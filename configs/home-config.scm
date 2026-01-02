@@ -82,22 +82,10 @@
 
                    (service home-xdg-configuration-files-service-type
                             `(("gdb/gdbinit" ,%default-gdbinit)
-                              ("nano/nanorc" ,%default-nanorc)
-                              ("foot/foot.ini" ,(local-file
-                                                 "../dotfiles/foot/foot.ini"))
-
-                              ("helix/config.toml" ,(local-file
-                                                     "../dotfiles/helix/config.toml"))
-                              ("helix/themes/transparent.toml" ,(local-file
-                                                                 "../dotfiles/helix/themes/transparent.toml"))))
+                              ("nano/nanorc" ,%default-nanorc)))
 
                    (service home-niri-service-type)
 
-                   (service home-waybar-service-type
-                            (home-waybar-configuration (config (local-file
-                                                                "../dotfiles/waybar/config.jsonc"))
-                                                       (style (local-file
-                                                               "../dotfiles/waybar/style.css"))))
                    (service home-theme-service-type
                             (home-theme-configuration (packages (specs->pkgs
                                                                  "papirus-icon-theme"

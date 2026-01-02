@@ -30,6 +30,7 @@
                      bootloaders
                      compression
                      containers
+                     cinnamon
                      curl
                      cryptsetup
                      emacs
@@ -40,7 +41,6 @@
                      gnome-xyz
                      image-viewers
                      linux
-                     lxqt
                      package-management
                      password-utils
                      qt
@@ -133,8 +133,8 @@
                           pipewire
                           wireplumber
 
-                          pcmanfm-qt
-                          lxqt-archiver
+                          nemo
+                          file-roller
                           nomacs
 
                           font-google-noto-emoji
@@ -142,6 +142,8 @@
                           font-nerd-fira-code
 
                           orchis-theme
+                          papirus-icon-theme
+                          bibata-cursor-theme
 
                           foot
                           helix
