@@ -1,0 +1,11 @@
+inherits = "ayu_mirage"
+
+["ui.background"]
+
+["ui.help"]
+
+["ui.menu"]
+
+["ui.statusline"]
+
+["ui.text"]
