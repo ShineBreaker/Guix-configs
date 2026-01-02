@@ -159,6 +159,9 @@
                           btop
                           wget
                           bat
+                          eza
+                          fzf
+                          direnv
                           zoxide
                           starship
 
