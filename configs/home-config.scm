@@ -23,13 +23,16 @@
 
 (define home-envs
   (home-environment
-    (packages (specifications->packages (list "swww"
-                                              "waybar"
+    (packages (specifications->packages (list "fcitx5"
                                               "fuzzel"
-                                              "zen-browser-bin"
                                               "keepassxc"
-                                              "fcitx5"
-                                              "nomacs")))
+                                              "kvantum"
+                                              "nomacs"
+                                              "qt5ct"
+                                              "qt6ct"
+                                              "swww"
+                                              "waybar"
+                                              "zen-browser-bin")))
     (services
      (append (list (service home-dotfiles-service-type
                             (home-dotfiles-configuration (directories '("../dotfiles"))))
@@ -70,11 +73,6 @@
                                                           #t)))
 
                    (service home-fish-service-type)
-                   (simple-service 'fish-greeting
-                                   home-xdg-configuration-files-service-type
-                                   `(("fish/functions/fish_greeting.fish" ,(plain-file
-                                                                            "fish_greeting.fish"
-                                                                            ""))))
 
                    (service home-files-service-type
                             `((".guile" ,%default-dotguile)
@@ -85,16 +83,6 @@
                               ("nano/nanorc" ,%default-nanorc)))
 
                    (service home-niri-service-type)
-
-                   (service home-theme-service-type
-                            (home-theme-configuration (packages (specs->pkgs
-                                                                 "papirus-icon-theme"
-                                                                 "bibata-cursor-theme"
-                                                                 "orchis-theme"))
-                                                      (icon-theme
-                                                       "Papirus-Dark")
-                                                      (cursor-theme
-                                                       "Bibata-Modern-Classic")))
 
                    (simple-service 'extend-fontconfig
                                    home-fontconfig-service-type
@@ -130,6 +118,7 @@
                                      ("GDK_BACKEND" . "wayland")
                                      ("MOZ_ENABLE_WAYLAND" . #t)
                                      ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
+                                     ("QT_QPA_PLATFORMTHEME" . "qt5ct")
                                      ("_JAVA_AWT_WM_NONREPARENTING" . #t))))
 
              %base-home-services))))
