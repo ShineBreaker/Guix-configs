@@ -3,6 +3,9 @@
 
 (use-modules (gnu)
              (gnu system nss)
+             (gnu system accounts)
+             (gnu services networking)
+             (gnu services containers)
 
              (guix channels)
 
@@ -65,7 +68,7 @@
                  (group "users")
                  (password
                   "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
-                 (supplementary-groups '("wheel" "netdev" "audio" "video"))
+                 (supplementary-groups '("cgroup" "wheel" "netdev" "audio" "video"))
                  (shell (file-append fish "/bin/fish"))) %base-user-accounts))
 
   (host-name "BrokenShine-Desktop")
@@ -178,6 +181,20 @@
   (services
    (append (list (service guix-home-service-type
                           `(("brokenshine" ,home-envs)))
+                   (service nftables-service-type)
+                  
+                 (service rootless-podman-service-type
+                                   (rootless-podman-configuration
+                                     (subuids
+                                      (list (subid-range
+                                             (name "brokenshine")
+                                             (start 100000)
+                                             (count 65536))))
+                                     (subgids
+                                      (list (subid-range
+                                             (name "brokenshine")
+                                             (start 100000)
+                                             (count 65536))))))
 
                  (simple-service 'mihomo-daemon shepherd-root-service-type
                                  (list (shepherd-service (documentation
