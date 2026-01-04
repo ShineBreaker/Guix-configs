@@ -31,6 +31,15 @@
                     (openpgp-fingerprint
                      "F164 709E 5FC7 B32B AEC7  9F37 1F2E 76AC E3F5 31C8"))))
                 (channel
+                  (name 'cast)
+                  (branch "main")
+                  (url "https://codeberg.org/vnpower/cast")
+                  (introduction
+                   (make-channel-introduction
+                    "fab73647fd9f0f2167d9ef9d42cddd77500fffb3"
+                    (openpgp-fingerprint
+                     "D430 1F59 A65F 49DA 918A  3C0D 8D4C 3248 29DE D156"))))
+                (channel
                   (name 'saayix)
                   (branch "main")
                   (url "https://codeberg.org/look/saayix")
