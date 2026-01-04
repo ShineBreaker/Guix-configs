@@ -20,16 +20,14 @@ status is-interactive; and begin
     alias lt 'eza --tree'
 
     # Interactive shell initialisation
-    fzf --fish | source
-
-    fastfetch
-    set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。
-
     if test "$TERM" != dumb
+        fzf --fish | source
         starship init fish | source
         direnv hook fish | source
         zoxide init fish | source
         enable_transience
     end
 
+    set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。
+    fastfetch
 end
