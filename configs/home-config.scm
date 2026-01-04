@@ -12,6 +12,7 @@
              (gnu home services syncthing)
              (gnu home services guix)
 
+             (gnu packages)
              (gnu packages linux)
              (gnu packages wm)
 
@@ -22,7 +23,11 @@
 
              (rosenthal packages games)
              (rosenthal services desktop)
-             (rosenthal utils packages))
+             (rosenthal utils packages)
+             
+             ;(sops secrets)
+             ;(sops home services sops)
+             )
 
 (define home-envs
   (home-environment
@@ -41,7 +46,7 @@
                             (home-dotfiles-configuration (directories '("../dotfiles"))))
 
                    (service home-syncthing-service-type)
-
+                   (service home-mako-service-type)
                    (service home-dbus-service-type)
                    (service home-blueman-applet-service-type)
 
@@ -58,6 +63,11 @@
                                                           #t)))
 
                    (service home-fish-service-type)
+                   (simple-service 'fish-greeting
+                                   home-xdg-configuration-files-service-type
+                                   `(("fish/functions/fish_greeting.fish" ,(plain-file
+                                                                            "fish_greeting.fish"
+                                                                            "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
 
                    (service home-files-service-type
                             `((".guile" ,%default-dotguile)
@@ -76,7 +86,7 @@
                                    home-fontconfig-service-type
                                    (let ((sans "Sarasa Gothic SC")
                                          (serif "Sarasa Gothic SC")
-                                         (mono "FiraCode Nerd Font")
+                                         (mono "Iosevka Nerd Font Mono")
                                          (emoji "Noto Color Emoji"))
                                      `((alias (family "sans-serif")
                                               (prefer (family ,sans)
@@ -90,15 +100,13 @@
                                                       (family ,emoji)))
                                        (alias (family "monospace")
                                               (prefer (family ,mono)
-                                                      (family "Sarasa Mono SC"
-                                                       "FiraCode Nerd Font")
+                                                      (family "Iosevka Nerd Font Mono" 
+                                                       "Sarasa Mono SC")
                                                       (family ,emoji)))
-                                       (alias (family "ui-serif")
-                                              (prefer (family ,serif)
-                                                      (family "serif")))
-                                       (alias (family "ui-monospace")
-                                              (prefer (family ,mono)
-                                                      (family "monospace"))))))
+                                       (alias (family "emoji")
+                                              (prefer (family ,emoji)
+                                                      (family "Noto Color Emoji"
+                                                              "FontAwesome"))))))
 
                    (simple-service 'environment-variables
                                    home-environment-variables-service-type
@@ -107,6 +115,11 @@
                                      ("MOZ_ENABLE_WAYLAND" . #t)
                                      ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
                                      ("QT_QPA_PLATFORMTHEME" . "qt5ct")
+                                     ("QT_PLUGIN_PATH" unquote
+                                      (string-append
+                                       "/run/current-system/profile/lib/qt5/plugins:"
+                                       "/run/current-system/profile/lib/qt6/plugins:"
+                                       (or (getenv "QT_PLUGIN_PATH") "")))
                                      ("_JAVA_AWT_WM_NONREPARENTING" . #t))))
 
              %base-home-services))))
