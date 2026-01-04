@@ -1,3 +1,5 @@
+(load "./channel.scm")
+
 (use-modules (gnu home)
              (gnu home services)
              (gnu home services shells)
@@ -8,6 +10,7 @@
              (gnu home services desktop)
              (gnu home services fontutils)
              (gnu home services syncthing)
+             (gnu home services guix)
 
              (gnu packages linux)
              (gnu packages wm)
@@ -16,20 +19,20 @@
              (gnu system shadow)
 
              (guix gexp)
-             (guix channels)
 
+             (rosenthal packages games)
              (rosenthal services desktop)
              (rosenthal utils packages))
 
 (define home-envs
   (home-environment
-    (packages (specifications->packages (list "fcitx5"
+    (packages (specifications->packages (list "cliphist"
+                                              "fcitx5"
                                               "fuzzel"
                                               "keepassxc"
-                                              "kvantum"
+                                              "mako"
                                               "nomacs"
-                                              "qt5ct"
-                                              "qt6ct"
+                                              "prismlauncher-dolly"
                                               "swww"
                                               "waybar"
                                               "zen-browser-bin")))
@@ -39,24 +42,6 @@
 
                    (service home-syncthing-service-type)
 
-                   (service home-shepherd-service-type
-                            (home-shepherd-configuration (services (list (shepherd-service
-                                                                          (documentation
-                                                                           "Run the swww daemon.")
-                                                                          (provision '
-                                                                           (swww))
-                                                                          (start #~
-                                                                           (make-forkexec-constructor
-                                                                            (list #$
-                                                                             (file-append
-                                                                              swww
-                                                                              "/bin/swww-daemon"))
-                                                                            #:log-file
-                                                                            "/var/log/swww-daemon.log"))
-                                                                          (stop #~
-                                                                           (make-kill-destructor))
-                                                                          (respawn?
-                                                                           #t))))))
                    (service home-dbus-service-type)
                    (service home-blueman-applet-service-type)
 
@@ -83,6 +68,9 @@
                               ("nano/nanorc" ,%default-nanorc)))
 
                    (service home-niri-service-type)
+
+                   (simple-service 'variant-packages-service
+                                   home-channels-service-type guix-channels)
 
                    (simple-service 'extend-fontconfig
                                    home-fontconfig-service-type

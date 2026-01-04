@@ -1,10 +1,9 @@
 (load "./configs/channel.scm")
 (load "./configs/home-config.scm")
-(load "./configs/services.scm")
 
 (use-modules (gnu)
              (gnu system nss)
-             
+
              (guix channels)
 
              (nonguix transformations)
@@ -19,10 +18,7 @@
              (saayix packages binaries)
              (saayix packages fonts))
 
-(use-service-modules dbus
-                     sddm
-                     sysctl
-                     xorg)
+(use-service-modules dbus sddm sysctl xorg)
 
 (use-package-modules admin
                      audio
@@ -33,7 +29,6 @@
                      cinnamon
                      curl
                      cryptsetup
-                     emacs
                      fcitx5
                      fonts
                      freedesktop
@@ -41,8 +36,10 @@
                      gnome-xyz
                      image-viewers
                      linux
+                     lxqt
                      package-management
                      password-utils
+                     polkit
                      qt
                      rust-apps
                      terminals
@@ -66,7 +63,8 @@
   (users (cons (user-account
                  (name "brokenshine")
                  (group "users")
-                 (password "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
+                 (password
+                  "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
                  (supplementary-groups '("wheel" "netdev" "audio" "video"))
                  (shell (file-append fish "/bin/fish"))) %base-user-accounts))
 
@@ -89,14 +87,16 @@
                                 (device (file-system-label "Linux"))
                                 (mount-point "/")
                                 (type "btrfs")
-                                (options "subvol=SYSTEM/Guix/@,compress=zstd:6")
+                                (options
+                                 "subvol=SYSTEM/Guix/@,compress=zstd:6")
                                 (dependencies mapped-devices)
                                 (create-mount-point? #t))
                               (file-system
                                 (device (file-system-label "Linux"))
                                 (mount-point "/home")
                                 (type "btrfs")
-                                (options "subvol=DATA/Home/Guix,compress=zstd:6")
+                                (options
+                                 "subvol=DATA/Home/Guix,compress=zstd:6")
                                 (dependencies mapped-devices)
                                 (create-mount-point? #t))
                               (file-system
@@ -122,20 +122,24 @@
 
                         %base-file-systems))
 
-  (packages (append (list niri
+  (packages (append (list gvfs
+                          light
+                          niri
                           wl-clipboard
                           xwayland-satellite
-                          light
-                          gvfs
-                          xdg-user-dirs
 
                           easyeffects
-                          pipewire
-                          wireplumber
-
-                          nemo
                           file-roller
+                          nemo
                           nomacs
+                          qt5ct
+                          qt6ct
+                          kvantum
+
+                          pipewire
+                          polkit-gnome
+                          wireplumber
+                          xdg-user-dirs
 
                           font-google-noto-emoji
                           font-sarasa-gothic
@@ -147,41 +151,55 @@
 
                           foot
                           helix
-                          emacs
                           mihomo
 
-                          fish
-                          fastfetch
-                          curl
-                          git
-                          unzip
-                          gzip
-                          btop
-                          wget
                           bat
-                          eza
-                          fzf
+                          btop
+                          curl
+                          cryptsetup
                           direnv
-                          zoxide
-                          starship
-
-                          flatpak
+                          distrobox
+                          eza
+                          fastfetch
+                          fish
+                          fzf
+                          git
+                          gzip
                           podman
                           podman-compose
-                          cryptsetup
+                          starship
+                          unzip
+                          wget
+                          zoxide
+
+                          flatpak
                           plymouth) %base-packages))
 
   (services
    (append (list (service guix-home-service-type
                           `(("brokenshine" ,home-envs)))
 
+                 (simple-service 'mihomo-daemon shepherd-root-service-type
+                                 (list (shepherd-service (documentation
+                                                          "Run the mihomo daemon.")
+                                                         (provision '(mihomo-daemon))
+                                                         (requirement '(user-processes))
+                                                         (start #~(make-forkexec-constructor
+                                                                   (list #$(file-append
+                                                                            mihomo
+                                                                            "/bin/mihomo")
+                                                                    "-f"
+                                                                    "/home/brokenshine/.config/mihomo/config.yaml")
+                                                                   #:log-file
+                                                                   "/var/log/mihomo.log"))
+                                                         (stop #~(make-kill-destructor))
+                                                         (respawn? #t))))
+
                  (service sddm-service-type
                           (sddm-configuration (auto-login-user "brokenshine")
                                               (auto-login-session
                                                "niri.desktop")))
 
-                 ;; (service mihomo-daemon)
-                 
                  (simple-service 'extend-sysctl sysctl-service-type
                                  '(("fs.inotify.max_user_watches" . "524288")
 
