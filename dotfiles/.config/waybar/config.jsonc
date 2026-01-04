@@ -75,7 +75,7 @@
     "format": " {used}G",
     "tooltip": true,
     "tooltip-format": "RAM: {used}G / {total}G\nSwap: {swapUsed}G / {swapTotal}G",
-    "on-click": "kitty btop",
+    "on-click": "foot btop",
   },
   "network": {
     "interval": 1,
@@ -84,7 +84,7 @@
     "format-linked": " Disconnected",
     "format-disconnected": " No IP ({ifname})",
     "tooltip-format": "{ifname} {ipaddr}/{cidr}\nIP: {gwaddr}\n信号强度: {signalStrength}%",
-    "on-click": "nmgui",
+    "on-click": "nm-connection-editor",
   },
   "niri/workspaces": {
     "all-outputs": true,
@@ -176,25 +176,25 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "锁定",
-    "on-click": "niri msg action power-off-monitors && gtklock -d",
+    "on-click": "niri msg action power-off-monitors && loginctl ",
   },
   "custom/poweroff": {
     "format": "",
     "tooltip": true,
     "tooltip-format": "关机",
-    "on-click": "pkexec shutdown",
+    "on-click": "loginctl poweroff",
   },
   "custom/reboot": {
     "format": "",
     "tooltip": true,
     "tooltip-format": "重启",
-    "on-click": "pkexec reboot",
+    "on-click": "loginctl reboot",
   },
   "custom/hibernate": {
     "format": "󰒲",
     "tooltip": true,
     "tooltip-format": "休眠",
-    "on-click": "pkexec suspend",
+    "on-click": "loginctl suspend",
   },
   "custom/search": {
     "format": "",

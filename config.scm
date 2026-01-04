@@ -6,6 +6,7 @@
              (gnu system accounts)
              (gnu services networking)
              (gnu services containers)
+             (gnu services pm)
 
              (guix channels)
 
@@ -14,8 +15,12 @@
              (nongnu packages firmware)
              (nongnu system linux-initrd)
 
+             (cast packages gtklock)
+
+             (rde packages fonts)
+
              (rosenthal)
-             (rosenthal bootloader grub)
+             (rosenthal bootloader uki)
              (rosenthal packages networking)
 
              (saayix packages binaries)
@@ -56,9 +61,14 @@
                      xorg)
 
 (operating-system
-  (kernel linux-xanmod)
   (initrd microcode-initrd)
-  (firmware (list linux-firmware))
+  (firmware (list linux-firmware sof-firmware))
+
+  (kernel linux-xanmod)
+  (kernel-arguments (cons* "kernel.sysrq=1" "zswap.enabled=1"
+                           "zswap.max_pool_percent=90"
+                           "modprobe.blacklist=amdgpu,pcspkr,hid_nintendo"
+                           %default-kernel-arguments))
 
   (timezone "Asia/Shanghai")
   (locale "zh_CN.utf8")
@@ -68,13 +78,14 @@
                  (group "users")
                  (password
                   "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
-                 (supplementary-groups '("cgroup" "wheel" "netdev" "audio" "video"))
+                 (supplementary-groups '("cgroup" "wheel" "netdev" "audio"
+                                         "video"))
                  (shell (file-append fish "/bin/fish"))) %base-user-accounts))
 
   (host-name "BrokenShine-Desktop")
 
   (bootloader (bootloader-configuration
-                (bootloader grub-efi-luks2-bootloader)
+                (bootloader uefi-uki-removable-bootloader)
                 (theme (grub-theme (inherit (grub-theme))
                                    (gfxmode '("1024x786x32" "auto"))))
                 (targets '("/efi"))
@@ -125,29 +136,32 @@
 
                         %base-file-systems))
 
-  (packages (append (list gvfs
+  (packages (append (list gtklock
+                          gvfs
                           light
                           niri
                           wl-clipboard
                           xwayland-satellite
 
                           easyeffects
-                          file-roller
-                          nemo
+                          lxqt-archiver
                           nomacs
+                          pcmanfm-qt
                           qt5ct
                           qt6ct
                           kvantum
 
+                          libsecret
                           pipewire
                           polkit-gnome
                           wireplumber
                           xdg-user-dirs
 
+                          font-awesome
                           font-google-noto-emoji
+                          font-iosevka-nerd
                           font-sarasa-gothic
-                          font-nerd-fira-code
-
+                          
                           orchis-theme
                           papirus-icon-theme
                           bibata-cursor-theme
@@ -181,20 +195,26 @@
   (services
    (append (list (service guix-home-service-type
                           `(("brokenshine" ,home-envs)))
-                   (service nftables-service-type)
-                  
+
+                 (service nftables-service-type)
+
+                 (service tlp-service-type)
+
                  (service rootless-podman-service-type
-                                   (rootless-podman-configuration
-                                     (subuids
-                                      (list (subid-range
-                                             (name "brokenshine")
-                                             (start 100000)
-                                             (count 65536))))
-                                     (subgids
-                                      (list (subid-range
-                                             (name "brokenshine")
-                                             (start 100000)
-                                             (count 65536))))))
+                          (rootless-podman-configuration (subuids (list (subid-range
+                                                                         (name
+                                                                          "brokenshine")
+                                                                         (start
+                                                                          100000)
+                                                                         (count
+                                                                          65536))))
+                                                         (subgids (list (subid-range
+                                                                         (name
+                                                                          "brokenshine")
+                                                                         (start
+                                                                          100000)
+                                                                         (count
+                                                                          65536))))))
 
                  (simple-service 'mihomo-daemon shepherd-root-service-type
                                  (list (shepherd-service (documentation
@@ -226,7 +246,9 @@
                                    ("vm.page_lock_unfairness" . "1")
                                    ("vm.stat_interval" . "120")
 
-                                   ("net.core.default_qdisc" . "fq")
+                                   ("net.core.default_qdisc" . "fq_pie")
+                                   ("net.core.rmem_max" . "7500000")
+                                   ("net.core.wmem_max" . "7500000")
                                    ("net.ipv4.tcp_congestion_control" . "bbr")
                                    ("net.ipv4.tcp_low_latency" . "1")
                                    ("net.ipv4.tcp_fastopen" . "3")
@@ -246,12 +268,15 @@
 
                  (simple-service 'guix-moe guix-service-type
                                  (guix-extension (authorized-keys (list (plain-file
-                                                                         "guix-moe-old.pub"
-                                                                         "(public-key (ecc (curve Ed25519) (q #374EC58F5F2EC0412431723AF2D527AD626B049D657B5633AAAEBC694F3E33F9#)))")
-                                                                        (plain-file
                                                                          "guix-moe.pub"
                                                                          "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
-                                                 (substitute-urls '("https://cache-cdn.guix.moe")))))
+                                                 (substitute-urls '("https://cache-cdn.guix.moe"))))
+
+                 (simple-service 'nonguix guix-service-type
+                                 (guix-extension (authorized-keys (list (plain-file
+                                                                         "nonguix.pub"
+                                                                         "(public-key (ecc (curve Ed25519)(q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
+                                                 (substitute-urls '("https://substitutes.nonguix.org")))))
 
            (modify-services %desktop-services
              (delete gdm-service-type)
