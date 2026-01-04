@@ -1,8 +1,14 @@
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 
-spawn-at-startup "swww-datmon"
-spawn-at-startup "waybar"
+spawn-at-startup "swww-daemon"
+spawn-at-startup "swww restore"
+
 spawn-at-startup "fcitx5" "-d"
+spawn-at-startup "mako"
+spawn-at-startup "waybar"
+
+
+spawn-at-startup "/run/current-system/profile/libexec/polkit-gnome-authentication-agent-1"
 
 prefer-no-csd
 
