@@ -13,6 +13,8 @@
              (gnu home services guix)
 
              (gnu packages)
+             (gnu packages java)
+             (gnu packages libreoffice)
              (gnu packages linux)
              (gnu packages wm)
 
@@ -35,8 +37,10 @@
                                               "fcitx5"
                                               "fuzzel"
                                               "keepassxc"
+                                              "libreoffice"
                                               "mako"
                                               "nomacs"
+                                              "openjdk"
                                               "prismlauncher-dolly"
                                               "swww"
                                               "waybar"
@@ -113,6 +117,10 @@
                                    `(("EDITOR" . "hx")
                                      ("GDK_BACKEND" . "wayland")
                                      ("MOZ_ENABLE_WAYLAND" . #t)
+                                     ("PATH" unquote
+                                      (string-append
+                                       "/home/brokenshine/.local/bin:"
+                                       (or (getenv "PATH") "")))
                                      ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
                                      ("QT_QPA_PLATFORMTHEME" . "qt5ct")
                                      ("QT_PLUGIN_PATH" unquote
