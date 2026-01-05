@@ -72,7 +72,7 @@
   },
   "memory": {
     "interval": 1,
-    "format": " {used}G",
+    "format": "  {used}G",
     "tooltip": true,
     "tooltip-format": "RAM: {used}G / {total}G\nSwap: {swapUsed}G / {swapTotal}G",
     "on-click": "foot btop",
