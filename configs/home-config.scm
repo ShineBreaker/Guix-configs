@@ -25,8 +25,8 @@
              (rosenthal services desktop)
              (rosenthal utils packages)
              
-             ;(sops secrets)
-             ;(sops home services sops)
+             (sops secrets)
+             (sops home services sops)
              )
 
 (define home-envs
