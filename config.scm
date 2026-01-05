@@ -42,6 +42,7 @@
                      freedesktop
                      gnome
                      gnome-xyz
+                     kde-frameworks
                      image-viewers
                      linux
                      lxqt
@@ -162,6 +163,7 @@
                           font-iosevka-nerd
                           font-sarasa-gothic
                           
+                          breeze-icons
                           orchis-theme
                           papirus-icon-theme
                           bibata-cursor-theme
