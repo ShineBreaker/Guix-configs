@@ -45,7 +45,6 @@
                      kde-frameworks
                      image-viewers
                      linux
-                     lxqt
                      package-management
                      password-utils
                      polkit
@@ -59,6 +58,7 @@
                      wget
                      wm
                      xdisorg
+                     xfce
                      xorg)
 
 (operating-system
@@ -141,16 +141,20 @@
                           gvfs
                           light
                           niri
+                          swayidle 
                           wl-clipboard
                           xwayland-satellite
 
                           easyeffects
-                          lxqt-archiver
+                          file-roller
+                          kvantum
                           nomacs
-                          pcmanfm-qt
                           qt5ct
                           qt6ct
-                          kvantum
+                          thunar
+                          thunar-archive-plugin
+                          thunar-media-tags-plugin
+                          thunar-volman
 
                           libsecret
                           pipewire
@@ -161,9 +165,9 @@
                           font-awesome
                           font-google-noto-emoji
                           font-iosevka-nerd
+                          font-nerd-noto
                           font-sarasa-gothic
                           
-                          breeze-icons
                           orchis-theme
                           papirus-icon-theme
                           bibata-cursor-theme
@@ -191,8 +195,7 @@
                           wget
                           zoxide
 
-                          flatpak
-                          plymouth) %base-packages))
+                          flatpak) %base-packages))
 
   (services
    (append (list (service guix-home-service-type
@@ -201,6 +204,12 @@
                  (service nftables-service-type)
 
                  (service tlp-service-type)
+                 
+                 (service screen-locker-service-type
+                     (screen-locker-configuration
+                       (name "gtklock")
+                       (program (file-append gtklock "/bin/gtklock"))
+                       (allow-empty-password? #f)))
 
                  (service rootless-podman-service-type
                           (rootless-podman-configuration (subuids (list (subid-range
