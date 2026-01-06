@@ -11,8 +11,8 @@
              (guix channels)
 
              (nonguix transformations)
-             (nongnu packages linux)
              (nongnu packages firmware)
+             (nongnu packages linux)
              (nongnu system linux-initrd)
 
              (cast packages gtklock)
@@ -40,8 +40,10 @@
                      fcitx5
                      fonts
                      freedesktop
+                     games
                      gnome
                      gnome-xyz
+                     gnupg
                      kde-frameworks
                      image-viewers
                      linux
@@ -141,7 +143,7 @@
                           gvfs
                           light
                           niri
-                          swayidle 
+                          swayidle
                           wl-clipboard
                           xwayland-satellite
 
@@ -157,6 +159,7 @@
                           thunar-volman
 
                           libsecret
+                          pinentry
                           pipewire
                           polkit-gnome
                           wireplumber
@@ -167,10 +170,11 @@
                           font-iosevka-nerd
                           font-nerd-noto
                           font-sarasa-gothic
-                          
+
+                          bibata-cursor-theme
+                          gsettings-desktop-schemas
                           orchis-theme
                           papirus-icon-theme
-                          bibata-cursor-theme
 
                           foot
                           helix
@@ -204,12 +208,14 @@
                  (service nftables-service-type)
 
                  (service tlp-service-type)
-                 
+
                  (service screen-locker-service-type
-                     (screen-locker-configuration
-                       (name "gtklock")
-                       (program (file-append gtklock "/bin/gtklock"))
-                       (allow-empty-password? #f)))
+                          (screen-locker-configuration (name "gtklock")
+                                                       (program (file-append
+                                                                 gtklock
+                                                                 "/bin/gtklock"))
+                                                       (allow-empty-password?
+                                                                              #f)))
 
                  (service rootless-podman-service-type
                           (rootless-podman-configuration (subuids (list (subid-range
@@ -291,7 +297,15 @@
 
            (modify-services %desktop-services
              (delete gdm-service-type)
-
+             (udev-service-type config =>
+                                (udev-configuration (inherit config)
+                                                    (rules (append (udev-configuration-rules
+                                                                    config)
+                                                                   (list
+                                                                    steam-devices-udev-rules
+                                                                    (plain-file
+                                                                     "99-sayodevice.rules"
+                                                                     "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\""))))))
              (guix-service-type config =>
                                 (guix-configuration (inherit config)
                                                     (channels guix-channels)
