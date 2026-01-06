@@ -3,8 +3,7 @@ status is-interactive; and begin
     # Abbreviations
     abbr --add -- cd z
     abbr --add -- commit 'git commit --all'
-    abbr --add -- enter 'toolbox enter'
-    abbr --add -- ls eza
+    abbr --add -- enter 'distrobox enter'
     abbr --add -- push 'git push'
     abbr --add -- reboot 'sudo reboot'
     abbr --add -- rebuild 'sudo guix system reconfigure ./config.scm'

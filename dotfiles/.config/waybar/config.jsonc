@@ -84,7 +84,7 @@
     "format-linked": " Disconnected",
     "format-disconnected": " No IP ({ifname})",
     "tooltip-format": "{ifname} {ipaddr}/{cidr}\nIP: {gwaddr}\n信号强度: {signalStrength}%",
-    "on-click": "nm-connection-editor",
+    "on-click": "foot pkexec nmtui",
   },
   "niri/workspaces": {
     "all-outputs": true,
@@ -176,7 +176,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "锁定",
-    "on-click": "niri msg action power-off-monitors && loginctl ",
+    "on-click": "niri msg action power-off-monitors && loginctl lock-sessions",
   },
   "custom/poweroff": {
     "format": "",
