@@ -22,6 +22,8 @@
              (gnu system shadow)
 
              (guix gexp)
+             
+             (nongnu packages game-client)
 
              (rosenthal packages games)
              (rosenthal services desktop)
@@ -42,6 +44,7 @@
                                               "nomacs"
                                               "openjdk"
                                               "prismlauncher-dolly"
+                                              "steam"
                                               "swww"
                                               "waybar"
                                               "zen-browser-bin")))
@@ -116,10 +119,11 @@
                                    home-environment-variables-service-type
                                    `(("EDITOR" . "hx")
                                      ("GDK_BACKEND" . "wayland")
+                                     ("GUIX_PROFILE" . "$HOME/.guix-home/profile/etc/profile")
                                      ("MOZ_ENABLE_WAYLAND" . #t)
                                      ("PATH" unquote
                                       (string-append
-                                       "/home/brokenshine/.local/bin:"
+                                       "$HOME/.local/bin:"
                                        (or (getenv "PATH") "")))
                                      ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
                                      ("QT_QPA_PLATFORMTHEME" . "qt5ct")
