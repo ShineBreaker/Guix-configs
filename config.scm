@@ -50,6 +50,7 @@
                      package-management
                      password-utils
                      polkit
+                     python
                      qt
                      rust-apps
                      terminals
@@ -176,30 +177,30 @@
                           orchis-theme
                           papirus-icon-theme
 
-                          foot
-                          helix
-                          mihomo
-
                           bat
                           btop
-                          curl
-                          cryptsetup
                           direnv
                           distrobox
                           eza
                           fastfetch
                           fish
+                          foot
                           fzf
+                          helix
+                          mihomo
+                          starship
+                          zoxide
+                          
+                          curl
+                          cryptsetup
+                          flatpak
                           git
                           gzip
                           podman
                           podman-compose
-                          starship
+                          python
                           unzip
-                          wget
-                          zoxide
-
-                          flatpak) %base-packages))
+                          wget) %base-packages))
 
   (services
    (append (list (service guix-home-service-type
