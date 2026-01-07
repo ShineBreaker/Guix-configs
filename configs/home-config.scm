@@ -4,6 +4,7 @@
              (gnu home services)
              (gnu home services shells)
              (gnu home services dotfiles)
+             (gnu home services gnupg)
              (gnu home services shepherd)
              (gnu home services niri)
              (gnu home services sound)
@@ -62,6 +63,11 @@
                                                                 "fcitx5-material-color-theme"))
                                                        (input-method-editors (specs->pkgs
                                                                               "fcitx5-rime"))))
+                        (service home-gpg-agent-service-type
+              (home-gpg-agent-configuration
+               (pinentry-program
+                (file-append pinentry-tty "/bin/pinentry-tty"))
+               (ssh-support? #t)))
 
                    (service home-pipewire-service-type
                             (home-pipewire-configuration (wireplumber
@@ -120,7 +126,8 @@
                                    `(("EDITOR" . "hx")
                                      ("GDK_BACKEND" . "wayland")
                                      ("GUIX_PROFILE" . "$HOME/.guix-home/profile/etc/profile")
-                                     ("MOZ_ENABLE_WAYLAND" . #t)
+                                     ("HTTP_PROXY" . "http://127.0.0.1:7890")
+                                     ("HTTPS_PROXY" . "$HTTP_PROXY")
                                      ("PATH" unquote
                                       (string-append
                                        "$HOME/.local/bin:"
