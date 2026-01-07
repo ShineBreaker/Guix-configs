@@ -190,7 +190,7 @@
                           mihomo
                           starship
                           zoxide
-                          
+
                           curl
                           cryptsetup
                           flatpak
@@ -282,19 +282,7 @@
                                 (pam-limits-entry "@realtime"
                                                   'both
                                                   'memlock
-                                                  'unlimited)))
-
-                 (simple-service 'guix-moe guix-service-type
-                                 (guix-extension (authorized-keys (list (plain-file
-                                                                         "guix-moe.pub"
-                                                                         "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
-                                                 (substitute-urls '("https://cache-cdn.guix.moe"))))
-
-                 (simple-service 'nonguix guix-service-type
-                                 (guix-extension (authorized-keys (list (plain-file
-                                                                         "nonguix.pub"
-                                                                         "(public-key (ecc (curve Ed25519)(q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
-                                                 (substitute-urls '("https://substitutes.nonguix.org")))))
+                                                  'unlimited))))
 
            (modify-services %desktop-services
              (delete gdm-service-type)
@@ -315,9 +303,16 @@
                                                     (substitute-urls (append (list
                                                                               "https://mirror.sjtu.edu.cn/guix"
                                                                               "https://cache-cdn.guix.moe"
-                                                                              "https://bordeaux.guix.gnu.org"
                                                                               "https://substitutes.nonguix.org")
                                                                       %default-substitute-urls))
+                                                    (authorized-keys (append (list
+                                                                              (plain-file
+                                                                               "guix-moe.pub"
+                                                                               "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
+                                                                              (plain-file
+                                                                               "nonguix.pub"
+                                                                               "(public-key (ecc (curve Ed25519)(q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
+                                                                      %default-authorized-guix-keys))
                                                     (discover? #t)
                                                     (extra-options '("--cores=16")))))))
 
