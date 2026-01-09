@@ -140,7 +140,8 @@
 
                         %base-file-systems))
 
-  (packages (append (list gtklock
+  (packages (append (list glib:bin
+                          gtklock
                           gvfs
                           light
                           niri
