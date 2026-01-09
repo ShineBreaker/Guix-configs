@@ -4,9 +4,6 @@
              (gnu home services guix)
              (gnu system nss)
              (gnu system accounts)
-             (gnu services networking)
-             (gnu services containers)
-             (gnu services pm)
 
              (guix channels)
 
@@ -26,7 +23,14 @@
              (saayix packages binaries)
              (saayix packages fonts))
 
-(use-service-modules dbus sddm sysctl xorg)
+(use-service-modules containers
+                     dbus
+                     linux
+                     networking
+                     pm
+                     sddm
+                     sysctl
+                     xorg)
 
 (use-package-modules admin
                      audio
