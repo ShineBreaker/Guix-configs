@@ -38,46 +38,6 @@
   - `/data` - DATA/Share
   - `/var/lib/flatpak` - DATA/Flatpak
 
-### 主要软件包
-
-#### 系统工具
-
-- `podman`, `podman-compose` - 容器管理
-- `distrobox` - 容器化开发环境
-- `flatpak` - 跨发行版应用分发
-- `mihomo` - 代理服务（后台守护进程运行）
-
-#### 开发工具
-
-- `helix` - 现代文本编辑器
-- `git` - 版本控制
-- `python` - Python 编程语言
-- `fish` - 友好的交互式 shell
-- `starship` - 优秀的 shell 提示符
-- `zoxide` - 智能目录跳转
-- `eza` - 更好的 ls 替代品
-- `bat` - cat 的增强版
-- `btop` - 系统监控工具
-- `fzf` - 命令行模糊查找器
-
-#### 多媒体
-
-- `pipewire` - 音频服务器
-- `wireplumber` - PipeWire 会话管理
-- `easyeffects` - 音频效果处理
-- `nomacs` - 图像查看器
-
-#### 游戏娱乐
-
-- `steam` - Steam 游戏平台
-- `prismlauncher-dolly` - Minecraft 启动器
-- `libreoffice` - 办公套件
-
-#### 网络与代理
-
-- `mihomo` - 代理内核
-- 系统级 HTTP/HTTPS 代理配置（127.0.0.1:7890）
-
 ### 内核优化
 
 配置了多项内核参数以提升系统性能：
@@ -91,42 +51,19 @@
 
 使用以下第三方频道扩展包库：
 
-- **cast** - 包含 GTK 锁屏器等
-- **nonguix** - 非 100% 自由软件
-- **radix** - 额外软件包
-- **rde** - Reproducible Development Environment
-- **rosenthal** - 提供多种额外包
-- **saayix** - 二进制包和字体
-- **sops-guix** - Secrets 管理集成
+- https://codeberg.org/vnpower/cast
+- https://gitlab.com/nonguix/nonguix
+- https://codeberg.org/anemofilia/radix.git
+- https://git.sr.ht/~abcdw/rde
+- https://codeberg.org/hako/rosenthal.git
+- https://codeberg.org/look/saayix
+- https://github.com/fishinthecalculator/sops-guix
 
 ### 字体配置
 
 - **无衬线字体**: Sarasa Gothic SC（更纱黑体 SC）
 - **等宽字体**: Iosevka Nerd Font Mono
 - **Emoji**: Noto Color Emoji
-- **图标**: Font Awesome
-
-### 系统服务
-
-- `nftables` - 防火墙
-- `tlp` - 笔记本电源管理
-- `rootless-podman` - 无根容器
-- `mihomo-daemon` - 代理守护进程
-- `syncthing` - 文件同步
-- `blueman-applet` - 蓝牙管理
-
-## Home 配置
-
-Home 配置通过 `guix home` 管理，包含：
-
-- 用户级软件包配置
-- Fish Shell 配置（包含日文欢迎语）
-- Fcitx5 输入法配置
-- GPG Agent 配置
-- PipeWire 用户级服务
-- Niri Wayland 合成器配置
-- 环境变量配置
-- 字体配置（fontconfig）
 
 ## 文件结构
 
@@ -201,4 +138,5 @@ guix home reconfigure home-config.scm
 
 ---
 
-**每日提示**：日常生活的每一天，也许都是奇迹的连续。 — Fish Shell 欢迎语
+## 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。 
+                                                            --《日常》
