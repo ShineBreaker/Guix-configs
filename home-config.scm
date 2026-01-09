@@ -1,4 +1,4 @@
-(load "./channel.scm")
+(load "./configs/channel.scm")
 
 (use-modules (gnu home)
              (gnu home services)
@@ -14,6 +14,7 @@
              (gnu home services guix)
 
              (gnu packages)
+             (gnu packages gnupg)
              (gnu packages java)
              (gnu packages libreoffice)
              (gnu packages linux)
@@ -23,18 +24,14 @@
              (gnu system shadow)
 
              (guix gexp)
-             
+
              (nongnu packages game-client)
 
              (rosenthal packages games)
              (rosenthal services desktop)
-             (rosenthal utils packages)
-             
-             (sops secrets)
-             (sops home services sops)
-             )
+             (rosenthal utils packages))
 
-(define home-envs
+(define home-config
   (home-environment
     (packages (specifications->packages (list "cliphist"
                                               "fcitx5"
@@ -51,7 +48,7 @@
                                               "zen-browser-bin")))
     (services
      (append (list (service home-dotfiles-service-type
-                            (home-dotfiles-configuration (directories '("../dotfiles"))))
+                            (home-dotfiles-configuration (directories '("./dotfiles"))))
 
                    (service home-syncthing-service-type)
                    (service home-mako-service-type)
@@ -63,11 +60,11 @@
                                                                 "fcitx5-material-color-theme"))
                                                        (input-method-editors (specs->pkgs
                                                                               "fcitx5-rime"))))
-                        (service home-gpg-agent-service-type
-              (home-gpg-agent-configuration
-               (pinentry-program
-                (file-append pinentry-tty "/bin/pinentry-tty"))
-               (ssh-support? #t)))
+                   (service home-gpg-agent-service-type
+                            (home-gpg-agent-configuration (pinentry-program (file-append
+                                                                             pinentry-tty
+                                                                             "/bin/pinentry-tty"))
+                                                          (ssh-support? #t)))
 
                    (service home-pipewire-service-type
                             (home-pipewire-configuration (wireplumber
@@ -92,9 +89,6 @@
 
                    (service home-niri-service-type)
 
-                   (simple-service 'variant-packages-service
-                                   home-channels-service-type guix-channels)
-
                    (simple-service 'extend-fontconfig
                                    home-fontconfig-service-type
                                    (let ((sans "Sarasa Gothic SC")
@@ -113,13 +107,15 @@
                                                       (family ,emoji)))
                                        (alias (family "monospace")
                                               (prefer (family ,mono)
-                                                      (family "Iosevka Nerd Font Mono" 
+                                                      (family
+                                                       "Iosevka Nerd Font Mono"
                                                        "Sarasa Mono SC")
                                                       (family ,emoji)))
                                        (alias (family "emoji")
                                               (prefer (family ,emoji)
-                                                      (family "Noto Color Emoji"
-                                                              "FontAwesome"))))))
+                                                      (family
+                                                       "Noto Color Emoji"
+                                                       "FontAwesome"))))))
 
                    (simple-service 'environment-variables
                                    home-environment-variables-service-type
@@ -129,9 +125,8 @@
                                      ("HTTP_PROXY" . "http://127.0.0.1:7890")
                                      ("HTTPS_PROXY" . "$HTTP_PROXY")
                                      ("PATH" unquote
-                                      (string-append
-                                       "$HOME/.local/bin:"
-                                       (or (getenv "PATH") "")))
+                                      (string-append "$HOME/.local/bin:"
+                                                     (or (getenv "PATH") "")))
                                      ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
                                      ("QT_QPA_PLATFORMTHEME" . "qt5ct")
                                      ("QT_PLUGIN_PATH" unquote
@@ -142,3 +137,5 @@
                                      ("_JAVA_AWT_WM_NONREPARENTING" . #t))))
 
              %base-home-services))))
+
+home-config
