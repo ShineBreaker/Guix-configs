@@ -4,6 +4,7 @@ status is-interactive; and begin
     abbr --add -- cd z
     abbr --add -- commit 'git commit --all'
     abbr --add -- enter 'distrobox enter'
+    abbr --add -- rebuildh 'guix home reconfigure ./home-config.scm'
     abbr --add -- push 'git push'
     abbr --add -- reboot 'sudo reboot'
     abbr --add -- rebuild 'sudo guix system reconfigure ./config.scm'
