@@ -1,6 +1,7 @@
 (load "./configs/channel.scm")
 
-(use-modules (gnu home)
+(use-modules (gnu)
+             (gnu home)
              (gnu home services)
              (gnu home services shells)
              (gnu home services desktop)
@@ -15,11 +16,6 @@
              (gnu home services guix)
 
              (gnu packages)
-             (gnu packages gnupg)
-             (gnu packages java)
-             (gnu packages libreoffice)
-             (gnu packages linux)
-             (gnu packages wm)
 
              (gnu services)
              (gnu system shadow)
@@ -32,21 +28,37 @@
              (rosenthal services desktop)
              (rosenthal utils packages))
 
+(use-package-modules freedesktop
+                     gnupg
+                     java
+                     libreoffice
+                     librewolf
+                     linux
+                     wm)
+
 (define home-config
   (home-environment
-    (packages (specifications->packages (list "cliphist"
-                                              "fcitx5"
-                                              "fuzzel"
-                                              "keepassxc"
-                                              "libreoffice"
-                                              "mako"
-                                              "nomacs"
-                                              "openjdk"
-                                              "prismlauncher-dolly"
-                                              "steam"
-                                              "swww"
-                                              "waybar"
-                                              "zen-browser-bin")))
+    (packages (specifications->packages (list 
+                                         "cliphist"
+                                         "fcitx5"
+                                         "fuzzel"
+                                         "keepassxc"
+                                         "libreoffice"
+                                         "mako"
+                                         "nomacs"
+                                         "openjdk"
+                                         "prismlauncher-dolly"
+                                         "steam"
+                                         "swww"
+                                         "waybar"
+                                         "zen-browser-bin"
+
+                                         "librewolf"
+                                         "adaptive-tab-bar-colour-icecat"
+                                         "browserpass-native"
+                                         "keepassxc-browser-icecat"
+                                         "privacy-redirect-icecat"
+                                         "ublock-origin-icecat")))
     (services
      (append (list (service home-dotfiles-service-type
                             (home-dotfiles-configuration (directories '("./dotfiles"))))
@@ -54,7 +66,7 @@
                    (service home-syncthing-service-type)
                    (service home-mako-service-type)
                    (service home-dbus-service-type)
-                 
+
                    (service home-blueman-applet-service-type)
 
                    (service home-fcitx5-service-type
@@ -75,11 +87,12 @@
                                                           #t)))
 
                    (service home-fish-service-type)
+  
                    (simple-service 'fish-greeting
                                    home-xdg-configuration-files-service-type
                                    `(("fish/conf.d/greeting.fish" ,(plain-file
-                                                                     "greeting.fish"
-                                                                     "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
+                                                                    "greeting.fish"
+                                                                    "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
 
                    (service home-files-service-type
                             `((".guile" ,%default-dotguile)
@@ -118,6 +131,39 @@
                                                       (family
                                                        "Noto Color Emoji"
                                                        "FontAwesome"))))))
+
+                   (simple-service 'xdg-desktop-portal
+                                   home-shepherd-service-type
+                                   (list (shepherd-service (provision '(xdg-desktop-portal))
+                                                           (requirement '(dbus))
+                                                           (start #~(make-forkexec-constructor
+                                                                     (list #$(file-append
+                                                                              xdg-desktop-portal
+                                                                              "/bin/xdg-desktop-portal"))
+                                                                     #:log-file
+                                                                     (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/xdg-desktop-portal.log")))
+                                                           (respawn? #t)
+                                                           (auto-start? #t))))
+
+                   ;; GTK 后端
+                   (simple-service 'xdg-desktop-portal-gtk
+                                   home-shepherd-service-type
+                                   (list (shepherd-service (provision '(xdg-desktop-portal-gtk))
+                                                           (requirement '(xdg-desktop-portal))
+                                                           (start #~(make-forkexec-constructor
+                                                                     (list #$(file-append
+                                                                              xdg-desktop-portal-gtk
+                                                                              "/libexec/xdg-desktop-portal-gtk"))
+                                                                     #:log-file
+                                                                     (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/xdg-desktop-portal-gtk.log")))
+                                                           (respawn? #t)
+                                                           (auto-start? #t))))
 
                    (simple-service 'environment-variables
                                    home-environment-variables-service-type

@@ -1,5 +1,5 @@
 (load "./configs/channel.scm")
- 
+
 (use-modules (gnu)
              (gnu home services guix)
              (gnu system nss)
@@ -41,6 +41,7 @@
                      fonts
                      freedesktop
                      games
+                     glib
                      gnome
                      gnome-xyz
                      gnupg
@@ -85,7 +86,7 @@
                  (supplementary-groups '("cgroup" "wheel" "netdev" "audio"
                                          "video"))
                  (shell (file-append fish "/bin/fish"))) %base-user-accounts))
-  
+
   (host-name "BrokenShine-Desktop")
 
   (bootloader (bootloader-configuration
@@ -140,13 +141,16 @@
 
                         %base-file-systems))
 
-  (packages (append (list glib:bin
+  (packages (append (list glib
                           gtklock
                           gvfs
                           light
                           niri
                           swayidle
                           wl-clipboard
+                          xdg-desktop-portal
+                          xdg-desktop-portal-gnome
+                          xdg-desktop-portal-gtk
                           xwayland-satellite
 
                           easyeffects
@@ -199,18 +203,16 @@
                           podman-compose
                           python
                           unzip
-                          wget)
-                    %base-packages))
+                          wget) %base-packages))
 
   (services
-   (append (list (simple-service 'variant-packages-service
-                                               home-channels-service-type
-                                               guix-channels)
-
-                 (service nftables-service-type)
-
+   (append (list (service nftables-service-type)
                  (service tlp-service-type)
 
+                 (service sddm-service-type
+                          (sddm-configuration (auto-login-user "brokenshine")
+                                              (auto-login-session
+                                               "niri.desktop")))
                  (service screen-locker-service-type
                           (screen-locker-configuration (name "gtklock")
                                                        (program (file-append
@@ -234,27 +236,9 @@
                                                                           100000)
                                                                          (count
                                                                           65536))))))
-
-                 (simple-service 'mihomo-daemon shepherd-root-service-type
-                                 (list (shepherd-service (documentation
-                                                          "Run the mihomo daemon.")
-                                                         (provision '(mihomo-daemon))
-                                                         (requirement '(user-processes))
-                                                         (start #~(make-forkexec-constructor
-                                                                   (list #$(file-append
-                                                                            mihomo
-                                                                            "/bin/mihomo")
-                                                                    "-f"
-                                                                    "/home/brokenshine/.config/mihomo/config.yaml")
-                                                                   #:log-file
-                                                                   "/var/log/mihomo.log"))
-                                                         (stop #~(make-kill-destructor))
-                                                         (respawn? #t))))
-
-                 (service sddm-service-type
-                          (sddm-configuration (auto-login-user "brokenshine")
-                                              (auto-login-session
-                                               "niri.desktop")))
+                 (simple-service 'extend-kernel-module-loader
+                                 kernel-module-loader-service-type
+                                 '("sch_fq_pie" "tcp_bbr"))
 
                  (simple-service 'extend-sysctl sysctl-service-type
                                  '(("fs.inotify.max_user_watches" . "524288")
@@ -275,6 +259,25 @@
                                    ("kernel.numa_balancing" . "0")
                                    ("kernel.sched_autogroup_enabled" . "1")
                                    ("kernel.sched_child_runs_first" . "0")))
+
+                 (simple-service 'home-channels home-channels-service-type
+                                 guix-channels)
+
+                 (simple-service 'mihomo-daemon shepherd-root-service-type
+                                 (list (shepherd-service (documentation
+                                                          "Run the mihomo daemon.")
+                                                         (provision '(mihomo-daemon))
+                                                         (requirement '(user-processes))
+                                                         (start #~(make-forkexec-constructor
+                                                                   (list #$(file-append
+                                                                            mihomo
+                                                                            "/bin/mihomo")
+                                                                    "-f"
+                                                                    "/home/brokenshine/.config/mihomo/config.yaml")
+                                                                   #:log-file
+                                                                   "/var/log/mihomo.log"))
+                                                         (stop #~(make-kill-destructor))
+                                                         (respawn? #t))))
 
                  (service pam-limits-service-type
                           (list (pam-limits-entry "@realtime"
