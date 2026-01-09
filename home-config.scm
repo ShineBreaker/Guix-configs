@@ -75,9 +75,9 @@
                    (service home-fish-service-type)
                    (simple-service 'fish-greeting
                                    home-xdg-configuration-files-service-type
-                                   `(("fish/functions/fish_greeting.fish" ,(plain-file
-                                                                            "fish_greeting.fish"
-                                                                            "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
+                                   `(("fish/conf.d/greeting.fish" ,(plain-file
+                                                                     "greeting.fish"
+                                                                     "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
 
                    (service home-files-service-type
                             `((".guile" ,%default-dotguile)
