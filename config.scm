@@ -1,5 +1,5 @@
 (load "./configs/channel.scm")
-
+ 
 (use-modules (gnu)
              (gnu home services guix)
              (gnu system nss)
