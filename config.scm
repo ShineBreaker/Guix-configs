@@ -1,7 +1,7 @@
 (load "./configs/channel.scm")
-(load "./configs/home-config.scm")
 
 (use-modules (gnu)
+             (gnu home services guix)
              (gnu system nss)
              (gnu system accounts)
              (gnu services networking)
@@ -85,7 +85,7 @@
                  (supplementary-groups '("cgroup" "wheel" "netdev" "audio"
                                          "video"))
                  (shell (file-append fish "/bin/fish"))) %base-user-accounts))
-
+  
   (host-name "BrokenShine-Desktop")
 
   (bootloader (bootloader-configuration
@@ -158,9 +158,7 @@
                           thunar-archive-plugin
                           thunar-media-tags-plugin
                           thunar-volman
-
                           libsecret
-                          pinentry
                           pipewire
                           polkit-gnome
                           wireplumber
@@ -200,11 +198,13 @@
                           podman-compose
                           python
                           unzip
-                          wget) %base-packages))
+                          wget)
+                    %base-packages))
 
   (services
-   (append (list (service guix-home-service-type
-                          `(("brokenshine" ,home-envs)))
+   (append (list (simple-service 'variant-packages-service
+                                               home-channels-service-type
+                                               guix-channels)
 
                  (service nftables-service-type)
 
@@ -309,11 +309,12 @@
                                                                               (plain-file
                                                                                "guix-moe.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
+
+                                                                              
                                                                               (plain-file
                                                                                "nonguix.pub"
                                                                                "(public-key (ecc (curve Ed25519)(q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
                                                                       %default-authorized-guix-keys))
-                                                    (discover? #t)
-                                                    (extra-options '("--cores=16")))))))
+                                                    (discover? #f))))))
 
   (name-service-switch %mdns-host-lookup-nss))
