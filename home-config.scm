@@ -54,12 +54,6 @@
                    (service home-syncthing-service-type)
                    (service home-mako-service-type)
                    (service home-dbus-service-type)
-                   
-                   (service home-dconf-service-type
-                            (home-dconf-configuration
-                  (settings
-                   '(("org/gnome/desktop/interface"
-                      ("color-scheme" . "prefer-dark"))))))
                  
                    (service home-blueman-applet-service-type)
 
