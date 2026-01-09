@@ -75,8 +75,8 @@ tooltip {
 #clock {
   border-radius: 10px;
   color: @base07;
-  padding: 0px 2px;
-    margin: 8px 4px;
+  padding: 0px 3px;
+    margin: 8px 3px;
 }
 
 #battery {
