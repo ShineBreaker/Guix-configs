@@ -3,6 +3,7 @@
 (use-modules (gnu home)
              (gnu home services)
              (gnu home services shells)
+             (gnu home services desktop)
              (gnu home services dotfiles)
              (gnu home services gnupg)
              (gnu home services shepherd)
@@ -53,6 +54,13 @@
                    (service home-syncthing-service-type)
                    (service home-mako-service-type)
                    (service home-dbus-service-type)
+                   
+                   (service home-dconf-service-type
+                            (home-dconf-configuration
+                  (settings
+                   '(("org/gnome/desktop/interface"
+                      ("color-scheme" . "prefer-dark"))))))
+                 
                    (service home-blueman-applet-service-type)
 
                    (service home-fcitx5-service-type
