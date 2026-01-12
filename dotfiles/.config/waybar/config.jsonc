@@ -176,7 +176,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "锁定",
-    "on-click": "niri msg action power-off-monitors && loginctl lock-sessions",
+    "on-click": "niri msg action power-off-monitors && gtklock -d",
   },
   "custom/poweroff": {
     "format": "",
@@ -206,7 +206,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "左键禁用自动休眠，右键启用自动休眠",
-    "on-click": "systemctl stop --user swayidle.service && notify-send '自动休眠已禁用'",
-    "on-click-right": "systemctl start --user swayidle.service && notify-send '自动休眠已启用'",
+    "on-click": "pkill swayidle && notify-send '自动休眠已禁用'",
+    "on-click-right": "swayidle && notify-send '自动休眠已启用'",
   },
 }
