@@ -227,17 +227,9 @@
                  (service nftables-service-type)
                  (service tlp-service-type)
 
-                 (service sddm-service-type
-                          (sddm-configuration (auto-login-user "brokenshine")
-                                              (auto-login-session
-                                               "niri.desktop")))
-                 (service screen-locker-service-type
-                          (screen-locker-configuration (name "gtklock")
-                                                       (program (file-append
-                                                                 gtklock
-                                                                 "/bin/gtklock"))
-                                                       (allow-empty-password?
-                                                                              #f)))
+                 (service bluetooth-service-type
+                         (bluetooth-configuration
+                           (auto-enable? #t)))
 
                  (service rootless-podman-service-type
                           (rootless-podman-configuration (subuids (list (subid-range
@@ -254,6 +246,21 @@
                                                                           100000)
                                                                          (count
                                                                           65536))))))
+
+                 (service screen-locker-service-type
+                          (screen-locker-configuration (name "gtklock")
+                                                       (program (file-append
+                                                                 gtklock
+                                                                 "/bin/gtklock"))
+                                                       (allow-empty-password?
+                                                                              #f)))
+
+                 (service sddm-service-type
+                          (sddm-configuration (auto-login-user "brokenshine")
+                                              (auto-login-session
+                                               "niri.desktop")))
+
+
                  (simple-service 'extend-kernel-module-loader
                                  kernel-module-loader-service-type
                                  '("sch_fq_pie" "tcp_bbr"))
