@@ -103,8 +103,6 @@
 
   (bootloader (bootloader-configuration
                 (bootloader uefi-uki-removable-bootloader)
-                (theme (grub-theme (inherit (grub-theme))
-                                   (gfxmode '("1024x786x32" "auto"))))
                 (targets '("/efi"))))
 
   (mapped-devices (list (mapped-device
@@ -151,7 +149,8 @@
 
                         %base-file-systems))
 
-  (packages (append (list glib
+  (packages (append (list bluez
+                          glib
                           gsettings-desktop-schemas
                           gtklock
                           gvfs
