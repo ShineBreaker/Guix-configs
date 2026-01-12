@@ -1,0 +1,4 @@
+timeout 600 'niri msg action power-off-monitors && gtklock -d' 
+after-resume 'gtklock -d' 
+lock 'niri msg action power-off-monitors && gtklock -d' 
+unlock 'niri msg action power-on-monitors'
