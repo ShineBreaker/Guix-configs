@@ -55,40 +55,41 @@
 
 (define home-config
   (home-environment
-    (packages (specifications->packages (list
-                                         ;; Desktop
-                                         "activitywatch"
-                                         "cliphist"
-                                         "fcitx5"
-                                         "fuzzel"
-                                         "keepassxc"
-                                         "mako"
+    (packages (append (specs->pkgs+out
+                       ;; Desktop
+                       "activitywatch"
+                       "cliphist"
+                       "fcitx5"
+                       "fuzzel"
+                       "keepassxc"
+                       "mako"
 
-                                         ;; Utility
-                                         "libreoffice"
-                                         "nomacs"
-                                         "obs"
-                                         "obsidian"
-                                         "sniffnet"
-                                         "sops"
-                                         "zen-browser-bin"
+                       ;; Utility
+                       "libreoffice"
+                       "nomacs"
+                       "obs"
+                       "obsidian"
+                       "sniffnet"
+                       "sops"
+                       "zen-browser-bin"
 
-                                         ;; Entertain
-                                         "openjdk"
-                                         "prismlauncher-dolly"
-                                         "steam"
+                       ;; Entertain
+                       "openjdk"
+                       "prismlauncher-dolly"
+                       "steam"
 
-                                         ;; Themes
-                                         "bibata-cursor-theme"
-                                         "orchis-theme"
-                                         "papirus-icon-theme"
+                       ;; Themes
+                       "bibata-cursor-theme"
+                       "orchis-theme"
+                       "papirus-icon-theme"
 
-                                         ;; Programming
-                                         "gh"
-                                         "node"
-                                         "pnpm"
-                                         "rust-analyzer"
-                                         "zed")))
+                       ;; Programming
+                       "gh"
+                       "node"
+                       "pnpm"
+                       "rust-analyzer"
+                       "zed")))
+
     (services
      (append (list (service home-blueman-applet-service-type)
                    (service home-dbus-service-type)
@@ -99,17 +100,17 @@
 
                    (service home-dotfiles-service-type
                             (home-dotfiles-configuration (directories '("./dotfiles"))))
-                   
+
                    (service home-fcitx5-service-type
                             (home-fcitx5-configuration (themes (specs->pkgs
                                                                 "fcitx5-material-color-theme"))
                                                        (input-method-editors (specs->pkgs
                                                                               "fcitx5-rime"))))
-                   
+
                    (service home-files-service-type
                             `((".guile" ,%default-dotguile)
                               (".Xdefaults" ,%default-xdefaults)))
-                   
+
                    (service home-gpg-agent-service-type
                             (home-gpg-agent-configuration (pinentry-program (file-append
                                                                              pinentry-tty
@@ -121,7 +122,7 @@
                                                           wireplumber)
                                                          (enable-pulseaudio?
                                                           #t)))
-                   
+
                    (service home-xdg-configuration-files-service-type
                             `(("gdb/gdbinit" ,%default-gdbinit)
                               ("nano/nanorc" ,%default-nanorc)))
@@ -135,21 +136,21 @@
                    (simple-service 'extend-fontconfig
                                    home-fontconfig-service-type
                                    (list "~/.local/share/fonts"
-                                   (let ((sans "Sarasa Gothic SC")
-                                         (serif "Sarasa Gothic SC")
-                                         (mono "Maple Mono NF CN")
-                                         (emoji "Noto Color Emoji"))
-                                     `((alias (family "sans-serif")
-                                              (prefer (family ,sans)
-                                                      (family ,emoji)))
-                                       (alias (family "serif")
-                                              (prefer (family ,serif)
-                                                      (family ,emoji)))
-                                       (alias (family "monospace")
-                                              (prefer (family ,mono)
-                                                      (family ,emoji)))
-                                       (alias (family "emoji")
-                                              (prefer (family ,emoji)))))))
+                                         (let ((sans "Sarasa Gothic SC")
+                                               (serif "Sarasa Gothic SC")
+                                               (mono "Maple Mono NF CN")
+                                               (emoji "Noto Color Emoji"))
+                                           `((alias (family "sans-serif")
+                                                    (prefer (family ,sans)
+                                                            (family ,emoji)))
+                                             (alias (family "serif")
+                                                    (prefer (family ,serif)
+                                                            (family ,emoji)))
+                                             (alias (family "monospace")
+                                                    (prefer (family ,mono)
+                                                            (family ,emoji)))
+                                             (alias (family "emoji")
+                                                    (prefer (family ,emoji)))))))
 
                    (simple-service 'xdg-desktop-portal
                                    home-shepherd-service-type
