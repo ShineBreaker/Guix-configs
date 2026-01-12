@@ -14,6 +14,11 @@
 
              (cast packages gtklock)
 
+             (px packages document)
+             (px packages tpm)
+
+             (radix packages freedesktop)
+
              (rde packages fonts)
 
              (rosenthal)
@@ -23,7 +28,8 @@
              (saayix packages binaries)
              (saayix packages fonts))
 
-(use-service-modules containers
+(use-service-modules authentication
+                     containers
                      dbus
                      linux
                      networking
@@ -49,9 +55,11 @@
                      gnome
                      gnome-xyz
                      gnupg
+                     hardware
                      kde-frameworks
                      image-viewers
                      linux
+                     lxqt
                      package-management
                      password-utils
                      polkit
@@ -71,7 +79,7 @@
 
 (operating-system
   (initrd microcode-initrd)
-  (firmware (list linux-firmware sof-firmware))
+  (firmware (list linux-firmware sof-firmware bluez-firmware))
 
   (kernel linux-xanmod)
   (kernel-arguments (cons* "kernel.sysrq=1" "zswap.enabled=1"
@@ -97,14 +105,12 @@
                 (bootloader uefi-uki-removable-bootloader)
                 (theme (grub-theme (inherit (grub-theme))
                                    (gfxmode '("1024x786x32" "auto"))))
-                (targets '("/efi"))
-                (extra-initrd "/SYSTEM/Guix/@/boot/cryptroot.cpio")))
+                (targets '("/efi"))))
 
   (mapped-devices (list (mapped-device
                           (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
                           (target "root")
-                          (type luks-device-mapping)
-                          (arguments '(#:key-file "/cryptroot.key")))))
+                          (type luks-device-mapping))))
 
   (file-systems (append (list (file-system
                                 (device (file-system-label "Linux"))
@@ -146,28 +152,35 @@
                         %base-file-systems))
 
   (packages (append (list glib
+                          gsettings-desktop-schemas
                           gtklock
                           gvfs
+                          libnotify
                           light
                           niri
                           swayidle
+                          swww
+                          waybar
                           wl-clipboard
                           xdg-desktop-portal
                           xdg-desktop-portal-gnome
                           xdg-desktop-portal-gtk
+                          xdg-dbus-proxy
+                          xdg-utils
+                          xdg-terminal-exec
                           xwayland-satellite
 
+                          dconf-editor
                           easyeffects
-                          file-roller
+                          featherpad
                           kvantum
                           nomacs
+                          pcmanfm-qt
                           qt5ct
                           qt6ct
-                          thunar
-                          thunar-archive-plugin
-                          thunar-media-tags-plugin
-                          thunar-volman
+                          qtsvg
                           libsecret
+                          lxqt-archiver
                           pipewire
                           polkit-gnome
                           wireplumber
@@ -178,11 +191,6 @@
                           font-iosevka-nerd
                           font-nerd-noto
                           font-sarasa-gothic
-
-                          bibata-cursor-theme
-                          gsettings-desktop-schemas
-                          orchis-theme
-                          papirus-icon-theme
 
                           bat
                           btop
@@ -198,19 +206,26 @@
                           starship
                           zoxide
 
+                          bluez
                           curl
                           cryptsetup
                           flatpak
+                          flatpak-xdg-utils
                           git
                           gzip
                           podman
                           podman-compose
                           python
+                          tpm2-abrmd
+                          tpm2-pkcs11
+                          tpm2-tools
+                          tpm2-tss
                           unzip
                           wget) %base-packages))
 
   (services
-   (append (list (service nftables-service-type)
+   (append (list (service fprintd-service-type)
+                 (service nftables-service-type)
                  (service tlp-service-type)
 
                  (service sddm-service-type
@@ -311,17 +326,23 @@
                                                     (substitute-urls (append (list
                                                                               "https://mirror.sjtu.edu.cn/guix"
                                                                               "https://cache-cdn.guix.moe"
-                                                                              "https://substitutes.nonguix.org")
+                                                                              "https://substitutes.nonguix.org"
+                                                                              "https://substitutes.guix.gofranz.com")
                                                                       %default-substitute-urls))
                                                     (authorized-keys (append (list
                                                                               (plain-file
                                                                                "guix-moe.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
 
-                                                                              
+
                                                                               (plain-file
                                                                                "nonguix.pub"
-                                                                               "(public-key (ecc (curve Ed25519)(q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
+                                                                               "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
+
+
+                                                                              (plain-file
+                                                                               "panther.pub"
+                                                                               "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
                                                                       %default-authorized-guix-keys))
                                                     (discover? #f))))))
 
