@@ -6,6 +6,7 @@
              (gnu home services shells)
              (gnu home services desktop)
              (gnu home services dotfiles)
+             (gnu home services fontutils)
              (gnu home services gnupg)
              (gnu home services shepherd)
              (gnu home services niri)
@@ -21,12 +22,26 @@
              (gnu system shadow)
 
              (guix gexp)
+             (guix utils)
 
              (nongnu packages game-client)
+             (nongnu packages productivity)
+
+             (px packages activitywatch)
+             (px packages desktop-tools)
+             (px packages editors)
+             (px packages networking)
+             (px packages node)
+             (px packages version-control)
 
              (rosenthal packages games)
              (rosenthal services desktop)
-             (rosenthal utils packages))
+             (rosenthal utils packages)
+
+             (sops secrets)
+             (sops home services sops)
+
+             (saayix packages browser-extensions))
 
 (use-package-modules freedesktop
                      gnupg
@@ -34,46 +49,67 @@
                      libreoffice
                      librewolf
                      linux
+                     node
+                     video
                      wm)
 
 (define home-config
   (home-environment
-    (packages (specifications->packages (list 
+    (packages (specifications->packages (list
+                                         ;; Desktop
+                                         "activitywatch"
                                          "cliphist"
                                          "fcitx5"
                                          "fuzzel"
                                          "keepassxc"
-                                         "libreoffice"
                                          "mako"
+
+                                         ;; Utility
+                                         "libreoffice"
                                          "nomacs"
+                                         "obs"
+                                         "obsidian"
+                                         "sniffnet"
+                                         "sops"
+                                         "zen-browser-bin"
+
+                                         ;; Entertain
                                          "openjdk"
                                          "prismlauncher-dolly"
                                          "steam"
-                                         "swww"
-                                         "waybar"
-                                         "zen-browser-bin"
 
-                                         "librewolf"
-                                         "adaptive-tab-bar-colour-icecat"
-                                         "browserpass-native"
-                                         "keepassxc-browser-icecat"
-                                         "privacy-redirect-icecat"
-                                         "ublock-origin-icecat")))
+                                         ;; Themes
+                                         "bibata-cursor-theme"
+                                         "orchis-theme"
+                                         "papirus-icon-theme"
+
+                                         ;; Programming
+                                         "gh"
+                                         "node"
+                                         "pnpm"
+                                         "rust-analyzer"
+                                         "zed")))
     (services
-     (append (list (service home-dotfiles-service-type
-                            (home-dotfiles-configuration (directories '("./dotfiles"))))
-
-                   (service home-syncthing-service-type)
-                   (service home-mako-service-type)
+     (append (list (service home-blueman-applet-service-type)
                    (service home-dbus-service-type)
+                   (service home-fish-service-type)
+                   (service home-mako-service-type)
+                   (service home-niri-service-type)
+                   (service home-syncthing-service-type)
 
-                   (service home-blueman-applet-service-type)
-
+                   (service home-dotfiles-service-type
+                            (home-dotfiles-configuration (directories '("./dotfiles"))))
+                   
                    (service home-fcitx5-service-type
                             (home-fcitx5-configuration (themes (specs->pkgs
                                                                 "fcitx5-material-color-theme"))
                                                        (input-method-editors (specs->pkgs
                                                                               "fcitx5-rime"))))
+                   
+                   (service home-files-service-type
+                            `((".guile" ,%default-dotguile)
+                              (".Xdefaults" ,%default-xdefaults)))
+                   
                    (service home-gpg-agent-service-type
                             (home-gpg-agent-configuration (pinentry-program (file-append
                                                                              pinentry-tty
@@ -85,52 +121,35 @@
                                                           wireplumber)
                                                          (enable-pulseaudio?
                                                           #t)))
+                   
+                   (service home-xdg-configuration-files-service-type
+                            `(("gdb/gdbinit" ,%default-gdbinit)
+                              ("nano/nanorc" ,%default-nanorc)))
 
-                   (service home-fish-service-type)
-  
                    (simple-service 'fish-greeting
                                    home-xdg-configuration-files-service-type
                                    `(("fish/conf.d/greeting.fish" ,(plain-file
                                                                     "greeting.fish"
                                                                     "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
 
-                   (service home-files-service-type
-                            `((".guile" ,%default-dotguile)
-                              (".Xdefaults" ,%default-xdefaults)))
-
-                   (service home-xdg-configuration-files-service-type
-                            `(("gdb/gdbinit" ,%default-gdbinit)
-                              ("nano/nanorc" ,%default-nanorc)))
-
-                   (service home-niri-service-type)
-
                    (simple-service 'extend-fontconfig
                                    home-fontconfig-service-type
+                                   (list "~/.local/share/fonts"
                                    (let ((sans "Sarasa Gothic SC")
                                          (serif "Sarasa Gothic SC")
-                                         (mono "Iosevka Nerd Font Mono")
+                                         (mono "Maple Mono NF CN")
                                          (emoji "Noto Color Emoji"))
                                      `((alias (family "sans-serif")
                                               (prefer (family ,sans)
-                                                      (family
-                                                       "Sarasa Gothic SC")
                                                       (family ,emoji)))
                                        (alias (family "serif")
                                               (prefer (family ,serif)
-                                                      (family
-                                                       "Sarasa Gothic SC")
                                                       (family ,emoji)))
                                        (alias (family "monospace")
                                               (prefer (family ,mono)
-                                                      (family
-                                                       "Iosevka Nerd Font Mono"
-                                                       "Sarasa Mono SC")
                                                       (family ,emoji)))
                                        (alias (family "emoji")
-                                              (prefer (family ,emoji)
-                                                      (family
-                                                       "Noto Color Emoji"
-                                                       "FontAwesome"))))))
+                                              (prefer (family ,emoji)))))))
 
                    (simple-service 'xdg-desktop-portal
                                    home-shepherd-service-type
@@ -148,7 +167,6 @@
                                                            (respawn? #t)
                                                            (auto-start? #t))))
 
-                   ;; GTK 后端
                    (simple-service 'xdg-desktop-portal-gtk
                                    home-shepherd-service-type
                                    (list (shepherd-service (provision '(xdg-desktop-portal-gtk))
