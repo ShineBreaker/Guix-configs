@@ -35,6 +35,7 @@
                      networking
                      pm
                      sddm
+                     syncthing
                      sysctl
                      xorg)
 
@@ -70,6 +71,7 @@
                      text-editors
                      shells
                      shellutils
+                     syncthing
                      version-control
                      wget
                      wm
@@ -226,6 +228,9 @@
    (append (list (service fprintd-service-type)
                  (service nftables-service-type)
                  (service tlp-service-type)
+                 
+                 (service syncthing-service-type
+                         (syncthing-configuration (user "brokenshine")))
 
                  (service bluetooth-service-type
                          (bluetooth-configuration

@@ -39,10 +39,8 @@
              (rosenthal utils packages)
 
              (sops secrets)
-             (sops home services sops)
-
-             (saayix packages browser-extensions))
-
+             (sops home services sops))
+ 
 (use-package-modules freedesktop
                      gnupg
                      java
@@ -96,7 +94,6 @@
                    (service home-fish-service-type)
                    (service home-mako-service-type)
                    (service home-niri-service-type)
-                   (service home-syncthing-service-type)
 
                    (service home-dotfiles-service-type
                             (home-dotfiles-configuration (directories '("./dotfiles"))))
