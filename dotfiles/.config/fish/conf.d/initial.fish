@@ -1,6 +1,7 @@
 status is-interactive; and begin
 
     # Abbreviations
+    abbr --add -- cat bat
     abbr --add -- cd z
     abbr --add -- commit 'git commit --all'
     abbr --add -- enter 'distrobox enter'
@@ -20,8 +21,6 @@ status is-interactive; and begin
 
     fzf --fish | source
     starship init fish | source
-    direnv hook fish | source
-    zoxide init fish | source
 
     enable_transience
 end
