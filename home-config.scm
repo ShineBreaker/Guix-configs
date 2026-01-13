@@ -34,10 +34,13 @@
              (px packages node)
              (px packages version-control)
 
+             (radix packages gnupg)
+
              (rosenthal packages games)
              (rosenthal services desktop)
+             (rosenthal services shellutils)
              (rosenthal utils packages))
- 
+
 (use-package-modules freedesktop
                      gnupg
                      java
@@ -89,6 +92,9 @@
      (append (list (service home-blueman-applet-service-type)
                    (service home-dbus-service-type)
                    (service home-fish-service-type)
+                   (service home-fish-plugin-atuin-service-type)
+                   (service home-fish-plugin-direnv-service-type)
+                   (service home-fish-plugin-zoxide-service-type)
                    (service home-mako-service-type)
                    (service home-niri-service-type)
 
@@ -107,8 +113,8 @@
 
                    (service home-gpg-agent-service-type
                             (home-gpg-agent-configuration (pinentry-program (file-append
-                                                                             pinentry-tty
-                                                                             "/bin/pinentry-tty"))
+                                                                             pinentry-fuzzel
+                                                                             "/bin/pinentry-fuzzel"))
                                                           (ssh-support? #t)))
 
                    (service home-pipewire-service-type
