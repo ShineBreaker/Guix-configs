@@ -18,7 +18,6 @@
              (px packages tpm)
 
              (radix packages freedesktop)
-             (radix packages gnupg)
 
              (rde packages fonts)
 
