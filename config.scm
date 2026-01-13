@@ -61,7 +61,6 @@
                      kde-frameworks
                      image-viewers
                      linux
-                     lxqt
                      package-management
                      password-utils
                      polkit
@@ -178,16 +177,19 @@
                           dconf-editor
                           easyeffects
                           featherpad
+                          file-roller
                           kvantum
+                          libsecret
                           nomacs
-                          pcmanfm-qt
+                          pipewire
+                          polkit-gnome
                           qt5ct
                           qt6ct
                           qtsvg
-                          libsecret
-                          lxqt-archiver
-                          pipewire
-                          polkit-gnome
+                          thunar
+                          thunar-archive-plugin
+                          thunar-media-tags-plugin
+                          thunar-volman
                           wireplumber
                           xdg-user-dirs
 
