@@ -43,6 +43,7 @@
 
 (use-package-modules freedesktop
                      gnupg
+                     gnome
                      java
                      libreoffice
                      librewolf
@@ -67,6 +68,7 @@
                        "nomacs"
                        "obs"
                        "obsidian"
+                       "seahorse"
                        "sniffnet"
                        "sops"
                        "zen-browser-bin"
