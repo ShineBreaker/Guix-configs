@@ -224,8 +224,6 @@
                           git
                           gzip
                           pinentry
-                          pinentry-fuzzel
-                          pinentry-tty
                           podman
                           podman-compose
                           python
