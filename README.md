@@ -1,13 +1,3 @@
-# Guix 配置仓库
-
-这是我的 GNU Guix 系统配置和 Home 环境配置文件。
-
-## 项目简介
-
-本项目包含了使用 GNU Guix 构建的个人 Linux 系统配置，包括系统级配置和 Home 环境配置。配置使用了多个第三方频道来扩展 Guix 的包库。
-
-## 系统特性
-
 ### 核心配置
 
 - **发行版**: GNU Guix System
@@ -19,8 +9,8 @@
 ### 桌面环境
 
 - **显示服务器**: Wayland
-- **窗口合成器**: Niri（动态平铺式 Wayland 合成器）
-- **显示管理器**: SDDM（自动登录）
+- **窗口合成器**: Niri
+- **显示管理器**: SDDM
 - **锁屏器**: gtklock
 - **终端**: Foot
 - **菜单启动器**: Fuzzel
@@ -46,18 +36,6 @@
 - 网络优化：BBR 拥塞控制、TCP 快速打开
 - 虚拟内存优化：减少缓存压力、降低页锁不公平性
 - 禁用 NUMA 平衡、启用调度自动分组
-
-### 自定义频道
-
-使用以下第三方频道扩展包库：
-
-- https://codeberg.org/vnpower/cast
-- https://gitlab.com/nonguix/nonguix
-- https://codeberg.org/anemofilia/radix.git
-- https://git.sr.ht/~abcdw/rde
-- https://codeberg.org/hako/rosenthal.git
-- https://codeberg.org/look/saayix
-- https://github.com/fishinthecalculator/sops-guix
 
 ### 字体配置
 
@@ -113,20 +91,6 @@ guix home reconfigure home-config.scm
 - https://mirror.sjtu.edu.cn/guix（上海交通大学）
 - https://cache-cdn.guix.moe（Moe 缓存）
 - https://substitutes.nonguix.org（Nonguix 替代源）
-
-## 系统要求
-
-- UEFI 固件
-- 支持 UEFI 的系统
-- 至少一个加密分区（LUKS）
-- Btrfs 文件系统支持
-
-## 注意事项
-
-1. 此配置针对特定的硬件和用户设置进行了定制
-2. 用户名为 `brokenshine`，如果需要使用，请相应修改
-3. 磁盘 UUID 和加密密钥文件路径需要根据实际情况调整
-4. 代理服务配置在 127.0.0.1:7890，确保 Mihomo 正确配置
 
 ---
 
