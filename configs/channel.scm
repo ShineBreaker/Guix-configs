@@ -63,15 +63,6 @@
                     (openpgp-fingerprint
                      "3FFA 7335 973E 0A49 47FC  0A8C 38D5 96BE 07D3 34AB"))))
                 (channel
-                  (name 'sops-guix)
-                  (url "https://github.com/fishinthecalculator/sops-guix")
-                  (branch "main")
-                  (introduction
-                   (make-channel-introduction
-                    "0bbaf1fdd25266c7df790f65640aaa01e6d2dbc9"
-                    (openpgp-fingerprint
-                     "8D10 60B9 6BB8 292E 829B  7249 AED4 1CC1 93B7 01E2"))))
-                (channel
                   (inherit (car %default-channels))
                   (url "https://mirror.sjtu.edu.cn/git/guix.git")))
 
