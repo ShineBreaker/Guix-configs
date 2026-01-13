@@ -18,12 +18,14 @@
              (px packages tpm)
 
              (radix packages freedesktop)
+             (radix packages gnupg)
 
              (rde packages fonts)
 
              (rosenthal)
              (rosenthal bootloader uki)
              (rosenthal packages networking)
+             (rosenthal packages rust-apps)
 
              (saayix packages binaries)
              (saayix packages fonts))
@@ -213,6 +215,7 @@
                           zoxide
 
                           ;; Ulitily
+                          atuin
                           bluez
                           curl
                           cryptsetup
@@ -220,6 +223,9 @@
                           flatpak-xdg-utils
                           git
                           gzip
+                          pinentry
+                          pinentry-fuzzel
+                          pinentry-tty
                           podman
                           podman-compose
                           python
@@ -232,6 +238,7 @@
 
   (services
    (append (list (service fprintd-service-type)
+                 (service gnome-keyring-service-type)
                  (service nftables-service-type)
                  (service tlp-service-type)
 
