@@ -105,12 +105,16 @@
 
   (bootloader (bootloader-configuration
                 (bootloader uefi-uki-removable-bootloader)
-                (targets '("/efi"))))
+                (theme (grub-theme (inherit (grub-theme))
+                                   (gfxmode '("1024x786x32"))))
+                (targets '("/efi"))
+                (extra-initrd "/SYSTEM/Guix/@/boot/cryptroot.cpio")))
 
   (mapped-devices (list (mapped-device
                           (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
                           (target "root")
-                          (type luks-device-mapping))))
+                          (type luks-device-mapping)
+                          (arguments '(#:key-file "/cryptroot.key")))))
 
   (file-systems (append (list (file-system
                                 (device (file-system-label "Linux"))
@@ -176,6 +180,7 @@
                           ;; Essential
                           dconf-editor
                           easyeffects
+                          exo
                           file-roller
                           kvantum
                           libsecret
@@ -233,15 +238,34 @@
   (services
    (append (list (service fprintd-service-type)
                  (service gnome-keyring-service-type)
-                 (service nftables-service-type)
                  (service tlp-service-type)
-
-                 (service syncthing-service-type
-                         (syncthing-configuration (user "brokenshine")))
 
                  (service bluetooth-service-type
                          (bluetooth-configuration
                            (auto-enable? #t)))
+
+                 (service nftables-service-type
+                           (nftables-configuration
+                             (ruleset (plain-file "nftables.conf"
+                               "flush ruleset
+                                table inet filter {
+                                  chain input {
+                                    type filter hook input priority 0; policy drop;
+                                    ct state established,related accept
+                                    iif lo accept
+                                    tcp dport 22 accept   # SSH
+                                    tcp dport 22000 accept  # Syncthing 同步端口
+                                    udp dport 21027 accept  # Syncthing 本地发现
+                                    # 可以添加其他需要的规则
+                                  }
+                                  chain forward {
+                                    type filter hook forward priority 0; policy drop;
+                                  }
+
+                                  chain output {
+                                    type filter hook output priority 0; policy accept;
+                                  }
+                                }"))))
 
                  (service rootless-podman-service-type
                           (rootless-podman-configuration (subuids (list (subid-range
@@ -271,6 +295,9 @@
                           (sddm-configuration (auto-login-user "brokenshine")
                                               (auto-login-session
                                                "niri.desktop")))
+
+                 (service syncthing-service-type
+                         (syncthing-configuration (user "brokenshine")))
 
 
                  (simple-service 'extend-kernel-module-loader
