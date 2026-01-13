@@ -176,11 +176,9 @@
                           ;; Essential
                           dconf-editor
                           easyeffects
-                          featherpad
                           file-roller
                           kvantum
                           libsecret
-                          nomacs
                           pipewire
                           polkit-gnome
                           qt5ct
@@ -203,7 +201,6 @@
                           ;; Terminal
                           bat
                           btop
-                          direnv
                           distrobox
                           eza
                           fastfetch
@@ -213,10 +210,8 @@
                           helix
                           mihomo
                           starship
-                          zoxide
 
                           ;; Ulitily
-                          atuin
                           bluez
                           curl
                           cryptsetup
