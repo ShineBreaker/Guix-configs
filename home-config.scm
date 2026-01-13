@@ -36,10 +36,7 @@
 
              (rosenthal packages games)
              (rosenthal services desktop)
-             (rosenthal utils packages)
-
-             (sops secrets)
-             (sops home services sops))
+             (rosenthal utils packages))
  
 (use-package-modules freedesktop
                      gnupg
