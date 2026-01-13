@@ -1,0 +1,3 @@
+[submodule "dotfiles/.local/share/fcitx5/rime"]
+	path = dotfiles/.local/share/fcitx5/rime
+	url = https://github.com/iDvel/rime-ice.git
