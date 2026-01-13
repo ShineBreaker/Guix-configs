@@ -151,8 +151,10 @@
 
                         %base-file-systems))
 
-  (packages (append (list bluez
+  (packages (append (list ;;Desktop
+                          bluez
                           glib
+                          gnome-keyring
                           gsettings-desktop-schemas
                           gtklock
                           gvfs
@@ -171,6 +173,7 @@
                           xdg-terminal-exec
                           xwayland-satellite
 
+                          ;; Essential
                           dconf-editor
                           easyeffects
                           featherpad
@@ -187,12 +190,14 @@
                           wireplumber
                           xdg-user-dirs
 
+                          ;; Fonts
                           font-awesome
                           font-google-noto-emoji
                           font-iosevka-nerd
                           font-nerd-noto
                           font-sarasa-gothic
 
+                          ;; Terminal
                           bat
                           btop
                           direnv
@@ -207,6 +212,7 @@
                           starship
                           zoxide
 
+                          ;; Ulitily
                           bluez
                           curl
                           cryptsetup
@@ -228,7 +234,7 @@
    (append (list (service fprintd-service-type)
                  (service nftables-service-type)
                  (service tlp-service-type)
-                 
+
                  (service syncthing-service-type
                          (syncthing-configuration (user "brokenshine")))
 
@@ -335,7 +341,7 @@
                                                     (guix (guix-for-channels
                                                            guix-channels))
                                                     (substitute-urls (append (list
-                                                                              "https://mirror.sjtu.edu.cn/guix"
+                                                                              ;;"https://mirror.sjtu.edu.cn/guix"
                                                                               "https://cache-cdn.guix.moe"
                                                                               "https://substitutes.nonguix.org"
                                                                               "https://substitutes.guix.gofranz.com")
