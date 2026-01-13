@@ -39,7 +39,9 @@
              (rosenthal packages games)
              (rosenthal services desktop)
              (rosenthal services shellutils)
-             (rosenthal utils packages))
+             (rosenthal utils packages)
+
+             (selected-guix-works packages rust-apps))
 
 (use-package-modules freedesktop
                      gnupg
@@ -64,6 +66,7 @@
                        "mako"
 
                        ;; Utility
+                       "git-credential-keepassxc"
                        "libreoffice"
                        "nomacs"
                        "obs"
