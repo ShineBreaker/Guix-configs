@@ -82,6 +82,7 @@
                        "steam"
 
                        ;; Themes
+                       "adwaita-icon-theme"
                        "bibata-cursor-theme"
                        "orchis-theme"
                        "papirus-icon-theme"
