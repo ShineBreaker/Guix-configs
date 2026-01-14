@@ -157,13 +157,13 @@
 
   (packages (append (list ;;Desktop
                           bluez
+                          brightnessctl
                           glib
                           gnome-keyring
                           gsettings-desktop-schemas
                           gtklock
                           gvfs
                           libnotify
-                          light
                           niri
                           swayidle
                           swww
@@ -216,7 +216,7 @@
                           mihomo
                           starship
 
-                          ;; Ulitily
+                          ;; System
                           bluez
                           curl
                           cryptsetup
