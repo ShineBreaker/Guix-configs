@@ -41,6 +41,8 @@
              (rosenthal services shellutils)
              (rosenthal utils packages)
 
+             (saayix packages binaries)
+
              (selected-guix-works packages rust-apps))
 
 (use-package-modules freedesktop
