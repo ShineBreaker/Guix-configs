@@ -48,6 +48,7 @@
 (use-package-modules freedesktop
                      gnupg
                      gnome
+                     golang-crypto
                      java
                      libreoffice
                      librewolf
@@ -68,14 +69,13 @@
                        "mako"
 
                        ;; Utility
+                       "age"
                        "git-credential-keepassxc"
                        "libreoffice"
                        "nomacs"
                        "obs"
                        "obsidian"
                        "seahorse"
-                       "sniffnet"
-                       "sops"
                        "zen-browser-bin"
 
                        ;; Entertain
@@ -105,6 +105,7 @@
                    (service home-fish-plugin-zoxide-service-type)
                    (service home-mako-service-type)
                    (service home-niri-service-type)
+                   (service home-syncthing-service-type)
 
                    (service home-dotfiles-service-type
                             (home-dotfiles-configuration (directories '("./dotfiles"))))
