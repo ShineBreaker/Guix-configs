@@ -24,6 +24,8 @@
              (guix gexp)
              (guix utils)
 
+             (jeans packages fonts)
+
              (nongnu packages game-client)
              (nongnu packages productivity)
 
@@ -90,6 +92,7 @@
                        "papirus-icon-theme"
 
                        ;; Programming
+                       "font-maple-font-nf-cn"
                        "gh"
                        "node"
                        "pnpm"
