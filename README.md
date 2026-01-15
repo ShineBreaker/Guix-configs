@@ -1,3 +1,5 @@
+# [Moved to Codeberg!!!](https://codeberg.org/BrokenShine/Guix-configs)
+
 # Guix 配置仓库
 
 这是我的 GNU Guix 系统配置和 Home 环境配置文件。
