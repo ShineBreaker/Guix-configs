@@ -296,10 +296,6 @@
                                               (auto-login-session
                                                "niri.desktop")))
 
-                 (service syncthing-service-type
-                         (syncthing-configuration (user "brokenshine")))
-
-
                  (simple-service 'extend-kernel-module-loader
                                  kernel-module-loader-service-type
                                  '("sch_fq_pie" "tcp_bbr"))
