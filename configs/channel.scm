@@ -11,6 +11,15 @@
                     (openpgp-fingerprint
                      "D430 1F59 A65F 49DA 918A  3C0D 8D4C 3248 29DE D156"))))
                 (channel
+                  (name 'jeans)
+                  (branch "main")
+                  (url "https://codeberg.org/BrokenShine/jeans.git")
+                  (introduction
+                   (make-channel-introduction
+                    "1e30ccbcaef375169d453d89d8186137bc32d9e8"
+                    (openpgp-fingerprint
+                     "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
+                (channel
                   (name 'nonguix)
                   (url "https://gitlab.com/nonguix/nonguix")
                   (introduction
