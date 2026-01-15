@@ -183,6 +183,7 @@
                           exo
                           file-roller
                           kvantum
+                          libgnome-keyring
                           libsecret
                           pipewire
                           polkit-gnome
