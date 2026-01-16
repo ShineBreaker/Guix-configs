@@ -1,17 +1,11 @@
+spawn-sh-at-startup "pgrep --uid $USER shepherd > /dev/null || shepherd"
+
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 
 spawn-at-startup "swww-daemon"
 spawn-at-startup "swww" "restore"
 
-spawn-at-startup "blueman-applet"
-spawn-at-startup "fcitx5" "-d"
-spawn-at-startup "mako"
 spawn-at-startup "swayidle"
-spawn-at-startup "waybar"
-
-spawn-at-startup "keepassxc" "--minimized"
-
-spawn-at-startup "/run/current-system/profile/libexec/polkit-gnome-authentication-agent-1"
 
 prefer-no-csd
 
