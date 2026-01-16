@@ -224,6 +224,7 @@
                           flatpak
                           flatpak-xdg-utils
                           git
+                          git-filter-repo
                           gzip
                           pinentry
                           podman
