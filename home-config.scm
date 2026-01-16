@@ -24,7 +24,7 @@
              (guix gexp)
              (guix utils)
 
-             (jeans packages fonts)
+             (jeans packages java)
 
              (nongnu packages game-client)
              (nongnu packages productivity)
@@ -47,11 +47,12 @@
 
              (selected-guix-works packages rust-apps))
 
-(use-package-modules freedesktop
+(use-package-modules emacs
+                     freedesktop
                      gnupg
                      gnome
                      golang-crypto
-                     java
+                     guile-xyz
                      libreoffice
                      librewolf
                      linux
@@ -81,7 +82,7 @@
                        "zen-browser-bin"
 
                        ;; Entertain
-                       "openjdk"
+                       "zulu25-bin"
                        "prismlauncher-dolly"
                        "steam"
 
@@ -92,26 +93,28 @@
                        "papirus-icon-theme"
 
                        ;; Programming
-                       "font-maple-font-nf-cn"
-                       "gh"
+                       "emacs"
+                       "guile-studio"
                        "node"
                        "pnpm"
                        "rust-analyzer"
                        "zed")))
 
     (services
-     (append (list (service home-blueman-applet-service-type)
-                   (service home-dbus-service-type)
-                   (service home-fish-service-type)
+     (append (list (service home-fish-service-type)
                    (service home-fish-plugin-atuin-service-type)
                    (service home-fish-plugin-direnv-service-type)
                    (service home-fish-plugin-zoxide-service-type)
                    (service home-mako-service-type)
                    (service home-niri-service-type)
                    (service home-syncthing-service-type)
+                   (service home-waybar-service-type)
 
                    (service home-dotfiles-service-type
-                            (home-dotfiles-configuration (directories '("./dotfiles"))))
+                            (home-dotfiles-configuration (directories '("./dotfiles"))
+                                                         (excluded '("^.git$"
+                                                                     "^.gitignore$"
+                                                                     "^.github$"))))
 
                    (service home-fcitx5-service-type
                             (home-fcitx5-configuration (themes (specs->pkgs
@@ -129,12 +132,6 @@
                                                                              "/bin/pinentry-fuzzel"))
                                                           (ssh-support? #t)))
 
-                   (service home-pipewire-service-type
-                            (home-pipewire-configuration (wireplumber
-                                                          wireplumber)
-                                                         (enable-pulseaudio?
-                                                          #t)))
-
                    (service home-xdg-configuration-files-service-type
                             `(("gdb/gdbinit" ,%default-gdbinit)
                               ("nano/nanorc" ,%default-nanorc)))
@@ -148,21 +145,22 @@
                    (simple-service 'extend-fontconfig
                                    home-fontconfig-service-type
                                    (list "~/.local/share/fonts"
-                                         (let ((sans "Sarasa Gothic SC")
-                                               (serif "Sarasa Gothic SC")
-                                               (mono "Maple Mono NF CN")
-                                               (emoji "Noto Color Emoji"))
-                                           `((alias (family "sans-serif")
-                                                    (prefer (family ,sans)
-                                                            (family ,emoji)))
-                                             (alias (family "serif")
-                                                    (prefer (family ,serif)
-                                                            (family ,emoji)))
-                                             (alias (family "monospace")
-                                                    (prefer (family ,mono)
-                                                            (family ,emoji)))
-                                             (alias (family "emoji")
-                                                    (prefer (family ,emoji)))))))
+                                    "/run/current-system/profile/share/fonts"
+                                    (let ((sans "Sarasa Gothic SC")
+                                          (serif "Sarasa Gothic SC")
+                                          (mono "Maple Mono NF CN")
+                                          (emoji "Noto Color Emoji"))
+                                      `((alias (family "sans-serif")
+                                               (prefer (family ,sans)
+                                                       (family ,emoji)))
+                                        (alias (family "serif")
+                                               (prefer (family ,serif)
+                                                       (family ,emoji)))
+                                        (alias (family "monospace")
+                                               (prefer (family ,mono)
+                                                       (family ,emoji)))
+                                        (alias (family "emoji")
+                                               (prefer (family ,emoji)))))))
 
                    (simple-service 'xdg-desktop-portal
                                    home-shepherd-service-type
@@ -215,6 +213,11 @@
                                        (or (getenv "QT_PLUGIN_PATH") "")))
                                      ("_JAVA_AWT_WM_NONREPARENTING" . #t))))
 
-             %base-home-services))))
+             (modify-services %rosenthal-desktop-home-services
+               (home-pipewire-service-type config =>
+                                           (home-pipewire-configuration (wireplumber
+                                                                         wireplumber)
+                                                                        (enable-pulseaudio?
+                                                                         #t))))))))
 
 home-config
