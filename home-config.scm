@@ -82,7 +82,7 @@
                        "zen-browser-bin"
 
                        ;; Entertain
-                       "zulu25-bin"
+                       "openjdk@25"
                        "prismlauncher-dolly"
                        "steam"
 
