@@ -80,7 +80,7 @@
                      xdisorg
                      xfce
                      xorg)
-
+(define username "brokenshine")
 (operating-system
   (initrd microcode-initrd)
   (firmware (list linux-firmware sof-firmware bluez-firmware))
@@ -95,7 +95,7 @@
   (locale "zh_CN.utf8")
 
   (users (cons (user-account
-                 (name "brokenshine")
+                 (name username)
                  (group "users")
                  (password
                   "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
@@ -368,12 +368,12 @@
                                                                                "guix-moe.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
 
-                                                                              
+
                                                                               (plain-file
                                                                                "nonguix.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
 
-                                                                              
+
                                                                               (plain-file
                                                                                "panther.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
@@ -406,11 +406,9 @@
                                                                              ("--time"
                                                                               "--time-format '%Y-%m-%d %l:%M:%S'"
                                                                               "--remember"
-                                                                              "--cmd"
-                                                                              "dbus-run-session niri --session"))))
-                                                                          ;; 如果你还想要 autologin
+                                                                              "--cmd 'dbus-run-session niri --session'"))))
                                                                           (initial-session-user
-                                                                           "brokenshine") ;改成你的用户名
+                                                                           username)
                                                                           (initial-session-command
                                                                            "dbus-run-session niri --session")))))))))
 
