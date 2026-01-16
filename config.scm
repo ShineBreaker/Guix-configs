@@ -14,6 +14,8 @@
 
              (cast packages gtklock)
 
+             (jeans packages fonts)
+
              (px packages document)
              (px packages tpm)
 
@@ -155,7 +157,7 @@
 
                         %base-file-systems))
 
-  (packages (append (list ;;Desktop
+  (packages (append (list ;Desktop
                           bluez
                           brightnessctl
                           glib
@@ -201,6 +203,7 @@
                           font-awesome
                           font-google-noto-emoji
                           font-iosevka-nerd
+                          font-maple-font-nf-cn
                           font-nerd-noto
                           font-sarasa-gothic
 
@@ -243,14 +246,15 @@
                  (service gnome-keyring-service-type)
                  (service tlp-service-type)
 
-                 (service bluetooth-service-type
-                         (bluetooth-configuration
-                           (auto-enable? #t)))
+                 (service kmscon-service-type
+                          (kmscon-configuration (virtual-terminal "tty2")
+                                                (font-engine "unifont")
+                                                (font-size 26)))
 
                  (service nftables-service-type
-                           (nftables-configuration
-                             (ruleset (plain-file "nftables.conf"
-                               "flush ruleset
+                          (nftables-configuration (ruleset (plain-file
+                                                            "nftables.conf"
+                                                            "flush ruleset
                                 table inet filter {
                                   chain input {
                                     type filter hook input priority 0; policy drop;
@@ -293,11 +297,6 @@
                                                                  "/bin/gtklock"))
                                                        (allow-empty-password?
                                                                               #f)))
-
-                 (service sddm-service-type
-                          (sddm-configuration (auto-login-user "brokenshine")
-                                              (auto-login-session
-                                               "niri.desktop")))
 
                  (simple-service 'extend-kernel-module-loader
                                  kernel-module-loader-service-type
@@ -351,24 +350,15 @@
                                                   'memlock
                                                   'unlimited))))
 
-           (modify-services %desktop-services
-             (delete gdm-service-type)
-             (udev-service-type config =>
-                                (udev-configuration (inherit config)
-                                                    (rules (append (udev-configuration-rules
-                                                                    config)
-                                                                   (list
-                                                                    steam-devices-udev-rules
-                                                                    (plain-file
-                                                                     "99-sayodevice.rules"
-                                                                     "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\""))))))
+           (modify-services %rosenthal-desktop-services
+             (delete console-font-service-type)
              (guix-service-type config =>
                                 (guix-configuration (inherit config)
                                                     (channels guix-channels)
                                                     (guix (guix-for-channels
                                                            guix-channels))
                                                     (substitute-urls (append (list
-                                                                              ;;"https://mirror.sjtu.edu.cn/guix"
+                                                                              ;; "https://mirror.sjtu.edu.cn/guix"
                                                                               "https://cache-cdn.guix.moe"
                                                                               "https://substitutes.nonguix.org"
                                                                               "https://substitutes.guix.gofranz.com")
@@ -378,16 +368,50 @@
                                                                                "guix-moe.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
 
-
+                                                                              
                                                                               (plain-file
                                                                                "nonguix.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
 
-
+                                                                              
                                                                               (plain-file
                                                                                "panther.pub"
                                                                                "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
                                                                       %default-authorized-guix-keys))
-                                                    (discover? #f))))))
+                                                    (discover? #f)))
+
+             (udev-service-type config =>
+                                (udev-configuration (inherit config)
+                                                    (rules (append (udev-configuration-rules
+                                                                    config)
+                                                                   (list
+                                                                    steam-devices-udev-rules
+                                                                    (plain-file
+                                                                     "99-sayodevice.rules"
+                                                                     "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\""))))))
+
+             (greetd-service-type config =>
+                                  (greetd-configuration (terminals (list (greetd-terminal-configuration
+                                                                          (terminal-vt
+                                                                           "7")
+                                                                          (terminal-switch
+                                                                           #t)
+                                                                          (default-session-command
+                                                                           (greetd-user-session
+                                                                            (command
+                                                                             (file-append
+                                                                              tuigreet
+                                                                              "/bin/tuigreet"))
+                                                                            (command-args '
+                                                                             ("--time"
+                                                                              "--time-format '%Y-%m-%d %l:%M:%S'"
+                                                                              "--remember"
+                                                                              "--cmd"
+                                                                              "dbus-run-session niri --session"))))
+                                                                          ;; 如果你还想要 autologin
+                                                                          (initial-session-user
+                                                                           "brokenshine") ;改成你的用户名
+                                                                          (initial-session-command
+                                                                           "dbus-run-session niri --session")))))))))
 
   (name-service-switch %mdns-host-lookup-nss))
