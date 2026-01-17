@@ -1,217 +1,23 @@
 (load "./configs/channel.scm")
+(load "./configs/information.scm")
 
-(use-modules (gnu)
-             (gnu home)
-             (gnu home services)
-             (gnu home services shells)
-             (gnu home services desktop)
-             (gnu home services dotfiles)
-             (gnu home services fontutils)
-             (gnu home services gnupg)
-             (gnu home services shepherd)
-             (gnu home services niri)
-             (gnu home services sound)
-             (gnu home services desktop)
-             (gnu home services fontutils)
-             (gnu home services syncthing)
-             (gnu home services guix)
+(load "./configs/home/modules.scm")
+(load "./configs/home/package.scm")
 
-             (gnu packages)
-
-             (gnu services)
-             (gnu system shadow)
-
-             (guix gexp)
-             (guix utils)
-
-             (jeans packages java)
-
-             (nongnu packages game-client)
-             (nongnu packages productivity)
-
-             (px packages activitywatch)
-             (px packages desktop-tools)
-             (px packages editors)
-             (px packages networking)
-             (px packages node)
-             (px packages version-control)
-
-             (radix packages gnupg)
-
-             (rosenthal packages games)
-             (rosenthal services desktop)
-             (rosenthal services shellutils)
-             (rosenthal utils packages)
-
-             (saayix packages binaries)
-
-             (selected-guix-works packages rust-apps))
-
-(use-package-modules emacs
-                     freedesktop
-                     gnupg
-                     gnome
-                     golang-crypto
-                     guile-xyz
-                     libreoffice
-                     librewolf
-                     linux
-                     node
-                     video
-                     wm)
+(load "./configs/home/services/desktop.scm")
+(load "./configs/home/services/dotfile.scm")
+(load "./configs/home/services/environment-variables.scm")
+(load "./configs/home/services/font.scm")
 
 (define home-config
   (home-environment
-    (packages (append (specs->pkgs+out
-                       ;; Desktop
-                       "activitywatch"
-                       "cliphist"
-                       "fcitx5"
-                       "fuzzel"
-                       "keepassxc"
-                       "mako"
-
-                       ;; Utility
-                       "age"
-                       "git-credential-keepassxc"
-                       "libreoffice"
-                       "nomacs"
-                       "obs"
-                       "obsidian"
-                       "seahorse"
-                       "zen-browser-bin"
-
-                       ;; Entertain
-                       "openjdk@25"
-                       "prismlauncher-dolly"
-                       "steam"
-
-                       ;; Themes
-                       "adwaita-icon-theme"
-                       "bibata-cursor-theme"
-                       "orchis-theme"
-                       "papirus-icon-theme"
-
-                       ;; Programming
-                       "emacs-pgtk"
-                       "guile-studio"
-                       "node"
-                       "pnpm"
-                       "rust-analyzer"
-                       "zed")))
+    (packages %packages-list)
 
     (services
-     (append (list (service home-fish-service-type)
-                   (service home-fish-plugin-atuin-service-type)
-                   (service home-fish-plugin-direnv-service-type)
-                   (service home-fish-plugin-zoxide-service-type)
-                   (service home-mako-service-type)
-                   (service home-niri-service-type)
-                   (service home-syncthing-service-type)
-                   (service home-waybar-service-type)
-
-                   (service home-dotfiles-service-type
-                            (home-dotfiles-configuration (directories '("./dotfiles"))
-                                                         (excluded '("^.git$"
-                                                                     "^.gitignore$"
-                                                                     "^.github$"))))
-
-                   (service home-fcitx5-service-type
-                            (home-fcitx5-configuration (themes (specs->pkgs
-                                                                "fcitx5-material-color-theme"))
-                                                       (input-method-editors (specs->pkgs
-                                                                              "fcitx5-rime"))))
-
-                   (service home-files-service-type
-                            `((".guile" ,%default-dotguile)
-                              (".Xdefaults" ,%default-xdefaults)))
-
-                   (service home-gpg-agent-service-type
-                            (home-gpg-agent-configuration (pinentry-program (file-append
-                                                                             pinentry-fuzzel
-                                                                             "/bin/pinentry-fuzzel"))
-                                                          (ssh-support? #t)))
-
-                   (service home-xdg-configuration-files-service-type
-                            `(("gdb/gdbinit" ,%default-gdbinit)
-                              ("nano/nanorc" ,%default-nanorc)))
-
-                   (simple-service 'fish-greeting
-                                   home-xdg-configuration-files-service-type
-                                   `(("fish/conf.d/greeting.fish" ,(plain-file
-                                                                    "greeting.fish"
-                                                                    "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))
-
-                   (simple-service 'extend-fontconfig
-                                   home-fontconfig-service-type
-                                   (list "~/.local/share/fonts"
-                                    "/run/current-system/profile/share/fonts"
-                                    (let ((sans "Sarasa Gothic SC")
-                                          (serif "Sarasa Gothic SC")
-                                          (mono "Maple Mono NF CN")
-                                          (emoji "Noto Color Emoji"))
-                                      `((alias (family "sans-serif")
-                                               (prefer (family ,sans)
-                                                       (family ,emoji)))
-                                        (alias (family "serif")
-                                               (prefer (family ,serif)
-                                                       (family ,emoji)))
-                                        (alias (family "monospace")
-                                               (prefer (family ,mono)
-                                                       (family ,emoji)))
-                                        (alias (family "emoji")
-                                               (prefer (family ,emoji)))))))
-
-                   (simple-service 'xdg-desktop-portal
-                                   home-shepherd-service-type
-                                   (list (shepherd-service (provision '(xdg-desktop-portal))
-                                                           (requirement '(dbus))
-                                                           (start #~(make-forkexec-constructor
-                                                                     (list #$(file-append
-                                                                              xdg-desktop-portal
-                                                                              "/bin/xdg-desktop-portal"))
-                                                                     #:log-file
-                                                                     (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/xdg-desktop-portal.log")))
-                                                           (respawn? #t)
-                                                           (auto-start? #t))))
-
-                   (simple-service 'xdg-desktop-portal-gtk
-                                   home-shepherd-service-type
-                                   (list (shepherd-service (provision '(xdg-desktop-portal-gtk))
-                                                           (requirement '(xdg-desktop-portal))
-                                                           (start #~(make-forkexec-constructor
-                                                                     (list #$(file-append
-                                                                              xdg-desktop-portal-gtk
-                                                                              "/libexec/xdg-desktop-portal-gtk"))
-                                                                     #:log-file
-                                                                     (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/xdg-desktop-portal-gtk.log")))
-                                                           (respawn? #t)
-                                                           (auto-start? #t))))
-
-                   (simple-service 'environment-variables
-                                   home-environment-variables-service-type
-                                   `(("EDITOR" . "hx")
-                                     ("GDK_BACKEND" . "wayland")
-                                     ("GUIX_PROFILE" . "$HOME/.guix-home/profile/etc/profile")
-                                     ("HTTP_PROXY" . "http://127.0.0.1:7890")
-                                     ("HTTPS_PROXY" . "$HTTP_PROXY")
-                                     ("PATH" unquote
-                                      (string-append "$HOME/.local/bin:"
-                                                     (or (getenv "PATH") "")))
-                                     ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
-                                     ("QT_QPA_PLATFORMTHEME" . "qt5ct")
-                                     ("QT_PLUGIN_PATH" unquote
-                                      (string-append
-                                       "/run/current-system/profile/lib/qt5/plugins:"
-                                       "/run/current-system/profile/lib/qt6/plugins:"
-                                       (or (getenv "QT_PLUGIN_PATH") "")))
-                                     ("_JAVA_AWT_WM_NONREPARENTING" . #t))))
+     (append %desktop-services
+             %dotfile-services
+             %environment-variable-services
+             %font-services
 
              (modify-services %rosenthal-desktop-home-services
                (home-pipewire-service-type config =>
