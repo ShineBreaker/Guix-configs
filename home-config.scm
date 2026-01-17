@@ -93,7 +93,7 @@
                        "papirus-icon-theme"
 
                        ;; Programming
-                       "emacs"
+                       "emacs-pgtk"
                        "guile-studio"
                        "node"
                        "pnpm"
