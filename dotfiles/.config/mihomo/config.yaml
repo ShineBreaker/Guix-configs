@@ -1,0 +1,144 @@
+init:
+  &init {
+    type: http,
+    interval: 86400,
+    health-check:
+      {
+        enable: true,
+        url: https://www.gstatic.com/generate_204,
+        interval: 1800,
+      },
+  }
+use: &use { type: select, proxies: [DIRECT, AUTO], use: [one] }
+auto:
+  &auto {
+    type: url-test,
+    url: https://www.gstatic.com/generate_204,
+    interval: 900,
+    filter: "^(?:(?!.*(?:倍|x)).)*$",
+  }
+
+proxy-providers:
+  one:
+    <<: *init
+    path: proxies/fastfly.yaml
+
+  another:
+    <<: *init
+    path: proxies/kuiben.yaml
+
+mixed-port: 7890
+# redir-port: 7892
+# tproxy-port: 7893
+allow-lan: true
+bind-address: "*"
+mode: rule
+ipv6: true
+udp: true
+log-level: error
+external-controller: 0.0.0.0:9090
+external-ui: UI
+external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
+
+geodata-mode: true
+geox-url:
+  geosite: "https://testingcf.jsdelivr.net/gh/v2fly/domain-list-community@release/dlc.dat"
+  geoip: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip-lite.dat"
+geo-auto-update: true
+geo-update-interval: 168
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+hosts:
+
+sniffer:
+  enable: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  skip-domain:
+    - Mijia Cloud
+
+tun:
+  enable: true
+  # device: utun
+  stack: mixed
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+  auto-route: true
+  auto-redirect: true
+  auto-detect-interface: true
+
+dns:
+  enable: true
+  prefer-h3: true
+  listen: 0.0.0.0:1053
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-filter:
+    - "geosite:connectivity-check"
+    - "geosite:private"
+  default-nameserver:
+    - 223.5.5.5
+  nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+
+proxy-groups:
+  - { name: PROXY, <<: *use }
+  - { name: GAME, <<: *use }
+  - { name: MATCH, <<: *use }
+  - { name: AUTO, <<: *auto, use: [one] }
+
+rule-anchor:
+  ip: &ip { type: http, interval: 604800, behavior: ipcidr, format: yaml }
+  domain:
+    &domain { type: http, interval: 604800, behavior: domain, format: yaml }
+rule-providers:
+  direct:
+    <<: *domain
+    url: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt"
+    path: rules/direct.yaml
+  proxy:
+    <<: *domain
+    url: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt"
+    path: rules/proxy.yaml
+  reject:
+    <<: *domain
+    url: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt"
+    path: rules/reject.yaml
+
+rules:
+  - GEOIP,lan,DIRECT,no-resolve
+  - GEOSITE,private,DIRECT
+  - RULE-SET,reject,REJECT
+  - GEOSITE,category-ads-all,REJECT
+  - RULE-SET,direct,DIRECT
+  - GEOSITE,category-game-platforms-download,DIRECT
+  - GEOSITE,category-games-cn,DIRECT
+  - GEOSITE,category-games@cn,DIRECT
+  - GEOSITE,category-games,GAME
+  - RULE-SET,proxy,PROXY
+  - GEOSITE,geolocation-!cn,PROXY
+  - GEOSITE,geolocation-!cn@cn,DIRECT
+  - GEOSITE,cn,DIRECT
+  - GEOSITE,category-public-tracker,DIRECT
+  - GEOSITE,category-pt,DIRECT
+  - GEOIP,cn,DIRECT,no-resolve
+  - GEOIP,jp,PROXY,no-resolve
+  - GEOIP,telegram,PROXY,no-resolve
+  - GEOIP,google,PROXY,no-resolve
+  - GEOIP,twitter,PROXY,no-resolve
+  - GEOIP,netflix,PROXY,no-resolve
+  - GEOIP,facebook,PROXY,no-resolve
+  - GEOIP,cloudflare,PROXY,no-resolve
+  - GEOIP,cloudfront,PROXY,no-resolve
+  - MATCH,MATCH
