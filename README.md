@@ -160,7 +160,9 @@ guix home reconfigure home-config.scm
 ### 特别感谢
 
 Grok：帮我解决问题
+
 GLM：帮忙拆分了一下我的配置文件
+
 [GNU/Guix China群聊](https://t.me/guixcn)：帮助解决了进入系统的大问题，才终于让我用上了Guix
 
 ---
