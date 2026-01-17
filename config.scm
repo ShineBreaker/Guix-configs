@@ -80,7 +80,8 @@
                      xdisorg
                      xfce
                      xorg)
-(define username "brokenshine")
+(define username
+  "brokenshine")
 (operating-system
   (initrd microcode-initrd)
   (firmware (list linux-firmware sof-firmware bluez-firmware))
@@ -391,22 +392,12 @@
                                                                      "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\""))))))
 
              (greetd-service-type config =>
-                                  (greetd-configuration (terminals (list (greetd-terminal-configuration
+                                  (greetd-configuration (inherit config)
+                                                        (terminals (list (greetd-terminal-configuration
                                                                           (terminal-vt
                                                                            "7")
                                                                           (terminal-switch
                                                                            #t)
-                                                                          (default-session-command
-                                                                           (greetd-user-session
-                                                                            (command
-                                                                             (file-append
-                                                                              tuigreet
-                                                                              "/bin/tuigreet"))
-                                                                            (command-args '
-                                                                             ("--time"
-                                                                              "--time-format '%Y-%m-%d %l:%M:%S'"
-                                                                              "--remember"
-                                                                              "--cmd 'dbus-run-session niri --session'"))))
                                                                           (initial-session-user
                                                                            username)
                                                                           (initial-session-command
