@@ -22,7 +22,7 @@
              (rde packages fonts)
 
              (rosenthal)
-             (rosenthal bootloader uki)
+             (rosenthal bootloader grub)
              (rosenthal packages networking)
              (rosenthal packages rust-apps)
 
