@@ -93,8 +93,8 @@
                                                                   (list #$(file-append
                                                                            mihomo
                                                                            "/bin/mihomo")
-                                                                   "-f"
-                                                                   "/home/brokenshine/.config/mihomo/config.yaml")
+                                                                   "-f" "/home/brokenshine/.config/mihomo/config.yaml"
+                                                                   "-f" "/home/brokenshine/.config/mihomo/proxies.yaml")
                                                                   #:log-file
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))
