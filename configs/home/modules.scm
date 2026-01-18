@@ -22,8 +22,6 @@
              (guix gexp)
              (guix utils)
 
-             (jeans packages java)
-
              (nongnu packages game-client)
              (nongnu packages productivity)
 
