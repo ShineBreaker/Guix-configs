@@ -29,6 +29,7 @@
                 kvantum
                 libgnome-keyring
                 libsecret
+                mihomo
                 pipewire
                 polkit-gnome
                 qt5ct
@@ -59,7 +60,6 @@
                 foot
                 fzf
                 helix
-                mihomo
                 starship
 
                 ;; System

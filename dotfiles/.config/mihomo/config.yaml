@@ -21,11 +21,13 @@ auto:
 proxy-providers:
   one:
     <<: *init
-    path: proxies/fastfly.yaml
+    url: ${provider-urls.one}
+    path: proxies/one.yaml
 
-  another:
+  two:
     <<: *init
-    path: proxies/kuiben.yaml
+    url: ${provider-urls.two}
+    path: proxies/two.yaml
 
 mixed-port: 7890
 # redir-port: 7892
