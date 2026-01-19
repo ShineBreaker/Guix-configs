@@ -12,17 +12,8 @@ status is-interactive; and begin
     abbr --add -- update 'sudo ll-cli upgrade && sudo flatpak upgrade'
     abbr --add -- upgrade 'guix pull'
 
-    # Aliases
-    alias la 'eza -a'
-    alias ll 'eza -l'
-    alias lla 'eza -la'
-    alias ls eza
-    alias lt 'eza --tree'
-
     fzf --fish | source
     starship init fish | source
-
-    enable_transience
 end
 
 fastfetch

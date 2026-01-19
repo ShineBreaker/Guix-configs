@@ -54,7 +54,6 @@
                 bat
                 btop
                 distrobox
-                eza
                 fastfetch
                 fish
                 foot
