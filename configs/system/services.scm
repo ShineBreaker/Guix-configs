@@ -8,30 +8,11 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service nix-service-type)
                 (service tlp-service-type)
 
                 (service nftables-service-type
-                         (nftables-configuration (ruleset (plain-file
-                                                           "nftables.conf"
-                                                           "flush ruleset
-                                                            table inet filter {
-                                                              chain input {
-                                                                type filter hook input priority 0; policy drop;
-                                                                ct state established,related accept
-                                                                iif lo accept
-                                                                tcp dport 22 accept   # SSH
-                                                                tcp dport 22000 accept  # Syncthing 同步端口
-                                                                udp dport 21027 accept  # Syncthing 本地发现
-                                                                # 可以添加其他需要的规则
-                                                              }
-                                                              chain forward {
-                                                                type filter hook forward priority 0; policy drop;
-                                                              }
-
-                                                              chain output {
-                                                                type filter hook output priority 0; policy accept;
-                                                              }
-                                                            }"))))
+                         (nftables-configuration (ruleset (local-file "../files/nftables.conf"))))
 
                 (service rootless-podman-service-type
                          (rootless-podman-configuration (subuids (list (subid-range
@@ -116,7 +97,7 @@
                                                    (guix (guix-for-channels
                                                           guix-channels))
                                                    (substitute-urls (append (list
-                                                                             ;; "https://mirror.sjtu.edu.cn/guix"
+                                                                             "https://mirror.sjtu.edu.cn/guix"
                                                                              "https://cache-cdn.guix.moe"
                                                                              "https://substitutes.nonguix.org"
                                                                              "https://substitutes.guix.gofranz.com")

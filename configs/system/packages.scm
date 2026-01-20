@@ -9,6 +9,7 @@
                 gvfs
                 libnotify
                 niri
+                poweralertd
                 swayidle
                 swww
                 waybar
@@ -71,6 +72,7 @@
                 git-filter-repo
                 git-lfs
                 gzip
+                nix
                 ntfs-3g
                 pinentry
                 podman
