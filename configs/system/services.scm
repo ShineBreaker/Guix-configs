@@ -1,3 +1,6 @@
+(use-modules (gnu home services guix)
+             (guix channels))
+
 (use-service-modules authentication
                      containers
                      dbus
@@ -20,12 +23,15 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
-                (service nix-service-type)
                 (service tlp-service-type)
 
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
                                                            "../files/nftables.conf"))))
+
+                (service nix-service-type
+                         (nix-configuration (extra-config (list
+                                                           "trusted-users = brokenshine"))))
 
                 (service rootless-podman-service-type
                          (rootless-podman-configuration (subuids (list (subid-range
