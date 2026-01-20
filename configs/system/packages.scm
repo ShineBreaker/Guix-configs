@@ -1,3 +1,57 @@
+(use-modules (cast packages gtklock)
+
+             (jeans packages fonts)
+
+             (px packages document)
+             (px packages tpm)
+
+             (radix packages freedesktop)
+
+             (rde packages fonts)
+             (rosenthal packages networking)
+             (rosenthal packages rust-apps)
+
+             (saayix packages binaries)
+             (saayix packages fonts))
+
+(use-package-modules admin
+                     audio
+                     bash
+                     bootloaders
+                     compression
+                     containers
+                     cinnamon
+                     curl
+                     cryptsetup
+                     fcitx5
+                     fonts
+                     freedesktop
+                     games
+                     glib
+                     gnome
+                     gnome-xyz
+                     gnupg
+                     hardware
+                     kde-frameworks
+                     image-viewers
+                     linux
+                     package-management
+                     password-utils
+                     polkit
+                     python
+                     qt
+                     rust-apps
+                     terminals
+                     text-editors
+                     shellutils
+                     syncthing
+                     version-control
+                     wget
+                     wm
+                     xdisorg
+                     xfce
+                     xorg)
+
 (define %packages-config
   (append (list ;Desktop
                 bluez

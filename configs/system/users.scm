@@ -1,3 +1,5 @@
+(use-modules (gnu packages shells))
+
 (define %timezone-config
   "Asia/Shanghai")
 (define %locale-config

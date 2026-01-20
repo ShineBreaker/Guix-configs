@@ -29,6 +29,13 @@
                   (create-mount-point? #t))
                 (file-system
                   (device (file-system-label "Linux"))
+                  (mount-point "/nix")
+                  (type "btrfs")
+                  (options "subvol=SYSTEM/NixOS/@nix,compress=zstd:6")
+                  (dependencies %mapped-devices-config)
+                  (create-mount-point? #t))
+                (file-system
+                  (device (file-system-label "Linux"))
                   (mount-point "/var/lib/flatpak")
                   (type "btrfs")
                   (options "subvol=DATA/Flatpak,compress=zstd:6")

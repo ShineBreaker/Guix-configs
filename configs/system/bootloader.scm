@@ -1,3 +1,5 @@
+(use-modules (rosenthal bootloader grub))
+
 (define %bootloader-config
   (bootloader-configuration
     (bootloader grub-efi-luks2-bootloader)
