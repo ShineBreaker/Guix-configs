@@ -41,9 +41,8 @@
           ;; Entertain
           "mangohud"
           "openjdk@25"
-          "prismlauncher-dolly"
+          ;"prismlauncher-dolly"
           "steam"
-          "zulu17-bin"
 
           ;; Themes
           "adwaita-icon-theme"
