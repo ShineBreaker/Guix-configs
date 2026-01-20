@@ -2,7 +2,7 @@
   (list (simple-service 'environment-variables
                         home-environment-variables-service-type
                         `(("EDITOR" . "hx") ("GDK_BACKEND" . "wayland")
-                          ("GUIX_PROFILE" . "$HOME/.guix-profile/etc/profile")
+                          ("GUIX_PROFILE" . "$HOME/.guix-profile")
                           ("HTTP_PROXY" . "http://127.0.0.1:7890")
                           ("HTTPS_PROXY" . "$HTTP_PROXY")
                           ("PATH" unquote
