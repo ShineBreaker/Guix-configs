@@ -13,6 +13,15 @@
                  `(("gdb/gdbinit" ,%default-gdbinit)
                    ("nano/nanorc" ,%default-nanorc)))
 
+        (simple-service 'fish-foreign-env
+                        home-xdg-configuration-files-service-type
+                        `(("fish/conf.d/01-fish-foreign-env-main.fish" ,(file-append
+                                                                         fish-foreign-env
+                                                                         "/share/fish/functions/fenv.main.fish"))
+                          ("fish/conf.d/02-fish-foreign-env.fish" ,(file-append
+                                                                    fish-foreign-env
+                                                                    "/share/fish/functions/fenv.fish"))))
+
         (simple-service 'fish-greeting
                         home-xdg-configuration-files-service-type
                         `(("fish/conf.d/greeting.fish" ,(plain-file
