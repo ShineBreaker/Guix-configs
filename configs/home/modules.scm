@@ -42,16 +42,3 @@
              (saayix packages binaries)
 
              (selected-guix-works packages rust-apps))
-
-(use-package-modules emacs
-                     freedesktop
-                     gnupg
-                     gnome
-                     golang-crypto
-                     guile-xyz
-                     libreoffice
-                     librewolf
-                     linux
-                     node
-                     video
-                     wm)
