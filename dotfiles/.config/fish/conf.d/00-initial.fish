@@ -1,5 +1,4 @@
 status is-interactive; and begin
-
     # Abbreviations
     abbr --add -- cat bat
     abbr --add -- cd z
