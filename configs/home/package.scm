@@ -1,3 +1,17 @@
+(use-package-modules emacs
+                     freedesktop
+                     gnupg
+                     gimp
+                     gnome
+                     golang-crypto
+                     guile-xyz
+                     libreoffice
+                     librewolf
+                     linux
+                     node
+                     video
+                     wm)
+
 (define %packages-list
   (cons* (specs->pkgs+out
           ;; Desktop
@@ -12,11 +26,16 @@
           "age"
           "git-credential-keepassxc"
           "libreoffice"
-          "nomacs"
-          "obs"
           "obsidian"
           "seahorse"
           "zen-browser-bin"
+
+          ;; Graphic
+          "gimp"
+          "nomacs"
+          "obs-with-cef"
+          "obs-pipewire-audio-capture"
+          "obs-vkcapture"
 
           ;; Entertain
           "openjdk@25"
