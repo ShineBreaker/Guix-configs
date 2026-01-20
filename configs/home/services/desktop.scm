@@ -18,6 +18,20 @@
                                                                   pinentry-fuzzel
                                                                   "/bin/pinentry-fuzzel"))
                                                (ssh-support? #t)))
+
+        (simple-service 'poweralertd home-shepherd-service-type
+                        (list (shepherd-service (provision '(poweralertd))
+                                                (requirement '(dbus))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   poweralertd
+                                                                   "/bin/poweralertd"))
+                                                          #:log-file (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/poweralertd.log")))
+                                                (respawn? #t))))
+
         (simple-service 'xdg-desktop-portal home-shepherd-service-type
                         (list (shepherd-service (provision '(xdg-desktop-portal))
                                                 (requirement '(dbus))
