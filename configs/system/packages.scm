@@ -71,6 +71,7 @@
                 git-filter-repo
                 git-lfs
                 gzip
+                ntfs-3g
                 pinentry
                 podman
                 podman-compose
