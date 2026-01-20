@@ -1,3 +1,15 @@
+(use-service-modules authentication
+                     containers
+                     dbus
+                     linux
+                     networking
+                     nix
+                     pm
+                     sddm
+                     syncthing
+                     sysctl
+                     xorg)
+
 (define %services-config
   (append (map (lambda (tty)
                  (service kmscon-service-type
@@ -12,7 +24,8 @@
                 (service tlp-service-type)
 
                 (service nftables-service-type
-                         (nftables-configuration (ruleset (local-file "../files/nftables.conf"))))
+                         (nftables-configuration (ruleset (local-file
+                                                           "../files/nftables.conf"))))
 
                 (service rootless-podman-service-type
                          (rootless-podman-configuration (subuids (list (subid-range
@@ -74,7 +87,8 @@
                                                                   (list #$(file-append
                                                                            mihomo
                                                                            "/bin/mihomo")
-                                                                   "-f" "/home/brokenshine/.config/mihomo/config.yaml")
+                                                                   "-f"
+                                                                   "/home/brokenshine/.config/mihomo/config.yaml")
                                                                   #:log-file
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))

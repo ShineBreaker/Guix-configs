@@ -1,3 +1,7 @@
+(use-modules (nongnu packages firmware)
+             (nongnu packages linux)
+             (nongnu system linux-initrd))
+
 (define %initrd-config
   microcode-initrd)
 (define %firmware-config
