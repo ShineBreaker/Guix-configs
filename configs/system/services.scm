@@ -100,6 +100,19 @@
                                                         (stop #~(make-kill-destructor))
                                                         (respawn? #t))))
 
+                (simple-service 'non-nixos-gpu shepherd-root-service-type
+                                (list (shepherd-service (documentation
+                                                         "Install GPU drivers for running GPU accelerated programs from Nix.")
+                                                        (provision '(non-nixos-gpu))
+                                                        (requirement '(nix))
+                                                        (start #~(make-forkexec-constructor '
+                                                                  ("/run/current-system/profile/bin/ln"
+                                                                   "-nsf"
+                                                                   "/nix/store/6nklad7qapmqf41pqc2f9vizivn66a5p-non-nixos-gpu"
+                                                                   "/run/opengl-driver")))
+                                                        (stop #~(make-kill-destructor))
+                                                        (one-shot? #t))))
+
                 (service pam-limits-service-type
                          (list (pam-limits-entry "@realtime"
                                                  'both
