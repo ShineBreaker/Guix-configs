@@ -7,6 +7,7 @@
                           ("HTTPS_PROXY" . "$HTTP_PROXY")
                           ("PATH" unquote
                            (string-append "$HOME/.local/bin:"
+                                          "$HOME/.nix-profile/bin:"
                                           (or (getenv "PATH") "")))
                           ("QT_AUTO_SCREEN_SCALE_FACTOR" . #t)
                           ("QT_QPA_PLATFORMTHEME" . "qt5ct")
