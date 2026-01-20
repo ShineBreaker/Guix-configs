@@ -9,6 +9,7 @@
                      librewolf
                      linux
                      node
+                     shells
                      video
                      wm)
 
