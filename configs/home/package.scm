@@ -1,3 +1,12 @@
+(use-modules (jeans packages desktop)
+
+  (px packages activitywatch)
+  (px packages desktop-tools)
+  (px packages editors)
+  (px packages networking)
+  (px packages node)
+  (px packages version-control))
+
 (use-package-modules emacs
                      freedesktop
                      gnupg
@@ -11,6 +20,7 @@
                      node
                      shells
                      video
+                     virtualization
                      wm)
 
 (define %packages-list
@@ -22,6 +32,7 @@
           "fuzzel"
           "keepassxc"
           "mako"
+          "waypaper"
 
           ;; Utility
           "age"
@@ -29,6 +40,7 @@
           "libreoffice"
           "obsidian"
           "seahorse"
+          "virt-manager"
           "zen-browser-bin"
 
           ;; Graphic
