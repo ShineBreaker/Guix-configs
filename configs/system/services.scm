@@ -117,7 +117,9 @@
                                                         (one-shot? #t))))
 
                 (service pam-limits-service-type
-                               (list (pam-limits-entry "*" 'both 'nofile 1048576))))
+                               (list (pam-limits-entry "@audio" 'both 'rtprio 90)
+                                     (pam-limits-entry "@audio" 'both 'memlock 'unlimited)
+                                     (pam-limits-entry "*" 'both 'nofile 1048576))))
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
