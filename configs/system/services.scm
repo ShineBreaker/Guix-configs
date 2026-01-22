@@ -1,3 +1,5 @@
+(load "../information.scm")
+
 (use-modules (gnu home services guix)
              (guix channels))
 
@@ -7,10 +9,12 @@
                      linux
                      networking
                      nix
+                     pam-mount
                      pm
                      sddm
                      syncthing
                      sysctl
+                     virtualization
                      xorg)
 
 (define %services-config
@@ -23,6 +27,7 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service libvirt-service-type)
                 (service tlp-service-type)
 
                 (service nftables-service-type
@@ -31,8 +36,7 @@
 
                 (service nix-service-type
                          (nix-configuration (extra-config (list
-                                                           "trusted-users = brokenshine"))))
-
+                           (string-append "trusted-users" "=" username)))))
 
                 (service rootless-podman-service-type
                          (rootless-podman-configuration (subuids (list (subid-range
@@ -97,7 +101,7 @@
                                                                            mihomo
                                                                            "/bin/mihomo")
                                                                    "-f"
-                                                                   "/home/brokenshine/.config/mihomo/config.yaml")
+                                                                   (srting-append "/home/" username "/.config/mihomo/config.yaml"))
                                                                   #:log-file
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))
