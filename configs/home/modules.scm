@@ -27,12 +27,7 @@
              (nongnu packages game-client)
              (nongnu packages productivity)
 
-             (px packages activitywatch)
-             (px packages desktop-tools)
-             (px packages editors)
-             (px packages networking)
-             (px packages node)
-             (px packages version-control)
+
 
              (radix packages gnupg)
 
