@@ -33,6 +33,7 @@
                          (nix-configuration (extra-config (list
                                                            "trusted-users = brokenshine"))))
 
+
                 (service rootless-podman-service-type
                          (rootless-podman-configuration (subuids (list (subid-range
                                                                         (name
@@ -63,6 +64,8 @@
 
                 (simple-service 'extend-sysctl sysctl-service-type
                                 '(("fs.inotify.max_user_watches" . "524288")
+                                  ("fs.file-max" . "2097152")
+                                  ("fs.nr_open" . "2097152")
 
                                   ("vm.max_map_count" . "2147483642")
                                   ("vm.compaction_proactiveness" . "0")
@@ -104,7 +107,7 @@
                                 (list (shepherd-service (documentation
                                                          "Install GPU drivers for running GPU accelerated programs from Nix.")
                                                         (provision '(non-nixos-gpu))
-                                                        (requirement '(nix))
+                                                        (requirement '(nix-daemon))
                                                         (start #~(make-forkexec-constructor '
                                                                   ("/run/current-system/profile/bin/ln"
                                                                    "-nsf"
@@ -114,16 +117,25 @@
                                                         (one-shot? #t))))
 
                 (service pam-limits-service-type
-                         (list (pam-limits-entry "@realtime"
-                                                 'both
-                                                 'rtprio 99)
-                               (pam-limits-entry "@realtime"
-                                                 'both
-                                                 'memlock
-                                                 'unlimited))))
+                               (list (pam-limits-entry "*" 'both 'nofile 1048576))))
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
+
+            (greetd-service-type config =>
+                                 (greetd-configuration (inherit config)
+                                                       (terminals (list (greetd-terminal-configuration
+                                                                         (terminal-vt
+                                                                          "7")
+                                                                         (terminal-switch
+                                                                          #t)
+                                                                         (default-session-command
+                                                                          (greetd-tuigreet-session))
+                                                                         (initial-session-user
+                                                                          username)
+                                                                         (initial-session-command
+                                                                          "dbus-run-session niri --session"))))))
+
             (guix-service-type config =>
                                (guix-configuration (inherit config)
                                                    (channels guix-channels)
@@ -158,18 +170,4 @@
                                                                    steam-devices-udev-rules
                                                                    (plain-file
                                                                     "99-sayodevice.rules"
-                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\""))))))
-
-            (greetd-service-type config =>
-                                 (greetd-configuration (inherit config)
-                                                       (terminals (list (greetd-terminal-configuration
-                                                                         (terminal-vt
-                                                                          "7")
-                                                                         (terminal-switch
-                                                                          #t)
-                                                                         (default-session-command
-                                                                          (greetd-tuigreet-session))
-                                                                         (initial-session-user
-                                                                          username)
-                                                                         (initial-session-command
-                                                                          "dbus-run-session niri --session")))))))))
+                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")))))))))

@@ -3,6 +3,7 @@
              (jeans packages fonts)
 
              (px packages document)
+             (px packages gstreamer)
              (px packages tpm)
 
              (radix packages freedesktop)
@@ -31,10 +32,12 @@
                      gnome
                      gnome-xyz
                      gnupg
+                     gstreamer
                      hardware
                      kde-frameworks
                      image-viewers
                      linux
+                     mate
                      package-management
                      password-utils
                      polkit
@@ -56,9 +59,7 @@
   (append (list ;Desktop
                 bluez
                 brightnessctl
-                glib
                 gnome-keyring
-                gsettings-desktop-schemas
                 gtklock
                 gvfs
                 libnotify
@@ -76,11 +77,15 @@
                 xdg-terminal-exec
                 xwayland-satellite
 
+                ;; File management
+                caja
+                caja-extensions
+                engrampa
+                python-caja
+
                 ;; Essential
                 dconf-editor
                 easyeffects
-                exo
-                file-roller
                 kvantum
                 libgnome-keyring
                 libsecret
@@ -90,12 +95,15 @@
                 qt5ct
                 qt6ct
                 qtsvg
-                thunar
-                thunar-archive-plugin
-                thunar-media-tags-plugin
-                thunar-volman
                 wireplumber
                 xdg-user-dirs
+
+                ;; gstreamer
+                gstreamer
+                gst-plugins-ugly-full
+                gst-plugins-bad
+                gst-plugins-base
+                gst-plugins-good
 
                 ;; Fonts
                 font-awesome
