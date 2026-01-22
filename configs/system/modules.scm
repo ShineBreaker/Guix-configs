@@ -1,5 +1,6 @@
 (use-modules (gnu)
-             (gnu system nss)
              (gnu system accounts)
+             (gnu system nss)
+             (gnu system pam)
              (nonguix transformations)
              (rosenthal))
