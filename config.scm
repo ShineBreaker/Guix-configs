@@ -1,6 +1,3 @@
-;;; 主系统配置文件
-;;; 该文件加载并组合所有子配置
-
 (load "./configs/channel.scm")
 (load "./configs/information.scm")
 
