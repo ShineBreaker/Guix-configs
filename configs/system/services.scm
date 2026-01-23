@@ -27,8 +27,12 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
-                (service libvirt-service-type)
                 (service tlp-service-type)
+
+                (service libvirt-service-type
+                                   (libvirt-configuration
+                                     (unix-sock-group "libvirt")))
+                          (service virtlog-service-type)
 
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
@@ -101,7 +105,7 @@
                                                                            mihomo
                                                                            "/bin/mihomo")
                                                                    "-f"
-                                                                   (srting-append "/home/" username "/.config/mihomo/config.yaml"))
+                                                                   "/home/brokenshine/.config/mihomo/config.yaml")
                                                                   #:log-file
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))
