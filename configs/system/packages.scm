@@ -37,7 +37,7 @@
                      kde-frameworks
                      image-viewers
                      linux
-                     mate
+                     lxqt
                      package-management
                      password-utils
                      polkit
@@ -49,6 +49,7 @@
                      shellutils
                      syncthing
                      version-control
+                     virtualization
                      wget
                      wm
                      xdisorg
@@ -78,10 +79,8 @@
                 xwayland-satellite
 
                 ;; File management
-                caja
-                caja-extensions
-                engrampa
-                python-caja
+                lxqt-archiver
+                pcmanfm-qt
 
                 ;; Essential
                 dconf-editor
@@ -124,6 +123,12 @@
                 helix
                 starship
 
+                ;;Virtualization & Container
+                libvirt
+                podman
+                podman-compose
+                qemu
+
                 ;; System
                 bluez
                 curl
@@ -137,8 +142,6 @@
                 nix
                 ntfs-3g
                 pinentry
-                podman
-                podman-compose
                 python
                 tpm2-abrmd
                 tpm2-pkcs11
