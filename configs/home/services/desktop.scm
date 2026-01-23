@@ -7,6 +7,7 @@
         (service home-niri-service-type)
         (service home-syncthing-service-type)
         (service home-waybar-service-type)
+
         (service home-fcitx5-service-type
                  (home-fcitx5-configuration (themes (specs->pkgs
                                                      "fcitx5-material-color-theme"))
@@ -19,8 +20,20 @@
                                                                   "/bin/pinentry-fuzzel"))
                                                (ssh-support? #t)))
 
-        (simple-service 'poweralertd home-shepherd-service-type
-                        (list (shepherd-service (provision '(poweralertd))
+        (simple-service 'essential-desktop-services home-shepherd-service-type
+                        (list (shepherd-service (provision '(polkit-gnome))
+                                                (requirement '(dbus))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   polkit-gnome
+                                                                   "/libexec/polkit-gnome-authentication-agent-1"))
+                                                          #:log-file (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/polkit-gnome.log")))
+                                                (respawn? #t))
+
+                              (shepherd-service (provision '(poweralertd))
                                                 (requirement '(dbus))
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
@@ -30,10 +43,9 @@
                                                                       (getenv
                                                                        "HOME")
                                                                       "/.var/log/poweralertd.log")))
-                                                (respawn? #t))))
+                                                (respawn? #t))
 
-        (simple-service 'xdg-desktop-portal home-shepherd-service-type
-                        (list (shepherd-service (provision '(xdg-desktop-portal))
+                              (shepherd-service (provision '(xdg-desktop-portal))
                                                 (requirement '(dbus))
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
@@ -43,10 +55,9 @@
                                                                       (getenv
                                                                        "HOME")
                                                                       "/.var/log/xdg-desktop-portal.log")))
-                                                (respawn? #t))))
+                                                (respawn? #t))
 
-        (simple-service 'xdg-desktop-portal-gtk home-shepherd-service-type
-                        (list (shepherd-service (provision '(xdg-desktop-portal-gtk))
+                              (shepherd-service (provision '(xdg-desktop-portal-gtk))
                                                 (requirement '(xdg-desktop-portal))
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
