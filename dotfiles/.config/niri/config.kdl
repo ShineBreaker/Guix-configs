@@ -2,10 +2,7 @@ spawn-sh-at-startup "pgrep --uid $USER shepherd > /dev/null || shepherd"
 
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 
-spawn-at-startup "swww-daemon"
-spawn-at-startup "swww" "restore"
-
-spawn-at-startup "swayidle"
+spawn-at-startup "waypaper" "--restore"
 
 prefer-no-csd
 
@@ -68,7 +65,7 @@ layout {
 
     focus-ring {
         // off
-        width 4
+        width 3
         active-gradient angle=45 from="89ddff" relative-to="window" to="ffcb6b"
         inactive-color "#505050"
     }
@@ -88,7 +85,7 @@ layer-rule {
 
 window-rule {
     draw-border-with-background false
-    geometry-corner-radius 12
+    geometry-corner-radius 8
     clip-to-geometry true
 
     shadow {
