@@ -1,11 +1,13 @@
-(use-modules (nongnu packages firmware)
+(use-modules (gnu packages firmware)
+
+             (nongnu packages firmware)
              (nongnu packages linux)
              (nongnu system linux-initrd))
 
 (define %initrd-config
   microcode-initrd)
 (define %firmware-config
-  (list linux-firmware sof-firmware bluez-firmware))
+  (list linux-firmware sof-firmware bluez-firmware ovmf-x86-64))
 (define %kernel-config
   linux-xanmod)
 (define %kernel-arguments-config
