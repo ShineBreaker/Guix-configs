@@ -16,8 +16,8 @@
 
         (service home-gpg-agent-service-type
                  (home-gpg-agent-configuration (pinentry-program (file-append
-                                                                  pinentry-fuzzel
-                                                                  "/bin/pinentry-fuzzel"))
+                                                                  pinentry-gnome3
+                                                                  "/bin/pinentry-gnome3"))
                                                (ssh-support? #t)))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
@@ -43,6 +43,30 @@
                                                                       (getenv
                                                                        "HOME")
                                                                       "/.var/log/poweralertd.log")))
+                                                (respawn? #t))
+
+                              (shepherd-service (provision '(swayidle))
+                                                (requirement '(dbus))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   swayidle
+                                                                   "/bin/swayidle"))
+                                                          #:log-file (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/swayidle.log")))
+                                                (respawn? #t))
+
+                              (shepherd-service (provision '(swww-daemon))
+                                                (requirement '(dbus))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   swww
+                                                                   "/bin/swww-daemon"))
+                                                          #:log-file (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/swww-daemon.log")))
                                                 (respawn? #t))
 
                               (shepherd-service (provision '(xdg-desktop-portal))
