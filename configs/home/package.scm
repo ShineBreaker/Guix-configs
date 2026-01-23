@@ -1,11 +1,12 @@
 (use-modules (jeans packages desktop)
+             (jeans packages theme)
 
-  (px packages activitywatch)
-  (px packages desktop-tools)
-  (px packages editors)
-  (px packages networking)
-  (px packages node)
-  (px packages version-control))
+             (px packages activitywatch)
+             (px packages desktop-tools)
+             (px packages editors)
+             (px packages networking)
+             (px packages node)
+             (px packages version-control))
 
 (use-package-modules emacs
                      freedesktop
@@ -54,14 +55,15 @@
           ;; Entertain
           "mangohud"
           "openjdk@25"
-          ;"prismlauncher-dolly"
+          ;; "prismlauncher-dolly"
           "steam"
 
           ;; Themes
           "adwaita-icon-theme"
           "bibata-cursor-theme"
-          "orchis-theme"
           "papirus-icon-theme"
+          "Vimix-gtk-themes"
+          "Vimix-kvantum-themes"
 
           ;; Programming
           "emacs-pgtk"
