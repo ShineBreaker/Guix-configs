@@ -18,6 +18,7 @@
                      librewolf
                      linux
                      node
+                     polkit
                      shells
                      video
                      virtualization
