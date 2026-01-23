@@ -77,9 +77,14 @@ tooltip {
 #custom-lock,
 #custom-poweroff,
 #custom-reboot,
-#custom-search,
 #custom-hibernate,
-#custom-caffeine,
+#custom-caffeine {
+  border-radius: 10px;
+  padding: 0px 3px;
+  margin: 8px 2px;
+}
+
+#custom-search,
 #workspaces button,
 #tray,
 #backlight,
@@ -92,8 +97,8 @@ tooltip {
 #clock {
   border-radius: 10px;
   color: @base07;
-  padding: 0px 3px;
-    margin: 8px 3px;
+  padding: 0px 6px;
+  margin: 8px 2px;
 }
 
 #battery {
