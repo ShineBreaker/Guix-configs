@@ -74,7 +74,7 @@
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
                                                                    xdg-desktop-portal
-                                                                   "/bin/xdg-desktop-portal"))
+                                                                   "/libexec/xdg-desktop-portal"))
                                                           #:log-file (string-append
                                                                       (getenv
                                                                        "HOME")
