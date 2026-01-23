@@ -6,6 +6,7 @@
 (use-service-modules authentication
                      containers
                      dbus
+                     dns
                      linux
                      networking
                      nix
@@ -29,18 +30,29 @@
                 (service gnome-keyring-service-type)
                 (service tlp-service-type)
 
-                (service libvirt-service-type
-                                   (libvirt-configuration
-                                     (unix-sock-group "libvirt")))
-                          (service virtlog-service-type)
+                (simple-service 'home-channels home-channels-service-type
+                                guix-channels)
 
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
                                                            "../files/nftables.conf"))))
 
-                (service nix-service-type
-                         (nix-configuration (extra-config (list
-                           (string-append "trusted-users" "=" username)))))
+                (service screen-locker-service-type
+                         (screen-locker-configuration (name "gtklock")
+                                                      (program (file-append
+                                                                gtklock
+                                                                "/bin/gtklock"))
+                                                      (allow-empty-password?
+                                                                             #f)))
+
+                ;; VM & Coantainer.
+                (service dnsmasq-service-type
+                         (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
+                                                (extra-options (list
+                                                                "--except-interface=lo"
+                                                                "--interface=virbr0"
+                                                                "--bind-dynamic"
+                                                                "--dhcp-range=192.168.10.2,192.168.10.254"))))
 
                 (service rootless-podman-service-type
                          (rootless-podman-configuration (subuids (list (subid-range
@@ -58,14 +70,23 @@
                                                                         (count
                                                                          65536))))))
 
-                (service screen-locker-service-type
-                         (screen-locker-configuration (name "gtklock")
-                                                      (program (file-append
-                                                                gtklock
-                                                                "/bin/gtklock"))
-                                                      (allow-empty-password?
-                                                                             #f)))
+                (service static-networking-service-type
+                         (list (static-networking (provision '(network-manager))
+                                                  (links (list (network-link (name
+                                                                              "virbr0")
+                                                                             (type 'bridge)
+                                                                             (arguments '()))))
+                                                  (addresses (list (network-address
+                                                                    (device
+                                                                     "virbr0")
+                                                                    (value
+                                                                     "192.168.10.1/24")))))))
 
+                (service libvirt-service-type
+                         (libvirt-configuration (unix-sock-group "libvirt")))
+                (service virtlog-service-type)
+
+                ;; Kernel related.
                 (simple-service 'extend-kernel-module-loader
                                 kernel-module-loader-service-type
                                 '("sch_fq_pie" "tcp_bbr"))
@@ -84,17 +105,29 @@
                                   ("net.core.default_qdisc" . "fq_pie")
                                   ("net.core.rmem_max" . "7500000")
                                   ("net.core.wmem_max" . "7500000")
+                                  ("net.ipv4.ip_forward" . "1")
                                   ("net.ipv4.tcp_congestion_control" . "bbr")
                                   ("net.ipv4.tcp_low_latency" . "1")
                                   ("net.ipv4.tcp_fastopen" . "3")
+                                  ("net.ipv6.conf.all.forwarding" . "1")
 
                                   ("kernel.numa_balancing" . "0")
                                   ("kernel.sched_autogroup_enabled" . "1")
                                   ("kernel.sched_child_runs_first" . "0")))
 
-                (simple-service 'home-channels home-channels-service-type
-                                guix-channels)
+                (service pam-limits-service-type
+                         (list (pam-limits-entry "@audio"
+                                                 'both
+                                                 'rtprio 90)
+                               (pam-limits-entry "@audio"
+                                                 'both
+                                                 'memlock
+                                                 'unlimited)
+                               (pam-limits-entry "*"
+                                                 'both
+                                                 'nofile 1048576)))
 
+                ;; Services need to run as root.
                 (simple-service 'mihomo-daemon shepherd-root-service-type
                                 (list (shepherd-service (documentation
                                                          "Run the mihomo daemon.")
@@ -111,6 +144,12 @@
                                                         (stop #~(make-kill-destructor))
                                                         (respawn? #t))))
 
+                ;; Nix related.
+                (service nix-service-type
+                         (nix-configuration (extra-config (list (string-append
+                                                                 "trusted-users"
+                                                                 "=" username)))))
+
                 (simple-service 'non-nixos-gpu shepherd-root-service-type
                                 (list (shepherd-service (documentation
                                                          "Install GPU drivers for running GPU accelerated programs from Nix.")
@@ -122,12 +161,7 @@
                                                                    "/nix/store/6nklad7qapmqf41pqc2f9vizivn66a5p-non-nixos-gpu"
                                                                    "/run/opengl-driver")))
                                                         (stop #~(make-kill-destructor))
-                                                        (one-shot? #t))))
-
-                (service pam-limits-service-type
-                               (list (pam-limits-entry "@audio" 'both 'rtprio 90)
-                                     (pam-limits-entry "@audio" 'both 'memlock 'unlimited)
-                                     (pam-limits-entry "*" 'both 'nofile 1048576))))
+                                                        (one-shot? #t)))))
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
