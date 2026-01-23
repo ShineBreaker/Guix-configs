@@ -12,5 +12,11 @@
           (group "users")
           (password
            "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
-          (supplementary-groups '("cgroup" "wheel" "netdev" "audio" "video"))
+          (supplementary-groups '("audio"
+                                  "cgroup"
+                                  "kvm"
+                                  "libvirt"
+                                  "netdev"
+                                  "video"
+                                  "wheel"))
           (shell (file-append fish "/bin/fish"))) %base-user-accounts))
