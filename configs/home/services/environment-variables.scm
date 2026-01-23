@@ -4,7 +4,9 @@
                         `(("EDITOR" . "hx") ("GDK_BACKEND" . "wayland")
                           ("GUIX_PROFILE" . "$HOME/.guix-profile")
                           ("HTTP_PROXY" . "http://127.0.0.1:7890")
+                          ("http_proxy" . "$HTTP_PROXY")
                           ("HTTPS_PROXY" . "$HTTP_PROXY")
+                          ("https_proxy" . "$HTTP_PROXY")
                           ("MOZ_ENABLE_WAYLAND" . "1")
                           ("PATH" unquote
                            (string-append "$HOME/.local/bin:"
