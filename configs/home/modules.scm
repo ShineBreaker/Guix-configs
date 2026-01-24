@@ -14,6 +14,8 @@
              (gnu home services syncthing)
              (gnu home services guix)
 
+             (gnu home-services version-control)
+
              (gnu packages)
 
              (gnu services)
