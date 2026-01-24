@@ -1,6 +1,7 @@
 (use-modules (cast packages gtklock)
 
              (jeans packages fonts)
+             (jeans packages linux)
 
              (px packages document)
              (px packages gstreamer)
