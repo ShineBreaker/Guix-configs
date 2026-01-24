@@ -45,8 +45,6 @@ input {
         accel-speed 0.6
         accel-profile "flat"
     }
-
-    focus-follows-mouse max-scroll-amount="10%"
 }
 
 layout {
@@ -271,6 +269,11 @@ binds {
 
     Mod+Ctrl+End    { move-column-to-last; }
     Mod+Ctrl+Home   { move-column-to-first; }
+
+    Mod+Ctrl+WheelScrollUp       hotkey-overlay-title="增大窗口宽度"  cooldown-ms=100  { set-column-width "+10%"; }
+    Mod+Ctrl+WheelScrollDown     hotkey-overlay-title="减小窗口宽度"  cooldown-ms=100  { set-column-width "-10%"; }
+    Mod+Ctrl+Alt+WheelScrollUp   hotkey-overlay-title="增大窗口高度"  cooldown-ms=100  { set-window-height "+10%"; }
+    Mod+Ctrl+Alt+WheelScrollDown hotkey-overlay-title="减小窗口高度"  cooldown-ms=100  { set-window-height "-10%"; }
 
     Mod+Ctrl+Page_Down hotkey-overlay-title="窗口移至下一工作区"  { move-column-to-workspace-down; }
     Mod+Ctrl+Page_Up   hotkey-overlay-title="窗口移至上一工作区"  { move-column-to-workspace-up; }
