@@ -48,6 +48,7 @@
 
           ;; Graphic
           "gimp"
+          "mpv"
           "nomacs"
           "obs-with-cef"
           "obs-pipewire-audio-capture"
@@ -63,8 +64,8 @@
           "adwaita-icon-theme"
           "bibata-cursor-theme"
           "papirus-icon-theme"
-          "Vimix-gtk-themes"
-          "Vimix-kvantum-themes"
+          "orchis-theme"
+          "orchis-kvantum-themes"
 
           ;; Programming
           "emacs-pgtk"
