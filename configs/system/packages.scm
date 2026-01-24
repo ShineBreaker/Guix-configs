@@ -38,7 +38,6 @@
                      kde-frameworks
                      image-viewers
                      linux
-                     lxqt
                      package-management
                      password-utils
                      polkit
@@ -80,8 +79,13 @@
                 xwayland-satellite
 
                 ;; File management
-                lxqt-archiver
-                pcmanfm-qt
+                file-roller
+                thunar
+                thunar-archive-plugin
+                thunar-media-tags-plugin
+                thunar-volman
+                thunar-vcs-plugin
+                xfconf
 
                 ;; Essential
                 dconf-editor
