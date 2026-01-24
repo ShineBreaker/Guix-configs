@@ -50,7 +50,7 @@ input {
 }
 
 layout {
-    gaps 16
+    gaps 14
 
     center-focused-column "on-overflow"
     always-center-single-column
