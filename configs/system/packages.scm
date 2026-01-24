@@ -67,7 +67,6 @@
                 niri
                 poweralertd
                 swayidle
-                swww
                 waybar
                 wl-clipboard
                 xdg-desktop-portal
