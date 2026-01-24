@@ -1,7 +1,9 @@
 (load "../information.scm")
 
 (use-modules (gnu home services guix)
-             (guix channels))
+             (guix channels)
+
+             (jeans packages linux))
 
 (use-service-modules authentication
                      containers
@@ -128,7 +130,7 @@
                                                  'nofile 1048576)))
 
                 ;; Services need to run as root.
-                (simple-service 'mihomo-daemon shepherd-root-service-type
+                (simple-service 'root-services shepherd-root-service-type
                                 (list (shepherd-service (documentation
                                                          "Run the mihomo daemon.")
                                                         (provision '(mihomo-daemon))
@@ -142,6 +144,21 @@
                                                                   #:log-file
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))
+                                                        (auto-start? #t)
+                                                        (respawn? #t))
+
+                                      (shepherd-service (documentation
+                                                         "REALTIMEKIT Realtime Policy and Watchdog Daemon.")
+                                                        (provision '(rtkit-daemon))
+                                                        (requirement '(dbus-system))
+                                                        (start #~(make-forkexec-constructor
+                                                                  (list #$(file-append
+                                                                           rtkit
+                                                                           "/libexec/rtkit-daemon"))
+                                                                  #:log-file
+                                                                  "/var/log/rtkit-daemon.log"))
+                                                        (stop #~(make-kill-destructor))
+                                                        (auto-start? #t)
                                                         (respawn? #t))))
 
                 ;; Nix related.
