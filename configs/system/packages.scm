@@ -143,6 +143,7 @@
                 ntfs-3g
                 pinentry
                 python
+                rtkit
                 tpm2-abrmd
                 tpm2-pkcs11
                 tpm2-tools
