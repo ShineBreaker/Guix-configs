@@ -34,6 +34,8 @@
           "fuzzel"
           "keepassxc"
           "mako"
+          "mpvpaper"
+          "swww"
           "waypaper"
 
           ;; Utility
