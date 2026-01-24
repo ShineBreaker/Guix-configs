@@ -42,6 +42,7 @@
           "libreoffice"
           "obsidian"
           "seahorse"
+          "telegram-desktop"
           "virt-manager"
           "zen-browser-bin"
 
