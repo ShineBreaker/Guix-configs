@@ -16,8 +16,8 @@
 
         (service home-gpg-agent-service-type
                  (home-gpg-agent-configuration (pinentry-program (file-append
-                                                                  pinentry-gtk2
-                                                                  "/bin/pinentry-gtk2"))
+                                                                  pinentry-fuzzel
+                                                                  "/bin/pinentry-fuzzel"))
                                                (ssh-support? #t)))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
