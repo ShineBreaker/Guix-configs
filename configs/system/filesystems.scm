@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 Copyright (C) 2024-2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 (define %mapped-devices-config
   (list (mapped-device
           (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))

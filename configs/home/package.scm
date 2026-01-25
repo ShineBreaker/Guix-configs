@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 Copyright (C) 2024-2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 (use-modules (jeans packages desktop)
              (jeans packages theme)
 
@@ -6,6 +10,7 @@
              (px packages editors)
              (px packages networking)
              (px packages node)
+             (px packages tools)
              (px packages version-control))
 
 (use-package-modules emacs
@@ -17,6 +22,7 @@
                      guile-xyz
                      libreoffice
                      librewolf
+                     license
                      linux
                      node
                      polkit
@@ -70,9 +76,11 @@
           "orchis-kvantum-themes"
 
           ;; Programming
+          "codex"
           "emacs-pgtk"
-          "guile-studio"
           "node"
           "pnpm"
+          "reuse"
           "rust-analyzer"
+          "vscode"
           "zed")))
