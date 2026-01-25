@@ -18,7 +18,7 @@ xwayland-satellite {
 
 gestures {
     hot-corners {
-        off
+        bottom-left
     }
 }
 
@@ -33,12 +33,8 @@ input {
         }
     }
     touchpad {
-        // off
         tap
-        // dwt
-        // dwtp
         natural-scroll
-        // disabled-on-external-mouse
     }
 
     mouse {
@@ -50,8 +46,9 @@ input {
 layout {
     gaps 14
 
-    center-focused-column "on-overflow"
     always-center-single-column
+    background-color "transparent"
+    center-focused-column "on-overflow"
 
     preset-column-widths {
         proportion 0.5
@@ -69,11 +66,20 @@ layout {
     }
 }
 
+output "eDP-1" {
+    variable-refresh-rate
+}
+
 screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
 
 layer-rule {
     match namespace="waybar"
     shadow { off; }
+}
+
+layer-rule {
+    match namespace="swww-daemon"
+    place-within-backdrop true
 }
 
 layer-rule {
