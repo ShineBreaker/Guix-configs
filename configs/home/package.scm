@@ -16,24 +16,6 @@
              (px packages tools)
              (px packages version-control))
 
-(use-package-modules emacs
-                     freedesktop
-                     gnupg
-                     gimp
-                     gnome
-                     golang-crypto
-                     guile-xyz
-                     libreoffice
-                     librewolf
-                     license
-                     linux
-                     node
-                     polkit
-                     shells
-                     video
-                     virtualization
-                     wm)
-
 (define %packages-list
   (cons* (specs->pkgs+out
           ;; Desktop
@@ -68,6 +50,7 @@
           ;; Entertain
           "mangohud"
           "openjdk@25"
+          "osu-lazer-tachyon-bin"
           ;; "prismlauncher-dolly"
           "steam"
 
