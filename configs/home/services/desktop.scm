@@ -2,6 +2,24 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(use-modules (gnu home services shells)
+             (gnu home services desktop)
+             (gnu home services dotfiles)
+             (gnu home services fontutils)
+             (gnu home services gnupg)
+             (gnu home services shepherd)
+             (gnu home services niri)
+             (gnu home services sound)
+             (gnu home services desktop)
+             (gnu home services fontutils)
+             (gnu home services syncthing)
+             (gnu home services guix)
+
+             (radix packages gnupg)
+
+             (rosenthal services desktop)
+             (rosenthal services shellutils))
+
 (use-package-modules freedesktop
                      linux
                      polkit
