@@ -3,7 +3,10 @@
 ;;; SPDX-License-Identifier: GPL-3.0
 
 (use-modules (jeans packages desktop)
+             (jeans packages games)
              (jeans packages theme)
+
+             (nongnu packages video)
 
              (px packages activitywatch)
              (px packages desktop-tools)
@@ -76,11 +79,12 @@
           "orchis-kvantum-themes"
 
           ;; Programming
-          "codex"
           "emacs-pgtk"
           "node"
+          "pandoc"
           "pnpm"
           "reuse"
           "rust-analyzer"
+          "shellcheck"
           "vscode"
           "zed")))

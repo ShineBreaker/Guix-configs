@@ -18,22 +18,15 @@
              (gnu home services syncthing)
              (gnu home services guix)
 
-             (gnu home-services version-control)
-
              (gnu packages)
-
              (gnu services)
              (gnu system shadow)
 
              (guix gexp)
              (guix utils)
 
-             (jeans packages java)
-
              (nongnu packages game-client)
              (nongnu packages productivity)
-
-
 
              (radix packages gnupg)
 
@@ -41,7 +34,5 @@
              (rosenthal services desktop)
              (rosenthal services shellutils)
              (rosenthal utils packages)
-
-             (saayix packages binaries)
 
              (selected-guix-works packages rust-apps))
