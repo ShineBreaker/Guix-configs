@@ -50,14 +50,6 @@
                     (openpgp-fingerprint
                      "F164 709E 5FC7 B32B AEC7  9F37 1F2E 76AC E3F5 31C8"))))
                 (channel
-                  (name 'rde)
-                  (url "https://git.sr.ht/~abcdw/rde")
-                  (introduction
-                   (make-channel-introduction
-                    "257cebd587b66e4d865b3537a9a88cccd7107c95"
-                    (openpgp-fingerprint
-                     "2841 9AC6 5038 7440 C7E9  2FFA 2208 D209 58C1 DEB0"))))
-                (channel
                   (name 'rosenthal)
                   (url "https://codeberg.org/hako/rosenthal.git")
                   (branch "trunk")
