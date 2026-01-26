@@ -4,7 +4,6 @@
 
 (define %desktop-services
   (list (service home-fish-service-type)
-        (service home-fish-plugin-atuin-service-type)
         (service home-fish-plugin-direnv-service-type)
         (service home-fish-plugin-zoxide-service-type)
         (service home-mako-service-type)
@@ -17,20 +16,6 @@
                                                      "fcitx5-material-color-theme"))
                                             (input-method-editors (specs->pkgs
                                                                    "fcitx5-rime"))))
-
-        (service home-git-service-type
-                   (home-git-configuration
-                    (config
-                     `((user
-                        ((name . "BrokenShine")
-                         (email . "brokenshine@noreply.codeberg.org")
-                         (signingkey . "62711D5E9CCDEC6907CADBF88637132222571907")))
-                       (commit
-                        ((gpgsign . #t)))
-                       (credential
-                        ((helper . "keepassxc --git-groups")))
-                       (credential
-                        ((helper . "cache")))))))
 
         (service home-gpg-agent-service-type
                  (home-gpg-agent-configuration (pinentry-program (file-append
