@@ -13,12 +13,12 @@
 
              (radix packages freedesktop)
 
-             (rde packages fonts)
              (rosenthal packages networking)
              (rosenthal packages rust-apps)
 
-             (saayix packages binaries)
-             (saayix packages fonts))
+             (saayix packages fonts)
+
+             (selected-guix-works packages fonts))
 
 (use-package-modules admin
                      audio
@@ -115,7 +115,8 @@
                 ;; Fonts
                 font-awesome
                 font-google-noto-emoji
-                font-iosevka-nerd
+                font-nerd-fonts-iosevka
+                font-nerd-symbols
                 font-maple-font-nf-cn
                 font-nerd-noto
                 font-sarasa-gothic
@@ -125,10 +126,12 @@
                 btop
                 distrobox
                 fastfetch
+                fd
                 fish
                 foot
                 fzf
                 helix
+                ripgrep
                 starship
 
                 ;;Virtualization & Container
@@ -152,6 +155,7 @@
                 pinentry
                 python
                 rtkit
+                strace
                 tpm2-abrmd
                 tpm2-pkcs11
                 tpm2-tools
