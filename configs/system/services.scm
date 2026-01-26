@@ -225,7 +225,10 @@
                                                                               "panther.pub"
                                                                               "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
                                                                      %default-authorized-guix-keys))
-                                                   (discover? #f)))
+                                                   (extra-options (list "--cores=20" "--max-jobs=6"))
+                                                   (http-proxy "http://127.0.0.1:7890")
+                                                   (discover? #f)
+                                                   (privileged? #f)))
 
             (udev-service-type config =>
                                (udev-configuration (inherit config)
