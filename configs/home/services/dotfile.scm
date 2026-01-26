@@ -2,6 +2,8 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(use-package-modules shells)
+
 (define %dotfile-services
   (list (service home-dotfiles-service-type
                  (home-dotfiles-configuration (directories '("../../../dotfiles"))

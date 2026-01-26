@@ -2,6 +2,11 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(use-package-modules freedesktop
+                     linux
+                     polkit
+                     wm)
+
 (define %desktop-services
   (list (service home-fish-service-type)
         (service home-fish-plugin-direnv-service-type)
