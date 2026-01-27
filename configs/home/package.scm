@@ -37,6 +37,7 @@
           ;; Utility
           "age"
           "git-credential-keepassxc"
+          "kdeconnect"
           "libreoffice"
           "obsidian"
           "seahorse"
