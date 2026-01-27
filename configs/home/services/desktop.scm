@@ -21,6 +21,7 @@
              (rosenthal services shellutils))
 
 (use-package-modules freedesktop
+                     kde-internet
                      linux
                      polkit
                      wm)
@@ -47,7 +48,19 @@
                                                (ssh-support? #t)))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (shepherd-service (provision '(polkit-gnome))
+                        (list (shepherd-service (provision '(kdeconnectd))
+                                                (requirement '(dbus))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   kdeconnect
+                                                                   "/bin/kdeconnectd"))
+                                                          #:log-file (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/kdeconnectd.log")))
+                                                (respawn? #t))
+
+                        (shepherd-service (provision '(polkit-gnome))
                                                 (requirement '(dbus))
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
