@@ -24,8 +24,8 @@
 (define %packages-list
   (cons* (specs->pkgs+out
           ;; Desktop
-          "activitywatch"
           "cliphist"
+          "dex"
           "fcitx5"
           "fuzzel"
           "keepassxc"

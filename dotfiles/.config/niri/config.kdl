@@ -2,6 +2,7 @@ spawn-sh-at-startup "pgrep --uid $USER shepherd > /dev/null || shepherd"
 
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 
+spawn-at-startup "dex" "-a"
 spawn-at-startup "waypaper" "--restore"
 
 prefer-no-csd
@@ -284,7 +285,7 @@ binds {
     Mod+Ctrl+Page_Down hotkey-overlay-title="窗口移至下一工作区"  { move-column-to-workspace-down; }
     Mod+Ctrl+Page_Up   hotkey-overlay-title="窗口移至上一工作区"  { move-column-to-workspace-up; }
 
-    // Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn "vicinae" "vicinae://extensions/vicinae/clipboard/history"; }
+    Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"; }
     Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn-sh "fish -c fuzzel"; }
     Mod+F hotkey-overlay-title="窗口最大化"                      { maximize-column; }
     Mod+Q hotkey-overlay-title="关闭窗口"        repeat=false    { close-window; }
