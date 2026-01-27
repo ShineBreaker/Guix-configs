@@ -1,3 +1,5 @@
+[init]
+  defaultBranch = "main"
 [user]
 	name = "BrokenShine"
 	email = "brokenshine@noreply.codeberg.org"
