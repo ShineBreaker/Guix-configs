@@ -38,6 +38,7 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service gvfs-service-type)
                 (service tlp-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
@@ -171,8 +172,11 @@
                                                                   (list #$(file-append
                                                                            mihomo
                                                                            "/bin/mihomo")
-                                                                   "-f"
-                                                                   (string-append "/home/" #$username "/.config/mihomo/config.yaml"))
+                                                                        "-f"
+                                                                        (string-append
+                                                                         "/home/"
+                                                                         #$username
+                                                                         "/.config/mihomo/config.yaml"))
                                                                   #:log-file
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))
@@ -193,11 +197,36 @@
                                                         (auto-start? #t)
                                                         (respawn? #t))))
 
+                ;; Fix filesystem permissions.
+                (simple-service 'fix-var-tmp-perms activation-service-type
+                                #~(begin
+                                    (use-modules (guix build utils))
+                                    (mkdir-p "/var/tmp")
+                                    (chmod "/var/tmp" #o1777)))
+
+                (simple-service 'fix-data-perms activation-service-type
+                                #~(begin
+                                    (use-modules (guix build utils))
+                                    (mkdir-p "/data")
+                                    (chmod "/data" #o1777)))
+
+                (simple-service
+                 'create-xdg-dirs
+                 activation-service-type
+                 #~(begin
+                     (use-modules (guix build utils))
+                     (let ((home (string-append "/home/" #$username)))
+                       (for-each
+                        (lambda (dir)
+                          (mkdir-p (string-append home "/" dir)))
+                        '#$%data-dirs))))
+
                 ;; Nix related.
                 (service nix-service-type
                          (nix-configuration (extra-config (list (string-append
                                                                  "trusted-users"
-                                                                 "=" username)))))
+                                                                 " = root "
+                                                                 username)))))
 
                 (simple-service 'non-nixos-gpu shepherd-root-service-type
                                 (list (shepherd-service (documentation
