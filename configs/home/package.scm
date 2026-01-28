@@ -32,7 +32,6 @@
           "keepassxc"
           "mako"
           "mpvpaper"
-          "pavucontrol"
           "swww"
           "waypaper"
 

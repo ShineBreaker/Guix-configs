@@ -17,4 +17,5 @@
 (define %kernel-arguments-config
   (cons* "kernel.sysrq=1" "zswap.enabled=1" "zswap.max_pool_percent=90"
          "modprobe.blacklist=amdgpu,pcspkr,hid_nintendo"
+         "snd-intel-dspcfg.dsp_driver=3"
          %default-kernel-arguments))
