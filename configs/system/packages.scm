@@ -34,7 +34,6 @@
 
            ;; Essential
            "dconf-editor"
-           "easyeffects"
            "kvantum"
            "libgnome-keyring"
            "libsecret"
