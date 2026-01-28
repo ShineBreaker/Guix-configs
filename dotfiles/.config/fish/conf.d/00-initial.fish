@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0
 
 status is-interactive; and begin
+    set -U fish_greeting
+
     # Abbreviations
     abbr --add -- cat bat
     abbr --add -- cd z
@@ -19,4 +21,8 @@ status is-interactive; and begin
     starship init fish | source
 end
 
-fastfetch
+function __fastfetch_on_startup --on-event fish_prompt
+    functions -e __fastfetch_on_startup
+    fastfetch
+    echo \n日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。\n | lolcat
+end
