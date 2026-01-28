@@ -1,5 +1,6 @@
 spawn-at-startup "fish" "-c" "pgrep --uid $USER shepherd > /dev/null || shepherd"
 
+// spawn-sh-at-startup "pgrep --uid $USER shepherd > /dev/null || shepherd"
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 
 spawn-at-startup "dex" "-a"
