@@ -10,7 +10,7 @@
              (jeans packages linux)
              (rosenthal packages networking))
 
-(use-package-modules games geo package-management)
+(use-package-modules games geo glib package-management wm)
 
 (use-service-modules authentication
                      containers
@@ -210,16 +210,15 @@
                                     (mkdir-p "/data")
                                     (chmod "/data" #o1777)))
 
-                (simple-service
-                 'create-xdg-dirs
-                 activation-service-type
-                 #~(begin
-                     (use-modules (guix build utils))
-                     (let ((home (string-append "/home/" #$username)))
-                       (for-each
-                        (lambda (dir)
-                          (mkdir-p (string-append home "/" dir)))
-                        '#$%data-dirs))))
+                (simple-service 'create-xdg-dirs activation-service-type
+                                #~(begin
+                                    (use-modules (guix build utils))
+                                    (let ((home (string-append "/home/"
+                                                               #$username)))
+                                      (for-each (lambda (dir)
+                                                  (mkdir-p (string-append home
+                                                            "/" dir)))
+                                                '#$%data-dirs))))
 
                 ;; Nix related.
                 (service nix-service-type
@@ -256,7 +255,24 @@
                                                                          (initial-session-user
                                                                           username)
                                                                          (initial-session-command
-                                                                          "dbus-run-session niri --session"))))))
+                                                                          (program-file
+                                                                           "niri-session"
+                                                                           #~(execl #$
+                                                                              (file-append
+                                                                               dbus
+                                                                               "/bin/dbus-run-session")
+                                                                              "dbus-run-session"
+                                                                              (string-append
+                                                                               "--dbus-daemon="
+                                                                               #$
+                                                                               (file-append
+                                                                                dbus
+                                                                                "/bin/dbus-daemon"))
+                                                                              #$
+                                                                              (file-append
+                                                                               niri
+                                                                               "/bin/niri")
+                                                                              "--session"))))))))
 
             (guix-service-type config =>
                                (guix-configuration (inherit config)
