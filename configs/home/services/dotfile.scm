@@ -27,10 +27,4 @@
                                                                          "/share/fish/functions/fenv.main.fish"))
                           ("fish/conf.d/02-fish-foreign-env.fish" ,(file-append
                                                                     fish-foreign-env
-                                                                    "/share/fish/functions/fenv.fish"))))
-
-        (simple-service 'fish-greeting
-                        home-xdg-configuration-files-service-type
-                        `(("fish/conf.d/greeting.fish" ,(plain-file
-                                                         "greeting.fish"
-                                                         "set --global fish_greeting 日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。"))))))
+                                                                    "/share/fish/functions/fenv.fish"))))))
