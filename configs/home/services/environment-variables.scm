@@ -7,6 +7,7 @@
                         home-environment-variables-service-type
                         `(("EDITOR" . "hx") ("GDK_BACKEND" . "wayland")
                           ("GUIX_PROFILE" . "$HOME/.guix-profile")
+                          ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/steam")
                           ("HTTP_PROXY" . "http://127.0.0.1:7890")
                           ("http_proxy" . "$HTTP_PROXY")
                           ("HTTPS_PROXY" . "$HTTP_PROXY")
