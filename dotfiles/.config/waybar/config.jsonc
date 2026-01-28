@@ -121,7 +121,7 @@
         ""
       ],
     },
-    "on-click": "easyeffects",
+    "on-click": "pavucontrol",
     "ignored-sinks": [
       "AudioRelay Virtual Sink",
       "Recorder Sink"
@@ -131,7 +131,6 @@
   "wlr/taskbar": {
     "format": "{icon}",
     "icon-size": 24,
-    "icon-theme": "Papirus-Dark",
     "tooltip-format": "{title}",
     "on-click": "activate",
     "on-click-middle": "close",
