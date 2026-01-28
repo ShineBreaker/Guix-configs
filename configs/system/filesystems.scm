@@ -1,6 +1,7 @@
 ;;; SPDX-FileCopyrightText: 2026 Copyright (C) 2024-2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
+
 (load "../information.scm")
 
 (use-modules (ice-9 match))
@@ -30,6 +31,7 @@
             (dependencies %mapped-devices-config)
             (options (string-append "subvol=" subvol ",compress=zstd:6"))
             (create-mount-point? #t)
+            (needed-for-boot? #t)
             (check? (string=? mount-point "/gnu")))))
        %btrfs-subvolumes))
 
