@@ -2,11 +2,11 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (rosenthal bootloader grub))
+(use-modules (rosenthal bootloader uki))
 
 (define %bootloader-config
   (bootloader-configuration
-    (bootloader grub-efi-luks2-bootloader)
+    (bootloader uefi-uki-removable-bootloader)
     (theme (grub-theme (inherit (grub-theme))
                        (gfxmode '("1024x786x32"))))
     (targets '("/efi"))
