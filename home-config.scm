@@ -11,6 +11,7 @@
 (load "./configs/home/services/desktop.scm")
 (load "./configs/home/services/dotfile.scm")
 (load "./configs/home/services/environment-variables.scm")
+(load "./configs/home/services/fish.scm")
 (load "./configs/home/services/font.scm")
 
 (define %home-config
@@ -21,6 +22,7 @@
      (append %desktop-services
              %dotfile-services
              %environment-variable-services
+             %fish-services
              %font-services
              %rosenthal-desktop-home-services))))
 
