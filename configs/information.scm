@@ -7,7 +7,9 @@
 (define %data-dirs
   '(".gnupg"
     ".local/share/PrismLauncher"
+    ".local/share/osu"
     ".var/app"
+
     "Desktop"
     "Documents"
     "Downloads"
@@ -16,13 +18,15 @@
     "Pictures"
     "Programs"
     "Public"
-    "Templates"))
+    "Templates"
+    "Videos"))
 
 (define %btrfs-subvol-data "DATA/Share")
 
 (define %btrfs-subvolumes
   '(("SYSTEM/Guix/@boot"            "/boot")
     ("SYSTEM/Guix/@data"            "/var/lib")
+    ("SYSTEM/Guix/@gnu"             "/gnu")
 
     ("SYSTEM/Guix/@persist/cache/root"     "/root/.cache")
     ("SYSTEM/Guix/@persist/cache/var"      "/var/cache")
@@ -32,8 +36,11 @@
     ("SYSTEM/Guix/@persist/mihomo"         "/.config")
     ("SYSTEM/Guix/@persist/tmp"            "/var/tmp")
 
-    ("SYSTEM/Guix/@etc"             "/etc")
-    ("SYSTEM/Guix/@gnu"             "/gnu")
+    ("SYSTEM/Guix/@etc/guix"               "/etc/guix")
+    ("SYSTEM/Guix/@etc/libvirt"            "/etc/libvirt")
+    ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
+
+    ("DATA/Flatpak"                 "/var/lib/flatpak")
     ("DATA/Home/Guix"               "/home")
-    ("SYSTEM/NixOS/@nix"            "/nix")
-    ("DATA/Flatpak"                 "/var/lib/flatpak")))
+
+    ("SYSTEM/NixOS/@nix"            "/nix")))
