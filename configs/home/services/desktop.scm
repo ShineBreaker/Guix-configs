@@ -1,9 +1,8 @@
-;;; SPDX-FileCopyrightText: 2026 Copyright (C) 2024-2026 BrokenShine <xchai404@gmail.com>
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (gnu home services shells)
-             (gnu home services desktop)
+(use-modules (gnu home services desktop)
              (gnu home services dotfiles)
              (gnu home services fontutils)
              (gnu home services gnupg)
@@ -17,21 +16,12 @@
 
              (radix packages gnupg)
 
-             (rosenthal services desktop)
-             (rosenthal services shellutils))
+             (rosenthal services desktop))
 
-(use-package-modules freedesktop
-                     kde-internet
-                     linux
-                     polkit
-                     wm)
+(use-package-modules freedesktop kde-internet linux polkit wm)
 
 (define %desktop-services
-  (list (service home-fish-service-type)
-        (service home-fish-plugin-atuin-service-type)
-        (service home-fish-plugin-direnv-service-type)
-        (service home-fish-plugin-zoxide-service-type)
-        (service home-mako-service-type)
+  (list (service home-mako-service-type)
         (service home-niri-service-type)
         (service home-syncthing-service-type)
         (service home-waybar-service-type)
@@ -61,7 +51,7 @@
                                                                       "/.var/log/kdeconnectd.log")))
                                                 (respawn? #t))
 
-                        (shepherd-service (provision '(polkit-gnome))
+                              (shepherd-service (provision '(polkit-gnome))
                                                 (requirement '(dbus))
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
