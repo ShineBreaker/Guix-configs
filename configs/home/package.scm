@@ -29,15 +29,21 @@
           "dex"
           "fcitx5"
           "fuzzel"
+          "helvum"
           "keepassxc"
           "mako"
           "mpvpaper"
+          "pavucontrol"
           "swww"
           "waypaper"
 
-          ;; Utility
+          ;; shell
           "age"
+          "atuin"
           "git-credential-keepassxc"
+          "lolcat"
+
+          ;; Utility
           "kdeconnect"
           "libreoffice"
           "obsidian"
@@ -71,7 +77,6 @@
           ;; Programming
           "emacs-pgtk"
           "node"
-          "lolcat"
           "pandoc"
           "pnpm"
           "reuse"
