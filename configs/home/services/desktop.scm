@@ -28,6 +28,7 @@
 
 (define %desktop-services
   (list (service home-fish-service-type)
+        (service home-fish-plugin-atuin-service-type)
         (service home-fish-plugin-direnv-service-type)
         (service home-fish-plugin-zoxide-service-type)
         (service home-mako-service-type)
