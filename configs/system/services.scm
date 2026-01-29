@@ -8,13 +8,16 @@
              (gnu home services guix)
              (guix channels)
              (jeans packages linux)
-             (rosenthal packages networking))
+             (rosenthal packages networking)
+             (rosenthal services base)
+             (rosenthal services desktop))
 
 (use-package-modules games geo glib package-management wm)
 
 (use-service-modules authentication
                      containers
                      databases
+                     desktop
                      dbus
                      dns
                      linux
@@ -23,6 +26,8 @@
                      pam-mount
                      pm
                      sddm
+                     shepherd
+                     sound
                      syncthing
                      sysctl
                      virtualization
@@ -242,9 +247,11 @@
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
+            (delete pulseaudio-service-type)
 
             (greetd-service-type config =>
                                  (greetd-configuration (inherit config)
+                                                       (greeter-supplementary-groups '("video" "audio"))
                                                        (terminals (list (greetd-terminal-configuration
                                                                          (terminal-vt
                                                                           "7")
