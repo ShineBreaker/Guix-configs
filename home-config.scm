@@ -13,7 +13,7 @@
 (load "./configs/home/services/environment-variables.scm")
 (load "./configs/home/services/font.scm")
 
-(define home-config
+(define %home-config
   (home-environment
     (packages %packages-list)
 
@@ -22,12 +22,6 @@
              %dotfile-services
              %environment-variable-services
              %font-services
+             %rosenthal-desktop-home-services))))
 
-             (modify-services %rosenthal-desktop-home-services
-               (home-pipewire-service-type config =>
-                                           (home-pipewire-configuration (wireplumber
-                                                                         wireplumber)
-                                                                        (enable-pulseaudio?
-                                                                         #t))))))))
-
-home-config
+%home-config
