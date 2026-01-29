@@ -10,12 +10,16 @@
 
 (define %initrd-config
   microcode-initrd)
+
 (define %firmware-config
-  (list linux-firmware sof-firmware bluez-firmware ovmf-x86-64))
+  (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
+
 (define %kernel-config
   linux-xanmod)
+
 (define %kernel-arguments-config
-  (cons* "kernel.sysrq=1" "zswap.enabled=1" "zswap.max_pool_percent=90"
-         "modprobe.blacklist=amdgpu,pcspkr,hid_nintendo"
+  (cons* "kernel.sysrq=1"
          "snd-intel-dspcfg.dsp_driver=3"
+         "zswap.enabled=1"
+         "zswap.max_pool_percent=90"
          %default-kernel-arguments))
