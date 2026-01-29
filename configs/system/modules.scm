@@ -6,5 +6,4 @@
              (gnu system accounts)
              (gnu system nss)
              (gnu system pam)
-             (nonguix transformations)
-             (rosenthal))
+             (rosenthal utils packages))
