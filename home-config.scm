@@ -16,7 +16,9 @@
 
 (define %home-config
   (home-environment
-    (packages %packages-list)
+    (packages (append %base-packages
+                      %fish-packages-list
+                      %packages-list))
 
     (services
      (append %desktop-services
