@@ -17,8 +17,7 @@
 
         (service home-xdg-configuration-files-service-type
                  `(("gdb/gdbinit" ,%default-gdbinit)
-                   ("nano/nanorc" ,%default-nanorc)
-                   ("pipewire/pipewire.conf.d/99-custom-latency.conf" , (local-file "../../files/99-custom-latency.conf"))))
+                   ("nano/nanorc" ,%default-nanorc)))
 
         (simple-service 'fish-foreign-env
                         home-xdg-configuration-files-service-type
