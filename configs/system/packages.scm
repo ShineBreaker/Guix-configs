@@ -5,7 +5,6 @@
 (define %packages-config
   (append (specs->pkgs+out
            ;; Desktop
-           "alsa-utils"
            "bluez"
            "brightnessctl"
            "gnome-keyring"
@@ -39,7 +38,6 @@
            "libgnome-keyring"
            "libsecret"
            "mihomo"
-           "pavucontrol"
            "pipewire"
            "polkit-gnome"
            "qt5ct"
@@ -84,6 +82,7 @@
            "qemu"
 
            ;; System
+           "alsa-utils"
            "bluez"
            "curl"
            "cryptsetup"
