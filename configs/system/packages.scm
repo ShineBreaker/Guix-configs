@@ -3,7 +3,7 @@
 ;;; SPDX-License-Identifier: GPL-3.0
 
 (define %packages-config
-  (append (specs->pkgs+out
+  (list (specs->pkgs+out
            ;; Desktop
            "bluez"
            "brightnessctl"
@@ -63,17 +63,11 @@
            "font-sarasa-gothic"
 
            ;; Terminal
-           "bat"
-           "btop"
            "distrobox"
            "fastfetch"
-           "fd"
            "fish"
            "foot"
-           "fzf"
            "helix"
-           "ripgrep"
-           "starship"
 
            ;; Virtualization & Container
            "libvirt"
@@ -104,4 +98,4 @@
            "tpm2-tools"
            "tpm2-tss"
            "unzip"
-           "wget") %base-packages))
+           "wget")))

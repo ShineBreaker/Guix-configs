@@ -2,18 +2,32 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(define %fish-packages-list
+  (specifications->packages (list "atuin"
+                                  "bat"
+                                  "direnv"
+                                  "fd"
+                                  "ripgrep"
+                                  "fzf"
+                                  "lolcat"
+                                  "starship"
+                                  "zoxide")))
+
 (define %fish-services
   (list (service home-fish-plugin-atuin-service-type)
         (service home-fish-plugin-direnv-service-type)
-        (service home-fish-plugin-zoxide-service-type)
         (service home-fish-service-type
-                 (home-fish-configuration (aliases '(("ll" . "ls -la")
-                                                     ("rm" . "rm -i")
-                                                     ("cp" . "cp -i")))
+                 (home-fish-configuration (aliases '(("cat" . "bat")
+                                                     ("cd" . "z")
+                                                     ("cp" . "cp -i")
+                                                     ("find" . "fd")
+                                                     ("grep" . "rg")
+                                                     ("htop" . "btop")
+                                                     ("ll" . "ls -la")
+                                                     ("rm" . "rm -i")))
 
-                                          (abbreviations '(("cat" . "git")
-                                                           ("cd" . "bat")
-                                                           ("commit" . "'git commit --all -S'")
+                                          (abbreviations '(("commit" . "'git commit --all -S'")
+                                                           ("enter" . "distrobox enter")
                                                            ("push" . "git push")
                                                            ("reboot" . "loginctl reboot")
                                                            ("rebuild" . "'sudo guix system reconfigure ./config.scm && guix home reconfigure ./home-config.scm'")
