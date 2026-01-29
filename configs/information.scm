@@ -1,4 +1,4 @@
-;;; SPDX-FileCopyrightText: 2026 Copyright (C) 2024-2026 BrokenShine <xchai404@gmail.com>
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
@@ -6,8 +6,9 @@
 
 (define %data-dirs
   '(".gnupg"
-    ".local/share/PrismLauncher"
     ".local/share/osu"
+    ".local/share/PrismLauncher"
+    ".local/share/steam"
     ".var/app"
 
     "Desktop"
@@ -24,9 +25,9 @@
 (define %btrfs-subvol-data "DATA/Share")
 
 (define %btrfs-subvolumes
-  '(("SYSTEM/Guix/@boot"            "/boot")
-    ("SYSTEM/Guix/@data"            "/var/lib")
-    ("SYSTEM/Guix/@gnu"             "/gnu")
+  '(("SYSTEM/Guix/@boot"                   "/boot")
+    ("SYSTEM/Guix/@data"                   "/var/lib")
+    ("SYSTEM/Guix/@gnu"                    "/gnu")
 
     ("SYSTEM/Guix/@persist/cache/root"     "/root/.cache")
     ("SYSTEM/Guix/@persist/cache/var"      "/var/cache")
@@ -40,7 +41,7 @@
     ("SYSTEM/Guix/@etc/libvirt"            "/etc/libvirt")
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
-    ("DATA/Flatpak"                 "/var/lib/flatpak")
-    ("DATA/Home/Guix"               "/home")
+    ("DATA/Flatpak"                        "/var/lib/flatpak")
+    ("DATA/Home/Guix"                      "/home")
 
-    ("SYSTEM/NixOS/@nix"            "/nix")))
+    ("SYSTEM/NixOS/@nix"                   "/nix")))
