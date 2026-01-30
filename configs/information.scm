@@ -1,8 +1,12 @@
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
+(use-modules (guix channels)
+             (guix gexp))
 
 (define username "brokenshine")
+(define guix-channels
+  (include "../channel.lock"))
 
 (define %data-dirs
   '(".gnupg"

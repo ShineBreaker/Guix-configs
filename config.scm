@@ -2,7 +2,6 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(load "./configs/channel.scm")
 (load "./configs/information.scm")
 
 (load "./configs/system/modules.scm")

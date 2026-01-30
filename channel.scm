@@ -81,3 +81,5 @@
                   (url "https://mirror.sjtu.edu.cn/git/guix.git")))
 
           %default-channels))
+
+guix-channels
