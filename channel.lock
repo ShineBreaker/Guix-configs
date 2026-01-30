@@ -1,0 +1,99 @@
+(list (channel
+        (name 'cast)
+        (url "https://codeberg.org/vnpower/cast")
+        (branch "main")
+        (commit
+          "a77a507b844c99c68a913e3389307814eb637714")
+        (introduction
+          (make-channel-introduction
+            "fab73647fd9f0f2167d9ef9d42cddd77500fffb3"
+            (openpgp-fingerprint
+              "D430 1F59 A65F 49DA 918A  3C0D 8D4C 3248 29DE D156"))))
+      (channel
+        (name 'jeans)
+        (url "https://codeberg.org/BrokenShine/jeans.git")
+        (branch "main")
+        (commit
+          "af5137370f41dd9369371208e00669635df883b7")
+        (introduction
+          (make-channel-introduction
+            "1e30ccbcaef375169d453d89d8186137bc32d9e8"
+            (openpgp-fingerprint
+              "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
+      (channel
+        (name 'nonguix)
+        (url "https://gitlab.com/nonguix/nonguix")
+        (branch "master")
+        (commit
+          "f5338f63fce69622ce06f93fe02524967e1f30d4")
+        (introduction
+          (make-channel-introduction
+            "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
+            (openpgp-fingerprint
+              "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
+      (channel
+        (name 'panther)
+        (url "https://codeberg.org/gofranz/panther")
+        (branch "master")
+        (commit
+          "5ac47e2538d2bd620ee51ac7e9ceac0188b3d507")
+        (introduction
+          (make-channel-introduction
+            "54b4056ac571611892c743b65f4c47dc298c49da"
+            (openpgp-fingerprint
+              "A36A D41E ECC7 A871 1003  5D24 524F EB1A 9D33 C9CB"))))
+      (channel
+        (name 'radix)
+        (url "https://codeberg.org/anemofilia/radix.git")
+        (branch "main")
+        (commit
+          "ce7da53081ed0d93641ce17100cbc74ac927a9e1")
+        (introduction
+          (make-channel-introduction
+            "f9130e11e35d2c147c6764ef85542dc58dc09c4f"
+            (openpgp-fingerprint
+              "F164 709E 5FC7 B32B AEC7  9F37 1F2E 76AC E3F5 31C8"))))
+      (channel
+        (name 'rosenthal)
+        (url "https://codeberg.org/hako/rosenthal.git")
+        (branch "trunk")
+        (commit
+          "eabcecfe5c3c0e6a0ee480caa19abe01bef94008")
+        (introduction
+          (make-channel-introduction
+            "7677db76330121a901604dfbad19077893865f35"
+            (openpgp-fingerprint
+              "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
+      (channel
+        (name 'saayix)
+        (url "https://codeberg.org/look/saayix")
+        (branch "main")
+        (commit
+          "f351eced445611b58015d1cb55b0b132ec83544d")
+        (introduction
+          (make-channel-introduction
+            "12540f593092e9a177eb8a974a57bb4892327752"
+            (openpgp-fingerprint
+              "3FFA 7335 973E 0A49 47FC  0A8C 38D5 96BE 07D3 34AB"))))
+      (channel
+        (name 'selected-guix-works)
+        (url "https://github.com/gs-101/selected-guix-works.git")
+        (branch "main")
+        (commit
+          "4cf9e6459472974ceed098364683bb08073f53ea")
+        (introduction
+          (make-channel-introduction
+            "5d1270d51c64457d61cd46ec96e5599176f315a4"
+            (openpgp-fingerprint
+              "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162"))))
+      (channel
+        (name 'guix)
+        (url "https://mirror.sjtu.edu.cn/git/guix.git")
+        (branch "master")
+        (commit
+          "1d9cf8758ecf49343457b98c1bbb084d214a602b")
+        (introduction
+          (make-channel-introduction
+            "9edb3f66fd807b096b48283debdcddccfea34bad"
+            (openpgp-fingerprint
+              "BBB0 2DDF 2CEA F6A8 0D1D  E643 A2A0 6DF2 A33A 54FA")))))
