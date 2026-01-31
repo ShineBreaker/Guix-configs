@@ -6,4 +6,7 @@
              (gnu system accounts)
              (gnu system nss)
              (gnu system pam)
+
+             (guix channels)
+
              (rosenthal utils packages))
