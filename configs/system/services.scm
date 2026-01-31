@@ -186,20 +186,6 @@
                                                                   "/var/log/mihomo.log"))
                                                         (stop #~(make-kill-destructor))
                                                         (auto-start? #t)
-                                                        (respawn? #t))
-
-                                      (shepherd-service (documentation
-                                                         "REALTIMEKIT Realtime Policy and Watchdog Daemon.")
-                                                        (provision '(rtkit-daemon))
-                                                        (requirement '(dbus-system))
-                                                        (start #~(make-forkexec-constructor
-                                                                  (list #$(file-append
-                                                                           rtkit
-                                                                           "/libexec/rtkit-daemon"))
-                                                                  #:log-file
-                                                                  "/var/log/rtkit-daemon.log"))
-                                                        (stop #~(make-kill-destructor))
-                                                        (auto-start? #t)
                                                         (respawn? #t))))
 
                 ;; Fix filesystem permissions.
