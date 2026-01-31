@@ -1,6 +1,7 @@
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
+
 (use-modules (guix channels)
              (guix gexp))
 
@@ -41,11 +42,10 @@
     ("SYSTEM/Guix/@persist/mihomo"         "/.config")
     ("SYSTEM/Guix/@persist/tmp"            "/var/tmp")
 
-    ("SYSTEM/Guix/@etc"                    "/etc")
-    ; ("SYSTEM/Guix/@etc/guix"               "/etc/guix")
-    ; ("SYSTEM/Guix/@etc/ipsec.secrets"      "/etc/ipsec.secrets")
-    ; ("SYSTEM/Guix/@etc/libvirt"            "/etc/libvirt")
-    ; ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
+    ("SYSTEM/Guix/@etc/guix"               "/etc/guix")
+    ("SYSTEM/Guix/@etc/ipsec.secrets"      "/etc/ipsec.secrets")
+    ("SYSTEM/Guix/@etc/libvirt"            "/etc/libvirt")
+    ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
     ("DATA/Home/Guix"                      "/home")
