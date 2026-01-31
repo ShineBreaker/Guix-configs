@@ -18,6 +18,7 @@
           (mount-point "/")
           (device "tmpfs")
           (type "tmpfs")
+          (flags '(no-atime))
           (options "mode=0755,nr_inodes=1m,size=10%")
           (check? #f))
         (file-system
