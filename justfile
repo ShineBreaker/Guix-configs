@@ -10,19 +10,36 @@ guix := "guix time-machine -C " + channel + " -- "
 # 应用全局配置
 rebuild:
 	@echo \n正在应用系统配置
-	sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades
+	sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
 	@echo \n正在应用用户配置
-	{{guix}} home reconfigure {{homecfg}} --allow-downgrades
+	{{guix}} home reconfigure {{homecfg}} > /dev/null
+
+# 应用全局配置 (详细显示日志)
+rebuildv:
+	@echo \n正在应用系统配置
+	sudo {{guix}} system reconfigure {{syscfg}}
+	@echo \n正在应用用户配置
+	{{guix}} home reconfigure {{homecfg}}
 
 # 应用系统配置
 system:
   @echo \n
-  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades
+  sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
+
+# 应用系统配置 (详细显示日志)
+systemv:
+  @echo \n
+  sudo {{guix}} system reconfigure {{syscfg}}
 
 # 应用用户配置
 home:
   @echo \n
-  {{guix}} home reconfigure {{homecfg}} --allow-downgrades
+  {{guix}} home reconfigure {{homecfg}} > /dev/null
+
+# 应用用户配置 (详细显示日志)
+homev:
+  @echo \n
+  {{guix}} home reconfigure {{homecfg}}
 
 # 更新lock file
 upgrade:
