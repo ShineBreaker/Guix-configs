@@ -25,7 +25,7 @@
         (url "https://gitlab.com/nonguix/nonguix")
         (branch "master")
         (commit
-          "f5338f63fce69622ce06f93fe02524967e1f30d4")
+          "712c2eb688fcd47f8dd6b27697c3552895fc2ed2")
         (introduction
           (make-channel-introduction
             "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
@@ -36,7 +36,7 @@
         (url "https://codeberg.org/gofranz/panther")
         (branch "master")
         (commit
-          "5ac47e2538d2bd620ee51ac7e9ceac0188b3d507")
+          "5af147cb8036d7dc7b224baca29687f7fd9d3886")
         (introduction
           (make-channel-introduction
             "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -47,7 +47,7 @@
         (url "https://codeberg.org/anemofilia/radix.git")
         (branch "main")
         (commit
-          "ce7da53081ed0d93641ce17100cbc74ac927a9e1")
+          "516a65373ea7456469126e1a76eadd2d540f2a73")
         (introduction
           (make-channel-introduction
             "f9130e11e35d2c147c6764ef85542dc58dc09c4f"
@@ -58,7 +58,7 @@
         (url "https://codeberg.org/hako/rosenthal.git")
         (branch "trunk")
         (commit
-          "eabcecfe5c3c0e6a0ee480caa19abe01bef94008")
+          "4f027bc4566a306ef42626414d3c323e1e8841f4")
         (introduction
           (make-channel-introduction
             "7677db76330121a901604dfbad19077893865f35"
@@ -88,10 +88,10 @@
               "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162"))))
       (channel
         (name 'guix)
-        (url "https://mirror.sjtu.edu.cn/git/guix.git")
+        (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "1d9cf8758ecf49343457b98c1bbb084d214a602b")
+          "819310310b532904692ec5dba0c0f2e883283a5b")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
