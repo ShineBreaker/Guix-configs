@@ -25,6 +25,7 @@
                      "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
                 (channel
                   (name 'nonguix)
+                  (branch "master")
                   (url "https://gitlab.com/nonguix/nonguix")
                   (introduction
                    (make-channel-introduction
@@ -33,8 +34,8 @@
                      "2A39 3FFF 68F4 OPEF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
                 (channel
                   (name 'panther)
-                  (url "https://codeberg.org/gofranz/panther")
                   (branch "master")
+                  (url "https://codeberg.org/gofranz/panther")
                   (introduction
                    (make-channel-introduction
                     "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -78,7 +79,7 @@
                      "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162"))))
                 (channel
                   (inherit (car %default-channels))
-                  (url "https://mirror.sjtu.edu.cn/git/guix.git")))
+                  (branch "master")))
 
           %default-channels))
 
