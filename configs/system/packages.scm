@@ -66,6 +66,7 @@
            "fish"
            "foot"
            "helix"
+           "just"
 
            ;; Virtualization & Container
            "libvirt"
