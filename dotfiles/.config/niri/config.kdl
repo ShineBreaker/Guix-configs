@@ -105,7 +105,13 @@ window-rule {
 window-rule {
     match is-active=false
 
-    opacity 0.8
+    opacity 0.9
+    shadow { off; }
+}
+
+window-rule {
+    match is-floating=true
+
     shadow { off; }
 }
 
