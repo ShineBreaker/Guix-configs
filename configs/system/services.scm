@@ -43,7 +43,6 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
-                (service gvfs-service-type)
                 (service tlp-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
@@ -233,7 +232,6 @@
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
-            (delete pulseaudio-service-type)
 
             (greetd-service-type config =>
                                  (greetd-configuration (inherit config)
