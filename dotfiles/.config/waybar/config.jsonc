@@ -209,7 +209,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "左键禁用自动休眠，右键启用自动休眠",
-    "on-click": "pkill swayidle & notify-send '自动休眠已禁用'",
-    "on-click-right": "swayidle & notify-send '自动休眠已启用'",
+    "on-click": "herd stop swayidle && notify-send '自动休眠已禁用'",
+    "on-click-right": "herd start swayidle && notify-send '自动休眠已启用'",
   },
 }
