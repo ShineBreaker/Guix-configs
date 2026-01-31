@@ -110,12 +110,6 @@ window-rule {
 }
 
 window-rule {
-    match is-floating=true
-
-    shadow { off; }
-}
-
-window-rule {
     match app-id="com.network.manager"
     match app-id="connman-gtk"
     match app-id="fcitx"
