@@ -1,6 +1,6 @@
-// spawn-at-startup "fish" "-c" "pgrep --uid $USER shepherd > /dev/null || shepherd"
+spawn-at-startup "fish" "-c" "pgrep --uid $USER shepherd > /dev/null || shepherd"
 
-spawn-sh-at-startup "pgrep --uid $USER shepherd > /dev/null || shepherd"
+// spawn-sh-at-startup "pgrep --uid $USER shepherd > /dev/null || shepherd"
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 
 spawn-at-startup "dex" "-a"
@@ -265,7 +265,7 @@ binds {
 
     Mod+Ctrl+C  hotkey-overlay-title="将窗口移至中央"    { center-column; }
     Mod+Ctrl+F  hotkey-overlay-title="使窗口悬浮"        { toggle-window-floating; }
-    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn-sh "waypaper --random"; }
+    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "waypaper" "--random"; }
 
     Mod+Ctrl+K     hotkey-overlay-title="上移窗口"    { move-window-up; }
     Mod+Ctrl+Up    hotkey-overlay-title="上移窗口"    { move-window-up; }
@@ -288,7 +288,7 @@ binds {
     Mod+Ctrl+Page_Up   hotkey-overlay-title="窗口移至上一工作区"  { move-column-to-workspace-up; }
 
     Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"; }
-    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "fuzzel"; }
+    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "fish" "-c" "fuzzel"; }
     Mod+F hotkey-overlay-title="窗口最大化"                      { maximize-column; }
     Mod+Q hotkey-overlay-title="关闭窗口"        repeat=false    { close-window; }
     Mod+R hotkey-overlay-title="更改窗口大小"                    { switch-preset-column-width; }
