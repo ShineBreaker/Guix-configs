@@ -62,10 +62,7 @@ layout {
     default-column-width { proportion 0.7; }
 
     focus-ring {
-        // off
-        width 3
-        active-gradient angle=45 from="89ddff" relative-to="window" to="ffcb6b"
-        inactive-color "#505050"
+        off
     }
 }
 
@@ -92,20 +89,25 @@ layer-rule {
 
 window-rule {
     draw-border-with-background false
-    geometry-corner-radius 8
+    geometry-corner-radius 18
     clip-to-geometry true
 
     shadow {
         on
-        softness 10
-        spread 0
+        softness 14
+        spread 1
         offset x=0 y=0
         draw-behind-window false
         color "#000000"
     }
 }
 
+window-rule {
+    match is-active=false
 
+    opacity 0.8
+    shadow { off; }
+}
 
 window-rule {
     match app-id="com.network.manager"
@@ -160,15 +162,6 @@ window-rule {
 
 window-rule {
     match is-window-cast-target=true
-
-    focus-ring {
-        active-color "#f38ba8"
-        inactive-color "#7d0d2d"
-    }
-
-    border {
-        inactive-color "#7d0d2d"
-    }
 
     shadow {
         color "#7d0d2d70"
