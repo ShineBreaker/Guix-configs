@@ -2,8 +2,8 @@ set shell := ["fish", "-c"]
 
 channel-fresh := "./configs/channel.scm"
 channel := "./configs/channel.lock"
-syscfg := "./system-config.scm"
-homecfg := "./home-config.scm"
+syscfg := "./configs/system-config.scm"
+homecfg := "./configs/home-config.scm"
 
 guix := "guix time-machine -C " + channel + " -- "
 
@@ -22,6 +22,6 @@ system:
 user:
 	{{guix}} home reconfigure {{homecfg}} --allow-downgrades
 
-# 更新lock file.
+# 更新lock file
 upgrade:
   guix time-machine -C {{channel-fresh}} -- describe --format=channels > {{channel}}
