@@ -24,17 +24,14 @@
                                                      ("grep" . "rg")
                                                      ("htop" . "btop")
                                                      ("ll" . "ls -la")
-                                                     ("rm" . "rm -i")
-                                                     ("sudo" . "/run/privileged/bin/sudo")))
+                                                     ("rm" . "rm -i")))
 
                                           (abbreviations '(("commit" . "'git commit --all -S'")
                                                            ("enter" . "distrobox enter")
                                                            ("push" . "git push")
                                                            ("reboot" . "loginctl reboot")
-                                                           ("rebuild" . "'sudo guix system reconfigure ./config.scm --allow-downgrades && guix home reconfigure ./home-config.scm --allow-downgrades'")
                                                            ("shutdown" . "loginctl poweroff")
-                                                           ("update" . "'sudo flatpak upgrade -y && flatpak upgrade -y && distrobox upgrade'")
-                                                           ("upgrade" . "'guix pull -C ./channel.scm && guix describe --format=channels > channel.lock'")))
+                                                           ("update" . "'sudo flatpak upgrade -y && flatpak upgrade -y && distrobox upgrade'")))
 
                                           (config (list (local-file
                                                          "../../files/config.fish")))))))
