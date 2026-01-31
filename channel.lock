@@ -14,7 +14,7 @@
         (url "https://codeberg.org/BrokenShine/jeans.git")
         (branch "main")
         (commit
-          "af5137370f41dd9369371208e00669635df883b7")
+          "bf1965b540f01b6894dc6a2dced2d272f6e45fad")
         (introduction
           (make-channel-introduction
             "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -25,7 +25,7 @@
         (url "https://gitlab.com/nonguix/nonguix")
         (branch "master")
         (commit
-          "712c2eb688fcd47f8dd6b27697c3552895fc2ed2")
+          "f5338f63fce69622ce06f93fe02524967e1f30d4")
         (introduction
           (make-channel-introduction
             "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
@@ -36,7 +36,7 @@
         (url "https://codeberg.org/gofranz/panther")
         (branch "master")
         (commit
-          "5af147cb8036d7dc7b224baca29687f7fd9d3886")
+          "fce17f20cdc409865f9bae4cb961b92a7446aa5e")
         (introduction
           (make-channel-introduction
             "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -47,7 +47,7 @@
         (url "https://codeberg.org/anemofilia/radix.git")
         (branch "main")
         (commit
-          "516a65373ea7456469126e1a76eadd2d540f2a73")
+          "7ce4bba774717bf1db2f2d3274e9a5ecb9a12a25")
         (introduction
           (make-channel-introduction
             "f9130e11e35d2c147c6764ef85542dc58dc09c4f"
@@ -58,7 +58,7 @@
         (url "https://codeberg.org/hako/rosenthal.git")
         (branch "trunk")
         (commit
-          "4f027bc4566a306ef42626414d3c323e1e8841f4")
+          "eabcecfe5c3c0e6a0ee480caa19abe01bef94008")
         (introduction
           (make-channel-introduction
             "7677db76330121a901604dfbad19077893865f35"
@@ -91,7 +91,7 @@
         (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "819310310b532904692ec5dba0c0f2e883283a5b")
+          "40c24a92af2ead4379ea0755304c00fd09c806bf")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
