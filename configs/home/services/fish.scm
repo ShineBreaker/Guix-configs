@@ -24,7 +24,8 @@
                                                      ("grep" . "rg")
                                                      ("htop" . "btop")
                                                      ("ll" . "ls -la")
-                                                     ("rm" . "rm -i")))
+                                                     ("rm" . "rm -i")
+                                                     ("sudo" . "/run/privileged/bin/sudo")))
 
                                           (abbreviations '(("commit" . "'git commit --all -S'")
                                                            ("enter" . "distrobox enter")
