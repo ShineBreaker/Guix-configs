@@ -23,61 +23,61 @@
              (selected-guix-works packages rust-apps))
 
 (define %packages-list
-  (specifications->packages (list
-                             ;; Desktop
-                             "cliphist"
-                             "dex"
-                             "fcitx5"
-                             "fuzzel"
-                             "helvum"
-                             "keepassxc"
-                             "mako"
-                             "mpvpaper"
-                             "pavucontrol"
-                             "swww"
-                             "waypaper"
+  (cons* (specs->pkgs+out
+          ;; Desktop
+          "cliphist"
+          "dex"
+          "fcitx5"
+          "fuzzel"
+          "helvum"
+          "keepassxc"
+          "mako"
+          "mpvpaper"
+          "pavucontrol"
+          "swww"
+          "waypaper"
 
-                             ;; Utility
-                             "age"
-                             "btop"
-                             "git-credential-keepassxc"
-                             "kdeconnect"
-                             "libreoffice"
-                             "obsidian"
-                             "seahorse"
-                             "telegram-desktop"
-                             "virt-manager"
-                             "zen-browser-bin"
+          ;; Utility
+          "age"
+          "btop"
+          "git-credential-keepassxc"
+          "kdeconnect"
+          "libreoffice"
+          "obsidian"
+          "seahorse"
+          "telegram-desktop"
+          "virt-manager"
+          "zen-browser-bin"
 
-                             ;; Graphic
-                             "gimp"
-                             "mpv"
-                             "nomacs"
-                             "obs-with-cef"
-                             "obs-pipewire-audio-capture"
-                             "obs-vkcapture"
+          ;; Graphic
+          "gimp"
+          "mpv"
+          "nomacs"
+          "obs-with-cef"
+          "obs-pipewire-audio-capture"
+          "obs-vkcapture"
 
-                             ;; Entertain
-                             "mangohud"
-                             "openjdk@25"
-                             "osu-lazer-tachyon-bin"
-                             ;; "prismlauncher-dolly"
-                             "steam"
+          ;; Entertain
+          "mangohud"
+          "openjdk@25"
+          "osu-lazer-tachyon-bin"
+          ;; "prismlauncher-dolly"
+          "steam"
 
-                             ;; Themes
-                             "adwaita-icon-theme"
-                             "bibata-cursor-theme"
-                             "papirus-icon-theme"
-                             "orchis-theme"
-                             "orchis-kvantum-themes"
+          ;; Themes
+          "adwaita-icon-theme"
+          "bibata-cursor-theme"
+          "papirus-icon-theme"
+          "orchis-theme"
+          "orchis-kvantum-themes"
 
-                             ;; Programming
-                             "emacs-pgtk"
-                             "node"
-                             "pandoc"
-                             "pnpm"
-                             "reuse"
-                             "rust-analyzer"
-                             "shellcheck"
-                             "vscode"
-                             "zed")))
+          ;; Programming
+          "emacs-pgtk"
+          "node"
+          "pandoc"
+          "pnpm"
+          "reuse"
+          "rust-analyzer"
+          "shellcheck"
+          "vscode"
+          "zed")))
