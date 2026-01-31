@@ -12,10 +12,7 @@
 
 (define %data-dirs
   '(".gnupg"
-    ".local/share/osu"
-    ".local/share/PrismLauncher"
-    ".local/share/steam"
-    ".var/app"
+    ".var"
 
     "Desktop"
     "Documents"
@@ -52,3 +49,7 @@
     ("DATA/Home/Guix"                      "/home")
 
     ("SYSTEM/NixOS/@nix"                   "/nix")))
+
+(define %tmpfs-list
+  '(("/"     "mode=0755,nr_inodes=1m,size=10%")
+    ("/tmp"  "mode=1777,nr_inodes=1m,size=75%")))

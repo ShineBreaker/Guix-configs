@@ -14,20 +14,14 @@
           (arguments '(#:key-file "/cryptroot.key")))))
 
 (define %tmpfs
-  (list (file-system
-          (mount-point "/")
+  (map (match-lambda ( (mpoint options)
+  (file-system
+          (mount-point mpoint)
           (device "tmpfs")
           (type "tmpfs")
           (flags '(no-atime))
-          (options "mode=0755,nr_inodes=1m,size=10%")
-          (check? #f))
-        (file-system
-          (mount-point "/tmp")
-          (device "tmpfs")
-          (type "tmpfs")
-          (flags '(no-dev no-suid no-atime))
-          (options "mode=1777,nr_inodes=1m,size=75%")
-          (check? #f))))
+          (options options)
+          (check? #f)))) %tmpfs-list))
 
 (define %persist-filesystem
   (map (match-lambda
