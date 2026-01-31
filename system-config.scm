@@ -2,9 +2,8 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(load "./home-config.scm")
-
 (load "./configs/information.scm")
+
 (load "./configs/system/modules.scm")
 (load "./configs/system/kernel.scm")
 (load "./configs/system/users.scm")
@@ -12,9 +11,6 @@
 (load "./configs/system/filesystems.scm")
 (load "./configs/system/packages.scm")
 (load "./configs/system/services.scm")
-
-(use-modules (gnu home)
-             (gnu services guix))
 
 (operating-system
   (initrd %initrd-config)
@@ -35,10 +31,6 @@
 
   (packages %packages-config)
 
-  (services
-   (cons*
-    (service guix-home-service-type
-      `(("brokenshine" ,%home-config)))
-    %services-config))
+  (services %services-config)
 
   (name-service-switch %mdns-host-lookup-nss))
