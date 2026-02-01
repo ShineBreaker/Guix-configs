@@ -14,4 +14,5 @@
              (guix packages)
              (guix utils)
 
+             (rosenthal utils file)
              (rosenthal utils packages))
