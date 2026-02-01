@@ -36,7 +36,6 @@
           "pavucontrol"
           "swww"
           "waypaper"
-          "wireplumber"
 
           ;; Utility
           "age"
