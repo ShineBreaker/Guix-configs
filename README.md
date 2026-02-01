@@ -40,13 +40,13 @@ sudo guix system reconfigure config.scm
 ```bash
 ❯ just --list
 Available recipes:
-  home     # 应用用户配置
-  homev    # 应用用户配置 (详细显示日志)
-  rebuild  # 应用全局配置
-  rebuildv # 应用全局配置 (详细显示日志)
-  system   # 应用系统配置
-  systemv  # 应用系统配置 (详细显示日志)
-  upgrade  # 更新lock file
+  home      # 应用用户配置
+  home-v    # 应用用户配置 (详细显示日志)
+  rebuild   # 应用全局配置
+  rebuild-v # 应用全局配置 (详细显示日志)
+  system    # 应用系统配置
+  system-v  # 应用系统配置 (详细显示日志)
+  upgrade   # 更新lock file
 ```
 
 ### 核心配置
