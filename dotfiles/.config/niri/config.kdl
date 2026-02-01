@@ -47,7 +47,7 @@ input {
 }
 
 layout {
-    gaps 14
+    gaps 12
 
     always-center-single-column
     background-color "transparent"
@@ -60,10 +60,6 @@ layout {
     }
 
     default-column-width { proportion 0.7; }
-
-    focus-ring {
-        off
-    }
 }
 
 output "eDP-1" {
@@ -94,11 +90,15 @@ window-rule {
 
     shadow {
         on
-        softness 14
-        spread 1
+        softness 12
+        spread 0
         offset x=0 y=0
         draw-behind-window false
         color "#000000"
+    }
+
+    focus-ring {
+        off
     }
 }
 
