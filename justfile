@@ -11,11 +11,13 @@ guix := "guix time-machine -C " + channel + " -- "
 rebuild:
 	@echo \n正在应用系统配置
 	sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
+
 	@echo \n正在应用用户配置
 	{{guix}} home reconfigure {{homecfg}} > /dev/null
 
+
 # 应用全局配置 (详细显示日志)
-rebuildv:
+rebuild-v:
 	@echo \n正在应用系统配置
 	sudo {{guix}} system reconfigure {{syscfg}}
 	@echo \n正在应用用户配置
@@ -27,7 +29,7 @@ system:
   sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
 
 # 应用系统配置 (详细显示日志)
-systemv:
+system-v:
   @echo \n
   sudo {{guix}} system reconfigure {{syscfg}}
 
@@ -37,7 +39,7 @@ home:
   {{guix}} home reconfigure {{homecfg}} > /dev/null
 
 # 应用用户配置 (详细显示日志)
-homev:
+home-v:
   @echo \n
   {{guix}} home reconfigure {{homecfg}}
 
