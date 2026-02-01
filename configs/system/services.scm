@@ -84,10 +84,6 @@
                                                       (allow-empty-password?
                                                                              #f)))
 
-                (simple-service 'etc-files-fish etc-service-type
-                                (list `("fish/config.fish" ,(local-file
-                                                             "../files/config.fish"))))
-
                 ;; VM & Coantainer.
                 (service dnsmasq-service-type
                          (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
