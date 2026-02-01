@@ -2,11 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0
 
-if status is-interactive
-    set --prepend fish_function_path /run/current-system/profile/share/fish/functions
-    fenv . $HOME/.nix-profile/etc/profile.d/hm-session-vars.sh
-end
-
 function __fastfetch_on_startup --on-event fish_prompt
     functions -e __fastfetch_on_startup
     $$bin/fastfetch$$
