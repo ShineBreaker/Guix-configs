@@ -97,5 +97,4 @@
            "tpm2-tools"
            "tpm2-tss"
            "unzip"
-           "wget"
-           "wireplumber") %base-packages))
+           "wget") %base-packages))
