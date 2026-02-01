@@ -61,12 +61,22 @@
            "font-sarasa-gothic"
 
            ;; Terminal
+           "atuin"
+           "bat"
+           "direnv"
            "distrobox"
            "fastfetch"
+           "fd"
+           "ripgrep"
            "fish"
+           "fish-foreign-env"
            "foot"
+           "fzf"
            "helix"
            "just"
+           "lolcat"
+           "starship"
+           "zoxide"
 
            ;; Virtualization & Container
            "libvirt"
