@@ -8,5 +8,7 @@
              (gnu system pam)
 
              (guix channels)
+             (guix gexp)
+             (guix modules)
 
              (rosenthal utils packages))

@@ -14,11 +14,14 @@
              (gnu home services syncthing)
              (gnu home services guix)
 
-             (radix packages gnupg)
-
              (rosenthal services desktop))
 
-(use-package-modules freedesktop kde-internet linux polkit wm)
+(use-package-modules freedesktop
+                     gnupg
+                     kde-internet
+                     linux
+                     polkit
+                     wm)
 
 (define %desktop-services
   (list (service home-mako-service-type)
@@ -38,21 +41,22 @@
                                                (ssh-support? #t)))
 
         (service home-niri-service-type
-          (home-niri-configuration
-            (config
-             (computed-substitution-with-inputs "niri.kdl"
-               (local-file "../configs/files/config.kdl")
-               (specs->pkgs "brightnessctl"
-                            "cliphist"
-                            "dex"
-                            "foot"
-                            "fish"
-                            "fuzzel"
-                            "gtklock"
-                            "niri"
-                            "waypaper"
-                            "wl-clipboard"
-                            "xwayland-satellite")))))
+                 (home-niri-configuration (config (computed-substitution-with-inputs
+                                                   "niri.kdl"
+                                                   (local-file
+                                                    "../configs/files/config.kdl")
+                                                   (specs->pkgs
+                                                    "brightnessctl"
+                                                    "cliphist"
+                                                    "dex"
+                                                    "foot"
+                                                    "fish"
+                                                    "fuzzel"
+                                                    "gtklock"
+                                                    "niri"
+                                                    "waypaper"
+                                                    "wl-clipboard"
+                                                    "xwayland-satellite")))))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (shepherd-service (provision '(kdeconnectd))
