@@ -2,6 +2,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0
 
+status --is-login; and not set -q __fish_login_config_sourced
+and begin
+    fenv . $HOME/.nix-profile/etc/profile.d/hm-session-vars.sh
+end
+
 function __fastfetch_on_startup --on-event fish_prompt
     functions -e __fastfetch_on_startup
     $$bin/fastfetch$$
