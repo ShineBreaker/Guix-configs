@@ -28,11 +28,10 @@ SPDX-License-Identifier: GPL-3.0
 
 ### 安装系统
 
-直接在仓库的根目录中使用just就可以便捷的对系统进行操作了
-需要用到`python`和`just`两个依赖
+直接在仓库的根目录中使用`just`就可以便捷的对系统进行操作了
 
 ```bash
-guix shell python just -- just init
+guix shell just -- just init
 ```
 
 ### 安装系统之后
@@ -193,9 +192,9 @@ Available recipes:
 
 ### 特别感谢
 
-Grok、ChatGPT、Gemini：帮我解决问题
+Grok、ChatGPT、Gemini、KIMI：帮我解决问题
 
-GLM：帮忙拆分了一下我的配置文件
+GLM：帮忙拆分了一下我的配置文件, 并起草了configen的初版
 
 [GNU/Guix China群聊](https://t.me/guixcn)：帮助解决了进入系统的大问题, 才终于让我用上了Guix
 
