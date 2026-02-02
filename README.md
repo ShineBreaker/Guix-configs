@@ -28,25 +28,32 @@ SPDX-License-Identifier: GPL-3.0
 
 ### 安装系统
 
+直接在仓库的根目录中使用just就可以便捷的对系统进行操作了
+需要用到`python`和`just`两个依赖
+
 ```bash
-# 这里会把系统和用户的配置都给配置好
-sudo guix system reconfigure config.scm
+guix shell python just -- just init
 ```
 
-### 利用just
-
-安装完系统之后就可以直接在仓库的根目录中使用just来便捷的对系统进行操作了
+### 安装系统之后
 
 ```bash
 ❯ just --list
 Available recipes:
-  home      # 应用用户配置
-  home-v    # 应用用户配置 (详细显示日志)
-  rebuild   # 应用全局配置
-  rebuild-v # 应用全局配置 (详细显示日志)
-  system    # 应用系统配置
-  system-v  # 应用系统配置 (详细显示日志)
-  upgrade   # 更新lock file
+  generate-home-config   # 只生成 home 配置
+  generate-init-config   # 生成用于安装系统的配置文件
+  generate-system-config # 只生成系统配置
+  home                   # 应用用户配置
+  home-v                 # 应用用户配置 (详细显示日志)
+  init                   # 安装系统
+  rebuild                # 应用全局配置
+  rebuild-v              # 应用全局配置 (详细显示日志)
+  style *args            # 格式化代码
+  style-all              # 格式化所有代码
+  system                 # 应用系统配置
+  system-v               # 应用系统配置 (详细显示日志)
+  tmprm                  # 清理临时文件
+  upgrade                # 更新lock file
 ```
 
 ### 核心配置
@@ -76,10 +83,12 @@ Available recipes:
 
 **Btrfs 持久化子卷** 
 
-详见`./configs/imformation.scm`, 那边利用了Scheme语法来做到绑定subvol, 
+详见`./configs/imformation.scm`,
+
+利用了Scheme语法来做到绑定subvol, 
 并将`/home`分区中需要持久化保存的目录放置在
 `/data  (subvol=DATA/Share)`
-中,并利用`bind-mount`来做目录绑定.
+中,并利用`bind-mount`来做目录绑定。
 
 ### 内核优化
 
