@@ -9,7 +9,7 @@
 
 (define %dotfile-services
   (list (service home-dotfiles-service-type
-                 (home-dotfiles-configuration (directories '("../../../dotfiles"))
+                 (home-dotfiles-configuration (directories '("../dotfiles"))
                                               (excluded '("^.git$"
                                                           "^.gitignore$"
                                                           "^.github$"))))

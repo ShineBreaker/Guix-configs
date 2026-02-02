@@ -50,7 +50,7 @@
 
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
-                                                           "../files/nftables.conf"))))
+                                                           "../configs/files/nftables.conf"))))
 
                 (service postgresql-service-type
                          (postgresql-configuration (postgresql (specification->package
@@ -61,7 +61,7 @@
                                                                  (log-destination
                                                                   "stderr")
                                                                  (hba-file (local-file
-                                                                            "../files/postgresql.conf"))
+                                                                            "../configs/files/postgresql.conf"))
                                                                  (extra-config '
                                                                   (("session_preload_libraries"
                                                                     "auto_explain")

@@ -41,7 +41,7 @@
           (home-niri-configuration
             (config
              (computed-substitution-with-inputs "niri.kdl"
-               (local-file "../../files/config.kdl")
+               (local-file "../configs/files/config.kdl")
                (specs->pkgs "brightnessctl"
                             "cliphist"
                             "dex"
