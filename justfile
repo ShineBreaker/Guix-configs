@@ -13,14 +13,17 @@ guix := "guix time-machine -C " + channel + " -- "
 # 生成用于安装系统的配置文件
 generate-init-config:
   @python3 {{configen}} init
+  guix style --whole-file {{initcfg}}
 
 # 只生成系统配置
 generate-system-config:
   @python3 {{configen}} system
+  guix style --whole-file {{syscfg}}
 
 # 只生成 home 配置
 generate-home-config:
   @python3 {{configen}} home
+  guix style --whole-file {{homecfg}}
 
 # 清理临时文件
 tmprm:
