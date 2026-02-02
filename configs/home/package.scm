@@ -2,31 +2,12 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (jeans packages desktop)
-             (jeans packages games)
-             (jeans packages theme)
-
-             (nongnu packages game-client)
-             (nongnu packages productivity)
-             (nongnu packages video)
-
-             (px packages activitywatch)
-             (px packages desktop-tools)
-             (px packages editors)
-             (px packages networking)
-             (px packages node)
-             (px packages tools)
-             (px packages version-control)
-
-             (rosenthal packages games)
-
-             (selected-guix-works packages rust-apps))
-
 (define %packages-list
   (cons* (specs->pkgs+out
           ;; Desktop
           "baobab"
           "cliphist"
+          "cursor"
           "fcitx5"
           "fuzzel"
           "helvum"
