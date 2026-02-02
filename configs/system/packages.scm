@@ -15,7 +15,6 @@
            "poweralertd"
            "swayidle"
            "waybar"
-           "wl-clipboard"
            "xdg-desktop-portal-gnome"
            "xdg-desktop-portal-gtk"
            "xdg-dbus-proxy"
