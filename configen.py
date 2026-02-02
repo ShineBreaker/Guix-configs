@@ -8,6 +8,7 @@ Guix 配置文件生成器
 
 用法:
     python3 configen.py          # 生成所有配置文件
+    python3 configen.py init      # 只生成安装配置
     python3 configen.py system   # 只生成系统配置
     python3 configen.py home     # 只生成 home 配置
 """
@@ -154,11 +155,24 @@ def main():
     tmp_dir = os.path.join(repo_root, "tmp")
     os.makedirs(tmp_dir, exist_ok=True)
 
-    # 输出到项目的 tmp 目录
-    system_input = os.path.join(configs_dir, "system-config.scm")
-    system_output = os.path.join(tmp_dir, "system-config.scm")
-    home_input = os.path.join(configs_dir, "home-config.scm")
-    home_output = os.path.join(tmp_dir, "home-config.scm")
+    # 定义输入和输出文件
+    files = {
+        'init': {
+            'input': os.path.join(configs_dir, "init-config.scm"),
+            'output': os.path.join(tmp_dir, "init-config.scm"),
+            'desc': '安装配置'
+        },
+        'system': {
+            'input': os.path.join(configs_dir, "system-config.scm"),
+            'output': os.path.join(tmp_dir, "system-config.scm"),
+            'desc': '系统配置'
+        },
+        'home': {
+            'input': os.path.join(configs_dir, "home-config.scm"),
+            'output': os.path.join(tmp_dir, "home-config.scm"),
+            'desc': 'Home 配置'
+        }
+    }
 
     # 解析命令行参数
     target = "all" if len(sys.argv) < 2 else sys.argv[1].lower()
@@ -169,21 +183,16 @@ def main():
     print(f"配置目录: {configs_dir}")
     print(f"输出目录: {tmp_dir}\n")
 
-    if target == "system":
-        # 只生成系统配置
-        generate_complete_config(system_input, system_output)
-    elif target == "home":
-        # 只生成 home 配置
-        generate_complete_config(home_input, home_output)
+    # 根据目标生成配置文件
+    if target in files:
+        generate_complete_config(files[target]['input'], files[target]['output'])
     else:
-        # 生成所有配置
-        generate_complete_config(system_input, system_output)
-        print()
-
-        # 重置已加载文件列表
-        loaded_files.clear()
-
-        generate_complete_config(home_input, home_output)
+        # 生成所有配置文件
+        for name, file_info in files.items():
+            generate_complete_config(file_info['input'], file_info['output'])
+            if name != 'home':  # 不是最后一个，添加空行
+                print()
+            loaded_files.clear()  # 重置已加载文件列表
 
     print()
     print("=" * 40)
