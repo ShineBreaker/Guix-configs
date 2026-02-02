@@ -16,6 +16,18 @@
 (define %fish-services
   (list (service home-fish-plugin-atuin-service-type)
         (service home-fish-plugin-direnv-service-type)
+
+        (simple-service
+         'fish-xdg-config
+         home-xdg-configuration-files-service-type
+         (list
+          `("fish/conf.d/01-fish-foreign-env-main.fish"
+            ,(file-append fish-foreign-env
+                          "/share/fish/functions/fenv.main.fish"))
+          `("fish/conf.d/02-fish-foreign-env.fish"
+            ,(file-append fish-foreign-env
+                          "/share/fish/functions/fenv.fish"))))
+
         (service home-fish-service-type
                  (home-fish-configuration (aliases '(("cat" . "bat")
                                                      ("cd" . "z")
