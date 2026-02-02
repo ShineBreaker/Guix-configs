@@ -2,42 +2,69 @@ set shell := ["fish", "-c"]
 
 channel-fresh := "./configs/channel.scm"
 channel := "./configs/channel.lock"
-syscfg := "./configs/system-config.scm"
-homecfg := "./configs/home-config.scm"
+syscfg := "./tmp/system-config.scm"
+homecfg := "./tmp/home-config.scm"
+
+configen := "./configen.py"
 
 guix := "guix time-machine -C " + channel + " -- "
 
+# 生成完整的配置文件
+generate-config:
+  @python3 {{configen}}
+
+# 只生成系统配置
+generate-system-config:
+  @python3 {{configen}} system
+
+# 只生成 home 配置
+generate-home-config:
+  @python3 {{configen}} home
+
+# 清理临时文件
+tmprm:
+  @rm -rf ./tmp
+
 # 应用全局配置
-rebuild:
+rebuild: generate-config
 	@echo 正在应用系统配置
 	sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
 
 	@echo 正在应用用户配置
 	{{guix}} home reconfigure {{homecfg}} > /dev/null
 
+	@echo 清理临时文件
+	@rm -rf ./tmp
+
 
 # 应用全局配置 (详细显示日志)
-rebuild-v:
+rebuild-v: generate-config
 	@echo 正在应用系统配置
 	sudo {{guix}} system reconfigure {{syscfg}}
 	@echo 正在应用用户配置
 	{{guix}} home reconfigure {{homecfg}}
+	@echo 清理临时文件
+	@rm -rf ./tmp
 
 # 应用系统配置
-system:
+system: generate-system-config
   sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
+  @rm -rf ./tmp
 
 # 应用系统配置 (详细显示日志)
-system-v:
+system-v: generate-system-config
   sudo {{guix}} system reconfigure {{syscfg}}
+  @rm -rf ./tmp
 
 # 应用用户配置
-home:
+home: generate-home-config
   {{guix}} home reconfigure {{homecfg}} > /dev/null
+  @rm -rf ./tmp
 
 # 应用用户配置 (详细显示日志)
-home-v:
+home-v: generate-home-config
   {{guix}} home reconfigure {{homecfg}}
+  @rm -rf ./tmp
 
 # 更新lock file
 upgrade:

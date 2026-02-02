@@ -48,7 +48,7 @@
                                           (config (list (computed-substitution-with-inputs
                                                          "config.fish"
                                                          (local-file
-                                                          "../../files/config.fish")
+                                                          "../configs/files/config.fish")
                                                          (specs->pkgs
                                                           "fastfetch" "fzf"
                                                           "lolcat" "starship"
