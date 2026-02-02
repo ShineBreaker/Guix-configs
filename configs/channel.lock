@@ -47,7 +47,7 @@
         (url "https://codeberg.org/anemofilia/radix.git")
         (branch "main")
         (commit
-          "516a65373ea7456469126e1a76eadd2d540f2a73")
+          "2fac43cf6d0fc09c9e5482e47aeee7be1cda647d")
         (introduction
           (make-channel-introduction
             "f9130e11e35d2c147c6764ef85542dc58dc09c4f"
@@ -91,7 +91,7 @@
         (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "8296d371106ca0288bb58e6e40dee3ffa9e0d711")
+          "4a1fedd453eeb6305a64d16e88d0029cb23f998d")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
