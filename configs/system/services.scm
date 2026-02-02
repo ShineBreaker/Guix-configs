@@ -201,14 +201,22 @@
                                     (chmod "/data" #o1777)))
 
                 (simple-service 'create-xdg-dirs activation-service-type
-                                #~(begin
-                                    (use-modules (guix build utils))
-                                    (let ((home (string-append "/home/"
-                                                               #$username)))
-                                      (for-each (lambda (dir)
-                                                  (mkdir-p (string-append home
-                                                            "/" dir)))
-                                                '#$%data-dirs))))
+                                (with-imported-modules
+                                    (source-module-closure
+                                     '((guix build utils)))
+                                  #~(begin
+                                      (use-modules (guix build utils))
+                                      (let* ((pw   (getpwnam #$username))
+                                             (uid  (passwd:uid pw))
+                                             (gid  (passwd:gid pw))
+                                             (home (string-append "/home/" #$username)))
+                                        (for-each
+                                         (lambda (dir)
+                                           (let ((path (string-append home "/" dir)))
+                                             (mkdir-p path)
+                                             (chown path uid gid)
+                                             (chmod path #o755)))
+                                         '#$%data-dirs)))))
 
                 ;; Nix related.
                 (service nix-service-type
