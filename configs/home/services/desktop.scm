@@ -22,7 +22,6 @@
 
 (define %desktop-services
   (list (service home-mako-service-type)
-        (service home-niri-service-type)
         (service home-syncthing-service-type)
         (service home-waybar-service-type)
 
@@ -37,6 +36,23 @@
                                                                   pinentry-fuzzel
                                                                   "/bin/pinentry-fuzzel"))
                                                (ssh-support? #t)))
+
+        (service home-niri-service-type
+          (home-niri-configuration
+            (config
+             (computed-substitution-with-inputs "niri.kdl"
+               (local-file "../../files/config.kdl")
+               (specs->pkgs "brightnessctl"
+                            "cliphist"
+                            "dex"
+                            "foot"
+                            "fish"
+                            "fuzzel"
+                            "gtklock"
+                            "niri"
+                            "waypaper"
+                            "wl-clipboard"
+                            "xwayland-satellite")))))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (shepherd-service (provision '(kdeconnectd))
