@@ -25,8 +25,8 @@
 (define %packages-list
   (cons* (specs->pkgs+out
           ;; Desktop
+          "baobab"
           "cliphist"
-          "dex"
           "fcitx5"
           "fuzzel"
           "helvum"
@@ -36,6 +36,7 @@
           "pavucontrol"
           "swww"
           "waypaper"
+          "wl-clipboard"
 
           ;; Utility
           "age"
