@@ -14,7 +14,7 @@
         (url "https://codeberg.org/BrokenShine/jeans.git")
         (branch "main")
         (commit
-          "af5137370f41dd9369371208e00669635df883b7")
+          "a570a1c11e40df3259c7fb3d824be61e09a5bf7f")
         (introduction
           (make-channel-introduction
             "1e30ccbcaef375169d453d89d8186137bc32d9e8"
