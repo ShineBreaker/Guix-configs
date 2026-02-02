@@ -2,16 +2,17 @@ set shell := ["fish", "-c"]
 
 channel-fresh := "./configs/channel.scm"
 channel := "./configs/channel.lock"
-syscfg := "./tmp/system-config.scm"
 homecfg := "./tmp/home-config.scm"
+initcfg := "./tmp/init-config.scm"
+syscfg := "./tmp/system-config.scm"
 
 configen := "./configen.py"
 
 guix := "guix time-machine -C " + channel + " -- "
 
-# 生成完整的配置文件
-generate-config:
-  @python3 {{configen}}
+# 生成用于安装系统的配置文件
+generate-init-config:
+  @python3 {{configen}} init
 
 # 只生成系统配置
 generate-system-config:
@@ -25,8 +26,14 @@ generate-home-config:
 tmprm:
   @rm -rf ./tmp
 
+# 安装系统
+init: generate-init-config
+  @echo 正在安装系统
+  sudo {{guix}} system init {{initcfg}} /mnt
+  @rm -rf ./tmp
+
 # 应用全局配置
-rebuild: generate-config
+rebuild: generate-system-config generate-home-config
 	@echo 正在应用系统配置
 	sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
 
@@ -38,7 +45,7 @@ rebuild: generate-config
 
 
 # 应用全局配置 (详细显示日志)
-rebuild-v: generate-config
+rebuild-v: generate-system-config generate-home-config
 	@echo 正在应用系统配置
 	sudo {{guix}} system reconfigure {{syscfg}}
 	@echo 正在应用用户配置
