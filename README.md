@@ -88,7 +88,7 @@ Available recipes:
 利用了Scheme语法来做到绑定subvol, 
 并将`/home`分区中需要持久化保存的目录放置在
 `/data  (subvol=DATA/Share)`
-中,并利用`bind-mount`来做目录绑定。
+中,利用`bind-mount`来做目录绑定。
 
 ### 内核优化
 
