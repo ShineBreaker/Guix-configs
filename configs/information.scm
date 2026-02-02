@@ -8,7 +8,7 @@
 (define username "brokenshine")
 
 (define guix-channels
-  (include "./channel.lock"))
+  (include "../configs/channel.lock"))
 
 (define %data-dirs
   '(".gnupg"
