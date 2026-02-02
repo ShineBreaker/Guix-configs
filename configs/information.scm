@@ -14,6 +14,10 @@
   '(".gnupg"
     ".var"
 
+    ".local/share/osu"
+    ".local/share/PrismLauncher"
+    ".local/share/steam"
+
     "Desktop"
     "Documents"
     "Downloads"
@@ -38,7 +42,6 @@
     ("SYSTEM/Guix/@persist/guix"           "/var/guix")
     ("SYSTEM/Guix/@persist/log"            "/var/log")
     ("SYSTEM/Guix/@persist/mihomo"         "/.config")
-    ("SYSTEM/Guix/@persist/tmp"            "/var/tmp")
 
     ("SYSTEM/Guix/@etc/guix"               "/etc/guix")
     ("SYSTEM/Guix/@etc/ipsec.secrets"      "/etc/ipsec.secrets")
