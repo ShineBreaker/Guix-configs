@@ -47,9 +47,7 @@
     ;; rust
     ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
     ;; sqlite
-    ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
-    ;; wget
-    ("WGETRC" . "$XDG_CONFIG_HOME/wgetrc")))
+    ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")))
 
 (define %environment-variable-services
   (list (simple-service 'environment-variables
