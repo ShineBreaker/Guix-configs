@@ -20,4 +20,7 @@
 
         (service home-xdg-configuration-files-service-type
                  `(("gdb/gdbinit" ,%default-gdbinit)
-                   ("nano/nanorc" ,%default-nanorc)))))
+                   ("nano/nanorc" ,%default-nanorc)))
+
+        (simple-service 'jdk-symlinks home-activation-service-type
+                        %jdk-symlink-activation)))
