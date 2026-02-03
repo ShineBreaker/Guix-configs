@@ -357,10 +357,10 @@ binds {
 
 
 
-    XF86AudioLowerVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "-1%"; }
+    XF86AudioLowerVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "-5%"; }
     XF86AudioMicMute      allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SOURCE@" "toggle"; }
     XF86AudioMute         allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SINK@" "toggle"; }
-    XF86AudioRaiseVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "+1%"; }
+    XF86AudioRaiseVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "+5%"; }
     XF86MonBrightnessDown allow-when-locked=true  { spawn "$$bin/brightnessctl$$" "set" "5%-"; }
     XF86MonBrightnessUp   allow-when-locked=true  { spawn "$$bin/brightnessctl$$" "set" "5%+"; }
 }
