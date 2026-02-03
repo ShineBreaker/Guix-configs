@@ -2,15 +2,15 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(load "./information.scm")
+(load "../information.scm")
 
-(load "./system/modules.scm")
-(load "./system/kernel.scm")
-(load "./system/users.scm")
-(load "./system/bootloader.scm")
-(load "./system/filesystems.scm")
-(load "./system/packages.scm")
-(load "./system/services.scm")
+(load "../system/modules.scm")
+(load "../system/kernel.scm")
+(load "../system/users.scm")
+(load "../system/bootloader.scm")
+(load "../system/filesystems.scm")
+(load "../system/packages.scm")
+(load "../system/services.scm")
 
 (operating-system
   (initrd %initrd-config)

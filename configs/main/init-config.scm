@@ -2,16 +2,16 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(load "./home-config.scm")
+(load "../home-config.scm")
 
-(load "./information.scm")
-(load "./system/modules.scm")
-(load "./system/kernel.scm")
-(load "./system/users.scm")
-(load "./system/bootloader.scm")
-(load "./system/filesystems.scm")
-(load "./system/packages.scm")
-(load "./system/services.scm")
+(load "../information.scm")
+(load "../system/modules.scm")
+(load "../system/kernel.scm")
+(load "../system/users.scm")
+(load "../system/bootloader.scm")
+(load "../system/filesystems.scm")
+(load "../system/packages.scm")
+(load "../system/services.scm")
 
 (use-modules (gnu home)
              (gnu services guix))

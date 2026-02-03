@@ -1,94 +1,92 @@
 #!/usr/bin/env bash
 # configen.sh - Guix 配置文件生成器 (Bash版)
-# 用法:
-# ./configen.sh # 生成所有配置文件
-# ./configen.sh init # 只生成安装配置
-# ./configen.sh system # 只生成系统配置
-# ./configen.sh home # 只生成 home 配置
+
 set -e
 
-# 获取脚本所在目录的绝对路径
 SCRIPT_PATH=$(realpath "${BASH_SOURCE[0]}")
 REPO_ROOT=$(dirname "$SCRIPT_PATH")
 CONFIGS_DIR="$REPO_ROOT/configs"
+CONFIGEN_DIR="$CONFIGS_DIR/main"
 TMP_DIR="$REPO_ROOT/tmp"
 
-# 确保 tmp 目录存在
 mkdir -p "$TMP_DIR"
 
-# 定义关联数组来追踪已加载的文件
 declare -A LOADED_FILES
 
 # -----------------------------------------------------------------------------
 # 核心处理函数
 # -----------------------------------------------------------------------------
 
-# 递归处理文件内容
 process_content() {
     local file_path="$1"
+    local load_root="${2:-}"
 
-    # 获取文件的绝对路径
     local full_path
     full_path=$(realpath "$file_path" 2>/dev/null || echo "")
 
-    # 检查文件是否存在
     if [[ -z "$full_path" || ! -f "$full_path" ]]; then
         echo "; 警告: 文件不存在: $file_path" >&2
         echo "; 警告: 无法加载 $file_path"
         return
     fi
 
-    # 检查是否已加载（去重）
     if [[ -n "${LOADED_FILES[$full_path]}" ]]; then
         return
     fi
 
-    # 标记为已加载
     LOADED_FILES["$full_path"]=1
 
-    # 获取当前文件所在的目录，用于解析相对路径
     local base_dir
     base_dir=$(dirname "$full_path")
 
-    # 逐行读取文件
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        # 只匹配 (load "./xxx")，忽略 include
-        if [[ "$line" =~ ^[[:space:]]*\(load[[:space:]]+\"./([^\"]+)\"[[:space:]]*\)[[:space:]]*$ ]]; then
-            local relative_path="${BASH_REMATCH[1]}"
-            local target_path="$base_dir/$relative_path"
+    if [[ -z "$load_root" ]]; then
+        load_root="$base_dir"
+    fi
 
-            # 输出注释分隔符
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # 匹配 (load "./xxx") 或 (load "../xxx")，捕获路径部分
+        if [[ "$line" =~ ^[[:space:]]*\(load[[:space:]]+\"(\.\.?/[^\"]+)\"[[:space:]]*\)[[:space:]]*$ ]]; then
+            local relative_path="${BASH_REMATCH[1]}"
+
+            # 如果路径以 ./ 开头，相对于 load_root
+            # 如果路径以 ../ 开头，相对于当前文件所在目录（base_dir）
+            local target_path
+            if [[ "$relative_path" == ./* ]]; then
+                target_path="$load_root/${relative_path#./}"
+            else
+                target_path="$base_dir/$relative_path"
+            fi
+
+            # 规范化路径（处理 ../）
+            target_path=$(realpath -m "$target_path")
+
             echo ""
             echo ";"
             echo "; ====== 来自 $relative_path ======"
             echo ";"
 
-            # 递归调用
-            process_content "$target_path"
+            # 递归时保持 load_root 不变
+            process_content "$target_path" "$load_root"
 
             echo ""
         else
-            # 普通行直接输出（保留 include 行）
             echo "$line"
         fi
     done < "$full_path"
 }
 
-# 生成单个配置文件
 generate_config() {
     local input_name="$1"
     local output_name="$2"
     local desc="$3"
 
-    local input_path="$CONFIGS_DIR/$input_name"
+    local input_path="$CONFIGEN_DIR/$input_name"
     local output_path="$TMP_DIR/$output_name"
 
     echo "正在生成完整配置文件: $output_path ($desc)"
 
-    # 重置已加载文件列表
     LOADED_FILES=()
 
-    # 准备头部信息
     local timestamp
     timestamp=$(date "+%Y-%m-%d %H:%M:%S")
 
@@ -96,14 +94,11 @@ generate_config() {
 ;;; 原始文件: $input_path
 ;;; 生成时间: $timestamp
 "
-    # 生成内容并写入临时文件
     {
         echo -e "$header"
-        process_content "$input_path"
+        process_content "$input_path" "$CONFIGS_DIR"
     } > "$output_path"
 
-    # 清理遗留的 load 语句 - 更宽松的正则，匹配各种空格情况
-    # 删除包含 (load "...") 的行，无论前后有什么
     if [[ "$(uname)" == "Darwin" ]]; then
         sed -i '' -E '/^[[:space:]]*\(load[[:space:]]+".*"\)[[:space:]]*$/d' "$output_path"
     else
@@ -124,7 +119,8 @@ main() {
     echo "========================================"
     echo "          Guix 配置文件生成器"
     echo "========================================"
-    echo "配置目录: $CONFIGS_DIR"
+    echo "入口目录: $CONFIGEN_DIR"
+    echo "模块目录: $CONFIGS_DIR"
     echo "输出目录: $TMP_DIR"
     echo ""
 
@@ -148,5 +144,4 @@ main() {
     echo "========================================"
 }
 
-# 执行主函数
 main "$@"
