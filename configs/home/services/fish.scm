@@ -21,10 +21,10 @@
          'fish-xdg-config
          home-xdg-configuration-files-service-type
          (list
-          `("fish/conf.d/01-fish-foreign-env-main.fish"
+          `("fish/functions/fenv.main.fish"
             ,(file-append fish-foreign-env
                           "/share/fish/functions/fenv.main.fish"))
-          `("fish/conf.d/02-fish-foreign-env.fish"
+          `("fish/functions/fenv.fish"
             ,(file-append fish-foreign-env
                           "/share/fish/functions/fenv.fish"))))
 
@@ -50,6 +50,8 @@
                                                          (local-file
                                                           "../configs/files/config.fish")
                                                          (specs->pkgs
-                                                          "fastfetch" "fzf"
-                                                          "lolcat" "starship"
+                                                          "fastfetch"
+                                                          "fzf"
+                                                          "lolcat"
+                                                          "starship"
                                                           "zoxide"))))))))
