@@ -43,7 +43,7 @@
           "mangohud"
           "openjdk@25"
           "osu-lazer-tachyon-bin"
-          ;; "prismlauncher-dolly"
+          "prismlauncher-dolly"
           "steam"
 
           ;; Themes
