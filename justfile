@@ -84,6 +84,15 @@ upgrade:
 pull:
   {{guix}} pull
 
+# 清除额外的配置 (慎用，用了就没办法回滚)
+clean:
+  sudo guix system delete-generations > /dev/null
+  guix home delete-generations > /dev/null
+
+# 清除额外的文件 (慎用，用了就没办法回滚)
+gc: clean
+  guix gc
+
 # 格式化代码
 style *args:
   guix style --whole-file {{args}}
