@@ -49,6 +49,7 @@
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
+    ("DATA/LibVirt"                        "/var/lib/libvirt")
     ("DATA/Home/Guix"                      "/home")))
 
 (define %tmpfs-list
