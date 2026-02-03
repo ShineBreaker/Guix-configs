@@ -36,43 +36,32 @@ init: generate-init-config
   @rm -rf ./tmp
 
 # 应用全局配置
-rebuild: generate-system-config generate-home-config
-	@echo 正在应用系统配置
-	sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
-
-	@echo 正在应用用户配置
-	{{guix}} home reconfigure {{homecfg}} > /dev/null
-
-	@echo 清理临时文件
-	@rm -rf ./tmp
-
+rebuild: system home
 
 # 应用全局配置 (详细显示日志)
-rebuild-v: generate-system-config generate-home-config
-	@echo 正在应用系统配置
-	sudo {{guix}} system reconfigure {{syscfg}}
-	@echo 正在应用用户配置
-	{{guix}} home reconfigure {{homecfg}}
-	@echo 清理临时文件
-	@rm -rf ./tmp
+rebuild-v: system-v home-v
 
 # 应用系统配置
 system: generate-system-config
+  @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
   @rm -rf ./tmp
 
 # 应用系统配置 (详细显示日志)
 system-v: generate-system-config
+  @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}}
   @rm -rf ./tmp
 
 # 应用用户配置
 home: generate-home-config
+  @echo 正在应用系统配置
   {{guix}} home reconfigure {{homecfg}} > /dev/null
   @rm -rf ./tmp
 
 # 应用用户配置 (详细显示日志)
 home-v: generate-home-config
+  @echo 正在应用系统配置
   {{guix}} home reconfigure {{homecfg}}
   @rm -rf ./tmp
 
