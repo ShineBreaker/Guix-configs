@@ -49,9 +49,7 @@
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
-    ("DATA/Home/Guix"                      "/home")
-
-    ("SYSTEM/NixOS/@nix"                   "/nix")))
+    ("DATA/Home/Guix"                      "/home")))
 
 (define %tmpfs-list
   '(("/"     "mode=0755,nr_inodes=1m,size=10%")
