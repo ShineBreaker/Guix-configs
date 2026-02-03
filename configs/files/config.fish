@@ -8,6 +8,8 @@ function __fastfetch_on_startup --on-event fish_prompt
     echo \n日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。\n | $$bin/lolcat$$
 end
 
+fenv source /etc/environment
+
 $$bin/fzf$$ --fish | source
 
 $$bin/starship$$ init fish | source
