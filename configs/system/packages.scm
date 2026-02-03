@@ -96,4 +96,5 @@
            "tpm2-tools"
            "tpm2-tss"
            "unzip"
-           "wget") %base-packages))
+           "wget"
+           "zip") %base-packages))
