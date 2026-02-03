@@ -22,7 +22,6 @@
                      dns
                      linux
                      networking
-                     nix
                      pam-mount
                      pm
                      sddm
@@ -216,27 +215,7 @@
                                              (mkdir-p path)
                                              (chown path uid gid)
                                              (chmod path #o755)))
-                                         '#$%data-dirs)))))
-
-                ;; Nix related.
-                (service nix-service-type
-                         (nix-configuration (extra-config (list (string-append
-                                                                 "trusted-users"
-                                                                 " = root "
-                                                                 username)))))
-
-                (simple-service 'non-nixos-gpu shepherd-root-service-type
-                                (list (shepherd-service (documentation
-                                                         "Install GPU drivers for running GPU accelerated programs from Nix.")
-                                                        (provision '(non-nixos-gpu))
-                                                        (requirement '(nix-daemon))
-                                                        (start #~(make-forkexec-constructor '
-                                                                  ("/run/current-system/profile/bin/ln"
-                                                                   "-nsf"
-                                                                   "/nix/store/6nklad7qapmqf41pqc2f9vizivn66a5p-non-nixos-gpu"
-                                                                   "/run/opengl-driver")))
-                                                        (stop #~(make-kill-destructor))
-                                                        (one-shot? #t)))))
+                                         '#$%data-dirs))))))
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
