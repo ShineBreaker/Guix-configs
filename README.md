@@ -39,12 +39,15 @@ guix shell just -- just init
 ```bash
 ❯ just --list
 Available recipes:
+  clean                  # 清除额外的配置 (慎用，用了就没办法回滚)
+  gc                     # 清除额外的文件 (慎用，用了就没办法回滚)
   generate-home-config   # 只生成 home 配置
   generate-init-config   # 生成用于安装系统的配置文件
   generate-system-config # 只生成系统配置
   home                   # 应用用户配置
   home-v                 # 应用用户配置 (详细显示日志)
   init                   # 安装系统
+  pull                   # 拉取channel
   rebuild                # 应用全局配置
   rebuild-v              # 应用全局配置 (详细显示日志)
   style *args            # 格式化代码
