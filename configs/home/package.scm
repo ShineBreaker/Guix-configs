@@ -40,6 +40,7 @@
           "obs-vkcapture"
 
           ;; Entertain
+          "heroic"
           "mangohud"
           "openjdk@25"
           "osu-lazer-tachyon-bin"
