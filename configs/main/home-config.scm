@@ -2,16 +2,17 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(load "./information.scm")
+(load "../information.scm")
+(load "../utils.scm")
 
-(load "./home/modules.scm")
-(load "./home/package.scm")
+(load "../home/modules.scm")
+(load "../home/package.scm")
 
-(load "./home/services/desktop.scm")
-(load "./home/services/dotfile.scm")
-(load "./home/services/environment-variables.scm")
-(load "./home/services/fish.scm")
-(load "./home/services/font.scm")
+(load "../home/services/desktop.scm")
+(load "../home/services/dotfile.scm")
+(load "../home/services/environment-variables.scm")
+(load "../home/services/fish.scm")
+(load "../home/services/font.scm")
 
 (define %home-config
   (home-environment
