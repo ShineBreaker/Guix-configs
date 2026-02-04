@@ -4,8 +4,7 @@
 
 (load "../information.scm")
 
-(use-modules (cast packages gtklock)
-             (gnu home services guix)
+(use-modules (gnu home services guix)
              (guix channels)
              (jeans packages linux)
              (rosenthal packages networking)
@@ -42,6 +41,7 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service powertop-service-type)
                 (service tlp-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
