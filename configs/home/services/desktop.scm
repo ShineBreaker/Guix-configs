@@ -35,8 +35,8 @@
 
         (service home-gpg-agent-service-type
                  (home-gpg-agent-configuration (pinentry-program (file-append
-                                                                  pinentry-fuzzel
-                                                                  "/bin/pinentry-fuzzel"))
+                                                                  pinentry-gnome3
+                                                                  "/bin/pinentry-gnome3"))
                                                (ssh-support? #t)))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
