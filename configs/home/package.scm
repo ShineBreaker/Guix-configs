@@ -12,7 +12,6 @@
           "fuzzel"
           "helvum"
           "keepassxc"
-          "mako"
           "mpvpaper"
           "pavucontrol"
           "swww"
@@ -48,11 +47,10 @@
           "steam"
 
           ;; Themes
+          "adw-gtk3-theme"
           "adwaita-icon-theme"
           "bibata-cursor-theme"
           "papirus-icon-theme"
-          "orchis-theme"
-          "orchis-kvantum-themes"
 
           ;; Programming
           "emacs-pgtk"
