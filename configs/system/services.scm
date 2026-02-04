@@ -76,10 +76,10 @@
                                                                     "/var/log/postgresql")))))))
 
                 (service screen-locker-service-type
-                         (screen-locker-configuration (name "gtklock")
+                         (screen-locker-configuration (name "swaylock")
                                                       (program (file-append
-                                                                gtklock
-                                                                "/bin/gtklock"))
+                                                                swaylock-effects
+                                                                "/bin/swaylock"))
                                                       (allow-empty-password?
                                                                              #f)))
 

@@ -254,7 +254,7 @@ binds {
     Mod+8       { focus-workspace 8; }
     Mod+9       { focus-workspace 9; }
 
-    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false { spawn "$$bin/gtklock$$"; }
+    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false { spawn "$$bin/swaylock$$" "--clock" "--daemonize" "--ignore-empty-password"; }
 
     Mod+Ctrl+C  hotkey-overlay-title="将窗口移至中央"    { center-column; }
     Mod+Ctrl+F  hotkey-overlay-title="使窗口悬浮"        { toggle-window-floating; }
