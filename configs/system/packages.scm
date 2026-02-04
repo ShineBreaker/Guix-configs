@@ -8,7 +8,6 @@
            "bluez"
            "brightnessctl"
            "gnome-keyring"
-           "gtklock"
            "gvfs"
            "libnotify"
            "niri"
@@ -19,7 +18,6 @@
            "xdg-desktop-portal-gtk"
            "xdg-dbus-proxy"
            "xdg-utils"
-           "xdg-terminal-exec"
            "xwayland-satellite"
 
            ;; File management
@@ -54,9 +52,7 @@
            "font-awesome"
            "font-google-noto-emoji"
            "font-nerd-fonts-iosevka"
-           "font-nerd-symbols"
            "font-maple-font-nf-cn"
-           "font-nerd-noto"
            "font-sarasa-gothic"
 
            ;; Terminal

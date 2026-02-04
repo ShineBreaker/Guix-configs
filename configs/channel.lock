@@ -1,15 +1,4 @@
 (list (channel
-        (name 'cast)
-        (url "https://codeberg.org/vnpower/cast")
-        (branch "main")
-        (commit
-          "a77a507b844c99c68a913e3389307814eb637714")
-        (introduction
-          (make-channel-introduction
-            "fab73647fd9f0f2167d9ef9d42cddd77500fffb3"
-            (openpgp-fingerprint
-              "D430 1F59 A65F 49DA 918A  3C0D 8D4C 3248 29DE D156"))))
-      (channel
         (name 'jeans)
         (url "https://codeberg.org/BrokenShine/jeans.git")
         (branch "main")
@@ -43,17 +32,6 @@
             (openpgp-fingerprint
               "A36A D41E ECC7 A871 1003  5D24 524F EB1A 9D33 C9CB"))))
       (channel
-        (name 'radix)
-        (url "https://codeberg.org/anemofilia/radix.git")
-        (branch "main")
-        (commit
-          "2fac43cf6d0fc09c9e5482e47aeee7be1cda647d")
-        (introduction
-          (make-channel-introduction
-            "f9130e11e35d2c147c6764ef85542dc58dc09c4f"
-            (openpgp-fingerprint
-              "F164 709E 5FC7 B32B AEC7  9F37 1F2E 76AC E3F5 31C8"))))
-      (channel
         (name 'rosenthal)
         (url "https://codeberg.org/hako/rosenthal.git")
         (branch "trunk")
@@ -64,17 +42,6 @@
             "7677db76330121a901604dfbad19077893865f35"
             (openpgp-fingerprint
               "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
-      (channel
-        (name 'saayix)
-        (url "https://codeberg.org/look/saayix")
-        (branch "main")
-        (commit
-          "f351eced445611b58015d1cb55b0b132ec83544d")
-        (introduction
-          (make-channel-introduction
-            "12540f593092e9a177eb8a974a57bb4892327752"
-            (openpgp-fingerprint
-              "3FFA 7335 973E 0A49 47FC  0A8C 38D5 96BE 07D3 34AB"))))
       (channel
         (name 'selected-guix-works)
         (url "https://github.com/gs-101/selected-guix-works.git")
@@ -91,7 +58,7 @@
         (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "e81ea17c5fb679c4408d32d58796745085d9d335")
+          "b556659af6fe3b1bcd2bdfefb060dac74e0bf491")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
