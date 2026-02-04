@@ -1,0 +1,121 @@
+QAbstractItemView::item {
+    background: transparent;
+    border: none;
+    padding: 5px;
+    color: palette(text);
+}
+
+QAbstractItemView::item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+}
+
+QAbstractItemView::item:selected {
+    background: palette(highlight);
+    color: white;
+    border-radius: 3px;
+}
+
+QComboBox::drop-down {
+    width: 15px;
+    border: none;
+}
+
+QFrame {
+    border: none;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+QGroupBox {
+    padding-top: 11px;
+    margin-top: 6px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 3px;
+    left: 6px;
+}
+
+QHeaderView::section {
+    padding: 4px 6px;
+    border: none;
+    background-color: palette(button);
+}
+
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    padding: 4px 5px;
+    min-height: 15px;
+}
+
+QListView::item {
+    margin: 3px;
+}
+
+QListView, QTableView, QTreeView {
+    alternate-background-color: palette(alternate-base);
+}
+
+QListView::item, QTableView::item, QTreeView::item {
+    padding: 4px 3px;
+    border: none;
+}
+
+QMenu {
+    border: none;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 3px;
+}
+
+QMenu::item {
+    padding: 4px 15px;
+    border-radius: 8px;
+    margin: 2px 3px;
+}
+
+QMenuBar, QMenu, QToolBar, QStatusBar, QScrollBar {
+    border: none;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+QMenuBar::item {
+    padding: 4px 8px;
+    background: transparent;
+}
+
+QPushButton, QToolButton {
+    padding: 4px 10px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+QTabBar::tab {
+    border: none;
+    outline: none;
+    padding: 5px 15px;
+    margin-right: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #bbbbbb;
+    border-radius: 10px;
+}
+
+QTabBar::tab:hover:!selected {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+QTabBar::tab:selected {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+QTabWidget::pane {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    top: 4px;
+}
+
+QWidget {
+    margin: 1px;
+    border-radius: 8px;
+}
