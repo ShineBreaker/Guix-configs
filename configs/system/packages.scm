@@ -31,7 +31,6 @@
 
            ;; Essential
            "dconf-editor"
-           "kvantum"
            "libgnome-keyring"
            "libsecret"
            "mihomo"
