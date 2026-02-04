@@ -20,6 +20,7 @@
 (define %kernel-arguments-config
   (cons* "kernel.sysrq=1"
          "snd-intel-dspcfg.dsp_driver=3"
+         "usbcore.autosuspend=120"
          "zswap.enabled=1"
          "zswap.max_pool_percent=90"
          %default-kernel-arguments))
