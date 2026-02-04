@@ -6,8 +6,12 @@
 
 (use-modules (gnu home services guix)
              (guix channels)
+
              (jeans packages linux)
+
              (rosenthal packages networking)
+             (rosenthal packages wm)
+
              (rosenthal services base)
              (rosenthal services desktop))
 
@@ -41,7 +45,6 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
-                (service powertop-service-type)
                 (service tlp-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
@@ -76,10 +79,10 @@
                                                                     "/var/log/postgresql")))))))
 
                 (service screen-locker-service-type
-                         (screen-locker-configuration (name "swaylock")
+                         (screen-locker-configuration (name "noctalia-shell")
                                                       (program (file-append
-                                                                swaylock-effects
-                                                                "/bin/swaylock"))
+                                                                noctalia-shell
+                                                                "/bin/noctalia-shell"))
                                                       (allow-empty-password?
                                                                              #f)))
 
