@@ -52,7 +52,7 @@ input {
 }
 
 layout {
-    gaps 12
+    gaps 14
 
     always-center-single-column
     background-color "transparent"
@@ -65,6 +65,13 @@ layout {
     }
 
     default-column-width { proportion 0.7; }
+
+    focus-ring { width 1.6; }
+
+    border {
+      on
+      width 1.6
+    }
 }
 
 output "eDP-1" {
@@ -85,20 +92,15 @@ layer-rule {
 
 window-rule {
     draw-border-with-background false
-    geometry-corner-radius 18
+    geometry-corner-radius 16
     clip-to-geometry true
 
     shadow {
         on
-        softness 12
+        softness 10
         spread 0
         offset x=0 y=0
         draw-behind-window false
-        color "#000000"
-    }
-
-    focus-ring {
-        off
     }
 }
 
@@ -125,14 +127,9 @@ window-rule {
 }
 
 window-rule {
-    match app-id="labwc"
-
-    open-maximized true
-}
-
-window-rule {
     match app-id="Waydroid"
     match app-id="gamescope"
+    match app-id="labwc"
     match app-id="r#'^steam_app'#"
     match app-id=".gamescope-wrapped"
 
@@ -141,8 +138,6 @@ window-rule {
 
 window-rule {
     match app-id="foot"
-    match title="Varia"
-
     default-column-width { proportion 0.5; }
 }
 
