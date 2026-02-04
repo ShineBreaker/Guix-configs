@@ -52,8 +52,8 @@
                                                     "foot"
                                                     "fish"
                                                     "fuzzel"
-                                                    "gtklock"
                                                     "niri"
+                                                    "swaylock-effects"
                                                     "waypaper"
                                                     "wl-clipboard"
                                                     "xwayland-satellite")))))
