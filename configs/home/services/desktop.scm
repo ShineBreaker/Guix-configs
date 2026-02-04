@@ -24,9 +24,8 @@
                      wm)
 
 (define %desktop-services
-  (list (service home-mako-service-type)
-        (service home-syncthing-service-type)
-        (service home-waybar-service-type)
+  (list (service home-syncthing-service-type)
+        (service home-noctalia-shell-service-type)
 
         (service home-fcitx5-service-type
                  (home-fcitx5-configuration (themes (specs->pkgs
@@ -39,24 +38,6 @@
                                                                   pinentry-fuzzel
                                                                   "/bin/pinentry-fuzzel"))
                                                (ssh-support? #t)))
-
-        (service home-niri-service-type
-                 (home-niri-configuration (config (computed-substitution-with-inputs
-                                                   "niri.kdl"
-                                                   (local-file
-                                                    "../configs/files/config.kdl")
-                                                   (specs->pkgs
-                                                    "brightnessctl"
-                                                    "cliphist"
-                                                    "dex"
-                                                    "foot"
-                                                    "fish"
-                                                    "fuzzel"
-                                                    "niri"
-                                                    "swaylock-effects"
-                                                    "waypaper"
-                                                    "wl-clipboard"
-                                                    "xwayland-satellite")))))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (shepherd-service (provision '(kdeconnectd))
@@ -105,18 +86,6 @@
                                                                       (getenv
                                                                        "HOME")
                                                                       "/.var/log/swayidle.log")))
-                                                (respawn? #t))
-
-                              (shepherd-service (provision '(swww-daemon))
-                                                (requirement '(dbus))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   swww
-                                                                   "/bin/swww-daemon"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/swww-daemon.log")))
                                                 (respawn? #t))
 
                               (shepherd-service (provision '(xdg-desktop-portal))

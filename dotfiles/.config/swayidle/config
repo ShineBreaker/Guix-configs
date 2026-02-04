@@ -1,4 +1,4 @@
-timeout 600 'niri msg action power-off-monitors && swaylock --clock --daemonize --ignore-empty-password'
-after-resume 'swaylock --clock --daemonize --ignore-empty-password'
-lock 'niri msg action power-off-monitors && swaylock --clock --daemonize --ignore-empty-password'
+timeout 600 'noctalia-shell ipc call lockScreen lock && niri msg action power-off-monitors'
+after-resume 'noctalia-shell ipc call lockScreen lock'
+lock 'noctalia-shell ipc call lockScreen lock && niri msg action power-off-monitors'
 unlock 'niri msg action power-on-monitors'

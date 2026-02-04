@@ -18,6 +18,22 @@
                  `((".guile" ,%default-dotguile)
                    (".Xdefaults" ,%default-xdefaults)))
 
+        (service home-niri-service-type
+                 (home-niri-configuration (config (computed-substitution-with-inputs
+                                                   "niri.kdl"
+                                                   (local-file
+                                                    "../configs/files/config.kdl")
+                                                   (specs->pkgs
+                                                    "brightnessctl"
+                                                    "cliphist"
+                                                    "dex"
+                                                    "foot"
+                                                    "fish"
+                                                    "niri"
+                                                    "noctalia-shell"
+                                                    "wl-clipboard"
+                                                    "xwayland-satellite")))))
+
         (service home-xdg-configuration-files-service-type
                  `(("gdb/gdbinit" ,%default-gdbinit)
                    ("nano/nanorc" ,%default-nanorc)))

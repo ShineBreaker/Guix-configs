@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0
 
-theme = "transparent"
+theme = "noctalia"
 
 [editor.cursor-shape]
 insert = "bar"
 normal = "block"
 select = "underline"
-
