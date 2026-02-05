@@ -5,7 +5,7 @@
 (use-modules (gnu home services shells)
              (rosenthal services shellutils))
 
-(use-package-modules shells)
+(use-package-modules java shells)
 
 (define %dotfile-services
   (list (service home-dotfiles-service-type
