@@ -62,4 +62,6 @@
                            (string-append
                             "/run/current-system/profile/lib/qt5/plugins:"
                             "/run/current-system/profile/lib/qt6/plugins:"
+                            "$HOME/.guix-home/profile/lib/qt5/plugins:"
+                            "$HOME/.guix-home/profile/lib/qt6/plugins:"
                             (or (getenv "QT_PLUGIN_PATH") "")))))))
