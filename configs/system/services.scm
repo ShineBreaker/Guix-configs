@@ -45,7 +45,7 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
-                (service tlp-service-type)
+                (service power-profiles-daemon-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
                                 guix-channels)
