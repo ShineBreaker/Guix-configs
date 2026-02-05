@@ -26,6 +26,7 @@
           "libreoffice"
           "obsidian"
           "seahorse"
+          "tailscale"
           "telegram-desktop"
           "virt-manager"
           "zen-browser-bin"
