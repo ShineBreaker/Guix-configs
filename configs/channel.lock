@@ -3,7 +3,7 @@
         (url "https://codeberg.org/BrokenShine/jeans.git")
         (branch "main")
         (commit
-          "88f72e909baafe6ad224bad3fb710c8d791c682b")
+          "5a943b150d37f812ba268fdfbe84a153f5a77b24")
         (introduction
           (make-channel-introduction
             "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -14,7 +14,7 @@
         (url "https://gitlab.com/nonguix/nonguix")
         (branch "master")
         (commit
-          "712c2eb688fcd47f8dd6b27697c3552895fc2ed2")
+          "6c0ea215e0bd089bf3b2097e5c59dd726fbbe304")
         (introduction
           (make-channel-introduction
             "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
@@ -25,7 +25,7 @@
         (url "https://codeberg.org/gofranz/panther")
         (branch "master")
         (commit
-          "d84db33a313a96d02020d8027ddeaf528e51b4c9")
+          "dcba033ebf25e4e26a93e831d5f6682871d482f1")
         (introduction
           (make-channel-introduction
             "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -36,7 +36,7 @@
         (url "https://codeberg.org/hako/rosenthal.git")
         (branch "trunk")
         (commit
-          "6fac29b34dfcf47672e54958b528dbc152492a2f")
+          "f06cef595c5cd37126e807377d41e41046f3c782")
         (introduction
           (make-channel-introduction
             "7677db76330121a901604dfbad19077893865f35"
@@ -58,7 +58,7 @@
         (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "d0ac3f79a4c0133a6f4723bb881508384b1b9405")
+          "f75080db69716891c46d5795f5d29ad8cc54700e")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
