@@ -12,6 +12,7 @@
           "fuzzel"
           "helvum"
           "keepassxc"
+          "kvantum"
           "mpvpaper"
           "pavucontrol"
           "swww"
@@ -51,6 +52,8 @@
           "adw-gtk3-theme"
           "adwaita-icon-theme"
           "bibata-cursor-theme"
+          "colloid-gtk-theme"
+          "colloid-kde-themes"
           "papirus-icon-theme"
 
           ;; Programming
