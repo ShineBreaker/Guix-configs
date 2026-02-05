@@ -5,9 +5,16 @@
 /* 警告：不要直接对 QWidget 设置 border-radius 或 margin，
    否则会导致布局内的所有子控件都变圆/错位。
    改为只针对特定容器设置。 */
-QFrame, QGroupBox, QScrollArea {
+
+QGroupBox, QScrollArea {
     border: none;
-    background: rgba(255, 255, 255, 0.03); /* 统一背景透明度 */
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* 单独给 QFrame 设为透明，除非有特殊需要 */
+QFrame {
+    border: none;
+    background: palette(window);
 }
 
 /* 菜单栏、工具栏、状态栏的基础背景 */
@@ -91,7 +98,7 @@ QToolButton::menu-indicator {
     image: none; /* 隐藏默认箭头，或者保持默认 */
     subcontrol-origin: padding;
     subcontrol-position: center right;
-    width: 2px;
+    width: 10px;
 }
 
 /* ==============================================
@@ -114,7 +121,7 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 5px;
+    width: 24px;
     border-left-width: 0px;
     border-top-right-radius: 6px;
     border-bottom-right-radius: 6px;
@@ -200,4 +207,50 @@ QGroupBox::title {
     padding: 0 1px;
     left: 2px;
     color: palette(text);
+}
+
+/* 垂直滚动条 */
+QScrollBar:vertical {
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    width: 8px; /* 变细 */
+    margin: 0px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 0.2);
+    min-height: 20px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px; /* 隐藏上下的箭头按钮 */
+}
+
+/* 水平滚动条 */
+QScrollBar:horizontal {
+    border: none;
+    background: rgba(0, 0, 0, 0.05);
+    height: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal {
+    background: rgba(255, 255, 255, 0.2);
+    min-width: 20px;
+    border-radius: 4px;
+}
+QScrollBar::handle:horizontal:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+QLabel {
+    background-color: transparent;
+    border: none;
+    background: none;
 }
