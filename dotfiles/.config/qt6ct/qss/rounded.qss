@@ -1,8 +1,148 @@
-QAbstractItemView::item {
-    background: transparent;
+/* ==============================================
+   1. 基础容器与窗口 (Containers & Windows)
+   ============================================== */
+
+/* 警告：不要直接对 QWidget 设置 border-radius 或 margin，
+   否则会导致布局内的所有子控件都变圆/错位。
+   改为只针对特定容器设置。 */
+QFrame, QGroupBox, QScrollArea {
     border: none;
-    padding: 8px;
+    background: rgba(255, 255, 255, 0.03); /* 统一背景透明度 */
+}
+
+/* 菜单栏、工具栏、状态栏的基础背景 */
+QMenuBar, QToolBar, QStatusBar {
+    border: none;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 2px;
+}
+
+/* ==============================================
+   2. 菜单系统 (Menus)
+   合并了你之前的两个 QMenu 块
+   ============================================== */
+QMenu {
+    /* 优先使用 palette(window) 保证可读性，也可叠加半透明 */
+    background-color: palette(window);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px; /* 统一圆角大小 */
+    padding: 5px;
+}
+
+QMenu::item {
+    padding: 6px 24px 6px 10px; /* 上右下左，右侧留宽给快捷键 */
+    background-color: transparent;
+    border-radius: 8px; /* 稍微减小内部圆角，视觉更协调 */
+    margin: 2px 4px;
     color: palette(text);
+}
+
+/* 鼠标滑过/选中 */
+QMenu::item:selected {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+/* 分割线 */
+QMenu::separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 5px 10px;
+}
+
+/* 菜单栏上的文字项 */
+QMenuBar::item {
+    padding: 6px 12px;
+    background: transparent;
+    border-radius: 6px;
+}
+
+QMenuBar::item:selected {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* ==============================================
+   3. 按钮 (Buttons)
+   合并了 QToolButton 和 QPushButton
+   ============================================== */
+QPushButton, QToolButton {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05); /* 微弱边框增强质感 */
+    border-radius: 6px; /* 按钮通常圆角比窗口小 */
+    padding: 6px 16px;
+    color: palette(text);
+}
+
+QPushButton:hover, QToolButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 按下或 Check 状态：使用高亮色 */
+QPushButton:pressed, QPushButton:checked,
+QToolButton:pressed, QToolButton:checked {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border: none;
+}
+
+/* QToolButton 特有的菜单箭头 */
+QToolButton::menu-indicator {
+    image: none; /* 隐藏默认箭头，或者保持默认 */
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 10px;
+}
+
+/* ==============================================
+   4. 输入控件 (Inputs)
+   ============================================== */
+QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-height: 24px;
+    color: palette(text);
+}
+
+/* 输入框获得焦点时高亮边框 */
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid palette(highlight);
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left-width: 0px;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+/* ==============================================
+   5. 列表与视图 (Views: List, Table, Tree)
+   ============================================== */
+QListView, QTableView, QTreeView {
+    background-color: palette(base);
+    alternate-background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    outline: none; /* 去掉选中时的虚线框 */
+}
+
+/* 表头 */
+QHeaderView::section {
+    padding: 6px 10px;
+    border: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.08); /* 比背景稍亮 */
+}
+
+/* 视图内的单个条目 */
+QAbstractItemView::item {
+    padding: 6px;
+    border: none;
 }
 
 QAbstractItemView::item:hover {
@@ -12,24 +152,46 @@ QAbstractItemView::item:hover {
 
 QAbstractItemView::item:selected {
     background: palette(highlight);
-    color: white;
+    color: palette(highlighted-text);
     border-radius: 4px;
 }
 
-QComboBox::drop-down {
-    width: 24px;
-    border: none;
+/* ==============================================
+   6. 标签页 (Tab Widget)
+   ============================================== */
+QTabWidget::pane {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: transparent;
+    top: 6px; /* 让 Tab 和内容连接更紧密 */
 }
 
-QFrame {
-    border: none;
+QTabBar::tab {
     background: rgba(255, 255, 255, 0.05);
+    color: palette(text);
+    border-radius: 8px;
+    padding: 8px 16px;
+    margin-right: 4px;
+    border: 1px solid transparent; /* 预留边框位置防止跳动 */
 }
 
+QTabBar::tab:hover:!selected {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+QTabBar::tab:selected {
+    background: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+/* ==============================================
+   7. 分组框 (GroupBox)
+   ============================================== */
 QGroupBox {
-    padding-top: 18px;
-    margin-top: 10px;
-    font-weight: bold;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding-top: 24px; /* 给标题留出空间 */
+    margin-top: 12px;
 }
 
 QGroupBox::title {
@@ -37,85 +199,5 @@ QGroupBox::title {
     subcontrol-position: top left;
     padding: 0 5px;
     left: 10px;
-}
-
-QHeaderView::section {
-    padding: 6px 10px;
-    border: none;
-    background-color: palette(button);
-}
-
-QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
-    padding: 6px 8px;
-    min-height: 24px;
-}
-
-QListView::item {
-    margin: 4px;
-}
-
-QListView, QTableView, QTreeView {
-    alternate-background-color: palette(alternate-base);
-}
-
-QListView::item, QTableView::item, QTreeView::item {
-    padding: 6px 4px;
-    border: none;
-}
-
-QMenu {
-    border: none;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 4px;
-}
-
-QMenu::item {
-    padding: 6px 24px;
-    border-radius: 12px;
-    margin: 2px 4px;
-}
-
-QMenuBar, QMenu, QToolBar, QStatusBar, QScrollBar {
-    border: none;
-    background: rgba(255, 255, 255, 0.03);
-}
-
-QMenuBar::item {
-    padding: 6px 12px;
-    background: transparent;
-}
-
-QPushButton, QToolButton {
-    padding: 6px 16px;
-    background: rgba(255, 255, 255, 0.05);
-}
-
-QTabBar::tab {
-    border: none;
-    outline: none;
-    padding: 8px 24px;
-    margin-right: 4px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #bbbbbb;
-    border-radius: 16px;
-}
-
-QTabBar::tab:hover:!selected {
-    background: rgba(255, 255, 255, 0.15);
-    color: #ffffff;
-}
-
-QTabBar::tab:selected {
-    background: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
-}
-
-QTabWidget::pane {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    top: 6px;
-}
-
-QWidget {
-    margin: 1px;
-    border-radius: 12px;
+    color: palette(text);
 }
