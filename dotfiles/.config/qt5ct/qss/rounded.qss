@@ -21,7 +21,7 @@ QFrame {
 QMenuBar, QToolBar, QStatusBar {
     border: none;
     background: rgba(255, 255, 255, 0.03);
-    padding: 0px;
+    padding: 2px;
 }
 
 /* ==============================================
@@ -33,14 +33,14 @@ QMenu {
     background-color: palette(window);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px; /* 统一圆角大小 */
-    padding: 1px;
+    padding: 5px;
 }
 
 QMenu::item {
-    padding: 1px 5px 1px 2px; /* 上右下左，右侧留宽给快捷键 */
+    padding: 6px 24px 6px 10px; /* 上右下左，右侧留宽给快捷键 */
     background-color: transparent;
     border-radius: 8px; /* 稍微减小内部圆角，视觉更协调 */
-    margin: 0px 1px;
+    margin: 2px 4px;
     color: palette(text);
 }
 
@@ -54,12 +54,12 @@ QMenu::item:selected {
 QMenu::separator {
     height: 1px;
     background: rgba(255, 255, 255, 0.1);
-    margin: 1px 2px;
+    margin: 5px 10px;
 }
 
 /* 菜单栏上的文字项 */
 QMenuBar::item {
-    padding: 1px 2px;
+    padding: 6px 12px;
     background: transparent;
     border-radius: 6px;
 }
@@ -76,7 +76,7 @@ QPushButton, QToolButton {
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.05); /* 微弱边框增强质感 */
     border-radius: 6px; /* 按钮通常圆角比窗口小 */
-    padding: 1px 3px;
+    padding: 6px 16px;
     color: palette(text);
 }
 
@@ -108,7 +108,7 @@ QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 6px;
-    padding: 1px 2px;
+    padding: 6px 8px;
     min-height: 24px;
     color: palette(text);
 }
@@ -140,7 +140,7 @@ QListView, QTableView, QTreeView {
 
 /* 表头 */
 QHeaderView::section {
-    padding: 1px 2px;
+    padding: 6px 10px;
     border: none;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
     background-color: rgba(255, 255, 255, 0.08); /* 比背景稍亮 */
@@ -148,7 +148,7 @@ QHeaderView::section {
 
 /* 视图内的单个条目 */
 QAbstractItemView::item {
-    padding: 1px;
+    padding: 6px;
     border: none;
 }
 
@@ -170,15 +170,15 @@ QTabWidget::pane {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     background: transparent;
-    top: 1px; /* 让 Tab 和内容连接更紧密 */
+    top: 6px; /* 让 Tab 和内容连接更紧密 */
 }
 
 QTabBar::tab {
     background: rgba(255, 255, 255, 0.05);
     color: palette(text);
     border-radius: 8px;
-    padding: 2px 3px;
-    margin-right: 1px;
+    padding: 8px 16px;
+    margin-right: 4px;
     border: 1px solid transparent; /* 预留边框位置防止跳动 */
 }
 
@@ -197,15 +197,15 @@ QTabBar::tab:selected {
 QGroupBox {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
-    padding-top: 5px; /* 给标题留出空间 */
-    margin-top: 2px;
+    padding-top: 24px; /* 给标题留出空间 */
+    margin-top: 12px;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
-    padding: 0 1px;
-    left: 2px;
+    padding: 0 5px;
+    left: 10px;
     color: palette(text);
 }
 
