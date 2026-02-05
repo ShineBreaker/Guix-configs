@@ -38,5 +38,10 @@
                  `(("gdb/gdbinit" ,%default-gdbinit)
                    ("nano/nanorc" ,%default-nanorc)))
 
-        (simple-service 'jdk-symlinks home-activation-service-type
-                        %jdk-symlink-activation)))
+        (simple-service 'symlink-openjdk home-files-service-type
+          (map (lambda (jdk)
+                 (list (in-vicinity ".local/share/PrismLauncher/java/" (package-version jdk))
+                       jdk))
+               (list openjdk25
+                     openjdk21
+                     openjdk17)))))
