@@ -249,11 +249,11 @@ binds {
     Mod+8       { focus-workspace 8; }
     Mod+9       { focus-workspace 9; }
 
-    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false         { spawn "$$bin/noctalia-shell$$" "ipc" "call" "lockScreen" "lock"; }
+    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false         { spawn "noctalia-shell" "ipc" "call" "lockScreen" "lock"; }
 
     Mod+Ctrl+C  hotkey-overlay-title="将窗口移至中央"    { center-column; }
     Mod+Ctrl+F  hotkey-overlay-title="使窗口悬浮"        { toggle-window-floating; }
-    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "$$bin/noctalia-shell$$" "ipc" "call" "wallpaper" "random"; }
+    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "noctalia-shell" "ipc" "call" "wallpaper" "random"; }
 
     Mod+Ctrl+K     hotkey-overlay-title="上移窗口"    { move-window-up; }
     Mod+Ctrl+Up    hotkey-overlay-title="上移窗口"    { move-window-up; }
@@ -275,8 +275,8 @@ binds {
     Mod+Ctrl+Page_Down hotkey-overlay-title="窗口移至下一工作区"  { move-column-to-workspace-down; }
     Mod+Ctrl+Page_Up   hotkey-overlay-title="窗口移至上一工作区"  { move-column-to-workspace-up; }
 
-    Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn "$$bin/noctalia-shell$$" "ipc" "call" "launcher" "clipboard"; }
-    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "$$bin/noctalia-shell$$" "ipc" "call" "launcher" "toggle"; }
+    Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn "noctalia-shell" "ipc" "call" "launcher" "clipboard"; }
+    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
     Mod+F hotkey-overlay-title="窗口最大化"                      { maximize-column; }
     Mod+Q hotkey-overlay-title="关闭窗口"        repeat=false    { close-window; }
     Mod+R hotkey-overlay-title="更改窗口大小"                    { switch-preset-column-width; }
@@ -352,14 +352,14 @@ binds {
 
 
 
-    XF86AudioRaiseVolume  allow-when-locked=true  { spawn "$$bin/noctalia-shell$$" "ipc" "call" "volume" "increase"; }
-    XF86AudioLowerVolume  allow-when-locked=true  { spawn "$$bin/noctalia-shell$$" "ipc" "call" "volume" "decrease"; }
+    XF86AudioRaiseVolume  allow-when-locked=true  { spawn "noctalia-shell" "ipc" "call" "volume" "increase"; }
+    XF86AudioLowerVolume  allow-when-locked=true  { spawn "noctalia-shell" "ipc" "call" "volume" "decrease"; }
 
-    XF86AudioMicMute      allow-when-locked=true  { spawn "$$bin/noctalia-shell$$" "ipc" "call" "volume" "muteInput"; }
-    XF86AudioMute         allow-when-locked=true  { spawn "$$bin/noctalia-shell$$" "ipc" "call" "volume" "muteOutput"; }
+    XF86AudioMicMute      allow-when-locked=true  { spawn "noctalia-shell" "ipc" "call" "volume" "muteInput"; }
+    XF86AudioMute         allow-when-locked=true  { spawn "noctalia-shell" "ipc" "call" "volume" "muteOutput"; }
 
-    XF86MonBrightnessUp   allow-when-locked=true  { spawn "$$bin/noctalia-shell$$" "ipc" "call" "brightness" "increase"; }
-    XF86MonBrightnessDown allow-when-locked=true  { spawn "$$bin/noctalia-shell$$" "ipc" "call" "brightness" "decrease"; }
+    XF86MonBrightnessUp   allow-when-locked=true  { spawn "noctalia-shell" "ipc" "call" "brightness" "increase"; }
+    XF86MonBrightnessDown allow-when-locked=true  { spawn "noctalia-shell" "ipc" "call" "brightness" "decrease"; }
 }
 
 switch-events {
