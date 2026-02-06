@@ -5,12 +5,14 @@
 (load "../information.scm")
 
 (load "../system/modules.scm")
-(load "../system/kernel.scm")
-(load "../system/users.scm")
+
 (load "../system/bootloader.scm")
 (load "../system/filesystems.scm")
+(load "../system/kernel.scm")
 (load "../system/packages.scm")
 (load "../system/services.scm")
+(load "../system/skeletons.scm")
+(load "../system/users.scm")
 
 (operating-system
   (initrd %initrd-config)
@@ -32,5 +34,6 @@
   (packages %packages-config)
 
   (services %services-config)
+  (skeletons %skeletons-config)
 
   (name-service-switch %mdns-host-lookup-nss))

@@ -11,4 +11,6 @@
              (guix gexp)
              (guix modules)
 
+             (ice-9 session)
+
              (rosenthal utils packages))
