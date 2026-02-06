@@ -16,13 +16,19 @@
 
         (service home-files-service-type
                  `((".guile" ,%default-dotguile)
-                   (".Xdefaults" ,%default-xdefaults)))
+                   (".Xdefaults" ,%default-xdefaults)
+                   (".config/git-credential-keepassxc" ,(computed-substitution-with-inputs
+                                                         "git-credential-keepassxc"
+                                                         (local-file
+                                                          "../configs/files/git-credential-keepassxc")
+                                                         (specs->pkgs "git"
+                                                                      "fish")))))
 
         (service home-niri-service-type
                  (home-niri-configuration (config (computed-substitution-with-inputs
-                                                   "niri.kdl"
+                                                   "config.kdl"
                                                    (local-file
-                                                    "../configs/files/config.kdl")
+                                                    "../configs/files/niri.kdl")
                                                    (specs->pkgs
                                                     "brightnessctl"
                                                     "cliphist"
@@ -39,9 +45,8 @@
                    ("nano/nanorc" ,%default-nanorc)))
 
         (simple-service 'symlink-openjdk home-files-service-type
-          (map (lambda (jdk)
-                 (list (in-vicinity ".local/share/PrismLauncher/java/" (package-version jdk))
-                       jdk))
-               (list openjdk25
-                     openjdk21
-                     openjdk17)))))
+                        (map (lambda (jdk)
+                               (list (in-vicinity
+                                      ".local/share/PrismLauncher/java/"
+                                      (package-version jdk)) jdk))
+                             (list openjdk25 openjdk21 openjdk17)))))
