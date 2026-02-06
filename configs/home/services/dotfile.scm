@@ -36,7 +36,6 @@
                                                     "foot"
                                                     "fish"
                                                     "niri"
-                                                    "noctalia-shell"
                                                     "wl-clipboard"
                                                     "xwayland-satellite")))))
 
