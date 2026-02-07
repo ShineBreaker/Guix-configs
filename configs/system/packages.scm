@@ -35,9 +35,6 @@
            "libsecret"
            "mihomo"
            "polkit-gnome"
-           "qt5ct"
-           "qt6ct"
-           "qtsvg"
            "xdg-user-dirs"
 
            ;; gstreamer
@@ -84,7 +81,7 @@
            "pinentry"
            "postgresql"
            "python"
-           ;; "rtkit"
+           "rtkit"
            "strace"
            "tpm2-abrmd"
            "tpm2-pkcs11"
