@@ -203,29 +203,50 @@
                                     (chmod "/data" #o1777)))
 
                 (simple-service 'create-xdg-dirs activation-service-type
-                                (with-imported-modules
-                                    (source-module-closure
-                                     '((guix build utils)))
-                                  #~(begin
-                                      (use-modules (guix build utils))
-                                      (let* ((pw   (getpwnam #$username))
-                                             (uid  (passwd:uid pw))
-                                             (gid  (passwd:gid pw))
-                                             (home (string-append "/home/" #$username)))
-                                        (for-each
-                                         (lambda (dir)
-                                           (let ((path (string-append home "/" dir)))
-                                             (mkdir-p path)
-                                             (chown path uid gid)
-                                             (chmod path #o755)))
-                                         '#$%data-dirs))))))
+                                (with-imported-modules (source-module-closure '
+                                                                              (
+                                                                               (guix
+                                                                                build
+                                                                                utils)))
+                                                       #~(begin
+                                                           (use-modules (guix
+                                                                         build
+                                                                         utils))
+                                                           (let* ((pw (getpwnam #$username))
+                                                                  (uid (passwd:uid
+                                                                        pw))
+                                                                  (gid (passwd:gid
+                                                                        pw))
+                                                                  (home (string-append
+                                                                         "/home/"
+                                                                         #$username)))
+                                                             (for-each (lambda
+                                                                               (dir)
+                                                                         (let
+                                                                              (
+                                                                               (path
+                                                                                (string-append
+                                                                                 home
+                                                                                 "/"
+                                                                                 dir)))
+                                                                           (mkdir-p
+                                                                            path)
+                                                                           (chown
+                                                                            path
+                                                                            uid
+                                                                            gid)
+                                                                           (chmod
+                                                                            path
+                                                                            #o755)))
+                                                                       '#$%data-dirs))))))
 
           (modify-services %rosenthal-desktop-services
             (delete console-font-service-type)
 
             (greetd-service-type config =>
                                  (greetd-configuration (inherit config)
-                                                       (greeter-supplementary-groups '("video" "audio"))
+                                                       (greeter-supplementary-groups '
+                                                        ("video" "audio"))
                                                        (terminals (list (greetd-terminal-configuration
                                                                          (terminal-vt
                                                                           "7")
@@ -243,6 +264,7 @@
                                                                                dbus
                                                                                "/bin/dbus-run-session")
                                                                               "dbus-run-session"
+
                                                                               (string-append
                                                                                "--dbus-daemon="
                                                                                #$
@@ -296,4 +318,7 @@
                                                                    steam-devices-udev-rules
                                                                    (plain-file
                                                                     "99-sayodevice.rules"
-                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")))))))))
+                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")
+                                                                   (plain-file
+                                                                    "99-usb-sync.rules"
+                                                                    "ENV{ID_BUS}==\"usb\", ENV{ID_FS_USAGE}==\"filesystem\", ENV{UDISKS_MOUNT_OPTIONS_DEFAULTS}=\"sync\"")))))))))
