@@ -12,7 +12,6 @@
           "fuzzel"
           "helvum"
           "keepassxc"
-          "kvantum"
           "mpvpaper"
           "pavucontrol"
           "swww"
@@ -65,4 +64,11 @@
           "rust-analyzer"
           "shellcheck"
           "vscode"
-          "zed")))
+          "zed"
+
+          ;; QT Related
+          "kvantum"
+          "qt5ct"
+          "qt6ct"
+          "qtmultimedia"
+          "qtsvg")))
