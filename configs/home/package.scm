@@ -20,7 +20,9 @@
 
           ;; Utility
           "age"
+          "amule"
           "btop"
+          "freerdp"
           "git-credential-keepassxc"
           "kdeconnect"
           "libreoffice"
