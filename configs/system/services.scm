@@ -284,9 +284,10 @@
                                                           guix-channels))
                                                    (substitute-urls (append (list
                                                                              "https://mirror.sjtu.edu.cn/guix"
+                                                                             "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"
+                                                                             "https://substitutes.guix.gofranz.com"
                                                                              "https://cache-cdn.guix.moe"
-                                                                             "https://substitutes.nonguix.org"
-                                                                             "https://substitutes.guix.gofranz.com")
+                                                                             "https://substitutes.nonguix.org")
                                                                      %default-substitute-urls))
                                                    (authorized-keys (append (list
                                                                              (plain-file
@@ -318,7 +319,4 @@
                                                                    steam-devices-udev-rules
                                                                    (plain-file
                                                                     "99-sayodevice.rules"
-                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")
-                                                                   (plain-file
-                                                                    "99-usb-sync.rules"
-                                                                    "ENV{ID_BUS}==\"usb\", ENV{ID_FS_USAGE}==\"filesystem\", ENV{UDISKS_MOUNT_OPTIONS_DEFAULTS}=\"sync\"")))))))))
+                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")))))))))

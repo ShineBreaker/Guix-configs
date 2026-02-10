@@ -49,9 +49,9 @@
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
-    ("DATA/LibVirt"                        "/var/lib/libvirt")
-    ("DATA/Home/Guix"                      "/home")))
+    ("DATA/Home/Guix"                      "/home")
+    ("DATA/LibVirt"                        "/var/lib/libvirt")))
 
 (define %tmpfs-list
-  '(("/"     "mode=0755,nr_inodes=1m,size=10%")
-    ("/tmp"  "mode=1777,nr_inodes=1m,size=75%")))
+  '(("/"      "mode=0755,nr_inodes=1m,size=10%")
+    ("/tmp"   "mode=1777,nr_inodes=1m,size=75%")))
