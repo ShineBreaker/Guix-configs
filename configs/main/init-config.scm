@@ -2,7 +2,7 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(load "../home-config.scm")
+(load "../main/home-config.scm")
 
 (load "../information.scm")
 (load "../system/modules.scm")
