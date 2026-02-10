@@ -12,6 +12,7 @@
                           ("http_proxy" . "$HTTP_PROXY")
                           ("HTTPS_PROXY" . "$HTTP_PROXY")
                           ("https_proxy" . "$HTTP_PROXY")
+                          ("LIBVIRT_DEFAULT_URI" . "qemu:///system")
                           ("MOZ_ENABLE_WAYLAND" . "1")
                           ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1")
                           ("QT_QPA_PLATFORMTHEME" . "qt5ct")
