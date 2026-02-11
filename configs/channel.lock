@@ -14,7 +14,7 @@
         (url "https://gitlab.com/nonguix/nonguix")
         (branch "master")
         (commit
-          "6c0ea215e0bd089bf3b2097e5c59dd726fbbe304")
+          "48a8706d44040cc7014f36873dbd834c048aadd3")
         (introduction
           (make-channel-introduction
             "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
@@ -25,7 +25,7 @@
         (url "https://codeberg.org/gofranz/panther")
         (branch "master")
         (commit
-          "464552e0e53bfd4f2e69bc84e8e5d43224127c76")
+          "abdda9cbc1f78b7b57633a2e3b719e2573656f9e")
         (introduction
           (make-channel-introduction
             "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -36,7 +36,7 @@
         (url "https://codeberg.org/hako/rosenthal.git")
         (branch "trunk")
         (commit
-          "80874b0c7b3db24f0c88026c4b3f904448322492")
+          "ed9a415397c2957665fc042d98393f004fe6ba02")
         (introduction
           (make-channel-introduction
             "7677db76330121a901604dfbad19077893865f35"
@@ -58,7 +58,7 @@
         (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "6da26b6b9072b4f9db47374c7b7b5b2a3e933259")
+          "d5e8058313afef24bf4ea1b44e302b15e7a48b01")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
