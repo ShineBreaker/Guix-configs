@@ -45,7 +45,6 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
-                (service power-profiles-daemon-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
                                 guix-channels)
@@ -240,7 +239,7 @@
                                                                             #o755)))
                                                                        '#$%data-dirs))))))
 
-          (modify-services %rosenthal-desktop-services
+          (modify-services %rosenthal-desktop-services/tuigreet
             (delete console-font-service-type)
 
             (greetd-service-type config =>
