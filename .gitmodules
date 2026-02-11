@@ -5,3 +5,6 @@
 [submodule "dotfiles/.local/share/fcitx5/rime"]
 	path = dotfiles/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
+[submodule "setup"]
+	path = setup
+	url = https://codeberg.org/BrokenShine/linux-setup
