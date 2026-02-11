@@ -61,7 +61,6 @@
           "emacs-pgtk"
           "node"
           "pandoc"
-          "pnpm"
           "reuse"
           "rust-analyzer"
           "shellcheck"
