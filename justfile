@@ -79,6 +79,7 @@ upgrade:
   git submodule update
   guix time-machine -C {{channel-fresh}} -- describe --format=channels > {{channel}}
   git commit -S -m "bump version." {{channel}}
+  {{guix}} locale --update
 
 # 拉取channel
 pull:
