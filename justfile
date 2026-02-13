@@ -48,7 +48,7 @@ rebuild-v: system-v home-v
 system: generate-system-config
   @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
-  sudo mkdir /efi/EFI/Guix-uki/
+  sudo mkdir -p /efi/EFI/Guix-uki/
   sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
   @rm -rf ./tmp
 
@@ -58,7 +58,7 @@ system: generate-system-config
 system-v: generate-system-config
   @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}}
-  sudo mkdir /efi/EFI/Guix-uki/
+  sudo mkdir -p /efi/EFI/Guix-uki/
   sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
   @rm -rf ./tmp
 
@@ -93,7 +93,7 @@ gc: clean
 
 # 备份一份efi文件(for uki.)
 ukibackup:
-  sudo mkdir /efi/EFI/Guix-uki/
+  sudo mkdir -p /efi/EFI/Guix-uki/
   sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
 
 # 格式化代码
