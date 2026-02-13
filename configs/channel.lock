@@ -25,7 +25,7 @@
         (url "https://codeberg.org/gofranz/panther")
         (branch "master")
         (commit
-          "abdda9cbc1f78b7b57633a2e3b719e2573656f9e")
+          "7793cf31b5f2248d61c313621f628a62a8c9e369")
         (introduction
           (make-channel-introduction
             "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -36,7 +36,7 @@
         (url "https://codeberg.org/hako/rosenthal.git")
         (branch "trunk")
         (commit
-          "ed9a415397c2957665fc042d98393f004fe6ba02")
+          "fdada954a6fa0514fee4b3ddf922c68c48ef890c")
         (introduction
           (make-channel-introduction
             "7677db76330121a901604dfbad19077893865f35"
@@ -58,7 +58,7 @@
         (url "https://git.guix.gnu.org/guix.git")
         (branch "master")
         (commit
-          "d5e8058313afef24bf4ea1b44e302b15e7a48b01")
+          "0ae891a57de855afd868c6da9ca7e78ae035112e")
         (introduction
           (make-channel-introduction
             "9edb3f66fd807b096b48283debdcddccfea34bad"
