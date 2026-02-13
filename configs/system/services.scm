@@ -77,14 +77,6 @@
                                                                    ("log_directory"
                                                                     "/var/log/postgresql")))))))
 
-                (service screen-locker-service-type
-                         (screen-locker-configuration (name "noctalia-shell")
-                                                      (program (file-append
-                                                                noctalia-shell
-                                                                "/bin/noctalia-shell"))
-                                                      (allow-empty-password?
-                                                                             #f)))
-
                 ;; VM & Coantainer.
                 (service dnsmasq-service-type
                          (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
