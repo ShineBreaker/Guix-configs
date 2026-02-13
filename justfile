@@ -76,7 +76,9 @@ home-v: generate-home-config
 
 # 更新lock file
 upgrade:
+  git submodule update
   guix time-machine -C {{channel-fresh}} -- describe --format=channels > {{channel}}
+  git commit -S -m "bump version." {{channel}}
 
 # 拉取channel
 pull:
