@@ -26,6 +26,7 @@
           "git-credential-keepassxc"
           "kdeconnect"
           "libreoffice"
+          "newsboat"
           "obsidian"
           "seahorse"
           "tailscale"
