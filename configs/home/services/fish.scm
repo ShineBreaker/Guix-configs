@@ -43,7 +43,7 @@
                                                            ("push" . "git push")
                                                            ("reboot" . "loginctl reboot")
                                                            ("shutdown" . "loginctl poweroff")
-                                                           ("update" . "'sudo flatpak upgrade -y && flatpak upgrade -y && distrobox upgrade'")))
+                                                           ("update" . "'sudo flatpak upgrade -y && flatpak upgrade -y && distrobox upgrade --all'")))
 
                                           (config (list (computed-substitution-with-inputs
                                                          "config.fish"
