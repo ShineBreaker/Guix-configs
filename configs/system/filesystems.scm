@@ -10,18 +10,31 @@
   (list (mapped-device
           (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
           (target "root")
-          ; (arguments '(#:key-file "/cryptroot.key"))
+          ;; (arguments '(#:key-file "/cryptroot.key"))
           (type luks-device-mapping))))
 
 (define %tmpfs
-  (map (match-lambda ( (mpoint options)
-  (file-system
-          (mount-point mpoint)
+  (list (file-system
+          (mount-point "/")
           (device "tmpfs")
           (type "tmpfs")
-          (flags '(no-atime))
-          (options options)
-          (check? #f)))) %tmpfs-list))
+          (options "mode=0755,nr_inodes=1m,size=10%")
+          (check? #f))
+        (file-system
+          (mount-point "/tmp")
+          (device "tmpfs")
+          (type "tmpfs")
+          (options "mode=1777,nr_inodes=1m,size=75%")
+          (create-mount-point? #t)
+          (check? #f))
+        (file-system
+          (device "tmpfs")
+          (mount-point "/var/lock")
+          (type "tmpfs")
+          (flags '(no-suid no-dev strict-atime))
+          (options "mode=1777,nr_inodes=800k,size=20%")
+          (create-mount-point? #t)
+          (check? #f))))
 
 (define %persist-filesystem
   (map (match-lambda
