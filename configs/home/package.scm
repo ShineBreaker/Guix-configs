@@ -7,7 +7,7 @@
           ;; Desktop
           "baobab"
           "cliphist"
-          "cursor"
+          "dex"
           "fcitx5"
           "fuzzel"
           "helvum"
