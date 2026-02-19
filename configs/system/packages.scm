@@ -7,17 +7,11 @@
            ;; Desktop
            "bluez"
            "brightnessctl"
-           "gnome-keyring"
-           "gvfs"
-           "libnotify"
            "niri"
            "poweralertd"
            "swayidle"
-           "waybar"
            "xdg-desktop-portal-gnome"
            "xdg-desktop-portal-gtk"
-           "xdg-dbus-proxy"
-           "xdg-utils"
            "xwayland-satellite"
 
            ;; File management
@@ -31,11 +25,17 @@
 
            ;; Essential
            "dconf-editor"
+           "gnome-keyring"
+           "gvfs"
            "libgnome-keyring"
+           "libnotify"
            "libsecret"
            "mihomo"
+           "pinentry-qt"
            "polkit-gnome"
+           "xdg-dbus-proxy"
            "xdg-user-dirs"
+           "xdg-utils"
 
            ;; gstreamer
            "gstreamer"
@@ -66,7 +66,7 @@
            "qemu"
 
            ;; System
-           "alsa-utils"
+           "adb"
            "bluez"
            "curl"
            "cryptsetup"
@@ -81,7 +81,6 @@
            "iproute2"
            "iptables-nft"
            "libnotify"
-           "kmod"
            "netcat-openbsd"
            "ntfs-3g"
            "pinentry"
