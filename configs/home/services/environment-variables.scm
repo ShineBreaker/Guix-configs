@@ -7,7 +7,7 @@
                         '(("EDITOR" . "hx")
                           ("GDK_BACKEND" . "wayland")
                           ("GUIX_PROFILE" . "$HOME/.guix-profile")
-                          ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/steam")
+                          ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
                           ("HTTP_PROXY" . "http://127.0.0.1:7890")
                           ("http_proxy" . "$HTTP_PROXY")
                           ("HTTPS_PROXY" . "$HTTP_PROXY")
@@ -25,6 +25,8 @@
     ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
     ;; gdb
     ("GDBHISTFILE" . "$XDG_STATE_HOME/gdb/history")
+    ;; gnupg
+    ("GNUPGHOME" . "$XDG_DATA_HOME/gnupg")
     ;; go
     ("GOMODCACHE" . "$XDG_CACHE_HOME/go/mod")
     ("GOPATH" . "$XDG_DATA_HOME/go")
@@ -43,7 +45,6 @@
     ;; password-store
     ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
     ;; python
-    ;; TODO: Python 3.13.
     ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
     ;; rust
     ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
