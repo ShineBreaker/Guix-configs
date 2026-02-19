@@ -13,9 +13,15 @@
              (rosenthal packages wm)
 
              (rosenthal services base)
-             (rosenthal services desktop))
+             (rosenthal services desktop)
+             (rosenthal services networking))
 
-(use-package-modules games geo glib package-management wm)
+(use-package-modules android
+                     games
+                     geo
+                     glib
+                     package-management
+                     wm)
 
 (use-service-modules authentication
                      containers
@@ -45,9 +51,25 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service tailscale-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
                                 guix-channels)
+
+                (simple-service 'guix-gc shepherd-root-service-type
+                                (list (shepherd-timer '(guix-gc)
+                                                      #~(calendar-event
+                                                                        #:days-of-week '
+                                                                        (sunday)
+                                                                        #:hours '
+                                                                        (18)
+                                                                        #:minutes '
+                                                                        (0))
+                                                      #~("/run/current-system/profile/bin/guix"
+                                                         "gc"
+                                                         "--delete-generations=7d")
+                                                      #:requirement '(user-processes
+                                                                      guix-daemon))))
 
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
@@ -255,7 +277,6 @@
                                                                                dbus
                                                                                "/bin/dbus-run-session")
                                                                               "dbus-run-session"
-
                                                                               (string-append
                                                                                "--dbus-daemon="
                                                                                #$
@@ -308,6 +329,10 @@
                                                                    config)
                                                                   (list
                                                                    steam-devices-udev-rules
+                                                                   android-udev-rules
+                                                                   (plain-file "60-controller-permission.rules"
+                                                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", \
+                                                                      MODE=\"0660\", GROUP=\"users\"")
                                                                    (plain-file
                                                                     "99-sayodevice.rules"
                                                                     "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")))))))))
