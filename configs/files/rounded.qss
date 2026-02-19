@@ -8,7 +8,7 @@
    -----------------------------------------------------------
    注意：QFrame 是众多控件的基类，直接设置 border-radius
    会导致所有子控件继承圆角，造成布局错乱。
-   因此只设置透明背景，不设置圆角。
+   因此只设置背景，不设置圆角。
 */
 
 QFrame {
@@ -224,8 +224,8 @@ QTabBar::tab {
     background: rgba(255, 255, 255, 0.05);
     color: palette(text);
     border-radius: 8px;
-    padding: 8px 16px;
-    margin-right: 4px;
+    padding: 6px 12px;
+    margin: 2px 4px 8px 4px;
     border: 1px solid transparent;
 }
 
