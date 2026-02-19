@@ -50,7 +50,3 @@
     ("DATA/Flatpak"                        "/var/lib/flatpak")
     ("DATA/Home/Guix"                      "/home")
     ("DATA/LibVirt"                        "/var/lib/libvirt")))
-
-(define %tmpfs-list
-  '(("/"      "mode=0755,nr_inodes=1m,size=10%")
-    ("/tmp"   "mode=1777,nr_inodes=1m,size=75%")))
