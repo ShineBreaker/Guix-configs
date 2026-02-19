@@ -15,7 +15,7 @@
 
     ".local/share/osu"
     ".local/share/PrismLauncher"
-    ".local/share/steam"
+    ".local/share/Sandbox"
 
     "Desktop"
     "Documents"
