@@ -22,7 +22,9 @@
                                                          (local-file
                                                           "../configs/files/git-credential-keepassxc")
                                                          (specs->pkgs "git"
-                                                                      "fish")))))
+                                                                      "fish")))
+                   (".config/qt5ct/qss/rounded.qss", (local-file "../configs/files/rounded.qss"))
+                   (".config/qt6ct/qss/rounded.qss", (local-file "../configs/files/rounded.qss"))))
 
         (service home-niri-service-type
                  (home-niri-configuration (config (computed-substitution-with-inputs

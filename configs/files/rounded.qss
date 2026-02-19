@@ -1,0 +1,324 @@
+/* ============================================================
+   Rounded Theme for Qt Applications
+   适用于 Qt 应用的圆角主题样式表
+   ============================================================ */
+
+/* -----------------------------------------------------------
+   1. 基础容器与窗口 (Base Containers)
+   -----------------------------------------------------------
+   注意：QFrame 是众多控件的基类，直接设置 border-radius
+   会导致所有子控件继承圆角，造成布局错乱。
+   因此只设置透明背景，不设置圆角。
+*/
+
+QFrame {
+    background: palette(base);
+    border: none;
+}
+
+/* 特定容器保持透明无边框 */
+QGroupBox, QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+/* 菜单栏、工具栏、状态栏使用微透明背景 */
+QMenuBar, QToolBar, QStatusBar {
+    border: none;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 2px;
+}
+
+/* -----------------------------------------------------------
+   2. 菜单系统 (Menu System)
+   -----------------------------------------------------------
+   圆角菜单设计，带悬停高亮效果
+*/
+
+QMenu {
+    background-color: palette(window);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 5px;
+}
+
+QMenu::item {
+    padding: 6px 24px 6px 10px;
+    background-color: transparent;
+    border-radius: 8px;
+    margin: 2px 4px;
+    color: palette(text);
+}
+
+QMenu::item:selected {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+QMenu::separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 5px 10px;
+}
+
+QMenuBar::item {
+    padding: 6px 12px;
+    background: transparent;
+    border-radius: 6px;
+}
+
+QMenuBar::item:selected {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* -----------------------------------------------------------
+   3. 按钮组件 (Buttons)
+   -----------------------------------------------------------
+   区分普通按钮和工具栏按钮的尺寸需求
+*/
+
+/* 普通按钮 - 适用于对话框操作（确定、取消、解锁等） */
+QPushButton {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 5px 16px;
+    margin: 2px 4px;
+    color: palette(text);
+    min-height: 20px;
+}
+
+/* 工具栏按钮 - 紧凑设计，适用于图标按钮 */
+QToolButton {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 3px;
+    color: palette(text);
+    min-height: 20px;
+}
+
+/* 隐藏工具栏按钮的下拉箭头区域，避免显示异常 */
+QToolButton::menu-button {
+    border: none;
+    background: transparent;
+    width: 16px;
+}
+
+/* 工具栏分隔线 */
+QToolBar::separator {
+    background: transparent;
+    width: 1px;
+    margin: 4px 6px;
+}
+
+/* 按钮交互状态 */
+QPushButton:hover, QToolButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+QPushButton:pressed, QPushButton:checked,
+QToolButton:pressed, QToolButton:checked {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border: none;
+}
+
+/* 工具栏下拉指示器 - 完全隐藏 */
+QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
+    height: 0px;
+}
+
+/* -----------------------------------------------------------
+   4. 输入控件 (Input Widgets)
+   -----------------------------------------------------------
+   统一的圆角输入框样式
+*/
+
+QLineEdit, QTextEdit, QPlainTextEdit,
+QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-height: 24px;
+    color: palette(text);
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid palette(highlight);
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left-width: 0px;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+/* -----------------------------------------------------------
+   5. 列表与视图 (Item Views)
+   -----------------------------------------------------------
+   列表、表格、树形控件的统一样式
+*/
+
+QListView, QTableView, QTreeView {
+    background-color: palette(base);
+    alternate-background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    outline: none;
+}
+
+/* 列表项去除默认边距，保持紧凑 */
+QListView::item {
+    border-radius: 0px;
+    padding: 2px;
+}
+
+/* 表头样式 */
+QHeaderView::section {
+    padding: 6px 10px;
+    border: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 通用项样式 */
+QAbstractItemView::item {
+    padding: 6px;
+    border: none;
+    border-radius: 4px;
+}
+
+QAbstractItemView::item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+QAbstractItemView::item:selected {
+    background: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+/* -----------------------------------------------------------
+   6. 标签页 (Tab Widget)
+   -----------------------------------------------------------
+   圆角标签页设计
+*/
+
+QTabWidget::pane {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: transparent;
+    /* 为标签预留空间 */
+    padding-top: 6px;
+}
+
+QTabBar::tab {
+    background: rgba(255, 255, 255, 0.05);
+    color: palette(text);
+    border-radius: 8px;
+    padding: 8px 16px;
+    margin-right: 4px;
+    border: 1px solid transparent;
+}
+
+QTabBar::tab:hover:!selected {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+QTabBar::tab:selected {
+    background: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+/* -----------------------------------------------------------
+   7. 分组框 (Group Box)
+   -----------------------------------------------------------
+   带标题的圆角分组容器
+*/
+
+QGroupBox {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding-top: 24px;
+    margin-top: 12px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+    color: palette(text);
+}
+
+/* -----------------------------------------------------------
+   8. 滚动条 (Scroll Bars)
+   -----------------------------------------------------------
+   极简细滚动条设计，适配深浅主题
+*/
+
+QScrollBar:vertical {
+    border: none;
+    background: rgba(128, 128, 128, 0.15);
+    width: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 0.25);
+    min-height: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    border: none;
+    background: rgba(128, 128, 128, 0.15);
+    height: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal {
+    background: rgba(255, 255, 255, 0.25);
+    min-width: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* -----------------------------------------------------------
+   9. 标签 (Label)
+   -----------------------------------------------------------
+   确保标签背景透明，不遮挡父容器
+*/
+
+QLabel {
+    background-color: transparent;
+    border: none;
+    background: none;
+}
