@@ -16,7 +16,8 @@
 
              (rosenthal services desktop))
 
-(use-package-modules freedesktop
+(use-package-modules fcitx5
+                     freedesktop
                      gnupg
                      kde-internet
                      linux
@@ -28,16 +29,12 @@
         (service home-noctalia-shell-service-type)
 
         (service home-fcitx5-service-type
-                 (home-fcitx5-configuration (themes (specs->pkgs
-                                                     "fcitx5-material-color-theme"))
-                                            (input-method-editors (specs->pkgs
-                                                                   "fcitx5-rime"))))
-
-        (service home-gpg-agent-service-type
-                 (home-gpg-agent-configuration (pinentry-program (file-append
-                                                                  pinentry-fuzzel
-                                                                  "/bin/pinentry-fuzzel"))
-                                               (ssh-support? #t)))
+                 (home-fcitx5-configuration (themes (list
+                                                     fcitx5-material-color-theme))
+                                            (input-method-editors (list
+                                                                   fcitx5-rime))
+                                            (gtk-im-module? #t)
+                                            (qt-im-module? #t)))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (shepherd-service (provision '(kdeconnectd))

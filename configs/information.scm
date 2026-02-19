@@ -11,8 +11,7 @@
   (include "../configs/channel.lock"))
 
 (define %data-dirs
-  '(".gnupg"
-    ".var"
+  '(".var"
 
     ".local/share/osu"
     ".local/share/PrismLauncher"
