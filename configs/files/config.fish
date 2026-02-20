@@ -10,4 +10,4 @@ end
 
 $$bin/fzf$$ --fish | source
 
-$$bin/starship$$ init fish | source
+$$bin/zoxide$$ init fish | source
