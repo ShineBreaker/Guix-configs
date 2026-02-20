@@ -10,13 +10,11 @@
                           "ripgrep"
                           "fzf"
                           "lolcat"
-                          "starship"
                           "zoxide")))
 
 (define %fish-services
   (list (service home-fish-plugin-atuin-service-type)
         (service home-fish-plugin-direnv-service-type)
-        (service home-fish-plugin-zoxide-service-type)
 
         (simple-service
          'fish-xdg-config
@@ -54,5 +52,4 @@
                                                           "fastfetch"
                                                           "fzf"
                                                           "lolcat"
-                                                          "starship"
                                                           "zoxide"))))))))
