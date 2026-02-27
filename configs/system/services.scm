@@ -54,6 +54,7 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service gvfs-service-type)
                 (service rtkit-daemon-service-type)
                 (service tailscale-service-type)
 
