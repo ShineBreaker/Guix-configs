@@ -8,6 +8,14 @@ function __fastfetch_on_startup --on-event fish_prompt
     echo \n日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。\n | $$bin/lolcat$$
 end
 
+status --is-login; and not set -q __fish_login_config_sourced
+and begin
+
+	  fenv . $HOME/.nix-profile/etc/profile.d/hm-session-vars.sh
+		fenv source /etc/environment
+
+end
+
 $$bin/fzf$$ --fish | source
 
 $$bin/zoxide$$ init fish | source
