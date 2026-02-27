@@ -1,0 +1,68 @@
+[language-server.pylsp]
+command = "pylsp"
+config.pylsp.plugins.black.enabled = true
+config.pylsp.plugins.mypy.enabled = true
+config.pylsp.plugins.rope.enabled = true
+
+[language-server.ccls]
+command = "ccls"
+
+[language-server.jdtls]
+command = "jdtls"
+
+[language-server.rust-analyzer]
+command = "rust-analyzer"
+
+[[language]]
+name = "python"
+language-servers = ["pylsp"]
+auto-format = true
+formatter = { command = "black", args = [
+  "--quiet",
+  "--stdin-filename",
+  "%{buffer_name}",
+  "-",
+] }
+
+[[language]]
+name = "json"
+formatter = { command = "js-beautify", args = [
+  "--stdin",
+  "--indent-size",
+  "2",
+  "-",
+] }
+auto-format = true
+
+[[language]]
+name = "jsonc"
+formatter = { command = "js-beautify", args = [
+  "--stdin",
+  "--indent-size",
+  "2",
+  "-",
+] }
+auto-format = true
+
+[[language]]
+name = "c"
+language-servers = ["ccls"]
+auto-format = true
+formatter = { command = "clang-format", args = [
+  "-style=file",
+  "-assume-filename=%{buffer_name}",
+] }
+
+[[language]]
+name = "cpp"
+language-servers = ["ccls"]
+auto-format = true
+formatter = { command = "clang-format", args = [
+  "-style=file",
+  "-assume-filename=%{buffer_name}",
+] }
+
+[[language]]
+name = "java"
+language-servers = ["jdtls"]
+auto-format = true

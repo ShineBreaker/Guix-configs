@@ -1,10 +1,44 @@
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: GPL-3.0
-
 theme = "noctalia"
 
+[editor]
+line-number = "absolute"
+cursorline = true
+soft-wrap.enable = false
+auto-format = true
+scrolloff = 8
+mouse = true
+true-color = true
+bufferline = "multiple"
+insert-final-newline = true
+trim-trailing-whitespace = false
+
+[editor.auto-save]
+focus-lost = true
+
 [editor.cursor-shape]
-insert = "bar"
 normal = "block"
+insert = "bar"
 select = "underline"
+
+[editor.lsp]
+display-inlay-hints = true
+auto-signature-help = true
+display-messages = true
+display-progress-messages = true
+
+[editor.inline-diagnostics]
+cursor-line = "warning"
+other-lines = "disable"
+
+[editor.gutters]
+layout = ["diagnostics", "spacer", "line-numbers", "spacer", "diff"]
+
+[editor.indent-guides]
+render = true
+
+[editor.statusline]
+left = ["mode", "spinner", "file-name", "diagnostics"]
+center = ["version-control"]
+right = ["selections", "position", "file-encoding", "file-type"]
+mode.normal = "NOR"
+mode.insert = "INS"
