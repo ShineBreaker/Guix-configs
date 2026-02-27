@@ -1,21 +1,63 @@
-[language-server.pylsp]
-command = "pylsp"
-config.pylsp.plugins.black.enabled = true
-config.pylsp.plugins.mypy.enabled = true
-config.pylsp.plugins.rope.enabled = true
-
 [language-server.ccls]
 command = "ccls"
 
 [language-server.jdtls]
 command = "jdtls"
 
+[language-server.pylsp]
+command = "pylsp"
+config.pylsp.plugins.black.enabled = true
+config.pylsp.plugins.mypy.enabled = true
+config.pylsp.plugins.rope.enabled = true
+
 [language-server.rust-analyzer]
 command = "rust-analyzer"
 
 [[language]]
+name = "c"
+auto-format = true
+formatter = { command = "clang-format", args = [
+  "-style=file",
+  "-assume-filename=%{buffer_name}",
+] }
+language-servers = ["ccls"]
+
+[[language]]
+name = "cpp"
+auto-format = true
+formatter = { command = "clang-format", args = [
+  "-style=file",
+  "-assume-filename=%{buffer_name}",
+] }
+language-servers = ["ccls"]
+
+[[language]]
+name = "java"
+auto-format = true
+language-servers = ["jdtls"]
+
+[[language]]
+name = "json"
+auto-format = true
+formatter = { command = "js-beautify", args = [
+  "--stdin",
+  "--indent-size",
+  "2",
+  "-",
+] }
+
+[[language]]
+name = "jsonc"
+auto-format = true
+formatter = { command = "js-beautify", args = [
+  "--stdin",
+  "--indent-size",
+  "2",
+  "-",
+] }
+
+[[language]]
 name = "python"
-language-servers = ["pylsp"]
 auto-format = true
 formatter = { command = "black", args = [
   "--quiet",
@@ -23,46 +65,4 @@ formatter = { command = "black", args = [
   "%{buffer_name}",
   "-",
 ] }
-
-[[language]]
-name = "json"
-formatter = { command = "js-beautify", args = [
-  "--stdin",
-  "--indent-size",
-  "2",
-  "-",
-] }
-auto-format = true
-
-[[language]]
-name = "jsonc"
-formatter = { command = "js-beautify", args = [
-  "--stdin",
-  "--indent-size",
-  "2",
-  "-",
-] }
-auto-format = true
-
-[[language]]
-name = "c"
-language-servers = ["ccls"]
-auto-format = true
-formatter = { command = "clang-format", args = [
-  "-style=file",
-  "-assume-filename=%{buffer_name}",
-] }
-
-[[language]]
-name = "cpp"
-language-servers = ["ccls"]
-auto-format = true
-formatter = { command = "clang-format", args = [
-  "-style=file",
-  "-assume-filename=%{buffer_name}",
-] }
-
-[[language]]
-name = "java"
-language-servers = ["jdtls"]
-auto-format = true
+language-servers = ["pylsp"]

@@ -1,44 +1,61 @@
 theme = "noctalia"
 
 [editor]
-line-number = "absolute"
-cursorline = true
-soft-wrap.enable = false
 auto-format = true
-scrolloff = 8
-mouse = true
-true-color = true
 bufferline = "multiple"
+color-modes = true
+cursorline = true
 insert-final-newline = true
+line-number = "absolute"
+mouse = true
+scrolloff = 8
+soft-wrap.enable = false
 trim-trailing-whitespace = false
 
 [editor.auto-save]
 focus-lost = true
 
 [editor.cursor-shape]
-normal = "block"
 insert = "bar"
+normal = "block"
 select = "underline"
 
-[editor.lsp]
-display-inlay-hints = true
-auto-signature-help = true
-display-messages = true
-display-progress-messages = true
-
-[editor.inline-diagnostics]
-cursor-line = "warning"
-other-lines = "disable"
+[editor.file-picker]
+git-ignore = true
+hidden = false
 
 [editor.gutters]
 layout = ["diagnostics", "spacer", "line-numbers", "spacer", "diff"]
 
 [editor.indent-guides]
+character = "·"
 render = true
+skip-levels = 1
+
+[editor.inline-diagnostics]
+cursor-line = "warning"
+other-lines = "disable"
+
+[editor.lsp]
+auto-signature-help = true
+display-inlay-hints = true
+display-messages = true
+display-progress-messages = true
+
+[editor.search]
+smart-case = true
+wrap-around = true
+
+[editor.smart-tab]
+enable = true
 
 [editor.statusline]
-left = ["mode", "spinner", "file-name", "diagnostics"]
 center = ["version-control"]
-right = ["selections", "position", "file-encoding", "file-type"]
-mode.normal = "NOR"
+left = ["mode", "spinner", "file-name", "diagnostics"]
 mode.insert = "INS"
+mode.normal = "NOR"
+mode.select = "SEL"
+right = ["selections", "position", "file-encoding", "file-type"]
+
+[editor.whitespace]
+render = "none"
