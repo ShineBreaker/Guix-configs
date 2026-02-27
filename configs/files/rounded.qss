@@ -45,7 +45,7 @@ QMenu {
 QMenu::item {
     padding: 6px 24px 6px 10px;
     background-color: transparent;
-    border-radius: 8px;
+    border-radius: 10px;
     margin: 2px 4px;
     color: palette(text);
 }
@@ -64,7 +64,7 @@ QMenu::separator {
 QMenuBar::item {
     padding: 6px 12px;
     background: transparent;
-    border-radius: 6px;
+    border-radius: 10px;
 }
 
 QMenuBar::item:selected {
@@ -81,7 +81,7 @@ QMenuBar::item:selected {
 QPushButton {
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: 10px;
     padding: 5px 16px;
     margin: 2px 4px;
     color: palette(text);
@@ -92,7 +92,7 @@ QPushButton {
 QToolButton {
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: 10px;
     padding: 4px 8px;
     margin: 3px;
     color: palette(text);
@@ -143,7 +143,7 @@ QLineEdit, QTextEdit, QPlainTextEdit,
 QSpinBox, QDoubleSpinBox, QComboBox {
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 6px;
+    border-radius: 10px;
     padding: 6px 8px;
     min-height: 24px;
     color: palette(text);
@@ -158,8 +158,8 @@ QComboBox::drop-down {
     subcontrol-position: top right;
     width: 24px;
     border-left-width: 0px;
-    border-top-right-radius: 6px;
-    border-bottom-right-radius: 6px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
 }
 
 /* -----------------------------------------------------------
@@ -172,7 +172,7 @@ QListView, QTableView, QTreeView {
     background-color: palette(base);
     alternate-background-color: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
+    border-radius: 10px;
     outline: none;
 }
 
@@ -214,7 +214,7 @@ QAbstractItemView::item:selected {
 
 QTabWidget::pane {
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    border-radius: 10px;
     background: transparent;
     /* 为标签预留空间 */
     padding-top: 6px;
@@ -223,7 +223,7 @@ QTabWidget::pane {
 QTabBar::tab {
     background: rgba(255, 255, 255, 0.05);
     color: palette(text);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 6px 12px;
     margin: 2px 4px 8px 4px;
     border: 1px solid transparent;
@@ -246,7 +246,7 @@ QTabBar::tab:selected {
 
 QGroupBox {
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    border-radius: 10px;
     padding-top: 24px;
     margin-top: 12px;
 }

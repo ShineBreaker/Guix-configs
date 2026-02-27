@@ -7,7 +7,9 @@
 (use-modules (gnu home services guix)
              (guix channels)
 
-             (jeans packages linux)
+             (jeans packages games)
+
+             (px services audio)
 
              (rosenthal packages networking)
              (rosenthal packages wm)
@@ -31,6 +33,7 @@
                      dns
                      linux
                      networking
+                     nix
                      pam-mount
                      pm
                      sddm
@@ -51,6 +54,7 @@
 
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
+                (service rtkit-daemon-service-type)
                 (service tailscale-service-type)
 
                 (simple-service 'home-channels home-channels-service-type
@@ -202,6 +206,26 @@
                                                         (auto-start? #t)
                                                         (respawn? #t))))
 
+                ;; Nix related.
+	                (service nix-service-type
+	                         (nix-configuration (extra-config (list (string-append
+	                                                                 "trusted-users"
+	                                                                 " = root "
+	                                                                 username)))))
+
+	                (simple-service 'non-nixos-gpu shepherd-root-service-type
+	                                (list (shepherd-service (documentation
+	                                                         "Install GPU drivers for running GPU accelerated programs from Nix.")
+	                                                        (provision '(non-nixos-gpu))
+	                                                        (requirement '(nix-daemon))
+	                                                        (start #~(make-forkexec-constructor '
+	                                                                  ("/run/current-system/profile/bin/ln"
+	                                                                   "-nsf"
+	                                                                   "/var/lib/non-nixos-gpu"
+	                                                                   "/run/opengl-driver")))
+	                                                        (stop #~(make-kill-destructor))
+	                                                        (one-shot? #t))))
+
                 ;; Fix filesystem permissions.
                 (simple-service 'fix-var-tmp-perms activation-service-type
                                 #~(begin
@@ -328,8 +352,9 @@
                                                    (rules (append (udev-configuration-rules
                                                                    config)
                                                                   (list
-                                                                   steam-devices-udev-rules
                                                                    android-udev-rules
+                                                                   opentabletdriver-udev-rules
+                                                                   steam-devices-udev-rules
                                                                    (plain-file "60-controller-permission.rules"
                                                                      "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", \
                                                                       MODE=\"0660\", GROUP=\"users\"")

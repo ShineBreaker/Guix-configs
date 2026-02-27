@@ -23,8 +23,26 @@
                                                           "../configs/files/git-credential-keepassxc")
                                                          (specs->pkgs "git"
                                                                       "fish")))
-                   (".config/qt5ct/qss/rounded.qss", (local-file "../configs/files/rounded.qss"))
-                   (".config/qt6ct/qss/rounded.qss", (local-file "../configs/files/rounded.qss"))))
+                   (".config/qt5ct/qss/rounded.qss" ,(local-file
+                                                      "../configs/files/rounded.qss"))
+                   (".config/qt6ct/qss/rounded.qss" ,(local-file
+                                                      "../configs/files/rounded.qss"))
+                   (".config/zed/settings.json" ,(computed-substitution-with-inputs
+                                                  "zed.json"
+                                                  (local-file
+                                                   "../configs/files/zed.json")
+                                                  (specs->pkgs
+                                                   "ccls"
+                                                   "clang"
+                                                   "maven"
+                                                   "node"
+                                                   "package-version-server"
+                                                   "python-black"
+                                                   "python-jsbeautifier"
+                                                   "python-lsp-black"
+                                                   "python-lsp-server"
+                                                   "python-pylsp-mypy"
+                                                   "rust-analyzer")))))
 
         (service home-niri-service-type
                  (home-niri-configuration (config (computed-substitution-with-inputs

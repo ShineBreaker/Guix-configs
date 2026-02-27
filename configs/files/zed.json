@@ -1,0 +1,321 @@
+{
+  "theme": "Noctalia Dark",
+  "language_models": {
+    "openai_compatible": {
+      "Aliyun": {
+        "api_url": "https://coding.dashscope.aliyuncs.com/v1",
+        "available_models": [{
+          "name": "kimi-k2.5",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-4.7",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3.5-plus",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3-max-2026-01-23",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3-coder-next",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3-coder-plus",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }]
+      },
+      "GLM": {
+        "api_url": "https://open.bigmodel.cn/api/coding/paas/v4",
+        "available_models": [{
+          "name": "glm-4.7",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }]
+      }
+    }
+  },
+  "active_pane_modifiers": {
+    "border_size": 2.0,
+    "inactive_opacity": 0.8
+  },
+  "agent": {
+    "model_parameters": [],
+    "play_sound_when_agent_done": true,
+    "tool_permissions": {
+      "default": "allow"
+    }
+  },
+  "auto_install_extensions": {
+    "basher": true,
+    "catppuccin-icons": true,
+    "colorizer": true,
+    "csharp": true,
+    "git-firefly": true,
+    "html": true,
+    "java": true,
+    "kdl": true,
+    "log": true,
+    "make": true,
+    "neocmake": true,
+    "nix": true,
+    "python": true,
+    "scheme": true,
+    "scss": true,
+    "sinppets": true,
+    "toml": true
+  },
+  "auto_signature_help": true,
+  "auto_update": false,
+  "autosave": "on_focus_change",
+  "autoscroll_on_clicks": false,
+  "base_keymap": "VSCode",
+  "buffer_font_size": 14,
+  "buffer_font_weight": 400.0,
+  "collaboration_panel": {
+    "button": false
+  },
+  "current_line_highlight": "all",
+  "cursor_shape": "bar",
+  "diagnostics": {
+    "inline": {
+      "enabled": true
+    },
+    "lsp_pull_diagnostics": {
+      "debounce_ms": 100
+    }
+  },
+  "disable_ai": false,
+  "format_on_save": "on",
+  "git": {
+    "git_gutter": "tracked_files",
+    "inline_blame": {
+      "delay_ms": 2000,
+      "enabled": true,
+      "show_commit_summary": true
+    }
+  },
+  "git_panel": {
+    "button": true,
+    "dock": "left"
+  },
+  "icon_theme": "Catppuccin Frappé",
+  "inlay_hints": {
+    "enabled": true,
+    "show_background": false
+  },
+  "languages": {
+    "Python": {
+      "language_servers": ["pylsp", "!pyright", "!ruff", "!basedpyright", "!pylsp"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/black$$",
+          "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
+        }
+      }
+    },
+    "JSON": {
+      "formatter": {
+        "external": {
+          "command": "$$bin/js-beautify$$",
+          "arguments": ["--stdin", "--indent-size", "2", "-"]
+        }
+      }
+    },
+    "JSONC": {
+      "soft_wrap": "prefer_line",
+      "formatter": {
+        "external": {
+          "command": "$$bin/js-beautify$$",
+          "arguments": ["--stdin", "--indent-size", "2", "-"]
+        }
+      }
+    },
+    "C": {
+      "language_servers": ["ccls"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/clang-format$$",
+          "arguments": ["-style=file", "-assume-filename={buffer_path}"]
+        }
+      }
+    },
+    "C++": {
+      "language_servers": ["ccls"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/clang-format$$",
+          "arguments": ["-style=file", "-assume-filename={buffer_path}"]
+        }
+      }
+    },
+    "Java": {
+      "language_servers": ["jdtls"]
+    }
+  },
+  "lsp": {
+    "package-version-server": {
+      "binary": {
+        "path": "$$bin/package-version-server$$"
+      }
+    },
+    "pylsp": {
+      "binary": {
+        "path": "$$bin/pylsp$$"
+      },
+      "initialization_options": {
+        "pylsp": {
+          "plugins": {
+            "black": {
+              "enabled": true
+            },
+            "mypy": {
+              "enabled": true
+            },
+            "rope": {
+              "enabled": true
+            }
+          }
+        }
+      }
+    },
+    "ccls": {
+      "binary": {
+        "path": "$$bin/ccls$$"
+      }
+    },
+    "rust-analyzer": {
+      "binary": {
+        "path": "$$bin/rust-analyzer$$"
+      }
+    }
+  },
+  "lsp_document_colors": "inlay",
+  "minimap": {
+    "current_line_highlight": "line",
+    "display_in": "active_editor",
+    "max_width_columns": 60,
+    "show": "auto",
+    "thumb": "always",
+    "thumb_border": "left_open"
+  },
+  "on_last_window_closed": "quit_app",
+  "outline_panel": {
+    "button": true
+  },
+  "prettier": {
+    "allowed": true
+  },
+  "preview_tabs": {
+    "enable_keep_preview_on_code_navigation": true,
+    "enable_preview_from_file_finder": true,
+    "enabled": true
+  },
+  "project_panel": {
+    "dock": "left",
+    "git_status": true,
+    "indent_guides": {
+      "show": "always"
+    },
+    "indent_size": 23,
+    "scrollbar": {
+      "show": "auto"
+    }
+  },
+  "restore_on_startup": "last_session",
+  "scrollbar": {
+    "axes": {
+      "horizontal": true
+    },
+    "cursors": true,
+    "show": "auto"
+  },
+  "show_signature_help_after_edits": true,
+  "snippet_sort_order": "inline",
+  "soft_wrap": "none",
+  "sticky_scroll": {
+    "enabled": true
+  },
+  "tab_size": 2,
+  "tabs": {
+    "file_icons": true,
+    "git_status": true,
+    "show_diagnostics": "errors"
+  },
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
+  },
+  "terminal": {
+    "env": {
+      "EDITOR": "zeditor --wait"
+    },
+    "shell": "system"
+  },
+  "ui_font_size": 15,
+  "ui_font_weight": 500.0,
+  "unnecessary_code_fade": 0.7,
+  "vim_mode": false,
+  "when_closing_with_no_tabs": "keep_window_open"
+}

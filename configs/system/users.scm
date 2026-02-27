@@ -20,7 +20,8 @@
            (group "users")
            (password
             "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
-           (supplementary-groups '("audio"
+           (supplementary-groups '("adbusers"
+                                   "audio"
                                    "cgroup"
                                    "kvm"
                                    "libvirt"

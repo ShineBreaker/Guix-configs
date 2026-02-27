@@ -27,6 +27,10 @@
   (host-name %host-name-config)
 
   (users %users-config)
+  (groups (append (list (user-group
+                           (name "adbusers")
+                           (system? #t)))
+                    %base-groups))
 
   (bootloader %bootloader-config)
 

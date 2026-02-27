@@ -8,7 +8,7 @@ syscfg := "./tmp/system-config.scm"
 
 configen := "./configen.sh"
 
-guix := "guix time-machine -C " + channel + " -- "
+guix := "guix time-machine -C " + channel + " --"
 
 default:
   @just --list
@@ -40,6 +40,7 @@ init: generate-init-config
 
 # 应用全局配置
 rebuild: system home
+  {{guix}} locate --update
 
 # 应用全局配置 (详细显示日志)
 rebuild-v: system-v home-v
@@ -47,7 +48,7 @@ rebuild-v: system-v home-v
 # 应用系统配置
 system: generate-system-config
   @echo 正在应用系统配置
-  sudo {{guix}} system reconfigure {{syscfg}} > /dev/null
+  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades > /dev/null
   sudo mkdir -p /efi/EFI/Guix-uki/
   sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
   @rm -rf ./tmp
@@ -57,7 +58,7 @@ system: generate-system-config
 # 应用系统配置 (详细显示日志)
 system-v: generate-system-config
   @echo 正在应用系统配置
-  sudo {{guix}} system reconfigure {{syscfg}}
+  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades
   sudo mkdir -p /efi/EFI/Guix-uki/
   sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
   @rm -rf ./tmp
@@ -65,13 +66,13 @@ system-v: generate-system-config
 # 应用用户配置
 home: generate-home-config
   @echo 正在应用系统配置
-  {{guix}} home reconfigure {{homecfg}} > /dev/null
+  {{guix}} home reconfigure {{homecfg}} --allow-downgrades > /dev/null
   @rm -rf ./tmp
 
 # 应用用户配置 (详细显示日志)
 home-v: generate-home-config
   @echo 正在应用系统配置
-  {{guix}} home reconfigure {{homecfg}}
+  {{guix}} home reconfigure {{homecfg}} --allow-downgrades
   @rm -rf ./tmp
 
 # 更新lock file
@@ -82,7 +83,7 @@ upgrade:
 
 # 拉取channel
 pull:
-  {{guix}} pull
+  {{guix}} pull --allow-downgrades
 
 # 清除额外的配置 (慎用，用了就没办法回滚)
 clean:
