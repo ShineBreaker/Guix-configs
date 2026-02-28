@@ -27,11 +27,6 @@ hidden = false
 [editor.gutters]
 layout = ["diagnostics", "spacer", "line-numbers", "spacer", "diff"]
 
-[editor.indent-guides]
-character = "·"
-render = true
-skip-levels = 1
-
 [editor.inline-diagnostics]
 cursor-line = "warning"
 other-lines = "disable"
