@@ -5,6 +5,7 @@
 
 (define %extend-environment-variables
                         '(("EDITOR" . "hx")
+                          ("FREERDP_ASKPASS" . "1")
                           ("GDK_BACKEND" . "wayland")
                           ("GUIX_PROFILE" . "$HOME/.guix-profile")
                           ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
@@ -14,6 +15,8 @@
                           ("https_proxy" . "$HTTP_PROXY")
                           ("LIBVIRT_DEFAULT_URI" . "qemu:///system")
                           ("MOZ_ENABLE_WAYLAND" . "1")
+                          ("no_proxy" . "127.0.0.1,localhost")
+                          ("NO_PROXY" . "127.0.0.1,localhost")
                           ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1")
                           ("QT_QPA_PLATFORMTHEME" . "qt5ct")
                           ("_JAVA_AWT_WM_NONREPARENTING" . "1")))
