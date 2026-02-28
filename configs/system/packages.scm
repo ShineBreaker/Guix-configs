@@ -22,7 +22,7 @@
            "wget"
 
            ;; Development Tools
-           "gcc"
+           "gcc-toolchain"
            "git"
            "git-filter-repo"
            "git-lfs"
