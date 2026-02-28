@@ -11,6 +11,7 @@ mouse = true
 scrolloff = 8
 soft-wrap.enable = false
 trim-trailing-whitespace = false
+true-color = true
 
 [editor.auto-save]
 focus-lost = true
