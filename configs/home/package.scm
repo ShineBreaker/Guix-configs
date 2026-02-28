@@ -22,7 +22,7 @@
           "age"
           "amule"
           "btop"
-          "freerdp"
+          "freerdp@3"
           "git-credential-keepassxc"
           "kdeconnect"
           "libreoffice"
@@ -30,6 +30,7 @@
           "tailscale"
           "telegram-desktop"
           "virt-manager"
+          "winapps"
           "zen-browser-bin"
 
           ;; Graphic
