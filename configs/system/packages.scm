@@ -4,17 +4,56 @@
 
 (define %packages-config
   (append (specs->pkgs+out
-           ;; Desktop
+           ;; Core System Tools
+           "cryptsetup"
+           "dialog"
+           "iproute2"
+           "iptables-nft"
+           "rtkit"
+           "strace"
+
+           ;; Networking & Connectivity
+           "adb"
            "bluez"
+           "curl"
+           "fprintd"
+           "mihomo"
+           "netcat-openbsd"
+           "wget"
+
+           ;; Development Tools
+           "gcc"
+           "git"
+           "git-filter-repo"
+           "git-lfs"
+           "just"
+           "python"
+           "postgresql"
+
+           ;; Desktop Environment
            "brightnessctl"
+           "dconf-editor"
+           "gvfs"
            "niri"
            "poweralertd"
            "swayidle"
+           "xdg-dbus-proxy"
            "xdg-desktop-portal-gnome"
            "xdg-desktop-portal-gtk"
+           "xdg-user-dirs"
+           "xdg-utils"
            "xwayland-satellite"
 
-           ;; File management
+           ;; Desktop Services
+           "gnome-keyring"
+           "libgnome-keyring"
+           "libnotify"
+           "libsecret"
+           "pinentry"
+           "pinentry-qt"
+           "polkit-gnome"
+
+           ;; File Management
            "file-roller"
            "thunar"
            "thunar-archive-plugin"
@@ -23,26 +62,12 @@
            "thunar-vcs-plugin"
            "xfconf"
 
-           ;; Essential
-           "dconf-editor"
-           "gnome-keyring"
-           "gvfs"
-           "libgnome-keyring"
-           "libnotify"
-           "libsecret"
-           "mihomo"
-           "pinentry-qt"
-           "polkit-gnome"
-           "xdg-dbus-proxy"
-           "xdg-user-dirs"
-           "xdg-utils"
-
-           ;; gstreamer
+           ;; Multimedia
            "gstreamer"
-           "gst-plugins-ugly-full"
-           "gst-plugins-bad"
            "gst-plugins-base"
            "gst-plugins-good"
+           "gst-plugins-bad"
+           "gst-plugins-ugly-full"
 
            ;; Fonts
            "font-awesome"
@@ -51,51 +76,33 @@
            "font-maple-font-nf-cn"
            "font-sarasa-gothic"
 
-           ;; Terminal
+           ;; Terminal & Shell
            "distrobox"
            "fastfetch"
            "fish"
            "foot"
            "helix"
-           "just"
 
-           ;; Virtualization & Container
+           ;; Virtualization & Containers
            "crun"
            "libvirt"
            "podman"
            "podman-compose"
            "qemu"
+           "runc"
            "spice"
 
-           ;; System
-           "adb"
-           "bluez"
-           "curl"
-           "cryptsetup"
-           "dialog"
+           ;; Package Management
            "flatpak"
            "flatpak-xdg-utils"
-           "fprintd"
-           "git"
-           "git-filter-repo"
-           "git-lfs"
-           "gzip"
-           "iproute2"
-           "iptables-nft"
-           "libnotify"
-           "netcat-openbsd"
            "nix"
+
+           ;; Utilities
+           "gzip"
            "ntfs-3g"
-           "pinentry"
-           "postgresql"
-           "python"
-           "rtkit"
-           "runc"
-           "strace"
            "tpm2-abrmd"
            "tpm2-pkcs11"
            "tpm2-tools"
            "tpm2-tss"
            "unzip"
-           "wget"
            "zip") %base-packages))
