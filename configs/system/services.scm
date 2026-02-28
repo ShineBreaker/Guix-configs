@@ -148,7 +148,8 @@
                 ;; Kernel related.
                 (simple-service 'extend-kernel-module-loader
                                 kernel-module-loader-service-type
-                                '("sch_fq_pie" "tcp_bbr"))
+                                '("ip_tables" "iptable_nat" "kvm_intel"
+                                  "sch_fq_pie" "tcp_bbr"))
 
                 (simple-service 'extend-sysctl sysctl-service-type
                                 '(("fs.inotify.max_user_watches" . "524288")
@@ -208,24 +209,24 @@
                                                         (respawn? #t))))
 
                 ;; Nix related.
-	                (service nix-service-type
-	                         (nix-configuration (extra-config (list (string-append
-	                                                                 "trusted-users"
-	                                                                 " = root "
-	                                                                 username)))))
+                (service nix-service-type
+                         (nix-configuration (extra-config (list (string-append
+                                                                 "trusted-users"
+                                                                 " = root "
+                                                                 username)))))
 
-	                (simple-service 'non-nixos-gpu shepherd-root-service-type
-	                                (list (shepherd-service (documentation
-	                                                         "Install GPU drivers for running GPU accelerated programs from Nix.")
-	                                                        (provision '(non-nixos-gpu))
-	                                                        (requirement '(nix-daemon))
-	                                                        (start #~(make-forkexec-constructor '
-	                                                                  ("/run/current-system/profile/bin/ln"
-	                                                                   "-nsf"
-	                                                                   "/var/lib/non-nixos-gpu"
-	                                                                   "/run/opengl-driver")))
-	                                                        (stop #~(make-kill-destructor))
-	                                                        (one-shot? #t))))
+                (simple-service 'non-nixos-gpu shepherd-root-service-type
+                                (list (shepherd-service (documentation
+                                                         "Install GPU drivers for running GPU accelerated programs from Nix.")
+                                                        (provision '(non-nixos-gpu))
+                                                        (requirement '(nix-daemon))
+                                                        (start #~(make-forkexec-constructor '
+                                                                  ("/run/current-system/profile/bin/ln"
+                                                                   "-nsf"
+                                                                   "/var/lib/non-nixos-gpu"
+                                                                   "/run/opengl-driver")))
+                                                        (stop #~(make-kill-destructor))
+                                                        (one-shot? #t))))
 
                 ;; Fix filesystem permissions.
                 (simple-service 'fix-var-tmp-perms activation-service-type
@@ -302,6 +303,7 @@
                                                                                dbus
                                                                                "/bin/dbus-run-session")
                                                                               "dbus-run-session"
+
                                                                               (string-append
                                                                                "--dbus-daemon="
                                                                                #$
@@ -356,9 +358,9 @@
                                                                    android-udev-rules
                                                                    opentabletdriver-udev-rules
                                                                    steam-devices-udev-rules
-                                                                   (plain-file "60-controller-permission.rules"
-                                                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", \
-                                                                      MODE=\"0660\", GROUP=\"users\"")
                                                                    (plain-file
-                                                                    "99-sayodevice.rules"
-                                                                    "KERNEL==\"hidraw*\" , ATTRS{idVendor}==\"8089\" , MODE=\"0666\"")))))))))
+                                                                    "65-kvm.rules"
+                                                                    "KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"666\"")
+                                                                   (plain-file
+                                                                    "60-controller-permission.rules"
+                                                                    "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\"")))))))))
