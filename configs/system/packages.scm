@@ -81,7 +81,6 @@
            "fastfetch"
            "fish"
            "foot"
-           "helix"
 
            ;; Virtualization & Containers
            "crun"
