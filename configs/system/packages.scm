@@ -60,10 +60,12 @@
            "just"
 
            ;; Virtualization & Container
+           "crun"
            "libvirt"
            "podman"
            "podman-compose"
            "qemu"
+           "spice"
 
            ;; System
            "adb"
