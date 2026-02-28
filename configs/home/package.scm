@@ -4,60 +4,63 @@
 
 (define %packages-list
   (cons* (specs->pkgs+out
-          ;; Desktop
+          ;; Desktop Environment
           "baobab"
           "cliphist"
           "dex"
           "fcitx5"
           "fuzzel"
           "helvum"
-          "keepassxc"
           "mpvpaper"
           "pavucontrol"
           "swww"
           "waypaper"
           "wl-clipboard"
 
-          ;; Utility
-          "age"
-          "amule"
-          "btop"
-          "freerdp@3"
-          "git-credential-keepassxc"
+          ;; Communication
           "kdeconnect"
+          "telegram-desktop"
+          "tailscale"
+
+          ;; Productivity
+          "keepassxc"
+          "git-credential-keepassxc"
           "libreoffice"
           "seahorse"
-          "tailscale"
-          "telegram-desktop"
           "virt-manager"
-          "winapps"
           "zen-browser-bin"
 
-          ;; Graphic
+          ;; Entertainment
           "gimp"
+          "heroic"
+          "mangohud"
           "mpv"
           "nomacs"
           "obs-with-cef"
           "obs-pipewire-audio-capture"
           "obs-vkcapture"
-
-          ;; Entertain
-          "heroic"
-          "mangohud"
           "osu-lazer-tachyon-bin"
           "prismlauncher-dolly"
           "steam"
 
-          ;; Themes
+          ;; System & Utilities
+          "age"
+          "amule"
+          "btop"
+          "freerdp@3"
+          "winapps"
+
+          ;; Themes & Appearance
           "adw-gtk3-theme"
           "adwaita-icon-theme"
           "bibata-cursor-theme"
           "papirus-icon-theme"
 
-          ;; Programming
+          ;; Development
           "ccls"
           "clang"
           "emacs-pgtk"
+          "helix"
           "maven"
           "node"
           "openjdk@21"
@@ -71,7 +74,7 @@
           "rust-analyzer"
           "zed"
 
-          ;; QT Related
+          ;; Qt Framework
           "qt5ct"
           "qt6ct"
           "qtmultimedia"
