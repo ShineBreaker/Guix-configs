@@ -42,6 +42,7 @@ services:
     devices:
       - /dev/kvm
       - /dev/net/tun # Enable tuntap
+      - /dev/bus/usb
       # Uncomment to mount a disk directly within the Windows VM.
       # WARNING: /dev/sdX paths may change after reboot. Use persistent identifiers!
       # NOTE: 'disk1' will be mounted as the main drive. THIS DISK WILL BE FORMATTED BY DOCKER.
