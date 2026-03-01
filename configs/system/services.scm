@@ -72,7 +72,7 @@
                                                                         (0))
                                                       #~("/run/current-system/profile/bin/guix"
                                                          "gc"
-                                                         "--delete-generations=7d")
+                                                         "--delete-generations=14d")
                                                       #:requirement '(user-processes
                                                                       guix-daemon))))
 
