@@ -228,7 +228,10 @@
                                                         (stop #~(make-kill-destructor))
                                                         (one-shot? #t))))
 
-                ;; Fix filesystem permissions.
+                ;; Filesystem fix.
+                (simple-service 'fixed-machine-id etc-service-type
+                  (list `("machine-id" ,(plain-file "machine-id" fixed-machine-id))))
+
                 (simple-service 'fix-var-tmp-perms activation-service-type
                                 #~(begin
                                     (use-modules (guix build utils))

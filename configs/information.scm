@@ -2,13 +2,24 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (guix channels)
+(use-modules (bytestructures guile bytevectors)
+             (gcrypt base16)
+             (gcrypt hash)
+             (guix channels)
              (guix gexp))
 
 (define username "brokenshine")
 
 (define guix-channels
   (include "../configs/channel.lock"))
+
+(define (generate-machine-id username)
+  (let* ((input (string->utf8 username))
+         (hash (md5 input))
+         (hex-string (bytevector->base16-string hash)))
+    (string-downcase hex-string)))
+
+(define fixed-machine-id (generate-machine-id username))
 
 (define %data-dirs
   '(".var"
