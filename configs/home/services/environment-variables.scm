@@ -2,28 +2,29 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-
 (define %extend-environment-variables
-                        '(("EDITOR" . "hx")
-                          ("FREERDP_ASKPASS" . "1")
-                          ("GDK_BACKEND" . "wayland")
-                          ("GUIX_PROFILE" . "$HOME/.guix-profile")
-                          ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
-                          ("HTTP_PROXY" . "http://127.0.0.1:7890")
-                          ("http_proxy" . "$HTTP_PROXY")
-                          ("HTTPS_PROXY" . "$HTTP_PROXY")
-                          ("https_proxy" . "$HTTP_PROXY")
-                          ("LIBVIRT_DEFAULT_URI" . "qemu:///system")
-                          ("MOZ_ENABLE_WAYLAND" . "1")
-                          ("no_proxy" . "127.0.0.1,localhost")
-                          ("NO_PROXY" . "127.0.0.1,localhost")
-                          ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1")
-                          ("QT_QPA_PLATFORMTHEME" . "qt5ct")
-                          ("_JAVA_AWT_WM_NONREPARENTING" . "1")))
+  '(("EDITOR" . "hx") ("FREERDP_ASKPASS" . "1")
+    ("GUIX_PROFILE" . "$HOME/.guix-profile")
+    ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
+    ("HTTP_PROXY" . "http://127.0.0.1:7890")
+    ("http_proxy" . "$HTTP_PROXY")
+    ("HTTPS_PROXY" . "$HTTP_PROXY")
+    ("https_proxy" . "$HTTP_PROXY")
+    ("LIBVIRT_DEFAULT_URI" . "qemu:///system")
+    ("no_proxy" . "127.0.0.1,localhost")
+    ("NO_PROXY" . "127.0.0.1,localhost")
+    ("QS_ICON_THEME" . "Papirus-Dark")
+    ("QT_QPA_PLATFORMTHEME" . "qt5ct")
+
+    ;; Wayland support.
+    ("GDK_BACKEND" . "wayland")
+    ("_JAVA_AWT_WM_NONREPARENTING" . "1")
+    ("MOZ_ENABLE_WAYLAND" . "1")
+    ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1")))
 
 (define %xdg-base-directory-env-vars
-  '(;; bash
-    ("HISTFILE" . "$XDG_STATE_HOME/bash/history")
+  '( ;bash
+     ("HISTFILE" . "$XDG_STATE_HOME/bash/history")
     ;; docker
     ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
     ;; gdb
@@ -57,16 +58,16 @@
 (define %environment-variable-services
   (list (simple-service 'environment-variables
                         home-environment-variables-service-type
-                        `(,@%extend-environment-variables
-                          ,@%xdg-base-directory-env-vars
-                          ("PATH" unquote
-                           (string-append "$HOME/.local/bin:"
-                                          "$HOME/.nix-profile/bin:"
-                                          (or (getenv "PATH") "")))
+                        `(,@%extend-environment-variables ,@%xdg-base-directory-env-vars
+                          ("CHROMIUM_FLAGS" unquote
+                           (string-append
+                            "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
+                            "--ozone-platform=wayland "
+                            "--enable-wayland-ime "
+                            "--wayland-text-input-version=3"))
                           ("QT_PLUGIN_PATH" unquote
                            (string-append
                             "/run/current-system/profile/lib/qt5/plugins:"
                             "/run/current-system/profile/lib/qt6/plugins:"
                             "$HOME/.guix-home/profile/lib/qt5/plugins:"
-                            "$HOME/.guix-home/profile/lib/qt6/plugins:"
-                            (or (getenv "QT_PLUGIN_PATH") "")))))))
+                            "$HOME/.guix-home/profile/lib/qt6/plugins:"))))))
