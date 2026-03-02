@@ -199,6 +199,29 @@
                                                         (auto-start? #t)
                                                         (respawn? #t))))
 
+                ;; Lower latency
+                (simple-service 'latency-fix shepherd-root-service-type
+                                (list (shepherd-service (documentation
+                                                         "Prepare system for real-time audio")
+                                                        (provision '(rt-audio-setup))
+                                                        (requirement '(user-processes))
+                                                        (start #~(make-forkexec-constructor '
+                                                                  ("/run/current-system/profile/bin/bash"
+                                                                   "-c"
+                                                                   "echo -n performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")))
+                                                        (stop #~(make-kill-destructor))
+                                                        (one-shot? #t))
+                                      (shepherd-service (documentation
+                                                         "disable SMT")
+                                                        (provision '(disable-smt))
+                                                        (requirement '(user-processes))
+                                                        (start #~(make-forkexec-constructor '
+                                                                  ("/run/current-system/profile/bin/bash"
+                                                                   "-c"
+                                                                   "echo off | tee /sys/devices/system/cpu/smt/control")))
+                                                        (stop #~(make-kill-destructor))
+                                                        (one-shot? #t))))
+
                 ;; Nix related.
                 (service nix-service-type
                          (nix-configuration (extra-config (list (string-append
