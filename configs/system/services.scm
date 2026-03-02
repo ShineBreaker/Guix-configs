@@ -244,7 +244,8 @@
 
                 ;; Filesystem fix.
                 (simple-service 'fixed-machine-id etc-service-type
-                  (list `("machine-id" ,(plain-file "machine-id" fixed-machine-id))))
+                                (list `("machine-id" ,(plain-file "machine-id"
+                                                       fixed-machine-id))))
 
                 (simple-service 'fix-var-tmp-perms activation-service-type
                                 #~(begin
@@ -321,6 +322,7 @@
                                                                                "/bin/dbus-run-session")
                                                                               "dbus-run-session"
 
+
                                                                               (string-append
                                                                                "--dbus-daemon="
                                                                                #$
@@ -365,19 +367,4 @@
                                                     "http://127.0.0.1:7890")
                                                    (discover? #f)
                                                    (privileged? #f)
-                                                   (tmpdir "/var/tmp")))
-
-            (udev-service-type config =>
-                               (udev-configuration (inherit config)
-                                                   (rules (append (udev-configuration-rules
-                                                                   config)
-                                                                  (list
-                                                                   android-udev-rules
-                                                                   opentabletdriver-udev-rules
-                                                                   steam-devices-udev-rules
-                                                                   (plain-file
-                                                                    "65-kvm.rules"
-                                                                    "KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"666\"")
-                                                                   (plain-file
-                                                                    "60-controller-permission.rules"
-                                                                    "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\"")))))))))
+                                                   (tmpdir "/var/tmp"))))))
