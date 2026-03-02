@@ -35,9 +35,5 @@
 
   (services %services-config)
   (skeletons %skeletons-config)
-  (groups (append (list (user-group
-                           (name "adbusers")
-                           (system? #t)))
-                    %base-groups))
 
   (name-service-switch %mdns-host-lookup-nss))
