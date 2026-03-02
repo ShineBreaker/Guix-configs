@@ -5,6 +5,7 @@
 (define %packages-config
   (append (specs->pkgs+out
            ;; Core System Tools
+           "cpufrequtils"
            "cryptsetup"
            "dialog"
            "iproute2"
