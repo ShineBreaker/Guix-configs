@@ -4,18 +4,23 @@
 
 (define %packages-list
   (cons* (specs->pkgs+out
+          ;; Audio & Video
+          "easyeffects"
+          "helvum"
+          "mpv"
+          "nomacs"
+          "obs-with-cef"
+          "obs-pipewire-audio-capture"
+          "obs-vkcapture"
+
           ;; Desktop Environment
           "baobab"
           "cliphist"
           "dex"
           "fcitx5"
           "fuzzel"
-          "helvum"
-          "mpvpaper"
-          "pavucontrol"
-          "swww"
-          "waypaper"
           "wl-clipboard"
+          "xclip"
 
           ;; Communication
           "kdeconnect"
@@ -23,6 +28,7 @@
           "tailscale"
 
           ;; Productivity
+          "gimp"
           "keepassxc"
           "git-credential-keepassxc"
           "libreoffice"
@@ -31,14 +37,8 @@
           "zen-browser-bin"
 
           ;; Entertainment
-          "gimp"
           "heroic"
           "mangohud"
-          "mpv"
-          "nomacs"
-          "obs-with-cef"
-          "obs-pipewire-audio-capture"
-          "obs-vkcapture"
           "osu-lazer-tachyon-bin"
           "prismlauncher-dolly"
           "steam"
