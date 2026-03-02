@@ -80,30 +80,6 @@
                          (nftables-configuration (ruleset (local-file
                                                            "../configs/files/nftables.conf"))))
 
-                (service postgresql-service-type
-                         (postgresql-configuration (postgresql (specification->package
-                                                                "postgresql@16.4"))
-                                                   (extension-packages (list
-                                                                        postgis))
-                                                   (config-file (postgresql-config-file
-                                                                 (log-destination
-                                                                  "stderr")
-                                                                 (hba-file (local-file
-                                                                            "../configs/files/postgresql.conf"))
-                                                                 (extra-config '
-                                                                  (("session_preload_libraries"
-                                                                    "auto_explain")
-                                                                   ("random_page_cost"
-                                                                    2)
-                                                                   ("auto_explain.log_min_duration"
-                                                                    "100 ms")
-                                                                   ("work_mem"
-                                                                    "500 MB")
-                                                                   ("logging_collector"
-                                                                    #t)
-                                                                   ("log_directory"
-                                                                    "/var/log/postgresql")))))))
-
                 ;; VM & Coantainer.
                 (service dnsmasq-service-type
                          (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
