@@ -75,6 +75,6 @@
                 (file-system
                   (device (uuid "9699-52A2"
                                 'fat))
-                  (mount-point "/efi")
+                  (mount-point "/boot")
                   (type "vfat")
                   (create-mount-point? #t))) %base-file-systems))

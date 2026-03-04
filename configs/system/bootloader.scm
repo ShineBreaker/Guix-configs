@@ -2,14 +2,9 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (rosenthal bootloader grub)
-             (rosenthal bootloader uki))
+(use-modules (rosenthal bootloader limine))
 
 (define %bootloader-config
   (bootloader-configuration
-    ; (bootloader grub-efi-luks2-bootloader )
-    (bootloader uefi-uki-removable-bootloader)
-    (theme (grub-theme (inherit (grub-theme))
-                       (gfxmode '("1024x786x32"))))
-    ; (extra-initrd "/SYSTEM/Guix/@boot/cryptroot.cpio")
-    (targets '("/efi"))))
+    (bootloader limine-efi-removable-bootloader)
+    (targets '("/boot"))))
