@@ -65,6 +65,7 @@
           "node"
           "openjdk@21"
           "package-version-server"
+          "pnpm@10"
           "python-black"
           "python-jsbeautifier"
           "python-lsp-black"
@@ -72,6 +73,7 @@
           "python-pylsp-mypy"
           "reuse"
           "rust-analyzer"
+          "uv"
           "zed"
 
           ;; Qt Framework
