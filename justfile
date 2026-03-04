@@ -49,18 +49,12 @@ rebuild-v: system-v home-v
 system: generate-system-config
   @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades > /dev/null
-  sudo mkdir -p /efi/EFI/Guix-uki/
-  sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
   @rm -rf ./tmp
-
-
 
 # 应用系统配置 (详细显示日志)
 system-v: generate-system-config
   @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades
-  sudo mkdir -p /efi/EFI/Guix-uki/
-  sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
   @rm -rf ./tmp
 
 # 应用用户配置
@@ -93,11 +87,6 @@ clean:
 # 清除额外的文件 (慎用，用了就没办法回滚)
 gc: clean
   guix gc
-
-# 备份一份efi文件(for uki.)
-ukibackup:
-  sudo mkdir -p /efi/EFI/Guix-uki/
-  sudo cp /efi/EFI/BOOT/BOOTX64.EFI /efi/EFI/Guix-uki/
 
 # 格式化代码
 style *args:
