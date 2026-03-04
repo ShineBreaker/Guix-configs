@@ -20,7 +20,7 @@
           "fcitx5"
           "fuzzel"
           "wl-clipboard"
-          "xclip"
+          "xsel"
 
           ;; Communication
           "kdeconnect"
@@ -31,7 +31,6 @@
           "gimp"
           "keepassxc"
           "git-credential-keepassxc"
-          "libreoffice"
           "seahorse"
           "virt-manager"
           "zen-browser-bin"
