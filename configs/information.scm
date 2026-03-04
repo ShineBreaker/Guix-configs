@@ -42,8 +42,7 @@
 (define %btrfs-subvol-data "DATA/Share")
 
 (define %btrfs-subvolumes
-  '(("SYSTEM/Guix/@boot"                   "/boot")
-    ("SYSTEM/Guix/@data"                   "/var/lib")
+  '(("SYSTEM/Guix/@data"                   "/var/lib")
     ("SYSTEM/Guix/@gnu"                    "/gnu")
 
     ("SYSTEM/Guix/@persist/cache/root"     "/root/.cache")
@@ -59,8 +58,7 @@
     ("SYSTEM/Guix/@etc/libvirt"            "/etc/libvirt")
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
-    ("SYSTEM/NixOS/@nix"                   "/nix")
-
     ("DATA/Flatpak"                        "/var/lib/flatpak")
     ("DATA/Home/Guix"                      "/home")
-    ("DATA/LibVirt"                        "/var/lib/libvirt")))
+    ("DATA/LibVirt"                        "/var/lib/libvirt")
+    ("DATA/Nix"                            "/nix")))
