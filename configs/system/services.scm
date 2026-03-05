@@ -78,22 +78,6 @@
                 (simple-service 'home-channels home-channels-service-type
                                 guix-channels)
 
-                (simple-service 'env-vars session-environment-service-type
-                                (list (cons "PATH"
-                                            (string-append "$HOME/.local/bin:"
-                                             "$HOME/.nix-profile/bin:"
-                                             (let ((p (or (getenv "PATH") "")))
-                                               (string-join (delete-duplicates
-                                                             (string-split p
-                                                                           #\:))
-                                                            ":"))))
-                                      (cons "QT_PLUGIN_PATH"
-                                            (string-append
-                                             "/run/current-system/profile/lib/qt5/plugins:"
-                                             "/run/current-system/profile/lib/qt6/plugins:"
-                                             "$HOME/.guix-home/profile/lib/qt5/plugins:"
-                                             "$HOME/.guix-home/profile/lib/qt6/plugins:"))))
-
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
                                                            "../configs/files/nftables.conf"))))

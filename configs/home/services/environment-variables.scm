@@ -58,7 +58,23 @@
 (define %environment-variable-services
   (list (simple-service 'environment-variables
                         home-environment-variables-service-type
-                        `(,@%extend-environment-variables ,@%xdg-base-directory-env-vars
+                        `(,@%extend-environment-variables
+                          ,@%xdg-base-directory-env-vars
+                          ("PATH" unquote
+                           (string-append "$HOME/.local/bin:"
+                                          "$HOME/.nix-profile/bin:"
+                                          "/run/privileged/bin:"
+                                          "/run/current-system/profile/bin:"
+                                          "/run/current-system/profile/sbin:"
+                                          "$HOME/.guix-home/profile/bin:"
+                                          "$HOME/.guix-home/profile/sbin:"
+                                          "$XDG_CONFIG_HOME/guix/current/bin"))
+                          ("QT_PLUGIN_PATH" unquote
+                           (string-append
+                            "/run/current-system/profile/lib/qt5/plugins:"
+                            "/run/current-system/profile/lib/qt6/plugins:"
+                            "$HOME/.guix-home/profile/lib/qt5/plugins:"
+                            "$HOME/.guix-home/profile/lib/qt6/plugins"))
                           ("CHROMIUM_FLAGS" unquote
                            (string-append
                             "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
