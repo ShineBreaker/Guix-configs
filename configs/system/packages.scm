@@ -55,6 +55,7 @@
            "polkit-gnome"
 
            ;; File Management
+           "exo"
            "file-roller"
            "thunar"
            "thunar-archive-plugin"
