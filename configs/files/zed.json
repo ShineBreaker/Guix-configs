@@ -132,10 +132,12 @@
     "catppuccin-icons": true,
     "colorizer": true,
     "csharp": true,
+    "fish": true,
     "git-firefly": true,
     "html": true,
     "java": true,
     "kdl": true,
+    "kotlin": true,
     "log": true,
     "make": true,
     "neocmake": true,
@@ -144,7 +146,9 @@
     "scheme": true,
     "scss": true,
     "sinppets": true,
-    "toml": true
+    "toml": true,
+    "xml": true,
+    "zig": true
   },
   "auto_signature_help": true,
   "auto_update": false,
@@ -186,32 +190,6 @@
     "show_background": false
   },
   "languages": {
-    "Python": {
-      "language_servers": ["pylsp", "!pyright", "!ruff", "!basedpyright", "!pylsp"],
-      "formatter": {
-        "external": {
-          "command": "$$bin/black$$",
-          "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
-        }
-      }
-    },
-    "JSON": {
-      "formatter": {
-        "external": {
-          "command": "$$bin/js-beautify$$",
-          "arguments": ["--stdin", "--indent-size", "2", "-"]
-        }
-      }
-    },
-    "JSONC": {
-      "soft_wrap": "prefer_line",
-      "formatter": {
-        "external": {
-          "command": "$$bin/js-beautify$$",
-          "arguments": ["--stdin", "--indent-size", "2", "-"]
-        }
-      }
-    },
     "C": {
       "language_servers": ["ccls"],
       "formatter": {
@@ -232,9 +210,52 @@
     },
     "Java": {
       "language_servers": ["jdtls"]
+    },
+    "JSON": {
+      "formatter": {
+        "external": {
+          "command": "$$bin/js-beautify$$",
+          "arguments": ["--stdin", "--indent-size", "2", "-"]
+        }
+      }
+    },
+    "JSONC": {
+      "soft_wrap": "prefer_line",
+      "formatter": {
+        "external": {
+          "command": "$$bin/js-beautify$$",
+          "arguments": ["--stdin", "--indent-size", "2", "-"]
+        }
+      }
+    },
+    "Kotlin": {
+      "language_servers": ["!kotlin-lsp", "kotlin-language-server"]
+    },
+    "Python": {
+      "language_servers": ["pylsp", "!pyright", "!ruff", "!basedpyright", "!pylsp"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/black$$",
+          "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
+        }
+      }
     }
   },
   "lsp": {
+    "ccls": {
+      "binary": {
+        "path": "$$bin/ccls$$"
+      }
+    },
+    "kotlin-language-server": {
+      "settings": {
+        "compiler": {
+          "jvm": {
+            "target": "17"
+          }
+        }
+      }
+    },
     "package-version-server": {
       "binary": {
         "path": "$$bin/package-version-server$$"
@@ -258,11 +279,6 @@
             }
           }
         }
-      }
-    },
-    "ccls": {
-      "binary": {
-        "path": "$$bin/ccls$$"
       }
     },
     "rust-analyzer": {
