@@ -3,7 +3,9 @@
 ;;; SPDX-License-Identifier: GPL-3.0
 
 (define %extend-environment-variables
-  '(("EDITOR" . "hx") ("FREERDP_ASKPASS" . "1")
+  '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
+    ("EDITOR" . "hx")
+    ("FREERDP_ASKPASS" . "1")
     ("GUIX_PROFILE" . "$HOME/.guix-profile")
     ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
     ("HTTP_PROXY" . "http://127.0.0.1:7890")
@@ -38,8 +40,6 @@
     ("GRADLE_USER_HOME" . "$XDG_DATA_HOME/gradle")
     ;; guile
     ("GUILE_HISTORY" . "$XDG_STATE_HOME/guile/history")
-    ;; java
-    ("_JAVA_OPTIONS" . "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java")
     ;; luanti
     ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
     ;; node
@@ -65,9 +65,7 @@
                             "--ozone-platform=wayland "
                             "--enable-wayland-ime "
                             "--wayland-text-input-version=3"))
-                          ("QT_PLUGIN_PATH" unquote
+                          ("_JAVA_OPTIONS" unquote
                            (string-append
-                            "/run/current-system/profile/lib/qt5/plugins:"
-                            "/run/current-system/profile/lib/qt6/plugins:"
-                            "$HOME/.guix-home/profile/lib/qt5/plugins:"
-                            "$HOME/.guix-home/profile/lib/qt6/plugins:"))))))
+                            "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
+                            "-Dawt.toolkit.name=WLToolkit"))))))

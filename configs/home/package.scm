@@ -59,6 +59,7 @@
           "ccls"
           "clang"
           "emacs-pgtk"
+          "gradle"
           "helix"
           "maven"
           "node"
@@ -72,6 +73,7 @@
           "python-pylsp-mypy"
           "reuse"
           "rust-analyzer"
+          "sdkmanager"
           "uv"
           "zed"
 
