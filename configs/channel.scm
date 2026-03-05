@@ -6,14 +6,6 @@
 
 (define guix-channels
   (append (list (channel
-                  (name 'guix-android)
-                  (url "https://framagit.org/tyreunom/guix-android.git")
-                  (introduction
-                   (make-channel-introduction
-                    "d031d039b1e5473b030fa0f272f693b469d0ac0e"
-                    (openpgp-fingerprint
-                     "1EFB 0909 1F17 D28C CBF9  B13A 53D4 57B2 D636 EE82"))))
-                (channel
                   (name 'jeans)
                   (branch "main")
                   (url "https://codeberg.org/BrokenShine/jeans.git")
