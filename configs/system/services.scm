@@ -16,7 +16,9 @@
 
              (rosenthal services base)
              (rosenthal services desktop)
-             (rosenthal services networking))
+             (rosenthal services networking)
+
+             (srfi srfi-1))
 
 (use-package-modules android
                      games
@@ -76,20 +78,21 @@
                 (simple-service 'home-channels home-channels-service-type
                                 guix-channels)
 
-                (simple-service 'guix-gc shepherd-root-service-type
-                                (list (shepherd-timer '(guix-gc)
-                                                      #~(calendar-event
-                                                                        #:days-of-week '
-                                                                        (sunday)
-                                                                        #:hours '
-                                                                        (18)
-                                                                        #:minutes '
-                                                                        (0))
-                                                      #~("/run/current-system/profile/bin/guix"
-                                                         "gc"
-                                                         "--delete-generations=14d")
-                                                      #:requirement '(user-processes
-                                                                      guix-daemon))))
+                (simple-service 'env-vars session-environment-service-type
+                                (list (cons "PATH"
+                                            (string-append "$HOME/.local/bin:"
+                                             "$HOME/.nix-profile/bin:"
+                                             (let ((p (or (getenv "PATH") "")))
+                                               (string-join (delete-duplicates
+                                                             (string-split p
+                                                                           #\:))
+                                                            ":"))))
+                                      (cons "QT_PLUGIN_PATH"
+                                            (string-append
+                                             "/run/current-system/profile/lib/qt5/plugins:"
+                                             "/run/current-system/profile/lib/qt6/plugins:"
+                                             "$HOME/.guix-home/profile/lib/qt5/plugins:"
+                                             "$HOME/.guix-home/profile/lib/qt6/plugins:"))))
 
                 (service nftables-service-type
                          (nftables-configuration (ruleset (local-file
@@ -180,7 +183,20 @@
 
                 ;; Services need to run as root.
                 (simple-service 'root-services shepherd-root-service-type
-                                (list (shepherd-service (documentation
+                                (list (shepherd-timer '(guix-gc)
+                                                      #~(calendar-event
+                                                                        #:days-of-week '
+                                                                        (sunday)
+                                                                        #:hours '
+                                                                        (18)
+                                                                        #:minutes '
+                                                                        (0))
+                                                      #~("/run/current-system/profile/bin/guix"
+                                                         "gc"
+                                                         "--delete-generations=14d")
+                                                      #:requirement '(user-processes
+                                                                      guix-daemon))
+                                      (shepherd-service (documentation
                                                          "Run the mihomo daemon.")
                                                         (provision '(mihomo-daemon))
                                                         (requirement '(user-processes))
@@ -204,22 +220,24 @@
                                 (list (shepherd-service (documentation
                                                          "Prepare system for real-time audio")
                                                         (provision '(rt-audio-setup))
-                                                        (requirement '(user-processes))
+                                                        (requirement '(dbus-system))
                                                         (start #~(make-forkexec-constructor '
-                                                                  ("/run/current-system/profile/bin/bash"
+                                                                  ("/run/privileged/bin/sh"
                                                                    "-c"
                                                                    "echo -n performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")))
                                                         (stop #~(make-kill-destructor))
+                                                        (auto-start? #t)
                                                         (one-shot? #t))
                                       (shepherd-service (documentation
                                                          "disable SMT")
                                                         (provision '(disable-smt))
-                                                        (requirement '(user-processes))
+                                                        (requirement '(dbus-system))
                                                         (start #~(make-forkexec-constructor '
-                                                                  ("/run/current-system/profile/bin/bash"
+                                                                  ("/run/privileged/bin/sh"
                                                                    "-c"
                                                                    "echo off | tee /sys/devices/system/cpu/smt/control")))
                                                         (stop #~(make-kill-destructor))
+                                                        (auto-start? #t)
                                                         (one-shot? #t))))
 
                 ;; Nix related.
@@ -240,6 +258,7 @@
                                                                    "/var/lib/non-nixos-gpu"
                                                                    "/run/opengl-driver")))
                                                         (stop #~(make-kill-destructor))
+                                                        (auto-start? #t)
                                                         (one-shot? #t))))
 
                 ;; Filesystem fix.
