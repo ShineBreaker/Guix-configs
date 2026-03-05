@@ -215,31 +215,6 @@
                                                         (auto-start? #t)
                                                         (respawn? #t))))
 
-                ;; Lower latency
-                (simple-service 'latency-fix shepherd-root-service-type
-                                (list (shepherd-service (documentation
-                                                         "Prepare system for real-time audio")
-                                                        (provision '(rt-audio-setup))
-                                                        (requirement '(dbus-system))
-                                                        (start #~(make-forkexec-constructor '
-                                                                  ("/run/privileged/bin/sh"
-                                                                   "-c"
-                                                                   "echo -n performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor")))
-                                                        (stop #~(make-kill-destructor))
-                                                        (auto-start? #t)
-                                                        (one-shot? #t))
-                                      (shepherd-service (documentation
-                                                         "disable SMT")
-                                                        (provision '(disable-smt))
-                                                        (requirement '(dbus-system))
-                                                        (start #~(make-forkexec-constructor '
-                                                                  ("/run/privileged/bin/sh"
-                                                                   "-c"
-                                                                   "echo off | tee /sys/devices/system/cpu/smt/control")))
-                                                        (stop #~(make-kill-destructor))
-                                                        (auto-start? #t)
-                                                        (one-shot? #t))))
-
                 ;; Nix related.
                 (service nix-service-type
                          (nix-configuration (extra-config (list (string-append
@@ -279,42 +254,20 @@
                                     (chmod "/data" #o1777)))
 
                 (simple-service 'create-xdg-dirs activation-service-type
-                                (with-imported-modules (source-module-closure '
-                                                                              (
-                                                                               (guix
-                                                                                build
-                                                                                utils)))
-                                                       #~(begin
-                                                           (use-modules (guix
-                                                                         build
-                                                                         utils))
-                                                           (let* ((pw (getpwnam #$username))
-                                                                  (uid (passwd:uid
-                                                                        pw))
-                                                                  (gid (passwd:gid
-                                                                        pw))
-                                                                  (home (string-append
-                                                                         "/home/"
-                                                                         #$username)))
-                                                             (for-each (lambda
-                                                                               (dir)
-                                                                         (let
-                                                                              (
-                                                                               (path
-                                                                                (string-append
-                                                                                 home
-                                                                                 "/"
-                                                                                 dir)))
-                                                                           (mkdir-p
-                                                                            path)
-                                                                           (chown
-                                                                            path
-                                                                            uid
-                                                                            gid)
-                                                                           (chmod
-                                                                            path
-                                                                            #o755)))
-                                                                       '#$%data-dirs))))))
+                                (with-imported-modules
+                                  (source-module-closure '((guix build utils)))
+                                    #~(begin (use-modules (guix build utils))
+                                                (let* ((pw (getpwnam #$username))
+                                                  (uid (passwd:uid pw))
+                                                  (gid (passwd:gid pw))
+                                                  (home (string-append "/home/" #$username)))
+                                                  (for-each (lambda (dir)
+                                                    (let ((path
+                                                      (string-append home "/" dir)))
+                                                      (mkdir-p path)
+                                                      (chown path uid gid)
+                                                      (chmod path #o755)))
+                                                  '#$%data-dirs))))))
 
           (modify-services %rosenthal-desktop-services/tuigreet
             (delete console-font-service-type)
