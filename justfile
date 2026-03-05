@@ -46,27 +46,27 @@ rebuild: system home
 rebuild-v: system-v home-v
 
 # 应用系统配置
-system: generate-system-config
+system: pull generate-system-config
   @echo 正在应用系统配置
-  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades > /dev/null
+  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades --fallback > /dev/null
   @rm -rf ./tmp
 
 # 应用系统配置 (详细显示日志)
-system-v: generate-system-config
+system-v: pull generate-system-config
   @echo 正在应用系统配置
-  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades
+  sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades --fallback
   @rm -rf ./tmp
 
 # 应用用户配置
 home: generate-home-config
   @echo 正在应用系统配置
-  {{guix}} home reconfigure {{homecfg}} --allow-downgrades > /dev/null
+  {{guix}} home reconfigure {{homecfg}} --allow-downgrades --fallback > /dev/null
   @rm -rf ./tmp
 
 # 应用用户配置 (详细显示日志)
 home-v: generate-home-config
   @echo 正在应用系统配置
-  {{guix}} home reconfigure {{homecfg}} --allow-downgrades
+  {{guix}} home reconfigure {{homecfg}} --allow-downgrades --fallback
   @rm -rf ./tmp
 
 # 更新lock file
@@ -77,7 +77,7 @@ upgrade:
 
 # 拉取channel
 pull:
-  {{guix}} pull --allow-downgrades
+  {{guix}} pull --allow-downgrades --fallback
 
 # 清除额外的配置 (慎用，用了就没办法回滚)
 clean:
