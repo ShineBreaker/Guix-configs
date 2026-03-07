@@ -183,6 +183,7 @@ window-rule {
     match app-id="Code"
     match app-id="codium"
     match app-id="dev.zed.Zed"
+    match app-id="emacs"
     match app-id="jetbrains-pycharm"
 
     open-on-workspace "Code"

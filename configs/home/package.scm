@@ -58,7 +58,7 @@
           ;; Development
           "ccls"
           "clang"
-          "emacs-pgtk"
+
           "gradle"
           "helix"
           "maven"
