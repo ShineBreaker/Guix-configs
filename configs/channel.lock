@@ -1,9 +1,20 @@
 (list (channel
+        (name 'guix)
+        (url "https://git.guix.gnu.org/guix.git")
+        (branch "master")
+        (commit
+          "2bdda1ea9ad34ddda8e40e69da483d033d405cb1")
+        (introduction
+          (make-channel-introduction
+            "9edb3f66fd807b096b48283debdcddccfea34bad"
+            (openpgp-fingerprint
+              "BBB0 2DDF 2CEA F6A8 0D1D  E643 A2A0 6DF2 A33A 54FA"))))
+      (channel
         (name 'emacs)
         (url "https://github.com/garrgravarr/guix-emacs")
         (branch "master")
         (commit
-          "833d25486ef4bbcdde98943940e7c82e667bea19")
+          "3691f2edfcb062eef2885e83a33fcc3008b4382a")
         (introduction
           (make-channel-introduction
             "d676ef5f94d2c1bd32f11f084d47dcb1a180fdd4"
@@ -14,7 +25,7 @@
         (url "https://codeberg.org/BrokenShine/jeans.git")
         (branch "main")
         (commit
-          "597cca09f7edbde9b7e95272015df821d245c3e8")
+          "610970efe876b39f7e6347ffd103995fe79cc1f2")
         (introduction
           (make-channel-introduction
             "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -63,15 +74,4 @@
           (make-channel-introduction
             "5d1270d51c64457d61cd46ec96e5599176f315a4"
             (openpgp-fingerprint
-              "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162"))))
-      (channel
-        (name 'guix)
-        (url "https://git.guix.gnu.org/guix.git")
-        (branch "master")
-        (commit
-          "2bdda1ea9ad34ddda8e40e69da483d033d405cb1")
-        (introduction
-          (make-channel-introduction
-            "9edb3f66fd807b096b48283debdcddccfea34bad"
-            (openpgp-fingerprint
-              "BBB0 2DDF 2CEA F6A8 0D1D  E643 A2A0 6DF2 A33A 54FA")))))
+              "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162")))))
