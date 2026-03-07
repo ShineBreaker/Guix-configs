@@ -52,7 +52,7 @@
             "chat_completions": true
           }
         }, {
-          "name": "minimax-m2.5",
+          "name": "MiniMax-M2.5",
           "max_tokens": 256000,
           "max_output_tokens": 65536,
           "max_completion_tokens": 256000,
@@ -132,6 +132,7 @@
     "catppuccin-icons": true,
     "colorizer": true,
     "csharp": true,
+    "elisp": true,
     "fish": true,
     "git-firefly": true,
     "html": true,
