@@ -107,4 +107,14 @@
                                                                       (getenv
                                                                        "HOME")
                                                                       "/.var/log/xdg-desktop-portal-gtk.log")))
-                                                (respawn? #t))))))
+                                                (respawn? #t))))
+
+        (simple-service 'auto-update home-shepherd-service-type
+                        (list (shepherd-timer '(flatpak-update)
+                                              #~(calendar-event
+                                                  #:hours '(18)
+                                                  #:minutes '(0))
+                                              #~("/run/current-system/profile/bin/flatpak"
+                                                 "upgrade"
+                                                 "-y")
+                                              #:requirement '(dbus))))))
