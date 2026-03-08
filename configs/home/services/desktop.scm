@@ -14,6 +14,8 @@
              (gnu home services syncthing)
              (gnu home services guix)
 
+             (jeans packages hardware)
+
              (rosenthal services desktop))
 
 (use-package-modules fcitx5
@@ -47,6 +49,18 @@
                                                                       (getenv
                                                                        "HOME")
                                                                       "/.var/log/kdeconnectd.log")))
+                                                (respawn? #t))
+
+                              (shepherd-service (provision '(otd-daemon))
+                                                (requirement '(dbus))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   opentabletdriver-bin
+                                                                   "/bin/otd-daemon"))
+                                                          #:log-file (string-append
+                                                                      (getenv
+                                                                       "HOME")
+                                                                      "/.var/log/otd-daemon.log")))
                                                 (respawn? #t))
 
                               (shepherd-service (provision '(polkit-gnome))
