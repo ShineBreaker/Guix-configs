@@ -23,7 +23,7 @@
           "xsel"
 
           ;; Communication
-          ; "kdeconnect"
+          "kdeconnect"
           "telegram-desktop"
           "tailscale"
 
