@@ -6,6 +6,10 @@
 
 (define guix-channels
   (append (list (channel
+                  (inherit (car %default-channels))
+                  (branch "master"))
+
+                (channel
                   (name 'jeans)
                   (branch "main")
                   (url "https://codeberg.org/BrokenShine/jeans.git")
@@ -49,10 +53,7 @@
                    (make-channel-introduction
                     "5d1270d51c64457d61cd46ec96e5599176f315a4"
                     (openpgp-fingerprint
-                     "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162"))))
-                (channel
-                  (inherit (car %default-channels))
-                  (branch "master")))
+                     "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162")))))
 
           %default-channels))
 
