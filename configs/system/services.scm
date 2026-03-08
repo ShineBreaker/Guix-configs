@@ -8,6 +8,7 @@
              (guix channels)
 
              (jeans packages games)
+             (jeans packages hardware)
 
              (px services audio)
 
