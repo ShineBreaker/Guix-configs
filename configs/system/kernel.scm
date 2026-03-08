@@ -15,7 +15,7 @@
   (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
 
 (define %kernel-config
-  linux-6.18)
+  linux-6.19)
 
 (define %kernel-arguments-config
   (cons* "kernel.sysrq=1"
