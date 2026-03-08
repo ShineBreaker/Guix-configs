@@ -63,18 +63,14 @@
                           ("PATH" unquote
                            (string-append "$HOME/.local/bin:"
                                           "$HOME/.nix-profile/bin:"
-                                          "/run/privileged/bin:"
-                                          "/run/current-system/profile/bin:"
-                                          "/run/current-system/profile/sbin:"
-                                          "$HOME/.guix-home/profile/bin:"
-                                          "$HOME/.guix-home/profile/sbin:"
-                                          "$XDG_CONFIG_HOME/guix/current/bin"))
+                                          (or (getenv "PATH") "")))
                           ("QT_PLUGIN_PATH" unquote
                            (string-append
                             "/run/current-system/profile/lib/qt5/plugins:"
                             "/run/current-system/profile/lib/qt6/plugins:"
                             "$HOME/.guix-home/profile/lib/qt5/plugins:"
                             "$HOME/.guix-home/profile/lib/qt6/plugins"))
+
                           ("CHROMIUM_FLAGS" unquote
                            (string-append
                             "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
