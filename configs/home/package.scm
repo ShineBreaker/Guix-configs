@@ -23,7 +23,7 @@
           "xsel"
 
           ;; Communication
-          "kdeconnect"
+          ; "kdeconnect"
           "telegram-desktop"
           "tailscale"
 
@@ -47,6 +47,7 @@
           "amule"
           "btop"
           "freerdp@3"
+          "opentabletdriver-bin"
           "winapps"
 
           ;; Themes & Appearance
@@ -58,7 +59,7 @@
           ;; Development
           "ccls"
           "clang"
-
+          "codex"
           "gradle"
           "helix"
           "maven"
@@ -78,7 +79,6 @@
           "zed"
 
           ;; Qt Framework
+          "pinentry-qt"
           "qt5ct"
-          "qt6ct"
-          "qtmultimedia"
-          "qtsvg")))
+          "qt6ct")))

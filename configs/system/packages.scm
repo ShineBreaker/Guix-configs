@@ -10,6 +10,7 @@
            "dialog"
            "iproute2"
            "iptables-nft"
+           "pinentry"
            "rtkit"
            "strace"
 
@@ -50,8 +51,6 @@
            "libgnome-keyring"
            "libnotify"
            "libsecret"
-           "pinentry"
-           "pinentry-qt"
            "polkit-gnome"
 
            ;; File Management
@@ -79,13 +78,12 @@
            "font-sarasa-gothic"
 
            ;; Terminal & Shell
-           "distrobox"
            "fastfetch"
            "fish"
            "foot"
 
            ;; Virtualization & Containers
-           "crun"
+           "distrobox"
            "libvirt"
            "podman"
            "podman-compose"
