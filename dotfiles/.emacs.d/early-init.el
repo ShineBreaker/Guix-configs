@@ -19,5 +19,15 @@
 (setq frame-inhibit-implied-resize t
       inhibit-compacting-font-caches t)
 
+;; 启动防闪屏：
+;; 在主题真正加载前，先给初始 frame 一个深色兜底，避免出现白底闪烁。
+;; 颜色与 noctalia 主题默认背景/前景保持一致。
+(setq frame-background-mode 'dark)
+(dolist (entry '((background-color . "#151313")
+                 (foreground-color . "#e8e1e1")
+                 (background-mode . dark)))
+  (add-to-list 'default-frame-alist entry)
+  (add-to-list 'initial-frame-alist entry))
+
 (provide 'early-init)
 ;;; early-init.el ends here

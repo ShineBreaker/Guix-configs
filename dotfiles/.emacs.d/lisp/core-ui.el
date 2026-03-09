@@ -55,9 +55,22 @@
 (setq-default cursor-type 'bar)
 (global-hl-line-mode 1)
 
-;; 视觉分隔更接近 Zed pane 边界。
-(setq window-divider-default-right-width 2
-      window-divider-default-bottom-width 1)
+;; 显式固定字体大小，避免系统更新后默认字号变化。
+;; Emacs 的高度单位是 1/10 pt：140=14pt，150=15pt。
+(defcustom my/default-font-height 110
+  "默认字体大小（1/10 pt）。"
+  :type 'integer
+  :group 'faces)
+
+(defun my/apply-default-font-size ()
+  "应用统一字体大小。"
+  (set-face-attribute 'default nil :height my/default-font-height))
+
+(my/apply-default-font-size)
+
+;; 分割线弱化：更细、更接近背景色，减少视觉干扰。
+(setq window-divider-default-right-width 1
+      window-divider-default-bottom-width 0)
 (window-divider-mode 1)
 
 ;; 不强制设定字体大小，回退到系统/原始 Emacs 字号。
@@ -65,6 +78,20 @@
 ;; 主题加载。
 (add-to-list 'custom-theme-load-path (expand-file-name "themes" user-emacs-directory))
 (load-theme 'noctalia t)
+
+(defun my/apply-subtle-window-dividers ()
+  "降低分割线存在感，但保持可见。"
+  (when (facep 'window-divider)
+    (let* ((shadow (or (face-foreground 'shadow nil t)
+                       (face-foreground 'mode-line-inactive nil t)
+                       (face-foreground 'default nil t)))
+           (bg (face-background 'default nil t)))
+      (set-face-attribute 'window-divider nil :foreground shadow :background bg)
+      (set-face-attribute 'window-divider-first-pixel nil :foreground shadow :background bg)
+      (set-face-attribute 'window-divider-last-pixel nil :foreground shadow :background bg))))
+
+(my/apply-subtle-window-dividers)
+(add-hook 'after-load-theme-hook #'my/apply-subtle-window-dividers)
 
 ;; 更现代、信息清晰的 mode-line。
 (use-package doom-modeline

@@ -7,13 +7,15 @@
 (defvar evil-want-integration)
 (defvar evil-undo-system)
 (defvar evil-want-C-u-scroll)
+(declare-function evil-emacs-state "evil")
+(declare-function evil-normal-state "evil")
 
 (defgroup my/keymap nil
   "个人按键与编辑模式。"
   :group 'convenience)
 
-(defcustom my/enable-vim-mode nil
-  "是否启用 Evil（复刻 zed.json 的 `vim_mode: false`，默认关闭）。"
+(defcustom my/enable-vim-mode t
+  "是否启用 Evil（默认开启，提供 Vim/Emacs 双编辑状态切换）。"
   :type 'boolean
   :group 'my/keymap)
 
@@ -27,7 +29,11 @@
   :if my/enable-vim-mode
   :demand t
   :config
-  (evil-mode 1))
+  (evil-mode 1)
+  ;; Vim/Emacs 双状态切换：
+  ;; C-c v e -> Emacs 编辑状态，C-c v v -> Vim 普通状态。
+  (global-set-key (kbd "C-c v e") #'evil-emacs-state)
+  (global-set-key (kbd "C-c v v") #'evil-normal-state))
 
 (use-package evil-collection
   :if my/enable-vim-mode
@@ -47,10 +53,21 @@
          ([remap describe-variable] . helpful-variable)
          ([remap describe-key]      . helpful-key)))
 
+(defun my/copy-dwim ()
+  "智能复制：有选区复制选区，无选区复制当前行。"
+  (interactive)
+  (if (use-region-p)
+      (kill-ring-save (region-beginning) (region-end))
+    (kill-ring-save (line-beginning-position)
+                    (line-beginning-position 2))
+    (message "已复制当前行")))
+
 ;; 贴近 VSCode 的常用快捷键习惯。
 (global-set-key (kbd "C-p") #'project-find-file)
 (global-set-key (kbd "C-S-f") #'consult-ripgrep)
 (global-set-key (kbd "C-S-b") #'consult-buffer)
+(global-set-key (kbd "C-S-c") #'my/copy-dwim)
+(global-set-key (kbd "C-S-v") #'yank)
 
 (provide 'core-keybindings)
 ;;; core-keybindings.el ends here
