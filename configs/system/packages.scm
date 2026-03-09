@@ -78,7 +78,7 @@
            "font-sarasa-gothic"
 
            ;; Terminal & Shell
-           "fastfetch"
+           "fastfetch-minimal"
            "fish"
            "foot"
 
