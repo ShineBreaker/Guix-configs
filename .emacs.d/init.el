@@ -23,7 +23,6 @@
 (require 'core-completion)
 (require 'core-editing)
 (require 'core-dev)
-(require 'core-ai)
 (require 'core-workspace)
 
 (message "[init] 配置加载完成，用时 %.2fs，GC 次数 %d"

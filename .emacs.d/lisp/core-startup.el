@@ -8,10 +8,6 @@
 (require 'use-package)
 (require 'recentf)
 (require 'desktop)
-
-;; 优先加载较新的 .el 源文件，避免旧 .elc 造成配置行为与源码不一致。
-(setq load-prefer-newer t)
-
 (setq use-package-always-ensure nil) ; 只使用 Guix 提供的包
 
 ;; 启动结束后恢复更平衡的 GC 策略。
