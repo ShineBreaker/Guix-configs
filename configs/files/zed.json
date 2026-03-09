@@ -346,7 +346,7 @@
   },
   "terminal": {
     "env": {
-      "EDITOR": "zeditor --wait"
+      "EDITOR": "zed-editor --wait"
     },
     "shell": "system"
   },
