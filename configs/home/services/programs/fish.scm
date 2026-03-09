@@ -49,7 +49,7 @@
                                                          (local-file
                                                           "../configs/files/config.fish")
                                                          (specs->pkgs
-                                                          "fastfetch"
+                                                          "fastfetch-minimal"
                                                           "fzf"
                                                           "lolcat"
                                                           "zoxide"))))))))
