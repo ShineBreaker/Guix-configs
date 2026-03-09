@@ -46,13 +46,13 @@ rebuild: system home
 rebuild-v: system-v home-v
 
 # 应用系统配置
-system: pull generate-system-config
+system: generate-system-config
   @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades --fallback > /dev/null
   @rm -rf ./tmp
 
 # 应用系统配置 (详细显示日志)
-system-v: pull generate-system-config
+system-v: generate-system-config
   @echo 正在应用系统配置
   sudo {{guix}} system reconfigure {{syscfg}} --allow-downgrades --fallback
   @rm -rf ./tmp
