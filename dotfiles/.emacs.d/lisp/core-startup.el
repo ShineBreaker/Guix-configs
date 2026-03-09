@@ -24,7 +24,8 @@
 (setq inhibit-startup-screen t
       initial-scratch-message nil
       ring-bell-function 'ignore
-      confirm-kill-emacs nil)
+      confirm-kill-emacs nil
+      confirm-kill-processes nil)
 
 ;; 统一缓存与杂项文件目录。
 (use-package no-littering
@@ -52,6 +53,7 @@
 ;; 复刻 `restore_on_startup: last_session`。
 (desktop-save-mode 1)
 (setq desktop-restore-eager 5)
+(setq desktop-save nil)
 
 (provide 'core-startup)
 ;;; core-startup.el ends here
