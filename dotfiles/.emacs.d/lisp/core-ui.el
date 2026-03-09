@@ -9,8 +9,41 @@
 (when (fboundp 'tool-bar-mode) (tool-bar-mode -1))
 (when (fboundp 'scroll-bar-mode) (scroll-bar-mode -1))
 
-(global-display-line-numbers-mode 1)
 (setq display-line-numbers-type 'relative)
+
+;; 行号策略：
+;; 1) 全局开启，保证编辑区稳定显示
+;; 2) 在终端/文件树/仪表盘等辅助窗口豁免
+(setq display-line-numbers-exempt-modes
+      '(vterm-mode
+        term-mode
+        eshell-mode
+        treemacs-mode
+        dashboard-mode
+        shell-mode))
+(global-display-line-numbers-mode 1)
+
+(defun my/line-number-exempt-buffer-p ()
+  "判断当前 buffer 是否应该关闭行号。"
+  (or (minibufferp)
+      (derived-mode-p 'vterm-mode
+                      'term-mode
+                      'eshell-mode
+                      'shell-mode
+                      'treemacs-mode
+                      'dashboard-mode
+                      'special-mode)))
+
+(defun my/refresh-line-number-state ()
+  "根据当前 buffer 类型强制刷新行号状态。"
+  (if (my/line-number-exempt-buffer-p)
+      (display-line-numbers-mode -1)
+    (when (or buffer-file-name
+              (derived-mode-p 'prog-mode 'text-mode))
+      (display-line-numbers-mode 1))))
+
+;; 在 major-mode 变化后兜底刷新，避免被 minor mode（如你看到的 wk）覆盖。
+(add-hook 'after-change-major-mode-hook #'my/refresh-line-number-state)
 (tab-bar-mode 1)
 (setq tab-bar-show 1)
 
@@ -27,11 +60,7 @@
       window-divider-default-bottom-width 1)
 (window-divider-mode 1)
 
-;; GUI 下尽量贴近 zed.json 的字号设置。
-(when (display-graphic-p)
-  (set-face-attribute 'default nil :height 140 :weight 'normal)
-  (set-face-attribute 'mode-line nil :height 150 :weight 'medium)
-  (set-face-attribute 'mode-line-inactive nil :height 150 :weight 'medium))
+;; 不强制设定字体大小，回退到系统/原始 Emacs 字号。
 
 ;; 主题加载。
 (add-to-list 'custom-theme-load-path (expand-file-name "themes" user-emacs-directory))

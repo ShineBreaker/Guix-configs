@@ -38,9 +38,25 @@
 
 ;; 近似 Zed sticky scroll：显示当前函数头。
 (use-package stickyfunc-enhance
-  :hook (prog-mode . semantic-stickyfunc-mode)
+  :hook (prog-mode . my/enable-stickyfunc-safely)
   :config
   (semantic-mode 1))
+
+(defun my/stickyfunc-supported-mode-p ()
+  "只在语义解析稳定的语言中启用 stickyfunc。"
+  (derived-mode-p 'c-mode 'c-ts-mode
+                  'c++-mode 'c++-ts-mode
+                  'java-mode 'java-ts-mode
+                  'python-mode 'python-ts-mode
+                  'rust-mode 'rust-ts-mode
+                  'emacs-lisp-mode))
+
+(defun my/enable-stickyfunc-safely ()
+  "安全启用 stickyfunc；不支持或出错时静默跳过。"
+  (when (and (my/stickyfunc-supported-mode-p)
+             (fboundp 'semantic-stickyfunc-mode))
+    (ignore-errors
+      (semantic-stickyfunc-mode 1))))
 
 (provide 'core-editing)
 ;;; core-editing.el ends here
