@@ -1,66 +1,60 @@
 (list (channel
-        (name 'jeans)
-        (url "https://codeberg.org/BrokenShine/jeans.git")
-        (branch "main")
-        (commit
-          "610970efe876b39f7e6347ffd103995fe79cc1f2")
-        (introduction
-          (make-channel-introduction
-            "1e30ccbcaef375169d453d89d8186137bc32d9e8"
-            (openpgp-fingerprint
-              "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
+       (name 'guix)
+       (url "https://git.guix.gnu.org/guix.git")
+       (branch "master")
+       (commit "f04dc9234c58b064507bb46ab1797f95f09b543e")
+       (introduction
+        (make-channel-introduction
+         "9edb3f66fd807b096b48283debdcddccfea34bad"
+         (openpgp-fingerprint
+          "BBB0 2DDF 2CEA F6A8 0D1D  E643 A2A0 6DF2 A33A 54FA"))))
       (channel
-        (name 'nonguix)
-        (url "https://gitlab.com/nonguix/nonguix")
-        (branch "master")
-        (commit
-          "816b5c6f45ed56cd81e2a6338ed5b710e4e66e98")
-        (introduction
-          (make-channel-introduction
-            "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
-            (openpgp-fingerprint
-              "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
+       (name 'jeans)
+       (url "https://codeberg.org/BrokenShine/jeans.git")
+       (branch "main")
+       (commit "689e4fd17f2e8aeb2e3a596521740b0d31a59d42")
+       (introduction
+        (make-channel-introduction
+         "1e30ccbcaef375169d453d89d8186137bc32d9e8"
+         (openpgp-fingerprint
+          "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
       (channel
-        (name 'panther)
-        (url "https://codeberg.org/gofranz/panther")
-        (branch "master")
-        (commit
-          "7e01d7fd21e20f04acbb05c51fbe8b365e70eebd")
-        (introduction
-          (make-channel-introduction
-            "54b4056ac571611892c743b65f4c47dc298c49da"
-            (openpgp-fingerprint
-              "A36A D41E ECC7 A871 1003  5D24 524F EB1A 9D33 C9CB"))))
+       (name 'nonguix)
+       (url "https://gitlab.com/nonguix/nonguix")
+       (branch "master")
+       (commit "45bda95c22845cba67ffe63b4e61202fa122aaf5")
+       (introduction
+        (make-channel-introduction
+         "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
+         (openpgp-fingerprint
+          "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
       (channel
-        (name 'rosenthal)
-        (url "https://codeberg.org/hako/rosenthal.git")
-        (branch "trunk")
-        (commit
-          "6f64117e144d1e3ddb98ae01b913ecaf5efd1fa4")
-        (introduction
-          (make-channel-introduction
-            "7677db76330121a901604dfbad19077893865f35"
-            (openpgp-fingerprint
-              "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
+       (name 'panther)
+       (url "https://codeberg.org/gofranz/panther")
+       (branch "master")
+       (commit "0a9705def6dcc070ea142403bf836d90a0b8e6f9")
+       (introduction
+        (make-channel-introduction
+         "54b4056ac571611892c743b65f4c47dc298c49da"
+         (openpgp-fingerprint
+          "A36A D41E ECC7 A871 1003  5D24 524F EB1A 9D33 C9CB"))))
       (channel
-        (name 'selected-guix-works)
-        (url "https://github.com/gs-101/selected-guix-works.git")
-        (branch "main")
-        (commit
-          "4cf9e6459472974ceed098364683bb08073f53ea")
-        (introduction
-          (make-channel-introduction
-            "5d1270d51c64457d61cd46ec96e5599176f315a4"
-            (openpgp-fingerprint
-              "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162"))))
+       (name 'rosenthal)
+       (url "https://codeberg.org/hako/rosenthal.git")
+       (branch "trunk")
+       (commit "ca9a350d787695c54a277044c785b1fe84911408")
+       (introduction
+        (make-channel-introduction
+         "7677db76330121a901604dfbad19077893865f35"
+         (openpgp-fingerprint
+          "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
       (channel
-        (name 'guix)
-        (url "https://git.guix.gnu.org/guix.git")
-        (branch "master")
-        (commit
-          "08ca724ee355daff0e9572d32a78d1e6bba5f26e")
-        (introduction
-          (make-channel-introduction
-            "9edb3f66fd807b096b48283debdcddccfea34bad"
-            (openpgp-fingerprint
-              "BBB0 2DDF 2CEA F6A8 0D1D  E643 A2A0 6DF2 A33A 54FA")))))
+       (name 'selected-guix-works)
+       (url "https://github.com/gs-101/selected-guix-works.git")
+       (branch "main")
+       (commit "4cf9e6459472974ceed098364683bb08073f53ea")
+       (introduction
+        (make-channel-introduction
+         "5d1270d51c64457d61cd46ec96e5599176f315a4"
+         (openpgp-fingerprint
+          "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162")))))
