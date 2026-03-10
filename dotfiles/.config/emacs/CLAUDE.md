@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0
+-->
+
 # CLAUDE.md
 
 本文件为 Claude Code (claude.ai/code) 提供在此仓库中工作的指导。

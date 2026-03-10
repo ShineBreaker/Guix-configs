@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; early-init.el --- Emacs early init for Guix -*- lexical-binding: t; -*-
 ;;; Commentary:
 ;; 在 GUI 初始化之前尽早执行：加速启动、减少闪屏、避免 package.el 介入。

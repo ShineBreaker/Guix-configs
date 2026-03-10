@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; appearance.el --- 界面外观配置 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

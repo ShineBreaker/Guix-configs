@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 (define %emacs-packages-list
   (cons* (specs->pkgs+out
           ;; --- Emacs 核心与 Lisp ---

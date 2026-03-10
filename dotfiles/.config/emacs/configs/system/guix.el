@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; guix.el --- Guix 特定集成 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

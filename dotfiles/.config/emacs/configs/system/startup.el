@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; startup.el --- 启动与持久化 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

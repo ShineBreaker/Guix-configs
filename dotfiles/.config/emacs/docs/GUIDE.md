@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0
+-->
+
 # Emacs 配置使用指南
 
 本文档介绍新增工具的使用方法。

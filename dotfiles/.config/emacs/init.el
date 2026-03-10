@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; init.el --- Emacs 主入口（Guix 版） -*- lexical-binding: t; -*-
 
 ;;; Commentary:

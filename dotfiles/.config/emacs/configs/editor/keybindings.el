@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; keybindings.el --- 键位绑定与 Evil 模式 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

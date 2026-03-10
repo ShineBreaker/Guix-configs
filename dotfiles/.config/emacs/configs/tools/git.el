@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; git.el --- Git 版本控制 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

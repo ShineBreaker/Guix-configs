@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; autoloads.el --- 自动加载定义 -*- lexical-binding: t; -*-
 
 ;;; Commentary:
