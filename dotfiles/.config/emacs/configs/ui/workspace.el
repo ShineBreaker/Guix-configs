@@ -331,11 +331,20 @@
        (or (and (fboundp 'projectile-project-p) (projectile-project-p))
            (vc-backend (buffer-file-name)))))
 
+;; 跟踪当前项目
+(defvar my/current-project nil
+  "当前项目的根目录，用于检测项目切换。")
+
 ;; 打开项目文件时自动应用布局
 (defun my/auto-layout-on-file-open ()
-  "打开文件时，如果是项目文件则自动应用布局。"
+  "打开文件时，如果切换到了新项目则自动应用布局。"
   (when (my/should-auto-layout-p)
-    (run-with-idle-timer 0.1 nil #'my/vscode-layout)))
+    (let ((project-root (and (fboundp 'projectile-project-root)
+                             (projectile-project-root))))
+      (when (and project-root
+                 (not (equal project-root my/current-project)))
+        (setq my/current-project project-root)
+        (run-with-idle-timer 0.1 nil #'my/vscode-layout)))))
 
 ;; 快捷键绑定
 (global-set-key (kbd "<f5>") #'my/vscode-layout)
