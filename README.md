@@ -4,12 +4,6 @@ SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 SPDX-License-Identifier: GPL-3.0
 -->
 
-<! --
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail. com>
-
-SPDX-License-Identifier: GPL-3. 0
--->
-
 ```
 ▗▄▄▖  ▄▄▄ ▄▄▄  █  ▄ ▗▞▀▚▖▄▄▄▄   ▗▄▄▖▐▌   ▄ ▄▄▄▄  ▗▞▀▚▖  ▄   ▄▄▄
 ▐▌ ▐▌█   █   █ █▄▀  ▐▛▀▀▘█   █ ▐▌   ▐▌   ▄ █   █ ▐▛▀▀▘     ▀▄▄
@@ -57,6 +51,7 @@ Available recipes:
     pull                   # 拉取channel
     rebuild                # 应用全局配置
     rebuild-v              # 应用全局配置 (详细显示日志)
+    reuse                  # 生成版权信息头
     style *args            # 格式化代码
     style-all              # 格式化所有代码
     system                 # 应用系统配置
