@@ -70,9 +70,6 @@
           "emacs-notmuch"                 ; 邮件客户端
           "emacs-calfw"                   ; 日历框架
 
-          ;; --- 文件管理增强 ---
-          "emacs-dired-sidebar"           ; Dired 侧边栏
-
           ;; --- 环境与工具 ---
           "emacs-no-littering"            ; 保持 Emacs 目录整洁
 
