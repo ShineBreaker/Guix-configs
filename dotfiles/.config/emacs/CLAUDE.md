@@ -32,7 +32,6 @@
 │   ├── coding/         # LSP、语言特定配置
 │   ├── tools/          # Git、项目、终端、AI、邮件、日历
 │   └── Documents/Org//            # Org Mode 和 Org-roam
-├── themes/             # 自定义主题
 ├── docs/               # 用户文档
 └── var/                # 运行时数据（自动生成）
 ```
