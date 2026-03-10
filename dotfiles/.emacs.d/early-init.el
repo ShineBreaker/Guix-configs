@@ -21,11 +21,11 @@
 
 ;; 启动防闪屏：
 ;; 在主题真正加载前，先给初始 frame 一个深色兜底，避免出现白底闪烁。
-;; 颜色与 noctalia 主题默认背景/前景保持一致。
+;; 使用通用深色背景，适配动态主题。
 (setq frame-background-mode 'dark)
-(dolist (entry '((background-color . "#151313")
-                 (foreground-color . "#e8e1e1")
-                 (background-mode . dark)))
+(dolist (entry '((background-mode . dark)
+                 (background-color . "#0a0a0a")
+                 (foreground-color . "#d0d0d0")))
   (add-to-list 'default-frame-alist entry)
   (add-to-list 'initial-frame-alist entry))
 
