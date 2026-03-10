@@ -15,6 +15,7 @@
 (load "../home/services/programs/fish.scm")
 
 (load "../home/services/font.scm")
+(load "../home/services/trash.scm")
 
 (define %home-config
   (home-environment
@@ -29,6 +30,7 @@
              ; %emacs-services
              %fish-services
              %font-services
+             %trash-services
              %rosenthal-desktop-home-services))))
 
 %home-config
