@@ -25,96 +25,258 @@
   :config
   (treemacs-load-theme "nerd-icons"))
 
-;; 帮助页面模式
-(define-derived-mode my/workspace-help-mode special-mode "Workspace-Help"
-  "中间编辑区启动帮助模式。")
-
-;; 居中显示帮助页面
-(defun my/workspace-center-help-window (&optional window)
-  "将帮助页在 WINDOW 中居中显示。"
-  (let ((win (or window (selected-window))))
-    (when (and (window-live-p win)
-               (buffer-live-p (window-buffer win)))
-      (with-current-buffer (window-buffer win)
-        (when (derived-mode-p 'my/workspace-help-mode)
-          (let* ((content-width
-                  (max 1
-                       (save-excursion
-                         (goto-char (point-min))
-                         (let ((mx 1))
-                           (while (not (eobp))
-                             (setq mx (max mx (string-width
-                                               (buffer-substring-no-properties
-                                                (line-beginning-position)
-                                                (line-end-position)))))
-                             (forward-line 1))
-                           mx))))
-                 (win-width (window-body-width win))
-                 (spare (max 0 (- win-width content-width)))
-                 (left (/ spare 2))
-                 (right (- spare left)))
-            (set-window-margins win left right)))))))
-
-;; 打开帮助缓冲区
-(defun my/workspace-open-help-buffer (&optional window)
-  "在 WINDOW 打开简短帮助文档。"
-  (let ((buf (get-buffer-create "*Workspace-Help*")))
+;; 快捷键帮助
+(defun my/show-shortcuts-help ()
+  "显示完整的快捷键帮助。"
+  (interactive)
+  (let ((buf (get-buffer-create "*Shortcuts Help*")))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
         (erase-buffer)
-        (my/workspace-help-mode)
-        (insert "\n\n")
+        (special-mode)
+        (insert "\n")
+        (insert (propertize "快捷键完整参考\n\n" 'face '(:height 1.5 :weight bold)))
         (cl-labels
             ((section (title)
-               (insert (propertize title 'face '(:weight bold :foreground "#7aa2f7")))
+               (insert (propertize title 'face '(:weight bold :foreground "#7aa2f7" :height 1.2)))
+               (insert "\n\n"))
+             (subsection (title)
+               (insert (propertize title 'face '(:weight bold :foreground "#bb9af7")))
                (insert "\n"))
              (row (key desc)
-               (insert (format "  %-14s %s\n" key desc))))
-          (section "文件与搜索")
+               (insert (format "  %-18s %s\n"
+                              (propertize key 'face 'font-lock-keyword-face)
+                              desc))))
+
+          ;; 基础操作
+          (section "═══ 基础操作 ═══")
+          (subsection "文件操作")
           (row "C-x C-f" "打开文件")
-          (row "C-p" "项目内快速找文件")
-          (row "C-S-f" "全文搜索 (ripgrep)")
-          (row "C-S-b" "切换缓冲区")
-          (row "C-s" "当前文件内搜索")
-          (insert "\n")
-          (section "编辑与控制")
           (row "C-x C-s" "保存当前文件")
-          (row "C-S-c" "复制（选区/当前行）")
+          (row "C-x C-w" "另存为")
+          (row "C-x s" "保存所有文件")
+          (row "C-x C-c" "退出 Emacs")
+          (insert "\n")
+
+          (subsection "缓冲区管理")
+          (row "C-x b" "切换缓冲区")
+          (row "C-S-b" "快速切换缓冲区（增强）")
+          (row "C-x k" "关闭当前缓冲区")
+          (row "C-x C-b" "列出所有缓冲区")
+          (row "C-x <left/right>" "切换到上/下一个缓冲区")
+          (insert "\n")
+
+          (subsection "窗口管理")
+          (row "C-x 0" "关闭当前窗口")
+          (row "C-x 1" "只保留当前窗口")
+          (row "C-x 2" "水平分割窗口")
+          (row "C-x 3" "垂直分割窗口")
+          (row "C-x o" "切换到下一个窗口")
+          (row "C-w h/j/k/l" "切换到 左/下/上/右 窗口（Vim 风格）")
+          (insert "\n")
+
+          ;; 编辑操作
+          (section "═══ 编辑操作 ═══")
+          (subsection "复制粘贴")
+          (row "C-S-c" "复制（选区或当前行）")
+          (row "C-S-x" "剪切（选区或当前行）")
           (row "C-S-v" "粘贴")
-          (row "M-y" "粘贴历史")
-          (row "C-." "上下文操作菜单")
-          (row "C-g" "取消当前命令")
+          (row "M-y" "粘贴历史（在粘贴后使用）")
+          (row "C-w" "剪切选区（Emacs 原生）")
+          (row "M-w" "复制选区（Emacs 原生）")
+          (row "C-y" "粘贴（Emacs 原生）")
           (insert "\n")
-          (section "窗口切换")
-          (row "C-w h/j/k/l" "切换到 左/下/上/右 窗口")
-          (row "C-x o" "循环切换窗口")
-          (row "C-c t" "打开/聚焦 Treemacs")
+
+          (subsection "撤销重做")
+          (row "C-/" "撤销")
+          (row "C-?" "重做")
+          (row "C-x u" "撤销（另一种方式）")
           (insert "\n")
-          (section "工作区布局")
-          (row "<f5>" "重建 VS Code 风格布局")
+
+          (subsection "选择与标记")
+          (row "C-SPC" "设置标记（开始选择）")
+          (row "C-x h" "全选")
+          (row "M-h" "选择当前段落")
+          (row "C-M-h" "选择当前函数")
           (insert "\n")
-          (section "Git 操作")
+
+          (subsection "删除操作")
+          (row "C-d" "删除光标后的字符")
+          (row "DEL" "删除光标前的字符")
+          (row "M-d" "删除光标后的单词")
+          (row "M-DEL" "删除光标前的单词")
+          (row "C-k" "删除到行尾")
+          (row "C-S-k" "删除整行")
+          (insert "\n")
+
+          ;; 搜索与导航
+          (section "═══ 搜索与导航 ═══")
+          (subsection "文件内搜索")
+          (row "C-s" "向前搜索")
+          (row "C-r" "向后搜索")
+          (row "M-%" "查找替换")
+          (row "C-M-s" "正则表达式搜索")
+          (insert "\n")
+
+          (subsection "项目搜索")
+          (row "C-p" "项目内快速找文件")
+          (row "C-S-f" "全文搜索（ripgrep）")
+          (row "C-c p s s" "项目内搜索")
+          (row "C-c p f" "项目内查找文件")
+          (insert "\n")
+
+          (subsection "光标移动")
+          (row "C-f/b" "前进/后退一个字符")
+          (row "M-f/b" "前进/后退一个单词")
+          (row "C-n/p" "下一行/上一行")
+          (row "C-a/e" "行首/行尾")
+          (row "M-a/e" "句首/句尾")
+          (row "M-{/}" "段首/段尾")
+          (row "C-v/M-v" "向下/向上翻页")
+          (row "M-</>" "文件开头/结尾")
+          (row "M-g g" "跳转到指定行")
+          (insert "\n")
+
+          ;; 项目管理
+          (section "═══ 项目管理 ═══")
+          (subsection "Projectile")
+          (row "C-c p p" "切换项目")
+          (row "C-c p f" "项目内查找文件")
+          (row "C-c p s s" "项目内搜索")
+          (row "C-c p k" "关闭项目所有缓冲区")
+          (row "C-c p d" "打开项目根目录")
+          (insert "\n")
+
+          (subsection "文件树")
+          (row "C-c t" "打开/关闭 Treemacs")
+          (row "?" "Treemacs 帮助（在 Treemacs 中）")
+          (insert "\n")
+
+          ;; Git 操作
+          (section "═══ Git 操作 ═══")
+          (subsection "Magit")
+          (row "C-x g" "打开 Magit 状态")
           (row "C-c g b" "显示当前行 Git blame")
           (insert "\n")
-          (section "AI 工作流")
+
+          (subsection "Magit 状态页操作")
+          (row "s" "暂存文件/区块")
+          (row "u" "取消暂存")
+          (row "c c" "提交")
+          (row "P p" "推送到远程")
+          (row "F p" "从远程拉取")
+          (row "b b" "切换分支")
+          (row "b c" "创建新分支")
+          (row "l l" "查看日志")
+          (row "d d" "查看差异")
+          (row "q" "退出 Magit")
+          (insert "\n")
+
+          ;; AI 工具
+          (section "═══ AI 工具 ═══")
+          (subsection "Ellama AI 助手")
           (row "C-c a c" "开始 AI 对话")
-          (row "C-c a q" "询问选区代码")
+          (row "C-c a q" "询问选中的代码")
           (row "C-c a e" "让 AI 改写代码")
           (row "C-c a i" "让 AI 补写代码")
+          (row "C-c a a" "让 AI 添加代码")
+          (row "C-c a s" "总结选中的内容")
           (insert "\n")
-          (section "模式切换")
-          (row "C-c v v" "切换到 Vim 模式")
-          (row "C-c v e" "切换到 Emacs 模式"))
-        (insert "\n\n")
-        (insert "按 ")
-        (insert (propertize "C-x C-f" 'face '(:weight bold)))
-        (insert " 立即开始编辑。\n")
+
+          ;; LSP 与代码
+          (section "═══ 代码编辑 ═══")
+          (subsection "LSP 功能")
+          (row "M-." "跳转到定义")
+          (row "M-," "返回")
+          (row "M-?" "查找引用")
+          (row "C-." "代码操作菜单")
+          (row "C-c l r" "重命名符号")
+          (row "C-c l f" "格式化代码")
+          (insert "\n")
+
+          (subsection "补全")
+          (row "TAB" "触发补全")
+          (row "C-n/p" "选择下一个/上一个补全项")
+          (row "RET" "确认补全")
+          (insert "\n")
+
+          ;; Org Mode
+          (section "═══ Org Mode ═══")
+          (subsection "基础操作")
+          (row "TAB" "折叠/展开标题")
+          (row "S-TAB" "全局折叠/展开")
+          (row "C-c C-t" "切换 TODO 状态")
+          (row "C-c C-s" "设置计划时间")
+          (row "C-c C-d" "设置截止时间")
+          (row "C-c C-c" "执行当前项操作")
+          (insert "\n")
+
+          (subsection "Org Roam 笔记")
+          (row "C-c n f" "查找/创建笔记")
+          (row "C-c n i" "插入笔记链接")
+          (row "C-c n l" "显示反向链接")
+          (insert "\n")
+
+          (subsection "Org Agenda")
+          (row "C-c a" "打开议程视图")
+          (row "C-c c" "打开日历")
+          (insert "\n")
+
+          ;; Evil 模式
+          (section "═══ Evil (Vim) 模式 ═══")
+          (subsection "模式切换")
+          (row "C-c v v" "切换到 Vim 普通模式")
+          (row "C-c v e" "切换到 Emacs 模式")
+          (row "i" "插入模式（在 Evil 中）")
+          (row "ESC" "返回普通模式（在 Evil 中）")
+          (insert "\n")
+
+          (subsection "Evil 普通模式")
+          (row "h/j/k/l" "左/下/上/右移动")
+          (row "w/b" "下一个/上一个单词")
+          (row "0/$" "行首/行尾")
+          (row "gg/G" "文件开头/结尾")
+          (row "dd" "删除当前行")
+          (row "yy" "复制当前行")
+          (row "p/P" "粘贴到后面/前面")
+          (row "u" "撤销")
+          (row "C-r" "重做")
+          (row "v" "可视模式")
+          (row "V" "可视行模式")
+          (row "C-v" "可视块模式")
+          (row ":" "命令模式")
+          (insert "\n")
+
+          ;; 工作区
+          (section "═══ 工作区布局 ═══")
+          (row "<f5>" "重建 VS Code 风格布局")
+          (row "C-c v t" "打开终端")
+          (insert "\n")
+
+          ;; 帮助系统
+          (section "═══ 帮助系统 ═══")
+          (row "F1 ?" "显示此帮助")
+          (row "C-h k" "查看按键绑定")
+          (row "C-h f" "查看函数文档")
+          (row "C-h v" "查看变量文档")
+          (row "C-h m" "查看当前模式帮助")
+          (row "C-h a" "搜索命令")
+          (insert "\n")
+
+          ;; 其他
+          (section "═══ 其他 ═══")
+          (row "C-g" "取消当前命令")
+          (row "M-x" "执行命令")
+          (row "C-x C-e" "执行光标前的 Lisp 表达式")
+          (row "C-c m" "打开邮件（Notmuch）")
+          (insert "\n\n")
+
+          (insert (propertize "提示：" 'face '(:weight bold)))
+          (insert " 按 ")
+          (insert (propertize "q" 'face 'font-lock-keyword-face))
+          (insert " 关闭此帮助窗口\n"))
         (goto-char (point-min))))
-    (if (window-live-p window)
-        (set-window-buffer window buf)
-      (switch-to-buffer buf))
-    (my/workspace-center-help-window (or window (selected-window)))
-    buf))
+    (pop-to-buffer buf)))
 
 ;; 辅助函数
 (defun my/find-code-window ()
@@ -125,14 +287,6 @@
        (and (not (window-parameter win 'window-side))
             (not (derived-mode-p 'treemacs-mode 'vterm-mode)))))
    (window-list)))
-
-(defun my/workspace-should-show-help-p (&optional window)
-  "判断 WINDOW 是否适合显示启动帮助页。"
-  (let ((win (or window (selected-window))))
-    (when (window-live-p win)
-      (with-selected-window win
-        (or (derived-mode-p 'dired-mode)
-            (member (buffer-name) '("*scratch*" "*dashboard*" "*Messages*")))))))
 
 ;; VS Code 风格布局：左树+中代码+下终端+右AI
 (defun my/vscode-layout ()
@@ -166,21 +320,27 @@
       (ignore-errors (my/ai-open-panel)))
     ;; 焦点回到代码窗口
     (when (window-live-p code-win)
-      (select-window code-win)
-      ;; 若主区是目录/启动缓冲区，则显示帮助页
-      (when (my/workspace-should-show-help-p code-win)
-        (my/workspace-open-help-buffer code-win)))))
+      (select-window code-win))))
 
-;; 窗口尺寸变化后重算帮助页居中
-(defun my/workspace-recenter-help-windows (_frame)
-  "窗口尺寸变化后重算帮助页居中。"
-  (dolist (win (window-list nil 'nomini))
-    (my/workspace-center-help-window win)))
+;; 判断是否应该自动触发布局
+(defun my/should-auto-layout-p ()
+  "判断当前是否应该自动触发 VSCode 布局。"
+  (and (buffer-file-name)
+       (not (derived-mode-p 'org-mode 'org-agenda-mode))
+       (not (string-match-p "\\*.*\\*" (buffer-name)))
+       (or (and (fboundp 'projectile-project-p) (projectile-project-p))
+           (vc-backend (buffer-file-name)))))
 
-;; 绑定到 F5 并在启动时自动应用
+;; 打开项目文件时自动应用布局
+(defun my/auto-layout-on-file-open ()
+  "打开文件时，如果是项目文件则自动应用布局。"
+  (when (my/should-auto-layout-p)
+    (run-with-idle-timer 0.1 nil #'my/vscode-layout)))
+
+;; 快捷键绑定
 (global-set-key (kbd "<f5>") #'my/vscode-layout)
-(add-hook 'emacs-startup-hook #'my/vscode-layout)
-(add-hook 'window-size-change-functions #'my/workspace-recenter-help-windows)
+(global-set-key (kbd "<f1> ?") #'my/show-shortcuts-help)
+(add-hook 'find-file-hook #'my/auto-layout-on-file-open)
 
 (provide 'workspace)
 ;;; workspace.el ends here

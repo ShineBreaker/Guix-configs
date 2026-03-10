@@ -5,12 +5,25 @@
 
 ;;; Code:
 
+;; 确保 Org 目录存在
+(defun my/ensure-org-directories ()
+  "确保所有 Org 相关目录存在。"
+  (dolist (dir '("~/Documents/Org/"
+                 "~/Documents/Org/agenda"
+                 "~/Documents/Org/notes"
+                 "~/Documents/Org/roam"))
+    (let ((expanded (expand-file-name dir)))
+      (unless (file-exists-p expanded)
+        (make-directory expanded t)))))
+
+(my/ensure-org-directories)
+
 ;; Org Mode 基础配置
 (use-package org
   :custom
-  (org-directory "~/org")
-  (org-agenda-files '("~/org"))
-  (org-default-notes-file "~/org/notes.org")
+  (org-directory "~/Documents/Org/")
+  (org-agenda-files '("~/Documents/Org/agenda"))
+  (org-default-notes-file "~/Documents/Org/notes/notes.org")
   (org-hide-emphasis-markers t)
   (org-startup-indented t))
 
@@ -25,7 +38,7 @@
 ;; Org Roam（笔记管理系统）
 (use-package org-roam
   :custom
-  (org-roam-directory "~/org/roam")
+  (org-roam-directory "~/Documents/Org/roam")
   :bind (("C-c n l" . org-roam-buffer-toggle)
          ("C-c n f" . org-roam-node-find)
          ("C-c n i" . org-roam-node-insert))

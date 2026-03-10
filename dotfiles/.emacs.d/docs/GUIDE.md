@@ -129,7 +129,7 @@ Calfw 可以显示 Org Mode 中的日程安排。
 ## 7. AI 工具 - Ellama
 
 **前置配置**：
-设置环境变量 `DASHSCOPE_API_KEY` 或使用 GNOME Keyring：
+设置环境变量 `OPENAI_API_KEY` 或使用 GNOME Keyring：
 
 ```bash
 secret-tool store --label="DashScope API Key" service emacs-ai provider dashscope

@@ -35,7 +35,7 @@
   :group 'my/ai)
 
 (defcustom my/ai-api-key-env-vars
-  '("DASHSCOPE_API_KEY" "OPENAI_API_KEY" "ALIYUN_API_KEY")
+  '("OPENAI_API_KEY" "DASHSCOPE_API_KEY" "ALIYUN_API_KEY")
   "按顺序尝试读取 API Key 的环境变量名。"
   :type '(repeat string)
   :group 'my/ai)

@@ -5,16 +5,46 @@
 
 ;;; Code:
 
+;; 快捷键帮助内容
+(defun my/dashboard-insert-shortcuts (list-size)
+  "在 dashboard 中插入快捷键帮助。"
+  (dashboard-insert-heading "快捷键参考" "?" "按 F1 ? 查看完整帮助")
+  (insert "\n")
+  (let ((shortcuts '(("文件与搜索"
+                      ("C-x C-f" "打开文件")
+                      ("C-p" "项目内快速找文件")
+                      ("C-S-f" "全文搜索")
+                      ("C-S-b" "切换缓冲区"))
+                     ("编辑与控制"
+                      ("C-x C-s" "保存文件")
+                      ("C-S-c" "复制")
+                      ("C-S-v" "粘贴")
+                      ("C-." "上下文菜单"))
+                     ("工具"
+                      ("C-c t" "文件树")
+                      ("<f5>" "工作区布局")
+                      ("C-c a c" "AI 对话")
+                      ("C-c v v" "Vim 模式")))))
+    (dolist (section shortcuts)
+      (insert (propertize (car section) 'face 'dashboard-heading) "\n")
+      (dolist (item (cdr section))
+        (insert (format "  %-12s %s\n"
+                       (propertize (car item) 'face 'font-lock-keyword-face)
+                       (cadr item))))
+      (insert "\n"))))
+
 (use-package dashboard
   :custom
   (dashboard-startup-banner 'official)
   (dashboard-set-navigator t)
-  (dashboard-items '((recents   . 10)
-                     (projects  . 8)
-                     (bookmarks . 8)))
+  (dashboard-items '((recents . 10)
+                     (projects . 8)
+                     (bookmarks . 8)
+                     (shortcuts . 1)))
   (dashboard-set-heading-icons t)
   (dashboard-set-file-icons t)
   :config
+  (add-to-list 'dashboard-item-generators '(shortcuts . my/dashboard-insert-shortcuts))
   (dashboard-setup-startup-hook))
 
 (provide 'dashboard)
