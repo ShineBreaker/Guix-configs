@@ -1,17 +1,16 @@
-;;; core-workspace.el --- 项目布局与终端工作流 -*- lexical-binding: t; -*-
+;;; workspace.el --- 工作区布局与文件树 -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; 配置 Treemacs 文件树和 VS Code 风格的工作区布局。
 
 ;;; Code:
 
 (require 'seq)
-(require 'project)
 (require 'cl-lib)
-(declare-function treemacs-follow-mode "ext:treemacs")
-(declare-function treemacs-project-follow-mode "ext:treemacs")
-(declare-function treemacs-load-theme "ext:treemacs")
-(declare-function my/ai-open-panel "core-ai")
 
+;; Treemacs 文件树
 (use-package treemacs
-  :bind (("C-c t" . treemacs))
+  :bind ("C-c t" . treemacs)
   :custom
   (treemacs-width 30)
   (treemacs-position 'left)
@@ -20,15 +19,17 @@
   (treemacs-project-follow-mode 1)
   (treemacs-follow-mode 1))
 
-;; 使用 nerd-icons 风格，贴近 Zed 图标体验。
+;; Nerd Icons 主题
 (use-package treemacs-nerd-icons
   :after treemacs
   :config
   (treemacs-load-theme "nerd-icons"))
 
+;; 帮助页面模式
 (define-derived-mode my/workspace-help-mode special-mode "Workspace-Help"
   "中间编辑区启动帮助模式。")
 
+;; 居中显示帮助页面
 (defun my/workspace-center-help-window (&optional window)
   "将帮助页在 WINDOW 中居中显示。"
   (let ((win (or window (selected-window))))
@@ -54,13 +55,9 @@
                  (right (- spare left)))
             (set-window-margins win left right)))))))
 
-(defun my/workspace-recenter-help-windows (_frame)
-  "窗口尺寸变化后重算帮助页居中。"
-  (dolist (win (window-list nil 'nomini))
-    (my/workspace-center-help-window win)))
-
+;; 打开帮助缓冲区
 (defun my/workspace-open-help-buffer (&optional window)
-  "在 WINDOW（默认当前窗口）打开简短帮助文档。"
+  "在 WINDOW 打开简短帮助文档。"
   (let ((buf (get-buffer-create "*Workspace-Help*")))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
@@ -75,37 +72,25 @@
                (insert (format "  %-14s %s\n" key desc))))
           (section "文件与搜索")
           (row "C-x C-f" "打开文件")
-          (row "C-x d" "打开目录 (Dired)")
           (row "C-p" "项目内快速找文件")
           (row "C-S-f" "全文搜索 (ripgrep)")
           (row "C-S-b" "切换缓冲区")
           (insert "\n")
-
           (section "编辑与控制")
           (row "C-x C-s" "保存当前文件")
           (row "C-S-c" "复制（选区/当前行）")
           (row "C-S-v" "粘贴")
-          (row "C-g" "取消当前命令/退出提示")
-          (row "C-/" "撤销")
-          (row "M-x" "执行命令")
+          (row "C-g" "取消当前命令")
           (insert "\n")
-
           (section "窗口与工作区")
-          (row "<f9>" "重建 VS Code 风格布局")
+          (row "<f5>" "重建工作区布局")
           (row "C-c t" "打开/聚焦 Treemacs")
           (insert "\n")
-
           (section "AI 工作流")
-          (row "C-c a a" "打开/聚焦 AI 面板")
-          (row "C-c a q" "询问选区（无选区则整文件）")
-          (row "C-c a e" "按要求改写代码")
-          (row "C-c a i" "补写代码")
-          (row "C-c a c" "直接开始问答")
-          (insert "\n")
-
-          (section "Vim / Emacs 状态")
-          (row "C-c v e" "切到 Emacs 编辑状态")
-          (row "C-c v v" "切回 Vim 普通状态"))
+          (row "C-c a c" "开始 AI 对话")
+          (row "C-c a q" "询问选区代码")
+          (row "C-c a e" "让 AI 改写代码")
+          (row "C-c a i" "让 AI 补写代码"))
         (insert "\n\n")
         (insert "按 ")
         (insert (propertize "C-x C-f" 'face '(:weight bold)))
@@ -117,26 +102,14 @@
     (my/workspace-center-help-window (or window (selected-window)))
     buf))
 
-(defun my/project-root-or-default ()
-  "尽可能获取项目根目录。"
-  (or (and (fboundp 'projectile-project-root)
-           (ignore-errors (projectile-project-root)))
-      (when-let ((pr (project-current nil)))
-        (project-root pr))
-      (and buffer-file-name (file-name-directory buffer-file-name))
-      default-directory))
-
+;; 辅助函数
 (defun my/find-code-window ()
-  "在当前 frame 内找到代码窗口。"
+  "查找代码编辑窗口。"
   (seq-find
    (lambda (win)
      (with-selected-window win
        (and (not (window-parameter win 'window-side))
-            (not (derived-mode-p 'treemacs-mode 'vterm-mode))
-            (not (eq major-mode 'ellama-session-mode))
-            (not (string-match-p "\\*vterm\\*" (buffer-name)))
-            (not (string-match-p "\\*AI-Codex\\*" (buffer-name)))
-            (not (string-match-p "^ellama " (buffer-name))))))
+            (not (derived-mode-p 'treemacs-mode 'vterm-mode)))))
    (window-list)))
 
 (defun my/workspace-should-show-help-p (&optional window)
@@ -147,11 +120,11 @@
         (or (derived-mode-p 'dired-mode)
             (member (buffer-name) '("*scratch*" "*dashboard*" "*Messages*")))))))
 
+;; VS Code 风格布局：左树+中代码+下终端+右AI
 (defun my/vscode-layout ()
-  "重置为类似 VS Code 的布局：左树+中代码+下终端+右侧 AI。"
+  "重置为类似 VS Code 的布局。"
   (interactive)
-  (let* ((project-root (my/project-root-or-default))
-         (terminal-height 12)
+  (let* ((terminal-height 12)
          (code-win nil)
          (vterm-win
           (seq-find
@@ -159,44 +132,41 @@
              (with-selected-window win
                (derived-mode-p 'vterm-mode)))
            (window-list))))
+    ;; 打开 Treemacs
     (unless (and (fboundp 'treemacs-is-visible) (treemacs-is-visible))
       (treemacs))
-    (when (fboundp 'treemacs-add-and-display-current-project-exclusively)
-      (ignore-errors (treemacs-add-and-display-current-project-exclusively)))
+    ;; 获取代码窗口
     (setq code-win (or (my/find-code-window) (selected-window)))
-    (let ((target-win code-win))
-      ;; 防止编辑区被终端/侧栏占据，必要时落回 scratch。
-      (when (and (window-live-p target-win)
-                 (with-selected-window target-win
-                   (or (derived-mode-p 'vterm-mode 'treemacs-mode)
-                       (window-parameter target-win 'window-side))))
-        (set-window-buffer target-win (get-buffer-create "*scratch*")))
-      (select-window code-win)
-      (unless (window-live-p vterm-win)
-        (when (> (window-height) (+ terminal-height 5))
-          (split-window-below (- (window-height) terminal-height))
-          (other-window 1)
-          (let ((default-directory project-root))
-            (condition-case nil
-                (vterm (generate-new-buffer-name "*vterm*"))
-               (error
-               (condition-case nil
-                   (ansi-term (getenv "SHELL"))
-                 (error (shell))))))
-          (other-window -1))))
-    ;; 每次应用布局都拉起右侧 AI 面板，保持 Cline/VSCode 风格一致。
+    (select-window code-win)
+    ;; 创建底部终端（仅当不存在时）
+    (unless (window-live-p vterm-win)
+      (when (> (window-height) (+ terminal-height 5))
+        (split-window-below (- (window-height) terminal-height))
+        (other-window 1)
+        (if (fboundp 'vterm)
+            (vterm)
+          (shell))
+        (other-window -1)))
+    ;; 打开右侧 AI 面板
     (when (fboundp 'my/ai-open-panel)
       (ignore-errors (my/ai-open-panel)))
-    ;; 打开右侧面板后，把焦点还给主编辑区。
+    ;; 焦点回到代码窗口
     (when (window-live-p code-win)
       (select-window code-win)
-      ;; 若主区是目录/启动缓冲区，则改为简短帮助页，避免误入不稳定功能区。
+      ;; 若主区是目录/启动缓冲区，则显示帮助页
       (when (my/workspace-should-show-help-p code-win)
         (my/workspace-open-help-buffer code-win)))))
 
-(global-set-key (kbd "<f9>") #'my/vscode-layout)
+;; 窗口尺寸变化后重算帮助页居中
+(defun my/workspace-recenter-help-windows (_frame)
+  "窗口尺寸变化后重算帮助页居中。"
+  (dolist (win (window-list nil 'nomini))
+    (my/workspace-center-help-window win)))
+
+;; 绑定到 F5 并在启动时自动应用
+(global-set-key (kbd "<f5>") #'my/vscode-layout)
 (add-hook 'emacs-startup-hook #'my/vscode-layout)
 (add-hook 'window-size-change-functions #'my/workspace-recenter-help-windows)
 
-(provide 'core-workspace)
-;;; core-workspace.el ends here
+(provide 'workspace)
+;;; workspace.el ends here

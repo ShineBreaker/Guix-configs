@@ -4,6 +4,10 @@
 
 (define %packages-list
   (cons* (specs->pkgs+out
+          ;; AI related.
+          "claude-code"
+          "codex"
+
           ;; Audio & Video
           "easyeffects"
           "helvum"
@@ -24,6 +28,7 @@
 
           ;; Communication
           "kdeconnect"
+          "notmuch"
           "telegram-desktop"
           "tailscale"
 
@@ -59,7 +64,6 @@
           ;; Development
           "ccls"
           "clang"
-          "codex"
           "gradle"
           "helix"
           "maven"
