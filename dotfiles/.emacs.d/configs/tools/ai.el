@@ -404,4 +404,4 @@
 (add-hook 'window-size-change-functions #'my/ai-recenter-info-panels)
 
 (provide 'core-ai)
-;;; core-ai.el ends here
+;;; ai.el ends here

@@ -35,17 +35,43 @@
           ;; --- 开发工具 ---
           "emacs-vterm"                   ; 终端模拟器（vterm）
           "emacs-yasnippet"               ; 代码片段扩展
+          "emacs-yasnippet-snippets"      ; 代码片段集合
           "emacs-rg"                      ; Ripgrep 集成
+
+          ;; --- 编程语言支持 ---
           "emacs-kotlin-mode"             ; Kotlin 语言支持
+          "emacs-rust-mode"               ; Rust 语言支持
+          "emacs-zig-mode"                ; Zig 语言支持
+          "emacs-typescript-mode"         ; TypeScript 支持
+          "emacs-web-mode"                ; 前端模板编辑
+          "emacs-json-mode"               ; JSON 编辑
+          "emacs-markdown-mode"           ; Markdown 编辑
           "emacs-sly"                     ; Superior Lisp 交互（Common Lisp）
           "emacs-geiser"                  ; Scheme REPL 集成
           "emacs-geiser-guile"            ; Geiser 的 Guile Scheme 支持
 
           ;; --- Git 集成 ---
+          "emacs-magit"                   ; Git 界面
+          "emacs-magit-todos"             ; Magit 中显示 TODO
           "emacs-git-messenger"           ; 显示当前行的提交信息
+
+          ;; --- 项目管理 ---
+          "emacs-projectile"              ; 项目管理增强
+
+          ;; --- Org Mode 生态 ---
+          "emacs-org-modern"              ; 现代化 Org 样式
+          "emacs-org-roam"                ; 笔记管理系统
+          "emacs-org-appear"              ; 自动显示隐藏元素
 
           ;; --- 帮助与文档 ---
           "emacs-helpful"                 ; 更友好的帮助缓冲区
+
+          ;; --- 邮件与日历 ---
+          "emacs-notmuch"                 ; 邮件客户端
+          "emacs-calfw"                   ; 日历框架
+
+          ;; --- 文件管理增强 ---
+          "emacs-dired-sidebar"           ; Dired 侧边栏
 
           ;; --- 环境与工具 ---
           "emacs-no-littering"            ; 保持 Emacs 目录整洁
