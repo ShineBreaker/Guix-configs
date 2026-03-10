@@ -87,6 +87,7 @@ clean:
 # 清除额外的文件 (慎用，用了就没办法回滚)
 gc: clean
   guix gc
+  sudo rm -rf /boot/EFI/Guix/OLD-*.EFI
 
 # 格式化代码
 style *args:
