@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; bootstrap.el --- 核心常量与路径 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

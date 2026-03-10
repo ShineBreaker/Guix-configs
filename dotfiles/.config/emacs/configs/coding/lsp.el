@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; lsp.el --- LSP 与代码格式化 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

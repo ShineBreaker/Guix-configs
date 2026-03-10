@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; mail.el --- 邮件客户端 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; core-ai.el --- AI Agent 面板与工作流配置 -*- lexical-binding: t; -*-
 
 ;;; Commentary:

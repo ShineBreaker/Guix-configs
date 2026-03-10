@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0
+-->
+
 # Emacs 配置说明
 
 基于 Guix 的模块化 Emacs 配置，提供类似 JetBrains IDE 的开发体验。

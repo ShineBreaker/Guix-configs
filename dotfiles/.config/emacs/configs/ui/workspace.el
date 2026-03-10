@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: GPL-3.0
+
 ;;; workspace.el --- 工作区布局与文件树 -*- lexical-binding: t; -*-
 
 ;;; Commentary:
