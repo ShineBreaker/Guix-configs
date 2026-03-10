@@ -89,6 +89,10 @@ gc: clean
   guix gc
   sudo rm -rf /boot/EFI/Guix/OLD-*.EFI
 
+# 生成版权信息头
+reuse:
+  reuse annotate --copyright "BrokenShine <xchai404@gmail.com>" --license "GPL-3.0" --skip-unrecognised --recursive --year $(date +%Y) .
+
 # 格式化代码
 style *args:
   guix style --whole-file {{args}}
