@@ -31,7 +31,7 @@ QGroupBox, QScrollArea {
 /* 菜单栏、工具栏、状态栏使用微透明背景 */
 QMenuBar, QToolBar, QStatusBar {
     border: none;
-    background: palette(alternate-base);
+    background: palette(window);
     padding: 2px;
 }
 
@@ -63,7 +63,7 @@ QMenu::item:selected {
 
 QMenu::separator {
     height: 1px;
-    background: palette(alternate-base);
+    background: palette(base);
     margin: 5px 10px;
 }
 
@@ -176,7 +176,7 @@ QComboBox::drop-down {
 
 QListView, QTableView, QTreeView {
     background-color: palette(base);
-    alternate-background-color: palette(alternate-base);
+    alternate-background-color: palette(window);
     border: 1px solid palette(alternate-base);
     border-radius: 10px;
     outline: none;
@@ -193,7 +193,7 @@ QHeaderView::section {
     padding: 6px 10px;
     border: none;
     border-right: 1px solid palette(alternate-base);
-    background-color: palette(alternate-base);
+    background-color: palette(window);
 }
 
 /* 通用项样式 */
