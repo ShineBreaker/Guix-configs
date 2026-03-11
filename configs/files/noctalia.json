@@ -1,5 +1,5 @@
 {
-  "settingsVersion": 54,
+  "settingsVersion": 56,
   "bar": {
     "barType": "simple",
     "position": "left",
@@ -28,7 +28,7 @@
     "widgets": {
       "left": [{
         "id": "Spacer",
-        "width": 2
+        "width": 1
       }, {
         "colorizeDistroLogo": false,
         "colorizeSystemIcon": "none",
@@ -137,6 +137,7 @@
         "diskPath": "/home",
         "iconColor": "none",
         "id": "SystemMonitor",
+        "showCpuCores": false,
         "showCpuFreq": false,
         "showCpuTemp": true,
         "showCpuUsage": true,
@@ -157,6 +158,12 @@
     "mouseWheelAction": "none",
     "reverseScroll": false,
     "mouseWheelWrap": true,
+    "middleClickAction": "none",
+    "middleClickFollowMouse": false,
+    "middleClickCommand": "",
+    "rightClickAction": "controlCenter",
+    "rightClickFollowMouse": true,
+    "rightClickCommand": "",
     "screenOverrides": []
   },
   "general": {
@@ -169,7 +176,7 @@
     "iRadiusRatio": 1,
     "boxRadiusRatio": 1,
     "screenRadiusRatio": 1,
-    "animationSpeed": 1,
+    "animationSpeed": 1.10,
     "animationDisabled": false,
     "compactLockScreen": false,
     "lockScreenAnimations": false,
@@ -178,6 +185,7 @@
     "showHibernateOnLockScreen": false,
     "enableLockScreenMediaControls": false,
     "enableShadows": true,
+    "enableBlurBehind": true,
     "shadowDirection": "center",
     "shadowOffsetX": 0,
     "shadowOffsetY": 0,
@@ -193,8 +201,8 @@
     "clockFormat": "hh\\nmm",
     "passwordChars": false,
     "lockScreenMonitors": [],
-    "lockScreenBlur": 0,
-    "lockScreenTint": 0,
+    "lockScreenBlur": 0.5,
+    "lockScreenTint": 0.4,
     "keybinds": {
       "keyUp": [
         "Up"
@@ -227,14 +235,14 @@
     "fontDefaultScale": 1,
     "fontFixedScale": 1,
     "tooltipsEnabled": true,
-    "boxBorderEnabled": false,
+    "boxBorderEnabled": true,
     "panelBackgroundOpacity": 0.9,
     "panelsAttachedToBar": true,
     "settingsPanelMode": "centered",
     "settingsPanelSideBarCardStyle": false
   },
   "location": {
-    "name": "",
+    "name": " ",
     "weatherEnabled": true,
     "weatherShowEffects": true,
     "useFahrenheit": false,
@@ -325,7 +333,6 @@
   },
   "controlCenter": {
     "position": "close_to_bar_button",
-    "openAtMouseOnBarRightClick": true,
     "diskPath": "/home",
     "shortcuts": {
       "left": [{
@@ -428,7 +435,8 @@
     "wifiDetailsViewMode": "grid",
     "bluetoothDetailsViewMode": "grid",
     "bluetoothHideUnnamedDevices": false,
-    "disableDiscoverability": false
+    "disableDiscoverability": false,
+    "bluetoothAutoConnect": true
   },
   "sessionMenu": {
     "enableCountdown": true,
@@ -474,6 +482,18 @@
       "countdownEnabled": true,
       "enabled": true,
       "keybind": "6"
+    }, {
+      "action": "userspaceReboot",
+      "command": "",
+      "countdownEnabled": true,
+      "enabled": false,
+      "keybind": ""
+    }, {
+      "action": "rebootToUefi",
+      "command": "",
+      "countdownEnabled": true,
+      "enabled": true,
+      "keybind": ""
     }]
   },
   "notifications": {
@@ -540,10 +560,10 @@
   "colorSchemes": {
     "useWallpaperColors": true,
     "predefinedScheme": "Noctalia (default)",
-    "darkMode": true,
-    "schedulingMode": "off",
-    "manualSunrise": "10:00",
-    "manualSunset": "22:30",
+    "darkMode": false,
+    "schedulingMode": "manual",
+    "manualSunrise": "08:30",
+    "manualSunset": "19:30",
     "generationMethod": "tonal-spot",
     "monitorForColors": ""
   },
@@ -572,9 +592,6 @@
     }, {
       "enabled": true,
       "id": "zed"
-    }, {
-      "enabled": true,
-      "id": "emacs"
     }, {
       "enabled": true,
       "id": "fuzzel"
