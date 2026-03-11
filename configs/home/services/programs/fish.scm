@@ -17,16 +17,14 @@
   (list (service home-fish-plugin-atuin-service-type)
         (service home-fish-plugin-direnv-service-type)
 
-        (simple-service
-         'fish-xdg-config
-         home-xdg-configuration-files-service-type
-         (list
-          `("fish/functions/fenv.main.fish"
-            ,(file-append fish-foreign-env
-                          "/share/fish/functions/fenv.main.fish"))
-          `("fish/functions/fenv.fish"
-            ,(file-append fish-foreign-env
-                          "/share/fish/functions/fenv.fish"))))
+        (simple-service 'fish-xdg-config
+                        home-xdg-configuration-files-service-type
+                        (list `("fish/functions/fenv.main.fish" ,(file-append
+                                                                  fish-foreign-env
+                                                                  "/share/fish/functions/fenv.main.fish"))
+                              `("fish/functions/fenv.fish" ,(file-append
+                                                             fish-foreign-env
+                                                             "/share/fish/functions/fenv.fish"))))
 
         (service home-fish-service-type
                  (home-fish-configuration (aliases '(("cat" . "bat")
@@ -51,6 +49,5 @@
                                                           "../configs/files/config.fish")
                                                          (specs->pkgs
                                                           "fastfetch-minimal"
-                                                          "fzf"
-                                                          "lolcat"
+                                                          "fzf" "lolcat"
                                                           "zoxide"))))))))
