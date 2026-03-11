@@ -31,7 +31,7 @@ QGroupBox, QScrollArea {
 /* 菜单栏、工具栏、状态栏使用微透明背景 */
 QMenuBar, QToolBar, QStatusBar {
     border: none;
-    background: rgba(255, 255, 255, 0.03);
+    background: palette(alternate-base);
     padding: 2px;
 }
 
@@ -43,7 +43,7 @@ QMenuBar, QToolBar, QStatusBar {
 
 QMenu {
     background-color: palette(window);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid palette(alternate-base);
     border-radius: 12px;
     padding: 5px;
 }
@@ -63,7 +63,7 @@ QMenu::item:selected {
 
 QMenu::separator {
     height: 1px;
-    background: rgba(255, 255, 255, 0.1);
+    background: palette(alternate-base);
     margin: 5px 10px;
 }
 
@@ -74,7 +74,7 @@ QMenuBar::item {
 }
 
 QMenuBar::item:selected {
-    background: rgba(255, 255, 255, 0.1);
+    background: palette(alternate-base);
 }
 
 /* -----------------------------------------------------------
@@ -85,8 +85,8 @@ QMenuBar::item:selected {
 
 /* 普通按钮 - 适用于对话框操作（确定、取消、解锁等） */
 QPushButton {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: palette(button);
+    border: 1px solid palette(alternate-base);
     border-radius: 10px;
     padding: 5px 16px;
     margin: 2px 4px;
@@ -96,8 +96,8 @@ QPushButton {
 
 /* 工具栏按钮 - 紧凑设计，适用于图标按钮 */
 QToolButton {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: palette(button);
+    border: 1px solid palette(alternate-base);
     border-radius: 10px;
     padding: 4px 8px;
     margin: 3px;
@@ -121,8 +121,8 @@ QToolBar::separator {
 
 /* 按钮交互状态 */
 QPushButton:hover, QToolButton:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.15);
+    background-color: palette(alternate-base);
+    border-color: palette(alternate-base);
 }
 
 QPushButton:pressed, QPushButton:checked,
@@ -147,8 +147,8 @@ QToolButton::menu-indicator {
 
 QLineEdit, QTextEdit, QPlainTextEdit,
 QSpinBox, QDoubleSpinBox, QComboBox {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: palette(base);
+    border: 1px solid palette(alternate-base);
     border-radius: 10px;
     padding: 6px 8px;
     min-height: 24px;
@@ -176,8 +176,8 @@ QComboBox::drop-down {
 
 QListView, QTableView, QTreeView {
     background-color: palette(base);
-    alternate-background-color: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    alternate-background-color: palette(alternate-base);
+    border: 1px solid palette(alternate-base);
     border-radius: 10px;
     outline: none;
 }
@@ -192,8 +192,8 @@ QListView::item {
 QHeaderView::section {
     padding: 6px 10px;
     border: none;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
-    background-color: rgba(255, 255, 255, 0.08);
+    border-right: 1px solid palette(alternate-base);
+    background-color: palette(alternate-base);
 }
 
 /* 通用项样式 */
@@ -204,7 +204,7 @@ QAbstractItemView::item {
 }
 
 QAbstractItemView::item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: palette(alternate-base);
 }
 
 QAbstractItemView::item:selected {
@@ -219,7 +219,7 @@ QAbstractItemView::item:selected {
 */
 
 QTabWidget::pane {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid palette(alternate-base);
     border-radius: 10px;
     background: transparent;
     /* 为标签预留空间 */
@@ -227,7 +227,7 @@ QTabWidget::pane {
 }
 
 QTabBar::tab {
-    background: rgba(255, 255, 255, 0.05);
+    background: palette(button);
     color: palette(text);
     border-radius: 10px;
     padding: 6px 12px;
@@ -236,7 +236,7 @@ QTabBar::tab {
 }
 
 QTabBar::tab:hover:!selected {
-    background: rgba(255, 255, 255, 0.1);
+    background: palette(alternate-base);
 }
 
 QTabBar::tab:selected {
@@ -251,7 +251,7 @@ QTabBar::tab:selected {
 */
 
 QGroupBox {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid palette(alternate-base);
     border-radius: 10px;
     padding-top: 24px;
     margin-top: 12px;
@@ -273,20 +273,20 @@ QGroupBox::title {
 
 QScrollBar:vertical {
     border: none;
-    background: rgba(128, 128, 128, 0.15);
+    background: palette(alternate-base);
     width: 8px;
     margin: 0px;
     border-radius: 4px;
 }
 
 QScrollBar::handle:vertical {
-    background: rgba(255, 255, 255, 0.25);
+    background: palette(mid);
     min-height: 20px;
     border-radius: 4px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background: rgba(255, 255, 255, 0.4);
+    background: palette(dark);
 }
 
 QScrollBar::add-line:vertical,
@@ -296,20 +296,20 @@ QScrollBar::sub-line:vertical {
 
 QScrollBar:horizontal {
     border: none;
-    background: rgba(128, 128, 128, 0.15);
+    background: palette(alternate-base);
     height: 8px;
     margin: 0px;
     border-radius: 4px;
 }
 
 QScrollBar::handle:horizontal {
-    background: rgba(255, 255, 255, 0.25);
+    background: palette(mid);
     min-width: 20px;
     border-radius: 4px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background: rgba(255, 255, 255, 0.4);
+    background: palette(dark);
 }
 
 QScrollBar::add-line:horizontal,
