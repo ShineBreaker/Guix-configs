@@ -2,9 +2,6 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (gnu home services)
-             (guix gexp))
-
 (define %trash-services
   (list
    (simple-service 'setup-trash-dirs home-activation-service-type

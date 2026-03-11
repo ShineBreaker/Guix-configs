@@ -2,6 +2,7 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(use-modules (gnu home services shells))
 (define %fish-packages-list
   (cons* (specs->pkgs+out "atuin"
                           "bat"

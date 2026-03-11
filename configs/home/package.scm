@@ -2,7 +2,10 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(define %packages-list
+(load "../home/services/programs/emacs.scm")
+(load "../home/services/programs/fish.scm")
+
+(define %packages-list-extended
   (cons* (specs->pkgs+out
           ;; AI related.
           "claude-code"
@@ -86,3 +89,8 @@
           "pinentry-qt"
           "qt5ct"
           "qt6ct")))
+
+(define %packages-list
+  (append %packages-list-extended
+          %emacs-packages-list
+          %fish-packages-list))
