@@ -2,6 +2,10 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(load "../services/programs/fish.scm")
+(load "../services/programs/modprobe.scm")
+(load "../services/programs/trash.scm")
+
 (use-modules (gnu home services desktop)
              (gnu home services dotfiles)
              (gnu home services fontutils)
@@ -26,7 +30,7 @@
                      polkit
                      wm)
 
-(define %desktop-services
+(define %user-desktop-services
   (list (service home-syncthing-service-type)
         (service home-noctalia-shell-service-type)
 
@@ -123,6 +127,7 @@
                                                                       "/.var/log/xdg-desktop-portal-gtk.log")))
                                                 (respawn? #t))))
 
+
         (simple-service 'auto-update home-shepherd-service-type
                         (list (shepherd-timer '(flatpak-update)
                                               #~(calendar-event
@@ -132,3 +137,10 @@
                                                  "upgrade"
                                                  "-y")
                                               #:requirement '(dbus))))))
+
+(define %desktop-services-extended
+  (append %user-desktop-services
+
+          %fish-services
+          %modprobe-services
+          %trash-services))
