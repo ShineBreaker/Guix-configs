@@ -19,6 +19,7 @@
 
 (define %kernel-arguments-config
   (cons* "kernel.sysrq=1"
+         "modprobe.blacklist=wacom,hid_uclogic"
          "snd-intel-dspcfg.dsp_driver=3"
          "usbcore.autosuspend=120"
          "zswap.enabled=1"

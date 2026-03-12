@@ -5,6 +5,7 @@
 (use-modules (gnu home services guix)
              (guix channels)
 
+             (jeans services hardware)
              (px services audio))
 
 (use-service-modules authentication
@@ -23,6 +24,7 @@
           (list (service fprintd-service-type)
                 (service gnome-keyring-service-type)
                 (service gvfs-service-type)
+                (service opentabletdriver-service-type)
                 (service rtkit-daemon-service-type)
 
 
