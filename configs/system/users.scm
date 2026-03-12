@@ -23,6 +23,7 @@
            (supplementary-groups '("adbusers"
                                    "audio"
                                    "cgroup"
+                                   "input"
                                    "kvm"
                                    "libvirt"
                                    "netdev"
