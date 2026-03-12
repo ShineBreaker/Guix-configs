@@ -28,37 +28,15 @@ SPDX-License-Identifier: GPL-3.0
 
 ### 安装系统
 
-直接在仓库的根目录中使用`just`就可以便捷的对系统进行操作了
+直接在仓库的根目录中使用`maak`就可以便捷的对系统进行操作了
 
 ```bash
-guix shell just -- just init
+guix shell maak -- maak init
 ```
 
 ### 安装系统之后
 
-```bash
-> just
-Available recipes:
-    clean                  # 清除额外的配置 (慎用，用了就没办法回滚)
-    default
-    gc                     # 清除额外的文件 (慎用，用了就没办法回滚)
-    generate-home-config   # 只生成 home 配置
-    generate-init-config   # 生成用于安装系统的配置文件
-    generate-system-config # 只生成系统配置
-    home                   # 应用用户配置
-    home-v                 # 应用用户配置 (详细显示日志)
-    init                   # 安装系统
-    pull                   # 拉取channel
-    rebuild                # 应用全局配置
-    rebuild-v              # 应用全局配置 (详细显示日志)
-    reuse                  # 生成版权信息头
-    style *args            # 格式化代码
-    style-all              # 格式化所有代码
-    system                 # 应用系统配置
-    system-v               # 应用系统配置 (详细显示日志)
-    tmprm                  # 清理临时文件
-    upgrade                # 更新lock file
-```
+在仓库中运行 `maak` 来查看所有可用指令
 
 ### 核心配置
 
