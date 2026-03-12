@@ -28,9 +28,6 @@
            "git"
            "git-filter-repo"
            "git-lfs"
-           "just"
-           "python"
-           "postgresql"
 
            ;; Desktop Environment
            "brightnessctl"

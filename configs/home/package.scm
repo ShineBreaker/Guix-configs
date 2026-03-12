@@ -55,7 +55,9 @@
           "amule"
           "btop"
           "freerdp@3"
+          "maak"
           "opentabletdriver-bin"
+          "postgresql"
           "winapps"
 
           ;; Themes & Appearance
