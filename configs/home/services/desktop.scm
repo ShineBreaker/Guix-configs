@@ -18,9 +18,6 @@
              (gnu home services syncthing)
              (gnu home services guix)
 
-             (jeans packages hardware)
-             (jeans home services hardware)
-
              (rosenthal services desktop))
 
 (use-package-modules fcitx5
@@ -34,7 +31,6 @@
 (define %user-desktop-services
   (list (service home-syncthing-service-type)
         (service home-noctalia-shell-service-type)
-        (service home-opentabletdriver-service-type)
 
         (service home-fcitx5-service-type
                  (home-fcitx5-configuration (themes (list
