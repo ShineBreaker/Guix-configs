@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=OpenTabletDriver
+Exec=flatpak run net.opentabletdriver.OpenTabletDriver -d
