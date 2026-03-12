@@ -55,6 +55,7 @@
           "amule"
           "btop"
           "freerdp@3"
+          "just"
           "maak"
           "opentabletdriver-bin"
           "postgresql"
