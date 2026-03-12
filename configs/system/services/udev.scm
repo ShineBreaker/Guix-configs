@@ -2,9 +2,6 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-(use-modules (jeans packages games)
-             (jeans packages hardware))
-
 (use-package-modules android
                      games)
 
@@ -13,8 +10,6 @@
 (define %udev-services
   (list (udev-rules-service 'android android-udev-rules
                             #:groups '("adbusers"))
-        (udev-rules-service 'opentabletdriver
-                            opentabletdriver-udev-rules)
         (udev-rules-service 'steam-devices steam-devices-udev-rules)
         (udev-rules-service 'controller
                             (udev-rule

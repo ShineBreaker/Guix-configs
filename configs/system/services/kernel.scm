@@ -10,7 +10,7 @@
   (list (simple-service 'extend-kernel-module-loader
                         kernel-module-loader-service-type
                         '("ip_tables" "iptable_nat" "kvm_intel"
-                          "sch_fq_pie" "tcp_bbr"))
+                          "sch_fq_pie" "tcp_bbr" "uinput"))
 
         (simple-service 'extend-sysctl sysctl-service-type
                         '(("fs.inotify.max_user_watches" . "524288")
