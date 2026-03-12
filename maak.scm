@@ -4,9 +4,11 @@
 (define-module (maak)
   #:declarative? #t
   #:use-module (maak maak)
-  #:use-module (ice-9 textual-ports)
+  #:use-module (srfi srfi-1)
+  #:use-module (srfi srfi-19)
+  #:use-module (srfi srfi-26)
   #:use-module (ice-9 regex)
-  #:use-module (srfi srfi-1))
+  #:use-module (ice-9 textual-ports))
 
 ;;; 配置路径
 (define repo-root (getcwd))
@@ -16,10 +18,19 @@
 (define channel-fresh (string-append configs-dir "/channel.scm"))
 (define channel-lock (string-append configs-dir "/channel.lock"))
 
-;;; 辅助函数：构建guix time-machine命令列表
-(define (guix-time-machine . args)
-  "返回guix time-machine命令的参数列表"
-  (append (list "guix" "time-machine" "-C" channel-lock "--") args))
+(define ($ cmd)
+  (let ((exit-code (status:exit-val (apply system* cmd))))
+    (or (zero? exit-code)
+        (error (format #f "
+Non-zero exit code when running!
+Command: ~a
+Exit code: ~a~%"
+                       cmd exit-code)))))
+
+(define* ($guix args #:key (channels channel-lock))
+  ($ `("guix" "time-machine"
+       ,(string-append "--channels=" channels)
+       "--" ,@args)))
 
 ;;; 配置文件生成逻辑
 (define loaded-files (make-hash-table))
@@ -61,7 +72,7 @@
       (lambda ()
         (format #t ";;; 自动生成的完整配置文件\n")
         (format #t ";;; 原始文件: ~a\n" input-path)
-        (format #t ";;; 生成时间: ~a\n\n" (strftime "%Y-%m-%d %H:%M:%S" (localtime (current-time))))
+        (format #t ";;; 生成时间: ~a\n\n" (strftime "%Y-%m-%d %H:%M:%S" (localtime (time-second (current-time)))))
         (process-content input-path configs-dir)))
     ($ (list "sed" "-i" "-E" "/^[[:space:]]*\\(load[[:space:]]+\".*\"\\)[[:space:]]*$/d" output-path))
     ($ (list "guix" "style" "--whole-file" output-path))
@@ -90,14 +101,14 @@
   "安装系统"
   (generate-init-config)
   (log-info "正在安装系统")
-  ($ (guix-time-machine "system" "init" (string-append tmp-dir "/init-config.scm") "/mnt"))
+  ($guix `("system" "init" ,(string-append tmp-dir "/init-config.scm") "/mnt"))
   (tmprm))
 
 (define (system)
   "应用系统配置"
   (generate-system-config)
   (log-info "正在应用系统配置")
-  ($ (guix-time-machine "system" "reconfigure" (string-append tmp-dir "/system-config.scm")
+  ($guix `("system" "reconfigure" ,(string-append tmp-dir "/system-config.scm")
                         "--allow-downgrades" "--fallback"))
   (tmprm))
 
@@ -105,7 +116,7 @@
   "应用用户配置"
   (generate-home-config)
   (log-info "正在应用用户配置")
-  ($ (guix-time-machine "home" "reconfigure" (string-append tmp-dir "/home-config.scm")
+  ($guix `("home" "reconfigure" ,(string-append tmp-dir "/home-config.scm")
                         "--allow-downgrades" "--fallback"))
   (tmprm))
 
@@ -113,18 +124,24 @@
   "应用全局配置"
   (system)
   (home)
-  ($ (guix-time-machine "locate" "--update")))
+  ($guix `("locate" "--update")))
+
+(define* (update-channels)
+  (with-atomic-file-output channel-lock
+    (cut with-output-to-port <>
+         (lambda ()
+           ($guix `("describe" "--format=channels")
+                #:channels  channel-fresh )))))
 
 (define (upgrade)
   "更新lock file"
   ($ (list "git" "submodule" "update"))
-  ($ (list "sh" "-c" (format #f "guix time-machine -C ~a -- describe --format=channels > ~a"
-                             channel-fresh channel-lock)))
+  (update-channels)
   ($ (list "git" "commit" "-S" "-m" "bump version." channel-lock)))
 
 (define (pull)
   "拉取channel"
-  ($ (guix-time-machine "pull" "--allow-downgrades" "--fallback")))
+  ($guix `("pull" "--allow-downgrades" "--fallback")))
 
 (define (clean)
   "清除额外的配置(慎用)"
@@ -144,7 +161,7 @@
            "--license" "GPL-3.0"
            "--skip-unrecognised"
            "--recursive"
-           "--year" (strftime "%Y" (localtime (current-time)))
+           "--year" (strftime "%Y" (localtime (time-second (current-time))))
            ".")))
 
 (define (style . args)
