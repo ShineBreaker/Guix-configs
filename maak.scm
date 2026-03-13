@@ -197,14 +197,9 @@ Exit code: ~a~%" cmd exit-code)))))
                      (localtime (time-second (current-time))))
            ".")))
 
-(define (style . args)
-  "格式化代码"
-  (apply $
-         (list (append (list "guix" "style" "--whole-file") args))))
-
 (define (style-all)
   "格式化所有代码"
-  (log-info "Format Scheme files using Guix Style")
+  (log-info "格式化所有代码")
   ($ '("find . -maxdepth 8 -name '*.scm'" "-type f -exec guix style -f {} \\;")
      #:verbose? #t))
 
