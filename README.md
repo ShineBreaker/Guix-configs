@@ -38,6 +38,12 @@ guix shell maak -- maak init
 
 在仓库中运行 `maak` 来查看所有可用指令
 
+### 系统预览
+
+![日常使用](screenshots/daily.png)
+![终端](screenshots/terminal.png)
+![Emacs](screenshots/emacs.png)
+
 ### 核心配置
 
 - **内核**: Linux xanmod (in nonguix channel.)
