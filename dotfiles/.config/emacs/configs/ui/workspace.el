@@ -52,8 +52,72 @@
                               (propertize key 'face 'font-lock-keyword-face)
                               desc))))
 
+          ;; Leader 键系统
+          (section "═══ Leader 键系统（推荐）═══")
+          (insert "在 Evil Normal/Visual 模式下，按 ")
+          (insert (propertize "SPC" 'face 'font-lock-keyword-face))
+          (insert " 触发 Leader 键\n\n")
+
+          (subsection "文件操作 (SPC f)")
+          (row "SPC f f" "打开文件")
+          (row "SPC f s" "保存文件")
+          (row "SPC f r" "最近文件")
+          (insert "\n")
+
+          (subsection "缓冲区 (SPC b)")
+          (row "SPC b b" "切换缓冲区")
+          (row "SPC b d" "关闭缓冲区")
+          (row "SPC b n/p" "下一个/上一个缓冲区")
+          (insert "\n")
+
+          (subsection "窗口 (SPC w)")
+          (row "SPC w s/v" "水平/垂直分割")
+          (row "SPC w d" "关闭窗口")
+          (row "SPC w h/j/k/l" "切换到左/下/上/右窗口")
+          (insert "\n")
+
+          (subsection "项目 (SPC p)")
+          (row "SPC p f" "项目查找文件")
+          (row "SPC p s" "项目搜索")
+          (row "SPC p p" "切换项目")
+          (insert "\n")
+
+          (subsection "Git (SPC g)")
+          (row "SPC g s" "Git 状态")
+          (row "SPC g b" "Git blame")
+          (insert "\n")
+
+          (subsection "AI (SPC a)")
+          (row "SPC a a" "打开 AI 面板")
+          (row "SPC a c" "AI 对话")
+          (row "SPC a q" "询问代码")
+          (row "SPC a e" "编辑代码")
+          (insert "\n")
+
+          (subsection "切换 (SPC t)")
+          (row "SPC t t" "文件树")
+          (row "SPC t v" "终端")
+          (row "SPC t l" "工作区布局")
+          (insert "\n")
+
+          (subsection "Org (SPC o)")
+          (row "SPC o a" "议程")
+          (row "SPC o c" "日历")
+          (row "SPC o n f" "查找笔记")
+          (insert "\n")
+
+          (subsection "帮助 (SPC h)")
+          (row "SPC h f/v/k" "查看函数/变量/按键")
+          (row "SPC h ?" "快捷键帮助")
+          (insert "\n")
+
+          (subsection "快速操作")
+          (row "SPC SPC" "执行命令 (M-x)")
+          (insert "\n")
+
           ;; 基础操作
-          (section "═══ 基础操作 ═══")
+          (section "═══ 传统快捷键（备选）═══")
+          (insert "以下快捷键在 Emacs 状态下或作为备选使用\n\n")
           (subsection "文件操作")
           (row "C-x C-f" "打开文件")
           (row "C-x C-s" "保存当前文件")

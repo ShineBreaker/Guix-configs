@@ -14,21 +14,20 @@
   "在 dashboard 中插入快捷键帮助。"
   (dashboard-insert-heading "快捷键参考" "?" "按 F1 ? 查看完整帮助")
   (insert "\n")
-  (let ((shortcuts '(("文件与搜索"
-                      ("C-x C-f" "打开文件")
-                      ("C-p" "项目内快速找文件")
-                      ("C-S-f" "全文搜索")
-                      ("C-S-b" "切换缓冲区"))
-                     ("编辑与控制"
-                      ("C-x C-s" "保存文件")
-                      ("C-S-c" "复制")
-                      ("C-S-v" "粘贴")
-                      ("C-." "上下文菜单"))
-                     ("工具"
-                      ("C-c t" "文件树")
-                      ("<f5>" "工作区布局")
-                      ("C-c a c" "AI 对话")
-                      ("C-c v v" "Vim 模式")))))
+  (let ((shortcuts '(("Leader 键 (SPC)"
+                      ("SPC f f" "打开文件")
+                      ("SPC p f" "项目查找文件")
+                      ("SPC p s" "项目搜索")
+                      ("SPC b b" "切换缓冲区"))
+                     ("常用操作"
+                      ("SPC g s" "Git 状态")
+                      ("SPC t t" "文件树")
+                      ("SPC t l" "工作区布局")
+                      ("SPC a c" "AI 对话"))
+                     ("帮助"
+                      ("SPC h ?" "完整快捷键帮助")
+                      ("SPC SPC" "执行命令 (M-x)")
+                      ("C-c v v" "切换到 Vim 模式")))))
     (dolist (section shortcuts)
       (insert (propertize (car section) 'face 'dashboard-heading) "\n")
       (dolist (item (cdr section))

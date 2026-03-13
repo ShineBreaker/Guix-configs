@@ -23,11 +23,26 @@ emacs
 
 ### 3. 核心快捷键
 
+#### Leader 键系统（推荐）
+
+在 Evil Normal 模式下使用 `SPC`（空格键）作为 Leader 键：
+
+- `SPC f f` - 打开文件
+- `SPC p f` - 项目内查找文件
+- `SPC b b` - 切换缓冲区
+- `SPC g s` - Git 管理（Magit）
+- `SPC t t` - 文件树（Treemacs）
+- `SPC a c` - AI 对话
+- `SPC t l` - 重置工作区布局
+- `SPC h ?` - 快捷键帮助
+
+#### 传统快捷键（备选）
+
 - `C-p` - 项目内查找文件
 - `C-x g` - Git 管理（Magit）
 - `C-c t` - 文件树（Treemacs）
 - `C-c a c` - AI 对话
-- `F9` - 重置工作区布局
+- `F5` - 重置工作区布局
 
 ## 文档
 

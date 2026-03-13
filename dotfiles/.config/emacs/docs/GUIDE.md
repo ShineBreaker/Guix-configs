@@ -8,9 +8,58 @@ SPDX-License-Identifier: GPL-3.0
 
 本文档介绍新增工具的使用方法。
 
+## 0. 键位系统
+
+### 0.1 Leader 键系统（推荐）
+
+本配置采用 Spacemacs/Doom Emacs 风格的 Leader 键设计，大幅减少对 Ctrl 键的依赖。
+
+**Leader 键**：`SPC`（空格键，在 Evil Normal/Visual 模式下）
+**Local Leader 键**：`,`（逗号，针对特定 major mode）
+
+**使用方式**：
+1. 按 `ESC` 或 `C-[` 进入 Evil Normal 模式
+2. 按 `SPC` 触发 Leader 键
+3. 按对应的键序列（会有提示）
+
+**主要键位分类**：
+- `SPC f` - 文件操作（file）
+- `SPC b` - 缓冲区操作（buffer）
+- `SPC w` - 窗口操作（window）
+- `SPC p` - 项目操作（project）
+- `SPC s` - 搜索操作（search）
+- `SPC g` - Git 操作
+- `SPC a` - AI 操作
+- `SPC t` - 切换操作（toggle）
+- `SPC o` - Org Mode 操作
+- `SPC h` - 帮助系统（help）
+
+**示例**：
+- 打开文件：`SPC f f`
+- 切换缓冲区：`SPC b b`
+- 项目搜索：`SPC p s`
+- Git 状态：`SPC g s`
+
+### 0.2 传统快捷键（备选）
+
+保留部分常用的 Ctrl 快捷键作为备选，在 Emacs 状态下或习惯传统快捷键时使用：
+
+- `C-p` - 项目查找文件
+- `C-S-f` - 全文搜索
+- `C-S-b` - 切换缓冲区
+- `C-c t` - 文件树
+- `F5` - 工作区布局
+
+### 0.3 Evil 模式切换
+
+- `C-c v v` - 切换到 Vim 普通模式（推荐使用 Leader 键）
+- `C-c v e` - 切换到 Emacs 模式（使用传统快捷键）
+- `i` - 在 Evil 普通模式下进入插入模式
+- `ESC` - 返回普通模式
+
 ## 1. Git 管理 - Magit
 
-**启动方式**：`C-x g` 或 `M-x magit-status`
+**启动方式**：`SPC g s` 或 `C-x g` 或 `M-x magit-status`
 
 **核心操作**：
 
@@ -30,15 +79,15 @@ SPDX-License-Identifier: GPL-3.0
 
 ## 2. 项目管理 - Projectile
 
-**快捷键前缀**：`C-c p`
+**快捷键前缀**：`SPC p`（推荐）或 `C-c p`（传统）
 
 **常用命令**：
 
-- `C-c p f` - 项目内查找文件
-- `C-c p s g` - 项目内搜索（grep）
-- `C-c p p` - 切换项目
-- `C-c p k` - 关闭项目所有缓冲区
-- `C-c p d` - 打开项目根目录
+- `SPC p f` 或 `C-c p f` - 项目内查找文件
+- `SPC p s` 或 `C-c p s s` - 项目内搜索
+- `SPC p p` 或 `C-c p p` - 切换项目
+- `SPC p k` 或 `C-c p k` - 关闭项目所有缓冲区
+- `SPC p d` 或 `C-c p d` - 打开项目根目录
 
 **项目识别**：
 Projectile 自动识别包含 `.git`、`.projectile` 等标记的目录为项目。
@@ -62,7 +111,7 @@ Projectile 自动识别包含 `.git`、`.projectile` 等标记的目录为项目
 - `C-c C-t` - 切换 TODO 状态
 - `C-c C-s` - 设置计划时间
 - `C-c C-d` - 设置截止时间
-- `C-c a` - 打开议程视图
+- `SPC o a` 或 `C-c a` - 打开议程视图
 
 ### 3.2 Org Roam（笔记管理）
 
@@ -70,15 +119,15 @@ Projectile 自动识别包含 `.git`、`.projectile` 等标记的目录为项目
 
 **核心命令**：
 
-- `C-c n f` - 查找或创建笔记
-- `C-c n i` - 插入笔记链接
-- `C-c n l` - 显示反向链接
+- `SPC o n f` 或 `C-c n f` - 查找或创建笔记
+- `SPC o n i` 或 `C-c n i` - 插入笔记链接
+- `SPC o n l` 或 `C-c n l` - 显示反向链接
 
 **使用流程**：
 
-1. `C-c n f` 创建新笔记
-2. 在笔记中使用 `C-c n i` 链接其他笔记
-3. `C-c n l` 查看哪些笔记链接到当前笔记
+1. `SPC o n f` 创建新笔记
+2. 在笔记中使用 `SPC o n i` 链接其他笔记
+3. `SPC o n l` 查看哪些笔记链接到当前笔记
 
 ## 4. 邮件客户端 - Notmuch
 
@@ -103,7 +152,7 @@ notmuch new
 
 ## 5. 日历 - Calfw
 
-**启动方式**：`C-c c` 或 `M-x cfw:open-calendar-buffer`
+**启动方式**：`SPC o c` 或 `C-c c` 或 `M-x cfw:open-calendar-buffer`
 
 **导航**：
 
@@ -118,7 +167,7 @@ Calfw 可以显示 Org Mode 中的日程安排。
 
 ## 6. 文件树 - Treemacs
 
-**启动方式**：`C-c t` 或 `M-x treemacs`
+**启动方式**：`SPC t t` 或 `C-c t` 或 `M-x treemacs`
 
 **基本操作**：
 
@@ -143,38 +192,60 @@ secret-tool store --label="DashScope API Key" service emacs-ai provider dashscop
 
 **快捷键**：
 
-- `C-c a c` - 开始 AI 对话
-- `C-c a q` - 询问选中的代码
-- `C-c a e` - 让 AI 编辑代码
-- `C-c a i` - 让 AI 补充代码
+- `SPC a a` 或 `C-c a a` - 打开 AI 面板
+- `SPC a c` 或 `C-c a c` - 开始 AI 对话
+- `SPC a q` 或 `C-c a q` - 询问选中的代码
+- `SPC a e` 或 `C-c a e` - 让 AI 编辑代码
+- `SPC a i` 或 `C-c a i` - 让 AI 补充代码
 
 **使用流程**：
 
 1. 选中代码
-2. `C-c a q` 询问问题
-3. 根据回答使用 `C-c a e` 修改代码
+2. `SPC a q` 询问问题
+3. 根据回答使用 `SPC a e` 修改代码
 
 ## 8. 工作区布局
 
-**快捷键**：`F9`
+**快捷键**：`SPC t l` 或 `F5`
 
 **布局说明**：
 
 - 左侧：Treemacs 文件树
 - 中间：代码编辑区
 - 底部：终端（vterm）
+- 右侧：AI 面板
 
 ## 9. Evil 模式（Vim 键位）
 
 **状态切换**：
 
-- `C-c v v` - 切换到 Vim 普通模式
-- `C-c v e` - 切换到 Emacs 模式
+- `C-c v v` - 切换到 Vim 普通模式（推荐使用 Leader 键）
+- `C-c v e` - 切换到 Emacs 模式（使用传统快捷键）
 
 **学习建议**：
-保留 Emacs 原生快捷键的学习价值，可以在两种模式间自由切换。
+保留 Emacs 原生快捷键的学习价值，可以在两种模式间自由切换。推荐在 Evil 普通模式下使用 Leader 键系统。
 
 ## 10. 常用快捷键总结
+
+### Leader 键快捷键（推荐）
+
+| 功能         | 快捷键      | 说明           |
+| ------------ | ----------- | -------------- |
+| 项目查找文件 | `SPC p f`   | 快速查找       |
+| 项目搜索     | `SPC p s`   | Ripgrep 搜索   |
+| 切换缓冲区   | `SPC b b`   | 快速切换       |
+| Git 状态     | `SPC g s`   | Magit          |
+| 文件树       | `SPC t t`   | Treemacs       |
+| 工作区布局   | `SPC t l`   | VS Code 风格   |
+| 终端         | `SPC t v`   | Vterm          |
+| AI 面板      | `SPC a a`   | 打开 AI 面板   |
+| AI 对话      | `SPC a c`   | Ellama         |
+| 日历         | `SPC o c`   | Calfw          |
+| Org 笔记     | `SPC o n f` | Org-roam       |
+| 帮助         | `SPC h ?`   | 快捷键帮助     |
+| 执行命令     | `SPC SPC`   | M-x            |
+
+### 传统快捷键（备选）
 
 | 功能         | 快捷键    | 说明         |
 | ------------ | --------- | ------------ |
