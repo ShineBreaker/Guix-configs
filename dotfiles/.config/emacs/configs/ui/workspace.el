@@ -67,9 +67,13 @@
             (shell))
           ;; 返回代码窗口
           (select-window code-win))))
-    ;; 打开右侧 AI 面板
-    (when (fboundp 'my/ai-open-panel)
-      (ignore-errors (my/ai-open-panel)))
+    ;; 显示 minimap（在 sidebar 之前）
+    (when (and (fboundp 'minimap-create)
+               (not (get-buffer-window "*MINIMAP*")))
+      (minimap-create))
+    ;; 显示右侧功能栏
+    (when (fboundp 'my/sidebar-show)
+      (my/sidebar-show))
     ;; 焦点回到代码窗口
     (when (window-live-p code-win)
       (select-window code-win))))
