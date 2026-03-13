@@ -80,14 +80,11 @@
           (row "SPC g d" "Git 差异")
           (insert "\n")
 
-          (section "═══ AI (SPC a) ═══")
-          (row "SPC a a" "打开 AI 终端")
-          (insert "\n")
-
           (section "═══ 切换 (SPC t) ═══")
           (row "SPC t t" "文件树")
           (row "SPC t v" "终端")
           (row "SPC t l" "工作区布局")
+          (row "SPC t s" "功能栏")
           (insert "\n")
 
           (section "═══ Org (SPC o) ═══")

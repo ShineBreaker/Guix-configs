@@ -24,6 +24,7 @@
 (my/load-config "ui" "appearance.el")
 (my/load-config "ui" "dashboard.el")
 (my/load-config "ui" "workspace.el")
+(my/load-config "ui" "sidebar.el")
 
 (my/load-config "editor" "keybindings.el")
 (my/load-config "editor" "leader.el")
@@ -37,7 +38,6 @@
 (my/load-config "tools" "git.el")
 (my/load-config "tools" "project.el")
 (my/load-config "tools" "terminal.el")
-(my/load-config "tools" "ai.el")
 (my/load-config "tools" "mail.el")
 (my/load-config "tools" "calendar.el")
 

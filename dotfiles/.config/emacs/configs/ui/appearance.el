@@ -85,10 +85,14 @@
   (doom-modeline-buffer-file-name-style 'truncate-upto-project)
   (doom-modeline-project-detection 'project))
 
-;; 迷你地图（F8 开关）
+;; 迷你地图
 (use-package minimap
-  :commands minimap-mode
-  :bind ("<f8>" . minimap-mode))
+  :commands (minimap-mode minimap-create minimap-kill)
+  :bind ("<f8>" . minimap-mode)
+  :custom
+  (minimap-window-location 'right)
+  (minimap-width-fraction 0.1)
+  (minimap-minimum-width 15))
 
 (provide 'appearance)
 ;;; appearance.el ends here

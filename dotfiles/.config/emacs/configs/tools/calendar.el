@@ -5,14 +5,12 @@
 ;;; calendar.el --- 日历管理 -*- lexical-binding: t; -*-
 
 ;;; Commentary:
-;; 配置 Calfw 日历框架。
+;; 使用 Emacs 内置日历。
 
 ;;; Code:
 
-;; Calfw（日历框架）
-(use-package calfw
-  :commands cfw:open-calendar-buffer
-  :bind ("C-c c" . cfw:open-calendar-buffer))
+;; 使用内置日历
+(global-set-key (kbd "C-c c") 'calendar)
 
 (provide 'calendar)
 ;;; calendar.el ends here

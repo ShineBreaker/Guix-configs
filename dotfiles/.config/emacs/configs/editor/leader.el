@@ -82,17 +82,13 @@
     "gl" '(magit-log :which-key "Git 日志")
     "gd" '(magit-diff :which-key "Git 差异"))
 
-  ;; AI 操作 (SPC a)
-  (my/leader-def
-    "a" '(:ignore t :which-key "AI")
-    "aa" '(my/ai-open-panel :which-key "打开 AI 终端"))
-
   ;; 切换操作 (SPC t)
   (my/leader-def
     "t" '(:ignore t :which-key "切换")
     "tt" '(treemacs :which-key "文件树")
     "tv" '(vterm :which-key "终端")
-    "tl" '(my/vscode-layout :which-key "工作区布局"))
+    "tl" '(my/vscode-layout :which-key "工作区布局")
+    "ts" '(my/sidebar-toggle :which-key "功能栏"))
 
   ;; Org Mode (SPC o)
   (my/leader-def
