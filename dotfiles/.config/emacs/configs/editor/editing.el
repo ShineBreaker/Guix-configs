@@ -46,15 +46,5 @@
   (git-messenger:show-detail t)
   (git-messenger:use-magit-popup t))
 
-;; Sticky 函数头（显示当前函数名）
-(use-package stickyfunc-enhance
-  :hook (prog-mode . (lambda ()
-                       (when (derived-mode-p 'c-mode 'c-ts-mode
-                                             'c++-mode 'c++-ts-mode
-                                             'python-mode 'python-ts-mode
-                                             'emacs-lisp-mode)
-                         (ignore-errors (semantic-mode 1)
-                                        (semantic-stickyfunc-mode 1))))))
-
 (provide 'editing)
 ;;; editing.el ends here

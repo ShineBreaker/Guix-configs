@@ -27,7 +27,8 @@
           vterm-color-white   (face-attribute 'term-color-white :foreground nil t)))
 
   (my/vterm-sync-colors)
-  (add-hook 'after-load-theme-hook #'my/vterm-sync-colors))
+  ;; 在加载主题后同步颜色
+  (advice-add 'load-theme :after (lambda (&rest _) (my/vterm-sync-colors))))
 
 (provide 'terminal)
 ;;; terminal.el ends here

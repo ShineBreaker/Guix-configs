@@ -2,7 +2,7 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-;;; core-ai.el --- AI 终端面板配置 -*- lexical-binding: t; -*-
+;;; ai.el --- AI 终端面板配置 -*- lexical-binding: t; -*-
 
 ;;; Commentary:
 ;; 简化的 AI 工具集成：直接在右侧打开 vterm 终端。
@@ -48,5 +48,5 @@
                       (window-parameters . ((no-delete-other-windows . t)
                                             (no-other-window . nil)))))))
 
-(provide 'core-ai)
+(provide 'ai)
 ;;; ai.el ends here
