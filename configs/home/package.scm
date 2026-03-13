@@ -33,7 +33,6 @@
           "kdeconnect"
           "notmuch"
           "telegram-desktop"
-          "tailscale"
 
           ;; Productivity
           "gimp"
@@ -74,7 +73,6 @@
           "maven"
           "node"
           "openjdk@21"
-          "package-version-server"
           "pnpm@10"
           "python-black"
           "python-jsbeautifier"

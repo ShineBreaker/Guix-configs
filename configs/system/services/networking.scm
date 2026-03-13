@@ -9,8 +9,7 @@
                      shepherd)
 
 (define %networking-services
-  (list (service tailscale-service-type)
-        (service nftables-service-type
+  (list (service nftables-service-type
                  (nftables-configuration (ruleset (local-file
                                                    "../configs/files/nftables.conf"))))
   (simple-service 'mihomo-services shepherd-root-service-type
