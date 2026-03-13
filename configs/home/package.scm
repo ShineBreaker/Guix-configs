@@ -45,7 +45,7 @@
           ;; Entertainment
           "heroic"
           "mangohud"
-          "osu-lazer-tachyon-bin"
+          "osu-lazer-bin"
           "prismlauncher-dolly"
           "steam"
 
@@ -73,6 +73,7 @@
           "maven"
           "node"
           "openjdk@21"
+          "pandoc"
           "pnpm@10"
           "python-black"
           "python-jsbeautifier"
