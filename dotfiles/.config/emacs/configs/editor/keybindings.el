@@ -7,6 +7,10 @@
 ;;; Commentary:
 ;; 配置 Evil（Vim 模拟）和全局键位绑定。
 ;; 保留 Emacs 原生操作的学习价值，提供 Vim/Emacs 双模式切换。
+;;
+;; 键位设计：
+;; - 主要使用 Leader 键（SPC）减少 Ctrl 键依赖（见 leader.el）
+;; - 保留部分常用 Ctrl 快捷键作为备选（兼容 Emacs 状态）
 
 ;;; Code:
 

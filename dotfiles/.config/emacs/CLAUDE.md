@@ -10,7 +10,7 @@ SPDX-License-Identifier: GPL-3.0
 
 ## 概述
 
-这是一个基于 Guix 的模块化 Emacs 配置，提供类似 JetBrains IDE 的开发体验。所有包由 Guix 管理（不使用 package.el），配置采用 VS Code 风格的快捷键和工作区布局。
+这是一个基于 Guix 的模块化 Emacs 配置，提供类似 JetBrains IDE 的开发体验。所有包由 Guix 管理（不使用 package.el），配置采用 Leader 键系统（Spacemacs/Doom 风格）减少对 Ctrl 键的依赖。
 
 ## 架构设计
 
@@ -94,17 +94,18 @@ emacs --debug-init
 
 ### 工作区布局（configs/ui/workspace.el）
 
-- 按 `F5` 触发 VS Code 风格布局
+- 按 `SPC t l` 或 `F5` 触发 VS Code 风格布局
 - 左侧：Treemacs 文件树
 - 中间：编辑器
 - 底部：vterm 终端
+- 右侧：AI 面板
 
 ### AI 集成（configs/tools/ai.el）
 
 - 使用 Ellama + DashScope API
 - API 密钥存储在 GNOME Keyring 或 `OPENAI_API_KEY` 环境变量
 - 配置方法：`secret-tool store --label="DashScope API Key" service emacs-ai provider dashscope`
-- 快捷键：`C-c a c`（对话）、`C-c a q`（询问）、`C-c a e`（编辑代码）
+- 快捷键：`SPC a c`（对话）、`SPC a q`（询问）、`SPC a e`（编辑代码）
 
 ### LSP 配置（configs/coding/lsp.el）
 
@@ -115,14 +116,14 @@ emacs --debug-init
 ### Git 管理（configs/tools/git.el）
 
 - 使用 Magit 和 magit-todos
-- `C-x g` 打开 Magit 状态页面
+- `SPC g s` 或 `C-x g` 打开 Magit 状态页面
 - 核心操作：`s`（暂存）、`c c`（提交）、`P p`（推送）、`F p`（拉取）
 
 ### 项目管理（configs/tools/project.el）
 
 - 使用 Projectile
 - 自动识别包含 `.git`、`.projectile` 等标记的目录
-- 前缀键：`C-c p`
+- Leader 键前缀：`SPC p`（推荐）或传统前缀：`C-c p`
 
 ### Org Mode（configs/Documents/Org/Documents/Org/-mode.el）
 
@@ -132,24 +133,58 @@ emacs --debug-init
 
 ## 常用快捷键
 
-这些快捷键定义在 configs/editor/keybindings.el 中：
+### Leader 键系统（推荐）
+
+配置采用 Spacemacs/Doom Emacs 风格的 Leader 键设计，减少对 Ctrl 键的依赖。
+
+**Leader 键**：`SPC`（空格键，在 Evil Normal/Visual 模式下）
+**Local Leader 键**：`,`（逗号，针对特定 major mode）
+
+主要快捷键（在 Evil Normal/Visual 模式下）：
+
+| 类别     | 快捷键      | 说明                |
+| -------- | ----------- | ------------------- |
+| **文件** | `SPC f f`   | 打开文件            |
+|          | `SPC f s`   | 保存文件            |
+|          | `SPC f r`   | 最近文件            |
+| **缓冲区** | `SPC b b` | 切换缓冲区          |
+|          | `SPC b d`   | 关闭缓冲区          |
+|          | `SPC b n/p` | 下一个/上一个缓冲区 |
+| **窗口** | `SPC w s/v` | 水平/垂直分割       |
+|          | `SPC w d`   | 关闭窗口            |
+|          | `SPC w h/j/k/l` | 切换到左/下/上/右窗口 |
+| **项目** | `SPC p f`   | 项目查找文件        |
+|          | `SPC p s`   | 项目搜索            |
+|          | `SPC p p`   | 切换项目            |
+| **搜索** | `SPC s s`   | 搜索当前文件        |
+|          | `SPC s p`   | 搜索项目            |
+| **Git**  | `SPC g s`   | Git 状态            |
+|          | `SPC g b`   | Git blame           |
+| **AI**   | `SPC a a`   | 打开 AI 面板        |
+|          | `SPC a c`   | AI 对话             |
+|          | `SPC a q`   | 询问代码            |
+|          | `SPC a e`   | 编辑代码            |
+| **切换** | `SPC t t`   | 文件树              |
+|          | `SPC t v`   | 终端                |
+|          | `SPC t l`   | 工作区布局          |
+| **Org**  | `SPC o a`   | Org 议程            |
+|          | `SPC o n f` | 查找笔记            |
+| **帮助** | `SPC h f/v/k` | 查看函数/变量/按键 |
+|          | `SPC h ?`   | 快捷键帮助          |
+| **快速** | `SPC SPC`   | M-x 命令            |
+
+### 传统快捷键（备选）
+
+保留部分 Ctrl 快捷键，在 Emacs 状态下或作为备选使用：
 
 | 功能         | 快捷键    | 说明                |
 | ------------ | --------- | ------------------- |
-| 项目查找文件 | `C-p`     | Projectile 查找     |
-| 全文搜索     | `C-S-f`   | Ripgrep 项目搜索    |
+| 项目查找文件 | `C-p`     | 快速查找            |
+| 全文搜索     | `C-S-f`   | Ripgrep 搜索        |
 | 切换缓冲区   | `C-S-b`   | 快速切换            |
-| Git 状态     | `C-x g`   | Magit 状态页面      |
-| 文件树       | `C-c t`   | Treemacs 切换       |
-| 工作区布局   | `F5`      | VS Code 风格布局    |
-| 终端         | `C-c v t` | Vterm 终端          |
+| 文件树       | `C-c t`   | Treemacs            |
+| 工作区布局   | `F5`      | VS Code 风格        |
 | AI 对话      | `C-c a c` | Ellama 对话         |
-| AI 询问代码  | `C-c a q` | 询问选中的代码      |
-| AI 编辑代码  | `C-c a e` | 让 AI 编辑代码      |
-| 邮件         | `C-c m`   | Notmuch 邮件客户端  |
-| 日历         | `C-c c`   | Calfw 日历          |
-| Org 笔记     | `C-c n f` | Org-roam 查找/创建  |
-| Org 议程     | `C-c a`   | Org 议程视图        |
 | Evil 模式    | `C-c v v` | 切换到 Vim 普通模式 |
 
 ## 修改配置
@@ -170,7 +205,9 @@ emacs --debug-init
 
 ### 修改快捷键
 
-编辑 configs/editor/keybindings.el - 这是所有自定义快捷键的集中位置。
+- Leader 键绑定：编辑 configs/editor/leader.el
+- 传统快捷键：编辑 configs/editor/keybindings.el
+- Leader 键系统使用 general.el 管理，提供 which-key 提示
 
 ### 添加新语言支持
 

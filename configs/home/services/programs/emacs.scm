@@ -8,6 +8,7 @@
           "emacs-pgtk"                    ; 纯 GTK 版 Emacs（原生 Wayland 支持）
           "sbcl"                          ; Steel Bank Common Lisp（SLY 所需）
           "emacs-use-package"             ; 包配置宏
+          "emacs-general"                 ;; Leader 键系统
 
           ;; --- 补全与迷你缓冲区 ---
           "emacs-vertico"                 ; 垂直补全界面

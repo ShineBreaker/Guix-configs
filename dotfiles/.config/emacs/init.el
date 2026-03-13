@@ -26,6 +26,7 @@
 (my/load-config "ui" "workspace.el")
 
 (my/load-config "editor" "keybindings.el")
+(my/load-config "editor" "leader.el")
 (my/load-config "editor" "completion.el")
 (my/load-config "editor" "editing.el")
 
