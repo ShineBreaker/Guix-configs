@@ -102,10 +102,15 @@ emacs --debug-init
 
 ### AI 集成（configs/tools/ai.el）
 
-- 使用 Ellama + DashScope API
-- API 密钥存储在 GNOME Keyring 或 `OPENAI_API_KEY` 环境变量
-- 配置方法：`secret-tool store --label="DashScope API Key" service emacs-ai provider dashscope`
-- 快捷键：`SPC a c`（对话）、`SPC a q`（询问）、`SPC a e`（编辑代码）
+- 简化的 AI 工具集成：直接在右侧打开 vterm 终端
+- 方便运行 Claude Code、Aider 等 CLI 工具
+- 快捷键：`SPC a a` 或 `C-c a a` 打开 AI 终端面板
+
+### 帮助系统（configs/editor/help.el）
+
+- 提供完整的快捷键参考文档
+- 快捷键：`F1 ?` 或 `SPC h ?` 显示帮助
+- **重要**：修改快捷键配置时，必须同步更新 help.el 中的帮助文档
 
 ### LSP 配置（configs/coding/lsp.el）
 
@@ -133,59 +138,52 @@ emacs --debug-init
 
 ## 常用快捷键
 
-### Leader 键系统（推荐）
+### Leader 键系统
 
-配置采用 Spacemacs/Doom Emacs 风格的 Leader 键设计，减少对 Ctrl 键的依赖。
+配置采用 Spacemacs/Doom Emacs 风格的 Leader 键设计，完全基于 Leader 键，无传统 Ctrl 快捷键。
 
 **Leader 键**：`SPC`（空格键，在 Evil Normal/Visual 模式下）
 **Local Leader 键**：`,`（逗号，针对特定 major mode）
 
 主要快捷键（在 Evil Normal/Visual 模式下）：
 
-| 类别     | 快捷键      | 说明                |
-| -------- | ----------- | ------------------- |
-| **文件** | `SPC f f`   | 打开文件            |
-|          | `SPC f s`   | 保存文件            |
-|          | `SPC f r`   | 最近文件            |
-| **缓冲区** | `SPC b b` | 切换缓冲区          |
-|          | `SPC b d`   | 关闭缓冲区          |
-|          | `SPC b n/p` | 下一个/上一个缓冲区 |
-| **窗口** | `SPC w s/v` | 水平/垂直分割       |
-|          | `SPC w d`   | 关闭窗口            |
-|          | `SPC w h/j/k/l` | 切换到左/下/上/右窗口 |
-| **项目** | `SPC p f`   | 项目查找文件        |
-|          | `SPC p s`   | 项目搜索            |
-|          | `SPC p p`   | 切换项目            |
-| **搜索** | `SPC s s`   | 搜索当前文件        |
-|          | `SPC s p`   | 搜索项目            |
-| **Git**  | `SPC g s`   | Git 状态            |
-|          | `SPC g b`   | Git blame           |
-| **AI**   | `SPC a a`   | 打开 AI 面板        |
-|          | `SPC a c`   | AI 对话             |
-|          | `SPC a q`   | 询问代码            |
-|          | `SPC a e`   | 编辑代码            |
-| **切换** | `SPC t t`   | 文件树              |
-|          | `SPC t v`   | 终端                |
-|          | `SPC t l`   | 工作区布局          |
-| **Org**  | `SPC o a`   | Org 议程            |
-|          | `SPC o n f` | 查找笔记            |
-| **帮助** | `SPC h f/v/k` | 查看函数/变量/按键 |
-|          | `SPC h ?`   | 快捷键帮助          |
-| **快速** | `SPC SPC`   | M-x 命令            |
+| 类别       | 快捷键          | 说明                  |
+| ---------- | --------------- | --------------------- |
+| **文件**   | `SPC f f`       | 打开文件              |
+|            | `SPC f s`       | 保存文件              |
+|            | `SPC f S`       | 另存为                |
+|            | `SPC f r`       | 最近文件              |
+| **缓冲区** | `SPC b b`       | 切换缓冲区            |
+|            | `SPC b d`       | 关闭缓冲区            |
+|            | `SPC b n/p`     | 下一个/上一个缓冲区   |
+| **窗口**   | `SPC w s/v`     | 水平/垂直分割         |
+|            | `SPC w d`       | 关闭窗口              |
+|            | `SPC w h/j/k/l` | 切换到左/下/上/右窗口 |
+| **项目**   | `SPC p f`       | 项目查找文件          |
+|            | `SPC p s`       | 项目搜索              |
+|            | `SPC p p`       | 切换项目              |
+| **搜索**   | `SPC s s`       | 搜索当前文件          |
+|            | `SPC s p`       | 搜索项目              |
+| **Git**    | `SPC g s`       | Git 状态              |
+|            | `SPC g b`       | Git blame             |
+| **AI**     | `SPC a a`       | 打开 AI 终端          |
+| **切换**   | `SPC t t`       | 文件树                |
+|            | `SPC t v`       | 终端                  |
+|            | `SPC t l`       | 工作区布局            |
+| **Org**    | `SPC o a`       | Org 议程              |
+|            | `SPC o n f`     | 查找笔记              |
+| **帮助**   | `SPC h f/v/k`   | 查看函数/变量/按键    |
+|            | `SPC h ?`       | 快捷键帮助            |
+| **快速**   | `SPC SPC`       | M-x 命令              |
 
-### 传统快捷键（备选）
+### 特殊快捷键
 
-保留部分 Ctrl 快捷键，在 Emacs 状态下或作为备选使用：
+少数功能键保留用于快速访问：
 
-| 功能         | 快捷键    | 说明                |
-| ------------ | --------- | ------------------- |
-| 项目查找文件 | `C-p`     | 快速查找            |
-| 全文搜索     | `C-S-f`   | Ripgrep 搜索        |
-| 切换缓冲区   | `C-S-b`   | 快速切换            |
-| 文件树       | `C-c t`   | Treemacs            |
-| 工作区布局   | `F5`      | VS Code 风格        |
-| AI 对话      | `C-c a c` | Ellama 对话         |
-| Evil 模式    | `C-c v v` | 切换到 Vim 普通模式 |
+| 功能       | 快捷键 | 说明             |
+| ---------- | ------ | ---------------- |
+| 工作区布局 | `F5`   | VS Code 风格布局 |
+| 快捷键帮助 | `F1 ?` | 显示帮助         |
 
 ## 修改配置
 
@@ -292,6 +290,21 @@ emacs --debug-init
 - 注释和文档主要使用中文
 - 修改文件时保持与现有注释语言的一致性
 
+### 文档维护
+
+**重要**：修改配置时必须同步更新相关文档：
+
+- 修改快捷键时，同步更新 `configs/editor/help.el` 中的帮助文档
+- 修改核心功能时，同步更新 `CLAUDE.md` 中的对应章节
+- 添加新模块时，在 `CLAUDE.md` 的"核心子系统"中添加说明
+- 修改目录结构时，更新 `CLAUDE.md` 中的目录结构图
+
+文档位置：
+- **configs/editor/help.el** - 快捷键帮助（按 F1 ? 显示）
+- **CLAUDE.md** - 开发者指南（本文件）
+- **docs/README.md** - 用户快速开始指南
+- **docs/GUIDE.md** - 用户详细功能文档
+
 ### 启动优化
 
 - early-init.el 中的 GC 设置在启动后会被重置
@@ -302,7 +315,6 @@ emacs --debug-init
 
 - **docs/README.md** - 快速开始指南（中文）
 - **docs/GUIDE.md** - 详细功能文档（中文）
-- **docs/changelog.md** - 变更历史
 
 ## 核心工具函数
 

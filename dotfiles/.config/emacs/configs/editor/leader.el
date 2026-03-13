@@ -85,11 +85,7 @@
   ;; AI 操作 (SPC a)
   (my/leader-def
     "a" '(:ignore t :which-key "AI")
-    "aa" '(my/ai-open-panel :which-key "打开 AI 面板")
-    "ac" '(ellama-chat :which-key "AI 对话")
-    "aq" '(my/ai-ask-codebase :which-key "询问代码")
-    "ae" '(ellama-code-edit :which-key "编辑代码")
-    "ai" '(ellama-code-add :which-key "补写代码"))
+    "aa" '(my/ai-open-panel :which-key "打开 AI 终端"))
 
   ;; 切换操作 (SPC t)
   (my/leader-def
@@ -122,6 +118,13 @@
     "SPC" '(execute-extended-command :which-key "M-x")
     ":" '(eval-expression :which-key "执行表达式")
     "q" '(save-buffers-kill-terminal :which-key "退出 Emacs")))
+
+;; Markdown 模式 Local Leader 键
+(general-define-key
+ :states '(normal visual)
+ :keymaps 'markdown-mode-map
+ :prefix ","
+ "p" '(markdown-preview :which-key "预览"))
 
 (provide 'leader)
 ;;; leader.el ends here
