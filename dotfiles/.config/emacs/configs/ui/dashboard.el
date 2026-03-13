@@ -23,7 +23,7 @@
                       ("SPC g s" "Git 状态")
                       ("SPC t t" "文件树")
                       ("SPC t l" "工作区布局")
-                      ("SPC a c" "AI 对话"))
+                      ("SPC a a" "AI 终端"))
                      ("帮助"
                       ("SPC h ?" "完整快捷键帮助")
                       ("SPC SPC" "执行命令 (M-x)")

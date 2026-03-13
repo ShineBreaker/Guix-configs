@@ -43,9 +43,11 @@
 
 (my/load-config "org" "org-mode.el")
 
-;; 启动信息
-(message "[init] 配置加载完成，用时 %.2fs"
-         (float-time (time-subtract after-init-time before-init-time)))
+;; 启动信息（在启动完成后显示）
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (message "[init] Emacs 启动完成，用时 %.2fs"
+                     (float-time (time-subtract after-init-time before-init-time)))))
 
 (provide 'init)
 ;;; init.el ends here
