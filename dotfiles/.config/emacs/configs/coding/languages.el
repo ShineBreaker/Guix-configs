@@ -31,7 +31,10 @@
 
 ;; Markdown
 (use-package markdown-mode
-  :mode ("\\.md\\'" "\\.markdown\\'"))
+  :mode ("\\.md\\'" "\\.markdown\\'")
+  :custom
+  (markdown-command "pandoc")
+  (markdown-fontify-code-blocks-natively t))
 
 ;; Kotlin
 (use-package kotlin-mode
