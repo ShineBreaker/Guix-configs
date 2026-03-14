@@ -43,8 +43,8 @@
                      (projects . 8)
                      (bookmarks . 8)
                      (shortcuts . 1)))
-  (dashboard-set-heading-icons t)
-  (dashboard-set-file-icons t)
+  (dashboard-set-heading-icons (display-graphic-p))
+  (dashboard-set-file-icons (display-graphic-p))
   :config
   (add-to-list 'dashboard-item-generators '(shortcuts . my/dashboard-insert-shortcuts))
   (dashboard-setup-startup-hook))
