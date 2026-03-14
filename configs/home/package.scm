@@ -57,6 +57,8 @@
           "just"
           "maak"
           "postgresql"
+          "tmux"
+          "tmuxifier"
           "winapps"
 
           ;; Themes & Appearance
