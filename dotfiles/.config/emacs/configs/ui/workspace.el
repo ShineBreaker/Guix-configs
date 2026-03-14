@@ -18,10 +18,18 @@
   :custom
   (treemacs-width 30)
   (treemacs-position 'left)
-  (treemacs-git-mode 'simple)
   :config
-  (treemacs-project-follow-mode 1)
-  (treemacs-follow-mode 1))
+  (if (display-graphic-p)
+      ;; GUI 模式：启用完整功能
+      (progn
+        (setq treemacs-git-mode 'simple)
+        (treemacs-project-follow-mode 1)
+        (treemacs-follow-mode 1))
+    ;; 终端模式：禁用可能有问题的功能
+    (setq treemacs-git-mode nil))
+  ;; 确保 evil-collection 正确设置 treemacs 键绑定
+  (with-eval-after-load 'evil-collection
+    (evil-collection-treemacs-setup)))
 
 ;; Nerd Icons 主题
 (use-package treemacs-nerd-icons
@@ -67,12 +75,14 @@
             (shell))
           ;; 返回代码窗口
           (select-window code-win))))
-    ;; 显示 minimap（在 sidebar 之前）
-    (when (and (fboundp 'minimap-create)
+    ;; 显示 minimap（仅在 GUI 模式下）
+    (when (and (display-graphic-p)
+               (fboundp 'minimap-create)
                (not (get-buffer-window "*MINIMAP*")))
       (minimap-create))
-    ;; 显示右侧功能栏
-    (when (fboundp 'my/sidebar-show)
+    ;; 显示右侧功能栏（仅 GUI 模式）
+    (when (and (display-graphic-p)
+               (fboundp 'my/sidebar-show))
       (my/sidebar-show))
     ;; 焦点回到代码窗口
     (when (window-live-p code-win)

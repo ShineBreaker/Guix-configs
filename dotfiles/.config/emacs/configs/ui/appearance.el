@@ -32,7 +32,8 @@
 
 ;; 终端鼠标与上下文菜单
 (xterm-mouse-mode 1)
-(context-menu-mode 1)
+(when (display-graphic-p)
+  (context-menu-mode 1))
 
 ;; 光标与当前行高亮（类似 Zed）
 (setq-default cursor-type 'bar)
@@ -44,12 +45,14 @@
   :type 'integer
   :group 'faces)
 
-(set-face-attribute 'default nil :height my/default-font-height)
+(when (display-graphic-p)
+  (set-face-attribute 'default nil :height my/default-font-height))
 
-;; 窗口分割线
-(setq window-divider-default-right-width 1
-      window-divider-default-bottom-width 0)
-(window-divider-mode 1)
+;; 窗口分割线（仅 GUI 模式）
+(when (display-graphic-p)
+  (setq window-divider-default-right-width 1
+        window-divider-default-bottom-width 0)
+  (window-divider-mode 1))
 
 ;; 加载主题
 (use-package ef-themes
