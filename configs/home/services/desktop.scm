@@ -4,7 +4,6 @@
 
 (load "../services/programs/fish.scm")
 (load "../services/programs/modprobe.scm")
-(load "../services/programs/trash.scm")
 
 (use-modules (gnu home services desktop)
              (gnu home services dotfiles)
@@ -128,5 +127,4 @@
   (append %user-desktop-services
 
           %fish-services
-          %modprobe-services
-          %trash-services))
+          %modprobe-services))
