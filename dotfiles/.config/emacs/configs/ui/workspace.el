@@ -14,22 +14,13 @@
 
 ;; Treemacs 文件树
 (use-package treemacs
-  :bind ("C-c t" . treemacs)
   :custom
   (treemacs-width 30)
   (treemacs-position 'left)
   :config
-  (if (display-graphic-p)
-      ;; GUI 模式：启用完整功能
-      (progn
-        (setq treemacs-git-mode 'simple)
-        (treemacs-project-follow-mode 1)
-        (treemacs-follow-mode 1))
-    ;; 终端模式：禁用可能有问题的功能
-    (setq treemacs-git-mode nil))
-  ;; 确保 evil-collection 正确设置 treemacs 键绑定
-  (with-eval-after-load 'evil-collection
-    (evil-collection-treemacs-setup)))
+  (setq treemacs-git-mode 'simple)
+  (treemacs-project-follow-mode 1)
+  (treemacs-follow-mode 1))
 
 ;; Nerd Icons 主题
 (use-package treemacs-nerd-icons

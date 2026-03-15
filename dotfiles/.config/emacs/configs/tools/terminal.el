@@ -12,7 +12,6 @@
 ;; Vterm（高性能终端模拟器）
 (use-package vterm
   :commands vterm
-  :bind ("C-c v t" . vterm)
   :config
   ;; 让 vterm 颜色跟随主题
   (defun my/vterm-sync-colors ()

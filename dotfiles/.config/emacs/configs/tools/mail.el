@@ -12,7 +12,6 @@
 ;; Notmuch（邮件客户端）
 (use-package notmuch
   :commands notmuch
-  :bind ("C-c m" . notmuch)
   :custom
   (notmuch-search-oldest-first nil))
 

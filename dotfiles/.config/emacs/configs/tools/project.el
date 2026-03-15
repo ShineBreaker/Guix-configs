@@ -12,7 +12,6 @@
 ;; Projectile（项目管理增强）
 (use-package projectile
   :demand t
-  :bind-keymap ("C-c p" . projectile-command-map)
   :custom
   (projectile-completion-system 'default)
   (projectile-enable-caching t)
