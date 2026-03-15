@@ -1,38 +1,38 @@
 if status is-interactive
 
-    # ========== 场景A：Foot 终端自动 Tmux ==========
+    # ========== Foot 终端自动 Tmux ==========
     # 条件：在 Foot 中 + 不在 Tmux 内 + 不在容器内
-    if test "$TERM" = "foot"
-        and not set -q TMUX
-        and not set -q CONTAINER_ID
+    if test "$TERM" = "foot"; and not set -q TMUX; and not set -q CONTAINER_ID
 
-        # 生成会话名：目录名，特殊字符替换
+        # 统一会话名
+        set -l session_name "main"
+
+        # 生成窗口名：目录名，特殊字符替换
         set -l cwd (pwd)
-        set -l session_name (basename $cwd | string replace -r '[^a-zA-Z0-9_-]' '_')
+        set -l window_name (basename $cwd | string replace -r '[^a-zA-Z0-9_-]' '_')
 
         # 防止空名称
-        if test -z "$session_name"
-            set session_name "default"
+        if test -z "$window_name"
+            set window_name "default"
         end
 
         # 限制长度
-        if test (string length $session_name) -gt 20
-            set session_name (string sub -l 20 $session_name)
+        if test (string length $window_name) -gt 20
+            set window_name (string sub -l 20 $window_name)
         end
 
-        # 尝试附加现有会话，否则创建
-        tmux attach-session -t $session_name 2>/dev/null
-
-        if test $status -ne 0
-            # 新会话，保持当前目录
-            tmux new-session -s $session_name -c $cwd
+        # 检查会话是否存在
+        if tmux has-session -t $session_name 2>/dev/null
+            # 会话已存在，创建新窗口并附加
+            tmux new-window -t $session_name -c $cwd
+            tmux attach-session -t $session_name
+        else
+            # 会话不存在，创建新会话
+            tmux new-session -s $session_name -n $window_name -c $cwd
         end
 
         # 退出后停止执行（防止继续加载 fish 提示符）
         exit
     end
-
-    # ========== 其他终端：普通 Fish ==========
-    # 这里放你的其他 fish 配置（starship、abbr 等）
 
 end
