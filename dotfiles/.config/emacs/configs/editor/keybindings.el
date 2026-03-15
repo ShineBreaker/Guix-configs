@@ -14,6 +14,12 @@
 
 ;;; Code:
 
+;; 启用 CUA 模式
+(cua-mode 1)
+
+;; 禁用选中即替换行为
+(setq cua-delete-selection nil)
+
 ;; Evil 预配置（必须在加载前设置）
 (eval-and-compile
   (setq evil-want-keybinding nil      ; 由 evil-collection 接管
@@ -66,6 +72,24 @@
 (global-set-key (kbd "C-S-b") #'consult-buffer)        ; 切换缓冲区
 (global-set-key (kbd "C-S-c") #'my/copy-dwim)          ; 智能复制
 (global-set-key (kbd "C-S-v") #'yank)                  ; 粘贴
+
+;; 覆盖 Emacs 默认快捷键
+;; C-s 原本是 isearch-forward，现在改为保存文件
+(global-set-key (kbd "C-s") #'save-buffer)
+;; C-f 原本是 forward-char，现在改为查找当前文件
+(global-set-key (kbd "C-f") #'consult-line)
+
+;; Alt + 方向键切换窗口（覆盖可能的其他绑定）
+(windmove-default-keybindings 'meta)
+
+;; 确保 Evil 模式下也能使用这些快捷键
+(with-eval-after-load 'evil
+  ;; 在插入状态下也能使用 C-s 保存
+  (define-key evil-insert-state-map (kbd "C-s") #'save-buffer)
+  (define-key evil-insert-state-map (kbd "C-f") #'consult-line)
+  ;; 在普通状态下也能使用（覆盖 Evil 默认的 C-f）
+  (define-key evil-normal-state-map (kbd "C-s") #'save-buffer)
+  (define-key evil-normal-state-map (kbd "C-f") #'consult-line))
 
 (provide 'keybindings)
 ;;; keybindings.el ends here

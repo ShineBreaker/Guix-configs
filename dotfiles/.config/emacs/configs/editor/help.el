@@ -57,6 +57,7 @@
           (row "SPC w v" "垂直分割")
           (row "SPC w h/j/k/l" "切换到左/下/上/右窗口")
           (row "SPC w o" "下一个窗口")
+          (row "M-方向键" "切换窗口")
           (insert "\n")
 
           (section "═══ 项目 (SPC p) ═══")
@@ -126,6 +127,16 @@
           (row "u" "撤销")
           (row "C-r" "重做")
           (row "v/V/C-v" "可视/行/块模式")
+          (insert "\n")
+
+          (section "═══ 类 VS Code 快捷键 ═══")
+          (row "C-s" "保存文件")
+          (row "C-f" "查找当前文件")
+          (row "C-p" "项目内查找文件")
+          (row "C-S-f" "全文搜索")
+          (row "C-S-b" "切换缓冲区")
+          (row "C-S-c" "智能复制")
+          (row "C-S-v" "粘贴")
           (insert "\n")
 
           (section "═══ 其他常用 ═══")
