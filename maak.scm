@@ -10,6 +10,21 @@
   #:use-module (ice-9 regex)
   #:use-module (ice-9 textual-ports))
 
+;;; 辅助函数：原子性文件写入（不依赖 guix utils）
+(define (write-file-atomically file thunk)
+  "原子性地执行 THUNK 写入 FILE，THUNK 接收一个输出端口作为参数"
+  (let* ((template (string-append file ".XXXXXX"))
+         (port (mkstemp! template)))
+    (with-throw-handler #t
+      (lambda ()
+        (thunk port)
+        (force-output port)
+        (close-port port)
+        (rename-file template file))
+      (lambda (key . args)
+        (false-if-exception (delete-file template))
+        (false-if-exception (close-port port))))))
+
 ;;; 配置路径
 (define repo-root
   (getcwd))
@@ -150,11 +165,14 @@ Exit code: ~a~%" cmd exit-code)))))
   ($guix `("locate" "--update")))
 
 (define* (update-channels)
-  (with-atomic-file-output channel-lock
-                           (cut with-output-to-port <>
-                                (lambda ()
-                                  ($guix `("describe" "--format=channels")
-                                         #:channels channel-fresh)))))
+  "更新 channel lock 文件"
+  (write-file-atomically channel-lock
+                         (cut with-output-to-port <>
+                              (lambda ()
+                                ($guix `("describe" "--format=channels")
+                                       #:channels channel-fresh)))))
+
+
 
 (define (upgrade)
   "更新lock file"
@@ -200,7 +218,7 @@ Exit code: ~a~%" cmd exit-code)))))
 (define (style-all)
   "格式化所有代码"
   (log-info "格式化所有代码")
-  ($ '("find . -maxdepth 8 -name '*.scm'" "-type f -exec guix style -f {} \\;")
+  ($ (list "find . -maxdepth 8 -name '*.scm'" "-type f -exec guix style -f {} \\;")
      #:verbose? #t))
 
 (define (default)
