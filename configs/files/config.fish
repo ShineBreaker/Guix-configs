@@ -17,6 +17,16 @@ if status is-interactive
 
 end
 
+set -g fish_autosuggestion_enabled 1
+
+# pnpm
+mkdir -p $HOME/.local/share/pnpm
+set -gx PNPM_HOME $HOME/.local/share/pnpm
+if not string match -q -- $PNPM_HOME $PATH
+  set -gx PATH "$PNPM_HOME" $PATH
+end
+# pnpm end
+
 $$bin/fzf$$ --fish | source
 
 $$bin/zoxide$$ init fish | source
