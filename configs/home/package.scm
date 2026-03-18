@@ -10,6 +10,7 @@
           ;; AI related.
           "claude-code"
           "codex"
+          "opencode"
 
           ;; Audio & Video
           "easyeffects"
@@ -75,7 +76,7 @@
           "helix"
           "maven"
           "node"
-          "openjdk@21"
+          "openjdk@25"
           "pandoc"
           "pnpm@10"
           "python-black"
