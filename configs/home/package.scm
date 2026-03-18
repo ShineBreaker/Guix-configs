@@ -26,6 +26,7 @@
           "dex"
           "fcitx5"
           "fuzzel"
+          "nautilus"
           "wl-clipboard"
           "xsel"
 
