@@ -60,10 +60,6 @@
                         home-environment-variables-service-type
                         `(,@%extend-environment-variables
                           ,@%xdg-base-directory-env-vars
-                          ("PATH" unquote
-                           (string-append "$HOME/.local/bin:"
-                                          "$HOME/.nix-profile/bin:"
-                                          (or (getenv "PATH") "")))
                           ("QT_PLUGIN_PATH" unquote
                            (string-append
                             "/run/current-system/profile/lib/qt5/plugins:"

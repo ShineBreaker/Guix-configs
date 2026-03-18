@@ -14,40 +14,25 @@
                           "zoxide")))
 
 (define %fish-services
-  (list (service home-fish-plugin-atuin-service-type)
-        (service home-fish-plugin-direnv-service-type)
+  (list (simple-service 'fish-configs home-xdg-configuration-files-service-type
+          (list `("fish/conf.d/10-source.fish" ,(computed-substitution-with-inputs "config.fish"
+                 (plain-file "10-source.fish"
+                   "status is-interactive
+                    and begin
 
-        (simple-service 'fish-xdg-config
+                      $$bin/atuin$$ init fish | source
+                      $$bin/direnv$$ hook fish | source
+                      $$bin/fzf$$ --fish | source
+                      $$bin/zoxide$$ init fish | source
+
+                    end")
+                 (specs->pkgs "atuin" "direnv" "fzf" "zoxide")))))
+
+        (simple-service 'fish-functions
                         home-xdg-configuration-files-service-type
                         (list `("fish/functions/fenv.main.fish" ,(file-append
                                                                   fish-foreign-env
                                                                   "/share/fish/functions/fenv.main.fish"))
                               `("fish/functions/fenv.fish" ,(file-append
                                                              fish-foreign-env
-                                                             "/share/fish/functions/fenv.fish"))))
-
-        (service home-fish-service-type
-                 (home-fish-configuration (aliases '(("cat" . "bat")
-                                                     ("cd" . "z")
-                                                     ("cp" . "cp -i")
-                                                     ("find" . "fd")
-                                                     ("grep" . "rg")
-                                                     ("htop" . "btop")
-                                                     ("ll" . "ls -la")
-                                                     ("rm" . "rm -i")))
-
-                                          (abbreviations '(("commit" . "'git commit --all -S'")
-                                                           ("enter" . "distrobox enter")
-                                                           ("push" . "git push")
-                                                           ("reboot" . "loginctl reboot")
-                                                           ("shutdown" . "loginctl poweroff")
-                                                           ("update" . "'sudo flatpak upgrade -y && flatpak upgrade -y && distrobox upgrade --all'")))
-
-                                          (config (list (computed-substitution-with-inputs
-                                                         "config.fish"
-                                                         (local-file
-                                                          "../configs/files/config.fish")
-                                                         (specs->pkgs
-                                                          "fastfetch-minimal"
-                                                          "fzf" "lolcat"
-                                                          "zoxide"))))))))
+                                                             "/share/fish/functions/fenv.fish"))))))
