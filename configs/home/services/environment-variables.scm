@@ -74,7 +74,7 @@
                           ("CHROMIUM_FLAGS" unquote
                            (string-append
                             "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
-                            "--ozone-platform=wayland "
+                            "--ozone-platform-hint=wayland "
                             "--enable-wayland-ime "
                             "--wayland-text-input-version=3"))
                           ("_JAVA_OPTIONS" unquote

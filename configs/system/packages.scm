@@ -35,12 +35,14 @@
            "gvfs"
            "niri"
            "poweralertd"
+           "setxkbmap"
            "swayidle"
            "xdg-dbus-proxy"
            "xdg-desktop-portal-gnome"
            "xdg-desktop-portal-gtk"
            "xdg-user-dirs"
            "xdg-utils"
+           "xprop"
            "xwayland-satellite"
 
            ;; Desktop Services
