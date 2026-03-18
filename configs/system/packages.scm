@@ -58,6 +58,7 @@
            "thunar-media-tags-plugin"
            "thunar-volman"
            "thunar-vcs-plugin"
+           "tumbler"
            "xfconf"
 
            ;; Multimedia
