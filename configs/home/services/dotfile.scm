@@ -63,7 +63,7 @@
                  `(("gdb/gdbinit" ,%default-gdbinit)
                    ("nano/nanorc" ,%default-nanorc)))
 
-        (simple-service 'symlink-openjdk home-files-service-type
+        (simple-service 'prism-jdks home-files-service-type
                         (map (lambda (jdk)
                                (list (in-vicinity
                                       ".local/share/PrismLauncher/java/"
