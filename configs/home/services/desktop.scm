@@ -36,7 +36,7 @@
                                                      fcitx5-material-color-theme))
                                             (input-method-editors (list
                                                                    fcitx5-rime))
-                                            (gtk-im-module? #f)
+                                            (gtk-im-module? #t)
                                             (qt-im-module? #t)))
 
         (simple-service 'essential-desktop-services home-shepherd-service-type
