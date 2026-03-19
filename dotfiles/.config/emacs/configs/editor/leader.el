@@ -12,6 +12,23 @@
 
 ;;; Code:
 
+(defun my/code-replace ()
+  "执行批量替换。
+
+优先在当前项目中执行跨文件替换；如果不在项目内，则回退到当前缓冲区。
+项目级替换优先使用 Emacs 原生的 `project-query-replace-regexp'，旧版本则回退。"
+  (interactive)
+  (require 'project)
+  (cond
+   ((and (project-current nil)
+         (fboundp 'project-query-replace-regexp))
+    (call-interactively #'project-query-replace-regexp))
+   ((and (project-current nil)
+         (fboundp 'project-query-replace))
+    (call-interactively #'project-query-replace))
+   (t
+    (call-interactively #'query-replace-regexp))))
+
 (use-package general
   :demand t
   :config
@@ -73,6 +90,11 @@
     "ss" '(consult-line :which-key "搜索当前文件")
     "sp" '(consult-ripgrep :which-key "搜索项目")
     "sb" '(consult-buffer :which-key "搜索缓冲区"))
+
+  ;; 代码操作 (SPC c)
+  (my/leader-def
+    "c" '(:ignore t :which-key "代码")
+    "cf" '(my/code-replace :which-key "批量替换"))
 
   ;; Git 操作 (SPC g)
   (my/leader-def

@@ -70,8 +70,9 @@
 (global-set-key (kbd "C-p") #'project-find-file)       ; 项目内查找文件
 (global-set-key (kbd "C-S-f") #'consult-ripgrep)       ; 全文搜索
 (global-set-key (kbd "C-S-b") #'consult-buffer)        ; 切换缓冲区
+
 (global-set-key (kbd "C-S-c") #'my/copy-dwim)          ; 智能复制
-(global-set-key (kbd "C-S-v") #'yank)                  ; 粘贴
+(global-set-key (kbd "C-v") #'yank)                    ; 粘贴
 
 ;; 覆盖 Emacs 默认快捷键
 ;; C-s 原本是 isearch-forward，现在改为保存文件

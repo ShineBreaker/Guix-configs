@@ -74,6 +74,10 @@
           (row "SPC s b" "搜索缓冲区")
           (insert "\n")
 
+          (section "═══ 代码 (SPC c) ═══")
+          (row "SPC c f" "批量替换（优先项目范围）")
+          (insert "\n")
+
           (section "═══ Git (SPC g) ═══")
           (row "SPC g s" "Git 状态")
           (row "SPC g b" "Git blame")
@@ -135,8 +139,8 @@
           (row "C-p" "项目内查找文件")
           (row "C-S-f" "全文搜索")
           (row "C-S-b" "切换缓冲区")
-          (row "C-S-c" "智能复制")
-          (row "C-S-v" "粘贴")
+          (row "C-c" "智能复制")
+          (row "C-v" "粘贴")
           (insert "\n")
 
           (section "═══ 其他常用 ═══")
