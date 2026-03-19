@@ -4,9 +4,9 @@ SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 SPDX-License-Identifier: GPL-3.0
 -->
 
-# CLAUDE.md
+# AGENT.md
 
-本文件为 Claude Code (claude.ai/code) 提供在此仓库中工作的指导。
+本文件为各大人工智能助手提供在此仓库中工作的指导。
 
 ## 概述
 
@@ -300,6 +300,7 @@ emacs --debug-init
 - 修改目录结构时，更新 `CLAUDE.md` 中的目录结构图
 
 文档位置：
+
 - **configs/editor/help.el** - 快捷键帮助（按 F1 ? 显示）
 - **CLAUDE.md** - 开发者指南（本文件）
 - **docs/README.md** - 用户快速开始指南
