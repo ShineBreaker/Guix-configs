@@ -4,11 +4,9 @@ if status is-interactive
     # 条件：在 Foot 中 + 不在 Tmux 内 + 不在容器内
     if test "$TERM" = "foot"; and not set -q TMUX; and not set -q CONTAINER_ID
 
-        # 统一会话组名（所有终端共享窗口列表）
+        # 主 session 作为会话组锚点；每个终端仍有自己的 session 视图
         set -l session_group "main"
-
-        # 生成唯一的会话名（基于 fish 的 %self，每个终端进程不同）
-        set -l session_name "term_"(echo %self)
+        set -l session_name "term_"$fish_pid
 
         # 生成窗口名：目录名，特殊字符替换
         set -l cwd (pwd)
@@ -24,13 +22,14 @@ if status is-interactive
             set window_name (string sub -l 20 $window_name)
         end
 
-        # 检查会话组是否存在
+        # 第一个终端创建主 session；后续终端加入同一 session group，
+        # 这样窗口列表共享，但每个终端的当前窗口可以独立切换。
+        # 新终端的行为等价于先加入组，再执行一次 Ctrl+b c。
         if tmux has-session -t $session_group 2>/dev/null
-            # 会话组已存在，创建链接会话（分组会话）
-            # 这样每个终端可以独立切换窗口，但共享窗口列表
-            tmux new-session -t $session_group -s $session_name -c $cwd
+            tmux new-session -d -t $session_group -s $session_name -c $cwd
+            tmux new-window -t "$session_name:" -n $window_name -c $cwd
+            tmux attach-session -t $session_name
         else
-            # 会话组不存在，创建主会话
             tmux new-session -s $session_group -n $window_name -c $cwd
         end
 
