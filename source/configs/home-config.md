@@ -10,7 +10,7 @@
 ### 包含了一些系统的基本信息
 
 ```scheme
-(load "../files/information.scm")
+(load "../source/information.scm")
 ```
 
 ## Modules
@@ -73,7 +73,7 @@
     (name "termide")
     (version "0.1.0")
     (source
-     (local-file "../files/configs/termide"))
+     (local-file "../source/files/termide"))
     (build-system trivial-build-system)
     (arguments
      (list
@@ -514,17 +514,17 @@
                    (".config/git-credential-keepassxc" ,(computed-substitution-with-inputs
                                                          "git-credential-keepassxc"
                                                          (local-file
-                                                          "../files/configs/git-credential-keepassxc")
+                                                          "../source/files/git-credential-keepassxc")
                                                          (specs->pkgs "git"
                                                                       "fish")))
                    (".config/qt5ct/qss/rounded.qss" ,(local-file
-                                                      "../files/configs/rounded.qss"))
+                                                      "../source/files/rounded.qss"))
                    (".config/qt6ct/qss/rounded.qss" ,(local-file
-                                                      "../files/configs/rounded.qss"))
+                                                      "../source/files/rounded.qss"))
                    (".config/zed/settings.json" ,(computed-substitution-with-inputs
                                                   "zed.json"
                                                   (local-file
-                                                   "../files/configs/zed.json")
+                                                   "../source/files/zed.json")
                                                   (specs->pkgs "ccls"
                                                    "clang"
                                                    "maven"
@@ -541,7 +541,7 @@
                  (home-niri-configuration (config (computed-substitution-with-inputs
                                                    "config.kdl"
                                                    (local-file
-                                                    "../files/configs/niri.kdl")
+                                                    "../source/files/niri.kdl")
                                                    (specs->pkgs
                                                     "brightnessctl"
                                                     "cliphist"

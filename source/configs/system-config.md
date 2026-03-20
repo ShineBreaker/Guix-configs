@@ -9,7 +9,7 @@
 ### 包含了一些系统的基本信息
 
 ```scheme
-(load "../files/information.scm")
+(load "../source/information.scm")
 ```
 
 ## Modules
@@ -510,7 +510,7 @@
 (define %networking-services
   (list (service nftables-service-type
                  (nftables-configuration (ruleset (local-file
-                                                   "../configs/files/nftables.conf"))))
+                                                   "../source/files/nftables.conf"))))
         (simple-service 'mihomo-services shepherd-root-service-type
                         (list (shepherd-service (documentation
                                                  "Run the mihomo daemon.")
@@ -643,9 +643,9 @@
 ```scheme
 
 (define %skeletons-config
-  `((".config/mihomo/config.yaml" ,(local-file "../configs/files/mihomo.yaml"))
+  `((".config/mihomo/config.yaml" ,(local-file "../source/files/mihomo.yaml"))
     (".config/noctalia/settings.json" ,(local-file
-                                        "../configs/files/noctalia.json"))))
+                                        "../source/files/noctalia.json"))))
 ```
 
 ## Users
@@ -696,7 +696,7 @@
   (firmware %firmware-config)
   (kernel %kernel-config)
   (kernel-arguments %kernel-arguments-config)
-  (keyboard-layout "us" #:options '("ctrl:swapcaps"))
+  (keyboard-layout (keyboard-layout "us" #:options '("ctrl:swapcaps")))
 
   (timezone %timezone-config)
   (locale %locale-config)
