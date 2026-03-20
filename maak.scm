@@ -8,7 +8,8 @@
   #:use-module (srfi srfi-19)
   #:use-module (srfi srfi-26)
   #:use-module (ice-9 regex)
-  #:use-module (ice-9 textual-ports))
+  #:use-module (ice-9 textual-ports)
+  #:use-module (ice-9 rdelim))
 
 ;;; 辅助函数：原子性文件写入（不依赖 guix utils）
 (define (write-file-atomically file thunk)
@@ -29,15 +30,15 @@
 (define repo-root
   (getcwd))
 (define configs-dir
-  (string-append repo-root "/configs"))
+  (string-append repo-root "/source/configs"))
 (define configen-dir
   (string-append configs-dir "/main"))
 (define tmp-dir
   (string-append repo-root "/tmp"))
 (define channel-fresh
-  (string-append configs-dir "/channel.scm"))
+  (string-append configs-dir "/../channel.scm"))
 (define channel-lock
-  (string-append configs-dir "/channel.lock"))
+  (string-append configs-dir "/../channel.lock"))
 
 (define ($ cmd)
   (let ((exit-code (status:exit-val (apply system* cmd))))
@@ -53,79 +54,56 @@ Exit code: ~a~%" cmd exit-code)))))
        ,(string-append "--channels=" channels) "--"
        ,@args)))
 
-;;; 配置文件生成逻辑
-(define loaded-files
-  (make-hash-table))
+;;; Markdown 代码块提取逻辑
 
-(define (process-content file-path load-root)
-  "递归处理配置文件，展开(load ...)语句"
-  (let ((full-path (canonicalize-path file-path)))
-    (when (and (file-exists? full-path)
-               (not (hash-ref loaded-files full-path)))
-      (hash-set! loaded-files full-path #t)
-      (let ((base-dir (dirname full-path))
-            (load-root* (or load-root
-                            (dirname full-path))))
-        (call-with-input-file full-path
-          (lambda (port)
-            (let loop
-              ((line (get-line port)))
-              (unless (eof-object? line)
-                (let ((match (string-match
-                              "^[[:space:]]*\\(load[[:space:]]+\"(\\.\\.?/[^\"]+)\"[[:space:]]*\\)[[:space:]]*$"
-                              line)))
-                  (if match
-                      (let* ((relative-path (match:substring match 1))
-                             (target-path (if (string-prefix? "./"
-                                                              relative-path)
-                                              (string-append load-root* "/"
-                                                             (substring
-                                                              relative-path 2))
-                                              (string-append base-dir "/"
-                                                             relative-path))))
-                        (display "\n;\n")
-                        (format #t "; ====== 来自 ~a ======\n" relative-path)
-                        (display ";\n")
-                        (process-content target-path load-root*))
-                      (display line))
-                  (newline))
-                (loop (get-line port))))))))))
+(define (extract-scheme-blocks-from-markdown file-path)
+  "从 Markdown 文件中提取所有 ```scheme ... ``` 代码块的内容"
+  (call-with-input-file file-path
+    (lambda (port)
+      (let loop ((lines '())
+                 (in-scheme-block? #f))
+        (let ((line (read-line port 'concat)))
+          (if (eof-object? line)
+              (reverse lines)
+              (let ((trimmed (string-trim-both line)))
+                (cond
+                 ;; 检测到 scheme 代码块开始
+                 ((and (not in-scheme-block?)
+                       (string-prefix? "```scheme" trimmed))
+                  (loop lines #t))
+                 ;; 检测到代码块结束
+                 ((and in-scheme-block?
+                       (string=? "```" trimmed))
+                  (loop lines #f))
+                 ;; 在代码块内，收集内容
+                 (in-scheme-block?
+                  (loop (cons line lines) #t))
+                 ;; 不在代码块内，跳过
+                 (else
+                  (loop lines #f))))))))))
 
-(define (generate-config input-name output-name desc)
-  "生成完整的配置文件"
-  (let ((input-path (string-append configen-dir "/" input-name))
+(define (generate-config-from-markdown md-file output-name)
+  "从 Markdown 文件提取 Scheme 代码块生成配置文件"
+  (let ((md-path (string-append configs-dir "/" md-file))
         (output-path (string-append tmp-dir "/" output-name)))
-    (log-info "正在生成完整配置文件: ~a (~a)" output-path desc)
-    (set! loaded-files
-          (make-hash-table))
     ($ (list "mkdir" "-p" tmp-dir))
-    (with-output-to-file output-path
-      (lambda ()
-        (format #t ";;; 自动生成的完整配置文件\n")
-        (format #t ";;; 原始文件: ~a\n" input-path)
-        (format #t ";;; 生成时间: ~a\n\n"
-                (strftime "%Y-%m-%d %H:%M:%S"
-                          (localtime (time-second (current-time)))))
-        (process-content input-path configs-dir)))
-    ($ (list "sed" "-i" "-E"
-             "/^[[:space:]]*\\(load[[:space:]]+\".*\"\\)[[:space:]]*$/d"
-             output-path))
-    ($ (list "guix" "style" "--whole-file" output-path))
-    (log-info "✓ 成功生成: ~a" output-path)))
+    (let ((scheme-content (extract-scheme-blocks-from-markdown md-path)))
+      (with-output-to-file output-path
+        (lambda ()
+          (for-each display scheme-content))))
+    ;; 格式化代码，忽略错误输出
+    (system* "guix" "style" "--whole-file" output-path)))
 
 ;;; Maak任务定义
 
 (define (generate-init-config)
-  "生成用于安装系统的配置文件"
-  (generate-config "init-config.scm" "init-config.scm" "安装配置"))
+  (generate-config-from-markdown "init-config.md" "init-config.scm"))
 
 (define (generate-system-config)
-  "只生成系统配置"
-  (generate-config "system-config.scm" "system-config.scm" "系统配置"))
+  (generate-config-from-markdown "system-config.md" "system-config.scm"))
 
 (define (generate-home-config)
-  "只生成home配置"
-  (generate-config "home-config.scm" "home-config.scm" "Home 配置"))
+  (generate-config-from-markdown "home-config.md" "home-config.scm"))
 
 (define (tmprm)
   "清理临时文件"
