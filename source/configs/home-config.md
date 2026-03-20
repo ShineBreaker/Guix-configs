@@ -571,7 +571,8 @@
 
 ```scheme
 (define %extend-environment-variables
-  '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK") ("EDITOR" . "hx")
+  '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
+    ("EDITOR" . "hx")
     ("FREERDP_ASKPASS" . "1")
     ("GUIX_PROFILE" . "$HOME/.guix-profile")
     ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
@@ -584,6 +585,7 @@
     ("NO_PROXY" . "127.0.0.1,localhost")
     ("QS_ICON_THEME" . "Papirus-Dark")
     ("QT_QPA_PLATFORMTHEME" . "qt5ct")
+    ("XKB_DEFAULT_OPTIONS" . "ctrl:swapcaps")
 
     ;; Wayland support.
     ("GDK_BACKEND" . "wayland")

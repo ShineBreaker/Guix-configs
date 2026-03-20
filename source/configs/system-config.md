@@ -239,6 +239,7 @@
            "dialog"
            "iproute2"
            "iptables-nft"
+           "ncurses"
            "pinentry"
            "rtkit"
            "strace"

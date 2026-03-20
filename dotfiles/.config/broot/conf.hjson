@@ -288,10 +288,11 @@ imports: [
     }
 
     # 当你的终端为浅色时导入此皮肤
-    {
+    { 
         luma: light
         # 取消注释以选择你喜欢的皮肤
         //file: skins/solarized-light.hjson
         file: skins/white.hjson
+    }
 
 ]

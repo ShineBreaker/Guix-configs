@@ -18,8 +18,8 @@
 # 环境变量：
 #   TERMIDE_SESSION_NAME     - 会话名称覆盖（默认：布局名称）
 #   TERMINAL_IDE_ROOT        - 工作目录（默认：$PWD）
-#   TERMIDE_SIDEBAR_WIDTH    - 侧边栏宽度："25%" 或 "30"（默认：25%）
-#   TERMIDE_TERMINAL_HEIGHT  - 终端高度："20%" 或 "10"（默认：14%）
+#   TERMIDE_SIDEBAR_WIDTH    - 侧边栏宽度："25%" 或 "30"（默认：15%）
+#   TERMIDE_TERMINAL_HEIGHT  - 终端高度："20%" 或 "10"（默认：18%）
 #   TERMIDE_EDITOR           - 编辑器命令（默认：hx）
 #   TERMIDE_FILE_MANAGER     - 文件管理器命令（默认：broot）
 #   TERMIDE_SHELL            - 终端面板的 Shell（默认：$SHELL）
@@ -30,8 +30,8 @@ set -eo pipefail
 window="main"
 termide_session="${TERMIDE_SESSION_NAME:-${session:-termide}}"
 root="${TERMINAL_IDE_ROOT:-$PWD}"
-sidebar_size_raw="${TERMIDE_SIDEBAR_WIDTH:-25%}"
-terminal_size_raw="${TERMIDE_TERMINAL_HEIGHT:-14%}"
+sidebar_size_raw="${TERMIDE_SIDEBAR_WIDTH:-15%}"
+terminal_size_raw="${TERMIDE_TERMINAL_HEIGHT:-18%}"
 editor_cmd="${TERMIDE_EDITOR:-hx}"
 file_manager_cmd="${TERMIDE_FILE_MANAGER:-broot}"
 shell_cmd="${TERMIDE_SHELL:-${SHELL:-/bin/sh}}"

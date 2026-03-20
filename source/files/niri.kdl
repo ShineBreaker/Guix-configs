@@ -35,6 +35,8 @@ cursor {
 input {
     keyboard {
         xkb {
+            layout "us"
+            options "ctrl:swapcaps"
         }
     }
     touchpad {
@@ -131,11 +133,6 @@ window-rule {
     match app-id=".gamescope-wrapped"
 
     open-fullscreen true
-}
-
-window-rule {
-    match app-id="foot"
-    default-column-width { proportion 0.4999; }
 }
 
 window-rule {
