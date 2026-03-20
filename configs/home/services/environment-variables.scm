@@ -53,7 +53,9 @@
     ;; rust
     ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
     ;; sqlite
-    ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")))
+    ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
+    ;; tmuxifier
+    ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts")))
 
 (define %environment-variable-services
   (list (simple-service 'environment-variables

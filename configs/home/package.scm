@@ -54,6 +54,7 @@
           ;; System & Utilities
           "age"
           "amule"
+          "broot"
           "btop"
           "freerdp@3"
           "just"
@@ -61,6 +62,7 @@
           "postgresql"
           "tmux"
           "tmuxifier"
+          "tmux-xpanes"
           "winapps"
 
           ;; Themes & Appearance
