@@ -156,7 +156,7 @@ open_in_editor() {
     tmux send-keys -t "$editor_pane" -l ":open $helix_file"
     tmux send-keys -t "$editor_pane" C-m
   else
-    quoted_command="cd $quoted_dir && clear && hx $quoted_file"
+    quoted_command=" cd $quoted_dir && clear && hx $quoted_file"
     tmux send-keys -t "$editor_pane" C-c
     tmux send-keys -t "$editor_pane" -l "$quoted_command"
     tmux send-keys -t "$editor_pane" C-m
@@ -187,7 +187,7 @@ terminal_here() {
   quoted_dir="$(shell_quote "$dir")"
 
   tmux send-keys -t "$terminal_pane" C-c
-  tmux send-keys -t "$terminal_pane" "cd $quoted_dir" C-m
+  tmux send-keys -t "$terminal_pane" " cd $quoted_dir" C-m
   tmux select-window -t "$target"
   tmux select-pane -t "$terminal_pane"
 }
