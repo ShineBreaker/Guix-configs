@@ -2,11 +2,44 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
+(use-modules (guix build-system trivial)
+             (guix gexp)
+             ((guix licenses) #:prefix license:)
+             (guix packages))
+
+(use-package-modules bash)
+
 (load "../home/services/programs/emacs.scm")
 (load "../home/services/programs/fish.scm")
 
+(define termide
+  (package
+    (name "termide")
+    (version "0.1.0")
+    (source (local-file "../configs/files/termide"))
+    (build-system trivial-build-system)
+    (arguments
+     (list #:modules '((guix build utils))
+           #:builder
+           #~(begin
+               (use-modules (guix build utils))
+               (let* ((out (assoc-ref %outputs "out"))
+                      (bin (string-append out "/bin"))
+                      (target (string-append bin "/termide")))
+                 (mkdir-p bin)
+                 (copy-file #$source target)
+                 (patch-shebang target (list (string-append #$bash-minimal "/bin")))
+                 (chmod target #o555)))))
+    (inputs (list bash-minimal))
+    (synopsis "VSCode-like tmux workspace helper")
+    (description
+     "termide launches and controls the tmuxifier-based terminal IDE session.")
+    (home-page "https://github.com/BrokenShine/Guix-configs")
+    (license license:gpl3)))
+
 (define %packages-list-extended
-  (cons* (specs->pkgs+out
+  (cons* termide
+         (specs->pkgs+out
           ;; AI related.
           "claude-code"
           "codex"

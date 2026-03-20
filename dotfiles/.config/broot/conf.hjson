@@ -1,0 +1,297 @@
+###############################################################
+# 本配置文件允许你
+# - 定义新命令
+# - 修改内置动词的快捷键或触发键
+# - 修改颜色
+# - 设置标志的默认值
+# - 为特定路径设置特殊行为
+# - 以及更多功能...
+#
+# 配置文档请访问
+#     https://dystroy.org/broot
+#
+# 本文件的格式是 Hjson ( https://hjson.github.io/ )。某些
+# 属性被注释掉了。若要启用，请删除前面的 `#`。
+#
+###############################################################
+
+###############################################################
+# 默认标志
+# 你可以设置希望 broot 启动时默认启用的标志，
+# 例如 `default_flags="-ihp"`，如果你通常希望看到隐藏文件和
+# 被 git 忽略的文件以及权限信息（然后如果某次启动你不想看到隐藏文件，
+# 可以用 `br -H` 启动 broot）。
+# 一个常用的标志是 `g`，用于显示与 git 相关的信息。
+#
+default_flags: "-gh"
+
+###############################################################
+# 终端标题
+# 如果你希望在切换目录时更新终端标题，可以通过取消注释
+# 下面的某个示例并根据你的喜好进行调整来设置 terminal_title 模式。
+#
+# terminal_title: "[broot] {git-name}"
+# terminal_title: "{file} 🐄"
+# terminal_title: "-= {file-name} =-"
+# reset_terminal_title_on_exit: false
+
+###############################################################
+# 日期/时间格式
+# 如果你想要修改日期/时间的显示格式，请取消注释
+# 下面的一行并根据
+# https://docs.rs/chrono/0.4.11/chrono/format/strftime/index.html
+# 进行修改。
+#
+# date_time_format: %Y/%m/%d %R
+
+###############################################################
+# 取消注释以激活模态模式
+#
+# （建议先阅读 https://dystroy.org/broot/modal/
+# 因为即使对于 vim 用户，它也可能不适合所有人）
+#
+# 你可以选择以 'command' 模式或 'input' 模式开始
+#
+# modal: true
+# initial_mode: command
+
+###############################################################
+# 是否用三角形标记选中的行
+
+show_selection_mark: true
+
+###############################################################
+# 列顺序
+# 如果指定了 cols_order，必须是以下数组的一个排列。
+# 建议将 name 列保持在最后，因为它的长度是变化的。
+
+cols_order: [
+    mark
+    git
+    size
+    permission
+    date
+    count
+    branch
+    name
+]
+
+###############################################################
+# 真彩色
+# 如果未设置此参数，broot 会尝试自动检测
+# 是否支持真彩色（24 位）。
+# 由于这个检测过程不可靠，如果你注意到预览图片的颜色
+# 偏差太大，可以取消注释此设置并将其设为 false 或 true。
+#
+# true_colors: false
+
+###############################################################
+# 图标
+# 如果你希望在 broot 中显示图标，请取消注释这一行
+# （安装和故障排除请参见 https://dystroy.org/broot/icons）
+
+icon_theme: nerdfont
+
+###############################################################
+# 特殊路径
+# 如果某些路径需要特殊处理，请取消注释（并根据示例修改）
+# 本节内容。
+# 在某个目录上设置 "list":"never" 可以阻止 broot 在搜索时
+# 查看其子目录，除非该目录是被选中的根目录。
+# 在某个目录上设置 "sum":"never" 可以阻止 broot 在计算总大小和
+# 文件数量时查看其子目录。
+# 设置 "show":"always" 可以让以点开头的文件也显示出来。
+# 设置 "list":"always" 可能对指向目录的链接有用
+# （否则 broot 不会进入这些目录，除非被选中）
+
+special_paths: {
+    ".git" : {
+        list: "never"
+        sum: "never"
+    }
+
+    "~/.config": { "show": "always" }
+
+    "trav": {
+        show: "always"
+        list: "always"
+        sum: "never"
+    }
+
+    # "~/useless": { "show": "never" }
+    # "~/my-link-I-want-to-explore": { "list": "always" }
+}
+
+###############################################################
+# 最后一次取消时退出
+# 通常你可以按 Escape 取消最后一次状态更改。
+# 如果你希望在没有可取消的内容时（例如你刚刚打开 broot），
+# 按 Escape 键退出 broot，请取消注释此参数。
+#
+# quit_on_last_cancel: true
+
+###############################################################
+# 搜索模式
+#
+# broot 支持多种搜索模式。
+# 搜索模式由以下因素定义：
+# - 搜索方式：'fuzzy'（模糊）、'exact'（精确）、'regex'（正则）或 'tokens'（分词）
+# - 搜索位置：文件 'name'（名称）、'path'（路径）或文件 'content'（内容）
+# 搜索模式例如可以是 "fuzzy path"（默认）、
+# "regex content" 或 "exact path"。
+#
+# 搜索模式由其前缀选择。例如，如果你
+# 输入 "abc"，默认模式是 "fuzzy path"。如果你输入 "/abc"，
+# 模式是 "regex path"。如果你输入 "rn/abc"，模式是
+# "regex name"。
+#
+# 这个映射可以修改。你可能想将空前缀
+# （不需要 '/' 的那个）分配给你最常用的搜索模式。
+# 下面的示例使搜索名称而不是子路径变得更容易。
+#
+# 更多信息请访问
+#  https://dystroy.org/broot/input/#the-filtering-pattern
+#
+search_modes: {
+    <empty>: fuzzy name
+    /: regex name
+}
+
+###############################################################
+# 文件扩展名颜色
+#
+# 如果你想根据文件扩展名为文件名着色，
+# 请取消注释并修改下一节
+#
+# ext_colors: {
+#     png: rgb(255, 128, 75)
+#     rs: yellow
+# }
+
+###############################################################
+# 内容搜索的最大文件大小
+#
+# 搜索文件内容时，会忽略更大的文件。你可以
+# 用 ISO 单位（如 5GB）或旧的二进制单位（如 44Kib）
+# 指定这个大小
+content_search_max_file_size: 10MB
+
+###############################################################
+# 最大面板数量
+#
+# 如果你有时希望打开超过 2 个面板，请修改此值
+# max_panels_count: 2
+
+###############################################################
+# 更新工作目录
+#
+# 默认情况下，broot 进程的工作目录会与当前
+# 面板的根目录保持同步。如果你希望保持不变，
+# 请取消注释此设置
+#
+# update_work_dir: false
+
+###############################################################
+# Kitty 键盘扩展
+#
+# 如果你希望在兼容 Kitty 的终端（Kitty、Wezterm）中使用
+# 高级键盘快捷键，请将此设置为 true。
+#
+# 这使得可以使用诸如 'space-n'、
+# 'ctrl-alt-a-b'、'shift-space' 等快捷键。
+#
+enable_kitty_keyboard: false
+
+###############################################################
+# 过滤预览中匹配行周围的行数
+#
+# 搜索文件内容时，你可以选择只显示匹配的行，
+# 或者同时显示一些周围的行。
+#
+lines_before_match_in_preview: 1
+lines_after_match_in_preview: 1
+
+###############################################################
+# 预览前的转换
+#
+# 可以定义一些转换，在调用 broot 的默认预览渲染器之前
+# 应用到某些文件上。
+# 下面有三个示例，你可以取消注释并调整：
+#
+preview_transformers: [
+    // # 使用 mutool 将任何 PDF 文件渲染为图像
+    // # 在这个示例中，我们使用占位符表示输入和输出文件
+    // {
+    //     input_extensions: [ "pdf" ] // 大小写不敏感
+    //     output_extension: png
+    //     mode: image
+    //     command: [ "mutool", "draw", "-w", "1000", "-o", "{output-path}", "{input-path}" ]
+    // }
+
+    // # 使用 LibreOffice 将 Office 文件渲染为图像
+    // # 在这个示例中，{output-dir} 用于指定 LibreOffice 必须写入结果的位置
+    // {
+    //     input_extensions: [ "xls", "xlsx", "doc", "docx", "ppt", "pptx", "ods", "odt", "odp" ]
+    //     output_extension: png
+    //     mode: image
+    //     command: [
+    //         "libreoffice", "--headless",
+    //         "--convert-to", "png",
+    //         "--outdir", "{output-dir}",
+    //         "{input-path}"
+    //     ]
+    // }
+
+    // # 使用 jq 美化 JSON
+    // # 在这个示例中，命令既不引用输入也不引用输出，
+    // # 因此 broot 会将它们通过管道传递给 jq 进程的标准输入和标准输出
+    // {
+    //     input_extensions: [ "json" ]
+    //     output_extension: json
+    //     mode: text
+    //     command: [ "jq" ]
+    // }
+
+    // # 使用 zmore 预览压缩文本文件
+    // {
+    //     input_extensions: [ "gz", "z", "tgz" ] // 大小写不敏感
+    //     output_extension: txt
+    //     mode: text
+    //     command: [ "zmore" ]
+    // }
+]
+
+###############################################################
+# 导入
+#
+# 虽然可以将所有配置放在一个文件中，
+# 但将其拆分为多个文件更方便。
+# 导入还允许设置终端颜色的条件，
+# 这使得在终端使用浅色背景和深色背景时可以
+# 选择不同的皮肤。
+
+imports: [
+
+    # 动词最好在 verbs.hjson 中配置。但你
+    # 也可以为个人动词添加其他文件
+    verbs.hjson
+
+    {
+        luma: [
+            dark
+            unknown
+        ]
+        # 取消注释以选择你喜欢的皮肤
+        file: skins/dark-blue.hjson
+        //file: skins/catppuccin-macchiato.hjson
+        //file: skins/catppuccin-mocha.hjson
+    }
+
+    # 当你的终端为浅色时导入此皮肤
+    {
+        luma: light
+        # 取消注释以选择你喜欢的皮肤
+        //file: skins/solarized-light.hjson
+        file: skins/white.hjson
+
+]

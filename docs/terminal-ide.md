@@ -8,31 +8,33 @@ SPDX-License-Identifier: GPL-3.0
 
 ## 实现时间
 
-- 2026-03-20 00:53:40 CST (+0800)
+- 2026-03-20
 
 ## 功能目标
 
-本次实现的是一个基于 `tmux + tmuxifier + lf + helix` 的终端 IDE 工作区，布局思路对齐 Emacs 里的 `my/vscode-layout`：
+本方案提供一个基于 `tmux + tmuxifier + broot + helix` 的终端 IDE 工作区，目标是尽量贴近 VSCode 的三栏心智模型：
 
-- 左侧：`lf` 文件浏览器
-- 中间主区：`helix`
+- 左侧：`broot` 目录树
+- 主区：`helix`
 - 底部：shell 终端
 
 ## 已写入的配置
 
 - `configs/home/package.scm`
-  - 新增 `lazygit`
-  - 新增 `lf`
-  - 新增 `tmux-xpanes`
-- `dotfiles/.config/fish/functions/termide.fish`
-  - 提供 `termide` 启动命令
-- `dotfiles/.config/tmuxifier/layouts/vscode.session.sh`
-  - 定义终端 IDE 会话布局
-  - 左侧固定 30 列，底部终端固定 12 行，编辑器保留主区
-- `dotfiles/.config/lf/lfrc`
-  - 配置 `lf`
-  - 将 `o` 和 Enter 绑定到打开动作
-  - 在 tmux IDE 会话里会把文件送到主编辑器 pane
+  - 通过本地 Guix 包把 `termide` 安装到 Home profile 的 `bin/termide`
+  - 不再依赖手工放置到 `.local/bin` 的脚本
+- `configs/files/termide`
+  - 统一提供会话启动、pane 聚焦、文件打开、终端联动四类动作
+- `dotfiles/.config/tmuxifier/layouts/termide.session.sh`
+  - 定义 IDE 布局
+  - 左侧为 `broot`，右上为 `helix`，右下为 shell
+  - 为三个 pane 设置可见标题：`Explorer`、`Editor`、`Terminal`
+- `dotfiles/.config/broot/verbs.hjson`
+  - `Enter` 直接把文件送到 Helix 并切到编辑器 pane
+  - `Ctrl-O` 打开文件但保留在左侧目录树
+  - `Ctrl-T` 将底部终端切换到当前文件或目录所在位置
+- `dotfiles/.tmux.conf`
+  - 启用 tmux 鼠标支持、滚轮滚动和 pane 点击切换
 
 ## 使用方法
 
@@ -58,7 +60,7 @@ guix shell maak -- maak rebuild
 termide
 ```
 
-首次启动会创建一个名为 `termide` 的 tmux 会话，再次执行会直接切换或附着到该会话。
+`termide` 现在是 Guix Home profile 提供的命令。首次启动会创建 `termide` tmux 会话，再次执行会直接切换或附着到该会话。
 
 ## 工作流
 
@@ -71,10 +73,40 @@ termide
 
 ### 在左侧文件树中打开文件
 
-- `o`
 - `Enter`
+- `Ctrl-E`
 
-这两个键会将当前文件发送到主编辑器 pane 打开。
+这两个动作都会把当前文件发送到右侧 Helix，并自动聚焦到编辑器 pane。这比之前更接近 VSCode 里在左侧资源管理器打开文件后的行为。
+
+如果想保留光标在左侧目录树：
+
+```text
+Ctrl-O
+```
+
+### 让底部终端跳到当前目录
+
+在 `broot` 中按：
+
+```text
+Ctrl-T
+```
+
+底部终端会切到当前文件所在目录；如果当前选中的是目录，则直接切到该目录。
+
+## 鼠标行为
+
+`tmux` 侧启用了鼠标增强，重点是这几类行为：
+
+- 点击 pane 会直接切换焦点
+- 可以直接拖动 pane 边界调整尺寸
+- 在 pane 中滚轮向上时，如果当前程序没有接管该事件，tmux 会自动进入 copy mode 并滚动历史
+- pane 顶部会显示 `Explorer`、`Editor`、`Terminal`，更容易在鼠标切换时确认当前区域
+
+注意：
+
+- `broot` 本身仍然是终端文件管理器，不会完全复制 GUI 资源管理器的点击语义
+- 当前主要对齐的是 tmux 层面的 pane 切换、滚动和布局识别
 
 ## 依赖说明
 
@@ -83,15 +115,15 @@ termide
 - `tmux`
 - `tmuxifier`
 - `helix`
-- `lf`
-- `lazygit`
+- `broot`
 - `tmux-xpanes`
+- `termide`
 
-其中 `tmux`、`tmuxifier`、`helix` 原本已存在，本次补齐了缺失部分。
+其中 `termide` 由本仓库本地打包并安装进 Home profile。
 
 ## 备注
 
-- 该布局默认会话名固定为 `termide`。
-- 布局根目录取启动 `termide` 命令时的当前目录。
-- 如果在 tmux 外部运行，会直接附着到新会话。
-- 如果在 tmux 内部运行，会切换到该会话。
+- 该布局默认会话名固定为 `termide`
+- 布局根目录取启动 `termide` 命令时的当前目录
+- `termide open <file>` 会默认切到编辑器 pane
+- `termide open --no-focus <file>` 可保留在侧边栏

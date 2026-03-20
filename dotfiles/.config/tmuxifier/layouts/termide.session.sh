@@ -5,25 +5,25 @@
 
 # termide - A VSCode-like tmuxifier session layout
 #
-# Layout structure:
+# 布局结构：
 # ┌─────────────┬──────────────────────────┐
-# │             │         editor           │
-# │   sidebar   │          (hx)            │
-# │   (broot)   │                          │
+# │             │         编辑器           │
+# │   侧边栏    │          (hx)            │
+# │  (broot)    │                          │
 # │             ├──────────────────────────┤
-# │             │         terminal         │
+# │             │         终端             │
 # │             │                          │
 # └─────────────┴──────────────────────────┘
 #
-# Environment variables:
-#   TERMIDE_SESSION_NAME     - Session name override (default: layout name)
-#   TERMINAL_IDE_ROOT        - Working directory (default: $PWD)
-#   TERMIDE_SIDEBAR_WIDTH    - Sidebar width: "25%" or "30" (default: 25%)
-#   TERMIDE_TERMINAL_HEIGHT  - Terminal height: "20%" or "10" (default: 20%)
-#   TERMIDE_EDITOR           - Editor command (default: hx)
-#   TERMIDE_FILE_MANAGER     - File manager command (default: broot)
-#   TERMIDE_SHELL            - Shell for terminal pane (default: $SHELL)
-#   TERMIDE_DEBUG            - If set, print debug information
+# 环境变量：
+#   TERMIDE_SESSION_NAME     - 会话名称覆盖（默认：布局名称）
+#   TERMINAL_IDE_ROOT        - 工作目录（默认：$PWD）
+#   TERMIDE_SIDEBAR_WIDTH    - 侧边栏宽度："25%" 或 "30"（默认：25%）
+#   TERMIDE_TERMINAL_HEIGHT  - 终端高度："20%" 或 "10"（默认：14%）
+#   TERMIDE_EDITOR           - 编辑器命令（默认：hx）
+#   TERMIDE_FILE_MANAGER     - 文件管理器命令（默认：broot）
+#   TERMIDE_SHELL            - 终端面板的 Shell（默认：$SHELL）
+#   TERMIDE_DEBUG            - 如果设置，打印调试信息
 
 set -eo pipefail
 
@@ -31,7 +31,7 @@ window="main"
 termide_session="${TERMIDE_SESSION_NAME:-${session:-termide}}"
 root="${TERMINAL_IDE_ROOT:-$PWD}"
 sidebar_size_raw="${TERMIDE_SIDEBAR_WIDTH:-25%}"
-terminal_size_raw="${TERMIDE_TERMINAL_HEIGHT:-20%}"
+terminal_size_raw="${TERMIDE_TERMINAL_HEIGHT:-14%}"
 editor_cmd="${TERMIDE_EDITOR:-hx}"
 file_manager_cmd="${TERMIDE_FILE_MANAGER:-broot}"
 shell_cmd="${TERMIDE_SHELL:-${SHELL:-/bin/sh}}"
@@ -128,6 +128,16 @@ if initialize_session "$termide_session"; then
     log_debug "replacing terminal shell in pane $terminal_pane: $shell_cmd"
     run_cmd "exec $shell_cmd" "$terminal_pane"
   fi
+
+  tmux set-window-option -t "$session:$window" @termide_root "$root" >/dev/null
+  tmux set-window-option -t "$session:$window" @termide_sidebar_pane "$sidebar_pane" >/dev/null
+  tmux set-window-option -t "$session:$window" @termide_editor_pane "$editor_pane" >/dev/null
+  tmux set-window-option -t "$session:$window" @termide_terminal_pane "$terminal_pane" >/dev/null
+  tmux set-window-option -t "$session:$window" pane-border-status top >/dev/null
+
+  tmux select-pane -t "$sidebar_pane" -T "Explorer"
+  tmux select-pane -t "$editor_pane" -T "Editor"
+  tmux select-pane -t "$terminal_pane" -T "Terminal"
 
   tmux select-pane -t "$editor_pane"
 fi
