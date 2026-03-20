@@ -11,7 +11,7 @@
 (define username "brokenshine")
 
 (define guix-channels
-  (include "../configs/channel.lock"))
+  (include "./channel.lock"))
 
 (define (generate-machine-id username)
   (let* ((input (string->utf8 username))

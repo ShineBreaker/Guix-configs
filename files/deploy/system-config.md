@@ -1,71 +1,20 @@
-# information
+# 系统配置
+
+此系统配置的关键在于 **让系统能够正常启动** ，所以会尽量精简软件包以及相关服务的数量
+
+待系统成功安装并进入系统之后，则可以直接手动应用用户配置
+
+## Information
+
+### 包含了一些系统的基本信息
 
 ```scheme
+(load "../files/information.scm")
+```
 
-(use-modules (bytestructures guile bytevectors)
-             (gcrypt base16)
-             (gcrypt hash)
-             (guix channels)
-             (guix gexp))
+## Modules
 
-(define username
-  "brokenshine")
-
-(define guix-channels
-  (include "../configs/channel.lock"))
-
-(define (generate-machine-id username)
-  (let* ((input (string->utf8 username))
-         (hash (md5 input))
-         (hex-string (bytevector->base16-string hash)))
-    (string-downcase hex-string)))
-
-(define fixed-machine-id
-  (generate-machine-id username))
-
-(define %data-dirs
-  '(".var"
-
-    ".local/share/osu"
-    ".local/share/PrismLauncher"
-    ".local/share/Sandbox"
-
-    "Desktop"
-    "Documents"
-    "Downloads"
-    "Games"
-    "Music"
-    "Pictures"
-    "Programs"
-    "Public"
-    "Templates"
-    "Videos"))
-
-(define %btrfs-subvol-data
-  "DATA/Share")
-
-(define %btrfs-subvolumes
-  '(("SYSTEM/Guix/@data" "/var/lib")
-    ("SYSTEM/Guix/@gnu" "/gnu")
-
-    ("SYSTEM/Guix/@persist/cache/root" "/root/.cache")
-    ("SYSTEM/Guix/@persist/cache/var" "/var/cache")
-    ("SYSTEM/Guix/@persist/db" "/var/db")
-    ("SYSTEM/Guix/@persist/guix" "/var/guix")
-    ("SYSTEM/Guix/@persist/log" "/var/log")
-    ("SYSTEM/Guix/@persist/mihomo" "/.config")
-    ("SYSTEM/Guix/@persist/tmp" "/var/tmp")
-
-    ("SYSTEM/Guix/@etc/guix" "/etc/guix")
-    ("SYSTEM/Guix/@etc/ipsec.secrets" "/etc/ipsec.secrets")
-    ("SYSTEM/Guix/@etc/libvirt" "/etc/libvirt")
-    ("SYSTEM/Guix/@etc/NetworkManager" "/etc/NetworkManager")
-
-    ("DATA/Flatpak" "/var/lib/flatpak")
-    ("DATA/Home/Guix" "/home")
-    ("DATA/LibVirt" "/var/lib/libvirt")
-    ("DATA/Nix" "/nix")))
-# modules
+### 一些通用的模块
 
 ```scheme
 
@@ -81,7 +30,11 @@
              (ice-9 session)
 
              (rosenthal utils packages))
-# bootloader
+```
+
+## Bootloader
+
+### 在这里使用了由 `rosenthal` 频道提供的 **Limine**
 
 ```scheme
 
@@ -91,18 +44,21 @@
   (bootloader-configuration
     (bootloader limine-efi-removable-bootloader)
     (targets '("/boot"))))
-# filesystems
+```
+
+## Filesystems
+
+这里的配置文件需要根据自己的实际情况进行修改，我目前是使用了 **LUKS + Btrfs** 的架构，同时高强度地使用subvol功能
+
+具体的subvol配置放置在 [information.scm](../information.scm) 中，方便我直接做相应地修改
 
 ```scheme
-# information
-
 (use-modules (ice-9 match))
 
 (define %mapped-devices-config
   (list (mapped-device
           (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
           (target "root")
-          ;; (arguments '(#:key-file "/cryptroot.key"))
           (type luks-device-mapping))))
 
 (define %tmpfs
@@ -170,10 +126,15 @@
                   (mount-point "/boot")
                   (type "vfat")
                   (create-mount-point? #t))) %base-file-systems))
-# kernel
+```
+
+## Kernel
+
+### 导入 `nonguix` 固件
+
+使用 `nonguix` 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
 
 ```scheme
-
 (use-modules (gnu packages firmware)
 
              (nongnu packages firmware)
@@ -188,6 +149,12 @@
 
 (define %kernel-config
   linux-6.19)
+```
+
+### 内核参数修改
+
+```scheme
+(use-service-modules linux pam-mount sysctl)
 
 (define %kernel-arguments-config
   (cons* "kernel.sysrq=1"
@@ -197,10 +164,55 @@
          "zswap.enabled=1"
          "zswap.max_pool_percent=90"
          %default-kernel-arguments))
-# packages
+
+(define %kernel-services
+  (list (simple-service 'extend-kernel-module-loader
+                        kernel-module-loader-service-type
+                        '("ip_tables" "iptable_nat" "kvm_intel" "sch_fq_pie"
+                          "tcp_bbr" "uinput"))
+
+        (simple-service 'extend-sysctl sysctl-service-type
+                        '(("fs.inotify.max_user_watches" . "524288")
+                          ("fs.file-max" . "2097152")
+                          ("fs.nr_open" . "2097152")
+
+                          ("vm.max_map_count" . "2147483642")
+                          ("vm.compaction_proactiveness" . "0")
+                          ("vm.vfs_cache_pressure" . "50")
+                          ("vm.page_lock_unfairness" . "1")
+                          ("vm.stat_interval" . "120")
+
+                          ("net.core.default_qdisc" . "fq_pie")
+                          ("net.core.rmem_max" . "7500000")
+                          ("net.core.wmem_max" . "7500000")
+                          ("net.ipv4.ip_forward" . "1")
+                          ("net.ipv4.tcp_congestion_control" . "bbr")
+                          ("net.ipv4.tcp_low_latency" . "1")
+                          ("net.ipv4.tcp_fastopen" . "3")
+                          ("net.ipv6.conf.all.forwarding" . "1")
+
+                          ("kernel.numa_balancing" . "0")
+                          ("kernel.sched_autogroup_enabled" . "1")
+                          ("kernel.sched_child_runs_first" . "0")))
+
+        (service pam-limits-service-type
+                 (list (pam-limits-entry "@audio"
+                                         'both
+                                         'rtprio 90)
+                       (pam-limits-entry "@audio"
+                                         'both
+                                         'memlock
+                                         'unlimited)
+                       (pam-limits-entry "*"
+                                         'both
+                                         'nofile 1048576)))))
+```
+
+## Packages
+
+一些需要用到的软件包， **非必要不修改**
 
 ```scheme
-
 (define %packages-config
   (append (specs->pkgs+out
            ;; Core System Tools
@@ -304,14 +316,11 @@
            "tpm2-tss"
            "unzip"
            "zip") %base-packages))
-# services
+```
+
+## Services
 
 ```scheme
-# information
-# base
-
-```scheme
-
 (use-modules (gnu home services guix)
              (guix channels)
 
@@ -319,7 +328,11 @@
              (px services audio))
 
 (use-service-modules authentication desktop linux sound)
+```
 
+### 基础服务
+
+```scheme
 (define %base-services
   (append (map (lambda (tty)
                  (service kmscon-service-type
@@ -351,7 +364,11 @@
                                                          "--delete-generations=14d")
                                                       #:requirement '(user-processes
                                                                       guix-daemon)))))))
-# desktop
+```
+
+### GUI相关服务
+
+在此也定义了Guix相关的配置
 
 ```scheme
 
@@ -430,7 +447,15 @@
                                            (discover? #f)
                                            (privileged? #f)
                                            (tmpdir "/var/tmp")))))
-# filesystem
+```
+
+### 文件系统相关服务
+
+在这里就是一些负责维护文件系统树的服务
+
+- **fixed-machine-id** 负责固定 `/etc/machine-id` 这个文件中的内容，具体的算法在 [information.scm](../information.scm) 中
+- **fix-data-perms** 负责修复 `/data` 目录下所有文件夹的权限
+- **create-xdg-dirs** 负责在 `/data` 目录和 `/home/user` 目录中创建同名的文件夹，以用于bind-mount
 
 ```scheme
 
@@ -440,12 +465,6 @@
   (list (simple-service 'fixed-machine-id etc-service-type
                         (list `("machine-id" ,(plain-file "machine-id"
                                                           fixed-machine-id))))
-
-        (simple-service 'fix-var-tmp-perms activation-service-type
-                        #~(begin
-                            (use-modules (guix build utils))
-                            (mkdir-p "/var/tmp")
-                            (chmod "/var/tmp" #o1777)))
 
         (simple-service 'fix-data-perms activation-service-type
                         #~(begin
@@ -478,57 +497,11 @@
                                                                    (chmod path
                                                                     #o755)))
                                                                '#$%data-dirs)))))))
-# kernel
+```
+
+### 网络相关配置
 
 ```scheme
-
-(use-service-modules linux pam-mount sysctl)
-
-(define %kernel-services
-  (list (simple-service 'extend-kernel-module-loader
-                        kernel-module-loader-service-type
-                        '("ip_tables" "iptable_nat" "kvm_intel" "sch_fq_pie"
-                          "tcp_bbr" "uinput"))
-
-        (simple-service 'extend-sysctl sysctl-service-type
-                        '(("fs.inotify.max_user_watches" . "524288")
-                          ("fs.file-max" . "2097152")
-                          ("fs.nr_open" . "2097152")
-
-                          ("vm.max_map_count" . "2147483642")
-                          ("vm.compaction_proactiveness" . "0")
-                          ("vm.vfs_cache_pressure" . "50")
-                          ("vm.page_lock_unfairness" . "1")
-                          ("vm.stat_interval" . "120")
-
-                          ("net.core.default_qdisc" . "fq_pie")
-                          ("net.core.rmem_max" . "7500000")
-                          ("net.core.wmem_max" . "7500000")
-                          ("net.ipv4.ip_forward" . "1")
-                          ("net.ipv4.tcp_congestion_control" . "bbr")
-                          ("net.ipv4.tcp_low_latency" . "1")
-                          ("net.ipv4.tcp_fastopen" . "3")
-                          ("net.ipv6.conf.all.forwarding" . "1")
-
-                          ("kernel.numa_balancing" . "0")
-                          ("kernel.sched_autogroup_enabled" . "1")
-                          ("kernel.sched_child_runs_first" . "0")))
-
-        (service pam-limits-service-type
-                 (list (pam-limits-entry "@audio"
-                                         'both
-                                         'rtprio 90)
-                       (pam-limits-entry "@audio"
-                                         'both
-                                         'memlock
-                                         'unlimited)
-                       (pam-limits-entry "*"
-                                         'both
-                                         'nofile 1048576)))))
-# networking
-
-```scheme
-
 (use-modules (rosenthal packages networking)
              (rosenthal services networking))
 
@@ -557,10 +530,11 @@
                                                 (stop #~(make-kill-destructor))
                                                 (auto-start? #t)
                                                 (respawn? #t))))))
-# nix
+```
+
+### `Nix`包管理器相关配置
 
 ```scheme
-
 (use-service-modules nix shepherd)
 
 (define %nix-services
@@ -582,10 +556,11 @@
                                                 (stop #~(make-kill-destructor))
                                                 (auto-start? #t)
                                                 (one-shot? #t))))))
-# udev
+```
+
+### UDEV规则
 
 ```scheme
-
 (use-package-modules android games)
 
 (use-service-modules linux)
@@ -600,7 +575,9 @@
         (udev-rules-service 'cpu-dma
                             (udev-rule "99-cpu-dma-latency.rules"
                              "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))))
-# virtualization
+```
+
+### 虚拟化相关服务
 
 ```scheme
 
@@ -653,7 +630,15 @@
           %nix-services
           %filesystem-services
           %desktop-services))
-# skeletons
+```
+
+## Skeletons
+
+负责处理 **用户骨架** (/etc/skel) 目录下的文件
+
+该目录下的所有文件都会在用户第一次创建时写入到用户的目录中
+
+适合在此放置一些需要经常修改的模板类服务
 
 ```scheme
 
@@ -661,10 +646,15 @@
   `((".config/mihomo/config.yaml" ,(local-file "../configs/files/mihomo.yaml"))
     (".config/noctalia/settings.json" ,(local-file
                                         "../configs/files/noctalia.json"))))
-# users
+```
+
+## Users
+
+用户信息
+
+其中的password默认设置为了 `guix-awesome` ，需要你在进入账户之后再重新修改对应的密码
 
 ```scheme
-
 (use-modules (gnu packages shells))
 
 (define %timezone-config
@@ -681,8 +671,7 @@
          (user-account
            (name username)
            (group "users")
-           (password
-            "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
+           (password (crypt "guix-awesome" "$6$abc"))
            (supplementary-groups '("adbusers" "audio"
                                    "cgroup"
                                    "input"
@@ -693,12 +682,21 @@
                                    "wheel"))
            (shell (file-append (spec->pkg "fish") "/bin/fish")))
          %base-user-accounts))
+```
 
+## Main
+
+导入所有配置
+
+一个 `operating-system` 块必须包含以下的所有内容
+
+```scheme
 (operating-system
   (initrd %initrd-config)
   (firmware %firmware-config)
   (kernel %kernel-config)
   (kernel-arguments %kernel-arguments-config)
+  (keyboard-layout "us" #:options '("ctrl:swapcaps"))
 
   (timezone %timezone-config)
   (locale %locale-config)
@@ -718,3 +716,4 @@
   (skeletons %skeletons-config)
 
   (name-service-switch %mdns-host-lookup-nss))
+```
