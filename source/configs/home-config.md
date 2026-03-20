@@ -5,6 +5,20 @@
 1. 在首次安装系统的时候，可以少安装很多很多的软件包，这样安装系统的时长不会说长的太过分，也可以尽量减少因为网络问题而造成的报错
 2. 系统和用户分开配置，这样在修改某一块的配置时不用将一整个系统都reconfighration一遍，方便多次迭代
 
+---
+
+## 模块
+
+- [Main](#Main) **全配置文件的基本骨架**，建议优先查看这里的结构
+
+- [Information](#information)
+- [Modules](#modules)
+- [Packages](#packages)
+- [Services](#services)
+- [Font](#font)
+
+---
+
 ## Information
 
 ### 包含了一些系统的基本信息
@@ -14,8 +28,6 @@
 ```
 
 ## Modules
-
-### 一些通用的模块
 
 ```scheme
 (use-modules (gnu)
@@ -669,7 +681,13 @@
                                          (prefer (family ,emoji)))))))))
 ```
 
-## 导入所有配置
+## Main
+
+用于导入所有配置
+
+配置文件利用 `define` 来分成了很多个模块，这样方便维护
+
+但是要记住：**一定要导入对应变量**
 
 ```scheme
 (define %packages-list

@@ -4,6 +4,24 @@
 
 待系统成功安装并进入系统之后，则可以直接手动应用用户配置
 
+---
+
+## 模块
+
+- [Main](#Main) **全配置文件的基本骨架**，建议优先查看这里的结构
+
+- [Information](#information)
+- [Modules](#modules)
+- [Bootloader](#bootloader)
+- [FileSystems](#filesystems)
+- [Kernel](#kernel)
+- [Packages](#packages)
+- [Services](#services)
+- [Skeletons](#skeletons)
+- [Users](#users)
+
+---
+
 ## Information
 
 ### 包含了一些系统的基本信息
@@ -46,7 +64,7 @@
     (targets '("/boot"))))
 ```
 
-## Filesystems
+## FileSystems
 
 这里的配置文件需要根据自己的实际情况进行修改，我目前是使用了 **LUKS + Btrfs** 的架构，同时高强度地使用subvol功能
 

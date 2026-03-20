@@ -113,42 +113,25 @@ maak rebuild
 
 ```text
 .
-├── AGENT.md                # 仓库级 AI 工作指引
-├── README.md               # 项目说明文档
-├── maak.scm                # 仓库任务入口
-├── configs/                # Guix 配置模块目录
-│   ├── channel.scm         # Guix 频道定义
-│   ├── channel.lock        # Guix 频道锁文件
-│   ├── information.scm     # 全局变量定义
-│   ├── files/              # 静态配置模板与资源文件
-│   ├── main/               # 配置聚合入口
-│   │   ├── init-config.scm
-│   │   ├── system-config.scm
-│   │   └── home-config.scm
-│   ├── system/             # 系统级配置模块
-│   │   ├── bootloader.scm
-│   │   ├── filesystems.scm
-│   │   ├── kernel.scm
-│   │   ├── modules.scm
-│   │   ├── packages.scm
-│   │   ├── services.scm
-│   │   ├── skeletons.scm
-│   │   ├── users.scm
-│   │   └── services/
-│   └── home/               # Home 配置模块
-│       ├── modules.scm
-│       ├── package.scm
-│       ├── services.scm
-│       └── services/
-│           ├── desktop.scm
-│           ├── dotfile.scm
-│           ├── environment-variables.scm
-│           ├── font.scm
-│           └── programs/
-├── dotfiles/               # 用户配置文件目录
-├── screenshots/            # 预览截图
-├── setup/                  # 安装辅助脚本子模块
-└── LICENSE                 # 项目许可证
+├── AGENT.md                 # 仓库级 AI 工作指引
+├── README.md                # 项目说明文档
+├── maak.scm                 # maak 的配置文件
+├── docs/                    # 文档目录
+│   └── terminal-ide.md      # 终端 IDE 功能说明
+├── source/                  # 配置源码目录
+│   ├── channel.scm          # Guix 频道定义
+│   ├── channel.lock         # Guix 频道锁文件
+│   ├── information.scm      # 全局变量定义
+│   ├── files/               # 静态配置模板与资源文件
+│   └── configs/             # Guix 配置文档
+│       ├── home-config.md   # Home 配置说明
+│       └── system-config.md # 系统配置说明
+├── dotfiles/                # 用户配置文件目录
+│   └── .config/             # 用户级配置
+│       └── emacs/           # Emacs 配置子树
+├── screenshots/             # 预览截图
+├── setup/                   # 安装辅助脚本子模块
+└── LICENSE                  # 项目许可证
 ```
 
 ### 配置文件说明
@@ -157,51 +140,23 @@ maak rebuild
 
 **任务入口**：
 
-- `maak.scm` - 仓库统一任务入口，负责生成完整配置并调用 `guix time-machine`
+- `maak.scm` - `maak` 的配置文件
+  `maak` 是一个类似于 `make` 的代码运行器，但是使用Guile作为默认语言
 
-**全局配置**（`configs/` 根目录）：
+**源码目录**（`source/`）：
 
 - `channel.scm` - 定义 Guix 软件包频道（包含 nonguix 等第三方频道）
 - `channel.lock` - Guix 频道版本锁定文件
 - `information.scm` - 定义系统基本信息，包括用户名、channel、Btrfs 子卷和持久化目录
+- `files/` - 静态配置模板与资源文件（nftables.conf、mihomo.yaml、niri.kdl 等）
+- `configs/` - 配置说明文档
+  - `home-config.md` - Home 环境配置详细说明
+  - `system-config.md` - 系统配置详细说明
 
-**配置聚合入口**（`configs/main/` 目录）：
+**说明**：
 
-- `init-config.scm` - 安装系统时使用的聚合入口
-- `system-config.scm` - 系统配置聚合入口
-- `home-config.scm` - Home 环境配置聚合入口
-
-**静态配置文件**（`configs/files/` 目录）：
-
-- `nftables.conf` - nftables 防火墙规则
-- `mihomo.yaml` - Mihomo 配置
-- `niri.kdl` - Niri 配置模板
-- `rounded.qss` - Qt 主题样式片段
-- `zed.json` - Zed 配置模板
-- `git-credential-keepassxc` - Git 凭据辅助脚本
-
-**系统配置模块**（`configs/system/` 目录）：
-
-- `modules.scm` - 导入系统配置所需的 Guix 模块
-- `bootloader.scm` - 配置引导加载器（GRUB / UKI）
-- `filesystems.scm` - 配置文件系统挂载点、Btrfs 子卷以及 LUKS 映射设备
-- `kernel.scm` - 配置内核版本、固件和内核参数
-- `packages.scm` - 定义系统要安装的软件包列表
-- `services.scm` - 聚合系统级服务
-- `services/*.scm` - 按类别拆分系统服务（桌面、网络、内核、udev、虚拟化等）
-- `skeletons.scm` - 定义 skeleton 文件
-- `users.scm` - 配置系统时区、语言环境、主机名和用户账户
-
-**Home 配置模块**（`configs/home/` 目录）：
-
-- `modules.scm` - 导入 Home 配置所需的 Guix 模块
-- `package.scm` - 定义用户环境的软件包列表
-- `services.scm` - 聚合 Home 服务
-- `services/desktop.scm` - 配置桌面环境所需要的服务（窗口管理器、状态栏、输入法等）
-- `services/dotfile.scm` - 配置 `dotfiles/` 与若干生成式配置文件
-- `services/environment-variables.scm` - 配置用户环境变量
-- `services/font.scm` - 配置用户字体设置
-- `services/programs/*.scm` - 按程序拆分的 Home 服务或包配置
+- 实际的 Scheme 配置模块通过 `maak` 从 `source/` 生成到 `tmp/` 目录后执行
+- 系统配置和用户配置分离，便于独立迭代
 
 **Dotfiles**（`dotfiles/` 目录）：
 
@@ -212,6 +167,10 @@ maak rebuild
 
 - `setup/` - Linux 安装辅助脚本
 - `dotfiles/.local/share/fcitx5/rime` - Rime 词库子模块
+
+**文档**（`docs/` 目录）：
+
+- `terminal-ide.md` - 终端 IDE（tmux + helix + broot）功能说明
 
 ### 特别感谢
 

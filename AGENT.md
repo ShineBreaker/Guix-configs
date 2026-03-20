@@ -12,10 +12,17 @@ SPDX-License-Identifier: GPL-3.0
 
 这是一个以 Guix 为核心的个人系统配置仓库，内容分成两层：
 
-- `configs/`：Guix System / Guix Home 的 Scheme 源配置。
+- `source/`：Guix System / Guix Home 的 Scheme 源配置和 Markdown 文档。
 - `dotfiles/`：通过 Home 服务分发到用户目录的配置文件集合。
+- `tmp/`：`maak` 生成的完整配置（临时目录，不应手动编辑）。
 
-仓库不是直接维护一份扁平化的最终配置，而是通过 `maak.scm` 读取 `configs/main/*.scm`，递归展开其中的 `(load ...)`，在 `tmp/` 中生成完整配置后，再交给 `guix time-machine` 执行。
+仓库不是直接维护一份扁平化的最终配置，而是利用 `maak` 处理 `source/configs` 中的 Markdown 文件，将所有的代码块提取出来并放置在一个文件中后，再继续利用 `maak` 执行所有操作。
+
+`maak` 是这个仓库的核心工具，它的主页上将其描述为
+
+> The infinitely extensible command runner, control plane and project automator à la Make (Guile Scheme - Lisp)
+
+作为一个代码运行器，我们可以封装很多很长的代码，以及相关业务逻辑到 `maak.scm` 中，便于用户以及机器进行直接调用
 
 ## 工作优先级
 
@@ -34,10 +41,15 @@ SPDX-License-Identifier: GPL-3.0
 ├── AGENT.md
 ├── README.md
 ├── maak.scm
-├── configs/
-│   ├── information.scm
+├── source/                 # 配置源码目录
 │   ├── channel.scm
 │   ├── channel.lock
+│   ├── information.scm
+│   ├── configs/            # Markdown 格式配置文档
+│   │   ├── home-config.md
+│   │   └── system-config.md
+│   └── files/              # 静态配置模板与资源文件
+├── configs/                # Guix 配置模块目录（由 maak.scm 生成）
 │   ├── main/
 │   │   ├── init-config.scm
 │   │   ├── system-config.scm
@@ -54,35 +66,42 @@ SPDX-License-Identifier: GPL-3.0
 │       └── 静态配置模板与资源文件
 ├── dotfiles/
 │   └── 真实用户配置文件树
+├── docs/                   # 文档目录
 ├── setup/
 │   └── 独立子模块
-└── screenshots/
+├── screenshots/
+└── tmp/                    # 生成的完整配置（临时）
 ```
 
 额外事实：
 
 - `setup/` 是 git submodule。
 - `dotfiles/.local/share/fcitx5/rime` 也是 git submodule。
-- `README.md` 中提到的 `justfile`、根目录 `config.scm` 等文件目前并不存在。
+- `maak.scm` 是一个名为 `maak` 的软件的配置文件，`maak` 是一个命令运行器 (command runner)。
 
 ## 配置装配模型
 
 ### 1. 主入口
 
 - [maak.scm](./maak.scm)：仓库任务入口。
-- [configs/main/init-config.scm](./configs/main/init-config.scm)：安装系统用入口。
-- [configs/main/system-config.scm](./configs/main/system-config.scm)：系统配置入口。
-- [configs/main/home-config.scm](./configs/main/home-config.scm)：Home 配置入口。
+- [source/information.scm](./source/information.scm)：全局变量定义。
+- [source/channel.scm](./source/channel.scm)：Guix 频道定义。
+- [source/configs/system-config.md](./source/configs/system-config.md)：系统配置说明文档。
+- [source/configs/home-config.md](./source/configs/home-config.md)：Home 配置说明文档。
+- [configs/main/init-config.scm](./configs/main/init-config.scm)：安装系统用入口（生成后）。
+- [configs/main/system-config.scm](./configs/main/system-config.scm)：系统配置入口（生成后）。
+- [configs/main/home-config.scm](./configs/main/home-config.scm)：Home 配置入口（生成后）。
 
 ### 2. 聚合方式
 
-- `maak.scm` 会递归处理 `configs/main/*.scm` 中的 `(load "../...")`。
+- `maak` 会处理 `source/configs` 中的 Markdown 文件，将所有的代码块提取出来并放置在一个文件中。
 - 生成后的完整文件会放到 `tmp/`。
-- 之后通过 `guix time-machine --channels=configs/channel.lock -- ...` 执行。
+- 之后通过调用 `maak` 执行。
 
 ### 3. 基础数据源
 
-- [configs/information.scm](./configs/information.scm)：用户名、channel lock、machine-id、Btrfs 子卷和持久化目录等全局事实来源。
+- [source/information.scm](./source/information.scm)：用户名、channel lock、machine-id、Btrfs 子卷和持久化目录等全局事实来源。
+- [source/channel.scm](./source/channel.scm)：Guix 频道定义和锁定。
 - 修改用户名、持久化目录、Btrfs 子卷、channel 相关行为时，应优先检查这里是否已经被其他模块引用。
 
 ## 目录职责
@@ -95,7 +114,7 @@ SPDX-License-Identifier: GPL-3.0
 - `services.scm` 作为系统服务聚合器，再拆到 `services/*.scm`。
 - `skeletons.scm` 负责 skeleton 文件。
 
-如果是系统层变更，优先落在对应子模块，不要把逻辑直接堆回 `configs/main/system-config.scm`。
+如果是系统层变更，优先修改 `source/` 中的对应文件，不要把逻辑直接堆回生成的 `configs/main/system-config.scm`。
 
 ### `configs/home/`
 
@@ -106,7 +125,7 @@ SPDX-License-Identifier: GPL-3.0
 - `services/dotfile.scm`：将 `../dotfiles` 暴露给 Home，并附加若干 `configs/files/*` 生成的文件。
 - `services/programs/*.scm`：按程序维护包或服务片段。
 
-若某个应用已经由 `dotfiles/` 提供真实配置，优先改对应 dotfile；若需要让 Guix Home 安装、链接或生成它，再改 `configs/home/services/*.scm`。
+若某个应用已经由 `dotfiles/` 提供真实配置，优先改对应 dotfile；若需要让 Guix Home 安装、链接或生成它，再修改 `source/` 中的相关配置。
 
 ### `configs/files/`
 
@@ -114,6 +133,7 @@ SPDX-License-Identifier: GPL-3.0
 
 - 需要把包的绝对路径注入模板。
 - 不适合直接放进 `dotfiles/` 的生成式配置。
+- 注意：`source/files/` 是源码，`configs/files/` 是生成后的副本。
 
 ### `dotfiles/`
 
@@ -152,8 +172,8 @@ maak rebuild
 - 优先在最具体的模块中修改，而不是改聚合入口。
 - 保持现有 `(load ...)` 风格和变量命名习惯，例如 `%services-config`、`%packages-list`。
 - 新增程序配置时，同时考虑三处是否需要联动：
-  - 包是否要加入 `configs/system/packages.scm` 或 `configs/home/package.scm`
-  - 服务是否要加入 `configs/system/services*.scm` 或 `configs/home/services*.scm`
+  - 包是否要加入 `source/` 中的系统或用户包定义
+  - 服务是否要加入 `source/` 中的系统或 Home 服务定义
   - 配置文件是否要放到 `dotfiles/` 或 `configs/files/`
 - 当 README 的结构描述过时，如有必要可顺手修正文档，但不要把错误结构继续复制进新文件。
 
@@ -176,11 +196,13 @@ maak rebuild
 
 ## 面向 AI 的决策规则
 
-- 用户提到“系统配置”时，通常先看 `configs/system/`。
-- 用户提到“ 用户/软件 配置”时，通常先看 `configs/home/` 与 `dotfiles/`。
-- 用户提到“为什么最终配置里出现某个字段”时，沿着 `configs/main/*.scm` 的 `load` 链回溯。
+- 用户提到"系统配置"时，通常先看 `source/` 中的系统相关文件。
+- 用户提到"用户/软件配置"时，通常先看 `source/` 中的 Home 配置和 `dotfiles/`。
+- 用户提到"为什么最终配置里出现某个字段"时，沿着 `source/` 中的 `load` 链回溯，然后检查生成的 `configs/main/*.scm`。
 - 用户提到 Emacs 时，先切换到 [dotfiles/.config/emacs/AGENT.md](./dotfiles/.config/emacs/AGENT.md) 的规则集。
 
 ## 已知风险点
 
 - `setup/` 与 `dotfiles/.local/share/fcitx5/rime` 是子模块，操作前先确认任务是否真的要求改动它们。
+- 不要手动编辑 `tmp/` 目录中的文件，它们是由 `maak.scm` 自动生成的。
+- `configs/` 目录（除了 `main/` 中的聚合入口）也是生成后的配置，优先修改 `source/` 中的源文件。
