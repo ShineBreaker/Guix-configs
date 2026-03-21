@@ -673,11 +673,11 @@
 
 `password`行可以用于设置默认密码
 
-`crypt` 函数的第一个参数为密码，第二个参数为加密方式
+利用 `(password (crypt "InitialPassword!" "$6$abc")))` 可以创建一个初始密码，其中crypt函数的第一个字符串为 **明文的密码**
 
-推荐在安装前取消该行的注释，为账户设置一个初始的密码
+然后在进入系统之后重新注释，并自行设置密码，或者将 **password** 后的函数设置为 **Hash化后的密码**
 
-然后在进入系统之后重新注释，并自行设置密码
+利用 `echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin` 即可返回需要填入的值
 
 ```scheme
 (use-modules (gnu packages shells))
@@ -696,7 +696,8 @@
          (user-account
            (name username)
            (group "users")
-           ;; (password (crypt "guix-awesome" "$6$abc"))
+           (password
+            "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
            (supplementary-groups '("adbusers" "audio"
                                    "cgroup"
                                    "input"

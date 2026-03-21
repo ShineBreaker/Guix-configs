@@ -38,42 +38,12 @@
              (gnu services)
              (gnu system shadow)
 
-             (guix build-system trivial)
              (guix gexp)
-             ((guix licenses) #:prefix license:)
              (guix packages)
              (guix utils)
 
              (rosenthal utils file)
-             (rosenthal utils packages)
-
-             (gnu home services shells)
-
-             (gnu home services desktop)
-             (gnu home services dotfiles)
-             (gnu home services fontutils)
-             (gnu home services gnupg)
-             (gnu home services shepherd)
-             (gnu home services niri)
-             (gnu home services sound)
-             (gnu home services syncthing)
-             (gnu home services guix)
-
-             (rosenthal services desktop)
-
-             (rosenthal services shellutils))
-
-(use-package-modules bash
-                     fcitx5
-                     freedesktop
-                     gnupg
-                     kde-internet
-                     java
-                     linux
-                     polkit
-                     rust-apps
-                     shells
-                     wm)
+             (rosenthal utils packages))
 ```
 
 ## Packages
@@ -243,7 +213,6 @@
           "amule"
           "broot"
           "btop"
-          "dae"
           "freerdp@3"
           "just"
           "kanata"
@@ -290,6 +259,30 @@
 
 ## Services
 
+```scheme
+(use-modules (gnu home services desktop)
+             (gnu home services dotfiles)
+             (gnu home services fontutils)
+             (gnu home services gnupg)
+             (gnu home services shepherd)
+             (gnu home services niri)
+             (gnu home services sound)
+             (gnu home services desktop)
+             (gnu home services fontutils)
+             (gnu home services syncthing)
+             (gnu home services guix)
+
+             (rosenthal services desktop))
+
+(use-package-modules fcitx5
+                     freedesktop
+                     gnupg
+                     kde-internet
+                     linux
+                     polkit
+                     wm)
+```
+
 ### modprobe 相关服务
 
 ```scheme
@@ -316,6 +309,8 @@
 ### Fish 相关服务
 
 ```scheme
+(use-modules (gnu home services shells))
+
 (define %fish-services
   (list (simple-service 'fish-configs
                         home-xdg-configuration-files-service-type
@@ -370,6 +365,8 @@
 这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作
 
 ```scheme
+(use-modules (gnu packages rust-apps))
+
 (define auto-startup
   (lambda (pkg path requirement)
     (shepherd-service (provision (list (string->symbol (package-name pkg))))
@@ -414,6 +411,11 @@
 #### 主要的一些内容
 
 ```scheme
+(use-modules (gnu home services shells)
+             (rosenthal services shellutils))
+
+(use-package-modules java shells)
+
 (define %dotfile-services
   (list (service home-dotfiles-service-type
                  (home-dotfiles-configuration (directories '("../dotfiles"))
