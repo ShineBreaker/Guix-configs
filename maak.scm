@@ -106,10 +106,10 @@ Exit code: ~a~%" cmd exit-code)))))
 ;; 安装系统
 (define (init)
   "安装系统"
-  (generate-init-config)
+  (generate-system-config)
   (log-info "正在安装系统")
   ($guix `("system" "init"
-           ,(string-append tmp-dir "/init-config.scm") "/mnt"))
+           ,(string-append tmp-dir "/system-config.scm") "/mnt"))
   (tmprm))
 
 (define (system)
