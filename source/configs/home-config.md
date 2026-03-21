@@ -365,92 +365,33 @@
 
 ### 利用 `home-shepherd-service-type` 来手动指定一些软件的自启动
 
+这里利用 `scheme` 的 **lambda** 函数来包装了一个列表，这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容
+
+这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作
+
 ```scheme
+(define auto-startup
+  (lambda (pkg path requirement)
+    (shepherd-service (provision (list (string->symbol (package-name pkg))))
+                      (requirement requirement)
+                      (start #~(make-forkexec-constructor
+                          (list #$(file-append pkg path))
+                                #:log-file (string-append (getenv "HOME") "/.var/log/"
+                                            #$(package-name pkg) ".log")))
+                      (respawn? #t))))
+
 (define %home-shepherd-services
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (shepherd-service (provision '(kanata))
-                                          (requirement '(dbus))
-                                          (start #~(make-forkexec-constructor
-                                                    (list #$(file-append
-                                                             kanata
-                                                             "/bin/kanata"))
-                                                    #:log-file (string-append
-                                                                (getenv
-                                                                 "HOME")
-                                                                "/.var/log/kanata.log")))
-                                          (respawn? #t))
+                        (list (auto-startup kanata "/bin/kanata" '(dbus))
+                              (auto-startup kdeconnect "/bin/kdeconnectd" '(dbus))
+                              (auto-startup polkit-gnome
+                               "/libexec/polkit-gnome-authentication-agent-1" '(dbus))
+                              (auto-startup poweralertd "/bin/poweralertd" '(dbus))
+                              (auto-startup swayidle "/bin/swayidle" '(dbus))
+                              (auto-startup xdg-desktop-portal "/libexec/xdg-desktop-portal" '(dbus))
+                              (auto-startup xdg-desktop-portal-gtk
+                               "/libexec/xdg-desktop-portal-gtk" '(xdg-desktop-portal))))))
 
-                              (shepherd-service (provision '(kdeconnectd))
-                                                (requirement '(dbus))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   kdeconnect
-                                                                   "/bin/kdeconnectd"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/kdeconnectd.log")))
-                                                (respawn? #t))
-
-                              (shepherd-service (provision '(polkit-gnome))
-                                                (requirement '(dbus))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   polkit-gnome
-                                                                   "/libexec/polkit-gnome-authentication-agent-1"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/polkit-gnome.log")))
-                                                (respawn? #t))
-
-                              (shepherd-service (provision '(poweralertd))
-                                                (requirement '(dbus))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   poweralertd
-                                                                   "/bin/poweralertd"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/poweralertd.log")))
-                                                (respawn? #t))
-
-                              (shepherd-service (provision '(swayidle))
-                                                (requirement '(dbus))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   swayidle
-                                                                   "/bin/swayidle"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/swayidle.log")))
-                                                (respawn? #t))
-
-                              (shepherd-service (provision '(xdg-desktop-portal))
-                                                (requirement '(dbus))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   xdg-desktop-portal
-                                                                   "/libexec/xdg-desktop-portal"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/xdg-desktop-portal.log")))
-                                                (respawn? #t))
-
-                              (shepherd-service (provision '(xdg-desktop-portal-gtk))
-                                                (requirement '(xdg-desktop-portal))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   xdg-desktop-portal-gtk
-                                                                   "/libexec/xdg-desktop-portal-gtk"))
-                                                          #:log-file (string-append
-                                                                      (getenv
-                                                                       "HOME")
-                                                                      "/.var/log/xdg-desktop-portal-gtk.log")))
-                                                (respawn? #t))))))
 ```
 
 ### 计时器服务
