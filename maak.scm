@@ -31,8 +31,6 @@
   (getcwd))
 (define configs-dir
   (string-append repo-root "/source/configs"))
-(define configen-dir
-  (string-append configs-dir "/main"))
 (define tmp-dir
   (string-append repo-root "/tmp"))
 (define channel-fresh
