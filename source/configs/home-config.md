@@ -78,50 +78,18 @@
 
 ## Packages
 
-### 自定义软件包
-
-```scheme
-(define termide
-  (package
-    (name "termide")
-    (version "0.1.0")
-    (source
-     (local-file "../source/files/termide"))
-    (build-system trivial-build-system)
-    (arguments
-     (list
-      #:modules '((guix build utils))
-      #:builder
-      #~(begin
-          (use-modules (guix build utils))
-          (let* ((out (assoc-ref %outputs "out"))
-                 (bin (string-append out "/bin"))
-                 (target (string-append bin "/termide")))
-            (mkdir-p bin)
-            (copy-file #$source target)
-            (patch-shebang target
-                           (list (string-append #$bash-minimal "/bin")))
-            (chmod target #o555)))))
-    (inputs (list bash-minimal))
-    (synopsis "VSCode-like tmux workspace helper")
-    (description
-     "termide launches and controls the tmuxifier-based terminal IDE session.")
-    (home-page "https://github.com/BrokenShine/Guix-configs")
-    (license license:gpl3)))
-```
-
 ### Emacs 相关软件包
 
 ```scheme
 (define %emacs-packages-list
   (cons* (specs->pkgs+out
-          ;; --- Emacs 核心与 Lisp ---
+          ;; Emacs 核心与 Lisp
           "emacs-pgtk"
           "sbcl"
           "emacs-use-package"
           "emacs-general"
 
-          ;; --- 补全与迷你缓冲区 ---
+          ;; 补全与迷你缓冲区
           "emacs-vertico"
           "emacs-marginalia"
           "emacs-orderless"
@@ -129,11 +97,11 @@
           "emacs-embark"
           "emacs-corfu"
 
-          ;; --- Evil 模式（Vim 模拟）---
+          ;; Evil 模式（Vim 模拟）
           "emacs-evil"
           "emacs-evil-collection"
 
-          ;; --- 界面与外观 ---
+          ;; 界面与外观
           "emacs-dashboard"
           "emacs-doom-modeline"
           "emacs-ef-themes"
@@ -148,13 +116,13 @@
           "emacs-stickyfunc-enhance"
           "emacs-ws-butler"
 
-          ;; --- 开发工具 ---
+          ;; 开发工具
           "emacs-vterm"
           "emacs-yasnippet"
           "emacs-yasnippet-snippets"
           "emacs-rg"
 
-          ;; --- 编程语言支持 ---
+          ;; 编程语言支持
           "emacs-kotlin-mode"
           "emacs-rust-mode"
           "emacs-zig-mode"
@@ -166,32 +134,32 @@
           "emacs-geiser"
           "emacs-geiser-guile"
 
-          ;; --- Git 集成 ---
+          ;; Git 集成
           "emacs-magit"
           "emacs-magit-todos"
           "emacs-git-messenger"
 
-          ;; --- 项目管理 ---
+          ;; 项目管理
           "emacs-projectile"
 
-          ;; --- Org Mode 生态 ---
+          ;; Org Mode 生态
           "emacs-org-modern"
           "emacs-org-roam"
           "emacs-org-appear"
 
-          ;; --- 帮助与文档 ---
+          ;; 帮助与文档
           "emacs-helpful"
 
-          ;; --- 邮件与日历 ---
+          ;; 邮件与日历
           "emacs-notmuch"
           "emacs-calfw"
 
-          ;; --- 环境与工具 ---
+          ;; 环境与工具
           "emacs-no-littering"
           "emacs-spinner"
           "emacs-yaml"
 
-          ;; --- Tree-sitter（语法解析）---
+          ;; Tree-sitter（语法解析）---
           "tree-sitter"
           "tree-sitter-bash"
           "tree-sitter-c"
@@ -225,14 +193,13 @@
 
 ```scheme
 (define %packages-list-extended
-  (cons* termide
-         (specs->pkgs+out
-          ;; AI related.
+  (cons* (specs->pkgs+out
+          ;; AI工具
           "claude-code"
           "codex"
           "opencode"
 
-          ;; Audio & Video
+          ;; 影音
           "easyeffects"
           "helvum"
           "mpv"
@@ -241,7 +208,7 @@
           "obs-pipewire-audio-capture"
           "obs-vkcapture"
 
-          ;; Desktop Environment
+          ;; 桌面环境相关
           "baobab"
           "cliphist"
           "dex"
@@ -251,31 +218,32 @@
           "wl-clipboard"
           "xsel"
 
-          ;; Communication
-          "kdeconnect"
+          ;; 社交
           "notmuch"
           "telegram-desktop"
 
-          ;; Productivity
+          ;; 生产力工具
           "gimp"
           "keepassxc"
           "git-credential-keepassxc"
+          "kdeconnect"
           "seahorse"
           "virt-manager"
           "zen-browser-bin"
 
-          ;; Entertainment
+          ;; 娱乐
           "heroic"
           "mangohud"
           "osu-lazer-bin"
           "prismlauncher-dolly"
           "steam"
 
-          ;; System & Utilities
+          ;; 系统工具
           "age"
           "amule"
           "broot"
           "btop"
+          "dae"
           "freerdp@3"
           "just"
           "kanata"
@@ -286,13 +254,13 @@
           "tmux-xpanes"
           "winapps"
 
-          ;; Themes & Appearance
+          ;; 主题
           "adw-gtk3-theme"
           "adwaita-icon-theme"
           "bibata-cursor-theme"
           "papirus-icon-theme"
 
-          ;; Development
+          ;; 开发环境
           "ccls"
           "clang"
           "gitui"
@@ -314,7 +282,7 @@
           "uv"
           "zed"
 
-          ;; Qt Framework
+          ;; QT框架相关
           "pinentry-qt"
           "qt5ct"
           "qt6ct")))
