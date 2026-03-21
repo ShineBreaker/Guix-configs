@@ -715,7 +715,6 @@
   (firmware %firmware-config)
   (kernel %kernel-config)
   (kernel-arguments %kernel-arguments-config)
-  (keyboard-layout (keyboard-layout "us" #:options '("ctrl:swapcaps")))
 
   (timezone %timezone-config)
   (locale %locale-config)

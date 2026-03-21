@@ -71,6 +71,7 @@
                      java
                      linux
                      polkit
+                     rust-apps
                      shells
                      wm)
 ```
@@ -277,6 +278,7 @@
           "btop"
           "freerdp@3"
           "just"
+          "kanata"
           "maak"
           "postgresql"
           "tmux"
@@ -293,6 +295,7 @@
           ;; Development
           "ccls"
           "clang"
+          "gitui"
           "gradle"
           "helix"
           "maven"
@@ -397,7 +400,19 @@
 ```scheme
 (define %home-shepherd-services
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (shepherd-service (provision '(kdeconnectd))
+                        (list (shepherd-service (provision '(kanata))
+                                          (requirement '(dbus))
+                                          (start #~(make-forkexec-constructor
+                                                    (list #$(file-append
+                                                             kanata
+                                                             "/bin/kanata"))
+                                                    #:log-file (string-append
+                                                                (getenv
+                                                                 "HOME")
+                                                                "/.var/log/kanata.log")))
+                                          (respawn? #t))
+
+                              (shepherd-service (provision '(kdeconnectd))
                                                 (requirement '(dbus))
                                                 (start #~(make-forkexec-constructor
                                                           (list #$(file-append
@@ -585,7 +600,6 @@
     ("NO_PROXY" . "127.0.0.1,localhost")
     ("QS_ICON_THEME" . "Papirus-Dark")
     ("QT_QPA_PLATFORMTHEME" . "qt5ct")
-    ("XKB_DEFAULT_OPTIONS" . "ctrl:swapcaps")
 
     ;; Wayland support.
     ("GDK_BACKEND" . "wayland")

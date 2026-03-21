@@ -35,8 +35,6 @@ cursor {
 input {
     keyboard {
         xkb {
-            layout "us"
-            options "ctrl:swapcaps"
         }
     }
     touchpad {
