@@ -8,7 +8,7 @@
 
 ## 模块
 
-- [Main](#Main) **全配置文件的基本骨架**，建议优先查看这里的结构
+- [Main](#Main) -- **全配置文件的基本骨架**，建议优先查看这里的结构
 
 - [Information](#information)
 - [Modules](#modules)
@@ -671,7 +671,13 @@
 
 用户信息
 
-其中的password默认设置为了 `guix-awesome` ，需要你在进入账户之后再重新修改对应的密码
+`password`行可以用于设置默认密码
+
+`crypt` 函数的第一个参数为密码，第二个参数为加密方式
+
+推荐在安装前取消该行的注释，为账户设置一个初始的密码
+
+然后在进入系统之后重新注释，并自行设置密码
 
 ```scheme
 (use-modules (gnu packages shells))
@@ -690,7 +696,7 @@
          (user-account
            (name username)
            (group "users")
-           (password (crypt "guix-awesome" "$6$abc"))
+           ;; (password (crypt "guix-awesome" "$6$abc"))
            (supplementary-groups '("adbusers" "audio"
                                    "cgroup"
                                    "input"

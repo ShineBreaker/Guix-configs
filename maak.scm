@@ -93,10 +93,6 @@ Exit code: ~a~%" cmd exit-code)))))
     (system* "guix" "style" "--whole-file" output-path)))
 
 ;;; Maak任务定义
-
-(define (generate-init-config)
-  (generate-config-from-markdown "init-config.md" "init-config.scm"))
-
 (define (generate-system-config)
   (generate-config-from-markdown "system-config.md" "system-config.scm"))
 

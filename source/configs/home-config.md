@@ -9,7 +9,7 @@
 
 ## 模块
 
-- [Main](#Main) **全配置文件的基本骨架**，建议优先查看这里的结构
+- [Main](#Main) -- **全配置文件的基本骨架**，建议优先查看这里的结构
 
 - [Information](#information)
 - [Modules](#modules)
