@@ -233,8 +233,7 @@
 ```scheme
 (define %packages-config
   (append (specs->pkgs+out
-           ;; Core System Tools
-           "cpufrequtils"
+           ;; 系统核心组件
            "cryptsetup"
            "dialog"
            "iproute2"
@@ -244,7 +243,7 @@
            "rtkit"
            "strace"
 
-           ;; Networking & Connectivity
+           ;; 网络与连接
            "adb"
            "bluez"
            "curl"
@@ -253,36 +252,29 @@
            "netcat-openbsd"
            "wget"
 
-           ;; Development Tools
+           ;; 开发工具
            "gcc-toolchain"
            "git"
            "git-filter-repo"
            "git-lfs"
 
-           ;; Desktop Environment
-           "brightnessctl"
-           "dconf-editor"
-           "gvfs"
+           ;; 桌面环境
+           "fuzzel"
            "niri"
-           "poweralertd"
-           "setxkbmap"
-           "swayidle"
-           "xdg-dbus-proxy"
-           "xdg-desktop-portal-gnome"
-           "xdg-desktop-portal-gtk"
-           "xdg-user-dirs"
-           "xdg-utils"
-           "xprop"
+           "waybar"
            "xwayland-satellite"
 
-           ;; Desktop Services
+           ;; 桌面服务
+           "brightnessctl"
+           "dconf-editor"
            "gnome-keyring"
+           "gvfs"
            "libgnome-keyring"
-           "libnotify"
            "libsecret"
            "polkit-gnome"
+           "poweralertd"
 
-           ;; File Management
+           ;; 文件管理器
            "exo"
            "file-roller"
            "thunar"
@@ -293,41 +285,42 @@
            "tumbler"
            "xfconf"
 
-           ;; Multimedia
+           ;; 解码器
            "gstreamer"
            "gst-plugins-base"
            "gst-plugins-good"
            "gst-plugins-bad"
            "gst-plugins-ugly-full"
 
-           ;; Fonts
+           ;; 字体
            "font-awesome"
            "font-google-noto-emoji"
            "font-nerd-fonts-iosevka"
            "font-maple-font-nf-cn"
            "font-sarasa-gothic"
 
-           ;; Terminal & Shell
+           ;; 命令行工具
            "fastfetch-minimal"
            "fish"
            "foot"
 
-           ;; Virtualization & Containers
+           ;; 虚拟化
            "distrobox"
            "libvirt"
            "podman"
            "podman-compose"
            "qemu"
-           "runc"
            "spice"
 
-           ;; Package Management
+           ;; 包管理器
            "flatpak"
            "flatpak-xdg-utils"
            "nix"
 
-           ;; Utilities
+           ;; 工具
+           "cpufrequtils"
            "gzip"
+           "libnotify"
            "ntfs-3g"
            "tpm2-abrmd"
            "tpm2-pkcs11"
@@ -385,9 +378,11 @@
                                                                       guix-daemon)))))))
 ```
 
-### GUI相关服务
+### 桌面服务
 
-在此也定义了Guix相关的配置
+主要是修改了 `rosenthal-desktop-services` 这个服务
+
+定义了Guix相关的配置，以及修改了greetd的配置
 
 ```scheme
 

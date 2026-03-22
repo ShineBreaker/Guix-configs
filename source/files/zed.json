@@ -12,110 +12,119 @@
   },
   "theme": {
     "mode": "system",
-    "light": "Noctalia Light",
-    "dark": "Noctalia Dark"
+    "light": "Ayu Light",
+    "dark": "Ayu Mirage"
   },
   "language_models": {
     "openai_compatible": {
       "Aliyun": {
         "api_url": "https://coding.dashscope.aliyuncs.com/v1",
-        "available_models": [{
-          "name": "kimi-k2.5",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
+        "available_models": [
+          {
+            "name": "kimi-k2.5",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "glm-4.7",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "glm-5",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "MiniMax-M2.5",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "qwen3.5-plus",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "qwen3-max-2026-01-23",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "qwen3-coder-next",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
+          },
+          {
+            "name": "qwen3-coder-plus",
+            "max_tokens": 256000,
+            "max_output_tokens": 65536,
+            "max_completion_tokens": 256000,
+            "capabilities": {
+              "tools": true,
+              "images": false,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "chat_completions": true
+            }
           }
-        }, {
-          "name": "glm-4.7",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "glm-5",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "MiniMax-M2.5",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3.5-plus",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3-max-2026-01-23",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3-coder-next",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3-coder-plus",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }]
+        ]
       }
     }
   },
@@ -237,7 +246,13 @@
       "language_servers": ["!kotlin-lsp", "kotlin-language-server"]
     },
     "Python": {
-      "language_servers": ["pylsp", "!pyright", "!ruff", "!basedpyright", "!pylsp"],
+      "language_servers": [
+        "pylsp",
+        "!pyright",
+        "!ruff",
+        "!basedpyright",
+        "!pylsp"
+      ],
       "formatter": {
         "external": {
           "command": "$$bin/black$$",

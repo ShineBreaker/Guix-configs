@@ -129,7 +129,7 @@
           "emacs-spinner"
           "emacs-yaml"
 
-          ;; Tree-sitter（语法解析）---
+          ;; Tree-sitter（语法解析）
           "tree-sitter"
           "tree-sitter-bash"
           "tree-sitter-c"
@@ -185,7 +185,16 @@
           "fcitx5"
           "fuzzel"
           "nautilus"
+          "swaylock-effects"
+          "swayidle"
+          "swww"
+          "waypaper"
           "wl-clipboard"
+          "xdg-dbus-proxy"
+          "xdg-desktop-portal-gnome"
+          "xdg-desktop-portal-gtk"
+          "xdg-user-dirs"
+          "xdg-utils"
           "xsel"
 
           ;; 社交
@@ -208,7 +217,7 @@
           "prismlauncher-dolly"
           "steam"
 
-          ;; 系统工具
+          ;; 实用工具
           "age"
           "amule"
           "broot"
@@ -218,13 +227,16 @@
           "kanata"
           "maak"
           "postgresql"
+          "setxkbmap"
           "tmux"
           "tmuxifier"
           "tmux-xpanes"
           "winapps"
+          "xprop"
 
           ;; 主题
-          "adw-gtk3-theme"
+          "orchis-kde-themes"
+          "orchis-theme"
           "adwaita-icon-theme"
           "bibata-cursor-theme"
           "papirus-icon-theme"
@@ -252,6 +264,7 @@
           "zed"
 
           ;; QT框架相关
+          "kvantum"
           "pinentry-qt"
           "qt5ct"
           "qt6ct")))
@@ -347,7 +360,6 @@
 ```scheme
 (define %user-desktop-services
   (list (service home-syncthing-service-type)
-        (service home-noctalia-shell-service-type)
 
         (service home-fcitx5-service-type
                  (home-fcitx5-configuration (themes (list
@@ -360,7 +372,7 @@
 
 ### 利用 `home-shepherd-service-type` 来手动指定一些软件的自启动
 
-这里利用 `scheme` 的 **lambda** 函数来包装了一个列表，这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容
+这里利用 **scheme** 的 `lambda` 函数来包装了一个列表，这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容
 
 这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作
 
@@ -385,6 +397,7 @@
                                "/libexec/polkit-gnome-authentication-agent-1" '(dbus))
                               (auto-startup poweralertd "/bin/poweralertd" '(dbus))
                               (auto-startup swayidle "/bin/swayidle" '(dbus))
+                              (auto-startup waybar "/bin/waybar" '(dbus))
                               (auto-startup xdg-desktop-portal "/libexec/xdg-desktop-portal" '(dbus))
                               (auto-startup xdg-desktop-portal-gtk
                                "/libexec/xdg-desktop-portal-gtk" '(xdg-desktop-portal))))))
@@ -455,10 +468,6 @@
                                                           "../source/files/git-credential-keepassxc")
                                                          (specs->pkgs "git"
                                                                       "fish")))
-                   (".config/qt5ct/qss/rounded.qss" ,(local-file
-                                                      "../source/files/rounded.qss"))
-                   (".config/qt6ct/qss/rounded.qss" ,(local-file
-                                                      "../source/files/rounded.qss"))
                    (".config/zed/settings.json" ,(computed-substitution-with-inputs
                                                   "zed.json"
                                                   (local-file
@@ -486,7 +495,10 @@
                                                     "dex"
                                                     "foot"
                                                     "fish"
+                                                    "fuzzel"
                                                     "niri"
+                                                    "swaylock-effects"
+                                                    "waypaper"
                                                     "wl-clipboard"
                                                     "xwayland-satellite")))))))
 ```

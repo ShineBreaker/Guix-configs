@@ -1,15 +1,9 @@
-include "./noctalia.kdl"
-
 spawn-sh-at-startup "$$bin/wl-paste$$ --watch cliphist store &"
 spawn-sh-at-startup "fish -c shepherd"
 
 spawn-at-startup "$$bin/dex$$" "-a"
 
 prefer-no-csd
-
-debug {
-    honor-xdg-activation-with-invalid-serial
-}
 
 hotkey-overlay {
     skip-at-startup
@@ -76,11 +70,6 @@ output "eDP-1" {
 }
 
 screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
-
-layer-rule {
-  match namespace="^noctalia-overview*"
-  place-within-backdrop true
-}
 
 layer-rule {
     match namespace="^notifications$"
@@ -245,11 +234,11 @@ binds {
     Mod+8       { focus-workspace 8; }
     Mod+9       { focus-workspace 9; }
 
-    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false         { spawn "noctalia-shell" "ipc" "call" "lockScreen" "lock"; }
+    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false { spawn "$$bin/swaylock$$" "--clock" "--daemonize" "--ignore-empty-password"; }
 
     Mod+Ctrl+C  hotkey-overlay-title="将窗口移至中央"    { center-column; }
     Mod+Ctrl+F  hotkey-overlay-title="使窗口悬浮"        { toggle-window-floating; }
-    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "noctalia-shell" "ipc" "call" "wallpaper" "random"; }
+    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "$$bin/waypaper$$" "--random"; }
 
     Mod+Ctrl+K     hotkey-overlay-title="上移窗口"    { move-window-up; }
     Mod+Ctrl+Up    hotkey-overlay-title="上移窗口"    { move-window-up; }
@@ -271,8 +260,8 @@ binds {
     Mod+Ctrl+Page_Down hotkey-overlay-title="窗口移至下一工作区"  { move-column-to-workspace-down; }
     Mod+Ctrl+Page_Up   hotkey-overlay-title="窗口移至上一工作区"  { move-column-to-workspace-up; }
 
-    Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn "noctalia-shell" "ipc" "call" "launcher" "clipboard"; }
-    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
+    Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "$$bin/cliphist$$ list | $$bin/fuzzel$$ --dmenu | $$bin/cliphist$$ decode | $$bin/wl-copy$$"; }
+    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "$$bin/fish$$" "-c" "$$bin/fuzzel$$"; }
     Mod+F hotkey-overlay-title="窗口最大化"                      { maximize-column; }
     Mod+Q hotkey-overlay-title="关闭窗口"        repeat=false    { close-window; }
     Mod+R hotkey-overlay-title="更改窗口大小"                    { switch-preset-column-width; }
@@ -345,25 +334,15 @@ binds {
     Mod+WheelScrollRight cooldown-ms=150  { focus-column-right; }
     Mod+WheelScrollUp    cooldown-ms=150  { focus-workspace-up; }
 
-    XF86AudioRaiseVolume  allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "increase"; }
-    XF86AudioLowerVolume  allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "decrease"; }
-    XF86AudioMute         allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "muteOutput"; }
-    XF86AudioMicMute      allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "volume" "muteInput"; }
-    XF86AudioPlay         allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "media" "play"; }
-    XF86AudioStop         allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "media" "pause"; }
-    XF86AudioPrev         allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "media" "previous"; }
-    XF86AudioNext         allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "media" "next"; }
-    XF86MonBrightnessUp   allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "brightness" "increase"; }
-    XF86MonBrightnessDown allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "brightness" "decrease"; }
+    XF86AudioRaiseVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "+5%"; }
+    XF86AudioLowerVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "-5%"; }
+    XF86AudioMicMute      allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SOURCE@" "toggle"; }
+    XF86AudioMute         allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SINK@" "toggle"; }
+    XF86MonBrightnessUp   allow-when-locked=true  { spawn "$$bin/brightnessctl$$" "set" "5%+"; }
+    XF86MonBrightnessDown allow-when-locked=true  { spawn "$$bin/brightnessctl$$" "set" "5%-"; }
 
-    Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "brightness" "increase"; }
-    Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn "noctalia-shell" "ipc" "call" "brightness" "decrease"; }
-
-    Mod+A           { spawn "noctalia-shell" "ipc" "call" "controlCenter" "toggle"; }
-    Mod+O           { spawn "noctalia-shell" "ipc" "call" "launcher" "toggle"; }
-    Mod+S           { spawn "noctalia-shell" "ipc" "call" "settings" "toggle"; }
-    Ctrl+Alt+Delete { spawn "noctalia-shell" "ipc" "call" "sessionMenu" "toggle"; }
-    Mod+Shift+E     hotkey-overlay-title="重启noctalia-shell" { spawn "herd" "restart" "noctalia-shell"; }
+    Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn "$$bin/brightnessctl$$" "set" "5%+"; }
+    Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn "$$bin/brightnessctl$$" "set" "5%-"; }
 }
 
 switch-events {
