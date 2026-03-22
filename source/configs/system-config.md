@@ -655,11 +655,12 @@
 适合在此放置一些需要经常修改的模板类服务
 
 ```scheme
+(use-modules (srfi srfi-1))
 
 (define %skeletons-config
-  `((".config/mihomo/config.yaml" ,(local-file "../source/files/mihomo.yaml"))
-    (".config/noctalia/settings.json" ,(local-file
-                                        "../source/files/noctalia.json"))))
+  (map (lambda (path)
+         `(,path ,(local-file (string-append "source/files/skel/" path))))
+       '( ".config/mihomo/config.yaml")))
 ```
 
 ## Users
