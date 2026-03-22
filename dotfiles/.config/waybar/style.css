@@ -21,7 +21,7 @@ window#waybar {
 .modules-right {
   border-radius: 14px;
   padding: 10px 0px 10px 0px;
-  margin: 8px;
+  margin: 4px;
   background-color: alpha(@base04, 0.16);
 }
 
@@ -56,7 +56,7 @@ tooltip {
 #clock {
   border-radius: 0px;
   color: @base07;
-  padding: 2px;
+  padding: 0px;
   margin: 1px 0px;
 }
 
