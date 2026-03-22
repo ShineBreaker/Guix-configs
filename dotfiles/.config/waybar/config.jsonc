@@ -1,0 +1,193 @@
+{
+  "layer": "top",
+  "position": "left",
+  "spacing": 0,
+  "weight": 14,
+  "margin": "6 3 6 6",
+  "modules-left": [
+    "custom/search",
+    "group/power",
+    "niri/workspaces"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "tray",
+    "group/status"
+  ],
+  "tray": {
+    "icon-size": 15,
+    "spacing": 10
+  },
+  "niri/workspaces": {
+    "all-outputs": true,
+    "expand": false,
+    "format": "{icon}",
+    "format-icons": {
+      "default": "",
+      "Code": "",
+      "Browser": "󰆋",
+      "Chat": "",
+      "Game": "󰺵",
+    },
+    "tooltip": true,
+  },
+  "group/status": {
+    "orientation": "inherit",
+    "modules": [
+      "battery",
+      "cpu",
+      "memory",
+      "network",
+      "wireplumber",
+      "backlight",
+    ],
+    "drawer": {
+      "transition-duration": 400,
+      "children-class": "not-battery",
+      "transition-left-to-right": false,
+    },
+  },
+  "clock": {
+    "interval": 1,
+    "format": "{:%H\n%M\n%S}",
+    "tooltip": true,
+    "tooltip-format": " {:%Y-%m-%d}，右键清除通知",
+    "on-click-right": "makoctl reload",
+  },
+  "cpu": {
+    "interval": 1,
+    "format": "",
+    "tooltip": true
+  },
+  "battery": {
+    "interval": 1,
+    "states": {
+      "warning": 30,
+      "critical": 10,
+    },
+    "format": "{icon}",
+    "format-charging": "",
+    "format-plugged": "",
+    "format-alt": "{icon}",
+    "format-icons": [
+      "",
+      "",
+      "",
+      "",
+      ""
+    ],
+    "tooltip": true,
+    "tooltip-format": "{capacity}%",
+  },
+  "backlight": {
+    "scroll-step": 5,
+    "format": "{icon}",
+    "format-icons": [
+      "󰛩",
+      "󱩎",
+      "󱩏",
+      "󱩐",
+      "󱩑",
+      "󱩒",
+      "󱩓",
+      "󱩔",
+      "󱩕",
+      "󱩖",
+      "󰛨"
+    ],
+    "min-length": 3,
+    "on-click": "brightnessctl set 1%+",
+    "on-click-right": "brightnessctl set 1%-",
+    "tooltip-format": "{percent}%",
+  },
+  "memory": {
+    "interval": 1,
+    "format": "",
+    "tooltip": true,
+    "tooltip-format": "RAM: {used}G / {total}G\nSwap: {swapUsed}G / {swapTotal}G",
+    "on-click": "foot btop",
+  },
+  "network": {
+    "interval": 1,
+    "format-wifi": "",
+    "format-ethernet": "",
+    "format-linked": "",
+    "format-disconnected": "",
+    "tooltip-format": "{ifname} {ipaddr}/{cidr}\nIP: {gwaddr}\n信号强度: {signalStrength}%",
+    "on-click": "nmgui",
+  },
+  "wireplumber": {
+    "scroll-step": 5,
+    "format": "{icon}",
+    "format-muted": "",
+    "format-bluetooth": "󰂰",
+    "format-bluetooth-muted": "\uf294",
+    "format-icons": {
+      "default": [
+        "\uf026",
+        "\uf027",
+        "\uf028"
+      ]
+    },
+    "on-click": "pwvucontrol",
+    "ignored-sinks": [
+      "AudioRelay Virtual Sink",
+      "Recorder Sink"
+    ],
+    "tooltip-format": "{volume}%",
+  },
+  "group/power": {
+    "orientation": "inherit",
+    "modules": [
+      "custom/caffeine",
+      "custom/hibernate",
+      "custom/lock",
+      "custom/poweroff",
+      "custom/reboot",
+    ],
+    "drawer": {
+      "transition-duration": 400,
+      "children-class": "not-lock",
+      "transition-left-to-right": true,
+    },
+  },
+  "custom/lock": {
+    "format": "",
+    "tooltip": true,
+    "tooltip-format": "锁定",
+    "on-click": "niri msg action power-off-monitors && gtklock -d",
+  },
+  "custom/poweroff": {
+    "format": "",
+    "tooltip": true,
+    "tooltip-format": "关机",
+    "on-click": "systemctl poweroff",
+  },
+  "custom/reboot": {
+    "format": "",
+    "tooltip": true,
+    "tooltip-format": "重启",
+    "on-click": "systemctl reboot",
+  },
+  "custom/hibernate": {
+    "format": "󰒲",
+    "tooltip": true,
+    "tooltip-format": "休眠",
+    "on-click": "systemctl hibernate",
+  },
+  "custom/search": {
+    "format": "",
+    "tooltip": true,
+    "tooltip-format": "搜索",
+    "on-click": "fuzzel",
+  },
+  "custom/caffeine": {
+    "format": "",
+    "tooltip": true,
+    "tooltip-format": "左键禁用自动休眠，右键启用自动休眠",
+    "on-click": "systemctl stop --user swayidle.service && notify-send '自动休眠已禁用'",
+    "on-click-right": "systemctl start --user swayidle.service && notify-send '自动休眠已启用'",
+  },
+}
