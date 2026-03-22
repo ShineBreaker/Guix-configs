@@ -57,11 +57,10 @@ layout {
 
     default-column-width { proportion 0.7; }
 
-    focus-ring { width 1.6; }
-
-    border {
-      on
-      width 1.6
+    focus-ring {
+        width 3
+        active-gradient angle=45 from="89ddff" relative-to="window" to="ffcb6b"
+        inactive-color "#505050"
     }
 }
 
@@ -139,6 +138,9 @@ window-rule {
 window-rule {
     match is-window-cast-target=true
 
+    focus-ring {
+        active-color "#7d0d2d70"
+    }
     shadow {
         color "#7d0d2d70"
     }
