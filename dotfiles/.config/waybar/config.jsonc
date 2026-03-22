@@ -3,7 +3,7 @@
   "position": "left",
   "spacing": 0,
   "weight": 14,
-  "margin": "6 3 6 6",
+  "margin": "8 0 8 8",
   "modules-left": [
     "custom/search",
     "group/power",
@@ -163,19 +163,19 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "关机",
-    "on-click": "systemctl poweroff",
+    "on-click": "loginctl poweroff",
   },
   "custom/reboot": {
     "format": "",
     "tooltip": true,
     "tooltip-format": "重启",
-    "on-click": "systemctl reboot",
+    "on-click": "loginctl reboot",
   },
   "custom/hibernate": {
     "format": "󰒲",
     "tooltip": true,
     "tooltip-format": "休眠",
-    "on-click": "systemctl hibernate",
+    "on-click": "loginctl hibernate",
   },
   "custom/search": {
     "format": "",
@@ -187,7 +187,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "左键禁用自动休眠，右键启用自动休眠",
-    "on-click": "systemctl stop --user swayidle.service && notify-send '自动休眠已禁用'",
-    "on-click-right": "systemctl start --user swayidle.service && notify-send '自动休眠已启用'",
+    "on-click": "herd stop swayidle && notify-send '自动休眠已禁用'",
+    "on-click-right": "herd start swayidle && notify-send '自动休眠已启用'",
   },
 }

@@ -1,6 +1,7 @@
 spawn-sh-at-startup "$$bin/wl-paste$$ --watch cliphist store &"
 spawn-sh-at-startup "fish -c shepherd"
 
+spawn-at-startup "$$bin/waypaper$$" "--restore"
 spawn-at-startup "$$bin/dex$$" "-a"
 
 prefer-no-csd
@@ -58,9 +59,7 @@ layout {
     default-column-width { proportion 0.7; }
 
     focus-ring {
-        width 3
-        active-gradient angle=45 from="89ddff" relative-to="window" to="ffcb6b"
-        inactive-color "#505050"
+        off
     }
 }
 
@@ -82,8 +81,8 @@ window-rule {
 
     shadow {
         on
-        softness 10
-        spread 0
+        softness 8
+        spread 1
         offset x=0 y=0
         draw-behind-window false
     }
@@ -92,7 +91,7 @@ window-rule {
 window-rule {
     match is-active=false
 
-    opacity 0.9
+    opacity 0.85
     shadow { off; }
 }
 

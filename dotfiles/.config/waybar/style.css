@@ -11,17 +11,17 @@
 }
 
 window#waybar {
-  background: transparent;
-  padding: 0px;
+  background-color: transparent;
   font-family: inherit;
 }
 
 .modules-left,
 .modules-center,
 .modules-right {
-  border-radius: 16px;
-  background-color: alpha(@base00, 0.88);
-  padding: 4px;
+  border-radius: 14px;
+  padding: 8px 0px 8px 0px;
+  margin: 0px;
+  background-color: alpha(@base02, 0.9);
 }
 
 window#waybar.hidden {
@@ -53,14 +53,14 @@ tooltip {
 #wireplumber,
 #wlr-taskbar,
 #clock {
-  border-radius: 20px;
+  border-radius: 0px;
   color: @base07;
-  padding: 0px;
-  margin: 3px 0px;
+  padding: 2px;
+  margin: 1px 0px;
 }
 
 #tray {
-  padding: 0px 0px 1px 2px;
+  padding: 0px 0px 6px 2px;
 }
 
 #battery {
