@@ -70,6 +70,11 @@ output "eDP-1" {
 screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
 
 layer-rule {
+  match namespace="swww-daemon"
+  place-within-backdrop true
+}
+
+layer-rule {
     match namespace="^notifications$"
     block-out-from "screencast"
 }

@@ -2,8 +2,10 @@
   "layer": "top",
   "position": "left",
   "spacing": 0,
-  "weight": 14,
-  "margin": "8 0 8 8",
+  "margin": "8 -2 8 4",
+  "ipc": true,
+  "on-sigusr1": "hide",
+  "on-sigusr2": "show",
   "modules-left": [
     "custom/search",
     "group/power",

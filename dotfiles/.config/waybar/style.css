@@ -11,7 +11,8 @@
 }
 
 window#waybar {
-  background-color: transparent;
+  border-radius: 20px;
+  background-color: alpha(@base01, 0.84);
   font-family: inherit;
 }
 
@@ -19,9 +20,9 @@ window#waybar {
 .modules-center,
 .modules-right {
   border-radius: 14px;
-  padding: 8px 0px 8px 0px;
-  margin: 0px;
-  background-color: alpha(@base02, 0.9);
+  padding: 10px 0px 10px 0px;
+  margin: 8px;
+  background-color: alpha(@base04, 0.16);
 }
 
 window#waybar.hidden {
