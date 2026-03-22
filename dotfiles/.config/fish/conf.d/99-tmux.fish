@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0
+
 if status is-interactive
 
     # ========== Foot 终端自动 Tmux ==========

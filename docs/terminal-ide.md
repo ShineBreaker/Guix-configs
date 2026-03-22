@@ -6,10 +6,6 @@ SPDX-License-Identifier: GPL-3.0
 
 # 终端 IDE 功能说明
 
-## 实现时间
-
-- 2026-03-20
-
 ## 功能目标
 
 本方案提供一个基于 `tmux + tmuxifier + broot + helix` 的终端 IDE 工作区，目标是尽量贴近 VSCode 的三栏心智模型：

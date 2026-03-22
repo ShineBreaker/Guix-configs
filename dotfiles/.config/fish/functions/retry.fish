@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0
+
 function retry -d "命令失败时自动重试"
     set -l max_retries 5
     set -l attempt 0

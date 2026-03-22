@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0
+
 ###############################################################
 # 本配置文件允许你
 # - 定义新命令
@@ -288,7 +292,7 @@ imports: [
     }
 
     # 当你的终端为浅色时导入此皮肤
-    { 
+    {
         luma: light
         # 取消注释以选择你喜欢的皮肤
         //file: skins/solarized-light.hjson

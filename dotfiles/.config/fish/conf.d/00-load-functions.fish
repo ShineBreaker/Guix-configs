@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0
+
 # 确定 functions 目录路径
 set -l functions_dir
 

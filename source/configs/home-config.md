@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0
+-->
+
 # 用户配置文件
 
 我会尽量地把更多的配置放在这里，而 `system-config.md` 只会放置一些保障系统正常使用所必须的配置，这样的好处在于:

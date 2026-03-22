@@ -1,8 +1,12 @@
+// SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+//
+// SPDX-License-Identifier: GPL-3.0
+
 {
   "layer": "top",
   "position": "left",
   "spacing": 0,
-  "margin": "8 -2 8 4",
+  "margin": "8 -2 8 3",
   "ipc": true,
   "on-sigusr1": "hide",
   "on-sigusr2": "show",
@@ -28,10 +32,11 @@
     "format": "{icon}",
     "format-icons": {
       "default": "",
-      "Code": "",
       "Browser": "󰆋",
       "Chat": "",
+      "Code": "",
       "Game": "󰺵",
+      "Work": "",
     },
     "tooltip": true,
   },

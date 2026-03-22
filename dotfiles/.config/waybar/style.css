@@ -1,3 +1,9 @@
+/*
+ * SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+ *
+ * SPDX-License-Identifier: GPL-3.0
+ */
+
 @import "colors.css";
 
 * {
@@ -21,7 +27,7 @@ window#waybar {
 .modules-right {
   border-radius: 14px;
   padding: 10px 0px 10px 0px;
-  margin: 4px;
+  margin: 5px;
   background-color: alpha(@base04, 0.16);
 }
 

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: GPL-3.0
+-->
+
 # 系统配置
 
 此系统配置的关键在于 **让系统能够正常启动** ，所以会尽量精简软件包以及相关服务的数量
