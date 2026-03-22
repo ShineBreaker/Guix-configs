@@ -8,6 +8,3 @@
 [submodule "setup"]
 	path = setup
 	url = https://codeberg.org/BrokenShine/linux-setup
-[submodule "dotfiles/.config/emacs"]
-	path = dotfiles/.config/emacs
-	url = https://codeberg.org/BrokenShine/.emacs.d.git
