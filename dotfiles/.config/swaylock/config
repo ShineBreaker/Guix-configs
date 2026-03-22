@@ -1,0 +1,20 @@
+show-failed-attempts
+ignore-empty-password
+disable-caps-lock-text
+
+screenshots
+effect-blur=7x5
+effect-greyscale
+effect-scale=1.1
+
+clock
+timestr=%H:%M
+datestr=%Y-%m-%d %A
+
+indicator-thickness=8
+indicator-radius=100
+
+fade-in=0.3
+grace=2
+
+indicator-idle-visible
