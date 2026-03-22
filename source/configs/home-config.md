@@ -185,6 +185,7 @@
           "fcitx5"
           "fuzzel"
           "nautilus"
+          "pinentry-fuzzel"
           "swaylock-effects"
           "swayidle"
           "swww"
@@ -265,7 +266,6 @@
 
           ;; QT框架相关
           "kvantum"
-          "pinentry-qt"
           "qt5ct"
           "qt6ct")))
 ```
