@@ -56,6 +56,7 @@
 
 ;; 加载主题
 (use-package ef-themes
+  :defer t
   :init
   ;; This makes the Modus commands listed below consider only the Ef
   ;; themes.  For an alternative that includes Modus and all
@@ -82,6 +83,7 @@
 
 ;; 现代模式行
 (use-package doom-modeline
+  :defer t
   :hook (after-init . doom-modeline-mode)
   :custom
   (doom-modeline-height 26)

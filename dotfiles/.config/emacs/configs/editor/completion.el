@@ -11,13 +11,11 @@
 
 ;; Vertico（垂直补全界面）
 (use-package vertico
-  :demand t
   :init
   (vertico-mode 1))
 
 ;; Marginalia（补全注释）
 (use-package marginalia
-  :after vertico
   :init
   (marginalia-mode 1))
 
@@ -29,6 +27,7 @@
 
 ;; Consult（搜索与导航）
 (use-package consult
+  :defer t
   :bind (("C-x b" . consult-buffer)
          ("M-y"   . consult-yank-pop)
          ("M-s r" . consult-ripgrep)
@@ -36,6 +35,7 @@
 
 ;; Embark（上下文操作）
 (use-package embark
+  :defer t
   :bind (("C-." . embark-act)
          ("C-;" . embark-dwim)
          ("C-h B" . embark-bindings))
@@ -43,10 +43,12 @@
   (setq prefix-help-command #'embark-prefix-help-command))
 
 (use-package embark-consult
-  :after (embark consult))
+  :after (embark consult)
+  :defer t)
 
 ;; Corfu（区域补全）
 (use-package corfu
+  :defer 0.2
   :custom
   (corfu-auto t)
   (corfu-auto-prefix 2)

@@ -45,13 +45,14 @@
 
 ;; Which-key（键位提示）
 (use-package which-key
-  :demand t
+  :defer 0.3
   :config
   (which-key-mode 1)
   (setq which-key-idle-delay 0.3))
 
 ;; Helpful（更好的帮助系统）
 (use-package helpful
+  :defer t
   :bind (([remap describe-function] . helpful-callable)
          ([remap describe-command]  . helpful-command)
          ([remap describe-variable] . helpful-variable)

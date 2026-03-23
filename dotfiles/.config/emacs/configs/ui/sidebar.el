@@ -9,7 +9,7 @@
 
 ;;; Code:
 
-(require 'nerd-icons)
+(when (require 'nerd-icons nil t))
 
 (defgroup my/sidebar nil
   "右侧功能栏配置。"

@@ -24,15 +24,18 @@
 
 ;; 自动清理行尾空格
 (use-package ws-butler
+  :defer t
   :hook ((text-mode . ws-butler-mode)
          (prog-mode . ws-butler-mode)))
 
 ;; 彩色括号
 (use-package rainbow-delimiters
+  :defer t
   :hook (prog-mode . rainbow-delimiters-mode))
 
 ;; Git 差异高亮
 (use-package diff-hl
+  :defer t
   :hook ((prog-mode . diff-hl-mode)
          (text-mode . diff-hl-mode)
          (dired-mode . diff-hl-dired-mode))
@@ -41,6 +44,7 @@
 
 ;; Git blame（显示当前行的提交信息）
 (use-package git-messenger
+  :defer t
   :bind ("C-c g b" . git-messenger:popup-message)
   :custom
   (git-messenger:show-detail t)

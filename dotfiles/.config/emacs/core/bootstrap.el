@@ -19,6 +19,9 @@
 (defconst my/configs-dir (expand-file-name "configs" my/emacs-dir)
   "配置模块目录。")
 
+;; 将配置子目录添加到加载路径
+(add-to-list 'load-path (expand-file-name "org" my/configs-dir))
+
 ;; Guix 环境检测
 (defconst my/guix-profile
   (or (getenv "GUIX_PROFILE")

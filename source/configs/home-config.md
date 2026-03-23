@@ -63,6 +63,7 @@ SPDX-License-Identifier: GPL-3.0
           "emacs-pgtk"
           "sbcl"
           "emacs-use-package"
+          "emacs-gcmh"
           "emacs-general"
 
           ;; 补全与迷你缓冲区
@@ -114,8 +115,6 @@ SPDX-License-Identifier: GPL-3.0
           "emacs-geiser"
           "emacs-geiser-guile"
 
-
-
           ;; Git 集成
           "emacs-magit"
           "emacs-magit-todos"
@@ -125,9 +124,11 @@ SPDX-License-Identifier: GPL-3.0
           "emacs-projectile"
 
           ;; Org Mode 生态
+          "emacs-htmlize"
+          "emacs-org-appear"
           "emacs-org-modern"
           "emacs-org-roam"
-          "emacs-org-appear"
+          "emacs-ox-gfm"
 
           ;; 帮助与文档
           "emacs-helpful"
