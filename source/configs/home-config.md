@@ -93,6 +93,10 @@ SPDX-License-Identifier: GPL-3.0
           "emacs-ws-butler"
 
           ;; 开发工具
+          "emacs-ace-jump-mode"
+          "emacs-expand-region"
+          "emacs-multiple-cursors"
+          "emacs-origami"
           "emacs-vterm"
           "emacs-yasnippet"
           "emacs-yasnippet-snippets"
@@ -109,6 +113,8 @@ SPDX-License-Identifier: GPL-3.0
           "emacs-sly"
           "emacs-geiser"
           "emacs-geiser-guile"
+
+
 
           ;; Git 集成
           "emacs-magit"
@@ -173,7 +179,6 @@ SPDX-License-Identifier: GPL-3.0
           ;; AI工具
           "claude-code"
           "codex"
-          "opencode"
 
           ;; 影音
           "easyeffects"
@@ -213,6 +218,7 @@ SPDX-License-Identifier: GPL-3.0
           "keepassxc"
           "git-credential-keepassxc"
           "kdeconnect"
+          "libreoffice"
           "seahorse"
           "virt-manager"
           "zen-browser-bin"
