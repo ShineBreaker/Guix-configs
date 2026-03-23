@@ -36,7 +36,7 @@
       (insert "\n"))))
 
 (use-package dashboard
-  :defer t
+  :demand t
   :custom
   (dashboard-startup-banner 'official)
   (dashboard-set-navigator t)
