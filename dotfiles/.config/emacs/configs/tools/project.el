@@ -11,7 +11,7 @@
 
 ;; Projectile（项目管理增强）
 (use-package projectile
-  :defer 0.3
+  :demand t
   :custom
   (projectile-completion-system 'default)
   (projectile-enable-caching t)

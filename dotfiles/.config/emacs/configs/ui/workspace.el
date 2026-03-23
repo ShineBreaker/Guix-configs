@@ -14,8 +14,7 @@
 
 ;; Treemacs 文件树
 (use-package treemacs
-  :defer t
-  :commands (treemacs treemacs-is-visible)
+  :demand t
   :custom
   (treemacs-width 30)
   (treemacs-position 'left)
