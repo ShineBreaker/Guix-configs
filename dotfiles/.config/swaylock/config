@@ -15,6 +15,5 @@ indicator-thickness=8
 indicator-radius=100
 
 fade-in=0.3
-grace=2
 
 indicator-idle-visible
