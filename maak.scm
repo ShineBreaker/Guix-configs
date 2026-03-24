@@ -53,52 +53,25 @@ Exit code: ~a~%" cmd exit-code)))))
        ,(string-append "--channels=" channels) "--"
        ,@args)))
 
-;;; Markdown 代码块提取逻辑
+;;; Org 文件导出逻辑
 
-(define (extract-scheme-blocks-from-markdown file-path)
-  "从 Markdown 文件中提取所有 ```scheme ... ``` 代码块的内容"
-  (call-with-input-file file-path
-    (lambda (port)
-      (let loop ((lines '())
-                 (in-scheme-block? #f))
-        (let ((line (read-line port 'concat)))
-          (if (eof-object? line)
-              (reverse lines)
-              (let ((trimmed (string-trim-both line)))
-                (cond
-                 ;; 检测到 scheme 代码块开始
-                 ((and (not in-scheme-block?)
-                       (string-prefix? "```scheme" trimmed))
-                  (loop lines #t))
-                 ;; 检测到代码块结束
-                 ((and in-scheme-block?
-                       (string=? "```" trimmed))
-                  (loop lines #f))
-                 ;; 在代码块内，收集内容
-                 (in-scheme-block?
-                  (loop (cons line lines) #t))
-                 ;; 不在代码块内，跳过
-                 (else
-                  (loop lines #f))))))))))
-
-(define (generate-config-from-markdown md-file output-name)
-  "从 Markdown 文件提取 Scheme 代码块生成配置文件"
-  (let ((md-path (string-append configs-dir "/" md-file))
-        (output-path (string-append tmp-dir "/" output-name)))
+(define (generate-config-from-org org-file)
+  "使用 Emacs 的 org-babel-tangle 导出 Org 文件"
+  (let ((org-path (string-append configs-dir "/" org-file)))
     ($ (list "mkdir" "-p" tmp-dir))
-    (let ((scheme-content (extract-scheme-blocks-from-markdown md-path)))
-      (with-output-to-file output-path
-        (lambda ()
-          (for-each display scheme-content))))
-    ;; 格式化代码，忽略错误输出
-    (system* "guix" "style" "--whole-file" output-path)))
+    ;; 调用 Emacs 导出 Org 文件
+    ($ (list "emacs" "--batch"
+             "-l" "org"
+             "--eval" "(require 'ob-tangle)"
+             "--eval" (format #f "(org-babel-tangle-file \"~a\")" org-path)))))
 
 ;;; Maak任务定义
 (define (generate-system-config)
-  (generate-config-from-markdown "system-config.md" "system-config.scm"))
+  ;; TODO: 等待 system-config.org 配置完成
+  (generate-config-from-org "system-config.org"))
 
 (define (generate-home-config)
-  (generate-config-from-markdown "home-config.md" "home-config.scm"))
+  (generate-config-from-org "home-config.org"))
 
 (define (tmprm)
   "清理临时文件"

@@ -1,5 +1,6 @@
 此系统配置的关键在于 *让系统能够正常启动* ，所以会尽量精简软件包以及相关服务的数量
 
+
 待系统成功安装并进入系统之后，则可以直接手动应用用户配置
 
 --------------
@@ -8,40 +9,57 @@
 
 一个 =operating-system= 块必须包含以下的所有内容
 
+在这里，我利用了 =Org Mode= 的 =Noweb= 功能
+这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
+引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
+
 #+NAME: main
-#+begin_src scheme
-(operating-system
-  (initrd %initrd-config)
-  (firmware %firmware-config)
-  (kernel %kernel-config)
-  (kernel-arguments %kernel-arguments-config)
-
-  (timezone %timezone-config)
-  (locale %locale-config)
-  (host-name %host-name-config)
-
-  (users %users-config)
-
-  (bootloader %bootloader-config)
-
-  (mapped-devices %mapped-devices-config)
-  (file-systems %file-systems-config)
-
-  (packages %packages-config)
-
-  (services
-   %services-config)
-  (skeletons %skeletons-config)
-
-  (name-service-switch %mdns-host-lookup-nss))
-#+end_src
-
-* Information
-** 包含了一些系统的基本信息
-
-#+NAME: information
-#+begin_src scheme
+#+begin_src scheme :tangle ../../tmp/system-config.scm :noweb yes
 (load "../source/information.scm")
+
+<<modules>>
+<<bootloader-modules>>
+<<filesystems-modules>>
+<<kernel-modules>>
+<<kernel-arguments-modules>>
+<<services-modules>>
+
+<<filesystem-defines>>
+
+(operating-system
+ <<kernel-configs>>
+
+ <<information-configs>>
+
+ <<users-config>>
+
+ <<bootloader-configs>>
+
+ (mapped-devices %mapped-devices-config)
+ (file-systems %file-systems-config)
+
+ (packages
+  (append
+   <<packages-list>>
+   %base-packages)
+  )
+
+ (services
+  (append
+   <<basic-services>>
+   <<udev-services>>
+   <<networking-services>>
+   <<virtualization-services>>
+   <<kernel-services>>
+   <<nix-services>>
+   <<filesystem-services>>
+   <<desktop-services>>
+   ))
+ (skeletons
+  <<skeletons-config>>
+  )
+
+ (name-service-switch %mdns-host-lookup-nss))
 #+end_src
 
 * Modules
@@ -49,7 +67,6 @@
 
 #+NAME: modules
 #+begin_src scheme
-
 (use-modules (gnu)
              (gnu system accounts)
              (gnu system nss)
@@ -59,23 +76,30 @@
              (guix gexp)
              (guix modules)
 
+             (gnu packages shells)
+
              (ice-9 session)
+             (ice-9 match)
 
              (rosenthal utils packages))
+
+
 #+end_src
 
 * Bootloader
-** 在这里使用了由 =rosenthal= 频道提供的 *Limine*
 
-#+NAME: bootloader
+在这里使用了由 =rosenthal= 频道提供的 *Limine*
+
+#+NAME: bootloader-modules
 #+begin_src scheme
-
 (use-modules (rosenthal bootloader limine))
+#+end_src
 
-(define %bootloader-config
-  (bootloader-configuration
-    (bootloader limine-efi-removable-bootloader)
-    (targets '("/boot"))))
+#+NAME: bootloader-configs
+#+begin_src scheme
+(bootloader (bootloader-configuration
+             (bootloader limine-efi-removable-bootloader)
+             (targets '("/boot"))))
 #+end_src
 
 * FileSystems
@@ -86,81 +110,79 @@ Btrfs 的架构，同时高强度地使用subvol功能
 具体的subvol配置放置在 [[../information.scm][information.scm]]
 中，方便我直接做相应地修改
 
-#+NAME: filesystems
+#+NAME: filesystem-defines
 #+begin_src scheme
-(use-modules (ice-9 match))
-
 (define %mapped-devices-config
   (list (mapped-device
-          (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
-          (target "root")
-          (type luks-device-mapping))))
+         (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
+         (target "root")
+         (type luks-device-mapping))))
 
 (define %tmpfs
   (list (file-system
-          (mount-point "/")
-          (device "tmpfs")
-          (type "tmpfs")
-          (flags '(no-atime))
-          (options "mode=0755,nr_inodes=1m,size=10%")
-          (check? #f))
+         (mount-point "/")
+         (device "tmpfs")
+         (type "tmpfs")
+         (flags '(no-atime))
+         (options "mode=0755,nr_inodes=1m,size=10%")
+         (check? #f))
         (file-system
-          (mount-point "/tmp")
-          (device "tmpfs")
-          (type "tmpfs")
-          (options "mode=1777,nr_inodes=1m,size=75%")
-          (create-mount-point? #t)
-          (check? #f))
+         (mount-point "/tmp")
+         (device "tmpfs")
+         (type "tmpfs")
+         (options "mode=1777,nr_inodes=1m,size=75%")
+         (create-mount-point? #t)
+         (check? #f))
         (file-system
-          (device "tmpfs")
-          (mount-point "/var/lock")
-          (type "tmpfs")
-          (flags '(no-suid no-dev strict-atime))
-          (options "mode=1777,nr_inodes=800k,size=20%")
-          (create-mount-point? #t)
-          (check? #f))))
+         (device "tmpfs")
+         (mount-point "/var/lock")
+         (type "tmpfs")
+         (flags '(no-suid no-dev strict-atime))
+         (options "mode=1777,nr_inodes=800k,size=20%")
+         (create-mount-point? #t)
+         (check? #f))))
 
 (define %persist-filesystem
   (map (match-lambda
          ((subvol mount-point)
           (file-system
-            (device (file-system-label "Linux"))
-            (mount-point mount-point)
-            (type "btrfs")
-            (dependencies %mapped-devices-config)
-            (options (string-append "subvol=" subvol ",compress=zstd:6"))
-            (create-mount-point? #t)
-            (needed-for-boot? #t)
-            (check? (string=? mount-point "/gnu"))))) %btrfs-subvolumes))
+           (device (file-system-label "Linux"))
+           (mount-point mount-point)
+           (type "btrfs")
+           (dependencies %mapped-devices-config)
+           (options (string-append "subvol=" subvol ",compress=zstd:6"))
+           (create-mount-point? #t)
+           (needed-for-boot? #t)
+           (check? (string=? mount-point "/gnu"))))) %btrfs-subvolumes))
 
 (define %data-filesystem
   (file-system
-    (device (file-system-label "Linux"))
-    (mount-point "/data")
-    (type "btrfs")
-    (dependencies %mapped-devices-config)
-    (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:6"))
-    (create-mount-point? #t)))
+   (device (file-system-label "Linux"))
+   (mount-point "/data")
+   (type "btrfs")
+   (dependencies %mapped-devices-config)
+   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:6"))
+   (create-mount-point? #t)))
 
 (define %bind-mounts
   (map (lambda (dirs)
          (file-system
-           (mount-point (string-append "/home/" username "/" dirs))
-           (device (string-append "/data/" dirs))
-           (type "none")
-           (flags '(bind-mount))
-           (dependencies (list %data-filesystem))
-           (create-mount-point? #t))) %data-dirs))
+          (mount-point (string-append "/home/" username "/" dirs))
+          (device (string-append "/data/" dirs))
+          (type "none")
+          (flags '(bind-mount))
+          (dependencies (list %data-filesystem))
+          (create-mount-point? #t))) %data-dirs))
 
 (define %file-systems-config
   (append %bind-mounts %persist-filesystem %tmpfs
           (list %data-filesystem
                 (file-system
-                  (device (uuid "9699-52A2"
-                                'fat))
-                  (mount-point "/boot")
-                  (type "vfat")
-                  (create-mount-point? #t))) %base-file-systems))
+                 (device (uuid "9699-52A2"
+                               'fat))
+                 (mount-point "/boot")
+                 (type "vfat")
+                 (create-mount-point? #t))) %base-file-systems))
 #+end_src
 
 * Kernel
@@ -168,7 +190,7 @@ Btrfs 的架构，同时高强度地使用subvol功能
 ** 导入 =nonguix= 固件
 使用 =nonguix= 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
 
-#+NAME: kernel
+#+NAME: kernel-modules
 #+begin_src scheme
 (use-modules (gnu packages firmware)
 
@@ -176,224 +198,242 @@ Btrfs 的架构，同时高强度地使用subvol功能
              (nongnu packages linux)
              (nongnu system linux-initrd))
 
-(define %initrd-config
-  microcode-initrd)
-
-(define %firmware-config
-  (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
-
-(define %kernel-config
-  linux-6.19)
-#+end_src
-
-** 内核参数修改
-
-#+NAME: kernel-arguments
-#+begin_src scheme
 (use-service-modules linux pam-mount sysctl)
 
-(define %kernel-arguments-config
-  (cons "kernel.sysrq=1"
-         "modprobe.blacklist=wacom,hid_uclogic"
-         "snd-intel-dspcfg.dsp_driver=3"
-         "usbcore.autosuspend=120"
-         "zswap.enabled=1"
-         "zswap.max_pool_percent=90"
-         %default-kernel-arguments))
+#+end_src
 
-(define %kernel-services
-  (list (simple-service 'extend-kernel-module-loader
-                        kernel-module-loader-service-type
-                        '("ip_tables" "iptable_nat" "kvm_intel" "sch_fq_pie"
-                          "tcp_bbr" "uinput"))
+#+NAME: kernel-configs
+#+begin_src scheme
+(initrd microcode-initrd)
+(firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
+(kernel linux-6.19)
+(kernel-arguments
+ (cons* "kernel.sysrq=1"
+        "modprobe.blacklist=wacom,hid_uclogic"
+        "snd-intel-dspcfg.dsp_driver=3"
+        "usbcore.autosuspend=120"
+        "zswap.enabled=1"
+        "zswap.max_pool_percent=90"
+        %default-kernel-arguments))
+#+end_src
 
-        (simple-service 'extend-sysctl sysctl-service-type
-                        '(("fs.inotify.max_user_watches" . "524288")
-                          ("fs.file-max" . "2097152")
-                          ("fs.nr_open" . "2097152")
 
-                          ("vm.max_map_count" . "2147483642")
-                          ("vm.compaction_proactiveness" . "0")
-                          ("vm.vfs_cache_pressure" . "50")
-                          ("vm.page_lock_unfairness" . "1")
-                          ("vm.stat_interval" . "120")
+#+NAME: kernel-services
+#+begin_src scheme
+(list (simple-service 'extend-kernel-module-loader
+                      kernel-module-loader-service-type
+                      '("ip_tables" "iptable_nat" "kvm_intel" "sch_fq_pie"
+                        "tcp_bbr" "uinput"))
 
-                          ("net.core.default_qdisc" . "fq_pie")
-                          ("net.core.rmem_max" . "7500000")
-                          ("net.core.wmem_max" . "7500000")
-                          ("net.ipv4.ip_forward" . "1")
-                          ("net.ipv4.tcp_congestion_control" . "bbr")
-                          ("net.ipv4.tcp_low_latency" . "1")
-                          ("net.ipv4.tcp_fastopen" . "3")
-                          ("net.ipv6.conf.all.forwarding" . "1")
+      (simple-service 'extend-sysctl sysctl-service-type
+                      '(("fs.inotify.max_user_watches" . "524288")
+                        ("fs.file-max" . "2097152")
+                        ("fs.nr_open" . "2097152")
 
-                          ("kernel.numa_balancing" . "0")
-                          ("kernel.sched_autogroup_enabled" . "1")
-                          ("kernel.sched_child_runs_first" . "0")))
+                        ("vm.max_map_count" . "2147483642")
+                        ("vm.compaction_proactiveness" . "0")
+                        ("vm.vfs_cache_pressure" . "50")
+                        ("vm.page_lock_unfairness" . "1")
+                        ("vm.stat_interval" . "120")
 
-        (service pam-limits-service-type
-                 (list (pam-limits-entry "@audio"
-                                         'both
-                                         'rtprio 90)
-                       (pam-limits-entry "@audio"
-                                         'both
-                                         'memlock
-                                         'unlimited)
-                       (pam-limits-entry "*"
-                                         'both
-                                         'nofile 1048576)))))
+                        ("net.core.default_qdisc" . "fq_pie")
+                        ("net.core.rmem_max" . "7500000")
+                        ("net.core.wmem_max" . "7500000")
+                        ("net.ipv4.ip_forward" . "1")
+                        ("net.ipv4.tcp_congestion_control" . "bbr")
+                        ("net.ipv4.tcp_low_latency" . "1")
+                        ("net.ipv4.tcp_fastopen" . "3")
+                        ("net.ipv6.conf.all.forwarding" . "1")
+
+                        ("kernel.numa_balancing" . "0")
+                        ("kernel.sched_autogroup_enabled" . "1")
+                        ("kernel.sched_child_runs_first" . "0")))
+
+      (service pam-limits-service-type
+               (list (pam-limits-entry "@audio"
+                                       'both
+                                       'rtprio 90)
+                     (pam-limits-entry "@audio"
+                                       'both
+                                       'memlock
+                                       'unlimited)
+                     (pam-limits-entry "*"
+                                       'both
+                                       'nofile 1048576))))
 #+end_src
 
 * Packages
 
 一些需要用到的软件包， *非必要不修改*
 
-#+NAME: packages
+#+NAME: packages-list
 #+begin_src scheme
-(define %packages-config
-  (append (specs->pkgs+out
-           ;; 系统核心组件
-           "cryptsetup"
-           "dialog"
-           "iproute2"
-           "iptables-nft"
-           "ncurses"
-           "pinentry"
-           "rtkit"
-           "strace"
+(specs->pkgs+out
+ ;; 系统核心组件
+ "cryptsetup"
+ "dialog"
+ "iproute2"
+ "iptables-nft"
+ "ncurses"
+ "pinentry"
+ "rtkit"
+ "strace"
 
-           ;; 网络与连接
-           "adb"
-           "bluez"
-           "curl"
-           "fprintd"
-           "mihomo"
-           "netcat-openbsd"
-           "wget"
+ ;; 网络与连接
+ "adb"
+ "bluez"
+ "curl"
+ "fprintd"
+ "mihomo"
+ "netcat-openbsd"
+ "wget"
 
-           ;; 开发工具
-           "gcc-toolchain"
-           "git"
-           "git-filter-repo"
-           "git-lfs"
+ ;; 开发工具
+ "gcc-toolchain"
+ "git"
+ "git-filter-repo"
+ "git-lfs"
 
-           ;; 桌面环境
-           "fuzzel"
-           "niri"
-           "waybar"
-           "xwayland-satellite"
+ ;; 桌面环境
+ "fuzzel"
+ "niri"
+ "waybar"
+ "xwayland-satellite"
 
-           ;; 桌面服务
-           "brightnessctl"
-           "dconf-editor"
-           "gnome-keyring"
-           "gvfs"
-           "libgnome-keyring"
-           "libsecret"
-           "polkit-gnome"
-           "poweralertd"
+ ;; 桌面服务
+ "brightnessctl"
+ "dconf-editor"
+ "gnome-keyring"
+ "gvfs"
+ "libgnome-keyring"
+ "libsecret"
+ "polkit-gnome"
+ "poweralertd"
 
-           ;; 文件管理器
-           "exo"
-           "file-roller"
-           "thunar"
-           "thunar-archive-plugin"
-           "thunar-media-tags-plugin"
-           "thunar-volman"
-           "thunar-vcs-plugin"
-           "tumbler"
-           "xfconf"
+ ;; 文件管理器
+ "exo"
+ "file-roller"
+ "thunar"
+ "thunar-archive-plugin"
+ "thunar-media-tags-plugin"
+ "thunar-volman"
+ "thunar-vcs-plugin"
+ "tumbler"
+ "xfconf"
 
-           ;; 解码器
-           "gstreamer"
-           "gst-plugins-base"
-           "gst-plugins-good"
-           "gst-plugins-bad"
-           "gst-plugins-ugly-full"
+ ;; 解码器
+ "gstreamer"
+ "gst-plugins-base"
+ "gst-plugins-good"
+ "gst-plugins-bad"
+ "gst-plugins-ugly-full"
 
-           ;; 字体
-           "font-awesome"
-           "font-google-noto-emoji"
-           "font-nerd-fonts-iosevka"
-           "font-maple-font-nf-cn"
-           "font-sarasa-gothic"
+ ;; 字体
+ "font-awesome"
+ "font-google-noto-emoji"
+ "font-nerd-fonts-iosevka"
+ "font-maple-font-nf-cn"
+ "font-sarasa-gothic"
 
-           ;; 命令行工具
-           "fastfetch-minimal"
-           "fish"
-           "foot"
+ ;; 命令行工具
+ "fastfetch-minimal"
+ "fish"
+ "foot"
 
-           ;; 虚拟化
-           "distrobox"
-           "libvirt"
-           "podman"
-           "podman-compose"
-           "qemu"
-           "spice"
+ ;; 虚拟化
+ "distrobox"
+ "libvirt"
+ "podman"
+ "podman-compose"
+ "qemu"
+ "spice"
 
-           ;; 包管理器
-           "flatpak"
-           "flatpak-xdg-utils"
-           "nix"
+ ;; 包管理器
+ "flatpak"
+ "flatpak-xdg-utils"
+ "nix"
 
-           ;; 工具
-           "cpufrequtils"
-           "gzip"
-           "libnotify"
-           "ntfs-3g"
-           "tpm2-abrmd"
-           "tpm2-pkcs11"
-           "tpm2-tools"
-           "tpm2-tss"
-           "unzip"
-           "zip") %base-packages))
+ ;; 工具
+ "cpufrequtils"
+ "gzip"
+ "libnotify"
+ "ntfs-3g"
+ "tpm2-abrmd"
+ "tpm2-pkcs11"
+ "tpm2-tools"
+ "tpm2-tss"
+ "unzip"
+ "zip")
 #+end_src
 
-* Services#+begin_src scheme
+* Services
+
+#+NAME: services-modules
+#+begin_src scheme
 (use-modules (gnu home services guix)
              (guix channels)
 
              (jeans services hardware)
              (px services audio))
 
-(use-service-modules authentication desktop linux sound)
+(use-package-modules android games)
+
+(use-modules (guix channels)
+
+             (rosenthal services base)
+             (rosenthal packages wm)
+             (rosenthal services desktop))
+
+(use-modules (rosenthal packages networking)
+             (rosenthal services networking))
+
+(use-service-modules networking shepherd)
+
+(use-service-modules nix shepherd)
+(use-package-modules android games)
+
+(use-service-modules linux)
+
+(use-modules (srfi srfi-1))
+
+(use-package-modules glib package-management wm)
+(use-service-modules authentication desktop linux sound  containers dns networking virtualization)
 #+end_src
 
 ** 基础服务
 
 #+NAME: basic-services
 #+begin_src scheme
-(define %base-services
-  (append (map (lambda (tty)
-                 (service kmscon-service-type
-                          (kmscon-configuration (virtual-terminal tty)
-                                                (font-engine "pango")
-                                                (font-size 24))))
-               '("tty2" "tty3" "tty4" "tty5" "tty6"))
+(map (lambda (tty)
+       (service kmscon-service-type
+                (kmscon-configuration (virtual-terminal tty)
+                                      (font-engine "pango")
+                                      (font-size 24))))
+     '("tty2" "tty3" "tty4" "tty5" "tty6"))
 
-          (list (service fprintd-service-type)
-                (service gnome-keyring-service-type)
-                (service gvfs-service-type)
-                (service opentabletdriver-service-type)
-                (service rtkit-daemon-service-type)
+(list (service fprintd-service-type)
+      (service gnome-keyring-service-type)
+      (service gvfs-service-type)
+      (service opentabletdriver-service-type)
+      (service rtkit-daemon-service-type)
 
-                (simple-service 'home-channels home-channels-service-type
-                                guix-channels)
+      (simple-service 'home-channels home-channels-service-type
+                      guix-channels)
 
-                (simple-service 'root-services shepherd-root-service-type
-                                (list (shepherd-timer '(guix-gc)
-                                                      #~(calendar-event
-                                                                        #:days-of-week '
-                                                                        (sunday)
-                                                                        #:hours '
-                                                                        (18)
-                                                                        #:minutes '
-                                                                        (0))
-                                                      #~("/run/current-system/profile/bin/guix"
-                                                         "gc"
-                                                         "--delete-generations=14d")
-                                                      #:requirement '(user-processes
-                                                                      guix-daemon)))))))
+      (simple-service 'root-services shepherd-root-service-type
+                      (list (shepherd-timer '(guix-gc)
+                                            #~(calendar-event
+                                               #:days-of-week '
+                                               (sunday)
+                                               #:hours '
+                                               (18)
+                                               #:minutes '
+                                               (0))
+                                            #~("/run/current-system/profile/bin/guix"
+                                               "gc"
+                                               "--delete-generations=14d")
+                                            #:requirement '(user-processes
+                                                            guix-daemon)))))
 #+end_src
 
 ** 桌面服务
@@ -402,276 +442,460 @@ Btrfs 的架构，同时高强度地使用subvol功能
 
 定义了Guix相关的配置，以及修改了greetd的配置
 
-#+NAME: desktop-Services
+#+NAME: desktop-services
 #+begin_src scheme
+(modify-services %rosenthal-desktop-services/tuigreet
+                 (delete console-font-service-type)
 
-(use-modules (guix channels)
+                 (greetd-service-type config =>
+                                      (greetd-configuration (inherit config)
+                                                            (greeter-supplementary-groups '
+                                                             ("video"
+                                                              "audio"))
+                                                            (terminals (list (greetd-terminal-configuration
+                                                                              (terminal-vt
+                                                                               "7")
+                                                                              (terminal-switch
+                                                                               #t)
+                                                                              (default-session-command
+                                                                                (greetd-tuigreet-session))
+                                                                              (initial-session-user
+                                                                               username)
+                                                                              (initial-session-command
+                                                                               (program-file
+                                                                                "niri-session"
+                                                                                #~(execl #$
+                                                                                         (file-append
+                                                                                          dbus
+                                                                                          "/bin/dbus-run-session")
+                                                                                         "dbus-run-session"
 
-             (rosenthal services base)
-             (rosenthal packages wm)
-             (rosenthal services desktop))
+                                                                                         (string-append
+                                                                                          "--dbus-daemon="
+                                                                                          #$(file-append
+                                                                                             dbus
+                                                                                             "/bin/dbus-daemon"))
+                                                                                         #$(file-append
+                                                                                            niri
+                                                                                            "/bin/niri")
+                                                                                         "--session"))))))))
 
-(use-package-modules glib package-management wm)
+                 (guix-service-type config =>
+                                    (guix-configuration (inherit config)
+                                                        (channels guix-channels)
+                                                        (guix (guix-for-channels
+                                                               guix-channels))
+                                                        (substitute-urls (append (list
+                                                                                  "https://mirror.sjtu.edu.cn/guix"
+                                                                                  "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"
+                                                                                  "https://substitutes.guix.gofranz.com"
+                                                                                  "https://cache-cdn.guix.moe"
+                                                                                  "https://substitutes.nonguix.org")
+                                                                                 %default-substitute-urls))
+                                                        (authorized-keys (append (list (plain-file
+                                                                                        "guix-moe.pub"
+                                                                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
 
-(define %desktop-services
-  (modify-services %rosenthal-desktop-services/tuigreet
-    (delete console-font-service-type)
+                                                                                       (plain-file
+                                                                                        "nonguix.pub"
+                                                                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
 
-    (greetd-service-type config =>
-                         (greetd-configuration (inherit config)
-                                               (greeter-supplementary-groups '
-                                                                             ("video"
-                                                                              "audio"))
-                                               (terminals (list (greetd-terminal-configuration
-                                                                 (terminal-vt
-                                                                  "7")
-                                                                 (terminal-switch
-                                                                  #t)
-                                                                 (default-session-command
-                                                                  (greetd-tuigreet-session))
-                                                                 (initial-session-user
-                                                                  username)
-                                                                 (initial-session-command
-                                                                  (program-file
-                                                                   "niri-session"
-                                                                   #~(execl #$
-                                                                      (file-append
-                                                                       dbus
-                                                                       "/bin/dbus-run-session")
-                                                                      "dbus-run-session"
-
-                                                                      (string-append
-                                                                       "--dbus-daemon="
-                                                                       #$(file-append
-                                                                          dbus
-                                                                          "/bin/dbus-daemon"))
-                                                                      #$(file-append
-                                                                         niri
-                                                                         "/bin/niri")
-                                                                      "--session"))))))))
-
-    (guix-service-type config =>
-                       (guix-configuration (inherit config)
-                                           (channels guix-channels)
-                                           (guix (guix-for-channels
-                                                  guix-channels))
-                                           (substitute-urls (append (list
-                                                                     "https://mirror.sjtu.edu.cn/guix"
-                                                                     "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"
-                                                                     "https://substitutes.guix.gofranz.com"
-                                                                     "https://cache-cdn.guix.moe"
-                                                                     "https://substitutes.nonguix.org")
-                                                             %default-substitute-urls))
-                                           (authorized-keys (append (list (plain-file
-                                                                           "guix-moe.pub"
-                                                                           "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
-
-                                                                          (plain-file
-                                                                           "nonguix.pub"
-                                                                           "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
-
-                                                                          (plain-file
-                                                                           "panther.pub"
-                                                                           "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
-                                                             %default-authorized-guix-keys))
-                                           (extra-options (list "--cores=20"
-                                                           "--max-jobs=6"))
-                                           (http-proxy "http://127.0.0.1:7890")
-                                           (discover? #f)
-                                           (privileged? #f)
-                                           (tmpdir "/var/tmp")))))
+                                                                                       (plain-file
+                                                                                        "panther.pub"
+                                                                                        "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
+                                                                                 %default-authorized-guix-keys))
+                                                        (extra-options (list "--cores=20"
+                                                                             "--max-jobs=6"))
+                                                        (http-proxy "http://127.0.0.1:7890")
+                                                        (discover? #f)
+                                                        (privileged? #f)
+                                                        (tmpdir "/var/tmp"))))
 #+end_src
 
 ** 文件系统相关服务
 在这里就是一些负责维护文件系统树的服务
 
-- *fixed-machine-id 负责固定 =/etc/machine-id=
-  这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
-  中
-- *fix-data-perms 负责修复 =/data= 目录下所有文件夹的权限
-- *create-xdg-dirs 负责在 =/data= 目录和 =/home/user=
-  目录中创建同名的文件夹，以用于bind-mount
+- *fixed-machine-id* 负责固定 =/etc/machine-id=
+   这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
+   中
+- *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
+- *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user=
+   目录中创建同名的文件夹，以用于bind-mount
 
 #+NAME: filesystem-services
 #+begin_src scheme
+(list (simple-service 'fixed-machine-id etc-service-type
+                      (list `("machine-id" ,(plain-file "machine-id"
+                                                        fixed-machine-id))))
 
-(use-service-modules desktop)
+      (simple-service 'fix-data-perms activation-service-type
+                      #~(begin
+                          (use-modules (guix build utils))
+                          (mkdir-p "/data")
+                          (chmod "/data" #o1777)))
 
-(define %filesystem-services
-  (list (simple-service 'fixed-machine-id etc-service-type
-                        (list `("machine-id" ,(plain-file "machine-id"
-                                                          fixed-machine-id))))
-
-        (simple-service 'fix-data-perms activation-service-type
-                        #~(begin
-                            (use-modules (guix build utils))
-                            (mkdir-p "/data")
-                            (chmod "/data" #o1777)))
-
-        (simple-service 'create-xdg-dirs activation-service-type
-                        (with-imported-modules (source-module-closure '((guix
-                                                                         build
-                                                                         utils)))
-                                               #~(begin
-                                                   (use-modules (guix build
-                                                                      utils))
-                                                   (let ((pw (getpwnam #$username))
-                                                          (uid (passwd:uid pw))
-                                                          (gid (passwd:gid pw))
-                                                          (home (string-append
-                                                                 "/home/"
-                                                                 #$username)))
-                                                     (for-each (lambda (dir)
-                                                                 (let ((path (string-append
-                                                                              home
-                                                                              "/"
-                                                                              dir)))
-                                                                   (mkdir-p
-                                                                    path)
-                                                                   (chown path
-                                                                    uid gid)
-                                                                   (chmod path
-                                                                    #o755)))
-                                                               '#$%data-dirs)))))))
+      (simple-service 'create-xdg-dirs activation-service-type
+                      (with-imported-modules (source-module-closure '((guix
+                                                                       build
+                                                                       utils)))
+                                             #~(begin
+                                                 (use-modules (guix build
+                                                                    utils))
+                                                 (let ((pw (getpwnam #$username))
+                                                       (uid (passwd:uid pw))
+                                                       (gid (passwd:gid pw))
+                                                       (home (string-append
+                                                              "/home/"
+                                                              #$username)))
+                                                   (for-each (lambda (dir)
+                                                               (let ((path (string-append
+                                                                            home
+                                                                            "/"
+                                                                            dir)))
+                                                                 (mkdir-p
+                                                                  path)
+                                                                 (chown path
+                                                                        uid gid)
+                                                                 (chmod path
+                                                                        #o755)))
+                                                             '#$%data-dirs))))))
 #+end_src
 
 ** 网络相关配置
 
 #+NAME: networking-services
 #+begin_src scheme
-(use-modules (rosenthal packages networking)
-             (rosenthal services networking))
-
-(use-service-modules networking shepherd)
-
-(define %networking-services
-  (list (service nftables-service-type
-                 (nftables-configuration (ruleset (local-file
-                                                   "../source/files/nftables.conf"))))
-        (simple-service 'mihomo-services shepherd-root-service-type
-                        (list (shepherd-service (documentation
-                                                 "Run the mihomo daemon.")
-                                                (provision '(mihomo-daemon))
-                                                (requirement '(user-processes))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   mihomo
-                                                                   "/bin/mihomo")
-                                                                "-f"
-                                                                (string-append
-                                                                 "/home/"
-                                                                 #$username
-                                                                 "/.config/mihomo/config.yaml"))
-                                                          #:log-file
-                                                          "/var/log/mihomo.log"))
-                                                (stop #~(make-kill-destructor))
-                                                (auto-start? #t)
-                                                (respawn? #t))))))
+(list (service nftables-service-type
+               (nftables-configuration (ruleset (local-file
+                                                 "../source/files/nftables.conf"))))
+      (simple-service 'mihomo-services shepherd-root-service-type
+                      (list (shepherd-service (documentation
+                                               "Run the mihomo daemon.")
+                                              (provision '(mihomo-daemon))
+                                              (requirement '(user-processes))
+                                              (start #~(make-forkexec-constructor
+                                                        (list #$(file-append
+                                                                 mihomo
+                                                                 "/bin/mihomo")
+                                                              "-f"
+                                                              (string-append
+                                                               "/home/"
+                                                               #$username
+                                                               "/.config/mihomo/config.yaml"))
+                                                        #:log-file
+                                                        "/var/log/mihomo.log"))
+                                              (stop #~(make-kill-destructor))
+                                              (auto-start? #t)
+                                              (respawn? #t)))))
 #+end_src
 
-** =Nix=包管理器相关配置
+** Nix包管理器相关配置
 
 #+NAME: nix-services
 #+begin_src scheme
-(use-service-modules nix shepherd)
+(list (service nix-service-type
+               (nix-configuration (extra-config (list (string-append
+                                                       "trusted-users"
+                                                       " = root " username)))))
 
-(define %nix-services
-  (list (service nix-service-type
-                 (nix-configuration (extra-config (list (string-append
-                                                         "trusted-users"
-                                                         " = root " username)))))
-
-        (simple-service 'non-nixos-gpu shepherd-root-service-type
-                        (list (shepherd-service (documentation
-                                                 "Install GPU drivers for running GPU accelerated programs from Nix.")
-                                                (provision '(non-nixos-gpu))
-                                                (requirement '(nix-daemon))
-                                                (start #~(make-forkexec-constructor '
-                                                          ("/run/current-system/profile/bin/ln"
-                                                           "-nsf"
-                                                           "/var/lib/non-nixos-gpu"
-                                                           "/run/opengl-driver")))
-                                                (stop #~(make-kill-destructor))
-                                                (auto-start? #t)
-                                                (one-shot? #t))))))
+      (simple-service 'non-nixos-gpu shepherd-root-service-type
+                      (list (shepherd-service (documentation
+                                               "Install GPU drivers for running GPU accelerated programs from Nix.")
+                                              (provision '(non-nixos-gpu))
+                                              (requirement '(nix-daemon))
+                                              (start #~(make-forkexec-constructor
+                                                        '("/run/current-system/profile/bin/ln"
+                                                          "-nsf"
+                                                          "/var/lib/non-nixos-gpu"
+                                                          "/run/opengl-driver")))
+                                              (stop #~(make-kill-destructor))
+                                              (auto-start? #t)
+                                              (one-shot? #t)))))
 #+end_src
 
 ** UDEV规则
 
 #+NAME: udev-services
-
 #+begin_src scheme
-(use-package-modules android games)
+(list (udev-rules-service 'android android-udev-rules
+                          #:groups '("adbusers"))
+      (udev-rules-service 'steam-devices steam-devices-udev-rules)
+      (udev-rules-service 'controller
+                          (udev-rule "60-controller-permission.rules"
+                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
+      (udev-rules-service 'cpu-dma
+                          (udev-rule "99-cpu-dma-latency.rules"
+                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\"")))
+#+end_src
 
-(use-service-modules linux)
+** 基础服务
 
-(define %udev-services
-  (list (udev-rules-service 'android android-udev-rules
-                            #:groups '("adbusers"))
-        (udev-rules-service 'steam-devices steam-devices-udev-rules)
-        (udev-rules-service 'controller
-                            (udev-rule "60-controller-permission.rules"
-                             "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
-        (udev-rules-service 'cpu-dma
-                            (udev-rule "99-cpu-dma-latency.rules"
-                             "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))))
+#+NAME: basic-services
+#+begin_src scheme
+(append (map (lambda (tty)
+               (service kmscon-service-type
+                        (kmscon-configuration (virtual-terminal tty)
+                                              (font-engine "pango")
+                                              (font-size 24))))
+             '("tty2" "tty3" "tty4" "tty5" "tty6"))
+
+        (list (service fprintd-service-type)
+              (service gnome-keyring-service-type)
+              (service gvfs-service-type)
+              (service opentabletdriver-service-type)
+              (service rtkit-daemon-service-type)
+
+              (simple-service 'home-channels home-channels-service-type
+                              guix-channels)
+
+              (simple-service 'root-services shepherd-root-service-type
+                              (list (shepherd-timer '(guix-gc)
+                                                    #~(calendar-event
+                                                       #:days-of-week '
+                                                       (sunday)
+                                                       #:hours '
+                                                       (18)
+                                                       #:minutes '
+                                                       (0))
+                                                    #~("/run/current-system/profile/bin/guix"
+                                                       "gc"
+                                                       "--delete-generations=14d")
+                                                    #:requirement '(user-processes
+                                                                    guix-daemon))))))
+#+end_src
+
+** 桌面服务
+
+主要是修改了 =rosenthal-desktop-services= 这个服务
+
+定义了Guix相关的配置，以及修改了greetd的配置
+
+#+NAME: desktop-services
+#+begin_src scheme
+(modify-services %rosenthal-desktop-services/tuigreet
+                 (delete console-font-service-type)
+
+                 (greetd-service-type config =>
+                                      (greetd-configuration (inherit config)
+                                                            (greeter-supplementary-groups '
+                                                             ("video"
+                                                              "audio"))
+                                                            (terminals (list (greetd-terminal-configuration
+                                                                              (terminal-vt
+                                                                               "7")
+                                                                              (terminal-switch
+                                                                               #t)
+                                                                              (default-session-command
+                                                                                (greetd-tuigreet-session))
+                                                                              (initial-session-user
+                                                                               username)
+                                                                              (initial-session-command
+                                                                               (program-file
+                                                                                "niri-session"
+                                                                                #~(execl #$
+                                                                                         (file-append
+                                                                                          dbus
+                                                                                          "/bin/dbus-run-session")
+                                                                                         "dbus-run-session"
+
+                                                                                         (string-append
+                                                                                          "--dbus-daemon="
+                                                                                          #$(file-append
+                                                                                             dbus
+                                                                                             "/bin/dbus-daemon"))
+                                                                                         #$(file-append
+                                                                                            niri
+                                                                                            "/bin/niri")
+                                                                                         "--session"))))))))
+
+                 (guix-service-type config =>
+                                    (guix-configuration (inherit config)
+                                                        (channels guix-channels)
+                                                        (guix (guix-for-channels
+                                                               guix-channels))
+                                                        (substitute-urls (append (list
+                                                                                  "https://mirror.sjtu.edu.cn/guix"
+                                                                                  "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"
+                                                                                  "https://substitutes.guix.gofranz.com"
+                                                                                  "https://cache-cdn.guix.moe"
+                                                                                  "https://substitutes.nonguix.org")
+                                                                                 %default-substitute-urls))
+                                                        (authorized-keys (append (list (plain-file
+                                                                                        "guix-moe.pub"
+                                                                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
+
+                                                                                       (plain-file
+                                                                                        "nonguix.pub"
+                                                                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
+
+                                                                                       (plain-file
+                                                                                        "panther.pub"
+                                                                                        "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
+                                                                                 %default-authorized-guix-keys))
+                                                        (extra-options (list "--cores=20"
+                                                                             "--max-jobs=6"))
+                                                        (http-proxy "http://127.0.0.1:7890")
+                                                        (discover? #f)
+                                                        (privileged? #f)
+                                                        (tmpdir "/var/tmp"))))
+#+end_src
+
+** 文件系统相关服务
+在这里就是一些负责维护文件系统树的服务
+
+- *fixed-machine-id* 负责固定 =/etc/machine-id=
+   这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
+   中
+- *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
+- *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user=
+   目录中创建同名的文件夹，以用于bind-mount
+
+#+NAME: filesystem-services
+#+begin_src scheme
+(list (simple-service 'fixed-machine-id etc-service-type
+                      (list `("machine-id" ,(plain-file "machine-id"
+                                                        fixed-machine-id))))
+
+      (simple-service 'fix-data-perms activation-service-type
+                      #~(begin
+                          (use-modules (guix build utils))
+                          (mkdir-p "/data")
+                          (chmod "/data" #o1777)))
+
+      (simple-service 'create-xdg-dirs activation-service-type
+                      (with-imported-modules (source-module-closure '((guix
+                                                                       build
+                                                                       utils)))
+                                             #~(begin
+                                                 (use-modules (guix build
+                                                                    utils))
+                                                 (let ((pw (getpwnam #$username))
+                                                       (uid (passwd:uid pw))
+                                                       (gid (passwd:gid pw))
+                                                       (home (string-append
+                                                              "/home/"
+                                                              #$username)))
+                                                   (for-each (lambda (dir)
+                                                               (let ((path (string-append
+                                                                            home
+                                                                            "/"
+                                                                            dir)))
+                                                                 (mkdir-p
+                                                                  path)
+                                                                 (chown path
+                                                                        uid gid)
+                                                                 (chmod path
+                                                                        #o755)))
+                                                             '#$%data-dirs))))))
+#+end_src
+
+** 网络相关配置
+
+#+NAME: networking-services
+#+begin_src scheme
+(list (service nftables-service-type
+               (nftables-configuration (ruleset (local-file
+                                                 "../source/files/nftables.conf"))))
+      (simple-service 'mihomo-services shepherd-root-service-type
+                      (list (shepherd-service (documentation
+                                               "Run the mihomo daemon.")
+                                              (provision '(mihomo-daemon))
+                                              (requirement '(user-processes))
+                                              (start #~(make-forkexec-constructor
+                                                        (list #$(file-append
+                                                                 mihomo
+                                                                 "/bin/mihomo")
+                                                              "-f"
+                                                              (string-append
+                                                               "/home/"
+                                                               #$username
+                                                               "/.config/mihomo/config.yaml"))
+                                                        #:log-file
+                                                        "/var/log/mihomo.log"))
+                                              (stop #~(make-kill-destructor))
+                                              (auto-start? #t)
+                                              (respawn? #t)))))
+#+end_src
+
+** Nix包管理器相关配置
+
+#+NAME: nix-services
+#+begin_src scheme
+(list (service nix-service-type
+               (nix-configuration (extra-config (list (string-append
+                                                       "trusted-users"
+                                                       " = root " username)))))
+
+      (simple-service 'non-nixos-gpu shepherd-root-service-type
+                      (list (shepherd-service (documentation
+                                               "Install GPU drivers for running GPU accelerated programs from Nix.")
+                                              (provision '(non-nixos-gpu))
+                                              (requirement '(nix-daemon))
+                                              (start #~(make-forkexec-constructor
+                                                        '("/run/current-system/profile/bin/ln"
+                                                          "-nsf"
+                                                          "/var/lib/non-nixos-gpu"
+                                                          "/run/opengl-driver")))
+                                              (stop #~(make-kill-destructor))
+                                              (auto-start? #t)
+                                              (one-shot? #t)))))
+#+end_src
+
+** UDEV规则
+
+#+NAME: udev-services
+#+begin_src scheme
+(list (udev-rules-service 'android android-udev-rules
+                          #:groups '("adbusers"))
+      (udev-rules-service 'steam-devices steam-devices-udev-rules)
+      (udev-rules-service 'controller
+                          (udev-rule "60-controller-permission.rules"
+                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
+      (udev-rules-service 'cpu-dma
+                          (udev-rule "99-cpu-dma-latency.rules"
+                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\"")))
 #+end_src
 
 ** 虚拟化相关服务
 
 #+NAME: virtualization-services
-
 #+begin_src scheme
+(list (service dnsmasq-service-type
+               (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
+                                      (extra-options (list
+                                                      "--except-interface=lo"
+                                                      "--interface=virbr0"
+                                                      "--bind-dynamic"
+                                                      "--dhcp-range=192.168.10.2,192.168.10.254"))))
 
-(use-service-modules containers dns networking virtualization)
+      (service rootless-podman-service-type
+               (rootless-podman-configuration (subuids (list (subid-range (name
+                                                                           "brokenshine")
+                                                                          (start
+                                                                           100000)
+                                                                          (count
+                                                                           65536))))
+                                              (subgids (list (subid-range (name
+                                                                           "brokenshine")
+                                                                          (start
+                                                                           100000)
+                                                                          (count
+                                                                           65536))))))
 
-(define %virtualization-services
-  (list (service dnsmasq-service-type
-                 (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
-                                        (extra-options (list
-                                                        "--except-interface=lo"
-                                                        "--interface=virbr0"
-                                                        "--bind-dynamic"
-                                                        "--dhcp-range=192.168.10.2,192.168.10.254"))))
+      (service static-networking-service-type
+               (list (static-networking (provision '(network-manager))
+                                        (links (list (network-link (name
+                                                                    "virbr0")
+                                                                   (type 'bridge)
+                                                                   (arguments '()))))
+                                        (addresses (list (network-address (device
+                                                                           "virbr0")
+                                                                          (value
+                                                                           "192.168.10.1/24")))))))
 
-        (service rootless-podman-service-type
-                 (rootless-podman-configuration (subuids (list (subid-range (name
-                                                                             "brokenshine")
-                                                                            (start
-                                                                             100000)
-                                                                            (count
-                                                                             65536))))
-                                                (subgids (list (subid-range (name
-                                                                             "brokenshine")
-                                                                            (start
-                                                                             100000)
-                                                                            (count
-                                                                             65536))))))
-
-        (service static-networking-service-type
-                 (list (static-networking (provision '(network-manager))
-                                          (links (list (network-link (name
-                                                                      "virbr0")
-                                                                     (type 'bridge)
-                                                                     (arguments '()))))
-                                          (addresses (list (network-address (device
-                                                                             "virbr0")
-                                                                            (value
-                                                                             "192.168.10.1/24")))))))
-
-        (service libvirt-service-type
-                 (libvirt-configuration (unix-sock-group "libvirt")))
-        (service virtlog-service-type)))
-
-(define %services-config
-  (append %base-services
-          %udev-services
-          %networking-services
-          %virtualization-services
-          %kernel-services
-          %nix-services
-          %filesystem-services
-          %desktop-services))
+      (service libvirt-service-type
+               (libvirt-configuration (unix-sock-group "libvirt")))
+      (service virtlog-service-type))
 #+end_src
 
 * Skeletons
@@ -680,20 +904,18 @@ Btrfs 的架构，同时高强度地使用subvol功能
 该目录下的所有文件都会在用户第一次创建时写入到用户的目录中
 
 适合在此放置一些需要经常修改的模板类服务
-#+NAME: skeletons
-#+begin_src scheme
-(use-modules (srfi srfi-1))
 
-(define %skeletons-config
-  (map (lambda (path)
-         `(,path ,(local-file (string-append "source/files/skel/" path))))
-       '( ".config/mihomo/config.yaml")))
+#+NAME: skeletons-config
+#+begin_src scheme
+(map (lambda (path)
+       `(,path ,(local-file (string-append "source/files/skel/" path))))
+     '( ".config/mihomo/config.yaml"))
 #+end_src
 
 * Users
 用户信息
 
-=password=行可以用于设置默认密码
+=password= 行可以用于设置默认密码
 
 利用 =(password (crypt "InitialPassword!" "$6$abc")))=
 可以创建一个初始密码，其中crypt函数的第一个字符串为 *明文的密码*
@@ -708,34 +930,32 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
 即可返回需要填入的值
 
-#+NAME: users
+#+NAME: information-configs
 #+begin_src scheme
-(use-modules (gnu packages shells))
+(timezone "Asia/Shanghai" )
+(locale "zh_CN.utf8" )
+(host-name "BrokenShine-Desktop" )
+#+end_src
 
-(define %timezone-config
-  "Asia/Shanghai")
-(define %locale-config
-  "zh_CN.utf8")
-(define %host-name-config
-  "BrokenShine-Desktop")
-(define %users-config
-  (cons (user-account
-           (inherit %root-account)
-           (password #f)
-           (shell (file-append (spec->pkg "fish") "/bin/fish")))
-         (user-account
-           (name username)
-           (group "users")
-           (password
-            "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
-           (supplementary-groups '("adbusers" "audio"
-                                   "cgroup"
-                                   "input"
-                                   "kvm"
-                                   "libvirt"
-                                   "netdev"
-                                   "video"
-                                   "wheel"))
-           (shell (file-append (spec->pkg "fish") "/bin/fish")))
-         %base-user-accounts))
+#+NAME: users-config
+#+begin_src scheme
+(users (cons* (user-account
+               (inherit %root-account)
+               (password #f)
+               (shell (file-append (spec->pkg "fish") "/bin/fish")))
+              (user-account
+               (name username)
+               (group "users")
+               (password
+                "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
+               (supplementary-groups '("adbusers" "audio"
+                                       "cgroup"
+                                       "input"
+                                       "kvm"
+                                       "libvirt"
+                                       "netdev"
+                                       "video"
+                                       "wheel"))
+               (shell (file-append (spec->pkg "fish") "/bin/fish")))
+              %base-user-accounts))
 #+end_src
