@@ -339,6 +339,7 @@ Btrfs 的架构，同时高强度地使用subvol功能
  "fastfetch-minimal"
  "fish"
  "foot"
+ "stow"
 
  ;; 虚拟化
  "distrobox"
@@ -372,32 +373,32 @@ Btrfs 的架构，同时高强度地使用subvol功能
 #+begin_src scheme
 (use-modules (gnu home services guix)
              (guix channels)
-
              (jeans services hardware)
-             (px services audio))
-
-(use-package-modules android games)
-
-(use-modules (guix channels)
-
-             (rosenthal services base)
+             (px services audio)
+             (rosenthal packages networking)
              (rosenthal packages wm)
-             (rosenthal services desktop))
+             (rosenthal services base)
+             (rosenthal services desktop)
+             (rosenthal services networking)
+             (srfi srfi-1))
 
-(use-modules (rosenthal packages networking)
-             (rosenthal services networking))
+(use-package-modules android
+                     games
+                     glib
+                     package-management
+                     wm)
 
-(use-service-modules networking shepherd)
+(use-service-modules authentication
+                     containers
+                     desktop
+                     dns
+                     linux
+                     networking
+                     nix
+                     shepherd
+                     sound
+                     virtualization)
 
-(use-service-modules nix shepherd)
-(use-package-modules android games)
-
-(use-service-modules linux)
-
-(use-modules (srfi srfi-1))
-
-(use-package-modules glib package-management wm)
-(use-service-modules authentication desktop linux sound  containers dns networking virtualization)
 #+end_src
 
 ** 基础服务

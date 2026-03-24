@@ -41,11 +41,6 @@
             %rosenthal-desktop-home-services)))
 #+end_src
 
-#+RESULTS: main
-: Throw to key `read-error' while reading argument `form' of command `geiser-eval':
-: #<unknown port>:280:78: Unknown # object: "#~"
-: scheme@(guile-user)>
-
 * Modules
 
 #+NAME: modules
@@ -421,7 +416,8 @@
                                                                #$(package-name pkg) ".log")))
                            (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(dbus))
+                        (list (make-shepherd-service kanata "/bin/kanata" '(dbus))
+                              (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(dbus))
                               (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(dbus))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(dbus))
                               (make-shepherd-service swayidle "/bin/swayidle" '(dbus))
@@ -453,13 +449,7 @@
 
 #+NAME: dotfile-services
 #+begin_src scheme
-(list (service home-dotfiles-service-type
-               (home-dotfiles-configuration (directories '("../dotfiles"))
-                                            (excluded '("^.git$"
-                                                        "^.gitignore$"
-                                                        "^.github$"))))
-
-      (service home-xdg-configuration-files-service-type
+(list (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
                  ("nano/nanorc" ,%default-nanorc)))
 

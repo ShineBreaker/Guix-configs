@@ -54,7 +54,6 @@ Exit code: ~a~%" cmd exit-code)))))
        ,@args)))
 
 ;;; Org 文件导出逻辑
-
 (define (generate-config-from-org org-file)
   "使用 Emacs 的 org-babel-tangle 导出 Org 文件"
   (let ((org-path (string-append configs-dir "/" org-file)))
@@ -64,6 +63,11 @@ Exit code: ~a~%" cmd exit-code)))))
              "-l" "org"
              "--eval" "(require 'ob-tangle)"
              "--eval" (format #f "(org-babel-tangle-file \"~a\")" org-path)))))
+
+;;; Stow 相关逻辑
+(define (stow)
+  "使用stow管理dotfiles"
+  ($ (list "bash" "-c" "stow -d ./dotfiles -t ~ /")))
 
 ;;; Maak任务定义
 (define (generate-system-config)
@@ -102,6 +106,7 @@ Exit code: ~a~%" cmd exit-code)))))
   ($guix `("home" "reconfigure"
            ,(string-append tmp-dir "/home-config.scm") "--allow-downgrades"
            "--fallback"))
+  (stow)
   (tmprm))
 
 (define (rebuild)
@@ -117,8 +122,6 @@ Exit code: ~a~%" cmd exit-code)))))
                               (lambda ()
                                 ($guix `("describe" "--format=channels")
                                        #:channels channel-fresh)))))
-
-
 
 (define (upgrade)
   "更新lock file"
@@ -145,6 +148,8 @@ Exit code: ~a~%" cmd exit-code)))))
   (clean)
   ($ (list "guix" "gc"))
   ($ (list "sudo" "rm" "-rf" "/boot/EFI/Guix/OLD-*.EFI")))
+
+
 
 (define (reuse)
   "生成版权信息头"
