@@ -542,12 +542,12 @@ Btrfs 的架构，同时高强度地使用subvol功能
                                              #~(begin
                                                  (use-modules (guix build
                                                                     utils))
-                                                 (let ((pw (getpwnam #$username))
-                                                       (uid (passwd:uid pw))
-                                                       (gid (passwd:gid pw))
-                                                       (home (string-append
-                                                              "/home/"
-                                                              #$username)))
+                                                 (let* ((pw (getpwnam #$username))
+                                                        (uid (passwd:uid pw))
+                                                        (gid (passwd:gid pw))
+                                                        (home (string-append
+                                                               "/home/"
+                                                                #$username)))
                                                    (for-each (lambda (dir)
                                                                (let ((path (string-append
                                                                             home
@@ -770,12 +770,12 @@ Btrfs 的架构，同时高强度地使用subvol功能
                                              #~(begin
                                                  (use-modules (guix build
                                                                     utils))
-                                                 (let ((pw (getpwnam #$username))
-                                                       (uid (passwd:uid pw))
-                                                       (gid (passwd:gid pw))
-                                                       (home (string-append
-                                                              "/home/"
-                                                              #$username)))
+                                                 (let* ((pw (getpwnam #$username))
+                                                        (uid (passwd:uid pw))
+                                                        (gid (passwd:gid pw))
+                                                        (home (string-append
+                                                               "/home/"
+                                                               #$username)))
                                                    (for-each (lambda (dir)
                                                                (let ((path (string-append
                                                                             home
