@@ -43,6 +43,8 @@
 
 * Modules
 
+这些以及下面 =service= 块中的 module 都是为了导入对应变量而使用的，所以必须放置在一个配置文件的最前面
+
 #+NAME: modules
 #+begin_src scheme
 (use-modules (gnu)
@@ -352,22 +354,16 @@
 ** Fish 相关服务
 
 #+NAME: fish-services
-#+begin_src scheme
+#+begin_src scheme :noweb yes
 (list (simple-service 'fish-configs
                       home-xdg-configuration-files-service-type
                       (list `("fish/conf.d/10-source.fish" ,(computed-substitution-with-inputs
                                                              "config.fish"
                                                              (plain-file
                                                               "10-source.fish"
-                                                              "status is-interactive
-                    and begin
-
-                      $$bin/atuin$$ init fish | source
-                      $$bin/direnv$$ hook fish | source
-                      $$bin/fzf$$ --fish | source
-                      $$bin/zoxide$$ init fish | source
-
-                    end")
+                                                              "
+<<fish-cfg>>
+")
                                                              (specs->pkgs
                                                               "atuin"
                                                               "direnv" "fzf"
@@ -381,6 +377,19 @@
                             `("fish/functions/fenv.fish" ,(file-append
                                                            fish-foreign-env
                                                            "/share/fish/functions/fenv.fish")))))
+#+end_src
+
+#+NAME: fish-cfg
+#+begin_src fish
+status is-interactive
+and begin
+
+  $$bin/atuin$$ init fish | source
+  $$bin/direnv$$ hook fish | source
+  $$bin/fzf$$ --fish | source
+  $$bin/zoxide$$ init fish | source
+
+end
 #+end_src
 
 ** 桌面常用软件的相关服务

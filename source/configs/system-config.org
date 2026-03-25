@@ -1,13 +1,9 @@
 此系统配置的关键在于 *让系统能够正常启动* ，所以会尽量精简软件包以及相关服务的数量
 
-
 待系统成功安装并进入系统之后，则可以直接手动应用用户配置
 
 --------------
 * Main
-导入所有配置
-
-一个 =operating-system= 块必须包含以下的所有内容
 
 在这里，我利用了 =Org Mode= 的 =Noweb= 功能
 这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
@@ -517,11 +513,11 @@ Btrfs 的架构，同时高强度地使用subvol功能
 在这里就是一些负责维护文件系统树的服务
 
 - *fixed-machine-id* 负责固定 =/etc/machine-id=
-   这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
-   中
+  这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
+  中
 - *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
 - *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user=
-   目录中创建同名的文件夹，以用于bind-mount
+  目录中创建同名的文件夹，以用于bind-mount
 
 #+NAME: filesystem-services
 #+begin_src scheme
@@ -547,7 +543,7 @@ Btrfs 的架构，同时高强度地使用subvol功能
                                                         (gid (passwd:gid pw))
                                                         (home (string-append
                                                                "/home/"
-                                                                #$username)))
+                                                               #$username)))
                                                    (for-each (lambda (dir)
                                                                (let ((path (string-append
                                                                             home
@@ -590,6 +586,10 @@ Btrfs 的架构，同时高强度地使用subvol功能
                                               (respawn? #t)))))
 #+end_src
 
+#+NAME: ntf-rules
+#+begin_src
+
+#+end_src
 ** Nix包管理器相关配置
 
 #+NAME: nix-services
@@ -745,11 +745,11 @@ Btrfs 的架构，同时高强度地使用subvol功能
 在这里就是一些负责维护文件系统树的服务
 
 - *fixed-machine-id* 负责固定 =/etc/machine-id=
-   这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
-   中
+  这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
+  中
 - *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
 - *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user=
-   目录中创建同名的文件夹，以用于bind-mount
+  目录中创建同名的文件夹，以用于bind-mount
 
 #+NAME: filesystem-services
 #+begin_src scheme
