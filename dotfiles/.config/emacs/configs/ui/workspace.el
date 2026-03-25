@@ -62,9 +62,11 @@
       (when (> (window-height) (+ terminal-height 5))
         (let ((term-win (split-window-below (- (window-height) terminal-height))))
           (select-window term-win)
-          (if (fboundp 'vterm)
-              (vterm)
-            (shell))
+          (if (fboundp 'my/vterm)
+              (my/vterm)
+            (if (fboundp 'vterm)
+                (vterm)
+              (shell)))
           ;; 返回代码窗口
           (select-window code-win))))
     ;; 显示 minimap（仅在 GUI 模式下）

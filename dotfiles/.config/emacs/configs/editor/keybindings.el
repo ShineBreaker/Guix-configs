@@ -32,10 +32,38 @@
   :demand t
   :config
   (evil-mode 1)
-  ;; Vim/Emacs 双状态切换
-  ;; C-c v e -> Emacs 状态，C-c v v -> Vim 普通状态
-  (global-set-key (kbd "C-c v e") #'evil-emacs-state)
-  (global-set-key (kbd "C-c v v") #'evil-normal-state))
+
+  ;; ═════════════════════════════════════════════════════════════════════════════
+  ;; 防止意外退出 Evil 模式
+  ;; ═════════════════════════════════════════════════════════════════════════════
+
+  (defun my/evil-switch-to-emacs-state-with-confirm ()
+    "切换到 Emacs 状态（需要确认）。"
+    (interactive)
+    (when (y-or-n-p "切换到 Emacs 状态？")
+      (evil-emacs-state)
+      (message "已切换到 Emacs 状态，按 C-c v v 返回 Vim 模式")))
+
+  ;; Vim/Emacs 双状态切换（带确认）
+  ;; C-c v e -> Emacs 状态（需确认），C-c v v -> Vim 普通状态
+  (global-set-key (kbd "C-c v e") #'my/evil-switch-to-emacs-state-with-confirm)
+  (global-set-key (kbd "C-c v v") #'evil-normal-state)
+
+  ;; ═════════════════════════════════════════════════════════════════════════════
+  ;; C-z 撤销 / C-S-z 恢复（类似 VS Code / JetBrains）
+  ;; ═════════════════════════════════════════════════════════════════════════════
+
+  ;; Normal 状态
+  (define-key evil-normal-state-map (kbd "C-z") #'undo)
+  (define-key evil-normal-state-map (kbd "C-S-z") #'undo-redo)
+
+  ;; Insert 状态
+  (define-key evil-insert-state-map (kbd "C-z") #'undo)
+  (define-key evil-insert-state-map (kbd "C-S-z") #'undo-redo)
+
+  ;; Visual 状态
+  (define-key evil-visual-state-map (kbd "C-z") #'undo)
+  (define-key evil-visual-state-map (kbd "C-S-z") #'undo-redo))
 
 ;; Evil Collection（为各种模式提供 Evil 键绑定）
 (use-package evil-collection

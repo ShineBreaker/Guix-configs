@@ -727,7 +727,7 @@
   (my/leader-def
     "t" '(:ignore t :which-key "切换")
     "tt" '(treemacs :which-key "文件树")
-    "tv" '(vterm :which-key "终端")
+    "tv" '(my/vterm :which-key "终端")
     "tl" '(my/vscode-layout :which-key "工作区布局")
     "ts" '(my/sidebar-toggle :which-key "功能栏"))
 
