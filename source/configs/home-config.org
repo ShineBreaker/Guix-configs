@@ -73,7 +73,6 @@
 (cons* (specs->pkgs+out
         ;; Emacs 核心与 Lisp
         "emacs-pgtk"
-        "sbcl"
         "emacs-use-package"
         "emacs-gcmh"
         "emacs-general"
@@ -154,6 +153,12 @@
         "emacs-spinner"
         "emacs-yaml"
 
+        ;; 编程语言相关
+        "graphviz"
+        "plantuml"
+        "sbcl"
+        "texlive"
+
         ;; Tree-sitter（语法解析）
         "tree-sitter"
         "tree-sitter-bash"
@@ -225,6 +230,7 @@
         ;; 社交
         "notmuch"
         "telegram-desktop"
+        "zulip-term"
 
         ;; 生产力工具
         "gimp"
@@ -239,7 +245,7 @@
         ;; 娱乐
         "heroic"
         "mangohud"
-        ; "osu-lazer-bin"
+        "osu-lazer-bin"
         "prismlauncher-dolly"
         "steam"
 

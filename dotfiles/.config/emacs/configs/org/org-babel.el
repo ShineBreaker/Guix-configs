@@ -15,22 +15,23 @@
 
 (use-package org
   :config
-  ;; 激活 Babel 语言
+  ;; 激活 Babel 语言（内置支持）
   (org-babel-do-load-languages
    'org-babel-load-languages
-   '((emacs-lisp . t)
-     (shell . t)
-     (python . t)
-     (scheme . t)
-     (js . t)
-     (lua . t)
-     (sql . t)
-     (dot . t)
-     (plantuml . t)
-     (C . t)
-     (java . t)
-     (latex . t)
-     (org . t)))
+   '((emacs-lisp . t)      ; 内置，无需依赖
+     (shell . t)           ; 内置，使用 sh/bash
+     (python . t)          ; 需要 python
+     (scheme . t)          ; 需要 guile
+     (js . t)              ; 需要 node
+     (lua . t)             ; 需要 lua
+     (sql . t)             ; 需要 sqlite/mysql/postgresql
+     (C . t)               ; 需要 clang/gcc
+     (java . t)            ; 需要 openjdk
+     (latex . t)           ; 需要 texlive
+     (org . t)             ; 内置
+     (lisp . t)            ; 需要 sbcl
+     (dot . t)             ; 需要 graphviz
+     (plantuml . t)))      ; 需要 plantuml + openjdk
 
   ;; 安全执行，不提示确认
   (setq org-confirm-babel-evaluate nil)
@@ -43,7 +44,41 @@
           (:cache . "no")
           (:noweb . "no")
           (:hlines . "no")
-          (:tangle . "no"))))
+          (:tangle . "no")))
+
+  ;; C/C++ 使用 clang 编译
+  (setq org-babel-C-compiler "clang"
+        org-babel-C++-compiler "clang++"))
+
+;; ═════════════════════════════════════════════════════════════════════════════
+;; 额外语言支持（需要额外包）
+;; ═════════════════════════════════════════════════════════════════════════════
+
+;; Rust 代码块支持
+(use-package ob-rust
+  :defer t
+  :after org
+  :config
+  (add-to-list 'org-babel-load-languages '(rust . t))
+  (setq org-babel-rust-command "rustc"))
+
+;; TypeScript 代码块支持
+(use-package ob-typescript
+  :defer t
+  :after org
+  :config
+  (add-to-list 'org-babel-load-languages '(typescript . t)))
+
+;; Kotlin 代码块支持（通过 shell 执行）
+(defun org-babel-execute:kotlin (body params)
+  "执行 Kotlin 代码块。"
+  (let ((src-file (make-temp-file "kotlin-src" nil ".kt"))
+        (out-file (make-temp-file "kotlin-out" nil ".jar")))
+    (with-temp-file src-file (insert body))
+    (org-babel-eval
+     (format "kotlinc %s -include-runtime -d %s && java -jar %s"
+             src-file out-file out-file)
+     "")))
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; Babel 执行函数
@@ -108,47 +143,51 @@
 ;; 快速插入代码块模板
 ;; ═════════════════════════════════════════════════════════════════════════════
 
-(defun my/org-insert-elisp-block ()
-  "插入 Emacs Lisp 代码块。"
-  (interactive)
-  (insert "#+begin_src emacs-lisp\n\n#+end_src")
-  (forward-line -1))
+(defcustom my/org-babel-language-alist
+  '(;; 内置支持
+    ("emacs-lisp" . nil)
+    ("shell" . nil)
+    ("python" . nil)
+    ("scheme" . nil)
+    ("lisp" . nil)             ; Common Lisp (sbcl)
+    ("js" . nil)               ; JavaScript (node)
+    ;; 扩展语言
+    ("typescript" . nil)       ; 需要 ob-typescript
+    ("rust" . nil)             ; 需要 ob-rust
+    ("C" . nil)                ; C (clang)
+    ("C++" . nil)              ; C++ (clang++)
+    ("java" . nil)
+    ("kotlin" . nil)           ; 需要 kotlinc
+    ("lua" . nil)
+    ("sql" . nil)
+    ("latex" . nil)
+    ;; 图表
+    ("dot" . ":file diagram.png :cmdline -Tpng")      ; Graphviz
+    ("plantuml" . ":file diagram.png"))               ; PlantUML
+  "语言与默认参数的映射。
+格式为 (语言 . 参数字符串)，若为 nil 则无额外参数。"
+  :type '(alist :key-type string :value-type (choice string (const nil))))
 
-(defun my/org-insert-shell-block ()
-  "插入 Shell 代码块。"
-  (interactive)
-  (insert "#+begin_src shell\n\n#+end_src")
-  (forward-line -1))
+(defun my/org-insert-src-block (language)
+  "插入指定语言的代码块。
+LANGUAGE 通过补全选择，支持自定义默认参数。"
+  (interactive
+   (list (completing-read "语言: " (mapcar #'car my/org-babel-language-alist))))
+  (let* ((params (alist-get language my/org-babel-language-alist nil nil #'string=))
+         (header (if params
+                     (format "#+begin_src %s %s" language params)
+                   (format "#+begin_src %s" language))))
+    (insert header)
+    (insert "\n\n#+end_src")
+    (forward-line -1)
+    (indent-according-to-mode)))
 
-(defun my/org-insert-python-block ()
-  "插入 Python 代码块。"
-  (interactive)
-  (insert "#+begin_src python\n\n#+end_src")
-  (forward-line -1))
-
-(defun my/org-insert-scheme-block ()
-  "插入 Scheme 代码块。"
-  (interactive)
-  (insert "#+begin_src scheme\n\n#+end_src")
-  (forward-line -1))
-
-(defun my/org-insert-js-block ()
-  "插入 JavaScript 代码块。"
-  (interactive)
-  (insert "#+begin_src js\n\n#+end_src")
-  (forward-line -1))
-
-(defun my/org-insert-dot-block ()
-  "插入 Graphviz 代码块。"
-  (interactive)
-  (insert "#+begin_src dot :file diagram.png :cmdline -Tpng\n\n#+end_src")
-  (forward-line -1))
-
-(defun my/org-insert-plantuml-block ()
-  "插入 PlantUML 代码块。"
-  (interactive)
-  (insert "#+begin_src plantuml :file diagram.png\n\n#+end_src")
-  (forward-line -1))
+(defun my/org-insert-src-block-inline (language)
+  "插入内联代码块。"
+  (interactive
+   (list (completing-read "语言: " (mapcar #'car my/org-babel-language-alist))))
+  (insert (format "src_%s{}" language))
+  (backward-char 1))
 
 (provide 'org-babel)
 ;;; org-babel.el ends here

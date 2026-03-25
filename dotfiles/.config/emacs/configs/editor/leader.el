@@ -748,13 +748,8 @@
     "obd" '(my/org-babel-demarcate-block :which-key "分割代码块")
     "ob'" '(my/org-babel-edit-src-code :which-key "编辑代码块")
     ;; ═════════════ 插入代码块 (i) ═════════════
-    "oi" '(:ignore t :which-key "插入代码块")
-    "oie" '(my/org-insert-elisp-block :which-key "Emacs Lisp")
-    "ois" '(my/org-insert-shell-block :which-key "Shell")
-    "oip" '(my/org-insert-python-block :which-key "Python")
-    "oiS" '(my/org-insert-scheme-block :which-key "Scheme")
-    "oid" '(my/org-insert-dot-block :which-key "Graphviz")
-    "oiu" '(my/org-insert-plantuml-block :which-key "PlantUML")
+    "oi" '(my/org-insert-src-block :which-key "插入代码块")
+    "oI" '(my/org-insert-src-block-inline :which-key "插入内联代码块")
     ;; ═════════════ Org 操作 (r) ═════════════
     "or" '(:ignore t :which-key "Org 操作")
     "ort" '(my/org-todo-todo :which-key "标记 TODO")
