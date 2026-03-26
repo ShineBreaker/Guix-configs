@@ -18,7 +18,7 @@ SPDX-License-Identifier: GPL-3.0
 
 1. **early-init.el** - GUI 初始化前执行（GC 优化、防闪屏设置）
 2. **init.el** - 主入口，加载核心模块和配置模块
-3. **core/** - 核心基础设施（bootstrap、lib、autoloads）
+3. **core/** - 核心基础设施（bootstrap、lib）
 4. **configs/** - 按类别组织的功能模块
 
 ### 目录结构
@@ -29,15 +29,16 @@ SPDX-License-Identifier: GPL-3.0
 ├── init.el             # 主入口，加载所有模块
 ├── core/
 │   ├── bootstrap.el    # 路径常量、Guix 环境检测
-│   ├── lib.el          # 工具函数（my/load-config 等）
-│   └── autoloads.el    # 自动加载定义
+│   └── lib.el          # 工具函数（my/load-config 等）
 ├── configs/
 │   ├── system/         # Guix 集成、启动设置
 │   ├── ui/             # 外观、仪表板、工作区布局
 │   ├── editor/         # 快捷键、补全、编辑功能
 │   ├── coding/         # LSP、语言特定配置
-│   ├── tools/          # Git、项目、终端、AI、邮件、日历
-│   └── Documents/Org//            # Org Mode 和 Org-roam
+│   ├── tools/          # Git、项目、终端、邮件、日历
+│   └── org/            # Org Mode 和 Org-roam
+├── emacs.scm           # Guix 包安装清单
+├── OPTIMIZATION.md     # 优化报告
 ├── docs/               # 用户文档
 └── var/                # 运行时数据（自动生成）
 ```
@@ -100,12 +101,6 @@ emacs --debug-init
 - 底部：vterm 终端
 - 右侧：AI 面板
 
-### AI 集成（configs/tools/ai.el）
-
-- 简化的 AI 工具集成：直接在右侧打开 vterm 终端
-- 方便运行 Claude Code、Aider 等 CLI 工具
-- 快捷键：`SPC a a` 或 `C-c a a` 打开 AI 终端面板
-
 ### 帮助系统（configs/editor/help.el）
 
 - 提供完整的快捷键参考文档
@@ -130,7 +125,7 @@ emacs --debug-init
 - 自动识别包含 `.git`、`.projectile` 等标记的目录
 - Leader 键前缀：`SPC p`（推荐）或传统前缀：`C-c p`
 
-### Org Mode（configs/Documents/Org/Documents/Org/-mode.el）
+### Org Mode（configs/org/org-mode.el）
 
 - 文件位置：`~/Documents/Org/`
 - Org-roam 笔记：`~/Documents/Org/roam/`
@@ -164,14 +159,20 @@ emacs --debug-init
 |            | `SPC p p`       | 切换项目              |
 | **搜索**   | `SPC s s`       | 搜索当前文件          |
 |            | `SPC s p`       | 搜索项目              |
+| **代码**   | `SPC c`         | 代码操作前缀          |
+|            | `SPC c g d`     | 跳转到定义            |
+|            | `SPC c g r`     | 查找引用              |
+|            | `SPC c f f`     | 格式化代码            |
 | **Git**    | `SPC g s`       | Git 状态              |
 |            | `SPC g b`       | Git blame             |
-| **AI**     | `SPC a a`       | 打开 AI 终端          |
+| **代码**   | `SPC c`         | 代码操作前缀          |
 | **切换**   | `SPC t t`       | 文件树                |
 |            | `SPC t v`       | 终端                  |
 |            | `SPC t l`       | 工作区布局            |
 | **Org**    | `SPC o a`       | Org 议程              |
+|            | `SPC o c`       | Org 日历              |
 |            | `SPC o n f`     | 查找笔记              |
+|            | `SPC o i`       | 插入代码块            |
 | **帮助**   | `SPC h f/v/k`   | 查看函数/变量/按键    |
 |            | `SPC h ?`       | 快捷键帮助            |
 | **快速**   | `SPC SPC`       | M-x 命令              |
@@ -239,20 +240,6 @@ notmuch new
 
 ```elisp
 M-x org-roam-db-sync
-```
-
-### AI 工具无法使用
-
-检查 API Key 配置：
-
-```elisp
-M-: (my/ai-read-api-key)
-```
-
-或设置环境变量：
-
-```bash
-export OPENAI_API_KEY="your-api-key"
 ```
 
 ### LSP 无法启动

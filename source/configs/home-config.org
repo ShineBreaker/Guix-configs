@@ -125,6 +125,7 @@
         "emacs-sly"
         "emacs-geiser"
         "emacs-geiser-guile"
+        "emacs-yaml-mode"
 
         ;; Git 集成
         "emacs-magit"
@@ -136,6 +137,7 @@
 
         ;; Org Mode 生态
         "emacs-htmlize"
+        "emacs-org"
         "emacs-org-appear"
         "emacs-org-modern"
         "emacs-org-roam"
@@ -157,7 +159,7 @@
         "graphviz"
         "plantuml"
         "sbcl"
-        "texlive"
+        "texlive-scheme-full"
 
         ;; Tree-sitter（语法解析）
         "tree-sitter"
