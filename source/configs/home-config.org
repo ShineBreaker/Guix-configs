@@ -404,7 +404,8 @@ end
 
 #+NAME: user-desktop-services
 #+begin_src scheme
-(list (service home-syncthing-service-type)
+(list (service home-mako-service-type)
+      (service home-syncthing-service-type)
 
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list
