@@ -84,7 +84,7 @@ maak rebuild
 
 **Btrfs 持久化子卷**
 
-详见 `./configs/information.scm`，
+详见 [`information.scm`](./source/information.scm)，
 
 利用 Scheme 语法定义 subvol，
 
@@ -113,25 +113,27 @@ maak rebuild
 
 ```text
 .
-├── AGENT.md                 # 仓库级 AI 工作指引
-├── README.md                # 项目说明文档
-├── maak.scm                 # maak 的配置文件
-├── docs/                    # 文档目录
-│   └── terminal-ide.md      # 终端 IDE 功能说明
-├── source/                  # 配置源码目录
-│   ├── channel.scm          # Guix 频道定义
-│   ├── channel.lock         # Guix 频道锁文件
-│   ├── information.scm      # 全局变量定义
-│   ├── files/               # 静态配置模板与资源文件
-│   └── configs/             # Guix 配置文档
-│       ├── home-config.md   # Home 配置说明
-│       └── system-config.md # 系统配置说明
-├── dotfiles/                # 用户配置文件目录
-│   └── .config/             # 用户级配置
-│       └── emacs/           # Emacs 配置子树
-├── screenshots/             # 预览截图
-├── setup/                   # 安装辅助脚本子模块
-└── LICENSE                  # 项目许可证
+├── AGENT.md                  # 仓库级 AI 工作指引
+├── README.md                 # 项目说明文档
+├── maak.scm                  # maak 的配置文件
+├── docs/                     # 文档目录
+│   └── emacs.md              # Emacs 功能说明
+│   └── terminal-ide.md       # 终端 IDE 功能说明
+├── source/                   # 配置源码目录
+│   ├── channel.scm           # Guix 频道定义
+│   ├── channel.lock          # Guix 频道锁文件
+│   ├── information.scm       # 全局变量定义
+│   ├── files/                # 静态配置模板与资源文件
+│   └── configs/              # Guix 配置文档
+│       ├── home-config.org   # Home 配置说明
+│       └── system-config.org # 系统配置说明
+├── dotfiles/                 # 用户配置文件目录
+│   └── .config/              # 用户级配置
+│       └── emacs/            # Emacs 配置子树
+│       ...
+├── screenshots/              # 预览截图
+├── setup/                    # 安装辅助脚本子模块
+└── LICENSE                   # 项目许可证
 ```
 
 ### 配置文件说明
@@ -140,18 +142,18 @@ maak rebuild
 
 **任务入口**：
 
-- `maak.scm` - `maak` 的配置文件
+- [`maak.scm`](./maak.scm) - `maak` 的配置文件
   `maak` 是一个类似于 `make` 的代码运行器，但是使用Guile作为默认语言
 
 **源码目录**（`source/`）：
 
-- `channel.scm` - 定义 Guix 软件包频道（包含 nonguix 等第三方频道）
-- `channel.lock` - Guix 频道版本锁定文件
-- `information.scm` - 定义系统基本信息，包括用户名、channel、Btrfs 子卷和持久化目录
-- `files/` - 静态配置模板与资源文件（nftables.conf、mihomo.yaml、niri.kdl 等）
-- `configs/` - 配置说明文档
-  - `home-config.md` - Home 环境配置详细说明
-  - `system-config.md` - 系统配置详细说明
+- [`channel.scm`](./source/channel.scm) - 定义 Guix 软件包频道（包含 nonguix 等第三方频道）
+- [`channel.lock`](./source/channel.lock) - Guix 频道版本锁定文件
+- [`information.scm`](./source/information.scm) - 定义系统基本信息，包括用户名、channel、Btrfs 子卷和持久化目录
+- [`files/`](./source/files/) - 静态配置模板与资源文件（nftables.conf、mihomo.yaml、niri.kdl 等）
+- [`configs/`](./source/configs/) - 配置说明文档
+  - [`home-config.org`](./source/configs/home-config.org) - Home 环境配置详细说明
+  - [`system-config.org`](./source/configs/system-config.org) - 系统配置详细说明
 
 **说明**：
 
@@ -161,16 +163,17 @@ maak rebuild
 **Dotfiles**（`dotfiles/` 目录）：
 
 - 存放实际分发到用户家目录的配置文件
-- `dotfiles/.config/emacs/` 是独立维护的 Emacs 配置子树
+- [`dotfiles/.config/emacs/`](./dotfiles/.config/emacs/) 是独立维护的 Emacs 配置子树
 
 **子模块**：
 
-- `setup/` - Linux 安装辅助脚本
-- `dotfiles/.local/share/fcitx5/rime` - Rime 词库子模块
+- [`setup/`](./setup/) - Linux 安装辅助脚本
+- [`dotfiles/.local/share/fcitx5/rime`](./dotfiles/.local/share/fcitx5/rime) - Rime 词库子模块
 
 **文档**（`docs/` 目录）：
 
-- `terminal-ide.md` - 终端 IDE（tmux + helix + broot）功能说明
+- [`emacs.md`](./docs/emacs.md) - Emacs 配置详细说明
+- [`terminal-ide.md`](./docs/terminal-ide.md) - 终端 IDE（tmux + helix + broot）功能说明
 
 ### 特别感谢
 
