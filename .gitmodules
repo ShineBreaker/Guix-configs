@@ -1,10 +1,6 @@
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: GPL-3.0
-
-[submodule "dotfiles/.local/share/fcitx5/rime"]
-	path = dotfiles/.local/share/fcitx5/rime
-	url = https://github.com/iDvel/rime-ice.git
-[submodule "setup"]
-	path = setup
-	url = https://codeberg.org/BrokenShine/linux-setup
+[submodule "dotfiles/emacs/.config/emacs"]
+	path = dotfiles/emacs/.config/emacs
+	url = https://codeberg.org/BrokenShine/.emacs.d.git
+[submodule "dotfiles/termide"]
+	path = dotfiles/termide
+	url = https://codeberg.org/BrokenShine/termide.git
