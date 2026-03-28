@@ -646,6 +646,28 @@ Btrfs 的架构，同时高强度地使用subvol功能
               (service opentabletdriver-service-type)
               (service rtkit-daemon-service-type)
 
+              (service tlp-service-type
+                       (tlp-configuration
+                        ;; === AC 电源模式 ===
+                        (cpu-scaling-governor-on-ac (list "performance"))
+                        (cpu-energy-perf-policy-on-ac "performance")
+                        (cpu-min-perf-on-ac 0)
+                        (cpu-max-perf-on-ac 100)
+
+                        ;; === 电池模式 ===
+                        (cpu-scaling-governor-on-bat (list "powersave"))
+                        (cpu-energy-perf-policy-on-bat "power")
+                        (cpu-min-perf-on-bat 0)
+                        (cpu-max-perf-on-bat 20)
+
+                        ;; === 电池健康保护（强烈推荐保留）===
+                        (start-charge-thresh-bat0 40)
+                        (stop-charge-thresh-bat0 80)
+
+                        ;; 可选但推荐的额外省电项
+                        (cpu-boost-on-bat? #f)
+                        (sched-powersave-on-bat? #t)))
+
               (simple-service 'home-channels home-channels-service-type
                               guix-channels)
 
