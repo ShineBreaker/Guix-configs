@@ -503,13 +503,15 @@ end
                                "desktop"
                                "fcitx5"
                                "termide"
+                               "terminal"
                                "themes"
                                "tools"))
                (excluded '(".*~"
                            ".*\\.swp"
                            "/\\.git/.*"
                            "\\.gitignore"
-                           "\\.github"))))
+                           "\\.github"
+                           ".*\\.md"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)

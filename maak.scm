@@ -160,11 +160,5 @@ Exit code: ~a~%" cmd exit-code)))))
                      (localtime (time-second (current-time))))
            ".")))
 
-(define (style-all)
-  "格式化所有代码"
-  (log-info "格式化所有代码")
-  ($ (list "find . -maxdepth 8 -name '*.scm'" "-type f -exec guix style -f {} \\;")
-     #:verbose? #t))
-
 (define (default)
   ($ (list "maak" "--list")))
