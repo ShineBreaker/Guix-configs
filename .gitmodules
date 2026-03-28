@@ -4,3 +4,6 @@
 [submodule "dotfiles/termide"]
 	path = dotfiles/termide
 	url = https://codeberg.org/BrokenShine/termide.git
+[submodule "dotfiles/fcitx5/.local/share/fcitx5/rime"]
+	path = dotfiles/fcitx5/.local/share/fcitx5/rime
+	url = https://github.com/iDvel/rime-ice.git
