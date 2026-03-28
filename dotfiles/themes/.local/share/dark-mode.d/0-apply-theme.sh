@@ -1,0 +1,1 @@
+/gnu/store/9iwnqky7s44k9ycyyfddbmw4dc91mjgv-home-dotfiles--local-share-dark-mode-d-0-apply-theme-sh

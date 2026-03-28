@@ -1,0 +1,1 @@
+/gnu/store/n6xs3vfi9mds153zv6vnh02vag51amsh-home-dotfiles--local-share-light-mode-d-10-gsettings-sh

@@ -1,0 +1,1 @@
+/gnu/store/gam7aqvr5zmz19zwqkivqd9pz4cvv0mv-home-dotfiles--local-share-light-mode-d-10-foot-sh

@@ -1,0 +1,1 @@
+/gnu/store/yyvhzm4q0msj01bwcw9lf2yn7pgx5z4d-home-dotfiles--local-share-dark-mode-d-10-foot-sh

@@ -1,0 +1,1 @@
+/gnu/store/bram5pszv957h86i6zy6cas53add1pnk-home-dotfiles--local-share-light-mode-d-0-apply-theme-sh

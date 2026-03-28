@@ -1,0 +1,1 @@
+/gnu/store/zdynq4swvrzc9v0apcpscq5ihbkid0l0-home-dotfiles--local-share-dark-mode-d-10-gsettings-sh

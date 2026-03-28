@@ -74,7 +74,6 @@
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 桌面组件
-        "darkman"
         "fuzzel"
         "swaylock-effects"
         "swayidle"
@@ -366,7 +365,8 @@
                      linux
                      polkit
                      rust-apps
-                     wm)
+                     wm
+                     xdisorg)
 #+end_src
 
 ** modprobe 相关服务
@@ -440,6 +440,14 @@ end
 (list (service home-mako-service-type)
       (service home-syncthing-service-type)
 
+      (service home-darkman-service-type
+               (home-darkman-configuration
+                (latitude 31.2304)
+                (longitude 121.4737)
+                (use-geoclue #f)
+                (dbus-server #t)
+                (portal #t)))
+
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
@@ -466,8 +474,7 @@ end
                                                                #$(package-name pkg) ".log")))
                            (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (make-shepherd-service darkman "/bin/darkman" '(dbus))
-                              (make-shepherd-service kanata "/bin/kanata" '(dbus))
+                        (list (make-shepherd-service kanata "/bin/kanata" '(dbus))
                               (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(dbus))
                               (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(dbus))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(dbus))
@@ -499,21 +506,21 @@ end
 #+NAME: dotfile-services
 #+begin_src scheme
 (list (service home-dotfiles-service-type
-             (home-dotfiles-configuration
-               (directories '("../dotfiles"))
-               (layout 'stow)
-               (packages (list "desktop"
-                               "system"
-                               "termide"
-                               "terminal"
-                               "themes"
-                               "utilities")))
-               (excluded '(".*~"
-                           ".*\\.swp"
-                           "/\\.git/.*"
-                           "\\.gitignore"
-                           "\\.github"
-                           ".*\\.md"))))
+               (home-dotfiles-configuration
+                (directories '("../dotfiles"))
+                (layout 'stow)
+                (packages '("desktop"
+                            "system"
+                            "termide"
+                            "terminal"
+                            "themes"
+                            "utilities"))
+                (excluded '(".*~"
+                            ".*\\.swp"
+                            "/\\.git/.*"
+                            "\\.gitignore"
+                            "\\.github"
+                            ".*\\.md"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
