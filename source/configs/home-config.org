@@ -74,6 +74,7 @@
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 桌面组件
+        "darkman"
         "fuzzel"
         "swaylock-effects"
         "swayidle"
@@ -269,6 +270,7 @@
         "bun"
         "direnv"
         "gitui"
+        "jq"
         "pandoc"
         "reuse"
         "sdkmanager"
@@ -464,7 +466,8 @@ end
                                                                #$(package-name pkg) ".log")))
                            (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (make-shepherd-service kanata "/bin/kanata" '(dbus))
+                        (list (make-shepherd-service darkman "/bin/darkman" '(dbus))
+                              (make-shepherd-service kanata "/bin/kanata" '(dbus))
                               (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(dbus))
                               (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(dbus))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(dbus))
@@ -499,29 +502,12 @@ end
              (home-dotfiles-configuration
                (directories '("../dotfiles"))
                (layout 'stow)
-               (packages (list "autostart"
-                               "broot"
-                               "btop"
-                               "containers"
-                               "fastfetch"
-                               "fcitx5"
-                               "fish"
-                               "foot"
-                               "fuzzel"
-                               "git"
-                               "helix"
-                               "kanata"
-                               "mako"
-                               "nix-channels"
-                               "pipewire"
-                               "swayidle"
-                               "swaylock"
+               (packages (list "desktop"
+                               "system"
                                "termide"
+                               "terminal"
                                "themes"
-                               "waybar"
-                               "winapps"
-                               "xdg-user-dirs"
-                               "xfce4")))
+                               "utilities")))
                (excluded '(".*~"
                            ".*\\.swp"
                            "/\\.git/.*"
