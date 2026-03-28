@@ -1,1 +1,4 @@
-/gnu/store/zdynq4swvrzc9v0apcpscq5ihbkid0l0-home-dotfiles--local-share-dark-mode-d-10-gsettings-sh
+#!/usr/bin/env sh
+
+guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
+guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme 'Orchis-Teal-Dark'

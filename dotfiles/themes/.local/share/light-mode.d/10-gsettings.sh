@@ -1,1 +1,4 @@
-/gnu/store/n6xs3vfi9mds153zv6vnh02vag51amsh-home-dotfiles--local-share-light-mode-d-10-gsettings-sh
+#!/usr/bin/env sh
+
+guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
+guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme 'Orchis-Teal-Light'

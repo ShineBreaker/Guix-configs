@@ -1,1 +1,4 @@
-/gnu/store/bram5pszv957h86i6zy6cas53add1pnk-home-dotfiles--local-share-light-mode-d-0-apply-theme-sh
+#!/usr/bin/env sh
+
+set -eu
+"${XDG_DATA_HOME:-$HOME/.local/share}/darkman/set-theme.sh" light

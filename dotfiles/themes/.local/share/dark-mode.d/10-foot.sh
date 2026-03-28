@@ -1,1 +1,7 @@
-/gnu/store/yyvhzm4q0msj01bwcw9lf2yn7pgx5z4d-home-dotfiles--local-share-dark-mode-d-10-foot-sh
+#!/usr/bin/env sh
+
+# dark.mode.d/foot.sh
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/foot/foot.ini"
+sed -i 's/initial-color-theme=[0-9]*/initial-color-theme=1/' "$CONFIG"
+
+pkill -u "$USER" --signal=SIGUSR1 ^foot$

@@ -1,1 +1,11 @@
-/gnu/store/6rgwmy0g89jivzd4svlkz3f9n37dmbif-home-dotfiles--config-kanata-kanata-kbd
+(defcfg process-unmapped-keys yes)
+
+(defsrc caps lalt ralt)
+
+(defalias smart-caps (fork lctl caps (lalt ralt)))
+
+(deflayer base
+  @smart-caps
+  _
+  _
+)

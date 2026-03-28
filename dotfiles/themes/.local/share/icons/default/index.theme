@@ -1,1 +1,4 @@
-/gnu/store/68l3js2nz82v4a7hihjs6fsk90pcyyhh-home-dotfiles--local-share-icons-default-index-theme
+[Icon Theme]
+Name=Default
+Comment=Default Cursor Theme
+Inherits=Bibata-Modern-Classic
