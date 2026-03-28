@@ -113,27 +113,46 @@ maak rebuild
 
 ```text
 .
-├── AGENT.md                  # 仓库级 AI 工作指引
-├── README.md                 # 项目说明文档
-├── maak.scm                  # maak 的配置文件
-├── docs/                     # 文档目录
-│   └── emacs.md              # Emacs 功能说明
-│   └── terminal-ide.md       # 终端 IDE 功能说明
-├── source/                   # 配置源码目录
-│   ├── channel.scm           # Guix 频道定义
-│   ├── channel.lock          # Guix 频道锁文件
-│   ├── information.scm       # 全局变量定义
-│   ├── files/                # 静态配置模板与资源文件
-│   └── configs/              # Guix 配置文档
-│       ├── home-config.org   # Home 配置说明
-│       └── system-config.org # 系统配置说明
-├── dotfiles/                 # 用户配置文件目录
-│   └── .config/              # 用户级配置
-│       └── emacs/            # Emacs 配置子树
-│       ...
-├── screenshots/              # 预览截图
-├── setup/                    # 安装辅助脚本子模块
-└── LICENSE                   # 项目许可证
+├── CLAUDE.md               # 仓库级 AI 工作指引
+├── README.md               # 项目说明文档
+├── LICENSE
+├── maak.scm                # maak 的配置文件
+├── source/                 # 配置源码目录
+│   ├── channel.scm         # Guix 频道定义
+│   ├── channel.lock        # Guix 频道锁文件
+│   ├── information.scm     # 全局变量定义
+│   ├── files/              # 静态配置模板与资源文件
+│   ├── configs/            # Guix 配置文档 (org 格式)
+│   │   ├── home-config.org
+│   │   └── system-config.org
+│   └── nix/                # Nix 配置 (实验性)
+├── dotfiles/               # 用户配置文件目录 (Stow 格式)
+│   ├── autostart/.config/
+│   ├── broot/.config/
+│   ├── btop/.config/
+│   ├── containers/.config/
+│   ├── emacs/.config/emacs/     # Emacs 配置子树 (独立维护)
+│   ├── fastfetch/.config/
+│   ├── fcitx5/.local/share/fcitx5/rime  # Rime 词库子模块
+│   ├── fish/.config/
+│   ├── foot/.config/
+│   ├── fuzzel/.config/
+│   ├── git/.config/
+│   ├── helix/.config/
+│   ├── kanata/.config/
+│   ├── mako/.config/
+│   ├── nix-channels/.config/
+│   ├── pipewire/.config/
+│   ├── swayidle/.config/
+│   ├── swaylock/.config/
+│   ├── termide/            # 终端 IDE 配置
+│   ├── themes/             # GTK/Qt 主题配置
+│   ├── waybar/.config/
+│   ├── winapps/.config/
+│   ├── xdg-user-dirs/.config/
+│   └── xfce4/.config/
+├── screenshots/            # 预览截图
+└── tmp/                    # 生成的完整配置（临时）
 ```
 
 ### 配置文件说明
@@ -160,20 +179,14 @@ maak rebuild
 - 实际的 Scheme 配置模块通过 `maak` 从 `source/` 生成到 `tmp/` 目录后执行
 - 系统配置和用户配置分离，便于独立迭代
 
-**Dotfiles**（`dotfiles/` 目录）：
+**Dotfiles**（`dotfiles/` 目录，Stow 格式）：
 
 - 存放实际分发到用户家目录的配置文件
-- [`dotfiles/.config/emacs/`](./dotfiles/.config/emacs/) 是独立维护的 Emacs 配置子树
+- [`dotfiles/emacs/.config/emacs/`](./dotfiles/emacs/.config/emacs/) 是独立维护的 Emacs 配置子树
 
 **子模块**：
 
-- [`setup/`](./setup/) - Linux 安装辅助脚本
-- [`dotfiles/.local/share/fcitx5/rime`](./dotfiles/.local/share/fcitx5/rime) - Rime 词库子模块
-
-**文档**（`docs/` 目录）：
-
-- [`emacs.md`](./docs/emacs.md) - Emacs 配置详细说明
-- [`terminal-ide.md`](./docs/terminal-ide.md) - 终端 IDE（tmux + helix + broot）功能说明
+- [`dotfiles/fcitx5/.local/share/fcitx5/rime`](./dotfiles/fcitx5/.local/share/fcitx5/rime) - Rime 词库子模块
 
 ### 特别感谢
 
