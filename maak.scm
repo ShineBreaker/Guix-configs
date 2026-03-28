@@ -12,7 +12,7 @@
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 rdelim))
 
-;;; 辅助函数：原子性文件写入（不依赖 guix utils）
+;;; 辅助函数：原子性文件写入
 (define (write-file-atomically file thunk)
   "原子性地执行 THUNK 写入 FILE，THUNK 接收一个输出端口作为参数"
   (let* ((template (string-append file ".XXXXXX"))
@@ -39,6 +39,7 @@
 (define channel-lock
   (string-append configs-dir "/../channel.lock"))
 
+;; 方便调试所添加的相关内容
 (define ($ cmd)
   (let ((exit-code (status:exit-val (apply system* cmd))))
     (or (zero? exit-code)
@@ -47,6 +48,8 @@ Non-zero exit code when running!
 Command: ~a
 Exit code: ~a~%" cmd exit-code)))))
 
+;; 手动包装的 guix 命令
+;; 主要是要求其使用 time-machine ，用于锁频道的 commit
 (define* ($guix args
                 #:key (channels channel-lock))
   ($ `("guix" "time-machine"
@@ -64,14 +67,8 @@ Exit code: ~a~%" cmd exit-code)))))
              "--eval" "(require 'ob-tangle)"
              "--eval" (format #f "(org-babel-tangle-file \"~a\")" org-path)))))
 
-;;; Stow 相关逻辑
-(define (stow)
-  "使用stow管理dotfiles"
-  ($ (list "bash" "-c" "stow -d ./dotfiles -t ~ default")))
-
 ;;; Maak任务定义
 (define (generate-system-config)
-  ;; TODO: 等待 system-config.org 配置完成
   (generate-config-from-org "system-config.org"))
 
 (define (generate-home-config)
@@ -106,7 +103,6 @@ Exit code: ~a~%" cmd exit-code)))))
   ($guix `("home" "reconfigure"
            ,(string-append tmp-dir "/home-config.scm") "--allow-downgrades"
            "--fallback"))
-  (stow)
   (tmprm))
 
 (define (rebuild)
@@ -148,8 +144,6 @@ Exit code: ~a~%" cmd exit-code)))))
   (clean)
   ($ (list "guix" "gc"))
   ($ (list "sudo" "rm" "-rf" "/boot/EFI/Guix/OLD-*.EFI")))
-
-
 
 (define (reuse)
   "生成版权信息头"

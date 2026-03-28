@@ -23,9 +23,11 @@
 
 (home-environment
  (packages (append
+            <<desktop-packages-list>>
             <<emacs-packages-list>>
-            <<fish-packages-list>>
-            <<user-packages>>
+            <<terminal-packages-list>>
+            <<devtools-packages-list>>
+            <<user-packages-list>>
             ))
 
  (services (append
@@ -66,24 +68,59 @@
 #+end_src
 
 * Packages
+** 桌面环境 相关软件包
+
+#+NAME: desktop-packages-list
+#+begin_src scheme
+(cons* (specs->pkgs+out
+        ;; 桌面组件
+        "fuzzel"
+        "swaylock-effects"
+        "swayidle"
+        "swww"
+        "waypaper"
+
+        ;; 输入法
+        "fcitx5"
+        "fcitx5-lua"
+
+        ;; 桌面服务
+        "cliphist"
+        "dex"
+        "libnotify"
+        "setxkbmap"
+        "wl-clipboard"
+        "xprop"
+
+        ;; XDG 相关组件
+        "nautilus" ; portal-gnome 依赖这个正常工作
+        "xdg-dbus-proxy"
+        "xdg-desktop-portal-gnome"
+        "xdg-desktop-portal-gtk"
+        "xdg-user-dirs"
+        "xdg-utils"))
+#+end_src
+
 ** Emacs 相关软件包
 
 #+NAME: emacs-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
-        ;; Emacs 核心与 Lisp
-        "emacs-pgtk"
-        "emacs-use-package"
+        ;; Emacs 核心与基础
         "emacs-gcmh"
         "emacs-general"
+        "emacs-no-littering"
+        "emacs-pgtk"
+        "emacs-spinner"
+        "emacs-use-package"
 
         ;; 补全与迷你缓冲区
-        "emacs-vertico"
+        "emacs-consult"
+        "emacs-corfu"
+        "emacs-embark"
         "emacs-marginalia"
         "emacs-orderless"
-        "emacs-consult"
-        "emacs-embark"
-        "emacs-corfu"
+        "emacs-vertico"
 
         ;; Evil 模式（Vim 模拟）
         "emacs-evil"
@@ -94,44 +131,47 @@
         "emacs-doom-modeline"
         "emacs-ef-themes"
         "emacs-kind-icon"
-        "emacs-nerd-icons"
-        "emacs-which-key"
         "emacs-minimap"
+        "emacs-nerd-icons"
         "emacs-rainbow-delimiters"
         "emacs-treemacs"
         "emacs-treemacs-nerd-icons"
-        "emacs-diff-hl"
-        "emacs-stickyfunc-enhance"
-        "emacs-ws-butler"
+        "emacs-which-key"
 
-        ;; 开发工具
+        ;; 编辑与导航
         "emacs-ace-jump-mode"
+        "emacs-diff-hl"
         "emacs-expand-region"
         "emacs-multiple-cursors"
         "emacs-origami"
+        "emacs-ws-butler"
+
+        ;; 开发工具
+        "emacs-eldoc-box"
+        "emacs-rg"
+        "emacs-stickyfunc-enhance"
         "emacs-vterm"
         "emacs-yasnippet"
         "emacs-yasnippet-snippets"
-        "emacs-rg"
-        "emacs-eldoc-box"
 
         ;; 编程语言支持
-        "emacs-kotlin-mode"
-        "emacs-rust-mode"
-        "emacs-zig-mode"
-        "emacs-typescript-mode"
-        "emacs-web-mode"
-        "emacs-json-mode"
-        "emacs-markdown-mode"
-        "emacs-sly"
         "emacs-geiser"
         "emacs-geiser-guile"
+        "emacs-json-mode"
+        "emacs-kotlin-mode"
+        "emacs-markdown-mode"
+        "emacs-rust-mode"
+        "emacs-sly"
+        "emacs-typescript-mode"
+        "emacs-web-mode"
+        "emacs-yaml"
         "emacs-yaml-mode"
+        "emacs-zig-mode"
 
         ;; Git 集成
+        "emacs-git-messenger"
         "emacs-magit"
         "emacs-magit-todos"
-        "emacs-git-messenger"
 
         ;; 项目管理
         "emacs-projectile"
@@ -148,16 +188,13 @@
         "emacs-helpful"
 
         ;; 邮件与日历
-        "emacs-notmuch"
         "emacs-calfw"
+        "emacs-notmuch"
 
-        ;; 环境与工具
+        ;; AI 工具
         "emacs-gptel"
-        "emacs-no-littering"
-        "emacs-spinner"
-        "emacs-yaml"
 
-        ;; 编程语言相关
+        ;; 编程语言运行时与工具
         "graphviz"
         "plantuml"
         "sbcl"
@@ -179,23 +216,67 @@
         "tree-sitter-typescript"))
 #+end_src
 
-** Fish 相关软件包
+** 终端 相关软件包
 
-#+NAME: fish-packages-list
+#+NAME: terminal-packages-list
 #+begin_src scheme
-(cons* (specs->pkgs+out "atuin"
-                        "bat"
-                        "direnv"
-                        "fd"
-                        "ripgrep"
-                        "fzf"
-                        "lolcat"
-                        "zoxide"))
+(cons* (specs->pkgs+out
+        ;; 工具
+        "atuin"
+        "broot"
+        "btop"
+
+        ;; 运行器
+        "just"
+        "maak"
+
+        ;; Tmux 相关
+        "tmux"
+        "tmuxifier"
+        "tmux-xpanes"
+
+        ;; 基于 Rust 的命令行工具替代品
+        "bat"
+        "fd"
+        "ripgrep"
+        "fzf"
+        "lolcat"
+        "zoxide"))
 #+end_src
 
-** 用户安装的软件包
+** 开发环境 相关软件包
 
-#+NAME: user-packages
+#+NAME: devtools-packages-list
+#+begin_src scheme
+(cons* (specs->pkgs+out
+        ;; 开发环境
+        "ccls"
+        "clang"
+        "gradle"
+        "helix"
+        "maven"
+        "node"
+        "openjdk@25"
+        "pnpm@10"
+        "python-black"
+        "python-jsbeautifier"
+        "python-lsp-black"
+        "python-lsp-server"
+        "python-pylsp-mypy"
+        "rust-analyzer"
+
+        ;; 工具
+        "bun"
+        "direnv"
+        "gitui"
+        "pandoc"
+        "reuse"
+        "sdkmanager"
+        "uv"))
+        #+end_src
+** 其他软件包
+
+#+NAME: user-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; AI工具
@@ -210,26 +291,6 @@
         "obs-with-cef"
         "obs-pipewire-audio-capture"
         "obs-vkcapture"
-
-        ;; 桌面环境相关
-        "baobab"
-        "cliphist"
-        "dex"
-        "fcitx5"
-        "fuzzel"
-        "libnotify"
-        "nautilus"
-        "swaylock-effects"
-        "swayidle"
-        "swww"
-        "waypaper"
-        "wl-clipboard"
-        "xdg-dbus-proxy"
-        "xdg-desktop-portal-gnome"
-        "xdg-desktop-portal-gtk"
-        "xdg-user-dirs"
-        "xdg-utils"
-        "xsel"
 
         ;; 社交
         "notmuch"
@@ -254,21 +315,11 @@
         "steam"
 
         ;; 实用工具
-        "age"
         "amule"
-        "broot"
-        "btop"
         "freerdp@3"
-        "just"
         "kanata"
-        "maak"
         "postgresql"
-        "setxkbmap"
-        "tmux"
-        "tmuxifier"
-        "tmux-xpanes"
         "winapps"
-        "xprop"
 
         ;; 主题
         "orchis-kde-themes"
@@ -276,28 +327,6 @@
         "adwaita-icon-theme"
         "bibata-cursor-theme"
         "papirus-icon-theme"
-
-        ;; 开发环境
-        "bun"
-        "ccls"
-        "clang"
-        "gitui"
-        "gradle"
-        "helix"
-        "maven"
-        "node"
-        "openjdk@25"
-        "pandoc"
-        "pnpm@10"
-        "python-black"
-        "python-jsbeautifier"
-        "python-lsp-black"
-        "python-lsp-server"
-        "python-pylsp-mypy"
-        "reuse"
-        "rust-analyzer"
-        "sdkmanager"
-        "uv"
 
         ;; QT框架相关
         "kvantum"
@@ -410,10 +439,9 @@ end
       (service home-syncthing-service-type)
 
       (service home-fcitx5-service-type
-               (home-fcitx5-configuration (themes (list
-                                                   fcitx5-material-color-theme))
-                                          (input-method-editors (list
-                                                                 fcitx5-rime))
+               (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
+                                          (input-method-editors (list fcitx5-rime))
+                                          (utilities (list fcitx5-configtool fcitx5-lua))
                                           (gtk-im-module? #t)
                                           (qt-im-module? #t))))
 #+end_src
@@ -467,7 +495,23 @@ end
 
 #+NAME: dotfile-services
 #+begin_src scheme
-(list (service home-xdg-configuration-files-service-type
+(list (service home-dotfiles-service-type
+             (home-dotfiles-configuration
+               (directories '("../dotfiles"))
+               (layout 'stow)
+               (packages (list "autostart"
+                               "desktop"
+                               "fcitx5"
+                               "termide"
+                               "themes"
+                               "tools"))
+               (excluded '(".*~"
+                           ".*\\.swp"
+                           "/\\.git/.*"
+                           "\\.gitignore"
+                           "\\.github"))))
+
+      (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
                  ("nano/nanorc" ,%default-nanorc)))
 
