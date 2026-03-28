@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: GPL-3.0
+
+# Shanghai fallback location; geoclue is still preferred when available.
+lat: 31.2304
+lng: 121.4737
+usegeoclue: true
+portal: true
+dbusserver: true

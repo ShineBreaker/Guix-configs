@@ -1,0 +1,13 @@
+background-color=$$base00$$F3
+border-color=$$base0D$$
+text-color=$$base07$$FF
+
+[urgency=critical]
+background-color=$$base00$$FF
+border-color=$$base0A$$
+text-color=$$base07$$FF
+
+[urgency=low]
+background-color=$$base00$$F3
+border-color=$$base03$$
+text-color=$$base07$$FF
