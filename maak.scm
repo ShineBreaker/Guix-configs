@@ -67,7 +67,7 @@ Exit code: ~a~%" cmd exit-code)))))
 ;;; Stow 相关逻辑
 (define (stow)
   "使用stow管理dotfiles"
-  ($ (list "bash" "-c" "stow -d ./dotfiles -t ~ /")))
+  ($ (list "bash" "-c" "stow -d ./dotfiles -t ~ default")))
 
 ;;; Maak任务定义
 (define (generate-system-config)
