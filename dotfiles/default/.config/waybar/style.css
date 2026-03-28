@@ -15,8 +15,7 @@
 }
 
 window#waybar {
-  border-radius: 20px;
-  background-color: alpha(@base01, 0.84);
+  background-color: transparent;
   font-family: inherit;
 }
 
@@ -24,10 +23,10 @@ window#waybar {
 .modules-center,
 .modules-right {
   border-radius: 14px;
-  padding: 10px 0px 10px 0px;
-  margin: 5px;
-  background-color: alpha(@base04, 0.16);
-  border: 1px solid alpha(@base04, 0.3);
+  padding: 12px 0px 12px 0px;
+  margin: 0px;
+  background-color: alpha(@base03, 0.82);
+  border: 1.2px solid alpha(@base04, 0.32);
 }
 
 .modules-left:hover,
@@ -69,7 +68,7 @@ tooltip {
 #clock {
   border-radius: 0px;
   color: @base07;
-  padding: 0px;
+  padding: 3px;
   margin: 1px 0px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -126,22 +125,21 @@ tooltip {
 }
 
 #workspaces button:hover {
-  background-color: alpha(@base07, 0.08);
-  box-shadow: inset 0 0 12px alpha(@base07, 0.4);
+  background-color: alpha(@base07, 0.25);
 }
 
 #workspaces button:active {
-  background-color: alpha(@base07, 0.15);
+  background-color: alpha(@base07, 0.04);
 }
 
 #workspaces button.focused {
-  background-color: alpha(@base0D, 0.1);
+  background-color: alpha(@base0D, 0.04);
   color: @base0D;
-  box-shadow: inset 0 0 14px alpha(@base0D, 0.4);
+  box-shadow: inset 0 0 14px alpha(@base0D, 0.32);
 }
 
 #workspaces button.urgent {
-  background-color: alpha(@base08, 0.15);
+  background-color: alpha(@base08, 0.02);
   color: @base08;
   box-shadow: inset 0 0 14px alpha(@base08, 0.4);
   animation: urgent-blink 0.8s ease-in-out infinite;

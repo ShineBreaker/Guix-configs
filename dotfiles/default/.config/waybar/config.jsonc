@@ -6,7 +6,7 @@
   "layer": "top",
   "position": "left",
   "spacing": 0,
-  "margin": "8 -2 8 3",
+  "margin": "8 -3 8 5",
   "ipc": true,
   "on-sigusr1": "hide",
   "on-sigusr2": "show",
