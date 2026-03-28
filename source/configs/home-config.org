@@ -113,6 +113,7 @@
         "emacs-yasnippet"
         "emacs-yasnippet-snippets"
         "emacs-rg"
+        "emacs-eldoc-box"
 
         ;; 编程语言支持
         "emacs-kotlin-mode"
@@ -151,6 +152,7 @@
         "emacs-calfw"
 
         ;; 环境与工具
+        "emacs-gptel"
         "emacs-no-littering"
         "emacs-spinner"
         "emacs-yaml"
@@ -276,6 +278,7 @@
         "papirus-icon-theme"
 
         ;; 开发环境
+        "bun"
         "ccls"
         "clang"
         "gitui"
@@ -295,7 +298,6 @@
         "rust-analyzer"
         "sdkmanager"
         "uv"
-        "zed"
 
         ;; QT框架相关
         "kvantum"
@@ -461,8 +463,6 @@ end
 
 ** dotfiles 管理相关服务
 
-#+NAME: dotfiles-管理相关服务
-
 *** 主要的一些内容
 
 #+NAME: dotfile-services
@@ -499,22 +499,7 @@ end
                                                        (local-file
                                                         "../source/files/git-credential-keepassxc")
                                                        (specs->pkgs "git"
-                                                                    "fish")))
-                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
-                                                "zed.json"
-                                                (local-file
-                                                 "../source/files/zed.json")
-                                                (specs->pkgs "ccls"
-                                                             "clang"
-                                                             "maven"
-                                                             "node"
-                                                             "package-version-server"
-                                                             "python-black"
-                                                             "python-jsbeautifier"
-                                                             "python-lsp-black"
-                                                             "python-lsp-server"
-                                                             "python-pylsp-mypy"
-                                                             "rust-analyzer")))))
+                                                                    "fish")))))
 
       (service home-niri-service-type
                (home-niri-configuration (config (computed-substitution-with-inputs
