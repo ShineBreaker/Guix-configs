@@ -5,6 +5,10 @@ set -eu
 "${HOME}/.config/darkman/script/set-theme.sh" dark
 
 ## Restart foot
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/foot/initial-color-theme.ini"
+rm -f "$CONFIG"
+touch "$CONFIG"
+echo 'initial-color-theme=1' > "$CONFIG"
 pkill -u "$USER" --signal=SIGUSR1 ^foot$
 
 ## Restart waybar
