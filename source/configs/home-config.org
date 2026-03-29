@@ -253,7 +253,6 @@
         "ccls"
         "clang"
         "gradle"
-        "helix"
         "maven"
         "node"
         "openjdk@25"
@@ -273,7 +272,11 @@
         "pandoc"
         "reuse"
         "sdkmanager"
-        "uv"))
+        "uv"
+
+        ;; 编辑器
+        "helix"
+        "zed"))
         #+end_src
 ** 其他软件包
 
@@ -554,8 +557,22 @@ end
                                                        (local-file
                                                         "../source/files/git-credential-keepassxc")
                                                        (specs->pkgs "git"
-                                                                    "fish")))))
-
+                                                                    "fish")))
+                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
+                                                "zed.json"
+                                                (local-file
+                                                 "../source/files/zed.json")
+                                                (specs->pkgs "ccls"
+                                                             "clang"
+                                                             "maven"
+                                                             "node"
+                                                             "package-version-server"
+                                                             "python-black"
+                                                             "python-jsbeautifier"
+                                                             "python-lsp-black"
+                                                             "python-lsp-server"
+                                                             "python-pylsp-mypy"
+                                                             "rust-analyzer")))))
       (service home-niri-service-type
                (home-niri-configuration (config (computed-substitution-with-inputs
                                                  "config.kdl"
