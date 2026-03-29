@@ -28,10 +28,11 @@
     "format": "{icon}",
     "format-icons": {
       "default": "",
-      "Code": "",
       "Browser": "󰆋",
       "Chat": "",
+      "Code": "",
       "Game": "󰺵",
+      "Work": "",
     },
     "tooltip": true,
   },
@@ -118,7 +119,7 @@
     "format-linked": "",
     "format-disconnected": "",
     "tooltip-format": "{ifname} {ipaddr}/{cidr}\nIP: {gwaddr}\n信号强度: {signalStrength}%",
-    "on-click": "nmgui",
+    "on-click": "foot nmtui",
   },
   "wireplumber": {
     "scroll-step": 5,
@@ -189,7 +190,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "左键禁用自动休眠，右键启用自动休眠",
-    "on-click": "herd stop swayidle && notify-send '自动休眠已禁用'",
-    "on-click-right": "herd start swayidle && notify-send '自动休眠已启用'",
+    "on-click": "herd disable swayidle & notify-send '自动休眠已禁用'",
+    "on-click-right": "herd enable swayidle & notify-send '自动休眠已启用'",
   },
 }
