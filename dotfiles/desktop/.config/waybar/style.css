@@ -26,19 +26,7 @@ window#waybar {
   border-radius: 14px;
   padding: 10px 0px 10px 0px;
   margin: 4px;
-  background-color: alpha(@base04, 0.16);
-}
-
-.modules-left:hover,
-.modules-center:hover,
-.modules-right:hover {
   background-color: alpha(@base04, 0.25);
-  box-shadow: inset 0 0 20px alpha(@base07, 0.15);
-  border: 1px solid alpha(@base07, 0.2);
-}
-
-window#waybar.hidden {
-  opacity: 0.2;
 }
 
 tooltip {
