@@ -5,6 +5,7 @@
 function __fastfetch_on_startup --on-event fish_prompt
 
     functions -e __fastfetch_on_startup
+    set -q GUIX_ENVIRONMENT; or set -q CONTAINER_ID; and return
     fastfetch
     echo \n日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。\n | lolcat
 

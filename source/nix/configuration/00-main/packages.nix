@@ -1,9 +1,8 @@
-{ config, pkgs, ... }:
+{ pkgs, ... }:
 
 {
   imports = [
     ../programs/Develop/code.nix
-    ../programs/Utility/ai-tools.nix
   ];
 
   home.packages = with pkgs; [
@@ -18,6 +17,8 @@
     gamescope
 
     pmbootstrap
+
+    sbctl
 
     libsForQt5.qt5ct
     kdePackages.qt6ct
