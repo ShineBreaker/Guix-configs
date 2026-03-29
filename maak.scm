@@ -28,12 +28,15 @@
         (false-if-exception (close-port port))))))
 
 ;;; 配置路径
-(define repo-root
-  (getcwd))
+(define repo-root (getcwd))
+(define home-dir (getenv "HOME"))
 (define configs-dir
   (string-append repo-root "/source/configs"))
+(define nix-dir
+  (string-append repo-root "/source/nix"))
 (define tmp-dir
   (string-append repo-root "/tmp"))
+
 (define channel-fresh
   (string-append configs-dir "/../channel.scm"))
 (define channel-lock
@@ -159,6 +162,21 @@ Exit code: ~a~%" cmd exit-code)))))
            (strftime "%Y"
                      (localtime (time-second (current-time))))
            ".")))
+
+(define (nix)
+  "安装nix包"
+  ($ (list (string-append home-dir "/.nix-profile/bin/home-manager") "switch" "-b" "backup" "--flake" (string-append nix-dir "/#Guix") "--extra-experimental-features" "nix-command" "--extra-experimental-features" "flakes")))
+
+(define (nix-init)
+  "初始化nix"
+  ($ (list "nix-channel" "--add" "https://github.com/nix-community/home-manager/archive/master.tar.gz" "home-manager"))
+  ($ (list "nix-channel" "--update"))
+  ($ (list "nix-shell" "<home-manager>" "-A" "install")))
+
+(define (nix-update)
+  "更新nix包"
+  ($ (list "nix-channel" "--update"))
+  ($ (list "nix" "flake" "update" "--flake" (string-append nix-dir "/#Guix"))))
 
 (define (default)
   ($ (list "maak" "--list")))

@@ -2,8 +2,7 @@
 
 {
   imports = [
-    ../home/programs/Develop/jujutsu.nix
-    ../home/programs/Develop/pixi.nix
+    ../programs/System/nix.nix
   ];
 
   targets.genericLinux.enable = true;
@@ -19,21 +18,4 @@
   programs.home-manager.enable = true;
 
   xdg.enable = true;
-
-  home.packages = with pkgs; [
-    android-tools
-    qtscrcpy
-    scrcpy
-
-    sarasa-gothic
-    bibata-cursors
-
-    gamemode
-    gamescope
-
-    pmbootstrap
-
-    libsForQt5.qt5ct
-    kdePackages.qt6ct
-  ];
 }
