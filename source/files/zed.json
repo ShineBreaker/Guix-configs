@@ -1,6 +1,6 @@
 {
-  "ui_font_family": "Sarasa Gothic UI SC",
-  "buffer_font_family": "Maple Mono Normal NF CN",
+  "ui_font_family": "Sarasa UI SC",
+  "buffer_font_family": "Maple Mono NF CN",
   "agent_servers": {
     "cline": {
       "type": "registry"
@@ -21,171 +21,162 @@
     "openai_compatible": {
       "Zhipu AI": {
         "api_url": "https://open.bigmodel.cn/api/coding/paas/v4",
-        "available_models": [
-          {
-            "name": "glm-5.1",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true
-            }
-          },
-          {
-            "name": "glm-5-turbo",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": {
-              "tools": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true
-            }
-          },
-          {
-            "name": "glm-5",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true
-            }
-          },
-          {
-            "name": "glm-4.5-air",
-            "max_tokens": 200000,
-            "max_output_tokens": 32000,
-            "max_completion_tokens": 200000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true
-            }
+        "available_models": [{
+          "name": "glm-5.1",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": true,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
           }
-        ]
+        }, {
+          "name": "glm-5-turbo",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": true,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-5",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-4.5-air",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }]
       },
       "Aliyun": {
         "api_url": "https://coding.dashscope.aliyuncs.com/v1",
-        "available_models": [
-          {
-            "name": "kimi-k2.5",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "glm-4.7",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "glm-5",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "MiniMax-M2.5",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "qwen3.5-plus",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "qwen3-max-2026-01-23",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "qwen3-coder-next",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-          {
-            "name": "qwen3-coder-plus",
-            "max_tokens": 256000,
-            "max_output_tokens": 65536,
-            "max_completion_tokens": 256000,
-            "capabilities": {
-              "tools": true,
-              "images": false,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "chat_completions": true,
-            },
-          },
-        ],
-      },
-    },
+        "available_models": [{
+          "name": "kimi-k2.5",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-4.7",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-5",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "MiniMax-M2.5",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3.5-plus",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3-max-2026-01-23",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3-coder-next",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "qwen3-coder-plus",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }],
+        "active_model": {
+          "provider": "Zhipu AI",
+          "model": "glm-5.1",
+          "enable_thinking": false
+        }
+      }
+    }
   },
   "active_pane_modifiers": {
     "border_size": 2.0,
@@ -200,8 +191,8 @@
     "model_parameters": [],
     "play_sound_when_agent_done": true,
     "tool_permissions": {
-      "default": "allow",
-    },
+      "default": "allow"
+    }
   },
   "auto_install_extensions": {
     "astro": true,
