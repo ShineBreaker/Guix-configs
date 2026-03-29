@@ -3,6 +3,7 @@
     "theme": "Orchis-Teal-Dark",
     "theme-kvantum": "Orchis-solidDark",
     "icon": "Papirus-Dark",
+    "prefer-dark": "1",
     "colors": {
         "base00": "#212121",
         "base01": "#303030",
@@ -23,9 +24,10 @@
       }
   },
   "light": {
-    "theme": "Orchis-Teal-Light",
+    "theme": "Orchis-Teal",
     "theme-kvantum":"Orchis",
-    "icon": "Papirus-Light",
+    "icon": "Papirus",
+    "prefer-dark": "0",
     "colors": {
         "base00": "#FAFAFA",
         "base01": "#E7EAEC",

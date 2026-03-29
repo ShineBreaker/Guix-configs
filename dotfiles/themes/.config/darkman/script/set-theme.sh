@@ -22,9 +22,8 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-root_dir="$(cd -- "${script_dir}/.." && pwd)"
 json_file="${script_dir}/config.json"
-template_dir="${root_dir}/config"
+template_dir="${HOME}/.config/darkman/config"
 target_root="${HOME}/.config"
 
 if [[ ! -f "$json_file" ]]; then
@@ -78,6 +77,9 @@ while IFS= read -r -d '' src; do
   dst_dir="$(dirname -- "$dst")"
   mkdir -p -- "$dst_dir"
 
+  # Remove existing file (symlink or read-only) before writing
+  rm -f -- "$dst"
+
   while IFS= read -r placeholder; do
     [[ -z "$placeholder" ]] && continue
     pkey="${placeholder#\$\$}"
@@ -88,7 +90,7 @@ while IFS= read -r -d '' src; do
     fi
   done < <(grep -oE '\$\$[A-Za-z0-9_-]+\$\$' "$src" | sort -u || true)
 
-  # Force overwrite even if noclobber is enabled in the caller environment.
-  sed -f "$sed_script" "$src" >| "$dst"
+  # Write the processed template to destination
+  sed -f "$sed_script" "$src" > "$dst"
   chmod --reference="$src" "$dst" 2>/dev/null || true
-done < <(find "$template_dir" -type f -print0)
+done < <(find "$template_dir" \( -type f -o -type l \) -print0)
