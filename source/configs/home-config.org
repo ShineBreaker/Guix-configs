@@ -185,7 +185,11 @@
         "emacs-ox-gfm"
 
         ;; 帮助与文档
+        "emacs-fold-dwim"
         "emacs-helpful"
+        "emacs-origami-ts"
+        "emacs-rainbow-delimiters"
+        "emacs-symbol-overlay"
 
         ;; 邮件与日历
         "emacs-calfw"
@@ -198,7 +202,7 @@
         "graphviz"
         "plantuml"
         "sbcl"
-        "texlive-scheme-full"
+        "texlive-scheme-basic"
 
         ;; Tree-sitter（语法解析）
         "tree-sitter"

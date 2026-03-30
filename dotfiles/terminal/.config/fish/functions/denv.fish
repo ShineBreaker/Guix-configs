@@ -3,27 +3,65 @@
 # SPDX-License-Identifier: GPL-3.0
 
 # =============================================================================
-# denv - 项目 direnv 环境管理器
+# denv - 项目环境管理器 (direnv + Guix + 语言支持)
 #
-# 基于 provider 架构，每个 provider 提供三个函数：
-#   __denv_provider_<name>_init    - 创建 provider 特有的文件
-#   __denv_provider_<name>_envrc   - 输出该 provider 的 .envrc 片段
-#   __denv_provider_<name>_files   - 列出该 provider 管理的文件
+# 子命令:
+#   denv init [FLAGS]    初始化项目文件夹结构 + direnv 环境
+#   denv load [FLAGS]    仅创建 direnv 相关文件
+#   denv remove          删除 denv 管理的所有文件
 #
-# 新增语言支持时：
-#   1. 在下方创建 __denv_provider_<name>_{init,envrc,files} 三个函数
-#   2. 在 __denv_all_providers 中注册 provider 名称
-#   3. 在 denv 主函数中添加对应的 --flag 处理
+# 扩展新语言:
+#   1. 在 "Provider 定义" 区域创建以下函数:
+#      __denv_provider_<name>_init       创建 provider 特有文件
+#      __denv_provider_<name>_envrc      输出 .envrc 片段
+#      __denv_provider_<name>_files      列出管理的文件 (用于 remove)
+#      __denv_provider_<name>_dirs       列出要创建的目录 (用于 init)
+#      __denv_provider_<name>_gitignore  输出 .gitignore 片段 (用于 init)
+#   2. 在 __denv_all_providers 中注册名称
+#   3. 在 denv 主函数的 flag 解析中添加对应的 --flag
 # =============================================================================
 
-# ----- Provider Registry -----------------------------------------------------
 
-function __denv_all_providers -d "List all registered provider names"
+# =============================================================================
+# 全局配置 — 修改此区域以自定义默认行为
+# =============================================================================
+
+# ----- 基础项目结构 -----------------------------------------------------------
+
+function __denv_config_base_dirs -d "每个项目都创建的目录"
+    echo src
+    echo doc
+end
+
+function __denv_config_base_gitignore -d "每个项目都写入 .gitignore 的基础内容"
+    echo "# direnv"
+    echo ".direnv/"
+    echo ""
+    echo "# Editor"
+    echo "*~"
+    echo ""
+    echo "# OS"
+    echo ".DS_Store"
+    echo "Thumbs.db"
+end
+
+function __denv_config_init_git -d "init 时是否自动执行 git init (true/false)"
+    echo true
+end
+
+# ----- Provider 注册表 --------------------------------------------------------
+
+function __denv_all_providers -d "所有已注册的 provider 名称"
     echo guix
     echo py
 end
 
-# ----- Provider: guix (always active) ----------------------------------------
+
+# =============================================================================
+# Provider 定义 — 每个语言/工具一个区块
+# =============================================================================
+
+# ----- Provider: guix (始终激活) ----------------------------------------------
 
 function __denv_provider_guix_init
     if not test -f manifest.scm
@@ -38,14 +76,22 @@ function __denv_provider_guix_init
 end
 
 function __denv_provider_guix_envrc
-    echo "use guix shell --manifest=./manifest.scm"
+    echo "use guix"
 end
 
 function __denv_provider_guix_files
     echo manifest.scm
 end
 
-# ----- Provider: py (activated with --py) ------------------------------------
+function __denv_provider_guix_dirs
+    # guix 不需要额外目录
+end
+
+function __denv_provider_guix_gitignore
+    # guix 不需要额外 gitignore 规则
+end
+
+# ----- Provider: py (通过 --py 激活) ------------------------------------------
 
 function __denv_provider_py_init
     if not test -f .python-version
@@ -76,7 +122,73 @@ function __denv_provider_py_files
     echo .python-version
 end
 
-# ----- Internal: load ---------------------------------------------------------
+function __denv_provider_py_dirs
+    echo tests
+end
+
+function __denv_provider_py_gitignore
+    echo ""
+    echo "# Python"
+    echo ".venv/"
+    echo "__pycache__/"
+    echo "*.pyc"
+    echo "*.egg-info/"
+end
+
+
+# =============================================================================
+# 内部逻辑 — 一般不需要修改
+# =============================================================================
+
+# ----- init -------------------------------------------------------------------
+
+function __denv_init -d "Initialize project directory structure and direnv environment"
+    set -l providers $argv
+
+    # --- Collect all directories ---
+    set -l dirs (__denv_config_base_dirs)
+    for provider in $providers
+        set -a dirs (__denv_provider_$provider\_dirs)
+    end
+
+    for dir in $dirs
+        if not test -d "$dir"
+            mkdir -p "$dir"
+            echo "✔ 已创建目录 $dir/"
+        else
+            echo "· 目录 $dir/ 已存在，跳过"
+        end
+    end
+
+    # --- Assemble .gitignore ---
+    set -l gitignore_content (__denv_config_base_gitignore)
+    for provider in $providers
+        set -a gitignore_content (__denv_provider_$provider\_gitignore)
+    end
+
+    if not test -f .gitignore
+        printf "%s\n" $gitignore_content > .gitignore
+        echo "✔ 已创建 .gitignore"
+    else
+        echo "· .gitignore 已存在，跳过"
+    end
+
+    # --- Git init ---
+    if test (__denv_config_init_git) = "true"
+        if not test -d .git
+            git init --quiet
+            echo "✔ 已初始化 Git 仓库"
+        else
+            echo "· Git 仓库已存在，跳过"
+        end
+    end
+
+    # --- Delegate to load for direnv setup ---
+    echo ""
+    __denv_load $providers
+end
+
+# ----- load -------------------------------------------------------------------
 
 function __denv_load -d "Create direnv environment files"
     set -l providers $argv
@@ -84,8 +196,7 @@ function __denv_load -d "Create direnv environment files"
     # Safety check before overwriting .envrc
     if test -f .envrc
         echo "⚠ .envrc 已存在，是否覆盖？[y/N]"
-        read -
-l response
+        read -l response
         if test "$response" != "y" -a "$response" != "Y"
             echo "已取消"
             return 0
@@ -116,10 +227,10 @@ l response
     end
 end
 
-# ----- Internal: remove -------------------------------------------------------
+# ----- remove -----------------------------------------------------------------
 
 function __denv_remove -d "Remove direnv environment files"
-    # Always scan all known providers so nothing is left behind
+    # Scan all known providers so nothing is left behind
     set -l all_providers (__denv_all_providers)
 
     set -l files .envrc
@@ -135,7 +246,7 @@ function __denv_remove -d "Remove direnv environment files"
         end
     end
 
-    # Check for .venv (managed by uv but created through our workflow)
+    # Check for .venv (created through py provider workflow)
     set -l has_venv false
     if test -d .venv
         set has_venv true
@@ -179,39 +290,42 @@ function __denv_remove -d "Remove direnv environment files"
     echo "✔ 清理完成"
 end
 
-# ----- Internal: usage --------------------------------------------------------
+# ----- usage ------------------------------------------------------------------
 
 function __denv_usage
-    echo "用法: denv [load] [OPTIONS]   初始化项目 direnv 环境"
-    echo "      denv remove             删除 direnv 相关文件"
+    echo "用法:"
+    echo "  denv init [FLAGS]    初始化项目文件夹结构 + direnv 环境"
+    echo "  denv load [FLAGS]    仅创建 direnv 相关文件"
+    echo "  denv remove          删除 denv 管理的所有文件"
     echo ""
-    echo "选项:"
+    echo "FLAGS:"
     echo "  --py     启用 Python (uv) 环境支持"
-    echo "  --help   显示帮助信息"
+    echo "  --help   显示此帮助信息"
     echo ""
     echo "示例:"
-    echo "  denv              # Guix + direnv"
-    echo "  denv load --py    # Guix + Python (uv) + direnv"
-    echo "  denv remove       # 清理所有 denv 管理的文件"
+    echo "  denv init          # 初始化通用项目 (src/ + doc/ + Guix + direnv)"
+    echo "  denv init --py     # 初始化 Python 项目 (额外 tests/ + uv + venv)"
+    echo "  denv load          # 仅配置 direnv (不创建目录结构)"
+    echo "  denv load --py     # 仅配置 direnv + Python"
+    echo "  denv remove        # 清理所有 denv 管理的文件"
 end
 
-# ----- Main Entry Point -------------------------------------------------------
+# ----- 主入口 -----------------------------------------------------------------
 
-function denv -d "Manage project direnv environments with Guix and language support"
+function denv -d "Manage project environments with Guix, direnv and language support"
     set -l cmd load
     set -l argv_tail $argv
 
     # Parse subcommand
     if test (count $argv_tail) -gt 0
         switch $argv_tail[1]
-            case load remove
+            case init load remove
                 set cmd $argv_tail[1]
                 set -e argv_tail[1]
         end
     end
 
-    # Parse flags -> build active providers list
-    # guix is always active
+    # Parse flags -> build providers list (guix always active)
     set -l providers guix
 
     for arg in $argv_tail
@@ -231,6 +345,8 @@ function denv -d "Manage project direnv environments with Guix and language supp
     end
 
     switch $cmd
+        case init
+            __denv_init $providers
         case load
             __denv_load $providers
         case remove
