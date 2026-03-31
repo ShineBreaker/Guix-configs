@@ -121,7 +121,6 @@ Exit code: ~a~%" cmd exit-code)))))
                               (lambda ()
                                 ($guix `("describe" "--format=channels")
                                        #:channels channel-fresh)))))
-
 (define (upgrade)
   "更新lock file"
   ($ (list "git" "submodule" "update"))
