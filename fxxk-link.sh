@@ -34,37 +34,37 @@ while IFS= read -r -d '' link_path; do
         echo "跳过目录链接: $link_path"
         continue
     fi
-    
+
     # 检查链接是否有效
     if [[ ! -e "$link_path" ]]; then
         echo "警告: 跳过损坏的链接: $link_path" >&2
         ((failed++)) || true
         continue
     fi
-    
+
     # 获取真实文件路径
     real_path=$(readlink -f "$link_path" 2>/dev/null || realpath "$link_path")
-    
+
     # 获取原文件权限
     perms=$(stat -c %a "$link_path" 2>/dev/null || stat -f %Lp "$link_path")
-    
+
     echo "处理: $link_path -> $real_path"
-    
+
     if [[ "$DRY_RUN" == false ]]; then
         # 创建临时文件（同一文件系统，避免跨设备移动）
         tmp_file=$(mktemp "$(dirname "$link_path")/.tmp.XXXXXX")
-        
+
         # 使用 cat 复制内容（如你所要求）
         if cat "$link_path" > "$tmp_file"; then
             # 删除符号链接
             rm "$link_path"
-            
+
             # 重命名为原文件名
             mv "$tmp_file" "$link_path"
-            
+
             # 恢复权限
             chmod "$perms" "$link_path" 2>/dev/null || true
-            
+
             ((++count))
         else
             echo "错误: 无法读取 $link_path" >&2
@@ -74,7 +74,7 @@ while IFS= read -r -d '' link_path; do
     else
         ((++count))
     fi
-    
+
 done < <(find "$TARGET_DIR" -type l -print0)
 
 echo ""
