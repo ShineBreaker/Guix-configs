@@ -93,7 +93,6 @@
         "xprop"
 
         ;; XDG 相关组件
-        "nautilus" ; portal-gnome 依赖这个正常工作
         "xdg-dbus-proxy"
         "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
@@ -213,6 +212,8 @@
         "tree-sitter-dockerfile"
         "tree-sitter-go"
         "tree-sitter-html"
+        "tree-sitter-java"
+        "tree-sitter-java-properties"
         "tree-sitter-javascript"
         "tree-sitter-json"
         "tree-sitter-python"
@@ -261,6 +262,7 @@
         "node"
         "openjdk@25"
         "pnpm@10"
+        "python"
         "python-black"
         "python-jsbeautifier"
         "python-lsp-black"
