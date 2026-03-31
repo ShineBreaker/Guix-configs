@@ -22,9 +22,7 @@
 (define fixed-machine-id (generate-machine-id username))
 
 (define %data-dirs
-  '(".var"
-
-    ".local/share/osu"
+  '(".local/share/osu"
     ".local/share/PrismLauncher"
     ".local/share/Sandbox"
 
