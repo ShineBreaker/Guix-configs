@@ -43,7 +43,7 @@ tooltip {
 #custom-reboot,
 #custom-search,
 #custom-hibernate,
-#custom-caffeine,
+#idle_inhibitor,
 #workspaces button,
 #tray,
 #backlight,
@@ -98,7 +98,7 @@ tooltip {
 #custom-hibernate {
   color: @base0B;
 }
-#custom-caffeine {
+#idle_inhibitor {
   color: @base09;
 }
 
@@ -149,7 +149,7 @@ tooltip {
   box-shadow: inset 0 0 14px alpha(@base0B, 0.5);
 }
 
-#custom-caffeine:hover {
+#idle_inhibitor:hover {
   box-shadow: inset 0 0 14px alpha(@base09, 0.5);
 }
 
@@ -173,7 +173,7 @@ tooltip {
 #custom-poweroff:hover,
 #custom-reboot:hover,
 #custom-hibernate:hover,
-#custom-caffeine:hover,
+#idle_inhibitor:hover,
 #custom-search:hover {
   background-color: alpha(@base07, 0.15);
 }
@@ -182,9 +182,13 @@ tooltip {
 #custom-poweroff:active,
 #custom-reboot:active,
 #custom-hibernate:active,
-#custom-caffeine:active,
+#idle_inhibitor:active,
 #custom-search:active {
   background-color: alpha(@base07, 0.3);
+}
+
+#idle_inhibitor.activated {
+  background-color: alpha(@base09, 0.15);
 }
 
 #battery.charging {

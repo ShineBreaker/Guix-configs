@@ -144,7 +144,7 @@
   "group/power": {
     "orientation": "inherit",
     "modules": [
-      "custom/caffeine",
+      "idle_inhibitor",
       "custom/hibernate",
       "custom/lock",
       "custom/poweroff",
@@ -186,11 +186,12 @@
     "tooltip-format": "搜索",
     "on-click": "fuzzel",
   },
-  "custom/caffeine": {
-    "format": "",
+  "idle_inhibitor": {
+    "format": "{icon}",
     "tooltip": true,
-    "tooltip-format": "左键禁用自动休眠，右键启用自动休眠",
-    "on-click": "herd disable swayidle & notify-send '自动休眠已禁用'",
-    "on-click-right": "herd enable swayidle & notify-send '自动休眠已启用'",
-  },
+    "format-icons": {
+      "activated": "󰅶",
+      "deactivated": "󰾪"
+    },
+  }
 }
