@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "a08c01b56eb05aaa459510a37509368094d8d979")
+       (commit "59446cc8be53c32f5f0bca62ba3fc06ffaac843d")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -12,7 +12,7 @@
        (name 'jeans)
        (url "https://codeberg.org/BrokenShine/jeans.git")
        (branch "main")
-       (commit "116b5354ebf58911719e1666092749eb213457d4")
+       (commit "1932046f8d123bfb3719a8c1e754d0d57e9e7043")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
