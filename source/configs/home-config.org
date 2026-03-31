@@ -80,17 +80,30 @@
         "swww"
         "waypaper"
 
+        ;; 字体
+        "font-awesome"
+        "font-google-noto-emoji"
+        "font-nerd-fonts-iosevka"
+        "font-maple-font-nf-cn"
+
         ;; 输入法
         "fcitx5"
         "fcitx5-lua"
 
-        ;; 桌面服务
+        ;; 工具
         "cliphist"
+        "dconf-editor"
         "dex"
         "libnotify"
         "setxkbmap"
         "wl-clipboard"
         "xprop"
+
+        ;; Thunar 插件
+        "thunar-archive-plugin"
+        "thunar-media-tags-plugin"
+        "thunar-volman"
+        "thunar-vcs-plugin"
 
         ;; XDG 相关组件
         "xdg-dbus-proxy"
@@ -154,8 +167,7 @@
         "emacs-yasnippet-snippets"
 
         ;; 编程语言支持
-        "emacs-geiser"
-        "emacs-geiser-guile"
+        "emacs-arei"
         "emacs-json-mode"
         "emacs-kotlin-mode"
         "emacs-markdown-mode"
@@ -199,6 +211,7 @@
 
         ;; 编程语言运行时与工具
         "graphviz"
+        "guile-ares-rs"
         "plantuml"
         "sbcl"
         "texlive-scheme-basic"
@@ -216,6 +229,7 @@
         "tree-sitter-java-properties"
         "tree-sitter-javascript"
         "tree-sitter-json"
+        "tree-sitter-nix"
         "tree-sitter-python"
         "tree-sitter-rust"
         "tree-sitter-typescript"))
@@ -274,6 +288,8 @@
         "bun"
         "direnv"
         "gitui"
+        "git-filter-repo"
+        "git-lfs"
         "jq"
         "pandoc"
         "reuse"
@@ -292,6 +308,17 @@
         ;; AI工具
         "claude-code"
         "codex"
+
+        ;; 浏览器及其插件
+        "ungoogled-chromium-wayland"
+        "ublock-origin-chromium"
+
+        ;; 解码器
+        "gstreamer"
+        "gst-plugins-base"
+        "gst-plugins-good"
+        "gst-plugins-bad"
+        "gst-plugins-ugly-full"
 
         ;; 影音
         "easyeffects"

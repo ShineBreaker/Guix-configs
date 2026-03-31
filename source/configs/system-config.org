@@ -284,11 +284,6 @@ Btrfs 的架构，同时高强度地使用subvol功能
  "netcat-openbsd"
  "wget"
 
- ;; 开发工具
- "gcc-toolchain"
- "git"
- "git-filter-repo"
- "git-lfs"
 
  ;; 桌面环境
  "fuzzel"
@@ -298,7 +293,6 @@ Btrfs 的架构，同时高强度地使用subvol功能
 
  ;; 桌面服务
  "brightnessctl"
- "dconf-editor"
  "gnome-keyring"
  "gvfs"
  "libgnome-keyring"
@@ -310,31 +304,17 @@ Btrfs 的架构，同时高强度地使用subvol功能
  "exo"
  "file-roller"
  "thunar"
- "thunar-archive-plugin"
- "thunar-media-tags-plugin"
- "thunar-volman"
- "thunar-vcs-plugin"
  "tumbler"
  "xfconf"
 
- ;; 解码器
- "gstreamer"
- "gst-plugins-base"
- "gst-plugins-good"
- "gst-plugins-bad"
- "gst-plugins-ugly-full"
-
  ;; 字体
- "font-awesome"
- "font-google-noto-emoji"
- "font-nerd-fonts-iosevka"
- "font-maple-font-nf-cn"
  "font-sarasa-gothic"
 
  ;; 命令行工具
  "fastfetch-minimal"
  "fish"
  "foot"
+ "git"
  "stow"
 
  ;; 虚拟化
