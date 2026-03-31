@@ -19,11 +19,6 @@
     pmbootstrap
     sbctl
 
-    (qq.override {
-      commandLineArgs = "--enable-wayland-ime --wayland-text-input-version=3";
-    })
-    wechat
-
     postman
 
     libsForQt5.qt5ct
