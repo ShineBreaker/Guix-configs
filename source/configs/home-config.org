@@ -168,9 +168,13 @@
 
         ;; 编程语言支持
         "emacs-arei"
+        "emacs-fish-mode"
+        "emacs-fish-completion"
         "emacs-json-mode"
+        "emacs-helm-fish-completion"
         "emacs-kotlin-mode"
         "emacs-markdown-mode"
+        "emacs-nix-mode"
         "emacs-rust-mode"
         "emacs-sly"
         "emacs-typescript-mode"
@@ -195,7 +199,7 @@
         "emacs-org-roam"
         "emacs-ox-gfm"
 
-        ;; 帮助与文档
+        ;; 显示优化
         "emacs-fold-dwim"
         "emacs-helpful"
         "emacs-origami-ts"
@@ -244,6 +248,7 @@
         "atuin"
         "broot"
         "btop"
+        "kitty-full"
 
         ;; 运行器
         "just"
@@ -271,10 +276,12 @@
         ;; 开发环境
         "ccls"
         "clang"
+        "jdtls-bin"
         "gradle"
         "maven"
         "node"
         "openjdk@25"
+        "package-version-server"
         "pnpm@10"
         "python"
         "python-black"
@@ -325,7 +332,7 @@
         "helvum"
         "mpv"
         "nomacs"
-        "obs-with-cef"
+        "obs"
         "obs-pipewire-audio-capture"
         "obs-vkcapture"
 
@@ -595,17 +602,19 @@ end
                                                 "zed.json"
                                                 (local-file
                                                  "../source/files/zed.json")
-                                                (specs->pkgs "ccls"
-                                                             "clang"
-                                                             "maven"
-                                                             "node"
-                                                             "package-version-server"
-                                                             "python-black"
-                                                             "python-jsbeautifier"
-                                                             "python-lsp-black"
-                                                             "python-lsp-server"
-                                                             "python-pylsp-mypy"
-                                                             "rust-analyzer")))))
+                                                (specs->pkgs
+                                                 "ccls"
+                                                 "clang"
+                                                 "jdtls-bin"
+                                                 "maven"
+                                                 "node"
+                                                 "package-version-server"
+                                                 "python-black"
+                                                 "python-jsbeautifier"
+                                                 "python-lsp-black"
+                                                 "python-lsp-server"
+                                                 "python-pylsp-mypy"
+                                                 "rust-analyzer")))))
       (service home-niri-service-type
                (home-niri-configuration (config (computed-substitution-with-inputs
                                                  "config.kdl"
