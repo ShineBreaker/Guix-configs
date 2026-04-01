@@ -346,7 +346,6 @@
         "keepassxc"
         "git-credential-keepassxc"
         "kdeconnect"
-        "libreoffice"
         "seahorse"
         "virt-manager"
         "zen-browser-bin"
