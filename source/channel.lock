@@ -12,7 +12,7 @@
        (name 'jeans)
        (url "https://codeberg.org/BrokenShine/jeans.git")
        (branch "main")
-       (commit "8c93edad47ef82ca68d9539c8fec606d48466210")
+       (commit "d743c8a74626d79bb23ead4103d364caac9c7a9e")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
