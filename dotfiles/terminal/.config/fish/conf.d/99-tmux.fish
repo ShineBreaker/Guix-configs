@@ -6,7 +6,7 @@ if status is-interactive
 
     # ========== Foot 终端自动 Tmux ==========
     # 条件：在 Foot 中 + 不在 Tmux 内 + 不在容器内
-    if test "$TERM" = "foot"; and not set -q TMUX; and not set -q CONTAINER_ID
+    if test "$TERM" = "foot"; or test "$TERM" = "xterm-kitty"; and not set -q TMUX; and not set -q CONTAINER_ID
 
         # 主 session 作为会话组锚点；每个终端仍有自己的 session 视图
         set -l session_group "main"

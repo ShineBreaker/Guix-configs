@@ -110,7 +110,7 @@
     "format": "",
     "tooltip": true,
     "tooltip-format": "RAM: {used}G / {total}G\nSwap: {swapUsed}G / {swapTotal}G",
-    "on-click": "foot btop",
+    "on-click": "kitty btop",
   },
   "network": {
     "interval": 1,
@@ -119,7 +119,7 @@
     "format-linked": "",
     "format-disconnected": "",
     "tooltip-format": "{ifname} {ipaddr}/{cidr}\nIP: {gwaddr}\n信号强度: {signalStrength}%",
-    "on-click": "foot nmtui",
+    "on-click": "kitty nmtui",
   },
   "wireplumber": {
     "scroll-step": 5,
