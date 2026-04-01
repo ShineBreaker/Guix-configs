@@ -322,6 +322,11 @@
         "path": "$$bin/ccls$$"
       }
     },
+    "jdtls": {
+      "binary": {
+        "path": "$$bin/jdtls$$"
+      }
+    },
     "kotlin-language-server": {
       "settings": {
         "compiler": {
