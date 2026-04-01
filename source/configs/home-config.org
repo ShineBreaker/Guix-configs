@@ -333,6 +333,7 @@
         "mpv"
         "nomacs"
         "obs"
+        "obs-wlrobs"
         "obs-pipewire-audio-capture"
         "obs-vkcapture"
 
@@ -402,6 +403,7 @@
 
 (use-package-modules fcitx5
                      freedesktop
+                     gnome
                      gnupg
                      kde-internet
                      linux
@@ -523,6 +525,7 @@ end
                               (make-shepherd-service swayidle "/bin/swayidle" '(dbus))
                               (make-shepherd-service waybar "/bin/waybar" '(dbus))
                               (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(dbus))
+                              (make-shepherd-service xdg-desktop-portal-gnome "/libexec/xdg-desktop-portal-gnome" '(xdg-desktop-portal))
                               (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(xdg-desktop-portal))))))
 #+end_src
 
