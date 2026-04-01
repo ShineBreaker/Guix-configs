@@ -188,7 +188,7 @@ tooltip {
 }
 
 #idle_inhibitor.activated {
-  background-color: alpha(@base09, 0.15);
+  background-color: alpha(@base09, 0.3);
 }
 
 #battery.charging {
