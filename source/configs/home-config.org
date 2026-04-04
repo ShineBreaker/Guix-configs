@@ -75,6 +75,7 @@
 (cons* (specs->pkgs+out
         ;; 桌面组件
         "fuzzel"
+        "mako"
         "swaylock-effects"
         "swayidle"
         "swww"
@@ -129,6 +130,7 @@
         ;; 补全与迷你缓冲区
         "emacs-consult"
         "emacs-corfu"
+        "emacs-corfu-terminal"
         "emacs-embark"
         "emacs-marginalia"
         "emacs-orderless"
@@ -200,9 +202,11 @@
         "emacs-ox-gfm"
 
         ;; 显示优化
+        "emacs-flycheck"
         "emacs-fold-dwim"
         "emacs-helpful"
         "emacs-origami-ts"
+        "emacs-posframe"
         "emacs-rainbow-delimiters"
         "emacs-symbol-overlay"
 
@@ -723,10 +727,15 @@ end
                            "--ozone-platform-hint=wayland "
                            "--enable-wayland-ime "
                            "--wayland-text-input-version=3"))
-                         ("_JAVA_OPTIONS" unquote
-                          (string-append
-                           "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
-                           "-Dawt.toolkit.name=WLToolkit"))))))
+                          ("_JAVA_OPTIONS" unquote
+                           (string-append
+                            "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
+                            "-Dawt.toolkit.name=WLToolkit"))
+                          ("XDG_DATA_DIRS" unquote
+                           (string-append
+                            "$HOME/.nix-profile/share:"
+                            "/nix/var/nix/profiles/default/share:"
+                            "$XDG_DATA_DIRS"))))))
 #+end_src
 
 * Font
