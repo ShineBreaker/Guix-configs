@@ -11,8 +11,14 @@ touch "$CONFIG"
 echo 'initial-color-theme=dark' > "$CONFIG"
 pkill -u "$USER" --signal=SIGUSR1 ^foot$
 
+## Restart kitty
+pkill -u "$USER" --signal=SIGUSR1 ^kitty$
+
 ## Restart waybar
 pkill -u "$USER" --signal=SIGHUP ^waybar$
+
+## Restart mako
+makoctl reload
 
 ## Set GNOME settings
 guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'

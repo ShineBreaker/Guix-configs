@@ -14,6 +14,12 @@ pkill -u "$USER" --signal=SIGUSR2 ^foot$
 ## Restart waybar
 pkill -u "$USER" --signal=SIGHUP ^waybar$
 
+## Restart kitty
+pkill -u "$USER" --signal=SIGUSR1 ^kitty$
+
+## Restart mako
+makoctl reload
+
 ## Set GNOME settings
 guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
 guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme 'Orchis-Teal'
