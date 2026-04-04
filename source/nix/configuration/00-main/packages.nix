@@ -10,6 +10,8 @@
     qtscrcpy
     scrcpy
 
+    gpu-screen-recorder-gtk
+
     sarasa-gothic
     bibata-cursors
 
@@ -19,7 +21,11 @@
     pmbootstrap
     sbctl
 
+    beekeeper-studio
     postman
+
+    opencode
+    opencode-desktop
 
     libsForQt5.qt5ct
     kdePackages.qt6ct
