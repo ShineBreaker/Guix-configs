@@ -100,12 +100,6 @@
         "wl-clipboard"
         "xprop"
 
-        ;; Thunar 插件
-        "thunar-archive-plugin"
-        "thunar-media-tags-plugin"
-        "thunar-volman"
-        "thunar-vcs-plugin"
-
         ;; XDG 相关组件
         "xdg-dbus-proxy"
         "xdg-desktop-portal-gnome"
@@ -252,6 +246,7 @@
         "atuin"
         "broot"
         "btop"
+        "starship"
         "kitty-full"
 
         ;; 运行器
@@ -455,7 +450,9 @@
 ")
                                                              (specs->pkgs
                                                               "atuin"
-                                                              "direnv" "fzf"
+                                                              "direnv"
+                                                              "fzf"
+                                                              "starship"
                                                               "zoxide")))))
 
       (simple-service 'fish-functions
@@ -476,6 +473,7 @@ and begin
   $$bin/atuin$$ init fish | source
   $$bin/direnv$$ hook fish | source
   $$bin/fzf$$ --fish | source
+  $$bin/starship$$ init fish | source
   $$bin/zoxide$$ init fish | source
 
 end
