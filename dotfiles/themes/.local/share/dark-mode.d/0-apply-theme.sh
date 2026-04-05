@@ -12,7 +12,7 @@ echo 'initial-color-theme=dark' > "$CONFIG"
 pkill -u "$USER" --signal=SIGUSR1 ^foot$ || true
 
 ## Restart kitty
-pkill -u "$USER" --signal=SIGUSR1 ^kitty$ || true
+kitty @ set-colors -a ~/.config/kitty/theme.conf
 
 ## Restart waybar
 pkill -u "$USER" --signal=SIGHUP ^waybar$ || true
