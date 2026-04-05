@@ -26,7 +26,7 @@ window#waybar {
   border-radius: 14px;
   padding: 10px 0px 10px 0px;
   margin: 4px;
-  background-color: alpha(@base04, 0.25);
+  background-color: alpha(@base05, 0.16);
 }
 
 tooltip {
