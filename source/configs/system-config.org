@@ -307,6 +307,12 @@ Btrfs 的架构，同时高强度地使用subvol功能
  "tumbler"
  "xfconf"
 
+ ;; Thunar 插件
+ "thunar-archive-plugin"
+ "thunar-media-tags-plugin"
+ "thunar-volman"
+ "thunar-vcs-plugin"
+
  ;; 字体
  "font-sarasa-gothic"
 
