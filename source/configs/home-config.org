@@ -560,10 +560,11 @@ end
                             "utilities"))
                 (excluded '(".*~"
                             ".*\\.swp"
-                            "/\\.git/.*"
+                            "\\.git"
                             "\\.gitignore"
                             "\\.github"
-                            ".*\\.md"))))
+                            "LICENSE"
+                            "README\\.md"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
