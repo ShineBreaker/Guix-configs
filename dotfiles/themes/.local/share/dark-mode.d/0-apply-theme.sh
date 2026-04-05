@@ -9,16 +9,16 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/foot/initial-color-theme.ini"
 rm -f "$CONFIG"
 touch "$CONFIG"
 echo 'initial-color-theme=dark' > "$CONFIG"
-pkill -u "$USER" --signal=SIGUSR1 ^foot$
+pkill -u "$USER" --signal=SIGUSR1 ^foot$ || true
 
 ## Restart kitty
-pkill -u "$USER" --signal=SIGUSR1 ^kitty$
+pkill -u "$USER" --signal=SIGUSR1 ^kitty$ || true
 
 ## Restart waybar
-pkill -u "$USER" --signal=SIGHUP ^waybar$
+pkill -u "$USER" --signal=SIGHUP ^waybar$ || true
 
 ## Restart mako
-makoctl reload
+makoctl reload || true
 
 ## Set GNOME settings
 guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
