@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0
 
 "$schema" = "https://starship.rs/config-schema.json"
-format = "[](red)$os$username[](bg:yellow fg:red)$directory[](fg:yellow bg:cyan)$git_branch$git_status[](fg:cyan bg:blue)$c$cpp$rust$golang$nodejs$php$java$kotlin$haskell$python[](fg:blue bg:bright-black)$direnv$docker_context$conda$pixi[](fg:bright-black bg:bright-black)$time[ ](fg:bright-black)$line_break$character"
+format = "[](bright-red)$os$username[](bg:yellow fg:bright-red)$directory[](fg:yellow bg:cyan)$git_branch$git_status[](fg:cyan bg:blue)$c$cpp$rust$golang$nodejs$php$java$kotlin$haskell$python[](fg:blue bg:bright-black)$direnv$docker_context$conda$pixi[](fg:bright-black bg:bright-black)$time[ ](fg:bright-black)$line_break$character"
 
 [c]
 format = "[[ $symbol( $version) ](fg:black bg:blue)]($style)"
@@ -91,7 +91,7 @@ symbol = ""
 
 [os]
 disabled = false
-style = "bg:red fg:black"
+style = "bg:bright-red fg:black"
 
 [os.symbols]
 Alpine = ""
@@ -145,5 +145,5 @@ time_format = "%R"
 [username]
 format = "[ $user ]($style)"
 show_always = true
-style_root = "bg:red fg:black"
-style_user = "bg:red fg:black"
+style_root = "bg:bright-red fg:black"
+style_user = "bg:bright-red fg:black"
