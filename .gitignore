@@ -3,3 +3,9 @@
 # SPDX-License-Identifier: GPL-3.0
 
 tmp
+node_modules
+package.json
+bun.lock
+.gitignore
+
+.sisyphus

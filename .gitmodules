@@ -7,3 +7,6 @@
 [submodule "dotfiles/fcitx5/.local/share/fcitx5/rime"]
 	path = dotfiles/fcitx5/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
+[submodule "dotfiles/utilities/.config/opencode/plugin/shell-strategy"]
+	path = dotfiles/utilities/.config/opencode/plugin/shell-strategy
+	url = https://github.com/JRedeker/opencode-shell-strategy.git

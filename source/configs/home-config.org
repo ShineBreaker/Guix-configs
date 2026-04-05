@@ -311,10 +311,6 @@
 #+NAME: user-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
-        ;; AI工具
-        "claude-code"
-        "codex"
-
         ;; 浏览器及其插件
         "ungoogled-chromium-wayland"
         "ublock-origin-chromium"

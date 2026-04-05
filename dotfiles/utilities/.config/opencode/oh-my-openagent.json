@@ -1,0 +1,82 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+  "agents": {
+    "sisyphus": {
+      "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/glm-5",
+        "alibaba-coding-plan-cn/qwen3-coder-next"
+      ]
+    },
+    "prometheus": {
+      "model": "zai-coding-plan/glm-5.1",
+      "fallback_models": [
+        "zai-coding-plan/glm-5",
+        "alibaba-coding-plan-cn/qwen3.5-plus"
+      ]
+    },
+    "metis": {
+      "model": "alibaba-coding-plan-cn/glm-4.7",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/MiniMax-M2.5",
+        "opencode/minimax-m2.5-free"
+      ]
+    },
+    "momus": {
+      "model": "zai-coding-plan/glm-5.1",
+      "fallback_models": [
+        "zai-coding-plan/glm-5",
+        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+      ]
+    },
+    "build": {
+      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/qwen3-coder-plus",
+        "opencode/qwen3.6-plus-free"
+      ]
+    },
+    "explore": {
+      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/qwen3.5-plus",
+        "opencode/nemotron-3-super-free"
+      ]
+    },
+    "librarian": {
+      "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+      "fallback_models": [
+        "zai-coding-plan/glm-5",
+        "opencode/qwen3.6-plus-free"
+      ]
+    },
+    "oracle": {
+      "model": "zai-coding-plan/glm-5.1",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
+        "zai-coding-plan/glm-5"
+      ]
+    },
+    "title": {
+      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/glm-4.7-flash",
+        "opencode/qwen3.6-plus-free"
+      ]
+    },
+    "summary": {
+      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/qwen3-coder-plus",
+        "opencode/qwen3.6-plus-free"
+      ]
+    },
+    "multimodal-looker": {
+      "model": "zai-coding-plan/glm-5v-turbo",
+      "fallback_models": [
+        "alibaba-coding-plan-cn/kimi-k2.5",
+        "alibaba-coding-plan-cn/qwen3.5-plus"
+      ]
+    }
+  }
+}
