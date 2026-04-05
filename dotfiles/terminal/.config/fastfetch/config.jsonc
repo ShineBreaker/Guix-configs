@@ -8,104 +8,81 @@
     "separator": "  > ",
     "constants": [
       "•"
-    ],
+    ]
   },
-  "modules": [
-    {
+  "modules": [{
       "type": "custom",
       "format": "{$1}",
-      "outputColor": "255",
-    },
-    {
+      "outputColor": "255"
+    }, {
       "type": "title",
       "key": "| ",
-      "keyColor": "blue",
-    },
-    {
+      "keyColor": "blue"
+    }, {
       "type": "custom",
       "format": "{$1}",
-      "outputColor": "255",
+      "outputColor": "255"
     },
-    "break",
-    {
+    "break", {
       "type": "custom",
       "format": "{$1}",
-      "outputColor": "255",
-    },
-    {
+      "outputColor": "255"
+    }, {
       "type": "os",
       "key": "┌ 󱄅",
-      "keyColor": "yellow",
-    },
-    {
+      "keyColor": "yellow"
+    }, {
       "type": "kernel",
       "key": "| 󰌽",
-      "keyColor": "yellow",
-    },
-    {
+      "keyColor": "yellow"
+    }, {
       "type": "packages",
       "key": "| 󰏖",
-      "keyColor": "yellow",
-    },
-    {
+      "keyColor": "yellow"
+    }, {
       "type": "shell",
       "key": "| 󰆍",
-      "keyColor": "yellow",
-    },
-    {
+      "keyColor": "yellow"
+    }, {
       "type": "wm",
       "key": "└ ",
-      "keyColor": "yellow",
-    },
-    {
+      "keyColor": "yellow"
+    }, {
       "type": "custom",
       "format": "{$1}",
-      "outputColor": "255",
-    },
-    {
+      "outputColor": "255"
+    }, {
       "type": "host",
       "key": "┌ ",
-      "keyColor": "green",
-    },
-    {
+      "keyColor": "green"
+    }, {
       "type": "cpu",
       "key": "| ",
-      "keyColor": "green",
-    },
-    {
+      "keyColor": "green"
+    }, {
       "type": "gpu",
       "key": "| ",
-      "keyColor": "green",
-    },
-    {
+      "keyColor": "green"
+    }, {
       "type": "disk",
       "key": "| 󱛟",
-      "keyColor": "green",
-    },
-    {
+      "keyColor": "green"
+    }, {
       "type": "memory",
       "key": "| ",
-      "keyColor": "green",
-    },
-    {
+      "keyColor": "green"
+    }, {
       "type": "uptime",
       "key": "| 󰅐",
-      "keyColor": "green",
-    },
-    {
+      "keyColor": "green"
+    }, {
       "type": "display",
-      "key": "| 󰍹",
-      "keyColor": "green",
-    },
-    {
-      "type": "sound",
-      "key": "└ ",
-      "keyColor": "green",
-    },
-    {
+      "key": "└ 󰍹",
+      "keyColor": "green"
+    }, {
       "type": "custom",
       "format": "{$1}",
-      "outputColor": "255",
-    },
-  ],
+      "outputColor": "255"
+    }
+  ]
 }
