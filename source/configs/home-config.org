@@ -155,6 +155,7 @@
         "emacs-ws-butler"
 
         ;; 开发工具
+        "emacs-apheleia"
         "emacs-eldoc-box"
         "emacs-rg"
         "emacs-stickyfunc-enhance"
@@ -278,6 +279,7 @@
         "jdtls-bin"
         "gradle"
         "maven"
+        "nixfmt"
         "node"
         "openjdk@25"
         "package-version-server"
@@ -288,7 +290,9 @@
         "python-lsp-black"
         "python-lsp-server"
         "python-pylsp-mypy"
+        "rust"
         "rust-analyzer"
+        "shfmt"
 
         ;; 工具
         "bun"
@@ -466,11 +470,15 @@
 status is-interactive
 and begin
 
-  $$bin/atuin$$ init fish | source
-  $$bin/direnv$$ hook fish | source
-  $$bin/fzf$$ --fish | source
-  $$bin/starship$$ init fish | source
-  $$bin/zoxide$$ init fish | source
+    $$bin/atuin$$ init fish | source
+    $$bin/direnv$$ hook fish | source
+    $$bin/fzf$$ --fish | source
+    $$bin/zoxide$$ init fish | source
+
+    if test \"$TERM\" != \"xterm-256color\"
+        $$bin/starship$$ init fish | source
+        enable_transience
+    end
 
 end
 #+end_src
