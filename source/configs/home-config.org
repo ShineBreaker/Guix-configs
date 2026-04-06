@@ -182,10 +182,12 @@
 
         ;; Git 集成
         "emacs-git-messenger"
+        "emacs-git-timemachine"
         "emacs-magit"
         "emacs-magit-todos"
 
         ;; 项目管理
+        "emacs-centaur-tabs"
         "emacs-projectile"
 
         ;; Org Mode 生态
@@ -342,6 +344,8 @@
         "zulip-term"
 
         ;; 生产力工具
+        "claude-code"
+        "codex"
         "gimp"
         "keepassxc"
         "git-credential-keepassxc"
@@ -475,10 +479,8 @@ and begin
     $$bin/fzf$$ --fish | source
     $$bin/zoxide$$ init fish | source
 
-    if test \"$TERM\" != \"xterm-256color\"
-        $$bin/starship$$ init fish | source
-        enable_transience
-    end
+    $$bin/starship$$ init fish | source
+    enable_transience
 
 end
 #+end_src
