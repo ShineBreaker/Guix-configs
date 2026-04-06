@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
   "agents": {
     "sisyphus": {
-      "model": "zai-coding-plan/glm-5",
+      "model": "alibaba-coding-plan-cn/kimi-k2.5",
       "fallback_models": [
         "alibaba-coding-plan-cn/MiniMax-M2.5",
         "alibaba-coding-plan-cn/qwen3.5-plus"
@@ -12,7 +12,7 @@
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
         "alibaba-coding-plan-cn/qwen3.5-plus",
-        "zai-coding-plan/glm-5"
+        "alibaba-coding-plan-cn/glm-5"
       ]
     },
     "metis": {
@@ -37,7 +37,7 @@
       ]
     },
     "atlas": {
-      "model": "zai-coding-plan/glm-5",
+      "model": "alibaba-coding-plan-cn/kimi-k2.5",
       "fallback_models": [
         "alibaba-coding-plan-cn/MiniMax-M2.5",
         "opencode/qwen3.6-plus-free"
@@ -47,7 +47,7 @@
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
         "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
-        "zai-coding-plan/glm-5"
+        "alibaba-coding-plan-cn/glm-5"
       ]
     },
     "build": {
@@ -58,16 +58,16 @@
       ]
     },
     "explore": {
-      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
       "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
+        "alibaba-coding-plan-cn/qwen3-coder-next",
         "opencode/nemotron-3-super-free"
       ]
     },
     "librarian": {
       "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
       "fallback_models": [
-        "zai-coding-plan/glm-5",
+        "alibaba-coding-plan-cn/glm-5",
         "opencode/qwen3.6-plus-free"
       ]
     },
@@ -130,9 +130,9 @@
       ]
     },
     "writing": {
-      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
+      "model": "alibaba-coding-plan-cn/kimi-k2.5",
       "fallback_models": [
-        "zai-coding-plan/glm-5",
+        "alibaba-coding-plan-cn/glm-5",
         "opencode/qwen3.6-plus-free"
       ]
     },
