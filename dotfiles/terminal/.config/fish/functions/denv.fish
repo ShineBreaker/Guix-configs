@@ -107,6 +107,8 @@ function __denv_provider_py_init
     else
         echo "· .python-version 已存在，跳过"
     end
+
+    uv init
 end
 
 function __denv_provider_py_envrc
