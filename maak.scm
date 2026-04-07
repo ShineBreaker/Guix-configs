@@ -129,7 +129,7 @@ Exit code: ~a~%" cmd exit-code)))))
            "commit"
            "-S"
            "-m"
-           "bump version."
+           "UPDATE: (channel.lock) bump version."
            channel-lock)))
 
 (define (pull)
