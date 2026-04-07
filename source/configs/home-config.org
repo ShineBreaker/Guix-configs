@@ -1,3 +1,47 @@
+#+BEGIN_COMMENT
+Agent 专区：Home 配置修改指引
+
+本区域为 AI 助手提供 Home 配置的上下文和决策规则。阅读此区域后再进行修改。
+
+Home 配置职责
+
+Home 配置定义 home-environment 的组成部分，包括：
+- 用户级包集合：桌面环境、Emacs、终端、开发工具、其他软件包
+- Home 服务定义：shepherd 服务、计时器、环境变量、字体配置
+- dotfiles 服务配置：通过 home-dotfiles-service-type 分发配置文件
+
+dotfiles 管理规则
+
+dotfiles 目录采用 Stow 规范组织，结构为 dotfiles/<app>/.config/<app>/。
+这些配置通过 home-dotfiles-service-type 服务自动链接到用户家目录。
+不要随意移动已有目录，保持现有结构稳定。
+
+新增应用配置流程
+
+添加新应用配置时，按以下顺序操作：
+1. 在 dotfiles/<app>/ 下创建配置目录，遵循 Stow 规范
+2. 在本文件的包列表中添加应用包（如 desktop-packages-list）
+3. 在 home-dotfiles-configuration 的 packages 中添加目录名
+
+source/files/ 用途
+
+source/files/ 目录存放静态模板文件，用于需要 computed-substitution-with-inputs 注入 Guix 包绝对路径的场景。
+例如 niri.kdl、zed.json 等文件，使用 &&bin/foo&& 语法标记需要替换的二进制路径。
+
+修改约定
+
+- 优先修改 dotfile 文件，若需要 Guix Home 管理再修改本文件
+- 保持现有的 (load ...) 风格和变量命名习惯
+- 变量名如 %services-config、%packages-list 等保持统一风格
+
+决策规则
+
+- 若应用已有 dotfile 配置，优先修改对应 dotfile
+- 新增程序时考虑三处联动：包列表、服务定义、配置文件
+- 能用 Home 解决就不用 System，保持系统层最小化
+#+END_COMMENT
+
+--------------
 
 我会尽量地把更多的配置放在这里，而 =system-config.md=
 只会放置一些保障系统正常使用所必须的配置，这样的好处在于:
@@ -278,19 +322,22 @@
         "jdtls-bin"
         "gradle"
         "maven"
-        "nixfmt"
         "node"
         "openjdk@25"
         "package-version-server"
         "pnpm@10"
         "python"
         "python-black"
-        "python-jsbeautifier"
-        "python-lsp-black"
         "python-lsp-server"
         "python-pylsp-mypy"
         "rust"
         "rust-analyzer"
+        "zig"
+
+        ;; 格式化工具
+        "nixfmt"
+        "python-jsbeautifier"
+        "python-lsp-black"
         "shfmt"
 
         ;; 工具

@@ -1,3 +1,21 @@
+#+BEGIN_COMMENT
+本文件为 AI 助手提供系统配置修改指引。
+
+系统配置职责：定义 operating-system 的组成部分，包括引导器、文件系统、内核、用户、系统包、系统服务、skeleton 文件。这些组件共同确保系统能够正常启动和运行。
+
+关键组件说明：引导器使用 Limine（由 rosenthal 频道提供），替代传统的 GRUB。文件系统采用 LUKS 加密 + Btrfs 子卷 + tmpfs 混合架构，实现根目录重启清空但数据持久化的效果。内核使用 XanMod（由 nonguix 频道提供），针对现代硬件进行优化。
+
+文件系统架构：根目录使用 tmpfs（重启后清空），Btrfs 子卷用于持久化数据，/data 分区通过 bind-mount 挂载到用户目录。具体的子卷映射和持久化目录定义在 information.scm 中，包括 %btrfs-subvolumes 和 %data-dirs 变量。
+
+source/files/ 用途：存放静态配置模板文件，如 nftables.conf 防火墙规则。这些文件通过 local-file 引用到系统配置中，在系统构建时被复制到目标位置。
+
+修改约定：系统层变更优先修改本文件中的对应代码块。生成的 tmp/system-config.scm 是自动导出的结果，不应手动编辑。全局变量如用户名、Btrfs 配置等统一在 information.scm 中定义，本文件通过 (load "../source/information.scm") 加载。
+
+决策规则：本文件仅放置系统级必需内容，包括引导配置、内核设置、文件系统挂载、系统服务定义。用户级工具、桌面环境配置、个人偏好设置应放入 Home 配置（home-config.org）。
+#+END_COMMENT
+
+--------------
+
 此系统配置的关键在于 *让系统能够正常启动* ，所以会尽量精简软件包以及相关服务的数量
 
 待系统成功安装并进入系统之后，则可以直接手动应用用户配置
