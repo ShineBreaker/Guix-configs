@@ -211,9 +211,6 @@
         "emacs-calfw"
         "emacs-notmuch"
 
-        ;; AI 工具
-        "emacs-gptel"
-
         ;; 编程语言运行时与工具
         "graphviz"
         "guile-ares-rs"
