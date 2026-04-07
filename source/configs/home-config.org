@@ -48,7 +48,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 - 若应用已有 dotfile 配置，优先修改对应 dotfile
 - 新增程序时考虑三处联动：包列表、服务定义、配置文件
 - 能用 Home 解决就不用 System，保持系统层最小化
-#+END_COMMENT
 
 --------------
 
