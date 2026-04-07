@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["oh-my-openagent", "opencode-mem", "@tarquinen/opencode-dcp", "@franlol/opencode-md-table-formatter", "opencode-scheduler", "@plannotator/opencode@latest"],
+  "plugin": ["oh-my-openagent", "opencode-mem", "@tarquinen/opencode-dcp", "@franlol/opencode-md-table-formatter", "opencode-scheduler", "@plannotator/opencode"],
   "instructions": [
     "~/.config/opencode/docs/language.md",
     "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
