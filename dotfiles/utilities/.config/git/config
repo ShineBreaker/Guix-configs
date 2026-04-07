@@ -6,7 +6,7 @@
 	signingkey = "62711D5E9CCDEC6907CADBF88637132222571907"
 [commit]
 	gpgsign = true
-	template = ".config/git/gitmessage"
+	template = "~/.config/git/gitmessage"
 [credential]
 	helper = "keepassxc --git-groups"
 [credential]
