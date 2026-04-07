@@ -2,52 +2,56 @@
   "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
   "agents": {
     "sisyphus": {
-      "model": "alibaba-coding-plan-cn/kimi-k2.5",
+      "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
-        "alibaba-coding-plan-cn/qwen3.5-plus"
+        "alibaba-coding-plan-cn/kimi-k2.5",
+        "openai/gpt-5.4",
+        "alibaba-coding-plan-cn/MiniMax-M2.5"
       ]
     },
     "prometheus": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3.5-plus",
-        "alibaba-coding-plan-cn/glm-5"
+        "openai/gpt-5.4",
+        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
       ]
     },
     "metis": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
-        "opencode/minimax-m2.5-free"
+        "openai/gpt-5.4",
+        "alibaba-coding-plan-cn/MiniMax-M2.5"
       ]
     },
     "momus": {
-      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
       "fallback_models": [
         "zai-coding-plan/glm-5.1",
         "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
       ]
     },
     "hephaestus": {
-      "model": "zai-coding-plan/glm-5.1",
+      "model": "openai/gpt-5.4",
+      "variant": "medium",
       "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
+        "zai-coding-plan/glm-5.1",
         "alibaba-coding-plan-cn/qwen3-coder-plus"
       ]
     },
     "atlas": {
       "model": "alibaba-coding-plan-cn/kimi-k2.5",
       "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
-        "opencode/qwen3.6-plus-free"
+        "openai/gpt-5.4",
+        "alibaba-coding-plan-cn/MiniMax-M2.5"
       ]
     },
     "oracle": {
-      "model": "zai-coding-plan/glm-5.1",
+      "model": "openai/gpt-5.4",
+      "variant": "high",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
-        "alibaba-coding-plan-cn/glm-5"
+        "zai-coding-plan/glm-5.1",
+        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
       ]
     },
     "build": {
@@ -86,47 +90,50 @@
       ]
     },
     "multimodal-looker": {
-      "model": "zai-coding-plan/glm-5v-turbo",
+      "model": "openai/gpt-5.4",
+      "variant": "medium",
       "fallback_models": [
-        "alibaba-coding-plan-cn/kimi-k2.5",
-        "alibaba-coding-plan-cn/qwen3.5-plus"
+        "zai-coding-plan/glm-5v-turbo",
+        "alibaba-coding-plan-cn/kimi-k2.5"
       ]
     }
   },
   "categories": {
     "quick": {
-      "model": "alibaba-coding-plan-cn/glm-4.7-flash",
+      "model": "openai/gpt-5.4-mini",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-coder-next",
-        "opencode/nemotron-3-super-free"
+        "alibaba-coding-plan-cn/glm-4.7-flash",
+        "alibaba-coding-plan-cn/qwen3-coder-next"
       ]
     },
     "unspecified-low": {
       "model": "alibaba-coding-plan-cn/qwen3-coder-next",
       "fallback_models": [
-        "alibaba-coding-plan-cn/glm-4.7-flash",
-        "opencode/qwen3.6-plus-free"
+        "openai/gpt-5.4",
+        "alibaba-coding-plan-cn/glm-4.7-flash"
       ]
     },
     "unspecified-high": {
-      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
+      "model": "zai-coding-plan/glm-5.1",
+      "fallback_models": [
+        "openai/gpt-5.4",
+        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+      ]
+    },
+    "deep": {
+      "model": "openai/gpt-5.4",
+      "variant": "medium",
       "fallback_models": [
         "zai-coding-plan/glm-5.1",
         "alibaba-coding-plan-cn/qwen3-coder-plus"
       ]
     },
-    "deep": {
-      "model": "zai-coding-plan/glm-5.1",
-      "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
-        "alibaba-coding-plan-cn/qwen3-coder-plus"
-      ]
-    },
     "ultrabrain": {
-      "model": "zai-coding-plan/glm-5.1",
+      "model": "openai/gpt-5.4",
+      "variant": "xhigh",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
-        "alibaba-coding-plan-cn/MiniMax-M2.5"
+        "zai-coding-plan/glm-5.1",
+        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
       ]
     },
     "writing": {
@@ -139,15 +146,15 @@
     "visual-engineering": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/MiniMax-M2.5",
+        "alibaba-coding-plan-cn/kimi-k2.5",
         "alibaba-coding-plan-cn/qwen3-coder-plus"
       ]
     },
     "artistry": {
       "model": "alibaba-coding-plan-cn/kimi-k2.5",
       "fallback_models": [
-        "zai-coding-plan/glm-5.1",
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+        "openai/gpt-5.4",
+        "zai-coding-plan/glm-5.1"
       ]
     }
   },
@@ -157,7 +164,8 @@
     "providerConcurrency": {
       "alibaba-coding-plan-cn": 6,
       "zai-coding-plan": 5,
-      "opencode": 8
+      "opencode": 8,
+      "openai": 3
     }
   }
 }
