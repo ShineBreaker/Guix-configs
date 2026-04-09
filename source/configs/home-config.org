@@ -71,6 +71,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
 <<modules>>
 
+<<custom-packages>>
+
 <<services-modules>>
 
 (home-environment
@@ -92,7 +94,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
             <<home-files-services>>
             <<environment-variable-services>>
             <<font-services>>
-            %rosenthal-desktop-home-services)))
+
+            %base-home-services)))
 #+end_src
 
 * Modules
@@ -104,19 +107,155 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 (use-modules (gnu)
              (gnu home)
              (gnu home services)
-
-             (gnu packages)
-             (gnu services)
-             (gnu system shadow)
-
-             (guix gexp)
              (guix packages)
-             (guix utils)
+             (gnu services)
 
              (jeans packages games)
 
              (rosenthal utils file)
              (rosenthal utils packages))
+#+end_src
+
+* Custom Packages
+
+自定义的 Guix 包定义。
+
+#+NAME: custom-packages
+#+begin_src scheme
+(use-modules (gnu packages)
+             (gnu packages librewolf)
+             (gnu system shadow)
+
+             (guix download)
+             (guix gexp)
+             ((guix licenses) #:prefix license:)
+             (guix utils)
+
+             (guix build-system trivial))
+
+(define librewolf-l10n-zh-cn
+  (package
+    (name "librewolf-l10n-zh-cn")
+    (version "149.0")
+    (source
+     (origin
+       (method url-fetch)
+       (uri "https://addons.mozilla.org/firefox/downloads/file/4751333/chinese_simplified_zh_cn_la-149.0.20260403.140140.xpi")
+       (hash (content-hash (base32 "0mgfy5dpgpf4s16hxkaiv171j3rp13yn6w5bp708lkmbyxydbadp")))))
+    (build-system trivial-build-system)
+    (arguments
+     (list
+      #:modules '((guix build utils))
+      #:builder
+      #~(begin
+          (use-modules (guix build utils))
+          (let ((ext-dir (string-append #$output
+                                        "/lib/librewolf/browser/extensions")))
+            (mkdir-p ext-dir)
+            (copy-file #$source
+                       (string-append ext-dir
+                                      "/langpack-zh-CN@firefox.mozilla.org.xpi"))))))
+    (home-page "https://addons.mozilla.org/")
+    (synopsis "LibreWolf Chinese (Simplified) language pack")
+    (description "Firefox zh-CN language pack compatible with LibreWolf 149.0.")
+    (license license:mpl2.0)))
+
+;;; LibreWolf + 中文语言包合并包
+;;; ---------------------------------------
+;;; 复制 LibreWolf 并注入 langpack，同时 patch policies.json 允许加载 langpack。
+
+(define librewolf-with-l10n
+  (package
+    (inherit librewolf)
+    (name "librewolf-with-l10n")
+    (source #f)
+    (build-system trivial-build-system)
+    (arguments
+     (list
+      #:modules '((guix build utils))
+       #:builder
+       #~(begin
+           (use-modules (guix build utils))
+
+           (define lw #$librewolf)
+           (define out #$output)
+
+           ;; 辅助函数：将符号链接替换为实际文件副本
+           (define (dereference! path)
+             (when (and (file-exists? path) (symbolic-link? path))
+               (let* ((target (readlink path))
+                      (resolved (if (string-prefix? "/" target)
+                                    target
+                                    (string-append (dirname path) "/" target)))
+                      (tmp (string-append path ".tmp")))
+                 (copy-file resolved tmp)
+                 (delete-file path)
+                 (rename-file tmp path))))
+
+           ;; 1. 复制整个 LibreWolf 到输出（保留原权限和符号链接）
+           (copy-recursively lw out)
+
+           ;; 2. 将 zh-CN langpack 复制到 extensions 目录
+           (let ((ext-dir (string-append out "/lib/librewolf/browser/extensions"))
+                 (src-xpi (string-append #$librewolf-l10n-zh-cn
+                                         "/lib/librewolf/browser/extensions"
+                                         "/langpack-zh-CN@firefox.mozilla.org.xpi")))
+             (mkdir-p ext-dir)
+             (copy-file src-xpi (string-append ext-dir "/langpack-zh-CN@firefox.mozilla.org.xpi")))
+
+             ;; 3. Patch policies.json: 将 "langpack" 加入 allowed_types，
+             ;;    添加 zh-CN langpack 的强制安装策略，
+             ;;    并通过 Preferences 策略显示语言切换 UI
+             (let ((policies-file (string-append out "/lib/librewolf/distribution/policies.json"))
+                   (xpi-url (string-append "file://" out
+                                           "/lib/librewolf/browser/extensions"
+                                           "/langpack-zh-CN@firefox.mozilla.org.xpi")))
+               (dereference! policies-file)
+               (chmod policies-file #o644)
+               (substitute* policies-file
+                 (("\"allowed_types\": \\[\"dictionary\", \"extension\", \"sitepermission\", \"theme\"\\]")
+                  "\"allowed_types\": [\"dictionary\", \"extension\", \"langpack\", \"sitepermission\", \"theme\"]"))
+               ;; 在 ExtensionSettings 中添加 langpack 的 normal_installed 策略
+               (substitute* policies-file
+                 (("\"uBlock0@raymondhill.net\": \\{")
+                  (string-append "\"langpack-zh-CN@firefox.mozilla.org\": {\n"
+                                 "                \"installation_mode\": \"normal_installed\",\n"
+                                 "                \"install_url\": \"" xpi-url "\"\n"
+                                 "            },\n"
+                                 "            \"uBlock0@raymondhill.net\": {")))
+               ;; 添加 Preferences 策略：显示语言切换 UI + 请求中文 locale
+               (substitute* policies-file
+                 (("\"SkipTermsOfUse\": true,")
+                  (string-append "\"Preferences\": {\n"
+                                 "            \"extensions.ui.locale.hidden\": {\n"
+                                 "                \"Value\": false,\n"
+                                 "                \"Status\": \"user\"\n"
+                                 "            },\n"
+                                 "            \"intl.locale.requested\": {\n"
+                                 "                \"Value\": \"zh-CN, en-US\",\n"
+                                 "                \"Status\": \"user\"\n"
+                                 "            }\n"
+                                 "        },\n"
+                                 "        \"SkipTermsOfUse\": true,")))
+               (chmod policies-file #o444))
+
+           ;; 4. 修正 wrapper 脚本中硬编码的旧 store 路径
+           ;;    bin/librewolf 是指向 lib/.../librewolf 的符号链接，两者都需要修正
+           (for-each
+            (lambda (file)
+              (let ((path (string-append out "/" file)))
+                (when (file-exists? path)
+                  (dereference! path)
+                  (chmod path #o644)
+                  (substitute* path ((lw) out))
+                  (chmod path #o555))))
+            '("bin/librewolf"
+              "lib/librewolf/librewolf"
+              "share/applications/librewolf.desktop")))))
+    (inputs
+     (list librewolf librewolf-l10n-zh-cn))
+    (native-inputs '())
+    (propagated-inputs '())))
 #+end_src
 
 * Packages
@@ -191,10 +330,12 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "emacs-doom-modeline"
         "emacs-ef-themes"
         "emacs-kind-icon"
+        "emacs-lsp-treemacs"
         "emacs-minimap"
         "emacs-nerd-icons"
         "emacs-rainbow-delimiters"
         "emacs-treemacs"
+        "emacs-treemacs-extra"
         "emacs-treemacs-nerd-icons"
         "emacs-which-key"
 
@@ -204,6 +345,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "emacs-expand-region"
         "emacs-multiple-cursors"
         "emacs-origami"
+        "emacs-perspective"
         "emacs-ws-butler"
 
         ;; 开发工具
@@ -368,11 +510,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
 #+NAME: user-packages-list
 #+begin_src scheme
-(cons* (specs->pkgs+out
-        ;; 浏览器及其插件
-        "ungoogled-chromium-wayland"
-        "ublock-origin-chromium"
-
+(append (list librewolf-with-l10n)
+  (cons* (specs->pkgs+out
         ;; 解码器
         "gstreamer"
         "gst-plugins-base"
@@ -417,6 +556,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "amule"
         "freerdp@3"
         "kanata"
+        "pinentry-qt"
         "postgresql"
         "winapps"
 
@@ -430,7 +570,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; QT框架相关
         "kvantum"
         "qt5ct"
-        "qt6ct"))
+        "qt6ct")))
 #+end_src
 
 * Services
@@ -551,6 +691,19 @@ end
                 (use-geoclue #f)
                 (dbus-server #t)
                 (portal #t)))
+
+      (service home-shepherd-service-type
+               (home-shepherd-configuration
+                (auto-start? #f)
+                (daemonize? #f)))
+
+      (simple-service 'dbus home-shepherd-service-type
+                      (list (shepherd-service
+                             (provision '(dbus))
+                             (start #~(const #t))
+                             (stop #~(const #f)))))
+
+      (service home-pipewire-service-type)
 
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
