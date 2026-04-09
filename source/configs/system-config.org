@@ -255,8 +255,8 @@ Btrfs 的架构，同时高强度地使用subvol功能
 #+begin_src scheme
 (list (simple-service 'extend-kernel-module-loader
                       kernel-module-loader-service-type
-                      '("ip_tables" "iptable_nat" "kvm_intel" "sch_fq_pie"
-                        "tcp_bbr" "uinput"))
+                      '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq_pie"
+                        "tcp_bbr" "uhid" "uinput"))
 
       (simple-service 'extend-sysctl sysctl-service-type
                       '(("fs.inotify.max_user_watches" . "524288")
@@ -397,13 +397,13 @@ Btrfs 的架构，同时高强度地使用subvol功能
              (rosenthal packages networking)
              (rosenthal packages wm)
              (rosenthal services base)
-             (rosenthal services desktop)
-             (rosenthal services networking)
              (srfi srfi-1))
 
 (use-package-modules android
                      games
                      glib
+                     hardware
+                     linux
                      package-management
                      wm)
 
@@ -417,7 +417,8 @@ Btrfs 的架构，同时高强度地使用subvol功能
                      nix
                      shepherd
                      sound
-                     virtualization)
+                     virtualization
+                     xorg)
 
 #+end_src
 
@@ -448,93 +449,13 @@ Btrfs 的架构，同时高强度地使用subvol功能
       (simple-service 'root-services shepherd-root-service-type
                       (list (shepherd-timer '(guix-gc)
                                             #~(calendar-event
-                                               #:days-of-week '
-                                               (sunday)
-                                               #:hours '
-                                               (18)
-                                               #:minutes '
-                                               (0))
+                                               #:days-of-week '(sunday)
+                                               #:hours '(18)
+                                               #:minutes '(0))
                                             #~("/run/current-system/profile/bin/guix"
-                                               "gc"
-                                               "--delete-generations=14d")
+                                               "gc" "--delete-generations=14d")
                                             #:requirement '(user-processes
                                                             guix-daemon)))))
-#+end_src
-
-** 桌面服务
-
-主要是修改了 =rosenthal-desktop-services= 这个服务
-
-定义了Guix相关的配置，以及修改了greetd的配置
-
-#+NAME: desktop-services
-#+begin_src scheme
-(modify-services %rosenthal-desktop-services/tuigreet
-                 (delete console-font-service-type)
-
-                 (greetd-service-type config =>
-                                      (greetd-configuration (inherit config)
-                                                            (greeter-supplementary-groups '
-                                                             ("video"
-                                                              "audio"))
-                                                            (terminals (list (greetd-terminal-configuration
-                                                                              (terminal-vt
-                                                                               "7")
-                                                                              (terminal-switch
-                                                                               #t)
-                                                                              (default-session-command
-                                                                                (greetd-tuigreet-session))
-                                                                              (initial-session-user
-                                                                               username)
-                                                                              (initial-session-command
-                                                                               (program-file
-                                                                                "niri-session"
-                                                                                #~(execl #$
-                                                                                         (file-append
-                                                                                          dbus
-                                                                                          "/bin/dbus-run-session")
-                                                                                         "dbus-run-session"
-
-                                                                                         (string-append
-                                                                                          "--dbus-daemon="
-                                                                                          #$(file-append
-                                                                                             dbus
-                                                                                             "/bin/dbus-daemon"))
-                                                                                         #$(file-append
-                                                                                            niri
-                                                                                            "/bin/niri")
-                                                                                         "--session"))))))))
-
-                 (guix-service-type config =>
-                                    (guix-configuration (inherit config)
-                                                        (channels guix-channels)
-                                                        (guix (guix-for-channels
-                                                               guix-channels))
-                                                        (substitute-urls (append (list
-                                                                                  "https://mirror.sjtu.edu.cn/guix"
-                                                                                  "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"
-                                                                                  "https://substitutes.guix.gofranz.com"
-                                                                                  "https://cache-cdn.guix.moe"
-                                                                                  "https://substitutes.nonguix.org")
-                                                                                 %default-substitute-urls))
-                                                        (authorized-keys (append (list (plain-file
-                                                                                        "guix-moe.pub"
-                                                                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
-
-                                                                                       (plain-file
-                                                                                        "nonguix.pub"
-                                                                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
-
-                                                                                       (plain-file
-                                                                                        "panther.pub"
-                                                                                        "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
-                                                                                 %default-authorized-guix-keys))
-                                                        (extra-options (list "--cores=20"
-                                                                             "--max-jobs=6"))
-                                                        (http-proxy "http://127.0.0.1:7890")
-                                                        (discover? #f)
-                                                        (privileged? #f)
-                                                        (tmpdir "/var/tmp"))))
 #+end_src
 
 ** 文件系统相关服务
@@ -614,10 +535,6 @@ Btrfs 的架构，同时高强度地使用subvol功能
                                               (respawn? #t)))))
 #+end_src
 
-#+NAME: ntf-rules
-#+begin_src
-
-#+end_src
 ** Nix包管理器相关配置
 
 #+NAME: nix-services
@@ -654,7 +571,10 @@ Btrfs 的架构，同时高强度地使用subvol功能
                                      "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
       (udev-rules-service 'cpu-dma
                           (udev-rule "99-cpu-dma-latency.rules"
-                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\"")))
+                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))
+      (udev-rules-service 'sunshine
+                          (udev-rule "60-sunshine-uinput.rules"
+                                     "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"")))
 #+end_src
 
 ** 基础服务
@@ -696,10 +616,40 @@ Btrfs 的架构，同时高强度地使用subvol功能
                         (cpu-boost-on-bat? #f)
                         (sched-powersave-on-bat? #t)))
 
-              (simple-service 'home-channels home-channels-service-type
-                              guix-channels)
+               (simple-service 'home-channels home-channels-service-type
+                               guix-channels)
 
-              (simple-service 'root-services shepherd-root-service-type
+               ;; Nonguix channel
+               (simple-service 'nonguix-substitutes guix-service-type
+                               (guix-extension
+                                (authorized-keys
+                                 (list (plain-file
+                                        "nonguix.pub"
+                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
+                                (substitute-urls
+                                 '("https://substitutes.nonguix.org"))))
+
+               ;; Panther channel
+               (simple-service 'panther-substitutes guix-service-type
+                               (guix-extension
+                                (authorized-keys
+                                 (list (plain-file
+                                        "panther.pub"
+                                        "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))
+                                (substitute-urls
+                                 '("https://substitutes.guix.gofranz.com"))))
+
+               ;; Guix-moe channel
+               (simple-service 'guix-moe-substitutes guix-service-type
+                               (guix-extension
+                                (authorized-keys
+                                 (list (plain-file
+                                        "guix-moe.pub"
+                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
+                                (substitute-urls
+                                 '("https://cache-cdn.guix.moe"))))
+
+               (simple-service 'root-services shepherd-root-service-type
                               (list (shepherd-timer '(guix-gc)
                                                     #~(calendar-event
                                                        #:days-of-week '
@@ -717,78 +667,55 @@ Btrfs 的架构，同时高强度地使用subvol功能
 
 ** 桌面服务
 
-主要是修改了 =rosenthal-desktop-services= 这个服务
+使用 Guix 原生的 =%desktop-services= 作为基础，删除默认的显示管理器和 mingetty
 
-定义了Guix相关的配置，以及修改了greetd的配置
+替换为 greetd + tuigreet 登录管理器，并添加蓝牙、屏幕锁、背光控制等桌面服务
+
+原先的 =modify-services= 大部分已拆分为独立的 service 列表，仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例）
 
 #+NAME: desktop-services
 #+begin_src scheme
-(modify-services %rosenthal-desktop-services/tuigreet
-                 (delete console-font-service-type)
+(modify-services %desktop-services
+                         (delete console-font-service-type)
+                         (delete mingetty-service-type)
+                         (delete gdm-service-type)
+                         (guix-service-type config =>
+                                            (guix-configuration (inherit config)
+                                                                (channels guix-channels)
+                                                                (guix (guix-for-channels guix-channels))
+                                                                (extra-options (list "--cores=20" "--max-jobs=6"))
+                                                                (http-proxy "http://127.0.0.1:7890")
+                                                                (discover? #f)
+                                                                (privileged? #f)
+                                                                (tmpdir "/var/tmp"))))
 
-                 (greetd-service-type config =>
-                                      (greetd-configuration (inherit config)
-                                                            (greeter-supplementary-groups '
-                                                             ("video"
-                                                              "audio"))
-                                                            (terminals (list (greetd-terminal-configuration
-                                                                              (terminal-vt
-                                                                               "7")
-                                                                              (terminal-switch
-                                                                               #t)
-                                                                              (default-session-command
-                                                                                (greetd-tuigreet-session))
-                                                                              (initial-session-user
-                                                                               username)
-                                                                              (initial-session-command
-                                                                               (program-file
-                                                                                "niri-session"
-                                                                                #~(execl #$
-                                                                                         (file-append
-                                                                                          dbus
-                                                                                          "/bin/dbus-run-session")
-                                                                                         "dbus-run-session"
+(list (service bluetooth-service-type
+               (bluetooth-configuration
+                (auto-enable? #t)))
+      (service screen-locker-service-type
+               (screen-locker-configuration
+                (name "swaylock")
+                (program (plain-file "empty" ""))
+                (using-setuid? #f)))
 
-                                                                                         (string-append
-                                                                                          "--dbus-daemon="
-                                                                                          #$(file-append
-                                                                                             dbus
-                                                                                             "/bin/dbus-daemon"))
-                                                                                         #$(file-append
-                                                                                            niri
-                                                                                            "/bin/niri")
-                                                                                         "--session"))))))))
+      (simple-service 'backlight udev-service-type (list ddcutil light))
 
-                 (guix-service-type config =>
-                                    (guix-configuration (inherit config)
-                                                        (channels guix-channels)
-                                                        (guix (guix-for-channels
-                                                               guix-channels))
-                                                        (substitute-urls (append (list
-                                                                                  "https://mirror.sjtu.edu.cn/guix"
-                                                                                  "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"
-                                                                                  "https://substitutes.guix.gofranz.com"
-                                                                                  "https://cache-cdn.guix.moe"
-                                                                                  "https://substitutes.nonguix.org")
-                                                                                 %default-substitute-urls))
-                                                        (authorized-keys (append (list (plain-file
-                                                                                        "guix-moe.pub"
-                                                                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")
-
-                                                                                       (plain-file
-                                                                                        "nonguix.pub"
-                                                                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")
-
-                                                                                       (plain-file
-                                                                                        "panther.pub"
-                                                                                        "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
-                                                                                 %default-authorized-guix-keys))
-                                                        (extra-options (list "--cores=20"
-                                                                             "--max-jobs=6"))
-                                                        (http-proxy "http://127.0.0.1:7890")
-                                                        (discover? #f)
-                                                        (privileged? #f)
-                                                        (tmpdir "/var/tmp"))))
+      (service greetd-service-type
+               (greetd-configuration
+                (greeter-supplementary-groups '("video" "audio"))
+                (terminals
+                 (list (greetd-terminal-configuration
+                        (terminal-vt "7")
+                        (terminal-switch #t)
+                        (default-session-command
+                          (greetd-tuigreet-session))
+                        (initial-session-user username)
+                        (initial-session-command
+                         (program-file
+                          "niri-session"
+                          #~(execl #$(file-append dbus "/bin/dbus-run-session") "dbus-run-session"
+                                   (string-append "--dbus-daemon=" #$(file-append dbus "/bin/dbus-daemon"))
+                                   #$(file-append niri "/bin/niri") "--session")))))))))
 #+end_src
 
 ** 文件系统相关服务

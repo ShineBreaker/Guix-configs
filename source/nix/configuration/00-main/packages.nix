@@ -11,6 +11,7 @@
     scrcpy
 
     gpu-screen-recorder-gtk
+    sunshine
 
     sarasa-gothic
     bibata-cursors
