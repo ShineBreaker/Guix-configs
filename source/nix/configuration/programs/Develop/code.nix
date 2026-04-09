@@ -33,6 +33,7 @@
         ecmel.vscode-html-css
         gencer.html-slim-scss-css-class-completion
         jnoortheen.nix-ide
+        rooveterinaryinc.roo-cline
         rust-lang.rust-analyzer
         stylelint.vscode-stylelint
         skyapps.fish-vscode

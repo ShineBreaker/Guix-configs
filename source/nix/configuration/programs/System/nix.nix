@@ -7,6 +7,9 @@
   nixpkgs.config = {
     allowUnfree = true;
     allowBroken = false;
+    permittedInsecurePackages = [
+      "beekeeper-studio-5.5.7"
+    ];
   };
 
   nix = {
