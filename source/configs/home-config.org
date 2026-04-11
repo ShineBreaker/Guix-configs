@@ -122,52 +122,24 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
 #+NAME: custom-packages
 #+begin_src scheme
-(use-modules (gnu packages)
-             (gnu packages librewolf)
-             (gnu system shadow)
+ (use-modules (gnu packages)
+              (gnu packages librewolf)
+              (gnu packages python)
+              (gnu system shadow)
 
-             (guix download)
-             (guix gexp)
-             ((guix licenses) #:prefix license:)
-             (guix utils)
+              (guix gexp)
+              (guix utils)
 
-             (guix build-system trivial))
+              (guix build-system trivial))
 
-(define librewolf-l10n-zh-cn
-  (package
-    (name "librewolf-l10n-zh-cn")
-    (version "149.0")
-    (source
-     (origin
-       (method url-fetch)
-       (uri "https://addons.mozilla.org/firefox/downloads/file/4751333/chinese_simplified_zh_cn_la-149.0.20260403.140140.xpi")
-       (hash (content-hash (base32 "0mgfy5dpgpf4s16hxkaiv171j3rp13yn6w5bp708lkmbyxydbadp")))))
-    (build-system trivial-build-system)
-    (arguments
-     (list
-      #:modules '((guix build utils))
-      #:builder
-      #~(begin
-          (use-modules (guix build utils))
-          (let ((ext-dir (string-append #$output
-                                        "/lib/librewolf/browser/extensions")))
-            (mkdir-p ext-dir)
-            (copy-file #$source
-                       (string-append ext-dir
-                                      "/langpack-zh-CN@firefox.mozilla.org.xpi"))))))
-    (home-page "https://addons.mozilla.org/")
-    (synopsis "LibreWolf Chinese (Simplified) language pack")
-    (description "Firefox zh-CN language pack compatible with LibreWolf 149.0.")
-    (license license:mpl2.0)))
-
-;;; LibreWolf + 中文语言包合并包
+;;; LibreWolf + Mozilla 官方扩展/语言包源补丁包
 ;;; ---------------------------------------
-;;; 复制 LibreWolf 并注入 langpack，同时 patch policies.json 允许加载 langpack。
+;;; 保留 LibreWolf 本体，仅修补其对 Mozilla 官方附加组件与语言包服务的限制。
 
-(define librewolf-with-l10n
+(define librewolf-nongnu
   (package
     (inherit librewolf)
-    (name "librewolf-with-l10n")
+    (name "librewolf-nongnu")
     (source #f)
     (build-system trivial-build-system)
     (arguments
@@ -193,51 +165,104 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
                  (rename-file tmp path))))
 
            ;; 1. 复制整个 LibreWolf 到输出（保留原权限和符号链接）
-           (copy-recursively lw out)
+            (copy-recursively lw out)
 
-           ;; 2. 将 zh-CN langpack 复制到 extensions 目录
-           (let ((ext-dir (string-append out "/lib/librewolf/browser/extensions"))
-                 (src-xpi (string-append #$librewolf-l10n-zh-cn
-                                         "/lib/librewolf/browser/extensions"
-                                         "/langpack-zh-CN@firefox.mozilla.org.xpi")))
-             (mkdir-p ext-dir)
-             (copy-file src-xpi (string-append ext-dir "/langpack-zh-CN@firefox.mozilla.org.xpi")))
+           ;; 2. 恢复 Mozilla 官方附加组件与语言包服务 URL
+           (let ((cfg-file (string-append out "/lib/librewolf/librewolf.cfg")))
+             (dereference! cfg-file)
+             (chmod cfg-file #o644)
+              (substitute* cfg-file
+                (("defaultPref\\(\"extensions\\.getAddons\\.search\\.browseURL\", .*")
+                 "defaultPref(\"extensions.getAddons.search.browseURL\", \"https://addons.mozilla.org/%LOCALE%/firefox/search?q=%TERMS%&platform=%OS%&appver=%VERSION%\");\n")
+                (("defaultPref\\(\"extensions\\.getAddons\\.get\\.url\", .*")
+                 "defaultPref(\"extensions.getAddons.get.url\", \"https://services.addons.mozilla.org/api/v4/addons/search/?guid=%IDS%&lang=%LOCALE%\");\n")
+                (("defaultPref\\(\"extensions\\.getAddons\\.link\\.url\", .*")
+                 "defaultPref(\"extensions.getAddons.link.url\", \"https://addons.mozilla.org/%LOCALE%/firefox/\");\n")
+                (("defaultPref\\(\"extensions\\.getAddons\\.discovery\\.api_url\", .*")
+                 "defaultPref(\"extensions.getAddons.discovery.api_url\", \"https://services.addons.mozilla.org/api/v4/discovery/?lang=%LOCALE%&edition=%DISTRIBUTION%\");\n")
+                (("defaultPref\\(\"extensions\\.getAddons\\.langpacks\\.url\", .*")
+                 "defaultPref(\"extensions.getAddons.langpacks.url\", \"https://services.addons.mozilla.org/api/v4/addons/language-tools/?app=firefox&type=language&appversion=%VERSION%\");\n")
+                (("defaultPref\\(\"lightweightThemes\\.getMoreURL\", .*")
+                 "defaultPref(\"lightweightThemes.getMoreURL\", \"https://addons.mozilla.org/%LOCALE%/firefox/themes\");\n"))
+             (chmod cfg-file #o444))
 
-             ;; 3. Patch policies.json: 将 "langpack" 加入 allowed_types，
-             ;;    添加 zh-CN langpack 的强制安装策略，
-             ;;    并通过 Preferences 策略显示语言切换 UI
-             (let ((policies-file (string-append out "/lib/librewolf/distribution/policies.json"))
-                   (xpi-url (string-append "file://" out
-                                           "/lib/librewolf/browser/extensions"
-                                           "/langpack-zh-CN@firefox.mozilla.org.xpi")))
-               (dereference! policies-file)
-               (chmod policies-file #o644)
-               (substitute* policies-file
-                 (("\"allowed_types\": \\[\"dictionary\", \"extension\", \"sitepermission\", \"theme\"\\]")
-                  "\"allowed_types\": [\"dictionary\", \"extension\", \"langpack\", \"sitepermission\", \"theme\"]"))
-               ;; 在 ExtensionSettings 中添加 langpack 的 normal_installed 策略
-               (substitute* policies-file
-                 (("\"uBlock0@raymondhill.net\": \\{")
-                  (string-append "\"langpack-zh-CN@firefox.mozilla.org\": {\n"
-                                 "                \"installation_mode\": \"normal_installed\",\n"
-                                 "                \"install_url\": \"" xpi-url "\"\n"
-                                 "            },\n"
-                                 "            \"uBlock0@raymondhill.net\": {")))
-               ;; 添加 Preferences 策略：显示语言切换 UI + 请求中文 locale
-               (substitute* policies-file
-                 (("\"SkipTermsOfUse\": true,")
-                  (string-append "\"Preferences\": {\n"
-                                 "            \"extensions.ui.locale.hidden\": {\n"
-                                 "                \"Value\": false,\n"
-                                 "                \"Status\": \"user\"\n"
-                                 "            },\n"
-                                 "            \"intl.locale.requested\": {\n"
-                                 "                \"Value\": \"zh-CN, en-US\",\n"
-                                 "                \"Status\": \"user\"\n"
-                                 "            }\n"
-                                 "        },\n"
-                                 "        \"SkipTermsOfUse\": true,")))
-               (chmod policies-file #o444))
+           ;; 2.1 修正 application.ini 中带发行版后缀的版本号，
+           ;;     否则 Mozilla 语言包的 strict_max_version 不会匹配 149.0-1 这种值。
+           (let ((app-file (string-append out "/lib/librewolf/application.ini")))
+             (dereference! app-file)
+             (chmod app-file #o644)
+             (substitute* app-file
+               (("Version=([0-9]+\\.[0-9]+)-[0-9]+" all version)
+                (string-append "Version=" version)))
+             (chmod app-file #o444))
+
+            ;; 2.2 修补 omni.ja：修正 AppConstants 版本号 + 绕过 langpack 兼容性检查
+            ;;     - AppConstants 中的 MOZ_APP_VERSION 带有 Guix 发行版后缀 (如 149.0-1)，
+            ;;       Mozilla 语言包的 strict_max_version 无法匹配，需要去除。
+            ;;     - isUsableAddon() 对 locale 类型扩展也会做版本兼容性检查，
+            ;;       即使版本号正确，仍可能因其他原因失败。直接跳过 locale 类型的检查。
+            (let ((omni-file (string-append out "/lib/librewolf/omni.ja")))
+              (dereference! omni-file)
+              (chmod omni-file #o644)
+              (invoke #$(file-append python "/bin/python3")
+                      "-c"
+                      (string-append
+                       "import pathlib, re, shutil, tempfile, zipfile\n"
+                       "omni = pathlib.Path('" omni-file "')\n"
+                       "with tempfile.TemporaryDirectory() as td:\n"
+                       "    root = pathlib.Path(td)\n"
+                       "    with zipfile.ZipFile(omni) as zin:\n"
+                       "        zin.extractall(root)\n"
+                       "    # Patch 1: Fix MOZ_APP_VERSION in AppConstants\n"
+                       "    app = root / 'modules' / 'AppConstants.sys.mjs'\n"
+                       "    text = app.read_text()\n"
+                       "    text = re.sub(r'MOZ_APP_VERSION: \"([0-9]+\\.[0-9]+)-[0-9]+\"', r'MOZ_APP_VERSION: \"\\1\"', text)\n"
+                       "    text = re.sub(r'MOZ_APP_VERSION_DISPLAY: \"([0-9]+\\.[0-9]+)-[0-9]+\"', r'MOZ_APP_VERSION_DISPLAY: \"\\1\"', text)\n"
+                       "    app.write_text(text)\n"
+                       "    # Patch 2: Skip compat check for locale addons in XPIDatabase\n"
+                       "    db = root / 'modules' / 'addons' / 'XPIDatabase.sys.mjs'\n"
+                       "    db_text = db.read_text()\n"
+                       "    old_compat = 'if (lazy.AddonManager.checkCompatibility) {'\n"
+                       "    new_compat = 'if (aAddon.type != \"locale\" && lazy.AddonManager.checkCompatibility) {'\n"
+                       "    if old_compat in db_text:\n"
+                       "        db_text = db_text.replace(old_compat, new_compat, 1)\n"
+                       "        db.write_text(db_text)\n"
+                       "        print('Patched XPIDatabase: bypassed compat check for locale addons')\n"
+                       "    else:\n"
+                       "        print('WARNING: could not find compat check in XPIDatabase')\n"
+                       "    # Rebuild omni.ja\n"
+                       "    rebuilt = root / 'omni-fixed.ja'\n"
+                       "    with zipfile.ZipFile(rebuilt, 'w', compression=zipfile.ZIP_DEFLATED) as zout:\n"
+                       "        for path in sorted(root.rglob('*')):\n"
+                       "            if path.is_file() and path != rebuilt:\n"
+                       "                zout.write(path, path.relative_to(root).as_posix())\n"
+                       "    shutil.move(str(rebuilt), omni)\n"))
+              (chmod omni-file #o444))
+
+           ;; 3. Patch policies.json: 允许安装语言包，并显示语言切换 UI
+           (let ((policies-file (string-append out "/lib/librewolf/distribution/policies.json")))
+             (dereference! policies-file)
+             (chmod policies-file #o644)
+              (substitute* policies-file
+                (("\"allowed_types\": \\[\"dictionary\", \"extension\", \"sitepermission\", \"theme\"\\]")
+                 "\"allowed_types\": [\"dictionary\", \"extension\", \"locale\", \"sitepermission\", \"theme\"]"))
+             (substitute* policies-file
+               (("\"blocked_install_message\": \"LibreWolf does not allow installing Language Packs\\.\"")
+                "\"blocked_install_message\": \"LibreWolf allows installing language packs from Mozilla Add-ons.\""))
+             (substitute* policies-file
+               (("\"SkipTermsOfUse\": true,")
+                (string-append "\"Preferences\": {\n"
+                               "            \"extensions.ui.locale.hidden\": {\n"
+                               "                \"Value\": false,\n"
+                               "                \"Status\": \"user\"\n"
+                               "            },\n"
+                               "            \"intl.locale.requested\": {\n"
+                               "                \"Value\": \"zh-CN,en-US\",\n"
+                               "                \"Status\": \"user\"\n"
+                               "            }\n"
+                               "        },\n"
+                               "        \"SkipTermsOfUse\": true,")))
+             (chmod policies-file #o444))
 
            ;; 4. 修正 wrapper 脚本中硬编码的旧 store 路径
            ;;    bin/librewolf 是指向 lib/.../librewolf 的符号链接，两者都需要修正
@@ -253,8 +278,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
               "lib/librewolf/librewolf"
               "share/applications/librewolf.desktop")))))
     (inputs
-     (list librewolf librewolf-l10n-zh-cn))
-    (native-inputs '())
+     (list librewolf))
+    (native-inputs (list python))
     (propagated-inputs '())))
 #+end_src
 
@@ -342,6 +367,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 编辑与导航
         "emacs-ace-jump-mode"
         "emacs-diff-hl"
+        "emacs-dirvish"
         "emacs-expand-region"
         "emacs-multiple-cursors"
         "emacs-origami"
@@ -510,8 +536,15 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
 #+NAME: user-packages-list
 #+begin_src scheme
-(append (list librewolf-with-l10n)
+(append (list librewolf-nongnu)
   (cons* (specs->pkgs+out
+        ;; 浏览器
+        "adaptive-tab-bar-colour-icecat"
+        "keepassxc-browser-icecat"
+        "miniflux-injector-icecat"
+        "privacy-redirect-icecat"
+        "ublock-origin-icecat"
+
         ;; 解码器
         "gstreamer"
         "gst-plugins-base"
@@ -709,8 +742,7 @@ end
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
                                           (utilities (list fcitx5-configtool fcitx5-lua))
-                                          (gtk-im-module? #t)
-                                          (qt-im-module? #t))))
+                                          (wayland-frontend? #t))))
 #+end_src
 
 ** 软件自启动
@@ -727,7 +759,7 @@ end
                            (requirement requirement)
                            (start #~(make-forkexec-constructor
                                      (list #$(file-append pkg path))
-                                     #:log-file (string-append (getenv "HOME") "/.var/log/"
+                                     #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
                                                                #$(package-name pkg) ".log")))
                            (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
