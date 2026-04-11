@@ -1,5 +1,4 @@
 {
-  "helix_mode": true,
   "ui_font_family": "Sarasa UI SC",
   "buffer_font_family": "Maple Mono NF CN",
   "agent_servers": {
@@ -433,6 +432,6 @@
   "ui_font_size": 15,
   "ui_font_weight": 500.0,
   "unnecessary_code_fade": 0.7,
-  "vim_mode": false,
+  "vim_mode": true,
   "when_closing_with_no_tabs": "keep_window_open"
 }
