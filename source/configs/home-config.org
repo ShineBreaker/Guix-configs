@@ -78,7 +78,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 (home-environment
  (packages (append
             <<desktop-packages-list>>
-            <<emacs-packages-list>>
             <<terminal-packages-list>>
             <<devtools-packages-list>>
             <<user-packages-list>>
@@ -88,6 +87,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
             <<user-desktop-services>>
             <<home-shepherd-services>>
             <<timer-services>>
+
+            <<emacs-services>>
             <<fish-services>>
             <<modprobe-services>>
             <<dotfile-services>>
@@ -363,139 +364,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "xdg-utils"))
 #+end_src
 
-** Emacs 相关软件包
-
-#+NAME: emacs-packages-list
-#+begin_src scheme
-(cons* (specs->pkgs+out
-        ;; Emacs 核心与基础
-        "emacs-gcmh"
-        "emacs-general"
-        "emacs-no-littering"
-        "emacs-pgtk"
-        "emacs-spinner"
-        "emacs-use-package"
-
-        ;; 补全与迷你缓冲区
-        "emacs-consult"
-        "emacs-corfu"
-        "emacs-corfu-terminal"
-        "emacs-embark"
-        "emacs-marginalia"
-        "emacs-orderless"
-        "emacs-vertico"
-
-        ;; Evil 模式（Vim 模拟）
-        "emacs-evil"
-        "emacs-evil-collection"
-
-        ;; 界面与外观
-        "emacs-dashboard"
-        "emacs-doom-modeline"
-        "emacs-ef-themes"
-        "emacs-kind-icon"
-        "emacs-lsp-treemacs"
-        "emacs-minimap"
-        "emacs-nerd-icons"
-        "emacs-rainbow-delimiters"
-        "emacs-treemacs"
-        "emacs-treemacs-extra"
-        "emacs-treemacs-nerd-icons"
-        "emacs-which-key"
-
-        ;; 编辑与导航
-        "emacs-ace-jump-mode"
-        "emacs-diff-hl"
-        "emacs-dirvish"
-        "emacs-expand-region"
-        "emacs-multiple-cursors"
-        "emacs-origami"
-        "emacs-perspective"
-        "emacs-ws-butler"
-
-        ;; 开发工具
-        "emacs-apheleia"
-        "emacs-eldoc-box"
-        "emacs-rg"
-        "emacs-stickyfunc-enhance"
-        "emacs-vterm"
-        "emacs-yasnippet"
-        "emacs-yasnippet-snippets"
-
-        ;; 编程语言支持
-        "emacs-arei"
-        "emacs-fish-mode"
-        "emacs-fish-completion"
-        "emacs-json-mode"
-        "emacs-helm-fish-completion"
-        "emacs-kotlin-mode"
-        "emacs-markdown-mode"
-        "emacs-nix-mode"
-        "emacs-rust-mode"
-        "emacs-sly"
-        "emacs-typescript-mode"
-        "emacs-web-mode"
-        "emacs-yaml"
-        "emacs-yaml-mode"
-        "emacs-zig-mode"
-
-        ;; Git 集成
-        "emacs-git-messenger"
-        "emacs-git-timemachine"
-        "emacs-magit"
-        "emacs-magit-todos"
-
-        ;; 项目管理
-        "emacs-centaur-tabs"
-        "emacs-projectile"
-
-        ;; Org Mode 生态
-        "emacs-htmlize"
-        "emacs-org"
-        "emacs-org-appear"
-        "emacs-org-modern"
-        "emacs-org-roam"
-        "emacs-ox-gfm"
-
-        ;; 显示优化
-        "emacs-flycheck"
-        "emacs-fold-dwim"
-        "emacs-helpful"
-        "emacs-origami-ts"
-        "emacs-posframe"
-        "emacs-rainbow-delimiters"
-        "emacs-symbol-overlay"
-
-        ;; 邮件与日历
-        "emacs-calfw"
-        "emacs-notmuch"
-
-        ;; 编程语言运行时与工具
-        "graphviz"
-        "guile-ares-rs"
-        "plantuml"
-        "sbcl"
-        "texlive-scheme-basic"
-
-        ;; Tree-sitter（语法解析）
-        "tree-sitter"
-        "tree-sitter-bash"
-        "tree-sitter-c"
-        "tree-sitter-cpp"
-        "tree-sitter-css"
-        "tree-sitter-dockerfile"
-        "tree-sitter-go"
-        "tree-sitter-html"
-        "tree-sitter-java"
-        "tree-sitter-java-properties"
-        "tree-sitter-javascript"
-        "tree-sitter-json"
-        "tree-sitter-nix"
-        "tree-sitter-python"
-        "tree-sitter-rust"
-        "tree-sitter-typescript"))
-#+end_src
-
 ** 终端 相关软件包
 
 #+NAME: terminal-packages-list
@@ -603,7 +471,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; 社交
         "notmuch"
-        "telegram-desktop"
+        ; "telegram-desktop"
         "zulip-term"
 
         ;; 生产力工具
@@ -615,7 +483,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "kdeconnect"
         "seahorse"
         "virt-manager"
-        "zen-browser-bin"
 
         ;; 娱乐
         "heroic"
@@ -662,13 +529,16 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (gnu home services syncthing)
              (gnu home services guix)
 
+             (rosenthal home services desktop)
+             (rosenthal home services emacs)
 
              (rosenthal services desktop)
              (rosenthal services shellutils))
 
 (use-package-modules java shells)
 
-(use-package-modules fcitx5
+(use-package-modules emacs
+                     fcitx5
                      freedesktop
                      gnome
                      gnupg
@@ -680,7 +550,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
                      xdisorg)
 #+end_src
 
-** modprobe 相关服务
+** modprobe 服务
 
 #+NAME: modprobe-services
 #+begin_src scheme
@@ -695,15 +565,12 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
                  #~(begin
                      (use-modules (guix build utils))
                      ;; 确保配置目录存在
-                     (mkdir-p (string-append (getenv "HOME")
-                                             "/.config/modprobed-db"))
+                     (mkdir-p (string-append (getenv "HOME") "/.config/modprobed-db"))
                      ;; 运行 modprobed-db store 记录当前模块
-                     (system* #$(file-append modprobed-db
-                                             "/bin/modprobed-db")
-                              "storesilent"))))
+                     (system* #$(file-append modprobed-db "/bin/modprobed-db") "storesilent"))))
 #+end_src
 
-** Fish 相关服务
+** Fish 服务
 
 #+NAME: fish-services
 #+begin_src scheme :noweb yes
@@ -749,12 +616,148 @@ and begin
 end
 #+end_src
 
+** Emacs 服务
+
+#+NAME: emacs-services
+#+begin_src scheme
+(list (service home-emacs-service-type
+               (home-emacs-configuration
+                (emacs emacs-pgtk)
+                (packages (specifications->manifest
+                           '(;; Emacs 核心与基础
+                             "emacs-gcmh"
+                             "emacs-general"
+                             "emacs-no-littering"
+                             "emacs-spinner"
+                             "emacs-use-package"
+
+                             ;; 补全与迷你缓冲区
+                             "emacs-consult"
+                             "emacs-corfu"
+                             "emacs-corfu-terminal"
+                             "emacs-embark"
+                             "emacs-marginalia"
+                             "emacs-orderless"
+                             "emacs-vertico"
+
+                             ;; Evil 模式（Vim 模拟）
+                             "emacs-evil"
+                             "emacs-evil-collection"
+
+                             ;; 界面与外观
+                             "emacs-dashboard"
+                             "emacs-doom-modeline"
+                             "emacs-ef-themes"
+                             "emacs-kind-icon"
+                             "emacs-lsp-treemacs"
+                             "emacs-minimap"
+                             "emacs-nerd-icons"
+                             "emacs-rainbow-delimiters"
+                             "emacs-treemacs"
+                             "emacs-treemacs-extra"
+                             "emacs-treemacs-nerd-icons"
+                             "emacs-which-key"
+
+                             ;; 编辑与导航
+                             "emacs-ace-jump-mode"
+                             "emacs-diff-hl"
+                             "emacs-dirvish"
+                             "emacs-expand-region"
+                             "emacs-multiple-cursors"
+                             "emacs-origami"
+                             "emacs-perspective"
+                             "emacs-ws-butler"
+
+                             ;; 开发工具
+                             "emacs-apheleia"
+                             "emacs-eldoc-box"
+                             "emacs-rg"
+                             "emacs-stickyfunc-enhance"
+                             "emacs-vterm"
+                             "emacs-yasnippet"
+                             "emacs-yasnippet-snippets"
+
+                             ;; 编程语言支持
+                             "emacs-arei"
+                             "emacs-fish-mode"
+                             "emacs-fish-completion"
+                             "emacs-json-mode"
+                             "emacs-helm-fish-completion"
+                             "emacs-kotlin-mode"
+                             "emacs-markdown-mode"
+                             "emacs-nix-mode"
+                             "emacs-rust-mode"
+                             "emacs-sly"
+                             "emacs-typescript-mode"
+                             "emacs-web-mode"
+                             "emacs-yaml"
+                             "emacs-yaml-mode"
+                             "emacs-zig-mode"
+
+                             ;; Git 集成
+                             "emacs-git-messenger"
+                             "emacs-git-timemachine"
+                             "emacs-magit"
+                             "emacs-magit-todos"
+
+                             ;; 项目管理
+                             "emacs-centaur-tabs"
+                             "emacs-projectile"
+
+                             ;; Org Mode 生态
+                             "emacs-htmlize"
+                             "emacs-org"
+                             "emacs-org-appear"
+                             "emacs-org-modern"
+                             "emacs-org-roam"
+                             "emacs-ox-gfm"
+
+                             ;; 显示优化
+                             "emacs-flycheck"
+                             "emacs-fold-dwim"
+                             "emacs-helpful"
+                             "emacs-origami-ts"
+                             "emacs-posframe"
+                             "emacs-rainbow-delimiters"
+                             "emacs-symbol-overlay"
+
+                             ;; 邮件与日历
+                             "emacs-calfw"
+                             "emacs-notmuch"
+
+                             ;; 编程语言运行时与工具
+                             "graphviz"
+                             "guile-ares-rs"
+                             "plantuml"
+                             "sbcl"
+                             "texlive-scheme-basic"
+
+                             ;; Tree-sitter（语法解析）
+                             "tree-sitter"
+                             "tree-sitter-bash"
+                             "tree-sitter-c"
+                             "tree-sitter-cpp"
+                             "tree-sitter-css"
+                             "tree-sitter-dockerfile"
+                             "tree-sitter-go"
+                             "tree-sitter-html"
+                             "tree-sitter-java"
+                             "tree-sitter-java-properties"
+                             "tree-sitter-javascript"
+                             "tree-sitter-json"
+                             "tree-sitter-nix"
+                             "tree-sitter-python"
+                             "tree-sitter-rust"
+                             "tree-sitter-typescript"))))))
+#+end_src
+
 ** 桌面常用软件的相关服务
 
 #+NAME: user-desktop-services
 #+begin_src scheme
 (list (service home-mako-service-type)
       (service home-syncthing-service-type)
+      (service home-pipewire-service-type)
 
       (service home-darkman-service-type
                (home-darkman-configuration
@@ -775,13 +778,11 @@ end
                              (start #~(const #t))
                              (stop #~(const #f)))))
 
-      (service home-pipewire-service-type)
-
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
                                           (utilities (list fcitx5-configtool fcitx5-lua))
-                                          (wayland-frontend? #t))))
+                                          (wayland-frontend? #f))))
 #+end_src
 
 ** 软件自启动
