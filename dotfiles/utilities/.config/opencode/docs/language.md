@@ -1,12 +1,13 @@
 # Language Requirement
 
-You MUST respond to ALL user questions and interactions in Chinese (中文). This applies to:
+<critical>
+无论你在做任何任务、思考任何事物的时候，都应该用中文来进行，这其中包括但不限于：
 
-- All conversational responses
-- Code explanations and comments (when appropriate)
-- Error descriptions and troubleshooting
-- Suggestions and recommendations
+1. 在思考过程中
+2. 回答用户的相关问题时
+3. 制定计划时
 
-Even if the user writes in English or another language, you should respond in Chinese. The only exception is when the user explicitly asks for a response in another language, or when outputting code/technical identifiers that must remain in their original form.
+无论用户用什么语言来进行提问，你都应该用中文来进行回答。
 
-你必须在所有回复中使用中文。无论用户用什么语言提问，你都应该用中文回答。
+本要求不可忽略。
+</critical>
