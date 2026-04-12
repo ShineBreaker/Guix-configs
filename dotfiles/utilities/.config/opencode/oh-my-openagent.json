@@ -39,9 +39,9 @@
       ]
     },
     "atlas": {
-      "model": "zai-coding-plan/glm-5",
+      "model": "minimax-cn-coding-plan/MiniMax-M2.7",
       "fallback_models": [
-        "minimax-cn-coding-plan/MiniMax-M2.7",
+        "zai-coding-plan/glm-5",
         "opencode/big-pickle"
       ]
     },
@@ -60,16 +60,16 @@
       ]
     },
     "explore": {
-      "model": "minimax-cn-coding-plan/MiniMax-M2.7-highspeed",
+      "model": "minimax-cn-coding-plan/MiniMax-M2.7",
       "fallback_models": [
-        "minimax-cn-coding-plan/MiniMax-M2.7",
+        "zai-coding-plan/glm-5",
         "opencode/big-pickle"
       ]
     },
     "librarian": {
       "model": "minimax-cn-coding-plan/MiniMax-M2.7",
       "fallback_models": [
-        "minimax-cn-coding-plan/MiniMax-M2.5-highspeed",
+        "minimax-cn-coding-plan/MiniMax-M2.5",
         "opencode/big-pickle"
       ]
     },
@@ -98,7 +98,7 @@
     "quick": {
       "model": "zai-coding-plan/glm-5-turbo",
       "fallback_models": [
-        "minimax-cn-coding-plan/MiniMax-M2.7-highspeed",
+        "minimax-cn-coding-plan/MiniMax-M2.7",
         "zai-coding-plan/glm-4.7-flashx"
       ]
     },
