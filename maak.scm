@@ -175,7 +175,7 @@ Exit code: ~a~%" cmd exit-code)))))
 (define (nix-update)
   "更新nix包"
   ($ (list "nix-channel" "--update"))
-  ($ (list "nix" "flake" "update" "--flake" (string-append nix-dir "/#Guix"))))
+  ($ (list "nix" "flake" "update" "--flake" nix-dir)))
 
 (define (default)
   ($ (list "maak" "--list")))
