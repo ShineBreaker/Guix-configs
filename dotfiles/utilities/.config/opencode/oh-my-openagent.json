@@ -4,30 +4,30 @@
     "sisyphus": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/kimi-k2.5",
-        "alibaba-coding-plan-cn/qwen3.5-plus",
-        "alibaba-coding-plan-cn/MiniMax-M2.5"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7",
+        "opencode/big-pickle"
       ]
     },
     "prometheus": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3.5-plus",
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "metis": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/glm-5",
-        "alibaba-coding-plan-cn/qwen3.5-plus"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "momus": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/glm-5",
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "hephaestus": {
@@ -35,116 +35,119 @@
       "variant": "medium",
       "fallback_models": [
         "zai-coding-plan/glm-5.1",
-        "alibaba-coding-plan-cn/qwen3-coder-plus"
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "atlas": {
-      "model": "alibaba-coding-plan-cn/kimi-k2.5",
+      "model": "zai-coding-plan/glm-5",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
-        "alibaba-coding-plan-cn/MiniMax-M2.5"
+        "minimax-cn-coding-plan/MiniMax-M2.7",
+        "opencode/big-pickle"
       ]
     },
     "oracle": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/glm-5",
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "build": {
-      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "model": "zai-coding-plan/glm-5",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-coder-plus"
+        "zai-coding-plan/glm-5-turbo",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "explore": {
-      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
+      "model": "minimax-cn-coding-plan/MiniMax-M2.7-highspeed",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-coder-next"
+        "minimax-cn-coding-plan/MiniMax-M2.7",
+        "opencode/big-pickle"
       ]
     },
     "librarian": {
-      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
+      "model": "minimax-cn-coding-plan/MiniMax-M2.7",
       "fallback_models": [
-        "alibaba-coding-plan-cn/glm-5"
+        "minimax-cn-coding-plan/MiniMax-M2.5-highspeed",
+        "opencode/big-pickle"
       ]
     },
     "title": {
-      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "model": "zai-coding-plan/glm-5",
       "fallback_models": [
-        "alibaba-coding-plan-cn/kimi-k2.5"
+        "zai-coding-plan/glm-4.7-flashx"
       ]
     },
     "summary": {
-      "model": "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
+      "model": "zai-coding-plan/glm-5-turbo",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-coder-max",
-        "alibaba-coding-plan-cn/qwen3-coder-plus"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "multimodal-looker": {
       "model": "zai-coding-plan/glm-5v-turbo",
-      "variant": "medium",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3.5-plus",
-        "alibaba-coding-plan-cn/kimi-k2.5"
+        "zai-coding-plan/glm-4.6v",
+        "zai-coding-plan/glm-4.5v"
       ]
     }
   },
   "categories": {
     "quick": {
-      "model": "alibaba-coding-plan-cn/MiniMax-M2.5",
+      "model": "zai-coding-plan/glm-5-turbo",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-coder-plus",
-        "alibaba-coding-plan-cn/qwen3-coder-next"
+        "minimax-cn-coding-plan/MiniMax-M2.7-highspeed",
+        "zai-coding-plan/glm-4.7-flashx"
       ]
     },
     "unspecified-low": {
-      "model": "alibaba-coding-plan-cn/qwen3-coder-next",
+      "model": "zai-coding-plan/glm-4.7-flashx",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-coder-next"
+        "zai-coding-plan/glm-4.5-flash"
       ]
     },
     "unspecified-high": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
-        "alibaba-coding-plan-cn/qwen3.5-plus"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "deep": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23",
-        "alibaba-coding-plan-cn/qwen3-coder-plus"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "ultrabrain": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/qwen3.5-plus",
-        "alibaba-coding-plan-cn/qwen3-max-2026-01-23"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "writing": {
-      "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+      "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/kimi-k2.5"
+        "zai-coding-plan/glm-5",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "visual-engineering": {
       "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/kimi-k2.5",
-        "alibaba-coding-plan-cn/qwen3.5-plus"
+        "zai-coding-plan/glm-5v-turbo",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     },
     "artistry": {
-      "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+      "model": "zai-coding-plan/glm-5.1",
       "fallback_models": [
-        "alibaba-coding-plan-cn/kimi-k2.5",
-        "zai-coding-plan/qwen3-max-2026-01-23"
+        "zai-coding-plan/glm-5v-turbo",
+        "minimax-cn-coding-plan/MiniMax-M2.7"
       ]
     }
   },
@@ -152,8 +155,9 @@
     "defaultConcurrency": 6,
     "staleTimeoutMs": 180000,
     "providerConcurrency": {
-      "alibaba-coding-plan-cn": 6,
-      "zai-coding-plan": 5
+      "zai-coding-plan": 5,
+      "minimax-cn-coding-plan": 6,
+      "openai": 3
     }
   }
 }

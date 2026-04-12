@@ -71,10 +71,10 @@
           }
         }]
       },
-      "Aliyun": {
-        "api_url": "https://coding.dashscope.aliyuncs.com/v1",
+      "MiniMax": {
+        "api_url": "https://api.minimaxi.com/v1",
         "available_models": [{
-          "name": "kimi-k2.5",
+          "name": "MiniMax-M2.7",
           "max_tokens": 256000,
           "max_output_tokens": 65536,
           "max_completion_tokens": 256000,
@@ -86,7 +86,7 @@
             "chat_completions": true
           }
         }, {
-          "name": "glm-4.7",
+          "name": "MiniMax-M2.7-highspeed",
           "max_tokens": 256000,
           "max_output_tokens": 65536,
           "max_completion_tokens": 256000,
@@ -98,7 +98,7 @@
             "chat_completions": true
           }
         }, {
-          "name": "glm-5",
+          "name": "MiniMax-M2.5-highspeed",
           "max_tokens": 256000,
           "max_output_tokens": 65536,
           "max_completion_tokens": 256000,
@@ -121,60 +121,7 @@
             "prompt_cache_key": false,
             "chat_completions": true
           }
-        }, {
-          "name": "qwen3.5-plus",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3-max-2026-01-23",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3-coder-next",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "qwen3-coder-plus",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }],
-        "active_model": {
-          "provider": "Zhipu AI",
-          "model": "glm-5.1",
-          "enable_thinking": false
-        }
+        }]
       }
     }
   },
