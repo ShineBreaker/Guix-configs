@@ -880,12 +880,6 @@ end
 (list (service home-files-service-type
                `((".guile" ,%default-dotguile)
                  (".Xdefaults" ,%default-xdefaults)
-                 (".config/git-credential-keepassxc" ,(computed-substitution-with-inputs
-                                                       "git-credential-keepassxc"
-                                                       (local-file
-                                                        "../source/files/git-credential-keepassxc")
-                                                       (specs->pkgs "git"
-                                                                    "fish")))
                  (".config/zed/settings.json" ,(computed-substitution-with-inputs
                                                 "zed.json"
                                                 (local-file

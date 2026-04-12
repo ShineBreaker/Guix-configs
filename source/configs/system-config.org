@@ -135,11 +135,9 @@
 
 * FileSystems
 
-这里的配置文件需要根据自己的实际情况进行修改，我目前是使用了 *LUKS +
-Btrfs 的架构，同时高强度地使用subvol功能
-
-具体的subvol配置放置在 [[../information.scm][information.scm]]
-中，方便我直接做相应地修改
+这里的配置文件需要根据自己的实际情况进行修改
+我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能
+具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -887,7 +885,7 @@ Btrfs 的架构，同时高强度地使用subvol功能
 #+begin_src scheme
 (map (lambda (path)
        `(,path ,(local-file (string-append "source/files/skel/" path))))
-     '( ".config/mihomo/config.yaml"))
+     '(".config/mihomo/config.yaml" ".config/git-credential-keepassxc"))
 #+end_src
 
 * Users
