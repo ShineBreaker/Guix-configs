@@ -355,6 +355,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "setxkbmap"
         "wl-clipboard"
         "xprop"
+        "xvfb-run"
 
         ;; XDG 相关组件
         "xdg-dbus-proxy"
@@ -471,7 +472,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; 社交
         "notmuch"
-        ; "telegram-desktop"
+        "telegram-desktop"
         "zulip-term"
 
         ;; 生产力工具
@@ -781,8 +782,7 @@ end
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua))
-                                          (wayland-frontend? #f))))
+                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
 #+end_src
 
 ** 软件自启动
@@ -929,13 +929,7 @@ end
   ("FREERDP_ASKPASS" . "1")
   ("GUIX_PROFILE" . "$HOME/.guix-profile")
   ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
-  ("HTTP_PROXY" . "http://127.0.0.1:7890")
-  ("http_proxy" . "$HTTP_PROXY")
-  ("HTTPS_PROXY" . "$HTTP_PROXY")
-  ("https_proxy" . "$HTTP_PROXY")
   ("LIBVIRT_DEFAULT_URI" . "qemu:///system")
-  ("no_proxy" . "127.0.0.1,localhost")
-  ("NO_PROXY" . "127.0.0.1,localhost")
   ("QS_ICON_THEME" . "Papirus-Dark")
   ("QT_QPA_PLATFORMTHEME" . "qt5ct")
 
