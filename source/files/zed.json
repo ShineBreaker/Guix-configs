@@ -372,13 +372,13 @@
   },
   "terminal": {
     "env": {
-      "EDITOR": "zed-editor --wait"
+      "EDITOR": "zed-editor"
     },
     "shell": "system"
   },
   "ui_font_size": 15,
   "ui_font_weight": 500.0,
   "unnecessary_code_fade": 0.7,
-  "vim_mode": true,
+  "vim_mode": false,
   "when_closing_with_no_tabs": "keep_window_open"
 }
