@@ -112,7 +112,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (gnu services)
 
              (jeans packages browser)
-             (jeans packages games)
 
              (rosenthal utils file)
              (rosenthal utils packages))
@@ -243,9 +242,10 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 (append (list librewolf-nongnu)
   (cons* (specs->pkgs+out
         ;; 浏览器 & 插件
-        "librewolf-nongnu"
-        "thorium-browser"
+        "ungoogled-chromium-wayland"
+        "ublock-origin-chromium"
 
+        "librewolf-nongnu"
         "adaptive-tab-bar-colour-icecat"
         "keepassxc-browser-icecat"
         "miniflux-injector-icecat"
@@ -408,7 +408,6 @@ and begin
     $$bin/direnv$$ hook fish | source
     $$bin/fzf$$ --fish | source
     $$bin/zoxide$$ init fish | source
-
     $$bin/starship$$ init fish | source
     enable_transience
 
@@ -417,16 +416,24 @@ end
 
 ** Emacs 服务
 
+这个服务可以做到两件事：
+
+1. 利用 ~emacs --fg-daemon~ 来开启一个 emacs 服务
+2. 将这下面的所有包放到一个只有 emacs 能够访问的专属 profile 中
+
+
 #+NAME: emacs-services
 #+begin_src scheme
 (list (service home-emacs-service-type
                (home-emacs-configuration
                 (emacs emacs-pgtk)
+                (shepherd-requirement '(graphical-session))
                 (packages (specifications->manifest
                            '(;; Emacs 核心与基础
                              "emacs-gcmh"
                              "emacs-general"
                              "emacs-no-littering"
+                             "emacs-pgtk:doc"
                              "emacs-spinner"
                              "emacs-use-package"
 
@@ -464,7 +471,6 @@ end
                              "emacs-expand-region"
                              "emacs-multiple-cursors"
                              "emacs-origami"
-                             "emacs-perspective"
                              "emacs-ws-butler"
 
                              ;; 开发工具
@@ -482,6 +488,7 @@ end
                              "emacs-fish-completion"
                              "emacs-json-mode"
                              "emacs-helm-fish-completion"
+                             "emacs-kdl-mode"
                              "emacs-kotlin-mode"
                              "emacs-markdown-mode"
                              "emacs-nix-mode"
@@ -544,6 +551,7 @@ end
                              "tree-sitter-java-properties"
                              "tree-sitter-javascript"
                              "tree-sitter-json"
+                             "tree-sitter-kdl"
                              "tree-sitter-nix"
                              "tree-sitter-python"
                              "tree-sitter-rust"
@@ -554,9 +562,11 @@ end
 
 #+NAME: user-desktop-services
 #+begin_src scheme
-(list (service home-mako-service-type)
+(list (service home-dbus-service-type)
+      (service home-mako-service-type)
       (service home-syncthing-service-type)
       (service home-pipewire-service-type)
+      (service home-waybar-service-type)
 
       (service home-darkman-service-type
                (home-darkman-configuration
@@ -566,16 +576,10 @@ end
                 (dbus-server #t)
                 (portal #t)))
 
-      (service home-shepherd-service-type
-               (home-shepherd-configuration
-                (auto-start? #f)
-                (daemonize? #f)))
-
-      (simple-service 'dbus home-shepherd-service-type
-                      (list (shepherd-service
-                             (provision '(dbus))
-                             (start #~(const #t))
-                             (stop #~(const #f)))))
+      (service home-graphical-session-service-type
+	             (home-graphical-session-configuration
+	              (wayland? #t)
+	              (x11? #t)))
 
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
@@ -585,9 +589,11 @@ end
 
 ** 软件自启动
 
-这里利用 *scheme* 的 =lambda=
-函数来包装了一个列表，这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容
-这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作
+这里利用 *scheme* 的 =lambda= 函数来包装了一个列表;
+
+这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容。
+
+这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作。
 
 #+NAME: home-shepherd-services
 #+begin_src scheme
@@ -601,13 +607,12 @@ end
                                                                #$(package-name pkg) ".log")))
                            (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (make-shepherd-service kanata "/bin/kanata" '(dbus))
-                              (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(dbus))
-                              (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(dbus))
-                              (make-shepherd-service poweralertd "/bin/poweralertd" '(dbus))
-                              (make-shepherd-service swayidle "/bin/swayidle" '(dbus))
-                              (make-shepherd-service waybar "/bin/waybar" '(dbus))
-                              (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(dbus))
+                        (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
+                              (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(graphical-session))
+                              (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(graphical-session))
+                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal-gnome "/libexec/xdg-desktop-portal-gnome" '(xdg-desktop-portal))
                               (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(xdg-desktop-portal))))))
 #+end_src

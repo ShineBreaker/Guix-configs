@@ -711,9 +711,7 @@
                         (initial-session-command
                          (program-file
                           "niri-session"
-                          #~(execl #$(file-append dbus "/bin/dbus-run-session") "dbus-run-session"
-                                   (string-append "--dbus-daemon=" #$(file-append dbus "/bin/dbus-daemon"))
-                                   #$(file-append niri "/bin/niri") "--session")))))))))
+                          #~(execl #$(file-append niri "/bin/niri") "--session")))))))))
 #+end_src
 
 ** 文件系统相关服务
