@@ -5,38 +5,31 @@
     flake-compat.url = "github:NixOS/flake-compat";
     flake-parts.url = "github:hercules-ci/flake-parts";
     flake-utils.url = "github:numtide/flake-utils";
-    nixpkgs.url = "nixpkgs/nixos-unstable";
+    nixpkgs.url = "nixpkgs/nixpkgs-unstable";
 
     home-manager = {
       url = "github:nix-community/home-manager";
+      inputs = { nixpkgs.follows = "nixpkgs"; };
+    };
+
+    nur = {
+      url = "github:nix-community/NUR";
       inputs = {
         nixpkgs.follows = "nixpkgs";
+        flake-parts.follows = "flake-parts";
       };
     };
   };
 
-  outputs =
-    { self, nixpkgs, ... }@inputs:
+  outputs = { self, nixpkgs, ... }@inputs:
 
-    (
-      let
-        system = "x86_64-linux";
-        username = "brokenshine";
+    (let
+      system = "x86_64-linux";
+      username = "brokenshine";
 
-        genRev = {
-          system.configurationRevision = self.rev or null;
-          system.nixos.label =
-            with builtins;
-            if self.sourceInfo ? lastModifiedDate && self.sourceInfo ? shortRev then
-              "${substring 0 8 self.sourceInfo.lastModifiedDate}.${self.sourceInfo.shortRev}"
-            else
-              "dirty";
-        };
-
-      in
-
-      {
-        homeConfigurations.Guix = inputs.home-manager.lib.homeManagerConfiguration {
+    in {
+      homeConfigurations.Guix =
+        inputs.home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${system};
 
           modules = [
@@ -46,6 +39,5 @@
 
           extraSpecialArgs = { inherit inputs; };
         };
-      }
-    );
+    });
 }
