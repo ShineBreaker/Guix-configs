@@ -2,14 +2,26 @@
 #
 # SPDX-License-Identifier: GPL-3.0
 
-inherits = "ayu_mirage"
+# Inherits base16_transparent but removes hardcoded white/black fg
+# so the editor follows the terminal's default foreground color.
 
-["ui.background"]
+inherits = "base16_transparent"
 
-["ui.help"]
+"ui.background" = {}
+"ui.text" = {}
+"ui.text.focus" = { modifiers = ["bold"] }
+"ui.menu" = {}
+"ui.menu.selected" = { modifiers = ["reversed"] }
+"ui.popup" = {}
+"ui.linenr.selected" = { modifiers = ["bold"] }
+"ui.statusline" = {}
+"ui.statusline.inactive" = { fg = "gray" }
+"ui.statusline.normal" = { modifiers = ["reversed"] }
+"ui.statusline.insert" = { modifiers = ["reversed"] }
+"ui.statusline.select" = { modifiers = ["reversed"] }
+"ui.help" = {}
+"ui.virtual.inlay-hint" = { fg = "gray", modifiers = ["italic"] }
+"ui.virtual.inlay-hint.parameter" = { fg = "gray", modifiers = ["italic"] }
+"ui.virtual.inlay-hint.type" = { fg = "gray", modifiers = ["italic"] }
 
-["ui.menu"]
-
-["ui.statusline"]
-
-["ui.text"]
+"comment" = { fg = "gray", modifiers = ["italic"] }

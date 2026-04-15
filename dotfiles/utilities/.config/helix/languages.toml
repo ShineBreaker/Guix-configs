@@ -17,6 +17,14 @@ config.pylsp.plugins.rope.enabled = true
 [language-server.rust-analyzer]
 command = "rust-analyzer"
 
+[language-server.zls]
+command = "zls"
+
+[[language]]
+name = "bash"
+auto-format = true
+formatter = { command = "shfmt", args = ["-s", "-"] }
+
 [[language]]
 name = "c"
 auto-format = true
@@ -34,6 +42,11 @@ formatter = { command = "clang-format", args = [
   "-assume-filename=%{buffer_name}",
 ] }
 language-servers = ["ccls"]
+
+[[language]]
+name = "fish"
+auto-format = true
+formatter = { command = "fish_indent" }
 
 [[language]]
 name = "java"
@@ -61,6 +74,11 @@ formatter = { command = "js-beautify", args = [
 ] }
 
 [[language]]
+name = "nix"
+auto-format = true
+formatter = { command = "nixfmt" }
+
+[[language]]
 name = "python"
 auto-format = true
 formatter = { command = "black", args = [
@@ -70,3 +88,13 @@ formatter = { command = "black", args = [
   "-",
 ] }
 language-servers = ["pylsp"]
+
+[[language]]
+name = "rust"
+auto-format = true
+formatter = { command = "rustfmt" }
+language-servers = ["rust-analyzer"]
+
+[[language]]
+name = "zig"
+language-servers = ["zls"]
