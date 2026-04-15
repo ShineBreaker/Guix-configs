@@ -1,9 +1,7 @@
 { pkgs, ... }:
 
 {
-  imports = [
-    ../programs/Develop/code.nix
-  ];
+  imports = [ ../programs/Develop/code.nix ];
 
   home.packages = with pkgs; [
     android-tools
@@ -20,15 +18,17 @@
     gamescope
 
     pmbootstrap
-    sbctl
 
     beekeeper-studio
     postman
 
+    crush
     opencode
-    opencode-desktop
 
-    libsForQt5.qt5ct
-    kdePackages.qt6ct
+    bash-language-server
+    kotlin-language-server
+    nil
+    typescript-language-server
+    vscode-langservers-extracted
   ];
 }
