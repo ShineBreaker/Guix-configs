@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "f6365c6b3e5736a3a1665e25e4156133b9301698")
+       (commit "fa3888834879056759086667087f10ad4e018aa9")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -29,32 +29,12 @@
          (openpgp-fingerprint
           "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
       (channel
-       (name 'panther)
-       (url "https://codeberg.org/gofranz/panther")
-       (branch "master")
-       (commit "ebbf606d5e45014bbdd7fd7bea053a2b82ec9f6c")
-       (introduction
-        (make-channel-introduction
-         "54b4056ac571611892c743b65f4c47dc298c49da"
-         (openpgp-fingerprint
-          "A36A D41E ECC7 A871 1003  5D24 524F EB1A 9D33 C9CB"))))
-      (channel
        (name 'rosenthal)
        (url "https://codeberg.org/hako/rosenthal.git")
        (branch "trunk")
-       (commit "54137b18ef1a56fe4065f4298f971d411a15c151")
+       (commit "29583b5c21fa829e82fe943a8dc0b6efe10232e9")
        (introduction
         (make-channel-introduction
          "7677db76330121a901604dfbad19077893865f35"
          (openpgp-fingerprint
-          "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
-      (channel
-       (name 'selected-guix-works)
-       (url "https://github.com/gs-101/selected-guix-works.git")
-       (branch "main")
-       (commit "4cf9e6459472974ceed098364683bb08073f53ea")
-       (introduction
-        (make-channel-introduction
-         "5d1270d51c64457d61cd46ec96e5599176f315a4"
-         (openpgp-fingerprint
-          "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162")))))
+          "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7")))))
