@@ -9,7 +9,6 @@
 --------------
 
 * Agent 指引
-
 ** Home 配置修改指引
 
 本区域为 AI 助手提供 Home 配置的上下文和决策规则。阅读此区域后再进行修改。
@@ -118,7 +117,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 #+end_src
 
 * Define
-
 ** LibreWolf 修补脚本
 
 #+NAME: patch-omni-py
@@ -444,7 +442,9 @@ NAME: define-packages
 
         ;; 工具
         "direnv"
+        "file"
         "gitui"
+        "git-credential-keepassxc"
         "git-filter-repo"
         "git-lfs"
         "gradle"
@@ -497,20 +497,23 @@ NAME: define-packages
 
         ;; 社交
         "notmuch"
-        "telegram-desktop"
+        ;; "telegram-desktop"
         "zulip-term"
 
         ;; 生产力工具
         "gimp"
         "keepassxc"
         "kdeconnect"
+        "motrix-next-bin"
         "seahorse"
         "virt-manager"
 
         ;; 娱乐
+        "beatoraja-bin"
         "gamemode"
         "heroic"
         "mangohud"
+        "osu-lazer-bin"
         "prismlauncher-dolly"
         "steam"
 
@@ -536,7 +539,6 @@ NAME: define-packages
 #+end_src
 
 * Services
-
 #+NAME: services-modules
 #+begin_src scheme
 (use-modules (gnu home services desktop)
@@ -1030,7 +1032,6 @@ end
 #+end_src
 
 * Font
-
 ** 字体相关配置
 
 #+NAME: font-services

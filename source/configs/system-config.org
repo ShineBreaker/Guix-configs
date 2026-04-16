@@ -411,6 +411,7 @@
                      linux
                      networking
                      nix
+                     pm
                      shepherd
                      sound
                      virtualization
