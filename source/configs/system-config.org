@@ -376,8 +376,6 @@
  "gzip"
  "libnotify"
  "ntfs-3g"
- "tpm2-abrmd"
- "tpm2-pkcs11"
  "tpm2-tools"
  "tpm2-tss"
  "unzip"
@@ -391,7 +389,6 @@
 (use-modules (gnu home services guix)
              (guix channels)
              (jeans services hardware)
-             (px services audio)
              (rosenthal packages networking)
              (rosenthal packages wm)
              (rosenthal services base)
@@ -407,6 +404,7 @@
 
 (use-service-modules authentication
                      containers
+                     dbus
                      desktop
                      dns
                      guix
@@ -418,42 +416,6 @@
                      virtualization
                      xorg)
 
-#+end_src
-
-** 基础服务
-
-#+NAME: basic-services
-#+begin_src scheme
-(map (lambda (tty)
-       (service kmscon-service-type
-                (kmscon-configuration (virtual-terminal tty)
-                                      (font-engine "pango")
-                                      (font-size 24))))
-     '("tty2" "tty3" "tty4" "tty5" "tty6"))
-
-(list (service fprintd-service-type)
-      (service gnome-keyring-service-type)
-      (service gvfs-service-type)
-      (service opentabletdriver-service-type)
-      (service rtkit-daemon-service-type)
-
-      (simple-service 'home-channels home-channels-service-type
-                      guix-channels)
-
-      (service shared-cache-service-type
-             (shared-cache-configuration
-               (users (list (user-cache (user username))))))
-
-      (simple-service 'root-services shepherd-root-service-type
-                      (list (shepherd-timer '(guix-gc)
-                                            #~(calendar-event
-                                               #:days-of-week '(sunday)
-                                               #:hours '(18)
-                                               #:minutes '(0))
-                                            #~("/run/current-system/profile/bin/guix"
-                                               "gc" "--delete-generations=14d")
-                                            #:requirement '(user-processes
-                                                            guix-daemon)))))
 #+end_src
 
 ** 文件系统相关服务
@@ -590,7 +552,6 @@
               (service gnome-keyring-service-type)
               (service gvfs-service-type)
               (service opentabletdriver-service-type)
-              (service rtkit-daemon-service-type)
 
               (service tlp-service-type
                        (tlp-configuration
@@ -626,16 +587,6 @@
                                         "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
                                 (substitute-urls
                                  '("https://substitutes.nonguix.org"))))
-
-               ;; Panther channel
-               (simple-service 'panther-substitutes guix-service-type
-                               (guix-extension
-                                (authorized-keys
-                                 (list (plain-file
-                                        "panther.pub"
-                                        "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))
-                                (substitute-urls
-                                 '("https://substitutes.guix.gofranz.com"))))
 
                ;; Guix-moe channel
                (simple-service 'guix-moe-substitutes guix-service-type
@@ -791,46 +742,7 @@
                                               (respawn? #t)))))
 #+end_src
 
-** Nix包管理器相关配置
-
-#+NAME: nix-services
-#+begin_src scheme
-(list (service nix-service-type
-               (nix-configuration (extra-config (list (string-append
-                                                       "trusted-users"
-                                                       " = root " username)))))
-
-      (simple-service 'non-nixos-gpu shepherd-root-service-type
-                      (list (shepherd-service (documentation
-                                               "Install GPU drivers for running GPU accelerated programs from Nix.")
-                                              (provision '(non-nixos-gpu))
-                                              (requirement '(nix-daemon))
-                                              (start #~(make-forkexec-constructor
-                                                        '("/run/current-system/profile/bin/ln"
-                                                          "-nsf"
-                                                          "/var/lib/non-nixos-gpu"
-                                                          "/run/opengl-driver")))
-                                              (stop #~(make-kill-destructor))
-                                              (auto-start? #t)
-                                              (one-shot? #t)))))
-#+end_src
-
-** UDEV规则
-
-#+NAME: udev-services
-#+begin_src scheme
-(list (udev-rules-service 'android android-udev-rules
-                          #:groups '("adbusers"))
-      (udev-rules-service 'steam-devices steam-devices-udev-rules)
-      (udev-rules-service 'controller
-                          (udev-rule "60-controller-permission.rules"
-                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
-      (udev-rules-service 'cpu-dma
-                          (udev-rule "99-cpu-dma-latency.rules"
-                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\"")))
-#+end_src
-
-** 虚拟化相关服务
+** 虚拟化服务
 
 #+NAME: virtualization-services
 #+begin_src scheme

@@ -83,20 +83,20 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
             <<user-packages-list>>
             ))
 
- (services (append
-            <<user-desktop-services>>
-            <<home-shepherd-services>>
-            <<timer-services>>
+  (services (append
+             <<user-desktop-services>>
+             <<home-shepherd-services>>
+             <<timer-services>>
 
-            <<emacs-services>>
-            <<fish-services>>
-            <<modprobe-services>>
-            <<dotfile-services>>
-            <<home-files-services>>
-            <<environment-variable-services>>
-            <<font-services>>
+             <<emacs-services>>
+             <<fish-services>>
+             <<modprobe-services>>
+             <<dotfile-services>>
+             <<home-files-services>>
+             <<environment-variable-services>>
+             <<font-services>>
 
-            %base-home-services)))
+             %base-home-services)))
 #+end_src
 
 * Modules
@@ -358,7 +358,6 @@ NAME: define-packages
         ;; 字体
         "font-awesome"
         "font-google-noto-emoji"
-        "font-nerd-fonts-iosevka"
         "font-maple-font-nf-cn"
 
         ;; 输入法
@@ -390,7 +389,6 @@ NAME: define-packages
 (cons* (specs->pkgs+out
         ;; 工具
         "atuin"
-        "broot"
         "btop"
         "starship"
         "kitty-full"
@@ -421,12 +419,12 @@ NAME: define-packages
         ;; 开发环境
         "ccls"
         "clang"
+        "godot"
         "graphviz"
         "jdtls-bin"
         "node"
         "openjdk@25"
         "plantuml"
-        "pnpm@10"
         "python"
         "rust"
         "zig"
@@ -434,7 +432,6 @@ NAME: define-packages
         ;; LSP & Formatter
         "guile-ares-rs"
         "nixfmt"
-        "package-version-server"
         "python-black"
         "python-jsbeautifier"
         "python-lsp-black"
@@ -446,12 +443,12 @@ NAME: define-packages
         "zig-zls"
 
         ;; 工具
-        "bun"
         "direnv"
         "gitui"
         "git-filter-repo"
         "git-lfs"
         "gradle"
+        "graphviz"
         "jq"
         "maven"
         "pandoc"
@@ -472,8 +469,8 @@ NAME: define-packages
 (append (list librewolf-nongnu)
   (cons* (specs->pkgs+out
         ;; 浏览器 & 插件
-        "ungoogled-chromium-wayland"
-        "ublock-origin-chromium"
+        ; "ungoogled-chromium-wayland"
+        ; "ublock-origin-chromium"
 
         "adaptive-tab-bar-colour-icecat"
         "keepassxc-browser-icecat"
@@ -486,7 +483,7 @@ NAME: define-packages
         "gst-plugins-base"
         "gst-plugins-good"
         "gst-plugins-bad"
-        "gst-plugins-ugly-full"
+        "gst-plugins-ugly"
 
         ;; 影音
         "easyeffects"
@@ -504,16 +501,14 @@ NAME: define-packages
         "zulip-term"
 
         ;; 生产力工具
-        "claude-code"
-        "codex"
         "gimp"
         "keepassxc"
-        "git-credential-keepassxc"
         "kdeconnect"
         "seahorse"
         "virt-manager"
 
         ;; 娱乐
+        "gamemode"
         "heroic"
         "mangohud"
         "prismlauncher-dolly"
@@ -715,6 +710,7 @@ end
                              "emacs-arei"
                              "emacs-fish-mode"
                              "emacs-fish-completion"
+                             "emacs-gdscript-mode"
                              "emacs-json-mode"
                              "emacs-helm-fish-completion"
                              "emacs-kdl-mode"
@@ -767,6 +763,7 @@ end
                              "tree-sitter-cpp"
                              "tree-sitter-css"
                              "tree-sitter-dockerfile"
+                             "tree-sitter-gdscript"
                              "tree-sitter-go"
                              "tree-sitter-html"
                              "tree-sitter-java"
@@ -915,7 +912,6 @@ end
                                                  "jdtls-bin"
                                                  "maven"
                                                  "node"
-                                                 "package-version-server"
                                                  "python-black"
                                                  "python-jsbeautifier"
                                                  "python-lsp-black"

@@ -28,15 +28,6 @@
                     (openpgp-fingerprint
                      "2A39 3FFF 68F4 OPEF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
                 (channel
-                  (name 'panther)
-                  (branch "master")
-                  (url "https://codeberg.org/gofranz/panther")
-                  (introduction
-                   (make-channel-introduction
-                    "54b4056ac571611892c743b65f4c47dc298c49da"
-                    (openpgp-fingerprint
-                     "A36A D41E ECC7 A871 1003  5D24 524F EB1A 9D33 C9CB"))))
-                (channel
                   (name 'rosenthal)
                   (url "https://codeberg.org/hako/rosenthal.git")
                   (branch "trunk")
@@ -44,16 +35,7 @@
                    (make-channel-introduction
                     "7677db76330121a901604dfbad19077893865f35"
                     (openpgp-fingerprint
-                     "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
-                (channel
-                  (name 'selected-guix-works)
-                  (url "https://github.com/gs-101/selected-guix-works.git")
-                  (branch "main")
-                  (introduction
-                   (make-channel-introduction
-                    "5d1270d51c64457d61cd46ec96e5599176f315a4"
-                    (openpgp-fingerprint
-                     "C780 21F7 34E4 07EB 9090  0CF1 4ACA 6D6F 89AB 3162")))))
+                     "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7")))))
 
           %default-channels))
 

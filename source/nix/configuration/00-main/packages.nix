@@ -5,11 +5,21 @@
 
   home.packages = with pkgs; [
     android-tools
+    broot
+    bun
+    claude-code
+    package-version-server
+    pnpm
     qtscrcpy
     scrcpy
+    tpm2-abrmd
+    tpm2-pkcs11
 
     gpu-screen-recorder-gtk
     sunshine
+
+    git-credential-keepassxc
+    nerd-fonts.iosevka
 
     sarasa-gothic
     bibata-cursors
@@ -22,6 +32,7 @@
     beekeeper-studio
     postman
 
+    codex
     crush
     opencode
 
