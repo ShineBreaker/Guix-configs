@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE_DIR="/etc/systemd/system"
+SERVICE_FILE="$SERVICE_DIR/non-nixos-gpu.service"
+GPU_DIR="/var/lib/non-nixos-gpu"
+
+cleanup() {
+    rm -rf "$SERVICE_DIR"
+}
+trap cleanup EXIT
+
+mkdir -p "$SERVICE_DIR"
+
+non-nixos-gpu-setup
+
+if [[ ! -f "$SERVICE_FILE" ]]; then
+    echo "error: $SERVICE_FILE not found after non-nixos-gpu-setup" >&2
+    exit 1
+fi
+
+exec_start=$(grep -oP '(?<=ExecStart=).*' "$SERVICE_FILE")
+if [[ -z "$exec_start" ]]; then
+    echo "error: ExecStart line not found in $SERVICE_FILE" >&2
+    exit 1
+fi
+
+cmd=${exec_start//\/run\/opengl-driver/$GPU_DIR}
+
+echo "+ $cmd"
+eval "$cmd"
