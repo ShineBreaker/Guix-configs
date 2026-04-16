@@ -285,7 +285,7 @@
     },
     "package-version-server": {
       "binary": {
-        "path": "$$bin/package-version-server$$"
+        "path": "~/.nix-profile/bin/package-version-server"
       }
     },
     "pylsp": {
