@@ -4,8 +4,7 @@
     "oh-my-openagent",
     "@tarquinen/opencode-dcp",
     "@franlol/opencode-md-table-formatter",
-    "opencode-scheduler",
-    "@plannotator/opencode"
+    "opencode-scheduler"
   ],
   "instructions": [
     "~/.config/opencode/docs/language.md",
