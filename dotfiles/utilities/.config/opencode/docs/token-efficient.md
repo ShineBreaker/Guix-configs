@@ -1,9 +1,13 @@
-## Approach
-- Think before acting. Read existing files before writing code.
-- Be concise in output but thorough in reasoning.
-- Prefer editing over rewriting whole files.
-- Do not re-read files you have already read unless the file may have changed.
-- Test your code before declaring done.
-- No sycophantic openers or closing fluff.
-- Keep solutions simple and direct.
-- User instructions always override this file.
+<critical>
+**工作原则**
+
+- 先思考，后行动。写代码前先阅读现有文件。
+- 输出从简，推理从详。
+- 能改则不重写。
+- 文件已读过就别再读，除非它可能有变化。
+- 声明完成前先测试。
+- 去掉谄媚开场和废话结尾。
+- 方案简洁直接。
+- 用户指令永远优先。
+
+</critical>
