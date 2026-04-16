@@ -1,0 +1,309 @@
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/oh-my-opencode.schema.json",
+
+  // ============================================================
+  // Agent-Model Matching Config
+  // 约束: Copilot 学生优惠无 Claude Opus/Sonnet 系列和 GPT-5.4 系列
+  // GLM-5.1 替代 Opus/Sonnet 作为通信/编排模型 (Claude 家族)
+  // GPT-5.3-Codex 替代 GPT-5.4 作为深度推理模型 (GPT 家族)
+  //
+  // 严格遵循文档 fallback chain 顺序，跳过不可用模型
+  // ============================================================
+
+  "agents": {
+
+    // === 通信型 → Claude/Kimi/GLM 家族 ===
+    // 文档: Sisyphus uses Claude / Kimi / GLM
+    // 安全替换: Opus → Sonnet, Kimi K2.5, GLM 5 (均为通信型)
+    // 危险: Sisyphus → older GPT: "GPT-5.4 is the only dedicated GPT prompt path"
+
+    "sisyphus": {
+      "model": "zai-coding-plan/glm-5.1",
+      "variant": "max",
+      "ultrawork": {
+        "model": "zai-coding-plan/glm-5.1",
+        "variant": "max"
+      },
+      // 文档链: opus(max)→kimi→k2p5→kimi→gpt-5.4(medium)→glm-5→big-pickle
+      // 跳过: opus(不可用), kimi/k2p5(不可用), gpt-5.4(不可用+危险)
+      "fallback_models": [{
+          "model": "zai-coding-plan/glm-5",
+          "variant": "max"
+        },
+        "opencode/big-pickle"
+      ]
+    },
+
+    "metis": {
+      "model": "zai-coding-plan/glm-5.1",
+      "variant": "high",
+      // 文档链: opus(max)→gpt-5.4(high)→glm-5→k2p5
+      // 跳过: opus, gpt-5.4(不可用), k2p5(不可用)
+      "fallback_models": [{
+          "model": "zai-coding-plan/glm-5",
+          "variant": "high"
+        },
+        "github-copilot/gemini-3.1-pro-preview"
+      ]
+    },
+
+    // === 双提示词型 → 支持 Claude 和 GPT，自动切换提示词 ===
+
+    "prometheus": {
+      "model": "zai-coding-plan/glm-5.1",
+      "variant": "high",
+      // 文档链: opus(max)→gpt-5.4(high)→glm-5→gemini-3.1-pro
+      "fallback_models": [{
+          "model": "github-copilot/gpt-5.3-codex",
+          "variant": "high"
+        }, {
+          "model": "zai-coding-plan/glm-5",
+          "variant": "high"
+        },
+        "github-copilot/gemini-3.1-pro-preview"
+      ]
+    },
+
+    "atlas": {
+      "model": "minimax-cn-coding-plan/MiniMax-M2.7",
+      // 文档链: claude-sonnet-4-6→kimi→gpt-5.4(medium)→minimax-m2.7
+      // 跳过: sonnet(不可用), kimi(不可用)
+      "fallback_models": [{
+          "model": "github-copilot/gpt-5.3-codex",
+          "variant": "medium"
+        },
+        "opencode/big-pickle"
+      ]
+    },
+
+    // === 深度专家型 → GPT 家族，不要换成 Claude ===
+    // 文档: "Don't override to Claude"
+
+    "hephaestus": {
+      "model": "github-copilot/gpt-5.3-codex",
+      "variant": "medium",
+      // 文档链: gpt-5.4(medium) [单条目链]
+      // GPT 家族内部降级
+      "fallback_models": [{
+        "model": "openai/gpt-5.3-codex",
+        "variant": "medium"
+      }, {
+        "model": "github-copilot/gpt-5.2-codex",
+        "variant": "medium"
+      }]
+    },
+
+    "oracle": {
+      "model": "github-copilot/gpt-5.3-codex",
+      "variant": "high",
+      // 文档链: gpt-5.4(high)→gemini-3.1-pro(high)→opus(max)→glm-5
+      // opus 替换为 glm-5.1 (同家族)
+      "fallback_models": [{
+        "model": "github-copilot/gemini-3.1-pro-preview",
+        "variant": "high"
+      }, {
+        "model": "zai-coding-plan/glm-5.1",
+        "variant": "max"
+      }, {
+        "model": "zai-coding-plan/glm-5",
+        "variant": "high"
+      }]
+    },
+
+    "momus": {
+      "model": "github-copilot/gpt-5.3-codex",
+      "variant": "xhigh",
+      // 文档链: gpt-5.4(xhigh)→opus(max)→gemini-3.1-pro(high)→glm-5
+      // opus 替换为 glm-5.1 (同家族)
+      "fallback_models": [{
+        "model": "zai-coding-plan/glm-5.1",
+        "variant": "max"
+      }, {
+        "model": "github-copilot/gemini-3.1-pro-preview",
+        "variant": "high"
+      }, {
+        "model": "zai-coding-plan/glm-5",
+        "variant": "high"
+      }]
+    },
+
+    // === 工具型 → 速度优先，不要升级到高端模型 ===
+    // 文档: "Don't upgrade them to Opus — hiring a senior engineer to file paperwork"
+
+    "explore": {
+      "model": "github-copilot/grok-code-fast-1",
+      // 文档链: grok-code-fast-1→minimax-m2.7-highspeed→minimax-m2.7→claude-haiku-4-5→gpt-5-nano
+      "fallback_models": [{
+          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+        },
+        "github-copilot/claude-haiku-4.5",
+        "opencode/gpt-5-nano"
+      ]
+    },
+
+    "librarian": {
+      "model": "opencode/gpt-5-nano",
+      // 文档链: minimax-m2.7→minimax-m2.7-highspeed→claude-haiku-4-5→gpt-5-nano
+      // 主模型已在链末尾，补充链前方的模型作为 fallback
+      "fallback_models": [{
+          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+        },
+        "github-copilot/claude-haiku-4.5",
+        "github-copilot/gemini-3-flash-preview"
+      ]
+    },
+
+    "multimodal-looker": {
+      "model": "zai-coding-plan/glm-4.6v",
+      // 文档链: gpt-5.4(medium)→kimi→glm-4.6v→gpt-5-nano
+      // glm-4.6v 是链中首个可用模型
+      "fallback_models": [
+        "zai-coding-plan/glm-5v-turbo",
+        "zai-coding-plan/glm-4.5v",
+        "opencode/gpt-5-nano"
+      ]
+    },
+
+    "sisyphus-junior": {
+      "model": "zai-coding-plan/glm-5.1",
+      // 文档链: claude-sonnet-4-6→kimi→gpt-5.4(medium)→minimax-m2.7→big-pickle
+      // 跳过: sonnet(不可用), kimi(不可用)
+      "fallback_models": [{
+          "model": "github-copilot/gpt-5.3-codex",
+          "variant": "medium"
+        }, {
+          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+        },
+        "opencode/big-pickle"
+      ]
+    }
+  },
+
+  "categories": {
+    // 文档链: gemini-3.1-pro(high)→glm-5→opus(max)→glm-5→k2p5
+    "visual-engineering": {
+      "model": "github-copilot/gemini-3.1-pro-preview",
+      "variant": "high",
+      "fallback_models": [{
+          "model": "zai-coding-plan/glm-5.1",
+          "variant": "high"
+        }, {
+          "model": "zai-coding-plan/glm-5",
+          "variant": "high"
+        },
+        "github-copilot/gemini-2.5-pro"
+      ]
+    },
+
+    // 文档链: gpt-5.4(xhigh)→gemini-3.1-pro(high)→opus(max)→glm-5
+    "ultrabrain": {
+      "model": "github-copilot/gpt-5.3-codex",
+      "variant": "xhigh",
+      "fallback_models": [{
+        "model": "github-copilot/gemini-3.1-pro-preview",
+        "variant": "high"
+      }, {
+        "model": "zai-coding-plan/glm-5.1",
+        "variant": "max"
+      }, {
+        "model": "zai-coding-plan/glm-5",
+        "variant": "high"
+      }]
+    },
+
+    // 文档链: gpt-5.4(medium)→opus(max)→gemini-3.1-pro(high)
+    "deep": {
+      "model": "github-copilot/gpt-5.3-codex",
+      "variant": "medium",
+      "fallback_models": [{
+          "model": "zai-coding-plan/glm-5.1",
+          "variant": "max"
+        },
+        "github-copilot/gemini-3.1-pro-preview",
+        "github-copilot/gemini-2.5-pro"
+      ]
+    },
+
+    // 文档链: gemini-3.1-pro(high)→opus(max)→gpt-5.4
+    "artistry": {
+      "model": "github-copilot/gemini-3.1-pro-preview",
+      "variant": "high",
+      "fallback_models": [{
+          "model": "zai-coding-plan/glm-5.1",
+          "variant": "max"
+        }, {
+          "model": "github-copilot/gpt-5.3-codex"
+        },
+        "github-copilot/gemini-2.5-pro"
+      ]
+    },
+
+    // 文档链: gpt-5.4-mini→claude-haiku→gemini-3-flash→minimax-m2.7→gpt-5-nano
+    // 跳过: gpt-5.4-mini(不可用)
+    "quick": {
+      "model": "github-copilot/claude-haiku-4.5",
+      "fallback_models": [
+        "github-copilot/gemini-3-flash-preview", {
+          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+        },
+        "opencode/gpt-5-nano"
+      ]
+    },
+
+    // 文档链: opus(max)→gpt-5.4(high)→glm-5→k2p5→glm-5→kimi→kimi
+    // 跳过: opus, gpt-5.4, k2p5, kimi
+    "unspecified-high": {
+      "model": "zai-coding-plan/glm-5.1",
+      "variant": "max",
+      "fallback_models": [{
+          "model": "github-copilot/gpt-5.3-codex",
+          "variant": "high"
+        }, {
+          "model": "zai-coding-plan/glm-5",
+          "variant": "high"
+        },
+        "github-copilot/gemini-3.1-pro-preview",
+        "opencode/big-pickle"
+      ]
+    },
+
+    // 文档链: claude-sonnet-4-6→gpt-5.3-codex(medium)→kimi→gemini-3-flash→minimax-m2.7
+    // 跳过: sonnet(不可用), kimi(不可用)
+    "unspecified-low": {
+      "model": "github-copilot/gpt-5.3-codex",
+      "fallback_models": [
+        "github-copilot/gemini-3-flash-preview", {
+          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+        }
+      ]
+    },
+
+    // 文档链: gemini-3-flash→kimi→claude-sonnet→minimax-m2.7
+    // 跳过: kimi(不可用), sonnet(不可用)
+    "writing": {
+      "model": "github-copilot/gemini-3-flash-preview",
+      "fallback_models": [{
+          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+        },
+        "github-copilot/gpt-5.2"
+      ]
+    }
+  },
+
+  "background_task": {
+    "providerConcurrency": {
+      "github-copilot": 5,
+      "openai": 3,
+      "zai-coding-plan": 10,
+      "minimax-cn-coding-plan": 10,
+      "opencode": 10
+    },
+    "modelConcurrency": {
+      "zai-coding-plan/glm-5.1": 5,
+      "github-copilot/gemini-3.1-pro-preview": 5,
+      "github-copilot/gpt-5.3-codex": 3,
+      "opencode/gpt-5-nano": 20,
+      "github-copilot/grok-code-fast-1": 20
+    }
+  }
+}
