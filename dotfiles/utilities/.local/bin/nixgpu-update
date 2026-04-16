@@ -12,7 +12,7 @@ trap cleanup EXIT
 
 mkdir -p "$SERVICE_DIR"
 
-non-nixos-gpu-setup
+non-nixos-gpu-setup || true
 
 if [[ ! -f "$SERVICE_FILE" ]]; then
     echo "error: $SERVICE_FILE not found after non-nixos-gpu-setup" >&2
