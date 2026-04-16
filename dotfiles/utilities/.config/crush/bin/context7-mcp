@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec ~/.guix-home/profile/bin/npx --yes -p @upstash/context7-mcp context7-mcp "$@"

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec ~/.guix-home/profile/bin/npx --yes -p bash-language-server bash-language-server "$@"

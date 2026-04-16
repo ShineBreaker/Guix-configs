@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec ~/.guix-home/profile/bin/npx --yes -p @modelcontextprotocol/server-sequential-thinking mcp-server-sequential-thinking "$@"
