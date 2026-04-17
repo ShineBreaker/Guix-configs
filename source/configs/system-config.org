@@ -130,7 +130,7 @@
 #+begin_src scheme
 (bootloader (bootloader-configuration
              (bootloader limine-efi-removable-bootloader)
-             (targets '("/boot"))))
+             (targets '("/efi"))))
 #+end_src
 
 * FileSystems
@@ -209,7 +209,7 @@
                 (file-system
                  (device (uuid "9699-52A2"
                                'fat))
-                 (mount-point "/boot")
+                 (mount-point "/efi")
                  (type "vfat")
                  (create-mount-point? #t))) %base-file-systems))
 #+end_src

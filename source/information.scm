@@ -40,7 +40,8 @@
 (define %btrfs-subvol-data "DATA/Share")
 
 (define %btrfs-subvolumes
-  '(("SYSTEM/Guix/@data"                   "/var/lib")
+  '(("SYSTEM/Guix/@boot"                   "/boot")
+    ("SYSTEM/Guix/@data"                   "/var/lib")
     ("SYSTEM/Guix/@gnu"                    "/gnu")
 
     ("SYSTEM/Guix/@persist/cache/root"     "/root/.cache")
