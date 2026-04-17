@@ -33,8 +33,8 @@
           pkgs = nixpkgs.legacyPackages.${system};
 
           modules = [
-            configuration/00-main/guix.nix
-            configuration/00-main/packages.nix
+            ./configuration/00-main/home.nix
+            ./configuration/programs/System/nix.nix
           ];
 
           extraSpecialArgs = { inherit inputs; };
