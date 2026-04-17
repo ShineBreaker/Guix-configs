@@ -38,9 +38,5 @@
     package-version-server
     typescript-language-server
     vscode-langservers-extracted
-
-    ## 聊天社交
-    qq
-
   ];
 }
