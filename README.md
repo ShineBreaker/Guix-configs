@@ -28,9 +28,18 @@ SPDX-License-Identifier: GPL-3.0
 
 ## 系统预览
 
-![日常使用](screenshots/daily.png)
-![终端](screenshots/terminal.png)
-![Emacs](screenshots/emacs.png)
+### 桌面截图
+
+![daily](screenshots/daily.png)
+![terminal](screenshots/terminal.png)
+
+### Emacs 截图
+
+![emacs](screenshots/emacs.png)
+
+### `LibreWolf` 配合 **[parfait](https://github.com/reizumii/parfait)** 主题
+
+![browse](screenshots/browse.png)
 
 ---
 
