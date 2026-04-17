@@ -599,20 +599,25 @@
                                 (substitute-urls
                                  '("https://cache-cdn.guix.moe"))))
 
-               (simple-service 'root-services shepherd-root-service-type
-                              (list (shepherd-timer '(guix-gc)
-                                                    #~(calendar-event
-                                                       #:days-of-week '
-                                                       (sunday)
-                                                       #:hours '
-                                                       (18)
-                                                       #:minutes '
-                                                       (0))
-                                                    #~("/run/current-system/profile/bin/guix"
-                                                       "gc"
-                                                       "--delete-generations=14d")
-                                                    #:requirement '(user-processes
-                                                                    guix-daemon))))))
+                (simple-service 'root-services shepherd-root-service-type
+                               (list (shepherd-timer '(guix-gc)
+                                                     #~(calendar-event
+                                                        #:days-of-week '(sunday)
+                                                        #:hours '(18)
+                                                        #:minutes '(0))
+                                                     #~("/run/current-system/profile/bin/guix"
+                                                        "gc"
+                                                        "--delete-generations=14d")
+                                                     #:requirement '(user-processes
+                                                                     guix-daemon))
+                                     ;; 用于自动更新 flatpak 系统安装的软件包
+                                     (shepherd-timer '(flatpak-system-update)
+                                                     #~(calendar-event #:hours '(18)
+                                                                       #:minutes '(0))
+                                                     #~("/run/current-system/profile/bin/flatpak"
+                                                        "update" "--system" "-y")
+                                                      #:requirement '(user-processes
+                                                                      network-manager))))))
 #+end_src
 
 ** 桌面服务
@@ -664,83 +669,6 @@
                          (program-file
                           "niri-session"
                           #~(execl #$(file-append niri "/bin/niri") "--session")))))))))
-#+end_src
-
-** 文件系统相关服务
-在这里就是一些负责维护文件系统树的服务
-
-+ *fixed-machine-id* 负责固定 =/etc/machine-id=
-  这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
-  中
-+ *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
-+ *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user=
-  目录中创建同名的文件夹，以用于bind-mount
-
-#+NAME: filesystem-services
-#+begin_src scheme
-(list (simple-service 'fixed-machine-id etc-service-type
-                      (list `("machine-id" ,(plain-file "machine-id"
-                                                        fixed-machine-id))))
-
-      (simple-service 'fix-data-perms activation-service-type
-                      #~(begin
-                          (use-modules (guix build utils))
-                          (mkdir-p "/data")
-                          (chmod "/data" #o1777)))
-
-      (simple-service 'create-xdg-dirs activation-service-type
-                      (with-imported-modules (source-module-closure '((guix
-                                                                       build
-                                                                       utils)))
-                                             #~(begin
-                                                 (use-modules (guix build
-                                                                    utils))
-                                                 (let* ((pw (getpwnam #$username))
-                                                        (uid (passwd:uid pw))
-                                                        (gid (passwd:gid pw))
-                                                        (home (string-append
-                                                               "/home/"
-                                                               #$username)))
-                                                   (for-each (lambda (dir)
-                                                               (let ((path (string-append
-                                                                            home
-                                                                            "/"
-                                                                            dir)))
-                                                                 (mkdir-p
-                                                                  path)
-                                                                 (chown path
-                                                                        uid gid)
-                                                                 (chmod path
-                                                                        #o755)))
-                                                             '#$%data-dirs))))))
-#+end_src
-
-** 网络相关配置
-
-#+NAME: networking-services
-#+begin_src scheme
-(list (service nftables-service-type
-               (nftables-configuration (ruleset (local-file
-                                                 "../source/files/nftables.conf"))))
-      (simple-service 'mihomo-services shepherd-root-service-type
-                      (list (shepherd-service (documentation
-                                               "Run the mihomo daemon.")
-                                              (provision '(mihomo-daemon))
-                                              (requirement '(user-processes))
-                                              (start #~(make-forkexec-constructor
-                                                        (list #$(file-append
-                                                                 mihomo
-                                                                 "/bin/mihomo")
-                                                              "-f"
-                                                              (string-append
-                                                               "/home/"
-                                                               #$username
-                                                               "/.config/mihomo/config.yaml"))
-                                                        #:log-file
-                                                        "/var/log/mihomo.log"))
-                                              (stop #~(make-kill-destructor))
-                                              (auto-start? #t)
-                                              (respawn? #t)))))
 #+end_src
 
 ** 虚拟化服务
@@ -835,7 +763,8 @@ echo "InitialPassword!" | guix shell openssl -+ openssl passwd -6 -stdin
                (group "users")
                (password
                 "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
-               (supplementary-groups '("adbusers" "audio"
+               (supplementary-groups '("adbusers"
+                                       "audio"
                                        "cgroup"
                                        "input"
                                        "kvm"

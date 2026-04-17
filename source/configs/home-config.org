@@ -125,6 +125,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 桌面组件
         "fuzzel"
         "mako"
+        "nautilus"
         "swaylock-effects"
         "swayidle"
         "swww"
@@ -134,6 +135,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "font-awesome"
         "font-google-noto-emoji"
         "font-maple-font-nf-cn"
+        "font-nerd-font-iosevka"
 
         ;; 输入法
         "fcitx5"
@@ -622,13 +624,13 @@ end
 #+begin_src scheme
 (list (simple-service 'auto-update home-shepherd-service-type
                       (list
-                       ;; 用于自动更新flatpak中的软件包
-                       (shepherd-timer '(flatpak-update)
-                                       #~(calendar-event #:hours '(18)
-                                                         #:minutes '(0))
-                                       #~("/run/current-system/profile/bin/flatpak"
-                                          "upgrade" "-y")
-                                       #:requirement '(dbus)))))
+                        ;; 用于自动更新 flatpak 用户安装的软件包
+                        (shepherd-timer '(flatpak-user-update)
+                                        #~(calendar-event #:hours '(18)
+                                                          #:minutes '(0))
+                                        #~("/run/current-system/profile/bin/flatpak"
+                                           "update" "--user" "-y")
+                                        #:requirement '(dbus)))))
 #+end_src
 
 ** dotfiles 管理相关服务
