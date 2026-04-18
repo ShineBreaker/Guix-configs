@@ -38,5 +38,10 @@
     package-version-server
     typescript-language-server
     vscode-langservers-extracted
+
+    ## 版本管理
+    jjui
+    lazygit
+    lazyjj
   ];
 }
