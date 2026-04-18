@@ -219,22 +219,33 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "shfmt"
         "zig-zls"
 
-        ;; 工具
+        ;; 数据库
+        "postgresql"
+        "redis"
+        "sqlite"
+        "sqlitestudio"
+
+        ;; 环境管理
         "direnv"
+        "gradle"
+        "graphviz"
+        "maven"
+        "sdkmanager"
+        "uv"
+
+        ;; 工具
         "file"
+        "jq"
+        "pandoc"
+        "reuse"
+        "texlive-scheme-basic"
+
+        ;; 版本管理
         "gitui"
         "git-credential-keepassxc"
         "git-filter-repo"
         "git-lfs"
-        "gradle"
-        "graphviz"
-        "jq"
-        "maven"
-        "pandoc"
-        "reuse"
-        "sdkmanager"
-        "texlive-scheme-basic"
-        "uv"
+        "jujutsu-dolly"
 
         ;; 编辑器
         "helix"
@@ -302,7 +313,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "freerdp@3"
         "kanata"
         "pinentry-qt"
-        "postgresql"
         "winapps"
 
         ;; 主题
@@ -436,6 +446,7 @@ end
                 (shepherd-requirement '(graphical-session))
                 (packages (specifications->manifest
                            '(;; Emacs 核心与基础
+                             "emacs-auto-compile"
                              "emacs-gcmh"
                              "emacs-general"
                              "emacs-no-littering"
@@ -507,11 +518,12 @@ end
                              "emacs-yaml-mode"
                              "emacs-zig-mode"
 
-                             ;; Git 集成
+                             ;; 版本控制
                              "emacs-git-messenger"
                              "emacs-git-timemachine"
                              "emacs-magit"
                              "emacs-magit-todos"
+                             "emacs-majutsu"
 
                              ;; 项目管理
                              "emacs-centaur-tabs"
