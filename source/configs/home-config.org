@@ -455,6 +455,7 @@ end
                              "emacs-use-package"
 
                              ;; 补全与迷你缓冲区
+                             "emacs-cape"
                              "emacs-consult"
                              "emacs-corfu"
                              "emacs-corfu-terminal"
@@ -468,6 +469,7 @@ end
                              "emacs-evil-collection"
 
                              ;; 界面与外观
+                             "emacs-all-the-icons"
                              "emacs-dashboard"
                              "emacs-doom-modeline"
                              "emacs-ef-themes"
@@ -546,9 +548,11 @@ end
                              "emacs-rainbow-delimiters"
                              "emacs-symbol-overlay"
 
-                             ;; 邮件与日历
+                             ;; 额外功能
+                             "emacs-2048-game"
                              "emacs-calfw"
                              "emacs-notmuch"
+                             "emacs-pdf-tools"
 
                              ;; Tree-sitter（语法解析）
                              "tree-sitter"

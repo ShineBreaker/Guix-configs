@@ -85,12 +85,12 @@
    <<nix-services>>
    <<filesystem-services>>
    <<desktop-services>>
-   ))
- (skeletons
+   )))
+  (skeletons
   <<skeletons-config>>
   )
 
- (name-service-switch %mdns-host-lookup-nss))
+  (name-service-switch %mdns-host-lookup-nss))
 #+end_src
 
 * Modules
@@ -549,75 +549,55 @@
                                               (font-size 24))))
              '("tty2" "tty3" "tty4" "tty5" "tty6"))
 
-        (list (service fprintd-service-type)
-              (service gnome-keyring-service-type)
-              (service gvfs-service-type)
-              (service opentabletdriver-service-type)
+        (list (simple-service 'home-channels home-channels-service-type
+                              guix-channels)
 
-              (service tlp-service-type
-                       (tlp-configuration
-                        ;; === AC 电源模式 ===
-                        (cpu-scaling-governor-on-ac (list "performance"))
-                        (cpu-energy-perf-policy-on-ac "performance")
-                        (cpu-min-perf-on-ac 0)
-                        (cpu-max-perf-on-ac 100)
+              ;; Nonguix channel
+              (simple-service 'nonguix-substitutes guix-service-type
+                              (guix-extension
+                               (authorized-keys
+                                (list (plain-file
+                                       "nonguix.pub"
+                                       "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
+                               (substitute-urls
+                                '("https://substitutes.nonguix.org"))))
 
-                        ;; === 电池模式 ===
-                        (cpu-scaling-governor-on-bat (list "powersave"))
-                        (cpu-energy-perf-policy-on-bat "power")
-                        (cpu-min-perf-on-bat 0)
-                        (cpu-max-perf-on-bat 20)
+              ;; Guix-moe channel
+              (simple-service 'guix-moe-substitutes guix-service-type
+                              (guix-extension
+                               (authorized-keys
+                                (list (plain-file
+                                       "guix-moe.pub"
+                                       "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
+                               (substitute-urls
+                                '("https://cache-cdn.guix.moe"))))
 
-                        ;; === 电池健康保护（强烈推荐保留）===
-                        (start-charge-thresh-bat0 40)
-                        (stop-charge-thresh-bat0 80)
+              ;; SJTUG Mirror
+              (simple-service 'sjtug-substitutes guix-service-type
+                              (guix-extension
+                               (substitute-urls
+                                '("https://mirror.sjtu.edu.cn/guix"
+                                  "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"))))
 
-                        ;; 可选但推荐的额外省电项
-                        (cpu-boost-on-bat? #f)
-                        (sched-powersave-on-bat? #t)))
-
-               (simple-service 'home-channels home-channels-service-type
-                               guix-channels)
-
-               ;; Nonguix channel
-               (simple-service 'nonguix-substitutes guix-service-type
-                               (guix-extension
-                                (authorized-keys
-                                 (list (plain-file
-                                        "nonguix.pub"
-                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
-                                (substitute-urls
-                                 '("https://substitutes.nonguix.org"))))
-
-               ;; Guix-moe channel
-               (simple-service 'guix-moe-substitutes guix-service-type
-                               (guix-extension
-                                (authorized-keys
-                                 (list (plain-file
-                                        "guix-moe.pub"
-                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
-                                (substitute-urls
-                                 '("https://cache-cdn.guix.moe"))))
-
-                (simple-service 'root-services shepherd-root-service-type
-                               (list (shepherd-timer '(guix-gc)
-                                                     #~(calendar-event
-                                                        #:days-of-week '(sunday)
-                                                        #:hours '(18)
-                                                        #:minutes '(0))
-                                                     #~("/run/current-system/profile/bin/guix"
-                                                        "gc"
-                                                        "--delete-generations=14d")
-                                                     #:requirement '(user-processes
+              (simple-service 'root-services shepherd-root-service-type
+                              (list (shepherd-timer '(guix-gc)
+                                                    #~(calendar-event
+                                                       #:days-of-week '(sunday)
+                                                       #:hours '(18)
+                                                       #:minutes '(0))
+                                                    #~("/run/current-system/profile/bin/guix"
+                                                       "gc"
+                                                       "--delete-generations=14d")
+                                                    #:requirement '(user-processes
                                                                      guix-daemon))
-                                     ;; 用于自动更新 flatpak 系统安装的软件包
-                                     (shepherd-timer '(flatpak-system-update)
-                                                     #~(calendar-event #:hours '(18)
-                                                                       #:minutes '(0))
-                                                     #~("/run/current-system/profile/bin/flatpak"
-                                                        "update" "--system" "-y")
-                                                      #:requirement '(user-processes
-                                                                      network-manager))))))
+                                    ;; 用于自动更新 flatpak 系统安装的软件包
+                                    (shepherd-timer '(flatpak-system-update)
+                                                    #~(calendar-event #:hours '(18)
+                                                                      #:minutes '(0))
+                                                    #~("/run/current-system/profile/bin/flatpak"
+                                                       "update" "--system" "-y")
+                                                    #:requirement '(user-processes
+                                                                    network-manager))))))
 #+end_src
 
 ** 桌面服务
@@ -628,9 +608,9 @@
 
 原先的 =modify-services= 大部分已拆分为独立的 service 列表，仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例）
 
-#+NAME: desktop-services
-#+begin_src scheme
-(modify-services %desktop-services
+ #+NAME: desktop-services
+ #+begin_src scheme
+(append (modify-services %desktop-services
                          (delete console-font-service-type)
                          (delete mingetty-service-type)
                          (delete gdm-service-type)
@@ -644,14 +624,41 @@
                                                                 (privileged? #f)
                                                                 (tmpdir "/var/tmp"))))
 
-(list (service bluetooth-service-type
-               (bluetooth-configuration
-                (auto-enable? #t)))
+        (list (service fprintd-service-type)
+      (service gnome-keyring-service-type)
+      (service gvfs-service-type)
+      (service opentabletdriver-service-type)
+
+      (service bluetooth-service-type
+               (bluetooth-configuration (auto-enable? #t)))
+
       (service screen-locker-service-type
                (screen-locker-configuration
                 (name "swaylock")
                 (program (plain-file "empty" ""))
                 (using-setuid? #f)))
+
+      (service tlp-service-type
+               (tlp-configuration
+                ;; === AC 电源模式 ===
+                (cpu-scaling-governor-on-ac (list "performance"))
+                (cpu-energy-perf-policy-on-ac "performance")
+                (cpu-min-perf-on-ac 0)
+                (cpu-max-perf-on-ac 100)
+
+                ;; === 电池模式 ===
+                (cpu-scaling-governor-on-bat (list "powersave"))
+                (cpu-energy-perf-policy-on-bat "power")
+                (cpu-min-perf-on-bat 0)
+                (cpu-max-perf-on-bat 20)
+
+                ;; === 电池健康保护（强烈推荐保留）===
+                (start-charge-thresh-bat0 40)
+                (stop-charge-thresh-bat0 80)
+
+                ;; 可选但推荐的额外省电项
+                (cpu-boost-on-bat? #f)
+                (sched-powersave-on-bat? #t)))
 
       (simple-service 'backlight udev-service-type (list ddcutil light))
 
@@ -665,10 +672,10 @@
                         (default-session-command
                           (greetd-tuigreet-session))
                         (initial-session-user username)
-                        (initial-session-command
-                         (program-file
-                          "niri-session"
-                          #~(execl #$(file-append niri "/bin/niri") "--session")))))))))
+                         (initial-session-command
+                          (program-file "niri-session"
+                                        #~(execl #$(file-append niri "/bin/niri")
+                                                   "--session")))))))))
 #+end_src
 
 ** 虚拟化服务
