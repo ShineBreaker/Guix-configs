@@ -94,8 +94,8 @@ tmp/*.scm
 
 ```bash
 maak init      # 安装系统到 /mnt
-maak system    # guix system reconfigure（自动 tangle + time-machine）
-maak home      # guix home reconfigure
+maak system    # guix system reconfigure（自动 tangle + time-machine + 括号检查）
+maak home      # guix home reconfigure（自动括号检查）
 maak rebuild   # system + home + locate --update
 maak upgrade   # 更新 channel.lock + git commit -S
 maak pull      # guix pull --allow-downgrades --fallback
@@ -105,6 +105,24 @@ maak reuse     # 为所有文件添加 SPDX 版权头
 maak nix       # 应用 Nix home-manager 配置
 maak nix-init  # 初始化 Nix home-manager
 maak nix-update # 更新 Nix flake
+```
+
+### 配置验证
+
+<critical>
+修改 `.org` 配置后，**务必先用 dry-run 验证**再实际应用。
+括号平衡检查已内置在 `system`/`home` 命令中（tangle 后自动运行），但 dry-run 能进一步验证 Guix 语义正确性。
+</critical>
+
+```bash
+# Dry-run：tangle + 括号检查 + guix build --dry-run（不实际应用）
+MAAK_DRY_RUN=1 maak system   # 验证系统配置
+MAAK_DRY_RUN=1 maak home     # 验证用户配置
+
+# 单独括号平衡检查（仅检查语法，不触发 guix）
+maak check          # 检查 system + home
+maak check-system   # 仅检查 system
+maak check-home     # 仅检查 home
 ```
 
 ## Git 子模块

@@ -163,6 +163,15 @@ maak rebuild    # 先 system 后 home，并更新 locate 数据库
 
 # 更新软件包频道
 maak upgrade    # 更新系统中所有仓库到最新版本
+
+# 验证配置（不实际应用）
+MAAK_DRY_RUN=1 maak system   # 仅构建检查系统配置
+MAAK_DRY_RUN=1 maak home     # 仅构建检查用户配置
+
+# 括号平衡检查
+maak check          # 检查 system + home 配置括号平衡
+maak check-system   # 仅检查 system 配置
+maak check-home     # 仅检查 home 配置
 ```
 
 ---
@@ -370,6 +379,22 @@ maak pull
 
 ```bash
 emacs --batch -l org --eval "(require 'ob-tangle)"
+```
+
+### 配置语法检查
+
+修改 `.org` 配置后，可以用 dry-run 模式验证语法是否正确（不会实际应用到系统）：
+
+```bash
+MAAK_DRY_RUN=1 maak system   # 验证系统配置
+MAAK_DRY_RUN=1 maak home     # 验证用户配置
+```
+
+`maak system` 和 `maak home` 在执行前会自动运行括号平衡检查。也可以手动单独检查：
+
+```bash
+maak check          # 检查所有配置
+maak check-system   # 仅检查系统配置
 ```
 
 ---
