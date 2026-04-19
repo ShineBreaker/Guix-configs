@@ -120,6 +120,7 @@ window-rule {
     match app-id="Waydroid"
     match app-id="gamescope"
     match app-id="labwc"
+    match app-id="^LR2oraja"
     match app-id="r#'^steam_app'#"
     match app-id=".gamescope-wrapped"
 
@@ -196,9 +197,11 @@ window-rule {
 window-rule {
     match app-id="heroic"
     match app-id="steam"
+    match app-id="bms.player.beatoraja.MainLoader"
     match app-id="r#'^steam_app'#"
     match app-id="steam_app_default"
     match app-id=".gamescope-wrapped"
+    match app-id="^LR2oraja"
     match app-id="net.lutris.Lutris"
     match app-id="^osu"
     match app-id="org.prismlauncher.PrismLauncher"
