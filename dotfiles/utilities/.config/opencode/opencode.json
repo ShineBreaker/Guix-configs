@@ -1,15 +1,16 @@
 {
-    "$schema": "https://opencode.ai/config.json",
-    "plugin": [
-        "oh-my-openagent",
-        "@tarquinen/opencode-dcp",
-        "@franlol/opencode-md-table-formatter",
-        "opencode-mem",
-        "opencode-scheduler"
-    ],
-    "instructions": [
-        "~/.config/opencode/docs/language.md",
-        "~/.config/opencode/docs/token-efficient.md",
-        "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
-    ]
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "oh-my-openagent",
+    "@tarquinen/opencode-dcp",
+    "@franlol/opencode-md-table-formatter",
+    "opencode-mem",
+    "opencode-scheduler"
+  ],
+  "instructions": [
+    "~/.config/opencode/docs/git.md",
+    "~/.config/opencode/docs/language.md",
+    "~/.config/opencode/docs/token-efficient.md",
+    "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
+  ]
 }
