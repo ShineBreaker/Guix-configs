@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "de90fd9b142457e178d03c034196d25c23c80c09")
+       (commit "14a65594a16456f1b339c211fa3d0c498d7769ff")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -12,12 +12,7 @@
        (name 'jeans)
        (url "https://codeberg.org/BrokenShine/jeans.git")
        (branch "main")
-       (commit "5b7aa24633ab72912efe32cfa05f05c90850f38c")
-       (introduction
-        (make-channel-introduction
-         "1e30ccbcaef375169d453d89d8186137bc32d9e8"
-         (openpgp-fingerprint
-          "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
+       (commit "06129cf05bc3805cce32a7794a4615089a9311a9"))
       (channel
        (name 'nonguix)
        (url "https://gitlab.com/nonguix/nonguix")
