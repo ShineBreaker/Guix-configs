@@ -10,9 +10,9 @@
           "BBB0 2DDF 2CEA F6A8 0D1D  E643 A2A0 6DF2 A33A 54FA"))))
       (channel
        (name 'jeans)
-       (url "https://codeberg.org/BrokenShine/jeans.git")
+       (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "06129cf05bc3805cce32a7794a4615089a9311a9"))
+       (commit "0827562d1c2afeb029ae3a4afeafa3983ee202b3"))
       (channel
        (name 'nonguix)
        (url "https://gitlab.com/nonguix/nonguix")
