@@ -197,6 +197,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "ccls"
         "clang"
         "godot"
+        "go"
         "graphviz"
         "jdtls-bin"
         "node"
@@ -208,7 +209,9 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; LSP & Formatter
         "guile-ares-rs"
+        "gopls"
         "nixfmt"
+        "omnisharp"
         "python-black"
         "python-jsbeautifier"
         "python-lsp-black"
@@ -217,6 +220,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "rust-analyzer"
         "sbcl"
         "shfmt"
+        "yq"
         "zig-zls"
 
         ;; 数据库
@@ -265,9 +269,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "miniflux-injector-icecat"
         "privacy-redirect-icecat"
         "ublock-origin-icecat"
-
-        "ungoogled-chromium-wayland"
-        "ublock-origin-chromium"
 
         ;; 解码器
         "gstreamer"
@@ -454,10 +455,8 @@ end
                            '(;; Emacs 核心与基础
                              "emacs-auto-compile"
                              "emacs-gcmh"
-                             "emacs-general"
                              "emacs-no-littering"
                              "emacs-pgtk:doc"
-                             "emacs-spinner"
                              "emacs-use-package"
 
                              ;; 补全与迷你缓冲区
@@ -470,52 +469,43 @@ end
                              "emacs-orderless"
                              "emacs-vertico"
 
-                             ;; Evil 模式（Vim 模拟）
-                             "emacs-evil"
-                             "emacs-evil-collection"
-
                              ;; 界面与外观
-                             "emacs-all-the-icons"
                              "emacs-dashboard"
                              "emacs-doom-modeline"
                              "emacs-ef-themes"
                              "emacs-kind-icon"
-                             "emacs-lsp-treemacs"
                              "emacs-minimap"
                              "emacs-nerd-icons"
                              "emacs-rainbow-delimiters"
                              "emacs-treemacs"
-                             "emacs-treemacs-extra"
                              "emacs-treemacs-nerd-icons"
                              "emacs-which-key"
 
                              ;; 编辑与导航
-                             "emacs-ace-jump-mode"
                              "emacs-diff-hl"
                              "emacs-dirvish"
                              "emacs-expand-region"
+                             "emacs-helpful"
                              "emacs-multiple-cursors"
                              "emacs-origami"
-                             "emacs-smartparens"
-                             "emacs-undo-tree"
+                             "emacs-origami-ts"
+                             "emacs-symbol-overlay"
                              "emacs-ws-butler"
+                             "emacs-eldoc-box"
 
                              ;; 开发工具
                              "emacs-apheleia"
-                             "emacs-eldoc-box"
-                             "emacs-rg"
-                             "emacs-stickyfunc-enhance"
+                             "emacs-flycheck"
+                             "emacs-posframe"
                              "emacs-vterm"
-                             "emacs-yasnippet"
-                             "emacs-yasnippet-snippets"
 
                              ;; 编程语言支持
                              "emacs-arei"
                              "emacs-fish-mode"
                              "emacs-fish-completion"
+                             "emacs-helm-fish-completion"
                              "emacs-gdscript-mode"
                              "emacs-json-mode"
-                             "emacs-helm-fish-completion"
                              "emacs-kdl-mode"
                              "emacs-kotlin-mode"
                              "emacs-markdown-mode"
@@ -526,17 +516,15 @@ end
                              "emacs-web-mode"
                              "emacs-yaml"
                              "emacs-yaml-mode"
+                             "emacs-yasnippet"
+                             "emacs-yasnippet-snippets"
                              "emacs-zig-mode"
 
-                             ;; 版本控制
+                             ;; 版本控制与项目管理
                              "emacs-git-messenger"
                              "emacs-git-timemachine"
                              "emacs-magit"
                              "emacs-magit-todos"
-                             "emacs-majutsu"
-
-                             ;; 项目管理
-                             "emacs-centaur-tabs"
                              "emacs-projectile"
 
                              ;; Org Mode 生态
@@ -547,22 +535,13 @@ end
                              "emacs-org-roam"
                              "emacs-ox-gfm"
 
-                             ;; 显示优化
-                             "emacs-flycheck"
-                             "emacs-fold-dwim"
-                             "emacs-helpful"
-                             "emacs-origami-ts"
-                             "emacs-posframe"
-                             "emacs-rainbow-delimiters"
-                             "emacs-symbol-overlay"
-
-                             ;; 额外功能
+                             ;; 额外工具
                              "emacs-2048-game"
                              "emacs-calfw"
                              "emacs-notmuch"
                              "emacs-pdf-tools"
 
-                             ;; Tree-sitter（语法解析）
+                             ;; Tree-sitter（保留更宽的语言覆盖）
                              "tree-sitter"
                              "tree-sitter-bash"
                              "tree-sitter-c"
