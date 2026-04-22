@@ -12,7 +12,7 @@
                 (channel
                   (name 'jeans)
                   (branch "main")
-                  (url "https://codeberg.org/BrokenShine/jeans.git")
+                  (url "https://github.com/ShineBreaker/jeans.git")
                   (introduction
                    (make-channel-introduction
                     "1e30ccbcaef375169d453d89d8186137bc32d9e8"
