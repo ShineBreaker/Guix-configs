@@ -533,6 +533,9 @@
       (udev-rules-service 'cpu-dma
                           (udev-rule "99-cpu-dma-latency.rules"
                                      "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))
+      (udev-rules-service 'sayodevice
+                          (udev-rule "60-sayodevice.rules"
+                                     "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
       (udev-rules-service 'sunshine
                           (udev-rule "60-sunshine-uinput.rules"
                                      "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"")))
