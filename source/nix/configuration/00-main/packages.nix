@@ -13,24 +13,31 @@
     pnpm
     postman
 
-    ## Android 工具
+    ## Android
     android-tools
     qtscrcpy
     scrcpy
 
     ## 工具
     broot
-    gamemode
     gamescope
-    gpu-screen-recorder-gtk
     pmbootstrap
     sunshine
+
+    ## 文本编辑
+    apostrophe
+    obsidian
+
 
     ## AI 工具
     claude-code
     codex
     crush
+    llmfit
+    ollama-vulkan
     opencode
+    #tabby
+    #tabby-agent
 
     ## LSP
     bash-language-server
