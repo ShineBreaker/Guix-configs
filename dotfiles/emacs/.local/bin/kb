@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: GPL-3.0
+#
+# kb — 知识库命令行工具
+# 人机协作经验卡片的增删查改，供 AI Agent 和人类在终端直接调用。
+#
+# 用法: kb <子命令> [参数]
+#
+# 子命令:
+#   add      添加经验卡片
+#   get      读取卡片详情
+#   list     列出卡片
+#   search   全文检索
+#   tags     按标签检索
+#   patterns 管理模式/原则
+#   help     显示帮助
+
+set -euo pipefail
+
+KB_ROOT="${HOME}/Documents/Org"
+KB_EXPERIENCES="${KB_ROOT}/experiences"
+KB_PATTERNS="${KB_ROOT}/patterns.org"
+KB_INDEX="${KB_ROOT}/index.org"
+KB_INBOX="${KB_ROOT}/inbox.org"
+
+# ─── 工具函数 ───────────────────────────────────────────────────────────────────
+
+die() { echo "错误: $*" >&2; exit 1; }
+
+now() { date '+%Y-%m-%d %a %H:%M'; }
+today() { date '+%Y-%m-%d'; }
+timestamp_id() { date '+%Y%m%d-%H%M%S'; }
+
+ensure_dirs() {
+    mkdir -p "${KB_EXPERIENCES}" "${KB_ROOT}/templates"
+}
+
+# ─── add: 添加经验卡片 ─────────────────────────────────────────────────────────
+#
+# 用法: kb add [选项]
+#   --title    任务标题（必需）
+#   --category 类别: emacs python rust go scheme shell nix web general
+#   --tech     技术栈: emacs-lisp python rust go scheme bash nix typescript org-mode
+#   --type     类型: debug refactor research workflow feature config
+#   --owner    执行者: human ai collaborative（默认 ai）
+#   --summary  一句话总结（可选）
+#   --stdin    从标准输入读取详细内容（可选）
+
+cmd_add() {
+    local title="" category="general" tech="" type="workflow"
+    local owner="ai" summary="" use_stdin=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --title)    title="$2"; shift 2 ;;
+            --category) category="$2"; shift 2 ;;
+            --tech)     tech="$2"; shift 2 ;;
+            --type)     type="$2"; shift 2 ;;
+            --owner)    owner="$2"; shift 2 ;;
+            --summary)  summary="$2"; shift 2 ;;
+            --stdin)    use_stdin=true; shift ;;
+            -h|--help)
+                echo "用法: kb add --title \"标题\" [--category 类别] [--tech 技术栈] [--type 类型] [--owner 执行者] [--summary 总结] [--stdin]"
+                echo ""
+                echo "选项:"
+                echo "  --title    任务标题（必需）"
+                echo "  --category 类别（emacs|python|rust|go|scheme|shell|nix|web|general）"
+                echo "  --tech     技术栈（emacs-lisp|python|rust|go|scheme|bash|nix|typescript|org-mode）"
+                echo "  --type     类型（debug|refactor|research|workflow|feature|config）"
+                echo "  --owner    执行者（human|ai|collaborative，默认 ai）"
+                echo "  --summary  一句话总结"
+                echo "  --stdin    从标准输入读取详细内容"
+                exit 0 ;;
+            *) die "未知选项: $1" ;;
+        esac
+    done
+
+    [[ -z "${title}" ]] && die "必须指定 --title"
+
+    # tech 默认取 category
+    [[ -z "${tech}" ]] && tech="${category}"
+
+    local id ts filename tags
+    id="$(timestamp_id)"
+    ts="$(now)"
+    filename="${id}-${type}-${category}.org"
+    tags="${category} ${type} ${owner}"
+    [[ -n "${tech}" && "${tech}" != "${category}" ]] && tags="${tags} ${tech}"
+
+    local filepath="${KB_EXPERIENCES}/${filename}"
+
+    # 读取 stdin 内容
+    local body=""
+    if ${use_stdin}; then
+        body="$(cat)"
+    fi
+
+    cat > "${filepath}" <<ORGEOF
+* DONE ${title}
+:PROPERTIES:
+:ID:       ${id}
+:CREATED:  [${ts}]
+:CATEGORY: ${category}
+:TECH:     ${tech}
+:TYPE:     ${type}
+:STATUS:   done
+:EFFORT:
+:OWNER:    ${owner}
+:END:
+${tags:+:$(echo "${tags}" | tr ' ' ':')::}
+
+** 任务描述
+${summary:-${title}}
+
+** 执行过程
+${body:-1. }
+
+** 难点与坑点 :difficulties:
+
+** 经验教训 :lessons:
+
+** 相关链接
+
+** AI 建议 :ai_notes:
+ORGEOF
+
+    echo "${filepath}"
+}
+
+# ─── get: 读取卡片详情 ─────────────────────────────────────────────────────────
+#
+# 用法: kb get <卡片文件名或ID>
+
+cmd_get() {
+    [[ $# -lt 1 ]] && die "用法: kb get <卡片文件名或ID>"
+    local target="$1"
+
+    # 尝试精确匹配文件路径
+    if [[ -f "${target}" ]]; then
+        cat "${target}"
+        return
+    fi
+
+    # 尝试在 experiences 目录下匹配
+    local file
+    file="$(find "${KB_EXPERIENCES}" -maxdepth 1 -name "*${target}*" -type f | head -1)" || true
+    if [[ -n "${file}" && -f "${file}" ]]; then
+        cat "${file}"
+        return
+    fi
+
+    die "未找到卡片: ${target}"
+}
+
+# ─── list: 列出卡片 ────────────────────────────────────────────────────────────
+#
+# 用法: kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
+
+cmd_list() {
+    local filter_category="" filter_type="" filter_owner=""
+    local recent=0 show_all=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --category) filter_category="$2"; shift 2 ;;
+            --type)     filter_type="$2"; shift 2 ;;
+            --owner)    filter_owner="$2"; shift 2 ;;
+            --recent)   recent="$2"; shift 2 ;;
+            --all)      show_all=true; shift ;;
+            -h|--help)
+                echo "用法: kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]"
+                echo ""
+                echo "列出经验卡片，默认只显示最近 20 条。"
+                echo "  --recent N  显示最近 N 条（0=全部）"
+                echo "  --all       显示全部（等同于 --recent 0）"
+                exit 0 ;;
+            *) die "未知选项: $1" ;;
+        esac
+    done
+
+    ${show_all} && recent=0
+    [[ ${recent} -eq 0 ]] && recent=9999
+
+    local count=0
+    for f in $(ls -t "${KB_EXPERIENCES}"/*.org 2>/dev/null); do
+        local basename category type owner title id created
+        basename="$(basename "${f}")"
+
+        # 从文件名解析元数据: YYYYMMDD-HHMMSS-type-category.org
+        # 从文件内容解析标题和属性
+        title="$(head -1 "${f}" | sed 's/^\*+ [A-Z]* //')"
+        id="$(awk '/:ID:/{gsub(/.*:ID:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        created="$(awk '/:CREATED:/{gsub(/.*:CREATED:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        category="$(awk '/:CATEGORY:/{gsub(/.*:CATEGORY:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        type="$(awk '/:TYPE:/{gsub(/.*:TYPE:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        owner="$(awk '/:OWNER:/{gsub(/.*:OWNER:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+
+        # 过滤
+        [[ -n "${filter_category}" && "${category}" != "${filter_category}" ]] && continue
+        [[ -n "${filter_type}" && "${type}" != "${filter_type}" ]] && continue
+        [[ -n "${filter_owner}" && "${owner}" != "${filter_owner}" ]] && continue
+
+        echo "${f}|${title}|${category:-?}|${type:-?}|${owner:-?}|${created:--}"
+        count=$((count + 1))
+        [[ ${count} -ge ${recent} ]] && break
+    done
+}
+
+# ─── search: 全文检索 ──────────────────────────────────────────────────────────
+#
+# 用法: kb search <关键词或正则> [--context N]
+
+cmd_search() {
+    [[ $# -lt 1 ]] && die "用法: kb search <关键词> [--context N]"
+    local query="$1"; shift
+    local context=3
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --context) context="$2"; shift 2 ;;
+            *) die "未知选项: $1" ;;
+        esac
+    done
+
+    if command -v rg &>/dev/null; then
+        rg --color=never -n -C "${context}" "${query}" "${KB_EXPERIENCES}" "${KB_PATTERNS}" 2>/dev/null || echo "未找到匹配: ${query}"
+    else
+        grep -r -n -C "${context}" "${query}" "${KB_EXPERIENCES}" "${KB_PATTERNS}" 2>/dev/null || echo "未找到匹配: ${query}"
+    fi
+}
+
+# ─── tags: 按标签检索 ──────────────────────────────────────────────────────────
+#
+# 用法: kb tags <标签> [标签2 ...]
+
+cmd_tags() {
+    [[ $# -lt 1 ]] && die "用法: kb tags <标签> [标签2 ...]"
+
+    for tag in "$@"; do
+        echo "── 标签: ${tag} ──"
+        if command -v rg &>/dev/null; then
+            rg --color=never -l ":${tag}:" "${KB_EXPERIENCES}" 2>/dev/null || echo "  (无匹配)"
+        else
+            grep -rl ":${tag}:" "${KB_EXPERIENCES}" 2>/dev/null || echo "  (无匹配)"
+        fi
+    done
+}
+
+# ─── patterns: 管理模式/原则 ────────────────────────────────────────────────────
+#
+# 用法:
+#   kb patterns           显示当前模式列表
+#   kb patterns --add     从 stdin 读取并追加一条新模式
+#   kb patterns --get     显示 patterns.org 全文
+
+cmd_patterns() {
+    if [[ $# -eq 0 ]]; then
+        # 列出所有二级标题（模式名称）
+        if [[ -f "${KB_PATTERNS}" ]]; then
+            grep '^\*\* ' "${KB_PATTERNS}" | sed 's/^\*\* //' || echo "(无模式)"
+        else
+            echo "(模式文件不存在)"
+        fi
+        return
+    fi
+
+    case "$1" in
+        --add)
+            # 从 stdin 追加一条模式
+            local pattern_body
+            pattern_body="$(cat)"
+            if [[ ! -f "${KB_PATTERNS}" ]]; then
+                cat > "${KB_PATTERNS}" <<EOF
+#+title: patterns
+#+date: [$(today)]
+
+${pattern_body}
+EOF
+            else
+                echo "" >> "${KB_PATTERNS}"
+                echo "${pattern_body}" >> "${KB_PATTERNS}"
+            fi
+            echo "已追加到 ${KB_PATTERNS}"
+            ;;
+        --get)
+            [[ -f "${KB_PATTERNS}" ]] && cat "${KB_PATTERNS}" || echo "(模式文件不存在)"
+            ;;
+        *)
+            die "未知选项: $1 (可用: --add, --get)"
+            ;;
+    esac
+}
+
+# ─── help ───────────────────────────────────────────────────────────────────────
+
+cmd_help() {
+    cat <<EOF
+kb — 知识库命令行工具
+
+用法: kb <子命令> [参数]
+
+子命令:
+  add       添加经验卡片
+            kb add --title "标题" [--category 类别] [--tech 技术栈]
+                    [--type 类型] [--owner 执行者] [--summary 总结] [--stdin]
+
+  get       读取卡片详情
+            kb get <卡片文件名或ID>
+
+  list      列出卡片
+            kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
+
+  search    全文检索
+            kb search <关键词或正则> [--context N]
+
+  tags      按标签检索
+            kb tags <标签> [标签2 ...]
+
+  patterns  管理模式/原则
+            kb patterns           列出模式
+            kb patterns --add     从 stdin 追加模式
+            kb patterns --get     显示全文
+
+  help      显示本帮助
+
+知识库路径: ${KB_ROOT}
+经验卡片目录: ${KB_EXPERIENCES}
+模式文件: ${KB_PATTERNS}
+EOF
+}
+
+# ─── 主入口 ─────────────────────────────────────────────────────────────────────
+
+ensure_dirs
+
+[[ $# -eq 0 ]] && { cmd_help; exit 0; }
+
+subcmd="$1"; shift
+case "${subcmd}" in
+    add)      cmd_add "$@" ;;
+    get)      cmd_get "$@" ;;
+    list)     cmd_list "$@" ;;
+    search)   cmd_search "$@" ;;
+    tags)     cmd_tags "$@" ;;
+    patterns) cmd_patterns "$@" ;;
+    help|--help|-h) cmd_help ;;
+    *)        die "未知子命令: ${subcmd}。运行 'kb help' 查看帮助。" ;;
+esac
