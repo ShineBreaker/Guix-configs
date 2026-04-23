@@ -8,9 +8,9 @@
     "opencode-scheduler"
   ],
   "instructions": [
-    "~/.config/opencode/docs/git.md",
     "~/.config/opencode/docs/language.md",
     "~/.config/opencode/docs/token-efficient.md",
+    "~/.config/opencode/docs/tools.md",
     "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
   ]
 }
