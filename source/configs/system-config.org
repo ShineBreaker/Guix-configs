@@ -414,6 +414,7 @@
                      pm
                      shepherd
                      sound
+                     ssh
                      virtualization
                      xorg)
 
@@ -475,6 +476,9 @@
 (list (service nftables-service-type
                (nftables-configuration (ruleset (local-file
                                                  "../source/files/nftables.conf"))))
+      (service openssh-service-type
+               (openssh-configuration
+                (password-authentication? #f)))
       (simple-service 'mihomo-services shepherd-root-service-type
                       (list (shepherd-service (documentation
                                                "Run the mihomo daemon.")
@@ -694,7 +698,8 @@
                                                       "--dhcp-range=192.168.10.2,192.168.10.254"))))
 
       (service rootless-podman-service-type
-               (rootless-podman-configuration (subuids (list (subid-range (name
+               (rootless-podman-configuration (pam-limits '())
+                                              (subuids (list (subid-range (name
                                                                            "brokenshine")
                                                                           (start
                                                                            100000)
