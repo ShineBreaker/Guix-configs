@@ -297,6 +297,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "gimp"
         "keepassxc"
         "kdeconnect"
+        "libreoffice"
         "motrix-next-bin"
         "seahorse"
         "virt-manager"
@@ -482,7 +483,7 @@ end
                              "emacs-which-key"
 
                              ;; 编辑与导航
-                             "emacs-diff-hl"
+                              "emacs-diff-hl"
                              "emacs-dirvish"
                              "emacs-expand-region"
                              "emacs-helpful"
@@ -541,7 +542,7 @@ end
                              "emacs-notmuch"
                              "emacs-pdf-tools"
 
-                             ;; Tree-sitter（保留更宽的语言覆盖）
+                             ;; Tree-sitter
                              "tree-sitter"
                              "tree-sitter-bash"
                              "tree-sitter-c"
@@ -664,8 +665,8 @@ end
                           ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
                           ;; 即时通讯
                           ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
-                          ;; 密钥管理
-                           ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
+                           ;; 密钥管理
+                            ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
 #+end_src
 
 ** 软件自启动
@@ -703,11 +704,10 @@ end
                             (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
-                              (make-shepherd-service kdeconnect "/bin/kdeconnectd" '(graphical-session)
-                                                     graphical-env-vars)
                               (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(graphical-session)
                                                      graphical-env-vars)
-                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session)
+                                                     graphical-env-vars)
                               (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session)
                                                      niri-env-vars)
                               (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session)
