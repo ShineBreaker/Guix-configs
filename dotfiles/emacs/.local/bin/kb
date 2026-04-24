@@ -14,6 +14,7 @@
 #   search   全文检索
 #   tags     按标签检索
 #   patterns 管理模式/原则
+#   reindex  重建索引（扫描 experiences/ 按 CATEGORY 分组重建 index.org）
 #   help     显示帮助
 
 set -euo pipefail
@@ -33,7 +34,15 @@ today() { date '+%Y-%m-%d'; }
 timestamp_id() { date '+%Y%m%d-%H%M%S'; }
 
 ensure_dirs() {
-    mkdir -p "${KB_EXPERIENCES}" "${KB_ROOT}/templates"
+    mkdir -p "${KB_EXPERIENCES}"
+    # 确保索引文件存在
+    for f in "${KB_INBOX}" "${KB_INDEX}" "${KB_PATTERNS}"; do
+        if [[ ! -f "${f}" ]]; then
+            local base
+            base="$(basename "${f}" .org)"
+            printf '#+title: %s\n#+date: [%s]\n\n' "${base}" "$(date '+%Y-%m-%d %a')" > "${f}"
+        fi
+    done
 }
 
 # ─── add: 添加经验卡片 ─────────────────────────────────────────────────────────
@@ -189,9 +198,9 @@ cmd_list() {
 
         # 从文件名解析元数据: YYYYMMDD-HHMMSS-type-category.org
         # 从文件内容解析标题和属性
-        title="$(head -1 "${f}" | sed 's/^\*+ [A-Z]* //')"
+        title="$(head -1 "${f}" | sed 's/^\* [A-Z]* //')"
         id="$(awk '/:ID:/{gsub(/.*:ID:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
-        created="$(awk '/:CREATED:/{gsub(/.*:CREATED:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        created="$(awk '/:CREATED:/{gsub(/.*:CREATED:[ \t]+/, ""); gsub(/[\[\]]/, ""); print $1; exit}' "${f}" 2>/dev/null || true)"
         category="$(awk '/:CATEGORY:/{gsub(/.*:CATEGORY:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
         type="$(awk '/:TYPE:/{gsub(/.*:TYPE:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
         owner="$(awk '/:OWNER:/{gsub(/.*:OWNER:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
@@ -292,6 +301,108 @@ EOF
     esac
 }
 
+# ─── reindex: 重建知识库索引 ────────────────────────────────────────────────────
+#
+# 用法: kb reindex
+#
+# 扫描 experiences/ 目录下所有卡片，按 CATEGORY 属性分组，
+# 重建 index.org 使其包含分类导航链接。
+
+cmd_reindex() {
+    ensure_dirs
+
+    # 收集所有卡片的元数据: filepath|title|category|created
+    local entries=()
+    for f in $(ls -t "${KB_EXPERIENCES}"/*.org 2>/dev/null); do
+        local title category created
+        title="$(head -1 "${f}" | sed 's/^\* [A-Z]* //')"
+        category="$(awk '/:CATEGORY:/{gsub(/.*:CATEGORY:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        created="$(awk '/:CREATED:/{gsub(/.*:CREATED:[ \t]+/, ""); gsub(/[\[\]]/, ""); print $1; exit}' "${f}" 2>/dev/null || true)"
+        [[ -z "${category}" ]] && category="general"
+        entries+=("${f}|${title}|${category}|${created:-未知日期}")
+    done
+
+    if [[ ${#entries[@]} -eq 0 ]]; then
+        cat > "${KB_INDEX}" <<EOF
+#+title: 知识库导航
+#+date: [$(date '+%Y-%m-%d %a')]
+
+* 概览
+知识库暂无经验卡片。使用 =kb add= 或 =C-c o k c= 添加。
+
+* 模式与原则
+  提炼出的通用模式/原则记录在 [[file:patterns.org][patterns.org]]。
+
+* 收件箱
+  快速捕获入口：[[file:inbox.org][inbox.org]]
+
+* 快速入口
+  - C-c o k c :: 快速捕获经验
+  - C-c o k s :: 检索经验
+  - C-c o k p :: 打开模式/原则
+  - C-c o k I :: 打开本索引
+  - kb reindex :: 重建本索引
+EOF
+        echo "索引已重建（无卡片，仅骨架）"
+        return
+    fi
+
+    # 按 category 分组
+    declare -A groups  # category -> "entry1\nentry2\n..."
+    declare -a group_order  # 保持插入顺序
+
+    for entry in "${entries[@]}"; do
+        IFS='|' read -r filepath title category created <<< "${entry}"
+        if [[ -z "${groups[${category}]+x}" ]]; then
+            groups["${category}"]=""
+            group_order+=("${category}")
+        fi
+        # relative path from index.org to experience file
+        local relpath="experiences/$(basename "${filepath}")"
+        local line="  - [[file:${relpath}][${title}]] (${created})"
+        groups["${category}"]="${groups[${category}]}${line}"$'\n'
+    done
+
+    # 统计
+    local total=${#entries[@]}
+
+    # 重建 index.org
+    {
+        echo "#+title: 知识库导航"
+        echo "#+date: [$(date '+%Y-%m-%d %a')]"
+        echo ""
+        echo "* 概览"
+        echo "共 ${total} 条经验卡片，${#group_order[@]} 个类别。"
+        echo "使用 =kb reindex= 重建本索引。"
+        echo ""
+        echo "* 收件箱"
+        echo "  快速捕获入口：[[file:inbox.org][inbox.org]]"
+        echo ""
+        echo "* 模式与原则"
+        echo "  提炼出的通用模式/原则记录在 [[file:patterns.org][patterns.org]]。"
+        echo ""
+
+        # 按类别分组输出
+        echo "* 按类别浏览"
+        for cat in "${group_order[@]}"; do
+            local count
+            count=$(echo -n "${groups[${cat}]}" | grep -c '^' || true)
+            echo "** ${cat} (${count})"
+            echo -n "${groups[${cat}]}"
+            echo ""
+        done
+
+        echo "* 快速入口"
+        echo "  - C-c o k c :: 快速捕获经验"
+        echo "  - C-c o k s :: 检索经验"
+        echo "  - C-c o k p :: 打开模式/原则"
+        echo "  - C-c o k I :: 打开本索引"
+        echo "  - kb reindex :: 重建本索引"
+    } > "${KB_INDEX}"
+
+    echo "索引已重建: ${total} 条卡片, ${#group_order[@]} 个类别 → ${KB_INDEX}"
+}
+
 # ─── help ───────────────────────────────────────────────────────────────────────
 
 cmd_help() {
@@ -322,6 +433,9 @@ kb — 知识库命令行工具
             kb patterns --add     从 stdin 追加模式
             kb patterns --get     显示全文
 
+  reindex   重建知识库索引
+            kb reindex
+
   help      显示本帮助
 
 知识库路径: ${KB_ROOT}
@@ -344,6 +458,7 @@ case "${subcmd}" in
     search)   cmd_search "$@" ;;
     tags)     cmd_tags "$@" ;;
     patterns) cmd_patterns "$@" ;;
+    reindex)  cmd_reindex "$@" ;;
     help|--help|-h) cmd_help ;;
     *)        die "未知子命令: ${subcmd}。运行 'kb help' 查看帮助。" ;;
 esac
