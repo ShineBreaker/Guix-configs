@@ -58,44 +58,42 @@
 <<filesystem-defines>>
 
 (operating-system
- <<kernel-configs>>
+  <<kernel-configs>>
+  <<information-configs>>
+  <<users-config>>
+  <<bootloader-configs>>
 
- <<information-configs>>
+  (mapped-devices %mapped-devices-config)
+  (file-systems %file-systems-config)
+  (swap-devices %swap-devices)
 
- <<users-config>>
+  (packages
+   (append
+     <<packages-list>>
+     %base-packages)
+   )
 
- <<bootloader-configs>>
+  (services
+   (append
+     <<basic-services>>
+     <<udev-services>>
+     <<networking-services>>
+     <<virtualization-services>>
+     <<kernel-services>>
+     <<nix-services>>
+     <<filesystem-services>>
+     <<desktop-services>>
+     )))
 
- (mapped-devices %mapped-devices-config)
- (file-systems %file-systems-config)
-
- (packages
-  (append
-   <<packages-list>>
-   %base-packages)
-  )
-
- (services
-  (append
-   <<basic-services>>
-   <<udev-services>>
-   <<networking-services>>
-   <<virtualization-services>>
-   <<kernel-services>>
-   <<nix-services>>
-   <<filesystem-services>>
-   <<desktop-services>>
-   )))
-  (skeletons
+(skeletons
   <<skeletons-config>>
   )
 
-  (name-service-switch %mdns-host-lookup-nss))
+(name-service-switch %mdns-host-lookup-nss))
 #+end_src
 
 * Modules
 ** 一些通用的模块
-
 #+NAME: modules
 #+begin_src scheme
 (use-modules (gnu)
@@ -113,18 +111,64 @@
              (ice-9 match)
 
              (rosenthal utils packages))
-
-
 #+end_src
 
-* Bootloader
-
-在这里使用了由 =rosenthal= 频道提供的 *Limine*
-
+** Bootloader
 #+NAME: bootloader-modules
 #+begin_src scheme
 (use-modules (rosenthal bootloader limine))
 #+end_src
+
+** Kernel
+#+NAME: kernel-modules
+#+begin_src scheme
+(use-modules (gnu packages firmware)
+
+             (nongnu packages firmware)
+             (nongnu packages linux)
+             (nongnu system linux-initrd))
+
+(use-service-modules linux pam-mount sysctl)
+#+end_src
+
+** Service
+#+NAME: services-modules
+#+begin_src scheme
+(use-modules (gnu home services guix)
+             (guix channels)
+             (jeans services hardware)
+             (rosenthal packages networking)
+             (rosenthal packages wm)
+             (rosenthal services base)
+             (srfi srfi-1))
+
+(use-package-modules android
+                     games
+                     glib
+                     hardware
+                     linux
+                     package-management
+                     wm)
+
+(use-service-modules authentication
+                     containers
+                     dbus
+                     desktop
+                     dns
+                     guix
+                     linux
+                     networking
+                     nix
+                     pm
+                     shepherd
+                     sound
+                     ssh
+                     virtualization
+                     xorg)
+#+end_src
+
+* Bootloader
+在这里使用了由 =rosenthal= 频道提供的 *Limine*
 
 #+NAME: bootloader-configs
 #+begin_src scheme
@@ -134,7 +178,6 @@
 #+end_src
 
 * FileSystems
-
 这里的配置文件需要根据自己的实际情况进行修改
 我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能
 具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
@@ -212,24 +255,15 @@
                  (mount-point "/efi")
                  (type "vfat")
                  (create-mount-point? #t))) %base-file-systems))
+
+(define %swap-devices
+  (list (swap-space
+         (target (uuid "169557cc-00a4-448c-9bb6-7bd80fc2b023")))))
 #+end_src
 
 * Kernel
-
 ** 导入 =nonguix= 固件
 使用 =nonguix= 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
-
-#+NAME: kernel-modules
-#+begin_src scheme
-(use-modules (gnu packages firmware)
-
-             (nongnu packages firmware)
-             (nongnu packages linux)
-             (nongnu system linux-initrd))
-
-(use-service-modules linux pam-mount sysctl)
-
-#+end_src
 
 #+NAME: kernel-configs
 #+begin_src scheme
@@ -237,7 +271,8 @@
 (firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
 (kernel linux-6.19)
 (kernel-arguments
- (cons* "kernel.sysrq=1"
+ (cons* "resume=UUID=169557cc-00a4-448c-9bb6-7bd80fc2b023"
+        "kernel.sysrq=1"
         "loglevel=0"
         "modprobe.blacklist=wacom,hid_uclogic"
         "snd-intel-dspcfg.dsp_driver=3"
@@ -294,7 +329,6 @@
 #+end_src
 
 * Packages
-
 一些需要用到的软件包， *非必要不修改*
 
 #+NAME: packages-list
@@ -383,52 +417,12 @@
 #+end_src
 
 * Services
-
-#+NAME: services-modules
-#+begin_src scheme
-(use-modules (gnu home services guix)
-             (guix channels)
-             (jeans services hardware)
-             (rosenthal packages networking)
-             (rosenthal packages wm)
-             (rosenthal services base)
-             (srfi srfi-1))
-
-(use-package-modules android
-                     games
-                     glib
-                     hardware
-                     linux
-                     package-management
-                     wm)
-
-(use-service-modules authentication
-                     containers
-                     dbus
-                     desktop
-                     dns
-                     guix
-                     linux
-                     networking
-                     nix
-                     pm
-                     shepherd
-                     sound
-                     ssh
-                     virtualization
-                     xorg)
-
-#+end_src
-
 ** 文件系统相关服务
 在这里就是一些负责维护文件系统树的服务
 
-+ *fixed-machine-id* 负责固定 =/etc/machine-id=
-  这个文件中的内容，具体的算法在 [[../information.scm][information.scm]]
-  中
++ *fixed-machine-id* 负责固定 =/etc/machine-id= 这个文件中的内容，具体的算法在 [[../information.scm][information.scm]] 中
 + *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
-+ *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user=
-  目录中创建同名的文件夹，以用于bind-mount
++ *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
 
 #+NAME: filesystem-services
 #+begin_src scheme
@@ -470,7 +464,6 @@
 #+end_src
 
 ** 网络相关配置
-
 #+NAME: networking-services
 #+begin_src scheme
 (list (service nftables-service-type
@@ -501,7 +494,6 @@
 #+end_src
 
 ** Nix包管理器相关配置
-
 #+NAME: nix-services
 #+begin_src scheme
 (list (service nix-service-type
@@ -525,7 +517,6 @@
 #+end_src
 
 ** UDEV规则
-
 #+NAME: udev-services
 #+begin_src scheme
 (list (udev-rules-service 'android android-udev-rules
@@ -546,7 +537,6 @@
 #+end_src
 
 ** 基础服务
-
 #+NAME: basic-services
 #+begin_src scheme
 (append (map (lambda (tty)
@@ -608,15 +598,12 @@
 #+end_src
 
 ** 桌面服务
-
 使用 Guix 原生的 =%desktop-services= 作为基础，删除默认的显示管理器和 mingetty
-
 替换为 greetd + tuigreet 登录管理器，并添加蓝牙、屏幕锁、背光控制等桌面服务
-
 原先的 =modify-services= 大部分已拆分为独立的 service 列表，仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例）
 
  #+NAME: desktop-services
- #+begin_src scheme
+ #+begin_src scheme :noweb yes
 (append (modify-services %desktop-services
                          (delete console-font-service-type)
                          (delete mingetty-service-type)
@@ -635,6 +622,19 @@
       (service gnome-keyring-service-type)
       (service gvfs-service-type)
       (service opentabletdriver-service-type)
+
+      ;; 允许本地活跃用户执行休眠/挂起/混合休眠（elogind + polkit）
+      (simple-service 'hibernate-polkit polkit-service-type
+                      (list (computed-file
+                             "polkit-hibernate-rules"
+                             (let ((rules-file (local-file "50-hibernate.rules")))
+                               #~(begin
+                                   (mkdir #$output)
+                                   (mkdir (string-append #$output "/share"))
+                                   (mkdir (string-append #$output "/share/polkit-1"))
+                                   (mkdir (string-append #$output "/share/polkit-1/rules.d"))
+                                   (copy-file #$rules-file
+                                              (string-append #$output "/share/polkit-1/rules.d/50-hibernate.rules")))))))
 
       (service bluetooth-service-type
                (bluetooth-configuration (auto-enable? #t)))
@@ -685,8 +685,24 @@
                                                    "--session")))))))))
 #+end_src
 
-** 虚拟化服务
 
+50-hibernate.rules
+
+#+name: 50-hibernate.rules
+#+begin_src js :tangle ../../tmp/50-hibernate.rules
+polkit.addRule(function(action, subject) {
+    if (subject.isLocal && subject.isActive &&
+        (action.id == "org.freedesktop.login1.hibernate" ||
+         action.id == "org.freedesktop.login1.hibernate-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.suspend" ||
+         action.id == "org.freedesktop.login1.suspend-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.hybrid-sleep" ||
+         action.id == "org.freedesktop.login1.hybrid-sleep-multiple-sessions")) {
+        return polkit.Result.YES;
+    }
+});
+#+end_src
+** 虚拟化服务
 #+NAME: virtualization-services
 #+begin_src scheme
 (list (service dnsmasq-service-type
@@ -730,9 +746,7 @@
 
 * Skeletons
 负责处理 *用户骨架 (/etc/skel) 目录下的文件
-
 该目录下的所有文件都会在用户第一次创建时写入到用户的目录中
-
 适合在此放置一些需要经常修改的模板类服务
 
 #+NAME: skeletons-config
