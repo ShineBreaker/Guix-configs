@@ -9,12 +9,21 @@
       "timeout": 15
     }
   },
+  "permissions": {
+    "allowed_tools": [
+      "edit",
+      "grep",
+      "ls",
+      "mcp_context7",
+      "sequential",
+      "view"
+    ]
+  },
   "options": {
     "context_paths": [
       "~/.config/crush/context/01-language.md",
       "~/.config/crush/context/02-style.md",
-      "~/.config/crush/context/03-shell-strategy.md",
-      "~/.config/crush/context/04-workspace.md"
+      "~/.config/crush/context/03-tools.md"
     ],
     "tui": {
       "compact_mode": true,
@@ -30,14 +39,6 @@
     "progress": true,
     "disable_notifications": false,
     "disable_provider_auto_update": false
-  },
-  "permissions": {
-    "allowed_tools": [
-      "view",
-      "ls",
-      "grep",
-      "edit"
-    ]
   },
   "providers": {
     "zhipu": {
@@ -55,9 +56,10 @@
       "max_tokens": 65536
     },
     "small": {
-      "provider": "minimax-china",
-      "model": "MiniMax-M2.7",
-      "max_tokens": 131072
+      "provider": "zhipu",
+      "model": "glm-5",
+      "think": true,
+      "max_tokens": 65536
     },
     "quick": {
       "provider": "zhipu",

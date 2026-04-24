@@ -65,7 +65,7 @@
     },
 
     "atlas": {
-      "model": "minimax-cn-coding-plan/MiniMax-M2.7",
+      "model": "zai-coding-plan/glm-5-turbo",
       // 文档链: claude-sonnet-4-6→kimi→gpt-5.4(medium)→minimax-m2.7
       // 跳过: sonnet(不可用), kimi(不可用)
       "fallback_models": [{
@@ -134,7 +134,7 @@
       "model": "github-copilot/grok-code-fast-1",
       // 文档链: grok-code-fast-1→minimax-m2.7-highspeed→minimax-m2.7→claude-haiku-4-5→gpt-5-nano
       "fallback_models": [{
-          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+          "model": "zai-coding-plan/glm-4.7"
         },
         "github-copilot/claude-haiku-4.5",
         "opencode/gpt-5-nano"
@@ -146,7 +146,7 @@
       // 文档链: minimax-m2.7→minimax-m2.7-highspeed→claude-haiku-4-5→gpt-5-nano
       // 主模型已在链末尾，补充链前方的模型作为 fallback
       "fallback_models": [{
-          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+          "model":"zai-coding-plan/glm-4.7"
         },
         "github-copilot/claude-haiku-4.5",
         "github-copilot/gemini-3-flash-preview"
@@ -172,7 +172,7 @@
           "model": "github-copilot/gpt-5.3-codex",
           "variant": "medium"
         }, {
-          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+          "model": "zai-coding-plan/glm-4.7"
         },
         "opencode/big-pickle"
       ]
@@ -244,7 +244,7 @@
       "model": "github-copilot/claude-haiku-4.5",
       "fallback_models": [
         "github-copilot/gemini-3-flash-preview", {
-          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+          "model": "zai-coding-plan/glm-4.5-air"
         },
         "opencode/gpt-5-nano"
       ]
@@ -273,7 +273,7 @@
       "model": "github-copilot/gpt-5.3-codex",
       "fallback_models": [
         "github-copilot/gemini-3-flash-preview", {
-          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+          "model": "zai-coding-plan/glm-4.7"
         }
       ]
     },
@@ -283,7 +283,7 @@
     "writing": {
       "model": "github-copilot/gemini-3-flash-preview",
       "fallback_models": [{
-          "model": "minimax-cn-coding-plan/MiniMax-M2.7"
+          "model": "zai-coding-plan/glm-4.7"
         },
         "github-copilot/gpt-5.2"
       ]
