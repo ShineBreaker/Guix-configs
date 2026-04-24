@@ -86,7 +86,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              <<user-desktop-services>>
              <<home-shepherd-services>>
              <<timer-services>>
-
              <<emacs-services>>
              <<fish-services>>
              <<modprobe-services>>
@@ -346,7 +345,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (gnu home services sound)
              (gnu home services xdg)
              (gnu home services desktop)
-             (gnu home services fontutils)
              (gnu home services syncthing)
              (gnu home services guix)
 
@@ -906,25 +904,23 @@ end
 #+end_src
 
 * Font
-** 字体相关配置
+字体相关配置
 
 #+NAME: font-services
 #+begin_src scheme
 (list (simple-service 'extend-fontconfig home-fontconfig-service-type
                       (list "~/.local/share/fonts"
                             "/run/current-system/profile/share/fonts"
-                            (let ((sans "Sarasa Gothic SC")
-                                  (serif "Sarasa Gothic SC")
-                                  (mono "Maple Mono NF CN")
-                                  (emoji "Noto Color Emoji"))
+                            (let ((emoji "Noto Color Emoji"))
                               `((alias (family "sans-serif")
-                                       (prefer (family ,sans)
+                                       (prefer (family ,"Sarasa Gothic SC")
                                                (family ,emoji)))
                                 (alias (family "serif")
-                                       (prefer (family ,serif)
+                                       (prefer (family ,"Sarasa Gothic SC")
                                                (family ,emoji)))
                                 (alias (family "monospace")
-                                       (prefer (family ,mono)
+                                       (prefer (family ,"Sarasa Mono SC")
+                                               (family ,"Maple Mono NF CN")
                                                (family ,emoji)))
                                 (alias (family "emoji")
                                        (prefer (family ,emoji))))))))
