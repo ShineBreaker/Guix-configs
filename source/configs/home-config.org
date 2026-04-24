@@ -125,7 +125,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 桌面组件
         "fuzzel"
         "mako"
-        "nautilus"
         "swaylock-effects"
         "swayidle"
         "swww"
@@ -297,8 +296,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "gimp"
         "keepassxc"
         "kdeconnect"
-        "libreoffice"
-        "motrix-next-bin"
+         "motrix-next-bin"
         "seahorse"
         "virt-manager"
 
@@ -571,6 +569,7 @@ end
       (service home-mako-service-type)
       (service home-syncthing-service-type)
       (service home-pipewire-service-type)
+      (service home-polkit-gnome-service-type)
       (service home-waybar-service-type)
 
       (service home-darkman-service-type
@@ -605,7 +604,7 @@ end
                           ("text/html" . "librewolf.desktop")
                           ("application/xhtml+xml" . "librewolf.desktop")
                           ;; 文件管理器
-                          ("inode/directory" . "org.gnome.Nautilus.desktop")
+                           ("inode/directory" . "thunar.desktop")
                           ;; 图片查看
                           ("image/png" . "org.nomacs.ImageLounge.desktop")
                           ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
@@ -651,9 +650,11 @@ end
                           ("text/x-java" . "emacsclient.desktop")
                           ("text/x-python" . "emacsclient.desktop")
                           ("text/x-rust" . "emacsclient.desktop")
-                          ;; PDF
-                          ("application/pdf" . "emacsclient.desktop")
-                          ;; 压缩包
+                           ;; PDF
+                           ("application/pdf" . "emacsclient.desktop")
+                            ;; KeePassXC 密码库
+                           ("application/x-keepass2" . "org.keepassxc.KeePassXC.desktop")
+                           ;; 压缩包
                           ("application/zip" . "org.gnome.FileRoller.desktop")
                           ("application/x-tar" . "org.gnome.FileRoller.desktop")
                           ("application/gzip" . "org.gnome.FileRoller.desktop")
@@ -665,8 +666,8 @@ end
                           ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
                           ;; 即时通讯
                           ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
-                           ;; 密钥管理
-                            ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
+                          ;; 密钥管理
+                          ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
 #+end_src
 
 ** 软件自启动
@@ -704,8 +705,6 @@ end
                             (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
-                              (make-shepherd-service polkit-gnome "/libexec/polkit-gnome-authentication-agent-1" '(graphical-session)
-                                                     graphical-env-vars)
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session)
                                                      graphical-env-vars)
                               (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session)
