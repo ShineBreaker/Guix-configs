@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Xdg Desktop Portal (GTK)
+Exec=/home/brokenshine/.guix-home/profile/libexec/xdg-desktop-portal-gtk
+X-GNOME-Autostart-enabled=true
+Hidden=false
+NoDisplay=true

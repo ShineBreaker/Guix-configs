@@ -709,13 +709,7 @@ end
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session)
                                                      graphical-env-vars)
                               (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session)
-                                                     niri-env-vars)
-                              (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session)
-                                                     graphical-env-vars)
-                              (make-shepherd-service xdg-desktop-portal-gnome "/libexec/xdg-desktop-portal-gnome" '(xdg-desktop-portal)
-                                                     graphical-env-vars)
-                              (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(xdg-desktop-portal)
-                                                     graphical-env-vars)))))
+                                                     niri-env-vars)))))
 #+end_src
 
 ** 计时器服务
