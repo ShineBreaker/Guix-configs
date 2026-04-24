@@ -86,30 +86,6 @@
             "chat_completions": true
           }
         }, {
-          "name": "MiniMax-M2.7-highspeed",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "MiniMax-M2.5-highspeed",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
           "name": "MiniMax-M2.5",
           "max_tokens": 256000,
           "max_output_tokens": 65536,
@@ -133,7 +109,7 @@
     "default_model": {
       "provider": "Zhipu AI",
       "model": "glm-5.1",
-      "enable_thinking": false
+      "enable_thinking": true
     },
     "model_parameters": [],
     "play_sound_when_agent_done": true,
