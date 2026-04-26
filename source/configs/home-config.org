@@ -237,6 +237,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; 工具
         "file"
+        "gitg"
         "jq"
         "pandoc"
         "reuse"
@@ -465,6 +466,10 @@ end
                              "emacs-marginalia"
                              "emacs-orderless"
                              "emacs-vertico"
+                             "emacs-corfu-doc"
+                             "emacs-corfu-doc-terminal"
+                             "emacs-consult-eglot"
+                             "emacs-consult-flycheck"
 
                              ;; 界面与外观
                              "emacs-dashboard"
@@ -479,7 +484,7 @@ end
                              "emacs-which-key"
 
                              ;; 编辑与导航
-                              "emacs-diff-hl"
+                             "emacs-diff-hl"
                              "emacs-dirvish"
                              "emacs-expand-region"
                              "emacs-helpful"
@@ -489,12 +494,15 @@ end
                              "emacs-symbol-overlay"
                              "emacs-ws-butler"
                              "emacs-eldoc-box"
+                             "emacs-vundo"
+                             "emacs-goto-chg"
 
                              ;; 开发工具
                              "emacs-apheleia"
                              "emacs-flycheck"
                              "emacs-posframe"
                              "emacs-vterm"
+                             "emacs-dape"
 
                              ;; 编程语言支持
                              "emacs-arei"
@@ -523,6 +531,10 @@ end
                              "emacs-magit"
                              "emacs-magit-todos"
                              "emacs-projectile"
+                             "emacs-forge"
+                             "emacs-git-modes"
+                             "emacs-magit-delta"
+                             "emacs-consult-projectile"
 
                              ;; Org Mode 生态
                              "emacs-htmlize"
@@ -919,8 +931,8 @@ end
                                        (prefer (family ,"Sarasa Gothic SC")
                                                (family ,emoji)))
                                 (alias (family "monospace")
-                                       (prefer (family ,"Sarasa Mono SC")
-                                               (family ,"Maple Mono NF CN")
+                                       (prefer (family ,"Maple Mono NF CN")
+                                               (family ,"Sarasa Mono SC")
                                                (family ,emoji)))
                                 (alias (family "emoji")
                                        (prefer (family ,emoji))))))))
