@@ -4,12 +4,13 @@
 
 set -g fish_autosuggestion_enabled 1
 
-alias cat "bat"
-alias cd "z"
+alias cat bat
+alias catr cat
+alias cd z
 alias cp "cp -i"
-alias find "fd"
-alias grep "rg"
-alias htop "btop"
+alias find fd
+alias grep rg
+alias htop btop
 alias ll "ls -la"
 alias rm "rm -i"
 
