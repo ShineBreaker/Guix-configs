@@ -4,9 +4,6 @@
   imports = [ ../programs/00-main.nix ];
 
   home.packages = with pkgs; [
-    ## 娱乐
-    bottles
-
     ## 编程工具
     beekeeper-studio
     bun
@@ -32,7 +29,6 @@
     ## AI 工具
     claude-code
     codex
-    crush
     llmfit
     ollama-vulkan
     opencode

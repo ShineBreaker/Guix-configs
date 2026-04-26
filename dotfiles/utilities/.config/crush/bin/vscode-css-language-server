@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-exec ~/.guix-home/profile/bin/npx --yes -p vscode-langservers-extracted vscode-css-language-server "$@"
