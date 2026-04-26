@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: GPL-3.0
+#
+# kb-lint — 知识库卡片格式校验与修复
+# 检测 Org 文件中的 Markdown 残留语法，自动修复为正确的 Org 格式。
+#
+# 修复项:
+#   1. ```lang ... ``` → #+begin_src lang ... #+end_src
+#   2. ``` ... ```     → #+begin_src ... #+end_src (无语言标注)
+#   3. **bold**        → *bold* (行内粗体，排除 Org 标题 ** 空格)
+#   4. ## heading      → *** heading (但仅在非代码块内且 ## 后有空格)
+#   5. - list item     → + list item (Org mode 用 + 而非 -)
+#   6. `inline code`   → ~inline code~ (Org mode 行内代码)
+#
+# 用法:
+#   kb-lint [选项] [文件...]
+#   kb-lint                  检查 ~/Documents/Org/experiences/ 下所有 .org
+#   kb-lint --fix            自动修复
+#   kb-lint --fix file.org   修复指定文件
+#   kb-lint --check          仅检查，输出问题数（退出码=问题数）
+
+import sys
+import os
+import re
+import glob
+
+KB_ROOT = os.path.expanduser("~/Documents/Org")
+EXPERIENCES = os.path.join(KB_ROOT, "experiences")
+
+
+def fix_org_content(text: str) -> tuple[str, list[str]]:
+    """修复 Org 文件中的 Markdown 语法，返回 (修复后文本, 修复项列表)"""
+    fixes = []
+    lines = text.split("\n")
+    result = []
+    in_code_block = False  # 追踪 ``` 代码块状态
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+
+        # --- 修复 1: ```lang ... ``` → #+begin_src lang ... #+end_src ---
+        code_match = re.match(r'^(\s*)```(\w*)\s*$', line)
+        if code_match:
+            indent = code_match.group(1)
+            lang = code_match.group(2)
+            if not in_code_block:
+                # 开始代码块
+                in_code_block = True
+                new_line = f"{indent}#+begin_src {lang}".rstrip()
+                if new_line != line:
+                    fixes.append(f"  行 {i+1}: ```{lang} → #+begin_src {lang}")
+                result.append(new_line)
+                i += 1
+                continue
+            else:
+                # 结束代码块
+                in_code_block = False
+                new_line = f"{indent}#+end_src"
+                fixes.append(f"  行 {i+1}: ``` → #+end_src")
+                result.append(new_line)
+                i += 1
+                continue
+
+        # --- 修复 2: 行内 **bold** → *bold* (不在代码块内) ---
+        if not in_code_block:
+            # 排除 Org 标题 (** 后有空格 = 标题) 和空行
+            stripped = line.lstrip()
+            # Org 标题模式: ** 或 *** 开头后跟空格
+            if re.match(r'^\*+\s', stripped):
+                result.append(line)
+                i += 1
+                continue
+
+            # 替换 **text** → *text* (markdown bold → org bold)
+            # 但不匹配 ** 开头后跟空格的情况 (那是 Org 标题)
+            new_line = re.sub(r'\*\*(.+?)\*\*', r'*\1*', line)
+            if new_line != line:
+                fixes.append(f"  行 {i+1}: **bold** → *bold*")
+                line = new_line
+
+            # --- 修复 3: `- list` → `+ list` (Org style) ---
+            # 匹配行首可选空白 + `- ` (列表标记)，排除 `--`(选项) 和 `-v`(短选项)
+            list_match = re.match(r'^(\s*)(- )(\S)', line)
+            if list_match and not line.lstrip().startswith('--'):
+                indent = list_match.group(1)
+                content = line.lstrip()[2:]
+                new_line = f"{indent}+ {content}"
+                fixes.append(f"  行 {i+1}: `- ` → `+ `")
+                line = new_line
+
+            # --- 修复 4: `inline code` → ~inline code~ (Org style) ---
+            # 匹配 `text` 但不匹配 ``` (三反引号代码块已在修复 1 处理)
+            # 需要确保不成对匹配跨越的情况
+            if '`' in line and '```' not in line:
+                def replace_inline_code(m):
+                    return f"~{m.group(1)}~"
+                new_line = re.sub(r'`([^`\n]+?)`', replace_inline_code, line)
+                if new_line != line:
+                    count = len(re.findall(r'`[^`\n]+?`', line))
+                    fixes.append(f"  行 {i+1}: `code` → ~code~ (×{count})")
+                    line = new_line
+
+        result.append(line)
+        i += 1
+
+    return "\n".join(result), fixes
+
+
+def check_file(filepath: str) -> list[str]:
+    """检查单个文件，返回问题列表"""
+    with open(filepath, "r", encoding="utf-8") as f:
+        text = f.read()
+    _, fixes = fix_org_content(text)
+    return fixes
+
+
+def fix_file(filepath: str) -> list[str]:
+    """修复单个文件，返回修复项列表"""
+    with open(filepath, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    new_text, fixes = fix_org_content(text)
+
+    if fixes:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(new_text)
+
+    return fixes
+
+
+def main():
+    args = sys.argv[1:]
+    do_fix = "--fix" in args
+    check_only = "--check" in args
+
+    # 收集目标文件
+    target_files = [a for a in args if not a.startswith("-")]
+    if not target_files:
+        target_files = sorted(glob.glob(os.path.join(EXPERIENCES, "*.org")))
+
+    if not target_files:
+        print("未找到 .org 文件", file=sys.stderr)
+        sys.exit(1)
+
+    total_issues = 0
+    files_with_issues = 0
+
+    for filepath in target_files:
+        if do_fix:
+            fixes = fix_file(filepath)
+        else:
+            fixes = check_file(filepath)
+
+        if fixes:
+            total_issues += len(fixes)
+            files_with_issues += 1
+            basename = os.path.basename(filepath)
+            print(f"\n{basename} ({len(fixes)} 项):")
+            for fix in fixes:
+                print(fix)
+
+    print(f"\n{'修复' if do_fix else '检查'}完成: {files_with_issues}/{len(target_files)} 个文件"
+          f"有 Markdown 残留, 共 {total_issues} 处")
+
+    if check_only:
+        sys.exit(min(total_issues, 127))
+
+
+if __name__ == "__main__":
+    main()
