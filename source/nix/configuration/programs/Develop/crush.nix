@@ -1,24 +1,13 @@
 { pkgs, lib, ... }:
 
 {
-  home.packages = with pkgs; [
-    context7-mcp
-    mcp-server-memory
-    mcp-server-sequential-thinking
-  ];
-
   programs.crush = {
     enable = true;
     settings = {
-      "$schema" = "https://charm.land/crush.json";
-
       tools = {
         ls = {
           max_depth = 6;
           max_items = 400;
-        };
-        grep = {
-          timeout = 15;
         };
       };
 
@@ -53,16 +42,12 @@
         tui = {
           compact_mode = true;
           diff_mode = "split";
-          transparent = true;
           completions = {
             max_depth = 3;
             max_items = 200;
           };
         };
         initialize_as = "AGENTS.md";
-        auto_lsp = true;
-        progress = true;
-        disable_notifications = false;
         disable_provider_auto_update = false;
       };
 
@@ -72,6 +57,7 @@
           name = "Zhipu Provider";
           base_url = "https://open.bigmodel.cn/api/coding/paas/v4";
           api_key = "$ZAI_API_KEY";
+          models = [ ];
         };
       };
 
@@ -107,7 +93,6 @@
             "meson.build"
             "Makefile"
           ];
-          timeout = 30;
         };
         python = {
           command = "pylsp";
@@ -135,13 +120,11 @@
               };
             };
           };
-          timeout = 30;
         };
         rust = {
           command = "rust-analyzer";
           filetypes = [ "rs" ];
           root_markers = [ "Cargo.toml" "rust-project.json" ];
-          timeout = 30;
         };
         java = {
           command = "jdtls";
@@ -153,7 +136,6 @@
             "settings.gradle"
             "settings.gradle.kts"
           ];
-          timeout = 60;
         };
         typescript = {
           command = "typescript-language-server";
@@ -169,35 +151,30 @@
             "pnpm-lock.yaml"
             "yarn.lock"
           ];
-          timeout = 60;
         };
         html = {
           command = "vscode-html-language-server";
           args = [ "--stdio" ];
           filetypes = [ "html" "htm" ];
           root_markers = [ "package.json" ".git" ];
-          timeout = 60;
         };
         css = {
           command = "vscode-css-language-server";
           args = [ "--stdio" ];
           filetypes = [ "css" "scss" "less" ];
           root_markers = [ "package.json" ".git" ];
-          timeout = 60;
         };
         json = {
           command = "vscode-json-language-server";
           args = [ "--stdio" ];
           filetypes = [ "json" "jsonc" ];
           root_markers = [ "package.json" ".git" ];
-          timeout = 60;
         };
         markdown = {
           command = "vscode-markdown-language-server";
           args = [ "--stdio" ];
           filetypes = [ "md" "markdown" ];
           root_markers = [ ".git" ];
-          timeout = 60;
         };
         eslint = {
           command = "vscode-eslint-language-server";
@@ -213,28 +190,24 @@
             "eslint.config.cjs"
             "eslint.config.ts"
           ];
-          timeout = 60;
         };
         bash = {
           command = "bash-language-server";
           args = [ "start" ];
           filetypes = [ "sh" "bash" "zsh" ];
           root_markers = [ ".git" ];
-          timeout = 60;
         };
         nix = {
           disabled = true;
           command = "nil";
           filetypes = [ "nix" ];
           root_markers = [ "flake.nix" "shell.nix" "default.nix" ];
-          timeout = 30;
         };
         zig = {
           disabled = true;
           command = "zls";
           filetypes = [ "zig" ];
           root_markers = [ "build.zig" "build.zig.zon" ];
-          timeout = 30;
         };
         kotlin = {
           disabled = true;
@@ -246,7 +219,6 @@
             "settings.gradle"
             "settings.gradle.kts"
           ];
-          timeout = 60;
         };
       };
 
@@ -263,7 +235,7 @@
         };
         sequential_thinking = {
           type = "stdio";
-          command = lib.getExe pkgs.mcp-server-sequential-thinking;
+          command = lib.getExe' pkgs.mcp-server-sequential-thinking "mcp-server-sequential-thinking";
           timeout = 30;
         };
       };

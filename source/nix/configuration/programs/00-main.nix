@@ -3,6 +3,6 @@
 {
   imports = [
     ./Develop/code.nix
-    ./Entertain/lutris.nix
+    ./Develop/crush.nix
   ];
 }
