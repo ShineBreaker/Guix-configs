@@ -1,3 +1,5 @@
+include optional=true "key-bindings.kdl"
+
 spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
 spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP"
 
@@ -284,11 +286,8 @@ binds {
     Mod+8       { focus-workspace 8; }
     Mod+9       { focus-workspace 9; }
 
-    Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false { spawn "swaylock" "--clock" "--daemonize" "--ignore-empty-password"; }
-
     Mod+Ctrl+C  hotkey-overlay-title="将窗口移至中央"    { center-column; }
     Mod+Ctrl+F  hotkey-overlay-title="使窗口悬浮"        { toggle-window-floating; }
-    Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "waypaper" "--random"; }
 
     Mod+Ctrl+K     hotkey-overlay-title="上移窗口"    { move-window-up; }
     Mod+Ctrl+Up    hotkey-overlay-title="上移窗口"    { move-window-up; }
@@ -310,12 +309,9 @@ binds {
     Mod+Ctrl+Page_Down hotkey-overlay-title="窗口移至下一工作区"  { move-column-to-workspace-down; }
     Mod+Ctrl+Page_Up   hotkey-overlay-title="窗口移至上一工作区"  { move-column-to-workspace-up; }
 
-    Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"; }
-    Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "fish" "-c" "fuzzel"; }
     Mod+F hotkey-overlay-title="窗口最大化"                      { maximize-column; }
     Mod+Q hotkey-overlay-title="关闭窗口"        repeat=false    { close-window; }
     Mod+R hotkey-overlay-title="更改窗口大小"                    { switch-preset-column-width; }
-
 
     Mod+K       hotkey-overlay-title="切换到上侧窗口"    { focus-window-up; }
     Mod+Up      hotkey-overlay-title="切换到上侧窗口"    { focus-window-up; }
@@ -383,16 +379,6 @@ binds {
     Mod+WheelScrollLeft  cooldown-ms=150  { focus-column-left; }
     Mod+WheelScrollRight cooldown-ms=150  { focus-column-right; }
     Mod+WheelScrollUp    cooldown-ms=150  { focus-workspace-up; }
-
-    XF86AudioRaiseVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "+5%"; }
-    XF86AudioLowerVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "-5%"; }
-    XF86AudioMicMute      allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SOURCE@" "toggle"; }
-    XF86AudioMute         allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SINK@" "toggle"; }
-    XF86MonBrightnessUp   allow-when-locked=true  { spawn "brightnessctl" "set" "5%+"; }
-    XF86MonBrightnessDown allow-when-locked=true  { spawn "brightnessctl" "set" "5%-"; }
-
-    Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn "brightnessctl" "set" "5%+"; }
-    Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn "brightnessctl" "set" "5%-"; }
 }
 
 switch-events {

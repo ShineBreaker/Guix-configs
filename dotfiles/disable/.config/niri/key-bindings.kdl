@@ -1,0 +1,17 @@
+binds {
+  Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false { spawn "swaylock" "--clock" "--daemonize" "--ignore-empty-password"; }
+  Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "waypaper" "--random"; }
+
+  Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "cliphist list | fuzzel --dmenu | cliphist decode | wl-copy"; }
+  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "fish" "-c" "fuzzel"; }
+
+  XF86AudioRaiseVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "+5%"; }
+  XF86AudioLowerVolume  allow-when-locked=true  { spawn "pactl" "set-sink-volume" "@DEFAULT_SINK@" "-5%"; }
+  XF86AudioMicMute      allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SOURCE@" "toggle"; }
+  XF86AudioMute         allow-when-locked=true  { spawn "pactl" "set-sink-mute"   "@DEFAULT_SINK@" "toggle"; }
+  XF86MonBrightnessUp   allow-when-locked=true  { spawn "brightnessctl" "set" "5%+"; }
+  XF86MonBrightnessDown allow-when-locked=true  { spawn "brightnessctl" "set" "5%-"; }
+
+  Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn "brightnessctl" "set" "5%+"; }
+  Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn "brightnessctl" "set" "5%-"; }
+}

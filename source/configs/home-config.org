@@ -82,19 +82,19 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
             <<user-packages-list>>
             ))
 
-  (services (append
-             <<user-desktop-services>>
-             <<home-shepherd-services>>
-             <<timer-services>>
-             <<emacs-services>>
-             <<fish-services>>
-             <<modprobe-services>>
-             <<dotfile-services>>
-             <<home-files-services>>
-             <<environment-variable-services>>
-             <<font-services>>
+ (services (append
+            <<user-desktop-services>>
+            <<home-shepherd-services>>
+            <<timer-services>>
+            <<emacs-services>>
+            <<fish-services>>
+            <<modprobe-services>>
+            <<dotfile-services>>
+            <<home-files-services>>
+            <<environment-variable-services>>
+            <<font-services>>
 
-             %base-home-services)))
+            %base-home-services)))
 #+end_src
 
 * Modules
@@ -122,12 +122,12 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 桌面组件
-        "fuzzel"
-        "mako"
-        "swaylock-effects"
-        "swayidle"
-        "swww"
-        "waypaper"
+        ;"fuzzel"
+        ;"mako"
+        ;"swaylock-effects"
+        ;"swayidle"
+        ;"swww"
+        ;"waypaper"
 
         ;; 字体
         "font-awesome"
@@ -241,6 +241,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "jq"
         "pandoc"
         "reuse"
+        "ripgrep"
         "texlive-scheme-basic"
 
         ;; 版本管理
@@ -253,7 +254,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 编辑器
         "helix"
         "zed"))
-        #+end_src
+#+end_src
 
 ** 其他软件包
 
@@ -261,72 +262,72 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 #+begin_src scheme
 (append
  (cons* (specs->pkgs+out
-        ;; 浏览器 & 插件
-        "librewolf-nongnu"
-        "adaptive-tab-bar-colour-icecat"
-        "keepassxc-browser-icecat"
-        "miniflux-injector-icecat"
-        "privacy-redirect-icecat"
-        "ublock-origin-icecat"
+         ;; 浏览器 & 插件
+         "librewolf-nongnu"
+         "adaptive-tab-bar-colour-icecat"
+         "keepassxc-browser-icecat"
+         "miniflux-injector-icecat"
+         "privacy-redirect-icecat"
+         "ublock-origin-icecat"
 
-        ;; 解码器
-        "gstreamer"
-        "gst-plugins-base"
-        "gst-plugins-good"
-        "gst-plugins-bad"
-        "gst-plugins-ugly"
+         ;; 解码器
+         "gstreamer"
+         "gst-plugins-base"
+         "gst-plugins-good"
+         "gst-plugins-bad"
+         "gst-plugins-ugly"
 
-        ;; 影音
-        "easyeffects"
-        "helvum"
-        "mpv"
-        "nomacs"
-        "obs"
-        "obs-wlrobs"
-        "obs-pipewire-audio-capture"
-        "obs-vkcapture"
+         ;; 影音
+         ;; "easyeffects"
+         "helvum"
+         "mpv"
+         "nomacs"
+         "obs"
+         "obs-wlrobs"
+         "obs-pipewire-audio-capture"
+         "obs-vkcapture"
 
-        ;; 社交
-        "element-desktop"
-        "notmuch"
-        "telegram-desktop"
-        "zulip-desktop"
+         ;; 社交
+         "element-desktop"
+         "notmuch"
+         ;; "telegram-desktop"
+         "zulip-desktop"
 
-        ;; 生产力工具
-        "gimp"
-        "keepassxc"
-        "kdeconnect"
+         ;; 生产力工具
+         "gimp"
+         "keepassxc"
+         "kdeconnect"
          "motrix-next-bin"
-        "seahorse"
-        "virt-manager"
+         "seahorse"
+         "virt-manager"
 
-        ;; 娱乐
-        "gamemode"
-        "heroic"
-        "lr2oraja-endlessdream-bin"
-        "mangohud"
-        "osu-lazer-bin"
-        "prismlauncher-dolly"
-        "steam"
+         ;; 娱乐
+         "gamemode"
+         "heroic"
+         "lr2oraja-endlessdream-bin"
+         "mangohud"
+         "osu-lazer-bin"
+         "prismlauncher-dolly"
+         "steam"
 
-        ;; 实用工具
-        "amule"
-        "freerdp@3"
-        "kanata"
-        "pinentry-qt"
-        "winapps"
+         ;; 实用工具
+         "amule"
+         "freerdp@3"
+         "kanata"
+         "pinentry-qt"
+         "winapps"
 
-        ;; 主题
-        "orchis-kde-themes"
-        "orchis-theme"
-        "adwaita-icon-theme"
-        "bibata-cursor-theme"
-        "papirus-icon-theme"
+         ;; 主题
+         "orchis-kde-themes"
+         "orchis-theme"
+         "adwaita-icon-theme"
+         "bibata-cursor-theme"
+         "papirus-icon-theme"
 
-        ;; QT框架相关
-        "kvantum"
-        "qt5ct"
-        "qt6ct")))
+         ;; QT框架相关
+         "kvantum"
+         "qt5ct"
+         "qt6ct")))
 #+end_src
 
 * Services
@@ -425,23 +426,21 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 status is-interactive
 and begin
 
-    $$bin/atuin$$ init fish | source
-    $$bin/direnv$$ hook fish | source
-    $$bin/fzf$$ --fish | source
-    $$bin/zoxide$$ init fish | source
-    $$bin/starship$$ init fish | source
-    enable_transience
+$$bin/atuin$$ init fish | source
+$$bin/direnv$$ hook fish | source
+$$bin/fzf$$ --fish | source
+$$bin/zoxide$$ init fish | source
+$$bin/starship$$ init fish | source
+enable_transience
 
 end
 #+end_src
 
 ** Emacs 服务
-
 这个服务可以做到两件事：
 
 1. 利用 ~emacs --fg-daemon~ 来开启一个 emacs 服务
 2. 将这下面的所有包放到一个只有 emacs 能够访问的专属 profile 中
-
 
 #+NAME: emacs-services
 #+begin_src scheme
@@ -499,6 +498,8 @@ end
 
                              ;; 开发工具
                              "emacs-apheleia"
+                             "emacs-eglot"
+                             "emacs-eglot-x"
                              "emacs-flycheck"
                              "emacs-posframe"
                              "emacs-vterm"
@@ -572,15 +573,15 @@ end
 #+end_src
 
 ** 桌面常用软件的相关服务
-
+*** 全局服务
 #+NAME: user-desktop-services
-#+begin_src scheme
+#+begin_src scheme :noweb yes
+<<default-applications>>
+
 (list (service home-dbus-service-type)
-      (service home-mako-service-type)
-      (service home-syncthing-service-type)
+      (service home-noctalia-shell-service-type)
       (service home-pipewire-service-type)
-      (service home-polkit-gnome-service-type)
-      (service home-waybar-service-type)
+      (service home-syncthing-service-type)
 
       (service home-darkman-service-type
                (home-darkman-configuration
@@ -597,87 +598,98 @@ end
 
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
-                                           (input-method-editors (list fcitx5-rime))
-                                           (utilities (list fcitx5-configtool fcitx5-lua))))
+                                          (input-method-editors (list fcitx5-rime))
+                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
+#+end_src
 
-      ;; 默认应用程序关联（声明式管理 mimeapps.list）
-      (simple-service 'default-applications
+*** 默认应用程序关联
+#+name: default-applications
+#+begin_src scheme
+(list (simple-service 'default-applications
                       home-xdg-mime-applications-service-type
                       (home-xdg-mime-applications-configuration
                        (default
-                        '(;; 浏览器
-                          ("x-scheme-handler/http" . "librewolf.desktop")
-                          ("x-scheme-handler/https" . "librewolf.desktop")
-                          ("x-scheme-handler/about" . "librewolf.desktop")
-                          ("x-scheme-handler/chrome" . "librewolf.desktop")
-                          ("x-scheme-handler/unknown" . "librewolf.desktop")
-                          ("text/html" . "librewolf.desktop")
-                          ("application/xhtml+xml" . "librewolf.desktop")
-                          ;; 文件管理器
+                         '(;; 浏览器
+                           ("x-scheme-handler/http" . "librewolf.desktop")
+                           ("x-scheme-handler/https" . "librewolf.desktop")
+                           ("x-scheme-handler/about" . "librewolf.desktop")
+                           ("x-scheme-handler/chrome" . "librewolf.desktop")
+                           ("x-scheme-handler/unknown" . "librewolf.desktop")
+                           ("text/html" . "librewolf.desktop")
+                           ("application/xhtml+xml" . "librewolf.desktop")
+                           ;; 文件管理器
                            ("inode/directory" . "thunar.desktop")
-                          ;; 图片查看
-                          ("image/png" . "org.nomacs.ImageLounge.desktop")
-                          ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
-                          ("image/gif" . "org.nomacs.ImageLounge.desktop")
-                          ("image/webp" . "org.nomacs.ImageLounge.desktop")
-                          ("image/bmp" . "org.nomacs.ImageLounge.desktop")
-                          ("image/tiff" . "org.nomacs.ImageLounge.desktop")
-                          ("image/svg+xml" . "org.nomacs.ImageLounge.desktop")
-                          ("image/x-icon" . "org.nomacs.ImageLounge.desktop")
-                          ;; 图片编辑
-                          ("image/x-xcf" . "gimp.desktop")
-                          ;; 音视频
-                          ("video/mp4" . "mpv.desktop")
-                          ("video/webm" . "mpv.desktop")
-                          ("video/x-matroska" . "mpv.desktop")
-                          ("video/x-msvideo" . "mpv.desktop")
-                          ("video/x-flv" . "mpv.desktop")
-                          ("video/quicktime" . "mpv.desktop")
-                          ("audio/mpeg" . "mpv.desktop")
-                          ("audio/ogg" . "mpv.desktop")
-                          ("audio/flac" . "mpv.desktop")
-                          ("audio/wav" . "mpv.desktop")
-                          ("audio/aac" . "mpv.desktop")
-                          ("audio/x-m4a" . "mpv.desktop")
-                          ;; 文本/代码编辑
-                          ("text/plain" . "emacsclient.desktop")
-                          ("text/markdown" . "emacsclient.desktop")
-                          ("text/x-scheme" . "emacsclient.desktop")
-                          ("text/x-emacs-lisp" . "emacsclient.desktop")
-                          ("text/csv" . "emacsclient.desktop")
-                          ("text/css" . "emacsclient.desktop")
-                          ("application/json" . "emacsclient.desktop")
-                          ("application/xml" . "emacsclient.desktop")
-                          ("application/yaml" . "emacsclient.desktop")
-                          ("application/toml" . "emacsclient.desktop")
-                          ;; 开发相关
-                          ("application/x-shellscript" . "emacsclient.desktop")
-                          ("application/x-desktop" . "emacsclient.desktop")
-                          ("text/x-csrc" . "emacsclient.desktop")
-                          ("text/x-chdr" . "emacsclient.desktop")
-                          ("text/x-c++src" . "emacsclient.desktop")
-                          ("text/x-c++hdr" . "emacsclient.desktop")
-                          ("text/x-java" . "emacsclient.desktop")
-                          ("text/x-python" . "emacsclient.desktop")
-                          ("text/x-rust" . "emacsclient.desktop")
+                           ;; 图片查看
+                           ("image/png" . "org.nomacs.ImageLounge.desktop")
+                           ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
+                           ("image/gif" . "org.nomacs.ImageLounge.desktop")
+                           ("image/webp" . "org.nomacs.ImageLounge.desktop")
+                           ("image/bmp" . "org.nomacs.ImageLounge.desktop")
+                           ("image/tiff" . "org.nomacs.ImageLounge.desktop")
+                           ("image/svg+xml" . "org.nomacs.ImageLounge.desktop")
+                           ("image/x-icon" . "org.nomacs.ImageLounge.desktop")
+                           ;; 图片编辑
+                           ("image/x-xcf" . "gimp.desktop")
+                           ;; 音视频
+                           ("video/mp4" . "mpv.desktop")
+                           ("video/webm" . "mpv.desktop")
+                           ("video/x-matroska" . "mpv.desktop")
+                           ("video/x-msvideo" . "mpv.desktop")
+                           ("video/x-flv" . "mpv.desktop")
+                           ("video/quicktime" . "mpv.desktop")
+                           ("audio/mpeg" . "mpv.desktop")
+                           ("audio/ogg" . "mpv.desktop")
+                           ("audio/flac" . "mpv.desktop")
+                           ("audio/wav" . "mpv.desktop")
+                           ("audio/aac" . "mpv.desktop")
+                           ("audio/x-m4a" . "mpv.desktop")
+                           ;; 文本/代码编辑
+                           ("text/plain" . "emacsclient.desktop")
+                           ("text/markdown" . "emacsclient.desktop")
+                           ("text/x-scheme" . "emacsclient.desktop")
+                           ("text/x-emacs-lisp" . "emacsclient.desktop")
+                           ("text/csv" . "emacsclient.desktop")
+                           ("text/css" . "emacsclient.desktop")
+                           ("application/json" . "emacsclient.desktop")
+                           ("application/xml" . "emacsclient.desktop")
+                           ("application/yaml" . "emacsclient.desktop")
+                           ("application/toml" . "emacsclient.desktop")
+                           ;; 开发相关
+                           ("application/x-shellscript" . "emacsclient.desktop")
+                           ("application/x-desktop" . "emacsclient.desktop")
+                           ("text/x-csrc" . "emacsclient.desktop")
+                           ("text/x-chdr" . "emacsclient.desktop")
+                           ("text/x-c++src" . "emacsclient.desktop")
+                           ("text/x-c++hdr" . "emacsclient.desktop")
+                           ("text/x-java" . "emacsclient.desktop")
+                           ("text/x-python" . "emacsclient.desktop")
+                           ("text/x-rust" . "emacsclient.desktop")
                            ;; PDF
                            ("application/pdf" . "emacsclient.desktop")
-                            ;; KeePassXC 密码库
+                           ;; KeePassXC 密码库
                            ("application/x-keepass2" . "org.keepassxc.KeePassXC.desktop")
                            ;; 压缩包
-                          ("application/zip" . "org.gnome.FileRoller.desktop")
-                          ("application/x-tar" . "org.gnome.FileRoller.desktop")
-                          ("application/gzip" . "org.gnome.FileRoller.desktop")
-                          ("application/x-xz" . "org.gnome.FileRoller.desktop")
-                          ("application/x-bzip2" . "org.gnome.FileRoller.desktop")
-                          ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
-                          ("application/x-rar-compressed" . "org.gnome.FileRoller.desktop")
-                          ;; 邮件
-                          ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
-                          ;; 即时通讯
-                          ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
-                          ;; 密钥管理
-                          ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
+                           ("application/zip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-tar" . "org.gnome.FileRoller.desktop")
+                           ("application/gzip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-xz" . "org.gnome.FileRoller.desktop")
+                           ("application/x-bzip2" . "org.gnome.FileRoller.desktop")
+                           ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
+                           ("application/x-rar-compressed" . "org.gnome.FileRoller.desktop")
+                           ;; 邮件
+                           ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
+                           ;; 即时通讯
+                           ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
+                           ;; 密钥管理
+                           ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
+#+end_src
+
+*** ~Waybar~ 体系桌面服务
+#+NAME: waybar-desktop-services
+#+begin_src scheme
+(list (service home-mako-service-type)
+      (service home-polkit-gnome-service-type)
+      (service home-waybar-service-type))
 #+end_src
 
 ** 软件自启动
@@ -700,19 +712,19 @@ end
                               '("NIRI_SOCKET")))
        (make-shepherd-service
         (lambda* (pkg path requirement #:optional (env-vars '()))
-          (shepherd-service (provision (list (string->symbol (package-name pkg))))
-                            (requirement requirement)
-                            (start #~(make-forkexec-constructor
-                                      (list #$(file-append pkg path))
-                                      #:environment-variables
-                                      (append (list (string-append "HOME=" (getenv "HOME")))
-                                              (map (lambda (var)
-                                                     (string-append var "=" (or (getenv var) "")))
-                                                   '#$env-vars))
-                                      #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
-                                                                #$(package-name pkg) ".log")))
-                            (stop #~(make-kill-destructor))
-                            (respawn? #t)))))
+                 (shepherd-service (provision (list (string->symbol (package-name pkg))))
+                                   (requirement requirement)
+                                   (start #~(make-forkexec-constructor
+                                             (list #$(file-append pkg path))
+                                             #:environment-variables
+                                             (append (list (string-append "HOME=" (getenv "HOME")))
+                                                     (map (lambda (var)
+                                                            (string-append var "=" (or (getenv var) "")))
+                                                          '#$env-vars))
+                                             #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
+                                                                       #$(package-name pkg) ".log")))
+                                   (stop #~(make-kill-destructor))
+                                   (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session)
@@ -727,30 +739,28 @@ end
 #+begin_src scheme
 (list (simple-service 'auto-update home-shepherd-service-type
                       (list
-                        ;; 用于自动更新 flatpak 用户安装的软件包
-                        (shepherd-timer '(flatpak-user-update)
-                                        #~(calendar-event #:hours '(18)
-                                                          #:minutes '(0))
-                                        #~("/run/current-system/profile/bin/flatpak"
-                                           "update" "--user" "-y")
-                                        #:requirement '(dbus)))))
+                       ;; 用于自动更新 flatpak 用户安装的软件包
+                       (shepherd-timer '(flatpak-user-update)
+                                       #~(calendar-event #:hours '(18)
+                                                         #:minutes '(0))
+                                       #~("/run/current-system/profile/bin/flatpak"
+                                          "update" "--user" "-y")
+                                       #:requirement '(dbus)))))
 #+end_src
 
 ** dotfiles 管理相关服务
-
 *** 主要的一些内容
 
 #+NAME: dotfile-services
 #+begin_src scheme
 (list (service home-dotfiles-service-type
                (home-dotfiles-configuration
-                (directories '("../dotfiles"))
+                (directories '("../dotfiles/immutable"))
                 (layout 'stow)
-                (packages '("desktop"
+                (packages '(;"darkman"
+                            "desktop"
                             "system"
-                            "termide"
                             "terminal"
-                            "themes"
                             "utilities"))
                 (excluded '(".*~"
                             ".*\\.swp"
@@ -802,24 +812,7 @@ end
                                                  "python-lsp-black"
                                                  "python-lsp-server"
                                                  "python-pylsp-mypy"
-                                                 "rust-analyzer")))))
-      (service home-niri-service-type
-               (home-niri-configuration (config (computed-substitution-with-inputs
-                                                 "config.kdl"
-                                                 (local-file
-                                                  "../source/files/niri.kdl")
-                                                 (specs->pkgs
-                                                  "brightnessctl"
-                                                  "cliphist"
-                                                  "dex"
-                                                  "foot"
-                                                  "fish"
-                                                  "fuzzel"
-                                                  "niri"
-                                                  "swaylock-effects"
-                                                  "waypaper"
-                                                  "wl-clipboard"
-                                                  "xwayland-satellite"))))))
+                                                 "rust-analyzer"))))))
 #+end_src
 
 ** 环境变量
@@ -831,8 +824,8 @@ end
 #+NAME: extend-environment-variables
 #+begin_src scheme
 '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
-   ("BROWSER" . "librewolf")
-   ("EDITOR" . "hx")
+  ("BROWSER" . "librewolf")
+  ("EDITOR" . "hx")
   ("FREERDP_ASKPASS" . "1")
   ("GUIX_PROFILE" . "$HOME/.guix-profile")
   ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
@@ -904,15 +897,15 @@ end
                            "--ozone-platform-hint=wayland "
                            "--enable-wayland-ime "
                            "--wayland-text-input-version=3"))
-                          ("_JAVA_OPTIONS" unquote
-                           (string-append
-                            "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
-                            "-Dawt.toolkit.name=WLToolkit"))
-                          ("XDG_DATA_DIRS" unquote
-                           (string-append
-                            "$HOME/.nix-profile/share:"
-                            "/nix/var/nix/profiles/default/share:"
-                            "$XDG_DATA_DIRS"))))))
+                         ("_JAVA_OPTIONS" unquote
+                          (string-append
+                           "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
+                           "-Dawt.toolkit.name=WLToolkit"))
+                         ("XDG_DATA_DIRS" unquote
+                          (string-append
+                           "$HOME/.nix-profile/share:"
+                           "/nix/var/nix/profiles/default/share:"
+                           "$XDG_DATA_DIRS"))))))
 #+end_src
 
 * Font
