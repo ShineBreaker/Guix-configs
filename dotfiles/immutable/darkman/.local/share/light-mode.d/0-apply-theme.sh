@@ -44,15 +44,14 @@ else
 	log "kitty theme reload: skipped (kitty not found)"
 fi
 
-pkill -u "$USER" --signal=SIGHUP ^waybar$ || true
-log "waybar reload signal sent"
+run_optional "noctalia-shell darkMode" timeout 5 noctalia-shell ipc --any-display call darkMode setLight
 
 makoctl reload || true
 log "mako reload requested"
 
 if command -v guix >/dev/null 2>&1; then
 	run_optional "gsettings color-scheme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme prefer-light
-	run_optional "gsettings gtk-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme Orchis-Teal
+	run_optional "gsettings gtk-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
 	run_optional "gsettings icon-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface icon-theme Papirus-Light
 else
 	log "gsettings: skipped (guix not found)"

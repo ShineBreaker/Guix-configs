@@ -14,8 +14,8 @@
   },
   "theme": {
     "mode": "system",
-    "light": "Ayu Light",
-    "dark": "Ayu Mirage"
+    "light": "Noctalia Light",
+    "dark": "Noctalia Dark"
   },
   "language_models": {
     "openai_compatible": {

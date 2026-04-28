@@ -26,6 +26,18 @@ run_optional() {
 
 log "hook start"
 
+"${HOME}/.config/darkman/script/set-theme.sh" light >>"$LOG_FILE" 2>&1
+log "set-theme: ok"
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/foot/initial-color-theme.ini"
+rm -f "$CONFIG"
+touch "$CONFIG"
+echo 'initial-color-theme=light' >"$CONFIG"
+log "foot config updated"
+
+pkill -u "$USER" --signal=SIGUSR2 ^foot$ || true
+log "foot reload signal sent"
+
 if command -v kitty >/dev/null 2>&1; then
 	run_optional "kitty config reload" pkill -u "$USER" --signal=SIGUSR1 ^kitty$
 else

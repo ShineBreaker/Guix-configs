@@ -1,12 +1,15 @@
-[submodule "dotfiles/emacs/.config/emacs"]
-	path = dotfiles/emacs/.config/emacs
+[submodule ".emacs.d"]
+	path = dotfiles/mutable/emacs/.config/emacs
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
-[submodule "dotfiles/termide"]
-	path = dotfiles/termide
+
+[submodule "dotfiles/mutable/termide"]
+	path = dotfiles/mutable/termide
 	url = https://codeberg.org/BrokenShine/termide.git
-[submodule "dotfiles/fcitx5/.local/share/fcitx5/rime"]
-	path = dotfiles/fcitx5/.local/share/fcitx5/rime
+
+[submodule "rime-ice"]
+	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
-[submodule "dotfiles/utilities/.config/opencode/plugin/shell-strategy"]
-	path = dotfiles/utilities/.config/opencode/plugin/shell-strategy
+
+[submodule "shell-strategy"]
+	path = dotfiles/immutable/utilities/.config/opencode/plugin/shell-strategy
 	url = https://github.com/JRedeker/opencode-shell-strategy.git
