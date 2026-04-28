@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  termide
+  termide focus <sidebar|editor|terminal>
+  termide open [--focus|--no-focus] <path>
+  termide terminal-here <path>
+EOF
+}
+
+die() {
+  printf 'termide: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  local command_name="$1"
+
+  command -v "$command_name" >/dev/null 2>&1 || \
+    die "\"$command_name\" not found"
+}
+
+shell_quote() {
+  printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
+helix_path() {
+  local path="$1"
+
+  path="${path//\\/\\\\}"
+  path="${path// /\\ }"
+  printf '%s' "$path"
+}
+
+resolve_path() {
+  local path="$1"
+
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m -- "$path"
+  else
+    readlink -f -- "$path"
+  fi
+}
+
+load_session() {
+  require_command tmux
+  require_command tmuxifier
+
+  export TERMINAL_IDE_ROOT="${TERMINAL_IDE_ROOT:-$PWD}"
+  tmuxifier load-session "${TERMIDE_SESSION_NAME:-termide}"
+}
+
+window_has_termide_metadata() {
+  local target="$1"
+
+  tmux show-options -w -v -t "$target" @termide_editor_pane >/dev/null 2>&1
+}
+
+discover_target() {
+  local current_target candidate
+  local -a candidates
+
+  if [[ -n "${TERMIDE_TARGET:-}" ]]; then
+    printf '%s' "$TERMIDE_TARGET"
+    return
+  fi
+
+  if [[ -z "${TMUX:-}" ]]; then
+    if window_has_termide_metadata "termide:main"; then
+      printf '%s' "termide:main"
+      return
+    fi
+    die 'must be run inside tmux or with TERMIDE_TARGET set'
+  fi
+
+  current_target="$(tmux display-message -p '#S:#W')"
+  if window_has_termide_metadata "$current_target"; then
+    printf '%s' "$current_target"
+    return
+  fi
+
+  candidates=("termide:main")
+  while IFS= read -r candidate; do
+    candidates+=("$candidate")
+  done < <(tmux list-windows -a -F '#{session_name}:#{window_name}')
+
+  for candidate in "${candidates[@]}"; do
+    if window_has_termide_metadata "$candidate"; then
+      printf '%s' "$candidate"
+      return
+    fi
+  done
+
+  die 'no termide window found'
+}
+
+window_option() {
+  local target="$1"
+  local option="$2"
+  local value
+
+  value="$(tmux show-options -w -v -t "$target" "$option" 2>/dev/null || true)"
+  [[ -n "$value" ]] || die "missing $option on $target"
+  printf '%s' "$value"
+}
+
+select_termide_pane() {
+  local role="$1"
+  local target pane
+
+  target="$(discover_target)"
+  pane="$(window_option "$target" "@termide_${role}_pane")"
+  tmux select-window -t "$target"
+  tmux select-pane -t "$pane"
+}
+
+open_in_editor() {
+  local focus=true
+  local editor_cmd editor_pane file_dir file_path helix_file target quoted_command quoted_dir quoted_file
+
+  case "${1:-}" in
+    --focus)
+      focus=true
+      shift
+      ;;
+    --no-focus)
+      focus=false
+      shift
+      ;;
+  esac
+
+  [[ $# -eq 1 ]] || die 'open expects a path'
+
+  file_path="$(resolve_path "$1")"
+  if [[ -e "$file_path" ]]; then
+    [[ -f "$file_path" ]] || die "not a file: $file_path"
+  else
+    file_dir="$(dirname "$file_path")"
+    [[ -d "$file_dir" ]] || die "parent directory not found: $file_dir"
+  fi
+
+  target="$(discover_target)"
+  editor_pane="$(window_option "$target" '@termide_editor_pane')"
+  file_dir="$(dirname "$file_path")"
+  helix_file="$(helix_path "$file_path")"
+  quoted_dir="$(shell_quote "$file_dir")"
+  quoted_file="$(shell_quote "$file_path")"
+  editor_cmd="$(tmux display-message -p -t "$editor_pane" '#{pane_current_command}')"
+
+  if [[ "$editor_cmd" == "hx" || "$editor_cmd" == "helix" ]]; then
+    tmux send-keys -t "$editor_pane" Escape
+    tmux send-keys -t "$editor_pane" -l ":open $helix_file"
+    tmux send-keys -t "$editor_pane" C-m
+  else
+    quoted_command=" cd $quoted_dir && clear && hx $quoted_file"
+    tmux send-keys -t "$editor_pane" C-c
+    tmux send-keys -t "$editor_pane" -l "$quoted_command"
+    tmux send-keys -t "$editor_pane" C-m
+  fi
+
+  if $focus; then
+    tmux select-window -t "$target"
+    tmux select-pane -t "$editor_pane"
+  fi
+}
+
+terminal_here() {
+  local input_path target terminal_pane dir quoted_dir
+
+  [[ $# -eq 1 ]] || die 'terminal-here expects a path'
+
+  input_path="$(resolve_path "$1")"
+  [[ -e "$input_path" ]] || die "path not found: $input_path"
+
+  if [[ -d "$input_path" ]]; then
+    dir="$input_path"
+  else
+    dir="$(dirname "$input_path")"
+  fi
+
+  target="$(discover_target)"
+  terminal_pane="$(window_option "$target" '@termide_terminal_pane')"
+  quoted_dir="$(shell_quote "$dir")"
+
+  tmux send-keys -t "$terminal_pane" C-c
+  tmux send-keys -t "$terminal_pane" " cd $quoted_dir" C-m
+  tmux select-window -t "$target"
+  tmux select-pane -t "$terminal_pane"
+}
+
+main() {
+  local command="${1:-}"
+
+  case "$command" in
+    "")
+      load_session
+      ;;
+    focus)
+      shift
+      case "${1:-}" in
+        sidebar|editor|terminal)
+          select_termide_pane "$1"
+          ;;
+        *)
+          die 'focus expects sidebar, editor, or terminal'
+          ;;
+      esac
+      ;;
+    open)
+      shift
+      open_in_editor "$@"
+      ;;
+    terminal-here)
+      shift
+      terminal_here "$@"
+      ;;
+    -h|--help|help)
+      usage
+      ;;
+    *)
+      die "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

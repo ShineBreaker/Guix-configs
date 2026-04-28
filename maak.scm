@@ -8,6 +8,7 @@
   #:use-module (srfi srfi-1)
   #:use-module (srfi srfi-19)
   #:use-module (srfi srfi-26)
+  #:use-module (ice-9 ftw)
   #:use-module (ice-9 regex)
   #:use-module (ice-9 textual-ports)
   #:use-module (ice-9 rdelim))
@@ -36,6 +37,29 @@
 ;;; 配置路径
 (define repo-root (getcwd))
 (define home-dir (getenv "HOME"))
+(define dotfiles-dir
+  (string-append repo-root "/dotfiles"))
+(define mutable-dir
+  (string-append dotfiles-dir "/mutable"))
+
+(define (stow-dotfiles)
+  "重新链接 stow 管理的 dotfiles（扫描 mutable 目录下的子文件夹）"
+  (let ((packages (scandir mutable-dir
+                           (lambda (name)
+                             (and (not (string-prefix? "." name))
+                                  (file-is-directory?
+                                   (string-append mutable-dir "/" name)))))))
+    (log-info "正在删除旧的 dotfiles 链接: ~a" (string-join packages " "))
+    (for-each
+     (lambda (pkg)
+       ($ `("stow" "-d" ,mutable-dir "-t" ,home-dir "-D" ,pkg)))
+     packages)
+    (log-info "正在重新链接 dotfiles")
+    (for-each
+     (lambda (pkg)
+       ($ `("stow" "-d" ,mutable-dir "-t" ,home-dir ,pkg)))
+     packages)))
+
 (define configs-dir
   (string-append repo-root "/source/configs"))
 (define nix-dir
@@ -179,6 +203,7 @@ Exit code: ~a~%" cmd exit-code)))))
         ($guix `("home" "reconfigure"
                  ,(string-append tmp-dir "/home-config.scm") "--allow-downgrades"
                  "--fallback"))
+        (stow-dotfiles)
         (tmprm))))
 
 (define (rebuild)

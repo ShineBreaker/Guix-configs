@@ -1,0 +1,360 @@
+{
+  "ui_font_family": "Sarasa UI SC",
+  "buffer_font_family": "Maple Mono NF CN",
+  "agent_servers": {
+    "cline": {
+      "type": "registry"
+    },
+    "kimi": {
+      "type": "registry"
+    },
+    "qwen-code": {
+      "type": "registry"
+    }
+  },
+  "theme": {
+    "mode": "system",
+    "light": "Ayu Light",
+    "dark": "Ayu Mirage"
+  },
+  "language_models": {
+    "openai_compatible": {
+      "Zhipu AI": {
+        "api_url": "https://open.bigmodel.cn/api/coding/paas/v4",
+        "available_models": [{
+          "name": "glm-5.1",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": true,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-5-turbo",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": true,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-5",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "glm-4.5-air",
+          "max_tokens": 200000,
+          "max_output_tokens": 32000,
+          "max_completion_tokens": 200000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }]
+      },
+      "MiniMax": {
+        "api_url": "https://api.minimaxi.com/v1",
+        "available_models": [{
+          "name": "MiniMax-M2.7",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }, {
+          "name": "MiniMax-M2.5",
+          "max_tokens": 256000,
+          "max_output_tokens": 65536,
+          "max_completion_tokens": 256000,
+          "capabilities": {
+            "tools": true,
+            "images": false,
+            "parallel_tool_calls": false,
+            "prompt_cache_key": false,
+            "chat_completions": true
+          }
+        }]
+      }
+    }
+  },
+  "active_pane_modifiers": {
+    "border_size": 2.0,
+    "inactive_opacity": 0.8
+  },
+  "agent": {
+    "default_model": {
+      "provider": "Zhipu AI",
+      "model": "glm-5.1",
+      "enable_thinking": true
+    },
+    "model_parameters": [],
+    "play_sound_when_agent_done": true,
+    "tool_permissions": {
+      "default": "allow"
+    }
+  },
+  "auto_install_extensions": {
+    "astro": true,
+    "basher": true,
+    "catppuccin-icons": true,
+    "colorizer": true,
+    "csharp": true,
+    "elisp": true,
+    "fish": true,
+    "git-firefly": true,
+    "html": true,
+    "java": true,
+    "kdl": true,
+    "kotlin": true,
+    "log": true,
+    "make": true,
+    "neocmake": true,
+    "nix": true,
+    "python": true,
+    "scheme": true,
+    "scss": true,
+    "sinppets": true,
+    "toml": true,
+    "xml": true,
+    "zig": true
+  },
+  "auto_signature_help": true,
+  "auto_update": false,
+  "autosave": "on_focus_change",
+  "autoscroll_on_clicks": false,
+  "base_keymap": "VSCode",
+  "buffer_font_size": 14,
+  "buffer_font_weight": 400.0,
+  "collaboration_panel": {
+    "button": false
+  },
+  "current_line_highlight": "all",
+  "cursor_shape": "bar",
+  "diagnostics": {
+    "inline": {
+      "enabled": true
+    },
+    "lsp_pull_diagnostics": {
+      "debounce_ms": 100
+    }
+  },
+  "disable_ai": false,
+  "format_on_save": "on",
+  "git": {
+    "git_gutter": "tracked_files",
+    "inline_blame": {
+      "delay_ms": 2000,
+      "enabled": true,
+      "show_commit_summary": true
+    }
+  },
+  "git_panel": {
+    "button": true,
+    "dock": "left"
+  },
+  "icon_theme": "Catppuccin Frappé",
+  "inlay_hints": {
+    "enabled": true,
+    "show_background": false
+  },
+  "languages": {
+    "C": {
+      "language_servers": ["ccls"],
+      "formatter": {
+        "external": {
+          "command": "clang-format",
+          "arguments": ["-style=file", "-assume-filename={buffer_path}"]
+        }
+      }
+    },
+    "C++": {
+      "language_servers": ["ccls"],
+      "formatter": {
+        "external": {
+          "command": "clang-format",
+          "arguments": ["-style=file", "-assume-filename={buffer_path}"]
+        }
+      }
+    },
+    "Java": {
+      "language_servers": ["jdtls"]
+    },
+    "JSON": {
+      "formatter": {
+        "external": {
+          "command": "js-beautify",
+          "arguments": ["--stdin", "--indent-size", "2", "-"]
+        }
+      }
+    },
+    "JSONC": {
+      "soft_wrap": "prefer_line",
+      "formatter": {
+        "external": {
+          "command": "js-beautify",
+          "arguments": ["--stdin", "--indent-size", "2", "-"]
+        }
+      }
+    },
+    "Kotlin": {
+      "language_servers": ["!kotlin-lsp", "kotlin-language-server"]
+    },
+    "Python": {
+      "language_servers": [
+        "pylsp",
+        "!pyright",
+        "!ruff",
+        "!basedpyright",
+        "!pylsp"
+      ],
+      "formatter": {
+        "external": {
+          "command": "black",
+          "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
+        }
+      }
+    }
+  },
+  "lsp": {
+    "ccls": {
+      "binary": {
+        "path": "ccls"
+      }
+    },
+    "jdtls": {
+      "binary": {
+        "path": "jdtls"
+      }
+    },
+    "kotlin-language-server": {
+      "settings": {
+        "compiler": {
+          "jvm": {
+            "target": "17"
+          }
+        }
+      }
+    },
+    "package-version-server": {
+      "binary": {
+        "path": "~/.nix-profile/bin/package-version-server"
+      }
+    },
+    "pylsp": {
+      "binary": {
+        "path": "pylsp"
+      },
+      "initialization_options": {
+        "pylsp": {
+          "plugins": {
+            "black": {
+              "enabled": true
+            },
+            "mypy": {
+              "enabled": true
+            },
+            "rope": {
+              "enabled": true
+            }
+          }
+        }
+      }
+    },
+    "rust-analyzer": {
+      "binary": {
+        "path": "rust-analyzer"
+      }
+    }
+  },
+  "lsp_document_colors": "inlay",
+  "minimap": {
+    "current_line_highlight": "line",
+    "display_in": "active_editor",
+    "max_width_columns": 60,
+    "show": "auto",
+    "thumb": "always",
+    "thumb_border": "left_open"
+  },
+  "on_last_window_closed": "quit_app",
+  "outline_panel": {
+    "button": true
+  },
+  "prettier": {
+    "allowed": true
+  },
+  "preview_tabs": {
+    "enable_keep_preview_on_code_navigation": true,
+    "enable_preview_from_file_finder": true,
+    "enabled": true
+  },
+  "project_panel": {
+    "dock": "left",
+    "git_status": true,
+    "indent_guides": {
+      "show": "always"
+    },
+    "indent_size": 23,
+    "scrollbar": {
+      "show": "auto"
+    }
+  },
+  "restore_on_startup": "last_session",
+  "scrollbar": {
+    "axes": {
+      "horizontal": true
+    },
+    "cursors": true,
+    "show": "auto"
+  },
+  "show_signature_help_after_edits": true,
+  "snippet_sort_order": "inline",
+  "soft_wrap": "none",
+  "sticky_scroll": {
+    "enabled": true
+  },
+  "tab_size": 2,
+  "tabs": {
+    "file_icons": true,
+    "git_status": true,
+    "show_diagnostics": "errors"
+  },
+  "telemetry": {
+    "diagnostics": false,
+    "metrics": false
+  },
+  "terminal": {
+    "env": {
+      "EDITOR": "zed-editor"
+    },
+    "shell": "system"
+  },
+  "ui_font_size": 15,
+  "ui_font_weight": 500.0,
+  "unnecessary_code_fade": 0.7,
+  "vim_mode": false,
+  "when_closing_with_no_tabs": "keep_window_open"
+}
