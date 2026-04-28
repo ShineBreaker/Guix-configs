@@ -154,7 +154,20 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
         "xdg-user-dirs"
-        "xdg-utils"))
+        "xdg-utils"
+
+        ;; 主题
+        "adw-gtk3-theme"
+        ; "orchis-kde-themes"
+        ; "orchis-theme"
+        "adwaita-icon-theme"
+        "bibata-cursor-theme"
+        "papirus-icon-theme"
+
+        ;; QT框架相关
+        ; "kvantum"
+        "qt5ct"
+        "qt6ct"))
 #+end_src
 
 ** 终端 相关软件包
@@ -315,19 +328,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "freerdp@3"
          "kanata"
          "pinentry-qt"
-         "winapps"
-
-         ;; 主题
-         "orchis-kde-themes"
-         "orchis-theme"
-         "adwaita-icon-theme"
-         "bibata-cursor-theme"
-         "papirus-icon-theme"
-
-         ;; QT框架相关
-         "kvantum"
-         "qt5ct"
-         "qt6ct")))
+         "winapps")))
 #+end_src
 
 * Services
@@ -757,7 +758,7 @@ end
                (home-dotfiles-configuration
                 (directories '("../dotfiles/immutable"))
                 (layout 'stow)
-                (packages '(;"darkman"
+                (packages '("darkman"
                             "desktop"
                             "system"
                             "terminal"
@@ -796,7 +797,11 @@ end
 #+begin_src scheme
 (list (service home-files-service-type
                `((".guile" ,%default-dotguile)
-                 (".Xdefaults" ,%default-xdefaults))))
+                 (".Xdefaults" ,%default-xdefaults)
+                 (".config/qt5ct/qss/rounded.qss" ,(local-file
+                                                    "../source/files/rounded.qss"))
+                 (".config/qt6ct/qss/rounded.qss" ,(local-file
+                                                    "../source/files/rounded.qss")))))
 #+end_src
 
 ** 环境变量
