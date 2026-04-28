@@ -796,23 +796,7 @@ end
 #+begin_src scheme
 (list (service home-files-service-type
                `((".guile" ,%default-dotguile)
-                 (".Xdefaults" ,%default-xdefaults)
-                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
-                                                "zed.json"
-                                                (local-file
-                                                 "../source/files/zed.json")
-                                                (specs->pkgs
-                                                 "ccls"
-                                                 "clang"
-                                                 "jdtls-bin"
-                                                 "maven"
-                                                 "node"
-                                                 "python-black"
-                                                 "python-jsbeautifier"
-                                                 "python-lsp-black"
-                                                 "python-lsp-server"
-                                                 "python-pylsp-mypy"
-                                                 "rust-analyzer"))))))
+                 (".Xdefaults" ,%default-xdefaults))))
 #+end_src
 
 ** 环境变量
