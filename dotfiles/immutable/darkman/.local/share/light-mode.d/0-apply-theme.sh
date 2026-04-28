@@ -57,4 +57,11 @@ else
 	log "gsettings: skipped (guix not found)"
 fi
 
+# 通知所有运行中的 GTK 应用刷新主题设置
+if command -v dbus-send >/dev/null 2>&1; then
+	run_optional "gtk notify theme change" dbus-send --session --dest=org.gtk.Settings --type=method_call /org/gtk/Settings org.gtk.Settings.NotifyThemeChange
+else
+	log "gtk theme notify: skipped (dbus-send not found)"
+fi
+
 log "hook end"
