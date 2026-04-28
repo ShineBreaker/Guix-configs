@@ -136,6 +136,7 @@
 #+begin_src scheme
 (use-modules (gnu home services guix)
              (guix channels)
+             (jeans packages desktop)
              (jeans services hardware)
              (rosenthal packages networking)
              (rosenthal packages wm)
@@ -356,7 +357,7 @@
 
  ;; 桌面环境
  "fuzzel"
- "niri"
+ "niri-latest"
  "waybar"
  "xwayland-satellite"
 
@@ -688,7 +689,7 @@
                         (initial-session-user username)
                          (initial-session-command
                           (program-file "niri-session"
-                                        #~(execl #$(file-append niri "/bin/niri")
+                                        #~(execl #$(file-append niri-latest "/bin/niri")
                                                    "--session")))))))))
 #+end_src
 
