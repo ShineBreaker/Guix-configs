@@ -33,6 +33,7 @@
     "Music"
     "Pictures"
     "Programs"
+    "Projects"
     "Public"
     "Templates"
     "Videos"))
