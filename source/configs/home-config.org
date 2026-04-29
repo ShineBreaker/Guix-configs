@@ -122,12 +122,12 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 桌面组件
-        ;"fuzzel"
-        ;"mako"
-        ;"swaylock-effects"
-        ;"swayidle"
-        ;"swww"
-        ;"waypaper"
+        ; "fuzzel"
+        ; "mako"
+        ; "swaylock-effects"
+        ; "swayidle"
+        ; "swww"
+        ; "waypaper"
 
         ;; 字体
         "font-awesome"
@@ -150,6 +150,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "xvfb-run"
 
         ;; XDG 相关组件
+        "desktop-file-utils"
         "xdg-dbus-proxy"
         "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
@@ -291,7 +292,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "gst-plugins-ugly"
 
          ;; 影音
-         ;; "easyeffects"
+         ; "easyeffects"
          "helvum"
          "mpv"
          "nomacs"
@@ -306,7 +307,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          ;; "telegram-desktop"
          "zulip-desktop"
 
-         ;; 生产力工具
+         ; 生产力工具
          "gimp"
          "keepassxc"
          "kdeconnect"
@@ -320,7 +321,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "lr2oraja-endlessdream-bin"
          "mangohud"
          "osu-lazer-bin"
-         "prismlauncher-dolly"
+         ; "prismlauncher-dolly"
          "steam"
 
          ;; 实用工具
@@ -890,11 +891,13 @@ end
                           (string-append
                            "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
                            "-Dawt.toolkit.name=WLToolkit"))
-                         ("XDG_DATA_DIRS" unquote
-                          (string-append
-                           "$HOME/.nix-profile/share:"
-                           "/nix/var/nix/profiles/default/share:"
-                           "$XDG_DATA_DIRS"))))))
+                          ("XDG_DATA_DIRS" unquote
+                           (string-append
+                            "$HOME/.local/share/flatpak/exports/share:"
+                            "/var/lib/flatpak/exports/share:"
+                            "$HOME/.nix-profile/share:"
+                            "/nix/var/nix/profiles/default/share:"
+                            "$XDG_DATA_DIRS"))))))
 #+end_src
 
 * Font

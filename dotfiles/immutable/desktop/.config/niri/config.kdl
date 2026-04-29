@@ -1,6 +1,10 @@
 include optional=true "key-bindings.kdl"
 include optional=true "noctalia.kdl"
 
+environment {
+    XDG_CURRENT_DESKTOP "niri"
+}
+
 spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
 spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP"
 
@@ -12,14 +16,16 @@ spawn-at-startup "dex" "-a"
 
 prefer-no-csd
 
-hotkey-overlay {
-    skip-at-startup
-    hide-not-bound
+blur {
+    passes 4
+    offset 6
+    noise 0
+    saturation 1
 }
 
-xwayland-satellite {
-    // off
-    path "/run/current-system/profile/bin/xwayland-satellite"
+cursor {
+    xcursor-theme "Bibata-Modern-Classic"
+    xcursor-size 24
 }
 
 gestures {
@@ -28,16 +34,14 @@ gestures {
     }
 }
 
-cursor {
-    xcursor-theme "Bibata-Modern-Classic"
-    xcursor-size 24
+hotkey-overlay {
+    skip-at-startup
+    hide-not-bound
 }
 
-blur {
-    passes 2        // more passes = stronger blur (default: 3)
-    offset 3.0      // sample distance per pass (default: 3.0)
-    noise 0.03      // grain overlay (default: 0.02)
-    saturation 1.0  // color saturation boost (default: 1.5)
+xwayland-satellite {
+    // off
+    path "/run/current-system/profile/bin/xwayland-satellite"
 }
 
 input {
@@ -55,6 +59,7 @@ input {
         accel-profile "flat"
     }
 }
+
 
 layout {
     gaps 8
@@ -93,6 +98,7 @@ layer-rule {
 
 layer-rule {
   match namespace="launcher"
+  match namespace="^noctalia-(background|launcher-overlay|dock)-.*$"
   match namespace="waybar"
 
   background-effect {
@@ -148,6 +154,7 @@ window-rule {
     match app-id="com.network.manager"
     match app-id="connman-gtk"
     match app-id="fcitx"
+    match app-id="KeePassXC"
     match app-id="mpv"
     match app-id="org.gnome.FileRoller"
     match app-id="org.kde.polkit-kde-authentication-agent-1"

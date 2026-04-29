@@ -520,7 +520,9 @@
 ** UDEV规则
 #+NAME: udev-services
 #+begin_src scheme
-(list (udev-rules-service 'android android-udev-rules
+(list (simple-service 'backlight udev-service-type (list ddcutil light))
+
+      (udev-rules-service 'android android-udev-rules
                           #:groups '("adbusers"))
 
       (udev-rules-service 'steam-devices steam-devices-udev-rules)
@@ -626,71 +628,48 @@
                                                                 (privileged? #f)
                                                                 (tmpdir "/var/tmp"))))
 
-        (list (service fprintd-service-type)
-      (service gnome-keyring-service-type)
-      (service gvfs-service-type)
-      (service opentabletdriver-service-type)
+        (list (service power-profiles-daemon-service-type)
+              (service fprintd-service-type)
+              (service gnome-keyring-service-type)
+              (service gvfs-service-type)
+              (service opentabletdriver-service-type)
 
-      ;; 允许本地活跃用户执行休眠/挂起/混合休眠（elogind + polkit）
-      (simple-service 'hibernate-polkit polkit-service-type
-                      (list (computed-file
-                             "polkit-hibernate-rules"
-                             (let ((rules-file (local-file "50-hibernate.rules")))
-                               #~(begin
-                                   (mkdir #$output)
-                                   (mkdir (string-append #$output "/share"))
-                                   (mkdir (string-append #$output "/share/polkit-1"))
-                                   (mkdir (string-append #$output "/share/polkit-1/rules.d"))
-                                   (copy-file #$rules-file
-                                              (string-append #$output "/share/polkit-1/rules.d/50-hibernate.rules")))))))
+              ;; 允许本地活跃用户执行休眠/挂起/混合休眠（elogind + polkit）
+              (simple-service 'hibernate-polkit polkit-service-type
+                              (list (computed-file
+                                     "polkit-hibernate-rules"
+                                     (let ((rules-file (local-file "50-hibernate.rules")))
+                                       #~(begin
+                                           (mkdir #$output)
+                                           (mkdir (string-append #$output "/share"))
+                                           (mkdir (string-append #$output "/share/polkit-1"))
+                                           (mkdir (string-append #$output "/share/polkit-1/rules.d"))
+                                           (copy-file #$rules-file
+                                                      (string-append #$output "/share/polkit-1/rules.d/50-hibernate.rules")))))))
 
-      (service bluetooth-service-type
-               (bluetooth-configuration (auto-enable? #t)))
+              (service bluetooth-service-type
+                       (bluetooth-configuration (auto-enable? #t)))
 
-      (service screen-locker-service-type
-               (screen-locker-configuration
-                (name "swaylock")
-                (program (plain-file "empty" ""))
-                (using-setuid? #f)))
+              (service screen-locker-service-type
+                       (screen-locker-configuration
+                        (name "swaylock")
+                        (program (plain-file "empty" ""))
+                        (using-setuid? #f)))
 
-      (service tlp-service-type
-               (tlp-configuration
-                ;; === AC 电源模式 ===
-                (cpu-scaling-governor-on-ac (list "performance"))
-                (cpu-energy-perf-policy-on-ac "performance")
-                (cpu-min-perf-on-ac 0)
-                (cpu-max-perf-on-ac 100)
-
-                ;; === 电池模式 ===
-                (cpu-scaling-governor-on-bat (list "powersave"))
-                (cpu-energy-perf-policy-on-bat "power")
-                (cpu-min-perf-on-bat 0)
-                (cpu-max-perf-on-bat 20)
-
-                ;; === 电池健康保护（强烈推荐保留）===
-                (start-charge-thresh-bat0 40)
-                (stop-charge-thresh-bat0 80)
-
-                ;; 可选但推荐的额外省电项
-                (cpu-boost-on-bat? #f)
-                (sched-powersave-on-bat? #t)))
-
-      (simple-service 'backlight udev-service-type (list ddcutil light))
-
-      (service greetd-service-type
-               (greetd-configuration
-                (greeter-supplementary-groups '("video" "audio"))
-                (terminals
-                 (list (greetd-terminal-configuration
-                        (terminal-vt "7")
-                        (terminal-switch #t)
-                        (default-session-command
-                          (greetd-tuigreet-session))
-                        (initial-session-user username)
-                         (initial-session-command
-                          (program-file "niri-session"
-                                        #~(execl #$(file-append niri-latest "/bin/niri")
-                                                   "--session")))))))))
+              (service greetd-service-type
+                       (greetd-configuration
+                        (greeter-supplementary-groups '("video" "audio"))
+                        (terminals
+                         (list (greetd-terminal-configuration
+                                (terminal-vt "7")
+                                (terminal-switch #t)
+                                (default-session-command
+                                  (greetd-tuigreet-session))
+                                (initial-session-user username)
+                                (initial-session-command
+                                 (program-file "niri-session"
+                                               #~(execl #$(file-append niri-latest "/bin/niri")
+                                                        "--session")))))))))
 #+end_src
 
 
