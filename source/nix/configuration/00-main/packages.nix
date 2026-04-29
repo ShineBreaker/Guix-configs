@@ -29,11 +29,13 @@
     ## AI 工具
     claude-code
     codex
+    goose-cli
     llmfit
     ollama-vulkan
     opencode
     #tabby
     #tabby-agent
+    warp-terminal
 
     ## LSP
     bash-language-server
