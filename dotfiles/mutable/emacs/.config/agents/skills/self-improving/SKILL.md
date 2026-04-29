@@ -1,8 +1,28 @@
+---
+name: self-improving
+description: 跨会话持续改进 — 检测对话中的经验信号，触发知识库写入
+when_to_use: |
+  Use when the conversation reveals experience worth recording.
+  Auto-detect: user corrections, non-obvious bugs, knowledge gaps,
+  better approaches discovered, environment-specific pitfalls.
+  The model should proactively suggest recording when these signals appear.
+disable-model-invocation: false
+user-invocable: true
+allowed-tools:
+  - Read
+  - Bash(kb:*)
+  - Bash(kb-lint:*)
+  - Bash(kb\ add:*)
+  - Bash(kb\ search:*)
+  - Bash(kb\ tags:*)
+  - Bash(kb\ patterns:*)
+---
+
 # Self-Improvement
 
-通过 `kb` CLI 将错误、修正、经验教训写入知识库（`~/Documents/Org/experiences/`），实现跨会话持续改进。
+在对话中自动检测经验信号，通过 `kb` CLI 将经验写入知识库，实现跨会话持续改进。
 
-与 `knowledge-base` skill 互补：本 skill 定义 **何时/为何** 记录，`knowledge-base` 定义 **如何** 操作 kb CLI。
+> CLI 操作细节和格式规范由 `knowledge-base` skill 定义。本 skill 仅关注 **何时/为何** 记录。
 
 ## 检测触发器
 
@@ -39,7 +59,7 @@
 - 跨工具集成（Emacs + Guix + Distrobox 等）的踩坑
 - 系统级行为差异的发现
 
-## 写入时机
+## 写入时机判断
 
 ### 必须写入
 
@@ -55,66 +75,13 @@
 - 一次性、无复用价值的操作
 - 已有经验完全覆盖的情况
 
-## 写入方式
+## 写入流程
 
-检测到触发器后，使用 `kb add` 写入经验卡片：
+检测到触发器后：
 
-```bash
-kb add \
-  --title "简明标题（问题 → 结论）" \
-  --category <category> \
-  --tech <tech> \
-  --type <type> \
-  --owner <owner> \
-  --summary "一句话总结" \
-  --stdin <<EOF
-** 任务描述
-发生了什么，期望什么
-
-** 执行过程
-1. 第一步尝试...
-2. 发现...
-
-** 难点与坑点
-- 坑点 1：...
-
-** 经验教训
-- 核心结论
-
-** 相关链接
-- 参考文档/Issue/Commit
-EOF
-```
-
-### 参数选择指南
-
-**type**（记录类型）：
-
-| type       | 使用场景                     |
-| ---------- | ---------------------------- |
-| `debug`    | 排错过程、错误修正、环境陷阱 |
-| `config`   | 配置调整、系统集成、环境设置 |
-| `feature`  | 新功能实现、工具链扩展       |
-| `workflow` | 工作流优化、自动化、最佳实践 |
-| `refactor` | 更优方案、代码改进、设计调整 |
-| `research` | 知识空白填补、技术调研       |
-
-**category**（技术领域）：
-
-| category                                              | 覆盖范围                      |
-| ----------------------------------------------------- | ----------------------------- |
-| `emacs`                                               | Emacs 配置、Elisp、插件       |
-| `nix`                                                 | Guix System、GuixSD、系统配置 |
-| `general`                                             | 跨领域、通用经验              |
-| `python` / `rust` / `go` / `scheme` / `shell` / `web` | 各语言生态                    |
-
-**owner**（发现者）：
-
-| owner           | 含义        |
-| --------------- | ----------- |
-| `ai`            | AI 自主发现 |
-| `human`         | 用户指出    |
-| `collaborative` | 协作发现    |
+1. **检索重复** — 先 `kb search` 检查是否已有类似经验
+2. **写入卡片** — 使用 `kb add`（CLI 用法见 `knowledge-base` skill）
+3. **校验格式** — 运行 `kb-lint` 确保无 Markdown 残留
 
 ## 模式归纳（晋升机制）
 
@@ -148,23 +115,11 @@ EOF
 开始非平凡任务前，检索相关历史经验避免重复踩坑：
 
 ```bash
-# 按任务关键词检索
 kb search "<任务关键词>"
-
-# 按技术栈检索
 kb tags emacs config
 ```
 
 如果检索到相关经验，将其作为上下文参考，在回复中隐式应用。
-
-## 与 knowledge-base skill 的分工
-
-| 维度     | self-improvement                      | knowledge-base      |
-| -------- | ------------------------------------- | ------------------- |
-| 核心职责 | **何时/为何**记录经验                 | **如何**操作 kb CLI |
-| 触发时机 | 对话中自动检测                        | 用户显式要求        |
-| 内容重点 | 检测触发器 + 晋升哲学                 | CLI 参数 + 工作流   |
-| 依赖关系 | 调用 kb CLI（由 knowledge-base 定义） | 定义 kb CLI 用法    |
 
 ## 最佳实践
 
@@ -173,13 +128,3 @@ kb tags emacs config
 3. **记录坑点而非过程** — 重点关注"没想到的地方"，而非逐步流水账
 4. **用 kb search 验证重复** — 写入前先搜一下，避免重复卡片
 5. **归纳通用模式** — 3 次同类经验后晋升为 pattern
-6. **写入后校验格式** — 运行 `kb-lint` 检查 Markdown 残留，用 `kb-lint --fix` 自动修复
-
-## Org 格式规范（CRITICAL）
-
-卡片格式为 **Org mode**，写入 `kb add --stdin` 内容时禁止使用 Markdown 语法：
-
-- 代码块用 `#+begin_src lang ... #+end_src`，禁止 ` ```lang ``` `
-- 粗体用 `*text*`，禁止 `**text**`
-- 子标题用 `*** heading`，禁止 `## heading`
-- 详细规范见 knowledge-base skill 的"格式规范"章节

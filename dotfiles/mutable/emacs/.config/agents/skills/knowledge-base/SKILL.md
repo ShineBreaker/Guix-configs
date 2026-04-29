@@ -1,3 +1,24 @@
+---
+name: knowledge-base
+description: 知识库操作工具 — 通过 kb CLI 检索、写入、管理经验卡片和模式
+when_to_use: |
+  Use when you need to interact with the knowledge base (kb CLI).
+  Examples: "kb search X", "记录经验", "写入知识库", "kb add",
+  "search experiences", "check patterns", "检索历史经验",
+  "任务开始前检索相关经验", "write to knowledge base"
+allowed-tools:
+  - Read
+  - Bash(kb:*)
+  - Bash(kb-lint:*)
+  - Bash(kb\ search:*)
+  - Bash(kb\ add:*)
+  - Bash(kb\ list:*)
+  - Bash(kb\ tags:*)
+  - Bash(kb\ get:*)
+  - Bash(kb\ patterns:*)
+  - Bash(kb\ reindex:*)
+---
+
 # Knowledge Base
 
 通过 `~/.local/bin/kb` 管理经验卡片和模式，实现任务间知识复用。
@@ -51,7 +72,7 @@ kb add \
 EOF
 ```
 
-参数取值详见 [references/parameters.md](references/parameters.md)。
+参数取值详见 `${CLAUDE_SKILL_DIR}/references/parameters.md`。
 
 ### 查看
 
@@ -96,7 +117,7 @@ kb reindex   # 重建索引（新增/删除卡片后运行）
 ```
 
 ❌ 错误: **粗体**
-✅ 正确: _粗体_
+✅ 正确: *粗体*
 
 ```
 
@@ -128,11 +149,3 @@ kb-lint --fix      # 自动修复
 | `## heading`    | `*** heading`                    | 子标题   |
 | `- item`        | `+ item`                         | 无序列表 |
 | `` `code` ``    | `~code~`                         | 行内代码 |
-
-## 写入时机
-
-**必须写入**：非显而易见的 bug 修复、值得记录的坑/陷阱、有参考价值的配置调整、多步操作任务（十步以上）。
-
-**不必写入**：简单文本替换、已有经验覆盖的重复操作、无复用价值的一次性操作。
-
-**写入后必须**：运行 `kb-lint` 检查格式，确保无 Markdown 残留。
