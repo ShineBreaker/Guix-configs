@@ -7,6 +7,14 @@
         }
     ],
     "states": {
+        "battery-threshold": {
+            "enabled": true,
+            "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
+        },
+        "calendar-widget": {
+            "enabled": true,
+            "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
+        },
         "clipper": {
             "enabled": true,
             "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
@@ -15,15 +23,15 @@
             "enabled": true,
             "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
         },
+        "polkit-agent": {
+            "enabled": true,
+            "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
+        },
         "screen-shot-and-record": {
             "enabled": true,
             "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
         },
         "sys-info-widget": {
-            "enabled": true,
-            "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
-        },
-        "tamagotchi": {
             "enabled": true,
             "sourceUrl": "https://github.com/noctalia-dev/noctalia-plugins"
         }
