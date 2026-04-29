@@ -21,8 +21,9 @@
 ;; `tab-line' 是窗口局部机制，更适合当前配置的 daemon/client 工作流。
 ;;
 ;; 标签栏视觉策略：外观尽量贴近 JetBrains / VSCode 一类 IDE。
-;; - 当前标签使用更接近编辑区的背景，并加一条强调色下划线
-;; - 非当前标签保持统一块状留白，避免终端里文字紧贴在一起
+;; - 整条标签栏沿用编辑区背景，把颜色层级留给 tab 按钮本身
+;; - 当前标签使用按钮底色，并用更强的文字对比和强调色下划线突出激活态
+;; - 非当前标签退回编辑区背景，只保留较弱文字层级，避免喧宾夺主
 ;; - 左右滚动与关闭按钮统一改成更稳定的文本按钮，兼顾 GUI/TTY
 ;; - 鼠标提示与行为说明尽量汉化，便于直接理解标签栏交互
 ;;
@@ -64,7 +65,7 @@
 
 ;; 仅 GUI 生效，终端不支持。
 ;; 值为 0~100 的整数，100 表示完全不透明，56 表示约 56% 不透明。
-(defcustom custom:frame-background-opacity 92
+(defcustom custom:frame-background-opacity 88
   "GUI frame 背景透明度（0~100，100 = 不透明）。"
   :type 'integer
   :group 'faces)
@@ -122,6 +123,16 @@
                (apply #'derived-mode-p custom:tabs-hidden-modes))))))
 
 (require 'tab-line)
+(require 'color)
+
+(defvar custom--tab-line-face-current nil
+  "当前标签使用的显式 face plist。")
+
+(defvar custom--tab-line-face-inactive nil
+  "非当前标签使用的显式 face plist。")
+
+(defvar custom--tab-line-face-highlight nil
+  "标签 hover 使用的显式 face plist。")
 
 (defun custom--tabs-target-window (&optional window)
   "返回标签命令应优先操作的 WINDOW。"
@@ -284,7 +295,20 @@ FRAME-OR-WINDOW 可以是 frame（全局 hook 传入）或 window（buffer-local
         ""
       (let ((close (copy-sequence tab-line-close-button)))
         (add-face-text-property 0 (length close) face t close)
+        ;; 当前标签保持“纯文本 + 下划线”外观，不再给关闭按钮单独挂
+        ;; `mouse-face'，避免 PGTK/GUI hover 态再次画出浅色描边。
+        (when selected-p
+          (put-text-property 0 (length close) 'mouse-face nil close))
         close))))
+
+(defun custom--tab-line-face-value (face)
+  "返回 FACE 对应的显式 face 定义。"
+  (pcase face
+    ('tab-line-tab-current custom--tab-line-face-current)
+    ('tab-line-tab custom--tab-line-face-inactive)
+    ('tab-line-tab-inactive custom--tab-line-face-inactive)
+    ('tab-line-highlight custom--tab-line-face-highlight)
+    (_ face)))
 
 (defun custom/tab-line-tab-name-format (tab tabs)
   "以更接近 IDE 的样式格式化 TAB。
@@ -296,16 +320,23 @@ TABS 为当前窗口全部标签列表。"
          (name (if buffer-p
                    (funcall tab-line-tab-name-function tab tabs)
                  (cdr (assq 'name tab))))
+         ;; tab-line 位于窗口顶部时，`mode-line-window-selected-p' 在某些场景下
+         ;; 会让当前 buffer 的标签退回普通 tab face，视觉上又变成“按钮底色+
+         ;; 浅色外框”。这里选中标签一律使用 current face，避免激活态抖动。
          (face (if selected-p
-                   (if (mode-line-window-selected-p)
-                       'tab-line-tab-current
-                     'tab-line-tab)
+                   'tab-line-tab-current
                  'tab-line-tab-inactive))
-           (label (concat " " (string-replace "%" "%%" name)))
+         (label (concat " " (string-replace "%" "%%" name)))
+         mouse-face
          close
          (help-echo (custom--tab-line-help-echo selected-p)))
     (dolist (fn tab-line-tab-face-functions)
       (setq face (funcall fn tab tabs face buffer-p selected-p)))
+    (setq face (custom--tab-line-face-value face))
+    ;; 当前标签不再设置 `mouse-face'。这样鼠标悬停时不会进入 Emacs
+    ;; 的按钮 hover 绘制路径，避免 selected tab 周围出现额外浅色边。
+    (setq mouse-face (unless selected-p
+                       custom--tab-line-face-highlight))
     (setq close (custom--tab-line-close-button face selected-p))
     (apply #'propertize
            (concat
@@ -316,8 +347,7 @@ TABS 为当前窗口全部标签列表。"
                         'follow-link 'ignore)
              close)
             `(tab ,tab
-                 ,@(if selected-p '(selected t))
-                 mouse-face tab-line-highlight))))
+                 mouse-face ,mouse-face))))
 
 (defun custom/apply-tab-line-button-preset ()
   "应用统一的标签栏按钮文本样式。"
@@ -340,6 +370,26 @@ TABS 为当前窗口全部标签列表。"
                     'mouse-face 'tab-line-highlight
                     'help-echo "向右滚动标签栏")))
 
+(defun custom--color-luminance (color)
+  "返回 COLOR 的相对亮度，范围约为 0.0 到 1.0。"
+  (when-let* ((rgb (ignore-errors (color-name-to-rgb color))))
+    (+ (* 0.2126 (nth 0 rgb))
+       (* 0.7152 (nth 1 rgb))
+       (* 0.0722 (nth 2 rgb)))))
+
+(defun custom--pick-readable-color (background &rest candidates)
+  "为 BACKGROUND 从 CANDIDATES 中选择对比度最高的颜色。"
+  (let ((bg-luminance (or (custom--color-luminance background) 0.0))
+        (best-color nil)
+        (best-distance -1.0))
+    (dolist (candidate candidates best-color)
+      (let ((fg-luminance (custom--color-luminance candidate)))
+        (when fg-luminance
+          (let ((distance (abs (- bg-luminance fg-luminance))))
+            (when (> distance best-distance)
+              (setq best-distance distance
+                    best-color candidate))))))))
+
 (defun custom/apply-tab-line-face-preset ()
   "应用更接近 JetBrains / VSCode 的标签栏外观。"
   (let* ((valid-bg (lambda (val) (and val (not (string-prefix-p "unspecified" val)) val)))
@@ -352,43 +402,128 @@ TABS 为当前窗口全部标签列表。"
          (accent-fg (or (funcall valid-bg (face-foreground 'cursor nil t))
                         (funcall valid-bg (face-foreground 'font-lock-keyword-face nil t))
                         default-fg))
-         (mode-line-bg (or (funcall valid-bg (face-background 'mode-line nil t)) default-bg))
+         (mode-line-fg (or (funcall valid-bg (face-foreground 'mode-line nil t))
+                           default-fg))
+         (mode-line-bg (or (funcall valid-bg (face-background 'mode-line nil t))
+                           default-bg))
          (mode-line-inactive-bg (or (funcall valid-bg (face-background 'mode-line-inactive nil t))
-                                    mode-line-bg))
+                                    default-bg))
          (mode-line-inactive-fg (or (funcall valid-bg (face-foreground 'mode-line-inactive nil t))
                                     default-fg))
-         (shadow-fg (or (funcall valid-bg (face-foreground 'shadow nil t)) mode-line-inactive-fg)))
+         (shadow-fg (or (funcall valid-bg (face-foreground 'shadow nil t))
+                        mode-line-inactive-fg))
+         ;; 整条标签栏本身回到编辑区背景，按钮颜色只用于标签块，
+         ;; 避免整个标签栏被主题的 mode-line 色整片染色。
+         (inactive-bg default-bg)
+         ;; 某些主题会把 `mode-line' 画得比 `mode-line-inactive' 更暗，
+         ;; 这里仍按亮度纠偏，但只影响“激活标签按钮”的底色。
+         (current-bg (if (let ((active-luminance (custom--color-luminance mode-line-bg))
+                               (inactive-luminance (custom--color-luminance mode-line-inactive-bg)))
+                           (and active-luminance
+                                inactive-luminance
+                                (< active-luminance inactive-luminance)))
+                         mode-line-bg
+                       mode-line-inactive-bg))
+         (current-fg (or (custom--pick-readable-color
+                          current-bg
+                          default-fg
+                          mode-line-fg
+                          accent-fg
+                          shadow-fg
+                          mode-line-inactive-fg)
+                         default-fg))
+         (inactive-fg (or (custom--pick-readable-color
+                           inactive-bg
+                           shadow-fg
+                           mode-line-inactive-fg
+                           default-fg
+                           mode-line-fg)
+                          default-fg)))
+    (setq custom--tab-line-face-current
+          `(:inherit nil
+            :background ,current-bg
+            :foreground ,current-fg
+            :box nil
+            :overline nil
+            :inverse-video nil
+            :weight semibold
+            :underline (:color ,accent-fg :position t)))
+    (setq custom--tab-line-face-inactive
+          `(:inherit nil
+            :background unspecified
+            :foreground ,inactive-fg
+            :box nil
+            :overline nil
+            :underline nil
+            :inverse-video nil
+            :weight medium))
+    (setq custom--tab-line-face-highlight
+          `(:inherit nil
+            :background ,current-bg
+            :foreground ,current-fg
+            :box nil
+            :overline nil
+            :underline nil
+            :inverse-video nil))
     (set-face-attribute 'tab-line nil
-                        :background mode-line-inactive-bg
-                        :foreground mode-line-inactive-fg
-                        :box nil
-                        :height 0.95
-                        :raise 2)       ; 上移文字，配合 padding 空格撑大行高实现垂直居中
-    (set-face-attribute 'tab-line-tab-current nil
+                        :inherit nil
                         :background default-bg
                         :foreground default-fg
                         :box nil
-                        :weight 'medium
+                        :overline nil
+                        :underline nil
+                        :inverse-video nil
+                        :height 0.95)
+    (set-face-attribute 'tab-line-tab-current nil
+                        :inherit nil
+                        :background current-bg
+                        :foreground current-fg
+                        :box nil
+                        :overline nil
+                        :inverse-video nil
+                        :weight 'semibold
                         :underline `(:color ,accent-fg :position t))
     (set-face-attribute 'tab-line-tab nil
-                        :background mode-line-bg
-                        :foreground default-fg
+                        :inherit nil
+                        :background current-bg
+                        :foreground current-fg
                         :box nil
+                        :overline nil
+                        :underline nil
+                        :inverse-video nil
                         :weight 'medium)
     (set-face-attribute 'tab-line-tab-inactive nil
-                        :background mode-line-inactive-bg
-                        :foreground shadow-fg
-                        :box nil)
+                        :inherit nil
+                        :background 'unspecified
+                        :foreground inactive-fg
+                        :box nil
+                        :overline nil
+                        :underline nil
+                        :inverse-video nil)
     (set-face-attribute 'tab-line-highlight nil
-                        :background mode-line-bg
-                        :foreground default-fg
-                        :box nil)
+                        :inherit nil
+                        :background current-bg
+                        :foreground current-fg
+                        :box nil
+                        :overline nil
+                        :underline nil
+                        :inverse-video nil)
     (set-face-attribute 'tab-line-close-highlight nil
+                        :inherit nil
                         :foreground "tomato"
-                        :background 'unspecified)
+                        :background 'unspecified
+                        :box nil
+                        :overline nil
+                        :underline nil
+                        :inverse-video nil)
     (set-face-attribute 'tab-line-tab-modified nil
+                        :inherit nil
                         :foreground "goldenrod"
-                        :background 'unspecified)))
+                        :background 'unspecified
+                        :box nil
+                        :overline nil
+                        :underline nil
+                        :inverse-video nil)))
 
 (defun custom--tabs-switch-to-buffer (buffer &optional window)
   "在 WINDOW 中切换到 BUFFER，并刷新标签显示。"
