@@ -112,6 +112,16 @@
                     "unreadBadgeColor": "primary"
                 },
                 {
+                    "colorizeSystemIcon": "none",
+                    "colorizeSystemText": "none",
+                    "customIconPath": "",
+                    "enableColorization": false,
+                    "icon": "rocket",
+                    "iconColor": "none",
+                    "id": "Launcher",
+                    "useDistroLogo": false
+                },
+                {
                     "characterCount": 2,
                     "colorizeIcons": false,
                     "emptyColor": "secondary",
@@ -236,9 +246,6 @@
                     "textColor": "none",
                     "useMonospaceFont": true,
                     "usePadding": false
-                },
-                {
-                    "id": "plugin:battery-threshold"
                 }
             ]
         }
@@ -377,7 +384,7 @@
                         "id": "Weather",
                         "roundedCorners": true,
                         "scale": 1,
-                        "showBackground": false,
+                        "showBackground": true,
                         "x": 1470,
                         "y": 30
                     },
