@@ -154,6 +154,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "xdg-dbus-proxy"
         "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
+        "xdg-desktop-portal-wlr"
         "xdg-user-dirs"
         "xdg-utils"
 
