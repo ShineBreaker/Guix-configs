@@ -10,7 +10,7 @@ window-rule {
 
     focus-ring {
         on
-        width 2.4
+        width 3
     }
 
     shadow {
