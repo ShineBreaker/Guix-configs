@@ -357,7 +357,7 @@
 
  ;; 桌面环境
  "fuzzel"
- "niri-latest"
+ "niri"
  "waybar"
  "xwayland-satellite"
 
@@ -668,7 +668,7 @@
                                 (initial-session-user username)
                                 (initial-session-command
                                  (program-file "niri-session"
-                                               #~(execl #$(file-append niri-latest "/bin/niri")
+                                               #~(execl #$(file-append niri "/bin/niri")
                                                         "--session")))))))))
 #+end_src
 
