@@ -59,6 +59,28 @@
           api_key = "$ZAI_API_KEY";
           models = [ ];
         };
+        deepseek = {
+          id = "deepseek";
+          type = "openai-compat";
+          base_url = "https://api.deepseek.com";
+          api_key = "$DEEPSEEK_API_KEY";
+          models = [
+            {
+              id = "deepseek-v4-pro";
+              name = "DeepSeek-V4-Pro";
+              context_window = 1048576;
+              default_max_tokens = 32768;
+              can_reason = true;
+            }
+            {
+              id = "deepseek-v4-flash";
+              name = "DeepSeek-V4-Flash";
+              context_window = 1048576;
+              default_max_tokens = 32768;
+              can_reason = true;
+            }
+          ];
+        };
       };
 
       models = {
@@ -246,15 +268,14 @@
   xdg.configFile = {
     "crush/context/01-language.md".text = ''
       <critical>
-      **以下要求不可忽略！**
-
-      请用中文语言的思维方式来完成所有任务：
+      **请用中文语言的思维方式来完成所有任务**：
       - 无论用户使用什么语言提问，默认使用中文思考、规划和回答。
       - 除非用户明确要求输出英文原文、英文代码注释或英文文档，否则优先使用中文。
       - 如果需要展示命令、标识符、错误消息或协议字段，保持其原文，不要翻译代码字面量。
 
       </critical>
     '';
+
     "crush/context/02-style.md".text = ''
       <critical>
       **工作原则**
@@ -270,6 +291,7 @@
 
       </critical>
     '';
+
     "crush/context/03-tools.md".text = ''
       <critical>
       你不是单独在这个仓库里工作。
