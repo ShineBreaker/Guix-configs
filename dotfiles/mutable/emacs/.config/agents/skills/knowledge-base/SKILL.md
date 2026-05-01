@@ -1,11 +1,15 @@
 ---
 name: knowledge-base
 description: 知识库操作工具 — 通过 kb CLI 检索、写入、管理经验卡片和模式
+version: "2.0.0"
 when_to_use: |
-  Use when you need to interact with the knowledge base (kb CLI).
-  Examples: "kb search X", "记录经验", "写入知识库", "kb add",
+  Use when you need to interact with the knowledge base via kb CLI.
+  Triggers: "kb search", "记录经验", "写入知识库", "kb add",
   "search experiences", "check patterns", "检索历史经验",
-  "任务开始前检索相关经验", "write to knowledge base"
+  "任务开始前检索相关经验", "write to knowledge base",
+  "查一下之前怎么解决的", "有没有类似经验", "记录下来",
+  "这个值得记住", "add to kb", "查询知识库"
+disable-model-invocation: false
 allowed-tools:
   - Read
   - Bash(kb:*)
@@ -72,7 +76,7 @@ kb add \
 EOF
 ```
 
-参数取值详见 `${CLAUDE_SKILL_DIR}/references/parameters.md`。
+参数取值详见 `references/parameters.md`。
 
 ### 查看
 
@@ -85,13 +89,18 @@ kb patterns --get         # 显示模式全文
 ### 管理
 
 ```bash
-kb patterns --add <<EOF
-** 模式名称
-   描述内容和适用场景。
+kb patterns --add <<'EOF'
+** <结论性标题>
+   <一句话声明式规则>。
+   适用：<场景>
+   例外：<反例或边界条件>
+   参考：<经验卡片 ID>
 EOF
 
 kb reindex   # 重建索引（新增/删除卡片后运行）
 ```
+
+**模式写入规范**：模式是紧凑的声明式规则，非排查叙事。标题为结论，正文 ≤5 行。必须包含"适用/例外/参考"三个字段。
 
 ## 格式规范（CRITICAL）
 
@@ -117,7 +126,7 @@ kb reindex   # 重建索引（新增/删除卡片后运行）
 ```
 
 ❌ 错误: **粗体**
-✅ 正确: *粗体*
+✅ 正确: _粗体_
 
 ```
 

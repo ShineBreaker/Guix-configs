@@ -1,11 +1,15 @@
 ---
 name: self-improving
 description: 跨会话持续改进 — 检测对话中的经验信号，触发知识库写入
+version: "2.0.0"
 when_to_use: |
   Use when the conversation reveals experience worth recording.
-  Auto-detect: user corrections, non-obvious bugs, knowledge gaps,
-  better approaches discovered, environment-specific pitfalls.
+  Auto-detect: user corrections ("不对，应该是..."), non-obvious bugs,
+  knowledge gaps, better approaches discovered, environment-specific pitfalls.
+  Triggers: "记录下来", "这个值得记住", "下次注意", "记一下",
+  "save this", "record this", "值得写入知识库", "这个坑要记"
   The model should proactively suggest recording when these signals appear.
+context: inline
 disable-model-invocation: false
 user-invocable: true
 allowed-tools:
@@ -93,14 +97,36 @@ allowed-tools:
 - 跨不同文件/模块的相同根因
 - 任何新会话都可能遇到的通用陷阱
 
+### 模式写作规范
+
+模式 = 从多次经验中抽象出的紧凑规则，非排查叙事。**声明式事实，一句话结论先行。**
+
+```
+✅ "Guix 系统重配置后若 swap 不生效，需同时检查 operating-system 声明和 fstab"
+❌ "有一次配置 swap 时发现没生效，排查了很久，最后发现是..."
+❌ "Always declare swap in operating-system"（指令式）
+```
+
+结构（每条 ≤5 行）：
+
+```
+** <结论性标题>               ← 一眼能看出规则
+   <一句话描述问题和通用解法>。 ← 声明式，非指令
+   适用：<场景>
+   例外：<反例或边界条件>
+   参考：<引用经验卡片 ID>
+```
+
 ### 归纳方式
 
 ```bash
-kb patterns --add <<EOF
-** 模式名称
-   问题描述和通用解法。
-   适用场景：...
-   反例：...
+kb patterns --add <<'EOF'
+** Guix swap-space 需同时在 operating-system 声明
+   swap-space 配置后若重启不生效，需检查 operating-system 中是否有
+   swap-devices 声明——仅 fstab 不够。
+   适用：Guix 系统重配置后 swap 异常
+   例外：临时 swap 文件无需此声明
+   参考：20260423-230246
 EOF
 ```
 
@@ -109,6 +135,25 @@ EOF
 - **晋升到 patterns.org**：跨项目通用规则、预防性指导
 - **保留为经验卡片**：具体问题的完整排查过程（保留可追溯性）
 - **两者共存**：晋升不删除原卡片，模式引用原卡片 ID
+
+### 模式即时修补
+
+从知识库检索到模式（patterns.org）并使用后，如果发现该模式已过时、不完整或有误，必须立即修补——不要等待用户提醒。无人维护的模式是负担，不是资产。
+
+修补信号：
+
+- 模式描述的解法对新版本不再适用
+- 模式缺少关键的边界条件或反例
+- 模式的前提条件已发生变化
+- 有新的经验卡片可以补充到模式的引用中
+
+修补方式：
+
+```bash
+# 直接编辑 patterns.org，修正有问题的模式条目
+# 修补后运行 lint 确保格式正确
+kb-lint --fix
+```
 
 ## 任务前经验检索
 
