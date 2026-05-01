@@ -44,16 +44,16 @@
         "autoShowDelay": 150,
         "backgroundOpacity": 0.93,
         "barType": "simple",
-        "capsuleColorKey": "none",
-        "capsuleOpacity": 1,
-        "contentPadding": 2,
+        "capsuleColorKey": "secondary",
+        "capsuleOpacity": 0.25,
+        "contentPadding": 10,
         "density": "default",
         "displayMode": "always_visible",
-        "enableExclusionZoneInset": true,
+        "enableExclusionZoneInset": false,
         "fontScale": 1,
         "frameRadius": 12,
         "frameThickness": 8,
-        "hideOnOverview": false,
+        "hideOnOverview": true,
         "marginHorizontal": 6,
         "marginVertical": 6,
         "middleClickAction": "none",
@@ -75,7 +75,7 @@
         "showOnWorkspaceSwitch": true,
         "showOutline": false,
         "useSeparateOpacity": false,
-        "widgetSpacing": 6,
+        "widgetSpacing": 5,
         "widgets": {
             "center": [
                 {
@@ -89,10 +89,6 @@
                 }
             ],
             "left": [
-                {
-                    "id": "Spacer",
-                    "width": 1
-                },
                 {
                     "colorizeDistroLogo": false,
                     "colorizeSystemIcon": "none",
@@ -363,7 +359,7 @@
                         "showBackground": true,
                         "useCustomFont": false,
                         "usePrimaryColor": true,
-                        "x": 1290,
+                        "x": 60,
                         "y": 30
                     },
                     {
@@ -385,7 +381,7 @@
                         "roundedCorners": true,
                         "scale": 1,
                         "showBackground": true,
-                        "x": 1470,
+                        "x": 240,
                         "y": 30
                     },
                     {
@@ -394,9 +390,10 @@
                             "showBackground": true
                         },
                         "id": "plugin:calendar-widget",
+                        "roundedCorners": true,
                         "showBackground": true,
                         "x": 1470,
-                        "y": 150
+                        "y": 30
                     }
                 ]
             }
@@ -515,7 +512,7 @@
     },
     "idle": {
         "customCommands": "[]",
-        "enabled": false,
+        "enabled": true,
         "fadeDuration": 5,
         "lockCommand": "",
         "lockTimeout": 660,
@@ -724,10 +721,6 @@
             },
             {
                 "enabled": true,
-                "id": "foot"
-            },
-            {
-                "enabled": true,
                 "id": "helix"
             },
             {
@@ -761,6 +754,10 @@
             {
                 "enabled": true,
                 "id": "kitty"
+            },
+            {
+                "enabled": true,
+                "id": "foot"
             }
         ],
         "enableUserTheming": false
