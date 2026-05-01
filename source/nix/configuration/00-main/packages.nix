@@ -28,7 +28,8 @@
 
     ## AI 工具
     claude-code
-    goose-cli
+    codex
+    codex-acp
     opencode
     tabby-agent
     warp-terminal

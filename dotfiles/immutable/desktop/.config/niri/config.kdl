@@ -65,7 +65,7 @@ input {
 
 
 layout {
-    gaps 8
+    gaps 12
 
     always-center-single-column
     background-color "transparent"
