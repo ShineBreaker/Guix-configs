@@ -123,7 +123,6 @@
 #+NAME: kernel-modules
 #+begin_src scheme
 (use-modules (gnu packages firmware)
-
              (nongnu packages firmware)
              (nongnu packages linux)
              (nongnu system linux-initrd))
@@ -431,6 +430,18 @@
                       (list `("machine-id" ,(plain-file "machine-id"
                                                         fixed-machine-id))))
 
+      ;; 每次启动时将 swap 分区写入 /sys/power/resume（休眠必需）
+      (simple-service 'setup-resume-device
+                      shepherd-root-service-type
+                      (list (shepherd-service
+                             (provision '(resume-device))
+                             (requirement '(file-systems))
+                             (one-shot? #t)
+                             (start #~(lambda ()
+                                        (call-with-output-file "/sys/power/resume"
+                                          (lambda (port)
+                                            (display "259:3" port))))))))
+
       (simple-service 'fix-data-perms activation-service-type
                       #~(begin
                           (use-modules (guix build utils))
@@ -567,7 +578,7 @@
                                        "nonguix.pub"
                                        "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
                                (substitute-urls
-                                '("https://substitutes.nonguix.org"))))
+                                '("https://nonguix-proxy.ditigal.xyz"))))
 
               ;; Guix-moe channel
               (simple-service 'guix-moe-substitutes guix-service-type
@@ -626,7 +637,12 @@
                                                                 (http-proxy "http://127.0.0.1:7890")
                                                                 (discover? #f)
                                                                 (privileged? #f)
-                                                                (tmpdir "/var/tmp"))))
+                                                                (tmpdir "/var/tmp")))
+                         (elogind-service-type config =>
+                                               (elogind-configuration
+                                                (inherit config)
+                                                ;; 仅使用 shutdown 模式休眠（platform 模式在此硬件上不可用）
+                                                (hibernate-mode '(shutdown)))))
 
         (list (service power-profiles-daemon-service-type)
               (service fprintd-service-type)
@@ -635,6 +651,7 @@
               (service opentabletdriver-service-type)
 
               ;; 允许本地活跃用户执行休眠/挂起/混合休眠（elogind + polkit）
+              ;; hibernate-mode 仅用 shutdown（platform 模式在此硬件上不可用）
               (simple-service 'hibernate-polkit polkit-service-type
                               (list (computed-file
                                      "polkit-hibernate-rules"
