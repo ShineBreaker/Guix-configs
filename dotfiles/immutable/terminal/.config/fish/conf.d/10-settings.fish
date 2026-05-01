@@ -8,6 +8,7 @@ alias cat bat
 alias catr cat
 alias cd z
 alias cp "cp -i"
+alias du dust
 alias find fd
 alias grep rg
 alias htop btop
