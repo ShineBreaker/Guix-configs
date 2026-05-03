@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "74f2a35f1e709c8a4884c726ec6da1a97a82e6ce")
+       (commit "bcb2824aa44b48f2f6b09e7a661176b561da42e4")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -12,7 +12,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "7be8cba8d20f2fca7c1ae0a1e75cf2fb27aca13e")
+       (commit "df363440fd24271f95c0a43b10ca33bfde853103")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
