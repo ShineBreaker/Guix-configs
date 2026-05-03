@@ -121,14 +121,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 #+NAME: desktop-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
-        ;; 桌面组件
-        ; "fuzzel"
-        ; "mako"
-        ; "swaylock-effects"
-        ; "swayidle"
-        ; "swww"
-        ; "waypaper"
-
         ;; 字体
         "font-awesome"
         "font-google-noto-emoji"
@@ -162,6 +154,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 主题
         "adw-gtk3-theme"
         "adwaita-icon-theme"
+        "breeze"
         "bibata-cursor-theme"
         "papirus-icon-theme"
 
@@ -277,12 +270,9 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 (append
  (cons* (specs->pkgs+out
          ;; 浏览器 & 插件
-         "librewolf-nongnu"
-         "adaptive-tab-bar-colour-icecat"
-         "keepassxc-browser-icecat"
-         "miniflux-injector-icecat"
-         "privacy-redirect-icecat"
-         "ublock-origin-icecat"
+         "ublock-origin-chromium"
+         "ungoogled-chromium-wayland"
+         "zen-browser-bin"
 
          ;; 解码器
          "gstreamer"
@@ -613,15 +603,15 @@ end
                       (home-xdg-mime-applications-configuration
                        (default
                          '(;; 浏览器
-                           ("x-scheme-handler/http" . "librewolf.desktop")
-                           ("x-scheme-handler/https" . "librewolf.desktop")
-                           ("x-scheme-handler/about" . "librewolf.desktop")
-                           ("x-scheme-handler/chrome" . "librewolf.desktop")
-                           ("x-scheme-handler/unknown" . "librewolf.desktop")
-                           ("text/html" . "librewolf.desktop")
-                           ("application/xhtml+xml" . "librewolf.desktop")
+                           ("x-scheme-handler/http" . "zen.desktop")
+                           ("x-scheme-handler/https" . "zen.desktop")
+                           ("x-scheme-handler/about" . "zen.desktop")
+                           ("x-scheme-handler/chrome" . "zen.desktop")
+                           ("x-scheme-handler/unknown" . "zen.desktop")
+                           ("text/html" . "zen.desktop")
+                           ("application/xhtml+xml" . "zen.desktop")
                            ;; 文件管理器
-                           ("inode/directory" . "thunar.desktop")
+                           ("inode/directory" . "pcmanfm-qt.desktop")
                            ;; 图片查看
                            ("image/png" . "org.nomacs.ImageLounge.desktop")
                            ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
@@ -672,13 +662,13 @@ end
                            ;; KeePassXC 密码库
                            ("application/x-keepass2" . "org.keepassxc.KeePassXC.desktop")
                            ;; 压缩包
-                           ("application/zip" . "org.gnome.FileRoller.desktop")
-                           ("application/x-tar" . "org.gnome.FileRoller.desktop")
-                           ("application/gzip" . "org.gnome.FileRoller.desktop")
-                           ("application/x-xz" . "org.gnome.FileRoller.desktop")
-                           ("application/x-bzip2" . "org.gnome.FileRoller.desktop")
-                           ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
-                           ("application/x-rar-compressed" . "org.gnome.FileRoller.desktop")
+                           ("application/zip" . "org.kde.ark.desktop")
+                           ("application/x-tar" . "org.kde.ark.desktop")
+                           ("application/gzip" . "org.kde.ark.desktop")
+                           ("application/x-xz" . "org.kde.ark.desktop")
+                           ("application/x-bzip2" . "org.kde.ark.desktop")
+                           ("application/x-7z-compressed" . "org.kde.ark.desktop")
+                           ("application/x-rar-compressed" . "org.kde.ark.desktop")
                            ;; 邮件
                            ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
                            ;; 即时通讯
@@ -815,7 +805,7 @@ end
 #+NAME: extend-environment-variables
 #+begin_src scheme
 '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
-  ("BROWSER" . "librewolf")
+  ("BROWSER" . "zen")
   ("EDITOR" . "hx")
   ("FREERDP_ASKPASS" . "1")
   ("GUIX_PROFILE" . "$HOME/.guix-profile")
