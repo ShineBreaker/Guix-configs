@@ -353,11 +353,8 @@
  "netcat-openbsd"
  "wget"
 
-
  ;; 桌面环境
- "fuzzel"
  "niri"
- "waybar"
  "xwayland-satellite"
 
  ;; 桌面服务
@@ -366,21 +363,11 @@
  "gvfs"
  "libgnome-keyring"
  "libsecret"
- "polkit-gnome"
  "poweralertd"
 
  ;; 文件管理器
- "exo"
- "file-roller"
- "thunar"
- "tumbler"
- "xfconf"
-
- ;; Thunar 插件
- "thunar-archive-plugin"
- "thunar-media-tags-plugin"
- "thunar-volman"
- "thunar-vcs-plugin"
+ "pcmanfm-qt"
+ "qtsvg"
 
  ;; 字体
  "font-sarasa-gothic"
