@@ -221,7 +221,7 @@ Exit code: ~a~%" cmd exit-code)))))
                                        #:channels channel-fresh)))))
 (define (upgrade)
   "更新lock file"
-  ($ (list "git" "submodule" "update"))
+  ;; ($ (list "git" "submodule" "update"))
   (update-channels)
   ($ (list "git"
            "commit"
