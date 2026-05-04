@@ -12,14 +12,6 @@
       inputs = { nixpkgs.follows = "nixpkgs"; };
     };
 
-    nur = {
-      url = "github:nix-community/NUR";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-parts.follows = "flake-parts";
-      };
-    };
-
     charmbracelet-nur = {
       url = "github:charmbracelet/nur";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -38,14 +30,9 @@
           pkgs = nixpkgs.legacyPackages.${system};
 
           modules = [
-            {
-              nixpkgs.overlays = [ inputs.nur.overlays.default ];
-            }
             ./configuration/00-main/home.nix
             ./configuration/programs/System/nix.nix
 
-
-            inputs.nur.modules.homeManager.default
             inputs.charmbracelet-nur.homeModules.crush
           ];
 

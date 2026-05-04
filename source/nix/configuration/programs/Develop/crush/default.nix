@@ -266,8 +266,8 @@
   };
 
   xdg.configFile = {
-    "crush/context/01-language.md".source = "./dotfiles/01-language.md";
-    "crush/context/02-style.md".source = "./dotfiles/02-style.md";
-    "crush/context/03-tools.md".source = "./dotfiles/03-tools.md";
+    "crush/context/01-language.md".source = ./dotfiles/01-language.md;
+    "crush/context/02-style.md".source = ./dotfiles/02-style.md;
+    "crush/context/03-tools.md".source = ./dotfiles/03-tools.md;
   };
 }
