@@ -29,7 +29,6 @@
     ## AI 工具
     claude-code
     codex
-    codex-acp
     opencode
     tabby-agent
     warp-terminal

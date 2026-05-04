@@ -3,6 +3,7 @@
 {
   imports = [
     ./Develop/code.nix
-    ./Develop/crush.nix
+
+    ./Develop/crush/default.nix
   ];
 }
