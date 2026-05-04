@@ -107,9 +107,9 @@
   },
   "agent": {
     "default_model": {
-      "provider": "Zhipu AI",
-      "model": "glm-5.1",
-      "enable_thinking": true
+      "provider": "MiniMax",
+      "model": "MiniMax-M2.7",
+      "enable_thinking": false
     },
     "model_parameters": [],
     "play_sound_when_agent_done": true,

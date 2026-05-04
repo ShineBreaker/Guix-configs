@@ -363,20 +363,6 @@
                         "y": 30
                     },
                     {
-                        "defaultSettings": {
-                        },
-                        "id": "plugin:custom-sticker",
-                        "image": "/home/brokenshine/Pictures/Guix.png",
-                        "mirror": false,
-                        "opacity": 0.3,
-                        "roundedCorners": true,
-                        "scale": 1.1961116463447066,
-                        "showBackground": false,
-                        "verticalMirror": false,
-                        "x": 1530,
-                        "y": 870
-                    },
-                    {
                         "id": "Weather",
                         "roundedCorners": true,
                         "scale": 1,
@@ -405,9 +391,9 @@
         "backgroundOpacity": 1,
         "colorizeIcons": false,
         "deadOpacity": 0.6,
-        "displayMode": "auto_hide",
-        "dockType": "floating",
-        "enabled": true,
+        "displayMode": "always_visible",
+        "dockType": "attached",
+        "enabled": false,
         "floatingRatio": 0.8,
         "groupApps": false,
         "groupClickAction": "cycle",
@@ -713,10 +699,6 @@
             },
             {
                 "enabled": true,
-                "id": "zenBrowser"
-            },
-            {
-                "enabled": true,
                 "id": "btop"
             },
             {
@@ -758,9 +740,13 @@
             {
                 "enabled": true,
                 "id": "foot"
+            },
+            {
+                "enabled": true,
+                "id": "zenBrowser"
             }
         ],
-        "enableUserTheming": false
+        "enableUserTheming": true
     },
     "ui": {
         "boxBorderEnabled": true,
