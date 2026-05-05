@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 # SPDX-License-Identifier: GPL-3.0
 #
@@ -12,320 +12,479 @@
 #   get      读取卡片详情
 #   list     列出卡片
 #   search   全文检索
+#   fields   列出已有字段值（优先复用标签）
 #   tags     按标签检索
 #   patterns 管理模式/原则
-#   reindex  重建索引（扫描 experiences/ 按 CATEGORY 分组重建 index.org）
+#   reindex  重建索引
+#   lint     格式校验与修复（原 kb-lint）
 #   help     显示帮助
 
-set -euo pipefail
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime
+from pathlib import Path
 
-KB_ROOT="${HOME}/Documents/Org"
-KB_EXPERIENCES="${KB_ROOT}/experiences"
-KB_PATTERNS="${KB_ROOT}/patterns.org"
-KB_INDEX="${KB_ROOT}/index.org"
-KB_INBOX="${KB_ROOT}/inbox.org"
+# ═══════════════════════════════════════════════════════════════════════════════
+# 常量与路径
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# ─── 工具函数 ───────────────────────────────────────────────────────────────────
+KB_ROOT = Path.home() / "Documents" / "Org"
+KB_EXPERIENCES = KB_ROOT / "experiences"
+KB_PATTERNS = KB_ROOT / "patterns.org"
+KB_INDEX = KB_ROOT / "index.org"
+KB_INBOX = KB_ROOT / "inbox.org"
 
-die() { echo "错误: $*" >&2; exit 1; }
 
-now() { date '+%Y-%m-%d %a %H:%M'; }
-today() { date '+%Y-%m-%d'; }
-timestamp_id() { date '+%Y%m%d-%H%M%S'; }
+# ═══════════════════════════════════════════════════════════════════════════════
+# 工具函数
+# ═══════════════════════════════════════════════════════════════════════════════
 
-ensure_dirs() {
-    mkdir -p "${KB_EXPERIENCES}"
-    # 确保索引文件存在
-    for f in "${KB_INBOX}" "${KB_INDEX}" "${KB_PATTERNS}"; do
-        if [[ ! -f "${f}" ]]; then
-            local base
-            base="$(basename "${f}" .org)"
-            printf '#+title: %s\n#+date: [%s]\n\n' "${base}" "$(date '+%Y-%m-%d %a')" > "${f}"
-        fi
-    done
-}
 
-# ─── add: 添加经验卡片 ─────────────────────────────────────────────────────────
-#
-# 用法: kb add [选项]
-#   --title    任务标题（必需）
-#   --category 类别: emacs python rust go scheme shell nix web general
-#   --tech     技术栈: emacs-lisp python rust go scheme bash nix typescript org-mode
-#   --type     类型: debug refactor research workflow feature config
-#   --owner    执行者: human ai collaborative（默认 ai）
-#   --summary  一句话总结（可选）
-#   --stdin    从标准输入读取详细内容（可选）
+def die(msg: str) -> None:
+    """打印错误信息并退出。"""
+    print(f"错误: {msg}", file=sys.stderr)
+    sys.exit(1)
 
-cmd_add() {
-    local title="" category="general" tech="" type="workflow"
-    local owner="ai" summary="" use_stdin=false
 
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --title)    title="$2"; shift 2 ;;
-            --category) category="$2"; shift 2 ;;
-            --tech)     tech="$2"; shift 2 ;;
-            --type)     type="$2"; shift 2 ;;
-            --owner)    owner="$2"; shift 2 ;;
-            --summary)  summary="$2"; shift 2 ;;
-            --stdin)    use_stdin=true; shift ;;
-            -h|--help)
-                echo "用法: kb add --title \"标题\" [--category 类别] [--tech 技术栈] [--type 类型] [--owner 执行者] [--summary 总结] [--stdin]"
-                echo ""
-                echo "选项:"
-                echo "  --title    任务标题（必需）"
-                echo "  --category 类别（emacs|python|rust|go|scheme|shell|nix|web|general）"
-                echo "  --tech     技术栈（emacs-lisp|python|rust|go|scheme|bash|nix|typescript|org-mode）"
-                echo "  --type     类型（debug|refactor|research|workflow|feature|config）"
-                echo "  --owner    执行者（human|ai|collaborative，默认 ai）"
-                echo "  --summary  一句话总结"
-                echo "  --stdin    从标准输入读取详细内容"
-                exit 0 ;;
-            *) die "未知选项: $1" ;;
-        esac
-    done
+def now() -> str:
+    """返回当前时间字符串，格式：2026-05-05 一 15:30"""
+    return datetime.now().strftime("%Y-%m-%d %a %H:%M")
 
-    [[ -z "${title}" ]] && die "必须指定 --title"
 
-    # tech 默认取 category
-    [[ -z "${tech}" ]] && tech="${category}"
+def today() -> str:
+    """返回当前日期字符串，格式：2026-05-05"""
+    return datetime.now().strftime("%Y-%m-%d")
 
-    local id ts filename tags
-    id="$(timestamp_id)"
-    ts="$(now)"
-    filename="${id}-${type}-${category}.org"
-    tags="${category} ${type} ${owner}"
-    [[ -n "${tech}" && "${tech}" != "${category}" ]] && tags="${tags} ${tech}"
 
-    local filepath="${KB_EXPERIENCES}/${filename}"
+def timestamp_id() -> str:
+    """生成时间戳 ID，格式：20260505-153000"""
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def ensure_dirs() -> None:
+    """确保知识库目录和基础文件存在。"""
+    KB_EXPERIENCES.mkdir(parents=True, exist_ok=True)
+    for f in (KB_INBOX, KB_INDEX, KB_PATTERNS):
+        if not f.exists():
+            base = f.stem
+            f.write_text(
+                f"#+title: {base}\n#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]\n\n",
+                encoding="utf-8",
+            )
+
+
+def parse_org_prop(content: str, key: str) -> str:
+    """从 Org 文件内容中提取 PROPERTIES 块中的指定属性值。"""
+    m = re.search(rf":{key}:\s*(.+)", content)
+    return m.group(1).strip() if m else ""
+
+
+def read_org_title(content: str) -> str:
+    """从 Org 内容中提取一级标题文本（去掉 DONE/TODO 前缀）。"""
+    m = re.search(r"^\* (?:DONE|TODO) (.+)", content, re.MULTILINE)
+    return m.group(1).strip() if m else "unknown"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: add — 添加经验卡片
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_add(args: argparse.Namespace) -> None:
+    """
+    创建一张新的经验卡片并写入 experiences/ 目录。
+
+    参数解析后根据 entry_type 自动推断 type 和 owner，
+    生成符合 Org mode 格式的卡片文件。
+    """
+    title = args.title or ""
+    category = args.category or "general"
+    tech = args.tech or ""
+    type_ = args.type or "workflow"
+    owner = args.owner or "ai"
+    entry_type = args.entry or ""
+    summary = args.summary or ""
+    use_stdin = args.stdin
+
+    if not title:
+        die("必须指定 --title")
+
+    if entry_type and entry_type not in ("", "mistake", "note", "ascended"):
+        die("--entry 仅支持: mistake, note, ascended")
+
+    # entry_type 自动推断（仅在用户未显式指定时）
+    if entry_type and not args.type:
+        if entry_type in ("mistake", "ascended"):
+            type_ = "debug"
+        elif entry_type == "note":
+            type_ = "workflow"
+
+    if entry_type and not args.owner:
+        owner = "collaborative"
+
+    if not tech:
+        tech = category
+
+    id_ = timestamp_id()
+    ts = now()
+    filename = f"{id_}-{type_}-{category}.org"
+
+    # 构建标签行
+    tags_parts = [category, type_, owner]
+    if tech and tech != category:
+        tags_parts.append(tech)
+    if entry_type:
+        tags_parts.append(entry_type)
+    tags_line = ":" + ":".join(tags_parts) + "::"
+
+    filepath = KB_EXPERIENCES / filename
 
     # 读取 stdin 内容
-    local body=""
-    if ${use_stdin}; then
-        body="$(cat)"
-    fi
+    body = ""
+    if use_stdin:
+        body = sys.stdin.read()
 
-    cat > "${filepath}" <<ORGEOF
-* DONE ${title}
-:PROPERTIES:
-:ID:       ${id}
-:CREATED:  [${ts}]
-:CATEGORY: ${category}
-:TECH:     ${tech}
-:TYPE:     ${type}
-:STATUS:   done
-:EFFORT:
-:OWNER:    ${owner}
-:END:
-${tags:+:$(echo "${tags}" | tr ' ' ':')::}
+    # ── 组装 Org 内容 ──────────────────────────────────────────────────────
+    lines = []
+    lines.append(f"* DONE {title}")
+    lines.append(":PROPERTIES:")
+    lines.append(f":ID:       {id_}")
+    lines.append(f":CREATED:  [{ts}]")
+    lines.append(f":CATEGORY: {category}")
+    lines.append(f":TECH:     {tech}")
+    lines.append(f":TYPE:     {type_}")
+    if entry_type:
+        lines.append(f":ENTRY_TYPE: {entry_type}")
+    lines.append(":STATUS:   done")
+    lines.append(":EFFORT:")
+    lines.append(f":OWNER:    {owner}")
+    lines.append(":END:")
+    lines.append(tags_line)
+    lines.append("")
 
-** 任务描述
-${summary:-${title}}
+    # 如果 stdin 已包含 ** 小节，直接作为完整正文写入
+    if use_stdin and re.search(r"^\*\* ", body, re.MULTILINE):
+        lines.append(body.rstrip("\n"))
+    else:
+        lines.append("** 任务描述")
+        lines.append(summary or title)
+        lines.append("")
+        lines.extend(_build_template(entry_type, body))
 
-** 执行过程
-${body:-1. }
+    filepath.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(filepath)
 
-** 难点与坑点 :difficulties:
 
-** 经验教训 :lessons:
+def _build_template(entry_type: str, body: str) -> list[str]:
+    """根据 entry_type 生成对应的模板章节。"""
+    if entry_type == "mistake":
+        return [
+            "** 执行过程",
+            body
+            or "*** 原始问题\n\n*** 用户纠错反馈\n\n*** 这次到底错在哪里\n\n*** 最终正确处理\n",
+            "",
+            "** 关键发现",
+            "*** 下次开始前自检",
+            "",
+            "** 难点与坑点 :difficulties:",
+            "",
+            "** 经验教训 :lessons:",
+            "",
+            "** 相关链接",
+            "",
+            "** AI 建议 :ai_notes:",
+        ]
+    elif entry_type == "note":
+        return [
+            "** 执行过程",
+            body
+            or "*** 事项内容\n\n*** 为什么值得长期保留\n\n*** 适用场景与例外\n\n*** 后续行动\n",
+            "",
+            "** 关键发现",
+            "",
+            "** 难点与坑点 :difficulties:",
+            "",
+            "** 经验教训 :lessons:",
+            "",
+            "** 相关链接",
+            "",
+            "** AI 建议 :ai_notes:",
+        ]
+    elif entry_type == "ascended":
+        return [
+            "** 执行过程",
+            body
+            or "*** 前几轮失败的根因\n\n*** 检索过的知识源\n\n*** 核对过的真实文件或输出\n\n*** 最终采用的最强方案\n",
+            "",
+            "** 关键发现",
+            "*** 需要新增或修补的规则",
+            "",
+            "** 难点与坑点 :difficulties:",
+            "",
+            "** 经验教训 :lessons:",
+            "",
+            "** 相关链接",
+            "",
+            "** AI 建议 :ai_notes:",
+        ]
+    else:
+        return [
+            "** 执行过程",
+            body or "1. ",
+            "",
+            "** 难点与坑点 :difficulties:",
+            "",
+            "** 经验教训 :lessons:",
+            "",
+            "** 相关链接",
+            "",
+            "** AI 建议 :ai_notes:",
+        ]
 
-** 相关链接
 
-** AI 建议 :ai_notes:
-ORGEOF
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: get — 读取卡片详情
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    echo "${filepath}"
-}
 
-# ─── get: 读取卡片详情 ─────────────────────────────────────────────────────────
-#
-# 用法: kb get <卡片文件名或ID>
+def cmd_get(args: argparse.Namespace) -> None:
+    """读取指定卡片的完整内容。支持完整路径或 ID 部分匹配。"""
+    target = args.target
+    if not target:
+        die("用法: kb get <卡片文件名或ID>")
 
-cmd_get() {
-    [[ $# -lt 1 ]] && die "用法: kb get <卡片文件名或ID>"
-    local target="$1"
-
-    # 尝试精确匹配文件路径
-    if [[ -f "${target}" ]]; then
-        cat "${target}"
+    p = Path(target)
+    if p.is_file():
+        print(p.read_text(encoding="utf-8"), end="")
         return
-    fi
 
-    # 尝试在 experiences 目录下匹配
-    local file
-    file="$(find "${KB_EXPERIENCES}" -maxdepth 1 -name "*${target}*" -type f | head -1)" || true
-    if [[ -n "${file}" && -f "${file}" ]]; then
-        cat "${file}"
+    candidates = list(KB_EXPERIENCES.glob(f"*{target}*"))
+    if candidates:
+        print(candidates[0].read_text(encoding="utf-8"), end="")
         return
-    fi
 
-    die "未找到卡片: ${target}"
-}
+    die(f"未找到卡片: {target}")
 
-# ─── list: 列出卡片 ────────────────────────────────────────────────────────────
-#
-# 用法: kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
 
-cmd_list() {
-    local filter_category="" filter_type="" filter_owner=""
-    local recent=0 show_all=false
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: list — 列出卡片
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --category) filter_category="$2"; shift 2 ;;
-            --type)     filter_type="$2"; shift 2 ;;
-            --owner)    filter_owner="$2"; shift 2 ;;
-            --recent)   recent="$2"; shift 2 ;;
-            --all)      show_all=true; shift ;;
-            -h|--help)
-                echo "用法: kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]"
-                echo ""
-                echo "列出经验卡片，默认只显示最近 20 条。"
-                echo "  --recent N  显示最近 N 条（0=全部）"
-                echo "  --all       显示全部（等同于 --recent 0）"
-                exit 0 ;;
-            *) die "未知选项: $1" ;;
-        esac
-    done
 
-    ${show_all} && recent=0
-    [[ ${recent} -eq 0 ]] && recent=9999
+def cmd_list(args: argparse.Namespace) -> None:
+    """列出经验卡片，支持过滤和数量限制。默认显示最近 20 条。"""
+    recent = args.recent if args.recent is not None else (0 if args.all else 20)
 
-    local count=0
-    for f in $(ls -t "${KB_EXPERIENCES}"/*.org 2>/dev/null); do
-        local basename category type owner title id created
-        basename="$(basename "${f}")"
+    files = sorted(
+        KB_EXPERIENCES.glob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
+    count = 0
+    for f in files:
+        content = f.read_text(encoding="utf-8")
+        title = read_org_title(content)
+        category = parse_org_prop(content, "CATEGORY")
+        type_ = parse_org_prop(content, "TYPE")
+        owner = parse_org_prop(content, "OWNER")
+        created = parse_org_prop(content, "CREATED")
+        if created:
+            created = re.sub(r"[\[\]]", "", created).split()[0]
 
-        # 从文件名解析元数据: YYYYMMDD-HHMMSS-type-category.org
-        # 从文件内容解析标题和属性
-        title="$(head -1 "${f}" | sed 's/^\* [A-Z]* //')"
-        id="$(awk '/:ID:/{gsub(/.*:ID:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
-        created="$(awk '/:CREATED:/{gsub(/.*:CREATED:[ \t]+/, ""); gsub(/[\[\]]/, ""); print $1; exit}' "${f}" 2>/dev/null || true)"
-        category="$(awk '/:CATEGORY:/{gsub(/.*:CATEGORY:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
-        type="$(awk '/:TYPE:/{gsub(/.*:TYPE:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
-        owner="$(awk '/:OWNER:/{gsub(/.*:OWNER:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
+        # 应用过滤条件
+        if args.category and category != args.category:
+            continue
+        if args.type and type_ != args.type:
+            continue
+        if args.owner and owner != args.owner:
+            continue
 
-        # 过滤
-        [[ -n "${filter_category}" && "${category}" != "${filter_category}" ]] && continue
-        [[ -n "${filter_type}" && "${type}" != "${filter_type}" ]] && continue
-        [[ -n "${filter_owner}" && "${owner}" != "${filter_owner}" ]] && continue
+        print(
+            f"{f}|{title}|{category or '?'}|{type_ or '?'}|{owner or '?'}|{created or '-'}"
+        )
+        count += 1
+        if recent > 0 and count >= recent:
+            break
 
-        echo "${f}|${title}|${category:-?}|${type:-?}|${owner:-?}|${created:--}"
-        count=$((count + 1))
-        [[ ${count} -ge ${recent} ]] && break
-    done
-}
 
-# ─── search: 全文检索 ──────────────────────────────────────────────────────────
-#
-# 用法: kb search <关键词或正则> [--context N]
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: search — 全文检索
+# ═══════════════════════════════════════════════════════════════════════════════
 
-cmd_search() {
-    [[ $# -lt 1 ]] && die "用法: kb search <关键词> [--context N]"
-    local query="$1"; shift
-    local context=3
 
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --context) context="$2"; shift 2 ;;
-            *) die "未知选项: $1" ;;
-        esac
-    done
+def cmd_search(args: argparse.Namespace) -> None:
+    """在 experiences/ 和 patterns.org 中全文检索。优先使用 ripgrep。"""
+    query = args.query
+    context = args.context
+    targets = [str(KB_EXPERIENCES), str(KB_PATTERNS)]
 
-    if command -v rg &>/dev/null; then
-        rg --color=never -n -C "${context}" "${query}" "${KB_EXPERIENCES}" "${KB_PATTERNS}" 2>/dev/null || echo "未找到匹配: ${query}"
-    else
-        grep -r -n -C "${context}" "${query}" "${KB_EXPERIENCES}" "${KB_PATTERNS}" 2>/dev/null || echo "未找到匹配: ${query}"
-    fi
-}
+    if shutil.which("rg"):
+        cmd = ["rg", "--color=never", "-n", "-C", str(context), query] + targets
+    else:
+        cmd = ["grep", "-r", "-n", "-C", str(context), query] + targets
 
-# ─── tags: 按标签检索 ──────────────────────────────────────────────────────────
-#
-# 用法: kb tags <标签> [标签2 ...]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(result.stdout, end="")
+    else:
+        print(f"未找到匹配: {query}")
 
-cmd_tags() {
-    [[ $# -lt 1 ]] && die "用法: kb tags <标签> [标签2 ...]"
 
-    for tag in "$@"; do
-        echo "── 标签: ${tag} ──"
-        if command -v rg &>/dev/null; then
-            rg --color=never -l ":${tag}:" "${KB_EXPERIENCES}" 2>/dev/null || echo "  (无匹配)"
-        else
-            grep -rl ":${tag}:" "${KB_EXPERIENCES}" 2>/dev/null || echo "  (无匹配)"
-        fi
-    done
-}
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: fields — 列出已有字段值
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# ─── patterns: 管理模式/原则 ────────────────────────────────────────────────────
-#
-# 用法:
-#   kb patterns           显示当前模式列表
-#   kb patterns --add     从 stdin 读取并追加一条新模式
-#   kb patterns --get     显示 patterns.org 全文
 
-cmd_patterns() {
-    if [[ $# -eq 0 ]]; then
-        # 列出所有二级标题（模式名称）
-        if [[ -f "${KB_PATTERNS}" ]]; then
-            grep '^\*\* ' "${KB_PATTERNS}" | sed 's/^\*\* //' || echo "(无模式)"
-        else
-            echo "(模式文件不存在)"
-        fi
+def cmd_fields(args: argparse.Namespace) -> None:
+    """
+    扫描所有卡片，统计已有的 category/tech/type/owner 值及出现次数。
+    帮助写入新卡片时优先复用已有标签。
+    """
+    show = {
+        "category": args.category,
+        "tech": args.tech,
+        "type": args.type_,
+        "owner": args.owner,
+    }
+    if not any(show.values()):
+        for k in show:
+            show[k] = True
+
+    counters = {k: Counter() for k in show}
+
+    for f in KB_EXPERIENCES.glob("*.org"):
+        content = f.read_text(encoding="utf-8")
+        if show["category"]:
+            v = parse_org_prop(content, "CATEGORY")
+            if v:
+                counters["category"][v] += 1
+        if show["tech"]:
+            v = parse_org_prop(content, "TECH")
+            if v:
+                counters["tech"][v] += 1
+        if show["type"]:
+            v = parse_org_prop(content, "TYPE")
+            if v:
+                counters["type"][v] += 1
+        if show["owner"]:
+            v = parse_org_prop(content, "OWNER")
+            if v:
+                counters["owner"][v] += 1
+
+    labels = {"category": "category", "tech": "tech", "type": "type", "owner": "owner"}
+    for key, label in labels.items():
+        if show[key]:
+            print(f"── {label} ──")
+            if not counters[key]:
+                print("  (无)")
+            else:
+                for k, c in sorted(counters[key].items()):
+                    print(f"  {k} ({c})")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: tags — 按标签检索
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_tags(args: argparse.Namespace) -> None:
+    """按标签搜索卡片文件，标签以冒号包裹形式存储在 Org 属性中。"""
+    if not args.tags:
+        die("用法: kb tags <标签> [标签2 ...]")
+
+    for tag in args.tags:
+        print(f"── 标签: {tag} ──")
+        if shutil.which("rg"):
+            result = subprocess.run(
+                ["rg", "--color=never", "-l", f":{tag}:", str(KB_EXPERIENCES)],
+                capture_output=True,
+                text=True,
+            )
+        else:
+            result = subprocess.run(
+                ["grep", "-rl", f":{tag}:", str(KB_EXPERIENCES)],
+                capture_output=True,
+                text=True,
+            )
+        if result.returncode == 0 and result.stdout.strip():
+            print(result.stdout, end="")
+        else:
+            print("  (无匹配)")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: patterns — 管理模式/原则
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_patterns(args: argparse.Namespace) -> None:
+    """列出、追加或查看 patterns.org 中的模式/原则。"""
+    action = args.action
+
+    if action is None:
+        if KB_PATTERNS.exists():
+            text = KB_PATTERNS.read_text(encoding="utf-8")
+            matches = re.findall(r"^\*\* (.+)", text, re.MULTILINE)
+            if matches:
+                for m in matches:
+                    print(m)
+            else:
+                print("(无模式)")
+        else:
+            print("(模式文件不存在)")
         return
-    fi
 
-    case "$1" in
-        --add)
-            # 从 stdin 追加一条模式
-            local pattern_body
-            pattern_body="$(cat)"
-            if [[ ! -f "${KB_PATTERNS}" ]]; then
-                cat > "${KB_PATTERNS}" <<EOF
-#+title: patterns
-#+date: [$(today)]
+    if action == "add":
+        pattern_body = sys.stdin.read()
+        if not KB_PATTERNS.exists():
+            KB_PATTERNS.write_text(
+                f"#+title: patterns\n#+date: [{today()}]\n\n{pattern_body}\n",
+                encoding="utf-8",
+            )
+        else:
+            with KB_PATTERNS.open("a", encoding="utf-8") as f:
+                f.write("\n" + pattern_body + "\n")
+        print(f"已追加到 {KB_PATTERNS}")
+    elif action == "get":
+        if KB_PATTERNS.exists():
+            print(KB_PATTERNS.read_text(encoding="utf-8"), end="")
+        else:
+            print("(模式文件不存在)")
+    else:
+        die(f"未知选项: {action} (可用: --add, --get)")
 
-${pattern_body}
-EOF
-            else
-                echo "" >> "${KB_PATTERNS}"
-                echo "${pattern_body}" >> "${KB_PATTERNS}"
-            fi
-            echo "已追加到 ${KB_PATTERNS}"
-            ;;
-        --get)
-            [[ -f "${KB_PATTERNS}" ]] && cat "${KB_PATTERNS}" || echo "(模式文件不存在)"
-            ;;
-        *)
-            die "未知选项: $1 (可用: --add, --get)"
-            ;;
-    esac
-}
 
-# ─── reindex: 重建知识库索引 ────────────────────────────────────────────────────
-#
-# 用法: kb reindex
-#
-# 扫描 experiences/ 目录下所有卡片，按 CATEGORY 属性分组，
-# 重建 index.org 使其包含分类导航链接。
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: reindex — 重建知识库索引
+# ═══════════════════════════════════════════════════════════════════════════════
 
-cmd_reindex() {
-    ensure_dirs
 
-    # 收集所有卡片的元数据: filepath|title|category|created
-    local entries=()
-    for f in $(ls -t "${KB_EXPERIENCES}"/*.org 2>/dev/null); do
-        local title category created
-        title="$(head -1 "${f}" | sed 's/^\* [A-Z]* //')"
-        category="$(awk '/:CATEGORY:/{gsub(/.*:CATEGORY:[ \t]+/, ""); print; exit}' "${f}" 2>/dev/null || true)"
-        created="$(awk '/:CREATED:/{gsub(/.*:CREATED:[ \t]+/, ""); gsub(/[\[\]]/, ""); print $1; exit}' "${f}" 2>/dev/null || true)"
-        [[ -z "${category}" ]] && category="general"
-        entries+=("${f}|${title}|${category}|${created:-未知日期}")
-    done
+def cmd_reindex(args: argparse.Namespace) -> None:
+    """
+    扫描 experiences/ 目录下所有卡片，按 CATEGORY 属性分组，
+    重建 index.org 使其包含分类导航链接。
+    """
+    ensure_dirs()
 
-    if [[ ${#entries[@]} -eq 0 ]]; then
-        cat > "${KB_INDEX}" <<EOF
-#+title: 知识库导航
-#+date: [$(date '+%Y-%m-%d %a')]
+    entries = []
+    for f in sorted(
+        KB_EXPERIENCES.glob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
+        content = f.read_text(encoding="utf-8")
+        title = read_org_title(content)
+        category = parse_org_prop(content, "CATEGORY") or "general"
+        created = parse_org_prop(content, "CREATED")
+        if created:
+            created = re.sub(r"[\[\]]", "", created).split()[0]
+        entries.append((f, title, category, created or "未知日期"))
+
+    if not entries:
+        KB_INDEX.write_text(
+            f"""#+title: 知识库导航
+#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]
 
 * 概览
 知识库暂无经验卡片。使用 =kb add= 或 =C-c o k c= 添加。
@@ -342,79 +501,221 @@ cmd_reindex() {
   - C-c o k p :: 打开模式/原则
   - C-c o k I :: 打开本索引
   - kb reindex :: 重建本索引
-EOF
-        echo "索引已重建（无卡片，仅骨架）"
+""",
+            encoding="utf-8",
+        )
+        print("索引已重建（无卡片，仅骨架）")
         return
-    fi
 
-    # 按 category 分组
-    declare -A groups  # category -> "entry1\nentry2\n..."
-    declare -a group_order  # 保持插入顺序
+    groups = defaultdict(list)
+    group_order = []
+    for f, title, category, created in entries:
+        if category not in groups:
+            group_order.append(category)
+        relpath = f"experiences/{f.name}"
+        groups[category].append(f"  - [[file:{relpath}][{title}]] ({created})")
 
-    for entry in "${entries[@]}"; do
-        IFS='|' read -r filepath title category created <<< "${entry}"
-        if [[ -z "${groups[${category}]+x}" ]]; then
-            groups["${category}"]=""
-            group_order+=("${category}")
-        fi
-        # relative path from index.org to experience file
-        local relpath="experiences/$(basename "${filepath}")"
-        local line="  - [[file:${relpath}][${title}]] (${created})"
-        groups["${category}"]="${groups[${category}]}${line}"$'\n'
-    done
+    total = len(entries)
 
-    # 统计
-    local total=${#entries[@]}
+    lines = []
+    lines.append("#+title: 知识库导航")
+    lines.append(f"#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]")
+    lines.append("")
+    lines.append("* 概览")
+    lines.append(f"共 {total} 条经验卡片，{len(group_order)} 个类别。")
+    lines.append("使用 =kb reindex= 重建本索引。")
+    lines.append("")
+    lines.append("* 收件箱")
+    lines.append("  快速捕获入口：[[file:inbox.org][inbox.org]]")
+    lines.append("")
+    lines.append("* 模式与原则")
+    lines.append("  提炼出的通用模式/原则记录在 [[file:patterns.org][patterns.org]]。")
+    lines.append("")
+    lines.append("* 按类别浏览")
+    for cat in group_order:
+        lines.append(f"** {cat} ({len(groups[cat])})")
+        lines.extend(groups[cat])
+        lines.append("")
 
-    # 重建 index.org
-    {
-        echo "#+title: 知识库导航"
-        echo "#+date: [$(date '+%Y-%m-%d %a')]"
-        echo ""
-        echo "* 概览"
-        echo "共 ${total} 条经验卡片，${#group_order[@]} 个类别。"
-        echo "使用 =kb reindex= 重建本索引。"
-        echo ""
-        echo "* 收件箱"
-        echo "  快速捕获入口：[[file:inbox.org][inbox.org]]"
-        echo ""
-        echo "* 模式与原则"
-        echo "  提炼出的通用模式/原则记录在 [[file:patterns.org][patterns.org]]。"
-        echo ""
+    lines.append("* 快速入口")
+    lines.append("  - C-c o k c :: 快速捕获经验")
+    lines.append("  - C-c o k s :: 检索经验")
+    lines.append("  - C-c o k p :: 打开模式/原则")
+    lines.append("  - C-c o k I :: 打开本索引")
+    lines.append("  - kb reindex :: 重建本索引")
 
-        # 按类别分组输出
-        echo "* 按类别浏览"
-        for cat in "${group_order[@]}"; do
-            local count
-            count=$(echo -n "${groups[${cat}]}" | grep -c '^' || true)
-            echo "** ${cat} (${count})"
-            echo -n "${groups[${cat}]}"
-            echo ""
-        done
+    KB_INDEX.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"索引已重建: {total} 条卡片, {len(group_order)} 个类别 → {KB_INDEX}")
 
-        echo "* 快速入口"
-        echo "  - C-c o k c :: 快速捕获经验"
-        echo "  - C-c o k s :: 检索经验"
-        echo "  - C-c o k p :: 打开模式/原则"
-        echo "  - C-c o k I :: 打开本索引"
-        echo "  - kb reindex :: 重建本索引"
-    } > "${KB_INDEX}"
 
-    echo "索引已重建: ${total} 条卡片, ${#group_order[@]} 个类别 → ${KB_INDEX}"
-}
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: lint — 格式校验与修复（原 kb-lint）
+# ═══════════════════════════════════════════════════════════════════════════════
 
-# ─── help ───────────────────────────────────────────────────────────────────────
 
-cmd_help() {
-    cat <<EOF
-kb — 知识库命令行工具
+def cmd_lint(args: argparse.Namespace) -> None:
+    """
+    检测 Org 文件中的 Markdown 残留语法，自动修复为正确的 Org 格式。
+
+    修复项:
+      1. ```lang ... ``` → #+begin_src lang ... #+end_src
+      2. **bold**        → *bold* (排除 Org 标题)
+      3. #/## heading    → **/*** heading
+      4. - list item     → + list item
+      5. `inline code`   → ~inline code~
+    """
+    target_files = args.files
+    if not target_files:
+        target_files = sorted(KB_EXPERIENCES.glob("*.org"))
+        target_files = [str(p) for p in target_files]
+
+    if not target_files:
+        die("未找到 .org 文件")
+
+    total_issues = 0
+    files_with_issues = 0
+
+    for filepath in target_files:
+        fixes = _lint_file(filepath, do_fix=args.fix)
+        if fixes:
+            total_issues += len(fixes)
+            files_with_issues += 1
+            basename = os.path.basename(filepath)
+            print(f"\n{basename} ({len(fixes)} 项):")
+            for fix in fixes:
+                print(fix)
+
+    action_name = "修复" if args.fix else "检查"
+    print(
+        f"\n{action_name}完成: {files_with_issues}/{len(target_files)} 个文件"
+        f"有 Markdown 残留, 共 {total_issues} 处"
+    )
+
+    if args.check:
+        sys.exit(min(total_issues, 127))
+
+
+def _lint_file(filepath: str, do_fix: bool) -> list[str]:
+    """检查（并可选修复）单个文件，返回修复项列表。"""
+    with open(filepath, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    new_text, fixes = _fix_org_content(text)
+
+    if do_fix and fixes:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(new_text)
+
+    return fixes
+
+
+def _fix_org_content(text: str) -> tuple[str, list[str]]:
+    """
+    修复 Org 文件中的 Markdown 语法。
+
+    返回 (修复后文本, 修复项列表)。
+    逐行处理，跟踪 ``` 代码块状态以避免误修复代码块内的内容。
+    """
+    fixes = []
+    lines = text.split("\n")
+    result = []
+    in_code_block = False  # 追踪 ``` 代码块状态
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+
+        # ── 修复 1: ```lang ... ``` → #+begin_src lang ... #+end_src ──
+        code_match = re.match(r"^(\s*)```(\w*)\s*$", line)
+        if code_match:
+            indent = code_match.group(1)
+            lang = code_match.group(2)
+            if not in_code_block:
+                # 开始代码块
+                in_code_block = True
+                new_line = f"{indent}#+begin_src {lang}".rstrip()
+                if new_line != line:
+                    fixes.append(f"  行 {i+1}: ```{lang} → #+begin_src {lang}")
+                result.append(new_line)
+                i += 1
+                continue
+            else:
+                # 结束代码块
+                in_code_block = False
+                new_line = f"{indent}#+end_src"
+                fixes.append(f"  行 {i+1}: ``` → #+end_src")
+                result.append(new_line)
+                i += 1
+                continue
+
+        # ── 修复 2-5: 只在非代码块内生效 ──
+        if not in_code_block:
+            stripped = line.lstrip()
+
+            # 排除 Org 标题模式（** 或 *** 开头后跟空格）
+            if re.match(r"^\*+\s", stripped):
+                result.append(line)
+                i += 1
+                continue
+
+            # 行内 **bold** → *bold*
+            new_line = re.sub(r"\*\*(.+?)\*\*", r"*\1*", line)
+            if new_line != line:
+                fixes.append(f"  行 {i+1}: **bold** → *bold*")
+                line = new_line
+
+            # Markdown heading → Org heading
+            heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+            if heading_match:
+                level = len(heading_match.group(1)) + 1
+                title = heading_match.group(2)
+                new_line = f"{'*' * level} {title}"
+                fixes.append(f"  行 {i+1}: Markdown heading → Org heading")
+                line = new_line
+
+            # `- list` → `+ list`
+            list_match = re.match(r"^(\s*)(- )(\S)", line)
+            if list_match and not line.lstrip().startswith("--"):
+                indent = list_match.group(1)
+                content = line.lstrip()[2:]
+                new_line = f"{indent}+ {content}"
+                fixes.append(f"  行 {i+1}: `- ` → `+ `")
+                line = new_line
+
+            # `inline code` → ~inline code~
+            if "`" in line and "```" not in line:
+
+                def replace_inline_code(m: re.Match) -> str:
+                    return f"~{m.group(1)}~"
+
+                new_line = re.sub(r"`([^`\n]+?)`", replace_inline_code, line)
+                if new_line != line:
+                    count = len(re.findall(r"`[^`\n]+?`", line))
+                    fixes.append(f"  行 {i+1}: `code` → ~code~ (×{count})")
+                    line = new_line
+
+        result.append(line)
+        i += 1
+
+    return "\n".join(result), fixes
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 帮助文本
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def print_help() -> None:
+    print(
+        f"""kb — 知识库命令行工具
 
 用法: kb <子命令> [参数]
 
 子命令:
   add       添加经验卡片
             kb add --title "标题" [--category 类别] [--tech 技术栈]
-                    [--type 类型] [--owner 执行者] [--summary 总结] [--stdin]
+                    [--type 类型] [--owner 执行者] [--entry 条目语义]
+                    [--summary 总结] [--stdin]
 
   get       读取卡片详情
             kb get <卡片文件名或ID>
@@ -424,6 +725,9 @@ kb — 知识库命令行工具
 
   search    全文检索
             kb search <关键词或正则> [--context N]
+
+  fields    列出已有字段值（用于优先复用标签）
+            kb fields [--category] [--tech] [--type] [--owner]
 
   tags      按标签检索
             kb tags <标签> [标签2 ...]
@@ -436,29 +740,142 @@ kb — 知识库命令行工具
   reindex   重建知识库索引
             kb reindex
 
+  lint      格式校验与修复（原 kb-lint）
+            kb lint                 检查所有卡片
+            kb lint --fix           自动修复
+            kb lint --check         仅检查，退出码=问题数
+            kb lint --fix file.org  修复指定文件
+
   help      显示本帮助
 
-知识库路径: ${KB_ROOT}
-经验卡片目录: ${KB_EXPERIENCES}
-模式文件: ${KB_PATTERNS}
-EOF
-}
+知识库路径: {KB_ROOT}
+经验卡片目录: {KB_EXPERIENCES}
+模式文件: {KB_PATTERNS}
+"""
+    )
 
-# ─── 主入口 ─────────────────────────────────────────────────────────────────────
 
-ensure_dirs
+# ═══════════════════════════════════════════════════════════════════════════════
+# 主入口
+# ═══════════════════════════════════════════════════════════════════════════════
 
-[[ $# -eq 0 ]] && { cmd_help; exit 0; }
 
-subcmd="$1"; shift
-case "${subcmd}" in
-    add)      cmd_add "$@" ;;
-    get)      cmd_get "$@" ;;
-    list)     cmd_list "$@" ;;
-    search)   cmd_search "$@" ;;
-    tags)     cmd_tags "$@" ;;
-    patterns) cmd_patterns "$@" ;;
-    reindex)  cmd_reindex "$@" ;;
-    help|--help|-h) cmd_help ;;
-    *)        die "未知子命令: ${subcmd}。运行 'kb help' 查看帮助。" ;;
-esac
+def main() -> None:
+    ensure_dirs()
+
+    parser = argparse.ArgumentParser(
+        prog="kb",
+        description="kb — 知识库命令行工具",
+        add_help=False,
+    )
+    subparsers = parser.add_subparsers(dest="command")
+
+    # ── add ───────────────────────────────────────────────────────────────
+    add_parser = subparsers.add_parser("add", help="添加经验卡片")
+    add_parser.add_argument("--title", required=True, help="任务标题")
+    add_parser.add_argument(
+        "--category", default="general", help="类别（自由输入，优先复用已有标签）"
+    )
+    add_parser.add_argument("--tech", help="技术栈（自由输入，优先复用已有标签）")
+    add_parser.add_argument(
+        "--type", help="类型（debug|refactor|research|workflow|feature|config）"
+    )
+    add_parser.add_argument(
+        "--owner", default="ai", help="执行者（human|ai|collaborative）"
+    )
+    add_parser.add_argument(
+        "--entry",
+        "--entry-type",
+        dest="entry",
+        help="条目语义（mistake|note|ascended）",
+    )
+    add_parser.add_argument("--summary", help="一句话总结")
+    add_parser.add_argument(
+        "--stdin", action="store_true", help="从标准输入读取详细内容"
+    )
+
+    # ── get ───────────────────────────────────────────────────────────────
+    get_parser = subparsers.add_parser("get", help="读取卡片详情")
+    get_parser.add_argument("target", help="卡片文件名或ID")
+
+    # ── list ──────────────────────────────────────────────────────────────
+    list_parser = subparsers.add_parser("list", help="列出卡片")
+    list_parser.add_argument("--category", help="按类别过滤")
+    list_parser.add_argument("--type", help="按类型过滤")
+    list_parser.add_argument("--owner", help="按执行者过滤")
+    list_parser.add_argument("--recent", type=int, help="显示最近 N 条")
+    list_parser.add_argument("--all", action="store_true", help="显示全部")
+
+    # ── search ────────────────────────────────────────────────────────────
+    search_parser = subparsers.add_parser("search", help="全文检索")
+    search_parser.add_argument("query", help="关键词或正则")
+    search_parser.add_argument("--context", type=int, default=3, help="上下文行数")
+
+    # ── fields ────────────────────────────────────────────────────────────
+    fields_parser = subparsers.add_parser("fields", help="列出已有字段值")
+    fields_parser.add_argument(
+        "--category", action="store_true", help="只列出 category"
+    )
+    fields_parser.add_argument("--tech", action="store_true", help="只列出 tech")
+    fields_parser.add_argument(
+        "--type", dest="type_", action="store_true", help="只列出 type"
+    )
+    fields_parser.add_argument("--owner", action="store_true", help="只列出 owner")
+
+    # ── tags ──────────────────────────────────────────────────────────────
+    tags_parser = subparsers.add_parser("tags", help="按标签检索")
+    tags_parser.add_argument("tags", nargs="+", help="标签")
+
+    # ── patterns ──────────────────────────────────────────────────────────
+    patterns_parser = subparsers.add_parser("patterns", help="管理模式/原则")
+    patterns_parser.add_argument(
+        "--add",
+        dest="action",
+        action="store_const",
+        const="add",
+        help="从 stdin 追加模式",
+    )
+    patterns_parser.add_argument(
+        "--get", dest="action", action="store_const", const="get", help="显示全文"
+    )
+
+    # ── reindex ───────────────────────────────────────────────────────────
+    subparsers.add_parser("reindex", help="重建知识库索引")
+
+    # ── lint ──────────────────────────────────────────────────────────────
+    lint_parser = subparsers.add_parser("lint", help="格式校验与修复（原 kb-lint）")
+    lint_parser.add_argument("--fix", action="store_true", help="自动修复")
+    lint_parser.add_argument(
+        "--check", action="store_true", help="仅检查，退出码=min(问题数,127)"
+    )
+    lint_parser.add_argument("files", nargs="*", help="目标文件（默认检查全部）")
+
+    # ── help ──────────────────────────────────────────────────────────────
+    subparsers.add_parser("help", help="显示本帮助")
+
+    args = parser.parse_args()
+
+    if args.command is None or args.command == "help":
+        print_help()
+        sys.exit(0)
+
+    commands = {
+        "add": cmd_add,
+        "get": cmd_get,
+        "list": cmd_list,
+        "search": cmd_search,
+        "fields": cmd_fields,
+        "tags": cmd_tags,
+        "patterns": cmd_patterns,
+        "reindex": cmd_reindex,
+        "lint": cmd_lint,
+    }
+
+    if args.command in commands:
+        commands[args.command](args)
+    else:
+        die(f"未知子命令: {args.command}。运行 'kb help' 查看帮助。")
+
+
+if __name__ == "__main__":
+    main()

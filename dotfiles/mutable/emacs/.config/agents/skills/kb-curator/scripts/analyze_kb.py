@@ -69,7 +69,9 @@ def parse_org_metadata(filepath: str) -> dict | None:
     # 检查章节完整性
     has_task_desc = bool(re.search(r"^\*\* 任务描述", content, re.MULTILINE))
     has_execution = bool(re.search(r"^\*\* 执行过程", content, re.MULTILINE))
-    has_findings = bool(re.search(r"^\*{2,3} (关键发现|难点与坑点|经验教训)", content, re.MULTILINE))
+    has_findings = bool(
+        re.search(r"^\*{2,3} (关键发现|难点与坑点|经验教训)", content, re.MULTILINE)
+    )
 
     if not has_task_desc:
         meta["quality_issues"].append("missing_task_description")
@@ -130,7 +132,9 @@ def detect_duplicates(entries: list[dict]) -> list[dict]:
     return duplicates
 
 
-def analyze(experiences_dir: str, check_duplicates: bool = False, check_quality: bool = False) -> dict:
+def analyze(
+    experiences_dir: str, check_duplicates: bool = False, check_quality: bool = False
+) -> dict:
     """主分析函数。"""
     exp_path = Path(experiences_dir)
     if not exp_path.is_dir():
@@ -165,9 +169,7 @@ def analyze(experiences_dir: str, check_duplicates: bool = False, check_quality:
         "owner_distribution": dict(owner_dist.most_common()),
         "recent_7d": recent_7d,
         "recent_30d": recent_30d,
-        "category_type_matrix": {
-            cat: dict(types) for cat, types in cross_dist.items()
-        },
+        "category_type_matrix": {cat: dict(types) for cat, types in cross_dist.items()},
     }
 
     # 内容长度分布
@@ -204,14 +206,19 @@ def analyze(experiences_dir: str, check_duplicates: bool = False, check_quality:
 
 def main():
     parser = argparse.ArgumentParser(description="知识库健康分析")
-    parser.add_argument("--dir", default=os.path.expanduser("~/Documents/Org/experiences"),
-                        help="经验卡片目录")
+    parser.add_argument(
+        "--dir",
+        default=os.path.expanduser("~/Documents/Org/experiences"),
+        help="经验卡片目录",
+    )
     parser.add_argument("--json", action="store_true", help="JSON 格式输出")
     parser.add_argument("--duplicates", action="store_true", help="检测疑似重复")
     parser.add_argument("--quality", action="store_true", help="检测质量问题")
     args = parser.parse_args()
 
-    result = analyze(args.dir, check_duplicates=args.duplicates, check_quality=args.quality)
+    result = analyze(
+        args.dir, check_duplicates=args.duplicates, check_quality=args.quality
+    )
 
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -224,7 +231,9 @@ def main():
         print(f"近7天新增: {result.get('recent_7d', 0)}")
         print(f"近30天新增: {result.get('recent_30d', 0)}")
         if "avg_lines" in result:
-            print(f"内容长度: 平均 {result['avg_lines']} 行 (最短 {result['min_lines']}, 最长 {result['max_lines']})")
+            print(
+                f"内容长度: 平均 {result['avg_lines']} 行 (最短 {result['min_lines']}, 最长 {result['max_lines']})"
+            )
 
         print(f"\n类别分布:")
         for cat, count in result["category_distribution"].items():
@@ -237,7 +246,9 @@ def main():
             print(f"  {typ:15s} {count:3d} {bar}")
 
         print(f"\n类别×类型矩阵:")
-        header = f"{'':15s}" + "".join(f"{t:>10s}" for t in sorted(result["type_distribution"].keys()))
+        header = f"{'':15s}" + "".join(
+            f"{t:>10s}" for t in sorted(result["type_distribution"].keys())
+        )
         print(header)
         for cat in sorted(result["category_type_matrix"].keys()):
             row = f"{cat:15s}"
@@ -248,7 +259,9 @@ def main():
         if result.get("potential_duplicates"):
             print(f"\n⚠ 疑似重复 ({len(result['potential_duplicates'])} 对):")
             for d in result["potential_duplicates"]:
-                print(f"  [{d['category']}] {d['card_a']} ≈ {d['card_b']} (重叠率: {d['overlap']})")
+                print(
+                    f"  [{d['category']}] {d['card_a']} ≈ {d['card_b']} (重叠率: {d['overlap']})"
+                )
 
         if result.get("quality_issues"):
             print(f"\n⚠  质量问题:")

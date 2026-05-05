@@ -13,7 +13,6 @@ when_to_use: |
   "提取今天的对话", "从对话中提取经验"
 allowed-tools:
   - Bash(kb:*)
-  - Bash(kb-lint:*)
   - Bash(python3:*)
   - Bash(grep:*)
   - Read
@@ -24,8 +23,7 @@ allowed-tools:
 
 在空闲时段（夜间/无人交互时）自动维护知识库：提取多源对话 → 分析健康度 → 识别空白 → 补充经验。
 
-> 定位：这是 **后台批处理** skill，适合在用户不活跃时运行。不需要用户实时交互，
-> 策展完成后输出总结报告即可。如需实时交互式记录经验，使用 `self-improving` skill。
+> 定位：这是 **后台批处理** skill，适合在用户离开键盘时运行，不依赖用户实时交互，策展完成后输出总结报告即可。如需实时交互式记录经验，使用 `self-improving` skill。
 
 ## 工具
 
@@ -85,6 +83,10 @@ python3 scripts/find_gaps.py --stale-days 60
 # 查看昨日对话中有价值的经验片段
 grep -rl "fix\|bug\|error\|解决\|修复" ./conversations/$(date -d yesterday +%Y-%m-%d)/ | head -10
 
+# 了解知识库现有标签分布，避免创建碎片化新类别
+kb fields --category
+kb fields --tech
+
 # 按类别筛选卡片
 kb list --category guix
 
@@ -106,7 +108,7 @@ kb add --title "简短标题" --category emacs --tech emacs-lisp --type debug --
 3. 验证结果
 
 ** 关键发现
-- 重要经验教训
+*** 重要经验教训
 EOF
 ```
 
@@ -114,18 +116,20 @@ EOF
 
 ```bash
 kb reindex     # 重建索引
-kb-lint --fix  # 自动修复格式问题
+kb lint --fix  # 自动修复格式问题
 ```
 
-## 策展原则（来自 Hermes 记忆系统规范）
+如果同一主题已有 3 张以上卡片，或近期新增 5 张以上同类卡片，执行一次 focused consolidation：合并重复、修补过时内容，并把稳定结论晋升为 pattern。目标是减少未来检索噪音，而不是增加总结字数。
+
+## 策展原则
 
 知识库卡片应遵循以下写入标准：
 
 ### 应记录的（值得保存）
 
 - **用户偏好和纠正**：用户反复指出的问题、偏好 → 减少未来纠正成本
-- **非显而易见的 bug**：排查 > 2 步才定位根因的问题
-- **环境特定陷阱**：涉及 Guix/Distrobox/Wayland/Emacs 等生态的特殊行为
+- **非显而易见的 bug**：排查 \> 2 步才定位根因的问题
+- **环境特定陷阱**：涉及特定软件环境生态的特殊行为
 - **更好的方案**：事后发现比初始实现更优的解法
 
 ### 不应记录的（无需保存）
@@ -151,12 +155,12 @@ kb-lint --fix  # 自动修复格式问题
 
 当用户主动触发策展时，按以下流程执行：
 
-1. **提取对话**：`extract-conversations.py` → 将昨日对话保存到 `~/Documents/Org/conversations/`
-2. **诊断**：`analyze_kb.py --quality --duplicates` → 获取健康报告
-3. **空白检测**：`find_gaps.py --stale-days 60` → 识别缺失内容
-4. **补充**：浏览提取的对话文件，将有价值的经验写入知识库
-5. **重整**：`kb reindex && kb-lint --fix`
-6. **质量复核**：对照策展原则检查新增卡片（声明式事实、非流水账、非临时内容）
+1.  **提取对话**：`extract-conversations.py` → 将昨日对话保存到 `~/Documents/Org/conversations/`
+2.  **诊断**：`analyze_kb.py --quality --duplicates` → 获取健康报告
+3.  **空白检测**：`find_gaps.py --stale-days 60` → 识别缺失内容
+4.  **补充**：先用 `kb fields` 查看现有标签避免碎片化，再浏览提取的对话文件，将有价值的经验写入知识库
+5.  **重整**：`kb reindex && kb lint --fix`
+6.  **质量复核**：对照策展原则检查新增卡片（声明式事实、非流水账、非临时内容）
 
 详细流程和补充策略见 `references/curation-guide.md`。
 
@@ -187,6 +191,30 @@ ls ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)/
 - [ ] 标题不包含结论 → 重命名为结论性标题
 - [ ] 纯流水账无经验教训 → 降级或删除
 - [ ] 与已有卡片高度重复 → 合并保留质量更好的
+- [ ] 已被 pattern 覆盖但仍有详细追溯价值 → 保留卡片，pattern 引用卡片 ID
+- [ ] 常被检索但不在 pattern 中 → 晋升为 pattern 或修补现有 pattern
+
+## 缓存式记忆整理
+
+1.  高频复用、跨会话稳定的结论进入 `patterns.org`
+2.  低频但可追溯的详细案例留在 `experiences/`
+3.  过时或低质内容先标记、修补或合并，不直接删除
+4.  pattern 缺少边界条件时，回链引用具体经验卡片补足依据
+
+## 飞升模式与策展的关系
+
+当 `self-improving` skill 进入飞升模式（同一问题被持续纠正 ≥2 次）时，事后应优先写入一张复盘经验卡片。若当时来不及写入，可以在对话提取结果中保留策展线索：
+
+```bash
+# 飞升模式结束后，追加到对话记录中供策展分析
+echo "### 飞升模式报告" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
+echo "- 问题：<一句话描述>" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
+echo "- 检索了：<知识源列表>" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
+echo "- 最终方案：<一句话>" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
+echo "- 新增经验：<若有新卡片写入>" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
+```
+
+这使策展脚本能在后续自动提取飞升模式的处理结果，归纳为新模式或补充现有模式。
 
 ## 文件路径
 
@@ -204,7 +232,7 @@ ls ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)/
 策展完成后确认：
 
 - [ ] `kb reindex` 已执行
-- [ ] `kb-lint --fix` 无残留错误
+- [ ] `kb lint --fix` 无残留错误
 - [ ] 新增卡片元数据完整（category/tech/type/owner）
 - [ ] 新增卡片含任务描述、执行过程、关键发现三个章节
 - [ ] 代码块使用 Org mode 格式（`#+begin_src` 而非 ` ``` `）

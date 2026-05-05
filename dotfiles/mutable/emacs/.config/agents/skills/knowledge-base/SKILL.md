@@ -9,18 +9,9 @@ when_to_use: |
   "任务开始前检索相关经验", "write to knowledge base",
   "查一下之前怎么解决的", "有没有类似经验", "记录下来",
   "这个值得记住", "add to kb", "查询知识库"
-disable-model-invocation: false
 allowed-tools:
   - Read
   - Bash(kb:*)
-  - Bash(kb-lint:*)
-  - Bash(kb\ search:*)
-  - Bash(kb\ add:*)
-  - Bash(kb\ list:*)
-  - Bash(kb\ tags:*)
-  - Bash(kb\ get:*)
-  - Bash(kb\ patterns:*)
-  - Bash(kb\ reindex:*)
 ---
 
 # Knowledge Base
@@ -48,9 +39,19 @@ kb tags <标签> [标签2 ...]                  # 按标签（category/type/owne
 kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
 ```
 
-- `kb list` 默认显示最近 10 条，`--all` 显示全部
+- `kb list` 默认显示最近 20 条，`--all` 显示全部
 - `kb list` 输出格式：`文件路径|标题|类别|类型|执行者|日期`
 - `kb search` 输出为匹配行及上下文，格式：`文件名-行号-:内容`
+
+### 字段统计（优先复用标签）
+
+```bash
+kb fields              # 列出所有已有 category/tech/type/owner
+kb fields --category   # 只列出已有 category
+kb fields --tech       # 只列出已有 tech
+```
+
+写入前先查看已有标签，优先复用，减少碎片化。
 
 ### 写入
 
@@ -61,6 +62,7 @@ kb add \
   --tech <技术栈> \
   --type <类型> \
   --owner <执行者> \
+  --entry <mistake|note|ascended> \
   --summary "一句话总结" \
   --stdin <<EOF
 ** 任务描述
@@ -77,6 +79,46 @@ EOF
 ```
 
 参数取值详见 `references/parameters.md`。
+
+### 纠错 / 记事条目映射
+
+Mistakebook 的 `mistake` / `note` 语义统一写入本知识库，不再另建并行存储。CLI 支持 `kb add --entry mistake|note|ascended`，会自动补 `ENTRY_TYPE` 属性、标签和默认模板；若 `--stdin` 内容已经包含 `**` 小节，则按完整 Org 正文原样写入。
+
+| 来源语义     | 推荐 type                          | 推荐 owner             | 必须保留的信息                           |
+| ------------ | ---------------------------------- | ---------------------- | ---------------------------------------- |
+| `mistake`    | `debug` / `config`                 | `collaborative`        | 原始问题、纠错反馈、错因、最终答案、自检 |
+| `note`       | `workflow` / `research` / `config` | `ai` / `collaborative` | 事项内容、记录原因、适用边界、行动项     |
+| 飞升模式复盘 | `debug` / `workflow`               | `collaborative`        | 失败原因、检索来源、最强方案、后续规则   |
+
+纠错类卡片可在标准三段内增加 Org 子标题：
+
+```org
+** 任务描述
+原始问题、用户纠错反馈链。
+
+** 执行过程
+*** 这次到底错在哪里
+...
+*** 最终正确处理
+...
+
+** 关键发现
+*** 下次开始前自检
++ ...
+```
+
+记事类卡片至少写清：
+
+1.  为什么值得长期保留
+2.  适用场景与例外
+3.  后续行动或检查点
+
+### 写入前决策
+
+1.  先 `kb search` 去重；已有卡片覆盖时优先补充或修正，不新建重复卡
+2.  **优先复用已有标签** — `category` 和 `tech` 不设白名单，但写入前应查看现有标签（`kb list`），优先复用已有类别；只有全新领域才创建新类别
+3.  项目私有细节只写入必要上下文；可泛化规则再晋升到 `patterns.org`
+4.  卡片保存完整过程，pattern 保存紧凑规则；二者可以共存，pattern 必须引用卡片 ID
 
 ### 查看
 
@@ -108,46 +150,48 @@ kb reindex   # 重建索引（新增/删除卡片后运行）
 
 ### 代码块 — 用 `#+begin_src`，禁止 ` ``` `
 
-````
-❌ 错误 (Markdown):
+错误（Markdown）：
+
+````markdown
 ```elisp
 (message "hello")
+```
 ````
 
-✅ 正确 (Org mode):
+正确（Org mode）：
+
+```org
 #+begin_src elisp
 (message "hello")
 #+end_src
-
 ```
 
 ### 强调 — 用 `*text*`，禁止 `**text**`
 
-```
+错误：`**粗体**`
 
-❌ 错误: **粗体**
-✅ 正确: _粗体_
-
-```
+正确：`*粗体*`
 
 注意：`** 任务描述`（`**` 后有空格）是 Org 二级标题，不是粗体。
 
 ### 标题层级
 
+```org
+* DONE 标题
+** 任务描述
+*** 子章节
 ```
 
-- DONE 标题 ← 一级（kb add 自动生成）
-  ** 任务描述 ← 二级（kb add 自动生成）\*** 子章节 ← 三级（执行过程中的分段标题）
-
-````
+`kb add` 自动生成一级标题；`--stdin` 中从二级标题开始写。
 
 ### 写入后校验
 
-写入后必须运行 `kb-lint` 检查格式：
+写入后必须运行 `kb lint` 检查格式：
+
 ```bash
-kb-lint            # 检查所有卡片
-kb-lint --fix      # 自动修复
-````
+kb lint            # 检查所有卡片
+kb lint --fix      # 自动修复
+```
 
 ### Markdown → Org 速查表
 

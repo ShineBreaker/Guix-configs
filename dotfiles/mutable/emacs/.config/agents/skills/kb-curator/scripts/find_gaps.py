@@ -18,11 +18,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-# 所有合法取值（与 kb 工具参数一致）
-ALL_CATEGORIES = {
-    "emacs", "python", "rust", "go", "android", "scheme",
-    "shell", "nix", "guix", "web", "general",
-}
+# 类型基础集合（category 从已有卡片动态发现，不再硬编码）
 ALL_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
 
 
@@ -89,9 +85,12 @@ def find_gaps(experiences_dir: str, stale_days: int = 90) -> dict:
         owner_coverage[e["category"]].add(e["owner"])
         category_counts[e["category"]] += 1
 
-    # 缺失组合
+    # 动态发现所有实际存在的 category（不再硬编码）
+    all_active_categories = set(category_counts.keys())
+
+    # 缺失组合：只针对已有 category × 所有 type 检查覆盖度
     missing_combos = []
-    for cat in ALL_CATEGORIES:
+    for cat in sorted(all_active_categories):
         for typ in ALL_TYPES:
             if typ not in covered.get(cat, set()):
                 missing_combos.append({"category": cat, "type": typ})
@@ -109,18 +108,21 @@ def find_gaps(experiences_dir: str, stale_days: int = 90) -> dict:
     for e in entries:
         d = parse_date(e.get("created"))
         if d and (now - d).days > stale_days:
-            stale_cards.append({
-                "file": os.path.basename(e["file"]),
-                "title": e["title"],
-                "category": e["category"],
-                "created": e["created"],
-                "days_old": (now - d).days,
-            })
+            stale_cards.append(
+                {
+                    "file": os.path.basename(e["file"]),
+                    "title": e["title"],
+                    "category": e["category"],
+                    "created": e["created"],
+                    "days_old": (now - d).days,
+                }
+            )
 
     # 无 human 参与的类别（纯 AI 知识，可能缺少人类视角）
     ai_only_categories = [
-        cat for cat, owners in owner_coverage.items()
-        if "human" not in owners and "collaborative" not in owners and cat in ALL_CATEGORIES
+        cat
+        for cat, owners in owner_coverage.items()
+        if "human" not in owners and "collaborative" not in owners
     ]
 
     result = {
@@ -130,7 +132,6 @@ def find_gaps(experiences_dir: str, stale_days: int = 90) -> dict:
         "stale_cards": stale_cards,
         "stale_count": len(stale_cards),
         "ai_only_categories": ai_only_categories,
-        "all_categories": sorted(ALL_CATEGORIES),
         "all_types": sorted(ALL_TYPES),
         "active_categories": sorted(category_counts.keys()),
     }
@@ -140,8 +141,11 @@ def find_gaps(experiences_dir: str, stale_days: int = 90) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="知识空白检测")
-    parser.add_argument("--dir", default=os.path.expanduser("~/Documents/Org/experiences"),
-                        help="经验卡片目录")
+    parser.add_argument(
+        "--dir",
+        default=os.path.expanduser("~/Documents/Org/experiences"),
+        help="经验卡片目录",
+    )
     parser.add_argument("--json", action="store_true", help="JSON 格式输出")
     parser.add_argument("--stale-days", type=int, default=90, help="陈旧阈值（天）")
     args = parser.parse_args()
@@ -163,14 +167,7 @@ def main():
             for combo in result["missing_category_type_combos"]:
                 by_cat[combo["category"]].append(combo["type"])
             for cat in sorted(by_cat.keys()):
-                if cat in result["active_categories"]:
-                    print(f"  [{cat}] 缺: {', '.join(by_cat[cat])}")
-                else:
-                    print(f"  [{cat}] 整类空白 — 缺: {', '.join(by_cat[cat])}")
-            # 未出现的类别
-            missing_cats = set(result["all_categories"]) - set(result["active_categories"])
-            if missing_cats:
-                print(f"\n  完全空白的类别: {', '.join(sorted(missing_cats))}")
+                print(f"  [{cat}] 缺: {', '.join(by_cat[cat])}")
         else:
             print("✅ 类别×类型全覆盖")
 
@@ -180,9 +177,15 @@ def main():
                 print(f"  {wc['category']}: 仅 {wc['count']} 张卡片")
 
         if result["stale_count"] > 0:
-            print(f"\n⚠ 陈旧卡片 (>{args.stale_days}天, 共 {result['stale_count']} 张):")
-            for card in sorted(result["stale_cards"], key=lambda x: x["days_old"], reverse=True):
-                print(f"  {card['file']} [{card['category']}] {card['days_old']}天前 — {card['title'][:60]}")
+            print(
+                f"\n⚠ 陈旧卡片 (>{args.stale_days}天, 共 {result['stale_count']} 张):"
+            )
+            for card in sorted(
+                result["stale_cards"], key=lambda x: x["days_old"], reverse=True
+            ):
+                print(
+                    f"  {card['file']} [{card['category']}] {card['days_old']}天前 — {card['title'][:60]}"
+                )
 
         if result["ai_only_categories"]:
             print(f"\n⚠ 纯 AI 无人类参与的类别:")

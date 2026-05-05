@@ -75,8 +75,7 @@ def find_codex_dbs() -> list[str]:
 def safe_filename(title: str, maxlen: int = 60) -> str:
     """将标题转为安全的文件名片段。"""
     return (
-        "".join(c if c.isalnum() or c in " _-" else "-" for c in title)
-        [:maxlen]
+        "".join(c if c.isalnum() or c in " _-" else "-" for c in title)[:maxlen]
         .strip()
         .replace(" ", "-")
     )
@@ -156,37 +155,49 @@ def extract_opencode(range_start: datetime, range_end: datetime) -> list[dict]:
                 if ptype == "text":
                     msg_parts.append({"type": "text", "content": pd.get("text", "")})
                 elif ptype == "reasoning":
-                    msg_parts.append({"type": "reasoning", "content": pd.get("text", "")})
+                    msg_parts.append(
+                        {"type": "reasoning", "content": pd.get("text", "")}
+                    )
                 elif ptype == "tool":
                     state: dict = pd.get("state", {})
                     inp: dict = state.get("input", {})
                     out = state.get("output", "")
-                    msg_parts.append({
-                        "type": "tool",
-                        "tool": pd.get("tool", ""),
-                        "input": inp,
-                        "output": out if isinstance(out, str) else json.dumps(out, ensure_ascii=False)[:2000],
-                    })
+                    msg_parts.append(
+                        {
+                            "type": "tool",
+                            "tool": pd.get("tool", ""),
+                            "input": inp,
+                            "output": (
+                                out
+                                if isinstance(out, str)
+                                else json.dumps(out, ensure_ascii=False)[:2000]
+                            ),
+                        }
+                    )
                 elif ptype == "patch":
                     msg_parts.append({"type": "patch", "files": pd.get("files", [])})
 
-            conversation_parts.append({
-                "role": role,
-                "model": model,
-                "agent": agent,
-                "parts": msg_parts,
-                "time_created": msg["time_created"],
-            })
+            conversation_parts.append(
+                {
+                    "role": role,
+                    "model": model,
+                    "agent": agent,
+                    "parts": msg_parts,
+                    "time_created": msg["time_created"],
+                }
+            )
 
-        results.append({
-            "source": "opencode",
-            "id": sess["id"],
-            "title": sess["title"],
-            "directory": sess["directory"],
-            "time_created": sess["time_created"],
-            "time_updated": sess["time_updated"],
-            "messages": conversation_parts,
-        })
+        results.append(
+            {
+                "source": "opencode",
+                "id": sess["id"],
+                "title": sess["title"],
+                "directory": sess["directory"],
+                "time_created": sess["time_created"],
+                "time_updated": sess["time_updated"],
+                "messages": conversation_parts,
+            }
+        )
 
     conn.close()
     return results
@@ -261,37 +272,51 @@ def extract_crush(range_start: datetime, range_end: datetime) -> list[dict]:
                                     raw_input = json.loads(raw_input)
                                 except (json.JSONDecodeError, TypeError):
                                     pass
-                            msg_parts.append({
-                                "type": "tool",
-                                "tool": tool_name,
-                                "input": raw_input,
-                            })
+                            msg_parts.append(
+                                {
+                                    "type": "tool",
+                                    "tool": tool_name,
+                                    "input": raw_input,
+                                }
+                            )
                         elif ptype in ("tool_result", "tool-result"):
                             content = pdata.get("content", pdata.get("output", ""))
-                            msg_parts.append({
-                                "type": "tool-result",
-                                "content": content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)[:2000],
-                            })
+                            msg_parts.append(
+                                {
+                                    "type": "tool-result",
+                                    "content": (
+                                        content
+                                        if isinstance(content, str)
+                                        else json.dumps(content, ensure_ascii=False)[
+                                            :2000
+                                        ]
+                                    ),
+                                }
+                            )
                         elif ptype == "reasoning":
                             thinking = pdata.get("thinking", pdata.get("text", ""))
                             msg_parts.append({"type": "reasoning", "content": thinking})
-                    conversation_parts.append({
-                        "role": msg["role"],
-                        "model": msg["model"] or "",
-                        "parts": msg_parts,
-                        "time_created": msg["created_at"],
-                    })
+                    conversation_parts.append(
+                        {
+                            "role": msg["role"],
+                            "model": msg["model"] or "",
+                            "parts": msg_parts,
+                            "time_created": msg["created_at"],
+                        }
+                    )
 
-                results.append({
-                    "source": "crush",
-                    "db_path": db_path,
-                    "project_dir": project_dir,
-                    "id": sid,
-                    "title": sess["title"],
-                    "time_created": sess["created_at"],
-                    "time_updated": sess["updated_at"],
-                    "messages": conversation_parts,
-                })
+                results.append(
+                    {
+                        "source": "crush",
+                        "db_path": db_path,
+                        "project_dir": project_dir,
+                        "id": sid,
+                        "title": sess["title"],
+                        "time_created": sess["created_at"],
+                        "time_updated": sess["updated_at"],
+                        "messages": conversation_parts,
+                    }
+                )
             conn.close()
         except Exception:
             continue
@@ -333,7 +358,9 @@ def extract_claude(range_start: datetime, range_end: datetime) -> list[dict]:
         # 从文件名提取 session ID（格式: ses_<hex>_<base64>.jsonl）
         fname = fpath.name
         # 提取 base64 部分之前的 hex session id
-        prefix = fname.replace("ses_", "").split("_")[0] if fname.startswith("ses_") else ""
+        prefix = (
+            fname.replace("ses_", "").split("_")[0] if fname.startswith("ses_") else ""
+        )
 
         # 读取第一条 user 消息获取时间戳和标题
         first_ts = None
@@ -382,47 +409,61 @@ def extract_claude(range_start: datetime, range_end: datetime) -> list[dict]:
             ts_unix = int(ts.timestamp()) if ts else 0
 
             if mtype == "user":
-                conversation_parts.append({
-                    "role": "user",
-                    "model": "",
-                    "parts": [{"type": "text", "content": msg.get("content", "")}],
-                    "time_created": ts_unix,
-                })
+                conversation_parts.append(
+                    {
+                        "role": "user",
+                        "model": "",
+                        "parts": [{"type": "text", "content": msg.get("content", "")}],
+                        "time_created": ts_unix,
+                    }
+                )
             elif mtype == "tool_use":
-                conversation_parts.append({
-                    "role": "assistant",
-                    "model": "",
-                    "parts": [{
-                        "type": "tool",
-                        "tool": msg.get("tool_name", "unknown"),
-                        "input": msg.get("tool_input", {}),
-                        "output": "",
-                    }],
-                    "time_created": ts_unix,
-                })
+                conversation_parts.append(
+                    {
+                        "role": "assistant",
+                        "model": "",
+                        "parts": [
+                            {
+                                "type": "tool",
+                                "tool": msg.get("tool_name", "unknown"),
+                                "input": msg.get("tool_input", {}),
+                                "output": "",
+                            }
+                        ],
+                        "time_created": ts_unix,
+                    }
+                )
             elif mtype == "tool_result":
                 output = msg.get("tool_output", "")
                 if isinstance(output, dict):
-                    output = output.get("output", json.dumps(output, ensure_ascii=False))
-                conversation_parts.append({
-                    "role": "tool",
-                    "model": "",
-                    "parts": [{
-                        "type": "tool-result",
-                        "content": str(output)[:2000] if output else "",
-                    }],
-                    "time_created": ts_unix,
-                })
+                    output = output.get(
+                        "output", json.dumps(output, ensure_ascii=False)
+                    )
+                conversation_parts.append(
+                    {
+                        "role": "tool",
+                        "model": "",
+                        "parts": [
+                            {
+                                "type": "tool-result",
+                                "content": str(output)[:2000] if output else "",
+                            }
+                        ],
+                        "time_created": ts_unix,
+                    }
+                )
 
-        results.append({
-            "source": "claude",
-            "id": sid_candidate or prefix,
-            "title": title,
-            "project": project,
-            "time_created": int(first_ts.timestamp()) if first_ts else 0,
-            "time_updated": int(first_ts.timestamp()) if first_ts else 0,
-            "messages": conversation_parts,
-        })
+        results.append(
+            {
+                "source": "claude",
+                "id": sid_candidate or prefix,
+                "title": title,
+                "project": project,
+                "time_created": int(first_ts.timestamp()) if first_ts else 0,
+                "time_updated": int(first_ts.timestamp()) if first_ts else 0,
+                "messages": conversation_parts,
+            }
+        )
 
     return results
 
@@ -448,7 +489,7 @@ def _parse_iso_timestamp(ts_str: str) -> datetime | None:
 
 def _find_session_id_for_transcript(fname: str, session_titles: dict[str, str]) -> str:
     """通过模糊匹配找到 transcript 文件对应的 session ID。
-    
+
     transcript 文件名格式: ses_<hex>_<base64>.jsonl
     history.jsonl 中 sessionId 是 UUID。
     尝试多种匹配策略。
@@ -485,7 +526,11 @@ def extract_codex(range_start: datetime, range_end: datetime) -> list[dict]:
         # 加载 history.jsonl 建立 session_id → title/project 映射
         history_path = os.path.join(codex_dir, "history.jsonl")
         session_titles: dict[str, str] = {}
-        project_dir = os.path.dirname(codex_dir) if codex_dir != os.path.expanduser("~/.codex") else "(global)"
+        project_dir = (
+            os.path.dirname(codex_dir)
+            if codex_dir != os.path.expanduser("~/.codex")
+            else "(global)"
+        )
         if os.path.exists(history_path):
             try:
                 with open(history_path) as f:
@@ -496,7 +541,11 @@ def extract_codex(range_start: datetime, range_end: datetime) -> list[dict]:
                             continue
                         sid = entry.get("session_id", "")
                         if sid and sid not in session_titles:
-                            session_titles[sid] = entry.get("text", "Untitled")[:80].replace("\n", " ").strip()
+                            session_titles[sid] = (
+                                entry.get("text", "Untitled")[:80]
+                                .replace("\n", " ")
+                                .strip()
+                            )
             except Exception:
                 pass
 
@@ -559,16 +608,22 @@ def extract_codex(range_start: datetime, range_end: datetime) -> list[dict]:
             # 转换消息
             conversation_parts: list[dict] = _parse_codex_messages(messages_raw)
 
-            results.append({
-                "source": "codex",
-                "id": sid,
-                "title": title,
-                "directory": cwd or project_dir,
-                "project_dir": project_dir,
-                "time_created": int(first_ts.timestamp()) if first_ts else int(mtime.timestamp()),
-                "time_updated": int(mtime.timestamp()),
-                "messages": conversation_parts,
-            })
+            results.append(
+                {
+                    "source": "codex",
+                    "id": sid,
+                    "title": title,
+                    "directory": cwd or project_dir,
+                    "project_dir": project_dir,
+                    "time_created": (
+                        int(first_ts.timestamp())
+                        if first_ts
+                        else int(mtime.timestamp())
+                    ),
+                    "time_updated": int(mtime.timestamp()),
+                    "messages": conversation_parts,
+                }
+            )
 
     return results
 
@@ -596,22 +651,37 @@ def _parse_codex_messages(messages_raw: list[dict]) -> list[dict]:
                 if btype in ("input_text", "output_text"):
                     parts.append({"type": "text", "content": block.get("text", "")})
                 elif btype == "function_call":
-                    parts.append({
-                        "type": "tool",
-                        "tool": block.get("name", block.get("function_name", "unknown")),
-                        "input": json.loads(block.get("arguments", "{}")) if isinstance(block.get("arguments"), str) else block.get("arguments", {}),
-                        "output": "",
-                    })
+                    parts.append(
+                        {
+                            "type": "tool",
+                            "tool": block.get(
+                                "name", block.get("function_name", "unknown")
+                            ),
+                            "input": (
+                                json.loads(block.get("arguments", "{}"))
+                                if isinstance(block.get("arguments"), str)
+                                else block.get("arguments", {})
+                            ),
+                            "output": "",
+                        }
+                    )
                 elif btype == "reasoning":
-                    parts.append({"type": "reasoning", "content": block.get("text", block.get("summary", ""))})
+                    parts.append(
+                        {
+                            "type": "reasoning",
+                            "content": block.get("text", block.get("summary", "")),
+                        }
+                    )
 
             if parts:
-                result.append({
-                    "role": role,
-                    "model": "",
-                    "parts": parts,
-                    "time_created": ts_unix,
-                })
+                result.append(
+                    {
+                        "role": role,
+                        "model": "",
+                        "parts": parts,
+                        "time_created": ts_unix,
+                    }
+                )
 
     return result
 
@@ -660,7 +730,9 @@ def format_org(session: dict) -> str:
                         lines.append("")
             continue
 
-        role_label = "User" if role == "user" else ("Assistant" if role == "assistant" else role)
+        role_label = (
+            "User" if role == "user" else ("Assistant" if role == "assistant" else role)
+        )
 
         header_parts: list[str] = [role_label]
         if agent:
@@ -692,7 +764,12 @@ def format_org(session: dict) -> str:
                 out: str = part.get("output", "")
                 cmd = ""
                 if isinstance(inp, dict):
-                    cmd = inp.get("command", inp.get("description", json.dumps(inp, ensure_ascii=False)[:200]))
+                    cmd = inp.get(
+                        "command",
+                        inp.get(
+                            "description", json.dumps(inp, ensure_ascii=False)[:200]
+                        ),
+                    )
                 lines.append(f"*** tool: {tool_name}")
                 lines.append("#+BEGIN_SRC")
                 lines.append(str(cmd).strip())
@@ -722,11 +799,14 @@ def format_org(session: dict) -> str:
 
 # ── 主逻辑 ──────────────────────────────────────────────────
 def main() -> None:
-    parser = argparse.ArgumentParser(description="提取 OpenCode/Crush/Codex/Claude 对话记录")
+    parser = argparse.ArgumentParser(
+        description="提取 OpenCode/Crush/Codex/Claude 对话记录"
+    )
     parser.add_argument("--date", "-d", help="目标日期 (YYYY-MM-DD)，默认昨天")
     parser.add_argument("--output", "-o", default=None, help="输出目录")
     parser.add_argument(
-        "--source", "-s",
+        "--source",
+        "-s",
         choices=["opencode", "crush", "codex", "claude", "all"],
         default="all",
         help="数据源 (默认: all)",
