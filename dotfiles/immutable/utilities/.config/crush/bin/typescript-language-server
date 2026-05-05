@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec ~/.guix-home/profile/bin/npx --yes -p typescript -p typescript-language-server typescript-language-server "$@"
