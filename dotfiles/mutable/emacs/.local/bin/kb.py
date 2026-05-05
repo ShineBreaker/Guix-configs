@@ -614,12 +614,13 @@ def _fix_org_content(text: str) -> tuple[str, list[str]]:
     修复 Org 文件中的 Markdown 语法。
 
     返回 (修复后文本, 修复项列表)。
-    逐行处理，跟踪 ``` 代码块状态以避免误修复代码块内的内容。
+    逐行处理，跟踪代码块状态以避免误修复代码块内的内容。
     """
     fixes = []
     lines = text.split("\n")
     result = []
     in_code_block = False  # 追踪 ``` 代码块状态
+    in_org_code_block = False  # 追踪 #+begin_src ... #+end_src 代码块状态
     i = 0
 
     while i < len(lines):
@@ -648,8 +649,14 @@ def _fix_org_content(text: str) -> tuple[str, list[str]]:
                 i += 1
                 continue
 
+        # ── 追踪 Org 代码块状态 ──
+        if re.match(r"^\s*#\+begin_src\b", line, re.IGNORECASE):
+            in_org_code_block = True
+        elif re.match(r"^\s*#\+end_src\b", line, re.IGNORECASE):
+            in_org_code_block = False
+
         # ── 修复 2-5: 只在非代码块内生效 ──
-        if not in_code_block:
+        if not in_code_block and not in_org_code_block:
             stripped = line.lstrip()
 
             # 排除 Org 标题模式（** 或 *** 开头后跟空格）
