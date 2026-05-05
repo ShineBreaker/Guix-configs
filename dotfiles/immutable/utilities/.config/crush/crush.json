@@ -12,8 +12,7 @@
   "options": {
     "context_paths": [
       "~/.config/agents/context/01-language.md",
-      "~/.config/agents/context/02-style.md",
-      "~/.config/agents/context/03-tools.md"
+      "~/.config/agents/context/02-ultilities.md"
     ],
     "tui": {
       "compact_mode": true,

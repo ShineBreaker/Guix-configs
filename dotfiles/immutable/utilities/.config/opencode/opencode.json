@@ -9,8 +9,7 @@
   ],
   "instructions": [
     "~/.config/agents/context/01-language.md",
-    "~/.config/agents/context/02-style.md",
-    "~/.config/agents/context/03-tools.md",
+    "~/.config/agents/context/02-ultilities.md",
     "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
   ],
   "mcp": {
