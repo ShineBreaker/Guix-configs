@@ -1,0 +1,29 @@
+* TODO 任务总结：%?
+:PROPERTIES:
+:ID:       %(format-time-string "%Y%m%d-%H%M%S")
+:CREATED:  %(format-time-string "[%Y-%m-%d %a]")
+:CATEGORY: %(completing-read "类别: " '("emacs" "python" "rust" "go" "scheme" "shell" "nix" "web" "general"))
+:TECH:     %(completing-read "技术栈: " '("emacs-lisp" "python" "rust" "go" "scheme" "bash" "nix" "typescript" "html/css" "org-mode") nil nil nil nil "")
+:TYPE:     %(completing-read "类型: " '("debug" "refactor" "research" "workflow" "feature" "config"))
+:STATUS:   inprogress
+:EFFORT:
+:OWNER:    %(completing-read "执行者: " '("human" "ai" "collaborative"))
+:END:
+
+** 任务描述
+%U
+
+** 执行过程
+1.
+
+** 难点与坑点 :difficulties:
+***
+
+** 经验教训 :lessons:
+-
+
+** 相关链接
+-
+
+** AI 建议                                                             :ai_notes:
+-

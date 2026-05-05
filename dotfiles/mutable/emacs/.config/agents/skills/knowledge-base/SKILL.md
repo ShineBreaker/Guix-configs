@@ -1,14 +1,12 @@
 ---
 name: knowledge-base
-description: 知识库操作工具 — 通过 kb CLI 检索、写入、管理经验卡片和模式
-version: "2.0.0"
-when_to_use: |
-  Use when you need to interact with the knowledge base via kb CLI.
+description: >
+  知识库操作工具 — 通过 kb CLI 检索、写入、管理经验卡片和模式。
   Triggers: "kb search", "记录经验", "写入知识库", "kb add",
-  "search experiences", "check patterns", "检索历史经验",
-  "任务开始前检索相关经验", "write to knowledge base",
-  "查一下之前怎么解决的", "有没有类似经验", "记录下来",
-  "这个值得记住", "add to kb", "查询知识库"
+  "检索历史经验", "查一下之前怎么解决的", "有没有类似经验", "记录下来",
+  "这个值得记住", "add to kb", "查询知识库", "check patterns",
+  "search experiences", "write to knowledge base"
+version: "2.0.0"
 allowed-tools:
   - Read
   - Bash(kb:*)
@@ -120,6 +118,8 @@ Mistakebook 的 `mistake` / `note` 语义统一写入本知识库，不再另建
 3.  项目私有细节只写入必要上下文；可泛化规则再晋升到 `patterns.org`
 4.  卡片保存完整过程，pattern 保存紧凑规则；二者可以共存，pattern 必须引用卡片 ID
 
+写入质量规范（传播联动、自包含、时效性、矛盾检测、置信度）详见 `references/writing-guide.md`。
+
 ### 查看
 
 ```bash
@@ -143,6 +143,8 @@ kb reindex   # 重建索引（新增/删除卡片后运行）
 ```
 
 **模式写入规范**：模式是紧凑的声明式规则，非排查叙事。标题为结论，正文 ≤5 行。必须包含"适用/例外/参考"三个字段。
+
+模式写入后应检查：是否有旧模式被新规则取代？有则标注 `已过时` 并引用新模式。
 
 ## 格式规范（CRITICAL）
 
