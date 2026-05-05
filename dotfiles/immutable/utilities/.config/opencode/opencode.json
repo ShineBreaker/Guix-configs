@@ -8,9 +8,9 @@
     "opencode-scheduler"
   ],
   "instructions": [
-    "~/.config/opencode/docs/language.md",
-    "~/.config/opencode/docs/token-efficient.md",
-    "~/.config/opencode/docs/tools.md",
+    "~/.config/agents/context/01-language.md",
+    "~/.config/agents/context/02-style.md",
+    "~/.config/agents/context/03-tools.md",
     "~/.config/opencode/plugin/shell-strategy/shell_strategy.md"
   ],
   "mcp": {

@@ -35,9 +35,9 @@
 
       options = {
         context_paths = [
-          "~/.config/crush/context/01-language.md"
-          "~/.config/crush/context/02-style.md"
-          "~/.config/crush/context/03-tools.md"
+          "~/.config/agents/context/01-language.md"
+          "~/.config/agents/context/02-style.md"
+          "~/.config/agents/context/03-tools.md"
         ];
         tui = {
           compact_mode = true;
@@ -263,11 +263,5 @@
         };
       };
     };
-  };
-
-  xdg.configFile = {
-    "crush/context/01-language.md".source = ./dotfiles/01-language.md;
-    "crush/context/02-style.md".source = ./dotfiles/02-style.md;
-    "crush/context/03-tools.md".source = ./dotfiles/03-tools.md;
   };
 }
