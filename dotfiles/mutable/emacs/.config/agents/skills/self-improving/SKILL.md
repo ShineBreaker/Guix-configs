@@ -1,19 +1,9 @@
 ---
 name: self-improving
 description: >
-  跨会话持续改进 — 检测对话中的经验信号，触发知识库写入。
-  Auto-detect: user corrections ("不对，应该是..."), non-obvious bugs,
-  knowledge gaps, better approaches, environment-specific pitfalls.
-  Triggers: "记录下来", "这个值得记住", "下次注意", "记一下",
-  "写入记事本", "写入错题集", "save this", "record this",
-  "值得写入知识库", "这个坑要记",
-  "不对，应该是", "你搞错了", "用最有效的方法处理", "/ascended"
-version: "2.0.0"
-context: inline
-user-invocable: true
-allowed-tools:
-  - Read
-  - Bash(kb:*)
+  跨会话持续改进 — 检测对话中的经验信号，通过 kb CLI 写入知识库。
+  自动检测用户纠正（"不对，应该是…"）、非显而易见的 bug、知识空白、更优方案、配置陷阱，
+  并在用户说"记录下来"、"这个值得记住"、"save this"、"/ascended"时触发记录。
 ---
 
 # Self-Improvement
@@ -46,13 +36,13 @@ allowed-tools:
 
 简表：
 
-| 信号类型 | 推荐 type | 关键词/信号 |
-| -------- | --------- | ----------- |
-| 修正 | `debug` | "不对，应该是…"、"你搞错了…" |
-| 知识空白 | `research` | 未知信息、过时文档、API 行为不符 |
-| 非显而易见错误 | `debug` | 排查 >2 步、环境差异 |
-| 更好方案 | `refactor` | 更优写法、更简路径 |
-| 配置陷阱 | `config` | 跨工具集成踩坑、非默认组合 |
+| 信号类型       | 推荐 type  | 关键词/信号                      |
+| -------------- | ---------- | -------------------------------- |
+| 修正           | `debug`    | "不对，应该是…"、"你搞错了…"     |
+| 知识空白       | `research` | 未知信息、过时文档、API 行为不符 |
+| 非显而易见错误 | `debug`    | 排查 >2 步、环境差异             |
+| 更好方案       | `refactor` | 更优写法、更简路径               |
+| 配置陷阱       | `config`   | 跨工具集成踩坑、非默认组合       |
 
 **注意防误触发**：用户描述报错但不纠正你、普通 review 无可复用经验、只要求继续下一步 → 不触发。
 

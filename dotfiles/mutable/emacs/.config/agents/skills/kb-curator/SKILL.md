@@ -1,14 +1,8 @@
 ---
-allowed-tools:
-- "Bash(kb:\\*)"
-- "Bash(python3:\\*)"
-- "Bash(grep:\\*)"
-- Read
-- Glob
-description: |
-  知识库策展 — 空闲时（夜间）自动运行的知识库维护。从多源对话记录中提取经验、 分析卡片健康度、识别空白、补充缺失内容。 Triggers: "检查知识库", "筛选经验", "补充知识库", "清理知识库", "知识库还缺什么", "curate kb", "知识库健康检查", "知识库维护", "整理知识库", "review knowledge base", "找重复卡片", "补齐空白", "知识库质量", "优化知识库", "clean up kb", "audit knowledge base", "夜间策展", "自动策展", "跑一次知识库维护", "nightly curation", "提取今天的对话", "从对话中提取经验"
 name: kb-curator
-version: 3.0.0
+description: >
+  知识库策展 — 空闲时自动运行的知识库维护：从多源对话提取经验、分析健康度、识别空白、补充缺失。
+  当用户要求检查知识库、维护整理知识库、"curate kb"、"夜间策展"、"nightly curation"时使用。
 ---
 
 # 知识库策展（空闲时运行）
@@ -23,7 +17,7 @@ version: 3.0.0
 ## 工具
 
 | 脚本                               | 用途                                                         |
-|------------------------------------|--------------------------------------------------------------|
+| ---------------------------------- | ------------------------------------------------------------ |
 | `scripts/extract-conversations.py` | **第一步**：从 OpenCode/Crush/Codex/Claude Code 提取昨日对话 |
 | `scripts/analyze_kb.py`            | 知识库健康分析（分布、重复、质量）                           |
 | `scripts/find_gaps.py`             | 知识空白检测（缺失组合、陈旧卡片）                           |
@@ -37,7 +31,7 @@ version: 3.0.0
 
 从所有 AI 编程工具中提取昨天的对话记录，转为 Org-mode 文件供后续分析。
 
-``` bash
+```bash
 # 提取所有数据源的昨日对话（默认输出到 ./conversations/YYYY-MM-DD/）
 python3 scripts/extract-conversations.py
 
@@ -56,7 +50,7 @@ python3 scripts/extract-conversations.py -o ~/Documents/Org/conversations/2026-0
 **支持的数据源**：
 
 | 来源        | 存储位置                                             | 格式   |
-|-------------|------------------------------------------------------|--------|
+| ----------- | ---------------------------------------------------- | ------ |
 | OpenCode    | `~/.local/share/opencode/opencode-stable.db`         | SQLite |
 | Crush       | `~/.config/crush/.crush/crush.db` + 项目级 `.crush/` | SQLite |
 | Claude Code | `~/.claude/transcripts/*.jsonl`                      | JSONL  |
@@ -64,7 +58,7 @@ python3 scripts/extract-conversations.py -o ~/Documents/Org/conversations/2026-0
 
 ### 第二步：健康诊断
 
-``` bash
+```bash
 # 全面健康检查
 python3 scripts/analyze_kb.py --quality --duplicates
 
@@ -86,7 +80,7 @@ python3 scripts/find_gaps.py --stale-days 60
 
 扫描已有知识库中的矛盾并处理：
 
-``` bash
+```bash
 # 搜索同一主题的多张卡片
 kb search "<关键词>"
 
@@ -112,7 +106,7 @@ kb list --category <类别> --type debug
 
 ### 第五步：筛选与补充
 
-``` bash
+```bash
 # 查看昨日对话中有价值的经验片段
 grep -rl "fix\|bug\|error\|解决\|修复" ./conversations/$(date -d yesterday +%Y-%m-%d)/ | head -10
 
@@ -129,7 +123,7 @@ kb search "Guix"
 
 ### 第六步：写入经验
 
-``` bash
+```bash
 # 写入新经验卡片（管道输入）
 kb add --title "简短标题" --category emacs --tech emacs-lisp --type debug --owner ai --summary "一句话总结" --stdin <<'EOF'
 ** 任务描述
@@ -149,7 +143,7 @@ EOF
 
 写入新卡片后，检查并更新关联内容：
 
-``` bash
+```bash
 # 检查是否有受影响的 pattern
 kb patterns --get | grep -i "<相关关键词>"
 
@@ -166,7 +160,7 @@ kb search "<相关关键词>"
 
 ### 第八步：重整与收尾
 
-``` bash
+```bash
 kb reindex     # 重建索引
 kb lint --fix  # 自动修复格式问题
 ```
@@ -226,7 +220,7 @@ kb lint --fix  # 自动修复格式问题
 
 当 `self-improving` skill 进入飞升模式（同一问题被持续纠正 ≥2次）时，事后应优先写入一张复盘经验卡片。 若当时来不及写入，可以在对话提取结果中保留策展线索：
 
-``` bash
+```bash
 # 飞升模式结束后，追加到对话记录中供策展分析
 echo "### 飞升模式报告" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
 echo "- 问题：<一句话描述>" >> conversations/$(date +%Y-%m-%d)/nightly-curation-notes.md
@@ -240,7 +234,7 @@ echo "- 新增经验：<若有新卡片写入>" >> conversations/$(date +%Y-%m-%
 ## 文件路径
 
 | 用途     | 路径                             |
-|----------|----------------------------------|
+| -------- | -------------------------------- |
 | CLI 工具 | `~/.local/bin/kb`                |
 | 经验卡片 | `~/Documents/Org/experiences/`   |
 | 模式文件 | `~/Documents/Org/patterns.org`   |

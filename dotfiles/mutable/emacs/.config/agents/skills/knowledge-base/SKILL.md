@@ -2,14 +2,8 @@
 name: knowledge-base
 description: >
   知识库操作工具 — 通过 kb CLI 检索、写入、管理经验卡片和模式。
-  Triggers: "kb search", "记录经验", "写入知识库", "kb add",
-  "检索历史经验", "查一下之前怎么解决的", "有没有类似经验", "记录下来",
-  "这个值得记住", "add to kb", "查询知识库", "check patterns",
-  "search experiences", "write to knowledge base"
-version: "2.0.0"
-allowed-tools:
-  - Read
-  - Bash(kb:*)
+  当需要查询历史经验、写入新经验、检索已有模式，或用户提到"kb search"、"记录经验"、
+  "写入知识库"、"check patterns"时使用。
 ---
 
 # Knowledge Base
