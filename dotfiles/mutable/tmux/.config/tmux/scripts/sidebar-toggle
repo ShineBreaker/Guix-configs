@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# sidebar-toggle - 切换/跟随浮动侧边栏
+# 用法: sidebar-toggle          # 切换显示/隐藏
+#       sidebar-toggle follow   # 在新窗口重建（hook 调用）
+#       sidebar-toggle pane-loop # 在浮动窗格内运行的显示循环
+
+scripts_dir="${HOME}/.config/tmux/scripts"
+sidebar_title="tmux-sidebar"
+sidebar_width="${SIDEBAR_WIDTH:-$(tmux show -gqv @sidebar_width 2>/dev/null || true)}"
+sidebar_width="${sidebar_width:-30}"
+lock_dir=""
+
+get_visible() { tmux show -gqv @sidebar_visible 2>/dev/null || echo "0"; }
+get_pane_id() { tmux show -wqv @sidebar_pane_id 2>/dev/null || echo ""; }
+
+lock_path() {
+    local key
+    key="$(tmux display-message -p '#{socket_path}:#{window_id}' 2>/dev/null | cksum | awk '{print $1}')"
+    printf '/tmp/tmux-sidebar-%s.lock' "$key"
+}
+
+acquire_lock() {
+    lock_dir="$(lock_path)"
+    mkdir "$lock_dir" 2>/dev/null
+}
+
+release_lock() {
+    [[ -n "$lock_dir" ]] && rmdir "$lock_dir" 2>/dev/null || true
+}
+
+is_sidebar_pane() {
+    local pane_id="$1"
+    [[ -n "$pane_id" ]] || return 1
+
+    local title start command
+    IFS=$'\t' read -r title start command < <(
+        tmux display-message -p -t "$pane_id" '#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true
+    )
+
+    [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]
+}
+
+current_window_sidebar() {
+    local pane_id title start command
+    while IFS=$'\t' read -r pane_id title start command; do
+        if [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]; then
+            printf '%s\n' "$pane_id"
+            return 0
+        fi
+    done < <(tmux list-panes -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+    return 1
+}
+
+kill_current_sidebars_except() {
+    local keep="${1:-}"
+    local pane_id title start command
+    while IFS=$'\t' read -r pane_id title start command; do
+        if [[ "$pane_id" == "$keep" ]]; then
+            continue
+        fi
+        if [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]; then
+            tmux kill-pane -t "$pane_id" 2>/dev/null || true
+        fi
+    done < <(tmux list-panes -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+}
+
+target_pane() {
+    local pane_id active title start command
+    local fallback=""
+    while IFS=$'\t' read -r pane_id active title start command; do
+        if [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]; then
+            continue
+        fi
+        [[ -n "$fallback" ]] || fallback="$pane_id"
+        if [[ "$active" == "1" ]]; then
+            printf '%s\n' "$pane_id"
+            return 0
+        fi
+    done < <(tmux list-panes -F '#{pane_id}	#{pane_active}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+
+    [[ -n "$fallback" ]] && printf '%s\n' "$fallback"
+}
+
+kill_sidebar() {
+    kill_current_sidebars_except ""
+    tmux set -wu @sidebar_pane_id 2>/dev/null || true
+}
+
+kill_all_sidebars() {
+    local pane_id title start command
+    while IFS=$'\t' read -r pane_id title start command; do
+        if [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]; then
+            tmux kill-pane -t "$pane_id" 2>/dev/null || true
+        fi
+    done < <(tmux list-panes -a -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+    tmux set -wu @sidebar_pane_id 2>/dev/null || true
+}
+
+create_sidebar() {
+    # 销毁旧窗格（如果存在）
+    kill_current_sidebars_except ""
+
+    local target new_id
+    target="$(target_pane || true)"
+    if [[ -z "$target" ]]; then
+        tmux display-message "侧边栏创建失败：当前窗口没有普通窗格"
+        return 1
+    fi
+
+    # 创建浮动窗格：水平分割、左侧、浮动、后台创建，避免抢焦点。
+    new_id=$(tmux split-window -d -t "$target" -h -b -f -l "$sidebar_width" -P -F '#{pane_id}' \
+        "exec bash ${scripts_dir}/sidebar-toggle pane-loop" 2>/dev/null) || {
+        # 如果浮动窗格失败，fallback 并通知用户
+        tmux display-message "侧边栏创建失败（需要 tmux 3.3a+）"
+        tmux set -g @sidebar_visible "0"
+        return 1
+    }
+    tmux select-pane -t "$new_id" -T "$sidebar_title" 2>/dev/null || true
+    kill_current_sidebars_except "$new_id"
+    tmux set -w @sidebar_pane_id "$new_id"
+    tmux set -g @sidebar_visible "1"
+}
+
+ensure_sidebar() {
+    local pane_id
+    acquire_lock || return 0
+    trap release_lock EXIT
+
+    pane_id="$(current_window_sidebar || true)"
+    if [[ -n "$pane_id" ]] && is_sidebar_pane "$pane_id"; then
+        kill_current_sidebars_except "$pane_id"
+        tmux set -w @sidebar_pane_id "$pane_id"
+        return 0
+    fi
+    create_sidebar
+}
+
+case "${1:-toggle}" in
+    toggle)
+        if [[ "$(get_visible)" == "1" ]]; then
+            kill_all_sidebars
+            tmux set -g @sidebar_visible "0"
+        else
+            tmux set -g @sidebar_visible "1"
+            ensure_sidebar
+        fi
+        ;;
+    follow)
+        # 窗口切换时重建侧边栏（由 hook 调用）
+        if [[ "$(get_visible)" == "1" ]]; then
+            ensure_sidebar
+        fi
+        ;;
+    signal)
+        # 向当前窗口的侧栏 pane 发送 SIGUSR1 触发即时重绘
+        pane_id="$(get_pane_id)"
+        [[ -n "$pane_id" ]] || exit 0
+        pid="$(tmux display-message -p -t "$pane_id" '#{pane_pid}' 2>/dev/null)" || exit 0
+        [[ -n "$pid" ]] && kill -USR1 "$pid" 2>/dev/null || true
+        ;;
+    pane-loop)
+        # 在浮动窗格内运行的显示循环
+        render_now=1
+        tick=0
+        trap 'printf "\033[?25h"; exit 0' EXIT INT TERM
+        trap 'render_now=1' USR1
+        printf '\033[?25l'  # 隐藏光标
+        printf '\033[2J\033[H'  # 仅启动时清屏，后续原位覆盖
+        while true; do
+            if [[ "$render_now" == "1" ]]; then
+                render_now=0
+                tick=0
+                printf '\033[H'  # 移动光标到左上角，避免全屏清除造成闪烁
+                GUILE_AUTO_COMPILE=0 guile --no-auto-compile -s "${scripts_dir}/sidebar-render.scm" 2>/dev/null
+                printf '\033[J'  # 清除旧渲染残留
+            fi
+            sleep 0.2
+            tick=$((tick + 1))
+            if (( tick >= 10 )); then
+                render_now=1
+            fi
+        done
+        ;;
+esac
