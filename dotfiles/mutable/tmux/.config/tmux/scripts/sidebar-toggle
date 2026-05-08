@@ -124,6 +124,9 @@ create_sidebar() {
 }
 
 ensure_sidebar() {
+    # 当前窗口若标记了 @no_sidebar，跳过（如 termide 等自带侧栏的布局）
+    [[ "$(tmux show -wqv @no_sidebar 2>/dev/null)" == "1" ]] && return 0
+
     local pane_id
     acquire_lock || return 0
     trap release_lock EXIT

@@ -13,6 +13,7 @@
 
 ;; === ANSI ===
 
+(define ansi-erase-line "\x1b[K")
 (define ansi-reset "\x1b[0m")
 (define ansi-bold "\x1b[1m")
 (define ansi-dim "\x1b[2m")
@@ -28,8 +29,13 @@
   (let ((n (and s (string->number s))))
     (if (and n (> n 0)) n fallback)))
 
-(define (sidebar-width)
-  "Return drawable width. Leave the last terminal column unused to avoid wrap."
+;; 宽度缓存：每个 Guile 进程（即每次渲染/点击处理）内只计算一次，
+;; 避免每行输出都重复调用 tmux 命令（单次渲染节省 60+ 次 tmux 调用）。
+(define %sidebar-width-value #f)
+(define %window-title-width-value #f)
+
+(define (%compute-sidebar-width)
+  "实际计算侧栏可绘制宽度。优先取 pane 宽度，回退到 @sidebar_width 选项。"
   (let* ((tmux-pane (getenv "TMUX_PANE"))
          (pane-width (if (and tmux-pane (not (string=? tmux-pane "")))
                          (string->positive-integer
@@ -40,8 +46,19 @@
          (width (if (> pane-width 0) pane-width option-width)))
     (max 18 (- width 1))))
 
+(define (sidebar-width)
+  "返回侧栏可绘制宽度（进程内缓存）。最后一列不用以避免换行。"
+  (or %sidebar-width-value
+      (let ((w (%compute-sidebar-width)))
+        (set! %sidebar-width-value w)
+        w)))
+
 (define (window-title-width)
-  (max 6 (- (sidebar-width) 8)))
+  "返回窗口标题区域最大宽度（进程内缓存）。"
+  (or %window-title-width-value
+      (let ((w (max 6 (- (sidebar-width) 8))))
+        (set! %window-title-width-value w)
+        w)))
 
 ;; === Text ===
 
@@ -283,10 +300,13 @@
                         available-width)))))
 
 (define (emit-line text)
-  (let ((text* (if (> (string-width text) (sidebar-width))
-                   (truncate-string text (sidebar-width))
-                   text)))
-    (display (pad-string text* (sidebar-width))))
+  "输出一行文本，填充到侧栏宽度、清除行尾残留、换行。"
+  (let* ((w (sidebar-width))
+         (text* (if (> (string-width text) w)
+                    (truncate-string text w)
+                    text)))
+    (display (pad-string text* w))
+    (display ansi-erase-line))   ;; 清除窗口缩窄时右侧的旧字符
   (newline))
 
 (define (emit-styled-line row)
@@ -427,10 +447,10 @@
            (list session (session-key session) (group-windows (hash-ref sessions session))))
          order)))
 
-(define (active-session-first blocks)
-  (let ((current-session (tmux-display "#{session_name}")))
-    (append (filter (lambda (block) (string=? (car block) current-session)) blocks)
-            (filter (lambda (block) (not (string=? (car block) current-session))) blocks))))
+(define (active-session-first blocks current-session)
+  "将当前会话块排到最前。CURRENT-SESSION 由调用方传入，避免重复查询 tmux。"
+  (append (filter (lambda (block) (string=? (car block) current-session)) blocks)
+          (filter (lambda (block) (not (string=? (car block) current-session))) blocks)))
 
 ;; === Layout ===
 
@@ -440,12 +460,13 @@
     (list text action color bold?)))
 
 (define (session-box-rows session skey collapsed?)
-  (let* ((inner (max 4 (- (sidebar-width) 2)))
+  (let* ((w (sidebar-width))
+         (inner (max 4 (- w 2)))
          (top (string-append "┌" (make-string inner #\─) "┐"))
          (middle (string-append "│" (center-text session inner) "│"))
          (bottom-icon (if collapsed? "▸" "▾"))
          (bottom (string-append "└─" bottom-icon
-                                (make-string (max 0 (- (sidebar-width) 4)) #\─)
+                                (make-string (max 0 (- w 4)) #\─)
                                 "┘"))
          (action (list 'session skey)))
     (list (make-row top action ansi-session #t)
@@ -453,10 +474,11 @@
           (make-row bottom action ansi-session #t))))
 
 (define (group-row session group-key group-name count last? collapsed?)
-  (let* ((prefix (if last? "  └─ " "  ├─ "))
+  (let* ((w (sidebar-width))
+         (prefix (if last? "  └─ " "  ├─ "))
          (icon (if collapsed? "▸ " "▾ "))
          (suffix (format #f " [~a]" count))
-         (available (max 4 (- (sidebar-width)
+         (available (max 4 (- w
                               (string-width prefix)
                               (string-width icon)
                               (string-width suffix))))
@@ -508,12 +530,13 @@
                         (row-pane-active? fields)))
          (prefix (pane-prefix group-last? window-last? last-pane?))
          (desc-prefix (pane-desc-prefix group-last? window-last? last-pane?))
+         (sw (sidebar-width))
          (marker (if current? "● " "  "))
-         (title-width (max 1 (- (sidebar-width)
+         (title-width (max 1 (- sw
                                 (string-width prefix)
                                 (string-width marker))))
          (title (format-pane-title* fields title-width))
-         (desc (truncate-string (display-desc fields) (max 4 (- (sidebar-width) (string-width desc-prefix)))))
+         (desc (truncate-string (display-desc fields) (max 4 (- sw (string-width desc-prefix)))))
          (action (list 'pane session idx pane-idx))
          (style (if current? ansi-active #f))
          (title-row (make-row (string-append prefix marker title) action style current?)))
@@ -541,12 +564,21 @@
                                         last-window?
                                         (= pane-index (- (length panes) 1))))))))))
 
+(define (split-option-value str)
+  "将逗号分隔的选项值拆分为列表，空值返回空列表。"
+  (if (or (not str) (string-null? str))
+      '()
+      (string-split str #\,)))
+
 (define (layout-rows blocks)
-  (let ((current-session (tmux-display "#{session_name}"))
-        (current-window (tmux-display "#{window_index}"))
-        (collapsed-sessions (option-list "@sidebar_collapsed_sessions"))
-        (collapsed-groups (option-list "@sidebar_collapsed_groups")))
-    (let block-loop ((bs (active-session-first blocks))
+  ;; 单次 tmux 调用获取渲染所需的 4 项上下文（4 → 1 次 tmux 调用）
+  (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}\t#{@sidebar_collapsed_sessions}\t#{@sidebar_collapsed_groups}"))
+         (parts (string-split raw-info #\tab))
+         (current-session (list-ref parts 0))
+         (current-window (list-ref parts 1))
+         (collapsed-sessions (split-option-value (if (> (length parts) 2) (list-ref parts 2) "")))
+         (collapsed-groups (split-option-value (if (> (length parts) 3) (list-ref parts 3) ""))))
+    (let block-loop ((bs (active-session-first blocks current-session))
                      (rows '()))
       (if (null? bs)
           (reverse rows)
@@ -618,10 +650,10 @@
   (let ((fresh (fresh-lines)))
     (if (null? fresh)
         (cache-lines)
-        (begin
-          (write-cache "sidebar-data.cache" (string-join fresh "\n"))
+        (let ((joined (string-join fresh "\n")))
+          (write-cache "sidebar-data.cache" joined)
           (write-cache "sidebar-data.hash"
-                       (number->string (modulo (string-hash (string-join fresh "\n")) 1000000000) 16))
+                       (number->string (modulo (string-hash joined) 1000000000) 16))
           fresh))))
 
 (define (refresh-data!)
@@ -649,12 +681,29 @@
          (info (collect-git-info lines)))
     (write-cache "git-branches.cache" (string-join info "\n"))))
 
+;; 渲染时缓存的行号→动作映射，供点击处理时直接读取，跳过 layout 重计算。
+(define (save-actions-cache! actions)
+  "将行号→动作映射写入缓存文件。"
+  (false-if-exception
+   (call-with-output-file (cache-file "sidebar-actions.cache")
+     (lambda (port) (write actions port)))))
+
+(define (load-actions-cache)
+  "从缓存加载行号→动作映射，缓存不可用时返回 #f。"
+  (let ((file (cache-file "sidebar-actions.cache")))
+    (and (file-exists? file)
+         (false-if-exception
+          (call-with-input-file file read)))))
+
 (define (render-to-stdout)
   (let ((lines (data-lines)))
     (if (null? lines)
         (emit-styled-line (make-row " [no tmux data]" #f ansi-dim #f))
-        (for-each emit-styled-line
-                  (layout-rows (session-blocks lines))))))
+        (let* ((rows (layout-rows (session-blocks lines)))
+               (actions (rows-actions rows)))
+          ;; 缓存 actions 供点击处理使用
+          (save-actions-cache! actions)
+          (for-each emit-styled-line rows)))))
 
 (define (row-action row actions)
   (let ((found (find (lambda (entry) (= (car entry) row)) actions)))
@@ -683,32 +732,33 @@
 
 (define (handle-action action sidebar-pane)
   (when action
-    (match action
-      (('session skey)
-       (toggle-list-value! "@sidebar_collapsed_sessions" skey)
-       (signal-sidebar-pane sidebar-pane))
-      (('group gkey)
-       (toggle-list-value! "@sidebar_collapsed_groups" gkey)
-       (signal-sidebar-pane sidebar-pane))
-      (('window session idx)
-       (let ((current-session (tmux-display "#{session_name}")))
+    ;; window 和 pane 都需要 current-session，提前获取一次
+    (let ((current-session (tmux-display "#{session_name}")))
+      (match action
+        (('session skey)
+         (toggle-list-value! "@sidebar_collapsed_sessions" skey)
+         (signal-sidebar-pane sidebar-pane))
+        (('group gkey)
+         (toggle-list-value! "@sidebar_collapsed_groups" gkey)
+         (signal-sidebar-pane sidebar-pane))
+        (('window session idx)
          (if (string=? session current-session)
              (tmux-cmd "select-window" "-t" (string-append ":" idx))
-             (tmux-cmd "switch-client" "-t" (string-append session ":" idx))))
-       (signal-sidebar-pane sidebar-pane))
-      (('pane session idx pane-idx)
-       (let ((current-session (tmux-display "#{session_name}")))
+             (tmux-cmd "switch-client" "-t" (string-append session ":" idx)))
+         (signal-sidebar-pane sidebar-pane))
+        (('pane session idx pane-idx)
          (if (string=? session current-session)
              (tmux-cmd "select-window" "-t" (string-append ":" idx))
-             (tmux-cmd "switch-client" "-t" (string-append session ":" idx))))
-       (when (nonempty pane-idx)
-         (tmux-cmd "select-pane" "-t" (string-append session ":" idx "." pane-idx)))
-       (signal-sidebar-pane sidebar-pane))
-      (_ #f))))
+             (tmux-cmd "switch-client" "-t" (string-append session ":" idx)))
+         (when (nonempty pane-idx)
+           (tmux-cmd "select-pane" "-t" (string-append session ":" idx "." pane-idx)))
+         (signal-sidebar-pane sidebar-pane))
+        (_ #f)))))
 
 (define (handle-click mouse-y pane-top sidebar-pane)
-  (let* ((rows (layout-rows (session-blocks (data-lines))))
-         (actions (rows-actions rows))
+  ;; 优先使用渲染时缓存的 actions 映射，避免重新计算 layout
+  (let* ((actions (or (load-actions-cache)
+                      (rows-actions (layout-rows (session-blocks (data-lines))))))
          (action (let loop ((candidates (screen-row-candidates mouse-y pane-top)))
                    (if (null? candidates)
                        #f
@@ -717,8 +767,11 @@
     (handle-action action sidebar-pane)))
 
 (define (toggle-current-group)
-  (let* ((current-session (tmux-display "#{session_name}"))
-         (current-window (tmux-display "#{window_index}")))
+  ;; 合并 session + window 为单次 tmux 调用
+  (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}"))
+         (parts (string-split raw-info #\tab))
+         (current-session (list-ref parts 0))
+         (current-window (if (> (length parts) 1) (list-ref parts 1) "0")))
     (let loop ((lines (data-lines)))
       (unless (null? lines)
         (let* ((fields (parse-cache-line (car lines)))

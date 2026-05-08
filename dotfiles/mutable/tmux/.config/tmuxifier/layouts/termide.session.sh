@@ -110,7 +110,15 @@ log_debug "root=$root sidebar=$sidebar_size terminal=$terminal_size"
 session_root "$root"
 
 if initialize_session "$termide_session"; then
-  new_window "$window"
+  # 绕过 tmuxifier 的 new_window bug：
+  # new_window() 内部执行 set-option -t "$1" 时缺少 session 前缀，
+  # 当当前 client 不在目标 session 中时会报 "no such window" 错误。
+  # 改用 tmux 原生命令并始终带 session: 前缀。
+  tmux new-window -t "$session:" -n "$window" -c "$root"
+  tmux set-option -t "$session:$window" allow-rename off >/dev/null
+  # 禁止浮动 sidebar hooks 在此窗口创建 sidebar（termide 自带侧栏布局）
+  tmux set-window-option -t "$session:$window" @no_sidebar 1 >/dev/null
+  window="$(tmux list-windows -t "$session:" -F '#{window_active}:#{window_index}' | grep '^1:' | cut -d: -f2)"
 
   editor_pane="$(tmux display-message -p -t "$session:$window" '#{pane_id}')"
 
