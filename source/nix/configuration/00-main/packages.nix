@@ -6,8 +6,6 @@
   home.packages = with pkgs; [
     ## 编程工具
     beekeeper-studio
-    bun
-    pnpm
     postman
 
     ## Android
@@ -16,7 +14,6 @@
     scrcpy
 
     ## 工具
-    broot
     gamescope
     pmbootstrap
     sunshine
@@ -25,13 +22,8 @@
     apostrophe
     obsidian
 
-
     ## AI 工具
-    claude-code
-    codex
-    opencode
     tabby-agent
-    warp-terminal
 
     ## LSP
     bash-language-server
@@ -40,10 +32,5 @@
     package-version-server
     typescript-language-server
     vscode-langservers-extracted
-
-    ## 版本管理
-    jjui
-    lazygit
-    lazyjj
   ];
 }

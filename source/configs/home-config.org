@@ -109,7 +109,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (guix packages)
              (gnu services)
 
-             (jeans packages browser)
+             (px packages ai)
+             (px packages editors)
 
              (rosenthal utils file)
              (rosenthal utils packages))
@@ -171,8 +172,9 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 工具
         "atuin"
         "btop"
-        "starship"
         "kitty-full"
+        "starship"
+        "warp-terminal-bin"
 
         ;; 运行器
         "just"
@@ -234,18 +236,27 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "sqlitestudio"
 
         ;; 环境管理
+        "bubblewrap"
+        "bun"
         "direnv"
         "gradle"
         "graphviz"
         "maven"
+        "pnpm"
         "sdkmanager"
         "uv"
 
-        ;; 工具
+        ;; AI Agent
+        "claude-code"
+        "codex"
         "crush-bin"
+        "opencode-bin"
+
+        ;; 工具
         "du-dust"
         "file"
         "gitg"
+        "guile-json"
         "jq"
         "pandoc"
         "reuse"
@@ -260,6 +271,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "jujutsu-dolly"
 
         ;; 编辑器
+        "edit"
         "helix"
         "zed"))
 #+end_src
@@ -280,10 +292,10 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "gst-plugins-base"
          "gst-plugins-good"
          "gst-plugins-bad"
-         "gst-plugins-ugly"
+         "gst-plugins-ugly-full"
 
          ;; 影音
-         ; "easyeffects"
+         "easyeffects"
          "helvum"
          "mpv"
          "nomacs"
@@ -295,10 +307,11 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          ;; 社交
          "element-desktop"
          "notmuch"
-         ;; "telegram-desktop"
+         "telegram-desktop"
          "zulip-desktop"
 
          ; 生产力工具
+         "broot"
          "cc-switch-bin"
          "gimp"
          "keepassxc"
@@ -313,7 +326,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "lr2oraja-endlessdream-bin"
          "mangohud"
          "osu-lazer-bin"
-         ; "prismlauncher-dolly"
+         "prismlauncher-dolly"
          "steam"
 
          ;; 实用工具
@@ -481,6 +494,7 @@ end
                              "emacs-dirvish"
                              "emacs-expand-region"
                              "emacs-helpful"
+                             "emacs-keymap-popup"
                              "emacs-multiple-cursors"
                              "emacs-origami"
                              "emacs-origami-ts"

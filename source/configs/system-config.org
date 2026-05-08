@@ -135,11 +135,16 @@
 #+begin_src scheme
 (use-modules (gnu home services guix)
              (guix channels)
+
              (jeans packages desktop)
              (jeans services hardware)
+
              (rosenthal packages networking)
              (rosenthal packages wm)
+
              (rosenthal services base)
+             (rosenthal services networking)
+
              (srfi srfi-1))
 
 (use-package-modules android
@@ -471,6 +476,9 @@
       (service openssh-service-type
                (openssh-configuration
                 (password-authentication? #f)))
+
+      (service tailscale-service-type)
+
       (simple-service 'mihomo-services shepherd-root-service-type
                       (list (shepherd-service (documentation
                                                "Run the mihomo daemon.")
@@ -576,6 +584,16 @@
                                        "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
                                (substitute-urls
                                 '("https://cache-cdn.guix.moe"))))
+
+              ;; Panther channel
+              (simple-service 'guix-moe-substitutes guix-service-type
+                              (guix-extension
+                               (authorized-keys
+                                (list (plain-file
+                                       "guix-moe.pub"
+                                       "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))
+                               (substitute-urls
+                                '("https://substitutes.guix.gofranz.com"))))
 
               ;; SJTUG Mirror
               (simple-service 'sjtug-substitutes guix-service-type

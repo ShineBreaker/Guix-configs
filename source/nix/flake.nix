@@ -11,11 +11,6 @@
       url = "github:nix-community/home-manager";
       inputs = { nixpkgs.follows = "nixpkgs"; };
     };
-
-    charmbracelet-nur = {
-      url = "github:charmbracelet/nur";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
   outputs = { self, nixpkgs, ... }@inputs:
@@ -25,18 +20,20 @@
       username = "brokenshine";
 
     in {
-      homeConfigurations.Guix =
-        inputs.home-manager.lib.homeManagerConfiguration {
-          pkgs = nixpkgs.legacyPackages.${system};
+      homeConfigurations.Guix = inputs.home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.${system};
 
-          modules = [
-            ./configuration/00-main/home.nix
-            ./configuration/programs/System/nix.nix
+        modules = [
+          ./configuration/00-main/home.nix
+          ./configuration/programs/System/nix.nix
+        ];
 
-            inputs.charmbracelet-nur.homeModules.crush
-          ];
+        extraSpecialArgs = { inherit inputs; };
+      };
 
-          extraSpecialArgs = { inherit inputs; };
-        };
+      # Aliases for home-manager compatibility
+      homeConfigurations."${username}" = self.homeConfigurations.Guix;
+      homeConfigurations."${username}@localhost" = self.homeConfigurations.Guix;
+      homeConfigurations."${username}@$(hostname -s)" = self.homeConfigurations.Guix;
     });
 }
