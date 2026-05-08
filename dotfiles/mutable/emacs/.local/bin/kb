@@ -17,6 +17,11 @@
 #   patterns 管理模式/原则
 #   reindex  重建索引
 #   lint     格式校验与修复（原 kb-lint）
+#   inbox    快速捕获到 inbox.org
+#   stats    知识库统计概览
+#   connect  双向链接两张卡片
+#   update   更新已有卡片的属性或追加内容
+#   profile  管理用户画像
 #   help     显示帮助
 
 import argparse
@@ -38,6 +43,7 @@ KB_EXPERIENCES = KB_ROOT / "experiences"
 KB_PATTERNS = KB_ROOT / "patterns.org"
 KB_INDEX = KB_ROOT / "index.org"
 KB_INBOX = KB_ROOT / "inbox.org"
+KB_PROFILE = KB_ROOT / "profile.org"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -69,13 +75,54 @@ def timestamp_id() -> str:
 def ensure_dirs() -> None:
     """确保知识库目录和基础文件存在。"""
     KB_EXPERIENCES.mkdir(parents=True, exist_ok=True)
-    for f in (KB_INBOX, KB_INDEX, KB_PATTERNS):
+    for f in (KB_INBOX, KB_INDEX, KB_PATTERNS, KB_PROFILE):
         if not f.exists():
             base = f.stem
-            f.write_text(
-                f"#+title: {base}\n#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]\n\n",
-                encoding="utf-8",
-            )
+            if f == KB_PROFILE:
+                _init_profile(f)
+            else:
+                f.write_text(
+                    f"#+title: {base}\n#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]\n\n",
+                    encoding="utf-8",
+                )
+
+
+def _init_profile(filepath: Path) -> None:
+    """初始化用户画像模板。"""
+    filepath.write_text(
+        f"""#+title: 用户画像
+#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]
+
+* 身份
+- 用户名：brokenshine
+- 系统环境：Guix System (tmpfs root + Btrfs 子卷)
+
+* 偏好
+** 编程语言
+- 首选：Scheme (Guile)、Emacs Lisp、Python
+- 包管理：Guix 优先，pnpm 替代 npm，uv 替代 pip
+
+** 编辑器与工具
+- 主力编辑器：Emacs
+- 终端模拟器：foot
+
+** 沟通风格
+- 语言：简体中文
+- 交互偏好：简洁直接
+
+* 习惯
+** 工作流
+- 配置管理：org-babel-tangle + maak
+
+* 活跃项目
+** Guix-configs
+- 路径：~/Projects/Config/Guix-configs
+- 描述：个人系统配置仓库
+
+* 目标
+""",
+        encoding="utf-8",
+    )
 
 
 def parse_org_prop(content: str, key: str) -> str:
@@ -708,6 +755,324 @@ def _fix_org_content(text: str) -> tuple[str, list[str]]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: inbox — 快速捕获
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_inbox(args: argparse.Namespace) -> None:
+    """快速捕获一个想法或待办到 inbox.org。"""
+    content = args.content
+    if not content:
+        content = sys.stdin.read()
+    if not content.strip():
+        die("必须指定内容或通过 stdin 管道输入")
+
+    ensure_dirs()
+    ts = now()
+    entry = f"\n** [{ts}] {content.strip()}\n"
+    with KB_INBOX.open("a", encoding="utf-8") as f:
+        f.write(entry)
+    print(f"已捕获到 {KB_INBOX}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: stats — 知识库统计
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_stats(args: argparse.Namespace) -> None:
+    """输出知识库的统计概览。"""
+    ensure_dirs()
+    files = list(KB_EXPERIENCES.glob("*.org"))
+    total = len(files)
+
+    cat_counter: Counter = Counter()
+    type_counter: Counter = Counter()
+    owner_counter: Counter = Counter()
+    tech_counter: Counter = Counter()
+    dates = []
+
+    for f in files:
+        content = f.read_text(encoding="utf-8")
+        cat = parse_org_prop(content, "CATEGORY") or "unknown"
+        type_ = parse_org_prop(content, "TYPE") or "unknown"
+        owner = parse_org_prop(content, "OWNER") or "unknown"
+        tech = parse_org_prop(content, "TECH") or "unknown"
+        created = parse_org_prop(content, "CREATED")
+        cat_counter[cat] += 1
+        type_counter[type_] += 1
+        owner_counter[owner] += 1
+        tech_counter[tech] += 1
+        if created:
+            dates.append(re.sub(r"[\[\]]", "", created).split()[0])
+
+    print(f"═══ 知识库统计 ═══")
+    print(f"总卡片数: {total}")
+    if dates:
+        print(f"时间范围: {min(dates)} ~ {max(dates)}")
+    if KB_PATTERNS.exists():
+        pat_text = KB_PATTERNS.read_text(encoding="utf-8")
+        pat_count = len(re.findall(r"^\*\* ", pat_text, re.MULTILINE))
+        print(f"模式数量: {pat_count}")
+    print()
+
+    for label, counter in [("按类别", cat_counter), ("按类型", type_counter),
+                           ("按执行者", owner_counter), ("按技术栈", tech_counter)]:
+        print(f"── {label} ──")
+        for k, v in counter.most_common():
+            bar = "█" * v
+            print(f"  {k:20s} {v:3d} {bar}")
+        print()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: connect — 双向链接
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_connect(args: argparse.Namespace) -> None:
+    """在两张卡片之间建立双向链接。"""
+    id_a = args.id_a
+    id_b = args.id_b
+    desc = args.desc or ""
+
+    if id_a == id_b:
+        die("不能链接同一张卡片")
+
+    file_a = _resolve_card(id_a)
+    file_b = _resolve_card(id_b)
+    if not file_a:
+        die(f"未找到卡片: {id_a}")
+    if not file_b:
+        die(f"未找到卡片: {id_b}")
+
+    _append_link(file_a, file_b, desc)
+    _append_link(file_b, file_a, desc)
+    print(f"已建立双向链接: {file_a.name} ↔ {file_b.name}")
+
+
+def _resolve_card(id_or_path: str) -> Path | None:
+    """通过 ID 或文件名解析卡片路径。"""
+    p = Path(id_or_path)
+    if p.is_file():
+        return p
+    candidates = list(KB_EXPERIENCES.glob(f"*{id_or_path}*"))
+    return candidates[0] if candidates else None
+
+
+def _append_link(filepath: Path, target: Path, desc: str) -> None:
+    """在卡片的 ** 相关链接 章节追加链接。"""
+    content = filepath.read_text(encoding="utf-8")
+    link = f"  [[file:experiences/{target.name}][{read_org_title(target.read_text(encoding='utf-8'))}]]"
+    if desc:
+        link += f" — {desc}"
+
+    if "** 相关链接" in content:
+        content = content.replace(
+            "** 相关链接\n",
+            f"** 相关链接\n{link}\n",
+            1,
+        )
+    else:
+        content = content.rstrip("\n") + f"\n\n** 相关链接\n{link}\n"
+
+    filepath.write_text(content, encoding="utf-8")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: update — 更新卡片
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_update(args: argparse.Namespace) -> None:
+    """更新已有卡片的属性或追加内容。"""
+    target = args.target
+    card = _resolve_card(target)
+    if not card:
+        die(f"未找到卡片: {target}")
+
+    content = card.read_text(encoding="utf-8")
+
+    # 更新属性
+    if args.status:
+        content = re.sub(r":STATUS:\s*\S+", f":STATUS:   {args.status}", content)
+    if args.category:
+        content = re.sub(r":CATEGORY:\s*\S+", f":CATEGORY: {args.category}", content)
+    if args.tech:
+        content = re.sub(r":TECH:\s*\S+", f":TECH:     {args.tech}", content)
+    if args.type_:
+        content = re.sub(r":TYPE:\s*\S+", f":TYPE:     {args.type_}", content)
+
+    # 追加内容到指定章节
+    if args.append_to and args.append_text:
+        section = f"** {args.append_to}"
+        if section in content:
+            content = content.replace(
+                section,
+                f"{section}\n{args.append_text}",
+                1,
+            )
+        else:
+            content = content.rstrip("\n") + f"\n\n{section}\n{args.append_text}\n"
+
+    # 从 stdin 追加到末尾（在 PROPERTIES 和标签之后）
+    if args.stdin:
+        extra = sys.stdin.read()
+        if extra.strip():
+            content = content.rstrip("\n") + f"\n\n{extra.strip()}\n"
+
+    card.write_text(content, encoding="utf-8")
+    print(f"已更新: {card}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: profile — 用户画像
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_profile(args: argparse.Namespace) -> None:
+    """管理用户画像：查看、设置、追加分类条目。"""
+    ensure_dirs()
+
+    if not KB_PROFILE.exists():
+        _init_profile(KB_PROFILE)
+
+    action = getattr(args, "action", None)
+    category = args.category
+
+    if action is None:
+        # 默认：显示
+        if category:
+            _profile_show_section(category)
+        else:
+            _profile_overview()
+    elif action == "set":
+        if not category:
+            die("必须指定分类名来设置分类")
+        content = sys.stdin.read().strip()
+        if not content:
+            die("必须通过 stdin 传入分类内容")
+        _profile_set_section(category, content)
+    elif action == "add":
+        if not category:
+            die("必须指定分类名来追加条目")
+        content = args.text or ""
+        if not content:
+            content = sys.stdin.read().strip()
+        if not content:
+            die("必须指定 --text 或通过 stdin 传入追加内容")
+        _profile_add_entry(category, content)
+
+
+def _profile_overview() -> None:
+    """显示画像概览：所有一级标题和条目数。"""
+    content = KB_PROFILE.read_text(encoding="utf-8")
+    sections = re.findall(r"^\* (.+)", content, re.MULTILINE)
+    if not sections:
+        print("(用户画像为空)")
+        return
+
+    print("═══ 用户画像 ═══")
+    for section in sections:
+        # 计算该标题下的条目数（到下一个同级标题为止）
+        pattern = rf"^\* {re.escape(section)}\n((?:.*\n)*?)(?=^\* |\Z)"
+        m = re.search(pattern, content, re.MULTILINE)
+        if m:
+            body = m.group(1)
+            items = len([l for l in body.split("\n") if l.strip().startswith("- ")])
+            sub = len(re.findall(r"^\*\* ", body, re.MULTILINE))
+            parts = []
+            if items:
+                parts.append(f"{items} 条目")
+            if sub:
+                parts.append(f"{sub} 子类")
+            detail = f" ({', '.join(parts)})" if parts else ""
+            print(f"  {section}{detail}")
+        else:
+            print(f"  {section}")
+
+
+def _profile_show_section(category: str) -> None:
+    """显示指定分类的内容。"""
+    content = KB_PROFILE.read_text(encoding="utf-8")
+
+    # 支持一级或二级标题匹配
+    for level in (r"\*", r"\*\*"):
+        if level == r"\*":
+            next_level = r"^\* [^\n*]"
+        else:
+            next_level = r"^\*\* [^\n*]"
+        pattern = rf"^{level} {re.escape(category)}\n"
+        m = re.search(pattern, content, re.MULTILINE)
+        if m:
+            start = m.end()
+            rest = content[start:]
+            next_m = re.search(next_level, rest, re.MULTILINE)
+            if next_m:
+                body = rest[:next_m.start()]
+            else:
+                body = rest
+            display_level = "*" if level == r"\*" else "**"
+            print(f"{display_level} {category}")
+            print(body.rstrip())
+            return
+
+    avail = ", ".join(re.findall(r"^\* (.+)", content, re.MULTILINE))
+    die(f"未找到分类: {category}（可用分类: {avail}）")
+
+
+def _profile_set_section(category: str, new_body: str) -> None:
+    """设置指定分类的内容（覆盖该分类下的全部条目）。"""
+    content = KB_PROFILE.read_text(encoding="utf-8")
+
+    pattern = rf"^\* {re.escape(category)}\n"
+    m = re.search(pattern, content, re.MULTILINE)
+    if not m:
+        # 追加新分类到文件末尾
+        content = content.rstrip("\n") + f"\n\n* {category}\n{new_body}\n"
+    else:
+        start = m.end()
+        rest = content[start:]
+        next_m = re.search(r"^\* ", rest, re.MULTILINE)
+        if next_m:
+            end = start + next_m.start()
+        else:
+            end = len(content)
+        content = content[:m.start()] + f"* {category}\n{new_body}\n" + content[end:]
+
+    KB_PROFILE.write_text(content, encoding="utf-8")
+    print(f"已更新分类 [{category}] → {KB_PROFILE}")
+
+
+def _profile_add_entry(category: str, entry: str) -> None:
+    """追加条目到指定分类。"""
+    content = KB_PROFILE.read_text(encoding="utf-8")
+
+    # 确保条目以 "- " 开头
+    if not entry.startswith("- "):
+        entry = f"- {entry}"
+
+    pattern = rf"^\* {re.escape(category)}\n"
+    m = re.search(pattern, content, re.MULTILINE)
+    if m:
+        start = m.end()
+        rest = content[start:]
+        next_m = re.search(r"^\* ", rest, re.MULTILINE)
+        if next_m:
+            end = start + next_m.start()
+        else:
+            end = len(content)
+        # 在该分类内容末尾追加
+        section_content = content[start:end].rstrip("\n")
+        content = content[:start] + section_content + f"\n{entry}\n" + content[end:]
+    else:
+        content = content.rstrip("\n") + f"\n\n* {category}\n{entry}\n"
+
+    KB_PROFILE.write_text(content, encoding="utf-8")
+    print(f"已追加到 [{category}] → {KB_PROFILE}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 帮助文本
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -753,11 +1118,32 @@ def print_help() -> None:
             kb lint --check         仅检查，退出码=问题数
             kb lint --fix file.org  修复指定文件
 
-  help      显示本帮助
+  inbox    快速捕获到 inbox.org
+            kb inbox "待捕获的想法" 或 echo "内容" | kb inbox
+
+  stats    知识库统计概览
+            kb stats
+
+  connect  双向链接两张卡片
+            kb connect <卡片ID> <卡片ID> [--desc 描述]
+
+  update   更新已有卡片
+            kb update <卡片ID> [--status STATUS] [--category 类别] [--tech 技术]
+                     [--type 类型] [--append-to 章节 --append-text 内容] [--stdin]
+
+  profile  管理用户画像
+            kb profile                           显示概览
+            kb profile <分类名>                  显示指定分类
+            kb profile --set --category <分类>   从 stdin 覆盖分类内容
+            kb profile --add --category <分类> --text "条目"
+            kb profile --add --category <分类>   从 stdin 追加条目
+
+  help     显示本帮助
 
 知识库路径: {KB_ROOT}
 经验卡片目录: {KB_EXPERIENCES}
 模式文件: {KB_PATTERNS}
+用户画像: {KB_PROFILE}
 """
     )
 
@@ -857,6 +1243,46 @@ def main() -> None:
     )
     lint_parser.add_argument("files", nargs="*", help="目标文件（默认检查全部）")
 
+    # ── inbox ──────────────────────────────────────────────────────────────
+    inbox_parser = subparsers.add_parser("inbox", help="快速捕获到 inbox.org")
+    inbox_parser.add_argument("content", nargs="?", help="捕获内容")
+
+    # ── stats ───────────────────────────────────────────────────────────────
+    subparsers.add_parser("stats", help="知识库统计概览")
+
+    # ── connect ─────────────────────────────────────────────────────────────
+    connect_parser = subparsers.add_parser("connect", help="双向链接两张卡片")
+    connect_parser.add_argument("id_a", help="卡片 A 的 ID 或文件名")
+    connect_parser.add_argument("id_b", help="卡片 B 的 ID 或文件名")
+    connect_parser.add_argument("--desc", help="链接描述")
+
+    # ── update ──────────────────────────────────────────────────────────────
+    update_parser = subparsers.add_parser("update", help="更新已有卡片")
+    update_parser.add_argument("target", help="卡片 ID 或文件名")
+    update_parser.add_argument("--status", help="新状态")
+    update_parser.add_argument("--category", help="新类别")
+    update_parser.add_argument("--tech", help="新技术栈")
+    update_parser.add_argument("--type", dest="type_", help="新类型")
+    update_parser.add_argument("--append-to", help="追加内容到指定章节")
+    update_parser.add_argument("--append-text", help="要追加的内容")
+    update_parser.add_argument(
+        "--stdin", action="store_true", help="从标准输入读取追加内容"
+    )
+
+    # ── profile ──────────────────────────────────────────────────────────
+    profile_parser = subparsers.add_parser("profile", help="管理用户画像")
+    profile_parser.add_argument("category", nargs="?", default=None,
+                                help="分类名（如 身份、偏好、习惯）")
+    profile_parser.add_argument(
+        "--set", dest="action", action="store_const", const="set",
+        help="从 stdin 覆盖分类内容",
+    )
+    profile_parser.add_argument(
+        "--add", dest="action", action="store_const", const="add",
+        help="追加条目到分类",
+    )
+    profile_parser.add_argument("--text", help="追加的条目文本")
+
     # ── help ──────────────────────────────────────────────────────────────
     subparsers.add_parser("help", help="显示本帮助")
 
@@ -876,6 +1302,11 @@ def main() -> None:
         "patterns": cmd_patterns,
         "reindex": cmd_reindex,
         "lint": cmd_lint,
+        "inbox": cmd_inbox,
+        "stats": cmd_stats,
+        "connect": cmd_connect,
+        "update": cmd_update,
+        "profile": cmd_profile,
     }
 
     if args.command in commands:

@@ -20,6 +20,8 @@ description: >
 | 经验卡片 | `~/Documents/Org/experiences/` |
 | 模式文件 | `~/Documents/Org/patterns.org` |
 | 索引文件 | `~/Documents/Org/index.org`    |
+| 收件箱   | `~/Documents/Org/inbox.org`    |
+| 用户画像 | `~/Documents/Org/profile.org`  |
 
 ## 命令速查
 
@@ -113,6 +115,54 @@ Mistakebook 的 `mistake` / `note` 语义统一写入本知识库，不再另建
 4.  卡片保存完整过程，pattern 保存紧凑规则；二者可以共存，pattern 必须引用卡片 ID
 
 写入质量规范（传播联动、自包含、时效性、矛盾检测、置信度）详见 `references/writing-guide.md`。
+
+AI-First 卡片规则（自包含、预备摘要、时效性、传播联动）详见 `references/ai-first-rules.md`。
+
+### 快速捕获
+
+```bash
+kb inbox "待捕获的想法"          # 快速写入 inbox.org
+echo "内容" | kb inbox           # 管道输入
+```
+
+### 统计概览
+
+```bash
+kb stats                        # 知识库统计：卡片数、类别分布、时间范围
+```
+
+### 更新卡片
+
+```bash
+kb update <卡片ID> --status done                                  # 更新状态
+kb update <卡片ID> --category guix                                # 更新类别
+kb update <卡片ID> --append-to "关键发现" --append-text "新发现"
+kb update <卡片ID> --stdin <<EOF                                  # 追加内容
+*** 补充信息
+新发现的边界条件
+EOF
+```
+
+### 双向链接
+
+```bash
+kb connect <卡片A的ID> <卡片B的ID>               # 建立双向链接
+kb connect <卡片A的B> <卡片B的ID> --desc "描述"  # 带描述
+```
+
+### 用户画像
+
+用户画像存储在 `~/Documents/Org/profile.org`，替代 memory MCP 的用户记忆功能。
+
+```bash
+kb profile                                 # 显示画像概览（所有分类 + 条目数）
+kb profile 身份                            # 查看「身份」分类
+kb profile 偏好                            # 查看「偏好」分类
+kb profile --add "目标" --text "新目标"    # 追加条目
+echo "- 新内容" | kb profile --set "偏好"  # 覆盖分类内容
+```
+
+画像分类：`身份`、`偏好`、`习惯`、`活跃项目`、`目标`。新增分类自动追加到文件末尾。
 
 ### 查看
 

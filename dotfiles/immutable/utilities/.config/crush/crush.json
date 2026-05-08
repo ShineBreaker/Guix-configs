@@ -354,11 +354,6 @@
       "command": "~/.config/crush/bin/context7-mcp",
       "timeout": 45
     },
-    "memory": {
-      "type": "stdio",
-      "command": "~/.config/crush/bin/mcp-server-memory",
-      "timeout": 30
-    },
     "sequential_thinking": {
       "type": "stdio",
       "command": "~/.config/crush/bin/mcp-server-sequential-thinking",
