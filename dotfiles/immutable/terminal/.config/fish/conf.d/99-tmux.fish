@@ -32,7 +32,10 @@ if status is-interactive
                     # 用户取消，回到普通 shell
                     return
                 case "NEW"
-                    # 用户选择新建，继续执行下面的 group 逻辑
+                    # 用户选择新建空会话：创建一个独立的、不在 group 中的新会话
+                    set -l new_session_name "term_"$fish_pid
+                    tmux new-session -s $new_session_name -n $window_name -c $cwd
+                    exit
                 case '*'
                     # 用户选择了已有 session，attach
                     tmux attach-session -t $choice
