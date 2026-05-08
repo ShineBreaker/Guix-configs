@@ -5,8 +5,7 @@
 
   home.packages = with pkgs; [
     ## 编程工具
-    beekeeper-studio
-    postman
+    yaak
 
     ## Android
     android-tools
@@ -20,10 +19,6 @@
 
     ## 文本编辑
     apostrophe
-    obsidian
-
-    ## AI 工具
-    tabby-agent
 
     ## LSP
     bash-language-server
