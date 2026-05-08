@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# window-jump - fzf 驱动的跨 session 窗口跳转
+
+current_session=$(tmux display -p "#{session_name}")
+
+# 列出所有窗口
+windows=$(tmux list-windows -a -F \
+  "#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_panes}" \
+  2>/dev/null) || true
+
+if [[ -z "$windows" ]]; then
+    tmux display-message "没有可跳转的窗口"
+    exit 0
+fi
+
+# 构建带标记的列表
+choices=""
+while IFS=$'\t' read -r session idx name path panes; do
+    pane_label="pane"
+    [[ "$panes" -gt 1 ]] && pane_label="panes"
+    short_path=$(basename "$path" 2>/dev/null || echo "$path")
+
+    if [[ "$session" == "$current_session" ]]; then
+        choices+="[当前] $name  $short_path  ($panes $pane_label)\t$session\t$idx\n"
+    else
+        choices+="  $name  $short_path  ($panes $pane_label)  ← $session\t$session\t$idx\n"
+    fi
+done <<< "$windows"
+
+# fzf 选择
+result=$(printf '%b' "$choices" \
+    | fzf --reverse --no-multi \
+          --header="跳转到窗口" \
+          --height=~50% \
+          --with-nth=1 \
+          --delimiter=$'\t' \
+    || true)
+
+if [[ -z "$result" ]]; then
+    exit 0
+fi
+
+# 提取 session 和 window index
+target_session=$(echo "$result" | awk -F$'\t' '{print $2}')
+target_window=$(echo "$result" | awk -F$'\t' '{print $3}')
+
+if [[ "$target_session" == "$current_session" ]]; then
+    tmux select-window -t "$target_window"
+else
+    tmux switch-client -t "${target_session}:${target_window}"
+fi
