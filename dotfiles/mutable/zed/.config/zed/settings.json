@@ -2,13 +2,19 @@
   "ui_font_family": "Sarasa UI SC",
   "buffer_font_family": "Maple Mono NF CN",
   "agent_servers": {
+    "claude-acp": {
+      "type": "registry"
+    },
+    "codebuddy-code": {
+      "type": "registry"
+    },
+    "codex-acp": {
+      "type": "registry"
+    },
+    "opencode": {
+      "type": "registry"
+    },
     "cline": {
-      "type": "registry"
-    },
-    "kimi": {
-      "type": "registry"
-    },
-    "qwen-code": {
       "type": "registry"
     }
   },
@@ -106,9 +112,10 @@
     "inactive_opacity": 0.8
   },
   "agent": {
+    "dock": "right",
     "default_model": {
-      "provider": "MiniMax",
-      "model": "MiniMax-M2.7",
+      "provider": "Zhipu AI",
+      "model": "glm-5.1",
       "enable_thinking": false
     },
     "model_parameters": [],
@@ -150,6 +157,7 @@
   "buffer_font_size": 14,
   "buffer_font_weight": 400.0,
   "collaboration_panel": {
+    "dock": "left",
     "button": false
   },
   "current_line_highlight": "all",
@@ -301,6 +309,7 @@
   },
   "on_last_window_closed": "quit_app",
   "outline_panel": {
+    "dock": "left",
     "button": true
   },
   "prettier": {
