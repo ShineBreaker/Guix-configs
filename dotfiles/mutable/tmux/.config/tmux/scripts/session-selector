@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# session-selector - fzf 驱动的 tmux 会话选择器
+# 输出：选中的 session 名，或 "NEW" 表示新建，或 "ESC" 表示退出
+
+trap 'tmux display-message "session-selector error: $?"' ERR
+
+# 获取所有 session 信息
+sessions=$(tmux list-sessions -F \
+  "#{session_name}\t#{session_windows}\t#{session_created}\t#{session_attached}\t#{session_group}" \
+  2>/dev/null) || true
+
+if [[ -z "$sessions" ]]; then
+    echo "NEW"
+    exit 0
+fi
+
+# 构建 fzf 输入
+choices=""
+available_count=0
+
+while IFS=$'\t' read -r name windows created attached group; do
+    # 转换时间戳
+    time_str=$(date -d "@$created" "+%H:%M" 2>/dev/null || echo "??:??")
+    window_label="window"
+    [[ "$windows" -gt 1 ]] && window_label="windows"
+
+    if [[ "$attached" -gt 0 ]]; then
+        choices+="${name}\t${windows} ${window_label}\t${time_str}\t[使用中]\n"
+    else
+        choices+="${name}\t${windows} ${window_label}\t${time_str}\t\n"
+        available_count=$((available_count + 1))
+    fi
+done <<< "$sessions"
+
+# 添加新建选项
+choices+="[新建空会话]\t\t\t\n"
+
+if [[ $available_count -eq 0 ]]; then
+    echo "NEW"
+    exit 0
+fi
+
+# 用 fzf 选择
+result=$(printf '%b' "$choices" \
+    | column -t -s $'\t' \
+    | fzf --reverse --no-multi \
+          --header="选择会话" \
+          --height=~50% \
+    || true)
+
+if [[ -z "$result" ]]; then
+    echo "ESC"
+    exit 0
+fi
+
+# 提取 session 名（第一列）
+selected=$(echo "$result" | awk '{print $1}')
+
+if [[ "$selected" == "[新建空会话]" ]]; then
+    echo "NEW"
+else
+    echo "$selected"
+fi
