@@ -2,14 +2,7 @@
 	path = dotfiles/mutable/emacs/.config/emacs
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
 
-[submodule "dotfiles/mutable/termide"]
-	path = dotfiles/mutable/termide
-	url = https://codeberg.org/BrokenShine/termide.git
-
 [submodule "rime-ice"]
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
 
-[submodule "shell-strategy"]
-	path = dotfiles/immutable/utilities/.config/opencode/plugin/shell-strategy
-	url = https://github.com/JRedeker/opencode-shell-strategy.git
