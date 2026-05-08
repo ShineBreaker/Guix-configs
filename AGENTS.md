@@ -139,3 +139,4 @@ maak check-home     # 仅检查 home
 
 - 不要手动编辑 `tmp/` 目录中的文件。
 - 优先修改 `source/` 中的源文件，修改顺序为 `home-config.org -> system-config.org`。
+- **禁止直接修改 `~/.config/`、`~/.local/` 等安装位置的文件**。所有配置必须修改 `dotfiles/` 中的源文件，再通过 `maak home` 生效。
