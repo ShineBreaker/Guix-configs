@@ -12,6 +12,11 @@ sidebar_width="${SIDEBAR_WIDTH:-$(tmux show -gqv @sidebar_width 2>/dev/null || t
 sidebar_width="${sidebar_width:-30}"
 lock_dir=""
 
+# 获取当前 client 上下文的 session 名称，用于 list-panes 等不带默认 session 的命令。
+# 在 run-shell -b hook 中，tmux 命令可能无法推断默认 session，
+# 必须显式指定 -t 参数。
+current_session() { tmux display-message -p '#{session_name}' 2>/dev/null; }
+
 get_visible() { tmux show -gqv @sidebar_visible 2>/dev/null || echo "0"; }
 get_pane_id() { tmux show -wqv @sidebar_pane_id 2>/dev/null || echo ""; }
 
@@ -43,18 +48,24 @@ is_sidebar_pane() {
 }
 
 current_window_sidebar() {
+    local session
+    session="$(current_session)"
+    [[ -n "$session" ]] || return 1
     local pane_id title start command
     while IFS=$'\t' read -r pane_id title start command; do
         if [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]; then
             printf '%s\n' "$pane_id"
             return 0
         fi
-    done < <(tmux list-panes -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+    done < <(tmux list-panes -t "$session" -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
     return 1
 }
 
 kill_current_sidebars_except() {
     local keep="${1:-}"
+    local session
+    session="$(current_session)"
+    [[ -n "$session" ]] || return 0
     local pane_id title start command
     while IFS=$'\t' read -r pane_id title start command; do
         if [[ "$pane_id" == "$keep" ]]; then
@@ -63,10 +74,13 @@ kill_current_sidebars_except() {
         if [[ "$title" == "$sidebar_title" || "$start" == *"sidebar-toggle pane-loop"* || "$command" == "sidebar-render" ]]; then
             tmux kill-pane -t "$pane_id" 2>/dev/null || true
         fi
-    done < <(tmux list-panes -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+    done < <(tmux list-panes -t "$session" -F '#{pane_id}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
 }
 
 target_pane() {
+    local session
+    session="$(current_session)"
+    [[ -n "$session" ]] || return 1
     local pane_id active title start command
     local fallback=""
     while IFS=$'\t' read -r pane_id active title start command; do
@@ -78,7 +92,7 @@ target_pane() {
             printf '%s\n' "$pane_id"
             return 0
         fi
-    done < <(tmux list-panes -F '#{pane_id}	#{pane_active}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
+    done < <(tmux list-panes -t "$session" -F '#{pane_id}	#{pane_active}	#{pane_title}	#{pane_start_command}	#{pane_current_command}' 2>/dev/null || true)
 
     [[ -n "$fallback" ]] && printf '%s\n' "$fallback"
 }
@@ -165,6 +179,8 @@ case "${1:-toggle}" in
         ;;
     pane-loop)
         # 在浮动窗格内运行的显示循环
+        # 信号驱动：SIGUSR1 触发即时重绘；30秒心跳兜底。
+        # render-if-changed：单次 Guile 调用完成采集+渲染。
         render_now=1
         tick=0
         trap 'printf "\033[?25h"; exit 0' EXIT INT TERM
@@ -175,13 +191,13 @@ case "${1:-toggle}" in
             if [[ "$render_now" == "1" ]]; then
                 render_now=0
                 tick=0
-                printf '\033[H'  # 移动光标到左上角，避免全屏清除造成闪烁
-                GUILE_AUTO_COMPILE=0 guile --no-auto-compile -s "${scripts_dir}/sidebar-render.scm" 2>/dev/null
-                printf '\033[J'  # 清除旧渲染残留
+                printf '\033[H'  # 移动光标到左上角
+                GUILE_AUTO_COMPILE=0 guile --no-auto-compile -s "${scripts_dir}/sidebar-render.scm" render-if-changed 2>/dev/null
+                printf '\033[J'  # 清除尾部残留
             fi
-            sleep 0.2
+            sleep 0.5
             tick=$((tick + 1))
-            if (( tick >= 10 )); then
+            if (( tick >= 60 )); then  # 30秒心跳（0.5s × 60）
                 render_now=1
             fi
         done
