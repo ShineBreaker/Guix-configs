@@ -141,7 +141,9 @@ def analyze(
         return {"error": f"目录不存在: {experiences_dir}"}
 
     entries = []
-    for f in sorted(exp_path.glob("*.org")):
+    for f in sorted(exp_path.rglob("*.org")):
+        if f.is_symlink():
+            continue
         meta = parse_org_metadata(str(f))
         if meta:
             entries.append(meta)

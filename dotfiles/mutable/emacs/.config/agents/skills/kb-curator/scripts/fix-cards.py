@@ -60,7 +60,9 @@ def main():
     experiences_dir = Path.home() / 'Documents' / 'Org' / 'experiences'
     fixed = []
     
-    for org_file in experiences_dir.glob('*.org'):
+    for org_file in experiences_dir.rglob('*.org'):
+        if org_file.is_symlink():
+            continue
         if fix_card(org_file):
             fixed.append(org_file.name)
     

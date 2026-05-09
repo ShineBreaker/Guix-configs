@@ -161,6 +161,9 @@ def cmd_add(args: argparse.Namespace) -> None:
     if not title:
         die("必须指定 --title")
 
+    if "/" in category or "\\" in category or ".." in category:
+        die(f"类别名不能包含路径分隔符或 '..': {category}")
+
     if entry_type and entry_type not in ("", "mistake", "note", "ascended"):
         die("--entry 仅支持: mistake, note, ascended")
 
@@ -189,7 +192,8 @@ def cmd_add(args: argparse.Namespace) -> None:
         tags_parts.append(entry_type)
     tags_line = ":" + ":".join(tags_parts) + "::"
 
-    filepath = KB_EXPERIENCES / filename
+    filepath = KB_EXPERIENCES / category / filename
+    filepath.parent.mkdir(parents=True, exist_ok=True)
 
     # 读取 stdin 内容
     body = ""
@@ -310,7 +314,8 @@ def cmd_get(args: argparse.Namespace) -> None:
         print(p.read_text(encoding="utf-8"), end="")
         return
 
-    candidates = list(KB_EXPERIENCES.glob(f"*{target}*"))
+    candidates = list(KB_EXPERIENCES.rglob(f"*{target}*"))
+    candidates = [c for c in candidates if not c.is_symlink() and c.is_file()]
     if candidates:
         print(candidates[0].read_text(encoding="utf-8"), end="")
         return
@@ -328,10 +333,12 @@ def cmd_list(args: argparse.Namespace) -> None:
     recent = args.recent if args.recent is not None else (0 if args.all else 20)
 
     files = sorted(
-        KB_EXPERIENCES.glob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
+        KB_EXPERIENCES.rglob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
     )
     count = 0
     for f in files:
+        if f.is_symlink():
+            continue
         content = f.read_text(encoding="utf-8")
         title = read_org_title(content)
         category = parse_org_prop(content, "CATEGORY")
@@ -402,7 +409,9 @@ def cmd_fields(args: argparse.Namespace) -> None:
 
     counters = {k: Counter() for k in show}
 
-    for f in KB_EXPERIENCES.glob("*.org"):
+    for f in KB_EXPERIENCES.rglob("*.org"):
+        if f.is_symlink():
+            continue
         content = f.read_text(encoding="utf-8")
         if show["category"]:
             v = parse_org_prop(content, "CATEGORY")
@@ -518,8 +527,10 @@ def cmd_reindex(args: argparse.Namespace) -> None:
 
     entries = []
     for f in sorted(
-        KB_EXPERIENCES.glob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
+        KB_EXPERIENCES.rglob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
     ):
+        if f.is_symlink():
+            continue
         content = f.read_text(encoding="utf-8")
         title = read_org_title(content)
         category = parse_org_prop(content, "CATEGORY") or "general"
@@ -559,7 +570,7 @@ def cmd_reindex(args: argparse.Namespace) -> None:
     for f, title, category, created in entries:
         if category not in groups:
             group_order.append(category)
-        relpath = f"experiences/{f.name}"
+        relpath = f.relative_to(KB_ROOT)
         groups[category].append(f"  - [[file:{relpath}][{title}]] ({created})")
 
     total = len(entries)
@@ -613,7 +624,7 @@ def cmd_lint(args: argparse.Namespace) -> None:
     """
     target_files = args.files
     if not target_files:
-        target_files = sorted(KB_EXPERIENCES.glob("*.org"))
+        target_files = sorted(f for f in KB_EXPERIENCES.rglob("*.org") if not f.is_symlink())
         target_files = [str(p) for p in target_files]
 
     if not target_files:
@@ -783,7 +794,7 @@ def cmd_inbox(args: argparse.Namespace) -> None:
 def cmd_stats(args: argparse.Namespace) -> None:
     """输出知识库的统计概览。"""
     ensure_dirs()
-    files = list(KB_EXPERIENCES.glob("*.org"))
+    files = list(f for f in KB_EXPERIENCES.rglob("*.org") if not f.is_symlink())
     total = len(files)
 
     cat_counter: Counter = Counter()
@@ -856,14 +867,19 @@ def _resolve_card(id_or_path: str) -> Path | None:
     p = Path(id_or_path)
     if p.is_file():
         return p
-    candidates = list(KB_EXPERIENCES.glob(f"*{id_or_path}*"))
+    candidates = list(KB_EXPERIENCES.rglob(f"*{id_or_path}*"))
+    # 过滤掉符号链接，只返回实际文件
+    candidates = [c for c in candidates if not c.is_symlink()]
     return candidates[0] if candidates else None
 
 
 def _append_link(filepath: Path, target: Path, desc: str) -> None:
     """在卡片的 ** 相关链接 章节追加链接。"""
+    import os as _os
     content = filepath.read_text(encoding="utf-8")
-    link = f"  [[file:experiences/{target.name}][{read_org_title(target.read_text(encoding='utf-8'))}]]"
+    # 使用从源文件到目标文件的相对路径（Org 按文件位置解析）
+    rel_path = _os.path.relpath(target, filepath.parent)
+    link = f"  [[file:{rel_path}][{read_org_title(target.read_text(encoding='utf-8'))}]]"
     if desc:
         link += f" — {desc}"
 

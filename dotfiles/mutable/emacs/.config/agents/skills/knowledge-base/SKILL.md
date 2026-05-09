@@ -10,7 +10,7 @@ description: >
 
 通过 `~/.local/bin/kb` 管理经验卡片和模式，实现任务间知识复用。
 
-卡片格式为 Org mode，存储在 `~/Documents/Org/experiences/`，每张卡片包含元数据（ID、类别、技术栈、类型、执行者）和结构化正文（任务描述、执行过程、关键发现）。
+卡片格式为 Org mode，按 category 子目录分类存储在 `~/Documents/Org/experiences/`，每张卡片包含元数据（ID、类别、技术栈、类型、执行者）和结构化正文（任务描述、执行过程、关键发现）。
 
 ## 路径
 
