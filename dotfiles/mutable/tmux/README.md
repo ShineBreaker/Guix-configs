@@ -25,7 +25,7 @@
 
 - 源码 `.scm` 文件放在 scripts/ 下，带 `#!/usr/bin/env guile` shebang + `!#` 入口
 - 当前直接使用 `GUILE_AUTO_COMPILE=0 guile --no-auto-compile -s ...`，避免 tmux pane 中出现 Guile 编译提示
-- 渲染脚本每次优先实时调用 tmux 采集数据，失败时才读取缓存
+- 实时采集+缓存 fallback。`render-if-changed` 每次优先实时调用 tmux 采集数据，失败时才读取缓存。
 - 如果后续性能不足，再考虑预编译 `.go` 或迁移到 Go/Rust；当前短期方案优先保持 Guix 友好和脚本可调试性
 
 ### Guix Home 集成策略
@@ -106,10 +106,10 @@ dotfiles/mutable/tmux/.config/fish/conf.d/99-tmux.fish  # 修改现有
 
 **工作方式：**
 
-- 按 `Ctrl+b B` 切换侧边栏显示/隐藏（toggle 持久状态）
+- 按 `Ctrl+x B` 切换侧边栏显示/隐藏（toggle 持久状态）
 - 侧边栏以浮动窗格形式覆盖在终端左侧，默认宽度 32 字符
-- 窗格内运行显示循环：收到 `USR1` 或约 2 秒轮询时原位重绘，避免全屏清除造成闪烁
-- 切换窗口、创建/销毁 pane、resize、client attach/resized 时，通过 hooks 调用 `sidebar-toggle follow` 确保当前窗口有侧栏
+- 窗格内运行显示循环：收到 `SIGUSR1`（信号驱动）或约 30 秒心跳时原位重绘
+- 切换窗口、创建/销毁 pane、resize、client attach/resized 时，通过 hooks 发送 signal 通知侧栏重绘（仅用户主动切换时才 follow 新窗口）
 - 鼠标点击 session/group 行可折叠或展开；点击 window/pane 行会切换到对应目标
 - 点击坐标使用 `#{mouse_y}` 与 `#{pane_top}` 计算 pane 内行号，并带相邻行 fallback，避免 tmux 坐标差异导致点不中
 
@@ -168,8 +168,8 @@ dotfiles/mutable/tmux/.config/fish/conf.d/99-tmux.fish  # 修改现有
 
 手动标题绑定：
 
-- `Ctrl+b T`：设置当前 window 的侧栏标题，不重命名 tmux window
-- `Ctrl+b D`：设置当前 window 的侧栏描述
+- `Ctrl+x T`：设置当前 window 的侧栏标题，不重命名 tmux window
+- `Ctrl+x D`：设置当前 window 的侧栏描述
 
 ### 分组机制
 
@@ -183,10 +183,10 @@ dotfiles/mutable/tmux/.config/fish/conf.d/99-tmux.fish  # 修改现有
 
 ### 折叠控制
 
-- 快捷键 `Ctrl+b B` 切换侧边栏浮动窗格的显示/隐藏
+- 快捷键 `Ctrl+x B` 切换侧边栏浮动窗格的显示/隐藏
 - 浮动窗格宽度默认 32 字符，位于终端左侧
-- 显示状态下按 `Ctrl+b B` 隐藏（销毁窗格）
-- 隐藏状态下按 `Ctrl+b B` 显示（创建窗格）
+- 显示状态下按 `Ctrl+x B` 隐藏（销毁窗格）
+- 隐藏状态下按 `Ctrl+x B` 显示（创建窗格）
 - 窗格显示/隐藏状态通过 tmux user option `@sidebar_visible` 持久化
 - 分组折叠：在 sidebar-render 中处理，折叠状态存储在 `@sidebar_collapsed_groups` 中
 - Session 折叠状态存储在 `@sidebar_collapsed_sessions` 中
@@ -197,6 +197,32 @@ dotfiles/mutable/tmux/.config/fish/conf.d/99-tmux.fish  # 修改现有
 **不维护独立主题文件。** 标签栏直接使用 tmux 的终端颜色（`default`、`brightblack`、`green` 等），由 foot 终端的 ANSI 调色板驱动。Foot 已经通过 darkman/noctalia 自动切换亮暗主题，tmux 继承终端颜色后标签栏自动跟随变化。
 
 具体颜色映射在 tmux.conf 中通过 `@sidebar_*` user option 定义，引用 tmux 内置颜色名（如 `set -g @sidebar_active_fg green`），不需要额外的 theme 文件。
+
+### 状态栏三段式布局
+
+顶部状态栏重构为三段式布局：
+
+| 区域 | 内容 | 样式 |
+|------|------|------|
+| 左侧 | 前缀键图标、session 名、git branch、命令、路径、zoom/copy 状态 | Nerd Font 图标标注各信息段 |
+| 中央 | 日期时间 | 通过 `window-status-current-format` 居中，配合 `status-justify centre` |
+| 右侧 | 系统负载、终端尺寸、主机名 | Nerd Font 图标标注 |
+
+**前缀键视觉反馈：**
+- 按下 `Ctrl+x` 时，前缀图标从 ``（空心）变为 ``（实心红色），session 名从绿色变为红色
+- 松开后恢复默认样式
+
+**中央区域原理：**
+- tmux 状态栏三段结构为 `left | center(窗口列表) | right`
+- `status-justify centre` 让中间窗口列表区域居中对齐
+- `window-status-current-format` 显示当前窗口的日期时间，借用窗口标签位置实现居中
+- `window-status-format` 设为空，非当前窗口不显示，避免干扰
+- 注意：strftime 格式（`%Y-%m-%d`、`%H:%M`）在 `window-status-*` 中不展开，需用 `#(date +%Y-%m-%d)`
+
+**Git branch 同步：**
+- `sidebar-render.scm` 的 `render-if-changed` 在每次渲染时，将当前窗口的 git branch 写入窗口级选项 `@status_git_branch`（`-w` 级别）
+- 状态栏 `status-left` 通过 `#{@status_git_branch}` 零开销引用
+- 使用窗口级而非全局级选项，避免多 session 场景下 pane-loop 互相覆盖
 
 ### 性能与竞态控制
 
@@ -213,13 +239,15 @@ dotfiles/mutable/tmux/.config/fish/conf.d/99-tmux.fish  # 修改现有
 
 - sidebar-render.scm 输出 ANSI 文本到 stdout
 - pane-loop 启动时清屏一次，后续只移动光标到左上并清除残留，减少闪烁
-- 点击、hook、轮询均可触发渲染；点击和部分 hook 使用 `SIGUSR1` 立即刷新
+- 点击、hook（signal 模式）、轮询均可触发渲染
+- 刷新机制：signal 触发立即刷新（`SIGUSR1`），30 秒心跳兜底
 
 **窗格跟随：**
 
 - 切换窗口时通过 `after-select-window` hook 调用 sidebar-toggle follow
 - sidebar-toggle 检查 `@sidebar_visible`，如果为 1 则在新窗口重建浮动窗格
 - 同一窗口中如果出现多个侧栏 pane，保留当前有效 pane 并清理重复项
+- 所有 list-panes 调用加 `-t session` 参数指定上下文，避免 run-shell -b hook 中 tmux 无法推断默认 session 的问题
 
 **数据采集分层：**
 
@@ -235,10 +263,12 @@ dotfiles/mutable/tmux/.config/fish/conf.d/99-tmux.fish  # 修改现有
 
 ### 数据来源
 
-- tmux hook `after-select-pane`、`after-split-window`、`after-kill-pane`、`after-select-layout`、`after-resize-pane`、`after-new-window`、`window-unlinked` 触发数据刷新或侧栏跟随
-- `after-select-window`、`client-attached`、`client-active`、`client-resized` 触发侧栏跟随
-- `sidebar-render.scm` 实时调用 tmux 采集数据，并维护缓存作为 fallback
-- 浮动窗格内的显示循环约每 2 秒刷新，点击和信号可立即刷新
+- tmux hook `after-select-pane`、`after-split-window`、`after-kill-pane`、`after-select-layout`、`after-resize-pane`、`after-new-window`、`window-unlinked` 触发 signal 通知侧栏重绘
+- `after-select-window`、`client-attached`、`client-active`、`client-resized` 触发 signal + follow
+- `after-new-session`、`client-session-changed` 触发 signal + follow（新 session 不经过 after-new-window）
+- 规则：仅用户主动切换窗口/客户端时 follow；split/kill/resize 只 signal，避免 create_sidebar 内部触发 hook 级联导致频闪
+- `sidebar-render.scm` 通过 `render-if-changed` 命令完成采集+渲染+状态栏选项同步
+- 浮动窗格内的显示循环约每 30 秒心跳刷新，signal 可立即刷新
 
 ### 错误处理
 
@@ -298,7 +328,7 @@ trap 'tmux display-message "session-selector error: $?"' ERR
 
 - 后台采集是周期性的，分支切换后最多 30 秒延迟（活跃窗口）
 - 可接受的折衷：标签栏信息是辅助性的，不需要实时精确
-- 手动刷新：`Ctrl+b g`（已确认 `g` 在当前配置中未被占用）强制触发一次即时采集
+- 手动刷新：`Ctrl+x g` 强制触发一次即时采集
 
 ## 功能三：会话选择器
 
@@ -364,7 +394,7 @@ another_session 1 window     12:15   [使用中]
 
 ### 触发
 
-快捷键 `Ctrl+b f` 触发 fzf 弹窗。
+快捷键 `Ctrl+x f` 触发 fzf 弹窗。
 
 ### 列表内容
 
@@ -508,16 +538,19 @@ tmux 没有直接的「窗口有活动」hook。使用以下方案：
       tmux · -fish
 ```
 
-完整信息可通过 `Ctrl+b i` 弹出详情面板查看。
+完整信息可通过 `Ctrl+x i` 弹出详情面板查看。
 
 ### 顶部上下文条
 
-底部 status/window tabs 已迁移：
+状态栏三段式布局（见「状态栏三段式布局」章节）：
 
-- status 位置：顶部（`status-position top`）
-- window tabs：不在 status 中显示，`window-status-format` 和 `window-status-current-format` 置空
-- 顶部只显示上下文信息：session、window、当前命令、路径、终端尺寸、日期时间、prefix 状态
-- window/tab 导航由左侧侧栏承担
+- 位置：顶部（`status-position top`）
+- 左侧：工作区信息（前缀键、session、git branch、命令、路径、zoom/copy 状态）
+- 中央：日期时间（通过 `window-status-current-format` 居中）
+- 右侧：系统状态（负载、终端尺寸、主机名）
+- 前缀键按下时图标变红，session 名变红，松开恢复
+- window tabs 不在 status 中显示，由左侧侧栏承担导航功能
+- `window-status-format` 和 `window-status-current-format` 中 strftime 不展开，需用 shell 命令 `#(date +...)`
 
 ## 功能八：Kitty 快捷键迁移
 
@@ -553,11 +586,11 @@ tmux 没有直接的「窗口有活动」hook。使用以下方案：
 
 复制模式补齐：
 
-- `Ctrl+b [` 或 `Alt+Shift+h` 进入 copy-mode
+- `Ctrl+x [` 或 `Alt+Shift+h` 进入 copy-mode
 - `v` 开始选择
 - `y` / `Enter` 复制到 `wl-copy`
 - 鼠标拖选结束复制到 `wl-copy`
-- `Ctrl+b p` 从剪贴板粘贴
+- `Ctrl+x p` 从剪贴板粘贴
 
 ## 实现约束
 
