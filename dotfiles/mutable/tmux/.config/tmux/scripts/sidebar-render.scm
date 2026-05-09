@@ -570,6 +570,14 @@
       '()
       (string-split str #\,)))
 
+(define (layout-rows-with-context blocks context-parts)
+  ;; 使用预缓存上下文渲染，零 tmux 调用。
+  (let* ((current-session (if (> (length context-parts) 0) (list-ref context-parts 0) ""))
+         (current-window (if (> (length context-parts) 1) (list-ref context-parts 1) ""))
+         (collapsed-sessions (split-option-value (if (> (length context-parts) 2) (list-ref context-parts 2) "")))
+         (collapsed-groups (split-option-value (if (> (length context-parts) 3) (list-ref context-parts 3) ""))))
+    (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)))
+
 (define (layout-rows blocks)
   ;; 单次 tmux 调用获取渲染所需的 4 项上下文（4 → 1 次 tmux 调用）
   (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}\t#{@sidebar_collapsed_sessions}\t#{@sidebar_collapsed_groups}"))
@@ -578,54 +586,58 @@
          (current-window (list-ref parts 1))
          (collapsed-sessions (split-option-value (if (> (length parts) 2) (list-ref parts 2) "")))
          (collapsed-groups (split-option-value (if (> (length parts) 3) (list-ref parts 3) ""))))
-    (let block-loop ((bs (active-session-first blocks current-session))
-                     (rows '()))
-      (if (null? bs)
-          (reverse rows)
-          (match (car bs)
-            ((session skey groups)
-             (let* ((session-collapsed? (member skey collapsed-sessions))
-                    (box-rows (session-box-rows session skey session-collapsed?))
-                    (rows* (append (reverse box-rows) rows)))
-               (if session-collapsed?
-                   (block-loop (cdr bs)
-                               (if (null? (cdr bs))
-                                   rows*
-                                   (cons (make-row "" #f) rows*)))
-                   (let ((group-count (length groups)))
-                     (let group-loop ((gs groups)
-                                      (index 0)
-                                      (g-rows rows*))
-                       (if (null? gs)
-                           (block-loop (cdr bs)
-                                       (if (null? (cdr bs))
-                                           g-rows
-                                           (cons (make-row "" #f) g-rows)))
-                           (match (car gs)
-                             ((group-key group-name windows)
-                              (let* ((last-group? (= index (- group-count 1)))
-                                     (collapse-key (group-collapse-key session group-key))
-                                     (group-collapsed? (member collapse-key collapsed-groups))
-                                     (g-rows* (cons (group-row session group-key group-name
-                                                               (length windows)
-                                                               last-group?
-                                                               group-collapsed?)
-                                                    g-rows)))
-                                (if group-collapsed?
-                                    (group-loop (cdr gs) (+ index 1) g-rows*)
-                                    (let window-loop ((ws windows)
-                                                      (w-index 0)
-                                                      (w-rows g-rows*))
-                                      (if (null? ws)
-                                          (group-loop (cdr gs) (+ index 1) w-rows)
-                                          (window-loop (cdr ws)
-                                                       (+ w-index 1)
-                                                       (append (reverse (window-rows (car ws)
-                                                                                    current-session
-                                                                                    current-window
-                                                                                    last-group?
-                                                                                    (= w-index (- (length windows) 1))))
-                                                               w-rows)))))))))))))))))))
+    (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)))
+
+(define (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)
+  "核心布局逻辑，接收预计算上下文参数。"
+  (let block-loop ((bs (active-session-first blocks current-session))
+                   (rows '()))
+    (if (null? bs)
+        (reverse rows)
+        (match (car bs)
+          ((session skey groups)
+           (let* ((session-collapsed? (member skey collapsed-sessions))
+                  (box-rows (session-box-rows session skey session-collapsed?))
+                  (rows* (append (reverse box-rows) rows)))
+             (if session-collapsed?
+                 (block-loop (cdr bs)
+                             (if (null? (cdr bs))
+                                 rows*
+                                 (cons (make-row "" #f) rows*)))
+                 (let ((group-count (length groups)))
+                   (let group-loop ((gs groups)
+                                    (index 0)
+                                    (g-rows rows*))
+                     (if (null? gs)
+                         (block-loop (cdr bs)
+                                     (if (null? (cdr bs))
+                                         g-rows
+                                         (cons (make-row "" #f) g-rows)))
+                         (match (car gs)
+                           ((group-key group-name windows)
+                            (let* ((last-group? (= index (- group-count 1)))
+                                   (collapse-key (group-collapse-key session group-key))
+                                   (group-collapsed? (member collapse-key collapsed-groups))
+                                   (g-rows* (cons (group-row session group-key group-name
+                                                             (length windows)
+                                                             last-group?
+                                                             group-collapsed?)
+                                                  g-rows)))
+                              (if group-collapsed?
+                                  (group-loop (cdr gs) (+ index 1) g-rows*)
+                                  (let window-loop ((ws windows)
+                                                    (w-index 0)
+                                                    (w-rows g-rows*))
+                                    (if (null? ws)
+                                        (group-loop (cdr gs) (+ index 1) w-rows)
+                                        (window-loop (cdr ws)
+                                                     (+ w-index 1)
+                                                     (append (reverse (window-rows (car ws)
+                                                                                  current-session
+                                                                                  current-window
+                                                                                  last-group?
+                                                                                  (= w-index (- (length windows) 1))))
+                                                             w-rows))))))))))))))))))
 
 (define (rows-actions rows)
   (let loop ((rs rows)
@@ -677,7 +689,7 @@
    lines))
 
 (define (refresh-git!)
-  (let* ((lines (data-lines))
+  (let* ((lines (cache-lines))
          (info (collect-git-info lines)))
     (write-cache "git-branches.cache" (string-join info "\n"))))
 
@@ -695,13 +707,54 @@
          (false-if-exception
           (call-with-input-file file read)))))
 
+(define (update-statusbar-options! current-session current-window lines)
+  "更新状态栏窗口级选项（@status_git_branch）。使用 -w 窗口级选项，
+避免多个 session 的 pane-loop 竞争覆盖同一个全局变量。"
+  (let loop ((ls lines))
+    (unless (null? ls)
+      (let* ((fields (parse-cache-line (car ls)))
+             (session (row-session fields))
+             (idx (row-index fields))
+             (path (row-path fields))
+             (active? (row-pane-active? fields)))
+        (if (and (string=? session current-session)
+                 (string=? idx current-window)
+                 active?)
+            (let ((branch (and (safe-git-path? path) (read-git-head path))))
+              (tmux-cmd "set-option" "-w" "@status_git_branch"
+                        (if branch branch "")))
+            (loop (cdr ls)))))))
+
+(define (render-if-changed)
+  "采集数据并渲染输出。单次 Guile 调用完成采集+渲染，避免双重启动开销。
+同时写入缓存供其他命令（click、toggle-group 等）使用。"
+  (let* ((data (collect-window-data))
+         (new-hash (number->string (modulo (string-hash data) 1000000000) 16)))
+    (write-cache "sidebar-data.cache" data)
+    (write-cache "sidebar-data.hash" new-hash)
+    (let ((lines (split-data data)))
+      (if (null? lines)
+          (emit-styled-line (make-row " [no tmux data]" #f ansi-dim #f))
+          (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}"))
+                 (ctx (string-split raw-info #\tab))
+                 (current-session (list-ref ctx 0))
+                 (current-window (if (> (length ctx) 1) (list-ref ctx 1) "0"))
+                 (rows (layout-rows-with-context
+                        (session-blocks lines)
+                        (append ctx
+                                (list (or (tmux-get-option "@sidebar_collapsed_sessions") "")
+                                      (or (tmux-get-option "@sidebar_collapsed_groups") ""))))))
+            (update-statusbar-options! current-session current-window lines)
+            (save-actions-cache! (rows-actions rows))
+            (for-each emit-styled-line rows))))))
+
 (define (render-to-stdout)
-  (let ((lines (data-lines)))
+  "从缓存渲染，不重新采集数据。实时获取 context 以避免多窗口竞争。"
+  (let ((lines (cache-lines)))
     (if (null? lines)
         (emit-styled-line (make-row " [no tmux data]" #f ansi-dim #f))
         (let* ((rows (layout-rows (session-blocks lines)))
                (actions (rows-actions rows)))
-          ;; 缓存 actions 供点击处理使用
           (save-actions-cache! actions)
           (for-each emit-styled-line rows)))))
 
@@ -758,7 +811,7 @@
 (define (handle-click mouse-y pane-top sidebar-pane)
   ;; 优先使用渲染时缓存的 actions 映射，避免重新计算 layout
   (let* ((actions (or (load-actions-cache)
-                      (rows-actions (layout-rows (session-blocks (data-lines))))))
+                      (rows-actions (layout-rows (session-blocks (cache-lines))))))
          (action (let loop ((candidates (screen-row-candidates mouse-y pane-top)))
                    (if (null? candidates)
                        #f
@@ -772,7 +825,7 @@
          (parts (string-split raw-info #\tab))
          (current-session (list-ref parts 0))
          (current-window (if (> (length parts) 1) (list-ref parts 1) "0")))
-    (let loop ((lines (data-lines)))
+    (let loop ((lines (cache-lines)))
       (unless (null? lines)
         (let* ((fields (parse-cache-line (car lines)))
                (session (row-session fields))
@@ -806,20 +859,26 @@
       (refresh-data!)
       (refresh-git!))
      ((and (> (length args) 1) (string=? (cadr args) "set-title"))
-      (set-window-text! "@sidebar_window_title" (cddr args)))
+      (set-window-text! "@sidebar_window_title" (cddr args))
+      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
      ((and (> (length args) 1) (string=? (cadr args) "set-desc"))
-      (set-window-text! "@sidebar_window_desc" (cddr args)))
+      (set-window-text! "@sidebar_window_desc" (cddr args))
+      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
      ((and (> (length args) 1) (string=? (cadr args) "clear-title"))
       (tmux-cmd "set-option" "-w" "-u" "@sidebar_window_title")
-      (tmux-cmd "set-option" "-w" "-u" "@sidebar_window_desc"))
+      (tmux-cmd "set-option" "-w" "-u" "@sidebar_window_desc")
+      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
      ((and (> (length args) 1) (string=? (cadr args) "toggle-group"))
-      (toggle-current-group))
+      (toggle-current-group)
+      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
      ((and (> (length args) 3) (string=? (cadr args) "click"))
       (let ((mouse-y (string->number (caddr args)))
             (pane-top (string->number (cadddr args)))
             (sidebar-pane (if (> (length args) 4) (list-ref args 4) #f)))
         (when (and mouse-y pane-top)
           (handle-click mouse-y pane-top sidebar-pane))))
+     ((and (> (length args) 1) (string=? (cadr args) "render-if-changed"))
+      (render-if-changed))
      ((and (> (length args) 1) (string=? (cadr args) "--as-library"))
       #t)
      (else
