@@ -274,7 +274,7 @@
 #+begin_src scheme
 (initrd microcode-initrd)
 (firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
-(kernel linux-6.19)
+(kernel linux-7.0)
 (kernel-arguments
  (cons* "resume=UUID=169557cc-00a4-448c-9bb6-7bd80fc2b023"
         "kernel.sysrq=1"
@@ -468,6 +468,10 @@
 #+end_src
 
 ** 网络相关配置
+开机自动开启 WiFi 热点（需先手动执行一次创建连接）
+
+~nmcli connection add type wifi ifname wlp0s20f3 con-name auto-hotspot ssid <你的SSID> 802-11-wireless.mode ap ipv4.method shared wifi-sec.key-mgmt wpa-psk wifi-sec.psk <你的密码>~
+
 #+NAME: networking-services
 #+begin_src scheme
 (list (service nftables-service-type
@@ -497,7 +501,25 @@
                                                         "/var/log/mihomo.log"))
                                               (stop #~(make-kill-destructor))
                                               (auto-start? #t)
-                                              (respawn? #t)))))
+                                              (respawn? #t))))
+
+
+      (simple-service 'auto-hotspot shepherd-root-service-type
+                      (list (shepherd-service
+                             (provision '(auto-hotspot))
+                             (requirement '(network-manager))
+                             (start #~(lambda _
+                                        ;; 先断开已有 WiFi 连接，再激活热点
+                                        (zero? (system* "nmcli" "device" "disconnect"
+                                                        "wlp0s20f3"))
+                                        (zero? (system* "nmcli" "connection" "up"
+                                                        "auto-hotspot"))))
+                             (stop #~(lambda _
+                                       (zero? (system* "nmcli" "connection" "down"
+                                                       "auto-hotspot"))))
+                             (one-shot? #t)
+                             (auto-start? #t)
+                             (respawn? #f)))))
 #+end_src
 
 ** Nix包管理器相关配置
