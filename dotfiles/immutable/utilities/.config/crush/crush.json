@@ -32,7 +32,10 @@
   "permissions": {
     "allowed_tools": [
       "agent",
+      "agentic_fetch",
+      "download",
       "edit",
+      "fetch",
       "glob",
       "grep",
       "job_kill",
@@ -42,13 +45,12 @@
       "lsp_references",
       "mcp_context7",
       "mcp_sequential_thinking",
+      "multiedit",
       "sequential",
       "sourcegraph",
       "todos",
       "view",
-      "write",
-      "multiedit",
-      "fetch"
+      "write"
     ]
   },
   "hooks": {
@@ -72,6 +74,10 @@
       {
         "matcher": "^bash$",
         "command": "~/.config/crush/hooks/no-direct-guix.sh"
+      },
+      {
+        "matcher": "^(edit|write|multiedit)$",
+        "command": "~/.config/crush/hooks/sensitive-info.sh"
       },
       {
         "matcher": "^bash$",
