@@ -60,9 +60,21 @@ window_has_termide_metadata() {
   tmux show-options -w -v -t "$target" @termide_editor_pane >/dev/null 2>&1
 }
 
+discover_metadata_target() {
+  local candidate
+
+  while IFS= read -r candidate; do
+    if window_has_termide_metadata "$candidate"; then
+      printf '%s' "$candidate"
+      return
+    fi
+  done < <(tmux list-windows -a -F '#{window_id}' 2>/dev/null || true)
+
+  return 1
+}
+
 discover_target() {
-  local current_target candidate
-  local -a candidates
+  local current_target discovered
 
   if [[ -n "${TERMIDE_TARGET:-}" ]]; then
     printf '%s' "$TERMIDE_TARGET"
@@ -70,30 +82,23 @@ discover_target() {
   fi
 
   if [[ -z "${TMUX:-}" ]]; then
-    if window_has_termide_metadata "termide:main"; then
-      printf '%s' "termide:main"
+    if discovered="$(discover_metadata_target)"; then
+      printf '%s' "$discovered"
       return
     fi
     die 'must be run inside tmux or with TERMIDE_TARGET set'
   fi
 
-  current_target="$(tmux display-message -p '#S:#W')"
+  current_target="$(tmux display-message -p '#{window_id}')"
   if window_has_termide_metadata "$current_target"; then
     printf '%s' "$current_target"
     return
   fi
 
-  candidates=("termide:main")
-  while IFS= read -r candidate; do
-    candidates+=("$candidate")
-  done < <(tmux list-windows -a -F '#{session_name}:#{window_name}')
-
-  for candidate in "${candidates[@]}"; do
-    if window_has_termide_metadata "$candidate"; then
-      printf '%s' "$candidate"
-      return
-    fi
-  done
+  if discovered="$(discover_metadata_target)"; then
+    printf '%s' "$discovered"
+    return
+  fi
 
   die 'no termide window found'
 }
