@@ -176,6 +176,7 @@
                     "hidePassive": false,
                     "id": "Tray",
                     "pinned": [
+                        "键盘 - 英语（美国）"
                     ]
                 },
                 {
@@ -270,7 +271,7 @@
         ]
     },
     "colorSchemes": {
-        "darkMode": true,
+        "darkMode": false,
         "generationMethod": "tonal-spot",
         "manualSunrise": "08:30",
         "manualSunset": "19:30",
