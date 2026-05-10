@@ -78,6 +78,8 @@ tun:
   auto-route: true
   auto-redirect: true
   auto-detect-interface: true
+  route-exclude-address:
+    - 10.42.0.0/24
 
 dns:
   enable: true
