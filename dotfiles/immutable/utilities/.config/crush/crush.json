@@ -62,7 +62,10 @@
       "command": "~/.config/crush/hooks/protect-paths.sh"
     }, {
       "matcher": "^bash$",
-      "command": "~/.config/crush/hooks/pkg-rewrite.sh"
+      "command": "~/.config/crush/hooks/safe-commands.sh"
+    }, {
+      "matcher": "^bash$",
+      "command": "~/.config/crush/hooks/command-rewrite.sh"
     }, {
       "matcher": "^(edit|write|multiedit)$",
       "command": "~/.config/crush/hooks/context-reminders.sh"
