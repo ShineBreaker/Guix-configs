@@ -64,7 +64,8 @@ SPDX-License-Identifier: GPL-3.0
 Guix 的软件包定义分布在多个「频道」中。默认只有 `guix` 官方频道，本配置额外添加了：
 
 - **[nonguix](https://gitlab.com/nonguix/nonguix)** - 提供 Linux 内核、专有驱动等
-- **[jeans](https://codeberg.org/BrokenShine/jeans)** - 个人频道，包含自定义包
+- **[jeans](https://github.com/ShineBreaker/jeans)** - 个人频道，包含自定义包
+- **[pantherx](https://codeberg.org/gofranz/panther.git)** - 提供一些需要用到的工具
 - **[rosenthal](https://codeberg.org/hako/rosenthal)** - 提供很多用于强化 window manager 体验的相关组件
 
 频道定义在 [`source/channel.scm`](./source/channel.scm)，版本锁定在 [`source/channel.lock`](./source/channel.lock)。
@@ -107,18 +108,24 @@ Guix 有两层配置：
 │   │   ├── home-config.org     # Home 环境配置
 │   │   └── system-config.org   # 系统配置
 │   ├── files/              # 静态配置文件模板
-│   │   ├── niri.kdl            # Niri 窗口管理器配置
 │   │   ├── nftables.conf       # 防火墙规则
-│   │   └── ...
+│   │   ├── rounded.qss         # Qt 圆角样式
+│   │   └── skel/               # 骨架文件模板（git-credential-keepassxc 等）
 │   └── nix/                # Nix 配置（实验性，可忽略）
-├── dotfiles/               # 用户配置文件（Stow 格式）
-│   ├── desktop/            # 桌面环境配置（Waybar、Fuzzel 等）
-│   ├── terminal/           # 终端配置（Foot、Fish、Helix 等）
-│   ├── system/             # 系统工具配置（Btop、Mako 等）
-│   ├── utilities/          # 实用工具配置
-│   ├── themes/             # GTK/Qt 主题配置
-│   ├── termide/            # 终端 IDE 配置
-│   └── emacs/              # Emacs 配置（独立子树）
+├── dotfiles/               # 用户配置文件（两层结构）
+│   ├── immutable/          # 不可变配置（Guix Home 管理，只读）
+│   │   ├── desktop/        # 桌面环境配置（Waybar、Fuzzel 等）
+│   │   ├── terminal/       # 终端配置（Foot、Fish、Helix 等）
+│   │   ├── system/         # 系统工具配置（Btop、Mako 等）
+│   │   ├── utilities/      # 实用工具配置
+│   │   └── darkman/        # 深色模式自动切换配置
+│   └── mutable/            # 可变配置（Stow 管理，可独立调试）
+│       ├── emacs/          # Emacs 配置（独立 git 子树）
+│       ├── tmux/           # tmux 配置（含 Guile/Bash 脚本）
+│       ├── zed/            # Zed 编辑器配置
+│       └── noctalia/       # Noctalia 主题配置
+├── tools/                  # 辅助工具
+│   └── crush-superpowers/  # crush 工作流工具集
 ├── screenshots/            # 预览截图
 └── tmp/                    # 生成的完整配置（临时，勿手动编辑）
 ```
@@ -131,7 +138,8 @@ Guix 有两层配置：
 | `source/channel.scm`               | 定义软件源频道                     | 需要添加第三方软件源时修改 |
 | `source/configs/home-config.org`   | 用户软件包、服务、dotfiles 配置    | 经常                       |
 | `source/configs/system-config.org` | 系统级配置                         | 较少                       |
-| `dotfiles/*`                       | 实际的用户配置文件                 | 经常                       |
+| `dotfiles/immutable/*`            | 不可变配置（Guix Home 管理）       | 经常                       |
+| `dotfiles/mutable/*`              | 可变配置（Stow 管理，独立调试）    | 经常                       |
 | `maak.scm`                         | 任务定义                           | 需要添加自定义任务时修改   |
 
 ---
@@ -158,7 +166,7 @@ maak --list
 
 # 常用命令
 maak system     # 应用系统配置（需要 sudo）
-maak home       # 应用用户配置
+maak home       # 应用用户配置（Tangle → reconfigure → stow mutable dotfiles）
 maak rebuild    # 先 system 后 home，并更新 locate 数据库
 
 # 更新软件包频道
@@ -200,9 +208,9 @@ maak check-home     # 仅检查 home 配置
 
 #### 2. 静态配置文件 ([`source/files/`](./source/files/))
 
-- `niri.kdl` - Niri Wayland 合成器配置（平铺窗口管理器）
 - `nftables.conf` - 基于 nftables 的防火墙规则
-- `zed.json` - Zed 编辑器配置
+- `rounded.qss` - Qt 应用圆角样式
+- `skel/` - 骨架文件模板（git-credential-keepassxc 等）
 
 **如何复用**：直接复制文件内容，或在自己的配置中使用 `(local-file "...")` 引用。
 
@@ -253,22 +261,35 @@ maak check-home     # 仅检查 home 配置
 
 #### 2. Dotfiles 组织方式 ([`dotfiles/`](./dotfiles/))
 
-采用 [GNU Stow](https://www.gnu.org/software/stow/) 格式：
+采用**两层结构**：
+
+- **`immutable/`** - 通过 Guix Home 的 `home-dotfiles-service-type` 管理，配置为只读，适合不需要频繁改动的软件
+- **`mutable/`** - 通过 [GNU Stow](https://www.gnu.org/software/stow/) 链接到用户目录，可独立修改调试，`maak home` 运行后自动执行 `stow-dotfiles` 重新链接
 
 ```
 dotfiles/
-├── desktop/.config/waybar/       # → ~/.config/waybar/
-├── terminal/.config/fish/        # → ~/.config/fish/
-└── terminal/.config/foot/        # → ~/.config/foot/
+├── immutable/                          # Guix Home 管理（只读）
+│   ├── desktop/.config/waybar/         # → ~/.config/waybar/
+│   ├── terminal/.config/fish/          # → ~/.config/fish/
+│   └── system/.config/btop/            # → ~/.config/btop/
+└── mutable/                            # Stow 管理（可独立调试）
+    ├── emacs/.config/emacs/            # → ~/.config/emacs/
+    ├── tmux/.config/tmux/              # → ~/.config/tmux/
+    ├── zed/.config/zed/                # → ~/.config/zed/
+    └── tmux/.config/fish/conf.d/       # → ~/.config/fish/conf.d/
 ```
 
-**如何复用**：在 `home-config.org` 中：
+**如何复用**：
+
+在 `home-config.org` 中声明 immutable 配置：
 
 ```scheme
 (service home-dotfiles-service-type
   (home-dotfiles-configuration
     (package `("desktop" "terminal" "system" ...))))
 ```
+
+mutable 配置通过 `maak home` 中的 `stow-dotfiles` 函数自动链接到 `$HOME`。
 
 ---
 
@@ -293,15 +314,21 @@ dotfiles/
 
 ### 添加配置文件
 
-**优先放入 `dotfiles/`**，遵循 Stow 规范：
+**优先放入 `dotfiles/`**，根据配置性质选择分层：
+
+1. **不需要频繁修改** → 放入 `dotfiles/immutable/`，通过 `home-config.org` 的 Guix Home 管理
+2. **需要独立调试** → 放入 `dotfiles/mutable/`，通过 `stow` 直接链接，修改后不需 `maak home`
 
 ```bash
-# 示例：添加 Alacritty 配置
-mkdir -p dotfiles/alacritty/.config/alacritty
-cp ~/alacritty.toml dotfiles/alacritty/.config/alacritty/
+# 示例：添加 immutable 配置
+mkdir -p dotfiles/immutable/app-name/.config/app-name
+cp ~/app-config.toml dotfiles/immutable/app-name/.config/app-name/
+# 然后在 home-config.org 中添加 app-name 到 packages 列表
 
-# 然后在 home-config.org 中添加 alacritty 到 packages 列表
-# 并确保 alacritty 包已安装
+# 示例：添加 mutable 配置
+mkdir -p dotfiles/mutable/app-name/.config/app-name
+cp ~/app-config.toml dotfiles/mutable/app-name/.config/app-name/
+# 下次 maak home 运行时 stow-dotfiles 自动链接
 ```
 
 **仅在需要动态生成时使用 `source/files/`**（如需要注入 Guix 软件包路径）。
@@ -358,7 +385,7 @@ maak upgrade
 
 ### `maak home` 提示找不到目录
 
-确保 `dotfiles/<name>` 目录存在，且与 `home-dotfiles-configuration` 中声明的 `packages` 一致。
+确保 `dotfiles/immutable/<name>` 目录存在，且与 `home-dotfiles-configuration` 中声明的 `packages` 一致。
 
 ### 系统启动后数据丢失
 
