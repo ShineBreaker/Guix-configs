@@ -469,19 +469,28 @@ def extract_claude(range_start: datetime, range_end: datetime) -> list[dict]:
 
 
 def _parse_iso_timestamp(ts_str: str) -> datetime | None:
-    """解析 ISO 8601 时间戳字符串。"""
+    """解析 ISO 8601 时间戳字符串（自动处理 UTC）。
+
+    Hexo/Claude Code transcript 使用 ISO 格式且以 Z 结尾表示 UTC。
+    提取后转换为本地时区以便与 compute_date_range 的本地时间范围对齐。
+    """
     if not ts_str:
         return None
     try:
         # 处理 "2026-04-13T10:58:46.700Z"
         ts_str = ts_str.replace("Z", "+00:00")
-        return datetime.fromisoformat(ts_str).replace(tzinfo=None)
+        dt = datetime.fromisoformat(ts_str)
+        # 转换为本地时区（从 UTC 到本地时间）
+        dt_local = dt.astimezone(None).replace(tzinfo=None)
+        return dt_local
     except (ValueError, TypeError):
         pass
     try:
         # 处理毫秒级 Unix 时间戳（数字字符串）
         ts_int = int(ts_str)
-        return datetime.fromtimestamp(ts_int / 1000)
+        dt_utc = datetime.fromtimestamp(ts_int / 1000, tz=datetime.timezone.utc)
+        dt_local = dt_utc.astimezone(None).replace(tzinfo=None)
+        return dt_local
     except (ValueError, TypeError):
         pass
     return None
