@@ -58,26 +58,11 @@
       "matcher": "^(cat|view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
       "command": "echo '{\"decision\":\"allow\"}'"
     }, {
-      "matcher": "^(edit|write|multiedit)$",
-      "command": "~/.config/crush/hooks/protect-paths.sh"
-    }, {
       "matcher": "^bash$",
-      "command": "~/.config/crush/hooks/safe-commands.sh"
-    }, {
-      "matcher": "^bash$",
-      "command": "~/.config/crush/hooks/command-rewrite.sh"
+      "command": "~/.config/crush/hooks/bash-gate.sh"
     }, {
       "matcher": "^(edit|write|multiedit)$",
-      "command": "~/.config/crush/hooks/context-reminders.sh"
-    }, {
-      "matcher": "^bash$",
-      "command": "~/.config/crush/hooks/no-direct-guix.sh"
-    }, {
-      "matcher": "^(edit|write|multiedit)$",
-      "command": "~/.config/crush/hooks/sensitive-info.sh"
-    }, {
-      "matcher": "^bash$",
-      "command": "~/.config/crush/hooks/non-interactive.sh"
+      "command": "~/.config/crush/hooks/edit-gate.sh"
     }]
   },
   "providers": {
