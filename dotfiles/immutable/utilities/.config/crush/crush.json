@@ -56,7 +56,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch)$",
+        "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
         "command": "echo '{\"decision\":\"allow\"}'"
       },
       {
