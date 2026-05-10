@@ -114,8 +114,8 @@
   "agent": {
     "dock": "right",
     "default_model": {
-      "provider": "Zhipu AI",
-      "model": "glm-5.1",
+      "provider": "MiniMax",
+      "model": "MiniMax-M2.7",
       "enable_thinking": false
     },
     "model_parameters": [],
