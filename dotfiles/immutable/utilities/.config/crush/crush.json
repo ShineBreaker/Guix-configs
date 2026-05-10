@@ -54,36 +54,28 @@
     ]
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
-        "command": "echo '{\"decision\":\"allow\"}'"
-      },
-      {
-        "matcher": "^(edit|write|multiedit)$",
-        "command": "~/.config/crush/hooks/protect-paths.sh"
-      },
-      {
-        "matcher": "^bash$",
-        "command": "~/.config/crush/hooks/pkg-rewrite.sh"
-      },
-      {
-        "matcher": "^(edit|write|multiedit)$",
-        "command": "~/.config/crush/hooks/context-reminders.sh"
-      },
-      {
-        "matcher": "^bash$",
-        "command": "~/.config/crush/hooks/no-direct-guix.sh"
-      },
-      {
-        "matcher": "^(edit|write|multiedit)$",
-        "command": "~/.config/crush/hooks/sensitive-info.sh"
-      },
-      {
-        "matcher": "^bash$",
-        "command": "~/.config/crush/hooks/non-interactive.sh"
-      }
-    ]
+    "PreToolUse": [{
+      "matcher": "^(cat|view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
+      "command": "echo '{\"decision\":\"allow\"}'"
+    }, {
+      "matcher": "^(edit|write|multiedit)$",
+      "command": "~/.config/crush/hooks/protect-paths.sh"
+    }, {
+      "matcher": "^bash$",
+      "command": "~/.config/crush/hooks/pkg-rewrite.sh"
+    }, {
+      "matcher": "^(edit|write|multiedit)$",
+      "command": "~/.config/crush/hooks/context-reminders.sh"
+    }, {
+      "matcher": "^bash$",
+      "command": "~/.config/crush/hooks/no-direct-guix.sh"
+    }, {
+      "matcher": "^(edit|write|multiedit)$",
+      "command": "~/.config/crush/hooks/sensitive-info.sh"
+    }, {
+      "matcher": "^bash$",
+      "command": "~/.config/crush/hooks/non-interactive.sh"
+    }]
   },
   "providers": {
     "deepseek": {
