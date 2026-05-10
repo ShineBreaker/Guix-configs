@@ -16,7 +16,8 @@ if [[ -z "$sessions" ]]; then
     exit 0
 fi
 
-# 构建 fzf 输入
+# 构建 fzf 输入。第一列是机器可读状态，fzf 只显示后续列，避免
+# column/awk 按空格重排后破坏包含空格的 session 名。
 choices=""
 available_count=0
 
@@ -27,15 +28,15 @@ while IFS=$'\t' read -r name windows created attached group; do
     [[ "$windows" -gt 1 ]] && window_label="windows"
 
     if [[ "$attached" -gt 0 ]]; then
-        choices+="${name}\t${windows} ${window_label}\t${time_str}\t[使用中]\n"
+        choices+="BUSY\t${name}\t${windows} ${window_label}\t${time_str}\t[使用中]\n"
     else
-        choices+="${name}\t${windows} ${window_label}\t${time_str}\t\n"
+        choices+="SESSION\t${name}\t${windows} ${window_label}\t${time_str}\t\n"
         available_count=$((available_count + 1))
     fi
 done <<< "$sessions"
 
 # 添加新建选项
-choices+="[新建空会话]\t\t\t\n"
+choices+="NEW\t[新建空会话]\t\t\t\n"
 
 if [[ $available_count -eq 0 ]]; then
     echo "NEW"
@@ -44,10 +45,11 @@ fi
 
 # 用 fzf 选择
 result=$(printf '%b' "$choices" \
-    | column -t -s $'\t' \
     | fzf --reverse --no-multi \
           --header="选择会话" \
           --height=~50% \
+          --delimiter=$'\t' \
+          --with-nth=2.. \
     || true)
 
 if [[ -z "$result" ]]; then
@@ -55,11 +57,21 @@ if [[ -z "$result" ]]; then
     exit 0
 fi
 
-# 提取 session 名（第一列）
-selected=$(echo "$result" | awk '{print $1}')
+kind=$(printf '%s\n' "$result" | awk -F $'\t' '{print $1}')
+selected=$(printf '%s\n' "$result" | awk -F $'\t' '{print $2}')
 
-if [[ "$selected" == "[新建空会话]" ]]; then
-    echo "NEW"
-else
-    echo "$selected"
-fi
+case "$kind" in
+    NEW)
+        echo "NEW"
+        ;;
+    SESSION)
+        echo "$selected"
+        ;;
+    BUSY)
+        tmux display-message "会话正在使用中：$selected" 2>/dev/null || true
+        echo "ESC"
+        ;;
+    *)
+        echo "ESC"
+        ;;
+esac
