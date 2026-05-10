@@ -1,10 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# sidebar-toggle - 切换/跟随浮动侧边栏
-# 用法: sidebar-toggle          # 切换显示/隐藏
-#       sidebar-toggle follow   # 在新窗口重建（hook 调用）
-#       sidebar-toggle pane-loop # 在浮动窗格内运行的显示循环
+# sidebar-toggle — 侧边栏生命周期管理器（Bash 层）
+#
+# 职责：创建/销毁/跟随浮动侧边栏 pane，以及向 pane-loop 发送刷新信号。
+# 是 tmux hooks 和 shell 之间的胶水层。
+#
+# 架构定位：
+#   - Bash 层：pane 创建/销毁/跟随等 tmux API 操作（Guile 的 tmux-cmd 做 split-window
+#     等需要解析输出的操作不如 Bash 直接）
+#   - Guile 层：数据采集 + 渲染（sidebar-render.scm）
+#   - 信号驱动：SIGUSR1 触发即时重绘（pane-loop 接收），30 秒心跳兜底
+#
+# 状态管理：
+#   - @sidebar_visible: 全局选项，表达用户偏好（0/1）
+#   - @sidebar_pane_id: 窗口级选项，记录当前窗口侧栏的 pane id
+#   - 按 window 隔离，每个窗口独立拥有侧栏 pane
+#
+# 安全措施：
+#   - 锁文件：/tmp/tmux-sidebar-<socket:window-hash>.lock，防止并发创建
+#   - is_sidebar_pane(): 三重检测（pane_title / start_command / current_command）
+#   - kill_current_sidebars_except(): 销毁当前窗口多余侧栏，只保留一个
+#
+# 用法：
+#   sidebar-toggle           # 切换显示/隐藏
+#   sidebar-toggle follow    # 窗口切换时确保侧栏存在（hook 调用）
+#   sidebar-toggle signal    # 向 pane-loop 发 SIGUSR1 触发重绘
+#   sidebar-toggle pane-loop # 在浮动 pane 内运行的显示循环
 
 scripts_dir="${HOME}/.config/tmux/scripts"
 sidebar_title="tmux-sidebar"

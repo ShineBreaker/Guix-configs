@@ -1,7 +1,30 @@
 #!/usr/bin/env guile
 !#
 
-;; sidebar-render.scm - render and handle clicks for the vertical tmux sidebar.
+;; sidebar-render.scm — tmux 侧边栏数据采集与渲染引擎
+;;
+;; 核心职责：
+;;   1. render-if-changed: 采集窗口数据 → 渲染为终端文本 → 输出到侧栏 pane
+;;   2. click: 处理鼠标点击事件（选择会话/窗口/折叠组/执行操作）
+;;   3. git: 采集所有工作目录的 git branch 信息并写缓存
+;;   4. data: 仅采集并写缓存（供 status-left 等引用）
+;;   5. toggle-group: 切换窗口组折叠状态
+;;
+;; 渲染管线（render-if-changed）：
+;;   1. 从 tmux 采集所有 pane 数据（collect-window-data）
+;;   2. 按 session → group-by-path → window → pane 组织层级树
+;;   3. 生成带 ANSI 颜色的文本，输出到侧栏 pane
+;;   4. render-if-changed：仅在数据确实发生变化时才输出（防抖动）
+;;     通过将当前渲染 hash 写入缓存与上次对比实现
+;;
+;; 数据采集层：
+;;   - 实时优先：对每个 pane 的路径执行 git rev-parse（timeout 2s）
+;;   - 缓存 fallback：git-branches.cache 保存上次采集结果
+;;   - 采集后写缓存，pane-loop 读取缓存的 git 数据（避免重复 git 调用）
+;;
+;; 状态管理（tmux 选项）：
+;;   - @sidebar_collapsed_groups: 全局逗号分隔列表，记录已折叠的组 key
+;;   - session/window 键通过 hash 生成，避免特殊字符转义问题
 
 (load (string-append (getenv "HOME") "/.config/tmux/scripts/tmux-helpers.scm"))
 

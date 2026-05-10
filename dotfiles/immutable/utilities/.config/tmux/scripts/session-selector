@@ -1,7 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# session-selector - fzf 驱动的 tmux 会话选择器
+# session-selector — tmux 会话选择器（fzf）
+#
+# 用 fzf 列出所有 tmux session，支持：
+#   - 选择空闲 session 切换
+#   - 过滤"使用中"的 session（避免意外断开他人）
+#   - 选择"新建空会话"创建新 session
+#   - ESC/取消 返回原 session
+#
+# 状态标记：
+#   BUSY    = 有客户端附着的 session（不可选，灰显）
+#   SESSION = 空闲 session
+#   NEW     = 创建新 session
+#
+# fzf 参数：--delimiter=\t --with-nth=2.. 使第一列（状态标记）不显示，
+# 保证 session 名中的空格不被当成列分隔符破坏。
+#
 # 输出：选中的 session 名，或 "NEW" 表示新建，或 "ESC" 表示退出
 
 trap 'tmux display-message "session-selector error: $?"' ERR

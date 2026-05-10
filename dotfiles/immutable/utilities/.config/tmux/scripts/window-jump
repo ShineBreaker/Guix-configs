@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# window-jump - fzf 驱动的跨 session 窗口跳转
+# window-jump — fzf 驱动的跨 session 窗口跳转
+#
+# 功能：列出所有 session 的所有 window，通过 fzf 模糊搜索并跳转。
+# 当前 session 的窗口标记为 [当前]，其他 session 的窗口显示 ← session 名。
+#
+# 快捷键：前缀键 + f（Ctrl+x f → display-popup → window-jump）
+#
+# 技术细节：
+#   - list-windows -a 跨所有 session 查询
+#   --delimiter=\t --with-nth=1 只显示第一列（描述文本）
+#   - 同 session 跳转用 select-window；跨 session 用 switch-client
 
 current_session=$(tmux display -p "#{session_name}")
 

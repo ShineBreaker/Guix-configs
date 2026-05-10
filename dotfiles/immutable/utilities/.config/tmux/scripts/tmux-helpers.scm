@@ -3,6 +3,16 @@
 
 ;;; tmux-helpers.scm - tmux 脚本共享工具模块
 ;;;
+;;; 本模块是 Guile 侧的共享基础设施，为所有 tmux Guile 脚本提供：
+;;;   - tmux 命令封装（带错误码的返回值，避免 shell 解析）
+;;;   - 侧边栏 pane 检测（按 title/start_command 过滤，避免自我采集）
+;;;   - 窗口数据采集器 collect-window-data（跨 session 整合，每 pane 一条制表符分隔行）
+;;;   - Socket 路径哈希到临时文件隔离（/tmp/tmux-<hash>-<name>）
+;;;   - 文件锁（flock -n 非阻塞，脚本间互斥）
+;;;   - 缓存读写（带时间戳，json/文本混合缓存）
+;;;   - 防抖调用（Debounce，连续 3 次跳过后强制执行）
+;;;   - CJK 字符宽度感知的截断/填充（用于侧栏渲染中的中英文混排）
+;;;
 ;;; 注意：本模块通过 (load ...) 加载，而非 (use-modules ...)。
 ;;; 这样设计是为了让 tmux 脚本可以直接使用其中定义的绑定，
 ;;; 而无需复杂的模块路径配置。
