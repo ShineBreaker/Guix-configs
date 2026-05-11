@@ -24,35 +24,8 @@
     "dark": "Noctalia Dark"
   },
   "language_models": {
-    "openai_compatible": {
-      "MiniMax": {
-        "api_url": "https://api.minimaxi.com/v1",
-        "available_models": [{
-          "name": "MiniMax-M2.7",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }, {
-          "name": "MiniMax-M2.5",
-          "max_tokens": 256000,
-          "max_output_tokens": 65536,
-          "max_completion_tokens": 256000,
-          "capabilities": {
-            "tools": true,
-            "images": false,
-            "parallel_tool_calls": false,
-            "prompt_cache_key": false,
-            "chat_completions": true
-          }
-        }]
-      }
+    "opencode": {
+      "show_zen_models": false
     }
   },
   "active_pane_modifiers": {
@@ -62,8 +35,8 @@
   "agent": {
     "dock": "right",
     "default_model": {
-      "provider": "MiniMax",
-      "model": "MiniMax-M2.7",
+      "provider": "opencode",
+      "model": "go/glm-5.1",
       "enable_thinking": false
     },
     "model_parameters": [],

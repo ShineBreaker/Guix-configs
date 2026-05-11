@@ -55,7 +55,7 @@
   },
   "hooks": {
     "PreToolUse": [{
-      "matcher": "^(cat|view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
+      "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
       "command": "echo '{\"decision\":\"allow\"}'"
     }, {
       "matcher": "^bash$",
@@ -104,14 +104,14 @@
       "max_tokens": 65536
     },
     "small": {
-      "provider": "minimax-china",
-      "model": "MiniMax-M2.7",
+      "provider": "opencode-go",
+      "model": "deepseek-v4-flash",
       "think": true,
       "max_tokens": 65536
     },
     "quick": {
-      "provider": "minimax-china",
-      "model": "MiniMax-M2.7",
+      "provider": "opencode-go",
+      "model": "deepseek-v4-flash",
       "max_tokens": 32768
     }
   },
