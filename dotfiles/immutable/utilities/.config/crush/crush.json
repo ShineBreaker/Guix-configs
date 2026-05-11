@@ -43,10 +43,10 @@
       "ls",
       "lsp_diagnostics",
       "lsp_references",
-      "mcp_context7",
-      "mcp_sequential_thinking",
+      "mcp_context7_query-docs",
+      "mcp_context7_resolve-library-id",
+      "mcp_sequential_thinking_sequentialthinking",
       "multiedit",
-      "sequential",
       "sourcegraph",
       "todos",
       "view",
@@ -55,7 +55,7 @@
   },
   "hooks": {
     "PreToolUse": [{
-      "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource)$",
+      "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource|mcp_context7_query-docs|mcp_context7_resolve-library-id|mcp_sequential_thinking_sequentialthinking)$",
       "command": "echo '{\"decision\":\"allow\"}'"
     }, {
       "matcher": "^bash$",
