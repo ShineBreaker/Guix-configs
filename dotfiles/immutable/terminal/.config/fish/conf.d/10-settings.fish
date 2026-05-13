@@ -7,6 +7,7 @@ set -g fish_autosuggestion_enabled 1
 alias cat bat
 alias catr cat
 alias cd z
+alias clone "git clone"
 alias cp "cp -i"
 alias du dust
 alias find fd

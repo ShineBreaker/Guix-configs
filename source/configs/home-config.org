@@ -174,7 +174,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "btop"
         "kitty-full"
         "starship"
-        "warp-terminal-bin"
+        "warp-oss-bin"
 
         ;; 运行器
         "just"
@@ -249,6 +249,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; AI Agent
         "claude-code"
         "codex"
+        "codex-acp"
         "crush-bin"
         "opencode-bin"
 
@@ -262,6 +263,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "reuse"
         "ripgrep"
         "texlive-scheme-basic"
+        "xxd"
 
         ;; 版本管理
         "gitui"
@@ -314,6 +316,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "amber-pm"
          "broot"
          "cc-switch-bin"
+         "cherry-studio-bin"
          "gimp"
          "keepassxc"
          "kdeconnect"
@@ -334,6 +337,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "amule"
          "freerdp@3"
          "kanata"
+         "mesa-utils"
          "pinentry-qt"
          "winapps")))
 #+end_src
@@ -506,6 +510,7 @@ end
                              "emacs-goto-chg"
 
                              ;; 开发工具
+                             "emacs-agent-shell"
                              "emacs-apheleia"
                              "emacs-eglot"
                              "emacs-eglot-x"

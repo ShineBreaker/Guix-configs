@@ -6,7 +6,7 @@ CMD="${CRUSH_TOOL_INPUT_COMMAND:-}"
 # --- Phase 1: Block checks (deny/halt takes priority) ---
 
 # Block interactive commands (will hang without TTY)
-if echo "$CMD" | grep -qE '(^|\s)(vim|vi|nano|emacs|pico|ed)\b'; then
+if echo "$CMD" | grep -qE '(^|\s)(vi|nano|pico|ed)\b'; then
   echo "禁止交互式编辑器，请使用 edit/write 工具" >&2; exit 2
 fi
 if echo "$CMD" | grep -qE '(^|\s)(less|more|most|pg)\b'; then
@@ -14,9 +14,6 @@ if echo "$CMD" | grep -qE '(^|\s)(less|more|most|pg)\b'; then
 fi
 if echo "$CMD" | grep -qE '(^|\s)man\s'; then
   echo "禁止 man，请使用 --help 或在线文档" >&2; exit 2
-fi
-if echo "$CMD" | grep -qE '(^|\s)pkexec\b'; then
-  echo "pkexec 需要 GUI 认证，请使用 maak system" >&2; exit 2
 fi
 if echo "$CMD" | grep -qE '(^|\s)git\s+commit\b' && ! echo "$CMD" | grep -qE '\s(-m|--message)\b'; then
   echo "git commit 必须使用 -m 指定提交信息" >&2; exit 2

@@ -12,12 +12,11 @@ REL="${FILE#"$PROJ"/}"
 if [[ "$REL" == tmp/* ]]; then
   echo "禁止手动编辑 tmp/ 目录，请修改 source/ 中的 .org 源文件" >&2; exit 2
 fi
+
 if [[ "$FILE" == */channel.lock ]]; then
   echo "禁止手动编辑 channel.lock，请使用 maak upgrade 更新" >&2; exit 2
 fi
-if echo "$FILE" | grep -qE '(emacs/\.config/emacs/|fcitx5/rime/|crush-superpowers/)'; then
-  echo "禁止直接编辑子模块内容，请到对应上游仓库修改" >&2; exit 2
-fi
+
 if echo "$FILE" | grep -qE '^/home/[^/]+/\.(config|local)/'; then
   if ! echo "$FILE" | grep -q "$PROJ"; then
     echo "禁止直接修改安装位置，请修改 dotfiles/ 后运行 maak home" >&2; exit 2

@@ -80,7 +80,7 @@ Guix 有两层配置：
 │   │   ├── nftables.conf       # 防火墙规则
 │   │   ├── rounded.qss         # Qt 圆角样式
 │   │   └── skel/               # 骨架文件模板（git-credential-keepassxc 等）
-│   └── nix/                # Nix 配置（实验性，可忽略）
+│   └── nix/                # Nix 配置
 ├── dotfiles/               # 用户配置文件（两层结构）
 │   ├── immutable/          # 不可变配置（Guix Home 管理，只读）
 │   │   ├── desktop/        # 桌面环境配置（Waybar、Fuzzel 等）

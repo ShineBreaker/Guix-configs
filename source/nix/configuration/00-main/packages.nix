@@ -13,6 +13,7 @@
     scrcpy
 
     ## 工具
+    claude-agent-acp
     gamescope
     pmbootstrap
     sunshine

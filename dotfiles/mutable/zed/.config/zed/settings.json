@@ -1,4 +1,5 @@
 {
+  "cli_default_open_behavior": "existing_window",
   "ui_font_family": "Sarasa UI SC",
   "buffer_font_family": "Maple Mono NF CN",
   "agent_servers": {
