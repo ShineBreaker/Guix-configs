@@ -471,6 +471,7 @@ end
                              ;; 补全与迷你缓冲区
                              "emacs-cape"
                              "emacs-consult"
+                             "emacs-consult-dir"
                              "emacs-corfu"
                              "emacs-corfu-terminal"
                              "emacs-embark"
@@ -498,8 +499,10 @@ end
                              "emacs-which-key"
 
                              ;; 编辑与导航
+                             "emacs-avy"
                              "emacs-diff-hl"
                              "emacs-dirvish"
+                             "emacs-editorconfig"
                              "emacs-expand-region"
                              "emacs-helpful"
                              "emacs-indent-bars"
@@ -508,6 +511,7 @@ end
                              "emacs-origami"
                              "emacs-origami-ts"
                              "emacs-symbol-overlay"
+                             "emacs-wgrep"
                              "emacs-ws-butler"
                              "emacs-eldoc-box"
                              "emacs-vundo"
@@ -518,6 +522,7 @@ end
                              "emacs-apheleia"
                              "emacs-eglot"
                              "emacs-eglot-x"
+                             "emacs-envrc"
                              "emacs-flycheck"
                              "emacs-posframe"
                              "emacs-vterm"
