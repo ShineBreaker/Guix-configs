@@ -489,9 +489,12 @@ end
                              "emacs-kind-icon"
                              "emacs-minimap"
                              "emacs-nerd-icons"
+                             "emacs-pulsar"
                              "emacs-rainbow-delimiters"
+                             "emacs-spacious-padding"
                              "emacs-treemacs"
                              "emacs-treemacs-nerd-icons"
+                             "emacs-ultra-scroll"
                              "emacs-which-key"
 
                              ;; 编辑与导航
@@ -499,6 +502,7 @@ end
                              "emacs-dirvish"
                              "emacs-expand-region"
                              "emacs-helpful"
+                             "emacs-indent-bars"
                              "emacs-keymap-popup"
                              "emacs-multiple-cursors"
                              "emacs-origami"
