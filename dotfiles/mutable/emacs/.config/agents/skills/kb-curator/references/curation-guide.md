@@ -206,7 +206,7 @@ kb lint --fix  # 自动修复格式问题
 变更涉及的文件：
 
 - `~/Documents/Org/experiences/` 下的新增/修改卡片
-- `~/Documents/Org/index.org`（kb reindex 自动更新）
+- `~/Documents/Org/index.json`（kb reindex 自动更新）
 - 可选：`~/Documents/Org/patterns.org`
 
 **重要规则**：

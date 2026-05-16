@@ -1,16 +1,13 @@
 ---
 name: knowledge-base
-description: >
-  知识库操作工具 — 通过 kb CLI 检索、写入、管理经验卡片和模式。
-  当需要查询历史经验、写入新经验、检索已有模式，或用户提到"kb search"、"记录经验"、
-  "写入知识库"、"check patterns"时使用。
+description: Use when querying historical experience, writing new experience cards, searching patterns, or when encountering "kb search", "记录经验", "写入知识库", "check patterns", "kb add", "kb list", "kb fields".
 ---
 
 # Knowledge Base
 
-通过 `~/.local/bin/kb` 管理经验卡片和模式，实现任务间知识复用。
+通过 `kb` CLI 管理经验卡片和模式，实现任务间知识复用。卡片为 Org mode 格式，按 category 子目录存储在 `~/Documents/Org/experiences/`。
 
-卡片格式为 Org mode，按 category 子目录分类存储在 `~/Documents/Org/experiences/`，每张卡片包含元数据（ID、类别、技术栈、类型、执行者）和结构化正文（任务描述、执行过程、关键发现）。
+> 经验写入时的决策逻辑、分类映射、卡片结构规范及用户画像维护流程见 `self-improving` skill。
 
 ## 路径
 
@@ -19,163 +16,77 @@ description: >
 | CLI 工具 | `~/.local/bin/kb`              |
 | 经验卡片 | `~/Documents/Org/experiences/` |
 | 模式文件 | `~/Documents/Org/patterns.org` |
-| 索引文件 | `~/Documents/Org/index.org`    |
+| 机器索引 | `~/Documents/Org/index.json`   |
 | 收件箱   | `~/Documents/Org/inbox.org`    |
 | 用户画像 | `~/Documents/Org/profile.org`  |
 
-## 命令速查
-
-### 检索
+## 检索
 
 ```bash
-kb search "<关键词或正则>" [--context N]   # 全文检索，--context 控制上下文行数
-kb tags <标签> [标签2 ...]                  # 按标签（category/type/owner/tech）筛选
+# 全文检索
+kb search "<关键词或正则>" [--context N]
+
+# 按标签筛选
+kb tags <标签> [标签2 ...]
+
+# 查看标题和id
 kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
+
+# 查看完整内容
+kb get <卡片ID或文件名>
+
+# 列出模式标题
+kb patterns
+
+# 显示模式全文
+kb patterns --get
 ```
 
-- `kb list` 默认显示最近 20 条，`--all` 显示全部
-- `kb list` 输出格式：`文件路径|标题|类别|类型|执行者|日期`
-- `kb search` 输出为匹配行及上下文，格式：`文件名-行号-:内容`
+`kb list` 输出 JSON 数组，每项含 `id`、`title`、`category`、`type`、`tech`、`owner`、`created`。默认最近 20 条，`--all` 显示全部。
 
-### 字段统计（优先复用标签）
+## 字段统计
 
 ```bash
-kb fields              # 列出所有已有 category/tech/type/owner
-kb fields --category   # 只列出已有 category
-kb fields --tech       # 只列出已有 tech
+kb fields              # 所有已有 category/tech/type/owner
+kb fields --category   # 只列 category
+kb fields --tech       # 只列 tech
 ```
 
 写入前先查看已有标签，优先复用，减少碎片化。
 
-### 写入
+## 写入
 
 ```bash
-kb add \
-  --title "简明标题" \
-  --category <类别> \
-  --tech <技术栈> \
-  --type <类型> \
-  --owner <执行者> \
-  --entry <mistake|note|ascended> \
-  --summary "一句话总结" \
-  --stdin <<EOF
+kb add --title "标题" --category <类别> --tech <技术栈> \
+  --type <类型> --owner <执行者> \
+  [--entry mistake|note|ascended] --summary "总结" --stdin <<EOF
 ** 任务描述
-简要说明要做什么、为什么。
-
-** 执行过程
-1. 分析与排查
-2. 修复方案
-3. 验证结果
-
-** 关键发现
-- 重要的经验教训或注意事项
-EOF
-```
-
-参数取值详见 `references/parameters.md`。
-
-### 纠错 / 记事条目映射
-
-Mistakebook 的 `mistake` / `note` 语义统一写入本知识库，不再另建并行存储。CLI 支持 `kb add --entry mistake|note|ascended`，会自动补 `ENTRY_TYPE` 属性、标签和默认模板；若 `--stdin` 内容已经包含 `**` 小节，则按完整 Org 正文原样写入。
-
-| 来源语义     | 推荐 type                          | 推荐 owner             | 必须保留的信息                           |
-| ------------ | ---------------------------------- | ---------------------- | ---------------------------------------- |
-| `mistake`    | `debug` / `config`                 | `collaborative`        | 原始问题、纠错反馈、错因、最终答案、自检 |
-| `note`       | `workflow` / `research` / `config` | `ai` / `collaborative` | 事项内容、记录原因、适用边界、行动项     |
-| 飞升模式复盘 | `debug` / `workflow`               | `collaborative`        | 失败原因、检索来源、最强方案、后续规则   |
-
-纠错类卡片可在标准三段内增加 Org 子标题：
-
-```org
-** 任务描述
-原始问题、用户纠错反馈链。
-
-** 执行过程
-*** 这次到底错在哪里
 ...
-*** 最终正确处理
+
+** 执行过程
 ...
 
 ** 关键发现
-*** 下次开始前自检
-+ ...
-```
-
-记事类卡片至少写清：
-
-1.  为什么值得长期保留
-2.  适用场景与例外
-3.  后续行动或检查点
-
-### 写入前决策
-
-1.  先 `kb search` 去重；已有卡片覆盖时优先补充或修正，不新建重复卡
-2.  **优先复用已有标签** — `category` 和 `tech` 不设白名单，但写入前应查看现有标签（`kb list`），优先复用已有类别；只有全新领域才创建新类别
-3.  项目私有细节只写入必要上下文；可泛化规则再晋升到 `patterns.org`
-4.  卡片保存完整过程，pattern 保存紧凑规则；二者可以共存，pattern 必须引用卡片 ID
-
-写入质量规范（传播联动、自包含、时效性、矛盾检测、置信度）详见 `references/writing-guide.md`。
-
-AI-First 卡片规则（自包含、预备摘要、时效性、传播联动）详见 `references/ai-first-rules.md`。
-
-### 快速捕获
-
-```bash
-kb inbox "待捕获的想法"          # 快速写入 inbox.org
-echo "内容" | kb inbox           # 管道输入
-```
-
-### 统计概览
-
-```bash
-kb stats                        # 知识库统计：卡片数、类别分布、时间范围
-```
-
-### 更新卡片
-
-```bash
-kb update <卡片ID> --status done                                  # 更新状态
-kb update <卡片ID> --category guix                                # 更新类别
-kb update <卡片ID> --append-to "关键发现" --append-text "新发现"
-kb update <卡片ID> --stdin <<EOF                                  # 追加内容
-*** 补充信息
-新发现的边界条件
+...
 EOF
 ```
 
-### 双向链接
+参数取值详见 `references/parameters.md`
+
+具体的样板参见 `references/experience-template.org`
+
+## 管理
 
 ```bash
-kb connect <卡片A的ID> <卡片B的ID>               # 建立双向链接
-kb connect <卡片A的B> <卡片B的ID> --desc "描述"  # 带描述
-```
+kb update <ID> --status done                                   # 更新状态
+kb update <ID> --append-to "关键发现" --append-text "新发现"   # 追加内容
 
-### 用户画像
+kb update <ID> --stdin <<EOF                                   # 追加内容
+EOF
 
-用户画像存储在 `~/Documents/Org/profile.org`，替代 memory MCP 的用户记忆功能。
+kb connect <卡片A> <卡片B> --desc "描述"                       # 双向链接
 
-```bash
-kb profile                                 # 显示画像概览（所有分类 + 条目数）
-kb profile 身份                            # 查看「身份」分类
-kb profile 偏好                            # 查看「偏好」分类
-kb profile --add "目标" --text "新目标"    # 追加条目
-echo "- 新内容" | kb profile --set "偏好"  # 覆盖分类内容
-```
-
-画像分类：`身份`、`偏好`、`习惯`、`活跃项目`、`目标`。新增分类自动追加到文件末尾。
-
-### 查看
-
-```bash
-kb get <卡片ID或文件名>   # 查看完整内容（ID 即文件名前的时间戳，如 20260423-230246）
-kb patterns               # 列出所有模式标题
-kb patterns --get         # 显示模式全文
-```
-
-### 管理
-
-```bash
-kb patterns --add <<'EOF'
+kb patterns --add <<'EOF'                                      # 追加模式
 ** <结论性标题>
    <一句话声明式规则>。
    适用：<场景>
@@ -183,68 +94,29 @@ kb patterns --add <<'EOF'
    参考：<经验卡片 ID>
 EOF
 
-kb reindex   # 重建索引（新增/删除卡片后运行）
+kb inbox "待捕获的想法"                                         # 快速捕获
+kb stats                                                        # 统计概览
+kb reindex                                                      # 重建索引
 ```
 
-**模式写入规范**：模式是紧凑的声明式规则，非排查叙事。标题为结论，正文 ≤5 行。必须包含"适用/例外/参考"三个字段。
-
-模式写入后应检查：是否有旧模式被新规则取代？有则标注 `已过时` 并引用新模式。
-
-## 格式规范（CRITICAL）
-
-卡片格式为 **Org mode**，不是 Markdown。写入 `--stdin` 内容时必须遵守以下规则：
-
-### 代码块 — 用 `#+begin_src`，禁止 ` ``` `
-
-错误（Markdown）：
-
-````markdown
-```elisp
-(message "hello")
-```
-````
-
-正确（Org mode）：
-
-```org
-#+begin_src elisp
-(message "hello")
-#+end_src
-```
-
-### 强调 — 用 `*text*`，禁止 `**text**`
-
-错误：`**粗体**`
-
-正确：`*粗体*`
-
-注意：`** 任务描述`（`**` 后有空格）是 Org 二级标题，不是粗体。
-
-### 标题层级
-
-```org
-* DONE 标题
-** 任务描述
-*** 子章节
-```
-
-`kb add` 自动生成一级标题；`--stdin` 中从二级标题开始写。
-
-### 写入后校验
-
-写入后必须运行 `kb lint` 检查格式：
+## 写入后校验
 
 ```bash
 kb lint            # 检查所有卡片
 kb lint --fix      # 自动修复
 ```
 
-### Markdown → Org 速查表
+lint 规则详见 `references/markdown-to-org.md`，非必要不查看，请直接使用工具来进行相关操作。
 
-| Markdown        | Org mode                         | 说明     |
-| --------------- | -------------------------------- | -------- |
-| ` ```lang ``` ` | `#+begin_src lang ... #+end_src` | 代码块   |
-| `**bold**`      | `*bold*`                         | 粗体     |
-| `## heading`    | `*** heading`                    | 子标题   |
-| `- item`        | `+ item`                         | 无序列表 |
-| `` `code` ``    | `~code~`                         | 行内代码 |
+## 用户画像
+
+```bash
+kb profile                           # 概览
+kb profile <分类名>                  # 查看指定分类
+kb profile --add "目标" --text "..."  # 追加条目
+echo "- 新内容" | kb profile --set "偏好"  # 覆盖分类
+```
+
+## 子章节规则
+
+`kb add` 自动生成一级标题；`--stdin` 中从二级标题开始写。

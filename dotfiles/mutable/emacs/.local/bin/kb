@@ -25,6 +25,7 @@
 #   help     显示帮助
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -41,7 +42,7 @@ from pathlib import Path
 KB_ROOT = Path.home() / "Documents" / "Org"
 KB_EXPERIENCES = KB_ROOT / "experiences"
 KB_PATTERNS = KB_ROOT / "patterns.org"
-KB_INDEX = KB_ROOT / "index.org"
+KB_INDEX = KB_ROOT / "index.json"
 KB_INBOX = KB_ROOT / "inbox.org"
 KB_PROFILE = KB_ROOT / "profile.org"
 
@@ -75,49 +76,39 @@ def timestamp_id() -> str:
 def ensure_dirs() -> None:
     """确保知识库目录和基础文件存在。"""
     KB_EXPERIENCES.mkdir(parents=True, exist_ok=True)
-    for f in (KB_INBOX, KB_INDEX, KB_PATTERNS, KB_PROFILE):
+    for f in (KB_INBOX, KB_PATTERNS):
         if not f.exists():
-            base = f.stem
-            if f == KB_PROFILE:
-                _init_profile(f)
-            else:
-                f.write_text(
-                    f"#+title: {base}\n#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]\n\n",
-                    encoding="utf-8",
-                )
+            f.write_text(
+                f"#+title: {f.stem}\n#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]\n\n",
+                encoding="utf-8",
+            )
+    if not KB_PROFILE.exists():
+        _init_profile(KB_PROFILE)
+    if not KB_INDEX.exists():
+        _save_index({"version": 1, "updated": "", "total": 0, "cards": []})
 
 
 def _init_profile(filepath: Path) -> None:
-    """初始化用户画像模板。"""
+    """初始化用户画像模板。仅生成骨架，具体内容由 AI 在对话中总结后写入。"""
     filepath.write_text(
         f"""#+title: 用户画像
 #+date: [{datetime.now().strftime('%Y-%m-%d %a')}]
 
+#+BEGIN_COMMENT
+<critical>
+若以上的 ~date 距离当前日期超过七天，那么请务必一定要进行一次用户画像的更新。
+</critical>
+
+更新步骤见：~/.config/agents/skills/self-improving/SKILL.md
+#+END_COMMENT
+
 * 身份
-- 用户名：brokenshine
-- 系统环境：Guix System (tmpfs root + Btrfs 子卷)
 
 * 偏好
-** 编程语言
-- 首选：Scheme (Guile)、Emacs Lisp、Python
-- 包管理：Guix 优先，pnpm 替代 npm，uv 替代 pip
-
-** 编辑器与工具
-- 主力编辑器：Emacs
-- 终端模拟器：foot
-
-** 沟通风格
-- 语言：简体中文
-- 交互偏好：简洁直接
 
 * 习惯
-** 工作流
-- 配置管理：org-babel-tangle + maak
 
 * 活跃项目
-** Guix-configs
-- 路径：~/Projects/Config/Guix-configs
-- 描述：个人系统配置仓库
 
 * 目标
 """,
@@ -135,6 +126,80 @@ def read_org_title(content: str) -> str:
     """从 Org 内容中提取一级标题文本（去掉 DONE/TODO 前缀）。"""
     m = re.search(r"^\* (?:DONE|TODO) (.+)", content, re.MULTILINE)
     return m.group(1).strip() if m else "unknown"
+
+
+def _card_dict(filepath: Path) -> dict | None:
+    """从一张卡片文件提取索引条目，返回 dict 或 None。"""
+    if filepath.is_symlink():
+        return None
+    content = filepath.read_text(encoding="utf-8")
+    card_id = parse_org_prop(content, "ID") or filepath.stem.split("-")[0]
+    created = parse_org_prop(content, "CREATED")
+    if created:
+        created = re.sub(r"[\[\]]", "", created).split()[0]
+    entry_type = parse_org_prop(content, "ENTRY_TYPE") or None
+    tags_line = ""
+    m = re.search(r":(\S+)::", content)
+    if m:
+        tags_line = m.group(1)
+    return {
+        "id": card_id,
+        "file": str(filepath.relative_to(KB_ROOT)),
+        "title": read_org_title(content),
+        "category": parse_org_prop(content, "CATEGORY") or "general",
+        "tech": parse_org_prop(content, "TECH") or "",
+        "type": parse_org_prop(content, "TYPE") or "workflow",
+        "owner": parse_org_prop(content, "OWNER") or "ai",
+        "entry_type": entry_type,
+        "status": parse_org_prop(content, "STATUS") or "done",
+        "created": created or "",
+        "tags": tags_line.split(":") if tags_line else [],
+    }
+
+
+def _load_index() -> dict:
+    """加载 JSON 索引，失败返回空骨架。"""
+    if KB_INDEX.exists():
+        try:
+            return json.loads(KB_INDEX.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"version": 1, "updated": "", "total": 0, "cards": []}
+
+
+def _save_index(index: dict) -> None:
+    """写入 JSON 索引。"""
+    index["updated"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    index["total"] = len(index["cards"])
+    KB_INDEX.write_text(
+        json.dumps(index, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _rebuild_index() -> dict:
+    """全量扫描 experiences/ 重建索引 dict。"""
+    cards = []
+    for f in sorted(
+        KB_EXPERIENCES.rglob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
+        d = _card_dict(f)
+        if d:
+            cards.append(d)
+    return {"version": 1, "updated": "", "total": len(cards), "cards": cards}
+
+
+def _upsert_card(index: dict, filepath: Path) -> None:
+    """增量更新：插入或替换一张卡片到索引。"""
+    d = _card_dict(filepath)
+    if not d:
+        return
+    for i, c in enumerate(index["cards"]):
+        if c["id"] == d["id"]:
+            index["cards"][i] = d
+            break
+    else:
+        index["cards"].insert(0, d)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -228,6 +293,12 @@ def cmd_add(args: argparse.Namespace) -> None:
         lines.extend(_build_template(entry_type, body))
 
     filepath.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    # 增量更新 JSON 索引
+    index = _load_index()
+    _upsert_card(index, filepath)
+    _save_index(index)
+
     print(filepath)
 
 
@@ -329,39 +400,23 @@ def cmd_get(args: argparse.Namespace) -> None:
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    """列出经验卡片，支持过滤和数量限制。默认显示最近 20 条。"""
+    """列出经验卡片，支持过滤和数量限制。默认显示最近 20 条，输出 JSON。"""
     recent = args.recent if args.recent is not None else (0 if args.all else 20)
-
-    files = sorted(
-        KB_EXPERIENCES.rglob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
-    )
-    count = 0
-    for f in files:
-        if f.is_symlink():
+    index = _load_index()
+    matched = []
+    for c in index["cards"]:
+        if args.category and c["category"] != args.category:
             continue
-        content = f.read_text(encoding="utf-8")
-        title = read_org_title(content)
-        category = parse_org_prop(content, "CATEGORY")
-        type_ = parse_org_prop(content, "TYPE")
-        owner = parse_org_prop(content, "OWNER")
-        created = parse_org_prop(content, "CREATED")
-        if created:
-            created = re.sub(r"[\[\]]", "", created).split()[0]
-
-        # 应用过滤条件
-        if args.category and category != args.category:
+        if args.type and c["type"] != args.type:
             continue
-        if args.type and type_ != args.type:
+        if args.owner and c["owner"] != args.owner:
             continue
-        if args.owner and owner != args.owner:
-            continue
-
-        print(
-            f"{f}|{title}|{category or '?'}|{type_ or '?'}|{owner or '?'}|{created or '-'}"
-        )
-        count += 1
-        if recent > 0 and count >= recent:
+        matched.append(c)
+        if recent > 0 and len(matched) >= recent:
             break
+
+    compact = [{k: c[k] for k in ("id", "title", "category", "type", "tech")} for c in matched]
+    print(json.dumps(compact, ensure_ascii=False, indent=2))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -394,7 +449,7 @@ def cmd_search(args: argparse.Namespace) -> None:
 
 def cmd_fields(args: argparse.Namespace) -> None:
     """
-    扫描所有卡片，统计已有的 category/tech/type/owner 值及出现次数。
+    从 JSON 索引统计已有的 category/tech/type/owner 值及出现次数。
     帮助写入新卡片时优先复用已有标签。
     """
     show = {
@@ -408,27 +463,17 @@ def cmd_fields(args: argparse.Namespace) -> None:
             show[k] = True
 
     counters = {k: Counter() for k in show}
+    index = _load_index()
 
-    for f in KB_EXPERIENCES.rglob("*.org"):
-        if f.is_symlink():
-            continue
-        content = f.read_text(encoding="utf-8")
-        if show["category"]:
-            v = parse_org_prop(content, "CATEGORY")
-            if v:
-                counters["category"][v] += 1
-        if show["tech"]:
-            v = parse_org_prop(content, "TECH")
-            if v:
-                counters["tech"][v] += 1
-        if show["type"]:
-            v = parse_org_prop(content, "TYPE")
-            if v:
-                counters["type"][v] += 1
-        if show["owner"]:
-            v = parse_org_prop(content, "OWNER")
-            if v:
-                counters["owner"][v] += 1
+    for c in index["cards"]:
+        if show["category"] and c.get("category"):
+            counters["category"][c["category"]] += 1
+        if show["tech"] and c.get("tech"):
+            counters["tech"][c["tech"]] += 1
+        if show["type"] and c.get("type"):
+            counters["type"][c["type"]] += 1
+        if show["owner"] and c.get("owner"):
+            counters["owner"][c["owner"]] += 1
 
     labels = {"category": "category", "tech": "tech", "type": "type", "owner": "owner"}
     for key, label in labels.items():
@@ -520,90 +565,13 @@ def cmd_patterns(args: argparse.Namespace) -> None:
 
 def cmd_reindex(args: argparse.Namespace) -> None:
     """
-    扫描 experiences/ 目录下所有卡片，按 CATEGORY 属性分组，
-    重建 index.org 使其包含分类导航链接。
+    全量扫描 experiences/ 目录下所有卡片，重建 index.json。
     """
     ensure_dirs()
 
-    entries = []
-    for f in sorted(
-        KB_EXPERIENCES.rglob("*.org"), key=lambda p: p.stat().st_mtime, reverse=True
-    ):
-        if f.is_symlink():
-            continue
-        content = f.read_text(encoding="utf-8")
-        title = read_org_title(content)
-        category = parse_org_prop(content, "CATEGORY") or "general"
-        created = parse_org_prop(content, "CREATED")
-        if created:
-            created = re.sub(r"[\[\]]", "", created).split()[0]
-        entries.append((f, title, category, created or "未知日期"))
-
-    if not entries:
-        KB_INDEX.write_text(
-            f"""#+title: 知识库导航
-#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]
-
-* 概览
-知识库暂无经验卡片。使用 =kb add= 或 =C-c o k c= 添加。
-
-* 模式与原则
-  提炼出的通用模式/原则记录在 [[file:patterns.org][patterns.org]]。
-
-* 收件箱
-  快速捕获入口：[[file:inbox.org][inbox.org]]
-
-* 快速入口
-  - C-c o k c :: 快速捕获经验
-  - C-c o k s :: 检索经验
-  - C-c o k p :: 打开模式/原则
-  - C-c o k I :: 打开本索引
-  - kb reindex :: 重建本索引
-""",
-            encoding="utf-8",
-        )
-        print("索引已重建（无卡片，仅骨架）")
-        return
-
-    groups = defaultdict(list)
-    group_order = []
-    for f, title, category, created in entries:
-        if category not in groups:
-            group_order.append(category)
-        relpath = f.relative_to(KB_ROOT)
-        groups[category].append(f"  - [[file:{relpath}][{title}]] ({created})")
-
-    total = len(entries)
-
-    lines = []
-    lines.append("#+title: 知识库导航")
-    lines.append(f"#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]")
-    lines.append("")
-    lines.append("* 概览")
-    lines.append(f"共 {total} 条经验卡片，{len(group_order)} 个类别。")
-    lines.append("使用 =kb reindex= 重建本索引。")
-    lines.append("")
-    lines.append("* 收件箱")
-    lines.append("  快速捕获入口：[[file:inbox.org][inbox.org]]")
-    lines.append("")
-    lines.append("* 模式与原则")
-    lines.append("  提炼出的通用模式/原则记录在 [[file:patterns.org][patterns.org]]。")
-    lines.append("")
-    lines.append("* 按类别浏览")
-    for cat in group_order:
-        lines.append(f"** {cat} ({len(groups[cat])})")
-        lines.extend(groups[cat])
-        lines.append("")
-
-    lines.append("* 快速入口")
-    lines.append("  - C-c o k c :: 快速捕获经验")
-    lines.append("  - C-c o k s :: 检索经验")
-    lines.append("  - C-c o k p :: 打开模式/原则")
-    lines.append("  - C-c o k I :: 打开本索引")
-    lines.append("  - kb reindex :: 重建本索引")
-
-    KB_INDEX.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"索引已重建: {total} 条卡片, {len(group_order)} 个类别 → {KB_INDEX}")
+    index = _rebuild_index()
+    _save_index(index)
+    print(f"索引已重建: {index['total']} 条卡片 → {KB_INDEX}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -794,8 +762,9 @@ def cmd_inbox(args: argparse.Namespace) -> None:
 def cmd_stats(args: argparse.Namespace) -> None:
     """输出知识库的统计概览。"""
     ensure_dirs()
-    files = list(f for f in KB_EXPERIENCES.rglob("*.org") if not f.is_symlink())
-    total = len(files)
+    index = _load_index()
+    cards = index["cards"]
+    total = len(cards)
 
     cat_counter: Counter = Counter()
     type_counter: Counter = Counter()
@@ -803,19 +772,13 @@ def cmd_stats(args: argparse.Namespace) -> None:
     tech_counter: Counter = Counter()
     dates = []
 
-    for f in files:
-        content = f.read_text(encoding="utf-8")
-        cat = parse_org_prop(content, "CATEGORY") or "unknown"
-        type_ = parse_org_prop(content, "TYPE") or "unknown"
-        owner = parse_org_prop(content, "OWNER") or "unknown"
-        tech = parse_org_prop(content, "TECH") or "unknown"
-        created = parse_org_prop(content, "CREATED")
-        cat_counter[cat] += 1
-        type_counter[type_] += 1
-        owner_counter[owner] += 1
-        tech_counter[tech] += 1
-        if created:
-            dates.append(re.sub(r"[\[\]]", "", created).split()[0])
+    for c in cards:
+        cat_counter[c.get("category", "unknown")] += 1
+        type_counter[c.get("type", "unknown")] += 1
+        owner_counter[c.get("owner", "unknown")] += 1
+        tech_counter[c.get("tech", "unknown")] += 1
+        if c.get("created"):
+            dates.append(c["created"])
 
     print(f"═══ 知识库统计 ═══")
     print(f"总卡片数: {total}")

@@ -1,12 +1,12 @@
+<rules>
+
 <critical>
 你不是单独在这个仓库里工作。可能还有其他 agent 或人工编辑者同时修改文件。
 </critical>
 
----
-
 <rule scope="git">
 
-禁止：
+**禁止**：
 
 - 整文件重写实现小功能、清理/格式化无关内容、提交无关文件
 - 不遵守 `~/.config/git/gitmessage` 中的 commit 规范进行对应操作
@@ -27,18 +27,17 @@
 
 ---
 
+<critical>
+在进行任何任务之前，请先利用 `kb list --category <category>` 来获取相关领域的知识库内容
+</critical>
+
 <rule scope="knowledge-base">
 
-<critical>
-
-每次接到非平凡任务, 必须执行预检：
+每次接到任务时，按照以下步骤来调用知识库：
 
 1. 调用 `knowledge-base` skill 加载 CLI 用法
 2. 运行 `kb search "任务相关技术/"工具/"框架"` 检索历史经验
-3. 运行 `kb profile` 回顾用户偏好和活跃项目
 4. 高相关经验 → 作为上下文参考输出提醒；空/低相关 → 静默继续
-
-</critical>
 
 对话中检测经验信号
 自动检测以下信号，触发 `self-improving` skill 记录：
@@ -75,10 +74,9 @@
 </signals>
 
 <checklist>
-写入规范速查
-- 格式：** Org mode **，不是 Markdown（`#+begin_src` 而非 `````）
+规范速查
 - 流程：写入前 `kb search` 去重，`kb fields` 复用已有标签
-- 校验：写入后 `kb lint` 校验格式
+- 校验：写入后 `kb lint --fix` 校验并修复格式
 - 标题应包含结论："X 导致 Y"而非 "Y 问题排查"
 - 不确定结论标注 `(推测)` / `(单源)`
 - 时效性声明附 `(截至 YYYY-MM)`
@@ -87,3 +85,5 @@
 </checklist>
 
 </rule>
+
+</rules>
