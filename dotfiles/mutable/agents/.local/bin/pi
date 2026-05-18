@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}"
+  while [[ -L "${source}" ]]; do
+    local dir
+    dir="$(cd -P "$(dirname "${source}")" && pwd)"
+    source="$(readlink "${source}")"
+    [[ "${source}" != /* ]] && source="${dir}/${source}"
+  done
+  cd -P "$(dirname "${source}")" && pwd
+}
+
+ensure_installed() {
+  local xdg_data_home="${XDG_DATA_HOME:-${HOME}/.local/share}"
+  local pi_root="${PI_LOCAL_ROOT:-${xdg_data_home}/pi}"
+
+  if [[ -d "${pi_root}/agent" && -x "${pi_root}/node_modules/.bin/pi" ]]; then
+    cd "${pi_root}" && pwd
+    return 0
+  fi
+
+  if ! command -v bun &>/dev/null; then
+    echo "bun is not installed. Please install bun first." >&2
+    return 1
+  fi
+
+  if [[ ! -d "${pi_root}" ]]; then
+    echo "Pi local root not found at ${pi_root}." >&2
+    return 1
+  fi
+
+  echo "Installing Pi dependencies..." >&2
+  cd "${pi_root}" && bun install
+
+  local npm_dir="${pi_root}/agent/npm"
+  if [[ -f "${npm_dir}/package.json" ]]; then
+    echo "Installing agent plugins..." >&2
+    cd "${npm_dir}" && bun install
+  fi
+
+  cd "${pi_root}" && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_path)"
+ROOT_DIR="$(ensure_installed)"
+AGENT_DIR="${ROOT_DIR}/agent"
+BIN_DIR="${ROOT_DIR}/node_modules/.bin"
+
+export PATH="${BIN_DIR}:${PATH}"
+export PI_HOME="${AGENT_DIR}"
+export PI_CODING_AGENT_DIR="${AGENT_DIR}"
+
+if [[ ! -e "${HOME}/.pi/agent" ]]; then
+  mkdir -p "${HOME}/.pi"
+  ln -sfn "${AGENT_DIR}" "${HOME}/.pi/agent"
+fi
+
+exec pi "$@"
