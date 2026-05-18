@@ -12,8 +12,8 @@
   "options": {
     "context_paths": [
       "~/Documents/Org/profile.org",
-      "~/.config/agents/context/01-language.md",
-      "~/.config/agents/context/02-ultilities.md"
+      "~/.agents/context/01-language.md",
+      "~/.agents/context/02-ultilities.md"
     ],
     "tui": {
       "compact_mode": true,
