@@ -5,9 +5,6 @@
 __pycache__
 tmp
 node_modules
-package.json
-bun.lock
-.gitignore
 
 .codex
 .sisyphus
