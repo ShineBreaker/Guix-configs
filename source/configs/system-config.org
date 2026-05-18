@@ -481,7 +481,10 @@
                (openssh-configuration
                 (password-authentication? #f)))
 
-      (service tailscale-service-type)
+      (service tailscale-service-type
+               (tailscale-configuration
+                (verbosity 1)
+                (extra-options '("--tun=userspace-networking"))))
 
       (simple-service 'mihomo-services shepherd-root-service-type
                       (list (shepherd-service (documentation

@@ -80,6 +80,7 @@ tun:
   auto-detect-interface: true
   route-exclude-address:
     - 10.42.0.0/24
+    - 100.64.0.0/10 # Tailscale CGNAT
 
 dns:
   enable: true
