@@ -5,6 +5,7 @@
 
   home.packages = with pkgs; [
     ## 编程工具
+    opencode-desktop
     yaak
 
     ## Android
@@ -13,7 +14,6 @@
     scrcpy
 
     ## 工具
-    claude-agent-acp
     gamescope
     pmbootstrap
     sunshine

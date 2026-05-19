@@ -1,34 +1,22 @@
-{
-  pkgs,
-  ...
-}:
+{ pkgs, ... }:
 
 {
   nixpkgs.config = {
     allowUnfree = true;
     allowBroken = false;
-    permittedInsecurePackages = [
-      "beekeeper-studio-5.5.7"
-    ];
+    permittedInsecurePackages = [ "beekeeper-studio-5.5.7" ];
   };
 
   nix = {
     package = pkgs.lixPackageSets.git.lix;
     settings = {
       auto-optimise-store = true;
-      trusted-users = [
-        "root"
-        "brokenshine"
-      ];
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
+      trusted-users = [ "root" "brokenshine" ];
+      experimental-features = [ "nix-command" "flakes" ];
       builders-use-substitutes = true;
       keep-derivations = true;
       substituters = [
         "https://mirrors.ustc.edu.cn/nix-channels/store"
-        "https://mirror.sjtu.edu.cn/nix-channels/store"
         "https://mirror.nju.edu.cn/nix-channels/store"
         "https://mirror.iscas.ac.cn/nix-channels/store"
         "https://mirrors.tuna.tsinghua.edu.cn/nix-channels/store"

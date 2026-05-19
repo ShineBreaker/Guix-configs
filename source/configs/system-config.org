@@ -138,6 +138,7 @@
 
              (jeans packages desktop)
              (jeans services hardware)
+             (jeans services nix-ld)
 
              (rosenthal packages networking)
              (rosenthal packages wm)
@@ -589,6 +590,8 @@
 
         (list (simple-service 'home-channels home-channels-service-type
                               guix-channels)
+
+              (service nix-ld-service-type)
 
               ;; Nonguix channel
               (simple-service 'nonguix-substitutes guix-service-type
