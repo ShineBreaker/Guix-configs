@@ -172,9 +172,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 工具
         "atuin"
         "btop"
-        "kitty-full"
         "starship"
-        "warp-oss-bin"
 
         ;; 运行器
         "just"
@@ -249,6 +247,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; AI Agent
         "crush-bin"
         "opencode-bin"
+        "opencode-desktop-bin"
 
         ;; 工具
         "du-dust"
@@ -807,7 +806,7 @@ end
 
 用法为：
 
-1. 在需要的配置文件内以 =&&bin/foo&&= 的形式来写你所需要写入的二进制路径
+1. 在需要的配置文件内以 =$$bin/foo$$= 的形式来写你所需要写入的二进制路径
 2. 在 =specs->pkgs= 参数中写入能够提供这些二进制的软件包
 
 #+NAME: home-files-services
@@ -818,7 +817,25 @@ end
                  (".config/qt5ct/qss/rounded.qss" ,(local-file
                                                     "../source/files/rounded.qss"))
                  (".config/qt6ct/qss/rounded.qss" ,(local-file
-                                                    "../source/files/rounded.qss")))))
+                                                    "../source/files/rounded.qss"))
+
+                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
+                                                "zed.json"
+                                                (local-file
+                                                 "../source/files/zed.json")
+                                                (specs->pkgs
+                                                 "ccls"
+                                                 "clang"
+                                                 "jdtls-bin"
+                                                 "maven"
+                                                 "node"
+                                                 "package-version-server"
+                                                 "python-black"
+                                                 "python-jsbeautifier"
+                                                 "python-lsp-black"
+                                                 "python-lsp-server"
+                                                 "python-pylsp-mypy"
+                                                 "rust-analyzer"))))))
 #+end_src
 
 ** 环境变量
@@ -911,8 +928,8 @@ end
                            (string-append
                             "$HOME/.local/share/flatpak/exports/share:"
                             "/var/lib/flatpak/exports/share:"
-                            "$HOME/.nix-profile/share:"
-                            "/nix/var/nix/profiles/default/share:"
+                            ; "$HOME/.nix-profile/share:"
+                            ; "/nix/var/nix/profiles/default/share:"
                             "$XDG_DATA_DIRS"))))))
 #+end_src
 

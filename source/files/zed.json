@@ -3,26 +3,17 @@
   "ui_font_family": "Sarasa UI SC",
   "buffer_font_family": "Maple Mono NF CN",
   "agent_servers": {
-    "claude-acp": {
-      "type": "registry"
-    },
-    "codebuddy-code": {
-      "type": "registry"
-    },
-    "codex-acp": {
-      "type": "registry"
-    },
     "opencode": {
       "type": "registry"
     },
-    "cline": {
+    "pi-acp": {
       "type": "registry"
     }
   },
   "theme": {
     "mode": "system",
-    "light": "Noctalia Light",
-    "dark": "Noctalia Dark"
+    "light": "One Light",
+    "dark": "One Dark"
   },
   "language_models": {
     "opencode": {
@@ -38,7 +29,7 @@
     "default_model": {
       "provider": "opencode",
       "model": "go/glm-5.1",
-      "enable_thinking": false
+      "enable_thinking": true
     },
     "model_parameters": [],
     "play_sound_when_agent_done": "always",
@@ -116,7 +107,7 @@
       "language_servers": ["ccls"],
       "formatter": {
         "external": {
-          "command": "clang-format",
+          "command": "$$bin/clang-format$$",
           "arguments": ["-style=file", "-assume-filename={buffer_path}"]
         }
       }
@@ -125,7 +116,7 @@
       "language_servers": ["ccls"],
       "formatter": {
         "external": {
-          "command": "clang-format",
+          "command": "$$bin/clang-format$$",
           "arguments": ["-style=file", "-assume-filename={buffer_path}"]
         }
       }
@@ -136,7 +127,7 @@
     "JSON": {
       "formatter": {
         "external": {
-          "command": "js-beautify",
+          "command": "$$bin/js-beautify$$",
           "arguments": ["--stdin", "--indent-size", "2", "-"]
         }
       }
@@ -145,13 +136,10 @@
       "soft_wrap": "prefer_line",
       "formatter": {
         "external": {
-          "command": "js-beautify",
+          "command": "$$bin/js-beautify$$",
           "arguments": ["--stdin", "--indent-size", "2", "-"]
         }
       }
-    },
-    "Kotlin": {
-      "language_servers": ["!kotlin-lsp", "kotlin-language-server"]
     },
     "Python": {
       "language_servers": [
@@ -163,7 +151,7 @@
       ],
       "formatter": {
         "external": {
-          "command": "black",
+          "command": "$$bin/black$$",
           "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
         }
       }
@@ -172,31 +160,31 @@
   "lsp": {
     "ccls": {
       "binary": {
-        "path": "ccls"
+        "path": "$$bin/ccls$$"
       }
     },
     "jdtls": {
       "binary": {
-        "path": "jdtls"
+        "path": "$$bin/jdtls$$"
       }
     },
     "kotlin-language-server": {
       "settings": {
         "compiler": {
           "jvm": {
-            "target": "17"
+            "target": "25"
           }
         }
       }
     },
     "package-version-server": {
       "binary": {
-        "path": "~/.nix-profile/bin/package-version-server"
+        "path": "$$bin/package-version-server$$"
       }
     },
     "pylsp": {
       "binary": {
-        "path": "pylsp"
+        "path": "$$bin/pylsp$$"
       },
       "initialization_options": {
         "pylsp": {
@@ -216,9 +204,13 @@
     },
     "rust-analyzer": {
       "binary": {
-        "path": "rust-analyzer"
+        "path": "$$bin/rust-analyzer$$"
       }
     }
+  },
+  "node": {
+    "path": "$$bin/node$$",
+    "npm_path": "$$bin/npm$$"
   },
   "lsp_document_colors": "inlay",
   "minimap": {
