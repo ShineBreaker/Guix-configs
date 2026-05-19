@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "zhipu",
-  "defaultModel": "glm-5.1",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "kimi-k2.6",
   "defaultThinkingLevel": "high",
   "npmCommand": [
     "bun"
@@ -28,9 +28,16 @@
     "npm:pi-hashline-edit",
     "npm:pi-lens",
     "npm:@ff-labs/pi-fff",
+    "npm:pi-cache-graph",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:@juicesharp/rpiv-advisor",
+    "npm:@juicesharp/rpiv-btw",
+    "npm:@tmustier/pi-ralph-wiggum",
     "npm:pi-context-prune"
   ],
-  "extensions": [],
+  "extensions": [
+    "./*"
+  ],
   "skills": [
     "./skills/*"
   ],
@@ -103,9 +110,15 @@
   "images": {
     "blockImages": true
   },
-  "theme": "dark",
-  "showHardwareCursor": true,
+  "theme": "light",
+  "showHardwareCursor": false,
   "transport": "auto",
   "collapseChangelog": true,
-  "quietStartup": true
+  "quietStartup": true,
+  "globalContext": {
+    "contextDir": "/home/brokenshine/.config/agents/context",
+    "extraFiles": [
+      "/home/brokenshine/Documents/Org/profile.org"
+    ]
+  }
 }
