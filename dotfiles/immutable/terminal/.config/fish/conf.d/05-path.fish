@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0
 
 ## Nix
-fenv . $HOME/.nix-profile/etc/profile.d/hm-session-vars.sh
+# fenv . $HOME/.nix-profile/etc/profile.d/hm-session-vars.sh
 
 ## PNPM
 mkdir -p $HOME/.local/share/pnpm

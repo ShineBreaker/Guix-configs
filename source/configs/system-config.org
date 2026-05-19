@@ -80,10 +80,10 @@
      <<networking-services>>
      <<virtualization-services>>
      <<kernel-services>>
-     <<nix-services>>
+     ;; <<nix-services>>
      <<filesystem-services>>
      <<desktop-services>>
-     )))
+     ))
 
 (skeletons
   <<skeletons-config>>
@@ -396,7 +396,7 @@
  ;; 包管理器
  "flatpak"
  "flatpak-xdg-utils"
- "nix"
+ ; "nix"
 
  ;; 工具
  "cpufrequtils"
@@ -719,7 +719,7 @@
                                 (initial-session-command
                                  (program-file "niri-session"
                                                #~(execl #$(file-append niri "/bin/niri")
-                                                        "--session")))))))))
+                                                        "--session"))))))))))
 #+end_src
 
 

@@ -60,5 +60,4 @@
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
     ("DATA/Home/Guix"                      "/home")
-    ("DATA/LibVirt"                        "/var/lib/libvirt")
-    ("DATA/Nix"                            "/nix")))
+    ("DATA/LibVirt"                        "/var/lib/libvirt")))
