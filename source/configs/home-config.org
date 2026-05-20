@@ -159,7 +159,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "xdg-utils"
 
         ;; 主题
-        "breeze"
         "bibata-cursor-theme"
         "orchis-theme"
         "orchis-kde-themes"
@@ -253,6 +252,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; AI Agent
         "crush-bin"
+        "oh-my-pi-bin"
         "opencode-bin"
         "opencode-desktop-bin"
 
@@ -897,6 +897,10 @@ end
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
+  ;; Pi Agent
+  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
+  ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
+  ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
   ;; python
   ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
   ;; rust
