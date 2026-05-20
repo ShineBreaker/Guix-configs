@@ -6,13 +6,15 @@ SPDX-License-Identifier: GPL-3.0
 
 # Agent 系统配置
 
-本目录通过 `maak home` 的 stow 链接到 `~/.config/agents/` 和 `~/.local/share/pi/`。
+本目录通过 `maak home` 的 stow 链接到 `~/.config/` 和 `~/.local/`。
 
 ## 概述
 
 当前目录承载两套 Agent 系统：
 
-- **Pi Agent**（`~/.local/share/pi/`）— 基于 `badlogic/pi-mono` 的自定义 Agent 框架，含扩展、Skills、Subagent
+- **Pi Agent**（XDG 分层）— 基于 `badlogic/pi-mono` 的自定义 Agent 框架
+  - 配置层 `~/.config/pi/`：settings.json、agents、extensions、prompts 等
+  - 数据层 `~/.local/share/pi/`：package.json、node_modules、npm、sessions 等
 - **全局上下文**（`~/.config/agents/context/`）— 被 OpenCode / Crush / Pi 共同引用的统一指引
 
 ## 目录结构
@@ -21,16 +23,24 @@ SPDX-License-Identifier: GPL-3.0
     ├── .config/
     │   ├── agents/context/    # 01-language.md, 02-ultilities.md（全局指令）
     │   ├── agents/skills/     # kb-curator, knowledge-base, self-improving
-    │   └── crush/             # Crush superpowers 配置（bin/、hooks/、crush.json）
+    │   ├── crush/             # Crush superpowers 配置（bin/、hooks/、crush.json）
+    │   └── pi/                # Pi Agent 配置层（agents、extensions、prompts、settings 等）
     └── .local/
         ├── bin/               # kb、pi 入口脚本
-        └── share/pi/          # Pi Agent 完整配置（详见子目录 AGENTS.md）
+        └── share/pi/          # Pi Agent 数据层（package.json、scripts、npm）
+
+## 环境变量
+
+| 变量 | 值 | 用途 |
+| --- | --- | --- |
+| `PI_CODING_AGENT_DIR` | `$XDG_CONFIG_HOME/pi` | Agent 配置目录 |
+| `PI_CODING_AGENT_SESSION_DIR` | `$XDG_DATA_HOME/pi/sessions` | Session 存储目录 |
 
 ## 关键约定
 
 - **加载顺序**：`01-language.md` → `02-ultilities.md`（AI 助手在最外层 AGENTS.md 中可同步注入）
 - **Skills 引用**：`~/.config/agents/skills/` 中的 SKILL.md 被 OpenCode 的 `available_skills` 引用
-- **Pi Agent** 的 Skills 不放在本目录，而是独立置于 `~/.pi/agent/skills/`
+- **Pi Agent** 的 Skills 由安装的 npm 包提供，位于 `~/.local/share/pi/node_modules/` 中
 
 ## 修改约束
 

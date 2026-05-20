@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "opencode-go",
-  "defaultModel": "kimi-k2.6",
+  "defaultProvider": "zhipu",
+  "defaultModel": "glm-5.1",
   "defaultThinkingLevel": "high",
   "npmCommand": [
     "bun"
@@ -32,8 +32,7 @@
     "npm:@juicesharp/rpiv-todo",
     "npm:@juicesharp/rpiv-advisor",
     "npm:@juicesharp/rpiv-btw",
-    "npm:@tmustier/pi-ralph-wiggum",
-    "npm:pi-context-prune"
+    "npm:@tmustier/pi-ralph-wiggum"
   ],
   "extensions": [
     "./*"
@@ -110,7 +109,7 @@
   "images": {
     "blockImages": true
   },
-  "theme": "light",
+  "theme": "dark",
   "showHardwareCursor": false,
   "transport": "auto",
   "collapseChangelog": true,

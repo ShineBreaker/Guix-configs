@@ -1,0 +1,4 @@
+# Bun lockfiles — managed by pi entry script sync, not stow
+bun\.lock
+# Python cache
+\.mypy_cache
