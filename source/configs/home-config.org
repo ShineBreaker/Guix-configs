@@ -122,6 +122,12 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 #+NAME: desktop-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
+        ;; 桌面组件
+        "fuzzel"
+        "mako"
+        "swww"
+        "waypaper"
+
         ;; 字体
         "font-awesome"
         "font-google-noto-emoji"
@@ -153,13 +159,14 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "xdg-utils"
 
         ;; 主题
-        "adw-gtk3-theme"
-        "adwaita-icon-theme"
         "breeze"
         "bibata-cursor-theme"
+        "orchis-theme"
+        "orchis-kde-themes"
         "papirus-icon-theme"
 
         ;; QT框架相关
+        "kvantum"
         "qt5ct"
         "qt6ct"))
 #+end_src
@@ -594,9 +601,10 @@ end
 #+NAME: user-desktop-services
 #+begin_src scheme :noweb yes
 <<default-applications>>
+<<waybar-desktop-services>>
 
 (list (service home-dbus-service-type)
-      (service home-noctalia-shell-service-type)
+      ; (service home-noctalia-shell-service-type)
       (service home-pipewire-service-type)
       (service home-syncthing-service-type)
 
@@ -774,11 +782,11 @@ end
                (home-dotfiles-configuration
                 (directories '("../dotfiles/immutable"))
                 (layout 'stow)
-                (packages '("darkman"
-                            "desktop"
+                (packages '("desktop"
                             "system"
                             "terminal"
-                            "utilities"))
+                            "utilities"
+                            "wm"))
                 (excluded '(".*~"
                             ".*\\.swp"
                             "\\.git"

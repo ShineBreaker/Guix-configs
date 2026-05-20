@@ -1,7 +1,7 @@
 include "settings/key-bindings.kdl"
 include "settings/window-rules.kdl"
 
-include optional=true "settings/key-bindings-noctalia.kdl"
+include optional=true "settings/key-bindings-wm.kdl"
 include optional=true "noctalia.kdl"
 
 environment {
@@ -100,7 +100,10 @@ layer-rule {
 }
 
 layer-rule {
+  match namespace="launcher"
+  match namespace="notifications"
   match namespace="^noctalia-(background|launcher-overlay|dock)-.*$"
+  match namespace="waybar"
   background-effect {
     blur true
     xray false
