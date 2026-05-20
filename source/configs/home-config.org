@@ -782,7 +782,8 @@ end
                (home-dotfiles-configuration
                 (directories '("../dotfiles/immutable"))
                 (layout 'stow)
-                (packages '("desktop"
+                (packages '("agents"
+                            "desktop"
                             "system"
                             "terminal"
                             "utilities"
@@ -898,7 +899,7 @@ end
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
   ;; Pi Agent
-  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
+  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi")
   ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
   ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
   ;; python
