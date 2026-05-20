@@ -94,6 +94,7 @@
     }
   },
   "git_panel": {
+    "tree_view": true,
     "button": true,
     "dock": "left"
   },
