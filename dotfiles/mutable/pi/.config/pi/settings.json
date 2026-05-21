@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "zhipu",
-  "defaultModel": "glm-5.1",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "kimi-k2.6",
   "defaultThinkingLevel": "high",
   "npmCommand": [
     "bun"
@@ -20,7 +20,6 @@
   },
   "packages": [
     "npm:context-mode",
-    "npm:pi-subagents",
     "npm:pi-mcp-adapter",
     "npm:pi-web-access",
     "npm:@plannotator/pi-extension",
@@ -33,9 +32,6 @@
     "npm:@juicesharp/rpiv-advisor",
     "npm:@juicesharp/rpiv-btw",
     "npm:@tmustier/pi-ralph-wiggum"
-  ],
-  "extensions": [
-    "./*"
   ],
   "skills": [
     "./skills/*"
@@ -59,38 +55,10 @@
       "opencode-go/deepseek-v4-flash"
     ]
   },
-  "subagents": {
-    "parallel": {
-      "maxTasks": 8,
-      "concurrency": 4
-    },
-    "agentOverrides": {
-      "scout": {
-        "model": "opencode-go/deepseek-v4-flash",
-        "thinking": "low",
-        "inheritProjectContext": true,
-        "inheritSkills": false
-      },
-      "researcher": {
-        "model": "opencode-go/deepseek-v4-pro",
-        "thinking": "medium"
-      },
-      "oracle": {
-        "model": "zhipu/glm-5.1",
-        "inheritProjectContext": true,
-        "inheritSkills": false
-      },
-      "delegate": {
-        "model": "opencode-go/deepseek-v4-pro",
-        "inheritProjectContext": true,
-        "inheritSkills": false
-      },
-      "context-builder": {
-        "model": "zhipu/glm-5.1",
-        "inheritProjectContext": true,
-        "inheritSkills": false
-      }
-    }
+  "tmuxSubagents": {
+    "pollIntervalMs": 2000,
+    "panePrefix": "sub:",
+    "keepResults": 24
   },
   "powerline": {
     "preset": "default",
@@ -105,7 +73,7 @@
     "enabled": true,
     "maxIterations": 20
   },
-  "lastChangelogVersion": "0.75.3",
+  "lastChangelogVersion": "0.75.4",
   "images": {
     "blockImages": true
   },
