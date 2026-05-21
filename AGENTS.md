@@ -23,12 +23,12 @@ source/configs/*.org
         ▼  maak → Emacs org-babel-tangle（Noweb 拼合）
 tmp/*.scm
         │
-        ▼  guix time-machine --channels=channel.lock reconfigure
+        ▼  guix time-machine --channels=source/channel.lock reconfigure
 系统 / 用户环境
 ```
 
 - Org 文件使用 Noweb `<<ref>>` 语法拼合代码块为完整 .scm
-- `maak` 基于 Scheme 定义在 `maak.scm` 中，所有 guix 命令通过 `guix time-machine --channels=channel.lock` 锁定频道版本
+- `maak` 基于 Scheme 定义在 `maak.scm` 中，所有 guix 命令通过 `guix time-machine --channels=source/channel.lock` 锁定频道版本
 
 ## 工作优先级
 
@@ -38,36 +38,46 @@ tmp/*.scm
 
 ## 文件路由表
 
-| 任务类型   | 优先读取位置                                         | 子目录指引         |
-| ---------- | ---------------------------------------------------- | ------------------ |
-| 系统配置   | `source/configs/system-config.org` 头部的 Agent 专区 | `source/AGENTS.md` |
-| 用户配置   | `source/configs/home-config.org` 头部的 Agent 专区   | `source/AGENTS.md` |
-| Emacs 配置 | `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`     | —                  |
-| 全局变量   | `source/information.scm`                             | —                  |
-| 频道定义   | `source/channel.scm`                                 | —                  |
-| 静态模板   | `source/files/`                                      | `source/AGENTS.md` |
-| dotfiles   | `dotfiles/<app>/`                                    | —                  |
+| 任务类型          | 优先读取位置                                         | 子目录指引                         |
+| ----------------- | ---------------------------------------------------- | ---------------------------------- |
+| 系统配置          | `source/configs/system-config.org` 头部的 Agent 专区 | `source/AGENTS.md`                 |
+| 用户配置          | `source/configs/home-config.org` 头部的 Agent 专区   | `source/AGENTS.md`                 |
+| **Emacs 配置**    | `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`     | 含知识库体系，详见下方             |
+| **Pi Agent 配置** | `dotfiles/mutable/pi/.config/pi/`                    | settings.json + agents/ + prompts/ |
+| 全局变量          | `source/information.scm`                             | —                                  |
+| 频道定义          | `source/channel.scm`                                 | —                                  |
+| 静态模板          | `source/files/`                                      | `source/AGENTS.md`                 |
+| dotfiles          | `dotfiles/<app>/`                                    | —                                  |
 
 <critical>
 **路由指令**：
 1. 遇到 Home/System 配置任务时，优先读取对应 org 文件头部的 Agent 专区 + `source/AGENTS.md`
 2. 修改软件配置时，优先修改 `dotfiles/` 内的文件，再提醒用户运行 `maak home`
+3. **Emacs 配置修改**：先读 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`，新包需同步修改 `source/configs/home-config.org` 的包清单
+4. **Pi Agent 修改**：先读 `dotfiles/mutable/pi/.config/pi/` 下的配置，settings.json 是核心配置
 </critical>
 
 ## dotfiles 三层结构
 
 ```
 dotfiles/
-├── immutable/   # Guix Home 管理（只读，maak home 时自动部署）
-│   ├── darkman/     desktop/     system/     terminal/     utilities/
-├── mutable/     # GNU Stow 管理（可直接调试修改，maak home 时重链）
-│   ├── emacs/   tmux/   zed/   noctalia/   ssh/
-└── disable/     # 已禁用的旧配置（.config/ 下含 darkman/fuzzel/mako/niri/swayidle/swaylock/waybar）
+├── immutable/   # Guix Home 管理（只读，构建时复制到 store）
+│   ├── agents/      # AI 助手系统（Pi/Crush/OpenCode/KB skills）
+│   ├── desktop/     # 桌面环境（niri WM、autostart、portal）
+│   ├── system/      # 系统级（containers、pipewire、xdg-dirs）
+│   ├── terminal/    # 终端工具链（fish、tmux、foot、btop、starship）
+│   ├── utilities/   # 开发工具（helix、git、kanata、winapps、rime）
+│   └── wm/          # WM 主题（darkman 明暗切换、waybar、fuzzel、mako）
+├── mutable/     # GNU Stow 管理（直接调试修改，maak home 时重链）
+│   ├── emacs/   # Emacs 配置（子模块 → codeberg.org/BrokenShine/.emacs.d）
+│   └── ssh/     # SSH 配置
+└── disable/     # 已禁用的旧配置（nix、noctalia）
 ```
 
-- `immutable/`：通过 Guix Home 的 `home-dotfiles-service-type` 管理，构建时复制到 store
+- `immutable/`：通过 Guix Home 的 `home-dotfiles-service-type` 管理
 - `mutable/`：通过 `maak home` 中的 `stow-dotfiles` 函数用 GNU Stow 链接到 `$HOME`
 - `disable/`：不再启用的配置文件，保留供参考
+- 各子目录详见 `dotfiles/AGENTS.md` 及子目录局部 AGENTS.md
 
 ## 频道架构
 
@@ -112,15 +122,12 @@ dotfiles/
 maak init      # 安装系统到 /mnt
 maak system    # guix system reconfigure（自动 tangle + time-machine + 括号检查）
 maak home      # guix home reconfigure（自动括号检查 + stow mutable dotfiles）
-maak rebuild   # system + home + locate --update
+maak rebuild   # system + home（含 guix locate --update 更新文件索引）
 maak upgrade   # 更新 channel.lock + git commit -S
 maak pull      # guix pull --allow-downgrades --fallback
-maak clean     # 删除旧的系统/用户 generations
-maak gc        # clean + guix gc + 清理旧 EFI
+maak clean     # 删除所有旧 system/home generations（慎用，默认删除全部旧版本）
+maak gc        # clean + guix gc + 清理旧 EFI 文件（⚠ 非 Guix 命令，直接操作 /boot 分区）
 maak reuse     # 为所有文件添加 SPDX 版权头
-maak nix       # 应用 Nix home-manager 配置
-maak nix-init  # 初始化 Nix home-manager
-maak nix-update # 更新 Nix flake
 ```
 
 ### 配置验证

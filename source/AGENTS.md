@@ -10,14 +10,15 @@ SPDX-License-Identifier: GPL-3.0
 
 ```
 source/
-├── channel.scm         # 频道定义（guix、jeans、nonguix、rosenthal）
+├── channel.scm         # 频道定义（guix、jeans、nonguix、pantherx、rosenthal）
 ├── channel.lock        # 锁定的频道版本（由 maak upgrade 更新，不要手动编辑）
 ├── information.scm     # 全局变量（username、%data-dirs、%btrfs-subvolumes 等）
 ├── configs/
 │   ├── home-config.org     # Home 环境配置（tangle → tmp/home-config.scm）
+│   │   └── AGENTS.md       # Org 配置指引
 │   └── system-config.org   # 系统配置（tangle → tmp/system-config.scm）
+│       └── AGENTS.md       # Org 配置指引
 ├── files/              # 静态模板文件（见下方说明）
-└── nix/                # 实验性 Nix 配置
 ```
 
 ## Org Noweb 机制
@@ -36,7 +37,7 @@ source/
 source/configs/*.org
     → maak 调用 emacs --batch org-babel-tangle
     → tmp/*.scm（完整 Scheme 文件）
-    → guix time-machine --channels=channel.lock system/home reconfigure
+    → guix time-machine --channels=source/channel.lock system/home reconfigure
 ```
 
 - `maak system`：tangle system-config.org → tmp/system-config.scm → guix system reconfigure
