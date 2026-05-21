@@ -24,7 +24,7 @@ for plugin in "${plugins[@]}"; do
   current=$((current + 1))
   printf "[%d/%d] 更新 %s ... " "$current" "$total" "$plugin"
 
-  if opencode plugin "$plugin" -f < /dev/null > /dev/null 2>&1; then
+  if opencode plugin "$plugin" -f -g < /dev/null > /dev/null 2>&1; then
     echo "OK"
     ok=$((ok + 1))
   else
