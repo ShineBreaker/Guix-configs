@@ -1,0 +1,8 @@
+keys:
+  - &user_brokenshine age1tnauny3g4vj0y8pu7etz4dx38m3yvne2kzydkjklnw83arj47cdq2sgzhe
+
+creation_rules:
+  - path_regex: ^dotfiles/secrets/.*\.yaml$
+    key_groups:
+      - age:
+          - *user_brokenshine
