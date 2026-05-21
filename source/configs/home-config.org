@@ -91,7 +91,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
             <<modprobe-services>>
             <<dotfile-services>>
             <<home-files-services>>
-            <<sops-services>>
             <<environment-variable-services>>
             <<font-services>>
 
@@ -368,10 +367,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (rosenthal home services emacs)
 
              (rosenthal services desktop)
-             (rosenthal services shellutils)
-
-             (sops secrets)
-             (sops home services sops))
+             (rosenthal services shellutils))
 
 (use-package-modules java shells)
 
@@ -798,7 +794,10 @@ end
                             "\\.gitignore"
                             "\\.github"
                             "LICENSE"
-                            "README\\.md"))))
+                            "AGENTS\\.md"
+                            "README\\.md"
+                            "bun\.lock"
+                            "\.mypy_cache"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
@@ -849,21 +848,6 @@ end
                                                  "python-lsp-server"
                                                  "python-pylsp-mypy"
                                                  "rust-analyzer"))))))
-#+end_src
-
-** SOPS 密钥解密
-
-#+NAME: sops-services
-#+begin_src scheme
-(list (service home-sops-secrets-service-type
-               (home-sops-service-configuration
-                (age-key-file (string-append (getenv "HOME") "/.config/sops/age/keys.txt"))
-                (secrets
-                 (list (sops-secret
-                        (key '("mihomo-config"))
-                        (file (local-file "../dotfiles/secrets/.config/mihomo/secrets.yaml"))
-                        (path (string-append (getenv "HOME") "/.config/mihomo/config.yaml"))
-                        (permissions #o600)))))))
 #+end_src
 
 ** 环境变量
@@ -918,7 +902,7 @@ end
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
   ;; Pi Agent
-  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi")
+  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
   ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
   ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
   ;; python

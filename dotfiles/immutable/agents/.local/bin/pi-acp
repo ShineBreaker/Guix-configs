@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+$HOME/.local/share/pi/node_modules/.bin/pi-acp

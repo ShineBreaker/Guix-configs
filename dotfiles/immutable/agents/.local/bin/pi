@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_path() {
+  local source="${BASH_SOURCE[0]}"
+  while [[ -L "${source}" ]]; do
+    local dir
+    dir="$(cd -P "$(dirname "${source}")" && pwd)"
+    source="$(readlink "${source}")"
+    [[ "${source}" != /* ]] && source="${dir}/${source}"
+  done
+  cd -P "$(dirname "${source}")" && pwd
+}
+
+ensure_installed() {
+  local xdg_data_home="${XDG_DATA_HOME:-${HOME}/.local/share}"
+  local pi_root="${PI_LOCAL_ROOT:-${xdg_data_home}/pi}"
+
+  if [[ -x "${pi_root}/node_modules/.bin/pi" ]]; then
+    cd "${pi_root}" && pwd
+    return 0
+  fi
+
+  if ! command -v bun &>/dev/null; then
+    echo "bun is not installed. Please install bun first." >&2
+    return 1
+  fi
+
+  if [[ ! -d "${pi_root}" ]]; then
+    echo "Pi local root not found at ${pi_root}." >&2
+    return 1
+  fi
+
+  # Resolve source repo lockfile path (package.json is a symlink from stow)
+  local src_lock=""
+  if [[ -L "${pi_root}/package.json" ]]; then
+    src_lock="$(cd "${pi_root}" && cd "$(dirname "$(readlink package.json)")" && pwd)/bun.lock"
+  fi
+
+  # Pre-install: seed lockfile from source repo if missing in install dir
+  if [[ -n "${src_lock}" && -f "${src_lock}" && ! -f "${pi_root}/bun.lock" ]]; then
+    cp "${src_lock}" "${pi_root}/bun.lock"
+  fi
+
+  echo "Installing Pi dependencies..." >&2
+  cd "${pi_root}" && bun install
+
+  # Post-install: sync lockfile back to source repo
+  if [[ -n "${src_lock}" && -f "${pi_root}/bun.lock" ]]; then
+    cp "${pi_root}/bun.lock" "${src_lock}"
+  fi
+
+  local npm_dir="${pi_root}/npm"
+  if [[ -f "${npm_dir}/package.json" ]]; then
+    echo "Installing agent plugins..." >&2
+    cd "${npm_dir}" && bun install
+  fi
+
+  cd "${pi_root}" && pwd
+}
+
+# XDG paths
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+
+SCRIPT_DIR="$(resolve_script_path)"
+DATA_DIR="$(ensure_installed)"
+CONFIG_DIR="${XDG_CONFIG_HOME}/pi"
+BIN_DIR="${DATA_DIR}/node_modules/.bin"
+
+export PATH="${BIN_DIR}:${PATH}"
+export PI_HOME="${CONFIG_DIR}"
+export PI_CODING_AGENT_DIR="${CONFIG_DIR}"
+export PI_CODING_AGENT_SESSION_DIR="${DATA_DIR}/sessions"
+
+exec pi "$@"
