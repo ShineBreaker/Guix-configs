@@ -91,6 +91,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
             <<modprobe-services>>
             <<dotfile-services>>
             <<home-files-services>>
+            <<sops-services>>
             <<environment-variable-services>>
             <<font-services>>
 
@@ -367,7 +368,10 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (rosenthal home services emacs)
 
              (rosenthal services desktop)
-             (rosenthal services shellutils))
+             (rosenthal services shellutils)
+
+             (sops secrets)
+             (sops home services sops))
 
 (use-package-modules java shells)
 
@@ -845,6 +849,21 @@ end
                                                  "python-lsp-server"
                                                  "python-pylsp-mypy"
                                                  "rust-analyzer"))))))
+#+end_src
+
+** SOPS 密钥解密
+
+#+NAME: sops-services
+#+begin_src scheme
+(list (service home-sops-secrets-service-type
+               (home-sops-service-configuration
+                (age-key-file (string-append (getenv "HOME") "/.config/sops/age/keys.txt"))
+                (secrets
+                 (list (sops-secret
+                        (key '("mihomo-config"))
+                        (file (local-file "../dotfiles/secrets/.config/mihomo/secrets.yaml"))
+                        (path (string-append (getenv "HOME") "/.config/mihomo/config.yaml"))
+                        (permissions #o600)))))))
 #+end_src
 
 ** 环境变量

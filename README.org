@@ -114,7 +114,6 @@ Guix 有两层配置：
 #+begin_src sh
 # 进入 Guix 安装环境后，克隆本仓库
 git clone https://codeberg.org/BrokenShine/Guix-configs
-cd ./Guix-configs
 
 # 修改 source/information.scm 中的用户名等基本信息
 # 然后初始化系统

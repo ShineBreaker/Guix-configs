@@ -2,13 +2,6 @@
 ;;;
 ;;; SPDX-License-Identifier: GPL-3.0
 
-;;; 频道定义文件
-;;; 新版 Guix 的 time-machine/pull 在隔离模式下会提供预设环境
-;;; （含 channel、make-channel-introduction、openpgp-fingerprint、
-;;;  %default-channels 等符号），无需手动 use-modules。
-;;;
-;;; 这个文件不需要返回变量名——time-machine 会取它求值结果作为频道列表。
-
 (append (list (channel
                (inherit (car %default-channels))
                (branch "master"))
@@ -47,6 +40,16 @@
                 (make-channel-introduction
                  "7677db76330121a901604dfbad19077893865f35"
                  (openpgp-fingerprint
-                  "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7")))))
+                  "13E7 6CD6 E649 C28C 3385  4DF5 5E5A A665 6149 17F7"))))
+              (channel
+               (name 'sops-guix)
+               (url "https://github.com/fishinthecalculator/sops-guix.git")
+               (branch "main")
+               ;; Enable signature verification:
+               (introduction
+                (make-channel-introduction
+                 "0bbaf1fdd25266c7df790f65640aaa01e6d2dbc9"
+                 (openpgp-fingerprint
+                  "8D10 60B9 6BB8 292E 829B  7249 AED4 1CC1 93B7 01E2")))))
 
        %default-channels)

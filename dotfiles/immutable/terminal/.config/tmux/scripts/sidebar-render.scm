@@ -45,6 +45,7 @@
 (define ansi-group "\x1b[96m")
 (define ansi-active "\x1b[94m")
 (define ansi-desc "\x1b[37m")
+(define ansi-session-active "\x1b[92m")
 
 ;; === Width ===
 
@@ -482,9 +483,10 @@
         (bold? (if (or (null? style) (null? (cdr style))) #f (cadr style))))
     (list text action color bold?)))
 
-(define (session-box-rows session skey collapsed?)
+(define (session-box-rows session skey collapsed? current?)
   (let* ((w (sidebar-width))
          (inner (max 4 (- w 2)))
+         (color (if current? ansi-session-active ansi-session))
          (top (string-append "┌" (make-string inner #\─) "┐"))
          (middle (string-append "│" (center-text session inner) "│"))
          (bottom-icon (if collapsed? "▸" "▾"))
@@ -492,9 +494,9 @@
                                 (make-string (max 0 (- w 4)) #\─)
                                 "┘"))
          (action (list 'session skey)))
-    (list (make-row top action ansi-session #t)
-          (make-row middle action ansi-session #t)
-          (make-row bottom action ansi-session #t))))
+    (list (make-row top action color #t)
+          (make-row middle action color #t)
+          (make-row bottom action color #t))))
 
 (define (group-row session group-key group-name count last? collapsed?)
   (let* ((w (sidebar-width))
@@ -613,14 +615,15 @@
 
 (define (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)
   "核心布局逻辑，接收预计算上下文参数。"
-  (let block-loop ((bs (active-session-first blocks current-session))
+  (let block-loop ((bs blocks)
                    (rows '()))
     (if (null? bs)
         (reverse rows)
         (match (car bs)
           ((session skey groups)
            (let* ((session-collapsed? (member skey collapsed-sessions))
-                  (box-rows (session-box-rows session skey session-collapsed?))
+                  (current? (string=? session current-session))
+                  (box-rows (session-box-rows session skey session-collapsed? current?))
                   (rows* (append (reverse box-rows) rows)))
              (if session-collapsed?
                  (block-loop (cdr bs)

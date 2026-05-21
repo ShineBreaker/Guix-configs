@@ -9,3 +9,5 @@ node_modules
 .codex
 .sisyphus
 /.agent-shell/
+
+.keys/

@@ -101,7 +101,6 @@ layer-rule {
 
 layer-rule {
   match namespace="launcher"
-  match namespace="notifications"
   match namespace="^noctalia-(background|launcher-overlay|dock)-.*$"
   match namespace="waybar"
   background-effect {
