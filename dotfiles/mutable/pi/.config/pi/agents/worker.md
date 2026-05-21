@@ -2,7 +2,7 @@
 name: worker
 description: 自主深度工作者——接收目标后独立完成编码，原则驱动、多文件推理、测试验证
 tools: read, grep, find, ls, bash, edit, write
-model: opencode-go/deepseek-v4-flash
+model: zai/GLM-5.1
 thinking: high
 ---
 

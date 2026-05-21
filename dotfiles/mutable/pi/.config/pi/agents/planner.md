@@ -2,7 +2,7 @@
 name: planner
 description: 战略规划师——面试式需求澄清、架构评估、替代方案对比、生成可执行的实施计划
 tools: read, grep, find, ls
-model: opencode-go/deepseek-v4-flash
+model: zai/GLM-5.1
 thinking: high
 ---
 

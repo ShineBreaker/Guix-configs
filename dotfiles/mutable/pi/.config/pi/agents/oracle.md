@@ -2,7 +2,7 @@
 name: oracle
 description: 架构顾问——质疑假设、评估方向、提供替代方案与架构模式建议
 tools: read, grep, find, ls
-model: opencode-go/deepseek-v4-flash
+model: zai/GLM-5.1
 thinking: high
 ---
 

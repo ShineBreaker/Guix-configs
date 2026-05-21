@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "opencode-go",
-  "defaultModel": "kimi-k2.6",
+  "defaultProvider": "zai",
+  "defaultModel": "GLM-5.1",
   "defaultThinkingLevel": "high",
   "npmCommand": [
     "bun"
@@ -36,43 +36,25 @@
   "skills": [
     "./skills/*"
   ],
-  "modelRouter": {
-    "quick-edit": "deepseek/deepseek-v4-flash",
-    "research": "deepseek/deepseek-v4-pro",
-    "deep": "zhipu/glm-5.1",
-    "writing": "deepseek/deepseek-v4-flash"
-  },
-  "modelFallback": {
-    "zhipu/glm-5.1": [
-      "opencode-go/deepseek-v4-pro",
-      "deepseek/deepseek-v4-pro",
-      "opencode-go/deepseek-v4-flash",
-      "deepseek/deepseek-v4-flash"
-    ],
-    "deepseek-v4-pro": [
-      "opencode-go/deepseek-v4-pro",
-      "deepseek/deepseek-v4-flash",
-      "opencode-go/deepseek-v4-flash"
-    ]
-  },
-  "tmuxSubagents": {
-    "pollIntervalMs": 2000,
-    "panePrefix": "sub:",
-    "keepResults": 24
-  },
+
   "powerline": {
     "preset": "default",
     "path": {
       "mode": "abbreviated"
     }
   },
-  "todoEnforcer": {
-    "enabled": true
+  "tmuxSubagents": {
+    "pollIntervalMs": 2000,
+    "panePrefix": "sub:",
+    "keepResults": 24
   },
-  "ralphLoop": {
-    "enabled": true,
-    "maxIterations": 20
+  "globalContext": {
+    "contextDir": "/home/brokenshine/.config/agents/context",
+    "extraFiles": [
+      "/home/brokenshine/Documents/Org/profile.org"
+    ]
   },
+
   "lastChangelogVersion": "0.75.4",
   "images": {
     "blockImages": true
@@ -81,11 +63,5 @@
   "showHardwareCursor": false,
   "transport": "auto",
   "collapseChangelog": true,
-  "quietStartup": true,
-  "globalContext": {
-    "contextDir": "/home/brokenshine/.config/agents/context",
-    "extraFiles": [
-      "/home/brokenshine/Documents/Org/profile.org"
-    ]
-  }
+  "quietStartup": true
 }

@@ -1,0 +1,12 @@
+# Pi Agent stow ignore
+# 路径相对于 package 根 (dotfiles/mutable/pi/)
+# 语法：正则表达式，匹配 package 内的相对路径
+
+# AI 助手指引文档
+\.config/pi/AGENTS\.md$
+
+# Git 忽略规则
+\.config/pi/\.gitignore$
+
+# npm 本地缓存（settings.json packages 安装位置）
+\.config/pi/npm

@@ -16,7 +16,7 @@ ensure_installed() {
   local xdg_data_home="${XDG_DATA_HOME:-${HOME}/.local/share}"
   local pi_root="${PI_LOCAL_ROOT:-${xdg_data_home}/pi}"
 
-  if [[ -d "${pi_root}/agent" && -x "${pi_root}/node_modules/.bin/pi" ]]; then
+  if [[ -x "${pi_root}/node_modules/.bin/pi" ]]; then
     cd "${pi_root}" && pwd
     return 0
   fi
@@ -34,13 +34,13 @@ ensure_installed() {
   echo "Installing Pi dependencies..." >&2
   cd "${pi_root}" && bun install
 
-  local npm_dir="${pi_root}/agent/npm"
+  local config_dir="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
+  local npm_dir="${config_dir}/npm"
   if [[ -f "${npm_dir}/package.json" ]]; then
     echo "Installing agent plugins..." >&2
     cd "${npm_dir}" && bun install
   fi
 
-  cd "${pi_root}" && pwd
 }
 
 SCRIPT_DIR="$(resolve_script_path)"
@@ -54,11 +54,11 @@ echo "位置: ${ROOT_DIR}"
 echo "=========================================="
 
 echo ""
-echo "[1/3] 当前版本:"
+echo "[1/4] 当前版本:"
 "${ROOT_DIR}/node_modules/.bin/pi" --version 2>/dev/null || echo "  无法获取版本号"
 
 echo ""
-echo "[2/3] 更新依赖包..."
+echo "[2/4] 更新核心依赖..."
 deps=$(node -e "console.log(Object.keys(require('./package.json').dependencies).join(' '))")
 for dep in ${deps}; do
   echo "  更新 ${dep}..."
@@ -66,14 +66,30 @@ for dep in ${deps}; do
 done
 
 echo ""
-echo "[3/3] 验证更新:"
+echo "[3/4] 更新扩展包..."
+NPM_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}/npm"
+if [[ -f "${NPM_DIR}/package.json" ]]; then
+  cd "${NPM_DIR}"
+  ext_deps=$(node -e "console.log(Object.keys(require('./package.json').dependencies).join(' '))")
+  for dep in ${ext_deps}; do
+    echo "  更新 ${dep}..."
+    bun install "${dep}@latest"
+  done
+else
+  echo "  未找到扩展包配置"
+fi
+
+cd "${ROOT_DIR}"
+echo ""
+echo "[4/4] 验证更新:"
 echo "  pi 版本: $("${ROOT_DIR}/node_modules/.bin/pi" --version 2>/dev/null || echo '未知')"
 
 echo ""
-echo "Agent 目录状态:"
-echo "  扩展: $(ls -1 "${ROOT_DIR}/agent/extensions/" 2>/dev/null | wc -l) 个"
-echo "  技能: $(ls -1 "${ROOT_DIR}/agent/skills/" 2>/dev/null | wc -l) 个"
-echo "  子代理: $(ls -1 "${ROOT_DIR}/agent/agents/" 2>/dev/null | wc -l) 个"
+CONFIG_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
+echo "配置目录状态:"
+echo "  扩展: $(ls -1 "${CONFIG_DIR}/extensions/" 2>/dev/null | wc -l) 个"
+echo "  子代理: $(ls -1 "${CONFIG_DIR}/agents/" 2>/dev/null | wc -l) 个"
+echo "  提示模板: $(ls -1 "${CONFIG_DIR}/prompts/" 2>/dev/null | wc -l) 个"
 
 echo ""
 echo "=========================================="
