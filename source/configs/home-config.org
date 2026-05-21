@@ -796,8 +796,8 @@ end
                             "LICENSE"
                             "AGENTS\\.md"
                             "README\\.md"
-                            "bun\.lock"
-                            "\.mypy_cache"))))
+                            "bun\\.lock"
+                            "\\.mypy_cache"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
