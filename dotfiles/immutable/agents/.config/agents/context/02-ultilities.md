@@ -28,7 +28,7 @@
 ---
 
 <critical>
-在进行任何任务之前，请先利用 `kb list --category <category>` 来获取相关领域的知识库内容
+**知识库是默认第一步，不是可选优化。** 每次接到任务后，必须在阅读大量源码或动手修改前实际运行一次知识库检索命令；不要等用户提醒，也不要只在最终总结时才想起知识库。
 </critical>
 
 <rule scope="knowledge-base">
@@ -36,8 +36,21 @@
 每次接到任务时，按照以下步骤来调用知识库：
 
 1. 调用 `knowledge-base` skill 加载 CLI 用法
-2. 运行 `kb search "任务相关技术/"工具/"框架"` 检索历史经验
-4. 高相关经验 → 作为上下文参考输出提醒；空/低相关 → 静默继续
+2. 根据任务选择 category，**先运行 `kb list --category <category> --all`**，读取该领域所有经验卡片的 `id/title/category/type/tech`，先从标题判断是否有相关经验；不确定 category 时先运行 `kb fields`
+3. 对标题明显相关的卡片运行 `kb get <id>` 读取全文；标题列表不足以定位时，再运行 `kb search "<任务关键词 工具 框架>" --context 2` 检索正文。`kb search` 默认按多关键词相关度排序，必要时用 `--all-terms` 收窄
+4. 高相关经验 → 明确把结论纳入计划或提醒用户；空/低相关 → 静默继续
+5. 如果 `kb` 不可用，明确报告工具缺失；不要假装已经查过
+
+常用映射：
+
+- Guix / 系统配置 / XDG / bwrap / shell wrapper → `guix` 或 `general`
+- Emacs 配置 → `emacs` 或 `emacs-config`
+- Pi / OpenCode / Crush / agent / skills / subagent → `general`，并用关键词二次 `kb search`
+- 前端、游戏、Sonolus → `gamedev`
+
+<critical>
+当任务涉及代码库探索、架构判断、外部文档、实现和审查中的任意两项以上，且当前 harness 提供 subagent/delegation 工具时，主 agent 应主动委派：先用只读侦察/调研 agent 收集上下文，再让实现/审查 agent 处理独立阶段。不要把“能自己做”当成不委派的理由。
+</critical>
 
 对话中检测经验信号
 自动检测以下信号，触发 `self-improving` skill 记录：
