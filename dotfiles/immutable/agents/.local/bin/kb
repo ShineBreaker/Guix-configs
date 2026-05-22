@@ -29,6 +29,7 @@ import json
 import os
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 from collections import Counter, defaultdict
@@ -200,6 +201,77 @@ def _upsert_card(index: dict, filepath: Path) -> None:
             break
     else:
         index["cards"].insert(0, d)
+
+
+def _iter_search_targets() -> list[Path]:
+    """返回全文检索目标文件。"""
+    targets = []
+    if KB_EXPERIENCES.exists():
+        targets.extend(
+            f
+            for f in sorted(KB_EXPERIENCES.rglob("*.org"))
+            if f.is_file() and not f.is_symlink()
+        )
+    if KB_PATTERNS.exists():
+        targets.append(KB_PATTERNS)
+    return targets
+
+
+def _query_terms(query: str) -> list[str]:
+    """把用户查询拆成适合模糊检索的关键词。"""
+    try:
+        pieces = shlex.split(query)
+    except ValueError:
+        pieces = query.split()
+
+    terms = []
+    for piece in pieces:
+        for term in re.split(r"[/,，、]+", piece):
+            term = term.strip()
+            if term:
+                terms.append(term)
+    if not terms and query.strip():
+        terms = [query.strip()]
+
+    unique = []
+    seen = set()
+    for term in terms:
+        key = term.casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(term)
+    return unique
+
+
+def _line_contains_any(line: str, needles: list[str], case_sensitive: bool) -> bool:
+    """判断一行是否包含任一关键词。"""
+    haystack = line if case_sensitive else line.casefold()
+    return any(needle in haystack for needle in needles)
+
+
+def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """合并上下文行号范围。"""
+    if not ranges:
+        return []
+    ranges = sorted(ranges)
+    merged = [ranges[0]]
+    for start, end in ranges[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end + 1:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _range_score(
+    lines: list[str], start: int, end: int, needles: list[str], case_sensitive: bool
+) -> int:
+    """计算上下文块与查询词的相关度。"""
+    block = "\n".join(lines[start : end + 1])
+    haystack = block if case_sensitive else block.casefold()
+    matched_terms = [needle for needle in needles if needle in haystack]
+    return len(matched_terms) * 100 + sum(haystack.count(needle) for needle in matched_terms)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -415,7 +487,10 @@ def cmd_list(args: argparse.Namespace) -> None:
         if recent > 0 and len(matched) >= recent:
             break
 
-    compact = [{k: c[k] for k in ("id", "title", "category", "type", "tech")} for c in matched]
+    compact = [
+        {k: c.get(k, "") for k in ("id", "title", "category", "type", "tech", "owner", "created")}
+        for c in matched
+    ]
     print(json.dumps(compact, ensure_ascii=False, indent=2))
 
 
@@ -425,21 +500,106 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def cmd_search(args: argparse.Namespace) -> None:
-    """在 experiences/ 和 patterns.org 中全文检索。优先使用 ripgrep。"""
+    """在 experiences/ 和 patterns.org 中全文检索。"""
     query = args.query
     context = args.context
-    targets = [str(KB_EXPERIENCES), str(KB_PATTERNS)]
 
-    if shutil.which("rg"):
-        cmd = ["rg", "--color=never", "-n", "-C", str(context), query] + targets
-    else:
-        cmd = ["grep", "-r", "-n", "-C", str(context), query] + targets
+    if args.regex:
+        targets = [str(KB_EXPERIENCES), str(KB_PATTERNS)]
+        if shutil.which("rg"):
+            cmd = ["rg", "--color=never", "-n", "-C", str(context), query] + targets
+        else:
+            cmd = ["grep", "-r", "-n", "-C", str(context), query] + targets
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        print(result.stdout, end="")
-    else:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            print(result.stdout, end="")
+        else:
+            print(f"未找到匹配: {query}")
+        return
+
+    terms = _query_terms(query)
+    if not terms:
+        die("必须提供搜索关键词")
+
+    normalized_terms = terms if args.case_sensitive else [t.casefold() for t in terms]
+    normalized_phrase = query if args.case_sensitive else query.casefold()
+    matches = []
+
+    for filepath in _iter_search_targets():
+        try:
+            content = filepath.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+        haystack = content if args.case_sensitive else content.casefold()
+        term_hits = [term for raw, term in zip(terms, normalized_terms) if term in haystack]
+        if not term_hits:
+            continue
+        if args.all_terms and len(term_hits) != len(terms):
+            continue
+
+        occurrence_count = sum(haystack.count(term) for term in term_hits)
+        phrase_bonus = 50 if normalized_phrase and normalized_phrase in haystack else 0
+        title = read_org_title(content)
+        title_haystack = title if args.case_sensitive else title.casefold()
+        title_bonus = 25 * sum(1 for term in term_hits if term in title_haystack)
+        score = len(term_hits) * 100 + occurrence_count + phrase_bonus + title_bonus
+
+        matches.append(
+            {
+                "filepath": filepath,
+                "content": content,
+                "score": score,
+                "matched": [raw for raw, term in zip(terms, normalized_terms) if term in haystack],
+                "title": title,
+            }
+        )
+
+    if not matches:
         print(f"未找到匹配: {query}")
+        return
+
+    matches.sort(key=lambda item: (-item["score"], str(item["filepath"])))
+    limit = max(1, args.limit)
+    for idx, match in enumerate(matches[:limit]):
+        filepath = match["filepath"]
+        rel = filepath.relative_to(KB_ROOT) if filepath.is_relative_to(KB_ROOT) else filepath
+        print(
+            f"== {rel} | score={match['score']} | matched={', '.join(match['matched'])} =="
+        )
+        if match["title"] != "unknown":
+            print(f"title: {match['title']}")
+
+        lines = match["content"].splitlines()
+        hit_indexes = [
+            i
+            for i, line in enumerate(lines)
+            if _line_contains_any(line, normalized_terms, args.case_sensitive)
+        ]
+        ranges = _merge_ranges(
+            [
+                (max(0, i - context), min(len(lines) - 1, i + context))
+                for i in hit_indexes
+            ]
+        )
+        selected_ranges = sorted(
+            sorted(
+                ranges,
+                key=lambda r: (
+                    -_range_score(lines, r[0], r[1], normalized_terms, args.case_sensitive),
+                    r[0],
+                ),
+            )[: max(1, args.max_blocks)]
+        )
+        for start, end in selected_ranges:
+            for line_idx in range(start, end + 1):
+                sep = ":" if line_idx in hit_indexes else "-"
+                print(f"{filepath}{sep}{line_idx + 1}{sep}{lines[line_idx]}")
+            if (start, end) != selected_ranges[-1]:
+                print("--")
+        if idx != min(len(matches), limit) - 1:
+            print()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1072,10 +1232,14 @@ def print_help() -> None:
             kb get <卡片文件名或ID>
 
   list      列出卡片
+            kb list --category 类别 --all
             kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
 
   search    全文检索
-            kb search <关键词或正则> [--context N]
+            kb search <关键词...> [--context N] [--limit N]
+            kb search --regex <正则> [--context N]
+            默认按空格、/、逗号拆分多关键词，大小写不敏感，按命中词数和次数排序。
+            需要旧式 rg/grep 正则行为时显式加 --regex。
 
   fields    列出已有字段值（用于优先复用标签）
             kb fields [--category] [--tech] [--type] [--owner]
@@ -1135,6 +1299,10 @@ def print_help() -> None:
 def main() -> None:
     ensure_dirs()
 
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print_help()
+        sys.exit(0)
+
     parser = argparse.ArgumentParser(
         prog="kb",
         description="kb — 知识库命令行工具",
@@ -1173,6 +1341,9 @@ def main() -> None:
     # ── list ──────────────────────────────────────────────────────────────
     list_parser = subparsers.add_parser("list", help="列出卡片")
     list_parser.add_argument("--category", help="按类别过滤")
+    list_parser.add_argument(
+        "--cagetory", dest="category", help=argparse.SUPPRESS
+    )
     list_parser.add_argument("--type", help="按类型过滤")
     list_parser.add_argument("--owner", help="按执行者过滤")
     list_parser.add_argument("--recent", type=int, help="显示最近 N 条")
@@ -1180,8 +1351,23 @@ def main() -> None:
 
     # ── search ────────────────────────────────────────────────────────────
     search_parser = subparsers.add_parser("search", help="全文检索")
-    search_parser.add_argument("query", help="关键词或正则")
+    search_parser.add_argument("query", help="关键词；默认按多关键词相关度检索")
     search_parser.add_argument("--context", type=int, default=3, help="上下文行数")
+    search_parser.add_argument(
+        "--limit", type=int, default=20, help="最多显示的文件数"
+    )
+    search_parser.add_argument(
+        "--max-blocks", type=int, default=4, help="每个文件最多显示的上下文块数"
+    )
+    search_parser.add_argument(
+        "--all-terms", action="store_true", help="只显示包含所有关键词的文件"
+    )
+    search_parser.add_argument(
+        "--case-sensitive", action="store_true", help="大小写敏感匹配"
+    )
+    search_parser.add_argument(
+        "--regex", action="store_true", help="使用旧版 rg/grep 正则检索模式"
+    )
 
     # ── fields ────────────────────────────────────────────────────────────
     fields_parser = subparsers.add_parser("fields", help="列出已有字段值")
