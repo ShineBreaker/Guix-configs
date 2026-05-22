@@ -1,50 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-resolve_script_path() {
-  local source="${BASH_SOURCE[0]}"
-  while [[ -L "${source}" ]]; do
-    local dir
-    dir="$(cd -P "$(dirname "${source}")" && pwd)"
-    source="$(readlink "${source}")"
-    [[ "${source}" != /* ]] && source="${dir}/${source}"
-  done
-  cd -P "$(dirname "${source}")" && pwd
-}
+XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+RUNTIME="${PI_RUNTIME_HELPER:-${XDG_DATA_HOME}/pi/scripts/pi-xdg-runtime.sh}"
 
-ensure_installed() {
-  local xdg_data_home="${XDG_DATA_HOME:-${HOME}/.local/share}"
-  local pi_root="${PI_LOCAL_ROOT:-${xdg_data_home}/pi}"
+if [[ ! -r "${RUNTIME}" ]]; then
+  echo "Pi runtime helper not found: ${RUNTIME}" >&2
+  exit 1
+fi
 
-  if [[ -x "${pi_root}/node_modules/.bin/pi" ]]; then
-    cd "${pi_root}" && pwd
-    return 0
-  fi
+# shellcheck source=/dev/null
+source "${RUNTIME}"
 
-  if ! command -v bun &>/dev/null; then
-    echo "bun is not installed. Please install bun first." >&2
-    return 1
-  fi
-
-  if [[ ! -d "${pi_root}" ]]; then
-    echo "Pi local root not found at ${pi_root}." >&2
-    return 1
-  fi
-
-  echo "Installing Pi dependencies..." >&2
-  cd "${pi_root}" && bun install
-
-  local config_dir="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
-  local npm_dir="${config_dir}/npm"
-  if [[ -f "${npm_dir}/package.json" ]]; then
-    echo "Installing agent plugins..." >&2
-    cd "${npm_dir}" && bun install
-  fi
-
-}
-
-SCRIPT_DIR="$(resolve_script_path)"
-ROOT_DIR="$(ensure_installed)"
+ROOT_DIR="$(pi_ensure_installed)"
+pi_prepare_compat_tree
 
 cd "${ROOT_DIR}"
 
@@ -67,7 +36,7 @@ done
 
 echo ""
 echo "[3/4] 更新扩展包..."
-NPM_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}/npm"
+NPM_DIR="${PI_DATA_DIR}/npm"
 if [[ -f "${NPM_DIR}/package.json" ]]; then
   cd "${NPM_DIR}"
   ext_deps=$(node -e "console.log(Object.keys(require('./package.json').dependencies).join(' '))")
@@ -85,7 +54,7 @@ echo "[4/4] 验证更新:"
 echo "  pi 版本: $("${ROOT_DIR}/node_modules/.bin/pi" --version 2>/dev/null || echo '未知')"
 
 echo ""
-CONFIG_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
+CONFIG_DIR="${PI_CONFIG_DIR}"
 echo "配置目录状态:"
 echo "  扩展: $(ls -1 "${CONFIG_DIR}/extensions/" 2>/dev/null | wc -l) 个"
 echo "  子代理: $(ls -1 "${CONFIG_DIR}/agents/" 2>/dev/null | wc -l) 个"

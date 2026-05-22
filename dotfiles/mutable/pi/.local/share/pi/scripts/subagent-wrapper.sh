@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # subagent-wrapper.sh — tmux pane 内的 subagent 执行包装
-# 用法: subagent-wrapper.sh <run-id> <agent-name> <task-file> [--model <m>] [--thinking <l>] [--cwd <d>]
+# 用法: subagent-wrapper.sh <run-id> <agent-name> <task-file> [--model <m>] [--thinking <l>] [--cwd <d>] [--tools <list>]
 
 set -euo pipefail
 
@@ -12,6 +12,7 @@ shift 3
 MODEL=""
 THINKING=""
 CWD=""
+TOOLS=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -27,6 +28,10 @@ while [[ $# -gt 0 ]]; do
 		CWD="$2"
 		shift 2
 		;;
+	--tools)
+		TOOLS="$2"
+		shift 2
+		;;
 	*) shift ;;
 	esac
 done
@@ -40,9 +45,36 @@ AGENTS_DIR="$XDG_CONFIG_HOME/pi/agents"
 
 status_file="$RUN_DIR/status.json"
 result_file="$RUN_DIR/result.md"
+meta_file="$RUN_DIR/result.json"
+
+write_status() {
+	local status="$1"
+	local exit_code="$2"
+	local started_at="${3:-}"
+	local finished_at="${4:-$(date +%s000)}"
+	local error="${5:-}"
+
+	python3 - "$status_file" "$status" "$exit_code" "$started_at" "$finished_at" "$error" <<'PY'
+import json
+import sys
+
+path, status, exit_code, started_at, finished_at, error = sys.argv[1:7]
+payload = {
+    "status": status,
+    "exitCode": int(exit_code),
+    "finishedAt": int(finished_at),
+}
+if started_at:
+    payload["startedAt"] = int(started_at)
+if error:
+    payload["error"] = error
+with open(path, "w", encoding="utf-8") as fh:
+    json.dump(payload, fh, ensure_ascii=False)
+PY
+}
 
 die() {
-	echo '{"status":"failed","exitCode":'${2:-1}',"finishedAt":'$(date +%s000)',"error":"'"$1"'"}' >"$status_file"
+	write_status "failed" "${2:-1}" "" "" "$1"
 	exit "${2:-1}"
 }
 
@@ -75,6 +107,11 @@ parse_agent_md() {
 				fm_thinking="${fm_thinking# }"
 				[[ -z "$THINKING" && -n "$fm_thinking" ]] && THINKING="$fm_thinking"
 			fi
+			if [[ "$line" =~ ^tools: ]]; then
+				local fm_tools="${line#tools: }"
+				fm_tools="${fm_tools# }"
+				[[ -z "$TOOLS" && -n "$fm_tools" ]] && TOOLS="$fm_tools"
+			fi
 		fi
 	done <"$agent_file"
 
@@ -91,6 +128,7 @@ parse_agent_md
 
 # 读取任务文件
 TASK_TEXT="$(cat "$TASK_FILE")" || die "failed to read task file" 1
+TOOLS="$(printf '%s' "$TOOLS" | sed -e 's/[[:space:]]*,[[:space:]]*/,/g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
 # 构造 pi 命令参数
 PI_ARGS=(--mode json -p --no-session)
@@ -100,6 +138,11 @@ if [[ -n "$MODEL" ]]; then
 fi
 if [[ -n "$THINKING" ]]; then
 	PI_ARGS+=(--thinking "$THINKING")
+fi
+if [[ -n "$TOOLS" ]]; then
+	PI_ARGS+=(--tools "$TOOLS")
+else
+	PI_ARGS+=(--tools "read,grep,find,ls")
 fi
 
 # 处理系统提示：较长时写入临时文件
@@ -140,7 +183,7 @@ run_pi() {
 extract_result() {
 	local script_dir
 	script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-	"$script_dir/extract-pi-result.py"
+	"$script_dir/extract-pi-result.py" --meta "$meta_file"
 }
 
 EXIT_CODE=0
@@ -151,13 +194,31 @@ FINISHED_AT="$(date +%s000)"
 # 写入最终 status.json
 if [[ $EXIT_CODE -eq 0 ]]; then
 	FINAL_STATUS="completed"
+	ERROR_MESSAGE=""
 else
 	FINAL_STATUS="failed"
+	ERROR_MESSAGE="$(python3 - "$meta_file" "$RUN_DIR/stderr.log" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+meta = Path(sys.argv[1])
+stderr = Path(sys.argv[2])
+message = ""
+if meta.exists():
+    try:
+        payload = json.loads(meta.read_text(encoding="utf-8"))
+        message = payload.get("errorMessage") or ""
+    except Exception:
+        pass
+if not message and stderr.exists():
+    message = stderr.read_text(encoding="utf-8").strip()[-2000:]
+print(message)
+PY
+)"
 fi
 
-cat >"$status_file" <<STATUS_EOF
-{"status":"$FINAL_STATUS","exitCode":$EXIT_CODE,"startedAt":$STARTED_AT,"finishedAt":$FINISHED_AT}
-STATUS_EOF
+write_status "$FINAL_STATUS" "$EXIT_CODE" "$STARTED_AT" "$FINISHED_AT" "$ERROR_MESSAGE"
 
 # 清理临时文件
 if [[ -n "${TMP_PROMPT:-}" && -f "$TMP_PROMPT" ]]; then

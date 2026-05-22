@@ -1,4 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-$HOME/.local/share/pi/node_modules/.bin/pi-acp
+XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
+RUNTIME="${PI_RUNTIME_HELPER:-${XDG_DATA_HOME}/pi/scripts/pi-xdg-runtime.sh}"
+
+if [[ ! -r "${RUNTIME}" ]]; then
+	echo "Pi runtime helper not found: ${RUNTIME}" >&2
+	exit 1
+fi
+
+# shellcheck source=/dev/null
+source "${RUNTIME}"
+
+DATA_DIR="$(pi_ensure_installed)"
+BIN_DIR="${DATA_DIR}/node_modules/.bin"
+
+export PATH="${BIN_DIR}:${PATH}"
+export PI_ACP_PI_COMMAND="${PI_ACP_PI_COMMAND:-${HOME}/.local/bin/pi}"
+
+pi_exec_xdg "${BIN_DIR}/pi-acp" "$@"
