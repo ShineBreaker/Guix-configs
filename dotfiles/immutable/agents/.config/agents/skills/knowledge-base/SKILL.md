@@ -23,13 +23,22 @@ description: Use when querying historical experience, writing new experience car
 ## 检索
 
 ```bash
-# 全文检索
-kb search "<关键词或正则>" [--context N]
+# 任务前预检第一步：按领域列出所有标题和元数据
+kb list --category <类别> --all
+
+# 全文检索：默认多关键词相关度检索，大小写不敏感
+kb search "<关键词 工具 症状>" [--context N] [--limit N]
+
+# 只接受包含所有关键词的结果
+kb search "<关键词 工具 症状>" --all-terms [--context N]
+
+# 旧式正则检索
+kb search --regex "<正则>" [--context N]
 
 # 按标签筛选
 kb tags <标签> [标签2 ...]
 
-# 查看标题和id
+# 查看标题和id（默认最近 20 条；领域预检必须加 --all）
 kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
 
 # 查看完整内容
@@ -41,6 +50,10 @@ kb patterns
 # 显示模式全文
 kb patterns --get
 ```
+
+任务前预检优先用 `kb list --category <类别> --all` 获取该领域全部卡片标题和元数据，再根据标题对明显相关卡片执行 `kb get <id>`。只有标题列表不足以定位时，再用 `kb search` 做正文检索。
+
+`kb search` 默认会按空格、`/`、逗号拆分多个关键词，按命中词数、标题命中和出现次数排序。Agent 做正文检索时优先给出 2-5 个具体关键词，不要把整句自然语言问题直接丢进去；需要精确正则时显式使用 `--regex`。
 
 `kb list` 输出 JSON 数组，每项含 `id`、`title`、`category`、`type`、`tech`、`owner`、`created`。默认最近 20 条，`--all` 显示全部。
 

@@ -12,14 +12,18 @@ description: Use when detecting experience signals during conversation, writing 
 ## 任务前预检
 
 <critical>
-开始任何非平凡任务前，必须执行 `kb search` 预检。每次都必须做。
+开始任何非平凡任务前，必须先执行 `kb list --category <category> --all` 读取对应领域标题索引；每次都必须做。标题列表不足以定位时，再执行 `kb search` 正文预检。
 </critical>
 
 ```bash
-kb search "<当前任务的关键技术/工具>"
+kb list --category <相关类别> --all
+kb get <明显相关的卡片ID>
+kb search "<当前任务的关键技术 工具 症状>" --context 2
 kb search "<错误信息或症状>"
 kb profile
 ```
+
+预检第一步是 category 标题索引：先看该领域有哪些历史经验，再决定是否 `kb get` 读取全文。`kb search` 默认是多关键词相关度检索，只作为标题索引后的正文补充；使用 2-5 个稳定关键词（技术名、工具名、错误短语、配置名），必要时加 `--all-terms` 收窄；只有确实需要正则时才用 `--regex`。
 
 **必须预检**：调试/排障、配置修改、已使用过的技术栈、与之前类似的问题。
 **可跳过**：全新领域开发、简单编辑、有明确文档的标准操作。
