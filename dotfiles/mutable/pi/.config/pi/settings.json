@@ -1,7 +1,6 @@
 {
-  "defaultProvider": "zai",
-  "defaultModel": "GLM-5.1",
-  "defaultThinkingLevel": "high",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro",
   "npmCommand": [
     "bun"
   ],
@@ -34,9 +33,8 @@
     "npm:@tmustier/pi-ralph-wiggum"
   ],
   "skills": [
-    "./skills/*"
+    "~/.config/agents/skills/*"
   ],
-
   "powerline": {
     "preset": "default",
     "path": {
@@ -46,15 +44,21 @@
   "tmuxSubagents": {
     "pollIntervalMs": 2000,
     "panePrefix": "sub:",
-    "keepResults": 24
+    "keepResults": 24,
+    "timeoutMs": 1800000,
+    "maxTasks": 8,
+    "maxConcurrency": 4
   },
   "globalContext": {
-    "contextDir": "/home/brokenshine/.config/agents/context",
+    "enabled": true,
+    "contextDir": "$XDG_CONFIG_HOME/agents/context",
     "extraFiles": [
-      "/home/brokenshine/Documents/Org/profile.org"
-    ]
+      "$HOME/Documents/Org/profile.org"
+    ],
+    "maxFiles": 8,
+    "maxBytesPerFile": 65536,
+    "maxTotalBytes": 196608
   },
-
   "lastChangelogVersion": "0.75.4",
   "images": {
     "blockImages": true
@@ -63,5 +67,6 @@
   "showHardwareCursor": false,
   "transport": "auto",
   "collapseChangelog": true,
-  "quietStartup": true
+  "quietStartup": true,
+  "defaultThinkingLevel": "high"
 }
