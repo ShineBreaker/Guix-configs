@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: GPL-3.0
+#
+# xdg-bwrap — Generic bwrap launcher for tools that hard-code dotfile paths.
+#
+# Usage:
+#   xdg-bwrap <tool> [args...]
+#
+# Reads mapping from config.sh, sets up bwrap bind mounts so the tool
+# sees its expected ~/.xxx while data actually lives in XDG dirs.
+#
+# Example: xdg-bwrap codex [args...]
+#   → bwrap --bind ~/.config/codex ~/.codex ... /gnu/store/.../codex [args...]
+
+set -euo pipefail
+
+# ── Binary resolution ─────────────────────────────────────────────────────
+
+resolve_binary() {
+	local name="$1"
+	local candidate
+	# Search Guix profile first, then PATH excluding our own wrapper dir
+	for dir in "$HOME/.guix-home/profile/bin" "$HOME/.guix-profile/bin"; do
+		candidate="$dir/$name"
+		if [[ -x "$candidate" ]]; then
+			readlink -f "$candidate"
+			return 0
+		fi
+	done
+	# Fallback: search PATH, skip $HOME/.local/bin (where our wrappers live)
+	local old_path="$PATH"
+	PATH="${PATH//:$HOME\/\.local\/bin/}"
+	PATH="${PATH//$HOME\/\.local\/bin:/}"
+	candidate="$(command -v "$name" 2>/dev/null)" || true
+	PATH="$old_path"
+	if [[ -n "$candidate" ]]; then
+		readlink -f "$candidate"
+		return 0
+	fi
+	echo "xdg-bwrap: '$name' not found" >&2; return 1
+}
+
+# ── Lookup table ──────────────────────────────────────────────────────────
+# Maps tool name → real binary path + bind mappings
+# Each tool function sets:
+#   BWRAP_BINARY  — full path to the real executable
+#   BWRAP_BINDS   — array of "src:dst" pairs (src = XDG location, dst = dotfile)
+
+BWRAP_BINARY=""
+BWRAP_BINDS=()
+
+setup_codex() {
+	BWRAP_BINARY="$(resolve_binary codex)"
+	BWRAP_BINDS=(
+		"${XDG_CONFIG_HOME:-$HOME/.config}/codex:$HOME/.codex"
+	)
+}
+
+setup_claude() {
+	BWRAP_BINARY="$(resolve_binary claude)"
+	BWRAP_BINDS=(
+		"${XDG_DATA_HOME:-$HOME/.local/share}/claude:$HOME/.claude"
+		"${XDG_CONFIG_HOME:-$HOME/.config}/claude.json:$HOME/.claude.json"
+	)
+}
+
+setup_cc-switch() {
+	BWRAP_BINARY="$(resolve_binary cc-switch)"
+	BWRAP_BINDS=(
+		"${XDG_CONFIG_HOME:-$HOME/.config}/cc-switch:$HOME/.cc-switch"
+	)
+}
+
+setup_omp() {
+	BWRAP_BINARY="$(resolve_binary omp)"
+	BWRAP_BINDS=(
+		"${XDG_CACHE_HOME:-$HOME/.cache}/omp:$HOME/.omp"
+	)
+}
+
+# ── Main ──────────────────────────────────────────────────────────────────
+
+TOOL="${1:?Usage: xdg-bwrap <tool> [args...]}"
+shift
+
+case "$TOOL" in
+	codex)     setup_codex ;;
+	claude)    setup_claude ;;
+	cc-switch) setup_cc-switch ;;
+	omp)       setup_omp ;;
+	*)
+		echo "xdg-bwrap: unknown tool '$TOOL'" >&2
+		echo "Supported: codex, claude, cc-switch, omp" >&2
+		exit 1
+		;;
+esac
+
+if [[ ! -x "$BWRAP_BINARY" ]]; then
+	echo "xdg-bwrap: binary not found: $BWRAP_BINARY" >&2
+	exit 1
+fi
+
+if ! command -v bwrap &>/dev/null; then
+	exec "$BWRAP_BINARY" "$@"
+fi
+
+# Build bwrap args
+bwrap_args=(
+	--die-with-parent
+	--dev-bind / /
+)
+
+for bind in "${BWRAP_BINDS[@]}"; do
+	src="${bind%%:*}"
+	dst="${bind#*:}"
+
+	# Ensure source exists (XDG location)
+	if [[ ! -e "$src" ]]; then
+		# If original dotfile still exists, move it to XDG location
+		orig="${dst/#\$HOME/$HOME}"
+		if [[ -e "$orig" ]]; then
+			mkdir -p "$(dirname "$src")"
+			mv "$orig" "$src"
+		else
+			# Create matching type: file bind → touch, dir bind → mkdir
+			if [[ "$src" == */*.* ]]; then
+				mkdir -p "$(dirname "$src")"
+				touch "$src"
+			else
+				mkdir -p "$src"
+			fi
+		fi
+	fi
+
+	# Ensure mount point exists with matching type
+	mkdir -p "$(dirname "$dst")"
+	if [[ -f "$src" ]]; then
+		# File bind: mount point must be a file (or nothing)
+		[[ -e "$dst" ]] || touch "$dst"
+	else
+		# Dir bind: mount point must be a dir
+		[[ -d "$dst" ]] || mkdir -p "$dst"
+	fi
+
+	bwrap_args+=(--bind "$src" "$dst")
+done
+
+# Execute via bwrap (don't exec — so we can rmdir mount points after)
+bwrap "${bwrap_args[@]}" "$BWRAP_BINARY" "$@"
+rc=$?
+
+# Cleanup mount points (they'll be recreated next run)
+for bind in "${BWRAP_BINDS[@]}"; do
+	dst="${bind#*:}"
+	src="${bind%%:*}"
+	if [[ -f "$src" ]]; then
+		rm -f "$dst" 2>/dev/null || true
+	else
+		rmdir "$dst" 2>/dev/null || true
+	fi
+done
+
+exit $rc

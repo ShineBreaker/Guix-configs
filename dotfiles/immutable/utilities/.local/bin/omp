@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: GPL-3.0
+#
+# omp wrapper — relocates ~/.omp to ~/.cache/omp via bwrap.
+# PI_CODING_AGENT_DIR is also set to ~/.config/omp so omp's agent dir
+# goes to XDG config instead of inside ~/.omp.
+
+export PI_CODING_AGENT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omp"
+
+exec xdg-bwrap omp "$@"
