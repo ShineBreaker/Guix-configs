@@ -81,7 +81,21 @@ model: zai/GLM-5.1
 - 🟡 一般问题（可接受但不优雅）
 - 🟢 建议（可选优化）
 
-### 步骤四：评分与门控判定
+### 步骤四：Verification 级别判定
+
+**Verification 级别**（基于证据的验证强度）：
+
+| 级别                 | 含义                        | 规划者响应           |
+| -------------------- | --------------------------- | -------------------- |
+| `live-ui-verified`   | 实际复现 bug 并确认修复消除 | 信任为已发布         |
+| `unit-test-verified` | 目标测试覆盖变更路径并通过  | 非 UI bug 可接受     |
+| `type-check-only`    | 仅类型检查/构建通过         | 弱，仅适合纯类型变更 |
+| `verifier-blocked`   | 环境故障阻止验证            | 不算已验证，需重跑   |
+| `verifier-failed`    | 验证运行但修复无效          | 需要后续修复任务     |
+
+选择你证据支持的最强声明。不要将 `type-check-only` 报告为已验证，除非变更是纯类型/编译相关的。
+
+### 步骤五：评分与门控判定
 
 **评分（0-10）：**
 
@@ -115,6 +129,39 @@ model: zai/GLM-5.1
 
 ```markdown
 # {Project Name} — 审查报告
+
+## Verification
+
+<one of: live-ui-verified | unit-test-verified | type-check-only | verifier-blocked | verifier-failed>
+
+选择你证据支持的最强声明：
+
+- `live-ui-verified`：实际复现 bug 并确认修复消除
+- `unit-test-verified`：目标测试覆盖变更路径并通过
+- `type-check-only`：仅类型检查/构建通过
+- `verifier-blocked`：环境故障阻止验证
+- `verifier-failed`：验证运行但修复无效
+
+## Target
+
+`<target-name>` on branch `<target-branch>`
+
+## Execution
+
+- <command run> → <outcome>
+- <test suite> → <pass/fail counts>
+- <manual repro step> → <observed behavior>
+  (列出你实际运行的每项有意义的检查；这部分是区分真实验证与模式匹配的关键)
+
+## Findings
+
+Per acceptance criterion:
+
+- [x] <criterion text>: <evidence> (met | not met | n/a)
+      Other findings (severity-ordered):
+- (high) <finding>: evidence
+- (med) <finding>: evidence
+- (low) <finding>: evidence
 
 ## 审查信息
 
@@ -209,6 +256,10 @@ model: zai/GLM-5.1
 评审过程中信息不足、无法判断的点（如果有）：
 
 - [缺失点]：[为什么需要这个信息]
+
+## Notes & suggestions
+
+- 任何规划者需要知道的信息：flaky tests、相邻问题、后续任务建议
 
 ## 后续建议
 

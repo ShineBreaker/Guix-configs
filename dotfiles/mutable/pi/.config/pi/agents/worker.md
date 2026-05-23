@@ -35,9 +35,62 @@ model: zai/GLM-5.1
 - 新增/修改功能必须更新对应文档（README、注释、CHANGELOG 相关条目）
 - 测试覆盖：新增代码应有对应测试，测试必须在验证结果中标注
 
+## Quality Floor
+
+- 无占位 TODO，每个公共函数必须有真实实现
+- 无 `throw new Error("not implemented")`，除非在明确的断言辅助函数中
+- 只注释非显而易见的 _why_，不写叙述性注释
+- UI/交互 bug：必须截屏或录屏作为修复证据，在 handoff 中注明产物路径
+
+## Verification 级别自评
+
+在报告中必须包含 `## Verification` 部分，自评你对修复的验证强度：
+
+| 级别                 | 含义                                                 |
+| -------------------- | ---------------------------------------------------- |
+| `live-ui-verified`   | 实际复现 bug 并确认修复消除（真实浏览器/二进制/CLI） |
+| `unit-test-verified` | 目标测试覆盖变更路径并通过，无实际复现               |
+| `type-check-only`    | 仅类型检查/构建通过，无测试或复现                    |
+| `not-verified`       | 未端到端验证（如纯重构，或环境阻塞）                 |
+
+选择你证据支持的最强声明。如果 verifier 后续运行，会覆盖你的自评。
+
+## 定量验收（Measurements）
+
+如果任务包含定量验收标准（如行数、包大小、测试数量），在报告中包含 `## Measurements` 部分：
+
+```
+## Measurements
+- LOC(path/to/file.ts): 412 → 354
+- pnpm test --filter @example/foo: 84 passing → 84 passing
+- bundle size: 2.41 MB → 2.39 MB
+```
+
+每行格式：`<指标名>: <之前> <op> <之后>`，op 为 `→`、`<=`、`<`、`>`、`>=`、`==` 之一。如果没有定量标准，写 `(none)`。
+
 ## 输出格式
 
 ```markdown
+## Status
+
+success | partial | blocked
+
+## Branch
+
+`<实际分支名>` (或 "(no branch)" 如果没有代码产出)
+
+## What I did
+
+- 高层摘要，按文件列出如有用
+
+## Measurements
+
+- <metric>: <before> <op> <after>
+
+## Verification
+
+live-ui-verified | unit-test-verified | type-check-only | not-verified
+
 ## 实施报告
 
 ### 完成内容
@@ -66,14 +119,22 @@ model: zai/GLM-5.1
 - ✅ 类型检查：`tsc --noEmit` — 结果
 - ✅ Lint 通过：`eslint ...` — 结果
 
-### 遗留风险/问题
+## Notes, concerns, deviations, findings, thoughts, feedback
+
+- 任何规划者需要知道的信息：假设、意外、决策、不变量破坏、不清楚的需求、你对任务范围的看法
+
+## Suggested follow-ups
+
+- 规划者应考虑发布的后续任务
+
+## 遗留风险/问题
 
 - ⚠️ [风险描述] — 建议后续处理
-
-### 建议下一步
-
-- 接下来应该做什么（如：让 reviewer 审查 / 补充测试 / 更新文档）
 ```
+
+## 失败处理
+
+如果 crash、OOM 或超时，编排脚本会代你写一个 synthetic failure handoff。不要浪费时间做防御性的最后挣扎写入；专注于真正的工作，正常完成时写正常的 handoff。
 
 ## 何时不自行处理
 
