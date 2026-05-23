@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: pack-guix
 description: 'Auto-generate Guix package definitions from binary URLs and source repositories. Handles FHS compatibility for precompiled binaries, generates build scripts, and supports continuous testing. Triggers: "guix package", "打包 guix", "create guix package", "guix define", "guix 打包", "binary to guix".'
 ---
@@ -237,6 +241,7 @@ sha256sum /tmp/pack-guix-source.tar.gz | xxd -r -p | base32 | tr '[:lower:]' '[:
 ```
 
 **注意**：
+
 - Binary 包用 `url-fetch` + `gnu-build-system`（raw ELF）或 `copy-build-system`（归档）
 - 源码包用 `git-fetch` + 对应的 `build-system`
 

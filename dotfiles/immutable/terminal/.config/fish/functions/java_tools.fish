@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: MIT
 
 function jdk -d "Manage JDK versions"
     if test (count $argv) -eq 0

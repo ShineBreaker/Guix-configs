@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: researcher
 description: 文档检索专家——网络调研、API 文档检索、最佳实践收集、版本兼容性追踪
 tools: read, grep, find, ls, bash

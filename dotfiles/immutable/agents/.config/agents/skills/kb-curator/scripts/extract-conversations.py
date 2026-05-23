@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 """提取 OpenCode / Crush / Codex / Claude Code 对话记录，输出为 Org-mode 文件。
 
 用法:

@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: task-orchestrate
 description: Use when decomposing complex tasks into subagent trees, managing parallel workers, or when encountering multi-file/multi-domain work that requires Planner/Worker/Verifier coordination.
 ---

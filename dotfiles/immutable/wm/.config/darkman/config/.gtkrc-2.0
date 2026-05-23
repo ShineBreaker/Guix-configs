@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 gtk-cursor-theme-name = "Bibata-Modern-Classic"
 gtk-cursor-theme-size = 26
 gtk-font-name = "Sarasa Gothic SC 11"

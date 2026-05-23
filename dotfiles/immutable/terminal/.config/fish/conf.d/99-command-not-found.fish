@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: MIT
 
 function fish_command_not_found
     set -l cmd $argv[1]
-    
+
     # 1. 告诉用户发生了什么 (模仿 Zsh 的反馈)
     echo "fish: '$cmd' not found. Searching in Guix..." >&2
 
@@ -22,12 +22,12 @@ function fish_command_not_found
     # 【关键 hack】: 因为 Fish handler 不传参数，我们需要从历史记录拿完整命令
     # 注意：这会将当前输入的整个命令行作为参数传给 guix shell
     set -l full_cmd_str $history[1]
-    
+
     # 将字符串分割成列表，以便 guix 正确解析参数
     set -l full_cmd_list (string split " " -- $full_cmd_str)
 
     echo "Found '$cmd' in package '$pkg'. Executing..." >&2
-    
+
     # 5. 执行
     # 使用 -- 确保后续内容被视为命令而非 guix 的参数
     guix shell $pkg -- $full_cmd_list
@@ -38,7 +38,7 @@ function try
     set -l cmd $argv[1]
     # 查找包
     set -l pkg (guix locate "$cmd" 2>/dev/null | grep /bin/ | head -1 | cut -d@ -f1)
-    
+
     if test -n "$pkg"
         echo "Running via guix shell $pkg..." >&2
         # 这里 $argv 是完整的参数，非常安全

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Implement and Review
 
 实施与修复链：worker → reviewer → worker (fix)。

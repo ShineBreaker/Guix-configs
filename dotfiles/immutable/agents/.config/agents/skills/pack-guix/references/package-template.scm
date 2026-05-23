@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: MIT
+
 ;;; pack-guix — Guix Package 定义模板
 ;;; 根据构建系统选择对应模板
 

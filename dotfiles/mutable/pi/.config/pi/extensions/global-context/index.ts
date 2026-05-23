@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { existsSync, readFileSync } from "node:fs";

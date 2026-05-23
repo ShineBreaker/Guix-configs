@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Superpowers for Crush
 
 让 [Superpowers](https://github.com/obra/superpowers) 技能库在 [Crush](https://crush.sh) 中生效。

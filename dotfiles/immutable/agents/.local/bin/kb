@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-# SPDX-License-Identifier: GPL-3.0
+#
+# SPDX-License-Identifier: MIT
 #
 # kb — 知识库命令行工具
 # 人机协作经验卡片的增删查改，供 AI Agent 和人类在终端直接调用。
@@ -271,7 +272,9 @@ def _range_score(
     block = "\n".join(lines[start : end + 1])
     haystack = block if case_sensitive else block.casefold()
     matched_terms = [needle for needle in needles if needle in haystack]
-    return len(matched_terms) * 100 + sum(haystack.count(needle) for needle in matched_terms)
+    return len(matched_terms) * 100 + sum(
+        haystack.count(needle) for needle in matched_terms
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -488,7 +491,10 @@ def cmd_list(args: argparse.Namespace) -> None:
             break
 
     compact = [
-        {k: c.get(k, "") for k in ("id", "title", "category", "type", "tech", "owner", "created")}
+        {
+            k: c.get(k, "")
+            for k in ("id", "title", "category", "type", "tech", "owner", "created")
+        }
         for c in matched
     ]
     print(json.dumps(compact, ensure_ascii=False, indent=2))
@@ -533,7 +539,9 @@ def cmd_search(args: argparse.Namespace) -> None:
             continue
 
         haystack = content if args.case_sensitive else content.casefold()
-        term_hits = [term for raw, term in zip(terms, normalized_terms) if term in haystack]
+        term_hits = [
+            term for raw, term in zip(terms, normalized_terms) if term in haystack
+        ]
         if not term_hits:
             continue
         if args.all_terms and len(term_hits) != len(terms):
@@ -551,7 +559,11 @@ def cmd_search(args: argparse.Namespace) -> None:
                 "filepath": filepath,
                 "content": content,
                 "score": score,
-                "matched": [raw for raw, term in zip(terms, normalized_terms) if term in haystack],
+                "matched": [
+                    raw
+                    for raw, term in zip(terms, normalized_terms)
+                    if term in haystack
+                ],
                 "title": title,
             }
         )
@@ -564,7 +576,11 @@ def cmd_search(args: argparse.Namespace) -> None:
     limit = max(1, args.limit)
     for idx, match in enumerate(matches[:limit]):
         filepath = match["filepath"]
-        rel = filepath.relative_to(KB_ROOT) if filepath.is_relative_to(KB_ROOT) else filepath
+        rel = (
+            filepath.relative_to(KB_ROOT)
+            if filepath.is_relative_to(KB_ROOT)
+            else filepath
+        )
         print(
             f"== {rel} | score={match['score']} | matched={', '.join(match['matched'])} =="
         )
@@ -587,7 +603,9 @@ def cmd_search(args: argparse.Namespace) -> None:
             sorted(
                 ranges,
                 key=lambda r: (
-                    -_range_score(lines, r[0], r[1], normalized_terms, args.case_sensitive),
+                    -_range_score(
+                        lines, r[0], r[1], normalized_terms, args.case_sensitive
+                    ),
                     r[0],
                 ),
             )[: max(1, args.max_blocks)]
@@ -752,7 +770,9 @@ def cmd_lint(args: argparse.Namespace) -> None:
     """
     target_files = args.files
     if not target_files:
-        target_files = sorted(f for f in KB_EXPERIENCES.rglob("*.org") if not f.is_symlink())
+        target_files = sorted(
+            f for f in KB_EXPERIENCES.rglob("*.org") if not f.is_symlink()
+        )
         target_files = [str(p) for p in target_files]
 
     if not target_files:
@@ -950,8 +970,12 @@ def cmd_stats(args: argparse.Namespace) -> None:
         print(f"模式数量: {pat_count}")
     print()
 
-    for label, counter in [("按类别", cat_counter), ("按类型", type_counter),
-                           ("按执行者", owner_counter), ("按技术栈", tech_counter)]:
+    for label, counter in [
+        ("按类别", cat_counter),
+        ("按类型", type_counter),
+        ("按执行者", owner_counter),
+        ("按技术栈", tech_counter),
+    ]:
         print(f"── {label} ──")
         for k, v in counter.most_common():
             bar = "█" * v
@@ -999,10 +1023,13 @@ def _resolve_card(id_or_path: str) -> Path | None:
 def _append_link(filepath: Path, target: Path, desc: str) -> None:
     """在卡片的 ** 相关链接 章节追加链接。"""
     import os as _os
+
     content = filepath.read_text(encoding="utf-8")
     # 使用从源文件到目标文件的相对路径（Org 按文件位置解析）
     rel_path = _os.path.relpath(target, filepath.parent)
-    link = f"  [[file:{rel_path}][{read_org_title(target.read_text(encoding='utf-8'))}]]"
+    link = (
+        f"  [[file:{rel_path}][{read_org_title(target.read_text(encoding='utf-8'))}]]"
+    )
     if desc:
         link += f" — {desc}"
 
@@ -1148,7 +1175,7 @@ def _profile_show_section(category: str) -> None:
             rest = content[start:]
             next_m = re.search(next_level, rest, re.MULTILINE)
             if next_m:
-                body = rest[:next_m.start()]
+                body = rest[: next_m.start()]
             else:
                 body = rest
             display_level = "*" if level == r"\*" else "**"
@@ -1177,7 +1204,7 @@ def _profile_set_section(category: str, new_body: str) -> None:
             end = start + next_m.start()
         else:
             end = len(content)
-        content = content[:m.start()] + f"* {category}\n{new_body}\n" + content[end:]
+        content = content[: m.start()] + f"* {category}\n{new_body}\n" + content[end:]
 
     KB_PROFILE.write_text(content, encoding="utf-8")
     print(f"已更新分类 [{category}] → {KB_PROFILE}")
@@ -1341,9 +1368,7 @@ def main() -> None:
     # ── list ──────────────────────────────────────────────────────────────
     list_parser = subparsers.add_parser("list", help="列出卡片")
     list_parser.add_argument("--category", help="按类别过滤")
-    list_parser.add_argument(
-        "--cagetory", dest="category", help=argparse.SUPPRESS
-    )
+    list_parser.add_argument("--cagetory", dest="category", help=argparse.SUPPRESS)
     list_parser.add_argument("--type", help="按类型过滤")
     list_parser.add_argument("--owner", help="按执行者过滤")
     list_parser.add_argument("--recent", type=int, help="显示最近 N 条")
@@ -1353,9 +1378,7 @@ def main() -> None:
     search_parser = subparsers.add_parser("search", help="全文检索")
     search_parser.add_argument("query", help="关键词；默认按多关键词相关度检索")
     search_parser.add_argument("--context", type=int, default=3, help="上下文行数")
-    search_parser.add_argument(
-        "--limit", type=int, default=20, help="最多显示的文件数"
-    )
+    search_parser.add_argument("--limit", type=int, default=20, help="最多显示的文件数")
     search_parser.add_argument(
         "--max-blocks", type=int, default=4, help="每个文件最多显示的上下文块数"
     )
@@ -1436,14 +1459,21 @@ def main() -> None:
 
     # ── profile ──────────────────────────────────────────────────────────
     profile_parser = subparsers.add_parser("profile", help="管理用户画像")
-    profile_parser.add_argument("category", nargs="?", default=None,
-                                help="分类名（如 身份、偏好、习惯）")
     profile_parser.add_argument(
-        "--set", dest="action", action="store_const", const="set",
+        "category", nargs="?", default=None, help="分类名（如 身份、偏好、习惯）"
+    )
+    profile_parser.add_argument(
+        "--set",
+        dest="action",
+        action="store_const",
+        const="set",
         help="从 stdin 覆盖分类内容",
     )
     profile_parser.add_argument(
-        "--add", dest="action", action="store_const", const="add",
+        "--add",
+        dest="action",
+        action="store_const",
+        const="add",
         help="追加条目到分类",
     )
     profile_parser.add_argument("--text", help="追加的条目文本")

@@ -1,7 +1,7 @@
 <!--
 SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 
-SPDX-License-Identifier: GPL-3.0
+SPDX-License-Identifier: MIT
 -->
 
 # Org 配置文件
@@ -34,6 +34,7 @@ configs/*.org
 ## Agent 专区
 
 每个 org 文件头部有 `Agent 指引` 区域，包含：
+
 - 配置职责边界和修改规则
 - dotfiles 管理规则
 - 新增应用配置流程

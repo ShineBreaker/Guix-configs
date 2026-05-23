@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 <critical>
 **语言要求**：全程使用简体中文进行思考、推演、提问和解释。所有内部推理、假设陈述、计划说明及代码注释, 均以简体中文完成, 不得切换语言。
 </critical>

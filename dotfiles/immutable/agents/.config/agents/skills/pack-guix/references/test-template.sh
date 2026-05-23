@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # pack-guix — 单次测试脚本
 # 用法: ./test.sh [package.scm] [test-command]
 

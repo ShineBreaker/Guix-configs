@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 #!/usr/bin/env bash
 
 tmux display-popup -E -w 70% -h 64% -b rounded \

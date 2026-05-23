@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: self-improving
 description: Use when detecting experience signals during conversation, writing lessons to KB, or encountering "记录下来", "save this", "/ascended", user corrections, non-obvious bugs, knowledge gaps, or better solutions.
 ---

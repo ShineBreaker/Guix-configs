@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: MIT
 
 # JDK 版本管理
 set -g JDK_VERSION_FILE $XDG_CONFIG_HOME/fish/.jdk_version

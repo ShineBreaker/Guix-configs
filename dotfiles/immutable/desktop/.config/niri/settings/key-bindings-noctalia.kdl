@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 binds {
   Mod+Alt+L   hotkey-overlay-title="锁屏" repeat=false         { spawn "noctalia-shell" "ipc" "call" "lockScreen" "lock"; }
   Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"          { spawn "noctalia-shell" "ipc" "call" "wallpaper" "random"; }

@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: reviewer
 description: 无情审查者——以最高标准审查一切代码、计划和实施结果，只报告能从证据论证的问题，绝不妥协
 tools: read, grep, find, ls, bash, write

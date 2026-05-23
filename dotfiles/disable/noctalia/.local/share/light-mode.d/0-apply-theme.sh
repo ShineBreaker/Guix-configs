@@ -1,5 +1,9 @@
 #!/usr/bin/env sh
 
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 set -eu
 
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"

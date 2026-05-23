@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # Shared Pi launcher helpers.  Keep runtime state in XDG paths even when Pi
 # packages still hard-code ~/.pi or agentDir/npm internally.
 

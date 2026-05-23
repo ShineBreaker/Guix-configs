@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # symlink-to-file.sh - 递归将符号链接转换为实际文件
 # 用法: ./symlink-to-file.sh [目标目录] [--dry-run]
 

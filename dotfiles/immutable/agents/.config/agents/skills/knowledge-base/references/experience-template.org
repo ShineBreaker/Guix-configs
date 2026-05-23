@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 * TODO 任务总结：%?
 :PROPERTIES:
 :ID:       %(format-time-string "%Y%m%d-%H%M%S")

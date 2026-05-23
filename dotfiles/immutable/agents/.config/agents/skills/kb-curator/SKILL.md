@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: kb-curator
 description: Use when maintaining the knowledge base, running nightly curation, analyzing KB health, identifying gaps, or when encountering "curate kb", "夜间策展", "nightly curation", "检查知识库", "维护知识库".
 ---

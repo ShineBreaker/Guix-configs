@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: knowledge-base
 description: Use when querying historical experience, writing new experience cards, searching patterns, or when encountering "kb search", "记录经验", "写入知识库", "check patterns", "kb add", "kb list", "kb fields".
 ---

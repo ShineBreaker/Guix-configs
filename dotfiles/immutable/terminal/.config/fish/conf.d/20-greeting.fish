@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: MIT
 
 function __fastfetch_on_startup --on-event fish_prompt
 

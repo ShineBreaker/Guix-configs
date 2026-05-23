@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: code-quality-review
 description: Use when asked to review code, assess a PR, or evaluate implementation quality. Triggers include "review this", "看看这段代码", "PR review", "code review", or any assessment of correctness, structure, and maintainability.
 ---

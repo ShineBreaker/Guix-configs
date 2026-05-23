@@ -1,6 +1,6 @@
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
-;;; SPDX-License-Identifier: GPL-3.0
+;;; SPDX-License-Identifier: MIT
 
 (define-module (maak)
   #:declarative? #t
@@ -252,7 +252,7 @@ Exit code: ~a~%" cmd exit-code)))))
            "--copyright"
            "BrokenShine <xchai404@gmail.com>"
            "--license"
-           "GPL-3.0"
+           "MIT"
            "--skip-unrecognised"
            "--recursive"
            "--year"

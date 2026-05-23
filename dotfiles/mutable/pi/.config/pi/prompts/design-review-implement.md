@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Design Review Implement
 
 完整实施链（含架构审查）：scout (thorough) → planner → oracle → worker → reviewer。

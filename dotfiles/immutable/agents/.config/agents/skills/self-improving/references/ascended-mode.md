@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # 飞升模式（Ascended Mode）
 
 当同一问题被用户持续纠正（≥2 次）仍无法解决时，自动进入飞升模式——全面检索所有知识源后给出最强方案。
@@ -34,7 +40,7 @@
 
 开始非平凡任务前，如果当前不在纠错循环或飞升模式中，执行轻量级预检：
 
-``` bash
+```bash
 kb search "<当前任务关键词>"
 ```
 

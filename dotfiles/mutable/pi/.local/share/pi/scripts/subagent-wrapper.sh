@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # subagent-wrapper.sh — tmux pane 内的 subagent 执行包装
 # 用法: subagent-wrapper.sh <run-id> <agent-name> <task-file> [--model <m>] [--thinking <l>] [--cwd <d>] [--tools <list>]
 

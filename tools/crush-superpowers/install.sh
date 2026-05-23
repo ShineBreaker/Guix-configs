@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # Install Superpowers skills for Crush CLI
 # Usage: bash install.sh [SKILLS_DIR]
 #

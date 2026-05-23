@@ -1,2 +1,6 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 [General]
 theme=$$theme-kvantum$$

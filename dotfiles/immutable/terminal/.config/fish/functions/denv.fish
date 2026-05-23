@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: MIT
 
 # =============================================================================
 # denv - 项目环境管理器 (direnv + Guix + 语言支持)

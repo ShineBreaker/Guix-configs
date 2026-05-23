@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 [submodule ".emacs.d"]
 	path = dotfiles/mutable/emacs/.config/emacs
 	url = https://codeberg.org/BrokenShine/.emacs.d.git

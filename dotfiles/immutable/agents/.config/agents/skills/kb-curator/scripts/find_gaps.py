@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 """知识空白检测 — 交叉分析类别×类型，识别缺失组合、逾期卡片、薄弱领域。
 
 用法：

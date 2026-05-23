@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 """知识库健康分析 — 统计类别/类型分布、检测重复、评估卡片质量。
 
 用法：

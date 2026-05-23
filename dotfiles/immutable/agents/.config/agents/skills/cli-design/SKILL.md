@@ -1,4 +1,8 @@
 ---
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 name: cli-design
 description: Use when designing a new CLI, reviewing an existing CLI for agent-friendliness, or when encountering "设计 CLI", "agent 友好的命令行", "命令行接口", "CLI 审查".
 ---
