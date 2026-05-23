@@ -10,10 +10,10 @@
       },
       "modelOverrides": {
         "glm-5.1": {
-          "reasoning": false
+          "reasoning": true
         },
         "glm-5-turbo": {
-          "reasoning": false
+          "reasoning": true
         },
         "glm-5v-turbo": {
           "reasoning": false
@@ -28,7 +28,7 @@
       "models": [{
         "id": "GLM-5.1",
         "name": "GLM 5.1",
-        "reasoning": false,
+        "reasoning": true,
         "input": ["text"],
         "contextWindow": 256000,
         "maxTokens": 32000,
@@ -41,7 +41,7 @@
       }, {
         "id": "GLM-5-Turbo",
         "name": "GLM 5 Turbo",
-        "reasoning": false,
+        "reasoning": true,
         "input": ["text"],
         "contextWindow": 256000,
         "maxTokens": 32000,

@@ -3,10 +3,10 @@
 # 语法：正则表达式，匹配 package 内的相对路径
 
 # AI 助手指引文档
-\.config/pi/AGENTS\.md$
+AGENTS\.md$
 
 # Git 忽略规则
-\.config/pi/\.gitignore$
+.gitignore$
 
 # npm 本地缓存（settings.json packages 安装位置）
-\.config/pi/npm
+npm

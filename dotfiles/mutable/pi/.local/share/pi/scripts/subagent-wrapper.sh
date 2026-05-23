@@ -46,6 +46,23 @@ AGENTS_DIR="$XDG_CONFIG_HOME/pi/agents"
 status_file="$RUN_DIR/status.json"
 result_file="$RUN_DIR/result.md"
 meta_file="$RUN_DIR/result.json"
+session_dir="$RUN_DIR/sessions"
+
+if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
+	c_reset=$'\033[0m'
+	c_bold=$'\033[1m'
+	c_dim=$'\033[2m'
+	c_cyan=$'\033[36m'
+	c_green=$'\033[32m'
+	c_red=$'\033[31m'
+else
+	c_reset=""
+	c_bold=""
+	c_dim=""
+	c_cyan=""
+	c_green=""
+	c_red=""
+fi
 
 write_status() {
 	local status="$1"
@@ -129,9 +146,10 @@ parse_agent_md
 # 读取任务文件
 TASK_TEXT="$(cat "$TASK_FILE")" || die "failed to read task file" 1
 TOOLS="$(printf '%s' "$TOOLS" | sed -e 's/[[:space:]]*,[[:space:]]*/,/g' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+mkdir -p "$session_dir"
 
 # 构造 pi 命令参数
-PI_ARGS=(--mode json -p --no-session)
+PI_ARGS=(--mode json -p --session-dir "$session_dir")
 
 if [[ -n "$MODEL" ]]; then
 	PI_ARGS+=(--model "$MODEL")
@@ -164,10 +182,10 @@ STARTED_AT="$(date +%s000)"
 
 run_pi() {
 	local pi_cmd="pi"
-	if command -v pi &>/dev/null; then
-		pi_cmd="pi"
-	elif [[ -x "$HOME/.local/bin/pi" ]]; then
+	if [[ -x "$HOME/.local/bin/pi" ]]; then
 		pi_cmd="$HOME/.local/bin/pi"
+	elif command -v pi &>/dev/null; then
+		pi_cmd="pi"
 	else
 		die "pi command not found" 127
 	fi
@@ -187,6 +205,12 @@ extract_result() {
 }
 
 EXIT_CODE=0
+{
+	printf '%bsubagent%b %s  %b%s%b\n' "$c_cyan$c_bold" "$c_reset" "$AGENT_NAME" "$c_dim" "$RUN_ID" "$c_reset"
+	printf '  cwd:   %s\n' "${CWD:-$PWD}"
+	printf '  model: %s\n' "${MODEL:-default}"
+	printf '  tools: %s\n\n' "${TOOLS:-read,grep,find,ls}"
+} >&2
 run_pi 2>"$RUN_DIR/stderr.log" | extract_result >"$result_file" || EXIT_CODE=$?
 
 FINISHED_AT="$(date +%s000)"
@@ -223,6 +247,21 @@ write_status "$FINAL_STATUS" "$EXIT_CODE" "$STARTED_AT" "$FINISHED_AT" "$ERROR_M
 # 清理临时文件
 if [[ -n "${TMP_PROMPT:-}" && -f "$TMP_PROMPT" ]]; then
 	rm -f "$TMP_PROMPT"
+fi
+
+if [[ -n "${TMUX:-}" && "${PI_SUBAGENT_KEEP_PANE:-0}" == "1" ]]; then
+	if [[ "$FINAL_STATUS" == "completed" ]]; then
+		status_color="$c_green"
+	else
+		status_color="$c_red"
+	fi
+	{
+		printf '\n%bsubagent%b %s %b%s%b\n' "$c_cyan$c_bold" "$c_reset" "$AGENT_NAME" "$status_color$c_bold" "$FINAL_STATUS" "$c_reset"
+		printf '  result:  %s\n' "$result_file"
+		printf '  session: %s\n' "$session_dir"
+		printf '  %bpane kept open because PI_SUBAGENT_KEEP_PANE=1.%b\n' "$c_dim" "$c_reset"
+	} >&2
+	exec "${SHELL:-bash}" -i
 fi
 
 exit $EXIT_CODE

@@ -1,8 +1,8 @@
 {
-  "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-v4-pro",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "mimo-v2.5-pro",
   "npmCommand": [
-    "bun"
+    "pnpm"
   ],
   "compaction": {
     "enabled": true,
@@ -61,7 +61,7 @@
   },
   "lastChangelogVersion": "0.75.4",
   "images": {
-    "blockImages": true
+    "blockImages": false
   },
   "theme": "dark",
   "showHardwareCursor": false,

@@ -23,7 +23,8 @@ pi_init_xdg() {
 	PI_CONFIG_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME}/pi}"
 	PI_DATA_DIR="${PI_LOCAL_ROOT:-${XDG_DATA_HOME}/pi}"
 	PI_CACHE_DIR="${XDG_CACHE_HOME}/pi"
-	PI_COMPAT_DOTPI="${PI_DATA_DIR}/compat-dot-pi"
+	PI_COMPAT_DOTPI="${PI_DATA_DIR}/data"
+	PI_COMPAT_PILENS="${PI_DATA_DIR}/pi-lens"
 
 	export PI_HOME="${PI_CONFIG_DIR}"
 	export PI_CODING_AGENT_DIR="${PI_CONFIG_DIR}"
@@ -38,22 +39,22 @@ pi_init_xdg() {
 pi_seed_lockfile() {
 	local src_lock=""
 	if [[ -L "${PI_DATA_DIR}/package.json" ]]; then
-		src_lock="$(cd "${PI_DATA_DIR}" && cd "$(dirname "$(readlink package.json)")" && pwd)/bun.lock"
+		src_lock="$(cd "${PI_DATA_DIR}" && cd "$(dirname "$(readlink package.json)")" && pwd)/pnpm-lock.yaml"
 	fi
 
-	if [[ -n "${src_lock}" && -f "${src_lock}" && ! -f "${PI_DATA_DIR}/bun.lock" ]]; then
-		cp "${src_lock}" "${PI_DATA_DIR}/bun.lock"
+	if [[ -n "${src_lock}" && -f "${src_lock}" && ! -f "${PI_DATA_DIR}/pnpm-lock.yaml" ]]; then
+		cp "${src_lock}" "${PI_DATA_DIR}/pnpm-lock.yaml"
 	fi
 }
 
 pi_sync_lockfile() {
 	local src_lock=""
 	if [[ -L "${PI_DATA_DIR}/package.json" ]]; then
-		src_lock="$(cd "${PI_DATA_DIR}" && cd "$(dirname "$(readlink package.json)")" && pwd)/bun.lock"
+		src_lock="$(cd "${PI_DATA_DIR}" && cd "$(dirname "$(readlink package.json)")" && pwd)/pnpm-lock.yaml"
 	fi
 
-	if [[ -n "${src_lock}" && -f "${PI_DATA_DIR}/bun.lock" ]]; then
-		cp "${PI_DATA_DIR}/bun.lock" "${src_lock}"
+	if [[ -n "${src_lock}" && -f "${PI_DATA_DIR}/pnpm-lock.yaml" ]]; then
+		cp "${PI_DATA_DIR}/pnpm-lock.yaml" "${src_lock}"
 	fi
 }
 
@@ -65,8 +66,8 @@ pi_ensure_installed() {
 		return 0
 	fi
 
-	if ! command -v bun &>/dev/null; then
-		echo "bun is not installed. Please install bun first." >&2
+	if ! command -v pnpm &>/dev/null; then
+		echo "pnpm is not installed. Please install pnpm first." >&2
 		return 1
 	fi
 
@@ -77,7 +78,7 @@ pi_ensure_installed() {
 
 	pi_seed_lockfile
 	echo "Installing Pi dependencies..." >&2
-	cd "${PI_DATA_DIR}" && bun install
+	cd "${PI_DATA_DIR}" && pnpm install
 	pi_sync_lockfile
 
 	cd "${PI_DATA_DIR}" && pwd
@@ -125,7 +126,8 @@ pi_prepare_compat_tree() {
 		"${PI_CACHE_DIR}" \
 		"${PI_CODING_AGENT_SESSION_DIR}" \
 		"${PI_COMPAT_DOTPI}/agent" \
-		"${PI_COMPAT_DOTPI}/pi-acp"
+		"${PI_COMPAT_DOTPI}/pi-acp" \
+		"${PI_COMPAT_PILENS}"
 
 	# Pi's package manager currently installs npm packages under agentDir/npm.
 	# Keep existing installs usable, then bind that path to XDG data in bwrap.
@@ -141,6 +143,18 @@ pi_prepare_compat_tree() {
 			cp -a "${item}" "${PI_COMPAT_DOTPI}/${name}"
 		done
 		: >"${PI_COMPAT_DOTPI}/.migrated-from-home"
+	fi
+
+	# --- pi-lens compat tree ---
+	if [[ -d "${HOME}/.pi-lens" && ! -e "${PI_COMPAT_PILENS}/.migrated-from-home" ]]; then
+		local pl_item pl_name
+		for pl_item in "${HOME}/.pi-lens"/*; do
+			[[ -e "${pl_item}" ]] || continue
+			pl_name="$(basename "${pl_item}")"
+			[[ -e "${PI_COMPAT_PILENS}/${pl_name}" ]] && continue
+			cp -a "${pl_item}" "${PI_COMPAT_PILENS}/${pl_name}"
+		done
+		: >"${PI_COMPAT_PILENS}/.migrated-from-home"
 	fi
 
 	for name in settings.json models.json auth.json keybindings.json APPEND_SYSTEM.md SYSTEM.md; do
@@ -171,10 +185,13 @@ pi_exec_xdg() {
 	pi_prepare_compat_tree
 
 	if [[ "${PI_XDG_BWRAP:-1}" != "0" && "${PI_XDG_BWRAP_ACTIVE:-0}" != "1" ]] && command -v bwrap &>/dev/null; then
-		exec bwrap \
+		mkdir -p "${HOME}/.pi" "${HOME}/.pi-lens"
+
+		bwrap \
 			--die-with-parent \
 			--dev-bind / / \
 			--bind "${PI_COMPAT_DOTPI}" "${HOME}/.pi" \
+			--bind "${PI_COMPAT_PILENS}" "${HOME}/.pi-lens" \
 			--bind "${PI_DATA_DIR}/npm" "${PI_CONFIG_DIR}/npm" \
 			--setenv HOME "${HOME}" \
 			--setenv XDG_CONFIG_HOME "${XDG_CONFIG_HOME}" \
@@ -188,6 +205,10 @@ pi_exec_xdg() {
 			--setenv PI_PACKAGE_DIR "${PI_PACKAGE_DIR:-}" \
 			--setenv PI_XDG_BWRAP_ACTIVE "1" \
 			"${target}" "$@"
+		local rc=$?
+
+		rmdir "${HOME}/.pi" "${HOME}/.pi-lens" 2>/dev/null || true
+		return $rc
 	fi
 
 	exec "${target}" "$@"

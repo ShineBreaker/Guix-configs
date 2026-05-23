@@ -13,6 +13,7 @@
 
 import { execFileSync } from "node:child_process";
 import * as crypto from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -81,6 +82,8 @@ const DEFAULT_CONFIG: SubagentConfig = {
 	maxConcurrency: 4,
 };
 
+const TOP_ROW_PERCENT = "40";
+
 // ─── XDG Paths ────────────────────────────────────────────────────────────
 
 function resolveXdgCache(): string {
@@ -105,8 +108,23 @@ function getScriptsDir(): string {
 
 // ─── Config ───────────────────────────────────────────────────────────────
 
-function loadConfig(settings: Record<string, unknown>): SubagentConfig {
-	const raw = settings.tmuxSubagents as Record<string, unknown> | undefined;
+function loadConfig(): SubagentConfig {
+	const candidates = [
+		path.join(getAgentDir(), "settings.json"),
+		path.join(os.homedir(), ".config", "pi", "settings.json"),
+	];
+
+	let raw: Record<string, unknown> | undefined;
+	for (const settingsPath of candidates) {
+		if (!existsSync(settingsPath)) continue;
+		try {
+			raw = JSON.parse(readFileSync(settingsPath, "utf8"))?.tmuxSubagents as Record<string, unknown> | undefined;
+			if (raw) break;
+		} catch {
+			continue;
+		}
+	}
+
 	if (!raw) return DEFAULT_CONFIG;
 	return {
 		pollIntervalMs: typeof raw.pollIntervalMs === "number" ? raw.pollIntervalMs : DEFAULT_CONFIG.pollIntervalMs,
@@ -282,6 +300,25 @@ function buildWrapperCmd(
 	return [wrapper, ...args].map(shellQuote).join(" ");
 }
 
+function splitAboveCurrentPane(cmd: string): string {
+	return tmuxExec(["split-window", "-v", "-b", "-p", TOP_ROW_PERCENT, "-P", "-F", "#{pane_id}", cmd]);
+}
+
+function splitRightOfPane(targetPaneId: string, cmd: string, percent: number): string {
+	return tmuxExec([
+		"split-window",
+		"-t",
+		targetPaneId,
+		"-h",
+		"-p",
+		String(Math.max(10, Math.min(90, percent))),
+		"-P",
+		"-F",
+		"#{pane_id}",
+		cmd,
+	]);
+}
+
 function launchSingle(
 	agent: AgentConfig,
 	task: string,
@@ -289,6 +326,8 @@ function launchSingle(
 	cwd?: string,
 	model?: string,
 	thinking?: string,
+	topRowTargetPaneId?: string,
+	splitPercent = 50,
 ): LaunchResult {
 	if (!process.env.TMUX) {
 		throw new Error("tmux-subagents requires Pi to run inside a tmux session");
@@ -303,7 +342,9 @@ function launchSingle(
 	const paneTitle = `${config.panePrefix}${agent.name}`;
 	const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, thinking);
 
-	const paneId = tmuxExec(["split-window", "-h", "-p", "50", "-P", "-F", "#{pane_id}", cmd]);
+	const paneId = topRowTargetPaneId
+		? splitRightOfPane(topRowTargetPaneId, cmd, splitPercent)
+		: splitAboveCurrentPane(cmd);
 	tmuxExec(["select-pane", "-t", paneId, "-T", paneTitle]);
 	tmuxExec(["select-pane", "-t", myPaneId]);
 
@@ -341,21 +382,10 @@ function launchParallel(
 
 		let paneId: string;
 		if (i === 0) {
-			const pct = Math.max(10, Math.round(((count - i) / (count + 1)) * 100));
-			paneId = tmuxExec(["split-window", "-h", "-p", String(pct), "-P", "-F", "#{pane_id}", cmd]);
+			paneId = splitAboveCurrentPane(cmd);
 		} else {
-			paneId = tmuxExec([
-				"split-window",
-				"-t",
-				results[i - 1].paneId,
-				"-v",
-				"-p",
-				"50",
-				"-P",
-				"-F",
-				"#{pane_id}",
-				cmd,
-			]);
+			const pct = Math.round(((count - i) / (count - i + 1)) * 100);
+			paneId = splitRightOfPane(results[i - 1].paneId, cmd, pct);
 		}
 
 		tmuxExec(["select-pane", "-t", paneId, "-T", paneTitle]);
@@ -491,10 +521,14 @@ async function runChain(
 ): Promise<RunResult[]> {
 	const results: RunResult[] = [];
 	let previous = rootTask ?? "";
+	let topRowTargetPaneId: string | undefined;
 
-	for (const step of steps) {
+	for (let i = 0; i < steps.length; i++) {
+		const step = steps[i];
 		const task = step.task.replaceAll("{previous}", previous).replaceAll("{task}", rootTask ?? previous);
-		const launch = launchSingle(step.agent, task, config, step.cwd, model, thinking);
+		const pct = Math.round(((steps.length - i) / (steps.length - i + 1)) * 100);
+		const launch = launchSingle(step.agent, task, config, step.cwd, model, thinking, topRowTargetPaneId, pct);
+		topRowTargetPaneId = launch.paneId;
 		const result = await waitForCompletion(launch, config, signal);
 		results.push(result);
 		previous = result.output;
@@ -580,7 +614,7 @@ const SubagentParams = Type.Object({
 });
 
 export default function (pi: ExtensionAPI) {
-	const config = loadConfig((pi.settings as Record<string, unknown>) ?? {});
+	const config = loadConfig();
 
 	pi.registerTool({
 		name: "subagent",
@@ -755,4 +789,69 @@ export default function (pi: ExtensionAPI) {
 			};
 		},
 	});
+
+	// ── 为每个 agent 注册 /agentname 快捷命令 ──
+	const agents = discoverAgents();
+	for (const agent of agents) {
+		pi.registerCommand(agent.name, {
+			description: `${agent.description}（快捷启动 subagent）`,
+			handler: async (args, ctx) => {
+				const task = args.trim();
+				if (!task) {
+					ctx.ui.notify(`用法: /${agent.name} <任务描述>\n例: /${agent.name} 审查当前修改的代码`, "warn");
+					return;
+				}
+
+				try {
+					const launch = launchSingle(agent, task, config, ctx.cwd, agent.model, agent.thinking);
+					ctx.ui.notify(`⏳ ${agent.name} 已启动 (run: ${launch.runId})...`, "info");
+					const result = await waitForCompletion(launch, config);
+					if (result.status === "completed") {
+						ctx.ui.notify(`✅ ${agent.name} 完成 (${(result.durationMs / 1000).toFixed(1)}s)\n\n${result.output.slice(0, 4000)}${result.output.length > 4000 ? "\n...（截断）" : ""}`, "info");
+					} else {
+						ctx.ui.notify(`❌ ${agent.name} 失败: ${result.error ?? "未知错误"}`, "error");
+					}
+				} catch (err) {
+					ctx.ui.notify(`启动 ${agent.name} 失败: ${(err as Error).message}`, "error");
+				}
+			},
+		});
+	}
+
+	// ── Plan review gate ──
+	// 拦截 plannotator_submit_plan：首次提交 block，要求 LLM 先调用 planner 审查
+	// 如果 plannotator 未安装，handler 不会匹配任何工具调用，无副作用
+	// 逻辑详见 plan-review-gate.ts
+	{
+		const reviewedPlans = new Set<string>();
+		pi.on("tool_call", async (event, _ctx) => {
+			if (event.toolName !== "plannotator_submit_plan") return;
+			const planFilePath = event.input?.filePath as string | undefined;
+			if (!planFilePath) return;
+			if (reviewedPlans.has(planFilePath)) {
+				reviewedPlans.delete(planFilePath);
+				return;
+			}
+			reviewedPlans.add(planFilePath);
+			return {
+				block: true,
+				reason: [
+				"📋 提交前需要先让 planner 审查计划。",
+				"请调用 subagent 工具：",
+				'  subagent(agent: "planner", task: "审查实施计划...")',
+				"",
+				"审查任务内容：",
+				"请审查以下实施计划，从架构合理性、完整性、风险和遗漏角度给出评估。",
+				"如果计划整体可行只需指出小问题；如果存在重大缺陷请详细说明。",
+				"计划文件路径：" + planFilePath,
+				"",
+				"审查完成后，如果计划需要修改请修改后再提交。",
+				"如果计划已通过审查，直接再次调用 plannotator_submit_plan 即可（不会再次被阻止）。",
+			].join("\n"),
+			};
+		});
+		pi.on("session_shutdown", () => {
+			reviewedPlans.clear();
+		});
+	}
 }
