@@ -1,11 +1,7 @@
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 [Desktop Entry]
 Type=Application
 Name=Xdg Desktop Portal
-Exec=/home/brokenshine/.guix-home/profile/libexec/xdg-desktop-portal
+Exec=~/.guix-home/profile/libexec/xdg-desktop-portal
 X-GNOME-Autostart-enabled=true
 Hidden=false
 NoDisplay=true
