@@ -1,7 +1,3 @@
-; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-;
-; SPDX-License-Identifier: MIT
-
 (defcfg process-unmapped-keys yes)
 
 (defsrc caps lalt ralt)
