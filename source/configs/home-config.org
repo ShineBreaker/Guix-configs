@@ -143,10 +143,10 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "fcitx5-lua"
 
         ;; 工具
-        "ark"
         "cliphist"
         "dconf-editor"
         "dex"
+        "file-roller"
         "libnotify"
         "setxkbmap"
         "wl-clipboard"
@@ -338,6 +338,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "gamemode"
          "heroic"
          "lr2oraja-endlessdream-bin"
+         "luanti-halon"
+         "luanti-mineclonia-csm"
          "mangohud"
          "osu-lazer-bin"
          "prismlauncher-dolly"
@@ -652,7 +654,7 @@ end
                            ("text/html" . "zen.desktop")
                            ("application/xhtml+xml" . "zen.desktop")
                            ;; 文件管理器
-                           ("inode/directory" . "pcmanfm-qt.desktop")
+                           ("inode/directory" . "thunar.desktop")
                            ;; 图片查看
                            ("image/png" . "org.nomacs.ImageLounge.desktop")
                            ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
@@ -703,13 +705,13 @@ end
                            ;; KeePassXC 密码库
                            ("application/x-keepass2" . "org.keepassxc.KeePassXC.desktop")
                            ;; 压缩包
-                           ("application/zip" . "org.kde.ark.desktop")
-                           ("application/x-tar" . "org.kde.ark.desktop")
-                           ("application/gzip" . "org.kde.ark.desktop")
-                           ("application/x-xz" . "org.kde.ark.desktop")
-                           ("application/x-bzip2" . "org.kde.ark.desktop")
-                           ("application/x-7z-compressed" . "org.kde.ark.desktop")
-                           ("application/x-rar-compressed" . "org.kde.ark.desktop")
+                           ("application/zip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-tar" . "org.gnome.FileRoller.desktop")
+                           ("application/gzip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-xz" . "org.gnome.FileRoller.desktop")
+                           ("application/x-bzip2" . "org.gnome.FileRoller.desktop")
+                           ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
+                           ("application/x-rar-compressed" . "org.gnome.FileRoller.desktop")
                            ;; 邮件
                            ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
                            ;; 即时通讯
