@@ -14,4 +14,4 @@ plans/
 .keys/
 
 # Agent 工作产物（不进入版本控制，但 .agent/ 下的 skill 等内容可跟踪）
-.agent/workfile/
+.agents/workfile/
