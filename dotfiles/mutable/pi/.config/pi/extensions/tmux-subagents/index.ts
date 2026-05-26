@@ -319,7 +319,7 @@ function discoverPrompts(): PromptConfig[] {
 // ─── Workfile Helpers ──────────────────────────────────────────────────────
 
 function getWorkfileDir(cwd: string, agentName: string): string {
-	return path.join(cwd, ".agent", "workfile", agentName);
+	return path.join(cwd, ".agents", "workfile", agentName);
 }
 
 function generateWorkfileName(): string {
@@ -328,7 +328,7 @@ function generateWorkfileName(): string {
 	return `${date}-${hash}.md`;
 }
 
-/** 将 agent 运行结果持久化到 .agent/workfile/{agent}/ 目录 */
+/** 将 agent 运行结果持久化到 .agents/workfile/{agent}/ 目录 */
 function persistToWorkfile(cwd: string, agentName: string, content: string): string | undefined {
 	try {
 		const dir = getWorkfileDir(cwd, agentName);
