@@ -1,8 +1,4 @@
 ---
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 name: git-summary
 description: Use when generating work summaries, weekly reports, status updates from git history, or when encountering "这周做了什么", "总结最近提交", "生成周报", "what did I get done".
 ---

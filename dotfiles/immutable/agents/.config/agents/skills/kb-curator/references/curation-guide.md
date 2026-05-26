@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # 知识库策展工作流指南
 
 ## 记忆分层模型

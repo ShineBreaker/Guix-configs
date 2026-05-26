@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # 桌面环境配置
 
 通过 Guix Home 部署到 `~/.config/`。

@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # Dotfiles 总览
 
 本目录包含三层配置，由 `maak home` 统一部署。

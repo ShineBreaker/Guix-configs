@@ -1,8 +1,4 @@
 ---
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 name: kb-curator
 description: Use when maintaining the knowledge base, running nightly curation, analyzing KB health, identifying gaps, or when encountering "curate kb", "夜间策展", "nightly curation", "检查知识库", "维护知识库".
 ---
@@ -37,8 +33,8 @@ description: Use when maintaining the knowledge base, running nightly curation, 
    **MEMORY 时效检测**：
    1. 扫描 MEMORY.org 中 `* feedback` 和 `* reference` 节的所有条目
    2. 计算 UPDATED 距今天数
-   3. >30 天 → 标记为 stale
-   4. >60 天 → 建议归档
+   3. > 30 天 → 标记为 stale
+   4. > 60 天 → 建议归档
 
    运行命令：`kb memory --stale`
 

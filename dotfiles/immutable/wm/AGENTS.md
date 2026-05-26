@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # WM 主题配置
 
 通过 Guix Home 部署到 `~/.config/` 和 `~/.local/`。

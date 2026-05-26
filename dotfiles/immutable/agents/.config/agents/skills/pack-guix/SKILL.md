@@ -1,8 +1,4 @@
 ---
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 name: pack-guix
 description: 'Auto-generate Guix package definitions from binary URLs and source repositories. Handles FHS compatibility for precompiled binaries, generates build scripts, and supports continuous testing. Triggers: "guix package", "打包 guix", "create guix package", "guix define", "guix 打包", "binary to guix".'
 ---

@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 <rules>
 
 <critical>
@@ -11,14 +5,17 @@ SPDX-License-Identifier: MIT
 每个任务开始时先使用知识库和记忆系统，且必须按照如下步骤进行：
 
 **知识库预检**（可复用技术知识）：
+
 1. `kb fields --category`
 2. `kb list --category <相关类别> --all`
 
 **记忆预检**（用户癖好 + 项目上下文）：
+
 1. `kb memory --project .` — 获取当前项目的记忆（项目级决策、状态、上下文）
 2. 反馈记忆和用户画像已通过 globalContext 自动加载，无需手动检索
 
 **定位区分**：
+
 - MEMORY（癖好/偏好）→ 用户行为模式、交互习惯、项目级不可推导信息
 - KB（可复用知识）→ 技术经验、调试方案、配置技巧
 
@@ -62,45 +59,61 @@ SPDX-License-Identifier: MIT
 若无 → 确认后停止。
 若用户提出新要求 → 先总结，再处理。
 
-<signals>
 经验信号速查
+
+<signals>
+
   <signal type="mistake">
     用户纠正（"不对，应该是…"、"你搞错了…"） → `mistake` 卡片
   </signal>
+  
   <signal type="note">
     发现知识空白（文档过时、API 行为不符预期） → `note` / `research` 卡片
   </signal>
+  
   <signal type="debug">
     踩坑/排查 >2 步、环境差异 → `debug` 卡片
   </signal>
+  
   <signal type="refactor">
     发现更优方案 → `refactor` 卡片
   </signal>
+  
   <signal type="config">
     配置陷阱（跨工具集成、非默认组合） → `config` 卡片
   </signal>
 
+</signals>
+
 记忆信号速查（写入 MEMORY）
+
+<signals>
+
   <signal type="preference">
     偏好表达（"我喜欢..."、"不要..."、"停..."） → feedback 记忆
   </signal>
+  
   <signal type="behavior-correction">
     行为纠正（纠正你的工作方式，非技术错误） → feedback 记忆
     区分："不要用 try-catch，用 Result 类型" 是偏好 → MEMORY
-         "这个正则写错了" 是技术纠正 → KB
+    "这个正则写错了" 是技术纠正 → KB
   </signal>
+  
   <signal type="habit">
     习惯模式（同一偏好出现 ≥2 次） → feedback 记忆
   </signal>
+  
   <signal type="project-decision">
     项目级决策或状态变化（不可从代码推导） → project 记忆
   </signal>
+  
   <signal type="external-reference">
     外部系统/文档/资源的位置信息 → reference 记忆
   </signal>
 
-双重归属：项目决策同时有跨项目复用价值时，同时写入 MEMORY + KB。
 </signals>
+
+双重归属：项目决策同时有跨项目复用价值时，同时写入 MEMORY + KB。
 
 <checklist>
 规范速查

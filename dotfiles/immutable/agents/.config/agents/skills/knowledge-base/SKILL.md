@@ -1,8 +1,4 @@
 ---
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 name: knowledge-base
 description: Use when querying historical experience, writing new experience cards, searching patterns, or when encountering "kb search", "记录经验", "写入知识库", "check patterns", "kb add", "kb list", "kb fields".
 ---
@@ -15,15 +11,15 @@ description: Use when querying historical experience, writing new experience car
 
 ## 路径
 
-| 用途     | 路径                           |
-| -------- | ------------------------------ |
-| CLI 工具 | `~/.local/bin/kb`              |
-| 经验卡片 | `~/Documents/Org/experiences/` |
-| 记忆文件 | `~/Documents/Org/MEMORY.org`   |
+| 用途     | 路径                                 |
+| -------- | ------------------------------------ |
+| CLI 工具 | `~/.local/bin/kb`                    |
+| 经验卡片 | `~/Documents/Org/experiences/`       |
+| 记忆文件 | `~/Documents/Org/MEMORY.org`         |
 | 项目记忆 | `~/Documents/Org/memories/projects/` |
-| 机器索引 | `~/Documents/Org/index.json`   |
-| 收件箱   | `~/Documents/Org/inbox.org`    |
-| 用户画像 | `~/Documents/Org/profile.org`  |
+| 机器索引 | `~/Documents/Org/index.json`         |
+| 收件箱   | `~/Documents/Org/inbox.org`          |
+| 用户画像 | `~/Documents/Org/profile.org`        |
 
 ## 检索
 

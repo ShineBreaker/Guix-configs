@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 <critical>
 主动委派 subagent。任务符合任一条件时，优先调用 `subagent` 工具，而不是独自顺序完成：
 - 需要先定位代码结构或跨文件理解：先派 `scout`。

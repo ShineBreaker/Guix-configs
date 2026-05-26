@@ -1,8 +1,4 @@
 ---
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 name: worker
 description: 自主深度工作者——接收目标后独立完成编码，原则驱动、多文件推理、测试验证
 tools: read, grep, find, ls, bash, edit, write

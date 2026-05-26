@@ -1,8 +1,4 @@
 ---
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
 name: oracle
 description: 架构顾问——质疑假设、评估方向、提供替代方案与架构模式建议
 tools: read, grep, find, ls, write

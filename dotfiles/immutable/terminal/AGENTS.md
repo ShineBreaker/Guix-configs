@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # 终端工具链配置
 
 通过 Guix Home 部署到 `~/.config/` 和 `~/.local/`。

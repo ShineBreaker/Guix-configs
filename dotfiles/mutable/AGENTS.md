@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # Mutable Dotfiles（GNU Stow 管理）
 
 本目录包含通过 GNU Stow 链接到 `$HOME` 的可变配置。

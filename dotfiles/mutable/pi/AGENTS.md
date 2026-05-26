@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # Pi Agent 配置
 
 本目录是 Pi Agent 的配置源文件，通过 GNU Stow 部署到 `~/.config/pi/`、`~/.local/share/pi/` 等 XDG 路径。

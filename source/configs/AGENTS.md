@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # Org 配置文件
 
 本目录包含 Guix System / Guix Home 的 org-babel 源文件。

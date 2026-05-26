@@ -1,6 +1,6 @@
 {
   "defaultProvider": "zai",
-  "defaultModel": "GLM-5.1",
+  "defaultModel": "glm-5.1",
   "npmCommand": [
     "pnpm"
   ],

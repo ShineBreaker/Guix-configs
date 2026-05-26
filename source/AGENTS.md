@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 本目录包含 Guix System / Guix Home 的源配置和 org 文档。AI 助手在修改此目录前应先阅读本文件。
 
 ## 目录结构

@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 本文件为在本仓库中工作的 AI 助手提供统一指引。`CLAUDE.md` 是本文件的符号链接。
 
 ## 概述

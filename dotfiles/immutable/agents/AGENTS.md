@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # Pi Agent 系统配置
 
 本目录通过 `maak home` 的 stow 链接到 `~/.config/` 和 `~/.local/`。

@@ -1,9 +1,3 @@
-<!--
-SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-
-SPDX-License-Identifier: MIT
--->
-
 # 飞升模式（Ascended Mode）
 
 当同一问题被用户持续纠正（≥2 次）仍无法解决时，自动进入飞升模式——全面检索所有知识源后给出最强方案。
