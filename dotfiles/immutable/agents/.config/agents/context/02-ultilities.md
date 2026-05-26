@@ -7,10 +7,20 @@ SPDX-License-Identifier: MIT
 <rules>
 
 <critical>
-**知识库是默认第一步，不是可选优化。**
-每个任务开始时先使用知识库，且必须按照如下步骤进行：
+**知识库和记忆系统是默认第一步，不是可选优化。**
+每个任务开始时先使用知识库和记忆系统，且必须按照如下步骤进行：
+
+**知识库预检**（可复用技术知识）：
 1. `kb fields --category`
 2. `kb list --category <相关类别> --all`
+
+**记忆预检**（用户癖好 + 项目上下文）：
+1. `kb memory --project .` — 获取当前项目的记忆（项目级决策、状态、上下文）
+2. 反馈记忆和用户画像已通过 globalContext 自动加载，无需手动检索
+
+**定位区分**：
+- MEMORY（癖好/偏好）→ 用户行为模式、交互习惯、项目级不可推导信息
+- KB（可复用知识）→ 技术经验、调试方案、配置技巧
 
 读取该领域全部经验卡片的标题、id、type、tech。先根据标题判断是否有可复用经验；
 标题相关时用 `kb get <id>` 读全文；标题列表不足以定位时，再用 `kb search "<关键词>" --context 2` 检索正文。
@@ -41,14 +51,16 @@ SPDX-License-Identifier: MIT
 当任务涉及代码库探索、架构判断、外部文档、实现和审查中的任意两项以上，且当前 harness 提供 subagent/delegation 工具时，主 agent 应主动委派：先用只读侦察/调研 agent 收集上下文，再让实现/审查 agent 处理独立阶段。不要把"能自己做"当成不委派的理由。
 </critical>
 
-对话中检测经验信号
+对话中检测经验信号和记忆信号
 自动检测以下信号，触发 `self-improving` skill 记录：
 
 用户表示任务完成（"可以用了"、"一切正常工作"、"Done"）
 必须触发 `self-improving` skill 执行总结流程。
 若有可记录经验 → `kb search` 去重 → `kb add` → `kb lint` → 传播联动。
+若有可记录偏好 → `kb memory --add --type feedback`。
+若有项目决策变化 → `kb memory --add --type project --project <id>`。
 若无 → 确认后停止。
-若用户提出新要求 → 先完成总结，再处理。
+若用户提出新要求 → 先总结，再处理。
 
 <signals>
 经验信号速查
@@ -67,12 +79,27 @@ SPDX-License-Identifier: MIT
   <signal type="config">
     配置陷阱（跨工具集成、非默认组合） → `config` 卡片
   </signal>
-  <signal type="ascended">
-    同一问题被纠正 ≥2 次、用户说 `/ascended` → 全面检索 → 最强方案 → 复盘
+
+记忆信号速查（写入 MEMORY）
+  <signal type="preference">
+    偏好表达（"我喜欢..."、"不要..."、"停..."） → feedback 记忆
   </signal>
-  <caution>
-    防误触发：用户只是描述报错但不纠正你、普通 review 无可复用经验 → 不触发。
-  </caution>
+  <signal type="behavior-correction">
+    行为纠正（纠正你的工作方式，非技术错误） → feedback 记忆
+    区分："不要用 try-catch，用 Result 类型" 是偏好 → MEMORY
+         "这个正则写错了" 是技术纠正 → KB
+  </signal>
+  <signal type="habit">
+    习惯模式（同一偏好出现 ≥2 次） → feedback 记忆
+  </signal>
+  <signal type="project-decision">
+    项目级决策或状态变化（不可从代码推导） → project 记忆
+  </signal>
+  <signal type="external-reference">
+    外部系统/文档/资源的位置信息 → reference 记忆
+  </signal>
+
+双重归属：项目决策同时有跨项目复用价值时，同时写入 MEMORY + KB。
 </signals>
 
 <checklist>

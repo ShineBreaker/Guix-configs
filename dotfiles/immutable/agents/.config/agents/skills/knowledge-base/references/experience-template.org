@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
+#
+# 注意：本模板专为 Emacs org-capture 设计，使用 completing-read 和
+# format-time-string 等 Emacs Lisp 函数。不适用于 kb add CLI 流程。
+# CLI 用户请直接使用: kb add --title "标题" --category 类别 ...
 
 * TODO 任务总结：%?
 :PROPERTIES:

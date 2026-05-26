@@ -24,91 +24,12 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-
-def parse_org_metadata(filepath: str) -> dict | None:
-    """从 Org 文件头部提取元数据。"""
-    meta = {"file": filepath, "quality_issues": []}
-    try:
-        with open(filepath) as f:
-            content = f.read()
-    except Exception:
-        return None
-
-    # 提取 PROPERTIES 块
-    props_match = re.search(r":PROPERTIES:(.*?):END:", content, re.DOTALL)
-    if not props_match:
-        meta["quality_issues"].append("missing_properties")
-        # 仍然尝试提取标题
-        title_match = re.search(r"^\* DONE (.+)", content, re.MULTILINE)
-        meta["title"] = title_match.group(1).strip() if title_match else "unknown"
-        return meta
-
-    props = props_match.group(1)
-
-    def get_prop(key):
-        m = re.search(rf":{key}:\s*(.+)", props)
-        return m.group(1).strip() if m else None
-
-    meta["id"] = get_prop("ID")
-    meta["created"] = get_prop("CREATED")
-    meta["category"] = get_prop("CATEGORY") or "unknown"
-    meta["tech"] = get_prop("TECH") or ""
-    meta["type"] = get_prop("TYPE") or "unknown"
-    meta["status"] = get_prop("STATUS") or "unknown"
-    meta["owner"] = get_prop("OWNER") or "unknown"
-
-    # 提取标题
-    title_match = re.search(r"^\* (?:DONE|TODO) (.+)", content, re.MULTILINE)
-    meta["title"] = title_match.group(1).strip() if title_match else "unknown"
-
-    # 质量检查
-    if not meta["id"]:
-        meta["quality_issues"].append("missing_id")
-    if not meta["created"]:
-        meta["quality_issues"].append("missing_created")
-    if meta["category"] == "unknown":
-        meta["quality_issues"].append("missing_category")
-    if not meta["tech"]:
-        meta["quality_issues"].append("missing_tech")
-
-    # 检查章节完整性
-    has_task_desc = bool(re.search(r"^\*\* 任务描述", content, re.MULTILINE))
-    has_execution = bool(re.search(r"^\*\* 执行过程", content, re.MULTILINE))
-    has_findings = bool(
-        re.search(r"^\*{2,3} (关键发现|难点与坑点|经验教训)", content, re.MULTILINE)
-    )
-
-    if not has_task_desc:
-        meta["quality_issues"].append("missing_task_description")
-    if not has_execution:
-        meta["quality_issues"].append("missing_execution_process")
-    if not has_findings:
-        meta["quality_issues"].append("missing_findings")
-
-    # 检查 Markdown 格式污染
-    if "```" in content:
-        meta["quality_issues"].append("markdown_code_blocks")
-    if re.search(r"(?<!\*)\*\*(?!\*)", content) and "** " not in content:
-        meta["quality_issues"].append("markdown_bold")
-
-    # 统计内容长度
-    meta["line_count"] = len(content.splitlines())
-
-    return meta
+# 共享 Org 解析工具
+from kb_org_utils import parse_org_metadata, parse_date
 
 
-def parse_date(date_str: str | None) -> datetime | None:
-    """解析 Org 日期字符串。"""
-    if not date_str:
-        return None
-    # 格式: [2026-04-23 四 23:02] 或 [2026-04-23 四]
-    m = re.search(r"(\d{4}-\d{2}-\d{2})", date_str)
-    if m:
-        try:
-            return datetime.strptime(m.group(1), "%Y-%m-%d")
-        except ValueError:
-            pass
-    return None
+# parse_org_metadata 和 parse_date 已提取到共享模块 kb_org_utils.py
+# 此处保留的函数为 analyze_kb 专用逻辑
 
 
 def detect_duplicates(entries: list[dict]) -> list[dict]:
@@ -149,7 +70,7 @@ def analyze(
     for f in sorted(exp_path.rglob("*.org")):
         if f.is_symlink():
             continue
-        meta = parse_org_metadata(str(f))
+        meta = parse_org_metadata(str(f), quality_check=True)
         if meta:
             entries.append(meta)
 

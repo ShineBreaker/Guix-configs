@@ -23,50 +23,14 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+# 共享 Org 解析工具
+from kb_org_utils import parse_org_metadata, parse_date
+
 # 类型基础集合（category 从已有卡片动态发现，不再硬编码）
 ALL_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
 
-
-def parse_org_metadata(filepath: str) -> dict | None:
-    meta = {"file": filepath}
-    try:
-        with open(filepath) as f:
-            content = f.read()
-    except Exception:
-        return None
-
-    props_match = re.search(r":PROPERTIES:(.*?):END:", content, re.DOTALL)
-    if not props_match:
-        return None
-
-    props = props_match.group(1)
-
-    def get_prop(key):
-        m = re.search(rf":{key}:\s*(.+)", props)
-        return m.group(1).strip() if m else None
-
-    meta["category"] = get_prop("CATEGORY") or "unknown"
-    meta["type"] = get_prop("TYPE") or "unknown"
-    meta["tech"] = get_prop("TECH") or ""
-    meta["created"] = get_prop("CREATED")
-    meta["owner"] = get_prop("OWNER") or "unknown"
-
-    title_match = re.search(r"^\* (?:DONE|TODO) (.+)", content, re.MULTILINE)
-    meta["title"] = title_match.group(1).strip() if title_match else "unknown"
-
-    return meta
-
-
-def parse_date(date_str: str | None) -> datetime | None:
-    if not date_str:
-        return None
-    m = re.search(r"(\d{4}-\d{2}-\d{2})", date_str)
-    if m:
-        try:
-            return datetime.strptime(m.group(1), "%Y-%m-%d")
-        except ValueError:
-            pass
-    return None
+# parse_org_metadata 和 parse_date 已提取到共享模块 kb_org_utils.py
+# 此处保留的函数为 find_gaps 专用逻辑
 
 
 def find_gaps(experiences_dir: str, stale_days: int = 90) -> dict:

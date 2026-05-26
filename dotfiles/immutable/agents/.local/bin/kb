@@ -38,15 +38,101 @@ from datetime import datetime
 from pathlib import Path
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 常量与路径
+# 配置常量 — 所有可变参数集中在此，修改时只需改这里
 # ═══════════════════════════════════════════════════════════════════════════════
 
-KB_ROOT = Path.home() / "Documents" / "Org"
-KB_EXPERIENCES = KB_ROOT / "experiences"
-KB_PATTERNS = KB_ROOT / "patterns.org"
-KB_INDEX = KB_ROOT / "index.json"
-KB_INBOX = KB_ROOT / "inbox.org"
-KB_PROFILE = KB_ROOT / "profile.org"
+# ── 路径 ──────────────────────────────────────────────────────────────────────
+KB_ROOT = Path.home() / "Documents" / "Org"         # 知识库根目录
+KB_EXPERIENCES = KB_ROOT / "experiences"             # 经验卡片存储目录
+KB_MEMORY = KB_ROOT / "MEMORY.org"                  # 记忆文件（feedback/project/reference）
+KB_MEMORIES = KB_ROOT / "memories"                  # 记忆子目录
+KB_PROJECTS = KB_MEMORIES / "projects"              # 项目记忆文件目录
+KB_PATTERNS = KB_MEMORY                             # 向后兼容别名（patterns 已合并到 MEMORY）
+KB_INDEX = KB_ROOT / "index.json"                   # JSON 查询索引
+KB_INBOX = KB_ROOT / "inbox.org"                    # 快速捕获收件箱
+KB_PROFILE = KB_ROOT / "profile.org"                # 用户画像文件
+
+# ── 白名单 — 定义合法的 type 和 owner 值 ───────────────────────────────────
+# 与 parameters.md 中定义的取值保持一致
+VALID_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
+VALID_OWNERS = {"human", "ai", "collaborative"}
+VALID_ENTRY_TYPES = {"mistake", "note", "ascended"}
+
+# ── 阈值 ──────────────────────────────────────────────────────────────────────
+STALE_DAYS = 30         # 记忆条目超过此天数未更新视为陈旧
+DEFAULT_LIST_COUNT = 20  # kb list 默认显示条数
+
+# ── MEMORY.org 标准节名（用于从零重建模板）──────────────────────────────────
+MEMORY_SECTIONS = ["feedback", "project", "reference", "deprecated"]
+
+# ── 卡片模板：各 entry_type 对应的章节骨架 ─────────────────────────────────
+# 每个模板是一个行列表，用于 cmd_add 生成新卡片
+CARD_TEMPLATES = {
+    "mistake": [
+        "** 执行过程",
+        None,  # 占位符：运行时替换为 body 或默认内容
+        "",
+        "** 关键发现",
+        "*** 下次开始前自检",
+        "",
+        "** 难点与坑点 :difficulties:",
+        "",
+        "** 经验教训 :lessons:",
+        "",
+        "** 相关链接",
+        "",
+        "** AI 建议 :ai_notes:",
+    ],
+    "note": [
+        "** 执行过程",
+        None,
+        "",
+        "** 关键发现",
+        "",
+        "** 难点与坑点 :difficulties:",
+        "",
+        "** 经验教训 :lessons:",
+        "",
+        "** 相关链接",
+        "",
+        "** AI 建议 :ai_notes:",
+    ],
+    "ascended": [
+        "** 执行过程",
+        None,
+        "",
+        "** 关键发现",
+        "*** 需要新增或修补的规则",
+        "",
+        "** 难点与坑点 :difficulties:",
+        "",
+        "** 经验教训 :lessons:",
+        "",
+        "** 相关链接",
+        "",
+        "** AI 建议 :ai_notes:",
+    ],
+    "default": [
+        "** 执行过程",
+        None,  # 占位符：运行时替换为 body 或 "1. "
+        "",
+        "** 难点与坑点 :difficulties:",
+        "",
+        "** 经验教训 :lessons:",
+        "",
+        "** 相关链接",
+        "",
+        "** AI 建议 :ai_notes:",
+    ],
+}
+
+# 各 entry_type 的默认 body 占位内容
+ENTRY_BODY_DEFAULTS = {
+    "mistake": "*** 原始问题\n\n*** 用户纠错反馈\n\n*** 这次到底错在哪里\n\n*** 最终正确处理\n",
+    "note": "*** 事项内容\n\n*** 为什么值得长期保留\n\n*** 适用场景与例外\n\n*** 后续行动\n",
+    "ascended": "*** 前几轮失败的根因\n\n*** 检索过的知识源\n\n*** 核对过的真实文件或输出\n\n*** 最终采用的最强方案\n",
+    "default": "1. ",
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -76,18 +162,57 @@ def timestamp_id() -> str:
 
 
 def ensure_dirs() -> None:
-    """确保知识库目录和基础文件存在。"""
+    """确保知识库目录和基础文件存在。
+
+    自愈机制：所有目录和模板文件在缺失时自动重建。
+    删除任意文件或整个 KB_ROOT 后重新运行 kb 命令即可恢复骨架。
+    注意：仅重建结构，不恢复卡片内容。
+    """
+    # ── 目录 ────────────────────────────────────────────────────────────────
     KB_EXPERIENCES.mkdir(parents=True, exist_ok=True)
-    for f in (KB_INBOX, KB_PATTERNS):
-        if not f.exists():
-            f.write_text(
-                f"#+title: {f.stem}\n#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]\n\n",
-                encoding="utf-8",
-            )
+    KB_MEMORIES.mkdir(parents=True, exist_ok=True)
+    KB_PROJECTS.mkdir(parents=True, exist_ok=True)
+
+    # ── inbox.org ──────────────────────────────────────────────────────────
+    if not KB_INBOX.exists():
+        KB_INBOX.write_text(
+            f"#+title: inbox\n#+date: [{now()}]\n\n",
+            encoding="utf-8",
+        )
+
+    # ── MEMORY.org（含所有标准节）──────────────────────────────────────────
+    if not KB_MEMORY.exists():
+        _init_memory_template()
+
+    # ── profile.org（用户画像骨架）────────────────────────────────────────
     if not KB_PROFILE.exists():
         _init_profile(KB_PROFILE)
+
+    # ── index.json（空索引）────────────────────────────────────────────────
     if not KB_INDEX.exists():
         _save_index({"version": 1, "updated": "", "total": 0, "cards": []})
+
+
+def _init_memory_template() -> None:
+    """从零生成 MEMORY.org 模板，包含所有标准节。"""
+    date_str = datetime.now().strftime("%Y-%m-%d %a")
+    sections = [f"#+title: MEMORY", f"#+date: [{date_str}]"]
+    sections.append("")
+    sections.append("#+BEGIN_COMMENT")
+    sections.append("MEMORY.org — 统一记忆索引")
+    sections.append("")
+    sections.append("设计原则：")
+    sections.append("1. 记忆只存储无法从当前代码/项目状态推导的信息")
+    sections.append("2. feedback 记录用户的行为偏好和工作癖好")
+    sections.append("3. project 记忆按项目拆分为独立文件，通过路径/名称检索")
+    sections.append("4. 记忆是时间点观察，不是实时状态——引用前先验证")
+    sections.append("5. MEMORY 偏重癖好偏好，知识库偏重可复用知识")
+    sections.append("6. 带 ⚠ 标记的条目为陈旧记忆，需验证后才能作为决策依据")
+    sections.append("#+END_COMMENT")
+    for sec in MEMORY_SECTIONS:
+        sections.append("")
+        sections.append(f"* {sec}")
+    KB_MEMORY.write_text("\n".join(sections) + "\n", encoding="utf-8")
 
 
 def _init_profile(filepath: Path) -> None:
@@ -131,7 +256,11 @@ def read_org_title(content: str) -> str:
 
 
 def _card_dict(filepath: Path) -> dict | None:
-    """从一张卡片文件提取索引条目，返回 dict 或 None。"""
+    """从一张卡片文件提取索引条目，返回 dict 或 None。
+
+    跳过符号链接（避免索引 Guix store 中的重复文件）。
+    tags 字段按逗号展开，解决 tech 含逗号时的数据污染问题。
+    """
     if filepath.is_symlink():
         return None
     content = filepath.read_text(encoding="utf-8")
@@ -140,10 +269,20 @@ def _card_dict(filepath: Path) -> dict | None:
     if created:
         created = re.sub(r"[\[\]]", "", created).split()[0]
     entry_type = parse_org_prop(content, "ENTRY_TYPE") or None
+
+    # ── 解析 tags 行 ─────────────────────────────────────────────────────
+    # tags 行格式: ":category:type:owner:tech::"（冒号分隔，尾部双冒号）
+    # tech 字段可能含逗号（如 "Hexo,Playwright,GuixSD"），需按逗号展开
     tags_line = ""
     m = re.search(r":(\S+)::", content)
     if m:
         tags_line = m.group(1)
+    raw_tags = tags_line.split(":") if tags_line else []
+    # 展开含逗号的标签（如 "Hexo,Playwright" → ["Hexo", "Playwright"]）
+    expanded_tags = []
+    for tag in raw_tags:
+        expanded_tags.extend(t.strip() for t in tag.split(",") if t.strip())
+
     return {
         "id": card_id,
         "file": str(filepath.relative_to(KB_ROOT)),
@@ -155,7 +294,7 @@ def _card_dict(filepath: Path) -> dict | None:
         "entry_type": entry_type,
         "status": parse_org_prop(content, "STATUS") or "done",
         "created": created or "",
-        "tags": tags_line.split(":") if tags_line else [],
+        "tags": expanded_tags,
     }
 
 
@@ -213,8 +352,8 @@ def _iter_search_targets() -> list[Path]:
             for f in sorted(KB_EXPERIENCES.rglob("*.org"))
             if f.is_file() and not f.is_symlink()
         )
-    if KB_PATTERNS.exists():
-        targets.append(KB_PATTERNS)
+    if KB_MEMORY.exists():
+        targets.append(KB_MEMORY)
     return targets
 
 
@@ -304,8 +443,14 @@ def cmd_add(args: argparse.Namespace) -> None:
     if "/" in category or "\\" in category or ".." in category:
         die(f"类别名不能包含路径分隔符或 '..': {category}")
 
-    if entry_type and entry_type not in ("", "mistake", "note", "ascended"):
-        die("--entry 仅支持: mistake, note, ascended")
+    if entry_type and entry_type not in ("", ) | VALID_ENTRY_TYPES:
+        die(f"--entry 仅支持: {', '.join(sorted(VALID_ENTRY_TYPES))}")
+
+    # ── 白名单校验：对非标准值打印警告 ─────────────────────────────────────
+    if type_ not in VALID_TYPES:
+        print(f"警告: type '{type_}' 不在标准值中 ({', '.join(sorted(VALID_TYPES))})", file=sys.stderr)
+    if owner not in VALID_OWNERS:
+        print(f"警告: owner '{owner}' 不在标准值中 ({', '.join(sorted(VALID_OWNERS))})", file=sys.stderr)
 
     # entry_type 自动推断（仅在用户未显式指定时）
     if entry_type and not args.type:
@@ -378,70 +523,23 @@ def cmd_add(args: argparse.Namespace) -> None:
 
 
 def _build_template(entry_type: str, body: str) -> list[str]:
-    """根据 entry_type 生成对应的模板章节。"""
-    if entry_type == "mistake":
-        return [
-            "** 执行过程",
-            body
-            or "*** 原始问题\n\n*** 用户纠错反馈\n\n*** 这次到底错在哪里\n\n*** 最终正确处理\n",
-            "",
-            "** 关键发现",
-            "*** 下次开始前自检",
-            "",
-            "** 难点与坑点 :difficulties:",
-            "",
-            "** 经验教训 :lessons:",
-            "",
-            "** 相关链接",
-            "",
-            "** AI 建议 :ai_notes:",
-        ]
-    elif entry_type == "note":
-        return [
-            "** 执行过程",
-            body
-            or "*** 事项内容\n\n*** 为什么值得长期保留\n\n*** 适用场景与例外\n\n*** 后续行动\n",
-            "",
-            "** 关键发现",
-            "",
-            "** 难点与坑点 :difficulties:",
-            "",
-            "** 经验教训 :lessons:",
-            "",
-            "** 相关链接",
-            "",
-            "** AI 建议 :ai_notes:",
-        ]
-    elif entry_type == "ascended":
-        return [
-            "** 执行过程",
-            body
-            or "*** 前几轮失败的根因\n\n*** 检索过的知识源\n\n*** 核对过的真实文件或输出\n\n*** 最终采用的最强方案\n",
-            "",
-            "** 关键发现",
-            "*** 需要新增或修补的规则",
-            "",
-            "** 难点与坑点 :difficulties:",
-            "",
-            "** 经验教训 :lessons:",
-            "",
-            "** 相关链接",
-            "",
-            "** AI 建议 :ai_notes:",
-        ]
-    else:
-        return [
-            "** 执行过程",
-            body or "1. ",
-            "",
-            "** 难点与坑点 :difficulties:",
-            "",
-            "** 经验教训 :lessons:",
-            "",
-            "** 相关链接",
-            "",
-            "** AI 建议 :ai_notes:",
-        ]
+    """根据 entry_type 生成对应的模板章节。
+
+    模板定义在 CARD_TEMPLATES 常量中，此处查找对应模板并填充 body。
+    """
+    # 选择模板：优先精确匹配 entry_type，否则用 default
+    template = CARD_TEMPLATES.get(entry_type, CARD_TEMPLATES["default"])
+    # 选择默认 body 内容
+    default_body = ENTRY_BODY_DEFAULTS.get(entry_type, ENTRY_BODY_DEFAULTS["default"])
+
+    result = []
+    for line in template:
+        if line is None:
+            # None 是 body 占位符：运行时替换为实际内容
+            result.append(body or default_body)
+        else:
+            result.append(line)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -450,16 +548,26 @@ def _build_template(entry_type: str, body: str) -> list[str]:
 
 
 def cmd_get(args: argparse.Namespace) -> None:
-    """读取指定卡片的完整内容。支持完整路径或 ID 部分匹配。"""
+    """读取指定卡片的完整内容。支持完整路径或 ID 部分匹配。
+
+    安全限制：直接路径必须在 KB_ROOT 内，防止任意文件读取。
+    """
     target = args.target
     if not target:
         die("用法: kb get <卡片文件名或ID>")
 
     p = Path(target)
+    # 安全检查：绝对路径必须在 KB_ROOT 内
+    if p.is_absolute():
+        try:
+            p.resolve().relative_to(KB_ROOT.resolve())
+        except ValueError:
+            die(f"路径超出知识库范围: {target}")
     if p.is_file():
         print(p.read_text(encoding="utf-8"), end="")
         return
 
+    # 在 experiences/ 中模糊匹配
     candidates = list(KB_EXPERIENCES.rglob(f"*{target}*"))
     candidates = [c for c in candidates if not c.is_symlink() and c.is_file()]
     if candidates:
@@ -475,8 +583,8 @@ def cmd_get(args: argparse.Namespace) -> None:
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    """列出经验卡片，支持过滤和数量限制。默认显示最近 20 条，输出 JSON。"""
-    recent = args.recent if args.recent is not None else (0 if args.all else 20)
+    """列出经验卡片，支持过滤和数量限制。默认显示最近 DEFAULT_LIST_COUNT 条，输出 JSON。"""
+    recent = args.recent if args.recent is not None else (0 if args.all else DEFAULT_LIST_COUNT)
     index = _load_index()
     matched = []
     for c in index["cards"]:
@@ -695,45 +803,540 @@ def cmd_tags(args: argparse.Namespace) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# MEMORY 系统：内部工具函数
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _parse_memory_sections(content: str) -> dict[str, list[tuple[int, int, str]]]:
+    """解析 MEMORY.org 的 `*` 顶级节。
+
+    返回 {节名: [(起始行号, 结束行号, 节文本)]}，行号从 0 开始。
+    """
+    lines = content.split("\n")
+    sections: dict[str, list[tuple[int, int, str]]] = {}
+    cur_name = None
+    cur_start = 0
+    for i, line in enumerate(lines):
+        m = re.match(r"^\*\s+(.+)", line)
+        if m:
+            if cur_name is not None:
+                sections.setdefault(cur_name, []).append(
+                    (cur_start, i, "\n".join(lines[cur_start:i]))
+                )
+            cur_name = m.group(1).strip()
+            cur_start = i
+    if cur_name is not None:
+        sections.setdefault(cur_name, []).append(
+            (cur_start, len(lines), "\n".join(lines[cur_start:]))
+        )
+    return sections
+
+
+def _next_memory_id(section_content: str, prefix: str) -> str:
+    """扫描已有 F/R 序号，返回下一个（如 F015）。"""
+    existing = re.findall(rf"^\*\* {prefix}(\d+)", section_content, re.MULTILINE)
+    if not existing:
+        return f"{prefix}001"
+    max_id = max(int(n) for n in existing)
+    return f"{prefix}{max_id + 1:03d}"
+
+
+def _find_section_end(lines: list[str], section_start: int) -> int:
+    """找到指定 `*` 节的最后一行（下一个 `*` 节之前）。"""
+    for i in range(section_start + 1, len(lines)):
+        if re.match(r"^\*\s+", lines[i]):
+            return i
+    return len(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: memory — 管理记忆系统
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_memory(args: argparse.Namespace) -> None:
+    """管理 MEMORY.org 中的反馈、项目和参考记忆。"""
+    ensure_dirs()
+
+    # --get：输出 MEMORY.org 全文或指定节
+    if getattr(args, "get", False):
+        if not KB_MEMORY.exists():
+            print("(记忆文件不存在)")
+            return
+        text = KB_MEMORY.read_text(encoding="utf-8")
+        mem_type = getattr(args, "type", None)
+        if mem_type:
+            # 只输出指定节的内容
+            sections = _parse_memory_sections(text)
+            for sec_name, entries in sections.items():
+                if mem_type in sec_name.lower():
+                    for _start, _end, sec_content in entries:
+                        print(sec_content, end="")
+                    return
+            print(f"(未找到 {mem_type} 节)")
+        else:
+            print(text, end="")
+        return
+
+    # --touch：更新时间戳
+    if getattr(args, "touch", None):
+        _memory_touch(args.touch)
+        return
+
+    # --archive：归档到 deprecated 节
+    if getattr(args, "archive", None):
+        _memory_archive(args.archive)
+        return
+
+    # --stale：列出陈旧记忆
+    if getattr(args, "stale", False):
+        _memory_stale()
+        return
+
+    # --add：添加记忆（优先于 --project 检索）
+    if getattr(args, "add", False):
+        _memory_add(args)
+        return
+
+    # --project：按项目名或路径检索
+    if getattr(args, "project", None):
+        _memory_project(args.project)
+        return
+
+    # 默认：列出所有记忆概览
+    _memory_overview(args)
+
+
+def _memory_overview(args: argparse.Namespace) -> None:
+    """列出所有记忆概览或按类型过滤。"""
+    if not KB_MEMORY.exists():
+        print("(记忆文件不存在)")
+        return
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    sections = _parse_memory_sections(text)
+
+    mem_type = getattr(args, "type", None)
+    if mem_type:
+        # 映射类型到节名
+        type_to_section = {
+            "feedback": "feedback",
+            "project": "project",
+            "reference": "reference",
+        }
+        section_name = type_to_section.get(mem_type)
+        if not section_name:
+            die(f"未知记忆类型: {mem_type}")
+        for sec_name, entries in sections.items():
+            if section_name in sec_name.lower():
+                for _start, _end, content in entries:
+                    # 列出 ** 二级标题
+                    for line in content.split("\n"):
+                        m = re.match(r"^\*\*\s+(.+)", line)
+                        if m:
+                            print(m.group(1))
+                return
+        print(f"(未找到 {mem_type} 条目)")
+        return
+
+    # 无过滤：概览统计
+    print("═══ MEMORY 概览 ═══")
+    for sec_name, entries in sections.items():
+        total = 0
+        for _s, _e, content in entries:
+            total += len(re.findall(r"^\*\* ", content, re.MULTILINE))
+        print(f"  {sec_name}: {total} 条")
+
+
+def _memory_add(args: argparse.Namespace) -> None:
+    """添加记忆条目。"""
+    mem_type = getattr(args, "type", None) or "feedback"
+    title = getattr(args, "title", "") or ""
+    use_stdin = getattr(args, "stdin", False)
+    project_name = getattr(args, "project", None)
+
+    body = ""
+    if use_stdin and not sys.stdin.isatty():
+        body = sys.stdin.read()
+
+    if not title:
+        # 从 stdin 内容第一行生成 title（兼容 patterns 旧接口）
+        if body:
+            first_line = body.strip().split("\n")[0].strip()
+            title = first_line[:80] if first_line else "(无标题)"
+        else:
+            die("添加记忆需要 --title")
+
+    if mem_type == "project":
+        _memory_add_project(title, body, project_name)
+        return
+
+    if not KB_MEMORY.exists():
+        _init_memory_template()
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    sections = _parse_memory_sections(text)
+
+    type_to_section = {
+        "feedback": "feedback",
+        "reference": "reference",
+    }
+    section_name = type_to_section.get(mem_type)
+    if not section_name:
+        die(f"未知记忆类型: {mem_type}")
+
+    # 找到目标节
+    target_section = None
+    for sec_name, entries in sections.items():
+        if section_name in sec_name.lower():
+            target_section = entries[0]
+            break
+
+    prefix = "F" if mem_type == "feedback" else "R"
+
+    if target_section:
+        _start, _end, sec_content = target_section
+        new_id = _next_memory_id(sec_content, prefix)
+        insert_line = _find_section_end(lines, _start)
+    else:
+        # 节不存在，创建
+        new_id = f"{prefix}001"
+        # 在文件末尾追加新节
+        insert_line = len(lines)
+        # 先添加节标题
+        section_header = f"\n* {section_name}"
+        lines.append(section_header)
+        insert_line = len(lines)
+
+    # 构建条目
+    entry_lines = [f"\n** {new_id} {title}"]
+    entry_lines.append("   :PROPERTIES:")
+    entry_lines.append(f"   :CREATED:  [{today()}]")
+    entry_lines.append(f"   :UPDATED:  [{today()}]")
+    if mem_type == "feedback" and getattr(args, "ref", None):
+        entry_lines.append(f"   :REF:      {args.ref}")
+    entry_lines.append("   :END:")
+    if body.strip():
+        entry_lines.append(f"   {body.strip()}")
+
+    entry_text = "\n".join(entry_lines) + "\n"
+    lines.insert(insert_line, entry_text)
+
+    KB_MEMORY.write_text("\n".join(lines), encoding="utf-8")
+    print(f"已添加 {mem_type} 记忆: {new_id} {title}")
+
+
+def _memory_add_project(title: str, body: str, project_name: str | None) -> None:
+    """添加 project 记忆到 memories/projects/<name>.org。"""
+    if not project_name:
+        die("添加 project 记忆需要 --project <项目名>")
+
+    KB_PROJECTS.mkdir(parents=True, exist_ok=True)
+    proj_file = KB_PROJECTS / f"{project_name}.org"
+
+    if not proj_file.exists():
+        proj_file.write_text(
+            f"#+title: {project_name}\n#+date: [{today()}]\n\n",
+            encoding="utf-8",
+        )
+
+    # 追加条目到项目文件
+    proj_text = proj_file.read_text(encoding="utf-8")
+    proj_lines = proj_text.split("\n")
+
+    entry_lines = [f"\n** {title}"]
+    entry_lines.append("   :PROPERTIES:")
+    entry_lines.append(f"   :CREATED:  [{today()}]")
+    entry_lines.append(f"   :UPDATED:  [{today()}]")
+    entry_lines.append("   :END:")
+    if body.strip():
+        entry_lines.append(f"   {body.strip()}")
+    entry_lines.append("")
+
+    proj_lines.extend(entry_lines)
+    proj_file.write_text("\n".join(proj_lines), encoding="utf-8")
+
+    # 同步更新 MEMORY.org 索引
+    _memory_sync_project_index(project_name, proj_file)
+
+    print(f"已添加 project 记忆: {title} → {project_name}")
+
+
+def _memory_sync_project_index(name: str, proj_file: Path) -> None:
+    """同步项目到 MEMORY.org 的 * project 节索引。"""
+    if not KB_MEMORY.exists():
+        _init_memory_template()
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+
+    # 检查是否已存在索引
+    if f"** {name}" in text:
+        return
+
+    lines = text.split("\n")
+    sections = _parse_memory_sections(text)
+
+    # 找到或创建 * project 节
+    proj_section = None
+    for sec_name, entries in sections.items():
+        if "project" in sec_name.lower():
+            proj_section = entries[0]
+            break
+
+    if proj_section:
+        insert_line = _find_section_end(lines, proj_section[0])
+    else:
+        # 追加新节
+        insert_line = len(lines)
+        lines.append("")
+        lines.append("* project")
+        insert_line = len(lines)
+
+    index_entry = (
+        f"\n** {name}\n"
+        f"   :PROPERTIES:\n"
+        f"   :PATH:     {proj_file}\n"
+        f"   :FILE:     {proj_file}\n"
+        f"   :UPDATED:  [{today()}]\n"
+        f"   :END:\n"
+    )
+    lines.insert(insert_line, index_entry)
+    KB_MEMORY.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _memory_touch(entry_id: str) -> None:
+    """更新指定条目的 UPDATED 时间戳。"""
+    if not KB_MEMORY.exists():
+        die("记忆文件不存在")
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    lines = text.split("\n")
+
+    # 找到条目位置
+    found = False
+    for i, line in enumerate(lines):
+        if re.match(rf"^\*\* {re.escape(entry_id)}\b", line):
+            found = True
+            # 向下查找 :UPDATED: 属性行
+            for j in range(i + 1, min(i + 10, len(lines))):
+                if ":UPDATED:" in lines[j]:
+                    lines[j] = re.sub(
+                        r":UPDATED:\s*\[\d{4}-\d{2}-\d{2}\]",
+                        f":UPDATED:  [{today()}]",
+                        lines[j],
+                    )
+                    break
+                if ":END:" in lines[j]:
+                    break
+            break
+
+    if not found:
+        die(f"未找到条目: {entry_id}")
+
+    KB_MEMORY.write_text("\n".join(lines), encoding="utf-8")
+    print(f"已更新 {entry_id} 时间戳 → {today()}")
+
+
+def _memory_archive(entry_id: str) -> None:
+    """将指定条目移入 * deprecated 节。"""
+    if not KB_MEMORY.exists():
+        die("记忆文件不存在")
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    lines = text.split("\n")
+
+    # 找到条目起始行
+    entry_start = None
+    for i, line in enumerate(lines):
+        if re.match(rf"^\*\* {re.escape(entry_id)}\b", line):
+            entry_start = i
+            break
+
+    if entry_start is None:
+        die(f"未找到条目: {entry_id}")
+
+    # 找到条目结束行（下一个 ** 或 * 之前）
+    entry_end = entry_start + 1
+    while entry_end < len(lines):
+        if re.match(r"^\*\*?\s+", lines[entry_end]):
+            break
+        entry_end += 1
+
+    # 提取条目文本
+    entry_lines = lines[entry_start:entry_end]
+
+    # 从原位置删除
+    del lines[entry_start:entry_end]
+
+    # 找到或创建 * deprecated 节
+    sections = _parse_memory_sections("\n".join(lines))
+    dep_section = None
+    for sec_name, entries in sections.items():
+        if "deprecated" in sec_name.lower():
+            dep_section = entries[0]
+            break
+
+    if dep_section:
+        insert_line = _find_section_end(lines, dep_section[0])
+    else:
+        # 追加 deprecated 节
+        lines.append("")
+        lines.append("* deprecated")
+        insert_line = len(lines)
+
+    # 插入到 deprecated 节末尾
+    for k, el in enumerate(entry_lines):
+        lines.insert(insert_line + k, el)
+
+    KB_MEMORY.write_text("\n".join(lines), encoding="utf-8")
+    print(f"已归档 {entry_id} → deprecated")
+
+
+def _memory_stale() -> None:
+    """列出超过 STALE_DAYS 天未更新的条目。"""
+    if not KB_MEMORY.exists():
+        print("(记忆文件不存在)")
+        return
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    stale_count = 0
+
+    for i, line in enumerate(lines):
+        if not re.match(r"^\*\* ", line):
+            continue
+        # 向下查找 UPDATED
+        for j in range(i + 1, min(i + 10, len(lines))):
+            m = re.match(r"\s*:UPDATED:\s*\[(\d{4}-\d{2}-\d{2})\]", lines[j])
+            if m:
+                try:
+                    updated = datetime.strptime(m.group(1), "%Y-%m-%d")
+                    if (datetime.now() - updated).days > STALE_DAYS:
+                        print(f"  {line.strip()} (更新于 {m.group(1)})")
+                        stale_count += 1
+                except ValueError:
+                    pass
+                break
+            if ":END:" in lines[j]:
+                break
+
+    if stale_count == 0:
+        print("无陈旧记忆")
+    else:
+        print(f"\n共 {stale_count} 条 >{STALE_DAYS} 天未更新")
+
+
+def _memory_project(identifier: str) -> None:
+    """按项目名或路径检索项目记忆。"""
+    if not KB_MEMORY.exists():
+        print("(记忆文件不存在)")
+        return
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    sections = _parse_memory_sections(text)
+
+    # 收集所有项目条目
+    proj_entries = []
+    for sec_name, entries in sections.items():
+        if "project" in sec_name.lower():
+            for _s, _e, content in entries:
+                # 解析 ** 条目及其属性
+                entry_lines_list = content.split("\n")
+                cur_entry = None
+                cur_props: dict[str, str] = {}
+                for el in entry_lines_list:
+                    m_entry = re.match(r"^\*\*\s+(.+)", el)
+                    if m_entry:
+                        if cur_entry:
+                            proj_entries.append((cur_entry, cur_props))
+                        cur_entry = m_entry.group(1)
+                        cur_props = {}
+                    else:
+                        pm = re.match(r"\s*:(\w+):\s*(.+)", el)
+                        if pm and cur_entry:
+                            cur_props[pm.group(1)] = pm.group(2).strip()
+                if cur_entry:
+                    proj_entries.append((cur_entry, cur_props))
+            break
+
+    if not proj_entries:
+        print("未找到匹配项目。")
+        sys.exit(1)
+
+    # 处理 "." → 用 PWD
+    if identifier == ".":
+        identifier = os.getcwd()
+
+    # 尝试匹配：1) 项目名  2) 路径前缀
+    matched = None
+
+    # 按项目名匹配
+    for entry_title, props in proj_entries:
+        if entry_title.strip() == identifier.strip():
+            matched = props
+            break
+
+    # 按路径前缀匹配
+    if not matched:
+        try:
+            id_path = str(Path(identifier).expanduser().resolve())
+        except (OSError, RuntimeError):
+            id_path = identifier
+
+        for entry_title, props in proj_entries:
+            path_val = props.get("PATH", props.get("FILE", ""))
+            if path_val:
+                try:
+                    resolved = str(Path(path_val).expanduser().resolve())
+                    if resolved.startswith(id_path) or id_path.startswith(resolved):
+                        matched = props
+                        break
+                except (OSError, RuntimeError):
+                    if path_val == identifier:
+                        matched = props
+                        break
+
+    if not matched:
+        known = ", ".join(e[0] for e in proj_entries)
+        print(f"未找到匹配项目。已知项目：{known}")
+        sys.exit(1)
+
+    # 读取并输出项目文件内容
+    file_path = matched.get("FILE", matched.get("PATH", ""))
+    proj_path = KB_ROOT / file_path if not Path(file_path).is_absolute() else Path(file_path)
+    if proj_path.exists():
+        print(proj_path.read_text(encoding="utf-8"), end="")
+    else:
+        print(f"项目文件不存在: {file_path}")
+        sys.exit(1)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: patterns — 管理模式/原则
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 def cmd_patterns(args: argparse.Namespace) -> None:
-    """列出、追加或查看 patterns.org 中的模式/原则。"""
-    action = args.action
+    """向后兼容：重定向到 cmd_memory 的 feedback 子集。"""
 
-    if action is None:
-        if KB_PATTERNS.exists():
-            text = KB_PATTERNS.read_text(encoding="utf-8")
-            matches = re.findall(r"^\*\* (.+)", text, re.MULTILINE)
-            if matches:
-                for m in matches:
-                    print(m)
-            else:
-                print("(无模式)")
-        else:
-            print("(模式文件不存在)")
-        return
+    class _CompatArgs:
+        pass
 
-    if action == "add":
-        pattern_body = sys.stdin.read()
-        if not KB_PATTERNS.exists():
-            KB_PATTERNS.write_text(
-                f"#+title: patterns\n#+date: [{today()}]\n\n{pattern_body}\n",
-                encoding="utf-8",
-            )
-        else:
-            with KB_PATTERNS.open("a", encoding="utf-8") as f:
-                f.write("\n" + pattern_body + "\n")
-        print(f"已追加到 {KB_PATTERNS}")
-    elif action == "get":
-        if KB_PATTERNS.exists():
-            print(KB_PATTERNS.read_text(encoding="utf-8"), end="")
-        else:
-            print("(模式文件不存在)")
-    else:
-        die(f"未知选项: {action} (可用: --add, --get)")
+    a = _CompatArgs()
+    a.type = "feedback"
+    a.project = None
+    a.add = args.action == "add"
+    a.get = args.action == "get"
+    a.title = ""
+    a.stale = False
+    a.touch = None
+    a.archive = None
+    a.stdin = True  # patterns --add 总是读 stdin
+    if args.action is None:
+        a.add = False
+        a.get = False
+    cmd_memory(a)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -982,6 +1585,35 @@ def cmd_stats(args: argparse.Namespace) -> None:
             print(f"  {k:20s} {v:3d} {bar}")
         print()
 
+    # MEMORY 统计
+    if KB_MEMORY.exists():
+        mem_text = KB_MEMORY.read_text(encoding="utf-8")
+        fb_count = len(re.findall(r"^\*\* F\d+", mem_text, re.MULTILINE))
+        ref_count = len(re.findall(r"^\*\* R\d+", mem_text, re.MULTILINE))
+        dep_section = mem_text[mem_text.find("* deprecated"):] if "* deprecated" in mem_text else ""
+        dep_count = len(re.findall(r"^\*\* F\d+", dep_section, re.MULTILINE))
+        proj_section = ""
+        if "* project" in mem_text and "* reference" in mem_text:
+            proj_start = mem_text.find("* project")
+            proj_end = mem_text.find("* reference")
+            if proj_start < proj_end:
+                proj_section = mem_text[proj_start:proj_end]
+        proj_count = len(re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE))
+        stale_count = 0
+        for m in re.finditer(r":UPDATED:\s*\[(\d{4}-\d{2}-\d{2})\]", mem_text):
+            try:
+                updated = datetime.strptime(m.group(1), "%Y-%m-%d")
+                if (datetime.now() - updated).days > STALE_DAYS:
+                    stale_count += 1
+            except ValueError:
+                pass
+        print("── MEMORY ──")
+        print(f"  feedback 条目数: {fb_count}")
+        print(f"  project 索引数: {proj_count}")
+        print(f"  reference 条目数: {ref_count}")
+        print(f"  deprecated 条目数: {dep_count}")
+        print(f"  stale (>{STALE_DAYS}d): {stale_count}")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: connect — 双向链接
@@ -1051,7 +1683,10 @@ def _append_link(filepath: Path, target: Path, desc: str) -> None:
 
 
 def cmd_update(args: argparse.Namespace) -> None:
-    """更新已有卡片的属性或追加内容。"""
+    """更新已有卡片的属性或追加内容。
+
+    属性替换使用 .+ 匹配到行尾，避免含空格的属性值被截断。
+    """
     target = args.target
     card = _resolve_card(target)
     if not card:
@@ -1059,15 +1694,17 @@ def cmd_update(args: argparse.Namespace) -> None:
 
     content = card.read_text(encoding="utf-8")
 
-    # 更新属性
+    # ── 更新属性（用 .+ 匹配整行值，避免空格截断）────────────────────────
     if args.status:
-        content = re.sub(r":STATUS:\s*\S+", f":STATUS:   {args.status}", content)
+        content = re.sub(r":STATUS:\s*.+", f":STATUS:   {args.status}", content)
     if args.category:
-        content = re.sub(r":CATEGORY:\s*\S+", f":CATEGORY: {args.category}", content)
+        content = re.sub(r":CATEGORY:\s*.+", f":CATEGORY: {args.category}", content)
     if args.tech:
-        content = re.sub(r":TECH:\s*\S+", f":TECH:     {args.tech}", content)
+        content = re.sub(r":TECH:\s*.+", f":TECH:     {args.tech}", content)
     if args.type_:
-        content = re.sub(r":TYPE:\s*\S+", f":TYPE:     {args.type_}", content)
+        content = re.sub(r":TYPE:\s*.+", f":TYPE:     {args.type_}", content)
+    if args.owner:
+        content = re.sub(r":OWNER:\s*.+", f":OWNER:    {args.owner}", content)
 
     # 追加内容到指定章节
     if args.append_to and args.append_text:
@@ -1274,7 +1911,17 @@ def print_help() -> None:
   tags      按标签检索
             kb tags <标签> [标签2 ...]
 
-  patterns  管理模式/原则
+  memory   管理记忆系统
+            kb memory                          列出记忆概览
+            kb memory --type feedback|project|reference  按类型过滤
+            kb memory --project <名称|路径|.>   检索项目记忆
+            kb memory --add --type <类型> --title "标题" --stdin  添加记忆
+            kb memory --stale                   列出陈旧记忆
+            kb memory --touch <ID>              更新时间戳
+            kb memory --archive <ID>            归档记忆
+            kb memory --get                     查看全文
+
+  patterns  管理模式/原则（向后兼容，委托给 memory）
             kb patterns           列出模式
             kb patterns --add     从 stdin 追加模式
             kb patterns --get     显示全文
@@ -1299,7 +1946,7 @@ def print_help() -> None:
 
   update   更新已有卡片
             kb update <卡片ID> [--status STATUS] [--category 类别] [--tech 技术]
-                     [--type 类型] [--append-to 章节 --append-text 内容] [--stdin]
+                     [--type 类型] [--owner 执行者] [--append-to 章节 --append-text 内容] [--stdin]
 
   profile  管理用户画像
             kb profile                           显示概览
@@ -1310,9 +1957,15 @@ def print_help() -> None:
 
   help     显示本帮助
 
+配置常量（修改文件头部即可调整）:
+  KB_ROOT      知识库根目录 ({KB_ROOT})
+  STALE_DAYS   陈旧记忆阈值 ({STALE_DAYS} 天)
+  VALID_TYPES  合法 type 值 ({', '.join(sorted(VALID_TYPES))})
+  VALID_OWNERS 合法 owner 值 ({', '.join(sorted(VALID_OWNERS))})
+
 知识库路径: {KB_ROOT}
 经验卡片目录: {KB_EXPERIENCES}
-模式文件: {KB_PATTERNS}
+记忆文件: {KB_MEMORY}
 用户画像: {KB_PROFILE}
 """
     )
@@ -1407,6 +2060,34 @@ def main() -> None:
     tags_parser = subparsers.add_parser("tags", help="按标签检索")
     tags_parser.add_argument("tags", nargs="+", help="标签")
 
+    # ── memory ──────────────────────────────────────────────────────────
+    memory_parser = subparsers.add_parser("memory", help="管理记忆系统")
+    memory_parser.add_argument(
+        "--type", choices=["feedback", "project", "reference"], help="记忆类型过滤"
+    )
+    memory_parser.add_argument(
+        "--project", metavar="IDENTIFIER", help="项目名或路径"
+    )
+    memory_parser.add_argument(
+        "--add", action="store_true", help="添加记忆"
+    )
+    memory_parser.add_argument(
+        "--get", action="store_true", help="查看记忆全文"
+    )
+    memory_parser.add_argument("--title", help="记忆标题")
+    memory_parser.add_argument(
+        "--stdin", action="store_true", help="从标准输入读取内容"
+    )
+    memory_parser.add_argument(
+        "--stale", action="store_true", help="列出陈旧记忆"
+    )
+    memory_parser.add_argument(
+        "--touch", metavar="ID", help="更新记忆时间戳"
+    )
+    memory_parser.add_argument(
+        "--archive", metavar="ID", help="归档记忆到 deprecated"
+    )
+
     # ── patterns ──────────────────────────────────────────────────────────
     patterns_parser = subparsers.add_parser("patterns", help="管理模式/原则")
     patterns_parser.add_argument(
@@ -1451,6 +2132,7 @@ def main() -> None:
     update_parser.add_argument("--category", help="新类别")
     update_parser.add_argument("--tech", help="新技术栈")
     update_parser.add_argument("--type", dest="type_", help="新类型")
+    update_parser.add_argument("--owner", help="新执行者")
     update_parser.add_argument("--append-to", help="追加内容到指定章节")
     update_parser.add_argument("--append-text", help="要追加的内容")
     update_parser.add_argument(
@@ -1494,6 +2176,7 @@ def main() -> None:
         "search": cmd_search,
         "fields": cmd_fields,
         "tags": cmd_tags,
+        "memory": cmd_memory,
         "patterns": cmd_patterns,
         "reindex": cmd_reindex,
         "lint": cmd_lint,

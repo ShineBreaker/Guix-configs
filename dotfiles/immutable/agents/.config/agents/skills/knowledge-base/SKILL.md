@@ -19,7 +19,8 @@ description: Use when querying historical experience, writing new experience car
 | -------- | ------------------------------ |
 | CLI 工具 | `~/.local/bin/kb`              |
 | 经验卡片 | `~/Documents/Org/experiences/` |
-| 模式文件 | `~/Documents/Org/patterns.org` |
+| 记忆文件 | `~/Documents/Org/MEMORY.org`   |
+| 项目记忆 | `~/Documents/Org/memories/projects/` |
 | 机器索引 | `~/Documents/Org/index.json`   |
 | 收件箱   | `~/Documents/Org/inbox.org`    |
 | 用户画像 | `~/Documents/Org/profile.org`  |
@@ -137,3 +138,43 @@ echo "- 新内容" | kb profile --set "偏好"  # 覆盖分类
 ## 子章节规则
 
 `kb add` 自动生成一级标题；`--stdin` 中从二级标题开始写。
+
+## 记忆系统
+
+MEMORY.org 是统一记忆索引，通过 `kb memory` 管理，区分于知识库（`kb add/list/search`）。
+
+### 定位区分
+
+- **MEMORY**：癖好/偏好/行为规则/项目上下文（不可从代码推导）
+- **知识库**：可复用的技术知识（调试方案、配置技巧、工作流优化）
+
+### 常用命令
+
+```bash
+# 获取当前项目记忆（任务开始时执行）
+kb memory --project .
+
+# 添加反馈记忆
+kb memory --add --type feedback --title "标题" --stdin <<EOF
+正文
+EOF
+
+# 添加项目记忆
+kb memory --add --type project --project <项目名> --title "标题" --stdin <<EOF
+正文
+EOF
+
+# 查看陈旧记忆
+kb memory --stale
+
+# 更新记忆时间戳
+kb memory --touch F001
+```
+
+### 向后兼容
+
+```bash
+kb patterns           # → kb memory --type feedback（列出偏好标题）
+kb patterns --add     # → kb memory --add --type feedback --stdin
+kb patterns --get     # → 输出 MEMORY.org 的 * feedback 节
+```

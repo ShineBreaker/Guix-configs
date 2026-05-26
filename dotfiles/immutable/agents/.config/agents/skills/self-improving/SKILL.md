@@ -48,6 +48,25 @@ kb profile
 
 **防误触发**：用户描述报错但不纠正你、普通 review 无可复用经验 → 不触发。
 
+## 记忆信号（写入 MEMORY.org）
+
+| 信号类型 | 记忆类型 | 关键词/信号 | 写入命令 |
+|---------|---------|------------|---------|
+| 偏好表达 | feedback | "我喜欢..."、"不要..."、"停..." | `kb memory --add --type feedback` |
+| 行为纠正 | feedback | 用户纠正了你的工作方式（非技术错误） | `kb memory --add --type feedback` |
+| 习惯模式 | feedback | 同一偏好出现 ≥2 次 | `kb memory --add --type feedback` |
+| 项目决策 | project | 不可从代码推导的项目级决策/状态 | `kb memory --add --type project --project <id>` |
+| 外部指针 | reference | 外部系统/文档/资源的位置信息 | `kb memory --add --type reference` |
+
+**MEMORY vs KB 边界**：
+- "你怎么做"（风格/流程/工具选择偏好）→ MEMORY
+- "你做错了"（事实/技术错误）→ KB
+- 两者可能并存：同一事件同时写入 MEMORY 和 KB
+
+**防误触发**：
+- 技术性纠正（"正则写错了"、"参数传反了"）→ 只写 KB，不写 MEMORY
+- 普通确认（"好的"、"行"）→ 不触发任何系统
+
 ## 写入时机
 
 **必须写入**：非显而易见的 bug（排查 >2 步）、环境特殊行为、配置踩坑、用户纠正。
@@ -64,6 +83,16 @@ kb profile
 6. 传播联动 — 检查受影响的 pattern/卡片
 7. `kb connect` 建立关联链接
 8. `kb profile --add` 更新画像（如涉及偏好/项目变化）
+
+### MEMORY 写入流程
+
+1. 判断信号类型（偏好/行为纠正/习惯 → feedback，项目决策 → project，外部指针 → reference）
+2. `kb memory --add --type <type> [--project <id>] --title "标题" --stdin <<EOF`
+   正文
+   EOF
+3. feedback 类型：自动分配 F 序号，插入 MEMORY.org `* feedback` 节
+4. project 类型：自动追加到 memories/projects/<name>.org 对应节
+5. reference 类型：自动分配 R 序号，插入 MEMORY.org `* reference` 节
 
 ### 增量更新原则
 

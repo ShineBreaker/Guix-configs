@@ -31,11 +31,29 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 
 1. **提取对话** — `python3 scripts/extract-conversations.py`
 2. **诊断** — `python3 scripts/analyze_kb.py --quality --duplicates`
+
+   ### MEMORY 维护
+
+   **MEMORY 时效检测**：
+   1. 扫描 MEMORY.org 中 `* feedback` 和 `* reference` 节的所有条目
+   2. 计算 UPDATED 距今天数
+   3. >30 天 → 标记为 stale
+   4. >60 天 → 建议归档
+
+   运行命令：`kb memory --stale`
+
 3. **空白检测** — `python3 scripts/find_gaps.py --stale-days 60`
 4. **矛盾调和** — 同主题卡片结论冲突时按规则处理
 5. **自发综合** — 扫描跨卡片模式，发现隐含连接
 6. **补充** — 从对话/收件箱提取经验，`kb fields` 查标签后写入
 7. **传播联动** — 新卡片是否影响已有 pattern/卡片
+
+   **project 记忆验证**：
+   1. 读取 MEMORY.org `* project` 节所有索引条目
+   2. 验证每条 PATH 属性指向的路径是否存在
+   3. 路径不存在 → 报告"项目路径失效"
+   4. 读取 project 文件，检查 UPDATED 是否超过 60 天
+
 8. **重整** — `kb reindex && kb lint --fix`
 9. **输出报告** — 必须输出，格式见下
 
@@ -69,6 +87,13 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 更新用户画像：Y/N（如有，列出更新的分类）
 kb stats 概要：
   总卡片数 / 模式数 / 时间范围
+── MEMORY 统计 ──
+  feedback: X 条（Y stale）
+  project: X 个（Y 路径失效）
+  reference: X 条
+  deprecated: X 条
+
+可通过 `kb stats` 获取。
 ```
 
 ## 策展原则

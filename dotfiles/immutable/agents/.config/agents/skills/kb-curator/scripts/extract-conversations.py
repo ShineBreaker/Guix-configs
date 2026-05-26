@@ -4,10 +4,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""提取 OpenCode / Crush / Codex / Claude Code 对话记录，输出为 Org-mode 文件。
+"""提取 OpenCode / Crush / Codex / Claude Code / Pi 对话记录，输出为 Org-mode 文件。
 
 用法:
-    extract-conversations.py [--date YYYY-MM-DD] [--output DIR] [--source {opencode,crush,codex,claude,all}]
+    extract-conversations.py [--date YYYY-MM-DD] [--output DIR] [--source {opencode,crush,codex,claude,pi,all}]
 
 日期逻辑:
     默认提取「昨天」的对话。
@@ -24,10 +24,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 # ── 数据源配置 ──────────────────────────────────────────────
-OPENCODE_DB = os.path.expanduser("~/.local/share/opencode/opencode-stable.db")
-CRUSH_GLOBAL_DB = os.path.expanduser("~/.config/crush/.crush/crush.db")
+_XDG_DATA = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+_XDG_CONFIG = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+
+OPENCODE_DB = os.path.join(_XDG_DATA, "opencode", "opencode-stable.db")
+CRUSH_GLOBAL_DB = os.path.join(_XDG_CONFIG, "crush", ".crush", "crush.db")
 CLAUDE_TRANSCRIPTS_DIR = os.path.expanduser("~/.claude/transcripts")
 CLAUDE_HISTORY = os.path.expanduser("~/.claude/history.jsonl")
+
+PI_SESSIONS_DIR = os.path.join(_XDG_DATA, "pi", "sessions")
 
 CRUSH_SEARCH_ROOTS = [
     os.path.expanduser("~/Documents"),
@@ -567,14 +572,16 @@ def extract_codex(range_start: datetime, range_end: datetime) -> list[dict]:
         for session_file in sorted(Path(sessions_dir).rglob("*.jsonl")):
             fname = session_file.name
             # 文件名格式: rollout-YYYY-MM-DDTHH-MM-SS-<UUID>.jsonl
-            # UUID 是 8-4-4-4-12 格式，共 5 段
+            # 去除 rollout- 前缀后按 - 分割:
+            #   parts[0]=YYYY  parts[1]=MM  parts[2]=DDTHH  parts[3]=MM  parts[4]=SS
+            #   parts[5..9] = UUID 的 5 段 (8-4-4-4-12)
+            #   最后一段带 .jsonl 后缀
             sid = ""
             if fname.startswith("rollout-"):
                 parts = fname.replace("rollout-", "").split("-")
-                # 日期+时间占用前 6 段: YYYY, MM, DDTHH, MM, SS, UUID[0..7]
-                # UUID 的 5 段在 parts[6] 到 parts[10]
-                if len(parts) >= 11:
-                    uuid_parts = parts[6:11]
+                # 日期+时间占用前 5 段 (0-4)，UUID 占 5 段 (5-9)
+                if len(parts) >= 10:
+                    uuid_parts = parts[5:10]
                     uuid_parts[-1] = uuid_parts[-1].replace(".jsonl", "")
                     sid = "-".join(uuid_parts)
 
@@ -700,6 +707,189 @@ def _parse_codex_messages(messages_raw: list[dict]) -> list[dict]:
     return result
 
 
+# ── Pi 提取 ────────────────────────────────────────────────
+def extract_pi(range_start: datetime, range_end: datetime) -> list[dict]:
+    """从 Pi agent sessions 目录提取对话。
+
+    Pi 的 JSONL 格式是事件流：每行一个事件，消息通过 parentId 链接。
+    只处理 type=message 的事件，按 parentId 重建消息顺序。
+    """
+    if not os.path.isdir(PI_SESSIONS_DIR):
+        return []
+
+    results: list[dict] = []
+
+    for fpath in sorted(Path(PI_SESSIONS_DIR).glob("*.jsonl")):
+        events: list[dict] = []
+        session_meta: dict = {}
+        has_in_range = False
+
+        try:
+            with open(fpath, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        evt = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    etype = evt.get("type", "")
+
+                    if etype == "session":
+                        session_meta = {
+                            "id": evt.get("id", ""),
+                            "timestamp": evt.get("timestamp", ""),
+                            "cwd": evt.get("cwd", ""),
+                        }
+                        # session 时间戳是 ISO UTC，转为本地时间判断
+                        ts = _parse_iso_timestamp(evt.get("timestamp", ""))
+                        if ts and range_start <= ts < range_end:
+                            has_in_range = True
+
+                    elif etype == "message":
+                        msg = evt.get("message", {})
+                        msg_ts = msg.get("timestamp")
+                        if msg_ts and isinstance(msg_ts, (int, float)):
+                            # message.timestamp 是毫秒级 UTC Unix 时间戳
+                            # 转为本地 datetime 判断
+                            msg_dt = datetime.fromtimestamp(
+                                msg_ts / 1000
+                            )
+                            if range_start <= msg_dt < range_end:
+                                has_in_range = True
+                        events.append(evt)
+        except Exception:
+            continue
+
+        if not has_in_range or not events:
+            continue
+
+        # 按 parentId 重建消息顺序（线性链，一个 parentId 最多一个子节点）
+        id_to_evt: dict[str, dict] = {e.get("id", ""): e for e in events}
+        child_of: dict[str, str] = {}  # parentId -> child_id
+        roots: list[str] = []
+
+        for evt in events:
+            eid = evt.get("id", "")
+            pid = evt.get("parentId")
+            if pid is None or pid not in id_to_evt:
+                roots.append(eid)
+            else:
+                child_of[pid] = eid
+
+        # 沿链遍历
+        ordered: list[dict] = []
+        for root in roots:
+            eid = root
+            while eid:
+                ordered.append(id_to_evt[eid])
+                eid = child_of.get(eid)
+
+        # 转换为统一消息格式
+        conversation_parts: list[dict] = []
+        for evt in ordered:
+            msg = evt.get("message", {})
+            role = msg.get("role", "")
+            model = msg.get("model", "")
+            content_blocks = msg.get("content", [])
+            msg_ts = msg.get("timestamp", 0)
+
+            if role == "toolResult":
+                # 工具结果 — 提取文本
+                result_text = ""
+                for block in content_blocks:
+                    if block.get("type") == "text":
+                        result_text += block.get("text", "")
+                if result_text:
+                    conversation_parts.append(
+                        {
+                            "role": "tool",
+                            "model": "",
+                            "parts": [
+                                {"type": "tool-result", "content": result_text[:2000]}
+                            ],
+                            "time_created": (
+                                int(msg_ts / 1000) if isinstance(msg_ts, (int, float)) else 0
+                            ),
+                        }
+                    )
+                continue
+
+            if role not in ("user", "assistant"):
+                continue
+
+            msg_parts: list[dict] = []
+            for block in content_blocks:
+                btype = block.get("type", "")
+                if btype == "text":
+                    text = block.get("text", "").strip()
+                    if text:
+                        msg_parts.append({"type": "text", "content": text})
+                elif btype == "thinking":
+                    thinking = block.get("thinking", "").strip()
+                    if thinking:
+                        msg_parts.append({"type": "reasoning", "content": thinking})
+                elif btype == "toolCall":
+                    tool_name = block.get("name", "unknown")
+                    raw_args = block.get("arguments", {})
+                    if isinstance(raw_args, str):
+                        try:
+                            raw_args = json.loads(raw_args)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    msg_parts.append(
+                        {
+                            "type": "tool",
+                            "tool": tool_name,
+                            "input": raw_args,
+                            "output": "",
+                        }
+                    )
+
+            if msg_parts:
+                conversation_parts.append(
+                    {
+                        "role": role,
+                        "model": model,
+                        "parts": msg_parts,
+                        "time_created": (
+                            int(msg_ts / 1000) if isinstance(msg_ts, (int, float)) else 0
+                        ),
+                    }
+                )
+
+        if not conversation_parts:
+            continue
+
+        # 用第一条 user 消息作为标题
+        title = "Untitled"
+        for part in conversation_parts:
+            if part["role"] == "user":
+                for p in part.get("parts", []):
+                    if p.get("type") == "text":
+                        title = p["content"][:80].replace("\n", " ").strip()
+                        break
+                break
+
+        ts_created = conversation_parts[0].get("time_created", 0)
+
+        results.append(
+            {
+                "source": "pi",
+                "id": session_meta.get("id", fpath.stem),
+                "title": title,
+                "directory": session_meta.get("cwd", ""),
+                "time_created": ts_created,
+                "time_updated": ts_created,
+                "messages": conversation_parts,
+            }
+        )
+
+    return results
+
+
 # ── Org-mode 格式化 ────────────────────────────────────────
 def format_org(session: dict) -> str:
     """将一个 session 格式化为 Org-mode 文本。"""
@@ -821,7 +1011,7 @@ def main() -> None:
     parser.add_argument(
         "--source",
         "-s",
-        choices=["opencode", "crush", "codex", "claude", "all"],
+        choices=["opencode", "crush", "codex", "claude", "pi", "all"],
         default="all",
         help="数据源 (默认: all)",
     )
@@ -846,6 +1036,9 @@ def main() -> None:
     if args.source in ("codex", "all"):
         print("提取 Codex...")
         sessions.extend(extract_codex(range_start, range_end))
+    if args.source in ("pi", "all"):
+        print("提取 Pi...")
+        sessions.extend(extract_pi(range_start, range_end))
 
     if not sessions:
         print(f"未找到 {target_label} 的对话记录。")
