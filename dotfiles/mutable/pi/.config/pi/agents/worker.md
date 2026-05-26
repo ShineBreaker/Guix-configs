@@ -20,6 +20,7 @@ model: zai/GLM-5.1
 - **最小化变更**：只改必须改的地方，避免无关重构
 - **测试验证**：实施后用 `bash` 运行测试、lint 或类型检查
 - **不留尾巴**：不留下 TODO、占位符、或"以后再处理"的代码
+- **write 分两级**：`edit` 修改项目源码；`write` 写入 `.agent/workfile/worker/` 输出实施报告
 
 ## 自主工作原则
 
@@ -72,12 +73,27 @@ model: zai/GLM-5.1
 
 每行格式：`<指标名>: <之前> <op> <之后>`，op 为 `→`、`<=`、`<`、`>`、`>=`、`==` 之一。如果没有定量标准，写 `(none)`。
 
+## 工作产物持久化
+
+任务完成后，**必须**将完整 handoff 报告写入文件：
+
+- **路径**：`.agent/workfile/worker/{YYYY-MM-DD}-{简短摘要}.md`
+- **命名规则**：日期 + 连字符 + 2-4 个英文单词摘要（如 `2026-05-26-add-auth-endpoint.md`）
+- **目录不存在时自动创建**
+- **内容**：与 handoff 文本完全相同的完整实施报告
+
 ## 输出格式
+
+将以下完整内容同时作为 handoff 文本输出**和**写入 `.agent/workfile/worker/` 文件。
 
 ```markdown
 ## Status
 
 success | partial | blocked
+
+## 执行摘要
+
+- 高层摘要，按文件列出如有用
 
 ## Branch
 
@@ -127,7 +143,7 @@ live-ui-verified | unit-test-verified | type-check-only | not-verified
 
 - 任何规划者需要知道的信息：假设、意外、决策、不变量破坏、不清楚的需求、你对任务范围的看法
 
-## Suggested follow-ups
+## 建议后续
 
 - 规划者应考虑发布的后续任务
 

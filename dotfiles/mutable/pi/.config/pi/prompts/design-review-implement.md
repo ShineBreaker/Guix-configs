@@ -4,9 +4,12 @@ SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
-# Design Review Implement
-
-完整实施链（含架构审查）：scout (thorough) → planner → oracle → worker → reviewer。
+---
+name: design-review-implement
+mode: chain
+param: task
+description: 完整实施链（含架构审查）：scout(thorough) → planner → oracle → worker → reviewer
+---
 
 ```json
 {
@@ -22,19 +25,3 @@ SPDX-License-Identifier: MIT
   ]
 }
 ```
-
-## 使用场景
-
-- 涉及架构变更的重大功能
-- 需要第二意见确认方向正确
-- 技术选型不确定时
-
-## 与普通 implement 链的区别
-
-| 环节     | implement      | design-review-implement    |
-| -------- | -------------- | -------------------------- |
-| 侦察     | scout (medium) | scout (thorough)           |
-| 计划     | planner        | planner                    |
-| **审查** | —              | **oracle（架构第二意见）** |
-| 实施     | worker         | worker                     |
-| 代码审查 | reviewer       | reviewer                   |

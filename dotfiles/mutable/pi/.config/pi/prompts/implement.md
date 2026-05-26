@@ -4,9 +4,12 @@ SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
-# Implement Workflow
-
-完整实施链：scout (thorough) → planner → worker → reviewer。
+---
+name: implement
+mode: chain
+param: task
+description: 完整实施链：scout(thorough) → planner → worker → reviewer
+---
 
 ```json
 {

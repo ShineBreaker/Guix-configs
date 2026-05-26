@@ -5,7 +5,7 @@
 /**
  * tmux-subagents extension
  *
- * 通过 tmux 分屏可视化执行 subagent 任务，替代 npm:pi-subagents。
+ * 通过 tmux 分屏可视化执行 subagent 任务。
  *
  * 模式：
  *   - single: { agent: "name", task: "..." }
@@ -13,6 +13,10 @@
  *   - chain: { chain: [{ agent: "name", task: "..." }, ...] }
  *   - list: { action: "list" }
  *   - status: { action: "status" [, id: "run-id"] }
+ *
+ * 快捷命令：
+ *   - /agentname <task>     — 启动单个 agent
+ *   - /<prompt-name> <param> — 按 prompt 模板启动链路
  */
 
 import { execFileSync } from "node:child_process";
@@ -37,6 +41,15 @@ interface AgentConfig {
 	filePath: string;
 }
 
+interface PromptConfig {
+	name: string;
+	mode: "single" | "parallel" | "chain";
+	param: string;
+	description: string;
+	/** 解析后的 task 列表 */
+	entries: Array<{ agent: string; task: string }>;
+}
+
 interface SubagentConfig {
 	pollIntervalMs: number;
 	panePrefix: string;
@@ -51,6 +64,7 @@ interface LaunchResult {
 	runDir: string;
 	paneId: string;
 	paneTitle: string;
+	agent: AgentConfig;
 }
 
 interface RunResult {
@@ -62,6 +76,7 @@ interface RunResult {
 	durationMs: number;
 	tmuxPane: string;
 	error?: string;
+	workfilePath?: string;
 }
 
 interface SubagentDetails {
@@ -77,6 +92,8 @@ interface StatusFile {
 	error?: string;
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────
+
 const DEFAULT_CONFIG: SubagentConfig = {
 	pollIntervalMs: 2000,
 	panePrefix: "sub:",
@@ -87,6 +104,20 @@ const DEFAULT_CONFIG: SubagentConfig = {
 };
 
 const TOP_ROW_PERCENT = "40";
+
+const PLAN_REVIEW_GATE_PROMPT = [
+	"📋 提交前需要先让 planner 审查计划。",
+	"请调用 subagent 工具：",
+	'  subagent(agent: "planner", task: "审查实施计划...")',
+	"",
+	"审查任务内容：",
+	"请审查以下实施计划，从架构合理性、完整性、风险和遗漏角度给出评估。",
+	"如果计划整体可行只需指出小问题；如果存在重大缺陷请详细说明。",
+	"计划文件路径：" /* + planFilePath */,
+	"",
+	"审查完成后，如果计划需要修改请修改后再提交。",
+	"如果计划已通过审查，直接再次调用 plannotator_submit_plan 即可（不会再次被阻止）。",
+].join("\n");
 
 // ─── XDG Paths ────────────────────────────────────────────────────────────
 
@@ -188,6 +219,143 @@ function discoverAgents(): AgentConfig[] {
 	}
 
 	return agents;
+}
+
+// ─── Prompt Discovery ─────────────────────────────────────────────────────
+
+/** 解析 prompt 文件的 frontmatter（跳过 SPDX 注释块，不依赖 parseFrontmatter 的文件起始约束） */
+function parsePromptFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } | null {
+	// 跳过开头的 HTML 注释块（SPDX 头）
+	let offset = 0;
+	if (content.startsWith("<!--")) {
+		const closeIdx = content.indexOf("-->");
+		if (closeIdx >= 0) offset = closeIdx + 3;
+	}
+	// 跳过空白
+	while (offset < content.length && /\s/.test(content[offset])) offset++;
+
+	// 检查 frontmatter
+	if (!content.startsWith("---", offset)) return null;
+	const fmStart = offset + 3;
+	const fmEnd = content.indexOf("\n---", fmStart);
+	if (fmEnd < 0) return null;
+
+	const fmText = content.slice(fmStart, fmEnd);
+	const frontmatter: Record<string, string> = {};
+	for (const line of fmText.split("\n")) {
+		const m = line.match(/^(\w+):\s*(.*)/);
+		if (m) frontmatter[m[1]] = m[2].trim();
+	}
+
+	const body = content.slice(fmEnd + 4); // skip \n---\n
+	return { frontmatter, body };
+}
+
+function discoverPrompts(): PromptConfig[] {
+	const promptsDir = path.join(getAgentDir(), "prompts");
+	const prompts: PromptConfig[] = [];
+
+	if (!fs.existsSync(promptsDir)) return prompts;
+
+	let entries: fs.Dirent[];
+	try {
+		entries = fs.readdirSync(promptsDir, { withFileTypes: true });
+	} catch {
+		return prompts;
+	}
+
+	for (const entry of entries) {
+		if (!entry.name.endsWith(".md")) continue;
+		if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+
+		const filePath = path.join(promptsDir, entry.name);
+		let content: string;
+		try {
+			content = fs.readFileSync(filePath, "utf-8");
+		} catch {
+			continue;
+		}
+
+		const parsed = parsePromptFrontmatter(content);
+		if (!parsed || !parsed.frontmatter.name || !parsed.frontmatter.mode) continue;
+
+		const mode = parsed.frontmatter.mode as "single" | "parallel" | "chain";
+		if (!["single", "parallel", "chain"].includes(mode)) continue;
+
+		// 从 body 中提取第一个 JSON 代码块
+		const jsonMatch = parsed.body.match(/```json\s*\n([\s\S]*?)\n```/);
+		if (!jsonMatch) continue;
+
+		let template: Record<string, unknown>;
+		try {
+			template = JSON.parse(jsonMatch[1]);
+		} catch {
+			continue;
+		}
+
+		// 从 JSON 模板中提取 entries
+		const promptEntries: Array<{ agent: string; task: string }> = [];
+		const items = (template.chain ?? template.tasks ?? [template]) as Array<Record<string, string>>;
+		for (const item of items) {
+			if (item.agent && item.task) {
+				promptEntries.push({ agent: item.agent, task: item.task });
+			}
+		}
+
+		if (promptEntries.length === 0) continue;
+
+		prompts.push({
+			name: parsed.frontmatter.name,
+			mode,
+			param: parsed.frontmatter.param ?? "task",
+			description: parsed.frontmatter.description ?? "",
+			entries: promptEntries,
+		});
+	}
+
+	return prompts;
+}
+
+// ─── Workfile Helpers ──────────────────────────────────────────────────────
+
+function getWorkfileDir(cwd: string, agentName: string): string {
+	return path.join(cwd, ".agent", "workfile", agentName);
+}
+
+function generateWorkfileName(): string {
+	const date = new Date().toISOString().slice(0, 10);
+	const hash = crypto.randomBytes(2).toString("hex");
+	return `${date}-${hash}.md`;
+}
+
+/** 将 agent 运行结果持久化到 .agent/workfile/{agent}/ 目录 */
+function persistToWorkfile(cwd: string, agentName: string, content: string): string | undefined {
+	try {
+		const dir = getWorkfileDir(cwd, agentName);
+		fs.mkdirSync(dir, { recursive: true });
+		const fileName = generateWorkfileName();
+		const filePath = path.join(dir, fileName);
+		fs.writeFileSync(filePath, content, "utf-8");
+		return path.relative(cwd, filePath);
+	} catch {
+		return undefined;
+	}
+}
+
+/** 检查 agent 是否已通过 write 工具自行写入了 workfile（对比任务开始时间） */
+function checkWorkfileExists(cwd: string, agentName: string, startedAt: number): boolean {
+	try {
+		const dir = getWorkfileDir(cwd, agentName);
+		if (!fs.existsSync(dir)) return false;
+		const files = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
+		// 检查是否有在本次任务开始后创建的文件
+		return files.some((f) => {
+			const stat = fs.statSync(path.join(dir, f));
+			return stat.mtimeMs >= startedAt - 5000; // 5s 容差
+		});
+	} catch {
+		return false;
+	}
 }
 
 // ─── Launcher ─────────────────────────────────────────────────────────────
@@ -352,7 +520,7 @@ function launchSingle(
 	tmuxExec(["select-pane", "-t", paneId, "-T", paneTitle]);
 	tmuxExec(["select-pane", "-t", myPaneId]);
 
-	return { runId, runDir, paneId, paneTitle };
+	return { runId, runDir, paneId, paneTitle, agent };
 }
 
 function launchParallel(
@@ -393,7 +561,7 @@ function launchParallel(
 		}
 
 		tmuxExec(["select-pane", "-t", paneId, "-T", paneTitle]);
-		results.push({ runId, runDir, paneId, paneTitle });
+		results.push({ runId, runDir, paneId, paneTitle, agent });
 	}
 
 	tmuxExec(["select-pane", "-t", myPaneId]);
@@ -496,28 +664,53 @@ function waitForAll(
 	return Promise.all(launches.map((l) => waitForCompletion(l, config, signal)));
 }
 
+/** 任务完成后验证 workfile，若 agent 未自行写入则由扩展兜底持久化 */
+function ensureWorkfile(result: RunResult, cwd: string, startedAt: number): void {
+	// 检查 agent 是否已自行写入 workfile
+	if (checkWorkfileExists(cwd, result.agent, startedAt)) return;
+
+	// agent 未写入（可能未遵循指令），由扩展兜底持久化
+	const workfilePath = persistToWorkfile(cwd, result.agent, result.output);
+	if (workfilePath) {
+		result.workfilePath = workfilePath;
+	}
+}
+
+/** 并行执行多批任务，每批不超过 maxConcurrency，完成后验证 workfile */
 async function runParallelBatches(
 	tasks: Array<{ agent: AgentConfig; task: string; cwd?: string }>,
 	config: SubagentConfig,
+	cwd: string,
 	model?: string,
 	thinking?: string,
 	signal?: AbortSignal,
 ): Promise<RunResult[]> {
 	const results: RunResult[] = [];
 	const concurrency = Math.max(1, Math.min(config.maxConcurrency, config.maxTasks));
+	const startedAt = Date.now();
 
 	for (let i = 0; i < tasks.length; i += concurrency) {
 		const batch = tasks.slice(i, i + concurrency);
 		const launches = launchParallel(batch, config, model, thinking);
-		results.push(...(await waitForAll(launches, config, signal)));
+		const batchResults = await waitForAll(launches, config, signal);
+		results.push(...batchResults);
+	}
+
+	// 验证 workfile
+	for (const r of results) {
+		if (r.status === "completed") {
+			ensureWorkfile(r, cwd, startedAt);
+		}
 	}
 
 	return results;
 }
 
+/** 串行执行任务链，{previous} 替换为上一步输出，完成后注入 workfile 路径并验证 */
 async function runChain(
 	steps: Array<{ agent: AgentConfig; task: string; cwd?: string }>,
 	config: SubagentConfig,
+	cwd: string,
 	rootTask?: string,
 	model?: string,
 	thinking?: string,
@@ -526,16 +719,29 @@ async function runChain(
 	const results: RunResult[] = [];
 	let previous = rootTask ?? "";
 	let topRowTargetPaneId: string | undefined;
+	const startedAt = Date.now();
 
 	for (let i = 0; i < steps.length; i++) {
 		const step = steps[i];
 		const task = step.task.replaceAll("{previous}", previous).replaceAll("{task}", rootTask ?? previous);
 		const pct = Math.round(((steps.length - i) / (steps.length - i + 1)) * 100);
-		const launch = launchSingle(step.agent, task, config, step.cwd, model, thinking, topRowTargetPaneId, pct);
+		const launch = launchSingle(step.agent, task, config, step.cwd ?? cwd, model, thinking, topRowTargetPaneId, pct);
 		topRowTargetPaneId = launch.paneId;
 		const result = await waitForCompletion(launch, config, signal);
+
+		// 验证 workfile
+		if (result.status === "completed") {
+			ensureWorkfile(result, cwd, startedAt);
+		}
+
+		// 将 workfile 路径注入到下一步的上下文中
+		let outputWithContext = result.output;
+		if (result.workfilePath) {
+			outputWithContext += `\n\n---\n上一步工作产物已持久化到: ${result.workfilePath}`;
+		}
+
 		results.push(result);
-		previous = result.output;
+		previous = outputWithContext;
 		if (result.status === "failed") break;
 	}
 
@@ -574,11 +780,14 @@ function listRunning(): RunResult[] {
 
 // ─── Formatting ───────────────────────────────────────────────────────────
 
+/** 格式化单个 agent 的运行结果（含 workfile 路径提示） */
 function formatResult(r: RunResult): string {
 	const icon = r.status === "completed" ? "✓" : "✗";
-	return `### [${r.agent}] ${icon} (${r.durationMs}ms)\n\n${r.output}`;
+	const workfile = r.workfilePath ? `\n📄 工作产物: ${r.workfilePath}` : "";
+	return `### [${r.agent}] ${icon} (${r.durationMs}ms)${workfile}\n\n${r.output}`;
 }
 
+/** 格式化多个 agent 运行结果的汇总 */
 function formatResults(results: RunResult[]): string {
 	const success = results.filter((r) => r.status === "completed").length;
 	return `${success}/${results.length} succeeded\n\n${results.map(formatResult).join("\n\n---\n\n")}`;
@@ -626,20 +835,42 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"通过 tmux 分屏可视化执行 subagent 任务。",
 			"模式：single (agent + task)、parallel (tasks 数组)、chain (chain 数组)。",
-			"管理：action: list 列出可用 agent，action: status 查看运行状态。",
+			"管理：action: list 列出可用 agent 和 prompt 模板，action: status 查看运行状态。",
 		].join(" "),
 		parameters: SubagentParams,
 
 		async execute(_toolCallId, params, signal, _onUpdate, _ctx): Promise<AgentToolResult<SubagentDetails>> {
 			const agents = discoverAgents();
+			const prompts = discoverPrompts();
+			const effectiveCwd = params.cwd ?? process.cwd();
 			const makeDetails =
 				(mode: "single" | "parallel" | "chain" | "list" | "status") =>
 				(results: RunResult[]): SubagentDetails => ({ mode, results });
 
 			if (params.action === "list") {
-				const list = agents.map((a) => `- **${a.name}**: ${a.description}`).join("\n");
+				const agentLines = agents
+					.map((a) => {
+						const tools = a.tools ? a.tools.join(", ") : "all";
+						const model = a.model ?? "default";
+						return `| ${a.name} | ${a.description.slice(0, 40)}… | ${tools} | ${model} |`;
+					})
+					.join("\n");
+				const promptLines = prompts
+					.map((p) => `| ${p.name} | ${p.mode} | ${p.description.slice(0, 40)}… | /${p.name} <${p.param}> |`)
+					.join("\n");
+				const list = [
+					"## Agents",
+					"| Name | Description | Tools | Model |",
+					"|------|-------------|-------|-------|",
+					agentLines || "| (none) | | | |",
+					"",
+					"## Prompt Templates",
+					"| Name | Mode | Description | Usage |",
+					"|------|------|-------------|-------|",
+					promptLines || "| (none) | | | |",
+				].join("\n");
 				return {
-					content: [{ type: "text", text: list || "无可用 agent" }],
+					content: [{ type: "text", text: list }],
 					details: makeDetails("list")([]),
 				};
 			}
@@ -695,13 +926,14 @@ export default function (pi: ExtensionAPI) {
 							details: makeDetails("chain")([]),
 						};
 					}
-					chainEntries.push({ agent, task: t.task, cwd: t.cwd ?? params.cwd });
+					chainEntries.push({ agent, task: t.task, cwd: params.cwd });
 				}
 
 				try {
 					const results = await runChain(
 						chainEntries,
 						config,
+						effectiveCwd,
 						params.task,
 						params.model,
 						params.thinking,
@@ -740,11 +972,11 @@ export default function (pi: ExtensionAPI) {
 							details: makeDetails("parallel")([]),
 						};
 					}
-					taskEntries.push({ agent, task: t.task, cwd: t.cwd ?? params.cwd });
+					taskEntries.push({ agent, task: t.task, cwd: params.cwd });
 				}
 
 				try {
-					const results = await runParallelBatches(taskEntries, config, params.model, params.thinking, signal);
+					const results = await runParallelBatches(taskEntries, config, effectiveCwd, params.model, params.thinking, signal);
 					return {
 						content: [{ type: "text", text: formatResults(results) }],
 						details: makeDetails("parallel")(results),
@@ -770,8 +1002,12 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				try {
+					const startedAt = Date.now();
 					const launch = launchSingle(agent, params.task, config, params.cwd, params.model, params.thinking);
 					const result = await waitForCompletion(launch, config, signal);
+					if (result.status === "completed") {
+						ensureWorkfile(result, effectiveCwd, startedAt);
+					}
 					return {
 						content: [{ type: "text", text: result.output }],
 						details: makeDetails("single")([result]),
@@ -794,11 +1030,11 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	// ── 为每个 agent 注册 /agentname 快捷命令 ──
+	// ── 为每个 agent 注册 /agentname 快捷命令（启动单个 agent 执行任务） ──
 	const agents = discoverAgents();
 	for (const agent of agents) {
 		pi.registerCommand(agent.name, {
-			description: `${agent.description}（快捷启动 subagent）`,
+			description: `${agent.description}（/${agent.name} <任务描述>）`,
 			handler: async (args, ctx) => {
 				const task = args.trim();
 				if (!task) {
@@ -807,13 +1043,16 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				try {
+					const startedAt = Date.now();
 					const launch = launchSingle(agent, task, config, ctx.cwd, agent.model, agent.thinking);
 					ctx.ui.notify(`⏳ ${agent.name} 已启动 (run: ${launch.runId})...`, "info");
 					const result = await waitForCompletion(launch, config);
 					if (result.status === "completed") {
-						ctx.ui.notify(`✅ ${agent.name} 完成 (${(result.durationMs / 1000).toFixed(1)}s)\n\n${result.output.slice(0, 4000)}${result.output.length > 4000 ? "\n...（截断）" : ""}`, "info");
+						ensureWorkfile(result, ctx.cwd, startedAt);
+						const workfileNote = result.workfilePath ? `\n📄 ${result.workfilePath}` : "";
+						ctx.ui.notify(`✅ ${agent.name} 完成 (${(result.durationMs / 1000).toFixed(1)}s)${workfileNote}\n\n${result.output.slice(0, 4000)}${result.output.length > 4000 ? "\n...（截断）" : ""}`, "info");
 					} else {
-						ctx.ui.notify(`❌ ${agent.name} 失败: ${result.error ?? "未知错误"}`, "error");
+						ctx.ui.notify(`❌ ${agent.name} 失败 (run: ${launch.runId}): ${result.error ?? "未知错误"}`, "error");
 					}
 				} catch (err) {
 					ctx.ui.notify(`启动 ${agent.name} 失败: ${(err as Error).message}`, "error");
@@ -822,10 +1061,65 @@ export default function (pi: ExtensionAPI) {
 		});
 	}
 
-	// ── Plan review gate ──
-	// 拦截 plannotator_submit_plan：首次提交 block，要求 LLM 先调用 planner 审查
-	// 如果 plannotator 未安装，handler 不会匹配任何工具调用，无副作用
-	// 逻辑详见 plan-review-gate.ts
+	// ── 为每个 prompt 模板注册快捷命令（与 agent 命令同一命名空间，冲突时跳过） ──
+	const prompts = discoverPrompts();
+	const agentNames = new Set(agents.map((a) => a.name));
+	for (const prompt of prompts) {
+		if (agentNames.has(prompt.name)) continue; // 与 agent 命令冲突，跳过
+		pi.registerCommand(prompt.name, {
+			description: `${prompt.description}（/${prompt.name} <${prompt.param}>）`,
+			handler: async (args, ctx) => {
+				const paramValue = args.trim();
+				if (!paramValue) {
+					ctx.ui.notify(`用法: /${prompt.name} <${prompt.param}>\n例: /${prompt.name} 重构认证模块`, "warn");
+					return;
+				}
+
+				// 替换模板中的占位符
+				const resolvedEntries = prompt.entries.map((e) => ({
+					agent: e.agent,
+					task: e.task.replaceAll(`{${prompt.param}}`, paramValue),
+				}));
+
+				try {
+					let results: RunResult[];
+
+					if (prompt.mode === "chain") {
+						// chain 模式：串行执行，{previous} 自动替换为上一步输出
+						const chainEntries = resolvedEntries.map((e) => {
+							const agent = agents.find((a) => a.name === e.agent);
+							if (!agent) throw new Error(`未知 agent: ${e.agent}`);
+							return { agent, task: e.task };
+						});
+						results = await runChain(chainEntries, config, ctx.cwd, paramValue);
+					} else if (prompt.mode === "parallel") {
+						// parallel 模式：并行执行，互不依赖
+						const taskEntries = resolvedEntries.map((e) => {
+							const agent = agents.find((a) => a.name === e.agent);
+							if (!agent) throw new Error(`未知 agent: ${e.agent}`);
+							return { agent, task: e.task };
+						});
+						results = await runParallelBatches(taskEntries, config, ctx.cwd);
+					} else {
+						// single 模式：单个 agent 执行
+						const e = resolvedEntries[0];
+						const agent = agents.find((a) => a.name === e.agent);
+						if (!agent) throw new Error(`未知 agent: ${e.agent}`);
+						const launch = launchSingle(agent, e.task, config, ctx.cwd);
+						const result = await waitForCompletion(launch, config);
+						results = [result];
+					}
+
+					const success = results.filter((r) => r.status === "completed").length;
+					ctx.ui.notify(`${prompt.name}: ${success}/${results.length} 成功\n\n${formatResults(results).slice(0, 4000)}`, success === results.length ? "info" : "warn");
+				} catch (err) {
+					ctx.ui.notify(`启动 ${prompt.name} 失败: ${(err as Error).message}`, "error");
+				}
+			},
+		});
+	}
+
+	// ── Plan review gate（拦截 plannotator 提交，首次提交 block，要求 LLM 先调用 planner 审查） ──
 	{
 		const reviewedPlans = new Set<string>();
 		pi.on("tool_call", async (event, _ctx) => {
@@ -839,19 +1133,7 @@ export default function (pi: ExtensionAPI) {
 			reviewedPlans.add(planFilePath);
 			return {
 				block: true,
-				reason: [
-				"📋 提交前需要先让 planner 审查计划。",
-				"请调用 subagent 工具：",
-				'  subagent(agent: "planner", task: "审查实施计划...")',
-				"",
-				"审查任务内容：",
-				"请审查以下实施计划，从架构合理性、完整性、风险和遗漏角度给出评估。",
-				"如果计划整体可行只需指出小问题；如果存在重大缺陷请详细说明。",
-				"计划文件路径：" + planFilePath,
-				"",
-				"审查完成后，如果计划需要修改请修改后再提交。",
-				"如果计划已通过审查，直接再次调用 plannotator_submit_plan 即可（不会再次被阻止）。",
-			].join("\n"),
+				reason: PLAN_REVIEW_GATE_PROMPT + planFilePath,
 			};
 		});
 		pi.on("session_shutdown", () => {

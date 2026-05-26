@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-v4-flash",
+  "defaultProvider": "zai",
+  "defaultModel": "GLM-5.1",
   "npmCommand": [
     "pnpm"
   ],
@@ -53,7 +53,8 @@
     "enabled": true,
     "contextDir": "$XDG_CONFIG_HOME/agents/context",
     "extraFiles": [
-      "$HOME/Documents/Org/profile.org"
+      "$HOME/Documents/Org/profile.org",
+      "$HOME/Documents/Org/MEMORY.org"
     ],
     "maxFiles": 8,
     "maxBytesPerFile": 65536,
@@ -68,5 +69,5 @@
   "transport": "auto",
   "collapseChangelog": true,
   "quietStartup": true,
-  "defaultThinkingLevel": "xhigh"
+  "defaultThinkingLevel": "high"
 }

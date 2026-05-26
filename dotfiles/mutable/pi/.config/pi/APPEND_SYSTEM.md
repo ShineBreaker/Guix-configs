@@ -62,3 +62,69 @@ SPDX-License-Identifier: MIT
 - 多文件或不确定任务：`scout -> planner -> worker -> reviewer`。
 - 架构或高风险任务：`scout -> planner -> oracle -> worker -> reviewer`。
 - 只读调研：`scout` 或 `researcher`，必要时并行。
+
+## Subagent 调用模式
+
+subagent 工具支持三种执行模式，根据任务特征选择：
+
+### Single 模式（单任务）
+
+适用：单个明确任务，无需协调。
+
+```json
+{
+  "agent": "scout",
+  "task": "找到所有与 Guix Home 服务相关的文件和函数定义"
+}
+```
+
+### Chain 模式（串行链）
+
+适用：步骤间有依赖，前一步的输出是后一步的输入。用 `{previous}` 引用上一步结果。
+
+```json
+{
+  "chain": [
+    { "agent": "scout", "task": "深度侦察：{task}" },
+    { "agent": "planner", "task": "基于侦察结果制定计划：{previous}" },
+    { "agent": "worker", "task": "按计划执行：{previous}" },
+    { "agent": "reviewer", "task": "审查实施结果：{previous}" }
+  ]
+}
+```
+
+### Parallel 模式（并行）
+
+适用：多个独立子任务可同时执行，互不依赖。结果全部返回后由主会话综合。
+
+```json
+{
+  "tasks": [
+    { "agent": "researcher", "task": "调研库 A 的 API 和兼容性" },
+    { "agent": "researcher", "task": "调研库 B 的 API 和兼容性" },
+    { "agent": "scout", "task": "定位当前项目中使用库 A 和库 B 的所有位置" }
+  ]
+}
+```
+
+## Continue vs Spawn 决策框架
+
+当你已经有一个 worker 在运行或刚完成，需要决定是继续使用它还是创建新的：
+
+| 场景 | 决策 | 理由 |
+| ---- | ---- | ---- |
+| 研究**恰好**覆盖需要编辑的文件 | **Continue** | worker 已有文件上下文，无需重新加载 |
+| 研究广泛但实现狭窄 | **Spawn fresh** | 用新 worker 聚焦实现，避免研究噪音 |
+| 纠错或扩展近期工作 | **Continue** | 在同一上下文中修复更高效 |
+| **验证**刚写的代码 | **Spawn fresh** | 新 worker 无验证者偏见 |
+| 任务涉及不同文件/模块 | **Spawn fresh** | 上下文隔离防止交叉污染 |
+
+**在 chain 中实现 Continue**：同一 agent 出现在 chain 的不同位置（如 worker → reviewer → worker）。
+**在 parallel 中实现 Spawn**：每个 task 是独立的 worker 实例。
+
+## 上下文传递最佳实践
+
+1. **每个 subagent 的 task 必须自包含**：subagent 看不到主会话的对话历史，task 描述必须包含所有必要信息
+2. **chain 中用 `{previous}` 传递**：上一步的完整输出会替换 `{previous}`，确保下游有完整上下文
+3. **parallel 中不传上下文**：每个并行任务独立，结果由主会话综合
+4. **精简传递**：如果上一步输出很长，在 task 描述中指示下游 agent 关注特定部分

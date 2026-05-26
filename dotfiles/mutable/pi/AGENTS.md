@@ -51,6 +51,13 @@ dotfiles/mutable/pi/          → GNU Stow → 实际路径
 └── plannotator.json # plannotator 扩展配置（planning phase 工具白名单）
 ```
 
+## 环境变量
+
+| 变量                          | 值                           | 用途             |
+| ----------------------------- | ---------------------------- | ---------------- |
+| `PI_CODING_AGENT_DIR`         | `$XDG_CONFIG_HOME/pi`        | Agent 配置目录   |
+| `PI_CODING_AGENT_SESSION_DIR` | `$XDG_DATA_HOME/pi/sessions` | Session 存储目录 |
+
 ## settings.json 配置归属
 
 JSON 不支持注释，所有配置项的归属和维护责任记录在此。
