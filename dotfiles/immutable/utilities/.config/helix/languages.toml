@@ -17,6 +17,13 @@ config.pylsp.plugins.rope.enabled = true
 [language-server.rust-analyzer]
 command = "rust-analyzer"
 
+[language-server.gopls]
+command = "gopls"
+
+[language-server.omnisharp]
+command = "omnisharp-wrapper"
+args = ["-lsp"]
+
 [language-server.zls]
 command = "zls"
 
@@ -47,6 +54,17 @@ language-servers = ["ccls"]
 name = "fish"
 auto-format = true
 formatter = { command = "fish_indent" }
+
+[[language]]
+name = "go"
+auto-format = true
+formatter = { command = "gofmt" }
+language-servers = ["gopls"]
+
+[[language]]
+name = "csharp"
+auto-format = true
+language-servers = ["omnisharp"]
 
 [[language]]
 name = "java"
@@ -96,5 +114,12 @@ formatter = { command = "rustfmt" }
 language-servers = ["rust-analyzer"]
 
 [[language]]
+name = "yaml"
+auto-format = true
+formatter = { command = "yq", args = ["-P", "-"] }
+
+[[language]]
 name = "zig"
+auto-format = true
+formatter = { command = "zig", args = ["fmt", "--stdin", "-"] }
 language-servers = ["zls"]

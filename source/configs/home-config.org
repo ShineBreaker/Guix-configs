@@ -230,7 +230,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "python-jsbeautifier"
         "python-lsp-black"
         "python-lsp-server"
-        "python-pylsp-mypy"
         "rust-analyzer"
         "sbcl"
         "shfmt"
@@ -282,7 +281,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "git-credential-keepassxc"
         "git-filter-repo"
         "git-lfs"
-        "jujutsu-dolly"
+        "jujutsu"
 
         ;; 编辑器
         "edit"
@@ -849,16 +848,24 @@ end
                                                 (specs->pkgs
                                                  "ccls"
                                                  "clang"
+                                                 "go"
+                                                 "gopls"
                                                  "jdtls-bin"
                                                  "maven"
+                                                 "nixfmt"
                                                  "node"
+                                                 "omnisharp"
                                                  "package-version-server"
                                                  "python-black"
                                                  "python-jsbeautifier"
                                                  "python-lsp-black"
                                                  "python-lsp-server"
-                                                 "python-pylsp-mypy"
-                                                 "rust-analyzer"))))))
+                                                 "rust"
+                                                 "rust-analyzer"
+                                                 "shfmt"
+                                                 "yq"
+                                                 "zig"
+                                                 "zig-zls"))))))
 #+end_src
 
 ** 环境变量

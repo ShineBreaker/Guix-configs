@@ -106,6 +106,7 @@
   "languages": {
     "C": {
       "language_servers": ["ccls"],
+      "tab_size": 4,
       "formatter": {
         "external": {
           "command": "$$bin/clang-format$$",
@@ -115,6 +116,7 @@
     },
     "C++": {
       "language_servers": ["ccls"],
+      "tab_size": 4,
       "formatter": {
         "external": {
           "command": "$$bin/clang-format$$",
@@ -122,8 +124,62 @@
         }
       }
     },
+    "Go": {
+      "language_servers": ["gopls"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/gofmt$$",
+          "arguments": ["-"]
+        }
+      }
+    },
+    "C#": {
+      "language_servers": ["omnisharp"]
+    },
     "Java": {
       "language_servers": ["jdtls"]
+    },
+    "Nix": {
+      "formatter": {
+        "external": {
+          "command": "$$bin/nixfmt$$",
+          "arguments": ["-"]
+        }
+      }
+    },
+    "Rust": {
+      "language_servers": ["rust-analyzer"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/rustfmt$$",
+          "arguments": ["--emit=stdout"]
+        }
+      }
+    },
+    "Shell Script": {
+      "formatter": {
+        "external": {
+          "command": "$$bin/shfmt$$",
+          "arguments": ["-"]
+        }
+      }
+    },
+    "YAML": {
+      "formatter": {
+        "external": {
+          "command": "$$bin/yq$$",
+          "arguments": ["-P", "-"]
+        }
+      }
+    },
+    "Zig": {
+      "language_servers": ["zls"],
+      "formatter": {
+        "external": {
+          "command": "$$bin/zig$$",
+          "arguments": ["fmt", "--stdin", "-"]
+        }
+      }
     },
     "JSON": {
       "formatter": {
@@ -147,8 +203,7 @@
         "pylsp",
         "!pyright",
         "!ruff",
-        "!basedpyright",
-        "!pylsp"
+        "!basedpyright"
       ],
       "formatter": {
         "external": {
@@ -162,6 +217,22 @@
     "ccls": {
       "binary": {
         "path": "$$bin/ccls$$"
+      }
+    },
+    "gopls": {
+      "binary": {
+        "path": "$$bin/gopls$$"
+      }
+    },
+    "omnisharp": {
+      "binary": {
+        "path": "$$bin/omnisharp-wrapper$$",
+        "arguments": ["-lsp"]
+      }
+    },
+    "zls": {
+      "binary": {
+        "path": "$$bin/zls$$"
       }
     },
     "jdtls": {
