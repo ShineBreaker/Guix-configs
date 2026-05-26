@@ -3,7 +3,7 @@
 - 需要先定位代码结构或跨文件理解：先派 `scout`。
 - 需要方案拆解、架构取舍或风险评估：派 `planner`，重大方案再派 `oracle`。
 - 需要外部文档、版本行为或 API 变化：派 `researcher`。
-- 需要实现独立编码工作：派 `worker`。
+- 需要实现独立编码工作：直接指定 agent（scout/planner/reviewer 等）执行。
 - 完成代码或配置修改后：派 `reviewer` 做证据化审查。
 </critical>
 
@@ -53,8 +53,8 @@
 ## 推荐工作流
 
 - 小型单文件修改：主会话可直接处理，但仍需先查知识库，完成后本地验证。
-- 多文件或不确定任务：`scout -> planner -> worker -> reviewer`。
-- 架构或高风险任务：`scout -> planner -> oracle -> worker -> reviewer`。
+- 多文件或不确定任务：`scout -> planner -> reviewer`。
+- 架构或高风险任务：`scout -> planner -> oracle -> reviewer`。
 - 只读调研：`scout` 或 `researcher`，必要时并行。
 
 ## Subagent 调用模式
@@ -81,8 +81,7 @@ subagent 工具支持三种执行模式，根据任务特征选择：
   "chain": [
     { "agent": "scout", "task": "深度侦察：{task}" },
     { "agent": "planner", "task": "基于侦察结果制定计划：{previous}" },
-    { "agent": "worker", "task": "按计划执行：{previous}" },
-    { "agent": "reviewer", "task": "审查实施结果：{previous}" }
+    { "agent": "reviewer", "task": "审查计划并验证：{previous}" }
   ]
 }
 ```
@@ -103,18 +102,18 @@ subagent 工具支持三种执行模式，根据任务特征选择：
 
 ## Continue vs Spawn 决策框架
 
-当你已经有一个 worker 在运行或刚完成，需要决定是继续使用它还是创建新的：
+当你已经有一个 subagent 在运行或刚完成，需要决定是继续使用它还是创建新的：
 
 | 场景                           | 决策            | 理由                                |
 | ------------------------------ | --------------- | ----------------------------------- |
-| 研究**恰好**覆盖需要编辑的文件 | **Continue**    | worker 已有文件上下文，无需重新加载 |
-| 研究广泛但实现狭窄             | **Spawn fresh** | 用新 worker 聚焦实现，避免研究噪音  |
+| 研究**恰好**覆盖需要编辑的文件 | **Continue**    | subagent 已有文件上下文，无需重新加载 |
+| 研究广泛但实现狭窄             | **Spawn fresh** | 用新 subagent 聚焦实现，避免研究噪音  |
 | 纠错或扩展近期工作             | **Continue**    | 在同一上下文中修复更高效            |
-| **验证**刚写的代码             | **Spawn fresh** | 新 worker 无验证者偏见              |
+| **验证**刚写的代码             | **Spawn fresh** | 新 subagent 无验证者偏见              |
 | 任务涉及不同文件/模块          | **Spawn fresh** | 上下文隔离防止交叉污染              |
 
-**在 chain 中实现 Continue**：同一 agent 出现在 chain 的不同位置（如 worker → reviewer → worker）。
-**在 parallel 中实现 Spawn**：每个 task 是独立的 worker 实例。
+**在 chain 中实现 Continue**：同一 agent 出现在 chain 的不同位置（如 scout → reviewer → scout）。
+**在 parallel 中实现 Spawn**：每个 task 是独立的 subagent 实例。
 
 ## 上下文传递最佳实践
 
