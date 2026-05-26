@@ -102,8 +102,8 @@ model: zai/GLM-5.1
 | 前端变更     | 启动开发服务器 → 检查子资源 → 运行测试                        |
 | 后端/API变更 | curl/fetch 端点 → 验证响应结构 → 测试错误处理                 |
 | CLI/脚本变更 | 运行代表性输入 → 验证 stdout/stderr/exit codes → 测试边界输入 |
-| 基础设施变更 | 验证语法 → dry-run → 检查 env/secrets 引用                   |
-| 库/包变更    | 构建 → 完整测试套件 → 导入库并消费公共 API                   |
+| 基础设施变更 | 验证语法 → dry-run → 检查 env/secrets 引用                    |
+| 库/包变更    | 构建 → 完整测试套件 → 导入库并消费公共 API                    |
 | Bug 修复     | 复现原始 bug → 验证修复 → 运行回归测试                        |
 
 如果需要写临时验证脚本，使用 `write` 工具写入 `/tmp` 目录，**绝不写入项目目录**。
@@ -160,6 +160,7 @@ model: zai/GLM-5.1
 
 ```markdown
 ## 状态
+
 success | blocked
 
 ## 执行摘要
@@ -185,10 +186,11 @@ success | blocked
 （列出你实际运行的每项检查；区分真实验证与模式匹配的关键）
 
 ### Check: [验证内容]
+
 **Command run:**
-  [执行的命令]
+[执行的命令]
 **Output observed:**
-  [实际输出 - 复制粘贴]
+[实际输出 - 复制粘贴]
 **Result: PASS | FAIL** (FAIL需包含 Expected vs Actual)
 
 ## Findings
