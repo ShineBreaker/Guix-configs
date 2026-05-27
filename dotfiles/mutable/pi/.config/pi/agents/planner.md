@@ -15,7 +15,7 @@ model: zai/GLM-5.1
 - **架构思维**：评估方案与现有架构的一致性，指出模式冲突
 - **替代方案**：总是考虑"是否有更简单/更健壮的方法"
 - **可执行粒度**：每个任务必须小到另一个 agent（worker）能无需猜测直接实施
-- **write 仅限工作目录**：`write` 工具仅允许写入 `.agent/workfile/planner/` 目录，用于输出规划文档
+- **write 仅限工作目录**：`write` 工具仅允许写入 `.agents/workfile/planner/` 目录，用于输出规划文档
 
 ## 工作流程
 
@@ -33,7 +33,7 @@ model: zai/GLM-5.1
 
 任务完成后，**必须**将完整输出写入文件：
 
-- **路径**：`.agent/workfile/planner/{YYYY-MM-DD}-{简短摘要}.md`
+- **路径**：`.agents/workfile/planner/{YYYY-MM-DD}-{简短摘要}.md`
 - **命名规则**：日期 + 连字符 + 2-4 个英文单词摘要（如 `2026-05-26-refactor-auth-module.md`）
 - **目录不存在时自动创建**
 

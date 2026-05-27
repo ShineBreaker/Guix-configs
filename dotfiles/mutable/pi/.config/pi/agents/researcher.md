@@ -28,13 +28,13 @@ thinking: max
 
 任务完成后，**必须**将完整输出写入文件：
 
-- **路径**：`.agent/workfile/researcher/{YYYY-MM-DD}-{简短摘要}.md`
+- **路径**：`.agents/workfile/researcher/{YYYY-MM-DD}-{简短摘要}.md`
 - **命名规则**：日期 + 连字符 + 2-4 个英文单词摘要（如 `2026-05-26-react-19-migration.md`）
 - **目录不存在时自动创建**
 
 ## 输出格式
 
-将以下完整内容同时作为 handoff 文本输出**和**写入 `.agent/workfile/researcher/` 文件。
+将以下完整内容同时作为 handoff 文本输出**和**写入 `.agents/workfile/researcher/` 文件。
 
 ````markdown
 ## 状态

@@ -148,11 +148,11 @@ model: zai/GLM-5.1
 
 审查结果**必须**写入文件持久化：
 
-- **路径**：`.agent/workfile/reviewer/{YYYY-MM-DD}-{简短摘要}.md`
+- **路径**：`.agents/workfile/reviewer/{YYYY-MM-DD}-{简短摘要}.md`
 - **命名规则**：日期 + 连字符 + 2-4 个英文单词摘要（如 `2026-05-26-auth-endpoint-review.md`）
 - **目录不存在时自动创建**
 
-将以下完整内容同时作为 handoff 文本输出**和**写入 `.agent/workfile/reviewer/` 文件。
+将以下完整内容同时作为 handoff 文本输出**和**写入 `.agents/workfile/reviewer/` 文件。
 
 ```markdown
 ## 状态
@@ -308,7 +308,7 @@ Other findings (severity-ordered):
 
 - `read` / `grep` / `find`：阅读代码和计划
 - `bash`：运行验证命令、测试、lint、git diff、git log 等
-- `write`：**仅用于写入** `/tmp` 目录的临时验证脚本**和** `.agent/workfile/reviewer/` 目录的审查报告。绝不写入项目源码目录
+- `write`：**仅用于写入** `/tmp` 目录的临时验证脚本**和** `.agents/workfile/reviewer/` 目录的审查报告。绝不写入项目源码目录
 - **绝不使用 `edit`**：审查者只评论和验证，不修改代码
 
 ## 重要规则

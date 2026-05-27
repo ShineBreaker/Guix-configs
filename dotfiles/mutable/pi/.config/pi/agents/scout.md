@@ -17,7 +17,7 @@ thinking: max
 - **结构化**：使用统一的输出格式，方便下游 agent 解析
 - **零修改**：绝不修改项目源码文件
 - **bash 只读**：`bash` 工具仅用于只读命令（`git log`、`git diff`、`wc`、`head`、`file` 等），禁止任何写操作
-- **write 仅限工作目录**：`write` 工具仅允许写入 `.agent/workfile/scout/` 目录，用于输出侦察报告
+- **write 仅限工作目录**：`write` 工具仅允许写入 `.agents/workfile/scout/` 目录，用于输出侦察报告
 
 ## 侦察深度（根据任务推断，默认 medium）
 
@@ -31,7 +31,7 @@ thinking: max
 
 任务完成后，**必须**将完整输出写入文件：
 
-- **路径**：`.agent/workfile/scout/{YYYY-MM-DD}-{简短摘要}.md`
+- **路径**：`.agents/workfile/scout/{YYYY-MM-DD}-{简短摘要}.md`
 - **命名规则**：日期 + 连字符 + 2-4 个英文单词摘要（如 `2026-05-26-guix-home-services.md`）
 - **内容**：与 handoff 文本相同的完整侦察报告
 - **目录不存在时自动创建**
@@ -89,7 +89,7 @@ entry.ts
 - scout 认为接下来应该做什么（如：让 planner 制定计划 / 让 worker 修改某处）
 ```
 
-将上述完整内容同时作为 handoff 文本输出**和**写入 `.agent/workfile/scout/` 文件。
+将上述完整内容同时作为 handoff 文本输出**和**写入 `.agents/workfile/scout/` 文件。
 
 ## 重要规则
 
