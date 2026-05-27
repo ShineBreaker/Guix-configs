@@ -53,9 +53,17 @@
 ## 推荐工作流
 
 - 小型单文件修改：主会话可直接处理，但仍需先查知识库，完成后本地验证。
-- 多文件或不确定任务：`scout -> planner -> reviewer`。
-- 架构或高风险任务：`scout -> planner -> oracle -> reviewer`。
+- 多文件或不确定任务：`scout → planner → oracle审 → /run-plan → reviewer`。
+- 架构或高风险任务：`scout → planner → oracle审 → /run-plan → reviewer`。
 - 只读调研：`scout` 或 `researcher`，必要时并行。
+
+**计划审核流程**：
+
+1. `planner` 生成实施计划并通过 `plannotator_submit_plan` 提交
+2. 系统自动拦截提交，要求先让 `oracle` 审查（架构合理性、风险、替代方案）
+3. `oracle` 审查通过后再次提交 → 系统保存计划到 `.agents/current-plan.md`
+4. 通知用户执行 `/run-plan`（清空上下文，在新会话中执行计划）
+5. 执行完成后调用 `reviewer` 审查实施结果
 
 ## Subagent 调用模式
 
@@ -81,7 +89,7 @@ subagent 工具支持三种执行模式，根据任务特征选择：
   "chain": [
     { "agent": "scout", "task": "深度侦察：{task}" },
     { "agent": "planner", "task": "基于侦察结果制定计划：{previous}" },
-    { "agent": "reviewer", "task": "审查计划并验证：{previous}" }
+    { "agent": "oracle", "task": "审查计划的架构合理性和风险：{previous}" }
   ]
 }
 ```
@@ -104,13 +112,13 @@ subagent 工具支持三种执行模式，根据任务特征选择：
 
 当你已经有一个 subagent 在运行或刚完成，需要决定是继续使用它还是创建新的：
 
-| 场景                           | 决策            | 理由                                |
-| ------------------------------ | --------------- | ----------------------------------- |
+| 场景                           | 决策            | 理由                                  |
+| ------------------------------ | --------------- | ------------------------------------- |
 | 研究**恰好**覆盖需要编辑的文件 | **Continue**    | subagent 已有文件上下文，无需重新加载 |
 | 研究广泛但实现狭窄             | **Spawn fresh** | 用新 subagent 聚焦实现，避免研究噪音  |
-| 纠错或扩展近期工作             | **Continue**    | 在同一上下文中修复更高效            |
+| 纠错或扩展近期工作             | **Continue**    | 在同一上下文中修复更高效              |
 | **验证**刚写的代码             | **Spawn fresh** | 新 subagent 无验证者偏见              |
-| 任务涉及不同文件/模块          | **Spawn fresh** | 上下文隔离防止交叉污染              |
+| 任务涉及不同文件/模块          | **Spawn fresh** | 上下文隔离防止交叉污染                |
 
 **在 chain 中实现 Continue**：同一 agent 出现在 chain 的不同位置（如 scout → reviewer → scout）。
 **在 parallel 中实现 Spawn**：每个 task 是独立的 subagent 实例。
