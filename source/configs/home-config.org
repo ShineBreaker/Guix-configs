@@ -353,7 +353,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "winapps")))
 #+end_src
 
-* Services
+* Servics
 
 这里是所有服务需要的 =modules=
 注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
@@ -897,7 +897,12 @@ end
 
 #+NAME: xdg-basedir-env-vars
 #+begin_src scheme
-'(("HISTFILE" . "$XDG_STATE_HOME/bash/history")
+'(;; bash
+  ("HISTFILE" . "$XDG_STATE_HOME/bash/history")
+  ;; claude-code
+  ("CLAUDE_CONFIG_DIR" . "$XDG_CONFIG_HOME/claude")
+  ;; codex
+  ("CODEX_HOME" . "$XDG_CONFIG_HOME/codex")
   ;; docker
   ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
   ;; gdb
@@ -919,7 +924,7 @@ end
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
-  ;; Pi Agent
+  ;; pi-agent
   ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
   ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
   ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")

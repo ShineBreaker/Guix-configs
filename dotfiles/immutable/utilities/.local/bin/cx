@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-#
-# codex wrapper — relocates ~/.codex to ~/.config/codex via bwrap
-
-exec xdg-bwrap codex --dangerously-bypass-approvals-and-sandbox "$@"
