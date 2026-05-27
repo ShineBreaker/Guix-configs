@@ -50,4 +50,9 @@ export const SubagentParams = Type.Object({
 			},
 		),
 	),
+	images: Type.Optional(
+		Type.Array(Type.String(), {
+			description: "图片文件路径数组，传递给 visual agent 分析",
+		}),
+	),
 });

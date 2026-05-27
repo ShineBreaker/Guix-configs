@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * 配置加载 — 从 settings.json 的 tmuxSubagents 字段加载运行时配置
+ * 配置加载 — 从 settings.json 的 atelier 字段加载运行时配置
  *
  * 查找顺序：agent dir/settings.json → ~/.config/pi/settings.json
  */
@@ -24,7 +24,7 @@ export function loadConfig(): SubagentConfig {
 	for (const settingsPath of candidates) {
 		if (!existsSync(settingsPath)) continue;
 		try {
-			raw = JSON.parse(readFileSync(settingsPath, "utf8"))?.tmuxSubagents as
+			raw = JSON.parse(readFileSync(settingsPath, "utf8"))?.atelier as
 				| Record<string, unknown>
 				| undefined;
 			if (raw) break;

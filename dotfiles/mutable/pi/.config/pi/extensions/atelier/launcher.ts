@@ -192,6 +192,7 @@ function buildWrapperCmd(
 	cwd?: string,
 	model?: string,
 	thinking?: string,
+	images?: string[],
 ): string {
 	const wrapper = ensureWrapperExecutable();
 	const args: string[] = [runId, agent.name, path.join(runDir, "task.md")];
@@ -200,6 +201,7 @@ function buildWrapperCmd(
 	if (thinking ?? agent.thinking) args.push("--thinking", (thinking ?? agent.thinking)!);
 	if (cwd) args.push("--cwd", cwd);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	if (images && images.length > 0) args.push("--image", images.join(","));
 	return [wrapper, ...args].map(shellQuote).join(" ");
 }
 
@@ -258,9 +260,10 @@ export function launchSingle(
 	thinking?: string,
 	topRowTargetPaneId?: string,
 	splitPercent = 50,
+	images?: string[],
 ): LaunchResult {
 	if (!process.env.TMUX) {
-		throw new Error("tmux-subagents requires Pi to run inside a tmux session");
+		throw new Error("atelier requires Pi to run inside a tmux session");
 	}
 
 	cleanupOldRuns(config);
@@ -270,7 +273,7 @@ export function launchSingle(
 	prepareRunDir(runDir, task);
 
 	const paneTitle = `${config.panePrefix}${agent.name}`;
-	const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, thinking);
+	const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, thinking, images);
 
 	const paneId = topRowTargetPaneId
 		? splitRightOfPane(topRowTargetPaneId, cmd, splitPercent)
@@ -302,9 +305,10 @@ export function launchParallel(
 	config: SubagentConfig,
 	model?: string,
 	thinking?: string,
+	existingTopRowPaneId?: string,
 ): LaunchResult[] {
 	if (!process.env.TMUX) {
-		throw new Error("tmux-subagents requires Pi to run inside a tmux session");
+		throw new Error("atelier requires Pi to run inside a tmux session");
 	}
 
 	cleanupOldRuns(config);
@@ -330,9 +334,12 @@ export function launchParallel(
 		const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, thinking);
 
 		let paneId: string;
-		if (i === 0) {
-			// 第一个：在当前 pane 上方垂直分割，创建顶部行
+		if (i === 0 && !existingTopRowPaneId) {
+			// 第一个且无已有顶部行：在当前 pane 上方垂直分割，创建顶部行
 			paneId = splitAboveCurrentPane(cmd);
+		} else if (i === 0 && existingTopRowPaneId) {
+			// 跨 batch 续接：在已有顶部行最右 pane 右侧水平分割
+			paneId = splitRightOfPane(existingTopRowPaneId, cmd, Math.round((count / (count + 1)) * 100));
 		} else {
 			// 后续：在前一个 pane 右侧水平分割，自动计算等分比例
 			const pct = Math.round(((count - i) / (count - i + 1)) * 100);

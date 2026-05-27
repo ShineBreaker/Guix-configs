@@ -10,7 +10,7 @@
  */
 
 import type { AgentConfig, RunResult, SubagentConfig } from "./types.ts";
-import { launchParallel, launchSingle } from "./launcher.ts";
+import { launchParallel, launchSingle, paneIsAlive } from "./launcher.ts";
 import { waitForAll, waitForCompletion } from "./monitor.ts";
 import { ensureWorkfile } from "./workfile.ts";
 
@@ -35,10 +35,17 @@ export async function runParallelBatches(
 	const results: RunResult[] = [];
 	const concurrency = Math.max(1, Math.min(config.maxConcurrency, config.maxTasks));
 	const startedAt = Date.now();
+	let topRowTargetPaneId: string | undefined;
 
 	for (let i = 0; i < tasks.length; i += concurrency) {
 		const batch = tasks.slice(i, i + concurrency);
-		const launches = launchParallel(batch, config, model, thinking);
+		// 如果上一个 batch 的 pane 已关闭，重置续接点，让 launchParallel 重新创建顶部行
+		if (topRowTargetPaneId && !paneIsAlive(topRowTargetPaneId)) {
+			topRowTargetPaneId = undefined;
+		}
+		const launches = launchParallel(batch, config, model, thinking, topRowTargetPaneId);
+		// 记录最后一个 pane 作为后续 batch 的续接点
+		topRowTargetPaneId = launches[launches.length - 1].paneId;
 		const batchResults = await waitForAll(launches, config, signal);
 		results.push(...batchResults);
 	}

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * tmux-subagents 扩展入口
+ * atelier 扩展入口
  *
  * 通过 tmux 分屏可视化执行 subagent 任务。
  *
@@ -31,6 +31,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AgentConfig, RunResult, SubagentDetails } from "./types.ts";
@@ -42,18 +43,18 @@ import { waitForCompletion, listRunning } from "./monitor.ts";
 import { runParallelBatches, runChain } from "./runner.ts";
 import { formatResults } from "./formatting.ts";
 import { SubagentParams } from "./schemas.ts";
+import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
+//
+// 职责：拦截 plannotator_submit_plan，强制先让 oracle 审查计划。
+// 审查框架由 oracle 自带（假设检验、范围风险、架构一致性、替代方案），
+// 此处只需路由到 oracle，不重复定义审查维度。
 
 const PLAN_REVIEW_GATE_PROMPT = [
-	"📋 提交前需要先让 planner 审查计划。",
+	"📋 提交前需要先让 oracle 审查计划。",
 	"请调用 subagent 工具：",
-	'  subagent(agent: "planner", task: "审查实施计划...")',
-	"",
-	"审查任务内容：",
-	"请审查以下实施计划，从架构合理性、完整性、风险和遗漏角度给出评估。",
-	"如果计划整体可行只需指出小问题；如果存在重大缺陷请详细说明。",
-	"计划文件路径：" /* + planFilePath */,
+	'  subagent(agent: "oracle", task: "审查以下实施计划的架构合理性和风险，提出建议。计划文件：<planFilePath>")',
 	"",
 	"审查完成后，如果计划需要修改请修改后再提交。",
 	"如果计划已通过审查，直接再次调用 plannotator_submit_plan 即可（不会再次被阻止）。",
@@ -213,6 +214,7 @@ export default function (pi: ExtensionAPI) {
 						params.thinking,
 						signal,
 					);
+					appendSessionLog("chain", results);
 					return {
 						content: [{ type: "text", text: formatResults(results) }],
 						details: makeDetails("chain")(results),
@@ -276,6 +278,7 @@ export default function (pi: ExtensionAPI) {
 						params.thinking,
 						signal,
 					);
+					appendSessionLog("parallel", results);
 					return {
 						content: [{ type: "text", text: formatResults(results) }],
 						details: makeDetails("parallel")(results),
@@ -318,11 +321,15 @@ export default function (pi: ExtensionAPI) {
 						params.cwd,
 						params.model,
 						params.thinking,
+						undefined,
+						50,
+						params.images,
 					);
 					const result = await waitForCompletion(launch, config, signal);
 					if (result.status === "completed") {
 						ensureWorkfile(result, effectiveCwd, startedAt);
 					}
+					appendSessionLog("single", [result]);
 					return {
 						content: [{ type: "text", text: result.output }],
 						details: makeDetails("single")([result]),
@@ -465,18 +472,197 @@ export default function (pi: ExtensionAPI) {
 		});
 	}
 
+	// ── /run-plan 命令：清空上下文，在新会话中执行已审查的计划 ─────────
+	//
+	// 流程：
+	//   1. 读取 .agents/current-plan.md
+	//   2. 立即归档到 .agents/archive/plan-<timestamp>.md（防反复触发）
+	//   3. newSession() 创建清空上下文的新会话
+	//   4. 将计划内容作为用户消息注入新会话
+
+	pi.registerCommand("run-plan", {
+		description: "清空当前上下文，在新会话中执行已通过审查的计划",
+		handler: async (_args, ctx) => {
+			const planPath = path.join(ctx.cwd, ".agents", "current-plan.md");
+
+			// 检查计划文件是否存在
+			if (!fs.existsSync(planPath)) {
+				ctx.ui.notify(
+					"❌ 未找到已审查的计划。\n" +
+					"请先用 plannotator 生成计划并让 oracle 审查通过。",
+					"error",
+				);
+				return;
+			}
+
+			// 读取计划内容
+			let planContent: string;
+			try {
+				planContent = fs.readFileSync(planPath, "utf-8");
+			} catch (err) {
+				ctx.ui.notify(`❌ 读取计划失败: ${(err as Error).message}`, "error");
+				return;
+			}
+
+			// 立即归档（防反复触发）
+			const archiveDir = path.join(ctx.cwd, ".agents", "archive");
+			fs.mkdirSync(archiveDir, { recursive: true });
+			const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+			const archivePath = path.join(archiveDir, `plan-${timestamp}.md`);
+			try {
+				fs.renameSync(planPath, archivePath);
+			} catch (err) {
+				ctx.ui.notify(`❌ 归档计划失败: ${(err as Error).message}`, "error");
+				return;
+			}
+
+			ctx.ui.notify(
+				`📋 计划已归档到 ${archivePath}\n🔄 正在创建新会话...`,
+				"info",
+			);
+
+			// 构建注入新会话的指令
+			const executionPrompt = [
+				"请按照以下已审查的实施计划开始执行。",
+				"",
+				"执行要求：",
+				"1. 严格按计划步骤执行，不要跳过或重新评估已完成审查的决策",
+				"2. 每完成一个步骤，简要标注进度",
+				"3. 遇到阻塞（无法绕过的错误）立即上报，不要自行扩大范围",
+				"4. 完成后调用 reviewer 审查实施结果",
+				"",
+				"---",
+				"# 实施计划",
+				"",
+				planContent,
+			].join("\n");
+
+			// 创建新会话并注入计划
+			try {
+				const result = await ctx.newSession({
+					parentSession: ctx.sessionManager?.currentPath,
+					setup: async (sessionManager) => {
+						// 新会话创建后的设置回调
+					},
+					withSession: async (newCtx) => {
+						// 向新会话注入计划作为初始用户消息
+						newCtx.sendUserMessage(executionPrompt);
+					},
+				});
+
+				if (result.cancelled) {
+					ctx.ui.notify("⚠️ 用户取消了新会话创建", "warn");
+				}
+			} catch (err) {
+				ctx.ui.notify(
+					`❌ 创建新会话失败: ${(err as Error).message}`,
+					"error",
+				);
+			}
+		},
+	});
+
+	// ── Visual agent 自动移交 ────────────────────────────────────────────
+	// 当用户输入包含图片但当前模型不支持视觉时，保存图片到临时文件
+	// 并注入系统提示指示 LLM 调用 visual subagent
+	{
+		pi.on("before_agent_start", (event, ctx) => {
+			const images = event.images;
+			if (!images || images.length === 0) return;
+
+			// 防止 subagent 递归：wrapper 会导出 PI_SUBAGENT=1
+			if (process.env.PI_SUBAGENT) return;
+
+			// 检查当前模型是否支持视觉（通过 Model.input 字段）
+			const currentModel = ctx.model;
+			if (currentModel?.input?.includes("image")) return; // 当前模型支持视觉，无需移交
+
+			// 保存图片到临时文件
+			const tmpDir = path.join(os.tmpdir(), "pi-visual");
+			fs.mkdirSync(tmpDir, { recursive: true });
+			const savedPaths: string[] = [];
+
+			for (let i = 0; i < images.length; i++) {
+				const img = images[i];
+				// ImageContent: { type: "image", data: string (base64), mimeType: string }
+				if (!img.data) continue;
+
+				const ext = (() => {
+					const mime = img.mimeType?.toLowerCase() ?? "image/png";
+					if (mime.includes("jpeg") || mime.includes("jpg")) return ".jpg";
+					if (mime.includes("gif")) return ".gif";
+					if (mime.includes("webp")) return ".webp";
+					if (mime.includes("bmp")) return ".bmp";
+					if (mime.includes("svg")) return ".svg";
+					return ".png";
+				})();
+
+				const tmpFile = path.join(tmpDir, `img-${Date.now()}-${i}${ext}`);
+				fs.writeFileSync(tmpFile, Buffer.from(img.data, "base64"));
+				savedPaths.push(tmpFile);
+			}
+
+			if (savedPaths.length === 0) return;
+
+			// 注入系统提示，指示 LLM 调用 visual subagent
+			const imageList = savedPaths.map((p) => `  - ${p}`).join("\n");
+			const visionHint = [
+				"",
+				"🖼️ **检测到图片输入，但当前模型不支持视觉。**",
+				"请使用 visual subagent 分析以下图片：",
+				"",
+				`subagent(agent: "visual", task: "分析以下图片", images: [${savedPaths.map((p) => `"${p}"`).join(", ")}])`, "",
+				`图片文件：\n${imageList}`,
+				"",
+			].join("\n");
+
+			// 追加到系统提示
+			return {
+				systemPrompt: event.systemPrompt + "\n" + visionHint,
+			};
+		});
+	}
+
 	// ── Plan review gate ──────────────────────────────────────────────────
+	//
+	// 流程：
+	//   1. 首次 plannotator_submit_plan → block，提示调 oracle 审查
+	//   2. oracle 审完后 LLM 再次调 plannotator_submit_plan → 放行
+	//   3. 放行时自动保存计划到 .agents/current-plan.md
+	//   4. 提示 LLM 通知用户执行 /run-plan（清空上下文，在新会话中执行计划）
 
 	{
 		const reviewedPlans = new Set<string>();
+		const approvedPlanPath = path.join(process.cwd(), ".agents", "current-plan.md");
+
 		pi.on("tool_call", async (event, _ctx) => {
 			if (event.toolName !== "plannotator_submit_plan") return;
 			const planFilePath = event.input?.filePath as string | undefined;
 			if (!planFilePath) return;
+
+			// 第二次调用（oracle 已审查）→ 放行并保存计划
 			if (reviewedPlans.has(planFilePath)) {
 				reviewedPlans.delete(planFilePath);
-				return;
+
+				// 读取计划文件内容并保存到约定路径
+				try {
+					const planContent = fs.readFileSync(planFilePath, "utf-8");
+					const planDir = path.dirname(approvedPlanPath);
+					fs.mkdirSync(planDir, { recursive: true });
+					fs.writeFileSync(approvedPlanPath, planContent, "utf-8");
+				} catch {
+					// 保存失败不阻塞，/run-plan 会报错提示
+				}
+
+				return {
+					systemPrompt:
+						"✅ 计划已通过 oracle 审查并保存。" +
+						"请通知用户：执行 `/run-plan` 开始实施（将清空当前上下文，在新会话中执行计划）。" +
+						"如果用户不想清空上下文，也可以直接按计划执行。",
+				};
 			}
+
+			// 首次调用 → block，提示调 oracle 审查
 			reviewedPlans.add(planFilePath);
 			return {
 				block: true,
@@ -485,6 +671,7 @@ export default function (pi: ExtensionAPI) {
 		});
 		pi.on("session_shutdown", () => {
 			reviewedPlans.clear();
+			finalizeSessionLog(process.cwd());
 		});
 	}
 }

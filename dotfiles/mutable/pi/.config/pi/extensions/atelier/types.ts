@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * 类型定义 — tmux-subagents 扩展的所有接口和常量
+ * 类型定义 — atelier 扩展的所有接口和常量
  *
  * 包含：Agent/Prompt/Run 相关接口、默认配置、分屏百分比常量
  */
@@ -33,7 +33,7 @@ export interface PromptConfig {
 
 // ─── 运行时数据 ─────────────────────────────────────────────────────────────
 
-/** tmux-subagents 运行时配置（从 settings.json 的 tmuxSubagents 字段加载） */
+/** atelier 运行时配置（从 settings.json 的 atelier 字段加载） */
 export interface SubagentConfig {
 	pollIntervalMs: number;
 	panePrefix: string;

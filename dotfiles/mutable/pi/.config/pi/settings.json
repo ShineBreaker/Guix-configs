@@ -41,7 +41,7 @@
       "mode": "abbreviated"
     }
   },
-  "tmuxSubagents": {
+  "atelier": {
     "pollIntervalMs": 2000,
     "panePrefix": "sub:",
     "keepResults": 24,
