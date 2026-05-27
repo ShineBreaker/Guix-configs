@@ -7,9 +7,9 @@ tmp
 node_modules
 
 .codex
+.pi-lens
 plans/
 .sisyphus
-/.agent-shell/
 
 .keys/
 
