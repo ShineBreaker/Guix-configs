@@ -1,7 +1,4 @@
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
+.agents/workfile
 .pi-lens
 __pycache__
 node_modules

@@ -256,7 +256,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; AI Agent
         "cc-switch-bin"
         "claude-code"
-        "codex"
+        ; "codex"
         "codex-acp"
         "crush-bin"
         "llama-cpp"
@@ -807,7 +807,8 @@ end
                             "AGENTS\\.md"
                             "README\\.md"
                             "bun\\.lock"
-                            "\\.mypy_cache"))))
+                            "\\.mypy_cache"
+                            "__pycache__"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
