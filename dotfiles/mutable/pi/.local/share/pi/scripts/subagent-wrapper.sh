@@ -18,6 +18,7 @@ MODEL=""
 THINKING=""
 CWD=""
 TOOLS=""
+IMAGES=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -37,6 +38,10 @@ while [[ $# -gt 0 ]]; do
 		TOOLS="$2"
 		shift 2
 		;;
+	--image)
+		IMAGES="$2"
+		shift 2
+		;;
 	*) shift ;;
 	esac
 done
@@ -47,6 +52,9 @@ XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 RUN_DIR="$XDG_CACHE_HOME/pi/subagents/$RUN_ID"
 AGENTS_DIR="$XDG_CONFIG_HOME/pi/agents"
+
+# 标记当前进程为 subagent，供扩展 hook 检测递归
+export PI_SUBAGENT=1
 
 status_file="$RUN_DIR/status.json"
 result_file="$RUN_DIR/result.md"
@@ -178,6 +186,21 @@ if [[ -n "$AGENT_SYSTEM_PROMPT" ]]; then
 	else
 		PI_ARGS+=(--append-system-prompt "$AGENT_SYSTEM_PROMPT")
 	fi
+fi
+
+# 附加图片文件（pi @file 语法）
+if [[ -n "$IMAGES" ]]; then
+	# 逗号分隔的多图片路径
+	IFS=',' read -ra IMG_PATHS <<< "$IMAGES"
+	for img_path in "${IMG_PATHS[@]}"; do
+		img_path="${img_path# }"  # 去前导空格
+		img_path="${img_path% }"  # 去尾部空格
+		if [[ -f "$img_path" ]]; then
+			PI_ARGS+=("@$img_path")
+		else
+			echo "warning: image file not found: $img_path" >&2
+		fi
+	done
 fi
 
 PI_ARGS+=("Task: $TASK_TEXT")
