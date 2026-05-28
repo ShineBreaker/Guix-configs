@@ -148,6 +148,7 @@
              (rosenthal packages wm)
 
              (rosenthal services base)
+             (rosenthal services games)
              (rosenthal services networking)
 
              (srfi srfi-1))
@@ -710,10 +711,40 @@
                                                (elogind-configuration
                                                 (inherit config)
                                                 ;; 仅使用 shutdown 模式休眠（platform 模式在此硬件上不可用）
-                                                (hibernate-mode '(shutdown)))))
+                                                (hibernate-mode '(shutdown))
+                                                ;; 连接电源时合盖只锁屏，不挂起
+                                                (handle-lid-switch-external-power 'lock)
+                                                ;; 禁止挂起/休眠键触发系统挂起
+                                                ;; 插电源时不允许任何进程突然中断
+                                                (handle-suspend-key 'ignore)
+                                                (handle-hibernate-key 'ignore))))
 
-        (list (service power-profiles-daemon-service-type)
+        (list (service tlp-service-type
+                       (tlp-configuration
+                        ;; === AC 电源模式 ===
+                        (cpu-scaling-governor-on-ac (list "performance"))
+                        (cpu-energy-perf-policy-on-ac "performance")
+                        (cpu-min-perf-on-ac 0)
+                        (cpu-max-perf-on-ac 100)
+
+                        ;; === 电池模式 ===
+                        (cpu-scaling-governor-on-bat (list "powersave"))
+                        (cpu-energy-perf-policy-on-bat "power")
+                        (cpu-min-perf-on-bat 0)
+                        (cpu-max-perf-on-bat 20)
+
+                        ;; === 电池健康保护（强烈推荐保留）===
+                        (start-charge-thresh-bat0 40)
+                        (stop-charge-thresh-bat0 80)
+
+                        ;; 可选但推荐的额外省电项
+                        (cpu-boost-on-bat? #f)
+                        (sched-powersave-on-bat? #t)
+                        ;; 开机恢复上次关机时的蓝牙/WiFi 开关状态
+                        (restore-device-state-on-startup? #t)))
+
               (service fprintd-service-type)
+              (service gamemode-service-type)
               (service gnome-keyring-service-type)
               (service gvfs-service-type)
               (service opentabletdriver-service-type)
@@ -867,6 +898,7 @@ echo "InitialPassword!" | guix shell openssl -+ openssl passwd -6 -stdin
                (supplementary-groups '("adbusers"
                                        "audio"
                                        "cgroup"
+                                       "gamemode"
                                        "input"
                                        "kvm"
                                        "libvirt"
