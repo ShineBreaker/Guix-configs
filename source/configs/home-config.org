@@ -129,6 +129,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 桌面组件
         "fuzzel"
         "mako"
+        "swaylock-effects"
         "swww"
         "waypaper"
 
@@ -335,13 +336,11 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
          ;; 娱乐
          "gamemode"
-         "heroic"
          "lr2oraja-endlessdream-bin"
          "luanti-halon"
          "luanti-mineclonia-csm"
          "mangohud"
          "osu-lazer-bin"
-         "prismlauncher-dolly"
          "steam"
 
          ;; 实用工具
@@ -737,35 +736,21 @@ end
 
 #+NAME: home-shepherd-services
 #+begin_src scheme
-(let* ((graphical-env-vars '("DBUS_SESSION_BUS_ADDRESS"
-                             "DISPLAY"
-                             "WAYLAND_DISPLAY"
-                             "XDG_CURRENT_DESKTOP"
-                             "XDG_RUNTIME_DIR"
-                             "XDG_SESSION_TYPE"))
-       (niri-env-vars (append graphical-env-vars
-                              '("NIRI_SOCKET")))
-       (make-shepherd-service
-        (lambda* (pkg path requirement #:optional (env-vars '()))
+(let* ((make-shepherd-service
+        (lambda* (pkg path requirement)
                  (shepherd-service (provision (list (string->symbol (package-name pkg))))
                                    (requirement requirement)
                                    (start #~(make-forkexec-constructor
                                              (list #$(file-append pkg path))
-                                             #:environment-variables
-                                             (append (list (string-append "HOME=" (getenv "HOME")))
-                                                     (map (lambda (var)
-                                                            (string-append var "=" (or (getenv var) "")))
-                                                          '#$env-vars))
+                                             #:environment-variables (environ)
                                              #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
                                                                        #$(package-name pkg) ".log")))
                                    (stop #~(make-kill-destructor))
                                    (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
-                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session)
-                                                     graphical-env-vars)
-                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session)
-                                                     niri-env-vars)))))
+                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))))))
 #+end_src
 
 ** 计时器服务
@@ -810,16 +795,16 @@ end
                             "\\.mypy_cache"
                             "__pycache__"))))
 
+      ; (simple-service 'prism-jdks home-files-service-type
+      ;                 (map (lambda (jdk)
+      ;                        (list (in-vicinity
+      ;                               ".local/share/PrismLauncher/java/"
+      ;                               (package-version jdk)) jdk))
+      ;                      (list openjdk25 openjdk21 openjdk17)))
+
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
-                 ("nano/nanorc" ,%default-nanorc)))
-
-      (simple-service 'prism-jdks home-files-service-type
-                      (map (lambda (jdk)
-                             (list (in-vicinity
-                                    ".local/share/PrismLauncher/java/"
-                                    (package-version jdk)) jdk))
-                           (list openjdk25 openjdk21 openjdk17))))
+                 ("nano/nanorc" ,%default-nanorc))))
 #+end_src
 
 *** 区别对待某些配置文件
