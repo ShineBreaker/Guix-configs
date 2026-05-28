@@ -825,7 +825,7 @@ polkit.addRule(function(action, subject) {
 #+begin_src scheme
 (map (lambda (path)
        `(,path ,(local-file (string-append "source/files/skel/" path))))
-     '(".config/mihomo/config.yaml" ".config/git-credential-keepassxc"))
+     '(".config/mihomo/config.yaml"))
 #+end_src
 
 * Users
