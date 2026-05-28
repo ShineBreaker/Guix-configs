@@ -119,6 +119,5 @@ layer-rule {
 }
 
 switch-events {
-    lid-close { spawn "niri" "msg" "action" "power-off-monitors"; }
-    lid-open  { spawn "niri" "msg" "action" "power-on-monitors"; }
+    lid-open { spawn "niri" "msg" "action" "power-on-monitors"; }
 }
