@@ -9,6 +9,19 @@ description: Use when querying historical experience, writing new experience car
 
 > 经验写入时的决策逻辑、分类映射、卡片结构规范及用户画像维护流程见 `self-improving` skill。
 
+## 初始化
+
+当 `~/Documents/Org` 不存在或为空时，引导用户运行：
+
+```bash
+kb init            # 创建目录结构 + git 仓库 + 初始 commit
+kb init --no-git   # 仅创建目录结构，跳过 git
+```
+
+`kb init` 会创建完整的目录结构（experiences/、memories/projects/）、模板文件（MEMORY.org、profile.org、inbox.org、.gitignore）并执行 git init + 初始 commit。
+
+如果知识库已有内容，`kb init` 会安全退出并提示。
+
 ## 路径
 
 | 用途     | 路径                                 |
@@ -111,6 +124,7 @@ EOF
 kb inbox "待捕获的想法"                                         # 快速捕获
 kb stats                                                        # 统计概览
 kb reindex                                                      # 重建索引
+kb commit -m "一句话总结"                                       # 提交变更到 git
 ```
 
 ## 写入后校验
