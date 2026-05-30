@@ -328,6 +328,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "amber-pm"
          "broot"
          "gimp"
+         "filezilla"
          "keepassxc"
          "kdeconnect"
          "motrix-next-bin"
@@ -740,17 +741,23 @@ end
         (lambda* (pkg path requirement)
                  (shepherd-service (provision (list (string->symbol (package-name pkg))))
                                    (requirement requirement)
-                                   (start #~(make-forkexec-constructor
-                                             (list #$(file-append pkg path))
-                                             #:environment-variables (environ)
-                                             #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
-                                                                       #$(package-name pkg) ".log")))
+                                   (start #~(lambda args
+                                             ((make-forkexec-constructor
+                                                (list #$(file-append pkg path))
+                                                #:environment-variables (environ)
+                                                #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
+                                                                          #$(package-name pkg) ".log")))
+                                              args))
                                    (stop #~(make-kill-destructor))
                                    (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
+                              (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
-                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))))))
+                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal-gnome "/libexec/xdg-desktop-portal-gnome" '(graphical-session))))))
 #+end_src
 
 ** 计时器服务
