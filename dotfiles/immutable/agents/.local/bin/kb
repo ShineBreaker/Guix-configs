@@ -445,7 +445,7 @@ def cmd_add(args: argparse.Namespace) -> None:
     if "/" in category or "\\" in category or ".." in category:
         die(f"类别名不能包含路径分隔符或 '..': {category}")
 
-    if entry_type and entry_type not in ("", ) | VALID_ENTRY_TYPES:
+    if entry_type and entry_type not in VALID_ENTRY_TYPES | {""}:
         die(f"--entry 仅支持: {', '.join(sorted(VALID_ENTRY_TYPES))}")
 
     # ── 白名单校验：对非标准值打印警告 ─────────────────────────────────────
