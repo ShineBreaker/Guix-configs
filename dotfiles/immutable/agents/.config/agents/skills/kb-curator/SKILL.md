@@ -52,6 +52,14 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 
 8. **重整** — `kb reindex && kb lint --fix`
 9. **输出报告** — 必须输出，格式见下
+10. **提交变更** — `kb commit -m "策展: <一句话总结>"`
+
+    commit message 要求：
+    + 以 `策展:` 前缀开头
+    + 用一句话总结本次策展的核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）
+    + 控制在 50 字以内
+    + 示例：`策展: 新增 2 张 guix 经验，更新 1 张，晋升 1 条 pattern`
+    + 无变更时跳过此步骤
 
 ### 矛盾调和规则
 
@@ -139,6 +147,7 @@ kb stats 概要：
 
 - [ ] `kb reindex` 已执行
 - [ ] `kb lint --fix` 无残留错误
+- [ ] `kb commit -m` 已执行（或确认无变更）
 - [ ] 新增卡片元数据完整（category/tech/type/owner）
 - [ ] 新增卡片含任务描述、执行过程、关键发现
 - [ ] 代码块使用 Org mode 格式
