@@ -9,7 +9,7 @@ include optional=true "settings/key-bindings-wm.kdl"
 include optional=true "noctalia.kdl"
 
 environment {
-    XDG_CURRENT_DESKTOP "niri"
+  XDG_CURRENT_DESKTOP "niri"
 }
 
 spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
@@ -24,74 +24,74 @@ spawn-at-startup "dex" "-a"
 prefer-no-csd
 
 blur {
-    passes 4
-    offset 6
-    noise 0
-    saturation 1
+  passes 4
+  offset 6
+  noise 0
+  saturation 1
 }
 
 cursor {
-    xcursor-theme "Bibata-Modern-Classic"
-    xcursor-size 24
+  xcursor-theme "Bibata-Modern-Classic"
+  xcursor-size 24
 }
 
 gestures {
-    hot-corners {
-        off
-    }
+  hot-corners {
+    off
+  }
 }
 
 hotkey-overlay {
-    skip-at-startup
-    hide-not-bound
+  skip-at-startup
+  hide-not-bound
 }
 
 xwayland-satellite {
-    // off
-    path "/run/current-system/profile/bin/xwayland-satellite"
+  // off
+  path "/run/current-system/profile/bin/xwayland-satellite"
 }
 
 input {
-    keyboard {
-        xkb {
-        }
+  keyboard {
+    xkb {
     }
-    touchpad {
-        tap
-        natural-scroll
-    }
+  }
+  touchpad {
+    tap
+    natural-scroll
+  }
 
-    mouse {
-        accel-speed 0.6
-        accel-profile "flat"
-    }
+  mouse {
+    accel-speed 0.6
+    accel-profile "flat"
+  }
 }
 
 
 layout {
-    gaps 12
+  gaps 12
 
-    always-center-single-column
-    background-color "transparent"
-    center-focused-column "on-overflow"
+  always-center-single-column
+  background-color "transparent"
+  center-focused-column "on-overflow"
 
-    preset-column-widths {
-        proportion 0.4999
-        proportion 0.7
-        proportion 1.0
-    }
+  preset-column-widths {
+    proportion 0.4999
+    proportion 0.7
+    proportion 1.0
+  }
 
-    default-column-width {
-      proportion 0.7;
-    }
+  default-column-width {
+    proportion 0.7;
+  }
 
-    focus-ring {
-        off
-    }
+  focus-ring {
+    off
+  }
 }
 
 output "eDP-1" {
-    variable-refresh-rate
+  variable-refresh-rate
 }
 
 screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
@@ -114,10 +114,11 @@ layer-rule {
 }
 
 layer-rule {
-    match namespace="^notifications$"
-    block-out-from "screencast"
+  match namespace="^notifications$"
+  block-out-from "screencast"
 }
 
 switch-events {
-    lid-open { spawn "niri" "msg" "action" "power-on-monitors"; }
+  lid-close { spawn "niri" "msg" "action" "power-off-monitors"; }
+  lid-open { spawn "niri" "msg" "action" "power-on-monitors"; }
 }
