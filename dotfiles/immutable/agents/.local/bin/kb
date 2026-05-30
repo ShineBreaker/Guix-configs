@@ -23,6 +23,8 @@
 #   connect  双向链接两张卡片
 #   update   更新已有卡片的属性或追加内容
 #   profile  管理用户画像
+#   init     初始化知识库（目录结构 + 可选 git）
+#   commit   提交知识库变更（封装 git 操作）
 #   help     显示帮助
 
 import argparse
@@ -1344,6 +1346,112 @@ def cmd_patterns(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 子命令: init — 初始化知识库
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def cmd_init(args: argparse.Namespace) -> None:
+    """初始化知识库目录结构，可选初始化 git 仓库。"""
+    # 检查 KB_ROOT 是否已存在且有实质内容
+    if KB_ROOT.exists() and any(KB_ROOT.iterdir()):
+        has_cards = KB_EXPERIENCES.exists() and any(KB_EXPERIENCES.iterdir())
+        if has_cards:
+            print(f"知识库已存在且有内容: {KB_ROOT}")
+            print("如需重新初始化，请先备份并删除该目录。")
+            return
+        # 有目录但无卡片——可能是损坏的初始化，继续
+        print(f"知识库目录已存在但为空，继续初始化: {KB_ROOT}")
+
+    # 创建目录和模板文件（复用 ensure_dirs 逻辑）
+    ensure_dirs()
+    print(f"目录结构已创建: {KB_ROOT}")
+
+    # git 初始化（默认启用，--no-git 跳过）
+    use_git = not args.no_git
+    if use_git:
+        git_bin = shutil.which("git")
+        if not git_bin:
+            print("提示: 未找到 git，跳过版本控制初始化。")
+            print("安装 git 后可手动运行: cd ~/Documents/Org && git init && git add -A && git commit -m 'kb init'")
+            return
+
+        git_dir = KB_ROOT / ".git"
+        if git_dir.exists():
+            print("git 仓库已存在，跳过 git init。")
+            return
+
+        # 检查父目录是否已有 git 仓库（避免嵌套）
+        parent_git = _find_parent_git(KB_ROOT)
+        if parent_git:
+            print(f"警告: 父目录已有 git 仓库 ({parent_git})")
+            print("跳过 git init 以避免嵌套仓库。")
+            print("如需独立版本控制，请手动运行: cd ~/Documents/Org && git init")
+            return
+
+        # 创建 .gitignore
+        gitignore = KB_ROOT / ".gitignore"
+        if not gitignore.exists():
+            gitignore.write_text("# 机器生成索引\nindex.json\n", encoding="utf-8")
+
+        # git init + 初始 commit
+        _run_git(["init"], cwd=KB_ROOT)
+        _run_git(["add", ".gitignore", "MEMORY.org", "profile.org", "inbox.org"], cwd=KB_ROOT)
+        _run_git(["commit", "-m", "kb init: 初始化知识库"], cwd=KB_ROOT)
+        print("git 仓库已初始化，初始 commit 已创建。")
+
+
+def cmd_commit(args: argparse.Namespace) -> None:
+    """提交知识库变更，封装 git add + commit。"""
+    git_bin = shutil.which("git")
+    if not git_bin:
+        die("未找到 git，无法提交。")
+
+    git_dir = KB_ROOT / ".git"
+    if not git_dir.exists():
+        die("知识库未初始化 git 仓库。请先运行 'kb init'。")
+
+    message = args.message
+    if not message:
+        die("请通过 -m 指定 commit message。")
+
+    # 检查是否有变更
+    status = _run_git(["status", "--porcelain"], cwd=KB_ROOT)
+    if not status.strip():
+        print("没有待提交的变更。")
+        return
+
+    # add 所有变更（包括新建、修改、删除）
+    _run_git(["add", "-A"], cwd=KB_ROOT)
+
+    # commit
+    _run_git(["commit", "-m", message], cwd=KB_ROOT)
+    print(f"已提交: {message}")
+
+
+def _run_git(args: list[str], cwd: Path) -> str:
+    """执行 git 命令，返回 stdout。失败时 die。"""
+    result = subprocess.run(
+        ["git"] + args,
+        capture_output=True,
+        text=True,
+        cwd=str(cwd),
+    )
+    if result.returncode != 0:
+        die(f"git {' '.join(args)} 失败: {result.stderr.strip()}")
+    return result.stdout
+
+
+def _find_parent_git(start: Path) -> Path | None:
+    """向上查找父目录中的 .git，返回其路径或 None。"""
+    current = start.parent
+    while current != current.parent:
+        if (current / ".git").exists():
+            return current / ".git"
+        current = current.parent
+    return None
+
+
 def cmd_reindex(args: argparse.Namespace) -> None:
     """
     全量扫描 experiences/ 目录下所有卡片，重建 index.json。
@@ -2028,6 +2136,13 @@ def print_help() -> None:
             kb profile --add --category <分类> --text "条目"
             kb profile --add --category <分类>   从 stdin 追加条目
 
+  init     初始化知识库
+            kb init            创建目录结构 + git 仓库 + 初始 commit
+            kb init --no-git   仅创建目录结构，跳过 git
+
+  commit   提交知识库变更
+            kb commit -m "总结"   提交所有变更到 git（.gitignore 排除 index.json）
+
   help     显示本帮助
 
 配置常量（修改文件头部即可调整）:
@@ -2050,7 +2165,10 @@ def print_help() -> None:
 
 
 def main() -> None:
-    ensure_dirs()
+    # init 子命令自己管理目录创建，跳过 ensure_dirs
+    skip_ensure = len(sys.argv) > 1 and sys.argv[1] == "init"
+    if not skip_ensure:
+        ensure_dirs()
 
     if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
         print_help()
@@ -2233,6 +2351,16 @@ def main() -> None:
     )
     profile_parser.add_argument("--text", help="追加的条目文本")
 
+    # ── init ──────────────────────────────────────────────────────────────
+    init_parser = subparsers.add_parser("init", help="初始化知识库")
+    init_parser.add_argument(
+        "--no-git", action="store_true", help="跳过 git 初始化"
+    )
+
+    # ── commit ────────────────────────────────────────────────────────────
+    commit_parser = subparsers.add_parser("commit", help="提交知识库变更")
+    commit_parser.add_argument("-m", "--message", required=True, help="commit message（建议 50 字以内总结）")
+
     # ── help ──────────────────────────────────────────────────────────────
     subparsers.add_parser("help", help="显示本帮助")
 
@@ -2258,6 +2386,8 @@ def main() -> None:
         "connect": cmd_connect,
         "update": cmd_update,
         "profile": cmd_profile,
+        "init": cmd_init,
+        "commit": cmd_commit,
     }
 
     if args.command in commands:
