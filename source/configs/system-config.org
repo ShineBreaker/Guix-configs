@@ -698,6 +698,7 @@
                          (delete console-font-service-type)
                          (delete mingetty-service-type)
                          (delete gdm-service-type)
+                         (delete screen-locker-service-type)
                          (guix-service-type config =>
                                             (guix-configuration (inherit config)
                                                                 (channels guix-channels)
