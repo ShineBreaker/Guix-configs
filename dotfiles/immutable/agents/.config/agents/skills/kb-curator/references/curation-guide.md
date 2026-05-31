@@ -76,16 +76,29 @@ python3 scripts/extract-conversations.py -o ~/Documents/Org/conversations/$(date
 
 此脚本自动覆盖 4 个数据源（OpenCode / Crush / Claude Code / Codex），输出 Org-mode 格式对话文件。 提取完成后浏览输出目录，标记有记录价值的对话文件。
 
-### 第一步：诊断（analyze_kb.py）
+### 第一步：诊断（analyze_kb.py 或 kb health）
 
-运行 `analyze_kb.py --quality --duplicates`，获取知识库整体健康报告。
+运行 `kb health` 或 `analyze_kb.py --quality --duplicates`，获取知识库整体健康报告。
 
 关注指标：
 
-- **类别分布极度不均**：某类别 \>50% 总量 → 考虑拆分或补充其他类别
-- **类型分布偏斜**：debug/config 占比过高时，考虑提炼 workflow/refactor 类经验
-- **重复卡片**：重叠率 \>80% 且同类别 → 合并或删除旧卡
+- **孤立率**：无 `[[file:` 链接的卡片比例 >15% → 补充关联
+- **过时率**：STATUS=stale 比例 >10% → 验证或归档
+- **类型偏斜**：最大 type 占比 >45% → 补充其他类型
+- **薄弱类别**：<3 张的 category → 从对话历史补充
+- **重复卡片**：重叠率 >80% 且同类别 → 合并或删除旧卡
 - **质量缺陷**：缺少执行过程/关键发现的卡片 → 补充或降级
+
+#### 步骤 1.5：状态转换
+
+诊断后执行状态转换：
+
+```bash
+kb stats --health → 检查状态分布
+# done >30天且质量合格 → kb update <id> --status stable
+# stable >30天未 LAST_VERIFIED → kb touch <id> --used-only
+# stale >90天 → kb archive <id> --reason "策展: >90天未验证"
+```
 
 ### 第二步：筛选（find_gaps.py）
 
@@ -144,6 +157,17 @@ kb patterns --get | grep -A5 "<关键词>"
 
 综合时遵循：发现连接，不制造连接。只有在明确证据支持下才建立关联。
 
+#### 步骤 4.5：卡片合并
+
+自发综合后执行重复检测和合并：
+
+```bash
+kb deduplicate --threshold 0.7  # 检测疑似重复
+kb merge <primary> <secondary> --desc "合并原因"  # 合并重复卡片
+```
+
+对疑似重复判断：合并或忽略。同 category+tech 的窄卡片合并为类级卡片。
+
 ### 第五步：补充
 
 三种补充来源：
@@ -190,6 +214,14 @@ kb search "<相关关键词>"
 - [ ] 新卡片补充了已有 pattern 的边界条件 → 修补 pattern
 - [ ] pattern 引用的卡片已过时 → 标注 pattern 并引用新卡片
 - [ ] 新卡片与其他卡片有隐含关联 → 补充 `[[file:...]]` 链接
+
+#### 步骤 6.5：记忆验证与项目更新
+
+```bash
+kb memory --stale                    # 逐条验证
+kb memory --stale --auto-archive-days 60  # 自动归档 >60天 stale feedback
+kb memory --project-touch <name>     # 更新活跃项目 LAST_ACTIVE
+```
 
 ### 第七步：重整
 

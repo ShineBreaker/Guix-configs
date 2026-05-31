@@ -30,6 +30,33 @@ kb profile
 
 **结果处理**：高相关 → 作为上下文参考；低相关/空 → 静默继续；矛盾 → 以较新/经验证的为准。
 
+## 轻量写入
+
+不是所有经验都值得写完整卡片。详细决策树见 `references/write-decision.md`。
+
+| 目标 | 方式 | 条件 |
+|------|------|------|
+| 可复用技术经验 | `kb add` 完整卡片 | 排查 >2 步、跨工具、架构决策 |
+| 偏好/习惯 | `kb memory --add` | 偏好表达、行为纠正 |
+| 一句话注意 | `kb inbox` / `kb update --append` | 简单修正、补充 |
+| 不写 | — | 一次性细节、环境失败、否定声明 |
+
+优先级：纠正(mistake) > 调试(debug/config) > 工作流 > 功能
+
+轻量写入规范见 `references/lightweight-writing.md`。
+
+## 卡片生命周期
+
+```
+done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
+```
+
+- `kb touch <id>` — 标记卡片"刚用过"
+- `kb update <id> --status stable` — 策展后设为 stable
+- `kb archive <id>` — 归档卡片
+- `kb restore <id>` — 恢复归档卡片
+- `kb review <id>` — 审查卡片质量
+
 ## 检测触发器
 
 完整触发器列表见 `references/triggers.md`。

@@ -26,23 +26,25 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 按顺序执行，详细步骤和判断标准见 `references/curation-guide.md`。
 
 1. **提取对话** — `python3 scripts/extract-conversations.py`
-2. **诊断** — `python3 scripts/analyze_kb.py --quality --duplicates`
-
+2. **诊断** — `kb health` 或 `python3 scripts/analyze_kb.py --quality --duplicates`
+   2.5. **状态转换** — done→stable, stale→archived
    ### MEMORY 维护
 
    **MEMORY 时效检测**：
    1. 扫描 MEMORY.org 中 `* feedback` 和 `* reference` 节的所有条目
    2. 计算 UPDATED 距今天数
    3. > 30 天 → 标记为 stale
-   4. > 60 天 → 建议归档
+   4. > 60 天 → 归档到 MEMORY-ARCHIVE.org
 
    运行命令：`kb memory --stale`
 
 3. **空白检测** — `python3 scripts/find_gaps.py --stale-days 60`
 4. **矛盾调和** — 同主题卡片结论冲突时按规则处理
 5. **自发综合** — 扫描跨卡片模式，发现隐含连接
+   5.5. **卡片合并** — `kb deduplicate` 检测重复，`kb merge` 合并
 6. **补充** — 从对话/收件箱提取经验，`kb fields` 查标签后写入
 7. **传播联动** — 新卡片是否影响已有 pattern/卡片
+   7.5. **记忆验证** — `kb memory --stale --auto-archive-days 60` 自动归档
 
    **project 记忆验证**：
    1. 读取 MEMORY.org `* project` 节所有索引条目
