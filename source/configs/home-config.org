@@ -157,7 +157,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; XDG 相关组件
         "desktop-file-utils"
         "xdg-dbus-proxy"
-        "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
         "xdg-desktop-portal-wlr"
         "xdg-user-dirs"
@@ -757,7 +756,7 @@ end
                               (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(graphical-session))
-                              (make-shepherd-service xdg-desktop-portal-gnome "/libexec/xdg-desktop-portal-gnome" '(graphical-session))))))
+                              (make-shepherd-service xdg-desktop-portal-wlr "/libexec/xdg-desktop-portal-wlr" '(graphical-session))))))
 #+end_src
 
 ** 计时器服务
