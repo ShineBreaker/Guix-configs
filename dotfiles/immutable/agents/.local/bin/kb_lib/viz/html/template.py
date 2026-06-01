@@ -18,7 +18,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
 <header class="hero">
   <div class="hero-row">
     <div>
-      <h1>📊 知识库可视化</h1>
+      <h1>知识库可视化</h1>
       <div class="subtitle">共 ${total} 张卡片 · 最后更新 ${updated}</div>
     </div>
     <div class="search-wrap">
@@ -49,7 +49,7 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
   <main>
 
     <div class="chart-card">
-      <h3>🔗 标签力导向图（共现关系 · Eades 简化算法）</h3>
+      <h3>标签力导向图</h3>
       <div style="position:relative">
         <svg id="graph-svg"></svg>
         <div class="graph-controls">
@@ -74,17 +74,17 @@ HTML_TEMPLATE = Template(r"""<!DOCTYPE html>
     </div>
 
     <div class="chart-card">
-      <h3>📈 时间线（双 Y 轴：左 created · 右 used/verified）</h3>
+      <h3>时间线（双 Y 轴：左 created · 右 used/verified）</h3>
       <svg id="chart-timeline" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
 
     <div class="chart-card">
-      <h3>🔥 月度热力图（top tech × 最近 12 个月 · 动态行数）</h3>
+      <h3>月度热力图（top tech × 最近 12 个月 · 动态行数）</h3>
       <svg id="chart-heatmap" preserveAspectRatio="xMinYMin meet"></svg>
     </div>
 
     <div class="chart-card">
-      <h3>📋 卡片</h3>
+      <h3>卡片</h3>
       <div class="count-line" id="count-line"></div>
       <div class="card-grid" id="card-list"></div>
     </div>

@@ -13,6 +13,7 @@ CSS / JS / HTML 模板分别存放在本子包内:
 
 本模块负责在运行时把这些文件读出并内联到单一 HTML 字符串中。
 """
+
 import json
 from pathlib import Path
 
