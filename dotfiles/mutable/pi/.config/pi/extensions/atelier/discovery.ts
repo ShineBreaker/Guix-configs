@@ -30,51 +30,52 @@ import type { AgentConfig, PromptConfig } from "./types.ts";
  * (body 作为 systemPrompt)
  */
 export function discoverAgents(): AgentConfig[] {
-	const agentsDir = path.join(getAgentDir(), "agents");
-	const agents: AgentConfig[] = [];
+  const agentsDir = path.join(getAgentDir(), "agents");
+  const agents: AgentConfig[] = [];
 
-	if (!fs.existsSync(agentsDir)) return agents;
+  if (!fs.existsSync(agentsDir)) return agents;
 
-	let entries: fs.Dirent[];
-	try {
-		entries = fs.readdirSync(agentsDir, { withFileTypes: true });
-	} catch {
-		return agents;
-	}
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(agentsDir, { withFileTypes: true });
+  } catch {
+    return agents;
+  }
 
-	for (const entry of entries) {
-		if (!entry.name.endsWith(".md")) continue;
-		if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+  for (const entry of entries) {
+    if (!entry.name.endsWith(".md")) continue;
+    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
 
-		const filePath = path.join(agentsDir, entry.name);
-		let content: string;
-		try {
-			content = fs.readFileSync(filePath, "utf-8");
-		} catch {
-			continue;
-		}
+    const filePath = path.join(agentsDir, entry.name);
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, "utf-8");
+    } catch {
+      continue;
+    }
 
-		const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
-		if (!frontmatter.name || !frontmatter.description) continue;
+    const { frontmatter, body } =
+      parseFrontmatter<Record<string, string>>(content);
+    if (!frontmatter.name || !frontmatter.description) continue;
 
-		// 解析 tools 列表（逗号分隔）
-		const tools = frontmatter.tools
-			?.split(",")
-			.map((t: string) => t.trim())
-			.filter(Boolean);
+    // 解析 tools 列表（逗号分隔）
+    const tools = frontmatter.tools
+      ?.split(",")
+      .map((t: string) => t.trim())
+      .filter(Boolean);
 
-		agents.push({
-			name: frontmatter.name,
-			description: frontmatter.description,
-			tools: tools && tools.length > 0 ? tools : undefined,
-			model: frontmatter.model,
-			thinking: frontmatter.thinking,
-			systemPrompt: body,
-			filePath,
-		});
-	}
+    agents.push({
+      name: frontmatter.name,
+      description: frontmatter.description,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      model: frontmatter.model,
+      thinking: frontmatter.thinking,
+      systemPrompt: body,
+      filePath,
+    });
+  }
 
-	return agents;
+  return agents;
 }
 
 // ─── Prompt 发现 ─────────────────────────────────────────────────────────────
@@ -83,32 +84,32 @@ export function discoverAgents(): AgentConfig[] {
  * 自定义 frontmatter 解析器 — 跳过 SPDX 注释块（不依赖 parseFrontmatter 的文件起始约束）
  */
 function parsePromptFrontmatter(
-	content: string,
+  content: string,
 ): { frontmatter: Record<string, string>; body: string } | null {
-	// 跳过开头的 HTML 注释块（SPDX 头）
-	let offset = 0;
-	if (content.startsWith("<!--")) {
-		const closeIdx = content.indexOf("-->");
-		if (closeIdx >= 0) offset = closeIdx + 3;
-	}
-	// 跳过空白
-	while (offset < content.length && /\s/.test(content[offset])) offset++;
+  // 跳过开头的 HTML 注释块（SPDX 头）
+  let offset = 0;
+  if (content.startsWith("<!--")) {
+    const closeIdx = content.indexOf("-->");
+    if (closeIdx >= 0) offset = closeIdx + 3;
+  }
+  // 跳过空白
+  while (offset < content.length && /\s/.test(content[offset])) offset++;
 
-	// 检查 frontmatter
-	if (!content.startsWith("---", offset)) return null;
-	const fmStart = offset + 3;
-	const fmEnd = content.indexOf("\n---", fmStart);
-	if (fmEnd < 0) return null;
+  // 检查 frontmatter
+  if (!content.startsWith("---", offset)) return null;
+  const fmStart = offset + 3;
+  const fmEnd = content.indexOf("\n---", fmStart);
+  if (fmEnd < 0) return null;
 
-	const fmText = content.slice(fmStart, fmEnd);
-	const frontmatter: Record<string, string> = {};
-	for (const line of fmText.split("\n")) {
-		const m = line.match(/^(\w+):\s*(.*)/);
-		if (m) frontmatter[m[1]] = m[2].trim();
-	}
+  const fmText = content.slice(fmStart, fmEnd);
+  const frontmatter: Record<string, string> = {};
+  for (const line of fmText.split("\n")) {
+    const m = line.match(/^(\w+):\s*(.*)/);
+    if (m) frontmatter[m[1]] = m[2].trim();
+  }
 
-	const body = content.slice(fmEnd + 4); // skip \n---\n
-	return { frontmatter, body };
+  const body = content.slice(fmEnd + 4); // skip \n---\n
+  return { frontmatter, body };
 }
 
 /**
@@ -126,68 +127,69 @@ function parsePromptFrontmatter(
  * ```
  */
 export function discoverPrompts(): PromptConfig[] {
-	const promptsDir = path.join(getAgentDir(), "prompts");
-	const prompts: PromptConfig[] = [];
+  const promptsDir = path.join(getAgentDir(), "prompts");
+  const prompts: PromptConfig[] = [];
 
-	if (!fs.existsSync(promptsDir)) return prompts;
+  if (!fs.existsSync(promptsDir)) return prompts;
 
-	let entries: fs.Dirent[];
-	try {
-		entries = fs.readdirSync(promptsDir, { withFileTypes: true });
-	} catch {
-		return prompts;
-	}
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(promptsDir, { withFileTypes: true });
+  } catch {
+    return prompts;
+  }
 
-	for (const entry of entries) {
-		if (!entry.name.endsWith(".md")) continue;
-		if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+  for (const entry of entries) {
+    if (!entry.name.endsWith(".md")) continue;
+    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
 
-		const filePath = path.join(promptsDir, entry.name);
-		let content: string;
-		try {
-			content = fs.readFileSync(filePath, "utf-8");
-		} catch {
-			continue;
-		}
+    const filePath = path.join(promptsDir, entry.name);
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, "utf-8");
+    } catch {
+      continue;
+    }
 
-		const parsed = parsePromptFrontmatter(content);
-		if (!parsed || !parsed.frontmatter.name || !parsed.frontmatter.mode) continue;
+    const parsed = parsePromptFrontmatter(content);
+    if (!parsed || !parsed.frontmatter.name || !parsed.frontmatter.mode)
+      continue;
 
-		const mode = parsed.frontmatter.mode as "single" | "parallel" | "chain";
-		if (!["single", "parallel", "chain"].includes(mode)) continue;
+    const mode = parsed.frontmatter.mode as "single" | "parallel" | "chain";
+    if (!["single", "parallel", "chain"].includes(mode)) continue;
 
-		// 从 body 中提取第一个 JSON 代码块作为模板
-		const jsonMatch = parsed.body.match(/```json\s*\n([\s\S]*?)\n```/);
-		if (!jsonMatch) continue;
+    // 从 body 中提取第一个 JSON 代码块作为模板
+    const jsonMatch = parsed.body.match(/```json\s*\n([\s\S]*?)\n```/);
+    if (!jsonMatch) continue;
 
-		let template: Record<string, unknown>;
-		try {
-			template = JSON.parse(jsonMatch[1]);
-		} catch {
-			continue;
-		}
+    let template: Record<string, unknown>;
+    try {
+      template = JSON.parse(jsonMatch[1]);
+    } catch {
+      continue;
+    }
 
-		// 从 JSON 模板中提取 entries（支持 chain/tasks/单对象三种格式）
-		const promptEntries: Array<{ agent: string; task: string }> = [];
-		const items = (template.chain ?? template.tasks ?? [template]) as Array<
-			Record<string, string>
-		>;
-		for (const item of items) {
-			if (item.agent && item.task) {
-				promptEntries.push({ agent: item.agent, task: item.task });
-			}
-		}
+    // 从 JSON 模板中提取 entries（支持 chain/tasks/单对象三种格式）
+    const promptEntries: Array<{ agent: string; task: string }> = [];
+    const items = (template.chain ?? template.tasks ?? [template]) as Array<
+      Record<string, string>
+    >;
+    for (const item of items) {
+      if (item.agent && item.task) {
+        promptEntries.push({ agent: item.agent, task: item.task });
+      }
+    }
 
-		if (promptEntries.length === 0) continue;
+    if (promptEntries.length === 0) continue;
 
-		prompts.push({
-			name: parsed.frontmatter.name,
-			mode,
-			param: parsed.frontmatter.param ?? "task",
-			description: parsed.frontmatter.description ?? "",
-			entries: promptEntries,
-		});
-	}
+    prompts.push({
+      name: parsed.frontmatter.name,
+      mode,
+      param: parsed.frontmatter.param ?? "task",
+      description: parsed.frontmatter.description ?? "",
+      entries: promptEntries,
+    });
+  }
 
-	return prompts;
+  return prompts;
 }

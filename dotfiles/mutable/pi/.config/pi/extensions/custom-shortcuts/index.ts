@@ -31,32 +31,32 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { matchesKey } from "@earendil-works/pi-tui";
 
 export default function customShortcuts(pi: ExtensionAPI): void {
-	let unsubscribe: (() => void) | undefined;
+  let unsubscribe: (() => void) | undefined;
 
-	pi.on("session_start", (_event, ctx) => {
-		const ui = ctx.ui;
+  pi.on("session_start", (_event, ctx) => {
+    const ui = ctx.ui;
 
-		unsubscribe = ui.onTerminalInput((data) => {
-			if (!matchesKey(data, "shift+tab")) return undefined;
+    unsubscribe = ui.onTerminalInput((data) => {
+      if (!matchesKey(data, "shift+tab")) return undefined;
 
-			// 保存用户当前输入
-			const saved = ui.getEditorText();
+      // 保存用户当前输入
+      const saved = ui.getEditorText();
 
-			// 写入斜杠命令
-			ui.setEditorText("/plannotator");
+      // 写入斜杠命令
+      ui.setEditorText("/plannotator");
 
-			// 将按键替换为回车，让编辑器走 onSubmit → 斜杠命令解析
-			// onSubmit 会同步清空编辑器，用 setTimeout 在清空后恢复用户输入
-			if (saved) {
-				setTimeout(() => ui.setEditorText(saved), 0);
-			}
+      // 将按键替换为回车，让编辑器走 onSubmit → 斜杠命令解析
+      // onSubmit 会同步清空编辑器，用 setTimeout 在清空后恢复用户输入
+      if (saved) {
+        setTimeout(() => ui.setEditorText(saved), 0);
+      }
 
-			return { consume: false, data: "\r" };
-		});
-	});
+      return { consume: false, data: "\r" };
+    });
+  });
 
-	pi.on("session_shutdown", () => {
-		unsubscribe?.();
-		unsubscribe = undefined;
-	});
+  pi.on("session_shutdown", () => {
+    unsubscribe?.();
+    unsubscribe = undefined;
+  });
 }

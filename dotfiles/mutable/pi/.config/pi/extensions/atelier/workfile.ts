@@ -16,14 +16,14 @@ import * as path from "node:path";
 
 /** 获取 agent workfile 目录 */
 function getWorkfileDir(cwd: string, agentName: string): string {
-	return path.join(cwd, ".agents", "workfile", agentName);
+  return path.join(cwd, ".agents", "workfile", agentName);
 }
 
 /** 生成唯一 workfile 文件名：日期-随机hex.md */
 function generateWorkfileName(): string {
-	const date = new Date().toISOString().slice(0, 10);
-	const hash = crypto.randomBytes(2).toString("hex");
-	return `${date}-${hash}.md`;
+  const date = new Date().toISOString().slice(0, 10);
+  const hash = crypto.randomBytes(2).toString("hex");
+  return `${date}-${hash}.md`;
 }
 
 /**
@@ -31,20 +31,20 @@ function generateWorkfileName(): string {
  * @returns 相对于 cwd 的文件路径，失败返回 undefined
  */
 export function persistToWorkfile(
-	cwd: string,
-	agentName: string,
-	content: string,
+  cwd: string,
+  agentName: string,
+  content: string,
 ): string | undefined {
-	try {
-		const dir = getWorkfileDir(cwd, agentName);
-		fs.mkdirSync(dir, { recursive: true });
-		const fileName = generateWorkfileName();
-		const filePath = path.join(dir, fileName);
-		fs.writeFileSync(filePath, content, "utf-8");
-		return path.relative(cwd, filePath);
-	} catch {
-		return undefined;
-	}
+  try {
+    const dir = getWorkfileDir(cwd, agentName);
+    fs.mkdirSync(dir, { recursive: true });
+    const fileName = generateWorkfileName();
+    const filePath = path.join(dir, fileName);
+    fs.writeFileSync(filePath, content, "utf-8");
+    return path.relative(cwd, filePath);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -52,21 +52,21 @@ export function persistToWorkfile(
  * @param startedAt 任务开始时间戳，容差 5 秒
  */
 export function checkWorkfileExists(
-	cwd: string,
-	agentName: string,
-	startedAt: number,
+  cwd: string,
+  agentName: string,
+  startedAt: number,
 ): boolean {
-	try {
-		const dir = getWorkfileDir(cwd, agentName);
-		if (!fs.existsSync(dir)) return false;
-		const files = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
-		return files.some((f) => {
-			const stat = fs.statSync(path.join(dir, f));
-			return stat.mtimeMs >= startedAt - 5000; // 5s 容差
-		});
-	} catch {
-		return false;
-	}
+  try {
+    const dir = getWorkfileDir(cwd, agentName);
+    if (!fs.existsSync(dir)) return false;
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith(".md"));
+    return files.some((f) => {
+      const stat = fs.statSync(path.join(dir, f));
+      return stat.mtimeMs >= startedAt - 5000; // 5s 容差
+    });
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -74,13 +74,18 @@ export function checkWorkfileExists(
  * 成功持久化时更新 result.workfilePath。
  */
 export function ensureWorkfile(
-	result: { agent: string; output: string; workfilePath?: string; status: string },
-	cwd: string,
-	startedAt: number,
+  result: {
+    agent: string;
+    output: string;
+    workfilePath?: string;
+    status: string;
+  },
+  cwd: string,
+  startedAt: number,
 ): void {
-	if (checkWorkfileExists(cwd, result.agent, startedAt)) return;
-	const workfilePath = persistToWorkfile(cwd, result.agent, result.output);
-	if (workfilePath) {
-		result.workfilePath = workfilePath;
-	}
+  if (checkWorkfileExists(cwd, result.agent, startedAt)) return;
+  const workfilePath = persistToWorkfile(cwd, result.agent, result.output);
+  if (workfilePath) {
+    result.workfilePath = workfilePath;
+  }
 }
