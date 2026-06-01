@@ -21,8 +21,8 @@ KB_AGENT_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kb/agent.conf"
 
 # 从配置文件加载（如果存在）
 if [[ -f "$KB_AGENT_CONFIG" ]]; then
-    # shellcheck source=/dev/null
-    source "$KB_AGENT_CONFIG"
+	# shellcheck source=/dev/null
+	source "$KB_AGENT_CONFIG"
 fi
 
 # 环境变量覆盖（优先于配置文件）
@@ -44,94 +44,94 @@ HEALTH_TASK="运行 kb health 输出知识库健康度报告，简要说明各�
 # ═══════════════════════════════════════════════════════════════════════════════
 
 run_pi() {
-    local task="$1"
-    if ! command -v pi >/dev/null 2>&1; then
-        echo "ERROR: pi CLI not found" >&2
-        exit 1
-    fi
+	local task="$1"
+	if ! command -v pi >/dev/null 2>&1; then
+		echo "ERROR: pi CLI not found" >&2
+		exit 1
+	fi
 
-    local model_flag=""
-    if [[ -n "$KB_AGENT_MODEL" ]]; then
-        model_flag="--model $KB_AGENT_MODEL"
-    fi
+	local model_flag=""
+	if [[ -n "$KB_AGENT_MODEL" ]]; then
+		model_flag="--model $KB_AGENT_MODEL"
+	fi
 
-    if [[ "$KB_DRY_RUN" == "1" ]]; then
-        echo "[DRY RUN] pi $model_flag — $task"
-        return
-    fi
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] pi $model_flag — $task"
+		return
+	fi
 
-    # 使用 pi 的非交互模式执行任务
-    pi agent self-improving --task "$task" $model_flag 2>&1 || true
+	# 使用 pi 的非交互模式执行任务
+	pi agent self-improving --task "$task" $model_flag 2>&1 || true
 }
 
 run_opencode() {
-    local task="$1"
-    if ! command -v opencode >/dev/null 2>&1; then
-        echo "ERROR: opencode CLI not found" >&2
-        exit 1
-    fi
+	local task="$1"
+	if ! command -v opencode >/dev/null 2>&1; then
+		echo "ERROR: opencode CLI not found" >&2
+		exit 1
+	fi
 
-    if [[ "$KB_DRY_RUN" == "1" ]]; then
-        echo "[DRY RUN] opencode — $task"
-        return
-    fi
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] opencode — $task"
+		return
+	fi
 
-    # TODO: 验证 opencode 的 CLI 接口后补充实际调用
-    echo "WARN: opencode 后端尚未实现，使用直接执行替代" >&2
-    run_direct "$task"
+	# TODO: 验证 opencode 的 CLI 接口后补充实际调用
+	echo "WARN: opencode 后端尚未实现，使用直接执行替代" >&2
+	run_direct "$task"
 }
 
 run_crush() {
-    local task="$1"
-    if ! command -v crush >/dev/null 2>&1; then
-        echo "ERROR: crush CLI not found" >&2
-        exit 1
-    fi
+	local task="$1"
+	if ! command -v crush >/dev/null 2>&1; then
+		echo "ERROR: crush CLI not found" >&2
+		exit 1
+	fi
 
-    if [[ "$KB_DRY_RUN" == "1" ]]; then
-        echo "[DRY RUN] crush — $task"
-        return
-    fi
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] crush — $task"
+		return
+	fi
 
-    # TODO: 验证 crush 的 CLI 接口后补充实际调用
-    echo "WARN: crush 后端尚未实现，使用直接执行替代" >&2
-    run_direct "$task"
+	# TODO: 验证 crush 的 CLI 接口后补充实际调用
+	echo "WARN: crush 后端尚未实现，使用直接执行替代" >&2
+	run_direct "$task"
 }
 
 run_direct() {
-    local task="$1"
+	local task="$1"
 
-    if [[ "$KB_DRY_RUN" == "1" ]]; then
-        echo "[DRY RUN] direct — $task"
-        return
-    fi
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] direct — $task"
+		return
+	fi
 
-    # 直接运行 kb 命令（不经过 AI agent）
-    echo "=== 直接执行模式 ==="
-    echo "任务: $task"
-    echo ""
+	# 直接运行 kb 命令（不经过 AI agent）
+	echo "=== 直接执行模式 ==="
+	echo "任务: $task"
+	echo ""
 
-    # 使用源文件（未部署时 ~/.local/bin/kb 可能是旧版）
-    local kb_cmd
-    kb_cmd="python3 \"$(dirname "$(readlink -f "$0")")/kb\""
+	# 使用源文件（未部署时 ~/.local/bin/kb 可能是旧版）
+	local kb_cmd
+	kb_cmd="python3 \"$(dirname "$(readlink -f "$0")")/kb\""
 
-    case "$task" in
-        *health*|*健康*)
-            eval "$kb_cmd health" 2>&1 || true
-            ;;
-        *deduplicate*|*重复*)
-            eval "$kb_cmd deduplicate" 2>&1 || true
-            ;;
-        *archive*|*归档*)
-            eval "$kb_cmd archive --stale" 2>&1 || true
-            ;;
-        *reindex*|*索引*)
-            eval "$kb_cmd reindex" 2>&1 || true
-            ;;
-        *)
-            echo "未知直接执行任务: $task"
-            ;;
-    esac
+	case "$task" in
+	*health* | *健康*)
+		eval "$kb_cmd health" 2>&1 || true
+		;;
+	*deduplicate* | *重复*)
+		eval "$kb_cmd deduplicate" 2>&1 || true
+		;;
+	*archive* | *归档*)
+		eval "$kb_cmd archive --stale" 2>&1 || true
+		;;
+	*reindex* | *索引*)
+		eval "$kb_cmd reindex" 2>&1 || true
+		;;
+	*)
+		echo "未知直接执行任务: $task"
+		;;
+	esac
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -139,7 +139,7 @@ run_direct() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 usage() {
-    cat <<EOF
+	cat <<EOF
 kb-agent — 知识库策展/审查自动化代理
 
 用法: kb-agent <操作> [选项]
@@ -161,6 +161,7 @@ kb-agent — 知识库策展/审查自动化代理
   KB_AGENT_MODEL     模型覆盖
   KB_AGENT_TIMEOUT   超时秒数
   KB_DRY_RUN         设为 1 启用 dry-run
+  EXTRA_CONTEXT      追加到任务描述的额外上下文（如对话摘要）
 
 配置文件: $KB_AGENT_CONFIG
 EOF
@@ -168,63 +169,69 @@ EOF
 
 ACTION=""
 while [[ $# -gt 0 ]]; do
-    case "$1" in
-        curate|review|health|self-improve)
-            ACTION="$1"
-            shift
-            ;;
-        --backend)
-            KB_AGENT_BACKEND="$2"
-            shift 2
-            ;;
-        --model)
-            KB_AGENT_MODEL="$2"
-            shift 2
-            ;;
-        --timeout)
-            KB_AGENT_TIMEOUT="$2"
-            shift 2
-            ;;
-        --dry-run)
-            KB_DRY_RUN=1
-            shift
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            echo "未知参数: $1" >&2
-            usage >&2
-            exit 1
-            ;;
-    esac
+	case "$1" in
+	curate | review | health | self-improve)
+		ACTION="$1"
+		shift
+		;;
+	--backend)
+		KB_AGENT_BACKEND="$2"
+		shift 2
+		;;
+	--model)
+		KB_AGENT_MODEL="$2"
+		shift 2
+		;;
+	--timeout)
+		KB_AGENT_TIMEOUT="$2"
+		shift 2
+		;;
+	--dry-run)
+		KB_DRY_RUN=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "未知参数: $1" >&2
+		usage >&2
+		exit 1
+		;;
+	esac
 done
 
 if [[ -z "$ACTION" ]]; then
-    usage
-    exit 1
+	usage
+	exit 1
 fi
 
 # 选择任务
 TASK=""
 case "$ACTION" in
-    curate)       TASK="$CURATE_TASK" ;;
-    review)       TASK="$REVIEW_TASK" ;;
-    health)       TASK="$HEALTH_TASK" ;;
-    self-improve) TASK="$REVIEW_TASK" ;;
+curate) TASK="$CURATE_TASK" ;;
+review) TASK="$REVIEW_TASK" ;;
+health) TASK="$HEALTH_TASK" ;;
+self-improve) TASK="$REVIEW_TASK" ;;
 esac
+
+# 注入额外上下文
+EXTRA_CONTEXT="${EXTRA_CONTEXT:-}"
+if [[ -n "$EXTRA_CONTEXT" ]]; then
+	TASK="${TASK}"$'\n\n--- 对话上下文 ---\n'"${EXTRA_CONTEXT}"
+fi
 
 # 执行
 echo "=== kb-agent: $ACTION (backend=$KB_AGENT_BACKEND) ==="
 case "$KB_AGENT_BACKEND" in
-    pi)       run_pi "$TASK" ;;
-    opencode) run_opencode "$TASK" ;;
-    crush)    run_crush "$TASK" ;;
-    direct)   run_direct "$TASK" ;;
-    *)
-        echo "ERROR: 未知后端: $KB_AGENT_BACKEND" >&2
-        echo "可用后端: pi, opencode, crush, direct" >&2
-        exit 1
-        ;;
+pi) run_pi "$TASK" ;;
+opencode) run_opencode "$TASK" ;;
+crush) run_crush "$TASK" ;;
+direct) run_direct "$TASK" ;;
+*)
+	echo "ERROR: 未知后端: $KB_AGENT_BACKEND" >&2
+	echo "可用后端: pi, opencode, crush, direct" >&2
+	exit 1
+	;;
 esac

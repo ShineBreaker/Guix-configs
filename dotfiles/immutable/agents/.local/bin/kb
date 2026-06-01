@@ -16,29 +16,57 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from kb_core import (  # noqa: E402
-    KB_ROOT, KB_EXPERIENCES, KB_MEMORIES,
-    KB_MEMORY, KB_PATTERNS, KB_INDEX, KB_INBOX, KB_PROFILE,
-    VALID_TYPES, VALID_OWNERS, VALID_ENTRY_TYPES, VALID_STATUSES,
+    KB_ROOT,
+    KB_EXPERIENCES,
+    KB_MEMORIES,
+    KB_MEMORY,
+    KB_PATTERNS,
+    KB_INDEX,
+    KB_INBOX,
+    KB_PROFILE,
+    VALID_TYPES,
+    VALID_OWNERS,
+    VALID_ENTRY_TYPES,
+    VALID_STATUSES,
     STALE_DAYS,
-    die, now, today,
-    _load_index, _save_index, _rebuild_index,
-    ensure_dirs, _init_profile,
+    die,
+    now,
+    today,
+    _load_index,
+    _save_index,
+    _rebuild_index,
+    ensure_dirs,
+    _init_profile,
 )
 from kb_cards import (  # noqa: E402
-    cmd_add, cmd_get, cmd_list, cmd_search,
-    cmd_fields, cmd_tags, cmd_inbox, cmd_stats,
-    cmd_connect, cmd_update,
-    cmd_touch, cmd_merge, cmd_archive, cmd_restore,
-    cmd_deduplicate, cmd_review, cmd_health,
+    cmd_add,
+    cmd_get,
+    cmd_list,
+    cmd_search,
+    cmd_fields,
+    cmd_tags,
+    cmd_inbox,
+    cmd_stats,
+    cmd_connect,
+    cmd_update,
+    cmd_touch,
+    cmd_merge,
+    cmd_archive,
+    cmd_restore,
+    cmd_deduplicate,
+    cmd_review,
+    cmd_health,
 )
 from kb_memory import cmd_memory, cmd_patterns  # noqa: E402
 from kb_lint import cmd_lint  # noqa: E402
+from kb_viz import cmd_viz  # noqa: E402
 
 import argparse
 import re
 import shutil
 import subprocess
 from pathlib import Path
+
 
 def cmd_init(args: argparse.Namespace) -> None:
     """初始化知识库目录结构，可选初始化 git 仓库。"""
@@ -62,7 +90,9 @@ def cmd_init(args: argparse.Namespace) -> None:
         git_bin = shutil.which("git")
         if not git_bin:
             print("提示: 未找到 git，跳过版本控制初始化。")
-            print("安装 git 后可手动运行: cd ~/Documents/Org && git init && git add -A && git commit -m 'kb init'")
+            print(
+                "安装 git 后可手动运行: cd ~/Documents/Org && git init && git add -A && git commit -m 'kb init'"
+            )
             return
 
         git_dir = KB_ROOT / ".git"
@@ -85,10 +115,11 @@ def cmd_init(args: argparse.Namespace) -> None:
 
         # git init + 初始 commit
         _run_git(["init"], cwd=KB_ROOT)
-        _run_git(["add", ".gitignore", "MEMORY.org", "profile.org", "inbox.org"], cwd=KB_ROOT)
+        _run_git(
+            ["add", ".gitignore", "MEMORY.org", "profile.org", "inbox.org"], cwd=KB_ROOT
+        )
         _run_git(["commit", "-m", "kb init: 初始化知识库"], cwd=KB_ROOT)
         print("git 仓库已初始化，初始 commit 已创建。")
-
 
 
 def cmd_commit(args: argparse.Namespace) -> None:
@@ -119,7 +150,6 @@ def cmd_commit(args: argparse.Namespace) -> None:
     print(f"已提交: {message}")
 
 
-
 def _run_git(args: list[str], cwd: Path) -> str:
     """执行 git 命令，返回 stdout。失败时 die。"""
     result = subprocess.run(
@@ -143,7 +173,6 @@ def _find_parent_git(start: Path) -> Path | None:
     return None
 
 
-
 def cmd_reindex(args: argparse.Namespace) -> None:
     """
     全量扫描 experiences/ 目录下所有卡片，重建 index.json。
@@ -156,6 +185,7 @@ def cmd_reindex(args: argparse.Namespace) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def cmd_profile(args: argparse.Namespace) -> None:
     """管理用户画像：查看、设置、追加分类条目。"""
@@ -304,11 +334,8 @@ def _profile_add_entry(category: str, entry: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
-
 def print_help() -> None:
-    print(
-        f"""kb — 知识库命令行工具
+    print(f"""kb — 知识库命令行工具
 
 用法: kb <子命令> [参数]
 
@@ -348,6 +375,7 @@ def print_help() -> None:
             kb memory --archive-to-file <ID>    归档 feedback 到 MEMORY-ARCHIVE.org
             kb memory --stale --auto-archive-days 60  自动归档陈旧 feedback
             kb memory --project-touch <名称>    更新项目 LAST_ACTIVE
+            kb memory --project <名称> --auto-update  自动更新项目元数据
             kb memory --get                     查看全文
 
   patterns  管理模式/原则（向后兼容，委托给 memory）
@@ -427,14 +455,12 @@ def print_help() -> None:
 经验卡片目录: {KB_EXPERIENCES}
 记忆文件: {KB_MEMORY}
 用户画像: {KB_PROFILE}
-"""
-    )
+""")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 主入口
 # ═══════════════════════════════════════════════════════════════════════════════
-
 
 
 def main() -> None:
@@ -468,7 +494,9 @@ def main() -> None:
         "--owner", default="ai", help="执行者（human|ai|collaborative）"
     )
     add_parser.add_argument(
-        "--entry", "--entry-type", dest="entry",
+        "--entry",
+        "--entry-type",
+        dest="entry",
         help="条目语义（mistake|note|ascended）",
     )
     add_parser.add_argument("--summary", help="一句话总结")
@@ -527,43 +555,41 @@ def main() -> None:
     memory_parser.add_argument(
         "--type", choices=["feedback", "project", "reference"], help="记忆类型过滤"
     )
-    memory_parser.add_argument(
-        "--project", metavar="IDENTIFIER", help="项目名或路径"
-    )
-    memory_parser.add_argument(
-        "--add", action="store_true", help="添加记忆"
-    )
-    memory_parser.add_argument(
-        "--get", action="store_true", help="查看记忆全文"
-    )
+    memory_parser.add_argument("--project", metavar="IDENTIFIER", help="项目名或路径")
+    memory_parser.add_argument("--add", action="store_true", help="添加记忆")
+    memory_parser.add_argument("--get", action="store_true", help="查看记忆全文")
     memory_parser.add_argument("--title", help="记忆标题")
     memory_parser.add_argument(
         "--stdin", action="store_true", help="从标准输入读取内容"
     )
-    memory_parser.add_argument(
-        "--stale", action="store_true", help="列出陈旧记忆"
-    )
-    memory_parser.add_argument(
-        "--touch", metavar="ID", help="更新记忆时间戳"
-    )
-    memory_parser.add_argument(
-        "--archive", metavar="ID", help="归档记忆到 deprecated"
-    )
+    memory_parser.add_argument("--stale", action="store_true", help="列出陈旧记忆")
+    memory_parser.add_argument("--touch", metavar="ID", help="更新记忆时间戳")
+    memory_parser.add_argument("--archive", metavar="ID", help="归档记忆到 deprecated")
     memory_parser.add_argument(
         "--archive-to-file", metavar="ID", help="归档 feedback 到 MEMORY-ARCHIVE.org"
     )
     memory_parser.add_argument(
-        "--auto-archive-days", type=int, default=0,
-        help="自动归档 >N 天 stale feedback（配合 --stale 使用）"
+        "--auto-archive-days",
+        type=int,
+        default=0,
+        help="自动归档 >N 天 stale feedback（配合 --stale 使用）",
     )
     memory_parser.add_argument(
         "--project-touch", metavar="NAME", help="更新项目 LAST_ACTIVE 时间戳"
+    )
+    memory_parser.add_argument(
+        "--auto-update",
+        action="store_true",
+        help="自动更新项目元数据（与 --project 联合使用）",
     )
 
     # ── patterns ──────────────────────────────────────────────────────────
     patterns_parser = subparsers.add_parser("patterns", help="管理模式/原则")
     patterns_parser.add_argument(
-        "--add", dest="action", action="store_const", const="add",
+        "--add",
+        dest="action",
+        action="store_const",
+        const="add",
         help="从 stdin 追加模式",
     )
     patterns_parser.add_argument(
@@ -614,20 +640,24 @@ def main() -> None:
         "category", nargs="?", default=None, help="分类名（如 身份、偏好、习惯）"
     )
     profile_parser.add_argument(
-        "--set", dest="action", action="store_const", const="set",
+        "--set",
+        dest="action",
+        action="store_const",
+        const="set",
         help="从 stdin 覆盖分类内容",
     )
     profile_parser.add_argument(
-        "--add", dest="action", action="store_const", const="add",
+        "--add",
+        dest="action",
+        action="store_const",
+        const="add",
         help="追加条目到分类",
     )
     profile_parser.add_argument("--text", help="追加的条目文本")
 
     # ── init ──────────────────────────────────────────────────────────────
     init_parser = subparsers.add_parser("init", help="初始化知识库")
-    init_parser.add_argument(
-        "--no-git", action="store_true", help="跳过 git 初始化"
-    )
+    init_parser.add_argument("--no-git", action="store_true", help="跳过 git 初始化")
 
     # ── commit ────────────────────────────────────────────────────────────
     commit_parser = subparsers.add_parser("commit", help="提交知识库变更")
@@ -658,9 +688,7 @@ def main() -> None:
     archive_parser.add_argument(
         "--list", dest="list_cards", action="store_true", help="列出归档卡片"
     )
-    archive_parser.add_argument(
-        "--stale", action="store_true", help="自动归档过时卡片"
-    )
+    archive_parser.add_argument("--stale", action="store_true", help="自动归档过时卡片")
     archive_parser.add_argument("--json", action="store_true", help="JSON 输出")
 
     # ── restore ─────────────────────────────────────────────────────────────
@@ -683,6 +711,14 @@ def main() -> None:
 
     # ── health ──────────────────────────────────────────────────────────────
     subparsers.add_parser("health", help="知识库健康度报告")
+
+    viz_parser = subparsers.add_parser("viz", help="生成知识库可视化 Web 页面")
+    viz_parser.add_argument(
+        "--output", "-o", help="输出文件路径（默认 ~/Documents/Org/kb-viz.html）"
+    )
+    viz_parser.add_argument(
+        "--open", action="store_true", help="生成后用 xdg-open 打开"
+    )
 
     args = parser.parse_args()
 
@@ -716,6 +752,7 @@ def main() -> None:
         "deduplicate": cmd_deduplicate,
         "review": cmd_review,
         "health": cmd_health,
+        "viz": cmd_viz,
     }
 
     if args.command in commands:

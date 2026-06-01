@@ -17,22 +17,24 @@ from pathlib import Path
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # ── 路径 ──────────────────────────────────────────────────────────────────────
-KB_ROOT = Path(os.environ.get("KB_ROOT", str(Path.home() / "Documents" / "Org")))  # 知识库根目录
-KB_EXPERIENCES = KB_ROOT / "experiences"             # 经验卡片存储目录
-KB_MEMORY = KB_ROOT / "MEMORY.org"                  # 记忆文件（feedback/project/reference）
-KB_MEMORIES = KB_ROOT / "memories"                  # 记忆子目录
-KB_PROJECTS = KB_MEMORIES / "projects"              # 项目记忆文件目录
-KB_PATTERNS = KB_MEMORY                             # 向后兼容别名（patterns 已合并到 MEMORY）
-KB_INDEX = KB_ROOT / "index.json"                   # JSON 查询索引
-KB_INBOX = KB_ROOT / "inbox.org"                    # 快速捕获收件箱
-KB_PROFILE = KB_ROOT / "profile.org"                # 用户画像文件
+KB_ROOT = Path(
+    os.environ.get("KB_ROOT", str(Path.home() / "Documents" / "Org"))
+)  # 知识库根目录
+KB_EXPERIENCES = KB_ROOT / "experiences"  # 经验卡片存储目录
+KB_MEMORY = KB_ROOT / "MEMORY.org"  # 记忆文件（feedback/project/reference）
+KB_MEMORIES = KB_ROOT / "memories"  # 记忆子目录
+KB_PROJECTS = KB_MEMORIES / "projects"  # 项目记忆文件目录
+KB_PATTERNS = KB_MEMORY  # 向后兼容别名（patterns 已合并到 MEMORY）
+KB_INDEX = KB_ROOT / "index.json"  # JSON 查询索引
+KB_INBOX = KB_ROOT / "inbox.org"  # 快速捕获收件箱
+KB_PROFILE = KB_ROOT / "profile.org"  # 用户画像文件
 
 VALID_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
 VALID_OWNERS = {"human", "ai", "collaborative"}
 VALID_ENTRY_TYPES = {"mistake", "note", "ascended"}
 
 # ── 阈值 ──────────────────────────────────────────────────────────────────────
-STALE_DAYS = 30         # 记忆条目超过此天数未更新视为陈旧
+STALE_DAYS = 30  # 记忆条目超过此天数未更新视为陈旧
 DEFAULT_LIST_COUNT = 20  # kb list 默认显示条数
 
 MEMORY_SECTIONS = ["feedback", "project", "reference", "deprecated"]
@@ -106,7 +108,6 @@ ENTRY_BODY_DEFAULTS = {
 }
 
 
-
 def _build_template(entry_type: str, body: str) -> list[str]:
     """根据 entry_type 生成对应的模板章节。
 
@@ -127,11 +128,10 @@ def _build_template(entry_type: str, body: str) -> list[str]:
     return result
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # 工具函数
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def die(msg: str) -> None:
     """打印错误信息并退出。"""
@@ -202,6 +202,7 @@ def _init_profile(filepath: Path) -> None:
 """,
         encoding="utf-8",
     )
+
 
 def ensure_dirs() -> None:
     """确保知识库目录和基础文件存在。
@@ -415,15 +416,13 @@ def _range_score(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # 状态机阈值
 # ═══════════════════════════════════════════════════════════════════════════════
 
-STALE_THRESHOLD_DAYS = 30       # stable → stale 阈值（天）
-ARCHIVE_THRESHOLD_DAYS = 90     # stale → archived 阈值（天）
-MEMORY_ARCHIVE_DAYS = 60        # feedback stale → 归档阈值（天）
+STALE_THRESHOLD_DAYS = 30  # stable → stale 阈值（天）
+ARCHIVE_THRESHOLD_DAYS = 90  # stale → archived 阈值（天）
+MEMORY_ARCHIVE_DAYS = 60  # feedback stale → 归档阈值（天）
 VALID_STATUSES = {"done", "stable", "stale", "archived"}
 
 # MEMORY-ARCHIVE.org 路径
@@ -451,9 +450,7 @@ def touch_card(filepath: Path, field: str = "LAST_USED") -> None:
     else:
         # 在 :STATUS: 行后插入
         if ":STATUS:" in content:
-            content = content.replace(
-                f":STATUS:", f":{field}:   {ts}\n:STATUS:", 1
-            )
+            content = content.replace(f":STATUS:", f":{field}:   {ts}\n:STATUS:", 1)
         else:
             # 在 :END: 前插入
             content = content.replace(":END:", f":{field}:   {ts}\n:END:", 1)

@@ -12,18 +12,42 @@ from datetime import datetime
 from pathlib import Path
 
 from kb_core import (  # noqa: E402
-    KB_ROOT, KB_EXPERIENCES, KB_MEMORY, KB_PATTERNS, KB_INBOX,
-    VALID_TYPES, VALID_OWNERS, VALID_ENTRY_TYPES, VALID_STATUSES,
-    STALE_DAYS, STALE_THRESHOLD_DAYS, ARCHIVE_THRESHOLD_DAYS,
-    CARD_TEMPLATES, ENTRY_BODY_DEFAULTS,
-    die, now, today, timestamp_id,
-    parse_org_prop, read_org_title, _card_dict,
-    _load_index, _save_index, _rebuild_index, _upsert_card,
-    _iter_search_targets, _query_terms,
-    _line_contains_any, _merge_ranges, _range_score,
-    _build_template, ensure_dirs,
-    touch_card, _resolve_card,
+    KB_ROOT,
+    KB_EXPERIENCES,
+    KB_MEMORY,
+    KB_PATTERNS,
+    KB_INBOX,
+    VALID_TYPES,
+    VALID_OWNERS,
+    VALID_ENTRY_TYPES,
+    VALID_STATUSES,
+    STALE_DAYS,
+    STALE_THRESHOLD_DAYS,
+    ARCHIVE_THRESHOLD_DAYS,
+    CARD_TEMPLATES,
+    ENTRY_BODY_DEFAULTS,
+    die,
+    now,
+    today,
+    timestamp_id,
+    parse_org_prop,
+    read_org_title,
+    _card_dict,
+    _load_index,
+    _save_index,
+    _rebuild_index,
+    _upsert_card,
+    _iter_search_targets,
+    _query_terms,
+    _line_contains_any,
+    _merge_ranges,
+    _range_score,
+    _build_template,
+    ensure_dirs,
+    touch_card,
+    _resolve_card,
 )
+
 
 def cmd_add(args: argparse.Namespace) -> None:
     """
@@ -52,9 +76,15 @@ def cmd_add(args: argparse.Namespace) -> None:
 
     # ── 白名单校验：对非标准值打印警告 ─────────────────────────────────────
     if type_ not in VALID_TYPES:
-        print(f"警告: type '{type_}' 不在标准值中 ({', '.join(sorted(VALID_TYPES))})", file=sys.stderr)
+        print(
+            f"警告: type '{type_}' 不在标准值中 ({', '.join(sorted(VALID_TYPES))})",
+            file=sys.stderr,
+        )
     if owner not in VALID_OWNERS:
-        print(f"警告: owner '{owner}' 不在标准值中 ({', '.join(sorted(VALID_OWNERS))})", file=sys.stderr)
+        print(
+            f"警告: owner '{owner}' 不在标准值中 ({', '.join(sorted(VALID_OWNERS))})",
+            file=sys.stderr,
+        )
 
     # entry_type 自动推断（仅在用户未显式指定时）
     if entry_type and not args.type:
@@ -128,7 +158,6 @@ def cmd_add(args: argparse.Namespace) -> None:
     print(filepath)
 
 
-
 def cmd_get(args: argparse.Namespace) -> None:
     """读取指定卡片的完整内容。支持完整路径或 ID 部分匹配。
 
@@ -166,10 +195,13 @@ def cmd_get(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
 def cmd_list(args: argparse.Namespace) -> None:
     """列出经验卡片，支持过滤和数量限制。默认显示最近 DEFAULT_LIST_COUNT 条，输出 JSON。"""
-    recent = args.recent if args.recent is not None else (0 if args.all else DEFAULT_LIST_COUNT)
+    recent = (
+        args.recent
+        if args.recent is not None
+        else (0 if args.all else DEFAULT_LIST_COUNT)
+    )
     index = _load_index()
     matched = []
     for c in index["cards"]:
@@ -196,7 +228,6 @@ def cmd_list(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: search — 全文检索
 # ═══════════════════════════════════════════════════════════════════════════════
-
 
 
 def cmd_search(args: argparse.Namespace) -> None:
@@ -319,7 +350,6 @@ def cmd_search(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
 def cmd_fields(args: argparse.Namespace) -> None:
     """
     从 JSON 索引统计已有的 category/tech/type/owner 值及出现次数。
@@ -364,7 +394,6 @@ def cmd_fields(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
 def cmd_tags(args: argparse.Namespace) -> None:
     """按标签搜索卡片文件，标签以冒号包裹形式存储在 Org 属性中。"""
     if not args.tags:
@@ -395,7 +424,6 @@ def cmd_tags(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
 def cmd_inbox(args: argparse.Namespace) -> None:
     """快速捕获一个想法或待办到 inbox.org。"""
     content = args.content
@@ -415,7 +443,6 @@ def cmd_inbox(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: stats — 知识库统计
 # ═══════════════════════════════════════════════════════════════════════════════
-
 
 
 def cmd_stats(args: argparse.Namespace) -> None:
@@ -466,7 +493,11 @@ def cmd_stats(args: argparse.Namespace) -> None:
         mem_text = KB_MEMORY.read_text(encoding="utf-8")
         fb_count = len(re.findall(r"^\*\* F\d+", mem_text, re.MULTILINE))
         ref_count = len(re.findall(r"^\*\* R\d+", mem_text, re.MULTILINE))
-        dep_section = mem_text[mem_text.find("* deprecated"):] if "* deprecated" in mem_text else ""
+        dep_section = (
+            mem_text[mem_text.find("* deprecated") :]
+            if "* deprecated" in mem_text
+            else ""
+        )
         dep_count = len(re.findall(r"^\*\* F\d+", dep_section, re.MULTILINE))
         proj_section = ""
         if "* project" in mem_text and "* reference" in mem_text:
@@ -474,7 +505,9 @@ def cmd_stats(args: argparse.Namespace) -> None:
             proj_end = mem_text.find("* reference")
             if proj_start < proj_end:
                 proj_section = mem_text[proj_start:proj_end]
-        proj_count = len(re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE))
+        proj_count = len(
+            re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE)
+        )
         stale_count = 0
         for m in re.finditer(r":UPDATED:\s*\[(\d{4}-\d{2}-\d{2})\]", mem_text):
             try:
@@ -494,7 +527,6 @@ def cmd_stats(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: connect — 双向链接
 # ═══════════════════════════════════════════════════════════════════════════════
-
 
 
 def cmd_connect(args: argparse.Namespace) -> None:
@@ -548,7 +580,6 @@ def _append_link(filepath: Path, target: Path, desc: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-
 def cmd_update(args: argparse.Namespace) -> None:
     """更新已有卡片的属性或追加内容。
 
@@ -569,9 +600,13 @@ def cmd_update(args: argparse.Namespace) -> None:
         # --status stable 自动更新 LAST_VERIFIED
         if args.status == "stable":
             if ":LAST_VERIFIED:" in content:
-                content = re.sub(r":LAST_VERIFIED:\s*\[.+?\]", f":LAST_VERIFIED: [{now()}]", content)
+                content = re.sub(
+                    r":LAST_VERIFIED:\s*\[.+?\]", f":LAST_VERIFIED: [{now()}]", content
+                )
             else:
-                content = content.replace(":END:", f":LAST_VERIFIED: [{now()}]\n:END:", 1)
+                content = content.replace(
+                    ":END:", f":LAST_VERIFIED: [{now()}]\n:END:", 1
+                )
     if args.category:
         content = re.sub(r":CATEGORY:\s*.+", f":CATEGORY: {args.category}", content)
     if args.tech:
@@ -606,10 +641,6 @@ def cmd_update(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: profile — 用户画像
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -705,9 +736,13 @@ def cmd_merge(args: argparse.Namespace) -> None:
     # 更新 primary 的 MERGED_FROM
     merged_str = ",".join(merged_from_ids)
     if ":MERGED_FROM:" in primary_content:
-        primary_content = re.sub(r":MERGED_FROM:\s*.+", f":MERGED_FROM: {merged_str}", primary_content)
+        primary_content = re.sub(
+            r":MERGED_FROM:\s*.+", f":MERGED_FROM: {merged_str}", primary_content
+        )
     else:
-        primary_content = primary_content.replace(":END:", f":MERGED_FROM: {merged_str}\n:END:", 1)
+        primary_content = primary_content.replace(
+            ":END:", f":MERGED_FROM: {merged_str}\n:END:", 1
+        )
 
     primary.write_text(primary_content, encoding="utf-8")
 
@@ -749,7 +784,9 @@ def cmd_archive(args: argparse.Namespace) -> None:
         content = content.replace(":END:", f":ARCHIVED_AT: [{now()}]\n:END:", 1)
     if getattr(args, "reason", None):
         if ":ARCHIVE_REASON:" not in content:
-            content = content.replace(":END:", f":ARCHIVE_REASON: {args.reason}\n:END:", 1)
+            content = content.replace(
+                ":END:", f":ARCHIVE_REASON: {args.reason}\n:END:", 1
+            )
 
     card.write_text(content, encoding="utf-8")
     index = _load_index()
@@ -795,7 +832,9 @@ def _archive_auto_stale() -> None:
                 if ":STATUS:" in content:
                     content = re.sub(r":STATUS:\s*.+", ":STATUS:   archived", content)
                 if ":ARCHIVED_AT:" not in content:
-                    content = content.replace(":END:", f":ARCHIVED_AT: [{now()}]\n:END:", 1)
+                    content = content.replace(
+                        ":END:", f":ARCHIVED_AT: [{now()}]\n:END:", 1
+                    )
                 card.write_text(content, encoding="utf-8")
                 _upsert_card(index, card)
                 count += 1
@@ -821,7 +860,9 @@ def cmd_restore(args: argparse.Namespace) -> None:
     content = re.sub(r":ARCHIVED_AT:\s*.+\n?", "", content)
     content = re.sub(r":ARCHIVE_REASON:\s*.+\n?", "", content)
     if ":LAST_VERIFIED:" in content:
-        content = re.sub(r":LAST_VERIFIED:\s*\[.+?\]", f":LAST_VERIFIED: [{now()}]", content)
+        content = re.sub(
+            r":LAST_VERIFIED:\s*\[.+?\]", f":LAST_VERIFIED: [{now()}]", content
+        )
     else:
         content = content.replace(":END:", f":LAST_VERIFIED: [{now()}]\n:END:", 1)
 
@@ -870,8 +911,13 @@ def cmd_deduplicate(args: argparse.Namespace) -> None:
 
     if getattr(args, "json", False):
         output = [
-            {"id_a": a["id"], "id_b": b["id"], "similarity": round(s, 2),
-             "title_a": a["title"][:60], "title_b": b["title"][:60]}
+            {
+                "id_a": a["id"],
+                "id_b": b["id"],
+                "similarity": round(s, 2),
+                "title_a": a["title"][:60],
+                "title_b": b["title"][:60],
+            }
             for a, b, s in pairs
         ]
         print(json.dumps(output, ensure_ascii=False, indent=2))
@@ -908,7 +954,9 @@ def cmd_review(args: argparse.Namespace) -> None:
     if last_verified:
         try:
             vd = re.sub(r"[\[\]]", "", last_verified).split()[0]
-            days_since_verified = (datetime.now() - datetime.strptime(vd, "%Y-%m-%d")).days
+            days_since_verified = (
+                datetime.now() - datetime.strptime(vd, "%Y-%m-%d")
+            ).days
         except (ValueError, IndexError):
             pass
 
@@ -985,7 +1033,9 @@ def cmd_health(args: argparse.Namespace) -> None:
     archived = status_counts.get("archived", 0)
 
     print("=== 知识库健康度报告 ===")
-    print(f"总卡片: {total} | done: {done} | stable: {stable} | stale: {stale} | archived: {archived}")
+    print(
+        f"总卡片: {total} | done: {done} | stable: {stable} | stale: {stale} | archived: {archived}"
+    )
     print()
 
     # 孤立率
@@ -1006,7 +1056,9 @@ def cmd_health(args: argparse.Namespace) -> None:
 
     # 类型偏斜
     type_counts = Counter(c.get("type", "unknown") for c in cards)
-    max_type, max_type_count = type_counts.most_common(1)[0] if type_counts else ("none", 0)
+    max_type, max_type_count = (
+        type_counts.most_common(1)[0] if type_counts else ("none", 0)
+    )
     max_type_pct = (max_type_count / total * 100) if total > 0 else 0
     type_icon = "✅" if max_type_pct < 45 else "⚠️"
 
@@ -1042,7 +1094,9 @@ def cmd_health(args: argparse.Namespace) -> None:
             proj_end = mem_text.find("* reference")
             if proj_start < proj_end:
                 proj_section = mem_text[proj_start:proj_end]
-        proj_count = len(re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE))
+        proj_count = len(
+            re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE)
+        )
         fb_icon = "✅" if stale_fb < fb_count // 2 else "⚠️"
         print()
         print("── 记忆 ──")

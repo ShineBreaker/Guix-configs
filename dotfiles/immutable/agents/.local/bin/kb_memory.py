@@ -25,6 +25,7 @@ from kb_core import (
     _init_memory_template,
 )
 
+
 def _parse_memory_sections(content: str) -> dict[str, list[tuple[int, int, str]]]:
     """解析 MEMORY.org 的 `*` 顶级节。
 
@@ -129,6 +130,13 @@ def cmd_memory(args: argparse.Namespace) -> None:
     # --add：添加记忆（优先于 --project 检索）
     if getattr(args, "add", False):
         _memory_add(args)
+        return
+
+    # --auto-update：自动更新项目记忆元数据
+    if getattr(args, "auto_update", False):
+        if not getattr(args, "project", None):
+            die("--auto-update 需要与 --project 联合使用")
+        _memory_project_auto_update(args.project)
         return
 
     # --project：按项目名或路径检索
@@ -339,7 +347,6 @@ def _memory_sync_project_index(name: str, proj_file: Path) -> None:
 
 
 def _memory_touch(entry_id: str) -> None:
-
     """更新指定条目的 UPDATED 时间戳。"""
     if not KB_MEMORY.exists():
         die("记忆文件不存在")
@@ -538,7 +545,9 @@ def _memory_project(identifier: str) -> None:
 
     # 读取并输出项目文件内容
     file_path = matched.get("FILE", matched.get("PATH", ""))
-    proj_path = KB_ROOT / file_path if not Path(file_path).is_absolute() else Path(file_path)
+    proj_path = (
+        KB_ROOT / file_path if not Path(file_path).is_absolute() else Path(file_path)
+    )
     if proj_path.exists():
         print(proj_path.read_text(encoding="utf-8"), end="")
     else:
@@ -719,4 +728,126 @@ def _memory_project_touch(project_name: str) -> None:
         die(f"未找到项目: {project_name}")
 
     KB_MEMORY.write_text("\n".join(lines), encoding="utf-8")
+
     print(f"已更新项目 {project_name} LAST_ACTIVE → {today()}")
+
+
+def _memory_set_property(lines, start, key, value):
+    """设置条目 PROPERTIES 中的属性(更新或插入)。原地修改 lines。"""
+    for j in range(start + 1, min(start + 15, len(lines))):
+        if ":" + key + ":" in lines[j]:
+            lines[j] = re.sub(
+                r"(:\w+:)(\s+).*$",
+                lambda m: m.group(1) + m.group(2) + value,
+                lines[j],
+            )
+            return
+        if lines[j].strip() == ":END:":
+            lines.insert(j, "   :" + key + ":  " + value)
+            return
+
+
+def _memory_project_auto_update(name):
+    """自动更新项目记忆元数据: LAST_ACTIVE, STATUS, LAST_CURATED。"""
+
+    if not KB_MEMORY.exists():
+        die("记忆文件不存在")
+
+    text = KB_MEMORY.read_text(encoding="utf-8")
+    lns = text.split("\n")
+
+    # 找到项目条目
+    entry_start = None
+    for i, l in enumerate(lns):
+        m = re.match(rf"^\*\* {re.escape(name)}\b", l)
+        if m:
+            entry_start = i
+            break
+
+    if entry_start is None:
+        die(f"未找到项目: {name}")
+
+    # 扫描已有属性
+    props = {}
+    for j in range(entry_start + 1, min(entry_start + 15, len(lns))):
+        if lns[j].strip() == ":END:":
+            break
+        pm = re.match(r"\s*:(\w+):\s*(.+)", lns[j])
+        if pm:
+            props[pm.group(1)] = pm.group(2).strip()
+
+    summary = [f"项目: {name}"]
+
+    # 1. 验证 PATH 存在性 -> STATUS
+    path_val = props.get("PATH", "")
+    if path_val:
+        proj_path = Path(path_val).expanduser()
+        if not proj_path.exists():
+            _memory_set_property(lns, entry_start, "STATUS", "dormant")
+            summary.append(f"  STATUS -> dormant (PATH 不存在: {path_val})")
+    else:
+        summary.append("  未设置 PATH 属性")
+
+    # 2. 检查 UPDATED 日期 > 60 天
+    updated_str = props.get("UPDATED", "")
+    if updated_str:
+        try:
+            # UPDATED 值格式为 [2026-05-26]，去掉方括号再解析
+            date_str = updated_str.strip("[]")
+            updated_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            delta = (datetime.now().date() - updated_date).days
+            if delta > 60:
+                summary.append(f"  上次更新距今 {delta} 天 (>60)，建议策展")
+            else:
+                summary.append(f"  距上次更新 {delta} 天，尚在窗口内")
+        except ValueError:
+            summary.append(f"  无法解析 UPDATED 日期: {updated_str}")
+    else:
+        summary.append("  未设置 UPDATED 属性")
+
+    # 3. 更新 LAST_ACTIVE
+    _memory_set_property(lns, entry_start, "LAST_ACTIVE", f"[{today()}]")
+    summary.append(f"  LAST_ACTIVE -> [{today()}]")
+
+    # 4. 更新项目记忆文件的 LAST_CURATED
+    file_val = props.get("FILE", "")
+    if file_val:
+        proj_file = (
+            KB_ROOT / file_val if not Path(file_val).is_absolute() else Path(file_val)
+        )
+        if proj_file.exists():
+            proj_text = proj_file.read_text(encoding="utf-8")
+            if ":PROPERTIES:" in proj_text[:100]:
+                # PROPERTIES 抽屉格式
+                proj_lns = proj_text.split("\n")
+                _memory_set_property(proj_lns, 0, "LAST_CURATED", f"[{today()}]")
+                proj_file.write_text("\n".join(proj_lns), encoding="utf-8")
+            else:
+                # #+ 元数据格式: 更新或追加
+                if "#+LAST_CURATED:" in proj_text:
+                    proj_text = re.sub(
+                        r"#\+LAST_CURATED:.*",
+                        f"#+LAST_CURATED: [{today()}]",
+                        proj_text,
+                    )
+                else:
+                    # 在第一个 #+ 属性块末尾追加
+                    plines = proj_text.split("\n")
+                    insert_pt = 0
+                    for k, pl in enumerate(plines):
+                        if pl.startswith("#+"):
+                            insert_pt = k + 1
+                        else:
+                            break
+                    plines.insert(insert_pt, f"#+LAST_CURATED: [{today()}]")
+                    proj_text = "\n".join(plines)
+                proj_file.write_text(proj_text, encoding="utf-8")
+            summary.append(f"  {file_val} LAST_CURATED -> [{today()}]")
+        else:
+            summary.append(f"  项目记忆文件不存在: {file_val}")
+
+    # 写入 MEMORY.org
+    KB_MEMORY.write_text("\n".join(lns), encoding="utf-8")
+
+    # 输出摘要
+    print("\n".join(summary))

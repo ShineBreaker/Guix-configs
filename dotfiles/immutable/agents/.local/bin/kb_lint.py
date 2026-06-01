@@ -14,6 +14,7 @@ from kb_core import KB_EXPERIENCES, die
 # lint 命令 — 格式校验与修复
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def cmd_lint(args: argparse.Namespace) -> None:
     """
     检测 Org 文件中的 Markdown 残留语法，自动修复为正确的 Org 格式。
@@ -74,7 +75,7 @@ def _lint_file(filepath: str, do_fix: bool) -> list[str]:
 
 
 # Org 强调标记 PRE 合法字符（行首也合法）
-_MARKER_PRE_VALID = set(' \t\n({[\'"`')
+_MARKER_PRE_VALID = set(" \t\n({['\"`")
 # Org 强调标记 POST 合法字符（行尾也合法）
 _MARKER_POST_VALID = set(' \t\n.,:;!?\'"" )}]\\-')
 
@@ -88,10 +89,13 @@ def _fix_marker_spacing(line: str, marker_char: str) -> tuple[str, int, int]:
     Returns (fixed_line, pre_fix_count, post_fix_count).
     """
     escaped = re.escape(marker_char)
-    pattern = escaped + r'[^' + escaped + r'\n]+' + escaped
+    pattern = escaped + r"[^" + escaped + r"\n]+" + escaped
     # 过滤纯空白内容的无意义标记（如 ~ ~）
-    markers = [(m.start(), m.end()) for m in re.finditer(pattern, line)
-                if m.group()[1:-1].strip()]
+    markers = [
+        (m.start(), m.end())
+        for m in re.finditer(pattern, line)
+        if m.group()[1:-1].strip()
+    ]
 
     if not markers:
         return line, 0, 0
@@ -102,17 +106,19 @@ def _fix_marker_spacing(line: str, marker_char: str) -> tuple[str, int, int]:
 
     for start, end in markers:
         # PRE: 标记前需合法字符或行首；跳过标记字符本身（处理 ~~path~ 嵌套）
-        if (start > 0
-                and line[start - 1] not in _MARKER_PRE_VALID
-                and line[start - 1] != marker_char):
+        if (
+            start > 0
+            and line[start - 1] not in _MARKER_PRE_VALID
+            and line[start - 1] != marker_char
+        ):
             if not any(pos == start for pos, _ in inserts):
-                inserts.append((start, ' '))
+                inserts.append((start, " "))
                 pre_count += 1
 
         # POST: 标记后需合法字符或行尾
         if end < len(line) and line[end] not in _MARKER_POST_VALID:
             if not any(pos == end for pos, _ in inserts):
-                inserts.append((end, ' '))
+                inserts.append((end, " "))
                 post_count += 1
 
     if not inserts:
@@ -123,7 +129,7 @@ def _fix_marker_spacing(line: str, marker_char: str) -> tuple[str, int, int]:
     for pos, char in sorted(inserts, reverse=True):
         result.insert(pos, char)
 
-    return ''.join(result), pre_count, post_count
+    return "".join(result), pre_count, post_count
 
 
 def _fix_org_content(text: str) -> tuple[str, list[str]]:
@@ -246,4 +252,3 @@ def _fix_org_content(text: str) -> tuple[str, list[str]]:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 子命令: inbox — 快速捕获
 # ═══════════════════════════════════════════════════════════════════════════════
-
