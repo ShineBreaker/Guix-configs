@@ -59,7 +59,7 @@ from kb_cards import (  # noqa: E402
 )
 from kb_memory import cmd_memory, cmd_patterns  # noqa: E402
 from kb_lint import cmd_lint  # noqa: E402
-from kb_viz import cmd_viz  # noqa: E402
+from kb_viz import add_viz_parser, cmd_viz  # noqa: E402
 
 import argparse
 import re
@@ -712,13 +712,7 @@ def main() -> None:
     # ── health ──────────────────────────────────────────────────────────────
     subparsers.add_parser("health", help="知识库健康度报告")
 
-    viz_parser = subparsers.add_parser("viz", help="生成知识库可视化 Web 页面")
-    viz_parser.add_argument(
-        "--output", "-o", help="输出文件路径（默认 ~/Documents/Org/kb-viz.html）"
-    )
-    viz_parser.add_argument(
-        "--open", action="store_true", help="生成后用 xdg-open 打开"
-    )
+    add_viz_parser(subparsers)
 
     args = parser.parse_args()
 
