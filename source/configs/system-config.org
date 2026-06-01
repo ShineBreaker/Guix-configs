@@ -154,11 +154,24 @@
              (srfi srfi-1))
 
 (use-package-modules android
+                     base
+                     commencement
+                     compression
+                     cups
                      games
+                     gl
                      glib
+                     gnupg
+                     gnustep
+                     gstreamer
                      hardware
                      linux
+                     multiprecision
+                     nss
                      package-management
+                     tls
+                     video
+                     webkit
                      wm)
 
 (use-service-modules authentication
@@ -627,7 +640,45 @@
         (list (simple-service 'home-channels home-channels-service-type
                               guix-channels)
 
-              (service nix-ld-service-type)
+             (service nix-ld-service-type
+                      (nix-ld-configuration
+                       (libraries
+                        (append
+                         %default-nix-ld-libraries
+                         (list
+                          ;; 编译工具链
+                          coreutils
+                          gcc-toolchain
+                          strace
+
+                          ;; 多媒体与图形
+                          ffmpeg
+                          gstreamer
+                          gst-plugins-base
+                          mesa
+                          mesa-utils
+
+                          ;; 加密与安全
+                          gmp
+                          libgpg-error
+                          nspr
+                          (list nss "lib/nss")
+                          p11-kit
+
+                          ;; 文件系统与压缩
+                          e2fsprogs
+                          fuse
+                          fuse-2
+                          zlib
+
+                          ;; 桌面与浏览器引擎
+                          cups
+                          glibc-locales
+                          libglvnd
+                          libobjc2
+                          webkitgtk
+                          webkitgtk-for-gtk3
+                          webkitgtk-with-libsoup2)))))
 
               ;; Nonguix channel
               (simple-service 'nonguix-substitutes guix-service-type
