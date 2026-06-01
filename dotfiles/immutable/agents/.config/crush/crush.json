@@ -11,7 +11,7 @@
   },
   "options": {
     "context_paths": [
-      "~/Documents/Org/profile.org",
+      "~/Documents/Org/MEMORY.org",
       "~/.agents/context/01-language.md",
       "~/.agents/context/02-ultilities.md"
     ],

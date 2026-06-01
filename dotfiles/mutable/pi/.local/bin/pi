@@ -1,8 +1,7 @@
+#!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-
-#!/usr/bin/env bash
 set -euo pipefail
 
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"

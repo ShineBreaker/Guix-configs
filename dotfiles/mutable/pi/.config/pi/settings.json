@@ -60,11 +60,6 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "extensions": {
-    "kb-hooks": {
-      "enabled": true
-    }
-  },
   "lastChangelogVersion": "0.75.5",
   "images": {
     "blockImages": false
@@ -74,5 +69,5 @@
   "transport": "auto",
   "collapseChangelog": true,
   "quietStartup": true,
-  "defaultThinkingLevel": "high"
+  "defaultThinkingLevel": "xhigh"
 }
