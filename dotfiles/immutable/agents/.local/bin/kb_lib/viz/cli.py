@@ -19,10 +19,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-from kb_core import KB_ROOT, _load_index
+from kb_lib.core import KB_ROOT, _load_index
 
-from kb_viz_data import compute_stats, memory_overview, parse_filter, top_techs
-from kb_viz_html import generate_html
+from kb_lib.viz.data import compute_stats, memory_overview, parse_filter, top_techs
+from kb_lib.viz.html import generate_html
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

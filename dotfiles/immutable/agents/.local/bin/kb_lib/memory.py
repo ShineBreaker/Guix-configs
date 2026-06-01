@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from kb_core import (
+from kb_lib.core import (
     KB_MEMORY,
     KB_MEMORIES,
     KB_PROJECTS,

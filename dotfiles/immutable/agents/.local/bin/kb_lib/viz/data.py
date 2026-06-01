@@ -12,7 +12,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-from kb_core import KB_MEMORY
+from kb_lib.core import KB_MEMORY
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

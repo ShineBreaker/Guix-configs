@@ -11,7 +11,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from kb_core import (  # noqa: E402
+from kb_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
     KB_MEMORY,

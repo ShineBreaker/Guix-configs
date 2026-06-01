@@ -15,7 +15,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from kb_core import (  # noqa: E402
+from kb_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
     KB_MEMORIES,
@@ -38,7 +38,7 @@ from kb_core import (  # noqa: E402
     ensure_dirs,
     _init_profile,
 )
-from kb_cards import (  # noqa: E402
+from kb_lib.cards import (  # noqa: E402
     cmd_add,
     cmd_get,
     cmd_list,
@@ -57,9 +57,9 @@ from kb_cards import (  # noqa: E402
     cmd_review,
     cmd_health,
 )
-from kb_memory import cmd_memory, cmd_patterns  # noqa: E402
-from kb_lint import cmd_lint  # noqa: E402
-from kb_viz import add_viz_parser, cmd_viz  # noqa: E402
+from kb_lib.memory import cmd_memory, cmd_patterns  # noqa: E402
+from kb_lib.lint import cmd_lint  # noqa: E402
+from kb_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
 import argparse
 import re

@@ -8,7 +8,7 @@ import os
 import re
 import sys
 
-from kb_core import KB_EXPERIENCES, die
+from kb_lib.core import KB_EXPERIENCES, die
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # lint 命令 — 格式校验与修复
