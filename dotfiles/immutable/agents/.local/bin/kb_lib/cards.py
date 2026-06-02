@@ -94,7 +94,7 @@ def cmd_add(args: argparse.Namespace) -> None:
             type_ = "workflow"
 
     if entry_type and not args.owner:
-        owner = "collaborative"
+        owner = "collab"
 
     if not tech:
         tech = category

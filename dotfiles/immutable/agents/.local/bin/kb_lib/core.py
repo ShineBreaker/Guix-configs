@@ -30,7 +30,7 @@ KB_INBOX = KB_ROOT / "inbox.org"  # 快速捕获收件箱
 KB_PROFILE = KB_ROOT / "profile.org"  # 用户画像文件
 
 VALID_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
-VALID_OWNERS = {"human", "ai", "collaborative"}
+VALID_OWNERS = {"human", "ai", "collab"}
 VALID_ENTRY_TYPES = {"mistake", "note", "ascended"}
 
 # ── 阈值 ──────────────────────────────────────────────────────────────────────

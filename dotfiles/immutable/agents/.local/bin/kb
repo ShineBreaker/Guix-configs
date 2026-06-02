@@ -491,7 +491,7 @@ def main() -> None:
         "--type", help="类型（debug|refactor|research|workflow|feature|config）"
     )
     add_parser.add_argument(
-        "--owner", default="ai", help="执行者（human|ai|collaborative）"
+        "--owner", default="ai", help="执行者（human|ai|collab）"
     )
     add_parser.add_argument(
         "--entry",
