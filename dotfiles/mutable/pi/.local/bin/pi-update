@@ -4,62 +4,46 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
-RUNTIME="${PI_RUNTIME_HELPER:-${XDG_DATA_HOME}/pi/scripts/pi-xdg-runtime.sh}"
+PI_DATA_DIR="${PI_LOCAL_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/pi}"
 
-if [[ ! -r "${RUNTIME}" ]]; then
-  echo "Pi runtime helper not found: ${RUNTIME}" >&2
-  exit 1
+export PI_HOME="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
+export PI_CODING_AGENT_DIR="${PI_HOME}"
+export PI_CODING_AGENT_SESSION_DIR="${PI_CODING_AGENT_SESSION_DIR:-${PI_DATA_DIR}/sessions}"
+export PI_OFFLINE="${PI_OFFLINE:-1}"
+
+BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
+
+if [[ ! -x "${BIN}" ]]; then
+	if ! command -v pnpm &>/dev/null; then
+		echo "pnpm is not installed." >&2; exit 1
+	fi
+	echo "Installing Pi dependencies..." >&2
+	cd "${PI_DATA_DIR}" && pnpm install
 fi
-
-# shellcheck source=/dev/null
-source "${RUNTIME}"
-
-pi_init_xdg
-pi_ensure_installed >/dev/null
-ROOT_DIR="${PI_DATA_DIR}"
 
 echo "=========================================="
 echo "Pi Agent 更新"
-echo "位置: ${ROOT_DIR}"
 echo "=========================================="
 
 echo ""
 echo "[1/3] 当前版本:"
-"${ROOT_DIR}/node_modules/.bin/pi" --version 2>/dev/null || echo "  无法获取版本号"
+"${BIN}" --version 2>/dev/null || echo "  无法获取版本号"
 
-# [2/3] 更新核心依赖
 echo ""
 echo "[2/3] 更新核心依赖..."
-cd "${ROOT_DIR}"
-pnpm update
+cd "${PI_DATA_DIR}" && pnpm update
 
-# [3/3] 更新扩展包
 echo ""
 echo "[3/3] 更新扩展包..."
 NPM_DIR="${PI_DATA_DIR}/npm"
 if [[ -f "${NPM_DIR}/package.json" ]]; then
-  cd "${NPM_DIR}"
-  pnpm update
+	cd "${NPM_DIR}" && pnpm update
 else
-  echo "  未找到扩展包配置"
+	echo "  未找到扩展包配置"
 fi
 
-# 同步 lockfile 回源目录
-pi_sync_lockfile
-
-cd "${ROOT_DIR}"
 echo ""
-echo "验证更新:"
-echo "  pi 版本: $("${ROOT_DIR}/node_modules/.bin/pi" --version 2>/dev/null || echo '未知')"
-
-echo ""
-CONFIG_DIR="${PI_CONFIG_DIR}"
-echo "配置目录状态:"
-echo "  扩展: $(ls -1 "${CONFIG_DIR}/extensions/" 2>/dev/null | wc -l) 个"
-echo "  子代理: $(ls -1 "${CONFIG_DIR}/agents/" 2>/dev/null | wc -l) 个"
-echo "  提示模板: $(ls -1 "${CONFIG_DIR}/prompts/" 2>/dev/null | wc -l) 个"
-
+echo "验证: $("${BIN}" --version 2>/dev/null || echo '未知')"
 echo ""
 echo "=========================================="
 echo "更新完成"

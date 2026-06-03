@@ -4,26 +4,21 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
-RUNTIME="${PI_RUNTIME_HELPER:-${XDG_DATA_HOME}/pi/scripts/pi-xdg-runtime.sh}"
+PI_DATA_DIR="${PI_LOCAL_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/pi}"
 
-if [[ ! -r "${RUNTIME}" ]]; then
-	echo "Pi runtime helper not found: ${RUNTIME}" >&2
-	exit 1
+export PI_HOME="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
+export PI_CODING_AGENT_DIR="${PI_HOME}"
+export PI_CODING_AGENT_SESSION_DIR="${PI_CODING_AGENT_SESSION_DIR:-${PI_DATA_DIR}/sessions}"
+export PI_OFFLINE="${PI_OFFLINE:-1}"
+
+BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
+
+if [[ ! -x "${BIN}" ]]; then
+	if ! command -v pnpm &>/dev/null; then
+		echo "pnpm is not installed." >&2; exit 1
+	fi
+	echo "Installing Pi dependencies..." >&2
+	cd "${PI_DATA_DIR}" && pnpm install
 fi
 
-# shellcheck source=/dev/null
-source "${RUNTIME}"
-
-# Export PI_* and XDG_* into the current shell before exec so the Pi
-# process inherits them.  pi_ensure_installed runs in a subshell and would
-# not propagate its exports.
-pi_init_xdg
-
-pi_ensure_installed >/dev/null
-
-BIN_DIR="${PI_DATA_DIR}/node_modules/.bin"
-
-export PATH="${BIN_DIR}:${PATH}"
-
-exec "${BIN_DIR}/pi" "$@"
+exec "${BIN}" "$@"
