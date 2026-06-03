@@ -790,6 +790,7 @@ end
                             "utilities"
                             "wm"))
                 (excluded '(".*~"
+                            ".agents"
                             ".*\\.swp"
                             "\\.git"
                             "\\.gitignore"
