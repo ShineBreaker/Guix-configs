@@ -12,25 +12,42 @@
 - 跨文件/跨领域任务必须拆分
 - 完成后进行验证
 
-## Bash 超时
+## Context-Mode
 
-所有 bash 命令默认 **120 秒超时** ：
+context-mode 已激活。路由拦截（curl/wget/内联 HTTP 禁令、Bash 大输出重定向）由扩展在 `tool_call` hook 中自动执行，无需 LLM 配合。以下仅列出需要 LLM 主动遵守的行为指引。
 
-- 一般命令（ls、grep、git status 等）：无需指定 timeout，默认值足够
-- **长时间命令必须显式指定更大 timeout**：
-  - 编译/构建（maak system, maak home, npm build 等）：`timeout: 300`（5 分钟）
-  - 测试套件（npm test, pytest 等）：`timeout: 180`（3 分钟）
-  - 网络/安装（guix pull, npm install 等）：`timeout: 300`
-  - 无法预估的长任务：`timeout: 600`（10 分钟）
-- 不要为快速命令浪费 token 写 timeout
+### 用代码思考
 
-```typescript
-// 快速命令 — 不需要 timeout
-bash({ command: "git status" });
+分析/计数/过滤/比较/搜索/解析/转换数据时：`ctx_execute(language, code)` 写代码，`console.log()` 只输出结论。纯 JavaScript（Node.js 内置模块），try/catch 处理 null/undefined。
 
-// 长时间命令 — 显式指定
-bash({ command: "maak home", timeout: 300 });
-```
+### 工具选择
+
+| 用途               | 工具                                                                     |
+| ------------------ | ------------------------------------------------------------------------ |
+| 收集数据（主工具） | `ctx_batch_execute(commands, queries)` — 一次调用替代 30+                |
+| 跟进查询           | `ctx_search(queries: ["q1", "q2"])` — 批量查询一次调用                   |
+| 数据处理           | `ctx_execute(language, code)` / `ctx_execute_file(path, language, code)` |
+| 获取网页           | `ctx_fetch_and_index(url, source)` → `ctx_search(queries)`               |
+| 索引内容           | `ctx_index(content, source)`                                             |
+| 恢复记忆           | `ctx_search(sort: "timeline")` — resume 后先搜再问                       |
+
+### 并行 I/O
+
+多 URL/API 批处理时加 `concurrency: 4-8`；CPU 密集或共享状态保持 1。gh 调用上限 4。
+
+### 命令超时
+
+默认 **120s**（`default-timeout` 扩展注入）：bash 单位秒，ctx\_\* 单位毫秒。长时间命令显式指定：构建 `300`/`300000`，测试 `180`/`180000`，安装 `300`/`300000`，长任务 `600`/`600000`。
+
+### 会话记忆
+
+resume 时 **先搜索再问用户**：`ctx_search(queries: ["summary"], source: "compaction", sort: "timeline")`。搜索无结果则按全新会话处理。
+
+### ctx 命令
+
+`ctx stats` → `ctx_stats` | `ctx doctor` → `ctx_doctor` | `ctx upgrade` → `ctx_upgrade` | `ctx purge` → `ctx_purge(confirm: true)`
+
+`/clear` / `/compact` 后知识库保留，`ctx purge` 彻底清除。
 
 ## Subagent 使用指引
 
