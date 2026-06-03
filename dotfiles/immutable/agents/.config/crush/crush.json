@@ -46,6 +46,19 @@
       "lsp_references",
       "mcp_context7_query-docs",
       "mcp_context7_resolve-library-id",
+      "mcp_filesystem_create_directory",
+      "mcp_filesystem_edit_file",
+      "mcp_filesystem_get_file_info",
+      "mcp_filesystem_list_allowed_directories",
+      "mcp_filesystem_list_directory",
+      "mcp_filesystem_move_file",
+      "mcp_filesystem_read_file",
+      "mcp_filesystem_read_media_file",
+      "mcp_filesystem_read_multiple_files",
+      "mcp_filesystem_read_text_file",
+      "mcp_filesystem_search_files",
+      "mcp_filesystem_write_file",
+      "mcp_filesystem_write_multiple_files",
       "mcp_sequential_thinking_sequentialthinking",
       "multiedit",
       "sourcegraph",
@@ -56,7 +69,7 @@
   },
   "hooks": {
     "PreToolUse": [{
-      "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource|mcp_context7_query-docs|mcp_context7_resolve-library-id|mcp_sequential_thinking_sequentialthinking)$",
+      "matcher": "^(view|ls|grep|glob|lsp_diagnostics|lsp_references|sourcegraph|fetch|download|agentic_fetch|job_output|todos|list_mcp_resources|read_mcp_resource|mcp_context7_query-docs|mcp_context7_resolve-library-id|mcp_filesystem_list_allowed_directories|mcp_filesystem_list_directory|mcp_filesystem_read_file|mcp_filesystem_read_text_file|mcp_filesystem_read_media_file|mcp_filesystem_read_multiple_files|mcp_filesystem_search_files|mcp_filesystem_get_file_info|mcp_sequential_thinking_sequentialthinking)$",
       "command": "echo '{\"decision\":\"allow\"}'"
     }, {
       "matcher": "^bash$",
@@ -373,6 +386,15 @@
     "sequential_thinking": {
       "type": "stdio",
       "command": "~/.config/crush/bin/mcp-server-sequential-thinking",
+      "timeout": 30
+    },
+    "filesystem": {
+      "type": "stdio",
+      "command": "~/.config/crush/bin/filesystem-mcp",
+      "args": [
+        "~/Projects",
+        "~/Documents"
+      ],
       "timeout": 30
     }
   }
