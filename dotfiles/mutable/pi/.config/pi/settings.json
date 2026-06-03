@@ -28,7 +28,6 @@
     "npm:@ff-labs/pi-fff",
     "npm:pi-cache-graph",
     "npm:@juicesharp/rpiv-todo",
-    "npm:@juicesharp/rpiv-advisor",
     "npm:@juicesharp/rpiv-btw",
     "npm:@tmustier/pi-ralph-wiggum"
   ],

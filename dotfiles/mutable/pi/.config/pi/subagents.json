@@ -20,9 +20,13 @@
       "model": "zai/GLM-5.1",
       "fallback": ["minimax-cn/MiniMax-M3"]
     },
+    "worker": {
+      "model": "zai/GLM-5.1",
+      "fallback": ["minimax-cn/MiniMax-M3"]
+    },
     "visual": {
-      "model": "xiaomi/mimo-v2.5",
-      "fallback": []
+      "model": "minimax-cn/MiniMax-M3",
+      "fallback": ["xiaomi/mimo-v2.5"]
     }
   }
 }
