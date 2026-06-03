@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: MIT
 
 # subagent-wrapper.sh — tmux pane 内的 subagent 执行包装
-# 用法: subagent-wrapper.sh <run-id> <agent-name> <task-file> [--model <m>] [--thinking <l>] [--cwd <d>] [--tools <list>]
+# 用法: subagent-wrapper.sh <run-id> <agent-name> <task-file> [--model <m>] [--cwd <d>] [--tools <list>]
 
 set -euo pipefail
 
@@ -15,7 +15,6 @@ TASK_FILE="${3:?missing task-file}"
 shift 3
 
 MODEL=""
-THINKING=""
 CWD=""
 TOOLS=""
 IMAGES=""
@@ -24,10 +23,6 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--model)
 		MODEL="$2"
-		shift 2
-		;;
-	--thinking)
-		THINKING="$2"
 		shift 2
 		;;
 	--cwd)
@@ -108,7 +103,7 @@ die() {
 	exit "${2:-1}"
 }
 
-# 解析 agent .md 的 frontmatter
+# 解析 agent .md 的 frontmatter（仅提取 tools）
 parse_agent_md() {
 	local agent_file="$AGENTS_DIR/$AGENT_NAME.md"
 	if [[ ! -f "$agent_file" ]]; then
@@ -127,16 +122,6 @@ parse_agent_md() {
 			fi
 		fi
 		if $in_fm; then
-			if [[ "$line" =~ ^model: ]]; then
-				local fm_model="${line#model: }"
-				fm_model="${fm_model# }"
-				[[ -z "$MODEL" && -n "$fm_model" ]] && MODEL="$fm_model"
-			fi
-			if [[ "$line" =~ ^thinking: ]]; then
-				local fm_thinking="${line#thinking: }"
-				fm_thinking="${fm_thinking# }"
-				[[ -z "$THINKING" && -n "$fm_thinking" ]] && THINKING="$fm_thinking"
-			fi
 			if [[ "$line" =~ ^tools: ]]; then
 				local fm_tools="${line#tools: }"
 				fm_tools="${fm_tools# }"
@@ -154,7 +139,32 @@ parse_agent_md() {
 	AGENT_SYSTEM_PROMPT="$body"
 }
 
+# 从 subagents.json 加载模型配置（如果 --model 未被调用方显式指定）
+load_subagents_config() {
+	local config_file="$XDG_CONFIG_HOME/pi/subagents.json"
+	if [[ -z "$MODEL" && -f "$config_file" ]]; then
+		local agent_model
+		agent_model="$(python3 - "$config_file" "$AGENT_NAME" <<'PY'
+import json
+import sys
+
+config_path, agent_name = sys.argv[1:3]
+try:
+    data = json.load(open(config_path, encoding="utf-8"))
+    agent_cfg = data.get("agents", {}).get(agent_name, {})
+    model = agent_cfg.get("model", "")
+    if model:
+        print(model)
+except Exception:
+    pass
+PY
+)"
+		[[ -n "$agent_model" ]] && MODEL="$agent_model"
+	fi
+}
+
 parse_agent_md
+load_subagents_config
 
 # 读取任务文件
 TASK_TEXT="$(cat "$TASK_FILE")" || die "failed to read task file" 1
@@ -166,9 +176,6 @@ PI_ARGS=(--mode json -p --session-dir "$session_dir")
 
 if [[ -n "$MODEL" ]]; then
 	PI_ARGS+=(--model "$MODEL")
-fi
-if [[ -n "$THINKING" ]]; then
-	PI_ARGS+=(--thinking "$THINKING")
 fi
 if [[ -n "$TOOLS" ]]; then
 	PI_ARGS+=(--tools "$TOOLS")

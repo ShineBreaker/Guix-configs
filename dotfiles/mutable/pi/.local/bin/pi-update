@@ -1,8 +1,7 @@
+#!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-
-#!/usr/bin/env bash
 set -euo pipefail
 
 XDG_DATA_HOME="${XDG_DATA_HOME:-${HOME}/.local/share}"
@@ -16,8 +15,9 @@ fi
 # shellcheck source=/dev/null
 source "${RUNTIME}"
 
-ROOT_DIR="$(pi_ensure_installed)"
-pi_prepare_compat_tree
+pi_init_xdg
+pi_ensure_installed >/dev/null
+ROOT_DIR="${PI_DATA_DIR}"
 
 echo "=========================================="
 echo "Pi Agent 更新"

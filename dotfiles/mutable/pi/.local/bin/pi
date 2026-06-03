@@ -15,9 +15,15 @@ fi
 # shellcheck source=/dev/null
 source "${RUNTIME}"
 
-DATA_DIR="$(pi_ensure_installed)"
-BIN_DIR="${DATA_DIR}/node_modules/.bin"
+# Export PI_* and XDG_* into the current shell before exec so the Pi
+# process inherits them.  pi_ensure_installed runs in a subshell and would
+# not propagate its exports.
+pi_init_xdg
+
+pi_ensure_installed >/dev/null
+
+BIN_DIR="${PI_DATA_DIR}/node_modules/.bin"
 
 export PATH="${BIN_DIR}:${PATH}"
 
-pi_exec_xdg "${BIN_DIR}/pi" "$@"
+exec "${BIN_DIR}/pi" "$@"
