@@ -18,6 +18,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type {
   AgentConfig,
+  AgentModelConfig,
   LaunchResult,
   StatusFile,
   SubagentConfig,
@@ -199,15 +200,11 @@ function buildWrapperCmd(
   runDir: string,
   cwd?: string,
   model?: string,
-  thinking?: string,
   images?: string[],
 ): string {
   const wrapper = ensureWrapperExecutable();
   const args: string[] = [runId, agent.name, path.join(runDir, "task.md")];
-  const effectiveModel = model ?? agent.model;
-  if (effectiveModel) args.push("--model", effectiveModel);
-  if (thinking ?? agent.thinking)
-    args.push("--thinking", (thinking ?? agent.thinking)!);
+  if (model) args.push("--model", model);
   if (cwd) args.push("--cwd", cwd);
   if (agent.tools && agent.tools.length > 0)
     args.push("--tools", agent.tools.join(","));
@@ -267,7 +264,6 @@ export function launchSingle(
   config: SubagentConfig,
   cwd?: string,
   model?: string,
-  thinking?: string,
   topRowTargetPaneId?: string,
   splitPercent = 50,
   images?: string[],
@@ -283,15 +279,7 @@ export function launchSingle(
   prepareRunDir(runDir, task);
 
   const paneTitle = `${config.panePrefix}${agent.name}`;
-  const cmd = buildWrapperCmd(
-    runId,
-    agent,
-    runDir,
-    cwd,
-    model,
-    thinking,
-    images,
-  );
+  const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, images);
 
   const paneId = topRowTargetPaneId
     ? splitRightOfPane(topRowTargetPaneId, cmd, splitPercent)
@@ -322,7 +310,6 @@ export function launchParallel(
   tasks: Array<{ agent: AgentConfig; task: string; cwd?: string }>,
   config: SubagentConfig,
   model?: string,
-  thinking?: string,
   existingTopRowPaneId?: string,
 ): LaunchResult[] {
   if (!process.env.TMUX) {
@@ -349,7 +336,7 @@ export function launchParallel(
         ? `${config.panePrefix}${agent.name}:${agentCountForName}`
         : `${config.panePrefix}${agent.name}`;
 
-    const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, thinking);
+    const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model);
 
     let paneId: string;
     if (i === 0 && !existingTopRowPaneId) {

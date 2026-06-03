@@ -15,10 +15,21 @@ export interface AgentConfig {
   name: string;
   description: string;
   tools?: string[];
-  model?: string;
-  thinking?: string;
   systemPrompt: string;
   filePath: string;
+}
+
+/** 从 subagents.json 加载的模型配置 */
+export interface AgentModelConfig {
+  /** 首选模型 */
+  model: string;
+  /** fallback 模型链，按顺序尝试 */
+  fallback: string[];
+}
+
+/** subagents.json 的完整结构 */
+export interface SubagentsJson {
+  agents: Record<string, AgentModelConfig>;
 }
 
 /** 从 .md 文件发现的 prompt 模板配置 */

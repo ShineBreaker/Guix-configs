@@ -37,13 +37,22 @@ import type {
   AgentToolResult,
   ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentConfig, RunResult, SubagentDetails } from "./types.ts";
+import type {
+  AgentConfig,
+  AgentModelConfig,
+  RunResult,
+  SubagentDetails,
+} from "./types.ts";
 import { loadConfig } from "./config.ts";
-import { discoverAgents, discoverPrompts } from "./discovery.ts";
+import {
+  discoverAgents,
+  discoverPrompts,
+  loadSubagentsConfig,
+} from "./discovery.ts";
 import { ensureWorkfile } from "./workfile.ts";
 import { getRunDir, launchSingle } from "./launcher.ts";
 import { waitForCompletion, listRunning } from "./monitor.ts";
-import { runParallelBatches, runChain } from "./runner.ts";
+import { executeWithFallback, runParallelBatches, runChain } from "./runner.ts";
 import { formatResults } from "./formatting.ts";
 import { SubagentParams } from "./schemas.ts";
 import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
@@ -74,6 +83,7 @@ const makeDetails =
 
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
+  const subagentsConfig = loadSubagentsConfig();
 
   // ── 注册 subagent 工具 ──────────────────────────────────────────────────
 
@@ -104,7 +114,8 @@ export default function (pi: ExtensionAPI) {
         const agentLines = agents
           .map((a) => {
             const tools = a.tools ? a.tools.join(", ") : "all";
-            const model = a.model ?? "default";
+            const modelCfg = subagentsConfig[a.name];
+            const model = modelCfg ? modelCfg.model : "default";
             return `| ${a.name} | ${a.description.slice(0, 40)}… | ${tools} | ${model} |`;
           })
           .join("\n");
@@ -214,9 +225,9 @@ export default function (pi: ExtensionAPI) {
             chainEntries,
             config,
             effectiveCwd,
+            subagentsConfig,
             params.task,
             params.model,
-            params.thinking,
             signal,
           );
           appendSessionLog("chain", results);
@@ -279,8 +290,8 @@ export default function (pi: ExtensionAPI) {
             taskEntries,
             config,
             effectiveCwd,
+            subagentsConfig,
             params.model,
-            params.thinking,
             signal,
           );
           appendSessionLog("parallel", results);
@@ -319,18 +330,19 @@ export default function (pi: ExtensionAPI) {
 
         try {
           const startedAt = Date.now();
-          const launch = launchSingle(
+          const result = await executeWithFallback(
             agent,
             params.task,
             config,
-            params.cwd,
+            params.cwd ?? process.cwd(),
+            subagentsConfig,
             params.model,
-            params.thinking,
+            signal,
             undefined,
             50,
             params.images,
           );
-          const result = await waitForCompletion(launch, config, signal);
+
           if (result.status === "completed") {
             ensureWorkfile(result, effectiveCwd, startedAt);
           }
@@ -377,19 +389,43 @@ export default function (pi: ExtensionAPI) {
 
         try {
           const startedAt = Date.now();
-          const launch = launchSingle(
-            agent,
-            task,
-            config,
-            ctx.cwd,
-            agent.model,
-            agent.thinking,
-          );
+          const modelCfg = subagentsConfig[agent.name];
+          const model = modelCfg?.model;
+          // 先用首选模型启动，通知用户
+          const launch = launchSingle(agent, task, config, ctx.cwd, model);
           ctx.ui.notify(
             `⏳ ${agent.name} 已启动 (run: ${launch.runId})...`,
             "info",
           );
-          const result = await waitForCompletion(launch, config);
+          let result = await waitForCompletion(launch, config);
+
+          // Fallback：如果失败且有 fallback 模型，自动重试
+          if (
+            result.status === "failed" &&
+            modelCfg &&
+            modelCfg.fallback.length > 0 &&
+            result.error !== "Aborted" &&
+            result.error !== "timeout"
+          ) {
+            for (const fallbackModel of modelCfg.fallback.slice(0, 2)) {
+              ctx.ui.notify(
+                `🔄 ${agent.name} 首选模型失败，尝试 fallback: ${fallbackModel}`,
+                "warn",
+              );
+              const fallbackLaunch = launchSingle(
+                agent,
+                task,
+                config,
+                ctx.cwd,
+                fallbackModel,
+              );
+              result = await waitForCompletion(fallbackLaunch, config);
+              if (result.status === "completed") break;
+              if (result.error === "Aborted" || result.error === "timeout")
+                break;
+            }
+          }
+
           if (result.status === "completed") {
             ensureWorkfile(result, ctx.cwd, startedAt);
             const workfileNote = result.workfilePath
@@ -448,21 +484,40 @@ export default function (pi: ExtensionAPI) {
               if (!agent) throw new Error(`未知 agent: ${e.agent}`);
               return { agent, task: e.task };
             });
-            results = await runChain(chainEntries, config, ctx.cwd, paramValue);
+            results = await runChain(
+              chainEntries,
+              config,
+              ctx.cwd,
+              subagentsConfig,
+              paramValue,
+            );
           } else if (prompt.mode === "parallel") {
             const taskEntries = resolvedEntries.map((e) => {
               const agent = agents.find((a) => a.name === e.agent);
               if (!agent) throw new Error(`未知 agent: ${e.agent}`);
               return { agent, task: e.task };
             });
-            results = await runParallelBatches(taskEntries, config, ctx.cwd);
+            results = await runParallelBatches(
+              taskEntries,
+              config,
+              ctx.cwd,
+              subagentsConfig,
+            );
           } else {
             const e = resolvedEntries[0];
-            const agent = agents.find((a) => a.name === e.agent);
-            if (!agent) throw new Error(`未知 agent: ${e.agent}`);
-            const launch = launchSingle(agent, e.task, config, ctx.cwd);
-            const result = await waitForCompletion(launch, config);
-            results = [result];
+            const agentCfg = agents.find((a) => a.name === e.agent);
+            if (!agentCfg) throw new Error(`未知 agent: ${e.agent}`);
+            // 单一 prompt 模式也使用 fallback
+            const singleResult = await executeWithFallback(
+              agentCfg,
+              e.task,
+              config,
+              ctx.cwd,
+              subagentsConfig,
+              undefined,
+              undefined,
+            );
+            results = [singleResult];
           }
 
           const success = results.filter(

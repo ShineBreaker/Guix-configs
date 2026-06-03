@@ -1,0 +1,28 @@
+{
+  "agents": {
+    "oracle": {
+      "model": "zai/GLM-5.1",
+      "fallback": ["minimax-cn/MiniMax-M3"]
+    },
+    "planner": {
+      "model": "minimax-cn/MiniMax-M3",
+      "fallback": ["zai/GLM-5.1"]
+    },
+    "scout": {
+      "model": "deepseek/deepseek-v4-flash",
+      "fallback": ["zai/GLM-5.1"]
+    },
+    "researcher": {
+      "model": "deepseek/deepseek-v4-pro",
+      "fallback": ["zai/GLM-5.1"]
+    },
+    "reviewer": {
+      "model": "zai/GLM-5.1",
+      "fallback": ["minimax-cn/MiniMax-M3"]
+    },
+    "visual": {
+      "model": "xiaomi/mimo-v2.5",
+      "fallback": []
+    }
+  }
+}

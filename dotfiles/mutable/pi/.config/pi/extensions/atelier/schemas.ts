@@ -39,21 +39,6 @@ export const SubagentParams = Type.Object({
   id: Type.Optional(Type.String({ description: "查看指定 run-id 的状态" })),
   cwd: Type.Optional(Type.String({ description: "工作目录覆盖" })),
   model: Type.Optional(Type.String({ description: "模型覆盖" })),
-  thinking: Type.Optional(
-    Type.Union(
-      [
-        Type.Literal("off"),
-        Type.Literal("minimal"),
-        Type.Literal("low"),
-        Type.Literal("medium"),
-        Type.Literal("high"),
-        Type.Literal("xhigh"),
-      ],
-      {
-        description: "思考级别",
-      },
-    ),
-  ),
   images: Type.Optional(
     Type.Array(Type.String(), {
       description: "图片文件路径数组，传递给 visual agent 分析",
