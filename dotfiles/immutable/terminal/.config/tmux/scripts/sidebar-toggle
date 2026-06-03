@@ -218,7 +218,7 @@ case "${1:-toggle}" in
                 render_now=0
                 tick=0
                 printf '\033[H'  # 移动光标到左上角
-                GUILE_AUTO_COMPILE=0 guile --no-auto-compile -s "${scripts_dir}/sidebar-render.scm" render-if-changed 2>/dev/null
+                GUILE_AUTO_COMPILE=0 guile --no-auto-compile -s "${scripts_dir}/sidebar-render.scm" render-if-changed 2>/dev/null || true
                 printf '\033[J'  # 清除尾部残留
             fi
             sleep 0.5
