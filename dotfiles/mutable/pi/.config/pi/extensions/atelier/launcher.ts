@@ -24,6 +24,7 @@ import type {
   SubagentConfig,
 } from "./types.ts";
 import { TOP_ROW_PERCENT } from "./types.ts";
+import { removeSubagentOnlyMarkers } from "./context.ts";
 
 // ─── XDG 路径 ────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,70 @@ function prepareRunDir(runDir: string, task: string): void {
   );
 }
 
+/**
+ * 为 subagent 准备 prompt 文件（到 runDir/subagent-prompt.md）。
+ *
+ * 处理逻辑：
+ *  1. 读 agent .md 全文
+ *  2. 剥除 frontmatter（首个 --- 到第二个 --- 之间的内容）
+ *  3. 去除 subagent-only HTML 注释标记（保留标记之间的内容）
+ *  4. 写入 $runDir/subagent-prompt.md
+ *
+ * 如果 agent .md 不存在或读取失败，函数静默失败（返回 null）——调用方
+ * 继续使用原 wrapper 逻辑（从 agent .md 直接读 prompt）。
+ *
+ * @returns 写入的文件路径，失败返回 null
+ */
+export function prepareAgentPrompt(
+  agentName: string,
+  runDir: string,
+): string | null {
+  const agentPath = path.join(
+    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
+    "pi",
+    "agents",
+    `${agentName}.md`,
+  );
+  let content: string;
+  try {
+    content = fs.readFileSync(agentPath, "utf-8");
+  } catch {
+    return null;
+  }
+
+  // 提取 body：跳到第二个 --- 之后的全部内容
+  const lines = content.split("\n");
+  let inFrontmatter = false;
+  let frontmatterEnded = false;
+  const bodyLines: string[] = [];
+  for (const line of lines) {
+    if (!frontmatterEnded && line === "---") {
+      if (!inFrontmatter) {
+        inFrontmatter = true;
+        continue;
+      } else {
+        inFrontmatter = false;
+        frontmatterEnded = true;
+        continue;
+      }
+    }
+    if (frontmatterEnded) {
+      bodyLines.push(line);
+    }
+  }
+
+  const body = removeSubagentOnlyMarkers(bodyLines.join("\n")).trim();
+  if (!body) return null;
+
+  const promptPath = path.join(runDir, "subagent-prompt.md");
+  try {
+    fs.writeFileSync(promptPath, body, "utf-8");
+    return promptPath;
+  } catch {
+    return null;
+  }
+}
+
 /** 读取 run 目录下的 status.json */
 export function readStatus(runDir: string): StatusFile | null {
   const statusPath = path.join(runDir, "status.json");
@@ -201,6 +266,7 @@ function buildWrapperCmd(
   cwd?: string,
   model?: string,
   images?: string[],
+  promptFile?: string,
 ): string {
   const wrapper = ensureWrapperExecutable();
   const args: string[] = [runId, agent.name, path.join(runDir, "task.md")];
@@ -209,6 +275,7 @@ function buildWrapperCmd(
   if (agent.tools && agent.tools.length > 0)
     args.push("--tools", agent.tools.join(","));
   if (images && images.length > 0) args.push("--image", images.join(","));
+  if (promptFile) args.push("--prompt-file", promptFile);
   return [wrapper, ...args].map(shellQuote).join(" ");
 }
 
@@ -278,8 +345,19 @@ export function launchSingle(
   const runDir = getRunDir(runId);
   prepareRunDir(runDir, task);
 
+  // 准备 subagent prompt 文件（包含 subagent-only 段，但不含 HTML 注释标记）
+  const promptFile = prepareAgentPrompt(agent.name, runDir);
+
   const paneTitle = `${config.panePrefix}${agent.name}`;
-  const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model, images);
+  const cmd = buildWrapperCmd(
+    runId,
+    agent,
+    runDir,
+    cwd,
+    model,
+    images,
+    promptFile ?? undefined,
+  );
 
   const paneId = topRowTargetPaneId
     ? splitRightOfPane(topRowTargetPaneId, cmd, splitPercent)
@@ -327,6 +405,9 @@ export function launchParallel(
     const runDir = getRunDir(runId);
     prepareRunDir(runDir, task);
 
+    // 准备 subagent prompt 文件
+    const promptFile = prepareAgentPrompt(agent.name, runDir);
+
     // 处理同名 agent 的 pane 标题编号
     const agentCountForName = tasks.filter(
       (t, j) => j <= i && t.agent.name === agent.name,
@@ -336,7 +417,15 @@ export function launchParallel(
         ? `${config.panePrefix}${agent.name}:${agentCountForName}`
         : `${config.panePrefix}${agent.name}`;
 
-    const cmd = buildWrapperCmd(runId, agent, runDir, cwd, model);
+    const cmd = buildWrapperCmd(
+      runId,
+      agent,
+      runDir,
+      cwd,
+      model,
+      undefined,
+      promptFile ?? undefined,
+    );
 
     let paneId: string;
     if (i === 0 && !existingTopRowPaneId) {

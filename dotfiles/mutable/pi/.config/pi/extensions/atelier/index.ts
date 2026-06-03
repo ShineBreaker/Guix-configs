@@ -33,6 +33,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type {
   AgentToolResult,
   ExtensionAPI,
@@ -56,6 +57,7 @@ import { executeWithFallback, runParallelBatches, runChain } from "./runner.ts";
 import { formatResults } from "./formatting.ts";
 import { SubagentParams } from "./schemas.ts";
 import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
+import { stripSubagentOnlySection } from "./context.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
 //
@@ -682,6 +684,92 @@ export default function (pi: ExtensionAPI) {
       // 追加到系统提示
       return {
         systemPrompt: event.systemPrompt + "\n" + visionHint,
+      };
+    });
+  }
+
+  // ── Worker / Planner 上下文注入 ─────────────────────────────────────────
+  //
+  // 流程：
+  //   1. 检测 plan mode 是否激活（双保险：session entries + systemPrompt 标记）
+  //   2. 按模式读取 agents/{worker,planner}.md 的 body
+  //   3. 剥离 subagent-only 段（主会话不需要看 workfile 路径、详细输出模板等）
+  //   4. 追加到 systemPrompt
+  //   5. plan mode 下额外追加优先级提示（plannotator 的 [PLANNOTATOR - PLANNING PHASE] 优先级最高）
+  //
+  // 检测失败（plannotator 未安装）→ 默认走 worker 上下文，不报错。
+
+  {
+    const PLANNOTATOR_MARKER = "[PLANNOTATOR - PLANNING PHASE]";
+
+    /**
+     * 检测 plan mode 是否激活。
+     * 主路径：读 session entries 找 plannotator 写的 custom 条目
+     * 兜底：扫描 systemPrompt 是否含 plannotator 标记
+     */
+    function isPlanModeActive(
+      ctx: {
+        sessionManager: {
+          getEntries(): ReadonlyArray<{
+            type: string;
+            customType?: string;
+            data?: { phase?: string };
+          }>;
+        };
+      },
+      systemPrompt: string,
+    ): boolean {
+      // 主路径：session entries（取最近的 plannotator 条目）
+      try {
+        const entries = ctx.sessionManager.getEntries();
+        for (let i = entries.length - 1; i >= 0; i--) {
+          const e = entries[i];
+          if (e.type === "custom" && e.customType === "plannotator") {
+            return e.data?.phase === "planning";
+          }
+        }
+      } catch {
+        // 静默走兜底
+      }
+      // 兜底：systemPrompt 标记
+      return systemPrompt.includes(PLANNOTATOR_MARKER);
+    }
+
+    /**
+     * 读取 agent .md 的 body，剥离 subagent-only 段。
+     * 文件不存在或读取失败返回 null。
+     */
+    function loadMainSessionAgentContext(agentName: string): string | null {
+      const agentPath = path.join(
+        getAgentDir(),
+        "agents",
+        `${agentName}.md`,
+      );
+      try {
+        const content = fs.readFileSync(agentPath, "utf-8");
+        return stripSubagentOnlySection(content);
+      } catch {
+        return null;
+      }
+    }
+
+    pi.on("before_agent_start", (event, ctx) => {
+      // 防止 subagent 递归
+      if (process.env.PI_SUBAGENT) return;
+
+      const planMode = isPlanModeActive(ctx, event.systemPrompt);
+      const agentName = planMode ? "planner" : "worker";
+      const contextContent = loadMainSessionAgentContext(agentName);
+      if (!contextContent) return; // 静默失败（agent .md 缺失），不加注入
+
+      // plan mode 下追加优先级提示：plannotator 的 plan 约束优先于本上下文
+      const priorityHint = planMode
+        ? "\n\n# 优先级提示：plan mode 下，plannotator 注入的 [PLANNOTATOR - PLANNING PHASE] 段中的所有约束优先级最高，与本文冲突时遵循 plannotator。\n"
+        : "";
+
+      return {
+        systemPrompt:
+          event.systemPrompt + priorityHint + "\n\n" + contextContent,
       };
     });
   }

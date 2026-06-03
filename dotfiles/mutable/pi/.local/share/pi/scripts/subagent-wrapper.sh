@@ -18,6 +18,7 @@ MODEL=""
 CWD=""
 TOOLS=""
 IMAGES=""
+PROMPT_FILE=""
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -35,6 +36,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--image)
 		IMAGES="$2"
+		shift 2
+		;;
+	--prompt-file)
+		PROMPT_FILE="$2"
 		shift 2
 		;;
 	*) shift ;;
@@ -130,13 +135,19 @@ parse_agent_md() {
 		fi
 	done <"$agent_file"
 
-	# 提取 body（frontmatter 之后的内容）作为系统提示
-	local body
-	body="$(sed -n '/^---$/,/^---$/!p' "$agent_file" | tail -n +1)"
-	# 去掉首尾空行
-	body="$(echo "$body" | sed -e '/./,$!d' -e ':a' -e '/^\n*$/{$d;N;ba' -e '}')"
+	# 如果调用方传了 --prompt-file（atelier launcher 预先生成的
+	# 清理后的 prompt），优先使用它；否则从 agent .md 提取 body
+	# （仍含 HTML 注释标记，LLM 会忽略）
+	if [[ -n "$PROMPT_FILE" && -f "$PROMPT_FILE" ]]; then
+		AGENT_SYSTEM_PROMPT="$(cat "$PROMPT_FILE")"
+	else
+		local body
+		body="$(sed -n '/^---$/,/^---$/!p' "$agent_file" | tail -n +1)"
+		# 去掉首尾空行
+		body="$(echo "$body" | sed -e '/./,$!d' -e ':a' -e '/^\n*$/{$d;N;ba' -e '}')"
 
-	AGENT_SYSTEM_PROMPT="$body"
+		AGENT_SYSTEM_PROMPT="$body"
+	fi
 }
 
 # 从 subagents.json 加载模型配置（如果 --model 未被调用方显式指定）
