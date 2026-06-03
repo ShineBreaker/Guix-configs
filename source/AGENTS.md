@@ -4,15 +4,15 @@
 
 ```
 source/
-├── channel.scm         # 频道定义（guix、jeans、nonguix、pantherx、rosenthal）
-├── channel.lock        # 锁定的频道版本（由 maak upgrade 更新，不要手动编辑）
-├── information.scm     # 全局变量（username、%data-dirs、%btrfs-subvolumes 等）
+├── AGENTS.md            # 本文件
+├── channel.scm          # 频道定义（guix、jeans、nonguix、pantherx、rosenthal、sops-guix）
+├── channel.lock         # 锁定的频道版本（由 maak upgrade 更新，不要手动编辑）
+├── information.scm      # 全局变量（username、%data-dirs、%btrfs-subvolumes 等）
 ├── configs/
-│   ├── home-config.org     # Home 环境配置（tangle → tmp/home-config.scm）
-│   │   └── AGENTS.md       # Org 配置指引
-│   └── system-config.org   # 系统配置（tangle → tmp/system-config.scm）
-│       └── AGENTS.md       # Org 配置指引
-├── files/              # 静态模板文件（见下方说明）
+│   ├── AGENTS.md            # Org 配置指引
+│   ├── home-config.org      # Home 环境配置（tangle → tmp/home-config.scm）
+│   └── system-config.org    # 系统配置（tangle → tmp/system-config.scm）
+├── files/               # 静态模板文件（见下方说明）
 ```
 
 ## Org Noweb 机制
@@ -92,7 +92,7 @@ source/configs/*.org
 **Don't**：
 
 - 不要把 `tmp/*.scm` 当源码
-- 不要直接编辑子模块，`emacs` 和 `termide` 除外
+- 编辑子模块后需在子模块内单独 commit 并 push，再更新父仓库引用
 - 不要假设 README 文件名存在
 - 不要在 org 文件中使用 Scheme 原生不支持的语法（`<<ref>>` 是 Org Noweb 功能）
 

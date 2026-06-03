@@ -47,7 +47,7 @@ TR:│   └── ssh/     # SSH 配置
 | 子目录                 | 局部 AGENTS.md | 职责                                       |
 | ---------------------- | -------------- | ------------------------------------------ |
 | `immutable/agents/`    | ✅ 已有        | OpenCode / Crush / KB skills               |
-| `mutable/pi/`          | —              | Pi Agent（settings.json、agents、prompts） |
+| `mutable/pi/`          | ✅ 已有        | Pi Agent（settings.json、agents、prompts） |
 | `immutable/desktop/`   | 见下方         | niri、autostart、portal                    |
 | `immutable/system/`    | 见下方         | containers、pipewire                       |
 | `immutable/terminal/`  | 见下方         | fish、tmux、foot、btop                     |

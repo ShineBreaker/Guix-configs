@@ -15,6 +15,14 @@ mutable/
 │       ├── diagnose/        # 诊断框架与 ERT 测试
 │       ├── configs/         # 系统/UI/编辑/编程/Org 模块
 │       └── ...
+├── pi/        # ★ Pi Agent 配置（settings.json、agents、extensions、prompts）
+│   └── .config/pi/
+│       ├── AGENTS.md        # Pi Agent 配置指引
+│       ├── settings.json    # 核心配置
+│       ├── agents/          # Subagent 定义
+│       ├── extensions/      # 本地扩展
+│       ├── prompts/         # Prompt 模板
+│       └── ...
 └── ssh/       # SSH 配置
 ```
 
@@ -25,6 +33,13 @@ mutable/
 - 也可在子目录内直接调试，Stow 链接会实时生效
 
 ## 核心子系统
+
+### Pi Agent
+
+- 基于 `pi-mono` 的自定义 Agent 框架
+- 详见 `dotfiles/mutable/pi/AGENTS.md`
+- `settings.json` 是核心配置：模型路由、子 agent、扩展包
+- 配置源文件位于 `dotfiles/mutable/pi/.config/pi/`，通过 stow 链接到 `~/.config/pi/`
 
 ### Emacs
 

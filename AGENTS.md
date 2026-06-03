@@ -64,6 +64,7 @@ dotfiles/
 │   └── wm/          # WM 主题（darkman 明暗切换、waybar、fuzzel、mako）
 ├── mutable/     # GNU Stow 管理（直接调试修改，maak home 时重链）
 │   ├── emacs/   # Emacs 配置（子模块 → codeberg.org/BrokenShine/.emacs.d）
+│   ├── pi/      # Pi Agent 配置（settings.json、agents、prompts）
 │   └── ssh/     # SSH 配置
 └── disable/     # 已禁用的旧配置（nix、noctalia）
 ```
@@ -82,6 +83,7 @@ dotfiles/
 | nonguix   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`        |
 | pantherx  | master | 工具包       | `https://codeberg.org/gofranz/panther.git`  |
 | rosenthal | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`   |
+| sops-guix | main   | 密钥管理     | `https://github.com/fishinthecalculator/sops-guix.git` |
 
 频道版本锁定在 `source/channel.lock`，由 `maak upgrade` 自动更新并 git commit。**不要手动编辑 channel.lock。**
 
