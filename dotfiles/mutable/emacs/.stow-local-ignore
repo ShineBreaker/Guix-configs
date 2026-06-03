@@ -1,0 +1,11 @@
+.agents
+AGENTS\.md$
+.codex
+.crush
+
+.gitignore$
+
+__pycache__
+npm
+
+
