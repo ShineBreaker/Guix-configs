@@ -1,48 +1,63 @@
 // SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-//
 // SPDX-License-Identifier: MIT
+
+/**
+ * kb-hooks extension
+ *
+ * 知识库集成钩子：
+ * - session_start: 注入 KB 健康度摘要
+ * - agent_end:     检测"任务完成信号"，命中时注入 self-improving 评估提示
+ * - /kb-summarize: 启动嵌套 agent 跑对话后经验总结
+ * - /curate:       启动嵌套 agent 跑知识库策展
+ * - /kb-health:    显示健康度报告
+ *
+ * 信号清单、写入流程、卡片格式由 self-improving / knowledge-base skill 提供，
+ * 本插件只做"事件触发 + 命令快捷入口"，避免与 skill 重复维护。
+ */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/**
- * kb-hooks extension
- *
- * 知识库集成钩子：
- * - session_start: 注入 KB 状态摘要（stale 卡片警告）
- * - agent_end: 检测经验信号，提醒审查
- * - turn_end: 轮次计数，定期提醒策展
- * - /curate 命令: 执行知识库策展
- * - /kb-review 命令: 对话后经验审查（健康度 + 信号检测清单）
- */
-
 const KB_SCRIPT = join(homedir(), ".local", "bin", "kb");
 const KB_AGENT = join(homedir(), ".local", "bin", "kb-agent");
-const REVIEW_INTERVAL = 10; // 每 10 轮提醒
 
-/** 经验信号关键词 */
-const EXPERIENCE_SIGNALS = [
-  "错误",
-  "error",
-  "bug",
-  "失败",
-  "踩坑",
-  "解决",
-  "修复",
-  "配置",
-  "config",
-  "发现",
-  "注意",
-  "重要",
-  "总结",
+/**
+ * 任务完成信号（取自 self-improving skill references/triggers.md）
+ * 收紧到强完成词，避免"好了"等高频词误触发。
+ */
+const COMPLETION_SIGNALS = [
+  // 中文显式完成
   "可以用了",
-  "Done",
+  "一切正常",
+  "都没问题",
+  "都正常",
+  "搞定",
   "完成",
+  "做完了",
+  "测试通过",
+  "通过",
+  "就这些",
+  "先这样",
+  "暂时够了",
+  "就这样",
+  "没了",
+  // 英文显式完成
+  "done.",
+  "done!",
+  "looks good",
+  "ship it",
 ];
 
-let turnCount = 0;
+/** 注入到下一轮的 self-improving 评估提示 */
+const SUMMARIZE_PROMPT = [
+  "[KB self-improving 评估] 检测到任务完成信号。",
+  "请按 self-improving skill 流程评估本次对话：",
+  "1. 是否有可记录的经验信号（bug/踩坑/更优方案/用户纠正/项目决策）？",
+  "2. 如有 → 调用 /kb-summarize 写入知识库（kb add / kb memory / kb connect）",
+  "3. 如无 → 明确回复'本次无可记录经验'",
+].join("\n");
 
 /** 运行 kb 命令并返回 stdout */
 function runKb(...args: string[]): string {
@@ -57,8 +72,12 @@ function runKb(...args: string[]): string {
   }
 }
 
-/** 运行 kb-agent 命令 */
-function runKbAgent(action: string, backend = "direct"): string {
+/**
+ * 运行 kb-agent 命令
+ * 备注：direct backend 只支持 health/deduplicate/archive/reindex 关键词匹配，
+ * 跑 curate / review 必须用 pi / opencode / crush backend 启动嵌套 agent。
+ */
+function runKbAgent(action: string, backend = "pi"): string {
   try {
     return execSync(`bash "${KB_AGENT}" ${action} --backend ${backend}`, {
       encoding: "utf-8",
@@ -70,7 +89,7 @@ function runKbAgent(action: string, backend = "direct"): string {
   }
 }
 
-/** 获取简短的 KB 状态摘要 */
+/** 获取简短的 KB 状态摘要（session_start 注入用） */
 function getKbStatusSummary(): string {
   const health = runKb("health");
   if (health.startsWith("(kb")) return ""; // 命令失败，静默
@@ -78,7 +97,6 @@ function getKbStatusSummary(): string {
   const lines = health.split("\n");
   const summary: string[] = ["[KB] 知识库状态:"];
 
-  // 提取关键行
   for (const line of lines) {
     const trimmed = line.trim();
     if (
@@ -123,10 +141,9 @@ export default function init(pi: ExtensionAPI): void {
     }
   });
 
-  // ── agent_end: 检测经验信号 ──
+  // ── agent_end: 检测完成信号，提示 agent 进入总结流程 ──
   pi.on("agent_end", async (event, ctx) => {
     const messages = (event as any).messages || [];
-    // 提取用户消息文本
     const userTexts = messages
       .filter((m: any) => m.role === "user")
       .map((m: any) => extractText(m.content))
@@ -135,28 +152,28 @@ export default function init(pi: ExtensionAPI): void {
 
     if (!userTexts) return;
 
-    const hasSignals = EXPERIENCE_SIGNALS.some((s) =>
+    const hasCompletion = COMPLETION_SIGNALS.some((s) =>
       userTexts.includes(s.toLowerCase()),
     );
 
-    if (hasSignals) {
+    if (hasCompletion) {
+      // deliverAs: followUp — 若 agent 仍在 streaming 则安全排队，idle 时立即交付
+      pi.sendUserMessage(SUMMARIZE_PROMPT, { deliverAs: "followUp" });
       ctx.ui.notify(
-        "[KB] 检测到可能的经验信号，可运行 /kb-review 记录经验",
+        "[KB] 任务完成信号已检测，建议运行 /kb-summarize 总结经验",
         "info",
       );
     }
   });
 
-  // ── turn_end: 轮次计数提醒 ──
-  pi.on("turn_end", async (_event, ctx) => {
-    turnCount++;
-    if (turnCount >= REVIEW_INTERVAL) {
-      turnCount = 0;
-      ctx.ui.notify(
-        `[KB] ${REVIEW_INTERVAL} 轮对话完成，可运行 /curate 审查知识库`,
-        "info",
-      );
-    }
+  // ── /kb-summarize 命令 ──
+  // 不开新会话——直接注入到当前会话让 agent（有完整上下文）做总结
+  pi.registerCommand("kb-summarize", {
+    description: "在当前会话中触发 self-improving 经验总结",
+    handler: async (_args, ctx) => {
+      ctx.ui.notify("[KB] 触发经验总结，请在下一轮对话中查看结果", "info");
+      pi.sendUserMessage(SUMMARIZE_PROMPT, { deliverAs: "followUp" });
+    },
   });
 
   // ── /curate 命令 ──
@@ -165,37 +182,11 @@ export default function init(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       ctx.ui.notify("[KB] 开始策展...", "info");
 
-      const result = runKbAgent("curate");
+      const result = runKbAgent("curate", "pi");
 
       ctx.ui.notify("[KB] 策展完成", "info");
       console.log("=== 策展结果 ===");
       console.log(result);
-    },
-  });
-
-  // ── /kb-review 命令 ──
-  pi.registerCommand("kb-review", {
-    description: "对话后经验审查（健康度 + 信号检测清单）",
-    handler: async (_args, ctx) => {
-      ctx.ui.notify("[KB] 经验审查中...", "info");
-
-      // 健康度报告
-      const health = runKb("health");
-      console.log("=== 知识库健康度 ===");
-      console.log(health);
-
-      // 经验信号检测清单
-      console.log("");
-      console.log("=== 经验信号检测清单 ===");
-      console.log("请检查本次对话是否包含以下信号：");
-      console.log("  □ 修复了 bug 或解决了技术问题 → kb add --type debug");
-      console.log("  □ 配置了新工具或调整了配置 → kb add --type config");
-      console.log("  □ 重构了代码或优化了结构 → kb add --type refactor");
-      console.log("  □ 发现了用户偏好或习惯 → kb memory --add --type feedback");
-      console.log("  □ 做了架构决策 → kb add --type feature");
-      console.log("  □ 做了简化或发现了更优方案 → kb add");
-      console.log("");
-      console.log("如无可记录经验，可忽略此审查。");
     },
   });
 
