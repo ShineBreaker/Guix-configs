@@ -29,11 +29,15 @@ command = "zls"
 
 [[language]]
 name = "bash"
+scope = "source.bash"
+file-types = ["sh", "bash", "ash", "dash", "ksh", "mksh", "zsh", "zshenv", "zlogin", "zlogout", "zprofile", "zshrc", "eclass", "ebuild", "bazelrc", "Renviron", "zsh-theme", "cshrc", "tcshrc", "bashrc_Apple_Terminal", "zshrc_Apple_Terminal"]
 auto-format = true
 formatter = { command = "shfmt", args = ["-s", "-"] }
 
 [[language]]
 name = "c"
+scope = "source.c"
+file-types = ["c"]
 auto-format = true
 formatter = { command = "clang-format", args = [
   "-style=file",
@@ -43,6 +47,8 @@ language-servers = ["ccls"]
 
 [[language]]
 name = "cpp"
+scope = "source.cpp"
+file-types = ["cc", "hh", "c++", "cpp", "hpp", "h", "ipp", "tpp", "cxx", "hxx", "ixx", "txx", "ino", "C", "H", "cu", "cuh", "cppm", "h++", "ii", "inl", { glob = ".hpp.in" }, { glob = ".h.in" }]
 auto-format = true
 formatter = { command = "clang-format", args = [
   "-style=file",
@@ -52,27 +58,37 @@ language-servers = ["ccls"]
 
 [[language]]
 name = "fish"
+scope = "source.fish"
+file-types = ["fish"]
 auto-format = true
 formatter = { command = "fish_indent" }
 
 [[language]]
 name = "go"
+scope = "source.go"
+file-types = ["go"]
 auto-format = true
 formatter = { command = "gofmt" }
 language-servers = ["gopls"]
 
 [[language]]
 name = "csharp"
+scope = "source.csharp"
+file-types = ["cs", "csx", "cake"]
 auto-format = true
 language-servers = ["omnisharp"]
 
 [[language]]
 name = "java"
+scope = "source.java"
+file-types = ["java", "jav", "pde"]
 auto-format = true
 language-servers = ["jdtls"]
 
 [[language]]
 name = "json"
+scope = "source.json"
+file-types = ["json", "arb", "ipynb", "geojson", "gltf", "webmanifest", "jsonl", "avsc", "ldtk", "ldtkl", "sublime-build", "sublime-color-scheme", "sublime-commands", "sublime-completions", "sublime-keymap", "sublime-macro", "sublime-menu", "sublime-mousemap", "sublime-project", "sublime-settings", "sublime-theme", "sublime-workspace", "code-workspace", { glob = "flake.lock" }, { glob = ".babelrc" }, { glob = ".bowerrc" }, { glob = ".jscrc" }, { glob = ".jslintrc" }, { glob = ".vuerc" }, { glob = "composer.lock" }, { glob = ".watchmanconfig" }, { glob = ".swift-format" }, "js.map", "ts.map", "css.map", { glob = "devenv.lock" }, { glob = "devbox.lock" }, { glob = "manifest.lock" }, { glob = "deno.lock" }]
 auto-format = true
 formatter = { command = "js-beautify", args = [
   "--stdin",
@@ -83,6 +99,8 @@ formatter = { command = "js-beautify", args = [
 
 [[language]]
 name = "jsonc"
+scope = "source.json"
+file-types = ["jsonc", { glob = "{t,j}sconfig.json" }, { glob = "bun.lock" }, { glob = ".devcontainer.json" }, { glob = "devcontainer.json" }, { glob = ".vscode/*.json" }]
 auto-format = true
 formatter = { command = "js-beautify", args = [
   "--stdin",
@@ -93,11 +111,15 @@ formatter = { command = "js-beautify", args = [
 
 [[language]]
 name = "nix"
+scope = "source.nix"
+file-types = ["nix"]
 auto-format = true
 formatter = { command = "nixfmt" }
 
 [[language]]
 name = "python"
+scope = "source.python"
+file-types = ["py", "pyi", "py3", "pyw", "ptl", "rpy", "cpy", "ipy", "pyt", { glob = ".python_history" }, { glob = ".pythonstartup" }, { glob = ".pythonrc" }, { glob = "*SConstruct" }, { glob = "*SConscript" }, { glob = "*sconstruct" }]
 auto-format = true
 formatter = { command = "black", args = [
   "--quiet",
@@ -109,17 +131,23 @@ language-servers = ["pylsp"]
 
 [[language]]
 name = "rust"
+scope = "source.rust"
+file-types = ["rs"]
 auto-format = true
 formatter = { command = "rustfmt" }
 language-servers = ["rust-analyzer"]
 
 [[language]]
 name = "yaml"
+scope = "source.yaml"
+file-types = ["yml", "yaml", "sublime-syntax", "bu", { glob = ".prettierrc" }, { glob = ".clangd" }, { glob = ".clang-format" }, { glob = ".clang-tidy" }, { glob = ".gem/credentials" }, { glob = ".kube/config" }, { glob = ".kube/kuberc" }, { glob = "yarn.lock" }, { glob = ".stylelintrc" }, { glob = ".puppeteerrc" }]
 auto-format = true
 formatter = { command = "yq", args = ["-P", "-"] }
 
 [[language]]
 name = "zig"
+scope = "source.zig"
+file-types = ["zig", "zon"]
 auto-format = true
 formatter = { command = "zig", args = ["fmt", "--stdin", "-"] }
 language-servers = ["zls"]
