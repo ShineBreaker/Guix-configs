@@ -23,7 +23,6 @@ from kb_lib.core import (  # noqa: E402
     KB_PATTERNS,
     KB_INDEX,
     KB_INBOX,
-    KB_PROFILE,
     VALID_TYPES,
     VALID_OWNERS,
     VALID_ENTRY_TYPES,
@@ -36,7 +35,6 @@ from kb_lib.core import (  # noqa: E402
     _save_index,
     _rebuild_index,
     ensure_dirs,
-    _init_profile,
 )
 from kb_lib.cards import (  # noqa: E402
     cmd_add,
@@ -116,7 +114,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         # git init + 初始 commit
         _run_git(["init"], cwd=KB_ROOT)
         _run_git(
-            ["add", ".gitignore", "MEMORY.org", "profile.org", "inbox.org"], cwd=KB_ROOT
+            ["add", ".gitignore", "MEMORY.org", "inbox.org"], cwd=KB_ROOT
         )
         _run_git(["commit", "-m", "kb init: 初始化知识库"], cwd=KB_ROOT)
         print("git 仓库已初始化，初始 commit 已创建。")
@@ -185,148 +183,6 @@ def cmd_reindex(args: argparse.Namespace) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-def cmd_profile(args: argparse.Namespace) -> None:
-    """管理用户画像：查看、设置、追加分类条目。"""
-    ensure_dirs()
-
-    if not KB_PROFILE.exists():
-        _init_profile(KB_PROFILE)
-
-    action = getattr(args, "action", None)
-    category = args.category
-
-    if action is None:
-        # 默认：显示
-        if category:
-            _profile_show_section(category)
-        else:
-            _profile_overview()
-    elif action == "set":
-        if not category:
-            die("必须指定分类名来设置分类")
-        content = sys.stdin.read().strip()
-        if not content:
-            die("必须通过 stdin 传入分类内容")
-        _profile_set_section(category, content)
-    elif action == "add":
-        if not category:
-            die("必须指定分类名来追加条目")
-        content = args.text or ""
-        if not content:
-            content = sys.stdin.read().strip()
-        if not content:
-            die("必须指定 --text 或通过 stdin 传入追加内容")
-        _profile_add_entry(category, content)
-
-
-def _profile_overview() -> None:
-    """显示画像概览：所有一级标题和条目数。"""
-    content = KB_PROFILE.read_text(encoding="utf-8")
-    sections = re.findall(r"^\* (.+)", content, re.MULTILINE)
-    if not sections:
-        print("(用户画像为空)")
-        return
-
-    print("═══ 用户画像 ═══")
-    for section in sections:
-        # 计算该标题下的条目数（到下一个同级标题为止）
-        pattern = rf"^\* {re.escape(section)}\n((?:.*\n)*?)(?=^\* |\Z)"
-        m = re.search(pattern, content, re.MULTILINE)
-        if m:
-            body = m.group(1)
-            items = len([l for l in body.split("\n") if l.strip().startswith("- ")])
-            sub = len(re.findall(r"^\*\* ", body, re.MULTILINE))
-            parts = []
-            if items:
-                parts.append(f"{items} 条目")
-            if sub:
-                parts.append(f"{sub} 子类")
-            detail = f" ({', '.join(parts)})" if parts else ""
-            print(f"  {section}{detail}")
-        else:
-            print(f"  {section}")
-
-
-def _profile_show_section(category: str) -> None:
-    """显示指定分类的内容。"""
-    content = KB_PROFILE.read_text(encoding="utf-8")
-
-    # 支持一级或二级标题匹配
-    for level in (r"\*", r"\*\*"):
-        if level == r"\*":
-            next_level = r"^\* [^\n*]"
-        else:
-            next_level = r"^\*\* [^\n*]"
-        pattern = rf"^{level} {re.escape(category)}\n"
-        m = re.search(pattern, content, re.MULTILINE)
-        if m:
-            start = m.end()
-            rest = content[start:]
-            next_m = re.search(next_level, rest, re.MULTILINE)
-            if next_m:
-                body = rest[: next_m.start()]
-            else:
-                body = rest
-            display_level = "*" if level == r"\*" else "**"
-            print(f"{display_level} {category}")
-            print(body.rstrip())
-            return
-
-    avail = ", ".join(re.findall(r"^\* (.+)", content, re.MULTILINE))
-    die(f"未找到分类: {category}（可用分类: {avail}）")
-
-
-def _profile_set_section(category: str, new_body: str) -> None:
-    """设置指定分类的内容（覆盖该分类下的全部条目）。"""
-    content = KB_PROFILE.read_text(encoding="utf-8")
-
-    pattern = rf"^\* {re.escape(category)}\n"
-    m = re.search(pattern, content, re.MULTILINE)
-    if not m:
-        # 追加新分类到文件末尾
-        content = content.rstrip("\n") + f"\n\n* {category}\n{new_body}\n"
-    else:
-        start = m.end()
-        rest = content[start:]
-        next_m = re.search(r"^\* ", rest, re.MULTILINE)
-        if next_m:
-            end = start + next_m.start()
-        else:
-            end = len(content)
-        content = content[: m.start()] + f"* {category}\n{new_body}\n" + content[end:]
-
-    KB_PROFILE.write_text(content, encoding="utf-8")
-    print(f"已更新分类 [{category}] → {KB_PROFILE}")
-
-
-def _profile_add_entry(category: str, entry: str) -> None:
-    """追加条目到指定分类。"""
-    content = KB_PROFILE.read_text(encoding="utf-8")
-
-    # 确保条目以 "- " 开头
-    if not entry.startswith("- "):
-        entry = f"- {entry}"
-
-    pattern = rf"^\* {re.escape(category)}\n"
-    m = re.search(pattern, content, re.MULTILINE)
-    if m:
-        start = m.end()
-        rest = content[start:]
-        next_m = re.search(r"^\* ", rest, re.MULTILINE)
-        if next_m:
-            end = start + next_m.start()
-        else:
-            end = len(content)
-        # 在该分类内容末尾追加
-        section_content = content[start:end].rstrip("\n")
-        content = content[:start] + section_content + f"\n{entry}\n" + content[end:]
-    else:
-        content = content.rstrip("\n") + f"\n\n* {category}\n{entry}\n"
-
-    KB_PROFILE.write_text(content, encoding="utf-8")
-    print(f"已追加到 [{category}] → {KB_PROFILE}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -405,13 +261,6 @@ def print_help() -> None:
             kb update <卡片ID> [--status STATUS] [--category 类别] [--tech 技术]
                      [--type 类型] [--owner 执行者] [--append-to 章节 --append-text 内容] [--stdin]
 
-  profile  管理用户画像
-            kb profile                           显示概览
-            kb profile <分类名>                  显示指定分类
-            kb profile --set --category <分类>   从 stdin 覆盖分类内容
-            kb profile --add --category <分类> --text "条目"
-            kb profile --add --category <分类>   从 stdin 追加条目
-
   init     初始化知识库
             kb init            创建目录结构 + git 仓库 + 初始 commit
             kb init --no-git   仅创建目录结构，跳过 git
@@ -454,7 +303,6 @@ def print_help() -> None:
 知识库路径: {KB_ROOT}
 经验卡片目录: {KB_EXPERIENCES}
 记忆文件: {KB_MEMORY}
-用户画像: {KB_PROFILE}
 """)
 
 
@@ -634,27 +482,6 @@ def main() -> None:
         "--stdin", action="store_true", help="从标准输入读取追加内容"
     )
 
-    # ── profile ──────────────────────────────────────────────────────────
-    profile_parser = subparsers.add_parser("profile", help="管理用户画像")
-    profile_parser.add_argument(
-        "category", nargs="?", default=None, help="分类名（如 身份、偏好、习惯）"
-    )
-    profile_parser.add_argument(
-        "--set",
-        dest="action",
-        action="store_const",
-        const="set",
-        help="从 stdin 覆盖分类内容",
-    )
-    profile_parser.add_argument(
-        "--add",
-        dest="action",
-        action="store_const",
-        const="add",
-        help="追加条目到分类",
-    )
-    profile_parser.add_argument("--text", help="追加的条目文本")
-
     # ── init ──────────────────────────────────────────────────────────────
     init_parser = subparsers.add_parser("init", help="初始化知识库")
     init_parser.add_argument("--no-git", action="store_true", help="跳过 git 初始化")
@@ -735,7 +562,6 @@ def main() -> None:
         "stats": cmd_stats,
         "connect": cmd_connect,
         "update": cmd_update,
-        "profile": cmd_profile,
         "init": cmd_init,
         "commit": cmd_commit,
         # 新命令

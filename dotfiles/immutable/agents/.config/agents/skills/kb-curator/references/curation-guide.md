@@ -7,10 +7,10 @@
 | 层级             | 存储位置                       | 内容                                        |
 | ---------------- | ------------------------------ | ------------------------------------------- |
 | **经验卡片**     | `~/Documents/Org/experiences/` | 跨会话可复用的 bug 修复、配置陷阱、方案对比 |
-| **模式文件**     | `~/Documents/Org/patterns.org` | 3 次以上同类经验的通用规则总结              |
+| **记忆文件**     | `~/Documents/Org/MEMORY.org`   | 偏好/规则/项目上下文（feedback 节）          |
 | **留在对话历史** | 原始对话文件                   | 任务进度、TODO、一次性操作记录              |
 
-详细经验保留在卡片，常用规则压缩到 `patterns.org`。策展时不要机械堆长文缓存；应维护短、准、可执行的 pattern。
+详细经验保留在卡片，常用规则压缩到 MEMORY.org feedback 节。策展时不要机械堆长文缓存；应维护短、准、可执行的反馈条目。
 
 ## 归档质量标准
 
@@ -59,7 +59,7 @@
 写入经验卡片前，先判断：
 
 - **这是否是跨会话可复用的知识？** 是 → 经验卡片；否 → 继续判断
-- **这是否是通用规则/模式？** 是 → 模式文件；否 → 经验卡片
+- **这是否是通用规则/模式？** 是 → MEMORY.org feedback 节；否 → 经验卡片
 - **一次性任务进度？** → 留在对话历史，不写入知识库
 
 ## 策展流程
@@ -187,9 +187,9 @@ ls ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)/
 grep -rl "fix\|bug\|error\|解决\|修复" ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)/ | head -10
 ```
 
-#### B. 从模式文件提炼
+#### B. 从 MEMORY 反馈提炼
 
-`~/Documents/Org/patterns.org` 中的模式如有对应经验缺失，需要补充具体案例卡片。
+MEMORY.org feedback 节中的偏好/规则如有对应经验缺失，需要补充具体案例卡片。
 
 #### C. 从收件箱整理
 
@@ -200,7 +200,8 @@ grep -rl "fix\|bug\|error\|解决\|修复" ~/Documents/Org/conversations/$(date 
 补充完成后，检查新写入的卡片是否影响已有内容：
 
 ```bash
-# 检查受影响的 pattern
+# 检查受影响的 MEMORY 反馈
+kb memory --type feedback
 kb patterns --get | grep -i "<相关关键词>"
 
 # 检查同类卡片
@@ -210,9 +211,9 @@ kb search "<相关关键词>"
 联动检查清单：
 
 - [ ] 新卡片推翻旧结论 → 更新旧卡片或添加勘误
-- [ ] 同类卡片累计 ≥3 张 → 评估是否晋升为 pattern
-- [ ] 新卡片补充了已有 pattern 的边界条件 → 修补 pattern
-- [ ] pattern 引用的卡片已过时 → 标注 pattern 并引用新卡片
+- [ ] 同类卡片累计 ≥3 张 → 评估是否晋升为 MEMORY feedback 条目
+- [ ] 新卡片补充了已有 feedback 条目的边界条件 → 修补 feedback
+- [ ] feedback 引用的卡片已过时 → 标注 feedback 并引用新卡片
 - [ ] 新卡片与其他卡片有隐含关联 → 补充 `[[file:...]]` 链接
 
 #### 步骤 6.5：记忆验证与项目更新
@@ -239,7 +240,7 @@ kb lint --fix  # 自动修复格式问题
 
 - `~/Documents/Org/experiences/` 下的新增/修改卡片
 - `~/Documents/Org/index.json`（kb reindex 自动更新）
-- 可选：`~/Documents/Org/patterns.org`
+- 可选：`~/Documents/Org/MEMORY.org`
 
 **重要规则**：
 

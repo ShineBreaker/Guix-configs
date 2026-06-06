@@ -60,8 +60,10 @@ kb search "去重" → kb add → kb lint --fix
 # 查看字段规范
 kb fields
 
-# 更新用户画像
-kb profile --add "偏好描述"
+# 更新用户偏好（写入 MEMORY.org feedback 节）
+kb memory --add --type feedback --title "偏好描述" --stdin <<EOF
+正文
+EOF
 ```
 
 ### 知识库文件

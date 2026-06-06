@@ -18,9 +18,8 @@ description: Use when detecting experience signals during conversation, writing 
 ```bash
 kb list --category <相关类别> --all
 kb get <明显相关的卡片ID>
-kb search "<当前任务的关键技术 工具 症状>" --context 2
+b search "<当前任务的关键技术 工具 症状>" --context 2
 kb search "<错误信息或症状>"
-kb profile
 ```
 
 预检第一步是 category 标题索引：先看该领域有哪些历史经验，再决定是否 `kb get` 读取全文。`kb search` 默认是多关键词相关度检索，只作为标题索引后的正文补充；使用 2-5 个稳定关键词（技术名、工具名、错误短语、配置名），必要时加 `--all-terms` 收窄；只有确实需要正则时才用 `--regex`。
@@ -105,9 +104,8 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 3. `kb fields` 查看标签，优先复用
 4. `kb add` 写入卡片（CLI 用法见 `knowledge-base` skill）
 5. `kb lint` 校验格式
-6. 传播联动 — 检查受影响的 pattern/卡片
+6. 传播联动 — 检查受影响的 MEMORY feedback/卡片
 7. `kb connect` 建立关联链接
-8. `kb profile --add` 更新画像（如涉及偏好/项目变化）
 
 ### MEMORY 写入流程
 
@@ -147,8 +145,8 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 
 1. `kb search` 去重 — 已有卡片覆盖时补充修正，不新建重复卡
 2. **优先复用已有标签** — `kb fields` 查看现有 category/tech，只有全新领域才创建新类别
-3. 项目私有细节只写必要上下文；可泛化规则晋升到 `patterns.org`
-4. 卡片保存完整过程，pattern 保存紧凑规则；二者可共存，pattern 必须引用卡片 ID
+3. 项目私有细节只写必要上下文；可泛化规则晋升到 MEMORY.org 的 feedback 节
+4. 卡片保存完整过程，MEMORY feedback 保存紧凑规则；二者可共存，feedback 条目必须引用卡片 ID
 
 写入质量规范详见 `self-improving/references/writing-guide.md`。
 
@@ -189,9 +187,9 @@ AI-First 卡片规则详见 `self-improving/references/ai-first-rules.md`。
 定期（建议每月）执行以下回顾：
 
 1. **知识内化检查** — 浏览最近 10 张卡片，问自己：这些经验是否已成为默认行为？
-2. **模式有效性** — 检查 patterns.org 中的模式，是否有已被新实践推翻的？
+2. **反馈有效性** — 检查 MEMORY.org feedback 节中的偏好和规则，是否有已被新实践推翻的？
 3. **连接补全** — 扫描孤立卡片（无 connect 链接），评估是否需要建立关联
-4. **画像更新** — 检查 profile.org 是否反映当前真实偏好和项目状态
+4. **记忆更新** — 检查 MEMORY.org 的 feedback/project/reference 节是否反映当前状态
 
 回顾可手动执行，也可由 `kb-curator` skill 在后台策展时一并完成。
 
@@ -201,51 +199,3 @@ AI-First 卡片规则详见 `self-improving/references/ai-first-rules.md`。
 
 核心：全面检索知识源 → 筛出最接近经验 → 解释失败原因 → 给出最强方案 → 写入经验卡片。
 
-## 用户画像维护
-
-### 触发条件
-
-- `profile.org` 的 `#+date` 距离当前日期超过 **7 天**
-- 经验写入流程第 8 步中发现用户的**偏好变化**或**活跃项目变更**
-
-### 分类体系
-
-固定 5 个一级分类：
-
-- **身份** — 用户名、系统环境等
-- **偏好** — 编程语言、编辑器、包管理器、沟通风格等
-- **习惯** — 工作流、常用工具组合等
-- **活跃项目** — 正在维护的仓库/系统
-- **目标** — 长期或短期目标
-
-### CLI 操作
-
-```bash
-kb profile                                 # 概览
-kb profile <分类名>                        # 查看指定分类
-kb profile --add "目标" --text "..."       # 追加条目
-echo "- 新内容" | kb profile --set "偏好"  # 覆盖分类
-```
-
-### 更新步骤
-
-1. **查看当前状态**
-   ```bash
-   kb profile
-   ```
-2. **追加或覆盖**
-   - 少量新增 → `kb profile --add "<分类>" --text "..."`
-   - 整类重写 → `echo "..." | kb profile --set "<分类>"`
-3. **更新日期**
-   手动将 `profile.org` 顶部的 `#+date` 改为当前日期
-4. **确认写入**
-   ```bash
-   kb profile
-   ```
-
-### 校验清单
-
-- [ ] 日期已更新为当前日期
-- [ ] 5 个分类结构完整
-- [ ] 新增/修改内容正确写入对应分类
-- [ ] 无格式错误（`kb lint` 不影响 profile，但建议手动检查）

@@ -7,7 +7,7 @@ description: Use when querying historical experience, writing new experience car
 
 通过 `kb` CLI 管理经验卡片和模式，实现任务间知识复用。卡片为 Org mode 格式，按 category 子目录存储在 `~/Documents/Org/experiences/`。
 
-> 经验写入时的决策逻辑、分类映射、卡片结构规范及用户画像维护流程见 `self-improving` skill。
+> 经验写入时的决策逻辑、分类映射、卡片结构规范见 `self-improving` skill。
 
 ## 初始化
 
@@ -18,7 +18,7 @@ kb init            # 创建目录结构 + git 仓库 + 初始 commit
 kb init --no-git   # 仅创建目录结构，跳过 git
 ```
 
-`kb init` 会创建完整的目录结构（experiences/、memories/projects/）、模板文件（MEMORY.org、profile.org、inbox.org、.gitignore）并执行 git init + 初始 commit。
+`kb init` 会创建完整的目录结构（experiences/、memories/projects/）、模板文件（MEMORY.org、inbox.org、.gitignore）并执行 git init + 初始 commit。
 
 如果知识库已有内容，`kb init` 会安全退出并提示。
 
@@ -32,7 +32,6 @@ kb init --no-git   # 仅创建目录结构，跳过 git
 | 项目记忆 | `~/Documents/Org/memories/projects/` |
 | 机器索引 | `~/Documents/Org/index.json`         |
 | 收件箱   | `~/Documents/Org/inbox.org`          |
-| 用户画像 | `~/Documents/Org/profile.org`        |
 
 ## 检索
 
@@ -135,15 +134,6 @@ kb lint --fix      # 自动修复
 ```
 
 lint 规则详见 `references/markdown-to-org.md`，非必要不查看，请直接使用工具来进行相关操作。
-
-## 用户画像
-
-```bash
-kb profile                           # 概览
-kb profile <分类名>                  # 查看指定分类
-kb profile --add "目标" --text "..."  # 追加条目
-echo "- 新内容" | kb profile --set "偏好"  # 覆盖分类
-```
 
 ## 子章节规则
 

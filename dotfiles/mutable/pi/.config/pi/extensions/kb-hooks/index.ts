@@ -15,10 +15,18 @@
  * 本插件只做"事件触发 + 命令快捷入口"，避免与 skill 重复维护。
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { execSync } from "node:child_process";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import type {
+  ExtensionAPI
+} from "@earendil-works/pi-coding-agent";
+import {
+  execSync
+} from "node:child_process";
+import {
+  homedir
+} from "node:os";
+import {
+  join
+} from "node:path";
 
 const KB_SCRIPT = join(homedir(), ".local", "bin", "kb");
 const KB_AGENT = join(homedir(), ".local", "bin", "kb-agent");
@@ -52,11 +60,11 @@ const COMPLETION_SIGNALS = [
 
 /** 注入到下一轮的 self-improving 评估提示 */
 const SUMMARIZE_PROMPT = [
-  "[KB self-improving 评估] 检测到任务完成信号。",
-  "请按 self-improving skill 流程评估本次对话：",
+  "<kb-hook>检测到任务完成信号,请按 self-improving skill 流程评估本次对话：",
+  "(注意：这有可能是误报，如果当前任务没有完成的话，请忽略)",
   "1. 是否有可记录的经验信号（bug/踩坑/更优方案/用户纠正/项目决策）？",
   "2. 如有 → 调用 /kb-summarize 写入知识库（kb add / kb memory / kb connect）",
-  "3. 如无 → 明确回复'本次无可记录经验'",
+  "3. 如无 → 明确回复'本次无可记录经验'</kb-hook>",
 ].join("\n");
 
 /** 运行 kb 命令并返回 stdout */
@@ -120,11 +128,13 @@ function extractText(content: unknown): string {
   if (Array.isArray(content)) {
     return content
       .filter(
-        (p): p is { type: "text"; text: string } =>
-          p &&
-          typeof p === "object" &&
-          "type" in p &&
-          (p as any).type === "text",
+        (p): p is {
+          type: "text";text: string
+        } =>
+        p &&
+        typeof p === "object" &&
+        "type" in p &&
+        (p as any).type === "text",
       )
       .map((p) => p.text)
       .join(" ");
@@ -158,7 +168,9 @@ export default function init(pi: ExtensionAPI): void {
 
     if (hasCompletion) {
       // deliverAs: followUp — 若 agent 仍在 streaming 则安全排队，idle 时立即交付
-      pi.sendUserMessage(SUMMARIZE_PROMPT, { deliverAs: "followUp" });
+      pi.sendUserMessage(SUMMARIZE_PROMPT, {
+        deliverAs: "followUp"
+      });
       ctx.ui.notify(
         "[KB] 任务完成信号已检测，建议运行 /kb-summarize 总结经验",
         "info",
@@ -172,7 +184,9 @@ export default function init(pi: ExtensionAPI): void {
     description: "在当前会话中触发 self-improving 经验总结",
     handler: async (_args, ctx) => {
       ctx.ui.notify("[KB] 触发经验总结，请在下一轮对话中查看结果", "info");
-      pi.sendUserMessage(SUMMARIZE_PROMPT, { deliverAs: "followUp" });
+      pi.sendUserMessage(SUMMARIZE_PROMPT, {
+        deliverAs: "followUp"
+      });
     },
   });
 
