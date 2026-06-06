@@ -138,7 +138,7 @@
         "\uf028"
       ]
     },
-    "on-click": "pwvucontrol",
+    "on-click": "pavucontrol",
     "ignored-sinks": [
       "AudioRelay Virtual Sink",
       "Recorder Sink"
