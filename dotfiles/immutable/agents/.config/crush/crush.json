@@ -80,26 +80,6 @@
     }]
   },
   "providers": {
-    "deepseek": {
-      "api_key": "$DEEPSEEK_API_KEY",
-      "base_url": "https://api.deepseek.com",
-      "disable": false,
-      "id": "deepseek",
-      "models": [{
-        "can_reason": true,
-        "context_window": 1048576,
-        "default_max_tokens": 32768,
-        "id": "deepseek-v4-pro",
-        "name": "DeepSeek-V4-Pro"
-      }, {
-        "can_reason": true,
-        "context_window": 1048576,
-        "default_max_tokens": 32768,
-        "id": "deepseek-v4-flash",
-        "name": "DeepSeek-V4-Flash"
-      }],
-      "type": "openai-compat"
-    },
     "zhipu": {
       "api_key": "$ZAI_API_KEY",
       "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
@@ -118,13 +98,13 @@
       "max_tokens": 65536
     },
     "small": {
-      "provider": "opencode-go",
+      "provider": "deepseek",
       "model": "deepseek-v4-flash",
       "think": true,
       "max_tokens": 65536
     },
     "quick": {
-      "provider": "opencode-go",
+      "provider": "deepseek",
       "model": "deepseek-v4-flash",
       "max_tokens": 32768
     }
