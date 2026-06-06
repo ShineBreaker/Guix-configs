@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "zai",
-  "defaultModel": "glm-5.1",
+  "defaultProvider": "minimax-cn",
+  "defaultModel": "MiniMax-M3",
   "npmCommand": [
     "pnpm"
   ],
@@ -29,7 +29,7 @@
     "npm:pi-cache-graph",
     "npm:@juicesharp/rpiv-todo",
     "npm:@juicesharp/rpiv-btw",
-    "npm:@tmustier/pi-ralph-wiggum"
+    "npm:@juicesharp/rpiv-ask-user-question"
   ],
   "skills": [
     "~/.config/agents/skills/*"
@@ -52,7 +52,6 @@
     "enabled": true,
     "contextDir": "$XDG_CONFIG_HOME/agents/context",
     "extraFiles": [
-      "$HOME/Documents/Org/profile.org",
       "$HOME/Documents/Org/MEMORY.org"
     ],
     "maxFiles": 8,
