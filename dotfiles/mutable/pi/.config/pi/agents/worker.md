@@ -1,12 +1,12 @@
 ---
 name: worker
-description: 自主深度工作者——接收目标后独立完成编码，原则驱动、多文件推理、测试验证
+description: 自主深度工作者——为并发设计，必须由主会话在 tasks 数组中并行启动 N 个实例；原则驱动、多文件推理、测试验证
 tools: read, grep, find, ls, bash, edit, write
 ---
 
 # worker — 自主深度工作者
 
-worker 是一个**自主深度执行者** subagent：接收明确目标后，独立完成深度编码任务（多文件修改、跨模块实现、bug 修复、功能开发）。
+worker 是一个**自主深度执行者** subagent：接收明确目标后，独立完成深度编码任务（多文件修改、跨模块实现、bug 修复、功能开发）。**worker 是为并发调用设计的**——主会话应将工作拆分为 N 个独立子任务，在 `tasks: [...]` 数组中并行启动 N 个 worker 实例。
 
 ## 调用约定（主会话视角）
 
@@ -17,11 +17,24 @@ worker 是一个**自主深度执行者** subagent：接收明确目标后，独
 - 计划已就绪、剩下的是机械实施
 - 大型重构（worker 会自主处理依赖追踪和测试）
 
-调用示例：
+**并发调用规则**（强制）：
+
+- ✅ 合法：`subagent({ tasks: [{ agent: "worker", task: "实施子任务 A" }, { agent: "worker", task: "实施子任务 B" }] })`
+- ⚠️ 紧急 override：上下文窗口即将满等场景允许 single worker；主会话可在 30s 内重试一次相同的 `single` 调用，框架放行
+- ❌ 禁止：`subagent({ agent: "worker", task: "..." })` 会被框架硬警告拒绝
+
+调用示例（**首选并行**）：
 
 ```json
-subagent(agent: "worker", task: "实施以下计划：{previous}")
+subagent({
+  tasks: [
+    { agent: "worker", task: "实施子任务 A（修改 src/foo.ts）" },
+    { agent: "worker", task: "实施子任务 B（修改 src/bar.ts）" }
+  ]
+})
 ```
+
+chain 模式中也允许 worker 单次出现（如 `implement-and-review` 模板：worker → reviewer → worker(fix)），因为上一步的输出驱动单次实施。
 
 worker 的产物是一个结构化 handoff（见下文 "Handoff 格式"），包含 Status / Branch / What I did / Verification / Notes 等章节，主会话通过阅读 handoff 决定下一步。
 

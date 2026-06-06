@@ -33,7 +33,12 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import {
+  execFileSync
+} from "node:child_process";
+import {
+  getAgentDir
+} from "@earendil-works/pi-coding-agent";
 import type {
   AgentToolResult,
   ExtensionAPI,
@@ -44,20 +49,43 @@ import type {
   RunResult,
   SubagentDetails,
 } from "./types.ts";
-import { loadConfig } from "./config.ts";
+import {
+  loadConfig
+} from "./config.ts";
 import {
   discoverAgents,
   discoverPrompts,
   loadSubagentsConfig,
 } from "./discovery.ts";
-import { ensureWorkfile } from "./workfile.ts";
-import { getRunDir, launchSingle } from "./launcher.ts";
-import { waitForCompletion, listRunning } from "./monitor.ts";
-import { executeWithFallback, runParallelBatches, runChain } from "./runner.ts";
-import { formatResults } from "./formatting.ts";
-import { SubagentParams } from "./schemas.ts";
-import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
-import { stripSubagentOnlySection } from "./context.ts";
+import {
+  ensureWorkfile
+} from "./workfile.ts";
+import {
+  getRunDir,
+  launchSingle
+} from "./launcher.ts";
+import {
+  waitForCompletion,
+  listRunning
+} from "./monitor.ts";
+import {
+  executeWithFallback,
+  runParallelBatches,
+  runChain
+} from "./runner.ts";
+import {
+  formatResults
+} from "./formatting.ts";
+import {
+  SubagentParams
+} from "./schemas.ts";
+import {
+  appendSessionLog,
+  finalizeSessionLog
+} from "./session-log.ts";
+import {
+  stripSubagentOnlySection
+} from "./context.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
 //
@@ -66,24 +94,82 @@ import { stripSubagentOnlySection } from "./context.ts";
 // 此处只需路由到 oracle，不重复定义审查维度。
 
 const PLAN_REVIEW_GATE_PROMPT = [
-  "📋 提交前需要先让 oracle 审查计划。",
+  "任务提交前需要先让 oracle 审查计划。",
   "请调用 subagent 工具：",
-  '  subagent(agent: "oracle", task: "审查以下实施计划的架构合理性和风险，提出建议。计划文件：<planFilePath>")',
+  'subagent(agent: "oracle", task: "审查以下实施计划的架构合理性和风险，提出建议。计划文件：<planFilePath>")',
   "",
   "审查完成后，如果计划需要修改请修改后再提交。",
   "如果计划已通过审查，直接再次调用 plannotator_submit_plan 即可（不会再次被阻止）。",
 ].join("\n");
+
+// ─── Worker single 模式硬警告 ────────────────────────────────────────────────
+//
+// 设计：worker 是为并发执行设计的 subagent。LLM 在 single 模式调用 worker 时
+// （即 `subagent({ agent: "worker", task: "..." })`）会触发硬警告（isError）。
+// 30 秒内 LLM 重试相同的调用视为紧急 override（例如上下文窗口即将满），
+// 放行执行。
+//
+// 为什么用进程级时间戳而不是 set 记忆：每次 tool call 之后 LLM 会读取错误信息
+// 重新决策，30s 窗口足够覆盖"LLM 看到错误 → 修改策略 → 再调用一次"的往返。
+
+/** worker single 模式 override 的 grace window（毫秒） */
+const WORKER_OVERRIDE_GRACE_MS = 30_000;
+
+/** 进程级：worker single 最近一次警告时间戳 */
+let lastWorkerSingleWarnAt = 0;
+
+/**
+ * 判断当前 single+worker 调用应警告还是放行。
+ *
+ * @returns "warn" 触发硬警告；"allow" 视为 override 放行
+ */
+function checkWorkerSingleOverride(): "warn" | "allow" {
+  if (Date.now() - lastWorkerSingleWarnAt > WORKER_OVERRIDE_GRACE_MS) {
+    lastWorkerSingleWarnAt = Date.now();
+    return "warn";
+  }
+  return "allow";
+}
+
+/** 构造 worker single 硬警告的错误响应 */
+function workerSingleWarnResponse(): AgentToolResult < SubagentDetails > {
+  return {
+    content: [{
+      type: "text",
+      text: [
+        "❌ worker 是为并发执行设计的 subagent，不允许 single 模式调用。",
+        "",
+        "请改用 `tasks` 数组（即使只放 1 个任务也合法）：",
+        '  subagent({ tasks: [{ agent: "worker", task: "..." }] })',
+        "",
+        "或者把工作拆成 N 个独立子任务，让 N 个 worker 并行：",
+        "  subagent({ tasks: [",
+        '    { agent: "worker", task: "子任务 A" },',
+        '    { agent: "worker", task: "子任务 B" },',
+        "  ] })",
+        "",
+        `紧急 override：若确实需要 single worker（例如剩余的上下文窗口不够使用）`,
+        `${WORKER_OVERRIDE_GRACE_MS / 1000}s 内再调用一次相同的请求将放行执行。`,
+      ].join("\n"),
+    }, ],
+    details: makeDetails("single")([]),
+    isError: true,
+  };
+}
 
 // ─── 辅助函数 ────────────────────────────────────────────────────────────────
 
 /** 创建 makeDetails 工厂 */
 const makeDetails =
   (mode: "single" | "parallel" | "chain" | "list" | "status") =>
-  (results: RunResult[]): SubagentDetails => ({ mode, results });
+  (results: RunResult[]): SubagentDetails => ({
+    mode,
+    results
+  });
 
 // ─── Extension Entry ─────────────────────────────────────────────────────────
 
-export default function (pi: ExtensionAPI) {
+export default function(pi: ExtensionAPI) {
   const config = loadConfig();
   const subagentsConfig = loadSubagentsConfig();
 
@@ -105,7 +191,7 @@ export default function (pi: ExtensionAPI) {
       signal,
       _onUpdate,
       _ctx,
-    ): Promise<AgentToolResult<SubagentDetails>> {
+    ): Promise < AgentToolResult < SubagentDetails >> {
       const agents = discoverAgents();
       const prompts = discoverPrompts();
       const effectiveCwd = params.cwd ?? process.cwd();
@@ -124,7 +210,7 @@ export default function (pi: ExtensionAPI) {
         const promptLines = prompts
           .map(
             (p) =>
-              `| ${p.name} | ${p.mode} | ${p.description.slice(0, 40)}… | /${p.name} <${p.param}> |`,
+            `| ${p.name} | ${p.mode} | ${p.description.slice(0, 40)}… | /${p.name} <${p.param}> |`,
           )
           .join("\n");
         const list = [
@@ -139,7 +225,10 @@ export default function (pi: ExtensionAPI) {
           promptLines || "| (none) | | | |",
         ].join("\n");
         return {
-          content: [{ type: "text", text: list }],
+          content: [{
+            type: "text",
+            text: list
+          }],
           details: makeDetails("list")([]),
         };
       }
@@ -149,21 +238,25 @@ export default function (pi: ExtensionAPI) {
       if (params.action === "status") {
         if (params.id) {
           const runDir = getRunDir(params.id);
-          let statusJson: Record<string, unknown>;
+          let statusJson: Record < string, unknown > ;
           try {
             statusJson = JSON.parse(
               fs.readFileSync(path.join(runDir, "status.json"), "utf-8"),
             );
           } catch {
             return {
-              content: [{ type: "text", text: `未找到 run: ${params.id}` }],
+              content: [{
+                type: "text",
+                text: `未找到 run: ${params.id}`
+              }],
               details: makeDetails("status")([]),
             };
           }
           return {
-            content: [
-              { type: "text", text: JSON.stringify(statusJson, null, 2) },
-            ],
+            content: [{
+              type: "text",
+              text: JSON.stringify(statusJson, null, 2)
+            }, ],
             details: makeDetails("status")([]),
           };
         }
@@ -171,7 +264,10 @@ export default function (pi: ExtensionAPI) {
         const running = listRunning();
         if (running.length === 0) {
           return {
-            content: [{ type: "text", text: "无运行中的 subagent" }],
+            content: [{
+              type: "text",
+              text: "无运行中的 subagent"
+            }],
             details: makeDetails("status")([]),
           };
         }
@@ -179,7 +275,10 @@ export default function (pi: ExtensionAPI) {
           (r) => `- **${r.runId}**: ${r.output.slice(0, 80)}...`,
         );
         return {
-          content: [{ type: "text", text: lines.join("\n") }],
+          content: [{
+            type: "text",
+            text: lines.join("\n")
+          }],
           details: makeDetails("status")(running),
         };
       }
@@ -189,37 +288,37 @@ export default function (pi: ExtensionAPI) {
       if (params.chain && params.chain.length > 0) {
         if (params.chain.length > config.maxTasks) {
           return {
-            content: [
-              {
-                type: "text",
-                text: `chain 任务数 ${params.chain.length} 超过上限 ${config.maxTasks}`,
-              },
-            ],
+            content: [{
+              type: "text",
+              text: `chain 任务数 ${params.chain.length} 超过上限 ${config.maxTasks}`,
+            }, ],
             details: makeDetails("chain")([]),
             isError: true,
           };
         }
 
-        const chainEntries: Array<{
+        const chainEntries: Array < {
           agent: AgentConfig;
           task: string;
-          cwd?: string;
-        }> = [];
+          cwd ? : string;
+        } > = [];
         for (const t of params.chain) {
           const agent = agents.find((a) => a.name === t.agent);
           if (!agent) {
             const available = agents.map((a) => a.name).join(", ") || "none";
             return {
-              content: [
-                {
-                  type: "text",
-                  text: `未知 agent: "${t.agent}"。可用: ${available}`,
-                },
-              ],
+              content: [{
+                type: "text",
+                text: `未知 agent: "${t.agent}"。可用: ${available}`,
+              }, ],
               details: makeDetails("chain")([]),
             };
           }
-          chainEntries.push({ agent, task: t.task, cwd: params.cwd });
+          chainEntries.push({
+            agent,
+            task: t.task,
+            cwd: params.cwd
+          });
         }
 
         try {
@@ -234,15 +333,19 @@ export default function (pi: ExtensionAPI) {
           );
           appendSessionLog("chain", results);
           return {
-            content: [{ type: "text", text: formatResults(results) }],
+            content: [{
+              type: "text",
+              text: formatResults(results)
+            }],
             details: makeDetails("chain")(results),
             isError: results.some((r) => r.status === "failed") || undefined,
           };
         } catch (err) {
           return {
-            content: [
-              { type: "text", text: `启动失败: ${(err as Error).message}` },
-            ],
+            content: [{
+              type: "text",
+              text: `启动失败: ${(err as Error).message}`
+            }, ],
             details: makeDetails("chain")([]),
             isError: true,
           };
@@ -254,37 +357,37 @@ export default function (pi: ExtensionAPI) {
       if (params.tasks && params.tasks.length > 0) {
         if (params.tasks.length > config.maxTasks) {
           return {
-            content: [
-              {
-                type: "text",
-                text: `parallel 任务数 ${params.tasks.length} 超过上限 ${config.maxTasks}`,
-              },
-            ],
+            content: [{
+              type: "text",
+              text: `parallel 任务数 ${params.tasks.length} 超过上限 ${config.maxTasks}`,
+            }, ],
             details: makeDetails("parallel")([]),
             isError: true,
           };
         }
 
-        const taskEntries: Array<{
+        const taskEntries: Array < {
           agent: AgentConfig;
           task: string;
-          cwd?: string;
-        }> = [];
+          cwd ? : string;
+        } > = [];
         for (const t of params.tasks) {
           const agent = agents.find((a) => a.name === t.agent);
           if (!agent) {
             const available = agents.map((a) => a.name).join(", ") || "none";
             return {
-              content: [
-                {
-                  type: "text",
-                  text: `未知 agent: "${t.agent}"。可用: ${available}`,
-                },
-              ],
+              content: [{
+                type: "text",
+                text: `未知 agent: "${t.agent}"。可用: ${available}`,
+              }, ],
               details: makeDetails("parallel")([]),
             };
           }
-          taskEntries.push({ agent, task: t.task, cwd: params.cwd });
+          taskEntries.push({
+            agent,
+            task: t.task,
+            cwd: params.cwd
+          });
         }
 
         try {
@@ -298,15 +401,19 @@ export default function (pi: ExtensionAPI) {
           );
           appendSessionLog("parallel", results);
           return {
-            content: [{ type: "text", text: formatResults(results) }],
+            content: [{
+              type: "text",
+              text: formatResults(results)
+            }],
             details: makeDetails("parallel")(results),
             isError: results.some((r) => r.status === "failed") || undefined,
           };
         } catch (err) {
           return {
-            content: [
-              { type: "text", text: `启动失败: ${(err as Error).message}` },
-            ],
+            content: [{
+              type: "text",
+              text: `启动失败: ${(err as Error).message}`
+            }, ],
             details: makeDetails("parallel")([]),
             isError: true,
           };
@@ -316,16 +423,22 @@ export default function (pi: ExtensionAPI) {
       // ── single 模式 ─────────────────────────────────────────────────
 
       if (params.agent && params.task) {
+        // worker single 模式硬警告 + 30s override grace
+        if (params.agent === "worker") {
+          const verdict = checkWorkerSingleOverride();
+          if (verdict === "warn") {
+            return workerSingleWarnResponse();
+          }
+        }
+
         const agent = agents.find((a) => a.name === params.agent);
         if (!agent) {
           const available = agents.map((a) => a.name).join(", ") || "none";
           return {
-            content: [
-              {
-                type: "text",
-                text: `未知 agent: "${params.agent}"。可用: ${available}`,
-              },
-            ],
+            content: [{
+              type: "text",
+              text: `未知 agent: "${params.agent}"。可用: ${available}`,
+            }, ],
             details: makeDetails("single")([]),
           };
         }
@@ -350,15 +463,19 @@ export default function (pi: ExtensionAPI) {
           }
           appendSessionLog("single", [result]);
           return {
-            content: [{ type: "text", text: result.output }],
+            content: [{
+              type: "text",
+              text: result.output
+            }],
             details: makeDetails("single")([result]),
             isError: result.status === "failed" || undefined,
           };
         } catch (err) {
           return {
-            content: [
-              { type: "text", text: `启动失败: ${(err as Error).message}` },
-            ],
+            content: [{
+              type: "text",
+              text: `启动失败: ${(err as Error).message}`
+            }, ],
             details: makeDetails("single")([]),
             isError: true,
           };
@@ -367,7 +484,10 @@ export default function (pi: ExtensionAPI) {
 
       const available = agents.map((a) => a.name).join(", ") || "none";
       return {
-        content: [{ type: "text", text: `参数无效。可用 agent: ${available}` }],
+        content: [{
+          type: "text",
+          text: `参数无效。可用 agent: ${available}`
+        }],
         details: makeDetails("single")([]),
       };
     },
@@ -430,9 +550,9 @@ export default function (pi: ExtensionAPI) {
 
           if (result.status === "completed") {
             ensureWorkfile(result, ctx.cwd, startedAt);
-            const workfileNote = result.workfilePath
-              ? `\n📄 ${result.workfilePath}`
-              : "";
+            const workfileNote = result.workfilePath ?
+              `\n📄 ${result.workfilePath}` :
+              "";
             ctx.ui.notify(
               `✅ ${agent.name} 完成 (${(result.durationMs / 1000).toFixed(1)}s)${workfileNote}\n\n${result.output.slice(0, 4000)}${result.output.length > 4000 ? "\n...（截断）" : ""}`,
               "info",
@@ -484,7 +604,10 @@ export default function (pi: ExtensionAPI) {
             const chainEntries = resolvedEntries.map((e) => {
               const agent = agents.find((a) => a.name === e.agent);
               if (!agent) throw new Error(`未知 agent: ${e.agent}`);
-              return { agent, task: e.task };
+              return {
+                agent,
+                task: e.task
+              };
             });
             results = await runChain(
               chainEntries,
@@ -497,7 +620,10 @@ export default function (pi: ExtensionAPI) {
             const taskEntries = resolvedEntries.map((e) => {
               const agent = agents.find((a) => a.name === e.agent);
               if (!agent) throw new Error(`未知 agent: ${e.agent}`);
-              return { agent, task: e.task };
+              return {
+                agent,
+                task: e.task
+              };
             });
             results = await runParallelBatches(
               taskEntries,
@@ -539,30 +665,37 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  // ── /run-plan 命令：清空上下文，在新会话中执行已审查的计划 ─────────
-  //
-  // 流程：
-  //   1. 读取 .agents/current-plan.md
-  //   2. 立即归档到 .agents/archive/plan-<timestamp>.md（防反复触发）
-  //   3. newSession() 创建清空上下文的新会话
-  //   4. 将计划内容作为用户消息注入新会话
+  // ── /run-plan 命令：loop 框架薄包装 ────────────────────────────────
+  // 读 .agents/current-plan.md → 归档 → loopctl start → step
 
   pi.registerCommand("run-plan", {
     description: "清空当前上下文，在新会话中执行已通过审查的计划",
     handler: async (_args, ctx) => {
       const planPath = path.join(ctx.cwd, ".agents", "current-plan.md");
+      const loopctlBin = "loopctl";
 
-      // 检查计划文件是否存在
       if (!fs.existsSync(planPath)) {
         ctx.ui.notify(
           "❌ 未找到已审查的计划。\n" +
-            "请先用 plannotator 生成计划并让 oracle 审查通过。",
+          "请先用 plannotator 生成计划并让 oracle 审查通过。",
           "error",
         );
         return;
       }
 
-      // 读取计划内容
+      try {
+        execFileSync("which", [loopctlBin], {
+          encoding: "utf-8"
+        });
+      } catch {
+        ctx.ui.notify(
+          "❌ loopctl 未找到。请确认 ~/.local/bin/loopctl 存在且在 PATH 中。",
+          "error",
+        );
+        return;
+      }
+
+      // 读取 + 归档
       let planContent: string;
       try {
         planContent = fs.readFileSync(planPath, "utf-8");
@@ -571,9 +704,10 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      // 立即归档（防反复触发）
       const archiveDir = path.join(ctx.cwd, ".agents", "archive");
-      fs.mkdirSync(archiveDir, { recursive: true });
+      fs.mkdirSync(archiveDir, {
+        recursive: true
+      });
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const archivePath = path.join(archiveDir, `plan-${timestamp}.md`);
       try {
@@ -583,45 +717,68 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      ctx.ui.notify(
-        `📋 计划已归档到 ${archivePath}\n🔄 正在创建新会话...`,
-        "info",
-      );
-
-      // 构建注入新会话的指令
-      const executionPrompt = [
-        "请按照以下已审查的实施计划开始执行。",
-        "",
-        "执行要求：",
-        "1. 严格按计划步骤执行，不要跳过或重新评估已完成审查的决策",
-        "2. 每完成一个步骤，简要标注进度",
-        "3. 遇到阻塞（无法绕过的错误）立即上报，不要自行扩大范围",
-        "4. 完成后调用 reviewer 审查实施结果",
-        "",
-        "---",
-        "# 实施计划",
-        "",
-        planContent,
-      ].join("\n");
-
-      // 创建新会话并注入计划
+      // loopctl 启动 + 第一轮
+      const loopName = `plan-${timestamp}`;
       try {
-        const result = await ctx.newSession({
-          parentSession: ctx.sessionManager?.currentPath,
-          setup: async (sessionManager) => {
-            // 新会话创建后的设置回调
+        execFileSync(
+          loopctlBin,
+          [loopName, "start", "--task-file", archivePath, "--adapter", "pi"], {
+            cwd: ctx.cwd,
+            encoding: "utf-8",
           },
-          withSession: async (newCtx) => {
-            // 向新会话注入计划作为初始用户消息
-            newCtx.sendUserMessage(executionPrompt);
-          },
+        );
+        ctx.ui.notify(
+          `📋 计划已作为 loop "${loopName}" 启动，正在执行第一轮...`,
+          "info",
+        );
+        execFileSync(loopctlBin, [loopName, "step"], {
+          cwd: ctx.cwd,
+          encoding: "utf-8",
+          timeout: 600_000,
+          maxBuffer: 10 * 1024 * 1024,
         });
+        ctx.ui.notify(`✅ Loop "${loopName}" 第一轮完成`, "info");
+      } catch (err: any) {
+        const output = (err.stdout || err.stderr || err.message) as string;
+        ctx.ui.notify(`❌ loopctl 错误: ${output.slice(0, 500)}`, "error");
+      }
+    },
+  });
 
-        if (result.cancelled) {
-          ctx.ui.notify("⚠️ 用户取消了新会话创建", "warn");
-        }
-      } catch (err) {
-        ctx.ui.notify(`❌ 创建新会话失败: ${(err as Error).message}`, "error");
+  // ── /loop 命令：loopctl 前端薄包装 ──────────────────────────────────
+
+  pi.registerCommand("loop", {
+    description: "loopctl 前端：管理跨 agent 长期迭代循环",
+    handler: async (args, ctx) => {
+      const loopctlBin = "loopctl";
+
+      try {
+        execFileSync("which", [loopctlBin], {
+          encoding: "utf-8"
+        });
+      } catch {
+        ctx.ui.notify(
+          "❌ loopctl 未找到。请确认 ~/.local/bin/loopctl 存在且在 PATH 中。",
+          "error",
+        );
+        return;
+      }
+
+      const trimmed = args.trim();
+      const cmdArgs: string[] = trimmed ?
+        trimmed.split(/\s+/) : ["list", "--all"];
+
+      try {
+        const result = execFileSync(loopctlBin, cmdArgs, {
+          cwd: ctx.cwd,
+          encoding: "utf-8",
+          timeout: 600_000,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        ctx.ui.notify(result.trim() || "(无输出)", "info");
+      } catch (err: any) {
+        const output = (err.stdout || err.stderr || err.message) as string;
+        ctx.ui.notify(`❌ loopctl 错误: ${output.slice(0, 500)}`, "error");
       }
     },
   });
@@ -643,7 +800,9 @@ export default function (pi: ExtensionAPI) {
 
       // 保存图片到临时文件
       const tmpDir = path.join(os.tmpdir(), "pi-visual");
-      fs.mkdirSync(tmpDir, { recursive: true });
+      fs.mkdirSync(tmpDir, {
+        recursive: true
+      });
       const savedPaths: string[] = [];
 
       for (let i = 0; i < images.length; i++) {
@@ -710,11 +869,13 @@ export default function (pi: ExtensionAPI) {
     function isPlanModeActive(
       ctx: {
         sessionManager: {
-          getEntries(): ReadonlyArray<{
+          getEntries(): ReadonlyArray < {
             type: string;
-            customType?: string;
-            data?: { phase?: string };
-          }>;
+            customType ? : string;
+            data ? : {
+              phase ? : string
+            };
+          } > ;
         };
       },
       systemPrompt: string,
@@ -740,11 +901,7 @@ export default function (pi: ExtensionAPI) {
      * 文件不存在或读取失败返回 null。
      */
     function loadMainSessionAgentContext(agentName: string): string | null {
-      const agentPath = path.join(
-        getAgentDir(),
-        "agents",
-        `${agentName}.md`,
-      );
+      const agentPath = path.join(getAgentDir(), "agents", `${agentName}.md`);
       try {
         const content = fs.readFileSync(agentPath, "utf-8");
         return stripSubagentOnlySection(content);
@@ -763,13 +920,12 @@ export default function (pi: ExtensionAPI) {
       if (!contextContent) return; // 静默失败（agent .md 缺失），不加注入
 
       // plan mode 下追加优先级提示：plannotator 的 plan 约束优先于本上下文
-      const priorityHint = planMode
-        ? "\n\n# 优先级提示：plan mode 下，plannotator 注入的 [PLANNOTATOR - PLANNING PHASE] 段中的所有约束优先级最高，与本文冲突时遵循 plannotator。\n"
-        : "";
+      const priorityHint = planMode ?
+        "\n\n# 优先级提示：plan mode 下，plannotator 注入的 [PLANNOTATOR - PLANNING PHASE] 段中的所有约束优先级最高，与本文冲突时遵循 plannotator。\n" :
+        "";
 
       return {
-        systemPrompt:
-          event.systemPrompt + priorityHint + "\n\n" + contextContent,
+        systemPrompt: event.systemPrompt + priorityHint + "\n\n" + contextContent,
       };
     });
   }
@@ -783,7 +939,7 @@ export default function (pi: ExtensionAPI) {
   //   4. 提示 LLM 通知用户执行 /run-plan（清空上下文，在新会话中执行计划）
 
   {
-    const reviewedPlans = new Set<string>();
+    const reviewedPlans = new Set < string > ();
     const approvedPlanPath = path.join(
       process.cwd(),
       ".agents",
@@ -803,15 +959,16 @@ export default function (pi: ExtensionAPI) {
         try {
           const planContent = fs.readFileSync(planFilePath, "utf-8");
           const planDir = path.dirname(approvedPlanPath);
-          fs.mkdirSync(planDir, { recursive: true });
+          fs.mkdirSync(planDir, {
+            recursive: true
+          });
           fs.writeFileSync(approvedPlanPath, planContent, "utf-8");
         } catch {
           // 保存失败不阻塞，/run-plan 会报错提示
         }
 
         return {
-          systemPrompt:
-            "✅ 计划已通过 oracle 审查并保存。" +
+          systemPrompt: "✅ 计划已通过 oracle 审查并保存。" +
             "请通知用户：执行 `/run-plan` 开始实施（将清空当前上下文，在新会话中执行计划）。" +
             "如果用户不想清空上下文，也可以直接按计划执行。",
         };
