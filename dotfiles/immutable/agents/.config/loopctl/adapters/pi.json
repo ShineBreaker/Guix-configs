@@ -1,0 +1,42 @@
+{
+  "name": "pi",
+  "version": "1.0",
+  "description": "Pi Coding Agent",
+  "bin": "pi",
+  "bin_check": ["pi", "--version"],
+  "bin_min_version": "0.75.5",
+
+  "run": {
+    "args_template": ["-p", "--mode", "json", "--no-session"],
+    "input_method": "arg",
+    "input_flag": null,
+    "output_format": "jsonl",
+    "working_dir": "project_root",
+    "timeout_sec": 600
+  },
+
+  "extract": {
+    "type": "jsonl-last-assistant-text"
+  },
+
+  "session": {
+    "supported": true,
+    "fresh_per_step": true,
+    "session_dir_flag": "--session-dir",
+    "resume_flag": "--resume"
+  },
+
+  "completion": {
+    "marker": "<promise>LOOP_COMPLETE</promise>",
+    "marker_scan_tail_chars": 4000,
+    "native_command": null
+  },
+
+  "env": {},
+
+  "extra_args": [],
+
+  "examples": {
+    "smoke_test_prompt": "Reply with exactly: OK"
+  }
+}

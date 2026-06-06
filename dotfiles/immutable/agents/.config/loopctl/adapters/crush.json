@@ -1,0 +1,42 @@
+{
+  "name": "crush",
+  "version": "1.0",
+  "description": "Crush AI Agent",
+  "bin": "crush",
+  "bin_check": ["crush", "--version"],
+  "bin_min_version": "0.57.0",
+
+  "run": {
+    "args_template": ["run"],
+    "input_method": "stdin",
+    "input_flag": null,
+    "output_format": "text",
+    "working_dir": "project_root",
+    "timeout_sec": 600
+  },
+
+  "extract": {
+    "type": "text"
+  },
+
+  "session": {
+    "supported": true,
+    "fresh_per_step": true,
+    "session_dir_flag": null,
+    "resume_flag": "--continue"
+  },
+
+  "completion": {
+    "marker": "<promise>LOOP_COMPLETE</promise>",
+    "marker_scan_tail_chars": 4000,
+    "native_command": null
+  },
+
+  "env": {},
+
+  "extra_args": [],
+
+  "examples": {
+    "smoke_test_prompt": "Reply with exactly: OK"
+  }
+}

@@ -1,0 +1,41 @@
+# 循环: ${LOOP_NAME} | 第 ${ITERATION}/${MAX_ITERATIONS} 轮 | Agent: ${AGENT}
+
+**任务**（完整描述见任务文件）：
+${TASK}
+
+---
+
+**检查点（必须阅读）**：${CHECKPOINT}
+
+---
+
+**进展**：
+
+- Git 变更：${GIT_SUMMARY}
+- 上轮输出尾部：${OUTPUT_TAIL}
+
+---
+
+## loopctl 命令速查
+
+| 命令                                                     | 用途                                   |
+| -------------------------------------------------------- | -------------------------------------- |
+| `echo "内容" \| loopctl ${LOOP_NAME} checkpoint --stdin` | 保存检查点（**每轮结束时必须写**）     |
+| `loopctl ${LOOP_NAME} next`                              | 当前轮完成，跳到下一轮                 |
+| `loopctl ${LOOP_NAME} fail "原因"`                       | 报告失败并终止循环                     |
+| `loopctl ${LOOP_NAME} done`                              | 手动标记完成（通常由 marker 自动触发） |
+
+- **完成标记**：输出末尾包含 `${MARKER}` 时自动标记完成
+- **文件约定**：检查点文件自动检测 `$XDG_CACHE_HOME/loops/${LOOP_NAME}/checkpoint-NNN.md`
+- **迭代上限**：达到 ${MAX_ITERATIONS} 轮后自动 done
+
+---
+
+**本轮任务**：
+
+1. 阅读上方引用的检查点文件
+2. 推进待办事项
+3. 轮次结束时，通过 `loopctl ${LOOP_NAME} checkpoint --stdin` 写入新检查点
+4. 如果整个任务已完成，在输出末尾包含 `${MARKER}`
+
+**约束**：输出不超过 4000 字符。遇到阻塞时执行 `loopctl ${LOOP_NAME} fail "原因"`。完成当前轮后可用 `loopctl ${LOOP_NAME} next` 手动触发下一轮（否则 agent 进程退出后自动进入下一轮）。

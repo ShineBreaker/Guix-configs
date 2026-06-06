@@ -1,0 +1,44 @@
+{
+  "name": "codex",
+  "version": "1.0",
+  "description": "OpenAI Codex CLI",
+  "bin": "codex",
+  "bin_check": ["codex", "--version"],
+  "bin_min_version": "0.136.0",
+
+  "run": {
+    "args_template": ["exec", "--json", "--ephemeral"],
+    "input_method": "arg",
+    "input_flag": null,
+    "output_format": "jsonl",
+    "working_dir": "project_root",
+    "timeout_sec": 600
+  },
+
+  "extract": {
+    "type": "jsonl-last-assistant-text"
+  },
+
+  "session": {
+    "supported": true,
+    "fresh_per_step": true,
+    "session_dir_flag": null,
+    "resume_flag": null
+  },
+
+  "completion": {
+    "marker": "<promise>LOOP_COMPLETE</promise>",
+    "marker_scan_tail_chars": 4000,
+    "native_command": null
+  },
+
+  "env": {
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+  },
+
+  "extra_args": [],
+
+  "examples": {
+    "smoke_test_prompt": "Reply with exactly: OK"
+  }
+}

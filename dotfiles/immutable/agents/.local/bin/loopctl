@@ -1,0 +1,741 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 brokenshine <brokenshine@users.noreply.codeberg.org>
+# SPDX-License-Identifier: MIT
+#
+# loopctl — Loop 驱动层主入口
+# POSIX sh 兼容，无 bashism，不依赖 jq
+#
+# 用法：loopctl <command> [args...]
+#       loopctl <loop-name> <command> [args...]
+
+set -e
+
+# ======== 加载库 ========
+_LOOPCTL_BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+_LOOPCTL_SELF="$_LOOPCTL_BIN_DIR/loopctl"
+export _LOOPCTL_LIB_DIR="$_LOOPCTL_BIN_DIR/loop_lib"
+. "$_LOOPCTL_LIB_DIR/common.sh"
+. "$_LOOPCTL_LIB_DIR/log.sh"
+. "$_LOOPCTL_LIB_DIR/state.sh"
+. "$_LOOPCTL_LIB_DIR/prompt.sh"
+. "$_LOOPCTL_LIB_DIR/agent.sh"
+. "$_LOOPCTL_LIB_DIR/adapter-cmds.sh"
+
+# ======== 使用说明 ========
+
+# 顶层概览
+usage() {
+    cat <<EOF
+loopctl — 跨 Agent 迭代循环驱动器 (接力棒模型)
+
+循环 (loop) 是一个有状态的迭代过程：创建 → 逐轮执行 → 完成/失败/归档。
+每轮由一个 agent (通过 adapter 配置) 执行，输出自动提取并持久化。
+
+USAGE
+  loopctl <command> [args...]
+  loopctl <loop-name> <command> [args...]
+
+COMMANDS
+  help [topic]             显示帮助（topic: adapter / start / loop / general）
+  list [--all]             列出活跃循环（--all 含已完成/失败/归档）
+  doctor                   健康检查（目录、adapter、模板、运行中循环）
+
+  adapter <subcmd>         管理 adapter 配置（详见 loopctl help adapter）
+
+  <loop-name> start ...    创建循环（详见 loopctl help start）
+  <loop-name> next         触发下一轮
+  <loop-name> status       显示循环状态
+  <loop-name> watch        连接到循环的 tmux session
+  <loop-name> done         手动标记完成
+  <loop-name> fail [msg]   手动标记失败
+  <loop-name> cancel       取消循环
+  <loop-name> pause        暂停（可 resume 恢复）
+  <loop-name> resume       恢复暂停的循环
+  <loop-name> archive      归档（移入 archive/）
+  <loop-name> checkpoint   写入检查点（从 stdin 读取）
+
+EXAMPLES
+  # 查看 adapter 和循环状态
+  loopctl adapter list
+  loopctl list --all
+  loopctl doctor
+
+  # 创建并执行一个 3 轮循环
+  loopctl my-task start --task "重构 auth 模块" --adapter pi --max-iterations 3
+  loopctl my-task next
+  loopctl my-task status
+  loopctl my-task done
+
+  # 查看详细帮助
+  loopctl help adapter     # adapter 管理
+  loopctl help start       # start 选项详解
+  loopctl help loop        # 循环操作命令
+  loopctl help general     # list / doctor
+EOF
+    exit "${1:-0}"
+}
+
+# help adapter
+usage_adapter() {
+    cat <<EOF
+loopctl adapter — 管理 agent adapter 配置
+
+Adapter 是声明式 JSON 文件，描述如何调用一个 agent CLI。
+配置目录: \$XDG_CONFIG_HOME/loopctl/adapters/
+
+USAGE
+  loopctl adapter list                列出所有 adapter + 二进制可用性
+  loopctl adapter show <name>         显示 adapter JSON 全文
+  loopctl adapter add <name>          交互式创建新 adapter
+  loopctl adapter test <name>         smoke test（实际启动 agent）
+
+ADAPTER JSON 字段
+  bin                   agent CLI 二进制名（PATH 查找）
+  run.input_method      stdin | arg | file
+  run.args_template     固定参数数组，如 ["-p", "--no-session"]
+  run.timeout_sec       单轮超时（默认 300）
+  extract.type          text | jsonl-last-assistant-text | jsonl-last-text
+  completion.marker     完成标记（默认 <promise>COMPLETE</promise>）
+  session.fresh_per_step  true = 每轮新会话
+
+EXAMPLES
+  loopctl adapter list
+  loopctl adapter show pi
+  loopctl adapter add my-tool
+  loopctl adapter test pi
+
+FILES
+  模板:   \$XDG_CONFIG_HOME/loopctl/adapters/_TEMPLATE.json
+  提取器: \$XDG_CONFIG_HOME/loopctl/templates/extract/
+EOF
+    exit 0
+}
+
+# help start
+usage_start() {
+    cat <<EOF
+loopctl <name> start — 创建新循环
+
+创建一个命名循环，写入初始 state.json 到 active/ 目录。
+state 文件跟踪迭代次数、状态、adapter、checkpoint 等全部运行时信息。
+
+USAGE
+  loopctl <name> start --task "描述" --adapter <a> [options]
+  loopctl <name> start --task-file <path> --adapter <a> [options]
+
+<name> 是循环标识符，经 safe_name 规范化（小写、a-z0-9_-）。
+同名循环不允许重复（需先 done / fail / cancel）。
+
+OPTIONS
+  --task "描述"           任务描述（与 --task-file 二选一，必需）
+  --task-file <path>      从文件读取任务描述
+  --adapter <name>        adapter 名称（必需，必须存在于 adapters/ 目录）
+  --max-iterations <n>    最大迭代次数（默认 50，达到后自动标记 done）
+  --cwd <dir>             工作目录（默认当前目录，agent 在此目录下执行）
+  --model <name>          模型名称（透传给 adapter，可选）
+
+LIFECYCLE
+  start → 自动循环（tmux 前台）→ done/fail/cancel
+              ↑
+          pause/resume 可穿插
+
+EXAMPLES
+  # 基本用法
+  loopctl refactor start --task "重构 auth 模块" --adapter pi
+
+  # 从文件读取任务，限制 5 轮
+  loopctl nightly start --task-file ./task.md --adapter opencode --max-iterations 5
+
+  # 指定工作目录
+  loopctl build start --task "编译并修复错误" --adapter claude-code --cwd ~/project
+
+STATE FILES
+  \$XDG_DATA_HOME/loopctl/active/<name>.state.json   循环状态
+  \$XDG_DATA_HOME/loopctl/active/<name>.task.md       任务文件
+  \$XDG_CACHE_HOME/loops/<name>/iter-NNN.*.md         每轮 prompt/output
+EOF
+    exit 0
+}
+
+# help loop
+usage_loop() {
+    cat <<EOF
+loopctl <name> — 循环操作命令
+
+对一个已存在的循环执行操作。循环必须处于 active 或 paused 状态
+（status / watch / archive 除外）。
+
+USAGE
+  loopctl <name> status            显示 state.json 全文
+  loopctl <name> watch             连接到循环的 tmux session
+  loopctl <name> next              触发下一轮（在 tmux 中使用）
+  loopctl <name> done              标记完成 → 移入 done/
+  loopctl <name> fail [reason]     标记失败 → 移入 failed/
+  loopctl <name> cancel            取消 → 移入 failed/（状态=cancelled）
+  loopctl <name> pause             暂停
+  loopctl <name> resume            恢复暂停
+  loopctl <name> archive           归档 → 移入 archive/（含时间戳）
+  loopctl <name> checkpoint        写入检查点（从 stdin 读取内容）
+
+自动循环流程
+  start 后自动进入 tmux 分屏模式：
+  1. 上方 pane 运行 agent（用户可直接操作）
+  2. 下方 pane 显示底栏状态（迭代进度、等待时间）
+  3. agent 退出 = 一轮完成，底栏自动启动下一轮
+  4. 达到 max_iterations 或检测到 completion marker → 自动 done
+
+CHECKPOINT
+  agent 可通过写入文件来保存检查点：
+    \$XDG_CACHE_HOME/loops/<name>/checkpoint-NNN.md
+  或使用命令行接口：
+    echo "检查点内容" | loopctl <name> checkpoint
+
+EXAMPLES
+  loopctl refactor status        # 查看当前状态
+  loopctl refactor watch         # 连接到 tmux session
+  loopctl refactor next          # 触发下一轮
+  loopctl refactor pause         # 暂停
+  loopctl refactor done          # 手动标记完成
+
+STATE DIRS
+  active/      运行中的循环
+  done/        已完成
+  failed/      已失败/已取消
+  archive/     已归档（含时间戳）
+  checkpoints/ 检查点符号链接
+EOF
+    exit 0
+}
+
+# help general
+usage_general() {
+    cat <<EOF
+loopctl — 全局命令
+
+USAGE
+  loopctl list [--all]        列出活跃循环
+  loopctl doctor               健康检查
+  loopctl help [topic]         帮助系统
+
+LIST
+  列出 active/ 下的循环，显示名称、迭代进度、adapter、状态。
+  加 --all 时额外统计 done/failed/archive 数量。
+
+  输出格式:
+    <name>                   iter=N/M agent=<a> status=<s>
+
+DOCTOR
+  检查 loopctl 运行所需的全部组件：
+  - 运行时目录（active/done/failed/archive/checkpoints）
+  - Adapter 配置（JSON 文件 + 二进制可用性）
+  - 提取脚本（可执行性）
+  - 模板文件（task/continuation/checkpoint .md.tmpl）
+  - 活跃循环状态
+  - 孤立 checkpoint 符号链接
+
+  退出码 = 发现的问题数（0 = 全部正常）
+
+HELP
+  loopctl help                总览
+  loopctl help adapter        adapter 子命令
+  loopctl help start          start 选项详解
+  loopctl help loop           循环操作命令
+  loopctl help general        本页
+
+EXAMPLES
+  loopctl list                 # 活跃循环
+  loopctl list --all           # 含历史统计
+  loopctl doctor               # 健康检查
+  loopctl doctor; echo "issues: $?"  # 检查并输出问题数
+EOF
+    exit 0
+}
+
+# ======== Loop 生命周期命令 ========
+
+cmd_start() {
+    _cs_name="$1"
+    shift
+    if [ -z "$_cs_name" ]; then
+        die "Usage: loopctl <name> start --task '...' --adapter <name>" 1
+    fi
+
+    _cs_task=""
+    _cs_adapter=""
+    _cs_max_iter="50"
+    _cs_cwd="$(pwd)"
+    _cs_model=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --task)        _cs_task="$2"; shift 2 ;;
+            --task-file)   _cs_task="$(cat "$2")"; shift 2 ;;
+            --adapter)     _cs_adapter="$2"; shift 2 ;;
+            --max-iterations) _cs_max_iter="$2"; shift 2 ;;
+            --cwd)         _cs_cwd="$2"; shift 2 ;;
+            --model)       _cs_model="$2"; shift 2 ;;
+            *)             die "Unknown option: $1" 1 ;;
+        esac
+    done
+
+    if [ -z "$_cs_task" ]; then die "--task or --task-file is required" 1; fi
+    if [ -z "$_cs_adapter" ]; then die "--adapter is required" 1; fi
+    if [ ! -f "$ADAPTERS_DIR/${_cs_adapter}.json" ]; then die "Adapter '$_cs_adapter' not found" 4; fi
+
+    _cs_safe_name="$(safe_name "$_cs_name")"
+    ensure_dirs
+
+    # 从 adapter 读取 completion marker
+    load_adapter "$_cs_adapter"
+    _cs_marker="$ADAPTER_MARKER"
+
+    _cs_state_file="$(state_init "$_cs_safe_name" "$_cs_task" "$_cs_adapter" "$_cs_cwd" "$_cs_max_iter" "$_cs_model" "$_cs_marker")"
+
+    if [ -d "$_cs_cwd/.git" ]; then
+        _cs_branch="$(cd "$_cs_cwd" && git rev-parse --abbrev-ref HEAD 2>/dev/null)" || _cs_branch=""
+        if [ -n "$_cs_branch" ]; then
+            json_set "$_cs_state_file" "branch_at_start" "$_cs_branch"
+            json_set "$_cs_state_file" "branch" "$_cs_branch"
+        fi
+    fi
+
+    log_success "Loop '$_cs_safe_name' 已创建"
+
+    # tmux 分屏启动
+    if [ -z "$TMUX" ]; then
+        # 不在 tmux 中，创建新 session
+        tmux new-session -s "loop-$_cs_safe_name" \
+            "$_LOOPCTL_SELF $_cs_safe_name _tmux-init"
+        return $?
+    fi
+
+    # 在 tmux 中，直接分屏
+    _cs_top_pane=$(tmux display-message -p '#{pane_id}')
+    _cs_bottom_pane=$(tmux split-window -v -l 8 -P -F '#{pane_id}')
+    tmux send-keys -t "$_cs_bottom_pane" \
+        "$_LOOPCTL_SELF $_cs_safe_name _driver $_cs_top_pane" Enter
+}
+
+# cmd_tmux_init — 在新 tmux session 中初始化（分屏 + 启动 driver）
+cmd_tmux_init() {
+    _cti_name="$1"
+    _cti_top=$(tmux display-message -p '#{pane_id}')
+    _cti_bottom=$(tmux split-window -v -l 8 -P -F '#{pane_id}')
+    tmux send-keys -t "$_cti_bottom" \
+        "$_LOOPCTL_SELF $_cti_name _driver $_cti_top" Enter
+}
+
+# cmd_driver — 底栏驱动循环（在底栏 pane 中运行）
+cmd_driver() {
+    _drv_name="$1"
+    _drv_top_pane="$2"
+
+    if [ -z "$_drv_name" ]; then exit 1; fi
+    if ! state_exists "$_drv_name"; then
+        echo "[driver] Loop '$_drv_name' not found"; exit 1
+    fi
+
+    _drv_adapter="$(state_read "$_drv_name" "agent")"
+    load_adapter "$_drv_adapter"
+
+    _drv_cwd="$(state_read "$_drv_name" "cwd")"
+    _drv_cache="${XDG_CACHE_HOME:-$HOME/.cache}/loops/${_drv_name}"
+    mkdir -p "$_drv_cache"
+    _drv_signal="$_drv_cache/step-done"
+    _drv_next="$_drv_cache/next-trigger"
+
+    trap 'tmux send-keys -t "$_drv_top_pane" C-c 2>/dev/null; exit 0' EXIT INT TERM
+
+    while true; do
+        _drv_status="$(state_get_status "$_drv_name")"
+        if [ "$_drv_status" != "active" ]; then
+            _driver_echo "状态: $_drv_status — 循环结束"
+            break
+        fi
+
+        _drv_iter="$(state_read "$_drv_name" "iteration")"
+        _drv_max="$(state_read "$_drv_name" "max_iterations")"
+        if [ "$_drv_iter" -ge "$_drv_max" ] 2>/dev/null; then
+            _driver_echo "达到迭代上限 ($_drv_max) — 自动 done"
+            state_update "$_drv_name" "status" "done"
+            state_move "$_drv_name" "$DONE_DIR"
+            break
+        fi
+
+        _drv_next_iter=$((_drv_iter + 1))
+        _drv_prompt="$(render_continuation "$_drv_name")"
+
+        _driver_display "$_drv_next_iter" "$_drv_max" 0
+
+        rm -f "$_drv_signal" "$_drv_next"
+
+        # 构造 agent 命令
+        _drv_agent_cmd="$(_build_agent_cmd "$_drv_prompt" "$_drv_cwd")"
+
+        # 在上方 pane 启动 agent
+        tmux send-keys -t "$_drv_top_pane" \
+            "cd '$_drv_cwd' && ($_drv_agent_cmd); touch '$_drv_signal'" Enter
+
+        # 等待完成（agent 退出 → step-done，或用户手动 next → next-trigger）
+        _drv_wait=0
+        _drv_timeout="$ADAPTER_TIMEOUT"
+        while [ ! -f "$_drv_signal" ] && [ ! -f "$_drv_next" ]; do
+            sleep 1
+            _drv_wait=$((_drv_wait + 1))
+            if [ $((_drv_wait % 5)) -eq 0 ]; then
+                _driver_display "$_drv_next_iter" "$_drv_max" "$_drv_wait"
+            fi
+            # 超时检查
+            if [ "$((_drv_wait))" -ge "$_drv_timeout" ]; then
+                _driver_echo "超时 ($_drv_timeout s) — 终止 agent"
+                tmux send-keys -t "$_drv_top_pane" C-c 2>/dev/null
+                sleep 2
+                state_update "$_drv_name" "status" "failed"
+                state_move "$_drv_name" "$FAILED_DIR"
+                break 2
+            fi
+        done
+
+        # 更新 state
+        state_update "$_drv_name" "iteration" "$_drv_next_iter"
+        state_update "$_drv_name" "last_iteration_at" "$(iso_now)"
+    done
+
+    _driver_echo "=== Loop '$_drv_name' 结束 ==="
+}
+
+# _build_agent_cmd <prompt_file> <cwd>
+# 根据 adapter 配置构造在 shell 中执行的命令字符串
+_build_agent_cmd() {
+    _bac_prompt="$1"
+    _bac_cwd="$2"
+
+    _bac_bin="$ADAPTER_BIN"
+    _bac_args="$ADAPTER_ARGS_TEMPLATE"
+
+    case "$ADAPTER_INPUT_METHOD" in
+        stdin)  echo "'$_bac_bin' $_bac_args < '$_bac_prompt'" ;;
+        file)   echo "'$_bac_bin' $_bac_args $ADAPTER_INPUT_FLAG '$_bac_prompt'" ;;
+        arg)
+            # arg 模式：prompt 文件路径作为参数传入
+            # 如果 args_template 中有 -p 之类的 flag，prompt 跟在后面
+            if [ -n "$_bac_args" ]; then
+                echo "$_bac_bin $_bac_args '$_bac_prompt'"
+            else
+                echo "$_bac_bin '$_bac_prompt'"
+            fi
+            ;;
+        *)      echo "$_bac_bin $_bac_args" ;;
+    esac
+}
+
+# _driver_display — 底栏状态更新
+_driver_display() {
+    _dd_iter="$1"
+    _dd_max="$2"
+    _dd_wait="$3"
+    _dd_task="$(state_read "$_drv_name" "task")"
+    clear
+    printf "\033[1;36m● %s | #%s/%s | %s\033[0m\n" \
+        "$_drv_name" "$_dd_iter" "$_dd_max" "$ADAPTER_BIN"
+    printf "  任务: %s\n" "$_dd_task"
+    if [ "$_dd_wait" -gt 0 ]; then
+        printf "  等待中... %ds\n" "$_dd_wait"
+    fi
+    printf "  \033[33mloopctl %s next\033[0m 下一轮 | \033[33mloopctl %s done\033[0m 完成 | \033[33mloopctl %s cancel\033[0m 取消\n" \
+        "$_drv_name" "$_drv_name" "$_drv_name"
+}
+
+_driver_echo() {
+    printf "\033[1;33m[driver] %s\033[0m\n" "$1"
+}
+
+cmd_status() {
+    _cst_name="$1"
+    if [ -z "$_cst_name" ]; then die "Usage: loopctl <name> status" 1; fi
+    if ! state_exists "$_cst_name"; then die "Loop '$_cst_name' not found" 3; fi
+    _cst_file="$(state_get_path "$_cst_name")"
+    echo "=== Loop: $_cst_name ==="
+    echo "  state file: $_cst_file"
+    cat "$_cst_file"
+}
+
+cmd_checkpoint() {
+    _cc_name="$1"
+    if [ -z "$_cc_name" ]; then die "Usage: loopctl <name> checkpoint --stdin" 1; fi
+    if ! state_exists "$_cc_name"; then die "Loop '$_cc_name' not found" 3; fi
+
+    _cc_iteration="$(state_read "$_cc_name" "iteration")"
+    _cc_session_dir="${XDG_CACHE_HOME:-$HOME/.cache}/loops/${_cc_name}"
+    mkdir -p "$_cc_session_dir"
+
+    _cc_file="$_cc_session_dir/checkpoint-$(printf '%03d' "$_cc_iteration").md"
+    cat > "$_cc_file"
+    if [ ! -s "$_cc_file" ]; then
+        log_warn "Empty checkpoint, removing"
+        rm -f "$_cc_file"
+        return 1
+    fi
+
+    state_update "$_cc_name" "last_checkpoint" "$_cc_file"
+    ln -sf "$_cc_file" "$CHECKPOINTS_DIR/${_cc_name}.iter-$(printf '%03d' "$_cc_iteration").md"
+    log_success "Checkpoint saved: $_cc_file"
+}
+
+cmd_pause() { _cmd_simple "$1" "paused"; }
+cmd_resume() {
+    _cr_name="$1"
+    if [ -z "$_cr_name" ]; then die "Usage: loopctl <name> resume" 1; fi
+    if ! state_exists "$_cr_name" ]; then die "Loop '$_cr_name' not found" 3; fi
+    state_update "$_cr_name" "status" "active"
+    log_success "Loop '$_cr_name' → active"
+
+    # 和 start 一样启动 tmux 分屏
+    if [ -z "$TMUX" ]; then
+        tmux new-session -s "loop-$_cr_name" \
+            "$_LOOPCTL_SELF $_cr_name _tmux-init"
+        return $?
+    fi
+    _cr_top_pane=$(tmux display-message -p '#{pane_id}')
+    _cr_bottom_pane=$(tmux split-window -v -l 8 -P -F '#{pane_id}')
+    tmux send-keys -t "$_cr_bottom_pane" \
+        "$_LOOPCTL_SELF $_cr_name _driver $_cr_top_pane" Enter
+}
+
+_cmd_simple() {
+    _cs2_name="$1"; _cs2_status="$2"
+    if [ -z "$_cs2_name" ]; then die "Usage: loopctl <name> <command>" 1; fi
+    if ! state_exists "$_cs2_name"; then die "Loop '$_cs2_name' not found" 3; fi
+    state_update "$_cs2_name" "status" "$_cs2_status"
+    log_success "Loop '$_cs2_name' → $_cs2_status"
+}
+
+cmd_done() {
+    _cd_name="$1"
+    if [ -z "$_cd_name" ]; then die "Usage: loopctl <name> done" 1; fi
+    if ! state_exists "$_cd_name"; then die "Loop '$_cd_name' not found" 3; fi
+    state_update "$_cd_name" "status" "done"
+    state_move "$_cd_name" "$DONE_DIR"
+    log_success "Loop '$_cd_name' → done"
+}
+
+cmd_fail() {
+    _cf_name="$1"
+    if [ -z "$_cf_name" ]; then die "Usage: loopctl <name> fail [reason]" 1; fi
+    if ! state_exists "$_cf_name"; then die "Loop '$_cf_name' not found" 3; fi
+    state_update "$_cf_name" "status" "failed"
+    state_move "$_cf_name" "$FAILED_DIR"
+    shift 2>/dev/null || true
+    if [ $# -gt 0 ]; then log_error "Loop '$_cf_name' failed: $*"
+    else log_error "Loop '$_cf_name' → failed"; fi
+}
+
+cmd_cancel() {
+    _cc2_name="$1"
+    if [ -z "$_cc2_name" ]; then die "Usage: loopctl <name> cancel" 1; fi
+    if ! state_exists "$_cc2_name"; then die "Loop '$_cc2_name' not found" 3; fi
+    state_update "$_cc2_name" "status" "cancelled"
+    state_move "$_cc2_name" "$FAILED_DIR"
+    log_info "Loop '$_cc2_name' → cancelled"
+}
+
+cmd_next() {
+    _cn_name="$1"
+    if [ -z "$_cn_name" ]; then die "Usage: loopctl <name> next" 1; fi
+    if ! state_exists "$_cn_name"; then die "Loop '$_cn_name' not found" 3; fi
+    _cn_cache="${XDG_CACHE_HOME:-$HOME/.cache}/loops/${_cn_name}"
+    mkdir -p "$_cn_cache"
+    touch "$_cn_cache/next-trigger"
+    log_success "已触发下一轮"
+}
+
+cmd_archive() {
+    _ca_name="$1"
+    if [ -z "$_ca_name" ]; then die "Usage: loopctl <name> archive" 1; fi
+    if ! state_exists "$_ca_name"; then die "Loop '$_ca_name' not found" 3; fi
+    _ca_ts="$(date -u +"%Y%m%dT%H%M%SZ" 2>/dev/null || date +"%Y%m%dT%H%M%S")"
+    _ca_file="$(state_get_path "$_ca_name")"
+    _ca_new_name="${_ca_name}-${_ca_ts}.state.json"
+    mkdir -p "$ARCHIVE_DIR"
+    mv "$_ca_file" "$ARCHIVE_DIR/$_ca_new_name"
+    _ca_dir="$(dirname "$_ca_file")"
+    if [ -f "${_ca_dir}/${_ca_name}.task.md" ]; then
+        mv "${_ca_dir}/${_ca_name}.task.md" "$ARCHIVE_DIR/"
+    fi
+    log_success "Loop '$_ca_name' → archived as $_ca_new_name"
+}
+
+cmd_watch() {
+    _cw_name="$1"
+    if [ -z "$_cw_name" ]; then die "Usage: loopctl <name> watch" 1; fi
+    if ! state_exists "$_cw_name"; then die "Loop '$_cw_name' not found" 3; fi
+
+    _cw_session="loop-$_cw_name"
+    if tmux has-session -t "$_cw_session" 2>/dev/null; then
+        tmux attach -t "$_cw_session"
+    else
+        die "Loop '$_cw_name' 的 tmux session 不存在 (可能已结束)" 9
+    fi
+}
+
+cmd_list() {
+    _cl_all=0
+    if [ "${1:-}" = "--all" ]; then _cl_all=1; fi
+
+    _cl_found=0
+    log_info "Active loops:"
+    for _f in "$ACTIVE_DIR"/*.state.json; do
+        [ -f "$_f" ] || continue
+        _cl_found=1
+        _cl_name="$(basename "$_f" .state.json)"
+        _cl_iter="$(json_get "$_f" "iteration")"
+        _cl_max="$(json_get "$_f" "max_iterations")"
+        _cl_agent="$(json_get "$_f" "agent")"
+        _cl_status="$(json_get "$_f" "status")"
+        printf "  %-30s iter=%s/%s agent=%s status=%s\n" \
+            "$_cl_name" "$_cl_iter" "$_cl_max" "$_cl_agent" "$_cl_status"
+    done
+    if [ "$_cl_found" -eq 0 ]; then echo "  (none)"; fi
+
+    if [ "$_cl_all" -eq 1 ]; then
+        for _dir_name in DONE FAILED ARCHIVE; do
+            eval "_cl_dir=\"\${${_dir_name}_DIR}\""
+            _cl_dir_count=0
+            for _f in "$_cl_dir"/*.state.json; do
+                [ -f "$_f" ] || continue
+                _cl_dir_count=$((_cl_dir_count + 1))
+            done
+            case "$_dir_name" in
+                DONE) _cl_label="done" ;; FAILED) _cl_label="failed" ;; ARCHIVE) _cl_label="archive" ;; *) _cl_label="$_dir_name" ;;
+            esac
+            log_info "${_cl_label}: ${_cl_dir_count} loop(s)"
+        done
+    fi
+}
+
+cmd_doctor() {
+    _cdi_issues=0
+    log_info "=== loopctl doctor ==="
+
+    log_info "Directories:"
+    for _dir in "$ACTIVE_DIR" "$DONE_DIR" "$FAILED_DIR" "$ARCHIVE_DIR" "$CHECKPOINTS_DIR"; do
+        if [ -d "$_dir" ]; then log_success "  $(basename "$_dir")/ exists"
+        else log_error "  $(basename "$_dir")/ MISSING"; _cdi_issues=$((_cdi_issues + 1)); fi
+    done
+
+    log_info "Adapters:"
+    _cdi_adapter_count=0
+    for _f in "$ADAPTERS_DIR"/*.json; do
+        [ -f "$_f" ] || continue
+        _cdi_aname="$(basename "$_f" .json)"
+        [ "$_cdi_aname" = "_TEMPLATE" ] && continue
+        _cdi_adapter_count=$((_cdi_adapter_count + 1))
+        _cdi_bin="$(json_get "$_f" "bin")"
+        if has_cmd "$_cdi_bin"; then log_success "  $_cdi_aname (bin: $_cdi_bin)"
+        else log_warn "  $_cdi_aname (bin: $_cdi_bin — NOT FOUND)"; fi
+    done
+    if [ "$_cdi_adapter_count" -eq 0 ]; then log_warn "  No adapters configured (only _TEMPLATE)"; fi
+
+    log_info "Extract scripts:"
+    for _f in "$EXTRACT_DIR"/*.sh; do
+        [ -f "$_f" ] || continue
+        if [ -x "$_f" ]; then log_success "  $(basename "$_f") executable"
+        else log_warn "  $(basename "$_f") not executable"; fi
+    done
+
+    log_info "Templates:"
+    for _tmpl in task.md.tmpl continuation.md.tmpl checkpoint.md.tmpl; do
+        if [ -f "$TEMPLATES_DIR/$_tmpl" ]; then log_success "  $_tmpl"
+        else log_error "  $_tmpl MISSING"; _cdi_issues=$((_cdi_issues + 1)); fi
+    done
+
+    log_info "Active loops:"
+    _cdi_active=0
+    for _f in "$ACTIVE_DIR"/*.state.json; do
+        [ -f "$_f" ] || continue
+        _cdi_active=$((_cdi_active + 1))
+        printf "  %-30s status=%s iter=%s agent=%s\n" \
+            "$(basename "$_f" .state.json)" \
+            "$(json_get "$_f" "status")" \
+            "$(json_get "$_f" "iteration")" \
+            "$(json_get "$_f" "agent")"
+    done
+    if [ "$_cdi_active" -eq 0 ]; then echo "  (none)"; fi
+
+    log_info "Orphan checkpoints:"
+    _cdi_orphans=0
+    for _f in "$CHECKPOINTS_DIR"/*.md; do
+        [ -f "$_f" ] || continue
+        if [ -L "$_f" ] && [ ! -e "$_f" ]; then
+            log_warn "  $(basename "$_f") — broken symlink"
+            _cdi_orphans=$((_cdi_orphans + 1)); _cdi_issues=$((_cdi_issues + 1))
+        fi
+    done
+    if [ "$_cdi_orphans" -eq 0 ]; then echo "  (none)"; fi
+
+    log_info "=== Issues: $_cdi_issues ==="
+    return "$_cdi_issues"
+}
+
+# ======== 主路由 ========
+
+if [ $# -eq 0 ]; then usage 0; fi
+
+_cmd="$1"
+shift
+
+case "$_cmd" in
+    help|--help|-h)
+        _topic="${1:-}"
+        case "$_topic" in
+            adapter)        usage_adapter ;;
+            start)          usage_start ;;
+            loop)           usage_loop ;;
+            general|list|doctor) usage_general ;;
+            "")             usage 0 ;;
+            *)              die "Unknown help topic: $_topic (available: adapter / start / loop / general)" 1 ;;
+        esac
+        ;;
+    adapter)
+        _subcmd="${1:-}"; shift || true
+        case "$_subcmd" in
+            --help|-h|help)  usage_adapter ;;
+            list)  cmd_adapter_list ;;
+            show)  cmd_adapter_show "$@" ;;
+            add)   cmd_adapter_add "$@" ;;
+            test)  cmd_adapter_test "$@" ;;
+            "")    cmd_adapter_list ;;
+            *)     die "Unknown adapter subcommand: $_subcmd (use: list/show/add/test)" 1 ;;
+        esac
+        ;;
+    list)   cmd_list "$@" ;;
+    doctor) cmd_doctor ;;
+    start|status|pause|resume|done|fail|cancel|archive|watch|checkpoint|next|step)
+        die "Usage: loopctl <loop-name> $_cmd (missing loop name)" 1 ;;
+    *)
+        _loop_name="$_cmd"
+        _loop_cmd="${1:-}"; shift || true
+        case "$_loop_cmd" in
+            --help|-h|help) usage_loop ;;
+            "")    cmd_status "$_loop_name" ;;
+            start)
+                # 在 start 参数中拦截 --help
+                case "${1:-}" in --help|-h|help) usage_start ;; esac
+                cmd_start "$_loop_name" "$@"
+                ;;
+            _tmux-init) cmd_tmux_init "$_loop_name" ;;
+            _driver)    cmd_driver "$_loop_name" "$@" ;;
+            next|step)   cmd_next "$_loop_name" ;;
+            status)     cmd_status "$_loop_name" ;;
+            checkpoint) cmd_checkpoint "$_loop_name" ;;
+            pause)      cmd_pause "$_loop_name" ;;
+            resume)     cmd_resume "$_loop_name" ;;
+            done)       cmd_done "$_loop_name" ;;
+            fail)       cmd_fail "$_loop_name" "$@" ;;
+            cancel)     cmd_cancel "$_loop_name" ;;
+            archive)    cmd_archive "$_loop_name" ;;
+            watch)      cmd_watch "$_loop_name" ;;
+            *)          die "Unknown loop command: $_loop_cmd" 1 ;;
+        esac
+        ;;
+esac

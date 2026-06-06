@@ -1,0 +1,42 @@
+{
+  "name": "claude-code",
+  "version": "1.0",
+  "description": "Claude Code (Anthropic)",
+  "bin": "claude",
+  "bin_check": ["claude", "--version"],
+  "bin_min_version": "2.1.160",
+
+  "run": {
+    "args_template": ["-p", "--output-format", "stream-json", "--no-session-persistence"],
+    "input_method": "arg",
+    "input_flag": null,
+    "output_format": "jsonl",
+    "working_dir": "project_root",
+    "timeout_sec": 600
+  },
+
+  "extract": {
+    "type": "claude-code-print"
+  },
+
+  "session": {
+    "supported": true,
+    "fresh_per_step": true,
+    "session_dir_flag": null,
+    "resume_flag": "--resume"
+  },
+
+  "completion": {
+    "marker": "<promise>LOOP_COMPLETE</promise>",
+    "marker_scan_tail_chars": 4000,
+    "native_command": null
+  },
+
+  "env": {},
+
+  "extra_args": [],
+
+  "examples": {
+    "smoke_test_prompt": "Reply with exactly: OK"
+  }
+}

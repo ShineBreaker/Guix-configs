@@ -1,0 +1,43 @@
+{
+  "name": "TEMPLATE",
+  "version": "1.0",
+  "description": "Adapter template — copy this file and edit the fields below",
+
+  "bin": "agent-cli",
+  "bin_check": ["agent-cli", "--version"],
+  "bin_min_version": "",
+
+  "run": {
+    "args_template": [],
+    "input_method": "stdin",
+    "input_flag": null,
+    "output_format": "text",
+    "working_dir": "project_root",
+    "timeout_sec": 300
+  },
+
+  "extract": {
+    "type": "text"
+  },
+
+  "session": {
+    "supported": false,
+    "fresh_per_step": true,
+    "session_dir_flag": null,
+    "resume_flag": null
+  },
+
+  "completion": {
+    "marker": "<promise>COMPLETE</promise>",
+    "marker_scan_tail_chars": 4000,
+    "native_command": null
+  },
+
+  "env": {},
+
+  "extra_args": [],
+
+  "examples": {
+    "smoke_test_prompt": "Reply with exactly: OK"
+  }
+}
