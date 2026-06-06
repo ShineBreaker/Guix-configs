@@ -16,7 +16,8 @@ alias htop btop
 alias ll "ls -la"
 alias rm "rm -i"
 
-abbr --add commit 'git commit --all -S'
+abbr --add cm 'git commit'
+abbr --add cmall 'git commit --all -S'
 abbr --add enter distrobox enter
 abbr --add push git push
 abbr --add reboot loginctl reboot
