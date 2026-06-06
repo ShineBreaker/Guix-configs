@@ -5,7 +5,11 @@
 set -euo pipefail
 
 PI_DATA_DIR="${PI_LOCAL_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/pi}"
+EXT_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}/npm"
 PI_BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
+
+# 缺了任一 binding 会导致 pi 启动崩溃
+NATIVE_PKGS=(better-sqlite3 koffi)
 
 if ! command -v pnpm &>/dev/null; then
 	echo "pnpm is not installed." >&2
@@ -17,11 +21,53 @@ if [[ ! -x "${PI_BIN}" ]]; then
 	(cd "${PI_DATA_DIR}" && pnpm install)
 fi
 
-OLD_VERSION="$("${PI_BIN}" --version 2>/dev/null || echo '未知')"
-echo "当前版本: ${OLD_VERSION}"
+if [[ ! -f "${EXT_DIR}/package.json" ]]; then
+	echo "Pi extensions not configured at ${EXT_DIR}" >&2
+	exit 1
+fi
+
+read_pi_version() {
+	node -p "require('${PI_DATA_DIR}/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null || echo '未知'
+}
+
+echo "当前版本: $(read_pi_version)"
 echo "更新 Pi 核心..."
 (cd "${PI_DATA_DIR}" && pnpm update)
-NEW_VERSION="$("${PI_BIN}" --version 2>/dev/null || echo '未知')"
+echo "更新扩展..."
+(cd "${EXT_DIR}" && pnpm update)
+
+# prebuild-install 偶发 silent 失败; 强制 rebuild + 验证 binding 实际存在
+echo "重建 native binding..."
+shopt -s nullglob
+FAILED=()
+for pkg in "${NATIVE_PKGS[@]}"; do
+	printf "  %s ... " "${pkg}"
+	if ! (cd "${EXT_DIR}" && pnpm rebuild "${pkg}" >/dev/null 2>&1); then
+		echo "rebuild 失败"
+		FAILED+=("${pkg}")
+		continue
+	fi
+	# pnpm 把 / 转成 + (@google/genai -> @google+genai), 用通配找 .node
+	pnpm_name="${pkg//\//+}"
+	found=0
+	for d in "${EXT_DIR}/node_modules/.pnpm/${pnpm_name}@"*; do
+		if find "$d" -name '*.node' 2>/dev/null | grep -q .; then
+			found=1
+			break
+		fi
+	done
+	if [[ $found -eq 1 ]]; then
+		echo "OK"
+	else
+		echo "binding 缺失!"
+		FAILED+=("${pkg}")
+	fi
+done
+
 echo ""
-echo "更新后: ${NEW_VERSION}"
-echo "提示: 已运行的 pi 进程仍用旧版本,需重启 pi 加载新代码;扩展请用 'pi update --extensions'"
+echo "更新后: $(read_pi_version)"
+if [[ ${#FAILED[@]} -gt 0 ]]; then
+	echo "失败: ${FAILED[*]}" >&2
+	exit 1
+fi
+echo "提示: 已运行的 pi 进程仍用旧版本,需重启 pi 加载新代码"
