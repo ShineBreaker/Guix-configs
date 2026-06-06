@@ -3,22 +3,24 @@
 # SPDX-License-Identifier: MIT
 """kb_viz_html — 知识库可视化的 HTML 组装入口。
 
-CSS / JS / HTML 模板分别存放在本子包内:
-- style.css    三主题样式表
-- core.js      状态、详情面板、搜索防抖
-- charts.js    6 张分布图、时间线、热力图
-- force.js     力导向图（Eades 简化算法 + 平滑缩放）
-- interact.js  卡片渲染 + init
-- template.py  HTML 骨架（string.Template 命名占位）
+源文件分布在本子包内:
+- skeleton.html   HTML 骨架（命名占位符，string.Template 替换）
+- style.css       三主题样式表
+- core.js         状态、详情面板、搜索防抖
+- charts.js       6 张分布图、时间线、热力图
+- force.js        力导向图（Eades 简化算法 + 平滑缩放）
+- interact.js     卡片渲染 + init
+- template.py     从 skeleton.html 加载并构造 Template 对象
 
-本模块负责在运行时把这些文件读出并内联到单一 HTML 字符串中。
+本模块负责在运行时把 CSS/JS 文件读出，与数据一起注入到骨架中，
+输出单一 HTML 字符串。
 """
 
 import json
 from pathlib import Path
 
-from .template import HTML_TEMPLATE
-from kb_lib.viz.data import attach_card_bodies
+from .template import TEMPLATE
+from kb_lib.viz.data import attach_card_bodies, normalize_cards
 
 
 def _read(name: str) -> str:
@@ -45,8 +47,8 @@ def generate_html(
     init_search: str,
 ) -> str:
     """组装 HTML 字符串。"""
-    cards_with_body = attach_card_bodies(cards)
-    return HTML_TEMPLATE.substitute(
+    cards_with_body = attach_card_bodies(normalize_cards(cards))
+    return TEMPLATE.substitute(
         theme=theme,
         css=_read("style.css"),
         total=stats.get("total", 0),

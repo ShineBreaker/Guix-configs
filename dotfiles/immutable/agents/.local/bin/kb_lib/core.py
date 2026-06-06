@@ -27,7 +27,6 @@ KB_PROJECTS = KB_MEMORIES / "projects"  # 项目记忆文件目录
 KB_PATTERNS = KB_MEMORY  # 向后兼容别名（patterns 已合并到 MEMORY）
 KB_INDEX = KB_ROOT / "index.json"  # JSON 查询索引
 KB_INBOX = KB_ROOT / "inbox.org"  # 快速捕获收件箱
-KB_PROFILE = KB_ROOT / "profile.org"  # 用户画像文件
 
 VALID_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
 VALID_OWNERS = {"human", "ai", "collab"}
@@ -176,34 +175,6 @@ def _init_memory_template() -> None:
     KB_MEMORY.write_text("\n".join(sections) + "\n", encoding="utf-8")
 
 
-def _init_profile(filepath: Path) -> None:
-    """初始化用户画像模板。仅生成骨架，具体内容由 AI 在对话中总结后写入。"""
-    filepath.write_text(
-        f"""#+title: 用户画像
-#+date: [{datetime.now().strftime('%Y-%m-%d %a')}]
-
-#+BEGIN_COMMENT
-<critical>
-若以上的 ~date 距离当前日期超过七天，那么请务必一定要进行一次用户画像的更新。
-</critical>
-
-更新步骤见：~/.config/agents/skills/self-improving/SKILL.md
-#+END_COMMENT
-
-* 身份
-
-* 偏好
-
-* 习惯
-
-* 活跃项目
-
-* 目标
-""",
-        encoding="utf-8",
-    )
-
-
 def ensure_dirs() -> None:
     """确保知识库目录和基础文件存在。
 
@@ -226,10 +197,6 @@ def ensure_dirs() -> None:
     # ── MEMORY.org（含所有标准节）──────────────────────────────────────────
     if not KB_MEMORY.exists():
         _init_memory_template()
-
-    # ── profile.org（用户画像骨架）────────────────────────────────────────
-    if not KB_PROFILE.exists():
-        _init_profile(KB_PROFILE)
 
     # ── index.json（空索引）────────────────────────────────────────────────
     if not KB_INDEX.exists():

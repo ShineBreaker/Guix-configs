@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 // SPDX-License-Identifier: MIT
+
+// ════════════════════════════════════════════════════════════════
+// 配置
+// ════════════════════════════════════════════════════════════════
+
 var FORCE = {
-  REPULSION: 22000,
+  REPULSION: 24000,
   GRAVITY: 0.008,
   SPRING_K: 0.04,
   SPRING_L: 130,
@@ -12,7 +17,7 @@ var FORCE = {
   ZOOM_MIN: 0.3,
   ZOOM_MAX: 4,
   ZOOM_WHEEL_STEP: 1.08,
-  ZOOM_BTN_STEP: 1.15,
+  ZOOM_BTN_STEP: 1.18,
   ZOOM_LERP: 0.22,
 };
 var GCURR = { tx: 0, ty: 0, k: 1 };
@@ -71,9 +76,15 @@ function resetGraph() {
   setGTgt(0, 0, 1);
 }
 
+// ════════════════════════════════════════════════════════════════
+// 渲染入口
+// ════════════════════════════════════════════════════════════════
+
 function renderForceGraph(visible) {
   var svg = document.getElementById("graph-svg");
   if (!svg) return;
+
+  // 1. 收集标签频次
   var tagCount = {},
     tagCards = {};
   visible.forEach(function (c) {
@@ -81,7 +92,9 @@ function renderForceGraph(visible) {
       if (!t) return;
       if (/^(debug|workflow|research|refactor|feature|config)$/i.test(t))
         return;
-      if (/^(general|guix|emacs|framework|gamedev|emacs-config)$/i.test(t))
+      if (
+        /^(general|guix|emacs|framework|gamedev|emacs-config)$/i.test(t)
+      )
         return;
       if (t === c.owner) return;
       if (t === c.category) return;
@@ -96,10 +109,12 @@ function renderForceGraph(visible) {
   var topN = Math.min(tags.length, 30);
   tags = tags.slice(0, topN);
   if (tags.length === 0) {
-    svg.innerHTML =
-      '<text x="50%" y="50%" fill="var(--text-dim)" font-size="13" text-anchor="middle">暂无标签数据</text>';
+    var w = svg.clientWidth || 800;
+    chartEmpty(svg, w, 480, "暂无标签数据");
     return;
   }
+
+  // 2. 共现边
   var maxCount = tagCount[tags[0]];
   var cooc = {};
   visible.forEach(function (c) {
@@ -113,12 +128,14 @@ function renderForceGraph(visible) {
       }
     }
   });
+
+  // 3. 节点初始布局
   var w = svg.clientWidth || 800;
   var h = parseInt(getComputedStyle(svg).height) || 480;
   var cx = w / 2,
     cy = h / 2;
   var nodes = tags.map(function (t, i) {
-    var size = 6 + (tagCount[t] / maxCount) * 14;
+    var size = 7 + (tagCount[t] / maxCount) * 16;
     var cols = Math.ceil(Math.sqrt(tags.length));
     var rows = Math.ceil(tags.length / cols);
     var padL = w * 0.12,
@@ -151,6 +168,8 @@ function renderForceGraph(visible) {
       b = nodeMap[parts[1]];
     if (a && b) edges.push({ a: a, b: b, w: cooc[key] });
   });
+
+  // 4. Eades 简化算法迭代
   var alpha = FORCE.ALPHA_INIT;
   for (var iter = 0; iter < FORCE.ITERATIONS; iter++) {
     var alphaNow = Math.max(alpha, FORCE.ALPHA_MIN);
@@ -199,9 +218,12 @@ function renderForceGraph(visible) {
     });
     alpha *= 0.995;
   }
+
+  // 5. 输出 SVG
   var html = '<g class="viewport">';
   edges.forEach(function (e) {
-    var op = Math.min(0.15 + e.w * 0.06, 0.5);
+    var op = Math.min(0.18 + e.w * 0.07, 0.55);
+    var sw = Math.min(0.8 + e.w * 0.4, 2.5);
     html +=
       '<line x1="' +
       e.a.x.toFixed(1) +
@@ -212,7 +234,7 @@ function renderForceGraph(visible) {
       '" y2="' +
       e.b.y.toFixed(1) +
       '" stroke="var(--accent)" stroke-width="' +
-      Math.min(e.w, 3) +
+      sw.toFixed(2) +
       '" opacity="' +
       op.toFixed(2) +
       '"/>';
@@ -224,8 +246,9 @@ function renderForceGraph(visible) {
         : "other";
     var color = CATEGORY_COLORS[cat] || "var(--accent)";
     html +=
-      '<g class="gnode" data-tag="' + esc(n.tag) + '" style="cursor:pointer">';
-    html +=
+      '<g class="gnode" data-tag="' +
+      esc(n.tag) +
+      '" style="cursor:pointer">' +
       '<circle cx="' +
       n.x.toFixed(1) +
       '" cy="' +
@@ -234,18 +257,17 @@ function renderForceGraph(visible) {
       n.size +
       '" fill="' +
       color +
-      '" opacity="0.9" stroke="var(--bg)" stroke-width="1.5"/>';
-    html +=
+      '" fill-opacity="0.85" stroke="var(--bg-panel)" stroke-width="1.5"/>' +
       '<text x="' +
       n.x.toFixed(1) +
       '" y="' +
-      (n.y + n.size + 11).toFixed(1) +
-      '" fill="var(--text-dim)" font-size="10" text-anchor="middle">' +
+      (n.y + n.size + 12).toFixed(1) +
+      '" fill="var(--text-dim)" font-size="10.5" text-anchor="middle" font-weight="500">' +
       esc(n.tag) +
-      " (" +
+      " · " +
       n.count +
-      ")</text>";
-    html += "</g>";
+      "</text>" +
+      "</g>";
   });
   html += "</g>";
   svg.innerHTML = html;
@@ -255,6 +277,8 @@ function renderForceGraph(visible) {
   svg.style.maxWidth = "100%";
   svg.style.height = "auto";
   resetGraph();
+
+  // 6. Tooltip
   var tt = document.getElementById("graph-tooltip");
   svg.querySelectorAll(".gnode").forEach(function (g) {
     g.addEventListener("mouseenter", function (e) {
@@ -263,12 +287,12 @@ function renderForceGraph(visible) {
       var html2 =
         '<div class="tt-title">' +
         esc(tag) +
-        '</div><div class="tt-meta">出现 ' +
+        '</div><div class="tt-meta bold">出现 ' +
         tagCount[tag] +
         " 次</div>";
       list.forEach(function (c) {
         html2 +=
-          '<div class="tt-meta">· ' + esc(c.title.substring(0, 50)) + "</div>";
+          '<div class="tt-meta">· ' + esc(c.title.substring(0, 48)) + "</div>";
       });
       if ((tagCards[tag] || []).length > 5)
         html2 +=
@@ -279,13 +303,24 @@ function renderForceGraph(visible) {
       tt.style.display = "block";
     });
     g.addEventListener("mousemove", function (e) {
-      tt.style.left = Math.min(e.clientX + 14, window.innerWidth - 280) + "px";
+      tt.style.left = Math.min(e.clientX + 14, window.innerWidth - 300) + "px";
       tt.style.top = e.clientY + 14 + "px";
     });
     g.addEventListener("mouseleave", function () {
       tt.style.display = "none";
     });
+    // 节点点击 → 应用到过滤
+    g.addEventListener("click", function () {
+      // 把标签写入搜索框，触发过滤
+      var si = document.getElementById("search-input");
+      if (si) {
+        si.value = tag;
+        onSearch(tag);
+      }
+    });
   });
+
+  // 7. 缩放
   svg.addEventListener(
     "wheel",
     function (e) {
@@ -296,6 +331,8 @@ function renderForceGraph(visible) {
     },
     { passive: false },
   );
+
+  // 8. 拖拽
   var drag = null;
   svg.addEventListener("mousedown", function (e) {
     if (e.target.closest(".gnode")) return;
