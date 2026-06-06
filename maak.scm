@@ -17,11 +17,11 @@
 ;;; 常量
 ;;; ============================================================
 
-(define repo-root   (getcwd))
-(define home-dir    (getenv "HOME"))
-(define mutable-dir (string-append repo-root "/dotfiles/mutable"))
-(define configs-dir (string-append repo-root "/source/configs"))
-(define tmp-dir     (string-append repo-root "/tmp"))
+(define repo-root     (getcwd))
+(define home-dir      (getenv "HOME"))
+(define mutable-dir   (string-append repo-root "/dotfiles/mutable"))
+(define configs-dir   (string-append repo-root "/source/configs"))
+(define tmp-dir       (string-append repo-root "/tmp"))
 (define channel-fresh (string-append configs-dir "/../channel.scm"))
 (define channel-lock  (string-append configs-dir "/../channel.lock"))
 
@@ -158,10 +158,32 @@
   ($ (list "sh" "-c" "sudo guix system delete-generations > /dev/null"))
   ($ (list "sh" "-c" "guix home delete-generations > /dev/null")))
 
-(define (clean-pycache)
-  "递归删除仓库内所有 __pycache__ 目录"
-  ($ (list "find" repo-root
-           "-type" "d" "-name" "__pycache__" "-print" "-exec" "rm" "-rf" "{}" "+")))
+(define artifact-rules
+  '(;; (pattern  type)
+    ;; type: directory → find -type d -name <pattern> -exec rm -rf
+    ;;       file     → find -type f -name <pattern> -delete
+    ("__pycache__"   directory)
+    ("*.elc"         file)
+    ("*.o"           file)
+    ("*.a"           file)
+    ("*.so"          file)))
+
+(define (clean-artifacts)
+  "递归删除仓库内所有编译产物"
+  (for-each
+   (lambda (rule)
+     (let ((pattern (car rule))
+           (type    (cadr rule)))
+       (if (eq? type 'directory)
+           ($ (list "find" repo-root
+                    "-type" "d" "-name" pattern
+                    "-not" "-path" "*/.git/*"
+                    "-print" "-exec" "rm" "-rf" "{}" "+"))
+           ($ (list "find" repo-root
+                    "-type" "f" "-name" pattern
+                    "-not" "-path" "*/.git/*"
+                    "-print" "-delete")))))
+   artifact-rules))
 
 (define (gc)
   "clean + guix gc + 清理旧 EFI 文件（慎用，直接操作 /boot）"
@@ -171,6 +193,7 @@
 
 (define (home)
   "应用用户配置"
+  (clean-artifacts)
   (reconfigure-scope "home" "home-config.org" "home-config.scm"))
 
 (define (init)
