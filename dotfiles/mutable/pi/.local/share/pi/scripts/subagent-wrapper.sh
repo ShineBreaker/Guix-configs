@@ -155,7 +155,8 @@ load_subagents_config() {
 	local config_file="$XDG_CONFIG_HOME/pi/subagents.json"
 	if [[ -z "$MODEL" && -f "$config_file" ]]; then
 		local agent_model
-		agent_model="$(python3 - "$config_file" "$AGENT_NAME" <<'PY'
+		agent_model="$(
+			python3 - "$config_file" "$AGENT_NAME" <<'PY'
 import json
 import sys
 
@@ -169,7 +170,7 @@ try:
 except Exception:
     pass
 PY
-)"
+		)"
 		[[ -n "$agent_model" ]] && MODEL="$agent_model"
 	fi
 }
@@ -209,10 +210,10 @@ fi
 # 附加图片文件（pi @file 语法）
 if [[ -n "$IMAGES" ]]; then
 	# 逗号分隔的多图片路径
-	IFS=',' read -ra IMG_PATHS <<< "$IMAGES"
+	IFS=',' read -ra IMG_PATHS <<<"$IMAGES"
 	for img_path in "${IMG_PATHS[@]}"; do
-		img_path="${img_path# }"  # 去前导空格
-		img_path="${img_path% }"  # 去尾部空格
+		img_path="${img_path# }" # 去前导空格
+		img_path="${img_path% }" # 去尾部空格
 		if [[ -f "$img_path" ]]; then
 			PI_ARGS+=("@$img_path")
 		else
@@ -267,7 +268,8 @@ if [[ $EXIT_CODE -eq 0 ]]; then
 	ERROR_MESSAGE=""
 else
 	FINAL_STATUS="failed"
-	ERROR_MESSAGE="$(python3 - "$meta_file" "$RUN_DIR/stderr.log" <<'PY'
+	ERROR_MESSAGE="$(
+		python3 - "$meta_file" "$RUN_DIR/stderr.log" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -285,7 +287,7 @@ if not message and stderr.exists():
     message = stderr.read_text(encoding="utf-8").strip()[-2000:]
 print(message)
 PY
-)"
+	)"
 fi
 
 write_status "$FINAL_STATUS" "$EXIT_CODE" "$STARTED_AT" "$FINISHED_AT" "$ERROR_MESSAGE"
