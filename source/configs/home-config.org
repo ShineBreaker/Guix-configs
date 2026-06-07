@@ -131,7 +131,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "mako"
         "pavucontrol"
         "swaylock-effects"
-        "swww"
+        "awww"
         "waypaper"
 
         ;; 字体
@@ -334,6 +334,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "kdeconnect"
          "motrix-next-bin"
          "seahorse"
+         "tesseract-ocr"
          "virt-manager"
 
          ;; 娱乐
@@ -582,7 +583,6 @@ end
                              "emacs-ox-gfm"
 
                              ;; 额外工具
-                             "emacs-2048-game"
                              "emacs-calfw"
                              "emacs-notmuch"
                              "emacs-pdf-tools"
