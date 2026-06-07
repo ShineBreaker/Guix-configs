@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
+
 """kb_lint — 知识库格式校验与修复：Markdown 残留检测、Org 标记修复"""
 
 import argparse

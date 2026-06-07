@@ -23,11 +23,14 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 
 ## 策展流水线
 
-按顺序执行，详细步骤和判断标准见 `references/curation-guide.md`。
+<critical>请务必严格地按顺序执行，如果用户提出了某些额外的要求，请务必在任务完成之后再进行</critical>
 
-1. **提取对话** — `python3 scripts/extract-conversations.py`
+详细步骤和判断标准见 `references/curation-guide.md`。
+
+1. **提取对话** — `python3 scripts/extract-conversations.py`（如果用户要求了某一段时间的对话，那么请严格执行）
 2. **诊断** — `kb health` 或 `python3 scripts/analyze_kb.py --quality --duplicates`
    2.5. **状态转换** — done→stable, stale→archived
+
    ### MEMORY 维护
 
    **MEMORY 时效检测**：
@@ -57,11 +60,11 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 10. **提交变更** — `kb commit -m "策展: <一句话总结>"`
 
     commit message 要求：
-    + 以 `策展:` 前缀开头
-    + 用一句话总结本次策展的核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）
-    + 控制在 50 字以内
-    + 示例：`策展: 新增 2 张 guix 经验，更新 1 张，晋升 1 条 pattern`
-    + 无变更时跳过此步骤
+    - 以 `策展:` 前缀开头
+    - 用一句话总结本次策展的核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）
+    - 控制在 50 字以内
+    - 示例：`策展: 新增 2 张 guix 经验，更新 1 张，晋升 1 条 pattern`
+    - 无变更时跳过此步骤
 
 ### 矛盾调和规则
 
@@ -130,6 +133,15 @@ kb stats 概要：
 - 与同类卡片矛盾 → 按调和规则处理
 - 缺少时效性标注但涉及版本/API → 补充验证日期
 - 无其他卡片/pattern 引用 → 评估补充关联或归档
+
+## 回顾机制
+
+定期（建议每月）执行以下回顾：
+
+1. **知识内化检查** — 浏览最近 10 张卡片，问自己：这些经验是否已成为默认行为？
+2. **反馈有效性** — 检查 MEMORY.org feedback 节中的偏好和规则，是否有已被新实践推翻的？
+3. **连接补全** — 扫描孤立卡片（无 connect 链接），评估是否需要建立关联
+4. **记忆更新** — 检查 MEMORY.org 的 feedback/project/reference 节是否反映当前状态
 
 ### 健康度指标
 

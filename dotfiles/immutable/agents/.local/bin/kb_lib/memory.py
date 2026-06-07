@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
+
 """kb_memory — 知识库记忆系统：MEMORY.org 管理、项目记忆、模式管理"""
 
 import argparse

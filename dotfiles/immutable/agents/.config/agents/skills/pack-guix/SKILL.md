@@ -433,4 +433,3 @@ Binary 的 `patchelf --print-needed` 输出 → Guix 包映射：
 
 1. `kb search "guix package"` 检查是否已有类似经验
 2. 如有新发现（特殊依赖、特殊构建步骤）→ `kb add` 记录
-3. 更新 `BUILD-NOTES.org` 作为可复用的打包经验

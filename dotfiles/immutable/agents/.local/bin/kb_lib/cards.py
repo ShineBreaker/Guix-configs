@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
+
 import argparse
 import json
 import os
@@ -15,7 +16,6 @@ from kb_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
     KB_MEMORY,
-    KB_PATTERNS,
     KB_INBOX,
     VALID_TYPES,
     VALID_OWNERS,
@@ -236,7 +236,7 @@ def cmd_search(args: argparse.Namespace) -> None:
     context = args.context
 
     if args.regex:
-        targets = [str(KB_EXPERIENCES), str(KB_PATTERNS)]
+        targets = [str(KB_EXPERIENCES), str(KB_MEMORY)]
         if shutil.which("rg"):
             cmd = ["rg", "--color=never", "-n", "-C", str(context), query] + targets
         else:
@@ -470,10 +470,6 @@ def cmd_stats(args: argparse.Namespace) -> None:
     print(f"总卡片数: {total}")
     if dates:
         print(f"时间范围: {min(dates)} ~ {max(dates)}")
-    if KB_PATTERNS.exists():
-        pat_text = KB_PATTERNS.read_text(encoding="utf-8")
-        pat_count = len(re.findall(r"^\*\* ", pat_text, re.MULTILINE))
-        print(f"模式数量: {pat_count}")
     print()
 
     for label, counter in [

@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
+
 """kb_core — 知识库核心模块：常量、工具函数、索引管理、Org 解析、搜索辅助"""
 
 import json
@@ -24,7 +25,6 @@ KB_EXPERIENCES = KB_ROOT / "experiences"  # 经验卡片存储目录
 KB_MEMORY = KB_ROOT / "MEMORY.org"  # 记忆文件（feedback/project/reference）
 KB_MEMORIES = KB_ROOT / "memories"  # 记忆子目录
 KB_PROJECTS = KB_MEMORIES / "projects"  # 项目记忆文件目录
-KB_PATTERNS = KB_MEMORY  # 向后兼容别名（patterns 已合并到 MEMORY）
 KB_INDEX = KB_ROOT / "index.json"  # JSON 查询索引
 KB_INBOX = KB_ROOT / "inbox.org"  # 快速捕获收件箱
 

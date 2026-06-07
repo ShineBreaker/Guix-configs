@@ -38,6 +38,7 @@ echo "内容" | kb memory --add --type feedback --title "偏好描述"
 ## 自动模式
 
 在自动策展（kb-curator）中：
+
 - `kb health` 检查知识库状况
 - `kb deduplicate` 清理重复
 - `kb review --fix` 修复质量问题
