@@ -9,7 +9,3 @@
 [submodule "rime-ice"]
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
-
-[submodule "tools/crush-superpowers/main"]
-	path = tools/crush-superpowers/main
-	url = https://github.com/obra/superpowers
