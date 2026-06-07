@@ -9,3 +9,15 @@
 [submodule "rime-ice"]
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
+[submodule "dotfiles/immutable/agents/.config/agents/skillsets/pi-skills"]
+	path = dotfiles/immutable/agents/.config/agents/skillsets/pi-skills
+	url = https://github.com/badlogic/pi-skills
+[submodule "dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills"]
+	path = dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills
+	url = https://github.com/xenodium/emacs-skills
+[submodule "dotfiles/immutable/agents/.config/agents/skillsets/agent-skills"]
+	path = dotfiles/immutable/agents/.config/agents/skillsets/agent-skills
+	url = https://github.com/addyosmani/agent-skills
+[submodule "dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills"]
+	path = dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills
+	url = https://github.com/mattpocock/skills
