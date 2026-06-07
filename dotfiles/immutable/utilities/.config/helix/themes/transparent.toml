@@ -4,6 +4,13 @@
 
 # Inherits base16_transparent but removes hardcoded white/black fg
 # so the editor follows the terminal's default foreground color.
+#
+# Comment visibility tuning: base16_transparent's `comment = "light-gray"`
+# is too bright on dark backgrounds. We keep light-gray (which is bright-white
+# in standard ANSI palettes) but rely on italic to soften it. On light
+# backgrounds light-gray is the medium-dark tone of the palette, so the
+# same color works in both modes — unlike `gray` (bright-black) which
+# crashes into the background in both modes.
 
 inherits = "base16_transparent"
 
@@ -13,6 +20,7 @@ inherits = "base16_transparent"
 "ui.menu" = {}
 "ui.menu.selected" = { modifiers = ["reversed"] }
 "ui.popup" = {}
+"ui.linenr" = {}
 "ui.linenr.selected" = { modifiers = ["bold"] }
 "ui.statusline" = {}
 "ui.statusline.inactive" = { fg = "gray" }
@@ -24,4 +32,4 @@ inherits = "base16_transparent"
 "ui.virtual.inlay-hint.parameter" = { fg = "gray", modifiers = ["italic"] }
 "ui.virtual.inlay-hint.type" = { fg = "gray", modifiers = ["italic"] }
 
-"comment" = { fg = "gray", modifiers = ["italic"] }
+"comment" = { fg = "light-gray", modifiers = ["italic"] }
