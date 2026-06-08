@@ -12,64 +12,36 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
-import type {
-  AgentConfig,
-  AgentModelConfig,
-  PromptConfig,
-  SubagentsJson,
-} from "./types.ts";
+import type { AgentConfig, PromptConfig } from "./types.ts";
 
 // ─── Agent 发现 ──────────────────────────────────────────────────────────────
 
 /**
  * 扫描 agents/ 目录下的 .md 文件，解析 frontmatter 提取 agent 配置。
  *
-/**
- * 加载 subagents.json — agent 模型配置和 fallback 链
+ * 每个 agent .md 文件格式：
+ * ---
+ * name: agent-name
+ * description: 简短描述
+ * tier: ultra | pro | quick | visual | inherit   (可选；缺失时用 defaultTier)
+ * tools: read, grep, bash                         (可选)
+ * ---
+ * (body 作为 systemPrompt)
  *
- * 文件格式：
- * {
- *   "agents": {
- *     "oracle": { "model": "zai/GLM-5.1", "fallback": ["minimax-cn/MiniMax-M3"] }
- *   }
- * }
- *
- * 查找位置：$XDG_CONFIG_HOME/pi/subagents.json
+ * 模型档次通过 frontmatter `tier:` 字段声明；具体 model + fallback 在
+ * settings.json 的 `atelier.tiers` 段集中配置。
  */
-export function loadSubagentsConfig(): Record<string, AgentModelConfig> {
-  const configPath = path.join(getAgentDir(), "subagents.json");
-  try {
-    const raw = JSON.parse(
-      fs.readFileSync(configPath, "utf-8"),
-    ) as SubagentsJson;
-    return raw.agents ?? {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * 获取 agent 的模型配置（首选模型 + fallback 链）。
- *
- * 优先级：subagents.json > settings.json defaultModel
- */
-export function resolveAgentModel(
-  agentName: string,
-  subagentsConfig: Record<string, AgentModelConfig>,
-): AgentModelConfig | undefined {
-  return subagentsConfig[agentName];
-}
-
 /**
  * 每个 agent .md 文件格式：
  * ---
  * name: agent-name
  * description: 简短描述
+ * tier: ultra | pro | quick | visual | inherit    (可选)
  * tools: read, grep, bash    (可选)
  * ---
  * (body 作为 systemPrompt)
  *
- * 模型配置已移至 subagents.json，不再从 frontmatter 读取。
+ * 模型配置通过 frontmatter `tier:` 字段 + settings.json `atelier.tiers` 解析。
  */
 export function discoverAgents(): AgentConfig[] {
   const agentsDir = path.join(getAgentDir(), "agents");
@@ -106,10 +78,14 @@ export function discoverAgents(): AgentConfig[] {
       .map((t: string) => t.trim())
       .filter(Boolean);
 
+    // tier 字段：ultra / pro / quick / visual / inherit，缺失为 undefined
+    const tier = frontmatter.tier?.trim() || undefined;
+
     agents.push({
       name: frontmatter.name,
       description: frontmatter.description,
       tools: tools && tools.length > 0 ? tools : undefined,
+      tier,
       systemPrompt: body,
       filePath,
     });

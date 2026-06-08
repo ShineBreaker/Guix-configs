@@ -19,7 +19,7 @@ import type {
 import { launchParallel, launchSingle, paneIsAlive } from "./launcher.ts";
 import { waitForAll, waitForCompletion } from "./monitor.ts";
 import { ensureWorkfile } from "./workfile.ts";
-import { resolveAgentModel } from "./discovery.ts";
+// resolveAgentModel 已删除（subagents.json 废弃，逻辑并入 resolveModelChain）
 
 // ─── Fallback 重试 ───────────────────────────────────────────────────────────
 
@@ -29,20 +29,34 @@ const MAX_ATTEMPTS = 3;
 /**
  * 解析 agent 的完整模型尝试链：[首选, ...fallback]
  *
- * 优先级：调用方显式覆盖 > subagents.json > 无模型（使用 defaultModel）
+ * 新优先级（自上而下短路）：
+ *   1. 调用方显式覆盖（params.model）
+ *   2. agent frontmatter `tier: inherit` → []（不传 model，跟随前台）
+ *   3. agent frontmatter `tier: <name>` → 查 config.tiers[<name>]
+ *   4. agent frontmatter 无 tier → 用 config.defaultTier
+ *   5. 全部解析失败 → []（= inherit 行为，兜底跟随前台）
+ *
+ * @returns model 列表（可空），空数组表示"不传 --model"
  */
-function resolveModelChain(
-  agentName: string,
-  subagentsConfig: Record<string, AgentModelConfig>,
+export function resolveModelChain(
+  agent: AgentConfig,
+  config: SubagentConfig,
   explicitModel?: string,
 ): string[] {
-  // 调方显式覆盖优先
+  // 1. 显式覆盖
   if (explicitModel) return [explicitModel];
 
-  const config = resolveAgentModel(agentName, subagentsConfig);
-  if (!config) return []; // 空数组 = 不传 --model，使用 pi 的 defaultModel
+  // 2-4. tier 解析
+  const tier = agent.tier ?? config.defaultTier;
 
-  return [config.model, ...config.fallback].filter(Boolean);
+  // inherit 特殊值：明确声明跟随前台
+  if (tier === "inherit") return [];
+
+  // 查 tiers 配置
+  const tierCfg: AgentModelConfig | undefined = config.tiers[tier];
+  if (!tierCfg) return []; // 未知 tier 视为 inherit（兜底安全）
+
+  return [tierCfg.model, ...tierCfg.fallback].filter(Boolean);
 }
 
 /**
@@ -60,18 +74,13 @@ export async function executeWithFallback(
   task: string,
   config: SubagentConfig,
   cwd: string,
-  subagentsConfig: Record<string, AgentModelConfig>,
   explicitModel: string | undefined,
   signal: AbortSignal | undefined,
   topRowTargetPaneId?: string,
   splitPercent?: number,
   images?: string[],
 ): Promise<RunResult> {
-  const modelChain = resolveModelChain(
-    agent.name,
-    subagentsConfig,
-    explicitModel,
-  );
+  const modelChain = resolveModelChain(agent, config, explicitModel);
 
   // 如果没有模型链（全部依赖 defaultModel），直接执行不重试
   if (modelChain.length === 0) {
@@ -131,7 +140,6 @@ export async function runParallelBatches(
   tasks: Array<{ agent: AgentConfig; task: string; cwd?: string }>,
   config: SubagentConfig,
   cwd: string,
-  subagentsConfig: Record<string, AgentModelConfig>,
   explicitModel?: string,
   signal?: AbortSignal,
 ): Promise<RunResult[]> {
@@ -153,7 +161,7 @@ export async function runParallelBatches(
       batch,
       config,
       // 注意：parallel 模式下所有任务共享同一 explicitModel（如提供），
-      // 否则每个 agent 从 subagents.json 获取各自的首选模型。
+      // 否则每个 agent 从自己的 tier 解析 model。
       // TODO: 如果需要 per-agent fallback，需要改为逐个 launchSingle
       explicitModel,
       topRowTargetPaneId,
@@ -196,7 +204,6 @@ export async function runChain(
   steps: Array<{ agent: AgentConfig; task: string; cwd?: string }>,
   config: SubagentConfig,
   cwd: string,
-  subagentsConfig: Record<string, AgentModelConfig>,
   rootTask?: string,
   explicitModel?: string,
   signal?: AbortSignal,
@@ -220,7 +227,6 @@ export async function runChain(
       task,
       config,
       step.cwd ?? cwd,
-      subagentsConfig,
       explicitModel,
       signal,
       topRowTargetPaneId,

@@ -1,6 +1,7 @@
 ---
 name: planner
 description: 战略规划师——面试式需求澄清、架构评估、替代方案对比、生成可执行的实施计划
+tier: pro
 tools: read, grep, find, ls, write
 ---
 

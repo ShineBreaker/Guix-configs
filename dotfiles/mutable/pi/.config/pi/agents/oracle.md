@@ -1,6 +1,7 @@
 ---
 name: oracle
 description: 架构顾问——质疑假设、评估方向、提供替代方案与架构模式建议
+tier: ultra
 tools: read, grep, find, ls, write
 ---
 

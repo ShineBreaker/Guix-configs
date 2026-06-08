@@ -224,8 +224,12 @@ export function prepareAgentPrompt(
     }
   }
 
-  const body = removeSubagentOnlyMarkers(bodyLines.join("\n")).trim();
-  if (!body) return null;
+  const rawBody = removeSubagentOnlyMarkers(bodyLines.join("\n")).trim();
+  if (!rawBody) return null;
+
+  // 在 agent 自己的 prompt 前面追加「能力自检」段，让模型自己判断视觉能力。
+  // 不维护 modelCapabilities 表：模型自己知道它有没有 vision。
+  const body = `${CAPABILITY_SELF_CHECK}\n\n${rawBody}`;
 
   const promptPath = path.join(runDir, "subagent-prompt.md");
   try {
@@ -235,6 +239,24 @@ export function prepareAgentPrompt(
     return null;
   }
 }
+
+/**
+ * 能力自检段——统一注入到所有 subagent 的 prompt 头部。
+ *
+ * 动机：很多模型原生支持多模态（minimax-cn/MiniMax-M3、xiaomi/mimo-v2.5），
+ * 但部分模型（zai/GLM-5.1、deepseek-v4-flash、deepseek-v4-pro 等）没有视觉能力。
+ * 不在 atelier 维护 modelCapabilities 表，而是让模型自检：发现自己无视觉时
+ * 显式调用 visual subagent 处理图片。
+ */
+const CAPABILITY_SELF_CHECK = `## 能力自检（重要）
+
+如果你发现自己**没有视觉能力**（无法直接理解图片附件）但收到了图片附件，**不要**试图猜测图片内容。请调用 visual subagent 处理图片：
+
+\`\`\`
+subagent({ agent: "visual", task: "分析以下图片：[描述图片情境]", images: [...] })
+\`\`\`
+
+支持视觉的模型：minimax-cn/MiniMax-M3、xiaomi/mimo-v2.5。`;
 
 /** 读取 run 目录下的 status.json */
 export function readStatus(runDir: string): StatusFile | null {

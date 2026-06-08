@@ -15,21 +15,23 @@ export interface AgentConfig {
   name: string;
   description: string;
   tools?: string[];
+  /**
+   * 模型档次（来自 frontmatter `tier:` 字段）：
+   *   - "ultra" | "pro" | "quick" | "visual" → 查 settings.json `atelier.tiers` 配置
+   *   - "inherit" → 不传 --model，让 pi 用前台 defaultModel（worker 默认行为）
+   *   - undefined → 用 settings.json `atelier.defaultTier`
+   */
+  tier?: string;
   systemPrompt: string;
   filePath: string;
 }
 
-/** 从 subagents.json 加载的模型配置 */
+/** 模型配置：首选 + fallback 链（tier 系统的底层结构） */
 export interface AgentModelConfig {
   /** 首选模型 */
   model: string;
   /** fallback 模型链，按顺序尝试 */
   fallback: string[];
-}
-
-/** subagents.json 的完整结构 */
-export interface SubagentsJson {
-  agents: Record<string, AgentModelConfig>;
 }
 
 /** 从 .md 文件发现的 prompt 模板配置 */
@@ -52,6 +54,10 @@ export interface SubagentConfig {
   timeoutMs: number;
   maxTasks: number;
   maxConcurrency: number;
+  /** tier 字段缺失时的默认 tier；解析不到时回退到 "inherit" */
+  defaultTier: string;
+  /** tier 名 → model + fallback 链的映射 */
+  tiers: Record<string, AgentModelConfig>;
 }
 
 /** 单次 tmux pane 启动的结果 */
@@ -101,6 +107,8 @@ export const DEFAULT_CONFIG: SubagentConfig = {
   timeoutMs: 30 * 60 * 1000,
   maxTasks: 8,
   maxConcurrency: 4,
+  defaultTier: "pro",
+  tiers: {},
 };
 
 /** parallel 模式下，上方 subagent 行占窗口高度百分比 */

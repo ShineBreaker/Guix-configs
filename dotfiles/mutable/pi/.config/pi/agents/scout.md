@@ -1,6 +1,7 @@
 ---
 name: scout
 description: 快速侦察员——代码库快速扫描，定位文件、模式与依赖关系，输出压缩结构化发现供其他 agent 消费
+tier: quick
 tools: read, grep, find, ls, bash, write
 ---
 

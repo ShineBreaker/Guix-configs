@@ -1,6 +1,7 @@
 ---
 name: visual
 description: 视觉分析员——分析图片、截图、UI 界面等视觉内容，提取文字、描述布局、诊断问题
+tier: visual
 tools: read, grep, find, ls
 ---
 

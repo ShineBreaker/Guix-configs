@@ -1,6 +1,7 @@
 ---
 name: worker
 description: 自主深度工作者——为并发设计，必须由主会话在 tasks 数组中并行启动 N 个实例；原则驱动、多文件推理、测试验证
+tier: inherit
 tools: read, grep, find, ls, bash, edit, write
 ---
 

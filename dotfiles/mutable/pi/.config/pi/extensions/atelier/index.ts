@@ -45,7 +45,6 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type {
   AgentConfig,
-  AgentModelConfig,
   RunResult,
   SubagentDetails,
 } from "./types.ts";
@@ -55,7 +54,6 @@ import {
 import {
   discoverAgents,
   discoverPrompts,
-  loadSubagentsConfig,
 } from "./discovery.ts";
 import {
   ensureWorkfile
@@ -71,7 +69,8 @@ import {
 import {
   executeWithFallback,
   runParallelBatches,
-  runChain
+  runChain,
+  resolveModelChain
 } from "./runner.ts";
 import {
   formatResults
@@ -171,7 +170,6 @@ const makeDetails =
 
 export default function(pi: ExtensionAPI) {
   const config = loadConfig();
-  const subagentsConfig = loadSubagentsConfig();
 
   // ── 注册 subagent 工具 ──────────────────────────────────────────────────
 
@@ -202,9 +200,10 @@ export default function(pi: ExtensionAPI) {
         const agentLines = agents
           .map((a) => {
             const tools = a.tools ? a.tools.join(", ") : "all";
-            const modelCfg = subagentsConfig[a.name];
-            const model = modelCfg ? modelCfg.model : "default";
-            return `| ${a.name} | ${a.description.slice(0, 40)}… | ${tools} | ${model} |`;
+            const tier = a.tier ?? config.defaultTier;
+            const tierCfg = config.tiers[tier];
+            const model = tierCfg ? tierCfg.model : (tier === "inherit" ? "(inherit)" : "(unknown tier)");
+            return `| ${a.name} | ${tier} | ${model} | ${a.description.slice(0, 40)}… | ${tools} |`;
           })
           .join("\n");
         const promptLines = prompts
@@ -215,9 +214,9 @@ export default function(pi: ExtensionAPI) {
           .join("\n");
         const list = [
           "## Agents",
-          "| Name | Description | Tools | Model |",
-          "|------|-------------|-------|-------|",
-          agentLines || "| (none) | | | |",
+          "| Name | Tier | Model | Description | Tools |",
+          "|------|------|-------|-------------|-------|",
+          agentLines || "| (none) | | | | |",
           "",
           "## Prompt Templates",
           "| Name | Mode | Description | Usage |",
@@ -326,7 +325,6 @@ export default function(pi: ExtensionAPI) {
             chainEntries,
             config,
             effectiveCwd,
-            subagentsConfig,
             params.task,
             params.model,
             signal,
@@ -395,7 +393,6 @@ export default function(pi: ExtensionAPI) {
             taskEntries,
             config,
             effectiveCwd,
-            subagentsConfig,
             params.model,
             signal,
           );
@@ -450,7 +447,6 @@ export default function(pi: ExtensionAPI) {
             params.task,
             config,
             params.cwd ?? process.cwd(),
-            subagentsConfig,
             params.model,
             signal,
             undefined,
@@ -511,25 +507,28 @@ export default function(pi: ExtensionAPI) {
 
         try {
           const startedAt = Date.now();
-          const modelCfg = subagentsConfig[agent.name];
-          const model = modelCfg?.model;
+          // 解析 model 链：显式覆盖 > tier > defaultTier > inherit
+          const modelChain = resolveModelChain(agent, config);
+          const initialModel = modelChain[0];
+          const modelLabel = initialModel
+            ? `(model: ${initialModel})`
+            : `(model: inherit)`;
           // 先用首选模型启动，通知用户
-          const launch = launchSingle(agent, task, config, ctx.cwd, model);
+          const launch = launchSingle(agent, task, config, ctx.cwd, initialModel);
           ctx.ui.notify(
-            `⏳ ${agent.name} 已启动 (run: ${launch.runId})...`,
+            `⏳ ${agent.name} 已启动 (run: ${launch.runId})... ${modelLabel}`,
             "info",
           );
           let result = await waitForCompletion(launch, config);
 
-          // Fallback：如果失败且有 fallback 模型，自动重试
+          // Fallback：如果失败且 tier 配置了 fallback，自动重试
           if (
             result.status === "failed" &&
-            modelCfg &&
-            modelCfg.fallback.length > 0 &&
+            modelChain.length > 1 &&
             result.error !== "Aborted" &&
             result.error !== "timeout"
           ) {
-            for (const fallbackModel of modelCfg.fallback.slice(0, 2)) {
+            for (const fallbackModel of modelChain.slice(1, 3)) {
               ctx.ui.notify(
                 `🔄 ${agent.name} 首选模型失败，尝试 fallback: ${fallbackModel}`,
                 "warn",
@@ -613,7 +612,6 @@ export default function(pi: ExtensionAPI) {
               chainEntries,
               config,
               ctx.cwd,
-              subagentsConfig,
               paramValue,
             );
           } else if (prompt.mode === "parallel") {
@@ -629,7 +627,6 @@ export default function(pi: ExtensionAPI) {
               taskEntries,
               config,
               ctx.cwd,
-              subagentsConfig,
             );
           } else {
             const e = resolvedEntries[0];
@@ -641,7 +638,6 @@ export default function(pi: ExtensionAPI) {
               e.task,
               config,
               ctx.cwd,
-              subagentsConfig,
               undefined,
               undefined,
             );
