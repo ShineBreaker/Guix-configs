@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "minimax-cn",
-  "defaultModel": "MiniMax-M3",
+  "defaultProvider": "zai",
+  "defaultModel": "glm-5.1",
   "npmCommand": [
     "pnpm"
   ],
@@ -51,19 +51,28 @@
     "tiers": {
       "ultra": {
         "model": "zai/GLM-5.1",
-        "fallback": ["minimax-cn/MiniMax-M3"]
+        "fallback": [
+          "minimax-cn/MiniMax-M3"
+        ]
       },
       "pro": {
         "model": "minimax-cn/MiniMax-M3",
-        "fallback": ["deepseek/deepseek-v4-pro", "zai/GLM-4.7"]
+        "fallback": [
+          "deepseek/deepseek-v4-pro",
+          "zai/GLM-4.7"
+        ]
       },
       "quick": {
         "model": "deepseek/deepseek-v4-flash",
-        "fallback": ["minimax-cn/MiniMax-M2.7"]
+        "fallback": [
+          "minimax-cn/MiniMax-M2.7"
+        ]
       },
       "visual": {
         "model": "xiaomi/mimo-v2.5",
-        "fallback": ["minimax-cn/MiniMax-M3"]
+        "fallback": [
+          "minimax-cn/MiniMax-M3"
+        ]
       }
     }
   },
@@ -77,7 +86,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.75.5",
+  "lastChangelogVersion": "0.78.1",
   "images": {
     "blockImages": false
   },

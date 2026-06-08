@@ -18,7 +18,7 @@ fi
 
 if [[ ! -x "${PI_BIN}" ]]; then
 	echo "Pi core not installed at ${PI_DATA_DIR}; running pnpm install first..." >&2
-	(cd "${PI_DATA_DIR}" && pnpm install)
+	(cd "${PI_DATA_DIR}" && CI=true pnpm install --no-frozen-lockfile)
 fi
 
 if [[ ! -f "${EXT_DIR}/package.json" ]]; then
@@ -30,11 +30,35 @@ read_pi_version() {
 	node -p "require('${PI_DATA_DIR}/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null || echo '未知'
 }
 
+# pnpm 11 以 ERR_PNPM_IGNORED_BUILDS 退出码 1 标记未审批的 build scripts，
+# 但包本身已正常安装。只对真正的 store 冲突或解析失败走重装。
+pnpm_update_or_reinstall() {
+	local dir="$1" label="$2"
+	local out
+	out=$(cd "${dir}" && pnpm update 2>&1) || {
+		if echo "${out}" | grep -q 'ERR_PNPM_UNEXPECTED_STORE'; then
+			echo "[${label}] store 版本不兼容，重新安装..." >&2
+			(cd "${dir}" && CI=true pnpm install --no-frozen-lockfile 2>&1)
+		elif echo "${out}" | grep -q 'ERR_PNPM_IGNORED_BUILDS'; then
+			echo "${out}" | grep -v 'ERR_PNPM_IGNORED_BUILDS' | grep -v 'Run "pnpm approve-builds"'
+			echo "[${label}] 部分依赖需要审批 build scripts（非致命）"
+		else
+			echo "${out}"
+			echo "[${label}] pnpm update 失败，重新安装..." >&2
+			(cd "${dir}" && CI=true pnpm install --no-frozen-lockfile 2>&1)
+		fi
+		return
+	}
+	echo "${out}"
+}
+
 echo "当前版本: $(read_pi_version)"
+
 echo "更新 Pi 核心..."
-(cd "${PI_DATA_DIR}" && pnpm update)
+pnpm_update_or_reinstall "${PI_DATA_DIR}" "Pi 核心"
+
 echo "更新扩展..."
-(cd "${EXT_DIR}" && pnpm update)
+pnpm_update_or_reinstall "${EXT_DIR}" "扩展"
 
 # prebuild-install 偶发 silent 失败; 强制 rebuild + 验证 binding 实际存在
 echo "重建 native binding..."
