@@ -44,6 +44,7 @@
   '(("SYSTEM/Guix/@boot"                   "/boot")
     ("SYSTEM/Guix/@data"                   "/var/lib")
     ("SYSTEM/Guix/@gnu"                    "/gnu")
+    ("SYSTEM/Guix/@nix"                    "/nix")
 
     ("SYSTEM/Guix/@persist/cache/root"     "/root/.cache")
     ("SYSTEM/Guix/@persist/cache/var"      "/var/cache")

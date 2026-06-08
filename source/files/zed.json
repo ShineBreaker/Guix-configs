@@ -32,7 +32,6 @@
       "enable_thinking": true
     },
     "model_parameters": [],
-    "play_sound_when_agent_done": "always",
     "tool_permissions": {
       "default": "allow"
     }
@@ -247,11 +246,6 @@
             "target": "25"
           }
         }
-      }
-    },
-    "package-version-server": {
-      "binary": {
-        "path": "$$bin/package-version-server$$"
       }
     },
     "pylsp": {

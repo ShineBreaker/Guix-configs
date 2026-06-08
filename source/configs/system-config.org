@@ -84,7 +84,7 @@
      <<networking-services>>
      <<virtualization-services>>
      <<kernel-services>>
-     ;; <<nix-services>>
+     <<nix-services>>
      <<filesystem-services>>
      <<desktop-services>>
      ))
@@ -430,7 +430,7 @@
  ;; 包管理器
  "flatpak"
  "flatpak-xdg-utils"
- ; "nix"
+ "nix"
 
  ;; 工具
  "cpufrequtils"

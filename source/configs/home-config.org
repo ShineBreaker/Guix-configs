@@ -113,9 +113,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
              (guix packages)
              (gnu services)
 
-             (px packages ai)
-             (px packages editors)
-
              (rosenthal utils file)
              (rosenthal utils packages))
 #+end_src
@@ -245,18 +242,15 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; 环境管理
         "bubblewrap"
-        "bun"
         "direnv"
         "gradle"
         "graphviz"
         "maven"
-        "pnpm"
         "sdkmanager"
         "uv"
 
         ;; AI Agent
         "cc-switch-bin"
-        "claude-code"
         "codex"
         "codex-acp"
         "crush-bin"
@@ -268,7 +262,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         ;; 工具
         "du-dust"
         "file"
-        "gh"
         "gitg"
         "guile-json"
         "jq"
@@ -286,7 +279,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "jujutsu"
 
         ;; 编辑器
-        "edit"
         "helix"
         "zed"))
 #+end_src
@@ -307,7 +299,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "gst-plugins-base"
          "gst-plugins-good"
          "gst-plugins-bad"
-         "gst-plugins-ugly-full"
+         "gst-plugins-ugly"
 
          ;; 影音
          "easyeffects"
@@ -327,7 +319,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
          ; 生产力工具
          "amber-pm"
-         "broot"
          "gimp"
          "filezilla"
          "keepassxc"
@@ -582,10 +573,12 @@ end
                              "emacs-org-roam"
                              "emacs-ox-gfm"
 
-                             ;; 额外工具
+                             ;; 应用工具
                              "emacs-calfw"
+                             "emacs-ement"
                              "emacs-notmuch"
                              "emacs-pdf-tools"
+                             "emacs-telega"
 
                              ;; Tree-sitter
                              "tree-sitter"
@@ -851,7 +844,6 @@ end
                                                  "nixfmt"
                                                  "node"
                                                  "omnisharp"
-                                                 "package-version-server"
                                                  "python-black"
                                                  "python-jsbeautifier"
                                                  "python-lsp-black"
@@ -963,8 +955,8 @@ end
                            (string-append
                             "$HOME/.local/share/flatpak/exports/share:"
                             "/var/lib/flatpak/exports/share:"
-                            ; "$HOME/.nix-profile/share:"
-                            ; "/nix/var/nix/profiles/default/share:"
+                            "$HOME/.nix-profile/share:"
+                            "/nix/var/nix/profiles/default/share:"
                             "$XDG_DATA_DIRS"))))))
 #+end_src
 

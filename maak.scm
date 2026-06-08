@@ -21,6 +21,7 @@
 (define home-dir      (getenv "HOME"))
 (define mutable-dir   (string-append repo-root "/dotfiles/mutable"))
 (define configs-dir   (string-append repo-root "/source/configs"))
+(define nix-dir       (string-append repo-root "/source/nix"))
 (define tmp-dir       (string-append repo-root "/tmp"))
 (define channel-fresh (string-append configs-dir "/../channel.scm"))
 (define channel-lock  (string-append configs-dir "/../channel.lock"))
@@ -204,6 +205,24 @@
            ,(string-append tmp-dir "/system-config.scm") "/mnt")
          #:sudo? #t)
   (tmprm))
+
+(define (nix)
+  "应用 nix home-manager 配置"
+  ($ (list (string-append home-dir "/.nix-profile/bin/home-manager")
+           "switch" "-b" "backup"
+           "--flake" (string-append nix-dir "/#Guix")
+           "--extra-experimental-features" "nix-command"
+           "--extra-experimental-features" "flakes")))
+
+(define (nix-init)
+  "初始化 nix channel 并安装 home-manager"
+  ($ (list "nix-channel" "--update"))
+  ($ (list "nix-shell" "<home-manager>" "-A" "install")))
+
+(define (nix-update)
+  "更新 nix channel 与 flake"
+  ($ (list "nix-channel" "--update"))
+  ($ (list "nix" "flake" "update" "--flake" nix-dir)))
 
 (define (pull)
   "拉取频道（guix pull）"
