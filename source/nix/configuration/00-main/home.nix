@@ -1,8 +1,9 @@
-{ config, pkgs, ... }:
+{ ... }:
 
 {
   imports = [
     ./packages.nix
+    ./nix.nix
   ];
 
   targets.genericLinux.enable = true;
@@ -16,7 +17,9 @@
   };
 
   home.sessionVariables = {
-    CHROMIUM_FLAGS = "--enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform-hint=wayland --enable-wayland-ime --wayland-text-input-version=3";
+    NIXOS_OZONE_WL = 1;
+    CHROMIUM_FLAGS =
+      "--enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform-hint=wayland --enable-wayland-ime --wayland-text-input-version=3";
   };
 
   programs.home-manager.enable = true;

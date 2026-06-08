@@ -7,6 +7,7 @@
     ## Tools
     broot
     gh
+    localsend
     yaak
 
     ## Android
@@ -17,9 +18,11 @@
 
     ## Gaming Tools
     gamescope
+    mangojuice
     sunshine
 
     ## Environment management
+    biome
     bun
     pnpm
 
@@ -30,5 +33,12 @@
     package-version-server
     typescript-language-server
     vscode-langservers-extracted
+
+    ## Chat
+    discord
+    feishu
+    # qq
+    wechat
+    wemeet
   ];
 }
