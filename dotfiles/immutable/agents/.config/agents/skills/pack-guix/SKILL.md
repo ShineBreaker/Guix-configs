@@ -18,7 +18,9 @@ description: 'Auto-generate Guix package definitions from binary URLs and source
 5. 生成 package.scm
 6. 处理 FHS 兼容性（patchelf 或 wrapper）
 7. 构建验证（guix build）
-8. 生成测试脚本
+8. Lint 检查（guix lint，强制）
+9. 运行时验证（guix shell + 功能测试）
+10. 生成测试脚本
 ```
 
 ## 输入格式
@@ -313,7 +315,35 @@ sha256sum /tmp/pack-guix-source.tar.gz | xxd -r -p | base32 | tr '[:lower:]' '[:
 # 在 Guix 环境中测试构建
 guix build -f package.scm --dry-run    # 先 dry-run
 guix build -f package.scm              # 实际构建
+```
 
+### 步骤 7：Lint 检查（强制）
+
+构建成功后，**必须**运行 `guix lint` 检查包定义质量。修复所有报告的问题后再继续。
+
+```bash
+# 对 jeans 通道中的包运行 lint
+guix lint -L modules <package-name>
+
+# 如果包定义在文件中但未加入通道
+guix lint -f package.scm
+```
+
+`guix lint` 检查项包括：
+
+- **synopsis**：是否为单行、无句号、不以包名开头
+- **description**：是否多行、无冗余措辞（"this package provides"）
+- **license**：许可证标识是否有效
+- **home-page**：URL 是否可达
+- **inputs**：是否有不必要的依赖
+- **source**：源码 URL 是否有效
+- **formatting**：缩进和格式是否规范
+
+如果 lint 报错，回到步骤 4 修正包定义，然后重新执行步骤 6-7。
+
+### 步骤 8：运行时验证
+
+```bash
 # 验证安装后 binary 基础运行
 guix shell -f package.scm -- <pkg-name> --version
 
@@ -325,7 +355,7 @@ guix shell -f package.scm -- <pkg-name> --version
 #   3. 如果报错 "cannot open shared object file"，补充对应的 Guix 包到 inputs
 ```
 
-### 步骤 7：生成测试脚本
+### 步骤 9：生成测试脚本
 
 参见 `references/test-template.sh`。
 
