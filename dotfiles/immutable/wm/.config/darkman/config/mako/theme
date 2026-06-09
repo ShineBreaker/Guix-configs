@@ -15,3 +15,8 @@ text-color=$$base07$$FF
 background-color=$$base00$$F3
 border-color=$$base03$$
 text-color=$$base07$$FF
+
+[urgency=high]
+background-color=$$base00$$FF
+border-color=$$base08$$
+text-color=$$base07$$FF

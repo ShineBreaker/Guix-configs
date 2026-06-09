@@ -61,7 +61,7 @@
     "format": "{:%H\n%M\n%S}",
     "tooltip": true,
     "tooltip-format": " {:%Y-%m-%d}，右键清除通知",
-    "on-click-right": "makoctl reload",
+    "on-click-right": "makoctl dismiss --all",
   },
   "cpu": {
     "interval": 1,

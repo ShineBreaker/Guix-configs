@@ -14,6 +14,10 @@ icon-path=~/.guix-home/profile/share/icons/Papirus-Dark/
 icons=1
 ignore-timeout=1
 layer=overlay
+markup=1
+max-history=20
+max-visible=5
+on-button-right=dismiss
 margin=10,10,10,10
 max-icon-size=64
 padding=10
@@ -29,4 +33,4 @@ group-by=category
 invisible=1
 
 [urgency=high]
-default-timeout=0
+default-timeout=15000
