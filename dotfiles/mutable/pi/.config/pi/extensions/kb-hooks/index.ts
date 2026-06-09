@@ -15,18 +15,10 @@
  * 本插件只做"事件触发 + 命令快捷入口"，避免与 skill 重复维护。
  */
 
-import type {
-  ExtensionAPI
-} from "@earendil-works/pi-coding-agent";
-import {
-  execSync
-} from "node:child_process";
-import {
-  homedir
-} from "node:os";
-import {
-  join
-} from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { execSync } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const KB_SCRIPT = join(homedir(), ".local", "bin", "kb");
 const KB_AGENT = join(homedir(), ".local", "bin", "kb-agent");
@@ -66,6 +58,10 @@ const SUMMARIZE_PROMPT = [
   "2. 如有 → 调用 /kb-summarize 写入知识库（kb add / kb memory / kb connect）",
   "3. 如无 → 明确回复'本次无可记录经验'</kb-hook>",
 ].join("\n");
+
+/** 防抖：同一信号在冷却期内不重复触发 */
+const DEBOUNCE_MS = 5 * 60 * 1000; // 5 分钟
+let lastTriggerTime = 0;
 
 /** 运行 kb 命令并返回 stdout */
 function runKb(...args: string[]): string {
@@ -128,13 +124,16 @@ function extractText(content: unknown): string {
   if (Array.isArray(content)) {
     return content
       .filter(
-        (p): p is {
-          type: "text";text: string
+        (
+          p,
+        ): p is {
+          type: "text";
+          text: string;
         } =>
-        p &&
-        typeof p === "object" &&
-        "type" in p &&
-        (p as any).type === "text",
+          p &&
+          typeof p === "object" &&
+          "type" in p &&
+          (p as any).type === "text",
       )
       .map((p) => p.text)
       .join(" ");
@@ -153,6 +152,10 @@ export default function init(pi: ExtensionAPI): void {
 
   // ── agent_end: 检测完成信号，提示 agent 进入总结流程 ──
   pi.on("agent_end", async (event, ctx) => {
+    // 防抖：冷却期内跳过
+    const now = Date.now();
+    if (now - lastTriggerTime < DEBOUNCE_MS) return;
+
     const messages = (event as any).messages || [];
     const userTexts = messages
       .filter((m: any) => m.role === "user")
@@ -167,9 +170,10 @@ export default function init(pi: ExtensionAPI): void {
     );
 
     if (hasCompletion) {
+      lastTriggerTime = now;
       // deliverAs: followUp — 若 agent 仍在 streaming 则安全排队，idle 时立即交付
       pi.sendUserMessage(SUMMARIZE_PROMPT, {
-        deliverAs: "followUp"
+        deliverAs: "followUp",
       });
       ctx.ui.notify(
         "[KB] 任务完成信号已检测，建议运行 /kb-summarize 总结经验",
@@ -185,7 +189,7 @@ export default function init(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       ctx.ui.notify("[KB] 触发经验总结，请在下一轮对话中查看结果", "info");
       pi.sendUserMessage(SUMMARIZE_PROMPT, {
-        deliverAs: "followUp"
+        deliverAs: "followUp",
       });
     },
   });
