@@ -5,11 +5,16 @@
 set -euo pipefail
 
 PI_DATA_DIR="${PI_LOCAL_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/pi}"
-EXT_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}/npm"
+PI_CONFIG_DIR="${PI_CODING_AGENT_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/pi}"
+EXT_DIR="${PI_CONFIG_DIR}/npm"
+SETTINGS_FILE="${PI_CONFIG_DIR}/settings.json"
 PI_BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
 
 # 缺了任一 binding 会导致 pi 启动崩溃
 NATIVE_PKGS=(better-sqlite3 koffi)
+
+# 不应自动移除的核心/框架包（settings.json 未列出时保留）
+PROTECTED_PKGS=(pi-subagents)
 
 if ! command -v pnpm &>/dev/null; then
 	echo "pnpm is not installed." >&2
@@ -25,6 +30,54 @@ if [[ ! -f "${EXT_DIR}/package.json" ]]; then
 	echo "Pi extensions not configured at ${EXT_DIR}" >&2
 	exit 1
 fi
+
+# === 从 settings.json 同步扩展包清单 ===
+sync_extensions_from_settings() {
+	[[ -f "${SETTINGS_FILE}" ]] || { echo "  settings.json 不存在，跳过" >&2; return; }
+
+	local diff
+	diff=$(node -e '
+		const fs = require("fs");
+		const [settingsFile, pkgFile, ...protect] = process.argv.slice(1);
+		const cfg = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+		const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8"));
+
+		const desired = (cfg.packages || [])
+			.filter(p => p.startsWith("npm:"))
+			.map(p => p.slice(4));
+		const current = Object.keys(pkg.dependencies || {});
+
+		const add = desired.filter(p => !current.includes(p));
+		const rem = current.filter(p =>
+			!desired.includes(p) &&
+			!p.startsWith("@earendil-works/") &&
+			!protect.includes(p)
+		);
+
+		if (add.length) process.stdout.write("add:" + add.join(" ") + "\n");
+		if (rem.length) process.stdout.write("remove:" + rem.join(" ") + "\n");
+	' "${SETTINGS_FILE}" "${EXT_DIR}/package.json" "${PROTECTED_PKGS[@]}")
+
+	if [[ -z "${diff}" ]]; then
+		echo "  无需变更"
+		return
+	fi
+
+	while IFS= read -r line; do
+		case "${line}" in
+		add:*)
+			local pkgs="${line#add:}"
+			echo "  安装: ${pkgs}"
+			(cd "${EXT_DIR}" && pnpm add ${pkgs} 2>&1)
+			;;
+		remove:*)
+			local pkgs="${line#remove:}"
+			echo "  移除: ${pkgs}"
+			(cd "${EXT_DIR}" && pnpm remove ${pkgs} 2>&1)
+			;;
+		esac
+	done <<< "${diff}"
+}
 
 read_pi_version() {
 	node -p "require('${PI_DATA_DIR}/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null || echo '未知'
@@ -56,6 +109,9 @@ echo "当前版本: $(read_pi_version)"
 
 echo "更新 Pi 核心..."
 pnpm_update_or_reinstall "${PI_DATA_DIR}" "Pi 核心"
+
+echo "同步扩展包（依据 settings.json）..."
+sync_extensions_from_settings
 
 echo "更新扩展..."
 pnpm_update_or_reinstall "${EXT_DIR}" "扩展"
