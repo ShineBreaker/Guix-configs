@@ -202,7 +202,7 @@ def _memory_add(args: argparse.Namespace) -> None:
         body = sys.stdin.read()
 
     if not title:
-        # 从 stdin 内容第一行生成 title（兼容 patterns 旧接口）
+        # 从 stdin 内容第一行生成 title
         if body:
             first_line = body.strip().split("\n")[0].strip()
             title = first_line[:80] if first_line else "(无标题)"
@@ -554,33 +554,6 @@ def _memory_project(identifier: str) -> None:
     else:
         print(f"项目文件不存在: {file_path}")
         sys.exit(1)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# 子命令: patterns — 管理模式/原则
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-def cmd_patterns(args: argparse.Namespace) -> None:
-    """向后兼容：重定向到 cmd_memory 的 feedback 子集。"""
-
-    class _CompatArgs:
-        pass
-
-    a = _CompatArgs()
-    a.type = "feedback"
-    a.project = None
-    a.add = args.action == "add"
-    a.get = args.action == "get"
-    a.title = ""
-    a.stale = False
-    a.touch = None
-    a.archive = None
-    a.stdin = True  # patterns --add 总是读 stdin
-    if args.action is None:
-        a.add = False
-        a.get = False
-    cmd_memory(a)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

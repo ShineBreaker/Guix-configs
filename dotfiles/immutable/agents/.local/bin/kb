@@ -54,7 +54,7 @@ from kb_lib.cards import (  # noqa: E402
     cmd_review,
     cmd_health,
 )
-from kb_lib.memory import cmd_memory, cmd_patterns  # noqa: E402
+from kb_lib.memory import cmd_memory  # noqa: E402
 from kb_lib.lint import cmd_lint  # noqa: E402
 from kb_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
@@ -231,10 +231,7 @@ def print_help() -> None:
             kb memory --project <名称> --auto-update  自动更新项目元数据
             kb memory --get                     查看全文
 
-  patterns  管理模式/原则（向后兼容，委托给 memory）
-            kb patterns           列出模式
-            kb patterns --add     从 stdin 追加模式
-            kb patterns --get     显示全文
+
 
   reindex   重建知识库索引
             kb reindex
@@ -426,19 +423,6 @@ def main() -> None:
         help="自动更新项目元数据（与 --project 联合使用）",
     )
 
-    # ── patterns ──────────────────────────────────────────────────────────
-    patterns_parser = subparsers.add_parser("patterns", help="管理模式/原则")
-    patterns_parser.add_argument(
-        "--add",
-        dest="action",
-        action="store_const",
-        const="add",
-        help="从 stdin 追加模式",
-    )
-    patterns_parser.add_argument(
-        "--get", dest="action", action="store_const", const="get", help="显示全文"
-    )
-
     # ── reindex ───────────────────────────────────────────────────────────
     subparsers.add_parser("reindex", help="重建知识库索引")
 
@@ -550,7 +534,6 @@ def main() -> None:
         "fields": cmd_fields,
         "tags": cmd_tags,
         "memory": cmd_memory,
-        "patterns": cmd_patterns,
         "reindex": cmd_reindex,
         "lint": cmd_lint,
         "inbox": cmd_inbox,

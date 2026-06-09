@@ -231,7 +231,7 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def cmd_search(args: argparse.Namespace) -> None:
-    """在 experiences/ 和 patterns.org 中全文检索。"""
+    """在 experiences/ 和 MEMORY.org 中全文检索。"""
     query = args.query
     context = args.context
 
