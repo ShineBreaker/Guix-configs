@@ -210,6 +210,8 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "clang"
         "godot"
         "go"
+        "ditaa"
+        "figlet"
         "graphviz"
         "jdtls-bin"
         "node"
@@ -221,6 +223,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
         ;; LSP & Formatter
         "guile-ares-rs"
+        "guile-lsp-server"
         "gopls"
         "nixfmt"
         "omnisharp"
@@ -302,6 +305,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
          "gst-plugins-ugly"
 
          ;; 影音
+         "audacity"
          "easyeffects"
          "helvum"
          "mpv"
@@ -503,6 +507,7 @@ end
                              "emacs-which-key"
 
                              ;; 编辑与导航
+                             "emacs-ace-window"
                              "emacs-avy"
                              "emacs-diff-hl"
                              "emacs-dirvish"
@@ -517,6 +522,8 @@ end
                              "emacs-symbol-overlay"
                              "emacs-wgrep"
                              "emacs-with-editor"
+                             "emacs-crux"
+                             "emacs-smartparens"
                              "emacs-ws-butler"
                              "emacs-eldoc-box"
                              "emacs-vundo"
@@ -566,7 +573,9 @@ end
                              "emacs-consult-projectile"
 
                              ;; Org Mode 生态
+                             "emacs-deft"
                              "emacs-htmlize"
+                             "emacs-olivetti"
                              "emacs-org"
                              "emacs-org-appear"
                              "emacs-org-modern"
@@ -575,6 +584,7 @@ end
 
                              ;; 应用工具
                              "emacs-calfw"
+                             "emacs-elfeed"
                              "emacs-ement"
                              "emacs-notmuch"
                              "emacs-pdf-tools"
@@ -839,6 +849,7 @@ end
                                                  "clang"
                                                  "go"
                                                  "gopls"
+                                                 "guile-lsp-server"
                                                  "jdtls-bin"
                                                  "maven"
                                                  "nixfmt"

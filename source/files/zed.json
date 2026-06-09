@@ -197,6 +197,9 @@
         }
       }
     },
+    "Scheme": {
+      "language_servers": ["guile-lsp-server"]
+    },
     "Python": {
       "language_servers": [
         "pylsp",
@@ -271,6 +274,11 @@
     "rust-analyzer": {
       "binary": {
         "path": "$$bin/rust-analyzer$$"
+      }
+    },
+    "guile-lsp-server": {
+      "binary": {
+        "path": "$$bin/guile-lsp-server$$"
       }
     }
   },

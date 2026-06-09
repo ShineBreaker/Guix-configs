@@ -341,6 +341,12 @@
       ],
       "timeout": 30
     },
+    "scheme": {
+      "command": "~/.guix-home/profile/bin/guile-lsp-server",
+      "filetypes": ["scm", "ss"],
+      "root_markers": [".git", "guix.scm", "manifest.scm"],
+      "timeout": 30
+    },
     "kotlin": {
       "disabled": true,
       "command": "kotlin-language-server",

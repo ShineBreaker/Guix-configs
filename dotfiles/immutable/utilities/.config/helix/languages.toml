@@ -27,6 +27,9 @@ args = ["-lsp"]
 [language-server.zls]
 command = "zls"
 
+[language-server.guile-lsp-server]
+command = "guile-lsp-server"
+
 [[language]]
 name = "bash"
 scope = "source.bash"
@@ -151,3 +154,7 @@ file-types = ["zig", "zon"]
 auto-format = true
 formatter = { command = "zig", args = ["fmt", "--stdin", "-"] }
 language-servers = ["zls"]
+
+[[language]]
+name = "scheme"
+language-servers = ["guile-lsp-server"]
