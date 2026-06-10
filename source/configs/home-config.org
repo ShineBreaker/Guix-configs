@@ -805,8 +805,10 @@ end
                             "AGENTS\\.md"
                             "README\\.md"
                             "bun\\.lock"
-                            "\\.mypy_cache"
-                            "__pycache__"))))
+                            "uv\\.lock"
+                            "\\.venv($|/.*)"
+                            "\\.mypy_cache($|/.*)"
+                            "__pycache__($|/.*)"))))
 
       ; (simple-service 'prism-jdks home-files-service-type
       ;                 (map (lambda (jdk)
