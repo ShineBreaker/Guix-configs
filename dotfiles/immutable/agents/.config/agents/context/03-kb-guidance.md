@@ -40,6 +40,11 @@
 | 不写           | —                                 | 一次性细节、环境失败、否定声明 |
 
 优先级：纠正(mistake) > 调试(debug/config) > 工作流 > 功能
+
+<critical>
+**MEMORY 长度硬约束**：每条 memory (`kb memory --add`) 只能写一句话（声明式规则 + 关键命令/路径）。MEMORY.org 完整注入 LLM 上下文，多段结构会撑爆窗口。详细规范见 knowledge-base skill 的"记忆系统"章节。
+</critical>
+
 </write_decision>
 
 <write_quality>
