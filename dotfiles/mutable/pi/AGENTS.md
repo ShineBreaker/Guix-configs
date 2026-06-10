@@ -148,6 +148,10 @@ Adapter 声明式配置见 `.agents/workfile/loops/drivers/adapters/`。加新 a
 
 ## Subagent 架构
 
+> **实现位置**：subagent 工具、`/<agent-name>` 快捷命令、plan-review-gate、worker/planner 上下文注入均由本地扩展 `extensions/atelier/` 实现。
+> 源码：`extensions/atelier/{index,launcher,runner,config,discovery,context}.ts` + 辅助脚本 `~/.local/share/pi/scripts/subagent-wrapper.sh`。
+> 模型路由通过 `settings.json` 的 `atelier.tiers` 配置 + agent frontmatter `tier:` 字段驱动；不要直接修改 `subagent-wrapper.sh` 试图改模型选择逻辑——所有 model 解析都在 `extensions/atelier/runner.ts` 的 `resolveModelChain()` 里。
+
 ### 设计原则
 
 本架构遵循以下核心原则：
