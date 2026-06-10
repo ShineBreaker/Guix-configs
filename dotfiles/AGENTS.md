@@ -26,7 +26,7 @@ TR:│   └── ssh/     # SSH 配置
 
 - 子模块，实际代码在 `codeberg.org/BrokenShine/.emacs.d`
 - 详见 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`
-- 内建知识库体系（knowledge-base / kb-curator / self-improving skills）
+- 内建知识库体系（`kb-mcp` 工具集 + kb-curator / self-improving skills）
 - 新包需同步修改 `source/configs/home-config.org` 的包清单
 
 ### Pi Agent（mutable/pi/）

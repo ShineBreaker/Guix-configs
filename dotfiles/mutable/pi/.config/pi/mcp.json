@@ -2,6 +2,9 @@
   "mcpServers": {
     "context-mode": {
       "command": "context-mode"
+    },
+    "kb-mcp": {
+      "command": "~/.config/agents/mcp-servers/kb-mcp/run.sh"
     }
   }
 }

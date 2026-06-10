@@ -7,6 +7,8 @@ import json
 import os
 import re
 import shlex
+import shutil
+import subprocess
 import sys
 from collections import Counter
 from datetime import datetime
@@ -26,6 +28,7 @@ from kb_lib.core import (  # noqa: E402
     ARCHIVE_THRESHOLD_DAYS,
     CARD_TEMPLATES,
     ENTRY_BODY_DEFAULTS,
+    DEFAULT_LIST_COUNT,
     die,
     now,
     today,
@@ -230,10 +233,33 @@ def cmd_list(args: argparse.Namespace) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _make_search_snippet(
+    match: dict, normalized_terms: list[str], case_sensitive: bool
+) -> str:
+    """从匹配项中提取首个 hit 前后两行的片段，最多 200 字符。"""
+    lines = match["content"].splitlines()
+    hit_indexes = [
+        i
+        for i, line in enumerate(lines)
+        if _line_contains_any(line, normalized_terms, case_sensitive)
+    ]
+    if not hit_indexes:
+        return ""
+    start = max(0, hit_indexes[0] - 2)
+    end = min(len(lines) - 1, hit_indexes[0] + 2)
+    snippet = "\n".join(lines[start : end + 1])
+    if len(snippet) > 200:
+        snippet = snippet[:200] + "..."
+    return snippet
+
+
 def cmd_search(args: argparse.Namespace) -> None:
     """在 experiences/ 和 MEMORY.org 中全文检索。"""
     query = args.query
     context = args.context
+
+    if args.json and args.regex:
+        die("--json 与 --regex 互斥；--regex 模式只支持人类可读输出")
 
     if args.regex:
         targets = [str(KB_EXPERIENCES), str(KB_MEMORY)]
@@ -294,11 +320,35 @@ def cmd_search(args: argparse.Namespace) -> None:
         )
 
     if not matches:
-        print(f"未找到匹配: {query}")
+        if args.json:
+            print(json.dumps([], ensure_ascii=False, indent=2))
+        else:
+            print(f"未找到匹配: {query}")
         return
 
     matches.sort(key=lambda item: (-item["score"], str(item["filepath"])))
     limit = max(1, args.limit)
+
+    if args.json:
+        results = []
+        for match in matches[:limit]:
+            card_id = (
+                parse_org_prop(match["content"], "ID")
+                or match["filepath"].stem.split("-")[0]
+            )
+            results.append(
+                {
+                    "id": card_id,
+                    "title": match["title"],
+                    "score": match["score"],
+                    "snippet": _make_search_snippet(
+                        match, normalized_terms, args.case_sensitive
+                    ),
+                }
+            )
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        return
+
     for idx, match in enumerate(matches[:limit]):
         filepath = match["filepath"]
         rel = (
@@ -379,6 +429,18 @@ def cmd_fields(args: argparse.Namespace) -> None:
             counters["owner"][c["owner"]] += 1
 
     labels = {"category": "category", "tech": "tech", "type": "type", "owner": "owner"}
+    if args.json:
+        payload = {
+            key: [
+                {"name": name, "count": cnt}
+                for name, cnt in sorted(counters[key].items())
+            ]
+            for key in labels
+            if show[key]
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+
     for key, label in labels.items():
         if show[key]:
             print(f"── {label} ──")
@@ -399,8 +461,9 @@ def cmd_tags(args: argparse.Namespace) -> None:
     if not args.tags:
         die("用法: kb tags <标签> [标签2 ...]")
 
+    json_items: list[dict] = []
+
     for tag in args.tags:
-        print(f"── 标签: {tag} ──")
         if shutil.which("rg"):
             result = subprocess.run(
                 ["rg", "--color=never", "-l", f":{tag}:", str(KB_EXPERIENCES)],
@@ -413,10 +476,37 @@ def cmd_tags(args: argparse.Namespace) -> None:
                 capture_output=True,
                 text=True,
             )
-        if result.returncode == 0 and result.stdout.strip():
-            print(result.stdout, end="")
+        files = (
+            [Path(line) for line in result.stdout.splitlines() if line]
+            if result.returncode == 0 and result.stdout.strip()
+            else []
+        )
+
+        if args.json:
+            for filepath in files:
+                try:
+                    content = filepath.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                card_id = parse_org_prop(content, "ID") or filepath.stem.split("-")[0]
+                json_items.append(
+                    {
+                        "tag": tag,
+                        "id": card_id,
+                        "title": read_org_title(content),
+                    }
+                )
+            continue
+
+        print(f"── 标签: {tag} ──")
+        if files:
+            for filepath in files:
+                print(filepath)
         else:
             print("  (无匹配)")
+
+    if args.json:
+        print(json.dumps(json_items, ensure_ascii=False, indent=2))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

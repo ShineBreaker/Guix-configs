@@ -356,6 +356,7 @@ def main() -> None:
     list_parser.add_argument("--owner", help="按执行者过滤")
     list_parser.add_argument("--recent", type=int, help="显示最近 N 条")
     list_parser.add_argument("--all", action="store_true", help="显示全部")
+    list_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     # ── search ────────────────────────────────────────────────────────────
     search_parser = subparsers.add_parser("search", help="全文检索")
@@ -374,6 +375,7 @@ def main() -> None:
     search_parser.add_argument(
         "--regex", action="store_true", help="使用旧版 rg/grep 正则检索模式"
     )
+    search_parser.add_argument("--json", action="store_true", help="JSON 输出")
 
     # ── fields ────────────────────────────────────────────────────────────
     fields_parser = subparsers.add_parser("fields", help="列出已有字段值")
@@ -385,10 +387,12 @@ def main() -> None:
         "--type", dest="type_", action="store_true", help="只列出 type"
     )
     fields_parser.add_argument("--owner", action="store_true", help="只列出 owner")
+    fields_parser.add_argument("--json", action="store_true", help="JSON 输出")
 
     # ── tags ──────────────────────────────────────────────────────────────
     tags_parser = subparsers.add_parser("tags", help="按标签检索")
     tags_parser.add_argument("tags", nargs="+", help="标签")
+    tags_parser.add_argument("--json", action="store_true", help="JSON 输出")
 
     # ── memory ──────────────────────────────────────────────────────────
     memory_parser = subparsers.add_parser("memory", help="管理记忆系统")

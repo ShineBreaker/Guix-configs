@@ -44,7 +44,7 @@ mutable/
 ### Emacs
 
 - 详见 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`
-- 内建知识库体系（knowledge-base / kb-curator / self-improving）
+- 内建知识库体系（`kb-mcp` 工具集 + kb-curator / self-improving）
 - 新包需同步修改 `source/configs/home-config.org` 的包清单
 - 禁止使用 `package.el`，所有包由 Guix 管理
 

@@ -7,22 +7,26 @@ description: Use when detecting experience signals during conversation, writing 
 
 在对话中检测经验信号，通过 `kb` CLI 写入知识库。
 
-> CLI 操作细节见 `knowledge-base` skill。本 skill 只关注 **何时/为何** 记录、**怎么写** 以及 **维护流程**。
+> KB 操作通过 `kb-mcp` MCP 工具集（12 个 `kb_*` 工具）调用；CLI 兜底仍用 `kb` 子命令。本 skill 只关注 **何时/为何** 记录、**怎么写** 以及 **维护流程**。
 
 ## 任务前预检
 
 <critical>
-开始任何非平凡任务前，必须先执行 `kb list --category <category> --all` 读取对应领域标题索引；每次都必须做。标题列表不足以定位时，再执行 `kb search` 正文预检。
+开始任何非平凡任务前，必须先执行 `kb_mcp_kb_list_cards(category=<category>, all=true)`（CLI 兜底：`kb list --category <category> --all`）读取对应领域标题索引；每次都必须做。标题列表不足以定位时，再执行 `kb_mcp_kb_search(queries=[...])`（CLI 兜底：`kb search`）正文预检。
 </critical>
 
 ```bash
+# MCP（优先）：
+kb_mcp_kb_list_cards(category=<相关类别>, all=true)
+kb_mcp_kb_get_card(<明显相关的卡片ID>)
+kb_mcp_kb_search(queries=["<关键词1>", "<关键词2>"])
+# CLI 兜底：
 kb list --category <相关类别> --all
 kb get <明显相关的卡片ID>
-b search "<当前任务的关键技术 工具 症状>" --context 2
-kb search "<错误信息或症状>"
+kb search "<错误信息或症状>" --context 2
 ```
 
-预检第一步是 category 标题索引：先看该领域有哪些历史经验，再决定是否 `kb get` 读取全文。`kb search` 默认是多关键词相关度检索，只作为标题索引后的正文补充；使用 2-5 个稳定关键词（技术名、工具名、错误短语、配置名），必要时加 `--all-terms` 收窄；只有确实需要正则时才用 `--regex`。
+预检第一步是 category 标题索引：先看该领域有哪些历史经验，再决定是否 `kb_mcp_kb_get_card`（CLI：`kb get`）读取全文。`kb_mcp_kb_search`（CLI：`kb search`）默认是多关键词相关度检索，只作为标题索引后的正文补充；使用 2-5 个稳定关键词（技术名、工具名、错误短语、配置名），必要时加 `--all-terms` 收窄；只有确实需要正则时才用 `--regex`。
 
 **必须预检**：调试/排障、配置修改、已使用过的技术栈、与之前类似的问题。
 **可跳过**：全新领域开发、简单编辑、有明确文档的标准操作。
@@ -33,12 +37,12 @@ kb search "<错误信息或症状>"
 
 不是所有经验都值得写完整卡片。详细决策树见 `references/write-decision.md`。
 
-| 目标           | 方式                              | 条件                           |
-| -------------- | --------------------------------- | ------------------------------ |
-| 可复用技术经验 | `kb add` 完整卡片                 | 排查 >2 步、跨工具、架构决策   |
-| 偏好/习惯      | `kb memory --add`                 | 偏好表达、行为纠正             |
-| 一句话注意     | `kb inbox` / `kb update --append` | 简单修正、补充                 |
-| 不写           | —                                 | 一次性细节、环境失败、否定声明 |
+| 目标           | 方式                                                                                  | 条件                           |
+| -------------- | ------------------------------------------------------------------------------------- | ------------------------------ |
+| 可复用技术经验 | `kb_mcp_kb_add_card`（CLI：`kb add`）完整卡片                                         | 排查 >2 步、跨工具、架构决策   |
+| 偏好/习惯      | `kb memory --add`                                                                     | 偏好表达、行为纠正             |
+| 一句话注意     | `kb_mcp_kb_inbox` / `kb_mcp_kb_update_card`（CLI：`kb inbox` / `kb update --append`） | 简单修正、补充                 |
+| 不写           | —                                                                                     | 一次性细节、环境失败、否定声明 |
 
 优先级：纠正(mistake) > 调试(debug/config) > 工作流 > 功能
 
@@ -50,8 +54,8 @@ kb search "<错误信息或症状>"
 done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 ```
 
-- `kb touch <id>` — 标记卡片"刚用过"
-- `kb update <id> --status stable` — 策展后设为 stable
+- `kb_mcp_kb_touch_card(id)`（CLI：`kb touch <id>`）— 标记卡片"刚用过"
+- `kb_mcp_kb_update_card(id, status="stable")`（CLI：`kb update <id> --status stable`）— 策展后设为 stable
 - `kb archive <id>` — 归档卡片
 - `kb restore <id>` — 恢复归档卡片
 - `kb review <id>` — 审查卡片质量
@@ -79,13 +83,32 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 | 习惯模式 | feedback  | 同一偏好出现 ≥2 次                   | `kb memory --add --type feedback`               |
 | 项目决策 | project   | 不可从代码推导的项目级决策/状态      | `kb memory --add --type project --project <id>` |
 | 外部指针 | reference | 外部系统/文档/资源的位置信息         | `kb memory --add --type reference`              |
+
 **MEMORY vs KB 边界**：
 
 <critical>
-**MEMORY 长度硬约束**：每条 memory 只能写一句话（声明式规则 + 关键命令/路径）。MEMORY.org 完整注入 LLM 上下文，多段结构会大幅消耗上下文窗口。详细规范和反例/正例对照见 `knowledge-base` skill 的"记忆系统"章节。
+**MEMORY 长度硬约束**：每条 memory 只能写一句话（声明式规则 + 关键命令/路径）。MEMORY.org 完整注入 LLM 上下文，不允许"现象+原因+策略+适用+例外+关联"多段结构。
+
+**为什么**：MEMORY.org 通常 100-200 行，完整注入大幅消耗上下文窗口；偏好/规则本身一句话足够，长描述是 KB 卡片的工作。
+
+**如何压缩**：内容超过 1 句 → 拆为"摘要（一句话）+ 详细指向 KB 卡片 ID"；历史多行条目迁移到 KB 卡片后 memory 压为 1 句。
+
+**反例**（不允许）：
+#+begin_src org
+\*\* F002 大任务分解并行
+单线程长思考在面对大量写入操作时效率极低。
+glm-5.1 将 258 项翻译任务分为 4 chunk 并行委托...
+策略：先规划 → 按模式分块 → 并行委托 → 汇总验证。
+适用：批量翻译、批量文件修改、批量配置生成...
+例外：任务间有严格依赖顺序时不可并行。
+#+end_src
+
+**正例**（一句话）：
+#+begin_src org
+\*\* F002 大任务分解并行
+写入密集型任务先规划→按模式分块→N 个 worker 并行委托→汇总验证（commit 除外必须 serial），依赖任务不可并行。
+#+end_src
 </critical>
-
-
 
 - "你怎么做"（风格/流程/工具选择偏好）→ MEMORY
 - "你做错了"（事实/技术错误）→ KB
@@ -104,13 +127,13 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 
 ## 写入流程
 
-1. `kb search` 去重
+1. `kb_mcp_kb_search`（CLI：`kb search`）去重
 2. 矛盾检测 — 新发现是否与已有卡片/pattern 矛盾
-3. `kb fields` 查看标签，优先复用
-4. `kb add` 写入卡片（CLI 用法见 `knowledge-base` skill）
+3. `kb_mcp_kb_fields`（CLI：`kb fields`）查看标签，优先复用
+4. `kb_mcp_kb_add_card` 写入卡片（CLI 兜底：`kb add --stdin`，参数细节 `kb add --help`）
 5. `kb lint` 校验格式
 6. 传播联动 — 检查受影响的 MEMORY feedback/卡片
-7. `kb connect` 建立关联链接
+7. `kb_mcp_kb_connect_cards`（CLI：`kb connect`）建立关联链接
 
 ### MEMORY 写入流程
 
@@ -148,8 +171,8 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 
 ### 写入前决策
 
-1. `kb search` 去重 — 已有卡片覆盖时补充修正，不新建重复卡
-2. **优先复用已有标签** — `kb fields` 查看现有 category/tech，只有全新领域才创建新类别
+1. `kb_mcp_kb_search`（CLI：`kb search`）去重 — 已有卡片覆盖时补充修正，不新建重复卡
+2. **优先复用已有标签** — `kb_mcp_kb_fields`（CLI：`kb fields`）查看现有 category/tech，只有全新领域才创建新类别
 3. 项目私有细节只写必要上下文；可泛化规则晋升到 MEMORY.org 的 feedback 节
 4. 卡片保存完整过程，MEMORY feedback 保存紧凑规则；二者可共存，feedback 条目必须引用卡片 ID
 
@@ -169,7 +192,7 @@ AI-First 卡片规则详见 `self-improving/references/ai-first-rules.md`。
 
 ### 子章节规则
 
-`kb add` 自动生成一级标题；`--stdin` 中从二级标题开始写。
+`kb_mcp_kb_add_card`（CLI：`kb add`）自动生成一级标题；`--stdin` 中从二级标题开始写。
 
 ## 模式归纳
 

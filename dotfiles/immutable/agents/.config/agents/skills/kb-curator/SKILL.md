@@ -77,10 +77,10 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 
 ### 传播联动规则
 
-- 新卡片推翻旧结论 → `kb update` 在旧卡追加勘误
+- 新卡片推翻旧结论 → `kb_update` 在旧卡追加勘误
 - 同类卡片 ≥3 张 → 归纳为 MEMORY feedback
 - 新卡片补充了已有 feedback → 修补 feedback
-- 隐含关联的卡片 → `kb connect` 建立双向链接
+- 隐含关联的卡片 → `kb_connect` 建立双向链接
 
 ### 报告格式
 
@@ -94,7 +94,7 @@ description: Use when maintaining the knowledge base, running nightly curation, 
 修补 feedback：Q 条（列出标题和修补内容）
 矛盾调和：C 个（列出涉及的卡片）
 更新用户偏好：Y/N（如有，列出更新的分类）
-kb stats 概要：
+kb_stats 概要：
   总卡片数 / 时间范围
 ── MEMORY 统计 ──
   feedback: X 条（Y stale）
@@ -102,7 +102,7 @@ kb stats 概要：
   reference: X 条
   deprecated: X 条
 
-可通过 `kb stats` 获取。
+可通过 `kb_stats` 获取。
 ```
 
 ## 策展原则

@@ -1,0 +1,13 @@
+[project]
+name = "kb-mcp"
+version = "0.1.0"
+description = "MCP 瘦壳:把知识库 CLI (kb) 暴露给模型客户端"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "mcp[cli]>=1.0",
+]
+
+# 说明:本项目不发布 wheel,只声明依赖给 `uv run --with` 用。
+# 启动脚本使用 `uv run --no-project` 跳过本地包构建。

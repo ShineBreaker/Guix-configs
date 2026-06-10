@@ -7,7 +7,7 @@
 当前目录承载一套 Agent 系统：
 
 - **全局上下文**（`~/.config/agents/context/`）— 被 OpenCode / Crush / Pi 共同引用的统一指引
-- **Skills 体系**（`~/.config/agents/skills/`）— kb-curator、knowledge-base、self-improving、pack-guix
+- **Skills 体系**（`~/.config/agents/skills/`）— kb-curator、self-improving、pack-guix（KB 操作已迁出为 `kb-mcp` 工具集，见下）
 
 ## 目录结构
 
@@ -16,7 +16,7 @@ agents/
 ├── .config/
 │   ├── agents/
 │   │   ├── context/         # 01-language.md, 02-ultilities.md（全局指令）
-│   │   └── skills/          # kb-curator, knowledge-base, self-improving, pack-guix
+│   │   └── skills/          # kb-curator, self-improving, pack-guix（KB 操作走 mcp-servers/kb-mcp/）
 │   └── crush/               # Crush superpowers 配置（bin/、hooks/、crush.json）
 │
 └── .local/
@@ -29,12 +29,14 @@ agents/
 
 ### 核心组件
 
-| 组件                   | 位置                                    | 说明                  |
-| ---------------------- | --------------------------------------- | --------------------- |
-| `knowledge-base` skill | `.config/agents/skills/knowledge-base/` | KB 查询/写入 CLI      |
-| `kb-curator` skill     | `.config/agents/skills/kb-curator/`     | 夜间策展、KB 健康检查 |
-| `self-improving` skill | `.config/agents/skills/self-improving/` | 经验信号检测与记录    |
-| `kb` 命令              | `.local/bin/kb`                         | KB 操作入口           |
+| 组件                   | 位置                                    | 说明                                           |
+| ---------------------- | --------------------------------------- | ---------------------------------------------- |
+| `kb-mcp` MCP 工具集    | `.config/agents/mcp-servers/kb-mcp/`    | 12 个 `kb_*` 工具（MCP），KB 查询/写入主入口   |
+| `kb-curator` skill     | `.config/agents/skills/kb-curator/`     | 夜间策展、KB 健康检查                          |
+| `self-improving` skill | `.config/agents/skills/self-improving/` | 经验信号检测与记录                             |
+| `kb` 命令（CLI 兜底）  | `.local/bin/kb`                         | 不支持 MCP 的环境用 `kb list` / `kb search` 等 |
+
+> **迁移说明**：原 `knowledge-base` skill（路径 `.config/agents/skills/knowledge-base/`）已删除，KB 操作整体迁出为 `kb-mcp` MCP 工具集。`pi-mcp-adapter` 在 mcp.json 中注册 `kb-mcp` 即可在所有 MCP 客户端（Pi / Crush / Claude Code 等）里自动发现 12 个 `kb_*` 工具。CLI 仍保留 `kb` 子命令作为兜底。
 
 ### 经验卡片类型
 
@@ -89,5 +91,5 @@ EOF
 ## 修改约束
 
 - 修改全局上下文文件（`01-language.md`、`02-ultilities.md`）时，需同步影响所有引用方
-- 新增 skill 时，先在既有 kb-curator/knowledge-base/self-improving 的 SKILL.md 中看模式
+- 新增 skill 时，先在既有 kb-curator/self-improving 的 SKILL.md 中看模式；新增 MCP 工具集时参考 `mcp-servers/kb-mcp/` 的薄壳设计
 - `~/.local/bin/` 下的入口脚本是 Guix Home 部署目标，不要直接编辑——改 `dotfiles/immutable/agents/.local/bin/` 中的源文件
