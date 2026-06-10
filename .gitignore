@@ -13,5 +13,9 @@ plans/
 
 .keys/
 
+# uv 虚拟环境与锁文件（运行时由 uv run 现场生成，不进版本控制）
+.venv
+uv.lock
+
 # Agent 工作产物（不进入版本控制，但 .agent/ 下的 skill 等内容可跟踪）
 .agents/workfile/

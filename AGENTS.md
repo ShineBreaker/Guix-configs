@@ -7,7 +7,7 @@
 - `source/`：Guix System / Guix Home 的 Scheme 源配置和 org 文档
 - `dotfiles/`：通过 Home 服务分发到用户目录的配置文件集合
 - `tmp/`：`maak` 生成的完整配置（临时目录，不应手动编辑）
-- `tools/`：辅助工具（含 crush-superpowers 子模块）
+- `tools/`：辅助工具
 
 ## 构建管线
 
@@ -46,7 +46,7 @@ tmp/*.scm
 <critical>
 **路由指令**：
 1. 遇到 Home/System 配置任务时，优先读取对应 org 文件头部的 Agent 专区 + `source/AGENTS.md`
-2. 修改软件配置时，优先修改 `dotfiles/` 内的文件，再提醒用户运行 `maak home`
+2. 修改软件配置时，优先修改 `dotfiles/` 内的文件，再提醒用户运行 `maak home`, **绝对禁止直接修改home中的相关文件**
 3. **Emacs 配置修改**：先读 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`，新包需同步修改 `source/configs/home-config.org` 的包清单
 4. **Pi Agent 修改**：先读 `dotfiles/mutable/pi/.config/pi/` 下的配置，settings.json 是核心配置
 </critical>
@@ -64,9 +64,8 @@ dotfiles/
 │   └── wm/          # WM 主题（darkman 明暗切换、waybar、fuzzel、mako）
 ├── mutable/     # GNU Stow 管理（直接调试修改，maak home 时重链）
 │   ├── emacs/   # Emacs 配置（子模块 → codeberg.org/BrokenShine/.emacs.d）
-│   ├── pi/      # Pi Agent 配置（settings.json、agents、prompts）
-│   └── ssh/     # SSH 配置
-└── disable/     # 已禁用的旧配置（nix、noctalia）
+│   └── pi/      # Pi Agent 配置（settings.json、agents、prompts）
+└── disable/     # 已禁用的旧配置（noctalia）
 ```
 
 - `immutable/`：通过 Guix Home 的 `home-dotfiles-service-type` 管理
@@ -76,16 +75,14 @@ dotfiles/
 
 ## 频道架构
 
-| 频道      | 分支   | 职责         | URL（以 channel.scm 为准）                  |
-| --------- | ------ | ------------ | ------------------------------------------- |
-| guix      | master | 官方包集合   | `https://git.guix.gnu.org/guix.git`         |
-| jeans     | main   | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git` |
-| nonguix   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`        |
-| pantherx  | master | 工具包       | `https://codeberg.org/gofranz/panther.git`  |
-| rosenthal | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`   |
-| sops-guix | main   | 密钥管理     | `https://github.com/fishinthecalculator/sops-guix.git` |
+| 频道      | 分支    | 职责         | URL（以 channel.scm 为准）                             |
+| --------- | ------- | ------------ | ------------------------------------------------------ |
+| guix      | master  | 官方包集合   | `https://git.guix.gnu.org/guix.git`                    |
+| jeans     | main    | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git`            |
+| nonguix   | master  | 非自由软件   | `https://gitlab.com/nonguix/nonguix`                   |
+| rosenthal | trunk   | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`              |
 
-频道版本锁定在 `source/channel.lock`，由 `maak upgrade` 自动更新并 git commit。**不要手动编辑 channel.lock。**
+频道版本锁定在 `source/channel.lock`，由 `maak update` 自动更新并 git commit。**不要手动编辑 channel.lock。**
 
 ## 文件系统架构
 
@@ -119,7 +116,7 @@ maak init      # 安装系统到 /mnt
 maak system    # guix system reconfigure（自动 tangle + time-machine + 括号检查）
 maak home      # guix home reconfigure（自动括号检查 + stow mutable dotfiles）
 maak rebuild   # system + home（含 guix locate --update 更新文件索引）
-maak upgrade   # 更新 channel.lock + git commit -S
+maak update    # 更新 channel.lock + git commit -S
 maak pull      # guix pull --allow-downgrades --fallback
 maak clean     # 删除所有旧 system/home generations（慎用，默认删除全部旧版本）
 maak gc        # clean + guix gc + 清理旧 EFI 文件（⚠ 非 Guix 命令，直接操作 /boot 分区）
@@ -149,7 +146,10 @@ maak check-home     # 仅检查 home
 | ------------------------------------------------------- | ----------------------------------------------------------- |
 | `dotfiles/mutable/emacs/.config/emacs`                  | Emacs 配置（codeberg.org/BrokenShine/.emacs.d）             |
 | `dotfiles/immutable/utilities/.local/share/fcitx5/rime` | Rime 输入法配置（github.com/iDvel/rime-ice）                |
-| `tools/crush-superpowers/main`                          | Crush superpowers 工作流工具（github.com/obra/superpowers） |
+| `dotfiles/immutable/agents/.config/agents/skillsets/agent-skills`    | Agent skills 技能集                      |
+| `dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills`    | Emacs 技能集                            |
+| `dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills` | Matt Pocock 技能集                   |
+| `dotfiles/immutable/agents/.config/agents/skillsets/pi-skills`       | Pi Agent 技能集                         |
 
 不要直接编辑子模块内容。
 
