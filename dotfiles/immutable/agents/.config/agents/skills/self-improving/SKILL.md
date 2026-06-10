@@ -79,8 +79,13 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 | 习惯模式 | feedback  | 同一偏好出现 ≥2 次                   | `kb memory --add --type feedback`               |
 | 项目决策 | project   | 不可从代码推导的项目级决策/状态      | `kb memory --add --type project --project <id>` |
 | 外部指针 | reference | 外部系统/文档/资源的位置信息         | `kb memory --add --type reference`              |
-
 **MEMORY vs KB 边界**：
+
+<critical>
+**MEMORY 长度硬约束**：每条 memory 只能写一句话（声明式规则 + 关键命令/路径）。MEMORY.org 完整注入 LLM 上下文，多段结构会大幅消耗上下文窗口。详细规范和反例/正例对照见 `knowledge-base` skill 的"记忆系统"章节。
+</critical>
+
+
 
 - "你怎么做"（风格/流程/工具选择偏好）→ MEMORY
 - "你做错了"（事实/技术错误）→ KB
