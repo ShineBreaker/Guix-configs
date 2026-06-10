@@ -35,7 +35,7 @@ import { ensureWorkfile } from "./workfile.ts";
  *
  * @returns ["provider/model"] 成功；[] 解析失败兜底（保持原行为）
  */
-function readDefaultModelFromSettings(): string[] {
+export function readDefaultModelFromSettings(): string[] {
   // 复用 config.ts 的查找策略：agent dir → ~/.config/pi/
   const candidates = [
     path.join(getAgentDir(), "settings.json"),
@@ -43,7 +43,10 @@ function readDefaultModelFromSettings(): string[] {
   ];
   for (const p of candidates) {
     try {
-      const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
+      const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<
+        string,
+        unknown
+      >;
       const provider = raw.defaultProvider;
       const model = raw.defaultModel;
       if (
@@ -95,7 +98,7 @@ export function resolveModelChain(
 
   // 查 tiers 配置
   const tierCfg: AgentModelConfig | undefined = config.tiers[tier];
-  if (!tierCfg) return []; // 未知 tier 视为 inherit（兜底安全）
+  if (!tierCfg) return []; // 未知 tier → 回退 []（让 subagent-wrapper 用自己的 defaultModel）
 
   return [tierCfg.model, ...tierCfg.fallback].filter(Boolean);
 }

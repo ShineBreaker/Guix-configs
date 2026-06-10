@@ -33,58 +33,29 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import {
-  execFileSync
-} from "node:child_process";
-import {
-  getAgentDir
-} from "@earendil-works/pi-coding-agent";
+import { execFileSync } from "node:child_process";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type {
   AgentToolResult,
   ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import type {
-  AgentConfig,
-  RunResult,
-  SubagentDetails,
-} from "./types.ts";
-import {
-  loadConfig
-} from "./config.ts";
-import {
-  discoverAgents,
-  discoverPrompts,
-} from "./discovery.ts";
-import {
-  ensureWorkfile
-} from "./workfile.ts";
-import {
-  getRunDir,
-  launchSingle
-} from "./launcher.ts";
-import {
-  waitForCompletion,
-  listRunning
-} from "./monitor.ts";
+import type { AgentConfig, RunResult, SubagentDetails } from "./types.ts";
+import { loadConfig } from "./config.ts";
+import { discoverAgents, discoverPrompts } from "./discovery.ts";
+import { ensureWorkfile } from "./workfile.ts";
+import { getRunDir, launchSingle } from "./launcher.ts";
+import { waitForCompletion, listRunning } from "./monitor.ts";
 import {
   executeWithFallback,
   runParallelBatches,
   runChain,
-  resolveModelChain
+  resolveModelChain,
+  readDefaultModelFromSettings,
 } from "./runner.ts";
-import {
-  formatResults
-} from "./formatting.ts";
-import {
-  SubagentParams
-} from "./schemas.ts";
-import {
-  appendSessionLog,
-  finalizeSessionLog
-} from "./session-log.ts";
-import {
-  stripSubagentOnlySection
-} from "./context.ts";
+import { formatResults } from "./formatting.ts";
+import { SubagentParams } from "./schemas.ts";
+import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
+import { stripSubagentOnlySection } from "./context.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
 //
@@ -131,26 +102,28 @@ function checkWorkerSingleOverride(): "warn" | "allow" {
 }
 
 /** 构造 worker single 硬警告的错误响应 */
-function workerSingleWarnResponse(): AgentToolResult < SubagentDetails > {
+function workerSingleWarnResponse(): AgentToolResult<SubagentDetails> {
   return {
-    content: [{
-      type: "text",
-      text: [
-        "❌ worker 是为并发执行设计的 subagent，不允许 single 模式调用。",
-        "",
-        "请改用 `tasks` 数组（即使只放 1 个任务也合法）：",
-        '  subagent({ tasks: [{ agent: "worker", task: "..." }] })',
-        "",
-        "或者把工作拆成 N 个独立子任务，让 N 个 worker 并行：",
-        "  subagent({ tasks: [",
-        '    { agent: "worker", task: "子任务 A" },',
-        '    { agent: "worker", task: "子任务 B" },',
-        "  ] })",
-        "",
-        `紧急 override：若确实需要 single worker（例如剩余的上下文窗口不够使用）`,
-        `${WORKER_OVERRIDE_GRACE_MS / 1000}s 内再调用一次相同的请求将放行执行。`,
-      ].join("\n"),
-    }, ],
+    content: [
+      {
+        type: "text",
+        text: [
+          "❌ worker 是为并发执行设计的 subagent，不允许 single 模式调用。",
+          "",
+          "请改用 `tasks` 数组（即使只放 1 个任务也合法）：",
+          '  subagent({ tasks: [{ agent: "worker", task: "..." }] })',
+          "",
+          "或者把工作拆成 N 个独立子任务，让 N 个 worker 并行：",
+          "  subagent({ tasks: [",
+          '    { agent: "worker", task: "子任务 A" },',
+          '    { agent: "worker", task: "子任务 B" },',
+          "  ] })",
+          "",
+          `紧急 override：若确实需要 single worker（例如剩余的上下文窗口不够使用）`,
+          `${WORKER_OVERRIDE_GRACE_MS / 1000}s 内再调用一次相同的请求将放行执行。`,
+        ].join("\n"),
+      },
+    ],
     details: makeDetails("single")([]),
     isError: true,
   };
@@ -163,12 +136,12 @@ const makeDetails =
   (mode: "single" | "parallel" | "chain" | "list" | "status") =>
   (results: RunResult[]): SubagentDetails => ({
     mode,
-    results
+    results,
   });
 
 // ─── Extension Entry ─────────────────────────────────────────────────────────
 
-export default function(pi: ExtensionAPI) {
+export default function (pi: ExtensionAPI) {
   const config = loadConfig();
 
   // ── 注册 subagent 工具 ──────────────────────────────────────────────────
@@ -189,7 +162,7 @@ export default function(pi: ExtensionAPI) {
       signal,
       _onUpdate,
       _ctx,
-    ): Promise < AgentToolResult < SubagentDetails >> {
+    ): Promise<AgentToolResult<SubagentDetails>> {
       const agents = discoverAgents();
       const prompts = discoverPrompts();
       const effectiveCwd = params.cwd ?? process.cwd();
@@ -202,14 +175,19 @@ export default function(pi: ExtensionAPI) {
             const tools = a.tools ? a.tools.join(", ") : "all";
             const tier = a.tier ?? config.defaultTier;
             const tierCfg = config.tiers[tier];
-            const model = tierCfg ? tierCfg.model : (tier === "inherit" ? "(inherit)" : "(unknown tier)");
+            const model =
+              tier === "inherit"
+                ? (readDefaultModelFromSettings()[0] ?? "(inherit)")
+                : tierCfg
+                  ? tierCfg.model
+                  : "(unknown tier)";
             return `| ${a.name} | ${tier} | ${model} | ${a.description.slice(0, 40)}… | ${tools} |`;
           })
           .join("\n");
         const promptLines = prompts
           .map(
             (p) =>
-            `| ${p.name} | ${p.mode} | ${p.description.slice(0, 40)}… | /${p.name} <${p.param}> |`,
+              `| ${p.name} | ${p.mode} | ${p.description.slice(0, 40)}… | /${p.name} <${p.param}> |`,
           )
           .join("\n");
         const list = [
@@ -224,10 +202,12 @@ export default function(pi: ExtensionAPI) {
           promptLines || "| (none) | | | |",
         ].join("\n");
         return {
-          content: [{
-            type: "text",
-            text: list
-          }],
+          content: [
+            {
+              type: "text",
+              text: list,
+            },
+          ],
           details: makeDetails("list")([]),
         };
       }
@@ -237,25 +217,29 @@ export default function(pi: ExtensionAPI) {
       if (params.action === "status") {
         if (params.id) {
           const runDir = getRunDir(params.id);
-          let statusJson: Record < string, unknown > ;
+          let statusJson: Record<string, unknown>;
           try {
             statusJson = JSON.parse(
               fs.readFileSync(path.join(runDir, "status.json"), "utf-8"),
             );
           } catch {
             return {
-              content: [{
-                type: "text",
-                text: `未找到 run: ${params.id}`
-              }],
+              content: [
+                {
+                  type: "text",
+                  text: `未找到 run: ${params.id}`,
+                },
+              ],
               details: makeDetails("status")([]),
             };
           }
           return {
-            content: [{
-              type: "text",
-              text: JSON.stringify(statusJson, null, 2)
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(statusJson, null, 2),
+              },
+            ],
             details: makeDetails("status")([]),
           };
         }
@@ -263,10 +247,12 @@ export default function(pi: ExtensionAPI) {
         const running = listRunning();
         if (running.length === 0) {
           return {
-            content: [{
-              type: "text",
-              text: "无运行中的 subagent"
-            }],
+            content: [
+              {
+                type: "text",
+                text: "无运行中的 subagent",
+              },
+            ],
             details: makeDetails("status")([]),
           };
         }
@@ -274,10 +260,12 @@ export default function(pi: ExtensionAPI) {
           (r) => `- **${r.runId}**: ${r.output.slice(0, 80)}...`,
         );
         return {
-          content: [{
-            type: "text",
-            text: lines.join("\n")
-          }],
+          content: [
+            {
+              type: "text",
+              text: lines.join("\n"),
+            },
+          ],
           details: makeDetails("status")(running),
         };
       }
@@ -287,36 +275,40 @@ export default function(pi: ExtensionAPI) {
       if (params.chain && params.chain.length > 0) {
         if (params.chain.length > config.maxTasks) {
           return {
-            content: [{
-              type: "text",
-              text: `chain 任务数 ${params.chain.length} 超过上限 ${config.maxTasks}`,
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: `chain 任务数 ${params.chain.length} 超过上限 ${config.maxTasks}`,
+              },
+            ],
             details: makeDetails("chain")([]),
             isError: true,
           };
         }
 
-        const chainEntries: Array < {
+        const chainEntries: Array<{
           agent: AgentConfig;
           task: string;
-          cwd ? : string;
-        } > = [];
+          cwd?: string;
+        }> = [];
         for (const t of params.chain) {
           const agent = agents.find((a) => a.name === t.agent);
           if (!agent) {
             const available = agents.map((a) => a.name).join(", ") || "none";
             return {
-              content: [{
-                type: "text",
-                text: `未知 agent: "${t.agent}"。可用: ${available}`,
-              }, ],
+              content: [
+                {
+                  type: "text",
+                  text: `未知 agent: "${t.agent}"。可用: ${available}`,
+                },
+              ],
               details: makeDetails("chain")([]),
             };
           }
           chainEntries.push({
             agent,
             task: t.task,
-            cwd: params.cwd
+            cwd: params.cwd,
           });
         }
 
@@ -331,19 +323,23 @@ export default function(pi: ExtensionAPI) {
           );
           appendSessionLog("chain", results);
           return {
-            content: [{
-              type: "text",
-              text: formatResults(results)
-            }],
+            content: [
+              {
+                type: "text",
+                text: formatResults(results),
+              },
+            ],
             details: makeDetails("chain")(results),
             isError: results.some((r) => r.status === "failed") || undefined,
           };
         } catch (err) {
           return {
-            content: [{
-              type: "text",
-              text: `启动失败: ${(err as Error).message}`
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: `启动失败: ${(err as Error).message}`,
+              },
+            ],
             details: makeDetails("chain")([]),
             isError: true,
           };
@@ -355,36 +351,40 @@ export default function(pi: ExtensionAPI) {
       if (params.tasks && params.tasks.length > 0) {
         if (params.tasks.length > config.maxTasks) {
           return {
-            content: [{
-              type: "text",
-              text: `parallel 任务数 ${params.tasks.length} 超过上限 ${config.maxTasks}`,
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: `parallel 任务数 ${params.tasks.length} 超过上限 ${config.maxTasks}`,
+              },
+            ],
             details: makeDetails("parallel")([]),
             isError: true,
           };
         }
 
-        const taskEntries: Array < {
+        const taskEntries: Array<{
           agent: AgentConfig;
           task: string;
-          cwd ? : string;
-        } > = [];
+          cwd?: string;
+        }> = [];
         for (const t of params.tasks) {
           const agent = agents.find((a) => a.name === t.agent);
           if (!agent) {
             const available = agents.map((a) => a.name).join(", ") || "none";
             return {
-              content: [{
-                type: "text",
-                text: `未知 agent: "${t.agent}"。可用: ${available}`,
-              }, ],
+              content: [
+                {
+                  type: "text",
+                  text: `未知 agent: "${t.agent}"。可用: ${available}`,
+                },
+              ],
               details: makeDetails("parallel")([]),
             };
           }
           taskEntries.push({
             agent,
             task: t.task,
-            cwd: params.cwd
+            cwd: params.cwd,
           });
         }
 
@@ -398,19 +398,23 @@ export default function(pi: ExtensionAPI) {
           );
           appendSessionLog("parallel", results);
           return {
-            content: [{
-              type: "text",
-              text: formatResults(results)
-            }],
+            content: [
+              {
+                type: "text",
+                text: formatResults(results),
+              },
+            ],
             details: makeDetails("parallel")(results),
             isError: results.some((r) => r.status === "failed") || undefined,
           };
         } catch (err) {
           return {
-            content: [{
-              type: "text",
-              text: `启动失败: ${(err as Error).message}`
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: `启动失败: ${(err as Error).message}`,
+              },
+            ],
             details: makeDetails("parallel")([]),
             isError: true,
           };
@@ -432,10 +436,12 @@ export default function(pi: ExtensionAPI) {
         if (!agent) {
           const available = agents.map((a) => a.name).join(", ") || "none";
           return {
-            content: [{
-              type: "text",
-              text: `未知 agent: "${params.agent}"。可用: ${available}`,
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: `未知 agent: "${params.agent}"。可用: ${available}`,
+              },
+            ],
             details: makeDetails("single")([]),
           };
         }
@@ -459,19 +465,23 @@ export default function(pi: ExtensionAPI) {
           }
           appendSessionLog("single", [result]);
           return {
-            content: [{
-              type: "text",
-              text: result.output
-            }],
+            content: [
+              {
+                type: "text",
+                text: result.output,
+              },
+            ],
             details: makeDetails("single")([result]),
             isError: result.status === "failed" || undefined,
           };
         } catch (err) {
           return {
-            content: [{
-              type: "text",
-              text: `启动失败: ${(err as Error).message}`
-            }, ],
+            content: [
+              {
+                type: "text",
+                text: `启动失败: ${(err as Error).message}`,
+              },
+            ],
             details: makeDetails("single")([]),
             isError: true,
           };
@@ -480,10 +490,12 @@ export default function(pi: ExtensionAPI) {
 
       const available = agents.map((a) => a.name).join(", ") || "none";
       return {
-        content: [{
-          type: "text",
-          text: `参数无效。可用 agent: ${available}`
-        }],
+        content: [
+          {
+            type: "text",
+            text: `参数无效。可用 agent: ${available}`,
+          },
+        ],
         details: makeDetails("single")([]),
       };
     },
@@ -514,7 +526,13 @@ export default function(pi: ExtensionAPI) {
             ? `(model: ${initialModel})`
             : `(model: inherit)`;
           // 先用首选模型启动，通知用户
-          const launch = launchSingle(agent, task, config, ctx.cwd, initialModel);
+          const launch = launchSingle(
+            agent,
+            task,
+            config,
+            ctx.cwd,
+            initialModel,
+          );
           ctx.ui.notify(
             `⏳ ${agent.name} 已启动 (run: ${launch.runId})... ${modelLabel}`,
             "info",
@@ -549,9 +567,9 @@ export default function(pi: ExtensionAPI) {
 
           if (result.status === "completed") {
             ensureWorkfile(result, ctx.cwd, startedAt);
-            const workfileNote = result.workfilePath ?
-              `\n📄 ${result.workfilePath}` :
-              "";
+            const workfileNote = result.workfilePath
+              ? `\n📄 ${result.workfilePath}`
+              : "";
             ctx.ui.notify(
               `✅ ${agent.name} 完成 (${(result.durationMs / 1000).toFixed(1)}s)${workfileNote}\n\n${result.output.slice(0, 4000)}${result.output.length > 4000 ? "\n...（截断）" : ""}`,
               "info",
@@ -605,29 +623,20 @@ export default function(pi: ExtensionAPI) {
               if (!agent) throw new Error(`未知 agent: ${e.agent}`);
               return {
                 agent,
-                task: e.task
+                task: e.task,
               };
             });
-            results = await runChain(
-              chainEntries,
-              config,
-              ctx.cwd,
-              paramValue,
-            );
+            results = await runChain(chainEntries, config, ctx.cwd, paramValue);
           } else if (prompt.mode === "parallel") {
             const taskEntries = resolvedEntries.map((e) => {
               const agent = agents.find((a) => a.name === e.agent);
               if (!agent) throw new Error(`未知 agent: ${e.agent}`);
               return {
                 agent,
-                task: e.task
+                task: e.task,
               };
             });
-            results = await runParallelBatches(
-              taskEntries,
-              config,
-              ctx.cwd,
-            );
+            results = await runParallelBatches(taskEntries, config, ctx.cwd);
           } else {
             const e = resolvedEntries[0];
             const agentCfg = agents.find((a) => a.name === e.agent);
@@ -673,7 +682,7 @@ export default function(pi: ExtensionAPI) {
       if (!fs.existsSync(planPath)) {
         ctx.ui.notify(
           "❌ 未找到已审查的计划。\n" +
-          "请先用 plannotator 生成计划并让 oracle 审查通过。",
+            "请先用 plannotator 生成计划并让 oracle 审查通过。",
           "error",
         );
         return;
@@ -681,7 +690,7 @@ export default function(pi: ExtensionAPI) {
 
       try {
         execFileSync("which", [loopctlBin], {
-          encoding: "utf-8"
+          encoding: "utf-8",
         });
       } catch {
         ctx.ui.notify(
@@ -702,7 +711,7 @@ export default function(pi: ExtensionAPI) {
 
       const archiveDir = path.join(ctx.cwd, ".agents", "archive");
       fs.mkdirSync(archiveDir, {
-        recursive: true
+        recursive: true,
       });
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       const archivePath = path.join(archiveDir, `plan-${timestamp}.md`);
@@ -718,7 +727,8 @@ export default function(pi: ExtensionAPI) {
       try {
         execFileSync(
           loopctlBin,
-          [loopName, "start", "--task-file", archivePath, "--adapter", "pi"], {
+          [loopName, "start", "--task-file", archivePath, "--adapter", "pi"],
+          {
             cwd: ctx.cwd,
             encoding: "utf-8",
           },
@@ -750,7 +760,7 @@ export default function(pi: ExtensionAPI) {
 
       try {
         execFileSync("which", [loopctlBin], {
-          encoding: "utf-8"
+          encoding: "utf-8",
         });
       } catch {
         ctx.ui.notify(
@@ -761,8 +771,9 @@ export default function(pi: ExtensionAPI) {
       }
 
       const trimmed = args.trim();
-      const cmdArgs: string[] = trimmed ?
-        trimmed.split(/\s+/) : ["list", "--all"];
+      const cmdArgs: string[] = trimmed
+        ? trimmed.split(/\s+/)
+        : ["list", "--all"];
 
       try {
         const result = execFileSync(loopctlBin, cmdArgs, {
@@ -797,7 +808,7 @@ export default function(pi: ExtensionAPI) {
       // 保存图片到临时文件
       const tmpDir = path.join(os.tmpdir(), "pi-visual");
       fs.mkdirSync(tmpDir, {
-        recursive: true
+        recursive: true,
       });
       const savedPaths: string[] = [];
 
@@ -865,13 +876,13 @@ export default function(pi: ExtensionAPI) {
     function isPlanModeActive(
       ctx: {
         sessionManager: {
-          getEntries(): ReadonlyArray < {
+          getEntries(): ReadonlyArray<{
             type: string;
-            customType ? : string;
-            data ? : {
-              phase ? : string
+            customType?: string;
+            data?: {
+              phase?: string;
             };
-          } > ;
+          }>;
         };
       },
       systemPrompt: string,
@@ -916,12 +927,13 @@ export default function(pi: ExtensionAPI) {
       if (!contextContent) return; // 静默失败（agent .md 缺失），不加注入
 
       // plan mode 下追加优先级提示：plannotator 的 plan 约束优先于本上下文
-      const priorityHint = planMode ?
-        "\n\n# 优先级提示：plan mode 下，plannotator 注入的 [PLANNOTATOR - PLANNING PHASE] 段中的所有约束优先级最高，与本文冲突时遵循 plannotator。\n" :
-        "";
+      const priorityHint = planMode
+        ? "\n\n# 优先级提示：plan mode 下，plannotator 注入的 [PLANNOTATOR - PLANNING PHASE] 段中的所有约束优先级最高，与本文冲突时遵循 plannotator。\n"
+        : "";
 
       return {
-        systemPrompt: event.systemPrompt + priorityHint + "\n\n" + contextContent,
+        systemPrompt:
+          event.systemPrompt + priorityHint + "\n\n" + contextContent,
       };
     });
   }
@@ -935,7 +947,7 @@ export default function(pi: ExtensionAPI) {
   //   4. 提示 LLM 通知用户执行 /run-plan（清空上下文，在新会话中执行计划）
 
   {
-    const reviewedPlans = new Set < string > ();
+    const reviewedPlans = new Set<string>();
     const approvedPlanPath = path.join(
       process.cwd(),
       ".agents",
@@ -956,7 +968,7 @@ export default function(pi: ExtensionAPI) {
           const planContent = fs.readFileSync(planFilePath, "utf-8");
           const planDir = path.dirname(approvedPlanPath);
           fs.mkdirSync(planDir, {
-            recursive: true
+            recursive: true,
           });
           fs.writeFileSync(approvedPlanPath, planContent, "utf-8");
         } catch {
@@ -964,7 +976,8 @@ export default function(pi: ExtensionAPI) {
         }
 
         return {
-          systemPrompt: "✅ 计划已通过 oracle 审查并保存。" +
+          systemPrompt:
+            "✅ 计划已通过 oracle 审查并保存。" +
             "请通知用户：执行 `/run-plan` 开始实施（将清空当前上下文，在新会话中执行计划）。" +
             "如果用户不想清空上下文，也可以直接按计划执行。",
         };
