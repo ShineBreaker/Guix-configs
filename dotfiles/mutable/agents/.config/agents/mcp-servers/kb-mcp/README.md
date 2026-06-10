@@ -161,7 +161,7 @@ MCP 进程继承客户端环境变量，`KB_ROOT` 默认 `~/Documents/Org`。
 - **kb 知识库路径**:走 `KB_ROOT` 环境变量,默认 `~/Documents/Org`。MCP 进程会继承客户端环境变量。
 - **每次调用都冷启动 uv**:首次调用约 1-2s 装 mcp 依赖,后续命中 uv 缓存 < 200ms。如需更低延迟,自行 `uv venv && uv pip install` 改成 venv 启动。
 - **没有写日志**:刻意保持瘦壳。问题排查直接看 kb 自身的 stderr。
-- **没接 home-config.org**:本目录随 `immutable/agents/.config/agents/` 整体由 Guix Home 部署,**mcp.json 注册**需要在 dotfiles/mutable/pi/.config/pi/mcp.json 里手动加(不自动改)。
+- **没接 home-config.org**:本目录随 `immutable/agents/.config/agents/` 整体由 Guix Home 部署,**mcp.json 注册**需要在 dotfiles/mutable/agents/.config/pi/mcp.json 里手动加(不自动改)。
 
 ## 加新工具的模板
 

@@ -7,16 +7,16 @@
 ```
 dotfiles/
 ├── immutable/   # Guix Home 管理（只读，构建时复制到 store）
-│   ├── agents/      # ★ OpenCode / Crush / KB skills（Pi Agent 配置已迁移至 mutable/pi/）
+│   ├── agents/      # ★ OpenCode / Crush / KB skills（Pi Agent 配置已迁移至 mutable/agents/）
 │   ├── desktop/     # niri WM、autostart、xdg-portal
 │   ├── system/      # containers、pipewire、user-dirs
 │   ├── terminal/    # fish、tmux、foot、btop、starship
 │   ├── utilities/   # helix、git、kanata、winapps、rime
 │   └── wm/          # darkman 明暗切换、waybar、fuzzel、mako
 ├── mutable/     # GNU Stow 管理（直接调试修改，maak home 时重链）
-RV:│   ├── emacs/   # ★ Emacs 配置（子模块 → codeberg.org/BrokenShine/.emacs.d）
-PW:│   ├── pi/      # ★ Pi Agent 配置（settings.json、agents、prompts、extensions）
-TR:│   └── ssh/     # SSH 配置
+│   ├── emacs/   # ★ Emacs 配置（子模块 → codeberg.org/BrokenShine/.emacs.d）
+│   ├── agents/   # ★ Pi Agent 配置（settings.json、agents、prompts、extensions）
+│   └── ssh/     # SSH 配置
 └── disable/     # 已禁用的旧配置（nix、noctalia）
 ```
 
@@ -29,12 +29,12 @@ TR:│   └── ssh/     # SSH 配置
 - 内建知识库体系（`kb-mcp` 工具集 + kb-curator / self-improving skills）
 - 新包需同步修改 `source/configs/home-config.org` 的包清单
 
-### Pi Agent（mutable/pi/）
+### Pi Agent（mutable/agents/）
 
 - 基于 `pi-mono` 的自定义 Agent 框架
 - `settings.json` 是核心配置：模型路由、子 agent、扩展包
-- 配置源文件位于 `dotfiles/mutable/pi/.config/pi/`，通过 stow 链接到 `~/.config/pi/`
-- 详见 `dotfiles/immutable/agents/AGENTS.md`（含环境变量与修改约束说明）
+- 配置源文件位于 `dotfiles/mutable/agents/.config/pi/`，通过 stow 链接到 `~/.config/pi/`
+- 详见 `dotfiles/mutable/agents/AGENTS.md`（完整配置参考）
 
 ## 部署机制
 
@@ -47,7 +47,7 @@ TR:│   └── ssh/     # SSH 配置
 | 子目录                 | 局部 AGENTS.md | 职责                                       |
 | ---------------------- | -------------- | ------------------------------------------ |
 | `immutable/agents/`    | ✅ 已有        | OpenCode / Crush / KB skills               |
-| `mutable/pi/`          | ✅ 已有        | Pi Agent（settings.json、agents、prompts） |
+| `mutable/agents/`      | ✅ 已有        | Pi Agent（settings.json、agents、prompts） |
 | `immutable/desktop/`   | 见下方         | niri、autostart、portal                    |
 | `immutable/system/`    | 见下方         | containers、pipewire                       |
 | `immutable/terminal/`  | 见下方         | fish、tmux、foot、btop                     |

@@ -37,7 +37,7 @@ tmp/*.scm
 | 系统配置          | `source/configs/system-config.org` 头部的 Agent 专区 | `source/AGENTS.md`                 |
 | 用户配置          | `source/configs/home-config.org` 头部的 Agent 专区   | `source/AGENTS.md`                 |
 | **Emacs 配置**    | `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`     | 含知识库体系，详见下方             |
-| **Pi Agent 配置** | `dotfiles/mutable/pi/.config/pi/`                    | settings.json + agents/ + prompts/ |
+| **Pi Agent 配置** | `dotfiles/mutable/agents/.config/pi/`                | settings.json + agents/ + prompts/ |
 | 全局变量          | `source/information.scm`                             | —                                  |
 | 频道定义          | `source/channel.scm`                                 | —                                  |
 | 静态模板          | `source/files/`                                      | `source/AGENTS.md`                 |
@@ -48,7 +48,7 @@ tmp/*.scm
 1. 遇到 Home/System 配置任务时，优先读取对应 org 文件头部的 Agent 专区 + `source/AGENTS.md`
 2. 修改软件配置时，优先修改 `dotfiles/` 内的文件，再提醒用户运行 `maak home`, **绝对禁止直接修改home中的相关文件**
 3. **Emacs 配置修改**：先读 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`，新包需同步修改 `source/configs/home-config.org` 的包清单
-4. **Pi Agent 修改**：先读 `dotfiles/mutable/pi/.config/pi/` 下的配置，settings.json 是核心配置
+4. **Pi Agent 修改**：先读 `dotfiles/mutable/agents/.config/pi/` 下的配置，settings.json 是核心配置
 </critical>
 
 ## dotfiles 三层结构
@@ -75,12 +75,12 @@ dotfiles/
 
 ## 频道架构
 
-| 频道      | 分支    | 职责         | URL（以 channel.scm 为准）                             |
-| --------- | ------- | ------------ | ------------------------------------------------------ |
-| guix      | master  | 官方包集合   | `https://git.guix.gnu.org/guix.git`                    |
-| jeans     | main    | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git`            |
-| nonguix   | master  | 非自由软件   | `https://gitlab.com/nonguix/nonguix`                   |
-| rosenthal | trunk   | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`              |
+| 频道      | 分支   | 职责         | URL（以 channel.scm 为准）                  |
+| --------- | ------ | ------------ | ------------------------------------------- |
+| guix      | master | 官方包集合   | `https://git.guix.gnu.org/guix.git`         |
+| jeans     | main   | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git` |
+| nonguix   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`        |
+| rosenthal | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`   |
 
 频道版本锁定在 `source/channel.lock`，由 `maak update` 自动更新并 git commit。**不要手动编辑 channel.lock。**
 
@@ -142,14 +142,14 @@ maak check-home     # 仅检查 home
 
 ## Git 子模块
 
-| 路径                                                    | 说明                                                        |
-| ------------------------------------------------------- | ----------------------------------------------------------- |
-| `dotfiles/mutable/emacs/.config/emacs`                  | Emacs 配置（codeberg.org/BrokenShine/.emacs.d）             |
-| `dotfiles/immutable/utilities/.local/share/fcitx5/rime` | Rime 输入法配置（github.com/iDvel/rime-ice）                |
-| `dotfiles/immutable/agents/.config/agents/skillsets/agent-skills`    | Agent skills 技能集                      |
-| `dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills`    | Emacs 技能集                            |
-| `dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills` | Matt Pocock 技能集                   |
-| `dotfiles/immutable/agents/.config/agents/skillsets/pi-skills`       | Pi Agent 技能集                         |
+| 路径                                                                   | 说明                                            |
+| ---------------------------------------------------------------------- | ----------------------------------------------- |
+| `dotfiles/mutable/emacs/.config/emacs`                                 | Emacs 配置（codeberg.org/BrokenShine/.emacs.d） |
+| `dotfiles/immutable/utilities/.local/share/fcitx5/rime`                | Rime 输入法配置（github.com/iDvel/rime-ice）    |
+| `dotfiles/immutable/agents/.config/agents/skillsets/agent-skills`      | Agent skills 技能集                             |
+| `dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills`      | Emacs 技能集                                    |
+| `dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills` | Matt Pocock 技能集                              |
+| `dotfiles/immutable/agents/.config/agents/skillsets/pi-skills`         | Pi Agent 技能集                                 |
 
 不要直接编辑子模块内容。
 
