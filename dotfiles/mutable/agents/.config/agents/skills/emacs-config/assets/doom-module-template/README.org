@@ -1,0 +1,43 @@
+#+title:    :ui notification
+#+subtitle: Cross-platform desktop notifications
+#+created:  2026-06-08
+* Description
+This module provides a unified interface to desktop notifications from
+Emacs, via the [[doom-package:alert]] package. On macOS it uses the
+native notification center, on Linux it uses libnotify/notify-send, and
+on Windows it uses the toast notification system.
+
+** Module flags
+- +alerts ::
+  Enable rich alert UI (toast-style popups) instead of falling back to
+  the simple message-line default.
+
+** Packages
+- [[doom-package:alert]]
+- if [[doom-module:+alerts]]
+  - [[doom-package:notifications]]
+
+** Hacks
++ On Linux without a notification daemon (rare), alerts silently fall
+  back to the echo area.
+
+* Installation
+Enable this module in your `doom!` block:
+#+begin_src emacs-lisp
+(doom! :ui (notification +alerts))
+#+end_src
+
+* Usage
+- ~M-x +notification/notify~: Send a desktop notification.
+- ~M-x +notification/notify-done~: Send a "task done" notification.
+
+* Configuration
+#+begin_src emacs-lisp
+(setq +notification-default-timeout 5)  ; seconds
+#+end_src
+
+* Troubleshooting
+/There are no known problems with this module./
+
+* Frequently asked questions
+/There are no FAQs yet./
