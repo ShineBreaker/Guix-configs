@@ -10,6 +10,10 @@
  * - executeWithFallback: 带 fallback 模型重试的单 agent 执行
  */
 
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type {
   AgentConfig,
   AgentModelConfig,
@@ -21,6 +25,43 @@ import { waitForAll, waitForCompletion } from "./monitor.ts";
 import { ensureWorkfile } from "./workfile.ts";
 // resolveAgentModel 已删除（subagents.json 废弃，逻辑并入 resolveModelChain）
 
+/**
+ * 从 settings.json 读 defaultProvider + defaultModel，组合成完整 model ID。
+ *
+ * 用途：tier=inherit 的"跟随前台"实际解析。
+ * 原实现是返回 []（不传 --model），导致 wrapper.sh 启动日志显示
+ * "model: default"，与子进程实际推理用的 defaultModel 不一致。
+ * 改为显式拼出 [provider/model]，让 wrapper 日志如实显示当前正在用的模型。
+ *
+ * @returns ["provider/model"] 成功；[] 解析失败兜底（保持原行为）
+ */
+function readDefaultModelFromSettings(): string[] {
+  // 复用 config.ts 的查找策略：agent dir → ~/.config/pi/
+  const candidates = [
+    path.join(getAgentDir(), "settings.json"),
+    path.join(os.homedir(), ".config", "pi", "settings.json"),
+  ];
+  for (const p of candidates) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(p, "utf8")) as Record<string, unknown>;
+      const provider = raw.defaultProvider;
+      const model = raw.defaultModel;
+      if (
+        typeof provider === "string" &&
+        typeof model === "string" &&
+        provider &&
+        model
+      ) {
+        return [`${provider}/${model}`];
+      }
+    } catch {
+      // 试下一个候选路径
+      continue;
+    }
+  }
+  return [];
+}
+
 // ─── Fallback 重试 ───────────────────────────────────────────────────────────
 
 /** 同一任务最大重试次数（含首次尝试） */
@@ -31,7 +72,7 @@ const MAX_ATTEMPTS = 3;
  *
  * 新优先级（自上而下短路）：
  *   1. 调用方显式覆盖（params.model）
- *   2. agent frontmatter `tier: inherit` → []（不传 model，跟随前台）
+ *   2. agent frontmatter `tier: inherit` → 从 settings.json 读 defaultProvider/defaultModel 组成 ["provider/model"]，让 wrapper 日志如实显示当前模型
  *   3. agent frontmatter `tier: <name>` → 查 config.tiers[<name>]
  *   4. agent frontmatter 无 tier → 用 config.defaultTier
  *   5. 全部解析失败 → []（= inherit 行为，兜底跟随前台）
@@ -49,8 +90,8 @@ export function resolveModelChain(
   // 2-4. tier 解析
   const tier = agent.tier ?? config.defaultTier;
 
-  // inherit 特殊值：明确声明跟随前台
-  if (tier === "inherit") return [];
+  // inherit 特殊值：从 settings.json 解析出 [provider/model]，既让 wrapper 启动日志如实显示，也保证 model 链路非空（避免 fallback 重试时跳过 inherit）
+  if (tier === "inherit") return readDefaultModelFromSettings();
 
   // 查 tiers 配置
   const tierCfg: AgentModelConfig | undefined = config.tiers[tier];
