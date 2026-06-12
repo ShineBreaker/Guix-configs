@@ -74,7 +74,7 @@
 
 在这里，我利用了 =Org Mode= 的 =Noweb= 功能
 这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
-引用的语法为 *<<>>** , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
+引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
 
 #+NAME: main
 #+begin_src scheme :tangle ../tmp/config.scm :noweb yes
@@ -108,10 +108,10 @@
    <<nix-services>>
    <<filesystem-services>>
    <<desktop-services>>
-   (service guix-home-service-type
-            `((username ,
+   (list (service guix-home-service-type
+            `((,username ,
                <<home-configs>>
-               )))))
+               ))))))
 
  (skeletons
   <<skeletons-config>>
@@ -235,12 +235,14 @@
          (type "tmpfs")
          (flags '(no-atime))
          (options "mode=0755,nr_inodes=1m,size=10%")
+         (needed-for-boot? #t)
          (check? #f))
         (file-system
          (mount-point "/tmp")
          (device "tmpfs")
          (type "tmpfs")
          (options "mode=1777,nr_inodes=1m,size=75%")
+         (needed-for-boot? #t)
          (create-mount-point? #t)
          (check? #f))
         (file-system
@@ -249,13 +251,12 @@
          (type "tmpfs")
          (flags '(no-suid no-dev strict-atime))
          (options "mode=1777,nr_inodes=800k,size=20%")
+         (needed-for-boot? #t)
          (create-mount-point? #t)
-         (check? #f))
-        (file-system
-         (mount-point "/home")
-         (device "tmpfs")
-         (type "tmpfs")
          (check? #f))))
+
+
+
 
 (define %persist-filesystem
   (map (match-lambda
@@ -466,9 +467,9 @@
 *** 文件系统相关服务
 在这里就是一些负责维护文件系统树的服务
 
-+ *fixed-machine-id** 负责固定 =/etc/machine-id= 这个文件中的内容，具体的算法在 [[../information.scm][information.scm]] 中
-+ *fix-data-perms** 负责修复 =/data= 目录下所有文件夹的权限
-+ *create-xdg-dirs** 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
++ *fixed-machine-id* 负责固定 =/etc/machine-id= 这个文件中的内容，具体的算法在 [[../information.scm][information.scm]] 中
++ *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
++ *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
 
 #+NAME: filesystem-services
 #+begin_src scheme
@@ -518,85 +519,7 @@
                                                                         uid gid)
                                                                  (chmod path
                                                                         #o755)))
-                                                             '#$%data-dirs)))))
-
-      ;; 在 tmpfs /home 上重建 Guix Home 环境
-      (simple-service 'bootstrap-guix-home activation-service-type
-                      (with-imported-modules (source-module-closure
-                                              '((guix build utils)))
-                                             #~(begin
-                                                 (use-modules (guix build utils))
-                                                 (let* ((user #$username)
-                                                        (home (string-append "/home/" user))
-                                                        (pw (getpwnam user))
-                                                        (uid (passwd:uid pw))
-                                                        (gid (passwd:gid pw))
-                                                        (profile-path (string-append
-                                                                       "/var/guix/profiles/per-user/" user "/guix-home")))
-                                                   ;; 确保 home 目录存在
-                                                   (mkdir-p home)
-                                                   (chown home uid gid)
-                                                   (chmod home #o700)
-
-                                                   (when (file-exists? profile-path)
-                                                     ;; 1. 创建 ~/.guix-home
-                                                     (let ((link (string-append home "/.guix-home")))
-                                                       (unless (file-exists? link)
-                                                         (symlink profile-path link)))
-
-                                                     ;; 2. 执行 activate（重建所有 store symlink）
-                                                     (catch #t
-                                                            (lambda ()
-                                                              (setenv "HOME" home)
-                                                              (setenv "GUIX_NEW_HOME" profile-path)
-                                                              (primitive-load (string-append profile-path "/activate"))
-                                                              (unsetenv "GUIX_NEW_HOME"))
-                                                            (lambda args
-                                                              (format #t "WARNING: activate failed: ~a~%" args)))
-
-                                                     ;; 3. 创建 ~/.guix-profile（activate 不管理此链接）
-                                                     (let ((target (string-append
-                                                                    "/var/guix/profiles/per-user/" user "/guix-profile"))
-                                                           (link (string-append home "/.guix-profile")))
-                                                       (when (and (file-exists? target)
-                                                                  (not (file-exists? link)))
-                                                         (symlink target link)))
-
-                                                     ;; 4. 创建 ~/.nix-profile
-                                                     (let ((target (string-append
-                                                                    home "/.local/state/nix/profiles/profile"))
-                                                           (link (string-append home "/.nix-profile")))
-                                                       (when (and (file-exists? target)
-                                                                  (not (file-exists? link)))
-                                                         (symlink target link)))
-
-                                                     ;; 5. Stow mutable dotfiles（emacs、pi）
-                                                     ;;    stow 在 system profile 中
-                                                     (catch #t
-                                                            (lambda ()
-                                                              (let* ((stow-bin "/run/current-system/profile/bin/stow")
-                                                                     (repo (string-append home "/Projects/Config/Guix-configs"))
-                                                                     (mutable-dir (string-append repo "/dotfiles/mutable")))
-                                                                (when (file-exists? mutable-dir)
-                                                                  (let ((pkgs (scandir mutable-dir
-                                                                                       (lambda (n)
-                                                                                         (and (not (string-prefix? "." n))
-                                                                                              (file-is-directory?
-                                                                                               (string-append mutable-dir "/" n)))))))
-                                                                    (for-each (lambda (p)
-                                                                                (system** stow-bin "-d" mutable-dir "-t" home "-D" p))
-                                                                              pkgs)
-                                                                    (for-each (lambda (p)
-                                                                                (system** stow-bin "-d" mutable-dir "-t" home p))
-                                                                              pkgs)))))
-                                                            (lambda args
-                                                              (format #t "WARNING: stow failed: ~a~%" args)))
-
-                                                     ;; 6. chown 所有新建内容给用户（activation 以 root 运行）
-                                                     (for-each (lambda (f)
-                                                                 (false-if-exception (chown f uid gid)))
-                                                               (find-files home (const #t)
-                                                                           #:directories? #t))))))))
+                                                             '#$%data-dirs))))))
 #+end_src
 
 *** 网络相关配置
@@ -660,12 +583,12 @@
                              (requirement '(network-manager))
                              (start #~(lambda _
                                         ;; 先断开已有 WiFi 连接，再激活热点
-                                        (zero? (system** "nmcli" "device" "disconnect"
+                                        (zero? (system* "nmcli" "device" "disconnect"
                                                          "wlp0s20f3"))
-                                        (zero? (system** "nmcli" "connection" "up"
+                                        (zero? (system* "nmcli" "connection" "up"
                                                          "auto-hotspot"))))
                              (stop #~(lambda _
-                                       (zero? (system** "nmcli" "connection" "down"
+                                       (zero? (system* "nmcli" "connection" "down"
                                                         "auto-hotspot"))))
                              (one-shot? #t)
                              (auto-start? #t)
@@ -1124,7 +1047,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
 在这里，我利用了 =Org Mode= 的 =Noweb= 功能
 这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
-引用的语法为 *<<>>** , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
+引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
 
 #+NAME: home-configs
 #+begin_src scheme :noweb yes
@@ -1313,7 +1236,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "oh-my-pi-bin"
         "opencode-bin"
         "opencode-desktop-bin"
-        "reasonix-desktop-bin"
+        ; "reasonix-desktop-bin"
 
         ;; 工具
         "du-dust"
@@ -1461,7 +1384,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
                      ;; 确保配置目录存在
                      (mkdir-p (string-append (getenv "HOME") "/.config/modprobed-db"))
                      ;; 运行 modprobed-db store 记录当前模块
-                     (system** #$(file-append modprobed-db "/bin/modprobed-db") "storesilent"))))
+                     (system* #$(file-append modprobed-db "/bin/modprobed-db") "storesilent"))))
 #+end_src
 
 *** Fish 服务
@@ -1787,7 +1710,7 @@ end
 
 *** 软件自启动
 
-这里利用 *scheme** 的 =lambda= 函数来包装了一个列表;
+这里利用 *scheme* 的 =lambda= 函数来包装了一个列表;
 
 这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容。
 
@@ -1849,8 +1772,7 @@ end
                             "system"
                             "terminal"
                             "utilities"))
-                (excluded '(".*~"
-                            ".agents"
+                (excluded '("\\.agents/workfile($|/.*)"
                             ".*\\.swp"
                             "\\.git"
                             "\\.gitignore"
@@ -1879,7 +1801,7 @@ end
 **** 区别对待某些配置文件
 
 有一些软件会需要在其配置文件内写入某个二进制的具体位置，此时就可以使用由
-*rosenthal** 提供的 =computed-substitution-with-inputs= 函数
+*rosenthal* 提供的 =computed-substitution-with-inputs= 函数
 
 用法为：
 

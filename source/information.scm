@@ -74,5 +74,5 @@
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
-    ;; ("DATA/Home/Guix"                    "/home")  ;; 已改为 tmpfs
+    ("DATA/Home/Guix"                      "/home")
     ("DATA/LibVirt"                        "/var/lib/libvirt")))
