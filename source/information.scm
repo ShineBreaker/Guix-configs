@@ -22,10 +22,24 @@
 (define fixed-machine-id (generate-machine-id username))
 
 (define %data-dirs
-  '(".local/share/osu"
+  '(;; --- dotfile 持久化（tmpfs /home 启动后自动 bind-mount）---
+    ".local/share/gnupg"
+    ".local/share/keyrings"
+    ".local/share/fish"
+    ".local/share/atuin"
+    ".local/share/direnv"
+    ".local/share/nix"
+    ".local/share/flatpak"
+    ".local/share/osu"
     ".local/share/PrismLauncher"
     ".local/share/Sandbox"
+    ".local/state"
+    ".ssh"
+    ".config/dconf"
+    ".config/Element"
+    ".config/QQ"
 
+    ;; --- XDG 目录 ---
     "Desktop"
     "Documents"
     "Downloads"
@@ -60,5 +74,5 @@
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
-    ("DATA/Home/Guix"                      "/home")
+    ;; ("DATA/Home/Guix"                    "/home")  ;; 已改为 tmpfs
     ("DATA/LibVirt"                        "/var/lib/libvirt")))

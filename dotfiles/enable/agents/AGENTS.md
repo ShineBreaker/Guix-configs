@@ -5,7 +5,7 @@
 ## 部署模型
 
 ```
-dotfiles/mutable/agents/      → GNU Stow → 实际路径
+dotfiles/enable/agents/      → GNU Stow → 实际路径
 ├── .config/pi/               → ~/.config/pi/          (配置 + 扩展 + agent)
 ├── .local/bin/               → ~/.local/bin/          (启动脚本: pi, pi-acp, pi-update)
 ├── .local/share/pi/          → ~/.local/share/pi/     (辅助脚本 + npm 依赖)
@@ -112,7 +112,7 @@ Adapter 声明式配置见 `.agents/workfile/loops/drivers/adapters/`。加新 a
 
 ### global-context（`before_agent_start` hook）
 
-从 `$XDG_CONFIG_HOME/agents/context/` 和 `extraFiles`（含 `~/Documents/Org/profile.org`）读取 `.md` 文件，注入到每次 agent 交互的系统提示词中。有字节预算限制（默认 192KB 总量、64KB/文件、最多 8 文件）。
+从 `$XDG_CONFIG_HOME/agents/context/` 读取 `.md` 文件，注入到每次 agent 交互的系统提示词中。有字节预算限制（默认 192KB 总量、64KB/文件、最多 8 文件）。
 
 ### custom-shortcuts（`onTerminalInput` hook）
 

@@ -54,8 +54,7 @@ Guix 有两层配置：
 
 | 层级   | 管理范围                         | 对应命令    | 配置文件来源                     |
 |--------+----------------------------------+-------------+----------------------------------|
-| *System* | 内核、引导、系统服务、全局软件包 | =guix system= | [[source/configs/system-config.org]] |
-| *Home*   | 用户软件包、dotfiles、用户服务   | =guix home=   | [[source/configs/home-config.org]]   |
+| *System + Home* | 系统与用户配置在同一文件 | =guix system reconfigure=（内部调用 guix-home-service） | [[source/config.org]] |
 
 *原则* ：能用 Home 解决就不用 System，保持系统层最小化。
 
@@ -77,15 +76,23 @@ Guix 有两层配置：
 │   ├── channel.scm         # 频道定义
 │   ├── channel.lock        # 频道版本锁定
 │   ├── information.scm     # 全局变量（用户名、Btrfs 配置等）
-│   ├── configs/            # Org 格式配置文档
-│   │   ├── AGENTS.md           # Org 配置指引
-│   │   ├── home-config.org     # Home 环境配置
-│   │   └── system-config.org   # 系统配置
+│   ├── information.scm     # 全局变量（用户名、Btrfs 配置等）
+│   ├── config.org          # 唯一 Org 配置文档（包含 system + home 全部内容）
 │   └── files/              # 静态配置文件模板
 │       ├── nftables.conf       # 防火墙规则
 │       ├── rounded.qss         # Qt 圆角样式
 │       └── skel/               # 骨架文件模板
-├── dotfiles/               # 用户配置文件（三层结构）
+├── dotfiles/               # 用户配置文件
+│   ├── enable/             # 启用的配置（含 immutable + mutable 两类）
+│   │   ├── agents/         # AI 助手系统（Pi/Crush/KB skills）
+│   │   ├── desktop/        # 桌面环境配置（niri、autostart、portal）
+│   │   ├── desktop-suite/  # WM 主题套件（darkman、waybar、fuzzel、mako）
+│   │   ├── emacs/          # Emacs 配置（独立 git 子模块）
+│   │   ├── system/         # 系统工具配置（containers、pipewire）
+│   │   ├── terminal/       # 终端配置（fish、tmux、foot、btop、starship）
+│   │   └── utilities/      # 开发工具（helix、git、kanata、winapps、rime）
+│   └── disable/            # 已禁用的旧配置
+│       └── noctalia/       # Noctalia 主题配置
 │   ├── immutable/          # 不可变配置（Guix Home 管理，只读）
 │   │   ├── agents/         # AI 助手系统（OpenCode、Crush、KB skills）
 │   │   ├── desktop/        # 桌面环境配置（niri、autostart、portal）
@@ -107,12 +114,9 @@ Guix 有两层配置：
 | 文件/目录                        | 用途                               | 修改频率                   |
 |----------------------------------+------------------------------------+----------------------------|
 | =source/information.scm=           | 定义用户名、Btrfs 子卷、持久化目录 | 初次使用时必改             |
-| =source/channel.scm=               | 定义软件源频道                     | 需要添加第三方软件源时修改 |
-| =source/configs/home-config.org=   | 用户软件包、服务、dotfiles 配置    | 经常                       |
-| =source/configs/system-config.org= | 系统级配置                         | 较少                       |
-| =dotfiles/immutable/*=             | 不可变配置（Guix Home 管理）       | 经常                       |
-| =dotfiles/mutable/*=               | 可变配置（Stow 管理，独立调试）    | 经常                       |
-| =maak.scm=                         | 任务定义                           | 需要添加自定义任务时修改   |
+| =source/config.org=            | 系统 + 用户配置（唯一 Org 源） | 经常                       |
+| =dotfiles/enable/*=            | 启用的 dotfiles 配置            | 经常                       |
+| =maak.scm=                     | 任务定义                        | 需要添加自定义任务时修改   |
 
 ** 快速开始
 *** 1. 安装系统（新机器）
@@ -131,29 +135,24 @@ guix shell maak -- maak init
 maak --list
 
 # 常用命令
-maak system     # 应用系统配置（需要 sudo）
-maak home       # 应用用户配置（Tangle → reconfigure → stow mutable dotfiles）
-maak rebuild    # 先 system 后 home，并更新 locate 数据库
+maak apply      # 应用配置（system + home 同时，一次 reconfigure）
+maak rebuild    # apply + guix locate --update（重建文件索引）
 
 # 更新软件包频道
 maak update     # 更新 channel.lock 并签名提交
 
 # 验证配置（不实际应用）
-MAAK_DRY_RUN=1 maak system   # 仅构建检查系统配置
-MAAK_DRY_RUN=1 maak home     # 仅构建检查用户配置
+MAAK_DRY_RUN=1 maak apply
 
-# 括号平衡检查
-maak check          # 检查 system + home 配置括号平衡
-maak check-system   # 仅检查 system 配置
-maak check-home     # 仅检查 home 配置
-#+end_src
+# 括号平衡检查（最轻量，不触发 guix）
+maak check
 
 ** 可复用组件指南
 以下组件设计为可独立复用，你可以直接复制到自己的配置中：
 
 *** ✅ 完全独立可复用
 **** 1. 内核优化参数
-([[./source/configs/system-config.org][source/configs/system-config.org]])
+([[./source/config.org::*内核配置][source/config.org]] 内部 kernel-arguments 代码块)
 
 #+begin_src scheme
 (kernel-arguments
@@ -222,32 +221,30 @@ maak check-home     # 仅检查 home 配置
 #+end_src
 
 *如何复用*：参考 =information.scm= 中的 =%data-dirs= 和
-=%btrfs-subvolumes= 定义，配合 =system-config.org= 中的 Btrfs 挂载配置。
+*如何复用*：参考 =information.scm= 中的 =%data-dirs= 和
+=%btrfs-subvolumes= 定义，配合 =config.org= 中的 Btrfs 挂载配置。
 
 **** 2. Dotfiles 组织方式 ([[./dotfiles/][dotfiles/]])
 采用*两层结构*：
 
-+ =immutable/= - 通过 Guix Home 的 =home-dotfiles-service-type= 管理，配置为只读，适合不需要频繁改动的软件
-+ =mutable/= - 通过 [[https://www.gnu.org/software/stow/][GNU Stow]] 链接到用户目录，可独立修改调试，=maak home= 运行后自动执行 =stow-dotfiles= 重新链接
++ =enable/<dir>/= - 当前启用的配置：其中不可变部分（agents、desktop、desktop-suite、system、terminal、utilities）通过 Guix Home 的 =home-dotfiles-service-type= 管理为只读；可变部分（emacs 等）通过 [[https://www.gnu.org/software/stow/][GNU Stow]] 链接到用户目录，可独立修改调试
++ =disable/<dir>/= - 旧配置保留区，不再启用
 
 #+begin_example
-dotfiles/
-├── immutable/                          # Guix Home 管理（只读）
-│   ├── agents/.config/agents/          # → ~/.config/agents/（上下文 + skills）
-│   ├── desktop/.config/niri/           # → ~/.config/niri/
-│   ├── desktop/.config/waybar/         # → ~/.config/waybar/
-│   ├── terminal/.config/fish/          # → ~/.config/fish/
-│   ├── system/.config/btop/            # → ~/.config/btop/
-│   ├── utilities/.config/tmux/         # → ~/.config/tmux/（侧边栏、窗口管理）
-│   └── wm/.config/darkman/            # → ~/.config/darkman/
-└── mutable/                            # Stow 管理（可独立调试）
-    ├── emacs/.config/emacs/            # → ~/.config/emacs/
-    └── pi/.config/pi/                  # → ~/.config/pi/
+dotfiles/enable/
+├── agents/.config/agents/                 # → ~/.config/agents/（上下文 + skills）
+├── desktop/.config/niri/                  # → ~/.config/niri/
+├── desktop/.config/waybar/                # → ~/.config/waybar/
+├── terminal/.config/fish/                 # → ~/.config/fish/
+├── system/.config/btop/                   # → ~/.config/btop/
+├── utilities/.config/tmux/                # → ~/.config/tmux/（侧边栏、窗口管理）
+├── desktop-suite/.config/darkman/         # → ~/.config/darkman/
+└── emacs/.config/emacs/                   # → ~/.config/emacs/ (Stow)
 #+end_example
 
 *如何复用*：
 
-在 =home-config.org= 中声明 immutable 配置：
+在 =config.org= 中声明 immutable 配置（home-dotfiles-service-type）：
 
 #+begin_src scheme
 (service home-dotfiles-service-type
@@ -255,9 +252,9 @@ dotfiles/
     (package `("desktop" "terminal" "system" ...))))
 #+end_src
 
-mutable 配置通过 ~maak home~ 中的 ~stow-dotfiles~ 函数自动链接到 =$HOME= 。
+mutable 配置通过 Guix Home 内置的 Stow 集成自动链接到 =$HOME=，修改后运行 ~maak apply~ 重链。
 
-**** 3. tmux 配置 ([[./dotfiles/immutable/utilities/.config/tmux/][dotfiles/immutable/utilities/.config/tmux/]])
+**** 3. tmux 配置 ([[./dotfiles/enable/utilities/.config/tmux/][dotfiles/enable/utilities/.config/tmux/]])
 tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计如下：
 
 + *侧边栏导航树*：由浮动 pane 渲染的层级树（Session → Window → Pane），取代原生 tab bar。通过前缀键 =Ctrl+x B= 切换显示
@@ -289,17 +286,17 @@ tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计如下
 理解何时修改哪个文件：
 
 *** 添加新软件包
-1. *仅用户需要* → =source/configs/home-config.org=
+1. *仅用户需要*（游戏、开发工具、媒体播放器） → 在 =config.org= 的 home-services / packages 段添加
    + 添加到 =packages= 字段
    + 示例：游戏、开发工具、媒体播放器
 
-2. *系统级必需* → =source/configs/system-config.org=
+2. *系统级必需*（文件系统工具、固件、limine 等） → 在 =config.org= 的 system-packages / system-services 段添加
    + 添加到 =packages= 字段
    + 示例：文件系统工具、系统监控、固件
 
 *** 添加新服务
-1. *用户服务*（如 swayidle、mako）→ =home-config.org=
-2. *系统服务*（如 nftables、docker）→ =system-config.org=
+1. *用户服务*（如 swayidle、mako） → =config.org= 的 home-services 段
+2. *系统服务*（如 nftables、docker） → =config.org= 的 system-services 段
 
 *** 添加配置文件
 :PROPERTIES:
@@ -307,19 +304,19 @@ tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计如下
 :END:
 *优先放入 =dotfiles/=*，根据配置性质选择分层：
 
-1. *不需要频繁修改* → 放入 =dotfiles/immutable/= ，通过 *home-config.org* 的 Guix Home 管理
-2. *需要独立调试* → 放入 =dotfiles/mutable/= ，通过 *stow* 直接链接，修改后不需 =maak home=
+1. *不需要频繁修改* → 放入 =dotfiles/enable/<dir>/.config/...= 下的 immutable 类目录（agents、desktop、desktop-suite、system、terminal、utilities），由 =config.org= 的 home-dotfiles-service-type 管理
+2. *需要独立调试* → 放入 =dotfiles/enable/<dir>/= 下的 mutable 类目录（emacs 等），由 GNU Stow 链接，修改后运行 =maak apply= 重链
 
 #+begin_src sh
 # 示例：添加 immutable 配置
-mkdir -p dotfiles/immutable/app-name/.config/app-name
-cp ~/app-config.toml dotfiles/immutable/app-name/.config/app-name/
-# 然后在 home-config.org 中添加 app-name 到 packages 列表
+mkdir -p dotfiles/enable/app-name/.config/app-name
+cp ~/app-config.toml dotfiles/enable/app-name/.config/app-name/
+# 然后在 config.org 中将 app-name 加入 home-dotfiles-configuration packages 列表
 
 # 示例：添加 mutable 配置
-mkdir -p dotfiles/mutable/app-name/.config/app-name
-cp ~/app-config.toml dotfiles/mutable/app-name/.config/app-name/
-# 下次 maak home 运行时 stow-dotfiles 自动链接
+mkdir -p dotfiles/enable/app-name/.config/app-name
+cp ~/app-config.toml dotfiles/enable/app-name/.config/app-name/
+# 下次 maak apply 运行时自动重链
 #+end_src
 
 *仅在需要动态生成时使用 source/files/* （如需要注入 Guix 软件包路径）。
@@ -332,7 +329,7 @@ cp ~/app-config.toml dotfiles/mutable/app-name/.config/app-name/
 (define username "your-username")
 #+end_src
 
-然后重新运行 ~maak home~ 。
+然后重新运行 ~maak apply~ 。
 
 *** 添加 Btrfs 持久化目录
 编辑 =source/information.scm= ：
@@ -342,7 +339,7 @@ cp ~/app-config.toml dotfiles/mutable/app-name/.config/app-name/
   '(... "your-new-dir"))
 #+end_src
 
-然后在 ~system-config.org~ 的 Btrfs 配置部分添加对应的 ~bind-mount~ 。
+然后在 ~config.org~ 的 Btrfs 配置部分添加对应的 ~bind-mount~ 。
 
 *** 添加新的 Channel
 编辑 =source/channel.scm= ，添加频道定义，然后运行：
@@ -364,8 +361,8 @@ maak update
 然后运行 ~maak my-task~ 。
 
 ** 故障排除
-*** =maak home= 提示找不到目录
-确保 =dotfiles/immutable/<name>= 目录存在，且与 =home-dotfiles-configuration= 中声明的 ~packages~ 一致。
+*** 配置声明与目录不一致
+确保 =dotfiles/enable/<name>/= 目录存在，且与 =config.org= 中 =home-dotfiles-configuration= 声明的 ~packages~ 一致。
 
 *** 系统启动后数据丢失
 检查 =source/information.scm= 中的 ~%data-dirs~ 和 ~Btrfs 子卷配置~ 是否正确，确保 =/data= 分区已正确挂载。
@@ -381,15 +378,13 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 修改 ~*.org~ 配置后，可以用 ~dry-run~ 模式验证语法是否正确（不会实际应用到系统）：
 
 #+begin_src sh
-MAAK_DRY_RUN=1 maak system   # 验证系统配置
-MAAK_DRY_RUN=1 maak home     # 验证用户配置
+MAAK_DRY_RUN=1 maak apply   # 验证配置（不实际应用）
 #+end_src
 
-~maak system~ 和 ~maak home~ 在执行前会自动运行括号平衡检查。也可以手动单独检查：
+~maak apply~ 在执行前会自动运行括号平衡检查。也可以手动单独检查：
 
 #+begin_src sh
-maak check          # 检查所有配置
-maak check-system   # 仅检查系统配置
+maak check          # 检查配置括号平衡
 #+end_src
 
 ** 技术规格

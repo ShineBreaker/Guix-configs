@@ -27,7 +27,6 @@
     "initialize_as": "AGENTS.md",
     "auto_lsp": true,
     "progress": true,
-    "disable_notifications": false,
     "disable_provider_auto_update": false
   },
   "permissions": {

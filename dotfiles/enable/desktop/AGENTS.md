@@ -30,5 +30,5 @@ desktop/.config/
 
 ## 修改约束
 
-- niri 配置修改后需 `maak home` 重新部署
+- niri 配置修改后需 =maak apply= 重新部署
 - 新增 autostart 项需确保对应服务已安装

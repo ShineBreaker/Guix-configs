@@ -1,0 +1,2051 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+* 模块导入
+
+#+NAME: modules
+#+begin_src scheme :noweb yes
+(load "../source/information.scm")
+
+(use-modules (gnu)
+             (gnu system accounts)
+             (gnu system nss)
+             (gnu system pam)
+
+             (guix channels)
+             (guix gexp)
+             (guix modules)
+
+             (gnu packages shells)
+
+             (ice-9 session)
+             (ice-9 match)
+
+             (rosenthal utils packages))
+
+<<system-modules>>
+<<home-modules>>
+#+end_src
+
+* 系统配置
+
+--------------
+
+此系统配置的关键在于 *让系统能够正常启动* ，所以会尽量精简软件包以及相关服务的数量
+
+待系统成功安装并进入系统之后，则可以直接手动应用用户配置
+
+--------------
+
+** Agent 指引
+
+系统配置修改指引。
+
+本区域为 AI 助手提供 Home 配置的上下文和决策规则。阅读此区域后再进行修改。
+
+*** 系统配置职责：
++ 定义 operating-system 的组成部分，包括引导器、文件系统、内核、用户、系统包、系统服务、skeleton 文件。
++ 这些组件共同确保系统能够正常启动和运行。
+
+*** 关键组件说明：
++ 引导器使用 Limine（由 rosenthal 频道提供），替代传统的 GRUB。
++ 文件系统采用 LUKS 加密 + Btrfs 子卷 + tmpfs 混合架构，实现根目录重启清空但数据持久化的效果。
++ 内核使用 主线内核（由 nonguix 频道提供），用于现代设备的正常启动。
+
+*** 文件系统架构：
++ 根目录使用 tmpfs（重启后清空），Btrfs 子卷用于持久化数据，/data 分区通过 bind-mount 挂载到用户目录。
++ 具体的子卷映射和持久化目录定义在 information.scm 中，包括 %btrfs-subvolumes 和 %data-dirs 变量。
+
+*** source/files/ 用途：
++ 存放静态配置模板文件，如 nftables.conf 防火墙规则。
++ 这些文件通过 local-file 引用到系统配置中，在系统构建时被复制到目标位置。
+
+*** 修改约定：
++ 系统层变更优先修改本文件中的对应代码块。生成的 tmp/system-config.scm 是自动导出的结果，不应手动编辑。
++ 全局变量如用户名、Btrfs 配置等统一在 information.scm 中定义，本文件通过 (load "../source/information.scm") 加载。
+
+*** 决策规则：
++ 本文件仅放置系统级必需内容，包括引导配置、内核设置、文件系统挂载、系统服务定义。
++ 用户级工具、桌面环境配置、个人偏好设置应放入本文件下方的 *用户配置* 章节。
+
+--------------
+** Main
+
+在这里，我利用了 =Org Mode= 的 =Noweb= 功能
+这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
+引用的语法为 *<<>>** , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
+
+#+NAME: main
+#+begin_src scheme :tangle ../tmp/config.scm :noweb yes
+<<modules>>
+
+<<filesystem-defines>>
+
+(operating-system
+ <<kernel-configs>>
+ <<information-configs>>
+ <<users-config>>
+ <<bootloader-configs>>
+
+ (mapped-devices %mapped-devices-config)
+ (file-systems %file-systems-config)
+ (swap-devices %swap-devices)
+
+ (packages
+  (append
+   <<packages-list>>
+   %base-packages)
+  )
+
+ (services
+  (append
+   <<basic-services>>
+   <<udev-services>>
+   <<networking-services>>
+   <<virtualization-services>>
+   <<kernel-services>>
+   <<nix-services>>
+   <<filesystem-services>>
+   <<desktop-services>>
+   (service guix-home-service-type
+            `((username ,
+               <<home-configs>>
+               )))))
+
+ (skeletons
+  <<skeletons-config>>
+  )
+
+ (name-service-switch %mdns-host-lookup-nss))
+#+end_src
+
+** Modules
+*** System
+#+NAME: system-modules
+#+begin_src scheme :noweb yes
+<<bootloader-modules>>
+<<filesystems-modules>>
+<<kernel-modules>>
+<<kernel-arguments-modules>>
+<<services-modules>>
+#+end_src
+
+*** Bootloader
+#+NAME: bootloader-modules
+#+begin_src scheme
+(use-modules (rosenthal bootloader limine))
+#+end_src
+
+*** Kernel
+#+NAME: kernel-modules
+#+begin_src scheme
+(use-modules (gnu packages firmware)
+             (nongnu packages firmware)
+             (nongnu packages linux)
+             (nongnu system linux-initrd))
+
+(use-service-modules linux pam-mount sysctl)
+#+end_src
+
+*** Service
+#+NAME: services-modules
+#+begin_src scheme
+(use-modules (gnu home services guix)
+             (guix channels)
+
+             (jeans packages desktop)
+             (jeans services hardware)
+             (jeans services nix-ld)
+
+             (rosenthal packages networking)
+             (rosenthal packages wm)
+
+             (rosenthal services base)
+             (rosenthal services games)
+             (rosenthal services networking)
+
+             (srfi srfi-1))
+
+(use-package-modules android
+                     base
+                     commencement
+                     compression
+                     cups
+                     games
+                     gl
+                     glib
+                     gnupg
+                     gnustep
+                     gstreamer
+                     hardware
+                     linux
+                     multiprecision
+                     nss
+                     package-management
+                     tls
+                     video
+                     webkit
+                     wm)
+
+(use-service-modules authentication
+                     containers
+                     dbus
+                     desktop
+                     dns
+                     guix
+                     linux
+                     networking
+                     nix
+                     pm
+                     shepherd
+                     sound
+                     ssh
+                     virtualization
+                     xorg)
+#+end_src
+
+** Bootloader
+在这里使用了由 =rosenthal= 频道提供的 *Limine*
+
+#+NAME: bootloader-configs
+#+begin_src scheme
+(bootloader (bootloader-configuration
+             (bootloader limine-efi-removable-bootloader)
+             (targets '("/efi"))))
+#+end_src
+
+** FileSystems
+这里的配置文件需要根据自己的实际情况进行修改
+我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能
+具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
+
+#+NAME: filesystem-defines
+#+begin_src scheme
+(define %mapped-devices-config
+  (list (mapped-device
+         (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
+         (target "root")
+         (type luks-device-mapping))))
+
+(define %tmpfs
+  (list (file-system
+         (mount-point "/")
+         (device "tmpfs")
+         (type "tmpfs")
+         (flags '(no-atime))
+         (options "mode=0755,nr_inodes=1m,size=10%")
+         (check? #f))
+        (file-system
+         (mount-point "/tmp")
+         (device "tmpfs")
+         (type "tmpfs")
+         (options "mode=1777,nr_inodes=1m,size=75%")
+         (create-mount-point? #t)
+         (check? #f))
+        (file-system
+         (device "tmpfs")
+         (mount-point "/var/lock")
+         (type "tmpfs")
+         (flags '(no-suid no-dev strict-atime))
+         (options "mode=1777,nr_inodes=800k,size=20%")
+         (create-mount-point? #t)
+         (check? #f))
+        (file-system
+         (mount-point "/home")
+         (device "tmpfs")
+         (type "tmpfs")
+         (check? #f))))
+
+(define %persist-filesystem
+  (map (match-lambda
+         ((subvol mount-point)
+          (file-system
+           (device (file-system-label "Linux"))
+           (mount-point mount-point)
+           (type "btrfs")
+           (dependencies %mapped-devices-config)
+           (options (string-append "subvol=" subvol ",compress=zstd:6"))
+           (create-mount-point? #t)
+           (needed-for-boot? #t)
+           (check? (string=? mount-point "/gnu"))))) %btrfs-subvolumes))
+
+(define %data-filesystem
+  (file-system
+   (device (file-system-label "Linux"))
+   (mount-point "/data")
+   (type "btrfs")
+   (dependencies %mapped-devices-config)
+   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:6"))
+   (create-mount-point? #t)))
+
+(define %bind-mounts
+  (map (lambda (dirs)
+         (file-system
+          (mount-point (string-append "/home/" username "/" dirs))
+          (device (string-append "/data/" dirs))
+          (type "none")
+          (flags '(bind-mount))
+          (dependencies (list %data-filesystem))
+          (create-mount-point? #t))) %data-dirs))
+
+(define %file-systems-config
+  (append %bind-mounts %persist-filesystem %tmpfs
+          (list %data-filesystem
+                (file-system
+                 (device (uuid "9699-52A2"
+                               'fat))
+                 (mount-point "/efi")
+                 (type "vfat")
+                 (create-mount-point? #t))) %base-file-systems))
+
+(define %swap-devices
+  (list (swap-space
+         (target (uuid "169557cc-00a4-448c-9bb6-7bd80fc2b023")))))
+#+end_src
+
+** Kernel
+*** 导入 =nonguix= 固件
+使用 =nonguix= 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
+
+#+NAME: kernel-configs
+#+begin_src scheme
+(initrd microcode-initrd)
+(firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
+(kernel linux-7.0)
+(kernel-arguments
+ (cons* "resume=UUID=169557cc-00a4-448c-9bb6-7bd80fc2b023"
+        "kernel.sysrq=1"
+        "loglevel=0"
+        "modprobe.blacklist=wacom,hid_uclogic"
+        "snd-intel-dspcfg.dsp_driver=3"
+        "quiet"
+        "usbcore.autosuspend=120"
+        "zswap.enabled=1"
+        "zswap.max_pool_percent=90"
+        %default-kernel-arguments))
+#+end_src
+
+*** 调节内核参数
+
+#+NAME: kernel-services
+#+begin_src scheme
+(list (simple-service 'extend-kernel-module-loader
+                      kernel-module-loader-service-type
+                      '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq_pie"
+                        "tcp_bbr" "uhid" "uinput"))
+
+      (simple-service 'extend-sysctl sysctl-service-type
+                      '(("fs.inotify.max_user_watches" . "524288")
+                        ("fs.file-max" . "2097152")
+                        ("fs.nr_open" . "2097152")
+
+                        ("vm.max_map_count" . "2147483642")
+                        ("vm.compaction_proactiveness" . "0")
+                        ("vm.vfs_cache_pressure" . "50")
+                        ("vm.page_lock_unfairness" . "1")
+                        ("vm.stat_interval" . "120")
+
+                        ("net.core.default_qdisc" . "fq_pie")
+                        ("net.core.rmem_max" . "7500000")
+                        ("net.core.wmem_max" . "7500000")
+                        ("net.core.rmem_default" . "524288")
+                        ("net.core.wmem_default" . "524288")
+                        ("net.core.netdev_max_backlog" . "5000")
+                        ("net.ipv4.ip_forward" . "1")
+                        ("net.ipv4.tcp_congestion_control" . "bbr")
+                        ("net.ipv4.tcp_low_latency" . "1")
+                        ("net.ipv4.tcp_fastopen" . "3")
+                        ("net.ipv4.tcp_mtu_probing" . "1")
+                        ("net.ipv4.tcp_notsent_lowat" . "16384")
+                        ("net.ipv4.tcp_ecn" . "2")
+                        ("net.ipv6.conf.all.forwarding" . "1")
+
+                        ("kernel.numa_balancing" . "0")
+                        ("kernel.sched_autogroup_enabled" . "1")
+                        ("kernel.sched_child_runs_first" . "0")))
+
+      (service pam-limits-service-type
+               (list (pam-limits-entry "@audio"
+                                       'both
+                                       'rtprio 90)
+                     (pam-limits-entry "@audio"
+                                       'both
+                                       'memlock
+                                       'unlimited)
+                     (pam-limits-entry "*"
+                                       'both
+                                       'nofile 1048576))))
+#+end_src
+
+** Packages
+一些需要用到的软件包， *非必要不修改*
+
+#+NAME: packages-list
+#+begin_src scheme
+(specs->pkgs+out
+ ;; 系统核心组件
+ "cryptsetup"
+ "dialog"
+ "iproute2"
+ "iptables-nft"
+ "ncurses"
+ "pinentry"
+ "rtkit"
+ "strace"
+
+ ;; 网络与连接
+ "adb"
+ "bluez"
+ "curl"
+ "fprintd"
+ "mihomo"
+ "netcat-openbsd"
+ "wget"
+
+ ;; 桌面环境
+ "niri"
+ "xwayland-satellite"
+
+ ;; 桌面服务
+ "brightnessctl"
+ "gnome-keyring"
+ "gvfs"
+ "libgnome-keyring"
+ "libsecret"
+ "poweralertd"
+
+ ;; 文件管理器
+ "exo"
+ "file-roller"
+ "thunar"
+ "tumbler"
+ "xfconf"
+
+ ;; Thunar 插件
+ "thunar-archive-plugin"
+ "thunar-media-tags-plugin"
+ "thunar-volman"
+ "thunar-vcs-plugin"
+
+ ;; 字体
+ "font-sarasa-gothic"
+
+ ;; 命令行工具
+ "fastfetch-minimal"
+ "fish"
+ "foot"
+ "git"
+ "stow"
+
+ ;; 虚拟化
+ "distrobox"
+ "libvirt"
+ "podman"
+ "podman-compose"
+ "qemu"
+ "spice"
+
+ ;; 包管理器
+ "flatpak"
+ "flatpak-xdg-utils"
+ "nix"
+
+ ;; 工具
+ "cpufrequtils"
+ "gzip"
+ "libnotify"
+ "ntfs-3g"
+ "tpm2-tools"
+ "tpm2-tss"
+ "unzip"
+ "zip")
+#+end_src
+
+** Services
+*** 文件系统相关服务
+在这里就是一些负责维护文件系统树的服务
+
++ *fixed-machine-id** 负责固定 =/etc/machine-id= 这个文件中的内容，具体的算法在 [[../information.scm][information.scm]] 中
++ *fix-data-perms** 负责修复 =/data= 目录下所有文件夹的权限
++ *create-xdg-dirs** 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
+
+#+NAME: filesystem-services
+#+begin_src scheme
+(list (simple-service 'fixed-machine-id etc-service-type
+                      (list `("machine-id" ,(plain-file "machine-id"
+                                                        fixed-machine-id))))
+
+      ;; 每次启动时将 swap 分区写入 /sys/power/resume（休眠必需）
+      (simple-service 'setup-resume-device
+                      shepherd-root-service-type
+                      (list (shepherd-service
+                             (provision '(resume-device))
+                             (requirement '(file-systems))
+                             (one-shot? #t)
+                             (start #~(lambda ()
+                                        (call-with-output-file "/sys/power/resume"
+                                          (lambda (port)
+                                            (display "259:3" port))))))))
+
+      (simple-service 'fix-data-perms activation-service-type
+                      #~(begin
+                          (use-modules (guix build utils))
+                          (mkdir-p "/data")
+                          (chmod "/data" #o1777)))
+
+      (simple-service 'create-xdg-dirs activation-service-type
+                      (with-imported-modules (source-module-closure '((guix
+                                                                       build
+                                                                       utils)))
+                                             #~(begin
+                                                 (use-modules (guix build
+                                                                    utils))
+                                                 (let* ((pw (getpwnam #$username))
+                                                        (uid (passwd:uid pw))
+                                                        (gid (passwd:gid pw))
+                                                        (home (string-append
+                                                               "/home/"
+                                                               #$username)))
+                                                   (for-each (lambda (dir)
+                                                               (let ((path (string-append
+                                                                            home
+                                                                            "/"
+                                                                            dir)))
+                                                                 (mkdir-p
+                                                                  path)
+                                                                 (chown path
+                                                                        uid gid)
+                                                                 (chmod path
+                                                                        #o755)))
+                                                             '#$%data-dirs)))))
+
+      ;; 在 tmpfs /home 上重建 Guix Home 环境
+      (simple-service 'bootstrap-guix-home activation-service-type
+                      (with-imported-modules (source-module-closure
+                                              '((guix build utils)))
+                                             #~(begin
+                                                 (use-modules (guix build utils))
+                                                 (let* ((user #$username)
+                                                        (home (string-append "/home/" user))
+                                                        (pw (getpwnam user))
+                                                        (uid (passwd:uid pw))
+                                                        (gid (passwd:gid pw))
+                                                        (profile-path (string-append
+                                                                       "/var/guix/profiles/per-user/" user "/guix-home")))
+                                                   ;; 确保 home 目录存在
+                                                   (mkdir-p home)
+                                                   (chown home uid gid)
+                                                   (chmod home #o700)
+
+                                                   (when (file-exists? profile-path)
+                                                     ;; 1. 创建 ~/.guix-home
+                                                     (let ((link (string-append home "/.guix-home")))
+                                                       (unless (file-exists? link)
+                                                         (symlink profile-path link)))
+
+                                                     ;; 2. 执行 activate（重建所有 store symlink）
+                                                     (catch #t
+                                                            (lambda ()
+                                                              (setenv "HOME" home)
+                                                              (setenv "GUIX_NEW_HOME" profile-path)
+                                                              (primitive-load (string-append profile-path "/activate"))
+                                                              (unsetenv "GUIX_NEW_HOME"))
+                                                            (lambda args
+                                                              (format #t "WARNING: activate failed: ~a~%" args)))
+
+                                                     ;; 3. 创建 ~/.guix-profile（activate 不管理此链接）
+                                                     (let ((target (string-append
+                                                                    "/var/guix/profiles/per-user/" user "/guix-profile"))
+                                                           (link (string-append home "/.guix-profile")))
+                                                       (when (and (file-exists? target)
+                                                                  (not (file-exists? link)))
+                                                         (symlink target link)))
+
+                                                     ;; 4. 创建 ~/.nix-profile
+                                                     (let ((target (string-append
+                                                                    home "/.local/state/nix/profiles/profile"))
+                                                           (link (string-append home "/.nix-profile")))
+                                                       (when (and (file-exists? target)
+                                                                  (not (file-exists? link)))
+                                                         (symlink target link)))
+
+                                                     ;; 5. Stow mutable dotfiles（emacs、pi）
+                                                     ;;    stow 在 system profile 中
+                                                     (catch #t
+                                                            (lambda ()
+                                                              (let* ((stow-bin "/run/current-system/profile/bin/stow")
+                                                                     (repo (string-append home "/Projects/Config/Guix-configs"))
+                                                                     (mutable-dir (string-append repo "/dotfiles/mutable")))
+                                                                (when (file-exists? mutable-dir)
+                                                                  (let ((pkgs (scandir mutable-dir
+                                                                                       (lambda (n)
+                                                                                         (and (not (string-prefix? "." n))
+                                                                                              (file-is-directory?
+                                                                                               (string-append mutable-dir "/" n)))))))
+                                                                    (for-each (lambda (p)
+                                                                                (system** stow-bin "-d" mutable-dir "-t" home "-D" p))
+                                                                              pkgs)
+                                                                    (for-each (lambda (p)
+                                                                                (system** stow-bin "-d" mutable-dir "-t" home p))
+                                                                              pkgs)))))
+                                                            (lambda args
+                                                              (format #t "WARNING: stow failed: ~a~%" args)))
+
+                                                     ;; 6. chown 所有新建内容给用户（activation 以 root 运行）
+                                                     (for-each (lambda (f)
+                                                                 (false-if-exception (chown f uid gid)))
+                                                               (find-files home (const #t)
+                                                                           #:directories? #t))))))))
+#+end_src
+
+*** 网络相关配置
+开机自动开启 WiFi 热点（需先手动执行一次创建连接）
+
+~nmcli connection add type wifi ifname wlp0s20f3 con-name auto-hotspot ssid <你的SSID> 802-11-wireless.mode ap ipv4.method shared wifi-sec.key-mgmt wpa-psk wifi-sec.psk <你的密码>~
+
+#+NAME: networking-services
+#+begin_src scheme
+(list (service nftables-service-type
+               (nftables-configuration (ruleset (local-file
+                                                 "../source/files/nftables.conf"))))
+      (service openssh-service-type
+               (openssh-configuration
+                (password-authentication? #f)))
+
+      (service tailscale-service-type
+               (tailscale-configuration
+                (verbosity 1)
+                (extra-options '("--tun=userspace-networking"))))
+
+      ;; 禁用 USB 以太网适配器 autosuspend，防止省电导致丢包
+      (simple-service 'usb-eth-autosuspend shepherd-root-service-type
+                      (list (shepherd-service
+                             (documentation
+                              "Disable USB autosuspend for CDC NCM ethernet adapter.")
+                             (provision '(usb-eth-autosuspend))
+                             (requirement '(user-processes file-systems))
+                             (one-shot? #t)
+                             (start #~(lambda _
+                                        (let ((path "/sys/class/net/enp0s13f0u2u4c2/device/power/autosuspend"))
+                                          (when (file-exists? path)
+                                            (call-with-output-file path
+                                              (lambda (port)
+                                                (display "on" port))))))))))
+
+      (simple-service 'mihomo-services shepherd-root-service-type
+                      (list (shepherd-service (documentation
+                                               "Run the mihomo daemon.")
+                                              (provision '(mihomo-daemon))
+                                              (requirement '(user-processes))
+                                              (start #~(make-forkexec-constructor
+                                                        (list #$(file-append
+                                                                 mihomo
+                                                                 "/bin/mihomo")
+                                                              "-f"
+                                                              (string-append
+                                                               "/home/"
+                                                               #$username
+                                                               "/.config/mihomo/config.yaml"))
+                                                        #:log-file
+                                                        "/var/log/mihomo.log"))
+                                              (stop #~(make-kill-destructor))
+                                              (auto-start? #t)
+                                              (respawn? #t))))
+
+
+      (simple-service 'auto-hotspot shepherd-root-service-type
+                      (list (shepherd-service
+                             (provision '(auto-hotspot))
+                             (requirement '(network-manager))
+                             (start #~(lambda _
+                                        ;; 先断开已有 WiFi 连接，再激活热点
+                                        (zero? (system** "nmcli" "device" "disconnect"
+                                                         "wlp0s20f3"))
+                                        (zero? (system** "nmcli" "connection" "up"
+                                                         "auto-hotspot"))))
+                             (stop #~(lambda _
+                                       (zero? (system** "nmcli" "connection" "down"
+                                                        "auto-hotspot"))))
+                             (one-shot? #t)
+                             (auto-start? #t)
+                             (respawn? #f)))))
+#+end_src
+
+*** Nix包管理器相关配置
+#+NAME: nix-services
+#+begin_src scheme
+(list (service nix-service-type
+               (nix-configuration (extra-config (list (string-append
+                                                       "trusted-users"
+                                                       " = root " username)))))
+
+      (simple-service 'non-nixos-gpu shepherd-root-service-type
+                      (list (shepherd-service (documentation
+                                               "Install GPU drivers for running GPU accelerated programs from Nix.")
+                                              (provision '(non-nixos-gpu))
+                                              (requirement '(nix-daemon))
+                                              (start #~(make-forkexec-constructor
+                                                        '("/run/current-system/profile/bin/ln"
+                                                          "-nsf"
+                                                          "/var/lib/non-nixos-gpu"
+                                                          "/run/opengl-driver")))
+                                              (stop #~(make-kill-destructor))
+                                              (auto-start? #t)
+                                              (one-shot? #t)))))
+#+end_src
+
+*** UDEV规则
+#+NAME: udev-services
+#+begin_src scheme
+(list (simple-service 'backlight udev-service-type (list ddcutil light))
+
+      (udev-rules-service 'android android-udev-rules
+                          #:groups '("adbusers"))
+
+      (udev-rules-service 'steam-devices steam-devices-udev-rules)
+
+      (udev-rules-service 'controller
+                          (udev-rule "60-controller-permission.rules"
+                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
+      (udev-rules-service 'cpu-dma
+                          (udev-rule "99-cpu-dma-latency.rules"
+                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))
+
+      (udev-rules-service 'intel-vpu
+                          (udev-rule "60-intel-vpu.rules"
+                                     "SUBSYSTEM==\"accel\", MODE=\"0660\", GROUP=\"video\""))
+
+      (udev-rules-service 'sayodevice
+                          (udev-rule "60-sayodevice.rules"
+                                     "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
+      (udev-rules-service 'sunshine
+                          (udev-rule "60-sunshine-uinput.rules"
+                                     "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"")))
+#+end_src
+
+*** 基础服务
+#+NAME: basic-services
+#+begin_src scheme
+(map (lambda (tty)
+       (service kmscon-service-type
+                (kmscon-configuration (virtual-terminal tty)
+                                      (font-engine "pango")
+                                      (font-size 24))))
+     '("tty2" "tty3" "tty4" "tty5" "tty6"))
+
+(list (simple-service 'home-channels home-channels-service-type
+                      guix-channels)
+
+      (service nix-ld-service-type
+               (nix-ld-configuration
+                (libraries
+                 (append
+                  %default-nix-ld-libraries
+                  (list
+                   ;; 编译工具链
+                   coreutils
+                   gcc-toolchain
+                   strace
+
+                   ;; 多媒体与图形
+                   ffmpeg
+                   gstreamer
+                   gst-plugins-base
+                   mesa
+                   mesa-utils
+
+                   ;; 加密与安全
+                   gmp
+                   libgpg-error
+                   nspr
+                   (list nss "lib/nss")
+                   p11-kit
+
+                   ;; 文件系统与压缩
+                   e2fsprogs
+                   fuse
+                   fuse-2
+                   zlib
+
+                   ;; 桌面与浏览器引擎
+                   cups
+                   glibc-locales
+                   libglvnd
+                   libobjc2
+                   webkitgtk
+                   webkitgtk-for-gtk3
+                   webkitgtk-with-libsoup2)))))
+
+      ;; Nonguix channel
+      (simple-service 'nonguix-substitutes guix-service-type
+                      (guix-extension
+                       (authorized-keys
+                        (list (plain-file
+                               "nonguix.pub"
+                               "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
+                       (substitute-urls
+                        '("https://nonguix-proxy.ditigal.xyz"))))
+
+      ;; Guix-moe channel
+      (simple-service 'guix-moe-substitutes guix-service-type
+                      (guix-extension
+                       (authorized-keys
+                        (list (plain-file
+                               "guix-moe.pub"
+                               "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
+                       (substitute-urls
+                        '("https://cache-cdn.guix.moe"))))
+
+      ;; Panther channel
+      (simple-service 'guix-moe-substitutes guix-service-type
+                      (guix-extension
+                       (authorized-keys
+                        (list (plain-file
+                               "guix-moe.pub"
+                               "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))
+                       (substitute-urls
+                        '("https://substitutes.guix.gofranz.com"))))
+
+      ;; SJTUG Mirror
+      (simple-service 'sjtug-substitutes guix-service-type
+                      (guix-extension
+                       (substitute-urls
+                        '("https://mirror.sjtu.edu.cn/guix"
+                          "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"))))
+
+      (simple-service 'root-services shepherd-root-service-type
+                      (list (shepherd-timer '(guix-gc)
+                                            #~(calendar-event
+                                               #:days-of-week '(sunday)
+                                               #:hours '(18)
+                                               #:minutes '(0))
+                                            #~("/run/current-system/profile/bin/guix"
+                                               "gc"
+                                               "--delete-generations=14d")
+                                            #:requirement '(user-processes
+                                                            guix-daemon))
+                            ;; 用于自动更新 flatpak 系统安装的软件包
+                            (shepherd-timer '(flatpak-system-update)
+                                            #~(calendar-event #:hours '(18)
+                                                              #:minutes '(0))
+                                            #~("/run/current-system/profile/bin/flatpak"
+                                               "update" "--system" "-y")
+                                            #:requirement '(user-processes
+                                                            network-manager)))))
+#+end_src
+
+*** 桌面服务
+使用 Guix 原生的 =%desktop-services= 作为基础，删除默认的显示管理器和 mingetty
+替换为 greetd + tuigreet 登录管理器，并添加蓝牙、屏幕锁、背光控制等桌面服务
+原先的 =modify-services= 大部分已拆分为独立的 service 列表，仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例）
+
+#+NAME: desktop-services
+#+begin_src scheme :noweb yes
+(append (modify-services %desktop-services
+                         (delete console-font-service-type)
+                         (delete mingetty-service-type)
+                         (delete gdm-service-type)
+                         (delete screen-locker-service-type)
+                         (guix-service-type config =>
+                                            (guix-configuration (inherit config)
+                                                                (channels guix-channels)
+                                                                (guix (guix-for-channels guix-channels))
+                                                                (extra-options (list "--cores=20" "--max-jobs=6"))
+                                                                (http-proxy "http://127.0.0.1:7890")
+                                                                (discover? #f)
+                                                                (privileged? #f)
+                                                                (tmpdir "/var/tmp")))
+                         (elogind-service-type config =>
+                                               (elogind-configuration
+                                                (inherit config)
+                                                ;; 仅使用 shutdown 模式休眠（platform 模式在此硬件上不可用）
+                                                (hibernate-mode '(shutdown))
+                                                ;; 连接电源时合盖只锁屏，不挂起
+                                                (handle-lid-switch-external-power 'lock)
+                                                ;; 禁止挂起/休眠键触发系统挂起
+                                                ;; 插电源时不允许任何进程突然中断
+                                                (handle-suspend-key 'ignore)
+                                                (handle-hibernate-key 'ignore))))
+
+        (list (service tlp-service-type
+                       (tlp-configuration
+                        ;; === AC 电源模式 ===
+                        (cpu-scaling-governor-on-ac (list "performance"))
+                        (cpu-energy-perf-policy-on-ac "performance")
+                        (cpu-min-perf-on-ac 0)
+                        (cpu-max-perf-on-ac 100)
+
+                        ;; === 电池模式 ===
+                        (cpu-scaling-governor-on-bat (list "powersave"))
+                        (cpu-energy-perf-policy-on-bat "power")
+                        (cpu-min-perf-on-bat 0)
+                        (cpu-max-perf-on-bat 20)
+
+                        ;; === 电池健康保护（强烈推荐保留）===
+                        (start-charge-thresh-bat0 40)
+                        (stop-charge-thresh-bat0 80)
+
+                        ;; 可选但推荐的额外省电项
+                        (cpu-boost-on-bat? #f)
+                        (sched-powersave-on-bat? #t)
+                        ;; 开机恢复上次关机时的蓝牙/WiFi 开关状态
+                        (restore-device-state-on-startup? #t)))
+
+              (service fprintd-service-type)
+              (service gamemode-service-type)
+              (service gnome-keyring-service-type)
+              (service gvfs-service-type)
+              (service opentabletdriver-service-type)
+
+              ;; 允许本地活跃用户执行休眠/挂起/混合休眠（elogind + polkit）
+              ;; hibernate-mode 仅用 shutdown（platform 模式在此硬件上不可用）
+              (simple-service 'hibernate-polkit polkit-service-type
+                              (list (computed-file
+                                     "polkit-hibernate-rules"
+                                     (let ((rules-file (local-file "50-hibernate.rules")))
+                                       #~(begin
+                                           (mkdir #$output)
+                                           (mkdir (string-append #$output "/share"))
+                                           (mkdir (string-append #$output "/share/polkit-1"))
+                                           (mkdir (string-append #$output "/share/polkit-1/rules.d"))
+                                           (copy-file #$rules-file
+                                                      (string-append #$output "/share/polkit-1/rules.d/50-hibernate.rules")))))))
+
+              (service bluetooth-service-type
+                       (bluetooth-configuration (auto-enable? #t)))
+
+              (service screen-locker-service-type
+                       (screen-locker-configuration
+                        (name "swaylock")
+                        (program (plain-file "empty" ""))
+                        (using-setuid? #f)))
+
+              (service greetd-service-type
+                       (greetd-configuration
+                        (greeter-supplementary-groups '("video" "audio"))
+                        (terminals
+                         (list (greetd-terminal-configuration
+                                (terminal-vt "7")
+                                (terminal-switch #t)
+                                (default-session-command
+                                  (greetd-tuigreet-session))
+                                (initial-session-user username)
+                                (initial-session-command
+                                 (program-file "niri-session"
+                                               #~(execl #$(file-append niri "/bin/niri")
+                                                        "--session"))))))))))
+#+end_src
+
+
+50-hibernate.rules
+
+#+name: 50-hibernate.rules
+#+begin_src js :tangle ../tmp/50-hibernate.rules
+polkit.addRule(function(action, subject) {
+    if (subject.isLocal && subject.isActive &&
+        (action.id == "org.freedesktop.login1.hibernate" ||
+         action.id == "org.freedesktop.login1.hibernate-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.suspend" ||
+         action.id == "org.freedesktop.login1.suspend-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.hybrid-sleep" ||
+         action.id == "org.freedesktop.login1.hybrid-sleep-multiple-sessions")) {
+        return polkit.Result.YES;
+    }
+});
+#+end_src
+*** 虚拟化服务
+#+NAME: virtualization-services
+#+begin_src scheme
+(list (service dnsmasq-service-type
+               (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
+                                      (extra-options (list
+                                                      "--except-interface=lo"
+                                                      "--interface=virbr0"
+                                                      "--bind-dynamic"
+                                                      "--dhcp-range=192.168.10.2,192.168.10.254"))))
+
+      (service rootless-podman-service-type
+               (rootless-podman-configuration (pam-limits '())
+                                              (subuids (list (subid-range (name
+                                                                           "brokenshine")
+                                                                          (start
+                                                                           100000)
+                                                                          (count
+                                                                           65536))))
+                                              (subgids (list (subid-range (name
+                                                                           "brokenshine")
+                                                                          (start
+                                                                           100000)
+                                                                          (count
+                                                                           65536))))))
+
+      (service static-networking-service-type
+               (list (static-networking (provision '(network-manager))
+                                        (links (list (network-link (name
+                                                                    "virbr0")
+                                                                   (type 'bridge)
+                                                                   (arguments '()))))
+                                        (addresses (list (network-address (device
+                                                                           "virbr0")
+                                                                          (value
+                                                                           "192.168.10.1/24")))))))
+
+      (service libvirt-service-type
+               (libvirt-configuration (unix-sock-group "libvirt")))
+      (service virtlog-service-type))
+#+end_src
+
+** Skeletons
+负责处理 *用户骨架 (/etc/skel) 目录下的文件
+该目录下的所有文件都会在用户第一次创建时写入到用户的目录中
+适合在此放置一些需要经常修改的模板类服务
+
+#+NAME: skeletons-config
+#+begin_src scheme
+(map (lambda (path)
+       `(,path ,(local-file (string-append "source/files/skel/" path))))
+     '(".config/mihomo/config.yaml"))
+#+end_src
+
+** Users
+用户信息
+
+=password= 行可以用于设置默认密码
+
+利用 =(password (crypt "InitialPassword!" "$6$abc")))=
+可以创建一个初始密码，其中crypt函数的第一个字符串为 *明文的密码*
+
+然后在进入系统之后重新注释，并自行设置密码，或者将 *password*
+后的函数设置为 *Hash化后的密码*
+
+利用
+#+begin_src bash
+echo "InitialPassword!" | guix shell openssl -+ openssl passwd -6 -stdin
+#+end_src
+
+即可返回需要填入的值
+
+#+NAME: information-configs
+#+begin_src scheme
+(timezone "Asia/Shanghai" )
+(locale "zh_CN.utf8" )
+(host-name "BrokenShine-Desktop" )
+#+end_src
+
+#+NAME: users-config
+#+begin_src scheme
+(users (cons* (user-account
+               (inherit %root-account)
+               (password #f)
+               (shell (file-append (spec->pkg "fish") "/bin/fish")))
+              (user-account
+               (name username)
+               (group "users")
+               (password
+                "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
+               (supplementary-groups '("adbusers"
+                                       "audio"
+                                       "cgroup"
+                                       "gamemode"
+                                       "input"
+                                       "kvm"
+                                       "libvirt"
+                                       "netdev"
+                                       "video"
+                                       "wheel"))
+               (shell (file-append (spec->pkg "fish") "/bin/fish")))
+              %base-user-accounts))
+#+end_src
+
+* 用户配置
+
+--------------
+
+我会尽量地把更多的配置放在这里，而 *系统配置* 章节
+只会放置一些保障系统正常使用所必须的配置，这样的好处在于:
+
+1. 在首次安装系统的时候，可以少安装很多很多的软件包，这样安装系统的时长不会说长的太过分，也可以尽量减少因为网络问题而造成的报错
+2. 系统和用户分开配置，这样在修改某一块的配置时不用将一整个系统都 reconfighration 一遍，方便多次迭代
+
+--------------
+
+** Agent 指引
+*** Home 配置修改指引
+
+本区域为 AI 助手提供 Home 配置的上下文和决策规则。阅读此区域后再进行修改。
+
+Home 配置定义 home-environment 的组成部分，包括：
++ 用户级包集合：桌面环境、Emacs、终端、开发工具、其他软件包
++ Home 服务定义：shepherd 服务、计时器、环境变量、字体配置
++ dotfiles 服务配置：通过 home-dotfiles-service-type 分发配置文件
+
+*** dotfiles 管理规则
+
+dotfiles 目录采用 Stow 规范组织，结构为 dotfiles/<app>/.config/<app>/。
+这些配置通过 home-dotfiles-service-type 服务自动链接到用户家目录。
+不要随意移动已有目录，保持现有结构稳定。
+
+*** 新增应用配置流程
+
+添加新应用配置时，按以下顺序操作：
+1. 在 dotfiles/<app>/ 下创建配置目录，遵循 Stow 规范
+2. 在本文件的包列表中添加应用包（如 desktop-packages-list）
+3. 在 home-dotfiles-configuration 的 packages 中添加目录名
+
+*** source/files/ 用途
+
+source/files/ 目录存放静态模板文件，用于需要 computed-substitution-with-inputs 注入 Guix 包绝对路径的场景。
+例如 niri.kdl、zed.json 等文件，使用 &&bin/foo&& 语法标记需要替换的二进制路径。
+
+*** 修改约定
+
++ 优先修改 dotfile 文件，若需要 Guix Home 管理再修改本文件
++ 保持现有的 (load ...) 风格和变量命名习惯
++ 变量名如 %services-config、%packages-list 等保持统一风格
+
+*** 决策规则
+
++ 若应用已有 dotfile 配置，优先修改对应 dotfile
++ 新增程序时考虑三处联动：包列表、服务定义、配置文件
++ 能用 Home 解决就不用 System，保持系统层最小化
+
+--------------
+
+我会尽量地把更多的配置放在这里，而 *系统配置* 章节
+只会放置一些保障系统正常使用所必须的配置，这样的好处在于:
+
+1. 在首次安装系统的时候，可以少安装很多很多的软件包，这样安装系统的时长不会说长的太过分，也可以尽量减少因为网络问题而造成的报错
+2. 系统和用户分开配置，这样在修改某一块的配置时不用将一整个系统都 reconfighration 一遍，方便多次迭代
+
+--------------
+
+** Main
+
+在这里，我利用了 =Org Mode= 的 =Noweb= 功能
+这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
+引用的语法为 *<<>>** , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
+
+#+NAME: home-configs
+#+begin_src scheme :noweb yes
+(home-environment
+ (packages (append
+            <<desktop-packages-list>>
+            <<terminal-packages-list>>
+            <<devtools-packages-list>>
+            <<user-packages-list>>
+            ))
+
+ (services (append
+            <<user-desktop-services>>
+            <<home-shepherd-services>>
+            <<timer-services>>
+            <<emacs-services>>
+            <<fish-services>>
+            <<modprobe-services>>
+            <<dotfile-services>>
+            <<home-files-services>>
+            <<environment-variable-services>>
+            <<font-services>>
+
+            %base-home-services)))
+#+end_src
+
+** Modules
+
+这些以及下面 =service= 块中的 module 都是为了导入对应变量而使用的，所以必须放置在一个配置文件的最前面
+
+#+NAME: home-modules
+#+begin_src scheme :noweb yes
+(use-modules (gnu)
+             (gnu home)
+             (gnu home services)
+             (guix packages)
+             (gnu services)
+
+             (rosenthal utils file)
+             (rosenthal utils packages))
+
+<<home-services-modules>>
+#+end_src
+
+** Packages
+*** 桌面环境 相关软件包
+
+#+NAME: desktop-packages-list
+#+begin_src scheme
+(cons* (specs->pkgs+out
+        ;; 桌面组件
+        "fuzzel"
+        "mako"
+        "pavucontrol"
+        "swaylock-effects"
+        "awww"
+        "waypaper"
+
+        ;; 字体
+        "font-awesome"
+        "font-google-noto-emoji"
+        "font-maple-font-nf-cn"
+        "font-nerd-font-iosevka"
+
+        ;; 输入法
+        "fcitx5"
+        "fcitx5-lua"
+
+        ;; 工具
+        "cliphist"
+        "dconf-editor"
+        "dex"
+        "file-roller"
+        "libnotify"
+        "setxkbmap"
+        "wl-clipboard"
+        "xprop"
+        "xvfb-run"
+
+        ;; XDG 相关组件
+        "desktop-file-utils"
+        "xdg-dbus-proxy"
+        "xdg-desktop-portal-gtk"
+        "xdg-desktop-portal-wlr"
+        "xdg-user-dirs"
+        "xdg-utils"
+
+        ;; 主题
+        "bibata-cursor-theme"
+        "orchis-theme"
+        "orchis-kde-themes"
+        "papirus-icon-theme"
+
+        ;; QT框架相关
+        "kvantum"
+        "qt5ct"
+        "qt6ct"))
+#+end_src
+
+*** 终端 相关软件包
+
+#+NAME: terminal-packages-list
+#+begin_src scheme
+(cons* (specs->pkgs+out
+        ;; 工具
+        "atuin"
+        "btop"
+        "starship"
+
+        ;; 运行器
+        "just"
+        "maak"
+
+        ;; Tmux 相关
+        "tmux"
+        "tmuxifier"
+        "tmux-xpanes"
+
+        ;; 基于 Rust 的命令行工具替代品
+        "bat"
+        "fd"
+        "ripgrep"
+        "fzf"
+        "lolcat"
+        "zoxide"))
+#+end_src
+
+*** 开发环境 相关软件包
+
+#+NAME: devtools-packages-list
+#+begin_src scheme
+(cons* (specs->pkgs+out
+        ;; 开发环境
+        "ccls"
+        "clang"
+        "godot"
+        "go"
+        "ditaa"
+        "figlet"
+        "graphviz"
+        "jdtls-bin"
+        "node"
+        "openjdk@25"
+        "plantuml"
+        "python"
+        "rust"
+        "zig"
+
+        ;; LSP & Formatter
+        "guile-ares-rs"
+        "guile-lsp-server"
+        "gopls"
+        "nixfmt"
+        "omnisharp"
+        "python-black"
+        "python-jsbeautifier"
+        "python-lsp-black"
+        "python-lsp-server"
+        "rust-analyzer"
+        "sbcl"
+        "shfmt"
+        "yq"
+        "zig-zls"
+
+        ;; 数据库
+        "postgresql"
+        "redis"
+        "sqlite"
+        "sqlitestudio"
+
+        ;; 环境管理
+        "bubblewrap"
+        "direnv"
+        "gradle"
+        "graphviz"
+        "maven"
+        "sdkmanager"
+        "uv"
+
+        ;; AI Agent
+        "cc-switch-bin"
+        "codex"
+        "codex-acp"
+        "crush-bin"
+        "llama-cpp"
+        "oh-my-pi-bin"
+        "opencode-bin"
+        "opencode-desktop-bin"
+        "reasonix-desktop-bin"
+
+        ;; 工具
+        "du-dust"
+        "file"
+        "gitg"
+        "guile-json"
+        "jq"
+        "pandoc"
+        "reuse"
+        "ripgrep"
+        "texlive-scheme-basic"
+        "xxd"
+
+        ;; 版本管理
+        "gitui"
+        "git-credential-keepassxc"
+        "git-filter-repo"
+        "git-lfs"
+        "jujutsu"
+
+        ;; 编辑器
+        "helix"
+        "zed"))
+#+end_src
+
+*** 其他软件包
+
+#+NAME: user-packages-list
+#+begin_src scheme
+(append
+ (cons* (specs->pkgs+out
+         ;; 浏览器 & 插件
+         "ublock-origin-chromium"
+         "ungoogled-chromium-wayland"
+         "zen-browser-bin"
+
+         ;; 解码器
+         "gstreamer"
+         "gst-plugins-base"
+         "gst-plugins-good"
+         "gst-plugins-bad"
+         "gst-plugins-ugly"
+
+         ;; 影音
+         "audacity"
+         "easyeffects"
+         "helvum"
+         "mpv"
+         "nomacs"
+         "obs"
+         "obs-wlrobs"
+         "obs-pipewire-audio-capture"
+         "obs-vkcapture"
+
+         ;; 社交
+         "element-desktop"
+         "notmuch"
+         "telegram-desktop"
+         "zulip-desktop"
+
+                                        ; 生产力工具
+         "amber-pm"
+         "gimp"
+         "filezilla"
+         "keepassxc"
+         "kdeconnect"
+         "motrix-next-bin"
+         "seahorse"
+         "tesseract-ocr"
+         "virt-manager"
+
+         ;; 娱乐
+         "gamemode"
+         "lr2oraja-endlessdream-bin"
+         "luanti-halon"
+         "luanti-mineclonia-csm"
+         "mangohud"
+         "osu-lazer-bin"
+         "steam"
+
+         ;; 实用工具
+         "amule"
+         "freerdp@3"
+         "kanata"
+         "mesa-utils"
+         "pinentry-qt"
+         "winapps")))
+#+end_src
+
+** Servics
+
+这里是所有服务需要的 =modules=
+注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
+
+#+NAME: home-services-modules
+#+begin_src scheme
+(use-modules (gnu home services desktop)
+             (gnu home services dotfiles)
+             (gnu home services fontutils)
+             (gnu home services gnupg)
+             (gnu home services shells)
+             (gnu home services shepherd)
+             (gnu home services niri)
+             (gnu home services sound)
+             (gnu home services xdg)
+             (gnu home services desktop)
+             (gnu home services syncthing)
+             (gnu home services guix)
+
+             (rosenthal home services desktop)
+             (rosenthal home services emacs)
+
+             (rosenthal services desktop)
+             (rosenthal services shellutils))
+
+(use-package-modules java shells)
+
+(use-package-modules emacs
+                     fcitx5
+                     freedesktop
+                     gnome
+                     gnupg
+                     kde-internet
+                     linux
+                     polkit
+                     rust-apps
+                     wm
+                     xdisorg)
+#+end_src
+
+*** modprobe 服务
+
+#+NAME: modprobe-services
+#+begin_src scheme
+(list ;modprobed-db 配置文件
+ (simple-service 'modprobed-db-config home-files-service-type
+                 `((".config/modprobed-db/modprobed-db.conf" ,(plain-file
+                                                               "modprobed-db.conf"
+                                                               "IGNORE=(hid-uclogic wacom)"))))
+
+ ;; modprobed-db 激活时运行（一次性初始化）
+ (simple-service 'modprobed-db-activation home-activation-service-type
+                 #~(begin
+                     (use-modules (guix build utils))
+                     ;; 确保配置目录存在
+                     (mkdir-p (string-append (getenv "HOME") "/.config/modprobed-db"))
+                     ;; 运行 modprobed-db store 记录当前模块
+                     (system** #$(file-append modprobed-db "/bin/modprobed-db") "storesilent"))))
+#+end_src
+
+*** Fish 服务
+
+#+NAME: fish-services
+#+begin_src scheme :noweb yes
+(list (simple-service 'fish-configs
+                      home-xdg-configuration-files-service-type
+                      (list `("fish/conf.d/10-source.fish" ,(computed-substitution-with-inputs
+                                                             "config.fish"
+                                                             (plain-file
+                                                              "10-source.fish"
+                                                              "
+<<fish-cfg>>
+")
+                                                             (specs->pkgs
+                                                              "atuin"
+                                                              "direnv"
+                                                              "fzf"
+                                                              "starship"
+                                                              "zoxide")))))
+
+      (simple-service 'fish-functions
+                      home-xdg-configuration-files-service-type
+                      (list `("fish/functions/fenv.main.fish" ,(file-append
+                                                                fish-foreign-env
+                                                                "/share/fish/functions/fenv.main.fish"))
+                            `("fish/functions/fenv.fish" ,(file-append
+                                                           fish-foreign-env
+                                                           "/share/fish/functions/fenv.fish")))))
+#+end_src
+
+#+NAME: fish-cfg
+#+begin_src fish
+status is-interactive
+and begin
+
+$$bin/atuin$$ init fish | source
+$$bin/direnv$$ hook fish | source
+$$bin/fzf$$ --fish | source
+$$bin/zoxide$$ init fish | source
+$$bin/starship$$ init fish | source
+enable_transience
+
+end
+#+end_src
+
+*** Emacs 服务
+这个服务可以做到两件事：
+
+1. 利用 ~emacs --fg-daemon~ 来开启一个 emacs 服务
+2. 将这下面的所有包放到一个只有 emacs 能够访问的专属 profile 中
+
+#+NAME: emacs-services
+#+begin_src scheme
+(list (service home-emacs-service-type
+               (home-emacs-configuration
+                (emacs emacs-pgtk)
+                (shepherd-requirement '(graphical-session))
+                (packages (specifications->manifest
+                           '(;; Emacs 核心与基础
+                             "emacs-auto-compile"
+                             "emacs-gcmh"
+                             "emacs-no-littering"
+                             "emacs-pgtk:doc"
+                             "emacs-use-package"
+
+                             ;; 补全与迷你缓冲区
+                             "emacs-cape"
+                             "emacs-consult"
+                             "emacs-consult-dir"
+                             "emacs-corfu"
+                             "emacs-corfu-terminal"
+                             "emacs-embark"
+                             "emacs-marginalia"
+                             "emacs-orderless"
+                             "emacs-vertico"
+                             "emacs-corfu-doc"
+                             "emacs-corfu-doc-terminal"
+                             "emacs-consult-eglot"
+                             "emacs-consult-flycheck"
+
+                             ;; 界面与外观
+                             "emacs-dashboard"
+                             "emacs-doom-modeline"
+                             "emacs-ef-themes"
+                             "emacs-kind-icon"
+                             "emacs-minimap"
+                             "emacs-nerd-icons"
+                             "emacs-pulsar"
+                             "emacs-rainbow-delimiters"
+                             "emacs-spacious-padding"
+                             "emacs-treemacs"
+                             "emacs-treemacs-nerd-icons"
+                             "emacs-ultra-scroll"
+                             "emacs-which-key"
+
+                             ;; 编辑与导航
+                             "emacs-ace-window"
+                             "emacs-avy"
+                             "emacs-diff-hl"
+                             "emacs-dirvish"
+                             "emacs-editorconfig"
+                             "emacs-expand-region"
+                             "emacs-helpful"
+                             "emacs-indent-bars"
+                             "emacs-keymap-popup"
+                             "emacs-multiple-cursors"
+                             "emacs-origami"
+                             "emacs-origami-ts"
+                             "emacs-symbol-overlay"
+                             "emacs-wgrep"
+                             "emacs-with-editor"
+                             "emacs-crux"
+                             "emacs-smartparens"
+                             "emacs-ws-butler"
+                             "emacs-eldoc-box"
+                             "emacs-vundo"
+                             "emacs-goto-chg"
+
+                             ;; 开发工具
+                             "emacs-agent-shell"
+                             "emacs-apheleia"
+                             "emacs-eglot"
+                             "emacs-eglot-x"
+                             "emacs-envrc"
+                             "emacs-flycheck"
+                             "emacs-posframe"
+                             "emacs-vterm"
+                             "emacs-dape"
+
+                             ;; 编程语言支持
+                             "emacs-arei"
+                             "emacs-fish-mode"
+                             "emacs-fish-completion"
+                             "emacs-helm-fish-completion"
+                             "emacs-gdscript-mode"
+                             "emacs-json-mode"
+                             "emacs-kdl-mode"
+                             "emacs-kotlin-mode"
+                             "emacs-markdown-mode"
+                             "emacs-nix-mode"
+                             "emacs-rust-mode"
+                             "emacs-sly"
+                             "emacs-typescript-mode"
+                             "emacs-web-mode"
+                             "emacs-yaml"
+                             "emacs-yaml-mode"
+                             "emacs-yasnippet"
+                             "emacs-yasnippet-snippets"
+                             "emacs-zig-mode"
+
+                             ;; 版本控制与项目管理
+                             "emacs-git-messenger"
+                             "emacs-git-timemachine"
+                             "emacs-magit"
+                             "emacs-magit-todos"
+                             "emacs-projectile"
+                             "emacs-forge"
+                             "emacs-git-modes"
+                             "emacs-magit-delta"
+                             "emacs-consult-projectile"
+
+                             ;; Org Mode 生态
+                             "emacs-deft"
+                             "emacs-htmlize"
+                             "emacs-olivetti"
+                             "emacs-org"
+                             "emacs-org-appear"
+                             "emacs-org-modern"
+                             "emacs-org-roam"
+                             "emacs-ox-gfm"
+
+                             ;; 应用工具
+                             "emacs-calfw"
+                             "emacs-elfeed"
+                             "emacs-ement"
+                             "emacs-notmuch"
+                             "emacs-pdf-tools"
+                             "emacs-telega"
+
+                             ;; Tree-sitter
+                             "tree-sitter"
+                             "tree-sitter-bash"
+                             "tree-sitter-c"
+                             "tree-sitter-cpp"
+                             "tree-sitter-css"
+                             "tree-sitter-dockerfile"
+                             "tree-sitter-gdscript"
+                             "tree-sitter-go"
+                             "tree-sitter-html"
+                             "tree-sitter-java"
+                             "tree-sitter-java-properties"
+                             "tree-sitter-javascript"
+                             "tree-sitter-json"
+                             "tree-sitter-kdl"
+                             "tree-sitter-nix"
+                             "tree-sitter-python"
+                             "tree-sitter-rust"
+                             "tree-sitter-typescript"))))))
+#+end_src
+
+*** 桌面常用软件的相关服务
+**** 全局服务
+#+NAME: user-desktop-services
+#+begin_src scheme :noweb yes
+<<default-applications>>
+<<waybar-desktop-services>>
+
+(list (service home-dbus-service-type)
+                                        ; (service home-noctalia-shell-service-type)
+      (service home-pipewire-service-type)
+      (service home-syncthing-service-type)
+
+      (service home-darkman-service-type
+               (home-darkman-configuration
+                (latitude 31.2304)
+                (longitude 121.4737)
+                (use-geoclue #f)
+                (dbus-server #t)
+                (portal #t)))
+
+      (service home-graphical-session-service-type
+	             (home-graphical-session-configuration
+	              (wayland? #t)
+	              (x11? #t)))
+
+      (service home-fcitx5-service-type
+               (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
+                                          (input-method-editors (list fcitx5-rime))
+                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
+#+end_src
+
+**** 默认应用程序关联
+#+name: default-applications
+#+begin_src scheme
+(list (simple-service 'default-applications
+                      home-xdg-mime-applications-service-type
+                      (home-xdg-mime-applications-configuration
+                       (default
+                         '(;; 浏览器
+                           ("x-scheme-handler/http" . "zen.desktop")
+                           ("x-scheme-handler/https" . "zen.desktop")
+                           ("x-scheme-handler/about" . "zen.desktop")
+                           ("x-scheme-handler/chrome" . "zen.desktop")
+                           ("x-scheme-handler/unknown" . "zen.desktop")
+                           ("text/html" . "zen.desktop")
+                           ("application/xhtml+xml" . "zen.desktop")
+                           ;; 文件管理器
+                           ("inode/directory" . "thunar.desktop")
+                           ;; 图片查看
+                           ("image/png" . "org.nomacs.ImageLounge.desktop")
+                           ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
+                           ("image/gif" . "org.nomacs.ImageLounge.desktop")
+                           ("image/webp" . "org.nomacs.ImageLounge.desktop")
+                           ("image/bmp" . "org.nomacs.ImageLounge.desktop")
+                           ("image/tiff" . "org.nomacs.ImageLounge.desktop")
+                           ("image/svg+xml" . "org.nomacs.ImageLounge.desktop")
+                           ("image/x-icon" . "org.nomacs.ImageLounge.desktop")
+                           ;; 图片编辑
+                           ("image/x-xcf" . "gimp.desktop")
+                           ;; 音视频
+                           ("video/mp4" . "mpv.desktop")
+                           ("video/webm" . "mpv.desktop")
+                           ("video/x-matroska" . "mpv.desktop")
+                           ("video/x-msvideo" . "mpv.desktop")
+                           ("video/x-flv" . "mpv.desktop")
+                           ("video/quicktime" . "mpv.desktop")
+                           ("audio/mpeg" . "mpv.desktop")
+                           ("audio/ogg" . "mpv.desktop")
+                           ("audio/flac" . "mpv.desktop")
+                           ("audio/wav" . "mpv.desktop")
+                           ("audio/aac" . "mpv.desktop")
+                           ("audio/x-m4a" . "mpv.desktop")
+                           ;; 文本/代码编辑
+                           ("text/plain" . "emacsclient.desktop")
+                           ("text/markdown" . "emacsclient.desktop")
+                           ("text/x-scheme" . "emacsclient.desktop")
+                           ("text/x-emacs-lisp" . "emacsclient.desktop")
+                           ("text/csv" . "emacsclient.desktop")
+                           ("text/css" . "emacsclient.desktop")
+                           ("application/json" . "emacsclient.desktop")
+                           ("application/xml" . "emacsclient.desktop")
+                           ("application/yaml" . "emacsclient.desktop")
+                           ("application/toml" . "emacsclient.desktop")
+                           ;; 开发相关
+                           ("application/x-shellscript" . "emacsclient.desktop")
+                           ("application/x-desktop" . "emacsclient.desktop")
+                           ("text/x-csrc" . "emacsclient.desktop")
+                           ("text/x-chdr" . "emacsclient.desktop")
+                           ("text/x-c++src" . "emacsclient.desktop")
+                           ("text/x-c++hdr" . "emacsclient.desktop")
+                           ("text/x-java" . "emacsclient.desktop")
+                           ("text/x-python" . "emacsclient.desktop")
+                           ("text/x-rust" . "emacsclient.desktop")
+                           ;; PDF
+                           ("application/pdf" . "emacsclient.desktop")
+                           ;; KeePassXC 密码库
+                           ("application/x-keepass2" . "org.keepassxc.KeePassXC.desktop")
+                           ;; 压缩包
+                           ("application/zip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-tar" . "org.gnome.FileRoller.desktop")
+                           ("application/gzip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-xz" . "org.gnome.FileRoller.desktop")
+                           ("application/x-bzip2" . "org.gnome.FileRoller.desktop")
+                           ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
+                           ("application/x-rar-compressed" . "org.gnome.FileRoller.desktop")
+                           ;; 邮件
+                           ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
+                           ;; 即时通讯
+                           ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
+                           ;; 密钥管理
+                           ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
+#+end_src
+
+**** ~Waybar~ 体系桌面服务
+#+NAME: waybar-desktop-services
+#+begin_src scheme
+(list (service home-mako-service-type)
+      (service home-polkit-gnome-service-type)
+      (service home-waybar-service-type))
+#+end_src
+
+*** 软件自启动
+
+这里利用 *scheme** 的 =lambda= 函数来包装了一个列表;
+
+这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容。
+
+这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作。
+
+#+NAME: home-shepherd-services
+#+begin_src scheme
+(let* ((make-shepherd-service
+        (lambda* (pkg path requirement)
+                 (shepherd-service (provision (list (string->symbol (package-name pkg))))
+                                   (requirement requirement)
+                                   (start #~(lambda args
+                                              ((make-forkexec-constructor
+                                                (list #$(file-append pkg path))
+                                                #:environment-variables (environ)
+                                                #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
+                                                                          #$(package-name pkg) ".log")))
+                                              args))
+                                   (stop #~(make-kill-destructor))
+                                   (respawn? #t)))))
+  (list (simple-service 'essential-desktop-services home-shepherd-service-type
+                        (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
+                              (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
+                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(graphical-session))
+                              (make-shepherd-service xdg-desktop-portal-wlr "/libexec/xdg-desktop-portal-wlr" '(graphical-session))))))
+#+end_src
+
+*** 计时器服务
+
+#+NAME: timer-services
+#+begin_src scheme
+(list (simple-service 'auto-update home-shepherd-service-type
+                      (list
+                       ;; 用于自动更新 flatpak 用户安装的软件包
+                       (shepherd-timer '(flatpak-user-update)
+                                       #~(calendar-event #:hours '(18)
+                                                         #:minutes '(0))
+                                       #~("/run/current-system/profile/bin/flatpak"
+                                          "update" "--user" "-y")
+                                       #:requirement '(dbus)))))
+#+end_src
+
+*** dotfiles 管理相关服务
+**** 主要的一些内容
+
+#+NAME: dotfile-services
+#+begin_src scheme
+(list (service home-dotfiles-service-type
+               (home-dotfiles-configuration
+                (directories '("../dotfiles/enable"))
+                (layout 'stow)
+                (packages '("agents"
+                            "desktop"
+                            "desktop-suite"
+                            "emacs"
+                            "system"
+                            "terminal"
+                            "utilities"))
+                (excluded '(".*~"
+                            ".agents"
+                            ".*\\.swp"
+                            "\\.git"
+                            "\\.gitignore"
+                            "\\.github"
+                            "LICENSE"
+                            "AGENTS\\.md"
+                            "README\\.md"
+                            "bun\\.lock"
+                            "uv\\.lock"
+                            "\\.venv($|/.*)"
+                            "\\.mypy_cache($|/.*)"
+                            "__pycache__($|/.*)"))))
+
+                                        ; (simple-service 'prism-jdks home-files-service-type
+                                        ;                 (map (lambda (jdk)
+                                        ;                        (list (in-vicinity
+                                        ;                               ".local/share/PrismLauncher/java/"
+                                        ;                               (package-version jdk)) jdk))
+                                        ;                      (list openjdk25 openjdk21 openjdk17)))
+
+      (service home-xdg-configuration-files-service-type
+               `(("gdb/gdbinit" ,%default-gdbinit)
+                 ("nano/nanorc" ,%default-nanorc))))
+#+end_src
+
+**** 区别对待某些配置文件
+
+有一些软件会需要在其配置文件内写入某个二进制的具体位置，此时就可以使用由
+*rosenthal** 提供的 =computed-substitution-with-inputs= 函数
+
+用法为：
+
+1. 在需要的配置文件内以 =$$bin/foo$$= 的形式来写你所需要写入的二进制路径
+2. 在 =specs->pkgs= 参数中写入能够提供这些二进制的软件包
+
+#+NAME: home-files-services
+#+begin_src scheme
+(list (service home-files-service-type
+               `((".guile" ,%default-dotguile)
+                 (".Xdefaults" ,%default-xdefaults)
+                 (".config/qt5ct/qss/rounded.qss" ,(local-file
+                                                    "../source/files/rounded.qss"))
+                 (".config/qt6ct/qss/rounded.qss" ,(local-file
+                                                    "../source/files/rounded.qss"))
+
+                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
+                                                "zed.json"
+                                                (local-file
+                                                 "../source/files/zed.json")
+                                                (specs->pkgs
+                                                 "ccls"
+                                                 "clang"
+                                                 "go"
+                                                 "gopls"
+                                                 "guile-lsp-server"
+                                                 "jdtls-bin"
+                                                 "maven"
+                                                 "nixfmt"
+                                                 "node"
+                                                 "omnisharp"
+                                                 "python-black"
+                                                 "python-jsbeautifier"
+                                                 "python-lsp-black"
+                                                 "python-lsp-server"
+                                                 "rust"
+                                                 "rust-analyzer"
+                                                 "shfmt"
+                                                 "yq"
+                                                 "zig"
+                                                 "zig-zls"))))))
+#+end_src
+
+*** 环境变量
+
+#+NAME: 环境变量
+
+**** 软件相关的环境变量
+
+#+NAME: extend-environment-variables
+#+begin_src scheme
+'(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
+  ("BROWSER" . "zen")
+  ("EDITOR" . "hx")
+  ("FREERDP_ASKPASS" . "1")
+  ("GUIX_PROFILE" . "$HOME/.guix-profile")
+  ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
+  ("LIBVIRT_DEFAULT_URI" . "qemu:///system")
+  ("QS_ICON_THEME" . "Papirus-Dark")
+  ("QT_QPA_PLATFORMTHEME" . "qt5ct")
+
+  ;; Wayland support.
+  ("GDK_BACKEND" . "wayland")
+  ("_JAVA_AWT_WM_NONREPARENTING" . "1")
+  ("MOZ_ENABLE_WAYLAND" . "1")
+  ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1"))
+#+end_src
+
+**** 为了让软件尽量遵守XDG规范而提供的变量
+
+#+NAME: xdg-basedir-env-vars
+#+begin_src scheme
+'(;; bash
+  ("HISTFILE" . "$XDG_STATE_HOME/bash/history")
+  ;; claude-code
+  ("CLAUDE_CONFIG_DIR" . "$XDG_CONFIG_HOME/claude")
+  ;; codex
+  ("CODEX_HOME" . "$XDG_CONFIG_HOME/codex")
+  ;; docker
+  ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
+  ;; gdb
+  ("GDBHISTFILE" . "$XDG_STATE_HOME/gdb/history")
+  ;; gnupg
+  ("GNUPGHOME" . "$XDG_DATA_HOME/gnupg")
+  ;; go
+  ("GOMODCACHE" . "$XDG_CACHE_HOME/go/mod")
+  ("GOPATH" . "$XDG_DATA_HOME/go")
+  ;; gradle
+  ("GRADLE_USER_HOME" . "$XDG_DATA_HOME/gradle")
+  ;; guile
+  ("GUILE_HISTORY" . "$XDG_STATE_HOME/guile/history")
+  ;; luanti
+  ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
+  ;; node
+  ("NPM_CONFIG_USERCONFIG" . "$XDG_CONFIG_HOME/npm/npmrc")
+  ;; nvidia-driver
+  ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
+  ;; password-store
+  ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
+  ;; pi-agent
+  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
+  ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
+  ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
+  ;; python
+  ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
+  ;; rust
+  ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
+  ;; sqlite
+  ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
+  ;; tmuxifier
+  ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts"))
+#+end_src
+
+**** 引用以上的所有变量，并在这里放一些多行的环境变量
+
+#+NAME: environment-variable-services
+#+begin_src scheme :noweb yes
+(list (simple-service 'environment-variables
+                      home-environment-variables-service-type
+                      (append
+                       <<extend-environment-variables>>
+                       <<xdg-basedir-env-vars>>
+                       `(("QT_PLUGIN_PATH" unquote
+                          (string-append
+                           "/run/current-system/profile/lib/qt5/plugins:"
+                           "/run/current-system/profile/lib/qt6/plugins:"
+                           "$HOME/.guix-home/profile/lib/qt5/plugins:"
+                           "$HOME/.guix-home/profile/lib/qt6/plugins"))
+                         ("CHROMIUM_FLAGS" unquote
+                          (string-append
+                           "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
+                           "--ozone-platform-hint=wayland "
+                           "--enable-wayland-ime "
+                           "--wayland-text-input-version=3"))
+                         ("_JAVA_OPTIONS" unquote
+                          (string-append
+                           "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
+                           "-Dawt.toolkit.name=WLToolkit"))
+                         ("XDG_DATA_DIRS" unquote
+                          (string-append
+                           "$HOME/.local/share/flatpak/exports/share:"
+                           "/var/lib/flatpak/exports/share:"
+                           "$HOME/.nix-profile/share:"
+                           "/nix/var/nix/profiles/default/share:"
+                           "$XDG_DATA_DIRS"))))))
+#+end_src
+
+** Font
+字体相关配置
+
+#+NAME: font-services
+#+begin_src scheme
+(list (simple-service 'extend-fontconfig home-fontconfig-service-type
+                      (list "~/.local/share/fonts"
+                            "/run/current-system/profile/share/fonts"
+                            (let ((emoji "Noto Color Emoji"))
+                              `((alias (family "sans-serif")
+                                       (prefer (family ,"Sarasa Gothic SC")
+                                               (family ,emoji)))
+                                (alias (family "serif")
+                                       (prefer (family ,"Sarasa Gothic SC")
+                                               (family ,emoji)))
+                                (alias (family "monospace")
+                                       (prefer (family ,"Maple Mono NF CN")
+                                               (family ,"Sarasa Mono SC")
+                                               (family ,emoji)))
+                                (alias (family "emoji")
+                                       (prefer (family ,emoji))))))))
+#+end_src

@@ -4,7 +4,7 @@
       "command": "context-mode"
     },
     "kb-mcp": {
-      "command": "~/.config/agents/mcp-servers/kb-mcp/run.sh"
+      "command": "/home/brokenshine/.config/agents/mcp-servers/kb-mcp/run.sh"
     }
   }
 }

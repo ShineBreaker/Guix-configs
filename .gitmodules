@@ -2,22 +2,23 @@
 #
 # SPDX-License-Identifier: MIT
 
-[submodule ".emacs.d"]
-	path = dotfiles/mutable/emacs/.config/emacs
+[submodule "dotfiles/enable/emacs/.config/emacs"]
+	path = dotfiles/enable/emacs/.config/emacs
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
 
-[submodule "rime-ice"]
-	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
+[submodule "dotfiles/enable/utilities/.local/share/fcitx5/rime"]
+	path = dotfiles/enable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
-[submodule "dotfiles/immutable/agents/.config/agents/skillsets/pi-skills"]
-	path = dotfiles/immutable/agents/.config/agents/skillsets/pi-skills
+
+[submodule "dotfiles/enable/agents/.config/agents/skillsets/pi-skills"]
+	path = dotfiles/enable/agents/.config/agents/skillsets/pi-skills
 	url = https://github.com/badlogic/pi-skills
-[submodule "dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills"]
-	path = dotfiles/immutable/agents/.config/agents/skillsets/emacs-skills
+[submodule "dotfiles/enable/agents/.config/agents/skillsets/emacs-skills"]
+	path = dotfiles/enable/agents/.config/agents/skillsets/emacs-skills
 	url = https://github.com/xenodium/emacs-skills
-[submodule "dotfiles/immutable/agents/.config/agents/skillsets/agent-skills"]
-	path = dotfiles/immutable/agents/.config/agents/skillsets/agent-skills
+[submodule "dotfiles/enable/agents/.config/agents/skillsets/agent-skills"]
+	path = dotfiles/enable/agents/.config/agents/skillsets/agent-skills
 	url = https://github.com/addyosmani/agent-skills
-[submodule "dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills"]
-	path = dotfiles/immutable/agents/.config/agents/skillsets/mattpocock-skills
+[submodule "dotfiles/enable/agents/.config/agents/skillsets/mattpocock-skills"]
+	path = dotfiles/enable/agents/.config/agents/skillsets/mattpocock-skills
 	url = https://github.com/mattpocock/skills
