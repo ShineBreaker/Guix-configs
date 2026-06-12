@@ -89,7 +89,6 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 ### MCP（`mcp.json`）
 
 - `context-mode` — 直接调用 `context-mode` 命令
-- `kb-mcp` — 走 `~/.config/agents/mcp-servers/kb-mcp/run.sh`
 
 ### 本地扩展
 
@@ -149,11 +148,10 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 ├── context/                # 全局上下文（global-context 扩展读取）
 │   ├── 01-language.md
 │   └── 02-ultilities.md
-├── mcp-servers/
-│   └── kb-mcp/             # 知识库 MCP（12 个 kb_* 工具）
 ├── skills/                 # 本仓库自维护 skills
 │   ├── emacs-config/
 │   ├── kb-curator/
+│   ├── knowledge-base/
 │   ├── pack-guix/
 │   └── self-improving/
 └── skillsets/              # 上游 skills 集（均为 git submodule）
@@ -162,8 +160,6 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
     ├── mattpocock-skills/  # github.com/mattpocock/skills
     └── pi-skills/          # github.com/badlogic/pi-skills
 ```
-
-> **迁移说明**：原 `knowledge-base` skill 已删除，KB 操作整体迁出为 `kb-mcp` MCP 工具集。`pi-mcp-adapter` 在 mcp.json 中注册 `kb-mcp` 即在所有 MCP 客户端里自动发现 12 个 `kb_*` 工具。CLI 仍保留 `kb` 子命令作为兜底。
 
 ## 修改约束
 

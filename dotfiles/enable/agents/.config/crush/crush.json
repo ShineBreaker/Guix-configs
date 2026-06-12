@@ -372,11 +372,6 @@
       "type": "stdio",
       "command": "~/.config/crush/bin/mcp-server-sequential-thinking",
       "timeout": 30
-    },
-    "kb-mcp": {
-      "type": "stdio",
-      "command": "~/.config/agents/mcp-servers/kb-mcp/run.sh",
-      "timeout": 30
     }
   }
 }

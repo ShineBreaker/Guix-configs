@@ -19,10 +19,10 @@ echo "注意: X 工具的 --flag 参数在 v2.0 后行为变更" | kb inbox
 
 适合：尚未整理的想法、待后续分类的注意点。
 
-### 2. kb_mcp_kb_update_card --append — 补充已有卡片
+### 2. kb update --append — 补充已有卡片
 
 ```bash
-kb_mcp_kb_update_card <id> --append-to "关键发现" --append-text "补充: 新发现的边界条件"
+kb update <id> --append-to "关键发现" --append-text "补充: 新发现的边界条件"
 ```
 
 适合：已有卡片需要补充新信息。
