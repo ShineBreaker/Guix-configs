@@ -48,15 +48,15 @@ tmp/config.scm
 
 ## 任务路由表
 
-| 任务类型            | 优先读取位置                                  | 子目录指引                                       |
-| ------------------- | --------------------------------------------- | ------------------------------------------------ |
-| System + Home 配置  | `source/config.org` 头部的 Agent 专区         | `source/AGENTS.md`                               |
-| **Emacs 配置**      | `dotfiles/enable/emacs/.config/emacs/AGENTS.md` | 子模块 `codeberg.org/BrokenShine/.emacs.d`       |
-| **Agent 资产**      | `dotfiles/enable/agents/.config/pi`、`crush`、`agents/` | `dotfiles/enable/agents/AGENTS.md` |
-| 全局变量            | `source/information.scm`                      | —                                                |
-| 频道定义            | `source/channel.scm`                          | `source/channel.lock` 锁定版本                   |
-| 静态模板            | `source/files/`                               | `source/AGENTS.md` 中 files/ 模板系统一节        |
-| 各类 dotfiles       | `dotfiles/enable/<app>/`                      | 各子目录 AGENTS.md                               |
+| 任务类型           | 优先读取位置                                            | 子目录指引                                 |
+| ------------------ | ------------------------------------------------------- | ------------------------------------------ |
+| System + Home 配置 | `source/config.org` 头部的 Agent 专区                   | `source/AGENTS.md`                         |
+| **Emacs 配置**     | `dotfiles/enable/emacs/.config/emacs/AGENTS.md`         | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
+| **Agent 资产**     | `dotfiles/enable/agents/.config/pi`、`crush`、`agents/` | `dotfiles/enable/agents/AGENTS.md`         |
+| 全局变量           | `source/information.scm`                                | —                                          |
+| 频道定义           | `source/channel.scm`                                    | `source/channel.lock` 锁定版本             |
+| 静态模板           | `source/files/`                                         | `source/AGENTS.md` 中 files/ 模板系统一节  |
+| 各类 dotfiles      | `dotfiles/enable/<app>/`                                | 各子目录 AGENTS.md                         |
 
 <critical>
 **路由硬约束**：
@@ -88,23 +88,23 @@ tmp/config.scm
 
 子模块位于 `enable/` 下，路径如下，**不要直接编辑子模块内容**：
 
-| 路径                                                                          | 上游                                                  |
-| ----------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `dotfiles/enable/emacs/.config/emacs`                                         | `codeberg.org/BrokenShine/.emacs.d`                   |
-| `dotfiles/enable/utilities/.local/share/fcitx5/rime`                          | `github.com/iDvel/rime-ice`                          |
-| `dotfiles/enable/agents/.config/agents/skillsets/agent-skills`                | `github.com/addyosmani/agent-skills`                  |
-| `dotfiles/enable/agents/.config/agents/skillsets/emacs-skills`                | `github.com/xenodium/emacs-skills`                    |
-| `dotfiles/enable/agents/.config/agents/skillsets/mattpocock-skills`           | `github.com/mattpocock/skills`                        |
-| `dotfiles/enable/agents/.config/agents/skillsets/pi-skills`                   | `github.com/badlogic/pi-skills`                       |
+| 路径                                                                | 上游                                 |
+| ------------------------------------------------------------------- | ------------------------------------ |
+| `dotfiles/enable/emacs/.config/emacs`                               | `codeberg.org/BrokenShine/.emacs.d`  |
+| `dotfiles/enable/utilities/.local/share/fcitx5/rime`                | `github.com/iDvel/rime-ice`          |
+| `dotfiles/enable/agents/.config/agents/skillsets/agent-skills`      | `github.com/addyosmani/agent-skills` |
+| `dotfiles/enable/agents/.config/agents/skillsets/emacs-skills`      | `github.com/xenodium/emacs-skills`   |
+| `dotfiles/enable/agents/.config/agents/skillsets/mattpocock-skills` | `github.com/mattpocock/skills`       |
+| `dotfiles/enable/agents/.config/agents/skillsets/pi-skills`         | `github.com/badlogic/pi-skills`      |
 
 ## 频道架构
 
-| 频道      | 分支    | 职责            | URL（以 `source/channel.scm` 为准）                |
-| --------- | ------- | --------------- | --------------------------------------------------- |
-| `guix`    | master  | 官方包集合      | `https://git.guix.gnu.org/guix.git`                 |
-| `jeans`   | main    | 个人自定义包    | `https://github.com/ShineBreaker/jeans.git`         |
-| `nonguix` | master  | 非自由软件      | `https://gitlab.com/nonguix/nonguix`                |
-| `rosenthal` | trunk | WM 增强组件     | `https://codeberg.org/hako/rosenthal.git`           |
+| 频道        | 分支   | 职责         | URL（以 `source/channel.scm` 为准）         |
+| ----------- | ------ | ------------ | ------------------------------------------- |
+| `guix`      | master | 官方包集合   | `https://git.guix.gnu.org/guix.git`         |
+| `jeans`     | main   | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git` |
+| `nonguix`   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`        |
+| `rosenthal` | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`   |
 
 - 频道版本锁定在 `source/channel.lock`，由 `maak update` 自动生成并 `git commit -S`
 - **不要手动编辑 `channel.lock`**（重生成会覆盖你的改动）
@@ -125,9 +125,9 @@ tmp/config.scm
 
 | 变量                 | 类型   | 说明                                                            |
 | -------------------- | ------ | --------------------------------------------------------------- |
-| `username`           | string | 主用户名（`"brokenshine"`）                                    |
-| `fixed-machine-id`   | string | 基于 `username` 的 MD5（保证跨机器一致）                       |
-| `%data-dirs`         | list   | 需要 bind-mount 持久化的用户子目录（XDG + dotfile 状态）       |
+| `username`           | string | 主用户名（`"brokenshine"`）                                     |
+| `fixed-machine-id`   | string | 基于 `username` 的 MD5（保证跨机器一致）                        |
+| `%data-dirs`         | list   | 需要 bind-mount 持久化的用户子目录（XDG + dotfile 状态）        |
 | `%btrfs-subvol-data` | string | 数据分区子卷路径（`"DATA/Share"`）                              |
 | `%btrfs-subvolumes`  | alist  | Btrfs 子卷 → 挂载点映射                                         |
 | `guix-channels`      | list   | 从 `channel.lock` 加载的频道列表（`(include "./channel.lock")`) |
@@ -176,3 +176,5 @@ maak check                    # 最快：仅括号平衡检查
 - 不要绕过 `maak` 直接调 `guix system reconfigure`（频道不会被锁）
 - 修改 `dotfiles/` 内容后必须 `maak rebuild`，否则不会生效
 - 子模块内容由上游维护，本仓 `AGENTS.md` 与 `README.md` 只在子模块顶层维护，子模块内不再重复本仓指引
+- **禁止 AI agent 自行运行 `maak rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。修改 dotfiles 或 source 后，告知用户手动运行验证
+- **pi 扩展必须是单文件 `index.ts`**：Guix Home stow 逐文件软链接到 `/gnu/store/`，导致 jiti 的相对路径 `import` 断裂。多模块扩展必须拼合为单个 `index.ts`
