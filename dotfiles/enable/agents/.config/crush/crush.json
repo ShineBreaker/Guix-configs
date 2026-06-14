@@ -84,7 +84,12 @@
       "base_url": "https://open.bigmodel.cn/api/coding/paas/v4",
       "disable": false,
       "id": "Zhipu",
-      "models": [],
+      "models": [{
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
+        "context_window": 1000000,
+        "default_max_tokens": 65536
+      }],
       "name": "Zhipu Provider",
       "type": "openai"
     }

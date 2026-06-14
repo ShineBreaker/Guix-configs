@@ -1,6 +1,6 @@
 {
   "defaultProvider": "zai",
-  "defaultModel": "glm-5.1",
+  "defaultModel": "glm-5.2",
   "npmCommand": [
     "pnpm"
   ],
@@ -52,7 +52,7 @@
     "defaultTier": "pro",
     "tiers": {
       "ultra": {
-        "model": "zai/GLM-5.1",
+        "model": "zai/GLM-5.2",
         "fallback": [
           "minimax-cn/MiniMax-M3"
         ]
