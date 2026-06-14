@@ -1430,8 +1430,8 @@ daemon 模式下:
 
 **重构**:
 
-1. 创建 `lisp/` 子目录
-2. 按功能拆:`lisp/ui.el`, `lisp/editor.el`, `lisp/lang.el`
+1. 在你的配置目录下创建 `lisp/` 子目录
+2. 按功能拆成你自己的 `lisp/ui.el`、`lisp/editor.el`、`lisp/lang.el`
 3. 把 `use-package` 块按主题移入对应文件
 4. `init.el` 只做 `require`
 
@@ -1480,7 +1480,7 @@ daemon 模式下:
 
 **重构**:
 
-1. 抽 `lisp/heavy.el` 包含 magit/org/corfu
+1. 抽一个你自己的 `lisp/heavy.el`（示例文件名）包含 magit/org/corfu
 2. 启动后 `run-with-idle-timer 2` 加载
 
 ```elisp

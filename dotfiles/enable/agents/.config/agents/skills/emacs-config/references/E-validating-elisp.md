@@ -1,4 +1,4 @@
-# E — 验证 Elisp:三件套模板与反模式
+# 验证 Elisp:三件套模板与反模式
 
 > 写完 Emacs Lisp 配置后,**第一件事**是调工具验证,不是数括号。
 > Emacs 自带 `check-parens` / `byte-compile-file` / ert,都比 LLM 数 `(`/`)`

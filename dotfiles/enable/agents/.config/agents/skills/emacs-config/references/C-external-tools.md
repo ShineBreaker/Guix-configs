@@ -1,4 +1,4 @@
-# C. Emacs 与外部工具集成的最佳范式
+# Emacs 与外部工具集成的最佳范式
 
 > 研究范围: doomemacs (doom3) + spacemacs
 > 重点: 集成模式, 不是工具本身的文档

@@ -7,7 +7,7 @@
 
 ✅ 适合: 用户提交了 `init.el` / `early-init.el` / `config.org` / `use-package` 块,希望改善性能、可维护性、键位可发现性。
 
-❌ 不适合: 用户刚装 Emacs 还没有 init.el(直接看 `references/startup-and-packages.md` §2-§3)。
+❌ 不适合: 用户刚装 Emacs 还没有 init.el(直接看 `references/A-startup-and-packages.md` §2-§3)。
 
 ## 1. 总览: 三步走
 
@@ -177,7 +177,7 @@ find $EMACSDIR -name '*.el' -exec wc -l {} + | tail -1
 - [ ] modeline 段命名一致(prefix `+`)
 - [ ] 有 `+which-key/replacements` 或等价机制(为不友好的命令名提供人类可读描述)
 
-详细清单见 `references/keybinds-ui-workspaces.md` §3 (which-key 12 条)+ §8 (可发现性陷阱)。
+详细清单见 `references/B-keybinds-ui-workspaces.md` §3 (which-key 12 条)+ §8 (可发现性陷阱)。
 
 ### 3.4 外部工具集成审查
 
@@ -201,7 +201,7 @@ find $EMACSDIR -name '*.el' -exec wc -l {} + | tail -1
 - [ ] magit 不跟 `global-auto-revert-mode` 混用(doom 用 `+magit-auto-revert`)
 - [ ] 退出时清掉 `*vterm*` buffer(doom `vterm-kill-buffer-on-exit`)
 
-详细清单见 `references/external-tools.md` §11 (工具/场景对应表)+ §12 (降级策略)。
+详细清单见 `references/C-external-tools.md` §11 (工具/场景对应表)+ §12 (降级策略)。
 
 ### 3.5 模块化结构审查
 
@@ -217,13 +217,13 @@ find $EMACSDIR -name '*.el' -exec wc -l {} + | tail -1
 **必查项**:
 
 - [ ] 有 `lisp/` 子目录按主题拆分(UI / Editor / Lang / Tools / Term)
-- [ ] 同一主题下,多个相关包集中在一个文件(如 `lisp/completion.el` 包含 vertico + consult + embark)
+- [ ] 同一主题下,多个相关包集中到一个文件(例如你自己的 `lisp/completion.el` 可集中 vertico + consult + embark)
 - [ ] 命名一致: `xxx-config.el` 放配置,`xxx-pkg.el` 放包声明
 - [ ] 文件头部用 `;;; xxx.el --- <用途> -*- lexical-binding: t -*-` 标准化
 - [ ] 第三方贡献清晰(从 doom module 或 spacemacs layer 学)
 - [ ] 当包数 > 80 时,考虑迁移到 doom / spacemacs / chemacs2 风格
 
-详细决策表见 `references/modules-and-architecture.md` §8。
+详细决策表见 `references/D-modules-and-architecture.md` §8。
 
 ---
 
@@ -275,7 +275,7 @@ find $EMACSDIR -name '*.el' -exec wc -l {} + | tail -1
 **操作**:
 
 1. 用 `M-x use-package-report` 找"启动期就加载但其实可以懒"的包
-2. 给每个"启动期加载"的包加 `:defer t` 或合适的触发器(详见 `references/startup-and-packages.md` §4)
+2. 给每个"启动期加载"的包加 `:defer t` 或合适的触发器(详见 `references/A-startup-and-packages.md` §4)
 3. 把所有 `use-package` 的 `:init` 块里**调用包内函数**的代码挪到 `:config`(重要!否则 lazy 失效)
 4. 用 `benchmark-init` 对比重构前后的启动时间
 
@@ -354,7 +354,7 @@ $EMACSDIR/
 
 **操作**:
 
-1. `doom-load-packages-incrementally` 范式: idle 时分批加载,见 `references/startup-and-packages.md` §6
+1. `doom-load-packages-incrementally` 范式: idle 时分批加载,见 `references/A-startup-and-packages.md` §6
 2. `doom-first-input-hook` 范式: 把 which-key / vertico / modeline 全部挂这里
 3. 字节编译: 排除不会改的包,加速加载
 4. 用 `gcmh-mode`(由 doom 提供)管理 GC 阈值
@@ -415,7 +415,7 @@ cd ~/.emacs.d && git checkout . && git clean -fd
 1. 引入分类标题:`spacemacs/declare-prefix "..." "Window"` 等,或 doom `map! :prefix "SPC w" :desc "Window"`
 2. 拆分 leader-key:`SPC` 全局,`,` 备用,`SPC m` localleader
 3. which-key 优化:`which-key-min-display-lines 6`、`which-key-side-window-slot -10`、`which-key-add-key-based-replacements`
-4. 详情见 `references/keybinds-ui-workspaces.md` §3
+4. 详情见 `references/B-keybinds-ui-workspaces.md` §3
 
 ---
 
@@ -440,7 +440,7 @@ cd ~/.emacs.d && git checkout . && git clean -fd
 - `assets/use-package-patterns.el` — 12 种 use-package 模式
 - `assets/lsp-server-degradation.el` — 外部依赖缺失时的降级
 - `assets/doom-module-template/` — doom 风格自建模块骨架
-- `references/startup-and-packages.md` — 启动+包管理深度参考
-- `references/keybinds-ui-workspaces.md` — 键位+UI 深度参考
-- `references/external-tools.md` — 外部工具集成深度参考
-- `references/modules-and-architecture.md` — 模块化架构对比
+- `references/A-startup-and-packages.md` — 启动+包管理深度参考
+- `references/B-keybinds-ui-workspaces.md` — 键位+UI 深度参考
+- `references/C-external-tools.md` — 外部工具集成深度参考
+- `references/D-modules-and-architecture.md` — 模块化架构对比

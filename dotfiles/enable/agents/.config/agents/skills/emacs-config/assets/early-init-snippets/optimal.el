@@ -6,7 +6,7 @@
 ;; **警告**: 不要盲目复制。GC 推迟、file-name-handler-alist 清空等都有副作用,
 ;; 必须配套 gcmh-mode 或等价的"idle 时复位 GC 阈值"机制,否则会卡顿。
 ;;
-;; 配套: 参考 references/startup-and-packages.md §2-§3
+;; 配套: 参考 references/A-startup-and-packages.md §2-§3
 
 ;;; Code:
 

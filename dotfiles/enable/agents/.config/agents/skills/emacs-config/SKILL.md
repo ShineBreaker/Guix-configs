@@ -29,26 +29,26 @@ metadata:
 你想做什么?
 
 ├─ 1. 从零开始写 init.el
-│   └─ §2(early-init 模板), §6(vanilla use-package 范式)
+│   └─ early-init 模板(`A-startup-and-packages.md`), vanilla use-package 范式(`D-modules-and-architecture.md`)
 │
 ├─ 2. init.el 启动变慢(<1s → 5s+)
-│   └─ §9(瓶颈定位), §2(early-init 优化), §5-§6(doom first-* + incremental)
+│   └─ 瓶颈定位 + early-init 优化 + doom first-* hook + incremental loader(`A-startup-and-packages.md`)
 │
 ├─ 3. init.el 超过 500 行,开始混乱
-│   └─ §8(包数量 → 架构), §9(vanilla → 模块化迁移 6 步)
+│   └─ 包数量 → 架构选择 + 模块化迁移 6 步(`D-modules-and-architecture.md`)
 │
 ├─ 4. 我想用 doom / spacemacs 风格
-│   ├─ 性能优先 + 愿意学 doom 宏体系 → doom(§4, §10)
-│   ├─ 想要现成 layer 生态(700+ 主题 layer) + 声明式 dotspacemacs → spacemacs(§5, §10)
+│   ├─ 性能优先 + 愿意学 doom 宏体系 → doom(`D-modules-and-architecture.md`)
+│   ├─ 想要现成 layer 生态(700+ 主题 layer) + 声明式 dotspacemacs → spacemacs(`D-modules-and-architecture.md`)
 │   ├─ 想完全控制 + 不引入大依赖 + init.el 已 500+ 行 → 自建模块化(`assets/doom-module-template/`)
 │   ├─ 多个 Emacs 配置要快速切换(工作/个人/旧) → chemacs2(profiles 切换)
 │   └─ 想要 literate config(文档即配置) → org-babel tangle
 │
 ├─ 5. 100+ 包,键位/which-key 一团乱
-│   └─ §3(which-key 12 条), §8(可发现性陷阱)
+│   └─ which-key 12 条 + 可发现性陷阱(`B-keybinds-ui-workspaces.md`)
 │
 ├─ 6. 想用外部工具加速 Emacs 内部
-│   └─ §2(exec-path), §3(ripgrep), §5(LSP), §11(工具/场景对应表)
+│   └─ exec-path / ripgrep / LSP + 工具-场景对应表(`C-external-tools.md`)
 │
 ├─ 7. 审计一份现有 Emacs 配置
     │   └─ `references/audit-and-refactor.md` + `assets/audit-checklist.md`(40 条)
@@ -57,20 +57,7 @@ metadata:
     └─ `references/E-validating-elisp.md` + `scripts/` (4 个 shell 包装)
 ```
 
-§N 编号对应见底部 references 清单。审计流程详见 `references/audit-and-refactor.md`(现状评估 / 五维审查 / 重构路径 / 验证回归)。
-
-### §N 章节索引
-
-| §N  | 内容                     | 文件                            |
-| --- | ------------------------ | ------------------------------- |
-| §2  | early-init.el 优化       | `A-startup-and-packages.md`     |
-| §3  | which-key 集成           | `B-keybinds-ui-workspaces.md`   |
-| §5  | Doom "等待时机"三 hook   | `A-startup-and-packages.md`     |
-| §6  | Vanilla use-package 范式 | `D-modules-and-architecture.md` |
-| §8  | 包数量 → 架构选择        | `D-modules-and-architecture.md` |
-| §9  | 瓶颈定位方法论           | `A-startup-and-packages.md`     |
-| §10 | Doom vs Spacemacs 对比表 | `A-startup-and-packages.md`     |
-| §11 | 工具/场景对应表          | `C-external-tools.md`           |
+审计流程详见 `references/audit-and-refactor.md`(现状评估 / 五维审查 / 重构路径 / 验证回归)。
 
 ## 反模式速查(高频 6 条;完整 11 条见 `references/audit-and-refactor.md`)
 
@@ -104,7 +91,7 @@ ENV 变量: `EMACS_CONFIG_LOAD_PATH` / `EMACS_TEST_DIR` / `EMACSCLIENT_EXECUTABL
 
 ## 参考文档 (references/)
 
-§N 编号对应:
+各文件范围:
 
 | 引用前缀 | 文件                            | 范围                                  |
 | -------- | ------------------------------- | ------------------------------------- |
