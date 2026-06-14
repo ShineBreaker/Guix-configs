@@ -37,7 +37,7 @@
     ## Chat
     discord
     feishu
-    # qq
+    qq
     wechat
     wemeet
   ];

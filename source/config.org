@@ -28,6 +28,77 @@
 <<home-modules>>
 #+end_src
 
+* 配置文件骨架
+
+在这里，我利用了 =Org Mode= 的 =Noweb= 功能
+这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
+引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
+
+#+NAME: main
+#+begin_src scheme :tangle ../tmp/config.scm :noweb yes
+<<modules>>
+
+<<filesystem-defines>>
+
+(define %home
+  (home-environment
+   (packages (append
+              <<desktop-packages-list>>
+              <<terminal-packages-list>>
+              <<devtools-packages-list>>
+              <<user-packages-list>>
+              ))
+
+   (services (append
+              <<user-desktop-services>>
+              <<home-shepherd-services>>
+              <<timer-services>>
+              <<emacs-services>>
+              <<fish-services>>
+              <<modprobe-services>>
+              <<dotfile-services>>
+              <<home-files-services>>
+              <<environment-variable-services>>
+              <<font-services>>
+
+              %base-home-services))))
+
+(operating-system
+ <<kernel-configs>>
+ <<information-configs>>
+ <<users-config>>
+ <<bootloader-configs>>
+
+ (mapped-devices %mapped-devices-config)
+ (file-systems %file-systems-config)
+ (swap-devices %swap-devices)
+
+ (packages
+  (append
+   <<packages-list>>
+   %base-packages)
+  )
+
+ (services
+  (append
+   <<basic-services>>
+   <<udev-services>>
+   <<networking-services>>
+   <<virtualization-services>>
+   <<kernel-services>>
+   <<nix-services>>
+   <<filesystem-services>>
+   <<desktop-services>>
+   (list (service guix-home-service-type
+                  `((,username ,%home))))))
+
+ (skeletons
+  <<skeletons-config>>
+  )
+
+ (name-service-switch %mdns-host-lookup-nss))
+#+end_src
+
 * 系统配置
 
 --------------
@@ -70,55 +141,6 @@
 + 用户级工具、桌面环境配置、个人偏好设置应放入本文件下方的 *用户配置* 章节。
 
 --------------
-** Main
-
-在这里，我利用了 =Org Mode= 的 =Noweb= 功能
-这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
-引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
-
-#+NAME: main
-#+begin_src scheme :tangle ../tmp/config.scm :noweb yes
-<<modules>>
-
-<<filesystem-defines>>
-
-(operating-system
- <<kernel-configs>>
- <<information-configs>>
- <<users-config>>
- <<bootloader-configs>>
-
- (mapped-devices %mapped-devices-config)
- (file-systems %file-systems-config)
- (swap-devices %swap-devices)
-
- (packages
-  (append
-   <<packages-list>>
-   %base-packages)
-  )
-
- (services
-  (append
-   <<basic-services>>
-   <<udev-services>>
-   <<networking-services>>
-   <<virtualization-services>>
-   <<kernel-services>>
-   <<nix-services>>
-   <<filesystem-services>>
-   <<desktop-services>>
-   (list (service guix-home-service-type
-            `((,username ,
-               <<home-configs>>
-               ))))))
-
- (skeletons
-  <<skeletons-config>>
-  )
-
- (name-service-switch %mdns-host-lookup-nss))
-#+end_src
 
 ** Modules
 *** System
@@ -584,12 +606,12 @@
                              (start #~(lambda _
                                         ;; 先断开已有 WiFi 连接，再激活热点
                                         (zero? (system* "nmcli" "device" "disconnect"
-                                                         "wlp0s20f3"))
+                                                        "wlp0s20f3"))
                                         (zero? (system* "nmcli" "connection" "up"
-                                                         "auto-hotspot"))))
+                                                        "auto-hotspot"))))
                              (stop #~(lambda _
                                        (zero? (system* "nmcli" "connection" "down"
-                                                        "auto-hotspot"))))
+                                                       "auto-hotspot"))))
                              (one-shot? #t)
                              (auto-start? #t)
                              (respawn? #f)))))
@@ -1043,37 +1065,6 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
 
 --------------
 
-** Main
-
-在这里，我利用了 =Org Mode= 的 =Noweb= 功能
-这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
-引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
-
-#+NAME: home-configs
-#+begin_src scheme :noweb yes
-(home-environment
- (packages (append
-            <<desktop-packages-list>>
-            <<terminal-packages-list>>
-            <<devtools-packages-list>>
-            <<user-packages-list>>
-            ))
-
- (services (append
-            <<user-desktop-services>>
-            <<home-shepherd-services>>
-            <<timer-services>>
-            <<emacs-services>>
-            <<fish-services>>
-            <<modprobe-services>>
-            <<dotfile-services>>
-            <<home-files-services>>
-            <<environment-variable-services>>
-            <<font-services>>
-
-            %base-home-services)))
-#+end_src
-
 ** Modules
 
 这些以及下面 =service= 块中的 module 都是为了导入对应变量而使用的，所以必须放置在一个配置文件的最前面
@@ -1236,7 +1227,7 @@ source/files/ 目录存放静态模板文件，用于需要 computed-substitutio
         "oh-my-pi-bin"
         "opencode-bin"
         "opencode-desktop-bin"
-        ; "reasonix-desktop-bin"
+                                        ; "reasonix-desktop-bin"
 
         ;; 工具
         "du-dust"
