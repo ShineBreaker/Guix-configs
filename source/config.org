@@ -64,40 +64,40 @@
               %base-home-services))))
 
 (define %system
-(operating-system
- <<kernel-configs>>
- <<information-configs>>
- <<users-config>>
- <<bootloader-configs>>
+  (operating-system
+   <<kernel-configs>>
+   <<information-configs>>
+   <<users-config>>
+   <<bootloader-configs>>
 
- (mapped-devices %mapped-devices-config)
- (file-systems %file-systems-config)
- (swap-devices %swap-devices)
+   (mapped-devices %mapped-devices-config)
+   (file-systems %file-systems-config)
+   (swap-devices %swap-devices)
 
- (packages
-  (append
-   <<packages-list>>
-   %base-packages)
-  )
+   (packages
+    (append
+     <<packages-list>>
+     %base-packages)
+    )
 
- (services
-  (append
-   <<basic-services>>
-   <<udev-services>>
-   <<networking-services>>
-   <<virtualization-services>>
-   <<kernel-services>>
-   <<nix-services>>
-   <<filesystem-services>>
-   <<desktop-services>>
-   (list (service guix-home-service-type
-                  `((,username ,%home))))))
+   (services
+    (append
+     <<basic-services>>
+     <<udev-services>>
+     <<networking-services>>
+     <<virtualization-services>>
+     <<kernel-services>>
+     <<nix-services>>
+     <<filesystem-services>>
+     <<desktop-services>>
+     (list (service guix-home-service-type
+                    `((,username ,%home))))))
 
- (skeletons
-  <<skeletons-config>>
-  )
+   (skeletons
+    <<skeletons-config>>
+    )
 
- (name-service-switch %mdns-host-lookup-nss)))
+   (name-service-switch %mdns-host-lookup-nss)))
 #+end_src
 
 * 系统配置

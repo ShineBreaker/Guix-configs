@@ -75,16 +75,16 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 
 ### 关键 settings 字段
 
-| 字段 | 用途 |
-| --- | --- |
-| `defaultProvider` / `defaultModel` | 默认 zai / glm-5.1 |
-| `compaction` | 上下文压缩策略 |
-| `retry` | 失败重试（baseDelay / maxRetries / maxRetryDelayMs） |
-| `packages` | npm 扩展清单 |
-| `skills` | skills 加载路径（`~/.config/agents/skills/*`） |
-| `powerline` | 状态栏配置（preset: default, path.mode: abbreviated） |
-| `atelier` | subagent 运行配置（poll / panePrefix / keepResults / timeoutMs / maxTasks / maxConcurrency / tier 路由） |
-| `globalContext` | 全局上下文注入（contextDir、extraFiles、字节预算） |
+| 字段                               | 用途                                                                                                     |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `defaultProvider` / `defaultModel` | 默认 zai / glm-5.1                                                                                       |
+| `compaction`                       | 上下文压缩策略                                                                                           |
+| `retry`                            | 失败重试（baseDelay / maxRetries / maxRetryDelayMs）                                                     |
+| `packages`                         | npm 扩展清单                                                                                             |
+| `skills`                           | skills 加载路径（`~/.config/agents/skills/*`）                                                           |
+| `powerline`                        | 状态栏配置（preset: default, path.mode: abbreviated）                                                    |
+| `atelier`                          | subagent 运行配置（poll / panePrefix / keepResults / timeoutMs / maxTasks / maxConcurrency / tier 路由） |
+| `globalContext`                    | 全局上下文注入（contextDir、extraFiles、字节预算）                                                       |
 
 ### MCP（`mcp.json`）
 
@@ -92,13 +92,13 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 
 ### 本地扩展
 
-| 扩展 | Hook / 作用 |
-| --- | --- |
-| `atelier/` | 注册 `subagent` 工具与 `/agentname` 快捷命令、plan-review-gate、worker/planner 上下文动态注入 |
-| `custom-shortcuts/` | `onTerminalInput` 拦截 Shift+Tab 改为 `/plannotator` |
-| `global-context/` | `before_agent_start` 注入 contextDir + extraFiles，受字节预算限制 |
-| `default-timeout/` | 默认超时调整 |
-| `kb-hooks/` | 知识库相关 hook |
+| 扩展                | Hook / 作用                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------- |
+| `atelier/`          | 注册 `subagent` 工具与 `/agentname` 快捷命令、plan-review-gate、worker/planner 上下文动态注入 |
+| `custom-shortcuts/` | `onTerminalInput` 拦截 Shift+Tab 改为 `/plannotator`                                          |
+| `global-context/`   | `before_agent_start` 注入 contextDir + extraFiles，受字节预算限制                             |
+| `default-timeout/`  | 默认超时调整                                                                                  |
+| `kb-hooks/`         | 知识库相关 hook                                                                               |
 
 ### Loop 体系（loopctl）
 
@@ -116,21 +116,21 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 
 ### 启动脚本（`.local/bin/`）
 
-| 脚本 | 作用 |
-| --- | --- |
-| `pi` | Pi Agent 主入口（设置 PI_* 环境变量 + 按需 pnpm install + exec） |
-| `pi-acp` | 自动 commit 推送工具 |
-| `pi-update` | Pi Agent 更新脚本 |
-| `kb`、`kb-agent` | 知识库 CLI |
-| `loopctl`、`loop_lib` | 循环框架 |
+| 脚本                  | 作用                                                               |
+| --------------------- | ------------------------------------------------------------------ |
+| `pi`                  | Pi Agent 主入口（设置 PI\_\* 环境变量 + 按需 pnpm install + exec） |
+| `pi-acp`              | 自动 commit 推送工具                                               |
+| `pi-update`           | Pi Agent 更新脚本                                                  |
+| `kb`、`kb-agent`      | 知识库 CLI                                                         |
+| `loopctl`、`loop_lib` | 循环框架                                                           |
 
 ### 辅助脚本（`.local/share/pi/scripts/`）
 
-| 脚本 | 作用 |
-| --- | --- |
-| `subagent-wrapper.sh` | subagent 执行包装：解析 frontmatter、构造 pi 命令、捕获输出 |
-| `extract-pi-result.py` | Pi JSON 流解析器 |
-| `read-crush-key.sh` | 从 crush.json 读取 provider API key |
+| 脚本                   | 作用                                                        |
+| ---------------------- | ----------------------------------------------------------- |
+| `subagent-wrapper.sh`  | subagent 执行包装：解析 frontmatter、构造 pi 命令、捕获输出 |
+| `extract-pi-result.py` | Pi JSON 流解析器                                            |
+| `read-crush-key.sh`    | 从 crush.json 读取 provider API key                         |
 
 ### Crush（`.config/crush/`）
 
@@ -163,6 +163,7 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 
 ## 修改约束
 
+- **pi 扩展必须是单文件 `index.ts`**：Guix Home stow 逐文件软链接到 `/gnu/store/`，导致 jiti 的相对路径 `import` 断裂。
 - **修改 `agents/*.md`**：直接编辑；frontmatter 中的 `model` 必须使用已配置或 Pi 内置可用的 provider/model；保留 scout/researcher 的 deepseek 路由
 - **修改 `agents/*.md` 的 `thinking`**：仅对确认支持 thinking 的模型设置
 - **修改 `settings.json` / `mcp.json` / `models.json`**：必须同步更新本文件相应表格

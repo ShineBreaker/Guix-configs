@@ -81,7 +81,7 @@ tmp/config.scm
    (excluded '("\\.agents/workfile($|/.*)" ...))))
 ```
 
-- 实际机制：构建时把目录软链接到 `$HOME`，运行期视同只读（用户不要手动 `~/.config/...` 改东西）
+- 实际机制：构建时把文件 _复制到 `/gnu/store/<hash>-home-dotfiles-...`_（只读副本），再从 store 软链接到 `$HOME`。**`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `maak home` 重建软链接才生效
 - **不存在顶层 `immutable/` + `mutable/` 拆分**；旧结构已并入 `enable/<app>/`
 - 不在 `excluded` 列表内的新增文件会在下次 `maak rebuild` 后自动出现在 `~`
 - `disable/` 内目录不再部署，仅保留参考
@@ -151,9 +151,18 @@ maak check                    # 最快：仅括号平衡检查
 
 ## 风险点
 
+> **⚠ 改源 ≠ 生效（验证必读）**：`~/.config/<app>/...` 指向 `/gnu/store` 只读副本，**不是仓库源**。改 dotfiles 源后直接 restart service + 验证，读到的是旧代码（假阳性）。
+
+**验证流程**（三步缺一不可）：
+
+1. 改 dotfiles 源
+2. `maak home`（重建 store 软链接）
+3. **grep 部署位置**（`~/.config/<app>/...`，非仓库源）确认同步，再 restart service + 验证行为
+
+> 快速判断同步：`md5sum <源文件>` vs `md5sum ~/.config/<app>/<同路径文件>`，或看软链接 target 的 store hash 是否变化。
+
 - 不要手动编辑 `tmp/` 下任何产物
 - 不要绕过 `maak` 直接调 `guix system reconfigure`（频道不会被锁）
-- 修改 `dotfiles/` 内容后必须 `maak home`，否则不会生效
+- 修改 `dotfiles/` 内容后必须 `maak home`，否则不会生效（机制 + 验证流程见本节顶部警告框）
 - **禁止 AI agent 自行运行 `maak rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
   修改 dotfiles 或 source 后，只能够运行 `maak home` ，该指令会在下次重启前暂时应用，待确认功能正常后再提醒用户运行 `maak rebuild` 固化配置即可。
-- **pi 扩展必须是单文件 `index.ts`**：Guix Home stow 逐文件软链接到 `/gnu/store/`，导致 jiti 的相对路径 `import` 断裂。
