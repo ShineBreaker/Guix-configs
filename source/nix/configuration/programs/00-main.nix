@@ -1,5 +1,5 @@
-{ pkgs, ... }:
+{ ... }:
 
 {
-  imports = [ ./Develop/code.nix ];
+  imports = [ ./code.nix ./hermes-agent.nix ];
 }

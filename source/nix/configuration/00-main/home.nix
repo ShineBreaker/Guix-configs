@@ -1,10 +1,7 @@
 { ... }:
 
 {
-  imports = [
-    ./packages.nix
-    ./nix.nix
-  ];
+  imports = [ ./packages.nix ../programs/nix.nix ];
 
   targets.genericLinux.enable = true;
 

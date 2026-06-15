@@ -8,28 +8,33 @@
       url = "github:nix-community/home-manager";
       inputs = { nixpkgs.follows = "nixpkgs"; };
     };
+
+    hermes-agent = {
+      url = "github:NousResearch/hermes-agent";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, ... }@inputs:
+  outputs = { self, nixpkgs, hermes-agent, ... }@inputs:
 
     (let
       system = "x86_64-linux";
       username = "brokenshine";
 
     in {
-      homeConfigurations.Guix = inputs.home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.${system};
+      homeConfigurations.Guix =
+        inputs.home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.${system};
 
-        modules = [
-          ./configuration/00-main/home.nix
-        ];
+          modules = [ ./configuration/00-main/home.nix ];
 
-        extraSpecialArgs = { inherit inputs; };
-      };
+          extraSpecialArgs = { inherit inputs; };
+        };
 
       # Aliases for home-manager compatibility
       homeConfigurations."${username}" = self.homeConfigurations.Guix;
       homeConfigurations."${username}@localhost" = self.homeConfigurations.Guix;
-      homeConfigurations."${username}@$(hostname -s)" = self.homeConfigurations.Guix;
+      homeConfigurations."${username}@$(hostname -s)" =
+        self.homeConfigurations.Guix;
     });
 }
