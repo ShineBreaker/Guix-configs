@@ -96,7 +96,7 @@ source/files/
             └── config.yaml
 ```
 
-- **路径注入语法**：`&&bin/foo&&`（替换为对应 Guix 包的绝对路径）
+- **路径注入语法**：`$$bin/foo$$`（双美元符，zed.json 中实际使用；替换为对应 Guix 包的绝对路径）
 - 注入机制：rosenthal 频道的 `computed-substitution-with-inputs`（参见 `config.org` 的「区别对待某些配置文件」段）
 - **不要把无需路径注入的 dotfile 放进 `source/files/`**；纯配置文件请放 `dotfiles/enable/<app>/`
 

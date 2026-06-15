@@ -112,35 +112,46 @@
 
 ** Agent 指引
 
-系统配置修改指引。
+系统配置（operating-system）修改指引。
 
-本区域为 AI 助手提供 Home 配置的上下文和决策规则。阅读此区域后再进行修改。
+本区域为 AI 助手提供系统层职责的上下文和决策规则。阅读此区域后再进行修改。
+本段对应 tangle 后 tmp/config.scm 中的 *%system* 段（参见顶部 * 配置文件骨架）。
 
 *** 系统配置职责：
-+ 定义 operating-system 的组成部分，包括引导器、文件系统、内核、用户、系统包、系统服务、skeleton 文件。
-+ 这些组件共同确保系统能够正常启动和运行。
++ 定义 operating-system 的组成部分：引导器、文件系统（FileSystems / mapped-devices / swap-devices）、内核与固件、用户与 skeleton、系统包、系统服务（networking / desktop / nix / udev / virtualization / kernel / filesystem）。
++ 这些组件共同确保系统能够正常启动和运行；其中 *(service guix-home-service-type ...)* 块会在同一次 reconfigure 中激活本文件下方 *用户配置* 章节里的 home-environment。
 
 *** 关键组件说明：
-+ 引导器使用 Limine（由 rosenthal 频道提供），替代传统的 GRUB。
-+ 文件系统采用 LUKS 加密 + Btrfs 子卷 + tmpfs 混合架构，实现根目录重启清空但数据持久化的效果。
-+ 内核使用 主线内核（由 nonguix 频道提供），用于现代设备的正常启动。
++ *引导器*：使用 Limine（由 rosenthal 频道的 (rosenthal bootloader limine) 模块提供），替代传统 GRUB；配置见 *Bootloader* 段。
++ *文件系统*：LUKS 加密 + Btrfs 子卷 + tmpfs 混合架构。根目录 tmpfs（重启后清空），Btrfs 子卷持久化 /var/lib、/gnu、/var/cache、/boot 等；/data 分区通过 bind-mount 映射到用户目录。
++ *内核*：nonguix 频道的主线 linux（当前绑定 linux-7.0），通过 (nongnu packages linux) 导入；现代设备的固件由 (nongnu packages firmware) 提供。内核参数 / sysctl 调优 / pam-limits 集中在 *Kernel* 段，频繁迭代时不必触动 system-packages 即可生效。
++ *服务编排*：按职责拆分到 basic-services / udev-services / networking-services / virtualization-services / kernel-services / nix-services / filesystem-services / desktop-services 八个块。新增系统服务时先判断归属再插入。
 
 *** 文件系统架构：
-+ 根目录使用 tmpfs（重启后清空），Btrfs 子卷用于持久化数据，/data 分区通过 bind-mount 挂载到用户目录。
-+ 具体的子卷映射和持久化目录定义在 information.scm 中，包括 %btrfs-subvolumes 和 %data-dirs 变量。
++ 持久化子卷和 bind-mount 路径的 *具体映射* 在 source/information.scm 中：%btrfs-subvolumes（Btrfs 子卷 → 挂载点）、%btrfs-subvol-data（/data 分区根子卷）、%data-dirs（/data 内部需要 bind 到 ~ 的子目录）。
++ /home 本身是 tmpfs，启动时由 *filesystem-services* 段从 DATA/Home/Guix 子卷重建，并按 %data-dirs 列表 bind-mount 持久化目录。
++ 新增持久化目录必须 *同时* 在 information.scm 的 %data-dirs 和 %btrfs-subvolumes 中登记（视情况选其一），并在 *FileSystems* 段正确接入 %bind-mounts / %persist-filesystem。
 
 *** source/files/ 用途：
-+ 存放静态配置模板文件，如 nftables.conf 防火墙规则。
-+ 这些文件通过 local-file 引用到系统配置中，在系统构建时被复制到目标位置。
++ 存放需要路径注入或作为模板部署的静态文件（具体部署机制见下方 *用户配置* → 「区别对待某些配置文件」段）。当前实际包含：
+  - nftables.conf — 防火墙规则，由本段 *网络* 块通过 (local-file) 引用
+  - rounded.qss — Qt5/Qt6 圆角样式，由 *用户配置* 段 home-files-service-type 部署到 ~/.config/{qt5ct,qt6ct}/qss/
+  - zed.json — Zed 编辑器配置，使用 $$bin/foo$$ 标记替换为 LSP / 格式化器绝对路径
+  - skel/.config/mihomo/config.yaml — mihomo 代理配置，作为骨架文件
++ 这些文件 *不* 通过 home-dotfiles-service-type 部署，而是通过 home-files-service-type + (local-file) / (computed-substitution-with-inputs) 直接写入。
 
 *** 修改约定：
-+ 系统层变更优先修改本文件中的对应代码块。生成的 tmp/system-config.scm 是自动导出的结果，不应手动编辑。
-+ 全局变量如用户名、Btrfs 配置等统一在 information.scm 中定义，本文件通过 (load "../source/information.scm") 加载。
++ 系统层的修改会触发整次 reconfigure。建议在 *用户配置* 章节里能解决的事情不要上升到本段（参考下方 *决策规则*）。
++ 全局变量如 username、%btrfs-subvolumes、%data-dirs 统一在 source/information.scm 中定义；本文件头部通过 (load "../source/information.scm") 加载，**不要**在 %system 内重复定义。
++ 本文件 *只* 是 Org 源；构建时由 maak.scm 中的 tangle 导出为 tmp/config.scm（单一输出文件，system + home Noweb 拼合）。**不要**手动编辑 tmp/config.scm；**不要**新建第二个 .org 配置文件。
++ 修改后先用 ~maak check~ 跑括号检查，再用 ~MAAK_DRY_RUN=1 maak rebuild~ 做完整 dry-run。AI agent **不要**自行执行 ~maak rebuild~ / ~guix system reconfigure~（需要 sudo 提权，会卡住 CLI），由用户手动执行；纯 dotfiles / Home 改动可用 ~maak home~ 验证。
 
 *** 决策规则：
-+ 本文件仅放置系统级必需内容，包括引导配置、内核设置、文件系统挂载、系统服务定义。
-+ 用户级工具、桌面环境配置、个人偏好设置应放入本文件下方的 *用户配置* 章节。
-
++ 本段仅放置系统级必需内容：引导配置、内核 / 固件、文件系统挂载、用户账户、必要的系统服务。
++ 用户级工具、桌面环境、用户 shepherd / timer 服务、个人 dotfiles 全部放入本文件下方的 *用户配置* 章节；dotfiles 内容本身放在 dotfiles/enable/<app>/ 下，**不** 放在本文件或 source/files/ 中。
++ 跨段引用（如「系统段需要某包才能让 home 段正常使用」）在 home-packages 段重复声明即可；不要为了 cross-segment 协调而新增系统段代码块。
++ 不要恢复旧的 source/configs/system-config.org / home-config.org 拆分（已合并）。
++ 临时调试（加个包、换个服务）可本地修改 + ~maak home~ 快速验证；最终固化前用 ~maak check~ + dry-run 确认无误，再由用户执行 ~maak rebuild~。
 --------------
 
 ** Modules
@@ -1020,49 +1031,68 @@ echo "InitialPassword!" | guix shell openssl -+ openssl passwd -6 -stdin
 *** Home 配置修改指引
 
 本区域为 AI 助手提供 Home 配置的上下文和决策规则。阅读此区域后再进行修改。
+本段对应 tangle 后 tmp/config.scm 中的 =%home= 段（参见顶部 * 配置文件骨架*），与上方 =%system= 段在同一次 reconfigure 中激活。
 
-Home 配置定义 home-environment 的组成部分，包括：
-+ 用户级包集合：桌面环境、Emacs、终端、开发工具、其他软件包
-+ Home 服务定义：shepherd 服务、计时器、环境变量、字体配置
-+ dotfiles 服务配置：通过 home-dotfiles-service-type 分发配置文件
+Home 配置定义 home-environment 的组成部分，按职责拆分到以下代码块（参见顶部 =#<<home-modules>>= 处的 =<<xxx>>= 引用）：
++ *包集合*（packages）：=desktop-packages-list= / =terminal-packages-list= / =devtools-packages-list= / =user-packages-list=，与 =%base-home-services= 合并后传入 home-environment。
++ *Home 服务*（services）：=user-desktop-services= / =home-shepherd-services= / =timer-services= / =emacs-services= / =fish-services= / =modprobe-services= / =dotfile-services= / =home-files-services= / =environment-variable-services= / =font-services=。
++ *环境变量*：=extend-environment-variables=（软件专属）+ =xdg-basedir-env-vars=（重定向 HISTFILE / GOMODCACHE / SQLITE_HISTORY 等到 XDG-* 目录）。
++ *dotfiles 服务*：=dotfile-services= 块通过 home-dotfiles-service-type 把 dotfiles/enable/<app>/ stow 到 =$HOME=。
 
 *** dotfiles 管理规则
 
-dotfiles 目录采用 Stow 规范组织，结构为 dotfiles/<app>/.config/<app>/。
-这些配置通过 home-dotfiles-service-type 服务自动链接到用户家目录。
-不要随意移动已有目录，保持现有结构稳定。
+dotfiles 目录统一放在 =dotfiles/enable/<app>/= 下，通过 home-dotfiles-service-type（layout 'stow）软链接到 =$HOME=，**不要**直接编辑已部署位置（=~/.config/...=）。当前 7 个 dotfile 子目录与 =dotfile-services= 块的 packages 列表保持一一对应：
++ =agents/= — Agent 资产（pi / crush / codex 等 settings + skillsets 子模块，详见 dotfiles/enable/agents/AGENTS.md）
++ =desktop/= — 桌面功能性配置（niri、autostart、xdg-desktop-portal、xfce4 helpers、pcmanfm-qt；详见 dotfiles/enable/desktop/AGENTS.md）
++ =desktop-suite/= — WM 主题套件（darkman、waybar、fuzzel、mako、foot themes、swayidle / swaylock、niri WM 主题快捷键；详见 dotfiles/enable/desktop-suite/AGENTS.md）
++ =emacs/= — Emacs 配置（独立 git 子模块 codeberg.org/BrokenShine/.emacs.d，详见 dotfiles/enable/emacs/.config/emacs/AGENTS.md）
++ =system/= — 系统级用户态（containers / pipewire / xdg user-dirs）
++ =terminal/= — 终端工具链（fish / tmux / foot / btop / starship / broot / fastfetch）
++ =utilities/= — 开发工具（helix / git / kanata / pnpm / winapps / rime / gnupg）
+
+每个子目录结构遵循 *Stow 规范*：目录内的相对路径 = 软链接到 =$HOME= 后的目标路径。例如 =desktop/.config/niri/= → =~/.config/niri/=，*不是* =desktop/.config/desktop/niri/=。**不要**画蛇添足地重复 <app> 段名。
+不要随意移动已有目录；新增目录后必须 *同步* 在 =dotfile-services= 块的 packages 列表中追加目录名。
+
+=home-dotfiles-configuration= 的 excluded 列表会过滤掉 .agents/workfile、.git、.gitignore、.github、LICENSE、AGENTS.md、README.md、bun.lock、uv.lock、.venv、.mypy_cache、__pycache__ 等元数据 / 锁文件 / 临时缓存；不在 excluded 列表的新增文件会在下次 reconfigure 后自动出现在 =$HOME=。
 
 *** 新增应用配置流程
 
 添加新应用配置时，按以下顺序操作：
-1. 在 dotfiles/<app>/ 下创建配置目录，遵循 Stow 规范
-2. 在本文件的包列表中添加应用包（如 desktop-packages-list）
-3. 在 home-dotfiles-configuration 的 packages 中添加目录名
+1. 在 =dotfiles/enable/<app>/= 下创建配置子目录，遵循 Stow 规范（如 =dotfiles/enable/foo/.config/foo/=）
+2. 在本文件的包列表中添加应用包（按性质归入 =desktop-packages-list= / =terminal-packages-list= / =devtools-packages-list= / =user-packages-list= 之一）
+3. 在 =home-dotfiles-configuration= 的 packages 中追加 ="<app>"= 目录名
+4. 纯 dotfiles 改动用 ~maak home~ 验证即可生效；如同时改了 system 段才需 ~maak rebuild~
 
 *** source/files/ 用途
 
-source/files/ 目录存放静态模板文件，用于需要 computed-substitution-with-inputs 注入 Guix 包绝对路径的场景。
-例如 niri.kdl、zed.json 等文件，使用 &&bin/foo&& 语法标记需要替换的二进制路径。
+source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/enable/ 走完全不同的部署路径。区别在于：
++ =dotfiles/enable/<app>/= → =home-dotfiles-service-type=（stow 软链接，*无* 路径注入）
++ =source/files/= → =home-files-service-type=（直接写入，(local-file) + 可选 (computed-substitution-with-inputs) 注入）
+
+当前实际包含的模板：
++ =nftables.conf= — 防火墙规则（系统段 *网络* 块通过 (local-file) 引用）
++ =rounded.qss= — Qt5 / Qt6 圆角样式（同时部署到 qt5ct 和 qt6ct 的 qss 目录）
++ =zed.json= — Zed 编辑器配置，*使用 =$$bin/foo$$= 标记*替换为 LSP / 格式化器 / 调试器的绝对路径
++ =skel/.config/mihomo/config.yaml= — mihomo 代理配置，作为骨架文件
+
+注入机制来自 rosenthal 频道的 =computed-substitution-with-inputs=：在模板内写 =$$bin/foo$$=，再在 (specs->pkgs ...) 参数中列出提供 foo 的包，构建时 Guix 会把 =$$bin/foo$$= 替换为对应包的绝对路径。**注意**：注入语法是 *双美元符 =$$bin/foo$$=*（zed.json 中实际使用），不是 =&&bin/foo&&= 也不是 =$bin/foo$=。新增需要注入的二进制时，先在目标包列表中追加包名，再在模板中插入 =$$bin/...$$= 标记。
+=niri.kdl=（实际是 =dotfiles/enable/desktop/.config/niri/config.kdl=）走的是 dotfiles 软链接路径，*不* 走路径注入（niri 的 KDL 配置里没有需要替换的二进制路径），**不要**把它当作 source/files/ 注入语法的例子。
 
 *** 修改约定
 
-+ 优先修改 dotfile 文件，若需要 Guix Home 管理再修改本文件
-+ 保持现有的 (load ...) 风格和变量命名习惯
-+ 变量名如 %services-config、%packages-list 等保持统一风格
++ 优先修改 dotfile 文件（=dotfiles/enable/<app>/=），需要 Guix Home 介入时再修改本文件
++ 保持现有的 (load ...) 风格和变量命名习惯：变量名以 =%= 前缀、代码块以 =<<ref>>= 引用、定义集中在对应的 *<name>-<role>* 段（如 =filesystem-defines= / =modprobe-services= / =default-applications=）
++ 跨包组与 Emacs 专属 profile：emacs 包独立声明在 =emacs-services= 块的 =specifications->manifest= 中（由 home-emacs-service-type 创建专属 profile），不要混入通用 =desktop-packages-list= 等四个包列表
++ Emacs 新包：必须 *同时* 在 =emacs-services= 块的 =specifications->manifest= 中声明（参考 dotfiles/enable/emacs/.config/emacs/AGENTS.md），emacs 子模块的 init.el 才能用得到
++ AI agent 调试时优先 ~maak home~（不需 sudo），避免不必要的系统级 reconfigure；改完用 ~maak check~ 跑括号检查确认无误
 
 *** 决策规则
 
-+ 若应用已有 dotfile 配置，优先修改对应 dotfile
-+ 新增程序时考虑三处联动：包列表、服务定义、配置文件
-+ 能用 Home 解决就不用 System，保持系统层最小化
-
---------------
-
-我会尽量地把更多的配置放在这里，而 *系统配置* 章节
-只会放置一些保障系统正常使用所必须的配置，这样的好处在于:
-
-1. 在首次安装系统的时候，可以少安装很多很多的软件包，这样安装系统的时长不会说长的太过分，也可以尽量减少因为网络问题而造成的报错
-2. 系统和用户分开配置，这样在修改某一块的配置时不用将一整个系统都 reconfighration 一遍，方便多次迭代
++ 若应用已有 dotfile 配置，优先修改 =dotfiles/enable/<app>/= 中对应文件；本文件 *不* 重复 dotfiles 里的内容
++ 新增程序时考虑三处联动：包列表（四个 packages-list 之一）、服务定义（=home-services-modules= 已覆盖 / 需扩展）、配置文件（dotfiles/ 或 source/files/）
++ 能用 Home 解决就不用 System，保持系统层最小化（与上方 *系统配置* 决策规则一致）
++ 涉及 XDG 规范的 env 变量（如 HISTFILE / GOMODCACHE / SQLITE_HISTORY 等）放到 =xdg-basedir-env-vars= 段，不要散落到多个位置
++ 修改后用 ~maak check~ 跑括号检查，纯 Home 改动可用 ~maak home~ 直接生效；agent **不要**自行执行 ~maak rebuild~（需 sudo，由用户手动执行）
 
 --------------
 
