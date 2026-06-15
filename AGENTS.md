@@ -38,25 +38,24 @@ tmp/config.scm
 - Org 文件使用 Noweb `<<ref>>` 语法拼合代码块为完整 `.scm`
 - 所有 `guix` 命令通过 `guix time-machine --channels=source/channel.lock` 锁定频道版本
 - 单一 `maak rebuild` 完成：tangle → 括号检查 → reconfigure → `guix locate --update`
-- DRY_RUN 时仅 tangle + 括号检查 + `guix system build --dry-run`，不实际写入系统
+- DRY_RUN 时仅 tangle + 括号检查 + `dry-run`，不实际写入系统
 
 ## 工作优先级
 
 1. 先看当前目录是否存在更近的 `AGENTS.md`（`source/`、`dotfiles/enable/<app>/`、emacs 子模块内）
 2. 若 README / 文档与实际文件不一致，以仓库实际结构和源码为准
-3. **禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置。** 所有配置必须改源文件后通过 `maak rebuild` 生效
+3. **禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置。** 所有配置必须改源文件后通过 `maak home` 生效
 
 ## 任务路由表
 
-| 任务类型           | 优先读取位置                                            | 子目录指引                                 |
-| ------------------ | ------------------------------------------------------- | ------------------------------------------ |
-| System + Home 配置 | `source/config.org` 头部的 Agent 专区                   | `source/AGENTS.md`                         |
-| **Emacs 配置**     | `dotfiles/enable/emacs/.config/emacs/AGENTS.md`         | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
-| **Agent 资产**     | `dotfiles/enable/agents/.config/pi`、`crush`、`agents/` | `dotfiles/enable/agents/AGENTS.md`         |
-| 全局变量           | `source/information.scm`                                | —                                          |
-| 频道定义           | `source/channel.scm`                                    | `source/channel.lock` 锁定版本             |
-| 静态模板           | `source/files/`                                         | `source/AGENTS.md` 中 files/ 模板系统一节  |
-| 各类 dotfiles      | `dotfiles/enable/<app>/`                                | 各子目录 AGENTS.md                         |
+| 任务类型           | 优先读取位置                                    | 子目录指引                                 |
+| ------------------ | ----------------------------------------------- | ------------------------------------------ |
+| System + Home 配置 | `source/config.org` 头部的 Agent 专区           | `source/AGENTS.md`                         |
+| **Emacs 配置**     | `dotfiles/enable/emacs/.config/emacs/AGENTS.md` | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
+| 全局变量           | `source/information.scm`                        | —                                          |
+| 频道定义           | `source/channel.scm`                            | `source/channel.lock` 锁定版本             |
+| 静态模板           | `source/files/`                                 | `source/AGENTS.md` 中 files/ 模板系统一节  |
+| 各类 dotfiles      | `dotfiles/enable/<app>/`                        | 各子目录 AGENTS.md                         |
 
 <critical>
 **路由硬约束**：
@@ -65,6 +64,7 @@ tmp/config.scm
 3. **Emacs 修改**：先读 `dotfiles/enable/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
+6. 优先使用 `maak --list` 内可以使用的相关命令
 </critical>
 
 ## dotfiles 部署模型
@@ -132,26 +132,6 @@ tmp/config.scm
 | `%btrfs-subvolumes`  | alist  | Btrfs 子卷 → 挂载点映射                                         |
 | `guix-channels`      | list   | 从 `channel.lock` 加载的频道列表（`(include "./channel.lock")`) |
 
-## maak 命令速查
-
-> **命令名以 `maak --list` 输出为准。** 旧文档提到的 `maak apply` 已重命名为 `maak rebuild`。
-
-```bash
-maak rebuild         # tangle → 括号检查 → system reconfigure → locate --update
-maak check           # 仅括号平衡检查（最轻量，不调 guix）
-maak tangle          # 仅导出 Org 到 tmp/
-maak update          # 更新 channel.lock 并 git commit -S
-maak pull            # guix pull --allow-downgrades --fallback
-maak clean           # 删除所有旧 system / home generations（慎用）
-maak clean-artifacts # 删除仓库内编译产物（__pycache__、*.elc、*.o、*.a、*.so）
-maak gc              # clean + guix gc + 删除旧 EFI（⚠ 直接操作 /boot）
-maak init            # 安装系统到 /mnt（自动提权）
-maak nix             # 应用 Nix home-manager 配置（独立分支）
-maak nix-init        # 初始化 Nix channel 并安装 home-manager
-maak nix-update      # 更新 Nix channel + flake
-maak reuse           # 用 reuse 为所有文件添加 SPDX 版权头
-```
-
 ### 配置验证（DRY_RUN）
 
 修改 `source/config.org` 后，**务必**先 dry-run 验证再实际应用：
@@ -172,9 +152,8 @@ maak check                    # 最快：仅括号平衡检查
 ## 风险点
 
 - 不要手动编辑 `tmp/` 下任何产物
-- 唯一 Org 源是 `source/config.org`，**没有** `system-config.org` / `home-config.org` 之分
 - 不要绕过 `maak` 直接调 `guix system reconfigure`（频道不会被锁）
-- 修改 `dotfiles/` 内容后必须 `maak rebuild`，否则不会生效
-- 子模块内容由上游维护，本仓 `AGENTS.md` 与 `README.md` 只在子模块顶层维护，子模块内不再重复本仓指引
-- **禁止 AI agent 自行运行 `maak rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。修改 dotfiles 或 source 后，告知用户手动运行验证
-- **pi 扩展必须是单文件 `index.ts`**：Guix Home stow 逐文件软链接到 `/gnu/store/`，导致 jiti 的相对路径 `import` 断裂。多模块扩展必须拼合为单个 `index.ts`
+- 修改 `dotfiles/` 内容后必须 `maak home`，否则不会生效
+- **禁止 AI agent 自行运行 `maak rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
+  修改 dotfiles 或 source 后，只能够运行 `maak home` ，该指令会在下次重启前暂时应用，待确认功能正常后再提醒用户运行 `maak rebuild` 固化配置即可。
+- **pi 扩展必须是单文件 `index.ts`**：Guix Home stow 逐文件软链接到 `/gnu/store/`，导致 jiti 的相对路径 `import` 断裂。

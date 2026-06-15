@@ -63,6 +63,7 @@
 
               %base-home-services))))
 
+(define %system
 (operating-system
  <<kernel-configs>>
  <<information-configs>>
@@ -96,7 +97,7 @@
   <<skeletons-config>>
   )
 
- (name-service-switch %mdns-host-lookup-nss))
+ (name-service-switch %mdns-host-lookup-nss)))
 #+end_src
 
 * 系统配置
