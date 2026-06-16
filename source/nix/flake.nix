@@ -8,14 +8,9 @@
       url = "github:nix-community/home-manager";
       inputs = { nixpkgs.follows = "nixpkgs"; };
     };
-
-    hermes-agent = {
-      url = "github:NousResearch/hermes-agent";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { self, nixpkgs, hermes-agent, ... }@inputs:
+  outputs = { self, nixpkgs, ... }@inputs:
 
     (let
       system = "x86_64-linux";
