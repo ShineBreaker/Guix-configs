@@ -9,23 +9,98 @@
 (load "../source/information.scm")
 
 (use-modules (gnu)
+             (gnu home)
+             (gnu home services)
+             (gnu home services desktop)
+             (gnu home services dotfiles)
+             (gnu home services fontutils)
+             (gnu home services gnupg)
+             (gnu home services guix)
+             (gnu home services niri)
+             (gnu home services shells)
+             (gnu home services shepherd)
+             (gnu home services sound)
+             (gnu home services syncthing)
+             (gnu home services xdg)
+             (gnu services)
              (gnu system accounts)
              (gnu system nss)
              (gnu system pam)
-
              (guix channels)
              (guix gexp)
              (guix modules)
-
-             (gnu packages shells)
-
-             (ice-9 session)
+             (guix packages)
              (ice-9 match)
+             (ice-9 session)
+             (jeans packages desktop)
+             (jeans services hardware)
+             (jeans services nix-ld)
+             (nongnu packages firmware)
+             (nongnu packages linux)
+             (nongnu system linux-initrd)
+             (rosenthal bootloader limine)
+             (rosenthal home services desktop)
+             (rosenthal home services emacs)
+             (rosenthal packages networking)
+             (rosenthal packages wm)
+             (rosenthal services base)
+             (rosenthal services desktop)
+             (rosenthal services games)
+             (rosenthal services networking)
+             (rosenthal services shellutils)
+             (rosenthal utils file)
+             (rosenthal utils packages)
+             (srfi srfi-1))
 
-             (rosenthal utils packages))
+(use-package-modules android
+                     base
+                     commencement
+                     compression
+                     cups
+                     emacs
+                     fcitx5
+                     firmware
+                     freedesktop
+                     games
+                     gl
+                     glib
+                     gnome
+                     gnupg
+                     gnustep
+                     gstreamer
+                     hardware
+                     java
+                     kde-internet
+                     linux
+                     multiprecision
+                     nss
+                     package-management
+                     polkit
+                     rust-apps
+                     shells
+                     tls
+                     video
+                     webkit
+                     wm
+                     xdisorg)
 
-<<system-modules>>
-<<home-modules>>
+(use-service-modules authentication
+                     containers
+                     dbus
+                     desktop
+                     dns
+                     guix
+                     linux
+                     networking
+                     nix
+                     pam-mount
+                     pm
+                     shepherd
+                     sound
+                     ssh
+                     sysctl
+                     virtualization
+                     xorg)
 #+end_src
 
 * 配置文件骨架
@@ -77,8 +152,7 @@
    (packages
     (append
      <<packages-list>>
-     %base-packages)
-    )
+     %base-packages))
 
    (services
     (append
@@ -101,13 +175,10 @@
 #+end_src
 
 * 系统配置
-
---------------
+------------
 
 此系统配置的关键在于 *让系统能够正常启动* ，所以会尽量精简软件包以及相关服务的数量
-
 待系统成功安装并进入系统之后，则可以直接手动应用用户配置
-
 --------------
 
 ** Agent 指引
@@ -151,93 +222,7 @@
 + 用户级工具、桌面环境、用户 shepherd / timer 服务、个人 dotfiles 全部放入本文件下方的 *用户配置* 章节；dotfiles 内容本身放在 dotfiles/enable/<app>/ 下，**不** 放在本文件或 source/files/ 中。
 + 跨段引用（如「系统段需要某包才能让 home 段正常使用」）在 home-packages 段重复声明即可；不要为了 cross-segment 协调而新增系统段代码块。
 + 不要恢复旧的 source/configs/system-config.org / home-config.org 拆分（已合并）。
-+ 临时调试（加个包、换个服务）可本地修改 + ~maak home~ 快速验证；最终固化前用 ~maak check~ + dry-run 确认无误，再由用户执行 ~maak rebuild~。
---------------
-
-** Modules
-*** System
-#+NAME: system-modules
-#+begin_src scheme :noweb yes
-<<bootloader-modules>>
-<<filesystems-modules>>
-<<kernel-modules>>
-<<kernel-arguments-modules>>
-<<services-modules>>
-#+end_src
-
-*** Bootloader
-#+NAME: bootloader-modules
-#+begin_src scheme
-(use-modules (rosenthal bootloader limine))
-#+end_src
-
-*** Kernel
-#+NAME: kernel-modules
-#+begin_src scheme
-(use-modules (gnu packages firmware)
-             (nongnu packages firmware)
-             (nongnu packages linux)
-             (nongnu system linux-initrd))
-
-(use-service-modules linux pam-mount sysctl)
-#+end_src
-
-*** Service
-#+NAME: services-modules
-#+begin_src scheme
-(use-modules (gnu home services guix)
-             (guix channels)
-
-             (jeans packages desktop)
-             (jeans services hardware)
-             (jeans services nix-ld)
-
-             (rosenthal packages networking)
-             (rosenthal packages wm)
-
-             (rosenthal services base)
-             (rosenthal services games)
-             (rosenthal services networking)
-
-             (srfi srfi-1))
-
-(use-package-modules android
-                     base
-                     commencement
-                     compression
-                     cups
-                     games
-                     gl
-                     glib
-                     gnupg
-                     gnustep
-                     gstreamer
-                     hardware
-                     linux
-                     multiprecision
-                     nss
-                     package-management
-                     tls
-                     video
-                     webkit
-                     wm)
-
-(use-service-modules authentication
-                     containers
-                     dbus
-                     desktop
-                     dns
-                     guix
-                     linux
-                     networking
-                     nix
-                     pm
-                     shepherd
-                     sound
-                     ssh
-                     virtualization
-                     xorg)
-#+end_src
++ 临时调试（加个包、换个服务）可本地修改 + ~maak home~ 快速验证；最终固化前用 ~maak check~ + dry-run 确认无误，再由用户执行 ~maak rebuild~
 
 ** Bootloader
 在这里使用了由 =rosenthal= 频道提供的 *Limine*
@@ -1096,24 +1081,6 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 
 --------------
 
-** Modules
-
-这些以及下面 =service= 块中的 module 都是为了导入对应变量而使用的，所以必须放置在一个配置文件的最前面
-
-#+NAME: home-modules
-#+begin_src scheme :noweb yes
-(use-modules (gnu)
-             (gnu home)
-             (gnu home services)
-             (guix packages)
-             (gnu services)
-
-             (rosenthal utils file)
-             (rosenthal utils packages))
-
-<<home-services-modules>>
-#+end_src
-
 ** Packages
 *** 桌面环境 相关软件包
 
@@ -1319,7 +1286,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
          "telegram-desktop"
          "zulip-desktop"
 
-                                        ; 生产力工具
+         ;; 生产力工具
          "amber-pm"
          "gimp"
          "filezilla"
@@ -1349,45 +1316,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 #+end_src
 
 ** Servics
-
-这里是所有服务需要的 =modules=
 注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
-
-#+NAME: home-services-modules
-#+begin_src scheme
-(use-modules (gnu home services desktop)
-             (gnu home services dotfiles)
-             (gnu home services fontutils)
-             (gnu home services gnupg)
-             (gnu home services shells)
-             (gnu home services shepherd)
-             (gnu home services niri)
-             (gnu home services sound)
-             (gnu home services xdg)
-             (gnu home services desktop)
-             (gnu home services syncthing)
-             (gnu home services guix)
-
-             (rosenthal home services desktop)
-             (rosenthal home services emacs)
-
-             (rosenthal services desktop)
-             (rosenthal services shellutils))
-
-(use-package-modules java shells)
-
-(use-package-modules emacs
-                     fcitx5
-                     freedesktop
-                     gnome
-                     gnupg
-                     kde-internet
-                     linux
-                     polkit
-                     rust-apps
-                     wm
-                     xdisorg)
-#+end_src
 
 *** modprobe 服务
 
@@ -1617,7 +1546,7 @@ end
 <<waybar-desktop-services>>
 
 (list (service home-dbus-service-type)
-                                        ; (service home-noctalia-shell-service-type)
+      ;; (service home-noctalia-shell-service-type)
       (service home-pipewire-service-type)
       (service home-syncthing-service-type)
 
@@ -1808,13 +1737,6 @@ end
                             "\\.mypy_cache($|/.*)"
                             "__pycache__($|/.*)"))))
 
-                                        ; (simple-service 'prism-jdks home-files-service-type
-                                        ;                 (map (lambda (jdk)
-                                        ;                        (list (in-vicinity
-                                        ;                               ".local/share/PrismLauncher/java/"
-                                        ;                               (package-version jdk)) jdk))
-                                        ;                      (list openjdk25 openjdk21 openjdk17)))
-
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
                  ("nano/nanorc" ,%default-nanorc))))
@@ -1868,9 +1790,6 @@ end
 #+end_src
 
 *** 环境变量
-
-#+NAME: 环境变量
-
 **** 软件相关的环境变量
 
 #+NAME: extend-environment-variables
@@ -1915,6 +1834,8 @@ end
   ("GRADLE_USER_HOME" . "$XDG_DATA_HOME/gradle")
   ;; guile
   ("GUILE_HISTORY" . "$XDG_STATE_HOME/guile/history")
+  ;; hermes
+  ("HERMES_HOME" . "$XDG_DATA_HOME/hermes-agent")
   ;; luanti
   ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
   ;; node
