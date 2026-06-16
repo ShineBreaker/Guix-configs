@@ -4,22 +4,37 @@
 
 ## 目录结构
 
+<!-- structor:begin -->
+
+<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+
 ```
 source/
-├── AGENTS.md          # 本文件
-├── channel.scm        # 频道定义（URL/branch 以 .scm 源码为准）
-├── channel.lock       # 锁定的频道版本（由 maak update 自动生成并 git commit -S，不要手动编辑）
-├── information.scm    # 全局变量（username、%data-dirs、%btrfs-subvolumes、guix-channels）
-├── config.org         # ★ 唯一的 Org 配置源（system + home 全部 Noweb 拼合）
-├── files/             # 静态模板文件（见下方「files/ 模板系统」一节）
-└── nix/               # 独立的 Nix home-manager 配置（与 Guix 配置并存，不互通）
+├── files/
+│   ├── skel/
+│   │   └── .config/
+│   │       └── mihomo/
+│   ├── nftables.conf
+│   ├── rounded.qss
+│   └── zed.json
+├── nix/
+│   ├── configuration/
+│   │   ├── 00-main/
+│   │   │   ├── home.nix
+│   │   │   └── packages.nix
+│   │   └── programs/
+│   │       ├── 00-main.nix
+│   │       ├── code.nix
+│   │       └── nix.nix
+│   ├── flake.lock
+│   └── flake.nix
+├── channel.lock
+├── channel.scm
+├── config.org
+└── information.scm
 ```
 
-> **结构说明**：
->
-> - `source/configs/` 子目录已废弃；`system-config.org` + `home-config.org` 已合并为单一 `source/config.org`
-> - `source/files/` 仅用作需要路径注入的静态模板（其余 dotfile 都放 `dotfiles/enable/<app>/`）
-
+<!-- /structor -->
 ## 构建管线
 
 ```

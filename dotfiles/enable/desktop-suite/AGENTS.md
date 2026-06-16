@@ -4,50 +4,56 @@
 
 ## 目录结构
 
-```
-desktop-suite/.config/
-├── darkman/
-│   ├── config/                          # 各应用主题配置（darkman 通过目录复制）
-│   │   ├── fuzzel/themes.ini
-│   │   ├── gtk-3.0/settings.ini
-│   │   ├── gtk-4.0/settings.ini
-│   │   ├── kitty/theme.conf
-│   │   ├── Kvantum/kvantum.kvconfig
-│   │   ├── mako/theme
-│   │   ├── qt5ct/qt5ct.conf
-│   │   ├── qt6ct/qt6ct.conf
-│   │   └── waybar/colors.css
-│   └── script/
-│       ├── config.json                  # darkman 脚本配置
-│       └── set-theme.sh                 # 主题切换脚本
-├── foot/
-│   └── themes/material.ini              # foot 终端主题
-├── fuzzel/
-│   └── fuzzel.ini                       # 应用启动器
-├── mako/
-│   └── config                           # 通知守护进程
-├── niri/
-│   └── settings/
-│       └── key-bindings-wm.kdl          # niri WM 主题/工作区相关快捷键
-├── swayidle/
-│   └── config                           # 空闲管理
-├── swaylock/
-│   └── config                           # 锁屏
-└── waybar/
-    ├── config.jsonc                     # 状态栏
-    └── style.css
+<!-- structor:begin -->
 
-desktop-suite/.local/
-└── share/
-    ├── dark-mode.d/
-    │   └── 0-apply-theme.sh             # 切换到暗色时执行
-    ├── light-mode.d/
-    │   └── 0-apply-theme.sh             # 切换到亮色时执行
-    └── icons/
-        └── default/
-            └── index.theme              # 默认图标主题
+<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+
+```
+desktop-suite/
+├── .config/
+│   ├── darkman/
+│   │   ├── config/
+│   │   │   ├── Kvantum/
+│   │   │   ├── fuzzel/
+│   │   │   ├── gtk-3.0/
+│   │   │   ├── gtk-4.0/
+│   │   │   ├── kitty/
+│   │   │   ├── mako/
+│   │   │   ├── qt5ct/
+│   │   │   ├── qt6ct/
+│   │   │   ├── waybar/
+│   │   │   └── .gtkrc-2.0
+│   │   └── script/
+│   │       ├── config.json
+│   │       └── set-theme.sh
+│   ├── foot/
+│   │   └── themes/
+│   │       └── material.ini
+│   ├── fuzzel/
+│   │   └── fuzzel.ini
+│   ├── mako/
+│   │   └── config
+│   ├── niri/
+│   │   └── settings/
+│   │       └── key-bindings-wm.kdl
+│   ├── swayidle/
+│   │   └── config
+│   ├── swaylock/
+│   │   └── config
+│   └── waybar/
+│       ├── config.jsonc
+│       └── style.css
+└── .local/
+    └── share/
+        ├── dark-mode.d/
+        │   └── 0-apply-theme.sh
+        ├── icons/
+        │   └── default/
+        └── light-mode.d/
+            └── 0-apply-theme.sh
 ```
 
+<!-- /structor -->
 ## 关键约定
 
 - **darkman** 通过 D-Bus 触发主题切换，调用 `~/.local/share/{dark,light}-mode.d/` 中的脚本

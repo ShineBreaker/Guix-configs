@@ -4,25 +4,86 @@
 
 ## 目录结构
 
+<!-- structor:begin -->
+
+<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+
 ```
 dotfiles/
-├── enable/        # 当前启用的配置（maak rebuild 时统一部署）
-│   ├── agents/         # Agent 资产（Pi、Crush、KB、loopctl、共享 skillsets）
-│   ├── desktop/        # 桌面环境（niri、autostart、portal、xfce4 helpers）
-│   ├── desktop-suite/  # WM 主题套件（darkman、waybar、fuzzel、mako、foot themes、swayidle/lock）
-│   ├── emacs/          # Emacs 配置（独立 git 子模块）
-│   ├── system/         # 系统级（containers、pipewire、xdg user-dirs）
-│   ├── terminal/       # 终端工具链（fish、tmux、foot、btop、starship、broot、fastfetch）
-│   └── utilities/      # 开发工具（helix、git、kanata、pnpm、winapps、rime、gnupg、bin）
-└── disable/       # 已弃用的旧配置（noctalia 等），不再部署
+├── disable/
+│   └── noctalia/
+│       ├── .config/
+│       │   ├── darkman/
+│       │   ├── niri/
+│       │   └── noctalia/
+│       └── .local/
+│           └── share/
+└── enable/
+    ├── agents/
+    │   ├── .config/
+    │   │   ├── agents/
+    │   │   ├── crush/
+    │   │   ├── loopctl/
+    │   │   └── pi/
+    │   ├── .local/
+    │   │   ├── bin/
+    │   │   └── share/
+    │   └── .gitignore
+    ├── desktop/
+    │   └── .config/
+    │       ├── autostart/
+    │       ├── niri/
+    │       ├── pcmanfm-qt/
+    │       ├── xdg-desktop-portal/
+    │       └── xfce4/
+    ├── desktop-suite/
+    │   ├── .config/
+    │   │   ├── darkman/
+    │   │   ├── foot/
+    │   │   ├── fuzzel/
+    │   │   ├── mako/
+    │   │   ├── niri/
+    │   │   ├── swayidle/
+    │   │   ├── swaylock/
+    │   │   └── waybar/
+    │   └── .local/
+    │       └── share/
+    ├── emacs/
+    │   └── .config/
+    │       └── emacs/
+    ├── system/
+    │   └── .config/
+    │       ├── containers/
+    │       ├── pipewire/
+    │       ├── user-dirs.dirs
+    │       └── user-dirs.locale
+    ├── terminal/
+    │   ├── .config/
+    │   │   ├── broot/
+    │   │   ├── btop/
+    │   │   ├── fastfetch/
+    │   │   ├── fish/
+    │   │   ├── foot/
+    │   │   ├── tmux/
+    │   │   ├── tmuxifier/
+    │   │   └── starship.toml
+    │   └── .local/
+    │       └── bin/
+    └── utilities/
+        ├── .config/
+        │   ├── fcitx5/
+        │   ├── git/
+        │   ├── helix/
+        │   ├── kanata/
+        │   ├── pnpm/
+        │   └── winapps/
+        ├── .local/
+        │   ├── bin/
+        │   └── share/
+        └── .nix-channels
 ```
 
-> **结构说明**：
-> - 旧的顶层 `immutable/` + `mutable/` 拆分已合并到 `enable/<app>/`，所有目录均通过 Guix Home stow 部署
-> - 不存在 "mutable 子目录需要 `stow -R` 手动重链" 的概念；每次 `maak rebuild` 都重新链接
-> - 新增配置请放入 `enable/<app>/` 的对应子目录，并在 `source/config.org` 的 `dotfile-services` 的 `packages` 列表中追加目录名
-> - 详见各子目录 `AGENTS.md`
-
+<!-- /structor -->
 ## 部署机制
 
 - 入口：Guix Home `home-dotfiles-service-type`，在 `source/config.org` 的 `dotfile-services` 块声明

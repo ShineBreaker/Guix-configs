@@ -4,26 +4,32 @@
 
 ## 目录结构
 
+<!-- structor:begin -->
+
+<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+
 ```
-desktop/.config/
-├── autostart/
-│   ├── kdeconnect-indicator.desktop
-│   └── net.opentabletdriver.OpenTabletDriver.desktop
-├── niri/
-│   ├── config.kdl                       # 主配置
-│   └── settings/
-│       ├── key-bindings.kdl             # 快捷键
-│       └── window-rules.kdl             # 窗口规则
-├── pcmanfm-qt/
-│   └── default/
-│       ├── recent-files.conf
-│       └── settings.conf
-├── xdg-desktop-portal/
-│   └── portals.conf
-└── xfce4/
-    └── helpers.rc
+desktop/
+└── .config/
+    ├── autostart/
+    │   ├── kdeconnect-indicator.desktop
+    │   └── net.opentabletdriver.OpenTabletDriver.desktop
+    ├── niri/
+    │   ├── settings/
+    │   │   ├── key-bindings.kdl
+    │   │   └── window-rules.kdl
+    │   └── config.kdl
+    ├── pcmanfm-qt/
+    │   └── default/
+    │       ├── recent-files.conf
+    │       └── settings.conf
+    ├── xdg-desktop-portal/
+    │   └── portals.conf
+    └── xfce4/
+        └── helpers.rc
 ```
 
+<!-- /structor -->
 ## 关键约定
 
 - niri 配置分为主配置 + `settings/` 子目录，通过 `include` 引入

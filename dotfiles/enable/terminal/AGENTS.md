@@ -4,51 +4,56 @@
 
 ## 目录结构
 
-```
-terminal/.config/
-├── broot/
-│   ├── conf.hjson                       # broot 文件浏览器
-│   └── verbs.hjson
-├── btop/
-│   └── btop.conf                        # 系统监控
-├── fastfetch/
-│   └── config.jsonc                     # 系统信息展示
-├── fish/
-│   ├── conf.d/                          # 自动加载配置（按文件名字母序）
-│   │   ├── 00-load-functions.fish
-│   │   ├── 01-guix.fish                 # Guix PATH 集成
-│   │   ├── 05-java.fish
-│   │   ├── 05-path.fish
-│   │   ├── 10-settings.fish
-│   │   ├── 20-greeting.fish
-│   │   ├── 99-command-not-found.fish
-│   │   └── 99-tmux.fish
-│   └── functions/
-│       ├── denv.fish
-│       ├── fish_prompt.fish
-│       ├── java_tools.fish
-│       └── retry.fish
-├── foot/
-│   └── foot.ini                         # Wayland 终端模拟器
-├── starship.toml                        # 命令提示符主题（TOML）
-├── tmux/
-│   ├── tmux.conf
-│   └── scripts/                         # 自定义脚本
-│       ├── session-selector             # 会话选择器（fzf）
-│       ├── sidebar-render.scm           # 侧边栏渲染（Guile）
-│       ├── sidebar-toggle               # 侧边栏生命周期（Bash）
-│       ├── tmux-helpers.scm             # 共享工具模块
-│       ├── which-key                    # 快捷键帮助弹窗
-│       └── window-jump                  # 窗口跳转（fzf）
-└── tmuxifier/
-    └── layouts/
-        └── termide.session.sh           # termide 会话布局
+<!-- structor:begin -->
 
-terminal/.local/
-└── bin/
-    └── termide                          # 自定义终端会话管理器入口
+<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+
+```
+terminal/
+├── .config/
+│   ├── broot/
+│   │   ├── conf.hjson
+│   │   └── verbs.hjson
+│   ├── btop/
+│   │   └── btop.conf
+│   ├── fastfetch/
+│   │   └── config.jsonc
+│   ├── fish/
+│   │   ├── conf.d/
+│   │   │   ├── 00-load-functions.fish
+│   │   │   ├── 01-guix.fish
+│   │   │   ├── 05-java.fish
+│   │   │   ├── 05-path.fish
+│   │   │   ├── 10-settings.fish
+│   │   │   ├── 20-greeting.fish
+│   │   │   ├── 99-command-not-found.fish
+│   │   │   └── 99-tmux.fish
+│   │   └── functions/
+│   │       ├── denv.fish
+│   │       ├── fish_prompt.fish
+│   │       ├── java_tools.fish
+│   │       └── retry.fish
+│   ├── foot/
+│   │   └── foot.ini
+│   ├── tmux/
+│   │   ├── scripts/
+│   │   │   ├── session-selector
+│   │   │   ├── sidebar-render.scm
+│   │   │   ├── sidebar-toggle
+│   │   │   ├── tmux-helpers.scm
+│   │   │   ├── which-key
+│   │   │   └── window-jump
+│   │   └── tmux.conf
+│   ├── tmuxifier/
+│   │   └── layouts/
+│   │       └── termide.session.sh
+│   └── starship.toml
+└── .local/
+    └── bin/
+        └── termide
 ```
 
+<!-- /structor -->
 ## 关键约定
 
 - fish `conf.d/` 按文件名字母序加载；数字前缀只是排序提示，非优先级语义

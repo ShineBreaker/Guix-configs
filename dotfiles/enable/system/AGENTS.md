@@ -4,18 +4,24 @@
 
 ## 目录结构
 
+<!-- structor:begin -->
+
+<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+
 ```
-system/.config/
-├── containers/
-│   ├── containers.conf                  # Podman/容器配置
-│   └── policy.json                      # 镜像签名策略
-├── pipewire/
-│   └── pipewire.conf.d/
-│       └── 10-latency-fix.conf          # 音频延迟优化
-├── user-dirs.dirs                       # XDG 用户目录映射
-└── user-dirs.locale                     # 用户目录语言
+system/
+└── .config/
+    ├── containers/
+    │   ├── containers.conf
+    │   └── policy.json
+    ├── pipewire/
+    │   └── pipewire.conf.d/
+    │       └── 10-latency-fix.conf
+    ├── user-dirs.dirs
+    └── user-dirs.locale
 ```
 
+<!-- /structor -->
 ## 关键约定
 
 - pipewire 配置使用 `pipewire.conf.d/` 目录，按字母顺序加载
