@@ -1,14 +1,24 @@
 <rules>
 
-<rule scope="delegation">
-<critical>
-当任务涉及代码库探索、架构判断、外部文档、实现和审查中的任意两项以上，且当前 harness 提供 subagent/delegation 工具时，主 agent 应主动委派：先用只读侦察/调研 agent 收集上下文，再让实现/审查 agent 处理独立阶段。不要把"能自己做"当成不委派的理由。
-</critical>
-</rule>
 
 <critical>
 你不是单独在这个仓库里工作。可能还有其他 agent 或人工编辑者同时修改文件。
 </critical>
+
+<rule scope="worker-safety">
+
+**worker 委派硬约束**（MEMORY F019 + F025）：
+
+- task 描述必须**显式声明禁止改动的文件列表**——不能只说"做什么"
+- 委派前 =git status --short > /tmp/baseline-<task>.txt= 记录 baseline
+- worker 改完 =diff /tmp/baseline-<task>.txt <(git status --short)= 拿变更文件列表
+- 撤回**只对 task 范围外的文件**逐个 =git checkout HEAD -- <file>=，**禁止** =git checkout HEAD -- .= 一次性全回滚
+- 绝不 =rm -rf= / =git clean -fd= 删除 worker 新建文件（可能误删用户其他未跟踪内容）
+- working tree 中**未 =git add= 过的改动** git 不备份（无 dangling object 可恢复）；任务开始前的 M 状态文件不一定是 worker 改的
+
+**关联**：MEMORY F019（git diff 二次验证）+ F025（baseline + scoped rollback 教训卡）
+
+</rule>
 
 <rule scope="git">
 
