@@ -342,6 +342,128 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
                     "-print" "-delete")))))
    artifact-rules))
 
+;;; ============================================================
+;;; secret-scan: 扫描文本配置中的凭据泄漏（Oracle 2026-06-16 建议的兜底工具）
+;;; ============================================================
+;;; 常用调用：
+;;;   maak secret-scan                                          扫描 dotfiles/enable
+;;;   MAAK_SECRET_SCAN_DIR=. maak secret-scan                   扫描整个仓库
+;;;   MAAK_SECRET_SCAN_FAIL_ON_FIND=0 maak secret-scan          只警告不退出非零
+;;;   MAAK_SECRET_SCAN_EXTRA_PATTERN='foo,bar' maak secret-scan 追加自定义正则（逗号分隔）
+;;; 设计取舍：
+;;; - 用 grep -HrnIE 递归 + --include 扩展名白名单 + --exclude-dir 排除目录（严格遵循 -rI）
+;;; - >1MB 文件在 Scheme 层按 stat:size 过滤（GNU grep 无 --max-filesize，该过滤与 -r 不兼容，
+;;;   故在命中后逐条 stat 判定；命中数稀疏，开销可忽略）
+;;; - 每条规则一次 grep，命中行经 ice-9 regex 解析为 [HINT] path:lineno:rule:content(截 80)
+
+(define %secret-exts
+  '("*.conf" "*.toml" "*.yaml" "*.yml" "*.json" "*.ini" "*.cfg"
+    "*.gitconfig" "*.scm" "*.fish" "*.el" "*.env" "*.netrc" "*.properties"))
+
+(define %secret-exclude-dirs
+  '(".git" ".agents" "node_modules" "tmp"))
+
+(define %secret-patterns
+  '(("github-pat"     . "ghp_[A-Za-z0-9]{36}")        ; GitHub PAT
+    ("github-oauth"   . "gho_[A-Za-z0-9]{36}")        ; GitHub OAuth
+    ("github-user"    . "ghu_[A-Za-z0-9]{36}")        ; GitHub user token
+    ("github-server"  . "ghs_[A-Za-z0-9]{36}")        ; GitHub server token
+    ("github-refresh" . "ghr_[A-Za-z0-9]{36}")        ; GitHub refresh token
+    ("openai"         . "sk-[A-Za-z0-9]{20,}")
+    ("anthropic"      . "sk-ant-[A-Za-z0-9-]{20,}")
+    ("openrouter"     . "sk-or-[A-Za-z0-9-]{20,}")
+    ("xai"            . "xai-[A-Za-z0-9]{20,}")
+    ("google-api"     . "AIza[A-Za-z0-9_-]{35}")
+    ("aws-access-key" . "AKIA[0-9A-Z]{16}")
+    ("gitlab"         . "glpat-[A-Za-z0-9_-]{20,}")
+    ("slack"          . "xox[bpars]-[A-Za-z0-9-]{10,}")
+    ("private-key"    . "-----BEGIN (RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----")
+    ("oauth-token"    . "oauth_token[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9_-]{16,}")
+    ("api-key"        . "api[_-]key[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9_-]{16,}")
+    ("access-token"   . "access_token[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9_-]{16,}")
+    ("password"       . "password[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}[\"']")))
+
+(define (%secret-shell-quote s)
+  "POSIX 单引号转义，安全传递含正则元字符的参数给 grep -e"
+  (string-append "'" (string-join (string-split s #\') "'\\''") "'"))
+
+(define (%secret-grep-flags-and-opts flags)
+  "FLAGS（如 \"grep -HrnIE\" / \"grep -rIl\"）+ --include 扩展名白名单 + --exclude-dir 选项串。
+   带参数是为了不被 maak 当成任务列出（框架自省所有零参数 define）。"
+  (string-append
+   flags " "
+   (string-join (map (lambda (e) (%secret-shell-quote (string-append "--include=" e)))
+                     %secret-exts) " ")
+   " "
+   (string-join (map (lambda (d) (%secret-shell-quote (string-append "--exclude-dir=" d)))
+                     %secret-exclude-dirs) " ")))
+
+(define (%secret-pipe->lines cmd)
+  "通过 open-input-pipe 执行 shell 命令 CMD（字符串），返回 stdout 行列表（不含换行）"
+  (let ((pipe (open-input-pipe cmd)))
+    (let loop ((acc '()))
+      (let ((line (read-line pipe)))
+        (if (eof-object? line)
+            (begin (close-pipe pipe) (reverse acc))
+            (loop (cons line acc)))))))
+
+(define (%secret-count-files dir)
+  "统计 dir 内符合扫描范围的文件数（grep -rIl 列出含任意字符的文件，范围与扫描一致）"
+  (let* ((cmd (string-append (%secret-grep-flags-and-opts "grep -rIl")
+                             " -e '.' " (%secret-shell-quote dir)
+                             " 2>/dev/null | wc -l"))
+         (out (%secret-pipe->lines cmd)))
+    (if (null? out) 0 (or (string->number (string-trim-both (car out))) 0))))
+
+(define (secret-scan)
+  "扫描 dotfiles 中的凭据泄漏"
+  (let* ((dir (let ((v (getenv "MAAK_SECRET_SCAN_DIR")))
+                (if (and v (not (string-null? v))) v "dotfiles/enable")))
+         (fail? (not (string=? (or (getenv "MAAK_SECRET_SCAN_FAIL_ON_FIND") "1") "0")))
+         (extra (getenv "MAAK_SECRET_SCAN_EXTRA_PATTERN"))
+         (patterns (append %secret-patterns
+                           (if (and extra (not (string-null? extra)))
+                               (map (lambda (p) (cons "user-pattern" p))
+                                    (string-split extra #\,))
+                               '())))
+         (nfiles (%secret-count-files dir))
+         (found 0))
+    (for-each
+     (lambda (rule)
+       (let* ((name (car rule))
+              (pat  (cdr rule))
+              (cmd  (string-append (%secret-grep-flags-and-opts "grep -HrnIE")
+                                   " -e " (%secret-shell-quote pat)
+                                   " " (%secret-shell-quote dir) " 2>/dev/null"))
+              (hits (%secret-pipe->lines cmd)))
+         (for-each
+          (lambda (raw)
+            (let ((m (string-match "^([^:]+):([0-9]+):(.*)$" raw)))
+              (when m
+                (let* ((path    (match:substring m 1))
+                       (lineno  (match:substring m 2))
+                       (content (match:substring m 3))
+                       (size    (stat:size (stat path))))
+                  ;; >1MB 的文件跳过（凭据极少在大文件里，且避免误报）
+                  (when (< size 1048576)
+                    (let ((trunc (if (> (string-length content) 80)
+                                     (substring content 0 80) content)))
+                      (display (string-append "[HINT] " path ":" lineno ":"
+                                              name ":" trunc))
+                      (newline)
+                      (set! found (+ found 1))))))))
+          hits)))
+     patterns)
+    (if (zero? found)
+        (log-info "[OK] No secrets found, scanned ~a files~%" nfiles)
+        (begin
+          (log-info "[WARN] secret-scan: ~a hit(s)~%" found)
+          (when fail?
+            (error (format #f
+             "secret-scan: ~a secret(s) found (set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn-only)"
+             found)))))
+    (or (zero? found) (not fail?))))
+
 (define (gc)
   "clean + guix gc + 清理旧 EFI 文件（慎用，直接操作 /boot）"
   (clean)
