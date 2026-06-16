@@ -1735,7 +1735,10 @@ end
                             "uv\\.lock"
                             "\\.venv($|/.*)"
                             "\\.mypy_cache($|/.*)"
-                            "__pycache__($|/.*)"))))
+                            "__pycache__($|/.*)"
+                            ;; fcitx5 运行时生成，跳过避免反复触发重建
+                            "fcitx5/conf/cached_layouts"
+                            "fcitx5/crash\\.log"))))
 
       (service home-xdg-configuration-files-service-type
                `(("gdb/gdbinit" ,%default-gdbinit)
