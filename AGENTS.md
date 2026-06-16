@@ -97,6 +97,22 @@ tmp/config.scm
 | `dotfiles/enable/agents/.config/agents/skillsets/mattpocock-skills` | `github.com/mattpocock/skills`       |
 | `dotfiles/enable/agents/.config/agents/skillsets/pi-skills`         | `github.com/badlogic/pi-skills`      |
 
+## 目录结构图自动维护
+
+> **实现位置**：`maak.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
+
+仓库内 7 个 `AGENTS.md`（`source/`、`dotfiles/`、`dotfiles/enable/<app>/` 里的 5 个）的“## 目录结构”章节**用标记圈起来**，由 `maak structor` 自动用 `tree` 输出重写。
+
+**使用约定**：
+
+- **不要手改**标记之间的内容——会被下次跑 `maak structor` 覆盖
+- 新增/移动文件后跑 `maak structor` 刷新所有结构图
+- 单文件调试：`MAAK_STRUCTOR_TARGET=source/AGENTS.md maak structor`
+- 预览不写文件：`MAAK_STRUCTOR_DRY=1 maak structor`
+- 标记格式独立于运行器（不带 `maak:` 前缀），其他仓库用 justfile/Makefile 包装时复用同一约定
+- 跳过规则与 `dotfile-services` 的 `excluded` 列表对齐（`.git` / `.github` / `AGENTS.md` 自身等）
+- 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `maak.scm` 的 `%structor-targets`
+
 ## 频道架构
 
 | 频道        | 分支   | 职责         | URL（以 `source/channel.scm` 为准）         |
