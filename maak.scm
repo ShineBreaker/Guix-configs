@@ -526,3 +526,149 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
     ($ (list "git" "commit" "-S" "-m"
              "UPDATE: (channel.lock) bump version."
              channel-lock))))
+
+;;; ============================================================
+;;; structor: 维护 AGENTS.md 中 <!-- structor:begin -->...<!-- /structor -->
+;;;           标记之间的目录 tree（不依赖外部 tree 命令，自包含）
+;;; ============================================================
+;;; 常用调用：
+;;;   maak structor                              更新所有目标 AGENTS.md
+;;;   MAAK_STRUCTOR_TARGET=<path> maak structor  只更新指定文件
+;;;   MAAK_STRUCTOR_DEPTH=<n> maak structor      限制递归深度（默认 4）
+;;;   MAAK_STRUCTOR_DRY=1 maak structor          预览输出但不写文件
+;;;
+;;; 设计取舍：
+;;; - 用 Scheme 递归而非 `tree` 命令 → 仓库 root 可自包含，不依赖宿主工具
+;;; - 标记格式独立于 maak（`<!-- structor -->` 而非 `<!-- maak:structor -->`），
+;;;   其他仓库用 justfile / Makefile 包装时也可复用同一标记约定
+;;; - 跳过规则与 dotfile-services excluded 对齐（.git / .github / node_modules）
+;;; - 写入用原子写（write-file-atomically），避免中途失败半写文件
+
+(define %structor-marker-start "<!-- structor:begin -->")
+(define %structor-marker-end   "<!-- /structor -->")
+
+;; 与 dotfile-services excluded 列表对齐；避免把 .git / 子模块内部暴露到结构图
+(define %structor-skip-names
+  '(".git" ".github" ".agents" "node_modules"))
+
+(define (%structor-skip? name)
+  ;; scandir 默认包含 "." ".."，必须显式排除，否则递归会跳到兄弟目录
+  (or (string=? name ".") (string=? name "..")
+      (member name %structor-skip-names)
+      (string-suffix? ".swp" name)
+      (string=? name "AGENTS.md")))
+
+(define (%structor-children dir)
+  "返回 ((is-dir? . name) ...) 排序：目录在前，文件在后，字母序"
+  (let* ((all (scandir dir (negate %structor-skip?)))
+         (typed (map (lambda (n)
+                       (let ((p (string-append dir "/" n)))
+                         (cons (file-is-directory? p) n)))
+                     all))
+         (dirs (filter car typed))
+         (files (filter (compose not car) typed)))
+    (append (sort dirs (lambda (a b) (string<? (cdr a) (cdr b))))
+            (sort files (lambda (a b) (string<? (cdr a) (cdr b)))))))
+
+(define (%structor-render dir max-depth depth prefix)
+  "递归渲染 DIR 的 children。PREFIX 为上层缩进，输出不含 DIR 自身行"
+  (let* ((entries (%structor-children dir))
+         (n (length entries)))
+    (let loop ((i 0) (out '()))
+      (if (>= i n)
+          (reverse out)
+          (let* ((entry (list-ref entries i))
+                 (name (cdr entry))
+                 (path (string-append dir "/" name))
+                 (is-dir? (car entry))
+                 (is-last? (= (+ i 1) n))
+                 (connector (if is-last? "└── " "├── "))
+                 (child-prefix (string-append prefix
+                                              (if is-last? "    " "│   ")))
+                 (line (string-append prefix connector name
+                                       (if is-dir? "/" "")))
+                 (children-lines
+                   (if (and is-dir? (< (+ depth 1) max-depth))
+                       (%structor-render path max-depth
+                                         (+ depth 1) child-prefix)
+                       '())))
+            (loop (+ i 1)
+                  (append (reverse children-lines)
+                          (cons line out))))))))
+
+(define (%structor-tree abs-dir max-depth)
+  "返回 ABS-DIR 的 tree lines 列表，第一行是 DIR 的 basename + /"
+  (cons (string-append (basename abs-dir) "/")
+        (%structor-render abs-dir max-depth 0 "")))
+
+(define (%structor-process-file file abs-dir depth dry?)
+  "在 FILE 中替换 structor 标记为 ABS-DIR 的 tree；DRY? 为 #t 时仅打印到 stdout。
+   无 marker 时直接返回（跳过写入），保证幂等且避免无谓 IO。"
+  (let* ((content (call-with-input-file file get-string-all))
+         (has-marker (and (string-contains content %structor-marker-start)
+                          (string-contains content %structor-marker-end))))
+    (if (not has-marker)
+        (log-info "  跳过 ~a（无 structor 标记）~%" file)
+        (let* ((lines (string-split content #\newline))
+               ;; replacement 自带 begin/end marker，下次跑仍能定位
+               (replacement
+                 (append
+                   (list "<!-- structor:begin -->"
+                         ""
+                         "<!-- 此结构图由 maak structor 自动维护，请勿手改 -->"
+                         ""
+                         "```")
+                   (%structor-tree abs-dir depth)
+                   (list "```" "" "<!-- /structor -->"))))
+          (let loop ((ls lines) (out '()) (state 'normal))
+            (cond
+             ((null? ls)
+              (let ((new-content (string-join (reverse out) "\n")))
+                (if dry?
+                    (display new-content)
+                    (write-file-atomically file
+                      (lambda (port) (display new-content port))))))
+             (else
+              (let ((line (car ls)))
+                (cond
+                 ((and (eq? state 'normal)
+                       (string=? (string-trim-both line) %structor-marker-start))
+                  (loop (cdr ls) (append (reverse replacement) out) 'in-block))
+                 ((and (eq? state 'in-block)
+                       (string=? (string-trim-both line) %structor-marker-end))
+                  (loop (cdr ls) out 'normal))
+                 ((eq? state 'normal)
+                  (loop (cdr ls) (cons line out) state))
+                 (else
+                  ;; in-block 内除结束标记外的内容：跳过
+                  (loop (cdr ls) out state)))))))))))
+
+;; structor 扫描的目标 AGENTS.md（每个对应一个 dotfile 子目录 / 顶层结构）
+;; 不包括 emacs 子模块（workspace slots 描述）和 agents/（无 "## 目录结构" 章节）
+(define %structor-targets
+  '("source/AGENTS.md"
+    "dotfiles/AGENTS.md"
+    "dotfiles/enable/utilities/AGENTS.md"
+    "dotfiles/enable/terminal/AGENTS.md"
+    "dotfiles/enable/system/AGENTS.md"
+    "dotfiles/enable/desktop/AGENTS.md"
+    "dotfiles/enable/desktop-suite/AGENTS.md"))
+
+(define (structor)
+  "扫描仓库内的 AGENTS.md，刷新 structor 标记之间的目录 tree"
+  (let* ((depth (let ((v (getenv "MAAK_STRUCTOR_DEPTH")))
+                  (if (and v (not (string-null? v))) (string->number v) 4)))
+         (target (or (getenv "MAAK_STRUCTOR_TARGET") ""))
+         (dry? (and (getenv "MAAK_STRUCTOR_DRY")
+                    (not (string-null? (getenv "MAAK_STRUCTOR_DRY"))))))
+    (for-each
+     (lambda (rel-path)
+       (when (or (string=? target "") (string=? target rel-path))
+         (let* ((abs-file (string-append repo-root "/" rel-path))
+                (abs-dir (string-append repo-root "/" (dirname rel-path))))
+           (when (file-exists? abs-file)
+             (log-info "[~a] ~a (scan=~a depth=~a)~%"
+                       (if dry? "DRY" "WRITE") rel-path
+                       (dirname rel-path) depth)
+             (%structor-process-file abs-file abs-dir depth dry?)))))
+     %structor-targets)))
