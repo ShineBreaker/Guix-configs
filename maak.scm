@@ -460,8 +460,8 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
           (log-info "[WARN] secret-scan: ~a hit(s)~%" found)
           (when fail?
             (error (format #f
-             "secret-scan: ~a secret(s) found (set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn-only)"
-             found)))))
+                           "secret-scan: ~a secret(s) found (set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn-only)"
+                           found)))))
     (or (zero? found) (not fail?))))
 
 (define (gc)
@@ -510,8 +510,8 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
        "--year" ,(strftime "%Y" (localtime (time-second (current-time))))
        ".")))
 
-; 注意：$guix 走 $ (fork+exec)，子进程 stdout 继承终端而非 Guile port，
-; 不能用 with-output-to-port 捕获。改用 open-input-pipe 直接捕获子进程 stdout。
+                                        ; 注意：$guix 走 $ (fork+exec)，子进程 stdout 继承终端而非 Guile port，
+                                        ; 不能用 with-output-to-port 捕获。改用 open-input-pipe 直接捕获子进程 stdout。
 (define (update)
   "更新 channel.lock 并签名提交"
   (let* ((cmd (string-join
@@ -522,7 +522,7 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
          (content (get-string-all pipe)))
     (close-pipe pipe)
     (write-file-atomically channel-lock
-      (lambda (port) (display content port)))
+                           (lambda (port) (display content port)))
     ($ (list "git" "commit" "-S" "-m"
              "UPDATE: (channel.lock) bump version."
              channel-lock))))
@@ -586,12 +586,12 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
                  (child-prefix (string-append prefix
                                               (if is-last? "    " "│   ")))
                  (line (string-append prefix connector name
-                                       (if is-dir? "/" "")))
+                                      (if is-dir? "/" "")))
                  (children-lines
-                   (if (and is-dir? (< (+ depth 1) max-depth))
-                       (%structor-render path max-depth
-                                         (+ depth 1) child-prefix)
-                       '())))
+                  (if (and is-dir? (< (+ depth 1) max-depth))
+                      (%structor-render path max-depth
+                                        (+ depth 1) child-prefix)
+                      '())))
             (loop (+ i 1)
                   (append (reverse children-lines)
                           (cons line out))))))))
@@ -612,14 +612,14 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
         (let* ((lines (string-split content #\newline))
                ;; replacement 自带 begin/end marker，下次跑仍能定位
                (replacement
-                 (append
-                   (list "<!-- structor:begin -->"
-                         ""
-                         "<!-- 此结构图由 maak structor 自动维护，请勿手改 -->"
-                         ""
-                         "```")
-                   (%structor-tree abs-dir depth)
-                   (list "```" "" "<!-- /structor -->"))))
+                (append
+                 (list "<!-- structor:begin -->"
+                       ""
+                       "<!-- 此结构图由 maak structor 自动维护，请勿手改 -->"
+                       ""
+                       "```")
+                 (%structor-tree abs-dir depth)
+                 (list "```" "" "<!-- /structor -->"))))
           (let loop ((ls lines) (out '()) (state 'normal))
             (cond
              ((null? ls)
@@ -627,7 +627,7 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
                 (if dry?
                     (display new-content)
                     (write-file-atomically file
-                      (lambda (port) (display new-content port))))))
+                                           (lambda (port) (display new-content port))))))
              (else
               (let ((line (car ls)))
                 (cond
