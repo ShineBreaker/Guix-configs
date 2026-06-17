@@ -1,0 +1,58 @@
+# Atuin 配置 — Guix 系统专用
+
+auto_sync = false
+
+search_mode = "fuzzy"
+filter_mode = "directory"
+exit_mode = "return-original"
+
+secrets_filter = true
+
+history_filter = [
+  "^cat",
+  "^zcat",
+]
+
+style = "auto"
+enter_accept = false
+
+[stats]
+common_subcommands = [
+  "cargo",
+  "docker",
+  "flatpak",
+  "git",
+  "go",
+  "guix",
+  "herd",
+  "nix",
+  "npm",
+  "pnpm",
+  "podman",
+  "tmux",
+  "yarn",
+  "maak",
+  "just",
+  "distrobox"
+]
+common_prefix = ["sudo"]
+ignored_commands = [
+  "cd",
+  "ls",
+  "cat",
+  "bat",
+  "echo",
+  "zcat",
+]
+
+[keys]
+scroll_exits = true
+
+[sync]
+records = true
+
+[preview]
+strategy = "auto"
+
+[search]
+filters = [ "global", "host", "session", "workspace", "directory" ]
