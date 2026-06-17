@@ -510,8 +510,8 @@ SUDO? 控制提权；TAIL 为可选后续 thunk（dry-run 也会执行）。"
        "--year" ,(strftime "%Y" (localtime (time-second (current-time))))
        ".")))
 
-                                        ; 注意：$guix 走 $ (fork+exec)，子进程 stdout 继承终端而非 Guile port，
-                                        ; 不能用 with-output-to-port 捕获。改用 open-input-pipe 直接捕获子进程 stdout。
+;; 注意：$guix 走 $ (fork+exec)，子进程 stdout 继承终端而非 Guile port，
+;; 不能用 with-output-to-port 捕获。改用 open-input-pipe 直接捕获子进程 stdout。
 (define (update)
   "更新 channel.lock 并签名提交"
   (let* ((cmd (string-join
