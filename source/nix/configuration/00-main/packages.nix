@@ -37,7 +37,6 @@
     ## Chat
     discord
     feishu
-    qq
     wechat
     wemeet
 
@@ -55,11 +54,7 @@
       ];
     })
     (qq.override {
-      # niri 26.04 的 zwp_text_input_v3 实现有 bug（niri#3067），不发 done 事件，
-      # 导致 Electron 应用（QQ）走 wayland text-input 协议时 IME 失效。
-      # 临时切到 X11 ozone 后端，让 QQ 跑在 XWayland 里、用 XIM 协议跟 fcitx5 通信。
-      # 等 niri 修 bug 后再切回 --enable-wayland-ime。
-      commandLineArgs = "--ozone-platform=x11";
+      commandLineArgs = "--enable-wayland-ime --wayland-text-input-version=3";
     })
   ];
 }

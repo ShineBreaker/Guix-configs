@@ -1,7 +1,10 @@
 { ... }:
 
 {
-  imports = [ ./packages.nix ../programs/nix.nix ];
+  imports = [
+    ./packages.nix
+    ../programs/nix.nix
+  ];
 
   targets.genericLinux.enable = true;
 
@@ -15,11 +18,17 @@
 
   home.sessionVariables = {
     NIXOS_OZONE_WL = 1;
-    CHROMIUM_FLAGS =
-      "--enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform-hint=wayland --enable-wayland-ime --wayland-text-input-version=3";
+    CHROMIUM_FLAGS = "--enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform-hint=wayland --enable-wayland-ime --wayland-text-input-version=3";
   };
 
   programs.home-manager.enable = true;
 
   xdg.enable = true;
+
+  i18n.inputMethod = {
+    enable = true;
+    type = "fcitx5";
+    fcitx5.waylandFrontend = true;
+  };
+
 }
