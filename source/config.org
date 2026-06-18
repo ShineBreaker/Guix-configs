@@ -1196,7 +1196,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "python-lsp-black"
         "python-lsp-server"
         "rust-analyzer"
-        "sbcl"
+
         "shfmt"
         "yq"
         "zig-zls"
@@ -1393,14 +1393,14 @@ end
 #+begin_src scheme
 (list (service home-emacs-service-type
                (home-emacs-configuration
-                (emacs emacs-pgtk)
+                (emacs emacs-next-pgtk)
                 (shepherd-requirement '(graphical-session))
                 (packages (specifications->manifest
                            '(;; Emacs 核心与基础
                              "emacs-auto-compile"
                              "emacs-gcmh"
                              "emacs-no-littering"
-                             "emacs-pgtk:doc"
+                             "emacs-next-pgtk:doc"
                              "emacs-use-package"
 
                              ;; 补全与迷你缓冲区
@@ -1419,10 +1419,13 @@ end
                              "emacs-consult-flycheck"
 
                              ;; 界面与外观
+                             "emacs-centaur-tabs"
                              "emacs-dashboard"
-                             "emacs-doom-modeline"
                              "emacs-ef-themes"
+                             "emacs-hide-mode-line"
                              "emacs-kind-icon"
+                             "emacs-mini-echo"
+
                              "emacs-minimap"
                              "emacs-nerd-icons"
                              "emacs-pulsar"
@@ -1442,7 +1445,6 @@ end
                              "emacs-expand-region"
                              "emacs-helpful"
                              "emacs-indent-bars"
-                             "emacs-keymap-popup"
                              "emacs-multiple-cursors"
                              "emacs-origami"
                              "emacs-origami-ts"
@@ -1479,7 +1481,7 @@ end
                              "emacs-markdown-mode"
                              "emacs-nix-mode"
                              "emacs-rust-mode"
-                             "emacs-sly"
+
                              "emacs-typescript-mode"
                              "emacs-web-mode"
                              "emacs-yaml"
