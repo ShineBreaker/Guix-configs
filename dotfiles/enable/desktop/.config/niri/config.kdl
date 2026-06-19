@@ -6,6 +6,7 @@ include "settings/key-bindings.kdl"
 include "settings/window-rules.kdl"
 
 include optional=true "settings/key-bindings-wm.kdl"
+include optional=true "settings/special.kdl"
 include optional=true "noctalia.kdl"
 
 environment {
@@ -16,9 +17,6 @@ spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAY
 spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP"
 
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
-spawn-sh-at-startup "herd restart waybar"
-
-spawn-at-startup "waypaper" "--restore"
 spawn-at-startup "dex" "-a"
 
 prefer-no-csd
@@ -97,13 +95,16 @@ output "eDP-1" {
 screenshot-path "~/Pictures/Screenshots/%Y-%m-%d_%H-%M-%S.png"
 
 layer-rule {
+  match namespace="awww-daemon"
+  match namespace="dms:blurwallpaper"
   match namespace="^noctalia-overview*"
   match namespace="^noctalia-wallpaper*"
-  match namespace="swww-daemon"
+  match namespace="^quickshell$"
   place-within-backdrop true
 }
 
 layer-rule {
+  match namespace="^dms:(app-launcher|bar)-.*$"
   match namespace="launcher"
   match namespace="^noctalia-(background|launcher-overlay|dock)-.*$"
   match namespace="waybar"
@@ -120,5 +121,5 @@ layer-rule {
 
 switch-events {
   lid-close { spawn "niri" "msg" "action" "power-off-monitors"; }
-  lid-open { spawn "niri" "msg" "action" "power-on-monitors"; }
+  lid-open  { spawn "niri" "msg" "action" "power-on-monitors"; }
 }

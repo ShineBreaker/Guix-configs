@@ -1,0 +1,65 @@
+#!/usr/bin/env sh
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+set -eu
+
+STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+LOG_DIR="${STATE_HOME}/darkman"
+LOG_FILE="${LOG_DIR}/hook.log"
+
+mkdir -p "$LOG_DIR"
+
+log() {
+	printf '[%s] [light] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" >>"$LOG_FILE"
+}
+
+run_optional() {
+	description="$1"
+	shift
+
+	if "$@" >>"$LOG_FILE" 2>&1; then
+		log "$description: ok"
+	else
+		status=$?
+		log "$description: failed (exit $status)"
+	fi
+}
+
+log "hook start"
+
+"${HOME}/.config/darkman/script/set-theme.sh" light >>"$LOG_FILE" 2>&1
+log "set-theme: ok"
+
+pkill -u "$USER" --signal=SIGUSR2 ^foot$ || true
+log "foot reload signal sent"
+
+if command -v kitty >/dev/null 2>&1; then
+	run_optional "kitty config reload" pkill -u "$USER" --signal=SIGUSR1 ^kitty$
+else
+	log "kitty theme reload: skipped (kitty not found)"
+fi
+
+run_optional "dms darkMode" timeout 5 dms ipc call theme light
+
+makoctl reload || true
+log "mako reload requested"
+
+if command -v guix >/dev/null 2>&1; then
+	run_optional "gsettings color-scheme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme prefer-light
+	run_optional "gsettings gtk-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme adw-gtk3
+	run_optional "gsettings icon-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface icon-theme Papirus-Light
+else
+	log "gsettings: skipped (guix not found)"
+fi
+
+# 通知所有运行中的 GTK 应用刷新主题设置
+if command -v dbus-send >/dev/null 2>&1; then
+	run_optional "gtk notify theme change" dbus-send --session --dest=org.gtk.Settings --type=method_call /org/gtk/Settings org.gtk.Settings.NotifyThemeChange
+else
+	log "gtk theme notify: skipped (dbus-send not found)"
+fi
+
+log "hook end"

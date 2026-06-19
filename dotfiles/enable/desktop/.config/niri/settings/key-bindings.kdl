@@ -4,8 +4,6 @@
 
 binds {
   Alt+Print   { screenshot-window; }
-  Alt+Tab     { focus-workspace-previous; }
-
   Ctrl+Print  { screenshot-screen; }
   Print       { screenshot; }
 

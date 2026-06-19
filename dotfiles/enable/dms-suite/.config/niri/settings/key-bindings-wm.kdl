@@ -1,0 +1,27 @@
+// SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+binds {
+  Mod+Alt+L   hotkey-overlay-title="锁屏"      repeat=false    { spawn "dms" "ipc" "call" "lock" "lock"; }
+  Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"  repeat=false    { spawn "noctalia-shell" "ipc" "call" "wallpaper" "random"; }
+
+  Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn "dms" "ipc" "call" "clipboard" "toggle"; }
+  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn "dms" "ipc" "call" "spotlight" "toggle"; }
+
+
+  XF86AudioRaiseVolume  allow-when-locked=true { spawn "dms" "ipc" "call" "audio" "increment" "5"; }
+  XF86AudioLowerVolume  allow-when-locked=true { spawn "dms" "ipc" "call" "audio" "decrement" "5"; }
+  XF86AudioMute         allow-when-locked=true { spawn "dms" "ipc" "call" "audio" "mute"; }
+  XF86MonBrightnessUp   allow-when-locked=true { spawn "dms" "ipc" "call" "brightness" "increment" "5" ""; }
+  XF86MonBrightnessDown allow-when-locked=true { spawn "dms" "ipc" "call" "brightness" "decrement" "5" ""; }
+
+  Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn "dms" "ipc" "call" "brightness" "increment" "5" ""; }
+  Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn "dms" "ipc" "call" "brightness" "decrement" "5" ""; }
+
+  Mod+M           hotkey-overlay-title="任务管理器" { spawn "dms" "ipc" "call" "processlist" "focusOrToggle"; }
+  Mod+Comma       hotkey-overlay-title="设置"       { spawn "dms" "ipc" "call" "settings" "focusOrToggle"; }
+  Mod+N           hotkey-overlay-title="控制中心"   { spawn "dms" "ipc" "call" "notifications" "toggle"; }
+  Mod+Y           hotkey-overlay-title="浏览壁纸"   { spawn "dms" "ipc" "call" "dankdash" "wallpaper"; }
+  Mod+Shift+E     hotkey-overlay-title="重启dms"    { spawn "herd" "restart" "dms"; }
+}
