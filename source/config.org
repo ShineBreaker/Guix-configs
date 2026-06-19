@@ -1710,7 +1710,7 @@ end
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
-                              (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
+                              ; (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal-wlr "/libexec/xdg-desktop-portal-wlr" '(graphical-session))))))
