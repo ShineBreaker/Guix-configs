@@ -6,6 +6,19 @@
 
 set -eu
 
+# home-shepherd 启动的 darkman daemon 未继承会话变量；hook 调 noctalia
+# 等 wayland 客户端需自取当前用户的 wayland socket。
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -d "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" ]; then
+	for _d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/wayland-*; do
+		case "$_d" in *\.lock) continue ;; esac
+		[ -S "$_d" ] || continue
+		WAYLAND_DISPLAY="${_d##*/}"
+		break
+	done
+fi
+export WAYLAND_DISPLAY
+unset _d
+
 STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 LOG_DIR="${STATE_HOME}/darkman"
 LOG_FILE="${LOG_DIR}/hook.log"
