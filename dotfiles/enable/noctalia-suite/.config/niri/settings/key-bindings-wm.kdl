@@ -1,0 +1,23 @@
+// SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+binds {
+  Mod+Alt+L   hotkey-overlay-title="锁屏"      repeat=false    { spawn-sh "noctalia msg panel-toggle launcher"; }
+  Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"                  { spawn-sh "noctalia msg wallpaper-random"; }
+
+  Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "noctalia msg panel-toggle clipboard"; }
+  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn-sh "noctalia msg panel-toggle launcher"; }
+
+
+  XF86AudioRaiseVolume  allow-when-locked=true { spawn-sh "noctalia msg volume-up"; }
+  XF86AudioLowerVolume  allow-when-locked=true { spawn-sh "noctalia msg volume-down"; }
+  XF86AudioMute         allow-when-locked=true { spawn-sh "noctalia msg volume-mute"; }
+  XF86MonBrightnessUp   allow-when-locked=true { spawn-sh "noctalia msg brightness-up"; }
+  XF86MonBrightnessDown allow-when-locked=true { spawn-sh "noctalia msg brightness-down"; }
+
+  Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn-sh "noctalia msg volume-up"; }
+  Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn-sh "noctalia msg volume-down"; }
+
+  Mod+Shift+E     hotkey-overlay-title="重启noctalia-shell" { spawn "herd" "restart" "noctalia-shell"; }
+}

@@ -1,0 +1,19 @@
+layer-rule {
+  match namespace="awww-daemon"
+  match namespace="dms:blurwallpaper"
+  match namespace="^noctalia-overview*"
+  match namespace="^noctalia-wallpaper*"
+  match namespace="^quickshell$"
+  place-within-backdrop true
+}
+
+layer-rule {
+  match namespace="^dms:(app-launcher|bar)-.*$"
+  match namespace="launcher"
+  match namespace="^noctalia-(background|launcher-overlay|dock)-.*$"
+  match namespace="waybar"
+  background-effect {
+    blur true
+    xray false
+  }
+}

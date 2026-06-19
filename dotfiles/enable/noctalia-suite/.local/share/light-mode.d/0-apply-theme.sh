@@ -42,7 +42,7 @@ else
 	log "kitty theme reload: skipped (kitty not found)"
 fi
 
-run_optional "noctalia-shell darkMode" timeout 5 noctalia-shell ipc --any-display call darkMode setLight
+run_optional "noctalia-shell darkMode" timeout 5 noctalia msg theme-mode-set light
 
 makoctl reload || true
 log "mako reload requested"

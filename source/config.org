@@ -1123,9 +1123,9 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "xdg-utils"
 
         ;; 主题
+        "adw-gtk3-theme"
         "bibata-cursor-theme"
-        "orchis-theme"
-        "orchis-kde-themes"
+        "breeze"
         "papirus-icon-theme"
 
         ;; QT框架相关
@@ -1555,6 +1555,7 @@ end
 ;; <<waybar-desktop-services>>
 
 (list (service home-dbus-service-type)
+      (service home-noctalia-service-type)
       (service home-pipewire-service-type)
       (service home-syncthing-service-type)
 
@@ -1574,25 +1575,7 @@ end
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua))))
-
-      (simple-service 'dank-material-shell home-shepherd-service-type
-                      (list
-                       (let ((pkg dank-material-shell))
-                         (shepherd-service
-                          (provision '(dms))
-                          (requirement '(graphical-session))
-                          (start #~(lambda args
-                                     ((make-forkexec-constructor
-                                       (list #$(file-append pkg "/bin/dms")
-                                             "-c" #$(file-append pkg "/share/quickshell")
-                                             "run" "--session")
-                                       #:environment-variables (environ)
-                                       #:log-file (string-append (getenv "HOME")
-                                                                 "/.local/state/shepherd/dms.log"))
-                                      args)))
-                          (stop #~(make-kill-destructor))
-                          (respawn? #t))))))
+                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
 #+end_src
 
 **** 默认应用程序关联
@@ -1687,11 +1670,17 @@ end
 
 #+NAME: waybar-suite-applications
 #+begin_src scheme
-(cons* (specs->pkgs+out "fuzzel"
-                        "mako"
-                        "swaylock-effects"
-                        "awww"
-                        "waypaper")
+(cons* (specs->pkgs+out
+        ;; 桌面组件
+        "fuzzel"
+        "mako"
+        "swaylock-effects"
+        "awww"
+        "waypaper"
+
+        ;; 主题
+        "orchis-theme"
+        "orchis-kde-themes")
 #+end_src
 
 *** 软件自启动
@@ -1753,11 +1742,12 @@ end
                 (layout 'stow)
                 (packages '("agents"
                             "desktop"
-                            "dms-suite"
                             "emacs"
                             "system"
                             "terminal"
-                            "utilities"))
+                            "utilities"
+
+                            "noctalia-suite"))
                 (excluded '("\\.agents/workfile($|/.*)"
                             ".*\\.swp"
                             "\\.git"

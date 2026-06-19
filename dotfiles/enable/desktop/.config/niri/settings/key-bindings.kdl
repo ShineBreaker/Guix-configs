@@ -105,7 +105,7 @@ binds {
   Mod+Shift+WheelScrollDown cooldown-ms=150 { focus-column-right; }
   Mod+Shift+WheelScrollUp   cooldown-ms=150 { focus-column-left; }
 
-  Mod+T hotkey-overlay-title="打开终端" repeat=false { spawn "foot"; }
+  Mod+T hotkey-overlay-title="打开终端"   repeat=false { spawn "foot"; }
   Mod+E hotkey-overlay-title="打开 Emacs" repeat=false { spawn "emacsclient" "-c"; }
 
   Mod+WheelScrollDown  cooldown-ms=150  { focus-workspace-down; }
