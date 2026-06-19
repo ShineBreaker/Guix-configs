@@ -172,7 +172,7 @@ maak check                    # 最快：仅括号平衡检查
 **验证流程**（三步缺一不可）：
 
 1. 改 dotfiles 源
-2. `maak home`（重建 store 软链接）
+2. `maak home`
 3. **grep 部署位置**（`~/.config/<app>/...`，非仓库源）确认同步，再 restart service + 验证行为
 
 > 快速判断同步：`md5sum <源文件>` vs `md5sum ~/.config/<app>/<同路径文件>`，或看软链接 target 的 store hash 是否变化。
@@ -181,4 +181,4 @@ maak check                    # 最快：仅括号平衡检查
 - 不要绕过 `maak` 直接调 `guix system reconfigure`（频道不会被锁）
 - 修改 `dotfiles/` 内容后必须 `maak home`，否则不会生效（机制 + 验证流程见本节顶部警告框）
 - **禁止 AI agent 自行运行 `maak rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
-  修改 dotfiles 或 source 后，只能够运行 `maak home` ，该指令会在下次重启前暂时应用，待确认功能正常后再提醒用户运行 `maak rebuild` 固化配置即可。
+  修改 dotfiles 或 source 后，只能够运行 `maak home` ，该指令会在下次重启前暂时将所有home-configs应用（包含其中的所有服务、包以及dotfiles的部署），待确认功能正常后再提醒用户运行 `maak rebuild` 固化配置即可。
