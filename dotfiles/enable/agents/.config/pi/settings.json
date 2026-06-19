@@ -54,13 +54,16 @@
       "ultra": {
         "model": "zai/GLM-5.2",
         "fallback": [
-          "minimax-cn/MiniMax-M3"
+          "minimax-cn/MiniMax-M3",
+          "xiaomi/mimo-v2.5-pro",
+          "deepseek/deepseek-v4-pro"
         ]
       },
       "pro": {
         "model": "minimax-cn/MiniMax-M3",
         "fallback": [
           "deepseek/deepseek-v4-pro",
+          "xiaomi/mimo-v2.5-pro",
           "zai/GLM-4.7"
         ]
       },
