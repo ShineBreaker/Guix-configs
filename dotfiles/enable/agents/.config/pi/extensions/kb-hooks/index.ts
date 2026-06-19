@@ -5,11 +5,12 @@
  * kb-hooks extension
  *
  * 知识库集成钩子：
- * - session_start: 注入 KB 健康度摘要
- * - agent_end:     检测"任务完成信号"，命中时注入 self-improving 评估提示
- * - /kb-summarize: 触发 self-improving 经验总结（自动切到 quick 模型，完成后恢复）
- * - /curate:       启动嵌套 agent 跑知识库策展
- * - /kb-health:    显示健康度报告
+ * - session_start:        注入 KB 健康度摘要
+ * - before_agent_start:   注入当前项目 memory（memories/projects/<name>.org）
+ * - agent_end:            检测"任务完成信号"，命中时注入 self-improving 评估提示
+ * - /kb-summarize:        触发 self-improving 经验总结（自动切到 quick 模型，完成后恢复）
+ * - /curate:              启动嵌套 agent 跑知识库策展
+ * - /kb-health:           显示健康度报告
  *
  * 信号清单、写入流程、卡片格式由 self-improving / knowledge-base skill 提供，
  * 本插件只做"事件触发 + 命令快捷入口"，避免与 skill 重复维护。
@@ -20,15 +21,23 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const KB_SCRIPT = join(homedir(), ".local", "bin", "kb");
 const KB_AGENT = join(homedir(), ".local", "bin", "kb-agent");
 const KB_SETTINGS_PATH =
   process.env.PI_SETTINGS_PATH ||
   join(homedir(), ".config", "pi", "settings.json");
+
+// 知识库根目录：与 kb 工具共享（KB_ROOT 环境变量可覆盖，默认 ~/Documents/Org）
+const KB_ROOT = process.env.KB_ROOT || join(homedir(), "Documents", "Org");
+const KB_MEMORY_FILE = join(KB_ROOT, "MEMORY.org");
+const KB_PROJECTS_DIR = join(KB_ROOT, "memories", "projects");
+
+/** 项目 memory 文件最大读取字节（防巨型文件爆 context） */
+const PROJECT_MEMORY_MAX_BYTES = 65536;
 
 /**
  * 任务完成信号（取自 self-improving skill references/triggers.md）
@@ -98,6 +107,191 @@ function readQuickModel(): { provider: string; id: string } | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** MEMORY.org 解析出的项目条目 */
+interface ProjectEntry {
+  name: string;
+  /** 原始 PATH 字符串（来自 MEMORY.org 的 :PATH: 属性） */
+  pathRaw: string;
+  /** 解析后的 FILE 路径（来自 :FILE: 属性） */
+  filePath: string;
+}
+
+/**
+ * 解析 MEMORY.org 的 `* project` 节，提取所有 `** <name>` 条目的 :PATH: 和 :FILE:。
+ * 解析失败返回空数组。
+ */
+function parseProjectEntries(memoryText: string): ProjectEntry[] {
+  const entries: ProjectEntry[] = [];
+  // 找 * project 节的起止（节标题为顶级 `* xxx`）
+  const lines = memoryText.split("\n");
+  let inProject = false;
+  let curEntry: string | null = null;
+  let curProps: Record<string, string> = {};
+  let inProps = false;
+
+  for (const line of lines) {
+    const topMatch = line.match(/^(\*)\s+\S/);
+    if (topMatch) {
+      // 顶级标题：先推入上一个 entry（避免节末尾的项目丢失），再切换节
+
+      if (inProject && curEntry) entries.push(buildEntry(curEntry, curProps));
+
+      inProject = /^\*\s+project\b/i.test(line);
+
+      curEntry = null;
+
+      curProps = {};
+
+      inProps = false;
+
+      continue;
+    }
+
+    if (!inProject) continue;
+
+    const subMatch = line.match(/^\s*\*\*\s+(.+)/);
+    if (subMatch) {
+      if (curEntry) entries.push(buildEntry(curEntry, curProps));
+      curEntry = subMatch[1].trim();
+      curProps = {};
+      inProps = false;
+      continue;
+    }
+
+    if (curEntry) {
+      if (/^\s*:PROPERTIES:\s*$/.test(line)) {
+        inProps = true;
+        continue;
+      }
+      if (/^\s*:END:\s*$/.test(line)) {
+        inProps = false;
+        continue;
+      }
+      if (inProps) {
+        const pm = line.match(/^\s*:([A-Z_][A-Z0-9_]*):\s*(.+)/);
+        if (pm) curProps[pm[1]] = pm[2].trim();
+      }
+    }
+  }
+  if (curEntry) entries.push(buildEntry(curEntry, curProps));
+  return entries;
+}
+
+function buildEntry(name: string, props: Record<string, string>): ProjectEntry {
+  return {
+    name,
+    pathRaw: props.PATH || "",
+    filePath: props.FILE || "",
+  };
+}
+
+/**
+
+ * 找出 cwd 所在的项目。
+
+ * 匹配规则：cwd == PATH 或 cwd 是 PATH 的严格子目录。
+
+ * 多个项目匹配时选最深的（最具体的），避免祖先误匹配
+
+ * （如 cwd=.emacs.d 时不该匹配其祖先 Guix-configs）。
+
+ * 注：kb memory --project . 走双向前缀匹配，祖先路径也会被误匹配；
+
+ * kb-hooks 用更严格的语义，因为 system prompt 注入对准确性要求高。
+
+ */
+
+function findProjectByCwd(
+  cwd: string,
+
+  entries: ProjectEntry[],
+): ProjectEntry | undefined {
+  let absCwd: string;
+
+  try {
+    absCwd = resolve(cwd);
+  } catch {
+    absCwd = cwd;
+  }
+
+  let best: ProjectEntry | undefined;
+
+  let bestDepth = -1;
+
+  for (const e of entries) {
+    if (!e.pathRaw) continue;
+
+    let absPath: string;
+
+    try {
+      absPath = resolve(e.pathRaw.replace(/^~/, homedir()));
+    } catch {
+      continue;
+    }
+
+    if (absCwd !== absPath && !absCwd.startsWith(absPath + "/")) continue;
+
+    // 路径段越多越深：/a/b/c 深度 3 比 /a 深度 1 更具体
+
+    const depth = absPath.split("/").length;
+
+    if (depth > bestDepth) {
+      best = e;
+
+      bestDepth = depth;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * 加载项目 memory 文件全文。带大小限制避免爆 context。
+ * 返回 { content, truncated }；文件不存在/超过限制返回 undefined。
+ */
+function loadProjectMemory(
+  entry: ProjectEntry,
+): { content: string; truncated: boolean } | undefined {
+  if (!entry.filePath) return undefined;
+  const filePath = entry.filePath.startsWith("/")
+    ? entry.filePath
+    : join(KB_PROJECTS_DIR, "..", "..", entry.filePath);
+  if (!existsSync(filePath)) return undefined;
+  const stat = statSync(filePath);
+  if (stat.size > PROJECT_MEMORY_MAX_BYTES) {
+    const buf = readFileSync(filePath, "utf-8").slice(
+      0,
+      PROJECT_MEMORY_MAX_BYTES,
+    );
+    return { content: buf, truncated: true };
+  }
+  return { content: readFileSync(filePath, "utf-8"), truncated: false };
+}
+
+/** 构造注入到 system prompt 的项目 memory 段（空表示不注入） */
+function buildProjectMemoryBlock(cwd: string): string {
+  if (!existsSync(KB_MEMORY_FILE)) return "";
+  let memoryText: string;
+  try {
+    memoryText = readFileSync(KB_MEMORY_FILE, "utf-8");
+  } catch {
+    return "";
+  }
+  const entries = parseProjectEntries(memoryText);
+  const match = findProjectByCwd(cwd, entries);
+  if (!match) return "";
+  const loaded = loadProjectMemory(match);
+  if (!loaded) return "";
+  const note = loaded.truncated
+    ? `\n\n> [kb-hooks] 注：原文 ${PROJECT_MEMORY_MAX_BYTES} 字节以上，已截断到 ${PROJECT_MEMORY_MAX_BYTES} 字节`
+    : "";
+  return (
+    `<project_memory name="${match.name}" path="${match.pathRaw}">\n` +
+    loaded.content +
+    `${note}\n</project_memory>`
+  );
 }
 
 /** 运行 kb 命令并返回 stdout */
@@ -185,6 +379,15 @@ export default function init(pi: ExtensionAPI): void {
     if (summary) {
       console.log(summary);
     }
+  });
+
+  // ── before_agent_start: 注入当前项目 memory 到 system prompt ──
+  pi.on("before_agent_start", async (event, ctx) => {
+    const block = buildProjectMemoryBlock(ctx.cwd);
+    if (!block) return;
+    return {
+      systemPrompt: event.systemPrompt + "\n\n" + block,
+    };
   });
 
   // ── agent_end: 检测完成信号 + 恢复 summarize 模式前的原模型 ──
