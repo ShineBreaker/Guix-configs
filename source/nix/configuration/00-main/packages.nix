@@ -40,6 +40,10 @@
     wechat
     wemeet
 
+    # AI Agent
+    codex
+    codex-acp
+
     ## Customized Packages
     (libreoffice.overrideAttrs {
       variant = "fresh";
