@@ -26,20 +26,20 @@
 
 --------------
 
-** 系统预览
-*** 桌面截图
+* 系统预览
+** 桌面截图
 [[file:screenshots/daily.png]]
-*** ~Tmux~ + ~Foot~ 实现的终端布局
+** ~Tmux~ + ~Foot~ 实现的终端布局
 [[file:screenshots/terminal.png]]
-*** Emacs 截图
+** Emacs 截图
 [[file:screenshots/emacs.png]]
-*** Zen Browser
+** Zen Browser
 [[file:screenshots/browse.png]]
 
-** 核心概念速览
+* 核心概念速览
 在深入配置前，先理解几个 Guix 特有的概念：
 
-*** 1. Channel（频道）
+** 1. Channel（频道）
 Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix= 外还包含：
 
 + [[https://gitlab.com/nonguix/nonguix][nonguix]] — Linux 内核、专有驱动等
@@ -48,12 +48,12 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 
 频道定义在 [[./source/channel.scm][source/channel.scm]]，版本锁定在 [[./source/channel.lock][source/channel.lock]]。 =channel.lock= 利用 channel 参数中 =commit= 字段锁住具体 commit，从而固定仓库。
 
-*** 2. System + Home（统一配置）
+** 2. System + Home（统一配置）
 单一 =guix system reconfigure= 同时激活系统配置与用户配置（用户配置由 =guix-home-service= 内嵌提供）。Org 源文件 =source/config.org= 中包含系统段与用户段两套 Noweb 代码块。
 
 *原则*：能用 Home 解决就不用 System，保持系统层最小化。
 
-*** 3. Org Mode 撰写配置
+** 3. Org Mode 撰写配置
 配置写在 =.org= 文件中，代码嵌入在 =src= 代码块里：
 
 + 配置和文档在一起
@@ -62,7 +62,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 
 本仓库使用 =maak=（基于 maak-mono 的 Scheme DSL）自动处理 Org 文件的导出。
 
-** 仓库架构详解
+* 仓库架构详解
 
 #+begin_example
 .
@@ -90,7 +90,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 └── tmp/                    # maak 生成的中间产物（自动生成，勿手动编辑）
 #+end_example
 
-*** 关键入口
+** 关键入口
 
 | 文件 / 目录                              | 用途                                              | 修改频率                   |
 |------------------------------------------+---------------------------------------------------+----------------------------|
@@ -100,7 +100,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 | =maak.scm=                               | maak 任务定义                                     | 需要添加自定义任务时修改   |
 | =source/channel.scm=                     | 频道定义                                          | 添加/删除频道时            |
 
-** 构建管线
+* 构建管线
 
 #+begin_example
 source/config.org
@@ -112,8 +112,8 @@ tmp/config.scm
 单一 reconfigure：operating-system 同时声明 guix-home-service（含 home-environment）
 #+end_example
 
-** 快速开始
-*** 1. 安装系统（新机器）
+* 快速开始
+** 1. 安装系统（新机器）
 #+begin_src sh
 # 进入 Guix 安装环境后，克隆本仓库
 git clone https://codeberg.org/BrokenShine/Guix-configs
@@ -123,7 +123,7 @@ git clone https://codeberg.org/BrokenShine/Guix-configs
 guix shell maak -- maak init
 #+end_src
 
-*** 2. 日常更新（已安装系统）
+** 2. 日常更新（已安装系统）
 #+begin_src sh
 # 查看所有可用命令
 maak --list
@@ -140,11 +140,11 @@ MAAK_DRY_RUN=1 maak rebuild
 maak check
 #+end_src
 
-** 可复用组件指南
+* 可复用组件指南
 以下组件设计为可独立复用，你可以直接复制到自己的配置中。
 
-*** ✅ 完全独立可复用
-**** 1. 内核优化参数（[[./source/config.org::*Kernel][source/config.org]] 内 =kernel-arguments= 代码块）
+** ✅ 完全独立可复用
+*** 1. 内核优化参数（[[./source/config.org::*Kernel][source/config.org]] 内 =kernel-arguments= 代码块）
 
 #+begin_src scheme
 (kernel-arguments
@@ -160,7 +160,7 @@ maak check
 
 *如何复用*：直接复制到 =operating-system= 的 =kernel-arguments= 字段。
 
-**** 2. 静态配置文件（[[./source/files/][source/files/]]）
+*** 2. 静态配置文件（[[./source/files/][source/files/]]）
 
 + =nftables.conf= — nftables 防火墙规则
 + =rounded.qss= — Qt 圆角样式
@@ -169,7 +169,7 @@ maak check
 
 *如何复用*：直接复制文件内容，或在自己的配置中使用 =(local-file "...")= 引用。
 
-**** 3. Org 模式配置工作流
+*** 3. Org 模式配置工作流
 
 本仓库的核心创新：用 Org 文件管理配置，通过 =maak= 自动提取。
 
@@ -187,8 +187,8 @@ maak check
 3. 用 =#+begin_src scheme :tangle ...= 包裹代码块
 4. 用 Noweb =<<ref>>= 引用子块
 
-*** ⚠️ 需要适配后复用
-**** 1. Btrfs + tmpfs 混合架构（[[./source/information.scm][source/information.scm]]）
+** ⚠️ 需要适配后复用
+*** 1. Btrfs + tmpfs 混合架构（[[./source/information.scm][source/information.scm]]）
 实现「重启后根目录清空，但数据持久化」的不可变系统效果（具体需要持久化的目录与 Btrfs 结构都需要对应修改）：
 
 #+begin_src scheme
@@ -212,7 +212,7 @@ maak check
 
 *如何复用*：参考 =information.scm= 中的 =%data-dirs= 和 =%btrfs-subvolumes= 定义，配合 =config.org= 中的 Btrfs 挂载配置。
 
-**** 2. Dotfiles 组织方式（[[./dotfiles/][dotfiles/]]）
+*** 2. Dotfiles 组织方式（[[./dotfiles/][dotfiles/]]）
 
 采用 *统一 Stow 部署*：所有 =enable/<dir>/= 子目录由 Guix Home 的 =home-dotfiles-service-type=（layout ='stow=）部署为软链接，不再有 immutable / mutable 拆分。
 
@@ -240,16 +240,16 @@ dotfiles/enable/
 
 #+begin_src scheme
 (service home-dotfiles-service-type
-  (home-dotfiles-configuration
-   (directories '("../dotfiles/enable"))
-   (layout 'stow)
-   (packages '("agents" "desktop" "desktop-suite"
-               "emacs" "system" "terminal" "utilities"))))
+         (home-dotfiles-configuration
+          (directories '("../dotfiles/enable"))
+          (layout 'stow)
+          (packages '("agents" "desktop" "desktop-suite"
+                      "emacs" "system" "terminal" "utilities"))))
 #+end_src
 
 新增 / 修改 =enable/<dir>/= 下文件后运行 =maak rebuild= 重新链接。
 
-**** 3. tmux 配置（[[./dotfiles/enable/terminal/.config/tmux/][dotfiles/enable/terminal/.config/tmux/]]）
+*** 3. tmux 配置（[[./dotfiles/enable/terminal/.config/tmux/][dotfiles/enable/terminal/.config/tmux/]]）
 tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计：
 
 + *侧边栏导航树*：浮动 pane 渲染的层级树（Session → Window → Pane），前缀键 =Ctrl+x B= 切换
@@ -276,18 +276,18 @@ tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计：
 
 *注意*：侧栏依赖 foot 终端行为，在其他终端下可能需要调整 =default-terminal= 与 =terminal-overrides=。
 
-** 配置分层策略
+* 配置分层策略
 理解何时修改哪个文件：
 
-*** 添加新软件包
+** 添加新软件包
 1. *仅用户需要*（游戏、开发工具、媒体播放器）→ 在 =source/config.org= 的 home-packages 段（=desktop-packages-list= / =terminal-packages-list= / =devtools-packages-list= / =user-packages-list=）添加
 2. *系统级必需*（文件系统工具、固件、limine 等）→ 在 =source/config.org= 的 system-packages 段（=packages-list=）添加
 
-*** 添加新服务
+** 添加新服务
 1. *用户服务*（如 swayidle、mako）→ =source/config.org= 的 home-services 段
 2. *系统服务*（如 nftables、docker）→ =source/config.org= 的 system-services 段
 
-*** 添加配置文件
+** 添加配置文件
 *优先放入 =dotfiles/enable/<app>/=*：
 
 1. 创建子目录（如 =dotfiles/enable/<app>/.config/<app>/=）
@@ -304,8 +304,8 @@ maak rebuild
 
 *仅在需要动态生成时使用 =source/files/=*（如需注入 Guix 软件包路径）。
 
-** 常用任务
-*** 修改用户名
+* 常用任务
+** 修改用户名
 编辑 =source/information.scm=：
 
 #+begin_src scheme
@@ -314,7 +314,7 @@ maak rebuild
 
 然后运行 =maak rebuild= 。
 
-*** 添加 Btrfs 持久化目录
+** 添加 Btrfs 持久化目录
 编辑 =source/information.scm=：
 
 #+begin_src scheme
@@ -324,14 +324,14 @@ maak rebuild
 
 如需新增 Btrfs 子卷挂载，同步编辑 =%btrfs-subvolumes=。然后在 =config.org= 的 Btrfs 配置部分添加对应的 bind-mount。
 
-*** 添加新的 Channel
+** 添加新的 Channel
 编辑 =source/channel.scm= 添加频道定义，然后运行：
 
 #+begin_src sh
 maak update
 #+end_src
 
-*** 自定义 maak 任务
+** 自定义 maak 任务
 编辑 =maak.scm= 添加新函数：
 
 #+begin_src scheme
@@ -343,21 +343,21 @@ maak update
 
 然后运行 =maak my-task= 。
 
-** 故障排除
-*** 配置声明与目录不一致
+* 故障排除
+** 配置声明与目录不一致
 确保 =dotfiles/enable/<name>/= 目录存在，且与 =source/config.org= 中 =home-dotfiles-configuration= 声明的 =packages= 一致。
 
-*** 系统启动后数据丢失
+** 系统启动后数据丢失
 检查 =source/information.scm= 中的 =%data-dirs= 与 Btrfs 子卷配置是否正确；确保 =/data= 分区已正确挂载。
 
-*** Org 导出失败
+** Org 导出失败
 确保安装了 Emacs 且启用了 =org-babel-tangle=：
 
 #+begin_src sh
 emacs --batch -l org --eval "(require 'ob-tangle)"
 #+end_src
 
-*** 配置语法检查
+** 配置语法检查
 修改 ~*.org~ 配置后，可用 =dry-run= 模式验证语法（不会实际应用到系统）：
 
 #+begin_src sh
@@ -370,7 +370,7 @@ MAAK_DRY_RUN=1 maak rebuild
 maak check
 #+end_src
 
-** 技术规格
+* 技术规格
 
 | 组件       | 选择                       | 说明                                                       |
 |------------+----------------------------+------------------------------------------------------------|
@@ -386,12 +386,12 @@ maak check
 | 输入法     | Fcitx5 + Rime              | 中文输入法                                                 |
 | 字体       | Sarasa Gothic / Maple Mono | 中文优化字体                                               |
 
-** 致谢
+* 致谢
 
 + [[https://t.me/guixcn][GNU Guix 中文社区]] — 提供关键技术支持
 + Grok, ChatGPT, Gemini, Kimi, Claude, GLM, Qwen, DeepSeek — 协助开发
 
 #+begin_quote
 *日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。*
-                                                          ------《日常》
+------《日常》
 #+end_quote

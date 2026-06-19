@@ -27,7 +27,7 @@ dotfiles/
     │   │   └── pi/
     │   ├── .local/
     │   │   ├── bin/
-    │   │   └── share/
+    │   │   │   └── share/
     │   └── .gitignore
     ├── desktop/
     │   └── .config/
@@ -84,6 +84,7 @@ dotfiles/
 ```
 
 <!-- /structor -->
+
 ## 部署机制
 
 - 入口：Guix Home `home-dotfiles-service-type`，在 `source/config.org` 的 `dotfile-services` 块声明
@@ -118,12 +119,12 @@ dotfiles/
 
 ## 各子目录指引
 
-| 子目录                     | 局部 AGENTS.md | 主要职责                                                 |
-| -------------------------- | -------------- | -------------------------------------------------------- |
-| `enable/agents/`           | ✅ 已有        | Pi、Crush、KB、loopctl、共享 skills                      |
-| `enable/desktop/`          | ✅ 已有        | niri、autostart、xdg-portal、xfce4 helpers              |
-| `enable/desktop-suite/`    | ✅ 已有        | darkman、waybar、fuzzel、mako、foot themes、swayidle/lock |
-| `enable/system/`           | ✅ 已有        | containers、pipewire、xdg user-dirs                      |
-| `enable/terminal/`         | ✅ 已有        | fish、tmux、foot、btop、starship、broot、fastfetch       |
-| `enable/utilities/`        | ✅ 已有        | helix、git、kanata、pnpm、winapps、rime、gnupg、bin      |
-| `enable/emacs/`            | ✅ 已有（子模块内） | Emacs + 知识库（独立子模块）                        |
+| 子目录                   | 局部 AGENTS.md      | 主要职责                                           |
+| ------------------------ | ------------------- | -------------------------------------------------- |
+| `enable/agents/`         | ✅ 已有             | Pi、Crush、KB、loopctl、共享 skills、知识库        |
+| `enable/desktop/`        | ✅ 已有             | niri、autostart、xdg-portal、xfce4 helpers         |
+| `enable/noctalia-suite/` | ✅ 已有             | darkman、noctalia相关适配工作                      |
+| `enable/system/`         | ✅ 已有             | containers、pipewire、xdg user-dirs                |
+| `enable/terminal/`       | ✅ 已有             | fish、tmux、foot、btop、starship、broot、fastfetch |
+| `enable/utilities/`      | ✅ 已有             | helix、git、kanata、pnpm、winapps、rime、gnupg     |
+| `enable/emacs/`          | ✅ 已有（子模块内） | Emacs                                              |
