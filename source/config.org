@@ -1085,15 +1085,13 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 *** 桌面环境 相关软件包
 
 #+NAME: desktop-packages-list
-#+begin_src scheme
+#+begin_src scheme :noweb yes
+;; <<waybar-suite-applications>>
+
 (cons* (specs->pkgs+out
         ;; 桌面组件
-        "fuzzel"
-        "mako"
+        "dank-material-shell"
         "pavucontrol"
-        "swaylock-effects"
-        "awww"
-        "waypaper"
 
         ;; 字体
         "font-awesome"
@@ -1145,6 +1143,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "atuin"
         "btop"
         "starship"
+        "tree"
 
         ;; 运行器
         "just"
@@ -1196,7 +1195,6 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "python-lsp-black"
         "python-lsp-server"
         "rust-analyzer"
-
         "shfmt"
         "yq"
         "zig-zls"
@@ -1218,14 +1216,12 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 
         ;; AI Agent
         "cc-switch-bin"
-        "codex"
-        "codex-acp"
         "crush-bin"
         "llama-cpp"
         "oh-my-pi-bin"
         "opencode-bin"
         "opencode-desktop-bin"
-                                        ; "reasonix-desktop-bin"
+        "reasonix-desktop-bin"
 
         ;; 工具
         "du-dust"
@@ -1245,6 +1241,13 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "git-filter-repo"
         "git-lfs"
         "jujutsu"
+
+        ;; 拼写检查
+        "aspell"
+        "aspell-dict-en"
+        "hunspell"
+        "hunspell-dict-en"
+        "miscfiles"
 
         ;; 编辑器
         "helix"
@@ -1422,17 +1425,12 @@ end
                              "emacs-centaur-tabs"
                              "emacs-dashboard"
                              "emacs-ef-themes"
-                             "emacs-hide-mode-line"
                              "emacs-kind-icon"
-                             "emacs-mini-echo"
-
                              "emacs-minimap"
                              "emacs-nerd-icons"
                              "emacs-pulsar"
                              "emacs-rainbow-delimiters"
                              "emacs-spacious-padding"
-                             "emacs-treemacs"
-                             "emacs-treemacs-nerd-icons"
                              "emacs-ultra-scroll"
                              "emacs-which-key"
 
@@ -1448,6 +1446,7 @@ end
                              "emacs-multiple-cursors"
                              "emacs-origami"
                              "emacs-origami-ts"
+                             "emacs-prescient"
                              "emacs-symbol-overlay"
                              "emacs-wgrep"
                              "emacs-with-editor"
@@ -1496,6 +1495,7 @@ end
                              "emacs-magit"
                              "emacs-magit-todos"
                              "emacs-projectile"
+                             "emacs-ibuffer-projectile"
                              "emacs-forge"
                              "emacs-git-modes"
                              "emacs-magit-delta"
@@ -1518,6 +1518,13 @@ end
                              "emacs-notmuch"
                              "emacs-pdf-tools"
                              "emacs-telega"
+
+                             ;; 拼写检查
+                             "aspell"
+                             "aspell-dict-en"
+                             "hunspell"
+                             "hunspell-dict-en"
+                             "miscfiles"
 
                              ;; Tree-sitter
                              "tree-sitter"
@@ -1545,10 +1552,9 @@ end
 #+NAME: user-desktop-services
 #+begin_src scheme :noweb yes
 <<default-applications>>
-<<waybar-desktop-services>>
+;; <<waybar-desktop-services>>
 
 (list (service home-dbus-service-type)
-      ;; (service home-noctalia-shell-service-type)
       (service home-pipewire-service-type)
       (service home-syncthing-service-type)
 
@@ -1568,7 +1574,25 @@ end
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
+                                          (utilities (list fcitx5-configtool fcitx5-lua))))
+
+      (simple-service 'dank-material-shell home-shepherd-service-type
+                      (list
+                       (let ((pkg dank-material-shell))
+                         (shepherd-service
+                          (provision '(dms))
+                          (requirement '(graphical-session))
+                          (start #~(lambda args
+                                     ((make-forkexec-constructor
+                                       (list #$(file-append pkg "/bin/dms")
+                                             "-c" #$(file-append pkg "/share/quickshell")
+                                             "run" "--session")
+                                       #:environment-variables (environ)
+                                       #:log-file (string-append (getenv "HOME")
+                                                                 "/.local/state/shepherd/dms.log"))
+                                      args)))
+                          (stop #~(make-kill-destructor))
+                          (respawn? #t))))))
 #+end_src
 
 **** 默认应用程序关联
@@ -1661,6 +1685,15 @@ end
       (service home-waybar-service-type))
 #+end_src
 
+#+NAME: waybar-suite-applications
+#+begin_src scheme
+(cons* (specs->pkgs+out "fuzzel"
+                        "mako"
+                        "swaylock-effects"
+                        "awww"
+                        "waypaper")
+#+end_src
+
 *** 软件自启动
 
 这里利用 *scheme* 的 =lambda= 函数来包装了一个列表;
@@ -1720,7 +1753,7 @@ end
                 (layout 'stow)
                 (packages '("agents"
                             "desktop"
-                            "desktop-suite"
+                            "dms-suite"
                             "emacs"
                             "system"
                             "terminal"
