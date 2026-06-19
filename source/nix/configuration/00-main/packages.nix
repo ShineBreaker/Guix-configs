@@ -37,6 +37,7 @@
     ## Chat
     discord
     feishu
+    qq
     wechat
     wemeet
 
@@ -56,9 +57,6 @@
         "en-US"
         "zh-CN"
       ];
-    })
-    (qq.override {
-      commandLineArgs = "--enable-wayland-ime --wayland-text-input-version=3";
     })
   ];
 }
