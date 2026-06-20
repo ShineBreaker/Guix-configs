@@ -12,9 +12,6 @@ ModifierOnlyKeyTimeout=250
 
 [Hotkey/TriggerKeys]
 0=Control+space
-1=Zenkaku_Hankaku
-2=Hangul
-
 [Hotkey/ActivateKeys]
 0=Hangul_Hanja
 
@@ -25,7 +22,7 @@ ModifierOnlyKeyTimeout=250
 0=Shift_L
 
 [Hotkey/EnumerateGroupForwardKeys]
-0=Super+space
+0=Control+Super+space
 
 [Hotkey/EnumerateGroupBackwardKeys]
 0=Shift+Super+space
@@ -80,4 +77,3 @@ AllowInputMethodForPassword=False
 ShowPreeditForPassword=False
 # 保存用户数据的时间间隔（以分钟为单位）
 AutoSavePeriod=30
-
