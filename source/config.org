@@ -215,7 +215,7 @@
 + 系统层的修改会触发整次 reconfigure。建议在 *用户配置* 章节里能解决的事情不要上升到本段（参考下方 *决策规则*）。
 + 全局变量如 username、%btrfs-subvolumes、%data-dirs 统一在 source/information.scm 中定义；本文件头部通过 (load "../source/information.scm") 加载，**不要**在 %system 内重复定义。
 + 本文件 *只* 是 Org 源；构建时由 maak.scm 中的 tangle 导出为 tmp/config.scm（单一输出文件，system + home Noweb 拼合）。**不要**手动编辑 tmp/config.scm；**不要**新建第二个 .org 配置文件。
-+ 修改后先用 ~maak check~ 跑括号检查，再用 ~MAAK_DRY_RUN=1 maak rebuild~ 做完整 dry-run。AI agent **不要**自行执行 ~maak rebuild~ / ~guix system reconfigure~（需要 sudo 提权，会卡住 CLI），由用户手动执行；纯 dotfiles / Home 改动可用 ~maak home~ 验证。
++ 修改后先用 ~maak check~ 跑括号检查，再用 ~BLUE_DRY_RUN=1 maak rebuild~ 做完整 dry-run。AI agent **不要**自行执行 ~maak rebuild~ / ~guix system reconfigure~（需要 sudo 提权，会卡住 CLI），由用户手动执行；纯 dotfiles / Home 改动可用 ~maak home~ 验证。
 
 *** 决策规则：
 + 本段仅放置系统级必需内容：引导配置、内核 / 固件、文件系统挂载、用户账户、必要的系统服务。
@@ -559,21 +559,6 @@
                (tailscale-configuration
                 (verbosity 1)
                 (extra-options '("--tun=userspace-networking"))))
-
-      ;; 禁用 USB 以太网适配器 autosuspend，防止省电导致丢包
-      (simple-service 'usb-eth-autosuspend shepherd-root-service-type
-                      (list (shepherd-service
-                             (documentation
-                              "Disable USB autosuspend for CDC NCM ethernet adapter.")
-                             (provision '(usb-eth-autosuspend))
-                             (requirement '(user-processes file-systems))
-                             (one-shot? #t)
-                             (start #~(lambda _
-                                        (let ((path "/sys/class/net/enp0s13f0u2u4c2/device/power/autosuspend"))
-                                          (when (file-exists? path)
-                                            (call-with-output-file path
-                                              (lambda (port)
-                                                (display "on" port))))))))))
 
       (simple-service 'mihomo-services shepherd-root-service-type
                       (list (shepherd-service (documentation
@@ -1089,10 +1074,6 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 ;; <<waybar-suite-applications>>
 
 (cons* (specs->pkgs+out
-        ;; 桌面组件
-        "dank-material-shell"
-        "pavucontrol"
-
         ;; 字体
         "font-awesome"
         "font-google-noto-emoji"
@@ -1146,6 +1127,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "tree"
 
         ;; 运行器
+        "blue"
         "just"
         "maak"
 
@@ -1674,6 +1656,7 @@ end
         ;; 桌面组件
         "fuzzel"
         "mako"
+        "pavucontrol"
         "swaylock-effects"
         "awww"
         "waypaper"
@@ -1832,6 +1815,12 @@ end
   ("QS_ICON_THEME" . "Papirus-Dark")
   ("QT_QPA_PLATFORMTHEME" . "qt5ct")
 
+  ;; proxy
+  ("HTTP_PROXY" . "http://127.0.0.1:7890")
+  ("HTTPS_PROXY" . "http://127.0.0.1:7890")
+  ("http_proxy" . "http://127.0.0.1:7890")
+  ("https_proxy" . "http://127.0.0.1:7890")
+
   ;; Wayland support.
   ("GDK_BACKEND" . "wayland")
   ("_JAVA_AWT_WM_NONREPARENTING" . "1")
@@ -1863,7 +1852,7 @@ end
   ;; guile
   ("GUILE_HISTORY" . "$XDG_STATE_HOME/guile/history")
   ;; hermes
-  ("HERMES_HOME" . "$XDG_DATA_HOME/hermes-agent")
+  ("HERMES_HOME" . "$XDG_DATA_HOME/hermes")
   ;; luanti
   ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
   ;; node

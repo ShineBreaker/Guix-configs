@@ -27,10 +27,15 @@ from pathlib import Path
 _XDG_DATA = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
 _XDG_CONFIG = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 
+# Claude Code 与 Codex CLI 均支持通过环境变量自定义配置目录。
+# 默认回退到 ~/.claude / ~/.codex，与各自 CLI 的默认行为一致。
+CLAUDE_CONFIG_DIR = os.environ.get("CLAUDE_CONFIG_DIR", os.path.expanduser("~/.claude"))
+CODEX_HOME_DIR = os.environ.get("CODEX_HOME", os.path.expanduser("~/.codex"))
+
 OPENCODE_DB = os.path.join(_XDG_DATA, "opencode", "opencode-stable.db")
 CRUSH_GLOBAL_DB = os.path.join(_XDG_CONFIG, "crush", ".crush", "crush.db")
-CLAUDE_TRANSCRIPTS_DIR = os.path.expanduser("~/.claude/transcripts")
-CLAUDE_HISTORY = os.path.expanduser("~/.claude/history.jsonl")
+CLAUDE_TRANSCRIPTS_DIR = os.path.join(CLAUDE_CONFIG_DIR, "transcripts")
+CLAUDE_HISTORY = os.path.join(CLAUDE_CONFIG_DIR, "history.jsonl")
 
 PI_SESSIONS_DIR = os.path.join(_XDG_DATA, "pi", "sessions")
 
@@ -68,7 +73,7 @@ def find_codex_dbs() -> list[str]:
     """扫描所有项目级 Codex session 目录。返回 .codex 目录路径列表。"""
     found: set[str] = set()
     # 全局 codex 目录
-    global_codex = os.path.expanduser("~/.codex")
+    global_codex = CODEX_HOME_DIR
     if os.path.isdir(global_codex):
         found.add(global_codex)
     for root in CODEX_SEARCH_ROOTS:
@@ -546,9 +551,7 @@ def extract_codex(range_start: datetime, range_end: datetime) -> list[dict]:
         history_path = os.path.join(codex_dir, "history.jsonl")
         session_titles: dict[str, str] = {}
         project_dir = (
-            os.path.dirname(codex_dir)
-            if codex_dir != os.path.expanduser("~/.codex")
-            else "(global)"
+            os.path.dirname(codex_dir) if codex_dir != CODEX_HOME_DIR else "(global)"
         )
         if os.path.exists(history_path):
             try:
@@ -754,9 +757,7 @@ def extract_pi(range_start: datetime, range_end: datetime) -> list[dict]:
                         if msg_ts and isinstance(msg_ts, (int, float)):
                             # message.timestamp 是毫秒级 UTC Unix 时间戳
                             # 转为本地 datetime 判断
-                            msg_dt = datetime.fromtimestamp(
-                                msg_ts / 1000
-                            )
+                            msg_dt = datetime.fromtimestamp(msg_ts / 1000)
                             if range_start <= msg_dt < range_end:
                                 has_in_range = True
                         events.append(evt)
@@ -811,7 +812,9 @@ def extract_pi(range_start: datetime, range_end: datetime) -> list[dict]:
                                 {"type": "tool-result", "content": result_text[:2000]}
                             ],
                             "time_created": (
-                                int(msg_ts / 1000) if isinstance(msg_ts, (int, float)) else 0
+                                int(msg_ts / 1000)
+                                if isinstance(msg_ts, (int, float))
+                                else 0
                             ),
                         }
                     )
@@ -855,7 +858,9 @@ def extract_pi(range_start: datetime, range_end: datetime) -> list[dict]:
                         "model": model,
                         "parts": msg_parts,
                         "time_created": (
-                            int(msg_ts / 1000) if isinstance(msg_ts, (int, float)) else 0
+                            int(msg_ts / 1000)
+                            if isinstance(msg_ts, (int, float))
+                            else 0
                         ),
                     }
                 )
