@@ -1,31 +1,44 @@
 #!/usr/bin/env bash
+# nixgpu-update — 在非 NixOS 主机上建立 /var/lib/non-nixos-gpu 链接
+#
+# 用途:把 nix store 里的 GPU 资源链接到 /var/lib 这个持久化目录
+# 配合 shepherd service 'non-nixos-gpu' 使用:
+#   - /run/opengl-driver 位于 tmpfs,重启清空,所以 service 启动时建链 /run/opengl-driver -> /var/lib/non-nixos-gpu
+#   - /var/lib/non-nixos-gpu 是持久化目标,本脚本负责把它建好
+#
+# 调用时机:
+#   - 首次安装后跑一次
+#   - nix 重新部署后(store hash 变化)再跑一次刷新链接
+#
+# 需要 root 权限(写 /etc/ 和 /var/lib/)
 set -euo pipefail
 
-SERVICE_DIR="/etc/systemd/system"
-SERVICE_FILE="$SERVICE_DIR/non-nixos-gpu.service"
 GPU_DIR="/var/lib/non-nixos-gpu"
+TMPFILES_CONF="/etc/tmpfiles.d/non-nixos-gpu.conf"
 
-cleanup() {
-	rm -rf "$SERVICE_DIR"
-}
-trap cleanup EXIT
-
-mkdir -p "$SERVICE_DIR"
-
+# 1) 调 non-nixos-gpu-setup 装好 /etc/tmpfiles.d/non-nixos-gpu.conf
+#    新版 setup 行为:删旧 /etc/systemd/system/non-nixos-gpu.service
+#                    软链 /etc/tmpfiles.d/non-nixos-gpu.conf 到 store
+#                    尝试 systemd-tmpfiles --create 立即生效
+#    Guix 主机上 /etc/tmpfiles.d/ 默认不存在(Guix 用 shepherd 而非 systemd),
+#    setup 步骤 2 软链时 ln -sf 因父目录缺失失败;先 mkdir -p 兜底
+#    最后一步 systemd-tmpfiles --create 在 Guix 上无该命令,|| true 容错
+mkdir -p /etc/tmpfiles.d
 non-nixos-gpu-setup || true
 
-if [[ ! -f "$SERVICE_FILE" ]]; then
-	echo "error: $SERVICE_FILE not found after non-nixos-gpu-setup" >&2
+# 2) 从 tmpfiles.d conf 读出 target 路径
+#    conf 格式: L+ /run/opengl-driver - - - - /nix/store/<hash>-non-nixos-gpu
+if [[ ! -f "$TMPFILES_CONF" ]]; then
+	echo "error: $TMPFILES_CONF not found after non-nixos-gpu-setup" >&2
 	exit 1
 fi
 
-exec_start=$(grep -oP '(?<=ExecStart=).*' "$SERVICE_FILE")
-if [[ -z "$exec_start" ]]; then
-	echo "error: ExecStart line not found in $SERVICE_FILE" >&2
+target=$(awk '/^L\+ \/run\/opengl-driver/ { print $NF }' "$TMPFILES_CONF")
+if [[ -z "$target" ]]; then
+	echo "error: failed to parse target from $TMPFILES_CONF" >&2
 	exit 1
 fi
 
-cmd=${exec_start//\/run\/opengl-driver/$GPU_DIR}
-
-echo "+ $cmd"
-eval "$cmd"
+# 3) 建 /var/lib/non-nixos-gpu 链接
+ln -nsf "$target" "$GPU_DIR"
+echo "+ ln -nsf $target $GPU_DIR"
