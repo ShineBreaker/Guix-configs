@@ -1,5 +1,8 @@
 { ... }:
 
 {
-  imports = [ ./code.nix ];
+  imports = [
+    ./code.nix
+    ./prismlauncher.nix
+  ];
 }
