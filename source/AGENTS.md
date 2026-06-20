@@ -52,7 +52,7 @@ tmp/config.scm
 
 - `config.org` 是**唯一** Org 源文件
 - `blue rebuild` 自动完成 tangle → 括号检查 → reconfigure → `guix locate --update`
-- `BLUE_DRY_RUN=1 blue rebuild` 仅构建一次不写入系统
+- `GUIX_DRY_RUN=1 blue rebuild` 仅构建一次不写入系统
 
 ## config.org 结构（自上而下）
 
@@ -123,29 +123,29 @@ source/files/
 - `channel.scm`：可编辑，定义使用的频道和分支（URL 以此为准）
 - `channel.lock`：自动生成，不要手动编辑
 - `information.scm` 通过 `(include "./channel.lock")` 加载锁定版本
-- 更新流程：编辑 `channel.scm` → `maak pull` → `maak update`
+- 更新流程：编辑 `channel.scm` → `blue pull` → `blue update`
 
-## maak 命令（与本目录相关）
+## blue 命令（与本目录相关）
 
 完整列表见根目录 `AGENTS.md`：
 
 ```bash
 blue rebuild               # tangle + 括号检查 + reconfigure + locate --update
-BLUE_DRY_RUN=1 blue rebuild # 仅构建不写入
-maak check                 # 仅括号平衡检查
-maak tangle                # 仅导出 Org
-maak update                # 更新 channel.lock + git commit -S
-maak pull                  # guix pull
+GUIX_DRY_RUN=1 blue rebuild # 仅构建不写入
+blue check                 # 仅括号平衡检查
+blue tangle                # 仅导出 Org
+blue update                # 更新 channel.lock + git commit -S
+blue pull                  # guix pull
 
 # 块级精准编辑（Agent 修改单个 #+NAME: 块时用，避免 read 整个 config.org）
-MAAK_BLOCK=<name> maak block-show     # 提取块 body 到 tmp/block-<name>.scm，stdout 打印路径
-cat new.scm | MAAK_BLOCK=<name> maak block-replace   # stdin 替换块 body + 原子写回 + 括号验证
+ORG_BLOCK=<name> blue block-show     # 提取块 body 到 tmp/block-<name>.scm，stdout 打印路径
+cat new.scm | ORG_BLOCK=<name> blue block-replace   # stdin 替换块 body + 原子写回 + 括号验证
 ```
 
 <critical>
 **Do**：
 - 修改前先读 `config.org` 头部的两段 Agent 指引
-- 修改后用 `maak check` 做括号检查，再用 `BLUE_DRY_RUN=1 blue rebuild` 做完整 dry-run
+- 修改后用 `blue check` 做括号检查，再用 `GUIX_DRY_RUN=1 blue rebuild` 做完整 dry-run
 - 优先修改 `dotfiles/`；只有需要 Guix Home / Guix System 介入时才改 `config.org`
 - 能用 Home 解决的就不要升级到 System（保持系统层最小化）
 
@@ -165,7 +165,7 @@ Agent 修改 `config.org` 中单个 `#+NAME:` 块时，用 block-\* 任务避免
 
 ```bash
 # 1. 提取块 body 到临时文件（stdout 末行是路径）
-FILE=$(MAAK_BLOCK=dotfile-services maak block-show 2>/dev/null | tail -1)
+FILE=$(ORG_BLOCK=dotfile-services blue block-show 2>/dev/null | tail -1)
 
 # 2. 查看提取结果（首两行是 lang= 和 noweb/plain 标记，第 3 行起是 body）
 cat "$FILE"
@@ -175,12 +175,12 @@ tail -n +3 "$FILE" > /tmp/new-body.scm
 $EDITOR /tmp/new-body.scm
 
 # 4. 替换 + 自动验证（括号不平衡会报错并提示 git checkout 回滚）
-cat /tmp/new-body.scm | MAAK_BLOCK=dotfile-services maak block-replace
+cat /tmp/new-body.scm | ORG_BLOCK=dotfile-services blue block-replace
 ```
 
 ### 关键约定
 
-- **参数走环境变量**：maak 框架零参数限制，块名通过 `MAAK_BLOCK=<name>` 传入（与 `BLUE_DRY_RUN` 同机制）
+- **参数走环境变量**：blue 框架零参数限制，块名通过 `ORG_BLOCK=<name>` 传入（与 `GUIX_DRY_RUN` 同机制）
 - **括号验证只对 scheme 块触发**：fish/bash/js 等非 scheme 块跳过验证（scheme 语义对它们无意义）
 - **失败不自动回滚**：括号验证失败时，stderr 提示 `git checkout source/config.org` 恢复；block-replace 不自建备份机制，依赖 git 兜底
 - **原子写回**：通过 `write-file-atomically`（mkstemp + rename）覆盖 `source/config.org`，崩溃窗口内不会半写

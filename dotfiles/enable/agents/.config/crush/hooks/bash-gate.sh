@@ -50,7 +50,7 @@ fi
 
 # Block direct guix reconfigure
 if echo "$CMD" | grep -qE '(^|\s)guix\s+(system|home)\s+reconfigure'; then
-	echo "禁止直接 guix reconfigure，请使用 maak system 或 blue home" >&2
+	echo "禁止直接 guix reconfigure，请使用 blue system 或 blue home" >&2
 	exit 2
 fi
 

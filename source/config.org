@@ -214,15 +214,15 @@
 *** 修改约定：
 + 系统层的修改会触发整次 reconfigure。建议在 *用户配置* 章节里能解决的事情不要上升到本段（参考下方 *决策规则*）。
 + 全局变量如 username、%btrfs-subvolumes、%data-dirs 统一在 source/information.scm 中定义；本文件头部通过 (load "../source/information.scm") 加载，**不要**在 %system 内重复定义。
-+ 本文件 *只* 是 Org 源；构建时由 maak.scm 中的 tangle 导出为 tmp/config.scm（单一输出文件，system + home Noweb 拼合）。**不要**手动编辑 tmp/config.scm；**不要**新建第二个 .org 配置文件。
-+ 修改后先用 ~maak check~ 跑括号检查，再用 ~BLUE_DRY_RUN=1 blue rebuild~ 做完整 dry-run。AI agent **不要**自行执行 ~blue rebuild~ / ~guix system reconfigure~（需要 sudo 提权，会卡住 CLI），由用户手动执行；纯 dotfiles / Home 改动可用 ~blue home~ 验证。
++ 本文件 *只* 是 Org 源；构建时由 blue.scm 中的 tangle 导出为 tmp/config.scm（单一输出文件，system + home Noweb 拼合）。**不要**手动编辑 tmp/config.scm；**不要**新建第二个 .org 配置文件。
++ 修改后先用 ~blue check~ 跑括号检查，再用 ~GUIX_DRY_RUN=1 blue rebuild~ 做完整 dry-run。AI agent **不要**自行执行 ~blue rebuild~ / ~guix system reconfigure~（需要 sudo 提权，会卡住 CLI），由用户手动执行；纯 dotfiles / Home 改动可用 ~blue home~ 验证。
 
 *** 决策规则：
 + 本段仅放置系统级必需内容：引导配置、内核 / 固件、文件系统挂载、用户账户、必要的系统服务。
 + 用户级工具、桌面环境、用户 shepherd / timer 服务、个人 dotfiles 全部放入本文件下方的 *用户配置* 章节；dotfiles 内容本身放在 dotfiles/enable/<app>/ 下，**不** 放在本文件或 source/files/ 中。
 + 跨段引用（如「系统段需要某包才能让 home 段正常使用」）在 home-packages 段重复声明即可；不要为了 cross-segment 协调而新增系统段代码块。
 + 不要恢复旧的 source/configs/system-config.org / home-config.org 拆分（已合并）。
-+ 临时调试（加个包、换个服务）可本地修改 + ~blue home~ 快速验证；最终固化前用 ~maak check~ + dry-run 确认无误，再由用户执行 ~blue rebuild~
++ 临时调试（加个包、换个服务）可本地修改 + ~blue home~ 快速验证；最终固化前用 ~blue check~ + dry-run 确认无误，再由用户执行 ~blue rebuild~
 
 ** Bootloader
 在这里使用了由 =rosenthal= 频道提供的 *Limine*
@@ -673,6 +673,7 @@
                    ;; 编译工具链
                    coreutils
                    gcc-toolchain
+                   make
                    strace
 
                    ;; 多媒体与图形
@@ -1054,7 +1055,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 + 保持现有的 (load ...) 风格和变量命名习惯：变量名以 =%= 前缀、代码块以 =<<ref>>= 引用、定义集中在对应的 *<name>-<role>* 段（如 =filesystem-defines= / =modprobe-services= / =default-applications=）
 + 跨包组与 Emacs 专属 profile：emacs 包独立声明在 =emacs-services= 块的 =specifications->manifest= 中（由 home-emacs-service-type 创建专属 profile），不要混入通用 =desktop-packages-list= 等四个包列表
 + Emacs 新包：必须 *同时* 在 =emacs-services= 块的 =specifications->manifest= 中声明（参考 dotfiles/enable/emacs/.config/emacs/AGENTS.md），emacs 子模块的 init.el 才能用得到
-+ AI agent 调试时优先 ~blue home~（不需 sudo），避免不必要的系统级 reconfigure；改完用 ~maak check~ 跑括号检查确认无误
++ AI agent 调试时优先 ~blue home~（不需 sudo），避免不必要的系统级 reconfigure；改完用 ~blue check~ 跑括号检查确认无误
 
 *** 决策规则
 
@@ -1062,7 +1063,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
 + 新增程序时考虑三处联动：包列表（四个 packages-list 之一）、服务定义（=home-services-modules= 已覆盖 / 需扩展）、配置文件（dotfiles/ 或 source/files/）
 + 能用 Home 解决就不用 System，保持系统层最小化（与上方 *系统配置* 决策规则一致）
 + 涉及 XDG 规范的 env 变量（如 HISTFILE / GOMODCACHE / SQLITE_HISTORY 等）放到 =xdg-basedir-env-vars= 段，不要散落到多个位置
-+ 修改后用 ~maak check~ 跑括号检查，纯 Home 改动可用 ~blue home~ 直接生效；agent **不要**自行执行 ~blue rebuild~（需 sudo，由用户手动执行）
++ 修改后用 ~blue check~ 跑括号检查，纯 Home 改动可用 ~blue home~ 直接生效；agent **不要**自行执行 ~blue rebuild~（需 sudo，由用户手动执行）
 
 --------------
 
@@ -1089,7 +1090,9 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         "dconf-editor"
         "dex"
         "file-roller"
+        "fuzzel"
         "libnotify"
+        "rofi"
         "setxkbmap"
         "wl-clipboard"
         "xprop"
@@ -1129,7 +1132,7 @@ source/files/ 目录存放需要 *路径注入* 的静态模板，与 dotfiles/e
         ;; 运行器
         "blue"
         "just"
-        "maak"
+        "blue"
 
         ;; Tmux 相关
         "tmux"

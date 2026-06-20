@@ -84,7 +84,7 @@ utilities/
 ### Nix 备份分支（独立使用）
 
 - 仓库根的 `source/nix/` 与本目录的 `.nix-channels` 共同构成一份独立的 Nix home-manager 配置
-- 与 Guix 配置并存但**不互通**：走 `maak nix` / `maak nix-init` / `maak nix-update`
+- 与 Guix 配置并存但**不互通**：走 `blue nix` / `blue nix-init` / `blue nix-update`
 - 主要作用是给特定工具（Nix 生态）做隔离验证
 
 ## 修改约束

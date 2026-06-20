@@ -20,7 +20,7 @@ if [[ "$REL" == tmp/* ]]; then
 fi
 
 if [[ "$FILE" == */channel.lock ]]; then
-	echo "禁止手动编辑 channel.lock，请使用 maak upgrade 更新" >&2
+	echo "禁止手动编辑 channel.lock，请使用 blue upgrade 更新" >&2
 	exit 2
 fi
 
@@ -89,7 +89,7 @@ if [[ "$REL" == dotfiles/* ]]; then
 	MSG+=("此文件修改后需要运行 blue home 才能生效")
 fi
 if [[ "$FILE" == *.org ]]; then
-	MSG+=("修改 org 配置后，务必先用 BLUE_DRY_RUN=1 blue home 或 maak system 验证")
+	MSG+=("修改 org 配置后，务必先用 GUIX_DRY_RUN=1 blue home 或 blue system 验证")
 fi
 
 if [[ ${#MSG[@]} -gt 0 ]]; then

@@ -6,7 +6,7 @@
 
 <!-- structor:begin -->
 
-<!-- 此结构图由 maak structor 自动维护，请勿手改 -->
+<!-- 此结构图由 blue structor 自动维护，请勿手改 -->
 
 ```
 desktop-suite/
@@ -54,6 +54,7 @@ desktop-suite/
 ```
 
 <!-- /structor -->
+
 ## 关键约定
 
 - **darkman** 通过 D-Bus 触发主题切换，调用 `~/.local/share/{dark,light}-mode.d/` 中的脚本

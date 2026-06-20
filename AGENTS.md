@@ -4,23 +4,23 @@
 
 ## 概述
 
-以 Guix 为核心的个人系统配置仓库，单一 `source/config.org` 同时声明 `operating-system` 和 `home-environment`，通过 `maak` 构建并部署。
+以 Guix 为核心的个人系统配置仓库，单一 `source/config.org` 同时声明 `operating-system` 和 `home-environment`，通过 `blue` 构建并部署。
 
 ```
 .
 ├── source/                 # Guix System / Home 的 Scheme + Org 源（唯一权威）
 │   ├── config.org          # 唯一的 Org 配置源（system + home 全 Noweb 拼合）
 │   ├── channel.scm         # 频道定义
-│   ├── channel.lock        # 频道版本锁定（由 maak update 自动更新）
+│   ├── channel.lock        # 频道版本锁定（由 blue update 自动更新）
 │   ├── information.scm     # 全局变量（username、%data-dirs、%btrfs-subvolumes）
 │   ├── files/              # 静态模板（nftables.conf、rounded.qss、zed.json、skel/）
 │   └── nix/                # Nix home-manager 备份分支（独立使用，与 Guix 不互通）
 ├── dotfiles/
 │   ├── enable/             # 当前启用的配置（统一由 Guix Home stow 部署）
 │   └── disable/            # 已弃用的旧配置（保留参考）
-├── tmp/                    # maak 生成的中间产物（自动生成，不要手动编辑）
+├── tmp/                    # blue 生成的中间产物（自动生成，不要手动编辑）
 ├── tools/                  # 辅助脚本
-└── maak.scm                # 任务运行器定义（基于 maak-mono Scheme DSL）
+└── blue.scm                # 任务运行器定义（基于 blue-mono Scheme DSL）
 ```
 
 ## 构建管线
@@ -64,7 +64,7 @@ tmp/config.scm
 3. **Emacs 修改**：先读 `dotfiles/enable/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
-6. 优先使用 `maak --list` 内可以使用的相关命令
+6. 优先使用 `blue --list` 内可以使用的相关命令
 </critical>
 
 ## dotfiles 部署模型
@@ -99,19 +99,19 @@ tmp/config.scm
 
 ## 目录结构图自动维护
 
-> **实现位置**：`maak.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
+> **实现位置**：`blue.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
 
-仓库内 7 个 `AGENTS.md`（`source/`、`dotfiles/`、`dotfiles/enable/<app>/` 里的 5 个）的“## 目录结构”章节**用标记圈起来**，由 `maak structor` 自动用 `tree` 输出重写。
+仓库内 7 个 `AGENTS.md`（`source/`、`dotfiles/`、`dotfiles/enable/<app>/` 里的 5 个）的“## 目录结构”章节**用标记圈起来**，由 `blue structor` 自动用 `tree` 输出重写。
 
 **使用约定**：
 
-- **不要手改**标记之间的内容——会被下次跑 `maak structor` 覆盖
-- 新增/移动文件后跑 `maak structor` 刷新所有结构图
-- 单文件调试：`MAAK_STRUCTOR_TARGET=source/AGENTS.md maak structor`
-- 预览不写文件：`MAAK_STRUCTOR_DRY=1 maak structor`
-- 标记格式独立于运行器（不带 `maak:` 前缀），其他仓库用 justfile/Makefile 包装时复用同一约定
+- **不要手改**标记之间的内容——会被下次跑 `blue structor` 覆盖
+- 新增/移动文件后跑 `blue structor` 刷新所有结构图
+- 单文件调试：`ORG_STRUCTOR_TARGET=source/AGENTS.md blue structor`
+- 预览不写文件：`ORG_STRUCTOR_DRY=1 blue structor`
+- 标记格式独立于运行器（不带 `blue:` 前缀），其他仓库用 justfile/Makefile 包装时复用同一约定
 - 跳过规则与 `dotfile-services` 的 `excluded` 列表对齐（`.git` / `.github` / `AGENTS.md` 自身等）
-- 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `maak.scm` 的 `%structor-targets`
+- 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `blue.scm` 的 `%structor-targets`
 
 ## 频道架构
 
@@ -122,7 +122,7 @@ tmp/config.scm
 | `nonguix`   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`        |
 | `rosenthal` | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`   |
 
-- 频道版本锁定在 `source/channel.lock`，由 `maak update` 自动生成并 `git commit -S`
+- 频道版本锁定在 `source/channel.lock`，由 `blue update` 自动生成并 `git commit -S`
 - **不要手动编辑 `channel.lock`**（重生成会覆盖你的改动）
 - `source/information.scm` 通过 `(include "./channel.lock")` 加载锁定版本
 
@@ -154,7 +154,7 @@ tmp/config.scm
 
 ```bash
 GUIX_DRY_RUN=1 blue rebuild   # 仅构建一次，不写入系统
-maak check                    # 最快：仅括号平衡检查
+blue check                    # 最快：仅括号平衡检查
 ```
 
 ## Org Noweb 机制
@@ -178,7 +178,7 @@ maak check                    # 最快：仅括号平衡检查
 > 快速判断同步：`md5sum <源文件>` vs `md5sum ~/.config/<app>/<同路径文件>`，或看软链接 target 的 store hash 是否变化。
 
 - 不要手动编辑 `tmp/` 下任何产物
-- 不要绕过 `maak` 直接调 `guix system reconfigure`（频道不会被锁）
+- 不要绕过 `blue` 直接调 `guix system reconfigure`（频道不会被锁）
 - 修改 `dotfiles/` 内容后必须 `blue home`，否则不会生效（机制 + 验证流程见本节顶部警告框）
 - **禁止 AI agent 自行运行 `blue rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
   修改 dotfiles 或 source 后，只能够运行 `blue home` ，该指令会在下次重启前暂时将所有home-configs应用（包含其中的所有服务、包以及dotfiles的部署），待确认功能正常后再提醒用户运行 `blue rebuild` 固化配置即可。

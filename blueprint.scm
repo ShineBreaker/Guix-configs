@@ -681,10 +681,10 @@
     (synopsis "扫描文本配置文件中疑似泄漏的密钥")
     (help "[DIR] [PATTERN] ...
 扫描 DIR（默认为 dotfiles/enable）。额外正则模式可作为后续参数传入。
-设置 MAAK_SECRET_SCAN_FAIL_ON_FIND=0 可仅警告而不报错。"))
+设置 GUIX_SECRET_SCAN_FAIL_ON_FIND=0 可仅警告而不报错。"))
   (let* ((dir (if (null? arguments) "dotfiles/enable" (first arguments)))
          (extra (if (null? arguments) '() (cdr arguments)))
-         (fail? (not (string=? (or (getenv "MAAK_SECRET_SCAN_FAIL_ON_FIND") "1") "0"))))
+         (fail? (not (string=? (or (getenv "GUIX_SECRET_SCAN_FAIL_ON_FIND") "1") "0"))))
     (scan-secrets dir fail? extra)))
 
 (define-command (gc-command arguments)
@@ -774,10 +774,10 @@
     (synopsis "刷新 AGENTS.md 中自动生成的目录树章节")
     (help "[TARGET] ...
 刷新所有 structor 目标，或仅刷新指定的 AGENTS.md。
-支持 MAAK_STRUCTOR_DEPTH=N 和 MAAK_STRUCTOR_DRY=1 环境变量。"))
-  (let* ((depth (or (and=> (getenv "MAAK_STRUCTOR_DEPTH") string->number) 4))
+支持 ORG_STRUCTOR_DEPTH=N 和 ORG_STRUCTOR_DRY=1 环境变量。"))
+  (let* ((depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4))
          (targets (if (null? arguments) %structor-targets arguments))
-         (dry? (%env-set? "MAAK_STRUCTOR_DRY")))
+         (dry? (%env-set? "ORG_STRUCTOR_DRY")))
     (run-structor targets #:depth depth #:dry? dry?)))
 
 ;;; ============================================================
