@@ -22,6 +22,7 @@ system/
 ```
 
 <!-- /structor -->
+
 ## 关键约定
 
 - pipewire 配置使用 `pipewire.conf.d/` 目录，按字母顺序加载
@@ -30,6 +31,6 @@ system/
 
 ## 修改约束
 
-- 修改后必须 `maak rebuild` 才会生效
+- 修改后必须 `blue rebuild` 才会生效
 - pipewire 配置修改后建议重启用户服务：`systemctl --user restart pipewire pipewire-pulse wireplumber`
 - user-dirs 变更后重新登录或 `xdg-user-dirs-update` 让 XDG 感知

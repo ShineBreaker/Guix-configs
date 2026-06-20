@@ -21,7 +21,7 @@
              (srfi srfi-26))
 
 ;;; ============================================================
-;;; Paths
+;;; 路径
 ;;; ============================================================
 
 (define %repo-root (getcwd))
@@ -48,7 +48,7 @@
     ((program . args)
      (let ((status (popen program args)))
        (unless (zero? status)
-         (error (format #f "Command failed (~a): ~s" status command)))
+         (error (format #f "命令执行失败 (~a): ~s" status command)))
        #t))))
 
 (define* (%guix args #:key (channels %channel-lock) sudo?)
@@ -94,7 +94,7 @@
          (content (get-string-all pipe))
          (status (close-pipe pipe)))
     (unless (zero? (status:exit-val status))
-      (error (format #f "Command failed (~a): ~a"
+      (error (format #f "命令执行失败 (~a): ~a"
                      (status:exit-val status) command)))
     content))
 
@@ -112,7 +112,7 @@
   (string-append "'" (string-join (string-split string #\') "'\\''") "'"))
 
 ;;; ============================================================
-;;; Buildable: source/config.org -> tmp/config.scm
+;;; 构建源: source/config.org -> tmp/config.scm
 ;;; ============================================================
 
 (define-blue-class <org-config>
@@ -130,7 +130,7 @@
                                         (output <string>))
   (let ((input (first inputs)))
     (make-build-manifest
-     (string-append "TANGLE\t" output)
+     (string-append "编织\t" output)
      (lambda ()
        (mkdir-p (dirname output))
        (%run (%emacs-command
@@ -149,7 +149,7 @@
    (outputs '("tmp/config.scm.check"))))
 
 ;;; ============================================================
-;;; Configuration helpers
+;;; 配置辅助函数
 ;;; ============================================================
 
 (define (count-parens port)
@@ -180,17 +180,17 @@
         ((opens . closes)
          (cond
           ((= opens closes)
-           (format #t "[OK] balanced parentheses: ~a pairs (~a)~%" opens file)
+           (format #t "[OK] 括号平衡: ~a 对 (~a)~%" opens file)
            #t)
           ((> opens closes)
            (format (current-error-port)
-                   "[ERROR] ~a more opening parenthesis/parens (open=~a close=~a)~%"
-                   (- opens closes) opens closes)
+                    "[ERROR] 多余 ~a 个左括号 (open=~a close=~a)~%"
+                    (- opens closes) opens closes)
            #f)
           (else
            (format (current-error-port)
-                   "[ERROR] ~a more closing parenthesis/parens (open=~a close=~a)~%"
-                   (- closes opens) opens closes)
+                    "[ERROR] 多余 ~a 个右括号 (open=~a close=~a)~%"
+                    (- closes opens) opens closes)
            #f)))))))
 
 (define-blue-method (ask-build-manifest (this <paren-check>)
@@ -198,13 +198,13 @@
                                         (output <string>))
   (let ((input (first inputs)))
     (make-build-manifest
-     (string-append "CHECK\t" input)
+     (string-append "检查\t" input)
      (lambda ()
-       (unless (check-paren-balance input)
-         (error "Parenthesis check failed"))
+     (unless (check-paren-balance input)
+          (error "括号平衡检查失败"))
        (call-with-output-file output
          (lambda (port)
-           (format port "checked ~a~%" input)))))))
+            (format port "已检查 ~a~%" input)))))))
 
 (define (tangle-config)
   (mkdir-p %tmp-dir)
@@ -217,17 +217,17 @@
   (tangle-config)
   (%append-to-file %config-scm (string-append "\n" tail-expression "\n"))
   (unless (check-paren-balance %config-scm)
-    (error "Configuration parenthesis check failed"))
+    (error "配置括号平衡检查失败"))
   %config-scm)
 
 (define* (apply-config subsystem tail-expression #:key sudo? after)
   (let ((scm (prepare-config tail-expression)))
     (if (%dry-run?)
         (begin
-          (format #t "[DRY-RUN] validating ~a configuration~%" subsystem)
+          (format #t "[预演] 验证 ~a 配置~%" subsystem)
           (%guix `(,subsystem "build" ,scm "--dry-run")))
         (begin
-          (format #t "Applying ~a configuration~%" subsystem)
+          (format #t "正在应用 ~a 配置~%" subsystem)
           (%guix `(,subsystem "reconfigure" ,scm
                               "--allow-downgrades" "--fallback")
                  #:sudo? sudo?)
@@ -235,7 +235,7 @@
   (when after (after)))
 
 ;;; ============================================================
-;;; Org block editing
+;;; Org 代码块编辑
 ;;; ============================================================
 
 (define block-extract-el
@@ -257,7 +257,7 @@
                           body-start (line-beginning-position)))
               (setq has-noweb (string-match-p \"<<[^>]+>>\" body))))))
       (unless body
-        (princ (format \"[ERROR] block %s not found\\n\" name))
+        (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
         (kill-emacs 1))
       (princ (format \"%s\\n%s\\n\" (or lang \"\") (if has-noweb \"noweb\" \"plain\")))
       (princ (string-trim body \"\\n\" \"\\n\")))
@@ -291,7 +291,7 @@
             (write-region (point-min) (point-max) out-file)
             (princ (format \"lang=%s\\n\" (or lang \"\"))))
           (progn
-            (princ (format \"[ERROR] block %s not found\\n\" name))
+            (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
             (kill-emacs 1)))))")
 
 (define (write-temp-elisp name body)
@@ -302,7 +302,7 @@
     file))
 
 ;;; ============================================================
-;;; secret-scan
+;;; 密钥扫描
 ;;; ============================================================
 
 (define %secret-exts
@@ -388,16 +388,16 @@
      patterns)
     (cond
      ((zero? found)
-      (format #t "[OK] No secrets found, scanned ~a files~%" file-count)
+      (format #t "[OK] 未发现密钥，已扫描 ~a 个文件~%" file-count)
       #t)
      (fail?
-      (error (format #f "secret-scan: ~a secret(s) found" found)))
+      (error (format #f "密钥扫描: 发现 ~a 处密钥" found)))
      (else
-      (format #t "[WARN] secret-scan: ~a hit(s)~%" found)
+      (format #t "[WARN] 密钥扫描: 发现 ~a 处疑似密钥~%" found)
       #t))))
 
 ;;; ============================================================
-;;; structor
+;;; 目录结构生成器
 ;;; ============================================================
 
 (define %structor-marker-start "<!-- structor:begin -->")
@@ -489,7 +489,7 @@
                  (append
                   (list %structor-marker-start
                         ""
-                        "<!-- This tree is generated by blue structor; do not edit manually. -->"
+                        "<!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->"
                         ""
                         "```")
                   (%structor-tree dir depth)
@@ -506,11 +506,11 @@
                      (%write-file-atomically
                       file
                       (lambda (port) (display new-content port)))))
-               (format #t "  skipped ~a (no structor markers)~%" rel-path))))))
+               (format #t " 跳过 ~a（无 structor 标记）~%" rel-path))))))
    targets))
 
 ;;; ============================================================
-;;; Commands
+;;; 指令
 ;;; ============================================================
 
 (define %project-command-groups
@@ -573,8 +573,8 @@
 (define-command (rebuild-command arguments)
   ((invoke "rebuild")
    (category 'deployment)
-   (synopsis "Apply Guix System configuration")
-   (help "Apply the operating-system form. Honors GUIX_DRY_RUN=1."))
+    (synopsis "应用 Guix System 配置")
+    (help "应用 operating-system 表。支持 GUIX_DRY_RUN=1 环境变量。"))
   (apply-config "system" "%system"
                 #:sudo? #t
                 #:after (lambda () (%guix '("locate" "--update")))))
@@ -582,16 +582,16 @@
 (define-command (home-command arguments)
   ((invoke "home")
    (category 'deployment)
-   (synopsis "Apply Guix Home configuration")
-   (help "Apply the home-environment form. Honors GUIX_DRY_RUN=1."))
+   (synopsis "应用 Guix Home 配置")
+   (help "应用 home-environment 表。支持 GUIX_DRY_RUN=1 环境变量。"))
   (apply-config "home" "%home"))
 
 (define-command (block-show-command arguments)
   ((invoke "block-show")
    (category 'editing)
-   (synopsis "Extract a named Org source block")
-   (help "BLOCK
-Extract BLOCK from source/config.org into tmp/block-BLOCK.scm and print the path."))
+    (synopsis "提取指定名称的 Org 源代码块")
+    (help "BLOCK
+从 source/config.org 提取 BLOCK 到 tmp/block-BLOCK.scm 并打印路径。"))
   (match arguments
     ((name)
      (let* ((script (write-temp-elisp "block-show.el" block-extract-el))
@@ -612,9 +612,9 @@ Extract BLOCK from source/config.org into tmp/block-BLOCK.scm and print the path
 (define-command (block-replace-command arguments)
   ((invoke "block-replace")
    (category 'editing)
-   (synopsis "Replace a named Org source block")
-   (help "BLOCK BODY-FILE
-Replace BLOCK in source/config.org with BODY-FILE. Scheme blocks are validated after replacement."))
+    (synopsis "替换指定名称的 Org 源代码块")
+    (help "BLOCK BODY-FILE
+用 BODY-FILE 替换 source/config.org 中的 BLOCK。替换后自动验证 Scheme 代码块。"))
   (match arguments
     ((name body-file)
      (let* ((script (write-temp-elisp "block-replace.el" block-replace-el))
@@ -638,27 +638,27 @@ Replace BLOCK in source/config.org with BODY-FILE. Scheme blocks are validated a
            (begin
              (tangle-config)
              (unless (check-paren-balance %config-scm)
-               (error "block-replace validation failed; use git to inspect/revert source/config.org"))
+               (error "block-replace 验证失败；请用 git 检查/还原 source/config.org"))
              (false-if-exception (delete-file-recursively %tmp-dir))
-             (format #t "[OK] block ~a replaced and validated~%" name))
+                           (format #t "[OK] 代码块 ~a 已替换并验证~%" name))
            (begin
              (false-if-exception (delete-file-recursively %tmp-dir))
-             (format #t "[OK] block ~a (~a) replaced~%" name lang)))))
+              (format #t "[OK] 代码块 ~a（~a）已替换~%" name lang)))))
     (_ (error "usage: blue block-replace BLOCK BODY-FILE"))))
 
 (define-command (clean-generations-command arguments)
   ((invoke "clean-generations")
    (category 'maintenance)
-   (synopsis "Delete old Guix System/Home generations")
-   (help "Delete old system and home generations. This may ask sudo for the system generations."))
+    (synopsis "删除旧的 Guix System/Home 世代")
+    (help "删除旧 system 和 home 世代。删除 system 世代可能需要 sudo 权限。"))
   (%run '("sh" "-c" "sudo guix system delete-generations > /dev/null"))
   (%run '("sh" "-c" "guix home delete-generations > /dev/null")))
 
 (define-command (clean-artifacts-command arguments)
   ((invoke "clean-artifacts")
    (category 'maintenance)
-   (synopsis "Remove repository build artifacts")
-   (help "Remove __pycache__, *.elc, *.o, *.a and *.so under the repository."))
+    (synopsis "移除仓库编译产物")
+    (help "移除仓库内的 __pycache__、*.elc、*.o、*.a 和 *.so 文件。"))
   (for-each
    (match-lambda
      ((pattern type)
@@ -678,10 +678,10 @@ Replace BLOCK in source/config.org with BODY-FILE. Scheme blocks are validated a
 (define-command (secret-scan-command arguments)
   ((invoke "secret-scan")
    (category 'validation)
-   (synopsis "Scan text configuration files for likely leaked secrets")
-   (help "[DIR] [PATTERN] ...
-Scan DIR, defaulting to dotfiles/enable. Extra regex patterns may be passed as remaining arguments.
-Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
+    (synopsis "扫描文本配置文件中疑似泄漏的密钥")
+    (help "[DIR] [PATTERN] ...
+扫描 DIR（默认为 dotfiles/enable）。额外正则模式可作为后续参数传入。
+设置 MAAK_SECRET_SCAN_FAIL_ON_FIND=0 可仅警告而不报错。"))
   (let* ((dir (if (null? arguments) "dotfiles/enable" (first arguments)))
          (extra (if (null? arguments) '() (cdr arguments)))
          (fail? (not (string=? (or (getenv "MAAK_SECRET_SCAN_FAIL_ON_FIND") "1") "0"))))
@@ -690,8 +690,8 @@ Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
 (define-command (gc-command arguments)
   ((invoke "gc")
    (category 'maintenance)
-   (synopsis "Run Guix GC and remove old Guix EFI files")
-   (help "Runs clean-generations, guix gc, and removes /boot/EFI/Guix/OLD-*.EFI."))
+    (synopsis "执行 Guix GC 并清理旧 Guix EFI 文件")
+    (help "依次执行 clean-generations、guix gc 并删除 /boot/EFI/Guix/OLD-*.EFI。"))
   ((command-procedure clean-generations-command) '())
   (%run '("guix" "gc"))
   (%run '("sudo" "rm" "-rf" "/boot/EFI/Guix/OLD-*.EFI")))
@@ -699,17 +699,17 @@ Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
 (define-command (init-command arguments)
   ((invoke "init")
    (category 'deployment)
-   (synopsis "Install system configuration to /mnt")
-   (help "Install the operating-system form to /mnt."))
+    (synopsis "将系统配置安装到 /mnt")
+    (help "将 operating-system 表安装到 /mnt。"))
   (let ((scm (prepare-config "%system")))
-    (format #t "Installing system to /mnt~%")
+    (format #t "正在将系统安装到 /mnt~%")
     (%guix `("system" "init" ,scm "/mnt") #:sudo? #t)
     (false-if-exception (delete-file-recursively %tmp-dir))))
 
 (define-command (nix-command arguments)
   ((invoke "nix")
    (category 'nix)
-   (synopsis "Apply backup Nix home-manager configuration"))
+    (synopsis "应用备用 Nix home-manager 配置"))
   (%run `(,(string-append %home-dir "/.nix-profile/bin/home-manager")
           "switch" "-b" "backup"
           "--flake" ,(string-append %nix-dir "/#Guix")
@@ -719,14 +719,14 @@ Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
 (define-command (nix-init-command arguments)
   ((invoke "nix-init")
    (category 'nix)
-   (synopsis "Initialize Nix channel and install home-manager"))
+    (synopsis "初始化 Nix channel 并安装 home-manager"))
   (%run '("nix-channel" "--update"))
   (%run '("nix-shell" "<home-manager>" "-A" "install")))
 
 (define-command (nix-update-command arguments)
   ((invoke "nix-update")
    (category 'nix)
-   (synopsis "Update Nix channel and flake"))
+    (synopsis "更新 Nix channel 和 flake"))
   (%run '("nix-channel" "--update"))
   (%run `("git" "commit" "-S" "-m"
           "UPDATE: (flake.lock) bump version."
@@ -736,13 +736,13 @@ Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
 (define-command (pull-command arguments)
   ((invoke "pull")
    (category 'guix)
-   (synopsis "Run guix pull through locked channels"))
+    (synopsis "通过锁定频道执行 guix pull"))
   (%guix '("pull" "--allow-downgrades" "--fallback")))
 
 (define-command (reuse-command arguments)
   ((invoke "reuse")
    (category 'maintenance)
-   (synopsis "Annotate files with SPDX copyright/license headers"))
+    (synopsis "为文件补充 SPDX 版权和许可证头"))
   (%run `("reuse" "annotate"
           "--copyright" "BrokenShine <xchai404@gmail.com>"
           "--license" "MIT"
@@ -753,7 +753,7 @@ Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
 (define-command (update-command arguments)
   ((invoke "update")
    (category 'guix)
-   (synopsis "Update source/channel.lock and commit it"))
+    (synopsis "更新 source/channel.lock 并提交"))
   (let ((content
          (%pipe->string
           (string-join
@@ -771,17 +771,17 @@ Set MAAK_SECRET_SCAN_FAIL_ON_FIND=0 to warn instead of failing."))
 (define-command (structor-command arguments)
   ((invoke "structor")
    (category 'maintenance)
-   (synopsis "Refresh generated tree sections in AGENTS.md files")
-   (help "[TARGET] ...
-Refresh all structor targets, or only the given target AGENTS.md files.
-Use MAAK_STRUCTOR_DEPTH=N and MAAK_STRUCTOR_DRY=1 for compatibility."))
+    (synopsis "刷新 AGENTS.md 中自动生成的目录树章节")
+    (help "[TARGET] ...
+刷新所有 structor 目标，或仅刷新指定的 AGENTS.md。
+支持 MAAK_STRUCTOR_DEPTH=N 和 MAAK_STRUCTOR_DRY=1 环境变量。"))
   (let* ((depth (or (and=> (getenv "MAAK_STRUCTOR_DEPTH") string->number) 4))
          (targets (if (null? arguments) %structor-targets arguments))
          (dry? (%env-set? "MAAK_STRUCTOR_DRY")))
     (run-structor targets #:depth depth #:dry? dry?)))
 
 ;;; ============================================================
-;;; Entry point
+;;; 入口点
 ;;; ============================================================
 
 (blueprint

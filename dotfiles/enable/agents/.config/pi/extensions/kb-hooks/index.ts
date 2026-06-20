@@ -90,7 +90,7 @@ let originalModelForSummarize: any = undefined;
  * 从 settings.json 读取 `atelier.tiers.quick.model`，拆为 { provider, id }。
  * 任何环节失败（文件不存在、JSON 损坏、字段缺失、格式非 "provider/id"）都返回 undefined，
  * 调用方需降级处理。不缓存——/kb-summarize 是低频命令，解析开销可忽略，
- * 且 maak home 后 settings.json 内容可能变化。
+ * 且 blue home 后 settings.json 内容可能变化。
  */
 function readQuickModel(): { provider: string; id: string } | undefined {
   try {

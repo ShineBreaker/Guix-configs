@@ -99,7 +99,7 @@ dotfiles/
 - `layout`：`'stow`（自动以目录名为前缀建立软链接）
 - `packages`：`agents desktop desktop-suite emacs system terminal utilities`
 - `excluded`：被排除的文件（`.git`、`.gitignore`、`AGENTS.md`、`README.md`、`__pycache__`、`.venv` 等）
-- 新增子目录或新增子目录中文件：直接 `maak rebuild`；新文件若需排除请更新 `excluded` 正则
+- 新增子目录或新增子目录中文件：直接 `blue rebuild`；新文件若需排除请更新 `excluded` 正则
 
 ## 核心子系统
 

@@ -30,6 +30,7 @@ desktop/
 ```
 
 <!-- /structor -->
+
 ## 关键约定
 
 - niri 配置分为主配置 + `settings/` 子目录，通过 `include` 引入
@@ -39,7 +40,7 @@ desktop/
 
 ## 修改约束
 
-- 修改后必须 `maak rebuild` 才会生效（不要直接编辑 `~/.config/niri/` 等已部署路径）
+- 修改后必须 `blue rebuild` 才会生效（不要直接编辑 `~/.config/niri/` 等已部署路径）
 - 新增 autostart 项前确认对应服务包已在 `config.org` 的 home-packages 中声明
 - niri 配置支持热加载：`niri msg action reload-config`
 

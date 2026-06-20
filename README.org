@@ -105,7 +105,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 #+begin_example
 source/config.org
         │
-        ▼  maak rebuild → Emacs org-babel-tangle（Noweb 拼合）
+        ▼  blue rebuild → Emacs org-babel-tangle（Noweb 拼合）
 tmp/config.scm
         │
         ▼  guix time-machine --channels=source/channel.lock system reconfigure
@@ -129,12 +129,12 @@ guix shell maak -- maak init
 maak --list
 
 # 常用命令
-maak rebuild            # tangle + 括号检查 + system reconfigure + locate --update
+blue rebuild            # tangle + 括号检查 + system reconfigure + locate --update
 maak update             # 更新 channel.lock 并签名提交
 maak pull               # guix pull --allow-downgrades --fallback
 
 # 验证配置（不实际应用）
-GUIX_DRY_RUN=1 maak rebuild
+GUIX_DRY_RUN=1 blue rebuild
 
 # 括号平衡检查（最轻量，不触发 guix）
 maak check
@@ -247,7 +247,7 @@ dotfiles/enable/
                       "emacs" "system" "terminal" "utilities"))))
 #+end_src
 
-新增 / 修改 =enable/<dir>/= 下文件后运行 =maak rebuild= 重新链接。
+新增 / 修改 =enable/<dir>/= 下文件后运行 =blue rebuild= 重新链接。
 
 *** 3. tmux 配置（[[./dotfiles/enable/terminal/.config/tmux/][dotfiles/enable/terminal/.config/tmux/]]）
 tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计：
@@ -292,14 +292,14 @@ tmux 配置采用 Guile 驱动 + Bash 胶水的混合架构，核心设计：
 
 1. 创建子目录（如 =dotfiles/enable/<app>/.config/<app>/=）
 2. 在 =source/config.org= 的 =dotfile-services= 块的 =packages= 列表中追加目录名
-3. =maak rebuild= 重新链接
+3. =blue rebuild= 重新链接
 
 #+begin_src sh
 # 示例：添加应用配置
 mkdir -p dotfiles/enable/app-name/.config/app-name
 cp ~/app-config.toml dotfiles/enable/app-name/.config/app-name/
 # 编辑 source/config.org 的 dotfile-services.packages，加上 "app-name"
-maak rebuild
+blue rebuild
 #+end_src
 
 *仅在需要动态生成时使用 =source/files/=*（如需注入 Guix 软件包路径）。
@@ -312,7 +312,7 @@ maak rebuild
 (define username "your-username")
 #+end_src
 
-然后运行 =maak rebuild= 。
+然后运行 =blue rebuild= 。
 
 ** 添加 Btrfs 持久化目录
 编辑 =source/information.scm=：
@@ -361,10 +361,10 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 修改 ~*.org~ 配置后，可用 =dry-run= 模式验证语法（不会实际应用到系统）：
 
 #+begin_src sh
-GUIX_DRY_RUN=1 maak rebuild
+GUIX_DRY_RUN=1 blue rebuild
 #+end_src
 
-=maak rebuild= 在执行前会自动运行括号平衡检查。也可手动单独检查：
+=blue rebuild= 在执行前会自动运行括号平衡检查。也可手动单独检查：
 
 #+begin_src sh
 maak check

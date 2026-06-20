@@ -28,7 +28,7 @@
 ```
 source/config.org
         │
-        ▼  maak rebuild → Emacs org-babel-tangle（Noweb 拼合）
+        ▼  blue rebuild → Emacs org-babel-tangle（Noweb 拼合）
 tmp/config.scm
         │
         ▼  guix time-machine --channels=source/channel.lock system reconfigure
@@ -37,14 +37,14 @@ tmp/config.scm
 
 - Org 文件使用 Noweb `<<ref>>` 语法拼合代码块为完整 `.scm`
 - 所有 `guix` 命令通过 `guix time-machine --channels=source/channel.lock` 锁定频道版本
-- 单一 `maak rebuild` 完成：tangle → 括号检查 → reconfigure → `guix locate --update`
+- 单一 `blue rebuild` 完成：tangle → 括号检查 → reconfigure → `guix locate --update`
 - DRY_RUN 时仅 tangle + 括号检查 + `dry-run`，不实际写入系统
 
 ## 工作优先级
 
 1. 先看当前目录是否存在更近的 `AGENTS.md`（`source/`、`dotfiles/enable/<app>/`、emacs 子模块内）
 2. 若 README / 文档与实际文件不一致，以仓库实际结构和源码为准
-3. **禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置。** 所有配置必须改源文件后通过 `maak home` 生效
+3. **禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置。** 所有配置必须改源文件后通过 `blue home` 生效
 
 ## 任务路由表
 
@@ -60,7 +60,7 @@ tmp/config.scm
 <critical>
 **路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
-2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `maak rebuild`
+2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `blue rebuild`
 3. **Emacs 修改**：先读 `dotfiles/enable/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
@@ -81,9 +81,9 @@ tmp/config.scm
    (excluded '("\\.agents/workfile($|/.*)" ...))))
 ```
 
-- 实际机制：构建时把文件 _复制到 `/gnu/store/<hash>-home-dotfiles-...`_（只读副本），再从 store 软链接到 `$HOME`。**`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `maak home` 重建软链接才生效
+- 实际机制：构建时把文件 _复制到 `/gnu/store/<hash>-home-dotfiles-...`_（只读副本），再从 store 软链接到 `$HOME`。**`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `blue home` 重建软链接才生效
 - **不存在顶层 `immutable/` + `mutable/` 拆分**；旧结构已并入 `enable/<app>/`
-- 不在 `excluded` 列表内的新增文件会在下次 `maak rebuild` 后自动出现在 `~`
+- 不在 `excluded` 列表内的新增文件会在下次 `blue rebuild` 后自动出现在 `~`
 - `disable/` 内目录不再部署，仅保留参考
 
 子模块位于 `enable/` 下，路径如下，**不要直接编辑子模块内容**：
@@ -153,7 +153,7 @@ tmp/config.scm
 修改 `source/config.org` 后，**务必**先 dry-run 验证再实际应用：
 
 ```bash
-GUIX_DRY_RUN=1 maak rebuild   # 仅构建一次，不写入系统
+GUIX_DRY_RUN=1 blue rebuild   # 仅构建一次，不写入系统
 maak check                    # 最快：仅括号平衡检查
 ```
 
@@ -172,13 +172,13 @@ maak check                    # 最快：仅括号平衡检查
 **验证流程**（三步缺一不可）：
 
 1. 改 dotfiles 源
-2. `maak home`
+2. `blue home`
 3. **grep 部署位置**（`~/.config/<app>/...`，非仓库源）确认同步，再 restart service + 验证行为
 
 > 快速判断同步：`md5sum <源文件>` vs `md5sum ~/.config/<app>/<同路径文件>`，或看软链接 target 的 store hash 是否变化。
 
 - 不要手动编辑 `tmp/` 下任何产物
 - 不要绕过 `maak` 直接调 `guix system reconfigure`（频道不会被锁）
-- 修改 `dotfiles/` 内容后必须 `maak home`，否则不会生效（机制 + 验证流程见本节顶部警告框）
-- **禁止 AI agent 自行运行 `maak rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
-  修改 dotfiles 或 source 后，只能够运行 `maak home` ，该指令会在下次重启前暂时将所有home-configs应用（包含其中的所有服务、包以及dotfiles的部署），待确认功能正常后再提醒用户运行 `maak rebuild` 固化配置即可。
+- 修改 `dotfiles/` 内容后必须 `blue home`，否则不会生效（机制 + 验证流程见本节顶部警告框）
+- **禁止 AI agent 自行运行 `blue rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
+  修改 dotfiles 或 source 后，只能够运行 `blue home` ，该指令会在下次重启前暂时将所有home-configs应用（包含其中的所有服务、包以及dotfiles的部署），待确认功能正常后再提醒用户运行 `blue rebuild` 固化配置即可。

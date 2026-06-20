@@ -26,7 +26,7 @@ fi
 
 if echo "$FILE" | grep -qE '^/home/[^/]+/\.(config|local)/'; then
 	if ! echo "$FILE" | grep -q "$PROJ"; then
-		echo "禁止直接修改安装位置，请修改 dotfiles/ 后运行 maak home" >&2
+		echo "禁止直接修改安装位置，请修改 dotfiles/ 后运行 blue home" >&2
 		exit 2
 	fi
 fi
@@ -86,10 +86,10 @@ fi
 
 MSG=()
 if [[ "$REL" == dotfiles/* ]]; then
-	MSG+=("此文件修改后需要运行 maak home 才能生效")
+	MSG+=("此文件修改后需要运行 blue home 才能生效")
 fi
 if [[ "$FILE" == *.org ]]; then
-	MSG+=("修改 org 配置后，务必先用 BLUE_DRY_RUN=1 maak home 或 maak system 验证")
+	MSG+=("修改 org 配置后，务必先用 BLUE_DRY_RUN=1 blue home 或 maak system 验证")
 fi
 
 if [[ ${#MSG[@]} -gt 0 ]]; then

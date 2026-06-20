@@ -56,6 +56,7 @@ terminal/
 ```
 
 <!-- /structor -->
+
 ## 关键约定
 
 - fish `conf.d/` 按文件名字母序加载；数字前缀只是排序提示，非优先级语义
@@ -66,7 +67,7 @@ terminal/
 
 ## 修改约束
 
-- 修改后必须 `maak rebuild` 才会生效
+- 修改后必须 `blue rebuild` 才会生效
 - fish 配置：新 shell 自动生效，无需 reload
 - tmux 配置：tmux 内 `prefix + r` 或 `tmux source ~/.config/tmux/tmux.conf` 即可热加载
 - 新增 fish 函数放 `functions/`；新增 conf 块放 `conf.d/` 并加数字前缀控制顺序
