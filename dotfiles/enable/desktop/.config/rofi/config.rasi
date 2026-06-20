@@ -1,0 +1,115 @@
+/* SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+@import "noctalia.rasi"
+
+configuration {
+    show-icons: false;
+    font: "Sarasa Mono SC 11";
+}
+
+* {
+    selection:       @accent;
+    sel-fg:          @accent-fg;
+    match-highlight: bold italic;
+    sel-highlight:   bold italic;
+
+    margin:     2;
+    text-color: @fg;
+    font:       "Sarasa Mono SC 11";
+
+    bg:         #131315CC;
+}
+
+window {
+    transparency: "real";
+
+    location: north;
+    anchor:   north;
+
+    y-offset: 14px;
+    width:    480px;
+}
+
+mainbox {
+    orientation: vertical;
+    children:    [ inputbar, listview ];
+    spacing:     6px;
+}
+
+inputbar {
+    orientation:  horizontal;
+    children:     [ prompt, entry ];
+    spacing:      8px;
+    padding:      6px 12px;
+
+    border:        2px;
+    border-color:  rgba(184, 200, 223, 0.25);
+    border-radius: 8px;
+}
+
+prompt {
+    text-color: @accent;
+    padding:    0 4px 0 0;
+}
+
+entry {
+    placeholder:       "Search windows…";
+    placeholder-color: rgba(228, 226, 227, 0.40);
+    text-color:        @fg;
+    cursor-color:      @accent;
+    blink:             true;
+    cursor:            text;
+}
+
+listview {
+    columns:      2;
+    lines:        3;
+    fixed-height: true;
+    cycle:        true;
+    dynamic:      true;
+    scrollbar:    false;
+}
+
+element {
+    orientation:   horizontal;
+    children:      [ element-text ];
+    padding:       6px 12px;
+    border-radius: 6px;
+}
+
+element normal {
+    text-color: @fg;
+}
+
+element selected {
+    background-color: @selection;
+    text-color:       @sel-fg;
+}
+
+element active {
+    background-color: rgba(184, 200, 223, 0.18);
+    text-color:       @fg;
+}
+
+element urgent {
+    background-color: rgba(255, 83, 112, 0.25);
+    text-color:       @fg;
+}
+
+element-text {
+    highlight:        @match-highlight;
+    vertical-align:   0.5;
+    horizontal-align: 0.0;
+}
+
+element-text selected {
+    text-color: @sel-fg;
+    highlight:  @sel-highlight;
+}
+
+element-icon {
+    size: 0;
+}

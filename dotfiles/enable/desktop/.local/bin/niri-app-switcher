@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+# niri-app-switcher — unified window switcher for niri
+# Groups running windows by canonical app name; supports strict prefix search + history sort.
+set -euo pipefail
+
+CONFIG="${NIRI_APP_SWITCHER_CONFIG:-$HOME/.config/niri/app-switcher.json}"
+HISTORY="${NIRI_APP_SWITCHER_HISTORY:-$HOME/.cache/niri-app-switcher-history.json}"
+ROFI_CONFIG="${NIRI_APP_SWITCHER_ROFI_CONFIG:-$HOME/.config/rofi/config.rasi}"
+mkdir -p "$(dirname "$HISTORY")"
+[ -f "$HISTORY" ] || printf '%s\n' '{}' >"$HISTORY"
+
+# ---- helpers ----------------------------------------------------------------
+
+# Read JSON file safely; fall back to {} on missing/corrupt/empty.
+read_json() {
+	local out
+	out=$(jq -c '.' "$1" 2>/dev/null)
+	[ -n "$out" ] && printf '%s\n' "$out" || printf '%s\n' '{}'
+}
+
+# Atomically replace $HISTORY with new content via tmp + mv.
+update_history() {
+	local name="$1" now ts new_h tmp
+	now=$(date +%s)
+	ts=$(jq -n --arg v "$now" '$v')
+	new_h=$(jq --arg n "$name" --argjson t "$ts" '.[$n] = $t' "$HISTORY" \
+		2>/dev/null || printf '%s\n' '{}')
+	tmp=$(mktemp "${HISTORY}.XXXXXX")
+	printf '%s\n' "$new_h" >"$tmp"
+	mv -f "$tmp" "$HISTORY"
+}
+
+dispatch_app() {
+	local app_name="$1" windows win_count wid
+	[ -z "$app_name" ] && exit 0
+
+	windows=$(jq -c --arg n "$app_name" '.[$n].windows // []' <<<"$apps_state")
+	win_count=$(jq 'length // 0' <<<"$windows")
+	[ "$win_count" -eq 0 ] && exit 0
+
+	if [ "$win_count" -eq 1 ]; then
+		wid=$(jq -r '.[0].id' <<<"$windows")
+	else
+		wid=$(jq -r 'max_by(.focus_timestamp).id' <<<"$windows")
+	fi
+	niri msg action focus-window --id "$wid" >/dev/null
+	update_history "$app_name"
+}
+
+# ---- 1. load config + history (both safe-fallback) ---------------------------
+
+config=$(read_json "$CONFIG")
+history=$(read_json "$HISTORY")
+
+# ---- 2. config health check (warn but don't fail) ----------------------------
+
+dup_warn=$(jq -r '
+  (.apps // {})
+  | [ to_entries[] | { key: .key, ids: ((.value.match_app_ids // [.key])
+                                          | if length == 0 then [.key] else . end) } ]
+  | map( .ids[] as $id | { id: $id, key: .key } )
+  | group_by(.id)
+  | map(select(length > 1))
+  | if length > 0
+    then "warn: match_app_id collision: " + (map(.[0].id) | unique | join(", "))
+    else empty
+    end
+' <<<"$config" 2>/dev/null) || true
+[ -n "${dup_warn:-}" ] && printf '%s\n' "$dup_warn" >&2
+
+# ---- 3. fetch windows from niri, apply exclude_titles -----------------------
+
+raw_windows=$(niri msg --json windows)
+filtered_windows=$(jq -c --argjson cfg "$config" '
+  [ .[] | select(
+      (.title // "") as $t
+      | ($cfg.exclude_titles // []) as $bad
+      | $bad | map(. as $e | $t | contains($e)) | any | not
+  ) ]
+' <<<"$raw_windows")
+
+# ---- 4. group windows by canonical name --------------------------------------
+# Canonical name resolution:
+#   - If app_id appears in any app's match_app_ids → use that app's key.
+#   - Otherwise → use the final app_id component, e.g. org.mozilla.firefox → firefox.
+# I1 fix: empty match_app_ids array falls back to [.key].
+# Null app_id defense: if $win.app_id is null, treat as "unknown".
+
+apps_state=$(jq -c --argjson w "$filtered_windows" --argjson cfg "$config" '
+  def short_id:
+    (. // "unknown" | tostring | split(".") | map(select(length > 0)) | .[-1] // "unknown" | ascii_downcase);
+
+  ($cfg.apps // {}) as $apps
+  | ( [ $apps | to_entries[]
+          | { key: .key,
+              ids: ((.value.match_app_ids // [.key])
+                    | if length == 0 then [.key] else . end) } ] ) as $defs
+  | ( $defs
+      | map( .ids[] as $id | { ($id): .key } )
+      | add // {} ) as $rev
+  | ( $defs
+      | map({ (.key): [(.key | ascii_downcase)] })
+      | add // {} ) as $configured_keys
+  | reduce $w[] as $win ({};
+      ( $win.app_id // "unknown" ) as $aid
+      | ($rev[$aid] // ($aid | short_id)) as $name
+      | .[$name] = ( .[$name] // { match_keys: [], windows: [] } )
+      | .[$name].match_keys += ($configured_keys[$name] // [($name | ascii_downcase)])
+      | .[$name].match_keys |= unique
+      | .[$name].windows += [ { id: $win.id,
+                                title: ($win.title // ""),
+                                workspace_id: $win.workspace_id } ] )
+' <<<"{}")
+
+# ---- 5. build prefix menu lines: display, accepted app name, strict prefix ----
+
+menu_lines=$(jq -r --argjson h "$history" --argjson s "$apps_state" '
+  $s | to_entries
+  | sort_by( $h[.key] // 0 )
+  | reverse
+  | .[]
+  | .key
+' <<<"{}")
+
+# I5: no running windows after filter → exit cleanly
+[ -z "$menu_lines" ] && exit 0
+
+# ---- 6. primary fuzzel ------------------------------------------------------
+
+selected=$(printf '%s\n' "$menu_lines" |
+	rofi -dmenu \
+		-config "$ROFI_CONFIG" \
+		-p 'App> ' \
+		-matching prefix \
+		-no-custom \
+		-auto-select \
+		-hover-select \
+		-me-select-entry '' \
+		-me-accept-entry MousePrimary) || exit 0
+app_name="$selected"
+[ -z "$app_name" ] && exit 0
+dispatch_app "$app_name"

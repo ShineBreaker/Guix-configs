@@ -1,0 +1,17 @@
+{
+  "apps": {
+    "emacs": {
+      "match_app_ids": ["emacs", "org.gnu.emacs"]
+    },
+    "firefox": {
+      "match_app_ids": ["firefox", "org.mozilla.firefox"]
+    },
+    "foot": {
+      "match_app_ids": ["foot"]
+    },
+    "telegram": {
+      "match_app_ids": ["telegram-desktop", "org.telegram.desktop"]
+    }
+  },
+  "exclude_titles": ["emacsapp"]
+}
