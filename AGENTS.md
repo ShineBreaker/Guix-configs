@@ -153,7 +153,7 @@ tmp/config.scm
 修改 `source/config.org` 后，**务必**先 dry-run 验证再实际应用：
 
 ```bash
-MAAK_DRY_RUN=1 maak rebuild   # 仅构建一次，不写入系统
+GUIX_DRY_RUN=1 maak rebuild   # 仅构建一次，不写入系统
 maak check                    # 最快：仅括号平衡检查
 ```
 

@@ -134,7 +134,7 @@ maak update             # 更新 channel.lock 并签名提交
 maak pull               # guix pull --allow-downgrades --fallback
 
 # 验证配置（不实际应用）
-MAAK_DRY_RUN=1 maak rebuild
+GUIX_DRY_RUN=1 maak rebuild
 
 # 括号平衡检查（最轻量，不触发 guix）
 maak check
@@ -361,7 +361,7 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 修改 ~*.org~ 配置后，可用 =dry-run= 模式验证语法（不会实际应用到系统）：
 
 #+begin_src sh
-MAAK_DRY_RUN=1 maak rebuild
+GUIX_DRY_RUN=1 maak rebuild
 #+end_src
 
 =maak rebuild= 在执行前会自动运行括号平衡检查。也可手动单独检查：
