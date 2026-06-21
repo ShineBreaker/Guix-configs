@@ -66,7 +66,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 
 #+begin_example
 .
-├── blue.scm                # 任务运行器（基于 blue-mono Scheme DSL）
+├── blueprint.scm           # 任务运行器（基于 blue-mono Scheme DSL）
 ├── source/                 # 配置源码
 │   ├── AGENTS.md           # 本目录 AI 助手指引
 │   ├── channel.scm         # 频道定义
@@ -79,7 +79,6 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 │   ├── enable/             # 启用的配置（统一由 Guix Home 的 home-dotfiles-service-type 部署）
 │   │   ├── agents/         # Agent 资产（Pi、Crush、KB、loopctl、共享 skillsets）
 │   │   ├── desktop/        # 桌面环境（niri、autostart、xdg-portal、xfce4 helpers）
-│   │   ├── desktop-suite/  # WM 主题套件（darkman、waybar、fuzzel、mako、foot themes、swayidle/lock）
 │   │   ├── emacs/          # Emacs 配置（独立 git 子模块）
 │   │   ├── system/         # 系统级（containers、pipewire、xdg user-dirs）
 │   │   ├── terminal/       # 终端工具链（fish、tmux、foot、btop、starship、broot、fastfetch）
@@ -97,7 +96,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 | =source/information.scm=                 | 用户名、Btrfs 子卷、持久化目录 =%data-dirs=       | 初次使用时必改             |
 | =source/config.org=                      | 系统 + 用户配置（唯一 Org 源）                    | 经常                       |
 | =dotfiles/enable/*=                      | 启用的 dotfiles 配置                              | 经常                       |
-| =blue.scm=                               | blue 任务定义                                     | 需要添加自定义任务时修改   |
+| =blueprint.scm=                          | blue 任务定义                                     | 需要添加自定义任务时修改   |
 | =source/channel.scm=                     | 频道定义                                          | 添加/删除频道时            |
 
 * 构建管线
@@ -174,7 +173,7 @@ blue check
 本仓库的核心创新：用 Org 文件管理配置，通过 =blue= 自动提取。
 
 #+begin_src scheme
-;; blue.scm 中的关键函数
+;; blueprint.scm 中的关键函数
 (define (rebuild)
   "tangle → 括号检查 → guix time-machine → system reconfigure"
   ...)
@@ -182,7 +181,7 @@ blue check
 
 *如何复用*：
 
-1. 复制 =blue.scm=，并安装 =blue=（blue-mono）
+1. 复制 =blueprint.scm=，并安装 =blue=（blue-mono）
 2. 将 =.scm= 配置改写为 =.org= 格式
 3. 用 =#+begin_src scheme :tangle ...= 包裹代码块
 4. 用 Noweb =<<ref>>= 引用子块
@@ -225,8 +224,6 @@ dotfiles/enable/
 ├── agents/.local/bin/                 → ~/.local/bin/
 ├── desktop/.config/niri/              → ~/.config/niri/
 ├── desktop/.config/autostart/         → ~/.config/autostart/
-├── desktop-suite/.config/darkman/     → ~/.config/darkman/
-├── desktop-suite/.config/waybar/      → ~/.config/waybar/
 ├── system/.config/containers/         → ~/.config/containers/
 ├── system/.config/pipewire/           → ~/.config/pipewire/
 ├── terminal/.config/fish/             → ~/.config/fish/
@@ -243,8 +240,8 @@ dotfiles/enable/
          (home-dotfiles-configuration
           (directories '("../dotfiles/enable"))
           (layout 'stow)
-          (packages '("agents" "desktop" "desktop-suite"
-                      "emacs" "system" "terminal" "utilities"))))
+          (packages '("agents" "desktop" "emacs"
+                      "noctalia-suite" "system" "terminal" "utilities"))))
 #+end_src
 
 新增 / 修改 =enable/<dir>/= 下文件后运行 =blue rebuild= 重新链接。
@@ -332,7 +329,7 @@ blue update
 #+end_src
 
 ** 自定义 blue 任务
-编辑 =blue.scm= 添加新函数：
+编辑 =blueprint.scm= 添加新函数：
 
 #+begin_src scheme
 (define (my-task)

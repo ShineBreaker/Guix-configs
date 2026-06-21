@@ -43,8 +43,3 @@ desktop/
 - 修改后必须 `blue rebuild` 才会生效（不要直接编辑 `~/.config/niri/` 等已部署路径）
 - 新增 autostart 项前确认对应服务包已在 `config.org` 的 home-packages 中声明
 - niri 配置支持热加载：`niri msg action reload-config`
-
-## 关联文档
-
-- niri 主题快捷键在 `dotfiles/enable/desktop-suite/.config/niri/settings/key-bindings-wm.kdl`（与本目录 `key-bindings.kdl` 是不同文件，分别由 desktop / desktop-suite 部署）
-- 主题切换由 `dotfiles/enable/desktop-suite/` 中的 darkman 体系管理

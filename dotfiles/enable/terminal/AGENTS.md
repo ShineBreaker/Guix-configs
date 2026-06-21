@@ -63,7 +63,6 @@ terminal/
 - tmux 自定义脚本混合 Scheme（`.scm`，Guile 驱动）+ Bash（胶水）
 - `termide` 是 tmuxifier 衍生的自定义会话管理器，入口在 `~/.local/bin/termide`
 - starship 使用 TOML；`terminal/` 下唯一顶级文件
-- foot 主题片段在 `desktop-suite/.config/foot/themes/`，主配置在本目录
 
 ## 修改约束
 

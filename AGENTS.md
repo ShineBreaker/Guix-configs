@@ -20,7 +20,7 @@
 │   └── disable/            # 已弃用的旧配置（保留参考）
 ├── tmp/                    # blue 生成的中间产物（自动生成，不要手动编辑）
 ├── tools/                  # 辅助脚本
-└── blue.scm                # 任务运行器定义（基于 blue-mono Scheme DSL）
+└── blueprint.scm           # 任务运行器定义（基于 blue-mono Scheme DSL）
 ```
 
 ## 构建管线
@@ -76,8 +76,8 @@ tmp/config.scm
   (home-dotfiles-configuration
    (directories '("../dotfiles/enable"))
    (layout 'stow)                         ; Stow 软链接语义
-   (packages '("agents" "desktop" "desktop-suite"
-               "emacs" "system" "terminal" "utilities"))
+   (packages '("agents" "desktop" "emacs"
+                "noctalia-suite" "system" "terminal" "utilities"))
    (excluded '("\\.agents/workfile($|/.*)" ...))))
 ```
 
@@ -99,7 +99,7 @@ tmp/config.scm
 
 ## 目录结构图自动维护
 
-> **实现位置**：`blue.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
+> **实现位置**：`blueprint.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
 
 仓库内 7 个 `AGENTS.md`（`source/`、`dotfiles/`、`dotfiles/enable/<app>/` 里的 5 个）的“## 目录结构”章节**用标记圈起来**，由 `blue structor` 自动用 `tree` 输出重写。
 
@@ -111,7 +111,7 @@ tmp/config.scm
 - 预览不写文件：`ORG_STRUCTOR_DRY=1 blue structor`
 - 标记格式独立于运行器（不带 `blue:` 前缀），其他仓库用 justfile/Makefile 包装时复用同一约定
 - 跳过规则与 `dotfile-services` 的 `excluded` 列表对齐（`.git` / `.github` / `AGENTS.md` 自身等）
-- 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `blue.scm` 的 `%structor-targets`
+- 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `blueprint.scm` 的 `%structor-targets`
 
 ## 频道架构
 

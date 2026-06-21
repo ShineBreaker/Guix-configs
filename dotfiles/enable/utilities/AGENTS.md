@@ -89,7 +89,7 @@ utilities/
 
 ## 修改约束
 
-- 修改后必须 `blue rebuild` 才会生效
+- 改 `utilities/.config/<app>/` 后跑 `blue home` 即可生效（不需 `blue rebuild`）；重启对应服务验证
 - Rime 子模块修改需在子模块内单独 commit 并 push 到上游
 - Git commit 模板通过 `~/.config/git/gitmessage`（已通过 `git config commit.template` 引用）
 - winapps 配置修改后需重建 VM

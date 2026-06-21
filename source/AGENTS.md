@@ -152,7 +152,6 @@ cat new.scm | ORG_BLOCK=<name> blue block-replace   # stdin 替换块 body + 原
 **Don't**：
 
 - 不要手动编辑 `tmp/config.scm`（自动生成）
-- 不要恢复 `source/configs/system-config.org` / `home-config.org`（已合并）
 - 不要在 org 文件中使用 Scheme 原生不支持的语法（`<<ref>>` 是 Org Noweb）
 - 不要把 `niri.kdl` 等不存在于 `source/files/` 的文件名写进文档（实际仅有 `nftables.conf`、`rounded.qss`、`zed.json`、`skel/`）
   </critical>

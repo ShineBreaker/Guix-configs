@@ -97,7 +97,7 @@ dotfiles/
 - 入口：Guix Home `home-dotfiles-service-type`，在 `source/config.org` 的 `dotfile-services` 块声明
 - `directories`：`'("../dotfiles/enable")`
 - `layout`：`'stow`（自动以目录名为前缀建立软链接）
-- `packages`：`agents desktop desktop-suite emacs system terminal utilities`
+- `packages`：`agents desktop emacs noctalia-suite system terminal utilities`
 - `excluded`：被排除的文件（`.git`、`.gitignore`、`AGENTS.md`、`README.md`、`__pycache__`、`.venv` 等）
 - 新增子目录或新增子目录中文件：直接 `blue rebuild`；新文件若需排除请更新 `excluded` 正则
 
