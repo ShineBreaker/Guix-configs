@@ -405,14 +405,18 @@
 (define %structor-skip-names
   '(".git" ".github" ".agents" "node_modules" ".blue-store"))
 
-(define %structor-targets
-  '("source/AGENTS.md"
-    "dotfiles/AGENTS.md"
-    "dotfiles/enable/utilities/AGENTS.md"
-    "dotfiles/enable/terminal/AGENTS.md"
-    "dotfiles/enable/system/AGENTS.md"
-    "dotfiles/enable/desktop/AGENTS.md"
-    "dotfiles/enable/desktop-suite/AGENTS.md"))
+(define (%structor-targets)
+  (let ((root %repo-root))
+    (filter-map
+     (lambda (path)
+       (and (file-exists? path)
+            (not (string-contains path "/.git/"))
+            (not (string-contains path "/disable/"))
+            (not (string-contains path "/tmp/"))
+            (not (string-contains path "/.blue-store/"))
+            (not (string-contains path "/.agents/"))
+            (substring path (string-length root))))
+     (find-files root "(^|/)(AGENTS|README)\\.md$"))))
 
 (define (%structor-skip? name)
   (or (member name '("." ".." "AGENTS.md"))
@@ -575,6 +579,7 @@
    (category 'deployment)
     (synopsis "应用 Guix System 配置")
     (help "应用 operating-system 表。支持 GUIX_DRY_RUN=1 环境变量。"))
+  ((command-procedure clean-artifacts-command) '())
   (apply-config "system" "%system"
                 #:sudo? #t
                 #:after (lambda () (%guix '("locate" "--update")))))
@@ -584,6 +589,7 @@
    (category 'deployment)
    (synopsis "应用 Guix Home 配置")
    (help "应用 home-environment 表。支持 GUIX_DRY_RUN=1 环境变量。"))
+  ((command-procedure clean-artifacts-command) '())
   (apply-config "home" "%home"))
 
 (define-command (block-show-command arguments)
@@ -658,22 +664,25 @@
   ((invoke "clean-artifacts")
    (category 'maintenance)
     (synopsis "移除仓库编译产物")
-    (help "移除仓库内的 __pycache__、*.elc、*.o、*.a 和 *.so 文件。"))
+    (help "移除仓库内的 __pycache__、*.elc、*.o、*.a、*.so 文件以及 Emacs 运行时缓存目录。"))
   (for-each
    (match-lambda
-     ((pattern type)
+     ((target type)
       (if (eq? type 'directory)
-          (%run `("find" ,%repo-root "-type" "d" "-name" ,pattern
-                  "-not" "-path" "*/.git/*"
-                  "-print" "-exec" "rm" "-rf" "{}" "+"))
-          (%run `("find" ,%repo-root "-type" "f" "-name" ,pattern
+          (when (file-exists? target)
+            (format #t "移除 ~a~%" target)
+            (delete-file-recursively target))
+          (%run `("find" ,%repo-root "-type" "f" "-name" ,target
                   "-not" "-path" "*/.git/*"
                   "-print" "-delete")))))
-   '(("__pycache__" directory)
+   `(("__pycache__" directory)
      ("*.elc" file)
      ("*.o" file)
      ("*.a" file)
-     ("*.so" file))))
+     ("*.so" file)
+     ("org-roam.db" file)
+     (,(string-append %repo-root "/dotfiles/enable/emacs/.config/emacs/etc") directory)
+     (,(string-append %repo-root "/dotfiles/enable/emacs/.config/emacs/var") directory))))
 
 (define-command (secret-scan-command arguments)
   ((invoke "secret-scan")
@@ -776,7 +785,7 @@
 刷新所有 structor 目标，或仅刷新指定的 AGENTS.md。
 支持 ORG_STRUCTOR_DEPTH=N 和 ORG_STRUCTOR_DRY=1 环境变量。"))
   (let* ((depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4))
-         (targets (if (null? arguments) %structor-targets arguments))
+         (targets (if (null? arguments) (%structor-targets) arguments))
          (dry? (%env-set? "ORG_STRUCTOR_DRY")))
     (run-structor targets #:depth depth #:dry? dry?)))
 
