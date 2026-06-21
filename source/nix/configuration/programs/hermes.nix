@@ -12,16 +12,4 @@ in
   home.sessionVariables = {
     HERMES_HOME = "$XDG_DATA_HOME/hermes";
   };
-
-  xdg.desktopEntries.hermes = {
-    name = "Hermes Agent";
-    exec = "hermes-desktop";
-    terminal = false;
-    type = "Application";
-    categories = [
-      "Development"
-      "Utility"
-    ];
-    comment = "Hermes Agent — self-improving AI agent by Nous Research";
-  };
 }

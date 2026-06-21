@@ -1,0 +1,8 @@
+[Desktop Entry]
+Categories=Development;Utility
+Comment=Hermes Agent — self-improving AI agent by Nous Research
+Exec=/home/brokenshine/.nix-profile/bin/hermes-desktop
+Name=Hermes Agent
+Terminal=false
+Type=Application
+Version=1.5
