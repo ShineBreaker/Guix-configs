@@ -34,8 +34,7 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 │   ├── atelier/                 # subagent 执行器 + plan-review-gate + worker/planner 上下文注入
 │   ├── custom-shortcuts/        # 快捷键覆盖（Shift+Tab → /plannotator）
 │   ├── global-context/          # 全局上下文注入（before_agent_start hook）
-│   ├── default-timeout/         # 默认超时调整
-│   └── kb-hooks/                # 知识库相关 hook
+│   └── default-timeout/         # 默认超时调整
 ├── prompts/                 # Prompt 模板（chain 定义）
 │   ├── design-review-implement.md
 │   ├── implement-and-review.md
@@ -98,7 +97,6 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 | `custom-shortcuts/` | `onTerminalInput` 拦截 Shift+Tab 改为 `/plannotator`                                          |
 | `global-context/`   | `before_agent_start` 注入 contextDir + extraFiles，受字节预算限制                             |
 | `default-timeout/`  | 默认超时调整                                                                                  |
-| `kb-hooks/`         | 知识库相关 hook                                                                               |
 
 ### Loop 体系（loopctl）
 
@@ -121,7 +119,7 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 | `pi`                  | Pi Agent 主入口（设置 PI\_\* 环境变量 + 按需 pnpm install + exec） |
 | `pi-acp`              | 自动 commit 推送工具                                               |
 | `pi-update`           | Pi Agent 更新脚本                                                  |
-| `kb`、`kb-agent`      | 知识库 CLI                                                         |
+| `kb`                  | 知识库 CLI（只读查询）                                             |
 | `loopctl`、`loop_lib` | 循环框架                                                           |
 
 ### 辅助脚本（`.local/share/pi/scripts/`）
@@ -150,16 +148,20 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 │   └── 02-ultilities.md
 ├── skills/                 # 本仓库自维护 skills
 │   ├── emacs-config/
-│   ├── kb-curator/
 │   ├── knowledge-base/
-│   ├── pack-guix/
-│   └── self-improving/
+│   └── pack-guix/
 └── skillsets/              # 上游 skills 集（均为 git submodule）
     ├── agent-skills/       # github.com/addyosmani/agent-skills
     ├── emacs-skills/       # github.com/xenodium/emacs-skills
     ├── mattpocock-skills/  # github.com/mattpocock/skills
     └── pi-skills/          # github.com/badlogic/pi-skills
 ```
+
+### Hermes（`.local/share/hermes/`）
+
+> 实现位置：`source/nix/configuration/programs/hermes.nix` 装 hermes-agent `full` + `desktop` 输出；`source/information.scm` 的 `%data-dirs` 加 `.local/share/hermes` 保证 bind-mount 持久化。
+
+Hermes Agent（[hermes-agent.nousresearch.com](https://hermes-agent.nousresearch.com)）—— Nous Research 出品的 self-improving AI agent，CLI / TUI / Web Dashboard / Desktop 共用同一份 config、sessions、skills 与 memory。**nix flake install** 装 `full` 变体（含所有 providers、messaging platform libraries、voice）+ 独立的 `desktop` 输出。
 
 ## 修改约束
 
@@ -170,4 +172,4 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 - **修改 `extensions/`**：当前为直接加载的 TypeScript 文件，修改后重启 Pi Agent 会话并用 `pi --help` / 语法检查验证
 - **新增 npm 包**：加入 `settings.json` 的 `packages` 数组，并在本文件记录其配置项
 - **删除 npm 包**：同步从 `settings.json` 移除其配置项，并更新本文件
-- **不要直接编辑 `skillsets/` 子模块内容**
+- **修改 hermes `config.yaml` / `SOUL.md`**：直接编辑 `dotfiles/enable/agents/.local/share/hermes/`；新增运行时目录（`skills/` 等）由 hermes 自管理，**不要**在 dotfile 仓库内创建空目录（stow 软链接会导致 git 污染）。改后必须 `blue home` 让 dotfile stow 重建软链接。
