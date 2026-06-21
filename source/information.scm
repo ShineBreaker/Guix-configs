@@ -28,11 +28,13 @@
     ".local/share/fish"
     ".local/share/atuin"
     ".local/share/direnv"
+    ".local/share/hermes"
     ".local/share/nix"
     ".local/share/flatpak"
     ".local/share/osu"
     ".local/share/PrismLauncher"
     ".local/share/Sandbox"
+
     ".local/state"
     ".ssh"
     ".config/dconf"

@@ -1349,7 +1349,6 @@ end
                              "emacs-dashboard"
                              "emacs-ef-themes"
                              "emacs-kind-icon"
-                             "emacs-minimap"
                              "emacs-nerd-icons"
                              "emacs-pulsar"
                              "emacs-rainbow-delimiters"
@@ -1634,10 +1633,44 @@ end
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
                               (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
-                              ; (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
+                                        ; (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
                               (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(graphical-session))
-                              (make-shepherd-service xdg-desktop-portal-wlr "/libexec/xdg-desktop-portal-wlr" '(graphical-session))))))
+                              (make-shepherd-service xdg-desktop-portal-wlr "/libexec/xdg-desktop-portal-wlr" '(graphical-session))))
+
+        ;; Hermes Agent —— 把 dashboard backend 和 messaging gateway 做成 shepherd 用户级守护进程，
+        ;; 与 NixOS nixosModules.hermes-agent 的 systemd 服务语义一致，但走 Shepherd 管理。
+        ;; 这样 hermes-desktop / hermes chat / messaging platforms 共享同一个常驻 backend，
+        ;; 不再依赖 desktop session 在线。
+        (simple-service 'hermes-services home-shepherd-service-type
+                        (list (shepherd-service
+                               (provision '(hermes-backend))
+                               (requirement '(graphical-session))
+                               (start #~(lambda args
+                                          ((make-forkexec-constructor
+                                            (list (string-append (getenv "HOME") "/.nix-profile/bin/hermes")
+                                                  "dashboard" "--no-open"
+                                                  "--host" "127.0.0.1" "--port" "9119")
+                                            #:environment-variables (environ)
+                                            #:log-file (string-append (getenv "HOME")
+                                                                      "/.local/state/shepherd/hermes-backend.log"))
+                                           args)))
+                               (stop #~(make-kill-destructor))
+                               (respawn? #t))
+
+                               (shepherd-service
+                                (provision '(hermes-gateway))
+                                (requirement '(hermes-backend))
+                                (start #~(lambda args
+                                          ((make-forkexec-constructor
+                                            (list (string-append (getenv "HOME") "/.nix-profile/bin/hermes")
+                                                  "gateway" "run" "--replace")
+                                            #:environment-variables (environ)
+                                            #:log-file (string-append (getenv "HOME")
+                                                                      "/.local/state/shepherd/hermes-backend.log"))
+                                           args)))
+                                (stop #~(make-kill-destructor))
+                                (respawn? #t))))))
 #+end_src
 
 *** 计时器服务
