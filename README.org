@@ -77,7 +77,7 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 │   └── nix/                # Nix home-manager 备份分支（与 Guix 不互通）
 ├── dotfiles/
 │   ├── enable/             # 启用的配置（统一由 Guix Home 的 home-dotfiles-service-type 部署）
-│   │   ├── agents/         # Agent 资产（Pi、Crush、KB、loopctl、共享 skillsets）
+│   │   ├── agents/         # Agent 资产（Pi、Crush、KB、loopctl、共享 skills）
 │   │   ├── desktop/        # 桌面环境（niri、autostart、xdg-portal、xfce4 helpers）
 │   │   ├── emacs/          # Emacs 配置（独立 git 子模块）
 │   │   ├── system/         # 系统级（containers、pipewire、xdg user-dirs）

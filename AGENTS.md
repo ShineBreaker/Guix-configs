@@ -92,10 +92,6 @@ tmp/config.scm
 | ------------------------------------------------------------------- | ------------------------------------ |
 | `dotfiles/enable/emacs/.config/emacs`                               | `codeberg.org/BrokenShine/.emacs.d`  |
 | `dotfiles/enable/utilities/.local/share/fcitx5/rime`                | `github.com/iDvel/rime-ice`          |
-| `dotfiles/enable/agents/.config/agents/skillsets/agent-skills`      | `github.com/addyosmani/agent-skills` |
-| `dotfiles/enable/agents/.config/agents/skillsets/emacs-skills`      | `github.com/xenodium/emacs-skills`   |
-| `dotfiles/enable/agents/.config/agents/skillsets/mattpocock-skills` | `github.com/mattpocock/skills`       |
-| `dotfiles/enable/agents/.config/agents/skillsets/pi-skills`         | `github.com/badlogic/pi-skills`      |
 
 ## 目录结构图自动维护
 

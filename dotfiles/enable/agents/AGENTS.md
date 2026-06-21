@@ -2,6 +2,122 @@
 
 本目录集中管理本仓库用到的所有 Agent 相关配置：Pi Agent、Crush、共享的 KB / loopctl 基础设施、跨 agent 技能集（submodule）。统一通过 Guix Home 的 `home-dotfiles-service-type`（stow layout）部署到 `~/.config/`、`~/.local/` 等路径。
 
+## 目录结构
+
+<!-- structor:begin -->
+
+<!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
+
+```
+agents/
+├── .config/
+│   ├── agents/
+│   │   ├── context/
+│   │   │   ├── 01-language.md
+│   │   │   └── 02-ultilities.md
+│   │   └── skills/
+│   │       ├── emacs-config/
+│   │       ├── knowledge-base/
+│   │       └── pack-guix/
+│   ├── crush/
+│   │   ├── bin/
+│   │   │   ├── bash-language-server
+│   │   │   ├── context7-mcp
+│   │   │   ├── filesystem-mcp
+│   │   │   ├── mcp-server-memory
+│   │   │   ├── mcp-server-sequential-thinking
+│   │   │   ├── typescript-language-server
+│   │   │   ├── vscode-css-language-server
+│   │   │   ├── vscode-eslint-language-server
+│   │   │   ├── vscode-html-language-server
+│   │   │   ├── vscode-json-language-server
+│   │   │   └── vscode-markdown-language-server
+│   │   ├── hooks/
+│   │   │   ├── bash-gate.sh
+│   │   │   └── edit-gate.sh
+│   │   └── crush.json
+│   ├── loopctl/
+│   │   ├── adapters/
+│   │   │   ├── README.md
+│   │   │   ├── _TEMPLATE.json
+│   │   │   ├── claude-code.json
+│   │   │   ├── codex.json
+│   │   │   ├── crush.json
+│   │   │   ├── opencode.json
+│   │   │   └── pi.json
+│   │   └── docs/
+│   │       ├── examples/
+│   │       ├── README.md
+│   │       ├── adapter.md
+│   │       └── extract.md
+│   └── pi/
+│       ├── agents/
+│       │   ├── oracle.md
+│       │   ├── planner.md
+│       │   ├── researcher.md
+│       │   ├── reviewer.md
+│       │   ├── scout.md
+│       │   ├── visual.md
+│       │   └── worker.md
+│       ├── extensions/
+│       │   ├── atelier/
+│       │   ├── custom-shortcuts/
+│       │   ├── default-timeout/
+│       │   └── global-context/
+│       ├── npm/
+│       │   └── pnpm-lock.yaml
+│       ├── prompts/
+│       │   ├── design-review-implement.md
+│       │   ├── implement-and-review.md
+│       │   ├── implement.md
+│       │   ├── parallel-research.md
+│       │   ├── parallel-workers.md
+│       │   ├── research-and-implement.md
+│       │   └── scout-and-plan.md
+│       ├── .gitignore
+│       ├── APPEND_SYSTEM.md
+│       ├── keybindings.json
+│       ├── lsp.json
+│       ├── models.json
+│       ├── plannotator.json
+│       └── settings.json
+├── .local/
+│   ├── bin/
+│   │   ├── kb_lib/
+│   │   │   ├── __pycache__/
+│   │   │   ├── viz/
+│   │   │   ├── __init__.py
+│   │   │   ├── cards.py
+│   │   │   ├── core.py
+│   │   │   └── lint.py
+│   │   ├── loop_lib/
+│   │   │   ├── extract/
+│   │   │   ├── templates/
+│   │   │   ├── tests/
+│   │   │   ├── adapter-cmds.sh
+│   │   │   ├── agent.sh
+│   │   │   ├── common.sh
+│   │   │   ├── log.sh
+│   │   │   ├── prompt.sh
+│   │   │   └── state.sh
+│   │   ├── kb
+│   │   ├── loopctl
+│   │   ├── pi
+│   │   ├── pi-acp
+│   │   └── pi-update
+│   └── share/
+│       ├── applications/
+│       │   └── hermes.desktop
+│       ├── hermes/
+│       └── pi/
+│           ├── scripts/
+│           ├── package.json
+│           └── pnpm-lock.yaml
+└── .gitignore
+```
+
+<!-- /structor -->
+
 ## 部署模型
 
 ```
@@ -9,7 +125,7 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 ├── .config/
 │   ├── pi/                   → ~/.config/pi/         # Pi Agent 核心配置
 │   ├── crush/                → ~/.config/crush/      # Crush 配置 + hooks + bin
-│   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills, skillsets, mcp-servers）
+│   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills, mcp-servers）
 │   └── loopctl/              → ~/.config/loopctl/    # 跨 agent 循环框架
 └── .local/
     ├── bin/                  → ~/.local/bin/         # 启动脚本（pi、pi-acp、pi-update、kb、loopctl 等）
@@ -137,24 +253,6 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `
 ├── crush.json              # Crush 核心配置
 ├── bin/                    # Crush 辅助脚本
 └── hooks/                  # Crush hook 脚本
-```
-
-### 共享 Agent 基础设施（`.config/agents/`）
-
-```
-.config/agents/
-├── context/                # 全局上下文（global-context 扩展读取）
-│   ├── 01-language.md
-│   └── 02-ultilities.md
-├── skills/                 # 本仓库自维护 skills
-│   ├── emacs-config/
-│   ├── knowledge-base/
-│   └── pack-guix/
-└── skillsets/              # 上游 skills 集（均为 git submodule）
-    ├── agent-skills/       # github.com/addyosmani/agent-skills
-    ├── emacs-skills/       # github.com/xenodium/emacs-skills
-    ├── mattpocock-skills/  # github.com/mattpocock/skills
-    └── pi-skills/          # github.com/badlogic/pi-skills
 ```
 
 ### Hermes（`.local/share/hermes/`）
