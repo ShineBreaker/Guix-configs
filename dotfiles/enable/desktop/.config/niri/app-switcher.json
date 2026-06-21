@@ -11,6 +11,9 @@
     },
     "telegram": {
       "match_app_ids": ["telegram-desktop", "org.telegram.desktop"]
+    },
+    "obs": {
+      "match_app_ids": ["obs", "com.obsproject.Studio"]
     }
   },
   "exclude_titles": ["emacsapp"]
