@@ -36,51 +36,20 @@ agents/
 │   │   │   ├── bash-gate.sh
 │   │   │   └── edit-gate.sh
 │   │   └── crush.json
-│   ├── loopctl/
-│   │   ├── adapters/
-│   │   │   ├── README.md
-│   │   │   ├── _TEMPLATE.json
-│   │   │   ├── claude-code.json
-│   │   │   ├── codex.json
-│   │   │   ├── crush.json
-│   │   │   ├── opencode.json
-│   │   │   └── pi.json
-│   │   └── docs/
-│   │       ├── examples/
-│   │       ├── README.md
-│   │       ├── adapter.md
-│   │       └── extract.md
-│   └── pi/
-│       ├── agents/
-│       │   ├── oracle.md
-│       │   ├── planner.md
-│       │   ├── researcher.md
-│       │   ├── reviewer.md
-│       │   ├── scout.md
-│       │   ├── visual.md
-│       │   └── worker.md
-│       ├── extensions/
-│       │   ├── atelier/
-│       │   ├── custom-shortcuts/
-│       │   ├── default-timeout/
-│       │   └── global-context/
-│       ├── npm/
-│       │   └── pnpm-lock.yaml
-│       ├── prompts/
-│       │   ├── design-review-implement.md
-│       │   ├── implement-and-review.md
-│       │   ├── implement.md
-│       │   ├── parallel-research.md
-│       │   ├── parallel-workers.md
-│       │   ├── research-and-implement.md
-│       │   └── scout-and-plan.md
-│       ├── .gitignore
-│       ├── APPEND_SYSTEM.md
-│       ├── keybindings.json
-│       ├── lsp.json
-│       ├── models.json
-│       ├── plannotator.json
-│       └── settings.json
+│   └── loopctl/
+│       ├── adapters/
+│       │   ├── README.md
+│       │   ├── _TEMPLATE.json
+│       │   ├── claude-code.json
+│       │   ├── codex.json
+│       │   ├── crush.json
+│       │   ├── omp.json
+│       │   └── opencode.json
+│       └── docs/
+│           ├── examples/
+│           ├── README.md
+│           ├── adapter.md
+│           └── extract.md
 ├── .local/
 │   ├── bin/
 │   │   ├── kb_lib/
@@ -101,18 +70,11 @@ agents/
 │   │   │   ├── prompt.sh
 │   │   │   └── state.sh
 │   │   ├── kb
-│   │   ├── loopctl
-│   │   ├── pi
-│   │   ├── pi-acp
-│   │   └── pi-update
+│   │   └── loopctl
 │   └── share/
 │       ├── applications/
 │       │   └── hermes.desktop
-│       ├── hermes/
-│       └── pi/
-│           ├── scripts/
-│           ├── package.json
-│           └── pnpm-lock.yaml
+│       └── hermes/
 └── .gitignore
 ```
 
@@ -123,128 +85,68 @@ agents/
 ```
 dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 ├── .config/
-│   ├── pi/                   → ~/.config/pi/         # Pi Agent 核心配置
 │   ├── crush/                → ~/.config/crush/      # Crush 配置 + hooks + bin
 │   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills, mcp-servers）
 │   └── loopctl/              → ~/.config/loopctl/    # 跨 agent 循环框架
 └── .local/
-    ├── bin/                  → ~/.local/bin/         # 启动脚本（pi、pi-acp、pi-update、kb、loopctl 等）
-    └── share/pi/             → ~/.local/share/pi/    # 辅助脚本 + npm 依赖
+    ├── bin/                  → ~/.local/bin/         # 启动脚本（kb、loopctl 等）
+    └── share/                → ~/.local/share/       # applications/hermes.desktop、hermes 运行时数据
 ```
 
-`.gitignore` 排除 `.agents/workfile`、`.pi-lens`、`node_modules`、`__pycache__`。文档类的 `AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
+> **oh-my-pi (OMP)** 不再从此目录部署。它是 Guix 频道 `jeans` 的 `oh-my-pi-bin`（v16.1.6）单 ELF 二进制，由 `guix-home` 的 `home-packages` 直接暴露为 `omp` 命令。运行时配置（settings/agents/prompts 等）走 OMP 自身约定路径，本仓库不再托管。
 
-## Pi Agent（`.config/pi/`）
+`.gitignore` 排除 `.agents/workfile`、`node_modules`、`__pycache__`。文档类的 `AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
 
-```
-.config/pi/
-├── agents/                  # Subagent 定义（YAML frontmatter + Markdown system prompt）
-│   ├── scout.md
-│   ├── researcher.md
-│   ├── planner.md
-│   ├── oracle.md
-│   ├── worker.md
-│   ├── reviewer.md
-│   └── visual.md
-├── extensions/              # 本地扩展（TypeScript，Pi 启动时加载）
-│   ├── atelier/                 # subagent 执行器 + plan-review-gate + worker/planner 上下文注入
-│   ├── custom-shortcuts/        # 快捷键覆盖（Shift+Tab → /plannotator）
-│   ├── global-context/          # 全局上下文注入（before_agent_start hook）
-│   └── default-timeout/         # 默认超时调整
-├── prompts/                 # Prompt 模板（chain 定义）
-│   ├── design-review-implement.md
-│   ├── implement-and-review.md
-│   ├── implement.md
-│   ├── parallel-research.md
-│   ├── parallel-workers.md
-│   ├── research-and-implement.md
-│   └── scout-and-plan.md
-├── APPEND_SYSTEM.md         # 主 agent 最小公共基础
-├── settings.json            # 核心配置（见下方归属表）
-├── models.json              # 自定义 provider/模型定义
-├── keybindings.json         # 快捷键绑定
-├── lsp.json                 # LSP 配置（@narumitw/pi-lsp 读取）
-├── mcp.json                 # MCP 服务器（context-mode、kb-mcp）
-├── npm/                     # npm 相关
-└── plannotator.json         # plannotator 扩展配置
-```
+## oh-my-pi / OMP（Guix 包 `oh-my-pi-bin`）
 
-### npm 扩展包（`settings.json` → `packages`）
+OMP（[can1357/oh-my-pi](https://github.com/can1357/oh-my-pi)）是 Pi 的 batteries-included fork：单 ELF 二进制（≈530 MB，内嵌 Bun runtime + native addons），覆盖 IDE 集成、40+ providers、32 内置工具、13 LSP、27 DAP、原生 subagent、web 搜索、浏览器自动化等。
 
-- `npm:context-mode`
-- `npm:pi-mcp-adapter`
-- `npm:pi-web-access`
-- `npm:@plannotator/pi-extension`
-- `npm:pi-powerline-footer`
-- `npm:pi-hashline-edit`
-- `npm:@narumitw/pi-lsp`
-- `npm:pi-code-review`
-- `npm:pi-gitnexus`
-- `npm:@ff-labs/pi-fff`
-- `npm:pi-cache-graph`
-- `npm:@juicesharp/rpiv-todo`
-- `npm:@juicesharp/rpiv-btw`
-- `npm:@juicesharp/rpiv-ask-user-question`
+**包来源**：jeans 频道 `jeans/packages/tools.scm::oh-my-pi-bin`，已被 `source/config.org` 的 `home-packages` 收纳（line 1144）。`guix-home` rebuild 后通过 `/home/brokenshine/.guix-home/profile/bin/omp` 暴露。
 
-修改 `settings.json` 同步更新本节清单。
+### 路径与运行时约定
 
-### 关键 settings 字段
+| 路径                                   | 用途                                                          |
+| -------------------------------------- | ------------------------------------------------------------- |
+| `$PI_CONFIG_DIR` (`$XDG_CONFIG_HOME/pi/omp`) | OMP 自身约定的配置文件目录（providers、agents、skills 等） |
+| `$PI_CODING_AGENT_DIR` (`$XDG_CONFIG_HOME/pi`) | 兼容 Pi 的主目录，OMP 作为 fork 通常仍识别                |
+| `$PI_CODING_AGENT_SESSION_DIR` (`$XDG_DATA_HOME/pi/sessions`) | 会话持久化目录                                       |
 
-| 字段                               | 用途                                                                                                     |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `defaultProvider` / `defaultModel` | 默认 zai / glm-5.1                                                                                       |
-| `compaction`                       | 上下文压缩策略                                                                                           |
-| `retry`                            | 失败重试（baseDelay / maxRetries / maxRetryDelayMs）                                                     |
-| `packages`                         | npm 扩展清单                                                                                             |
-| `skills`                           | skills 加载路径（`~/.config/agents/skills/*`）                                                           |
-| `powerline`                        | 状态栏配置（preset: default, path.mode: abbreviated）                                                    |
-| `atelier`                          | subagent 运行配置（poll / panePrefix / keepResults / timeoutMs / maxTasks / maxConcurrency / tier 路由） |
-| `globalContext`                    | 全局上下文注入（contextDir、extraFiles、字节预算）                                                       |
+以上三条 env 在 `source/config.org` 的 XDG session-variables 块声明（line 1838-1841），由 `guix-home` 在 shell 启动时注入。
 
-### MCP（`mcp.json`）
+### 自定义配置的边界
 
-- `context-mode` — 直接调用 `context-mode` 命令
+> **本仓库不托管 OMP 配置源**——理由：OMP 是单二进制、内置完整扩展生态，"batteries-included" 的精神就是让用户少操心配置工程。需要在 `~/.config/pi/omp/` 下放自定义文件（providers / agents / skills 等）时，由用户本地维护，**不进仓库**。
 
-### 本地扩展
+如确实需要把 OMP 的某类配置工程化（如自定义 provider 列表、agents 模板），建议：
 
-| 扩展                | Hook / 作用                                                                                   |
-| ------------------- | --------------------------------------------------------------------------------------------- |
-| `atelier/`          | 注册 `subagent` 工具与 `/agentname` 快捷命令、plan-review-gate、worker/planner 上下文动态注入 |
-| `custom-shortcuts/` | `onTerminalInput` 拦截 Shift+Tab 改为 `/plannotator`                                          |
-| `global-context/`   | `before_agent_start` 注入 contextDir + extraFiles，受字节预算限制                             |
-| `default-timeout/`  | 默认超时调整                                                                                  |
+1. 在 `dotfiles/enable/agents/.config/omp/`（新增）下放配置源
+2. 在 `dotfiles-services` 的 `(packages ...)` 列表里加 `"omp"`
+3. `blue home` 部署
+
+但默认不做——保持仓库精简。
 
 ### Loop 体系（loopctl）
 
 跨 agent 长期迭代循环（接力棒模型）通过 `.config/loopctl/` 与 `.local/bin/loopctl` 管理：
 
 ```text
-/loop <name> start --task '...' --adapter pi   # 创建 loop
-/loop <name> step                              # 跑一轮
-/loop <name> status                            # 查看状态
-/loop list --all                               # 列出所有 loop
-/run-plan                                      # 计划执行（内部走 loop 框架）
+/loop <name> start --task '...' --adapter omp    # 创建 loop
+/loop <name> step                                # 跑一轮
+/loop <name> status                              # 查看状态
+/loop list --all                                 # 列出所有 loop
+/run-plan                                        # 计划执行（内部走 loop 框架）
 ```
 
-Adapter 声明式配置见 `.config/loopctl/adapters/`。新增 agent = 复制 `_TEMPLATE.json` 改 5–10 字段。
+Adapter 声明式配置见 `.config/loopctl/adapters/`。当前内置：`claude-code` / `codex` / `crush` / **omp** / `opencode`。新增 agent = 复制 `_TEMPLATE.json` 改 5–10 字段。
 
 ### 启动脚本（`.local/bin/`）
 
-| 脚本                  | 作用                                                               |
-| --------------------- | ------------------------------------------------------------------ |
-| `pi`                  | Pi Agent 主入口（设置 PI\_\* 环境变量 + 按需 pnpm install + exec） |
-| `pi-acp`              | 自动 commit 推送工具                                               |
-| `pi-update`           | Pi Agent 更新脚本                                                  |
-| `kb`                  | 知识库 CLI（只读查询）                                             |
-| `loopctl`、`loop_lib` | 循环框架                                                           |
+| 脚本          | 作用                              |
+| ------------- | --------------------------------- |
+| `kb`          | 知识库 CLI（只读查询）            |
+| `loopctl`     | 跨 agent 循环框架入口             |
 
-### 辅助脚本（`.local/share/pi/scripts/`）
-
-| 脚本                   | 作用                                                        |
-| ---------------------- | ----------------------------------------------------------- |
-| `subagent-wrapper.sh`  | subagent 执行包装：解析 frontmatter、构造 pi 命令、捕获输出 |
-| `extract-pi-result.py` | Pi JSON 流解析器                                            |
-| `read-crush-key.sh`    | 从 crush.json 读取 provider API key                         |
+OMP 自身通过 Guix profile 直接以 `omp` 命令暴露，不需要 wrapper。
 
 ### Crush（`.config/crush/`）
 
@@ -263,11 +165,6 @@ Hermes Agent（[hermes-agent.nousresearch.com](https://hermes-agent.nousresearch
 
 ## 修改约束
 
-- **pi 扩展必须是单文件 `index.ts`**：Guix Home stow 逐文件软链接到 `/gnu/store/`，导致 jiti 的相对路径 `import` 断裂。
-- **修改 `agents/*.md`**：直接编辑；frontmatter 中的 `model` 必须使用已配置或 Pi 内置可用的 provider/model；保留 scout/researcher 的 deepseek 路由
-- **修改 `agents/*.md` 的 `thinking`**：仅对确认支持 thinking 的模型设置
-- **修改 `settings.json` / `mcp.json` / `models.json`**：必须同步更新本文件相应表格
-- **修改 `extensions/`**：当前为直接加载的 TypeScript 文件，修改后重启 Pi Agent 会话并用 `pi --help` / 语法检查验证
-- **新增 npm 包**：加入 `settings.json` 的 `packages` 数组，并在本文件记录其配置项
-- **删除 npm 包**：同步从 `settings.json` 移除其配置项，并更新本文件
+- **OMP 自身配置**：OMP 是 Guix 包，不在本仓库 dotfiles 范围。如需自定义 OMP（providers/agents/skills 等），直接编辑 `~/.config/pi/omp/` 下文件，**不进仓库**。除非未来需要把某类配置工程化（如团队共享的 provider 列表），再单独建 `dotfiles/enable/agents/.config/omp/` 子目录并加到 `dotfile-services` 的 `packages` 列表。
 - **修改 hermes `config.yaml` / `SOUL.md`**：直接编辑 `dotfiles/enable/agents/.local/share/hermes/`；新增运行时目录（`skills/` 等）由 hermes 自管理，**不要**在 dotfile 仓库内创建空目录（stow 软链接会导致 git 污染）。改后必须 `blue home` 让 dotfile stow 重建软链接。
+- **修改 `adapters/omp.json`**：loopctl 调 OMP 的协议配置。改字段前先跑 `loopctl adapter test omp` 验证（如果 OMP 当前 CLI 参数不兼容 `args_template`，会立即暴露）。

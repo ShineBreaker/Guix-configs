@@ -1,4 +1,3 @@
 .agents/workfile
-.pi-lens
-__pycache__
 node_modules
+__pycache__

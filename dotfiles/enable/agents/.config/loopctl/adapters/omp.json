@@ -1,10 +1,10 @@
 {
-  "name": "pi",
+  "name": "omp",
   "version": "1.0",
-  "description": "Pi Coding Agent",
-  "bin": "pi",
-  "bin_check": ["pi", "--version"],
-  "bin_min_version": "0.75.5",
+  "description": "oh-my-pi (OMP) Coding Agent — Pi fork with IDE integration",
+  "bin": "omp",
+  "bin_check": ["omp", "--version"],
+  "bin_min_version": "16.1.6",
 
   "run": {
     "args_template": ["-p", "--mode", "json", "--no-session"],
