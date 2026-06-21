@@ -18,12 +18,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from kb_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
-    KB_MEMORY,
     KB_INDEX,
-    STALE_DAYS,
     die,
     now,
     ensure_dirs,
+    _rebuild_index,
+    _save_index,
 )
 from kb_lib.cards import (  # noqa: E402
     cmd_get,
@@ -34,7 +34,6 @@ from kb_lib.cards import (  # noqa: E402
     cmd_stats,
     cmd_health,
 )
-from kb_lib.memory import cmd_memory  # noqa: E402
 from kb_lib.lint import cmd_lint  # noqa: E402
 from kb_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
@@ -46,7 +45,6 @@ from kb_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 def cmd_reindex(args: argparse.Namespace) -> None:
     """全量扫描 experiences/ 目录下所有卡片，重建 index.json。"""
     ensure_dirs()
-    from kb_lib.core import _rebuild_index, _save_index
     index = _rebuild_index()
     _save_index(index)
     print(f"索引已重建: {index['total']} 条卡片 → {KB_INDEX}")
@@ -81,14 +79,6 @@ def print_help() -> None:
   tags      按标签检索
             kb tags <标签> [标签2 ...]
 
-  memory    查阅记忆系统
-            kb memory                          列出记忆概览
-            kb memory --type feedback|project|reference  按类型过滤
-            kb memory --project <名称|路径|.>   检索项目记忆
-            kb memory --stale                   列出陈旧记忆
-            kb memory --get                     查看全文
-            kb memory --get --type feedback     查看指定节全文
-
 诊断:
   stats     知识库统计概览
             kb stats
@@ -112,13 +102,8 @@ def print_help() -> None:
 
   help      显示本帮助
 
-配置常量:
-  KB_ROOT      知识库根目录 ({KB_ROOT})
-  STALE_DAYS   陈旧记忆阈值 ({STALE_DAYS} 天)
-
 知识库路径: {KB_ROOT}
 经验卡片目录: {KB_EXPERIENCES}
-记忆文件: {KB_MEMORY}
 """)
 
 
@@ -177,13 +162,6 @@ def main() -> None:
     tags_parser.add_argument("tags", nargs="+", help="标签")
     tags_parser.add_argument("--json", action="store_true", help="JSON 输出")
 
-    # ── memory ──────────────────────────────────────────────────────────
-    memory_parser = subparsers.add_parser("memory", help="查阅记忆系统")
-    memory_parser.add_argument("--type", choices=["feedback", "project", "reference"], help="记忆类型过滤")
-    memory_parser.add_argument("--project", metavar="IDENTIFIER", help="项目名或路径")
-    memory_parser.add_argument("--get", action="store_true", help="查看记忆全文")
-    memory_parser.add_argument("--stale", action="store_true", help="列出陈旧记忆")
-
     # ── reindex ───────────────────────────────────────────────────────────
     subparsers.add_parser("reindex", help="重建知识库索引")
 
@@ -217,7 +195,6 @@ def main() -> None:
         "search": cmd_search,
         "fields": cmd_fields,
         "tags": cmd_tags,
-        "memory": cmd_memory,
         "reindex": cmd_reindex,
         "lint": cmd_lint,
         "stats": cmd_stats,

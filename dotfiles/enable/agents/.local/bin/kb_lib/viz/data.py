@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """kb_viz_data — 知识库可视化的 Python 端数据预处理
 
-把 index.json / MEMORY.org 转换为前端可直接消费的 dict。
+把 index.json 转换为前端可直接消费的 dict。
 所有计算与单位规整都在此模块完成，前端只负责呈现。
 """
 
@@ -12,7 +12,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-from kb_lib.core import KB_MEMORY, KB_ROOT
+from kb_lib.core import KB_ROOT
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -32,29 +32,8 @@ KNOWN_FILTER_KEYS = {
 # ═══════════════════════════════════════════════════════════════════════════════
 # 记忆概览
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-def memory_overview() -> dict:
-    """解析 MEMORY.org，返回反馈/项目/参考记忆数。"""
-    if not KB_MEMORY.exists():
-        return {"total_feedback": 0, "total_project": 0, "total_reference": 0}
-
-    content = KB_MEMORY.read_text(encoding="utf-8")
-    feedback = len(re.findall(r"^\*\* F\d{3} ", content, re.MULTILINE))
-    proj_section = re.search(
-        r"^\* project\b.*?(?=^\* [a-z]|\Z)", content, re.MULTILINE | re.DOTALL
-    )
-    project = (
-        len(re.findall(r"^\*\* ", proj_section.group(0), re.MULTILINE))
-        if proj_section
-        else 0
-    )
-    reference = len(re.findall(r"^\*\* R\d{3} ", content, re.MULTILINE))
-    return {
-        "total_feedback": feedback,
-        "total_project": project,
-        "total_reference": reference,
-    }
+# MEMORY 章节已废弃；偏好/项目上下文由 Hermes memory 工具管理
+# viz 不再生成 memory_overview 数据
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -130,17 +109,17 @@ def normalize_cards(cards: list[dict]) -> list[dict]:
     return out
 
 
-def compute_stats(cards: list[dict], memory: dict) -> dict:
-    """Python 端预计算：总数、陈旧列表、记忆概览。
+def compute_stats(cards: list[dict], memory: dict | None = None) -> dict:
+    """Python 端预计算：总数、陈旧列表。
 
     陈旧判定：last_used 距今 > 60 天 或 > 180 天。空值不计入。
+    `memory` 参数保留为可选以兼容旧调用，但不再生成相关数据。
     """
     normalized = normalize_cards(cards)
     stale_60 = [c for c in normalized if 0 < days_since(c["last_used"]) > 60]
     stale_180 = [c for c in normalized if 0 < days_since(c["last_used"]) > 180]
     return {
         "total": len(cards),
-        "memory": memory,
         "stale_60_count": len(stale_60),
         "stale_180_count": len(stale_180),
         "stale_60_ids": [c["id"] for c in stale_60],

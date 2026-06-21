@@ -239,18 +239,9 @@ function renderSidebar() {
       });
     });
 
-  // 记忆概览
-  var m = STATS.memory || {};
-  document.getElementById("memory-grid").innerHTML =
-    '<div class="mem-cell"><span class="num">' +
-    (m.total_feedback || 0) +
-    '</span><span class="lbl">反馈</span></div>' +
-    '<div class="mem-cell"><span class="num">' +
-    (m.total_project || 0) +
-    '</span><span class="lbl">项目</span></div>' +
-    '<div class="mem-cell"><span class="num">' +
-    (m.total_reference || 0) +
-    '</span><span class="lbl">参考</span></div>';
+  // MEMORY 章节已废弃；memory-grid 在 HTML 中保留为空容器
+  var mg = document.getElementById("memory-grid");
+  if (mg) mg.innerHTML = "";
 }
 
 // ════════════════════════════════════════════════════════════════

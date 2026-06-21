@@ -153,7 +153,6 @@ function highlightSelected(id) {
 
 function renderHeroStats() {
   var el = document.getElementById("hero-stats");
-  var m = STATS.memory || {};
   el.innerHTML =
     '<div class="hero-stat" title="知识库总卡片数">' +
     '<span class="num">' +
@@ -166,11 +165,7 @@ function renderHeroStats() {
     '<div class="hero-stat" title="180 天以上未使用">' +
     '<span class="num" style="color:var(--red)">' +
     (STATS.stale_180_count || 0) +
-    '</span><span class="label">180d+</span></div>' +
-    '<div class="hero-stat" title="MEMORY 反馈条目数">' +
-    '<span class="num" style="color:var(--teal)">' +
-    (m.total_feedback || 0) +
-    '</span><span class="label">反馈记忆</span></div>';
+    '</span><span class="label">180d+</span></div>';
 }
 
 // ════════════════════════════════════════════════════════════════

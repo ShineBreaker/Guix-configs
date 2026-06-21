@@ -17,12 +17,8 @@ from pathlib import Path
 from kb_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
-    KB_MEMORY,
-    KB_INBOX,
-    STALE_DAYS,
     DEFAULT_LIST_COUNT,
     die,
-    now,
     parse_org_prop,
     read_org_title,
     _card_dict,
@@ -133,7 +129,7 @@ def cmd_search(args: argparse.Namespace) -> None:
         die("--json 与 --regex 互斥；--regex 模式只支持人类可读输出")
 
     if args.regex:
-        targets = [str(KB_EXPERIENCES), str(KB_MEMORY)]
+        targets = [str(KB_EXPERIENCES)]
         if shutil.which("rg"):
             cmd = ["rg", "--color=never", "-n", "-C", str(context), query] + targets
         else:
@@ -418,40 +414,8 @@ def cmd_stats(args: argparse.Namespace) -> None:
             print(f"  {k:20s} {v:3d} {bar}")
         print()
 
-    # MEMORY 统计
-    if KB_MEMORY.exists():
-        mem_text = KB_MEMORY.read_text(encoding="utf-8")
-        fb_count = len(re.findall(r"^\*\* F\d+", mem_text, re.MULTILINE))
-        ref_count = len(re.findall(r"^\*\* R\d+", mem_text, re.MULTILINE))
-        dep_section = (
-            mem_text[mem_text.find("* deprecated") :]
-            if "* deprecated" in mem_text
-            else ""
-        )
-        dep_count = len(re.findall(r"^\*\* F\d+", dep_section, re.MULTILINE))
-        proj_section = ""
-        if "* project" in mem_text and "* reference" in mem_text:
-            proj_start = mem_text.find("* project")
-            proj_end = mem_text.find("* reference")
-            if proj_start < proj_end:
-                proj_section = mem_text[proj_start:proj_end]
-        proj_count = len(
-            re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE)
-        )
-        stale_count = 0
-        for m in re.finditer(r":UPDATED:\s*\[(\d{4}-\d{2}-\d{2})\]", mem_text):
-            try:
-                updated = datetime.strptime(m.group(1), "%Y-%m-%d")
-                if (datetime.now() - updated).days > STALE_DAYS:
-                    stale_count += 1
-            except ValueError:
-                pass
-        print("── MEMORY ──")
-        print(f"  feedback 条目数: {fb_count}")
-        print(f"  project 索引数: {proj_count}")
-        print(f"  reference 条目数: {ref_count}")
-        print(f"  deprecated 条目数: {dep_count}")
-        print(f"  stale (>{STALE_DAYS}d): {stale_count}")
+    # MEMORY 章节已废弃，偏好/项目上下文由 Hermes memory 工具管理
+    # 本命令不再输出 MEMORY 统计
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -512,28 +476,5 @@ def cmd_health(args: argparse.Namespace) -> None:
     else:
         print(f"  薄弱类别:   无 [阈值 ≥3] ✅")
 
-    if KB_MEMORY.exists():
-        mem_text = KB_MEMORY.read_text(encoding="utf-8")
-        fb_count = len(re.findall(r"^\*\* F\d+", mem_text, re.MULTILINE))
-        stale_fb = 0
-        for m in re.finditer(r":UPDATED:\s*\[(\d{4}-\d{2}-\d{2})\]", mem_text):
-            try:
-                updated = datetime.strptime(m.group(1), "%Y-%m-%d")
-                if (datetime.now() - updated).days > STALE_DAYS:
-                    stale_fb += 1
-            except ValueError:
-                pass
-        proj_section = ""
-        if "* project" in mem_text and "* reference" in mem_text:
-            proj_start = mem_text.find("* project")
-            proj_end = mem_text.find("* reference")
-            if proj_start < proj_end:
-                proj_section = mem_text[proj_start:proj_end]
-        proj_count = len(
-            re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE)
-        )
-        fb_icon = "✅" if stale_fb < fb_count // 2 else "⚠️"
-        print()
-        print("── 记忆 ──")
-        print(f"  feedback: {fb_count} (stale: {stale_fb}) {fb_icon}")
-        print(f"  project:  {proj_count}")
+    # MEMORY 章节已废弃，偏好/项目上下文由 Hermes memory 工具管理
+    # 本命令不再输出 MEMORY 健康指标

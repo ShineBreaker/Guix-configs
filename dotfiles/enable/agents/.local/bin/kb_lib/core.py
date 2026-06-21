@@ -9,7 +9,6 @@ import os
 import re
 import shlex
 import sys
-from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -22,17 +21,11 @@ KB_ROOT = Path(
     os.environ.get("KB_ROOT", str(Path.home() / "Documents" / "Org"))
 )
 KB_EXPERIENCES = KB_ROOT / "experiences"
-KB_MEMORY = KB_ROOT / "MEMORY.org"
-KB_MEMORIES = KB_ROOT / "memories"
-KB_PROJECTS = KB_MEMORIES / "projects"
-KB_INDEX = KB_ROOT / "index.json"
 KB_INBOX = KB_ROOT / "inbox.org"
+KB_INDEX = KB_ROOT / "index.json"
 
 # ── 阈值 ──────────────────────────────────────────────────────────────────────
-STALE_DAYS = 30
 DEFAULT_LIST_COUNT = 20
-
-MEMORY_SECTIONS = ["feedback", "project", "reference", "deprecated"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -57,40 +50,15 @@ def timestamp_id() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
-def _init_memory_template() -> None:
-    date_str = datetime.now().strftime("%Y-%m-%d %a")
-    sections = [f"#+title: MEMORY", f"#+date: [{date_str}]"]
-    sections.append("")
-    sections.append("#+BEGIN_COMMENT")
-    sections.append("MEMORY.org — 统一记忆索引")
-    sections.append("")
-    sections.append("设计原则：")
-    sections.append("1. 记忆只存储无法从当前代码/项目状态推导的信息")
-    sections.append("2. feedback 记录用户的行为偏好和工作癖好")
-    sections.append("3. project 记忆按项目拆分为独立文件，通过路径/名称检索")
-    sections.append("4. 记忆是时间点观察，不是实时状态——引用前先验证")
-    sections.append("5. MEMORY 偏重癖好偏好，知识库偏重可复用知识")
-    sections.append("6. 带 ⚠ 标记的条目为陈旧记忆，需验证后才能作为决策依据")
-    sections.append("#+END_COMMENT")
-    for sec in MEMORY_SECTIONS:
-        sections.append("")
-        sections.append(f"* {sec}")
-    KB_MEMORY.write_text("\n".join(sections) + "\n", encoding="utf-8")
-
-
 def ensure_dirs() -> None:
+    """确保知识库目录存在。inbox.org 和 index.json 在缺失时自动重建骨架。"""
     KB_EXPERIENCES.mkdir(parents=True, exist_ok=True)
-    KB_MEMORIES.mkdir(parents=True, exist_ok=True)
-    KB_PROJECTS.mkdir(parents=True, exist_ok=True)
 
     if not KB_INBOX.exists():
         KB_INBOX.write_text(
             f"#+title: inbox\n#+date: [{now()}]\n\n",
             encoding="utf-8",
         )
-
-    if not KB_MEMORY.exists():
-        _init_memory_template()
 
     if not KB_INDEX.exists():
         _save_index({"version": 1, "updated": "", "total": 0, "cards": []})
@@ -172,6 +140,7 @@ def _rebuild_index() -> dict:
 
 
 def _iter_search_targets() -> list[Path]:
+    """返回全文检索目标文件（仅 experiences/，不再含 MEMORY.org）。"""
     targets = []
     if KB_EXPERIENCES.exists():
         targets.extend(
@@ -179,8 +148,6 @@ def _iter_search_targets() -> list[Path]:
             for f in sorted(KB_EXPERIENCES.rglob("*.org"))
             if f.is_file() and not f.is_symlink()
         )
-    if KB_MEMORY.exists():
-        targets.append(KB_MEMORY)
     return targets
 
 

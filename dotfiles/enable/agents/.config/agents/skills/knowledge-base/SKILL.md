@@ -1,21 +1,21 @@
 ---
 name: knowledge-base
-description: Use when querying historical experience, searching patterns, or when encountering "kb search", "kb list", "kb get", "kb fields", "查询知识库", "kb memory --stale", "check patterns".
+description: Use when querying historical experience, searching patterns, or when encountering "kb search", "kb list", "kb get", "kb fields", "查询知识库", "check patterns".
 ---
 
 # Knowledge Base（只读）
 
-通过 `kb` CLI **检索**人类维护的经验卡片和记忆索引。**AI Agent 只能读，不能写**——所有卡片和 MEMORY.org 由人类手动撰写。
+通过 `kb` CLI **检索**人类维护的经验卡片。**AI Agent 只能读，不能写**——所有卡片由人类在 Emacs 中手动编辑。
+
+> 偏好/项目上下文由 Hermes 自带的 `memory` 工具管理（不再使用 MEMORY.org）。
 
 ## 路径
 
-| 用途     | 路径                                 |
-| -------- | ------------------------------------ |
-| CLI 工具 | `~/.local/bin/kb`                    |
-| 经验卡片 | `~/Documents/Org/experiences/`       |
-| 记忆文件 | `~/Documents/Org/MEMORY.org`         |
-| 项目记忆 | `~/Documents/Org/memories/projects/` |
-| 机器索引 | `~/Documents/Org/index.json`         |
+| 用途     | 路径                           |
+| -------- | ------------------------------ |
+| CLI 工具 | `~/.local/bin/kb`              |
+| 经验卡片 | `~/Documents/Org/experiences/` |
+| 机器索引 | `~/Documents/Org/index.json`   |
 
 ## 检索（核心流程）
 
@@ -68,24 +68,6 @@ kb patterns --get
 - **高相关** → 作为上下文参考
 - **低相关/空** → 静默继续
 - **矛盾** → 以较新/验证过的为准
-
-## MEMORY.org 查阅
-
-MEMORY.org 是人类维护的统一记忆索引（feedback / project / reference 三节），在会话启动时自动注入上下文。Agent 可以额外用以下命令查阅：
-
-```bash
-# 获取当前项目记忆
-kb memory --project .
-
-# 查看陈旧记忆（>30 天未更新）
-kb memory --stale
-```
-
-<critical>
-**定位区分**：
-- **MEMORY.org** — 人类的行为偏好/项目上下文/外部指针（不可从代码推导）
-- **知识库卡片** — 可复用的技术知识（调试方案、配置技巧、工作流优化）
-</critical>
 
 ## 维护命令（只读/校验）
 

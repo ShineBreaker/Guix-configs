@@ -21,7 +21,7 @@ from pathlib import Path
 
 from kb_lib.core import KB_ROOT, _load_index
 
-from kb_lib.viz.data import compute_stats, memory_overview, parse_filter, top_techs
+from kb_lib.viz.data import compute_stats, parse_filter, top_techs
 from kb_lib.viz.html import generate_html
 
 
@@ -121,9 +121,8 @@ def cmd_viz(args: argparse.Namespace) -> None:
         print("❌ 知识库索引为空。请先运行 'kb reindex' 重建索引。")
         return
 
-    memory = memory_overview()
     cards = index["cards"]
-    stats = compute_stats(cards, memory)
+    stats = compute_stats(cards)
     techs = top_techs(cards, limit=8)
     init_filter = parse_filter(args.filter or "")
     init_search = args.search or ""

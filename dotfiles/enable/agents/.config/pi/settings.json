@@ -84,9 +84,6 @@
   "globalContext": {
     "enabled": true,
     "contextDir": "$XDG_CONFIG_HOME/agents/context",
-    "extraFiles": [
-      "$HOME/Documents/Org/MEMORY.org"
-    ],
     "maxFiles": 8,
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
