@@ -543,7 +543,9 @@
      ("nix-init" "初始化 Nix channel 并安装 home-manager")
      ("nix-update" "更新 Nix channel 和 flake"))
     (validation
-     ("secret-scan [DIR] [PATTERN] ..." "扫描文本配置中疑似泄漏的凭据"))))
+     ("secret-scan [DIR] [PATTERN] ..." "扫描文本配置中疑似泄漏的凭据"))
+    (stow
+     ("stow [--adopt|--restow|--delete] PKG ..." "用 GNU Stow 管理频繁变动的 dotfiles"))))
 
 (define (print-command-list)
   (format #t "用法: blue 指令 [参数]...~%~%")
@@ -777,6 +779,74 @@
             "UPDATE: (channel.lock) bump version."
             ,%channel-lock))))
 
+;;; ============================================================
+;;; GNU Stow 包装
+;;; ============================================================
+
+(define %stow-dir (string-append %repo-root "/stow"))
+
+(define (parse-stow-args args)
+  ;; 返回 alist: ((mode . "adopt"|"restow"|"delete"|"stow") (packages . (...)))
+  (let loop ((rest args) (mode "stow") (packages '()))
+    (match rest
+      (()
+       (if (null? packages)
+           (error "stow: 至少需要一个包名")
+           `((mode . ,mode) (packages . ,packages))))
+      (("--adopt" . rest)
+       (loop rest "adopt" packages))
+      (("--restow" . rest)
+       (loop rest "restow" packages))
+      (("--delete" . rest)
+       (loop rest "delete" packages))
+      ((pkg . rest)
+       (loop rest mode (append packages (list pkg)))))))
+
+(define-command (stow-command arguments)
+  ((invoke "stow")
+   (category 'stow)
+   (synopsis "用 GNU Stow 管理频繁变动的 dotfiles")
+   (help "[--adopt|--restow|--delete] PKG ...
+GNU Stow 直链部署 stow/PKG/ 到 $HOME。改源即生效（无需 blue home）。
+
+模式:
+  blue stow PKG ...          从源部署（创建软链接）
+  blue stow --adopt PKG ...  把 $HOME 下已有文件移动到源目录，再建软链接
+  blue stow --restow PKG ... 强制重建所有软链接（先删除再重建）
+  blue stow --delete PKG ... 删除软链接（$HOME 下变回实际文件）
+
+源目录布局: stow/PKG/.local/share/hermes/ -> ~/.local/share/hermes/
+改后用 git commit 备份。配合 dotfiles/ 的 Guix stow（仅读源）使用。"))
+  (let* ((parsed (parse-stow-args arguments))
+         (mode (assq-ref parsed 'mode))
+         (packages (assq-ref parsed 'packages))
+         (home (or (getenv "HOME") "/root"))
+         (flag (case (string->symbol mode)
+                 ((adopt) "--adopt")
+                 ((restow) "--restow")
+                 ((delete) "--delete")
+                 (else "")))
+         (verb (case (string->symbol mode)
+                 ((adopt) "收养")
+                 ((restow) "重建")
+                 ((delete) "撤销")
+                 (else "部署"))))
+    (unless (file-exists? %stow-dir)
+      (error (format #f "stow 源目录不存在: ~a" %stow-dir)))
+    (for-each
+     (lambda (pkg)
+       (let ((pkg-dir (string-append %stow-dir "/" pkg)))
+         (unless (file-exists? pkg-dir)
+           (error (format #f "stow 包不存在: ~a" pkg-dir)))
+         (format #t "[~a] ~a -> ~a~%" verb pkg home)
+         (let ((cmd `("stow"
+                      ,(string-append "--dir=" %stow-dir)
+                      ,(string-append "--target=" home)
+                      ,@(if (string=? flag "") '() (list flag))
+                      ,pkg)))
+           (%run cmd))))
+     packages)))
+
 (define-command (structor-command arguments)
   ((invoke "structor")
    (category 'maintenance)
@@ -813,4 +883,5 @@
         pull-command
         reuse-command
         update-command
+        stow-command
         structor-command)))

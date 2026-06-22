@@ -93,6 +93,33 @@ tmp/config.scm
 | `dotfiles/enable/emacs/.config/emacs`                               | `codeberg.org/BrokenShine/.emacs.d`  |
 | `dotfiles/enable/utilities/.local/share/fcitx5/rime`                | `github.com/iDvel/rime-ice`          |
 
+## stow/ — GNU Stow 直链部署
+
+> 与 `dotfiles/enable/`（Guix Home stow，源指向 store 只读副本）互补。`stow/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置文件（如 hermes 的 SOUL.md、MEMORY.md）。
+
+```
+stow/
+└── hermes/                                # 包名 = 软链接前缀
+    └── .local/share/hermes/               # 路径前缀直接映射到 $HOME
+        ├── SOUL.md                        # → ~/.local/share/hermes/SOUL.md
+        ├── config.yaml
+        └── memories/
+            ├── MEMORY.md
+            └── USER.md
+```
+
+**常用命令**：
+
+```bash
+blue stow hermes                 # 从源部署（建软链接）
+blue stow --adopt hermes         # 把 ~ 下文件移动到源，再建链（首次使用）
+blue stow --restow hermes        # 强制重建所有软链接
+blue stow --delete hermes        # 删除软链接（~ 下变回实际文件）
+blue stow hermes newpkg          # 同时部署多个包
+```
+
+详见 `stow/AGENTS.md`。
+
 ## 目录结构图自动维护
 
 > **实现位置**：`blueprint.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
