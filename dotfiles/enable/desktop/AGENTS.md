@@ -31,8 +31,10 @@ desktop/
 │   └── xfce4/
 │       └── helpers.rc
 └── .local/
-    └── bin/
-        └── niri-app-switcher
+    ├── bin/
+    │   └── niri-app-switcher
+    └── share/
+        └── applications/
 ```
 
 <!-- /structor -->

@@ -46,6 +46,89 @@ utilities/
 │   └── share/
 │       ├── fcitx5/
 │       │   └── rime/
+│       │       ├── cn_dicts/
+│       │       │   ├── 41448.dict.yaml
+│       │       │   ├── 8105.dict.yaml
+│       │       │   ├── base.dict.yaml
+│       │       │   ├── ext.dict.yaml
+│       │       │   ├── others.dict.yaml
+│       │       │   └── tencent.dict.yaml
+│       │       ├── en_dicts/
+│       │       │   ├── cn_en.txt
+│       │       │   ├── cn_en_abc.txt
+│       │       │   ├── cn_en_double_pinyin.txt
+│       │       │   ├── cn_en_flypy.txt
+│       │       │   ├── cn_en_jiajia.txt
+│       │       │   ├── cn_en_mspy.txt
+│       │       │   ├── cn_en_sogou.txt
+│       │       │   ├── cn_en_ziguang.txt
+│       │       │   ├── en.dict.yaml
+│       │       │   └── en_ext.dict.yaml
+│       │       ├── lua/
+│       │       │   ├── cold_word_drop/
+│       │       │   ├── autocap_filter.lua
+│       │       │   ├── calc_translator.lua
+│       │       │   ├── cn_en_spacer.lua
+│       │       │   ├── convert_ar_num_to_zh.lua
+│       │       │   ├── corrector.lua
+│       │       │   ├── date_translator.lua
+│       │       │   ├── debuger.lua
+│       │       │   ├── en_spacer.lua
+│       │       │   ├── force_gc.lua
+│       │       │   ├── is_in_user_dict.lua
+│       │       │   ├── long_word_filter.lua
+│       │       │   ├── lunar.db
+│       │       │   ├── lunar.lua
+│       │       │   ├── number_translator.lua
+│       │       │   ├── pin_cand_filter.lua
+│       │       │   ├── reduce_english_filter.lua
+│       │       │   ├── search.lua
+│       │       │   ├── select_character.lua
+│       │       │   ├── t9_preedit.lua
+│       │       │   ├── unicode.lua
+│       │       │   ├── uuid.lua
+│       │       │   └── v_filter.lua
+│       │       ├── opencc/
+│       │       │   ├── emoji.json
+│       │       │   ├── emoji.txt
+│       │       │   └── others.txt
+│       │       ├── others/
+│       │       │   ├── Hamster/
+│       │       │   ├── asserts/
+│       │       │   ├── docs/
+│       │       │   ├── fcitx4/
+│       │       │   ├── iRime/
+│       │       │   ├── pages/
+│       │       │   ├── recipes/
+│       │       │   ├── script/
+│       │       │   ├── 双拼补丁示例/
+│       │       │   ├── cn_en.txt
+│       │       │   └── emoji-map.txt
+│       │       ├── .gitignore
+│       │       ├── LICENSE
+│       │       ├── README.md
+│       │       ├── custom_phrase.txt
+│       │       ├── default.yaml
+│       │       ├── double_pinyin.schema.yaml
+│       │       ├── double_pinyin_abc.schema.yaml
+│       │       ├── double_pinyin_flypy.schema.yaml
+│       │       ├── double_pinyin_jiajia.schema.yaml
+│       │       ├── double_pinyin_mspy.schema.yaml
+│       │       ├── double_pinyin_sogou.schema.yaml
+│       │       ├── double_pinyin_ziguang.schema.yaml
+│       │       ├── go.work
+│       │       ├── melt_eng.dict.yaml
+│       │       ├── melt_eng.schema.yaml
+│       │       ├── radical_pinyin.dict.yaml
+│       │       ├── radical_pinyin.schema.yaml
+│       │       ├── recipe.yaml
+│       │       ├── rime_ice.dict.yaml
+│       │       ├── rime_ice.schema.yaml
+│       │       ├── squirrel.yaml
+│       │       ├── symbols_caps_v.yaml
+│       │       ├── symbols_v.yaml
+│       │       ├── t9.schema.yaml
+│       │       └── weasel.yaml
 │       └── gnupg/
 │           └── gpg-agent.conf
 └── .nix-channels

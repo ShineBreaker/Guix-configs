@@ -14,6 +14,7 @@ source/
 │   ├── skel/
 │   │   └── .config/
 │   │       └── mihomo/
+│   │           └── config.yaml
 │   ├── nftables.conf
 │   ├── rounded.qss
 │   └── zed.json

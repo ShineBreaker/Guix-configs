@@ -17,8 +17,35 @@ agents/
 │   │   │   └── 02-ultilities.md
 │   │   └── skills/
 │   │       ├── emacs-config/
+│   │       │   ├── assets/
+│   │       │   │   ├── doom-module-template/
+│   │       │   │   ├── early-init-snippets/
+│   │       │   │   ├── audit-checklist.md
+│   │       │   │   ├── lsp-server-degradation.el
+│   │       │   │   └── use-package-patterns.el
+│   │       │   ├── references/
+│   │       │   │   ├── A-startup-and-packages.md
+│   │       │   │   ├── B-keybinds-ui-workspaces.md
+│   │       │   │   ├── C-external-tools.md
+│   │       │   │   ├── D-modules-and-architecture.md
+│   │       │   │   ├── E-validating-elisp.md
+│   │       │   │   ├── audit-and-refactor.md
+│   │       │   │   └── principles.md
+│   │       │   ├── scripts/
+│   │       │   │   ├── README.md
+│   │       │   │   ├── clean-up-elc.sh
+│   │       │   │   ├── elisp-compile.sh
+│   │       │   │   ├── elisp-reload.sh
+│   │       │   │   └── run-tests.sh
+│   │       │   └── SKILL.md
 │   │       ├── knowledge-base/
+│   │       │   └── SKILL.md
 │   │       └── pack-guix/
+│   │           ├── references/
+│   │           │   ├── package-template.scm
+│   │           │   ├── test-template.sh
+│   │           │   └── watch-test-template.sh
+│   │           └── SKILL.md
 │   ├── crush/
 │   │   ├── bin/
 │   │   │   ├── bash-language-server
@@ -47,34 +74,62 @@ agents/
 │       │   └── opencode.json
 │       └── docs/
 │           ├── examples/
+│           │   ├── format-check.md
+│           │   └── kb-nightly.md
 │           ├── README.md
 │           ├── adapter.md
 │           └── extract.md
 ├── .local/
-│   ├── bin/
-│   │   ├── kb_lib/
-│   │   │   ├── __pycache__/
-│   │   │   ├── viz/
-│   │   │   ├── __init__.py
-│   │   │   ├── cards.py
-│   │   │   ├── core.py
-│   │   │   └── lint.py
-│   │   ├── loop_lib/
-│   │   │   ├── extract/
-│   │   │   ├── templates/
-│   │   │   ├── tests/
-│   │   │   ├── adapter-cmds.sh
-│   │   │   ├── agent.sh
-│   │   │   ├── common.sh
-│   │   │   ├── log.sh
-│   │   │   ├── prompt.sh
-│   │   │   └── state.sh
-│   │   ├── kb
-│   │   └── loopctl
-│   └── share/
-│       ├── applications/
-│       │   └── hermes.desktop
-│       └── hermes/
+│   └── bin/
+│       ├── kb_lib/
+│       │   ├── __pycache__/
+│       │   │   ├── __init__.cpython-312.pyc
+│       │   │   ├── cards.cpython-312.pyc
+│       │   │   ├── core.cpython-312.pyc
+│       │   │   ├── lint.cpython-312.pyc
+│       │   │   └── memory.cpython-312.pyc
+│       │   ├── viz/
+│       │   │   ├── __pycache__/
+│       │   │   │   ├── __init__.cpython-312.pyc
+│       │   │   │   ├── cli.cpython-312.pyc
+│       │   │   │   └── data.cpython-312.pyc
+│       │   │   ├── html/
+│       │   │   │   ├── __pycache__/
+│       │   │   │   ├── __init__.py
+│       │   │   │   ├── charts.js
+│       │   │   │   ├── core.js
+│       │   │   │   ├── force.js
+│       │   │   │   ├── interact.js
+│       │   │   │   ├── skeleton.html
+│       │   │   │   ├── style.css
+│       │   │   │   └── template.py
+│       │   │   ├── __init__.py
+│       │   │   ├── cli.py
+│       │   │   └── data.py
+│       │   ├── __init__.py
+│       │   ├── cards.py
+│       │   ├── core.py
+│       │   └── lint.py
+│       ├── loop_lib/
+│       │   ├── extract/
+│       │   │   ├── claude-code-print.sh
+│       │   │   ├── jsonl-last-assistant.sh
+│       │   │   ├── jsonl-last-text.sh
+│       │   │   └── text.sh
+│       │   ├── templates/
+│       │   │   ├── checkpoint.md.tmpl
+│       │   │   ├── continuation.md.tmpl
+│       │   │   └── task.md.tmpl
+│       │   ├── tests/
+│       │   │   └── test_json.sh
+│       │   ├── adapter-cmds.sh
+│       │   ├── agent.sh
+│       │   ├── common.sh
+│       │   ├── log.sh
+│       │   ├── prompt.sh
+│       │   └── state.sh
+│       ├── kb
+│       └── loopctl
 └── .gitignore
 ```
 

@@ -1,0 +1,3 @@
+用户偏好:删除文件一律走 XDG trash (`~/.local/share/Trash/files/` + `~/.local/share/Trash/info/<name>.trashinfo`),不用 `rm` / `rm -rf` / `shutil.rmtree`。原话:"不要执行 rm 操作,而是利用 trash 来执行"。适用于 skill 目录清理、缓存清理、任何"删除一批文件"场景。特殊情形:`~/.local/share/hermes/Trash/` 跟 `~/.local/share/Trash/` 是两个目录,hermes 自己维护一个 Trash 子树。
+§
+用户偏好:在 Guix-configs 仓库的子模块 cwd(典型 `~/Projects/Config/Guix-configs/dotfiles/enable/emacs/.config/emacs/`)里跑 `blue home` 必须先 `cd ~/Projects/Config/Guix-configs` 再执行,否则会报 "&external-error / No command with this name",看起来像命令本身挂了,实际是子模块 cwd 找不到 `blueprint.scm` + `source/config.org`。改 dotfiles 后任何 `blue` 子命令都得在仓库根跑。

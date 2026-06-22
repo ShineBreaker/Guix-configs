@@ -1,0 +1,9 @@
+Guix-configs 仓库(~/Projects/Config/Guix-configs)是系统级变更的唯一源: 任何安装软件 / 修改配置 / 调整环境变量的需求,必须先到这里找现成方案(dotfiles/enable/<app>/、source/、tools/),不要直接编辑 ~/.config/ ~/.local/ /gnu/store/。① 改源 → blue home 部署生效 ② AI 禁跑 blue rebuild / guix system|home reconfigure(sudo 卡死) ③ commit gitmessage 规范 + serial ④ ~/Documents/Org KB/MEMORY 由人类主笔,AI 只读 kb search/list/get ⑤ skill_manage 写入部署路径不持久,skill 修改需走源路径 + blue home 部署。hermes-desktop / hermes-agent 也走这条源(Nix flake 定义在 source/nix/flake.nix,输入源 github:NousResearch/hermes-agent),不是独立通道。架构: Btrfs + tmpfs root + bind-mount %data-dirs,构建管线 source/config.org tangle → tmp/config.scm → guix time-machine。详细流程见 guix-configs-workflow skill。
+§
+Guix-configs/emacs 子模块 debug 经验(2026-06-21):改 .el 后必须 `cd ~/Projects/Config/Guix-configs && blue home` + md5sum 验证 + herd restart,emacsclient 验证时用 write-region 写文件读回(避免输出被吞)。完整范式见 `guix-configs-workflow` §1 "完整验证四步" + "Emacs 配置调试专属三陷阱"。
+§
+Guix-configs 改 home-shepherd 服务定义后的重启流程(2026-06-22,hermes-gateway self-kick 案例):`blue home` **不会**终止在跑的 home-shepherd 守护进程;改 service 定义后必须 `herd restart <svc>` 才生效。`herd restart` 只影响当前连接的 daemon,如果存在多个并存 home-shepherd(`pgrep -af shepherd-for-home` 见多个 PID),旧 daemon 的服务仍用旧配置,典型表现为自踢循环(`--replace` 触发)或端口被占。清理范式:kill 旧 shepherd PID → kill 它 fork 的孤儿服务进程 → herd restart 新 daemon。详细诊断 + `blue block-replace` 工具踩坑(emacs-minimal 报 `void-variable replaced` → 退回 patch 工具)见 `guix-configs-workflow` §4.4/§4.5 + `references/hermes-gateway-shepherd-service.md`。
+§
+`blue block-show` 位置参数是 BLOCK 名,`blue block-replace` 是 `<name> <body-file>` 两个位置参数(不是 AGENTS.md 写的 stdin pipe / ORG_BLOCK env)。而且 `block-replace` 在 Guix time-machine + emacs-minimal 下报 `Symbol's value as variable is void: replaced`,实际跑不通 —— 改 config.org 的少量行直接用 patch 工具。
+§
+Emacs 31 行号列宽控制变量是 `display-line-numbers-width`（不是 `line-number-display-width`，后者已废弃）。byte-compile 不报 warning，运行时静默失效。正确用法：`(setq display-line-numbers-width <digits>)`，守卫 `(boundp 'display-line-numbers-width)`。
