@@ -1032,6 +1032,7 @@ echo "InitialPassword!" | guix shell openssl -+ openssl passwd -6 -stdin
         "libnotify"
         "rofi"
         "setxkbmap"
+        "trash-cli"
         "wl-clipboard"
         "xprop"
         "xvfb-run"
@@ -1664,10 +1665,10 @@ end
                                 (start #~(lambda args
                                           ((make-forkexec-constructor
                                             (list (string-append (getenv "HOME") "/.nix-profile/bin/hermes")
-                                                  "gateway" "run" "--replace")
+                                                  "gateway" "run")
                                             #:environment-variables (environ)
                                             #:log-file (string-append (getenv "HOME")
-                                                                      "/.local/state/shepherd/hermes-backend.log"))
+                                                                      "/.local/state/shepherd/hermes-gateway.log"))
                                            args)))
                                 (stop #~(make-kill-destructor))
                                 (respawn? #t))))))
@@ -1799,6 +1800,7 @@ end
   ("GDK_BACKEND" . "wayland")
   ("_JAVA_AWT_WM_NONREPARENTING" . "1")
   ("MOZ_ENABLE_WAYLAND" . "1")
+  ("NIXOS_OZONE_WL" . "1")
   ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1"))
 #+end_src
 

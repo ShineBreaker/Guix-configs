@@ -58,7 +58,7 @@
       ];
     })
     (qq.override {
-      commandLineArgs = "--enable-wayland-ime --wayland-text-input-version=3";
+      commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
     })
   ];
 }
