@@ -747,10 +747,10 @@
    (category 'nix)
     (synopsis "更新 Nix channel 和 flake"))
   (%run '("nix-channel" "--update"))
+  (%run `("nix" "flake" "update" "--flake" ,%nix-dir))
   (%run `("git" "commit" "-S" "-m"
           "UPDATE: (flake.lock) bump version."
-          ,(string-append %nix-dir "/flake.nix")))
-  (%run `("nix" "flake" "update" "--flake" ,%nix-dir)))
+          ,(string-append %nix-dir "/flake.lock"))))
 
 (define-command (pull-command arguments)
   ((invoke "pull")
