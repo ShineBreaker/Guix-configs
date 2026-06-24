@@ -133,7 +133,7 @@ blue update             # 更新 channel.lock 并签名提交
 blue pull               # guix pull --allow-downgrades --fallback
 
 # 验证配置（不实际应用）
-GUIX_DRY_RUN=1 blue rebuild
+blue --dry-run rebuild
 
 # 括号平衡检查（最轻量，不触发 guix）
 blue check
@@ -358,7 +358,7 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 修改 ~*.org~ 配置后，可用 =dry-run= 模式验证语法（不会实际应用到系统）：
 
 #+begin_src sh
-GUIX_DRY_RUN=1 blue rebuild
+blue --dry-run rebuild
 #+end_src
 
 =blue rebuild= 在执行前会自动运行括号平衡检查。也可手动单独检查：

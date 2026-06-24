@@ -55,7 +55,7 @@ tmp/config.scm
 
 - `config.org` 是**唯一** Org 源文件
 - `blue rebuild` 自动完成 tangle → 括号检查 → reconfigure → `guix locate --update`
-- `GUIX_DRY_RUN=1 blue rebuild` 仅构建一次不写入系统
+- `blue --dry-run rebuild` 仅构建一次不写入系统（tangle + 括号检查仍真跑，reconfigure 短路）
 
 ## config.org 结构（自上而下）
 
@@ -134,7 +134,7 @@ source/files/
 
 ```bash
 blue rebuild               # tangle + 括号检查 + reconfigure + locate --update
-GUIX_DRY_RUN=1 blue rebuild # 仅构建不写入
+blue --dry-run rebuild     # 仅构建不写入（tangle/括号检查真跑，reconfigure 短路）
 blue check                 # 仅括号平衡检查
 blue tangle                # 仅导出 Org
 blue update                # 更新 channel.lock + git commit -S
@@ -148,7 +148,7 @@ cat new.scm | ORG_BLOCK=<name> blue block-replace   # stdin 替换块 body + 原
 <critical>
 **Do**：
 - 修改前先读 `config.org` 头部的两段 Agent 指引
-- 修改后用 `blue check` 做括号检查，再用 `GUIX_DRY_RUN=1 blue rebuild` 做完整 dry-run
+- 修改后用 `blue check` 做括号检查，再用 `blue --dry-run rebuild` 做完整 dry-run
 - 优先修改 `dotfiles/`；只有需要 Guix Home / Guix System 介入时才改 `config.org`
 - 能用 Home 解决的就不要升级到 System（保持系统层最小化）
 
@@ -182,7 +182,7 @@ cat /tmp/new-body.scm | ORG_BLOCK=dotfile-services blue block-replace
 
 ### 关键约定
 
-- **参数走环境变量**：blue 框架零参数限制，块名通过 `ORG_BLOCK=<name>` 传入（与 `GUIX_DRY_RUN` 同机制）
+- **参数机制**：dry-run 用全局 flag `blue --dry-run`（对所有 `%run` 子进程统一短路，仅 tangle/括号检查标 `#:real?` 例外）；块名通过 `ORG_BLOCK=<name>` 环境变量传入（structor 等命令特定的运行时开关）
 - **括号验证只对 scheme 块触发**：fish/bash/js 等非 scheme 块跳过验证（scheme 语义对它们无意义）
 - **失败不自动回滚**：括号验证失败时，stderr 提示 `git checkout source/config.org` 恢复；block-replace 不自建备份机制，依赖 git 兜底
 - **原子写回**：通过 `write-file-atomically`（mkstemp + rename）覆盖 `source/config.org`，崩溃窗口内不会半写

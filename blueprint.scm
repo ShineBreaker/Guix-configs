@@ -3,6 +3,7 @@
 ;;; SPDX-License-Identifier: MIT
 
 (use-modules (blue build)
+             (blue states)
              (blue types)
              (blue types blueprint)
              (blue types buildable)
@@ -37,19 +38,23 @@
   (let ((value (getenv name)))
     (and value (not (string-null? value)))))
 
-(define (%dry-run?)
-  (%env-set? "GUIX_DRY_RUN"))
-
 (define (%print-header action target)
   (format #t "\t~a\t~a~%" action target))
 
-(define (%run command)
+;; 子进程执行的唯一出口。dry-run（blue --dry-run 设 (dry-build?)）时默认短路：
+;; 打印 [预演] + 命令、返回 #t、不 popen。需要"dry 时也必真跑"的操作（tangle、
+;; 括号检查——构造验证所必需的产物）显式传 #:real? #t 强制执行。
+(define* (%run command #:key real?)
   (match command
     ((program . args)
-     (let ((status (popen program args)))
-       (unless (zero? status)
-         (error (format #f "命令执行失败 (~a): ~s" status command)))
-       #t))))
+     (if (and (dry-build?) (not real?))
+         (begin
+           (format #t "\t[预演]\t~a ~{~a ~}~%" program args)
+           #t)
+         (let ((status (popen program args)))
+           (unless (zero? status)
+             (error (format #f "命令执行失败 (~a): ~s" status command)))
+           #t)))))
 
 (define* (%guix args #:key (channels %channel-lock) sudo?)
   (let ((command `("guix" "time-machine"
@@ -136,7 +141,8 @@
        (%run (%emacs-command
               `("--quick" "--batch" "-l" "org"
                 "--eval" "(require 'ob-tangle)"
-                "--eval" ,(format #f "(org-babel-tangle-file ~s)" input))))))))
+                "--eval" ,(format #f "(org-babel-tangle-file ~s)" input))
+             #:real? #t))))))
 
 (define %config-buildable
   (org-config
@@ -211,7 +217,8 @@
   (%run (%emacs-command
          `("--quick" "--batch" "-l" "org"
            "--eval" "(require 'ob-tangle)"
-           "--eval" ,(format #f "(org-babel-tangle-file ~s)" %config-org)))))
+           "--eval" ,(format #f "(org-babel-tangle-file ~s)" %config-org)))
+        #:real? #t))
 
 (define (prepare-config tail-expression)
   (tangle-config)
@@ -222,7 +229,7 @@
 
 (define* (apply-config subsystem tail-expression #:key sudo? after)
   (let ((scm (prepare-config tail-expression)))
-    (if (%dry-run?)
+    (if (dry-build?)
         (begin
           (format #t "[预演] 验证 ~a 配置~%" subsystem)
           (%guix `(,subsystem "build" ,scm "--dry-run")))
@@ -545,7 +552,8 @@
     (validation
      ("secret-scan [DIR] [PATTERN] ..." "扫描文本配置中疑似泄漏的凭据"))
     (stow
-     ("stow [--adopt|--restow|--delete] PKG ..." "用 GNU Stow 管理频繁变动的 dotfiles"))))
+     ("stow [--adopt|--restow|--delete] PKG ..." "用 GNU Stow 管理频繁变动的 dotfiles（--no-folding，仅链接文件）")
+     ("stow-all [--adopt|--restow|--delete]" "对 stow/ 下所有包批量执行 stow 操作"))))
 
 (define (print-command-list)
   (format #t "用法: blue 指令 [参数]...~%~%")
@@ -580,7 +588,7 @@
   ((invoke "rebuild")
    (category 'deployment)
     (synopsis "应用 Guix System 配置")
-    (help "应用 operating-system 表。支持 GUIX_DRY_RUN=1 环境变量。"))
+    (help "应用 operating-system 表。blue --dry-run rebuild 仅构建验证、不写入系统。"))
   ((command-procedure clean-artifacts-command) '())
   (apply-config "system" "%system"
                 #:sudo? #t
@@ -590,7 +598,7 @@
   ((invoke "home")
    (category 'deployment)
    (synopsis "应用 Guix Home 配置")
-   (help "应用 home-environment 表。支持 GUIX_DRY_RUN=1 环境变量。"))
+   (help "应用 home-environment 表。blue --dry-run home 仅构建验证、不写入系统。"))
   ((command-procedure clean-artifacts-command) '())
   (apply-config "home" "%home"))
 
@@ -683,8 +691,8 @@
      ("*.a" file)
      ("*.so" file)
      ("org-roam.db" file)
-     (,(string-append %repo-root "/dotfiles/enable/emacs/.config/emacs/etc") directory)
-     (,(string-append %repo-root "/dotfiles/enable/emacs/.config/emacs/var") directory))))
+     (,(string-append %repo-root "/stow/emacs/.config/emacs/etc") directory)
+     (,(string-append %repo-root "/stow/emacs/.config/emacs/var") directory))))
 
 (define-command (secret-scan-command arguments)
   ((invoke "secret-scan")
@@ -785,14 +793,56 @@
 
 (define %stow-dir (string-append %repo-root "/stow"))
 
+;; stow/ 下被视为元目录、不当作包的直接子目录。
+(define %stow-meta-names
+  '("." ".." ".git" ".github" ".agents" "node_modules" ".blue-store"))
+
+(define (%stow-flag mode)
+  (case (string->symbol mode)
+    ((adopt) "--adopt")
+    ((restow) "--restow")
+    ((delete) "--delete")
+    (else "")))
+
+(define (%stow-verb mode)
+  (case (string->symbol mode)
+    ((adopt) "收养")
+    ((restow) "重建")
+    ((delete) "撤销")
+    (else "部署")))
+
+(define (%stow-package pkg mode home)
+  ;; 对单个包执行 stow。--no-folding 与 stow/.stowrc 双重保险：目标保持真实目录，
+  ;; 只对单个文件建软链，避免应用运行时产物经整目录软链污染源。
+  (let ((pkg-dir (string-append %stow-dir "/" pkg)))
+    (unless (file-exists? pkg-dir)
+      (error (format #f "stow 包不存在: ~a" pkg-dir)))
+    (format #t "[~a] ~a -> ~a~%" (%stow-verb mode) pkg home)
+    (let ((flag (%stow-flag mode)))
+      (%run `("stow"
+              "--no-folding"
+              ,(string-append "--dir=" %stow-dir)
+              ,(string-append "--target=" home)
+              ,@(if (string=? flag "") '() (list flag))
+              ,pkg)))))
+
+(define (%stow-list-packages)
+  ;; 枚举 stow/ 下所有直接子目录（包不能嵌套），过滤元目录。
+  (sort
+   (filter-map
+    (lambda (name)
+      (and (not (member name %stow-meta-names))
+           (file-is-directory? (string-append %stow-dir "/" name))
+           name))
+    (or (scandir %stow-dir) '()))
+   string<?))
+
 (define (parse-stow-args args)
   ;; 返回 alist: ((mode . "adopt"|"restow"|"delete"|"stow") (packages . (...)))
   (let loop ((rest args) (mode "stow") (packages '()))
     (match rest
       (()
-       (if (null? packages)
-           (error "stow: 至少需要一个包名")
-           `((mode . ,mode) (packages . ,packages))))
+       `((mode . ,mode) (packages . ,packages)))
       (("--adopt" . rest)
        (loop rest "adopt" packages))
       (("--restow" . rest)
@@ -815,37 +865,55 @@ GNU Stow 直链部署 stow/PKG/ 到 $HOME。改源即生效（无需 blue home�
   blue stow --restow PKG ... 强制重建所有软链接（先删除再重建）
   blue stow --delete PKG ... 删除软链接（$HOME 下变回实际文件）
 
+--no-folding: 目标目录保持为真实目录，stow 只对单个文件建软链（由 stow/.stowrc
++ 命令行双重保证）。应用运行时产物（logs/、state.db、sessions/ 等）落到真实目
+录而非源。批量操作所有包见 `blue stow-all`。
+
+忽略机制（三层，优先级递减）:
+  stow/.stowrc                全局（含 --no-folding）
+  stow/<PKG>/.stow-local-ignore  每包 Perl 正则，逐行，# 注释允许
+  --ignore=REGEX              命令行一次性
+
 源目录布局: stow/PKG/.local/share/hermes/ -> ~/.local/share/hermes/
 改后用 git commit 备份。配合 dotfiles/ 的 Guix stow（仅读源）使用。"))
   (let* ((parsed (parse-stow-args arguments))
          (mode (assq-ref parsed 'mode))
          (packages (assq-ref parsed 'packages))
-         (home (or (getenv "HOME") "/root"))
-         (flag (case (string->symbol mode)
-                 ((adopt) "--adopt")
-                 ((restow) "--restow")
-                 ((delete) "--delete")
-                 (else "")))
-         (verb (case (string->symbol mode)
-                 ((adopt) "收养")
-                 ((restow) "重建")
-                 ((delete) "撤销")
-                 (else "部署"))))
+         (home (or (getenv "HOME") "/root")))
+    (when (null? packages)
+      (error "stow: 至少需要一个包名（批量操作请用 blue stow-all）"))
     (unless (file-exists? %stow-dir)
       (error (format #f "stow 源目录不存在: ~a" %stow-dir)))
-    (for-each
-     (lambda (pkg)
-       (let ((pkg-dir (string-append %stow-dir "/" pkg)))
-         (unless (file-exists? pkg-dir)
-           (error (format #f "stow 包不存在: ~a" pkg-dir)))
-         (format #t "[~a] ~a -> ~a~%" verb pkg home)
-         (let ((cmd `("stow"
-                      ,(string-append "--dir=" %stow-dir)
-                      ,(string-append "--target=" home)
-                      ,@(if (string=? flag "") '() (list flag))
-                      ,pkg)))
-           (%run cmd))))
-     packages)))
+    (for-each (cut %stow-package <> mode home) packages)))
+
+(define-command (stow-all-command arguments)
+  ((invoke "stow-all")
+   (category 'stow)
+   (synopsis "对 stow/ 下所有包批量执行 stow 操作")
+   (help "[--adopt|--restow|--delete]
+枚举 stow/ 下所有直接子目录作为包，逐个执行（包不能嵌套）。默认为部署。
+
+  blue stow-all              部署所有包
+  blue stow-all --restow     重建所有软链接（最常用）
+  blue stow-all --delete     撤销所有软链接（$HOME 下变回实际文件）
+  blue stow-all --adopt      把 $HOME 下已有文件收养进各包源
+
+逐一执行，遇错即停（与 blue stow 一致）。语义同 blue stow，见其帮助。"))
+  (let* ((parsed (parse-stow-args arguments))
+         (mode (assq-ref parsed 'mode))
+         ;; --restow 等模式开关之外的裸参数视为包名过滤；为空则取全部。
+         (only (assq-ref parsed 'packages))
+         (home (or (getenv "HOME") "/root")))
+    (unless (file-exists? %stow-dir)
+      (error (format #f "stow 源目录不存在: ~a" %stow-dir)))
+    (let ((packages
+           (if (null? only)
+               (%stow-list-packages)
+               (filter (cut member <> only) (%stow-list-packages)))))
+      (when (null? packages)
+        (error "stow-all: stow/ 下无可用包（或指定的包不存在）"))
+      (format #t "stow-all: 共 ~a 个包，模式=~a~%" (length packages) mode)
+      (for-each (cut %stow-package <> mode home) packages))))
 
 (define-command (structor-command arguments)
   ((invoke "structor")
@@ -884,4 +952,5 @@ GNU Stow 直链部署 stow/PKG/ 到 $HOME。改源即生效（无需 blue home�
         reuse-command
         update-command
         stow-command
+        stow-all-command
         structor-command)))

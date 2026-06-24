@@ -89,7 +89,7 @@ if [[ "$REL" == dotfiles/* ]]; then
 	MSG+=("此文件修改后需要运行 blue home 才能生效")
 fi
 if [[ "$FILE" == *.org ]]; then
-	MSG+=("修改 org 配置后，务必先用 GUIX_DRY_RUN=1 blue home 或 blue system 验证")
+	MSG+=("修改 org 配置后，务必先用 blue --dry-run home 或 blue --dry-run rebuild 验证")
 fi
 
 if [[ ${#MSG[@]} -gt 0 ]]; then

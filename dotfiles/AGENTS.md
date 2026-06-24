@@ -349,10 +349,10 @@ dotfiles/
 
 ## 核心子系统
 
-### Emacs（`enable/emacs/`）
+### Emacs（已迁移到 `stow/emacs/`）
 
-- 独立 git 子模块，实际代码在 `codeberg.org/BrokenShine/.emacs.d`
-- 详见 `dotfiles/enable/emacs/.config/emacs/AGENTS.md`
+- Emacs 配置已从 `dotfiles/enable/` 迁移到 `stow/`，通过 GNU Stow 直链部署（改源即生效）
+- 详见 `stow/emacs/.config/emacs/AGENTS.md`
 - Guix 通过 `(package (specification->package "emacs-nox"))` 等依赖提供 Emacs Lisp 包；新增包必须同步到 `source/config.org` 的 home-packages 清单
 - **不要直接编辑子模块内容**
 
@@ -374,7 +374,7 @@ dotfiles/
 
 | 子目录                   | 局部 AGENTS.md      | 主要职责                                           |
 | ------------------------ | ------------------- | -------------------------------------------------- |
-| `enable/agents/`         | ✅ 已有             | OMP、Crush、KB、loopctl、共享 skills、知识库        |
+| `enable/agents/`         | ✅ 已有             | OMP、Crush、KB、loopctl、共享 skills、知识库       |
 | `enable/desktop/`        | ✅ 已有             | niri、autostart、xdg-portal、xfce4 helpers         |
 | `enable/noctalia-suite/` | ✅ 已有             | darkman、noctalia相关适配工作                      |
 | `enable/system/`         | ✅ 已有             | containers、pipewire、xdg user-dirs                |

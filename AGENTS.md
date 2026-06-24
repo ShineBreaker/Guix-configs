@@ -38,7 +38,7 @@ tmp/config.scm
 - Org 文件使用 Noweb `<<ref>>` 语法拼合代码块为完整 `.scm`
 - 所有 `guix` 命令通过 `guix time-machine --channels=source/channel.lock` 锁定频道版本
 - 单一 `blue rebuild` 完成：tangle → 括号检查 → reconfigure → `guix locate --update`
-- DRY_RUN 时仅 tangle + 括号检查 + `dry-run`，不实际写入系统
+- `blue --dry-run` 时：tangle + 括号检查仍真跑（构造验证所需产物），其余命令（reconfigure/clean/gc/stow 等）短路打印不执行
 
 ## 工作优先级
 
@@ -48,20 +48,20 @@ tmp/config.scm
 
 ## 任务路由表
 
-| 任务类型           | 优先读取位置                                    | 子目录指引                                 |
-| ------------------ | ----------------------------------------------- | ------------------------------------------ |
-| System + Home 配置 | `source/config.org` 头部的 Agent 专区           | `source/AGENTS.md`                         |
-| **Emacs 配置**     | `dotfiles/enable/emacs/.config/emacs/AGENTS.md` | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
-| 全局变量           | `source/information.scm`                        | —                                          |
-| 频道定义           | `source/channel.scm`                            | `source/channel.lock` 锁定版本             |
-| 静态模板           | `source/files/`                                 | `source/AGENTS.md` 中 files/ 模板系统一节  |
-| 各类 dotfiles      | `dotfiles/enable/<app>/`                        | 各子目录 AGENTS.md                         |
+| 任务类型           | 优先读取位置                          | 子目录指引                                 |
+| ------------------ | ------------------------------------- | ------------------------------------------ |
+| System + Home 配置 | `source/config.org` 头部的 Agent 专区 | `source/AGENTS.md`                         |
+| **Emacs 配置**     | `stow/emacs/.config/emacs/AGENTS.md`  | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
+| 全局变量           | `source/information.scm`              | —                                          |
+| 频道定义           | `source/channel.scm`                  | `source/channel.lock` 锁定版本             |
+| 静态模板           | `source/files/`                       | `source/AGENTS.md` 中 files/ 模板系统一节  |
+| 各类 dotfiles      | `dotfiles/enable/<app>/`              | 各子目录 AGENTS.md                         |
 
 <critical>
 **路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
 2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `blue rebuild`
-3. **Emacs 修改**：先读 `dotfiles/enable/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
+3. **Emacs 修改**：先读 `stow/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
 6. 优先使用 `blue --list` 内可以使用的相关命令
@@ -76,8 +76,8 @@ tmp/config.scm
   (home-dotfiles-configuration
    (directories '("../dotfiles/enable"))
    (layout 'stow)                         ; Stow 软链接语义
-   (packages '("agents" "desktop" "emacs"
-                "noctalia-suite" "system" "terminal" "utilities"))
+   (packages '("agents" "desktop"
+                 "noctalia-suite" "system" "terminal" "utilities"))
    (excluded '("\\.agents/workfile($|/.*)" ...))))
 ```
 
@@ -88,10 +88,10 @@ tmp/config.scm
 
 子模块位于 `enable/` 下，路径如下，**不要直接编辑子模块内容**：
 
-| 路径                                                                | 上游                                 |
-| ------------------------------------------------------------------- | ------------------------------------ |
-| `dotfiles/enable/emacs/.config/emacs`                               | `codeberg.org/BrokenShine/.emacs.d`  |
-| `dotfiles/enable/utilities/.local/share/fcitx5/rime`                | `github.com/iDvel/rime-ice`          |
+| 路径                                                 | 上游                                |
+| ---------------------------------------------------- | ----------------------------------- |
+| `stow/emacs/.config/emacs`                           | `codeberg.org/BrokenShine/.emacs.d` |
+| `dotfiles/enable/utilities/.local/share/fcitx5/rime` | `github.com/iDvel/rime-ice`         |
 
 ## stow/ — GNU Stow 直链部署
 
@@ -176,9 +176,11 @@ blue stow hermes newpkg          # 同时部署多个包
 修改 `source/config.org` 后，**务必**先 dry-run 验证再实际应用：
 
 ```bash
-GUIX_DRY_RUN=1 blue rebuild   # 仅构建一次，不写入系统
+blue --dry-run rebuild        # tangle + 括号检查 + guix build --dry-run，不写入系统
 blue check                    # 最快：仅括号平衡检查
 ```
+
+`--dry-run` 是全局开关，对**所有** `%run` 子进程统一生效（reconfigure/clean/gc/stow/nix 等均短路打印）。tangle 与括号检查例外——它们标了 `#:real?`，dry-run 时仍真跑以保留验证能力。
 
 ## Org Noweb 机制
 
