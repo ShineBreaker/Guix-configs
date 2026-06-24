@@ -808,8 +808,8 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                                                                 (tmpdir "/var/tmp")))
 
                          (network-manager-service-type config =>
-                                            (network-manager-configuration (inherit config)
-                                              (dns "default")))
+                                                       (network-manager-configuration (inherit config)
+                                                                                      (dns "default")))
 
                          (elogind-service-type config =>
                                                (elogind-configuration
@@ -1655,10 +1655,10 @@ end
                                (stop #~(make-kill-destructor))
                                (respawn? #t))
 
-                               (shepherd-service
-                                (provision '(hermes-gateway))
-                                (requirement '(hermes-backend))
-                                (start #~(lambda args
+                              (shepherd-service
+                               (provision '(hermes-gateway))
+                               (requirement '(hermes-backend))
+                               (start #~(lambda args
                                           ((make-forkexec-constructor
                                             (list (string-append (getenv "HOME") "/.nix-profile/bin/hermes")
                                                   "gateway" "run")
@@ -1666,8 +1666,8 @@ end
                                             #:log-file (string-append (getenv "HOME")
                                                                       "/.local/state/shepherd/hermes-gateway.log"))
                                            args)))
-                                (stop #~(make-kill-destructor))
-                                (respawn? #t))))))
+                               (stop #~(make-kill-destructor))
+                               (respawn? #t))))))
 #+end_src
 
 *** 计时器服务
