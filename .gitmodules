@@ -2,10 +2,9 @@
 #
 # SPDX-License-Identifier: MIT
 
-[submodule "dotfiles/enable/emacs/.config/emacs"]
-	path = dotfiles/enable/emacs/.config/emacs
-	url = https://codeberg.org/BrokenShine/.emacs.d.git
-
 [submodule "dotfiles/enable/utilities/.local/share/fcitx5/rime"]
 	path = dotfiles/enable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
+[submodule "stow/emacs/.config/emacs"]
+	path = stow/emacs/.config/emacs
+	url = https://codeberg.org/BrokenShine/.emacs.d.git

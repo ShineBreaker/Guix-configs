@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# Emacs 子模块的每包忽略清单（Perl 正则，逐行，# 注释与空行允许）。
+# 与 stow/emacs/.config/emacs/.gitignore 的排除项保持一致。
+# stow 在 --no-folding 下逐文件链接时按此跳过。
+#
+# ⚠ 语法要点（见 Stow 手册 "Types And Syntax Of Ignore Lists"）：
+#   Stow 把每条模式分入两集合之一，并各自【自动】锚定 ^...$：
+#     - 含 / 的模式 → "路径集"：与相对包根的子路径（如 .config/emacs/var）
+#       逐段匹配，Stow 再包成 (^|/)(PATTERN)(/|$)。
+#     - 不含 / 的模式 → "basename 集"：仅与单个文件/目录名匹配，Stow 包成 ^(PATTERN)$。
+#   关键推论（实测确认）：
+#     - basename 集是【精确】匹配，故【后缀】匹配必须自带通配前缀 .*，
+#       例如 .*\.elc$ 才能匹配 org-mode.elc；裸 \.elc$ 只匹配名为 .elc 的文件。
+#     - 同理不要给 basename 模式手写 ^ 锚。
+#     - 风格参照 Stow 内建默认表（.+~、\.\#.+ 等后缀都用 .+ 通配）。
+
+# 编译产物（后缀匹配，basename 集）
+.*\.elc$
+
+# 子模块 gitlink（文件，非目录）——绝不能软链到 ~；basename 精确为 .git
+\.git$
+
+# 运行时目录（部署时生成，源中无；basename 精确匹配）
+\bvar$
+\beta$
+
+# 编辑器锁/交换/备份文件（后缀/前缀匹配）
+.*\.swp$
+\.\#.+
+.+#$
+
+# Emacs 自动保存与 tramp 缓存（basename 精确匹配）
+auto-save-list
+tramp
