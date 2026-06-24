@@ -217,11 +217,14 @@ blue check
 
 #+begin_example
 dotfiles/enable/
-├── agents/.config/pi/                 → ~/.config/pi/
 ├── agents/.config/agents/             → ~/.config/agents/
 ├── agents/.config/crush/              → ~/.config/crush/
 ├── agents/.config/loopctl/            → ~/.config/loopctl/
 ├── agents/.local/bin/                 → ~/.local/bin/
+└── stow/                              # GNU Stow 直链(改源即生效)
+    ├── hermes/.local/share/hermes/    → ~/.local/share/hermes/
+    ├── emacs/.config/emacs/           → ~/.config/emacs/        (子模块)
+    └── pi/                            → ~/.config/pi/ + ~/.local/bin/{pi,pi-acp,pi-update} + ~/.local/share/pi/
 ├── desktop/.config/niri/              → ~/.config/niri/
 ├── desktop/.config/autostart/         → ~/.config/autostart/
 ├── system/.config/containers/         → ~/.config/containers/

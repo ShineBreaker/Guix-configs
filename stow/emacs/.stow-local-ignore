@@ -35,3 +35,13 @@
 # Emacs 自动保存与 tramp 缓存（basename 精确匹配）
 auto-save-list
 tramp
+
+# --- Python bytecode ---
+(__pycache__|.*\.pyc)$
+
+# --- kb-lib viz generated files ---
+# (re-enabled selectively; the .js / .html / .css / .py sources are kept)
+
+# --- kb runtime artifacts (none yet, but reserve the namespace) ---
+# sessions/.*\.db(-shm|-wal)?$
+# index\.json$

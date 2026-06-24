@@ -1,0 +1,6 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+node_modules
+.pnpm-store

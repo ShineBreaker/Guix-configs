@@ -14,325 +14,78 @@ dotfiles/
 │   ├── dms-suite/
 │   │   ├── .config/
 │   │   │   ├── darkman/
-│   │   │   │   ├── config/
-│   │   │   │   │   ├── Kvantum/
-│   │   │   │   │   ├── gtk-3.0/
-│   │   │   │   │   ├── gtk-4.0/
-│   │   │   │   │   ├── kitty/
-│   │   │   │   │   ├── qt5ct/
-│   │   │   │   │   ├── qt6ct/
-│   │   │   │   │   └── .gtkrc-2.0
-│   │   │   │   └── script/
-│   │   │   │       ├── config.json
-│   │   │   │       └── set-theme.sh
 │   │   │   ├── foot/
-│   │   │   │   └── themes/
-│   │   │   │       └── material.ini
 │   │   │   └── niri/
-│   │   │       └── settings/
-│   │   │           ├── key-bindings-wm.kdl
-│   │   │           └── special.kdl
 │   │   └── .local/
 │   │       └── share/
-│   │           ├── dark-mode.d/
-│   │           │   └── 0-apply-theme.sh
-│   │           ├── icons/
-│   │           │   └── default/
-│   │           └── light-mode.d/
-│   │               └── 0-apply-theme.sh
 │   └── waybar-suite/
 │       ├── .config/
 │       │   ├── darkman/
-│       │   │   ├── config/
-│       │   │   │   ├── Kvantum/
-│       │   │   │   ├── fuzzel/
-│       │   │   │   ├── gtk-3.0/
-│       │   │   │   ├── gtk-4.0/
-│       │   │   │   ├── kitty/
-│       │   │   │   ├── mako/
-│       │   │   │   ├── qt5ct/
-│       │   │   │   ├── qt6ct/
-│       │   │   │   ├── waybar/
-│       │   │   │   └── .gtkrc-2.0
-│       │   │   └── script/
-│       │   │       ├── config.json
-│       │   │       └── set-theme.sh
 │       │   ├── foot/
-│       │   │   └── themes/
-│       │   │       └── material.ini
 │       │   ├── fuzzel/
-│       │   │   └── fuzzel.ini
 │       │   ├── mako/
-│       │   │   └── config
 │       │   ├── niri/
-│       │   │   └── settings/
-│       │   │       ├── key-bindings-wm.kdl
-│       │   │       └── special.kdl
 │       │   ├── swayidle/
-│       │   │   └── config
 │       │   ├── swaylock/
-│       │   │   └── config
 │       │   └── waybar/
-│       │       ├── config.jsonc
-│       │       └── style.css
 │       └── .local/
 │           └── share/
-│               ├── dark-mode.d/
-│               │   └── 0-apply-theme.sh
-│               ├── icons/
-│               │   └── default/
-│               └── light-mode.d/
-│                   └── 0-apply-theme.sh
 └── enable/
     ├── agents/
     │   ├── .config/
     │   │   ├── agents/
-    │   │   │   ├── context/
-    │   │   │   │   ├── 01-language.md
-    │   │   │   │   └── 02-ultilities.md
-    │   │   │   └── skills/
-    │   │   │       ├── emacs-config/
-    │   │   │       ├── knowledge-base/
-    │   │   │       └── pack-guix/
     │   │   ├── crush/
-    │   │   │   ├── bin/
-    │   │   │   │   ├── bash-language-server
-    │   │   │   │   ├── context7-mcp
-    │   │   │   │   ├── filesystem-mcp
-    │   │   │   │   ├── mcp-server-memory
-    │   │   │   │   ├── mcp-server-sequential-thinking
-    │   │   │   │   ├── typescript-language-server
-    │   │   │   │   ├── vscode-css-language-server
-    │   │   │   │   ├── vscode-eslint-language-server
-    │   │   │   │   ├── vscode-html-language-server
-    │   │   │   │   ├── vscode-json-language-server
-    │   │   │   │   └── vscode-markdown-language-server
-    │   │   │   ├── hooks/
-    │   │   │   │   ├── bash-gate.sh
-    │   │   │   │   └── edit-gate.sh
-    │   │   │   └── crush.json
     │   │   └── loopctl/
-    │   │       ├── adapters/
-    │   │       │   ├── README.md
-    │   │       │   ├── _TEMPLATE.json
-    │   │       │   ├── claude-code.json
-    │   │       │   ├── codex.json
-    │   │       │   ├── crush.json
-    │   │       │   ├── omp.json
-    │   │       │   └── opencode.json
-    │   │       └── docs/
-    │   │           ├── examples/
-    │   │           ├── README.md
-    │   │           ├── adapter.md
-    │   │           └── extract.md
     │   ├── .local/
     │   │   └── bin/
-    │   │       ├── kb_lib/
-    │   │       │   ├── __pycache__/
-    │   │       │   ├── viz/
-    │   │       │   ├── __init__.py
-    │   │       │   ├── cards.py
-    │   │       │   ├── core.py
-    │   │       │   └── lint.py
-    │   │       ├── loop_lib/
-    │   │       │   ├── extract/
-    │   │       │   ├── templates/
-    │   │       │   ├── tests/
-    │   │       │   ├── adapter-cmds.sh
-    │   │       │   ├── agent.sh
-    │   │       │   ├── common.sh
-    │   │       │   ├── log.sh
-    │   │       │   ├── prompt.sh
-    │   │       │   └── state.sh
-    │   │       ├── kb
-    │   │       └── loopctl
     │   └── .gitignore
     ├── desktop/
     │   ├── .config/
     │   │   ├── autostart/
-    │   │   │   ├── kdeconnect-indicator.desktop
-    │   │   │   └── net.opentabletdriver.OpenTabletDriver.desktop
     │   │   ├── niri/
-    │   │   │   ├── settings/
-    │   │   │   │   ├── key-bindings.kdl
-    │   │   │   │   └── window-rules.kdl
-    │   │   │   ├── app-switcher.json
-    │   │   │   └── config.kdl
     │   │   ├── pcmanfm-qt/
-    │   │   │   └── default/
-    │   │   │       ├── recent-files.conf
-    │   │   │       └── settings.conf
     │   │   ├── rofi/
-    │   │   │   └── config.rasi
     │   │   ├── xdg-desktop-portal/
-    │   │   │   └── portals.conf
     │   │   └── xfce4/
-    │   │       └── helpers.rc
     │   └── .local/
     │       ├── bin/
-    │       │   └── niri-app-switcher
     │       └── share/
-    │           └── applications/
-    ├── emacs/
-    │   └── .config/
-    │       └── emacs/
-    │           ├── .crush/
-    │           │   ├── crush-fetch-3361075340/
-    │           │   ├── logs/
-    │           │   ├── .gitignore
-    │           │   ├── crush.db
-    │           │   ├── crush.db-shm
-    │           │   └── crush.db-wal
-    │           ├── configs/
-    │           │   ├── coding/
-    │           │   ├── editor/
-    │           │   ├── i18n/
-    │           │   ├── org/
-    │           │   ├── system/
-    │           │   ├── tools/
-    │           │   └── ui/
-    │           ├── core/
-    │           │   ├── bootstrap.el
-    │           │   └── lib.el
-    │           ├── diagnose/
-    │           │   ├── diagnostic-advice.el
-    │           │   ├── diagnostic-context.el
-    │           │   ├── diagnostic-env.el
-    │           │   ├── diagnostic-install.el
-    │           │   ├── diagnostic-log.el
-    │           │   ├── diagnostic-report.el
-    │           │   ├── diagnostic-state.el
-    │           │   ├── diagnostic.el
-    │           │   ├── run-tests.el
-    │           │   ├── test-config-loading.el
-    │           │   ├── test-core-lib.el
-    │           │   ├── test-diagnostic.el
-    │           │   ├── test-org-folding.el
-    │           │   ├── test-org-knowledge-viz.el
-    │           │   └── test-support.el
-    │           ├── snippets/
-    │           ├── .codex
-    │           ├── .gitignore
-    │           ├── CLAUDE.md
-    │           ├── LICENSE
-    │           ├── README.org
-    │           ├── early-init.el
-    │           └── init.el
     ├── noctalia-suite/
     │   ├── .config/
     │   │   ├── darkman/
-    │   │   │   ├── config/
-    │   │   │   │   ├── gtk-3.0/
-    │   │   │   │   ├── gtk-4.0/
-    │   │   │   │   ├── qt5ct/
-    │   │   │   │   ├── qt6ct/
-    │   │   │   │   └── .gtkrc-2.0
-    │   │   │   └── script/
-    │   │   │       ├── config.json
-    │   │   │       └── set-theme.sh
     │   │   └── niri/
-    │   │       └── settings/
-    │   │           ├── key-bindings-wm.kdl
-    │   │           └── special.kdl
     │   └── .local/
     │       └── share/
-    │           ├── dark-mode.d/
-    │           │   └── 0-apply-theme.sh
-    │           ├── icons/
-    │           │   └── default/
-    │           └── light-mode.d/
-    │               └── 0-apply-theme.sh
     ├── system/
     │   └── .config/
     │       ├── containers/
-    │       │   ├── containers.conf
-    │       │   └── policy.json
     │       ├── pipewire/
-    │       │   └── pipewire.conf.d/
-    │       │       └── 10-latency-fix.conf
     │       ├── user-dirs.dirs
     │       └── user-dirs.locale
     ├── terminal/
     │   ├── .config/
     │   │   ├── atuin/
-    │   │   │   └── config.toml
     │   │   ├── broot/
-    │   │   │   ├── conf.hjson
-    │   │   │   └── verbs.hjson
     │   │   ├── btop/
-    │   │   │   └── btop.conf
     │   │   ├── fastfetch/
-    │   │   │   └── config.jsonc
     │   │   ├── fish/
-    │   │   │   ├── conf.d/
-    │   │   │   │   ├── 00-load-functions.fish
-    │   │   │   │   ├── 01-guix.fish
-    │   │   │   │   ├── 05-java.fish
-    │   │   │   │   ├── 05-path.fish
-    │   │   │   │   ├── 10-settings.fish
-    │   │   │   │   ├── 20-greeting.fish
-    │   │   │   │   ├── 99-command-not-found.fish
-    │   │   │   │   └── 99-tmux.fish
-    │   │   │   └── functions/
-    │   │   │       ├── denv.fish
-    │   │   │       ├── fish_prompt.fish
-    │   │   │       ├── java_tools.fish
-    │   │   │       └── retry.fish
     │   │   ├── foot/
-    │   │   │   └── foot.ini
     │   │   ├── tmux/
-    │   │   │   ├── scripts/
-    │   │   │   │   ├── session-selector
-    │   │   │   │   ├── sidebar-render.scm
-    │   │   │   │   ├── sidebar-toggle
-    │   │   │   │   ├── tmux-helpers.scm
-    │   │   │   │   ├── which-key
-    │   │   │   │   └── window-jump
-    │   │   │   └── tmux.conf
     │   │   ├── tmuxifier/
-    │   │   │   └── layouts/
-    │   │   │       └── termide.session.sh
     │   │   └── starship.toml
     │   └── .local/
     │       └── bin/
-    │           └── termide
     └── utilities/
         ├── .config/
         │   ├── fcitx5/
-        │   │   ├── conf/
-        │   │   │   ├── classicui.conf
-        │   │   │   ├── keyboard.conf
-        │   │   │   ├── notifications.conf
-        │   │   │   ├── rime.conf
-        │   │   │   └── waylandim.conf
-        │   │   ├── config
-        │   │   └── profile
         │   ├── git/
-        │   │   ├── config
-        │   │   └── gitmessage
         │   ├── helix/
-        │   │   ├── themes/
-        │   │   │   └── transparent.toml
-        │   │   ├── config.toml
-        │   │   └── languages.toml
         │   ├── kanata/
-        │   │   └── kanata.kbd
         │   ├── pnpm/
-        │   │   └── rc
         │   └── winapps/
-        │       ├── compose.yaml
-        │       └── winapps.conf
         ├── .local/
         │   ├── bin/
-        │   │   ├── keepassxc-credential-setup
-        │   │   ├── nixgpu-update
-        │   │   ├── opencode-update
-        │   │   └── xdg-bwrap
         │   └── share/
-        │       ├── fcitx5/
-        │       │   └── rime/
-        │       └── gnupg/
-        │           └── gpg-agent.conf
         └── .nix-channels
 ```
 

@@ -17,35 +17,8 @@ agents/
 │   │   │   └── 02-ultilities.md
 │   │   └── skills/
 │   │       ├── emacs-config/
-│   │       │   ├── assets/
-│   │       │   │   ├── doom-module-template/
-│   │       │   │   ├── early-init-snippets/
-│   │       │   │   ├── audit-checklist.md
-│   │       │   │   ├── lsp-server-degradation.el
-│   │       │   │   └── use-package-patterns.el
-│   │       │   ├── references/
-│   │       │   │   ├── A-startup-and-packages.md
-│   │       │   │   ├── B-keybinds-ui-workspaces.md
-│   │       │   │   ├── C-external-tools.md
-│   │       │   │   ├── D-modules-and-architecture.md
-│   │       │   │   ├── E-validating-elisp.md
-│   │       │   │   ├── audit-and-refactor.md
-│   │       │   │   └── principles.md
-│   │       │   ├── scripts/
-│   │       │   │   ├── README.md
-│   │       │   │   ├── clean-up-elc.sh
-│   │       │   │   ├── elisp-compile.sh
-│   │       │   │   ├── elisp-reload.sh
-│   │       │   │   └── run-tests.sh
-│   │       │   └── SKILL.md
 │   │       ├── knowledge-base/
-│   │       │   └── SKILL.md
 │   │       └── pack-guix/
-│   │           ├── references/
-│   │           │   ├── package-template.scm
-│   │           │   ├── test-template.sh
-│   │           │   └── watch-test-template.sh
-│   │           └── SKILL.md
 │   ├── crush/
 │   │   ├── bin/
 │   │   │   ├── bash-language-server
@@ -71,11 +44,10 @@ agents/
 │       │   ├── codex.json
 │       │   ├── crush.json
 │       │   ├── omp.json
-│       │   └── opencode.json
+│       │   ├── opencode.json
+│       │   └── pi.json
 │       └── docs/
 │           ├── examples/
-│           │   ├── format-check.md
-│           │   └── kb-nightly.md
 │           ├── README.md
 │           ├── adapter.md
 │           └── extract.md
@@ -83,45 +55,15 @@ agents/
 │   └── bin/
 │       ├── kb_lib/
 │       │   ├── __pycache__/
-│       │   │   ├── __init__.cpython-312.pyc
-│       │   │   ├── cards.cpython-312.pyc
-│       │   │   ├── core.cpython-312.pyc
-│       │   │   ├── lint.cpython-312.pyc
-│       │   │   └── memory.cpython-312.pyc
 │       │   ├── viz/
-│       │   │   ├── __pycache__/
-│       │   │   │   ├── __init__.cpython-312.pyc
-│       │   │   │   ├── cli.cpython-312.pyc
-│       │   │   │   └── data.cpython-312.pyc
-│       │   │   ├── html/
-│       │   │   │   ├── __pycache__/
-│       │   │   │   ├── __init__.py
-│       │   │   │   ├── charts.js
-│       │   │   │   ├── core.js
-│       │   │   │   ├── force.js
-│       │   │   │   ├── interact.js
-│       │   │   │   ├── skeleton.html
-│       │   │   │   ├── style.css
-│       │   │   │   └── template.py
-│       │   │   ├── __init__.py
-│       │   │   ├── cli.py
-│       │   │   └── data.py
 │       │   ├── __init__.py
 │       │   ├── cards.py
 │       │   ├── core.py
 │       │   └── lint.py
 │       ├── loop_lib/
 │       │   ├── extract/
-│       │   │   ├── claude-code-print.sh
-│       │   │   ├── jsonl-last-assistant.sh
-│       │   │   ├── jsonl-last-text.sh
-│       │   │   └── text.sh
 │       │   ├── templates/
-│       │   │   ├── checkpoint.md.tmpl
-│       │   │   ├── continuation.md.tmpl
-│       │   │   └── task.md.tmpl
 │       │   ├── tests/
-│       │   │   └── test_json.sh
 │       │   ├── adapter-cmds.sh
 │       │   ├── agent.sh
 │       │   ├── common.sh
@@ -149,6 +91,10 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 ```
 
 > **oh-my-pi (OMP)** 不再从此目录部署。它是 Guix 频道 `jeans` 的 `oh-my-pi-bin`（v16.1.6）单 ELF 二进制，由 `guix-home` 的 `home-packages` 直接暴露为 `omp` 命令。运行时配置（settings/agents/prompts 等）走 OMP 自身约定路径，本仓库不再托管。
+>
+> **pi-coding-agent** 同理——它的 settings/models/agents/prompts/extensions 已经从 `dotfiles/enable/agents/.config/pi/` 整体迁到 `stow/pi/.config/pi/`(由 GNU Stow `--no-folding` 部署,详见 `stow/AGENTS.md` 的 `pi` 包条目)。loopctl 现已恢复 `adapters/pi.json` 与 `adapters/omp.json` 共存,`/loop <name> start --adapter pi|omp` 二选一。
+>
+> **知识库体系 (`kb`)** 同理——`kb` / `kb-agent` CLI、整套 `kb_lib/`(含 `memory.py` 子系统、viz 可视化)、以及 `skills/{knowledge-base,kb-curator,self-improving}` 三个 skill 已迁到 `stow/kb/`,与 pi 包解耦。`emacs-config` / `pack-guix` skill 仍走 `dotfiles/enable/agents/.config/agents/skills/`(Guix Home stow)——它们的更改频率低、`blue home` 重建成本可接受。`skillsets/` 那 4 个 gitlink 子模块暂不恢复(当时的依赖来源已不可追溯)。
 
 `.gitignore` 排除 `.agents/workfile`、`node_modules`、`__pycache__`。文档类的 `AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
 
