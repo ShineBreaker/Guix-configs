@@ -33,7 +33,8 @@ source/
 ├── channel.lock
 ├── channel.scm
 ├── config.org
-└── information.scm
+├── information.scm
+└── manifest.scm
 ```
 
 <!-- /structor -->

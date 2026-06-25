@@ -45,17 +45,19 @@ tmp/config.scm
 1. 先看当前目录是否存在更近的 `AGENTS.md`（`source/`、`dotfiles/enable/<app>/`、emacs 子模块内）
 2. 若 README / 文档与实际文件不一致，以仓库实际结构和源码为准
 3. **禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置。** 所有配置必须改源文件后通过 `blue home` 生效
+4. **新机装机引导**：`tools/bootstrap.sh` 是入口；先读 `source/manifest.scm` 了解依赖图。
 
 ## 任务路由表
 
-| 任务类型           | 优先读取位置                          | 子目录指引                                 |
-| ------------------ | ------------------------------------- | ------------------------------------------ |
-| System + Home 配置 | `source/config.org` 头部的 Agent 专区 | `source/AGENTS.md`                         |
-| **Emacs 配置**     | `stow/emacs/.config/emacs/AGENTS.md`  | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
-| 全局变量           | `source/information.scm`              | —                                          |
-| 频道定义           | `source/channel.scm`                  | `source/channel.lock` 锁定版本             |
-| 静态模板           | `source/files/`                       | `source/AGENTS.md` 中 files/ 模板系统一节  |
-| 各类 dotfiles      | `dotfiles/enable/<app>/`              | 各子目录 AGENTS.md                         |
+| 任务类型             | 优先读取位置                                 | 子目录指引                                 |
+| -------------------- | -------------------------------------------- | ------------------------------------------ |
+| System + Home 配置   | `source/config.org` 头部的 Agent 专区        | `source/AGENTS.md`                         |
+| **Emacs 配置**       | `stow/emacs/.config/emacs/AGENTS.md`         | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
+| 全局变量             | `source/information.scm`                     | —                                          |
+| 频道定义             | `source/channel.scm`                         | `source/channel.lock` 锁定版本             |
+| 静态模板             | `source/files/`                              | `source/AGENTS.md` 中 files/ 模板系统一节  |
+| 各类 dotfiles        | `dotfiles/enable/<app>/`                     | 各子目录 AGENTS.md                         |
+| 新机装机（官方 ISO） | `source/manifest.scm` + `tools/bootstrap.sh` | —                                          |
 
 <critical>
 **路由硬约束**：
@@ -66,6 +68,40 @@ tmp/config.scm
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
 6. 优先使用 `blue --list` 内可以使用的相关命令
 </critical>
+
+## 引导（新机安装）
+
+在一台**干净**的机器（官方 Guix ISO）上，`blue`、`emacs-minimal` 等本仓库依赖都不存在，
+但 `%emacs-command` 会通过 `guix time-machine ... shell emacs-minimal` 自行供给 emacs——
+所以**真正需要预先引导的依赖只有 `blue`**。
+
+机制由两个文件支撑（结构放在 `source/`，与 `channel.lock` 同一类声明）：
+
+- `source/manifest.scm`：声明本仓库的引导依赖（目前为 `blue`）
+- `tools/bootstrap.sh`：封装"锁定频道 + manifest"的入口，给出可执行的 `blue`
+
+### 官方 ISO 装机流程
+
+```bash
+# 1. 启动官方 Guix ISO
+# 2. 配置网络、克隆本仓库
+git clone <仓库地址> && cd Guix-configs
+
+# 3. 引导：进入一个带 blue 的临时 shell（首次较慢，会克隆/构建频道）
+./tools/bootstrap.sh
+
+# 4. 在引导 shell 内：（用户已自行完成分区、格式化、挂载 /mnt）
+blue init
+# 装好重启后，home profile 接管，blue 永久可用。
+```
+
+`bootstrap.sh` 严格只做"提供环境"一件事：它**不会**自动分区、挂载或跑 `blue init`，
+避免对 `/mnt` 做任何破坏性操作。
+
+### 复用为自制 ISO
+
+将来若做自制定制 ISO（把 `blue` 烤进 live profile），live 配置可以直接引用
+`source/manifest.scm` —— 同一份声明临时 shell 与 live 系统双路径，零重复维护。
 
 ## dotfiles 部署模型
 

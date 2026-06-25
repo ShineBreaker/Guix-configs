@@ -58,6 +58,8 @@ GNU Stow 默认会做 **tree folding**：当目标目录不存在或为空时，
 stow/
 ├── emacs/
 │   ├── .config/
+│   │   ├── agents/
+│   │   │   └── skills/
 │   │   └── emacs/
 │   │       ├── configs/
 │   │       ├── core/
@@ -73,18 +75,10 @@ stow/
 │   └── .local/
 │       └── share/
 │           └── hermes/
-├── kb/
-│   ├── .config/
-│   │   └── agents/
-│   │       └── skills/
-│   ├── .local/
-│   │   └── bin/
-│   │       ├── kb_lib/
-│   │       ├── kb
-│   │       └── kb-agent
-│   └── .stow-local-ignore
 ├── pi/
 │   ├── .config/
+│   │   ├── agents/
+│   │   │   └── skills/
 │   │   └── pi/
 │   │       ├── agents/
 │   │       ├── extensions/
@@ -100,6 +94,7 @@ stow/
 │   │       └── settings.json
 │   ├── .local/
 │   │   ├── bin/
+│   │   │   ├── kb-agent
 │   │   │   ├── pi
 │   │   │   ├── pi-acp
 │   │   │   └── pi-update
@@ -113,12 +108,11 @@ stow/
 
 ## 当前纳管的包
 
-| 包       | 部署目标                                                          | 包含文件                                                                                                                  |
-| -------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `hermes` | `~/.local/share/hermes/`                                          | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                |
-| `emacs`  | `~/.config/emacs/`                                                | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                |
-| `pi`     | `~/.config/pi/`、`~/.local/bin/{pi,pi-acp,pi-update}`、`~/.local/share/pi/` | 从 `9b720b6e^` 恢复的 pi-coding-agent 全部配置(settings/models/lsp/keybindings/plannotator、agents/*.md、prompts/*.md、extensions/{atelier,custom-shortcuts,default-timeout,global-context,kb-hooks})、启动脚本与 scripts/ 辅助 |
-| `kb`     | `~/.local/bin/{kb,kb-agent}`、`~/.local/bin/kb_lib/`、`~/.config/agents/skills/{knowledge-base,kb-curator,self-improving}` | 从 `d5ec299f` 恢复的完整知识库体系(可执行 CLI、kb_lib 含 memory 子模块、3 个 skill 与 references) |
+| 包       | 部署目标                                                                                                         | 包含文件                                                                                                                                                                                                                                                                                                                                                    |
+| -------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                                                                                                                                                                  |
+| `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                                                                                                                                                                    |
+| `pi`     | `~/.config/pi/`、`~/.local/bin/{kb-agent,pi,pi-acp,pi-update}`、`~/.local/share/pi/`、`~/.config/agents/skills/` | pi-coding-agent 全部配置(settings/models/lsp/keybindings/plannotator、agents/_.md、prompts/_.md、extensions/{atelier,custom-shortcuts,default-timeout,global-context,agenote-hooks})、启动脚本与 scripts/ 辅助；**agenote 体系**：`kb-agent` CLI、`agenote-{base,curator,review}` 三个 skill（kb CLI + kb_lib 已迁到 dotfiles/enable/agents，走 Guix Home） |
 
 ## 工作流
 

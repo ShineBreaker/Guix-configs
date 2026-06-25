@@ -16,8 +16,6 @@ agents/
 │   │   │   ├── 01-language.md
 │   │   │   └── 02-ultilities.md
 │   │   └── skills/
-│   │       ├── emacs-config/
-│   │       ├── knowledge-base/
 │   │       └── pack-guix/
 │   ├── crush/
 │   │   ├── bin/
@@ -57,9 +55,11 @@ agents/
 │       │   ├── __pycache__/
 │       │   ├── viz/
 │       │   ├── __init__.py
+│       │   ├── agenote.py
 │       │   ├── cards.py
 │       │   ├── core.py
-│       │   └── lint.py
+│       │   ├── lint.py
+│       │   └── memory.py
 │       ├── loop_lib/
 │       │   ├── extract/
 │       │   ├── templates/
@@ -94,7 +94,7 @@ dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 >
 > **pi-coding-agent** 同理——它的 settings/models/agents/prompts/extensions 已经从 `dotfiles/enable/agents/.config/pi/` 整体迁到 `stow/pi/.config/pi/`(由 GNU Stow `--no-folding` 部署,详见 `stow/AGENTS.md` 的 `pi` 包条目)。loopctl 现已恢复 `adapters/pi.json` 与 `adapters/omp.json` 共存,`/loop <name> start --adapter pi|omp` 二选一。
 >
-> **知识库体系 (`kb`)** 同理——`kb` / `kb-agent` CLI、整套 `kb_lib/`(含 `memory.py` 子系统、viz 可视化)、以及 `skills/{knowledge-base,kb-curator,self-improving}` 三个 skill 已迁到 `stow/kb/`,与 pi 包解耦。`emacs-config` / `pack-guix` skill 仍走 `dotfiles/enable/agents/.config/agents/skills/`(Guix Home stow)——它们的更改频率低、`blue home` 重建成本可接受。`skillsets/` 那 4 个 gitlink 子模块暂不恢复(当时的依赖来源已不可追溯)。
+> **知识库体系 (`kb`)** —— `kb` / `kb-agent` CLI、整套 `kb_lib/`（含 `memory.py` 子系统、`agenote.py` 子命令分发、`viz` 可视化）已在 `dotfiles/enable/agents/.local/bin/`（Guix Home stow），含完整写操作 + `kb agenote` 子命令树（agent 专属记事本，数据隔离在 `~/Documents/Org/agenote/`）。**agenote 体系**：`agenote-{base,curator,review}` 三个 skill 与 `agenote-hooks` pi 插件在 `stow/pi/`（GNU Stow，改源即生效）。`emacs-config` / `pack-guix` skill 仍走 `dotfiles/enable/agents/.config/agents/skills/`（Guix Home stow）——它们的更改频率低、`blue home` 重建成本可接受。
 
 `.gitignore` 排除 `.agents/workfile`、`node_modules`、`__pycache__`。文档类的 `AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
 
@@ -106,11 +106,11 @@ OMP（[can1357/oh-my-pi](https://github.com/can1357/oh-my-pi)）是 Pi 的 batte
 
 ### 路径与运行时约定
 
-| 路径                                   | 用途                                                          |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `$PI_CONFIG_DIR` (`$XDG_CONFIG_HOME/pi/omp`) | OMP 自身约定的配置文件目录（providers、agents、skills 等） |
-| `$PI_CODING_AGENT_DIR` (`$XDG_CONFIG_HOME/pi`) | 兼容 Pi 的主目录，OMP 作为 fork 通常仍识别                |
-| `$PI_CODING_AGENT_SESSION_DIR` (`$XDG_DATA_HOME/pi/sessions`) | 会话持久化目录                                       |
+| 路径                                                          | 用途                                                       |
+| ------------------------------------------------------------- | ---------------------------------------------------------- |
+| `$PI_CONFIG_DIR` (`$XDG_CONFIG_HOME/pi/omp`)                  | OMP 自身约定的配置文件目录（providers、agents、skills 等） |
+| `$PI_CODING_AGENT_DIR` (`$XDG_CONFIG_HOME/pi`)                | 兼容 Pi 的主目录，OMP 作为 fork 通常仍识别                 |
+| `$PI_CODING_AGENT_SESSION_DIR` (`$XDG_DATA_HOME/pi/sessions`) | 会话持久化目录                                             |
 
 以上三条 env 在 `source/config.org` 的 XDG session-variables 块声明（line 1838-1841），由 `guix-home` 在 shell 启动时注入。
 
@@ -142,10 +142,10 @@ Adapter 声明式配置见 `.config/loopctl/adapters/`。当前内置：`claude-
 
 ### 启动脚本（`.local/bin/`）
 
-| 脚本          | 作用                              |
-| ------------- | --------------------------------- |
-| `kb`          | 知识库 CLI（只读查询）            |
-| `loopctl`     | 跨 agent 循环框架入口             |
+| 脚本      | 作用                   |
+| --------- | ---------------------- |
+| `kb`      | 知识库 CLI（只读查询） |
+| `loopctl` | 跨 agent 循环框架入口  |
 
 OMP 自身通过 Guix profile 直接以 `omp` 命令暴露，不需要 wrapper。
 
