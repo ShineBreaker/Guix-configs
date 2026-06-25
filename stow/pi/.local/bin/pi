@@ -15,10 +15,18 @@ BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
 
 if [[ ! -x "${BIN}" ]]; then
 	if ! command -v pnpm &>/dev/null; then
-		echo "pnpm is not installed." >&2; exit 1
+		echo "pnpm is not installed." >&2
+		exit 1
 	fi
 	echo "Installing Pi dependencies..." >&2
 	cd "${PI_DATA_DIR}" && pnpm install
+	# 首次安装时同步扩展（bootstrap package.json + 从 settings.json 同步清单）
+	# 用 readlink -f 解析真实路径（stow 软链场景下 $0 可能是 symlink）
+	_pi_update="$(dirname "$(readlink -f "$0")")/pi-update"
+	if [[ -x "${_pi_update}" ]]; then
+		echo "Installing Pi extensions..." >&2
+		"${_pi_update}" --extensions-only || echo "  扩展安装失败，可用 pi-update 重试" >&2
+	fi
 fi
 
 exec "${BIN}" "$@"
