@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "zai",
-  "defaultModel": "glm-5.2",
+  "defaultProvider": "minimax-cn",
+  "defaultModel": "MiniMax-M3",
   "npmCommand": [
     "pnpm"
   ],
@@ -22,7 +22,6 @@
     "npm:pi-mcp-adapter",
     "npm:pi-web-access",
     "npm:@plannotator/pi-extension",
-    "npm:pi-powerline-footer",
     "npm:pi-hashline-edit",
     "npm:@narumitw/pi-lsp",
     "npm:pi-code-review",

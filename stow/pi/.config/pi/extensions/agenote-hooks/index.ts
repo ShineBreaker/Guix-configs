@@ -144,13 +144,10 @@ function extractText(content: unknown): string {
 }
 
 export default function init(pi: ExtensionAPI): void {
-  // ── session_start: 注入 agenote 状态 ──
-  pi.on("session_start", async (_event, _ctx) => {
-    const summary = getAgenoteStatusSummary();
-    if (summary) {
-      console.log(summary);
-    }
-  });
+// session_start：状态显示已交给 pi-ui 扩展（欢迎框中显示）。
+  // 原逻辑在这里 console.log 会导致 stdout 在 TUI 之前打印多行文本，
+  // 且与 pi-ui 欢迎框重复。pi-ui 已调用 kb agenote health 解析后
+  // 在欢迎框中显示。需要独立查看请使用 /agenote-health 命令。
 
   // ── agent_end: 检测完成信号，提示 agent 进入总结流程 ──
   pi.on("agent_end", async (event, ctx) => {
