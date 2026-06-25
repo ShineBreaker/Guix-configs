@@ -48,20 +48,41 @@ import {
   createStatusBar,
   type FooterState,
 } from "./status-bar.ts";
+import {
+  startAnimation,
+  triggerModelFlash,
+  type AnimationState,
+} from "./animations.ts";
 
 /** 缓存渲染所需数据 */
 interface UiCache {
   welcome: WelcomeData | null;
   footer: FooterState;
+  /** 动画状态（被 welcome-box 工厂引用） */
+  anim: AnimationState;
   /** 捕获的 TUI 引用，用于触发重绘（powerline-footer 同款模式） */
   tuiRef: TUI | null;
   sessionStartMs: number;
+  /** session_start 后启动的动画 cleanup */
+  stopAnimation: (() => void) | null;
+}
+
+/** 创建默认动画状态（每次启动重置） */
+function makeAnimState(): AnimationState {
+  return {
+    phase: 0,
+    elapsedMs: 0,
+    active: 1,
+    modelFlash: 0,
+    tipRevealed: [0, 0, 0],
+    tipStartMs: [200, 600, 1000], // 三条 tips staggered 启动 (ms)
+  };
 }
 
 export default function piUiExtension(pi: ExtensionAPI): void {
   const sessionStartMs = Date.now();
 
-  const cache: UiCache = {
+const cache: UiCache = {
     welcome: null,
     footer: {
       modelName: "...",
@@ -73,8 +94,10 @@ export default function piUiExtension(pi: ExtensionAPI): void {
       contextWindow: 0,
       sessionStartMs,
     },
+    anim: makeAnimState(),
     tuiRef: null,
     sessionStartMs,
+    stopAnimation: null,
   };
 
   function refreshCacheFromCtx(ctx: ExtensionContext): void {
@@ -134,7 +157,7 @@ export default function piUiExtension(pi: ExtensionAPI): void {
 
   // ── session_start：注册 header + footer ─────────────────────────────
 
-  pi.on("session_start", async (event, ctx) => {
+pi.on("session_start", async (event, ctx) => {
     // TUI 守卫：非 TUI 模式（pi -p / RPC / SDK）不渲染装饰性 header/footer
     if (ctx.mode !== "tui") return;
     if (ctx.hasUI === false) return;
@@ -151,26 +174,35 @@ export default function piUiExtension(pi: ExtensionAPI): void {
 
     // Header：仅 startup reason 注册，避免 resume/branch 时重复渲染
     if (event.reason === "startup") {
-      const welcomeFactory = createWelcomeHeader(() => {
-        if (!cache.welcome) {
-          return {
-            modelName: "loading...",
-            providerName: "",
-            tips: [],
-loaded: {
-              contextFiles: [],
-              tools: 0,
-              commands: 0,
-              skills: 0,
-              extensions: 0,
-              templates: 0,
-            },
-            recent: [],
-            agenote: null,
-          };
-        }
-        return cache.welcome;
-      });
+      // 重置动画状态（resume 时保持冻结）
+      cache.anim = makeAnimState();
+      // 启动 5s 动画循环（彩虹 logo + tips 打字机 + 状态脉冲）
+      if (cache.stopAnimation) cache.stopAnimation(); // 清理旧的
+      cache.stopAnimation = startAnimation(cache.anim, () => cache.tuiRef?.requestRender(), 5000);
+
+      const welcomeFactory = createWelcomeHeader(
+        () => {
+          if (!cache.welcome) {
+            return {
+              modelName: "loading...",
+              providerName: "",
+              tips: [],
+              loaded: {
+                contextFiles: [],
+                tools: 0,
+                commands: 0,
+                skills: 0,
+                extensions: 0,
+                templates: 0,
+              },
+              recent: [],
+              agenote: null,
+            };
+          }
+          return cache.welcome;
+        },
+        () => cache.anim,
+      );
       ctx.ui.setHeader((tui, _theme) => {
         cache.tuiRef = tui as TUI;
         return welcomeFactory(tui, _theme);
@@ -180,12 +212,14 @@ loaded: {
 
   // ── 事件监听：让 footer/header 跟随运行时变化刷新 ──────────────────
 
-  pi.on("model_select", async (_event, ctx) => {
+pi.on("model_select", async (_event, ctx) => {
     cache.footer.modelName = ctx.model?.name ?? ctx.model?.id ?? "no model";
     if (cache.welcome) {
       cache.welcome.modelName = cache.footer.modelName;
       cache.welcome.providerName = ctx.model?.provider ?? "unknown";
     }
+    // 触发 model 颜色闪烁动画（1s 内 3 次颜色切换）
+    triggerModelFlash(cache.anim, () => cache.tuiRef?.requestRender());
     requestRender();
   });
 
@@ -206,7 +240,12 @@ loaded: {
       cache.footer.contextPercent = next;
       cache.footer.contextTokens = usage?.tokens ?? null;
       cache.footer.contextWindow = usage?.contextWindow ?? 0;
-      requestRender();
+requestRender();
     }
+  });
+
+  // 进程退出前清理动画定时器
+  process.on("exit", () => {
+    if (cache.stopAnimation) cache.stopAnimation();
   });
 }

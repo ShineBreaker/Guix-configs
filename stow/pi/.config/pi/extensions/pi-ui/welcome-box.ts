@@ -29,6 +29,15 @@ import type {
   LoadedCounts,
   RecentSessionInfo,
 } from "./plugin-bridge.ts";
+import {
+  fg,
+  LOGO_COLOR_SPEED,
+  LOGO_GRADIENT,
+  MODEL_FLASH_COLORS,
+  RESET,
+  STATUS_BASE,
+  type AnimationState,
+} from "./animations.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Nerd Font 检测（与 status-bar.ts 一致，单一真相源）
@@ -110,33 +119,25 @@ const PI_LOGO = [
 ] as const;
 
 /**
- * 将渐变色应用到一行 logo。空格保留为不可见字符。
- * 使用 pi theme 的 accent → muted 渐变（与 theme 一致）。
+ * 将渐变色应用到一行 logo。
+ * - phase=0: 使用 LOGO_GRADIENT 静态色（冷调紫色调）
+ * - phase>0: 每段色相随 phase 循环（彩虹呼吸动画）
+ * 空格保留为不可见字符。
  */
-function gradientLine(line: string, theme: Theme): string {
-  const colors: readonly string[] = [
-    theme.fg("accent", ""), // 占位以保持索引对齐
-    theme.fg("accent", ""),
-    theme.fg("muted", ""),
-    theme.fg("muted", ""),
-    theme.fg("dim", ""),
-    theme.fg("dim", ""),
-  ];
-  const reset = "\x1b[0m";
-  const step = Math.max(1, Math.floor(line.length / colors.length));
+function gradientLine(line: string, phase: number): string {
+  const step = Math.max(1, Math.floor(line.length / LOGO_GRADIENT.length));
   let result = "";
-  let colorIdx = 0;
+  let stopIdx = 0;
   for (let i = 0; i < line.length; i++) {
-    if (i > 0 && i % step === 0 && colorIdx < colors.length - 1) colorIdx++;
+    if (i > 0 && i % step === 0 && stopIdx < LOGO_GRADIENT.length - 1) stopIdx++;
     const char = line[i];
     if (char === " ") {
       result += char;
     } else {
-      // ANSI 转义码包裹单个字符
-      const ansi = colors[colorIdx] ?? "";
-      // 去掉 colors[] 的 ANSI reset（theme.fg 自带 reset）
-      // 这里直接用 ansi 即可
-      result += ansi.replace(/\x1b\[0m$/, "") + char + reset;
+      const stop = LOGO_GRADIENT[stopIdx]!;
+      // 动画时加相位偏移，phase=0 时偏移=0，保持基色
+      const h = stop.h + phase * LOGO_COLOR_SPEED;
+      result += fg(h, stop.s, stop.l) + char + RESET;
     }
   }
   return result;
@@ -179,27 +180,64 @@ function fitToWidth(text: string, width: number): string {
 // 左栏 + 右栏构造
 // ═══════════════════════════════════════════════════════════════════════════
 
-function buildLeftColumn(data: WelcomeData, theme: Theme, width: number): string[] {
-  const logo = PI_LOGO.map((line) => centerText(gradientLine(line, theme), width));
+function buildLeftColumn(
+  data: WelcomeData,
+  theme: Theme,
+  width: number,
+  phase: number,
+  modelFlash: number,
+): string[] {
+  // 1. Logo 彩虹呼吸：phase=0 为静态基色，phase>0 随 phase 循环
+  const logo = PI_LOGO.map((line) => centerText(gradientLine(line, phase), width));
+
+  // 2. Model name 闪烁：modelFlash>0 时在 MODEL_FLASH_COLORS 间循环
+  let modelText: string;
+  if (modelFlash > 0) {
+    const idx = (3 - modelFlash) % MODEL_FLASH_COLORS.length;
+    const [h, s, l] = MODEL_FLASH_COLORS[idx]!;
+    modelText = fg(h, s, l) + data.modelName + RESET;
+  } else {
+    modelText = theme.fg("accent", data.modelName);
+  }
+
   return [
     "",
     centerText(theme.bold(theme.fg("accent", "Welcome back!")), width),
     "",
     ...logo,
     "",
-    centerText(theme.fg("accent", data.modelName), width),
+    centerText(modelText, width),
     centerText(theme.fg("muted", data.providerName), width),
   ];
 }
 
-function buildRightColumn(data: WelcomeData, theme: Theme, width: number): string[] {
+function buildRightColumn(
+  data: WelcomeData,
+  theme: Theme,
+  width: number,
+  anim: AnimationState,
+): string[] {
   const sep = ` ${theme.fg("dim", "─".repeat(Math.max(0, width - 2)))}`;
   const lines: string[] = [];
 
-  // Tips 区
+  // Tips 区——打字机效果：逐字出现，staggered 启动
   lines.push(sectionHeader(theme, ICON.tips, "Tips"));
-  for (const tip of data.tips) {
-    lines.push(` ${theme.fg("muted", tip)}`);
+  for (let i = 0; i < data.tips.length; i++) {
+    const tip = data.tips[i]!;
+    const startMs = anim.tipStartMs[i] ?? 0;
+    const sinceStart = anim.elapsedMs - startMs;
+    let visibleText: string;
+    if (anim.active === 0) {
+      visibleText = tip; // 动画结束后显示全部
+    } else if (sinceStart < 0) {
+      visibleText = ""; // 还没轮到
+    } else {
+      const charsRevealed = Math.min(tip.length, Math.floor(sinceStart / 30));
+      visibleText = tip.slice(0, charsRevealed);
+    }
+    if (visibleText.length > 0) {
+      lines.push(` ${theme.fg("muted", visibleText)}`);
+    }
   }
   lines.push(sep);
 
@@ -216,7 +254,7 @@ function buildRightColumn(data: WelcomeData, theme: Theme, width: number): strin
       : ctxReadable === ctxCount
         ? `${ctxCount} context file${ctxCount === 1 ? "" : "s"} (${formatBytes(ctxBytes)})`
         : `${ctxReadable}/${ctxCount} context files`;
-// fastfetch 风格：图标 + 值，无圆点前缀
+  // fastfetch 风格：图标 + 值，无圆点前缀
   lines.push(` ${theme.fg("muted", `${ICON.ctxFile} ${ctxStr}`)}`);
   lines.push(` ${theme.fg("muted", `${ICON.tool} ${data.loaded.tools} tools`)}`);
   lines.push(` ${theme.fg("muted", `${ICON.skill} ${data.loaded.skills} skills`)}`);
@@ -232,29 +270,29 @@ function buildRightColumn(data: WelcomeData, theme: Theme, width: number): strin
   if (data.agenote && data.agenote.available) {
     lines.push(sectionHeader(theme, ICON.agenote, "Agenote"));
     const a = data.agenote;
-    // 卡片总数 + 状态
     lines.push(
       ` ${theme.fg("muted", `${a.cards.total} cards (done: ${a.cards.done}, stable: ${a.cards.stable})`)}`,
     );
-    // 健康指标：每个一行（fastfetch 风格）
+    // 严重指标图标加脉冲：sin 波调整亮度
+    const pulse = 0.5 + 0.5 * Math.sin(anim.phase * 0.13);
     for (const m of a.metrics) {
-      const iconColor = m.status === "ok" ? "success" : m.status === "warn" ? "warning" : "error";
+      const baseColor = STATUS_BASE[m.status];
+      const l = baseColor.l + (m.status === "ok" ? 0 : (pulse - 0.5) * 0.15);
       const statusIcon = m.status === "ok" ? ICON.ok : m.status === "warn" ? ICON.warn : ICON.error;
-      // 指标名 + 值 + [阈值] + 状态图标（紧凑、与 fastfetch 一致）
       const name = theme.fg("muted", m.name);
-      const value = theme.fg(iconColor, m.value);
-      const thr = theme.fg(iconColor, `[${m.threshold}]`);
-      const icon = theme.fg(iconColor, statusIcon);
+      const value = theme.fg(baseColor.h < 30 ? "error" : baseColor.h < 100 ? "warning" : "success", m.value);
+      const thr = theme.fg(baseColor.h < 30 ? "error" : baseColor.h < 100 ? "warning" : "success", `[${m.threshold}]`);
+      const icon = fg(baseColor.h, baseColor.s, l) + statusIcon + RESET;
       lines.push(` ${name} ${value} ${thr} ${icon}`);
     }
-    // feedback 状态
     if (a.feedback.total > 0) {
       lines.push(` ${theme.fg("muted", `feedback: ${a.feedback.total} (stale: ${a.feedback.stale})`)}`);
     } else {
       lines.push(` ${theme.fg("dim", `feedback: 0 (stale: ${a.feedback.stale})`)}`);
     }
-    lines.push(sep);
+lines.push(sep);
   }
+
   // Recent 区
   lines.push(sectionHeader(theme, ICON.recent, "Recent"));
   if (data.recent.length === 0) {
@@ -291,6 +329,7 @@ function renderWelcomeBox(
   data: WelcomeData,
   theme: Theme,
   termWidth: number,
+  anim: AnimationState,
 ): string[] {
   // 极窄终端直接跳过（< 44 列放不下两栏）
   const minLayoutWidth = 44;
@@ -312,8 +351,8 @@ function renderWelcomeBox(
   const bl = theme.fg("dim", "╰");
   const br = theme.fg("dim", "╯");
 
-  const leftLines = buildLeftColumn(data, theme, leftCol);
-  const rightLines = buildRightColumn(data, theme, rightCol);
+const leftLines = buildLeftColumn(data, theme, leftCol, anim.phase, anim.modelFlash);
+  const rightLines = buildRightColumn(data, theme, rightCol, anim);
 
   const lines: string[] = [];
 
@@ -344,19 +383,21 @@ function renderWelcomeBox(
 // Component 工厂：setHeader 的 factory 模式
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function createWelcomeHeader(getData: () => WelcomeData) {
-  return function welcomeHeaderFactory(
+export function createWelcomeHeader(
+  getData: () => WelcomeData,
+  getAnim: () => AnimationState,
+) {
+  const welcomeHeaderFactory = (
     _tui: unknown,
     theme: Theme,
-  ): Component {
-    return {
-      invalidate(): void {
-        // welcome header 启动后基本不变，invalidate 仅在主题切换时调用，
-        // 依赖 theme 闭包即时重算即可
-      },
-      render(width: number): string[] {
-        return renderWelcomeBox(getData(), theme, width);
-      },
-    };
-  };
+  ): Component => ({
+    invalidate(): void {
+      // 动画期间（≤ 5s）render 输出每帧都在变，无需手动 invalidate；
+      // 主题切换时 pi 会自动重新创建组件实例
+    },
+    render(width: number): string[] {
+      return renderWelcomeBox(getData(), theme, width, getAnim());
+    },
+  });
+  return welcomeHeaderFactory;
 }
