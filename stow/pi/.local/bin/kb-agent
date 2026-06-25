@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: MIT
+#
+# kb-agent — 知识库策展/审查自动化代理
+# 支持多后端（pi/opencode/crush），通过环境变量或配置文件切换。
+#
+# 用法:
+#   kb-agent curate           执行完整策展
+#   kb-agent review           对话后审查
+#   kb-agent health           知识库健康检查
+#   kb-agent self-improve     同 review
+
+set -euo pipefail
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 配置区
+# ═══════════════════════════════════════════════════════════════════════════════
+
+KB_AGENT_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/kb/agent.conf"
+
+# 从配置文件加载（如果存在）
+if [[ -f "$KB_AGENT_CONFIG" ]]; then
+	# shellcheck source=/dev/null
+	source "$KB_AGENT_CONFIG"
+fi
+
+# 环境变量覆盖（优先于配置文件）
+KB_AGENT_BACKEND="${KB_AGENT_BACKEND:-pi}"
+KB_AGENT_MODEL="${KB_AGENT_MODEL:-}"
+KB_AGENT_TIMEOUT="${KB_AGENT_TIMEOUT:-300}"
+KB_DRY_RUN="${KB_DRY_RUN:-0}"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 操作定义
+# ═══════════════════════════════════════════════════════════════════════════════
+
+CURATE_TASK="执行 agenote 策展：运行 kb agenote health 检查健康度，运行 kb agenote deduplicate 检测重复，对 stale 卡片执行 kb agenote archive --stale，运行 kb agenote curate 重分配权重，最后运行 kb agenote reindex 重建索引。输出策展报告摘要。"
+REVIEW_TASK="审查本次对话，检测是否有可记录的经验信号（用户纠正、踩坑、发现更优方案），并对用到的资料留痕：已有卡片用 kb agenote touch <id>，联网新知识用 kb agenote add --type note。如有经验信号则运行 kb agenote add 或 kb agenote memory --add 写入。"
+HEALTH_TASK="运行 kb agenote health 输出 agenote 健康度报告，简要说明各项指标是否达标。"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 后端适配器
+# ═══════════════════════════════════════════════════════════════════════════════
+
+run_pi() {
+	local task="$1"
+	if ! command -v pi >/dev/null 2>&1; then
+		echo "ERROR: pi CLI not found" >&2
+		exit 1
+	fi
+
+	# pi -p: 非交互模式（处理完 prompt 即退出）
+	# - settings.json 已配置 globalContext 自动加载 ~/.config/agents/context/
+	# - settings.json 已配置 skills 自动加载 ~/.config/agents/skills/* 含 self-improving / kb-curator
+	# - kb-hooks extension 在 session_start 自动注入 KB 状态摘要到 system prompt
+	# 注: pi CLI 没有 subagent 参数,subagent 体系仅在 TUI 内通过工具调用;
+	#     主 agent 配合自动加载的 skill 上下文已足够执行 kb 策展/审查任务。
+	local -a cmd=(pi -p)
+	[[ -n "$KB_AGENT_MODEL" ]] && cmd+=(--model "$KB_AGENT_MODEL")
+	cmd+=("$task")
+
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] ${cmd[*]}"
+		return
+	fi
+
+	"${cmd[@]}" 2>&1 || true
+}
+
+run_opencode() {
+	local task="$1"
+	if ! command -v opencode >/dev/null 2>&1; then
+		echo "ERROR: opencode CLI not found" >&2
+		exit 1
+	fi
+
+	# opencode run: 使用 build (primary) agent
+	# - 通过 --file 显式附加 self-improving / kb-curator skill 上下文
+	# - 通过 --title 标记会话便于追溯（所有 kb-agent 任务聚合到同一 title）
+	# - 全局指令由 opencode.json 的 instructions 字段自动加载
+	# 注意 yargs greedy: --file [array] 会吞掉后续所有非 flag positional,
+	# 把 task 字符串错认为 file 路径 → "File not found: <中文 task>"。
+	# 修复: task 必须在所有 --file 之前。
+	local -a cmd=(opencode run --agent build --title "kb-agent:$ACTION")
+	[[ -n "$KB_AGENT_MODEL" ]] && cmd+=(--model "$KB_AGENT_MODEL")
+	cmd+=("$task")
+	[[ -f "$HOME/.config/agents/skills/self-improving/SKILL.md" ]] &&
+		cmd+=(--file "$HOME/.config/agents/skills/self-improving/SKILL.md")
+	[[ -f "$HOME/.config/agents/skills/kb-curator/SKILL.md" ]] &&
+		cmd+=(--file "$HOME/.config/agents/skills/kb-curator/SKILL.md")
+
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] ${cmd[*]}"
+		return
+	fi
+
+	"${cmd[@]}" 2>&1 || true
+}
+
+run_crush() {
+	local task="$1"
+	if ! command -v crush >/dev/null 2>&1; then
+		echo "ERROR: crush CLI not found" >&2
+		exit 1
+	fi
+
+	# crush run: 无 subagent 系统，使用默认 persona
+	# - 依赖 crush.json 的 context_paths 自动加载 MEMORY.org / 全局指令
+	# - initialize_as: "AGENTS.md" 让 crush 读取仓库根 AGENTS.md
+	# - --cwd 设为 $HOME 确保 initialize_as 路径解析正确
+	local -a cmd=(crush run --quiet --cwd "$HOME")
+	[[ -n "$KB_AGENT_MODEL" ]] && cmd+=(--model "$KB_AGENT_MODEL")
+	cmd+=("$task")
+
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] ${cmd[*]}"
+		return
+	fi
+
+	"${cmd[@]}" 2>&1 || true
+}
+
+run_direct() {
+	local task="$1"
+
+	if [[ "$KB_DRY_RUN" == "1" ]]; then
+		echo "[DRY RUN] direct — $task"
+		return
+	fi
+
+	# 直接运行 kb 命令（不经过 AI agent）
+	echo "=== 直接执行模式 ==="
+	echo "任务: $task"
+	echo ""
+
+	# 使用源文件（未部署时 ~/.local/bin/kb 可能是旧版）
+	local kb_cmd
+	kb_cmd="python3 \"$(dirname "$(readlink -f "$0")")/kb\""
+
+	case "$task" in
+	*health* | *健康*)
+		eval "$kb_cmd health" 2>&1 || true
+		;;
+	*deduplicate* | *重复*)
+		eval "$kb_cmd deduplicate" 2>&1 || true
+		;;
+	*archive* | *归档*)
+		eval "$kb_cmd archive --stale" 2>&1 || true
+		;;
+	*reindex* | *索引*)
+		eval "$kb_cmd reindex" 2>&1 || true
+		;;
+	*)
+		echo "未知直接执行任务: $task"
+		;;
+	esac
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 主逻辑
+# ═══════════════════════════════════════════════════════════════════════════════
+
+usage() {
+	cat <<EOF
+kb-agent — 知识库策展/审查自动化代理
+
+用法: kb-agent <操作> [选项]
+
+操作:
+  curate        执行完整策展
+  review        对话后审查（传入摘要）
+  health        知识库健康检查
+  self-improve  同 review
+
+选项:
+  --backend <pi|opencode|crush>   覆盖后端（默认: $KB_AGENT_BACKEND）
+  --model <model>                  覆盖模型
+  --timeout <seconds>              超时（默认: $KB_AGENT_TIMEOUT）
+  --dry-run                        仅打印将要执行的操作
+
+环境变量:
+  KB_AGENT_BACKEND   后端选择
+  KB_AGENT_MODEL     模型覆盖
+  KB_AGENT_TIMEOUT   超时秒数
+  KB_DRY_RUN         设为 1 启用 dry-run
+  EXTRA_CONTEXT      追加到任务描述的额外上下文（如对话摘要）
+
+配置文件: $KB_AGENT_CONFIG
+EOF
+}
+
+ACTION=""
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	curate | review | health | self-improve)
+		ACTION="$1"
+		shift
+		;;
+	--backend)
+		KB_AGENT_BACKEND="$2"
+		shift 2
+		;;
+	--model)
+		KB_AGENT_MODEL="$2"
+		shift 2
+		;;
+	--timeout)
+		KB_AGENT_TIMEOUT="$2"
+		shift 2
+		;;
+	--dry-run)
+		KB_DRY_RUN=1
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "未知参数: $1" >&2
+		usage >&2
+		exit 1
+		;;
+	esac
+done
+
+if [[ -z "$ACTION" ]]; then
+	usage
+	exit 1
+fi
+
+# 选择任务
+TASK=""
+case "$ACTION" in
+curate) TASK="$CURATE_TASK" ;;
+review) TASK="$REVIEW_TASK" ;;
+health) TASK="$HEALTH_TASK" ;;
+self-improve) TASK="$REVIEW_TASK" ;;
+esac
+
+# 注入额外上下文
+EXTRA_CONTEXT="${EXTRA_CONTEXT:-}"
+if [[ -n "$EXTRA_CONTEXT" ]]; then
+	TASK="${TASK}"$'\n\n--- 对话上下文 ---\n'"${EXTRA_CONTEXT}"
+fi
+
+# 执行
+echo "=== kb-agent: $ACTION (backend=$KB_AGENT_BACKEND) ==="
+case "$KB_AGENT_BACKEND" in
+pi) run_pi "$TASK" ;;
+opencode) run_opencode "$TASK" ;;
+crush) run_crush "$TASK" ;;
+direct) run_direct "$TASK" ;;
+*)
+	echo "ERROR: 未知后端: $KB_AGENT_BACKEND" >&2
+	echo "可用后端: pi, opencode, crush, direct" >&2
+	exit 1
+	;;
+esac

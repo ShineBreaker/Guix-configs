@@ -9,14 +9,14 @@ import os
 import re
 import sys
 
-from kb_lib.core import KB_EXPERIENCES, die
+from kb_lib.core import die, default_context
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # lint 命令 — 格式校验与修复
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def cmd_lint(args: argparse.Namespace) -> None:
+def cmd_lint(args: argparse.Namespace, ctx=None) -> None:
     """
     检测 Org 文件中的 Markdown 残留语法，自动修复为正确的 Org 格式。
 
@@ -28,10 +28,11 @@ def cmd_lint(args: argparse.Namespace) -> None:
       5. `inline code`   → ~inline code~
       6. Org 行内标记(~code~ / *bold*)外部空格检查与修复
     """
+    ctx = ctx or default_context()
     target_files = args.files
     if not target_files:
         target_files = sorted(
-            f for f in KB_EXPERIENCES.rglob("*.org") if not f.is_symlink()
+            f for f in ctx.experiences.rglob("*.org") if not f.is_symlink()
         )
         target_files = [str(p) for p in target_files]
 
