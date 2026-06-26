@@ -3,31 +3,29 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * status-bar.ts — starship 风格状态栏（替换 footer）
+ * status-bar.ts — 精简版 status bar（footer）
  *
  * 设计参考：
  *   - Emacs modeline.el：4 档宽度 (wide/medium/narrow/compact)、`·` 分隔、
  *     语义颜色、Nerd Font 图标优先 + 降级到空串
  *   - starship.toml：`·` 分隔符
- *   - pi-powerline-footer icons.ts：Nerd Font 图标码位
  *
- * 段顺序（按重要度）：model · path · git · thinking · context · tokens · timeSpent · time
+ * 段顺序：path · git · time
+ *
+ * model / thinking / context / tokens 已搬到 pet widget 左列展示，
+ * footer 只保留位置信息（path/git）和时间信息（time）。会话时长由 pet widget 左列展示。
  *
  * 宽度档（同 Emacs modeline）：
- *   - wide    (>= 120): 全部 8 段，完整信息
- *   - medium  (100-119): 省略 time，压缩次要段
- *   - narrow   (80-99):  省略 time + timeSpent + tokens，git 只显分支名
- *   - compact  (< 80):   只显 model · context%
- *
- * 颜色阈值（同 Emacs modeline + powerline-footer）：
- *   - context >90% → error（红色）
- *   - context >70% → warning（黄色）
- *   - context  ≤70% → dim
- *   - thinking high/xhigh → rainbow
+ *   - wide    (>= 120): 全部 4 段
+ *   - medium  (100-119): 省略 time
+ *   - narrow   (80-99):  只显 path · git
+ *   - compact  (< 80):   只显 path
  */
 
 import { homedir } from "node:os";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
+import { existsSync } from "node:fs";
+import { execSync } from "node:child_process";
 import type {
   Theme,
   ReadonlyFooterDataProvider,
@@ -36,7 +34,7 @@ import type { Component } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Nerd Font 检测 + 图标（与 welcome-box.ts 共享检测逻辑）
+// Nerd Font 检测 + 图标
 // ═══════════════════════════════════════════════════════════════════════════
 
 function detectNerdFont(): boolean {
@@ -64,59 +62,56 @@ function detectNerdFont(): boolean {
   if (term.includes("xterm") && colorTerm.includes("truecolor")) return true;
   const termName = (process.env.TERM ?? "").toLowerCase();
   if (termName.includes("nerd") || termName.includes("nf-")) return true;
-  // tmux 内假定外层 terminal 支持 Nerd Font
   if (process.env.TMUX) return true;
   return false;
 }
 
 const NF = detectNerdFont();
 
-/**
- * 图标集：Nerd Font codepoint 从 pi-powerline-footer icons.ts 搬运，
- * 保证视觉一致性。ASCII 降级到简短的纯文本标识。
- */
 const IC = {
-  // model / AI chip
-  model:         NF ? "\uEC19" : "m",
   // folder open
-  folder:        NF ? "\uF115" : "dir",
+  folder: NF ? "\uF115" : "dir",
   // git branch (code fork)
-  branch:        NF ? "\uF126" : "b",
-  // thinking/minimal: lightning bolt
-  thinkMin:      NF ? "\uF0E7" : "T_",
-  // thinking/low: circle outline
-  thinkLow:      NF ? "\uF10C" : "T-",
-  // thinking/medium: dot circle
-  thinkMed:      NF ? "\uF192" : "T",
-  // thinking/high: filled circle
-  thinkHigh:     NF ? "\uF111" : "T+",
-  // thinking/xhigh: fire
-  thinkXHigh:    NF ? "\uF06D" : "T!",
-  // tokens
-  tokens:        NF ? "\uE26B" : "t",
-  // context / database
-  context:       NF ? "\uE70F" : "c",
-  // dollar / cost
-  cost:          NF ? "\uF155" : "$",
+  branch: NF ? "\uF126" : "b",
+  // git ahead (upload) / behind (download) — ↑ ↓ 是 BMP 符号，非 emoji
+  ahead: "\u2191", // ↑
+  behind: "\u2193", // ↓
+  // commit (bullet / circle-dot)
+  commit: NF ? "\uF418" : "@",
   // clock
-  clock:         NF ? "\uF017" : "t",
+  clock: NF ? "\uF017" : "t",
   // separator（starship 风格 · ）
-  sep:           " · ",
+  sep: " · ",
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 类型 + 宽度档
 // ═══════════════════════════════════════════════════════════════════════════
 
+function fmtDuration(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}h${m % 60}m`;
+  if (m > 0) return `${m}m${s % 60}s`;
+  return `${s}s`;
+}
+
+/**
+ * FooterState — footer + pet widget 共享的会话状态。
+ * status-bar.ts 只用 cwd/gitBranch/sessionStartMs 三字段；
+ * 其余字段供 pet.ts 读 modelName/thinkingLevel/contextPercent 等。
+ */
 export interface FooterState {
-  modelName: string;
-  thinkingLevel: string;
   cwd: string;
   gitBranch: string | null;
-  contextPercent: number | null;
-  contextTokens: number | null;
-  contextWindow: number;
   sessionStartMs: number;
+  /** pet widget 使用；status-bar 不读 */
+  modelName?: string;
+  thinkingLevel?: string;
+  contextPercent?: number | null;
+  contextTokens?: number | null;
+  contextWindow?: number;
 }
 
 export type WidthTier = "wide" | "medium" | "narrow" | "compact";
@@ -128,118 +123,147 @@ export function getTier(width: number): WidthTier {
   return "compact";
 }
 
-export type ContextColor = "dim" | "warning" | "error";
-
-export function contextColor(percent: number | null): ContextColor {
-  if (percent === null) return "dim";
-  if (percent >= 90) return "error";
-  if (percent >= 70) return "warning";
-  return "dim";
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 各段渲染器
-// ═══════════════════════════════════════════════════════════════════════════
-
-function fmtTokens(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
-  if (n < 1000000) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1000000).toFixed(1)}M`;
-}
-
-function fmtDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}h${m % 60}m`;
-  if (m > 0) return `${m}m${s % 60}s`;
-  return `${s}s`;
-}
-
 function iconText(icon: string, text: string): string {
   if (!text) return "";
   if (!icon) return text;
   return `${icon} ${text}`;
 }
 
-/** 模型名缩写（去掉 "Claude " 前缀） */
-function shortModel(name: string): string {
-  if (name.startsWith("Claude ")) return name.slice(7);
-  return name;
+// Git dirty 计数缓存：5s 内复用，避免每帧 fork `git status`
+let _dirtyCache: { count: number; fetchedAt: number } = {
+  count: 0,
+  fetchedAt: 0,
+};
+function getGitDirtyCount(): number {
+  const now = Date.now();
+  if (now - _dirtyCache.fetchedAt < 5000) return _dirtyCache.count;
+  try {
+    const out = execSync("git status --porcelain 2>/dev/null | wc -l", {
+      encoding: "utf-8",
+      timeout: 1000,
+    }).trim();
+    const n = parseInt(out, 10) || 0;
+    _dirtyCache = { count: n, fetchedAt: now };
+    return n;
+  } catch {
+    return 0;
+  }
 }
 
-// ── 各段 ──
+// ═══════════════════════════════════════════════════════════════════════════
+// 各段渲染器
+// ═══════════════════════════════════════════════════════════════════════════
 
 function segPath(state: FooterState, theme: Theme): string {
   const pwd = basename(state.cwd || homedir()) || "?";
   return theme.fg("accent", iconText(IC.folder, pwd));
 }
 
-function segGit(state: FooterState, theme: Theme, tier: WidthTier): string {
+function segGit(state: FooterState, theme: Theme): string {
   if (!state.gitBranch) return "";
-  const branch = tier === "narrow"
-    ? state.gitBranch
-    : state.gitBranch;
-  return theme.fg("accent", iconText(IC.branch, branch));
+  const dirty = getGitDirtyCount();
+  const dirtyMark = dirty > 0 ? ` ${theme.fg("warning", `●${dirty}`)}` : "";
+  return theme.fg("accent", iconText(IC.branch, state.gitBranch)) + dirtyMark;
 }
-
-function segThinking(state: FooterState, theme: Theme): string {
-  const level = state.thinkingLevel || "off";
-  if (level === "off") return "";
-
-  const map: Record<string, { icon: string; label: string }> = {
-    minimal: { icon: IC.thinkMin, label: "min" },
-    low: { icon: IC.thinkLow, label: "low" },
-    medium: { icon: IC.thinkMed, label: "med" },
-    high: { icon: IC.thinkHigh, label: "high" },
-    xhigh: { icon: IC.thinkXHigh, label: "xhi" },
-  };
-  const info = map[level];
-  if (!info) return "";
-
-  // high / xhigh → rainbow（模拟：多色拼接，简单化用绿色警告色）
-  if (level === "high" || level === "xhigh") {
-    // rainbow：用成功色（绿）= pi theme 没有 true rainbow，用 success 代替
-    return `${theme.fg("success", info.icon)} ${theme.fg("success", info.label)}`;
+// Git ahead/behind：本地与 @{u} 的差距（仅当 branch 存在时）
+let _aheadBehindCache: { text: string; fetchedAt: number } = {
+  text: "",
+  fetchedAt: 0,
+};
+function getAheadBehind(): string {
+  const now = Date.now();
+  if (now - _aheadBehindCache.fetchedAt < 5000) return _aheadBehindCache.text;
+  try {
+    const out = execSync(
+      "git rev-list --count --left-right @{u}...HEAD 2>/dev/null",
+      {
+        encoding: "utf-8",
+        timeout: 1000,
+      },
+    ).trim();
+    // 输出格式 "behind\t ahead"（左=behind, 右=ahead）
+    const [behind, ahead] = out.split(/\s+/).map((n) => parseInt(n, 10) || 0);
+    let text = "";
+    if (ahead > 0) text += `\u2191${ahead}`;
+    if (behind > 0) text += (text ? " " : "") + `\u2193${behind}`;
+    _aheadBehindCache = { text, fetchedAt: now };
+    return text;
+  } catch {
+    return "";
   }
-  if (level === "minimal") {
-    return `${theme.fg("dim", info.icon)} ${theme.fg("dim", info.label)}`;
+}
+function segAheadBehind(state: FooterState, theme: Theme): string {
+  if (!state.gitBranch) return "";
+  const text = getAheadBehind();
+  if (!text) return "";
+  return theme.fg("muted", text);
+}
+
+// Git HEAD commit 短 hash：8s 缓存
+let _hashCache: { text: string; fetchedAt: number } = {
+  text: "",
+  fetchedAt: 0,
+};
+function getHeadHash(): string {
+  const now = Date.now();
+  if (now - _hashCache.fetchedAt < 8000) return _hashCache.text;
+  try {
+    const out = execSync("git rev-parse --short HEAD 2>/dev/null", {
+      encoding: "utf-8",
+      timeout: 1000,
+    }).trim();
+    _hashCache = { text: out, fetchedAt: now };
+    return out;
+  } catch {
+    return "";
   }
-  return `${theme.fg("accent", info.icon)} ${theme.fg("accent", info.label)}`;
+}
+function segHash(state: FooterState, theme: Theme): string {
+  if (!state.gitBranch) return "";
+  const h = getHeadHash();
+  if (!h) return "";
+  return theme.fg("muted", `${IC.commit}${h}`);
 }
 
-function segModel(state: FooterState, theme: Theme): string {
-  return theme.fg("accent", iconText(IC.model, shortModel(state.modelName)));
-}
-
-function segTokenTotal(state: FooterState, theme: Theme): string {
-  const n = state.contextTokens;
-  if (n === null || n === undefined || n <= 0) return "";
-  return theme.fg("dim", iconText(IC.tokens, fmtTokens(n)));
-}
-
-function segContext(state: FooterState, theme: Theme, tier: WidthTier): string {
-  const pct = state.contextPercent;
-  const window = state.contextWindow;
-  const color = contextColor(pct);
-
-  if (pct === null) {
-    return theme.fg("dim", iconText(IC.context, "n/a"));
+// 项目语言检测：cwd 下扫特征文件，1h 缓存（项目类型极少变化）
+let _langCache: { text: string; fetchedAt: number; cwd: string } = {
+  text: "",
+  fetchedAt: 0,
+  cwd: "",
+};
+function detectProjectLang(cwd: string): string {
+  const now = Date.now();
+  if (_langCache.cwd === cwd && now - _langCache.fetchedAt < 3_600_000)
+    return _langCache.text;
+  // 优先级排序：具体语言 > 通用
+  const probes: Array<[string, string, string]> = [
+    ["package.json", "\uE712", "Node"],
+    ["Cargo.toml", "\uE7A8", "Rust"],
+    ["pyproject.toml", "\uE73C", "Python"],
+    ["go.mod", "\uE626", "Go"],
+    ["flake.nix", "\uF313", "Nix"],
+    ["channel.scm", "\uF0CB", "Guix"],
+    ["manifest.scm", "\uF0CB", "Guix"],
+  ];
+  let detected = "";
+  let icon = "\uF07C";
+  let label = "";
+  for (const [file, ic, lbl] of probes) {
+    if (existsSync(join(cwd, file))) {
+      icon = ic;
+      label = lbl;
+      detected = file;
+      break;
+    }
   }
-
-  const pctStr = `${Math.round(pct)}%`;
-  const text = tier === "wide" || tier === "medium"
-    ? `${pctStr}/${fmtTokens(window)}`
-    : pctStr;
-
-  return `${theme.fg(color, IC.context)} ${theme.fg(color, text)}`;
+  const text = label ? `${icon} ${label}` : "";
+  _langCache = { text, fetchedAt: now, cwd };
+  return text;
 }
-
-function segTimeSpent(state: FooterState, theme: Theme): string {
-  const elapsed = Date.now() - state.sessionStartMs;
-  if (elapsed < 1000) return "";
-  return theme.fg("dim", iconText(IC.clock, fmtDuration(elapsed)));
+function segLanguage(state: FooterState, theme: Theme): string {
+  const text = detectProjectLang(state.cwd || process.cwd());
+  if (!text) return "";
+  return theme.fg("dim", text);
 }
 
 function segTime(_state: FooterState, theme: Theme): string {
@@ -251,7 +275,7 @@ function segTime(_state: FooterState, theme: Theme): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 组装：按 tier 选段，超出宽度时从末尾按优先级省略
+// 组装：按 tier 选段
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface SegSpec {
@@ -261,48 +285,43 @@ interface SegSpec {
   render: () => string;
 }
 
-function buildSegments(state: FooterState, theme: Theme, tier: WidthTier): SegSpec[] {
+function buildSegments(
+  state: FooterState,
+  theme: Theme,
+  tier: WidthTier,
+): SegSpec[] {
   const all: SegSpec[] = [];
 
-  // model 始终渲染
-  all.push({ id: "model", priority: 99, render: () => segModel(state, theme) });
-
-  // path（compact 省略）
-  if (tier !== "compact") {
-    all.push({ id: "path", priority: 60, render: () => segPath(state, theme) });
-  }
-
-  // git
+  // path（compact 也保留）
+  all.push({ id: "path", priority: 60, render: () => segPath(state, theme) });
+  // git（compact 省略）
   if (tier !== "compact" && state.gitBranch) {
-    all.push({ id: "git", priority: 50, render: () => segGit(state, theme, tier) });
+    all.push({ id: "git", priority: 50, render: () => segGit(state, theme) });
+
+    // ahead/behind（narrow 省略）
+    if (tier !== "narrow") {
+      const ab = segAheadBehind(state, theme);
+      if (ab) all.push({ id: "aheadBehind", priority: 40, render: () => ab });
+    }
+
+    // commit hash（仅 wide）
+    if (tier === "wide") {
+      const h = segHash(state, theme);
+      if (h) all.push({ id: "hash", priority: 35, render: () => h });
+    }
   }
 
-  // thinking
-  if (tier !== "compact" && state.thinkingLevel !== "off") {
-    all.push({ id: "thinking", priority: 40, render: () => segThinking(state, theme) });
-  }
-
-  // context 始终渲染
-  all.push({ id: "context", priority: 80, render: () => segContext(state, theme, tier) });
-
-  // token total（narrow/compact 省略）
+  // 项目语言（wide/medium 保留）
   if (tier === "wide" || tier === "medium") {
-    const t = segTokenTotal(state, theme);
-    if (t) all.push({ id: "tokens", priority: 30, render: () => t });
+    const l = segLanguage(state, theme);
+    if (l) all.push({ id: "lang", priority: 30, render: () => l });
   }
 
-  // timeSpent（narrow/compact 省略）
-  if (tier !== "narrow" && tier !== "compact") {
-    const ts = segTimeSpent(state, theme);
-    if (ts) all.push({ id: "timeSpent", priority: 20, render: () => ts });
-  }
-
-  // time（仅 wide 显示）
-  if (tier === "wide") {
+  // time（narrow/compact 省略）
+  if (tier === "wide" || tier === "medium") {
     all.push({ id: "time", priority: 10, render: () => segTime(state, theme) });
   }
 
-  // 按 priority 降序排列，确保高优先级段先被保留
   all.sort((a, b) => b.priority - a.priority);
   return all;
 }
@@ -310,8 +329,8 @@ function buildSegments(state: FooterState, theme: Theme, tier: WidthTier): SegSp
 function assembleLine(segs: SegSpec[], sep: string, maxWidth: number): string {
   if (segs.length === 0) return "";
 
-  // 重新按原始顺序排列（model · path · git · thinking · context · tokens · timeSpent · time）
-  const order = ["model", "path", "git", "thinking", "context", "tokens", "timeSpent", "time"];
+  // 按原始顺序排列（path · git · aheadBehind · hash · lang · time）
+  const order = ["path", "git", "aheadBehind", "hash", "lang", "time"];
   const ordered = order
     .map((id) => segs.find((s) => s.id === id))
     .filter((s): s is SegSpec => !!s);
@@ -321,17 +340,15 @@ function assembleLine(segs: SegSpec[], sep: string, maxWidth: number): string {
   const sepVw = visibleWidth(sep);
 
   for (let dropCount = 0; dropCount < ordered.length; dropCount++) {
-    // 不能省略 model 或 context
     const toDrop = ordered[ordered.length - 1 - dropCount];
     if (!toDrop) break;
-    if (toDrop.id === "model" || toDrop.id === "context") continue;
 
-    const totalVw = parts.reduce((sum, p) => sum + visibleWidth(p), 0)
-      + (parts.length - 1) * sepVw;
+    const totalVw =
+      parts.reduce((sum, p) => sum + visibleWidth(p), 0) +
+      (parts.length - 1) * sepVw;
 
     if (totalVw <= maxWidth) break;
 
-    // 省略当前最低优先级段
     const idx = ordered.indexOf(toDrop);
     if (idx >= 0) parts.splice(idx, 1);
   }
@@ -340,51 +357,73 @@ function assembleLine(segs: SegSpec[], sep: string, maxWidth: number): string {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Footer factory
+// Widget factory（aboveEditor placement，status bar 渲染到 editor 之上）
 // ═══════════════════════════════════════════════════════════════════════════
-
-export function createStatusBar(getState: () => FooterState) {
-  return function statusBarFactory(
-    _tui: unknown,
-    theme: Theme,
-    footerData: ReadonlyFooterDataProvider,
-  ): Component {
+//
+// 参考 pi-powerline-footer：不用 setExtensionFooter 替换内置 footer，
+// 而是用 setExtensionFooter(emptyFactory) 隐藏内置 footer + setWidget
+// 把状态栏注册到 aboveEditor。setExtensionFooter 工厂闭包内捕获
+// footerData 引用，由 getGitBranch() 在每次 render 时实时读。
+// 内部 setInterval(1000) 调 tui.requestRender() 触发 time / * time 自动更新。
+//
+export function createStatusBarWidget(
+  getState: () => FooterState,
+  getGitBranch: () => string | null,
+): (_tui: unknown, theme: Theme) => Component {
+  return (_tui, theme) => {
+    // 每秒 requestRender：tui.requestRender 内部有 renderRequested 防重入，
+    // time/duration 每秒变化时 widget render 会重画，与聊天输出不会冲突。
+    const tui = _tui as { requestRender: () => void } | null;
+    const interval = setInterval(() => tui?.requestRender?.(), 1000);
     let lastTier: WidthTier = "wide";
     let lastWidth = -1;
     let cached: string[] = [];
-
     return {
-      invalidate(): void {
-        lastWidth = -1;
-        cached = [];
+      dispose(): void {
+        clearInterval(interval);
       },
+      invalidate(): void {},
       render(width: number): string[] {
-        const branch = footerData.getGitBranch();
-        const s = getState();
         const state: FooterState = {
-          ...s,
-          gitBranch: branch,
+          ...getState(),
+          gitBranch: getGitBranch(),
         };
-
         const tier = getTier(width);
         const segs = buildSegments(state, theme, tier);
         let line = assembleLine(segs, theme.fg("muted", IC.sep), width);
-
-        // 如果仍然超宽，强制截断
         if (visibleWidth(line) > width) {
           line = truncateToWidth(line, width, "");
         }
-
-        // 填充到终端宽度（status bar 始终占满一行）
         const vw = visibleWidth(line);
         const padded = vw < width ? line + " ".repeat(width - vw) : line;
-
         if (tier !== lastTier || width !== lastWidth || cached[0] !== padded) {
           lastTier = tier;
           lastWidth = width;
           cached = [padded];
         }
         return cached;
+      },
+    };
+  };
+}
+/**
+ * 空 footer 工厂 —— 隐藏 pi 内置 footer（仍在 ui 树最底，但视觉上不可见）。
+ * 闭包内捕获 footerData 引用供 status bar widget 读 git branch。
+ */
+export function createEmptyFooter(
+  onCreated?: (footerData: ReadonlyFooterDataProvider) => void,
+): (
+  tui: unknown,
+  theme: Theme,
+  footerData: ReadonlyFooterDataProvider,
+) => Component {
+  return (_tui, _theme, footerData) => {
+    onCreated?.(footerData);
+    return {
+      dispose(): void {},
+      invalidate(): void {},
+      render(): string[] {
+        return [];
       },
     };
   };

@@ -78,29 +78,31 @@ const NERD_FONTS = detectNerdFont();
 
 const ICON = {
   // 灯泡（tips）
-  tips:      NERD_FONTS ? "\uF0EB" : "",
+  tips: NERD_FONTS ? "\uF0EB" : "",
   // 立方体（loaded）
-  loaded:    NERD_FONTS ? "\uF1B3" : "",
+  loaded: NERD_FONTS ? "\uF1B3" : "",
   // 时钟（recent）
-  recent:    NERD_FONTS ? "\uF017" : "",
-// 记事本（agenote）— nf-md-notebook
-  agenote:   NERD_FONTS ? "\uF562" : "kb",
+  recent: NERD_FONTS ? "\uF017" : "",
+  // 记事本（agenote）— nf-md-notebook
+  agenote: NERD_FONTS ? "\uF562" : "kb",
   // 小点
-  dot:       NERD_FONTS ? "\uF192" : "*",
+  dot: NERD_FONTS ? "\uF192" : "*",
   // 扩展（cube）
-  ext:       NERD_FONTS ? "\uF1B2" : "ext",
+  ext: NERD_FONTS ? "\uF1B2" : "ext",
   // prompt template
-  template:  NERD_FONTS ? "\uF0F6" : "tpl",
+  template: NERD_FONTS ? "\uF0F6" : "tpl",
   // context file
-  ctxFile:   NERD_FONTS ? "\uF15B" : "ctx",
+  ctxFile: NERD_FONTS ? "\uF15B" : "ctx",
   // tool
-  tool:      NERD_FONTS ? "\uEC19" : "tool",
+  tool: NERD_FONTS ? "\uEC19" : "tool",
   // skill
-  skill:     NERD_FONTS ? "\uF13D" : "skl",
+  skill: NERD_FONTS ? "\uF13D" : "skl",
   // 健康状态图标
-  ok:        "\u2705",
-  warn:      "\u26A0\uFE0F",
-  error:     "\u274C",
+  ok: "\u2705",
+  warn: "\u26A0\uFE0F",
+  error: "\u274C",
+  // 天气（默认 sunny；时辰问候按 hour 切换具体图标）
+  weather: NERD_FONTS ? "\uF185" : "", // nf-md-weather-sunny 兜底
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -124,19 +126,22 @@ const PI_LOGO = [
  * - phase>0: 每段色相随 phase 循环（彩虹呼吸动画）
  * 空格保留为不可见字符。
  */
-function gradientLine(line: string, phase: number): string {
+function gradientLine(line: string, phase: number, modelFlash: number): string {
   const step = Math.max(1, Math.floor(line.length / LOGO_GRADIENT.length));
   let result = "";
   let stopIdx = 0;
+  // modelFlash>0 时叠加色相偏移，让 logo 跟着 model 文本"闪一下"
+  const flashHue = modelFlash > 0 ? 60 : 0;
   for (let i = 0; i < line.length; i++) {
-    if (i > 0 && i % step === 0 && stopIdx < LOGO_GRADIENT.length - 1) stopIdx++;
+    if (i > 0 && i % step === 0 && stopIdx < LOGO_GRADIENT.length - 1)
+      stopIdx++;
     const char = line[i];
     if (char === " ") {
       result += char;
     } else {
       const stop = LOGO_GRADIENT[stopIdx]!;
       // 动画时加相位偏移，phase=0 时偏移=0，保持基色
-      const h = stop.h + phase * LOGO_COLOR_SPEED;
+      const h = stop.h + phase * LOGO_COLOR_SPEED + flashHue;
       result += fg(h, stop.s, stop.l) + char + RESET;
     }
   }
@@ -188,7 +193,9 @@ function buildLeftColumn(
   modelFlash: number,
 ): string[] {
   // 1. Logo 彩虹呼吸：phase=0 为静态基色，phase>0 随 phase 循环
-  const logo = PI_LOGO.map((line) => centerText(gradientLine(line, phase), width));
+  const logo = PI_LOGO.map((line) =>
+    centerText(gradientLine(line, phase, modelFlash), width),
+  );
 
   // 2. Model name 闪烁：modelFlash>0 时在 MODEL_FLASH_COLORS 间循环
   let modelText: string;
@@ -200,9 +207,37 @@ function buildLeftColumn(
     modelText = theme.fg("accent", data.modelName);
   }
 
+  // 时辰问候：5-11 morning / 12-17 afternoon / 18-21 evening / 22-1 night / 2-5 late night
+  const hour = new Date().getHours();
+  let timeIcon: string = ICON.weather; // default sunny（显式 string 以突破 as const 字面量收窄）
+  let timeLabel = "morning";
+  if (hour >= 2 && hour < 5) {
+    timeIcon = "\uF173";
+    timeLabel = "late night";
+  } // nf-md-weather-night-partly-cloudy
+  else if (hour >= 5 && hour < 12) {
+    timeIcon = "\uF185";
+    timeLabel = "morning";
+  } // nf-md-weather-sunny
+  else if (hour >= 12 && hour < 18) {
+    timeIcon = "\uF172";
+    timeLabel = "afternoon";
+  } // nf-md-weather-partly-cloudy
+  else if (hour >= 18 && hour < 22) {
+    timeIcon = "\uF179";
+    timeLabel = "evening";
+  } // nf-md-weather-sunset
+  else {
+    timeIcon = "\uF176";
+    timeLabel = "night";
+  } // nf-md-weather-night
+  const greeting = timeIcon
+    ? `Welcome back!  ${timeIcon} ${timeLabel}`
+    : `Welcome back!  ${timeLabel}`;
+
   return [
     "",
-    centerText(theme.bold(theme.fg("accent", "Welcome back!")), width),
+    centerText(theme.bold(theme.fg("accent", greeting)), width),
     "",
     ...logo,
     "",
@@ -256,13 +291,21 @@ function buildRightColumn(
         : `${ctxReadable}/${ctxCount} context files`;
   // fastfetch 风格：图标 + 值，无圆点前缀
   lines.push(` ${theme.fg("muted", `${ICON.ctxFile} ${ctxStr}`)}`);
-  lines.push(` ${theme.fg("muted", `${ICON.tool} ${data.loaded.tools} tools`)}`);
-  lines.push(` ${theme.fg("muted", `${ICON.skill} ${data.loaded.skills} skills`)}`);
+  lines.push(
+    ` ${theme.fg("muted", `${ICON.tool} ${data.loaded.tools} tools`)}`,
+  );
+  lines.push(
+    ` ${theme.fg("muted", `${ICON.skill} ${data.loaded.skills} skills`)}`,
+  );
   if (data.loaded.extensions > 0) {
-    lines.push(` ${theme.fg("muted", `${ICON.ext} ${data.loaded.extensions} extensions`)}`);
+    lines.push(
+      ` ${theme.fg("muted", `${ICON.ext} ${data.loaded.extensions} extensions`)}`,
+    );
   }
   if (data.loaded.templates > 0) {
-    lines.push(` ${theme.fg("muted", `${ICON.template} ${data.loaded.templates} templates`)}`);
+    lines.push(
+      ` ${theme.fg("muted", `${ICON.template} ${data.loaded.templates} templates`)}`,
+    );
   }
   lines.push(sep);
 
@@ -273,24 +316,45 @@ function buildRightColumn(
     lines.push(
       ` ${theme.fg("muted", `${a.cards.total} cards (done: ${a.cards.done}, stable: ${a.cards.stable})`)}`,
     );
-    // 严重指标图标加脉冲：sin 波调整亮度
-    const pulse = 0.5 + 0.5 * Math.sin(anim.phase * 0.13);
+    // 严重指标图标加脉冲：ok 不脉冲；warn 慢脉冲（~1.5s 周期）；error 快脉冲（~600ms 周期）
     for (const m of a.metrics) {
       const baseColor = STATUS_BASE[m.status];
-      const l = baseColor.l + (m.status === "ok" ? 0 : (pulse - 0.5) * 0.15);
-      const statusIcon = m.status === "ok" ? ICON.ok : m.status === "warn" ? ICON.warn : ICON.error;
+      let l = baseColor.l;
+      if (m.status === "warn") {
+        const pulse = 0.5 + 0.5 * Math.sin(anim.phase * 0.04);
+        l = baseColor.l + (pulse - 0.5) * 0.15;
+      } else if (m.status === "error") {
+        const pulse = 0.5 + 0.5 * Math.sin(anim.phase * 0.16);
+        l = baseColor.l + (pulse - 0.5) * 0.25;
+      }
+      const statusIcon =
+        m.status === "ok"
+          ? ICON.ok
+          : m.status === "warn"
+            ? ICON.warn
+            : ICON.error;
       const name = theme.fg("muted", m.name);
-      const value = theme.fg(baseColor.h < 30 ? "error" : baseColor.h < 100 ? "warning" : "success", m.value);
-      const thr = theme.fg(baseColor.h < 30 ? "error" : baseColor.h < 100 ? "warning" : "success", `[${m.threshold}]`);
+      const value = theme.fg(
+        baseColor.h < 30 ? "error" : baseColor.h < 100 ? "warning" : "success",
+        m.value,
+      );
+      const thr = theme.fg(
+        baseColor.h < 30 ? "error" : baseColor.h < 100 ? "warning" : "success",
+        `[${m.threshold}]`,
+      );
       const icon = fg(baseColor.h, baseColor.s, l) + statusIcon + RESET;
       lines.push(` ${name} ${value} ${thr} ${icon}`);
     }
     if (a.feedback.total > 0) {
-      lines.push(` ${theme.fg("muted", `feedback: ${a.feedback.total} (stale: ${a.feedback.stale})`)}`);
+      lines.push(
+        ` ${theme.fg("muted", `feedback: ${a.feedback.total} (stale: ${a.feedback.stale})`)}`,
+      );
     } else {
-      lines.push(` ${theme.fg("dim", `feedback: 0 (stale: ${a.feedback.stale})`)}`);
+      lines.push(
+        ` ${theme.fg("dim", `feedback: 0 (stale: ${a.feedback.stale})`)}`,
+      );
     }
-lines.push(sep);
+    lines.push(sep);
   }
 
   // Recent 区
@@ -298,12 +362,16 @@ lines.push(sep);
   if (data.recent.length === 0) {
     lines.push(` ${theme.fg("dim", "no recent sessions")}`);
   } else {
-    for (const session of data.recent.slice(0, 3)) {
+    data.recent.slice(0, 3).forEach((session, i) => {
       const namePart = theme.fg("accent", session.name);
       const agePart =
         session.age !== null ? theme.fg("muted", ` (${session.age})`) : "";
-      lines.push(` ${theme.fg("muted", `${ICON.dot}`)} ${namePart}${agePart}`);
-    }
+      const resumeHint =
+        theme.fg("dim", " → /resume ") + theme.fg("accent", String(i + 1));
+      lines.push(
+        ` ${theme.fg("muted", `${ICON.dot}`)} ${namePart}${agePart}${resumeHint}`,
+      );
+    });
   }
 
   return lines;
@@ -351,7 +419,13 @@ function renderWelcomeBox(
   const bl = theme.fg("dim", "╰");
   const br = theme.fg("dim", "╯");
 
-const leftLines = buildLeftColumn(data, theme, leftCol, anim.phase, anim.modelFlash);
+  const leftLines = buildLeftColumn(
+    data,
+    theme,
+    leftCol,
+    anim.phase,
+    anim.modelFlash,
+  );
   const rightLines = buildRightColumn(data, theme, rightCol, anim);
 
   const lines: string[] = [];
@@ -361,7 +435,8 @@ const leftLines = buildLeftColumn(data, theme, leftCol, anim.phase, anim.modelFl
   const titleStyled = theme.fg("accent", title);
   const titleVisLen = visibleWidth(title);
   const afterTitle = boxWidth - 2 - titleVisLen;
-  const afterText = afterTitle > 0 ? theme.fg("dim", hChar.repeat(afterTitle)) : "";
+  const afterText =
+    afterTitle > 0 ? theme.fg("dim", hChar.repeat(afterTitle)) : "";
   lines.push(tl + titleStyled + afterText + tr);
 
   // 内容行
@@ -387,10 +462,7 @@ export function createWelcomeHeader(
   getData: () => WelcomeData,
   getAnim: () => AnimationState,
 ) {
-  const welcomeHeaderFactory = (
-    _tui: unknown,
-    theme: Theme,
-  ): Component => ({
+  const welcomeHeaderFactory = (_tui: unknown, theme: Theme): Component => ({
     invalidate(): void {
       // 动画期间（≤ 5s）render 输出每帧都在变，无需手动 invalidate；
       // 主题切换时 pi 会自动重新创建组件实例

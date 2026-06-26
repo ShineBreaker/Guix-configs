@@ -143,14 +143,36 @@ function extractText(content: unknown): string {
   return "";
 }
 
+/**
+ * 当前进程是否是 subagent 工具 spawn 出来的独立 pi 进程。
+ *
+ * subagent 工具为每次委派 spawn 一个 `pi --mode json -p --no-session ...` 子进程，
+ * 它也会加载本扩展。如果不识别并跳过，它内部对话里的 "完成 / 搞定 / done" 等信号
+ * 会污染 handoff 输出：
+ *   1. hook 在 worker 进程的 agent_end 触发
+ *   2. 把 SUMMARIZE_PROMPT 作为 followUp 注入到 worker 进程
+ *   3. worker 进程下一轮开始执行经验总结评估
+ *   4. 主 agent 收到的不是干净 handoff，而是混入"请评估是否记录经验"的内容
+ *
+ * `--no-session` 是 subagent 工具独有的标志（interactive 模式 / 普通 `pi -p`
+ * 一次性命令都不会带），用它识别最稳。
+ */
+function isSubagentProcess(): boolean {
+  return process.argv.includes("--no-session");
+}
+
 export default function init(pi: ExtensionAPI): void {
-// session_start：状态显示已交给 pi-ui 扩展（欢迎框中显示）。
+  // session_start：状态显示已交给 pi-ui 扩展（欢迎框中显示）。
   // 原逻辑在这里 console.log 会导致 stdout 在 TUI 之前打印多行文本，
   // 且与 pi-ui 欢迎框重复。pi-ui 已调用 kb agenote health 解析后
   // 在欢迎框中显示。需要独立查看请使用 /agenote-health 命令。
 
   // ── agent_end: 检测完成信号，提示 agent 进入总结流程 ──
   pi.on("agent_end", async (event, ctx) => {
+    // subagent 进程的内部对话不应触发本扩展——见 isSubagentProcess 注释。
+    // 这是修复"hook 在 worker 进程触发，污染 handoff"问题的关键守卫。
+    if (isSubagentProcess()) return;
+
     // 防抖：冷却期内跳过
     const now = Date.now();
     if (now - lastTriggerTime < DEBOUNCE_MS) return;

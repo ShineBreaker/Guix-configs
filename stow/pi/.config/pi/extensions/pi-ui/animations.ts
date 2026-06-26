@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import type { PetMood } from "./pet.ts";
+
 /**
  * 动画原语集合
  *
@@ -47,6 +49,9 @@ export interface AnimationState {
   tipRevealed: number[];
   /** tips 启动时间偏移（ms）—— staggered 出现 */
   tipStartMs: number[];
+  petMood: PetMood;
+  petMoodStartMs: number;
+  inputFlash: number;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,12 +90,15 @@ export function shouldAnimate(): boolean {
   return true;
 }
 
-
 /** HSL → RGB（0-255） */
-export function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+export function hslToRgb(
+  h: number,
+  s: number,
+  l: number,
+): [number, number, number] {
   // h ∈ [0, 360), s,l ∈ [0, 1]
   const c = (1 - Math.abs(2 * l - 1)) * s;
-  const hp = ((h % 360) + 360) % 360 / 60;
+  const hp = (((h % 360) + 360) % 360) / 60;
   const x = c * (1 - Math.abs((hp % 2) - 1));
   let r1 = 0;
   let g1 = 0;
@@ -115,7 +123,11 @@ export function hslToRgb(h: number, s: number, l: number): [number, number, numb
     b1 = x;
   }
   const m = l - c / 2;
-  return [Math.round((r1 + m) * 255), Math.round((g1 + m) * 255), Math.round((b1 + m) * 255)];
+  return [
+    Math.round((r1 + m) * 255),
+    Math.round((g1 + m) * 255),
+    Math.round((b1 + m) * 255),
+  ];
 }
 
 /** HSL → 24-bit ANSI 前景色转义码（不含 reset） */
@@ -207,7 +219,10 @@ export function startAnimation(
  * 触发 model_select 闪烁动画。
  * 持续 1 秒，期间 modelFlash 计数递减；render 时按模 3 切换颜色。
  */
-export function triggerModelFlash(state: AnimationState, requestRender: () => void): void {
+export function triggerModelFlash(
+  state: AnimationState,
+  requestRender: () => void,
+): void {
   if (!shouldAnimate()) return;
   state.modelFlash = 3; // 3 次切换（共 600ms）
   let elapsed = 0;

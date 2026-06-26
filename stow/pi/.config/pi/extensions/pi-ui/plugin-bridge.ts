@@ -168,7 +168,10 @@ export function runAgenoteHealth(): AgenoteHealth {
       stdio: ["pipe", "pipe", "pipe"],
     });
   } catch (err) {
-    return { ...empty, error: `kb 命令失败：${(err as Error).message.split("\n")[0]}` };
+    return {
+      ...empty,
+      error: `kb 命令失败：${(err as Error).message.split("\n")[0]}`,
+    };
   }
 
   return parseAgenoteHealth(raw);
@@ -207,9 +210,11 @@ function parseAgenoteHealth(raw: string): AgenoteHealth {
     }
 
     // 健康指标行：孤立率: 100% [阈值 <15%] ❌
-// 健康指标行：孤立率: 100% [阈值 <15%] ❌
+    // 健康指标行：孤立率: 100% [阈值 <15%] ❌
     // emoji 可能是单个 codepoint 或 + variation selector (U+FE0F)
-    const metricMatch = trimmed.match(/^(.+?):\s*(.+?)\s*\[阈值\s*(.+?)\]\s*([\u2705\u26A0\u274C]\uFE0F?)$/);
+    const metricMatch = trimmed.match(
+      /^(.+?):\s*(.+?)\s*\[阈值\s*(.+?)\]\s*([\u2705\u26A0\u274C]\uFE0F?)$/,
+    );
     if (metricMatch) {
       const name = metricMatch[1].trim();
       const value = metricMatch[2].trim();
@@ -227,19 +232,28 @@ function parseAgenoteHealth(raw: string): AgenoteHealth {
         else if (op === "≥") direction = "ge";
       }
 
-// 根据 icon 确定状态（去掉可选的 variation selector U+FE0F）
+      // 根据 icon 确定状态（去掉可选的 variation selector U+FE0F）
       const iconBase = icon.replace(/\uFE0F$/, "");
       let status: MetricStatus = "ok";
       if (iconBase === "\u2705") status = "ok";
       else if (iconBase === "\u26A0") status = "warn";
       else if (iconBase === "\u274C") status = "error";
 
-      result.metrics.push({ name, value, threshold, direction, thresholdNum, status });
+      result.metrics.push({
+        name,
+        value,
+        threshold,
+        direction,
+        thresholdNum,
+        status,
+      });
       continue;
     }
 
     // feedback: 0 (stale: 0) ⚠️
-    const feedbackMatch = trimmed.match(/^feedback:\s*(\d+)\s*\(stale:\s*(\d+)\)/);
+    const feedbackMatch = trimmed.match(
+      /^feedback:\s*(\d+)\s*\(stale:\s*(\d+)\)/,
+    );
     if (feedbackMatch) {
       result.feedback = {
         total: Number(feedbackMatch[1]),

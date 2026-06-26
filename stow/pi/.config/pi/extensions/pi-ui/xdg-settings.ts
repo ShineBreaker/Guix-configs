@@ -58,7 +58,11 @@ export function readSettings(): Settings {
   try {
     const raw = readFileSync(path, "utf8");
     const parsed: unknown = JSON.parse(raw);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
       return {};
     }
     return parsed as Settings;
