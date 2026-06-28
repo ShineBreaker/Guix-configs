@@ -1026,6 +1026,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "dex"
         "file-roller"
         "libnotify"
+        "pavucontrol"
         "rofi"
         "setxkbmap"
         "trash-cli"
@@ -1128,11 +1129,14 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; 环境管理
         "bubblewrap"
         "direnv"
-        "gradle"
-        "graphviz"
-        "maven"
         "sdkmanager"
         "uv"
+
+        ;; 构造工具
+        "gcc-toolchain"
+        "gradle"
+        "make"
+        "maven"
 
         ;; AI Agent
         "cc-switch-bin"
@@ -1146,7 +1150,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; 工具
         "du-dust"
         "file"
-        "make"
+        "graphviz"
         "guile-json"
         "jq"
         "pandoc"
@@ -1235,7 +1239,16 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
          "kanata"
          "mesa-utils"
          "pinentry-qt"
-         "winapps")))
+         "winapps"
+
+         ;; MCP server 运行时
+         "python-mcp"
+         "python-httpx-sse"
+         "python-pydantic-settings"
+         "python-sse-starlette"
+         "python-starlette"
+         "python-uvicorn"
+         "python-typer")))
 #+end_src
 
 ** Servics
@@ -1699,7 +1712,6 @@ end
                             "system"
                             "terminal"
                             "utilities"
-
                             "noctalia-suite"))
                 (excluded '("\\.agents/workfile($|/.*)"
                             ".*\\.swp"
@@ -1836,6 +1848,8 @@ end
   ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
   ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
   ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
+  ;; putty
+  ("PYTTYDIR" . "$XDG_CONFIG_HOME/putty")
   ;; python
   ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
   ;; rust
