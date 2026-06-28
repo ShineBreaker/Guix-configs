@@ -37,26 +37,15 @@
     ## Chat
     discord
     feishu
-    wechat
+    # wechat
     wemeet
 
     # AI Agent
+    claude-code
     codex
     codex-acp
 
     ## Customized Packages
-    (libreoffice.overrideAttrs {
-      variant = "fresh";
-      withHelp = false;
-      kdeIntegration = false;
-      withJava = false;
-
-      langs = [
-        "en-GB"
-        "en-US"
-        "zh-CN"
-      ];
-    })
     (qq.override {
       commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
     })
