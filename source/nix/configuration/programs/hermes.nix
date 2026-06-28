@@ -5,8 +5,7 @@ let
 in
 {
   home.packages = [
-    hermes-agent-packages.full
-    hermes-agent-packages.full.hermesDesktop
+    hermes-agent-packages.default
   ];
 
   home.sessionVariables = {
@@ -15,8 +14,8 @@ in
 
   xdg.desktopEntries.hermes = {
     name = "Hermes Agent";
-    exec = "${hermes-agent-packages.full.hermesDesktop}/bin/hermes-desktop --ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations %U";
-    icon = "${hermes-agent-packages.full.hermesDesktop}/share/hermes-desktop/dist/apple-touch-icon.png";
+    exec = "${hermes-agent-packages.default.hermesDesktop}/bin/hermes-desktop --ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations %U";
+    icon = "${hermes-agent-packages.default.hermesDesktop}/share/hermes-desktop/dist/apple-touch-icon.png";
     terminal = false;
     type = "Application";
     categories = [
