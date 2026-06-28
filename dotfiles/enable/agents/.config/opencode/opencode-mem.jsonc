@@ -1,0 +1,55 @@
+{
+  // ===== 存储 =====
+  "storagePath": "~/.local/share/opencode-mem/data",
+  "userEmailOverride": "",
+  "userNameOverride": "",
+
+  // ===== 嵌入模型（多语言 768 维） =====
+  "embeddingModel": "Xenova/nomic-embed-text-v1",
+
+  // ===== Web 管理界面 =====
+  "webServerEnabled": true,
+  "webServerPort": 4747,
+  "webServerHost": "127.0.0.1",
+
+  // ===== 数据库 =====
+  "maxVectorsPerShard": 50000,
+  "autoCleanupEnabled": true,
+  "autoCleanupRetentionDays": 30,
+  "deduplicationEnabled": true,
+  "deduplicationSimilarityThreshold": 0.90,
+
+  // ===== 记忆范围 =====
+  "memory": {
+    "defaultScope": "project"
+  },
+
+  // ===== 自动捕获 =====
+  "autoCaptureEnabled": true,
+  "autoCaptureMaxIterations": 5,
+  "autoCaptureIterationTimeout": 30000,
+  "autoCaptureMaxRetries": 3,
+  "aiSessionRetentionDays": 7,
+  "memoryTemperature": 0.3,
+  "autoCaptureLanguage": "zh",
+
+  // ===== 通知弹窗 =====
+  "showAutoCaptureToasts": true,
+  "showUserProfileToasts": true,
+  "showErrorToasts": true,
+
+  // ===== 用户画像 =====
+  "userProfileAnalysisInterval": 10,
+  "userProfileMaxPreferences": 20,
+  "userProfileMaxPatterns": 15,
+  "userProfileMaxWorkflows": 10,
+  "userProfileConfidenceDecayDays": 30,
+  "userProfileChangelogRetentionCount": 5,
+
+  // ===== 搜索 =====
+  "similarityThreshold": 0.6,
+  "maxMemories": 10,
+
+  // ===== 高级 =====
+  "injectProfile": true
+}
