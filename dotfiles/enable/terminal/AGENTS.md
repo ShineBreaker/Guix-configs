@@ -59,15 +59,13 @@ terminal/
 
 ## 关键约定
 
-- fish `conf.d/` 按文件名字母序加载；数字前缀只是排序提示，非优先级语义
-- tmux 自定义脚本混合 Scheme（`.scm`，Guile 驱动）+ Bash（胶水）
-- `termide` 是 tmuxifier 衍生的自定义会话管理器，入口在 `~/.local/bin/termide`
-- starship 使用 TOML；`terminal/` 下唯一顶级文件
+- fish `conf.d/` 按文件名字母序加载；数字前缀仅排序提示，无优先级语义
+- tmux 脚本混合 Scheme（Guile 驱动）+ Bash 胶水
+- `termide` 是 tmuxifier 衍生的会话管理器，入口 `~/.local/bin/termide`
 
 ## 修改约束
 
-- 修改后必须 `blue rebuild` 才会生效
-- fish 配置：新 shell 自动生效，无需 reload
-- tmux 配置：tmux 内 `prefix + r` 或 `tmux source ~/.config/tmux/tmux.conf` 即可热加载
-- 新增 fish 函数放 `functions/`；新增 conf 块放 `conf.d/` 并加数字前缀控制顺序
-- tmux 侧栏依赖 foot 终端行为；在其他终端下可能需要调整 `default-terminal` 和 `terminal-overrides`
+- 改源后 `blue home` 生效
+- fish 新 shell 自动生效；tmux 内 `prefix+r` 或 `tmux source ~/.config/tmux/tmux.conf` 热加载
+- 新增 fish 函数放 `functions/`；conf 块放 `conf.d/` 加数字前缀控制排序
+- tmux 侧栏依赖 foot 终端行为；其他终端需调 `default-terminal`

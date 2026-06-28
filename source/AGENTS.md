@@ -42,48 +42,34 @@ source/
 ## 构建管线
 
 ```
-source/config.org
-        │
-        ▼  blue rebuild → Emacs org-babel-tangle（Noweb 拼合）
-tmp/config.scm
-        │
-        ▼  guix time-machine --channels=source/channel.lock system reconfigure
-单一 reconfigure：operating-system 同时声明 guix-home-service（含 home-environment）
+source/config.org → blue rebuild → tmp/config.scm → guix system reconfigure
 ```
 
-要点：
+单一 reconfigure 同时应用 operating-system 与内嵌的 guix-home-service。
 
-- `config.org` 是**唯一** Org 源文件
+- `config.org` 是**唯一** Org 源
 - `blue rebuild` 自动完成 tangle → 括号检查 → reconfigure → `guix locate --update`
-- `blue --dry-run rebuild` 仅构建一次不写入系统（tangle + 括号检查仍真跑，reconfigure 短路）
+- `blue --dry-run rebuild`：tangle + 括号检查真跑，reconfigure 短路
 
-## config.org 结构（自上而下）
+## config.org 结构
 
-1. **模块导入**：`modules` 块（system-modules + home-modules）
-2. **系统配置**：_系统配置_ 章节（内含 Agent 指引）
-   - Bootloader、FileSystems、Kernel、Packages、Services、Skeletons、Users
-3. **用户配置**：_用户配置_ 章节（内含 Agent 指引）
-   - Packages（desktop / terminal / devtools / user）、Services、Environment、Font
-4. **dotfile-services**：在 _用户配置_ → _dotfiles 管理相关服务_ 段
-   - 通过 `home-dotfiles-service-type`（`(layout 'stow)`）分发 `dotfiles/enable/<app>/`
+1. **模块导入**：`modules` 块
+2. **系统配置**：Bootloader、FileSystems、Kernel、Packages、Services、Users
+3. **用户配置**：Packages、Services、Environment、Font
+4. **dotfile-services**：`home-dotfiles-service-type`（`layout 'stow`）分发 `dotfiles/enable/<app>/`
 
 ## Org Noweb 机制
 
-`config.org` 使用 Org Mode Noweb 拼合代码块：
-
-- `#+NAME: ref` 为代码块命名
-- `<<ref>>` 在其他代码块中引用已命名的内容
+- `#+NAME: ref` 命名代码块
+- `<<ref>>` 在其他块中引用（**不是** Scheme 原生语法，是 Org Mode 功能）
 - `#+begin_src scheme :tangle ../tmp/config.scm :noweb yes` 标记 tangle 目标
-- 最终由 `emacs --batch org-babel-tangle` 展开为完整 `tmp/config.scm`
-
-> `<<ref>>` 是 Org Mode 语法，**不是** Scheme 原生功能。不要尝试在 Scheme 解释器中执行 `config.org`。
 
 ## Agent 专区（必须先读）
 
-`source/config.org` 头部包含两段 Agent 指引：
+`source/config.org` 头部包含两段 Agent 指引（`* System` 和 `* Home` 节）：
 
-1. **系统配置 → Agent 指引**（约 line 41 起）：系统层职责边界、关键组件说明、文件系统架构、修改约定、决策规则
-2. **用户配置 → Agent 指引**（约 line 1003 起）：Home 配置职责、dotfiles 管理规则、新增应用配置流程、修改约定、决策规则
+1. **System**：系统层职责边界、关键组件说明、修改约定、决策规则
+2. **Home**：Home 配置职责、dotfiles 管理规则、新增应用流程、修改约定
 
 **修改 `config.org` 前必须先读完这两段。**
 
@@ -104,94 +90,74 @@ tmp/config.scm
 
 ## files/ 模板系统
 
-`source/files/` 存放**需要路径注入**的静态模板文件，由 `home-files-service-type` 直接部署。当前文件：
+存放**需要路径注入**的静态模板，由 `home-files-service-type` 直接部署：
 
 ```
 source/files/
 ├── nftables.conf      # 防火墙规则
 ├── rounded.qss        # Qt 圆角样式
 ├── zed.json           # Zed 编辑器配置
-└── skel/
-    └── .config/
-        └── mihomo/
-            └── config.yaml
+└── skel/              # 骨架文件
+    └── .config/mihomo/config.yaml
 ```
 
-- **路径注入语法**：`$$bin/foo$$`（双美元符，zed.json 中实际使用；替换为对应 Guix 包的绝对路径）
-- 注入机制：rosenthal 频道的 `computed-substitution-with-inputs`（参见 `config.org` 的「区别对待某些配置文件」段）
-- **不要把无需路径注入的 dotfile 放进 `source/files/`**；纯配置文件请放 `dotfiles/enable/<app>/`
+- **路径注入语法**：`$$bin/foo$$` 替换为 Guix 包绝对路径（rosenthal 的 `computed-substitution-with-inputs`）
+- **不要**把无需路径注入的 dotfile 放进此目录；纯配置文件请放 `dotfiles/enable/<app>/`
 
 ## 频道管理
 
-- `channel.scm`：可编辑，定义使用的频道和分支（URL 以此为准）
-- `channel.lock`：自动生成，不要手动编辑
-- `information.scm` 通过 `(include "./channel.lock")` 加载锁定版本
+- `channel.scm`：可编辑，定义频道和分支
+- `channel.lock`：自动生成，**不要手动编辑**
 - 更新流程：编辑 `channel.scm` → `blue pull` → `blue update`
 
 ## blue 命令（与本目录相关）
 
-完整列表见根目录 `AGENTS.md`：
+完整列表见根目录 `AGENTS.md`。常用：
 
 ```bash
-blue rebuild               # tangle + 括号检查 + reconfigure + locate --update
-blue --dry-run rebuild     # 仅构建不写入（tangle/括号检查真跑，reconfigure 短路）
-blue check                 # 仅括号平衡检查
-blue tangle                # 仅导出 Org
-blue update                # 更新 channel.lock + git commit -S
-blue pull                  # guix pull
+blue rebuild               # tangle → 括号检查 → reconfigure → locate --update
+blue --dry-run rebuild     # 构建验证不写入（tangle/括号检查真跑）
+blue home                  # 仅 Home 层（含 dotfiles），不需 sudo
+blue check                 # 括号平衡检查
 
-# 块级精准编辑（Agent 修改单个 #+NAME: 块时用，避免 read 整个 config.org）
-ORG_BLOCK=<name> blue block-show     # 提取块 body 到 tmp/block-<name>.scm，stdout 打印路径
-cat new.scm | ORG_BLOCK=<name> blue block-replace   # stdin 替换块 body + 原子写回 + 括号验证
+# 块级编辑（修改单个 #+NAME: 块，避免读 2000 行 config.org）
+ORG_BLOCK=<name> blue block-show       # 提取块 body 到 tmp/
+cat body.scm | ORG_BLOCK=<name> blue block-replace  # 替换 + 原子写回 + 验证
 ```
 
 <critical>
 **Do**：
-- 修改前先读 `config.org` 头部的两段 Agent 指引
-- 修改后用 `blue check` 做括号检查，再用 `blue --dry-run rebuild` 做完整 dry-run
-- 优先修改 `dotfiles/`；只有需要 Guix Home / Guix System 介入时才改 `config.org`
-- 能用 Home 解决的就不要升级到 System（保持系统层最小化）
+- 修改前先读 `config.org` 头部两段 Agent 指引
+- 优先改 `dotfiles/`，只在需要 Guix 介入时改 `config.org`
+- 能用 Home 解决就不用 System
 
 **Don't**：
 
-- 不要手动编辑 `tmp/config.scm`（自动生成）
-- 不要在 org 文件中使用 Scheme 原生不支持的语法（`<<ref>>` 是 Org Noweb）
-- 不要把 `niri.kdl` 等不存在于 `source/files/` 的文件名写进文档（实际仅有 `nftables.conf`、`rounded.qss`、`zed.json`、`skel/`）
+- 不要手动编辑 `tmp/config.scm`
+- `<<ref>>` 是 Org Noweb 语法，非 Scheme
   </critical>
 
-## 块级精准编辑（block-show / block-replace）
+## 块级精准编辑
 
-Agent 修改 `config.org` 中单个 `#+NAME:` 块时，用 block-\* 任务避免 read 整个 2000 行文件。
-
-### 工作流
+修改 `config.org` 中单个 `#+NAME:` 块时，用 block-\* 任务避免读 2000 行文件：
 
 ```bash
-# 1. 提取块 body 到临时文件（stdout 末行是路径）
+# 提取块 body（首两行: lang= 和 noweb/plain 标记，第 3 行起是实际内容）
 FILE=$(ORG_BLOCK=dotfile-services blue block-show 2>/dev/null | tail -1)
-
-# 2. 查看提取结果（首两行是 lang= 和 noweb/plain 标记，第 3 行起是 body）
-cat "$FILE"
-
-# 3. 编辑 body（跳过前两行标记，从第 3 行起）
-tail -n +3 "$FILE" > /tmp/new-body.scm
-$EDITOR /tmp/new-body.scm
-
-# 4. 替换 + 自动验证（括号不平衡会报错并提示 git checkout 回滚）
-cat /tmp/new-body.scm | ORG_BLOCK=dotfile-services blue block-replace
+tail -n +3 "$FILE" > /tmp/new-body.scm   # 编辑 body
+cat /tmp/new-body.scm | ORG_BLOCK=dotfile-services blue block-replace  # 替换 + 验证
 ```
 
-### 关键约定
+**要点**：
 
-- **参数机制**：dry-run 用全局 flag `blue --dry-run`（对所有 `%run` 子进程统一短路，仅 tangle/括号检查标 `#:real?` 例外）；块名通过 `ORG_BLOCK=<name>` 环境变量传入（structor 等命令特定的运行时开关）
-- **括号验证只对 scheme 块触发**：fish/bash/js 等非 scheme 块跳过验证（scheme 语义对它们无意义）
-- **失败不自动回滚**：括号验证失败时，stderr 提示 `git checkout source/config.org` 恢复；block-replace 不自建备份机制，依赖 git 兜底
-- **原子写回**：通过 `write-file-atomically`（mkstemp + rename）覆盖 `source/config.org`，崩溃窗口内不会半写
-- **noweb 占位**：提取出的 body 可能含 `<<ref>>` 占位（如 `fish-services` 含 `<<fish-cfg>>`）。Agent 拿到后应自行用 `grep '^#+NAME: <ref>' source/config.org` 或再 `block-show` 读取被引用块的内容，理解完整上下文
-- **适用边界**：适合叶子块或低 noweb 出入度的小块（如 `dotfile-services` 48 行）。改高耦合大块（如 `emacs-services` 151 行）时仍建议 read 整段，因为需要周边上下文
+- 括号验证仅对 scheme 块触发（fish/bash/js 跳过）
+- body 可能含 `<<ref>>` 占位，需自行追踪被引用块
+- 验证失败时手动 `git checkout source/config.org` 恢复
+- 适合低耦合的小块；改大块（如 `emacs-services`）仍建议读整段
 
 ## 修改约束
 
-- `config.org` 是唯一 Org 源，**不要**新建第二个 org 配置文件
-- 头部代码块（全局变量、文件系统、内核）会同时影响 system 和 home
-- 启动时序敏感的服务（tmpfs /home 重建、bind-mount 等）集中在 `config.org` 的 `filesystem-services` 块
-- 新增 dotfile 子目录后必须更新 `dotfile-services` 的 `packages` 列表并 `blue rebuild`
+- `config.org` 是唯一 Org 源，**不要**新建第二个
+- 头部代码块（全局变量、文件系统、内核）同时影响 system 和 home
+- 启动时序敏感的服务集中在 `filesystem-services` 块
+- 新增 dotfile 子目录后必须更新 `dotfile-services` 的 `packages` 列表

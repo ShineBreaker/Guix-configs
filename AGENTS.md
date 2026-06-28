@@ -49,20 +49,19 @@ tmp/config.scm
 
 ## 任务路由表
 
-| 任务类型             | 优先读取位置                                 | 子目录指引                                 |
-| -------------------- | -------------------------------------------- | ------------------------------------------ |
-| System + Home 配置   | `source/config.org` 头部的 Agent 专区        | `source/AGENTS.md`                         |
-| **Emacs 配置**       | `stow/emacs/.config/emacs/AGENTS.md`         | 子模块 `codeberg.org/BrokenShine/.emacs.d` |
-| 全局变量             | `source/information.scm`                     | —                                          |
-| 频道定义             | `source/channel.scm`                         | `source/channel.lock` 锁定版本             |
-| 静态模板             | `source/files/`                              | `source/AGENTS.md` 中 files/ 模板系统一节  |
-| 各类 dotfiles        | `dotfiles/enable/<app>/`                     | 各子目录 AGENTS.md                         |
-| 新机装机（官方 ISO） | `source/manifest.scm` + `tools/bootstrap.sh` | —                                          |
+| 任务类型             | 优先读取位置                                 | 子目录指引                                |
+| -------------------- | -------------------------------------------- | ----------------------------------------- |
+| System + Home 配置   | `source/config.org` 头部的 Agent 专区        | `source/AGENTS.md`                        |
+| 全局变量             | `source/information.scm`                     | —                                         |
+| 频道定义             | `source/channel.scm`                         | `source/channel.lock` 锁定版本            |
+| 静态模板             | `source/files/`                              | `source/AGENTS.md` 中 files/ 模板系统一节 |
+| 各类 dotfiles        | `dotfiles/enable/<app>/`                     | 各子目录 AGENTS.md                        |
+| 新机装机（官方 ISO） | `source/manifest.scm` + `tools/bootstrap.sh` | —                                         |
 
 <critical>
 **路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
-2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `blue rebuild`
+2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `blue home`
 3. **Emacs 修改**：先读 `stow/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
@@ -71,37 +70,21 @@ tmp/config.scm
 
 ## 引导（新机安装）
 
-在一台**干净**的机器（官方 Guix ISO）上，`blue`、`emacs-minimal` 等本仓库依赖都不存在，
-但 `%emacs-command` 会通过 `guix time-machine ... shell emacs-minimal` 自行供给 emacs——
-所以**真正需要预先引导的依赖只有 `blue`**。
+官方 Guix ISO 上只有 `blue` 需要预先引导（emacs 由 `guix time-machine shell emacs-minimal` 自动供给）。
 
-机制由两个文件支撑（结构放在 `source/`，与 `channel.lock` 同一类声明）：
+两个支撑文件：
 
-- `source/manifest.scm`：声明本仓库的引导依赖（目前为 `blue`）
-- `tools/bootstrap.sh`：封装"锁定频道 + manifest"的入口，给出可执行的 `blue`
-
-### 官方 ISO 装机流程
+- `source/manifest.scm`：声明引导依赖（目前仅 `blue`）
+- `tools/bootstrap.sh`：锁定频道 + 提供可执行 `blue`
 
 ```bash
-# 1. 启动官方 Guix ISO
-# 2. 配置网络、克隆本仓库
-git clone <仓库地址> && cd Guix-configs
-
-# 3. 引导：进入一个带 blue 的临时 shell（首次较慢，会克隆/构建频道）
-./tools/bootstrap.sh
-
-# 4. 在引导 shell 内：（用户已自行完成分区、格式化、挂载 /mnt）
+git clone <url> && cd Guix-configs
+./tools/bootstrap.sh   # 进入带 blue 的临时 shell（首次较慢）
+# 分区/格式化/挂载 /mnt 后：
 blue init
-# 装好重启后，home profile 接管，blue 永久可用。
 ```
 
-`bootstrap.sh` 严格只做"提供环境"一件事：它**不会**自动分区、挂载或跑 `blue init`，
-避免对 `/mnt` 做任何破坏性操作。
-
-### 复用为自制 ISO
-
-将来若做自制定制 ISO（把 `blue` 烤进 live profile），live 配置可以直接引用
-`source/manifest.scm` —— 同一份声明临时 shell 与 live 系统双路径，零重复维护。
+`bootstrap.sh` **不会**自动分区或跑 `blue init`。自制 ISO 可直接引用 `source/manifest.scm`。
 
 ## dotfiles 部署模型
 
@@ -117,9 +100,9 @@ blue init
    (excluded '("\\.agents/workfile($|/.*)" ...))))
 ```
 
-- 实际机制：构建时把文件 _复制到 `/gnu/store/<hash>-home-dotfiles-...`_（只读副本），再从 store 软链接到 `$HOME`。**`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `blue home` 重建软链接才生效
-- **不存在顶层 `immutable/` + `mutable/` 拆分**；旧结构已并入 `enable/<app>/`
-- 不在 `excluded` 列表内的新增文件会在下次 `blue rebuild` 后自动出现在 `~`
+- 实际机制：构建时把文件 _复制到 `/gnu/store/<hash>-home-dotfiles-...`_（只读副本），再从 store 软链接到 `$HOME`。
+  **`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `blue home` 重建软链接才生效
+- 不在 `excluded` 列表内的新增文件会在下次 `blue home` 后自动出现在 `~`
 - `disable/` 内目录不再部署，仅保留参考
 
 子模块位于 `enable/` 下，路径如下，**不要直接编辑子模块内容**：
@@ -131,36 +114,22 @@ blue init
 
 ## stow/ — GNU Stow 直链部署
 
-> 与 `dotfiles/enable/`（Guix Home stow，源指向 store 只读副本）互补。`stow/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置文件（如 hermes 的 SOUL.md、MEMORY.md）。
-
-```
-stow/
-└── hermes/                                # 包名 = 软链接前缀
-    └── .local/share/hermes/               # 路径前缀直接映射到 $HOME
-        ├── SOUL.md                        # → ~/.local/share/hermes/SOUL.md
-        ├── config.yaml
-        └── memories/
-            ├── MEMORY.md
-            └── USER.md
-```
-
-**常用命令**：
+与 `dotfiles/enable/`（Guix Home stow）互补：`stow/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置（emacs、pi、hermes）。
 
 ```bash
-blue stow hermes                 # 从源部署（建软链接）
-blue stow --adopt hermes         # 把 ~ 下文件移动到源，再建链（首次使用）
-blue stow --restow hermes        # 强制重建所有软链接
-blue stow --delete hermes        # 删除软链接（~ 下变回实际文件）
-blue stow hermes newpkg          # 同时部署多个包
+blue stow hermes                 # 部署（建软链接）
+blue stow --restow hermes        # 强制重建
+blue stow --delete hermes        # 删除软链接
+blue stow-all --restow           # 重建所有包
 ```
 
 详见 `stow/AGENTS.md`。
 
 ## 目录结构图自动维护
 
-> **实现位置**：`blueprint.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。MEMORY F024。
+> **实现位置**：`blueprint.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。
 
-仓库内 7 个 `AGENTS.md`（`source/`、`dotfiles/`、`dotfiles/enable/<app>/` 里的 5 个）的“## 目录结构”章节**用标记圈起来**，由 `blue structor` 自动用 `tree` 输出重写。
+仓库内所有 `AGENTS.md` 的"## 目录结构"章节用标记圈起，由 `blue structor` 自动重写。
 
 **使用约定**：
 
@@ -187,12 +156,11 @@ blue stow hermes newpkg          # 同时部署多个包
 
 ## 文件系统架构
 
-- **根目录**：tmpfs（重启后清空）
-- **持久化**：Btrfs 子卷挂载到 `/var/lib`、`/gnu`、`/var/cache`、`/boot` 等
-- **用户数据**：`/data` 分区通过 bind-mount 映射到 `~`（具体映射见 `%btrfs-subvolumes`）
-- **`/home`**：tmpfs，启动时由 `filesystem-services` 从 `DATA/Home/Guix` 子卷重建并按 `%data-dirs` bind-mount
+- **根目录**：tmpfs（重启清空）
+- **持久化**：Btrfs 子卷挂载到 `/var/lib`、`/gnu`、`/boot` 等
+- **用户数据**：`/data` 分区 bind-mount 到 `~`
 
-> 任何持久化目录必须同时在 `source/information.scm` 的 `%data-dirs` 和 `%btrfs-subvolumes` 中登记。
+> 持久化目录必须同时在 `%data-dirs` 和 `%btrfs-subvolumes` 中登记。
 
 ## 全局变量速查（`source/information.scm`）
 
@@ -209,14 +177,14 @@ blue stow hermes newpkg          # 同时部署多个包
 
 ### 配置验证（DRY_RUN）
 
-修改 `source/config.org` 后，**务必**先 dry-run 验证再实际应用：
+修改 `source/config.org` 后先 dry-run：
 
 ```bash
 blue --dry-run rebuild        # tangle + 括号检查 + guix build --dry-run，不写入系统
 blue check                    # 最快：仅括号平衡检查
 ```
 
-`--dry-run` 是全局开关，对**所有** `%run` 子进程统一生效（reconfigure/clean/gc/stow/nix 等均短路打印）。tangle 与括号检查例外——它们标了 `#:real?`，dry-run 时仍真跑以保留验证能力。
+`--dry-run` 对**所有** `%run` 子进程统一生效（reconfigure/clean/gc/stow/nix 等短路打印）。tangle 与括号检查仍真跑（`#:real?`）以保留验证能力。
 
 ## Org Noweb 机制
 
@@ -228,18 +196,14 @@ blue check                    # 最快：仅括号平衡检查
 
 ## 风险点
 
-> **⚠ 改源 ≠ 生效（验证必读）**：`~/.config/<app>/...` 指向 `/gnu/store` 只读副本，**不是仓库源**。改 dotfiles 源后直接 restart service + 验证，读到的是旧代码（假阳性）。
+> **⚠ 改源 ≠ 生效**：`~/.config/<app>/...` 指向 `/gnu/store` 只读副本，**不是仓库源**。改 dotfiles 后 `md5sum <源>` vs `md5sum ~/.config/<app>/<同路径>` 确认 store hash 已变。
 
-**验证流程**（三步缺一不可）：
+**验证流程**：
 
 1. 改 dotfiles 源
 2. `blue home`
-3. **grep 部署位置**（`~/.config/<app>/...`，非仓库源）确认同步，再 restart service + 验证行为
-
-> 快速判断同步：`md5sum <源文件>` vs `md5sum ~/.config/<app>/<同路径文件>`，或看软链接 target 的 store hash 是否变化。
+3. grep 部署位置确认同步 → restart service + 验证行为
 
 - 不要手动编辑 `tmp/` 下任何产物
 - 不要绕过 `blue` 直接调 `guix system reconfigure`（频道不会被锁）
-- 修改 `dotfiles/` 内容后必须 `blue home`，否则不会生效（机制 + 验证流程见本节顶部警告框）
-- **禁止 AI agent 自行运行 `blue rebuild` / `guix system reconfigure`**：这些命令会要求使用 `sudo` 提权，导致CLI卡死。
-  修改 dotfiles 或 source 后，只能够运行 `blue home` ，该指令会在下次重启前暂时将所有home-configs应用（包含其中的所有服务、包以及dotfiles的部署），待确认功能正常后再提醒用户运行 `blue rebuild` 固化配置即可。
+- **禁止 AI agent 自行运行 `blue rebuild` / `guix system reconfigure`**（需 sudo 提权，卡死 CLI）。只许 `blue home` 调试，确认正常后提醒用户手动 `blue rebuild` 固化。

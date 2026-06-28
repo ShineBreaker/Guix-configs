@@ -17,6 +17,11 @@ system/
     ├── pipewire/
     │   └── pipewire.conf.d/
     │       └── 10-latency-fix.conf
+    ├── wireplumber/
+    │   ├── scripts/
+    │   │   └── 40-alsa/
+    │   └── wireplumber.conf.d/
+    │       └── 50-disable-automute.conf
     ├── user-dirs.dirs
     └── user-dirs.locale
 ```
@@ -25,12 +30,12 @@ system/
 
 ## 关键约定
 
-- pipewire 配置使用 `pipewire.conf.d/` 目录，按字母顺序加载
+- pipewire 使用 `pipewire.conf.d/` 按字母顺序加载
 - containers `policy.json` 定义镜像拉取签名验证规则
-- `user-dirs.dirs` / `user-dirs.locale` 由 `xdg-user-dirs` 工具读取，定义 `Desktop`、`Documents`、`Downloads` 等
+- `user-dirs.dirs` / `user-dirs.locale` 由 `xdg-user-dirs` 读取
 
 ## 修改约束
 
-- 修改后必须 `blue rebuild` 才会生效
-- pipewire 配置修改后建议重启用户服务：`systemctl --user restart pipewire pipewire-pulse wireplumber`
-- user-dirs 变更后重新登录或 `xdg-user-dirs-update` 让 XDG 感知
+- 改源后 `blue home` 生效
+- pipewire 改后 `herd restart pipewire`（shepherd 是 Guix 的 init 系统）
+- user-dirs 变更后重新登录或 `xdg-user-dirs-update`

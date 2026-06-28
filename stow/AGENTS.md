@@ -15,37 +15,6 @@
 
 > 核心约束：**目标目录必须保持为真实目录，stow 只对单个文件建软链接**。这避免应用运行时产物（`logs/`、`state.db`、`sessions/` 等）经整目录软链写进仓库源。
 
-### no-folding（双重保险）
-
-GNU Stow 默认会做 **tree folding**：当目标目录不存在或为空时，把整目录折叠成单个软链（`~/.local/share/hermes → stow/hermes/.local/share/hermes`），而非逐文件链接。本仓库**全程禁用折叠**，通过两处同时保证：
-
-| 载体                                                      | 作用                     | 生效范围                                             |
-| --------------------------------------------------------- | ------------------------ | ---------------------------------------------------- |
-| `stow/.stowrc` 写 `--no-folding`                          | 任何人直接 `stow` 也遵循 | 所有包（`blue stow` 传 `--dir=stow`，Stow 自动读取） |
-| `blue stow` / `blue stow-all` 命令行硬编码 `--no-folding` | 绕过 `.stowrc` 也安全    | 所有包                                               |
-
-效果对比（以 hermes 为例）：
-
-```
-折叠（旧/禁用）：      no-folding（本仓库）：
-~/.local/share/hermes  ~/.local/share/hermes/        ← 真实目录
-  → stow/hermes/.../    ├── SOUL.md   → 源（单文件软链）
-  (整目录一个软链)       ├── config.yaml → 源
-                         └── memories/   ← 真实目录
-                             ├── MEMORY.md → 源
-                             └── USER.md  → 源
-```
-
-### 三层忽略（优先级递减）
-
-`--no-folding` 逐文件链接时，需要按下列清单跳过不该部署的文件（编译产物、`.git` gitlink、运行时目录）：
-
-| 层       | 文件                            | 作用域   | 当前内容                  |
-| -------- | ------------------------------- | -------- | ------------------------- | -------------- | ------------ | ---------- |
-| 1 全局   | `stow/.stowrc`                  | 所有包   | `--no-folding`            |
-| 2 每包   | `stow/<PKG>/.stow-local-ignore` | 单个包   | 仅 `emacs`：`\.elc$`、`(^ | /)\.git$`、`(^ | /)var$`、`(^ | /)etc$` 等 |
-| 3 一次性 | `--ignore=REGEX`                | 单次命令 | （按需，不入库）          |
-
 `.stow-local-ignore` 语法：**Perl 正则，逐行一条，匹配路径尾部**；`#` 起注释、空行允许（见 Stow 手册 "Ignore Lists"）。
 
 ## 目录结构
@@ -56,6 +25,10 @@ GNU Stow 默认会做 **tree folding**：当目标目录不存在或为空时，
 
 ```
 stow/
+├── .local/
+│   └── bin/
+│       ├── agenote_cli.py
+│       └── agenote_mcp.py
 ├── emacs/
 │   ├── .config/
 │   │   ├── agents/
@@ -70,6 +43,14 @@ stow/
 │   │       ├── README.org
 │   │       ├── early-init.el
 │   │       └── init.el
+│   ├── .local/
+│   │   └── bin/
+│   │       ├── __pycache__/
+│   │       ├── kb_lib/
+│   │       ├── agenote_cli.py
+│   │       ├── agenote_mcp.py
+│   │       ├── kb
+│   │       └── kb-agent
 │   └── .stow-local-ignore
 ├── hermes/
 │   └── .local/
@@ -77,8 +58,6 @@ stow/
 │           └── hermes/
 ├── pi/
 │   ├── .config/
-│   │   ├── agents/
-│   │   │   └── skills/
 │   │   └── pi/
 │   │       ├── agents/
 │   │       ├── extensions/
@@ -94,7 +73,6 @@ stow/
 │   │       └── settings.json
 │   ├── .local/
 │   │   ├── bin/
-│   │   │   ├── kb-agent
 │   │   │   ├── pi
 │   │   │   ├── pi-acp
 │   │   │   └── pi-update
@@ -108,11 +86,11 @@ stow/
 
 ## 当前纳管的包
 
-| 包       | 部署目标                                                                                                         | 包含文件                                                                                                                                                                                                                                                                                                                                                    |
-| -------- | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                                                                                                                                                                  |
-| `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                                                                                                                                                                    |
-| `pi`     | `~/.config/pi/`、`~/.local/bin/{kb-agent,pi,pi-acp,pi-update}`、`~/.local/share/pi/`、`~/.config/agents/skills/` | pi-coding-agent 全部配置(settings/models/lsp/keybindings/plannotator、agents/_.md、prompts/_.md、extensions/{atelier,custom-shortcuts,default-timeout,global-context,agenote-hooks})、启动脚本与 scripts/ 辅助；**agenote 体系**：`kb-agent` CLI、`agenote-{base,curator,review}` 三个 skill（kb CLI + kb_lib 已迁到 dotfiles/enable/agents，走 Guix Home） |
+| 包       | 部署目标                                                                                                         | 包含文件                                                                                                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                       |
+| `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                         |
+| `pi`     | `~/.config/pi/`、`~/.local/bin/{kb-agent,pi,pi-acp,pi-update}`、`~/.local/share/pi/`、`~/.config/agents/skills/` | pi-coding-agent 全部配置(settings/models/lsp/keybindings/plannotator、agents/_.md、prompts/_.md、extensions/{atelier,custom-shortcuts,default-timeout,global-context,agenote-hooks})、启动脚本与 scripts/ 辅助； |
 
 ## 工作流
 
@@ -202,7 +180,7 @@ blue stow-all --restow
 
 ## 备份与恢复
 
-`blue stow` 操作前无需额外备份——文件就在仓库 `stow/` 下，git 跟踪本身就是备份。但若执行 `--adopt` 把 ~ 下文件移动到源，git status 会立刻显示变化；如果误删，恢复方式：
+文件在 `stow/` 下由 git 跟踪，无需额外备份。误删后用 git 恢复：
 
 ```bash
 git checkout HEAD -- stow/hermes/

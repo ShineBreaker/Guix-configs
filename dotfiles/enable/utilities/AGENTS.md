@@ -55,7 +55,7 @@ utilities/
 
 ## 核心子系统
 
-> **实现位置**：fcitx5 用户配置 — `utilities/.config/fcitx5/` 由 `dotfile-services`（`home-dotfiles-service-type`）stow 到 `~/.config/fcitx5/`；运行期生成的 `cached_layouts` 与 `crash.log` 在 `dotfile-services` 的 `excluded` 列表里跳过。
+> fcitx5 用户配置由 `home-dotfiles-service-type` stow 到 `~/.config/fcitx5/`。运行时产物 `cached_layouts`、`crash.log` 在 `excluded` 列表跳过。
 
 ### fcitx5 输入法框架
 
@@ -81,15 +81,14 @@ utilities/
 
 - `kanata.kbd` 定义键盘层映射，用于改键/宏
 
-### Nix 备份分支（独立使用）
+### Nix 备份分支
 
-- 仓库根的 `source/nix/` 与本目录的 `.nix-channels` 共同构成一份独立的 Nix home-manager 配置
-- 与 Guix 配置并存但**不互通**：走 `blue nix` / `blue nix-init` / `blue nix-update`
-- 主要作用是给特定工具（Nix 生态）做隔离验证
+- `source/nix/` 与 `.nix-channels` 构成独立 Nix home-manager 配置，与 Guix **不互通**
+- 操作：`blue nix` / `blue nix-init` / `blue nix-update`
 
 ## 修改约束
 
-- 改 `utilities/.config/<app>/` 后跑 `blue home` 即可生效（不需 `blue rebuild`）；重启对应服务验证
-- Rime 子模块修改需在子模块内单独 commit 并 push 到上游
-- Git commit 模板通过 `~/.config/git/gitmessage`（已通过 `git config commit.template` 引用）
-- winapps 配置修改后需重建 VM
+- 改源后 `blue home` 即可生效（不需 `blue rebuild`）
+- Rime 子模块修改需在子模块内 commit/push 到上游
+- Git commit 模板：`~/.config/git/gitmessage`
+- winapps 改后需重建 VM
