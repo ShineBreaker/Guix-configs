@@ -1075,7 +1075,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "tmuxifier"
         "tmux-xpanes"
 
-        ;; 基于 Rust 的命令行工具替代品
+        ;; 命令行工具
         "bat"
         "fd"
         "ripgrep"
@@ -1219,6 +1219,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
          "filezilla"
          "keepassxc"
          "kdeconnect"
+         "libreoffice"
          "motrix-next-bin"
          "seahorse"
          "tesseract-ocr"
@@ -1226,7 +1227,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
          ;; 娱乐
          "gamemode"
-         "lr2oraja-endlessdream-bin"
          "luanti-halon"
          "luanti-mineclonia-csm"
          "mangohud"
