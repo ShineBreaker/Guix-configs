@@ -57,7 +57,10 @@ from kb_lib.cards import (  # noqa: E402
 from kb_lib.memory import cmd_memory  # noqa: E402
 from kb_lib.lint import cmd_lint  # noqa: E402
 from kb_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
-from kb_lib.agenote import add_agenote_parser, cmd_agenote  # noqa: E402
+
+# 注意：agenote 子命令树已废弃，改为 MCP server（agenote_mcp.py）。
+# kb CLI 不再注册 agenote 子命令；agent 通过 MCP tool 调用，
+# hooks 插件通过 agenote_cli.py shim 调用。
 
 import argparse
 import re
@@ -524,7 +527,8 @@ def main() -> None:
     subparsers.add_parser("health", help="知识库健康度报告")
 
     # ── agenote ─────────────────────────────────────────────────────────
-    add_agenote_parser(subparsers)
+    # 已废弃：agenote 改造为 MCP server（agenote_mcp.py），不再作为 kb 子命令。
+    # add_agenote_parser(subparsers)
 
     add_viz_parser(subparsers)
 
@@ -559,7 +563,7 @@ def main() -> None:
         "review": cmd_review,
         "health": cmd_health,
         "viz": cmd_viz,
-        "agenote": cmd_agenote,
+        # agenote 已废弃 → 改为 MCP server（agenote_mcp.py）
     }
 
     if args.command in commands:

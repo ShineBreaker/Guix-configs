@@ -13,6 +13,11 @@
  *
  * 信号清单、写入流程、卡片格式由 agenote-{base,curator,review} skill 提供，
  * 本插件只做"事件触发 + 命令快捷入口"，避免与 skill 重复维护。
+ *
+ * 调用路径：agenote 已改造为 MCP server（agenote_mcp.py），agent 主循环通过
+ * MCP tool 调用。但 pi 的 ExtensionAPI 不提供 MCP 调用接口，本插件的命令
+ * （/agenote-health、/agenote-curate）改调轻量 CLI shim（agenote_cli.py），
+ * 它复用同一套 kb_lib 内核，输出人类可读文本。
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -20,7 +25,7 @@ import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const KB_SCRIPT = join(homedir(), ".local", "bin", "kb");
+const KB_SCRIPT = join(homedir(), ".local", "bin", "agenote_cli.py");
 const KB_AGENT = join(homedir(), ".local", "bin", "kb-agent");
 
 /**
@@ -56,8 +61,8 @@ const SUMMARIZE_PROMPT = [
   "<agenote-hook>检测到任务完成信号，请按 agenote-review skill 流程评估本次对话：",
   "（注意：这有可能是误报，如果当前任务没有完成的话，请忽略）",
   "1. 是否有可记录的经验信号（bug/踩坑/更优方案/用户纠正/项目决策）？",
-  "2. 如有 → 调用 /agenote-summarize 写入（kb agenote add / kb agenote memory / kb agenote connect）",
-  "3. 本轮用到的资料留痕：已有卡片 kb agenote touch <id>，联网新知识 kb agenote add --type note",
+  "2. 如有 → 通过 agenote MCP tool 写入（agenote_add / agenote_memory_add / 链接用 agenote_get 后手动关联）",
+  "3. 本轮用到的资料留痕：已有卡片 agenote_touch，联网新知识 agenote_add（type=note）",
   "4. 如无 → 明确回复'本次无可记录经验'</agenote-hook>",
 ].join("\n");
 
@@ -65,7 +70,12 @@ const SUMMARIZE_PROMPT = [
 const DEBOUNCE_MS = 5 * 60 * 1000; // 5 分钟
 let lastTriggerTime = 0;
 
-/** 运行 kb 命令并返回 stdout */
+/** 运行 agenote_cli 命令并返回 stdout
+ *
+ * agenote_cli.py 是轻量 CLI shim（纯 stdlib），复用 kb_lib 内核。
+ * agent 主循环已改用 MCP tool 调用 agenote，但本插件（ExtensionAPI 无
+ * MCP 调用接口）只能 execSync 外部进程，故走此 shim。
+ */
 function runKb(...args: string[]): string {
   try {
     return execSync(`python3 "${KB_SCRIPT}" ${args.join(" ")}`, {
@@ -74,7 +84,7 @@ function runKb(...args: string[]): string {
       stdio: ["pipe", "pipe", "pipe"],
     }).trim();
   } catch (err: any) {
-    return `(kb 命令失败: ${err.message?.split("\n")[0] || err})`;
+    return `(agenote_cli 命令失败: ${err.message?.split("\n")[0] || err})`;
   }
 }
 
@@ -97,8 +107,8 @@ function runKbAgent(action: string, backend = "pi"): string {
 
 /** 获取简短的 agenote 状态摘要（session_start 注入用） */
 function getAgenoteStatusSummary(): string {
-  const health = runKb("agenote", "health");
-  if (health.startsWith("(kb")) return ""; // 命令失败，静默
+  const health = runKb("health");
+  if (health.startsWith("(agenote")) return ""; // 命令失败，静默
 
   const lines = health.split("\n");
   const summary: string[] = ["[agenote] 记事本状态:"];
@@ -233,7 +243,7 @@ export default function init(pi: ExtensionAPI): void {
   pi.registerCommand("agenote-health", {
     description: "显示 agenote 健康度报告",
     handler: async (_args, _ctx) => {
-      const health = runKb("agenote", "health");
+      const health = runKb("health");
       console.log(health);
     },
   });

@@ -35,9 +35,9 @@ KB_DRY_RUN="${KB_DRY_RUN:-0}"
 # 操作定义
 # ═══════════════════════════════════════════════════════════════════════════════
 
-CURATE_TASK="执行 agenote 策展：运行 kb agenote health 检查健康度，运行 kb agenote deduplicate 检测重复，对 stale 卡片执行 kb agenote archive --stale，运行 kb agenote curate 重分配权重，最后运行 kb agenote reindex 重建索引。输出策展报告摘要。"
-REVIEW_TASK="审查本次对话，检测是否有可记录的经验信号（用户纠正、踩坑、发现更优方案），并对用到的资料留痕：已有卡片用 kb agenote touch <id>，联网新知识用 kb agenote add --type note。如有经验信号则运行 kb agenote add 或 kb agenote memory --add 写入。"
-HEALTH_TASK="运行 kb agenote health 输出 agenote 健康度报告，简要说明各项指标是否达标。"
+CURATE_TASK="执行 agenote 策展：通过 agenote MCP tool 检查健康度（agenote_health）、检测重复（agenote_deduplicate）、对 stale 卡片归档（agenote_archive stale=true）、重分配权重并重建索引（agenote_curate）、刷新索引（agenote_reindex）。输出策展报告摘要。"
+REVIEW_TASK="审查本次对话，检测是否有可记录的经验信号（用户纠正、踩坑、发现更优方案），并对用到的资料留痕：已有卡片用 agenote_touch，联网新知识用 agenote_add（type=note）。如有经验信号则通过 agenote MCP tool 写入（agenote_add 或 agenote_memory_add）。"
+HEALTH_TASK="通过 agenote MCP tool（agenote_health）输出 agenote 健康度报告，简要说明各项指标是否达标。"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 后端适配器

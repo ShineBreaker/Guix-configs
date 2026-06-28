@@ -139,7 +139,7 @@ export default function piUiExtension(pi: ExtensionAPI): void {
     // recent sessions：留到后续实现
     const recent: RecentSessionInfo[] = [];
 
-    // Agenote 健康度（运行 kb agenote health 解析，失败时 available=false）
+    // Agenote 健康度（运行 agenote_cli health 解析，失败时 available=false）
     const agenote = runAgenoteHealth();
 
     cache.welcome = {

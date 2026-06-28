@@ -105,7 +105,7 @@ export function discoverLocalTemplates(): number {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Agenote 健康度（运行 kb agenote health 解析）
+// Agenote 健康度（运行 agenote_cli health 解析）
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type MetricStatus = "ok" | "warn" | "error";
@@ -145,11 +145,14 @@ export interface AgenoteHealth {
   error?: string;
 }
 
-const KB_SCRIPT = join(homedir(), ".local", "bin", "kb");
+const KB_SCRIPT = join(homedir(), ".local", "bin", "agenote_cli.py");
 
 /**
- * 运行 `kb agenote health`，解析输出。
+ * 运行 `agenote_cli health`，解析输出。
  * 失败时返回 available=false 的结果（不抛错）。
+ *
+ * 注意：agenote 已改造为 MCP server，agent 主循环经 MCP tool 调用。
+ * 但 pi-ui 扩展（ExtensionAPI 无 MCP 调用接口）走轻量 CLI shim。
  */
 export function runAgenoteHealth(): AgenoteHealth {
   const empty: AgenoteHealth = {
@@ -162,7 +165,7 @@ export function runAgenoteHealth(): AgenoteHealth {
 
   let raw: string;
   try {
-    raw = execSync(`python3 "${KB_SCRIPT}" agenote health`, {
+    raw = execSync(`python3 "${KB_SCRIPT}" health`, {
       encoding: "utf-8",
       timeout: 15000,
       stdio: ["pipe", "pipe", "pipe"],
@@ -170,14 +173,14 @@ export function runAgenoteHealth(): AgenoteHealth {
   } catch (err) {
     return {
       ...empty,
-      error: `kb 命令失败：${(err as Error).message.split("\n")[0]}`,
+      error: `agenote_cli 命令失败：${(err as Error).message.split("\n")[0]}`,
     };
   }
 
   return parseAgenoteHealth(raw);
 }
 
-/** 解析 kb agenote health 的输出文本 */
+/** 解析 agenote_cli health 的输出文本 */
 function parseAgenoteHealth(raw: string): AgenoteHealth {
   const result: AgenoteHealth = {
     available: true,

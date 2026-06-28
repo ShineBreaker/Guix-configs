@@ -96,5 +96,5 @@
   "transport": "auto",
   "collapseChangelog": true,
   "quietStartup": true,
-  "defaultThinkingLevel": "xhigh"
+  "defaultThinkingLevel": "high"
 }

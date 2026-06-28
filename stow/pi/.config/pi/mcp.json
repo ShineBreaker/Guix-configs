@@ -2,6 +2,10 @@
   "mcpServers": {
     "context-mode": {
       "command": "context-mode"
+    },
+    "agenote": {
+      "command": "/home/brokenshine/.guix-home/profile/bin/python3",
+      "args": ["/home/brokenshine/.local/bin/agenote_mcp.py"]
     }
   }
 }
