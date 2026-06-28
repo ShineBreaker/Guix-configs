@@ -60,6 +60,23 @@
       "mcp_sequential_thinking_sequentialthinking",
       "multiedit",
       "sourcegraph",
+      "mcp_agenote_agenote_init",
+      "mcp_agenote_agenote_add",
+      "mcp_agenote_agenote_get",
+      "mcp_agenote_agenote_search",
+      "mcp_agenote_agenote_list",
+      "mcp_agenote_agenote_stats",
+      "mcp_agenote_agenote_health",
+      "mcp_agenote_agenote_touch",
+      "mcp_agenote_agenote_curate",
+      "mcp_agenote_agenote_deduplicate",
+      "mcp_agenote_agenote_archive",
+      "mcp_agenote_agenote_restore",
+      "mcp_agenote_agenote_reindex",
+      "mcp_agenote_agenote_memory_overview",
+      "mcp_agenote_agenote_memory_get",
+      "mcp_agenote_agenote_memory_add",
+      "mcp_agenote_agenote_memory_search",
       "todos",
       "view",
       "write"
@@ -370,6 +387,12 @@
     "context7": {
       "type": "stdio",
       "command": "~/.config/crush/bin/context7-mcp",
+      "timeout": 45
+    },
+    "agenote": {
+      "type": "stdio",
+      "command": "/home/brokenshine/.guix-home/profile/bin/python3",
+      "args": ["/home/brokenshine/.local/bin/agenote_mcp.py"],
       "timeout": 45
     }
   }
