@@ -85,34 +85,14 @@ agents/
 dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
 ├── .config/
 │   ├── crush/                → ~/.config/crush/      # Crush 配置 + hooks + bin
-│   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills, mcp-servers）
+│   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills）
 │   └── loopctl/              → ~/.config/loopctl/    # 跨 agent 循环框架
 └── .local/
     ├── bin/                  → ~/.local/bin/         # 启动脚本（kb、loopctl 等）
     └── share/                → ~/.local/share/       # applications/hermes.desktop、hermes 运行时数据
 ```
 
-> **oh-my-pi (OMP)** 不再从此目录部署。它是 `jeans` 频道的 `oh-my-pi-bin` 单 ELF 二进制，由 `guix-home` 的 `home-packages` 暴露为 `omp` 命令。运行时配置走 OMP 自身约定路径，本仓库不托管。
->
-> **pi-coding-agent** 的配置已整体迁至 `stow/pi/`（GNU Stow 直链部署），详情见 `stow/AGENTS.md` 的 pi 包条目。loopctl 适配器 `adapters/pi.json` 与 `adapters/omp.json` 共存。
->
-> **知识库体系 (`kb`)** —— CLI 与 `kb_lib/` 数据层（含 `memory.py`、`viz`）在本目录 `.local/bin/`。**agenote 体系** 已改造为 MCP server + CLI shim，两者共享 `kb_lib` 数据层内核。agenote skill 与 pi 插件在 `stow/pi/`。
-
 `.gitignore` 排除 `.agents/workfile`、`node_modules`、`__pycache__`。文档类的 `AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
-
-## oh-my-pi / OMP（Guix 包 `oh-my-pi-bin`）
-
-OMP 是 Pi 的 batteries-included fork，单 ELF 二进制（≈530 MB），由 `jeans` 频道提供。`source/config.org` 的 `home-packages` 已收纳，通过 `omp` 命令暴露。
-
-**路径约定**（在 `config.org` XDG session-variables 块声明）：
-
-| 路径                                                          | 用途                         |
-| ------------------------------------------------------------- | ---------------------------- |
-| `$PI_CONFIG_DIR` (`~/.config/pi/omp`)                         | 配置文件目录（providers 等） |
-| `$PI_CODING_AGENT_DIR` (`~/.config/pi`)                       | 兼容 Pi 的主目录             |
-| `$PI_CODING_AGENT_SESSION_DIR` (`~/.local/share/pi/sessions`) | 会话持久化                   |
-
-**本仓库不托管 OMP 配置源**——OMP 是 batteries-included 单二进制，用户本地维护 `~/.config/pi/omp/`。
 
 ### Loop 体系（loopctl）
 
@@ -133,6 +113,4 @@ OMP 是 Pi 的 batteries-included fork，单 ELF 二进制（≈530 MB），由 
 
 ## 修改约束
 
-- **OMP**：不托管在仓库内，直接编辑 `~/.config/pi/omp/` 本地维护
-- **Hermes**：改 `stow/hermes/` 即生效（GNU Stow 直链），无需 `blue home`
 - **loopctl adapter**：改 `adapters/<name>.json` 后用 `loopctl adapter test <name>` 验证

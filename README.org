@@ -100,16 +100,28 @@ guix shell blue -- blue init
 
 ** 2. 日常更新 (已安装系统)
 
-| 命令                   | 作用                                            |
-|------------------------+-------------------------------------------------|
-| =blue rebuild=           | tangle → 括号检查 → system reconfigure → locate |
-| =blue home=              | 仅应用 Home 层 (含 dotfiles) , 不需 sudo        |
-| =blue --dry-run rebuild= | 构建验证不写入系统                              |
-| =blue check=             | 括号平衡检查 (最轻量)                           |
-| =blue update=            | 更新 =channel.lock= 并签名提交                    |
-| =blue pull=              | =guix pull --allow-downgrades=                    |
-| =blue stow=              | GNU Stow 管理 stow/ 下的直链部署                |
-| =blue structor=          | 刷新 AGENTS.md 中自动目录树                     |
+完整列表运行 =blue list= 。 =blue --dry-run= 对任何命令生效, 仅做构建验证、不写入系统 (子进程统一短路)。
+
+| 命令                    | 作用                                             | 类别 |
+|-------------------------+--------------------------------------------------+------|
+| =blue rebuild=            | tangle → 括号检查 → system reconfigure → locate  | 部署 |
+| =blue home=               | 仅应用 Home 层 (含 dotfiles) , 不需 sudo         | 部署 |
+| =blue init=               | 把系统配置安装到 =/mnt= （新装机用）               | 部署 |
+| =blue block-show NAME=    | 从 =source/config.org= 提取名为 NAME 的 Org 代码块 | 编辑 |
+| =blue block-replace NAME= | 把 =tmp/= 里的代码塞回 Org 源                      | 编辑 |
+| =blue secret-scan=        | 扫描文本配置中疑似泄漏的密钥                     | 校验 |
+| =blue update=             | 更新 =source/channel.lock= 并签名提交              | 频道 |
+| =blue pull=               | =guix pull --allow-downgrades=                     | 频道 |
+| =blue stow [MODE] PKG...= | GNU Stow 部署 stow/ 下的包                       | 直链 |
+| =blue stow-all [MODE]=    | 批量对 stow/ 下所有包执行 stow 操作              | 直链 |
+| =blue clean-generations=  | 删除旧的 Guix System / Home 世代                 | 维护 |
+| =blue clean-artifacts=    | 移除仓库编译产物                                 | 维护 |
+| =blue gc=                 | 执行 Guix GC 并清理旧 Guix EFI 文件              | 维护 |
+| =blue reuse=              | 为文件补充 SPDX 版权和许可证头                   | 维护 |
+| =blue structor=           | 刷新 AGENTS.md 中自动生成的目录树章节            | 维护 |
+| =blue nix=                | 应用备用 Nix home-manager 配置                   | 二轨 |
+| =blue nix-init=           | 初始化 Nix channel 并安装 home-manager           | 二轨 |
+| =blue nix-update=         | 更新 Nix channel 和 flake                        | 二轨 |
 
 * 常用任务
 ** 修改用户名
@@ -139,16 +151,39 @@ blue update
 #+end_src
 
 ** 自定义 blue 任务
-编辑 =blueprint.scm= 添加新函数:
+blue 命令通过 [[https://codeberg.org/lapislazuli/blue][blue]] 框架的 Scheme DSL 注册。普通 =(define (my-task) ...)= 不会被识别; 必须以 =(define-command (NAME-command arguments) ...)= 形式声明, 并登记到 =blueprint.scm= 末尾的 =(blueprint ... (commands (list ...)))= 列表中。
+
+*** 模板
+
+编辑 =blueprint.scm=, 在任意 =(define-command ...)= 块附近新增:
 
 #+begin_src scheme
-(define (my-task)
-  "我的自定义任务"
-  (log-info "执行自定义任务")
-  ($ `("echo" "Hello, Guix!")))
+(define-command (my-task-command arguments)
+  ((invoke "my-task")                       ; 用户用 =blue <此字符串>= 调用
+   (category 'misc)                          ; 必填: help/maintenance/deployment/editing/stow/nix/guix/validation
+   (synopsis "一句话描述")
+   (help "详细帮助, 可多行"))
+  ;; ----- 命令体: 任意 Scheme 表达式 -----
+  (%run `("echo" "Hello, Guix!")))           ; 走 %run 自动遵循 blue --dry-run
 #+end_src
 
-然后运行 =blue my-task= 。
+*** 注册到入口
+
+在 =blueprint.scm= 末尾的 =(blueprint ... (commands (list ...)))= 列表里追加新命令:
+
+#+begin_src scheme
+(blueprint
+ (buildables (list %config-buildable))
+ (testables (list %config-check))
+ (commands
+  (list list-command
+        rebuild-command
+        ;; ... 其他已有命令 ...
+        structor-command
+        my-task-command)))                   ; ← 追加在末尾
+#+end_src
+
+完成后运行 =blue my-task= (=blue --dry-run my-task= 仅构建验证、不真跑子进程)。
 
 * 故障排除
 ** 系统启动后数据丢失
@@ -170,11 +205,7 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 blue --dry-run rebuild
 #+end_src
 
-=blue rebuild= 在执行前会自动运行括号平衡检查。也可手动单独检查:
-
-#+begin_src sh
-blue check
-#+end_src
+=blue rebuild= 在执行前会自动跑括号平衡检查 (=<paren-check>= testable, 由 =blueprint.scm= 中 =%config-check= 定义)。若只想验证构建、不写入系统, 用 =blue --dry-run rebuild= 。
 
 + 如果提示 =unbound variable=: 检查是否导入对应模块 (可以利用 [[https://search.guix.moe/][Toys]] 来查询)
 + 如果提示 =invalid field specifier=: 检查括号是否标错 (推荐用 =Emacs= 来进行检查)
@@ -200,7 +231,7 @@ blue check
 
 + [[https://t.me/guixcn][GNU Guix 中文社区]] — 提供关键技术支持
 + =Grok=, =ChatGPT=, =Gemini=, =Kimi=, =Claude=, =GLM=, =Qwen=, =DeepSeek=, =MiniMax= —- 协助开发 (按照时间先后排序)
-   (其中最好用的是 =GLM= 和 =ChatGPT= , 效果最差的是 =MiniMax= 。封号最快的是 =Claude= )
+  (其中最好用的是 =GLM= 和 =ChatGPT= , 效果最差的是 =MiniMax= 。封号最快的是 =Claude= )
 
 #+begin_quote
 *日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。*
