@@ -82,7 +82,7 @@ export async function waitForCompletion(
         return;
       }
 
-      // 检查 status.json
+      // PR-7: 检查 status.json 终态
       const status = readStatus(launch.runDir);
       if (status && status.status !== "running") {
         clearInterval(interval);
@@ -94,6 +94,56 @@ export async function waitForCompletion(
           exitCode: status.exitCode ?? 1,
           error: status.error,
         });
+        // PR-7: 解析 result.md 的 Return Header，写入 registry return_status
+        try {
+          const parsed = parseReturnHeader(output);
+          if (parsed) {
+            updateRunReturnStatusInRegistry({
+              runId: launch.runId,
+              returnStatus: parsed.status,
+              returnSummary: parsed.summary,
+            });
+          } else {
+            // 缺 header: 标 unknown（不阻塞 subagent，仅警告）
+            updateRunReturnStatusInRegistry({
+              runId: launch.runId,
+              returnStatus: "unknown",
+              returnSummary: "(no return header)",
+            });
+            console.warn(
+              `[atelier:monitor] run ${launch.runId} (${agent}) result.md 缺 Return Header，标 return_status=unknown`,
+            );
+          }
+        } catch (headerErr) {
+          console.warn(
+            `[atelier:monitor] parseReturnHeader failed for ${launch.runId}:`,
+            headerErr,
+          );
+        }
+
+        // PR-8: completion gate（no-op: isTaskToolAvailable=false → 恒 false）
+        // 当前阶段 isTaskToolAvailable() 返回 false，gate 不触发 reentry。
+        // 架构保留便于未来接入 pi 的 task 工具。
+        try {
+          const gate = completionGateDecide(launch.runId, agent, 0);
+          if (gate.needReentry) {
+            incrementReentryCountInRegistry(launch.runId);
+            console.warn(
+              `[atelier:monitor] completion gate requested reentry for ${launch.runId} — 架构保留中，当前 no-op`,
+            );
+          }
+          if (gate.downgradedTo) {
+            console.warn(
+              `[atelier:monitor] gate downgraded ${launch.runId} → ${gate.downgradedTo}`,
+            );
+          }
+        } catch (gateErr) {
+          console.warn(
+            `[atelier:monitor] completionGate failed for ${launch.runId}:`,
+            gateErr,
+          );
+        }
+
         resolve({
           runId: launch.runId,
           agent,
@@ -135,9 +185,15 @@ export function waitForAll(
 ): Promise<RunResult[]> {
   return Promise.all(launches.map((l) => waitForCompletion(l, config, signal)));
 }
-
-/** 列出所有正在运行的 subagent（从 cache 目录扫描 status.json） */
-export function listRunning(): RunResult[] {
+/**
+ * 列出所有正在运行的 subagent（从 cache 目录扫描 status.json）
+ *
+ * PR-9: 默认隐藏系统子 agent。传 `{ includeSystem: true }` 可看全部。
+ */
+export function listRunning(
+  opts: { includeSystem?: boolean } = {},
+): RunResult[] {
+  const includeSystem = opts.includeSystem ?? false;
   const subagentsDir = getSubagentsDir();
   if (!fs.existsSync(subagentsDir)) return [];
 
@@ -153,6 +209,9 @@ export function listRunning(): RunResult[] {
     } catch {
       /* ignore */
     }
+
+    // PR-9: 默认隐藏系统子 agent（runId 以 sys- 开头）
+    if (!includeSystem && entry.startsWith("sys-")) continue;
 
     results.push({
       runId: entry,

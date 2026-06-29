@@ -44,4 +44,15 @@ export const SubagentParams = Type.Object({
       description: "图片文件路径数组，传递给 visual agent 分析",
     }),
   ),
+  // PR-9: 系统子 agent 标记。系统命令（如 /atelier-dream）调用时设为 true，
+  // 默认 false。spawn 时透传到 registerRun 的 isSystemSpawned 字段。
+  isSystemSpawned: Type.Optional(
+    Type.Boolean({ description: "PR-9: 系统子 agent 标记（默认 false）" }),
+  ),
+  // PR-10: 长程任务 checkpoint + resume 选项
+  action_ext: Type.Optional(
+    Type.String({
+      description: "PR-10: 扩展动作（resume <runId>）",
+    }),
+  ),
 });

@@ -68,6 +68,10 @@ export interface RegisterRunInput {
   taskExcerpt?: string;
   tmuxPane?: string;
   startedAt?: number;
+  /** PR-9: 系统子 agent 标记；默认 false。 */
+  isSystemSpawned?: boolean;
+  /** PR-10: 父 run id（chain/resume 关联查询用）。 */
+  parentRunId?: string;
 }
 
 /** `updateRunStatus` 的输入参数。终态必须传 status，其余可选。 */
@@ -78,6 +82,13 @@ export interface UpdateRunStatusInput {
   error?: string;
   finishedAt?: number;
   workfilePath?: string;
+}
+
+/** PR-7: `updateRunReturnStatus` 的输入参数。从 result.md 解析出的 header 字段。 */
+export interface UpdateRunReturnStatusInput {
+  runId: string;
+  returnStatus: "success" | "partial" | "failed" | "blocked" | "unknown";
+  returnSummary?: string;
 }
 
 /** 一条 run 的全部字段。 */
@@ -95,6 +106,20 @@ export interface RegisteredRun {
   taskExcerpt: string;
   exitCode: number | null;
   error: string | null;
+  /** PR-7: result.md header 解析出的 status。 */
+  returnStatus: "success" | "partial" | "failed" | "blocked" | "unknown" | null;
+  /** PR-7: result.md header 解析出的 summary。 */
+  returnSummary: string | null;
+  /** PR-7: 最近一次写入 returnStatus 的时间戳。 */
+  returnStatusCheckedAt: number | null;
+  /** PR-8: completion gate reentry 次数。 */
+  reentryCount: number;
+  /** PR-9: 系统子 agent 标记（白名单内的 agent 自动 true）。 */
+  isSystemSpawned: boolean;
+  /** PR-9/PR-10: 父 run id（chain step / resume parent）。 */
+  parentRunId: string | null;
+  /** PR-10: checkpoint 文件路径（本阶段可选；未来 resume 用）。 */
+  checkpointPath: string | null;
 }
 
 interface RegisteredRow {
@@ -111,6 +136,13 @@ interface RegisteredRow {
   task_excerpt: string;
   exit_code: number | null;
   error: string | null;
+  return_status: string | null;
+  return_summary: string | null;
+  return_status_checked_at: number | null;
+  reentry_count: number;
+  is_system_spawned: number;
+  parent_run_id: string | null;
+  checkpoint_path: string | null;
 }
 
 /** rebuildFromStatusFiles 的统计报告 */
@@ -201,7 +233,33 @@ export function closeRegistry(): void {
  *  - last_turn_at : 本阶段总等于 started_at；后续 PR 引入 turn 计数时扩展
  *  - task_excerpt: task.md 前 200 字摘要（避免大文本进 DB）
  */
+/**
+ * 初始化 schema。`IF NOT EXISTS` 保证幂等。
+ *
+ * 字段解释：
+ *  - run_id     : PRIMARY KEY；sa-{base36ts}-{3bytehex}（launcher.ts:83 生成）
+ *  - agent      : agent 名（如 worker/scout/oracle），来自 agentConfig.name
+ *  - mode       : single/parallel/chain，用于 `atelier list` 分组
+ *  - status     : RunStatus 枚举字符串
+ *  - run_dir    : $XDG_CACHE_HOME/pi/subagents/{run_id}
+ *  - last_turn_at : 本阶段总等于 started_at；后续 PR 引入 turn 计数时扩展
+ *  - task_excerpt: task.md 前 200 字摘要（避免大文本进 DB）
+ *  - return_status / return_summary / return_status_checked_at (PR-7): monitor 终态后从 result.md 解析
+ *  - reentry_count (PR-8): completion gate 自动 reentry 计数
+ *  - is_system_spawned (PR-9): 系统子 agent 标记（dream / distill / checkpoint-writer）
+ *  - parent_run_id (PR-9/10): chain step / resume parent 关联
+ *  - checkpoint_path (PR-10): 长程任务 checkpoint 文件路径
+/**
+ * Schema 版本号。每次 ALTER TABLE 加列必须 +1 并在 migrate() 加分支。
+ *   v1 = PR-6 初始(13 列)
+ *   v2 = PR-7..11 新增 7 列(return_status/return_summary/return_status_checked_at/
+ *                          reentry_count/is_system_spawned/parent_run_id/checkpoint_path)
+ *                          + 3 索引
+ */
+const SCHEMA_VERSION = 2;
+
 function initSchema(db: DatabaseSync): void {
+  // 表骨架(v1 兼容)。后续列都通过 migrate() 增量加,不修改这里。
   db.exec(`
     CREATE TABLE IF NOT EXISTS atelier_runs (
       run_id        TEXT PRIMARY KEY,
@@ -218,10 +276,58 @@ function initSchema(db: DatabaseSync): void {
       exit_code     INTEGER,
       error         TEXT
     );
-    CREATE INDEX IF NOT EXISTS idx_status ON atelier_runs(status);
-    CREATE INDEX IF NOT EXISTS idx_started ON atelier_runs(started_at);
-    CREATE INDEX IF NOT EXISTS idx_agent ON atelier_runs(agent);
   `);
+  migrate(db);
+}
+
+/**
+ * 升级到当前 SCHEMA_VERSION。每次加列/索引/重命名都加一个 v+1 分支。
+ *
+ * 设计:
+ *   - 用 `PRAGMA user_version` 记录当前版本(SQLite 原生支持)
+ *   - 用 `PRAGMA table_info(...)` 检测列存在性(避免重复加列报错)
+ *   - ALTER TABLE ADD COLUMN 支持 NOT NULL DEFAULT(必须有 default)
+ *   - 加 NOT NULL 但无默认的列需分两步:先 nullable,UPDATE 填值,再改 NOT NULL
+ *     (SQLite 12+ 起 ADD COLUMN 支持 NOT NULL DEFAULT,可省略 UPDATE)
+ *   - 每次 ALTER 都 try/catch 单列失败不阻塞整体
+ */
+function migrate(db: DatabaseSync): void {
+  const current = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+  if (current >= SCHEMA_VERSION) return;
+
+  // v1 → v2: PR-7..11 新增列 + 索引
+  if (current < 2) {
+    const cols = new Set(
+      (db.prepare("PRAGMA table_info(atelier_runs)").all() as Array<{ name: string }>).map((c) => c.name),
+    );
+    const addCol = (name: string, decl: string) => {
+      if (cols.has(name)) return;
+      try {
+        db.exec(`ALTER TABLE atelier_runs ADD COLUMN ${name} ${decl}`);
+      } catch (e) {
+        console.error(`[atelier:registry] migration v1→v2 ADD COLUMN ${name} 失败:`, e);
+      }
+    };
+    addCol("return_status", "TEXT");
+    addCol("return_summary", "TEXT");
+    addCol("return_status_checked_at", "INTEGER");
+    addCol("reentry_count", "INTEGER NOT NULL DEFAULT 0");
+    addCol("is_system_spawned", "INTEGER NOT NULL DEFAULT 0");
+    addCol("parent_run_id", "TEXT");
+    addCol("checkpoint_path", "TEXT");
+
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_status ON atelier_runs(status);
+      CREATE INDEX IF NOT EXISTS idx_started ON atelier_runs(started_at);
+      CREATE INDEX IF NOT EXISTS idx_agent ON atelier_runs(agent);
+      CREATE INDEX IF NOT EXISTS idx_is_system ON atelier_runs(is_system_spawned);
+      CREATE INDEX IF NOT EXISTS idx_parent ON atelier_runs(parent_run_id);
+    `);
+  }
+
+  // 更新 user_version(原子)
+  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  console.log(`[atelier:registry] schema 已升级 v${current} → v${SCHEMA_VERSION}`);
 }
 
 // ─── Rebuild from status.json ────────────────────────────────────────────────
@@ -336,9 +442,10 @@ export function registerRun(input: RegisterRunInput): void {
       `
       INSERT OR REPLACE INTO atelier_runs (
         run_id, agent, mode, status, run_dir, task_excerpt,
-        started_at, finished_at, last_turn_at, tmux_pane
-      ) VALUES (?, ?, ?, 'running', ?, ?, ?, NULL, ?, ?)
-    `,
+        started_at, finished_at, last_turn_at, tmux_pane,
+        is_system_spawned, parent_run_id
+      ) VALUES (?, ?, ?, 'running', ?, ?, ?, NULL, ?, ?, ?, ?)
+      `,
     ).run(
       input.runId,
       input.agent,
@@ -348,6 +455,8 @@ export function registerRun(input: RegisterRunInput): void {
       startedAt, // started_at
       startedAt, // last_turn_at 本阶段 = started_at
       input.tmuxPane ?? null,
+      input.isSystemSpawned ? 1 : 0,
+      input.parentRunId ?? null,
     );
   } catch (err) {
     console.warn(
@@ -399,6 +508,59 @@ export function updateRunStatus(input: UpdateRunStatusInput): void {
 }
 
 /**
+ * PR-7: 写入 return header 解析结果。
+ * 独立接口（独立函数而非塞进 updateRunStatus），因为：
+ *   - header 解析语义与 status 写终态是不同步的——status 由 wrapper 写终态，
+ *     header 由 monitor 终态后从 result.md 异步解析
+ *   - 调用方无需关心 schema 演进
+ *
+ * 失败仅 console.warn，不阻塞 subagent 调用方。
+ */
+export function updateRunReturnStatus(input: UpdateRunReturnStatusInput): void {
+  try {
+    const db = getRegistry();
+    const now = Date.now();
+    db.prepare(
+      `
+      UPDATE atelier_runs
+      SET return_status = ?,
+          return_summary = ?,
+          return_status_checked_at = ?
+      WHERE run_id = ?
+      `,
+    ).run(input.returnStatus, input.returnSummary ?? null, now, input.runId);
+  } catch (err) {
+    console.warn(
+      `[atelier:registry] updateRunReturnStatus failed for ${input.runId}:`,
+      err,
+    );
+  }
+}
+
+/**
+ * PR-8: 递增 reentry_count（completion gate 触发 re-run 时调）。
+ * 用 UPDATE ... SET reentry_count = reentry_count + 1，保证并发也原子。
+ */
+export function incrementReentryCount(runId: string): number {
+  try {
+    const db = getRegistry();
+    db.prepare(
+      "UPDATE atelier_runs SET reentry_count = reentry_count + 1 WHERE run_id = ?",
+    ).run(runId);
+    const row = db
+      .prepare("SELECT reentry_count FROM atelier_runs WHERE run_id = ?")
+      .get(runId) as { reentry_count: number } | undefined;
+    return row?.reentry_count ?? 0;
+  } catch (err) {
+    console.warn(
+      `[atelier:registry] incrementReentryCount failed for ${runId}:`,
+      err,
+    );
+    return 0;
+  }
+}
+
+/**
  * 触摸 last_turn_at 为 now。本阶段基本不调用（没有 turn 事件），
  * 留给后续 PR 引入 turn 计数时用。
  */
@@ -413,7 +575,6 @@ export function touchRun(runId: string): void {
     /* ignore — 本阶段 best-effort */
   }
 }
-
 // ─── 查询 API ────────────────────────────────────────────────────────────────
 
 /** 把 row 转换为 RegisteredRun（snake_case → camelCase）。 */
@@ -432,6 +593,17 @@ function rowToRun(row: RegisteredRow): RegisteredRun {
     taskExcerpt: row.task_excerpt,
     exitCode: row.exit_code,
     error: row.error,
+    // PR-7
+    returnStatus: row.return_status as RegisteredRun["returnStatus"],
+    returnSummary: row.return_summary,
+    returnStatusCheckedAt: row.return_status_checked_at,
+    // PR-8
+    reentryCount: row.reentry_count,
+    // PR-9
+    isSystemSpawned: row.is_system_spawned === 1,
+    parentRunId: row.parent_run_id,
+    // PR-10
+    checkpointPath: row.checkpoint_path,
   };
 }
 

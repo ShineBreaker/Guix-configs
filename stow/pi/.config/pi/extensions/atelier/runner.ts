@@ -20,9 +20,23 @@ import type {
   RunResult,
   SubagentConfig,
 } from "./types.ts";
-import { launchParallel, launchSingle, paneIsAlive } from "./launcher.ts";
+import {
+  generateRunId,
+  launchParallel,
+  launchSingle,
+  paneIsAlive,
+} from "./launcher.ts";
 import { waitForAll, waitForCompletion } from "./monitor.ts";
 import { ensureWorkfile } from "./workfile.ts";
+import { isSystemAgent } from "./system-agents.ts";
+import {
+  createCheckpoint,
+  markCheckpointFailed,
+  markStepCompleted,
+  writeCheckpoint as writeCheckpointToFile,
+} from "./checkpoint.ts";
+const writeCheckpoint = writeCheckpointToFile; // 重命名避免与函数变量冲突
+import { generateWorkflowId, persistWorkflow } from "./workflow.ts";
 // resolveAgentModel 已删除（subagents.json 废弃，逻辑并入 resolveModelChain）
 
 /**
@@ -123,30 +137,17 @@ export async function executeWithFallback(
   topRowTargetPaneId?: string,
   splitPercent?: number,
   images?: string[],
+  // PR-9: 系统子 agent 透传。默认由 isSystemAgent(agent.name) 推断。
+  isSystemSpawned?: boolean,
+  // PR-10: chain/parallel 内的 parent run id(由 runChain/runParallelBatches 生成)
+  parentRunId?: string,
 ): Promise<RunResult> {
+  const resolvedSystem = isSystemSpawned ?? isSystemAgent(agent.name);
   const modelChain = resolveModelChain(agent, config, explicitModel);
 
-  // 如果没有模型链（全部依赖 defaultModel），直接执行不重试
-  if (modelChain.length === 0) {
-    const launch = launchSingle(
-      agent,
-      task,
-      config,
-      cwd,
-      undefined,
-      topRowTargetPaneId,
-      splitPercent ?? 50,
-      images,
-    );
-    return waitForCompletion(launch, config, signal);
-  }
-
-  let lastResult: RunResult | undefined;
-  const maxAttempts = Math.min(MAX_ATTEMPTS, modelChain.length);
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const model = modelChain[attempt];
-    const launch = launchSingle(
+  // 把 resolvedSystem 闭包到一个本地 helper 中,避免在两处 launchSingle 重复写 9 个参数
+  const launchWith = (model: string | undefined) =>
+    launchSingle(
       agent,
       task,
       config,
@@ -155,7 +156,20 @@ export async function executeWithFallback(
       topRowTargetPaneId,
       splitPercent ?? 50,
       images,
+      resolvedSystem,
+      parentRunId,
     );
+
+  if (modelChain.length === 0) {
+    const launch = launchWith(undefined);
+    return waitForCompletion(launch, config, signal);
+  }
+
+  let lastResult: RunResult | undefined;
+  const maxAttempts = Math.min(MAX_ATTEMPTS, modelChain.length);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const launch = launchWith(modelChain[attempt]);
     const result = await waitForCompletion(launch, config, signal);
 
     if (result.status === "completed") return result;
@@ -257,6 +271,56 @@ export async function runChain(
   let topRowTargetPaneId: string | undefined;
   const startedAt = Date.now();
 
+  // PR-10: 为整个 chain 生成一个 parentRunId；所有 step 的 registerRun 关联到此 id。
+  // 同时创建 checkpoint（5 节格式 YAML）与 Workflow（PR-11 JSON）并持久化。
+  const parentRunId = generateRunId();
+  const intent = (rootTask ?? steps[0]?.task ?? "").slice(0, 200);
+
+  let checkpoint: ReturnType<typeof createCheckpoint> | null = null;
+  let workflow: import("./workflow.ts").Workflow | null = null;
+  try {
+    checkpoint = createCheckpoint(
+      parentRunId,
+      "chain",
+      steps.map((s, idx) => ({
+        id: `step-${idx + 1}`,
+        agent: s.agent.name,
+        task: s.task,
+      })),
+      intent,
+    );
+    writeCheckpoint(checkpoint, cwd);
+  } catch (err) {
+    console.warn(
+      `[atelier:runner] chain ${parentRunId} createCheckpoint failed:`,
+      err,
+    );
+    checkpoint = null;
+  }
+  try {
+    workflow = {
+      id: generateWorkflowId(),
+      name: `chain-${parentRunId}`,
+      mode: "chain",
+      steps: steps.map((s, idx) => ({
+        id: `step-${idx + 1}`,
+        agent: s.agent.name,
+        task: s.task,
+        dependsOn: idx === 0 ? [] : [`step-${idx}`],
+        status: "pending",
+      })),
+      context: { task: rootTask ?? "" },
+      parentRunId,
+    };
+    persistWorkflow(workflow, cwd);
+  } catch (err) {
+    console.warn(
+      `[atelier:runner] chain ${parentRunId} workflow persist failed:`,
+      err,
+    );
+    workflow = null;
+  }
+
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     const task = step.task
@@ -265,7 +329,7 @@ export async function runChain(
     // 计算水平分割百分比，确保等分
     const pct = Math.round(((steps.length - i) / (steps.length - i + 1)) * 100);
 
-    // 使用带 fallback 的执行
+    // 使用带 fallback 的执行（PR-10: 传入 parentRunId 关联到 atelier_runs.parent_run_id）
     const result = await executeWithFallback(
       step.agent,
       task,
@@ -275,11 +339,44 @@ export async function runChain(
       signal,
       topRowTargetPaneId,
       pct,
+      undefined, // images
+      undefined, // isSystemSpawned
+      parentRunId,
     );
 
     // 验证 workfile
     if (result.status === "completed") {
       ensureWorkfile(result, cwd, startedAt);
+    }
+
+    // PR-10: 每完成一步写 checkpoint（写盘 + 更新 workflow 状态 + persist）
+    if (checkpoint) {
+      try {
+        checkpoint = markStepCompleted(checkpoint, i, {
+          runId: result.runId,
+          workfilePath: result.workfilePath,
+          outputPreview: result.output.slice(0, 500),
+          inheritedContextForNext: previous.slice(0, 2000),
+        });
+        writeCheckpoint(checkpoint, cwd);
+      } catch (err) {
+        console.warn(
+          `[atelier:runner] chain ${parentRunId} step ${i + 1} markStepCompleted failed:`,
+          err,
+        );
+      }
+    }
+    if (workflow) {
+      try {
+        workflow.steps[i].status =
+          result.status === "completed" ? "completed" : "failed";
+        persistWorkflow(workflow, cwd);
+      } catch (err) {
+        console.warn(
+          `[atelier:runner] chain ${parentRunId} workflow step ${i + 1} persist failed:`,
+          err,
+        );
+      }
     }
 
     // 将 workfile 路径注入到下一步的上下文中
@@ -290,7 +387,24 @@ export async function runChain(
 
     results.push(result);
     previous = outputWithContext;
-    if (result.status === "failed") break;
+    if (result.status === "failed") {
+      if (checkpoint) {
+        try {
+          checkpoint = markCheckpointFailed(
+            checkpoint,
+            i,
+            result.error ?? "failed",
+          );
+          writeCheckpoint(checkpoint, cwd);
+        } catch (err) {
+          console.warn(
+            `[atelier:runner] chain ${parentRunId} markCheckpointFailed failed:`,
+            err,
+          );
+        }
+      }
+      break;
+    }
   }
 
   return results;

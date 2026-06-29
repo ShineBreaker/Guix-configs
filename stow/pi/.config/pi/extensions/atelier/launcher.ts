@@ -26,6 +26,8 @@ import type {
 import { TOP_ROW_PERCENT } from "./types.ts";
 import { removeSubagentOnlyMarkers } from "./context.ts";
 import { registerRun } from "./registry.ts";
+import { formatReturnHeaderInstruction } from "./return-header.ts";
+import { isSystemAgent } from "./system-agents.ts";
 
 // ─── XDG 路径 ────────────────────────────────────────────────────────────────
 
@@ -228,9 +230,9 @@ export function prepareAgentPrompt(
   const rawBody = removeSubagentOnlyMarkers(bodyLines.join("\n")).trim();
   if (!rawBody) return null;
 
-  // 在 agent 自己的 prompt 前面追加「能力自检」段，让模型自己判断视觉能力。
-  // 不维护 modelCapabilities 表：模型自己知道它有没有 vision。
-  const body = `${CAPABILITY_SELF_CHECK}\n\n${rawBody}`;
+  // 一次性追加：能力自检段 + Return Header 指令 + agent 自有 body。
+  // Return Header 指令（PR-7）让子 agent 在 final message 顶部写出结构化字段。
+  const body = `${CAPABILITY_SELF_CHECK}\n\n${RETURN_FORMAT_INSTRUCTION}\n\n${rawBody}`;
 
   const promptPath = path.join(runDir, "subagent-prompt.md");
   try {
@@ -258,6 +260,13 @@ subagent({ agent: "visual", task: "分析以下图片：[描述图片情境]", i
 \`\`\`
 
 支持视觉的模型：minimax-cn/MiniMax-M3、xiaomi/mimo-v2.5。`;
+
+// PR-7：Return Header 指令——统一注入到所有 subagent 的 prompt 头部。
+// 让子 agent 在 final message 顶部写出 "Status:"/Summary 等结构化字段，
+// 方便父会话结构化解析而非靠 regex 猜。
+//
+// 由 prepareAgentPrompt() 在 CAPABILITY_SELF_CHECK 之后追加。
+const RETURN_FORMAT_INSTRUCTION = formatReturnHeaderInstruction();
 
 /** 读取 run 目录下的 status.json */
 export function readStatus(runDir: string): StatusFile | null {
@@ -357,6 +366,10 @@ export function launchSingle(
   topRowTargetPaneId?: string,
   splitPercent = 50,
   images?: string[],
+  // PR-9: 系统子 agent 标记。默认由 isSystemAgent(agent.name) 推断；外部传 false 可强制覆盖
+  isSystemSpawned?: boolean,
+  // PR-10: chain / parallel batch 的 parent run id,关联到 atelier_runs.parent_run_id
+  parentRunId?: string,
 ): LaunchResult {
   if (!process.env.TMUX) {
     throw new Error("atelier requires Pi to run inside a tmux session");
@@ -372,8 +385,9 @@ export function launchSingle(
     runId,
     agent: agent.name,
     mode: "single",
-    runDir,
     taskExcerpt: task.slice(0, 200),
+    isSystemSpawned: isSystemSpawned ?? isSystemAgent(agent.name),
+    parentRunId,
   });
 
   // 准备 subagent prompt 文件（包含 subagent-only 段，但不含 HTML 注释标记）
@@ -420,6 +434,10 @@ export function launchParallel(
   config: SubagentConfig,
   model?: string,
   existingTopRowPaneId?: string,
+  // PR-9: 整个 batch 共享的 isSystemSpawned（默认由 isSystemAgent 推断）
+  isSystemSpawned?: boolean,
+  // PR-10: parallel batch 的 parent run id,关联到 atelier_runs.parent_run_id
+  parentRunId?: string,
 ): LaunchResult[] {
   if (!process.env.TMUX) {
     throw new Error("atelier requires Pi to run inside a tmux session");
@@ -435,13 +453,14 @@ export function launchParallel(
     const runId = generateRunId();
     const runDir = getRunDir(runId);
     prepareRunDir(runDir, task);
-    // 同步注册到全局 registry（SQLite）；失败仅 console.warn，不阻塞 subagent
+    // PR-9: 同步注册到全局 registry；isSystemSpawned 推断
     registerRun({
       runId,
       agent: agent.name,
       mode: "parallel",
       runDir,
-      taskExcerpt: task.slice(0, 200),
+      isSystemSpawned: isSystemSpawned ?? isSystemAgent(agent.name),
+      parentRunId,
     });
 
     // 准备 subagent prompt 文件

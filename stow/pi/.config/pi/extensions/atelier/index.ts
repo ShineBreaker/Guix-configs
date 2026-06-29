@@ -59,6 +59,36 @@ import { stripSubagentOnlySection } from "./context.ts";
 import { rebuildFromStatusFiles, closeRegistry } from "./registry.ts";
 import { orphanRecovery } from "./orphan-recovery.ts";
 import { startStuckDetector } from "./stuck-detector.ts";
+import { isSystemAgent } from "./system-agents.ts";
+import {
+  MAX_REENTRY,
+  READ_ONLY_AGENTS,
+  gateStatus,
+  decide as completionGateDecide,
+} from "./completion-gate.ts";
+import {
+  type CheckpointData,
+  resolveCheckpointPath,
+  readCheckpoint,
+  writeCheckpoint,
+  createCheckpoint,
+  markStepCompleted,
+  markCheckpointFailed,
+  CheckpointError,
+} from "./checkpoint.ts";
+import { resumeChain, type ResumePlan, type FinishedResume } from "./resume.ts";
+import {
+  type Workflow,
+  type WorkflowStep,
+  generateWorkflowId,
+  persistWorkflow,
+  loadWorkflow,
+  listWorkflows,
+  nextReadyStep,
+  serialize as serializeWorkflow,
+  deserialize as deserializeWorkflow,
+  resolveStepTask,
+} from "./workflow.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
 //
@@ -818,6 +848,77 @@ export default function (pi: ExtensionAPI) {
         const output = (err.stdout || err.stderr || err.message) as string;
         ctx.ui.notify(`❌ loopctl 错误: ${output.slice(0, 500)}`, "error");
       }
+    },
+  });
+  // ── PR-10: /atelier-resume <runId> ──────────────────────────────────────────
+  // 从 SQLite registry + checkpoint 读上次的链式进度，未完成的步骤从当前 step 继续。
+  pi.registerCommand("atelier-resume", {
+    description:
+      "从 checkpoint 续跳 chain/parallel。用法: /atelier-resume <parentRunId>",
+    handler: async (args, ctx) => {
+      const runId = args.trim();
+      if (!runId) {
+        ctx.ui.notify("❌ 用法: /atelier-resume <parentRunId>", "error");
+        return;
+      }
+      try {
+        const cwd = process.cwd();
+        const config = loadConfig();
+        const plan = resumeChain(runId, config, cwd);
+        if (!plan) {
+          ctx.ui.notify(
+            `❌ 未找到 runId=${runId} 的 resume plan（checkpoint 丢失或已完成）`,
+            "error",
+          );
+          return;
+        }
+        ctx.ui.notify(
+          `✓ ${plan.parentRunId} 续跳中：${plan.completedSteps}/${plan.totalSteps} 步已完成，剩 ${plan.remainingSteps} 步`,
+          "info",
+        );
+      } catch (err) {
+        ctx.ui.notify(
+          `❌ resume 失败: ${err instanceof Error ? err.message : String(err)}`,
+          "error",
+        );
+      }
+    },
+  });
+
+  // ── PR-11: /atelier-workflow list|show <id> ─────────────────────────────────
+  // 查看已持久化的 workflow JSON（不启动新 workflow）。
+  pi.registerCommand("atelier-workflow", {
+    description: "查看 workflow list/show。子命令: list | show <id>",
+    handler: async (args, ctx) => {
+      const cwd = process.cwd();
+      const parts = args.trim().split(/\s+/);
+      const sub = parts[0] ?? "list";
+      if (sub === "list") {
+        const items = listWorkflows(cwd);
+        if (items.length === 0) {
+          ctx.ui.notify("（无 workflow）", "info");
+          return;
+        }
+        const lines = items
+          .map((w) => `  ${w.id}  ${w.name}  [${w.mode}]`)
+          .join("\n");
+        ctx.ui.notify(`Workflows:\n${lines}`, "info");
+        return;
+      }
+      if (sub === "show" && parts[1]) {
+        const wf = loadWorkflow(cwd, parts[1]);
+        if (!wf) {
+          ctx.ui.notify(`❌ 未找到 workflow id=${parts[1]}`, "error");
+          return;
+        }
+        const summary = JSON.stringify(wf, null, 2).slice(0, 1500);
+        ctx.ui.notify(
+          `${summary}${wf.steps.length > 0 ? "\n..." : ""}`,
+          "info",
+        );
+        return;
+      }
+      ctx.ui.notify("❌ 用法: /atelier-workflow list | show <id>", "error");
     },
   });
 

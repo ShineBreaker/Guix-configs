@@ -292,6 +292,18 @@ fi
 
 write_status "$FINAL_STATUS" "$EXIT_CODE" "$STARTED_AT" "$FINISHED_AT" "$ERROR_MESSAGE"
 
+# PR-7：验证 result.md 顶部是否是 Return Header。若缺，写 stderr 警告（不阻塞返回）。
+# atelier 侧的 monitor.ts 仍能 parse → 返回 null → 标 return_status="unknown"。
+# wrapper 层只做轻量提示，便于 tmux pane 内肉眼诊断。
+if [[ -f "$result_file" ]]; then
+	first_line="$(head -n 1 "$result_file" 2>/dev/null || true)"
+	if [[ "$first_line" != *"**"*"Status"*"**"*":"* ]]; then
+		printf '%b[atelier:wrapper]%b result.md 缺 Return Header（首行非 **Status**:）。\n' "$c_yellow" "$c_reset" >&2 || true
+	fi
+else
+	printf '%b[atelier:wrapper]%b result_file 不存在：%s\n' "$c_yellow" "$c_reset" "$result_file" >&2 || true
+fi
+
 # 清理临时文件
 if [[ -n "${TMP_PROMPT:-}" && -f "$TMP_PROMPT" ]]; then
 	rm -f "$TMP_PROMPT"
