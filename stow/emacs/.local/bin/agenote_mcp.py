@@ -35,6 +35,7 @@ from kb_lib.core import (  # noqa: E402
     STALE_THRESHOLD_DAYS,
     ARCHIVE_THRESHOLD_DAYS,
     VALID_STATUSES,
+    KNOWN_AGENTS,
     MEMORY_SECTIONS,
     agenote_context,
     default_context,
@@ -186,6 +187,42 @@ def _cross_domain_search(
                     "snippet": snippet,
                 }
             )
+
+    # ── Phase 2 reconcile 事实：作为额外检索目标（带 source 标记）──────────────
+    # 只读拉取的其他 agent memory（hermes 等），weight 低于 KB 卡片，
+    # 命中时 domain="reconcile"、source=hermes，便于调用方区分来源。
+    try:
+        from kb_lib.reconcile import load_reconcile_facts
+
+        for fact in load_reconcile_facts():
+            hay = fact.get("content", "")
+            haystack = hay if case_sensitive else hay.casefold()
+            term_hits = [t for t in normalized_terms if t in haystack]
+            if not term_hits:
+                continue
+            occurrence_count = sum(haystack.count(t) for t in term_hits)
+            title = fact.get("title", "")
+            title_hay = title if case_sensitive else title.casefold()
+            title_bonus = 25 * sum(1 for t in term_hits if t in title_hay)
+            raw_score = len(term_hits) * 100 + occurrence_count + title_bonus
+            weighted_score = raw_score * fact.get("weight", 0.7)
+            results.append(
+                {
+                    "domain": "reconcile",
+                    "source": fact.get("source", ""),
+                    "weight": fact.get("weight", 0.7),
+                    "raw_score": raw_score,
+                    "score": round(weighted_score, 1),
+                    "title": title,
+                    "file": "",  # reconcile 事实无对应 .org 文件
+                    "id": fact.get("id", ""),
+                    "snippet": hay[:200] + ("..." if len(hay) > 200 else ""),
+                }
+            )
+    except Exception:
+        # reconcile 索引不可用（如首次未跑）→ 静默跳过，不影响 KB 检索
+        pass
+
     results.sort(key=lambda r: r["score"], reverse=True)
     return results[:limit]
 
@@ -481,12 +518,25 @@ def agenote_health() -> dict:
     cat_counts = Counter(c.get("category", "unknown") for c in cards)
     weak_cats = {cat: cnt for cat, cnt in cat_counts.items() if cnt < 3}
 
+    # ── 跨 agent 溯源分布（Phase 5）──────────────────────────────────────────
+    # by_source：每张卡片由哪个 agent 写入。空串 = 人类手写（agenote 域通常为空）。
+    # 来源是 KBContext.agent_name → 写卡时落 :SOURCE_AGENT: → _card_dict 解析。
+    # 与 Phase 2 reconcile 联动：reconcile 拉取的 hermes/crush 事实打对应 source。
+    source_counts = Counter(c.get("source_agent", "") for c in cards)
+    # known（白名单内）与 unknown（白名单外，便于发现未登记的新 agent）
+    by_source = {
+        "counts": dict(sorted(source_counts.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "known_agents": sorted(KNOWN_AGENTS),
+        "unknown": [s for s in source_counts if s and s not in KNOWN_AGENTS],
+    }
+
     def _status(pct, ok_max, warn_max):
         return "ok" if pct < ok_max else "warn" if pct < warn_max else "bad"
 
     return {
         "total": total,
         "status": dict(status_counts),
+        "by_source": by_source,
         "isolated": {
             "pct": isolated_pct,
             "threshold": 15,
@@ -505,6 +555,77 @@ def agenote_health() -> dict:
         },
         "weak_categories": weak_cats,
     }
+
+
+@mcp.tool()
+def agenote_reconcile(source: str = "all", dry_run: bool = False) -> dict:
+    """跨 agent memory 只读 reconcile：把其他 agent 的 memory 拉进检索范围。
+
+    从其他 agent（当前仅 hermes）的 memory store 只读抽取事实，写入
+    `.reconcile/index.json`，让 agenote_search 能搜到，但**绝不写回源文件**
+    **绝不污染权威 KB**（reconcile 事实 weight 低于 KB 卡片）。
+
+    Args:
+        source: "hermes" | "all"（all 跑所有已注册 source）
+        dry_run: True 只返回报告不落盘（首次/审核用，默认 False 直接落盘）
+
+    Returns:
+        ReconcileReport dict：{source, indexed, skipped, pruned, errors,
+        error_details, indexed_items}
+    """
+    from kb_lib.reconcile import reconcile_source
+
+    report = reconcile_source(source=source, dry_run=dry_run)
+    return report.to_dict()
+
+
+@mcp.tool()
+def agenote_dream(window_days: int = 7, dry_run: bool = True) -> dict:
+    """memory consolidation：从 reconcile 事实启发式提炼候选卡片。
+
+    把其他 agent memory 里**高频出现、KB 尚未覆盖**的主题提为候选新卡片。
+    **默认 dry_run=True**：只返回候选清单，review 后用 dry_run=False 才写 KB。
+
+    纯启发式（关键词频次），不调 LLM，可安全手动触发。
+    **零候选是合法返回**（KB 已覆盖所有高频主题 → 无需 consolidate）。
+
+    Args:
+        window_days: 事实时间窗口（保留参数，当前 reconcile 事实无时间戳）
+        dry_run: True 只返回候选不写 KB（默认）
+
+    Returns:
+        DreamReport dict：{window_days, total_reconcile_facts, candidates,
+        promoted, skipped_existing, error_details, message}
+    """
+    from kb_lib.dream import run_dream
+
+    report = run_dream(window_days=window_days, dry_run=dry_run)
+    return report.to_dict()
+
+
+@mcp.tool()
+def agenote_distill(window_days: int = 30, dry_run: bool = True) -> dict:
+    """workflow packaging：把重复经验打包成 skill 草稿。
+
+    扫 KB 里**被反复使用的**（type=ascended 或 usage_count≥2）工作流模式，
+    按 category+tech 聚类，同主题 ≥2 张才生成 SKILL.md 草稿，写到 `.distill/`
+    （**不直接进 skills/ 目录**，人工 review + move 才生效）。
+
+    **零候选是合法返回**（KB 无重复工作流 → 无需 distill）。
+    不调 LLM 生成正文（模板填空，正文留空由人工填）。
+
+    Args:
+        window_days: 保留参数（当前扫全量 KB）
+        dry_run: True 只返回候选不落盘（默认）
+
+    Returns:
+        DistillReport dict：{total_kb_cards, candidates, drafted,
+        skipped_existing_draft, error_details, message}
+    """
+    from kb_lib.distill import run_distill
+
+    report = run_distill(window_days=window_days, dry_run=dry_run)
+    return report.to_dict()
 
 
 @mcp.tool()

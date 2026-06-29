@@ -9,6 +9,11 @@ agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 A
 
 > **调用方式**：agenote 已改造为 MCP server，agent 主循环通过 MCP tool 调用（tool 名以 `agenote_` 为前缀）。pi-mcp-adapter lazy 连接，首次调用时自动启动 server。以下示例中的 `agenote_*` 均为 MCP tool 名。
 
+> **来源溯源**：每张 agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env
+> `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote_health()` 的 `by_source` 字段可看各 agent
+> 写卡分布；`agenote_search` 命中跨 agent 卡片时 `domain`/`source` 字段标注来源。
+> 跨 agent 经验共享（reconcile/dream/distill）见 `agenote-curator` skill。
+
 ## 何时该记录
 
 主动记录以下场景，减少重复劳动：

@@ -34,6 +34,38 @@ VALID_TYPES = {"debug", "refactor", "research", "workflow", "feature", "config"}
 VALID_OWNERS = {"human", "ai", "collab"}
 VALID_ENTRY_TYPES = {"mistake", "note", "ascended"}
 
+# ── source_agent 体系（跨 agent 经验溯源）─────────────────────────────────────
+# 记录每张卡片由哪个 agent 写入，供跨 agent 检索/健康度统计/reconcile 使用。
+# 写入时从 os.environ["AGENOTE_AGENT"] 取值；人类手写的卡片留空（source_agent=""）。
+# 白名单用于 sanity check（缺失或不在白名单只警告，不阻塞，便于新增 agent）。
+KNOWN_AGENTS = {
+    "pi",  # pi-coding-agent（agenote-hooks 自动写入）
+    "hermes",  # hermes-agent
+    "omp",  # oh-my-pi（用户偏好暂不托管，预留）
+    "crush",  # crush agent
+    "opencode",  # opencode fork
+    "mimocode",  # MiMoCode（opencode fork）
+    "claude-code",  # claude-code
+    "pi-dream",  # dream 工作流产生的卡片（系统生成）
+    "pi-distill",  # distill 工作流产生的卡片（系统生成）
+}
+
+# AGENOTE_AGENT 环境变量名（各 agent 的 MCP 启动入口需设置）
+AGENT_ENV_VAR = "AGENOTE_AGENT"
+# 兜底默认值：未设置环境变量时（如人类直接 kb add）记为 pi，保持向后兼容
+DEFAULT_AGENT = "pi"
+
+
+def default_agent() -> str:
+    """读取当前调用者所属 agent 名。
+
+    优先取 AGENOTE_AGENT 环境变量；缺失时回退 DEFAULT_AGENT（"pi"）。
+    空/只空白视为未设置（回退默认值），避免 SOURCE_AGENT 写成空串。
+    """
+    val = os.environ.get(AGENT_ENV_VAR, "").strip()
+    return val or DEFAULT_AGENT
+
+
 # ── 阈值 ──────────────────────────────────────────────────────────────────────
 STALE_DAYS = 30  # 记忆条目超过此天数未更新视为陈旧
 DEFAULT_LIST_COUNT = 20  # kb list 默认显示条数
@@ -140,10 +172,14 @@ class KBContext:
     inbox: Path  # inbox.org 路径
     is_human: bool = True  # 是否人类域（影响 MEMORY 模板文案、curate 基础权重选择）
     default_weight: float = 1.5  # 该域卡片默认检索权重
+    agent_name: str = ""  # 写入卡片时打的 source_agent 标签（default_context 留空）
 
 
 def default_context() -> KBContext:
-    """人类知识库上下文（KB_ROOT 根，权重 1.5）。"""
+    """人类知识库上下文（KB_ROOT 根，权重 1.5）。
+
+    人类域的 agent_name 留空（""），区分"人手写"与"agent 写"。
+    """
     return KBContext(
         name="human",
         root=KB_ROOT,
@@ -156,13 +192,19 @@ def default_context() -> KBContext:
         inbox=KB_INBOX,
         is_human=True,
         default_weight=HUMAN_DEFAULT_WEIGHT,
+        agent_name="",
     )
 
 
-def agenote_context() -> KBContext:
+def agenote_context(agent_name: str | None = None) -> KBContext:
     """agenote 上下文（KB_ROOT/agenote 子目录，权重 1.0）。
 
     首次调用不创建目录——由 cmd_agenote_init / ensure_dirs(ctx) 负责。
+
+    agent_name 决定该上下文写入卡片时的 SOURCE_AGENT 标签：
+    - 显式传参时用传入值（便于 dream/distill 等系统工作流标记自身）
+    - 否则读 AGENOTE_AGENT 环境变量（MCP 启动入口设置）
+    - 都缺失时回退 DEFAULT_AGENT（"pi"），保持向后兼容
     """
     root = KB_ROOT / "agenote"
     return KBContext(
@@ -177,6 +219,7 @@ def agenote_context() -> KBContext:
         inbox=root / "inbox.org",
         is_human=False,
         default_weight=AGENT_DEFAULT_WEIGHT,
+        agent_name=agent_name if agent_name is not None else default_agent(),
     )
 
 
@@ -330,6 +373,8 @@ def _card_dict(filepath: Path, ctx: "KBContext | None" = None) -> dict | None:
     if created:
         created = re.sub(r"[\[\]]", "", created).split()[0]
     entry_type = parse_org_prop(content, "ENTRY_TYPE") or None
+    # source_agent：记录卡片写入者。旧卡片无此属性 → 空串（迁移时补 pi）。
+    source_agent = parse_org_prop(content, "SOURCE_AGENT") or ""
 
     # ── 解析 tags 行 ─────────────────────────────────────────────────────
     # tags 行格式: ":category:type:owner:tech::"（冒号分隔，尾部双冒号）
@@ -353,6 +398,7 @@ def _card_dict(filepath: Path, ctx: "KBContext | None" = None) -> dict | None:
         "type": parse_org_prop(content, "TYPE") or "workflow",
         "owner": parse_org_prop(content, "OWNER") or "ai",
         "entry_type": entry_type,
+        "source_agent": source_agent,
         "status": parse_org_prop(content, "STATUS") or "done",
         "last_used": parse_org_prop(content, "LAST_USED"),
         "last_verified": parse_org_prop(content, "LAST_VERIFIED"),

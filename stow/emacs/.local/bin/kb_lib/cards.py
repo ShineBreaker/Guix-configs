@@ -22,6 +22,7 @@ from kb_lib.core import (  # noqa: E402
     VALID_TYPES,
     VALID_OWNERS,
     VALID_ENTRY_TYPES,
+    KNOWN_AGENTS,
     VALID_STATUSES,
     STALE_DAYS,
     STALE_THRESHOLD_DAYS,
@@ -91,6 +92,16 @@ def cmd_add(args: argparse.Namespace, ctx=None) -> None:
             file=sys.stderr,
         )
 
+    # source_agent：从 ctx.agent_name 取（agenote 域有值、人类域为空串）。
+    # 不在白名单只警告不阻塞，便于新增 agent 而无需同步改代码。
+    source_agent = getattr(ctx, "agent_name", "") or ""
+    if source_agent and source_agent not in KNOWN_AGENTS:
+        print(
+            f"警告: source_agent '{source_agent}' 不在已知 agent 列表中 "
+            f"({', '.join(sorted(KNOWN_AGENTS))})",
+            file=sys.stderr,
+        )
+
     # entry_type 自动推断（仅在用户未显式指定时）
     if entry_type and not args.type:
         if entry_type in ("mistake", "ascended"):
@@ -140,6 +151,9 @@ def cmd_add(args: argparse.Namespace, ctx=None) -> None:
     lines.append(f":LAST_VERIFIED: [{ts}]")
     lines.append(":EFFORT:")
     lines.append(f":OWNER:    {owner}")
+    # source_agent：agent 域写入者溯源；人类域留空（不写该行，区分人/agent）
+    if source_agent:
+        lines.append(f":SOURCE_AGENT: {source_agent}")
     lines.append(f":WEIGHT:   {ctx.default_weight}")
     lines.append(":USAGE_COUNT: 0")
     lines.append(":END:")
