@@ -56,6 +56,9 @@ import { formatResults } from "./formatting.ts";
 import { SubagentParams } from "./schemas.ts";
 import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
 import { stripSubagentOnlySection } from "./context.ts";
+import { rebuildFromStatusFiles, closeRegistry } from "./registry.ts";
+import { orphanRecovery } from "./orphan-recovery.ts";
+import { startStuckDetector } from "./stuck-detector.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
 //
@@ -143,6 +146,34 @@ const makeDetails =
 
 export default function (pi: ExtensionAPI) {
   const config = loadConfig();
+
+  // ── Atelier Registry：启动 rebuild + orphan recovery + stuck detector ─────
+  //
+  // 三步全部 best-effort，任何一步失败不阻塞 atelier 扩展加载。
+  // status.json 仍是 single source of truth；registry 仅是查询视图。
+  // 设计细节见 registry.ts / orphan-recovery.ts / stuck-detector.ts。
+  const registryInit = (() => {
+    try {
+      const rebuildReport = rebuildFromStatusFiles();
+      const recoveryReport = orphanRecovery();
+      return { ok: true as const, rebuildReport, recoveryReport };
+    } catch (err) {
+      console.warn(
+        "[atelier:registry] init failed, continuing without index:",
+        err,
+      );
+      return { ok: false as const, error: err };
+    }
+  })();
+
+  if (registryInit.ok && registryInit.rebuildReport.indexed > 0) {
+    console.log(
+      `[atelier:registry] indexed ${registryInit.rebuildReport.indexed} runs from status.json`,
+    );
+  }
+
+  // 后台 stuck detector fiber（unref，不阻塞进程退出）
+  const stuckDetector = registryInit.ok ? startStuckDetector() : null;
 
   // ── 注册 subagent 工具 ──────────────────────────────────────────────────
 
@@ -993,6 +1024,10 @@ export default function (pi: ExtensionAPI) {
     pi.on("session_shutdown", () => {
       reviewedPlans.clear();
       finalizeSessionLog(process.cwd());
+      // 停止 stuck detector，清除 interval handler
+      stuckDetector?.stop();
+      // flush WAL，关闭 SQLite 连接
+      closeRegistry();
     });
   }
 }

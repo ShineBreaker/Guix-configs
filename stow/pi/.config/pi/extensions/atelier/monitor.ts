@@ -19,6 +19,7 @@ import {
   readStatus,
   writeFailedStatus,
 } from "./launcher.ts";
+import { updateRunStatus } from "./registry.ts";
 
 /**
  * 轮询等待单个 subagent 完成。
@@ -48,6 +49,13 @@ export async function waitForCompletion(
       ) => {
         clearInterval(interval);
         writeFailedStatus(launch.runDir, exitCode, error ?? output, startedAt);
+        // 同步终态到全局 registry（SQLite）
+        updateRunStatus({
+          runId: launch.runId,
+          status: "failed",
+          exitCode,
+          error: error ?? output,
+        });
         resolve({
           runId: launch.runId,
           agent,
@@ -79,6 +87,13 @@ export async function waitForCompletion(
       if (status && status.status !== "running") {
         clearInterval(interval);
         const output = readResult(launch.runDir);
+        // wrapper 写的终态（completed / failed）同步到全局 registry
+        updateRunStatus({
+          runId: launch.runId,
+          status: status.status === "completed" ? "completed" : "failed",
+          exitCode: status.exitCode ?? 1,
+          error: status.error,
+        });
         resolve({
           runId: launch.runId,
           agent,

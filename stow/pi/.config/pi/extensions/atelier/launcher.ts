@@ -25,6 +25,7 @@ import type {
 } from "./types.ts";
 import { TOP_ROW_PERCENT } from "./types.ts";
 import { removeSubagentOnlyMarkers } from "./context.ts";
+import { registerRun } from "./registry.ts";
 
 // ─── XDG 路径 ────────────────────────────────────────────────────────────────
 
@@ -366,6 +367,14 @@ export function launchSingle(
   const runId = generateRunId();
   const runDir = getRunDir(runId);
   prepareRunDir(runDir, task);
+  // 同步注册到全局 registry（SQLite）；失败仅 console.warn，不阻塞 subagent
+  registerRun({
+    runId,
+    agent: agent.name,
+    mode: "single",
+    runDir,
+    taskExcerpt: task.slice(0, 200),
+  });
 
   // 准备 subagent prompt 文件（包含 subagent-only 段，但不含 HTML 注释标记）
   const promptFile = prepareAgentPrompt(agent.name, runDir);
@@ -426,6 +435,14 @@ export function launchParallel(
     const runId = generateRunId();
     const runDir = getRunDir(runId);
     prepareRunDir(runDir, task);
+    // 同步注册到全局 registry（SQLite）；失败仅 console.warn，不阻塞 subagent
+    registerRun({
+      runId,
+      agent: agent.name,
+      mode: "parallel",
+      runDir,
+      taskExcerpt: task.slice(0, 200),
+    });
 
     // 准备 subagent prompt 文件
     const promptFile = prepareAgentPrompt(agent.name, runDir);
