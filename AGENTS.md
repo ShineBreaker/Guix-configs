@@ -181,7 +181,7 @@ blue stow-all --restow           # 重建所有包
 
 ```bash
 blue --dry-run rebuild        # tangle + 括号检查 + guix build --dry-run，不写入系统
-blue check                    # 最快：仅括号平衡检查
+blue check                    # 最快：逐块括号平衡检查（定位到块名）
 ```
 
 `--dry-run` 对**所有** `%run` 子进程统一生效（reconfigure/clean/gc/stow/nix 等短路打印）。tangle 与括号检查仍真跑（`#:real?`）以保留验证能力。

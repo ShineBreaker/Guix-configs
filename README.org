@@ -205,7 +205,7 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 blue --dry-run rebuild
 #+end_src
 
-=blue rebuild= 在执行前会自动跑括号平衡检查 (=<paren-check>= testable, 由 =blueprint.scm= 中 =%config-check= 定义)。若只想验证构建、不写入系统, 用 =blue --dry-run rebuild= 。
+=blue rebuild= 在执行前会自动跑整体括号平衡检查 (在 =prepare-config= 里, 对 tangle 出的 =config.scm= )。独立的 =blue check= 则做*逐块*检查——直接解析 =config.org= 每个 =#+NAME= 块 + 周边 =.scm= 文件, 能定位到具体出错的块名, 且不依赖 tangle。若只想验证构建、不写入系统, 用 =blue --dry-run rebuild= 。
 
 + 如果提示 =unbound variable=: 检查是否导入对应模块 (可以利用 [[https://search.guix.moe/][Toys]] 来查询)
 + 如果提示 =invalid field specifier=: 检查括号是否标错 (推荐用 =Emacs= 来进行检查)

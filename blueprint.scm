@@ -206,8 +206,9 @@
 ;;;   * <org-config>（继承 <buildable>） → `blue build` 会触发 tangle
 ;;;   * <paren-check>（继承 <testable>） → `blue check` 会触发括号检查
 ;;;
-;;; 所以 `blue build` 等价于 tangle，`blue check` 等价于 tangle+括号检查
-;;; （testable 依赖 buildable 的产物）。
+;;; 所以 `blue build` 等价于 tangle。`blue check` 走的是另一条路：不 tangle，
+;;; 而是直接解析 config.org 的每个 #+NAME 块 + 周边 scm 文件，逐个做括号平衡
+;;; 检查（见 §4 的 %check-config-blocks）——能定位到具体出错的块名。
 
 ;; ---- 两个 blue 类 --------------------------------------------------------
 
@@ -217,7 +218,7 @@
   (constructor org-config)
   (predicate org-config?))
 
-;; "括号检查" testable：输入是上面的 buildable（即 config.scm），输出占位标记。
+;; "括号检查" testable：不依赖 buildable（不 tangle），输出占位标记。
 (define-blue-class <paren-check>
   (inherit <testable>)
   (constructor paren-check)
@@ -249,15 +250,20 @@
 
 (define %config-check
   (paren-check
-   (inputs (list %config-buildable))             ; 依赖 tangle 产物
+   (inputs '())                                  ; 不依赖 tangle，直接解析 config.org
    (outputs '("tmp/config.scm.check"))))         ; 仅作占位，内容见下
 
 ;; ---- 括号平衡检查（手写 Scheme 词法扫描） --------------------------------
 ;;
-;; 为什么不用 guile 自带的 read？因为 tangle 出的 config.scm 可能含
-;; unquote / 各种读取器宏，read 报错时定位差。这里只做最朴素的"数括号"
-;; 检查，且正确跳过字符串字面量和 ; 注释，足以抓出 tangle 失败最常见的
-;; "括号不匹配"症状。
+;; 为什么不用 guile 自带的 read？因为 config.org 的块/tangle 出的 config.scm
+;; 可能含 unquote / 各种读取器宏，read 报错时定位差。这里只做最朴素的"数括号"
+;; 检查，且正确跳过字符串字面量和 ; 注释，足以抓出最常见的"括号不匹配"症状。
+;;
+;; 两处复用：
+;;   * blue check（§4 的 %check-config-blocks）：对每个 scheme 块的 body 调
+;;     count-parens，出错定位到块名。
+;;   * prepare-config（本节下方，rebuild/home 用）：对完整 tangle 出的
+;;     config.scm 调 check-paren-balance，作 reconfigure 前的整体兜底。
 
 ;; 数 port 里的左/右括号数量，返回 (opens . closes)。
 (define (count-parens port)
@@ -304,20 +310,19 @@
                    (- closes opens) opens closes)
            #f)))))))
 
-;; `blue check` 触发时调这个：跑括号检查，通过则写一个占位标记文件。
+;; `blue check` 触发时调这个：逐块 + 周边 scm 括号检查，全过则写占位标记。
+;; 不再依赖 tangle（不消费 inputs），直接解析 config.org 的命名块。
 (define-blue-method (ask-build-manifest (this <paren-check>)
                                         (inputs <list>)
                                         (output <string>))
-  (let ((input (first inputs)))
-    (make-build-manifest
-     (string-append "检查\t" input)
-     (lambda ()
-       (unless (check-paren-balance input)
-         (error "括号平衡检查失败"))
-       (call-with-output-file output
-         (lambda (port)
-           (format port "已检查 ~a~%" input)))))))
-
+  (make-build-manifest
+   (string-append "检查\t" %config-org)
+   (lambda ()
+     (unless (%check-config-blocks)             ; 见 §4（块感知检查）
+       (error "括号平衡检查失败"))
+     (call-with-output-file output
+       (lambda (port)
+         (format port "已检查 ~a~%" %config-org))))))
 ;; ---- 三步流水线（被各 reconfigure 命令复用） -----------------------------
 
 ;; 步骤 1：跑 tangle，生成 tmp/config.scm。#:real? #t 保证 dry-run 也真跑。
@@ -425,6 +430,42 @@
             (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
             (kill-emacs 1)))))")
 
+;; 枚举：一次性遍历 file，导出【所有】 #+NAME 块。blue check 用它做逐块检查，
+;; 避免每个块启动一次 emacs。与 block-extract-el 共用同一套正则风格，可对照阅读。
+;;
+;; 输出格式（用 >>> / <<< 作记录分隔，避免与 body 内任意文本冲突）：
+;;   >>>name=<n>\tlang=<l>\tnoweb=plain|noweb
+;;   <body 第 1 行>
+;;   ...
+;;   <<<
+;; 每条记录：一行 >>> 头 + body（已 string-trim 首尾换行）+ 一行 <<< 结束。
+(define block-list-el
+  "(let* ((file (nth 0 command-line-args-left))
+         (name-re \"^#[+]NAME:[[:space:]]+\\\\([^[:space:]\n]+\\\\)\")
+         (begin-re \"^#[+]begin_src[[:space:]]+\\\\([^[:space:]\n]+\\\\)\")
+         (end-re \"^#[+]end_src\")
+         name lang body-start has-noweb)
+    (with-temp-buffer
+      (insert-file-contents file)
+      (goto-char (point-min))
+      (while (re-search-forward name-re nil t)
+        (setq name (match-string-no-properties 1))
+        (forward-line 1)
+        (when (re-search-forward begin-re nil t)
+          (setq lang (match-string-no-properties 1))
+          (forward-line 1)
+          (setq body-start (point))
+          (when (re-search-forward end-re nil t)
+            (let ((body (buffer-substring-no-properties
+                         body-start (line-beginning-position))))
+              (setq has-noweb (string-match-p \"<<[^>]+>>\" body))
+              (princ (format \">>>name=%s\\tlang=%s\\tnoweb=%s\\n\"
+                             name (or lang \"\")
+                             (if has-noweb \"noweb\" \"plain\")))
+              (princ (string-trim body \"\\n\" \"\\n\"))
+              (princ \"\\n<<<\\n\"))))))
+    (kill-emacs 0))")
+
 ;; 把一段 elisp 写到 tmp/<name>.el，返回文件路径。block-show/block-replace 用。
 (define (write-temp-elisp name body)
   (mkdir-p %tmp-dir)
@@ -444,6 +485,111 @@
           `("--quick" "--batch" "--script" ,script-file
             ,%config-org ,@extra-args)))
     " ")))
+
+;; 跑 block-list-el 导出 config.org 里所有命名块，解析 >>>...<<< 记录，
+;; 返回 ((name lang noweb body) ...) 列表。body 已去掉首尾换行。
+;; blue check 用它拿到每个块的 body 做逐块括号检查。
+(define (%extract-all-blocks)
+  (let* ((script (write-temp-elisp "block-list.el" block-list-el))
+         (output (%run-elisp-script script '())))
+    (let loop ((lines (string-split output #\newline))
+               (current #f)            ; 当前记录的 (name lang noweb)
+               (body-acc '())          ; body 行累积（逆序）
+               (result '()))
+      (cond
+       ;; 输入耗尽：返回结果（末尾应有空行，current 应已是 #f）
+       ((null? lines)
+        (reverse result))
+       ;; 记录头 >>>name=...	lang=...	noweb=...
+       ((string-prefix? ">>>" (car lines))
+        (let* ((header (substring (car lines) 3)) ; 去掉 ">>>"
+               (fields (map (lambda (field)
+                              (cons (car (string-split field #\=))
+                                    (string-join
+                                     (cdr (string-split field #\=)) "=")))
+                            (string-split header #\tab))))
+          (loop (cdr lines)
+                (list (or (assoc-ref fields "name") "")
+                      (or (assoc-ref fields "lang") "")
+                      (or (assoc-ref fields "noweb") ""))
+                '()
+                result)))
+       ;; 记录结束 <<<：收尾当前记录，body 行逆序拼回字符串
+       ((string=? "<<<" (car lines))
+        (if current
+            (loop (cdr lines) #f '()
+                  (cons (append current
+                                (list (string-join (reverse body-acc) "\n")))
+                        result))
+            (loop (cdr lines) #f '() result)))
+       ;; body 行：累积（仅在记录内才有意义；记录外的行丢弃）
+       (else
+        (loop (cdr lines) current
+              (if current (cons (car lines) body-acc) body-acc)
+              result))))))
+
+;; ---- 逐块 + 周边 scm 括号检查（blue check 的核心） -----------------------
+;;
+;; 这三个函数复用 §3 的 count-parens / check-paren-balance 和上面的
+;; %extract-all-blocks，实现"逐块定位"的括号检查。blue check 不再 tangle，
+;; 而是解析 config.org 的每个命名块单独检查——出错时能报具体块名。
+
+;; 周边 scm 文件：与 config.org 同级的独立 Scheme 源，逐个整体检查。
+(define %peripheral-scm-files
+  (list (string-append %repo-root "/source/channel.scm")
+        (string-append %repo-root "/source/information.scm")
+        (string-append %repo-root "/source/manifest.scm")))
+
+;; 检查单个块：(name lang noweb body) → #t/#f。
+;; 只检查 lang=scheme 的块（fish/bash/js 是嵌在 scheme 字符串里的内容，跳过）。
+;; main 块也检查——<<ref>> 占位本身括号平衡，能抓 main 自身的括号错。
+(define (%check-block-parens block)
+  (match block
+    ((name lang noweb body)
+     (if (string=? lang "scheme")
+         (call-with-input-string body
+                                 (lambda (port)
+                                   (match (count-parens port)
+                                     ((opens . closes)
+                                      (cond
+                                       ((= opens closes)
+                                        (format #t "[OK] 块 ~a: ~a 对~%" name opens)
+                                        #t)
+                                       ((> opens closes)
+                                        (format (current-error-port)
+                                                "[ERROR] 块 ~a: 多余 ~a 个左括号 (open=~a close=~a)~%"
+                                                name (- opens closes) opens closes)
+                                        #f)
+                                       (else
+                                        (format (current-error-port)
+                                                "[ERROR] 块 ~a: 多余 ~a 个右括号 (open=~a close=~a)~%"
+                                                name (- closes opens) opens closes)
+                                        #f))))))
+         (begin
+           (format #t "[SKIP] 块 ~a (~a)~%" name lang)
+           #t)))))
+
+;; 逐块检查 config.org + 整体检查周边 scm 文件。全部通过返回 #t，任一失败 #f。
+;; 失败不立即中止——继续跑完，让用户一次看到所有错误。
+(define (%check-config-blocks)
+  (let* ((blocks (%extract-all-blocks))
+         (scheme-count (length (filter (lambda (b) (string=? (cadr b) "scheme"))
+                                       blocks)))
+         (block-results (map %check-block-parens blocks))
+         (scm-results
+          (map (lambda (file)
+                 (if (file-exists? file)
+                     (check-paren-balance file)
+                     (begin
+                       (format (current-error-port) "[ERROR] 文件不存在: ~a~%" file)
+                       #f)))
+               %peripheral-scm-files)))
+    (let ((all-ok? (every identity (append block-results scm-results))))
+      (if all-ok?
+          (format #t "[OK] 全部通过: ~a 个 scheme 块 + ~a 个周边文件~%"
+                  scheme-count (length %peripheral-scm-files))
+          (format (current-error-port) "[FAIL] 括号检查未通过~%"))
+      all-ok?)))
 
 ;;; ============================================================
 ;;; §5  密钥扫描（secret-scan 命令）
@@ -777,7 +923,7 @@
 (define %project-command-groups
   `((workflow
      ("build" "将 source/config.org 导出为 tmp/config.scm")
-     ("check" "导出配置并检查 Scheme 括号平衡")
+     ("check" "逐块检查 config.org + 周边 scm 的括号平衡")
      ("clean" "清理 Blue 生成的构建/检查产物"))
     (deployment
      ("home" "应用 Guix Home 配置")

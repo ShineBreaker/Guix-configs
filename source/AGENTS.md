@@ -118,7 +118,7 @@ source/files/
 blue rebuild               # tangle → 括号检查 → reconfigure → locate --update
 blue --dry-run rebuild     # 构建验证不写入（tangle/括号检查真跑）
 blue home                  # 仅 Home 层（含 dotfiles），不需 sudo
-blue check                 # 括号平衡检查
+blue check                 # 逐块括号平衡检查（定位到块名）
 
 # 块级编辑（修改单个 #+NAME: 块，避免读 2000 行 config.org）
 blue block-show <name>                 # 提取块 body 到 tmp/block-<name>.scm（打印路径）
