@@ -8,3 +8,6 @@
 [submodule "stow/emacs/.config/emacs"]
 	path = stow/emacs/.config/emacs
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
+[submodule "stow/appimage-run"]
+	path = stow/appimage-run
+	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
