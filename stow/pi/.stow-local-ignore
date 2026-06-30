@@ -29,3 +29,8 @@ extensions/.*(__pycache__|.*\.pyc)$
 #     pi only loads *.ts extension files; skip the markdown so `--no-folding`
 #     doesn't symlink them into ~/.config/pi. ---
 extensions/.*AGENTS\.md$
+
+# --- extensions submodules: skip their .git gitlink files so
+#     `--no-folding` doesn't symlink submodule metadata into ~/.config/pi.
+#     Matches the emacs submodule convention (stow/emacs also ignores .git). ---
+\.git$

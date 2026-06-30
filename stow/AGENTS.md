@@ -26,10 +26,12 @@
 ```
 stow/
 ├── appimage-run/
-│   └── .local/
-│       └── bin/
-│           ├── appimage-run_lib/
-│           └── appimage-run
+│   ├── .local/
+│   │   └── bin/
+│   │       ├── appimage-run_lib/
+│   │       └── appimage-run
+│   ├── .stow-local-ignore
+│   └── README.md
 ├── emacs/
 │   ├── .config/
 │   │   ├── agents/

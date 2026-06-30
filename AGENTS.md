@@ -11,10 +11,9 @@
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
 ```
-Guix-configs/
+Guix-configs///
 ├── docs/
 │   ├── agenote_mcp.md
-│   ├── appimage-run.md
 │   ├── atelier.md
 │   └── loopctl.md
 ├── dotfiles/
@@ -70,8 +69,10 @@ Guix-configs/
 │   └── manifest.scm
 ├── stow/
 │   ├── appimage-run/
-│   │   └── .local/
-│   │       └── bin/
+│   │   ├── .local/
+│   │   │   └── bin/
+│   │   ├── .stow-local-ignore
+│   │   └── README.md
 │   ├── emacs/
 │   │   ├── .config/
 │   │   │   ├── agents/
@@ -101,7 +102,8 @@ Guix-configs/
 ├── CLAUDE.md
 ├── LICENSE
 ├── README.org
-└── blueprint.scm
+├── blueprint.scm
+└── packages.md
 ```
 
 <!-- /structor -->
