@@ -25,10 +25,11 @@
 
 ```
 stow/
-├── .local/
-│   └── bin/
-│       ├── agenote_cli.py
-│       └── agenote_mcp.py
+├── appimage-run/
+│   └── .local/
+│       └── bin/
+│           ├── appimage-run_lib/
+│           └── appimage-run
 ├── emacs/
 │   ├── .config/
 │   │   ├── agents/
@@ -44,6 +45,7 @@ stow/
 │   │       ├── early-init.el
 │   │       └── init.el
 │   ├── .local/
+│   │   ├── .local/
 │   │   └── bin/
 │   │       ├── __pycache__/
 │   │       ├── kb_lib/

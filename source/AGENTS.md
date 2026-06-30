@@ -26,8 +26,7 @@ source/
 │   │       ├── 00-main.nix
 │   │       ├── code.nix
 │   │       ├── hermes.nix
-│   │       ├── nix.nix
-│   │       └── prismlauncher.nix
+│   │       └── nix.nix
 │   ├── flake.lock
 │   └── flake.nix
 ├── channel.lock

@@ -6,22 +6,105 @@
 
 以 Guix 为核心的个人系统配置仓库，单一 `source/config.org` 同时声明 `operating-system` 和 `home-environment`，通过 `blue` 构建并部署。
 
+<!-- structor:begin -->
+
+<!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
+
 ```
-.
-├── source/                 # Guix System / Home 的 Scheme + Org 源（唯一权威）
-│   ├── config.org          # 唯一的 Org 配置源（system + home 全 Noweb 拼合）
-│   ├── channel.scm         # 频道定义
-│   ├── channel.lock        # 频道版本锁定（由 blue update 自动更新）
-│   ├── information.scm     # 全局变量（username、%data-dirs、%btrfs-subvolumes）
-│   ├── files/              # 静态模板（nftables.conf、rounded.qss、zed.json、skel/）
-│   └── nix/                # Nix home-manager 备份分支（独立使用，与 Guix 不互通）
+Guix-configs/
+├── docs/
+│   ├── agenote_mcp.md
+│   ├── appimage-run.md
+│   ├── atelier.md
+│   └── loopctl.md
 ├── dotfiles/
-│   ├── enable/             # 当前启用的配置（统一由 Guix Home stow 部署）
-│   └── disable/            # 已弃用的旧配置（保留参考）
-├── tmp/                    # blue 生成的中间产物（自动生成，不要手动编辑）
-├── tools/                  # 辅助脚本
-└── blueprint.scm           # 任务运行器定义（基于 blue-mono Scheme DSL）
+│   ├── disable/
+│   │   ├── dms-suite/
+│   │   │   ├── .config/
+│   │   │   └── .local/
+│   │   └── waybar-suite/
+│   │       ├── .config/
+│   │       └── .local/
+│   └── enable/
+│       ├── agents/
+│       │   ├── .config/
+│       │   ├── .local/
+│       │   └── .gitignore
+│       ├── desktop/
+│       │   ├── .config/
+│       │   └── .local/
+│       ├── noctalia-suite/
+│       │   ├── .config/
+│       │   └── .local/
+│       ├── system/
+│       │   └── .config/
+│       ├── terminal/
+│       │   ├── .config/
+│       │   └── .local/
+│       └── utilities/
+│           ├── .config/
+│           ├── .local/
+│           └── .nix-channels
+├── screenshots/
+│   ├── browse.png
+│   ├── daily.png
+│   ├── emacs.png
+│   └── terminal.png
+├── source/
+│   ├── files/
+│   │   ├── skel/
+│   │   │   └── .config/
+│   │   ├── nftables.conf
+│   │   ├── rounded.qss
+│   │   └── zed.json
+│   ├── nix/
+│   │   ├── configuration/
+│   │   │   ├── 00-main/
+│   │   │   └── programs/
+│   │   ├── flake.lock
+│   │   └── flake.nix
+│   ├── channel.lock
+│   ├── channel.scm
+│   ├── config.org
+│   ├── information.scm
+│   └── manifest.scm
+├── stow/
+│   ├── appimage-run/
+│   │   └── .local/
+│   │       └── bin/
+│   ├── emacs/
+│   │   ├── .config/
+│   │   │   ├── agents/
+│   │   │   └── emacs/
+│   │   ├── .local/
+│   │   │   ├── .local/
+│   │   │   └── bin/
+│   │   └── .stow-local-ignore
+│   ├── hermes/
+│   │   └── .local/
+│   │       └── share/
+│   ├── pi/
+│   │   ├── .config/
+│   │   │   └── pi/
+│   │   ├── .local/
+│   │   │   ├── bin/
+│   │   │   └── share/
+│   │   └── .stow-local-ignore
+│   └── .stowrc
+├── tools/
+│   ├── bootstrap.sh
+│   └── fxxk-link.sh
+├── .gitattributes
+├── .gitignore
+├── .gitmodules
+├── .sops.yaml
+├── CLAUDE.md
+├── LICENSE
+├── README.org
+└── blueprint.scm
 ```
+
+<!-- /structor -->
 
 ## 构建管线
 
