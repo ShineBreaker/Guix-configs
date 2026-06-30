@@ -1153,6 +1153,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "reasonix-desktop-bin"
 
         ;; 工具
+        "binutils"                  ; readelf — appimage-run 架构检测
         "du-dust"
         "file"
         "graphviz"
@@ -1161,6 +1162,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "pandoc"
         "reuse"
         "ripgrep"
+        "squashfs-tools"            ; unsquashfs — appimage-run 解包
         "texlive-scheme-basic"
         "xxd"
 
@@ -1618,7 +1620,7 @@ end
 
         ;; 主题
         "orchis-theme"
-        "orchis-kde-themes")
+        "orchis-kde-themes"))
 #+end_src
 
 *** 软件自启动
