@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from kb_lib.core import (  # noqa: E402
+from ag_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
     KB_MEMORY,
@@ -996,6 +996,18 @@ def cmd_restore(args: argparse.Namespace, ctx=None) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _jaccard_similarity(s1: str, s2: str) -> float:
+    """标题词级 Jaccard 相似度。
+
+    抽出为模块级函数供 health._detect_duplicates 复用，统一去重算法。
+    """
+    w1 = set(s1.casefold().split())
+    w2 = set(s2.casefold().split())
+    if not w1 or not w2:
+        return 0.0
+    return len(w1 & w2) / len(w1 | w2)
+
+
 def cmd_deduplicate(args: argparse.Namespace, ctx=None) -> None:
     """基于标题相似度和 category/tech 匹配检测重复卡片。"""
     ctx = ctx or default_context()
@@ -1003,19 +1015,11 @@ def cmd_deduplicate(args: argparse.Namespace, ctx=None) -> None:
     index = _load_index(ctx)
     cards_list = [c for c in index["cards"] if c.get("status") != "archived"]
 
-    def _jaccard(s1: str, s2: str) -> float:
-        """标题词级 Jaccard 相似度。"""
-        w1 = set(s1.casefold().split())
-        w2 = set(s2.casefold().split())
-        if not w1 or not w2:
-            return 0.0
-        return len(w1 & w2) / len(w1 | w2)
-
     pairs = []
     for i in range(len(cards_list)):
         for j in range(i + 1, len(cards_list)):
             a, b = cards_list[i], cards_list[j]
-            sim = _jaccard(a.get("title", ""), b.get("title", ""))
+            sim = _jaccard_similarity(a.get("title", ""), b.get("title", ""))
             if a.get("category") == b.get("category"):
                 sim += 0.15
             if a.get("tech") and a.get("tech") == b.get("tech"):
@@ -1134,95 +1138,9 @@ def cmd_review(args: argparse.Namespace, ctx=None) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# 增强: cmd_stats --health
+# cmd_health 已迁至 ag_lib.health（与 agenote_mcp.agenote_health / 策展脚本统一）。
+# cmd_curate 通过 lazy import 调用，避免 cards ↔ health 循环导入。
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
-def cmd_health(args: argparse.Namespace, ctx=None) -> None:
-    """输出知识库健康度报告。"""
-    ctx = ctx or default_context()
-    ensure_dirs(ctx)
-    index = _load_index(ctx)
-    cards = index["cards"]
-    total = len(cards)
-
-    # 状态分布
-    status_counts = Counter(c.get("status", "done") for c in cards)
-    done = status_counts.get("done", 0)
-    stable = status_counts.get("stable", 0)
-    stale = status_counts.get("stale", 0)
-    archived = status_counts.get("archived", 0)
-
-    print("=== 知识库健康度报告 ===")
-    print(
-        f"总卡片: {total} | done: {done} | stable: {stable} | stale: {stale} | archived: {archived}"
-    )
-    print()
-
-    # 孤立率
-    linked_cards = set()
-    for f in ctx.experiences.rglob("*.org"):
-        if f.is_symlink():
-            continue
-        content = f.read_text(encoding="utf-8")
-        if "[[file:" in content:
-            linked_cards.add(parse_org_prop(content, "ID") or f.stem.split("-")[0])
-    isolated = total - len(linked_cards)
-    isolated_pct = (isolated / total * 100) if total > 0 else 0
-    isolated_icon = "✅" if isolated_pct < 15 else "⚠️" if isolated_pct < 25 else "❌"
-
-    # 过时率
-    stale_pct = (stale / total * 100) if total > 0 else 0
-    stale_icon = "✅" if stale_pct < 10 else "⚠️" if stale_pct < 20 else "❌"
-
-    # 类型偏斜
-    type_counts = Counter(c.get("type", "unknown") for c in cards)
-    max_type, max_type_count = (
-        type_counts.most_common(1)[0] if type_counts else ("none", 0)
-    )
-    max_type_pct = (max_type_count / total * 100) if total > 0 else 0
-    type_icon = "✅" if max_type_pct < 45 else "⚠️"
-
-    # 薄弱类别
-    cat_counts = Counter(c.get("category", "unknown") for c in cards)
-    weak_cats = [(cat, cnt) for cat, cnt in cat_counts.items() if cnt < 3]
-
-    print("── 健康指标 ──")
-    print(f"  孤立率:     {isolated_pct:.0f}% [阈值 <15%] {isolated_icon}")
-    print(f"  过时率:      {stale_pct:.0f}% [阈值 <10%] {stale_icon}")
-    print(f"  类型偏斜:   {max_type} {max_type_pct:.0f}% [阈值 <45%] {type_icon}")
-    if weak_cats:
-        cats_str = ", ".join(f"{cat}({cnt})" for cat, cnt in weak_cats)
-        print(f"  薄弱类别:   {cats_str} [阈值 ≥3] ❌")
-    else:
-        print(f"  薄弱类别:   无 [阈值 ≥3] ✅")
-
-    # MEMORY 统计
-    if ctx.memory_org.exists():
-        mem_text = ctx.memory_org.read_text(encoding="utf-8")
-        fb_count = len(re.findall(r"^\*\* F\d+", mem_text, re.MULTILINE))
-        stale_fb = 0
-        for m in re.finditer(r":UPDATED:\s*\[(\d{4}-\d{2}-\d{2})\]", mem_text):
-            try:
-                updated = datetime.strptime(m.group(1), "%Y-%m-%d")
-                if (datetime.now() - updated).days > STALE_DAYS:
-                    stale_fb += 1
-            except ValueError:
-                pass
-        proj_section = ""
-        if "* project" in mem_text and "* reference" in mem_text:
-            proj_start = mem_text.find("* project")
-            proj_end = mem_text.find("* reference")
-            if proj_start < proj_end:
-                proj_section = mem_text[proj_start:proj_end]
-        proj_count = len(
-            re.findall(r"^\*\* .+\n\s+:PROPERTIES:", proj_section, re.MULTILINE)
-        )
-        fb_icon = "✅" if stale_fb < fb_count // 2 else "⚠️"
-        print()
-        print("── 记忆 ──")
-        print(f"  feedback: {fb_count} (stale: {stale_fb}) {fb_icon}")
-        print(f"  project:  {proj_count}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1232,7 +1150,7 @@ def cmd_health(args: argparse.Namespace, ctx=None) -> None:
 
 def cmd_curate(args: argparse.Namespace, ctx=None) -> None:
     """一键策展：健康检查 + 权重重分配 + 去重 + 归档陈旧 + 重建索引。"""
-    from kb_lib.core import (
+    from ag_lib.core import (
         HUMAN_DEFAULT_WEIGHT,
         AGENT_DEFAULT_WEIGHT,
         WEIGHT_USAGE_BONUS,
@@ -1244,8 +1162,10 @@ def cmd_curate(args: argparse.Namespace, ctx=None) -> None:
     ctx = ctx or default_context()
     print(f"=== curate ({ctx.name}) ===")
 
-    # 1. 健康检查
+    # 1. 健康检查（cmd_health 已迁至 ag_lib.health，lazy import 避免循环）
     print("\n── 1. 健康检查 ──")
+    from ag_lib.health import cmd_health
+
     cmd_health(args, ctx)
 
     # 2. 权重重分配

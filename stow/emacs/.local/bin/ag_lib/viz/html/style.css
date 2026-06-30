@@ -49,13 +49,15 @@
   --shadow-focus: 0 0 0 3px var(--accent-soft);
 
   /* 字体 */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei",
-    sans-serif;
-  --font-serif: "Source Han Serif SC", "Noto Serif SC", "Charter",
-    "Iowan Old Style", Georgia, "PingFang SC", serif;
-  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Consolas,
-    "Liberation Mono", monospace;
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-serif:
+    "Source Han Serif SC", "Noto Serif SC", "Charter", "Iowan Old Style",
+    Georgia, "PingFang SC", serif;
+  --font-mono:
+    "JetBrains Mono", "Fira Code", "SF Mono", Consolas, "Liberation Mono",
+    monospace;
 
   /* 节奏 */
   --r-1: 4px;
@@ -1031,11 +1033,21 @@ body {
   font-weight: 600;
 }
 
-.detail-pane .body h1 { font-size: 18px; }
-.detail-pane .body h2 { font-size: 16px; }
-.detail-pane .body h3 { font-size: 14px; }
-.detail-pane .body h4 { font-size: 13px; }
-.detail-pane .body h5 { font-size: 12px; }
+.detail-pane .body h1 {
+  font-size: 18px;
+}
+.detail-pane .body h2 {
+  font-size: 16px;
+}
+.detail-pane .body h3 {
+  font-size: 14px;
+}
+.detail-pane .body h4 {
+  font-size: 13px;
+}
+.detail-pane .body h5 {
+  font-size: 12px;
+}
 
 .detail-pane .body ul,
 .detail-pane .body ol {
@@ -1140,10 +1152,6 @@ body {
 .status-done {
   background: color-mix(in srgb, var(--cyan) 16%, transparent);
   color: var(--cyan);
-}
-.status-draft {
-  background: color-mix(in srgb, var(--orange) 16%, transparent);
-  color: var(--orange);
 }
 .status-archived {
   background: color-mix(in srgb, var(--purple) 16%, transparent);

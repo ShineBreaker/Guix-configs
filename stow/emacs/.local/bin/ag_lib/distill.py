@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 #
-"""kb_lib.distill — workflow packaging（把重复经验打包成 skill 草稿）。
+"""ag_lib.distill — workflow packaging（把重复经验打包成 skill 草稿）。
 
 扫 KB 卡片里**被反复使用的工作流模式**，聚类为候选 skill 草稿，
 写到 `.distill/`（**不直接进 skills/ 目录**），人工 review + 手动 move 才生效。
@@ -25,7 +25,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from kb_lib.core import _load_index, agenote_context
+from ag_lib.core import _load_index, agenote_context
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 常量

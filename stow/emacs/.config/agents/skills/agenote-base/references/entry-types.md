@@ -19,7 +19,7 @@ ENTRY_TYPE 区分卡片的语义类型。agent 场景的映射如下：
 **示例**：
 
 ```
-kb agenote add --title "Guix 通道锁机制" --entry note
+agenote add --title "Guix 通道锁机制" --entry note
 ```
 
 ### `mistake` — 踩坑/被纠正
@@ -37,7 +37,7 @@ kb agenote add --title "Guix 通道锁机制" --entry note
 **示例**：
 
 ```
-kb agenote add --title "误改 tmp/ 产物" --entry mistake
+agenote add --title "误改 tmp/ 产物" --entry mistake
 ```
 
 ### `ascended` — 多轮试错后的最优方案
@@ -54,7 +54,7 @@ kb agenote add --title "误改 tmp/ 产物" --entry mistake
 **示例**：
 
 ```
-kb agenote add --title "Emcc 启动卡死排查" --entry ascended
+agenote add --title "Emcc 启动卡死排查" --entry ascended
 ```
 
 ## 与人类场景的对照

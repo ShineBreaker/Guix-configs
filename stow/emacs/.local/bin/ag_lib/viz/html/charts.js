@@ -21,7 +21,6 @@ var CATEGORY_COLORS = {
 var STATUS_COLORS = {
   stable: "#51cf66",
   done: "#22b8cf",
-  draft: "#ff922b",
   archived: "#cc5de8",
   stale: "#ff6b6b",
 };
@@ -38,7 +37,12 @@ var OWNER_COLORS = {
   ai: "#5c7cfa",
   collab: "#20c997",
 };
-var ENTRY_COLORS = { mistake: "#ff6b6b", note: "#5c7cfa", ascended: "#20c997", none: "#adb5bd" };
+var ENTRY_COLORS = {
+  mistake: "#ff6b6b",
+  note: "#5c7cfa",
+  ascended: "#20c997",
+  none: "#adb5bd",
+};
 
 // ════════════════════════════════════════════════════════════════
 // 工具
@@ -98,9 +102,11 @@ function chartEmpty(svg, w, h, msg) {
 
 function renderStale() {
   var bar = document.getElementById("stale-alert");
-  var s60 = STATS.stale_60_count || 0,
-    s180 = STATS.stale_180_count || 0;
-  if (s60 === 0 && s180 === 0) {
+  var sStale = STATS.stale_count || 0,
+    sArchive = STATS.archive_count || 0,
+    staleDays = STATS.stale_threshold_days || 30,
+    archiveDays = STATS.archive_threshold_days || 90;
+  if (sStale === 0 && sArchive === 0) {
     bar.innerHTML = "";
     bar.style.display = "none";
     return;
@@ -109,10 +115,14 @@ function renderStale() {
   bar.innerHTML =
     "<div>" +
     "<strong>⚠ 陈旧卡片</strong>" +
-    "<span>60 天以上未使用 <strong style='color:var(--orange)'>" +
-    s60 +
-    "</strong> 张 · 180 天以上未使用 <strong style='color:var(--red)'>" +
-    s180 +
+    "<span>" +
+    staleDays +
+    " 天以上未使用 <strong style='color:var(--orange)'>" +
+    sStale +
+    "</strong> 张 · " +
+    archiveDays +
+    " 天以上未使用 <strong style='color:var(--red)'>" +
+    sArchive +
     "</strong> 张，建议验证或归档</span>" +
     "</div>";
 }
@@ -238,10 +248,6 @@ function renderSidebar() {
         renderAll();
       });
     });
-
-  // MEMORY 章节已废弃；memory-grid 在 HTML 中保留为空容器
-  var mg = document.getElementById("memory-grid");
-  if (mg) mg.innerHTML = "";
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -250,7 +256,12 @@ function renderSidebar() {
 
 function renderCharts() {
   var visible = getVisibleCards();
-  renderBarChart("chart-category", countBy(visible, "category"), CATEGORY_COLORS, 160);
+  renderBarChart(
+    "chart-category",
+    countBy(visible, "category"),
+    CATEGORY_COLORS,
+    160,
+  );
   renderBarChart("chart-type", countBy(visible, "type"), TYPE_COLORS, 160);
   renderBarChart("chart-owner", countBy(visible, "owner"), OWNER_COLORS, 160);
   renderBarChart("chart-tech", countBy(visible, "tech"), null, 200);
@@ -260,7 +271,12 @@ function renderCharts() {
     ENTRY_COLORS,
     160,
   );
-  renderBarChart("chart-status", countBy(visible, "status"), STATUS_COLORS, 160);
+  renderBarChart(
+    "chart-status",
+    countBy(visible, "status"),
+    STATUS_COLORS,
+    160,
+  );
   renderTimeline(visible);
   renderHeatmap(visible);
   renderForceGraph(visible);
@@ -629,8 +645,7 @@ function renderHeatmap(visible) {
       "</text>";
     months.forEach(function (m, ci) {
       var v = grid[t + "|" + m] || 0;
-      var intensity =
-        maxV > 0 ? Math.log(1 + v) / Math.log(1 + maxV) : 0;
+      var intensity = maxV > 0 ? Math.log(1 + v) / Math.log(1 + maxV) : 0;
       var color =
         v === 0
           ? "var(--bg-elevated)"
@@ -648,7 +663,7 @@ function renderHeatmap(visible) {
         color +
         '" rx="2">' +
         (v > 0
-          ? '<title>' + esc(t) + " · " + esc(m) + ": " + v + " 张</title>"
+          ? "<title>" + esc(t) + " · " + esc(m) + ": " + v + " 张</title>"
           : "") +
         "</rect>";
       if (v > 0) {
@@ -664,6 +679,9 @@ function renderHeatmap(visible) {
     });
   });
   svg.setAttribute("viewBox", "0 0 " + w + " " + h);
-  svg.setAttribute("style", "max-width: 360px; height: auto; margin: 0 auto; display: block;");
+  svg.setAttribute(
+    "style",
+    "max-width: 360px; height: auto; margin: 0 auto; display: block;",
+  );
   svg.innerHTML = html;
 }

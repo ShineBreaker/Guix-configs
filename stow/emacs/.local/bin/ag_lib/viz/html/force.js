@@ -92,9 +92,7 @@ function renderForceGraph(visible) {
       if (!t) return;
       if (/^(debug|workflow|research|refactor|feature|config)$/i.test(t))
         return;
-      if (
-        /^(general|guix|emacs|framework|gamedev|emacs-config)$/i.test(t)
-      )
+      if (/^(general|guix|emacs|framework|gamedev|emacs-config)$/i.test(t))
         return;
       if (t === c.owner) return;
       if (t === c.category) return;

@@ -9,7 +9,7 @@ import os
 import re
 import sys
 
-from kb_lib.core import die, default_context
+from ag_lib.core import die, default_context
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # lint 命令 — 格式校验与修复

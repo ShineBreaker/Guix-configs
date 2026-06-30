@@ -99,13 +99,15 @@ function renderCards() {
         "</span>",
     );
     if (c.type) {
-      meta.push('<span style="color:' + typeColor + '">' + esc(c.type) + "</span>");
+      meta.push(
+        '<span style="color:' + typeColor + '">' + esc(c.type) + "</span>",
+      );
     }
     meta.push(
       '<span style="color:' + ownerColor + '">· ' + esc(owner) + "</span>",
     );
     if (c.created) {
-      meta.push('<span>· ' + esc(c.created) + "</span>");
+      meta.push("<span>· " + esc(c.created) + "</span>");
     }
     html +=
       '<div class="card-item" data-id="' +
@@ -153,19 +155,29 @@ function highlightSelected(id) {
 
 function renderHeroStats() {
   var el = document.getElementById("hero-stats");
+  var staleDays = STATS.stale_threshold_days || 30,
+    archiveDays = STATS.archive_threshold_days || 90;
   el.innerHTML =
     '<div class="hero-stat" title="知识库总卡片数">' +
     '<span class="num">' +
     (STATS.total || 0) +
     '</span><span class="label">总卡片</span></div>' +
-    '<div class="hero-stat" title="60 天以上未使用">' +
+    '<div class="hero-stat" title="' +
+    staleDays +
+    ' 天以上未使用（stale）">' +
     '<span class="num" style="color:var(--orange)">' +
-    (STATS.stale_60_count || 0) +
-    '</span><span class="label">60d+</span></div>' +
-    '<div class="hero-stat" title="180 天以上未使用">' +
+    (STATS.stale_count || 0) +
+    '</span><span class="label">' +
+    staleDays +
+    "d+</span></div>" +
+    '<div class="hero-stat" title="' +
+    archiveDays +
+    ' 天以上未使用（建议归档）">' +
     '<span class="num" style="color:var(--red)">' +
-    (STATS.stale_180_count || 0) +
-    '</span><span class="label">180d+</span></div>';
+    (STATS.archive_count || 0) +
+    '</span><span class="label">' +
+    archiveDays +
+    "d+</span></div>";
 }
 
 // ════════════════════════════════════════════════════════════════

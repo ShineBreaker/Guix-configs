@@ -6,7 +6,7 @@
 """agenote_cli — hooks 插件用的轻量入口（不走 MCP 协议）。
 
 pi 的 ExtensionAPI 不提供 MCP 调用接口，TS 插件只能 execSync 外部进程。
-本脚本复用 kb_lib 内核，输出人类可读文本（hooks 当前就这样解析）。
+本脚本复用 ag_lib 内核，输出人类可读文本（hooks 当前就这样解析）。
 纯 stdlib，零依赖，直接 python3 运行。
 
 用法:
@@ -26,15 +26,15 @@ import sys
 # 与 kb CLI 相同的 sys.path 注入
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from kb_lib.core import agenote_context, ensure_dirs  # noqa: E402
-from kb_lib.cards import cmd_health, cmd_curate  # noqa: E402
+from ag_lib.core import agenote_context, ensure_dirs  # noqa: E402
+from ag_lib.cards import cmd_curate  # noqa: E402
+from ag_lib.health import cmd_health  # noqa: E402
 
-# kb-agent review 任务的固定模板（原 kb-agent 脚本 REVIEW_TASK 的内容）
+# kb-agent review 任务的固定模板（提示 agent 执行会话后经验采集）
 REVIEW_TASK = (
     "审查本次对话，检测是否有可记录的经验信号（用户纠正、踩坑、发现更优方案），"
-    "并对用到的资料留痕：已有卡片用 agenote touch <id>，联网新知识用 agenote add。"
-    "如有经验信号则运行 agenote add 或 agenote memory_add 写入。"
-    "（agenote 现已通过 MCP tool 暴露，agent 可直接调用对应 tool）"
+    "并对用到的资料留痕：已有卡片用 agenote_touch，联网新知识用 agenote_add。"
+    "如有经验信号则调用 agenote_add 或 agenote_memory_add 写入。"
 )
 
 

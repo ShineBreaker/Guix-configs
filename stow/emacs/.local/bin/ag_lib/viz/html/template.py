@@ -8,6 +8,7 @@
 
 不持有任何 HTML 字符串 —— 所有骨架文本在 .html 文件中。
 """
+
 from pathlib import Path
 from string import Template
 

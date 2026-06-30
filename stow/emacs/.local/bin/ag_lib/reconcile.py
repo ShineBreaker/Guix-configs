@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 #
-"""kb_lib.reconcile — 跨 agent memory 只读索引（reconcile）。
+"""ag_lib.reconcile — 跨 agent memory 只读索引（reconcile）。
 
 把其他 agent 的 memory **只读拉取**进 agenote 检索范围，让所有 agent 都能
 搜到彼此的经验，但**绝不写回源文件**、**绝不污染人类权威 KB**。
@@ -32,7 +32,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from kb_lib.core import KB_ROOT, KNOWN_AGENTS
+from ag_lib.core import KB_ROOT, KNOWN_AGENTS
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # reconcile 索引落盘位置（与 experiences/ 平级，独立目录，绝不混入权威 KB）
@@ -55,7 +55,7 @@ RECONCILE_DEFAULT_WEIGHT = 0.7
 class ReconciledFact:
     """从外部 agent memory 抽取的一条只读事实（reconcile 索引项）。
 
-    字段对齐 kb_lib _card_dict 的结构，便于 agenote_search 统一处理。
+    字段对齐 ag_lib _card_dict 的结构，便于 agenote_search 统一处理。
     但 reconcile 卡片**没有对应 .org 文件**（file 字段为空），只活在
     .reconcile/index.json 里，是纯检索辅助。
     """
@@ -197,10 +197,37 @@ def extract_hermes() -> tuple[list[ReconciledFact], list[str]]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # 每个 source：name → (extractor_fn, 描述)。extractor 返回 (facts, errors)。
+# ag_lib.extract.* 5 个抽取器独立模块，三重只读保护由 open_sqlite_ro() 保证。
 KNOWN_SOURCES: dict[str, tuple] = {
     "hermes": (extract_hermes, "hermes holographic memory_store.db (FTS5)"),
-    # claude-code / crush / mimocode 源当前不存在（~/.claude/projects 等
-    # 实测缺失），暂不登记；待对应 agent memory 落地后再加 extractor。
+    "opencode": (
+        lambda: __import__(
+            "ag_lib.extract.opencode", fromlist=["extract_opencode"]
+        ).extract_opencode(),
+        "opencode sqlite session/message/part (opencode-stable.db)",
+    ),
+    "crush": (
+        lambda: __import__(
+            "ag_lib.extract.crush", fromlist=["extract_crush"]
+        ).extract_crush(),
+        "crush sqlite (global + project-level DBs)",
+    ),
+    "codex": (
+        lambda: __import__(
+            "ag_lib.extract.codex", fromlist=["extract_codex"]
+        ).extract_codex(),
+        "codex XDG (history.jsonl + sessions/YYYY/MM)",
+    ),
+    "claude": (
+        lambda: __import__(
+            "ag_lib.extract.claude", fromlist=["extract_claude"]
+        ).extract_claude(),
+        "claude XDG (CLAUDE_CONFIG_DIR + XDG_DATA_HOME/claude/transcripts)",
+    ),
+    "pi": (
+        lambda: __import__("ag_lib.extract.pi", fromlist=["extract_pi"]).extract_pi(),
+        "pi JSONL 事件流 (parentId 重建)",
+    ),
 }
 
 
@@ -281,6 +308,27 @@ def reconcile_source(source: str = "hermes", dry_run: bool = False) -> Reconcile
     report = ReconcileReport(source=source)
     report.error_details.extend(extract_errors)
     report.errors = len(extract_errors)
+
+    # 0-fact 警告：extractor 跑通但抽不到任何事实（数据未生成 / schema 漂移）
+    if not facts and not extract_errors:
+        report.error_details.append(
+            f"[warn] {source} 抽取到 0 facts（数据未生成或 schema 漂移）"
+        )
+
+    # Dedup：跨 DB 重复（如 crush 全局 + 项目级，或 bind-mount 同源）
+    # 按 id 去重，保留先出现的（数据库读取顺序由 extractor 决定）
+    seen_ids: set[str] = set()
+    deduped: list = []
+    dup_count = 0
+    for f in facts:
+        if f.id in seen_ids:
+            dup_count += 1
+            continue
+        seen_ids.add(f.id)
+        deduped.append(f)
+    facts = deduped
+    if dup_count:
+        report.error_details.append(f"[info] {source} 去重跳过 {dup_count} 条重复")
 
     # KB 优先：跳过与 KB 已有卡片同标题的事实
     kb_titles = _kb_titles()

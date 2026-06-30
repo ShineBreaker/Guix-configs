@@ -1,28 +1,31 @@
 ---
 name: agenote-curator
-description: agenote 自动策展指南。当需要维护 agenote 记事本健康度、去重、归档陈旧条目、重新分配检索权重时使用。涵盖 agenote MCP tool 策展流程与权重机制。
+description: agenote 跨 agent 策展指南。当需要维护 agenote KB 健康度、去重、归档陈旧条目、重新分配检索权重、或从 6 个 AI 编程工具（hermes/opencode/crush/codex/claude/pi）抽取对话与 reconcile 跨 agent memory 时使用。涵盖 agenote MCP tool 策展流程、6 源 XDG 路径与三重只读保护机制。
 ---
 
-# agenote-curator — 自动策展
+# agenote-curator — 跨 agent 自动策展
 
-定期对 agenote 记事本执行策展，保持健康度并优化检索权重。
+定期对 agenote 记事本执行策展，保持健康度并优化检索权重；同时支持从 **6 个 AI 编程工具**抽取对话、跨 agent reconcile 多源 memory。
 
-> agenote 已改造为 MCP server，以下 `agenote_*` 均为 MCP tool 名。
+> agenote 已改造为 MCP server，以下 `agenote_*` 均为 MCP tool 名。底层 CLI 为 `kb`。
 
 ## 何时策展
 
-- 周期性维护（如每周/每次长会话后）
-- 条目数明显增多（>50 条）
+- 周期性维护（每周/每次长会话后）
+- 条目数明显增多（>50 张）
 - 检索结果质量下降（噪音多、相关性差）
+- 新增了对话源或更新了 XDG 环境变量
 - 用户主动要求 `/agenote-curate`
 
-## 一键策展
+## 一键策展（MCP 流水线）
 
 ```
 agenote_curate()
 ```
 
-执行 5 个步骤：
+执行 **2 阶段**：
+
+### Step 1 — KB 内策展（5 步）
 
 1. **健康检查**：孤立率、过时率、类型偏斜、薄弱类别
 2. **权重重分配**：根据 USAGE_COUNT 和新鲜度重新计算每张卡片的 WEIGHT
@@ -30,63 +33,304 @@ agenote_curate()
 4. **归档陈旧**：超阈值（90 天）未验证的 stale 卡片自动归档
 5. **重建索引**：全量扫描 experiences/ 刷新 index.json
 
+### Step 2 — 跨 agent reconcile（6 源）
+
+按 `KNOWN_SOURCES` 表注册顺序跑全部 source（hermes / opencode / crush / codex / claude / pi），结果写到 `.reconcile/index.json`。
+
+## Batch 策展流水线（`kb` CLI）
+
+按顺序执行以下 10 步，适用于夜间策展或手动批处理：
+
+### 第 0 步：提取对话
+
+```bash
+# MCP tool（agent 主循环用）：agenote_extract(source="all")
+# CLI 等价（底层走 ag_lib/extract/ 6 源抽取器）：
+agenote extract --source all --output ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)
+```
+
+> 注：`agenote extract` 子命令尚未在 CLI 暴露（抽取逻辑在 `ag_lib/extract/`，当前仅通过 `agenote_extract` MCP tool 调用）。CLI 批处理场景请用 MCP tool，或直接调 `python3 -m ag_lib.extract`。
+
+### 第 1 步：诊断
+
+```bash
+agenote health --quality --duplicates   # 健康度 + 质量扫描 + 重复检测（统一自 ag_lib/health.py）
+agenote stats                           # 状态分布
+```
+
+### 第 2 步：状态转换
+
+```bash
+# done >30 天且质量合格 → stable
+agenote update <id> --status stable
+# stale >90 天 → 归档
+agenote archive <id> --reason "策展: >90 天未验证"
+```
+
+### 第 3 步：空白检测
+
+```bash
+agenote gaps --stale-days 60            # 类别×类型矩阵 + 缺失组合 + 陈旧卡片（迁自 find_gaps.py）
+```
+
+### 第 4 步：矛盾调和
+
+见下方"矛盾调和规则"。
+
+### 第 5 步：自发综合 + 卡片合并
+
+```bash
+agenote deduplicate --threshold 0.7
+agenote merge <primary> <secondary> --desc "合并原因"
+```
+
+### 第 6 步：补充
+
+从对话历史/收件箱提取经验：
+
+```bash
+agenote fields        # 查看标签，优先复用
+agenote add ...       # 写入新卡片
+```
+
+### 第 7 步：传播联动
+
+见下方"传播联动规则"。
+
+```bash
+agenote memory --stale                    # 记忆验证
+agenote memory --stale --auto-archive-days 60  # 自动归档
+```
+
+### 第 8 步：重整
+
+```bash
+agenote reindex
+agenote lint --fix
+```
+
+### 第 9 步：提交变更
+
+```bash
+agenote commit -m "策展: <一句话总结>"
+```
+
+commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）。无变更时跳过。
+
+### 第 10 步：输出报告
+
+格式见下方"报告格式"。
+
+## 策展原则
+
+**应记录**：用户偏好和纠正、非显而易见的 bug（排查 >2 步）、环境特定陷阱、更好的方案。
+
+**不应记录**：任务进度和 TODO、语法错误和拼写修正、纯流水账、已有经验完全覆盖的情况。
+
+**维护理念**：过时卡片是负担不是资产、矛盾必须处理、卡片之间应有链接。
+
+## 矛盾调和规则
+
+| 矛盾类型           | 处理                              |
+| ------------------ | --------------------------------- |
+| 同条件相反结论     | 保留较新的，旧卡标注「已过时」    |
+| 不同条件分别成立   | 互相引用，注明各自适用场景        |
+| 旧方案被取代       | 旧卡标注「已被 \<新卡ID\> 取代」  |
+| pattern 与卡片矛盾 | 修补 pattern，标注修订原因        |
+| 歧义未决           | 双方标注 `(存疑)`，待下次策展验证 |
+
+## 传播联动规则
+
+- 新卡片推翻旧结论 → `agenote update` 在旧卡追加勘误
+- 同类卡片 ≥3 张 → 晋升为 pattern
+- 新卡片补充了已有 pattern → 修补 pattern
+- 隐含关联的卡片 → `agenote connect` 建立双向链接
+- pattern 引用的卡片已过时 → 标注 pattern 并引用新卡片
+
+## Andon 机制（策展暂停）
+
+后台策展过程中发现以下情况时，暂停自动流程并输出报告，等待人工决策：
+
+- **严重矛盾** — 同一主题 ≥2 张卡片结论相反，且无法按调和规则自动处理
+- **知识库膨胀** — 单次策展新增卡片 >10 张，怀疑提取策略过于激进
+- **模式失效** — 已有 pattern 被 ≥2 张新卡片推翻
+- **画像冲突** — 用户画像中的偏好与近期卡片记录严重不一致
+
+暂停时输出：问题描述 + 涉及的卡片/模式 ID + 建议的三种处理方式。
+
+## 报告格式
+
+```
+═══ 策展报告 ═══
+日期：YYYY-MM-DD
+提取对话：N 条
+新增经验卡片：K 张（列出标题）
+更新已有卡片：M 张（列出标题和更新原因）
+晋升为 pattern：P 条（列出标题）
+修补 pattern：Q 条
+矛盾调和：C 个（列出涉及的卡片）
+── MEMORY 统计 ──
+feedback: X 条（Y stale）
+project: X 个（Y 路径失效）
+reference: X 条
+deprecated: X 条
+```
+
 ## 权重机制（spec §7）
 
-检索时 agenote_search 跨域扫描人类（weight 默认 1.5）+ agent（weight 默认 1.0）卡片，最终分数 = 原始相关度 × WEIGHT。
+检索时 agenote_search 跨域扫描人类（weight 默认 1.5）+ agent（weight 默认 1.0）+ reconcile（weight 0.6-0.7）卡片，最终分数 = 原始相关度 × WEIGHT。
 
 **curate 时的权重重分配公式**：
 
 ```
 新 WEIGHT = 基础权重 × 使用系数 × 新鲜度系数
 
-基础权重:   人类=1.5, agent=1.0
+基础权重:   人类=1.5, agent=1.0, reconcile=0.6-0.7
 使用系数:   1 + 0.1 × min(USAGE_COUNT, 10)   # 常用的提升，上限 +1.0
 新鲜度系数: last_used 超 STALE_DAYS(30天) → 0.8，否则 1.0
 ```
 
-效果：
+**reconcile 权重梯度**：
 
-- 频繁使用的卡片权重爬升（最高 1.0 → 2.0）
-- 长期不用的卡片权重衰减（×0.8）
-- 人类卡片整体权重高于 agent 卡片
+- hermes / pi：0.7（自家或信任度高）
+- opencode / crush / codex / claude：0.6（外部源，略低避免淹没 KB）
+
+## 6 个数据源（XDG-aware）
+
+所有源通过 `ag_lib/extract/` 子包提供抽取器，每个抽取器签名统一为 `(list[ReconciledFact], list[str])`，**三重只读保护**：
+
+1. **SQLite**：`file: URI + mode=ro` + `PRAGMA query_only=1` + 调用方从不构造写语句
+2. **JSONL**：仅读，从不构造写语句
+3. **文件不存在** → 返回 `([], [msg])` 不抛异常
+
+| Source       | 路径（XDG 派生）                                                                                                                     | Schema                                                                               | 权重 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ---- |
+| **hermes**   | `$HERMES_HOME/memory_store.db` = `~/.local/share/hermes/memory_store.db`                                                             | SQLite: `facts` + `facts_fts` (FTS5)                                                 | 0.7  |
+| **opencode** | `~/.local/share/opencode/opencode-stable.db`（476MB 实测）                                                                           | SQLite: `session` + `message(data JSON) + part(data JSON)`                           | 0.7  |
+| **crush**    | `~/.config/crush/.crush/crush.db`（全局）+ 项目级扫描 `~/Documents/{Repo,Org}`、`~/.emacs.d`、`/data/Documents` 下 `.crush/crush.db` | SQLite: `sessions` + `messages(parts JSON list)`                                     | 0.7  |
+| **codex**    | `$CODEX_HOME` = `~/.config/codex/`                                                                                                   | JSONL: `history.jsonl`（顶层）+ `sessions/YYYY/MM/rollout-*.jsonl`（**按年月分层**） | 0.6  |
+| **claude**   | config: `$CLAUDE_CONFIG_DIR` = `~/.config/claude/`；**transcripts: `$XDG_DATA_HOME/claude/transcripts/`**（双重 XDG）                | JSONL: `transcripts/ses_*.jsonl`（26 个文件实测）                                    | 0.6  |
+| **pi**       | `$PI_CODING_AGENT_SESSION_DIR` = `~/.local/share/pi/sessions/`                                                                       | JSONL 事件流（按 `parentId` 重建，**实测有 707 层深链**）                            | 0.7  |
+
+**XDG 重定向来源**：`source/config.org` 的 `xdg-basedir-env-vars` 代码块（第 1828-1875 行）。
+
+### Claude 双重 XDG 注意点
+
+旧脚本假设的 `~/.claude/transcripts/` 已经空了——transcripts 实际走 `$XDG_DATA_HOME/claude/transcripts/`，config 才走 `$CLAUDE_CONFIG_DIR`。任何不读 XDG 环境变量的脚本会**100% 找不到数据**。
+
+### Codex 按年月分层
+
+`$CODEX_HOME/sessions/2026/06/rollout-<uuid>.jsonl`——旧脚本假设的平铺 `sessions/rollout-*.jsonl` 路径是错的。extract 用 `rglob("rollout-*.jsonl")` 递归扫描。
+
+### Pi 深链 RecursionError
+
+实测 pi session 有 707 层 `parentId` 深链，触发 Python 默认 1000 递归限制。extract 用**迭代 DFS**（stack-based）重建消息顺序，**不要用递归**。
+
+### Opencode 数据量大
+
+DB 476 MB，全量扫描 ~30s。提取时按 `time_created` 索引避免顺序扫描，parts 表只 SELECT 不 fetchall 全量。
 
 ## 手动维护命令（MCP tool）
 
 ```
-agenote_health()                          # 查看健康度（含 by_source 跨 agent 分布）
+agenote_health()                          # KB 健康度
 agenote_deduplicate()                     # 只检测重复
 agenote_archive(stale=true)               # 只归档陈旧
 agenote_archive(list_cards=true)          # 列出已归档
 agenote_restore(target="<ID>")            # 恢复归档卡片
 agenote_reindex()                         # 只重建索引
 agenote_memory_search(stale=true)         # 陈旧记忆
+agenote_extract(source="all", dry_run=True)    # 抽取原始对话为 Org 文件（不落盘）
+agenote_extract(source="claude", date="2026-06-29", output_dir="/tmp/x")  # 指定日期 + 路径
 ```
 
-## 跨 agent 工作流（MCP tool，手动触发，默认 dry_run）
+## 跨 agent 工作流（5 个 MCP tool，默认 dry_run）
 
-这三个 tool 实现"跨 agent 经验共享"，参考 MiMoCode Memory/Dream/Distill 体系，
-**纯只读/启发式，不调 LLM，不写回源**，默认 dry_run 安全试跑：
+参考 MiMoCode Memory/Dream/Distill 体系。**纯只读/启发式，不调 LLM**，默认 `dry_run=True` 安全试跑：
 
 ```
-agenote_reconcile(source="hermes")        # 只读拉取 hermes memory 进检索范围
-agenote_reconcile(source="all", dry_run=True)  # 全源 dry_run 预览
-agenote_dream(dry_run=True)               # 从 reconcile 事实启发式提炼候选新卡片
-agenote_distill(dry_run=True)             # 把重复工作流聚成 skill 草稿（写到 .distill/）
+# 1. 抽取：从 6 个 AI 工具的原始对话 → Org 文件（~/Documents/Org/conversations/<date>/）
+agenote_extract(source="all", dry_run=True)             # 6 源全抽
+agenote_extract(source="opencode", date="2026-06-29")  # 单源 + 指定日期
+agenote_extract(source="all")                           # 实际写入磁盘
+
+# 2. reconcile：把外部 agent memory 索引到 .reconcile/index.json（让 agenote_search 能搜到）
+agenote_reconcile(source="hermes")                      # 单源
+agenote_reconcile(source="all", dry_run=True)           # 6 源全跑 dry-run
+agenote_reconcile(source="all")                         # 实际落盘
+
+# 3. dream：从 reconcile 事实启发式提炼候选新卡片
+agenote_dream(dry_run=True)
+
+# 4. distill：把 KB 中反复使用的模式聚成 skill 草稿（写到 .distill/）
+agenote_distill(dry_run=True)
 ```
 
-- **reconcile**：把 hermes `memory_store.db` 的 facts 只读索引到 `.reconcile/index.json`，
-  让 `agenote_search` 能搜到（domain=`reconcile`、source=`hermes`），weight 低于 KB 卡片。
-  **三重只读保护**（mode=ro + query_only + 不构造写语句），hermes DB 绝不被改。
+### reconcile 行为细节
+
+- **三重只读**：每个 extractor 内部 SQLite mode=ro + query_only + 仅 SELECT
+- **KB 优先**：reconcile 抽到的事实若与 KB 已有卡片同名，跳过不索引
+- **去重**：同一事实可能从多个 DB 出现（如 crush 全局 + bind-mount 项目级），按 `id` 去重保留先出现的
+- **0-fact 警告**：extractor 跑通但抽不到任何事实（数据未生成 / schema 漂移）→ 自动报 `[warn]`
+- **不写回源**：绝不写回任何外部 agent 的原始数据（DB/JSONL 只读）
+- **不污染 KB**：reconcile 事实进 `.reconcile/index.json`（独立目录），不进 `experiences/`
+
+### dream / distill 行为
+
 - **dream**：找 reconcile 事实里高频出现、KB 未覆盖的主题 → 候选新卡片。**零候选即成功**。
-- **distill**：把 KB 里 `type=ascended`/`usage_count≥2` 的卡片按 category+tech 聚类 →
-  SKILL.md 草稿（写 `.distill/`，**不进 skills/**，人工 move 才生效）。**零候选即成功**。
+- **distill**：把 KB 里 `type=ascended`/`usage_count≥2` 的卡片按 category+tech 聚类 → SKILL.md 草稿（写 `.distill/`，**不进 skills/**，人工 move 才生效）。**零候选即成功**。
 
 ## 健康度指标解读
 
-| 指标     | 阈值              | 含义                          |
-| -------- | ----------------- | ----------------------------- |
-| 孤立率   | <15% ✅ / <25% ⚠️ | 无 `[[file:]]` 链接的卡片占比 |
-| 过时率   | <10% ✅ / <20% ⚠️ | stale 状态卡片占比            |
-| 类型偏斜 | <45% ✅           | 单一 type 占比过高            |
-| 薄弱类别 | ≥3 ✅             | 每个类别至少 3 张卡片         |
-| by_source | 各 agent 分布    | `by_source.counts`：每 agent 写卡数；`unknown` 列表暴露未登记 agent |
+| 指标           | 阈值              | 含义                                                                |
+| -------------- | ----------------- | ------------------------------------------------------------------- |
+| 孤立率         | <15% ✅ / <25% ⚠️ | 无 `[[file:]]` 链接的卡片占比                                       |
+| 过时率         | <10% ✅ / <20% ⚠️ | stale 状态卡片占比                                                  |
+| 类型偏斜       | <45% ✅           | 单一 type 占比过高                                                  |
+| 薄弱类别       | ≥3 ✅             | 每个类别至少 3 张卡片                                               |
+| by_source      | 各 agent 分布     | `by_source.counts`：每 agent 写卡数；`unknown` 列表暴露未登记 agent |
+| 卡片增长率     | 月增 <20 张 ✅    | 超标的放慢提取频率                                                  |
+| 矛盾未决数     | 0 ✅              | 必须处理，触发 Andon                                                |
+| pattern 覆盖率 | ≥30% ✅           | 有对应 pattern 的经验占比                                           |
+
+## 旧卡片审查清单
+
+- 内容已过时 → 归档或标记过期
+- 标题不包含结论 → 重命名
+- 纯流水账 → 降级或删除
+- 高度重复 → 合并保留更好的
+- 与同类卡片矛盾 → 按调和规则处理
+- 缺少时效性标注但涉及版本/API → 补充验证日期
+- 无其他卡片/pattern 引用 → 评估补充关联或归档
+
+## 扩展新 source
+
+新增 AI 编程工具时：
+
+1. 在 `ag_lib/extract/<source>.py` 创建 extractor（参考 `codex.py`/`pi.py` 的 JSONL 模式 或 `opencode.py`/`crush.py` 的 SQLite 模式）
+2. 复用 `ag_lib/extract/__init__.py` 的 `resolve_xdg_path` + `open_sqlite_ro` + `extract_title`
+3. 函数签名统一：`() -> tuple[list[ReconciledFact], list[str]]`
+4. 在 `ag_lib/reconcile.py` 的 `KNOWN_SOURCES` 注册表加一行（用 `__import__` lambda 避免循环导入）
+5. 在 `ag_lib/core.py` 的 `KNOWN_AGENTS` 白名单加入 agent 名
+6. 在 `agenote_mcp.py` 的 `agenote_extract` 的 `EXTRACTORS` 字典加入映射
+7. 更新本文档的"6 个数据源"表格
+
+## 何时不策展
+
+- 单条经验刚写入 → 等 1 周积累 USAGE_COUNT 后再 curate
+- 跨 agent 数据未跑通（schema 漂移）→ 先跑 `agenote_extract(source=<新源>, dry_run=True)` 验证 schema
+- KB 总卡片 < 30 → curate 收益小，可手动维护
+
+## 策展完成检查清单
+
+- [ ] `agenote reindex` 已执行
+- [ ] `agenote lint --fix` 无残留错误
+- [ ] `agenote commit -m` 已执行（或确认无变更）
+- [ ] 新增卡片元数据完整（category/tech/type/owner）
+- [ ] 新增卡片含任务描述、执行过程、关键发现
+- [ ] 代码块使用 Org mode 格式
+- [ ] 仅提交本次策展涉及的文件
+
+## 详细参考
+
+- [策展工作流与质量标准](references/curation-guide.md) — 完整批处理步骤、矛盾调和、Andon 机制、报告格式

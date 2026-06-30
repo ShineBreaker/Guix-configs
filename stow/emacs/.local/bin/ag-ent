@@ -2,14 +2,14 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 # SPDX-License-Identifier: MIT
 #
-# kb-agent — 知识库策展/审查自动化代理
+# ag-ent — 知识库策展/审查自动化代理
 # 支持多后端（pi/opencode/crush），通过环境变量或配置文件切换。
 #
 # 用法:
-#   kb-agent curate           执行完整策展
-#   kb-agent review           对话后审查
-#   kb-agent health           知识库健康检查
-#   kb-agent self-improve     同 review
+#   ag-ent curate           执行完整策展
+#   ag-ent review           对话后审查
+#   ag-ent health           知识库健康检查
+#   ag-ent self-improve     同 review
 
 set -euo pipefail
 
@@ -77,12 +77,12 @@ run_opencode() {
 
 	# opencode run: 使用 build (primary) agent
 	# - 通过 --file 显式附加 self-improving / kb-curator skill 上下文
-	# - 通过 --title 标记会话便于追溯（所有 kb-agent 任务聚合到同一 title）
+	# - 通过 --title 标记会话便于追溯（所有 ag-ent 任务聚合到同一 title）
 	# - 全局指令由 opencode.json 的 instructions 字段自动加载
 	# 注意 yargs greedy: --file [array] 会吞掉后续所有非 flag positional,
 	# 把 task 字符串错认为 file 路径 → "File not found: <中文 task>"。
 	# 修复: task 必须在所有 --file 之前。
-	local -a cmd=(opencode run --agent build --title "kb-agent:$ACTION")
+	local -a cmd=(opencode run --agent build --title "ag-ent:$ACTION")
 	[[ -n "$KB_AGENT_MODEL" ]] && cmd+=(--model "$KB_AGENT_MODEL")
 	cmd+=("$task")
 	[[ -f "$HOME/.config/agents/skills/self-improving/SKILL.md" ]] &&
@@ -134,22 +134,22 @@ run_direct() {
 	echo "任务: $task"
 	echo ""
 
-	# 使用源文件（未部署时 ~/.local/bin/kb 可能是旧版）
-	local kb_cmd
-	kb_cmd="python3 \"$(dirname "$(readlink -f "$0")")/kb\""
+	# 使用源文件（未部署时 ~/.local/bin/agenote 可能是旧版）
+	local ag_cmd
+	ag_cmd="python3 \"$(dirname "$(readlink -f "$0")")/agenote\""
 
 	case "$task" in
 	*health* | *健康*)
-		eval "$kb_cmd health" 2>&1 || true
+		eval "$ag_cmd health" 2>&1 || true
 		;;
 	*deduplicate* | *重复*)
-		eval "$kb_cmd deduplicate" 2>&1 || true
+		eval "$ag_cmd deduplicate" 2>&1 || true
 		;;
 	*archive* | *归档*)
-		eval "$kb_cmd archive --stale" 2>&1 || true
+		eval "$ag_cmd archive --stale" 2>&1 || true
 		;;
 	*reindex* | *索引*)
-		eval "$kb_cmd reindex" 2>&1 || true
+		eval "$ag_cmd reindex" 2>&1 || true
 		;;
 	*)
 		echo "未知直接执行任务: $task"
@@ -163,9 +163,9 @@ run_direct() {
 
 usage() {
 	cat <<EOF
-kb-agent — 知识库策展/审查自动化代理
+ag-ent — 知识库策展/审查自动化代理
 
-用法: kb-agent <操作> [选项]
+用法: ag-ent <操作> [选项]
 
 操作:
   curate        执行完整策展
@@ -246,7 +246,7 @@ if [[ -n "$EXTRA_CONTEXT" ]]; then
 fi
 
 # 执行
-echo "=== kb-agent: $ACTION (backend=$KB_AGENT_BACKEND) ==="
+echo "=== ag-ent: $ACTION (backend=$KB_AGENT_BACKEND) ==="
 case "$KB_AGENT_BACKEND" in
 pi) run_pi "$TASK" ;;
 opencode) run_opencode "$TASK" ;;

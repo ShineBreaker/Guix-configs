@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 #
-"""kb_lib.dream — memory consolidation（启发式，无 LLM）。
+"""ag_lib.dream — memory consolidation（启发式，无 LLM）。
 
 把 reconcile 拉取的其他 agent memory 中**高频出现、但 KB 尚未记录**的事实，
 启发式地提为候选卡片，人工 review 后才合并入 KB。
@@ -28,8 +28,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
-from kb_lib.core import KB_ROOT, _load_index, _save_index
-from kb_lib.reconcile import (
+from ag_lib.core import KB_ROOT, _load_index, _save_index
+from ag_lib.reconcile import (
     AGENOTE_ROOT,
     RECONCILE_DEFAULT_WEIGHT,
     load_reconcile_facts,
@@ -39,7 +39,7 @@ from kb_lib.reconcile import (
 # 启发式阈值（集中常量，调参只改这里）
 # ═══════════════════════════════════════════════════════════════════════════════
 
-MIN_TERM_FREQ = 2  # 关键词在 reconcile 事实中出现 ≥N 次才升级为候选（evidence）
+MIN_TERM_FREQ = 10  # 关键词在 reconcile 事实中出现 ≥N 次才升级为候选（evidence）
 TOP_K_CANDIDATES = 5  # 一次 dream 最多提 K 个候选（避免一次灌爆 KB）
 MIN_FACT_LEN = 15  # 太短的事实（<15 字）不提，信息量不足
 MIN_TERM_LEN = 3  # 关键词最短长度（过滤"的/了/是"等停用词）
@@ -53,8 +53,24 @@ DREAM_AGENT_TAG = "pi-dream"  # dream 产生的卡片打这个 source_agent
 _STOPWORDS = frozenset("""
     的 了 在 是 有 和 与 或 也 都 就 这 那 一 个 些 等 把 被 让 给 向 往
     对 为 以 于 由 从 到 用 通过 以及 但是 因为 所以 如果 虽然 不过 然后不然
+    我 你 他 她 它 们 的 地 得 着 过 会 能 要 想 可 说 看 做 去 来 出 进 上 下
+    请 帮 告 知 道 理 解 决 处 理 完 成 实 现 配 置 修 改 删 除 更 新 增 加
+    问 题 方 法 功 能 代 码 项 目 文 件 目 录 系 统 命 令 操 作 使 用 行 为
+    前 后 时 间 今 天 昨 天 明 天 现 在 刚 才 已 经 正 在 之 前 以 后 以 上 以 下
     a an the of to in on at for and or but is are was were be been being
     this that these those it its as with from by into out up down over under
+    user can will would should could may might do does did have has had
+    assistant reasoning all task system reminder let me know if
+    function tool call use get set return true false none null
+    files 当前 you complete omo_internal_initiator skill prompt agent
+    message content context information data config settings setup
+    check note make sure based using different new want need try
+    help work way look find see read write edit delete create change
+    update add remove move copy paste open close start stop run
+    request tasks what how where when why who which
+    修改 然后 前的 但是 但是因为 所以如果
+    我先 没有 工作 进行 需要 可以 使用 这个 那个 什么 怎么
+    一下 一些 一个 已经 还是 或者 不是 就是 可能 应该
     """.split())
 
 # 用非字母数字（含 CJK）切词的简单分词：英文按空格/标点，CJK 按单字+2-3 gram
@@ -146,6 +162,27 @@ def _kb_covered_terms() -> set[str]:
     return covered
 
 
+_SYSTEM_MARKERS = re.compile(
+    r"<system-reminder>|<skill-instruction>|<auto-slash-command>|"
+    r"\[search-mode\]|\[analyze-mode\]|delegate_task|subagent_type|"
+    r"run_in_background|load_skills|MANDATORY|MAXIMIZE SEARCH|"
+    r"SYNTHESIZE|IF COMPLEX|Base directory for this skill",
+    re.IGNORECASE,
+)
+
+
+def _is_system_content(fact: dict) -> bool:
+    """Check if a fact is mostly system prompts / config, not user knowledge."""
+    content = fact.get("content", "")
+    if len(content) < MIN_FACT_LEN:
+        return True
+    # If >30% of content matches system markers, skip
+    matches = _SYSTEM_MARKERS.findall(content)
+    if len(matches) > len(content) / 300:  # rough heuristic
+        return True
+    return False
+
+
 def _gather_candidates(facts: list[dict]) -> list[DreamCandidate]:
     """从 reconcile 事实启发式提取候选。
 
@@ -158,6 +195,12 @@ def _gather_candidates(facts: list[dict]) -> list[DreamCandidate]:
     # 词 → [(fact_idx, fact), ...]：记录每个词出现在哪些事实
     term_facts: dict[str, list[tuple[int, dict]]] = {}
     for idx, fact in enumerate(facts):
+        if _is_system_content(fact):
+            continue
+        title = fact.get("title", "")
+        # Skip facts with useless titles
+        if not title or title in ("Untitled", "---", "<system-reminder>", "TASK"):
+            continue
         content = fact.get("content", "")
         if len(content) < MIN_FACT_LEN:
             continue
@@ -176,6 +219,10 @@ def _gather_candidates(facts: list[dict]) -> list[DreamCandidate]:
             continue
         # 选正文最长的事实作为代表（信息量最大）
         rep = max(hits, key=lambda h: len(h[1].get("content", "")))[1]
+        rep_content = rep.get("content", "")
+        # Skip if representative is system content
+        if _SYSTEM_MARKERS.search(rep_content[:500]):
+            continue
         candidates.append(
             DreamCandidate(
                 term=term,
@@ -237,8 +284,8 @@ def run_dream(window_days: int = 7, dry_run: bool = True) -> DreamReport:
 
     # ── dry_run=False：实际 promote 候选到 KB ──────────────────────────────
     # 通过 cmd_add 写卡片，source_agent=DREAM_AGENT_TAG，避免污染 pi/hermes 归属
-    from kb_lib.cards import cmd_add
-    from kb_lib.core import agenote_context
+    from ag_lib.cards import cmd_add
+    from ag_lib.core import agenote_context
     import argparse
 
     ctx = agenote_context(agent_name=DREAM_AGENT_TAG)

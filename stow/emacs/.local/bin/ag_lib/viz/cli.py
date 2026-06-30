@@ -19,11 +19,10 @@ import time
 import urllib.request
 from pathlib import Path
 
-from kb_lib.core import KB_ROOT, _load_index
+from ag_lib.core import KB_ROOT, agenote_context, default_context, _load_index
 
-from kb_lib.viz.data import compute_stats, parse_filter, top_techs
-from kb_lib.viz.html import generate_html
-
+from ag_lib.viz.data import compute_stats, parse_filter, top_techs
+from ag_lib.viz.html import generate_html
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 常量
@@ -71,6 +70,7 @@ def _serve(path: Path, port: int, should_open: bool) -> None:
     saved_cwd = os.getcwd()
     os.chdir(str(workdir))
     try:
+
         class ReuseTCPServer(socketserver.TCPServer):
             allow_reuse_address = True
 
@@ -114,21 +114,57 @@ def _serve(path: Path, port: int, should_open: bool) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _load_domain_cards(domain: str) -> tuple[list[dict], str]:
+    """加载单个域的卡片，打 domain 标签。返回 (cards, updated)。
+
+    域不存在或索引为空时返回 ([], "")。
+    """
+    ctx = default_context() if domain == "human" else agenote_context()
+    if not ctx.index.exists():
+        return ([], "")
+    index = _load_index(ctx)
+    cards = index.get("cards", [])
+    for c in cards:
+        c["domain"] = domain
+    return (cards, index.get("updated", ""))
+
+
+def _load_cards_for_viz(domain_arg: str) -> tuple[list[dict], str]:
+    """按 --domain 开关合并多域卡片。
+
+    domain_arg: human | agenote | all
+    返回 (合并后的 cards, 最新 updated 时间戳)。
+    """
+    domains = ["human", "agenote"] if domain_arg == "all" else [domain_arg]
+    all_cards: list[dict] = []
+    latest = ""
+    for d in domains:
+        cards, updated = _load_domain_cards(d)
+        all_cards.extend(cards)
+        if updated > latest:
+            latest = updated
+    return (all_cards, latest)
+
+
 def cmd_viz(args: argparse.Namespace) -> None:
-    """生成知识库可视化 HTML 页面。"""
-    index = _load_index()
-    if not index.get("cards"):
+    """生成知识库可视化 HTML 页面。
+
+    默认合并人类域（~/Documents/Org/）与 agenote 域（~/Documents/Org/agenote/），
+    每张卡打 domain 字段（human/agenote）供前端区分着色。
+    --domain 可限定单域。
+    """
+    cards, updated = _load_cards_for_viz(args.domain)
+    if not cards:
         print("❌ 知识库索引为空。请先运行 'kb reindex' 重建索引。")
         return
 
-    cards = index["cards"]
     stats = compute_stats(cards)
     techs = top_techs(cards, limit=8)
     init_filter = parse_filter(args.filter or "")
     init_search = args.search or ""
 
     html = generate_html(
-        updated=index.get("updated", ""),
+        updated=updated,
         cards=cards,
         stats=stats,
         top_techs=techs,
@@ -140,7 +176,8 @@ def cmd_viz(args: argparse.Namespace) -> None:
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
-    print(f"✅ 可视化页面已生成: {out}")
+    domains_desc = args.domain if args.domain != "all" else "human+agenote"
+    print(f"✅ 可视化页面已生成: {out}（{len(cards)} 张卡片，域: {domains_desc}）")
 
     if args.serve:
         _serve(out, args.port, args.open_browser)
@@ -158,36 +195,57 @@ def add_viz_parser(subparsers) -> argparse.ArgumentParser:
     """向外部 argparse 子解析器注册 viz 子命令。"""
     p = subparsers.add_parser("viz", help="生成知识库可视化 Web 页面")
     p.add_argument(
-        "--output", "-o", default=DEFAULT_OUTPUT,
+        "--output",
+        "-o",
+        default=DEFAULT_OUTPUT,
         help=f"输出文件路径（默认 {DEFAULT_OUTPUT}）",
     )
     p.add_argument(
-        "--open", dest="open_browser", action="store_true", default=True,
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        default=True,
         help="生成后用 xdg-open 打开（默认）",
     )
     p.add_argument(
-        "--no-open", dest="open_browser", action="store_false",
+        "--no-open",
+        dest="open_browser",
+        action="store_false",
         help="不打开浏览器",
     )
     p.add_argument(
-        "--serve", action="store_true",
+        "--serve",
+        action="store_true",
         help="启动本地 HTTP 服务器阻塞运行，Ctrl-C 退出",
     )
     p.add_argument(
-        "--port", type=int, default=DEFAULT_PORT,
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
         help=f"--serve 监听端口（默认 {DEFAULT_PORT}）",
     )
     p.add_argument(
-        "--theme", choices=["light", "dark", "auto"], default="auto",
+        "--theme",
+        choices=["light", "dark", "auto"],
+        default="auto",
         help="初始主题（默认 auto，跟随系统）",
     )
     p.add_argument(
-        "--filter", dest="filter", default="",
+        "--filter",
+        dest="filter",
+        default="",
         help="初始过滤，语法: category=guix,status=stable",
     )
     p.add_argument(
-        "--search", default="",
+        "--search",
+        default="",
         help="初始搜索关键词",
+    )
+    p.add_argument(
+        "--domain",
+        choices=["human", "agenote", "all"],
+        default="all",
+        help="可视化域：human（~/Documents/Org/）、agenote（agenote/子目录）、all（合并，默认）",
     )
     return p
 

@@ -4,4 +4,4 @@
 #
 # KB CLI 共享库:cards / memory / lint / core / viz。
 #
-# 所有模块通过 `from kb_lib.X import ...` 由 bin/kb 加载。
+# 所有模块通过 `from ag_lib.X import ...` 由 bin/kb 加载。

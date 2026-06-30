@@ -45,7 +45,7 @@ function highlight(text, q) {
   if (idx < 0) return esc(text);
   return (
     esc(text.slice(0, idx)) +
-    '<mark>' +
+    "<mark>" +
     esc(text.slice(idx, idx + q.length)) +
     "</mark>" +
     esc(text.slice(idx + q.length))

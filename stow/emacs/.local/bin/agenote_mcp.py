@@ -6,7 +6,7 @@
 """agenote MCP server — agent 专属记事本的 MCP tool 暴露。
 
 经 pi-mcp-adapter lazy 连接，agent 主循环通过 MCP 协议调用。
-复用 kb_lib 数据层函数（返回结构化 dict），不包装 cmd_* 的 stdout。
+复用 ag_lib 数据层函数（返回结构化 dict），不包装 cmd_* 的 stdout。
 
 依赖：python-mcp（Guix home profile 供给，需 7 个包见 config.org 注释）
 启动：~/.guix-home/profile/bin/python3 agenote_mcp.py
@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP  # noqa: E402
 
-from kb_lib.core import (  # noqa: E402
+from ag_lib.core import (  # noqa: E402
     KB_ROOT,
     HUMAN_DEFAULT_WEIGHT,
     AGENT_DEFAULT_WEIGHT,
@@ -60,19 +60,23 @@ from kb_lib.core import (  # noqa: E402
     _parse_float_prop,
     _parse_int_prop,
 )
-from kb_lib.cards import (  # noqa: E402
+from ag_lib.cards import (  # noqa: E402
     _make_search_snippet,
     cmd_add,
     cmd_list,
     cmd_stats,
-    cmd_health,
     cmd_touch,
     cmd_archive,
     cmd_restore,
     cmd_deduplicate,
     cmd_curate,
 )
-from kb_lib.memory import (  # noqa: E402
+from ag_lib.health import (  # noqa: E402
+    _compute_base_metrics,
+    analyze,
+    find_gaps,
+)
+from ag_lib.memory import (  # noqa: E402
     cmd_memory,
     _parse_memory_sections,
     _next_memory_id,
@@ -98,7 +102,7 @@ _HUMAN_CTX = default_context()
 def _run_cmd_capture(cmd_fn, args, ctx) -> str:
     """调用 cmd_fn(args, ctx)，捕获 stdout 文本。
 
-    kb_lib 的 cmd_* 全部 print 到 stdout 且返回 None。本函数用
+    ag_lib 的 cmd_* 全部 print 到 stdout 且返回 None。本函数用
     redirect_stdout 捕获输出文本，同时拦截 die() 的 sys.exit(1)。
     """
     buf = io.StringIO()
@@ -192,7 +196,7 @@ def _cross_domain_search(
     # 只读拉取的其他 agent memory（hermes 等），weight 低于 KB 卡片，
     # 命中时 domain="reconcile"、source=hermes，便于调用方区分来源。
     try:
-        from kb_lib.reconcile import load_reconcile_facts
+        from ag_lib.reconcile import load_reconcile_facts
 
         for fact in load_reconcile_facts():
             hay = fact.get("content", "")
@@ -228,7 +232,7 @@ def _cross_domain_search(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Tool 定义（17 个，覆盖原 kb agenote 全部子命令）
+# Tool 定义（21 个：读写卡片 / 检索统计 / 记忆 / 策展 / 跨 agent）
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
@@ -478,82 +482,96 @@ def agenote_stats() -> dict:
 
 
 @mcp.tool()
-def agenote_health() -> dict:
+def agenote_health(
+    check_duplicates: bool = False,
+    check_quality: bool = False,
+    stale_days: int = 90,
+) -> dict:
     """输出 agenote 健康度报告。
 
-    指标：总卡片数、状态分布、孤立率（阈值<15%）、过时率（阈值<10%）、
-    类型偏斜（阈值<45%）、薄弱类别（阈值≥3）。
+    基础指标（总卡片数、状态分布、孤立率、过时率、类型偏斜、薄弱类别）由
+    ag_lib.health._compute_base_metrics 统一计算，与 agenote CLI 的 health 子命令
+    共享同一真相源；额外提供 MCP 独有的 by_source（跨 agent 溯源分布）。
+
+    Args:
+        check_duplicates: True 时附加疑似重复卡片对（Jaccard，有成本）
+        check_quality: True 时附加质量扫描（章节/元数据/Markdown，逐文件有成本）
+        stale_days: gaps 报告的陈旧阈值（天，默认 90）
+
+    Returns:
+        dict: 基础健康率 + by_source + 分布/矩阵/近期 + 可选 gaps/重复/质量
     """
     ctx = _AGENT_CTX
     ensure_dirs(ctx)
-    index = _load_index(ctx)
-    cards = index["cards"]
-    total = len(cards)
 
-    status_counts = Counter(c.get("status", "done") for c in cards)
+    # 基础健康率（与 agenote health CLI 共享 health.py 真相源）
+    base = _compute_base_metrics(ctx)
 
-    # 孤立率
-    linked_cards = set()
-    for f in ctx.experiences.rglob("*.org"):
-        if f.is_symlink():
-            continue
-        content = f.read_text(encoding="utf-8")
-        if "[[file:" in content:
-            linked_cards.add(parse_org_prop(content, "ID") or f.stem.split("-")[0])
-    isolated = total - len(linked_cards)
-    isolated_pct = round(isolated / total * 100) if total > 0 else 0
+    # 深度分析：分布 / 矩阵 / 近期 / 可选质量与重复
+    deep = analyze(ctx, check_duplicates=check_duplicates, check_quality=check_quality)
 
-    # 过时率
-    stale = status_counts.get("stale", 0)
-    stale_pct = round(stale / total * 100) if total > 0 else 0
+    # 空白检测：缺失组合 / 陈旧卡片(时间维) / 纯AI类别
+    gaps = find_gaps(ctx, stale_days=stale_days)
 
-    # 类型偏斜
-    type_counts = Counter(c.get("type", "unknown") for c in cards)
-    max_type, max_type_count = (
-        type_counts.most_common(1)[0] if type_counts else ("none", 0)
-    )
-    max_type_pct = round(max_type_count / total * 100) if total > 0 else 0
-
-    # 薄弱类别
-    cat_counts = Counter(c.get("category", "unknown") for c in cards)
-    weak_cats = {cat: cnt for cat, cnt in cat_counts.items() if cnt < 3}
-
-    # ── 跨 agent 溯源分布（Phase 5）──────────────────────────────────────────
-    # by_source：每张卡片由哪个 agent 写入。空串 = 人类手写（agenote 域通常为空）。
-    # 来源是 KBContext.agent_name → 写卡时落 :SOURCE_AGENT: → _card_dict 解析。
-    # 与 Phase 2 reconcile 联动：reconcile 拉取的 hermes/crush 事实打对应 source。
+    # ── 跨 agent 溯源分布（MCP 独有）─────────────────────────────────────────
+    # by_source：每张卡片由哪个 agent 写入。空串 = 人类手写。
+    # 来源 KBContext.agent_name → 写卡时落 :SOURCE_AGENT: → _card_dict 解析。
+    # 与 reconcile 联动：reconcile 拉取的 hermes/crush 事实打对应 source。
+    cards = _load_index(ctx)["cards"]
     source_counts = Counter(c.get("source_agent", "") for c in cards)
-    # known（白名单内）与 unknown（白名单外，便于发现未登记的新 agent）
     by_source = {
         "counts": dict(sorted(source_counts.items(), key=lambda kv: (-kv[1], kv[0]))),
         "known_agents": sorted(KNOWN_AGENTS),
         "unknown": [s for s in source_counts if s and s not in KNOWN_AGENTS],
     }
 
-    def _status(pct, ok_max, warn_max):
-        return "ok" if pct < ok_max else "warn" if pct < warn_max else "bad"
-
     return {
-        "total": total,
-        "status": dict(status_counts),
+        # 基础健康率（保持原字段兼容）
+        "total": base["total"],
+        "status": base["status"],
         "by_source": by_source,
-        "isolated": {
-            "pct": isolated_pct,
-            "threshold": 15,
-            "status": _status(isolated_pct, 15, 25),
+        "isolated": base["isolated"],
+        "stale": base["stale"],
+        "type_skew": base["type_skew"],
+        "weak_categories": base["weak_categories"],
+        # 深度分析（新增）
+        "category_distribution": deep["category_distribution"],
+        "type_distribution": deep["type_distribution"],
+        "owner_distribution": deep["owner_distribution"],
+        "recent_7d": deep["recent_7d"],
+        "recent_30d": deep["recent_30d"],
+        "category_type_matrix": deep["category_type_matrix"],
+        # 空白检测（新增）
+        "gaps": {
+            "missing_count": gaps["missing_count"],
+            "missing_category_type_combos": gaps["missing_category_type_combos"],
+            "stale_count": gaps["stale_count"],
+            "stale_cards": gaps["stale_cards"],
+            "ai_only_categories": gaps["ai_only_categories"],
         },
-        "stale": {
-            "pct": stale_pct,
-            "threshold": 10,
-            "status": _status(stale_pct, 10, 20),
-        },
-        "type_skew": {
-            "type": max_type,
-            "pct": max_type_pct,
-            "threshold": 45,
-            "status": _status(max_type_pct, 45, 60),
-        },
-        "weak_categories": weak_cats,
+        # 可选（仅当 check_duplicates/check_quality 时存在）
+        **(
+            {"potential_duplicates": deep["potential_duplicates"]}
+            if check_duplicates
+            else {}
+        ),
+        **(
+            {
+                "quality_issues": deep["quality_issues"],
+                "problem_cards": deep["problem_cards"],
+            }
+            if check_quality
+            else {}
+        ),
+        **(
+            {
+                "content_length": {
+                    k: deep[k] for k in ("avg_lines", "min_lines", "max_lines")
+                }
+            }
+            if "avg_lines" in deep
+            else {}
+        ),
     }
 
 
@@ -561,22 +579,123 @@ def agenote_health() -> dict:
 def agenote_reconcile(source: str = "all", dry_run: bool = False) -> dict:
     """跨 agent memory 只读 reconcile：把其他 agent 的 memory 拉进检索范围。
 
-    从其他 agent（当前仅 hermes）的 memory store 只读抽取事实，写入
-    `.reconcile/index.json`，让 agenote_search 能搜到，但**绝不写回源文件**
-    **绝不污染权威 KB**（reconcile 事实 weight 低于 KB 卡片）。
+    从已注册的 6 个 source（hermes / opencode / crush / codex / claude / pi）
+    只读抽取事实，写入 `.reconcile/index.json`，让 agenote_search 能搜到，
+    但**绝不写回源文件**、**绝不污染权威 KB**（reconcile 事实 weight 低于 KB 卡片）。
+
+    三重只读保护（每个 extractor 各自实现）：
+      1. SQLite: file: URI + mode=ro + PRAGMA query_only=1
+      2. JSONL: 仅读，从不构造写语句
+      3. 文件不存在 → 返回 ([], [msg]) 不抛异常
 
     Args:
-        source: "hermes" | "all"（all 跑所有已注册 source）
+        source: hermes | opencode | crush | codex | claude | pi | "all"
+            （all 跑所有已注册 source；当前 6 个 source）
         dry_run: True 只返回报告不落盘（首次/审核用，默认 False 直接落盘）
 
     Returns:
         ReconcileReport dict：{source, indexed, skipped, pruned, errors,
         error_details, indexed_items}
     """
-    from kb_lib.reconcile import reconcile_source
+    from ag_lib.reconcile import reconcile_source
 
     report = reconcile_source(source=source, dry_run=dry_run)
     return report.to_dict()
+
+
+@mcp.tool()
+def agenote_extract(
+    source: str = "all",
+    date: str = "",
+    output_dir: str = "",
+    dry_run: bool = True,
+) -> dict:
+    """跨 agent 对话抽取：把 AI 编程工具的原始对话抽取为 Org-mode 文件。
+
+    与 agenote_reconcile 的区别：
+      - reconcile：抽取**已沉淀的经验**（agent memory store），写入 .reconcile/index.json
+      - extract：抽取**原始对话**（DB/JSONL），输出 Org 文件供人/agent 提炼新经验
+
+    Args:
+        source: opencode | crush | codex | claude | pi | hermes | all
+        date: 目标日期 YYYY-MM-DD（默认昨天；空字符串 = 不按日期过滤）
+        output_dir: 输出目录（默认 ~/Documents/Org/conversations/<date>/）
+        dry_run: True 只返回报告不落盘（默认）
+
+    Returns:
+        dict: {source, total_facts, output_dir, files: [path, ...], errors: [...]}
+    """
+    from datetime import datetime, timedelta
+    from pathlib import Path
+
+    from ag_lib.extract import opencode, crush, codex, claude, pi
+    from ag_lib.reconcile import extract_hermes
+
+    EXTRACTORS = {
+        "opencode": opencode.extract_opencode,
+        "crush": crush.extract_crush,
+        "codex": codex.extract_codex,
+        "claude": claude.extract_claude,
+        "pi": pi.extract_pi,
+        "hermes": extract_hermes,
+    }
+
+    if source == "all":
+        selected = list(EXTRACTORS.keys())
+    elif source in EXTRACTORS:
+        selected = [source]
+    else:
+        return {"error": f"未知 source: {source}；可选: {sorted(EXTRACTORS)}"}
+
+    # 输出目录
+    if not output_dir:
+        target_date = date or (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        output_dir = f"~/Documents/Org/conversations/{target_date}"
+    out_path = Path(output_dir).expanduser()
+    if not dry_run:
+        out_path.mkdir(parents=True, exist_ok=True)
+
+    files: list[str] = []
+    errors: list[str] = []
+    total = 0
+    for src in selected:
+        try:
+            facts, errs = EXTRACTORS[src]()
+            total += len(facts)
+            errors.extend(errs)
+            if dry_run:
+                continue
+            src_file = out_path / f"{src}.org"
+            lines: list[str] = [
+                f"#+TITLE: {src} conversations",
+                f"#+DATE: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                f"#+SOURCE: {src}",
+                f"#+TOTAL: {len(facts)}",
+                "",
+            ]
+            for f in facts[:500]:  # 安全上限：每源最多 500 条
+                lines.append(f"* {f.title}")
+                lines.append(f":PROPERTIES:")
+                lines.append(f":ID: {f.id}")
+                lines.append(f":CATEGORY: {f.category}")
+                lines.append(f":WEIGHT: {f.weight}")
+                lines.append(f":END:")
+                lines.append("")
+                lines.append(f.content[:3000])
+                lines.append("")
+            src_file.write_text("\n".join(lines), encoding="utf-8")
+            files.append(str(src_file))
+        except Exception as e:
+            errors.append(f"{src}: {e}")
+
+    return {
+        "source": source,
+        "total_facts": total,
+        "output_dir": str(out_path),
+        "files": files,
+        "errors": errors,
+        "dry_run": dry_run,
+    }
 
 
 @mcp.tool()
@@ -597,7 +716,7 @@ def agenote_dream(window_days: int = 7, dry_run: bool = True) -> dict:
         DreamReport dict：{window_days, total_reconcile_facts, candidates,
         promoted, skipped_existing, error_details, message}
     """
-    from kb_lib.dream import run_dream
+    from ag_lib.dream import run_dream
 
     report = run_dream(window_days=window_days, dry_run=dry_run)
     return report.to_dict()
@@ -622,7 +741,7 @@ def agenote_distill(window_days: int = 30, dry_run: bool = True) -> dict:
         DistillReport dict：{total_kb_cards, candidates, drafted,
         skipped_existing_draft, error_details, message}
     """
-    from kb_lib.distill import run_distill
+    from ag_lib.distill import run_distill
 
     report = run_distill(window_days=window_days, dry_run=dry_run)
     return report.to_dict()
@@ -655,15 +774,32 @@ def agenote_touch(target: str, used_only: bool = False) -> dict:
 
 @mcp.tool()
 def agenote_curate() -> dict:
-    """一键策展：健康检查 + 权重重分配 + 去重检测 + 归档陈旧 + 重建索引。
+    """一键策展：6 步流水线。
+
+    Step 1 健康检查 + 权重重分配 + 去重检测 + 归档陈旧 + 重建索引（KB 内）
+    Step 2 跨 agent reconcile（6 源：hermes/opencode/crush/codex/claude/pi）
 
     建议：卡片超过 50 条、或检索质量下降时运行。频率约每周一次。
     """
     ctx = _AGENT_CTX
-    # curate 内部串行调 cmd_health/cmd_deduplicate/cmd_archive/cmd_reindex，
-    # 它们都 print 到 stdout。捕获汇总文本供 agent 参考。
-    out = _run_cmd_capture(cmd_curate, _ns(), ctx)
-    return {"report": out, "curated": True}
+    # Step 1: KB 内 curate（健康/权重/去重/归档/索引）
+    out_kb = _run_cmd_capture(cmd_curate, _ns(threshold=0.7), ctx)
+
+    # Step 2: 跨 agent reconcile（all 源）
+    out_recon: dict = {"skipped": True, "note": "step2 disabled"}
+    try:
+        from ag_lib.reconcile import reconcile_all
+
+        rep = reconcile_all(dry_run=False)
+        out_recon = rep.to_dict()
+    except Exception as e:
+        out_recon = {"skipped": True, "error": str(e)}
+
+    return {
+        "kb_curate": out_kb,
+        "cross_agent_reconcile": out_recon,
+        "curated": True,
+    }
 
 
 @mcp.tool()

@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 
 from .template import TEMPLATE
-from kb_lib.viz.data import attach_card_bodies, normalize_cards
+from ag_lib.viz.data import attach_card_bodies, normalize_cards
 
 
 def _read(name: str) -> str:

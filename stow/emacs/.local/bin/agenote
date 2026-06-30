@@ -3,19 +3,20 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# kb — 知识库命令行工具
-# 人机协作经验卡片的增删查改，供 AI Agent 和人类在终端直接调用。
+# agenote — 人类域知识库 CLI（agenote 体系的人类入口）
+# 人机协作经验卡片的增删查改，供人类在终端直接调用。
+# agent 域由 agenote_mcp.py（MCP server）暴露，TS 插件由 agenote_cli.py 桥接。
 #
-# 用法: kb <子命令> [参数]
+# 用法: agenote <子命令> [参数]
 #
-# 详细子命令列表请运行 kb help。
+# 详细子命令列表请运行 agenote help。
 
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from kb_lib.core import (  # noqa: E402
+from ag_lib.core import (  # noqa: E402
     KB_ROOT,
     KB_EXPERIENCES,
     KB_MEMORIES,
@@ -35,7 +36,7 @@ from kb_lib.core import (  # noqa: E402
     _rebuild_index,
     ensure_dirs,
 )
-from kb_lib.cards import (  # noqa: E402
+from ag_lib.cards import (  # noqa: E402
     cmd_add,
     cmd_get,
     cmd_list,
@@ -52,15 +53,15 @@ from kb_lib.cards import (  # noqa: E402
     cmd_restore,
     cmd_deduplicate,
     cmd_review,
-    cmd_health,
 )
-from kb_lib.memory import cmd_memory  # noqa: E402
-from kb_lib.lint import cmd_lint  # noqa: E402
-from kb_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
+from ag_lib.memory import cmd_memory  # noqa: E402
+from ag_lib.lint import cmd_lint  # noqa: E402
+from ag_lib.health import cmd_health, cmd_gaps  # noqa: E402
+from ag_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
-# 注意：agenote 子命令树已废弃，改为 MCP server（agenote_mcp.py）。
-# kb CLI 不再注册 agenote 子命令；agent 通过 MCP tool 调用，
-# hooks 插件通过 agenote_cli.py shim 调用。
+# 本 CLI 操作人类域知识库（~/Documents/Org/）。
+# agent 域（~/Documents/Org/agenote/）由 MCP server agenote_mcp.py 暴露，
+# TS 插件通过 agenote_cli.py shim 调用——三入口共享 ag_lib 内核、职责分离。
 
 import argparse
 import re
@@ -92,7 +93,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         if not git_bin:
             print("提示: 未找到 git，跳过版本控制初始化。")
             print(
-                "安装 git 后可手动运行: cd ~/Documents/Org && git init && git add -A && git commit -m 'kb init'"
+                "安装 git 后可手动运行: cd ~/Documents/Org && git init && git add -A && git commit -m 'agenote init'"
             )
             return
 
@@ -117,7 +118,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         # git init + 初始 commit
         _run_git(["init"], cwd=KB_ROOT)
         _run_git(["add", ".gitignore", "MEMORY.org", "inbox.org"], cwd=KB_ROOT)
-        _run_git(["commit", "-m", "kb init: 初始化知识库"], cwd=KB_ROOT)
+        _run_git(["commit", "-m", "agenote init: 初始化知识库"], cwd=KB_ROOT)
         print("git 仓库已初始化，初始 commit 已创建。")
 
 
@@ -129,7 +130,7 @@ def cmd_commit(args: argparse.Namespace) -> None:
 
     git_dir = KB_ROOT / ".git"
     if not git_dir.exists():
-        die("知识库未初始化 git 仓库。请先运行 'kb init'。")
+        die("知识库未初始化 git 仓库。请先运行 'agenote init'。")
 
     message = args.message
     if not message:
@@ -192,103 +193,106 @@ def cmd_reindex(args: argparse.Namespace) -> None:
 
 
 def print_help() -> None:
-    print(f"""kb — 知识库命令行工具
+    print(f"""agenote — 知识库命令行工具
 
-用法: kb <子命令> [参数]
+用法: agenote <子命令> [参数]
 
 子命令:
   add       添加经验卡片
-            kb add --title "标题" [--category 类别] [--tech 技术栈]
+            agenote add --title "标题" [--category 类别] [--tech 技术栈]
                     [--type 类型] [--owner 执行者] [--entry 条目语义]
                     [--summary 总结] [--stdin]
 
   get       读取卡片详情
-            kb get <卡片文件名或ID>
+            agenote get <卡片文件名或ID>
 
   list      列出卡片
-            kb list --category 类别 --all
-            kb list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
+            agenote list --category 类别 --all
+            agenote list [--category 类别] [--type 类型] [--owner 执行者] [--recent N] [--all]
 
   search    全文检索
-            kb search <关键词...> [--context N] [--limit N]
-            kb search --regex <正则> [--context N]
+            agenote search <关键词...> [--context N] [--limit N]
+            agenote search --regex <正则> [--context N]
             默认按空格、/、逗号拆分多关键词，大小写不敏感，按命中词数和次数排序。
             需要旧式 rg/grep 正则行为时显式加 --regex。
 
   fields    列出已有字段值（用于优先复用标签）
-            kb fields [--category] [--tech] [--type] [--owner]
+            agenote fields [--category] [--tech] [--type] [--owner]
 
   tags      按标签检索
-            kb tags <标签> [标签2 ...]
+            agenote tags <标签> [标签2 ...]
 
   memory   管理记忆系统
-            kb memory                          列出记忆概览
-            kb memory --type feedback|project|reference  按类型过滤
-            kb memory --project <名称|路径|.>   检索项目记忆
-            kb memory --add --type <类型> --title "标题" --stdin  添加记忆
-            kb memory --stale                   列出陈旧记忆
-            kb memory --touch <ID>              更新时间戳
-            kb memory --archive <ID>            归档记忆到 deprecated
-            kb memory --archive-to-file <ID>    归档 feedback 到 MEMORY-ARCHIVE.org
-            kb memory --stale --auto-archive-days 60  自动归档陈旧 feedback
-            kb memory --project-touch <名称>    更新项目 LAST_ACTIVE
-            kb memory --project <名称> --auto-update  自动更新项目元数据
-            kb memory --get                     查看全文
+            agenote memory                          列出记忆概览
+            agenote memory --type feedback|project|reference  按类型过滤
+            agenote memory --project <名称|路径|.>   检索项目记忆
+            agenote memory --add --type <类型> --title "标题" --stdin  添加记忆
+            agenote memory --stale                   列出陈旧记忆
+            agenote memory --touch <ID>              更新时间戳
+            agenote memory --archive <ID>            归档记忆到 deprecated
+            agenote memory --archive-to-file <ID>    归档 feedback 到 MEMORY-ARCHIVE.org
+            agenote memory --stale --auto-archive-days 60  自动归档陈旧 feedback
+            agenote memory --project-touch <名称>    更新项目 LAST_ACTIVE
+            agenote memory --project <名称> --auto-update  自动更新项目元数据
+            agenote memory --get                     查看全文
 
 
 
   reindex   重建知识库索引
-            kb reindex
+            agenote reindex
 
   lint      格式校验与修复（原 kb-lint）
-            kb lint                 检查所有卡片
-            kb lint --fix           自动修复
-            kb lint --check         仅检查，退出码=问题数
-            kb lint --fix file.org  修复指定文件
+            agenote lint                 检查所有卡片
+            agenote lint --fix           自动修复
+            agenote lint --check         仅检查，退出码=问题数
+            agenote lint --fix file.org  修复指定文件
 
   inbox    快速捕获到 inbox.org
-            kb inbox "待捕获的想法" 或 echo "内容" | kb inbox
+            agenote inbox "待捕获的想法" 或 echo "内容" | agenote inbox
 
   stats    知识库统计概览
-            kb stats
+            agenote stats
 
   connect  双向链接两张卡片
-            kb connect <卡片ID> <卡片ID> [--desc 描述]
+            agenote connect <卡片ID> <卡片ID> [--desc 描述]
 
   update   更新已有卡片
-            kb update <卡片ID> [--status STATUS] [--category 类别] [--tech 技术]
+            agenote update <卡片ID> [--status STATUS] [--category 类别] [--tech 技术]
                      [--type 类型] [--owner 执行者] [--append-to 章节 --append-text 内容] [--stdin]
 
   init     初始化知识库
-            kb init            创建目录结构 + git 仓库 + 初始 commit
-            kb init --no-git   仅创建目录结构，跳过 git
+            agenote init            创建目录结构 + git 仓库 + 初始 commit
+            agenote init --no-git   仅创建目录结构，跳过 git
 
   commit   提交知识库变更
-            kb commit -m "总结"   提交所有变更到 git（.gitignore 排除 index.json）
+            agenote commit -m "总结"   提交所有变更到 git（.gitignore 排除 index.json）
 
   touch    更新卡片时间戳
-            kb touch <卡片ID>              更新 LAST_USED + LAST_VERIFIED
-            kb touch <卡片ID> --used-only  只更新 LAST_USED
+            agenote touch <卡片ID>              更新 LAST_USED + LAST_VERIFIED
+            agenote touch <卡片ID> --used-only  只更新 LAST_USED
 
   merge    合并卡片
-            kb merge <主卡片ID> <次卡片ID>... [--desc 原因]
+            agenote merge <主卡片ID> <次卡片ID>... [--desc 原因]
 
   archive  归档卡片
-            kb archive <卡片ID> [--reason 原因]  归档指定卡片
-            kb archive --list [--json]           列出归档卡片
-            kb archive --stale                   自动归档过时卡片
+            agenote archive <卡片ID> [--reason 原因]  归档指定卡片
+            agenote archive --list [--json]           列出归档卡片
+            agenote archive --stale                   自动归档过时卡片
 
   restore  恢复归档卡片
-            kb restore <卡片ID> [--status stable]
+            agenote restore <卡片ID> [--status stable]
 
   deduplicate 检测重复卡片
-            kb deduplicate [--threshold 0.7] [--json]
+            agenote deduplicate [--threshold 0.7] [--json]
 
   review   审查卡片
-            kb review <卡片ID> [--fix]
+            agenote review <卡片ID> [--fix]
 
   health   知识库健康度报告
-            kb health
+            agenote health [--duplicates] [--quality]
+
+  gaps     知识空白检测（类别×类型矩阵）
+            agenote gaps [--stale-days 90] [--json]
 
   help     显示本帮助
 
@@ -321,7 +325,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="kb",
-        description="kb — 知识库命令行工具",
+        description="agenote — 人类域知识库 CLI",
         add_help=False,
     )
     subparsers = parser.add_subparsers(dest="command")
@@ -524,11 +528,20 @@ def main() -> None:
     review_parser.add_argument("--fix", action="store_true", help="自动修复问题")
 
     # ── health ──────────────────────────────────────────────────────────────
-    subparsers.add_parser("health", help="知识库健康度报告")
+    health_parser = subparsers.add_parser("health", help="知识库健康度报告")
+    health_parser.add_argument(
+        "--duplicates", action="store_true", help="检测疑似重复卡片"
+    )
+    health_parser.add_argument(
+        "--quality", action="store_true", help="检测质量问题（章节/元数据/Markdown）"
+    )
 
-    # ── agenote ─────────────────────────────────────────────────────────
-    # 已废弃：agenote 改造为 MCP server（agenote_mcp.py），不再作为 kb 子命令。
-    # add_agenote_parser(subparsers)
+    # ── gaps ────────────────────────────────────────────────────────────────
+    gaps_parser = subparsers.add_parser("gaps", help="知识空白检测（类别×类型矩阵）")
+    gaps_parser.add_argument(
+        "--stale-days", type=int, default=90, help="陈旧阈值（天，默认 90）"
+    )
+    gaps_parser.add_argument("--json", action="store_true", help="JSON 格式输出")
 
     add_viz_parser(subparsers)
 
@@ -562,14 +575,14 @@ def main() -> None:
         "deduplicate": cmd_deduplicate,
         "review": cmd_review,
         "health": cmd_health,
+        "gaps": cmd_gaps,
         "viz": cmd_viz,
-        # agenote 已废弃 → 改为 MCP server（agenote_mcp.py）
     }
 
     if args.command in commands:
         commands[args.command](args)
     else:
-        die(f"未知子命令: {args.command}。运行 'kb help' 查看帮助。")
+        die(f"未知子命令: {args.command}。运行 'agenote help' 查看帮助。")
 
 
 if __name__ == "__main__":

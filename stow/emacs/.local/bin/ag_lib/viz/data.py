@@ -12,8 +12,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-from kb_lib.core import KB_ROOT
-
+from ag_lib.core import ARCHIVE_THRESHOLD_DAYS, KB_ROOT, STALE_THRESHOLD_DAYS
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # --filter 字段白名单（与索引卡片字段对齐）
@@ -26,6 +25,8 @@ KNOWN_FILTER_KEYS = {
     "tech",
     "entry_type",
     "status",
+    "source_agent",  # 跨 agent 溯源（agenote 域）
+    "domain",  # human / agenote
 }
 
 
@@ -99,31 +100,47 @@ def parse_filter(s: str) -> dict:
 
 
 def normalize_cards(cards: list[dict]) -> list[dict]:
-    """把 last_used / last_verified 规整为 ISO 日期，前端按日期直接计算。"""
+    """规整日期字段并透传 agenote 体系字段（domain/weight/usage_count/source_agent）。"""
     out = []
     for c in cards:
         nc = dict(c)
         nc["last_used"] = parse_org_date(c.get("last_used", ""))
         nc["last_verified"] = parse_org_date(c.get("last_verified", ""))
+        # 三域区分字段（缺失时给默认值，前端可统一处理）
+        nc.setdefault("domain", "human")
+        nc.setdefault("source_agent", "")
+        nc.setdefault("weight", 1.5 if nc["domain"] == "human" else 1.0)
+        nc.setdefault("usage_count", 0)
         out.append(nc)
     return out
 
 
 def compute_stats(cards: list[dict], memory: dict | None = None) -> dict:
-    """Python 端预计算：总数、陈旧列表。
+    """Python 端预计算：总数、陈旧列表、按域分布。
 
-    陈旧判定：last_used 距今 > 60 天 或 > 180 天。空值不计入。
+    陈旧判定对齐 agenote 体系状态机：
+      - stale: last_used 距今 > STALE_THRESHOLD_DAYS(30)
+      - archive: last_used 距今 > ARCHIVE_THRESHOLD_DAYS(90)
     `memory` 参数保留为可选以兼容旧调用，但不再生成相关数据。
     """
     normalized = normalize_cards(cards)
-    stale_60 = [c for c in normalized if 0 < days_since(c["last_used"]) > 60]
-    stale_180 = [c for c in normalized if 0 < days_since(c["last_used"]) > 180]
+    stale_cards = [
+        c for c in normalized if 0 < days_since(c["last_used"]) > STALE_THRESHOLD_DAYS
+    ]
+    archive_cards = [
+        c for c in normalized if 0 < days_since(c["last_used"]) > ARCHIVE_THRESHOLD_DAYS
+    ]
+    # 按域分布（三域区分统计）
+    domain_counts = Counter(c.get("domain", "human") for c in normalized)
     return {
         "total": len(cards),
-        "stale_60_count": len(stale_60),
-        "stale_180_count": len(stale_180),
-        "stale_60_ids": [c["id"] for c in stale_60],
-        "stale_180_ids": [c["id"] for c in stale_180],
+        "stale_count": len(stale_cards),
+        "archive_count": len(archive_cards),
+        "stale_ids": [c["id"] for c in stale_cards],
+        "archive_ids": [c["id"] for c in archive_cards],
+        "stale_threshold_days": STALE_THRESHOLD_DAYS,
+        "archive_threshold_days": ARCHIVE_THRESHOLD_DAYS,
+        "domain_counts": dict(domain_counts),
     }
 
 
@@ -218,7 +235,9 @@ def render_card_body(file_relpath: str) -> str:
 
         if _PROPS_BEGIN_RE.match(s):
             in_props = True
-            flush_para(); flush_list(); flush_block()
+            flush_para()
+            flush_list()
+            flush_block()
             continue
         if in_props:
             if _PROPS_END_RE.match(s):
@@ -229,13 +248,15 @@ def render_card_body(file_relpath: str) -> str:
         if m and not in_block:
             in_block = True
             block_lang = m.group(1) or ""
-            flush_para(); flush_list()
+            flush_para()
+            flush_list()
             continue
         m = _BEGIN_RE.match(s)
         if m and not in_block:
             in_block = True
             block_lang = ""
-            flush_para(); flush_list()
+            flush_para()
+            flush_list()
             continue
         if _END_RE.match(s) and in_block:
             in_block = False
@@ -251,9 +272,10 @@ def render_card_body(file_relpath: str) -> str:
             text = m.group(2)
             for state in _TODO_STATES:
                 if text.startswith(state + " "):
-                    text = text[len(state) + 1:]
+                    text = text[len(state) + 1 :]
                     break
-            flush_para(); flush_list()
+            flush_para()
+            flush_list()
             out.append(f"<h{level}>{_inline(text)}</h{level}>")
             continue
 
@@ -267,13 +289,16 @@ def render_card_body(file_relpath: str) -> str:
             continue
 
         if not s.strip():
-            flush_para(); flush_list()
+            flush_para()
+            flush_list()
             continue
 
         list_buf.clear()
         para_buf.append(s.strip())
 
-    flush_para(); flush_list(); flush_block()
+    flush_para()
+    flush_list()
+    flush_block()
     return "\n".join(out)
 
 

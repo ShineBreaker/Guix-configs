@@ -17,7 +17,7 @@
  * 调用路径：agenote 已改造为 MCP server（agenote_mcp.py），agent 主循环通过
  * MCP tool 调用。但 pi 的 ExtensionAPI 不提供 MCP 调用接口，本插件的命令
  * （/agenote-health、/agenote-curate）改调轻量 CLI shim（agenote_cli.py），
- * 它复用同一套 kb_lib 内核，输出人类可读文本。
+ * 它复用同一套 ag_lib 内核，输出人类可读文本。
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -72,7 +72,7 @@ let lastTriggerTime = 0;
 
 /** 运行 agenote_cli 命令并返回 stdout
  *
- * agenote_cli.py 是轻量 CLI shim（纯 stdlib），复用 kb_lib 内核。
+ * agenote_cli.py 是轻量 CLI shim（纯 stdlib），复用 ag_lib 内核。
  * agent 主循环已改用 MCP tool 调用 agenote，但本插件（ExtensionAPI 无
  * MCP 调用接口）只能 execSync 外部进程，故走此 shim。
  */

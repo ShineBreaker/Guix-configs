@@ -11,7 +11,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from kb_lib.core import (
+from ag_lib.core import (
     STALE_DAYS,
     MEMORY_ARCHIVE_DAYS,
     die,
