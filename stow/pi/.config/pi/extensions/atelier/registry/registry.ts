@@ -23,7 +23,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { StatusFile } from "./types.ts";
+import type { StatusFile } from "../core/types.ts";
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -222,41 +222,32 @@ export function closeRegistry(): void {
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
 /**
- * 初始化 schema。`IF NOT EXISTS` 保证幂等。
- *
- * 字段解释：
- *  - run_id     : PRIMARY KEY；sa-{base36ts}-{3bytehex}（launcher.ts:83 生成）
- *  - agent      : agent 名（如 worker/scout/oracle），来自 agentConfig.name
- *  - mode       : single/parallel/chain，用于 `atelier list` 分组
- *  - status     : RunStatus 枚举字符串
- *  - run_dir    : $XDG_CACHE_HOME/pi/subagents/{run_id}
- *  - last_turn_at : 本阶段总等于 started_at；后续 PR 引入 turn 计数时扩展
- *  - task_excerpt: task.md 前 200 字摘要（避免大文本进 DB）
- */
-/**
- * 初始化 schema。`IF NOT EXISTS` 保证幂等。
- *
- * 字段解释：
- *  - run_id     : PRIMARY KEY；sa-{base36ts}-{3bytehex}（launcher.ts:83 生成）
- *  - agent      : agent 名（如 worker/scout/oracle），来自 agentConfig.name
- *  - mode       : single/parallel/chain，用于 `atelier list` 分组
- *  - status     : RunStatus 枚举字符串
- *  - run_dir    : $XDG_CACHE_HOME/pi/subagents/{run_id}
- *  - last_turn_at : 本阶段总等于 started_at；后续 PR 引入 turn 计数时扩展
- *  - task_excerpt: task.md 前 200 字摘要（避免大文本进 DB）
- *  - return_status / return_summary / return_status_checked_at (PR-7): monitor 终态后从 result.md 解析
- *  - reentry_count (PR-8): completion gate 自动 reentry 计数
- *  - is_system_spawned (PR-9): 系统子 agent 标记（dream / distill / checkpoint-writer）
- *  - parent_run_id (PR-9/10): chain step / resume parent 关联
- *  - checkpoint_path (PR-10): 长程任务 checkpoint 文件路径
-/**
  * Schema 版本号。每次 ALTER TABLE 加列必须 +1 并在 migrate() 加分支。
- *   v1 = PR-6 初始(13 列)
- *   v2 = PR-7..11 新增 7 列(return_status/return_summary/return_status_checked_at/
- *                          reentry_count/is_system_spawned/parent_run_id/checkpoint_path)
- *                          + 3 索引
+ *   v1 = 初始（13 列）
+ *   v2 = 新增 7 列（return_status / return_summary / return_status_checked_at /
+ *                  reentry_count / is_system_spawned / parent_run_id / checkpoint_path）
+ *        + 索引（idx_status / idx_started / idx_agent / idx_is_system / idx_parent）
  */
 const SCHEMA_VERSION = 2;
+
+/**
+ * 初始化 schema。`IF NOT EXISTS` 保证幂等。
+ *
+ * 字段解释：
+ *  - run_id     : PRIMARY KEY；`sa-{base36ts}-{3bytehex}`（runtime/launcher.ts generateRunId 生成）
+ *  - agent      : agent 名（如 worker/scout/oracle），来自 agentConfig.name
+ *  - mode       : single/parallel/chain，用于 `atelier list` 分组
+ *  - status     : RunStatus 枚举字符串
+ *  - run_dir    : $XDG_CACHE_HOME/pi/subagents/{run_id}
+ *  - started_at / finished_at / last_turn_at : 时间戳；last_turn_at 本阶段总等于 started_at
+ *  - task_excerpt: task.md 前 200 字摘要（避免大文本进 DB）
+ *  - tmux_pane / workfile_path / exit_code / error : 运行期元数据
+ *  - return_status / return_summary / return_status_checked_at : monitor 终态后从 result.md 解析
+ *  - reentry_count : completion gate 自动 reentry 计数
+ *  - is_system_spawned : 系统子 agent 标记（atelier-dream / distill / checkpoint-writer）
+ *  - parent_run_id : chain step / resume parent 关联
+ *  - checkpoint_path : 长程任务 checkpoint 文件路径
+ */
 
 function initSchema(db: DatabaseSync): void {
   // 表骨架(v1 兼容)。后续列都通过 migrate() 增量加,不修改这里。
@@ -593,16 +584,16 @@ function rowToRun(row: RegisteredRow): RegisteredRun {
     taskExcerpt: row.task_excerpt,
     exitCode: row.exit_code,
     error: row.error,
-    // PR-7
+    // result.md Return Header 解析结果（monitor 终态后写入）
     returnStatus: row.return_status as RegisteredRun["returnStatus"],
     returnSummary: row.return_summary,
     returnStatusCheckedAt: row.return_status_checked_at,
-    // PR-8
+    // completion gate reentry 计数
     reentryCount: row.reentry_count,
-    // PR-9
+    // 系统子 agent 标记 + chain/resume 父子关联
     isSystemSpawned: row.is_system_spawned === 1,
     parentRunId: row.parent_run_id,
-    // PR-10
+    // 长程任务 checkpoint 文件路径
     checkpointPath: row.checkpoint_path,
   };
 }

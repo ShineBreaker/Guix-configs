@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import type { PetMood } from "./pet.ts";
+import type { PetMood } from "./types.ts";
 
 /**
  * 动画原语集合

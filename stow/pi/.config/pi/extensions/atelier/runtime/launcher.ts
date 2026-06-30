@@ -22,12 +22,12 @@ import type {
   LaunchResult,
   StatusFile,
   SubagentConfig,
-} from "./types.ts";
-import { TOP_ROW_PERCENT } from "./types.ts";
-import { removeSubagentOnlyMarkers } from "./context.ts";
-import { registerRun } from "./registry.ts";
-import { formatReturnHeaderInstruction } from "./return-header.ts";
-import { isSystemAgent } from "./system-agents.ts";
+} from "../core/types.ts";
+import { TOP_ROW_PERCENT } from "../core/types.ts";
+import { removeSubagentOnlyMarkers } from "../core/context.ts";
+import { registerRun } from "../registry/registry.ts";
+import { formatReturnHeaderInstruction } from "../registry/return-header.ts";
+import { isSystemAgent } from "../core/system-agents.ts";
 
 // ─── XDG 路径 ────────────────────────────────────────────────────────────────
 

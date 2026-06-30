@@ -32,87 +32,39 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { NERD_FONTS } from "../shared/nerd-font.ts";
+import {
+  createKeyedTtlCache,
+  createTtlCache,
+  iconText,
+} from "../shared/format.ts";
+import type { FooterState } from "../shared/types.ts";
+// FooterState re-export：历史调用方仍可从本模块导入
+export type { FooterState };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Nerd Font 检测 + 图标
+// 图标
 // ═══════════════════════════════════════════════════════════════════════════
-
-function detectNerdFont(): boolean {
-  if (process.env.POWERLINE_NERD_FONTS === "1") return true;
-  if (process.env.POWERLINE_NERD_FONTS === "0") return false;
-  if (process.env.GHOSTTY_RESOURCES_DIR) return true;
-  const term = (process.env.TERM_PROGRAM ?? "").toLowerCase();
-  if (
-    term.includes("iterm") ||
-    term.includes("wezterm") ||
-    term.includes("kitty") ||
-    term.includes("ghostty") ||
-    term.includes("alacritty") ||
-    term.includes("vscode") ||
-    term.includes("hyper") ||
-    term.includes("konsole") ||
-    term.includes("foot") ||
-    term.includes("tmux") ||
-    term.includes("apple_terminal")
-  ) {
-    return true;
-  }
-  const colorTerm = (process.env.COLORTERM ?? "").toLowerCase();
-  if (term.includes("gnome") && colorTerm.includes("truecolor")) return true;
-  if (term.includes("xterm") && colorTerm.includes("truecolor")) return true;
-  const termName = (process.env.TERM ?? "").toLowerCase();
-  if (termName.includes("nerd") || termName.includes("nf-")) return true;
-  if (process.env.TMUX) return true;
-  return false;
-}
-
-const NF = detectNerdFont();
 
 const IC = {
   // folder open
-  folder: NF ? "\uF115" : "dir",
+  folder: NERD_FONTS ? "\uF115" : "dir",
   // git branch (code fork)
-  branch: NF ? "\uF126" : "b",
+  branch: NERD_FONTS ? "\uF126" : "b",
   // git ahead (upload) / behind (download) — ↑ ↓ 是 BMP 符号，非 emoji
   ahead: "\u2191", // ↑
   behind: "\u2193", // ↓
   // commit (bullet / circle-dot)
-  commit: NF ? "\uF418" : "@",
+  commit: NERD_FONTS ? "\uF418" : "@",
   // clock
-  clock: NF ? "\uF017" : "t",
+  clock: NERD_FONTS ? "\uF017" : "t",
   // separator（starship 风格 · ）
   sep: " · ",
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 类型 + 宽度档
+// 宽度档
 // ═══════════════════════════════════════════════════════════════════════════
-
-function fmtDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}h${m % 60}m`;
-  if (m > 0) return `${m}m${s % 60}s`;
-  return `${s}s`;
-}
-
-/**
- * FooterState — footer + pet widget 共享的会话状态。
- * status-bar.ts 只用 cwd/gitBranch/sessionStartMs 三字段；
- * 其余字段供 pet.ts 读 modelName/thinkingLevel/contextPercent 等。
- */
-export interface FooterState {
-  cwd: string;
-  gitBranch: string | null;
-  sessionStartMs: number;
-  /** pet widget 使用；status-bar 不读 */
-  modelName?: string;
-  thinkingLevel?: string;
-  contextPercent?: number | null;
-  contextTokens?: number | null;
-  contextWindow?: number;
-}
 
 export type WidthTier = "wide" | "medium" | "narrow" | "compact";
 
@@ -123,31 +75,20 @@ export function getTier(width: number): WidthTier {
   return "compact";
 }
 
-function iconText(icon: string, text: string): string {
-  if (!text) return "";
-  if (!icon) return text;
-  return `${icon} ${text}`;
-}
-
-// Git dirty 计数缓存：5s 内复用，避免每帧 fork `git status`
-let _dirtyCache: { count: number; fetchedAt: number } = {
-  count: 0,
-  fetchedAt: 0,
-};
+// Git 查询缓存：避免每帧 fork git 子进程。各 TTL 见各 helper。
+const dirtyCache = createTtlCache<number>(5000);
 function getGitDirtyCount(): number {
-  const now = Date.now();
-  if (now - _dirtyCache.fetchedAt < 5000) return _dirtyCache.count;
-  try {
-    const out = execSync("git status --porcelain 2>/dev/null | wc -l", {
-      encoding: "utf-8",
-      timeout: 1000,
-    }).trim();
-    const n = parseInt(out, 10) || 0;
-    _dirtyCache = { count: n, fetchedAt: now };
-    return n;
-  } catch {
-    return 0;
-  }
+  return dirtyCache.get(() => {
+    try {
+      const out = execSync("git status --porcelain 2>/dev/null | wc -l", {
+        encoding: "utf-8",
+        timeout: 1000,
+      }).trim();
+      return parseInt(out, 10) || 0;
+    } catch {
+      return 0;
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -165,32 +106,30 @@ function segGit(state: FooterState, theme: Theme): string {
   const dirtyMark = dirty > 0 ? ` ${theme.fg("warning", `●${dirty}`)}` : "";
   return theme.fg("accent", iconText(IC.branch, state.gitBranch)) + dirtyMark;
 }
-// Git ahead/behind：本地与 @{u} 的差距（仅当 branch 存在时）
-let _aheadBehindCache: { text: string; fetchedAt: number } = {
-  text: "",
-  fetchedAt: 0,
-};
+// Git ahead/behind：本地与 @{u} 的差距（仅当 branch 存在时），5s 缓存
+const aheadBehindCache = createTtlCache<string>(5000);
 function getAheadBehind(): string {
-  const now = Date.now();
-  if (now - _aheadBehindCache.fetchedAt < 5000) return _aheadBehindCache.text;
-  try {
-    const out = execSync(
-      "git rev-list --count --left-right @{u}...HEAD 2>/dev/null",
-      {
-        encoding: "utf-8",
-        timeout: 1000,
-      },
-    ).trim();
-    // 输出格式 "behind\t ahead"（左=behind, 右=ahead）
-    const [behind, ahead] = out.split(/\s+/).map((n) => parseInt(n, 10) || 0);
-    let text = "";
-    if (ahead > 0) text += `\u2191${ahead}`;
-    if (behind > 0) text += (text ? " " : "") + `\u2193${behind}`;
-    _aheadBehindCache = { text, fetchedAt: now };
-    return text;
-  } catch {
-    return "";
-  }
+  return aheadBehindCache.get(() => {
+    try {
+      const out = execSync(
+        "git rev-list --count --left-right @{u}...HEAD 2>/dev/null",
+        {
+          encoding: "utf-8",
+          timeout: 1000,
+        },
+      ).trim();
+      // 输出格式 "behind\t ahead"（左=behind, 右=ahead）
+      const [behind, ahead] = out
+        .split(/\s+/)
+        .map((n) => parseInt(n, 10) || 0);
+      let text = "";
+      if (ahead > 0) text += `\u2191${ahead}`;
+      if (behind > 0) text += (text ? " " : "") + `\u2193${behind}`;
+      return text;
+    } catch {
+      return "";
+    }
+  });
 }
 function segAheadBehind(state: FooterState, theme: Theme): string {
   if (!state.gitBranch) return "";
@@ -200,23 +139,18 @@ function segAheadBehind(state: FooterState, theme: Theme): string {
 }
 
 // Git HEAD commit 短 hash：8s 缓存
-let _hashCache: { text: string; fetchedAt: number } = {
-  text: "",
-  fetchedAt: 0,
-};
+const hashCache = createTtlCache<string>(8000);
 function getHeadHash(): string {
-  const now = Date.now();
-  if (now - _hashCache.fetchedAt < 8000) return _hashCache.text;
-  try {
-    const out = execSync("git rev-parse --short HEAD 2>/dev/null", {
-      encoding: "utf-8",
-      timeout: 1000,
-    }).trim();
-    _hashCache = { text: out, fetchedAt: now };
-    return out;
-  } catch {
-    return "";
-  }
+  return hashCache.get(() => {
+    try {
+      return execSync("git rev-parse --short HEAD 2>/dev/null", {
+        encoding: "utf-8",
+        timeout: 1000,
+      }).trim();
+    } catch {
+      return "";
+    }
+  });
 }
 function segHash(state: FooterState, theme: Theme): string {
   if (!state.gitBranch) return "";
@@ -225,40 +159,27 @@ function segHash(state: FooterState, theme: Theme): string {
   return theme.fg("muted", `${IC.commit}${h}`);
 }
 
-// 项目语言检测：cwd 下扫特征文件，1h 缓存（项目类型极少变化）
-let _langCache: { text: string; fetchedAt: number; cwd: string } = {
-  text: "",
-  fetchedAt: 0,
-  cwd: "",
-};
+// 项目语言检测：按 cwd 扫特征文件，1h 缓存（项目类型极少变化）
+const langCache = createKeyedTtlCache<string>(3_600_000);
+// 优先级排序：具体语言 > 通用
+const LANG_PROBES: ReadonlyArray<readonly [string, string, string]> = [
+  ["package.json", "\uE712", "Node"],
+  ["Cargo.toml", "\uE7A8", "Rust"],
+  ["pyproject.toml", "\uE73C", "Python"],
+  ["go.mod", "\uE626", "Go"],
+  ["flake.nix", "\uF313", "Nix"],
+  ["channel.scm", "\uF0CB", "Guix"],
+  ["manifest.scm", "\uF0CB", "Guix"],
+];
 function detectProjectLang(cwd: string): string {
-  const now = Date.now();
-  if (_langCache.cwd === cwd && now - _langCache.fetchedAt < 3_600_000)
-    return _langCache.text;
-  // 优先级排序：具体语言 > 通用
-  const probes: Array<[string, string, string]> = [
-    ["package.json", "\uE712", "Node"],
-    ["Cargo.toml", "\uE7A8", "Rust"],
-    ["pyproject.toml", "\uE73C", "Python"],
-    ["go.mod", "\uE626", "Go"],
-    ["flake.nix", "\uF313", "Nix"],
-    ["channel.scm", "\uF0CB", "Guix"],
-    ["manifest.scm", "\uF0CB", "Guix"],
-  ];
-  let detected = "";
-  let icon = "\uF07C";
-  let label = "";
-  for (const [file, ic, lbl] of probes) {
-    if (existsSync(join(cwd, file))) {
-      icon = ic;
-      label = lbl;
-      detected = file;
-      break;
+  return langCache.get(cwd, () => {
+    for (const [file, icon, label] of LANG_PROBES) {
+      if (existsSync(join(cwd, file))) {
+        return `${icon} ${label}`;
+      }
     }
-  }
-  const text = label ? `${icon} ${label}` : "";
-  _langCache = { text, fetchedAt: now, cwd };
-  return text;
+    return "";
+  });
 }
 function segLanguage(state: FooterState, theme: Theme): string {
   const text = detectProjectLang(state.cwd || process.cwd());
@@ -280,8 +201,6 @@ function segTime(_state: FooterState, theme: Theme): string {
 
 interface SegSpec {
   id: string;
-  /** 优先级：越大越不易被省略 */
-  priority: number;
   render: () => string;
 }
 
@@ -293,36 +212,36 @@ function buildSegments(
   const all: SegSpec[] = [];
 
   // path（compact 也保留）
-  all.push({ id: "path", priority: 60, render: () => segPath(state, theme) });
+  all.push({ id: "path", render: () => segPath(state, theme) });
   // git（compact 省略）
   if (tier !== "compact" && state.gitBranch) {
-    all.push({ id: "git", priority: 50, render: () => segGit(state, theme) });
+    all.push({ id: "git", render: () => segGit(state, theme) });
 
     // ahead/behind（narrow 省略）
     if (tier !== "narrow") {
       const ab = segAheadBehind(state, theme);
-      if (ab) all.push({ id: "aheadBehind", priority: 40, render: () => ab });
+      if (ab) all.push({ id: "aheadBehind", render: () => ab });
     }
 
     // commit hash（仅 wide）
     if (tier === "wide") {
       const h = segHash(state, theme);
-      if (h) all.push({ id: "hash", priority: 35, render: () => h });
+      if (h) all.push({ id: "hash", render: () => h });
     }
   }
 
   // 项目语言（wide/medium 保留）
   if (tier === "wide" || tier === "medium") {
     const l = segLanguage(state, theme);
-    if (l) all.push({ id: "lang", priority: 30, render: () => l });
+    if (l) all.push({ id: "lang", render: () => l });
   }
 
   // time（narrow/compact 省略）
   if (tier === "wide" || tier === "medium") {
-    all.push({ id: "time", priority: 10, render: () => segTime(state, theme) });
+    all.push({ id: "time", render: () => segTime(state, theme) });
   }
 
-  all.sort((a, b) => b.priority - a.priority);
+  // 段顺序由 assembleLine 的固定 order 数组决定，这里不排序
   return all;
 }
 

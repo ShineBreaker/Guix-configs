@@ -30,29 +30,31 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
-import { readSettings } from "./xdg-settings.ts";
+import { readSettings } from "./data/settings.ts";
 import {
   collectLoaded,
+  collectRecentSessions,
   discoverContextFiles,
   discoverLocalExtensions,
   discoverLocalTemplates,
   runAgenoteHealth,
   type LoadedCounts,
-  type RecentSessionInfo,
-} from "./plugin-bridge.ts";
-import { createWelcomeHeader, type WelcomeData } from "./welcome-box.ts";
+} from "./data/plugin-bridge.ts";
+import { createWelcomeHeader, type WelcomeData } from "./widgets/welcome-box.ts";
 import {
   createStatusBarWidget,
   createEmptyFooter,
-  type FooterState,
-} from "./status-bar.ts";
-import type { ReadonlyFooterDataProvider } from "@earendil-works/pi-coding-agent";
+} from "./widgets/status-bar.ts";
+import type {
+  ReadonlyFooterDataProvider,
+} from "@earendil-works/pi-coding-agent";
 import {
   startAnimation,
   triggerModelFlash,
   type AnimationState,
-} from "./animations.ts";
-import { createPetWidget, setPetMood } from "./pet.ts";
+} from "./shared/animations.ts";
+import type { FooterState } from "./shared/types.ts";
+import { createPetWidget, setPetMood } from "./widgets/pet.ts";
 
 /** 缓存渲染所需数据 */
 interface UiCache {
@@ -135,11 +137,8 @@ export default function piUiExtension(pi: ExtensionAPI): void {
     // 默认 tips
     const tips = ["/ for commands", "! to run bash", "Tab cycle thinking"];
 
-    // recent sessions：留到后续实现
-    // recent sessions：留到后续实现
-    const recent: RecentSessionInfo[] = [];
-
-    // Agenote 健康度（运行 agenote_cli health 解析，失败时 available=false）
+    // recent sessions：首屏用空数组占位（同步函数无法 await），
+    // session_start 的 startup 分支会异步调 collectRecentSessions 填充并 requestRender。
     const agenote = runAgenoteHealth();
 
     cache.welcome = {
@@ -147,7 +146,7 @@ export default function piUiExtension(pi: ExtensionAPI): void {
       providerName,
       tips,
       loaded,
-      recent,
+      recent: [],
       agenote,
     };
   }
@@ -160,9 +159,12 @@ export default function piUiExtension(pi: ExtensionAPI): void {
   // ── session_start：注册 header + footer ─────────────────────────────
 
   pi.on("session_start", async (event, ctx) => {
-    // TUI 守卫：非 TUI 模式（pi -p / RPC / SDK）不渲染装饰性 header/footer
-    if (ctx.mode !== "tui") return;
-    if (ctx.hasUI === false) return;
+    // TUI 守卫：非 TUI 模式（pi -p / RPC / SDK）不渲染装饰性 header/footer。
+    // 注意：ExtensionContext 的类型声明里没有 mode 字段（pi 0.74.2 实测），
+    // 但运行时 pi 会注入 mode 属性。用类型断言访问以兼顾类型安全与运行时行为。
+    const isTui = (ctx as { mode?: string }).mode === "tui";
+    if (!isTui) return;
+    if (!ctx.hasUI) return;
 
     refreshCacheFromCtx(ctx);
 
@@ -240,6 +242,16 @@ export default function piUiExtension(pi: ExtensionAPI): void {
       ctx.ui.setHeader((tui, _theme) => {
         cache.tuiRef = tui as TUI;
         return welcomeFactory(tui, _theme);
+      });
+
+      // Recent sessions 异步加载：首屏用空数组（"no recent sessions"）占位，
+      // 加载完成后填入 cache.welcome.recent 并 requestRender 触发重绘。
+      // SessionManager.list(cwd) 是 pi 公开 API（plugin-bridge.collectRecentSessions 封装）。
+      void collectRecentSessions(ctx.cwd).then((recent) => {
+        if (cache.welcome) {
+          cache.welcome.recent = recent;
+          cache.tuiRef?.requestRender();
+        }
       });
     }
   });

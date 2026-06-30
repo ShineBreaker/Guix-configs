@@ -17,17 +17,14 @@
  * 快捷命令：
  *   - /agentname <task>     — 启动单个 agent
  *   - /<prompt-name> <param> — 按 prompt 模板启动链路
+ *   - /atelier-resume <id>  — 从 checkpoint 续跳未完成的 chain
+ *   - /atelier-workflow ...  — 查看持久化的 workflow
  *
- * 文件拆分：
- *   types.ts       — 接口和常量
- *   config.ts      — 配置加载
- *   discovery.ts   — Agent 和 Prompt 发现
- *   workfile.ts    — Workfile 持久化
- *   launcher.ts    — Tmux 分屏启动
- *   monitor.ts     — 运行监控
- *   runner.ts      — 执行编排
- *   formatting.ts  — 结果格式化
- *   schemas.ts     — 参数 Schema
+ * 目录结构（按职能分层，详见同目录 AGENTS.md）：
+ *   core/       — types, config, schemas, context, discovery, system-agents
+ *   runtime/    — launcher, monitor, runner, workfile, session-log, formatting
+ *   registry/   — registry(SQLite), orphan-recovery, stuck-detector, return-header, completion-gate
+ *   lifecycle/  — checkpoint, workflow, resume
  */
 
 import * as fs from "node:fs";
@@ -39,56 +36,28 @@ import type {
   AgentToolResult,
   ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentConfig, RunResult, SubagentDetails } from "./types.ts";
-import { loadConfig } from "./config.ts";
-import { discoverAgents, discoverPrompts } from "./discovery.ts";
-import { ensureWorkfile } from "./workfile.ts";
-import { getRunDir, launchSingle } from "./launcher.ts";
-import { waitForCompletion, listRunning } from "./monitor.ts";
+import type { AgentConfig, RunResult, SubagentDetails } from "./core/types.ts";
+import { loadConfig } from "./core/config.ts";
+import { discoverAgents, discoverPrompts } from "./core/discovery.ts";
+import { ensureWorkfile } from "./runtime/workfile.ts";
+import { getRunDir, launchSingle } from "./runtime/launcher.ts";
+import { waitForCompletion, listRunning } from "./runtime/monitor.ts";
 import {
   executeWithFallback,
   runParallelBatches,
   runChain,
   resolveModelChain,
   readDefaultModelFromSettings,
-} from "./runner.ts";
-import { formatResults } from "./formatting.ts";
-import { SubagentParams } from "./schemas.ts";
-import { appendSessionLog, finalizeSessionLog } from "./session-log.ts";
-import { stripSubagentOnlySection } from "./context.ts";
-import { rebuildFromStatusFiles, closeRegistry } from "./registry.ts";
-import { orphanRecovery } from "./orphan-recovery.ts";
-import { startStuckDetector } from "./stuck-detector.ts";
-import { isSystemAgent } from "./system-agents.ts";
-import {
-  MAX_REENTRY,
-  READ_ONLY_AGENTS,
-  gateStatus,
-  decide as completionGateDecide,
-} from "./completion-gate.ts";
-import {
-  type CheckpointData,
-  resolveCheckpointPath,
-  readCheckpoint,
-  writeCheckpoint,
-  createCheckpoint,
-  markStepCompleted,
-  markCheckpointFailed,
-  CheckpointError,
-} from "./checkpoint.ts";
-import { resumeChain, type ResumePlan, type FinishedResume } from "./resume.ts";
-import {
-  type Workflow,
-  type WorkflowStep,
-  generateWorkflowId,
-  persistWorkflow,
-  loadWorkflow,
-  listWorkflows,
-  nextReadyStep,
-  serialize as serializeWorkflow,
-  deserialize as deserializeWorkflow,
-  resolveStepTask,
-} from "./workflow.ts";
+} from "./runtime/runner.ts";
+import { formatResults } from "./runtime/formatting.ts";
+import { SubagentParams } from "./core/schemas.ts";
+import { appendSessionLog, finalizeSessionLog } from "./runtime/session-log.ts";
+import { stripSubagentOnlySection } from "./core/context.ts";
+import { rebuildFromStatusFiles, closeRegistry } from "./registry/registry.ts";
+import { orphanRecovery } from "./registry/orphan-recovery.ts";
+import { startStuckDetector } from "./registry/stuck-detector.ts";
+import { resumeChain, type ResumePlan, type FinishedResume } from "./lifecycle/resume.ts";
+import { loadWorkflow, listWorkflows } from "./lifecycle/workflow.ts";
 
 // ─── Plan Review Gate 提示词 ─────────────────────────────────────────────────
 //
@@ -850,42 +819,93 @@ export default function (pi: ExtensionAPI) {
       }
     },
   });
-  // ── PR-10: /atelier-resume <runId> ──────────────────────────────────────────
-  // 从 SQLite registry + checkpoint 读上次的链式进度，未完成的步骤从当前 step 继续。
+  // ── /atelier-resume <parentRunId> ──────────────────────────────────────────
+  // 从 checkpoint 续跳未完成的 chain 步骤：读 checkpoint → 把剩余 step 转
+  // chainEntries → 调 runChain 真实 dispatch。
+  //
+  // 语义说明：
+  //   - 续跳会生成新的 parentRunId（runChain 内部 generateRunId），原 checkpoint
+  //     作为历史保留。这是"从崩溃点重跑剩余步骤"而非"无缝接续事务"。
+  //   - 崩溃前的 {previous} 已丢失，用 checkpoint.inheritedContextSnapshot
+  //     （冻结的前 2000 字）近似替换。属于设计内的降级。
+  //   - 若 checkpoint 已全部完成 → 返回 FinishedResume，notify 提示无需续跳。
   pi.registerCommand("atelier-resume", {
     description:
-      "从 checkpoint 续跳 chain/parallel。用法: /atelier-resume <parentRunId>",
+      "从 checkpoint 续跳 chain。用法: /atelier-resume <parentRunId>",
     handler: async (args, ctx) => {
-      const runId = args.trim();
-      if (!runId) {
+      const parentRunId = args.trim();
+      if (!parentRunId) {
         ctx.ui.notify("❌ 用法: /atelier-resume <parentRunId>", "error");
         return;
       }
+
+      let plan: ResumePlan;
       try {
-        const cwd = process.cwd();
-        const config = loadConfig();
-        const plan = resumeChain(runId, config, cwd);
-        if (!plan) {
+        const result = resumeChain(parentRunId, {}, ctx.cwd);
+        if ("finished" in result) {
           ctx.ui.notify(
-            `❌ 未找到 runId=${runId} 的 resume plan（checkpoint 丢失或已完成）`,
+            `✓ ${parentRunId} 已全部完成（${result.totalSteps} 步），无需续跳`,
+            "info",
+          );
+          return;
+        }
+        plan = result;
+      } catch (err) {
+        ctx.ui.notify(
+          `❌ resume 失败: ${err instanceof Error ? err.message : String(err)}`,
+          "error",
+        );
+        return;
+      }
+
+      ctx.ui.notify(
+        `⏳ ${parentRunId} 续跳中：已完成 ${plan.currentStep + 1}/${plan.totalSteps} 步，剩 ${plan.remainingSteps.length} 步，正在 dispatch...`,
+        "info",
+      );
+
+      // 把剩余 CheckpointStep 转成 runChain 需要的 { agent, task }[]。
+      // agent 名需查表得到 AgentConfig；task 的 {previous} 用 inheritedContextSnapshot 近似替换。
+      const agents = discoverAgents();
+      const chainEntries: Array<{ agent: AgentConfig; task: string }> = [];
+      for (const step of plan.remainingSteps) {
+        const agent = agents.find((a) => a.name === step.agent);
+        if (!agent) {
+          const available = agents.map((a) => a.name).join(", ") || "none";
+          ctx.ui.notify(
+            `❌ 续跳中止：step "${step.id}" 引用的 agent "${step.agent}" 不存在。可用: ${available}`,
             "error",
           );
           return;
         }
+        const task = step.task.replaceAll(
+          "{previous}",
+          plan.inheritedContextSnapshot,
+        );
+        chainEntries.push({ agent, task });
+      }
+
+      try {
+        const results = await runChain(
+          chainEntries,
+          loadConfig(),
+          ctx.cwd,
+          plan.inheritedContextSnapshot,
+        );
+        const success = results.filter((r) => r.status === "completed").length;
         ctx.ui.notify(
-          `✓ ${plan.parentRunId} 续跳中：${plan.completedSteps}/${plan.totalSteps} 步已完成，剩 ${plan.remainingSteps} 步`,
-          "info",
+          `续跳完成 ${success}/${results.length} 成功\n\n${formatResults(results).slice(0, 4000)}`,
+          success === results.length ? "info" : "warn",
         );
       } catch (err) {
         ctx.ui.notify(
-          `❌ resume 失败: ${err instanceof Error ? err.message : String(err)}`,
+          `❌ 续跳 dispatch 失败: ${err instanceof Error ? err.message : String(err)}`,
           "error",
         );
       }
     },
   });
 
-  // ── PR-11: /atelier-workflow list|show <id> ─────────────────────────────────
+  // ── /atelier-workflow list|show <id> ────────────────────────────────────────
   // 查看已持久化的 workflow JSON（不启动新 workflow）。
   pi.registerCommand("atelier-workflow", {
     description: "查看 workflow list/show。子命令: list | show <id>",

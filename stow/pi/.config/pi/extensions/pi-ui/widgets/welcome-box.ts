@@ -28,7 +28,7 @@ import type {
   AgenoteHealth,
   LoadedCounts,
   RecentSessionInfo,
-} from "./plugin-bridge.ts";
+} from "../data/plugin-bridge.ts";
 import {
   fg,
   LOGO_COLOR_SPEED,
@@ -37,44 +37,13 @@ import {
   RESET,
   STATUS_BASE,
   type AnimationState,
-} from "./animations.ts";
+} from "../shared/animations.ts";
+import { NERD_FONTS } from "../shared/nerd-font.ts";
+import { formatBytes } from "../shared/format.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Nerd Font 检测（与 status-bar.ts 一致，单一真相源）
+// 图标（NERD_FONTS 从 shared/nerd-font.ts 取，单一真相源）
 // ═══════════════════════════════════════════════════════════════════════════
-
-function detectNerdFont(): boolean {
-  if (process.env.POWERLINE_NERD_FONTS === "1") return true;
-  if (process.env.POWERLINE_NERD_FONTS === "0") return false;
-  if (process.env.GHOSTTY_RESOURCES_DIR) return true;
-  const term = (process.env.TERM_PROGRAM ?? "").toLowerCase();
-  const colorTerm = (process.env.COLORTERM ?? "").toLowerCase();
-  if (
-    term.includes("iterm") ||
-    term.includes("wezterm") ||
-    term.includes("kitty") ||
-    term.includes("ghostty") ||
-    term.includes("alacritty") ||
-    term.includes("vscode") ||
-    term.includes("hyper") ||
-    term.includes("konsole") ||
-    term.includes("terminus") ||
-    term.includes("foot") ||
-    term.includes("tmux") ||
-    term.includes("apple_terminal")
-  ) {
-    return true;
-  }
-  if (term.includes("gnome") && colorTerm.includes("truecolor")) return true;
-  if (term.includes("xterm") && colorTerm.includes("truecolor")) return true;
-  const termName = (process.env.TERM ?? "").toLowerCase();
-  if (termName.includes("nerd") || termName.includes("nf-")) return true;
-  // tmux 内的 terminal 通常来自外层 terminal，假定支持
-  if (process.env.TMUX) return true;
-  return false;
-}
-
-const NERD_FONTS = detectNerdFont();
 
 const ICON = {
   // 灯泡（tips）
@@ -381,12 +350,6 @@ function buildRightColumn(
 function sectionHeader(theme: Theme, icon: string, label: string): string {
   const iconPart = icon ? `${icon} ` : "";
   return ` ${theme.bold(theme.fg("accent", `${iconPart}${label}`))}`;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

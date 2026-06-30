@@ -31,18 +31,6 @@ import type { AgentConfig, PromptConfig } from "./types.ts";
  * 模型档次通过 frontmatter `tier:` 字段声明；具体 model + fallback 在
  * settings.json 的 `atelier.tiers` 段集中配置。
  */
-/**
- * 每个 agent .md 文件格式：
- * ---
- * name: agent-name
- * description: 简短描述
- * tier: ultra | pro | quick | visual | inherit    (可选)
- * tools: read, grep, bash    (可选)
- * ---
- * (body 作为 systemPrompt)
- *
- * 模型配置通过 frontmatter `tier:` 字段 + settings.json `atelier.tiers` 解析。
- */
 export function discoverAgents(): AgentConfig[] {
   const agentsDir = path.join(getAgentDir(), "agents");
   const agents: AgentConfig[] = [];

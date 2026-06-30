@@ -19,7 +19,7 @@ import type {
   AgentModelConfig,
   RunResult,
   SubagentConfig,
-} from "./types.ts";
+} from "../core/types.ts";
 import {
   generateRunId,
   launchParallel,
@@ -28,16 +28,14 @@ import {
 } from "./launcher.ts";
 import { waitForAll, waitForCompletion } from "./monitor.ts";
 import { ensureWorkfile } from "./workfile.ts";
-import { isSystemAgent } from "./system-agents.ts";
+import { isSystemAgent } from "../core/system-agents.ts";
 import {
   createCheckpoint,
   markCheckpointFailed,
   markStepCompleted,
-  writeCheckpoint as writeCheckpointToFile,
-} from "./checkpoint.ts";
-const writeCheckpoint = writeCheckpointToFile; // 重命名避免与函数变量冲突
-import { generateWorkflowId, persistWorkflow } from "./workflow.ts";
-// resolveAgentModel 已删除（subagents.json 废弃，逻辑并入 resolveModelChain）
+  writeCheckpoint,
+} from "../lifecycle/checkpoint.ts";
+import { generateWorkflowId, persistWorkflow } from "../lifecycle/workflow.ts";
 
 /**
  * 从 settings.json 读 defaultProvider + defaultModel，组合成完整 model ID。

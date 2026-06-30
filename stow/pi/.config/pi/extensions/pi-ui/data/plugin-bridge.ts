@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * plugin-bridge.ts — 与本地插件的最小化交互层
+ * plugin-bridge.ts — 与本地插件的最小化交互层 + 数据采集。
  *
  * 设计约束（来自 reviewer 2026-06-25-0716.md CRITICAL #1）：
  * - 不复制 global-context 扩展的 listConfiguredFiles() 完整逻辑（100 行）
@@ -11,17 +11,17 @@
  *   用 readdirSync 统计 .md 文件数
  * - 从 pi API 拿真实的工具/命令/主题列表（不重新扫描文件系统）
  *
- * 未来扩展点（占位，未启用）：
- * - atelier subagent 状态：需要 atelier 暴露 status 接口
- * - agenote-hooks 健康度：需要其暴露健康度 API
- * 第一版不实现，避免凭空推测 API 形状。
+ * collectRecentSessions 用 SessionManager.list(cwd)（pi 公开 API），
+ * 不再 readdirSync sessions 目录（plan v2 里 pi-powerline-footer 的反模式）。
  */
 import { execSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { expandEnvPath, type Settings } from "./xdg-settings.ts";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { expandEnvPath, type Settings } from "./settings.ts";
+import { formatTimeAgo } from "../shared/format.ts";
 
 /** global-context 实际会注入的 context 文件摘要 */
 export interface ContextFileSummary {
@@ -46,6 +46,14 @@ export interface LoadedCounts {
   extensions: number;
   /** pi prompt templates 数（~/.config/pi/prompts/） */
   templates: number;
+}
+
+/** 当前项目下最近 N 个会话的展示信息（供 welcome 屏 Recent 区） */
+export interface RecentSessionInfo {
+  /** 显示名（优先 session name，回退首条消息摘要，再回退 id） */
+  name: string;
+  /** 相对时间（如 "5m ago"），供 UI 展示；null 表示无法判断 */
+  age: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -102,6 +110,57 @@ export function discoverLocalTemplates(): number {
     }
   }
   return count;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Recent sessions（SessionManager.list 公开 API）
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * 列出当前项目目录下最近 N 个会话。
+ *
+ * 用 pi 公开的 SessionManager.list(cwd)（静态方法），按 modified 降序取前 N。
+ * 展示名优先级：name → firstMessage 首行截断 → id。
+ *
+ * 异步：SessionManager.list 返回 Promise，调用方（index.ts session_start）
+ * 需 await；首次渲染用空数组占位，加载完成后由调用方触发 requestRender。
+ *
+ * 失败（session 目录不可读等）静默返回 []，不影响 welcome 屏渲染。
+ */
+export async function collectRecentSessions(
+  cwd: string,
+  limit = 3,
+): Promise<RecentSessionInfo[]> {
+  try {
+    const sessions = await SessionManager.list(cwd);
+    // 过滤掉无修改时间的脏数据，按 modified 降序
+    const sorted = sessions
+      .filter((s) => s.modified instanceof Date)
+      .sort((a, b) => b.modified.getTime() - a.modified.getTime())
+      .slice(0, limit);
+    return sorted.map((s) => {
+      const name = pickSessionName(s);
+      const age = formatTimeAgo(s.modified.getTime());
+      return { name, age };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/** 从 SessionInfo 选展示名：name → firstMessage 首行 → id */
+function pickSessionName(s: {
+  name?: string;
+  firstMessage: string;
+  id: string;
+}): string {
+  if (s.name && s.name.trim()) return s.name.trim();
+  // firstMessage 可能含换行，取首行并截断
+  const firstLine = s.firstMessage.split("\n")[0]?.trim() ?? "";
+  if (firstLine) {
+    return firstLine.length > 40 ? `${firstLine.slice(0, 37)}...` : firstLine;
+  }
+  return s.id;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -212,7 +271,6 @@ function parseAgenoteHealth(raw: string): AgenoteHealth {
       continue;
     }
 
-    // 健康指标行：孤立率: 100% [阈值 <15%] ❌
     // 健康指标行：孤立率: 100% [阈值 <15%] ❌
     // emoji 可能是单个 codepoint 或 + variation selector (U+FE0F)
     const metricMatch = trimmed.match(
@@ -358,9 +416,6 @@ export function discoverContextFiles(settings: Settings): ContextFileSummary[] {
     }
   }
 
-  // 静默使用 existsSync 检测（避免 IDE 警告）
-  void existsSync;
-
   return results;
 }
 
@@ -375,6 +430,8 @@ export function discoverContextFiles(settings: Settings): ContextFileSummary[] {
  *
  * 因此必须在 factory 闭包里捕获 pi 引用，在事件回调（session_start
  * 已 bindCore 之后）通过 pi.getAllTools() 调用。
+ *
+ * 技能 = commands 中 source === "skill" 的子集（SlashCommandSource 字面量联合）。
  */
 export function collectLoaded(
   pi: ExtensionAPI,
@@ -383,41 +440,11 @@ export function collectLoaded(
   const commands = pi.getCommands();
 
   // 技能 = commands 中 source === "skill" 的子集
-  const skills = commands.filter((c: unknown) => {
-    const src = (c as { source?: string }).source;
-    return src === "skill";
-  }).length;
+  const skills = commands.filter((c) => c.source === "skill").length;
 
   return {
     tools: tools.length,
     commands: commands.length,
     skills,
   };
-}
-
-/**
- * 当前项目目录下最近 N 个会话。
- * 第一版未使用 — 完整实现需要 ctx.sessionManager.list(ctx.cwd)，
- * 但 sessionManager 在 session_start 时 cwd 可能尚未稳定。
- */
-export interface RecentSessionInfo {
-  name: string;
-  age: string | null;
-}
-
-/**
- * 把 mtime ms 转成 "5m ago" / "2h ago" / "3d ago" / "just now" 格式。
- */
-export function formatTimeAgo(ms: number): string {
-  const now = Date.now();
-  const seconds = Math.floor((now - ms) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return `${Math.floor(days / 30)}mo ago`;
 }

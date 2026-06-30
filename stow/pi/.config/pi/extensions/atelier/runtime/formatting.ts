@@ -6,7 +6,7 @@
  * 结果格式化 — 将 RunResult 数组转换为人类可读的汇总文本
  */
 
-import type { RunResult } from "./types.ts";
+import type { RunResult } from "../core/types.ts";
 
 /** 格式化单个 agent 的运行结果（含 workfile 路径提示） */
 export function formatResult(r: RunResult): string {

@@ -14,7 +14,7 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { RunResult } from "./types.ts";
+import type { RunResult } from "../core/types.ts";
 
 /** 单次 subagent 调用记录 */
 interface SessionLogEntry {

@@ -16,57 +16,21 @@
  */
 
 import type { ExtensionUIContext } from "@earendil-works/pi-coding-agent";
-import type { AnimationState } from "./animations.ts";
-import type { FooterState } from "./status-bar.ts";
+import type { AnimationState } from "../shared/animations.ts";
+import type { FooterState, PetMood } from "../shared/types.ts";
+import { NERD_FONTS } from "../shared/nerd-font.ts";
+import { fmtDuration, fmtTokens, makeBar, shortModel } from "../shared/format.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 类型
+// 图标（pet widget 专用；与 status-bar.ts 的 IC 不同 codepoint，不强行合并）
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type PetMood =
-  | "idle"
-  | "listening"
-  | "thinking"
-  | "happy"
-  | "worried"
-  | "error";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Nerd Font 检测 + 图标
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * 与 welcome-box.ts / status-bar.ts 重复定义；提到 animations.ts 是未来
- * 重构方向，目前三处独立以避免循环依赖。
- */
-function detectNerdFont(): boolean {
-  if (process.env.POWERLINE_NERD_FONTS === "1") return true;
-  if (process.env.POWERLINE_NERD_FONTS === "0") return false;
-  if (process.env.GHOSTTY_RESOURCES_DIR) return true;
-  const term = (process.env.TERM_PROGRAM ?? "").toLowerCase();
-  if (
-    term.match(
-      /iterm|wezterm|kitty|ghostty|alacritty|vscode|hyper|konsole|terminus|foot|tmux|apple_terminal/,
-    )
-  ) {
-    return true;
-  }
-  if (process.env.TMUX) return true;
-  const termName = (process.env.TERM ?? "").toLowerCase();
-  return termName.includes("nerd") || termName.includes("nf-");
-}
-
-const NF = detectNerdFont();
-
-/**
- * 4 个图标 codepoint 与 status-bar.ts IC 同源；这里独立定义一份避免循环依赖。
- * ASCII 降级用单字母前缀 + 冒号（避免与 widget 内容其他字符冲突）。
- */
+// ASCII 降级用单字母前缀（避免与 widget 内容其他字符冲突）。
 const IC = {
-  model: NF ? "\uEC19" : "M", // chip
-  think: NF ? "\uF0E7" : "T", // lightning bolt
-  ctx: NF ? "\uE70F" : "C", // database
-  clock: NF ? "\uF017" : "t", // clock
+  model: NERD_FONTS ? "\uEC19" : "M", // chip
+  think: NERD_FONTS ? "\uF0E7" : "T", // lightning bolt
+  ctx: NERD_FONTS ? "\uE70F" : "C", // database
+  clock: NERD_FONTS ? "\uF017" : "t", // clock
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -117,39 +81,6 @@ const FRAMES: Record<PetMood, string[]> = {
     " (_| ~ |_)",
   ],
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 格式化 helper
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** 短模型名（去掉 "Claude " 前缀） */
-function shortModel(name: string): string {
-  return name.startsWith("Claude ") ? name.slice(7) : name;
-}
-
-/** 8 格字符画 */
-function makeBar(pct: number): string {
-  const filled = Math.max(0, Math.min(8, Math.round(pct / 12.5)));
-  return "\u2593".repeat(filled) + "\u2591".repeat(8 - filled);
-}
-
-/** 时长格式 */
-function fmtDuration(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const h = Math.floor(m / 60);
-  if (h > 0) return `${h}h${m % 60}m`;
-  if (m > 0) return `${m}m${s % 60}s`;
-  return `${s}s`;
-}
-
-/** token 数格式 */
-function fmtTokens(n: number): string {
-  if (n < 1000) return String(n);
-  if (n < 10000) return `${(n / 1000).toFixed(1)}k`;
-  if (n < 1000000) return `${Math.round(n / 1000)}k`;
-  return `${(n / 1000000).toFixed(1)}M`;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Pet mood helper

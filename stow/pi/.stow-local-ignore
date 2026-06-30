@@ -24,3 +24,8 @@ node_modules$
 # --- extensions: skip generated __pycache__ if any TS/Python tooling
 #     under extensions/ ever produces one ---
 extensions/.*(__pycache__|.*\.pyc)$
+
+# --- docs: AGENTS.md / README.md are maintainer-facing, not runtime config.
+#     pi only loads *.ts extension files; skip the markdown so `--no-folding`
+#     doesn't symlink them into ~/.config/pi. ---
+extensions/.*AGENTS\.md$

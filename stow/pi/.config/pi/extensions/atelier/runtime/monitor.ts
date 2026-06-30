@@ -10,7 +10,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { LaunchResult, RunResult, SubagentConfig } from "./types.ts";
+import type { LaunchResult, RunResult, SubagentConfig } from "../core/types.ts";
 import {
   getSubagentsDir,
   killPane,
@@ -19,7 +19,13 @@ import {
   readStatus,
   writeFailedStatus,
 } from "./launcher.ts";
-import { updateRunStatus } from "./registry.ts";
+import {
+  updateRunStatus,
+  updateRunReturnStatus,
+  incrementReentryCount,
+} from "../registry/registry.ts";
+import { parseReturnHeader } from "../registry/return-header.ts";
+import { decide as completionGateDecide } from "../registry/completion-gate.ts";
 
 /**
  * 轮询等待单个 subagent 完成。
@@ -98,14 +104,14 @@ export async function waitForCompletion(
         try {
           const parsed = parseReturnHeader(output);
           if (parsed) {
-            updateRunReturnStatusInRegistry({
+            updateRunReturnStatus({
               runId: launch.runId,
               returnStatus: parsed.status,
               returnSummary: parsed.summary,
             });
           } else {
             // 缺 header: 标 unknown（不阻塞 subagent，仅警告）
-            updateRunReturnStatusInRegistry({
+            updateRunReturnStatus({
               runId: launch.runId,
               returnStatus: "unknown",
               returnSummary: "(no return header)",
@@ -127,7 +133,7 @@ export async function waitForCompletion(
         try {
           const gate = completionGateDecide(launch.runId, agent, 0);
           if (gate.needReentry) {
-            incrementReentryCountInRegistry(launch.runId);
+            incrementReentryCount(launch.runId);
             console.warn(
               `[atelier:monitor] completion gate requested reentry for ${launch.runId} — 架构保留中，当前 no-op`,
             );

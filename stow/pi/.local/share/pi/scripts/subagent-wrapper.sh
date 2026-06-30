@@ -68,6 +68,7 @@ if [[ -t 2 && -z "${NO_COLOR:-}" ]]; then
 	c_cyan=$'\033[36m'
 	c_green=$'\033[32m'
 	c_red=$'\033[31m'
+	c_yellow=$'\033[33m'
 else
 	c_reset=""
 	c_bold=""
@@ -75,6 +76,7 @@ else
 	c_cyan=""
 	c_green=""
 	c_red=""
+	c_yellow=""
 fi
 
 write_status() {

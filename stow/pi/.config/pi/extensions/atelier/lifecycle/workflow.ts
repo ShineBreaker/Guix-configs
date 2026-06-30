@@ -147,7 +147,14 @@ export function loadWorkflow(cwd: string, id: string): Workflow | null {
   }
 }
 
-/** 列出 cwd 下的所有 workflow id */
+/**
+ * 列出 cwd 下的所有 workflow id。
+ *
+ * 注意：workflow 与 checkpoint 共用 `.agents/workflows/` 目录——
+ * checkpoint 文件名为 `{parentRunId}.json`（`sa-` 前缀），workflow 文件名
+ * 为 `wf-yyyymmdd-...json`（见 generateWorkflowId）。只列 `wf-` 前缀文件，
+ * 避免把 checkpoint 文件（结构不同，deserialize 会抛错）误列为 "(corrupt)"。
+ */
 export function listWorkflows(
   cwd: string,
 ): Array<{ id: string; name: string; mode: string }> {
@@ -155,7 +162,7 @@ export function listWorkflows(
   if (!fs.existsSync(dir)) return [];
   return fs
     .readdirSync(dir)
-    .filter((f) => f.endsWith(".json"))
+    .filter((f) => f.startsWith("wf-") && f.endsWith(".json"))
     .map((f) => {
       const id = f.replace(/\.json$/, "");
       try {
