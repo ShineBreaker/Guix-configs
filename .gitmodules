@@ -11,3 +11,6 @@
 [submodule "stow/appimage-run"]
 	path = stow/appimage-run
 	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
+[submodule "stow/pi/.config/pi/extensions/atelier"]
+	path = stow/pi/.config/pi/extensions/atelier
+	url = https://github.com/ShineBreaker/pi-atelier.git
