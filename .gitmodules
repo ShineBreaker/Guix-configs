@@ -14,3 +14,6 @@
 [submodule "stow/pi/.config/pi/extensions/atelier"]
 	path = stow/pi/.config/pi/extensions/atelier
 	url = https://github.com/ShineBreaker/pi-atelier.git
+[submodule "stow/pi/.config/pi/extensions/pi-ui"]
+	path = stow/pi/.config/pi/extensions/pi-ui
+	url = https://github.com/ShineBreaker/pi-ui.git
