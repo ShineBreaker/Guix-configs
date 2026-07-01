@@ -14,6 +14,10 @@ plans/
 
 .keys/
 
+# 放行 dotfiles/secrets/.keys/ 下的公钥（私钥 .keys/ 通配规则已排除）
+!dotfiles/secrets/.keys/
+!dotfiles/secrets/.keys/*.pub
+
 # uv 虚拟环境与锁文件（运行时由 uv run 现场生成，不进版本控制）
 .venv
 uv.lock
