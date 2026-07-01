@@ -130,7 +130,7 @@ dotfiles/
 | ------------------------ | --------- | -------------------------------------------------- |
 | `enable/agents/`         | ✅ 已有   | OMP、Crush、KB、loopctl、共享 skills、知识库       |
 | `enable/desktop/`        | ✅ 已有   | niri、autostart、xdg-portal、xfce4 helpers         |
-| `enable/noctalia-suite/` | ✅ 已有   | darkman、noctalia 适配                             |
+| `enable/noctalia-suite/` | ❌ 无     | darkman、noctalia 适配                             |
 | `enable/system/`         | ✅ 已有   | containers、pipewire、xdg user-dirs                |
 | `enable/terminal/`       | ✅ 已有   | fish、tmux、foot、btop、starship、broot、fastfetch |
 | `enable/utilities/`      | ✅ 已有   | helix、git、kanata、pnpm、winapps、rime、gnupg     |

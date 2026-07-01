@@ -12,9 +12,9 @@
 
 ```
 Guix-configs///
+├── .ropeproject/
 ├── docs/
 │   ├── agenote_mcp.md
-│   ├── atelier.md
 │   └── loopctl.md
 ├── dotfiles/
 │   ├── disable/
@@ -102,8 +102,7 @@ Guix-configs///
 ├── CLAUDE.md
 ├── LICENSE
 ├── README.org
-├── blueprint.scm
-└── packages.md
+└── blueprint.scm
 ```
 
 <!-- /structor -->
@@ -150,7 +149,7 @@ tmp/config.scm
 3. **Emacs 修改**：先读 `stow/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
-6. 优先使用 `blue --list` 内可以使用的相关命令
+6. 优先使用 `blue help` 内可以使用的相关命令
 </critical>
 
 ## 引导（新机安装）
@@ -190,12 +189,15 @@ blue init
 - 不在 `excluded` 列表内的新增文件会在下次 `blue home` 后自动出现在 `~`
 - `disable/` 内目录不再部署，仅保留参考
 
-子模块位于 `enable/` 下，路径如下，**不要直接编辑子模块内容**：
+子模块位于 `enable/` 和 `stow/` 下，路径如下，**不要直接编辑子模块内容**：
 
 | 路径                                                 | 上游                                |
 | ---------------------------------------------------- | ----------------------------------- |
 | `stow/emacs/.config/emacs`                           | `codeberg.org/BrokenShine/.emacs.d` |
 | `dotfiles/enable/utilities/.local/share/fcitx5/rime` | `github.com/iDvel/rime-ice`         |
+| `stow/appimage-run`                                  | `codeberg.org/BrokenShine/appimage-run-guix` |
+| `stow/pi/.config/pi/extensions/atelier`              | `github.com/ShineBreaker/pi-atelier` |
+| `stow/pi/.config/pi/extensions/pi-ui`               | `github.com/ShineBreaker/pi-ui`     |
 
 ## stow/ — GNU Stow 直链部署
 
@@ -212,7 +214,7 @@ blue stow-all --restow           # 重建所有包
 
 ## 目录结构图自动维护
 
-> **实现位置**：`blueprint.scm` 内的 `structor` 任务；7 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。
+> **实现位置**：`blueprint.scm` 内的 `structor` 任务；11 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。
 
 仓库内所有 `AGENTS.md` 的"## 目录结构"章节用标记圈起，由 `blue structor` 自动重写。
 
@@ -228,12 +230,13 @@ blue stow-all --restow           # 重建所有包
 
 ## 频道架构
 
-| 频道        | 分支   | 职责         | URL（以 `source/channel.scm` 为准）         |
-| ----------- | ------ | ------------ | ------------------------------------------- |
-| `guix`      | master | 官方包集合   | `https://git.guix.gnu.org/guix.git`         |
-| `jeans`     | main   | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git` |
-| `nonguix`   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`        |
-| `rosenthal` | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`   |
+| 频道        | 分支   | 职责         | URL（以 `source/channel.scm` 为准）              |
+| ----------- | ------ | ------------ | ------------------------------------------------ |
+| `guix`      | master | 官方包集合   | `https://git.guix.gnu.org/guix.git`              |
+| `bluebox`   | main   | blue 构建工具 | `https://codeberg.org/lapislazuli/bluebox`       |
+| `jeans`     | main   | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git`      |
+| `nonguix`   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`             |
+| `rosenthal` | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`        |
 
 - 频道版本锁定在 `source/channel.lock`，由 `blue update` 自动生成并 `git commit -S`
 - **不要手动编辑 `channel.lock`**（重生成会覆盖你的改动）
