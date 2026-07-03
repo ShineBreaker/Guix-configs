@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "minimax-cn",
-  "defaultModel": "MiniMax-M3",
+  "defaultProvider": "zai",
+  "defaultModel": "glm-5.2",
   "npmCommand": [
     "pnpm"
   ],
@@ -87,7 +87,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.78.1",
+  "lastChangelogVersion": "0.80.2",
   "images": {
     "blockImages": false
   },
