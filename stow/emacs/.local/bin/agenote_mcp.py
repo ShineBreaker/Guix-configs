@@ -708,10 +708,15 @@ def agenote_touch(target: str, used_only: bool = False) -> dict:
 
 @mcp.tool()
 def agenote_curate() -> dict:
-    """一键策展：6 步流水线。
+    """一键策展：机械阶段 2 步流水线（无 LLM）。
 
-    Step 1 健康检查 + 权重重分配 + 去重检测 + 归档陈旧 + 重建索引（KB 内）
-    Step 2 跨 agent reconcile（6 源：hermes/opencode/crush/codex/claude/pi）
+    Step 1 KB 内策展（健康/权重/去重/归档/索引，详见 ag_lib.cards.cmd_curate）
+    Step 2 跨 agent reconcile（全源，清单见 ag_lib.reconcile.KNOWN_SOURCES；
+        写入层自动过滤元消息噪声）
+
+    KB 卡片增长由 agent 综合驱动：curate 后调 agenote_dream() 拿候选清单，
+    读 representative_content 后用 agenote_add 写新卡片（见 agenote-curator
+    skill 的 Step 3）。本 tool 不自动提炼新卡片。
 
     建议：卡片超过 50 条、或检索质量下降时运行。频率约每周一次。
     """

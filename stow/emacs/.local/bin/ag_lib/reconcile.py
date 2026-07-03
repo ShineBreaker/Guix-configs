@@ -32,7 +32,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from ag_lib.core import KB_ROOT, KNOWN_AGENTS
+from ag_lib.core import KB_ROOT, KNOWN_AGENTS, is_noise_fact
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # reconcile 索引落盘位置（与 experiences/ 平级，独立目录，绝不混入权威 KB）
@@ -339,14 +339,17 @@ def reconcile_source(source: str = "hermes", dry_run: bool = False) -> Reconcile
     kept = [f for f in facts if f.title.casefold() not in kb_titles]
     report.skipped = len(facts) - len(kept)
 
+    # 噪声过滤（元消息/工具提示）：extractor 抽取一切，reconcile 是策展层负责过滤
+    noise = [f for f in kept if is_noise_fact(asdict(f))]
+    kept = [f for f in kept if not is_noise_fact(asdict(f))]
+    if noise:
+        report.error_details.append(
+            f"[info] {source} 过滤 {len(noise)} 条元消息噪声"
+        )
+
     # 加载现有 reconcile 索引，剔除该 source 的旧条目（重新填），保留其他 source
     old_index = _load_reconcile_index()
     pruned_old = [f for f in old_index.get("facts", []) if f.get("source") != source]
-    report.pruned = sum(
-        1 for f in old_index.get("facts", []) if f.get("source") == source
-    ) - len(
-        [f for f in facts if False]
-    )  # placeholder；实际 pruned = 旧-新
     report.pruned = sum(
         1 for f in old_index.get("facts", []) if f.get("source") == source
     )

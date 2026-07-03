@@ -67,6 +67,46 @@ def default_agent() -> str:
     return val or DEFAULT_AGENT
 
 
+# ── reconcile 噪声过滤（系统消息/工具提示，非用户知识）──────────────────────
+# reconcile 写入层用；dream 复用避免重复统计。
+# 覆盖 TodoWrite、background-task、system-reminder、checkpoint、command-* 等
+# "元消息"——它们源自 harness 注入而非用户的真实经验。
+NOISE_MARKERS = re.compile(
+    r"<system-reminder>|<command-instruction>|<command-name>|"
+    r"<skill-instruction>|<auto-slash-command>|"
+    r"\[search-mode\]|\[analyze-mode\]|\[SYSTEM DIRECTIVE"
+    r"|TodoWrite|BACKGROUND TASK|OMO_INTERNAL_INITIATOR|"
+    r"delegate_task|subagent_type|run_in_background|"
+    r"load_skills|checkpoint|MANDATORY",
+    re.IGNORECASE,
+)
+NOISE_MIN_LEN = 15  # <15 字符的事实视为无信息量（沿用 dream.py 旧 MIN_FACT_LEN）
+
+
+def is_noise_fact(fact: dict) -> bool:
+    """判别 reconcile 事实是否为元消息/工具提示噪声。
+
+    元消息（TodoWrite 提示、[search-mode]、system-reminder、checkpoint 等）源自
+    harness 注入，不是用户的真实经验。它们常以 `USER: <元消息>\\n\\nASSISTANT: <真实回复>`
+    的形态出现——整条 content 可能很长（ASSISTANT 段有内容），但**用户提问的开头**
+    是元消息。因此按全文长度做密度阈值（旧 /100、/300）会漏检。
+
+    判定规则（任一即噪声）：
+    1. content+title 总长 < NOISE_MIN_LEN（信息量不足）
+    2. title 本身命中 NOISE_MARKERS（纯元消息标题，如 `[search-mode]`）
+    3. content 的**开头 250 字符**（USER 提问区）命中 ≥1 个 NOISE_MARKERS
+       ——真实对话的 marker 常出现在 assistant 回复中段（被保留），只有用户提问
+       本身是元消息时才判噪。
+    """
+    content = fact.get("content", "") or ""
+    title = fact.get("title", "") or ""
+    if len(content) + len(title) < NOISE_MIN_LEN:
+        return True
+    if NOISE_MARKERS.search(title):
+        return True
+    return bool(NOISE_MARKERS.search(content[:250]))
+
+
 # ── 阈值 ──────────────────────────────────────────────────────────────────────
 STALE_DAYS = 30  # 记忆条目超过此天数未更新视为陈旧
 DEFAULT_LIST_COUNT = 20  # kb list 默认显示条数
