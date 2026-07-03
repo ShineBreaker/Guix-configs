@@ -7,12 +7,12 @@
 
 ### 1.1 三层信任边界
 
-| 层     | 路径                                          | 进 git? | 出现在 `~`? | 权限 |
-| ------ | --------------------------------------------- | ------- | ----------- | ---- |
-| 密文   | `dotfiles/secrets/<name>.age`                 | ✓       | ✗           | 644  |
-| 公钥   | `dotfiles/secrets/.keys/age.pub`              | ✓       | ✗           | 644  |
-| 私钥   | `stow/secrets/.keys/age`(软链到 `~/.keys/age`) | ✗       | ✓           | 600  |
-| 明文   | `~/.local/share/secrets-decrypted/<name>`     | ✗       | ✓           | 600  |
+| 层   | 路径                                           | 进 git? | 出现在 `~`? | 权限 |
+| ---- | ---------------------------------------------- | ------- | ----------- | ---- |
+| 密文 | `dotfiles/secrets/<name>.age`                  | ✓       | ✗           | 644  |
+| 公钥 | `dotfiles/secrets/.keys/age.pub`               | ✓       | ✗           | 644  |
+| 私钥 | `stow/secrets/.keys/age`(软链到 `~/.keys/age`) | ✗       | ✓           | 600  |
+| 明文 | `~/.local/share/secrets-decrypted/<name>`      | ✗       | ✓           | 600  |
 
 整个仓库 push 到 origin 的字节里,**没有**任何明文,也没有解密所需的私钥。
 
@@ -118,16 +118,16 @@ source ~/.local/share/secrets-decrypted/dotenv
 
 ## 4. 子命令清单
 
-| 命令                  | 用途                                            |
-| --------------------- | ----------------------------------------------- |
-| `init`                | 生成密钥对(已存在则报错)                       |
-| `list` / `ls`         | 列密文 + 私钥/公钥状态 + 已解密明文            |
-| `recipients`          | 列出所有 recipients 公钥(目前只有一个)         |
-| `encrypt <name>`      | 从 stdin 读明文 → `dotfiles/secrets/<name>.age` |
-| `decrypt <name>`      | 解密到 `~/.local/share/secrets-decrypted/<name>`|
-| `decrypt --stdout`    | 解密打印到 stdout(管道用)                      |
-| `show <name>`         | 同 `decrypt --stdout`                           |
-| `edit <name>`         | 解密 → `$EDITOR` → 重加密                      |
+| 命令                        | 用途                                                   |
+| --------------------------- | ------------------------------------------------------ |
+| `init`                      | 生成密钥对(已存在则报错)                               |
+| `list` / `ls`               | 列密文 + 私钥/公钥状态 + 已解密明文                    |
+| `recipients`                | 列出所有 recipients 公钥(目前只有一个)                 |
+| `encrypt <name>`            | 从 stdin 读明文 → `dotfiles/secrets/<name>.age`        |
+| `decrypt <name>`            | 解密到 `~/.local/share/secrets-decrypted/<name>`       |
+| `decrypt --stdout`          | 解密打印到 stdout(管道用)                              |
+| `show <name>`               | 同 `decrypt --stdout`                                  |
+| `edit <name>`               | 解密 → `$EDITOR` → 重加密                              |
 | `re-encrypt [--with <key>]` | 用指定私钥解密所有 `.age`,用当前公钥重加密(密钥轮换用) |
 
 全局选项:`tools/secrets [--dry-run] <command> ...`。`--dry-run` 让有写副作用
@@ -216,25 +216,25 @@ chmod 600 ~/.keys/age
 
 ## 8. 故障排查
 
-| 症状                                  | 原因                                | 解决                                                  |
-| ------------------------------------- | ----------------------------------- | ----------------------------------------------------- |
-| `tools/secrets decrypt` 报找不到私钥  | stow 没部署或软链失效               | `cd Guix-configs && blue stow --restow secrets`      |
-| `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail`  | 修脚本;`bash -n` 不查变量绑定,必须真跑               |
-| `age: error: no identity`             | 私钥权限被改了                      | `chmod 600 stow/secrets/.keys/age`                    |
-| `init` 后 `.age.pub` 是空的           | 私钥不是用本脚本 init 生成          | trash 旧私钥重跑 init,或手动 `awk` 提取               |
-| `~/.config/secrets/` 出现了文件       | dotfile-services 误把 secrets 加入  | 检查 `source/config.org` 的 dotfile-services 块       |
-| `re-encrypt` 报 `failed to decrypt` | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份) |
+| 症状                                  | 原因                                      | 解决                                            |
+| ------------------------------------- | ----------------------------------------- | ----------------------------------------------- |
+| `tools/secrets decrypt` 报找不到私钥  | stow 没部署或软链失效                     | `cd Guix-configs && blue stow --restow secrets` |
+| `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail`        | 修脚本;`bash -n` 不查变量绑定,必须真跑          |
+| `age: error: no identity`             | 私钥权限被改了                            | `chmod 600 stow/secrets/.keys/age`              |
+| `init` 后 `.age.pub` 是空的           | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init,或手动 `awk` 提取         |
+| `~/.config/secrets/` 出现了文件       | dotfile-services 误把 secrets 加入        | 检查 `source/config.org` 的 dotfile-services 块 |
+| `re-encrypt` 报 `failed to decrypt`   | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)        |
 
 ## 9. 与同类方案的对比
 
-| 维度                | 本方案 (age + stow)        | sops + git                | pass + gpg               |
-| ------------------- | -------------------------- | ------------------------- | ------------------------ |
-| 包大小              | 1 个二进制                 | sops + gnupg              | pass + gpg + tree + gettext |
-| 配置复杂度          | 一个 shell 脚本            | .sops.yaml + 密钥映射     | gpg-agent 配置           |
-| 加密粒度            | 整文件                     | YAML/JSON 键级            | 整文件                   |
-| 跨机分发            | git pull + 私钥迁移        | git pull + 密钥服务/文件  | git pull + gpg key 同步  |
-| 适合场景            | 任意格式凭证               | 结构化配置(主要是 YAML)  | 密码管理器               |
-| 已集成工具          | `tools/secrets`(本仓库自带) | sops CLI                  | pass CLI / 各种 UI       |
+| 维度       | 本方案 (age + stow)         | sops + git               | pass + gpg                  |
+| ---------- | --------------------------- | ------------------------ | --------------------------- |
+| 包大小     | 1 个二进制                  | sops + gnupg             | pass + gpg + tree + gettext |
+| 配置复杂度 | 一个 shell 脚本             | .sops.yaml + 密钥映射    | gpg-agent 配置              |
+| 加密粒度   | 整文件                      | YAML/JSON 键级           | 整文件                      |
+| 跨机分发   | git pull + 私钥迁移         | git pull + 密钥服务/文件 | git pull + gpg key 同步     |
+| 适合场景   | 任意格式凭证                | 结构化配置(主要是 YAML)  | 密码管理器                  |
+| 已集成工具 | `tools/secrets`(本仓库自带) | sops CLI                 | pass CLI / 各种 UI          |
 
 如果将来需要键级加密(比如 terraform state 里只加密特定字段),再考虑迁移到
 sops。当前体量下 age 足够。
