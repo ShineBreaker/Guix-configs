@@ -17,6 +17,9 @@
    agent 本身就是 LLM，读 ≤5 条候选后用现有 agenote_add 写卡。
 4. **不调 LLM**：纯启发式（关键词频次 + KB 覆盖检查），reconcile 已在写入层
    过滤元消息噪声，dream 复用 is_noise_fact 做二次兜底。
+5. **分词器：jieba 优先，2-gram 兜底**：jieba（若经 nix profile 自动发现可用）
+   对中文产出真实词边界（"配置文件/重新启动"），远胜 2-gram 滑窗；jieba 不可用时
+   回退到 2-gram + 胶水字过滤（仍能跑，但产出伪词边界噪声）。
 
 与 MiMoCode dream.txt 的差异：
 - MiMoCode 跑 LLM 做 6 阶段提炼；本机把 LLM 角色交给调用 dream 的 agent，
@@ -25,7 +28,10 @@
 - "把重复工作流打包成 skill" 是 distill 的活，不是 dream 的（dream.txt:26）。
 """
 
+import glob
+import os
 import re
+import sys
 from dataclasses import asdict, dataclass, field
 
 from ag_lib.core import is_noise_fact
@@ -34,6 +40,45 @@ from ag_lib.reconcile import (
     load_reconcile_facts,
 )
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# jieba 分词（可选优化；缺失则回退到下方 2-gram 启发式）
+# ═══════════════════════════════════════════════════════════════════════════════
+# jieba 对中文分词质量远超 2-gram 滑窗（输出"配置文件/重新启动"而非"配置/置文/文件"）。
+# 它不在 agenote 的硬依赖里（agenote 跑在 guix python3.12，jieba 装在 nix python3.14
+# profile）。这里做自动发现：扫 ~/.nix-profile/lib/python*/site-packages/jieba——
+# jieba 是纯 Python 无 C 扩展，py3.12 能直接 import py3.14 路径下的包。
+# 找不到就静默回退到 _GLUE_CHARS + 2-gram 启发式（仍是可用的兜底分词器）。
+
+_JIEBA_CACHE: object = False  # 三态：False=未尝试, None=不可用, module=已加载
+
+
+def _get_jieba():
+    """惰性加载 jieba，模块级缓存。
+
+    返回 jieba 模块或 None（不可用时）。缓存结果避免每次 _tokenize 都 glob。
+    """
+    global _JIEBA_CACHE
+    if _JIEBA_CACHE is not False:
+        return _JIEBA_CACHE if _JIEBA_CACHE is not None else None
+    # 自动发现：nix profile（python3.14 site-packages）+ 用户 site-packages
+    for pattern in (
+        "~/.nix-profile/lib/python*/site-packages/jieba/__init__.py",
+        "~/.local/lib/python*/site-packages/jieba/__init__.py",
+    ):
+        for path in glob.glob(os.path.expanduser(pattern)):
+            site_dir = os.path.dirname(os.path.dirname(path))  # site-packages/
+            if site_dir not in sys.path:
+                sys.path.insert(0, site_dir)
+            try:
+                import jieba  # noqa: SUO005 — 有意动态发现，路径来自上面 glob
+                _JIEBA_CACHE = jieba
+                return jieba
+            except Exception:
+                continue
+    _JIEBA_CACHE = None  # 标记不可用，后续直接短路
+    return None
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 启发式阈值（集中常量，调参只改这里）
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -41,7 +86,8 @@ from ag_lib.reconcile import (
 MIN_TERM_FREQ = 10  # 关键词在 reconcile 事实中出现 ≥N 次才升级为候选（evidence）
 TOP_K_CANDIDATES = 5  # 一次 dream 最多提 K 个候选（避免一次灌爆 KB）
 MIN_FACT_LEN = 15  # 太短的事实（<15 字）不提，信息量不足
-MIN_TERM_LEN = 3  # 关键词最短长度（过滤"的/了/是"等停用词）
+MIN_TERM_LEN = 3  # ASCII 关键词最短长度（过滤 is/the/a 等英文虚词）
+MIN_CJK_LEN = 2  # CJK 关键词最短长度（中文真实词多为 2 字：相关/对话/避免/浪费）
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -76,27 +122,32 @@ _STOPWORDS = frozenset("""
     了解 你看 需要 进行 可以 下面 里面 上面 同时 然后 所以
     """.split())
 
-# CJK 功能字：这些字几乎从不出现在真实词的内部，只作为词间"胶水"。
-# 2-gram 滑动窗会跨词边界产生 我需/是一/的时/中的 这类伪词——它们总含一个胶水字。
-# 据此过滤：2-gram 任一字符是胶水字即丢弃（无需词典即可消除跨边界噪声）。
-# 经实测在干净 reconcile 数据上：跨边界伪词 100% 含胶水字，真词（配置/修复/检测/并行）无一含胶水字。
+# CJK 功能字（仅在 jieba 不可用、走 2-gram 回退路径时使用）：
+# 这些字几乎从不出现在真实词的内部，只作为词间"胶水"。2-gram 滑动窗跨词边界
+# 产生 我需/是一/的时/中的 这类伪词——它们总含一个胶水字。据此过滤：
+# 2-gram 任一字符是胶水字即丢弃（无需词典即可消除跨边界噪声）。
+# 经实测在干净 reconcile 数据上：跨边界伪词 100% 含胶水字，
+# 真词（配置/修复/检测/并行）无一含胶水字。
+# jieba 路径不需要这个（jieba.cut 直接产出真实词边界）。
 _GLUE_CHARS = frozenset(
     "的了吗呢吧啊哦呀哇么我你他她它是在有和无或但也还就更都只又再已"
     "将把被让给向往对为以于由从到用着过"
 )
 
-# 用非字母数字（含 CJK）切词的简单分词：英文按空格/标点，CJK 按单字+2-3 gram
-# 这里用最朴素的"提取 CJK 连续段 + ASCII 词"策略，够启发式用。
+# 切 CJK 连续段 + ASCII 标识符，再交给 _tokenize 做子路径分词。
 _TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+|[a-zA-Z_][a-zA-Z0-9_-]+")
-_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 def _tokenize(text: str) -> list[str]:
-    """朴素分词：CJK 连续段 + ASCII 标识符。
+    """分词：jieba 优先（若可用），否则回退到 2-gram 启发式。
 
-    对 CJK 段进一步切 2-gram（覆盖中文无空格特性），降级为"子串频次"统计。
-    2-gram 经胶水字过滤，抑制跨词边界的伪词（我需/是一/的时 等）。
+    jieba 路径：对 CJK 段用 jieba.cut 得到真实词（"配置文件/重新启动"），
+    单字功能词（"的/了/是"）经 _STOPWORDS + MIN_CJK_LEN 过滤。
+    回退路径：CJK 段切 2-gram + 胶水字过滤（仍能跑，但产出伪词边界噪声）。
+
+    ASCII 标识符两条路径一致（小写化 + 停用词 + MIN_TERM_LEN 长度过滤）。
     """
+    jieba = _get_jieba()
     tokens: list[str] = []
     for m in _TOKEN_RE.finditer(text):
         seg = m.group(0)
@@ -104,13 +155,20 @@ def _tokenize(text: str) -> list[str]:
             low = seg.lower()
             if low not in _STOPWORDS and len(low) >= MIN_TERM_LEN:
                 tokens.append(low)
+            continue
+        # CJK 段
+        if jieba is not None:
+            # jieba.cut 输出真实词（"配置文件/重新启动"），单字功能词靠
+            # MIN_CJK_LEN + _STOPWORDS 过滤；中文真实词多为 2 字，故阈值低于 ASCII。
+            for word in jieba.cut(seg):
+                if len(word) >= MIN_CJK_LEN and word not in _STOPWORDS:
+                    tokens.append(word)
         else:
-            # CJK 段：切 2-gram（中文关键词多在 2-4 字）
+            # 回退：2-gram + 胶水字过滤（跨词边界伪词抑制）
             for i in range(len(seg) - 1):
                 bigram = seg[i : i + 2]
                 if bigram in _STOPWORDS:
                     continue
-                # 胶水字过滤：跨词边界的 2-gram 几乎总含一个功能字
                 if bigram[0] in _GLUE_CHARS or bigram[1] in _GLUE_CHARS:
                     continue
                 tokens.append(bigram)

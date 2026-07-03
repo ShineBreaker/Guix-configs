@@ -184,15 +184,20 @@ def _inline(text: str) -> str:
     return out
 
 
-def render_card_body(file_relpath: str) -> str:
+def render_card_body(file_relpath: str, domain: str = "human") -> str:
     """把 .org 卡片正文渲染为 HTML 片段。失败返回空串。
 
     跳过 PROPERTIES drawer、文件级 #+ 指令、单行 :tag:tag: 标记。
     支持:标题、列表、代码块、~code~/*bold*//italic//[[link]]。
+
+    domain 决定文件根：human → KB_ROOT，agenote → KB_ROOT/agenote。
+    卡片索引里的 ``file`` 字段是相对各自域根的路径，不区分域会读错位置
+    （agenote 卡片读成 human 路径，文件不存在 → 正文为空 → 前端显示"（无内容）"）。
     """
     if not file_relpath:
         return ""
-    p = KB_ROOT / file_relpath
+    root = KB_ROOT / "agenote" if domain == "agenote" else KB_ROOT
+    p = root / file_relpath
     if not p.exists() or p.suffix != ".org":
         return ""
     try:
@@ -303,10 +308,14 @@ def render_card_body(file_relpath: str) -> str:
 
 
 def attach_card_bodies(cards: list[dict]) -> list[dict]:
-    """为每张卡加 body 字段（HTML 片段）。读 .org 失败时 body 为空串。"""
+    """为每张卡加 body 字段（HTML 片段）。读 .org 失败时 body 为空串。
+
+    按卡片的 ``domain`` 字段（由 viz cli._load_domain_cards 打标）选文件根，
+    缺失时默认 human。
+    """
     out = []
     for c in cards:
         nc = dict(c)
-        nc["body"] = render_card_body(c.get("file", ""))
+        nc["body"] = render_card_body(c.get("file", ""), c.get("domain", "human"))
         out.append(nc)
     return out

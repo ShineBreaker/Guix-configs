@@ -8,6 +8,7 @@
     broot
     gh
     localsend
+    python314Packages.jieba
     yaak
 
     ## Android

@@ -146,12 +146,16 @@ def _load_cards_for_viz(domain_arg: str) -> tuple[list[dict], str]:
     return (all_cards, latest)
 
 
-def cmd_viz(args: argparse.Namespace) -> None:
+def cmd_viz(args: argparse.Namespace, ctx=None) -> None:
     """生成知识库可视化 HTML 页面。
 
     默认合并人类域（~/Documents/Org/）与 agenote 域（~/Documents/Org/agenote/），
     每张卡打 domain 字段（human/agenote）供前端区分着色。
     --domain 可限定单域。
+
+    ctx 形参为对齐 agenote 调度器签名（``cmd_xxx(args, ctx)``）保留——
+    viz 自身按 ``args.domain``（human|agenote|all）独立解析目标域，
+    不使用全局 ctx（ctx 对应的根可能不是这里要可视化的域）。
     """
     cards, updated = _load_cards_for_viz(args.domain)
     if not cards:
