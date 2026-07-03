@@ -46,6 +46,7 @@ KNOWN_AGENTS = {
     "opencode",  # opencode fork
     "mimocode",  # MiMoCode（opencode fork）
     "claude-code",  # claude-code
+    "zcode",  # zcode agent (GLM-based)
     "pi-dream",  # dream 工作流产生的卡片（系统生成）
     "pi-distill",  # distill 工作流产生的卡片（系统生成）
 }

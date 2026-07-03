@@ -628,7 +628,7 @@ def agenote_extract(
     from datetime import datetime, timedelta
     from pathlib import Path
 
-    from ag_lib.extract import opencode, crush, codex, claude, pi
+    from ag_lib.extract import opencode, crush, codex, claude, pi, zcode
     from ag_lib.reconcile import extract_hermes
 
     EXTRACTORS = {
@@ -638,6 +638,7 @@ def agenote_extract(
         "claude": claude.extract_claude,
         "pi": pi.extract_pi,
         "hermes": extract_hermes,
+        "zcode": zcode.extract_zcode,
     }
 
     if source == "all":

@@ -228,6 +228,10 @@ KNOWN_SOURCES: dict[str, tuple] = {
         lambda: __import__("ag_lib.extract.pi", fromlist=["extract_pi"]).extract_pi(),
         "pi JSONL 事件流 (parentId 重建)",
     ),
+    "zcode": (
+        lambda: __import__("ag_lib.extract.zcode", fromlist=["extract_zcode"]).extract_zcode(),
+        "zcode sqlite session/message/part (~/.zcode/cli/db/db.sqlite)",
+    ),
 }
 
 
