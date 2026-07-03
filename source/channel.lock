@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "27d13fbe68807eb7306770ac26ac8b10655cb9fd")
+       (commit "0fb918d61609f3aadc2d8ecc212926b3bdfabb4c")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -22,7 +22,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "c44dc09929c9a6a90d042ddf4880364edd953fae")
+       (commit "1295ce1619e10c65df5b6ef569d7efea1bee72bd")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -42,7 +42,7 @@
        (name 'rosenthal)
        (url "https://codeberg.org/hako/rosenthal.git")
        (branch "trunk")
-       (commit "fe34e0911d93d08ee0f7dd4f907f433aa5f40899")
+       (commit "c2722ed1762b9ff38ce77331019b660477f7dad3")
        (introduction
         (make-channel-introduction
          "7677db76330121a901604dfbad19077893865f35"
