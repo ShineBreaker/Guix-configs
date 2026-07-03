@@ -27,7 +27,9 @@
         "/home/brokenshine/.guix-home/profile/bin/python3",
         "/home/brokenshine/.local/bin/agenote_mcp.py"
       ],
-      "env": {"AGENOTE_AGENT": "opencode"},
+      "environment": {
+        "AGENOTE_AGENT": "opencode"
+      },
       "enabled": true,
       "type": "local"
     }
