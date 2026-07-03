@@ -66,20 +66,36 @@ _STOPWORDS = frozenset("""
     help work way look find see read write edit delete create change
     update add remove move copy paste open close start stop run
     request tasks what how where when why who which
+    any they like actual their must about first them then than some such
+    very much many most other same another also just only even still well back
     修改 然后 前的 但是 但是因为 所以如果
     我先 没有 工作 进行 需要 可以 使用 这个 那个 什么 怎么
     一下 一些 一个 已经 还是 或者 不是 就是 可能 应该
+    完成 帮我 时候 继续 想要 两个 之后 先看 这里 并且 开始 加一 要修
+    让我 目前 现在 这是 我们 已经 或者 不是 就是 可能 应该
+    了解 你看 需要 进行 可以 下面 里面 上面 同时 然后 所以
     """.split())
+
+# CJK 功能字：这些字几乎从不出现在真实词的内部，只作为词间"胶水"。
+# 2-gram 滑动窗会跨词边界产生 我需/是一/的时/中的 这类伪词——它们总含一个胶水字。
+# 据此过滤：2-gram 任一字符是胶水字即丢弃（无需词典即可消除跨边界噪声）。
+# 经实测在干净 reconcile 数据上：跨边界伪词 100% 含胶水字，真词（配置/修复/检测/并行）无一含胶水字。
+_GLUE_CHARS = frozenset(
+    "的了吗呢吧啊哦呀哇么我你他她它是在有和无或但也还就更都只又再已"
+    "将把被让给向往对为以于由从到用着过"
+)
 
 # 用非字母数字（含 CJK）切词的简单分词：英文按空格/标点，CJK 按单字+2-3 gram
 # 这里用最朴素的"提取 CJK 连续段 + ASCII 词"策略，够启发式用。
 _TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+|[a-zA-Z_][a-zA-Z0-9_-]+")
+_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 def _tokenize(text: str) -> list[str]:
     """朴素分词：CJK 连续段 + ASCII 标识符。
 
     对 CJK 段进一步切 2-gram（覆盖中文无空格特性），降级为"子串频次"统计。
+    2-gram 经胶水字过滤，抑制跨词边界的伪词（我需/是一/的时 等）。
     """
     tokens: list[str] = []
     for m in _TOKEN_RE.finditer(text):
@@ -92,8 +108,12 @@ def _tokenize(text: str) -> list[str]:
             # CJK 段：切 2-gram（中文关键词多在 2-4 字）
             for i in range(len(seg) - 1):
                 bigram = seg[i : i + 2]
-                if bigram not in _STOPWORDS:
-                    tokens.append(bigram)
+                if bigram in _STOPWORDS:
+                    continue
+                # 胶水字过滤：跨词边界的 2-gram 几乎总含一个功能字
+                if bigram[0] in _GLUE_CHARS or bigram[1] in _GLUE_CHARS:
+                    continue
+                tokens.append(bigram)
             # 同时保留完整段（≥3 字的整段可能是专有名词）
             if len(seg) >= MIN_TERM_LEN:
                 tokens.append(seg)
