@@ -1146,14 +1146,12 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; AI Agent
         "cc-switch-bin"
         "crush-bin"
-        "llama-cpp"
-        "oh-my-pi-bin"
         "opencode-bin"
-        "opencode-desktop-bin"
         "reasonix-desktop-bin"
+        "zcode"
 
         ;; 工具
-        "binutils"                  ; readelf — appimage-run 架构检测
+        "binutils"
         "du-dust"
         "file"
         "graphviz"
@@ -1162,7 +1160,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "pandoc"
         "reuse"
         "ripgrep"
-        "squashfs-tools"            ; unsquashfs — appimage-run 解包
+        "squashfs-tools"
         "texlive-scheme-basic"
         "xxd"
 
@@ -1243,6 +1241,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
          ;; 实用工具
          "amule"
          "freerdp@3"
+         "age"
          "kanata"
          "mesa-utils"
          "pinentry-qt"
@@ -1403,8 +1402,8 @@ end
                              "emacs-eglot-x"
                              "emacs-envrc"
                              "emacs-flycheck"
+                             "emacs-ghostel"
                              "emacs-posframe"
-                             "emacs-vterm"
                              "emacs-dape"
 
                              ;; 编程语言支持
@@ -1866,6 +1865,8 @@ end
   ("PYTTYDIR" . "$XDG_CONFIG_HOME/putty")
   ;; python
   ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
+  ;; reasonix
+  ("REASONIX_HOME" . "$XDG_DATA_HOME/reasonix")
   ;; rust
   ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
   ;; sqlite

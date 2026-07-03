@@ -82,6 +82,8 @@ tools/secrets recipients
 # 确认私钥路径与软链都正确
 ls -la stow/secrets/.keys/age ~/.keys/age
 stat -c '%a' stow/secrets/.keys/age     # 应为 600
+# 预演加密(不落盘):打印 [dry-run] 计划,不写 .age
+./tools/secrets --dry-run encrypt example < /tmp/example.toml
 ```
 
 ## 常见踩坑
@@ -98,10 +100,15 @@ stat -c '%a' stow/secrets/.keys/age     # 应为 600
 3. **「git add 时 .pub 没进暂存区」** —— 可能是误以为文件未被 ignore 但其实
    已被某个未显示的 `.gitignore` 命中。诊断:
    `git check-ignore -v dotfiles/secrets/.keys/age.pub`(应静默返回 = 未 ignore)。
-4. **`edit` 子命令的 $EDITOR 临时文件** —— 临时文件由 `mktemp` 创建(权限
-   600),生命周期在脚本进程内。如果 `EDITOR` 把文件复制到别处(如 emacs 的
-   backup `~` / autosave `#`),会有 644 副产物。当前未处理,如需要可在
-   `cmd_edit` 加 `trap "shred -u $tmp" EXIT`。
+4. **`edit` 子命令的 $EDITOR 临时文件**(已解决) —— `cmd_edit` 现在用
+   `mktemp -d` 建隔离目录,明文放目录内,`trap 'rm -rf "$tmpdir"' RETURN INT TERM`
+   整体清理;emacs 的 backup `~` / autosave `#` 副产物也落在隔离目录内,随退出
+   一起删除。**实现坑**:`set -u` 下 trap 引用 local 变量(此处 `$tmpdir`)须用
+   `${tmpdir:-}` 守卫,否则未赋值就触发未绑定变量错误。
+5. **`re-encrypt` 轮换时旧私钥丢失** —— 密钥轮换前必须先 `cp stow/secrets/.keys/age
+   /tmp/age.old` 备份旧私钥,确认 `re-encrypt --with /tmp/age.old` 成功后再
+   `trash /tmp/age.old`。`trash` 旧私钥后 `init` 生成新密钥对,期间旧密文只能
+   用备份的旧私钥解密;若先销毁旧私钥,旧 `.age` 永久丢失。
 
 ## 与 dotfile-services 的边界
 
