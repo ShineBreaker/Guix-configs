@@ -31,6 +31,16 @@ ${TASK}
 
 ---
 
+## 跨 agent 知识共享
+
+本循环的输出会被其他 agent（pi/crush/opencode/hermes 等）检索复用。
+
+- **任务前**：`agenote search "<关键词>"`（`~/.local/bin/agenote`）查相关经验，避免重复踩坑
+- **完成后**：发现可复用的踩坑/方案/拓扑，用 `agenote add` 记录，会自动打上你的来源标签
+- 详见 `~/.agents/skills/agenote-base/SKILL.md`
+
+---
+
 **本轮任务**：
 
 1. 阅读上方引用的检查点文件
