@@ -12,10 +12,16 @@
 
 ```
 Guix-configs///
+├── .crush/
+│   ├── logs/
+│   │   └── crush.log
+│   ├── .gitignore
+│   └── crush.db
 ├── .ropeproject/
 ├── docs/
 │   ├── agenote_mcp.md
-│   └── loopctl.md
+│   ├── loopctl.md
+│   └── secrets.md
 ├── dotfiles/
 │   ├── disable/
 │   │   ├── dms-suite/
@@ -24,26 +30,29 @@ Guix-configs///
 │   │   └── waybar-suite/
 │   │       ├── .config/
 │   │       └── .local/
-│   └── enable/
-│       ├── agents/
-│       │   ├── .config/
-│       │   ├── .local/
-│       │   └── .gitignore
-│       ├── desktop/
-│       │   ├── .config/
-│       │   └── .local/
-│       ├── noctalia-suite/
-│       │   ├── .config/
-│       │   └── .local/
-│       ├── system/
-│       │   └── .config/
-│       ├── terminal/
-│       │   ├── .config/
-│       │   └── .local/
-│       └── utilities/
-│           ├── .config/
-│           ├── .local/
-│           └── .nix-channels
+│   ├── enable/
+│   │   ├── agents/
+│   │   │   ├── .config/
+│   │   │   ├── .local/
+│   │   │   └── .gitignore
+│   │   ├── desktop/
+│   │   │   ├── .config/
+│   │   │   └── .local/
+│   │   ├── noctalia-suite/
+│   │   │   ├── .config/
+│   │   │   └── .local/
+│   │   ├── system/
+│   │   │   └── .config/
+│   │   ├── terminal/
+│   │   │   ├── .config/
+│   │   │   └── .local/
+│   │   └── utilities/
+│   │       ├── .config/
+│   │       ├── .local/
+│   │       └── .nix-channels
+│   └── secrets/
+│       └── .keys/
+│           └── age.pub
 ├── screenshots/
 │   ├── browse.png
 │   ├── daily.png
@@ -91,14 +100,21 @@ Guix-configs///
 │   │   │   ├── bin/
 │   │   │   └── share/
 │   │   └── .stow-local-ignore
+│   ├── secrets/
+│   │   ├── .keys/
+│   │   │   └── age
+│   │   ├── .local/
+│   │   │   └── share/
+│   │   └── .stow-overlay/
+│   ├── skills/
 │   └── .stowrc
 ├── tools/
 │   ├── bootstrap.sh
-│   └── fxxk-link.sh
+│   ├── fxxk-link.sh
+│   └── secrets
 ├── .gitattributes
 ├── .gitignore
 ├── .gitmodules
-├── .sops.yaml
 ├── CLAUDE.md
 ├── LICENSE
 ├── README.org

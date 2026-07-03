@@ -91,6 +91,9 @@ git commit -S -m "UPDATE: (secrets) added example.age"
 git push
 ```
 
+> 演练预览(不落盘):`./tools/secrets --dry-run encrypt example < /tmp/x.toml`
+> 只打印 `[dry-run] ...` 计划,不写 `.age`。
+
 ### 3.3 修改已有密文
 
 ```bash
@@ -125,43 +128,52 @@ source ~/.local/share/secrets-decrypted/dotenv
 | `decrypt --stdout`    | 解密打印到 stdout(管道用)                      |
 | `show <name>`         | 同 `decrypt --stdout`                           |
 | `edit <name>`         | 解密 → `$EDITOR` → 重加密                      |
+| `re-encrypt [--with <key>]` | 用指定私钥解密所有 `.age`,用当前公钥重加密(密钥轮换用) |
 
+全局选项:`tools/secrets [--dry-run] <command> ...`。`--dry-run` 让有写副作用
+的命令(`init`/`encrypt`/`decrypt` 非 stdout/`edit`/`re-encrypt`)只打印
+`[dry-run] ...` 计划并成功返回,不写文件;只读命令(`list`/`recipients`/
+`show`/`decrypt --stdout`)不受影响。
 环境变量:
 
 - `SECRETS_PRIVATE_KEY`: 自定义私钥路径(默认 `~/.keys/age`)
-- `SECRETS_PUBLIC_KEY`: 自定义公钥路径(默认 `dotfiles/secrets/.keys/age.pub`)
+- `SECRETS_PUBLIC_KEY`: 自定义公钥路径(默认 `dotfiles/secrets/.keys/age.pub`),`find_default_pubkey` 优先读取此环境变量
 - `EDITOR`: `edit` 子命令用的编辑器(默认 `nano`)
 
 ## 5. 密钥轮换
 
-密钥丢失或泄漏后**必须**立即轮换。流程:
+密钥丢失或泄漏后**必须**立即轮换。核心原则:**旧私钥必须保留到 re-encrypt
+完成之后**才能销毁——否则无法解密旧密文,密文永久丢失。
 
 ```bash
-# 1. 备份旧私钥(应急)
+# 1. 备份旧私钥(重加密期间需要它解密旧密文,不能先删)
 cp stow/secrets/.keys/age /tmp/age.old
 chmod 600 /tmp/age.old
 
-# 2. trash 旧密钥
+# 2. trash 旧私钥,生成新密钥对(init 检测到旧 age 会拒绝,必须先 trash)
 trash stow/secrets/.keys/age
+./tools/secrets init                    # 生成新 age + 覆盖 age.pub
+blue stow --restow secrets              # 重建 ~/.keys/age 软链指向新私钥
 
-# 3. 生成新密钥
-./tools/secrets init                 # 会提示已存在 → trash 后再跑
+# 3. 用旧私钥解密所有旧密文 + 新公钥重加密
+./tools/secrets re-encrypt --with /tmp/age.old
 
-# 4. 重新加密所有 .age(用新公钥)
-for name in $(./tools/secrets list 2>/dev/null | grep -oP '\.age' | sed 's/\.age//'); do
-    ./tools/secrets decrypt "$name" --stdout | ./tools/secrets encrypt "$name"
-done
+# 4. 演练预览(可选):再跑一次 dry-run 确认无残留旧密文需要处理
+./tools/secrets --dry-run re-encrypt --with /tmp/age.old
 
 # 5. 验证 + 提交
 ./tools/secrets list
-git add dotfiles/secrets/.keys/age.pub
-git add dotfiles/secrets/*.age
-git commit -S -m "ROTATE: (secrets) regenerated keypair."
+git add dotfiles/secrets/.keys/age.pub dotfiles/secrets/*.age
+git commit -S -m "ROTATE: (secrets) regenerated keypair + re-encrypted all .age"
 git push
+
+# 6. 销毁旧私钥(重加密已完成,旧私钥不再需要)
+trash /tmp/age.old
 ```
 
-旧私钥仍能解密 `.age`,但新写入的密文用新公钥加密,泄漏的旧私钥无法解密
-新内容。
+轮换后旧私钥无法解密新写入的密文(新公钥加密),但**旧私钥仍能解密 push
+历史里的旧 `.age`**——所以轮换的真正目的是让"泄漏的旧私钥"无法读"未来
+新增的密文",并配合 `git filter-repo` 清理历史才能彻底止血。
 
 ## 6. 跨机部署
 
@@ -192,9 +204,11 @@ chmod 600 ~/.keys/age
 1. **密文 git 历史是可恢复的**。即使现在 push 出去的全是 `.age`,曾经
    commit 过明文的话,旧 commit 仍在历史里。需要的话用
    `git filter-repo --invert-paths --path <泄漏文件>` 重写历史。
-2. **`tools/secrets edit` 的临时文件**。`mktemp` 权限 600,在脚本进程退出
-   时清理。如果 `EDITOR=emacs`,emacs 的 `backup~` 和 autosave `#` 副产物
-   会落到当前目录,可能产生明文痕迹。建议 `edit` 前 `cd /tmp`。
+2. **`tools/secrets edit` 的临时文件**(已解决)。`cmd_edit` 现在用 `mktemp -d`
+   建隔离目录,明文放目录内,`trap 'rm -rf "$tmpdir"' RETURN INT TERM` 整体
+   清理;emacs 的 backup `~` / autosave `#` 副产物也落在隔离目录内,随退出
+   一起删除。不再需要 `cd /tmp` 的 workaround。如需额外保险,可在 tmpfs 上
+   操作。
 3. **`.age` 文件名是公开信息**。不要把凭证类型放进文件名(如
    `aws-secret-key.age`),保持中性命名(`aws-prod.age`、`accounts.age`)。
 4. **明文落地的生命周期**。`~/.local/share/secrets-decrypted/` 下的文件
@@ -209,6 +223,7 @@ chmod 600 ~/.keys/age
 | `age: error: no identity`             | 私钥权限被改了                      | `chmod 600 stow/secrets/.keys/age`                    |
 | `init` 后 `.age.pub` 是空的           | 私钥不是用本脚本 init 生成          | trash 旧私钥重跑 init,或手动 `awk` 提取               |
 | `~/.config/secrets/` 出现了文件       | dotfile-services 误把 secrets 加入  | 检查 `source/config.org` 的 dotfile-services 块       |
+| `re-encrypt` 报 `failed to decrypt` | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份) |
 
 ## 9. 与同类方案的对比
 
