@@ -35,6 +35,8 @@ from ag_lib.core import (  # noqa: E402
     _save_index,
     _rebuild_index,
     ensure_dirs,
+    default_context,
+    agenote_context,
 )
 from ag_lib.cards import (  # noqa: E402
     cmd_add,
@@ -53,38 +55,49 @@ from ag_lib.cards import (  # noqa: E402
     cmd_restore,
     cmd_deduplicate,
     cmd_review,
+    cmd_curate,
 )
 from ag_lib.memory import cmd_memory  # noqa: E402
 from ag_lib.lint import cmd_lint  # noqa: E402
 from ag_lib.health import cmd_health, cmd_gaps  # noqa: E402
 from ag_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
-# 本 CLI 操作人类域知识库（~/Documents/Org/）。
-# agent 域（~/Documents/Org/agenote/）由 MCP server agenote_mcp.py 暴露，
-# TS 插件通过 agenote_cli.py shim 调用——三入口共享 ag_lib 内核、职责分离。
+# 跨 agent 协同 4 件套（lazy import 到 wrapper 内，避免顶层拉起 sqlite/JSONL 依赖）
+from ag_lib.reconcile import reconcile_source  # noqa: E402
+from ag_lib.dream import run_dream  # noqa: E402
+from ag_lib.distill import run_distill  # noqa: E402
+from ag_lib.extract import run_extract  # noqa: E402
+
+# 本 CLI 默认操作 agenote 域（~/Documents/Org/agenote/），与 MCP server 对齐。
+# --domain human 切到人类知识库根（~/Documents/Org/）。
+# 三入口共享 ag_lib 内核：本 CLI（通用）、agenote_mcp.py（MCP server）、
+# agenote_cli.py（TS hooks 桥，已默认 agenote 域）。
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
 from pathlib import Path
 
 
-def cmd_init(args: argparse.Namespace) -> None:
+def cmd_init(args: argparse.Namespace, ctx=None) -> None:
     """初始化知识库目录结构，可选初始化 git 仓库。"""
-    # 检查 KB_ROOT 是否已存在且有实质内容
-    if KB_ROOT.exists() and any(KB_ROOT.iterdir()):
-        has_cards = KB_EXPERIENCES.exists() and any(KB_EXPERIENCES.iterdir())
+    ctx = ctx or default_context()
+    root = ctx.root
+    # 检查根目录是否已存在且有实质内容
+    if root.exists() and any(root.iterdir()):
+        has_cards = ctx.experiences.exists() and any(ctx.experiences.iterdir())
         if has_cards:
-            print(f"知识库已存在且有内容: {KB_ROOT}")
+            print(f"知识库已存在且有内容: {root}")
             print("如需重新初始化，请先备份并删除该目录。")
             return
         # 有目录但无卡片——可能是损坏的初始化，继续
-        print(f"知识库目录已存在但为空，继续初始化: {KB_ROOT}")
+        print(f"知识库目录已存在但为空，继续初始化: {root}")
 
     # 创建目录和模板文件（复用 ensure_dirs 逻辑）
-    ensure_dirs()
-    print(f"目录结构已创建: {KB_ROOT}")
+    ensure_dirs(ctx)
+    print(f"目录结构已创建: {root}")
 
     # git 初始化（默认启用，--no-git 跳过）
     use_git = not args.no_git
@@ -93,61 +106,63 @@ def cmd_init(args: argparse.Namespace) -> None:
         if not git_bin:
             print("提示: 未找到 git，跳过版本控制初始化。")
             print(
-                "安装 git 后可手动运行: cd ~/Documents/Org && git init && git add -A && git commit -m 'agenote init'"
+                f"安装 git 后可手动运行: cd {root} && git init && git add -A && git commit -m 'agenote init'"
             )
             return
 
-        git_dir = KB_ROOT / ".git"
+        git_dir = root / ".git"
         if git_dir.exists():
             print("git 仓库已存在，跳过 git init。")
             return
 
         # 检查父目录是否已有 git 仓库（避免嵌套）
-        parent_git = _find_parent_git(KB_ROOT)
+        parent_git = _find_parent_git(root)
         if parent_git:
             print(f"警告: 父目录已有 git 仓库 ({parent_git})")
             print("跳过 git init 以避免嵌套仓库。")
-            print("如需独立版本控制，请手动运行: cd ~/Documents/Org && git init")
+            print(f"如需独立版本控制，请手动运行: cd {root} && git init")
             return
 
         # 创建 .gitignore
-        gitignore = KB_ROOT / ".gitignore"
+        gitignore = root / ".gitignore"
         if not gitignore.exists():
             gitignore.write_text("# 机器生成索引\nindex.json\n", encoding="utf-8")
 
         # git init + 初始 commit
-        _run_git(["init"], cwd=KB_ROOT)
-        _run_git(["add", ".gitignore", "MEMORY.org", "inbox.org"], cwd=KB_ROOT)
-        _run_git(["commit", "-m", "agenote init: 初始化知识库"], cwd=KB_ROOT)
+        _run_git(["init"], cwd=root)
+        _run_git(["add", ".gitignore", "MEMORY.org", "inbox.org"], cwd=root)
+        _run_git(["commit", "-m", "agenote init: 初始化知识库"], cwd=root)
         print("git 仓库已初始化，初始 commit 已创建。")
 
 
-def cmd_commit(args: argparse.Namespace) -> None:
+def cmd_commit(args: argparse.Namespace, ctx=None) -> None:
     """提交知识库变更，封装 git add + commit。"""
+    ctx = ctx or default_context()
+    root = ctx.root
     git_bin = shutil.which("git")
     if not git_bin:
         die("未找到 git，无法提交。")
 
-    git_dir = KB_ROOT / ".git"
+    git_dir = root / ".git"
     if not git_dir.exists():
-        die("知识库未初始化 git 仓库。请先运行 'agenote init'。")
+        die(f"知识库未初始化 git 仓库 ({root})。请先运行 'agenote init'。")
 
     message = args.message
     if not message:
         die("请通过 -m 指定 commit message。")
 
     # 检查是否有变更
-    status = _run_git(["status", "--porcelain"], cwd=KB_ROOT)
+    status = _run_git(["status", "--porcelain"], cwd=root)
     if not status.strip():
         print("没有待提交的变更。")
         return
 
     # add 所有变更（包括新建、修改、删除）
-    _run_git(["add", "-A"], cwd=KB_ROOT)
+    _run_git(["add", "-A"], cwd=root)
 
     # commit
-    _run_git(["commit", "-m", message], cwd=KB_ROOT)
-    print(f"已提交: {message}")
+    _run_git(["commit", "-m", message], cwd=root)
+    print(f"已提交 ({ctx.name}): {message}")
 
 
 def _run_git(args: list[str], cwd: Path) -> str:
@@ -173,15 +188,77 @@ def _find_parent_git(start: Path) -> Path | None:
     return None
 
 
-def cmd_reindex(args: argparse.Namespace) -> None:
+def cmd_reindex(args: argparse.Namespace, ctx=None) -> None:
     """
     全量扫描 experiences/ 目录下所有卡片，重建 index.json。
     """
-    ensure_dirs()
+    ctx = ctx or default_context()
+    ensure_dirs(ctx)
 
-    index = _rebuild_index()
-    _save_index(index)
-    print(f"索引已重建: {index['total']} 条卡片 → {KB_INDEX}")
+    index = _rebuild_index(ctx)
+    _save_index(index, ctx)
+    print(f"索引已重建 ({ctx.name}): {index['total']} 条卡片 → {ctx.index}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 跨 agent 协同 4 件套：reconcile / dream / distill / extract
+# 均为薄 wrapper：读 args → 调 ag_lib 函数 → 格式化输出。
+# 这 4 个函数内部自建 agenote_context（与 KB 卡片同库），不接受外部 ctx，
+# 但为保持 dispatch 签名统一 (args, ctx) 仍接受并忽略 ctx。
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def _print_report(d: dict, json_flag: bool, title: str) -> None:
+    """统一报告输出：--json 走 JSON，否则人类可读摘要。"""
+    if json_flag:
+        print(json.dumps(d, ensure_ascii=False, indent=2))
+        return
+    print(f"=== {title} ===")
+    for k, v in d.items():
+        if isinstance(v, list):
+            print(f"{k}: {len(v)} 项")
+            for it in v[:10]:
+                if isinstance(it, dict):
+                    # 取最像标题/来源的字段
+                    label = it.get("title") or it.get("source") or it.get("id") or str(it)[:60]
+                    print(f"  + {label}")
+                else:
+                    print(f"  + {it}")
+        elif isinstance(v, dict):
+            print(f"{k}:")
+            for sk, sv in v.items():
+                print(f"  {sk}: {sv}")
+        else:
+            print(f"{k}: {v}")
+
+
+def cmd_reconcile(args: argparse.Namespace, ctx=None) -> None:
+    """跨 agent memory 只读 reconcile：抽取事实到 .reconcile/index.json。"""
+    report = reconcile_source(source=args.source, dry_run=args.dry_run)
+    _print_report(report.to_dict(), getattr(args, "json", False),
+                  f"reconcile ({args.source}, dry_run={args.dry_run})")
+
+
+def cmd_dream(args: argparse.Namespace, ctx=None) -> None:
+    """从 reconcile 事实启发式提炼候选新卡片。"""
+    report = run_dream(window_days=args.window_days, dry_run=args.dry_run)
+    _print_report(report.to_dict(), getattr(args, "json", False),
+                  f"dream (window={args.window_days}d, dry_run={args.dry_run})")
+
+
+def cmd_distill(args: argparse.Namespace, ctx=None) -> None:
+    """工作流蒸馏：把反复使用的经验打包成 skill 草稿。"""
+    report = run_distill(window_days=args.window_days, dry_run=args.dry_run)
+    _print_report(report.to_dict(), getattr(args, "json", False),
+                  f"distill (window={args.window_days}d, dry_run={args.dry_run})")
+
+
+def cmd_extract(args: argparse.Namespace, ctx=None) -> None:
+    """跨 agent 对话抽取为 Org 文件。"""
+    d = run_extract(source=args.source, date=args.date,
+                    output_dir=args.output_dir, dry_run=args.dry_run)
+    _print_report(d, getattr(args, "json", False),
+                  f"extract ({args.source}, dry_run={args.dry_run})")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -195,7 +272,13 @@ def cmd_reindex(args: argparse.Namespace) -> None:
 def print_help() -> None:
     print(f"""agenote — 知识库命令行工具
 
-用法: agenote <子命令> [参数]
+用法: agenote [--domain human|agenote] <子命令> [参数]
+
+全局选项:
+  --domain {{human,agenote}}  操作域（默认 agenote，与 MCP server 对齐）
+        agenote  → ~/Documents/Org/agenote/（agent 写入的卡片，本 CLI 默认）
+        human    → ~/Documents/Org/（人类知识库根）
+  --version              显示版本号
 
 子命令:
   add       添加经验卡片
@@ -294,17 +377,34 @@ def print_help() -> None:
   gaps     知识空白检测（类别×类型矩阵）
             agenote gaps [--stale-days 90] [--json]
 
+  curate   一键策展（健康检查+权重重分配+去重+归档陈旧+重建索引）
+            agenote curate [--threshold 0.7]
+            策展后建议运行: agenote commit -m "策展: <一句话总结>"
+
+  reconcile 跨 agent memory 只读 reconcile（抽取事实到 .reconcile/，不写回源）
+            agenote reconcile [--source all] [--dry-run]
+            agenote reconcile --source hermes --dry-run
+
+  dream    从 reconcile 事实启发式提炼候选新卡片（不调 LLM，零候选即成功）
+            agenote dream [--window-days 7] [--dry-run]
+
+  distill  工作流蒸馏：把反复使用的经验打包成 skill 草稿（写 .distill/，不进 skills/）
+            agenote distill [--window-days 30] [--dry-run]
+
+  extract  跨 agent 对话抽取为 Org 文件（输出到 conversations/<date>/）
+            agenote extract [--source all] [--date YYYY-MM-DD] [--dry-run]
+
   help     显示本帮助
 
 配置常量（修改文件头部即可调整）:
-  KB_ROOT      知识库根目录 ({KB_ROOT})
+  KB_ROOT      人类知识库根 ({KB_ROOT})
   STALE_DAYS   陈旧记忆阈值 ({STALE_DAYS} 天)
   VALID_TYPES  合法 type 值 ({', '.join(sorted(VALID_TYPES))})
   VALID_OWNERS 合法 owner 值 ({', '.join(sorted(VALID_OWNERS))})
 
-知识库路径: {KB_ROOT}
-经验卡片目录: {KB_EXPERIENCES}
-记忆文件: {KB_MEMORY}
+默认操作域: agenote（~/Documents/Org/agenote/）
+  人类知识库根: {KB_ROOT}
+  --domain human 切到人类根；reconcile/dream/distill/extract 始终操作 agenote 域
 """)
 
 
@@ -314,19 +414,25 @@ def print_help() -> None:
 
 
 def main() -> None:
-    # init 子命令自己管理目录创建，跳过 ensure_dirs
-    skip_ensure = len(sys.argv) > 1 and sys.argv[1] == "init"
-    if not skip_ensure:
-        ensure_dirs()
-
-    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+    # 手动拦截 -h/--help（在 argparse 之前，避免 prog 名暴露问题 + 兼容 --domain 前置）
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
         print_help()
         sys.exit(0)
 
     parser = argparse.ArgumentParser(
-        prog="kb",
-        description="agenote — 人类域知识库 CLI",
+        prog="agenote",
+        description="agenote — 知识库命令行工具（默认 agenote 域，与 MCP server 对齐）",
         add_help=False,
+    )
+    # 全局参数：--domain 决定读写哪棵目录树；--version 修复 argparse 露馅问题
+    parser.add_argument(
+        "--domain",
+        choices=["human", "agenote"],
+        default="agenote",
+        help="操作域：agenote（默认，~/Documents/Org/agenote/）或 human（~/Documents/Org/）",
+    )
+    parser.add_argument(
+        "--version", action="version", version="agenote 1.0",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -536,6 +642,14 @@ def main() -> None:
         "--quality", action="store_true", help="检测质量问题（章节/元数据/Markdown）"
     )
 
+    # ── curate ──────────────────────────────────────────────────────────────
+    curate_parser = subparsers.add_parser(
+        "curate", help="一键策展（健康+权重+去重+归档陈旧+重建索引）"
+    )
+    curate_parser.add_argument(
+        "--threshold", type=float, default=0.7, help="去重相似度阈值"
+    )
+
     # ── gaps ────────────────────────────────────────────────────────────────
     gaps_parser = subparsers.add_parser("gaps", help="知识空白检测（类别×类型矩阵）")
     gaps_parser.add_argument(
@@ -544,6 +658,46 @@ def main() -> None:
     gaps_parser.add_argument("--json", action="store_true", help="JSON 格式输出")
 
     add_viz_parser(subparsers)
+
+    # ── reconcile ───────────────────────────────────────────────────────────
+    reconcile_parser = subparsers.add_parser(
+        "reconcile", help="跨 agent memory 只读 reconcile（抽取事实到 .reconcile/）"
+    )
+    reconcile_parser.add_argument(
+        "--source", default="all",
+        help="hermes|opencode|crush|codex|claude|pi|zcode|all（默认 all）",
+    )
+    reconcile_parser.add_argument("--dry-run", action="store_true", help="只预览不落盘")
+    reconcile_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+
+    # ── dream ───────────────────────────────────────────────────────────────
+    dream_parser = subparsers.add_parser(
+        "dream", help="从 reconcile 事实启发式提炼候选新卡片（不调 LLM）"
+    )
+    dream_parser.add_argument("--window-days", type=int, default=7, help="回看窗口（天）")
+    dream_parser.add_argument("--dry-run", action="store_true", default=True, help="只预览不写 KB")
+    dream_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+
+    # ── distill ─────────────────────────────────────────────────────────────
+    distill_parser = subparsers.add_parser(
+        "distill", help="工作流蒸馏：把反复使用的经验打包成 skill 草稿"
+    )
+    distill_parser.add_argument("--window-days", type=int, default=30, help="回看窗口（天）")
+    distill_parser.add_argument("--dry-run", action="store_true", default=True, help="只预览不写 .distill/")
+    distill_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+
+    # ── extract ─────────────────────────────────────────────────────────────
+    extract_parser = subparsers.add_parser(
+        "extract", help="跨 agent 对话抽取为 Org 文件（输出到 conversations/）"
+    )
+    extract_parser.add_argument(
+        "--source", default="all",
+        help="opencode|crush|codex|claude|pi|hermes|zcode|all（默认 all）",
+    )
+    extract_parser.add_argument("--date", default="", help="目标日期 YYYY-MM-DD（默认昨天）")
+    extract_parser.add_argument("--output-dir", default="", help="输出目录（默认 conversations/<date>/）")
+    extract_parser.add_argument("--dry-run", action="store_true", default=True, help="只预览不落盘")
+    extract_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -577,10 +731,21 @@ def main() -> None:
         "health": cmd_health,
         "gaps": cmd_gaps,
         "viz": cmd_viz,
+        "curate": cmd_curate,
+        # 跨 agent 协同 4 件套
+        "reconcile": cmd_reconcile,
+        "dream": cmd_dream,
+        "distill": cmd_distill,
+        "extract": cmd_extract,
     }
 
     if args.command in commands:
-        commands[args.command](args)
+        # 解析 ctx：默认 agenote（与 MCP server 对齐），--domain human 切到人类 KB 根。
+        # init 子命令自己管理目录创建（含 ensure_dirs），其余命令按 ctx 确保骨架存在。
+        ctx = default_context() if args.domain == "human" else agenote_context()
+        if args.command != "init":
+            ensure_dirs(ctx)
+        commands[args.command](args, ctx)
     else:
         die(f"未知子命令: {args.command}。运行 'agenote help' 查看帮助。")
 

@@ -7,7 +7,7 @@ description: agent 专属记事本（agenote）的基础使用指南。当需要
 
 agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 AI agent 记录而设。数据隔离在 `~/Documents/Org/agenote/` 子目录，与人类卡片互不污染。
 
-> **调用方式**：agenote 已改造为 MCP server，agent 主循环通过 MCP tool 调用（tool 名以 `agenote_` 为前缀）。pi-mcp-adapter lazy 连接，首次调用时自动启动 server。以下示例中的 `agenote_*` 均为 MCP tool 名。底层 CLI 为 `agenote` 命令（位于 `~/.local/bin/agenote`）。
+> **调用方式**：agenote 已改造为 MCP server，agent 主循环通过 MCP tool 调用（tool 名以 `agenote_` 为前缀）。pi-mcp-adapter lazy 连接，首次调用时自动启动 server。以下示例中的 `agenote_*` 均为 MCP tool 名。底层 CLI 为 `agenote` 命令（位于 `~/.local/bin/agenote`），默认操作 agenote 子库（与 MCP server 对齐），`--domain human` 切到人类知识库根。
 
 > **来源溯源**：每张 agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env
 > `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote_health()` 的 `by_source` 字段可看各 agent

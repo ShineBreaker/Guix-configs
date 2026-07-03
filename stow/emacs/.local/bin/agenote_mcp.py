@@ -625,78 +625,11 @@ def agenote_extract(
     Returns:
         dict: {source, total_facts, output_dir, files: [path, ...], errors: [...]}
     """
-    from datetime import datetime, timedelta
-    from pathlib import Path
+    from ag_lib.extract import run_extract
 
-    from ag_lib.extract import opencode, crush, codex, claude, pi, zcode
-    from ag_lib.reconcile import extract_hermes
-
-    EXTRACTORS = {
-        "opencode": opencode.extract_opencode,
-        "crush": crush.extract_crush,
-        "codex": codex.extract_codex,
-        "claude": claude.extract_claude,
-        "pi": pi.extract_pi,
-        "hermes": extract_hermes,
-        "zcode": zcode.extract_zcode,
-    }
-
-    if source == "all":
-        selected = list(EXTRACTORS.keys())
-    elif source in EXTRACTORS:
-        selected = [source]
-    else:
-        return {"error": f"未知 source: {source}；可选: {sorted(EXTRACTORS)}"}
-
-    # 输出目录
-    if not output_dir:
-        target_date = date or (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        output_dir = f"~/Documents/Org/conversations/{target_date}"
-    out_path = Path(output_dir).expanduser()
-    if not dry_run:
-        out_path.mkdir(parents=True, exist_ok=True)
-
-    files: list[str] = []
-    errors: list[str] = []
-    total = 0
-    for src in selected:
-        try:
-            facts, errs = EXTRACTORS[src]()
-            total += len(facts)
-            errors.extend(errs)
-            if dry_run:
-                continue
-            src_file = out_path / f"{src}.org"
-            lines: list[str] = [
-                f"#+TITLE: {src} conversations",
-                f"#+DATE: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                f"#+SOURCE: {src}",
-                f"#+TOTAL: {len(facts)}",
-                "",
-            ]
-            for f in facts[:500]:  # 安全上限：每源最多 500 条
-                lines.append(f"* {f.title}")
-                lines.append(f":PROPERTIES:")
-                lines.append(f":ID: {f.id}")
-                lines.append(f":CATEGORY: {f.category}")
-                lines.append(f":WEIGHT: {f.weight}")
-                lines.append(f":END:")
-                lines.append("")
-                lines.append(f.content[:3000])
-                lines.append("")
-            src_file.write_text("\n".join(lines), encoding="utf-8")
-            files.append(str(src_file))
-        except Exception as e:
-            errors.append(f"{src}: {e}")
-
-    return {
-        "source": source,
-        "total_facts": total,
-        "output_dir": str(out_path),
-        "files": files,
-        "errors": errors,
-        "dry_run": dry_run,
-    }
+    return run_extract(
+        source=source, date=date, output_dir=output_dir, dry_run=dry_run
+    )
 
 
 @mcp.tool()
