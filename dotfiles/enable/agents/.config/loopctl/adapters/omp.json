@@ -32,7 +32,9 @@
     "native_command": null
   },
 
-  "env": {},
+  "env": {
+    "AGENOTE_AGENT": "omp"
+  },
 
   "extra_args": [],
 

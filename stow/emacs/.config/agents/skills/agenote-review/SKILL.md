@@ -1,6 +1,6 @@
 ---
 name: agenote-review
-description: 会话后经验采集与留痕指南。当检测到任务完成信号、需要评估本次对话是否有可记录经验、或对用到的资料留痕时使用。涵盖可记录信号识别、ENTRY_TYPE 判定、留痕决策树。
+description: 会话后经验采集与留痕。**触发信号**：agenote-hooks 插件检测到完成信号 / 用户触发 `/agenote-summarize` / 长任务结束前的例行评估 / 用户纠正了你 / 排查 >2 步才定位根因 / 发现了比初始方案更优的写法。**当上述任一信号出现时立即调用本 skill** 做"经验信号识别 + ENTRY_TYPE 判定 + 留痕决策树"，按其内部规则写卡片或 touch 已有卡片。基础用法见 `agenote-base`。
 ---
 
 # agenote-review — 会话后经验采集与留痕
@@ -58,12 +58,12 @@ agenote profile
 
 不是所有经验都值得写完整卡片：
 
-| 目标 | 方式 | 条件 |
-| --- | --- | --- |
-| 可复用技术经验 | `agenote add` 完整卡片 | 排查 >2 步、跨工具、架构决策 |
-| 偏好/习惯 | `agenote memory --add` | 偏好表达、行为纠正 |
-| 一句话注意 | `agenote inbox` / `agenote update --append` | 简单修正、补充 |
-| 不写 | — | 一次性细节、环境失败、否定声明 |
+| 目标           | 方式                                        | 条件                           |
+| -------------- | ------------------------------------------- | ------------------------------ |
+| 可复用技术经验 | `agenote add` 完整卡片                      | 排查 >2 步、跨工具、架构决策   |
+| 偏好/习惯      | `agenote memory --add`                      | 偏好表达、行为纠正             |
+| 一句话注意     | `agenote inbox` / `agenote update --append` | 简单修正、补充                 |
+| 不写           | —                                           | 一次性细节、环境失败、否定声明 |
 
 优先级：纠正(mistake) > 调试(debug/config) > 工作流 > 功能
 
@@ -82,20 +82,22 @@ agenote profile
 
 ## 记忆信号（写入 MEMORY.org）
 
-| 信号类型 | 记忆类型 | 关键词/信号 | 写入命令 |
-| --- | --- | --- | --- |
-| 偏好表达 | feedback | "我喜欢..."、"不要..."、"停..." | `agenote memory --add --type feedback` |
-| 行为纠正 | feedback | 用户纠正了你的工作方式（非技术错误） | `agenote memory --add --type feedback` |
-| 习惯模式 | feedback | 同一偏好出现 ≥2 次 | `agenote memory --add --type feedback` |
-| 项目决策 | project | 不可从代码推导的项目级决策/状态 | `agenote memory --add --type project --project <id>` |
-| 外部指针 | reference | 外部系统/文档/资源的位置信息 | `agenote memory --add --type reference` |
+| 信号类型 | 记忆类型  | 关键词/信号                          | 写入命令                                             |
+| -------- | --------- | ------------------------------------ | ---------------------------------------------------- |
+| 偏好表达 | feedback  | "我喜欢..."、"不要..."、"停..."      | `agenote memory --add --type feedback`               |
+| 行为纠正 | feedback  | 用户纠正了你的工作方式（非技术错误） | `agenote memory --add --type feedback`               |
+| 习惯模式 | feedback  | 同一偏好出现 ≥2 次                   | `agenote memory --add --type feedback`               |
+| 项目决策 | project   | 不可从代码推导的项目级决策/状态      | `agenote memory --add --type project --project <id>` |
+| 外部指针 | reference | 外部系统/文档/资源的位置信息         | `agenote memory --add --type reference`              |
 
 **MEMORY vs KB 边界**：
+
 - "你怎么做"（风格/流程/工具选择偏好）→ MEMORY
 - "你做错了"（事实/技术错误）→ KB
 - 两者可能并存：同一事件同时写入 MEMORY 和 KB
 
 **防误触发**：
+
 - 技术性纠正（"正则写错了"、"参数传反了"）→ 只写 KB，不写 MEMORY
 - 普通确认（"好的"、"行"）→ 不触发任何系统
 
@@ -159,11 +161,11 @@ agenote profile
 
 ### Entry type 映射
 
-| 来源语义 | `--entry` | 推荐 type | 推荐 owner |
-| --- | --- | --- | --- |
-| 用户纠错 | `mistake` | `debug` / `config` | `collaborative` |
-| 长期注意事项 | `note` | `workflow` / `config` | `ai` |
-| 飞升模式复盘 | `ascended` | `debug` / `workflow` | `collaborative` |
+| 来源语义     | `--entry`  | 推荐 type             | 推荐 owner      |
+| ------------ | ---------- | --------------------- | --------------- |
+| 用户纠错     | `mistake`  | `debug` / `config`    | `collaborative` |
+| 长期注意事项 | `note`     | `workflow` / `config` | `ai`            |
+| 飞升模式复盘 | `ascended` | `debug` / `workflow`  | `collaborative` |
 
 ## 卡片生命周期
 

@@ -3,7 +3,7 @@ agent:
   clarify_timeout: 600
   coding_context: auto
   disabled_toolsets: []
-  environment_hint: ''
+  environment_hint: ""
   environment_probe: true
   gateway_auto_continue_freshness: 3600
   gateway_notify_interval: 180
@@ -14,7 +14,7 @@ agent:
   parallel_tool_call_guidance: true
   reasoning_effort: xhigh
   restart_drain_timeout: 180
-  service_tier: ''
+  service_tier: ""
   task_completion_guidance: true
   tool_use_enforcement: auto
   verbose: false
@@ -26,99 +26,99 @@ approvals:
   timeout: 60
 auxiliary:
   approval:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 30
   compression:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 120
   curator:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 600
   kanban_decomposer:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 180
   mcp:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 30
   monitor:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 60
   profile_describer:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 60
   session_search:
-    model: ''
+    model: ""
     provider: auto
   skills_hub:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 30
   title_generation:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    language: ''
-    model: ''
+    language: ""
+    model: ""
     provider: auto
     timeout: 60
   triage_specifier:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 120
   tts_audio_tags:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 30
   vision:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     download_timeout: 30
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 60
   web_extract:
-    api_key: ''
-    base_url: ''
+    api_key: ""
+    base_url: ""
     extra_body: {}
-    model: ''
+    model: ""
     provider: auto
     timeout: 60
 bedrock:
@@ -127,11 +127,11 @@ bedrock:
     provider_filter: []
     refresh_interval: 3600
   guardrail:
-    guardrail_identifier: ''
-    guardrail_version: ''
+    guardrail_identifier: ""
+    guardrail_version: ""
     stream_processing_mode: async
     trace: disabled
-  region: ''
+  region: ""
 browser:
   allow_private_urls: false
   auto_local_for_private_urls: true
@@ -140,9 +140,9 @@ browser:
     loopback_host_alias: host.docker.internal
     managed_persistence: false
     rewrite_loopback_urls: false
-    session_key: ''
-    user_id: ''
-  cdp_url: ''
+    session_key: ""
+    user_id: ""
+  cdp_url: ""
   command_timeout: 30
   dialog_policy: must_respond
   dialog_timeout_s: 300
@@ -177,12 +177,12 @@ context_file_max_chars: null
 credential_pool_strategies: {}
 cron:
   chronos:
-    callback_url: ''
-    expected_audience: ''
-    nas_jwks_url: ''
+    callback_url: ""
+    expected_audience: ""
+    nas_jwks_url: ""
     portal_url: https://portal.nousresearch.com
   max_parallel_jobs: null
-  provider: ''
+  provider: ""
   wrap_response: true
 curator:
   archive_after_days: 90
@@ -197,57 +197,57 @@ curator:
   stale_after_days: 30
 dashboard:
   basic_auth:
-    password: ''
-    password_hash: ''
-    secret: ''
+    password: ""
+    password_hash: ""
+    secret: ""
     session_ttl_seconds: 0
-    username: ''
+    username: ""
   oauth:
-    client_id: ''
-    portal_url: ''
-  public_url: ''
+    client_id: ""
+    portal_url: ""
+  public_url: ""
   show_token_analytics: false
   theme: default
 delegation:
-  api_key: ''
-  api_mode: ''
-  base_url: ''
+  api_key: ""
+  api_mode: ""
+  base_url: ""
   child_timeout_seconds: 0
   inherit_mcp_toolsets: true
   max_async_children: 3
   max_concurrent_children: 3
   max_iterations: 50
   max_spawn_depth: 1
-  model: ''
+  model: ""
   orchestrator_enabled: true
-  provider: ''
+  provider: ""
   reasoning_effort: high
   subagent_auto_approve: false
 discord:
   allow_any_attachment: false
-  allowed_channels: ''
+  allowed_channels: ""
   auto_thread: true
   channel_prompts: {}
-  dm_role_auth_guild: ''
-  free_response_channels: ''
+  dm_role_auth_guild: ""
+  free_response_channels: ""
   history_backfill: true
   history_backfill_limit: 50
   max_attachment_bytes: 33554432
   reactions: true
   require_mention: true
-  server_actions: ''
+  server_actions: ""
   thread_require_mention: false
   voice_fx:
     ack_enabled: true
     ack_phrases:
-    - Let me look into that.
-    - One moment.
-    - Checking on that now.
-    - Give me a sec.
-    - On it.
+      - Let me look into that.
+      - One moment.
+      - Checking on that now.
+      - Give me a sec.
+      - On it.
     ambient_enabled: true
     ambient_gain: 0.18
-    ambient_path: ''
+    ambient_path: ""
     duck_gain: 0.06
     enabled: false
     speech_gain: 1
@@ -284,9 +284,9 @@ display:
   runtime_footer:
     enabled: false
     fields:
-    - model
-    - context_pct
-    - cwd
+      - model
+      - context_pct
+      - cwd
   show_cost: false
   show_reasoning: false
   skin: mono
@@ -325,18 +325,18 @@ human_delay:
 kanban:
   auto_decompose: true
   auto_decompose_per_tick: 3
-  default_assignee: ''
+  default_assignee: ""
   dispatch_in_gateway: true
   dispatch_interval_seconds: 60
   dispatch_stale_timeout_seconds: 14400
   failure_limit: 2
   max_in_progress_per_profile: null
-  orchestrator_profile: ''
+  orchestrator_profile: ""
   worker_log_backup_count: 1
   worker_log_rotate_bytes: 2097152
 known_plugin_toolsets:
   cli:
-  - spotify
+    - spotify
 logging:
   backup_count: 3
   level: INFO
@@ -348,16 +348,23 @@ lsp:
   wait_mode: document
   wait_timeout: 5
 matrix:
-  allowed_rooms: ''
-  free_response_rooms: ''
+  allowed_rooms: ""
+  free_response_rooms: ""
   require_mention: true
 mattermost:
-  allowed_channels: ''
+  allowed_channels: ""
   channel_prompts: {}
-  free_response_channels: ''
+  free_response_channels: ""
   require_mention: true
 max_concurrent_sessions: null
 mcp_discovery_timeout: 1.5
+mcp_servers:
+  agenote:
+    command: /home/brokenshine/.guix-home/profile/bin/python3
+    args:
+      - /home/brokenshine/.local/bin/agenote_mcp.py
+    env:
+      AGENOTE_AGENT: hermes
 memory:
   flush_min_turns: 6
   memory_char_limit: 2000
@@ -394,28 +401,28 @@ personalities: {}
 platform_hints: {}
 platform_toolsets:
   cli:
-  - browser
-  - clarify
-  - code_execution
-  - context_engine
-  - cronjob
-  - delegation
-  - file
-  - kanban
-  - memory
-  - session_search
-  - skills
-  - terminal
-  - todo
-  - vision
-  - web
+    - browser
+    - clarify
+    - code_execution
+    - context_engine
+    - cronjob
+    - delegation
+    - file
+    - kanban
+    - memory
+    - session_search
+    - skills
+    - terminal
+    - todo
+    - vision
+    - web
 plugins:
   hermes-memory-store:
-    auto_extract: 'true'
+    auto_extract: "true"
     db_path: ~/.local/share/hermes/memory_store.db
-    default_trust: '0.5'
-    hrr_dim: '1024'
-prefill_messages_file: ''
+    default_trust: "0.5"
+    hrr_dim: "1024"
+prefill_messages_file: ""
 privacy:
   redact_pii: false
 prompt_caching:
@@ -443,8 +450,8 @@ secrets:
     cache_ttl_seconds: 300
     enabled: false
     override_existing: true
-    project_id: ''
-    server_url: ''
+    project_id: ""
+    server_url: ""
 security:
   acked_advisories: []
   allow_lazy_installs: true
@@ -471,20 +478,20 @@ sessions:
 skills:
   creation_nudge_interval: 15
   external_dirs:
-  - ~/.agents/skills
+    - ~/.agents/skills
   guard_agent_created: false
   inline_shell: false
   inline_shell_timeout: 10
   template_vars: true
   write_approval: false
 slack:
-  allowed_channels: ''
+  allowed_channels: ""
   channel_prompts: {}
-  free_response_channels: ''
+  free_response_channels: ""
   require_mention: true
 streaming:
   buffer_threshold: 24
-  cursor: " \u2589"
+  cursor: ' ▉'
   edit_interval: 0.8
   enabled: false
   fresh_final_after_seconds: 0
@@ -492,12 +499,12 @@ streaming:
 stt:
   elevenlabs:
     diarize: false
-    language_code: ''
+    language_code: ""
     model_id: scribe_v2
     tag_audio_events: false
   enabled: true
   local:
-    language: ''
+    language: ""
     model: base
   mistral:
     model: voxtral-mini-latest
@@ -505,7 +512,7 @@ stt:
     model: whisper-1
   provider: local
 telegram:
-  allowed_chats: ''
+  allowed_chats: ""
   channel_prompts: {}
   extra:
     rich_messages: true
@@ -535,7 +542,7 @@ terminal:
   shell_init_files: []
   singularity_image: docker://nikolaik/python-nodejs:python3.11-nodejs20
   timeout: 180
-timezone: ''
+timezone: ""
 tool_loop_guardrails:
   hard_stop_after:
     exact_failure: 5
@@ -558,7 +565,7 @@ tools:
     search_default_limit: 5
     threshold_pct: 10
 toolsets:
-- hermes-cli
+  - hermes-cli
 tts:
   edge:
     voice: en-US-AriaNeural
@@ -568,7 +575,7 @@ tts:
   gemini:
     audio_tags: false
     model: gemini-2.5-flash-preview-tts
-    persona_prompt_file: ''
+    persona_prompt_file: ""
     voice: Kore
   mistral:
     model: voxtral-mini-tts-2603
@@ -576,8 +583,8 @@ tts:
   neutts:
     device: cpu
     model: neuphonic/neutts-air-q4-gguf
-    ref_audio: ''
-    ref_text: ''
+    ref_audio: ""
+    ref_text: ""
   openai:
     model: gpt-4o-mini-tts
     voice: alloy
@@ -601,9 +608,9 @@ voice:
   silence_duration: 3
   silence_threshold: 200
 web:
-  backend: ''
-  extract_backend: ''
-  search_backend: ''
+  backend: ""
+  extract_backend: ""
+  search_backend: ""
 whatsapp: {}
 x_search:
   model: grok-4.20-reasoning

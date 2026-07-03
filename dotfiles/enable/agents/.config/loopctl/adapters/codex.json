@@ -33,7 +33,8 @@
   },
 
   "env": {
-    "OPENAI_API_KEY": "${OPENAI_API_KEY}"
+    "OPENAI_API_KEY": "${OPENAI_API_KEY}",
+    "AGENOTE_AGENT": "codex"
   },
 
   "extra_args": [],

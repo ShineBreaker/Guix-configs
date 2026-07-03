@@ -188,4 +188,16 @@
   </constraints>
 </memory-discipline>
 
+<!-- ==================== 跨 agent 共享知识（agenote） ==================== -->
+<shared-knowledge>
+  <critical>agenote 是与 fact_store 正交的「跨 agent 共享层」，不替代 fact_store。</critical>
+  <purpose>fact_store 沉淀你私人的项目事实；agenote 让有价值的事实被 pi/crush/opencode 等其他 agent 检索复用。</purpose>
+  <routing>
+    <rule trigger="踩坑根因、部署拓扑、命令诀窍，且值得跨 agent 共享" target="both" order="先 fact_store（私人索引），再 agenote（共享）" />
+    <rule trigger="用户偏好、人物画像" target="memory only（不打进 agenote）" />
+    <rule trigger="明确只对当前项目有用、无跨 agent 复用价值" target="fact_store only" />
+  </routing>
+  <how>通过 agenote MCP tool（agenote_add / agenote_search / agenote_list）或 CLI（~/.local/bin/agenote）。任务前查、完成后记。完整规则见 ~/.agents/skills/agenote-base/。</how>
+</shared-knowledge>
+
 </hermes-persona>

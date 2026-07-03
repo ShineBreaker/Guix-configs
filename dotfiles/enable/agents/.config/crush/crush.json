@@ -393,6 +393,7 @@
       "type": "stdio",
       "command": "/home/brokenshine/.guix-home/profile/bin/python3",
       "args": ["/home/brokenshine/.local/bin/agenote_mcp.py"],
+      "env": {"AGENOTE_AGENT": "crush"},
       "timeout": 45
     }
   }

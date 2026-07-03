@@ -1,6 +1,6 @@
 ---
 name: agenote-base
-description: agent 专属记事本（agenote）的基础使用指南。当需要记录查询所得知识、项目处理中遇到的问题、跨会话偏好时使用。涵盖 agenote MCP tool、卡片格式、何时记录/何时不记录。
+description: 跨 agent 共享知识库（agenote）—— 任务开始时查、过程中复用、结束时记。**触发信号**：开始非平凡任务前 / 遇到已踩过或疑似踩过的坑 / 联网查到新方案 / 用户纠正/纠正自己 / 长任务结束。**当上述任一信号出现时立即调用本 skill**，按其内部规则决策（list→search→get；add→touch；commit）。需要维护 KB 健康度（去重/归档/重整）或从 6+ agent 抽取对话 reconcile 时转 `agenote-curator`；会话结束需评估可记录经验时转 `agenote-review`。底层 CLI 为 `agenote`（`~/.local/bin/agenote`），与 MCP tool 行为对齐。
 ---
 
 # agenote — agent 专属记事本
@@ -133,35 +133,13 @@ agenote merge <primary> <sec>...       # 合并卡片
 agenote health                         # 健康度报告
 ```
 
-## 可视化 — `agenote viz` 就是体系内的 `md2html`
+## 可视化
 
-用户心智模型里常把"把 markdown 渲染成可视化网页"的工具叫 `md2html`，但**本机已装的对应物是 `agenote viz`**（`~/.local/bin/agenote` 的子命令，2014-2026 就在那里）。下次用户说"用 md2html"或"把 KB 渲染出来看"，先想 `agenote viz`：
+`agenote viz -o out.html` 把 KB 渲染成可搜索的单文件 HTML（自带主题）；`--serve --port 8765` 起本地服务。用户说"用 md2html"或"把 KB 渲染出来看"时，先想 `agenote viz`。内容是单份 markdown 报告（非 KB 卡片）时退回 `pandoc -s <md> -o <html>`。
 
-| 维度 | `agenote viz`（已装）                                | 通用 `md2html` skill |
-| ---- | ---------------------------------------------------- | -------------------- |
-| 输入 | 合并人类 + agenote 两域 index.json（`--domain` 可限定单域） | 单个 .md 文件        |
-| 输出 | 单文件 HTML（自带 dark/light/auto 主题）              | 单文件 HTML          |
-| 交互 | 全文搜索 + 类别树 + 多维过滤 + 统计图 + 过期告警      | 仅渲染               |
-| 启动 | `agenote viz -o out.html` 或 `agenote viz --serve --port 8765` | 取决于具体 skill     |
+## agent 写入者
 
-**何时用 `agenote viz`**：内容是 KB 卡片、要检索/过滤/统计。
-**何时退回 pandoc**：内容是单份 markdown 报告（KB 卡片化会丢失章节顺序），用 `pandoc -s <md> -o <html>` + 自写 CSS。
-
-## 本机 agent 拓扑（2026-06-28 实测）
-
-`agenote` 的写入者不止 pi/hayes。给一张现有 agent 系统清单，方便在 review/curate 时知道哪些 agent 的经验该入库：
-
-| Agent           | 数据位置                           | MCP                                                  | 已有 agenote 桥接？                          |
-| --------------- | ---------------------------------- | ---------------------------------------------------- | -------------------------------------------- |
-| hermes-agent    | `~/.local/share/hermes/`           | ✅（已配 holographic + mcp-server-memory）           | 半（holographic 走 `fact_store`，没走 `agenote`） |
-| pi-coding-agent | `~/.pi/`（`$PI_CODING_AGENT_DIR`） | ✅                                                   | ✅（`agenote-hooks` 插件）                   |
-| oh-my-pi (OMP)  | `~/.config/pi/omp/`                | ✅                                                   | ❌（用户偏好本仓库不托管 OMP 配置）          |
-| crush           | `~/.config/crush/`                 | ✅（filesystem/memory/context7/sequential-thinking） | ❌                                           |
-| opencode        | `~/.opencode-mem/data/*.db`        | 待确认                                               | ❌                                           |
-| reasonix        | `~/.reasonix/`                     | 待确认                                               | ❌                                           |
-| claude-code     | —（本机未检出 `~/.claude/`）       | ✅                                                   | ❌                                           |
-
-**结论**：当前只有 pi 一个 agent **自动**往 agenote 写（经 `agenote-hooks` 插件 + MCP server）。其他 agent 要手动调 MCP tool 或 `agenote` CLI。
+任何 agent 通过 MCP tool 或 CLI 写入的卡片都自动打 `:SOURCE_AGENT:` 标签（取自 `AGENOTE_AGENT` env）。当前接入的 agent 清单以各自 MCP 配置为准（pi/crush/opencode/hermes），新增 agent 时在其 MCP 配置加 `env: {AGENOTE_AGENT: <name>}` 即可纳入归因。外部 agent（codex/claude/omp 等）经 loopctl 调起时通过其 adapter 的 `env` 块设置。
 
 ## 重要：用 ID 而非 title 定位卡片
 
@@ -190,12 +168,12 @@ agenote 的 memory 子系统记录跨会话的偏好与项目元数据。
 
 ### 四种记忆类型
 
-| 类型 | 用途 | agenote 场景 |
-| --- | --- | --- |
-| feedback | 行为偏好 | 用户对 agent 工作方式的偏好（回复风格、工具选择） |
-| project | 项目记忆 | 按项目拆分，存 `memories/projects/<项目>.org` |
-| reference | 参考资料 | 可跨项目复用的参考 |
-| deprecated | 归档 | 陈旧记忆归档区 |
+| 类型       | 用途     | agenote 场景                                      |
+| ---------- | -------- | ------------------------------------------------- |
+| feedback   | 行为偏好 | 用户对 agent 工作方式的偏好（回复风格、工具选择） |
+| project    | 项目记忆 | 按项目拆分，存 `memories/projects/<项目>.org`     |
+| reference  | 参考资料 | 可跨项目复用的参考                                |
+| deprecated | 归档     | 陈旧记忆归档区                                    |
 
 ### CLI 操作
 
