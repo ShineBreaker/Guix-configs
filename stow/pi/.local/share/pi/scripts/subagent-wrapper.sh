@@ -51,7 +51,23 @@ XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 RUN_DIR="$XDG_CACHE_HOME/pi/subagents/$RUN_ID"
-AGENTS_DIR="$XDG_CONFIG_HOME/pi/agents"
+
+# agent .md 候选目录（多路径回退，与 TS 端 resolveAgentFile 策略一致）：
+#   1. 插件内置 atelier/context/agents（自包含 agent 定义）
+#   2. 用户自定义 ~/.config/pi/agents（兼容旧路径）
+PLUGIN_AGENTS_DIR="$XDG_CONFIG_HOME/pi/extensions/atelier/context/agents"
+USER_AGENTS_DIR="$XDG_CONFIG_HOME/pi/agents"
+
+# 按优先级查找 agent .md 文件，输出第一个存在的路径
+resolve_agent_file() {
+	for d in "$PLUGIN_AGENTS_DIR" "$USER_AGENTS_DIR"; do
+		if [[ -f "$d/$AGENT_NAME.md" ]]; then
+			echo "$d/$AGENT_NAME.md"
+			return 0
+		fi
+	done
+	return 1
+}
 
 # 标记当前进程为 subagent，供扩展 hook 检测递归
 export PI_SUBAGENT=1
@@ -112,9 +128,9 @@ die() {
 
 # 解析 agent .md 的 frontmatter（仅提取 tools）
 parse_agent_md() {
-	local agent_file="$AGENTS_DIR/$AGENT_NAME.md"
-	if [[ ! -f "$agent_file" ]]; then
-		die "agent file not found: $agent_file" 1
+	local agent_file
+	if ! agent_file="$(resolve_agent_file)"; then
+		die "agent file not found: $AGENT_NAME.md (searched: $PLUGIN_AGENTS_DIR, $USER_AGENTS_DIR)" 1
 	fi
 
 	local in_fm=false
