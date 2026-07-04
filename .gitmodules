@@ -6,14 +6,14 @@
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
 [submodule "stow/emacs/.config/emacs/general-config"]
-	path = stow/emacs/.config/emacs/general-config
+	path = dotfiles/mutable/emacs/.config/emacs/general-config
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
 [submodule "stow/appimage-run"]
-	path = stow/appimage-run
+	path = dotfiles/mutable/appimage-run
 	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
 [submodule "stow/pi/.config/pi/extensions/atelier"]
-	path = stow/pi/.config/pi/extensions/atelier
+	path = dotfiles/mutable/pi/.config/pi/extensions/atelier
 	url = https://github.com/ShineBreaker/pi-atelier.git
 [submodule "stow/pi/.config/pi/extensions/pi-ui"]
-	path = stow/pi/.config/pi/extensions/pi-ui
+	path = dotfiles/mutable/pi/.config/pi/extensions/pi-ui
 	url = https://github.com/ShineBreaker/pi-ui.git
