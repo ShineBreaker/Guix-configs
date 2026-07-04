@@ -20,23 +20,50 @@ description: "Use when the user wants to add, remove, prune, audit, or curate th
 3. **bundled skill 看似 read-only,实际可写**。`0555` 是文件权限位不是 mount 选项,`chmod -R u+w` 后即可 `mv`/`rm`。不要被"看起来是只读"骗到,绕远路去改 Hermes 安装源或用 sudo。
 4. **skills_list 视图 ≠ 磁盘真实存在**。`skills_list` 返回 97 个,但磁盘上 bundled 目录只有 ~73 个,其余 24 个(agent-browser、guix-configs-workflow、kami、hyperframes 全套等)在你 Guix 部署里,**`find` 不到**。精简前用 `find ~/.local/share/hermes/skills -name SKILL.md | wc -l` 拿到真实数量,再用 `KEEP` 集合做 `existing - KEEP`,别信 `skills_list` 的返回数。
 
+5. **`hermes_cli.skills_hub.do_list` 是 hermes 端的 source of truth**(光 `ls` 不算)。当用户说"我刚刚把 skill 备份/部署好了,看看 hermes 认不认"时,正确探针不是 `ls ~/.local/share/hermes/skills/<name>/`,而是**直接调 hermes 的 discover API**。它读 `_find_all_skills` + `HubLockFile` + `get_disabled_skill_names`,把 builtin/local/hub 三类合起来报,**还会**标出 disable 状态(`0 disabled` 才是部署成功):
+
+   ```python
+   import os
+   os.environ.setdefault('HERMES_HOME', '/home/<user>/.local/share/hermes')
+   from hermes_cli.skills_hub import do_list
+   from rich.console import Console
+   do_list(console=Console(force_terminal=False, no_color=True, width=200))
+   ```
+
+   关键参数:`force_terminal=False, no_color=True, width=200` 让 rich table 输出可被 AI 解析(默认会输出 ANSI 色码跟 box-drawing,在受限的 shell 渲染下乱)。
+
+   **CLI 调不通时的 fallback**:`hermes skills list` 走 desktop 进程(常报 `ModuleNotFoundError: hermes_cli` 那种 broken venv 问题),直接用 Python API 调正在跑的后台 daemon venv(在 `ps -ef | grep 'hermes dashboard'` 找 `klnyl...-hermes-agent-env/bin/python3.12`,那是当前活着的 venv)。
+
+6. **`blue stow` 不会覆盖已存在的目标 entry**。当用户的 `~/.local/share/hermes/skills/<name>/`(或 `~/.agents/skills/<name>/`)已经是个真目录(通常被另一个 `mutable/` 包部署过),新包 `blue stow <pkg>` **不会**替换这个目录——结果是顶层 entry 存在,但内部文件链(`SKILL.md` 是个指向仓库源的 symlink)**没建上**,agent 实际跑的时候读不到这个 skill。**症状**:`ls ~/.local/share/hermes/skills/<name>/SKILL.md` 是真文件但内容为空,或干脆 entry 是空目录。**修法**(任选):
+   - `blue stow --adopt <pkg>` —— 收养目标现状,把当前内容挪进包源(适合"想保留 ~ 下现状"场景)
+   - `blue stow --delete <pkg> && blue stow <pkg>` —— 干净重来(先把 ~ 下的 entry 删掉,stow 再建)
+   - 跨包冲突场景(两个 `mutable/` 包都往 `~/.agents/skills/<x>/` 写):先 `blue stow --delete` 那个不该拥有此 entry 的包,只让一个包拥有该 path
+
+   验证 deploy 真的生效的方式见 §1.5 —— `do_list` 是 source of truth,`0 disabled` 是最低门槛。
+
 ## 2. 标准精简协议(7 步)
 
 ### Step 1: 拍板前必须交叉验证
+
 **最容易翻车的一步**。先别动手,先把决策交叉验证清楚:
+
 - `KEEP` 集合与磁盘上真实存在的 skill 取**交集**(哪些"想保留"磁盘上根本不存在 → 不操作,只记录)
 - `existing - KEEP` 得到**真正的待删清单**(不要直接按 `skills_list` 减 `KEEP`,会有 ~25 个伪差)
 - **同一类目打包问**(智能家居/ML/社交/...),别一个个问 → 问 4-5 轮拍板所有类别。
 - 拍板后用 `KEEP_NAMES` Python 集合 + `dry-run` 输出确认无误再 `--apply`。
 
 ### Step 2: 全局加写权限
+
 ```bash
 chmod -R u+w ~/.local/share/hermes/skills/
 ```
+
 不加这一句,所有 bundled skill 目录会 `PermissionError`(脚本里要捕获 `os.access(..., os.W_OK)` 跳过,记录到 skipped 列表)。
 
 ### Step 3: 用 trash,不用 rm
+
 **XDG trash 范式**(用户偏好 + 可恢复):
+
 ```python
 import shutil, datetime, pathlib
 trash_files = pathlib.Path.home() / ".local/share/Trash/files"
@@ -50,27 +77,34 @@ info.write_text(
 )
 shutil.move(str(src), str(dest))
 ```
+
 **禁止**:`os.remove`、`shutil.rmtree`、`rm -rf`(用户明确反对)。
 
 ### Step 4: 补刀嵌套目录
+
 bundled skill 目录结构是 `mlops/{evaluation,inference,models}/<name>/`,`glob("*/<name>")` 抓不到。要么:
+
 - `Path.rglob("SKILL.md")` 拿真实 `name`(路径倒数第二段)
 - 或者显式列嵌套白名单
 
 ### Step 5: 恢复路径
+
 ```bash
 # 从 trash 还原某个 skill
 mv ~/.local/share/Trash/files/<ts>-<name> \
    ~/.local/share/hermes/skills/<category>/
 ```
+
 注意 `~/.local/share/hermes/` 下的 Trash(`/home/brokenshine/.local/share/hermes/Trash/`)跟 `~/.local/share/Trash/` 是**两个不同位置**——trash 脚本里要用 `<skills_root>.parent / "Trash/files"`,别用 `~/.local/share/Trash/`。清理时优先用 `<skills_root>.parent/Trash`(就在 skill 目录隔壁,语义最近);软链接(symlink)删除时也要写 `.trashinfo` 记录 `LinkTarget=...`,不然恢复时只看到空名。
 
 ### Step 6: 验证 + 报告
+
 - 重新跑 `find ~/.local/share/hermes/skills/ -name SKILL.md | wc -l` 确认最终数
 - 输出 `trash 移动 N 个 / 跳过 K 个 / 失败 M 个` 三栏 + 完整路径
 - 列"保留清单中磁盘上不存在的"(N 个) — 让用户知道为什么这些没动
 
 ### Step 7: 提醒"重建可能恢复"
+
 bundled skill 来自 Hermes 安装包,下次 `blue rebuild` / Hermes self-update / `skills_list` 触发 lazy load 时可能从 upstream 重新拉回。**持久精简要在源头改**(`source/nix/configuration/programs/hermes.nix` 装 `minimal` 而不是 `full`,或者删 `~/Projects/Agent/hermes-agent/skills/<name>/SKILL.md`)。如果用户没要求持久化,只做 trash 就够了。
 
 ## 3. 反模式(本会话犯过的错)

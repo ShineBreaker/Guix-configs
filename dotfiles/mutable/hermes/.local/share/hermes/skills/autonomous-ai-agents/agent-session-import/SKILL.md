@@ -1,7 +1,7 @@
 ---
 name: agent-session-import
 description: "Import conversation history from a third-party coding-agent CLI/TUI (pi, Claude Code, Codex, OpenCode, Aider, zcode, …) into Hermes's local session store so the conversations appear in `hermes sessions list` and can be resumed with `hermes --resume <id>`. Triggers: 'import pi/zcode sessions', '把 claude code / zcode 对话导入 hermes', 'migrate my chat history', '把 .codex/sessions 灌进 hermes', '恢复被删的 dotfiles'. Also handles recap work when hermes's `session_search` is empty but another agent left local state behind. **Before writing any importer against an agent's data dir, run `find ~ -name '*.db' -o -name '*.sqlite*' 2>/dev/null | grep -i <agent>` first — many agents (zcode, pi context-mode) keep the real session tree in a SQLite DB even when an obvious `*.jsonl` directory exists nearby.** For the related but narrower task of generating a schema reconnaissance report without writing the importer, see `agent-history-importer`."
-version: 1.3.0
+version: 1.4.0
 license: MIT
 metadata:
   hermes:
@@ -472,6 +472,12 @@ you'll hit them too:
   derived, not the source" trap, millisecond `time_created`,
   OpenCode-style part tree, subagent filter, turn-coalescing
   across `step-start`/`step-finish` part borders.
+- `references/hermes-state-db-pitfalls.md` — hermes `state.db` 写入陷阱(实战汇总,
+  2026-07 直接 INSERT 入库场景):`sessions.title` UNIQUE 静默吞掉撞名、`messages.id`
+  是 INTEGER AUTOINCREMENT 不是 TEXT、`tool_calls` 是 JSON LIST 不是 dict、`PRAGMA
+  journal_mode=DELETE` 切回会抛 `database is locked`(无害)、FTS5 trigger
+  自动维护但 `-`/`.` 分词不友好、`$HOME` 被沙箱重定向 → `mkdir` 报 ENOTDIR。
+  **如果你**绕开 hermes 官方 `SessionDB` API **直接写 SQL**,这份文档必读。
 - `skill-authoring` — why this skill is structured the way it
   is. The two structural principles (self-contained +
   progressive disclosure) are documented there, with this skill

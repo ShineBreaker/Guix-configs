@@ -161,6 +161,7 @@ FROM message m1, message m2 WHERE ...相邻两条...
 6. **样本要包含真实数据** —— 别只查空字段,找一个有 reasoning / tool use / file upload 的 session 才能验证完所有 part.type
 7. **不要输出"完整文件内容"** —— 只输出代表样本 + 字段映射表,下游可自己看 DB
 8. **如果表名带时间后缀**(sessions_v2 / messages_v3),说明 schema 在演进 —— 报告里注明版本号
+9. **如果用户用 hermes —— 先看是否已有官方 importer 再动手** —— 写 importer 之前先搜 `~/.local/share/hermes/skills/*/scripts/`、跑 `session_search query:"<source> importer"`、看 `holographic memory` 是否存着 `category='project'` 的旧 importer 线索。可能存在沉淀好的 `import-<tool>-to-hermes.py` 走 hermes 内部 `SessionDB` API(比直接 INSERT SQL 更稳),重写是反自包含。
 
 ## 参考资料
 
@@ -172,3 +173,29 @@ FROM message m1, message m2 WHERE ...相邻两条...
 - **不要在 message 数量为 0 的 session 上做 sanity check** —— 验证不了任何 part type
 - **不要假设 part 表一定有 time 字段** —— 一些工具(part 是 message 的 children)只存 message 级别的时间
 - **不要漏查子会话** —— Agent/Task 工具调用的 subagent 在 DB 里通常是独立 row + parent_id,而不是嵌入主消息流的一部分
+
+### 来自实战 (2026-07 zcode → hermes 迁移):写 hermes state.db 时的隐藏陷阱
+
+- **`sessions.title` 有 UNIQUE 约束** → `INSERT OR IGNORE` 会**静默吞掉撞名行**,messages 都写了但 session 看不到,表现为 "orphan messages"。**修复**:INSERT 前 `SELECT 1 FROM sessions WHERE title=?` 查重,撞了加 hash 后缀;或干脆用 hermes 官方 `SessionDB` API(`create_session()` 自己处理)。`PRAGMA foreign_keys=0` 是 hermes 默认,**FK 帮不了你挡 orphan**。
+- **`messages.id` 是 INTEGER AUTOINCREMENT,不是 TEXT** → 用 hash 字符串当 id 会失败。三种修法:(a) 不传 id 让 SQLite 自增(最稳);(b) 用 `INSERT OR REPLACE` + 自增 ROWID;(c) 先 SELECT MAX 然后...❌(并发不安全)。
+- **`messages.tool_calls` 是 TEXT 列,但存的是 OpenAI 风格 JSON list(`[{"id":..., "call_id":..., "type":"function",...}]`),不是 dict**。`json.dumps({...})` 语义错,GUI 看到的不是正常 tool call。
+- **`PRAGMA journal_mode=WAL` 是 hermes 默认**,导入期间 GUI hermes 持锁时,`PRAGMA journal_mode=DELETE` 会报 `database is locked` —— 数据 commit 没问题,只是日志模式切不回来。**安全**:try/except 吞掉这个错。
+- **复用官方 importer 时核对 id 约定** —— `import-zcode-to-hermes.py` 用 `sess_<原 zcode id>`(保留),不是 hash 缩写。如果你的临时 importer 用 hash 缩写,两边在 hermes DB 里并存同样内容但 id 风格不同,FTS 召回没问题但 GUI 列表会重复显示。
+- **`messages.content/tool_calls` 自动喂 FTS5** → 长 tool output 会膨胀 FTS 索引。官方 importer 在 tool output >50KB 时截断,别忘了。
+- **`grep_messages MATCH` 对 `-` / `.` 分词不友好** —— 这是 FTS5 unicode61 默认 normalizer 的行为。GLM-5.2 / org-src-fontify 这种 token 默认召不回,但真名(distrobox/fontify/host-spawn)召回良好。**不要因此怀疑 importer 失败**。
+
+### 来自沙箱实战 (2026-07)
+
+- **`$HOME` 被 sandbox/hook 重定向** —— 在嵌套 shell 或 hook 安装过的终端里,`$HOME` 可能被改成某个 SKILL.md 的绝对路径,导致 `~`/`$HOME`/`Path.home()` 都错(典型症状:`mkdir` 报 `ENOTDIR: not a directory, mkdir '/foo/bar/SKILL.md/.zcode/v2/logs'`)。**永远用绝对路径**(`/home/<user>/.zcode/...`)做探测命令;遇到这错先 `printenv HOME` 看真值。
+
+## 写 hermes rows 的额外检查清单 (新增)
+
+按用户偏好"先 1 个样本验证再放量",在第一次 INSERT 前必须:
+
+1. **Hot backup**:`sqlite3 <db> ".backup <db>.pre-<task>-<ts>.bak"`(WAL-safe,比 cp 文件可靠)。完成后用 `trash` 工具(按用户偏好)而不是 rm。
+2. **查 NOT NULL 列**:`PRAGMA table_info(<table>)` 而非 `.schema`(后者末尾噪声挡关键字段)。
+3. **查 UNIQUE 约束**:`SELECT name, sql FROM sqlite_master WHERE type='index' AND sql LIKE '%UNIQUE%'` —— **INSERT OR IGNORE 之前必须知道哪些列会触发 silent fail**。
+4. **临时关 FK(已知 hermes 默认 off,但写完后切回去)**:`PRAGMA foreign_keys=OFF`。
+5. **挑 1 个 session 端到端验证**:不批量灌。看 hermes `messages` row 数对得上 zcode source 真实数(zcode:part 数 / hermes:row 数),再放量。
+6. **FTS5 抽样召回**:`SELECT ... FROM messages_fts WHERE messages_fts MATCH '<keyword>'` 验 trigger 自动维护。
+7. **跑 idempotent probe**:再跑一次导入,assert row count unchanged。我惨中过一次:首次写完 row count 比真实多 ~2x,二次 idempotent 跳过所以**重导前必须 DELETE + 重导**,确认一次写一次。
