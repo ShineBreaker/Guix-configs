@@ -7,9 +7,7 @@
     ## Tools
     broot
     gh
-    localsend
     python314Packages.jieba
-    yaak
 
     ## Android
     android-tools
@@ -35,20 +33,9 @@
     typescript-language-server
     vscode-langservers-extracted
 
-    ## Chat
-    discord
-    feishu
-    # wechat
-    wemeet
-
     # AI Agent
     claude-code
     codex
     codex-acp
-
-    ## Customized Packages
-    (qq.override {
-      commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
-    })
   ];
 }

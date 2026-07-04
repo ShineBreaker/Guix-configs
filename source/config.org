@@ -1360,7 +1360,6 @@ end
                              "emacs-consult-flycheck"
 
                              ;; 界面与外观
-                             "emacs-centaur-tabs"
                              "emacs-dashboard"
                              "emacs-ef-themes"
                              "emacs-kind-icon"
@@ -1381,8 +1380,6 @@ end
                              "emacs-helpful"
                              "emacs-indent-bars"
                              "emacs-multiple-cursors"
-                             "emacs-origami"
-                             "emacs-origami-ts"
                              "emacs-prescient"
                              "emacs-symbol-overlay"
                              "emacs-wgrep"
