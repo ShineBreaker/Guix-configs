@@ -24,7 +24,6 @@ source/
 │   │   │   └── packages.nix
 │   │   └── programs/
 │   │       ├── 00-main.nix
-│   │       ├── code.nix
 │   │       ├── hermes.nix
 │   │       └── nix.nix
 │   ├── flake.lock
