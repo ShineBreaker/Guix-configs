@@ -30,7 +30,7 @@ dotfiles/
 │       │   └── waybar/
 │       └── .local/
 │           └── share/
-├── enable/
+├── immutable/
 │   ├── agents/
 │   │   ├── .config/
 │   │   │   ├── agents/
@@ -89,9 +89,39 @@ dotfiles/
 │       │   ├── bin/
 │       │   └── share/
 │       └── .nix-channels
+├── mutable/
+│   ├── appimage-run/
+│   │   ├── .local/
+│   │   │   └── bin/
+│   │   ├── .stow-local-ignore
+│   │   └── README.md
+│   ├── emacs/
+│   │   ├── .config/
+│   │   │   ├── agents/
+│   │   │   ├── chemacs/
+│   │   │   └── emacs/
+│   │   ├── .local/
+│   │   │   ├── .local/
+│   │   │   └── bin/
+│   │   └── .stow-local-ignore
+│   ├── hermes/
+│   │   └── .local/
+│   │       └── share/
+│   ├── pi/
+│   │   ├── .config/
+│   │   │   └── pi/
+│   │   ├── .local/
+│   │   │   ├── bin/
+│   │   │   └── share/
+│   │   └── .stow-local-ignore
+│   ├── secrets/
+│   │   ├── .local/
+│   │   │   └── share/
+│   │   └── .stow-overlay/
+│   ├── skills/
+│   └── .stowrc
 └── secrets/
     └── .keys/
-        └── age.pub
 ```
 
 <!-- /structor -->
@@ -99,7 +129,7 @@ dotfiles/
 ## 部署机制
 
 - 入口：Guix Home `home-dotfiles-service-type`，在 `source/config.org` 的 `dotfile-services` 块声明
-- `directories`：`'("../dotfiles/enable")`
+- `directories`：`'("../dotfiles/immutable")`
 - `layout`：`'stow`（自动以目录名为前缀建立软链接）
 - `packages`：`agents desktop noctalia-suite system terminal utilities`
 - `excluded`：被排除的文件（`.git`、`.gitignore`、`AGENTS.md`、`README.md`、`__pycache__`、`.venv` 等）
@@ -107,11 +137,11 @@ dotfiles/
 
 ## 核心子系统
 
-### Emacs（`stow/emacs/`）
+### Emacs（`dotfiles/mutable/emacs/`）
 
-- Emacs 配置在 `stow/emacs/`，通过 GNU Stow 直链部署，改源即生效
+- Emacs 配置在 `dotfiles/mutable/emacs/`，通过 GNU Stow 直链部署，改源即生效
 - Guix 提供 Emacs Lisp 包依赖；新增包必须同步到 `source/config.org` home-packages
-- **不要直接编辑子模块内容**（详见 `stow/emacs/.config/emacs/AGENTS.md`）
+- **不要直接编辑子模块内容**（详见 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`）
 
 ### oh-my-pi + Crush + loopctl（`enable/agents/`）
 
@@ -120,7 +150,7 @@ dotfiles/
 - **loopctl**：`.config/loopctl/`（adapters 含 claude-code/codex/crush/omp/opencode/pi）
 - **共享基础设施**：`.config/agents/`（context、skills）
 - **启动脚本**：`.local/bin/`（kb、loopctl 等）
-- 详见 `dotfiles/enable/agents/AGENTS.md`
+- 详见 `dotfiles/immutable/agents/AGENTS.md`
 
 ### Rime 输入法（`enable/utilities/.local/share/fcitx5/rime/`）
 

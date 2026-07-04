@@ -82,7 +82,7 @@ agents/
 ## 部署模型
 
 ```
-dotfiles/enable/agents/      → Guix Home (stow layout) → 实际路径
+dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 ├── .config/
 │   ├── crush/                → ~/.config/crush/      # Crush 配置 + hooks + bin
 │   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills）

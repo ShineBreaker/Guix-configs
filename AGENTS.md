@@ -30,7 +30,7 @@ Guix-configs///
 │   │   └── waybar-suite/
 │   │       ├── .config/
 │   │       └── .local/
-│   ├── enable/
+│   ├── immutable/
 │   │   ├── agents/
 │   │   │   ├── .config/
 │   │   │   ├── .local/
@@ -50,9 +50,28 @@ Guix-configs///
 │   │       ├── .config/
 │   │       ├── .local/
 │   │       └── .nix-channels
+│   ├── mutable/
+│   │   ├── appimage-run/
+│   │   │   ├── .local/
+│   │   │   ├── .stow-local-ignore
+│   │   │   └── README.md
+│   │   ├── emacs/
+│   │   │   ├── .config/
+│   │   │   ├── .local/
+│   │   │   └── .stow-local-ignore
+│   │   ├── hermes/
+│   │   │   └── .local/
+│   │   ├── pi/
+│   │   │   ├── .config/
+│   │   │   ├── .local/
+│   │   │   └── .stow-local-ignore
+│   │   ├── secrets/
+│   │   │   ├── .local/
+│   │   │   └── .stow-overlay/
+│   │   ├── skills/
+│   │   └── .stowrc
 │   └── secrets/
 │       └── .keys/
-│           └── age.pub
 ├── screenshots/
 │   ├── browse.png
 │   ├── daily.png
@@ -76,39 +95,6 @@ Guix-configs///
 │   ├── config.org
 │   ├── information.scm
 │   └── manifest.scm
-├── stow/
-│   ├── appimage-run/
-│   │   ├── .local/
-│   │   │   └── bin/
-│   │   ├── .stow-local-ignore
-│   │   └── README.md
-│   ├── emacs/
-│   │   ├── .config/
-│   │   │   ├── agents/
-│   │   │   ├── chemacs/
-│   │   │   └── emacs/
-│   │   ├── .local/
-│   │   │   ├── .local/
-│   │   │   └── bin/
-│   │   └── .stow-local-ignore
-│   ├── hermes/
-│   │   └── .local/
-│   │       └── share/
-│   ├── pi/
-│   │   ├── .config/
-│   │   │   └── pi/
-│   │   ├── .local/
-│   │   │   ├── bin/
-│   │   │   └── share/
-│   │   └── .stow-local-ignore
-│   ├── secrets/
-│   │   ├── .keys/
-│   │   │   └── age
-│   │   ├── .local/
-│   │   │   └── share/
-│   │   └── .stow-overlay/
-│   ├── skills/
-│   └── .stowrc
 ├── tools/
 │   ├── bootstrap.sh
 │   ├── fxxk-link.sh
@@ -143,7 +129,7 @@ tmp/config.scm
 
 ## 工作优先级
 
-1. 先看当前目录是否存在更近的 `AGENTS.md`（`source/`、`dotfiles/enable/<app>/`、emacs 子模块内）
+1. 先看当前目录是否存在更近的 `AGENTS.md`（`source/`、`dotfiles/immutable/<app>/`、emacs 子模块内）
 2. 若 README / 文档与实际文件不一致，以仓库实际结构和源码为准
 3. **禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置。** 所有配置必须改源文件后通过 `blue home` 生效
 4. **新机装机引导**：`tools/bootstrap.sh` 是入口；先读 `source/manifest.scm` 了解依赖图。
@@ -156,15 +142,15 @@ tmp/config.scm
 | 全局变量             | `source/information.scm`                     | —                                         |
 | 频道定义             | `source/channel.scm`                         | `source/channel.lock` 锁定版本            |
 | 静态模板             | `source/files/`                              | `source/AGENTS.md` 中 files/ 模板系统一节 |
-| 各类 dotfiles        | `dotfiles/enable/<app>/`                     | 各子目录 AGENTS.md                        |
+| 各类 dotfiles        | `dotfiles/immutable/<app>/`                  | 各子目录 AGENTS.md                        |
 | 新机装机（官方 ISO） | `source/manifest.scm` + `tools/bootstrap.sh` | —                                         |
 
 <critical>
 **路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
-2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `blue home`
-3. **Emacs 修改**：先读 `stow/emacs/.config/emacs/general-config/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages。**注意**：`stow/emacs/.config/emacs/` 顶层是 chemacs2 引导层（init/early-init/chemacs.el），旧配置 submodule 在 `general-config/` 子目录，新 org literate 配置在 `literal-config/`
-4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
+2. 修改应用配置时优先改 `dotfiles/immutable/<app>/` 内文件，再 `blue home`
+3. **Emacs 修改**：先读 `dotfiles/mutable/emacs/.config/emacs/general-config/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages。**注意**：`dotfiles/mutable/emacs/.config/emacs/` 顶层是 chemacs2 引导层（init/early-init/chemacs.el），旧配置 submodule 在 `general-config/` 子目录，新 org literate 配置在 `literal-config/`
+4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/immutable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
 6. 优先使用 `blue help` 内可以使用的相关命令
 </critical>
@@ -189,12 +175,12 @@ blue init
 
 ## dotfiles 部署模型
 
-所有 `dotfiles/enable/<app>/` 子目录统一通过 Guix Home 的 `home-dotfiles-service-type` 部署，定义在 `source/config.org` 的 `dotfile-services` 代码块：
+所有 `dotfiles/immutable/<app>/` 子目录统一通过 Guix Home 的 `home-dotfiles-service-type` 部署，定义在 `source/config.org` 的 `dotfile-services` 代码块：
 
 ```scheme
 (service home-dotfiles-service-type
   (home-dotfiles-configuration
-   (directories '("../dotfiles/enable"))
+   (directories '("../dotfiles/immutable"))
    (layout 'stow)                         ; Stow 软链接语义
    (packages '("agents" "desktop"
                  "noctalia-suite" "system" "terminal" "utilities"))
@@ -206,19 +192,19 @@ blue init
 - 不在 `excluded` 列表内的新增文件会在下次 `blue home` 后自动出现在 `~`
 - `disable/` 内目录不再部署，仅保留参考
 
-子模块位于 `enable/` 和 `stow/` 下，路径如下，**不要直接编辑子模块内容**：
+子模块位于 `dotfiles/immutable/` 和 `dotfiles/mutable/` 下，路径如下，**不要直接编辑子模块内容**：
 
-| 路径                                                 | 上游                                |
-| ---------------------------------------------------- | ----------------------------------- |
-| `stow/emacs/.config/emacs/general-config`            | `codeberg.org/BrokenShine/.emacs.d` |
-| `dotfiles/enable/utilities/.local/share/fcitx5/rime` | `github.com/iDvel/rime-ice`         |
-| `stow/appimage-run`                                  | `codeberg.org/BrokenShine/appimage-run-guix` |
-| `stow/pi/.config/pi/extensions/atelier`              | `github.com/ShineBreaker/pi-atelier` |
-| `stow/pi/.config/pi/extensions/pi-ui`               | `github.com/ShineBreaker/pi-ui`     |
+| 路径                                                    | 上游                                |
+| ------------------------------------------------------- | ----------------------------------- |
+| `dotfiles/mutable/emacs/.config/emacs/general-config`   | `codeberg.org/BrokenShine/.emacs.d` |
+| `dotfiles/immutable/utilities/.local/share/fcitx5/rime` | `github.com/iDvel/rime-ice`         |
+| `dotfiles/mutable/appimage-run`                         | `codeberg.org/BrokenShine/appimage-run-guix` |
+| `dotfiles/mutable/pi/.config/pi/extensions/atelier`     | `github.com/ShineBreaker/pi-atelier` |
+| `dotfiles/mutable/pi/.config/pi/extensions/pi-ui`       | `github.com/ShineBreaker/pi-ui`     |
 
-## stow/ — GNU Stow 直链部署
+## dotfiles/mutable/ — GNU Stow 直链部署
 
-与 `dotfiles/enable/`（Guix Home stow）互补：`stow/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置（emacs、pi、hermes）。
+与 `dotfiles/immutable/`（Guix Home stow）互补：`dotfiles/mutable/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置（emacs、pi、hermes）。
 
 ```bash
 blue stow hermes                 # 部署（建软链接）
@@ -227,11 +213,11 @@ blue stow --delete hermes        # 删除软链接
 blue stow-all --restow           # 重建所有包
 ```
 
-详见 `stow/AGENTS.md`。
+详见 `dotfiles/mutable/AGENTS.md`。
 
 ## Emacs 多 Profile 架构（chemacs2）
 
-`stow/emacs/.config/emacs/` 顶层是 **chemacs2 引导层**（`init.el` / `early-init.el` / `chemacs.el`，从 [plexus/chemacs2](https://github.com/plexus/chemacs2) 复制，GPL-3.0），占据 Emacs 启动入口。它在启动时读 `~/.config/chemacs/profiles.el` 选 profile，把 `user-emacs-directory` 指向对应配置树，再加载该树的 `init.el`。
+`dotfiles/mutable/emacs/.config/emacs/` 顶层是 **chemacs2 引导层**（`init.el` / `early-init.el` / `chemacs.el`，从 [plexus/chemacs2](https://github.com/plexus/chemacs2) 复制，GPL-3.0），占据 Emacs 启动入口。它在启动时读 `~/.config/chemacs/profiles.el` 选 profile，把 `user-emacs-directory` 指向对应配置树，再加载该树的 `init.el`。
 
 ```
 ~/.config/emacs/                      ← chemacs2 引导层（Emacs 真正入口）
@@ -251,9 +237,9 @@ blue stow-all --restow           # 重建所有包
 
 **常用操作**：
 - 试新配置（前台实例，独立于 daemon）：`emacs --with-profile literal`
-- 切默认到新配置（稳定后）：改 `stow/emacs/.config/chemacs/profile` 为 `literal` → `blue stow --restow emacs` → `herd restart emacs-daemon`
-- 改旧配置源：`stow/emacs/.config/emacs/general-config/`（submodule，改源即生效）
-- 改 profile 表：`stow/emacs/.config/chemacs/profiles.el`（改完 `blue stow --restow emacs`）
+- 切默认到新配置（稳定后）：改 `dotfiles/mutable/emacs/.config/chemacs/profile` 为 `literal` → `blue stow --restow emacs` → `herd restart emacs-daemon`
+- 改旧配置源：`dotfiles/mutable/emacs/.config/emacs/general-config/`（submodule，改源即生效）
+- 改 profile 表：`dotfiles/mutable/emacs/.config/chemacs/profiles.el`（改完 `blue stow --restow emacs`）
 
 ## 目录结构图自动维护
 

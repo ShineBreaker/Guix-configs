@@ -10,11 +10,11 @@
 ;; 它读取 ~/.config/chemacs/profiles.el + ~/.config/chemacs/profile，
 ;; 选定 profile 后把 user-emacs-directory 指向对应配置树并加载其 init.el。
 ;;
-;; 当前 profile 布局（见 stow/emacs/.config/chemacs/profiles.el）：
+;; 当前 profile 布局（见 dotfiles/mutable/emacs/.config/chemacs/profiles.el）：
 ;;   general  -> ~/.config/emacs/general-config/  （旧 submodule 配置，默认）
 ;;   literal  -> ~/.config/emacs/literal-config/  （新 org literate 配置，待写）
 ;;
-;; 切换默认 profile：改 stow/emacs/.config/chemacs/profile -> blue stow --restow emacs
+;; 切换默认 profile：改 dotfiles/mutable/emacs/.config/chemacs/profile -> blue stow --restow emacs
 ;; 临时试某 profile：emacs --with-profile literal
 
 (require 'chemacs

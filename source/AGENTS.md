@@ -54,7 +54,7 @@ source/config.org → blue rebuild → tmp/config.scm → guix system reconfigur
 1. **模块导入**：`modules` 块
 2. **系统配置**：Bootloader、FileSystems、Kernel、Packages、Services、Users
 3. **用户配置**：Packages、Services、Environment、Font
-4. **dotfile-services**：`home-dotfiles-service-type`（`layout 'stow`）分发 `dotfiles/enable/<app>/`
+4. **dotfile-services**：`home-dotfiles-service-type`（`layout 'stow`）分发 `dotfiles/immutable/<app>/`
 
 ## Org Noweb 机制
 
@@ -100,7 +100,7 @@ source/files/
 ```
 
 - **路径注入语法**：`$$bin/foo$$` 替换为 Guix 包绝对路径（rosenthal 的 `computed-substitution-with-inputs`）
-- **不要**把无需路径注入的 dotfile 放进此目录；纯配置文件请放 `dotfiles/enable/<app>/`
+- **不要**把无需路径注入的 dotfile 放进此目录；纯配置文件请放 `dotfiles/immutable/<app>/`
 
 ## 频道管理
 

@@ -1,15 +1,15 @@
-# stow/ — GNU Stow 源目录
+# dotfiles/mutable/ — GNU Stow 源目录
 
-本目录管理**频繁变动且需要版本备份**的配置文件，与 `dotfiles/`（Guix Home stow，源只读）的部署模型互补：
+本目录管理**频繁变动且需要版本备份**的配置文件，与 `dotfiles/immutable/`（Guix Home stow，源只读）的部署模型互补：
 
-| 维度         | `dotfiles/enable/`                                       | `stow/`                                                   |
-| ------------ | -------------------------------------------------------- | --------------------------------------------------------- |
-| 部署机制     | Guix Home `home-dotfiles-service-type`（layout `'stow`） | GNU Stow（`stow --no-folding --dir=stow --target=$HOME`） |
-| 源-目标关系  | 软链接到 `/gnu/store` 只读副本                           | **单文件**软链接直接到 `stow/PKG/` 仓库源                 |
-| 目标目录形态 | 软链接到 store 只读副本                                  | **真实目录**（`--no-folding`，运行时可写入）              |
-| 改源后生效   | 必须 `blue home`                                         | **无需任何命令，直接生效**                                |
-| 适合场景     | 稳定的配置文件（niri、fish 等）                          | 频繁手改、需要 git 备份追踪（如 emacs、hermes）           |
-| 版本控制     | git 跟踪 + Guix store hash                               | git 跟踪（无中间层）                                      |
+| 维度         | `dotfiles/immutable/`                                    | `dotfiles/mutable/`                                                   |
+| ------------ | -------------------------------------------------------- | --------------------------------------------------------------------- |
+| 部署机制     | Guix Home `home-dotfiles-service-type`（layout `'stow`） | GNU Stow（`stow --no-folding --dir=dotfiles/mutable --target=$HOME`） |
+| 源-目标关系  | 软链接到 `/gnu/store` 只读副本                           | **单文件**软链接直接到 `dotfiles/mutable/PKG/` 仓库源                 |
+| 目标目录形态 | 软链接到 store 只读副本                                  | **真实目录**（`--no-folding`，运行时可写入）                          |
+| 改源后生效   | 必须 `blue home`                                         | **无需任何命令，直接生效**                                            |
+| 适合场景     | 稳定的配置文件（niri、fish 等）                          | 频繁手改、需要 git 备份追踪（如 emacs、hermes）                       |
+| 版本控制     | git 跟踪 + Guix store hash                               | git 跟踪（无中间层）                                                  |
 
 ## 部署模型：no-folding + 三层忽略
 
@@ -24,7 +24,7 @@
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
 ```
-stow/
+mutable/
 ├── appimage-run/
 │   ├── .local/
 │   │   └── bin/
@@ -82,10 +82,9 @@ stow/
 │   │       └── pi/
 │   └── .stow-local-ignore
 ├── secrets/
-│   ├── .keys/
-│   │   └── age
 │   ├── .local/
 │   │   └── share/
+│   │       ├── keys/
 │   │       └── secrets-decrypted/
 │   └── .stow-overlay/
 ├── skills/
@@ -106,18 +105,18 @@ stow/
 
 ### 修改已纳管的配置
 
-直接编辑 `stow/hermes/.local/share/hermes/<file>`，保存即生效（hermes 进程会重新读取）。
+直接编辑 `dotfiles/mutable/hermes/.local/share/hermes/<file>`，保存即生效（hermes 进程会重新读取）。
 
 ```bash
-$EDITOR stow/hermes/.local/share/hermes/SOUL.md
-git add stow/ && git commit -S -m "..."
+$EDITOR dotfiles/mutable/hermes/.local/share/hermes/SOUL.md
+git add dotfiles/mutable/ && git commit -S -m "..."
 ```
 
 ### 添加新文件到已纳管的包
 
 ```bash
 # 1. 把文件复制到源目录
-cp ~/.local/share/hermes/new-file stow/hermes/.local/share/hermes/new-file
+cp ~/.local/share/hermes/new-file dotfiles/mutable/hermes/.local/share/hermes/new-file
 
 # 2. 让 stow 建链（替换原文件为软链接）
 blue stow --restow hermes
@@ -126,36 +125,36 @@ blue stow --restow hermes
 ls -la ~/.local/share/hermes/new-file
 
 # 4. git commit
-git add stow/ && git commit -S -m "..."
+git add dotfiles/mutable/ && git commit -S -m "..."
 ```
 
 ### 添加新包
 
 ```bash
 # 1. 创建包目录结构
-mkdir -p stow/<new-pkg>/.config/<app>
+mkdir -p dotfiles/mutable/<new-pkg>/.config/<app>
 
 # 2. 复制 ~ 下的现有文件到源
-cp ~/.config/<app>/<file> stow/<new-pkg>/.config/<app>/<file>
+cp ~/.config/<app>/<file> dotfiles/mutable/<new-pkg>/.config/<app>/<file>
 
 # 3. 删 ~ 下的原文件（让 stow 建链）
 mv ~/.config/<app>/<file> /tmp/backup-<file>
 
 # 4. （按需）添加每包忽略清单：源里若含编译产物/.git/运行时目录，
-#    写 stow/<new-pkg>/.stow-local-ignore（Perl 正则逐行，# 注释允许），
-#    模板见 stow/emacs/.stow-local-ignore。纯配置文件包（如 hermes）可跳过。
+#    写 dotfiles/mutable/<new-pkg>/.stow-local-ignore（Perl 正则逐行，# 注释允许），
+#    模板见 dotfiles/mutable/emacs/.stow-local-ignore。纯配置文件包（如 hermes）可跳过。
 
 # 5. 部署（--no-folding 自动生效，目标为真实目录）
 blue stow <new-pkg>
 
 # 6. 验证 + commit
 ls -la ~/.config/<app>/<file>
-git add stow/<new-pkg>/ && git commit -S -m "..."
+git add dotfiles/mutable/<new-pkg>/ && git commit -S -m "..."
 ```
 
 ### 批量操作所有包（stow-all）
 
-枚举 `stow/` 下所有直接子目录为包，逐个执行（包不能嵌套；`.git`/`.agents` 等元目录自动跳过）。逐一执行、遇错即停。
+枚举 `dotfiles/mutable/` 下所有直接子目录为包，逐个执行（包不能嵌套；`.git`/`.agents` 等元目录自动跳过）。逐一执行、遇错即停。
 
 ```bash
 blue stow-all              # 部署所有包
@@ -184,15 +183,15 @@ blue stow-all --restow
 
 ## 与 Guix stow 的边界
 
-- **不要**把 `stow/` 下的任何文件加入 `dotfiles/enable/`（会产生双重部署冲突）
-- `home-dotfiles-service-type` 的 `directories` 默认为 `("../dotfiles/enable")`，不涉及 `stow/`
-- `~/.local/share/hermes/` 下其他文件（logs/、state.db、sessions/ 等运行时产物）**不属于** `stow/hermes/` 范围，stow 不会动它们
+- **不要**把 `dotfiles/mutable/` 下的任何文件加入 `dotfiles/immutable/`（会产生双重部署冲突）
+- `home-dotfiles-service-type` 的 `directories` 默认为 `("../dotfiles/immutable")`，不涉及 `dotfiles/mutable/`
+- `~/.local/share/hermes/` 下其他文件（logs/、state.db、sessions/ 等运行时产物）**不属于** `dotfiles/mutable/hermes/` 范围，stow 不会动它们
 
 ## 备份与恢复
 
-文件在 `stow/` 下由 git 跟踪，无需额外备份。误删后用 git 恢复：
+文件在 `dotfiles/mutable/` 下由 git 跟踪，无需额外备份。误删后用 git 恢复：
 
 ```bash
-git checkout HEAD -- stow/hermes/
+git checkout HEAD -- dotfiles/mutable/hermes/
 blue stow --restow hermes
 ```

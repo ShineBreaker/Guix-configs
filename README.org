@@ -112,8 +112,8 @@ guix shell blue -- blue init
 | =blue secret-scan=        | 扫描文本配置中疑似泄漏的密钥                     | 校验 |
 | =blue update=             | 更新 =source/channel.lock= 并签名提交              | 频道 |
 | =blue pull=               | =guix pull --allow-downgrades=                     | 频道 |
-| =blue stow [MODE] PKG...= | GNU Stow 部署 stow/ 下的包                       | 直链 |
-| =blue stow-all [MODE]=    | 批量对 stow/ 下所有包执行 stow 操作              | 直链 |
+| =blue stow [MODE] PKG...= | GNU Stow 部署 dotfiles/mutable/ 下的包           | 直链 |
+| =blue stow-all [MODE]=    | 批量对 dotfiles/mutable/ 下所有包执行 stow 操作  | 直链 |
 | =blue clean-generations=  | 删除旧的 Guix System / Home 世代                 | 维护 |
 | =blue clean-artifacts=    | 移除仓库编译产物                                 | 维护 |
 | =blue gc=                 | 执行 Guix GC 并清理旧 Guix EFI 文件              | 维护 |

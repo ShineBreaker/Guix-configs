@@ -15,16 +15,22 @@
 
 ```
 secrets/
-└── .keys/
-    └── age.pub
+├── .local/
+│   └── share/
+│       ├── keys/
+│       │   ├── .gitignore
+│       │   ├── age
+│       │   └── age.pub
+│       └── secrets-decrypted/
+└── .stow-overlay/
 ```
 
 <!-- /structor -->
 
 ## 硬约束
 
-1. **私钥绝不进 git**。私钥只能位于 `stow/secrets/.keys/age`(由 GNU Stow 软链
-   到 `~/.keys/age`)。`stow/secrets/.keys/` 在根 `.gitignore` 命中 `.keys/` 通配
+1. **私钥绝不进 git**。私钥只能位于 `dotfiles/mutable/secrets/.keys/age`(由 GNU Stow 软链
+   到 `~/.keys/age`)。`dotfiles/mutable/secrets/.keys/` 在根 `.gitignore` 命中 `.keys/` 通配
    规则被排除,**不要**修改这条规则。
 2. **公钥必须入库**。`dotfiles/secrets/.keys/age.pub` 走 `!.keys/*.pub` 放行规
    则进入 git,这是跨机部署密文的唯一信任锚。如果公钥丢失或泄漏,**必须立即
@@ -80,8 +86,8 @@ tools/secrets list
 tools/secrets recipients
 
 # 确认私钥路径与软链都正确
-ls -la stow/secrets/.keys/age ~/.keys/age
-stat -c '%a' stow/secrets/.keys/age     # 应为 600
+ls -la dotfiles/mutable/secrets/.keys/age ~/.keys/age
+stat -c '%a' dotfiles/mutable/secrets/.keys/age     # 应为 600
 # 预演加密(不落盘):打印 [dry-run] 计划,不写 .age
 ./tools/secrets --dry-run encrypt example < /tmp/example.toml
 ```
@@ -93,7 +99,7 @@ stat -c '%a' stow/secrets/.keys/age     # 应为 600
    修复后用 `bash -n tools/secrets` + 真跑每个子命令验证(只查语法不查变量绑
    定,必须真跑)。
 2. **「`init` 之后 `dotfiles/secrets/.keys/age.pub` 是空的」** —— 脚本靠
-   `awk '/^# public key:/ {print $NF}' stow/secrets/.keys/age > ...` 从私钥头
+   `awk '/^# public key:/ {print $NF}' dotfiles/mutable/secrets/.keys/age > ...` 从私钥头
    注释行提取公钥,如果私钥不是用本脚本的 `init` 生成(如手动 `age-keygen` 复
    制过来),注释行格式可能不同。**不要**手动修改脚本绕过,正确做法是重新跑
    `tools/secrets init`(覆盖前先 trash 现有私钥)。
@@ -105,14 +111,14 @@ stat -c '%a' stow/secrets/.keys/age     # 应为 600
    整体清理;emacs 的 backup `~` / autosave `#` 副产物也落在隔离目录内,随退出
    一起删除。**实现坑**:`set -u` 下 trap 引用 local 变量(此处 `$tmpdir`)须用
    `${tmpdir:-}` 守卫,否则未赋值就触发未绑定变量错误。
-5. **`re-encrypt` 轮换时旧私钥丢失** —— 密钥轮换前必须先 `cp stow/secrets/.keys/age
+5. **`re-encrypt` 轮换时旧私钥丢失** —— 密钥轮换前必须先 `cp dotfiles/mutable/secrets/.keys/age
    /tmp/age.old` 备份旧私钥,确认 `re-encrypt --with /tmp/age.old` 成功后再
    `trash /tmp/age.old`。`trash` 旧私钥后 `init` 生成新密钥对,期间旧密文只能
    用备份的旧私钥解密;若先销毁旧私钥,旧 `.age` 永久丢失。
 
 ## 与 dotfile-services 的边界
 
-| 维度         | `dotfiles/secrets/`              | `dotfiles/enable/<app>/`           |
+| 维度         | `dotfiles/secrets/`              | `dotfiles/immutable/<app>/`        |
 | ------------ | -------------------------------- | ---------------------------------- |
 | 部署机制     | **不部署**(仅 stow 软链 + git)   | Guix Home `home-dotfiles-service-type` |
 | 进 `~`       | 公钥 + 密文从不直接进 `~`        | 软链到 `/gnu/store/<hash>`         |
@@ -133,5 +139,5 @@ blue stow secrets                  # 建私钥软链 ~/.keys/age
 # 之后所有 tools/secrets decrypt 都能在本机运行
 ```
 
-私钥需要**手动迁移**:从旧机的 `stow/secrets/.keys/age` 用安全信道(物理介质 /
+私钥需要**手动迁移**:从旧机的 `dotfiles/mutable/secrets/.keys/age` 用安全信道(物理介质 /
 加密隧道)复制到新机,权限保持 600。

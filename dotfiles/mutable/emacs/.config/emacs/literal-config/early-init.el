@@ -7,7 +7,7 @@
 ;; 在 GUI 初始化之前尽早执行：加速启动、减少闪屏、避免 package.el 介入。
 ;;
 ;; 本文件独立维护，不由 emacs.org tangle 生成（避免防闪屏逻辑被 tangle 影响）。
-;; chemacs2 的引导层（stow/emacs/.config/emacs/early-init.el）会自动加载
+;; chemacs2 的引导层（dotfiles/mutable/emacs/.config/emacs/early-init.el）会自动加载
 ;; 本目录的 early-init.el。
 ;;
 ;; 优化项：

@@ -11,7 +11,7 @@
 | ---- | ---------------------------------------------- | ------- | ----------- | ---- |
 | 密文 | `dotfiles/secrets/<name>.age`                  | ✓       | ✗           | 644  |
 | 公钥 | `dotfiles/secrets/.keys/age.pub`               | ✓       | ✗           | 644  |
-| 私钥 | `stow/secrets/.keys/age`(软链到 `~/.keys/age`) | ✗       | ✓           | 600  |
+| 私钥 | `dotfiles/mutable/secrets/.keys/age`(软链到 `~/.keys/age`) | ✗       | ✓           | 600  |
 | 明文 | `~/.local/share/secrets-decrypted/<name>`      | ✗       | ✓           | 600  |
 
 整个仓库 push 到 origin 的字节里,**没有**任何明文,也没有解密所需的私钥。
@@ -45,10 +45,11 @@ Guix-configs/
 │       │   └── age.pub                   # X25519 公钥
 │       ├── <name>.age                    # 加密产物(N 个)
 │       └── AGENTS.md                     # 维护范式(给 AI)
-├── stow/
-│   └── secrets/                          # 私钥(不进 git,stow 软链)
-│       └── .keys/
-│           └── age                       # X25519 私钥,mode 600
+├── dotfiles/
+│   └── mutable/
+│       └── secrets/                      # 私钥(不进 git,stow 软链)
+│           └── .keys/
+│               └── age                   # X25519 私钥,mode 600
 ├── tools/
 │   └── secrets                           # 加密/解密/编辑 CLI
 └── docs/
@@ -66,7 +67,7 @@ Guix-configs/
 
 ```bash
 cd ~/Projects/Config/Guix-configs
-./tools/secrets init                # 生成密钥对到 stow/secrets/.keys/age
+./tools/secrets init                # 生成密钥对到 dotfiles/mutable/secrets/.keys/age
 blue stow secrets                   # 建软链 ~/.keys/age
 ./tools/secrets list                # 验证一切就绪
 ```
@@ -74,7 +75,7 @@ blue stow secrets                   # 建软链 ~/.keys/age
 `init` 会:
 
 1. 调用 `age-keygen` 生成 X25519 密钥对
-2. 写私钥到 `stow/secrets/.keys/age`,权限 600
+2. 写私钥到 `dotfiles/mutable/secrets/.keys/age`,权限 600
 3. 从私钥首行注释提取公钥,写到 `dotfiles/secrets/.keys/age.pub`,权限 644
 4. 提示下一步:`blue stow secrets`
 
@@ -147,11 +148,11 @@ source ~/.local/share/secrets-decrypted/dotenv
 
 ```bash
 # 1. 备份旧私钥(重加密期间需要它解密旧密文,不能先删)
-cp stow/secrets/.keys/age /tmp/age.old
+cp dotfiles/mutable/secrets/.keys/age /tmp/age.old
 chmod 600 /tmp/age.old
 
 # 2. trash 旧私钥,生成新密钥对(init 检测到旧 age 会拒绝,必须先 trash)
-trash stow/secrets/.keys/age
+trash dotfiles/mutable/secrets/.keys/age
 ./tools/secrets init                    # 生成新 age + 覆盖 age.pub
 blue stow --restow secrets              # 重建 ~/.keys/age 软链指向新私钥
 
@@ -190,7 +191,7 @@ blue stow secrets                   # 建 ~/.keys/age 软链
 
 ```bash
 # 旧机
-scp stow/secrets/.keys/age user@newhost:~/.keys/age
+scp dotfiles/mutable/secrets/.keys/age user@newhost:~/.keys/age
 chmod 600 ~/.keys/age
 
 # 新机
@@ -220,7 +221,7 @@ chmod 600 ~/.keys/age
 | ------------------------------------- | ----------------------------------------- | ----------------------------------------------- |
 | `tools/secrets decrypt` 报找不到私钥  | stow 没部署或软链失效                     | `cd Guix-configs && blue stow --restow secrets` |
 | `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail`        | 修脚本;`bash -n` 不查变量绑定,必须真跑          |
-| `age: error: no identity`             | 私钥权限被改了                            | `chmod 600 stow/secrets/.keys/age`              |
+| `age: error: no identity`             | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/secrets/.keys/age`  |
 | `init` 后 `.age.pub` 是空的           | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init,或手动 `awk` 提取         |
 | `~/.config/secrets/` 出现了文件       | dotfile-services 误把 secrets 加入        | 检查 `source/config.org` 的 dotfile-services 块 |
 | `re-encrypt` 报 `failed to decrypt`   | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)        |

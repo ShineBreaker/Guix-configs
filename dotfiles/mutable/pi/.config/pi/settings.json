@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "zai",
-  "defaultModel": "glm-5.2",
+  "defaultProvider": "minimax-cn",
+  "defaultModel": "MiniMax-M3",
   "npmCommand": [
     "pnpm"
   ],
