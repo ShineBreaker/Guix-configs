@@ -6,7 +6,7 @@
 	path = dotfiles/enable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
 [submodule "stow/emacs/.config/emacs"]
-	path = stow/emacs/.config/emacs
+	path = stow/emacs/.config/emacs/general-config
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
 [submodule "stow/appimage-run"]
 	path = stow/appimage-run

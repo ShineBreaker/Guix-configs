@@ -36,19 +36,20 @@ stow/
 │   ├── .config/
 │   │   ├── agents/
 │   │   │   └── skills/
+│   │   ├── chemacs/
+│   │   │   ├── profile
+│   │   │   └── profiles.el
 │   │   └── emacs/
-│   │       ├── configs/
-│   │       ├── core/
-│   │       ├── diagnose/
-│   │       ├── .gitignore
-│   │       ├── CLAUDE.md
-│   │       ├── LICENSE
-│   │       ├── README.org
+│   │       ├── general-config/
+│   │       ├── literal-config/
+│   │       ├── README.md
+│   │       ├── chemacs.el
 │   │       ├── early-init.el
 │   │       └── init.el
 │   ├── .local/
 │   │   ├── .local/
 │   │   └── bin/
+│   │       ├── __pycache__/
 │   │       ├── ag_lib/
 │   │       ├── ag-ent
 │   │       ├── agenote
@@ -62,10 +63,8 @@ stow/
 ├── pi/
 │   ├── .config/
 │   │   └── pi/
-│   │       ├── agents/
 │   │       ├── extensions/
 │   │       ├── npm/
-│   │       ├── prompts/
 │   │       ├── .gitignore
 │   │       ├── APPEND_SYSTEM.md
 │   │       ├── keybindings.json

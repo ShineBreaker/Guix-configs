@@ -85,6 +85,7 @@ Guix-configs///
 │   ├── emacs/
 │   │   ├── .config/
 │   │   │   ├── agents/
+│   │   │   ├── chemacs/
 │   │   │   └── emacs/
 │   │   ├── .local/
 │   │   │   ├── .local/
@@ -162,7 +163,7 @@ tmp/config.scm
 **路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
 2. 修改应用配置时优先改 `dotfiles/enable/<app>/` 内文件，再 `blue home`
-3. **Emacs 修改**：先读 `stow/emacs/.config/emacs/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages
+3. **Emacs 修改**：先读 `stow/emacs/.config/emacs/general-config/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages。**注意**：`stow/emacs/.config/emacs/` 顶层是 chemacs2 引导层（init/early-init/chemacs.el），旧配置 submodule 在 `general-config/` 子目录，新 org literate 配置在 `literal-config/`
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/enable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
 6. 优先使用 `blue help` 内可以使用的相关命令
@@ -209,7 +210,7 @@ blue init
 
 | 路径                                                 | 上游                                |
 | ---------------------------------------------------- | ----------------------------------- |
-| `stow/emacs/.config/emacs`                           | `codeberg.org/BrokenShine/.emacs.d` |
+| `stow/emacs/.config/emacs/general-config`            | `codeberg.org/BrokenShine/.emacs.d` |
 | `dotfiles/enable/utilities/.local/share/fcitx5/rime` | `github.com/iDvel/rime-ice`         |
 | `stow/appimage-run`                                  | `codeberg.org/BrokenShine/appimage-run-guix` |
 | `stow/pi/.config/pi/extensions/atelier`              | `github.com/ShineBreaker/pi-atelier` |
@@ -227,6 +228,32 @@ blue stow-all --restow           # 重建所有包
 ```
 
 详见 `stow/AGENTS.md`。
+
+## Emacs 多 Profile 架构（chemacs2）
+
+`stow/emacs/.config/emacs/` 顶层是 **chemacs2 引导层**（`init.el` / `early-init.el` / `chemacs.el`，从 [plexus/chemacs2](https://github.com/plexus/chemacs2) 复制，GPL-3.0），占据 Emacs 启动入口。它在启动时读 `~/.config/chemacs/profiles.el` 选 profile，把 `user-emacs-directory` 指向对应配置树，再加载该树的 `init.el`。
+
+```
+~/.config/emacs/                      ← chemacs2 引导层（Emacs 真正入口）
+├── init.el / early-init.el / chemacs.el   ← 引导层三件套（stow 软链到仓库源）
+├── general-config/                   ← 旧配置（submodule，默认 profile）
+│   ├── init.el / early-init.el
+│   └── core/ configs/ diagnose/ var/ etc/ ...
+└── literal-config/                   ← 新配置（org literate，待 tangle 生成）
+    └── init.el                       ← 占位，后续 config.org 重写
+
+~/.config/chemacs/                    ← chemacs2 profile 配置（stow 软链）
+├── profiles.el                       ← profile 表（general / literal）
+└── profile                           ← 默认 profile 选择器（当前一行：general）
+```
+
+**单 daemon + 默认 profile**：rosenthal `home-emacs-service-type` 跑 `emacs --fg-daemon`（不传 `--with-profile`），自动走默认 profile = `general`。所有现有 `emacsclient` 调用（niri Mod+E、skill 脚本、`.desktop`、`with-editor` GIT_EDITOR）依赖默认 socket 名 "server"，**零改动**。
+
+**常用操作**：
+- 试新配置（前台实例，独立于 daemon）：`emacs --with-profile literal`
+- 切默认到新配置（稳定后）：改 `stow/emacs/.config/chemacs/profile` 为 `literal` → `blue stow --restow emacs` → `herd restart emacs-daemon`
+- 改旧配置源：`stow/emacs/.config/emacs/general-config/`（submodule，改源即生效）
+- 改 profile 表：`stow/emacs/.config/chemacs/profiles.el`（改完 `blue stow --restow emacs`）
 
 ## 目录结构图自动维护
 
