@@ -49,6 +49,28 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'seq)
+
+;; ═════════════════════════════════════════════════════════════════════════════
+;; 注入点：路径与外部命令（由 init.el 注入）
+;; ═════════════════════════════════════════════════════════════════════════════
+(defvar literal:org-directory nil
+  "Org 文件根目录。由 init.el 注入。")
+(defvar literal:org-inbox-file nil
+  "通用收件箱文件路径。由 init.el 注入。")
+(defvar literal:org-knowledge-directory nil
+  "知识库经验卡片目录（人类域）。由 init.el 注入。")
+(defvar literal:executable-agenote nil
+  "agenote CLI 可执行文件路径。nil 表示未注入（命令不可用）。")
+
+(defun literal/knowledge--call-process (command &rest args)
+  "同步执行 COMMAND 与 ARGS，返回 (STATUS . OUTPUT)。
+本模块私有拷贝，避免依赖 literal-bootstrap。
+STATUS 为进程退出码（0 = 成功），OUTPUT 为 stdout 的 trimmed 字符串。"
+  (with-temp-buffer
+    (cons (or (apply #'call-process command nil t nil (remq nil args))
+              -1)
+          (string-trim (buffer-string)))))
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 辅助：递归扫描 experiences 目录
@@ -275,7 +297,7 @@ experiences/<category>/<timestamp>.org。模板定义见 org-mode.el。"
       (let ((buf (get-buffer-create "*agenote-tags*")))
         (with-current-buffer buf
           (erase-buffer)
-          (insert (cdr (literal/call-process literal:executable-agenote "tags" tag))))
+          (insert (cdr (literal/knowledge--call-process literal:executable-agenote "tags" tag))))
         (display-buffer buf))
     (literal/knowledge-search (format ":%s:" tag))))
 
@@ -330,7 +352,7 @@ experiences/<category>/<timestamp>.org。模板定义见 org-mode.el。"
       (let ((buf (get-buffer-create "*agenote-stats*")))
         (with-current-buffer buf
           (erase-buffer)
-          (insert (cdr (literal/call-process literal:executable-agenote "stats")))
+          (insert (cdr (literal/knowledge--call-process literal:executable-agenote "stats")))
           (goto-char (point-min)))
         (display-buffer buf))
     (message "未找到 agenote 命令")))
@@ -389,7 +411,7 @@ experiences/<category>/<timestamp>.org。模板定义见 org-mode.el。"
   (let ((id (literal/knowledge--ensure-experience-buffer)))
     (when id
       (if literal:executable-agenote
-          (let ((result (apply #'literal/call-process
+          (let ((result (apply #'literal/knowledge--call-process
                                literal:executable-agenote "touch" id
                                (when used-only '("--used-only")))))
             (if (zerop (car result))
@@ -404,7 +426,7 @@ experiences/<category>/<timestamp>.org。模板定义见 org-mode.el。"
   (let ((id (literal/knowledge--ensure-experience-buffer)))
     (when id
       (if literal:executable-agenote
-          (let* ((result (literal/call-process literal:executable-agenote
+          (let* ((result (literal/knowledge--call-process literal:executable-agenote
                                               "archive" id "--reason" reason)))
             (if (zerop (car result))
                 (message "已归档: %s (%s)" id reason)
@@ -419,7 +441,7 @@ ID 通过 completing-read 从归档列表选取（若可获取），否则手动
                       (when-let* ((cur (literal/knowledge--current-id)))
                         cur))))
   (if literal:executable-agenote
-      (let ((result (literal/call-process literal:executable-agenote "restore" id)))
+      (let ((result (literal/knowledge--call-process literal:executable-agenote "restore" id)))
         (if (zerop (car result))
             (message "已恢复: %s" id)
           (message "恢复失败: %s" (cdr result))))
@@ -432,7 +454,7 @@ ID 通过 completing-read 从归档列表选取（若可获取），否则手动
     (when id
       (if literal:executable-agenote
           (let ((buf (get-buffer-create "*agenote-review*"))
-                (result (literal/call-process literal:executable-agenote "review" id)))
+                (result (literal/knowledge--call-process literal:executable-agenote "review" id)))
             (with-current-buffer buf
               (erase-buffer)
               (insert (cdr result))
@@ -462,7 +484,7 @@ ID 通过 completing-read 从归档列表选取（若可获取），否则手动
                                         nil t)))
                                (split-string-and-unquote op))
                            nil))
-             (result (apply #'literal/call-process
+             (result (apply #'literal/knowledge--call-process
                             literal:executable-agenote "memory" extra-args))
              (buf (get-buffer-create "*agenote-memory*")))
         (with-current-buffer buf
@@ -486,7 +508,7 @@ ID-A 默认取当前 buffer 的 :ID:，ID-B 与 DESC 在 minibuffer 收集。
       (let* ((args (delq nil (list "connect" id-a id-b
                                    (unless (string-empty-p desc) "--desc")
                                    (unless (string-empty-p desc) desc))))
-             (result (apply #'literal/call-process
+             (result (apply #'literal/knowledge--call-process
                             literal:executable-agenote args)))
         (if (zerop (car result))
             (message "已链接: %s ↔ %s" id-a id-b)
@@ -506,7 +528,7 @@ SECONDARY-IDS 为空格分隔的多个 ID，REASON 记录合并原因。"
       (let* ((args (append (list "merge" primary-id) secondary-ids
                            (unless (string-empty-p reason)
                              (list "--reason" reason))))
-             (result (apply #'literal/call-process literal:executable-agenote args)))
+             (result (apply #'literal/knowledge--call-process literal:executable-agenote args)))
         (if (zerop (car result))
             (message "已合并 %d 张到 %s" (length secondary-ids) primary-id)
           (message "合并失败: %s" (cdr result))))
@@ -517,7 +539,7 @@ SECONDARY-IDS 为空格分隔的多个 ID，REASON 记录合并原因。"
   (interactive)
   (if literal:executable-agenote
       (let ((buf (get-buffer-create "*agenote-deduplicate*"))
-            (result (literal/call-process literal:executable-agenote
+            (result (literal/knowledge--call-process literal:executable-agenote
                                          "deduplicate")))
         (with-current-buffer buf
           (erase-buffer)
@@ -533,7 +555,7 @@ SECONDARY-IDS 为空格分隔的多个 ID，REASON 记录合并原因。"
   (interactive "P")
   (if literal:executable-agenote
       (let* ((args (if arg (list "lint" "--fix") (list "lint" "--check")))
-             (result (apply #'literal/call-process literal:executable-agenote args))
+             (result (apply #'literal/knowledge--call-process literal:executable-agenote args))
              (buf (get-buffer-create "*agenote-lint*")))
         (with-current-buffer buf
           (erase-buffer)
@@ -549,7 +571,7 @@ SECONDARY-IDS 为空格分隔的多个 ID，REASON 记录合并原因。"
 index.json 由 .gitignore 排除，仅提交卡片与 MEMORY 变更。"
   (interactive "s提交总结: ")
   (if literal:executable-agenote
-      (let ((result (literal/call-process literal:executable-agenote
+      (let ((result (literal/knowledge--call-process literal:executable-agenote
                                          "commit" "-m" summary)))
         (if (zerop (car result))
             (message "已提交: %s" summary)
@@ -600,9 +622,6 @@ index.json 由 .gitignore 排除，仅提交卡片与 MEMORY 变更。"
 ;; 命名约定：literal/knowledge-viz--*（函数）、literal--knowledge-viz-*（私有变量）
 
 ;;; Code:
-
-(require 'cl-lib)
-(require 'seq)
 
 ;; =============================================================================
 ;; 常量

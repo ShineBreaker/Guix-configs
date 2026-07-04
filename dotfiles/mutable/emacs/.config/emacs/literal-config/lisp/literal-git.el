@@ -11,13 +11,21 @@
 ;; - 文件级操作：blame / log / diff / stage / discard / timemachine
 ;; - 仓库级操作：push / pull / stash push / stash pop
 ;;
-;; 所有操作通过 `literal:executable-git'（启动期缓存）调用 git，
-;; 不每次搜 PATH。
+;; 自包含设计：所有操作通过 `literal:executable-git' 调用 git。
+;; 该变量为模块自带 defvar（默认 nil = 启动期自动 executable-find），
+;; init.el 在 require 本模块前注入真实路径以复用启动期缓存。
 
 ;;; Code:
 
 (require 'subr-x)
-(require 'literal-bootstrap)
+
+;; ═════════════════════════════════════════════════════════════════════════════
+;; 注入点：git 可执行文件路径
+;; ═════════════════════════════════════════════════════════════════════════════
+;; 默认 nil：首次使用时 (executable-find "git") 兜底。
+;; init.el 通常在 require 本模块前 setq 为启动期缓存的值。
+(defvar literal:executable-git nil
+  "git 可执行文件路径。nil 表示未注入，首次使用时自动检测。")
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 仓库检测辅助
@@ -42,11 +50,17 @@
   (or (literal/git-repo-root file)
       (user-error "当前不在 Git 仓库中")))
 
+(defun literal/git--executable ()
+  "返回本模块使用的 git 可执行文件路径。
+优先用注入的 `literal:executable-git'，未注入则启动期一次性检测并缓存。"
+  (or literal:executable-git
+      (setq literal:executable-git (executable-find "git"))))
+
 (defun literal/git--run (&rest args)
   "在当前仓库中执行 Git ARGS。"
   (let ((default-directory (literal/git--ensure-repo)))
     (with-temp-buffer
-      (let ((status (apply #'process-file literal:executable-git nil t nil args))
+      (let ((status (apply #'process-file (literal/git--executable) nil t nil args))
             (output (string-trim (buffer-string))))
         (unless (eq status 0)
           (error "Git 命令失败: %s"

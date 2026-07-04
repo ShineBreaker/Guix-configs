@@ -25,10 +25,31 @@
 ;;
 ;; 命名约定：literal/agenote--*（函数）、literal--agenote-*（私有变量）
 ;; 入口：`C-c o k O' → `literal/agenote-browse'
+;;
+;; 自包含设计：本模块不 require 任何 literal-* 模块。
+;; 下方两个 defvar 由 init.el 在 require 本模块前注入真实值。
 
 ;;; Code:
 
 (require 'cl-lib)
+
+;; ═════════════════════════════════════════════════════════════════════════════
+;; 注入点：路径与外部命令（由 init.el 注入）
+;; ═════════════════════════════════════════════════════════════════════════════
+(defvar literal:agenote-directory nil
+  "agenote 子域目录路径（agent 写入的卡片 + index.json）。
+由 init.el 注入；nil 时 index.json 路径回退到 nil。")
+(defvar literal:executable-agenote nil
+  "agenote CLI 可执行文件路径。nil 表示未注入（命令不可用）。")
+
+(defun literal/agenote--call-process (command &rest args)
+  "同步执行 COMMAND 与 ARGS，返回 (STATUS . OUTPUT)。
+本模块私有拷贝，避免依赖 literal-bootstrap。
+STATUS 为进程退出码（0 = 成功），OUTPUT 为 stdout 的 trimmed 字符串。"
+  (with-temp-buffer
+    (cons (or (apply #'call-process command nil t nil (remq nil args))
+              -1)
+          (string-trim (buffer-string)))))
 
 ;; =============================================================================
 ;; 常量
@@ -280,7 +301,7 @@ index.json 修改时间变化才重解析，否则保留缓存。"
   "重新调 `agenote health --quality' 并填充当前 health buffer。"
   (let ((inhibit-read-only t))
     (erase-buffer)
-    (insert (or (cdr (literal/call-process literal:executable-agenote
+    (insert (or (cdr (literal/agenote--call-process literal:executable-agenote
                                           "health" "--quality"))
                 "（agenote 命令不可用）"))
     (goto-char (point-min))))
