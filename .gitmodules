@@ -17,3 +17,6 @@
 [submodule "pi-ui"]
 	path = dotfiles/mutable/pi/.config/pi/extensions/pi-ui
 	url = https://github.com/ShineBreaker/pi-ui.git
+[submodule "tools/linux-setup"]
+	path = tools/linux-setup
+	url = https://codeberg.org/BrokenShine/linux-setup
