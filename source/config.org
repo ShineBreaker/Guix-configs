@@ -748,7 +748,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                                                                 (extra-options (list "--cores=20" "--max-jobs=6"))
                                                                 (http-proxy "http://127.0.0.1:7890")
                                                                 (discover? #f)
-                                                                (privileged? #f)
                                                                 (tmpdir "/var/tmp")))
 
                          (network-manager-service-type config =>
