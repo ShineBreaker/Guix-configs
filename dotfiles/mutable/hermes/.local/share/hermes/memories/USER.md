@@ -6,4 +6,4 @@
 §
 用户偏好:使用 `clarify` 工具时,必须把选项列在 `choices` 数组里作为可勾选的 row,**不要**把选项塞进 `question` 文本里。原话:"重新提问一次,你目前并没有成功显示出选项"。前一次失败的提问把所有候选写进 question 字符串里,UI 渲染成不可选的散文。规则:options only in `choices[]`, never inside `question`. // 风格: 用户回复短、直接、决断 (如"把sops的配置删了, 这些我完全没用过" / 直接选数字选项), 不要"我建议..." + 劝解式; 给选项后立即推进, 不要二次确认细节.
 §
-Verify code paths before claiming "X is loaded into context". When user asks "is X really injected?" or "does X actually do Y?", do NOT rely on what you "know" or on SOUL.md docs — grep the actual codebase and report file:line evidence. Error to avoid: implying knowledge = knowing it's wired up. **同原则适用 MEMORY 引用**:行号/字符串是某次印象,可能已变,引用前 grep 真文件。**`patch` fallback**:#15236 吞 `old_string`,反复重试都失败 → `sed -i` / python heredoc / `git show` + cp,别再 patch 重试。
+用户偏好:大型迁移/批量灌数据/多仓库同步等,先拿一个代表性样本做端到端验证,估算好迁移后 hermes session_search / memory / DB 体积等实际效果再决定"要不要继续 / 怎么扩展"。原话:"先试着迁 1 个中等 session 做端到端验证,过了再说"。给包含预估影响的选项优于直接问"全量还是部分";汇报进度时主动报"已验证 X,待你决定是否放量"。

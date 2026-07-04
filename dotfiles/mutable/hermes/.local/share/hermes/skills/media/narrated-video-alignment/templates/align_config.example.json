@@ -1,0 +1,27 @@
+{
+  "video_in": "/path/to/silent_video.mp4",
+  "audio_dir": "/path/to/audio/v2",
+  "work_dir": "/path/to/audio/v2/work",
+  "final_mp3": "/path/to/audio/v2/narration_aligned.mp3",
+  "final_mp4": "/path/to/final-with-audio.mp4",
+  "plan": [
+    {
+      "key": "cover",
+      "src": "ch00_cover.mp3",
+      "target_s": 25.0,
+      "video_start_s": 0
+    },
+    {
+      "key": "p1",
+      "src": "ch01.mp3",
+      "target_s": 150.0,
+      "video_start_s": 25
+    },
+    {
+      "key": "p2",
+      "src": "ch02.mp3",
+      "target_s": 130.0,
+      "video_start_s": 175
+    }
+  ]
+}

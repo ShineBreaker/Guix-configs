@@ -868,16 +868,30 @@
     ((delete) "撤销")
     (else "部署")))
 
-;; 对单个包执行 stow。--no-folding 与 dotfiles/mutable/.stowrc 双重保险：目标保持真实
-;; 目录，只对单个文件建软链，避免应用运行时产物经整目录软链污染源。
+;; 标记文件名：放在 dotfiles/mutable/<PKG>/.stow-folding 即对该包启用 tree folding
+;; （目标目录整目录折叠成单条软链）。无标记的包走默认 --no-folding（真实目录 +
+;; 逐文件软链，保护应用运行时产物不污染源）。
+(define %stow-folding-marker ".stow-folding")
+
+;; 判断 pkg 是否启用了 folding（其目录下存在 .stow-folding 标记文件）。
+(define (%stow-folding? pkg)
+  (file-exists? (string-append %stow-dir "/" pkg "/" %stow-folding-marker)))
+
+;; 对单个包执行 stow。folding 由 .stow-folding 标记决定（默认 --no-folding）。
+;; --ignore=\.stow-folding$ 始终带上，确保标记文件本身永不部署到 $HOME（否则多个
+;; 包的同名标记会冲突，且把无意义的元文件塞进用户目录）。
 (define (%stow-package pkg mode home)
   (let ((pkg-dir (string-append %stow-dir "/" pkg)))
     (unless (file-exists? pkg-dir)
       (error (format #f "stow 包不存在: ~a" pkg-dir)))
-    (format #t "[~a] ~a -> ~a~%" (%stow-verb mode) pkg home)
-    (let ((flag (%stow-flag mode)))
+    (let* ((folding? (%stow-folding? pkg))
+           (flag (%stow-flag mode)))
+      (format #t "[~a] ~a -> ~a (~a)~%"
+              (%stow-verb mode) pkg home
+              (if folding? "folding" "no-folding"))
       (%run `("stow"
-              "--no-folding"
+              "--ignore=\\.stow-folding$"
+              ,@(if folding? '() (list "--no-folding"))
               ,(string-append "--dir=" %stow-dir)
               ,(string-append "--target=" home)
               ,@(if (string=? flag "") '() (list flag))
@@ -1198,14 +1212,17 @@ GNU Stow 直链部署 dotfiles/mutable/PKG/ 到 $HOME。改源即生效（无需
   blue stow --restow PKG ... 强制重建所有软链接（先删除再重建）
   blue stow --delete PKG ... 删除软链接（$HOME 下变回实际文件）
 
---no-folding: 目标目录保持为真实目录，stow 只对单个文件建软链（由 dotfiles/mutable/.stowrc
-+ 命令行双重保证）。应用运行时产物（logs/、state.db、sessions/ 等）落到真实目
-录而非源。批量操作所有包见 `blue stow-all`。
+--no-folding（默认）/ folding: 目标目录默认保持为真实目录、stow 只对单个文件建软链，
+保护应用运行时产物（logs/、state.db、sessions/ 等）不污染源。想让某个包改用整目录
+折叠（目标目录本身变成指向源的软链），在该包目录下放 .stow-folding 标记文件即可。
+批量操作所有包见 `blue stow-all`。
 
-忽略机制（三层，优先级递减）:
-  dotfiles/mutable/.stowrc                全局（含 --no-folding）
+folding 控制:
+  dotfiles/mutable/<PKG>/.stow-folding      存在即对该包启用 tree folding（opt-in）
+  其余包默认 --no-folding
+忽略机制（每包 + 命令行）:
   dotfiles/mutable/<PKG>/.stow-local-ignore  每包 Perl 正则，逐行，# 注释允许
-  --ignore=REGEX              命令行一次性
+  --ignore=REGEX              命令行一次性（blueprint 内部固定加 --ignore=\\.stow-folding$）
 
 源目录布局: dotfiles/mutable/PKG/.local/share/hermes/ -> ~/.local/share/hermes/
 改后用 git commit 备份。配合 dotfiles/immutable/ 的 Guix stow（仅读源）使用。"))

@@ -1,0 +1,816 @@
+---
+name: guix-configs-workflow
+description: "Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'blue rebuild', 'guix system reconfigure', 'shepherd service', 'stow 死链', '热点连不上', 'dnsmasq 端口冲突', 'worker 委派', '撤回', 'AGENTS.md 翻新', 'blue structor', 'home-shepherd 排查', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'GUI 缺环境变量', 'niri environment 块', 'dead git submodule', 'GNU Stow', 'blue stow', '二轨 dotfiles', '恢复被删除的 dotfiles', 'pi-agent 配置', 'wireplumber', 'pavucontrol', '系统服务兜底', 'user-level daemon 兜底', or related. Ten sub-protocols: dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging, AGENTS.md structor, GUI environment injection, GNU Stow mutable config, restoring deleted dotfiles, config.org service modification, user-level daemon override."
+---
+
+# guix-configs-workflow — Guix-configs 仓库高频工作流
+
+> Guix-configs 仓库内的高频工作流合集。所有内容提炼自 160 张 KB 卡片 + MEMORY.org F019/F021/F022/F025/F026 + 28 张 guix 卡片 + Guix-configs project memory。源数据在 ~/Documents/Org/ 由人类维护,本 skill 是缓存层。
+
+## 关键不变量(仓库内一切工作的硬约束)
+
+1. **dotfiles 改源 ≠ 生效**:`~/.config/<app>` 指向 `/gnu/store` 只读副本。验证三步:① 改源 ② `blue home` ③ grep 部署位置(`~/.config/`,不是仓库源)确认同步。restart service **不够**。
+   - **`blue home` 不会重启已在跑的 home-shepherd 守护进程**——它只对 `on-change` gexp 求值并加载新配置,但已在跑的进程持有旧 `make-forkexec-constructor` 参数。要让新 service 定义生效,**必须手动 `herd restart <svc>`**(参见 §4.4)。如果改了 service 定义导致旧进程与新进程并存冲突(如带 `--replace` 的旧 gateway 占着端口不放),还需直接 `kill` 旧 shepherd PID(见 §4.5)。
+2. **删除同理**:`~/.config/<app>` 下任何"清理"(rm 旧文件/孤儿/缓存/__pycache__ 等)在下一次 `blue home` 时会从 store 副本重新软链接回来。删除 dotfile 必须在 `dotfiles/enable/<app>/` 源里做,`blue home` 重新生成软链接;直接 `rm ~/.config/...` 只能算"临时清",**不持久**。典型场景:某 skill 整体从源删除后,`~/.config/<app>/skills/<name>/` 还会带 `__pycache__/` 孤儿 — 必须从源删。
+
+   **例外 — `~/.local/share/hermes/skills/` 不归本不变量管**。该目录是 Hermes 安装包自带的 read-only bundle(`0555`),不在 `dotfiles/enable/` 仓库源里;`blue home` 不会重新生成它(它走 `source/nix/configuration/programs/hermes.nix` 装 hermes-agent `full` 输出)。对此目录做"临时清"不会被 `blue home` 回滚。详细精简流程见 `hermes-skill-curation` skill 的"XDG trash 范式"小节。
+3. **AI 禁跑** `blue rebuild` / `guix system reconfigure` / `guix home reconfigure` (sudo 卡死 CLI)。改源后只能 `blue home` 暂用,固化等用户操作。**例外**:`blue structor` 只重写 AGENTS.md 标记对内容,AI 可以跑(见 §5.3)。
+4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。
+5. **commit 严格遵循 gitmessage 规范** + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。
+6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
+7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
+
+---
+
+## 1. dotfiles 部署验证三步(高频,任何 dotfile 改动前必读)
+
+```
+① 改源(dotfiles/enable/<app>/ 或 source/)
+② blue home(在仓库根跑,见下方 ⚠)
+③ 校验同步:
+   md5sum <源文件> vs md5sum ~/.config/<app>/<同路径>
+   或 readlink ~/.config/<app>/<file> 看 store hash 是否变
+   然后 restart service + 行为验证
+```
+
+**反例**: 改 source/config.org + emacs 重启 → 读到旧配置(假阳性)。F019 + KB 20260615-232932。
+
+**根因机制**: Guix Home 的 `home-dotfiles-service-type` 把文件复制到 store,再软链接到 $HOME;改源后 store 副本不变,软链接 target 不变,所有读 ~/.config 的程序读到旧内容。
+
+### ⚠ `blue home` 必须在仓库根跑(用户反复踩过的坑)
+
+```bash
+# ✅ 正确
+cd ~/Projects/Config/Guix-configs && blue home
+
+# ❌ 错:从子模块 cwd 跑(典型:emacs 子模块在 dotfiles/enable/emacs/.config/emacs/)
+blue home
+# → 报 "&external-error / No command with this name"
+# → 看起来像 blue 命令本身挂了,实际是子模块 cwd 找不到 blueprint.scm / source/config.org
+```
+
+**根因**: `blue` 读 cwd 的 `blueprint.scm` + `source/config.org` 才能正常求值;子模块 cwd 没有这两个文件,blue 启动后报"无子命令"。在子模块里改完 .el 必须先 `cd` 回仓库根再 `blue home`。
+
+**完整路径约束**(常见子模块 cwd):
+| 子模块 | cwd | 仓库根命令 |
+|--------|-----|------------|
+| `dotfiles/enable/emacs/.config/emacs/` | Emacs 配置根 | `cd ~/Projects/Config/Guix-configs && blue home` |
+| `dotfiles/enable/agents/` | Hermes agents | 同上 |
+| 其他 `dotfiles/enable/<app>/` 子目录 | | 同上 |
+
+### 仓库源直接验证 ≠ 部署生效(假阳性陷阱)
+
+改完 .el 后,**仅做仓库源语法验证**(`emacs --batch` / `emacsclient --eval` 读仓库源)是不够的——
+
+- `emacsclient --eval` 走的是运行中的 daemon,daemon 读的是 `/gnu/store` 软链,不是仓库源
+- 仅当 daemon 重启后 + store 副本已同步(走完 `blue home` + md5sum 校验)时,emacsclient 验证才是真验证
+- **byte-compile-file 通过 ≠ 变量名正确**:Emacs 31 对不存在的变量 `setq` 不报 warning,代码可编译但运行时静默失效(典型:把废弃的 `line-number-display-width` 写成 `display-line-numbers-width` —— 本案例踩过)
+
+**完整验证四步**(缺一不可):
+1. 改源
+2. `cd ~/Projects/Config/Guix-configs && blue home`
+3. `md5sum` 源 vs `~/.config/<app>/` 部署,确认 store hash 变了
+4. `herd restart <service>` + **行为模拟**(开 buffer 触发 hook,inspect 实际变量值),不要只信 byte-compile
+
+### Emacs 配置调试专属四陷阱(踩坑合集)
+
+#### 陷阱 1:变量名废弃/拼错,byte-compile 不会报
+
+Emacs 31 对不存在的变量 `setq` 不发 warning。`byte-compile-file` 静默通过,运行时 hook 直接 `void-variable` 静默失效。
+
+**典型案例**: 行号列宽控制变量是 `display-line-numbers-width`(Emacs 27+),`line-number-display-width` 早已废弃。写错后 `setq` 不会报错,只有 `symbol-value` 取出来才发现是 `void` 触发 nil。
+
+**防护**: 行为模拟阶段必须 `inspect` 实际值(见陷阱 3),不能只信编译通过。
+
+#### 陷阱 2:hook 里用 buffer-local 变量做守卫,绕过 global-mode 延迟启用
+
+`global-display-line-numbers-mode` 启用时,把 buffer-local `<mode>-mode` 翻成 t 的动作发生在 `find-file-hook` 之后。若 hook 用 `display-line-numbers-mode` 做守卫,hook 跑时该值为 nil → 整个 `when` 跳过 → 配置未生效 → 后续 global-mode 翻成 t 但配置仍未设 → 用户看到原始默认行为 + 极端情况下触发 `arith-error`(如 `display-line-numbers-type 'relative` + 行号算术溢出)。
+
+**正确做法**: 守卫用 global 开关(`global-display-line-numbers-mode`),不要用 buffer-local 那个。或者改挂到 `after-change-major-mode-hook` / `hack-local-variables-hook` 等延后到 mode 启用之后才跑的钩子上。
+
+#### 陷阱 3:emacsclient --eval 多字符输出被吞
+
+`emacsclient --eval` 在某些情境下会把多行 `format` / `message` 输出折叠成单行 `t` 或 `*ERROR*`,看不到具体值。
+
+**绕路(按优先级)**:
+1. **`write-region` 到文件**:`emacsclient --eval "(write-region (format \"...\" ...) nil \"/tmp/out\")"`,然后 `cat` 文件
+2. **读 `*Messages*` buffer**:`emacsclient --eval "(prin1 (with-current-buffer (get-buffer \"*Messages*\") (buffer-string)))"`
+3. **避免 `t` 结尾**:表达式最后别放 `t`,让 elisp 返回值本身就是字符串
+
+**根因**: emacsclient 走 server 协议传回 `t` 当"成功"标识,把多字符输出收成单行。具体触发条件不固定(daemon 版本、message 长度、是否触发 echo-area 截断),所以**最稳就是写文件**。
+
+#### 陷阱 4:org src block native fontification 触发 scheme-mode font-lock 死循环
+
+Emacs 31 的 `scheme-mode` 在处理 quasiquote/unquote（反引号 `` ` `` 与逗号 `,`）语法时会触发 **font-lock 死循环**,导致 jit-lock 挂死 + buffer 渲染中断 + 行号消失。Guix 的 `config.org` 大量使用 scheme quasiquote,`org-src-fontify-natively t` 会把 scheme 块送进 native fontification,必然卡死。
+
+**错误特征**:
+- *Messages* 里出现 `Native code fontification error in #<buffer config.org> at pos<NNNNN>`
+- `backtrace-to-string(nil)` 堆栈
+- 触发时机:`org-cycle` 展开或滚动到含 scheme quasiquote 的 src block 时
+- 连带症状:行号列消失(`display-line-numbers-mode` 仍为 t,但渲染被 jit-lock 错误拖垮)
+
+**正确修复**: 在 `org-src-font-lock-fontify-block` 的 `:around` advice 里,对 `lang="scheme"` 直接 `return nil`,让 org fallback 到基础高亮。不要用 `cl-letf` stub `treesit-ready-p`/`treesit-available-p`——本案中 `major-mode-remap-alist` 对 scheme 是 nil,tree-sitter 根本不在事故链上。
+
+**防护**: org 模式下的调试,优先用 `find-file-noselect` + `font-lock-ensure`(不走 display/jit-lock 触发链)隔离问题。如果 `find-file-noselect` 正常而 `find-file` 卡死,排查 `scheme-mode-hook` 里的 Arei/geiser 等扩展是否也在卡。
+
+---
+
+## 2. worker 委派协议(并行委派 + 范围控制)
+
+### 委派前
+```bash
+# 1. 记录 baseline(redirect 保存)
+git status --short > /tmp/baseline-<task>.txt
+
+# 2. tasks[].cwd 显式传项目根绝对路径
+# 3. 任务描述里所有文件路径用绝对路径(双保险)
+```
+
+### 委派后
+```bash
+# 1. 拿变更文件列表
+diff <(git status --short) /tmp/baseline-<task>.txt
+
+# 2. 二次验证改动范围
+git diff --stat <限定路径>
+git diff <路径> | grep -E '^\+' | head -50   # 关注新增行
+
+# 3. 并行委派 N worker 用 path-scoped:
+git diff --name-only -- ':!<task-path>'  # 空 = 零越权
+```
+
+### 撤回(绝不能批量)
+- ✅ 逐个 `git checkout HEAD -- <file>` 对 task 范围**外**的文件
+- ❌ `git checkout HEAD -- .`(W1 案例: 误删用户合法改动,不可逆)
+- ❌ `rm -rf` / `git clean -fd`(可能误删用户未跟踪内容)
+
+**根因**: working tree 中未 `git add` 过的改动 git 不备份(无 dangling object);任务开始前 M 状态的文件可能是用户之前未 commit 的合法改动。F025 + KB 20260617-000549。
+
+**worker 越权高发三类型**:
+1. 顺手改 home-config.org 加无关包
+2. AGENTS.md 加死引用
+3. 修一个文件时改坏同目录相邻文件
+
+---
+
+## 3. 多行编辑安全(edit 工具 chain-delete 防护)
+
+### 跨 3+ 行精确修改
+**优先** `python3 + str.replace()` 或 `git show + heredoc`,**不用** edit 工具的 range replace。
+
+```python
+# 优选范式
+python3 << 'EOF'
+path = "/path/to/file.el"
+old = """<精确旧块>"""
+new = """<新块>"""
+with open(path) as f: content = f.read()
+content = content.replace(old, new, 1)
+with open(path, 'w') as f: f.write(content)
+EOF
+```
+
+**根因**: edit 工具的 `LINE#HASH` 每次 read 都重生成(字母变化),多次 read/edit 循环频繁触发 `E_STALE_ANCHOR`;range replace 缺 dry-run,错删 anchor 范围外相邻行(chain-delete)不可逆,只能 `git checkout HEAD -- <file>` 单文件撤回。F026 + KB 20260618-191010。
+
+**适用**: `.el` / `.scm` / `.org` 等任何代码文件的多行编辑。
+
+**单行 / 2 行**编辑仍可用 edit 工具(节省时间)。
+
+---
+
+## 4. Guix service 排查(从 shepherd 角度)
+
+### 黄金法则
+> **不要**手动跑 `~/activate` 这类 service command(会绕过 service 上下文、破坏用户环境);从 shepherd service 角度排查。
+
+### 标准排查 4 步
+```bash
+# 1. 看 service 状态 + cached PID + command 字段
+pkexec herd status <service>
+# 2. 确认进程是否真活着
+pkexec cat /proc/<pid>/cmdline
+pkexec ls -la /proc/<pid>/cwd
+# 3. 拉取完整 service history(含 on-change gexp 错误 + backtrace)
+pkexec grep "<service-keyword>" /var/log/messages
+# 4. 修根因后 pkexec herd start <service> 触发重跑
+```
+
+### 典型陷阱
+- **stow 死链残留**:`find ~ -xtype l` 清理 → `create-symlinks` 阶段遍历 .local/share 时 stat 报 ENOENT → activate 异常退出 → `.guix-home` 链接未切换。KB 20260613-040133。
+- **shepherd cached PID 不可信**:`make-forkexec-constructor` 不 wait 子进程,子进程死后 shepherd 仍缓存 PID。真相只在 `/var/log/messages` + `/proc/<pid>`。
+- **home-shepherd fork 不继承 WAYLAND_DISPLAY**: 调 wayland 客户端(`noctalia msg` / `makoctl`)需在 hook 脚本顶部动态探测 `$XDG_RUNTIME_DIR/wayland-*` 设 `WAYLAND_DISPLAY`。KB 20260619-195519 + F028。
+- **shepherd service command 禁止带 `--replace`**: 任何 `make-forkexec-constructor` 命令里的 `--replace`(典型来源:hermes gateway CLI 的 self-replace flag)会触发**自踢循环**——新进程启动 → 给前任发 SIGTERM → 前任退出码非 0 → shepherd `respawn? #t` 视为失败 → 再重启 → 又踢自己。日志特征是 `Received SIGTERM as a planned --replace takeover — exiting cleanly` 与 `Another gateway instance is already running (PID XXXX)` 交替出现。修复:从 service 定义里删 `--replace`,详情见 §4.5 + `references/hermes-gateway-shepherd-service.md`。
+- **NetworkManager 共享热点 DHCP 失败（dnsmasq 端口冲突）**: 手机连上热点但卡在"获取 IP 地址"——日志显示 `dnsmasq: failed to create listening socket for 10.42.0.1: Address already in use`。根因是 mihomo（或其他 DNS 代理）的 `dns.listen: 0.0.0.0:53` 占用了所有接口的 53 端口，NM 启动的 dnsmasq 无法绑定热点接口 DNS 端口而退出（exit code 2），DHCP 服务随之缺失。修复:把 DNS 代理的 listen 改为 `127.0.0.1:53`（劫持规则不受影响），重启代理 + 重新激活热点。完整诊断 + 修复流程见 `references/nm-hotspot-dnsmasq-port-conflict.md`。
+
+### 4.4 改 shepherd 服务定义后的完整重启流程(blue home 不够)
+
+`blue home` 部署新配置后,**在跑的 home-shepherd 不会自动重启**——它只对 on-change gexp 求值。要让 service 定义(比如 `start` 命令、`requirement`、`respawn?`)真正生效:
+
+```bash
+# 1) blue home(部署新 .scm 到 store)
+cd ~/Projects/Config/Guix-configs && blue home
+
+# 2) herd restart(让现有 shepherd 重新加载服务定义并 respawn)
+herd restart <service-name>
+
+# 3) 验证 command 字段已更新
+herd status <service-name>   # 看 "命令:" 行是不是新值
+```
+
+### 4.5 多个 home-shepherd 并存时的清理范式
+
+`herd restart` 只重启当前连接的 shepherd。**如果系统里有两个 home-shepherd 实例并存**(典型:旧 shepherd 还活着,新 `blue home` 启动了一个新的),`herd restart` 只影响新那个;旧 shepherd 的服务还在用旧配置。诊断方法:
+
+```bash
+pgrep -af "shepherd-for-home"   # 看到多个 PID = 并存
+```
+
+清理步骤:
+
+```bash
+# 1) 找出"旧的"那个(可能是 PID 较小的、或吃了旧 config hash 的)
+ps -o pid,etime,cmd -p $(pgrep -f "shepherd-for-home")
+
+# 2) kill 旧的(直接 SIGTERM,shepherd 会清理其 fork 的服务进程)
+kill <old-shepherd-pid>
+
+# 3) 验证只剩一个
+pgrep -af "shepherd-for-home"   # 应只剩 1 个 PID
+
+# 4) 此时旧服务若还占着端口/资源(典型:gateway 失败重启循环报 Another instance PID),再 kill 那个孤儿服务进程
+ps aux | grep "<service-cmd>" | grep -v grep
+kill <orphan-pid>
+
+# 5) 让新 shepherd respawn 新服务
+herd restart <service-name>
+```
+
+**为什么会并存**:`blue home` 部署新 .scm 后,如果 home-shepherd 守护进程没重启,Guix 不会主动终止它(它不是 `home-shepherd-service` 自身)。新 daemon 通常由用户手动起 / 由 PAM session 起;旧 daemon 继续持有旧服务定义,直到 logout / 重启才走。
+
+**根因机制**:home-shepherd 没有 cgroup 隔离,两个 daemon 完全平等,各自维护自己的服务表。
+
+---
+
+## 5. AGENTS.md 翻新(blue structor 范式)
+
+**用户偏好(2026-06-21)**: "路径不应该是手写的,应该全部依靠工具生成"。AGENTS.md 里的目录树段**必须**用 `blue structor` 自动维护,**禁止**手写。
+
+### 5.1 翻新判断
+
+- `grep -L "structor:begin" $(find . -name "AGENTS.md" -not -path './.git/*')` → 找出所有**手写**目录树的 AGENTS.md
+- `blue structor` 的 `%structor-targets` 自动扫描所有 AGENTS.md(已过滤 `/disable/`、`/tmp/`、`.blue-store/`、`.agents/`),**有 `<!-- structor:begin -->...<!-- /structor -->` 标记对才处理**
+
+### 5.2 翻新流程(4 步)
+
+```bash
+# 1) 决定哪些 AGENTS.md 要翻新
+# 排除项:emacs/.config/emacs/AGENTS.md、rime/AGENTS.md —— 这些是 git submodule 内,不要直接编辑子模块内容
+
+# 2) 在合适位置插入标记对(参考其他已标记 AGENTS.md 的格式)
+# 模板:
+## 目录结构
+<!-- structor:begin -->
+
+<!-- 此树形目录由 structor 自动生成,请勿手动编辑。 -->
+
+\\`\\`\\`
+<placeholder>/
+\\`\\`\\`
+
+<!-- /structor -->
+
+# 3) dry-run 预览
+ORG_STRUCTOR_DRY=1 blue structor 2>&1 | grep -A 20 "<目标文件>"
+
+# 4) 实际重写
+blue structor 2>&1 | grep -E "(WRITE|DRY|ERROR)"
+```
+
+### 5.3 关键约束
+
+- **`blue structor` 不**自动给没标记的 AGENTS.md 加标记 —— 必须先手插标记对(但**只**插空标记 + 最小占位,内容由 structor 重写)
+- **子模块内 AGENTS.md 不要动**: `dotfiles/enable/emacs/.config/emacs/AGENTS.md`、`dotfiles/enable/utilities/.local/share/fcitx5/rime/AGENTS.md` 在独立 git 仓库里
+- **重复手写段要删**: 翻新后顶部"## 目录结构"会重写完整树,文件下半部分如果还有手写的小节(`.config/agents/` 段等)就重复了 —— 删旧的
+- **语言风格**: structor 默认生成 `<!-- 此树形目录由 structor 自动生成,请勿手动编辑。 -->` 中文注释。已有英文注释(由前人手动写的)会被覆盖
+- **AI 可以跑 `blue structor`**: 它只重写标记对之间的内容,不涉及 system reconfigure/home rebuild —— **不**受不变量 #3 限制
+
+### 5.4 dead git submodule 清理(配套)
+
+精简 Guix-configs 仓库时,如果 `.gitmodules` 里有**从未 init 的 submodule 条目**(`.gitmodules` 列出但 `git submodule status` 没显示),按下面清:
+
+```bash
+# 1) 验证是真的 dead(没 init)
+cd ~/Projects/Config/Guix-configs
+git submodule status | grep <path>  # 空 = dead
+
+# 2) 删 .gitmodules 条目(直接编辑文件;git 没批量删命令)
+# 保留真正 init 的(emacs + rime)
+
+# 3) 删 .git/config 里的 submodule section
+git config --remove-section submodule."<path>" 2>&1
+# 重复每条
+
+# 4) 清 .git/modules/<path> 残留(用 find 找空目录,不用手写路径)
+find .git/modules -type d -empty -delete 2>&1
+
+# 5) 同步更新 AGENTS.md 里的 submodule 表格 / 文档里的引用
+grep -rn "<submodule-name>" --include="*.md" --include="*.scm" --include="*.org" . \
+  | grep -v ".git/" | grep -v ".agents/workfile"
+```
+
+### 5.5 反模式
+
+- ❌ **手写或 patch 目录树段** —— 用户明确反对("路径不应该是手写的")
+- ❌ **`patch` 工具删 5-10 行手写树** —— 结构性差,容易出 chain-delete 风险。用 `blue structor` 自动重写
+- ❌ **改子模块内的 AGENTS.md** —— 硬约束"不要直接编辑子模块内容"
+- ❌ **跑 `blue structor` 但不插标记对** —— 没标记的文件被静默跳过,看起来无效果
+
+---
+
+## 6. GUI 应用环境变量注入(niri / greetd / fcitx 三件套)
+
+> 当**双击 .desktop 文件**启动的 GUI 应用缺环境变量时(IME 没弹 / Electron 应用不能打字 / Qt 应用字体不对 / proxy 没生效),改的不是各个 .desktop 文件,而是 niri 的"环境注入三件套"。改一次覆盖所有 GUI 应用。
+
+### 6.1 黄金法则
+
+> **任何 GUI 应用的环境变量问题,先问:** "它启动时,谁在喂它环境?"
+
+在 Guix + niri + greetd 这套非 systemd 启动链里,GUI 应用的变量来源有且仅有:
+
+1. **niri config.kdl 的 `environment { ... }` 块** —— niri 给它起的所有子进程注入环境(最权威,一次改覆盖所有)
+2. **`spawn-sh-at-startup "dbus-update-activation-environment ..."`** —— 喂 dbus activation 环境,影响通过 dbus 启动的服务
+3. **`spawn-sh-at-startup "herd set-environment ..."`** —— 喂 Guix shepherd 起的服务
+
+**不在**这套链里的:
+- `~/.profile` / `~/.bashrc` —— 只影响 login shell,不影响 GUI 应用
+- `~/.config/environment.d/*.conf` —— **Guix 不用 systemd,所以这条几乎不起作用**;user session manager 不会读它
+- `systemctl --user show-environment` —— 同上,systemd --user 没起就查不到任何东西
+- `home-manager` 的 `i18n.inputModule.type` / `sessionVariables` —— 在 `source/nix/` 那条独立链里,跟 Guix Home 不互通(根 AGENTS.md 写明)
+
+### 6.2 标准做法(修一次覆盖所有 GUI 应用)
+
+改 `dotfiles/enable/desktop/.config/niri/config.kdl`,三处一起改:
+
+```kdl
+environment {
+  XDG_CURRENT_DESKTOP "niri"
+  // 这一块加 GUI 应用需要的全局环境变量
+  GTK_IM_MODULE "fcitx"
+  QT_IM_MODULE "fcitx"
+  XMODIFIERS "@im=fcitx"
+  SDL_IM_MODULE "fcitx"
+  GLFW_IM_MODULE "ibus"
+}
+
+spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET GTK_IM_MODULE=$GTK_IM_MODULE QT_IM_MODULE=$QT_IM_MODULE XMODIFIERS=$XMODIFIERS SDL_IM_MODULE=$SDL_IM_MODULE GLFW_IM_MODULE=$GLFW_IM_MODULE"
+
+spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP GTK_IM_MODULE QT_IM_MODULE XMODIFIERS SDL_IM_MODULE GLFW_IM_MODULE"
+```
+
+注意 `$VAR` 的写法 —— niri 自己的环境里没有 GTK_IM_MODULE,所以这条 `spawn-sh-at-startup` 第一次跑时 `$GTK_IM_MODULE` 是空。要么 `environment` 块先于 `spawn-sh-at-startup` 求值(实际 KDL 配置顺序保证这点),要么干脆把变量值字面量写死。
+
+**改完三件套**:
+1. `blue home`(让 store 副本同步)
+2. **重启 niri 会话**(不是 reload;niri 主配置不支持热重载 —— `pkill -f 'niri --session'`,greetd 会自动重启)
+3. 验证: `cat /proc/$(pgrep -f <app>)/environ | tr '\0' '\n' | grep GTK_IM_MODULE`
+
+### 6.3 常见注入变量速查
+
+| 类别 | 变量 | 触发场景 |
+|------|------|----------|
+| IME | `GTK_IM_MODULE` / `QT_IM_MODULE` / `XMODIFIERS` / `SDL_IM_MODULE` / `GLFW_IM_MODULE` | 双击 .desktop 启动的 Electron/Qt/SDL/GLFW 应用没法用输入法 |
+| Wayland | `WAYLAND_DISPLAY` / `XDG_RUNTIME_DIR` / `NIRI_SOCKET` | GUI 应用找不到 wayland socket |
+| 显示 | `DISPLAY` / `XDG_SESSION_TYPE` | XWayland fallback / session 识别 |
+| 桌面 | `XDG_CURRENT_DESKTOP` | 应用的 desktop integration(portal 等)需要 |
+| Locale | `LANG` / `LC_ALL` / `LANGUAGE` | GUI 应用乱码 |
+| Proxy | `http_proxy` / `https_proxy` / `HTTP_PROXY` / `HTTPS_PROXY` | Electron / Qt 应用不走终端的 proxy |
+| 字体 | `XCURSOR_PATH` / `FONTCONFIG_PATH` / `QT_QPA_FONTDIR` | 自定义字体 / cursor 主题找不到 |
+
+### 6.4 反模式(自己踩过的坑)
+
+- ❌ **改各个 .desktop 文件的 `Exec=` 前缀加 `env`** —— 治标;每装一个新应用都要改;而且 nix-profile 装的 .desktop 是从 `/nix/store` 软链来的,改 `~/.local/share/applications/<x>.desktop` 也只对当前用户临时生效,home-manager / nix profile rebuild 会被覆盖。**例外**: §6.7 的 Electron 版本差异场景(三件套已生效、缺 cmdline flag),`.desktop` 覆盖是正确解法
+- ❌ **在 `~/.config/environment.d/` 加 `.conf`** —— Guix 不用 systemd,这条不起作用(在 NixOS / Ubuntu 上有用,在 Guix 上没用)
+- ❌ **`systemctl --user import-environment` 在 niri 启动时跑** —— 假设 systemd --user 在跑;但在 Guix 默认配置下,systemd --user 不一定起,要看 `pgrep -af 'systemd --user'`。不要假设它一定在
+- ❌ **改 `~/.profile` 加 export** —— 只影响 shell 进程,GUI launcher 看不到
+- ❌ **`home-manager` 那条独立链的 `i18n.inputModule`** —— `source/nix/` 与 Guix 不互通;改了 home-manager 配置但你用 `blue home` 部署,不会生效
+
+### 6.5 与本节相关的诊断命令
+
+```bash
+# niri 起的 GUI 应用的环境里有什么(以 hermes-desktop 为例)
+cat /proc/$(pgrep -f hermes-desktop | head -1)/environ | tr '\0' '\n' | grep -E 'GTK_IM|QT_IM|XMODIFIERS|WAYLAND'
+
+# 对比两端环境差异(工作 vs 不工作)
+cat /proc/<pid_ok>/environ | tr '\0' '\n' | sort > /tmp/env-ok.txt
+cat /proc/<pid_fail>/environ | tr '\0' '\n' | sort > /tmp/env-fail.txt
+comm -23 /tmp/env-ok.txt /tmp/env-fail.txt   # 看 OK 有、FAIL 没有的
+
+# 对比 cmdline 差异(看 Electron 有没有缺失 flag)
+cat /proc/<pid>/cmdline | tr '\0' ' '
+
+# 当前 shell 有什么(对比)
+env | grep -E 'GTK_IM|QT_IM|XMODIFIERS|WAYLAND'
+
+# niri 配置软链接是否指向最新 store
+readlink ~/.config/niri/config.kdl
+
+# fcitx5 实际在跑吗 + 看 focus 状态
+pgrep -af fcitx5
+fcitx5-diagnose 2>/dev/null | grep -A1 'program:'
+
+# electron 版本探查(readlink 拿到 store 路径,再 strings 搜版本号)
+readlink -f /proc/$(pgrep -f '<app>' | head -1)/exe
+strings <exe-path> | grep -oP 'Chrome/\d+' | sort -u
+
+# systemd --user 是否在跑(诊断 environment.d 是否生效)
+pgrep -af 'systemd --user'
+```
+
+### 6.7 Electron 版本差异：三件套全对但仍不工作
+
+**前提确认**: 已在 §6.2 部署三件套、`/proc/<pid>/environ` 确认所有 IME 变量存在。
+
+如果 **环境变量齐全但特定 Electron 应用仍不工作**(fcitx5 `focus:0`)，根因可能是 **Electron 版本差异**：
+
+| Electron 版本 | 行为 |
+|---|---|
+| **41**（最新） | Wayland IME 默认工作，cmdline 零 flag 也正常 |
+| **37**（QQ 3.2.29 内嵌） | `--ozone-platform-hint=auto` **无法激活** text-input-v3 focus；必须 `--ozone-platform=wayland` + `UseOzonePlatform` |
+| **~29–32**（老版） | 需要 `--enable-features=UseOzonePlatform` flag，缺则协议无法激活 focus |
+
+#### 诊断流程
+
+1. 确认环境变量已注入：`cat /proc/<pid>/environ | tr '\0' '\n' | grep -E 'NIXOS_OZONE|GTK_IM|QT_IM|XMODIFIERS'`（应全有值）
+2. 查 Electron 版本：从 crashpad handler 的 `--annotation=ver=` 获取最准；或用 `readlink -f /proc/<pid>/exe` 拿二进制路径、`strings` 搜 `Electron/` 或 `Chrome/`
+3. 对比 cmdline flag：`cat /proc/<pid>/cmdline | tr '\0' ' '`，看是否有 `--ozone-platform=wayland`（不是 `=auto`）和 `UseOzonePlatform` feature
+4. 验证 focus 状态：`fcitx5-diagnose 2>/dev/null | grep 'program:<app>'`，`focus:0` 持续 = 协议未激活
+
+#### 解法（按优先级）
+
+**方案 A — Nix 层（推荐，如果应用来自 Nix）**
+
+在 `source/nix/configuration/00-main/packages.nix` 中 override `commandLineArgs`：
+
+```ix
+(qq.override {
+  commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
+})
+```
+
+或用 `xdg.desktopEntries` 生成 .desktop（如 hermes.nix）。然后 `home-manager switch --flake .#Guix`。
+
+**方案 B — Guix dotfiles .desktop 覆盖（兜底）**
+
+在 `dotfiles/enable/desktop/.local/share/applications/<app>.desktop` 创建覆盖，Exec 行补齐：
+
+```
+Exec=<app-wrapper-path> --ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime=true --wayland-text-input-version=3 %U
+```
+
+然后 `blue home`。此方案适用于 Nix 修复尚未生效的过渡期，或应用来自 nix profile 不受 home-manager 管理的场景。
+
+**注意**: Nix 包的 `.desktop` wrapper 可能用自己的条件逻辑（如 QQ 的 `NIXOS_OZONE_WL` 条件仅加 `--ozone-platform-hint=auto`）。`.desktop` 覆盖的 `--ozone-platform=wayland` 会覆盖 wrapper 的 `=auto`。
+
+#### 关键 flag 对照
+
+| flag | 作用 | 何时需要 |
+|---|---|---|
+| `--ozone-platform=wayland` | 强制 Wayland Ozone（非 `hint=auto`） | Electron < 41，`auto` hint 可能不激活 text-input |
+| `--enable-features=UseOzonePlatform` | 显式启用 Ozone 平台 | Electron < 37 必需；37+ 默认启用但建议加 |
+| `--enable-wayland-ime` | 启用 Wayland IME | 所有 Electron 版本 |
+| `--wayland-text-input-version=3` | 使用 text-input-v3 协议 | 配合现代 compositor（niri、sway 等） |
+
+详细调试流程见 `references/electron-wayland-ime-debug.md`。
+
+### 6.8 典型场景排查清单
+
+1. **双击 .desktop 没输入法** → §6.2 三件套 + `blue home` + 重启 niri
+2. **终端能起 GUI 应用但 .desktop 起不行** → 100% 是环境变量;走 §6.5 对比两端 `/proc/<pid>/environ` 差异
+3. **nix-profile 装的应用没输入法(hermes-desktop / QQ)** → 同一根因,同一解法;不要去改 nix 那条链
+4. **应用能在 Chromium 系工作但 Electron 系不行** → Electron 需要 `GTK_IM_MODULE=fcitx` 而不是 `ibus`;检查 §6.3 速查表里所有 IM 变量都写了
+5. **改了不生效** → 检查 `blue home` 是否跑了(store hash 是否变了) + niri 会话是否重启了(改 .kdl 不会热重载)
+6. **环境变量已全、fcitx5 IC 正常但 focus:0** → §6.7 Electron 版本差异;对比工作/不工作进程的 cmdline flag + Electron 版本;可能需要 `.desktop` 覆盖补 `UseOzonePlatform`
+
+---
+
+## 7. GNU Stow 二轨 dotfile 部署（stow/ + blue stow）
+
+适用场景：**频繁手改 + 需要 git 备份** 的配置文件（agent context、SOUL.md、MEMORY.md、prompt 等），不想为每次小改付 `blue home` 的代价。
+
+机制：`stow/<pkg>/` 用 GNU Stow 直接建软链接到 `$HOME`，**改源即生效**。与 `dotfiles/enable/`（Guix Home stow，源指向 store 只读副本）的双轨分工：
+
+| 部署模型 | 源-目标 | 改源后 |
+|----------|---------|--------|
+| Guix stow（`dotfiles/enable/`） | 源 → /gnu/store 只读副本 → $HOME 软链 | 必须 `blue home` |
+| GNU Stow（`stow/`） | 源 → $HOME 软链 | 直接生效 |
+
+**常用命令**（`blueprint.scm` `stow-command`）：
+
+```bash
+blue stow hermes                 # 从源部署
+blue stow --adopt hermes         # 首次：~ 下文件移源 + 建链
+blue stow --restow hermes        # 重建链
+blue stow --delete hermes        # 撤销链（~ 下变回实际文件）
+```
+
+**关键陷阱**：
+
+- 不要用 `rm` 删 ~ 下原文件 —— Hermes 硬保护。安全范式：`cp` 到源 → `mv` 原文件到 `/tmp/hermes-mv-backup/` → `stow --dir=stow --target=$HOME hermes` → `rm -rf /tmp/hermes-mv-backup/`
+- 不要让 `stow/` 与 `dotfiles/enable/` 部署同一文件（双链冲突）
+- `blue structor` 扫 `stow/AGENTS.md` 默认 depth=4 会截断到 `hermes/`；用 `ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=stow/AGENTS.md blue structor`
+
+完整协议（备份策略、md5 三方验证、实时生效测试、commit 规范、反模式清单、故障排查表）见 `references/gnu-stow-two-tier-dotfiles.md`。
+
+---
+
+## 8. 改 `source/config.org` system 层 service 定义的安全协议
+
+> 适用场景：需要直接修改 `source/config.org` 的某个 `#\+NAME:` 服务块（典型：`networking-services` / `kernel-services` / `home-shepherd-services` / `basic-services`），新增 `(service ...)` 或 `(simple-service ...)`。**与 §3（多行编辑）和 §4（service 排查）互补**——本节专门覆盖「改源 → DRY_RUN」的端到端流程与五类常见踩坑。
+
+### 8.1 标准 4 步流程（必走）
+
+```
+① cd ~/Projects/Config/Guix-configs          # 必须在仓库根
+② 用 patch 工具精确改 source/config.org（§3 安全提示）
+③ blue check                                # 括号平衡检查，秒级
+④ GUIX_DRY_RUN=1 blue rebuild                # 完整构建，不写入系统
+```
+
+DRY_RUN 通过后才能让用户跑 `blue rebuild`（AI 禁跑，sudo 卡 CLI）。
+
+### 8.2 五类典型坑（必看）
+
+#### 坑 1：`patch` 工具 fuzzy match 偷偷换括号数
+
+`patch` 用 9 种 fuzzy 策略之一匹配 `old_string`，当末尾 `)))))` 链的 `)` 数量被误判为"近似匹配"时，可能把原文 5 个 `)` 替换成 6 个，**多出 1 个**，`blue check` 立刻报 `多余 1 个右括号 (open=905 close=906)`，但 git diff 里两行看着一样。
+
+**防护**：
+- 改前用 `cat -A` 精确数，或 python：`print(line.count('('), line.count(')'))`
+- `old_string` 和 `new_string` 末尾的 `)` 数量必须**字节级一致**
+- 出错就 `git checkout source/config.org` 重做
+
+#### 坑 2：凭空捏造 Guix service 字段名
+
+`GUIX_DRY_RUN=1 blue rebuild` 报 `extraneous field initializers (regulatory-domain ...)` —— 说明你写的字段在该 service 当前 commit 的 record-type 里**不存在**。
+
+**防护**（**动笔前先查 upstream**）：
+```bash
+# 1) 拿当前 Guix commit
+guix describe --format=channels | grep -oP 'commit "\K[^"]+'
+# 典型：ecd4ab5994c4cfd02414f0b2e86125fdc25fd877
+
+# 2) 拉对应 commit 的 service 定义文件
+curl -fsSL "https://git.savannah.gnu.org/cgit/guix.git/plain/gnu/services/networking.scm?id=<commit>" > /tmp/svc.scm
+
+# 3) 查字段定义
+grep -n -A 20 "define-record-type\* <network-manager-configuration>" /tmp/svc.scm
+```
+
+实测：Guix `ecd4ab5` 的 `network-manager-configuration` **只有 7 个字段**（`network-manager` / `shepherd-requirement` / `dns` / `vpn-plugins` / `iwd?` / `extra-configuration-files` / `dnsmasq-configuration-files`），**没有** `regulatory-domain` / `wifi-scan-rand-mac-address` / `packages`。改 regulatory 得走 `simple-service 'iw-reg-cn` + `iw reg set CN`；改 wifi 行为得走 `extra-configuration-files` 注入 `NetworkManager.conf`。
+
+#### 坑 3：`simple-service` 在 `(append ...)` 链中位置错位
+
+DRY_RUN 报 `Wrong type argument in position 1 (expecting empty list): #<<service> type: #<service-type iw-reg-cn ...>>` —— `append` 第一个参数**不是 list 而是单个 service 对象**。
+
+**根因**：服务块通常是 `(list (service ...) (simple-service ...))`，被 main 块的 `(services (append <<block1>> <<block2>> ...))` 处理。新加的 `simple-service` 如果漏了或多包了一层 `)`，会从 `list` 里"掉出来"被外层 `append` 误当 list 处理。
+
+**防护**：每次新增 service / simple-service 前，**先确认它的父表达式是 `(list ...)` 还是 `(append ...)`**，再决定缩进和括号数。DRY_RUN 报 `Wrong type` / `expecting empty list` 时，第一反应是看新加的那行**是不是漏了或多包了一层 `)`**。
+
+#### 坑 4：改 packages / services 列表时破坏既有列宽对齐
+
+`source/config.org` 里很多 `(packages '("a" "b" "c"))` 列表被人手工对齐到固定列宽（典型：每行 33 字符长，按最长项 + 缩进对齐全列）。`patch` 工具**不会自动保持列宽**——直接 `old_string` / `new_string` 加一个短项，会让新行短一截，与同列表其他行不对齐。`blue check` 不会因为这个报错（语法上完全合法），但 git diff 看着"我加的没动结构"实则动了风格。
+
+**防护**（**动笔前先看 baseline 周围风格**）：
+
+```bash
+# 1) 改前看周围 5 行的对齐基线
+sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
+
+# 2) 如果是列宽对齐模式（如所有项缩进到 col 33）：
+#    new_string 也要补足空格到一致列宽,不要"刚好引号结束就换行"
+```
+
+**典型案例**：wireplumber 配置那次，会话里 patch 加 `"wireplumber"` 到 packages 列表时，直接复用了原 `old_string` 但没补缩进，diff 里只看到 +1 行字面值，**实际破坏了"utilities"那行的右括号位置**（从 33 字符宽度变成 27 字符宽度），违反仓库 style 约定。
+
+**反例对照**（同样内容,两种风格）：
+
+```scheme
+;; ❌ 不对齐（直接 new_string 缩到 27 字符）
+(packages '("agents"
+           "desktop"
+           "utilities"
+           "wireplumber"      ; 短一截
+           "noctalia-suite")))
+
+;; ✅ 对齐（new_string 也补足到 col 33）
+(packages '("agents"
+            "desktop"
+            "system"
+            "terminal"
+            "utilities"
+            "wireplumber"      ; 跟 "noctalia-suite" 对齐
+            "noctalia-suite")))
+```
+
+#### 坑 5：`blue check` 报"括号不平衡"不一定是真括号错——可能是上游错误 cascade
+
+`blue check` 报 `[ERROR] 多余 1 个右括号 (open=904 close=905)` 时，第一反应不一定是去 source/config.org 数括号。**这可能是更早阶段的错误（如 `wrong-number-of-args` 在 `(include "./channel.lock")` 阶段）cascade 下来，让括号计数器拿到不完整的输入导致偏差**。
+
+**根因识别套路**：
+
+```bash
+# 1) 抓原始 Guile 报错（不仅是 blue 的"Build failed"摘要）
+blue check 2>&1 | head -10
+
+# 2) 看有没有 wrong-number-of-args / unbound-variable / Wrong type 这些
+#    早于"括号"出现的错误
+
+# 3) git stash 你的改动，单独跑一次 baseline blue check：
+git stash push -m "verify-baseline" -- source/config.org
+blue check 2>&1 | head -5
+git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.lock / information.scm
+```
+
+**典型误判路径**：看到 `open=904 close=905` → 以为自己刚加的某行多写了 `)` → 回滚 patch → 验证还是 -1 → 浪费时间。**用 git stash 30 秒就能排除**。
+
+**反模式**：
+- ❌ 看到括号错误就回滚最近 patch（可能是无关上游错误）
+- ❌ 顺手去改 `source/channel.lock`（AGENTS.md 明确禁手动编辑，由 `blue update` 生成）
+- ❌ 顺手去改 `source/information.scm` 的 `(include "./channel.lock")`（同上，不要碰加载机制）
+
+正确做法：**先 stash 验证 baseline 是不是真有错**，如果 baseline 也有——是另一个独立 issue，跟当前任务**完全无关**，**不要让当前任务的部署卡在 pre-existing 问题上**。可以把 baseline 错误作为"另外发现的 issue"汇报给用户，但不要为此拖住当前任务进度。
+
+### 8.3 字段引用小抄
+
+| 想用 | 来自 | 已 use-modules? |
+|------|------|-----------------|
+| `network-manager-service-type` | `(gnu services)` re-export | ✅ |
+| `network-manager-configuration` | `(gnu services networking)` | ✅（7 字段，见上） |
+| `dnsmasq-service-type` | `(gnu services dns)` re-export | ✅ |
+| `dnsmasq`（package） | `(gnu packages dns)` | ❌ 需手动加 use-package-modules |
+| `iw`（package） | `(gnu packages linux)` | ✅ `linux` |
+
+### 8.4 DRY_RUN 报错 → 排查速查表
+
+| 错误特征 | 坑位 | 修复 |
+|----------|------|------|
+| `[ERROR] 多余 N 个右括号` | §8.2 坑 1 | git checkout 重做 patch |
+| `extraneous field initializers (...)` | §8.2 坑 2 | 拉 upstream 查字段定义 |
+| `Wrong type argument ... expecting empty list` | §8.2 坑 3 | 检查新加 service 是否漏括号 |
+| `列宽不一致 / 缩进跳格` | §8.2 坑 4 | 看 baseline 周围列宽,补足到一致 |
+| `blue check cascade (括号 / wrong-number-of-args)` | §8.2 坑 5 | git stash 验证 baseline;别动 channel.lock |
+| `unbound variable: <name>` | use-modules 没引 | 加对应模块 |
+| `Symbol's value as variable is void: replaced` | `blue block-replace` 工具自身 bug | 不用 block-replace，直接 patch |
+
+完整错误 transcript 和字段引用小抄见 `references/config-org-modify-safely.md`。
+
+---
+
+## 9. 系统服务 user-level 兜底配置（wireplumber / 之类 Lua 钩子范式）
+
+> 适用场景：**用户态 daemon**（wireplumber / swayidle / gammastep / 各类 systemd --user 服务）的行为不符合预期，而 service 本身的 Guix 配置没有这个开关。需要在 `~/.config/<daemon>/` 下注入 user-level 配置或脚本，但 daemon 默认配置目录**在系统层（`/etc` 或 `/gnu/store`）**，用户态 `~/.config/<daemon>/` 不存在——直接放不会被加载。
+
+### 9.1 典型症状
+
+WirePlumber 案例（2026-06-26 实战）：默认输出 sink 总是 MUTED 状态。诊断：
+```bash
+wpctl status
+# *   82. sof-hda-dsp Speaker                 [vol: 0.69 MUTED]
+# 这时已经用 wpctl set-mute 82 0 临时解开,验证声音有了
+# 然后看根因:~/.config/wireplumber/ 不存在(daemon 在用系统默认)
+ls -la ~/.config/wireplumber/ 2>&1  # 没有该目录
+```
+
+### 9.2 根因分类（先判定再选路径）
+
+| 根因分类 | 表现 | 兜底路径 |
+|----------|------|----------|
+| **A. daemon 自带"自动"行为被误触发** | 某条件触发后 sink 状态被改 + 持久化 | 配置层关闭那个自动行为（`*.conf` / `*.d/` 段） |
+| **B. state 恢复时把上次的错误状态读回来** | 状态文件（如 `~/.local/state/<daemon>/`）里 `mute:true` 反复被回放 | 行为层 hook 强制覆盖（Lua / 脚本） |
+| **C. 启动顺序问题** | 某 service 启动比 daemon 早，配置没被读到 | 行为层加 on-ready hook |
+| **D. 完全是上游 bug** | 等等 | 工作量大于 value 时，**接受现状 + 写 workaround 脚本**，不跟上游斗 |
+
+wireplumber 案例是 A+B 混合，**配置层 + 行为层双管齐下**。
+
+### 9.3 配置层 + 行为层双管齐下范式（wireplumber 实战可复用）
+
+**A. 仓库内建包**
+
+```
+dotfiles/enable/wireplumber/
+└── .config/
+    └── wireplumber/
+        ├── wireplumber.conf.d/
+        │   └── 50-disable-automute.conf        # 配置层
+        └── scripts/
+            └── 40-alsa/                        # 目录名前缀控制加载顺序
+                └── 40-force-unmute.lua          # 行为层
+```
+
+`AGENTS.md`（含 `<!-- structor:begin -->...<!-- /structor -->` 标记对，给 `blue structor` 重写）一并建好。
+
+**B. `source/config.org` `dotfile-services` 块加包名到 packages 列表**
+
+```scheme
+(packages '("agents" "desktop" "system" "terminal" "utilities"
+            "wireplumber"          ; ← 新加,跟其他项保持 col 对齐(见 §8.2 坑 4)
+            "noctalia-suite"))
+```
+
+**C. wireplumber.conf.d 关闭自带自动行为**
+
+`wireplumber.conf` 语法（GKeyFile 风格，**没有逗号**）：
+
+```ini
+wireplumber.profiles = {
+    main = {
+        wireplumber.settings = {
+            ["device.routes.mute-on-alsa-playback-removed"] = false
+            ["device.routes.mute-on-bluetooth-playback-removed"] = false
+        }
+    }
+}
+```
+
+**D. scripts/ 行为层兜底 Lua 脚本**
+
+wireplumber 0.5.x API：监听 `node-state-changed` 事件，filter `device.api=alsa` + `media.class matches Audio/Sink` + `event.subject.new-state=running` → 拿到 `device.id` + `card.profile.device` → 遍历 device 的 Route 参数 → 把对应 route `mute = false` 写回去。
+
+关键 hook 模板：
+
+```lua
+unmute_hook = SimpleEventHook {
+  name = "force-unmute/alsa-sink-ready",
+  interests = {
+    EventInterest {
+      Constraint { "event.type", "=", "node-state-changed" },
+      Constraint { "media.class", "matches", "Audio/Sink" },
+      Constraint { "device.api", "=", "alsa" },
+    },
+  },
+  execute = function (event)
+    local node = event:get_subject ()
+    if event:get_properties ()["event.subject.new-state"] ~= "running" then return end
+    -- 拿 device_id + cpd,遍历 Route 把 mute = false
+    ...
+  end
+}
+unmute_hook:register ()
+```
+
+**E. 加载顺序：目录名前缀数字控制**
+
+- `40-alsa/` 在系统自带的 `50-alsa/` 之前注册 hook
+- 同 prefix 内按字典序加载
+- 这条对所有"用户态脚本要早于系统脚本注册 hook"的场景通用
+
+### 9.4 部署与验证
+
+```bash
+# 1) blue home(必须在仓库根,见 §1 ⚠)
+cd ~/Projects/Config/Guix-configs && blue home
+
+# 2) 验证部署到位
+ls -la ~/.config/wireplumber/   # 应存在(原本是空/不存在的)
+ls -la ~/.config/wireplumber/scripts/40-alsa/
+
+# 3) 重启 daemon 让配置生效
+systemctl --user restart wireplumber
+# 失败时试试直接 kill:pkill -f wireplumber,然后 dbus 拉起新实例
+
+# 4) 验证行为
+wpctl status    # 看 sink 是否还 MUTED
+```
+
+### 9.5 兜底防线（**关键**）
+
+如果 `blue home` 因为 §8.2 坑 5（上游错误 cascade）走不通：
+- **不要**手改 `source/channel.lock` / `source/information.scm`
+- **可以**手动 stow 验证效果（`stow --dir=dotfiles/enable --target=$HOME --no-folding wireplumber`）—— 临时验证后**回滚**手动 symlink，等 `blue home` 修好再统一部署
+- 把 `channel.lock` 错误作为独立 issue 汇报给用户，**不要**让它卡住当前任务
+
+### 9.6 反模式
+
+- ❌ **写 `~/.config/wireplumber/...` 直接编辑（不走 stow）**——这文件会被 `blue home` 的 store 副本覆盖或冲突
+- ❌ **只写配置层不写行为层**——wireplumber 这种 daemon 行为层兜底是必须的，配置层只能关 setting
+- ❌ **只写行为层不写配置层**——下次 daemon 升级可能默认开启 automute，行为层永远在救火
+- ❌ **把脚本放在 `scripts/` 顶层（不分子目录）**——失去加载顺序控制，跟系统 `50-alsa/*` 撞 race condition
+- ❌ **在 Lua 脚本里 `print` 调试**——wireplumber 走 journal/log topic，**用 `log:info(device, "...")`** 才有 trace
+
+---
+
+## 不变量与边界
+
+- 本 skill **不缓存** KB 卡片全文；只缓存"反复出现的高频协议"。
+- 任何工作流细节冲突 → 以 `~/Documents/Org/experiences/*/` 对应 KB 卡片为准(session_search 召回)。
+- 新增协议不写本 skill,直接写 KB 卡片(人类主笔);本 skill 周期性从 KB 提取。
+- 详细场景化案例见各 KB 卡片 ID(报告 .hermes-extract-report.md B 节有完整 ID 索引)。
+- Emacs dotfiles 调试陷阱见 `references/emacs-org-capture-pitfalls.md`(org-capture-expand-file 不对内嵌 form 求值)。
+- niri 桌面 + fcitx IME + nix-profile GUI 应用的环境变量注入实战见 `references/niri-gui-environment-injection.md`（三件套诊断、blue home + 重启 niri 会话流程、Guix 不用 systemd 的反模式）。
+- hermes-desktop 启动失败诊断见 `references/hermes-desktop-diagnostics.md`(日志优先级、版本探测超时、cron 模块导入竞态、Nix flake lock 追溯、GC 检测)。
+- hermes-gateway 作为 shepherd service 的 self-kick loop 诊断见 `references/hermes-gateway-shepherd-service.md`(日志模式识别、`--replace` 触发机制、清理多个并存 home-shepherd、orphan gateway 进程)。
+- Electron Wayland IME 完整调试流程（QQ 案例、flag 对照表、Electron 版本速查、Nix 修复范式）见 `references/electron-wayland-ime-debug.md`。
+- GNU Stow 二轨 dotfile 部署策略（`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范）见 `references/gnu-stow-two-tier-dotfiles.md`。
+- 从 git history 恢复已删除的 dotfile 到 `stow/<pkg>/` 或 `dotfiles/enable/<app>/`(过期 README 路径、删除 commit 索引、git archive 导出、多版本候选决策、gitlink 子模块跳过、用户已明确范围时的 clarify 边界)见 `references/git-restore-deleted-dotfiles.md`。
+- **source/config.org system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判)见 §8 + `references/config-org-modify-safely.md`。
+- **user-level daemon 兜底配置范式**(wireplumber 类、配置层 + 行为层双管齐下、加载顺序、blue home 部署失败兜底防线)见 §9。

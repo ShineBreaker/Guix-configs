@@ -2,18 +2,20 @@
 
 本目录管理**频繁变动且需要版本备份**的配置文件，与 `dotfiles/immutable/`（Guix Home stow，源只读）的部署模型互补：
 
-| 维度         | `dotfiles/immutable/`                                    | `dotfiles/mutable/`                                                   |
-| ------------ | -------------------------------------------------------- | --------------------------------------------------------------------- |
-| 部署机制     | Guix Home `home-dotfiles-service-type`（layout `'stow`） | GNU Stow（`stow --no-folding --dir=dotfiles/mutable --target=$HOME`） |
-| 源-目标关系  | 软链接到 `/gnu/store` 只读副本                           | **单文件**软链接直接到 `dotfiles/mutable/PKG/` 仓库源                 |
-| 目标目录形态 | 软链接到 store 只读副本                                  | **真实目录**（`--no-folding`，运行时可写入）                          |
-| 改源后生效   | 必须 `blue home`                                         | **无需任何命令，直接生效**                                            |
-| 适合场景     | 稳定的配置文件（niri、fish 等）                          | 频繁手改、需要 git 备份追踪（如 emacs、hermes）                       |
-| 版本控制     | git 跟踪 + Guix store hash                               | git 跟踪（无中间层）                                                  |
+| 维度         | `dotfiles/immutable/`                                    | `dotfiles/mutable/`                                                     |
+| ------------ | -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 部署机制     | Guix Home `home-dotfiles-service-type`（layout `'stow`） | GNU Stow（`blue stow` → `stow --dir=dotfiles/mutable --target=$HOME`）  |
+| 源-目标关系  | 软链接到 `/gnu/store` 只读副本                           | **单文件**软链接直接到 `dotfiles/mutable/PKG/` 仓库源                   |
+| 目标目录形态 | 软链接到 store 只读副本                                  | **默认真实目录**（`--no-folding`，运行时可写入）；可按包 opt-in folding |
+| 改源后生效   | 必须 `blue home`                                         | **无需任何命令，直接生效**                                              |
+| 适合场景     | 稳定的配置文件（niri、fish 等）                          | 频繁手改、需要 git 备份追踪（如 emacs、hermes）                         |
+| 版本控制     | git 跟踪 + Guix store hash                               | git 跟踪（无中间层）                                                    |
 
-## 部署模型：no-folding + 三层忽略
+## 部署模型：默认 no-folding，可按包 opt-in folding
 
-> 核心约束：**目标目录必须保持为真实目录，stow 只对单个文件建软链接**。这避免应用运行时产物（`logs/`、`state.db`、`sessions/` 等）经整目录软链写进仓库源。
+> 核心约束：**目标目录默认保持为真实目录，stow 只对单个文件建软链接**。这避免应用运行时产物（`logs/`、`state.db`、`sessions/` 等）经整目录软链写进仓库源。
+
+> **folding 控制**：在 `dotfiles/mutable/<PKG>/` 下放一个 `.stow-folding` 标记文件（空文件即可），即对该包启用 tree folding（目标目录本身折叠成单条指向源的软链）。无标记的包走默认 `--no-folding`。`blueprint.scm` 每次调用 stow 时都带 `--ignore=\.stow-folding$`，确保标记文件本身不会被部署到 `$HOME`。
 
 `.stow-local-ignore` 语法：**Perl 正则，逐行一条，匹配路径尾部**；`#` 起注释、空行允许（见 Stow 手册 "Ignore Lists"）。
 
@@ -144,8 +146,10 @@ mv ~/.config/<app>/<file> /tmp/backup-<file>
 #    写 dotfiles/mutable/<new-pkg>/.stow-local-ignore（Perl 正则逐行，# 注释允许），
 #    模板见 dotfiles/mutable/emacs/.stow-local-ignore。纯配置文件包（如 hermes）可跳过。
 
-# 5. 部署（--no-folding 自动生效，目标为真实目录）
+# 5. 部署（默认 --no-folding，目标为真实目录）
 blue stow <new-pkg>
+#    若想让该包改用整目录折叠（目标目录本身变成指向源的软链）：
+#    touch dotfiles/mutable/<new-pkg>/.stow-folding && blue stow --restow <new-pkg>
 
 # 6. 验证 + commit
 ls -la ~/.config/<app>/<file>

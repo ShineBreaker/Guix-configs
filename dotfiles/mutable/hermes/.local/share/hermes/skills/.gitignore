@@ -1,0 +1,6 @@
+.curator_backups
+.curator_state
+.hub
+
+.usage.json
+.usage.json.lock
