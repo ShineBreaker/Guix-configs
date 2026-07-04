@@ -2,18 +2,18 @@
 #
 # SPDX-License-Identifier: MIT
 
-[submodule "dotfiles/enable/utilities/.local/share/fcitx5/rime"]
+[submodule "rime"]
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
-[submodule "stow/emacs/.config/emacs/general-config"]
+[submodule "emacs-general-config"]
 	path = dotfiles/mutable/emacs/.config/emacs/general-config
 	url = https://codeberg.org/BrokenShine/.emacs.d.git
-[submodule "stow/appimage-run"]
+[submodule "appimage-run"]
 	path = dotfiles/mutable/appimage-run
 	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
-[submodule "stow/pi/.config/pi/extensions/atelier"]
+[submodule "pi-atelier"]
 	path = dotfiles/mutable/pi/.config/pi/extensions/atelier
 	url = https://github.com/ShineBreaker/pi-atelier.git
-[submodule "stow/pi/.config/pi/extensions/pi-ui"]
+[submodule "pi-ui"]
 	path = dotfiles/mutable/pi/.config/pi/extensions/pi-ui
 	url = https://github.com/ShineBreaker/pi-ui.git
