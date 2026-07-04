@@ -13,11 +13,10 @@ environment {
   XDG_CURRENT_DESKTOP "niri"
 }
 
-spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
-spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP"
+spawn-sh-at-startup "herd set-environment graphical-session XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
 
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
-spawn-at-startup "dex" "-a"
+spawn-sh-at-startup "fish -c 'dex -a &'"
 
 prefer-no-csd
 
