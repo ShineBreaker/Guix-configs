@@ -6,6 +6,8 @@
 etc
 var
 
-# Binary
+# Binary(编译产物)
 *.elc
-init.el
+
+# main.el 由 emacs.org tangle 自动生成,init.el bootstrap 会按需重建
+main.el
