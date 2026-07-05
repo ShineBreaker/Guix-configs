@@ -176,3 +176,165 @@ Q5: 社交/通讯 CLI(X/邮件/Teams)?(可多选)
 ```
 
 **经验**:5 大类打包问,先给数量预期;Q1 是最大头,问清楚能省 50% 后续问题。
+
+## 5. 分类重组(reorganize)配套脚本
+
+> 配合 SKILL.md §2.5 使用。把"1 目录 = 1 skill"的散沙重组为"<category>/<skill>"官方 layout。提炼自 2026-07-05 重组 31 → 12 分类那次会话。
+
+### 5.1 盘点 + 分类识别脚本
+
+```bash
+#!/usr/bin/env bash
+# reorganize-survey.sh — 跑之前先摸清结构 + git 状态
+# 用法: ./reorganize-survey.sh
+
+set -e
+SKILLS="$HOME/Projects/Config/Guix-configs/dotfiles/mutable/hermes/.local/share/hermes/skills"
+
+echo "=== 1. SKILL.md 总数基线 ==="
+find "$SKILLS" -name SKILL.md -not -path "*/.curator_backups/*" | wc -l
+
+echo ""
+echo "=== 2. 顶层目录(分类)状态 ==="
+for d in "$SKILLS"/*/; do
+  d=${d%/}
+  name=$(basename "$d")
+  has_skill="N"; [ -f "$d/SKILL.md" ] && has_skill="Y"
+  has_subdirs=$(find "$d" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+  has_desc="N"; [ -f "$d/DESCRIPTION.md" ] && has_desc="Y"
+  printf "  %-30s  SKILL.md=%s  sub-skill=%2d  DESCRIPTION=%s\n" \
+    "$name" "$has_skill" "$has_subdirs" "$has_desc"
+done
+
+echo ""
+echo "=== 3. 伪分类(目录名=skill 名,无 nested)==="
+for d in "$SKILLS"/*/; do
+  d=${d%/}
+  name=$(basename "$d")
+  if [ -f "$d/SKILL.md" ] && [ "$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l)" = "0" ]; then
+    echo "  $name"
+  fi
+done
+
+echo ""
+echo "=== 4. 空分类(只有 DESCRIPTION.md,无 skill)==="
+for d in "$SKILLS"/*/; do
+  d=${d%/}
+  name=$(basename "$d")
+  if [ ! -f "$d/SKILL.md" ] && [ "$(find "$d" -name SKILL.md | wc -l)" = "0" ]; then
+    echo "  $name"
+  fi
+done
+
+echo ""
+echo "=== 5. git 索引状态基线 ==="
+cd ~/Projects/Config/Guix-configs
+git status -s dotfiles/mutable/hermes/.local/share/hermes/skills/
+```
+
+### 5.2 重组执行脚本(PLAN → 执行)
+
+```bash
+#!/usr/bin/env bash
+# reorganize-execute.sh — 搬运 skill 到新分类,处理 git 未跟踪目录
+# 用法: 编辑下面的 PLAN,确认后 ./reorganize-execute.sh
+
+set -euo pipefail
+REPO="$HOME/Projects/Config/Guix-configs"
+SKILLS_REL="dotfiles/mutable/hermes/.local/share/hermes/skills"
+SKILLS="$REPO/$SKILLS_REL"
+
+declare -A MOVE_MAP=(
+  ["agent-history-importer"]="autonomous-ai-agents"
+  ["crush-session-extract"]="autonomous-ai-agents"
+  ["worker-handoff"]="autonomous-ai-agents"
+  ["architecture-advisor"]="planning"
+  ["task-planner"]="planning"
+  ["codebase-scout"]="devtools"
+)
+NEW_CATEGORIES=("planning" "guix-configs")
+EMPTY_TO_TRASH=("data-science" "email" "github" "note-taking" "smart-home" "social-media")
+
+cd "$SKILLS"
+chmod -R u+w "$SKILLS"
+
+# Step 2: 创建新分类
+for c in "${NEW_CATEGORIES[@]}"; do
+  if [ ! -d "$c" ]; then
+    mkdir "$c"
+    cd "$REPO" && git add "$SKILLS_REL/$c/" && cd "$SKILLS"
+    echo "  ✓ 新建分类: $c"
+  fi
+done
+
+# Step 3: 处理 git 未跟踪的源(避免 §1.8 那个 "source directory is empty" 错)
+for skill in "${!MOVE_MAP[@]}"; do
+  cd "$REPO"
+  if git status -s "$SKILLS_REL/$skill/" 2>/dev/null | grep -q "^??"; then
+    git add "$SKILLS_REL/$skill/"
+    echo "  ✓ git add 未跟踪: $skill"
+  fi
+  cd "$SKILLS"
+done
+
+# Step 4: git mv 搬迁
+for skill in "${!MOVE_MAP[@]}"; do
+  tgt="${MOVE_MAP[$skill]}"
+  if [ -d "$skill" ] && [ -d "$tgt" ]; then
+    cd "$REPO"
+    git mv "$SKILLS_REL/$skill" "$SKILLS_REL/$tgt/" 2>/dev/null \
+      && echo "  ✓ git mv $skill → $tgt/" \
+      || echo "  ✗ 失败: $skill"
+    cd "$SKILLS"
+  fi
+done
+
+# Step 5: 删空分类走 XDG trash
+mkdir -p "$HOME/.local/share/hermes/Trash/files" "$HOME/.local/share/hermes/Trash/info"
+TS=$(date +%Y%m%d%H%M%S)
+for c in "${EMPTY_TO_TRASH[@]}"; do
+  src_rel="$SKILLS_REL/$c"
+  src_abs="$SKILLS/$c"
+  [ ! -d "$src_abs" ] && continue
+  cd "$REPO"
+  git rm -r "$src_rel" >/dev/null 2>&1 || continue
+  dest="$HOME/.local/share/hermes/Trash/files/${TS}-$c"
+  cat > "$HOME/.local/share/hermes/Trash/info/${TS}-$c.trashinfo" <<EOF
+[Trash Info]
+Path=$REPO/$src_rel
+DeletionDate=$(date -Iseconds)
+EOF
+  mv "$src_abs" "$dest"
+  echo "  ✓ trash $c/ → ${TS}-$c/"
+  cd "$SKILLS"
+done
+
+# Step 6: 验证
+echo ""
+echo "=== SKILL.md 总数(应与基线一致)==="
+find "$SKILLS" -name SKILL.md -not -path "*/.curator_backups/*" | wc -l
+echo ""
+echo "=== Hermes 端 discover(0 disabled 即成功)==="
+~/.nix-profile/bin/hermes skills list 2>&1 | tail -3
+echo ""
+echo "=== 作用域边界:其他源未碰 ==="
+echo "  ~/.config/agents/skills/ 数: $(ls ~/.config/agents/skills/ | wc -l)"
+```
+
+**关键点**:
+- **Step 3 必须有**:不先 `git add` 就 `git mv` 会报"fatal: source directory is empty"(§1.8)
+- **Step 5 trash 用 `<skills_root>.parent / "Trash"`**(注意是 hermes 的 Trash 不是 ~/.local/share/Trash)
+- **Step 6 验证 `0 disabled`**:hermes 端读到新分类但有任何 skill disabled = 部署失败
+
+### 5.3 重组前 cross-check 必问
+
+把 PLAN 整表展示给用户**等拍板**再执行:
+
+| skill 名 | 当前顶层 | 目标分类 | 理由 | 操作 |
+|---|---|---|---|---|
+| agent-history-importer | top-level | autonomous-ai-agents | 外部 agent schema 侦察 | git mv |
+| architecture-advisor | top-level | planning 🆕 | 战略咨询 ≠ agent 编排 | mkdir + git mv |
+| data-science | empty | (删除) | 只有顶层 DESCRIPTION,无具体 skill | trash |
+| mlops | empty-with-nested | (保留) | 有 evaluation/inference/models 三个 nested placeholder | 不动 |
+
+如果用户说"先压现有"或"可以新建",再执行 5.2 脚本。

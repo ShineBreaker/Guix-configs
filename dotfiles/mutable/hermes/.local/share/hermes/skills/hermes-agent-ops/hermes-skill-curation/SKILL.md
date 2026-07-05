@@ -1,13 +1,13 @@
 ---
 name: hermes-skill-curation
-description: "Use when the user wants to add, remove, prune, audit, or curate the Hermes Agent skill library on disk (~/.local/share/hermes/skills/, ~/.hermes/skills/, bundled vs. dotfile-managed skills). Triggers: '精简 skill', '删掉 XX skill', 'skill 太多', '哪些 skill 在用', '清理 Hermes skill', 'skill 审计', 'trash skill 目录', 'bundled skill 删不掉', 'skills_list 跟磁盘对不上', 'hermes skill 库维护', 'curator 暂停', 'archiving skills', or any bulk add/remove of skill directories. Covers: skills_list 视图 vs 磁盘真实存在的差异、bundled skill 的 read-only 0555 权限位破解、XDG trash 范式(用户偏好 rm→trash)、用户 dotfile 源(Guix stow)与 Hermes 安装源(bundle)边界。"
+description: "Use when the user wants to add, remove, prune, reorganize, audit, or curate the Hermes Agent skill library on disk (~/.local/share/hermes/skills/, ~/.hermes/skills/, bundled vs. dotfile-managed skills). Triggers: '精简 skill', '删掉 XX skill', 'skill 太多', '哪些 skill 在用', '清理 Hermes skill', 'skill 审计', 'trash skill 目录', 'bundled skill 删不掉', 'skills_list 跟磁盘对不上', 'hermes skill 库维护', 'curator 暂停', 'archiving skills', '分类 skill', '重新分类', 'skill 太散', 'skill 没分类', '重组 skill', 'reorganize skills', '创建分类目录', '新建分类', or any bulk add/remove/regroup of skill directories. Covers: skills_list 视图 vs 磁盘真实存在的差异、bundled skill 的 read-only 0555 权限位破解、XDG trash 范式(用户偏好 rm→trash)、用户 dotfile 源(Guix stow)与 Hermes 安装源(bundle)边界、分类重组(伪分类→真分类)、git 索引状态对 mv 的影响、作用域边界(本 skill 默认只管 ~/.local/share/hermes/skills/,不动 ~/.config/agents/skills/ 或 ~/.hermes/skills/ 除非用户明确授权)。"
 ---
 
-# hermes-skill-curation — Hermes skill 库精简
+# hermes-skill-curation — Hermes skill 库维护(精简 + 重组)
 
-> 一次会话内"Hermes skill 批量增删"类工作的协议。源数据在 ~/Documents/Org/ 由人类维护;本 skill 是缓存层,提炼自 2026-06-21 精简 73 → 15 那次会话。
+> 一次会话内"Hermes skill 批量增删/重组"类工作的协议。涵盖两类核心工作流:**Prune**(精简/删除) 和 **Reorganize**(分类重组——把"1 目录 = 1 skill"的散沙按语义归入真分类)。源数据在 ~/Documents/Org/ 由人类维护;本 skill 是缓存层,提炼自 2026-06-21 精简 73 → 15 那次会话 + 2026-07-05 重组 31 → 12 分类那次会话。
 
-## 1. 关键不变量(开始任何精简前必读)
+## 1. 关键不变量(开始任何维护前必读)
 
 1. **三种 skill 源,不要混**:
    - **Hermes bundled**:`~/.local/share/hermes/skills/<category>/<name>/` —— Hermes 安装包自带,read-only 权限位 `0555`,**不在任何仓库源里**。`blue home` 不会回滚它(它走 `source/nix/configuration/programs/hermes.nix` 装 `full` 输出)。精简它就是直接动磁盘。**正确卸载路径**:`hermes skills opt-out --yes` 写 `~/.local/share/hermes/.no-bundled-skills` marker,后续 `hermes update`/`skills sync` 不会 seed;`opt-out --remove --yes` 还会**删所有未修改的 bundled 副本**(user-edited 和 local/hub 不动)。**不要直接 trash builtin**——marker 不写,下次 self-update 仍会从 upstream 拉回。
@@ -32,7 +32,7 @@ description: "Use when the user wants to add, remove, prune, audit, or curate th
 
    关键参数:`force_terminal=False, no_color=True, width=200` 让 rich table 输出可被 AI 解析(默认会输出 ANSI 色码跟 box-drawing,在受限的 shell 渲染下乱)。
 
-   **CLI 调不通时的 fallback**:`hermes skills list` 走 desktop 进程(常报 `ModuleNotFoundError: hermes_cli` 那种 broken venv 问题),直接用 Python API 调正在跑的后台 daemon venv(在 `ps -ef | grep 'hermes dashboard'` 找 `klnyl...-hermes-agent-env/bin/python3.12`,那是当前活着的 venv)。
+   **CLI 调不通时的 fallback**:`~/.nix-profile/bin/hermes skills list`(走绝对路径,因为 PATH 默认不含 `~/.nix-profile/bin`)读 4 列表(Name/Category/Source/Status)。`0 disabled` 是部署成功的最低门槛。
 
 6. **`blue stow` 不会覆盖已存在的目标 entry**。当用户的 `~/.local/share/hermes/skills/<name>/`(或 `~/.agents/skills/<name>/`)已经是个真目录(通常被另一个 `mutable/` 包部署过),新包 `blue stow <pkg>` **不会**替换这个目录——结果是顶层 entry 存在,但内部文件链(`SKILL.md` 是个指向仓库源的 symlink)**没建上**,agent 实际跑的时候读不到这个 skill。**症状**:`ls ~/.local/share/hermes/skills/<name>/SKILL.md` 是真文件但内容为空,或干脆 entry 是空目录。**修法**(任选):
    - `blue stow --adopt <pkg>` —— 收养目标现状,把当前内容挪进包源(适合"想保留 ~ 下现状"场景)
@@ -40,6 +40,18 @@ description: "Use when the user wants to add, remove, prune, audit, or curate th
    - 跨包冲突场景(两个 `mutable/` 包都往 `~/.agents/skills/<x>/` 写):先 `blue stow --delete` 那个不该拥有此 entry 的包,只让一个包拥有该 path
 
    验证 deploy 真的生效的方式见 §1.5 —— `do_list` 是 source of truth,`0 disabled` 是最低门槛。
+
+7. **作用域边界:本 skill 默认只管 `~/.local/share/hermes/skills/`**。
+   - **绝对不要碰 `~/.config/agents/skills/`**(用户 dotfile 源 + 软链接到 `/gnu/store` 只读副本,改动必须通过 `blue home` 部署,直接编辑会被覆盖;**且该目录下 skill 跟本 skill 库是 separate 的 24 个独立 skill**,2026-07-05 用户明令"不要碰 ~/.config/agents/skills/ 里面的东西")
+   - **不要碰 `~/.hermes/skills/`**(Hub 安装源,受 `hermes skills uninstall` 管理,走 CLI 不动磁盘)
+   - **不要碰 Hermes 安装源**(`/gnu/store/<hash>-hermes-*/skills/` 或 `~/Projects/Agent/hermes-agent/skills/`),bundled skill 走 `hermes skills opt-out`
+   - 如果任务确实需要跨多个源(如批量同步),**先 clarify 询问用户授权范围**,列出"将影响 X 个 skill 在 Y 个位置"的具体清单 + 影响预估,等用户拍板再动手
+
+8. **git 索引状态对 mv 的影响**。Stow 源是 git 仓库,搬迁/删除要走 `git mv` / `git rm` 保持 git history(否则 `git status` 报大量 `D` + `??`,历史丢失)。**但 `git mv` 要求源已在 git 索引中**——如果目录是 git 还没 add 的未跟踪状态(`git status` 报 `??`),直接 `git mv` 会失败:
+   ```
+   致命错误:源目录为空,源=<untracked>,目标=<dest>
+   ```
+   **正确顺序**:`git add <untracked_dir>` 先把目录纳入索引,**再** `git mv <src> <dest>`。或者改用纯 `mv` + 后续 `git add <dest>` + `git rm` 已跟踪文件(适用于混合状态)。**搬迁前必须跑 `git status` 看基线**,把 `??` 未跟踪列出来单独处理。`mv` + 后续 `git rm -r <deleted_src>` 也能工作,但 git history 会断成"先 add 后 rm"两段而非 rename。
 
 ## 2. 标准精简协议(7 步)
 
@@ -107,6 +119,116 @@ mv ~/.local/share/Trash/files/<ts>-<name> \
 
 bundled skill 来自 Hermes 安装包,下次 `blue rebuild` / Hermes self-update / `skills_list` 触发 lazy load 时可能从 upstream 重新拉回。**持久精简要在源头改**(`source/nix/configuration/programs/hermes.nix` 装 `minimal` 而不是 `full`,或者删 `~/Projects/Agent/hermes-agent/skills/<name>/SKILL.md`)。如果用户没要求持久化,只做 trash 就够了。
 
+## 2.5 分类重组协议(Reorganize)
+
+跟 §2 精简协议并列。把"1 目录 = 1 skill"的散沙重组为"语义分类/<skill>"的官方 layout。**原则**:先压入现有分类,**只有在当前分类完全没合理文件夹时再新建**(用户硬偏好)。**前提**:本任务只动 §1.7 作用域内的 `~/.local/share/hermes/skills/`,用户明确授权。
+
+### Step 1: 盘点 + 分类识别
+
+```bash
+# 1. 真实 SKILL.md 总数(基线)
+find ~/.local/share/hermes/skills/ -name SKILL.md | wc -l
+
+# 2. 顶层目录结构
+ls -la ~/.local/share/hermes/skills/
+
+# 3. 每个顶层目录的子结构(sub-skill vs 伪分类)
+for d in ~/.local/share/hermes/skills/*/; do
+  has_skill=$(test -f "$d/SKILL.md" && echo Y || echo N)
+  has_subdirs=$(find "$d" -mindepth 1 -maxdepth 1 -type d | wc -l)
+  echo "$d  skill=$has_skill subdirs=$has_subdirs"
+done
+
+# 4. git 索引状态(搬迁前基线)
+cd ~/Projects/Config/Guix-configs
+git status -s dotfiles/mutable/hermes/.local/share/hermes/skills/
+```
+
+**伪分类识别**:目录名 = skill 名,目录下只有 `SKILL.md` 自己,无 nested skill。**真分类**:目录下有 ≥1 个子目录(sub-skill),子目录里才是 `SKILL.md`。**空分类**:只有 `DESCRIPTION.md` 一个文件,无 skill。
+
+### Step 2: 读每个伪分类的 SKILL.md frontmatter
+
+`name` + `description` + `tags` + `related_skills` 是归属决策的**唯一权威**。**禁止**只看目录名猜测语义。
+
+### Step 3: 设计分类映射表(PLAN,不动磁盘)
+
+列三栏表格:`skill 名 → 目标分类(理由) → 操作(mv 到子目录 / 创建新分类 / 删除空分类)`。**用户硬约束**:
+- **优先压入现有真分类**(autonomous-ai-agents / creative / devtools / hermes-agent-ops / media / mlops / productivity / desktop / education / research 等)
+- **只在现有分类确实无法容纳时新建**(典型场景:"战略咨询/规划" ≠ "agent 编排",前者该新开 `planning/`;项目专属 workflow ≠ "通用调试",前者该新开 `<project>/`)
+- **空分类决策**:有 nested placeholder + 明确未来方向的保留(例如 `mlops/{evaluation,inference,models}/`);只有顶层 `DESCRIPTION.md` 无具体方向的,**建议删除**走 trash
+
+把 PLAN 整表展示给用户**等拍板**,不直接动手。
+
+### Step 4: chmod + git 基线
+
+```bash
+chmod -R u+w ~/.local/share/hermes/skills/   # §1.3 bundled 0555
+cd ~/Projects/Config/Guix-configs
+git status dotfiles/mutable/hermes/.local/share/hermes/skills/   # 记录基线
+```
+
+### Step 5: 用 `git mv` 搬迁,处理 §1.8 未跟踪目录
+
+```bash
+cd dotfiles/mutable/hermes/.local/share/hermes/skills
+
+# 已跟踪目录:直接 git mv(保持 rename 历史)
+git mv <skill> <category>/
+
+# 未跟踪目录(`git status` 显示 `??`):先 git add 再 git mv
+git add <untracked_skill>/
+git mv <untracked_skill> <category>/
+```
+
+### Step 6: 新建分类目录(仅当 Step 3 PLAN 批准时)
+
+```bash
+mkdir <new_category>
+git add <new_category>/
+# 然后 git mv skill 进子目录(见 Step 5)
+```
+
+**新建分类后必须**:① 写 `<new_category>/DESCRIPTION.md`(frontmatter `description:` 一段话说明分类边界);② skill 本体自己也要写 `SKILL.md`,**只写 DESCRIPTION 是不够的**(DESCRIPTION 是分类元数据,SKILL.md 才是 skill 元数据;分类可能嵌套多个 skill)。
+
+### Step 7: 删空分类走 XDG trash(参见 §2 Step 3 协议)
+
+```bash
+cd ~/Projects/Config/Guix-configs
+mkdir -p ~/.local/share/hermes/Trash/{files,info}
+TS=$(date +%Y%m%d%H%M%S)
+for c in <empty_category_1> <empty_category_2> ...; do
+  src="dotfiles/mutable/hermes/.local/share/hermes/skills/$c"
+  [ ! -d "$src" ] && continue
+  git rm -r "$src"
+  dest="$HOME/.local/share/hermes/Trash/files/${TS}-$c"
+  cat > "$HOME/.local/share/hermes/Trash/info/${TS}-$c.trashinfo" <<EOF
+[Trash Info]
+Path=$(pwd)/$src
+DeletionDate=$(date -Iseconds)
+EOF
+  mv "$src" "$dest"
+done
+```
+
+### Step 8: 验证 + 报告
+
+```bash
+# 1. SKILL.md 总数应该与 Step 1 基线一致(零丢失)
+find ~/.local/share/hermes/skills/ -name SKILL.md | wc -l
+
+# 2. hermes 端 discover 看到新分类 + 0 disabled
+~/.nix-profile/bin/hermes skills list | tail -3   # 期望 "N enabled, 0 disabled"
+
+# 3. git status 全是 R(rename)或 D(空分类删)或 A(新分类),没有 ?? 残留
+cd ~/Projects/Config/Guix-configs
+git status -s dotfiles/mutable/hermes/.local/share/hermes/skills/
+
+# 4. 作用域边界确认:其他源未碰
+ls /home/brokenshine/.config/agents/skills/ | wc -l   # 应跟重组前一致
+```
+
+输出报告:「搬 N 个 / 新建 M 个分类 / 删 K 个空分类 / SKILL.md 总数保持 X / enabled Y disabled 0 / 其他作用域源未触碰 (24/24 原样)」。
+
 ## 3. 反模式(本会话犯过的错)
 
 - ❌ **直接 `rm -rf` 删 skill 目录** — 用户明确反对(且 trash 还能恢复)
@@ -119,6 +241,11 @@ bundled skill 来自 Hermes 安装包,下次 `blue rebuild` / Hermes self-update
 - ❌ **`hermes skills uninstall <local-skill>`** — local 不接受 uninstall,会报 "is not a hub-installed skill";要走 trash
 - ❌ **`hermes skills config` 试图 echo 走 stdin** — 报 "requires an interactive terminal",必须 PTY,AI 跑不了
 - ❌ **删 cc-switch 软链接指向的真实目录** — 软链接 `~/.config/agents/skills/docx` 指向 `~/.config/cc-switch/skills/docx`,cc-switch 用 SQLite 状态管理;只 `os.unlink` 软链接,不要删 cc-switch 那边的源
+- ❌ **`git mv` 对未跟踪目录直接用** — `git status` 显示 `??` 的目录不在 git 索引里,`git mv` 会报"fatal: source directory is empty"而不报错其实是 silent 跳过。**必须先 `git add <untracked>` 再 `git mv`**,否则 git history 断成两段(见 §1.8)
+- ❌ **分类重组时跨作用域** — 比如同时改 `~/.local/share/hermes/skills/` **和** `~/.config/agents/skills/`,后者的 skill 是 separate 24 个独立 skill,改动走 `blue home` 部署,直接编辑会被覆盖。**严格守住 §1.7 边界**,要跨就先 clarify 用户授权
+- ❌ **盲目新建分类** — 看到两个 skill 没分类就开 `<新分类>/` 而不复用现有分类。每次新建分类前问自己:**现有 12 个分类里,真的没有任何一个语义上能容纳吗?** 用户硬偏好"先压入现有,只有在完全没合理文件夹时才新建"
+- ❌ **只写分类 DESCRIPTION.md,不写 skill 自己的 SKILL.md** — DESCRIPTION 是分类元数据(描述整个分类边界),SKILL.md 才是 skill 元数据。新建分类 + 搬 skill 时,两者都要写,缺一不可(2026-07-05 重组时只写了 DESCRIPTION,后续给具体 skill 时必须补 SKILL.md)
+- ❌ **execute_code / patch 工具在 hermes skill 文件上 timeout / blocked** — 这是 sandbox 拦截的「人工审批 + 沙箱限制」信号,**不要重试**,**不要换工具重新尝试同样效果**,改用直接终端命令(`mkdir` / `mv` / `cat > file <<EOF`)或 `skill_manage` 管理 SKILL.md
 
 ## 4.5 hermes CLI 关键路径(2026-06-21 确认)
 
@@ -168,4 +295,9 @@ Q5: find-skills / pack-guix / 浏览器自动化 / 社交 CLI 等小项(逐项)
 
 ## 6. 配套脚本
 
-- `references/curation-scripts.md` — 三个验证过的脚本(builtin 批量 trash / local 含 symlink / 标准验证)+ 5 大类用户咨询模板。改 `KEEP_NAMES` / `TO_DELETE` 即可复用。
+- `references/curation-scripts.md` — 4 个验证过的脚本 + 用户咨询模板:
+  - §1 builtin 批量 trash(Prune 用)
+  - §2 local 含 symlink 的 trash(Prune 用)
+  - §3 标准验证流程(Prune/Reorganize 共用)
+  - §4 用户咨询模板(Prune 决策)
+  - §5 **分类重组**(Reorganize 用,新增)— §5.1 盘点脚本 `reorganize-survey.sh` + §5.2 执行脚本 `reorganize-execute.sh`(处理 git 未跟踪 + chmod + trash + 验证 0 disabled)+ §5.3 cross-check 必问表

@@ -35,7 +35,7 @@ metadata:
 | opencode    | `~/.local/share/opencode/storage.db`(SQLite)             |
 | Codex       | `~/.codex/sessions/**/*.jsonl`                           |
 | pi agent    | `~/.pi/agent/sessions/*.json`(老格式)/ `sessions.db`(新) |
-| Crush       | `~/.crush/sessions/*.json`                               |
+| Crush       | `<project>/.crush/crush.db`(SQLite,**项目级**,每个项目独立);全局 `~/.config/crush/.crush/crush.db` 只有 `goose_db_version`,无 session。完整 schema 见 `crush-session-extract` skill(`references/schema-cheatsheet.md`) |
 
 用 `find` / `ls -R` 找到文件,记下大小和 mtime。
 
@@ -166,6 +166,7 @@ FROM message m1, message m2 WHERE ...相邻两条...
 ## 参考资料
 
 - `references/zcode-schema.md` — zcode (`~/.zcode/cli/db/db.sqlite`) 完整 schema 报告。包含所有 part.type 样本、字段映射 cheat sheet、synthetic system-reminder 处理规则、subagent 嵌入策略、time=ms 验证。**importer 写 zcode 后端时直接对照抄**
+- `crush-session-extract` skill(`references/schema-cheatsheet.md`) — Crush v0.81+ 完整 schema(DDL + 每种 part.type 样本 + 字段映射 cheat sheet + 时间单位自检)。本 skill 表里的 Crush 行只是入口指针,详细报告在该 skill 里
 
 ## 已知 pitfall
 
@@ -173,6 +174,10 @@ FROM message m1, message m2 WHERE ...相邻两条...
 - **不要在 message 数量为 0 的 session 上做 sanity check** —— 验证不了任何 part type
 - **不要假设 part 表一定有 time 字段** —— 一些工具(part 是 message 的 children)只存 message 级别的时间
 - **不要漏查子会话** —— Agent/Task 工具调用的 subagent 在 DB 里通常是独立 row + parent_id,而不是嵌入主消息流的一部分
+- **Crush schema 注释说 ms 但实际是秒** —— `sessions.created_at` 注释写 "Unix timestamp in milliseconds",实际存秒(2026 年的时间戳约 1.78e9,不是 1.78e12)。**永远 `datetime(v, 'unixepoch')` 直读,不要除 1000**,否则落回 1970
+- **Crush 没有全局 db** —— `~/.crush/` 不存在,`~/.config/crush/.crush/crush.db` 是 goose migration header(0 sessions)。每个项目独立存 `<project>/.crush/crush.db`,要 `find ~ -name 'crush.db' -path '*/.crush/*'` 才能拿到真实数据
+- **Crush `messages.id` 不全局唯一** —— subagent 的 tool_call 用 `<parent_session_id>$$<tool_call_id>` 复合形式复用了 id 字段。importer 写入 hermes 时把 (session_id, id) 当复合主键,不要单独 PRIMARY KEY(messages.id)
+- **Crush 没有 `system` role** —— system / runtime 提示全部塞进 assistant 第一条消息的 `text` part。importer 的"折叠 system reminder"逻辑对 crush 走空 path,不要无脑套 zcode / claude-code 的折叠策略
 
 ### 来自实战 (2026-07 zcode → hermes 迁移):写 hermes state.db 时的隐藏陷阱
 
