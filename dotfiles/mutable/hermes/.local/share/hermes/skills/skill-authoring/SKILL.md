@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
 description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles every skill must follow — **self-contained** (all runnable artifacts ship inside the skill directory so backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — plus the directory layout, file-type rules, decision trees for what goes in the main file vs. a support file, and a checklist before declaring a skill done. Trigger when: writing a new skill, refactoring an existing skill's structure, wondering 'should this go in SKILL.md or references/', preparing a skill for backup/share, noticing a skill violates the self-contained rule (e.g. references an external path outside the skill dir), or auditing existing skills against the two principles. Also trigger when the user complains that something in a skill 'is too verbose' or 'the docs are in the wrong place' — those are progressive-disclosure violations, not just style nits."
-version: 1.0.0
+version: 1.1.0
 license: MIT
 metadata:
   hermes:
@@ -212,8 +212,64 @@ each one is a fix-on-sight.
 | SKILL.md has a per-tool field table that lives 1:1 in `references/<topic>.md` | Duplication rot | Delete the SKILL.md copy, replace with one-line pointer |
 | `references/2026-MM-DD-topic.md` (date in filename) | Session-ifies what should be reusable | Rename to `references/topic.md`, add a "verified on" note inside |
 | `SKILL.md` is 1000+ lines | Not progressive disclosure | Identify topics, split into `references/<topic>.md` per topic, keep main file under 500 |
-| Hardcoded `/nix/store/<hash>-hermes-agent-env/bin/python3` in a `scripts/` file | Breaks on next `nix-collect-garbage` | Use `_resolve_hermes_py()` pattern (see `scripts/` of `agent-session-import`) |
 | Description frontmatter is generic ("Helps with coding tasks") | Won't fire on real triggers | Rewrite with concrete signal words the user would actually say |
+
+## 7. clarify() options belong in `choices[]`, NEVER inside `question`
+
+When using the `clarify` tool during skill design — for scope decisions,
+naming, support-file layout, etc. — every selectable option goes into
+the `choices` array, **never into the `question` text**.
+
+**Why this matters.** The UI renders `choices` as selectable rows.
+Options written into the `question` string render as dead prose the
+user can read but cannot pick. The user has explicitly corrected this
+mistake in past sessions ("你的提问又出问题了,再试一下") — treat it as
+a known sharp edge of skill authoring, not a typo.
+
+**Anti-pattern** (what NOT to do):
+
+```python
+clarify(
+    question="Which scope? 1) minimal 2) extended 3) full",  # ← options in text
+    choices=[]                                              # ← empty
+)
+```
+
+**Correct pattern:**
+
+```python
+clarify(
+    question="Which scope fits the new skill?",   # question text only
+    choices=["minimal", "extended", "full"]       # every option as a row
+)
+```
+
+If the user's reply indicates the options didn't render
+("选项没显示出来" / "你的提问又出问题了"),re-issue with `choices[]`
+populated and the question string stripped of option lists.
+
+## 8. Verification evidence lives in the same turn as the change
+
+When `scripts/<name>.py` (or any runnable artifact) is added or
+modified, the same turn that publishes the change **must also produce
+passing verification evidence**. A summary of "ran it, looks good"
+without fixtures and an explicit pass/fail tally is not enough.
+
+**Minimum bar for ad-hoc verification of a new/changed script:**
+
+1. Create N fixtures under `/tmp/` with the `hermes-verify-` prefix
+   (`tempfile.mkstemp(prefix="hermes-verify-")` is the OS-safe path).
+2. Cover: happy path, every distinct error category, edge cases
+   (empty / comment-only / missing input), CLI flags that change
+   behavior.
+3. Print a `PASS/FAIL` tally per check and a final `<passed>/<total>`
+   count.
+4. Clean up fixtures (`os.unlink` each one) before exiting.
+5. State the scope explicitly as "ad-hoc verification — not a test
+   suite" so the user knows what kind of evidence they're reading.
+
+A change without verification in the same turn will be re-prompted by
+the runtime — bake the verification into the skill-creation workflow.
 
 ## Out of scope
 

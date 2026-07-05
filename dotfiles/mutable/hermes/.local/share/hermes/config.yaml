@@ -593,6 +593,10 @@ mcp_servers:
     args:
       - /home/brokenshine/.local/bin/agenote_mcp.py
     env:
+      # hermes 的 _build_safe_env 过滤掉非 SAFE 变量,导致 Guix Python wrapper
+      # 丢 GUIX_PYTHONPATH,子进程报 ModuleNotFoundError: No module named 'mcp'。
+      # 显式透传 PYTHONPATH 即可。
+      PYTHONPATH: /home/brokenshine/.guix-home/profile/lib/python3.12/site-packages
       AGENOTE_AGENT: hermes
 platform_toolsets:
   cli:
