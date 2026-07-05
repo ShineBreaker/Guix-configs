@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# 子模块 gitlink（文件，非目录）——绝不能软链到 ~；basename 精确为 .git
+\.git$
+
+# --- Python bytecode ---
+(__pycache__|.*\.pyc)$
+
+# --- kb-lib viz generated files ---
+# (re-enabled selectively; the .js / .html / .css / .py sources are kept)
+
+# --- kb runtime artifacts (none yet, but reserve the namespace) ---
+# sessions/.*\.db(-shm|-wal)?$
+# index\.json$
