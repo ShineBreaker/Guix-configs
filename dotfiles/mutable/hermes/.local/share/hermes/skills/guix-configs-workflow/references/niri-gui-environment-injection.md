@@ -22,7 +22,7 @@ TTY login → greetd-tuigreet → niri-session → niri → 子进程(GUI app)
 
 ## 解决方案: niri "环境注入三件套"
 
-在 `dotfiles/enable/desktop/.config/niri/config.kdl` 同时改三处,GUI 应用就有完整环境:
+在 `dotfiles/immutable/desktop/.config/niri/config.kdl` 同时改三处,GUI 应用就有完整环境:
 
 ```kdl
 environment {
@@ -40,6 +40,7 @@ spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY 
 ```
 
 三处作用:
+
 1. `environment { }` —— niri 给所有子进程注入(主战场)
 2. `herd set-environment` —— 喂 Guix shepherd 拉起的服务
 3. `dbus-update-activation-environment` —— 喂 dbus activation 环境(影响 dbus 拉起的服务,如 fcitx5 dbus interface)
@@ -109,6 +110,7 @@ Exec=env GTK_IM_MODULE=fcitx QT_IM_MODULE=fcitx ... /home/brokenshine/.nix-profi
 ```
 
 副作用:
+
 1. **治标**: QQ / Steam / VSCode / 等等还是没输入法
 2. **易腐烂**: nix-profile rebuild 会从 `/nix/store` 软链覆盖回来,改动消失
 3. **硬编码**: DISPLAY=:0 / WAYLAND_DISPLAY=wayland-1 写死,SSH 进不同机器失效
@@ -116,7 +118,6 @@ Exec=env GTK_IM_MODULE=fcitx QT_IM_MODULE=fcitx ... /home/brokenshine/.nix-profi
 只有当用户明确要求"只修这一个应用"、或者这个应用是 sandbox 里跑的(niri 三件套喂不到)时,才用单 .desktop 修法。
 
 **例外**: 当三件套已正确注入(env vars 齐全)、但 Electron 版本差异导致仍不工作时,见下方 §"三件套全对但仍不工作(版本差异坑)"——此时 `.desktop` 覆盖是正确解法。
-
 
 ## 三件套全对但 Electron 应用仍不工作（版本差异坑）
 
@@ -135,10 +136,10 @@ Exec=env GTK_IM_MODULE=fcitx QT_IM_MODULE=fcitx ... /home/brokenshine/.nix-profi
 
 **Electron 版本差异**导致 Wayland IME 实现成熟度不同：
 
-| Electron 版本 | Chromium 版本 | Wayland IME 行为 |
-|---|---|---|
-| **41.7.2**（hermes-desktop） | ~134 | Wayland IME 默认工作，cmdline 零 flag 也正常 |
-| **~29–32**（QQ 内嵌版） | ~122–128 | 需要 `--enable-features=UseOzonePlatform` feature flag；缺则 text-input-v3 协议无法激活 focus |
+| Electron 版本                | Chromium 版本 | Wayland IME 行为                                                                              |
+| ---------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| **41.7.2**（hermes-desktop） | ~134          | Wayland IME 默认工作，cmdline 零 flag 也正常                                                  |
+| **~29–32**（QQ 内嵌版）      | ~122–128      | 需要 `--enable-features=UseOzonePlatform` feature flag；缺则 text-input-v3 协议无法激活 focus |
 
 QQ wrapper 的条件块 `${NIXOS_OZONE_WL:+--ozone-platform-hint=auto ...}` 只加了 `--ozone-platform-hint=auto`
 和 `--enable-features=WaylandWindowDecorations`，**缺了 `UseOzonePlatform`**。
@@ -180,6 +181,7 @@ Categories=Network;
 ```
 
 新增的 flag（相对原 wrapper 输出）：
+
 - `--ozone-platform=wayland`（替代 wrapper 的 `--ozone-platform-hint=auto`；强制 Wayland，不 fallback）
 - `--enable-features=UseOzonePlatform`（**关键**：补上缺失的 Ozone platform feature）
 

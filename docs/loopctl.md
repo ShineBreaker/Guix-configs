@@ -165,14 +165,7 @@ Adapter 是声明式 JSON 文件，描述如何调用一个 agent CLI。每个 a
 
 ### 3.3 已有 Adapter
 
-| Adapter       | 二进制        | input_method | extract                   |
-| ------------- | ------------- | ------------ | ------------------------- |
-| `pi`          | `pi`          | stdin        | text                      |
-| `opencode`    | `opencode`    | stdin        | jsonl-last-assistant-text |
-| `crush`       | `crush`       | stdin        | jsonl-last-assistant-text |
-| `claude-code` | `claude-code` | stdin        | claude-code-print         |
-| `codex`       | `codex`       | stdin        | text                      |
-| `omp`         | `omp`         | stdin        | text                      |
+运行 `loopctl adapter list` 查看当前全部可用 adapter 及其状态。
 
 ### 3.4 新增 Adapter
 

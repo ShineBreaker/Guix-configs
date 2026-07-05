@@ -1,6 +1,6 @@
-# 从 git history 恢复已删除的 dotfiles 到 stow/ 或 dotfiles/enable/
+# 从 git history 恢复已删除的 dotfiles 到 stow/ 或 dotfiles/immutable/
 
-> 适用场景:用户说"把 XXX 配置从仓库里找出来放到 `stow/<pkg>/`(或 `dotfiles/enable/<app>/`)",但仓库**当前目录里找不到**——大概率是某次重构 commit 整体删除了那批文件,要从 history 恢复。这是 §7(GNU Stow 二轨)与 §3(多行编辑)、§5(AGENTS.md structor)的**交汇点**,本文档给可复用剧本。
+> 适用场景:用户说"把 XXX 配置从仓库里找出来放到 `stow/<pkg>/`(或 `dotfiles/immutable/<app>/`)",但仓库**当前目录里找不到**——大概率是某次重构 commit 整体删除了那批文件,要从 history 恢复。这是 §7(GNU Stow 二轨)与 §3(多行编辑)、§5(AGENTS.md structor)的**交汇点**,本文档给可复用剧本。
 
 ## 前置三检(避免无效恢复)
 
@@ -51,9 +51,9 @@ mkdir -p /tmp/restore-<name>
 
 # 2) 从删除 commit 的**父提交**(<rev>^)导出多个路径到临时区
 git archive <rev>^ -- \
-    'dotfiles/enable/<app>/.config/<svc>' \
-    'dotfiles/enable/<app>/.local/bin/<cmd>' \
-    'dotfiles/enable/<app>/.config/<app>/adapters/<svc>.json' \
+    'dotfiles/immutable/<app>/.config/<svc>' \
+    'dotfiles/immutable/<app>/.local/bin/<cmd>' \
+    'dotfiles/immutable/<app>/.config/<app>/adapters/<svc>.json' \
     | tar -x -C /tmp/restore-<name>
 
 # 3) 看清单对不对
@@ -63,21 +63,22 @@ find /tmp/restore-<name> -type f | sort
 **关键细节**:
 
 - 用 **`<rev>^`** 而不是 `<rev>` —— 因为删除 commit 的 tree 里**已经没有这些文件**了,要拿父提交(删除前)的 tree
-- 路径必须相对仓库根,带 `dotfiles/enable/...` 或 `stow/...` 前缀
+- 路径必须相对仓库根,带 `dotfiles/immutable/...` 或 `stow/...` 前缀
 - 一次 `git archive` 命令可以列多个路径,用空格分隔
 
-## 决定目标位置 — `stow/` 还是 `dotfiles/enable/`
+## 决定目标位置 — `stow/` 还是 `dotfiles/immutable/`
 
 这一步最容易被绕晕,因为两套机制都在用。在恢复前问清(也用 `clarify` 给选项):
 
-| 目标位置 | 适合内容 | 部署命令 |
-|---------|---------|---------|
-| `stow/<pkg>/` | **频繁改动、需要 git 备份追踪**的配置文件(agent context、SOUL.md、prompt 模板、用户自定义脚本) | `blue stow <pkg>` 软链接到仓库源,改源即生效 |
-| `dotfiles/enable/<app>/` | **静态/稳定**配置文件(模板、默认设置、跨机器统一) | `blue home` 经 store 副本,改源后要重新构建 |
+| 目标位置                    | 适合内容                                                                                       | 部署命令                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `stow/<pkg>/`               | **频繁改动、需要 git 备份追踪**的配置文件(agent context、SOUL.md、prompt 模板、用户自定义脚本) | `blue stow <pkg>` 软链接到仓库源,改源即生效 |
+| `dotfiles/immutable/<app>/` | **静态/稳定**配置文件(模板、默认设置、跨机器统一)                                              | `blue home` 经 store 副本,改源后要重新构建  |
 
 **判断准则**(从 `AGENTS.md` 顶级导引):
+
 - 改源即生效(无需 `blue home`) → `stow/`
-- 改源需 `blue home` 重建软链 → `dotfiles/enable/`
+- 改源需 `blue home` 重建软链 → `dotfiles/immutable/`
 
 如果用户原话是"放到 `stow/<pkg>/`"或"放到 `stow/` 内某个新包",就遵循用户意图——其他情况下 `clarify` 给出选项。
 
@@ -119,7 +120,7 @@ models\.db(-shm|-wal)?$
    - 包表新增一行(部署目标 + 包含文件清单)
    - 目录结构图**用 `blue structor` 重写**(用户偏好,见 §5)
 2. **`README.org`(如果有引用过期路径)**:把过期的目录条目替换成新的 `stow/<pkg>/` 路径
-3. **同包相关的 `dotfiles/enable/<app>/AGENTS.md`**:如果之前在那个目录的措辞要更新(典型:从"OMP 不再从此目录部署"扩展到"OMP + pi 都迁走了")
+3. **同包相关的 `dotfiles/immutable/<app>/AGENTS.md`**:如果之前在那个目录的措辞要更新(典型:从"OMP 不再从此目录部署"扩展到"OMP + pi 都迁走了")
 
 ```bash
 # 一次性刷新所有 AGENTS.md 树图
@@ -135,7 +136,7 @@ blue structor 2>&1 | grep -E '(WRITE|ERROR)'
 diff -u <restored-pi>.json <existing-omp>.json
 
 # 2) 恢复 pi.json 后,让 loopctl 同时支持两套 adapter
-cp <restored-pi>.json dotfiles/enable/<app>/.config/loopctl/adapters/
+cp <restored-pi>.json dotfiles/immutable/<app>/.config/loopctl/adapters/
 ```
 
 这一步**必须 clarify 用户**:adapter 恢复会改变 loopctl 的命令空间(`/loop --adapter pi|omp`),用户可能只想保留 omp 不想要 pi。
@@ -226,11 +227,11 @@ git ls-tree <rev> -- <可疑路径>
 4. 用户回答:1.B 全部恢复 / 2.B 恢复 adapter
 5. `git archive 9b720b6e^ -- <5 个路径>` → /tmp/pi-restore
 6. `cp -r` + `chmod +x` 搬到 `stow/pi/.config/pi/`、`stow/pi/.local/bin/`、`stow/pi/.local/share/pi/`
-7. `cp /tmp/.../loopctl/adapters/pi.json dotfiles/enable/agents/.config/loopctl/adapters/`
+7. `cp /tmp/.../loopctl/adapters/pi.json dotfiles/immutable/agents/.config/loopctl/adapters/`
 8. 写 `stow/pi/.stow-local-ignore`(排除 `node_modules$` / `\.pnpm-store$` / `npm/pnpm-lock\.yaml$`)
 9. `blue structor` 刷新 5 个 AGENTS.md 的树图(stow/AGENTS.md、agents/AGENTS.md、dotfiles/AGENTS.md、source/AGENTS.md、utilities/AGENTS.md)
 10. patch `README.org` 删除过期 `agents/.config/pi/ → ~/.config/pi/` 那行,补上 `stow/{hermes,emacs,pi}/` 三包
-11. patch `dotfiles/enable/agents/AGENTS.md` 在 OMP 段落后补"pi 已迁到 `stow/pi/`、loopctl 双 adapter 共存"
+11. patch `dotfiles/immutable/agents/AGENTS.md` 在 OMP 段落后补"pi 已迁到 `stow/pi/`、loopctl 双 adapter 共存"
 12. `git add` 全部 36 个新文件 + 5 个相关 AGENTS.md 改动,**不 commit**(等用户确认)
 13. 给用户讲:下一步跑 `blue stow pi` 验证(预先 `ls -la ~/.config/pi/` 检查会与 stow 软链冲突的实际文件)
 
@@ -243,7 +244,7 @@ git ls-tree <rev> -- <可疑路径>
 
 ## 反模式
 
-- ❌ **`git checkout <rev>^ -- <path>`** —— 这会把删除的文件恢复到**工作区当前路径**(可能就是 `dotfiles/enable/<app>/` 而不是你想要的 `stow/<pkg>/`)。如果用户意图是搬到 stow/,要先 archive 到临时区,再 cp 到目标
+- ❌ **`git checkout <rev>^ -- <path>`** —— 这会把删除的文件恢复到**工作区当前路径**(可能就是 `dotfiles/immutable/<app>/` 而不是你想要的 `stow/<pkg>/`)。如果用户意图是搬到 stow/,要先 archive 到临时区,再 cp 到目标
 - ❌ **`rm -rf /tmp/restore-<name>` 在最后没清** —— 残留临时区会成为下次误操作的源头。完成后 `rm -rf`
 - ❌ **patch 工具的 fuzzy match 在多文件大改时漏行** —— 整个目录搬迁应该用 `cp -r`,不是逐文件 patch
 - ❌ **改 `stow/<pkg>/` 之外的所有文档树图手动维护** —— `blue structor` 会顺手刷 `stow/`、`dotfiles/`、`source/` 等所有带 `structor:begin` 标记的 AGENTS.md,别忘了跑

@@ -19,6 +19,7 @@ sudo grep -E 'dnsmasq|sharing|shared' /var/log/messages | tail -20
 ```
 
 关键行模式：
+
 ```
 dnsmasq-manager: starting dnsmasq...
 dnsmasq[PID]: failed to create listening socket for 10.42.0.1: Address already in use
@@ -35,18 +36,19 @@ sudo ss -ulnp | grep ':53'
 ```
 
 典型输出：
+
 ```
 LISTEN  *:53  users:(("mihomo",pid=1282,fd=11))   # ← 占用了 0.0.0.0:53
 ```
 
 ## 常见冲突进程
 
-| 进程 | 典型配置 | 修复方法 |
-|------|----------|----------|
-| **mihomo** (clash-meta) | `dns.listen: 0.0.0.0:53` | 改为 `listen: 127.0.0.1:53` |
-| **dnsmasq** (独立实例) | 系统级 dnsmasq service | 改其 listen-address 或停掉 |
-| **systemd-resolved** | stub listener on 127.0.0.53 | Guix 下不常见 |
-| **unbound / bind** | 递归 DNS | 检查配置中的 interface 绑定 |
+| 进程                    | 典型配置                    | 修复方法                    |
+| ----------------------- | --------------------------- | --------------------------- |
+| **mihomo** (clash-meta) | `dns.listen: 0.0.0.0:53`    | 改为 `listen: 127.0.0.1:53` |
+| **dnsmasq** (独立实例)  | 系统级 dnsmasq service      | 改其 listen-address 或停掉  |
+| **systemd-resolved**    | stub listener on 127.0.0.53 | Guix 下不常见               |
+| **unbound / bind**      | 递归 DNS                    | 检查配置中的 interface 绑定 |
 
 ## mihomo 特定情况
 
@@ -58,6 +60,7 @@ mihomo 有两层 DNS 机制：
 2. **`dns-hijack` + nftables redirect**：在网络层劫持所有 DNS 流量（`any:53` / `tcp://any:53`），通过 nftables DNAT 到 mihomo 的 Meta 接口（`198.18.0.2:53`），再走 mihomo 的内部 DNS 链路
 
 **两层独立运作**。把 `listen` 从 `0.0.0.0:53` 改为 `127.0.0.1:53` 后：
+
 - 本地进程仍可通过 `127.0.0.1:53` 使用 mihomo DNS
 - 网络层 DNS 劫持（nftables redirect）不受影响——它不走 `listen` 端口
 - `10.42.0.1:53` 被释放，dnsmasq 可以绑定并提供热点 DNS
@@ -117,11 +120,11 @@ IP forwarding 只影响数据包转发，不影响 DHCP 服务监听。手机卡
 
 ## 相关日志位置
 
-| 信息 | 位置 |
-|------|------|
+| 信息                     | 位置                                                      |
+| ------------------------ | --------------------------------------------------------- |
 | NM 启动 dnsmasq 的命令行 | `/var/log/messages` grep `dnsmasq-manager: command line:` |
-| dnsmasq 启动失败原因 | `/var/log/messages` grep `dnsmasq.*failed` |
-| dnsmasq DHCP 范围 | `/var/log/messages` grep `dnsmasq-dhcp` |
-| 当前 DHCP 租约 | `/var/lib/NetworkManager/dnsmasq-wlp0s20f3.leases` |
-| mihomo 日志 | `/var/log/mihomo.log` |
-| nftables NM 热点表 | `sudo nft list table ip nm-shared-wlp0s20f3` |
+| dnsmasq 启动失败原因     | `/var/log/messages` grep `dnsmasq.*failed`                |
+| dnsmasq DHCP 范围        | `/var/log/messages` grep `dnsmasq-dhcp`                   |
+| 当前 DHCP 租约           | `/var/lib/NetworkManager/dnsmasq-wlp0s20f3.leases`        |
+| mihomo 日志              | `/var/log/mihomo.log`                                     |
+| nftables NM 热点表       | `sudo nft list table ip nm-shared-wlp0s20f3`              |

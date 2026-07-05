@@ -24,6 +24,7 @@ grep -n 'boot failed\|bootstrap\|Fatal\|Error:' ~/.local/share/hermes/logs/deskt
 ```
 
 常见致死模式：
+
 - **`Hermes bootstrap failed: Cannot resolve install.sh`** — Electron 的 CLI 版本探测失败后进入自举路径，但 Nix 包没打包 `install.sh`
 - **`--version probe failed`** — Electron 跑 `hermes --version` 超时（5 秒）或返回非零
 
@@ -32,12 +33,15 @@ grep -n 'boot failed\|bootstrap\|Fatal\|Error:' ~/.local/share/hermes/logs/deskt
 如果致命行附近有 `--version probe failed; falling through to bootstrap`：
 
 1. 手动验证 CLI 是否真的坏了：
+
    ```bash
    /nix/store/<hash>-hermes-agent-0.17.0/bin/hermes --version
    ```
+
    如果手动跑 OK，说明是瞬态失败（负载、竞态、超时）
 
 2. 检查系统负载：
+
    ```bash
    cat ~/.local/share/hermes/logs/gateway-shutdown-diag.log | grep loadavg
    ```
@@ -51,12 +55,14 @@ grep -n 'boot failed\|bootstrap\|Fatal\|Error:' ~/.local/share/hermes/logs/deskt
 ### Step 3: 查 cron 模块导入竞态（常见背景噪音）
 
 `desktop.log` 或 `gateway-exit-diag.log` 中反复出现：
+
 ```
 from cron.scheduler_provider import resolve_cron_scheduler
 ModuleNotFoundError: No module named 'cron.scheduler_provider'
 ```
 
 这是 **hermes-agent 0.17.0 上游 bug**——间歇性导入竞态。验证方法：
+
 ```bash
 # 直接导入总是成功（证明包完整）
 /nix/store/<hash>-hermes-agent-env/bin/python3 -c "from cron.scheduler_provider import resolve_cron_scheduler"

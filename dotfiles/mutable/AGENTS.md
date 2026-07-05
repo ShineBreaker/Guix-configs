@@ -27,6 +27,20 @@
 
 ```
 mutable/
+├── agenote/
+│   ├── .config/
+│   │   └── agents/
+│   │       └── skills/
+│   ├── .local/
+│   │   └── bin/
+│   │       ├── __pycache__/
+│   │       ├── ag_lib/
+│   │       ├── ag-ent
+│   │       ├── agenote
+│   │       ├── agenote_cli.py
+│   │       └── agenote_mcp.py
+│   ├── .stow-folding
+│   └── .stow-local-ignore
 ├── appimage-run/
 │   ├── .local/
 │   │   └── bin/
@@ -48,20 +62,12 @@ mutable/
 │   │       ├── chemacs.el
 │   │       ├── early-init.el
 │   │       └── init.el
-│   ├── .local/
-│   │   ├── .local/
-│   │   └── bin/
-│   │       ├── __pycache__/
-│   │       ├── ag_lib/
-│   │       ├── ag-ent
-│   │       ├── agenote
-│   │       ├── agenote_cli.py
-│   │       └── agenote_mcp.py
 │   └── .stow-local-ignore
 ├── hermes/
-│   └── .local/
-│       └── share/
-│           └── hermes/
+│   ├── .local/
+│   │   └── share/
+│   │       └── hermes/
+│   └── .stow-folding
 ├── pi/
 │   ├── .config/
 │   │   └── pi/
@@ -88,9 +94,13 @@ mutable/
 │   │   └── share/
 │   │       ├── keys/
 │   │       └── secrets-decrypted/
-│   └── .stow-overlay/
-├── skills/
-└── .stowrc
+│   ├── .stow-overlay/
+│   └── .stow-local-ignore
+└── skills/
+    ├── .config/
+    │   └── agents/
+    │       └── skills/
+    └── .stow-folding
 ```
 
 <!-- /structor -->

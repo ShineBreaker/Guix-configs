@@ -89,39 +89,45 @@ dotfiles/
 │       │   ├── bin/
 │       │   └── share/
 │       └── .nix-channels
-├── mutable/
-│   ├── appimage-run/
-│   │   ├── .local/
-│   │   │   └── bin/
-│   │   ├── .stow-local-ignore
-│   │   └── README.md
-│   ├── emacs/
-│   │   ├── .config/
-│   │   │   ├── agents/
-│   │   │   ├── chemacs/
-│   │   │   └── emacs/
-│   │   ├── .local/
-│   │   │   ├── .local/
-│   │   │   └── bin/
-│   │   └── .stow-local-ignore
-│   ├── hermes/
-│   │   └── .local/
-│   │       └── share/
-│   ├── pi/
-│   │   ├── .config/
-│   │   │   └── pi/
-│   │   ├── .local/
-│   │   │   ├── bin/
-│   │   │   └── share/
-│   │   └── .stow-local-ignore
-│   ├── secrets/
-│   │   ├── .local/
-│   │   │   └── share/
-│   │   └── .stow-overlay/
-│   ├── skills/
-│   └── .stowrc
-└── secrets/
-    └── .keys/
+└── mutable/
+    ├── agenote/
+    │   ├── .config/
+    │   │   └── agents/
+    │   ├── .local/
+    │   │   └── bin/
+    │   ├── .stow-folding
+    │   └── .stow-local-ignore
+    ├── appimage-run/
+    │   ├── .local/
+    │   │   └── bin/
+    │   ├── .stow-local-ignore
+    │   └── README.md
+    ├── emacs/
+    │   ├── .config/
+    │   │   ├── agents/
+    │   │   ├── chemacs/
+    │   │   └── emacs/
+    │   └── .stow-local-ignore
+    ├── hermes/
+    │   ├── .local/
+    │   │   └── share/
+    │   └── .stow-folding
+    ├── pi/
+    │   ├── .config/
+    │   │   └── pi/
+    │   ├── .local/
+    │   │   ├── bin/
+    │   │   └── share/
+    │   └── .stow-local-ignore
+    ├── secrets/
+    │   ├── .local/
+    │   │   └── share/
+    │   ├── .stow-overlay/
+    │   └── .stow-local-ignore
+    └── skills/
+        ├── .config/
+        │   └── agents/
+        └── .stow-folding
 ```
 
 <!-- /structor -->
@@ -143,7 +149,7 @@ dotfiles/
 - Guix 提供 Emacs Lisp 包依赖；新增包必须同步到 `source/config.org` home-packages
 - **不要直接编辑子模块内容**（详见 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`）
 
-### oh-my-pi + Crush + loopctl（`enable/agents/`）
+### oh-my-pi + Crush + loopctl（`immutable/agents/`）
 
 - **OMP**：`jeans` 频道的 `oh-my-pi-bin`，`home-packages` 提供 `omp` 命令。**仓库不托管配置源**，本地维护 `~/.config/pi/omp/`
 - **Crush**：`.config/crush/`（crush.json、hooks、bin）
@@ -152,18 +158,18 @@ dotfiles/
 - **启动脚本**：`.local/bin/`（kb、loopctl 等）
 - 详见 `dotfiles/immutable/agents/AGENTS.md`
 
-### Rime 输入法（`enable/utilities/.local/share/fcitx5/rime/`）
+### Rime 输入法（`immutable/utilities/.local/share/fcitx5/rime/`）
 
 - Git 子模块（`github.com/iDvel/rime-ice`）：双拼、词典、Lua 扩展
 - **不要直接编辑子模块内容**（`custom_phrase.txt` 等用户自定义文件除外）
 
 ## 各子目录指引
 
-| 子目录                   | AGENTS.md | 主要职责                                           |
-| ------------------------ | --------- | -------------------------------------------------- |
-| `enable/agents/`         | ✅ 已有   | OMP、Crush、KB、loopctl、共享 skills、知识库       |
-| `enable/desktop/`        | ✅ 已有   | niri、autostart、xdg-portal、xfce4 helpers         |
-| `enable/noctalia-suite/` | ❌ 无     | darkman、noctalia 适配                             |
-| `enable/system/`         | ✅ 已有   | containers、pipewire、xdg user-dirs                |
-| `enable/terminal/`       | ✅ 已有   | fish、tmux、foot、btop、starship、broot、fastfetch |
-| `enable/utilities/`      | ✅ 已有   | helix、git、kanata、pnpm、winapps、rime、gnupg     |
+| 子目录                      | AGENTS.md | 主要职责                                           |
+| --------------------------- | --------- | -------------------------------------------------- |
+| `immutable/agents/`         | ✅ 已有   | OMP、Crush、KB、loopctl、共享 skills、知识库       |
+| `immutable/desktop/`        | ✅ 已有   | niri、autostart、xdg-portal、xfce4 helpers         |
+| `immutable/noctalia-suite/` | ❌ 无     | darkman、noctalia 适配                             |
+| `immutable/system/`         | ✅ 已有   | containers、pipewire、xdg user-dirs                |
+| `immutable/terminal/`       | ✅ 已有   | fish、tmux、foot、btop、starship、broot、fastfetch |
+| `immutable/utilities/`      | ✅ 已有   | helix、git、kanata、pnpm、winapps、rime、gnupg     |

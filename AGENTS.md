@@ -50,28 +50,33 @@ Guix-configs///
 │   │       ├── .config/
 │   │       ├── .local/
 │   │       └── .nix-channels
-│   ├── mutable/
-│   │   ├── appimage-run/
-│   │   │   ├── .local/
-│   │   │   ├── .stow-local-ignore
-│   │   │   └── README.md
-│   │   ├── emacs/
-│   │   │   ├── .config/
-│   │   │   ├── .local/
-│   │   │   └── .stow-local-ignore
-│   │   ├── hermes/
-│   │   │   └── .local/
-│   │   ├── pi/
-│   │   │   ├── .config/
-│   │   │   ├── .local/
-│   │   │   └── .stow-local-ignore
-│   │   ├── secrets/
-│   │   │   ├── .local/
-│   │   │   └── .stow-overlay/
-│   │   ├── skills/
-│   │   └── .stowrc
-│   └── secrets/
-│       └── .keys/
+│   └── mutable/
+│       ├── agenote/
+│       │   ├── .config/
+│       │   ├── .local/
+│       │   ├── .stow-folding
+│       │   └── .stow-local-ignore
+│       ├── appimage-run/
+│       │   ├── .local/
+│       │   ├── .stow-local-ignore
+│       │   └── README.md
+│       ├── emacs/
+│       │   ├── .config/
+│       │   └── .stow-local-ignore
+│       ├── hermes/
+│       │   ├── .local/
+│       │   └── .stow-folding
+│       ├── pi/
+│       │   ├── .config/
+│       │   ├── .local/
+│       │   └── .stow-local-ignore
+│       ├── secrets/
+│       │   ├── .local/
+│       │   ├── .stow-overlay/
+│       │   └── .stow-local-ignore
+│       └── skills/
+│           ├── .config/
+│           └── .stow-folding
 ├── screenshots/
 │   ├── browse.png
 │   ├── daily.png
@@ -95,7 +100,30 @@ Guix-configs///
 │   ├── config.org
 │   ├── information.scm
 │   └── manifest.scm
+├── tmp/
+│   ├── 50-hibernate.rules
+│   ├── block-list.el
+│   ├── config.scm
+│   └── config.scm.check
 ├── tools/
+│   ├── linux-setup/
+│   │   ├── docs/
+│   │   │   └── ai-toolchain.md
+│   │   ├── files/
+│   │   │   ├── env-arch
+│   │   │   └── env-fedora
+│   │   ├── scripts/
+│   │   │   ├── backup-flatpak-apps.sh
+│   │   │   ├── link-data-folders.sh
+│   │   │   ├── restore-flatpak-apps.sh
+│   │   │   ├── subvol-setup.sh
+│   │   │   └── verify-ai-toolchain.sh
+│   │   ├── tools/
+│   │   │   ├── arch-chroot
+│   │   │   └── genfstab
+│   │   ├── LICENSE
+│   │   ├── README.md
+│   │   └── justfile
 │   ├── bootstrap.sh
 │   ├── fxxk-link.sh
 │   └── secrets
@@ -192,15 +220,7 @@ blue init
 - 不在 `excluded` 列表内的新增文件会在下次 `blue home` 后自动出现在 `~`
 - `disable/` 内目录不再部署，仅保留参考
 
-子模块位于 `dotfiles/immutable/` 和 `dotfiles/mutable/` 下，路径如下，**不要直接编辑子模块内容**：
-
-| 路径                                                    | 上游                                |
-| ------------------------------------------------------- | ----------------------------------- |
-| `dotfiles/mutable/emacs/.config/emacs/general-config`   | `codeberg.org/BrokenShine/.emacs.d` |
-| `dotfiles/immutable/utilities/.local/share/fcitx5/rime` | `github.com/iDvel/rime-ice`         |
-| `dotfiles/mutable/appimage-run`                         | `codeberg.org/BrokenShine/appimage-run-guix` |
-| `dotfiles/mutable/pi/.config/pi/extensions/atelier`     | `github.com/ShineBreaker/pi-atelier` |
-| `dotfiles/mutable/pi/.config/pi/extensions/pi-ui`       | `github.com/ShineBreaker/pi-ui`     |
+子模块列表见 `.gitmodules`（权威来源），**不要直接编辑子模块内容**。
 
 ## dotfiles/mutable/ — GNU Stow 直链部署
 
@@ -236,6 +256,7 @@ blue stow-all --restow           # 重建所有包
 **单 daemon + 默认 profile**：rosenthal `home-emacs-service-type` 跑 `emacs --fg-daemon`（不传 `--with-profile`），自动走默认 profile = `general`。所有现有 `emacsclient` 调用（niri Mod+E、skill 脚本、`.desktop`、`with-editor` GIT_EDITOR）依赖默认 socket 名 "server"，**零改动**。
 
 **常用操作**：
+
 - 试新配置（前台实例，独立于 daemon）：`emacs --with-profile literal`
 - 切默认到新配置（稳定后）：改 `dotfiles/mutable/emacs/.config/chemacs/profile` 为 `literal` → `blue stow --restow emacs` → `herd restart emacs-daemon`
 - 改旧配置源：`dotfiles/mutable/emacs/.config/emacs/general-config/`（submodule，改源即生效）
@@ -259,13 +280,13 @@ blue stow-all --restow           # 重建所有包
 
 ## 频道架构
 
-| 频道        | 分支   | 职责         | URL（以 `source/channel.scm` 为准）              |
-| ----------- | ------ | ------------ | ------------------------------------------------ |
-| `guix`      | master | 官方包集合   | `https://git.guix.gnu.org/guix.git`              |
-| `bluebox`   | main   | blue 构建工具 | `https://codeberg.org/lapislazuli/bluebox`       |
-| `jeans`     | main   | 个人自定义包 | `https://github.com/ShineBreaker/jeans.git`      |
-| `nonguix`   | master | 非自由软件   | `https://gitlab.com/nonguix/nonguix`             |
-| `rosenthal` | trunk  | WM 增强组件  | `https://codeberg.org/hako/rosenthal.git`        |
+| 频道        | 分支   | 职责          | URL（以 `source/channel.scm` 为准）         |
+| ----------- | ------ | ------------- | ------------------------------------------- |
+| `guix`      | master | 官方包集合    | `https://git.guix.gnu.org/guix.git`         |
+| `bluebox`   | main   | blue 构建工具 | `https://codeberg.org/lapislazuli/bluebox`  |
+| `jeans`     | main   | 个人自定义包  | `https://github.com/ShineBreaker/jeans.git` |
+| `nonguix`   | master | 非自由软件    | `https://gitlab.com/nonguix/nonguix`        |
+| `rosenthal` | trunk  | WM 增强组件   | `https://codeberg.org/hako/rosenthal.git`   |
 
 - 频道版本锁定在 `source/channel.lock`，由 `blue update` 自动生成并 `git commit -S`
 - **不要手动编辑 `channel.lock`**（重生成会覆盖你的改动）

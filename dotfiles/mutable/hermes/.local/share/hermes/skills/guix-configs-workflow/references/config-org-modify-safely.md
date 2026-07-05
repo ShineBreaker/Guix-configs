@@ -153,16 +153,16 @@ DRY_RUN 报 `Wrong type` / `expecting empty list` 时，第一反应是看新加
 
 ## 字段引用小抄（直接给 Guix 模块 → 变量映射）
 
-| 想用 | 来自哪个模块 | 是否已 use-modules | 备注 |
-|------|--------------|---------------------|------|
-| `network-manager-service-type` | `(gnu services)` | ✅ | re-exported |
-| `network-manager-configuration` | `(gnu services networking)` | ✅ | 7 字段，见坑位 2 |
-| `dnsmasq-service-type` | `(gnu services dns)` | ✅ | re-exported by `(gnu services)` |
-| `dnsmasq`（package） | `(gnu packages dns)` | ❌ use-package-modules | 不在 packages 模块列表里需手动加 |
-| `iw`（package） | `(gnu packages linux)` | ✅ `linux` | 直接可用 |
-| `nftables-service-type` | `(gnu services)` | ✅ | |
-| `tailscale-service-type` | rosenthal 频道 | ✅ rosenthal services networking | |
-| `wpa-supplicant`（package） | `(gnu packages networking)` | ✅ `networking`（在 rosenthal 频道） | |
+| 想用                            | 来自哪个模块                | 是否已 use-modules                   | 备注                             |
+| ------------------------------- | --------------------------- | ------------------------------------ | -------------------------------- |
+| `network-manager-service-type`  | `(gnu services)`            | ✅                                   | re-exported                      |
+| `network-manager-configuration` | `(gnu services networking)` | ✅                                   | 7 字段，见坑位 2                 |
+| `dnsmasq-service-type`          | `(gnu services dns)`        | ✅                                   | re-exported by `(gnu services)`  |
+| `dnsmasq`（package）            | `(gnu packages dns)`        | ❌ use-package-modules               | 不在 packages 模块列表里需手动加 |
+| `iw`（package）                 | `(gnu packages linux)`      | ✅ `linux`                           | 直接可用                         |
+| `nftables-service-type`         | `(gnu services)`            | ✅                                   |                                  |
+| `tailscale-service-type`        | rosenthal 频道              | ✅ rosenthal services networking     |                                  |
+| `wpa-supplicant`（package）     | `(gnu packages networking)` | ✅ `networking`（在 rosenthal 频道） |                                  |
 
 判断某变量是否在当前 use-modules 里：
 

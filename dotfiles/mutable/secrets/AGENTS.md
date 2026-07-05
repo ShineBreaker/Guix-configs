@@ -22,7 +22,8 @@ secrets/
 │       │   ├── age
 │       │   └── age.pub
 │       └── secrets-decrypted/
-└── .stow-overlay/
+├── .stow-overlay/
+└── .stow-local-ignore
 ```
 
 <!-- /structor -->
@@ -107,22 +108,21 @@ stat -c '%a' dotfiles/mutable/secrets/.keys/age     # 应为 600
    已被某个未显示的 `.gitignore` 命中。诊断:
    `git check-ignore -v dotfiles/secrets/.keys/age.pub`(应静默返回 = 未 ignore)。
 4. **`edit` 子命令的 $EDITOR 临时文件**(已解决) —— `cmd_edit` 现在用
-   `mktemp -d` 建隔离目录,明文放目录内,`trap 'rm -rf "$tmpdir"' RETURN INT TERM`
-   整体清理;emacs 的 backup `~` / autosave `#` 副产物也落在隔离目录内,随退出
-   一起删除。**实现坑**:`set -u` 下 trap 引用 local 变量(此处 `$tmpdir`)须用
+   `mktemp -d` 建隔离目录,明文放目录内,`trap 'rm -rf "$tmpdir"' RETURN INT TERM`整体清理;emacs 的 backup`~`/ autosave`#` 副产物也落在隔离目录内,随退出
+一起删除。**实现坑**:`set -u`下 trap 引用 local 变量(此处`$tmpdir`)须用
    `${tmpdir:-}` 守卫,否则未赋值就触发未绑定变量错误。
 5. **`re-encrypt` 轮换时旧私钥丢失** —— 密钥轮换前必须先 `cp dotfiles/mutable/secrets/.keys/age
-   /tmp/age.old` 备份旧私钥,确认 `re-encrypt --with /tmp/age.old` 成功后再
+/tmp/age.old` 备份旧私钥,确认 `re-encrypt --with /tmp/age.old` 成功后再
    `trash /tmp/age.old`。`trash` 旧私钥后 `init` 生成新密钥对,期间旧密文只能
    用备份的旧私钥解密;若先销毁旧私钥,旧 `.age` 永久丢失。
 
 ## 与 dotfile-services 的边界
 
-| 维度         | `dotfiles/secrets/`              | `dotfiles/immutable/<app>/`        |
-| ------------ | -------------------------------- | ---------------------------------- |
-| 部署机制     | **不部署**(仅 stow 软链 + git)   | Guix Home `home-dotfiles-service-type` |
-| 进 `~`       | 公钥 + 密文从不直接进 `~`        | 软链到 `/gnu/store/<hash>`         |
-| 改源后生效   | `git pull` 即可                  | 必须 `blue home`                   |
+| 维度       | `dotfiles/secrets/`            | `dotfiles/immutable/<app>/`            |
+| ---------- | ------------------------------ | -------------------------------------- |
+| 部署机制   | **不部署**(仅 stow 软链 + git) | Guix Home `home-dotfiles-service-type` |
+| 进 `~`     | 公钥 + 密文从不直接进 `~`      | 软链到 `/gnu/store/<hash>`             |
+| 改源后生效 | `git pull` 即可                | 必须 `blue home`                       |
 
 **铁律**:`dotfiles/secrets/` 任何文件都不应出现在 `~/.config/secrets/` 下。
 如果出现,说明 dotfile-services 误把它加入了 `packages`,立即检查

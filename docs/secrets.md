@@ -117,29 +117,9 @@ source ~/.local/share/secrets-decrypted/dotenv
 
 `show` 子命令是 `decrypt --stdout` 的别名,等价于打印到 stdout。
 
-## 4. 子命令清单
+## 4. 子命令与选项
 
-| 命令                        | 用途                                                   |
-| --------------------------- | ------------------------------------------------------ |
-| `init`                      | 生成密钥对(已存在则报错)                               |
-| `list` / `ls`               | 列密文 + 私钥/公钥状态 + 已解密明文                    |
-| `recipients`                | 列出所有 recipients 公钥(目前只有一个)                 |
-| `encrypt <name>`            | 从 stdin 读明文 → `dotfiles/secrets/<name>.age`        |
-| `decrypt <name>`            | 解密到 `~/.local/share/secrets-decrypted/<name>`       |
-| `decrypt --stdout`          | 解密打印到 stdout(管道用)                              |
-| `show <name>`               | 同 `decrypt --stdout`                                  |
-| `edit <name>`               | 解密 → `$EDITOR` → 重加密                              |
-| `re-encrypt [--with <key>]` | 用指定私钥解密所有 `.age`,用当前公钥重加密(密钥轮换用) |
-
-全局选项:`tools/secrets [--dry-run] <command> ...`。`--dry-run` 让有写副作用
-的命令(`init`/`encrypt`/`decrypt` 非 stdout/`edit`/`re-encrypt`)只打印
-`[dry-run] ...` 计划并成功返回,不写文件;只读命令(`list`/`recipients`/
-`show`/`decrypt --stdout`)不受影响。
-环境变量:
-
-- `SECRETS_PRIVATE_KEY`: 自定义私钥路径(默认 `~/.keys/age`)
-- `SECRETS_PUBLIC_KEY`: 自定义公钥路径(默认 `dotfiles/secrets/.keys/age.pub`),`find_default_pubkey` 优先读取此环境变量
-- `EDITOR`: `edit` 子命令用的编辑器(默认 `nano`)
+运行 `tools/secrets`（无参数）即可查看完整命令清单、环境变量和全局选项。
 
 ## 5. 密钥轮换
 

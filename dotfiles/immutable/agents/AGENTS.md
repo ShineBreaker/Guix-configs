@@ -12,11 +12,9 @@
 agents/
 ├── .config/
 │   ├── agents/
-│   │   ├── context/
-│   │   │   ├── 01-language.md
-│   │   │   └── 02-ultilities.md
-│   │   └── skills/
-│   │       └── pack-guix/
+│   │   └── context/
+│   │       ├── 01-language.md
+│   │       └── 02-ultilities.md
 │   ├── crush/
 │   │   ├── bin/
 │   │   │   ├── bash-language-server

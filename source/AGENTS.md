@@ -73,16 +73,7 @@ source/config.org → blue rebuild → tmp/config.scm → guix system reconfigur
 
 ## 全局变量（`information.scm`）
 
-被 `config.org` 顶部通过 `(load "../source/information.scm")` 加载。
-
-| 变量                 | 说明                                                |
-| -------------------- | --------------------------------------------------- |
-| `username`           | 主用户名（`"brokenshine"`）                         |
-| `fixed-machine-id`   | 基于 `username` 的 MD5                              |
-| `%data-dirs`         | bind-mount 持久化的用户子目录（XDG + dotfile 状态） |
-| `%btrfs-subvol-data` | 数据分区子卷路径                                    |
-| `%btrfs-subvolumes`  | Btrfs 子卷 → 挂载点映射                             |
-| `guix-channels`      | `(include "./channel.lock")` — 锁定频道列表         |
+被 `config.org` 顶部通过 `(load "../source/information.scm")` 加载。完整变量清单见根 `AGENTS.md` 的「全局变量速查」节。
 
 > 变更前应同时检查 `config.org` 各代码块对这些变量的引用是否需要同步调整。
 

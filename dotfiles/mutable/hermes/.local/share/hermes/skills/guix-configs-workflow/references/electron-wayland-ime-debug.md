@@ -44,23 +44,25 @@ fcitx5-diagnose 2>/dev/null | grep -A1 'program:<app>'
 
 ### 尝试的修复
 
-| 尝试 | flag | 结果 |
-|---|---|---|
-| 原始 | `--ozone-platform-hint=auto` | focus:0 |
-| 方案 A | 同上 + `.desktop` 覆盖补 `UseOzonePlatform` | focus:0（显示正常） |
-| 方案 B | `--ozone-platform=x11` | focus:0 + 鼠标缩放异常 |
-| 方案 A修正 | `--ozone-platform=wayland` + `UseOzonePlatform` | focus:1 |
+| 尝试       | flag                                            | 结果                   |
+| ---------- | ----------------------------------------------- | ---------------------- |
+| 原始       | `--ozone-platform-hint=auto`                    | focus:0                |
+| 方案 A     | 同上 + `.desktop` 覆盖补 `UseOzonePlatform`     | focus:0（显示正常）    |
+| 方案 B     | `--ozone-platform=x11`                          | focus:0 + 鼠标缩放异常 |
+| 方案 A修正 | `--ozone-platform=wayland` + `UseOzonePlatform` | focus:1                |
 
 ### 根因
 
 QQ wrapper 的 `NIXOS_OZONE_WL` 条件块只加 `--ozone-platform-hint=auto`，Electron 37 上 `auto` hint 无法激活 Wayland text-input-v3 协议。必须用 `--ozone-platform=wayland`（强制，非 hint）+ `UseOzonePlatform` feature。
 
 QQ wrapper 的 Exec 行：
+
 ```bash
 exec "qq" ${NIXOS_OZONE_WL:+${WAYLAND_DISPLAY:+--ozone-platform-hint=auto ...}} --enable-wayland-ime --wayland-text-input-version=3 "$@"
 ```
 
 最终 cmdline（.desktop 覆盖后）：
+
 ```
 --ozone-platform=wayland              ← 覆盖 wrapper 的 =auto
 --enable-features=UseOzonePlatform,WaylandWindowDecorations
@@ -72,13 +74,15 @@ exec "qq" ${NIXOS_OZONE_WL:+${WAYLAND_DISPLAY:+--ozone-platform-hint=auto ...}} 
 ### 最终修复
 
 **Nix 层**（`source/nix/configuration/00-main/packages.nix`）：
+
 ```nix
 (qq.override {
   commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
 })
 ```
 
-**Guix dotfiles 层**（兜底，`dotfiles/enable/desktop/.local/share/applications/qq.desktop`）：
+**Guix dotfiles 层**（兜底，`dotfiles/immutable/desktop/.local/share/applications/qq.desktop`）：
+
 ```ini
 Exec=/home/brokenshine/.nix-profile/bin/qq --ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime=true --wayland-text-input-version=3 %U
 ```
@@ -93,9 +97,9 @@ Exec=/home/brokenshine/.nix-profile/bin/qq --ozone-platform=wayland --enable-fea
 
 ## Electron 版本 vs Chromium 版本快速对照
 
-| Electron | Chromium | 发布日期 | Wayland IME 状态 |
-|---|---|---|---|
-| 41 | 134 | 2026 Q1 | 默认成熟，零 flag 可工作 |
-| 37 | 130 | 2025 Q4 | 需 `--ozone-platform=wayland` + `UseOzonePlatform` |
-| 29–32 | 122–126 | 2024–2025 | 需 `UseOzonePlatform` |
-| < 28 | < 120 | 2024 前 | Wayland IME 实验性 |
+| Electron | Chromium | 发布日期  | Wayland IME 状态                                   |
+| -------- | -------- | --------- | -------------------------------------------------- |
+| 41       | 134      | 2026 Q1   | 默认成熟，零 flag 可工作                           |
+| 37       | 130      | 2025 Q4   | 需 `--ozone-platform=wayland` + `UseOzonePlatform` |
+| 29–32    | 122–126  | 2024–2025 | 需 `UseOzonePlatform`                              |
+| < 28     | < 120    | 2024 前   | Wayland IME 实验性                                 |

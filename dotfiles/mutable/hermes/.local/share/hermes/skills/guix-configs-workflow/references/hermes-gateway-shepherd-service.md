@@ -28,13 +28,13 @@
 
 ## 症状速查
 
-| 现象 | 根因 | 跳到 |
-|------|------|------|
-| gateway PID 每 4 秒换一个,日志交替出现 SIGTERM + connected | `--replace` self-kick loop(§1) | §1 |
-| `herd restart hermes-gateway` 后日志报 `Another gateway instance is already running (PID XXXX)`,X 是另一个 daemon 的服务 PID | 多个 home-shepherd 并存(§2) | §2 |
-| `herd restart` 后进程列表里仍看到带 `--replace` 的 gateway | 旧 shepherd 的服务没被新 daemon 接管(§2) | §2 |
-| QQ Bot 间歇性 `400 Bad Request`(与重启循环叠加出现) | 自踢循环的副作用——冷启动时 token 还没刷就被踢(§3) | §3 |
-| 想用 `blue block-replace` 改 config.org 块但报 `Symbol's value as variable is void: replaced` | emacs-minimal 跑工具的脚本 bug(§4) | §4 |
+| 现象                                                                                                                         | 根因                                              | 跳到 |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---- |
+| gateway PID 每 4 秒换一个,日志交替出现 SIGTERM + connected                                                                   | `--replace` self-kick loop(§1)                    | §1   |
+| `herd restart hermes-gateway` 后日志报 `Another gateway instance is already running (PID XXXX)`,X 是另一个 daemon 的服务 PID | 多个 home-shepherd 并存(§2)                       | §2   |
+| `herd restart` 后进程列表里仍看到带 `--replace` 的 gateway                                                                   | 旧 shepherd 的服务没被新 daemon 接管(§2)          | §2   |
+| QQ Bot 间歇性 `400 Bad Request`(与重启循环叠加出现)                                                                          | 自踢循环的副作用——冷启动时 token 还没刷就被踢(§3) | §3   |
+| 想用 `blue block-replace` 改 config.org 块但报 `Symbol's value as variable is void: replaced`                                | emacs-minimal 跑工具的脚本 bug(§4)                | §4   |
 
 ## 1. self-kick loop(`--replace` 触发)
 
@@ -119,6 +119,7 @@ gateway.platforms.qqbot.adapter: QQ startup failed:
 ```
 
 这条**本身**不是 hermes bug,可能源于:
+
 - QQ Bot 开放平台 token 缓存问题(hermes 0.17.0 vs 当前 API)
 - access token 用了旧的(冷启动时没刷新就发请求)
 
@@ -157,13 +158,13 @@ blue block-replace <name> /path/to/new-body.scm
 
 ## 5. 关键日志位置
 
-| 用途 | 路径 |
-|------|------|
-| gateway 服务日志(shepherd 写的) | `~/.local/state/shepherd/hermes-gateway.log` |
-| gateway 内部日志(hermes 自己写的,带 INFO/ERROR level) | `~/.local/share/hermes/logs/gateway.log` |
-| gateway 异常退出诊断 | `~/.local/share/hermes/logs/gateway-shutdown-diag.log` |
-| gateway 重启记录(结构化 JSON) | `~/.local/share/hermes/logs/gateway-exit-diag.log` |
-| 当前活跃 gateway 状态 | `~/.local/share/hermes/gateway_state.json` |
-| PID 锁 | `~/.local/share/hermes/gateway.pid` / `gateway.lock` |
+| 用途                                                  | 路径                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------ |
+| gateway 服务日志(shepherd 写的)                       | `~/.local/state/shepherd/hermes-gateway.log`           |
+| gateway 内部日志(hermes 自己写的,带 INFO/ERROR level) | `~/.local/share/hermes/logs/gateway.log`               |
+| gateway 异常退出诊断                                  | `~/.local/share/hermes/logs/gateway-shutdown-diag.log` |
+| gateway 重启记录(结构化 JSON)                         | `~/.local/share/hermes/logs/gateway-exit-diag.log`     |
+| 当前活跃 gateway 状态                                 | `~/.local/share/hermes/gateway_state.json`             |
+| PID 锁                                                | `~/.local/share/hermes/gateway.pid` / `gateway.lock`   |
 
 **优先级**:看 self-kick 状态先看 `gateway.log`(hermes 自己的 INFO 最准);看服务定义是否生效看 `herd status` 的"命令:"字段;看进程级细节看 `/proc/<pid>/cmdline`。
