@@ -123,13 +123,16 @@ def _compute_base_metrics(ctx=None) -> dict:
 
     status_counts = Counter(c.get("status", "done") for c in cards)
 
-    # 孤立率：无 [[file: 链接的卡片占比
+    # 孤立率：无 [[file: 或 [[id: 链接的卡片占比
+    # 两种链接都算「被引用」：[[file:foo.org]] 是传统的 wikilink，
+    # [[id:20260101-xxxxxx]] 是 card ID 直接引用（双向链接，避免
+    # 每次添加 reference 都要找完整路径）。两者都应被视为非孤立。
     linked_cards = set()
     for f in ctx.experiences.rglob("*.org"):
         if f.is_symlink():
             continue
         content = f.read_text(encoding="utf-8")
-        if "[[file:" in content:
+        if "[[file:" in content or "[[id:" in content:
             linked_cards.add(parse_org_prop(content, "ID") or f.stem.split("-")[0])
     isolated = total - len(linked_cards)
     isolated_pct = round(isolated / total * 100) if total > 0 else 0

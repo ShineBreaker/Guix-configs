@@ -696,7 +696,7 @@ def main() -> None:
     )
     extract_parser.add_argument("--date", default="", help="目标日期 YYYY-MM-DD（默认昨天）")
     extract_parser.add_argument("--output-dir", default="", help="输出目录（默认 conversations/<date>/）")
-    extract_parser.add_argument("--dry-run", action="store_true", default=True, help="只预览不落盘")
+    extract_parser.add_argument("--dry-run", action="store_true", default=False, help="只预览不落盘（默认会真写盘；传 --dry-run 才不写）")
     extract_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()

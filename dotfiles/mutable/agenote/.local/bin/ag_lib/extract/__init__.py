@@ -104,7 +104,7 @@ def run_extract(
     source: str = "all",
     date: str = "",
     output_dir: str = "",
-    dry_run: bool = True,
+    dry_run: bool = False,
 ) -> dict:
     """跨 agent 对话抽取编排：把 7 个 AI 工具的原始对话抽取为 Org-mode 文件。
 
@@ -116,7 +116,7 @@ def run_extract(
         source: opencode | crush | codex | claude | pi | hermes | zcode | all
         date: 目标日期 YYYY-MM-DD（默认昨天；空字符串 = 不按日期过滤）
         output_dir: 输出目录（默认 ~/Documents/Org/conversations/<date>/）
-        dry_run: True 只返回报告不落盘（默认）
+        dry_run: False 只返回报告不落盘（默认）；显式 --dry-run 才不写盘
 
     Returns:
         dict: {source, total_facts, output_dir, files: [path, ...], errors: [...], dry_run}
