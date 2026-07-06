@@ -1967,12 +1967,14 @@ end
              (gnu packages guile)            ; guile-3.0
              (gnu packages texinfo)          ; texinfo
              (gnu packages xfce)
-             (gnu packages rofi)
+             ;; 注: 不写 (gnu packages rofi) —— 该模块不存在(实测 9e068cc),
+             ;; rofi 在 (gnu packages xdisorg). rofi 走 spec 解析,无需 use-modules.
              (gnu packages networking)       ; mihomo (D4: 只装包不引 service)
              (nongnu packages linux)         ; linux / linux-firmware
              (nongnu system linux-initrd)
              (guix channels)
              (guix gexp)
+             (guix utils)                    ; %current-system (make-installation-os #:efi-only? 用)
              (ice-9 match)
              (srfi srfi-1)
              (srfi srfi-19))

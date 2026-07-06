@@ -53,8 +53,9 @@
 > 1. **`make-installation-os` 在 guix core `(gnu system install)`**,
 >    不是 rosenthal。gril fact_id=22 已更正 §9.4.2,本次同步改了
 >    §9.4.3 注释 / §9.4.5 陷阱 3 / §15.6(原写 rosenthal 是错的)。
-> 2. **`(gnu packages slim)` 模块不存在** —— 加载会 abort,连带打断
->    后续 use-modules。§9.4.2 已删该行,slim 走 `specifications->packages`。
+> 2. **`(gnu packages slim)` 和 `(gnu packages rofi)` 模块不存在** —— 加载会
+>    abort,连带打断后续 use-modules。§9.4.2 已删这两行;slim/rofi 走
+>    `specifications->packages`(slim 在某 base 模块,rofi 在 `(gnu packages xdisorg)`)。
 > 3. **slim-configuration 字段是 `xauth`(不是 `xauth-file`)**,且期望
 >    xauth 程序(默认 `xauth` 包),非 `.Xauthority` 文件路径。§9.4.3
 >    删除该行,用默认值(SLiM 自管 X 授权)。
@@ -62,7 +63,8 @@
 >    不 export,必须 `(@@ (gnu system install) %default-locale-libcs)`。
 >    §9.4.3 已加 `@@`。
 >
-> 另: §11.2 错误码表新增 3 行(`no code for module (gnu packages slim)` /
+> 另: §11.2 错误码表新增 4 行(`no code for module (gnu packages slim)` /
+> `no code for module (gnu packages rofi)` /
 > `extraneous field initializer (xauth-file)` / `unbound variable: %default-locale-libcs`)。
 
 ### 文档来源
@@ -801,12 +803,14 @@ guix shell guile -- guile --no-auto-compile -c '(load "scripts/build-image.scm")
              ;; 注: 不写 (gnu packages slim) —— 该模块不存在(实测 9e068cc),
              ;; 加载会 abort 并连带打断后续 use-modules。slim 走
              ;; specifications->packages 解析即可(实测 slim@1.3.6 OK)。
-             (gnu packages rofi)          ; 启动器
+             ;; 同理不写 (gnu packages rofi) —— 也不存在, rofi 在 (gnu packages xdisorg).
+             ;; rofi 同样走 spec 解析(实测 27 个 spec 全 OK).
              (gnu packages networking)    ; mihomo 在这(gril D4 加的)
              (nongnu packages linux)      ; linux / linux-firmware(nonguix)
              (nongnu system linux-initrd)
              (guix channels)              ; channel / make-channel-introduction
              (guix gexp)
+             (guix utils)                 ; %current-system(make-installation-os #:efi-only? 判断 arch 用)
              (ice-9 match)
              (srfi srfi-1)
              (srfi srfi-19))
@@ -1569,7 +1573,8 @@ blue block-show live-installation-os
 | `unbound variable: make-installation-os`      | `(gnu system install)` 没引(**不是** rosenthal) | §9.4.2 模块列表 + §9.4.5 陷阱 3 |
 | `unbound variable: xfce-desktop-service-type` | `(gnu services desktop)` 没引 | §9.4.2                         |
 | `unbound variable: slim-service-type`         | `(gnu services xorg)` 没引    | §9.4.2                         |
-| `no code for module (gnu packages slim)`      | 该模块**不存在**,删掉这行 use-modules | §9.4.2 注释(slum 走 spec 解析) |
+| `no code for module (gnu packages slim)`      | 该模块**不存在**,删掉这行 use-modules | §9.4.2 注释(slim 走 spec 解析) |
+| `no code for module (gnu packages rofi)`      | 该模块**不存在**,rofi 在 `(gnu packages xdisorg)` 或走 spec | §9.4.2 注释 |
 | `extraneous field initializer (xauth-file)`   | slim-configuration 字段名错(应 `xauth`)或误传路径 | §9.4.3 slim 注释(xauth 期望程序,非 .Xauthority) |
 | `unbound variable: %default-locale-libcs`     | 内部变量,需 `(@@ (gnu system install) ...)` | §9.4.3 gc-root 注释 |
 | `Wrong type to apply: #<<service-type>`       | service 括号错位              | §9.4.5 陷阱 1                  |
