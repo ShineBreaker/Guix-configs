@@ -40,6 +40,7 @@
              (blue types command)       ; define-command 宏
              (blue types testable)      ; <testable> 基类（接 blue check）
              (blue subprocess)          ; popen（子进程，返回退出码）
+             (guix utils)               ; %current-system（build-iso 文件名用）
              (guix build utils)         ; mkdir-p / delete-file-recursively
              (ice-9 ftw)                ; scandir（列目录）
              (ice-9 match)              ; match / match-lambda（模式匹配）
@@ -941,6 +942,47 @@
 ;;; 另一条命令的过程，用于复用（如 rebuild 先跑 clean-artifacts）。
 ;;; 命令顺序按类别聚簇，方便对照 §8 的清单。
 
+;;; ============================================================
+;;; §8.5  Live ISO 构建辅助（build-iso-command 用）
+;;; =================================================;;=========
+;;;
+;;; 给 §9 的 build-iso-command 提供：变体列表、文件名拼合、参数过滤。
+;;; 仿 Testament blueprint.scm 的 %images / images-from-arguments，
+;;; 但前缀改为本仓库自有名 "jeans-"（不用 rosenthal-，那是上游频道）。
+
+;; ISO 变体列表（用户拍板 2026-07-06）。首选 XFCE（GUI 装机辅助），
+;; minimal 作为辅助变体留给 xfce 跑不动的硬件（纯 CLI installer）。
+;; 顺序即构建顺序：先 xfce（主目标），再 minimal（fallback）。
+;; 注：minimal 变体目前共用同一份 live-installation-os（source/config.org
+;; 里只定义了 XFCE 版本）；要做 minimal 得在 config.org 加独立的 OS 块。
+(define %images '("xfce" "minimal"))
+
+;; ISO 文件名前缀：写死为 "jeans"（本仓库自有名）。改发布名只动这里。
+(define %live-iso-prefix "jeans")
+
+;; 把命令参数（变体名列表）过滤成实际要构建的子集。
+;; 空 arguments → 全部 %images；非空 → 只保留出现在 arguments 里的变体。
+(define (images-from-arguments arguments)
+  (if (null? arguments)
+      %images
+      (filter (lambda (v) (member v arguments)) %images)))
+
+;; scripts/build-image.scm 的绝对路径（被 guix repl 调用）。
+(define (%live-build-image-script)
+  (string-append %repo-root "/scripts/build-image.scm"))
+
+;; dist/ 输出目录的绝对路径（build-iso 产物落地区）。
+(define (%live-iso-output-dir)
+  (string-append %repo-root "/dist"))
+
+;; 拼合 ISO 文件名（不含路径）：<prefix>-<variant>-<YYYYMMDD>.<arch>.iso。
+(define (%live-iso-filename variant)
+  (format #f "~a-~a-~a.~a.iso"
+          %live-iso-prefix
+          variant
+          (date->string (current-date) "~Y~m~d")
+          (%current-system)))
+
 ;;; ---------- 帮助 ----------
 
 ;; blue list —— 列出本项目所有指令（覆盖框架默认的 help 风格）。
@@ -987,6 +1029,36 @@
     (format #t "正在将系统安装到 /mnt~%")
     (%guix `("system" "init" ,scm "/mnt") #:sudo? #t)
     (false-if-exception (delete-file-recursively %tmp-dir))))
+
+;; blue build-iso [VARIANT] ... —— 构建 Guix System Live ISO。
+;; 先 tangle source/config.org（让 :tangle ../tmp/live-iso.scm 的块出产物，
+;; dry-run 也真跑 #:real? #t），再对每个变体调 scripts/build-image.scm。
+;; 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
+;; ⚠ Agent 不要自行运行（ISO 构建耗时 30+ 分钟，见 docs §11.5）。
+(define-command (build-iso-command arguments)
+  ((invoke "build-iso")
+   (category 'deployment)
+   (synopsis "构建 Guix System Live ISO")
+   (help "[VARIANT] ...
+构建 Live ISO 镜像，产物落到 dist/<prefix>-<variant>-<YYYYMMDD>.<arch>.iso。
+不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
+受 AGENTS.md 硬约束：本命令不 sudo，但镜像构建需 30+ 分钟，建议手动执行。"))
+  ;; 1) tangle（dry-run 也真跑，验证括号需要产物；复用现成的 tangle-config）
+  (tangle-config)
+  ;; 2) 遍历变体，逐个调 guix repl 跑 build-image.scm
+  (mkdir-p (%live-iso-output-dir))
+  (let ((scm (string-append %tmp-dir "/live-iso.scm")))
+    (every
+     (cut eq? #t <>)
+     (map
+      (lambda (variant)
+        (let* ((iso-name (%live-iso-filename variant))
+               (iso-path (string-append (%live-iso-output-dir) "/" iso-name)))
+          (format #t "\tBUILD ISO\t~a~%" iso-name)
+          (%guix `("repl" "--" ,(%live-build-image-script)
+                   ,iso-path ,scm
+                   "--image-type=iso9660"))))
+      (images-from-arguments arguments)))))
 
 ;;; ---------- 编辑 ----------
 
@@ -1280,6 +1352,7 @@ folding 控制:
  (commands
   (list rebuild-command
         home-command
+        build-iso-command
         block-show-command
         block-replace-command
         clean-generations-command
