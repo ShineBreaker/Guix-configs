@@ -1824,9 +1824,26 @@ $ cd ~/Projects/Config/Guix-configs && blue check
 
 #### P7:实际构建(用户执行)
 
-- [ ] **[U]** P7(用户执行):`blue build-iso xfce` 跑通(30+ 分钟,需用户手动)
+- [x] **[A]** P7(用户授权 AI 跑,确认不 sudo):`blue build-iso xfce` 跑通 ✅ —— 23 分钟产出 3.7 GiB ISO
 - [x] **[A]** P7:`blue --dry-run build-iso xfce` 输出与 §9.9 描述一致 ✅(实测见 P3 额外项)
-- [ ] **[U]** P7:产物路径:`dist/jeans-xfce-<YYYYMMDD>.x86_64-linux.iso`(待用户实跑)
+- [x] **[A]** P7:产物路径:`dist/jeans-xfce-20260706.x86_64-linux.iso` ✅(3991293952 bytes,sha256=a38f5a14...,`file` 报 ISO 9660 CD-ROM ... 'GUIX_IMAGE' (bootable))
+
+**实际产物**:
+```bash
+$ ls -la dist/
+-rw-r--r-- 1 brokenshine users 3991293952 Jul 6 23:56 jeans-xfce-20260706.x86_64-linux.iso
+
+$ file dist/jeans-xfce-20260706.x86_64-linux.iso
+... ISO 9660 CD-ROM filesystem data (DOS/MBR boot sector) 'GUIX_IMAGE' (bootable)
+
+$ sha256sum dist/jeans-xfce-20260706.x86_64-linux.iso
+a38f5a14697a580e48ab21dfb0553a4526ff714129b691d4dff1752f83f71604
+```
+
+> **构建过程暴露并修复的 3 个额外错误**(P7 三次重跑才通,记这里供接手 agent):
+> 1. `(gnu packages rofi)` 模块不存在(commit 08232e4)
+> 2. `(service kmscon-service-type)` 缺 configuration,且 make-installation-os 默认已含(commit 1d6dab4)
+> 3. `gc-root-service-type` 用 `cons*` 把 `%default-locale-libcs`(list)当单元素塞进去 → builder `symlink` 类型错;改 `append`(commit e934c43)
 
 **期望输出样板**(用户实跑后):
 
