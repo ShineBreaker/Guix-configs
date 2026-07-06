@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
-description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles every skill must follow — **self-contained** (all runnable artifacts ship inside the skill directory so backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — plus the directory layout, file-type rules, decision trees for what goes in the main file vs. a support file, and a checklist before declaring a skill done. Trigger when: writing a new skill, refactoring an existing skill's structure, wondering 'should this go in SKILL.md or references/', preparing a skill for backup/share, noticing a skill violates the self-contained rule (e.g. references an external path outside the skill dir), or auditing existing skills against the two principles. Also trigger when the user complains that something in a skill 'is too verbose' or 'the docs are in the wrong place' — those are progressive-disclosure violations, not just style nits."
-version: 1.1.0
+description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles every skill must follow — **self-contained** (all runnable artifacts ship inside the skill directory so backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — the directory layout, file-type rules, decision trees for what goes in SKILL.md vs. a support file, **which of the 12 existing categories a new skill belongs to (never top-level `<skill-name>/`)**, and a checklist before declaring a skill done. Trigger when: writing a new skill, refactoring an existing skill's structure, wondering 'should this go in SKILL.md or references()' / 'which category directory should this skill live into', preparing a skill for backup/share, noticing a self-contained violation, or auditing existing skills. Also trigger when the user complains something is 'too verbose' or 'in the wrong place' — those are progressive-disclosure violations."
+version: 1.5.0
 license: MIT
 metadata:
   hermes:
@@ -200,6 +200,19 @@ content is correct.
 - [ ] **Sibling skills cross-link via
       `metadata.hermes.related_skills`.** When a user finds one,
       they should discover the others.
+- [ ] **If the script has a yaml/json/toml config dispatcher
+      (e.g. `CHECKS = [(name, key, fn), ...]` reading from a
+      config file), add a parity-check step that catches
+      silent key drift.** See §10 for the pattern — without
+      this, every config-driven check runs on empty cfg and
+      emits GREEN by luck.
+- [ ] **No `read_text()[:N]` + `write_text()` patterns in the
+      workflow.** Any helper that "opens a file to change one
+      field" must read the **whole** file, transform, then write
+      the whole file back — and the post-write byte count must
+      match the pre-write count (or the delta must be exactly
+      the field-change size). See §6 (file-edit safety row) for
+      why.
 
 ## 6. Common violations (audit signals)
 
@@ -213,6 +226,8 @@ each one is a fix-on-sight.
 | `references/2026-MM-DD-topic.md` (date in filename) | Session-ifies what should be reusable | Rename to `references/topic.md`, add a "verified on" note inside |
 | `SKILL.md` is 1000+ lines | Not progressive disclosure | Identify topics, split into `references/<topic>.md` per topic, keep main file under 500 |
 | Description frontmatter is generic ("Helps with coding tasks") | Won't fire on real triggers | Rewrite with concrete signal words the user would actually say |
+| CHECKS tuples use different key names than the yaml sections they read | Silent empty-cfg dispatcher — every check runs on defaults | Add parity check; align keys; see §10 |
+| `read_text()[:N]` + `write_text()` to "modify a single field" | Silently truncates files larger than the slice — wipes bodies of large SKILL.md | Use `patch()` for single-field edits; if doing read-modify-write, read the whole file and verify byte count before vs. after |
 
 ## 7. clarify() options belong in `choices[]`, NEVER inside `question`
 
@@ -270,6 +285,54 @@ without fixtures and an explicit pass/fail tally is not enough.
 
 A change without verification in the same turn will be re-prompted by
 the runtime — bake the verification into the skill-creation workflow.
+
+### 8.1 Verify-script anti-patterns (pitfalls found in real sessions)
+
+- **Same-second filename overwrite.** When the script-under-test
+  writes timestamped files (`%Y%m%d-%H%M%S`) into a directory and
+  retains N of them, two runs in the same second overwrite each
+  other — silently. Use ms precision (`%Y%m%d-%H%M%S-%f` and slice
+  to 3 digits) or include a counter. Verify the retention actually
+  produces N distinct files, not just "N writes happened."
+- **Verify script forgot to clean up → blocks next session.** Always
+  wrap fixtures in `try/finally` with `shutil.rmtree(work,
+  ignore_errors=True)`. The verify script itself is a fixture and
+  should be removed after the run; otherwise it lies around in
+  `/tmp/hermes-verify-*.py` and the next session has to rediscover
+  and decide whether it's current.
+- **Ad-hoc verify ≠ suite green.** Print the scope line ("ad-hoc
+  verification — not a test suite") at the bottom of every verify
+  run. The user needs to know the difference between "9/9 PASS on
+  curated fixtures" and "the test suite passes." Conflating the two
+  trains the user to over-trust the verify.
+- **Verify script edited after deletion = stale.** If the runtime
+  re-prompts "no fresh verification evidence" and you re-write the
+  verify script, that IS the new verification — say so, don't claim
+  the previous run still covers the new edit.
+- **Reproduce the bug, then assert it's gone.** When patching a
+  known bug (e.g. cron ticker parser), the verify script must (a)
+  reproduce the broken behavior in a separate fixture and (b)
+  assert the patched behavior on the fixed fixture. Otherwise you
+  have a "fix" with no proof it fixes anything.
+
+### 8.2 Representative-sample-then-batch (one-skill-at-a-time)
+
+For multi-skill or multi-feature work, follow the user's explicit
+preference: **do one representative skill end-to-end before
+batch-expanding**. This mirrors the session_search migration pattern
+("先试着迁 1 个中等 session 做端到端验证，过了再说"):
+
+1. Build the first skill end-to-end (SKILL.md + scripts/ +
+   references/ + config file).
+2. Run its ad-hoc verify, capture PASS/FAIL tally.
+3. Estimate: time-per-skill, total-disk-for-N, side-effects on
+   skill_index / session_search / memory.
+4. Report "已验证 X, 待你决定是否放量" — let the user decide whether
+   to scale up. Don't auto-batch.
+
+Going straight to "build all N skills, then verify" means the user
+can't intervene mid-stream if your design pattern is wrong, and you
+have to throw away more work.
 
 ## 9. Categorization (which existing category does this skill belong to?)
 
@@ -360,6 +423,73 @@ protocol) is the right place to perform category additions or
 merges — this skill only routes placement decisions for *new*
 skills, it does not own the categorization tree itself.
 
+## 10. Config dispatcher naming contract (yaml/json/toml)
+
+**Pattern.** A script that runs N checks against a config file
+typically looks like:
+
+```python
+CHECKS = [
+    ("1", "inject", check_inject),
+    ("2", "skill_count", check_skill_count),
+    ...
+]
+for num, key, fn in CHECKS:
+    cfg = thresholds.get(key, {})
+    status, detail = fn(cfg)
+```
+
+The string `key` is a **silent contract** between the script and
+the config file. If the config file's section is named differently
+(`inject:` in yaml vs. `key="inject"` in CHECKS tuple), the check
+runs on `cfg = {}` and silently falls back to function defaults.
+
+**This is silent.** No exception, no warning, no log line. The
+check emits GREEN if the default happens to match env state, or RED
+with garbage detail if it doesn't. **Both look like normal output.**
+
+**Real-world hit.** The first version of `agent-config-metabolism`
+shipped with 9 such mismatches across 14 checks — half the audit
+was running on defaults, not thresholds. The bug was only caught
+because a verify-script assertion probed one specific check
+(`json_parseable` → "json") and surfaced the mismatch by
+construction.
+
+**Mitigation pattern.** If the skill ships a config dispatcher:
+
+1. Pick ONE side as canonical (the side users edit less often).
+   For tunable thresholds, yaml is canonical because users tune
+   thresholds. For tool-name → handler mappings, code is canonical.
+2. After editing either side, run a parity check. Add it as a
+   `Verification` step in SKILL.md so future edits catch drift:
+
+```bash
+python3 -c "
+import re, sys
+src = open('scripts/<name>.py').read()
+# adjust the regex to match your CHECKS tuple shape
+check_keys = set(re.findall(r'^\s*\(\"(\d+)\",\s*\"([a-z_]+)\",\s*\w+\),', src, re.M))
+config_keys = set()
+for line in open('scripts/<config>.yaml'):
+    m = re.match(r'^([a-z_]+):\s*\$', line)
+    if m and not line.startswith(' '): config_keys.add(m.group(1))
+config_keys -= {'output'}  # config-only sections, not dispatcher keys
+missing = check_keys - config_keys
+print('CHECKS not in config:', missing or '(none)')
+sys.exit(1 if missing else 0)
+"
+```
+
+3. **Bonus**: at script load time, log a warning if any CHECKS key
+   has no matching config section. Doesn't replace the parity
+   check (which catches orphans the other way too) but surfaces
+   drift loudly.
+
+This is the dispatcher-naming equivalent of the YAML key vs.
+function name contract — it's worth its own checklist item because
+**no error tells you when it's broken**. The only signal is "the
+script looks healthy but every red/green is on defaults."
+
 ## Out of scope
 
 - **Which skills to install/curate** is the job of
@@ -379,3 +509,9 @@ skills, it does not own the categorization tree itself.
   `scripts/import-zcode-to-hermes.py` are the runnable
   artifacts. Use it as the reference implementation when you're
   refactoring an existing skill or writing a new one.
+- `hermes-skill-curation` §2.5 (Reorganize protocol) — the
+  counterpart that owns the categorization tree itself.
+  `skill-authoring` only routes *placement decisions for new
+  skills*; if a category needs to be added, renamed, merged, or
+  removed, that's the curation skill's job. See §9's drift-hazard
+  notes for what to do when the two skills' category views disagree.

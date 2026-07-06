@@ -1,6 +1,6 @@
 ---
 name: guix-configs-workflow
-description: "Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'blue rebuild', 'guix system reconfigure', 'shepherd service', 'stow 死链', '热点连不上', 'dnsmasq 端口冲突', 'worker 委派', '撤回', 'AGENTS.md 翻新', 'blue structor', 'home-shepherd 排查', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'GUI 缺环境变量', 'niri environment 块', 'dead git submodule', 'GNU Stow', 'blue stow', '二轨 dotfiles', '恢复被删除的 dotfiles', 'pi-agent 配置', 'wireplumber', 'pavucontrol', '系统服务兜底', 'user-level daemon 兜底', or related. Ten sub-protocols: dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging, AGENTS.md structor, GUI environment injection, GNU Stow mutable config, restoring deleted dotfiles, config.org service modification, user-level daemon override."
+description: Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'guix system reconfigure', 'shepherd service', 'stow 死链', 'blue stow', 'AGENTS.md 翻新', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'wireplumber', '二轨 dotfiles', '恢复被删除的 dotfiles', or related. Ten sub-protocols: dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging, GNU Stow mutable config, restoring deleted dotfiles.
 ---
 
 # guix-configs-workflow — Guix-configs 仓库高频工作流

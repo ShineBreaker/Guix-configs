@@ -1,6 +1,12 @@
 ---
 name: hermes-skill-curation
-description: "Use when the user wants to add, remove, prune, reorganize, audit, or curate the Hermes Agent skill library on disk (~/.local/share/hermes/skills/, ~/.hermes/skills/, bundled vs. dotfile-managed skills). Triggers: '精简 skill', '删掉 XX skill', 'skill 太多', '哪些 skill 在用', '清理 Hermes skill', 'skill 审计', 'trash skill 目录', 'bundled skill 删不掉', 'skills_list 跟磁盘对不上', 'hermes skill 库维护', 'curator 暂停', 'archiving skills', '分类 skill', '重新分类', 'skill 太散', 'skill 没分类', '重组 skill', 'reorganize skills', '创建分类目录', '新建分类', or any bulk add/remove/regroup of skill directories. Covers: skills_list 视图 vs 磁盘真实存在的差异、bundled skill 的 read-only 0555 权限位破解、XDG trash 范式(用户偏好 rm→trash)、用户 dotfile 源(Guix stow)与 Hermes 安装源(bundle)边界、分类重组(伪分类→真分类)、git 索引状态对 mv 的影响、作用域边界(本 skill 默认只管 ~/.local/share/hermes/skills/,不动 ~/.config/agents/skills/ 或 ~/.hermes/skills/ 除非用户明确授权)。"
+description: "Use when the user wants to add, remove, prune, reorganize, audit, or curate the Hermes Agent skill library on disk. Triggers: '精简 skill', '删掉 XX skill', 'skill 太多', '哪些 skill 在用', '清理 Hermes skill', 'skill 审计', 'trash skill 目录', 'bundled skill 删不掉', 'curator 暂停', 'archiving skills', '分类 skill', '重新分类', 'skill 太散', 'skill 没分类', '重组 skill', 'reorganize skills', '创建分类目录', '新建分类', or any bulk add/remove/regroup of skill directories. Covers: skills_list 视图 vs 磁盘真实差异、bundled read-only 0555 权限位破解、XDG trash 范式(用户偏好 rm→trash)、用户 dotfile 源(Guix stow)与 Hermes 安装源(bundle)边界、分类重组(伪分类→真分类)、git 索引状态对 mv 的影响、作用域边界(本 skill 默认只管 ~/.local/share/hermes/skills/,不动 ~/.config/agents/skills/ 或 ~/.hermes/skills/ 除非用户明确授权)。Companion to skill-authoring: this skill handles *reorganizing existing* skills, while skill-authoring §9 routes placement for *new* skills."
+version: 1.3.0
+license: MIT
+metadata:
+  hermes:
+    tags: [skill-curation, prune, reorganize, categorize, trash, git-mv, scope]
+    related_skills: [skill-authoring, hermes-agent, importing-agent-prompts]
 ---
 
 # hermes-skill-curation — Hermes skill 库维护(精简 + 重组)
@@ -32,7 +38,7 @@ description: "Use when the user wants to add, remove, prune, reorganize, audit, 
 
    关键参数:`force_terminal=False, no_color=True, width=200` 让 rich table 输出可被 AI 解析(默认会输出 ANSI 色码跟 box-drawing,在受限的 shell 渲染下乱)。
 
-   **CLI 调不通时的 fallback**:`~/.nix-profile/bin/hermes skills list`(走绝对路径,因为 PATH 默认不含 `~/.nix-profile/bin`)读 4 列表(Name/Category/Source/Status)。`0 disabled` 是部署成功的最低门槛。
+   - **CLI 调不通时的 fallback**:`~/.nix-profile/bin/hermes skills list`(走绝对路径,因为 PATH 默认不含 `~/.nix-profile/bin`)读 4 列表(Name/Category/Source/Status)。`0 disabled` 是部署成功的最低门槛。
 
 6. **`blue stow` 不会覆盖已存在的目标 entry**。当用户的 `~/.local/share/hermes/skills/<name>/`(或 `~/.agents/skills/<name>/`)已经是个真目录(通常被另一个 `mutable/` 包部署过),新包 `blue stow <pkg>` **不会**替换这个目录——结果是顶层 entry 存在,但内部文件链(`SKILL.md` 是个指向仓库源的 symlink)**没建上**,agent 实际跑的时候读不到这个 skill。**症状**:`ls ~/.local/share/hermes/skills/<name>/SKILL.md` 是真文件但内容为空,或干脆 entry 是空目录。**修法**(任选):
    - `blue stow --adopt <pkg>` —— 收养目标现状,把当前内容挪进包源(适合"想保留 ~ 下现状"场景)
@@ -246,6 +252,14 @@ ls /home/brokenshine/.config/agents/skills/ | wc -l   # 应跟重组前一致
 - ❌ **盲目新建分类** — 看到两个 skill 没分类就开 `<新分类>/` 而不复用现有分类。每次新建分类前问自己:**现有 12 个分类里,真的没有任何一个语义上能容纳吗?** 用户硬偏好"先压入现有,只有在完全没合理文件夹时才新建"
 - ❌ **只写分类 DESCRIPTION.md,不写 skill 自己的 SKILL.md** — DESCRIPTION 是分类元数据(描述整个分类边界),SKILL.md 才是 skill 元数据。新建分类 + 搬 skill 时,两者都要写,缺一不可(2026-07-05 重组时只写了 DESCRIPTION,后续给具体 skill 时必须补 SKILL.md)
 - ❌ **execute_code / patch 工具在 hermes skill 文件上 timeout / blocked** — 这是 sandbox 拦截的「人工审批 + 沙箱限制」信号,**不要重试**,**不要换工具重新尝试同样效果**,改用直接终端命令(`mkdir` / `mv` / `cat > file <<EOF`)或 `skill_manage` 管理 SKILL.md
+- ❌ **写审计/检查脚本时用 exclude 模式"绕过"真实问题** — 看到 `lsp/node_modules/*.json` 解析失败就 `exclude: ["lsp/**"]`,看到 `mcp-stderr.log` 噪音就 `exclude: ["mcp-stderr.log"]`,看到 Traceback 重复就把所有 `Traceback` 聚成一类。**这是把责任推给"以后",不是解决**。用户原话:**"在多数情况下,能够直接解决问题的话就不要用 exclude 忽略,要善于直接解决问题,而不是把问题留到后面"**。正确的方向:
+  - **JSONC 是 TypeScript/VSCode 生态的 de-facto 标准**(`tsconfig.json` / `tsdoc-metadata.json` 用 `//` 注释 + trailing comma)→ 写**支持 `//` 注释 + trailing comma 的 lenient parser**,不要 exclude `lsp/**`。具体实现见 `references/audit-patterns.md` §1
+  - **Traceback 不是噪音,异常类型是关键信号** → 逐块 walk 到 column-0 的异常行提取 `ImportError` / `ModuleNotFoundError` / `RuntimeError` 等真实类名,不要聚类成 `::Traceback×N`(信息全丢)。具体实现见 `references/audit-patterns.md` §2
+  - **mcp-stderr 的 `ModuleNotFoundError` 之类是真问题** → 让脚本看到它,detail 字段暴露出来让用户修,**不要 exclude**。排除路径 = 把信号藏起来 = 监控自我欺骗
+  - **何时 exclude 真的合理**:用户明确说"这个路径/这个文件不是我关心的"(比如 `.Trash/`、备份目录),并且**没有更直接的方案**(识别它/解析它/聚合它)。其他情况默认走"让脚本识别"路线
+- ❌ **跨 skill 改配置时 key 名悄悄漂移** — 在某个 skill 的 `scripts/<name>.py` 里写了一个 CHECKS tuple `("12", "backup_tmp", ...)` 在另一个文件里把它改成 `backup_tmp_pile`,yaml 那边也跟着改。两边都改完了没人记得谁先改的,半年后另一个会话照着 SKILL.md 复制实现,**新写的 yaml 跟着 `backup_tmp` 走 → `cfg.get("backup_tmp", {})` 永远拿到空 dict**。**教训**:yaml 配置 dispatcher 的 section 名必须跟代码里的 key string 来自同一个 source of truth — 要么把 yaml 当 canonical 写生成器(从 yaml 生成代码里的 tuple),要么在 SKILL.md `Verification` 步骤加 parity check。具体实现见 `references/audit-patterns.md` §3
+- ❌ **读取文件只 `head[:600]` 就当全文本处理** — YAML frontmatter 的 description 字段常常超过 600 字节,`re.findall` 或正则匹配会从截断处继续,得到**残缺的值** → inject 大小算错 / frontmatter 检测漏报。**修法**:`head[:4096]` 至少覆盖典型 frontmatter,或者 `text = path.read_text()` 读全文(小文件没成本)。具体案例见 `references/audit-patterns.md` §4
+- ❌ **正则用 `(?:.*\n)*` + `re.S` 嵌套无界量词** — catastrophic backtracking,小文本也可能 timeout 几小时。**修法**:改 walk-line 算法,或者在量词上加 `+?` / `*?` 强制非贪婪。具体案例见 `references/audit-patterns.md` §5
 
 ## 4.5 hermes CLI 关键路径(2026-06-21 确认)
 
@@ -301,3 +315,19 @@ Q5: find-skills / pack-guix / 浏览器自动化 / 社交 CLI 等小项(逐项)
   - §3 标准验证流程(Prune/Reorganize 共用)
   - §4 用户咨询模板(Prune 决策)
   - §5 **分类重组**(Reorganize 用,新增)— §5.1 盘点脚本 `reorganize-survey.sh` + §5.2 执行脚本 `reorganize-execute.sh`(处理 git 未跟踪 + chmod + trash + 验证 0 disabled)+ §5.3 cross-check 必问表
+- `references/audit-patterns.md` — 写审计/检查脚本的具体技巧库(JSONC 解析、Traceback tail 提取、yaml/CHECKS key parity、文件截断陷阱、灾难性回溯陷阱)。跟 §3 「❌ 用 exclude 绕过真实问题」配套——读完之后知道怎么直接解决问题而不是 exclude。
+
+## 7. Companion skills
+
+- `skill-authoring` §9 (Categorization) — the **placement** counterpart.
+  When you're *creating a new skill*, that skill's `skill-authoring`
+  §9 decision tree picks which category directory it goes into. This
+  curation skill only handles *moving / pruning / merging* of
+  existing skills — when you do either, leave a breadcrumb in the
+  curation log so a future session loading `skill-authoring` knows
+  the category table there may need a sync (see `skill-authoring`
+  §9 "Category-table drift hazard").
+- `references/audit-patterns.md` (this skill, new in v1.3.0) — 写健康检查/审计
+  脚本时怎么直接解决问题(而不是 exclude 绕过)。覆盖 JSONC 解析、
+  Traceback tail 提取、yaml/CHECKS key parity、文件截断陷阱、灾难性
+  回溯陷阱。跟 §3 「❌ 用 exclude 绕过真实问题」配套阅读。

@@ -1,6 +1,6 @@
 ---
 name: emacs-config-debugging
-description: 调试用户的 Emacs Lisp 配置 —— 当用户报告"我绑的快捷键不生效 / 按键行为不符合配置 / mode 下行为怪异 / face 视觉调整出问题"等 Emacs 配置层问题时使用。覆盖 keymap 优先级链（global → minor-mode → buffer-local → text/overlay）、描述 `describe-key` / `C-h k` / `where-is-internal` 的输出如何解读、如何用 `emacsclient --eval` 实测运行中 daemon 的键位与 face、如何定位"包内置绑定覆盖了我的配置"或"主题覆盖了我的 face"这类典型坑。触发：「按键不生效」「C-x 在 X mode 下行为不对」「我绑了 Y 但是按下去还是 Z」「describe-key 告诉我绑到了 A 但我要的是 B」「global-set-key 没生效」「buffer-local keymap 抢了全局键」「major-mode 覆盖了我的键位」「行号列与正文之间留白过大」「face 颜色/间距被主题改回去了」「配置改完 reload 不生效」等。
+description: 调试用户的 Emacs Lisp 配置 —— 键位/face/模式行为不符合预期时使用。覆盖 keymap 优先级链、describe-key / C-h k 输出解读、emacsclient --eval 实测运行 daemon、定位"包内置绑定/主题覆盖"等典型坑。触发：「按键不生效」「C-x 在 X mode 行为不对」「我绑了 Y 但按下去是 Z」「global-set-key 没生效」「face 被主题改回去」「reload 不生效」。
 ---
 
 # emacs-config-debugging
@@ -40,11 +40,11 @@ Key Bindings
 
 读输出时关注三个字段：
 
-| 字段              | 含义                                                    |
-| ----------------- | ------------------------------------------------------- |
-| "Key Bindings"    | 该命令实际生效的位置（keymap 名 + 键位）               |
-| "References"      | 该命令在源码里的定义位置（用于确认是不是预期内）        |
-| 末尾的源文件路径  | 用来判断是内置包、第三方包、还是用户配置                |
+| 字段             | 含义                                             |
+| ---------------- | ------------------------------------------------ |
+| "Key Bindings"   | 该命令实际生效的位置（keymap 名 + 键位）         |
+| "References"     | 该命令在源码里的定义位置（用于确认是不是预期内） |
+| 末尾的源文件路径 | 用来判断是内置包、第三方包、还是用户配置         |
 
 如果输出在 "Key Bindings" 一行写的是 `xxx-mode-map <key>`，说明是更高优先级的层在绑——**问题不在你的配置里，而在那个 mode-map 的定义处**。
 
@@ -74,11 +74,11 @@ emacsclient --eval '(mapconcat #'key-description (where-is-internal #'my-command
 
 根据 `describe-key` 输出的源文件路径，分三种情况：
 
-| 源文件位置                          | 含义                                  | 修复方向                                              |
-| ----------------------------------- | ------------------------------------- | ----------------------------------------------------- |
-| `.../site-lisp/<pkg>-<ver>/<file>.el` | 内置包默认绑定（org-mode, magit, ...） | 在用户的 `configs/<pkg>.el` 加 buffer-local 覆盖     |
+| 源文件位置                            | 含义                                          | 修复方向                                                       |
+| ------------------------------------- | --------------------------------------------- | -------------------------------------------------------------- |
+| `.../site-lisp/<pkg>-<ver>/<file>.el` | 内置包默认绑定（org-mode, magit, ...）        | 在用户的 `configs/<pkg>.el` 加 buffer-local 覆盖               |
 | `.../straight/build/<pkg>/<file>.el`  | 第三方包源码（用户通过 straight/elpaca 等装） | 在 `use-package :bind` 块里覆盖，或在配置文件中显式 define-key |
-| 用户仓库内的 `configs/...`          | 用户自己的配置                        | 优先级顺序错了（后加载的反而被前面的覆盖了）         |
+| 用户仓库内的 `configs/...`            | 用户自己的配置                                | 优先级顺序错了（后加载的反而被前面的覆盖了）                   |
 
 **最常见的坑是第一种**：Org 内置把 `C-j` 绑给 `org-return-and-maybe-indent`，magit 把 `C-c C-c` 绑给 `magit-commit`，company / corfu / yasnippet 各自劫持 `<tab>` 和 `M-TAB`——这些都不会报错，你的配置"看起来"生效了，运行时却被压住。
 
@@ -100,6 +100,7 @@ emacsclient --eval '(mapconcat #'key-description (where-is-internal #'my-command
    ```
 
    保留 mode 在特定上下文里的有用语义，其余位置走你的约定。
+
 3. **完整接管**：用 `:bind (:map <mode>-map ...)` 在 use-package 块里集中覆盖所有冲突键。适合该 mode 完全不符合你的工作流的情况。
 
 **默认推荐档 2**：花 5 行代码换来 mode 在表格/代码块等特殊上下文里的原生智能行为。
@@ -117,12 +118,15 @@ emacsclient --eval '(mapconcat #'key-description (where-is-internal #'my-command
 修改完**两件事必须做**：
 
 1. **byte-compile 语法检查**：
+
    ```bash
    emacsclient --eval '(byte-compile-file (locate-user-emacs-file "configs/<file>.el"))'
    ```
+
    返回 `t` 即通过；返回错误则立即看。
 
 2. **运行中 daemon 实测 reload + 重测键位**：
+
    ```bash
    emacsclient --eval '(progn
      (require '\''<pkg>)
@@ -154,6 +158,7 @@ emacsclient --eval '(mapconcat #'key-description (where-is-internal #'my-command
 **症状**：用户报告 `C-j` 在 Org buffer 里"创建新行"而不是"下移光标"。
 
 **调查路径**：
+
 1. 查全局 `keybindings.el` → 已绑 `next-line`，看起来正常。
 2. `C-h k C-j` 在 Org buffer → 输出 "Key Bindings: `org-mode-map C-j`"。
 3. 定位：Org 内置 `org-return-and-maybe-indent` 绑在 `org-mode-map`。
@@ -230,6 +235,7 @@ face 类问题（行号列间距过大、高亮颜色不对、字体宽度不统
 **症状**：4 位数行号 + Emacs 默认 `line-number` face 的 normal 宽度 → 行号与正文之间有 ~5 个字符的留白，看起来松散。
 
 **根因**：两层叠加——
+
 - `display-line-numbers-mode` 在每个行号**末尾硬编码加 1 个空格**（避免数字紧贴正文，渲染层行为，没有变量能关）。
 - 默认 `line-number` face 的字符宽度 = normal，等宽数字本身就比较宽。
 - **加上 buffer 左边的 8px fringe gutter**，这是视觉留白的主要来源之一（很多人会漏掉这一层）。

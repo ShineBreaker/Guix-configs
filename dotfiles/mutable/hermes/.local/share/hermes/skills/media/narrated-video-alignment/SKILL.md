@@ -1,6 +1,6 @@
 ---
 name: narrated-video-alignment
-description: "Repair or assemble the audio+subtitle track for an already-rendered, segmented video (HyperFrames explainer, slide deck, course video, screencast) so narration matches the picture exactly. Trigger on 音频和视频对不上, 配音和画面不匹配, narration drift, voiceover out of sync, 音画不同步, 重做配音, 重新对位, 补字幕, 烧字幕, or any task where a finished video needs a TTS-scripted voiceover + burned-in subtitles built to match its visual chapter boundaries. Covers topic drift, length drift, and boundary drift. Pipeline: 1fps probe → visual inventory → script rewrite → TTS → atempo/padding alignment → silencedetect SRT → ffmpeg subtitles burn-in. Use when the deliverable is a single MP4 with audio+subs; for new authoring, route to /faceless-explainer or /general-video."
+description: "Repair or assemble the audio+subtitle track for an already-rendered, segmented video (HyperFrames explainer, slide deck, course video, screencast) so narration matches the picture. Trigger on 音频和视频对不上, 配音和画面不匹配, narration drift, voiceover out of sync, 音画不同步, 重做配音, 重新对位, 补字幕, 烧字幕. Covers topic drift, length drift, boundary drift. Pipeline: 1fps probe → visual inventory → script rewrite → TTS → atempo/padding → silencedetect SRT → ffmpeg subtitles burn-in.
 ---
 
 # Narrated Video Alignment

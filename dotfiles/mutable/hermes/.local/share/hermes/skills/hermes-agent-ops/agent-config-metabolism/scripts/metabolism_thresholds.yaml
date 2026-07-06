@@ -1,0 +1,94 @@
+# Metabolism check thresholds — edit per setup
+# Probe: python3 -c "import yaml; print(yaml.safe_load(open('scripts/metabolism_thresholds.yaml')))"
+
+inject:
+  enabled: true
+  max_kb: 25                # sum of system prompt + skill index + memory
+
+skill_count:
+  enabled: true
+  max: 160                  # find $HERMES_HOME/skills -name SKILL.md | wc -l
+
+broken_symlinks:
+  enabled: true
+  max: 0                    # should always be 0
+
+config_exists:
+  enabled: true
+  files:
+    - config.yaml
+    - .env
+    - auth.json
+    - cron/jobs.json
+
+rule_frontmatter:
+  enabled: true
+  required_fields: [name, description]
+
+json:
+  enabled: true
+  globs:
+    - "*.json"
+  # JSONC tolerance (in script) handles tsconfig.json + tsdoc-metadata.json.
+  # No path excludes — every JSON file under HERMES_HOME is checked.
+
+cron_alive:
+  enabled: true
+  max_age_days: 7           # tick log must be < this old
+
+pipeline_fresh:
+  enabled: true
+  max_age_hours: 24         # last session_ts vs now
+
+errors:
+  enabled: true
+  max_per_day: 5
+  log_globs:
+    - "logs/*.log"          # scan ALL logs — duplicates and noise surface via signature grouping
+  # When real problems exist (e.g. mcp server failing to start, web_server cron
+  # import collision), they should be VISIBLE in the report, not excluded. The
+  # signature grouping (top-N unique errors) makes a single repeating failure
+  # cheap to identify even if the absolute count is large.
+
+log_line_cap:
+  enabled: true
+  max_lines: 100000
+
+task_ledger:
+  enabled: false            # turn on if you use kanban
+  paths:
+    - "kanban/board.json"
+    - "todo/store.json"
+
+backup_tmp_pile:
+  enabled: true
+  max_files: 50
+  patterns:
+    - "*.bak.*"
+    - "*.tmp"
+    - "*~"
+
+memory_cache_size:
+  enabled: true
+  max_mb: 200               # cache/ + memory_store.db + audio_cache/
+
+plaintext_secrets:
+  enabled: true
+  max: 0                    # should always be 0
+  grep_patterns:
+    - "aws_[A-Za-z0-9]{20,}"
+    - "sk-[A-Za-z0-9]{20,}"
+    - "ghp_[A-Za-z0-9]{20,}"
+    - "xoxb-[A-Za-z0-9]{10,}"
+    - "xoxp-[A-Za-z0-9]{10,}"
+    - "Bearer eyJ[A-Za-z0-9_-]+\\."
+    - "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"
+  exclude_paths:
+    - ".env"                # intentional secrets live here
+    - "node_modules/**"
+    - ".venv/**"
+    - "references/**"       # doc examples may have fake keys
+
+output:
+  log_dir: "cron/output"    # relative to $HERMES_HOME
+  keep_logs: 12             # how many recent logs to retain

@@ -9,3 +9,5 @@
 用户偏好:大型迁移/批量灌数据/多仓库同步等,先拿一个代表性样本做端到端验证,估算好迁移后 hermes session_search / memory / DB 体积等实际效果再决定"要不要继续 / 怎么扩展"。原话:"先试着迁 1 个中等 session 做端到端验证,过了再说"。给包含预估影响的选项优于直接问"全量还是部分";汇报进度时主动报"已验证 X,待你决定是否放量"。
 §
 用户偏好:在 `~/.local/share/hermes/skills/` 新建 skill 必须放进现有 12 个分类之一(成为 `<category>/<skill-name>/`),只有现有分类全装不下时才能新建分类(且必须先与用户确认)。不允许直接在 `skills/` 顶层创建 `<skill-name>/`(把分类当 skill 名是反模式)。**不动 `~/.config/agents/skills/`**(那是 Guix Home immutable 部署)。12 个分类名 + 决策树见 `skill-authoring` skill §9。
+§
+用户偏好：低频但关键—只要用户说「自主完成所有任务」「我去休息了」，立刻转为自主模式，不再 confirm 选项、不再提问，按 skill 流程一路推到 commit + 报告产出。策展 / 修复 / 批量动作 都遵这条。

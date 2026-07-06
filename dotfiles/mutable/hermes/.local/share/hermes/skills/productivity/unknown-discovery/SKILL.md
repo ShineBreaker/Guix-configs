@@ -1,6 +1,6 @@
 ---
 name: unknown-discovery
-description: "Use when the user starts a new project, faces ambiguous requirements, says 'I don't know what I don't know', wants to do discovery/research before design, mentions 'unknowns', 'assumptions', 'validation', or asks for help planning interviews/surveys/early product research. Triggers: '我有哪些未知', '识别未知', '设计前的调研', '验证假设', '用户访谈设计', '我都不知道该问什么', '干系人访谈', '前期发现', 'start a new project but unclear', 'discovery phase', 'validate assumptions'. Distilled from Than Tibbetts' 'A Field Guide to Fable: Finding Your Unknowns' — gives the agent a 5-stage workflow for finding unknowns before you can find their solutions."
+description: "Use when the user starts a new project, faces ambiguous requirements, says 'I don't know what I don't know', wants discovery/research before design. Triggers: '识别未知', '设计前的调研', '验证假设', '用户访谈设计', 'discovery phase', 'validate assumptions'. Distilled from Than Tibbetts' 'A Field Guide to Fable: Finding Your Unknowns' — gives a 5-stage workflow for finding unknowns before you can find their solutions."
 version: 0.1.0
 license: MIT
 metadata:
