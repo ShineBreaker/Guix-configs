@@ -2084,9 +2084,11 @@ end
           ;; (默认 xauth 包), 不是 .Xauthority 文件路径. 用默认值, SLiM 自管 X 授权.
           ))
 
-      ;; D6: 显式加 kmscon (tty1 装机回退; make-installation-os 默认已启用 kmscon,
-      ;; 这里冗余声明便于接手 agent 看出意图)
-      (service kmscon-service-type)
+      ;; D6: kmscon 已由 make-installation-os 默认提供(install.scm:466-468,
+      ;; (service kmscon-service-type (kmscon-configuration (kmscon kmscon-8) ...))),
+      ;; 作为 tty1 装机回退. 不在此重复声明 —— (service kmscon-service-type)
+      ;; 不带 configuration 会被 guix 拒绝("no value specified for service of
+      ;; type 'kmscon'"), 而且本就冗余.
 
       ;; ---- 4 套 substitute 镜像 (D3: 全复刻 source/config.org 的 4 套) ----
       (simple-service 'nonguix-substitutes guix-service-type

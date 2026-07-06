@@ -62,10 +62,18 @@
 > 4. **`%default-locale-libcs` 是 `(gnu system install)` 内部变量**,
 >    不 export,必须 `(@@ (gnu system install) %default-locale-libcs)`。
 >    §9.4.3 已加 `@@`。
+> 5. **`(service kmscon-service-type)` 不带 configuration 非法** —— guix 报
+>    "no value specified for service of type 'kmscon'"。而 make-installation-os
+>    默认已含 `(service kmscon-service-type (kmscon-configuration ...))`
+>    (install.scm:466-468)。§9.4.3 已删掉冗余声明(D6 目标由 base OS 满足)。
+> 6. **`(%current-system)` 在 OS 块里需要 `(guix utils)`** —— live-modules 漏了
+>    该 use-modules。已补(make-installation-os 的 #:efi-only? 判断要用)。
 >
-> 另: §11.2 错误码表新增 4 行(`no code for module (gnu packages slim)` /
+> 另: §11.2 错误码表新增 5 行(`no code for module (gnu packages slim)` /
 > `no code for module (gnu packages rofi)` /
-> `extraneous field initializer (xauth-file)` / `unbound variable: %default-locale-libcs`)。
+> `extraneous field initializer (xauth-file)` /
+> `unbound variable: %default-locale-libcs` /
+> `no value specified for service of type 'kmscon'`)。
 
 ### 文档来源
 
@@ -955,8 +963,10 @@ service-type` / `gnome-desktop-service-type` / `plasma-desktop-service-type`
           ;; 语义错(传路径给期望程序的槽)。用默认值,SLiM 自己处理 X 授权。
           ))
 
-      ;; D6 拍板:显式加 kmscon(rosenthal installer 走 kmscon;tty1 装机回退)
-      (service kmscon-service-type)
+      ;; D6: kmscon 已由 make-installation-os 默认提供(install.scm:466-468),
+      ;; 作为 tty1 装机回退. 不在此重复声明 —— (service kmscon-service-type)
+      ;; 不带 configuration 会被 guix 拒绝("no value specified for service of
+      ;; type 'kmscon'"), 而且本就冗余.
 
       ;; ---- 4 套 substitute 镜像(D3 拍板,全复刻)----
       (simple-service 'nonguix-substitutes guix-service-type
@@ -1040,7 +1050,7 @@ service-type` / `gnome-desktop-service-type` / `plasma-desktop-service-type`
 | `"font-sarasa-gothic"` 在 packages 列表里                                                 | 中文字体                                 | 桌面查资料时,中文字符不能是框框(gril 重审时用户纠正)                                                                    |
 | `(service xfce-desktop-service-type)`                                                     | XFCE 桌面                                | 自动配 polkit / udisks / 权限,见 Guix 1.5 手册 Desktop Services 节                                                       |
 | `(service slim-service-type (slim-configuration ...))`                                    | slim DM                                  | 轻量,跟 XFCE 风格统一;`auto-login? #t` + `default-user "live"` 让 ISO 启动即进桌面                                       |
-| `(service kmscon-service-type)`                                                           | **D6 显式加** kmscon 文字 console         | rosenthal installer 走 kmscon;tty1 提供装机回退。**不**写 `(delete kmscon-service-type)`(上版误加,实测 rosenthal install ISO 默认就启用 kmscon) |
+| ~~`(service kmscon-service-type)`~~ 已删                                                  | (D6 原想显式加,实测发现 make-installation-os 默认已含带 configuration 的 kmscon) | 裸 `(service kmscon-service-type)` 不带 configuration 会被拒("no value specified for service of type 'kmscon'"); 基础 OS 已有 → 删除冗余声明 |
 | 4 个 `simple-service '*-substitutes guix-service-type ...` 块                             | D3 4 套 substitute 镜像                  | 复刻 source/config.org 的 4 套(nonguix / guix-moe / panther / sjtug),装机时取 substitute 用                                |
 | `(delete (@@ (gnu system install) configuration-template-service-type))`                  | 移除 etc-service-type 的 examples/ 模板  | 本仓库不放 examples/(D2 gril 重审一致)                                                                                    |
 | `(gc-root-service-type config => ...)`                                                    | 重写 gc-root-service                     | rosenthal 默认塞 examples/* 包;我们只保留 locale + texinfo + guile                                                       |
@@ -1575,6 +1585,7 @@ blue block-show live-installation-os
 | `unbound variable: slim-service-type`         | `(gnu services xorg)` 没引    | §9.4.2                         |
 | `no code for module (gnu packages slim)`      | 该模块**不存在**,删掉这行 use-modules | §9.4.2 注释(slim 走 spec 解析) |
 | `no code for module (gnu packages rofi)`      | 该模块**不存在**,rofi 在 `(gnu packages xdisorg)` 或走 spec | §9.4.2 注释 |
+| `no value specified for service of type 'kmscon'` | `(service kmscon-service-type)` 缺 configuration | 删该行(make-installation-os 默认已含带 config 的 kmscon) |
 | `extraneous field initializer (xauth-file)`   | slim-configuration 字段名错(应 `xauth`)或误传路径 | §9.4.3 slim 注释(xauth 期望程序,非 .Xauthority) |
 | `unbound variable: %default-locale-libcs`     | 内部变量,需 `(@@ (gnu system install) ...)` | §9.4.3 gc-root 注释 |
 | `Wrong type to apply: #<<service-type>`       | service 括号错位              | §9.4.5 陷阱 1                  |
