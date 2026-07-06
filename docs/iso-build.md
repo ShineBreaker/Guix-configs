@@ -994,18 +994,21 @@ service-type` / `gnome-desktop-service-type` / `plasma-desktop-service-type`
             "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"))))
 
       (modify-services (operating-system-user-services %live-base-os)
-        ;; 删除原版 configuration-template(本仓库不放 examples/)
+        ;; 删掉原版 configuration-template (本仓库不放 examples/)
         (delete (@@ (gnu system install) configuration-template-service-type))
-        ;; 替换 gc-root-service:不放 examples,只保留 locale + texinfo + guile
-        ;; 注: %default-locale-libcs 是 (gnu system install) 内部变量,不 export,
-        ;; 必须用 @@ 取(实测: %root-account/%base-user-accounts 被 (gnu) re-export,
-        ;; 但 %default-locale-libcs 没被 re-export)。
+        ;; 重写 gc-root-service: 不放 examples, 只保留 locale + texinfo + guile.
+        ;; 注 1: %default-locale-libcs 是 (gnu system install) 内部变量 (不 export),
+        ;;   必须用 @@ 取(实测: %root-account/%base-user-accounts 被 (gnu) re-export,
+        ;;   但 %default-locale-libcs 没被 re-export)。
+        ;; 注 2: %default-locale-libcs 本身是 list, 要用 append 而非 cons* ——
+        ;;   builder 会 for-each symlink 每个元素, 元素必须是单个 store path.
+        ;;   cons* 把整个 list 当一个元素塞进去 → (symlink '("p1" "p2") "0") 类型错.
         (gc-root-service-type
-         config => (cons* (libc-utf8-locales-for-target)
-                          texinfo
-                          guile-3.0
-                          (@@ (gnu system install) %default-locale-libcs)
-                          (or config '()))))))))
+         config => (append (list (libc-utf8-locales-for-target)
+                                 texinfo
+                                 guile-3.0)
+                           (@@ (gnu system install) %default-locale-libcs)
+                           (or config '()))))))))
 
 %live-installation-os
 #+end_src

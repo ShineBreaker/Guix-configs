@@ -2115,14 +2115,18 @@ end
         ;; 删掉原版 configuration-template (本仓库不放 examples/)
         (delete (@@ (gnu system install) configuration-template-service-type))
         ;; 重写 gc-root-service: 不放 examples, 只保留 locale + texinfo + guile.
-        ;; 注: %default-locale-libcs 是 (gnu system install) 内部变量 (不 export),
-        ;; 必须用 @@ 取 (%root-account 被 (gnu) re-export 了, 这个没有).
+        ;; 注 1: %default-locale-libcs 是 (gnu system install) 内部变量 (不 export),
+        ;;   必须用 @@ 取 (%root-account 被 (gnu) re-export 了, 这个没有).
+        ;; 注 2: %default-locale-libcs 本身是 list, 要用 append 而非 cons* ——
+        ;;   gc-root-service 的 builder 会 for-each symlink 每个元素, 元素必须是
+        ;;   单个 store path (字符串). cons* 会把整个 list 当一个元素塞进去,
+        ;;   builder 调 (symlink '("path1" "path2") "0") 会因类型错 build failed.
         (gc-root-service-type
-          config => (cons* (libc-utf8-locales-for-target)
-                           texinfo
-                           guile-3.0
-                           (@@ (gnu system install) %default-locale-libcs)
-                           (or config '()))))))))
+          config => (append (list (libc-utf8-locales-for-target)
+                                  texinfo
+                                  guile-3.0)
+                            (@@ (gnu system install) %default-locale-libcs)
+                            (or config '()))))))))
 
 %live-installation-os
 #+end_src
