@@ -1711,8 +1711,8 @@ cd ~/Projects/Config/Guix-configs && blue check
 
 #### P1:scripts/build-image.scm 已建
 
-- [ ] **[A]** P1:`scripts/build-image.scm` 文件存在
-- [ ] **[A]** P1:文件 18 行 + SPDX 头
+- [x] **[A]** P1:`scripts/build-image.scm` 文件存在 ✅ (commit be70f1a)
+- [x] **[A]** P1:文件 31 行 + SPDX 头(实测比 plan 估的 18 行多 —— 含注释和空行,核心逻辑仍是 18 行 match 块)
 
 **期望输出样板**:
 
@@ -1731,10 +1731,10 @@ $ head -3 scripts/build-image.scm
 
 #### P2:config.org ISO 块
 
-- [ ] **[A]** P2:config.org 已加 `* Live ISO` 章 + `live-modules` + `live-installation-os`
-- [ ] **[A]** P2:`tmp/live-iso.scm` 经 `blue check` 通过
-- [ ] **[A]** P2:`tmp/live-iso.scm` 末行是 `%live-installation-os`
-- [ ] **[A]** P2:`tmp/config.scm` 经 `blue check` 通过,**没有** `%live-installation-os` 字样
+- [x] **[A]** P2:config.org 已加 `* Live ISO` 章 + `live-modules` + `live-installation-os` ✅ (commit 1aa09fc)
+- [x] **[A]** P2:`tmp/live-iso.scm` 经 `blue check` 通过(实测 live-modules 25 对 / live-installation-os 85 对 —— plan 样板写的 32 对是旧估,以实测为准)
+- [x] **[A]** P2:`tmp/live-iso.scm` 末行是 `%live-installation-os`
+- [x] **[A]** P2:`tmp/config.scm` 经 `blue check` 通过(914 对),**没有** `%live-installation-os` / `make-installation-os` / 任何 ISO 独有标识符(实测 9 个标识符全 0)
 
 **期望输出样板**:
 
@@ -1757,9 +1757,10 @@ $ grep -c "%live-installation-os" tmp/config.scm
 
 #### P3:blueprint.scm build-iso-command
 
-- [ ] **[A]** P3:`blueprint.scm` 已加 `build-iso-command`
-- [ ] **[A]** P3:`blue list` 能看到 `build-iso`
-- [ ] **[A]** P3:`blue help build-iso` 输出 help 文本
+- [x] **[A]** P3:`blueprint.scm` 已加 `build-iso-command` ✅ (commit 06fa397)
+- [x] **[A]** P3:`blue help`(无参)能看到 `build-iso` 列出 ⚠️ `blue list`(项目自定义)在本环境**预先就坏**(exit 1, 与本任务无关 —— git stash 回到 P3 前同样失败);改用 `blue help`(框架内建)确认注册成功
+- [x] **[A]** P3:`blue help build-iso` 输出 help 文本
+- [x] **[A]** P3(额外):`blue --dry-run build-iso xfce` 输出 `BUILD ISO jeans-xfce-20260706.x86_64-linux.iso` + `[预演] guix time-machine --channels=...source/channel.lock -- repl -- .../scripts/build-image.scm .../dist/jeans-xfce-20260706.x86_64-linux.iso .../tmp/live-iso.scm --image-type=iso9660`
 
 **期望输出样板**:
 
@@ -1776,8 +1777,8 @@ $ blue help build-iso 2>&1 | head -10
 
 #### P4-P5
 
-- [ ] **[A]** P4:manifest.scm 已评估是否需增包(默认不动)
-- [ ] **[A]** P5:.gitignore 已加 `dist/`
+- [x] **[A]** P4:manifest.scm 已评估,结论**不动**(blue 已含 guix repl + guile + guix scripts system;P1 实测 guix repl 能加载 (guix scripts system))
+- [x] **[A]** P5:.gitignore 已加 `dist`(✅ commit f5d01df;用 `dist` 不带 `/` 也忽略同名文件,git check-ignore -v 验证命中)
 
 **期望输出样板**:
 
@@ -1788,8 +1789,8 @@ dist/
 
 #### P6:blue check 全过
 
-- [ ] **[A]** P6:`blue check` 全过(无 FAIL)
-- [ ] **[A]** P6:无新增 `[SKIP]` 块(若新增,需说明)
+- [x] **[A]** P6:`blue check` 全过(无 FAIL) —— 实测 39 个 scheme 块 + 3 周边文件全 [OK](plan 估 38,实际多 1 因为 live-modules + live-installation-os 各算 1 块)
+- [x] **[A]** P6:无新增 `[SKIP]` 块(实测仅 2 个原有 SKIP:`50-hibernate.rules (js)` + `fish-cfg (fish)`,与 ISO 无关)
 
 **期望输出样板**:
 
@@ -1804,9 +1805,9 @@ $ cd ~/Projects/Config/Guix-configs && blue check
 
 #### P7:实际构建(用户执行)
 
-- [ ] **[U]** P7(用户执行):`blue build-iso xfce` 跑通
-- [ ] **[A]** P7:`blue --dry-run build-iso xfce` 输出与 §9.9 描述一致
-- [ ] **[U]** P7:产物路径:`dist/jeans-xfce-<YYYYMMDD>.x86_64-linux.iso`
+- [ ] **[U]** P7(用户执行):`blue build-iso xfce` 跑通(30+ 分钟,需用户手动)
+- [x] **[A]** P7:`blue --dry-run build-iso xfce` 输出与 §9.9 描述一致 ✅(实测见 P3 额外项)
+- [ ] **[U]** P7:产物路径:`dist/jeans-xfce-<YYYYMMDD>.x86_64-linux.iso`(待用户实跑)
 
 **期望输出样板**(用户实跑后):
 
