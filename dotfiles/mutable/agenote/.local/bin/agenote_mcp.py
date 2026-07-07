@@ -608,7 +608,7 @@ def agenote_extract(
     source: str = "all",
     date: str = "",
     output_dir: str = "",
-    dry_run: bool = True,
+    dry_run: bool = False,
 ) -> dict:
     """跨 agent 对话抽取：把 AI 编程工具的原始对话抽取为 Org-mode 文件。
 
@@ -620,7 +620,7 @@ def agenote_extract(
         source: opencode | crush | codex | claude | pi | hermes | all
         date: 目标日期 YYYY-MM-DD（默认昨天；空字符串 = 不按日期过滤）
         output_dir: 输出目录（默认 ~/Documents/Org/conversations/<date>/）
-        dry_run: True 只返回报告不落盘（默认）
+        dry_run: True 只返回报告不落盘；默认 False（落盘，与底层 run_extract 对齐）
 
     Returns:
         dict: {source, total_facts, output_dir, files: [path, ...], errors: [...]}
