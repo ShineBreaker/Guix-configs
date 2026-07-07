@@ -148,17 +148,19 @@ def _extract_session_file(
             elif role == "assistant" and current_user and content:
                 tag = (cwd_evt or cwd).split("/")[-1] if (cwd_evt or cwd) else "codex"
                 sid = session_id_evt or session_id
+                evt_ts = str(evt.get("timestamp", ""))
                 facts.append(
                     ReconciledFact(
-                        id=f'codex:{sid}:{evt.get("timestamp", events.index(evt))}',
+                        id=f'codex:{sid}:{evt_ts or events.index(evt)}',
                         source="codex",
-                        native_id=str(evt.get("timestamp", events.index(evt))),
+                        native_id=evt_ts or str(events.index(evt)),
                         title=extract_title(current_user) or title,
                         category="general",
                         content=f"USER: {current_user[:1000]}\n\nASSISTANT: {content[:2000]}",
                         trust_score=0.5,
                         weight=EXTERNAL_RECONCILE_WEIGHT,
                         tags=[tag],
+                        timestamp=evt_ts,
                     )
                 )
                 current_user = None

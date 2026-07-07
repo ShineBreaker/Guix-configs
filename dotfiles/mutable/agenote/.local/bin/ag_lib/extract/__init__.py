@@ -105,6 +105,7 @@ def run_extract(
     date: str = "",
     output_dir: str = "",
     dry_run: bool = False,
+    limit: int = 500,
 ) -> dict:
     """跨 agent 对话抽取编排：把 7 个 AI 工具的原始对话抽取为 Org-mode 文件。
 
@@ -114,12 +115,17 @@ def run_extract(
 
     Args:
         source: opencode | crush | codex | claude | pi | hermes | zcode | all
-        date: 目标日期 YYYY-MM-DD（默认昨天；空字符串 = 不按日期过滤）
+        date: 目标日期 YYYY-MM-DD。非空时**按对话时间戳过滤**——只抽取该日的对话
+            （基于 ReconciledFact.timestamp；extractor 未填时间戳的源退化为全量）。
+            空 = 不按日期过滤（全量抽取）。同时决定默认输出目录名。
         output_dir: 输出目录（默认 ~/Documents/Org/conversations/<date>/）
         dry_run: False 只返回报告不落盘（默认）；显式 --dry-run 才不写盘
+        limit: 每源最大抽取条数（默认 500，安全上限防止巨型 Org 文件）。
+            0 = 不限制。过滤后的条数仍受此上限约束。
 
     Returns:
-        dict: {source, total_facts, output_dir, files: [path, ...], errors: [...], dry_run}
+        dict: {source, total_facts, filtered_by_date, output_dir, files: [path, ...],
+        errors: [...], dry_run, limit}
         未知 source 时返回 {"error": ...}。
     """
     from datetime import datetime, timedelta
@@ -141,44 +147,85 @@ def run_extract(
     if not dry_run:
         out_path.mkdir(parents=True, exist_ok=True)
 
+    # 日期过滤：把 ISO 时间戳归一到 YYYY-MM-DD 比对。
+    # extractor 未填 timestamp 的事实（timestamp=""）不过滤，避免静默丢数据。
+    def _date_of(ts: str) -> str:
+        """把 ISO 8601 / epoch ms 时间戳归一成 YYYY-MM-DD；无法解析返回空串。"""
+        if not ts:
+            return ""
+        s = ts.strip()
+        # ISO 8601（含时区）：直接截前 10 字符
+        if "T" in s or " " in s and any(c.isdigit() for c in s[:4]):
+            return s[:10]
+        # epoch ms / epoch s（纯数字）
+        if s.isdigit():
+            n = int(s)
+            if n > 1e12:  # ms
+                n //= 1000
+            try:
+                return datetime.utcfromtimestamp(n).strftime("%Y-%m-%d")
+            except (OSError, ValueError, OverflowError):
+                return ""
+        return ""
+
     files: list[str] = []
     errors: list[str] = []
     total = 0
+    filtered_total = 0  # 日期过滤后总条数（用于报告）
+    effective_limit = limit if limit and limit > 0 else None
     for src in selected:
         try:
             facts, errs = extractors[src]()
             total += len(facts)
             errors.extend(errs)
+            # 日期过滤：只保留 date 当天的事实；无 timestamp 的保留（不静默丢）
+            if date:
+                facts = [
+                    f for f in facts
+                    if not f.timestamp or _date_of(f.timestamp) == date
+                ]
+            filtered_total += len(facts)
             if dry_run:
                 continue
+            # 上限参数化：effective_limit=None 表示不限制
+            shown = facts if effective_limit is None else facts[:effective_limit]
+            truncated = len(facts) - len(shown) if effective_limit else 0
             src_file = out_path / f"{src}.org"
             lines: list[str] = [
                 f"#+TITLE: {src} conversations",
                 f"#+DATE: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
                 f"#+SOURCE: {src}",
-                f"#+TOTAL: {len(facts)}",
+                f"#+TOTAL: {len(shown)}",
+                f"#+FILTERED_BY_DATE: {date or 'no'}",
+                f"#+LIMIT: {effective_limit if effective_limit else 'unlimited'}",
                 "",
             ]
-            for f in facts[:500]:  # 安全上限：每源最多 500 条
+            for f in shown:
                 lines.append(f"* {f.title}")
                 lines.append(f":PROPERTIES:")
                 lines.append(f":ID: {f.id}")
                 lines.append(f":CATEGORY: {f.category}")
                 lines.append(f":WEIGHT: {f.weight}")
+                if f.timestamp:
+                    lines.append(f":TIMESTAMP: {f.timestamp}")
                 lines.append(f":END:")
                 lines.append("")
                 lines.append(f.content[:3000])
                 lines.append("")
             src_file.write_text("\n".join(lines), encoding="utf-8")
             files.append(str(src_file))
+            if truncated:
+                errors.append(f"{src}: 截断 {truncated} 条（达 limit={effective_limit}）")
         except Exception as e:
             errors.append(f"{src}: {e}")
 
     return {
         "source": source,
         "total_facts": total,
+        "filtered_by_date": filtered_total,
         "output_dir": str(out_path),
         "files": files,
         "errors": errors,
         "dry_run": dry_run,
+        "limit": effective_limit,
     }

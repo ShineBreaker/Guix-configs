@@ -56,6 +56,7 @@ def _session_to_facts(session_row, conn) -> list[ReconciledFact]:
     ).fetchall()
 
     current_user: str | None = None
+    current_user_ts: str = ""
     for msg in messages:
         try:
             md = json.loads(msg["data"])
@@ -79,6 +80,7 @@ def _session_to_facts(session_row, conn) -> list[ReconciledFact]:
             content = "\n\n".join(t for t in texts if t).strip()
             if content:
                 current_user = content
+                current_user_ts = str(msg["time_created"] or "")
 
         elif role == "assistant" and current_user:
             parts = conn.execute(
@@ -120,9 +122,11 @@ def _session_to_facts(session_row, conn) -> list[ReconciledFact]:
                             if session_row["directory"]
                             else "unknown"
                         ],
+                        timestamp=current_user_ts,
                     )
                 )
                 current_user = None
+                current_user_ts = ""
     return facts
 
 

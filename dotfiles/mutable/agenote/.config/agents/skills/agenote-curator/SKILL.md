@@ -125,28 +125,27 @@ agenote lint --fix
 
 ### 第 9 步：提交变更
 
-> **⚠️ 强制标准（硬性约束）**：agenote **没有** `commit` 子命令（CLI 只暴露 add/get/list/search/fields/tags/memory/reindex/lint/health/stats/gaps/archive/restore/deduplicate/update/connect/extract 等，无 git 封装）。任何"策展必须以 commit 收尾"的流程**一律用真实 `git` 命令**，绝不允许调用 `agenote commit`（该命令不存在，会静默失败导致遗留改动永久不进版本库）。
->
-> 历史教训：2026-07-07 之前多轮策展都因 skill 写了 `agenote commit -m` 而从未真正提交，积累大量未跟踪/已修改文件。从本轮起，commit 是**不可省略的收尾步骤**。
+> **commit 是不可省略的收尾步骤**。用 `agenote commit` 封装 git add+commit。
+> 历史教训：2026-07-07 之前多轮策展因 skill 写了不存在的 `agenote commit` 而从未真正提交，积累大量未跟踪/已修改文件。该子命令现已实现（D1 修复，2026-07-07），**默认精准 add 策展产物**（experiences/index.json/conversations/kb-viz.html），不会误吞无关文件（如其他仓库的同步改动）。
 
 ```bash
-# 仓库根：~/Documents/Org（agenote/、conversations/、kb-viz.html 同仓）
-cd ~/Documents/Org
+# 仓库根自动解析：agenote commit 内部用 git rev-parse --show-toplevel 找真实根
+#   （ctx.root 如 ~/Documents/Org/agenote/ 是子目录，.git 在 ~/Documents/Org/）
 
-# 1) 先看清楚本次策展涉及的改动（不要无脑 git add -A，避免误吞无关文件）
-git status --short
+# 1) 先看清楚本次策展涉及的改动
+cd ~/Documents/Org && git status --short
 
-# 2) 只 add 本次策展产物（经验卡片 + index.json + 本次抽取目录 + kb-viz.html 如刷新）
-git add agenote/experiences/... agenote/index.json conversations/2026-07-07/ [kb-viz.html]
+# 2) 一键提交（默认只 add 策展产物，遵循仓库 commit.gpgsign 配置自动签名）
+agenote commit -m "策展: (agenote) <一句话总结: 新增 K 张 / 更新 M 张 / reconcile N 条 / dream P 候选>"
 
-# 3) 用仓库的 commit.template（~/.config/git/gitmessage）格式提交
-#    类型前缀用仓库历史一致的 `策展:`；格式 <类型>: (<组件>) <动词开头描述>，首字母大写、末尾无句号
-git commit -F - <<'EOF'
-策展: (agenote) <一句话总结: 新增 K 张 / 更新 M 张 / reconcile N 条 / dream P 候选>
-EOF
+#    cron 等无 pinentry 场景加 --no-gpg-sign；提交全部变更（含非策展文件）加 --all
+#    agenote commit --no-gpg-sign -m "..."
+#    agenote commit --all -m "..."
 ```
 
-commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）。无变更时跳过。
+commit message 要求：以 `策展:` 前缀开头，50 字以内总结核心操作（新增 K 张 / 更新 M 张 / 晋升 P 条）。无变更时跳过（agenote commit 会提示"没有待提交的变更"）。
+
+**MCP 路径**：经 MCP 调用时用 `agenote_commit(message=..., dry_run=True)` 先预览将提交的文件清单，确认后 `dry_run=False` 真提交（默认 dry_run=True 安全）。
 
 **阶段拆分规则**：若本轮同时有「遗留未提交改动」和「本次新策展产物」，应**分两个 commit**（先提交遗留，再提交本轮），不混在一起，保持历史可读。
 
@@ -317,7 +316,7 @@ agenote_distill(dry_run=True)
 
 - [ ] `agenote reindex` 已执行
 - [ ] `agenote lint --fix` 无残留错误
-- [ ] **真实 `git commit` 已执行（强制，不可省略）**——注意：agenote 无 `commit` 子命令，必须用 `git`，见「第 9 步」
+- [ ] **`agenote commit -m "策展: ..."` 已执行（强制，不可省略）**——封装 git add+commit，见「第 9 步」
 - [ ] 新增卡片元数据完整（category/tech/type/owner）
 - [ ] 新增卡片含任务描述、执行过程、关键发现
 - [ ] 代码块使用 Org mode 格式

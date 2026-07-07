@@ -149,6 +149,7 @@ def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[
                 trust_score=0.5,
                 weight=EXTERNAL_RECONCILE_WEIGHT,
                 tags=["claude-code"],
+                timestamp=ts,
             )
         )
         current_user = None

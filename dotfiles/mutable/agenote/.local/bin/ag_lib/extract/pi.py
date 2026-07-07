@@ -152,12 +152,15 @@ def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[
 
 # user → assistant pairing (role/content nested under message.* per real schema)
     current_user: str | None = None
+    current_user_ts: str = ""
     for m in ordered:
         msg = m.get("message", {}) if isinstance(m.get("message"), dict) else {}
         role = msg.get("role", "")
         text = _normalize_content(msg.get("content", "")).strip()
         if role == "user":
             current_user = text
+            # 优先用 message 事件顶层 timestamp；回退 message 内嵌 timestamp
+            current_user_ts = str(m.get("timestamp") or msg.get("timestamp") or "")
         elif role == "assistant" and current_user and text:
             facts.append(
                 ReconciledFact(
@@ -170,9 +173,11 @@ def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[
                     trust_score=0.5,
                     weight=RECONCILE_DEFAULT_WEIGHT,
                     tags=[tag],
+                    timestamp=current_user_ts,
                 )
             )
             current_user = None
+            current_user_ts = ""
     return facts, errors
 
 

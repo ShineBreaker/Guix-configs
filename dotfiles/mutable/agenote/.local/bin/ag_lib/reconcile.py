@@ -70,6 +70,7 @@ class ReconciledFact:
     weight: float  # 检索权重（trust 越低 weight 越低）
     tags: list[str] = field(default_factory=list)
     retrieved_at: str = ""  # 本次 reconcile 拉取时间
+    timestamp: str = ""  # 对话发生时间（ISO 8601，extractor 能取到就填；空=未知，不过滤）
 
 
 @dataclass

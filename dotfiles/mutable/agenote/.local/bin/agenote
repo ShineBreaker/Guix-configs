@@ -136,33 +136,69 @@ def cmd_init(args: argparse.Namespace, ctx=None) -> None:
 
 
 def cmd_commit(args: argparse.Namespace, ctx=None) -> None:
-    """提交知识库变更，封装 git add + commit。"""
+    """提交知识库变更，封装 git add + commit。
+
+    与「无脑 git add -A」的区别（D1 修复）：
+      - **精准 add**：只提交本次策展产物（experiences/ + index.json + conversations/
+        + kb-viz.html），不吞无关文件。可用 --all 退回旧行为。
+      - **git 根解析**：ctx.root（如 ~/Documents/Org/agenote/）往往不是 git 仓库根
+        （~/Documents/Org/），用 git rev-parse --show-toplevel 找真实根。
+      - **commit.template**：默认走仓库 commit.gpgsign + commit.template 配置，
+        不强制 --no-gpg-sign（除非显式 --no-gpg-sign）。
+      - **message 规范**：建议用「策展: (组件) 描述」前缀（对齐 gitmessage 模板），
+        但不强校验——agent 可传任意 message。
+    """
     ctx = ctx or default_context()
     root = ctx.root
     git_bin = shutil.which("git")
     if not git_bin:
         die("未找到 git，无法提交。")
 
-    git_dir = root / ".git"
-    if not git_dir.exists():
-        die(f"知识库未初始化 git 仓库 ({root})。请先运行 'agenote init'。")
+    # 解析 git 仓库根：ctx.root 可能是子目录（agenote 域），.git 在更上层
+    try:
+        repo_root = _run_git(["rev-parse", "--show-toplevel"], cwd=root).strip()
+    except SystemExit:
+        die(f"不在 git 仓库内 ({root})。请先运行 'agenote init' 初始化。")
+    repo_root_path = Path(repo_root)
 
     message = args.message
     if not message:
         die("请通过 -m 指定 commit message。")
 
-    # 检查是否有变更
-    status = _run_git(["status", "--porcelain"], cwd=root)
+    # 决定 add 策略：--all 退回旧行为（git add -A），否则精准 add 策展产物
+    if args.all:
+        add_targets: list[str] = ["-A"]
+    else:
+        # 策展产物清单（相对 repo_root）：experiences/ + index.json +
+        # conversations/ + kb-viz.html。用 git ls-files --others + 已跟踪变更交集。
+        # 简化实现：显式列出策展相关路径，git add 对不存在的路径会报错，故逐个探测。
+        candidates = [
+            "agenote/experiences", "agenote/index.json", "agenote/.reconcile",
+            "conversations", "kb-viz.html", "MEMORY.org", "agenote/MEMORY.org",
+            "agenda",
+        ]
+        add_targets = [c for c in candidates if (repo_root_path / c).exists()]
+        if not add_targets:
+            print("未发现策展产物路径（experiences/index.json/conversations 等）。")
+            print("如需提交全部变更，请用 agenote commit --all -m \"...\"")
+            return
+
+    # 检查是否有变更（用拟 add 的范围预览；--all 模式下 status 不传 -A，那是 add 的参数）
+    status_args = [] if args.all else add_targets
+    status = _run_git(["status", "--porcelain"] + status_args, cwd=repo_root_path)
     if not status.strip():
         print("没有待提交的变更。")
         return
 
-    # add 所有变更（包括新建、修改、删除）
-    _run_git(["add", "-A"], cwd=root)
+    # add
+    _run_git(["add"] + add_targets, cwd=repo_root_path)
 
-    # commit
-    _run_git(["commit", "-m", message], cwd=root)
-    print(f"已提交 ({ctx.name}): {message}")
+    # commit：遵循仓库 commit.gpgsign 配置（不强制 --no-gpg-sign）
+    commit_cmd = ["commit", "-m", message]
+    if args.no_gpg_sign:
+        commit_cmd = ["-c", "commit.gpgsign=false"] + commit_cmd
+    _run_git(commit_cmd, cwd=repo_root_path)
+    print(f"已提交 ({ctx.name} @ {repo_root}): {message}")
 
 
 def _run_git(args: list[str], cwd: Path) -> str:
@@ -256,9 +292,10 @@ def cmd_distill(args: argparse.Namespace, ctx=None) -> None:
 def cmd_extract(args: argparse.Namespace, ctx=None) -> None:
     """跨 agent 对话抽取为 Org 文件。"""
     d = run_extract(source=args.source, date=args.date,
-                    output_dir=args.output_dir, dry_run=args.dry_run)
+                    output_dir=args.output_dir, dry_run=args.dry_run,
+                    limit=args.limit)
     _print_report(d, getattr(args, "json", False),
-                  f"extract ({args.source}, dry_run={args.dry_run})")
+                  f"extract ({args.source}, date={args.date or 'all'}, limit={args.limit}, dry_run={args.dry_run})")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -347,8 +384,11 @@ def print_help() -> None:
             agenote init            创建目录结构 + git 仓库 + 初始 commit
             agenote init --no-git   仅创建目录结构，跳过 git
 
-  commit   提交知识库变更
-            agenote commit -m "总结"   提交所有变更到 git（.gitignore 排除 index.json）
+  commit   提交知识库变更（默认只 add 策展产物：experiences/index.json/conversations/kb-viz.html）
+            agenote commit -m "策展: (agenote) 新增 K 张 / 更新 M 张"
+            agenote commit --all -m "..."              提交全部变更（git add -A）
+            agenote commit --no-gpg-sign -m "..."      跳过 GPG 签名（cron 等无 pinentry 场景）
+            message 建议「策展: (组件) 描述」前缀，对齐 ~/.config/git/gitmessage 模板
 
   touch    更新卡片时间戳
             agenote touch <卡片ID>              更新 LAST_USED + LAST_VERIFIED
@@ -392,7 +432,8 @@ def print_help() -> None:
             agenote distill [--window-days 30] [--dry-run]
 
   extract  跨 agent 对话抽取为 Org 文件（输出到 conversations/<date>/）
-            agenote extract [--source all] [--date YYYY-MM-DD] [--dry-run]
+            agenote extract [--source all] [--date YYYY-MM-DD] [--limit N] [--dry-run]
+            --date 非空时按对话时间戳过滤（只抽该日对话）；--limit 0=不限（默认 500）
 
   help     显示本帮助
 
@@ -585,7 +626,9 @@ def main() -> None:
 
     # ── commit ────────────────────────────────────────────────────────────
     commit_parser = subparsers.add_parser("commit", help="提交知识库变更")
-    commit_parser.add_argument("-m", "--message", required=True, help="commit message")
+    commit_parser.add_argument("-m", "--message", required=True, help="commit message（建议「策展: (组件) 描述」前缀）")
+    commit_parser.add_argument("--all", action="store_true", help="提交全部变更（git add -A，可能吞无关文件；默认只 add 策展产物）")
+    commit_parser.add_argument("--no-gpg-sign", action="store_true", help="跳过 GPG 签名（默认遵循仓库 commit.gpgsign）")
 
     # ── help ──────────────────────────────────────────────────────────────
     subparsers.add_parser("help", help="显示本帮助")
@@ -694,8 +737,9 @@ def main() -> None:
         "--source", default="all",
         help="opencode|crush|codex|claude|pi|hermes|zcode|all（默认 all）",
     )
-    extract_parser.add_argument("--date", default="", help="目标日期 YYYY-MM-DD（默认昨天）")
+    extract_parser.add_argument("--date", default="", help="目标日期 YYYY-MM-DD（默认昨天）；非空时按对话时间戳过滤，只抽该日对话")
     extract_parser.add_argument("--output-dir", default="", help="输出目录（默认 conversations/<date>/）")
+    extract_parser.add_argument("--limit", type=int, default=500, help="每源最大抽取条数（默认 500；0=不限制）")
     extract_parser.add_argument("--dry-run", action="store_true", default=False, help="只预览不落盘（默认会真写盘；传 --dry-run 才不写）")
     extract_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 

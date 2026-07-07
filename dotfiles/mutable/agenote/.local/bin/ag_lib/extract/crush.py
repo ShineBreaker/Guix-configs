@@ -113,11 +113,13 @@ def _extract_from_db(db_path: Path) -> tuple[list[ReconciledFact], list[str]]:
                     (sess["id"],),
                 ).fetchall()
                 current_user: str | None = None
+                current_user_ts: str = ""
                 for msg in messages:
                     role = msg["role"] or ""
                     content = _parts_to_text(msg["parts"] or "")
                     if role == "user":
                         current_user = content
+                        current_user_ts = str(msg["created_at"] or "")
                     elif role == "assistant" and current_user and content:
                         tag = (
                             project_dir.split("/")[-1]
@@ -136,9 +138,11 @@ def _extract_from_db(db_path: Path) -> tuple[list[ReconciledFact], list[str]]:
                                 trust_score=0.5,
                                 weight=RECONCILE_DEFAULT_WEIGHT,
                                 tags=[tag],
+                                timestamp=current_user_ts,
                             )
                         )
                         current_user = None
+                        current_user_ts = ""
             except Exception as e:
                 errors.append(f"session={sess['id']}: {e}")
     finally:

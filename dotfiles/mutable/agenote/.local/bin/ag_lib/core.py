@@ -71,10 +71,15 @@ def default_agent() -> str:
 # reconcile 写入层用；dream 复用避免重复统计。
 # 覆盖 TodoWrite、background-task、system-reminder、checkpoint、command-* 等
 # "元消息"——它们源自 harness 注入而非用户的真实经验。
+# 另覆盖 agent prompt 模板的结构化标记（oh-my-pi 的 [CONTEXT]/[GOAL]/[DOWNSTREAM]/
+# [REQUEST] 框架、harness 的 [SYSTEM NOTIFICATION]）——它们是 agent 生成的元结构，
+# 不是人类经验；常以 `USER: [CONTEXT]: ...` 形态出现在 content 开头。
 NOISE_MARKERS = re.compile(
     r"<system-reminder>|<command-instruction>|<command-name>|"
     r"<skill-instruction>|<auto-slash-command>|"
     r"\[search-mode\]|\[analyze-mode\]|\[SYSTEM DIRECTIVE"
+    r"|\[CONTEXT\]|\[GOAL\]|\[DOWNSTREAM\]|\[REQUEST\]"
+    r"|\[SYSTEM NOTIFICATION\]"
     r"|TodoWrite|BACKGROUND TASK|OMO_INTERNAL_INITIATOR|"
     r"delegate_task|subagent_type|run_in_background|"
     r"load_skills|checkpoint|MANDATORY",

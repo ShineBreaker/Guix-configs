@@ -609,6 +609,7 @@ def agenote_extract(
     date: str = "",
     output_dir: str = "",
     dry_run: bool = False,
+    limit: int = 500,
 ) -> dict:
     """跨 agent 对话抽取：把 AI 编程工具的原始对话抽取为 Org-mode 文件。
 
@@ -618,17 +619,21 @@ def agenote_extract(
 
     Args:
         source: opencode | crush | codex | claude | pi | hermes | all
-        date: 目标日期 YYYY-MM-DD（默认昨天；空字符串 = 不按日期过滤）
+        date: 目标日期 YYYY-MM-DD。非空时**按对话时间戳过滤**——只抽取该日对话
+            （基于 ReconciledFact.timestamp；hermes 等无时间戳源退化为全量）。
+            空 = 不按日期过滤（全量）。同时决定默认输出目录名。
         output_dir: 输出目录（默认 ~/Documents/Org/conversations/<date>/）
         dry_run: True 只返回报告不落盘；默认 False（落盘，与底层 run_extract 对齐）
+        limit: 每源最大抽取条数（默认 500，安全上限；0 = 不限制）
 
     Returns:
-        dict: {source, total_facts, output_dir, files: [path, ...], errors: [...]}
+        dict: {source, total_facts, filtered_by_date, output_dir, files: [path, ...],
+        errors: [...], dry_run, limit}
     """
     from ag_lib.extract import run_extract
 
     return run_extract(
-        source=source, date=date, output_dir=output_dir, dry_run=dry_run
+        source=source, date=date, output_dir=output_dir, dry_run=dry_run, limit=limit
     )
 
 
@@ -781,6 +786,124 @@ def agenote_deduplicate(threshold: float = 0.7) -> list[dict]:
                 )
     pairs.sort(key=lambda x: -x["similarity"])
     return pairs
+
+
+@mcp.tool()
+def agenote_commit(
+    message: str,
+    all_changes: bool = False,
+    no_gpg_sign: bool = False,
+    dry_run: bool = True,
+) -> dict:
+    """提交 KB 仓库变更（策展收尾的一键入库）。
+
+    解决「策展产物散落在工作树、需手动 git add+commit」的痛点。与「无脑 git add -A」
+    的区别：默认只 add 策展产物（experiences/index.json/conversations/kb-viz.html），
+    避免误吞无关文件（如其他仓库的同步改动）。可传 all_changes=True 退回 git add -A 语义。
+
+    **默认 dry_run=True**：只返回将要 add/commit 的文件清单，不真提交。agent review
+    清单无误后传 dry_run=False 才真落盘（与 agenote_dream/distill 的安全默认一致）。
+
+    Args:
+        message: commit message（建议「策展: (组件) 描述」前缀，对齐 commit.template）
+        all_changes: True = git add -A（提交全部变更）；默认 False = 只 add 策展产物
+        no_gpg_sign: True = 跳过 GPG 签名（cron 等无 pinentry 场景）；默认遵循仓库配置
+        dry_run: True 只预览不提交（默认）；False 真提交
+
+    Returns:
+        dict: {repo_root, add_targets, staged_files, committed, message, dry_run}
+    """
+    import shutil
+    import subprocess
+
+    ctx = _AGENT_CTX
+    if not shutil.which("git"):
+        return {"error": "未找到 git"}
+
+    # 解析 git 仓库根（ctx.root 可能是子目录，.git 在上层）
+    try:
+        repo_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, cwd=str(ctx.root),
+        )
+        if repo_root.returncode != 0:
+            return {"error": f"不在 git 仓库内 ({ctx.root})"}
+        repo_root_path = Path(repo_root.stdout.strip())
+    except Exception as e:
+        return {"error": f"git rev-parse 失败: {e}"}
+
+    # 决定 add 范围
+    if all_changes:
+        add_targets = ["-A"]
+    else:
+        candidates = [
+            "agenote/experiences", "agenote/index.json", "agenote/.reconcile",
+            "conversations", "kb-viz.html", "MEMORY.org", "agenote/MEMORY.org",
+            "agenda",
+        ]
+        add_targets = [c for c in candidates if (repo_root_path / c).exists()]
+        if not add_targets:
+            return {
+                "repo_root": str(repo_root_path),
+                "add_targets": [],
+                "staged_files": [],
+                "committed": False,
+                "message": "未发现策展产物路径；如需提交全部用 all_changes=True",
+                "dry_run": dry_run,
+            }
+
+    # 预览将 add 的文件（all_changes 模式下 status 不传 -A，那是 add 的参数）
+    status_args = [] if all_changes else add_targets
+    status = subprocess.run(
+        ["git", "status", "--porcelain"] + status_args,
+        capture_output=True, text=True, cwd=str(repo_root_path),
+    )
+    staged_files = [
+        line[3:] for line in status.stdout.splitlines() if line.strip()
+    ]
+
+    if not staged_files:
+        return {
+            "repo_root": str(repo_root_path),
+            "add_targets": add_targets,
+            "staged_files": [],
+            "committed": False,
+            "message": "没有待提交的变更",
+            "dry_run": dry_run,
+        }
+
+    if dry_run:
+        return {
+            "repo_root": str(repo_root_path),
+            "add_targets": add_targets,
+            "staged_files": staged_files,
+            "committed": False,
+            "message": "dry_run 预览（传 dry_run=False 真提交）",
+            "dry_run": True,
+        }
+
+    # 真提交
+    def _git(args: list[str]) -> tuple[int, str, str]:
+        r = subprocess.run(
+            ["git"] + args,
+            capture_output=True, text=True, cwd=str(repo_root_path),
+        )
+        return r.returncode, r.stdout, r.stderr
+
+    _git(["add"] + add_targets)
+    commit_cmd = ["commit", "-m", message]
+    if no_gpg_sign:
+        commit_cmd = ["-c", "commit.gpgsign=false"] + commit_cmd
+    rc, out, err = _git(commit_cmd)
+    return {
+        "repo_root": str(repo_root_path),
+        "add_targets": add_targets,
+        "staged_files": staged_files,
+        "committed": rc == 0,
+        "commit_output": out.strip() or err.strip(),
+        "message": message,
+        "dry_run": False,
+    }
 
 
 @mcp.tool()
