@@ -98,8 +98,10 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
              (rosenthal services desktop)
              (rosenthal services games)
              (rosenthal services networking)
+             (rosenthal services nix)
              (rosenthal services shellutils)
              (rosenthal utils file)
+             (rosenthal utils nix)
              (rosenthal utils packages)
              (srfi srfi-1))
 
@@ -169,6 +171,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 (define %home
   (home-environment
    (packages (append
+              <<nix-profiles-list>>
               <<desktop-packages-list>>
               <<terminal-packages-list>>
               <<devtools-packages-list>>
@@ -626,9 +629,12 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+NAME: nix-services
 #+begin_src scheme
 (list (service nix-service-type
-               (nix-configuration (extra-config (list (string-append
-                                                       "trusted-users"
-                                                       " = root " username)))))
+               (nix-configuration
+                (build-directory "/var/tmp")
+                (extra-config
+                 '("experimental-features = nix-command flakes\n"
+                   "auto-optimise-store = true\n"
+                   "substituters = https://mirror.sjtu.edu.cn/nix-channels/store https://cache.nixos.org\n"))))
 
       (simple-service 'non-nixos-gpu shepherd-root-service-type
                       (list (shepherd-service (documentation
@@ -1186,8 +1192,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
 #+NAME: user-packages-list
 #+begin_src scheme
-(append
- (cons* (specs->pkgs+out
+(cons* (specs->pkgs+out
          ;; 浏览器 & 插件
          "ublock-origin-chromium"
          "ungoogled-chromium-wayland"
@@ -1253,9 +1258,35 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
          "python-sse-starlette"
          "python-starlette"
          "python-uvicorn"
-         "python-typer")))
+         "python-typer"))
 #+end_src
 
+*** Nix 软件包
+利用 ~with-nix-profile~ [来自 =(rosenthal utils nix)=] 来安装一些来自 ~nix~ 的软件包
+它可以利用 ~nix-shell-wrapper~ 来调用nix，安装对应软件并放到当前用户的环境中
+#+begin_quote
+(rosenthal utils nix) 模块提供 nix-shell-wrapper、nix-wrapper->package、with-nix-profile。
+(rosenthal services nix) 模块提供 nix-search-paths-service-type（Guix System 用）和 home-nix-search-paths-service-type（Guix Home 用）。
+#+end_quote
+
+#+NAME: nix-profiles-list
+#+begin_src scheme
+(with-nix-profile
+ (append (map (lambda (package)
+               (nix-shell-wrapper package
+                                  (string-append "github:NixOS/nixpkgs/nixos-26.05#" package)
+                                  #:run-command (list package)))
+             '(;; AI Agent
+               "claude-code" "codex" "codex-acp"
+               ;; 环境管理
+               "biome" "bun" "pnpm")
+               ;; 工具
+               "android-tools" "broot" "gh" "pmbootstrap" "python314Packages.jieba" "qtscrcpy" "scrcpy"
+               ;; 游戏工具
+               "gamescope" "mangojuice" "sunshine"
+               ;; LSP
+               "bash-language-server" "kotlin-language-server" "nil" "package-version-server" "typescript-language-server")))
+#+end_src
 ** Servics
 注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
 
@@ -1509,7 +1540,9 @@ end
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
+                                          (utilities (list fcitx5-configtool fcitx5-lua))))
+
+      (service home-nix-search-paths-service-type))
 #+end_src
 
 **** 默认应用程序关联
@@ -2045,10 +2078,10 @@ end
      (list (service elogind-service-type)
            (service plasma-desktop-service-type)
            (service sddm-service-type
-             (sddm-configuration
-               (display-server "wayland")
-               (auto-login-user "live")
-               (auto-login-session "plasma.desktop"))))
+                    (sddm-configuration
+                     (display-server "wayland")
+                     (auto-login-user "live")
+                     (auto-login-session "plasma.desktop"))))
      (operating-system-user-services %live-base-os)))))
 
 %live-installation-os

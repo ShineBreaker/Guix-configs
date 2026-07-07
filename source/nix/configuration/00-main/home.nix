@@ -2,8 +2,8 @@
 
 {
   imports = [
-    ./packages.nix
-    ../programs/nix.nix
+    ../programs/00-main.nix
+    ./nix.nix
   ];
 
   targets.genericLinux.enable = true;
