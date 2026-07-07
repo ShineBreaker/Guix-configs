@@ -1,8 +1,7 @@
 ---
 name: guix-configs-workflow
-description: Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'guix system reconfigure', 'shepherd service', 'stow 死链', 'blue stow', 'AGENTS.md 翻新', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'wireplumber', '二轨 dotfiles', '恢复被删除的 dotfiles', or related. Ten sub-protocols: dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging, GNU Stow mutable config, restoring deleted dotfiles.
+description: Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'guix system reconfigure', 'shepherd service', 'stow 死链', 'blue stow', 'AGENTS.md 翻新', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'wireplumber', '二轨 dotfiles', '恢复被删除的 dotfiles', or related. Ten sub-protocols — dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging, GNU Stow mutable config, restoring deleted dotfiles, ISO 移植, 需求澄清, 模块归属陷阱.
 ---
-
 # guix-configs-workflow — Guix-configs 仓库高频工作流
 
 > Guix-configs 仓库内的高频工作流合集。所有内容提炼自 160 张 KB 卡片 + MEMORY.org F019/F021/F022/F025/F026 + 28 张 guix 卡片 + Guix-configs project memory。源数据在 ~/Documents/Org/ 由人类维护,本 skill 是缓存层。
@@ -395,9 +394,9 @@ spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY 
 | ------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | IME     | `GTK_IM_MODULE` / `QT_IM_MODULE` / `XMODIFIERS` / `SDL_IM_MODULE` / `GLFW_IM_MODULE` | 双击 .desktop 启动的 Electron/Qt/SDL/GLFW 应用没法用输入法 |
 | Wayland | `WAYLAND_DISPLAY` / `XDG_RUNTIME_DIR` / `NIRI_SOCKET`                                | GUI 应用找不到 wayland socket                              |
-| 显示    | `DISPLAY` / `XDG_SESSION_TYPE`                                                       | XWayland fallback / session 识别                           |
+| 显示    | `DISPLAY` / `XDG_SESSION_TYPE`                                                       | XWayland fallback / session 识别                            |
 | 桌面    | `XDG_CURRENT_DESKTOP`                                                                | 应用的 desktop integration(portal 等)需要                  |
-| Locale  | `LANG` / `LC_ALL` / `LANGUAGE`                                                       | GUI 应用乱码                                               |
+| Locale  | `LANG` / `LC_ALL` / `LANGUAGE`                                                       | GUI 应用乱码                                                |
 | Proxy   | `http_proxy` / `https_proxy` / `HTTP_PROXY` / `HTTPS_PROXY`                          | Electron / Qt 应用不走终端的 proxy                         |
 | 字体    | `XCURSOR_PATH` / `FONTCONFIG_PATH` / `QT_QPA_FONTDIR`                                | 自定义字体 / cursor 主题找不到                             |
 
@@ -449,22 +448,22 @@ pgrep -af 'systemd --user'
 
 | Electron 版本            | 行为                                                                                                                |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| **41**（最新）           | Wayland IME 默认工作，cmdline 零 flag 也正常                                                                        |
-| **37**（QQ 3.2.29 内嵌） | `--ozone-platform-hint=auto` **无法激活** text-input-v3 focus；必须 `--ozone-platform=wayland` + `UseOzonePlatform` |
-| **~29–32**（老版）       | 需要 `--enable-features=UseOzonePlatform` flag，缺则协议无法激活 focus                                              |
+| **41**（最新）           | Wayland IME 默认工作,cmdline 零 flag 也正常                                                                        |
+| **37**（QQ 3.2.29 内嵌） | `--ozone-platform-hint=auto` **无法激活** text-input-v3 focus;必须 `--ozone-platform=wayland` + `UseOzonePlatform` |
+| **~29–32**（老版）       | 需要 `--enable-features=UseOzonePlatform` flag,缺则协议无法激活 focus                                              |
 
 #### 诊断流程
 
-1. 确认环境变量已注入：`cat /proc/<pid>/environ | tr '\0' '\n' | grep -E 'NIXOS_OZONE|GTK_IM|QT_IM|XMODIFIERS'`（应全有值）
-2. 查 Electron 版本：从 crashpad handler 的 `--annotation=ver=` 获取最准；或用 `readlink -f /proc/<pid>/exe` 拿二进制路径、`strings` 搜 `Electron/` 或 `Chrome/`
-3. 对比 cmdline flag：`cat /proc/<pid>/cmdline | tr '\0' ' '`，看是否有 `--ozone-platform=wayland`（不是 `=auto`）和 `UseOzonePlatform` feature
-4. 验证 focus 状态：`fcitx5-diagnose 2>/dev/null | grep 'program:<app>'`，`focus:0` 持续 = 协议未激活
+1. 确认环境变量已注入:`cat /proc/<pid>/environ | tr '\0' '\n' | grep -E 'NIXOS_OZONE|GTK_IM|QT_IM|XMODIFIERS'`(应全有值)
+2. 查 Electron 版本:从 crashpad handler 的 `--annotation=ver=` 获取最准;或用 `readlink -f /proc/<pid>/exe` 拿二进制路径、`strings` 搜 `Electron/` 或 `Chrome/`
+3. 对比 cmdline flag:`cat /proc/<pid>/cmdline | tr '\0' ' '`,看是否有 `--ozone-platform=wayland`(不是 `=auto`)和 `UseOzonePlatform` feature
+4. 验证 focus 状态:`fcitx5-diagnose 2>/dev/null | grep 'program:<app>'`,`focus:0` 持续 = 协议未激活
 
 #### 解法（按优先级）
 
-**方案 A — Nix 层（推荐，如果应用来自 Nix）**
+**方案 A — Nix 层(推荐,如果应用来自 Nix)**
 
-在 `source/nix/configuration/00-main/packages.nix` 中 override `commandLineArgs`：
+在 `source/nix/configuration/00-main/packages.nix` 中 override `commandLineArgs`:
 
 ```ix
 (qq.override {
@@ -472,28 +471,28 @@ pgrep -af 'systemd --user'
 })
 ```
 
-或用 `xdg.desktopEntries` 生成 .desktop（如 hermes.nix）。然后 `home-manager switch --flake .#Guix`。
+或用 `xdg.desktopEntries` 生成 .desktop(如 hermes.nix)。然后 `home-manager switch --flake .#Guix`。
 
-**方案 B — Guix dotfiles .desktop 覆盖（兜底）**
+**方案 B — Guix dotfiles .desktop 覆盖(兜底)**
 
-在 `dotfiles/immutable/desktop/.local/share/applications/<app>.desktop` 创建覆盖，Exec 行补齐：
+在 `dotfiles/immutable/desktop/.local/share/applications/<app>.desktop` 创建覆盖,Exec 行补齐:
 
 ```
 Exec=<app-wrapper-path> --ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime=true --wayland-text-input-version=3 %U
 ```
 
-然后 `blue home`。此方案适用于 Nix 修复尚未生效的过渡期，或应用来自 nix profile 不受 home-manager 管理的场景。
+然后 `blue home`。此方案适用于 Nix 修复尚未生效的过渡期,或应用来自 nix profile 不受 home-manager 管理的场景。
 
-**注意**: Nix 包的 `.desktop` wrapper 可能用自己的条件逻辑（如 QQ 的 `NIXOS_OZONE_WL` 条件仅加 `--ozone-platform-hint=auto`）。`.desktop` 覆盖的 `--ozone-platform=wayland` 会覆盖 wrapper 的 `=auto`。
+**注意**: Nix 包的 `.desktop` wrapper 可能用自己的条件逻辑(如 QQ 的 `NIXOS_OZONE_WL` 条件仅加 `--ozone-platform-hint=auto`)。`.desktop` 覆盖的 `--ozone-platform=wayland` 会覆盖 wrapper 的 `=auto`。
 
 #### 关键 flag 对照
 
 | flag                                 | 作用                                 | 何时需要                                         |
 | ------------------------------------ | ------------------------------------ | ------------------------------------------------ |
-| `--ozone-platform=wayland`           | 强制 Wayland Ozone（非 `hint=auto`） | Electron < 41，`auto` hint 可能不激活 text-input |
-| `--enable-features=UseOzonePlatform` | 显式启用 Ozone 平台                  | Electron < 37 必需；37+ 默认启用但建议加         |
+| `--ozone-platform=wayland`           | 强制 Wayland Ozone(非 `hint=auto`)  | Electron < 41,`auto` hint 可能不激活 text-input |
+| `--enable-features=UseOzonePlatform` | 显式启用 Ozone 平台                  | Electron < 37 必需;37+ 默认启用但建议加         |
 | `--enable-wayland-ime`               | 启用 Wayland IME                     | 所有 Electron 版本                               |
-| `--wayland-text-input-version=3`     | 使用 text-input-v3 协议              | 配合现代 compositor（niri、sway 等）             |
+| `--wayland-text-input-version=3`     | 使用 text-input-v3 协议              | 配合现代 compositor(niri、sway 等)               |
 
 详细调试流程见 `references/electron-wayland-ime-debug.md`。
 
@@ -510,58 +509,58 @@ Exec=<app-wrapper-path> --ozone-platform=wayland --enable-features=UseOzonePlatf
 
 ## 7. GNU Stow 二轨 dotfile 部署（stow/ + blue stow）
 
-适用场景：**频繁手改 + 需要 git 备份** 的配置文件（agent context、SOUL.md、MEMORY.md、prompt 等），不想为每次小改付 `blue home` 的代价。
+适用场景：**频繁手改 + 需要 git 备份**的配置文件(agent context、SOUL.md、MEMORY.md、prompt 等),不想为每次小改付 `blue home` 的代价。
 
-机制：`dotfiles/mutable/<pkg>/` 用 GNU Stow 直接建软链接到 `$HOME`，**改源即生效**。与 `dotfiles/immutable/`（Guix Home stow，源指向 store 只读副本）的双轨分工：
+机制：`dotfiles/mutable/<pkg>/` 用 GNU Stow 直接建软链接到 `$HOME`,**改源即生效**。与 `dotfiles/immutable/`(Guix Home stow,源指向 store 只读副本)的双轨分工:
 
 | 部署模型                           | 源-目标                               | 改源后           |
 | ---------------------------------- | ------------------------------------- | ---------------- |
-| Guix stow（`dotfiles/immutable/`） | 源 → /gnu/store 只读副本 → $HOME 软链 | 必须 `blue home` |
-| GNU Stow（`dotfiles/mutable/`）    | 源 → $HOME 软链                       | 直接生效         |
+| Guix stow(`dotfiles/immutable/`)  | 源 → /gnu/store 只读副本 → $HOME 软链 | 必须 `blue home` |
+| GNU Stow(`dotfiles/mutable/`)    | 源 → $HOME 软链                       | 直接生效         |
 
-**常用命令**（`blueprint.scm` `stow-command`）：
+**常用命令**(`blueprint.scm` `stow-command`):
 
 ```bash
 blue stow hermes                 # 从源部署
-blue stow --adopt hermes         # 首次：~ 下文件移源 + 建链
+blue stow --adopt hermes         # 首次:~ 下文件移源 + 建链
 blue stow --restow hermes        # 重建链
-blue stow --delete hermes        # 撤销链（~ 下变回实际文件）
+blue stow --delete hermes        # 撤销链(~ 下变回实际文件)
 ```
 
 **关键陷阱**：
 
 - 不要用 `rm` 删 ~ 下原文件 —— Hermes 硬保护。安全范式：`cp` 到源 → `mv` 原文件到 `/tmp/hermes-mv-backup/` → `blue stow hermes` → `rm -rf /tmp/hermes-mv-backup/`
-- 不要让 `dotfiles/mutable/` 与 `dotfiles/immutable/` 部署同一文件（双链冲突）
-- `blue structor` 扫 `dotfiles/mutable/AGENTS.md` 默认 depth=4 会截断到 `hermes/`；用 `ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=dotfiles/mutable/AGENTS.md blue structor`
+- 不要让 `dotfiles/mutable/` 与 `dotfiles/immutable/` 部署同一文件(双链冲突)
+- `blue structor` 扫 `dotfiles/mutable/AGENTS.md` 默认 depth=4 会截断到 `hermes/`;用 `ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=dotfiles/mutable/AGENTS.md blue structor`
 
-完整协议（备份策略、md5 三方验证、实时生效测试、commit 规范、反模式清单、故障排查表）见 `references/gnu-stow-two-tier-dotfiles.md`。
+完整协议(备份策略、md5 三方验证、实时生效测试、commit 规范、反模式清单、故障排查表)见 `references/gnu-stow-two-tier-dotfiles.md`。
 
 ---
 
 ## 8. 改 `source/config.org` system 层 service 定义的安全协议
 
-> 适用场景：需要直接修改 `source/config.org` 的某个 `#\+NAME:` 服务块（典型：`networking-services` / `kernel-services` / `home-shepherd-services` / `basic-services`），新增 `(service ...)` 或 `(simple-service ...)`。**与 §3（多行编辑）和 §4（service 排查）互补**——本节专门覆盖「改源 → DRY_RUN」的端到端流程与五类常见踩坑。
+> 适用场景：需要直接修改 `source/config.org` 的某个 `#\+NAME:` 服务块(典型：`networking-services` / `kernel-services` / `home-shepherd-services` / `basic-services`),新增 `(service ...)` 或 `(simple-service ...)`。**与 §3(多行编辑)和 §4(service 排查)互补**——本节专门覆盖「改源 → DRY_RUN」的端到端流程与五类常见踩坑。
 
-### 8.1 标准 4 步流程（必走）
+### 8.1 标准 4 步流程(必走)
 
 ```
 ① cd ~/Projects/Config/Guix-configs          # 必须在仓库根
-② 用 patch 工具精确改 source/config.org（§3 安全提示）
-③ blue check                                # 括号平衡检查，秒级
-④ GUIX_DRY_RUN=1 blue rebuild                # 完整构建，不写入系统
+② 用 patch 工具精确改 source/config.org(§3 安全提示)
+③ blue check                                # 括号平衡检查,秒级
+④ GUIX_DRY_RUN=1 blue rebuild                # 完整构建,不写入系统
 ```
 
-DRY_RUN 通过后才能让用户跑 `blue rebuild`（AI 禁跑，sudo 卡 CLI）。
+DRY_RUN 通过后才能让用户跑 `blue rebuild`(AI 禁跑,sudo 卡 CLI)。
 
-### 8.2 五类典型坑（必看）
+### 8.2 五类典型坑(必看)
 
 #### 坑 1：`patch` 工具 fuzzy match 偷偷换括号数
 
-`patch` 用 9 种 fuzzy 策略之一匹配 `old_string`，当末尾 `)))))` 链的 `)` 数量被误判为"近似匹配"时，可能把原文 5 个 `)` 替换成 6 个，**多出 1 个**，`blue check` 立刻报 `多余 1 个右括号 (open=905 close=906)`，但 git diff 里两行看着一样。
+`patch` 用 9 种 fuzzy 策略之一匹配 `old_string`,当末尾 `)))))` 链的 `)` 数量被误判为"近似匹配"时,可能把原文 5 个 `)` 替换成 6 个,**多出 1 个**，`blue check` 立刻报 `多余 1 个右括号 (open=905 close=906)`,但 git diff 里两行看着一样。
 
 **防护**：
 
-- 改前用 `cat -A` 精确数，或 python：`print(line.count('('), line.count(')'))`
+- 改前用 `cat -A` 精确数,或 python：`print(line.count('('), line.count(')'))`
 - `old_string` 和 `new_string` 末尾的 `)` 数量必须**字节级一致**
 - 出错就 `git checkout source/config.org` 重做
 
@@ -569,12 +568,12 @@ DRY_RUN 通过后才能让用户跑 `blue rebuild`（AI 禁跑，sudo 卡 CLI）
 
 `GUIX_DRY_RUN=1 blue rebuild` 报 `extraneous field initializers (regulatory-domain ...)` —— 说明你写的字段在该 service 当前 commit 的 record-type 里**不存在**。
 
-**防护**（**动笔前先查 upstream**）：
+**防护**(**动笔前先查 upstream**):
 
 ```bash
 # 1) 拿当前 Guix commit
 guix describe --format=channels | grep -oP 'commit "\K[^"]+'
-# 典型：ecd4ab5994c4cfd02414f0b2e86125fdc25fd877
+# 典型:ecd4ab5994c4cfd02414f0b2e86125fdc25fd877
 
 # 2) 拉对应 commit 的 service 定义文件
 curl -fsSL "https://git.savannah.gnu.org/cgit/guix.git/plain/gnu/services/networking.scm?id=<commit>" > /tmp/svc.scm
@@ -583,43 +582,43 @@ curl -fsSL "https://git.savannah.gnu.org/cgit/guix.git/plain/gnu/services/networ
 grep -n -A 20 "define-record-type\* <network-manager-configuration>" /tmp/svc.scm
 ```
 
-实测：Guix `ecd4ab5` 的 `network-manager-configuration` **只有 7 个字段**（`network-manager` / `shepherd-requirement` / `dns` / `vpn-plugins` / `iwd?` / `extra-configuration-files` / `dnsmasq-configuration-files`），**没有** `regulatory-domain` / `wifi-scan-rand-mac-address` / `packages`。改 regulatory 得走 `simple-service 'iw-reg-cn` + `iw reg set CN`；改 wifi 行为得走 `extra-configuration-files` 注入 `NetworkManager.conf`。
+实测：Guix `ecd4ab5` 的 `network-manager-configuration` **只有 7 个字段**(`network-manager` / `shepherd-requirement` / `dns` / `vpn-plugins` / `iwd?` / `extra-configuration-files` / `dnsmasq-configuration-files`),**没有** `regulatory-domain` / `wifi-scan-rand-mac-address` / `packages`。改 regulatory 得走 `simple-service 'iw-reg-cn` + `iw reg set CN`;改 wifi 行为得走 `extra-configuration-files` 注入 `NetworkManager.conf`。
 
 #### 坑 3：`simple-service` 在 `(append ...)` 链中位置错位
 
 DRY_RUN 报 `Wrong type argument in position 1 (expecting empty list): #<<service> type: #<service-type iw-reg-cn ...>>` —— `append` 第一个参数**不是 list 而是单个 service 对象**。
 
-**根因**：服务块通常是 `(list (service ...) (simple-service ...))`，被 main 块的 `(services (append <<block1>> <<block2>> ...))` 处理。新加的 `simple-service` 如果漏了或多包了一层 `)`，会从 `list` 里"掉出来"被外层 `append` 误当 list 处理。
+**根因**：服务块通常是 `(list (service ...) (simple-service ...))`,被 main 块的 `(services (append <<block1>> <<block2>> ...))` 处理。新加的 `simple-service` 如果漏了或多包了一层 `)`,会从 `list` 里"掉出来"被外层 `append` 误当 list 处理。
 
-**防护**：每次新增 service / simple-service 前，**先确认它的父表达式是 `(list ...)` 还是 `(append ...)`**，再决定缩进和括号数。DRY_RUN 报 `Wrong type` / `expecting empty list` 时，第一反应是看新加的那行**是不是漏了或多包了一层 `)`**。
+**防护**：每次新增 service / simple-service 前,**先确认它的父表达式是 `(list ...)` 还是 `(append ...)`**,再决定缩进和括号数。DRY_RUN 报 `Wrong type` / `expecting empty list` 时,第一反应是看新加的那行**是不是漏了或多包了一层 `)`**。
 
 #### 坑 4：改 packages / services 列表时破坏既有列宽对齐
 
-`source/config.org` 里很多 `(packages '("a" "b" "c"))` 列表被人手工对齐到固定列宽（典型：每行 33 字符长，按最长项 + 缩进对齐全列）。`patch` 工具**不会自动保持列宽**——直接 `old_string` / `new_string` 加一个短项，会让新行短一截，与同列表其他行不对齐。`blue check` 不会因为这个报错（语法上完全合法），但 git diff 看着"我加的没动结构"实则动了风格。
+`source/config.org` 里很多 `(packages '("a" "b" "c"))` 列表被人手工对齐到固定列宽(典型：每行 33 字符长,按最长项 + 缩进对齐全列)。`patch` 工具**不会自动保持列宽**——直接 `old_string` / `new_string` 加一个短项,会让新行短一截,与同列表其他行不对齐。`blue check` 不会因为这个报错(语法上完全合法),但 git diff 看着"我加的没动结构"实则动了风格。
 
-**防护**（**动笔前先看 baseline 周围风格**）：
+**防护**(**动笔前先看 baseline 周围风格**):
 
 ```bash
 # 1) 改前看周围 5 行的对齐基线
 sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
 
-# 2) 如果是列宽对齐模式（如所有项缩进到 col 33）：
+# 2) 如果是列宽对齐模式(如所有项缩进到 col 33)：
 #    new_string 也要补足空格到一致列宽,不要"刚好引号结束就换行"
 ```
 
-**典型案例**：wireplumber 配置那次，会话里 patch 加 `"wireplumber"` 到 packages 列表时，直接复用了原 `old_string` 但没补缩进，diff 里只看到 +1 行字面值，**实际破坏了"utilities"那行的右括号位置**（从 33 字符宽度变成 27 字符宽度），违反仓库 style 约定。
+**典型案例**：wireplumber 配置那次,会话里 patch 加 `"wireplumber"` 到 packages 列表时,直接复用了原 `old_string` 但没补缩进,diff 里只看到 +1 行字面值,**实际破坏了"utilities"那行的右括号位置**(从 33 字符宽度变成 27 字符宽度),违反仓库 style 约定。
 
-**反例对照**（同样内容,两种风格）：
+**反例对照**(同样内容,两种风格)：
 
 ```scheme
-;; ❌ 不对齐（直接 new_string 缩到 27 字符）
+;; ❌ 不对齐(直接 new_string 缩到 27 字符)
 (packages '("agents"
            "desktop"
            "utilities"
            "wireplumber"      ; 短一截
            "noctalia-suite")))
 
-;; ✅ 对齐（new_string 也补足到 col 33）
+;; ✅ 对齐(new_string 也补足到 col 33)
 (packages '("agents"
             "desktop"
             "system"
@@ -631,18 +630,18 @@ sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
 
 #### 坑 5：`blue check` 报"括号不平衡"不一定是真括号错——可能是上游错误 cascade
 
-`blue check` 报 `[ERROR] 多余 1 个右括号 (open=904 close=905)` 时，第一反应不一定是去 source/config.org 数括号。**这可能是更早阶段的错误（如 `wrong-number-of-args` 在 `(include "./channel.lock")` 阶段）cascade 下来，让括号计数器拿到不完整的输入导致偏差**。
+`blue check` 报 `[ERROR] 多余 1 个右括号 (open=904 close=905)` 时,第一反应不一定是去 source/config.org 数括号。**这可能是更早阶段的错误(如 `wrong-number-of-args` 在 `(include "./channel.lock")` 阶段)cascade 下来,让括号计数器拿到不完整的输入导致偏差**。
 
 **根因识别套路**：
 
 ```bash
-# 1) 抓原始 Guile 报错（不仅是 blue 的"Build failed"摘要）
+# 1) 抓原始 Guile 报错(不仅是 blue 的"Build failed"摘要)
 blue check 2>&1 | head -10
 
 # 2) 看有没有 wrong-number-of-args / unbound-variable / Wrong type 这些
 #    早于"括号"出现的错误
 
-# 3) git stash 你的改动，单独跑一次 baseline blue check：
+# 3) git stash 你的改动,单独跑一次 baseline blue check：
 git stash push -m "verify-baseline" -- source/config.org
 blue check 2>&1 | head -5
 git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.lock / information.scm
@@ -652,21 +651,21 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 
 **反模式**：
 
-- ❌ 看到括号错误就回滚最近 patch（可能是无关上游错误）
-- ❌ 顺手去改 `source/channel.lock`（AGENTS.md 明确禁手动编辑，由 `blue update` 生成）
-- ❌ 顺手去改 `source/information.scm` 的 `(include "./channel.lock")`（同上，不要碰加载机制）
+- ❌ 看到括号错误就回滚最近 patch(可能是无关上游错误)
+- ❌ 顺手去改 `source/channel.lock`(AGENTS.md 明确禁手动编辑,由 `blue update` 生成)
+- ❌ 顺手去改 `source/information.scm` 的 `(include "./channel.lock")`(同上,不要碰加载机制)
 
-正确做法：**先 stash 验证 baseline 是不是真有错**，如果 baseline 也有——是另一个独立 issue，跟当前任务**完全无关**，**不要让当前任务的部署卡在 pre-existing 问题上**。可以把 baseline 错误作为"另外发现的 issue"汇报给用户，但不要为此拖住当前任务进度。
+正确做法：**先 stash 验证 baseline 是不是真有错**,如果 baseline 也有——是另一个独立 issue,跟当前任务**完全无关**,**不要让当前任务的部署卡在 pre-existing 问题上**。可以把 baseline 错误作为"另外发现的 issue"汇报给用户,但不要为此拖住当前任务进度。
 
 ### 8.3 字段引用小抄
 
 | 想用                            | 来自                           | 已 use-modules?                 |
 | ------------------------------- | ------------------------------ | ------------------------------- |
 | `network-manager-service-type`  | `(gnu services)` re-export     | ✅                              |
-| `network-manager-configuration` | `(gnu services networking)`    | ✅（7 字段，见上）              |
+| `network-manager-configuration` | `(gnu services networking)`    | ✅(7 字段,见上)                |
 | `dnsmasq-service-type`          | `(gnu services dns)` re-export | ✅                              |
-| `dnsmasq`（package）            | `(gnu packages dns)`           | ❌ 需手动加 use-package-modules |
-| `iw`（package）                 | `(gnu packages linux)`         | ✅ `linux`                      |
+| `dnsmasq`(包)                  | `(gnu packages dns)`           | ❌ 需手动加 use-package-modules |
+| `iw`(包)                       | `(gnu packages linux)`         | ✅ `linux`                      |
 
 ### 8.4 DRY_RUN 报错 → 排查速查表
 
@@ -678,19 +677,19 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 | `列宽不一致 / 缩进跳格`                            | §8.2 坑 4                         | 看 baseline 周围列宽,补足到一致           |
 | `blue check cascade (括号 / wrong-number-of-args)` | §8.2 坑 5                         | git stash 验证 baseline;别动 channel.lock |
 | `unbound variable: <name>`                         | use-modules 没引                  | 加对应模块                                |
-| `Symbol's value as variable is void: replaced`     | `blue block-replace` 工具自身 bug | 不用 block-replace，直接 patch            |
+| `Symbol's value as variable is void: replaced`     | `blue block-replace` 工具自身 bug | 不用 block-replace,直接 patch            |
 
 完整错误 transcript 和字段引用小抄见 `references/config-org-modify-safely.md`。
 
 ---
 
-## 9. 系统服务 user-level 兜底配置（wireplumber / 之类 Lua 钩子范式）
+## 9. 系统服务 user-level 兜底配置(wireplumber / 之类 Lua 钩子范式)
 
-> 适用场景：**用户态 daemon**（wireplumber / swayidle / gammastep / 各类 systemd --user 服务）的行为不符合预期，而 service 本身的 Guix 配置没有这个开关。需要在 `~/.config/<daemon>/` 下注入 user-level 配置或脚本，但 daemon 默认配置目录**在系统层（`/etc` 或 `/gnu/store`）**，用户态 `~/.config/<daemon>/` 不存在——直接放不会被加载。
+> 适用场景：**用户态 daemon**(wireplumber / swayidle / gammastep / 各类 systemd --user 服务)的行为不符合预期,而 service 本身的 Guix 配置没有这个开关。需要在 `~/.config/<daemon>/` 下注入 user-level 配置或脚本,但 daemon 默认配置目录**在系统层(`/etc` 或 `/gnu/store`)**,用户态 `~/.config/<daemon>/` 不存在——直接放不会被加载。
 
 ### 9.1 典型症状
 
-WirePlumber 案例（2026-06-26 实战）：默认输出 sink 总是 MUTED 状态。诊断：
+WirePlumber 案例(2026-06-26 实战)：默认输出 sink 总是 MUTED 状态。诊断：
 
 ```bash
 wpctl status
@@ -700,18 +699,18 @@ wpctl status
 ls -la ~/.config/wireplumber/ 2>&1  # 没有该目录
 ```
 
-### 9.2 根因分类（先判定再选路径）
+### 9.2 根因分类(先判定再选路径)
 
 | 根因分类                                  | 表现                                                               | 兜底路径                                                           |
 | ----------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| **A. daemon 自带"自动"行为被误触发**      | 某条件触发后 sink 状态被改 + 持久化                                | 配置层关闭那个自动行为（`*.conf` / `*.d/` 段）                     |
-| **B. state 恢复时把上次的错误状态读回来** | 状态文件（如 `~/.local/state/<daemon>/`）里 `mute:true` 反复被回放 | 行为层 hook 强制覆盖（Lua / 脚本）                                 |
-| **C. 启动顺序问题**                       | 某 service 启动比 daemon 早，配置没被读到                          | 行为层加 on-ready hook                                             |
-| **D. 完全是上游 bug**                     | 等等                                                               | 工作量大于 value 时，**接受现状 + 写 workaround 脚本**，不跟上游斗 |
+| **A. daemon 自带"自动"行为被误触发**      | 某条件触发后 sink 状态被改 + 持久化                                | 配置层关闭那个自动行为(`*.conf` / `*.d/` 段)                     |
+| **B. state 恢复时把上次的错误状态读回来** | 状态文件(如 `~/.local/state/<daemon>/`)里 `mute:true` 反复被回放 | 行为层 hook 强制覆盖(Lua / 脚本)                                 |
+| **C. 启动顺序问题**                       | 某 service 启动比 daemon 早,配置没被读到                          | 行为层加 on-ready hook                                             |
+| **D. 完全是上游 bug**                     | 等等                                                               | 工作量大于 value 时,**接受现状 + 写 workaround 脚本**,不跟上游斗 |
 
-wireplumber 案例是 A+B 混合，**配置层 + 行为层双管齐下**。
+wireplumber 案例是 A+B 混合,**配置层 + 行为层双管齐下**。
 
-### 9.3 配置层 + 行为层双管齐下范式（wireplumber 实战可复用）
+### 9.3 配置层 + 行为层双管齐下范式(wireplumber 实战可复用)
 
 **A. 仓库内建包**
 
@@ -726,7 +725,7 @@ dotfiles/immutable/system/
                 └── 40-force-unmute.lua          # 行为层
 ```
 
-`AGENTS.md`（含 `<!-- structor:begin -->...<!-- /structor -->` 标记对，给 `blue structor` 重写）一并建好。
+`AGENTS.md`(含 `<!-- structor:begin -->...<!-- /structor -->` 标记对,给 `blue structor` 重写)一并建好。
 
 **B. `source/config.org` `dotfile-services` 块加包名到 packages 列表**
 
@@ -738,7 +737,7 @@ dotfiles/immutable/system/
 
 **C. wireplumber.conf.d 关闭自带自动行为**
 
-`wireplumber.conf` 语法（GKeyFile 风格，**没有逗号**）：
+`wireplumber.conf` 语法(GKeyFile 风格,**没有逗号**):
 
 ```ini
 wireplumber.profiles = {
@@ -753,9 +752,9 @@ wireplumber.profiles = {
 
 **D. scripts/ 行为层兜底 Lua 脚本**
 
-wireplumber 0.5.x API：监听 `node-state-changed` 事件，filter `device.api=alsa` + `media.class matches Audio/Sink` + `event.subject.new-state=running` → 拿到 `device.id` + `card.profile.device` → 遍历 device 的 Route 参数 → 把对应 route `mute = false` 写回去。
+wireplumber 0.5.x API：监听 `node-state-changed` 事件,filter `device.api=alsa` + `media.class matches Audio/Sink` + `event.subject.new-state=running` → 拿到 `device.id` + `card.profile.device` → 遍历 device 的 Route 参数 → 把对应 route `mute = false` 写回去。
 
-关键 hook 模板：
+关键 hook 模板:
 
 ```lua
 unmute_hook = SimpleEventHook {
@@ -777,7 +776,7 @@ unmute_hook = SimpleEventHook {
 unmute_hook:register ()
 ```
 
-**E. 加载顺序：目录名前缀数字控制**
+**E. 加载顺序:目录名前缀数字控制**
 
 - `40-alsa/` 在系统自带的 `50-alsa/` 之前注册 hook
 - 同 prefix 内按字典序加载
@@ -801,36 +800,121 @@ systemctl --user restart wireplumber
 wpctl status    # 看 sink 是否还 MUTED
 ```
 
-### 9.5 兜底防线（**关键**）
+### 9.5 兜底防线(**关键**)
 
-如果 `blue home` 因为 §8.2 坑 5（上游错误 cascade）走不通：
+如果 `blue home` 因为 §8.2 坑 5(上游错误 cascade)走不通：
 
 - **不要**手改 `source/channel.lock` / `source/information.scm`
-- **可以**手动 stow 验证效果（`stow --dir=dotfiles/enable --target=$HOME --no-folding wireplumber`）—— 临时验证后**回滚**手动 symlink，等 `blue home` 修好再统一部署
-- 把 `channel.lock` 错误作为独立 issue 汇报给用户，**不要**让它卡住当前任务
+- **可以**手动 stow 验证效果(`stow --dir=dotfiles/enable --target=$HOME --no-folding wireplumber`)—— 临时验证后**回滚**手动 symlink,等 `blue home` 修好再统一部署
+- 把 `channel.lock` 错误作为独立 issue 汇报给用户,**不要**让它卡住当前任务
 
 ### 9.6 反模式
 
-- ❌ **写 `~/.config/wireplumber/...` 直接编辑（不走 stow）**——这文件会被 `blue home` 的 store 副本覆盖或冲突
-- ❌ **只写配置层不写行为层**——wireplumber 这种 daemon 行为层兜底是必须的，配置层只能关 setting
-- ❌ **只写行为层不写配置层**——下次 daemon 升级可能默认开启 automute，行为层永远在救火
-- ❌ **把脚本放在 `scripts/` 顶层（不分子目录）**——失去加载顺序控制，跟系统 `50-alsa/*` 撞 race condition
-- ❌ **在 Lua 脚本里 `print` 调试**——wireplumber 走 journal/log topic，**用 `log:info(device, "...")`** 才有 trace
+- ❌ **写 `~/.config/wireplumber/...` 直接编辑(不走 stow)**——这文件会被 `blue home` 的 store 副本覆盖或冲突
+- ❌ **只写配置层不写行为层**——wireplumber 这种 daemon 行为层兜底是必须的,配置层只能关 setting
+- ❌ **只写行为层不写配置层**——下次 daemon 升级可能默认开启 automute,行为层永远在救火
+- ❌ **把脚本放在 `scripts/` 顶层(不分子目录)**——失去加载顺序控制,跟系统 `50-alsa/*` 撞 race condition
+- ❌ **在 Lua 脚本里 `print` 调试**——wireplumber 走 journal/log topic,**用 `log:info(device, "...")`** 才有 trace
+
+---
+
+## 10. 需求澄清顺序(用户偏好,2026-07-06)
+
+> **任何"为仓库加新能力 / 新管线 / 新变体"的任务,开工前先问"你想要哪种 X",再列技术可能性。**
+
+### 10.1 反模式:以工具可能性当目标
+
+看到上游仓库(Testament)或文档里有 `minimal` / `niri` 两个现成变体,**直接默认沿用其中一个** —— 这是惰性,不是判断。**正确做法**:
+
+1. **先问用户**:你想做什么用?想要哪个桌面/哪个形态?
+2. **再列技术可能性**:基于用户的回答,去 Guix 手册 / Guix 仓库 / 上游频道里找现成 service-type
+3. **最后给选项 + 默认**:clarify 给 3-4 个候选,每个候选附"现成度"和"工作量"
+
+### 10.2 实证案例(ISO 移植,2026-07-06)
+
+- ❌ 默认选 `minimal`("先做最简单的")—— 用户要的是带桌面
+- ❌ 默认选 `niri`("Testament 有现成的")—— 用户没装过 niri,不熟
+- ✅ 应该问:"你想要哪种桌面?XFCE / KDE / GNOME / MATE?" 给候选 + 工作量预估
+
+### 10.3 模块归属陷阱(与 §8.2 坑 2 同套路)
+
+§8.2 坑 2("凭空捏造 Guix service 字段名")说的是字段级陷阱。**类比到服务类型级**:
+
+- 错把 `(gnu services xorg)` 当成"唯一桌面服务模块" → 漏掉 `xfce-desktop-service-type` / `gnome-desktop-service-type` / `plasma-desktop-service-type`
+- 这些 service-type 都在 `(gnu services desktop)` 模块(见 Guix 1.5 手册 Desktop Services 节)
+- 它们**不只是包装包**,还自动配齐 polkit / udisks / 权限规则
+
+**防护**(动笔前先查 upstream,跟 §8.2 坑 2 同套路):
+
+```bash
+# 1) 拿当前 Guix commit
+guix describe --format=channels | grep -A1 "name 'guix'" | grep commit | head -1
+
+# 2) 用本地 repl 枚举"我要的 service-type 在哪个模块"
+guix time-machine -C ~/Projects/Config/Guix-configs/source/channel.lock \
+  -- repl <<'EOF'
+(use-modules (gnu services desktop) (gnu services xorg) (gnu services))
+;; 验证你以为是 xorg 模块的 service-type 是不是真的在 xorg 模块
+(format #t "xfce in xorg: ~a / in desktop: ~a~%"
+  (module-variable (resolve-module '(gnu services xorg)) 'xfce-desktop-service-type)
+  (module-variable (resolve-module '(gnu services desktop)) 'xfce-desktop-service-type))
+EOF
+```
+
+输出 `#<variable ... value: #<service-type xfce-desktop ...>>` 才算确认。**不要相信 `defined?` 的布尔返回**(它对 `bound vs unbound` 判断不靠谱)。
+
+### 10.4 文档交接习惯(用户偏好 2026-07-06,**对 agent 的硬约束**)
+
+> **核心规则**: 用户说 "不要动手" / "先好好细化文档" / "我后续让其他 agent 接手" —— **立刻停手,不再做任何代码改动**,只产出完整方案文档。这是用户偏好,**不是建议**。
+>
+> 用户原话: "不要动手！先好好细化一下文档,我后续让其他 agent 接手进行工作"。
+
+执行细节:
+
+如果用户说"让其他 agent 接手",**立刻停手**——不再做任何代码改动,只产出:
+
+1. 一份**完整方案文档**(写到 `docs/<topic>.md`),包含 §0 决策记录 + §接手必读 + §1-N 实施步骤 + 验收清单
+2. 决策记录的每条都要可追溯("为什么选 X 不选 Y"、"用户 YYYY-MM-DD 拍板")
+3. 接手 agent 直接照文档干就行,**不需要再回头问**
+4. 顺手把"接手 agent 必读"路径表塞进 SKILL.md 或 reference(让接手 agent 一加载 skill 就看到文档位置)
+
+反模式:
+- ❌ 边细化文档边写代码 —— 用户没让你写
+- ❌ 文档只写到"思路"层,没到"完整代码 + 实施步骤" —— 接手 agent 还得重新调研
+- ❌ 决策不写理由 —— 接手 agent 不知道为啥这么选
+- ❌ 自己默认选变体/工具 —— 见 §10.1 "以工具可能性当目标"
+
+### 10.5 ISO 移植相关参考
+
+完整 ISO 移植方案(1986 行 / v0.5,§接手必读 + §0~§15)见 `~/Projects/Config/Guix-configs/docs/iso-build.md`。**接手 agent 必读路径**:
+
+- **§接手必读**(第一屏) → 阅读路径 + 7 条工作纪律 + 30 秒 checklist
+- §0 决策记录 → XFCE 首选 / jeans- 前缀 / live user 留空密码 / nonguix 频道自动配 / DM=slim
+- §9.0 子文档索引 → 5 文件详细说明(脚本 + 配置 + 蓝图)
+- §9.4.3 主体代码块 + §9.4.3.1 逐行解释 → 完整可粘贴的 `live-installation-os` 块(XFCE + slim + nonguix)
+- §9.5.1 + §9.5.1.1 + §9.5.2 + §9.5.2.1 → build-iso-command 完整可粘贴 + 逐行解释
+- §11 双维度诊断(症状 + 错误码) + §11.5 接手 agent 边界表
+- §12 验收清单(19 项 + [A/U/R] 标签 + 期望输出样板 + 打假绿勾反模式)
+- §15 维护纪律 + 版本表
+
+ISO 移植沉淀详细复盘见 `references/iso-build-handoff.md`(本次会话沉淀,v0.5 已同步更新)。
 
 ---
 
 ## 不变量与边界
 
-- 本 skill **不缓存** KB 卡片全文；只缓存"反复出现的高频协议"。
+- 本 skill **不缓存** KB 卡片全文;只缓存"反复出现的高频协议"。
 - 任何工作流细节冲突 → 以 `~/Documents/Org/experiences/*/` 对应 KB 卡片为准(session_search 召回)。
 - 新增协议不写本 skill,直接写 KB 卡片(人类主笔);本 skill 周期性从 KB 提取。
 - 详细场景化案例见各 KB 卡片 ID(报告 .hermes-extract-report.md B 节有完整 ID 索引)。
 - Emacs dotfiles 调试陷阱见 `references/emacs-org-capture-pitfalls.md`(org-capture-expand-file 不对内嵌 form 求值)。
-- niri 桌面 + fcitx IME + nix-profile GUI 应用的环境变量注入实战见 `references/niri-gui-environment-injection.md`（三件套诊断、blue home + 重启 niri 会话流程、Guix 不用 systemd 的反模式）。
+- niri 桌面 + fcitx IME + nix-profile GUI 应用的环境变量注入实战见 `references/niri-gui-environment-injection.md`(三件套诊断、blue home + 重启 niri 会话流程、Guix 不用 systemd 的反模式)。
 - hermes-desktop 启动失败诊断见 `references/hermes-desktop-diagnostics.md`(日志优先级、版本探测超时、cron 模块导入竞态、Nix flake lock 追溯、GC 检测)。
 - hermes-gateway 作为 shepherd service 的 self-kick loop 诊断见 `references/hermes-gateway-shepherd-service.md`(日志模式识别、`--replace` 触发机制、清理多个并存 home-shepherd、orphan gateway 进程)。
-- Electron Wayland IME 完整调试流程（QQ 案例、flag 对照表、Electron 版本速查、Nix 修复范式）见 `references/electron-wayland-ime-debug.md`。
-- GNU Stow 二轨 dotfile 部署策略（`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范）见 `references/gnu-stow-two-tier-dotfiles.md`。
+- Electron Wayland IME 完整调试流程(QQ 案例、flag 对照表、Electron 版本速查、Nix 修复范式)见 `references/electron-wayland-ime-debug.md`。
+- GNU Stow 二轨 dotfile 部署策略(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
 - 从 git history 恢复已删除的 dotfile 到 `dotfiles/mutable/<pkg>/` 或 `dotfiles/immutable/<app>/`(过期 README 路径、删除 commit 索引、git archive 导出、多版本候选决策、gitlink 子模块跳过、用户已明确范围时的 clarify 边界)见 `references/git-restore-deleted-dotfiles.md`。
 - **source/config.org system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判)见 §8 + `references/config-org-modify-safely.md`。
 - **user-level daemon 兜底配置范式**(wireplumber 类、配置层 + 行为层双管齐下、加载顺序、blue home 部署失败兜底防线)见 §9。
+- **需求澄清顺序**(以工具可能性当目标的反模式、模块归属陷阱、文档交接习惯)见 §10。
+- **ISO 移植完整方案 + 接手协议**(XFCE 首选 / 1200 行方案文档 / 失败诊断树 / 验收清单 / 接手 agent 必读路径)见 §10.5 + `references/iso-build-handoff.md`。
