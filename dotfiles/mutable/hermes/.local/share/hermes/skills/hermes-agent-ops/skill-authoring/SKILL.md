@@ -1,11 +1,19 @@
 ---
 name: skill-authoring
 description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles every skill must follow — **self-contained** (all runnable artifacts ship inside the skill directory so backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — the directory layout, file-type rules, decision trees for what goes in SKILL.md vs. a support file, **which of the 12 existing categories a new skill belongs to (never top-level `<skill-name>/`)**, and a checklist before declaring a skill done. Trigger when: writing a new skill, refactoring an existing skill's structure, wondering 'should this go in SKILL.md or references()' / 'which category directory should this skill live into', preparing a skill for backup/share, noticing a self-contained violation, or auditing existing skills. Also trigger when the user complains something is 'too verbose' or 'in the wrong place' — those are progressive-disclosure violations."
-version: 1.5.0
+version: 1.6.0
 license: MIT
 metadata:
   hermes:
-    tags: [skill-design, self-contained, progressive-disclosure, references, scripts, structure]
+    tags:
+      [
+        skill-design,
+        self-contained,
+        progressive-disclosure,
+        references,
+        scripts,
+        structure,
+      ]
     related_skills: [hermes-skill-curation, hermes-agent, agent-session-import]
 ---
 
@@ -71,7 +79,7 @@ backup discipline should not depend on remembering to mirror.
    conditions, signal words)
 2. **What does it do at a high level?** (the workflow steps, the
    conventions, the API contract — things the agent needs in
-   *every* invocation of the skill)
+   _every_ invocation of the skill)
 3. **Where do I go for detail?** (one-line pointers to
    `references/<topic>.md`, `templates/<name>`, `scripts/<name>`)
 
@@ -134,21 +142,23 @@ agent uses to decide whether to load the skill. **Get it right.**
 
 ```yaml
 ---
-name: skill-name         # kebab-case, matches directory name
-description: "..."       # 1-3 sentences. First sentence = trigger
-                         #   conditions (signal words the user
-                         #   might say). Second = what it does.
-                         #   Third (optional) = a key gotcha that
-                         #   affects *when* to load it.
-version: X.Y.Z           # bump on content change. patch = fix typo /
-                         #   one pitfall. minor = new section / new
-                         #   support file. major = restructure
-                         #   (progressive-disclosure refactor,
-                         #   breaking rename).
+name: skill-name # kebab-case, matches directory name
+description:
+  "..." # 1-3 sentences. First sentence = trigger
+  #   conditions (signal words the user
+  #   might say). Second = what it does.
+  #   Third (optional) = a key gotcha that
+  #   affects *when* to load it.
+version:
+  X.Y.Z # bump on content change. patch = fix typo /
+  #   one pitfall. minor = new section / new
+  #   support file. major = restructure
+  #   (progressive-disclosure refactor,
+  #   breaking rename).
 license: MIT
 metadata:
   hermes:
-    tags: [a, b, c]      # search-discoverable keywords
+    tags: [a, b, c] # search-discoverable keywords
     related_skills: [sibling-skill-1, sibling-skill-2]
 ---
 ```
@@ -206,6 +216,12 @@ content is correct.
       silent key drift.** See §10 for the pattern — without
       this, every config-driven check runs on empty cfg and
       emits GREEN by luck.
+- [ ] **If the script parses external output (`--help`, MCP tool
+      listing, OpenAPI schema) as ground truth, see §11.** Three
+      silent traps: CJK help text in column 2, 1:N CLI→MCP
+      fanning, and `help` meta-command counting. Any one of these
+      will produce a verify that runs cleanly but reports the wrong
+      expected value.
 - [ ] **No `read_text()[:N]` + `write_text()` patterns in the
       workflow.** Any helper that "opens a file to change one
       field" must read the **whole** file, transform, then write
@@ -219,15 +235,15 @@ content is correct.
 When auditing or refactoring existing skills, look for these —
 each one is a fix-on-sight.
 
-| Violation | Why it's wrong | Fix |
-|-----------|---------------|-----|
-| SKILL.md references `~/.local/share/.../tools/script.py` | Self-contained violation — backup is incomplete | Move script to `scripts/`, update all references |
-| SKILL.md has a per-tool field table that lives 1:1 in `references/<topic>.md` | Duplication rot | Delete the SKILL.md copy, replace with one-line pointer |
-| `references/2026-MM-DD-topic.md` (date in filename) | Session-ifies what should be reusable | Rename to `references/topic.md`, add a "verified on" note inside |
-| `SKILL.md` is 1000+ lines | Not progressive disclosure | Identify topics, split into `references/<topic>.md` per topic, keep main file under 500 |
-| Description frontmatter is generic ("Helps with coding tasks") | Won't fire on real triggers | Rewrite with concrete signal words the user would actually say |
-| CHECKS tuples use different key names than the yaml sections they read | Silent empty-cfg dispatcher — every check runs on defaults | Add parity check; align keys; see §10 |
-| `read_text()[:N]` + `write_text()` to "modify a single field" | Silently truncates files larger than the slice — wipes bodies of large SKILL.md | Use `patch()` for single-field edits; if doing read-modify-write, read the whole file and verify byte count before vs. after |
+| Violation                                                                     | Why it's wrong                                                                  | Fix                                                                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| SKILL.md references `~/.local/share/.../tools/script.py`                      | Self-contained violation — backup is incomplete                                 | Move script to `scripts/`, update all references                                                                             |
+| SKILL.md has a per-tool field table that lives 1:1 in `references/<topic>.md` | Duplication rot                                                                 | Delete the SKILL.md copy, replace with one-line pointer                                                                      |
+| `references/2026-MM-DD-topic.md` (date in filename)                           | Session-ifies what should be reusable                                           | Rename to `references/topic.md`, add a "verified on" note inside                                                             |
+| `SKILL.md` is 1000+ lines                                                     | Not progressive disclosure                                                      | Identify topics, split into `references/<topic>.md` per topic, keep main file under 500                                      |
+| Description frontmatter is generic ("Helps with coding tasks")                | Won't fire on real triggers                                                     | Rewrite with concrete signal words the user would actually say                                                               |
+| CHECKS tuples use different key names than the yaml sections they read        | Silent empty-cfg dispatcher — every check runs on defaults                      | Add parity check; align keys; see §10                                                                                        |
+| `read_text()[:N]` + `write_text()` to "modify a single field"                 | Silently truncates files larger than the slice — wipes bodies of large SKILL.md | Use `patch()` for single-field edits; if doing read-modify-write, read the whole file and verify byte count before vs. after |
 
 ## 7. clarify() options belong in `choices[]`, NEVER inside `question`
 
@@ -296,7 +312,7 @@ the runtime — bake the verification into the skill-creation workflow.
   produces N distinct files, not just "N writes happened."
 - **Verify script forgot to clean up → blocks next session.** Always
   wrap fixtures in `try/finally` with `shutil.rmtree(work,
-  ignore_errors=True)`. The verify script itself is a fixture and
+ignore_errors=True)`. The verify script itself is a fixture and
   should be removed after the run; otherwise it lies around in
   `/tmp/hermes-verify-*.py` and the next session has to rediscover
   and decide whether it's current.
@@ -314,6 +330,24 @@ the runtime — bake the verification into the skill-creation workflow.
   reproduce the broken behavior in a separate fixture and (b)
   assert the patched behavior on the fixed fixture. Otherwise you
   have a "fix" with no proof it fixes anything.
+- **The verify script itself is code — and it can be wrong.** When
+  the first verify run produces a FAIL, do not assume "the script
+  is right and the new code is wrong." Iterate: 5/7 → fix verify
+  parser → 6/7 → fix another verify assumption → 7/7. A FAIL on a
+  freshly written verify script is **often** a verify-side bug
+  (wrong regex, wrong expected value, ground-truth construction
+  flaw) — not necessarily a target-script bug. Three FAILs in a row
+  with the same root cause (e.g. wrong expected value) means stop
+  and re-read the verify script, not the target. This was the actual
+  pattern in the doc-check.py / doc-engineering rollout: 5/7 → 6/7
+  → 7/7 across three iterations, all in the verify layer.
+- **Ground-truth construction must be explicit and inline.** When
+  the verify script derives "what is correct" from another tool's
+  output (e.g. parsing `agenote --help` to build the list of CLI
+  subcommands), do not import a shared helper. Inline the parser
+  so the failure mode is visible in the verify output. Otherwise
+  the verify silently uses a broken ground-truth and produces
+  wrong-but-internally-consistent FAILs.
 
 ### 8.2 Representative-sample-then-batch (one-skill-at-a-time)
 
@@ -345,20 +379,20 @@ top-level `<skill-name>/` directory; that is the bug that created 31
 one cannot host the skill. The 12 current categories (as of
 2026-07-05) are:
 
-| Category | Hosts skills about… | Example sub-skills |
-|---|---|---|
-| `autonomous-ai-agents/` | Spawning / orchestrating sub-agents, importing external-agent histories | `worker-handoff`, `agent-session-import`, `claude-code` |
-| `creative/` | Creative content generation — design, video, music | `architecture-diagram`, `sketch`, `songwriting-and-ai-music` |
-| `desktop/` | Desktop-environment troubleshooting (IME, Wayland, GUI env) | `electron-wayland-ime` |
-| `devtools/` | Generic dev tools — repo recon, code review, debugging specific toolchains, exploratory QA | `codebase-scout`, `code-reviewer`, `dogfood`, `emacs-config-debugging` |
-| `education/` | Coursework, explainer videos, learning material | `academic-coursework-cn`, `elisp-explainer-video` |
-| `guix-configs/` | Workflows specific to this user's Guix-configs deployment (`~/Projects/Config/Guix-configs/`) and the personal `jeans` Guix channel | `guix-configs-workflow`, `jeans-channel-workflow` |
-| `hermes-agent-ops/` | Operating Hermes Agent itself — skill authoring, memory routing, prompt migration, library curation | `skill-authoring` (this skill), `hermes-memory-routing`, `importing-agent-prompts`, `hermes-skill-curation` |
-| `media/` | Media content — transcripts, GIFs, music gen, audio viz | `youtube-content`, `gif-search`, `heartmula`, `songsee` |
-| `mlops/` | ML/AI Ops — training, fine-tuning, serving, eval | (currently empty placeholder — bundled seeds here) |
-| `planning/` | Strategic planning, architecture advisory, task breakdown | `architecture-advisor`, `task-planner` |
-| `productivity/` | Documents, presentations, spreadsheets, discovery | `powerpoint`, `nano-pdf`, `ocr-and-documents`, `unknown-discovery` |
-| `research/` | Research workflows — doc discovery, literature review, doc lint | `doc-researcher`, `single-source-doc-lint` |
+| Category                | Hosts skills about…                                                                                                                 | Example sub-skills                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `autonomous-ai-agents/` | Spawning / orchestrating sub-agents, importing external-agent histories                                                             | `worker-handoff`, `agent-session-import`, `claude-code`                                                     |
+| `creative/`             | Creative content generation — design, video, music                                                                                  | `architecture-diagram`, `sketch`, `songwriting-and-ai-music`                                                |
+| `desktop/`              | Desktop-environment troubleshooting (IME, Wayland, GUI env)                                                                         | `electron-wayland-ime`                                                                                      |
+| `devtools/`             | Generic dev tools — repo recon, code review, debugging specific toolchains, exploratory QA                                          | `codebase-scout`, `code-reviewer`, `dogfood`, `emacs-config-debugging`                                      |
+| `education/`            | Coursework, explainer videos, learning material                                                                                     | `academic-coursework-cn`, `elisp-explainer-video`                                                           |
+| `guix-configs/`         | Workflows specific to this user's Guix-configs deployment (`~/Projects/Config/Guix-configs/`) and the personal `jeans` Guix channel | `guix-configs-workflow`, `jeans-channel-workflow`                                                           |
+| `hermes-agent-ops/`     | Operating Hermes Agent itself — skill authoring, memory routing, prompt migration, library curation                                 | `skill-authoring` (this skill), `hermes-memory-routing`, `importing-agent-prompts`, `hermes-skill-curation` |
+| `media/`                | Media content — transcripts, GIFs, music gen, audio viz                                                                             | `youtube-content`, `gif-search`, `heartmula`, `songsee`                                                     |
+| `mlops/`                | ML/AI Ops — training, fine-tuning, serving, eval                                                                                    | (currently empty placeholder — bundled seeds here)                                                          |
+| `planning/`             | Strategic planning, architecture advisory, task breakdown                                                                           | `architecture-advisor`, `task-planner`                                                                      |
+| `productivity/`         | Documents, presentations, spreadsheets, discovery                                                                                   | `powerpoint`, `nano-pdf`, `ocr-and-documents`, `unknown-discovery`                                          |
+| `research/`             | Research workflows — doc discovery, literature review, doc lint                                                                     | `doc-researcher`, `single-source-doc-lint`                                                                  |
 
 **Decision tree for placement:**
 
@@ -385,7 +419,7 @@ one cannot host the skill. The 12 current categories (as of
 12. **Is the skill about training / serving / evaluating ML models?**
     → `mlops/`
 
-If **none** of the 12 fit, *stop and ask the user*. Do not invent a
+If **none** of the 12 fit, _stop and ask the user_. Do not invent a
 new category on your own. The user has stated this explicitly
 ("必须在当前分类中完全没有合理的文件夹可存放时再创建新分类文件夹").
 
@@ -420,7 +454,7 @@ added, renamed, merged, or removed by a future session using
 
 The companion `hermes-skill-curation` skill (§2.5 Reorganize
 protocol) is the right place to perform category additions or
-merges — this skill only routes placement decisions for *new*
+merges — this skill only routes placement decisions for _new_
 skills, it does not own the categorization tree itself.
 
 ## 10. Config dispatcher naming contract (yaml/json/toml)
@@ -490,11 +524,76 @@ function name contract — it's worth its own checklist item because
 **no error tells you when it's broken**. The only signal is "the
 script looks healthy but every red/green is on defaults."
 
+## 11. External-output parser traps (CLI help / MCP tool lists / API responses)
+
+Scripts that derive their "ground truth" from another tool's
+output (`--help`, MCP tool listing, OpenAPI schema, JSONL log)
+face three quiet failure modes that §10 doesn't cover.
+
+**Trap A — Chinese / non-ASCII help text.** When `<tool> --help`
+output is in CJK, a parser like `awk '/^  [a-z]/{print $2}'`
+silently picks up the **description column**, not the **command
+name column**, because the next field after `add` is `添加经验卡片`.
+Two distinct bugs result:
+
+1. `$2` returns `添加经验卡片` instead of `add` (the wrong token).
+2. Even with `LC_ALL=C`, the `[a-z]` regex matches only the ASCII
+   command name — but `$2` still grabs the CJK description.
+
+**Fix.** Take `$1`, not `$2`, when the first column is the
+identifier you want. Anchor the regex on the _column_ you care
+about, not the line shape. Verify the parser's first match by
+hand-printing it before trusting it.
+
+**Trap B — 1:N mapping between CLI subcommands and MCP/API tools.**
+A single CLI subcommand often fans out into multiple server-side
+tools (`agenote memory` ↔ `agenote_memory_add` /
+`agenote_memory_get` / `agenote_memory_overview` /
+`agenote_memory_search`). A verify script that checks
+"doc lists N MCP tools, CLI has N subcommands" will report a false
+"unknown" mismatch for every fanned-out tool unless the verify
+script knows the expansion map.
+
+**Fix.** Either:
+
+- Maintain an explicit expansion table in the target script (e.g.
+  `KNOWN_MULTI_TOOL_SUBCOMMANDS = {"memory": [...]}`) and expose it
+  as a module-level symbol so verifiers can import it; **or**
+- Have the verify script own the expansion table and re-state it
+  inline (DRY violation but each side stays self-contained).
+
+Pick one side as canonical (the side users edit less often). For
+ground-truth tool lists, **the server is canonical**; for tunable
+thresholds, the user's config file is canonical.
+
+**Trap C — version counting.** Some `help` outputs include a meta
+command (`help`) that distorts "how many subcommands does this
+tool have" checks. The verify script must either subtract `help`
+or include it — and declare which.
+
+**These three traps** all share a symptom: the verify script's
+expected value silently drifts from reality. The doc-check.py /
+doc-engineering rollout hit all three in one cycle:
+
+- Trap A: `awk '$2'` parsed `add       添加经验卡片` → `添加经验卡片`
+  (caught when the verify reported 24 "unknown" tools, all CJK).
+- Trap B: 4 `agenote_memory_*` MCP tools were unmatched against
+  the 28-CLI ground truth (caught when verify reported those 4 as
+  unknown).
+- Trap C: counting 28 vs 29 depending on whether `help` is
+  subtracted (caught when verify expected `actual: 28` and got
+  `actual: 29`).
+
+When all three fire in the same script, the agent runs
+`5/7 → 6/7 → 7/7` across three iterations, each time fixing
+one verify-side assumption. See §8.1's "verify script itself is
+code — and it can be wrong" pitfall for the iteration pattern.
+
 ## Out of scope
 
 - **Which skills to install/curate** is the job of
   `hermes-skill-curation` (lifecycle: add/remove/archive/audit).
-  This skill is about how to *author* one.
+  This skill is about how to _author_ one.
 - **Migrating prompts from other agents** is the job of
   `importing-agent-prompts`. The output of that workflow is a
   skill, but the workflow itself is separate.
@@ -511,7 +610,7 @@ script looks healthy but every red/green is on defaults."
   refactoring an existing skill or writing a new one.
 - `hermes-skill-curation` §2.5 (Reorganize protocol) — the
   counterpart that owns the categorization tree itself.
-  `skill-authoring` only routes *placement decisions for new
-  skills*; if a category needs to be added, renamed, merged, or
+  `skill-authoring` only routes _placement decisions for new
+  skills_; if a category needs to be added, renamed, merged, or
   removed, that's the curation skill's job. See §9's drift-hazard
   notes for what to do when the two skills' category views disagree.
