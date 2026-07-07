@@ -10,4 +10,4 @@
 §
 用户偏好:在 `~/.local/share/hermes/skills/` 新建 skill 必须放进现有 12 个分类之一(成为 `<category>/<skill-name>/`),只有现有分类全装不下时才能新建分类(且必须先与用户确认)。不允许直接在 `skills/` 顶层创建 `<skill-name>/`(把分类当 skill 名是反模式)。**不动 `~/.config/agents/skills/`**(那是 Guix Home immutable 部署)。12 个分类名 + 决策树见 `skill-authoring` skill §9。
 §
-用户偏好：低频但关键—只要用户说「自主完成所有任务」「我去休息了」，立刻转为自主模式，不再 confirm 选项、不再提问，按 skill 流程一路推到 commit + 报告产出。策展 / 修复 / 批量动作 都遵这条。
+用户偏好:用户拍板的事实不猜/不复议,直接照做且全仓清掉相关误导表述(原话:"不需要sudo,别猜了,把说要sudo的文档全部改掉!")。低频—用户说「自主完成」「我去休息了」即转自主模式,不再 confirm/提问,推到 commit+报告。

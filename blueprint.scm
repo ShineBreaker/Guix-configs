@@ -950,12 +950,11 @@
 ;;; 仿 Testament blueprint.scm 的 %images / images-from-arguments，
 ;;; 但前缀改为本仓库自有名 "jeans-"（不用 rosenthal-，那是上游频道）。
 
-;; ISO 变体列表（用户拍板 2026-07-06）。首选 XFCE（GUI 装机辅助），
-;; minimal 作为辅助变体留给 xfce 跑不动的硬件（纯 CLI installer）。
-;; 顺序即构建顺序：先 xfce（主目标），再 minimal（fallback）。
-;; 注：minimal 变体目前共用同一份 live-installation-os（source/config.org
-;; 里只定义了 XFCE 版本）；要做 minimal 得在 config.org 加独立的 OS 块。
-(define %images '("xfce" "minimal"))
+;; ISO 变体列表（用户拍板 2026-07-06）。首选 desktop（GUI 装机辅助），
+;; minimal 作为辅助变体留给 desktop 跑不动的硬件（纯 CLI installer）。
+;; 顺序即构建顺序：先 desktop（主目标），再 minimal（fallback）。
+;; 注：minimal 变体目前共用同一份 live-installation-os（source/config.org 里只定义了 desktop 版本）；要做 minimal 得在 config.org 加独立的 OS 块。
+(define %images '("desktop" "minimal"))
 
 ;; ISO 文件名前缀：写死为 "jeans"（本仓库自有名）。改发布名只动这里。
 (define %live-iso-prefix "jeans")
@@ -1034,7 +1033,7 @@
 ;; 先 tangle source/config.org（让 :tangle ../tmp/live-iso.scm 的块出产物，
 ;; dry-run 也真跑 #:real? #t），再对每个变体调 scripts/build-image.scm。
 ;; 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
-;; ⚠ Agent 不要自行运行（ISO 构建耗时 30+ 分钟，见 docs §11.5）。
+;; ISO 构建耗时 30+ 分钟，适合后台运行（见 docs/iso-build.md）。
 (define-command (build-iso-command arguments)
   ((invoke "build-iso")
    (category 'deployment)
@@ -1042,7 +1041,8 @@
    (help "[VARIANT] ...
 构建 Live ISO 镜像，产物落到 dist/<prefix>-<variant>-<YYYYMMDD>.<arch>.iso。
 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
-受 AGENTS.md 硬约束：本命令不 sudo，但镜像构建需 30+ 分钟，建议手动执行。"))
+构建 Live ISO 镜像（不需要 sudo）。产物落到 dist/<prefix>-<variant>-<date>.<arch>.iso。
+不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。"))
   ;; 1) tangle（dry-run 也真跑，验证括号需要产物；复用现成的 tangle-config）
   (tangle-config)
   ;; 2) 遍历变体，逐个调 guix repl 跑 build-image.scm

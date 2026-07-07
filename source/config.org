@@ -208,7 +208,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
    (services
     (append
      <<basic-services>>
-     <<guix-settings>>
+     <<guix-substitutes>>
      <<udev-services>>
      <<networking-services>>
      <<virtualization-services>>
@@ -687,6 +687,26 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 (list (simple-service 'home-channels home-channels-service-type
                       guix-channels)
 
+      (simple-service 'root-services shepherd-root-service-type
+                      (list (shepherd-timer '(guix-gc)
+                                            #~(calendar-event
+                                               #:days-of-week '(sunday)
+                                               #:hours '(18)
+                                               #:minutes '(0))
+                                            #~("/run/current-system/profile/bin/guix"
+                                               "gc"
+                                               "--delete-generations=14d")
+                                            #:requirement '(user-processes
+                                                            guix-daemon))
+                            ;; 用于自动更新 flatpak 系统安装的软件包
+                            (shepherd-timer '(flatpak-system-update)
+                                            #~(calendar-event #:hours '(18)
+                                                              #:minutes '(0))
+                                            #~("/run/current-system/profile/bin/flatpak"
+                                               "update" "--system" "-y")
+                                            #:requirement '(user-processes
+                                                            network-manager))))
+
       (service nix-ld-service-type
                (nix-ld-configuration
                 (libraries
@@ -871,8 +891,8 @@ polkit.addRule(function(action, subject) {
       (service virtlog-service-type))
 #+end_src
 
-*** Guix 设置
-#+NAME: guix-settings
+*** Guix 下载源
+#+NAME: guix-substitutes
 #+begin_src scheme
 (list ;; Nonguix channel
  (simple-service 'nonguix-substitutes guix-service-type
@@ -899,7 +919,7 @@ polkit.addRule(function(action, subject) {
                  (guix-extension
                   (authorized-keys
                    (list (plain-file
-                          "guix-moe.pub"
+                          "panther.pub"
                           "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))
                   (substitute-urls
                    '("https://substitutes.guix.gofranz.com"))))
@@ -909,27 +929,7 @@ polkit.addRule(function(action, subject) {
                  (guix-extension
                   (substitute-urls
                    '("https://mirror.sjtu.edu.cn/guix"
-                     "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"))))
-
- (simple-service 'root-services shepherd-root-service-type
-                 (list (shepherd-timer '(guix-gc)
-                                       #~(calendar-event
-                                          #:days-of-week '(sunday)
-                                          #:hours '(18)
-                                          #:minutes '(0))
-                                       #~("/run/current-system/profile/bin/guix"
-                                          "gc"
-                                          "--delete-generations=14d")
-                                       #:requirement '(user-processes
-                                                       guix-daemon))
-                       ;; 用于自动更新 flatpak 系统安装的软件包
-                       (shepherd-timer '(flatpak-system-update)
-                                       #~(calendar-event #:hours '(18)
-                                                         #:minutes '(0))
-                                       #~("/run/current-system/profile/bin/flatpak"
-                                          "update" "--system" "-y")
-                                       #:requirement '(user-processes
-                                                       network-manager)))))
+                     "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux")))))
 #+end_src
 
 ** Skeletons
@@ -1929,84 +1929,54 @@ end
 #+end_src
 
 * Live ISO
-------------
 这里定义自研 Live ISO 的 =operating-system=, 与主机 =%system= 完全独立.
-=blue build-iso= (见 blueprint.scm build-iso-command) 会 tangle 出
-=tmp/live-iso.scm=, 再调 =scripts/build-image.scm= 生成 iso9660 镜像.
+=blue build-iso= (见 blueprint.scm build-iso-command) 会 tangle 出 =tmp/live-iso.scm=, 再调 =scripts/build-image.scm= 生成 iso9660 镜像.
 
-参考: Testament 的 config/live/*.scm; 本仓库按 gril 决策走 config.org
-统一 tangle (见 docs/iso-build.md §6 / §9.4). 变体: =xfce= (主, GUI 装机辅助)
++ =desktop= (主要, KDE Plasma 桌面环境).
 + =minimal= (辅助, 纯 CLI fallback).
 
 ** 重要约束 (改本节必读)
-- tangle 目标 =../tmp/live-iso.scm= 绝对不能复用 =../tmp/config.scm=,
-  否则 =%live-installation-os= 会污染主机配置 (见 docs §9.4.5 陷阱 1).
-- =<<live-modules>>= 只在本节被 =live-installation-os= 引用, 绝不能塞进
-  主 =<<modules>>= 块 (会污染 tmp/config.scm).
-- =blue check= 不做 cross-tangle 验证, 改完务必 =tail tmp/live-iso.scm=
-  确认末行是 =%live-installation-os= (裸值).
+- tangle 目标 =../tmp/live-iso.scm= 绝对不能复用 =../tmp/config.scm=, 否则 =%live-installation-os= 会污染主机配置 (见 docs §9.4.5 陷阱 1).
+- =<<live-modules>>= 只在本节被 =live-installation-os= 引用, 绝不能塞进主 =<<modules>>= 块 (会污染 tmp/config.scm).
+- =blue check= 不做 cross-tangle 验证, 改完务必 =tail tmp/live-iso.scm= 确认末行是 =%live-installation-os= (裸值).
 
 ** ISO 专用模块导入
 #+NAME: live-modules
 #+begin_src scheme
-;; make-installation-os 在 guix core (gnu system install), 不是 rosenthal
-;; (实测 source/channel.lock 锁定的 guix 9e068cc; gril fact_id=22).
-;; 注: 不写 (gnu packages slim) —— 该模块不存在, slim 走 spec 解析.
-(use-modules (gnu)                            ; re-export %root-account 等
+(use-modules (gnu)
              (gnu system)
-             (gnu system install)            ; make-installation-os + configuration-template-service-type
+             (gnu system install)
              (gnu services)
-             (gnu services base)             ; guix-configuration / guix-extension
-             (gnu services desktop)          ; xfce-desktop-service-type
-             (gnu services xorg)             ; slim-service-type / slim-configuration
+             (gnu services base)
+             (gnu services desktop)
+             (gnu services xorg)
              (gnu services dbus)
-             (gnu packages shells)           ; fish
+             (gnu packages shells)
              (gnu packages package-management)
              (gnu packages base)
              (gnu packages linux)
-             (gnu packages guile)            ; guile-3.0
-             (gnu packages texinfo)          ; texinfo
-             (gnu packages xfce)
-             ;; 注: 不写 (gnu packages rofi) —— 该模块不存在(实测 9e068cc),
-             ;; rofi 在 (gnu packages xdisorg). rofi 走 spec 解析,无需 use-modules.
-             (gnu packages networking)       ; mihomo (D4: 只装包不引 service)
-             (nongnu packages linux)         ; linux / linux-firmware
+             (gnu packages guile)
+             (gnu packages texinfo)
+             (gnu services sddm)
+             (gnu packages networking)
+             (nongnu packages linux)
+             (gnu packages gnuzilla)
              (nongnu system linux-initrd)
              (guix channels)
              (guix gexp)
-             (guix utils)                    ; %current-system (make-installation-os #:efi-only? 用)
+             (guix packages)
+             ((guix licenses) #:prefix license:)
+             (guix build-system trivial)
+             (guix utils)
              (ice-9 match)
              (srfi srfi-1)
              (srfi srfi-19))
 #+end_src
 
-** OS 定义 (XFCE 首选变体)
+** 系统主体
 #+NAME: live-installation-os
 #+begin_src scheme :tangle ../tmp/live-iso.scm :noweb yes
 <<live-modules>>
-
-;; ---- 频道公钥 (D3: 复刻 source/config.org 主机配置的 substitute 镜像) ----
-;; 装机阶段 guix pull / nonguix kernel 取 substitute 就要用这些公钥.
-(define nonguix-signing-key
-  (plain-file "nonguix.pub"
-    "(public-key
-       (ecc
-         (curve Ed25519)
-         (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
-
-(define guix-moe-signing-key
-  (plain-file "guix-moe.pub"
-    "(public-key
-       (ecc
-         (curve Ed25519)
-         (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))"))
-
-(define panther-signing-key
-  (plain-file "panther.pub"
-    "(public-key
-       (ecc
-         (curve Ed25519)
-         (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
 
 ;; ---- 基础 OS: 继承 guix core make-installation-os ----
 ;; efi-only? 在 aarch64 上自动切纯 EFI. live-modules 已 use-modules, repl 直接可见.
@@ -2014,119 +1984,72 @@ end
   (make-installation-os
    #:efi-only? (string=? (%current-system) "aarch64-linux")))
 
-;; ---- ISO OS: XFCE 变体 (D2: 装机用环境, 不干预装好后) ----
 (define %live-installation-os
   (operating-system
-    (inherit %live-base-os)
-    (host-name "live-system")
-    (label (format #f "Guix System XFCE installation (~a build)"
-                   (date->string (current-date) "~Y-~m-~d")))
-    (kernel linux)
-    (firmware (cons* linux-firmware
-                     (operating-system-firmware %live-base-os)))
+   (inherit %live-base-os)
+   (host-name "live-system")
+   (label (format #f "Guix System KDE Plasma installation (~a build)"
+                  (date->string (current-date) "~Y-~m-~d")))
+   (kernel linux)
+   (firmware (cons* linux-firmware
+                    (operating-system-firmware %live-base-os)))
 
-    (users
-     (cons* (user-account
-              (name "live")
-              (group "users")
-              ;; D5: 密码 = "live" —— slim auto-login 后 live user 能直接 sudo
-              ;; (crypt 形式; 装机阶段不要求强密码, 装好后用户自己 passwd 改)
-              (password (crypt "live" "$6$abc"))
-              (supplementary-groups '("wheel" "audio" "video" "netdev"))
-              (shell (file-append fish "/bin/fish")))
-            (user-account
-              (inherit %root-account)
-              (shell (file-append fish "/bin/fish")))
-            %base-user-accounts))
+   (users
+    (cons* (user-account
+            (name "live")
+            (group "users")
+            (password (crypt "live" "$6$abc"))
+            (supplementary-groups '("wheel" "audio" "video" "netdev"))
+            (shell (file-append fish "/bin/fish")))
+           (user-account
+            (inherit %root-account)
+            (shell (file-append fish "/bin/fish")))
+           %base-user-accounts))
 
-    (packages
-     (append (specifications->packages
-               '(;; CLI 工具 (installer 自身 + 装机调试)
-                 "curl" "file" "git" "gnupg" "mosh"
-                 "ncurses" "rsync" "unzip"
-                 ;; installer 依赖
-                 "guile-newt" "guile-parted"
-                 ;; D4: 只装 mihomo 包, 不引 service / config / tun
-                 ;; 用户在 ISO 里手动 mihomo -f <user-supplied.yaml> 启动
-                 "mihomo"
-                 ;; XFCE 周边 (xfce-desktop-service-type 只带主包, 这里补实际用得到的)
-                 "xfce4-terminal"
-                 "xfce4-screenshooter"
-                 "xfce4-taskmanager"
-                 "thunar"
-                 "thunar-volman"
-                 "tumbler"
-                 "mousepad"
-                 "ristretto"
-                 "xfce4-notifyd"
-                 "xfce4-power-manager"
-                 "rofi"
-                 ;; DM
-                 "slim"
-                 ;; 网络
-                 "network-manager"
-                 "network-manager-applet"
-                 ;; 中文字体 (桌面查资料必须, 不能是框框)
-                 "font-sarasa-gothic"))
-             (operating-system-packages %live-base-os)))
+   (packages
+    (append (specifications->packages
+             '(;; CLI 工具
+               "curl"
+               "file"
+               "git"
+               "gnupg"
+               "mosh"
+               "ncurses"
+               "rsync"
+               "unzip"
 
-    (services
-     (cons*
-      ;; ---- 桌面 + DM ----
-      (service xfce-desktop-service-type)
+               ;; installer 依赖
+               "guile-newt"
+               "guile-parted"
 
-      (service slim-service-type
-        (slim-configuration
-          (display ":0")
-          (auto-login? #t)
-          (default-user "live")
-          ;; 不设 xauth: slim-configuration 的 xauth 字段期望的是 xauth 【程序】
-          ;; (默认 xauth 包), 不是 .Xauthority 文件路径. 用默认值, SLiM 自管 X 授权.
-          ))
+               ;; 网络工具
+               "mihomo"
+               "network-manager"
+               "network-manager-applet"
 
-      ;; D6: kmscon 已由 make-installation-os 默认提供(install.scm:466-468,
-      ;; (service kmscon-service-type (kmscon-configuration (kmscon kmscon-8) ...))),
-      ;; 作为 tty1 装机回退. 不在此重复声明 —— (service kmscon-service-type)
-      ;; 不带 configuration 会被 guix 拒绝("no value specified for service of
-      ;; type 'kmscon'"), 而且本就冗余.
+               ;; 中文字体
+               "font-sarasa-gothic"
 
-      ;; ---- 4 套 substitute 镜像 (D3: 全复刻 source/config.org 的 4 套) ----
-      (simple-service 'nonguix-substitutes guix-service-type
-        (guix-extension
-          (authorized-keys (list nonguix-signing-key))
-          (substitute-urls '("https://nonguix-proxy.ditigal.xyz"))))
+               ;; 浏览器
+               "icecat"
+               "icecat-l10n"
 
-      (simple-service 'guix-moe-substitutes guix-service-type
-        (guix-extension
-          (authorized-keys (list guix-moe-signing-key))
-          (substitute-urls '("https://cache-cdn.guix.moe"))))
+               ;; AI Agent
+               "crush-bin"))
 
-      (simple-service 'panther-substitutes guix-service-type
-        (guix-extension
-          (authorized-keys (list panther-signing-key))
-          (substitute-urls '("https://substitutes.guix.gofranz.com"))))
+            (operating-system-packages %live-base-os)))
 
-      (simple-service 'sjtug-substitutes guix-service-type
-        (guix-extension
-          (substitute-urls '("https://mirror.sjtu.edu.cn/guix"
-                             "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux"))))
-
-      (modify-services (operating-system-user-services %live-base-os)
-        ;; 删掉原版 configuration-template (本仓库不放 examples/)
-        (delete (@@ (gnu system install) configuration-template-service-type))
-        ;; 重写 gc-root-service: 不放 examples, 只保留 locale + texinfo + guile.
-        ;; 注 1: %default-locale-libcs 是 (gnu system install) 内部变量 (不 export),
-        ;;   必须用 @@ 取 (%root-account 被 (gnu) re-export 了, 这个没有).
-        ;; 注 2: %default-locale-libcs 本身是 list, 要用 append 而非 cons* ——
-        ;;   gc-root-service 的 builder 会 for-each symlink 每个元素, 元素必须是
-        ;;   单个 store path (字符串). cons* 会把整个 list 当一个元素塞进去,
-        ;;   builder 调 (symlink '("path1" "path2") "0") 会因类型错 build failed.
-        (gc-root-service-type
-          config => (append (list (libc-utf8-locales-for-target)
-                                  texinfo
-                                  guile-3.0)
-                            (@@ (gnu system install) %default-locale-libcs)
-                            (or config '()))))))))
+   (services
+    (append
+     <<guix-substitutes>>
+     (list (service elogind-service-type)
+           (service plasma-desktop-service-type)
+           (service sddm-service-type
+             (sddm-configuration
+               (display-server "wayland")
+               (auto-login-user "live")
+               (auto-login-session "plasma.desktop"))))
+     (operating-system-user-services %live-base-os)))))
 
 %live-installation-os
 #+end_src

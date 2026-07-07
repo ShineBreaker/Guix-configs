@@ -175,11 +175,37 @@ ISO 块内容,直接撞死 `blue rebuild`。
 (同 §2.3) 实施前更正记录里有 5 条相关修正,`source/config.org` `* Live ISO`
 章节顶部注释里有完整留路标。**不要凭印象改 use-modules 列表**。
 
+### §3.5 `services` 字段里 `<<guix-substitutes>>` 不能当 `cons*` 元素
+
+`<<guix-substitutes>>` 块展开后本身是一个 `(list 4个simple-service ...)`。
+若写成 `(cons* (service xfce-desktop-service-type) <<guix-substitutes>>
+(service lightdm-service-type ...) ...)`,会把整个 list 当单个 service 元素
+嵌进 services 列表,报 `'services' field must contain a list of services`。
+
+**修复**:用 `append` 拍平 ——
+`(services (append <<guix-substitutes>>
+(list (service xfce-desktop-service-type)
+(service lightdm-service-type ...) ...)))`。
+`blue check` 只看块内括号平衡,**不会**抓到这类 "list-in-list" 类型错,
+只能靠 guix 真跑报 `must contain a list of services` 才发现。
+
+### §3.6 `xfce-wayland-session` 的 builder 必须 `with-imported-modules`
+
+该包用 `trivial-build-system`,其 builder 默认**不**导入 `(guix build utils)`,
+直接在 `#~(begin ...)` 里 `(use-modules (guix build utils))` 会报
+`no code for module (guix build utils)`(drv 编译阶段失败)。
+
+**修复**:用 `(with-imported-modules '((guix build utils)) #~(begin ...))`
+包裹 gexp,把模块编译进构建环境。注意 `with-imported-modules` 多包一层,
+结尾需补一个右括号,否则 `blue check` 报 `live-xfce-define` 多 1 个左括号。
+
 ## §4 出错怎么办(快速索引)
 
 | 症状                                        | 看哪                                                  |
 | ------------------------------------------- | ----------------------------------------------------- |
 | `blue build-iso` 报 `unbound variable`      | `source/config.org` `* Live ISO` 章节顶部注释 + §3.4  |
+| `'services' field must contain a list of services` | `<<guix-substitutes>>` 被当 cons* 元素,§3.5 改 append |
+| `no code for module (guix build utils)`(drv 编译失败) | `xfce-wayland-session` builder 缺 `with-imported-modules`,§3.6 |
 | `no code for module (gnu packages X)`       | 删该 use-modules,改走 `specifications->packages`      |
 | `extraneous field initializer (X)`          | 字段名/值类型错,查 Guix 手册对应 service              |
 | `Wrong type to apply: #<<service-type>>`    | service 括号错位,§3.1 排查                            |
