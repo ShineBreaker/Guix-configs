@@ -34,11 +34,20 @@
 ;; - C-c o k c    新建经验卡片（走 org-capture，选 entry_type：note/mistake/ascended）
 ;; - C-c o k s    全文检索经验（ripgrep）
 ;; - C-c o k t    按标签检索经验（agenote tags）
-;; - C-c o k a    将 inbox 条目归档到 experiences/<category>/
 ;; - C-c o k I    打开收件箱
 ;; - C-c o k S    知识库统计（agenote stats）
 ;; - C-c o k v    可视化知识库（类别树 / 时间线，见 org-knowledge-viz.el）
 ;; - C-c o k V    在浏览器打开知识库可视化（agenote viz --open）
+;; 生命周期管理（agenote CRUD）：
+;; - C-c o k a    将 inbox 条目归档到 experiences/<category>/
+;; - C-c o k d    检测重复卡片（agenote deduplicate）
+;; - C-c o k e    合并卡片（次卡并入主卡，agenote merge）
+;; - C-c o k l    格式校验所有经验卡片（agenote lint，前缀参数则 --fix）
+;; - C-c o k m    记忆系统概览/操作（agenote memory）
+;; - C-c o k n    双向链接两张卡片（agenote connect）
+;; - C-c o k o    提交知识库变更到 git（agenote commit）
+;; - C-c o k r    审查当前经验卡片（agenote review）
+;; - C-c o k u    更新卡片 LAST_USED + LAST_VERIFIED（agenote touch）
 ;;
 ;; capture 实现：org-mode.el 的 `org-capture-templates' 定义 kn/km/ka 三条
 ;; 模板（对齐 agenote-base entry-types 语义），`C-c o k c' 调
