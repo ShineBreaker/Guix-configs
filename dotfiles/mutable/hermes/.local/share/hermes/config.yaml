@@ -1,7 +1,6 @@
 model:
-  base_url: ''
-  default: stepfun/step-3.7-flash:free
-  provider: nous
+  default: MiniMax-M3
+  provider: minimax-cn
 providers:
   minimax-cn:
     models:
