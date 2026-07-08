@@ -16,7 +16,7 @@
 |----------+--------+------------------------+---------------------|
 | 1 | 启动与基础设施 | =literal-bootstrap= 、 =literal-frame= | =defconst= 路径常量与 =defun= frame hook 实现; 后者通过 =defvar= 注入到 color-scheme / dashboard |
 | 2 | 界面与外观 | =literal-git= 、 =literal-color-scheme= 、 =literal-tab-line= 、 =literal-modeline= 、 =literal-help= 、 =literal-context-menu= 、 =literal-which-key-data= | color-scheme 依赖 =literal/add-frame-hook= 注入点(已在启动域 setq); =literal/register-buffer-refresh!= 在此域导出供 dashboard 注入 |
-| 3 | 编辑与文本 | (无外置 require) | 引用 bootstrap 的 =literal/call-process= helper; =with-eval-after-load which-key= 注册中文描述 |
+| 3 | 编辑与文本 | (无外置 require) | 本域内联定义 =literal/{copy,paste,cut,rename,comment}-dwim= 等编辑命令; =with-eval-after-load which-key= 注册中文描述(注:bootstrap 的 =literal/call-process= 实际未被本域引用,各模块用私有副本,见 [[audit-checklist]][3]) |
 | 4 | 编程与开发 | (无新增 require,见 #2) | 共享 §2 已加载的 git / color-scheme / tab-line / modeline / help |
 | 5 | 项目与导航 | (无外置 require) | projectile-known-projects 与 terminal 子模块内联 |
 | 6 | Org 与知识库 | =literal-org-knowledge= 、 =literal-org-agenote= | 依赖 bootstrap 提供的 =literal:org-directory= / =literal:org-inbox-file= / =literal:agenote-directory= 等 defconst |
