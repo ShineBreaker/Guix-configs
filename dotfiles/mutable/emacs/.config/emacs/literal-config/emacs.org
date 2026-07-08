@@ -5,6 +5,26 @@
 #+STARTUP: content
 #+OPTIONS: toc:2
 
+* 启动顺序与模块依赖速查
+本配置 =emacs.org= 由 8 个顶层域构成(末尾 =* init.el ends here= 为占位),每个域通过 13 处 =(require 'literal-...)= 把外置 =lisp/*.el= 模块挂到 init 序列。加载顺序敏感:任一处 require 顺序错位都可能引起 void-function / 注入点为 nil。
+
++ 路径常量由 =literal-bootstrap.el= 的 =defconst= 提供,模块 =defvar= 不覆盖已 bound 值
++ frame hook 实现由 =literal-frame.el= 的 =defun= 提供,经 =defvar= 注入点 setq 到 color-scheme / dashboard 模块
++ Dashboard 因依赖知识库/帮助/颜色方案模块,延后到 =* 系统工具与实验性= 域末尾加载;4 个回调在加载前 setq 注入
+
+| 加载顺序 | 顶层域 | 引用的外置 =lisp/*.el= | 关键跨域注入/依赖点 |
+|----------+--------+------------------------+---------------------|
+| 1 | 启动与基础设施 | =literal-bootstrap= 、 =literal-frame= | =defconst= 路径常量与 =defun= frame hook 实现; 后者通过 =defvar= 注入到 color-scheme / dashboard |
+| 2 | 界面与外观 | =literal-git= 、 =literal-color-scheme= 、 =literal-tab-line= 、 =literal-modeline= 、 =literal-help= 、 =literal-context-menu= 、 =literal-which-key-data= | color-scheme 依赖 =literal/add-frame-hook= 注入点(已在启动域 setq); =literal/register-buffer-refresh!= 在此域导出供 dashboard 注入 |
+| 3 | 编辑与文本 | (无外置 require) | 引用 bootstrap 的 =literal/call-process= helper; =with-eval-after-load which-key= 注册中文描述 |
+| 4 | 编程与开发 | (无新增 require,见 #2) | 共享 §2 已加载的 git / color-scheme / tab-line / modeline / help |
+| 5 | 项目与导航 | (无外置 require) | projectile-known-projects 与 terminal 子模块内联 |
+| 6 | Org 与知识库 | =literal-org-knowledge= 、 =literal-org-agenote= | 依赖 bootstrap 提供的 =literal:org-directory= / =literal:org-inbox-file= / =literal:agenote-directory= 等 defconst |
+| 7 | 键位与补全 | =literal-completion= | vertico / corfu / which-key 本体走 use-package,框架抽取到 =literal-completion.el=; frame-hook 已在启动域 setq 注入 |
+| 8 | 系统工具与实验性 | =literal-dashboard= | 4 个回调 setq 注入(knowledge→collect-files 、 knowledge→open-file 、 help→extract-bindings 、 color-scheme→register-buffer-refresh!); dashboard =defvar= 注入点全部非 nil 后再 require |
+
+注:行 2 「界面与外观」罗列的 7 个 require 由 §启动与基础设施(2 处)、§编辑与文本(2 处) 等多个 =src= 块组成,init 序列仅一处连续 require 串(见行 514–516 + 531 + 540),但跨域语义各自独立。
+
 * 启动与基础设施
 Emacs 冷启动的第一阶段:GC / 路径常量 / 外部命令缓存 / Frame 生命周期 / 键位辅助 / 包管理 / 基础行为。
 本域代码必须最先执行——后续所有功能域(以及外置重型模块)都依赖这里定义的常量、命令缓存与 =literal/set-key= / =literal/add-frame-hook= 等基础原语。
