@@ -169,14 +169,6 @@ MODE 为 'light 或 'dark。
           (literal/color-scheme-clear-bootstrap-frame-colors)
           (message "[color-scheme] 已同步主题: %s" target-theme))))))
 
-(defun literal/color-scheme-sync ()
-  "手动同步系统颜色方案到 Emacs 主题（交互式命令）。"
-  (interactive)
-  (let ((mode (literal/color-scheme-get-from-dbus)))
-    (if mode
-        (literal/color-scheme-apply-theme mode)
-      (message "[color-scheme] 无法获取 Darkman 模式"))))
-
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; D-Bus 信号监听
 ;; ═════════════════════════════════════════════════════════════════════════════
