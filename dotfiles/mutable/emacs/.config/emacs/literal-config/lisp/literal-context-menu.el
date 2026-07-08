@@ -905,20 +905,6 @@
   "翻译 `context-menu-map' 返回的 MENU。"
   (literal/context-menu--translate-keymap menu))
 
-(defun literal/context-menu--translate-generated-menu (menu)
-  "翻译运行期生成的 MENU keymap。"
-  (literal/context-menu--translate-keymap menu))
-
-(defun literal/context-menu--with-generated-menu-translation (fn &rest args)
-  "在调用 FN ARGS 期间翻译 `easy-menu-create-menu' 生成的 keymap。"
-  (unwind-protect
-      (progn
-        (advice-add 'easy-menu-create-menu :filter-return
-                    #'literal/context-menu--translate-generated-menu)
-        (apply fn args))
-    (advice-remove 'easy-menu-create-menu
-                   #'literal/context-menu--translate-generated-menu)))
-
 (when (fboundp 'context-menu-map)
   (unless (advice-member-p #'literal/context-menu-translate #'context-menu-map)
     (advice-add 'context-menu-map :filter-return #'literal/context-menu-translate)))
