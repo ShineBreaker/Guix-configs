@@ -36,10 +36,6 @@
   (when-let* ((target (or file (buffer-file-name) default-directory)))
     (locate-dominating-file target ".git")))
 
-(defun literal/git-file-in-repo-p (&optional file)
-  "判断 FILE 或当前 buffer 是否位于 Git 仓库中。"
-  (and (literal/git-repo-root file) t))
-
 (defun literal/git-buffer-file ()
   "返回当前 buffer 对应的文件，不存在时抛出用户错误。"
   (or (buffer-file-name)
@@ -150,24 +146,6 @@
   (when (y-or-n-p "恢复最近一次 stash？")
     (literal/git--run "stash" "pop")
     (message "已恢复最近一次 stash")))
-
-;; ═════════════════════════════════════════════════════════════════════════════
-;; Magit 显示策略
-;; ═════════════════════════════════════════════════════════════════════════════
-
-(defun literal/magit-display-buffer (buffer)
-  "Magit 缓冲区显示策略。
-- magit-status → 底部 side-window (height 0.4)
-- 其他 magit 子缓冲区（diff/log/process）→ 复用 status 所在窗口
-注意：commit message 不经过这里，由 emacsclient/with-editor 经
-`server-window' → `display-buffer' 路径显示。"
-  (let ((buffer-mode (buffer-local-value 'major-mode buffer)))
-    (cond
-     ((eq buffer-mode 'magit-status-mode)
-      (display-buffer buffer '(display-buffer-in-side-window
-                               (side . bottom) (window-height . 0.4))))
-     (t
-      (display-buffer buffer '(display-buffer-same-window))))))
 
 (defun literal/git-commit-setup-buffer-maybe ()
   "当前 buffer 是 Git 提交消息文件时加载并启用 `git-commit-mode'。"
