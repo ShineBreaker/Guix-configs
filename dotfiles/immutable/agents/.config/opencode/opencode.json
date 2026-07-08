@@ -36,9 +36,7 @@
   },
   "permission": "allow",
   "plugin": [
-    "@tarquinen/opencode-dcp",
     "@franlol/opencode-md-table-formatter",
-    "opencode-mem",
     "opencode-scheduler",
     "@plannotator/opencode"
   ]
