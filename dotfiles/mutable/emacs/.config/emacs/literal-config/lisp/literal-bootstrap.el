@@ -117,19 +117,5 @@
 (defconst literal:executable-hunspell (executable-find "hunspell")
   "hunspell 路径，启动期缓存。")
 
-;; ═════════════════════════════════════════════════════════════════════════════
-;; 通用进程调用封装
-;; ═════════════════════════════════════════════════════════════════════════════
-
-(defun literal/call-process (command &rest args)
-  "同步执行 COMMAND 与 ARGS，返回 (STATUS . OUTPUT)。
-STATUS 为进程退出码（0 = 成功），OUTPUT 为 stdout 的 trimmed 字符串。
-ARGS 中的 nil 会被自动过滤。适用于一次性外部命令调用（fd/rg/jq/git 等）。
-不适合高频调用（每次 spawn 进程有 10-30ms 开销）。"
-  (with-temp-buffer
-    (cons (or (apply #'call-process command nil t nil (remq nil args))
-              -1)
-          (string-trim (buffer-string)))))
-
 (provide 'literal-bootstrap)
 ;;; literal-bootstrap.el ends here
