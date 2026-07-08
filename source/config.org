@@ -632,9 +632,12 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                (nix-configuration
                 (build-directory "/var/tmp")
                 (extra-config
-                 '("experimental-features = nix-command flakes\n"
-                   "auto-optimise-store = true\n"
-                   "substituters = https://mirror.sjtu.edu.cn/nix-channels/store https://cache.nixos.org\n"))))
+                (list
+                  (string-append "trusted-users" " = root " username "\n")
+                  (string-append "experimental-features = nix-command flakes\n")
+                                 "auto-optimise-store = true\n"
+                                 "use-xdg-base-directories = true\n"
+                                 "substituters = https://mirror.sjtu.edu.cn/nix-channels/store https://cache.nixos.org\n"))))
 
       (simple-service 'non-nixos-gpu shepherd-root-service-type
                       (list (shepherd-service (documentation
@@ -840,7 +843,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 
 
 50-hibernate.rules
-
 #+name: 50-hibernate.rules
 #+begin_src js :tangle ../tmp/50-hibernate.rules
 polkit.addRule(function(action, subject) {
@@ -1130,6 +1132,10 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "yq"
         "zig-zls"
 
+        ;; 编辑器
+        "helix"
+        "zed"
+
         ;; 数据库
         "postgresql"
         "redis"
@@ -1181,11 +1187,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "aspell-dict-en"
         "hunspell"
         "hunspell-dict-en"
-        "miscfiles"
-
-        ;; 编辑器
-        "helix"
-        "zed"))
+        "miscfiles"))
 #+end_src
 
 *** 其他软件包
@@ -1193,72 +1195,72 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+NAME: user-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
-         ;; 浏览器 & 插件
-         "ublock-origin-chromium"
-         "ungoogled-chromium-wayland"
-         "zen-browser-bin"
+        ;; 浏览器 & 插件
+        "ublock-origin-chromium"
+        "ungoogled-chromium-wayland"
+        "zen-browser-bin"
 
-         ;; 解码器
-         "gstreamer"
-         "gst-plugins-base"
-         "gst-plugins-good"
-         "gst-plugins-bad"
-         "gst-plugins-ugly"
+        ;; 解码器
+        "gstreamer"
+        "gst-plugins-base"
+        "gst-plugins-good"
+        "gst-plugins-bad"
+        "gst-plugins-ugly"
 
-         ;; 影音
-         "audacity"
-         "easyeffects"
-         "helvum"
-         "mpv"
-         "nomacs"
-         "obs"
-         "obs-wlrobs"
-         "obs-pipewire-audio-capture"
-         "obs-vkcapture"
+        ;; 影音
+        "audacity"
+        "easyeffects"
+        "helvum"
+        "mpv"
+        "nomacs"
+        "obs"
+        "obs-wlrobs"
+        "obs-pipewire-audio-capture"
+        "obs-vkcapture"
 
-         ;; 社交
-         "element-desktop"
-         "notmuch"
-         "telegram-desktop"
-         "zulip-desktop"
+        ;; 社交
+        "element-desktop"
+        "notmuch"
+        "telegram-desktop"
+        "zulip-desktop"
 
-         ;; 生产力工具
-         "amber-pm"
-         "gimp"
-         "filezilla"
-         "keepassxc"
-         "kdeconnect"
-         "motrix-next-bin"
-         "seahorse"
-         "tesseract-ocr"
-         "virt-manager"
+        ;; 生产力工具
+        "amber-pm"
+        "gimp"
+        "filezilla"
+        "keepassxc"
+        "kdeconnect"
+        "motrix-next-bin"
+        "seahorse"
+        "tesseract-ocr"
+        "virt-manager"
 
-         ;; 娱乐
-         "gamemode"
-         "luanti-halon"
-         "luanti-mineclonia-csm"
-         "mangohud"
-         "osu-lazer-bin"
-         "prismlauncher-dolly"
-         "steam"
+        ;; 娱乐
+        "gamemode"
+        "luanti-halon"
+        "luanti-mineclonia-csm"
+        "mangohud"
+        "osu-lazer-bin"
+        "prismlauncher-dolly"
+        "steam"
 
-         ;; 实用工具
-         "amule"
-         "freerdp@3"
-         "age"
-         "kanata"
-         "mesa-utils"
-         "pinentry-qt"
-         "winapps"
+        ;; 实用工具
+        "amule"
+        "freerdp@3"
+        "age"
+        "kanata"
+        "mesa-utils"
+        "pinentry-qt"
+        "winapps"
 
-         ;; MCP server 运行时
-         "python-mcp"
-         "python-httpx-sse"
-         "python-pydantic-settings"
-         "python-sse-starlette"
-         "python-starlette"
-         "python-uvicorn"
-         "python-typer"))
+        ;; MCP server 运行时
+        "python-mcp"
+        "python-httpx-sse"
+        "python-pydantic-settings"
+        "python-sse-starlette"
+        "python-starlette"
+        "python-uvicorn"
+        "python-typer"))
 #+end_src
 
 *** Nix 软件包
@@ -1273,19 +1275,39 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+begin_src scheme
 (with-nix-profile
  (append (map (lambda (package)
-               (nix-shell-wrapper package
-                                  (string-append "github:NixOS/nixpkgs/nixos-26.05#" package)
-                                  #:run-command (list package)))
-             '(;; AI Agent
-               "claude-code" "codex" "codex-acp"
-               ;; 环境管理
-               "biome" "bun" "pnpm")
-               ;; 工具
-               "android-tools" "broot" "gh" "pmbootstrap" "python314Packages.jieba" "qtscrcpy" "scrcpy"
-               ;; 游戏工具
-               "gamescope" "mangojuice" "sunshine"
-               ;; LSP
-               "bash-language-server" "kotlin-language-server" "nil" "package-version-server" "typescript-language-server")))
+                (nix-shell-wrapper package
+                                   (string-append "github:NixOS/nixpkgs/nixos-26.05#" package)
+                                   #:run-command (list package)))
+              '(;; AI Agent
+                "codex" "codex-acp"
+                ;; Coding 工具
+                "biome" "bun" "pnpm"
+                ;; 工具
+                "broot" "gh" "pmbootstrap" "scrcpy"
+                ;; 游戏工具
+                "gamescope" "mangojuice" "sunshine"
+                ;; LSP
+                "bash-language-server" "kotlin-language-server" "nil" "package-version-server" "typescript-language-server"))
+
+         (list (nix-shell-wrapper "adb"
+                                  '("github:NixOS/nixpkgs/nixos-26.05#android-tools")
+                                  #:run-command '("adb")))
+
+         (list (nix-shell-wrapper "bun"
+                                  '("github:NixOS/nixpkgs/nixos-26.05#bun")
+                                  #:run-command '("bun")))
+
+         (list (nix-shell-wrapper "bunx"
+                                  '("github:NixOS/nixpkgs/nixos-26.05#bun")
+                                  #:run-command '("bunx")))
+
+         (list (nix-shell-wrapper "claude"
+                                  '("github:NixOS/nixpkgs/nixos-26.05#claude-code")
+                                  #:run-command '("claude")))
+
+         (list (nix-shell-wrapper "fastboot"
+                                  '("github:NixOS/nixpkgs/nixos-26.05#android-tools")
+                                  #:run-command '("fastboot")))))
 #+end_src
 ** Servics
 注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
