@@ -63,7 +63,7 @@ from ag_lib.health import cmd_health, cmd_gaps  # noqa: E402
 from ag_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
 # 跨 agent 协同 4 件套（lazy import 到 wrapper 内，避免顶层拉起 sqlite/JSONL 依赖）
-from ag_lib.reconcile import reconcile_source  # noqa: E402
+from ag_lib.reconcile import reconcile_source, trace_fact  # noqa: E402
 from ag_lib.dream import run_dream  # noqa: E402
 from ag_lib.distill import run_distill  # noqa: E402
 from ag_lib.extract import run_extract  # noqa: E402
@@ -173,14 +173,19 @@ def cmd_commit(args: argparse.Namespace, ctx=None) -> None:
         # conversations/ + kb-viz.html。用 git ls-files --others + 已跟踪变更交集。
         # 简化实现：显式列出策展相关路径，git add 对不存在的路径会报错，故逐个探测。
         candidates = [
-            "agenote/experiences", "agenote/index.json", "agenote/.reconcile",
-            "conversations", "kb-viz.html", "MEMORY.org", "agenote/MEMORY.org",
+            "agenote/experiences",
+            "agenote/index.json",
+            "agenote/.reconcile",
+            "conversations",
+            "kb-viz.html",
+            "MEMORY.org",
+            "agenote/MEMORY.org",
             "agenda",
         ]
         add_targets = [c for c in candidates if (repo_root_path / c).exists()]
         if not add_targets:
             print("未发现策展产物路径（experiences/index.json/conversations 等）。")
-            print("如需提交全部变更，请用 agenote commit --all -m \"...\"")
+            print('如需提交全部变更，请用 agenote commit --all -m "..."')
             return
 
     # 检查是否有变更（用拟 add 的范围预览；--all 模式下 status 不传 -A，那是 add 的参数）
@@ -256,7 +261,12 @@ def _print_report(d: dict, json_flag: bool, title: str) -> None:
             for it in v[:10]:
                 if isinstance(it, dict):
                     # 取最像标题/来源的字段
-                    label = it.get("title") or it.get("source") or it.get("id") or str(it)[:60]
+                    label = (
+                        it.get("title")
+                        or it.get("source")
+                        or it.get("id")
+                        or str(it)[:60]
+                    )
                     print(f"  + {label}")
                 else:
                     print(f"  + {it}")
@@ -271,31 +281,113 @@ def _print_report(d: dict, json_flag: bool, title: str) -> None:
 def cmd_reconcile(args: argparse.Namespace, ctx=None) -> None:
     """跨 agent memory 只读 reconcile：抽取事实到 .reconcile/index.json。"""
     report = reconcile_source(source=args.source, dry_run=args.dry_run)
-    _print_report(report.to_dict(), getattr(args, "json", False),
-                  f"reconcile ({args.source}, dry_run={args.dry_run})")
+    _print_report(
+        report.to_dict(),
+        getattr(args, "json", False),
+        f"reconcile ({args.source}, dry_run={args.dry_run})",
+    )
 
 
 def cmd_dream(args: argparse.Namespace, ctx=None) -> None:
     """从 reconcile 事实启发式提炼候选新卡片。"""
-    report = run_dream(window_days=args.window_days, dry_run=args.dry_run)
-    _print_report(report.to_dict(), getattr(args, "json", False),
-                  f"dream (window={args.window_days}d, dry_run={args.dry_run})")
+    report = run_dream(
+        window_days=args.window_days,
+        dry_run=args.dry_run,
+        offset=args.offset,
+        limit=args.limit,
+    )
+    _print_report(
+        report.to_dict(),
+        getattr(args, "json", False),
+        f"dream (window={args.window_days}d, offset={args.offset}, limit={args.limit}, dry_run={args.dry_run})",
+    )
+
+
+def cmd_trace(args: argparse.Namespace, ctx=None) -> None:
+    """回查 dream 候选的原始完整对话（溯源，不截断）。"""
+    result = trace_fact(args.id)
+    if getattr(args, "json", False):
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    # 人类可读模式
+    if "error" in result:
+        print(f"[trace 错误] {result['error']}")
+        return
+    source = result.get("source", "?")
+    sess = result.get("session", {})
+    print(f"=== trace {source}: {args.id} ===")
+    if result.get("degraded"):
+        print(f"[降级] {result.get('message', '')}")
+        print(f"标题: {result.get('title', '')}")
+        print(f"摘要内容:\n{result.get('content', '')}")
+        return
+    print(f"session: {sess.get('title', sess.get('cwd', '?'))}")
+    msgs = result.get("messages", [])
+    print(f"消息数: {len(msgs)}")
+    print("-" * 60)
+    for m in msgs:
+        role = m.get("role", "?")
+        ts = m.get("ts", "")
+        print(f"\n--- [{role}] {ts} ---")
+        # opencode/zcode: parts 列表；pi: content 字段
+        if "parts" in m:
+            for p in m.get("parts", []):
+                ptype = p.get("type", "")
+                if ptype == "text":
+                    print(p.get("text", ""))
+                elif ptype == "reasoning":
+                    print(f"[reasoning] {p.get('text', '')}")
+                elif ptype == "tool":
+                    inp = json.dumps(p.get("input", {}), ensure_ascii=False)
+                    print(f"[tool: {p.get('tool', '?')}] {inp[:500]}")
+                elif ptype == "patch":
+                    print(f"[patch: {len(p.get('files', []))} files]")
+        else:
+            content = m.get("content", "")
+            if isinstance(content, list):
+                for part in content:
+                    if isinstance(part, dict):
+                        ptype = part.get("type", "")
+                        if ptype == "text":
+                            print(part.get("text", ""))
+                        elif ptype == "tool_use":
+                            inp = json.dumps(part.get("input", {}), ensure_ascii=False)
+                            print(f"[tool_use: {part.get('name', '?')}] {inp[:500]}")
+                        elif ptype == "tool_result":
+                            c = part.get("content", "")
+                            print(
+                                f"[tool_result] {c if isinstance(c, str) else json.dumps(c, ensure_ascii=False)[:500]}"
+                            )
+                    elif isinstance(part, str):
+                        print(part)
+            else:
+                print(content)
 
 
 def cmd_distill(args: argparse.Namespace, ctx=None) -> None:
     """工作流蒸馏：把反复使用的经验打包成 skill 草稿。"""
     report = run_distill(window_days=args.window_days, dry_run=args.dry_run)
-    _print_report(report.to_dict(), getattr(args, "json", False),
-                  f"distill (window={args.window_days}d, dry_run={args.dry_run})")
+    _print_report(
+        report.to_dict(),
+        getattr(args, "json", False),
+        f"distill (window={args.window_days}d, dry_run={args.dry_run})",
+    )
 
 
 def cmd_extract(args: argparse.Namespace, ctx=None) -> None:
     """跨 agent 对话抽取为 Org 文件。"""
-    d = run_extract(source=args.source, date=args.date,
-                    output_dir=args.output_dir, dry_run=args.dry_run,
-                    limit=args.limit)
-    _print_report(d, getattr(args, "json", False),
-                  f"extract ({args.source}, date={args.date or 'all'}, limit={args.limit}, dry_run={args.dry_run})")
+    d = run_extract(
+        source=args.source,
+        date=args.date,
+        output_dir=args.output_dir,
+        dry_run=args.dry_run,
+        limit=args.limit,
+    )
+    _print_report(
+        d,
+        getattr(args, "json", False),
+        f"extract ({args.source}, date={args.date or 'all'}, limit={args.limit}, dry_run={args.dry_run})",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -426,7 +518,12 @@ def print_help() -> None:
             agenote reconcile --source hermes --dry-run
 
   dream    从 reconcile 事实启发式提炼候选新卡片（不调 LLM，零候选即成功）
-            agenote dream [--window-days 7] [--dry-run]
+            agenote dream [--window-days 90] [--offset N] [--limit N] [--dry-run]
+            候选含 source_trace 字段——用 trace 命令回查完整原始对话
+
+  trace    回查 dream 候选的原始完整对话（溯源，不截断，含工具调用/推理/补丁）
+            agenote trace --id <source_trace>
+            --id 取自 dream 候选的 source_trace（如 opencode:ses_x:msg_y）
 
   distill  工作流蒸馏：把反复使用的经验打包成 skill 草稿（写 .distill/，不进 skills/）
             agenote distill [--window-days 30] [--dry-run]
@@ -473,7 +570,9 @@ def main() -> None:
         help="操作域：agenote（默认，~/Documents/Org/agenote/）或 human（~/Documents/Org/）",
     )
     parser.add_argument(
-        "--version", action="version", version="agenote 1.0",
+        "--version",
+        action="version",
+        version="agenote 1.0",
     )
     subparsers = parser.add_subparsers(dest="command")
 
@@ -626,9 +725,22 @@ def main() -> None:
 
     # ── commit ────────────────────────────────────────────────────────────
     commit_parser = subparsers.add_parser("commit", help="提交知识库变更")
-    commit_parser.add_argument("-m", "--message", required=True, help="commit message（建议「策展: (组件) 描述」前缀）")
-    commit_parser.add_argument("--all", action="store_true", help="提交全部变更（git add -A，可能吞无关文件；默认只 add 策展产物）")
-    commit_parser.add_argument("--no-gpg-sign", action="store_true", help="跳过 GPG 签名（默认遵循仓库 commit.gpgsign）")
+    commit_parser.add_argument(
+        "-m",
+        "--message",
+        required=True,
+        help="commit message（建议「策展: (组件) 描述」前缀）",
+    )
+    commit_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="提交全部变更（git add -A，可能吞无关文件；默认只 add 策展产物）",
+    )
+    commit_parser.add_argument(
+        "--no-gpg-sign",
+        action="store_true",
+        help="跳过 GPG 签名（默认遵循仓库 commit.gpgsign）",
+    )
 
     # ── help ──────────────────────────────────────────────────────────────
     subparsers.add_parser("help", help="显示本帮助")
@@ -707,7 +819,8 @@ def main() -> None:
         "reconcile", help="跨 agent memory 只读 reconcile（抽取事实到 .reconcile/）"
     )
     reconcile_parser.add_argument(
-        "--source", default="all",
+        "--source",
+        default="all",
         help="hermes|opencode|crush|codex|claude|pi|zcode|all（默认 all）",
     )
     reconcile_parser.add_argument("--dry-run", action="store_true", help="只预览不落盘")
@@ -717,16 +830,41 @@ def main() -> None:
     dream_parser = subparsers.add_parser(
         "dream", help="从 reconcile 事实启发式提炼候选新卡片（不调 LLM）"
     )
-    dream_parser.add_argument("--window-days", type=int, default=7, help="回看窗口（天）")
-    dream_parser.add_argument("--dry-run", action="store_true", default=True, help="只预览不写 KB")
+    dream_parser.add_argument(
+        "--window-days", type=int, default=90, help="回看窗口（天，默认 90；0=不过滤）"
+    )
+    dream_parser.add_argument(
+        "--offset", type=int, default=0, help="跳过前 N 个候选（多轮抽取用）"
+    )
+    dream_parser.add_argument(
+        "--limit", type=int, default=5, help="本次最多返回 N 个候选（默认 5）"
+    )
+    dream_parser.add_argument(
+        "--dry-run", action="store_true", default=True, help="只预览不写 KB"
+    )
     dream_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
+
+    # ── trace ───────────────────────────────────────────────────────────────
+    trace_parser = subparsers.add_parser(
+        "trace", help="回查 dream 候选的原始完整对话（溯源，不截断）"
+    )
+    trace_parser.add_argument(
+        "--id",
+        required=True,
+        help="fact_id（DreamCandidate.source_trace 的值，如 opencode:ses_x:msg_y）",
+    )
+    trace_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     # ── distill ─────────────────────────────────────────────────────────────
     distill_parser = subparsers.add_parser(
         "distill", help="工作流蒸馏：把反复使用的经验打包成 skill 草稿"
     )
-    distill_parser.add_argument("--window-days", type=int, default=30, help="回看窗口（天）")
-    distill_parser.add_argument("--dry-run", action="store_true", default=True, help="只预览不写 .distill/")
+    distill_parser.add_argument(
+        "--window-days", type=int, default=30, help="回看窗口（天）"
+    )
+    distill_parser.add_argument(
+        "--dry-run", action="store_true", default=True, help="只预览不写 .distill/"
+    )
     distill_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     # ── extract ─────────────────────────────────────────────────────────────
@@ -734,13 +872,27 @@ def main() -> None:
         "extract", help="跨 agent 对话抽取为 Org 文件（输出到 conversations/）"
     )
     extract_parser.add_argument(
-        "--source", default="all",
+        "--source",
+        default="all",
         help="opencode|crush|codex|claude|pi|hermes|zcode|all（默认 all）",
     )
-    extract_parser.add_argument("--date", default="", help="目标日期 YYYY-MM-DD（默认昨天）；非空时按对话时间戳过滤，只抽该日对话")
-    extract_parser.add_argument("--output-dir", default="", help="输出目录（默认 conversations/<date>/）")
-    extract_parser.add_argument("--limit", type=int, default=500, help="每源最大抽取条数（默认 500；0=不限制）")
-    extract_parser.add_argument("--dry-run", action="store_true", default=False, help="只预览不落盘（默认会真写盘；传 --dry-run 才不写）")
+    extract_parser.add_argument(
+        "--date",
+        default="",
+        help="目标日期 YYYY-MM-DD（默认昨天）；非空时按对话时间戳过滤，只抽该日对话",
+    )
+    extract_parser.add_argument(
+        "--output-dir", default="", help="输出目录（默认 conversations/<date>/）"
+    )
+    extract_parser.add_argument(
+        "--limit", type=int, default=500, help="每源最大抽取条数（默认 500；0=不限制）"
+    )
+    extract_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="只预览不落盘（默认会真写盘；传 --dry-run 才不写）",
+    )
     extract_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
@@ -779,6 +931,7 @@ def main() -> None:
         # 跨 agent 协同 4 件套
         "reconcile": cmd_reconcile,
         "dream": cmd_dream,
+        "trace": cmd_trace,
         "distill": cmd_distill,
         "extract": cmd_extract,
     }

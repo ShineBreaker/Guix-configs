@@ -12,7 +12,7 @@ agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 A
 > **来源溯源**：每张 agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env
 > `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote_health()` 的 `by_source` 字段可看各 agent
 > 写卡分布；`agenote_search` 命中跨 agent 卡片时 `domain`/`source` 字段标注来源。
-> 跨 agent 经验共享（reconcile/dream/distill）见 `agenote-curator` skill。
+> 跨 agent 经验共享（reconcile/dream/trace/distill）见 `agenote-curator` skill。
 
 ## 何时该记录
 
@@ -57,6 +57,13 @@ agenote_memory_search(stale=true)           # 陈旧记忆
 
 # 策展（健康+去重+归档+权重重分配）
 agenote_curate()
+
+# 跨 agent 协同（6 个 tool：reconcile/extract/dream/trace/distill/curate）
+agenote_reconcile(source="all")            # 抽取→索引（只读）
+agenote_extract(source="opencode", date="2026-07-09")  # 抽原始对话为 Org
+agenote_dream(window_days=90, limit=5)    # 启发式候选（IDF × √df × 形态学）
+agenote_trace(fact_id="<source_trace>")    # 回查 dream 候选的完整原始对话（不截断）
+agenote_distill(dry_run=True)              # 经验→SKILL 草稿
 ```
 
 ## `agenote` CLI 底层命令

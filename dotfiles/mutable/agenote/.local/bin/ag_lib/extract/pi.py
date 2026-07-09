@@ -121,7 +121,7 @@ def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[
             if rid:
                 root_ids.append(rid)
 
-# Iterative DFS walk (avoid Python recursion limit on deep 700+ chains)
+    # Iterative DFS walk (avoid Python recursion limit on deep 700+ chains)
     ordered: list[dict] = []
 
     for rid in root_ids:
@@ -138,7 +138,7 @@ def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[
 
     # First user message as title
     title = "Untitled"
-# Note: real schema nests role/content under message: {id, parentId, timestamp, type:message, message:{role, content, timestamp}}
+    # Note: real schema nests role/content under message: {id, parentId, timestamp, type:message, message:{role, content, timestamp}}
     for m in ordered:
         msg = m.get("message", {}) if isinstance(m.get("message"), dict) else {}
         if msg.get("role") == "user":
@@ -150,7 +150,7 @@ def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[
     cwd = session_meta.get("cwd", "")
     tag = cwd.split("/")[-1] if cwd else "pi"
 
-# user → assistant pairing (role/content nested under message.* per real schema)
+    # user → assistant pairing (role/content nested under message.* per real schema)
     current_user: str | None = None
     current_user_ts: str = ""
     for m in ordered:
@@ -192,3 +192,92 @@ def extract_pi() -> tuple[list[ReconciledFact], list[str]]:
         all_facts.extend(facts)
         all_errors.extend(errors)
     return all_facts, all_errors
+
+
+def trace_session(session_id: str) -> dict:
+    """回查一个 pi session 的完整原始对话（dream trace 溯源用，不截断）。
+
+    pi 的 session_id 对应一个 .jsonl 文件（file stem = session_id）。trace 找到
+    该文件，重建 parentId 消息树，返回完整内容（不截断 [:1000]/[:2000]）。
+    与 _extract_session_file 的区别：保留 tool_use/tool_result 全文，content 不截断。
+    """
+    # pi 的 .jsonl 文件名格式："{ISO时间戳}_{session_id}.jsonl"，session_id（UUID）
+    # 嵌在文件名尾部而非 file stem。用 glob 匹配尾部。
+    matches = sorted(PI_SESSIONS_DIR.glob(f"*{session_id}.jsonl"))
+    if not matches:
+        return {
+            "error": f"pi session 文件不存在: {session_id}",
+            "session_id": session_id,
+        }
+    jsonl_path = matches[0]
+
+    session_meta: dict = {}
+    messages: list[dict] = []
+    try:
+        with open(jsonl_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if evt.get("type") == "session":
+                    session_meta = evt
+                elif evt.get("type") == "message":
+                    messages.append(evt)
+    except OSError as e:
+        return {"error": str(e), "session_id": session_id}
+
+    if not messages:
+        return {
+            "source": "pi",
+            "session_id": session_id,
+            "session": session_meta,
+            "messages": [],
+        }
+
+    # parentId 重建（与 _extract_session_file 一致）
+    msg_by_id = {m.get("id", ""): m for m in messages if m.get("id")}
+    children: dict[str, list[str]] = {}
+    for m in messages:
+        pid = m.get("parentId", "") or ""
+        if pid:
+            children.setdefault(pid, []).append(m.get("id", ""))
+    root_ids = [
+        m.get("id", "")
+        for m in messages
+        if not (m.get("parentId") or "") or m.get("parentId") not in msg_by_id
+    ]
+    ordered: list[dict] = []
+    for rid in root_ids:
+        stack = [rid]
+        while stack:
+            mid = stack.pop()
+            if mid not in msg_by_id:
+                continue
+            ordered.append(msg_by_id[mid])
+            for cid in reversed(children.get(mid, [])):
+                stack.append(cid)
+
+    msgs_out: list[dict] = []
+    for m in ordered:
+        msg = m.get("message", {}) if isinstance(m.get("message"), dict) else {}
+        if not msg:
+            continue
+        content = msg.get("content", "")
+        # content 可能是 str 或 list[part]；list 时保留完整结构（不截断）
+        msgs_out.append(
+            {
+                "role": msg.get("role", ""),
+                "ts": str(m.get("timestamp") or msg.get("timestamp") or ""),
+                "content": content,  # 原样保留，不做 [:1000]/[:2000] 截断
+            }
+        )
+    return {
+        "source": "pi",
+        "session_id": session_id,
+        "session": session_meta,
+        "messages": msgs_out,
+    }

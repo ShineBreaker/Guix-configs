@@ -70,7 +70,9 @@ class ReconciledFact:
     weight: float  # 检索权重（trust 越低 weight 越低）
     tags: list[str] = field(default_factory=list)
     retrieved_at: str = ""  # 本次 reconcile 拉取时间
-    timestamp: str = ""  # 对话发生时间（ISO 8601，extractor 能取到就填；空=未知，不过滤）
+    timestamp: str = (
+        ""  # 对话发生时间（ISO 8601，extractor 能取到就填；空=未知，不过滤）
+    )
 
 
 @dataclass
@@ -230,7 +232,9 @@ KNOWN_SOURCES: dict[str, tuple] = {
         "pi JSONL 事件流 (parentId 重建)",
     ),
     "zcode": (
-        lambda: __import__("ag_lib.extract.zcode", fromlist=["extract_zcode"]).extract_zcode(),
+        lambda: __import__(
+            "ag_lib.extract.zcode", fromlist=["extract_zcode"]
+        ).extract_zcode(),
         "zcode sqlite session/message/part (~/.zcode/cli/db/db.sqlite)",
     ),
 }
@@ -344,9 +348,7 @@ def reconcile_source(source: str = "hermes", dry_run: bool = False) -> Reconcile
     noise = [f for f in kept if is_noise_fact(asdict(f))]
     kept = [f for f in kept if not is_noise_fact(asdict(f))]
     if noise:
-        report.error_details.append(
-            f"[info] {source} 过滤 {len(noise)} 条元消息噪声"
-        )
+        report.error_details.append(f"[info] {source} 过滤 {len(noise)} 条元消息噪声")
 
     # 加载现有 reconcile 索引，剔除该 source 的旧条目（重新填），保留其他 source
     old_index = _load_reconcile_index()
@@ -404,3 +406,66 @@ def load_reconcile_facts() -> list[dict]:
     """
     idx = _load_reconcile_index()
     return idx.get("facts", [])
+
+
+# ── trace 溯源（dream 候选 → 回查原始完整对话）─────────────────
+# fact_id 三段式："{source}:{session_id}:{msg_id}"（opencode/zcode/pi/claude 等）
+# 或两段式："{source}:{native_id}"（hermes/crush 等）。trace 从中拆出 source +
+# session_id，按 source 分发到对应 extractor 的 trace_session（不截断回查原始 DB）。
+# 未实现 trace_session 的 source 优雅降级：返回索引层 content（截断摘要）+ 说明。
+
+
+def trace_fact(fact_id: str) -> dict:
+    """从 fact_id 回查原始完整对话（dream trace 溯源入口）。
+
+    fact_id 来自 DreamCandidate.source_trace（= reconcile fact 的 id）。
+    解析三段式拆出 source + session_id，按 source 分发：
+      - opencode/zcode：trace_session 查 SQLite（完整 message+part，不截断）
+      - pi：trace_session 读 .jsonl（完整 parentId 树，不截断）
+      - 其余（hermes/crush/codex/claude）：暂未实现 trace_session，降级返回
+        索引层 content（截断摘要）+ 降级说明
+
+    返回 dict（含 source/session_id/session 元信息 + messages 列表）。
+    出错时返回 {"error": ..., "fact_id": ...}。
+    """
+    parts = fact_id.split(":", 2)
+    if len(parts) < 2:
+        return {"error": f"fact_id 格式无法解析: {fact_id}", "fact_id": fact_id}
+    source = parts[0]
+    session_id = parts[1] if len(parts) >= 2 else ""
+
+    # 已实现 trace_session 的 source 分发
+    _TRACE_DISPATCH = {
+        "opencode": "ag_lib.extract.opencode",
+        "zcode": "ag_lib.extract.zcode",
+        "pi": "ag_lib.extract.pi",
+    }
+    mod_name = _TRACE_DISPATCH.get(source)
+    if mod_name:
+        try:
+            mod = __import__(mod_name, fromlist=["trace_session"])
+            result = mod.trace_session(session_id)
+            result.setdefault("fact_id", fact_id)
+            return result
+        except Exception as e:
+            return {
+                "error": f"trace {source}/{session_id} 失败: {e}",
+                "fact_id": fact_id,
+            }
+
+    # 未实现 trace_session 的 source：降级返回索引层 content
+    idx = _load_reconcile_index()
+    for f in idx.get("facts", []):
+        if f.get("id") == fact_id:
+            return {
+                "source": source,
+                "fact_id": fact_id,
+                "degraded": True,
+                "message": (
+                    f"{source} 的 trace_session 尚未实现，返回索引层摘要（已截断）。"
+                    f"该 content 由 extractor 在建索引时截断，不含完整工具调用/推理。"
+                ),
+                "content": f.get("content", ""),
+                "title": f.get("title", ""),
+            }
+    return {"error": f"fact_id {fact_id} 在 reconcile 索引中未找到", "fact_id": fact_id}

@@ -40,16 +40,52 @@ agenote_curate()        # 机械阶段：Step 1 + Step 2（KB 内策展 + reconc
 
 ### Step 3 — Agent 综合（从 reconcile 事实提炼新 KB 卡片）
 
-`agenote_dream()` 返回 ≤5 个候选（每个含 `representative_title` + 完整 `representative_content` + 出现频次 + `source_facts` 来源 ID）。**dream 不自动写 KB**——综合决策交给 agent（读候选 → 判断 → `agenote_add`）：
+`agenote_dream()` 返回 ≤`limit` 个候选（默认 5，可调）。每个候选含：
 
-1. 读 dream 候选的 `representative_content`（已过元消息噪声过滤，每条约 200-2000 字）
-2. 判断该主题是否值得沉淀为 KB 卡片（应用下方"策展原则"的应记录/不应记录判据）
-3. 值得 → `agenote_add(title=..., entry="note", category=<candidate.suggested_category>, body=...)`，body 引用 `source_facts` 中的 ID 以保留溯源
-4. 已被现有 KB 卡片覆盖 → 跳过（或 `agenote_touch` 已有卡片标记复用）
-5. 矛盾/已被取代 → 按"矛盾调和规则"处理旧卡
+- `term`：触发候选的高频关键词
+- `frequency`：该词在窗口内出现的次数（df）
+- `score`：综合质量评分（IDF × √df × 形态学权重，越大越值得沉淀）
+- `representative_title` + `representative_content`：代表事实（词密度最高那条）
+- `source_trace`：溯源指针（= reconcile fact id，**调 `agenote_trace` 用**）
+- `suggested_category`：映射后的 kb category
+- `source_facts`：贡献该词的事实 id 列表
 
-**token 经济**：dream 候选 ≤5 条，每条只暴露代表事实正文；agent 不需读全部 reconcile 事实。
-**质量门槛**：词频高 ≠ 值得沉淀。优先综合 `frequency` 高**且** `representative_content` 含具体技术细节的候选；纯流程性/工具名词性的候选丢弃。
+**dream 不自动写 KB**——综合决策交给 agent（读候选 → 判断 → `agenote_add`）：
+
+1. 读 dream 候选的 `representative_content`（**索引层摘要，已截断**——见下方溯源）
+2. **需深入判断时调 `agenote_trace(fact_id=candidate.source_trace)` 读完整原始对话**
+   （含工具调用/推理/补丁，索引层这些都丢失了）。token 经济性：按需展开，不要无差别调
+3. 判断该主题是否值得沉淀为 KB 卡片（应用下方"策展原则"的应记录/不应记录判据）
+4. 值得 → `agenote_add(title=..., entry="note", category=<candidate.suggested_category>, body=...)`，body 引用 `source_facts` 中的 ID 以保留溯源
+5. 已被现有 KB 卡片覆盖 → 跳过（或 `agenote_touch` 已有卡片标记复用）
+6. 矛盾/已被取代 → 按"矛盾调和规则"处理旧卡
+
+**为什么需要 trace**：reconcile 索引层 `content` 是 extractor 建索引时的**截断摘要**
+（opencode/zcode：user 截 1000 字、assistant 截 2000 字、tool/patch 退化为 `[tool: name]` 标记）。
+要判断一个 dream 候选是否真的有具体经验价值，必须读真实完整对话——这正是
+`agenote_trace` 的职责。dream 候选的 `score` 反映"统计上像经验词"，`agenote_trace` 让你
+确认"语义上确实是有用经验"。
+
+**dream 参数**（MCP/CLI 对齐）：
+
+- `window_days`：时间窗口（天），默认 90 覆盖 ~90% facts。0=不过滤。`0/7/30/90/180`
+  窗口在真实数据上分别幸存 100%/7%/37%/93%/100% facts
+- `offset`：跳过前 N 个候选（多轮抽取跳过噪声词；前 5 个没用就调 offset=5 继续）
+- `limit`：本次最多返回 N 个候选（默认 5）
+- 无 timestamp 的 fact（hermes 30 条）**默认保留**，不受窗口影响
+
+**评分算法（IDF × √df × 形态学）**：
+
+- IDF = log(total_facts / df)：稀有词天然高分
+- √df：补偿高频好词（如 treemacs df=119）不至于被 456 个 df=5 长尾淹没
+- 形态学权重：含 `-`/`_` 的代码标识符 +2.0（CJK 二字虚词 ×0.4 降权）
+- 实测 top10 全是真实项目概念（guix-configs / self-improving / kb-summarize / pi-ui /
+  host-spawn 等），坏词（removed / understand / todowrite）已被 _DOMAIN_GENERIC 过滤
+
+**token 经济**：dream 候选 ≤limit 条，每条只暴露代表事实正文（截断版）；agent 不需读
+全部 reconcile 事实。要深入按需调 trace。
+**质量门槛**：score 高 ≠ 值得沉淀。优先综合 `score` 高**且** `representative_content`
+含具体技术细节的候选；纯流程性/工具名词性的候选丢弃。
 
 ## Batch 策展流水线（`kb` CLI）
 
@@ -238,16 +274,17 @@ deprecated: X 条
 ```
 agenote_health()                          # KB 健康度
 agenote_deduplicate()                     # 只检测重复
-agenote_archive(stale=true)               # 只归档陈旧
-agenote_archive(list_cards=true)          # 列出已归档
+agenote_archive(stale=True)               # 只归档陈旧
+agenote_archive(list_cards=True)          # 列出已归档
 agenote_restore(target="<ID>")            # 恢复归档卡片
 agenote_reindex()                         # 只重建索引
-agenote_memory_search(stale=true)         # 陈旧记忆
+agenote_memory_search(stale=True)         # 陈旧记忆
 agenote_extract(source="all", dry_run=True)    # 抽取原始对话为 Org 文件（不落盘）
 agenote_extract(source="claude", date="2026-06-29", output_dir="/tmp/x")  # 指定日期 + 路径
+agenote_trace(fact_id="opencode:ses_x:msg_y")  # 回查 dream 候选的完整原始对话（不截断）
 ```
 
-## 跨 agent 工作流（5 个 MCP tool，默认 dry_run）
+## 跨 agent 工作流（6 个 MCP tool，默认 dry_run）
 
 参考 MiMoCode Memory/Dream/Distill 体系。**纯只读/启发式，不调 LLM**，默认 `dry_run=True` 安全试跑：
 
@@ -262,11 +299,44 @@ agenote_reconcile(source="hermes")                      # 单源
 agenote_reconcile(source="all", dry_run=True)           # 全源 dry-run
 agenote_reconcile(source="all")                         # 实际落盘
 
-# 3. dream：从 reconcile 事实启发式提炼候选新卡片
-agenote_dream(dry_run=True)
+# 3. dream：从 reconcile 事实启发式提炼候选新卡片（IDF × √df × 形态学评分）
+agenote_dream(window_days=90, limit=5)                  # 默认参数
+agenote_dream(offset=5, limit=5)                        # 多轮抽取，跳过前 5
+agenote_dream(window_days=7)                            # 聚焦近 7 天
+agenote_dream(dry_run=True)                             # 显式 dry-run（默认）
 
-# 4. distill：把 KB 中反复使用的模式聚成 skill 草稿（写到 .distill/）
+# 4. trace：回查 dream 候选的原始完整对话（溯源，不截断）
+agenote_trace(fact_id="opencode:ses_xxx:msg_yyy")       # 完整对话含 tool/patch
+agenote_trace(fact_id="pi:{uuid}:{msg_id}")             # pi 同样支持
+agenote_trace(fact_id="hermes:23")                      # 未实现则降级返回摘要
+
+# 5. distill：把 KB 中反复使用的模式聚成 skill 草稿（写到 .distill/）
 agenote_distill(dry_run=True)
+```
+
+### dream 评估工作流
+
+```
+# 第一轮：取 top 候选
+candidates = agenote_dream(limit=5)
+for c in candidates:
+    print(f"  score={c['score']:.2f}  term={c['term']!r}  freq={c['frequency']}")
+    # 摘要判断：top10 是真项目概念说明算法有效
+    if c['score'] < 30:
+        continue  # 低分候选直接跳过
+    # 深入判断：调 trace 读完整对话
+    full = agenote_trace(fact_id=c['source_trace'])
+    if 'error' in full:
+        continue
+    # 决定：写 KB？touch 已有？跳过？矛盾处理？
+    if 决定写:
+        agenote_add(title=..., body=引用 source_facts 保留溯源)
+    elif 复用已有:
+        agenote_touch(target="<现有卡片ID>")
+
+# 第二轮：前 5 个都不满意就跳页
+if 第一轮没产出:
+    candidates = agenote_dream(offset=5, limit=5)
 ```
 
 ### reconcile 行为细节
@@ -278,9 +348,15 @@ agenote_distill(dry_run=True)
 - **不写回源**：绝不写回任何外部 agent 的原始数据（DB/JSONL 只读）
 - **不污染 KB**：reconcile 事实进 `.reconcile/index.json`（独立目录），不进 `experiences/`
 
-### dream / distill 行为
+### dream / distill / trace 行为
 
-- **dream**：找 reconcile 事实里高频出现、KB 未覆盖的主题 → 返回候选清单（含代表事实正文）。**不再自动写 KB**；综合决策由 agent 主导（见 Step 3）。**零候选即成功**。
+- **dream**：找 reconcile 事实里高频出现、KB 未覆盖的主题 → 返回候选清单（含代表事实
+  正文 + source_trace 溯源指针）。**不再自动写 KB**；综合决策由 agent 主导（见 Step 3）。
+  **零候选即成功**。参数：`window_days`（默认 90）、`offset`（默认 0）、`limit`（默认 5）。
+  评分：IDF × √df × 形态学权重。
+- **trace**：按 `fact_id` 从原始 DB 回查完整对话（不截断），含工具调用/推理/补丁。
+  三重只读保护。dream 候选的 `source_trace` 字段就是 `fact_id`。未实现 trace_session 的
+  source（hermes/crush/codex/claude）降级返回索引层摘要。
 - **distill**：把 KB 里 `type=ascended`/`usage_count≥2` 的卡片按 category+tech 聚类 → SKILL.md 草稿（写 `.distill/`，**不进 skills/**，人工 move 才生效）。**零候选即成功**。
 
 ## 健康度指标解读

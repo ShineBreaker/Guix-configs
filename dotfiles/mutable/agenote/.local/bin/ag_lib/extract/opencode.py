@@ -28,7 +28,11 @@ from ag_lib.extract import open_sqlite_ro, resolve_xdg_path, extract_title
 OPENCODE_DB = Path(
     os.environ.get(
         "OPENCODE_DB",
-        str(resolve_xdg_path("OPENCODE_DB", "~/.local/share/opencode/opencode-stable.db")),
+        str(
+            resolve_xdg_path(
+                "OPENCODE_DB", "~/.local/share/opencode/opencode-stable.db"
+            )
+        ),
     )
 ).expanduser()
 
@@ -118,9 +122,11 @@ def _session_to_facts(session_row, conn) -> list[ReconciledFact]:
                         trust_score=0.5,
                         weight=RECONCILE_DEFAULT_WEIGHT,
                         tags=[
-                            session_row["directory"].split("/")[-1]
-                            if session_row["directory"]
-                            else "unknown"
+                            (
+                                session_row["directory"].split("/")[-1]
+                                if session_row["directory"]
+                                else "unknown"
+                            )
                         ],
                         timestamp=current_user_ts,
                     )
@@ -151,3 +157,78 @@ def extract_opencode() -> tuple[list[ReconciledFact], list[str]]:
     finally:
         conn.close()
     return facts, errors
+
+
+def trace_session(session_id: str) -> dict:
+    """回查一个 session 的完整原始对话（dream trace 溯源用，不截断）。
+
+    与 _session_to_facts 的区别：
+    - 不截断（[:1000]/[:2000] 全去掉），reasoning/tool/patch 取全文
+    - 返回结构化 {session, messages: [{role, ts, parts: [{type, text}]}]}，
+      而非拼成单条 content
+
+    三重只读保护复用 open_sqlite_ro（与 extract 一致）。
+    """
+    try:
+        conn = open_sqlite_ro(OPENCODE_DB)
+    except FileNotFoundError as e:
+        return {"error": str(e), "session_id": session_id}
+    try:
+        sess = conn.execute(
+            "SELECT id, title, directory, time_created FROM session WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if sess is None:
+            return {"error": f"session {session_id} 不存在", "session_id": session_id}
+        messages_raw = conn.execute(
+            "SELECT id, time_created, data FROM message "
+            "WHERE session_id = ? ORDER BY time_created",
+            (session_id,),
+        ).fetchall()
+        msgs: list[dict] = []
+        for m in messages_raw:
+            try:
+                md = json.loads(m["data"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            parts_out: list[dict] = []
+            parts = conn.execute(
+                "SELECT data FROM part WHERE message_id = ? ORDER BY time_created",
+                (m["id"],),
+            ).fetchall()
+            for p in parts:
+                try:
+                    pd = json.loads(p["data"])
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                ptype = pd.get("type", "")
+                entry: dict = {"type": ptype}
+                if ptype == "text":
+                    entry["text"] = pd.get("text", "")
+                elif ptype == "reasoning":
+                    entry["text"] = pd.get("text", "")  # 不截断
+                elif ptype == "tool":
+                    entry["tool"] = pd.get("tool", "?")
+                    entry["input"] = pd.get("input", {})
+                elif ptype == "patch":
+                    entry["files"] = pd.get("files", [])
+                parts_out.append(entry)
+            msgs.append(
+                {
+                    "role": md.get("role", ""),
+                    "ts": str(m["time_created"] or ""),
+                    "parts": parts_out,
+                }
+            )
+        return {
+            "source": "opencode",
+            "session_id": session_id,
+            "session": {
+                "title": sess["title"],
+                "directory": sess["directory"],
+                "time_created": str(sess["time_created"] or ""),
+            },
+            "messages": msgs,
+        }
+    finally:
+        conn.close()

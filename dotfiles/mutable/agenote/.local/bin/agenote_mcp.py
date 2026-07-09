@@ -638,27 +638,67 @@ def agenote_extract(
 
 
 @mcp.tool()
-def agenote_dream(window_days: int = 7, dry_run: bool = True) -> dict:
+def agenote_dream(
+    window_days: int = 90,
+    dry_run: bool = True,
+    offset: int = 0,
+    limit: int = 5,
+) -> dict:
     """memory consolidation：从 reconcile 事实启发式提炼候选卡片。
 
     把其他 agent memory 里**高频出现、KB 尚未覆盖**的主题提为候选新卡片。
     **默认 dry_run=True**：只返回候选清单，review 后用 dry_run=False 才写 KB。
 
-    纯启发式（关键词频次），不调 LLM，可安全手动触发。
+    纯启发式（IDF × √df × 形态学权重），不调 LLM，可安全手动触发。
     **零候选是合法返回**（KB 已覆盖所有高频主题 → 无需 consolidate）。
 
+    每个候选含 `source_trace` 字段（= fact_id），是溯源指针。用
+    `agenote_trace(fact_id=...)` 回查该候选出现的完整原始对话（含工具调用/
+    推理/补丁，索引层 content 是截断摘要）。
+
     Args:
-        window_days: 事实时间窗口（保留参数，当前 reconcile 事实无时间戳）
+        window_days: 事实时间窗口（天，默认 90 覆盖 ~90% facts；0=不过滤）
         dry_run: True 只返回候选不写 KB（默认）
+        offset: 跳过前 N 个候选（多轮抽取跳过噪声词；默认 0）
+        limit: 本次最多返回 N 个候选（默认 5）
 
     Returns:
-        DreamReport dict：{window_days, total_reconcile_facts, candidates,
-        promoted, skipped_existing, error_details, message}
+        DreamReport dict：{window_days, total_reconcile_facts, used_facts,
+        total_candidates, offset, limit, candidates, promoted,
+        skipped_existing, error_details, message}
     """
     from ag_lib.dream import run_dream
 
-    report = run_dream(window_days=window_days, dry_run=dry_run)
+    report = run_dream(
+        window_days=window_days, dry_run=dry_run, offset=offset, limit=limit
+    )
     return report.to_dict()
+
+
+@mcp.tool()
+def agenote_trace(fact_id: str) -> dict:
+    """回查 dream 候选的原始完整对话（溯源，不截断）。
+
+    dream 候选的 `representative_content` 来自 reconcile 索引层，由 extractor
+    在建索引时截断（opencode/zcode：user 截 1000 字、assistant 截 2000 字，
+    tool/patch 调用完全丢失）。当 agent 需要"读到真实对话"以做综合判断时，
+    用本 tool 按 fact_id 从原始数据库回查完整内容。
+
+    三重只读保护（与 reconcile 一致）：SQLite mode=ro + query_only + 仅 SELECT。
+    未实现 trace_session 的 source（hermes/crush/codex/claude）降级返回索引
+    层摘要 + 降级说明。
+
+    Args:
+        fact_id: dream 候选 source_trace 字段值（= reconcile fact 的 id，
+            形如 "opencode:ses_xxx:msg_yyy" / "pi:{uuid}:{msg_id}" / "hermes:23"）
+
+    Returns:
+        dict：{source, session_id, session: {title, ...}, messages: [{role, ts,
+        parts: [{type, text|tool|patch}]}]}。出错时返回 {error, fact_id}。
+    """
+    from ag_lib.reconcile import trace_fact
+
+    return trace_fact(fact_id)
 
 
 @mcp.tool()
@@ -824,7 +864,9 @@ def agenote_commit(
     try:
         repo_root = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, cwd=str(ctx.root),
+            capture_output=True,
+            text=True,
+            cwd=str(ctx.root),
         )
         if repo_root.returncode != 0:
             return {"error": f"不在 git 仓库内 ({ctx.root})"}
@@ -837,8 +879,13 @@ def agenote_commit(
         add_targets = ["-A"]
     else:
         candidates = [
-            "agenote/experiences", "agenote/index.json", "agenote/.reconcile",
-            "conversations", "kb-viz.html", "MEMORY.org", "agenote/MEMORY.org",
+            "agenote/experiences",
+            "agenote/index.json",
+            "agenote/.reconcile",
+            "conversations",
+            "kb-viz.html",
+            "MEMORY.org",
+            "agenote/MEMORY.org",
             "agenda",
         ]
         add_targets = [c for c in candidates if (repo_root_path / c).exists()]
@@ -856,11 +903,11 @@ def agenote_commit(
     status_args = [] if all_changes else add_targets
     status = subprocess.run(
         ["git", "status", "--porcelain"] + status_args,
-        capture_output=True, text=True, cwd=str(repo_root_path),
+        capture_output=True,
+        text=True,
+        cwd=str(repo_root_path),
     )
-    staged_files = [
-        line[3:] for line in status.stdout.splitlines() if line.strip()
-    ]
+    staged_files = [line[3:] for line in status.stdout.splitlines() if line.strip()]
 
     if not staged_files:
         return {
@@ -886,7 +933,9 @@ def agenote_commit(
     def _git(args: list[str]) -> tuple[int, str, str]:
         r = subprocess.run(
             ["git"] + args,
-            capture_output=True, text=True, cwd=str(repo_root_path),
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root_path),
         )
         return r.returncode, r.stdout, r.stderr
 

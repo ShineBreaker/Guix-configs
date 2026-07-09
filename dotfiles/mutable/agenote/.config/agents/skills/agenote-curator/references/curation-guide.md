@@ -68,17 +68,22 @@
 
 ### 第〇步：提取对话（夜间策展必做）
 
-使用 `extract-conversations.py` 从所有 AI 编程工具提取昨日对话：
+使用 `agenote extract`（MCP tool：`agenote_extract`）从所有 AI 编程工具提取昨日对话，输出到 `~/Documents/Org/conversations/<date>/`：
 
 ```bash
-python3 scripts/extract-conversations.py -o ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)
+# MCP tool（agent 主循环用）
+agenote_extract(source="all", date="2026-07-08", output_dir="~/Documents/Org/conversations/2026-07-08")
+# CLI 等价（底层走 ag_lib/extract/ 多源抽取器）
+agenote extract --source all --date 2026-07-08 --output-dir ~/Documents/Org/conversations/2026-07-08
 ```
 
-此脚本自动覆盖 4 个数据源（OpenCode / Crush / Claude Code / Codex），输出 Org-mode 格式对话文件。 提取完成后浏览输出目录，标记有记录价值的对话文件。
+抽取器自动覆盖 7 个数据源（opencode/crush/codex/claude/pi/hermes/zcode），
+输出 Org-mode 格式对话文件。提取完成后浏览输出目录，标记有记录价值的对话文件。
 
-### 第一步：诊断（analyze_kb.py 或 kb health）
+### 第一步：诊断（agenote_health 或 agenote curate）
 
-运行 `kb health` 或 `analyze_kb.py --quality --duplicates`，获取知识库整体健康报告。
+运行 `agenote health`（MCP：`agenote_health()`），获取知识库整体健康报告。
+一键流水用 `agenote_curate()`（执行 Step 1 KB 内策展 + Step 2 reconcile 机械两步）。
 
 关注指标：
 
@@ -94,15 +99,15 @@ python3 scripts/extract-conversations.py -o ~/Documents/Org/conversations/$(date
 诊断后执行状态转换：
 
 ```bash
-kb stats --health → 检查状态分布
-# done >30天且质量合格 → kb update <id> --status stable
-# stable >30天未 LAST_VERIFIED → kb touch <id> --used-only
-# stale >90天 → kb archive <id> --reason "策展: >90天未验证"
+agenote stats                  # 检查状态分布
+# done >30天且质量合格 → agenote update <id> --status stable
+# stable >30天未 LAST_VERIFIED → agenote touch <id>
+# stale >90天 → agenote archive <id> --reason "策展: >90天未验证"
 ```
 
-### 第二步：筛选（find_gaps.py）
+### 第二步：筛选（agenote gaps）
 
-运行 `find_gaps.py --stale-days 60`，识别待处理内容。
+运行 `agenote gaps --stale-days 60`，识别待处理内容。
 
 筛选维度：
 
@@ -120,13 +125,13 @@ kb stats --health → 检查状态分布
 
 ```bash
 # 按类别查看同类卡片
-kb list --category <类别> --all
+agenote list --category <类别> --all
 
 # 全文搜索同一主题
-kb search "<关键词>"
+agenote search "<关键词>"
 
-# 查看相关 pattern
-kb patterns --get | grep -A5 "<关键词>"
+# 查看相关 pattern（patterns.org 纯人工维护，直接读）
+grep -A5 "<关键词>" ~/Documents/Org/patterns.org
 ```
 
 矛盾分类处理：
@@ -162,8 +167,8 @@ kb patterns --get | grep -A5 "<关键词>"
 自发综合后执行重复检测和合并：
 
 ```bash
-kb deduplicate --threshold 0.7  # 检测疑似重复
-kb merge <primary> <secondary> --desc "合并原因"  # 合并重复卡片
+agenote deduplicate --threshold 0.7  # 检测疑似重复
+agenote merge <primary> <secondary> --desc "合并原因"  # 合并重复卡片
 ```
 
 对疑似重复判断：合并或忽略。同 category+tech 的窄卡片合并为类级卡片。
@@ -174,11 +179,11 @@ kb merge <primary> <secondary> --desc "合并原因"  # 合并重复卡片
 
 #### A. 从对话历史提取
 
-首选 `extract-conversations.py` 自动提取，然后手动浏览：
+首选 `agenote extract` 自动提取（见第〇步），然后手动浏览：
 
 ```bash
 # 提取昨日所有数据源的对话
-python3 scripts/extract-conversations.py -o ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)
+agenote extract --source all --output-dir ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)
 
 # 浏览提取的文件
 ls ~/Documents/Org/conversations/$(date -d yesterday +%Y-%m-%d)/
@@ -200,11 +205,11 @@ grep -rl "fix\|bug\|error\|解决\|修复" ~/Documents/Org/conversations/$(date 
 补充完成后，检查新写入的卡片是否影响已有内容：
 
 ```bash
-# 检查受影响的 pattern
-kb patterns --get | grep -i "<相关关键词>"
+# 检查受影响的 pattern（patterns.org 纯人工维护，直接读）
+grep -i "<相关关键词>" ~/Documents/Org/patterns.org
 
 # 检查同类卡片
-kb search "<相关关键词>"
+agenote search "<相关关键词>"
 ```
 
 联动检查清单：
@@ -218,9 +223,9 @@ kb search "<相关关键词>"
 #### 步骤 6.5：记忆验证与项目更新
 
 ```bash
-kb memory --stale                    # 逐条验证
-kb memory --stale --auto-archive-days 60  # 自动归档 >60天 stale feedback
-kb memory --project-touch <name>     # 更新活跃项目 LAST_ACTIVE
+agenote memory --stale                    # 逐条验证
+agenote memory --stale --auto-archive-days 60  # 自动归档 >60天 stale feedback
+agenote memory --project-touch <name>     # 更新活跃项目 LAST_ACTIVE
 ```
 
 ### 第七步：重整
@@ -228,9 +233,9 @@ kb memory --project-touch <name>     # 更新活跃项目 LAST_ACTIVE
 补充完成后必须执行：
 
 ```bash
-kb reindex     # 重建索引
-kb lint        # 格式检查
-kb lint --fix  # 自动修复格式问题
+agenote reindex     # 重建索引
+agenote lint        # 格式检查
+agenote lint --fix  # 自动修复格式问题
 ```
 
 ### 第八步：提交
@@ -238,14 +243,14 @@ kb lint --fix  # 自动修复格式问题
 变更涉及的文件：
 
 - `~/Documents/Org/experiences/` 下的新增/修改卡片
-- `~/Documents/Org/index.json`（kb reindex 自动更新）
+- `~/Documents/Org/index.json`（agenote reindex 自动更新）
 - 可选：`~/Documents/Org/patterns.org`
 
 **重要规则**：
 
 - 只提交本次策展涉及的文件
 - 不要提交无关的对话文件或模式文件
-- 提交前运行 `kb lint --fix` 确保格式正确
+- 提交前运行 `agenote lint --fix` 确保格式正确
 
 ## 质量评判标准
 

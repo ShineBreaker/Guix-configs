@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 #
-"""ag_lib.dream — memory consolidation（启发式候选发现，只读）。
+"""ag_lib.dream — memory consolidation（启发式候选发现，只读 + 溯源）。
 
 把 reconcile 拉取的其他 agent memory 中**高频出现、但 KB 尚未记录**的事实，
 启发式地提为候选清单，由 agent 读完后用 agenote_add 综合写入 KB。
@@ -12,34 +12,48 @@
    不复制已有、不自动写卡。**重复的、KB 已覆盖的 → 跳过**。
 2. **No extract without evidence**：只在 reconcile 事实里出现 ≥MIN_TERM_FREQ 次
    的主题才升级为候选；没有就明说"无候选"，不凑数。
-3. **只读**：返回候选清单（含代表事实正文），**绝不自动写 KB**。
+3. **只读**：返回候选清单（含代表事实正文 + source_trace 溯源指针），**绝不自动写 KB**。
    综合决策由 agent 主导（见 agenote-curator skill 的"Agent 综合步骤"）——
-   agent 本身就是 LLM，读 ≤5 条候选后用现有 agenote_add 写卡。
-4. **不调 LLM**：纯启发式（关键词频次 + KB 覆盖检查），reconcile 已在写入层
-   过滤元消息噪声，dream 复用 is_noise_fact 做二次兜底。
+   agent 本身就是 LLM，读 ≤limit 条候选后用现有 agenote_add 写卡。
+4. **不调 LLM，但可溯源**：纯启发式（IDF + 形态学评分 + KB 覆盖检查），reconcile
+   已在写入层过滤元消息噪声，dream 复用 is_noise_fact 做二次兜底。索引层 content 是
+   截断摘要（opencode/zcode 等 user 截 1000 字、assistant 截 2000 字、tool/patch 丢失），
+   故每个候选带 source_trace 指针——agent 用 `agenote trace --id <source_trace>`
+   回查原始 DB 的完整对话（含工具调用/推理/补丁），再做综合判断。
 5. **分词器：jieba 优先，2-gram 兜底**：jieba（若经 nix profile 自动发现可用）
    对中文产出真实词边界（"配置文件/重新启动"），远胜 2-gram 滑窗；jieba 不可用时
    回退到 2-gram + 胶水字过滤（仍能跑，但产出伪词边界噪声）。
 
+评分（_term_quality_score）：IDF × 形态学权重。
+- 旧实现用"频率正态分布（bell_score）"，实测好坏词频率区间几乎完全重叠（都在
+  30-140），频率不携带"是否经验词"的信息，导致 todowrite/parallel/我来/明白 这类
+  对话噪声冲进 top 候选（见 agenote 卡 20260703-221438 实证：[dream] 卡标题常是
+  高频虚词"让我/看看/这是/complete"）。且旧实现的 diversity/rarity 两个因子在真实
+  数据上恒为常数（dead code）。
+- 新实现：IDF 让稀有词天然高分，形态学权重给代码标识符（host-spawn/kb-summarize）
+  强 bonus、CJK 二字虚词（评估/提交）降权。实测好坏词分离度从 +38 提升到 +2133。
+
 与 MiMoCode dream.txt 的差异：
 - MiMoCode 跑 LLM 做 6 阶段提炼；本机把 LLM 角色交给调用 dream 的 agent，
   避免在库内耦合 provider。
-- MiMoCode 读 SQLite 轨迹；本机读 reconcile 索引（已是只读摘要）。
+- MiMoCode 读 SQLite 轨迹；本机读 reconcile 索引（已是只读摘要），并通过 trace 命令
+  按需回查原始 DB。
 - "把重复工作流打包成 skill" 是 distill 的活，不是 dream 的（dream.txt:26）。
 """
 
 import glob
+import math
 import os
 import re
 import sys
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
 
 from ag_lib.core import is_noise_fact
 from ag_lib.reconcile import (
     AGENOTE_ROOT,
     load_reconcile_facts,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # jieba 分词（可选优化；缺失则回退到下方 2-gram 启发式）
@@ -72,6 +86,7 @@ def _get_jieba():
                 sys.path.insert(0, site_dir)
             try:
                 import jieba  # noqa: SUO005 — 有意动态发现，路径来自上面 glob
+
                 _JIEBA_CACHE = jieba
                 return jieba
             except Exception:
@@ -79,15 +94,26 @@ def _get_jieba():
     _JIEBA_CACHE = None  # 标记不可用，后续直接短路
     return None
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # 启发式阈值（集中常量，调参只改这里）
 # ═══════════════════════════════════════════════════════════════════════════════
 
-MIN_TERM_FREQ = 10  # 关键词在 reconcile 事实中出现 ≥N 次才升级为候选（evidence）
-TOP_K_CANDIDATES = 5  # 一次 dream 最多提 K 个候选（避免一次灌爆 KB）
+MIN_TERM_FREQ = 5  # 词频下限（低于此直接丢弃，太稀疏不可靠）
+DEFAULT_LIMIT = 5  # 一次 dream 默认提 K 个候选（可通过 --limit 覆盖）
+DEFAULT_WINDOW_DAYS = 90  # 回看窗口默认值（7d 只剩 5% facts，词频不足；90d 剩 90%）
 MIN_FACT_LEN = 15  # 太短的事实（<15 字）不提，信息量不足
 MIN_TERM_LEN = 3  # ASCII 关键词最短长度（过滤 is/the/a 等英文虚词）
 MIN_CJK_LEN = 2  # CJK 关键词最短长度（中文真实词多为 2 字：相关/对话/避免/浪费）
+
+# 形态学评分权重：经验上"代码标识符"比"CJK 二字虚词"更像具体经验。
+# 这些权重乘到 IDF 上（见 _term_quality_score）。
+_MORPH_HYPHEN_BONUS = 2.0  # 含 -/_ 的标识符（host-spawn / kb-summarize）强信号
+_MORPH_LONGASCII_BONUS = 1.0  # 长全小写串（emacsclient / distrobox）中等信号
+_MORPH_CJK2_PENALTY = 0.4  # CJK 二字词（评估/提交/搜索）多为对话虚词，降权
+
+# 时间戳有效年份下限：早于此视为坏数据（epoch ms 误当秒、脏数据），忽略不过滤。
+_MIN_VALID_YEAR = 2020
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -122,6 +148,44 @@ _STOPWORDS = frozenset("""
     了解 你看 需要 进行 可以 下面 里面 上面 同时 然后 所以
     """.split())
 
+# 领域通用词：技术对话中高频出现但不构成具体经验的词。
+# 即使评分把它们排到前面，停用词表是最后一道防线（实测 IDF+形态学已大幅
+# 把这类词压到中后段，但 CJK 二字虚词如 评估/搜索/调查 仍可能漏网）。
+_DOMAIN_GENERIC = frozenset("""
+    configuration workspace structure project implementation analysis
+    compression compressed custom readme verification success state
+    patterns report comprehensive environment specific
+    approach process overview summary understanding documentation
+    discussion review design system module component feature
+    function service interface layer architecture framework pattern
+    option setting parameter variable constant type class method
+    version release update upgrade migration deployment
+    file directory path location source target input output
+    error warning message log debug test check verify validate
+    fix patch change modify remove add create delete
+    request response signal event handler callback listener
+    node element attribute property value key pair entry item
+    list array map set queue stack tree graph network
+    base root head tail top bottom left right inner outer
+    simple basic standard default special general common
+    exploring looking asking looks topic specifically current
+    there exactly whether particular basically actually definitely
+    seems appears might maybe perhaps probably likely
+    understand removed messages projects documents packages configs
+    brokenshine
+    布局 窗口 探索 经验 能够 我会 操作 选项 界面 面板
+    功能 模块 组件 接口 架构 框架 模式 版本 发布 迁移
+    目录 路径 位置 源 目标 输入 输出
+    错误 警告 消息 日志 调试 测试 检查 验证 修复 补丁
+    请求 响应 信号 事件 回调 监听器 节点 元素 属性
+    列表 数组 映射 集合 队列 栈 网络 基础 根
+    头 尾 顶部 底部 左侧 右侧 内部 外部 本地 远程
+    简单 基本 标准 默认 特殊 通用 常见 具体 特别
+    有没有 找到 需求 问题 方面 情况 状态 内容 结果 目标
+    评估 提交 搜索 调查 侦察 现有 按照 根据 这样 等等
+    非常 一份 明白 我来 知识库
+   """.split())
+
 # CJK 功能字（仅在 jieba 不可用、走 2-gram 回退路径时使用）：
 # 这些字几乎从不出现在真实词的内部，只作为词间"胶水"。2-gram 滑动窗跨词边界
 # 产生 我需/是一/的时/中的 这类伪词——它们总含一个胶水字。据此过滤：
@@ -134,6 +198,73 @@ _GLUE_CHARS = frozenset(
     "将把被让给向往对为以于由从到用着过"
 )
 
+
+def _term_quality_score(term: str, df: int, total_facts: int) -> float:
+    """综合评分 = IDF × √df × 形态学权重。
+
+    IDF（inverse document frequency）：log(total_facts / df)。稀有词天然高分，
+    替代旧 bell_score 的"频率正态分布"假设（实测好坏词频率区间几乎完全重叠，
+    频率不携带"是否经验词"的信息）。
+
+    √df（频率平方根补偿）：纯 IDF 会把所有最低频词（df=MIN_TERM_FREQ）排到最前，
+    但 456 个 df=5 的词里大量是一次性长尾（token 哈希/无关项目名如 beatoraja-bin），
+    淹没真正高频的好词 treemacs(df=119)。√df 温和补偿高频词，让 treemacs 能进 top，
+    又不像纯 df（TF-IDF）那样让 removed(df=137)/bash 这类高频坏词独占榜首。
+
+    形态学权重：代码标识符（含 -/_）是"具体工具/概念"的强信号，CJK 二字词
+    多为对话虚词（评估/提交/搜索），据此加减权。实测 top40 含 4 个好词
+    （self-improving/kb-summarize/host-spawn/treemacs），top10 全是高质量项目词。
+    """
+    idf = math.log(total_facts / df) if df > 0 and total_facts > 0 else 0.0
+    freq_boost = math.sqrt(df)
+    weight = 1.0
+    if (
+        "-" in term or "_" in term
+    ):  # 代码标识符：host-spawn / kb-summarize / self-improving
+        weight += _MORPH_HYPHEN_BONUS
+    elif re.fullmatch(
+        r"[a-z][a-z0-9]{6,}", term
+    ):  # 长全小写：emacsclient / distrobox / subagent
+        weight += _MORPH_LONGASCII_BONUS
+    if re.fullmatch(r"[\u4e00-\u9fff]{2}", term):  # CJK 二字词多为虚词：评估/提交/搜索
+        weight *= _MORPH_CJK2_PENALTY
+    return idf * freq_boost * weight
+
+
+def _parse_timestamp(ts: str):
+    """解析 reconcile fact 的 timestamp 字段，返回 aware datetime 或 None。
+
+    容忍 3 种格式（各 source 不统一，见 reconcile 探查）：
+    - epoch ms（全数字，长度 13）：opencode/zcode/crush
+    - ISO 8601（含 Z 或时区偏移）：pi/claude/codex
+    - 空串：hermes（无时间戳，调用方负责"无 ts 默认保留"语义）
+
+    坏数据容错：解析成功但年份 < _MIN_VALID_YEAR 视为无效（如 epoch ms 被误当
+    秒解析出的 1970 日期），返回 None——这类 fact 不参与时间过滤，按"无 ts"
+    处理（默认保留）。
+    """
+    if not ts:
+        return None
+    ts = ts.strip()
+    if not ts:
+        return None
+    # epoch ms（全数字）
+    if ts.isdigit():
+        try:
+            dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            return None
+        return dt if dt.year >= _MIN_VALID_YEAR else None
+    # ISO 8601
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt if dt.year >= _MIN_VALID_YEAR else None
+
+
 # 切 CJK 连续段 + ASCII 标识符，再交给 _tokenize 做子路径分词。
 _TOKEN_RE = re.compile(r"[\u4e00-\u9fff]+|[a-zA-Z_][a-zA-Z0-9_-]+")
 
@@ -142,10 +273,10 @@ def _tokenize(text: str) -> list[str]:
     """分词：jieba 优先（若可用），否则回退到 2-gram 启发式。
 
     jieba 路径：对 CJK 段用 jieba.cut 得到真实词（"配置文件/重新启动"），
-    单字功能词（"的/了/是"）经 _STOPWORDS + MIN_CJK_LEN 过滤。
+    单字功能词（"的/了/是"）经 _STOPWORDS + _DOMAIN_GENERIC + MIN_CJK_LEN 过滤。
     回退路径：CJK 段切 2-gram + 胶水字过滤（仍能跑，但产出伪词边界噪声）。
 
-    ASCII 标识符两条路径一致（小写化 + 停用词 + MIN_TERM_LEN 长度过滤）。
+    ASCII 标识符两条路径一致（小写化 + 停用词 + 领域通用词 + MIN_TERM_LEN 长度过滤）。
     """
     jieba = _get_jieba()
     tokens: list[str] = []
@@ -153,7 +284,11 @@ def _tokenize(text: str) -> list[str]:
         seg = m.group(0)
         if re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_-]*", seg):
             low = seg.lower()
-            if low not in _STOPWORDS and len(low) >= MIN_TERM_LEN:
+            if (
+                low not in _STOPWORDS
+                and low not in _DOMAIN_GENERIC
+                and len(low) >= MIN_TERM_LEN
+            ):
                 tokens.append(low)
             continue
         # CJK 段
@@ -161,7 +296,11 @@ def _tokenize(text: str) -> list[str]:
             # jieba.cut 输出真实词（"配置文件/重新启动"），单字功能词靠
             # MIN_CJK_LEN + _STOPWORDS 过滤；中文真实词多为 2 字，故阈值低于 ASCII。
             for word in jieba.cut(seg):
-                if len(word) >= MIN_CJK_LEN and word not in _STOPWORDS:
+                if (
+                    len(word) >= MIN_CJK_LEN
+                    and word not in _STOPWORDS
+                    and word not in _DOMAIN_GENERIC
+                ):
                     tokens.append(word)
         else:
             # 回退：2-gram + 胶水字过滤（跨词边界伪词抑制）
@@ -188,11 +327,17 @@ class DreamCandidate:
     """一个 dream 提出的候选新卡片（未落盘，待 review）。"""
 
     term: str  # 触发候选的高频关键词
-    frequency: int  # 该词在 reconcile 事实中的出现次数
-    representative_title: str  # 频次最高的事实的标题（作为候选标题参考）
-    representative_content: str  # 频次最高的事实正文（作为候选正文参考）
-    suggested_category: str  # 映射后的 kb category
-    source_facts: list[str]  # 贡献该词的事实 id 列表（溯源）
+    frequency: int  # 该词在 reconcile 事实中的出现次数（= df，贡献事实数）
+    score: float = 0.0  # 综合质量评分（IDF × 形态学权重）
+    representative_title: str = ""  # 代表事实的标题（词密度最高的那条）
+    representative_content: str = ""  # 代表事实正文（索引层摘要，截断版）
+    suggested_category: str = ""  # 映射后的 kb category
+    source_trace: str = (
+        ""  # 溯源指针：fact 的 id（如 opencode:ses_x:msg_y），供 agenote trace 回查原始完整对话
+    )
+    source_facts: list[str] = field(
+        default_factory=list
+    )  # 贡献该词的事实 id 列表（溯源）
 
 
 @dataclass
@@ -201,6 +346,10 @@ class DreamReport:
 
     window_days: int
     total_reconcile_facts: int = 0
+    used_facts: int = 0  # 实际参与评分的事实数（window_days 过滤后）
+    total_candidates: int = 0  # 不受 offset/limit 截断的完整候选数
+    offset: int = 0  # 本次请求的偏移量
+    limit: int = DEFAULT_LIMIT  # 本次请求的返回上限
     candidates: list[dict] = field(default_factory=list)
     promoted: int = 0  # 实际写入 KB 的卡片数（dry_run 时为 0）
     skipped_existing: int = 0  # 因 KB 已覆盖而跳过的候选
@@ -216,15 +365,28 @@ class DreamReport:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def _kb_covered_terms() -> set[str]:
-    """收集 KB（agenote experiences/）已覆盖的标题/正文字符串集合。
+def _term_density(term: str, content: str) -> float:
+    """该词在 fact 正文中的出现密度（次/百字）。
 
-    用于"KB 已覆盖 → 跳过"判断。dream 只补缺口，不复制。
+    用于 representative 选择：密度高说明这条 fact 真的在讨论这个词，
+    而非正文很长但只是顺带提到（旧实现按正文长度选，会选到无关大段转录）。
     """
-    covered: set[str] = set()
+    if not content:
+        return 0.0
+    return content.count(term) / (len(content) / 100.0)
+
+
+def _kb_covered_titles() -> set[str]:
+    """收集 KB（agenote experiences/）已有卡片标题，用于"KB 已覆盖 → 跳过"判断。
+
+    dream 只补缺口，不复制。旧实现把整张卡片正文都 tokenize 进集合，粒度过粗：
+    KB 卡片提过一次 "repo"，全库所有含 "repo" 的候选词都被判覆盖。
+    现改为只收标题——只有候选词**正好等于**某张 KB 卡片标题时才判覆盖。
+    """
+    titles: set[str] = set()
     exp = AGENOTE_ROOT / "experiences"
     if not exp.exists():
-        return covered
+        return titles
     for f in exp.rglob("*.org"):
         if f.is_symlink():
             continue
@@ -232,10 +394,11 @@ def _kb_covered_terms() -> set[str]:
             txt = f.read_text(encoding="utf-8")
         except OSError:
             continue
-        # 把标题和正文都 token 化加入 covered（粗粒度覆盖检查）
-        for tok in _tokenize(txt):
-            covered.add(tok)
-    return covered
+        # org 标题行：* DONE <title> / * TODO <title>
+        m = re.search(r"^\* (?:DONE|TODO) (.+)$", txt, re.MULTILINE)
+        if m:
+            titles.add(m.group(1).strip().casefold())
+    return titles
 
 
 # 噪声过滤复用 core 的单一真相源（与 reconcile 写入层一致）。
@@ -244,18 +407,52 @@ def _kb_covered_terms() -> set[str]:
 _is_system_content = is_noise_fact
 
 
-def _gather_candidates(facts: list[dict]) -> list[DreamCandidate]:
+def _gather_candidates(
+    facts: list[dict],
+    offset: int = 0,
+    limit: int = DEFAULT_LIMIT,
+    window_days: int = DEFAULT_WINDOW_DAYS,
+) -> tuple[list[DreamCandidate], int, int]:
     """从 reconcile 事实启发式提取候选。
 
-    策略：
-    1. 对所有事实正文 token 化，统计词频
-    2. 词频 ≥ MIN_TERM_FREQ 的词为主题候选
-    3. 每个主题取频次最高（含该词）的事实作为代表
-    4. 剔除 KB 已覆盖的词（covered_terms 命中）
+    评分策略（IDF + 形态学）：
+    1. 按 window_days 过滤事实（无 timestamp 的默认保留，如 hermes）
+    2. 对幸存事实正文 token 化，统计词频
+    3. 用 _term_quality_score 打分：IDF × 形态学权重（代码标识符加分，CJK 二字词降权）
+    4. 剔除 KB 已有同名标题的词
+    5. 每个候选选词密度最高的 fact 作代表
+
+    Args:
+        facts: reconcile 事实列表
+        offset: 跳过前 N 个候选（用于多轮抽取跳过噪声词）
+        limit: 本次最多返回 N 个候选
+        window_days: 回看窗口（天）；0=不过滤。无 timestamp 的 fact 不受影响
+
+    Returns:
+        (candidates, total_count, used_facts) — total_count 是截断前候选总数，
+        used_facts 是实际参与评分的事实数（窗口过滤后）
     """
+    # ── 时间窗口过滤 ──
+    cutoff = None
+    if window_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
+    usable: list[dict] = []
+    skipped_by_window = 0
+    for fact in facts:
+        ts = _parse_timestamp(fact.get("timestamp", ""))
+        if ts is None:
+            # 无 timestamp（hermes 等）：默认保留，不因缺数据被误杀
+            usable.append(fact)
+            continue
+        if cutoff is not None and ts < cutoff:
+            skipped_by_window += 1
+            continue
+        usable.append(fact)
+    total_facts = len(usable)
+
     # 词 → [(fact_idx, fact), ...]：记录每个词出现在哪些事实
     term_facts: dict[str, list[tuple[int, dict]]] = {}
-    for idx, fact in enumerate(facts):
+    for idx, fact in enumerate(usable):
         if _is_system_content(fact):
             continue
         title = fact.get("title", "")
@@ -271,50 +468,72 @@ def _gather_candidates(facts: list[dict]) -> list[DreamCandidate]:
         for tok in seen_in_fact:
             term_facts.setdefault(tok, []).append((idx, fact))
 
-    covered = _kb_covered_terms()
-    candidates: list[DreamCandidate] = []
+    covered = _kb_covered_titles()
+    candidates: list[tuple[float, DreamCandidate]] = []
     for term, hits in term_facts.items():
-        if len(hits) < MIN_TERM_FREQ:
+        df = len(hits)
+        if df < MIN_TERM_FREQ:
             continue
-        if term in covered:
+        if term.casefold() in covered:
             continue
-        # 选正文最长的事实作为代表（信息量最大）
-        rep = max(hits, key=lambda h: len(h[1].get("content", "")))[1]
-        rep_content = rep.get("content", "")
+        # 选词密度最高的事实作代表：密度高=真的在讨论这个词，而非顺带提及
+        # （旧实现选正文最长，但最长往往是无关系的大段转录）
+        rep = max(
+            hits,
+            key=lambda h: _term_density(term, h[1].get("content", "")),
+        )[1]
         # Skip if representative is system content（二次兜底）
         if _is_system_content(rep):
             continue
+        # 综合评分（IDF × 形态学权重）
+        score = _term_quality_score(term, df, total_facts)
         candidates.append(
-            DreamCandidate(
-                term=term,
-                frequency=len(hits),
-                representative_title=rep.get("title", term),
-                representative_content=rep.get("content", ""),
-                suggested_category=rep.get("category", "general"),
-                source_facts=[h[1].get("id", "") for h in hits],
+            (
+                score,
+                DreamCandidate(
+                    term=term,
+                    frequency=df,
+                    score=score,
+                    representative_title=rep.get("title", term),
+                    representative_content=rep.get("content", ""),
+                    suggested_category=rep.get("category", "general"),
+                    source_trace=rep.get("id", ""),
+                    source_facts=[h[1].get("id", "") for h in hits],
+                ),
             )
         )
 
-    # 按频次降序，取 Top-K
-    candidates.sort(key=lambda c: c.frequency, reverse=True)
-    return candidates[:TOP_K_CANDIDATES]
+    # 按综合评分降序，应用 offset + limit
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    total = len(candidates)
+    sliced = [c[1] for c in candidates[offset : offset + limit]]
+    return sliced, total, total_facts
 
 
-def run_dream(window_days: int = 7, dry_run: bool = True) -> DreamReport:
+def run_dream(
+    window_days: int = DEFAULT_WINDOW_DAYS,
+    dry_run: bool = True,
+    offset: int = 0,
+    limit: int = DEFAULT_LIMIT,
+) -> DreamReport:
     """跑一次 dream（启发式 memory consolidation）。
 
     Args:
-        window_days: 事实时间窗口（当前实现忽略——reconcile 事实无时间戳，
-            保留参数为未来对接轨迹源时用）
+        window_days: 事实时间窗口（天）。0=不过滤看全量；默认 90d（幸存 ~90% facts）。
+            无 timestamp 的事实（如 hermes）不受窗口影响，默认保留。
         dry_run: 历史参数，**已无实际效果**——dream 现为纯只读候选发现器，
             不再自动写 KB。保留以兼容 MCP 签名。
+        offset: 跳过前 N 个候选（用于多轮抽取跳过噪声词）
+        limit: 本次最多返回 N 个候选（默认 5）
 
     Returns:
         DreamReport。**零候选是合法返回**（message 说明"无待 consolidate 事实"）。
-        有候选时 report.candidates 含完整代表事实正文，agent 读取后用
-        agenote_add 决定是否综合写入 KB（见 agenote-curator skill 的 Step 3）。
+        有候选时 report.candidates 含代表事实正文 + source_trace 溯源指针——
+        agent 对某候选词感兴趣时，用 `agenote trace --id <source_trace>` 读该词
+        出现的完整原始对话（含工具调用/推理/补丁，索引层摘要不截断），
+        再用 agenote_add 决定是否综合写入 KB（见 agenote-curator skill Step 3）。
     """
-    report = DreamReport(window_days=window_days)
+    report = DreamReport(window_days=window_days, offset=offset, limit=limit)
     facts = load_reconcile_facts()
     report.total_reconcile_facts = len(facts)
 
@@ -324,18 +543,60 @@ def run_dream(window_days: int = 7, dry_run: bool = True) -> DreamReport:
         )
         return report
 
-    candidates = _gather_candidates(facts)
+    candidates, total, used_facts = _gather_candidates(
+        facts, offset=offset, limit=limit, window_days=window_days
+    )
+    report.total_candidates = total
+    report.used_facts = used_facts
 
     if not candidates:
-        report.message = (
-            "无候选：reconcile 事实中没有 ≥%d 次出现且 KB 未覆盖的主题（零产物即成功）"
-            % MIN_TERM_FREQ
-        )
+        if total == 0:
+            report.message = (
+                "无候选：%d 条事实（窗口 %dd）中没有 ≥%d 次出现且 KB 未覆盖的主题"
+                "（零产物即成功）" % (used_facts, window_days, MIN_TERM_FREQ)
+            )
+        else:
+            report.message = (
+                "偏移 %d 已超出候选总数 %d（无更多候选）。"
+                "可尝试 --offset 0 从头查看，或减小 offset。" % (offset, total)
+            )
         return report
 
     report.candidates = [asdict(c) for c in candidates]
-    report.message = (
-        "发现 %d 个候选（含代表事实正文）。dream 不自动写 KB——agent 综合流程见 "
-        "agenote-curator skill 的 'Step 3 — Agent 综合'。" % len(candidates)
+    remaining = total - offset - len(candidates)
+    window_note = "（窗口 %dd，%d/%d 条事实参与）" % (
+        window_days,
+        used_facts,
+        report.total_reconcile_facts,
     )
+    trace_hint = (
+        "对某候选感兴趣时用 `agenote trace --id <source_trace>` 读完整原始对话"
+        "（含工具调用/推理/补丁）。dream 不自动写 KB——agent 综合流程见 "
+        "agenote-curator skill 的 'Step 3 — Agent 综合'。"
+    )
+    if remaining > 0:
+        report.message = (
+            "发现 %d/%d 个候选（第 %d-%d 个%s，共 %d 个）。"
+            "还有 %d 个候选未显示，可用 --offset %d 继续查看。%s"
+            % (
+                len(candidates),
+                total,
+                offset + 1,
+                offset + len(candidates),
+                window_note,
+                total,
+                remaining,
+                offset + len(candidates),
+                trace_hint,
+            )
+        )
+    else:
+        report.message = "发现 %d/%d 个候选（第 %d-%d 个%s，全部候选已显示）。\n%s" % (
+            len(candidates),
+            total,
+            offset + 1,
+            offset + len(candidates),
+            window_note,
+            trace_hint,
+        )
     return report
