@@ -1157,7 +1157,10 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; AI Agent
         "cc-switch-bin"
         "crush-bin"
-        "opencode-bin"
+        "github-copilot-bin"
+        "mimocode-bin"
+        "opencode-desktop-bin"
+        "orca-ide-bin"
         "reasonix-desktop-bin"
         "zcode"
 
