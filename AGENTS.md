@@ -16,10 +16,20 @@ Guix-configs///
 │   ├── logs/
 │   │   └── crush.log
 │   ├── .gitignore
-│   └── crush.db
+│   ├── crush.db
+│   └── init
 ├── .ropeproject/
+├── .zcode/
+│   └── plans/
+│       └── plan-sess_6258bfa0-a708-47dc-b6ce-bc8dcef60df1.md
+├── dist/
+│   ├── jeans-desktop-20260707.x86_64-linux.iso
+│   ├── jeans-minimal-20260707.x86_64-linux.iso
+│   ├── jeans-xfce-20260706.x86_64-linux.iso
+│   └── jeans-xfce-20260707.x86_64-linux.iso
 ├── docs/
-│   ├── agenote_mcp.md
+│   ├── agenote.md
+│   ├── iso-build.md
 │   ├── loopctl.md
 │   └── secrets.md
 ├── dotfiles/
@@ -82,6 +92,8 @@ Guix-configs///
 │   ├── daily.png
 │   ├── emacs.png
 │   └── terminal.png
+├── scripts/
+│   └── build-image.scm
 ├── source/
 │   ├── files/
 │   │   ├── skel/
@@ -100,11 +112,6 @@ Guix-configs///
 │   ├── config.org
 │   ├── information.scm
 │   └── manifest.scm
-├── tmp/
-│   ├── 50-hibernate.rules
-│   ├── block-list.el
-│   ├── config.scm
-│   └── config.scm.check
 ├── tools/
 │   ├── linux-setup/
 │   │   ├── docs/
@@ -177,7 +184,7 @@ tmp/config.scm
 **路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
 2. 修改应用配置时优先改 `dotfiles/immutable/<app>/` 内文件，再 `blue home`
-3. **Emacs 修改**：先读 `dotfiles/mutable/emacs/.config/emacs/general-config/AGENTS.md`，新包必须同步 `source/config.org` 的 home-packages。**注意**：`dotfiles/mutable/emacs/.config/emacs/` 顶层是 chemacs2 引导层（init/early-init/chemacs.el），旧配置 submodule 在 `general-config/` 子目录，新 org literate 配置在 `literal-config/`
+3. **Emacs 修改**：先读 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`（literal-config 自包含工作规范）。新包必须同步 `source/config.org` 的 home-packages。**注意**：`dotfiles/mutable/emacs/.config/emacs/` 顶层就是 literal-config 仓库本体（init.el / early-init.el / emacs.org / main.el / scripts/），无 chemacs2 引导层、无 submodule；`~/.config/emacs/` 通过 GNU Stow 软链到仓库源（改源即生效，无需 `blue home`）。
 4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/immutable/agents/AGENTS.md`（部署模型、settings.json 归属表）
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
 6. 优先使用 `blue help` 内可以使用的相关命令
@@ -235,32 +242,31 @@ blue stow-all --restow           # 重建所有包
 
 详见 `dotfiles/mutable/AGENTS.md`。
 
-## Emacs 多 Profile 架构（chemacs2）
-
-`dotfiles/mutable/emacs/.config/emacs/` 顶层是 **chemacs2 引导层**（`init.el` / `early-init.el` / `chemacs.el`，从 [plexus/chemacs2](https://github.com/plexus/chemacs2) 复制，GPL-3.0），占据 Emacs 启动入口。它在启动时读 `~/.config/chemacs/profiles.el` 选 profile，把 `user-emacs-directory` 指向对应配置树，再加载该树的 `init.el`。
-
+## Emacs 单 Profile 架构（literal-config）
+迁移历史：2026-07 commit `0ca2c196` 移除 chemacs2 后，emacs 配置直接位于
+`dotfiles/mutable/emacs/.config/emacs/` 顶层，以 GNU Stow 软链到 `~/.config/emacs/`。
+**无 chemacs2 引导层、无 submodule、单 profile**。
 ```
-~/.config/emacs/                      ← chemacs2 引导层（Emacs 真正入口）
-├── init.el / early-init.el / chemacs.el   ← 引导层三件套（stow 软链到仓库源）
-├── general-config/                   ← 旧配置（submodule，默认 profile）
-│   ├── init.el / early-init.el
-│   └── core/ configs/ diagnose/ var/ etc/ ...
-└── literal-config/                   ← 新配置（org literate，待 tangle 生成）
-    └── init.el                       ← 占位，后续 config.org 重写
-
-~/.config/chemacs/                    ← chemacs2 profile 配置（stow 软链）
-├── profiles.el                       ← profile 表（general / literal）
-└── profile                           ← 默认 profile 选择器（当前一行：general）
+~/.config/emacs/                      ← Stow 软链到仓库源（改源即生效）
+├── init.el                            ← 固定手写 bootstrap：按需 tangle emacs.org → main.el
+├── early-init.el                      ← 启动期优化（GC / bidi / exec-path / 防闪屏）
+├── emacs.org                          ← 唯一真理源
+├── main.el                            ← tangle 产物（gitignore，按需重建）
+├── scripts/                           ← 辅助 Python/Bash 工具
+├── AGENTS.md                          ← literal-config 自包含工作规范
+└── .gitignore
 ```
-
-**单 daemon + 默认 profile**：rosenthal `home-emacs-service-type` 跑 `emacs --fg-daemon`（不传 `--with-profile`），自动走默认 profile = `general`。所有现有 `emacsclient` 调用（niri Mod+E、skill 脚本、`.desktop`、`with-editor` GIT_EDITOR）依赖默认 socket 名 "server"，**零改动**。
-
+**启动路径**：`emacs` 启动 → `~/.config/emacs/init.el`
+（实际为 `dotfiles/mutable/emacs/.config/emacs/init.el`）→ 检测 `emacs.org` 是否比
+`main.el` 新 → 是则 `org-babel-tangle-file` 重新生成 `main.el` → `load main.el`。
+**Daemon**：rosenthal `home-emacs-service-type` 跑 `emacs --fg-daemon`，所有现有
+`emacsclient` 调用（niri Mod+E、skill 脚本、`.desktop`、`with-editor` GIT_EDITOR）
+依赖默认 socket 名 "server"，**零改动**。
 **常用操作**：
-
-- 试新配置（前台实例，独立于 daemon）：`emacs --with-profile literal`
-- 切默认到新配置（稳定后）：改 `dotfiles/mutable/emacs/.config/chemacs/profile` 为 `literal` → `blue stow --restow emacs` → `herd restart emacs-daemon`
-- 改旧配置源：`dotfiles/mutable/emacs/.config/emacs/general-config/`（submodule，改源即生效）
-- 改 profile 表：`dotfiles/mutable/emacs/.config/chemacs/profiles.el`（改完 `blue stow --restow emacs`）
+- 试新配置（前台实例，独立于 daemon）：`emacs`
+- 改 bootstrap：`dotfiles/mutable/emacs/.config/emacs/init.el`（人类手维护，AGENTS.md §1.2 固定签名的契约不变）
+- 改配置源：`dotfiles/mutable/emacs/.config/emacs/emacs.org`（按 *启动顺序与模块依赖速查* 8 域组织）
+- 切 Guix Emacs 版本（影响包版本，不影响配置内容）：改 `source/config.org` 中 `home-emacs-packages` 后 `blue home`
 
 ## 目录结构图自动维护
 

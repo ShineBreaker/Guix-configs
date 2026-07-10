@@ -21,11 +21,11 @@ source/
 │   ├── configuration/
 │   │   ├── 00-main/
 │   │   │   ├── home.nix
-│   │   │   └── packages.nix
+│   │   │   └── nix.nix
 │   │   └── programs/
 │   │       ├── 00-main.nix
 │   │       ├── hermes.nix
-│   │       └── nix.nix
+│   │       └── zed.nix
 │   ├── flake.lock
 │   └── flake.nix
 ├── channel.lock

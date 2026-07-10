@@ -57,7 +57,6 @@ agents/
 │       │   └── update-plugins.sh
 │       ├── .gitignore
 │       ├── dcp.jsonc
-│       ├── opencode-mem.jsonc
 │       └── opencode.json
 ├── .local/
 │   └── bin/

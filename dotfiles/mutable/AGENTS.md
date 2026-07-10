@@ -52,16 +52,13 @@ mutable/
 │   ├── .config/
 │   │   ├── agents/
 │   │   │   └── skills/
-│   │   ├── chemacs/
-│   │   │   ├── profile
-│   │   │   └── profiles.el
 │   │   └── emacs/
-│   │       ├── general-config/
-│   │       ├── literal-config/
-│   │       ├── README.md
-│   │       ├── chemacs.el
+│   │       ├── scripts/
+│   │       ├── .gitignore
 │   │       ├── early-init.el
-│   │       └── init.el
+│   │       ├── emacs.org
+│   │       ├── init.el
+│   │       └── main.el
 │   └── .stow-local-ignore
 ├── hermes/
 │   ├── .local/

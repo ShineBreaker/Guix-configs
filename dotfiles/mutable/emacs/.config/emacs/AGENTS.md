@@ -11,17 +11,17 @@
 
 | 项       | 值                                                                                   |
 | -------- | ------------------------------------------------------------------------------------ |
-| 路径     | `~/Projects/Config/Guix-configs/dotfiles/mutable/emacs/.config/emacs/literal-config` |
-| 用途     | 个人 Emacs 配置(literate),chemacs2 选 `literal` profile 后加载                       |
+| 路径     | `~/Projects/Config/Guix-configs/dotfiles/mutable/emacs/.config/emacs`                |
+| 用途     | 个人 Emacs 配置(literate),以 GNU Stow 软链到 `~/.config/emacs/`(无 chemacs2、无 submodule) |
 | 技术栈   | GNU Emacs 31+、org-mode / org-babel、Guix 包管理、`use-package`、noweb               |
-| 启动路径 | chemacs2 → `init.el` →(按需 tangle `emacs.org` → `main.el`)→ `load main.el`          |
+| 启动路径 | `emacs` → `init.el` →(按需 tangle `emacs.org` → `main.el`)→ `load main.el`          |
 
 ### 1.1 文件清单与处理规则
 
 | 文件            | 处理                                        | 谁来维护                                  |
 | --------------- | ------------------------------------------- | ----------------------------------------- |
 | `emacs.org`     | **唯一真理源**,git 跟踪                     | 人类 + agent 编辑                         |
-| `init.el`       | 固定手写 bootstrap,git 跟踪,chemacs2 入口   | 人类手维护,agent **禁止**改动 tangle 签名 |
+| `init.el`       | 固定手写 bootstrap,git 跟踪,Emacs 启动入口 | 人类手维护,agent **禁止**改动 tangle 签名 |
 | `early-init.el` | 固定手写启动期优化,git 跟踪                 | 人类手维护                                |
 | `main.el`       | **tangle 产物**,`/.gitignore` 忽略,禁止手改 | 由 `init.el` 按需重建                     |
 | `scripts/`      | 辅助 Python/Bash 脚本,git 跟踪              | 见 §7                                     |

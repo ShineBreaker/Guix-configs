@@ -105,7 +105,6 @@ dotfiles/
     ├── emacs/
     │   ├── .config/
     │   │   ├── agents/
-    │   │   ├── chemacs/
     │   │   └── emacs/
     │   └── .stow-local-ignore
     ├── hermes/
