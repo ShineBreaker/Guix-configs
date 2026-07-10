@@ -5,9 +5,6 @@
 [submodule "rime"]
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
-[submodule "emacs-general-config"]
-	path = dotfiles/mutable/emacs/.config/emacs/general-config
-	url = https://codeberg.org/BrokenShine/.emacs.d.git
 [submodule "appimage-run"]
 	path = dotfiles/mutable/appimage-run
 	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
