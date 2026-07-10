@@ -647,10 +647,13 @@ def agenote_dream(
     """memory consolidation：从 reconcile 事实启发式提炼候选卡片。
 
     把其他 agent memory 里**高频出现、KB 尚未覆盖**的主题提为候选新卡片。
-    **默认 dry_run=True**：只返回候选清单，review 后用 dry_run=False 才写 KB。
+    **dream 是纯只读候选发现器，绝不自动写 KB**——综合写入由 agent 主导
+    （见 agenote-curator skill 的 Step 3 — Agent 综合）。`dry_run` 参数保留
+    仅为向后兼容，无实际效果（显式传 dry_run=False 会触发 DeprecationWarning）。
 
-    纯启发式（IDF × √df × 形态学权重），不调 LLM，可安全手动触发。
-    **零候选是合法返回**（KB 已覆盖所有高频主题 → 无需 consolidate）。
+    纯启发式（IDF × √df × 形态学权重；TF 作 score 并列时的 tie-breaker），
+    不调 LLM，可安全手动触发。**零候选是合法返回**（KB 已覆盖所有高频主题 →
+    无需 consolidate）。
 
     每个候选含 `source_trace` 字段（= fact_id），是溯源指针。用
     `agenote_trace(fact_id=...)` 回查该候选出现的完整原始对话（含工具调用/
@@ -658,13 +661,15 @@ def agenote_dream(
 
     Args:
         window_days: 事实时间窗口（天，默认 90 覆盖 ~90% facts；0=不过滤）
-        dry_run: True 只返回候选不写 KB（默认）
-        offset: 跳过前 N 个候选（多轮抽取跳过噪声词；默认 0）
+        dry_run: **已废弃，无效果**（dream 现为纯只读）。保留以兼容旧调用
+        offset: 跳过前 N 个候选（多轮抽取跳过噪声词；默认 0）。**注意 offset 语义
+            不稳定**：候选排序随 reconcile 索引更新变化，report.snapshot_hash 标识
+            本次候选集指纹，指纹变了即说明排序已漂移。
         limit: 本次最多返回 N 个候选（默认 5）
 
     Returns:
         DreamReport dict：{window_days, total_reconcile_facts, used_facts,
-        total_candidates, offset, limit, candidates, promoted,
+        total_candidates, offset, limit, snapshot_hash, candidates, promoted,
         skipped_existing, error_details, message}
     """
     from ag_lib.dream import run_dream

@@ -61,7 +61,7 @@ agenote_curate()
 # 跨 agent 协同（6 个 tool：reconcile/extract/dream/trace/distill/curate）
 agenote_reconcile(source="all")            # 抽取→索引（只读）
 agenote_extract(source="opencode", date="2026-07-09")  # 抽原始对话为 Org
-agenote_dream(window_days=90, limit=5)    # 启发式候选（IDF × √df × 形态学）
+agenote_dream(window_days=90, limit=5)    # 启发式候选（IDF × √df × 形态学 + TF tie-breaker，只读不写 KB）
 agenote_trace(fact_id="<source_trace>")    # 回查 dream 候选的完整原始对话（不截断）
 agenote_distill(dry_run=True)              # 经验→SKILL 草稿
 ```

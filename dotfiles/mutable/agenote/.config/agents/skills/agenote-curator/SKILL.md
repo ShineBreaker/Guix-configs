@@ -70,17 +70,23 @@ agenote_curate()        # 机械阶段：Step 1 + Step 2（KB 内策展 + reconc
 
 - `window_days`：时间窗口（天），默认 90 覆盖 ~90% facts。0=不过滤。`0/7/30/90/180`
   窗口在真实数据上分别幸存 100%/7%/37%/93%/100% facts
-- `offset`：跳过前 N 个候选（多轮抽取跳过噪声词；前 5 个没用就调 offset=5 继续）
+- `offset`：跳过前 N 个候选（多轮抽取跳过噪声词；前 5 个没用就调 offset=5 继续）。
+  **注意 offset 不稳定**：候选排序随 reconcile 索引更新漂移，`report.snapshot_hash`
+  标识本次候选集指纹——两次调用指纹不同即说明排序已变，同一 offset 可能指向不同候选
 - `limit`：本次最多返回 N 个候选（默认 5）
+- `dry_run`：**已废弃，无效果**——dream 是纯只读候选发现器，绝不自动写 KB。
+  综合写入由你主导（见上方 Step 3）。该参数保留仅为向后兼容
 - 无 timestamp 的 fact（hermes 30 条）**默认保留**，不受窗口影响
 
-**评分算法（IDF × √df × 形态学）**：
+**评分算法（IDF × √df × 形态学，TF 作 tie-breaker）**：
 
 - IDF = log(total_facts / df)：稀有词天然高分
-- √df：补偿高频好词（如 treemacs df=119）不至于被 456 个 df=5 长尾淹没
+- √df：温和补偿高频好词，不至于被大量 df=MIN_TERM_FREQ 长尾淹没
 - 形态学权重：含 `-`/`_` 的代码标识符 +2.0（CJK 二字虚词 ×0.4 降权）
-- 实测 top10 全是真实项目概念（guix-configs / self-improving / kb-summarize / pi-ui /
-  host-spawn 等），坏词（removed / understand / todowrite）已被 _DOMAIN_GENERIC 过滤
+- TF（tie-breaker，不进主评分）：score 并列时 TF 高的候选优先，消除随机排序。
+  每个候选 dict 含 `tf_total` 字段供参考
+- 实测 top 候选稳定为高质量项目标识符（guix-configs / self-improving / host-spawn 等），
+  对话虚词（removed / understand / 让我）已被 IDF + 形态学 + 停用词表三重压制
 
 **token 经济**：dream 候选 ≤limit 条，每条只暴露代表事实正文（截断版）；agent 不需读
 全部 reconcile 事实。要深入按需调 trace。

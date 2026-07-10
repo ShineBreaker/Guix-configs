@@ -517,8 +517,8 @@ def print_help() -> None:
             agenote reconcile [--source all] [--dry-run]
             agenote reconcile --source hermes --dry-run
 
-  dream    从 reconcile 事实启发式提炼候选新卡片（不调 LLM，零候选即成功）
-            agenote dream [--window-days 90] [--offset N] [--limit N] [--dry-run]
+  dream    从 reconcile 事实启发式提炼候选新卡片（只读，不调 LLM，零候选即成功）
+            agenote dream [--window-days 90] [--offset N] [--limit N]
             候选含 source_trace 字段——用 trace 命令回查完整原始对话
 
   trace    回查 dream 候选的原始完整对话（溯源，不截断，含工具调用/推理/补丁）
@@ -828,19 +828,26 @@ def main() -> None:
 
     # ── dream ───────────────────────────────────────────────────────────────
     dream_parser = subparsers.add_parser(
-        "dream", help="从 reconcile 事实启发式提炼候选新卡片（不调 LLM）"
+        "dream",
+        help="从 reconcile 事实启发式提炼候选新卡片（只读，不调 LLM，不写 KB）",
     )
     dream_parser.add_argument(
         "--window-days", type=int, default=90, help="回看窗口（天，默认 90；0=不过滤）"
     )
     dream_parser.add_argument(
-        "--offset", type=int, default=0, help="跳过前 N 个候选（多轮抽取用）"
+        "--offset",
+        type=int,
+        default=0,
+        help="跳过前 N 个候选（多轮抽取用）。注意排序随索引更新漂移，见 report.snapshot_hash",
     )
     dream_parser.add_argument(
         "--limit", type=int, default=5, help="本次最多返回 N 个候选（默认 5）"
     )
     dream_parser.add_argument(
-        "--dry-run", action="store_true", default=True, help="只预览不写 KB"
+        "--dry-run",
+        action="store_true",
+        default=True,
+        help=argparse.SUPPRESS,  # 已废弃：dream 现为纯只读，dry_run 无效果
     )
     dream_parser.add_argument("--json", action="store_true", help=argparse.SUPPRESS)
 

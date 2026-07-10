@@ -24,14 +24,21 @@
    对中文产出真实词边界（"配置文件/重新启动"），远胜 2-gram 滑窗；jieba 不可用时
    回退到 2-gram + 胶水字过滤（仍能跑，但产出伪词边界噪声）。
 
-评分（_term_quality_score）：IDF × 形态学权重。
+评分（_term_quality_score）：IDF × √df × 形态学权重，TF 作 tie-breaker。
 - 旧实现用"频率正态分布（bell_score）"，实测好坏词频率区间几乎完全重叠（都在
   30-140），频率不携带"是否经验词"的信息，导致 todowrite/parallel/我来/明白 这类
   对话噪声冲进 top 候选（见 agenote 卡 20260703-221438 实证：[dream] 卡标题常是
   高频虚词"让我/看看/这是/complete"）。且旧实现的 diversity/rarity 两个因子在真实
   数据上恒为常数（dead code）。
-- 新实现：IDF 让稀有词天然高分，形态学权重给代码标识符（host-spawn/kb-summarize）
-  强 bonus、CJK 二字虚词（评估/提交）降权。实测好坏词分离度从 +38 提升到 +2133。
+- 主评分：IDF（log(N/df)）让稀有词天然高分，√df 温和补偿高频好词（防止 456 个
+  df=MIN_TERM_FREQ 长尾淹没真实高频项目词），形态学权重给代码标识符
+  （host-spawn/kb-summarize）强 bonus、CJK 二字虚词（评估/提交）降权。
+- TF 信号：旧实现 per-fact 去重成 set 把 TF 全丢了。现在保留 TF（per-fact 内
+  min(count,3) 截断），但**不进主评分**——实测让 TF 进 BM25 saturation 反而恶化
+  top 候选（df=5 单 fact 内重复的长尾词涌入），因为本项目好词（项目标识符）通常
+  每条 fact 只出现 1 次。TF 仅在主评分并列时作 tie-breaker（消除随机排序）。
+- 实测 top 候选稳定为高质量项目标识符（guix-configs/self-improving/host-spawn 等），
+  对话虚词（removed/complete/让我）已被 IDF + 形态学 + 停用词表三重压制。
 
 与 MiMoCode dream.txt 的差异：
 - MiMoCode 跑 LLM 做 6 阶段提炼；本机把 LLM 角色交给调用 dream 的 agent，
@@ -42,10 +49,13 @@
 """
 
 import glob
+import hashlib
 import math
 import os
 import re
 import sys
+import warnings
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -62,19 +72,25 @@ from ag_lib.reconcile import (
 # 它不在 agenote 的硬依赖里（agenote 跑在 guix python3.12，jieba 装在 nix python3.14
 # profile）。这里做自动发现：扫 ~/.nix-profile/lib/python*/site-packages/jieba——
 # jieba 是纯 Python 无 C 扩展，py3.12 能直接 import py3.14 路径下的包。
-# 找不到就静默回退到 _GLUE_CHARS + 2-gram 启发式（仍是可用的兜底分词器）。
+# 找不到或 import 失败则回退到 _GLUE_CHARS + 2-gram 启发式（仍是可用的兜底分词器），
+# 并通过 warnings.warn 暴露降级原因（旧实现静默回退，用户不知道分词质量降级了）。
 
 _JIEBA_CACHE: object = False  # 三态：False=未尝试, None=不可用, module=已加载
+_JIEBA_LOAD_ERROR: str = ""  # 加载失败原因（用于降级警告）
 
 
 def _get_jieba():
     """惰性加载 jieba，模块级缓存。
 
     返回 jieba 模块或 None（不可用时）。缓存结果避免每次 _tokenize 都 glob。
+    首次加载失败时通过 warnings.warn 暴露原因（而非静默回退）——让用户知道
+    当前走的是 2-gram 兜底分词器，中文分词质量降级了。
     """
-    global _JIEBA_CACHE
+    global _JIEBA_CACHE, _JIEBA_LOAD_ERROR
     if _JIEBA_CACHE is not False:
         return _JIEBA_CACHE if _JIEBA_CACHE is not None else None
+
+    here_major = sys.version_info[0], sys.version_info[1]
     # 自动发现：nix profile（python3.14 site-packages）+ 用户 site-packages
     for pattern in (
         "~/.nix-profile/lib/python*/site-packages/jieba/__init__.py",
@@ -87,11 +103,37 @@ def _get_jieba():
             try:
                 import jieba  # noqa: SUO005 — 有意动态发现，路径来自上面 glob
 
+                # 版本一致性检查：site-packages 路径里的 pythonX.Y 与当前解释器对比。
+                # jieba 纯 Python 当前能跨版本跑，但若路径含 C 扩展或 bytecode cache
+                # 版本检查，会静默炸。路径不匹配时记一条 warning（不阻止加载——
+                # 实测 jieba 跨 py3.12/py3.14 能正常工作，只是有 SyntaxWarning）。
+                m = re.search(r"python(\d+)\.(\d+)", site_dir)
+                if m:
+                    pkg_major, pkg_minor = int(m.group(1)), int(m.group(2))
+                    if (pkg_major, pkg_minor) != here_major:
+                        warnings.warn(
+                            "jieba 来自 python%d.%d site-packages，当前解释器是 "
+                            "python%d.%d。jieba 纯 Python 通常可跨版本运行，但若"
+                            "出现 SyntaxWarning 或 ImportError，此处即是原因。"
+                            % (pkg_major, pkg_minor, here_major[0], here_major[1]),
+                            RuntimeWarning,
+                            stacklevel=2,
+                        )
                 _JIEBA_CACHE = jieba
                 return jieba
-            except Exception:
+            except Exception as e:
+                # 记录失败原因，继续尝试下一个候选路径（可能有多个 pythonX.Y）
+                _JIEBA_LOAD_ERROR = "%s: %r" % (site_dir, e)
                 continue
     _JIEBA_CACHE = None  # 标记不可用，后续直接短路
+    if not _JIEBA_LOAD_ERROR:
+        _JIEBA_LOAD_ERROR = "未找到 jieba 包（~/.nix-profile 和 ~/.local 的 site-packages 都没有）"
+    warnings.warn(
+        "jieba 不可用，dream 回退到 2-gram 兜底分词器（中文分词质量降级）。"
+        "原因: %s" % _JIEBA_LOAD_ERROR,
+        RuntimeWarning,
+        stacklevel=2,
+    )
     return None
 
 
@@ -119,13 +161,19 @@ _MIN_VALID_YEAR = 2020
 # ═══════════════════════════════════════════════════════════════════════════════
 # 停用词（中文 + 英文常见虚词，避免"的/了/the/a"被当成高频主题）
 # ═══════════════════════════════════════════════════════════════════════════════
+# 设计：停用词表是**兜底防线**，不是主筛。主评分（IDF × √df × 形态学权重）已挡住
+# 大部分噪声——此表只清理那些评分仍放到前面的漏网虚词/对话套话。
+#
+# 注意：CJK 单字（如"问/题/方/法/代/码"）已从表中删除——_tokenize 两条路径都不产
+# 单字 token（jieba 路径 MIN_CJK_LEN=2 过滤，2-gram 路径产 2 字），单字停用词是死代码。
+# 2-gram 回退路径若产生跨边界伪词，由 _GLUE_CHARS 过滤，不靠此表。
 
 _STOPWORDS = frozenset("""
     的 了 在 是 有 和 与 或 也 都 就 这 那 一 个 些 等 把 被 让 给 向 往
-    对 为 以 于 由 从 到 用 通过 以及 但是 因为 所以 如果 虽然 不过 然后不然
-    我 你 他 她 它 们 的 地 得 着 过 会 能 要 想 可 说 看 做 去 来 出 进 上 下
-    请 帮 告 知 道 理 解 决 处 理 完 成 实 现 配 置 修 改 删 除 更 新 增 加
-    问 题 方 法 功 能 代 码 项 目 文 件 目 录 系 统 命 令 操 作 使 用 行 为
+    对 为 以 于 由 从 到 用 通过 以及 但是 因为 所以 如果 虽然 不过
+    然后 不然 然后不然
+    我 你 他 她 它 们 地 得 着 过 会 能 要 想 可 说 看 做 去 来 出 进 上 下
+    请 帮 告 知 道 理 解 决 处 理 完 成 实 现
     前 后 时 间 今 天 昨 天 明 天 现 在 刚 才 已 经 正 在 之 前 以 后 以 上 以 下
     a an the of to in on at for and or but is are was were be been being
     this that these those it its as with from by into out up down over under
@@ -144,13 +192,14 @@ _STOPWORDS = frozenset("""
     我先 没有 工作 进行 需要 可以 使用 这个 那个 什么 怎么
     一下 一些 一个 已经 还是 或者 不是 就是 可能 应该
     完成 帮我 时候 继续 想要 两个 之后 先看 这里 并且 开始 加一 要修
-    让我 目前 现在 这是 我们 已经 或者 不是 就是 可能 应该
-    了解 你看 需要 进行 可以 下面 里面 上面 同时 然后 所以
+    让我 目前 现在 这是 我们
+    了解 你看 需要 进行 可以 下面 里面 上面 同时 所以
     """.split())
 
 # 领域通用词：技术对话中高频出现但不构成具体经验的词。
-# 即使评分把它们排到前面，停用词表是最后一道防线（实测 IDF+形态学已大幅
-# 把这类词压到中后段，但 CJK 二字虚词如 评估/搜索/调查 仍可能漏网）。
+# 这是**兜底防线**（与 _STOPWORDS 同级）——主评分（IDF × √df × 形态学权重）已挡住
+# 大部分噪声，此表只清理评分仍放到前面的漏网虚词。CJK 二字虚词（评估/搜索/调查）
+# 虽被形态学降权（×0.4），但仍可能冲进候选，故在此显式列出。
 _DOMAIN_GENERIC = frozenset("""
     configuration workspace structure project implementation analysis
     compression compressed custom readme verification success state
@@ -181,7 +230,7 @@ _DOMAIN_GENERIC = frozenset("""
     列表 数组 映射 集合 队列 栈 网络 基础 根
     头 尾 顶部 底部 左侧 右侧 内部 外部 本地 远程
     简单 基本 标准 默认 特殊 通用 常见 具体 特别
-    有没有 找到 需求 问题 方面 情况 状态 内容 结果 目标
+    有没有 找到 需求 问题 方面 情况 状态 内容 结果
     评估 提交 搜索 调查 侦察 现有 按照 根据 这样 等等
     非常 一份 明白 我来 知识库
    """.split())
@@ -200,20 +249,23 @@ _GLUE_CHARS = frozenset(
 
 
 def _term_quality_score(term: str, df: int, total_facts: int) -> float:
-    """综合评分 = IDF × √df × 形态学权重。
+    """综合评分 = IDF × √df × 形态学权重（主评分）。
+
+    **本函数是主评分，不包含 TF**。TF 信号在 _gather_candidates 里保留并作 score
+    并列时的 tie-breaker（不进主评分——实测让 TF 进 BM25 saturation 会恶化候选，
+    见模块 docstring）。
 
     IDF（inverse document frequency）：log(total_facts / df)。稀有词天然高分，
     替代旧 bell_score 的"频率正态分布"假设（实测好坏词频率区间几乎完全重叠，
     频率不携带"是否经验词"的信息）。
 
     √df（频率平方根补偿）：纯 IDF 会把所有最低频词（df=MIN_TERM_FREQ）排到最前，
-    但 456 个 df=5 的词里大量是一次性长尾（token 哈希/无关项目名如 beatoraja-bin），
-    淹没真正高频的好词 treemacs(df=119)。√df 温和补偿高频词，让 treemacs 能进 top，
-    又不像纯 df（TF-IDF）那样让 removed(df=137)/bash 这类高频坏词独占榜首。
+    但大量 df=5 的词是一次性长尾（token 哈希/无关项目名），淹没真正高频的好词。
+    √df 温和补偿高频词，让高频项目标识符能进 top，又不像纯 df（TF-IDF）那样让
+    高频坏词独占榜首。
 
     形态学权重：代码标识符（含 -/_）是"具体工具/概念"的强信号，CJK 二字词
-    多为对话虚词（评估/提交/搜索），据此加减权。实测 top40 含 4 个好词
-    （self-improving/kb-summarize/host-spawn/treemacs），top10 全是高质量项目词。
+    多为对话虚词（评估/提交/搜索），据此加减权。
     """
     idf = math.log(total_facts / df) if df > 0 and total_facts > 0 else 0.0
     freq_boost = math.sqrt(df)
@@ -328,7 +380,8 @@ class DreamCandidate:
 
     term: str  # 触发候选的高频关键词
     frequency: int  # 该词在 reconcile 事实中的出现次数（= df，贡献事实数）
-    score: float = 0.0  # 综合质量评分（IDF × 形态学权重）
+    score: float = 0.0  # 综合质量评分（IDF × √df × 形态学权重）
+    tf_total: int = 0  # 全库出现总次数（per-fact 内 min(count,3) 截断后累加；作 score 并列时的 tie-breaker）
     representative_title: str = ""  # 代表事实的标题（词密度最高的那条）
     representative_content: str = ""  # 代表事实正文（索引层摘要，截断版）
     suggested_category: str = ""  # 映射后的 kb category
@@ -350,6 +403,7 @@ class DreamReport:
     total_candidates: int = 0  # 不受 offset/limit 截断的完整候选数
     offset: int = 0  # 本次请求的偏移量
     limit: int = DEFAULT_LIMIT  # 本次请求的返回上限
+    snapshot_hash: str = ""  # 本次候选集指纹（前 8 位）；offset>0 时提示排序可能漂移
     candidates: list[dict] = field(default_factory=list)
     promoted: int = 0  # 实际写入 KB 的卡片数（dry_run 时为 0）
     skipped_existing: int = 0  # 因 KB 已覆盖而跳过的候选
@@ -412,15 +466,19 @@ def _gather_candidates(
     offset: int = 0,
     limit: int = DEFAULT_LIMIT,
     window_days: int = DEFAULT_WINDOW_DAYS,
-) -> tuple[list[DreamCandidate], int, int]:
+) -> tuple[list[DreamCandidate], int, int, str]:
     """从 reconcile 事实启发式提取候选。
 
-    评分策略（IDF + 形态学）：
+    评分策略（IDF + 形态学，TF 作 tie-breaker）：
     1. 按 window_days 过滤事实（无 timestamp 的默认保留，如 hermes）
-    2. 对幸存事实正文 token 化，统计词频
-    3. 用 _term_quality_score 打分：IDF × 形态学权重（代码标识符加分，CJK 二字词降权）
-    4. 剔除 KB 已有同名标题的词
-    5. 每个候选选词密度最高的 fact 作代表
+    2. 对幸存事实正文 token 化，统计词频（**保留 per-fact TF**，旧实现去重成 set 丢了 TF）
+    3. 用 _term_quality_score 打分：IDF × √df × 形态学权重
+       （代码标识符加分，CJK 二字词降权）。**TF 不进主评分**——实测让 TF 进 BM25
+       saturation 会使 df=5 长尾词涌入 top（见实证：top-20 恶化成 折叠/nur/welcome），
+       因为本项目的好词（项目标识符）通常每条 fact 只出现 1 次，而 BM25 给单 fact 内
+       重复词加分。TF 仅在 score 并列时作 tie-breaker（消除随机排序）。
+    4. 剔除 KB 已有同名标题的词（精确匹配，非 token 级——实测 token 级误杀好候选）
+    5. 每个候选选词密度最高的 fact 作代表（密度高=真的在讨论这个词）
 
     Args:
         facts: reconcile 事实列表
@@ -429,15 +487,15 @@ def _gather_candidates(
         window_days: 回看窗口（天）；0=不过滤。无 timestamp 的 fact 不受影响
 
     Returns:
-        (candidates, total_count, used_facts) — total_count 是截断前候选总数，
-        used_facts 是实际参与评分的事实数（窗口过滤后）
+        (candidates, total_count, used_facts, snapshot_hash) —
+        total_count 是截断前候选总数，used_facts 是实际参与评分的事实数（窗口过滤后），
+        snapshot_hash 是候选集指纹（前 8 位 hex），供 offset 漂移提示用。
     """
     # ── 时间窗口过滤 ──
     cutoff = None
     if window_days > 0:
         cutoff = datetime.now(timezone.utc) - timedelta(days=window_days)
     usable: list[dict] = []
-    skipped_by_window = 0
     for fact in facts:
         ts = _parse_timestamp(fact.get("timestamp", ""))
         if ts is None:
@@ -445,13 +503,15 @@ def _gather_candidates(
             usable.append(fact)
             continue
         if cutoff is not None and ts < cutoff:
-            skipped_by_window += 1
             continue
         usable.append(fact)
     total_facts = len(usable)
 
     # 词 → [(fact_idx, fact), ...]：记录每个词出现在哪些事实
+    # 同时累计 TF（per-fact 内 min(count,3) 截断防单条 fact 刷频次）。
+    # 旧实现用 set() 去重把 TF 全丢了——这里保留，仅作 tie-breaker，不进主评分。
     term_facts: dict[str, list[tuple[int, dict]]] = {}
+    term_tf_total: dict[str, int] = {}
     for idx, fact in enumerate(usable):
         if _is_system_content(fact):
             continue
@@ -462,14 +522,14 @@ def _gather_candidates(
         content = fact.get("content", "")
         if len(content) < MIN_FACT_LEN:
             continue
-        # 对每条事实去重 token（避免单条事实里重复词刷频次）
-        seen_in_fact = set(_tokenize(content))
-        seen_in_fact.update(_tokenize(fact.get("title", "")))
-        for tok in seen_in_fact:
+        # 保留 per-fact TF：content + title 合并计数，单 fact 内 min(cnt, 3) 截断
+        fact_tf = Counter(_tokenize(content) + _tokenize(title))
+        for tok, cnt in fact_tf.items():
             term_facts.setdefault(tok, []).append((idx, fact))
+            term_tf_total[tok] = term_tf_total.get(tok, 0) + min(cnt, 3)
 
     covered = _kb_covered_titles()
-    candidates: list[tuple[float, DreamCandidate]] = []
+    candidates: list[tuple[float, int, DreamCandidate]] = []
     for term, hits in term_facts.items():
         df = len(hits)
         if df < MIN_TERM_FREQ:
@@ -485,15 +545,18 @@ def _gather_candidates(
         # Skip if representative is system content（二次兜底）
         if _is_system_content(rep):
             continue
-        # 综合评分（IDF × 形态学权重）
+        # 综合评分（IDF × √df × 形态学权重）——主评分
         score = _term_quality_score(term, df, total_facts)
+        tf = term_tf_total.get(term, 0)
         candidates.append(
             (
                 score,
+                tf,
                 DreamCandidate(
                     term=term,
                     frequency=df,
                     score=score,
+                    tf_total=tf,
                     representative_title=rep.get("title", term),
                     representative_content=rep.get("content", ""),
                     suggested_category=rep.get("category", "general"),
@@ -503,11 +566,20 @@ def _gather_candidates(
             )
         )
 
-    # 按综合评分降序，应用 offset + limit
-    candidates.sort(key=lambda x: x[0], reverse=True)
+    # 排序：score 降序为主，TF 降序作 tie-breaker（消除并列 score 的随机排序）。
+    # 例：c-c(df=27) 与 emacs-config(df=21) 的 score 可能并列，此时 TF 高者优先。
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
     total = len(candidates)
-    sliced = [c[1] for c in candidates[offset : offset + limit]]
-    return sliced, total, total_facts
+
+    # 候选集指纹：对 (term, df, score) 元组列表算 hash，供 offset 漂移提示。
+    # offset 语义不稳定（排序随 reconcile 索引更新变化），指纹让调用方感知"快照已变"。
+    fingerprint = "\n".join(
+        "%s|%d|%.4f" % (c[2].term, c[2].frequency, c[0]) for c in candidates
+    )
+    snapshot_hash = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:8]
+
+    sliced = [c[2] for c in candidates[offset : offset + limit]]
+    return sliced, total, total_facts, snapshot_hash
 
 
 def run_dream(
@@ -522,8 +594,11 @@ def run_dream(
         window_days: 事实时间窗口（天）。0=不过滤看全量；默认 90d（幸存 ~90% facts）。
             无 timestamp 的事实（如 hermes）不受窗口影响，默认保留。
         dry_run: 历史参数，**已无实际效果**——dream 现为纯只读候选发现器，
-            不再自动写 KB。保留以兼容 MCP 签名。
-        offset: 跳过前 N 个候选（用于多轮抽取跳过噪声词）
+            不再自动写 KB。保留以兼容 MCP 签名。显式传 `dry_run=False`（旧行为：
+            "写 KB"）会触发 DeprecationWarning，提示该参数已废弃。
+        offset: 跳过前 N 个候选（用于多轮抽取跳过噪声词）。**注意 offset 语义不稳定**：
+            候选排序随 reconcile 索引更新变化，同一 offset 在不同时间可能指向不同候选。
+            report.snapshot_hash 标识本次候选集指纹，两次调用指纹不同即说明排序已漂移。
         limit: 本次最多返回 N 个候选（默认 5）
 
     Returns:
@@ -533,6 +608,16 @@ def run_dream(
         出现的完整原始对话（含工具调用/推理/补丁，索引层摘要不截断），
         再用 agenote_add 决定是否综合写入 KB（见 agenote-curator skill Step 3）。
     """
+    # dry_run 弃用警告：只在显式传 dry_run=False（旧行为）时触发。
+    # 默认 dry_run=True 不警告（避免每次调用都吵）——只提示那些以为"False=写KB"的调用方。
+    if dry_run is False:
+        warnings.warn(
+            "run_dream(dry_run=False) 已无效果——dream 现为纯只读候选发现器，"
+            "不再自动写 KB。该参数保留仅为向后兼容，请勿依赖其行为。",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     report = DreamReport(window_days=window_days, offset=offset, limit=limit)
     facts = load_reconcile_facts()
     report.total_reconcile_facts = len(facts)
@@ -543,11 +628,12 @@ def run_dream(
         )
         return report
 
-    candidates, total, used_facts = _gather_candidates(
+    candidates, total, used_facts, snapshot_hash = _gather_candidates(
         facts, offset=offset, limit=limit, window_days=window_days
     )
     report.total_candidates = total
     report.used_facts = used_facts
+    report.snapshot_hash = snapshot_hash
 
     if not candidates:
         if total == 0:
@@ -574,10 +660,16 @@ def run_dream(
         "（含工具调用/推理/补丁）。dream 不自动写 KB——agent 综合流程见 "
         "agenote-curator skill 的 'Step 3 — Agent 综合'。"
     )
+    # offset 漂移提示：offset>0 时排序可能已变，提示调用方核对 snapshot_hash。
+    drift_hint = (
+        "\n⚠ offset 漂移：候选排序随 reconcile 索引更新变化，本次基于 snapshot %s。"
+        "下次调用若 snapshot 变了，offset 指向的内容可能不同。"
+        % snapshot_hash
+    )
     if remaining > 0:
         report.message = (
-            "发现 %d/%d 个候选（第 %d-%d 个%s，共 %d 个）。"
-            "还有 %d 个候选未显示，可用 --offset %d 继续查看。%s"
+            "发现 %d/%d 个候选（第 %d-%d 个%s，共 %d 个，snapshot %s）。"
+            "还有 %d 个候选未显示，可用 --offset %d 继续查看。%s%s"
             % (
                 len(candidates),
                 total,
@@ -585,18 +677,25 @@ def run_dream(
                 offset + len(candidates),
                 window_note,
                 total,
+                snapshot_hash,
                 remaining,
                 offset + len(candidates),
                 trace_hint,
+                drift_hint if offset > 0 else "",
             )
         )
     else:
-        report.message = "发现 %d/%d 个候选（第 %d-%d 个%s，全部候选已显示）。\n%s" % (
-            len(candidates),
-            total,
-            offset + 1,
-            offset + len(candidates),
-            window_note,
-            trace_hint,
+        report.message = (
+            "发现 %d/%d 个候选（第 %d-%d 个%s，全部候选已显示，snapshot %s）。\n%s%s"
+            % (
+                len(candidates),
+                total,
+                offset + 1,
+                offset + len(candidates),
+                window_note,
+                snapshot_hash,
+                trace_hint,
+                drift_hint if offset > 0 else "",
+            )
         )
     return report
