@@ -160,8 +160,58 @@ file_lines=$(wc -l < "$path")
   用 cron 而非 agent 进程触发,避免被 agent 生命周期绑架
 - ❌ **缺 dry_run 默认** —— 任何"改 KB / 改 memory"的批量操作,默认
   `dry_run=true`,首次跑给用户审核
-- ❌ **没看上游代码就读 README 出设计** —— README 是宣传,代码是
+- ❌ **没看上游代码就读 README 出设计** —— README 是宣传，代码是
   真相。1500 行的 `checkpoint.ts` 不会在 README 里讲清楚
+- ❌ **不尊重目标系统的硬约束** —— 目标系统的 `AGENTS.md` /
+  `CLAUDE.md` / `CONTRIBUTING.md` 里写明的硬约束（如"禁止跨模块
+  require"、"零脚本混进 skills 目录"、"分类目录下放、不允许顶层"）
+  必须**最先于借鉴方案被读取**，并在 PLAN.md「目标 Outcome」节列出，
+  否则改造到一半发现违反硬约束要全返工。例:literal-config 的
+  `lisp/AGENTS.md`「禁止跨模块 require」会**强制**你解耦上游耦合代码
+  （`(require 'lib)` → 按需函数内联 / 改注入点 / `defvar` 占位），而
+  不是按上游原貌搬运
+
+## 跨库依赖三类映射法（实施阶段借用）
+
+借鉴 + 移植过程中，经常需要把上游的「跨库/跨模块依赖」改成本机可接
+受的形态。emacs lisp 移植场景（搬 `general-config` 的 `completion.el`
+到 literal-config 的 `lisp/literal-completion.el`）实测出三段映射决策
+表，其他语言按对位套用：
+
+| 上游依赖形态 | 检测 | 本机改造 |
+|---|---|---|
+| 整库 `(require 'xxx)` | 模块文件内 `require 'xxx` | 删除。移植后模块必须**自包含可单文件加载**，按需函数内联进模块 |
+| 私有常量 `<prefix>:<const>` | `<prefix>:[a-z-]+` 模式 | 顶部 `defvar literal:<const> nil`，**用注入点机制接住**：bootstrap / 编排块的 defconst 自动生效，模块加载时变量已 bound |
+| 私有函数调用 `<prefix>/<fn>` | 直接调用 + 无显式 provide | `(when (fboundp '<prefix>/<fn>) (funcall '<prefix>/<fn> args))` 间接调用。注入点 nil / fboundp 不命中时降级静默 |
+
+**核对时机**：在 Step 4 写 PLAN.md 第 5 节「改动清单」时**先列「跨库
+依赖表」**（上游有哪些 require / 常量 / 函数调用 → 本机要不要 / 怎么
+接），不要图快直接搬运；PR 落地前再 grep 验证一遍：
+
+```bash
+rg "^[^;]*require '" 模块文件          # 应该为零或仅有本仓库自身 require
+rg "<prefix>:[a-z-]+" 模块文件          # 应该全部被 defvar 改造
+rg "(<prefix>)/<fn>" 模块文件          # 应该全部被 fboundp 检查包住
+```
+
+详细范例（搬运 general-config `completion.el` 的完整 require /
+常量前缀 / frame-hook 三个改造实例）见
+`references/cross-library-dependency-mapping.md`。
+
+## 借用时段的 commit 边界控制
+
+Plan 交付后逐步实施成多个 PR。每个 PR 的 commit 必须**只含本 PR 范围
+内的文件改动**，不混进同 session 内的其他任务改动（用户硬偏好，多次
+在 `Guix-configs` 等仓库的 commit 动作上明确强调「不要碰其他的
+uncommit 更改」）。具体三步法见
+`/skill agenote-curator` 第 9a 节「Commit 边界三步法」：
+
+1. `git add -- <本任务精确路径...>` 精准 stage（绝不用 `-A` / `-u`）
+2. `git diff --cached --name-only` 核对 staged 列表
+3. 提交后 `git status --short` 复查：其他目录的 uncommit 改动**原样保留**
+
+这条与「PR 拆分独立验收」组合使用，共同保证实施时不被混入无关改动
+污染 git 历史。
 
 ## 与其他 skill 的协作
 
@@ -187,3 +237,4 @@ file_lines=$(wc -l < "$path")
   copy-paste 即可起新文档
 - `references/capability-matrix-template.md` —— 缺口矩阵的 markdown 模板
 - `references/file-line-validation.md` —— grep 校验脚本片段
+- `references/cross-library-dependency-mapping.md` —— 跨库依赖三类映射法详细范例（emacs lisp 移植真实案例:从 general-config 的 completion.el 搬出）
