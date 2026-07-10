@@ -1281,9 +1281,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
                 (nix-shell-wrapper package
                                    (string-append "github:NixOS/nixpkgs/nixos-26.05#" package)
                                    #:run-command (list package)))
-              '(;; AI Agent
-                "codex" "codex-acp"
-                ;; Coding 工具
+              '(;; Coding 工具
                 "biome" "bun" "pnpm"
                 ;; 工具
                 "broot" "gh" "pmbootstrap" "scrcpy"
