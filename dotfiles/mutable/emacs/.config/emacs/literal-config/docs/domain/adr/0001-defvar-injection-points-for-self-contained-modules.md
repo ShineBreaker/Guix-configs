@@ -2,7 +2,7 @@
 
 `literal-color-scheme.el` / `literal-dashboard.el` 等模块自包含,不 `require` 其他 `literal-*` 模块;跨模块函数依赖通过「模块头部 `defvar` 占位变量 + 加载序列后方 `setq` 注入函数」解决,利用 Emacs Lisp 双命名空间下 `defun` 与同名 `defvar` 共存的特性。
 
-**Status**: accepted
+**Status**: superseded by [0002 — direct `require` for sibling modules](0002-direct-require-for-sibling-modules.md) (2026-07)
 
 **Considered Options**:
 

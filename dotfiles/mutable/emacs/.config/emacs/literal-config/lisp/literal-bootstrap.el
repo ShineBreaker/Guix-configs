@@ -52,8 +52,14 @@
   "agenote 子域目录（agent 写入的卡片 + index.json）。")
 
 (defconst literal:tree-sitter-lib-dir
-  (expand-file-name "~/.guix-home/profile/lib/tree-sitter")
-  "Guix Home profile 的 tree-sitter 动态库目录。")
+  (or (getenv "TREE_SITTER_GRAMMAR_PATH")
+      (expand-file-name "~/.guix-home/profile/lib/tree-sitter"))
+  "Tree-sitter grammar 动态库目录。
+
+Guix home-emacs-service 的 wrapper 把 home-emacs-profile/lib/tree-sitter/
+通过 `TREE_SITTER_GRAMMAR_PATH' 环境变量注入 Emacs 进程(该 profile 独立于
+~/.guix-home/profile,只有 emacs wrapper 能访问)。Emacs 31 会自动把该环境
+变量加入 `treesit-extra-load-path',故常量本身主要用于诊断与非 Guix 环境。")
 
 (defconst literal:guix-profile
   (or (getenv "GUIX_PROFILE")

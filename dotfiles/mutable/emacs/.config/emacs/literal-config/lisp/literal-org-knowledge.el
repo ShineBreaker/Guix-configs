@@ -100,6 +100,10 @@ STATUS 为进程退出码（0 = 成功），OUTPUT 为 stdout 的 trimmed 字符
             (push name result)))))
       (nreverse result))))
 
+;; 公开别名:双横线名为模块私有约定,跨模块调用(dashboard 收集知识库文件)
+;; 应走公开 API。defalias 让 dashboard 调 literal/knowledge-collect-org-files。
+(defalias 'literal/knowledge-collect-org-files #'literal/knowledge--collect-org-files)
+
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 目录确保
 ;; ═════════════════════════════════════════════════════════════════════════════

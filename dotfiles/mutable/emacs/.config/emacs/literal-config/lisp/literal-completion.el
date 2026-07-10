@@ -31,9 +31,9 @@
 ;;   - `literal:executable-hunspell' ← literal-bootstrap.el 的 defconst 自动生效
 ;;   未注入（nil）时：ispell 后端检测跳过，cape 补全不受影响。
 ;;
-;; 注入点 2（frame 生命周期 hook，AGENTS.md 机制 2，Lisp-2 双命名空间）：
-;;   - `literal/add-frame-hook' ← init.el 在 require literal-frame 后 setq 注入
-;;   未注入（nil）时：per-frame 的 GUI/终端 childframe 适配跳过，补全仍可用默认显示。
+;; 注入点 2（frame 生命周期 hook）：
+;;   - `literal/add-frame-hook' ← 直接 require 'literal-frame（见 ADR-0002），
+;;     per-frame 的 GUI/终端 childframe 适配由 literal-frame 提供实现。
 ;;
 ;; 快捷键约定（与 literal-config 全局键位一致）：
 ;; - `C-s` 保留为保存，更贴近 Windows / IDE 常见习惯
@@ -45,6 +45,7 @@
 
 (require 'seq)
 (require 'ispell)
+(require 'literal-frame)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 注入点
@@ -58,10 +59,7 @@ nil 时 ispell 后端检测跳过。")
   "hunspell 可执行文件路径。由 literal-bootstrap.el 的 defconst 自动生效。
 nil 时 ispell 后端检测跳过。")
 
-(defvar literal/add-frame-hook nil
-  "注册函数在每个新 frame 创建时执行的 hook。
-由 init.el 注入 literal-frame.el 的实现。nil 时 per-frame 初始化跳过。
-函数签名：(FUNCTION &optional FRAME) -> FUNCTION 接受可选 FRAME 参数。")
+;; frame hook 由 literal-frame.el 提供（顶部已 require），见 ADR-0002
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; savehist - 持久化 minibuffer 历史和 vertico 最后查询
@@ -523,8 +521,7 @@ dabbrev + keyword（关键字）+ file（路径）。
 GUI 模式：应用 PGTK childframe 修复 + kind-icon 图标。
 终端模式：启用 corfu-terminal 和 Nerd Font 图标。
 
-frame hook 由 init.el 通过 `literal/add-frame-hook' 注入点注册；
-未注入时 standalone 模式下本函数不会被调用，补全使用默认显示。"
+frame hook 由 literal-frame.el 提供（顶部已 require）。"
   (with-selected-frame (or frame (selected-frame))
     (with-eval-after-load 'corfu
       (if (display-graphic-p)
@@ -542,9 +539,8 @@ frame hook 由 init.el 通过 `literal/add-frame-hook' 注入点注册；
         (setq corfu-margin-formatters
               '(literal/completion--corfu-terminal-margin-formatter))))))
 
-;; 通过注入点注册到 frame 生命周期（nil 时 no-op，AGENTS.md 机制 2）
-(when (functionp literal/add-frame-hook)
-  (funcall literal/add-frame-hook #'literal/completion-setup-display))
+;; 注册到 frame 生命周期（literal-frame.el 提供 add-frame-hook）
+(literal/add-frame-hook #'literal/completion-setup-display)
 
 (provide 'literal-completion)
 ;;; literal-completion.el ends here

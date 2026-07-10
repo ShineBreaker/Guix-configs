@@ -12,29 +12,18 @@
 ;; 在 daemon 模式下，初始化被延迟到首个 GUI 帧创建时执行，
 ;; 避免在没有 display 环境时过早加载 ef-themes 导致非法 frame 错误。
 ;;
-;; 自包含设计：本模块不 require 任何 literal-* 模块。
-;; frame hook（`literal/add-frame-hook' / `literal/remove-frame-hook'）
-;; 通过下方 defvar 注入点由 init.el 提供真实实现；未注入时模块仍可加载，
-;; 仅 daemon/client 的 per-frame 初始化会跳过。
+;; 依赖：`literal-frame' 提供 frame 生命周期 hook（`literal/add-frame-hook'
+;; / `literal/remove-frame-hook'）。模块在同仓库、同 load-path 下，直接 require
+;; 即可（替代原 defvar 注入点解耦，见 ADR-0002）。
 
 ;;; Code:
 
 (require 'dbus)
+(require 'literal-frame)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; 注入点：frame 生命周期 hook（由 init.el 注入 literal-frame.el 的实现）
+;; frame 生命周期 hook（由 literal-frame.el 提供，已在顶部 require）
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; 默认 nil：模块可独立加载，仅 daemon per-frame 初始化路径跳过。
-;; init.el 在 require 本模块后通常 setq 为：
-;;   (setq literal/add-frame-hook    #'literal/add-frame-hook-impl)
-;;   (setq literal/remove-frame-hook #'literal/remove-frame-hook-impl)
-(defvar literal/add-frame-hook nil
-  "注册函数在每个新 frame 创建时执行的 hook。
-由 init.el 注入 literal-frame.el 的实现。nil 时 per-frame 初始化跳过。
-函数签名：(FUNCTION &optional FRAME) -> FUNCTION 接受可选 FRAME 参数。")
-(defvar literal/remove-frame-hook nil
-  "移除 frame hook 注册的函数。
-由 init.el 注入 literal-frame.el 的实现。nil 时为 no-op。")
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 配置变量
@@ -261,16 +250,14 @@ MODE 为 'light 或 'dark。
     (with-selected-frame frame
       (require 'ef-themes)
       (literal/color-scheme-init)))
-  (when (functionp literal/remove-frame-hook)
-    (funcall literal/remove-frame-hook #'literal/color-scheme-delayed-init)))
+  (literal/remove-frame-hook #'literal/color-scheme-delayed-init))
 
 ;; daemon 模式：延迟到首帧创建时再加载主题和初始化
 ;; 非 daemon 模式：帧已存在，立即初始化
 (if (daemonp)
     (progn
-      (when (functionp literal/add-frame-hook)
-        (funcall literal/add-frame-hook #'literal/color-scheme-delayed-init)
-        (funcall literal/add-frame-hook #'literal/color-scheme-apply-for-frame)))
+      (literal/add-frame-hook #'literal/color-scheme-delayed-init)
+      (literal/add-frame-hook #'literal/color-scheme-apply-for-frame))
   (require 'ef-themes)
   (literal/color-scheme-init))
 
