@@ -8,6 +8,9 @@
 ;; 本文件是 literal-config 的固定 bootstrap 入口,**不由 emacs.org tangle 生成**,
 ;; 永久纳入 git 跟踪。chemacs2 在选定 literal profile 后会加载本文件。
 ;;
+;; chemacs2 迁移后(commit 0ca2c196)说明:已无 chemacs2 引导层,本文件由
+;; `emacs' 直接以 user-emacs-directory = 本仓库路径加载。
+;;
 ;; 职责(且仅此三步):
 ;;   1. 检测 emacs.org 是否比 main.el 新(或 main.el 不存在)
 ;;   2. 是则调用 `org-babel-tangle-file' 重新生成 main.el
@@ -22,13 +25,21 @@
 
 ;;; Code:
 
-;; chemacs2 已把 user-emacs-directory 指向本目录(literal-config/)。
 (let* ((org-file (expand-file-name "emacs.org" user-emacs-directory))
        (main-file (expand-file-name "main.el" user-emacs-directory)))
 
   ;; 按需 tangle:main.el 缺失,或 emacs.org 比 main.el 新
   (when (or (not (file-exists-p main-file))
             (file-newer-than-file-p org-file main-file))
+    ;; Emacs 31 仍 defvar `byte-compile-root-dir'(见 bytecomp.el:1232),但 bytecomp.el
+    ;; 是 lazy-load,默认不在初始环境。`elfeed-link.el' 注册的 `elfeed' org link
+    ;; 会被 `org-babel-tangle--unbracketed-link' 通过 `org-store-link' 试探,触发
+    ;; autoload → `require 'elfeed-show' → `require 'elfeed'。elfeed.el 内
+    ;; `(cl-eval-when (load eval) (unless byte-compile-root-dir ...))' 这段
+    ;; byte-code 假设变量已 bound,但 elfeed-3.4.2 不可绕开。预先 defvar 即可
+    ;; 让字节码读到 nil 而不是 void-variable;真正根治需升级到 elfeed-4.0.1。
+    (when (not (boundp 'byte-compile-root-dir))
+      (defvar byte-compile-root-dir nil))
     (require 'org)
     (require 'ob-tangle)
     ;; Emacs 28+ 在 daemon/批处理下 org-babel-tangle 可能触发 GC 抖动,
