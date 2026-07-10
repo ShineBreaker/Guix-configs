@@ -1454,6 +1454,7 @@ end
 
                              ;; 编程语言支持
                              "emacs-arei"
+                             "emacs-csharp-mode"
                              "emacs-fish-mode"
                              "emacs-fish-completion"
                              "emacs-helm-fish-completion"

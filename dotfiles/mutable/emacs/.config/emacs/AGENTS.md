@@ -11,6 +11,7 @@
 | `init.el`           | 固定 bootstrap        | 不得改变 tangle 签名和单产物模型 |
 | `early-init.el`     | 启动前优化            | 仅处理必须早于 `main.el` 的行为  |
 | `main.el`           | tangle 产物,gitignore | 禁止手改                         |
+| `data/*.el`         | 外置翻译表            | 只允许注释和预定变量的字面量 `setq` |
 | `scripts/configctl` | Agent 导航与验收入口  | 新增维护能力优先扩展这里         |
 
 启动链:
@@ -152,6 +153,7 @@ startup -> appearance -> editing -> programming -> projects
 | 项目导航                  | `project-navigation`               |
 | Org / Knowledge / agenote | `org-core`, `knowledge`, `agenote` |
 | 键位 / 补全               | `keybindings`, `completion`        |
+| Which-key / 右键菜单翻译  | `data/which-key-zh.el`, `data/context-menu-zh.el` |
 | Dashboard                 | `dashboard`                        |
 | 版本 workaround / 待确认  | `compatibility`                    |
 
@@ -176,6 +178,11 @@ git status --short
 
 `load` 成功意味着临时 tangle 产物可在 Guix Emacs 包环境中加载。D-Bus session
 在 batch 环境不可用时允许出现颜色方案提示;其他 Lisp error 不允许忽略。
+
+翻译数据是唯一的外置数据例外：`data/which-key-zh.el` 和
+`data/context-menu-zh.el` 由 `appearance/i18n-data` 加载。两者只能包含注释和
+预定变量的字面量 `setq`，修改后重启 Emacs；`configctl check` 会验证其文件清单、
+赋值目标、括号和纯数据边界，`configctl load` 会把它们复制到隔离运行时。
 
 额外静态检查:
 

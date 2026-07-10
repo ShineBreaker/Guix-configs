@@ -16,6 +16,15 @@
   '("startup" "appearance" "editing" "programming" "projects"
     "org-knowledge" "keys-completion" "system-tools"))
 
+(defconst literal-configctl-i18n-data-files
+  '(("which-key-zh.el"
+     literal:which-key-description-spec
+     literal:which-key-major-mode-description-spec
+     literal:which-key-regexp-replacements)
+    ("context-menu-zh.el"
+     literal:context-menu-label-translations))
+  "External data files and their required `setq' targets.")
+
 (defun literal-configctl--fail (format-string &rest args)
   (error "configctl: %s" (apply #'format format-string args)))
 
@@ -227,6 +236,57 @@
                                   (error-message-string err))))
       (list forms (hash-table-count definitions)))))
 
+(defun literal-configctl--audit-i18n-data ()
+  "Validate that external localization files contain only expected literal data."
+  (let ((assignments 0)
+        (data-directory (expand-file-name "data/" literal-configctl-root)))
+    (dolist (specification literal-configctl-i18n-data-files)
+      (let* ((name (car specification))
+             (symbols (cdr specification))
+             (file (expand-file-name name data-directory))
+             found)
+        (unless (file-readable-p file)
+          (literal-configctl--fail "missing or unreadable i18n data file: %s" file))
+        (with-temp-buffer
+          (insert-file-contents file)
+          (emacs-lisp-mode)
+          (condition-case err
+              (check-parens)
+            (error
+             (literal-configctl--fail "unbalanced i18n data file %s: %s"
+                                      name (error-message-string err))))
+          (goto-char (point-min))
+          (while (progn
+                   (skip-chars-forward " \t\n")
+                   (< (point) (point-max)))
+            (let ((form (condition-case err
+                            (read (current-buffer))
+                          (error
+                           (literal-configctl--fail
+                            "cannot read i18n data file %s: %s"
+                            name (error-message-string err))))))
+              (unless (and (listp form)
+                           (eq (car form) 'setq)
+                           (= (length form) 3)
+                           (memq (cadr form) symbols)
+                           (let ((value (caddr form)))
+                             (and (listp value)
+                                  (eq (car value) 'quote)
+                                  (= (length value) 2)
+                                  (listp (cadr value)))))
+                (literal-configctl--fail
+                 "i18n data file %s must contain only literal setq assignments" name))
+              (when (memq (cadr form) found)
+                (literal-configctl--fail
+                 "duplicate i18n assignment %s in %s" (cadr form) name))
+              (push (cadr form) found)
+              (cl-incf assignments)))
+        (unless (equal (nreverse found) symbols)
+          (literal-configctl--fail
+           "i18n assignments in %s must be exactly %S (found %S)"
+           name symbols found)))))
+    assignments))
+
 (defun literal-configctl--assert (condition format-string &rest args)
   (unless condition
     (literal-configctl--fail "smoke assertion failed: %s"
@@ -271,6 +331,11 @@
   (require 'which-key)
   (literal-configctl--assert (null literal--pending-wk-descs)
                              "pending Which-key descriptions were not flushed")
+  (literal-configctl--assert (consp literal:which-key-description-spec)
+                             "Which-key translation data missing")
+  (literal-configctl--assert
+   (equal (cdr (assoc "Undo" literal:context-menu-label-translations)) "撤销")
+   "context-menu translation data missing Undo -> 撤销")
   t)
 
 (defun literal-configctl--tangle-and-audit ()
@@ -288,20 +353,24 @@
           (with-temp-file org-id-locations-file (prin1 nil (current-buffer)))
           (make-directory org-persist-directory t)
           (copy-file literal-configctl-org-file org-copy t)
+          (copy-directory (expand-file-name "data/" literal-configctl-root)
+                          (expand-file-name "data/" runtime)
+                          nil nil t)
           (org-babel-tangle-file org-copy target "emacs-lisp")
           (list runtime target (literal-configctl--audit-elisp target)))
       ;; The caller removes RUNTIME after an optional load.
       )))
 
 (defun literal-configctl-check (&optional keep-tangle)
-  (pcase-let* ((`(,blocks ,refs) (literal-configctl--check-structure))
+  (let ((data-assignments (literal-configctl--audit-i18n-data)))
+    (pcase-let* ((`(,blocks ,refs) (literal-configctl--check-structure))
                (`(,runtime ,target (,forms ,definitions))
                 (literal-configctl--tangle-and-audit)))
-    (unless keep-tangle
-      (delete-directory runtime t))
-    (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions\n"
-                   blocks refs forms definitions))
-    (when keep-tangle (list runtime target))))
+      (unless keep-tangle
+        (delete-directory runtime t))
+      (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions, %d external data assignments\n"
+                     blocks refs forms definitions data-assignments))
+      (when keep-tangle (list runtime target)))))
 
 (defun literal-configctl-load ()
   (pcase-let* ((`(,runtime ,target) (literal-configctl-check t))
