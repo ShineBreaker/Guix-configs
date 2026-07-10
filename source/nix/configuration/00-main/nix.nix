@@ -10,10 +10,17 @@
     package = pkgs.nix;
     settings = {
       auto-optimise-store = true;
-      trusted-users = [ "root" "brokenshine" ];
-      experimental-features = [ "nix-command" "flakes" ];
+      trusted-users = [
+        "root"
+        "brokenshine"
+      ];
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
       builders-use-substitutes = true;
       keep-derivations = true;
+      use-xdg-base-directories = true;
       substituters = [
         "https://mirrors.ustc.edu.cn/nix-channels/store"
         "https://mirror.nju.edu.cn/nix-channels/store"

@@ -1225,7 +1225,7 @@
   ((invoke "nix")
    (category 'nix)
    (synopsis "应用备用 Nix home-manager 配置"))
-  (%run `(,(string-append %home-dir "/.nix-profile/bin/home-manager")
+  (%run `(,(string-append %home-dir "/.local/state/nix/profile/bin/home-manager")
           "switch" "-b" "backup"
           "--flake" ,(string-append %nix-dir "/#Guix")
           "--extra-experimental-features" "nix-command"

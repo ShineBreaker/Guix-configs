@@ -1199,8 +1199,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 浏览器 & 插件
-        "ublock-origin-chromium"
-        "ungoogled-chromium-wayland"
+        ; "ublock-origin-chromium"
+        ; "ungoogled-chromium-wayland"
         "zen-browser-bin"
 
         ;; 解码器
@@ -1303,10 +1303,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
          (list (nix-shell-wrapper "bunx"
                                   '("github:NixOS/nixpkgs/nixos-26.05#bun")
                                   #:run-command '("bunx")))
-
-         (list (nix-shell-wrapper "claude"
-                                  '("github:NixOS/nixpkgs/nixos-26.05#claude-code")
-                                  #:run-command '("claude")))
 
          (list (nix-shell-wrapper "fastboot"
                                   '("github:NixOS/nixpkgs/nixos-26.05#android-tools")
@@ -1718,12 +1714,12 @@ end
                                (requirement '(graphical-session))
                                (start #~(lambda args
                                           ((make-forkexec-constructor
-                                            (list (string-append (getenv "HOME") "/.nix-profile/bin/hermes")
+                                            (list (string-append (getenv "XDG_STATE_HOME") "/nix/profile/bin/hermes")
                                                   "dashboard" "--no-open"
                                                   "--host" "127.0.0.1" "--port" "9119")
                                             #:environment-variables (environ)
-                                            #:log-file (string-append (getenv "HOME")
-                                                                      "/.local/state/shepherd/hermes-backend.log"))
+                                            #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                                                      "/shepherd/hermes-backend.log"))
                                            args)))
                                (stop #~(make-kill-destructor))
                                (respawn? #t))
@@ -1733,11 +1729,11 @@ end
                                (requirement '(hermes-backend))
                                (start #~(lambda args
                                           ((make-forkexec-constructor
-                                            (list (string-append (getenv "HOME") "/.nix-profile/bin/hermes")
+                                            (list (string-append (getenv "XDG_STATE_HOME") "/nix/profile/bin/hermes")
                                                   "gateway" "run")
                                             #:environment-variables (environ)
-                                            #:log-file (string-append (getenv "HOME")
-                                                                      "/.local/state/shepherd/hermes-gateway.log"))
+                                            #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                                                      "/shepherd/hermes-gateway.log"))
                                            args)))
                                (stop #~(make-kill-destructor))
                                (respawn? #t))))))
@@ -1956,9 +1952,9 @@ end
                            "-Dawt.toolkit.name=WLToolkit"))
                          ("XDG_DATA_DIRS" unquote
                           (string-append
-                           "$HOME/.local/share/flatpak/exports/share:"
+                           "$XDG_DATA_HOME/flatpak/exports/share:"
                            "/var/lib/flatpak/exports/share:"
-                           "$HOME/.nix-profile/share:"
+                           "$XDG_STATE_HOME/nix/profile/share:"
                            "/nix/var/nix/profiles/default/share:"
                            "$XDG_DATA_DIRS"))))))
 #+end_src
