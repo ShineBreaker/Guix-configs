@@ -6,27 +6,12 @@
 
 以 Guix 为核心的个人系统配置仓库，单一 `source/config.org` 同时声明 `operating-system` 和 `home-environment`，通过 `blue` 构建并部署。
 
-<!-- structor:begin -->
+<!-- structor:begin depth=2 -->
 
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
 ```
 Guix-configs///
-├── .crush/
-│   ├── logs/
-│   │   └── crush.log
-│   ├── .gitignore
-│   ├── crush.db
-│   └── init
-├── .ropeproject/
-├── .zcode/
-│   └── plans/
-│       └── plan-sess_6258bfa0-a708-47dc-b6ce-bc8dcef60df1.md
-├── dist/
-│   ├── jeans-desktop-20260707.x86_64-linux.iso
-│   ├── jeans-minimal-20260707.x86_64-linux.iso
-│   ├── jeans-xfce-20260706.x86_64-linux.iso
-│   └── jeans-xfce-20260707.x86_64-linux.iso
 ├── docs/
 │   ├── agenote.md
 │   ├── iso-build.md
@@ -34,59 +19,8 @@ Guix-configs///
 │   └── secrets.md
 ├── dotfiles/
 │   ├── disable/
-│   │   ├── dms-suite/
-│   │   │   ├── .config/
-│   │   │   └── .local/
-│   │   └── waybar-suite/
-│   │       ├── .config/
-│   │       └── .local/
 │   ├── immutable/
-│   │   ├── agents/
-│   │   │   ├── .config/
-│   │   │   ├── .local/
-│   │   │   └── .gitignore
-│   │   ├── desktop/
-│   │   │   ├── .config/
-│   │   │   └── .local/
-│   │   ├── noctalia-suite/
-│   │   │   ├── .config/
-│   │   │   └── .local/
-│   │   ├── system/
-│   │   │   └── .config/
-│   │   ├── terminal/
-│   │   │   ├── .config/
-│   │   │   └── .local/
-│   │   └── utilities/
-│   │       ├── .config/
-│   │       ├── .local/
-│   │       └── .nix-channels
 │   └── mutable/
-│       ├── agenote/
-│       │   ├── .config/
-│       │   ├── .local/
-│       │   ├── .stow-folding
-│       │   └── .stow-local-ignore
-│       ├── appimage-run/
-│       │   ├── .local/
-│       │   ├── .stow-local-ignore
-│       │   └── README.md
-│       ├── emacs/
-│       │   ├── .config/
-│       │   └── .stow-local-ignore
-│       ├── hermes/
-│       │   ├── .local/
-│       │   └── .stow-folding
-│       ├── pi/
-│       │   ├── .config/
-│       │   ├── .local/
-│       │   └── .stow-local-ignore
-│       ├── secrets/
-│       │   ├── .local/
-│       │   ├── .stow-overlay/
-│       │   └── .stow-local-ignore
-│       └── skills/
-│           ├── .config/
-│           └── .stow-folding
 ├── screenshots/
 │   ├── browse.png
 │   ├── daily.png
@@ -96,17 +30,7 @@ Guix-configs///
 │   └── build-image.scm
 ├── source/
 │   ├── files/
-│   │   ├── skel/
-│   │   │   └── .config/
-│   │   ├── nftables.conf
-│   │   ├── rounded.qss
-│   │   └── zed.json
 │   ├── nix/
-│   │   ├── configuration/
-│   │   │   ├── 00-main/
-│   │   │   └── programs/
-│   │   ├── flake.lock
-│   │   └── flake.nix
 │   ├── channel.lock
 │   ├── channel.scm
 │   ├── config.org
@@ -114,23 +38,6 @@ Guix-configs///
 │   └── manifest.scm
 ├── tools/
 │   ├── linux-setup/
-│   │   ├── docs/
-│   │   │   └── ai-toolchain.md
-│   │   ├── files/
-│   │   │   ├── env-arch
-│   │   │   └── env-fedora
-│   │   ├── scripts/
-│   │   │   ├── backup-flatpak-apps.sh
-│   │   │   ├── link-data-folders.sh
-│   │   │   ├── restore-flatpak-apps.sh
-│   │   │   ├── subvol-setup.sh
-│   │   │   └── verify-ai-toolchain.sh
-│   │   ├── tools/
-│   │   │   ├── arch-chroot
-│   │   │   └── genfstab
-│   │   ├── LICENSE
-│   │   ├── README.md
-│   │   └── justfile
 │   ├── bootstrap.sh
 │   ├── fxxk-link.sh
 │   └── secrets
@@ -243,9 +150,11 @@ blue stow-all --restow           # 重建所有包
 详见 `dotfiles/mutable/AGENTS.md`。
 
 ## Emacs 单 Profile 架构（literal-config）
+
 迁移历史：2026-07 commit `0ca2c196` 移除 chemacs2 后，emacs 配置直接位于
 `dotfiles/mutable/emacs/.config/emacs/` 顶层，以 GNU Stow 软链到 `~/.config/emacs/`。
 **无 chemacs2 引导层、无 submodule、单 profile**。
+
 ```
 ~/.config/emacs/                      ← Stow 软链到仓库源（改源即生效）
 ├── init.el                            ← 固定手写 bootstrap：按需 tangle emacs.org → main.el
@@ -256,6 +165,7 @@ blue stow-all --restow           # 重建所有包
 ├── AGENTS.md                          ← literal-config 自包含工作规范
 └── .gitignore
 ```
+
 **启动路径**：`emacs` 启动 → `~/.config/emacs/init.el`
 （实际为 `dotfiles/mutable/emacs/.config/emacs/init.el`）→ 检测 `emacs.org` 是否比
 `main.el` 新 → 是则 `org-babel-tangle-file` 重新生成 `main.el` → `load main.el`。
@@ -263,14 +173,15 @@ blue stow-all --restow           # 重建所有包
 `emacsclient` 调用（niri Mod+E、skill 脚本、`.desktop`、`with-editor` GIT_EDITOR）
 依赖默认 socket 名 "server"，**零改动**。
 **常用操作**：
+
 - 试新配置（前台实例，独立于 daemon）：`emacs`
 - 改 bootstrap：`dotfiles/mutable/emacs/.config/emacs/init.el`（人类手维护，AGENTS.md §1.2 固定签名的契约不变）
-- 改配置源：`dotfiles/mutable/emacs/.config/emacs/emacs.org`（按 *启动顺序与模块依赖速查* 8 域组织）
+- 改配置源：`dotfiles/mutable/emacs/.config/emacs/emacs.org`（按 _启动顺序与模块依赖速查_ 8 域组织）
 - 切 Guix Emacs 版本（影响包版本，不影响配置内容）：改 `source/config.org` 中 `home-emacs-packages` 后 `blue home`
 
 ## 目录结构图自动维护
 
-> **实现位置**：`blueprint.scm` 内的 `structor` 任务；11 个 `AGENTS.md` 里的 `<!-- structor:begin -->...<!-- /structor -->` 标记对。
+> **实现位置**：`blueprint.scm` 内的 `structor` 任务；11 个 `AGENTS.md` 里的 `<!-- structor:begin ...>...<!-- /structor -->` 标记对。
 
 仓库内所有 `AGENTS.md` 的"## 目录结构"章节用标记圈起，由 `blue structor` 自动重写。
 
@@ -278,10 +189,11 @@ blue stow-all --restow           # 重建所有包
 
 - **不要手改**标记之间的内容——会被下次跑 `blue structor` 覆盖
 - 新增/移动文件后跑 `blue structor` 刷新所有结构图
-- 单文件调试：`ORG_STRUCTOR_TARGET=source/AGENTS.md blue structor`
+- 单文件调试：`blue structor source/AGENTS.md`
 - 预览不写文件：`ORG_STRUCTOR_DRY=1 blue structor`
 - 标记格式独立于运行器（不带 `blue:` 前缀），其他仓库用 justfile/Makefile 包装时复用同一约定
-- 跳过规则与 `dotfile-services` 的 `excluded` 列表对齐（`.git` / `.github` / `AGENTS.md` 自身等）
+- **可见性遵循 `.gitignore`**（`git ls-files --cached --others --exclude-standard` 驱动）：根 `.gitignore` + 所有嵌套 `.gitignore` + submodule gitlink 都自动生效。额外只结构化跳过 `AGENTS.md` 自身（树所在文件）与 `*.swp`（编辑器交换文件）
+- **深度可控**：在标记内写 `<!-- structor:begin depth=N -->`，优先级高于 `ORG_STRUCTOR_DEPTH` 环境变量与默认 4。`blue structor` 每次重写会把解析出的 `depth=N` 回写到 begin 标记（自描述、重跑不丢）
 - 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `blueprint.scm` 的 `%structor-targets`
 
 ## 频道架构

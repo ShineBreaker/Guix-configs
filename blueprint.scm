@@ -709,16 +709,27 @@
 ;;; 刷新所有 AGENTS.md 的目录树。详见仓库根 AGENTS.md 的同名章节。
 ;;;
 ;;; 标记格式（独立于运行器）：
-;;;   <!-- structor:begin -->
+;;;   <!-- structor:begin depth=N -->     ← N 可选，覆盖默认深度
 ;;;   ... 自动生成的树 ...
 ;;;   <!-- /structor -->
 ;;;
-;;; 跳过规则与 dotfile-services 的 excluded 列表对齐（.git / .github 等）。
+;;; 【可见性 = git 驱动】被忽略的条目直接交给 git：对每个 target 所在目录
+;;; 跑 `git -C <scope> ls-files --cached --others --exclude-standard`，拿到
+;;; "git 能看见的所有相对路径"。一个条目可见 ⟺ 列表里有等于它、或以
+;;; `<它>/` 为前缀的路径。这样根 `.gitignore` + 所有嵌套 `.gitignore` +
+;;; submodule gitlink 都自动正确。额外只结构化跳过两类 git 不会帮我们挡的：
+;;; AGENTS.md（树所在文件本身，不能列出自己）和 `*.swp`（编辑器交换文件）。
 
 (define %structor-marker-start "<!-- structor:begin -->")
 (define %structor-marker-end "<!-- /structor -->")
-(define %structor-skip-names
-  '(".git" ".github" ".agents" "node_modules" ".blue-store"))
+
+;; 同时识别 begin 标记行并抽取 depth=N。depth 组整体可选（兼容无参数标记）。
+;; 例：`<!-- structor:begin -->` → 命中，depth=#f；
+;;     `<!-- structor:begin depth=6 -->` → 命中，depth="6"。
+;; Guile ERE：`(`、`)` 是分组符号（不是字面括号），故无需 `\\` 转义。
+(define %structor-depth-regex
+  (make-regexp
+   "<!--[[:space:]]*structor:begin([[:space:]]+depth[[:space:]]*=[[:space:]]*([0-9]+))?[[:space:]]*-->"))
 
 ;; 枚举仓库内所有需要维护目录树的 AGENTS.md/README.md（返回相对路径）。
 ;; 排除 .git / disable / tmp / .blue-store / .agents 下的文件。
@@ -735,28 +746,64 @@
             (substring path (string-length root))))
      (find-files root "(^|/)(AGENTS|README)\\.md$"))))
 
-;; 某个目录条目是否应被 structor 忽略（. / .. / 元目录 / vim 交换文件 / AGENTS.md 自身）。
+;; 某个目录条目是否应被 structor 忽略。
+;; git 之外的硬性跳过：`.` / `..` 隐式条目、AGENTS.md（树所在文件自身）、
+;; `*.swp` 编辑器交换文件（可能被 git 跟踪）。其余（.git/.github/.agents/
+;; node_modules/.blue-store/dist/.zcode/.keys/…）一律由 git 可见性决定。
 (define (%structor-skip? name)
   (or (member name '("." ".." "AGENTS.md"))
-      (member name %structor-skip-names)
       (string-suffix? ".swp" name)))
 
+;; 对 scope 目录跑 git ls-files，返回"git 能看见的所有相对路径"列表（相对
+;; scope）。--cached 含已跟踪文件，--others 含未跟踪文件，--exclude-standard
+;; 应用 .gitignore。退出码非 0（非 git 仓库）→ error 中止。
+(define (%structor-git-visible-paths scope)
+  (let* ((pipe (open-input-pipe
+                (string-append "git -C " (%shell-quote scope)
+                               " ls-files --cached --others --exclude-standard")))
+         (paths (let loop ((lines '()))
+                  (let ((line (read-line pipe)))
+                    (if (eof-object? line)
+                        (reverse lines)
+                        (loop (cons line lines))))))
+         (status (close-pipe pipe)))
+    (unless (zero? (status:exit-val status))
+      (error (format #f "structor: 无法枚举 git 可见路径 (~a): ~a"
+                     (status:exit-val status) scope)))
+    paths))
+
+;; 条目 rel（相对 scope 的路径）是否在 git 可见路径集合 visible 中。
+;; 可见 ⟺ visible 中存在等于 rel、或以 `<rel>/` 为前缀的路径（后者让"git
+;; 只列了子文件"的目录也被判为可见）。
+(define (%structor-visible? rel visible)
+  (let ((prefix (string-append rel "/")))
+    (any (lambda (p) (or (string=? p rel) (string-prefix? prefix p))) visible)))
+
 ;; 列出 dir 的直接子条目，目录在前文件在后，各自字母序。返回 ((is-dir? . name) ...)。
-(define (%structor-children dir)
+;; 只保留：非 %structor-skip? 且在 git 可见集合 visible 里。用 file-is-directory?
+;; 决定尾斜杠与递归（submodule gitlink 目录在文件系统层是目录，正确显示为目录）。
+;; rel-of 把 dir 内的 name 翻译成相对 scope 的路径，供可见性判断用。
+(define (%structor-children dir scope visible rel-of)
   (let* ((entries (scandir dir (negate %structor-skip?)))
+         (visible-entries
+          (filter (lambda (name)
+                    (%structor-visible? (rel-of name) visible))
+                  entries))
          (typed (map (lambda (name)
                        (cons (file-is-directory?
                               (string-append dir "/" name))
                              name))
-                     entries))
+                     visible-entries))
          (dirs (filter car typed))
          (files (filter (compose not car) typed)))
     (append (sort dirs (lambda (a b) (string<? (cdr a) (cdr b))))
             (sort files (lambda (a b) (string<? (cdr a) (cdr b)))))))
 
 ;; 递归渲染 dir 的树形行列表。max-depth 限制深度；depth/prefix 是递归状态。
-(define (%structor-render dir max-depth depth prefix)
-  (let* ((entries (%structor-children dir))
+;; rel-of 翻译当前 dir 内条目名 → 相对 scope 路径（供 %structor-children
+;; 做可见性判断）；每下钻一层 rel-of 套一层子目录前缀。
+(define (%structor-render dir scope visible max-depth depth prefix rel-of)
+  (let* ((entries (%structor-children dir scope visible rel-of))
          (count (length entries)))
     (let loop ((index 0) (lines '()))
       (if (>= index count)
@@ -772,19 +819,45 @@
                  (line (string-append prefix connector name
                                       (if is-dir? "/" "")))
                  (children (if (and is-dir? (< (+ depth 1) max-depth))
-                               (%structor-render path max-depth
-                                                 (+ depth 1) child-prefix)
+                               (%structor-render path scope visible max-depth
+                                                 (+ depth 1) child-prefix
+                                                 (lambda (n)
+                                                   (rel-of (string-append name "/" n))))
                                '())))
             (loop (+ index 1)
                   (append (reverse children) (cons line lines))))))))
 
+;; dir 的根标签：通常 (basename dir)。但 scope 为仓库根时 dir 形如
+;; `<repo>/.`，basename 返回 "."，退一阶用 (basename (dirname dir))（如
+;; "Guix-configs"）。其他 scope 行为不变。
+(define (%structor-root-label dir)
+  (let ((base (basename dir)))
+    (if (string=? base ".")
+        (basename (dirname dir))
+        base)))
+
 ;; 渲染 dir 的整棵树，顶部加一行根目录名。
-(define (%structor-tree dir depth)
-  (cons (string-append (basename dir) "/")
-        (%structor-render dir depth 0 "")))
+(define (%structor-tree dir scope visible depth)
+  (cons (string-append (%structor-root-label dir) "/")
+        (%structor-render dir scope visible depth 0 ""
+                          (lambda (n) n))))
+
+;; 从 AGENTS.md 的正文 content 里解析第一个 structor begin 标记带的 depth。
+;; 返回整数 depth 或 #f（无标记 / 标记无 depth 参数）。
+(define (%structor-parse-depth content)
+  (let loop ((lines (string-split content #\newline)))
+    (match lines
+      (() #f)
+      ((line . rest)
+       (let ((m (regexp-exec %structor-depth-regex (string-trim-both line))))
+         (if m
+             (let ((d (match:substring m 2)))
+               (and d (string->number d)))
+             (loop rest)))))))
 
 ;; 在 AGENTS.md 的正文 content 里，用 replacement 替换 structor 标记之间的
 ;; 内容。返回新内容（若没找到标记则返回 #f 表示无需改动）。
+;; begin 行用 %structor-depth-regex 匹配（兼容 `depth=N` 写法）；end 行精确匹配。
 (define (%replace-structor-block content replacement)
   (let loop ((lines (string-split content #\newline))
              (out '())
@@ -797,7 +870,7 @@
        (cond
         ;; 进入标记：把整段替换内容塞进输出，状态切到 in-block
         ((and (eq? state 'normal)
-              (string=? (string-trim-both line) %structor-marker-start))
+              (regexp-exec %structor-depth-regex (string-trim-both line)))
          (loop rest (append (reverse replacement) out) 'in-block #t))
         ;; 离开标记：状态切回 normal（标记行本身被丢弃）
         ((and (eq? state 'in-block)
@@ -811,34 +884,39 @@
          (loop rest out state changed?)))))))
 
 ;; 对每个 target AGENTS.md 渲染并写回目录树。dry?=#t 时只打印不写。
+;; depth 作为全局回退默认；标记内 `depth=N`（经 %structor-parse-depth）优先。
 (define* (run-structor targets #:key (depth 4) dry?)
   (for-each
    (lambda (rel-path)
      (let* ((file (string-append %repo-root "/" rel-path))
             (dir (string-append %repo-root "/" (dirname rel-path))))
        (when (file-exists? file)
-         (let* ((replacement
-                 (append
-                  (list %structor-marker-start
-                        ""
-                        "<!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->"
-                        ""
-                        "```")
-                  (%structor-tree dir depth)
-                  (list "```" "" %structor-marker-end)))
-                (content (call-with-input-file file get-string-all))
-                (new-content (%replace-structor-block content replacement)))
-           (if new-content
-               (begin
-                 (format #t "[~a] ~a (scan=~a depth=~a)~%"
-                         (if dry? "DRY" "WRITE") rel-path
-                         (dirname rel-path) depth)
-                 (if dry?
-                     (display new-content)
-                     (%write-file-atomically
-                      file
-                      (lambda (port) (display new-content port)))))
-               (format #t " 跳过 ~a（无 structor 标记）~%" rel-path))))))
+         (let* ((content (call-with-input-file file get-string-all))
+                (doc-depth (%structor-parse-depth content))
+                (eff-depth (or doc-depth depth))
+                (visible (%structor-git-visible-paths dir)))
+           (let* ((replacement
+                   (append
+                    (list (format #f "<!-- structor:begin depth=~a -->" eff-depth)
+                          ""
+                          "<!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->"
+                          ""
+                          "```")
+                    (%structor-tree dir dir visible eff-depth)
+                    (list "```" "" %structor-marker-end)))
+                  (new-content (%replace-structor-block content replacement)))
+             (if new-content
+                 (begin
+                   (format #t "[~a] ~a (scan=~a depth=~a~a)~%"
+                           (if dry? "DRY" "WRITE") rel-path
+                           (dirname rel-path) eff-depth
+                           (if doc-depth " ←doc" ""))
+                   (if dry?
+                       (display new-content)
+                       (%write-file-atomically
+                        file
+                        (lambda (port) (display new-content port)))))
+                 (format #t " 跳过 ~a（无 structor 标记）~%" rel-path)))))))
    targets))
 
 ;;; ============================================================
@@ -1205,14 +1283,17 @@
 
 ;; blue structor [TARGET] ... —— 刷新 AGENTS.md 的自动目录树。
 ;; 不带参数刷所有目标；带参数只刷指定 AGENTS.md。
-;; 环境变量：ORG_STRUCTOR_DEPTH=N 控制深度（默认 4）；ORG_STRUCTOR_DRY=1 预览。
+;; 可见性遵循 .gitignore（git ls-files 驱动）。深度优先级：
+;;   标记内 depth=N > ORG_STRUCTOR_DEPTH > 默认 4。
+;; 环境变量：ORG_STRUCTOR_DEPTH=N 全局回退深度；ORG_STRUCTOR_DRY=1 预览。
 (define-command (structor-command arguments)
   ((invoke "structor")
    (category 'maintenance)
    (synopsis "刷新 AGENTS.md 中自动生成的目录树章节")
    (help "[TARGET] ...
 刷新所有 structor 目标，或仅刷新指定的 AGENTS.md。
-支持 ORG_STRUCTOR_DEPTH=N 和 ORG_STRUCTOR_DRY=1 环境变量。"))
+可见性遵循 .gitignore（git ls-files 驱动）。
+深度优先级：标记内 `<!-- structor:begin depth=N -->` > ORG_STRUCTOR_DEPTH > 默认 4。"))
   (let* ((depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4))
          (targets (if (null? arguments) (%structor-targets) arguments))
          (dry? (%env-set? "ORG_STRUCTOR_DRY")))

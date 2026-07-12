@@ -21,7 +21,7 @@
 
 ## 目录结构
 
-<!-- structor:begin -->
+<!-- structor:begin depth=4 -->
 
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
@@ -33,7 +33,6 @@ mutable/
 │   │       └── skills/
 │   ├── .local/
 │   │   └── bin/
-│   │       ├── __pycache__/
 │   │       ├── ag_lib/
 │   │       ├── ag-ent
 │   │       ├── agenote
@@ -42,23 +41,17 @@ mutable/
 │   ├── .stow-folding
 │   └── .stow-local-ignore
 ├── appimage-run/
-│   ├── .local/
-│   │   └── bin/
-│   │       ├── appimage-run_lib/
-│   │       └── appimage-run
-│   ├── .stow-local-ignore
-│   └── README.md
 ├── emacs/
 │   ├── .config/
 │   │   ├── agents/
 │   │   │   └── skills/
 │   │   └── emacs/
+│   │       ├── data/
 │   │       ├── scripts/
 │   │       ├── .gitignore
 │   │       ├── early-init.el
 │   │       ├── emacs.org
-│   │       ├── init.el
-│   │       └── main.el
+│   │       └── init.el
 │   └── .stow-local-ignore
 ├── hermes/
 │   ├── .local/
@@ -90,8 +83,7 @@ mutable/
 │   ├── .local/
 │   │   └── share/
 │   │       ├── keys/
-│   │       └── secrets-decrypted/
-│   ├── .stow-overlay/
+│   │       └── secrets-encrypted/
 │   └── .stow-local-ignore
 └── skills/
     ├── .config/

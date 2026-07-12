@@ -4,7 +4,7 @@
 
 ## 目录结构
 
-<!-- structor:begin -->
+<!-- structor:begin depth=4 -->
 
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
@@ -31,10 +31,8 @@ desktop/
 │   └── xfce4/
 │       └── helpers.rc
 └── .local/
-    ├── bin/
-    │   └── niri-app-switcher
-    └── share/
-        └── applications/
+    └── bin/
+        └── niri-app-switcher
 ```
 
 <!-- /structor -->

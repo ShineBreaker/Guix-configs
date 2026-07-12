@@ -4,7 +4,7 @@
 
 ## 目录结构
 
-<!-- structor:begin -->
+<!-- structor:begin depth=4 -->
 
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
@@ -49,8 +49,7 @@ dotfiles/
 │   │   │   ├── xdg-desktop-portal/
 │   │   │   └── xfce4/
 │   │   └── .local/
-│   │       ├── bin/
-│   │       └── share/
+│   │       └── bin/
 │   ├── noctalia-suite/
 │   │   ├── .config/
 │   │   │   ├── darkman/
@@ -98,10 +97,6 @@ dotfiles/
     │   ├── .stow-folding
     │   └── .stow-local-ignore
     ├── appimage-run/
-    │   ├── .local/
-    │   │   └── bin/
-    │   ├── .stow-local-ignore
-    │   └── README.md
     ├── emacs/
     │   ├── .config/
     │   │   ├── agents/
@@ -121,7 +116,6 @@ dotfiles/
     ├── secrets/
     │   ├── .local/
     │   │   └── share/
-    │   ├── .stow-overlay/
     │   └── .stow-local-ignore
     └── skills/
         ├── .config/
