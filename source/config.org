@@ -120,6 +120,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                      gnome
                      gnupg
                      gnustep
+                     golang-crypto
                      gstreamer
                      hardware
                      java
@@ -555,74 +556,325 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 *** 网络相关配置
-开机自动开启 WiFi 热点（需先手动执行一次创建连接）
 
-~nmcli connection add type wifi ifname wlp0s20f3 con-name auto-hotspot ssid <你的SSID> 802-11-wireless.mode ap ipv4.method shared wifi-sec.key-mgmt wpa-psk wifi-sec.psk <你的密码>~
+**** 防火墙与可信 WiFi
+
+使用一份静态 nftables 规则集，NetworkManager dispatcher 只原子更新
+=inet filter= 表的 =trusted_ifaces= 集合。它绝不执行 =flush ruleset=，因而不会
+删除 libvirt 或其他服务在运行时安装的 nftables 规则。
+
+- =source/files/nftables.conf= —— 唯一由 =nftables-service-type= 加载的规则集
+- 可信 connection profile 列表只保存在 age 密文中，不在 Scheme 源码保留明文副本
+- dispatcher 在可信 profile 的 =up= 事件中加入 =wlp0s20f3=；在非可信或 =down=
+   事件中删除它，失败时默认严格
+
+白名单使用 NetworkManager 的 =CONNECTION_ID=（profile 名称），不是 SSID；它必须与
+=nmcli connection show= 的名称一致。列表以 age 密文保存在
+=dotfiles/mutable/secrets/.local/share/secrets-encrypted/wifi-trust.age=。dispatcher
+只注入密文与 =age=、=nft=、=grep= 的 store 路径，事件触发时把解密结果直接通过管道
+交给 =grep=，不产生持久化明文。私钥缺失或解密失败时仅撤销 WiFi 信任，NetworkManager
+继续正常运行，因此不会阻断普通联网。
+
+**** 热点 AP + WiFi 客户端并发
+
+硬件确认：Intel Meteor Lake CNVi 支持 =managed + AP= 并发（同信道）。
+系统服务用 =iw= 创建 =uap0=，NetworkManager 只管理该已存在的 AP 接口；profile 名称本身
+不会创建虚拟无线接口。两个接口共享同一 radio，AP 必须与客户端使用同一信道。
+
+服务启动时会幂等迁移已有的热点 profile（保留现有 SSID 和密钥），并在创建
+=uap0= 之前关闭 NetworkManager 自动激活。也可在部署前手动执行同一命令预检：
+
+#+begin_src bash
+nmcli connection modify auto-hotspot \
+      connection.interface-name uap0 \
+      connection.autoconnect no \
+      connection.autoconnect-priority -100
+#+end_src
+
+若尚未创建 profile，再运行：
+
+#+begin_src bash
+nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
+      ssid <你的SSID> 802-11-wireless.mode ap \
+      ipv4.method shared wifi-sec.key-mgmt wpa-psk wifi-sec.psk <你的密码> \
+      connection.autoconnect no connection.autoconnect-priority -100 \
+      802-11-wireless.cloned-mac-address stable
+#+end_src
+
+关键参数：
+- =ifname uap0= —— 绑定由 Shepherd 创建的专用 AP 接口
+- =autoconnect no= —— 热点生命周期只由 Shepherd 管理，避免与 NM 自动激活竞态
+- =autoconnect-priority -100= —— 即使手动改回自动连接，也低于 WiFi 客户端
+- =ipv4.method shared= —— NM 自带 DHCP + NAT（与 nftables NAT 配合）
+- =hotspot-profile-safety= 迁移失败会阻断后续 AP 服务链，不会回退到物理客户端接口
 
 #+NAME: networking-services
-#+begin_src scheme
-(list (service nftables-service-type
-               (nftables-configuration (ruleset (local-file
-                                                 "../source/files/nftables.conf"))))
-      (service openssh-service-type
-               (openssh-configuration
-                (password-authentication? #f)))
+#+begin_src scheme :noweb yes
+(let* ((trusted-wifi-connections
+        (local-file
+         "../dotfiles/mutable/secrets/.local/share/secrets-encrypted/wifi-trust.age"))
+       (dispatcher-template
+        (local-file "nm-dispatcher-trusted-connection"))
+       (dispatcher-script
+        (computed-file
+         "nm-dispatcher-trusted-connection"
+         (with-imported-modules '((guix build utils))
+                                #~(begin
+                                    (use-modules (guix build utils))
+                                    (copy-file #$dispatcher-template #$output)
+                                    (substitute* #$output
+                                                 (("@AGE_IDENTITY@")
+                                                  #$(string-append
+                                                     "/home/" username "/.local/share/keys/age"))
+                                                 (("@TRUSTED_CONNECTIONS_CIPHER@")
+                                                  #$trusted-wifi-connections)
+                                                 (("@AGE_BIN@")
+                                                  #$(file-append age "/bin/age"))
+                                                 (("@NFT_BIN@")
+                                                  #$(file-append nftables "/sbin/nft"))
+                                                 (("@GREP_BIN@")
+                                                  #$(file-append grep "/bin/grep"))))))))
 
-      (service tailscale-service-type
-               (tailscale-configuration
-                (verbosity 1)
-                (extra-options '("--tun=userspace-networking"))))
+  (list (service nftables-service-type
+                 (nftables-configuration (ruleset (local-file
+                                                   "./nftables.conf"))))
 
-      (simple-service 'mihomo-services shepherd-root-service-type
-                      (list (shepherd-service (documentation
-                                               "Run the mihomo daemon.")
-                                              (provision '(mihomo-daemon))
-                                              (requirement '(user-processes))
-                                              (start #~(make-forkexec-constructor
-                                                        (list #$(file-append
-                                                                 mihomo
-                                                                 "/bin/mihomo")
-                                                              "-f"
-                                                              (string-append
-                                                               "/home/"
-                                                               #$username
-                                                               "/.config/mihomo/config.yaml"))
-                                                        #:log-file
-                                                        "/var/log/mihomo.log"))
-                                              (stop #~(make-kill-destructor))
-                                              (auto-start? #t)
-                                              (respawn? #t))))
+        (service openssh-service-type
+                 (openssh-configuration
+                  (password-authentication? #f)))
 
+        (service tailscale-service-type
+                 (tailscale-configuration
+                  (verbosity 1)
+                  (extra-options '("--tun=userspace-networking"))))
 
-      (simple-service 'auto-hotspot shepherd-root-service-type
-                      (list (shepherd-service
-                             (provision '(auto-hotspot))
-                             (requirement '(network-manager))
-                             (start #~(lambda _
-                                        ;; 先断开已有 WiFi 连接，再激活热点
-                                        (zero? (system* "nmcli" "device" "disconnect"
-                                                        "wlp0s20f3"))
-                                        (zero? (system* "nmcli" "connection" "up"
-                                                        "auto-hotspot"))))
-                             (stop #~(lambda _
-                                       (zero? (system* "nmcli" "connection" "down"
-                                                       "auto-hotspot"))))
-                             (one-shot? #t)
-                             (auto-start? #t)
-                             (respawn? #f))))
+        ;; NetworkManager dispatcher：可信 profile → 原子更新 trusted_ifaces。
+        ;; /etc/NetworkManager 是 btrfs 持久化挂载点，etc-service-type 无法直接写入，
+        ;; 故用 activation-service-type 在每次 reconfigure 时拷贝脚本到位。
+        (simple-service 'nm-dispatcher-trusted-ssid activation-service-type
+                        #~(let ((dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"))
+                            (system* "mkdir" "-p"
+                                     "/etc/NetworkManager/dispatcher.d")
+                            (system* "install" "-m" "755"
+                                     #$dispatcher-script dest)))
 
-      (simple-service 'iw-reg-cn shepherd-root-service-type
-                      (list (shepherd-service
-                             (documentation "Set wireless regulatory domain to CN.")
-                             (provision '(iw-reg-cn))
-                             (requirement '(user-processes))
-                             (start #~(lambda _
-                                        (zero? (system* #$(file-append iw "/bin/iw")
-                                                        "reg" "set" "CN"))))
-                             (stop #~(make-kill-destructor))
-                             (one-shot? #t)
-                             (auto-start? #t)
-                             (respawn? #f)))))
+        (simple-service 'mihomo-services shepherd-root-service-type
+                        (list (shepherd-service (documentation
+                                                 "Run the mihomo daemon.")
+                                                (provision '(mihomo-daemon))
+                                                (requirement '(user-processes))
+                                                (start #~(make-forkexec-constructor
+                                                          (list #$(file-append
+                                                                   mihomo
+                                                                   "/bin/mihomo")
+                                                                "-f"
+                                                                (string-append
+                                                                 "/home/"
+                                                                 #$username
+                                                                 "/.config/mihomo/config.yaml"))
+                                                          #:log-file
+                                                          "/var/log/mihomo.log"))
+                                                (stop #~(make-kill-destructor))
+                                                (auto-start? #t)
+                                                (respawn? #t))))
+
+        ;; Normalize the persistent hotspot profile independently of AP setup.
+        ;; Once reconfigure starts this service, later boots cannot auto-activate
+        ;; the hotspot on the physical WiFi client interface.
+        (simple-service 'hotspot-profile-safety shepherd-root-service-type
+                        (list (shepherd-service
+                               (documentation
+                                "Bind auto-hotspot to uap0 and disable NM autoconnect.")
+                               (provision '(hotspot-profile-safety))
+                               (requirement '(NetworkManager))
+                               (start #~(lambda _
+                                          (zero? (system* "nmcli" "connection" "modify"
+                                                          "auto-hotspot"
+                                                          "connection.interface-name" "uap0"
+                                                          "connection.autoconnect" "no"
+                                                          "connection.autoconnect-priority" "-100"))))
+                               (stop #~(lambda _ #t))
+                               (one-shot? #t)
+                               (auto-start? #t)
+                               (respawn? #f))))
+
+        ;; Create the dedicated AP interface.  A NetworkManager WiFi profile can
+        ;; select an interface but cannot create a virtual wireless interface.
+        (simple-service 'wifi-ap-interface shepherd-root-service-type
+                        (list (shepherd-service
+                               (documentation
+                                "Create the uap0 virtual AP interface for concurrent WiFi.")
+                               (provision '(wifi-ap-interface))
+                               (requirement '(hotspot-profile-safety iw-reg-cn))
+                               (start #~(lambda _
+                                          (and (or (zero? (system* #$(file-append iw "/bin/iw")
+                                                                   "dev" "uap0" "info"))
+                                                   (zero? (system* #$(file-append iw "/bin/iw")
+                                                                   "dev" "wlp0s20f3" "interface"
+                                                                   "add" "uap0" "type" "__ap")))
+                                               ;; NetworkManager learns about a newly-created
+                                               ;; netdev asynchronously; wait before nmcli up.
+                                               (let loop ((attempts 20))
+                                                 (cond
+                                                  ((zero? (system* "nmcli" "-t" "-g"
+                                                                   "GENERAL.STATE" "device"
+                                                                   "show" "uap0")) #t)
+                                                  ((zero? attempts) #f)
+                                                  (else (sleep 1)
+                                                        (loop (1- attempts))))))))
+                               (stop #~(lambda _
+                                         (if (zero? (system* #$(file-append iw "/bin/iw")
+                                                             "dev" "uap0" "info"))
+                                             (zero? (system* #$(file-append iw "/bin/iw")
+                                                             "dev" "uap0" "del"))
+                                             #t)))
+                               (one-shot? #t)
+                               (auto-start? #t)
+                               (respawn? #f))))
+
+        ;; The hotspot is explicitly activated on uap0, never the client interface.
+        (simple-service 'auto-hotspot shepherd-root-service-type
+                        (list (shepherd-service
+                               (documentation
+                                "Activate AP hotspot connection (concurrent with WiFi client).")
+                               (provision '(auto-hotspot))
+                               (requirement '(wifi-ap-interface))
+                               (start #~(lambda _
+                                          (zero? (system* "nmcli" "connection" "up"
+                                                          "auto-hotspot" "ifname" "uap0"))))
+                               (stop #~(lambda _
+                                         (zero? (system* "nmcli" "connection" "down"
+                                                         "auto-hotspot"))))
+                               (one-shot? #t)
+                               (auto-start? #t)
+                               (respawn? #f))))
+
+        (simple-service 'iw-reg-cn shepherd-root-service-type
+                        (list (shepherd-service
+                               (documentation "Set wireless regulatory domain to CN.")
+                               (provision '(iw-reg-cn))
+                               (requirement '(user-processes))
+                               (start #~(lambda _
+                                          (zero? (system* #$(file-append iw "/bin/iw")
+                                                          "reg" "set" "CN"))))
+                               (stop #~(make-kill-destructor))
+                               (one-shot? #t)
+                               (auto-start? #t)
+                               (respawn? #f))))))
+#+end_src
+
+nm-dispatcher-trusted-connection
+#+name: nm-dispatcher-trusted-connection
+#+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
+#!/bin/sh
+# Auto-generated by Guix config.org.
+# Update only inet/filter/trusted_ifaces; never flush the ruleset.
+
+WIFI_IFACE="wlp0s20f3"
+AGE_IDENTITY="@AGE_IDENTITY@"
+TRUSTED_CONNECTIONS_CIPHER="@TRUSTED_CONNECTIONS_CIPHER@"
+AGE_BIN="@AGE_BIN@"
+NFT_BIN="@NFT_BIN@"
+GREP_BIN="@GREP_BIN@"
+
+ACTION="$2"
+CONNECTION_ID="${CONNECTION_ID:-}"
+
+[ "$1" = "$WIFI_IFACE" ] || exit 0
+
+is_trusted_connection() {
+    [ -r "$AGE_IDENTITY" ] || return 1
+    "$AGE_BIN" -d -i "$AGE_IDENTITY" "$TRUSTED_CONNECTIONS_CIPHER" 2>/dev/null |
+        "$GREP_BIN" -Fqx -- "$1"
+}
+
+remove_wifi_from_trusted_set() {
+    "$NFT_BIN" delete element inet filter trusted_ifaces { "$WIFI_IFACE" } 2>/dev/null || true
+}
+
+add_wifi_to_trusted_set() {
+    remove_wifi_from_trusted_set
+    "$NFT_BIN" add element inet filter trusted_ifaces { "$WIFI_IFACE" }
+}
+
+case "$ACTION" in
+    up)
+        if is_trusted_connection "$CONNECTION_ID"; then
+            add_wifi_to_trusted_set
+        else
+            remove_wifi_from_trusted_set
+        fi
+        ;;
+    down)
+        remove_wifi_from_trusted_set
+        ;;
+esac
+#+end_src
+
+nftable 配置
+#+begin_src conf :tangle ../tmp/nftables.conf
+# Static ruleset loaded only by nftables-service-type at boot.
+# The NetworkManager dispatcher atomically updates trusted_ifaces; it never
+# reloads or flushes this ruleset.  The physical WiFi interface is absent by
+# default, so disconnected or unrecognized networks remain restricted.
+
+flush ruleset
+
+table inet filter {
+# The dispatcher temporarily adds wlp0s20f3 for trusted connection profiles.
+set trusted_ifaces {
+type ifname
+elements = { "uap0", "virbr0" }
+}
+
+chain input {
+type filter hook input priority filter; policy drop;
+
+ct state { established, related } accept
+iifname "lo" accept
+
+# Network bootstrap must work even when WiFi is not trusted or the
+# encrypted trust list cannot be decrypted.
+udp sport 67 udp dport 68 accept
+udp sport 547 udp dport 546 accept
+ip protocol icmp icmp type {
+destination-unreachable,
+time-exceeded,
+parameter-problem
+} accept
+ip6 nexthdr ipv6-icmp accept
+
+# Hotspot, VMs, and trusted WiFi may access local services.
+iifname @trusted_ifaces accept
+
+# Tailscale WireGuard direct endpoint.
+udp dport 41641 accept
+
+reject with icmpx type port-unreachable
+}
+
+chain forward {
+type filter hook forward priority filter; policy drop;
+
+iifname @trusted_ifaces accept
+oifname @trusted_ifaces ct state { established, related } accept
+}
+
+chain output {
+type filter hook output priority 0; policy accept;
+}
+}
+
+table inet nat {
+chain postrouting {
+type nat hook postrouting priority srcnat; policy accept;
+
+# Do not masquerade multicast/broadcast traffic from VMs.
+iifname "virbr0" ip daddr { 224.0.0.0/4, 255.255.255.255/32 } return
+iifname "virbr0" oifname != "virbr0" masquerade
+iifname "uap0" oifname != "uap0" masquerade
+}
+}
 #+end_src
 
 *** Nix包管理器相关配置
@@ -632,12 +884,12 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                (nix-configuration
                 (build-directory "/var/tmp")
                 (extra-config
-                (list
+                 (list
                   (string-append "trusted-users" " = root " username "\n")
                   (string-append "experimental-features = nix-command flakes\n")
-                                 "auto-optimise-store = true\n"
-                                 "use-xdg-base-directories = true\n"
-                                 "substituters = https://mirror.sjtu.edu.cn/nix-channels/store https://cache.nixos.org\n"))))
+                  "auto-optimise-store = true\n"
+                  "use-xdg-base-directories = true\n"
+                  "substituters = https://mirror.sjtu.edu.cn/nix-channels/store https://cache.nixos.org\n"))))
 
       (simple-service 'non-nixos-gpu shepherd-root-service-type
                       (list (shepherd-service (documentation
@@ -1199,8 +1451,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 浏览器 & 插件
-        ; "ublock-origin-chromium"
-        ; "ungoogled-chromium-wayland"
+                                        ; "ublock-origin-chromium"
+                                        ; "ungoogled-chromium-wayland"
         "zen-browser-bin"
 
         ;; 解码器
