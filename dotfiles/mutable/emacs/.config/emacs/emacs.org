@@ -3497,12 +3497,15 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
       (quit-window nil (get-buffer-window flycheck-error-list-buffer))
     (flycheck-list-errors)))
 
-;; envrc(direnv buffer-local 环境变量注入)
+;; envrc (direnv buffer-local 环境变量注入)
 (use-package envrc
   :defer 0.5
   :if literal:executable-direnv
   :config
   (envrc-global-mode 1))
+
+;; rainbow-delimiters (彩虹括号)
+(add-hook 'prog-mode-hook #'rainbow-delimiters-mode)
 #+end_src
 
 ** 各语言 major mode
