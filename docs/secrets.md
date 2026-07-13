@@ -7,22 +7,20 @@
 
 ### 1.1 三层信任边界
 
-| 层   | 路径 | 进 git? | 出现在 `~`? | 权限 |
-| ---- | ---- | ------- | ----------- | ---- |
-| 密文 | `dotfiles/mutable/secrets/.local/share/secrets-encrypted/<name>.age` | ✓ | ✗（Stow 排除） | 644 |
-| 公钥 | `dotfiles/mutable/secrets/.local/share/keys/age.pub` | ✓ | ✓ | 644 |
-| 私钥 | `dotfiles/mutable/secrets/.local/share/keys/age`(软链到 `~/.local/share/keys/age`) | ✗       | ✓           | 600  |
-| 明文 | `~/.local/share/secrets-decrypted/<name>`      | ✗       | ✓           | 600  |
+| 层   | 路径                                                                               | 进 git? | 出现在 `~`?    | 权限 |
+| ---- | ---------------------------------------------------------------------------------- | ------- | -------------- | ---- |
+| 密文 | `dotfiles/mutable/secrets/.local/share/secrets-encrypted/<name>.age`               | ✓       | ✗（Stow 排除） | 644  |
+| 公钥 | `dotfiles/mutable/secrets/.local/share/keys/age.pub`                               | ✓       | ✓              | 644  |
+| 私钥 | `dotfiles/mutable/secrets/.local/share/keys/age`(软链到 `~/.local/share/keys/age`) | ✗       | ✓              | 600  |
+| 明文 | `~/.local/share/secrets-decrypted/<name>`                                          | ✗       | ✓              | 600  |
 
 整个仓库 push 到 origin 的字节里,**没有**任何明文,也没有解密所需的私钥。
 
 ### 1.2 为什么选 age 而不是 sops/gpg/pass
 
-- **age**:单一二进制([`age-encryption.org`](https://age-encryption.org/)),无
-  配置,无密钥服务器,无 GPG 信任网,X25519 + ChaCha20-Poly1305,加密速度远
-  超 GPG
-- **sops**:YAML/JSON 友好的键级加密,但本仓库的密文形态多样(纯文本/二
-  进制/JSON),用整文件加密更直接
+- **age**:单一二进制([`age-encryption.org`](https://age-encryption.org/)),无配置,无密钥服务器,无 GPG 信任网
+  X25519 + ChaCha20-Poly1305,加密速度远超 GPG
+- **sops**:YAML/JSON 友好的键级加密,但本仓库的密文形态多样(纯文本/二进制/JSON),用整文件加密更直接
 - **pass**:GPG 生态,UI 美观但依赖 GPG,Guix 包里 age 更轻量
 
 ### 1.3 部署边界
@@ -191,14 +189,14 @@ chmod 600 ~/.local/share/keys/age
 
 ## 8. 故障排查
 
-| 症状                                  | 原因                                      | 解决                                            |
-| ------------------------------------- | ----------------------------------------- | ----------------------------------------------- |
-| `tools/secrets decrypt` 报找不到私钥  | stow 没部署或软链失效                     | `cd Guix-configs && blue stow --restow secrets` |
-| `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail`        | 修脚本;`bash -n` 不查变量绑定,必须真跑          |
-| `age: error: no identity`             | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/secrets/.local/share/keys/age`  |
-| `init` 后 `.age.pub` 是空的           | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init,或手动 `awk` 提取         |
-| `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录 | 修复 ignore 后 `blue stow --restow secrets` |
-| `re-encrypt` 报 `failed to decrypt`   | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)        |
+| 症状                                     | 原因                                      | 解决                                                       |
+| ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------- |
+| `tools/secrets decrypt` 报找不到私钥     | stow 没部署或软链失效                     | `cd Guix-configs && blue stow --restow secrets`            |
+| `list` 报 `DECREPT_DIR: 未绑定的变量`    | 脚本 typo 触发 `set -euo pipefail`        | 修脚本;`bash -n` 不查变量绑定,必须真跑                     |
+| `age: error: no identity`                | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/secrets/.local/share/keys/age` |
+| `init` 后 `.age.pub` 是空的              | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init,或手动 `awk` 提取                    |
+| `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录       | 修复 ignore 后 `blue stow --restow secrets`                |
+| `re-encrypt` 报 `failed to decrypt`      | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)                   |
 
 ## 9. 与同类方案的对比
 
