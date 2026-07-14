@@ -172,7 +172,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 (define %home
   (home-environment
    (packages (append
-              <<nix-profiles-list>>
               <<desktop-packages-list>>
               <<terminal-packages-list>>
               <<devtools-packages-list>>
@@ -1386,7 +1385,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
         ;; 编辑器
         "helix"
-        "zed"
+        ; "zed"
 
         ;; 数据库
         "postgresql"
@@ -1409,7 +1408,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; AI Agent
         "cc-switch-bin"
         "crush-bin"
-        "github-copilot-bin"
+        "github-copilot"
         "mimocode-bin"
         "opencode-desktop-bin"
         "orca-ide-bin"
@@ -1518,46 +1517,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "python-typer"))
 #+end_src
 
-*** Nix 软件包
-利用 ~with-nix-profile~ [来自 =(rosenthal utils nix)=] 来安装一些来自 ~nix~ 的软件包
-它可以利用 ~nix-shell-wrapper~ 来调用nix，安装对应软件并放到当前用户的环境中
-#+begin_quote
-(rosenthal utils nix) 模块提供 nix-shell-wrapper、nix-wrapper->package、with-nix-profile。
-(rosenthal services nix) 模块提供 nix-search-paths-service-type（Guix System 用）和 home-nix-search-paths-service-type（Guix Home 用）。
-#+end_quote
-
-#+NAME: nix-profiles-list
-#+begin_src scheme
-(with-nix-profile
- (append (map (lambda (package)
-                (nix-shell-wrapper package
-                                   (string-append "github:NixOS/nixpkgs/nixos-26.05#" package)
-                                   #:run-command (list package)))
-              '(;; Coding 工具
-                "biome" "bun" "pnpm"
-                ;; 工具
-                "broot" "gh" "pmbootstrap" "scrcpy"
-                ;; 游戏工具
-                "gamescope" "mangojuice" "sunshine"
-                ;; LSP
-                "bash-language-server" "kotlin-language-server" "nil" "package-version-server" "typescript-language-server"))
-
-         (list (nix-shell-wrapper "adb"
-                                  '("github:NixOS/nixpkgs/nixos-26.05#android-tools")
-                                  #:run-command '("adb")))
-
-         (list (nix-shell-wrapper "bun"
-                                  '("github:NixOS/nixpkgs/nixos-26.05#bun")
-                                  #:run-command '("bun")))
-
-         (list (nix-shell-wrapper "bunx"
-                                  '("github:NixOS/nixpkgs/nixos-26.05#bun")
-                                  #:run-command '("bunx")))
-
-         (list (nix-shell-wrapper "fastboot"
-                                  '("github:NixOS/nixpkgs/nixos-26.05#android-tools")
-                                  #:run-command '("fastboot")))))
-#+end_src
 ** Servics
 注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
 
@@ -1812,9 +1771,7 @@ end
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua))))
-
-      (service home-nix-search-paths-service-type))
+                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
 #+end_src
 
 **** 默认应用程序关联
@@ -2235,7 +2192,7 @@ end
 
 * Live ISO
 这里定义自研 Live ISO 的 =operating-system=, 与主机 =%system= 完全独立.
-=blue build-iso= (见 blueprint.scm build-iso-command) 会 tangle 出 =tmp/live-iso.scm=, 再调 =scripts/build-image.scm= 生成 iso9660 镜像.
+=blue build-iso= (见 blueprint.scm build-iso-command) 会 tangle 出 =tmp/live-iso.scm=, 再调 =tools/build-image.scm= 生成 iso9660 镜像.
 
 + =desktop= (主要, KDE Plasma 桌面环境).
 + =minimal= (辅助, 纯 CLI fallback).
