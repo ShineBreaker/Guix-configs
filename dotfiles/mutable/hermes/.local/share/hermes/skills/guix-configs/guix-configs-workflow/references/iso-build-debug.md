@@ -24,7 +24,7 @@ Error while running command build-iso:
 ```bash
 cd ~/Projects/Config/Guix-configs
 guix time-machine --channels=source/channel.lock -- repl -- \
-  scripts/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
+  tools/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
   tmp/live-iso.scm --image-type=iso9660 2>&1 | tee /tmp/iso-xfce-build.log
 ```
 
@@ -177,7 +177,7 @@ blue check 2>&1 | tail -3        # [OK] 全部通过
 
 # 2) 手动复现构建（抓真实报错，确认不再 early fail）
 guix time-machine --channels=source/channel.lock -- repl -- \
-  scripts/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
+  tools/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
   tmp/live-iso.scm --image-type=iso9660 2>&1 | tee /tmp/iso-xfce-build.log
 # 进入 guix-system image 构建 = 成功越过 OS 定义阶段
 

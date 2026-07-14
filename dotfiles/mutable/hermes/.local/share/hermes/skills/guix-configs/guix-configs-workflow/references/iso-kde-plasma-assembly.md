@@ -107,7 +107,7 @@ rm -f tmp/live-iso.scm
 guix time-machine --channels=source/channel.lock -- shell emacs-minimal -- emacs --quick --batch -l org \
   --eval "(require 'ob-tangle)" --eval "(org-babel-tangle-file \"source/config.org\")"
 guix time-machine --channels=source/channel.lock -- repl -- \
-  scripts/build-image.scm dist/jeans-desktop-$(date +%Y%m%d).x86_64-linux.iso \
+  tools/build-image.scm dist/jeans-desktop-$(date +%Y%m%d).x86_64-linux.iso \
   tmp/live-iso.scm --image-type=iso9660 2>&1 | tee /tmp/iso-kde-build.log
 
 # 3) 正式后台构建（30+ 分钟，background=true + notify）

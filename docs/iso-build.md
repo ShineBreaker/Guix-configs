@@ -2,7 +2,7 @@
 
 > 一条 `blue build-iso` 命令,基于本仓库 `source/config.org` 打出 Live ISO 镜像, 产物落到 `dist/jeans-<variant>-<date>.<arch>.iso`。
 
-> 详细代码 / 决策 / 调试见 `source/config.org` 的 `* Live ISO` 章节、`blueprint.scm` §8.5 注释、`scripts/build-image.scm` 文件头。本文档**只**说明功能模型、使用方式、关键设计权衡。
+> 详细代码 / 决策 / 调试见 `source/config.org` 的 `* Live ISO` 章节、`blueprint.scm` §8.5 注释、`tools/build-image.scm` 文件头。本文档**只**说明功能模型、使用方式、关键设计权衡。
 
 ## §0 一句话模型
 
@@ -12,7 +12,7 @@ source/config.org  (Live ISO 章节)
         ▼  blue build-iso 跑 ob-tangle
 tmp/live-iso.scm
         │
-        ▼  guix repl -- scripts/build-image.scm
+        ▼  guix repl -- tools/build-image.scm
         │     (在 guix time-machine -C source/channel.lock 内)
         │
 guix system image --image-type=iso9660
@@ -30,7 +30,7 @@ dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso
 | 非自由内核 / 固件    | nonguix 的 `linux` + `linux-firmware`                      | 接入                                   |
 | OS 定义              | 本仓库                                                     | `source/config.org` `* Live ISO` 章节  |
 | 构建编排             | BLUE build system                                          | `build-iso` 命令(`blueprint.scm` §8.5) |
-| 产物落地             | 本仓库                                                     | `scripts/build-image.scm`(~30 行)      |
+| 产物落地             | 本仓库                                                     | `tools/build-image.scm`(~30 行)        |
 
 ## §1 用法
 
@@ -274,7 +274,7 @@ ISO 块内容,直接撞死 `blue rebuild`。
 | 扩展                                      | 工作量 | 触发条件                   |
 | ----------------------------------------- | ------ | -------------------------- |
 | `source/live-channels.lock` 独立 ISO lock | 1h     | 追求 Testament 级密封性    |
-| `scripts/sign` GPG detach-sign            | 1h     | ISO 公开发布前             |
+| `tools/sign` GPG detach-sign              | 1h     | ISO 公开发布前             |
 | ISO 内嵌 `examples/` 配置模板             | 半天   | 装机引导想"开箱即用本仓库" |
 | `blue build-iso --keep-failed`            | 15min  | 调试阻塞时                 |
 | `blue build-iso --substitute-urls=...`    | 30min  | 测试专用 mirror            |
@@ -285,5 +285,5 @@ ISO 块内容,直接撞死 `blue rebuild`。
 
 - `source/config.org` `* Live ISO` 章节 —— 实施细节 / 全部 use-modules / 块代码
 - `blueprint.scm` §8.5 —— `%images` / `images-from-arguments` / `build-iso-command`
-- `scripts/build-image.scm` —— guix-system image 产物落地助手(~30 行)
+- `tools/build-image.scm` —— guix-system image 产物落地助手(~30 行)
 - `docs/secrets.md` —— 同期构建的年龄加密入仓参考

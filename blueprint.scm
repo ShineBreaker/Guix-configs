@@ -1044,9 +1044,9 @@
       %images
       (filter (lambda (v) (member v arguments)) %images)))
 
-;; scripts/build-image.scm 的绝对路径（被 guix repl 调用）。
+;; tools/build-image.scm 的绝对路径（被 guix repl 调用）。
 (define (%live-build-image-script)
-  (string-append %repo-root "/scripts/build-image.scm"))
+  (string-append %repo-root "/tools/build-image.scm"))
 
 ;; dist/ 输出目录的绝对路径（build-iso 产物落地区）。
 (define (%live-iso-output-dir)
@@ -1109,7 +1109,7 @@
 
 ;; blue build-iso [VARIANT] ... —— 构建 Guix System Live ISO。
 ;; 先 tangle source/config.org（让 :tangle ../tmp/live-iso.scm 的块出产物，
-;; dry-run 也真跑 #:real? #t），再对每个变体调 scripts/build-image.scm。
+;; dry-run 也真跑 #:real? #t），再对每个变体调 tools/build-image.scm。
 ;; 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
 ;; ISO 构建耗时 30+ 分钟，适合后台运行（见 docs/iso-build.md）。
 (define-command (build-iso-command arguments)

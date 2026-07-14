@@ -125,7 +125,7 @@ grep -A1 "name 'guix'" /tmp/channels.txt | grep commit
 | 阶段 | 任务 | 关键文件 | AI 可做? |
 |------|------|---------|---------|
 | P0 | 验证 #7373 仍 Open(已实测) | 见 §9.2 | ✅ |
-| P1 | 新建 `scripts/build-image.scm` | 18 行,SPDX 头 | ✅ |
+| P1 | 新建 `tools/build-image.scm` | 18 行,SPDX 头 | ✅ |
 | P2 | config.org 增 `* Live ISO` 章 + 3 块 | `:tangle ../tmp/live-iso.scm :noweb yes` | ✅ |
 | P3 | blueprint.scm 增 `build-iso-command` | 1 个 define-command + 1 处 commands 列表追加 | ✅ |
 | P4 | manifest.scm 视情况增包 | 默认不动 | ✅ |
@@ -143,7 +143,7 @@ grep -A1 "name 'guix'" /tmp/channels.txt | grep commit
 **v0.5 在原文基础上扩了 7 项**(以下为完整清单):
 
 - [AI] P0:codeberg.org/guix/guix/issues/7373 状态确认(curl)✅ 已实测 Open
-- [AI] P1:`scripts/build-image.scm` 文件存在 + 18 行 + SPDX 头
+- [AI] P1:`tools/build-image.scm` 文件存在 + 18 行 + SPDX 头
 - [AI] P2:config.org 已加 `* Live ISO` 章 + `live-modules` + `live-installation-os`
 - [AI] P2:`tmp/live-iso.scm` 经 `blue check` 通过,末行是 `%live-installation-os`
 - [AI] P2:`tmp/config.scm` 经 `blue check` 通过,**没有** `%live-installation-os` 字样
@@ -178,10 +178,10 @@ grep -A1 "name 'guix'" /tmp/channels.txt | grep commit
 
 ```bash
 # P1 验证
-$ wc -l scripts/build-image.scm
-18 scripts/build-image.scm
+$ wc -l tools/build-image.scm
+18 tools/build-image.scm
 
-$ head -3 scripts/build-image.scm
+$ head -3 tools/build-image.scm
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: MIT

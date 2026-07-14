@@ -994,7 +994,7 @@ no code for module (guix build utils)
 
 > **重要修正（用户 2026-07-07 拍板）**：`blue build-iso` **不需要 sudo**,与 `blue rebuild` 不同。Agent 可以直接后台跑它,**不要**在文档 / blueprint 里写“agent 别跑 / 建议手动执行”的警告。
 
-**与 §关键不变量 #3 的区别**：#3 禁的是 `blue rebuild` / `guix system reconfigure` / `guix home reconfigure`(这些需 sudo 会卡 CLI)。`blue build-iso` 走 `guix time-machine ... repl ... scripts/build-image.scm`,全程用户态,**不碰系统**、**不需 sudo**。
+**与 §关键不变量 #3 的区别**：#3 禁的是 `blue rebuild` / `guix system reconfigure` / `guix home reconfigure`(这些需 sudo 会卡 CLI)。`blue build-iso` 走 `guix time-machine ... repl ... tools/build-image.scm`,全程用户态,**不碰系统**、**不需 sudo**。
 
 **运行方式**（agent 直接干）：
 
@@ -1011,7 +1011,7 @@ blue build-iso xfce
 ```bash
 cd ~/Projects/Config/Guix-configs
 guix time-machine --channels=source/channel.lock -- repl -- \
-  scripts/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
+  tools/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
   tmp/live-iso.scm --image-type=iso9660 2>&1 | tee /tmp/iso-xfce-build.log
 ```
 

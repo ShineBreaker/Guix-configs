@@ -4,9 +4,9 @@
 
 ;; build-image.scm —— guix system image 产物落地助手
 ;;
-;; 用法:guix repl -- scripts/build-image.scm DST [OS-DEFINITION-OR-ARGS]...
+;; 用法:guix repl -- tools/build-image.scm DST [OS-DEFINITION-OR-ARGS]...
 ;;
-;; 做三件事(等价 Testament/scripts/build-image.scm,只是加 SPDX 头):
+;; 做三件事(等价 Testament/tools/build-image.scm,只是加 SPDX 头):
 ;;   1. 调 (guix-system "image" args...) 程序化地生成 ISO
 ;;   2. 从 stdout 抓 store path(/gnu/store/...-iso9660-image)
 ;;   3. 复制到 DST(dist/<name>.iso)并 chmod u+w 让后续可签名/读
