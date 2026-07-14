@@ -22,7 +22,10 @@
      literal:which-key-major-mode-description-spec
      literal:which-key-regexp-replacements)
     ("context-menu-zh.el"
-     literal:context-menu-label-translations))
+     literal:context-menu-label-translations)
+    ("help-zh.el"
+     literal:help-dashboard-bindings
+     literal:help-sections))
   "External data files and their required `setq' targets.")
 
 (defun literal-configctl--fail (format-string &rest args)
@@ -336,6 +339,8 @@
   (literal-configctl--assert
    (equal (cdr (assoc "Undo" literal:context-menu-label-translations)) "撤销")
    "context-menu translation data missing Undo -> 撤销")
+  (literal-configctl--assert (consp literal:help-sections)
+                             "shortcut help sections data missing")
   t)
 
 (defun literal-configctl--tangle-and-audit ()
@@ -372,6 +377,23 @@
                      blocks refs forms definitions data-assignments))
       (when keep-tangle (list runtime target)))))
 
+(defun literal-configctl--bootstrap-guix-autoloads ()
+  "Load per-package autoloads the way Guix `site-start' would.
+
+`scripts/configctl' starts Emacs with `-Q', which skips `site-start' and
+leaves the Guix profile's `*-autoloads.el' files unprocessed: `load-path' is
+populated but package autoloads (e.g. `rainbow-delimiters-mode') are never
+defined, so any config that relies on them breaks in the isolated runtime.
+Mirror `site-start' by delegating to `guix-emacs-autoload-packages' when the
+Guix helper is on `load-path', and fall back to loading each
+*-autoloads file ourselves so the smoke test sees what a live daemon sees."
+  (when (require 'guix-emacs nil t)
+    (guix-emacs-autoload-packages 'no-reload))
+  (dolist (dir load-path)
+    (when (file-directory-p dir)
+      (dolist (file (directory-files dir t "-autoloads\\.el\\'" t))
+        (load (file-name-sans-extension file) t t)))))
+
 (defun literal-configctl-load ()
   (pcase-let* ((`(,runtime ,target) (literal-configctl-check t))
                (user-emacs-directory (file-name-as-directory runtime))
@@ -383,6 +405,7 @@
             (prin1 nil (current-buffer)))
           (setq-default projectile-known-projects-file
                         (expand-file-name "var/projectile/known-projects.el" runtime))
+          (literal-configctl--bootstrap-guix-autoloads)
           (load target nil t)
           (literal-configctl--smoke-test)
           (setq kill-emacs-hook nil)
