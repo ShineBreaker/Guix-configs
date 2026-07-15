@@ -2024,33 +2024,7 @@ end
                  (".config/qt5ct/qss/rounded.qss" ,(local-file
                                                     "../source/files/rounded.qss"))
                  (".config/qt6ct/qss/rounded.qss" ,(local-file
-                                                    "../source/files/rounded.qss"))
-
-                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
-                                                "zed.json"
-                                                (local-file
-                                                 "../source/files/zed.json")
-                                                (specs->pkgs
-                                                 "ccls"
-                                                 "clang"
-                                                 "go"
-                                                 "gopls"
-                                                 "guile-lsp-server"
-                                                 "jdtls-bin"
-                                                 "maven"
-                                                 "nixfmt"
-                                                 "node"
-                                                 "omnisharp"
-                                                 "python-black"
-                                                 "python-jsbeautifier"
-                                                 "python-lsp-black"
-                                                 "python-lsp-server"
-                                                 "rust"
-                                                 "rust-analyzer"
-                                                 "shfmt"
-                                                 "yq"
-                                                 "zig"
-                                                 "zig-zls"))))))
+                                                    "../source/files/rounded.qss")))))
 #+end_src
 
 *** 环境变量
