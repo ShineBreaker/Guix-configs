@@ -9,8 +9,26 @@
   home.packages = with pkgs; [
     ## Tools
     broot
+    localsend
     gh
     python314Packages.jieba
+
+    (libreoffice.overrideAttrs {
+      variant = "fresh";
+      withHelp = false;
+      kdeIntegration = false;
+      withJava = false;
+
+      langs = [
+        "en-GB"
+        "en-US"
+        "zh-CN"
+      ];
+
+      noto-fonts = sarasa-gothic;
+      noto-fonts-lgc-plus = sarasa-gothic;
+      noto-fonts-cjk-sans = sarasa-gothic;
+    })
 
     ## Android
     android-tools
@@ -38,11 +56,18 @@
 
     # AI Agent
     claude-code
+    claude-agent-acp
     codex
     codex-acp
 
+    # Communication
+    discord
+    feishu
+    feishu-cli
     (qq.override {
       commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
     })
+    wechat
+    wemeet
   ];
 }
