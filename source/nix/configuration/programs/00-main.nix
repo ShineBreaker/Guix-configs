@@ -8,6 +8,7 @@
 
   home.packages = with pkgs; [
     ## Tools
+    apostrophe
     broot
     localsend
     gh
@@ -64,10 +65,11 @@
     discord
     feishu
     feishu-cli
+    wechat
+    wemeet
+
     (qq.override {
       commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
     })
-    wechat
-    wemeet
   ];
 }
