@@ -1,42 +1,93 @@
+#!/usr/bin/env guile
+!#
+
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-#!/usr/bin/env guile
-!#
-
-;; sidebar-render.scm — tmux 侧边栏数据采集与渲染引擎
+;; sidebar-render.scm — tmux 侧边栏长驻渲染进程
 ;;
-;; 核心职责：
-;;   1. render-if-changed: 采集窗口数据 → 渲染为终端文本 → 输出到侧栏 pane
-;;   2. click: 处理鼠标点击事件（选择会话/窗口/折叠组/执行操作）
-;;   3. git: 采集所有工作目录的 git branch 信息并写缓存
-;;   4. data: 仅采集并写缓存（供 status-left 等引用）
-;;   5. toggle-group: 切换窗口组折叠状态
+;; 外部接口只有两个：
+;;   daemon  长驻侧栏 pane，通过 FIFO 接收 refresh/click/toggle-group 事件
+;;   render  单次渲染到 stdout，供检查与基准测试使用
 ;;
-;; 渲染管线（render-if-changed）：
-;;   1. 从 tmux 采集所有 pane 数据（collect-window-data）
-;;   2. 按 session → group-by-path → window → pane 组织层级树
-;;   3. 生成带 ANSI 颜色的文本，输出到侧栏 pane
-;;   4. render-if-changed：仅在数据确实发生变化时才输出（防抖动）
-;;     通过将当前渲染 hash 写入缓存与上次对比实现
-;;
-;; 数据采集层：
-;;   - 实时优先：对每个 pane 的路径执行 git rev-parse（timeout 2s）
-;;   - 缓存 fallback：git-branches.cache 保存上次采集结果
-;;   - 采集后写缓存，pane-loop 读取缓存的 git 数据（避免重复 git 调用）
-;;
-;; 状态管理（tmux 选项）：
-;;   - @sidebar_collapsed_groups: 全局逗号分隔列表，记录已折叠的组 key
-;;   - session/window 键通过 hash 生成，避免特殊字符转义问题
-
-(load (string-append (getenv "HOME") "/.config/tmux/scripts/tmux-helpers.scm"))
+;; daemon 每次刷新只执行一次 tmux list-panes。当前上下文、侧栏宽度、
+;; 折叠状态和全部 pane 数据都从这份快照取得，避免跨进程缓存和重复查询。
 
 (use-modules (ice-9 match)
              (ice-9 popen)
+             (ice-9 rdelim)
              (ice-9 textual-ports)
              (srfi srfi-1)
              (srfi srfi-34))
+
+;; === tmux snapshot ===
+
+(define sidebar-title "tmux-sidebar")
+(define sidebar-command "sidebar-render.scm daemon")
+
+(define (tmux-cmd . args)
+  "执行 tmux 命令，返回 (exit-code . output)。"
+  (let* ((port (apply open-pipe* OPEN_READ "tmux" args))
+         (output (read-string port))
+         (status (close-pipe port)))
+    (cons status (string-trim-right output))))
+
+(define (tmux-sidebar-pane? title start-command)
+  (or (string=? title sidebar-title)
+      (and start-command (string-contains start-command sidebar-command))))
+
+;; 普通 pane 字段：session, window index/id/name, path, command, active,
+;; title, pid, pane index, AI/custom title, custom description, locked title.
+(define (collect-state)
+  "用一次 list-panes 返回 (context pane-fields...)。
+CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
+  (let* ((current-pane (or (getenv "TMUX_PANE") ""))
+         (format-string
+          (string-append
+           "#{pane_id}\t#{session_name}\t#{window_index}\t#{window_id}\t"
+           "#{window_name}\t#{pane_current_path}\t#{pane_current_command}\t"
+           "#{pane_active}\t#{pane_title}\t#{pane_pid}\t#{pane_index}\t"
+           "#{pane_start_command}\t#{@tabby_ai_title}\t"
+           "#{@sidebar_window_title}\t#{@sidebar_window_desc}\t"
+           "#{@tabby_pane_title}\t#{@sidebar_collapsed_sessions}\t"
+           "#{@sidebar_collapsed_groups}\t#{pane_width}\t#{@sidebar_width}\t"
+           "#{@status_git_branch}\t__END__"))
+         (result (tmux-cmd "list-panes" "-a" "-F" format-string)))
+    (if (not (zero? (car result)))
+        #f
+        (let loop ((raw-lines (string-split (cdr result) #\newline))
+                   (context #f)
+                   (panes '()))
+          (if (null? raw-lines)
+              (list context (reverse panes))
+              (match (string-split (car raw-lines) #\tab)
+                ((pane-id session idx win-id name path command active title pid pane-idx
+                          start ai-title custom-title custom-desc locked-title
+                          collapsed-sessions collapsed-groups pane-width option-width
+                          status-branch _end)
+                 (cond
+                  ((string=? pane-id current-pane)
+                   (let ((context* (list session idx collapsed-sessions collapsed-groups
+                                         pane-width option-width status-branch)))
+                     (if (tmux-sidebar-pane? title start)
+                         (loop (cdr raw-lines) context* panes)
+                         (loop (cdr raw-lines)
+                               context*
+                               (cons (list session idx win-id name path command active
+                                           title pid pane-idx ai-title custom-title
+                                           custom-desc locked-title)
+                                     panes)))))
+                  ((tmux-sidebar-pane? title start)
+                   (loop (cdr raw-lines) context panes))
+                  (else
+                   (loop (cdr raw-lines)
+                         context
+                         (cons (list session idx win-id name path command active
+                                     title pid pane-idx ai-title custom-title
+                                     custom-desc locked-title)
+                               panes)))))
+                (_ (loop (cdr raw-lines) context panes))))))))
 
 ;; === ANSI ===
 
@@ -44,7 +95,6 @@
 (define ansi-reset "\x1b[0m")
 (define ansi-bold "\x1b[1m")
 (define ansi-dim "\x1b[2m")
-(define ansi-tree "\x1b[90m")
 (define ansi-session "\x1b[97m")
 (define ansi-group "\x1b[96m")
 (define ansi-active "\x1b[94m")
@@ -59,43 +109,17 @@
 
 ;; 宽度缓存：每个 Guile 进程（即每次渲染/点击处理）内只计算一次，
 ;; 避免每行输出都重复调用 tmux 命令（单次渲染节省 60+ 次 tmux 调用）。
-(define %sidebar-width-value #f)
-(define %window-title-width-value #f)
+(define %sidebar-width-value 31)
 
-(define (%compute-sidebar-width)
-  "实际计算侧栏可绘制宽度。优先取 pane 宽度，回退到 @sidebar_width 选项。"
-  (let* ((tmux-pane (getenv "TMUX_PANE"))
-         (pane-width (if (and tmux-pane (not (string=? tmux-pane "")))
-                         (string->positive-integer
-                          (cdr (tmux-cmd "display-message" "-p" "-t" tmux-pane "#{pane_width}"))
-                          0)
-                         0))
-         (option-width (string->positive-integer (tmux-get-option "@sidebar_width") 32))
-         (width (if (> pane-width 0) pane-width option-width)))
-    (max 18 (- width 1))))
+(define (set-sidebar-width! pane-width option-width)
+  (let* ((pane (string->positive-integer pane-width 0))
+         (option (string->positive-integer option-width 32))
+         (width (if (> pane 0) pane option)))
+    (set! %sidebar-width-value (max 18 (- width 1)))))
 
-(define (sidebar-width)
-  "返回侧栏可绘制宽度（进程内缓存）。最后一列不用以避免换行。"
-  (or %sidebar-width-value
-      (let ((w (%compute-sidebar-width)))
-        (set! %sidebar-width-value w)
-        w)))
-
-(define (window-title-width)
-  "返回窗口标题区域最大宽度（进程内缓存）。"
-  (or %window-title-width-value
-      (let ((w (max 6 (- (sidebar-width) 8))))
-        (set! %window-title-width-value w)
-        w)))
+(define (sidebar-width) %sidebar-width-value)
 
 ;; === Text ===
-
-(define (parse-cache-line line)
-  (string-split line #\tab))
-
-(define (valid-data-line? line)
-  (let ((len (length (parse-cache-line line))))
-    (or (= len 7) (>= len 18))))
 
 (define (field fields index fallback)
   (if (> (length fields) index)
@@ -104,20 +128,18 @@
 
 (define (row-session fields) (field fields 0 ""))
 (define (row-index fields) (field fields 1 ""))
-(define (row-window-id fields) (if (>= (length fields) 18) (field fields 2 "") ""))
-(define (row-window-name fields) (if (>= (length fields) 18) (field fields 3 "") (field fields 2 "")))
-(define (row-path fields) (if (>= (length fields) 18) (field fields 4 "") (field fields 3 "")))
-(define (row-command fields) (if (>= (length fields) 18) (field fields 5 "") (field fields 4 "")))
-(define (row-activity fields) (if (>= (length fields) 18) (field fields 6 "") (field fields 5 "")))
-(define (row-pane-title fields) (if (>= (length fields) 18) (field fields 9 "") ""))
-(define (row-pane-pid fields) (if (>= (length fields) 18) (field fields 10 "") ""))
-(define (row-pane-index fields) (if (>= (length fields) 18) (field fields 11 "") ""))
-(define (row-ai-title fields) (if (>= (length fields) 18) (field fields 13 "") ""))
-(define (row-custom-title fields) (if (>= (length fields) 18) (field fields 14 "") ""))
-(define (row-custom-desc fields) (if (>= (length fields) 18) (field fields 15 "") ""))
-(define (row-locked-pane-title fields) (if (>= (length fields) 18) (field fields 16 "") ""))
-(define (row-window-panes fields) (if (>= (length fields) 18) (field fields 17 "1") "1"))
-(define (row-pane-active? fields) (string=? (if (>= (length fields) 18) (field fields 8 "") "") "1"))
+(define (row-window-id fields) (field fields 2 ""))
+(define (row-window-name fields) (field fields 3 ""))
+(define (row-path fields) (field fields 4 ""))
+(define (row-command fields) (field fields 5 ""))
+(define (row-pane-active? fields) (string=? (field fields 6 "") "1"))
+(define (row-pane-title fields) (field fields 7 ""))
+(define (row-pane-pid fields) (field fields 8 ""))
+(define (row-pane-index fields) (field fields 9 ""))
+(define (row-ai-title fields) (field fields 10 ""))
+(define (row-custom-title fields) (field fields 11 ""))
+(define (row-custom-desc fields) (field fields 12 ""))
+(define (row-locked-pane-title fields) (field fields 13 ""))
 
 (define (nonempty s)
   (and s (not (string=? s "")) s))
@@ -132,20 +154,17 @@
       (string=? title window-name)
       (string-prefix? "~" title)))
 
-(define (option-list name)
-  (let ((value (tmux-get-option name)))
-    (if (and value (not (string=? value "")))
-        (string-split value #\,)
-        '())))
-
 (define (set-option-list! name values)
   (tmux-cmd "set" "-g" name (string-join values ",")))
 
-(define (toggle-list-value! option key)
-  (let ((values (option-list option)))
-    (if (member key values)
-        (set-option-list! option (delete key values))
-        (set-option-list! option (cons key values)))))
+(define (toggle-list-value! option current-value key)
+  (let ((values (if (string-null? current-value)
+                    '()
+                    (string-split current-value #\,))))
+    (set-option-list! option
+                      (if (member key values)
+                          (delete key values)
+                          (cons key values)))))
 
 (define (session-key session)
   (string-append "s:" (number->string (string-hash session) 16)))
@@ -153,40 +172,53 @@
 (define (group-collapse-key session group-key)
   (string-append "g:" (number->string (string-hash (string-append session ":" group-key)) 16)))
 
-(define (split-data data)
-  (if (and data (not (string=? data "")))
-      (filter valid-data-line?
-              (filter (lambda (line) (not (string=? line "")))
-                      (string-split data #\newline)))
-      '()))
+(define (basename-of-path path)
+  (let ((idx (string-rindex path #\/)))
+    (if idx (substring path (+ idx 1)) path)))
 
-(define (read-git-branch session window)
-  (let ((cache (read-cache "git-branches.cache")))
-    (if (and cache (not (string=? cache "")))
-        (let loop ((lines (string-split cache #\newline)))
-          (if (null? lines)
-              #f
-              (let* ((line (car lines))
-                     (space-idx (string-index line #\space)))
-                (if (and space-idx
-                         (string=? (string-take line space-idx)
-                                   (format #f "~a:~a" session window)))
-                    (string-drop line (+ space-idx 1))
-                    (loop (cdr lines))))))
-        #f)))
+(define (char-width c)
+  (let ((n (char->integer c))
+        (category (char-general-category c)))
+    (cond
+     ((memq category '(Mn Me Cf)) 0)
+     ((or (and (>= n #x3400) (<= n #x4DBF))
+          (and (>= n #x4E00) (<= n #x9FFF))
+          (and (>= n #xF900) (<= n #xFAFF))
+          (and (>= n #xAC00) (<= n #xD7AF))
+          (and (>= n #xFF01) (<= n #xFF60))
+          (and (>= n #xFFE0) (<= n #xFFE6))
+          (and (>= n #x20000) (<= n #x2FFFD))
+          (and (>= n #x30000) (<= n #x3FFFD)))
+      2)
+     (else 1))))
 
-(define (run/read . args)
-  (let* ((port (apply open-pipe* OPEN_READ args))
-         (output (string-trim-both (read-string port)))
-         (status (close-pipe port)))
-    (and (zero? status) output)))
+(define (string-width text)
+  (fold (lambda (c width) (+ width (char-width c)))
+        0
+        (string->list text)))
 
-(define (realpath* path)
-  (run/read "timeout" "2" "realpath" "--" path))
+(define (truncate-string text max-width)
+  (let ((ellipsis "…"))
+    (cond
+     ((<= max-width 0) "")
+     ((<= (string-width text) max-width) text)
+     ((= max-width 1) ellipsis)
+     (else
+      (let loop ((chars (string->list text))
+                 (width 0)
+                 (result '()))
+        (if (or (null? chars)
+                (> (+ width (char-width (car chars))) (- max-width 1)))
+            (string-append (list->string (reverse result)) ellipsis)
+            (loop (cdr chars)
+                  (+ width (char-width (car chars)))
+                  (cons (car chars) result))))))))
 
-(define (path-prefix-or-equal? parent child)
-  (or (string=? parent child)
-      (string-prefix? (string-append parent "/") child)))
+(define (pad-string text width)
+  (let ((padding (- width (string-width text))))
+    (if (positive? padding)
+        (string-append text (make-string padding #\space))
+        text)))
 
 (define (directory-path? path)
   (false-if-exception (eq? (stat:type (stat path)) 'directory)))
@@ -196,45 +228,89 @@
       (and (char>=? c #\a) (char<=? c #\f))
       (and (char>=? c #\A) (char<=? c #\F))))
 
+(define %git-head-paths (make-hash-table))
+(define %git-branches (make-hash-table))
+(define git-path-cache-ticks (* 30 internal-time-units-per-second))
+
+(define (absolute-path? path)
+  (and (positive? (string-length path))
+       (char=? (string-ref path 0) #\/)))
+
+(define (gitdir-from-marker directory marker)
+  (cond
+   ((directory-path? marker) marker)
+   ((file-exists? marker)
+    (let ((content (string-trim-both (call-with-input-file marker read-string))))
+      (and (string-prefix? "gitdir: " content)
+           (let* ((value (string-drop content 8))
+                  (path (if (absolute-path? value)
+                            value
+                            (string-append directory "/" value))))
+             (false-if-exception (canonicalize-path path))))))
+   (else #f)))
+
+(define (find-git-head path)
+  (let* ((now (get-internal-real-time))
+         (cached (hash-ref %git-head-paths path #f)))
+    (if (and cached (< now (car cached)))
+        (cdr cached)
+        (let* ((start (false-if-exception (canonicalize-path path)))
+               (head
+                (and start
+                     (let loop ((directory start))
+                       (let* ((marker (string-append directory "/.git"))
+                              (gitdir (gitdir-from-marker directory marker)))
+                         (cond
+                          (gitdir
+                          (let ((candidate (string-append gitdir "/HEAD")))
+                             (and (file-exists? candidate) candidate)))
+                          ((string=? directory "/") #f)
+                          (else
+                           (let ((parent (parent-path directory)))
+                             (if (string=? parent directory)
+                                 #f
+                                 (loop parent))))))))))
+          (hash-set! %git-head-paths path
+                     (cons (+ now git-path-cache-ticks) head))
+          head))))
+
+(define (head-content->branch content)
+  (cond
+   ((string-prefix? "ref: refs/heads/" content)
+    (let ((branch (string-drop content (string-length "ref: refs/heads/"))))
+      (and (not (string-null? branch)) branch)))
+   ((and (>= (string-length content) 7)
+         (string-every hex-char? content))
+    (substring content 0 7))
+   (else #f)))
+
 (define (read-git-head path)
-  (let ((git-path (string-append path "/.git")))
-    (cond
-     ((and (file-exists? git-path) (not (directory-path? git-path)))
-      (let ((branch (run/read "timeout" "2" "git" "-C" path
-                              "rev-parse" "--abbrev-ref" "HEAD")))
-        (and branch (not (string-null? branch)) branch)))
-     ((and (file-exists? git-path) (directory-path? git-path))
-      (let ((head-path (string-append git-path "/HEAD")))
-        (and (file-exists? head-path)
-             (let ((content (string-trim-both
-                             (call-with-input-file head-path read-string))))
-               (cond
-                ((string-prefix? "ref: refs/heads/" content)
-                 (let ((branch (string-drop content (string-length "ref: refs/heads/"))))
-                   (and (not (string-null? branch)) branch)))
-                ((and (= (string-length content) 40)
-                      (string-every hex-char? content))
-                 (substring content 0 7))
-                (else #f))))))
-     (else #f))))
+  (let ((head (find-git-head path)))
+    (and head
+         (false-if-exception
+          (let* ((info (stat head))
+                 (stamp (list (stat:mtime info)
+                              (stat:mtimensec info)
+                              (stat:size info)))
+                 (cached (hash-ref %git-branches head #f)))
+            (if (and cached (equal? (car cached) stamp))
+                (cdr cached)
+                (let* ((content (string-trim-both
+                                 (call-with-input-file head read-string)))
+                       (branch (head-content->branch content)))
+                  (hash-set! %git-branches head (cons stamp branch))
+                  branch)))))))
 
-(define (safe-git-path? pane-path)
-  (let ((git-path (string-append pane-path "/.git")))
-    (and (file-exists? git-path)
-         (or (not (directory-path? git-path))
-             (let ((real-pane (realpath* pane-path))
-                   (real-git (realpath* git-path)))
-               (and real-pane real-git
-                    (path-prefix-or-equal? real-pane real-git)))))))
+(define %cmdline-cache (make-hash-table))
+(define cmdline-cache-ticks (* 2 internal-time-units-per-second))
 
-(define (process-cmdline pid)
+(define (process-argv pid)
   (let ((file (string-append "/proc/" pid "/cmdline")))
     (and (file-exists? file)
-         (let* ((raw (call-with-input-file file read-string))
-                (chars (map (lambda (c) (if (char=? c #\nul) #\space c))
-                            (string->list raw)))
-                (line (string-trim-both (list->string chars))))
-           (and (not (string-null? line)) line)))))
+         (let ((args (filter (lambda (arg) (not (string-null? arg)))
+                             (string-split (call-with-input-file file read-string)
+                                           #\nul))))
+           (and (pair? args) args)))))
 
 (define (child-pids pid)
   (let ((file (string-append "/proc/" pid "/task/" pid "/children")))
@@ -245,7 +321,7 @@
               (string-split raw #\space)))
         '())))
 
-(define (foreground-cmdline pid)
+(define (foreground-argv/uncached pid)
   (let loop ((queue (if (nonempty pid) (list pid) '()))
              (last #f)
              (seen '()))
@@ -255,18 +331,31 @@
                (rest (cdr queue)))
           (if (member pid* seen)
               (loop rest last seen)
-              (let ((cmd (process-cmdline pid*))
+              (let ((argv (process-argv pid*))
                     (children (child-pids pid*)))
                 (loop (append children rest)
-                      (or cmd last)
+                      (or argv last)
                       (cons pid* seen))))))))
 
-(define (shorten-cmdline cmdline command)
-  (if (not (nonempty cmdline))
+(define (foreground-argv pid)
+  (let* ((now (get-internal-real-time))
+         (cached (and (nonempty pid) (hash-ref %cmdline-cache pid #f))))
+    (if (and cached (< now (car cached)))
+        (cdr cached)
+        (let ((argv (foreground-argv/uncached pid)))
+          (when (nonempty pid)
+            (hash-set! %cmdline-cache pid
+                       (cons (+ now cmdline-cache-ticks) argv)))
+          argv))))
+
+(define (shorten-argv argv command)
+  (if (not (pair? argv))
       ""
-      (let* ((parts (string-split cmdline #\space))
-             (program (if (null? parts) command (basename-of-path (car parts))))
-             (args (if (null? parts) '() (cdr parts)))
+      (let* ((raw-program (basename-of-path (car argv)))
+             (program (if (string-prefix? "-" raw-program)
+                          (string-drop raw-program 1)
+                          raw-program))
+             (args (cdr argv))
              (trimmed-args (filter (lambda (arg)
                                      (not (member arg '("--login" "-l" "-i"))))
                                    args))
@@ -289,16 +378,13 @@
   (or (nonempty (row-custom-desc fields))
       (let* ((path (row-path fields))
              (command (row-command fields))
-             (cmdline (shorten-cmdline (foreground-cmdline (row-pane-pid fields)) command))
+             (cmdline (shorten-argv (foreground-argv (row-pane-pid fields)) command))
              (path-label (basename-display path)))
         (cond
          ((and (nonempty cmdline) (not (string=? cmdline command)))
           (format #f "~a · ~a" path-label cmdline))
          ((nonempty path-label) path-label)
          (else "")))))
-
-(define (format-pane-title fields)
-  (format-pane-title* fields (window-title-width)))
 
 (define (format-pane-title* fields available-width)
   (let* ((idx (row-index fields))
@@ -310,9 +396,6 @@
          (base (truncate-string title-text label-width)))
     (truncate-string (format #f "~a~a" number-part base)
                      available-width)))
-
-(define (format-tab-title window)
-  (format-tab-title* window (window-title-width)))
 
 (define (format-tab-title* window available-width)
   (match window
@@ -400,16 +483,15 @@
   (or (nonempty (row-window-id fields))
       (string-append (row-session fields) ":" (row-index fields))))
 
-(define (window-objects lines)
-  "Return ((window-key session index name representative-fields pane-lines) ...)."
+(define (window-objects panes)
+  "Return ((window-key session index name representative-fields pane-fields) ...)."
   (let ((windows (make-hash-table))
         (order '()))
     (for-each
-     (lambda (line)
-       (let* ((fields (parse-cache-line line))
-              (key (window-key fields)))
+     (lambda (fields)
+       (let ((key (window-key fields)))
          (unless (hash-ref windows key #f)
-           (set! order (append order (list key)))
+           (set! order (cons key order))
            (hash-set! windows key
                       (list (row-session fields)
                             (row-index fields)
@@ -421,11 +503,11 @@
                 (idx (list-ref window 1))
                 (name (list-ref window 2))
                 (rep-fields (list-ref window 3))
-                (panes (list-ref window 4))
+                (window-panes (list-ref window 4))
                 (rep* (if (row-pane-active? fields) fields rep-fields)))
            (hash-set! windows key
-                      (list session idx name rep* (append panes (list line)))))))
-     lines)
+                      (list session idx name rep* (cons fields window-panes))))))
+     panes)
     (map (lambda (key)
            (let ((window (hash-ref windows key)))
              (list key
@@ -433,10 +515,10 @@
                    (list-ref window 1)
                    (list-ref window 2)
                    (list-ref window 3)
-                   (list-ref window 4))))
-         order)))
+                   (reverse (list-ref window 4)))))
+         (reverse order))))
 
-(define (group-windows lines)
+(define (group-windows panes)
   "Return ((group-key group-name (window-objects ...)) ...), preserving order."
   (let ((groups (make-hash-table))
         (order '()))
@@ -447,33 +529,35 @@
           (match (path-group-key (row-path rep-fields))
             ((group-key display _group-path)
              (unless (hash-ref groups group-key #f)
-               (set! order (append order (list group-key)))
+               (set! order (cons group-key order))
                (hash-set! groups group-key (list display '())))
              (let* ((group (hash-ref groups group-key))
                     (windows (cadr group)))
                (hash-set! groups group-key
-                          (list display (append windows (list window))))))))))
-     (window-objects lines))
+                          (list display (cons window windows)))))))))
+     (window-objects panes))
     (map (lambda (key)
            (let ((group (hash-ref groups key)))
-             (list key (car group) (cadr group))))
-         order)))
+             (list key (car group) (reverse (cadr group)))))
+         (reverse order))))
 
-(define (session-blocks lines)
+(define (session-blocks panes)
   "Return ((session-name session-key (group ...)) ...), preserving order."
   (let ((sessions (make-hash-table))
         (order '()))
     (for-each
-     (lambda (line)
-       (let ((session (row-session (parse-cache-line line))))
+     (lambda (fields)
+       (let ((session (row-session fields)))
          (unless (hash-ref sessions session #f)
-           (set! order (append order (list session)))
+           (set! order (cons session order))
            (hash-set! sessions session '()))
-         (hash-set! sessions session (append (hash-ref sessions session) (list line)))))
-     lines)
+         (hash-set! sessions session (cons fields (hash-ref sessions session)))))
+     panes)
     (map (lambda (session)
-           (list session (session-key session) (group-windows (hash-ref sessions session))))
-         order)))
+           (list session
+                 (session-key session)
+                 (group-windows (reverse (hash-ref sessions session)))))
+         (reverse order))))
 
 (define (active-session-first blocks current-session)
   "将当前会话块排到最前。CURRENT-SESSION 由调用方传入，避免重复查询 tmux。"
@@ -549,9 +633,8 @@
                  style
                  current?)))))
 
-(define (pane-row line current-session current-window group-last? window-last? last-pane?)
-  (let* ((fields (parse-cache-line line))
-         (session (row-session fields))
+(define (pane-row fields current-session current-window group-last? window-last? last-pane?)
+  (let* ((session (row-session fields))
          (idx (row-index fields))
          (pane-idx (row-pane-index fields))
          (current? (and (string=? session current-session)
@@ -578,20 +661,19 @@
   (match window
     ((_key _session _idx _name _rep-fields panes)
      (let pane-loop ((ps panes)
-                     (pane-index 0)
                      (rows (list (tab-row window current-session current-window
-                                           group-last? last-window?))))
+                                          group-last? last-window?))))
        (if (null? ps)
-           rows
+           (reverse rows)
            (pane-loop (cdr ps)
-                      (+ pane-index 1)
-                      (append rows
-                              (pane-row (car ps)
-                                        current-session
-                                        current-window
-                                        group-last?
-                                        last-window?
-                                        (= pane-index (- (length panes) 1))))))))))
+                      (append (reverse
+                               (pane-row (car ps)
+                                         current-session
+                                         current-window
+                                         group-last?
+                                         last-window?
+                                         (null? (cdr ps))))
+                              rows)))))))
 
 (define (split-option-value str)
   "将逗号分隔的选项值拆分为列表，空值返回空列表。"
@@ -600,21 +682,10 @@
       (string-split str #\,)))
 
 (define (layout-rows-with-context blocks context-parts)
-  ;; 使用预缓存上下文渲染，零 tmux 调用。
   (let* ((current-session (if (> (length context-parts) 0) (list-ref context-parts 0) ""))
          (current-window (if (> (length context-parts) 1) (list-ref context-parts 1) ""))
          (collapsed-sessions (split-option-value (if (> (length context-parts) 2) (list-ref context-parts 2) "")))
          (collapsed-groups (split-option-value (if (> (length context-parts) 3) (list-ref context-parts 3) ""))))
-    (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)))
-
-(define (layout-rows blocks)
-  ;; 单次 tmux 调用获取渲染所需的 4 项上下文（4 → 1 次 tmux 调用）
-  (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}\t#{@sidebar_collapsed_sessions}\t#{@sidebar_collapsed_groups}"))
-         (parts (string-split raw-info #\tab))
-         (current-session (list-ref parts 0))
-         (current-window (list-ref parts 1))
-         (collapsed-sessions (split-option-value (if (> (length parts) 2) (list-ref parts 2) "")))
-         (collapsed-groups (split-option-value (if (> (length parts) 3) (list-ref parts 3) ""))))
     (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)))
 
 (define (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)
@@ -634,10 +705,8 @@
                              (if (null? (cdr bs))
                                  rows*
                                  (cons (make-row "" #f) rows*)))
-                 (let ((group-count (length groups)))
-                   (let group-loop ((gs groups)
-                                    (index 0)
-                                    (g-rows rows*))
+                 (let group-loop ((gs groups)
+                                  (g-rows rows*))
                      (if (null? gs)
                          (block-loop (cdr bs)
                                      (if (null? (cdr bs))
@@ -645,7 +714,7 @@
                                          (cons (make-row "" #f) g-rows)))
                          (match (car gs)
                            ((group-key group-name windows)
-                            (let* ((last-group? (= index (- group-count 1)))
+                            (let* ((last-group? (null? (cdr gs)))
                                    (collapse-key (group-collapse-key session group-key))
                                    (group-collapsed? (member collapse-key collapsed-groups))
                                    (g-rows* (cons (group-row session group-key group-name
@@ -654,20 +723,18 @@
                                                              group-collapsed?)
                                                   g-rows)))
                               (if group-collapsed?
-                                  (group-loop (cdr gs) (+ index 1) g-rows*)
+                                  (group-loop (cdr gs) g-rows*)
                                   (let window-loop ((ws windows)
-                                                    (w-index 0)
                                                     (w-rows g-rows*))
                                     (if (null? ws)
-                                        (group-loop (cdr gs) (+ index 1) w-rows)
+                                        (group-loop (cdr gs) w-rows)
                                         (window-loop (cdr ws)
-                                                     (+ w-index 1)
                                                      (append (reverse (window-rows (car ws)
                                                                                   current-session
                                                                                   current-window
                                                                                   last-group?
-                                                                                  (= w-index (- (length windows) 1))))
-                                                             w-rows))))))))))))))))))
+                                                                                  (null? (cdr ws))))
+                                                             w-rows)))))))))))))))))
 
 (define (rows-actions rows)
   (let loop ((rs rows)
@@ -682,111 +749,72 @@
 
 ;; === Render and Click ===
 
-(define (cache-lines)
-  (split-data (read-cache "sidebar-data.cache")))
+(define %current-context #f)
+(define %current-panes '())
+(define %current-actions '())
+(define %last-screen #f)
 
-(define (fresh-lines)
-  (split-data (collect-window-data)))
+(define (context-value index fallback)
+  (if (and %current-context (> (length %current-context) index))
+      (list-ref %current-context index)
+      fallback))
 
-(define (data-lines)
-  (let ((fresh (fresh-lines)))
-    (if (null? fresh)
-        (cache-lines)
-        (let ((joined (string-join fresh "\n")))
-          (write-cache "sidebar-data.cache" joined)
-          (write-cache "sidebar-data.hash"
-                       (number->string (modulo (string-hash joined) 1000000000) 16))
-          fresh))))
+(define (current-git-branch)
+  (let ((session (context-value 0 ""))
+        (window (context-value 1 "")))
+    (let loop ((panes %current-panes)
+               (fallback #f))
+      (if (null? panes)
+          (if fallback (or (read-git-head fallback) "") "")
+          (let ((fields (car panes)))
+            (if (and (string=? (row-session fields) session)
+                     (string=? (row-index fields) window))
+                (if (row-pane-active? fields)
+                    (or (read-git-head (row-path fields)) "")
+                    (loop (cdr panes) (or fallback (row-path fields))))
+                (loop (cdr panes) fallback)))))))
 
-(define (refresh-data!)
-  (let ((data (collect-window-data)))
-    (write-cache "sidebar-data.cache" data)
-    (write-cache "sidebar-data.hash"
-                 (number->string (modulo (string-hash data) 1000000000) 16))
-    data))
+(define (update-statusbar-branch!)
+  (let ((branch (current-git-branch))
+        (previous (context-value 6 "")))
+    (unless (string=? branch previous)
+      (tmux-cmd "set-option" "-w" "@status_git_branch" branch))))
 
-(define (collect-git-info lines)
-  (filter-map
-   (lambda (line)
-     (let* ((fields (parse-cache-line line))
-            (session (row-session fields))
-            (window (row-index fields))
-            (pane-path (row-path fields))
-            (branch (and (safe-git-path? pane-path)
-                         (read-git-head pane-path))))
-       (and branch
-            (string-append session ":" window " " branch))))
-   lines))
+(define (rows->screen rows)
+  (call-with-output-string
+   (lambda (port)
+     (parameterize ((current-output-port port))
+       (for-each emit-styled-line rows)))))
 
-(define (refresh-git!)
-  (let* ((lines (cache-lines))
-         (info (collect-git-info lines)))
-    (write-cache "git-branches.cache" (string-join info "\n"))))
+(define (refresh-state!)
+  (let ((state (collect-state)))
+    (when state
+      (set! %current-context (car state))
+      (set! %current-panes (cadr state)))
+    (when %current-context
+      (set-sidebar-width! (context-value 4 "0") (context-value 5 "32")))
+    (update-statusbar-branch!)))
 
-;; 渲染时缓存的行号→动作映射，供点击处理时直接读取，跳过 layout 重计算。
-(define (save-actions-cache! actions)
-  "将行号→动作映射写入缓存文件。"
-  (false-if-exception
-   (call-with-output-file (cache-file "sidebar-actions.cache")
-     (lambda (port) (write actions port)))))
+(define (current-rows)
+  (if (or (not %current-context) (null? %current-panes))
+      (list (make-row " [no tmux data]" #f ansi-dim #f))
+      (let* ((session (context-value 0 ""))
+             (blocks (active-session-first (session-blocks %current-panes) session)))
+        (layout-rows-with-context blocks %current-context))))
 
-(define (load-actions-cache)
-  "从缓存加载行号→动作映射，缓存不可用时返回 #f。"
-  (let ((file (cache-file "sidebar-actions.cache")))
-    (and (file-exists? file)
-         (false-if-exception
-          (call-with-input-file file read)))))
-
-(define (update-statusbar-options! current-session current-window lines)
-  "更新状态栏窗口级选项（@status_git_branch）。使用 -w 窗口级选项，
-避免多个 session 的 pane-loop 竞争覆盖同一个全局变量。"
-  (let loop ((ls lines))
-    (unless (null? ls)
-      (let* ((fields (parse-cache-line (car ls)))
-             (session (row-session fields))
-             (idx (row-index fields))
-             (path (row-path fields))
-             (active? (row-pane-active? fields)))
-        (if (and (string=? session current-session)
-                 (string=? idx current-window)
-                 active?)
-            (let ((branch (and (safe-git-path? path) (read-git-head path))))
-              (tmux-cmd "set-option" "-w" "@status_git_branch"
-                        (if branch branch "")))
-            (loop (cdr ls)))))))
-
-(define (render-if-changed)
-  "采集数据并渲染输出。单次 Guile 调用完成采集+渲染，避免双重启动开销。
-同时写入缓存供其他命令（click、toggle-group 等）使用。"
-  (let* ((data (collect-window-data))
-         (new-hash (number->string (modulo (string-hash data) 1000000000) 16)))
-    (write-cache "sidebar-data.cache" data)
-    (write-cache "sidebar-data.hash" new-hash)
-    (let ((lines (split-data data)))
-      (if (null? lines)
-          (emit-styled-line (make-row " [no tmux data]" #f ansi-dim #f))
-          (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}"))
-                 (ctx (string-split raw-info #\tab))
-                 (current-session (list-ref ctx 0))
-                 (current-window (if (> (length ctx) 1) (list-ref ctx 1) "0"))
-                 (rows (layout-rows-with-context
-                        (session-blocks lines)
-                        (append ctx
-                                (list (or (tmux-get-option "@sidebar_collapsed_sessions") "")
-                                      (or (tmux-get-option "@sidebar_collapsed_groups") ""))))))
-            (update-statusbar-options! current-session current-window lines)
-            (save-actions-cache! (rows-actions rows))
-            (for-each emit-styled-line rows))))))
-
-(define (render-to-stdout)
-  "从缓存渲染，不重新采集数据。实时获取 context 以避免多窗口竞争。"
-  (let ((lines (cache-lines)))
-    (if (null? lines)
-        (emit-styled-line (make-row " [no tmux data]" #f ansi-dim #f))
-        (let* ((rows (layout-rows (session-blocks lines)))
-               (actions (rows-actions rows)))
-          (save-actions-cache! actions)
-          (for-each emit-styled-line rows)))))
+(define (render-current! cursor-control?)
+  (refresh-state!)
+  (let* ((rows (current-rows))
+         (screen (rows->screen rows)))
+    (set! %current-actions (rows-actions rows))
+    (when (or (not cursor-control?)
+              (not %last-screen)
+              (not (string=? screen %last-screen)))
+      (when cursor-control? (display "\x1b[H"))
+      (display screen)
+      (when cursor-control? (display "\x1b[J"))
+      (force-output)
+      (set! %last-screen screen))))
 
 (define (row-action row actions)
   (let ((found (find (lambda (entry) (= (car entry) row)) actions)))
@@ -806,58 +834,43 @@
      (filter (lambda (n) (>= n 0))
              (list local local-prev mouse-y (- mouse-y 1))))))
 
-(define (signal-sidebar-pane pane-id)
-  (when (and pane-id (not (string=? pane-id "")))
-    (let* ((pid-text (cdr (tmux-cmd "display-message" "-p" "-t" pane-id "#{pane_pid}")))
-           (pid (and pid-text (string->number pid-text))))
-      (when pid
-        (false-if-exception (kill pid SIGUSR1))))))
+(define (switch-client-to client target)
+  (if (nonempty client)
+      (tmux-cmd "switch-client" "-c" client "-t" target)
+      (tmux-cmd "switch-client" "-t" target)))
 
-(define (handle-action action sidebar-pane)
+(define (handle-action action client)
   (when action
-    ;; window 和 pane 都需要 current-session，提前获取一次
-    (let ((current-session (tmux-display "#{session_name}")))
-      (match action
-        (('session skey)
-         (toggle-list-value! "@sidebar_collapsed_sessions" skey)
-         (signal-sidebar-pane sidebar-pane))
-        (('group gkey)
-         (toggle-list-value! "@sidebar_collapsed_groups" gkey)
-         (signal-sidebar-pane sidebar-pane))
-        (('window session idx)
-         (if (string=? session current-session)
-             (tmux-cmd "select-window" "-t" (string-append ":" idx))
-             (tmux-cmd "switch-client" "-t" (string-append session ":" idx)))
-         (signal-sidebar-pane sidebar-pane))
-        (('pane session idx pane-idx)
-         (if (string=? session current-session)
-             (tmux-cmd "select-window" "-t" (string-append ":" idx))
-             (tmux-cmd "switch-client" "-t" (string-append session ":" idx)))
-         (when (nonempty pane-idx)
-           (tmux-cmd "select-pane" "-t" (string-append session ":" idx "." pane-idx)))
-         (signal-sidebar-pane sidebar-pane))
-        (_ #f)))))
+    (match action
+      (('session skey)
+       (toggle-list-value! "@sidebar_collapsed_sessions"
+                           (context-value 2 "") skey))
+      (('group gkey)
+       (toggle-list-value! "@sidebar_collapsed_groups"
+                           (context-value 3 "") gkey))
+      (('window session idx)
+       (switch-client-to client (string-append session ":" idx)))
+      (('pane session idx pane-idx)
+       (switch-client-to client (string-append session ":" idx))
+       (when (nonempty pane-idx)
+         (tmux-cmd "select-pane" "-t"
+                   (string-append session ":" idx "." pane-idx))))
+      (_ #f))))
 
-(define (handle-click mouse-y pane-top sidebar-pane)
-  ;; 优先使用渲染时缓存的 actions 映射，避免重新计算 layout
-  (let* ((actions (or (load-actions-cache)
-                      (rows-actions (layout-rows (session-blocks (cache-lines))))))
-         (action (let loop ((candidates (screen-row-candidates mouse-y pane-top)))
+(define (handle-click mouse-y pane-top client)
+  (let ((action (let loop ((candidates (screen-row-candidates mouse-y pane-top)))
                    (if (null? candidates)
                        #f
-                       (or (nearby-action (car candidates) actions)
+                       (or (nearby-action (car candidates) %current-actions)
                            (loop (cdr candidates)))))))
-    (handle-action action sidebar-pane)))
+    (handle-action action client)))
 
 (define (toggle-current-group)
-  ;; 合并 session + window 为单次 tmux 调用
-  (let* ((raw-info (tmux-display "#{session_name}\t#{window_index}"))
-         (parts (string-split raw-info #\tab))
-         (current-session (list-ref parts 0))
-         (current-window (if (> (length parts) 1) (list-ref parts 1) "0")))
-    (let loop ((lines (cache-lines)))
-      (unless (null? lines)
-        (let* ((fields (parse-cache-line (car lines)))
+  (let ((current-session (context-value 0 ""))
+        (current-window (context-value 1 "")))
+    (let loop ((panes %current-panes))
+      (unless (null? panes)
+        (let* ((fields (car panes))
                (session (row-session fields))
                (idx (row-index fields))
                (path (row-path fields)))
@@ -866,50 +879,88 @@
               (match (path-group-key path)
                 ((group-key _display _group-path)
                  (toggle-list-value! "@sidebar_collapsed_groups"
+                                     (context-value 3 "")
                                      (group-collapse-key session group-key))))
-              (loop (cdr lines))))))))
+              (loop (cdr panes))))))))
 
-(define (set-window-text! option args)
-  (let ((text (string-trim-both (string-join args " "))))
-    (if (string-null? text)
-        (tmux-cmd "set-option" "-w" "-u" option)
-        (tmux-cmd "set-option" "-w" option text))))
+;; === FIFO daemon ===
+
+(define (fifo-path)
+  (let* ((pane (or (getenv "TMUX_PANE") "unknown"))
+         (id (if (and (positive? (string-length pane))
+                      (char=? (string-ref pane 0) #\%))
+                 (substring pane 1)
+                 pane)))
+    (format #f "/tmp/tmux-sidebar-~a-~a.fifo" (getuid) id)))
+
+(define (open-event-fifo)
+  (let ((path (fifo-path)))
+    (when (file-exists? path) (delete-file path))
+    (mknod path 'fifo #o600 0)
+    (cons path (open-file path "r+"))))
+
+(define (handle-event line)
+  (match (string-split line #\tab)
+    (("refresh") #t)
+    (("toggle-group") (toggle-current-group))
+    (("click" mouse-y pane-top client)
+     (let ((y (string->number mouse-y))
+           (top (string->number pane-top)))
+       (when (and y top) (handle-click y top client))))
+    (_ #f)))
+
+(define (drain-events port)
+  (let loop ()
+    (when (char-ready? port)
+      (let ((line (read-line port)))
+        (unless (eof-object? line)
+          (handle-event line)
+          (loop))))))
+
+(define (run-daemon)
+  (let* ((fifo (open-event-fifo))
+         (path (car fifo))
+         (port (cdr fifo))
+         (cleaned? #f))
+    (define (cleanup)
+      (unless cleaned?
+        (set! cleaned? #t)
+        (false-if-exception (close port))
+        (false-if-exception (delete-file path))
+        (display "\x1b[?25h")
+        (force-output)))
+    (for-each
+     (lambda (signal)
+       (sigaction signal
+                  (lambda (_)
+                    (cleanup)
+                    (primitive-exit 0))))
+     (list SIGHUP SIGINT SIGTERM))
+    (dynamic-wind
+      (lambda ()
+        (display "\x1b[?25l\x1b[2J\x1b[H")
+        (force-output))
+      (lambda ()
+        (let loop ()
+          (render-current! #t)
+          (let ((readable (car (select (list port) '() '() 30))))
+            (when (pair? readable) (drain-events port)))
+          (loop)))
+      cleanup)))
 
 ;; === Entry ===
 
 (guard (ex (#t
             (format (current-error-port) "sidebar-render error: ~a~%" ex)
             (exit 1)))
-  (require-tmux-version)
   (let ((args (command-line)))
     (cond
-     ((and (> (length args) 1) (string=? (cadr args) "data"))
-      (refresh-data!))
-     ((and (> (length args) 1) (string=? (cadr args) "git"))
-      (refresh-data!)
-      (refresh-git!))
-     ((and (> (length args) 1) (string=? (cadr args) "set-title"))
-      (set-window-text! "@sidebar_window_title" (cddr args))
-      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
-     ((and (> (length args) 1) (string=? (cadr args) "set-desc"))
-      (set-window-text! "@sidebar_window_desc" (cddr args))
-      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
-     ((and (> (length args) 1) (string=? (cadr args) "clear-title"))
-      (tmux-cmd "set-option" "-w" "-u" "@sidebar_window_title")
-      (tmux-cmd "set-option" "-w" "-u" "@sidebar_window_desc")
-      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
-     ((and (> (length args) 1) (string=? (cadr args) "toggle-group"))
-      (toggle-current-group)
-      (system "~/.config/tmux/scripts/sidebar-toggle signal"))
-     ((and (> (length args) 3) (string=? (cadr args) "click"))
-      (let ((mouse-y (string->number (caddr args)))
-            (pane-top (string->number (cadddr args)))
-            (sidebar-pane (if (> (length args) 4) (list-ref args 4) #f)))
-        (when (and mouse-y pane-top)
-          (handle-click mouse-y pane-top sidebar-pane))))
-     ((and (> (length args) 1) (string=? (cadr args) "render-if-changed"))
-      (render-if-changed))
+     ((and (> (length args) 1) (string=? (cadr args) "daemon"))
+      (run-daemon))
+     ((and (> (length args) 1) (string=? (cadr args) "render"))
+      (render-current! #f))
      ((and (> (length args) 1) (string=? (cadr args) "--as-library"))
       #t)
      (else
-      (render-to-stdout)))))
+      (format (current-error-port) "usage: sidebar-render.scm daemon|render~%")
+      (exit 2)))))

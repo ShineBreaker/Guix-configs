@@ -1,8 +1,8 @@
+#!/usr/bin/env bash
+
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-
-#!/usr/bin/env bash
 set -euo pipefail
 
 # session-selector — tmux 会话选择器（fzf）
@@ -27,7 +27,7 @@ trap 'tmux display-message "session-selector error: $?"' ERR
 
 # 获取所有 session 信息
 sessions=$(tmux list-sessions -F \
-  "#{session_name}\t#{session_windows}\t#{session_created}\t#{session_attached}\t#{session_group}" \
+  $'#{session_name}\t#{session_windows}\t#{t/f/%H#:%M:session_created}\t#{session_attached}' \
   2>/dev/null) || true
 
 if [[ -z "$sessions" ]]; then
@@ -37,25 +37,23 @@ fi
 
 # 构建 fzf 输入。第一列是机器可读状态，fzf 只显示后续列，避免
 # column/awk 按空格重排后破坏包含空格的 session 名。
-choices=""
+choices=()
 available_count=0
 
-while IFS=$'\t' read -r name windows created attached group; do
-    # 转换时间戳
-    time_str=$(date -d "@$created" "+%H:%M" 2>/dev/null || echo "??:??")
+while IFS=$'\t' read -r name windows time_str attached; do
     window_label="window"
     [[ "$windows" -gt 1 ]] && window_label="windows"
 
     if [[ "$attached" -gt 0 ]]; then
-        choices+="BUSY\t${name}\t${windows} ${window_label}\t${time_str}\t[使用中]\n"
+        choices+=("BUSY"$'\t'"${name}"$'\t'"${windows} ${window_label}"$'\t'"${time_str}"$'\t'"[使用中]")
     else
-        choices+="SESSION\t${name}\t${windows} ${window_label}\t${time_str}\t\n"
+        choices+=("SESSION"$'\t'"${name}"$'\t'"${windows} ${window_label}"$'\t'"${time_str}"$'\t')
         available_count=$((available_count + 1))
     fi
 done <<< "$sessions"
 
 # 添加新建选项
-choices+="NEW\t[新建空会话]\t\t\t\n"
+choices+=("NEW"$'\t'"[新建空会话]"$'\t\t\t')
 
 if [[ $available_count -eq 0 ]]; then
     echo "NEW"
@@ -63,7 +61,7 @@ if [[ $available_count -eq 0 ]]; then
 fi
 
 # 用 fzf 选择
-result=$(printf '%b' "$choices" \
+result=$(printf '%s\n' "${choices[@]}" \
     | fzf --reverse --no-multi \
           --header="选择会话" \
           --height=~50% \
@@ -76,8 +74,7 @@ if [[ -z "$result" ]]; then
     exit 0
 fi
 
-kind=$(printf '%s\n' "$result" | awk -F $'\t' '{print $1}')
-selected=$(printf '%s\n' "$result" | awk -F $'\t' '{print $2}')
+IFS=$'\t' read -r kind selected _ <<< "$result"
 
 case "$kind" in
     NEW)

@@ -42,7 +42,6 @@ terminal/
 │   │   │   ├── session-selector
 │   │   │   ├── sidebar-render.scm
 │   │   │   ├── sidebar-toggle
-│   │   │   ├── tmux-helpers.scm
 │   │   │   ├── which-key
 │   │   │   └── window-jump
 │   │   └── tmux.conf
@@ -60,7 +59,7 @@ terminal/
 ## 关键约定
 
 - fish `conf.d/` 按文件名字母序加载；数字前缀仅排序提示，无优先级语义
-- tmux 脚本混合 Scheme（Guile 驱动）+ Bash 胶水
+- tmux 侧栏由长驻 Guile 渲染进程负责，Bash 只处理 pane 生命周期与 FIFO 事件
 - `termide` 是 tmuxifier 衍生的会话管理器，入口 `~/.local/bin/termide`
 
 ## 修改约束
@@ -68,4 +67,4 @@ terminal/
 - 改源后 `blue home` 生效
 - fish 新 shell 自动生效；tmux 内 `prefix+r` 或 `tmux source ~/.config/tmux/tmux.conf` 热加载
 - 新增 fish 函数放 `functions/`；conf 块放 `conf.d/` 加数字前缀控制排序
-- tmux 侧栏依赖 foot 终端行为；其他终端需调 `default-terminal`
+- foot 保持 `TERM=foot`，tmux pane 保持 `TERM=tmux-256color`；不要手工覆写为 `xterm-*`

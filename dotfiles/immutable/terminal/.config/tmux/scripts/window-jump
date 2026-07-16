@@ -1,8 +1,8 @@
+#!/usr/bin/env bash
+
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-
-#!/usr/bin/env bash
 set -euo pipefail
 
 # window-jump — fzf 驱动的跨 session 窗口跳转
@@ -21,7 +21,7 @@ current_session=$(tmux display -p "#{session_name}")
 
 # 列出所有窗口
 windows=$(tmux list-windows -a -F \
-  "#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_panes}" \
+  $'#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_panes}' \
   2>/dev/null) || true
 
 if [[ -z "$windows" ]]; then
@@ -30,21 +30,23 @@ if [[ -z "$windows" ]]; then
 fi
 
 # 构建带标记的列表
-choices=""
+choices=()
 while IFS=$'\t' read -r session idx name path panes; do
     pane_label="pane"
     [[ "$panes" -gt 1 ]] && pane_label="panes"
-    short_path=$(basename "$path" 2>/dev/null || echo "$path")
+    short_path="${path%/}"
+    short_path="${short_path##*/}"
+    [[ -n "$short_path" ]] || short_path="/"
 
     if [[ "$session" == "$current_session" ]]; then
-        choices+="[当前] $name  $short_path  ($panes $pane_label)\t$session\t$idx\n"
+        choices+=("[当前] $name  $short_path  ($panes $pane_label)"$'\t'"$session"$'\t'"$idx")
     else
-        choices+="  $name  $short_path  ($panes $pane_label)  ← $session\t$session\t$idx\n"
+        choices+=("  $name  $short_path  ($panes $pane_label)  ← $session"$'\t'"$session"$'\t'"$idx")
     fi
 done <<< "$windows"
 
 # fzf 选择
-result=$(printf '%b' "$choices" \
+result=$(printf '%s\n' "${choices[@]}" \
     | fzf --reverse --no-multi \
           --header="跳转到窗口" \
           --height=~50% \
@@ -57,8 +59,7 @@ if [[ -z "$result" ]]; then
 fi
 
 # 提取 session 和 window index
-target_session=$(echo "$result" | awk -F$'\t' '{print $2}')
-target_window=$(echo "$result" | awk -F$'\t' '{print $3}')
+IFS=$'\t' read -r _ target_session target_window <<< "$result"
 
 if [[ "$target_session" == "$current_session" ]]; then
     tmux select-window -t "$target_window"
