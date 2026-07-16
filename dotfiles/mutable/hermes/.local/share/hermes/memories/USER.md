@@ -9,3 +9,5 @@
 用户偏好:用户拍板的事实不猜/不复议,直接照做且全仓清掉相关误导表述。低频—用户说「自主完成」「我去休息了」即转自主模式,推到 commit+报告。commit 时严格边界控制("不要碰其他的 uncommit 更改"):`git add -- <精确路径>` + `git diff --cached --name-only` 核对 + 提交后 `git status --short` 复查;agent 环境 GPG 缺私钥时 `--no-gpg-sign` 兜底。
 §
 用户偏好:大型迁移/批量灌数据/多仓库同步等,先拿一个代表性样本做端到端验证,估算好迁移后 hermes session_search / memory / DB 体积等实际效果再决定"要不要继续 / 怎么扩展"。原话:"先试着迁 1 个中等 session 做端到端验证,过了再说"。给包含预估影响的选项优于直接问"全量还是部分";汇报进度时主动报"已验证 X,待你决定是否放量"。
+§
+工具/库安装偏好：任务需要某 CLI 工具或 Python 库而环境里没有时，先用 `guix search <关键字>` 在 Guix channel 里找，列给用户由用户用 `guix install` 装——不要默认走 `pip install`。（Guix Home 环境）

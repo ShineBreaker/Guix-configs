@@ -1,0 +1,15 @@
+{
+  "src": "source.pdf",
+  "total": 0,
+  "chunks": [
+    {
+      "id": "1-intro",
+      "title": "1   Introduction",
+      "level": 1,
+      "pages": [6, 9],
+      "source": "source/1-intro.en.md",
+      "status": "pending",
+      "translated": null
+    }
+  ]
+}
