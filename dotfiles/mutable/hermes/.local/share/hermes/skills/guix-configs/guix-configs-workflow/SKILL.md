@@ -646,6 +646,13 @@ sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
 看起来像"没自动登录"。修复：补 `(user-session "xfce")`（值 = `share/xsessions/<name>.desktop` 去扩展名）。
 完整字段表 + labwc Wayland session 注入法见 `references/iso-lightdm-labwc-wayland.md`（§10.6）。
 
+**补遗（2026-07-16 实战）**：live 用户密码是 `(crypt "live" "$6$abc")` 故意弱密码，但
+`lightdm-configuration` 顶级字段 **`allow-empty-passwords?` 默认 `#f`**——只配
+`autologin-user` + `user-session` 还不够，自动登录会在 PAM 阶段失败、症状是
+"看起来没反应 / 重启又跳回 greeter"。**必须在 `lightdm-configuration` 顶层加
+`(allow-empty-passwords? #t)`**（见 `references/iso-lightdm-labwc-wayland.md` §1 末尾的完整最小配置）。
+主机自用配置不需要这一项（用户用的是正常密码），但**任何 ISO/装机/弱密码场景都得开**。
+
 #### 坑 5：`blue check` 报"括号不平衡"不一定是真括号错——可能是上游错误 cascade
 
 `blue check` 报 `[ERROR] 多余 1 个右括号 (open=904 close=905)` 时,第一反应不一定是去 source/config.org 数括号。**这可能是更早阶段的错误(如 `wrong-number-of-args` 在 `(include "./channel.lock")` 阶段)cascade 下来,让括号计数器拿到不完整的输入导致偏差**。
@@ -902,6 +909,36 @@ EOF
 - ❌ 决策不写理由 —— 接手 agent 不知道为啥这么选
 - ❌ 自己默认选变体/工具 —— 见 §10.1 "以工具可能性当目标"
 
+#### 10.4.bis 文档/决策/代码漂移时的修订纪律（2026-07-16 实战）
+
+`docs/iso-build.md` §6.2 维护纪律明确写明："**决策变更加修订注，不直接改原决策行**(原 gril session 的决定保留可见)"。这条**已经经过本次会话实战验证**——`iso-build.md` §2.6 决策表 D1 是 gril 拍板"Plasma + sddm"，但实际仓库 `live-installation-os` 跑的是 XFCE + lightdm（详见 §10.8 同步修正注）。
+
+正确处理思路：
+- **决策表 D1-D7 原行不动**——拍板记录是历史事实，agent 没资格覆盖
+- **§2.6 表格下方加修订注** (`> **修订注(2026-MM-DD)**:...`) 说明实施超越了决策、原因、影响范围
+- **事实陈述章节**（§1.1 用法、§1.2 文件注释、§3.5 错误示例、§3.7 删除 kmscon 段、§7.1 扩展矩阵）——这些**不是**设计决策而是事实描述，事实错了**直接修**，不保留错误信息
+- **`source/config.org` 标签 (`label "Guix System ...") 同步校正**——这是产物输出字段，跟决策拍板无关，可直接改
+
+反模式：
+- ❌ 看到决策表原行与现实不符就**直接 patch 原行** —— 等于覆盖 gril 拍板记录，违反 §6.2
+- ❌ 看到事实描述章节错了就**加修订注而不修正文** —— 事实章节本来就不该有修订注，决策章节才有；混了等于把脏话留给后续接手 agent
+- ❌ 改完 `source/config.org` 后**忘了同步** `label / documentation` 描述 —— 会出现"代码改了 label 还是 KDE"的二次漂移
+
+#### 10.4.ter ISO 文档与代码漂移时的判断树
+
+```
+config.org 实际做了什么?
+  ↓
+跟 gril 决策表 D1-D7 一致?
+  ├─ 是 → 文档应该也一致. 不一致=文档跟代码漂移. 去查文档原因.
+  │        ├─ 文档事实章节(§1.x / §3.x / §7.x) → 直接修
+  │        └─ 文档决策章节(§2.x D# 行)        → 加修订注,不改原行
+  └─ 否 → 实施超越了决策.
+           ├─ 决策章节                  → 加修订注说明 + 解释原因 + 标注影响
+           ├─ 文档事实章节              → 跟代码一起校正
+           └─ source/config.org label   → 同步
+```
+
 ### 10.5 ISO 移植相关参考
 
 完整 ISO 移植方案(1986 行 / v0.5,§接手必读 + §0~§15)见 `~/Projects/Config/Guix-configs/docs/iso-build.md`。**接手 agent 必读路径**:
@@ -1041,6 +1078,12 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 
 **字段验证离线法**：本环境 `web_extract` 对 `guix.gnu.org` 报 "Blocked: URL targets a private or internal network address"（浏览器可开但分页找不到 `lightdm-seat-configuration`）。直接 grep 本地锁定的 guix 源码 `/gnu/store/*<commit>*/gnu/services/*.scm`（commit 来自 `source/channel.lock`），比 `curl` savannah 更稳且 commit-exact。
 
+> **同步修正注（2026-07-16）**：本节基于 2026-07-07 一次"`jeans-desktop-20260707.iso` 构建成功"的截图记录，但**截至 2026-07-16 仓库 `source/config.org` 实际 ISO 段并非 KDE Plasma**——
+> `live-installation-os` 的 services 块跑的是 `xfce-desktop-service-type` + `lightdm-service-type`（autologin live → xfce），label 也已改为 "Guix System XFCE installation"。
+> 这条意味着 §10.8 的"KDE 装配"那部分是**历史路径记录**，不是当前主目标。
+> 接手 agent 若打开仓库发现 ISO 是 XFCE：① 别慌，代码与 §10.8 描述本来就是分开演进的两条路 ② gril 决策表 D1 那行（Plasma）保留不动 + 决策章节里应该有实施超越决策的修订注可读 ③ 不要"为了对齐 §10.8 把代码改回 KDE"——那是反向覆盖，把现状推到一段已没人维护的旧版本。
+> 详细 ISO lightdm autologin + seat configuration 字段 + `allow-empty-passwords?` 必备项见 `references/iso-lightdm-labwc-wayland.md`（§1）。
+
 ---
 
 ## 不变量与边界
@@ -1056,9 +1099,9 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 - Electron Wayland IME 完整调试流程(QQ 案例、flag 对照表、Electron 版本速查、Nix 修复范式)见 `references/electron-wayland-ime-debug.md`。
 - GNU Stow 二轨 dotfile 部署策略(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
 - 从 git history 恢复已删除的 dotfile 到 `dotfiles/mutable/<pkg>/` 或 `dotfiles/immutable/<app>/`(过期 README 路径、删除 commit 索引、git archive 导出、多版本候选决策、gitlink 子模块跳过、用户已明确范围时的 clarify 边界)见 `references/git-restore-deleted-dotfiles.md`。
-- **source/config.org system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判)见 §8 + `references/config-org-modify-safely.md`。
+- **source/config.org system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判、lightdm autologin 三件套 `autologin-user` + `user-session` + `allow-empty-passwords?`)见 §8 + `references/config-org-modify-safely.md`。
 - **user-level daemon 兜底配置范式**(wireplumber 类、配置层 + 行为层双管齐下、加载顺序、blue home 部署失败兜底防线)见 §9。
-- **需求澄清顺序**(以工具可能性当目标的反模式、模块归属陷阱、文档交接习惯)见 §10。
+- **需求澄清顺序**(以工具可能性当目标的反模式、模块归属陷阱、文档交接习惯、**gril 决策表与代码漂移时的修订纪律实战**——决策表原行不动 + 加修订注 vs 事实章节直接修的判断树)见 §10 + §10.4.bis + §10.4.ter。
 - **ISO 移植完整方案 + 接手协议**(XFCE 首选 / 1200 行方案文档 / 失败诊断树 / 验收清单 / 接手 agent 必读路径)见 §10.5 + `references/iso-build-handoff.md`。
 - **ISO lightdm 自动登录 + labwc Wayland session 注入**(字段表 / synthetic package 模板 / append 拆分坑 / 离线查 guix 源码法)见 §10.6 + `references/iso-lightdm-labwc-wayland.md`。
 - **ISO XFCE-on-labwc (Fedora 三件套落地 + `blue check` 手写 synthetic package 括号平衡调试)** 见 `references/iso-xfce-on-labwc-fedora-approach.md`(RPM 解包 / startxfce4 --wayland 机制 / 单引号 XML 属性 / 调收尾 `)` 数收敛)。

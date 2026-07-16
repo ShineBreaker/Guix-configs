@@ -135,7 +135,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                      tls
                      video
                      webkit
-                     wm
+                     window-management
                      xdisorg)
 
 (use-service-modules authentication
@@ -565,7 +565,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 - =source/files/nftables.conf= —— 唯一由 =nftables-service-type= 加载的规则集
 - 可信 connection profile 列表只保存在 age 密文中，不在 Scheme 源码保留明文副本
 - dispatcher 在可信 profile 的 =up= 事件中加入 =wlp0s20f3=；在非可信或 =down=
-   事件中删除它，失败时默认严格
+  事件中删除它，失败时默认严格
 
 白名单使用 NetworkManager 的 =CONNECTION_ID=（profile 名称），不是 SSID；它必须与
 =nmcli connection show= 的名称一致。列表以 age 密文保存在
@@ -1385,7 +1385,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
         ;; 编辑器
         "helix"
-        ; "zed"
 
         ;; 数据库
         "postgresql"
@@ -1450,8 +1449,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 浏览器 & 插件
-                                        ; "ublock-origin-chromium"
-                                        ; "ungoogled-chromium-wayland"
+        "ublock-origin-chromium"
+        "ungoogled-chromium-wayland"
         "zen-browser-bin"
 
         ;; 解码器
@@ -1505,12 +1504,15 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "kanata"
         "mesa-utils"
         "pinentry-qt"
+        "poppler"
+        "poppler-qt6"
         "winapps"
 
-        ;; MCP server 运行时
+        ;; Python
         "python-mcp"
         "python-httpx-sse"
         "python-pydantic-settings"
+        "python-pymupdf"
         "python-sse-starlette"
         "python-starlette"
         "python-uvicorn"
@@ -2168,7 +2170,7 @@ end
 这里定义自研 Live ISO 的 =operating-system=, 与主机 =%system= 完全独立.
 =blue build-iso= (见 blueprint.scm build-iso-command) 会 tangle 出 =tmp/live-iso.scm=, 再调 =tools/build-image.scm= 生成 iso9660 镜像.
 
-+ =desktop= (主要, KDE Plasma 桌面环境).
++ =desktop= (主要, XFCE 桌面环境 + lightdm 自动登录 live 用户).
 + =minimal= (辅助, 纯 CLI fallback).
 
 ** 重要约束 (改本节必读)
@@ -2191,9 +2193,9 @@ end
              (gnu packages package-management)
              (gnu packages base)
              (gnu packages linux)
+             (gnu services lightdm)
              (gnu packages guile)
              (gnu packages texinfo)
-             (gnu services sddm)
              (gnu packages networking)
              (nongnu packages linux)
              (gnu packages gnuzilla)
@@ -2220,11 +2222,32 @@ end
   (make-installation-os
    #:efi-only? (string=? (%current-system) "aarch64-linux")))
 
+;; ---- Live 精简频道: 只 guix + nonguix ----
+;; 参照 Testament minimal.scm 的 channels-with-nonguix. ISO 不需要 bluebox/jeans/
+;; rosenthal 这些主机的建站频道——装机后由 `blue rebuild` 重建完整频道集.
+;; 用途:modify-services 把它写进 guix-configuration 的 channels 字段,
+;; 让 Live 环境的 /etc/guix/channels.scm 预置 nonguix, `guix pull` 直接拉到.
+;; 与 <<guix-substitutes>> 的关系:substitutes 管"下载二进制"(4 套镜像),
+;; channels 管"拉源码频道"(pull 用), 两者互补不冲突.
+(define channels-with-nonguix
+  (list (channel
+         (inherit (car %default-channels))
+         (name 'guix)
+         (url "https://git.guix.gnu.org/guix.git"))
+        (channel
+         (name 'nonguix)
+         (url "https://gitlab.com/nonguix/nonguix")
+         (introduction
+          (make-channel-introduction
+           "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
+           (openpgp-fingerprint
+            "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))))
+
 (define %live-installation-os
   (operating-system
    (inherit %live-base-os)
    (host-name "live-system")
-   (label (format #f "Guix System KDE Plasma installation (~a build)"
+   (label (format #f "Guix System XFCE installation (~a build)"
                   (date->string (current-date) "~Y-~m-~d")))
    (kernel linux)
    (firmware (cons* linux-firmware
@@ -2270,6 +2293,18 @@ end
                "icecat"
                "icecat-l10n"
 
+               ;; XFCE 套件
+               "xfce4-terminal"
+               "xfce4-screenshooter"
+               "xfce4-taskmanager"
+               "thunar"
+               "thunar-volman"
+               "tumbler"
+               "mousepad"
+               "ristretto"
+               "xfce4-notifyd"
+               "xfce4-power-manager"
+
                ;; AI Agent
                "crush-bin"))
 
@@ -2279,13 +2314,31 @@ end
     (append
      <<guix-substitutes>>
      (list (service elogind-service-type)
-           (service plasma-desktop-service-type)
-           (service sddm-service-type
-                    (sddm-configuration
-                     (display-server "wayland")
-                     (auto-login-user "live")
-                     (auto-login-session "plasma.desktop"))))
-     (operating-system-user-services %live-base-os)))))
+           (service xfce-desktop-service-type)
+           ;; LightDM 自动登录 live 用户 → xfce 会话.
+           ;; 配置参照 Guix 1.5 手册 X Window 节 (gnu services xorg):
+           ;;   * allow-empty-passwords? —— live 的密码是弱密码 'live'
+           ;;     (见上面 users 字段),打开允许空/弱密码登录
+           ;;   * seats (name "*") —— 通配所有 seat,无需读硬件 seat
+           ;;   * user-session —— 必须小写字符串,xfce 包提供 'xfce' .desktop
+           ;;   * autologin-user —— 与 users 块里的 live 账户名对齐
+           (service lightdm-service-type
+                    (lightdm-configuration
+                     (allow-empty-passwords? #t)
+                     (seats
+                      (list
+                       (lightdm-seat-configuration
+                        (name "*")
+                        (type 'local)
+                        (user-session "xfce")
+                        (autologin-user "live")))))))
+     (modify-services (operating-system-user-services %live-base-os)
+                      (delete kmscon-service-type)
+                      (delete console-font-service-type)
+                      (guix-service-type
+                       config => (guix-configuration (inherit config)
+                                                     (channels channels-with-nonguix))))))))
+
 
 %live-installation-os
 #+end_src

@@ -43,7 +43,7 @@ blue build-iso [VARIANT] ...
 | 调用                     | 行为                                 |
 | ------------------------ | ------------------------------------ |
 | `blue build-iso`         | 构建 `%images` 列出的全部变体        |
-| `blue build-iso xfce`    | 只构建 XFCE 镜像(主目标)             |
+| `blue build-iso desktop` | 只构建 XFCE 镜像(主目标)             |
 | `blue build-iso minimal` | 只构建 minimal 镜像(纯 CLI fallback) |
 
 变体清单定义在 `blueprint.scm` §8.5 的 `%images` 常量。文件名前缀在
@@ -53,30 +53,31 @@ blue build-iso [VARIANT] ...
 
 ```
 dist/
-├── jeans-xfce-20260706.x86_64-linux.iso        # 主目标,GUI 桌面
-└── jeans-minimal-20260706.x86_64-linux.iso     # 纯 CLI fallback
+├── jeans-desktop-20260714.x86_64-linux.iso        # 主目标,XFCE 桌面 + lightdm 自动登录
+└── jeans-minimal-20260714.x86_64-linux.iso        # 纯 CLI fallback
 ```
 
 镜像内部:
 
 - **live user**:`live` / `live`(密码故意弱,装机完成即销毁)
 - **root shell**:`fish`
-- **桌面**(xfce 变体):`xfce-desktop-service-type` + `lightdm` 自动登录 live
+- **桌面**(desktop 变体):`xfce-desktop-service-type` + `lightdm`(X11)自动登录 live → xfce 会话
 - **tty1 回退**:`make-installation-os` 自带 kmscon(可手动启用)
 - **nonguix kernel**:`linux` + `linux-firmware`(支持非自由 wifi/显卡)
 - **4 套 substitute 镜像**: nonguix / guix-moe / panther / sjtug
+- **预置 nonguix channel**:Live 环境的 `/etc/guix/channels.scm` 已含 guix + nonguix,`guix pull` 直接拉到(参照 Testament minimal.scm)
 
 ### 1.3 烧盘与验证
 
 ```bash
 # 烧 U 盘
-dd if=dist/jeans-xfce-20260706.x86_64-linux.iso of=/dev/sdX bs=4M status=progress conv=fsync
+dd if=dist/jeans-desktop-20260714.x86_64-linux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 
 # QEMU 验证
-qemu-system-x86_64 -m 4G -enable-kvm -cdrom dist/jeans-xfce-*.iso
+qemu-system-x86_64 -m 4G -enable-kvm -cdrom dist/jeans-desktop-*.iso
 
 # sha256 校验
-sha256sum dist/jeans-xfce-*.iso
+sha256sum dist/jeans-desktop-*.iso
 ```
 
 ## §2 关键设计决策(为什么这样做)
@@ -97,7 +98,7 @@ Testament 用 `find` 扫 `config/live/*.scm` 推断变体。本仓库用
 `blueprint.scm` §8.5 的 `%images` 常量,显式列举:
 
 ```scheme
-(define %images '("xfce" "minimal"))
+(define %images '("desktop" "minimal"))
 ```
 
 - 顺序 = 构建顺序(主目标先,fallback 后)
@@ -132,15 +133,15 @@ ISO 装机时 `guix pull` / nonguix kernel 拉 substitute 需要公钥,
 
 ### §2.6 显式声明的 4 个 P 阶段(gril 拍板)
 
-| 决策   | 内容                                              | 理由                                                    |
-| ------ | ------------------------------------------------- | ------------------------------------------------------- |
-| **D1** | 首选变体 = XFCE                                   | 用户要桌面辅助装机,`xfce-desktop-service-type` 是标准件 |
-| **D2** | ISO OS 目标 = "提供装机用环境",不干预装好后       | 装好后用户自己 `blue rebuild` 重建                      |
-| **D3** | 4 套 substitute 镜像全复刻(§2.5)                  | 装机时 `guix pull` 要用公钥                             |
-| **D4** | 只装 mihomo 包,不引 service / config / tun        | ISO 内手动启;装好后由 `blue rebuild` 重建               |
-| **D5** | live user = `live` / `live`                       | lightdm auto-login 后 sudo 需要明确密码                 |
-| **D6** | 显式加 kmscon(由 `make-installation-os` 默认提供) | tty1 装机回退,X 失败时的救命 console                    |
-| **D7** | 本文档**进**仓库                                  | 给接手 agent 留契约 —— 见 §6.2 维护纪律                 |
+| 决策   | 内容                                              | 理由                                                                       |
+| ------ | ------------------------------------------------- | -------------------------------------------------------------------------- |
+| **D1** | 首选变体 = KDE Plasma(desktop)                    | 用户要桌面辅助装机,`plasma-desktop-service-type` + `sddm`(Wayland)是标准件 |
+| **D2** | ISO OS 目标 = "提供装机用环境",不干预装好后       | 装好后用户自己 `blue rebuild` 重建                                         |
+| **D3** | 4 套 substitute 镜像全复刻(§2.5)                  | 装机时 `guix pull` 要用公钥                                                |
+| **D4** | 只装 mihomo 包,不引 service / config / tun        | ISO 内手动启;装好后由 `blue rebuild` 重建                                  |
+| **D5** | live user = `live` / `live`                       | sddm auto-login 后 sudo 需要明确密码                                       |
+| **D6** | 显式加 kmscon(由 `make-installation-os` 默认提供) | tty1 装机回退,X 失败时的救命 console                                       |
+| **D7** | 本文档**进**仓库                                  | 给接手 agent 留契约 —— 见 §6.2 维护纪律                                    |
 
 ## §3 已知陷阱(接手维护必看)
 
@@ -189,31 +190,63 @@ ISO 块内容,直接撞死 `blue rebuild`。
 `blue check` 只看块内括号平衡,**不会**抓到这类 "list-in-list" 类型错,
 只能靠 guix 真跑报 `must contain a list of services` 才发现。
 
-### §3.6 `xfce-wayland-session` 的 builder 必须 `with-imported-modules`
+### §3.6 builder 里 `(use-modules (guix build utils))` 必须 `with-imported-modules`
 
-该包用 `trivial-build-system`,其 builder 默认**不**导入 `(guix build utils)`,
+trivial-build-system 的 builder 默认**不**导入 `(guix build utils)`,
 直接在 `#~(begin ...)` 里 `(use-modules (guix build utils))` 会报
 `no code for module (guix build utils)`(drv 编译阶段失败)。
 
 **修复**:用 `(with-imported-modules '((guix build utils)) #~(begin ...))`
 包裹 gexp,把模块编译进构建环境。注意 `with-imported-modules` 多包一层,
-结尾需补一个右括号,否则 `blue check` 报 `live-xfce-define` 多 1 个左括号。
+结尾需补一个右括号,否则 `blue check` 报对应块多 1 个左括号。
+
+### §3.7 `delete kmscon` 后必须同时 `delete console-font`(否则进不了桌面)
+
+ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器。安装器是
+`make-installation-os` 在 tty1 上跑的 kmscon:
+
+```scheme
+;; gnu/system/install.scm:466-470 —— kmscon 在 tty1 且 login-program = 安装器
+(service kmscon-service-type
+         (kmscon-configuration (virtual-terminal "tty1")
+                               (login-program installer)))
+```
+
+但 kmscon 同时是 tty1 上 `term-tty1` 的**唯一提供者**,而 `console-font-service-type`
+(base.scm:920)对每个 tty 都 `requirement (term-<tty>)`。只删 kmscon 会导致:
+
+```
+服务 'console-font-tty1' 需要 'term-tty1',但没有任何服务提供该服务
+```
+
+**修复**(参照 Testament `graphical-system.scm:64` + 主机 `desktop-services` 块):
+
+```scheme
+(modify-services (operating-system-user-services %live-base-os)
+  (delete kmscon-service-type)            ;; 删 tty1 安装器
+  (delete console-font-service-type))     ;; 删依赖 term-tty1 的 console-font
+```
+
+console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副作用。
+`blue check` 不查 shepherd 依赖图,这类"服务依赖缺提供者"错只能靠真跑 `guix`
+构建暴露 —— 见 §4。
 
 ## §4 出错怎么办(快速索引)
 
-| 症状                                        | 看哪                                                  |
-| ------------------------------------------- | ----------------------------------------------------- |
-| `blue build-iso` 报 `unbound variable`      | `source/config.org` `* Live ISO` 章节顶部注释 + §3.4  |
-| `'services' field must contain a list of services` | `<<guix-substitutes>>` 被当 cons* 元素,§3.5 改 append |
-| `no code for module (guix build utils)`(drv 编译失败) | `xfce-wayland-session` builder 缺 `with-imported-modules`,§3.6 |
-| `no code for module (gnu packages X)`       | 删该 use-modules,改走 `specifications->packages`      |
-| `extraneous field initializer (X)`          | 字段名/值类型错,查 Guix 手册对应 service              |
-| `Wrong type to apply: #<<service-type>>`    | service 括号错位,§3.1 排查                            |
-| `blue check` 报多余括号                     | `blue block-show` 定位块名,git diff 找行              |
-| `guix time-machine: failed to authenticate` | `source/channel.lock` 频道公钥过期,`blue update` 重生 |
-| `error: connection refused`                 | 网络/防火墙,见 §5 网络镜像配置                        |
-| `permission denied (store path)`            | `/gnu/store` 权限,见 §5                               |
-| QEMU 启动但 X 启动失败                      | tty1 进 kmscon 调试,X 日志在 `~/.local/share/xorg/`   |
+| 症状                                                  | 看哪                                                  |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| `blue build-iso` 报 `unbound variable`                | `source/config.org` `* Live ISO` 章节顶部注释 + §3.4  |
+| `'services' field must contain a list of services`    | `<<guix-substitutes>>` 被当 cons* 元素,§3.5 改 append |
+| `no code for module (guix build utils)`(drv 编译失败) | builder 缺 `with-imported-modules`,§3.6               |
+| `服务 'console-font-tty1' 需要 'term-tty1'`           | 删 kmscon 时漏删 console-font,§3.7 配对 delete        |
+| `no code for module (gnu packages X)`                 | 删该 use-modules,改走 `specifications->packages`      |
+| `extraneous field initializer (X)`                    | 字段名/值类型错,查 Guix 手册对应 service              |
+| `Wrong type to apply: #<<service-type>>`              | service 括号错位,§3.1 排查                            |
+| `blue check` 报多余括号                               | `blue block-show` 定位块名,git diff 找行              |
+| `guix time-machine: failed to authenticate`           | `source/channel.lock` 频道公钥过期,`blue update` 重生 |
+| `error: connection refused`                           | 网络/防火墙,见 §5 网络镜像配置                        |
+| `permission denied (store path)`                      | `/gnu/store` 权限,见 §5                               |
+| QEMU 启动但 X 启动失败                                | tty1 进 kmscon 调试,X 日志在 `~/.local/share/xorg/`   |
 
 接手 agent 真撞错时:先 grep `tmp/build-*.log`(若 `blue build-iso --keep-failed`
 启用),再查 Guix 手册对应 service / package 文档,最后才看上游 issue
@@ -253,13 +286,12 @@ ISO 块内容,直接撞死 `blue rebuild`。
 
 ### §7.1 桌面变体
 
-| 变体      | service-type                        | DM      | 工作量  | 触发条件                 |
-| --------- | ----------------------------------- | ------- | ------- | ------------------------ |
-| `xfce`    | `xfce-desktop-service-type`         | lightdm | ✅ 已做 | 本任务                   |
-| `minimal` | (用 make-installation-os 默认)      | kmscon  | ✅ 已做 | xfce 跑不动的 fallback   |
-| `gnome`   | `gnome-desktop-service-type`        | gdm     | 2-3h    | nvidia 显卡 / Wayland    |
-| `kde`     | `plasma-desktop-service-type`       | sddm    | 2-3h    | KDE 专有应用             |
-| `niri`    | `home-niri-service-type`(rosenthal) | greetd  | 4-5h    | 对齐 Testament niri 体验 |
+| 变体      | service-type                        | DM      | 工作量  | 触发条件                           |
+| --------- | ----------------------------------- | ------- | ------- | ---------------------------------- |
+| `desktop` | `xfce-desktop-service-type`         | lightdm | ✅ 已做 | 本任务(XFCE,lightdm 自动登录 live) |
+| `minimal` | (用 make-installation-os 默认)      | kmscon  | ✅ 已做 | desktop 跑不动的 fallback          |
+| `gnome`   | `gnome-desktop-service-type`        | gdm     | 2-3h    | nvidia 显卡 / Wayland              |
+| `niri`    | `home-niri-service-type`(rosenthal) | greetd  | 4-5h    | 对齐 Testament niri 体验           |
 
 ### §7.2 平台
 
