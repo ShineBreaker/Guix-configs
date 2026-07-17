@@ -47,7 +47,7 @@ Agent Crush ───┘                ├── .distill/        (蒸馏草稿
 > **特殊约束**：`reconcile` / `dream` / `distill` / `extract` **始终在 agenote 域**——这些命令
 > 跨多源数据，不受 `--domain` 切换影响。
 
-## 2. CLI 命令清单（28 个子命令）
+## 2. CLI 命令清单（29 个子命令）
 
 CLI 是 agent 之外的人与 cron 入口，所有命令与 MCP 共用 `ag_lib` 底层，行为一致。
 完整用法跑 `agenote --help`；`agenote help` 是 `help` 元命令（不算子命令）。
@@ -96,7 +96,8 @@ agenote memory --get                     # 全文输出
 
 | 子命令        | 功能                                                         |
 | ------------- | ------------------------------------------------------------ |
-| `lint`        | 格式校验（`--fix` 自动修；`--check` 仅检退出码=问题数）      |
+| `lint`        | 格式+语义校验（`--fix` 只修可安全自动化的；`--check` 退出码=问题数） |
+| `format`      | 格式化卡片（默认直接写盘；`--check` 只检查）                 |
 | `review`      | 单卡片审查（`--fix` 自动改）                                 |
 | `deduplicate` | 重复检测（`--threshold 0.7`，默认 Jaccard 相似度阈值）       |
 | `archive`     | 归档（指定 ID / `--stale` 自动归档陈旧 / `--list` 列已归档） |
@@ -161,7 +162,7 @@ agenote memory --get                     # 全文输出
 | 工具              | 功能                                                                  |
 | ----------------- | --------------------------------------------------------------------- |
 | `agenote_curate`  | 一键策展（健康+权重+去重+归档+重建索引）                              |
-| `agenote_lint`    | 格式校验（`fix=True` 自动修复）                                       |
+| `agenote_lint`    | 格式+语义校验（`fix=True` 只修可安全自动化的格式问题；语义问题只报告） |
 | `agenote_health`  | 健康度报告（孤立率/过时率/类型偏斜/薄弱类别）                         |
 | `agenote_stats`   | 统计概览                                                              |
 | `agenote_gaps`    | 知识空白检测（category×type 矩阵）                                    |

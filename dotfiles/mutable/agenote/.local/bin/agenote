@@ -59,6 +59,7 @@ from ag_lib.cards import (  # noqa: E402
 )
 from ag_lib.memory import cmd_memory  # noqa: E402
 from ag_lib.lint import cmd_lint  # noqa: E402
+from ag_lib.orgfmt import cmd_format  # noqa: E402
 from ag_lib.health import cmd_health, cmd_gaps  # noqa: E402
 from ag_lib.viz.cli import add_viz_parser, cmd_viz  # noqa: E402
 
@@ -453,11 +454,16 @@ def print_help() -> None:
   reindex   重建知识库索引
             agenote reindex
 
-  lint      格式校验与修复（原 kb-lint）
-            agenote lint                 检查所有卡片
-            agenote lint --fix           自动修复
-            agenote lint --check         仅检查，退出码=问题数
+  lint      格式校验与报告（格式问题 + 语义问题：枚举漂移、缺失字段）
+            agenote lint                 检查所有卡片（格式 + 语义）
+            agenote lint --fix           自动修复可安全自动化的（= format）
+            agenote lint --check         仅检查，退出码=问题数（CI 用）
             agenote lint --fix file.org  修复指定文件
+
+  format   格式化卡片（默认直接写盘，agent 写完卡片调用一次即可）
+            agenote format               格式化所有卡片
+            agenote format --check       只检查不写盘
+            agenote format file.org      格式化指定文件
 
   inbox    快速捕获到 inbox.org
             agenote inbox "待捕获的想法" 或 echo "内容" | agenote inbox
@@ -537,8 +543,8 @@ def print_help() -> None:
 配置常量（修改文件头部即可调整）:
   KB_ROOT      人类知识库根 ({KB_ROOT})
   STALE_DAYS   陈旧记忆阈值 ({STALE_DAYS} 天)
-  VALID_TYPES  合法 type 值 ({', '.join(sorted(VALID_TYPES))})
-  VALID_OWNERS 合法 owner 值 ({', '.join(sorted(VALID_OWNERS))})
+  VALID_TYPES  合法 type 值 ({", ".join(sorted(VALID_TYPES))})
+  VALID_OWNERS 合法 owner 值 ({", ".join(sorted(VALID_OWNERS))})
 
 默认操作域: agenote（~/Documents/Org/agenote/）
   人类知识库根: {KB_ROOT}
@@ -685,12 +691,21 @@ def main() -> None:
     subparsers.add_parser("reindex", help="重建知识库索引")
 
     # ── lint ──────────────────────────────────────────────────────────────
-    lint_parser = subparsers.add_parser("lint", help="格式校验与修复（原 kb-lint）")
-    lint_parser.add_argument("--fix", action="store_true", help="自动修复")
+    lint_parser = subparsers.add_parser("lint", help="格式校验与报告（含语义问题）")
+    lint_parser.add_argument(
+        "--fix", action="store_true", help="自动修复可安全自动化的（= format）"
+    )
     lint_parser.add_argument(
         "--check", action="store_true", help="仅检查，退出码=min(问题数,127)"
     )
     lint_parser.add_argument("files", nargs="*", help="目标文件（默认检查全部）")
+
+    # ── format ───────────────────────────────────────────────────────────
+    fmt_parser = subparsers.add_parser(
+        "format", help="格式化卡片（默认直接写盘，agent 调用一次即可）"
+    )
+    fmt_parser.add_argument("--check", action="store_true", help="只检查不写盘")
+    fmt_parser.add_argument("files", nargs="*", help="目标文件（默认格式化全部）")
 
     # ── inbox ──────────────────────────────────────────────────────────────
     inbox_parser = subparsers.add_parser("inbox", help="快速捕获到 inbox.org")
@@ -918,6 +933,7 @@ def main() -> None:
         "memory": cmd_memory,
         "reindex": cmd_reindex,
         "lint": cmd_lint,
+        "format": cmd_format,
         "inbox": cmd_inbox,
         "stats": cmd_stats,
         "connect": cmd_connect,

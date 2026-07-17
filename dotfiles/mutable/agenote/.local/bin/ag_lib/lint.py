@@ -2,31 +2,49 @@
 #
 # SPDX-License-Identifier: MIT
 
-"""kb_lint — 知识库格式校验与修复：Markdown 残留检测、Org 标记修复"""
+"""agenote lint — 知识库格式与语义校验（纯检查器）。
+
+与 format 的分工：
+  - format（ag_lib.orgfmt）：执行可安全自动化的格式化（属性对齐、block 大小写、
+    空行、表格、MD→Org、标记间距），默认直接写盘。
+  - lint（本模块）：报告**全部**问题——格式问题（调 format_org 做 diff）+
+    语义问题（枚举漂移、缺失字段、fingerprint 字段数、卡片骨架）。
+    语义问题需要人工判断或破坏性改动，不自动修。
+
+命令形态：
+  - agenote lint            报告格式 + 语义问题
+  - agenote lint --fix      只自动修可安全自动化的（= 调 format_org）
+  - agenote lint --check    报告 + 退出码=问题数（CI/pre-commit 用）
+"""
 
 import argparse
 import os
 import re
 import sys
 
-from ag_lib.core import die, default_context
+from ag_lib.core import (
+    VALID_TYPES,
+    VALID_OWNERS,
+    VALID_ENTRY_TYPES,
+    die,
+    default_context,
+    parse_org_prop,
+)
+from ag_lib.orgfmt import format_org
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# lint 命令 — 格式校验与修复
+# lint 命令 — 格式 + 语义校验
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 def cmd_lint(args: argparse.Namespace, ctx=None) -> None:
-    """
-    检测 Org 文件中的 Markdown 残留语法，自动修复为正确的 Org 格式。
+    """检查卡片格式 + 语义问题，可选自动修复格式问题。
 
-    修复项:
-      1. ```lang ... ``` → #+begin_src lang ... #+end_src
-      2. **bold**        → *bold* (排除 Org 标题)
-      3. #/## heading    → **/*** heading
-      4. - list item     → + list item
-      5. `inline code`   → ~inline code~
-      6. Org 行内标记(~code~ / *bold*)外部空格检查与修复
+    格式问题：调 format_org(text, strict=True) 做 diff，报告所有变更。
+    语义问题：枚举漂移、缺失字段、fingerprint 字段数、卡片骨架章节缺失。
+    --fix 只修格式问题（= format），语义问题始终只报告。
+    --check 设退出码 = 问题数（≤127）。
     """
     ctx = ctx or default_context()
     target_files = args.files
@@ -43,19 +61,19 @@ def cmd_lint(args: argparse.Namespace, ctx=None) -> None:
     files_with_issues = 0
 
     for filepath in target_files:
-        fixes = _lint_file(filepath, do_fix=args.fix)
-        if fixes:
-            total_issues += len(fixes)
+        issues = _lint_file(filepath, do_fix=args.fix)
+        if issues:
+            total_issues += len(issues)
             files_with_issues += 1
             basename = os.path.basename(filepath)
-            print(f"\n{basename} ({len(fixes)} 项):")
-            for fix in fixes:
-                print(fix)
+            print(f"\n{basename} ({len(issues)} 项):")
+            for issue in issues:
+                print(issue)
 
     action_name = "修复" if args.fix else "检查"
     print(
         f"\n{action_name}完成: {files_with_issues}/{len(target_files)} 个文件"
-        f"有 Markdown 残留, 共 {total_issues} 处"
+        f"有问题, 共 {total_issues} 处"
     )
 
     if args.check:
@@ -63,192 +81,140 @@ def cmd_lint(args: argparse.Namespace, ctx=None) -> None:
 
 
 def _lint_file(filepath: str, do_fix: bool) -> list[str]:
-    """检查（并可选修复）单个文件，返回修复项列表。"""
+    """检查（并可选修复格式问题）单个文件，返回问题/变更列表。
+
+    格式问题：do_fix=True 时调 format_org 写盘修复。
+    语义问题：始终只报告（不自动改）。
+    """
     with open(filepath, "r", encoding="utf-8") as f:
         text = f.read()
 
-    new_text, fixes = _fix_org_content(text)
+    issues: list[str] = []
 
-    if do_fix and fixes:
+    # ── 格式问题：调 format_org 做 diff ──
+    new_text, fmt_changes = format_org(text, strict=True)
+    if fmt_changes:
+        # 去重格式变更说明（format_org 可能重复报告同类问题）
+        seen = set()
+        for ch in fmt_changes:
+            key = ch.strip()
+            if key not in seen:
+                seen.add(key)
+                issues.append(ch)
+    if do_fix and fmt_changes:
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(new_text)
 
-    return fixes
+    # ── 语义问题（始终只报告，--fix 不修）──
+    # 用原始 text 检查（语义问题不依赖格式化结果）
+    issues += _check_semantic(text)
+
+    return issues
 
 
-# Org 强调标记 PRE 合法字符（行首也合法）
-_MARKER_PRE_VALID = set(" \t\n({['\"`")
-# Org 强调标记 POST 合法字符（行尾也合法）
-_MARKER_POST_VALID = set(' \t\n.,:;!?\'"" )}]\\-')
+# ═══════════════════════════════════════════════════════════════════════════════
+# 语义检查
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# fingerprint 行字段数应为 5：:cat:type:owner:tech:entry::
+# 即 :END: 后的 :...:: 行，去掉首尾 : 和 :: 后按 : 拆分应得 5 段
+_FINGERPRINT_LINE = re.compile(r"^:([^:\s][^:]*(:[^:]+)*?)::\s*$")
+
+# 标准卡片骨架章节（** 二级标题），缺失时提示（信息性，非错误）
+_STANDARD_SECTIONS = [
+    "** 难点与坑点 :difficulties:",
+    "** 经验教训 :lessons:",
+    "** AI 建议 :ai_notes:",
+]
 
 
-def _fix_marker_spacing(line: str, marker_char: str) -> tuple[str, int, int]:
-    """检查并修复 ~...~ 或 *...* 标记的外部空格。
+def _check_semantic(text: str) -> list[str]:
+    """检查 agenote 卡片语义问题（不自动修，只报告）。
 
-    使用 Org 的 PRE/POST 规则判断是否需要插入空格。
-    相邻标记共享边界空格，避免重复插入。
-
-    Returns (fixed_line, pre_fix_count, post_fix_count).
+    检查项：
+      1. 缺失 ENTRY_TYPE（agenote 卡片应有，旧卡片可能缺）
+      2. TYPE 枚举漂移（不在 VALID_TYPES）
+      3. OWNER 枚举漂移（不在 VALID_OWNERS）
+      4. ENTRY_TYPE 枚举漂移（不在 VALID_ENTRY_TYPES，且非空）
+      5. fingerprint 行字段数 ≠ 5
+      6. 缺失标准骨架章节（信息性提示）
     """
-    escaped = re.escape(marker_char)
-    pattern = escaped + r"[^" + escaped + r"\n]+" + escaped
-    # 过滤纯空白内容的无意义标记（如 ~ ~）
-    markers = [
-        (m.start(), m.end())
-        for m in re.finditer(pattern, line)
-        if m.group()[1:-1].strip()
-    ]
+    issues: list[str] = []
 
-    if not markers:
-        return line, 0, 0
+    # 1. ENTRY_TYPE 缺失
+    entry_type = parse_org_prop(text, "ENTRY_TYPE")
+    if not entry_type:
+        issues.append("  语义: 缺失 :ENTRY_TYPE: 字段（建议补 note/mistake/ascended）")
 
-    inserts: list[tuple[int, str]] = []
-    pre_count = 0
-    post_count = 0
+    # 2. TYPE 枚举
+    card_type = parse_org_prop(text, "TYPE")
+    if card_type and card_type not in VALID_TYPES:
+        issues.append(
+            f"  语义: :TYPE: {card_type} 不在 VALID_TYPES（{sorted(VALID_TYPES)}）"
+        )
 
-    for start, end in markers:
-        # PRE: 标记前需合法字符或行首；跳过标记字符本身（处理 ~~path~ 嵌套）
-        if (
-            start > 0
-            and line[start - 1] not in _MARKER_PRE_VALID
-            and line[start - 1] != marker_char
-        ):
-            if not any(pos == start for pos, _ in inserts):
-                inserts.append((start, " "))
-                pre_count += 1
+    # 3. OWNER 枚举
+    owner = parse_org_prop(text, "OWNER")
+    if owner and owner not in VALID_OWNERS:
+        issues.append(
+            f"  语义: :OWNER: {owner} 不在 VALID_OWNERS（{sorted(VALID_OWNERS)}）"
+        )
 
-        # POST: 标记后需合法字符或行尾
-        if end < len(line) and line[end] not in _MARKER_POST_VALID:
-            if not any(pos == end for pos, _ in inserts):
-                inserts.append((end, " "))
-                post_count += 1
+    # 4. ENTRY_TYPE 枚举（有值时校验）
+    if entry_type and entry_type not in VALID_ENTRY_TYPES:
+        issues.append(
+            f"  语义: :ENTRY_TYPE: {entry_type} 不在 VALID_ENTRY_TYPES"
+            f"（{sorted(VALID_ENTRY_TYPES)}）"
+        )
 
-    if not inserts:
-        return line, 0, 0
+    # 5. fingerprint 字段数
+    fp_issue = _check_fingerprint_fields(text)
+    if fp_issue:
+        issues.append(fp_issue)
 
-    # 从右往左插入，避免位置偏移
-    result = list(line)
-    for pos, char in sorted(inserts, reverse=True):
-        result.insert(pos, char)
+    # 6. 标准骨架章节（信息性，只在卡片有正文时检查）
+    if "** " in text:
+        missing_sections = [s for s in _STANDARD_SECTIONS if s not in text]
+        if missing_sections:
+            issues.append(f"  信息: 缺失标准章节 {missing_sections}（信息性，非必须）")
 
-    return "".join(result), pre_count, post_count
+    return issues
 
 
-def _fix_org_content(text: str) -> tuple[str, list[str]]:
+def _check_fingerprint_fields(text: str) -> str | None:
+    """检查 fingerprint 行字段数是否为 5。
+
+    fingerprint 格式：:category:type:owner:tech:entry_type::
+    去掉首尾的 : 和 :: 后按 : 拆分应得 5 段。
     """
-    修复 Org 文件中的 Markdown 语法。
-
-    返回 (修复后文本, 修复项列表)。
-    逐行处理，跟踪代码块状态以避免误修复代码块内的内容。
-    """
-    fixes = []
     lines = text.split("\n")
-    result = []
-    in_code_block = False  # 追踪 ``` 代码块状态
-    in_org_code_block = False  # 追踪 #+begin_src ... #+end_src 代码块状态
-    i = 0
+    # 找 :END: 后第一行
+    end_idx = None
+    for i, ln in enumerate(lines):
+        if ln.strip() == ":END:":
+            end_idx = i
+            break
+    if end_idx is None or end_idx + 1 >= len(lines):
+        return None
 
-    while i < len(lines):
-        line = lines[i]
+    fp_line = lines[end_idx + 1]
+    m = _FINGERPRINT_LINE.match(fp_line)
+    if not m:
+        return None  # 无 fingerprint 行（旧卡片），不报
 
-        # ── 修复 1: ```lang ... ``` → #+begin_src lang ... #+end_src ──
-        code_match = re.match(r"^(\s*)```(\w*)\s*$", line)
-        if code_match:
-            indent = code_match.group(1)
-            lang = code_match.group(2)
-            if not in_code_block:
-                # 开始代码块
-                in_code_block = True
-                new_line = f"{indent}#+begin_src {lang}".rstrip()
-                if new_line != line:
-                    fixes.append(f"  行 {i+1}: ```{lang} → #+begin_src {lang}")
-                result.append(new_line)
-                i += 1
-                continue
-            else:
-                # 结束代码块
-                in_code_block = False
-                new_line = f"{indent}#+end_src"
-                fixes.append(f"  行 {i+1}: ``` → #+end_src")
-                result.append(new_line)
-                i += 1
-                continue
-
-        # ── 追踪 Org 代码块状态 ──
-        if re.match(r"^\s*#\+begin_src\b", line, re.IGNORECASE):
-            in_org_code_block = True
-        elif re.match(r"^\s*#\+end_src\b", line, re.IGNORECASE):
-            in_org_code_block = False
-
-        # ── 修复 2-5: 只在非代码块内生效 ──
-        if not in_code_block and not in_org_code_block:
-            stripped = line.lstrip()
-
-            # 排除 Org 标题模式（** 或 *** 开头后跟空格）
-            if re.match(r"^\*+\s", stripped):
-                result.append(line)
-                i += 1
-                continue
-
-            # 行内 **bold** → *bold*
-            new_line = re.sub(r"\*\*(.+?)\*\*", r"*\1*", line)
-            if new_line != line:
-                fixes.append(f"  行 {i+1}: **bold** → *bold*")
-                line = new_line
-
-            # Markdown heading → Org heading
-            heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
-            if heading_match:
-                level = len(heading_match.group(1)) + 1
-                title = heading_match.group(2)
-                new_line = f"{'*' * level} {title}"
-                fixes.append(f"  行 {i+1}: Markdown heading → Org heading")
-                line = new_line
-
-            # `- list` → `+ list`
-            list_match = re.match(r"^(\s*)(- )(\S)", line)
-            if list_match and not line.lstrip().startswith("--"):
-                indent = list_match.group(1)
-                content = line.lstrip()[2:]
-                new_line = f"{indent}+ {content}"
-                fixes.append(f"  行 {i+1}: `- ` → `+ `")
-                line = new_line
-
-            # `inline code` → ~inline code~
-            if "`" in line and "```" not in line:
-
-                def replace_inline_code(m: re.Match) -> str:
-                    return f"~{m.group(1)}~"
-
-                new_line = re.sub(r"`([^`\n]+?)`", replace_inline_code, line)
-                if new_line != line:
-                    count = len(re.findall(r"`[^`\n]+?`", line))
-                    fixes.append(f"  行 {i+1}: `code` → ~code~ (×{count})")
-                    line = new_line
-
-            # ── 修复 6: Org 行内标记(~...~ 和 *...*)外部空格 ──
-            # Org 强调标记外部需满足 PRE/POST 条件才能渲染
-            # PRE: 空格/({[/'"/`/行首  POST: 空格/.,:;!?'" )}]/\/-/行尾
-            # 不满足时自动插入空格，相邻标记共享边界空格
-
-            if "~" in line:
-                line, pre_n, post_n = _fix_marker_spacing(line, "~")
-                if pre_n:
-                    fixes.append(f"  行 {i+1}: ~code~ 前缺空格 (×{pre_n})")
-                if post_n:
-                    fixes.append(f"  行 {i+1}: ~code~ 后缺空格 (×{post_n})")
-
-            if "*" in line:
-                line, pre_n, post_n = _fix_marker_spacing(line, "*")
-                if pre_n:
-                    fixes.append(f"  行 {i+1}: *bold* 前缺空格 (×{pre_n})")
-                if post_n:
-                    fixes.append(f"  行 {i+1}: *bold* 后缺空格 (×{post_n})")
-
-        result.append(line)
-        i += 1
-
-    return "\n".join(result), fixes
+    # 解析字段：去掉首 : 和尾 ::，按 : 拆分
+    inner = fp_line.strip()
+    if inner.startswith(":"):
+        inner = inner[1:]
+    if inner.endswith("::"):
+        inner = inner[:-2]
+    fields = inner.split(":")
+    if len(fields) != 5:
+        return (
+            f"  语义: fingerprint 字段数 {len(fields)}（应为 5: "
+            f"category:type:owner:tech:entry_type）— {fp_line.strip()}"
+        )
+    return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
