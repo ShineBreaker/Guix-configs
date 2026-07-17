@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
 description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles — **self-contained** (all runnable artifacts ship inside the skill directory; backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — the directory layout, file-type rules, decision trees, **which of the 12 existing categories a new skill belongs to (never top-level `<skill-name>/`)**, and a pre-publish checklist. Triggers: writing a new skill, refactoring an existing one's structure, wondering 'should this go in SKILL.md vs references()' / 'which category fits', preparing for backup/share, noticing a self-contained or progressive-disclosure violation, the user complaining 'too verbose' / 'in the wrong place', or **discovering a real use case the skill doesn't cover** — patch the skill (§6 last row) instead of inventing a workaround."
-version: 1.6.1
+version: 1.7.0
 license: MIT
 metadata:
   hermes:
@@ -377,8 +377,10 @@ top-level `<skill-name>/` directory; that is the bug that created 31
 "pseudo-categories" with one skill each in the 2026-07-05 cleanup.
 
 **Hard rule:** before creating a new category, prove every existing
-one cannot host the skill. The 12 current categories (as of
-2026-07-05) are:
+one cannot host the skill. The 11 current categories (snapshot
+2026-07-17; last drift fix removed `research/`, retained `mlops/` as
+intentional placeholder — see git log for
+`dotfiles/mutable/hermes/.local/share/hermes/skills/mlops/`):
 
 | Category                | Hosts skills about…                                                                                                                 | Example sub-skills                                                                                          |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
@@ -390,12 +392,12 @@ one cannot host the skill. The 12 current categories (as of
 | `guix-configs/`         | Workflows specific to this user's Guix-configs deployment (`~/Projects/Config/Guix-configs/`) and the personal `jeans` Guix channel | `guix-configs-workflow`, `jeans-channel-workflow`                                                           |
 | `hermes-agent-ops/`     | Operating Hermes Agent itself — skill authoring, memory routing, prompt migration, library curation                                 | `skill-authoring` (this skill), `hermes-memory-routing`, `importing-agent-prompts`, `hermes-skill-curation` |
 | `media/`                | Media content — transcripts, GIFs, music gen, audio viz                                                                             | `youtube-content`, `gif-search`, `heartmula`, `songsee`                                                     |
-| `mlops/`                | ML/AI Ops — training, fine-tuning, serving, eval                                                                                    | (currently empty placeholder — bundled seeds here)                                                          |
+| `mlops/`                | ML/AI Ops — training, fine-tuning, serving, eval                                                                                    | (intentional placeholder; DESCRIPTION.md git-tracked, awaiting first ML skill)                             |
 | `planning/`             | Strategic planning, architecture advisory, task breakdown                                                                           | `architecture-advisor`, `task-planner`                                                                      |
 | `productivity/`         | Documents, presentations, spreadsheets, discovery                                                                                   | `powerpoint`, `nano-pdf`, `ocr-and-documents`, `unknown-discovery`                                          |
-| `research/`             | Research workflows — doc discovery, literature review, doc lint                                                                     | `doc-researcher`, `single-source-doc-lint`                                                                  |
 
-**Decision tree for placement:**
+**Decision tree for placement** (12-step; research/ removed 2026-07-17,
+decision tree renumbered but semantic order unchanged):
 
 1. **Does the skill act on the user's own Guix-configs repo or the
    personal jeans Guix channel?** → `guix-configs/`
@@ -407,23 +409,26 @@ one cannot host the skill. The 12 current categories (as of
    breakdown, feasibility assessment)?** → `planning/`
 5. **Does the skill produce or inspect documents / presentations /
    spreadsheets?** → `productivity/`
-6. **Does the skill investigate, lint, or curate external knowledge
-   (docs, papers, web)?** → `research/`
-7. **Does the skill generate creative content (design, video, music,
+6. **Does the skill generate creative content (design, video, music,
    ASCII art)?** → `creative/`
-8. **Does the skill work with media (transcripts, audio, video files)?**
+7. **Does the skill work with media (transcripts, audio, video files)?**
    → `media/`
-9. **Does the skill teach or produce educational material?** → `education/`
-10. **Does the skill troubleshoot a desktop / GUI / IME issue?** → `desktop/`
-11. **Is the skill a generic dev tool — repo recon, code review,
+8. **Does the skill teach or produce educational material?**
+   → `education/`
+9. **Does the skill troubleshoot a desktop / GUI / IME issue?** → `desktop/`
+10. **Is the skill a generic dev tool — repo recon, code review,
     debugging a specific toolchain, exploratory QA?** → `devtools/`
-12. **Is the skill about training / serving / evaluating ML models?**
+11. **Is the skill about training / serving / evaluating ML models?**
     → `mlops/`
 
-If **none** of the 12 fit, _stop and ask the user_. Do not invent a
+If **none** of the 11 fit, _stop and ask the user_. Do not invent a
 new category on your own. The user has stated this explicitly
 ("必须在当前分类中完全没有合理的文件夹可存放时再创建新分类文件夹").
-
+Note: the prior version of this table also listed a `research/`
+category; that was removed in the 2026-07-17 drift fix because no
+such directory exists on disk. If you need to revive it (e.g. a
+`doc-researcher` skill comes back), add the directory first, then
+restore this row.
 **Scope guard:** this categorization rule applies **only** to
 `~/.local/share/hermes/skills/`. The directory
 `~/.config/agents/skills/` is a separate Guix Home immutable
@@ -434,10 +439,12 @@ directly at the top of the skills tree is the same bug as the
 pre-cleanup state — it makes every skill look like its own category.
 Always: `skills/<category>/<x>/SKILL.md`.
 
-**Category-table drift hazard.** The 12-category table above is a
-snapshot from 2026-07-05; it goes stale the moment a category is
-added, renamed, merged, or removed by a future session using
-`hermes-skill-curation`. When the snapshot and reality disagree:
+**Category-table drift hazard.** The 11-category table above is a
+snapshot from 2026-07-17 (originally 12 on 2026-07-05, with
+`research/` removed 2026-07-17 because no such directory existed);
+it goes stale the moment a category is added, renamed, merged,
+or removed by a future session using `hermes-skill-curation`. When
+the snapshot and reality disagree:
 
 - **Re-derive the actual category list** by reading
   `find ~/.local/share/hermes/skills/ -mindepth 1 -maxdepth 1 -type d`
