@@ -60,7 +60,10 @@ current_sidebar() {
 signal_current() {
     local pane_id
     pane_id="$(current_sidebar || true)"
-    [[ -n "$pane_id" ]] && send_event "$pane_id" "refresh"
+    # 末尾 || true：没有侧栏 pane 是正常的 no-op（例如 follow 尚未建好侧栏时的
+    # 竞态），不应让脚本在 set -e 下以非零退出，否则 tmux run-shell 会在状态栏
+    # 显示 "'...sidebar-toggle signal' returned 1"。
+    [[ -n "$pane_id" ]] && send_event "$pane_id" "refresh" || true
 }
 
 kill_all_sidebars() {
@@ -159,7 +162,7 @@ case "${1:-toggle}" in
         ;;
     toggle-group)
         pane_id="$(current_sidebar || true)"
-        [[ -n "$pane_id" ]] && send_event "$pane_id" "toggle-group"
+        [[ -n "$pane_id" ]] && send_event "$pane_id" "toggle-group" || true
         ;;
     *)
         printf 'usage: sidebar-toggle [toggle|follow|signal|click|toggle-group]\n' >&2
