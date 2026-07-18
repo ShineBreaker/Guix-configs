@@ -439,6 +439,13 @@ Guix helper is on `load-path', and fall back to loading each
 (defconst literal-configctl-compatibility-ids '("compatibility")
   "CUSTOM_IDs whose source blocks are allowed to touch third-party private APIs.")
 
+(defconst literal-configctl-agenote-adapter-ids
+  '("bootstrap" "process-helper")
+  "CUSTOM_IDs that define the agenote executable path constant and the
+`literal/agenote-call' adapter. These blocks legitimately reference the
+agenote executable without passing --domain at every site (the adapter itself
+enforces it), so `audit-agenote-domain' skips them.")
+
 (defvar literal-configctl--audit-violations nil
   "Accumulated audit violations as a list of (CATEGORY . MESSAGE).")
 
@@ -790,30 +797,34 @@ Allow list: blocks whose owning CUSTOM_ID is in
 
 (defun literal-configctl--audit-agenote-domain ()
   "Verify every agenote CLI invocation explicitly passes --domain.
-Scans for `literal:executable-agenote' followed by argument lists."
+Skips `bootstrap' / `process-helper' (the executable constant and the
+`literal/agenote-call' adapter live there; the adapter enforces --domain).
+Other blocks must route through `literal/agenote-call' / `literal/agenote-call-async'
+(which always pass --domain) and must not reference `literal:executable-agenote'
+directly (the dedicated CLI executable constant). Bare `\"agenote\"' string
+literals are NOT flagged — too ambiguous (path components, mode display names)."
   (dolist (block (literal-configctl--src-blocks))
     (let ((owner (car block))
           (body (nth 4 block)))
-      (with-temp-buffer
-        (insert body)
-        (goto-char (point-min))
-        (while (re-search-forward
-                "literal:executable-agenote\\|literal/agenote-call\\|\"agenote\""
-                nil t)
-          (let ((line (line-number-at-pos))
-                (win-start (point))
-                (mbeg (match-beginning 0)))
-            (let ((window (buffer-substring-no-properties
-                           win-start (min (point-max) (+ win-start 400)))))
-              (unless (string-match-p "--domain\\|:domain" window)
-                (save-excursion
-                  (goto-char mbeg)
-                  (let ((ssyntax (syntax-ppss)))
-                    (unless (or (nth 4 ssyntax) (nth 3 ssyntax))
-                      (literal-configctl--violation
-                       "agenote-no-domain"
-                       (format "%s line %d without explicit --domain"
-                               owner line))))))))))))
+      ;; Skip the adapter itself and the bootstrap definition.
+      (when (not (member owner literal-configctl-agenote-adapter-ids))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          (while (re-search-forward
+                  "literal:executable-agenote"
+                  nil t)
+            (let ((line (line-number-at-pos))
+                  (mbeg (match-beginning 0)))
+              (save-excursion
+                (goto-char mbeg)
+                (let ((ssyntax (syntax-ppss)))
+                  ;; Skip comments and strings — those mention the constant in prose.
+                  (unless (or (nth 4 ssyntax) (nth 3 ssyntax))
+                    (literal-configctl--violation
+                     "agenote-no-domain"
+                     (format "%s line %d references literal:executable-agenote directly (route through literal/agenote-call)"
+                             owner line)))))))))))
   (literal-configctl--report-audit "audit-agenote-domain"))
 
 (defconst literal-configctl-guix-manifest-file

@@ -185,11 +185,12 @@ contract pinned across the Commit 7 rewrite."
 ;; still-red test means the fix is incomplete.
 
 (ert-deftest literal-config-baseline/agenote-call-entrypoint-exists ()
-  "P0 #1: agenote calls must go through a single `literal/agenote-call'
-entrypoint that requires an explicit `--domain'. Commit 2 introduces it and
-migrates every `literal/knowledge-*' call."
-  :expected-result :failed
-  (should (fboundp 'literal/agenote-call)))
+  "P0 #1 (fixed by Commit 2): agenote calls must go through a single
+`literal/agenote-call' entrypoint that requires an explicit `--domain'.
+All `literal/knowledge-*' calls route through it; `audit-agenote-domain'
+catches any new direct CLI calls."
+  (should (fboundp 'literal/agenote-call))
+  (should (fboundp 'literal/agenote-call-async)))
 
 (ert-deftest literal-config-baseline/eglot-flymake-chain-intact ()
   "P0 #2: Eglot must NOT opt out of Flymake. Today the config adds `flymake'
