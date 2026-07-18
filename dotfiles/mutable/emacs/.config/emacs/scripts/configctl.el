@@ -323,7 +323,10 @@
    (not (memq #'literal--eglot-setup-once prog-mode-hook))
    "one-shot eglot hook was not removed")
   (require 'org-capture)
-  (dolist (key '("kn" "km" "ka"))
+  ;; Phase 2.2 统一 Capture 入口:四类生命周期
+  ;;   ki=inbox / kt=任务 / kd=带日期任务 / ke=日程 / kr=roam
+  ;;   kn/km/ka=经验卡片(note/mistake/ascended,对齐 agenote-base entry-types)
+  (dolist (key '("ki" "kt" "kd" "ke" "kr" "kn" "km" "ka"))
     (literal-configctl--assert (assoc key org-capture-templates)
                                "missing Org capture template %s" key))
   ;; P0 #2 fix: Flymake chain intact (eglot-stay-out-of does not contain

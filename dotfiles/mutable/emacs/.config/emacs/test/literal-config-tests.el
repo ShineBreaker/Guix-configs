@@ -173,6 +173,18 @@ contract pinned across the Commit 7 rewrite."
       (ignore-errors (kill-buffer buf-b))
       (ignore-errors (kill-buffer buf-a2)))))
 
+(ert-deftest literal-config/capture-templates-cover-lifecycle ()
+  "Phase 2.2: org-capture-templates covers all four data lifecycles.
+ki=inbox, kt/kd/ke=agenda (task/dated/event), kr=roam, kn/km/ka=experiences
+(aligning with agenote-base entry-types note/mistake/ascended)."
+  (require 'org-capture)
+  ;; after-load hook fires on require; ensure templates populated.
+  (should (consp org-capture-templates))
+  (let ((required-keys '("ki" "kt" "kd" "ke" "kr" "kn" "km" "ka"))
+        (present-keys (mapcar #'car org-capture-templates)))
+    (dolist (key required-keys)
+      (should (member key present-keys)))))
+
 
 ;;; ---------------------------------------------------------------------------
 ;;; Category 2: baseline-bug contracts (expected to FAIL today)
