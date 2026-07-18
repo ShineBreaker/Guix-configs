@@ -63,35 +63,6 @@
                            (literal/agenote--sort-by-recency cards))
                    '("b" "c" "a")))))
 
-(ert-deftest literal-config/dashboard-staleness-bucket-boundaries ()
-  "Staleness buckets fall at 7/30/60/180 days. Validates the bucketing logic.
-Once Commit 5 removes the in-Emacs staleness computation (it should live in
-the agenote CLI), this test should be deleted along with the function."
-  (skip-unless (fboundp 'literal/knowledge-viz--compute-staleness))
-  (let ((now (current-time)))
-    (dolist (case '((1   . fresh)
-                    (6   . fresh)
-                    (7   . recent)
-                    (8   . recent)
-                    (29  . recent)
-                    (30  . aging)
-                    (31  . aging)
-                    (59  . aging)
-                    (60  . stale)
-                    (61  . stale)
-                    (179 . stale)
-                    (180 . critical)
-                    (181 . critical)
-                    (400 . critical)))
-      (let* ((days (car case))
-             (want (cdr case))
-             ;; `encode-time' is robust across Emacs versions; days-to-time
-             ;; also works but encode-time is the documented inverse.
-             (past (time-subtract now (days-to-time days)))
-             (card `(:last_verified ,(format-time-string "[%Y-%m-%d Mon]" past)))
-             (got (cdr (literal/knowledge-viz--compute-staleness card))))
-        (should (eq got want))))))
-
 (ert-deftest literal-config/modeline-tier-boundaries ()
   "Tier computation: wide >= 120, medium >= 100, narrow >= 80, else compact.
 Commit 8 will centralize tier computation into a single renderer; this test

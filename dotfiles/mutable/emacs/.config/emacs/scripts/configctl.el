@@ -305,12 +305,20 @@
                       literal/display-or-focus
                       literal/help--extract-dashboard-bindings
                       literal/knowledge-collect-org-files
+                      ;; Phase 2.3:统一浏览入口替代 knowledge-viz + agenote-browse
+                      literal/knowledge-browse-human
+                      literal/knowledge-browse-agenote
+                      literal/knowledge-viz-open-browser
                       literal/open-terminal
                       literal/tabs-next))
     (literal-configctl--assert (fboundp function) "missing function %s" function))
   (dolist (binding '(("C-S-c" . literal/copy-dwim)
                      ("C-<tab>" . literal/tabs-next)
                      ("C-c o k s" . literal/knowledge-search)
+                     ;; Phase 2.3:统一浏览入口的绑定
+                     ("C-c o k v" . literal/knowledge-browse-human)
+                     ("C-c o k b" . literal/knowledge-browse-agenote)
+                     ("C-c o k V" . literal/knowledge-viz-open-browser)
                      ("C-c l d" . literal/code-goto-definition)))
     (literal-configctl--assert
      (eq (key-binding (kbd (car binding))) (cdr binding))
