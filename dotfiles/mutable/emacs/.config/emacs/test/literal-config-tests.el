@@ -246,5 +246,43 @@ Now a hard contract — M-d must bind only `corfu-popupinfo-toggle'."
       (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
 	(should (eq m-d-cmd 'corfu-popupinfo-toggle))))
 
+    (ert-deftest literal-config/audit-keys-helpers-phase6 ()
+      "Phase 6 binding-spec single-source-of-truth: audit-keys helper semantics.
+固化三个关键不变量:
+  1. `literal-configctl--curated-key-p' 只识别 C-c [a-z] *(case-sensitive),
+     不应把 C-c C-c / C-c C-t 等第三方包内部 keymap 误判为 curated。
+  2. `literal-configctl--prefix-group-p' 识别 \"...\" 占位符为前缀组声明。
+  3. `literal-configctl--help-key-tokens' 正确切分 / 分隔的多键合并形式,
+     并剥离 \"Markdown: \" 之类的描述前缀。
+
+configctl test 子命令由 scripts/configctl.el 提供,该文件作为 runner
+已经加载到当前 batch 环境,所以 audit helper 函数都是 fboundp 的;无需
+再 load 一次。"
+      ;; (1) curated-key-p 是 case-sensitive 的(C-c C-c 不应被识别)。
+      (let ((case-fold-search t))  ; 模拟默认环境,验证函数内已绑定 nil
+        (should-not (literal-configctl--curated-key-p "C-c C-c"))
+        (should-not (literal-configctl--curated-key-p "C-c C-t"))
+        (should-not (literal-configctl--curated-key-p "C-c C-p"))
+        (should (literal-configctl--curated-key-p "C-c a g"))
+        (should (literal-configctl--curated-key-p "C-c e l"))
+        (should (literal-configctl--curated-key-p "C-c d"))   ; 单字母前缀(虽无子绑定)
+        (should (literal-configctl--curated-key-p "C-x p f")))
+      ;; (2) prefix-group-p 识别占位符。
+      (should (literal-configctl--prefix-group-p "C-c a g ..."))
+      (should (literal-configctl--prefix-group-p "C-c o b ..."))
+      (should-not (literal-configctl--prefix-group-p "C-c a g t"))
+      ;; (3) help-key-tokens 正确切分。
+      (should (equal (literal-configctl--help-key-tokens "C-c g # / @")
+                     '("C-c g #" "C-c g @")))
+      (should (equal (literal-configctl--help-key-tokens "C-x 2 / 3 / 0 / 1 / o")
+                     '("C-x 2" "C-x 3" "C-x 0" "C-x 1" "C-x o")))
+      (should (equal (literal-configctl--help-key-tokens "Markdown: C-c p")
+                     '("C-c p")))
+      (should (equal (literal-configctl--help-key-tokens "C-c e . / ,")
+                     '("C-c e ." "C-c e ,")))
+      ;; (4) prefix-of 正确剥离尾随 ... 和空格。
+      (should (equal (literal-configctl--prefix-of "C-c e l ...") "C-c e"))
+      (should (equal (literal-configctl--prefix-of "C-c a g t") "C-c a g")))
+
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here

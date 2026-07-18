@@ -555,8 +555,13 @@ DESC is the which-key description for literal/set-key or nil."
           (insert body)
           (goto-char (point-min))
           ;; literal/set-key "KEY" #'CMD "DESC"
+          ;; Regex explanation: #?' matches #' or '  — the function quote.
+          ;; The trailing \"\\([^\")]*\\)\" was buggy because it excluded all \"
+          ;; chars, preventing the description string (which contains \") from
+          ;; being matched. Fix: allow \\(\"[^\"]*\"\\)* inside the tail so
+          ;; the description string passes through, then require the literal ).
           (while (re-search-forward
-                  "(literal/set-key[[:space:]]+\"\\([^\"]+\\)\"[[:space:]]+#?'\\([^ )]+\\)\\([^\")]*\\))"
+                  "(literal/set-key[[:space:]]+\"\\([^\"]+\\)\"[[:space:]]+#?'\\([^ )]+\\)\\(\\(?:[^)\"]*\\|\"[^\"]*\"\\)*\\))"
                   nil t)
             (let ((key (match-string 1))
                   (cmd (match-string 2))
@@ -579,6 +584,17 @@ DESC is the which-key description for literal/set-key or nil."
           (goto-char (point-min))
           (while (re-search-forward
                   "(keymap-set[[:space:]]+\\S-+[[:space:]]+\"\\([^\"]+\\)\"[[:space:]]+#?'\\([^ )]+\\))"
+                  nil t)
+            (let ((key (match-string 1))
+                  (cmd (match-string 2)))
+              (push (list :key key :command cmd :desc nil
+                          :owner owner) specs)))
+          ;; global-set-key (kbd "KEY") #'CMD  — legacy form still used for
+          ;; <f1> ? and C-c h ? (literal/show-help). Phase 6: include them so
+          ;; audit-keys treats F1 ? / C-c h ? as first-class bindings.
+          (goto-char (point-min))
+          (while (re-search-forward
+                  "(global-set-key[[:space:]]+(kbd[[:space:]]+\"\\([^\"]+\\)\")[[:space:]]+#?'\\([^ )]+\\))"
                   nil t)
             (let ((key (match-string 1))
                   (cmd (match-string 2)))
@@ -634,11 +650,38 @@ actual keymap."
                 (push hint hints)))))))
     (delete-dups (nreverse hints))))
 
+(defun literal-configctl--prefix-group-p (key-string)
+  "Return non-nil if KEY-STRING is a prefix-group placeholder.
+Matches forms like \"C-c a g ...\" or \"C-c o b ...\" where the trailing
+\"...\" indicates the entry describes a prefix group rather than one
+specific binding."
+  (string-match-p "\\.\\.\\.?\\'" key-string))
+
+(defun literal-configctl--prefix-of (key-string)
+  "Return the prefix portion of KEY-STRING (everything before the last token).
+\"C-c a g t\" → \"C-c a g\". \"C-c a g ...\" → \"C-c a g\".
+Single-token strings return nil."
+  (let* ((trimmed (string-trim (string-trim-right key-string "\\.\\.\\.?"))))
+    (if (string-match "\\(.*\\) [^ ]+\\'" trimmed)
+        (match-string 1 trimmed)
+      nil)))
+
+(defun literal-configctl--has-child-binding-p (prefix bound-keys)
+  "Return non-nil if PREFIX has at least one child binding in BOUND-KEYS.
+\"C-c a g\" matches any of \"C-c a g t\", \"C-c a g s\", etc."
+  (let ((prefix-re (concat "\\`" (regexp-quote prefix) " ")))
+    (cl-some (lambda (k) (string-match-p prefix-re k)) bound-keys)))
+
 (defun literal-configctl--audit-keys ()
   "Cross-check declared bindings vs help data and dashboard hints.
 Only curated app-prefix bindings (C-c ?, C-x p, M-g, M-s, F1, C-x g, C-x t) are
 checked — raw single-char bindings like C-j are set by key-helper and not part
-of the help/dashboard single-source-of-truth."
+of the help/dashboard single-source-of-truth.
+
+Phase 6 智能识别:
+  - \"C-c X y ...\" 前缀组声明:只要存在任意 C-c X y * 子绑定即视为满足。
+  - dashboard 单字母前缀(\"C-c l\" 等):是前缀组名,只要有任意 C-c l * 子绑定即满足。
+  - 第三方包内部绑定(C-c C-c 等):非本配置 single-source-of-truth 范围,跳过。"
   (let* ((specs (literal-configctl--binding-specs))
          (bound-keys (delete-dups (mapcar (lambda (s) (plist-get s :key)) specs)))
          (help-data (literal-configctl--help-zh-data))
@@ -660,13 +703,27 @@ of the help/dashboard single-source-of-truth."
     (setq help-keys (delete-dups (nreverse help-keys)))
     ;; (a) help/dashboard/hardcoded hint strings that have no corresponding binding
     (dolist (key help-keys)
-      (unless (member key bound-keys)
+      (unless (or (member key bound-keys)
+                  ;; 前缀组占位符(C-c X y ...):只要有任意子绑定即满足
+                  (and (literal-configctl--prefix-group-p key)
+                       (let ((prefix (literal-configctl--prefix-of key)))
+                         (and prefix
+                              (literal-configctl--has-child-binding-p prefix bound-keys))))
+                  ;; 第三方包内部绑定(非 C-c [a-z] 开头)非本配置 SoT 范围
+                  (not (string-match-p "\\`C-c [a-z]" key)))
         (literal-configctl--violation
          "help-no-binding"
          (format "%s declared in data/help-zh.el but no keymap-global-set/keymap-set/literal/set-key matches"
                  key))))
     (dolist (key dashboard-keys)
-      (unless (member key bound-keys)
+      (unless (or (member key bound-keys)
+                  ;; dashboard 单字母前缀(C-c l / C-c a 等):是前缀组名,
+                  ;; 只要存在任意 C-c l * 子绑定即视为声明有效。
+                  (and (string-match-p "\\`C-c [a-z]\\'" key)
+                       (literal-configctl--has-child-binding-p key bound-keys))
+                  ;; 多 token 前缀(C-x p / C-x g / C-x t)同理
+                  (and (string-match-p "\\`C-x [a-z]\\'" key)
+                       (literal-configctl--has-child-binding-p key bound-keys)))
         (literal-configctl--violation
          "dashboard-no-binding"
          (format "%s declared in literal:help-dashboard-bindings but no binding matches"
@@ -702,28 +759,44 @@ of the help/dashboard single-source-of-truth."
   '("C-c " "C-x p" "M-g " "M-s " "F1 " "C-x g" "C-x t"))
 
 (defun literal-configctl--curated-key-p (key-string)
-  "Return non-nil if KEY-STRING is a curated app-prefix binding."
-  (string-match-p "\\`C-c [a-z]\\|\\`C-x p\\|\\`C-x g\\|\\`C-x t\\|\\`M-g \\|\\`M-s \\|\\`F1 "
-                  key-string))
+  "Return non-nil if KEY-STRING is a curated app-prefix binding.
+Phase 6: only single-letter C-c prefixes (C-c [a-z] ...) are first-party
+curated bindings. Third-party package internal bindings (C-c C-c, C-c C-t,
+C-c digit, etc.) are NOT part of our single-source-of-truth — they are
+defined inside package keymaps (agent-shell, telega, magit, ...) and the
+audit must ignore them.
+
+注意:`case-fold-search' 默认 t 会让 [a-z] 也匹配大写,导致 C-c C-c 被误判
+为 curated。这里显式绑定 nil,确保 [a-z] 只匹配小写。"
+  (let ((case-fold-search nil))
+    (string-match-p "\\`C-c [a-z]\\|\\`C-x p\\|\\`C-x g\\|\\`C-x t\\|\\`M-g \\|\\`M-s \\|\\`F1 "
+                    key-string)))
 
 (defun literal-configctl--help-key-tokens (key-string)
   "Split a help/dashboard key display string into individual key tokens.
 \"C-x 2 / 3 / 0 / 1 / o\" → (\"C-x 2\" \"C-x 3\" \"C-x 0\" \"C-x 1\" \"C-x o\").
 \"C-c a a a\"            → (\"C-c a a a\").
-Returns only tokens that look like complete bindings (start with C-/M-/S-/F1/<fN>
+\"C-c g # / @\"          → (\"C-c g #\" \"C-c g @\").
+\"Markdown: C-c p\"      → (\"C-c p\").
+Returns only tokens that look like complete bindings (start with C-/M-/S-/F1/<fN
 followed by a key spec). Incomplete fragments (e.g. \"<up\" after a / split) are
-dropped."
-  (let* ((slash-split (split-string key-string "[/]+"))
+dropped. Prefix descriptions like \"Markdown:\" are stripped."
+  (let* (;; Strip prefix descriptions like "Markdown: " or "Wgrep: " so the
+         ;; subsequent token parsing sees only the key spec.
+         (cleaned (if (string-match "^[A-Za-z]+: \\(.*\\)" key-string)
+                      (match-string 1 key-string)
+                    key-string))
+         (slash-split (split-string cleaned "[/]+"))
          (tokens nil))
     (dolist (branch slash-split)
       (let ((trimmed (string-trim branch)))
         ;; A branch is either a complete key (starts with a modifier) or a
         ;; suffix of the first branch (e.g. "3" continues "C-x 2" → "C-x 3").
         (cond
-         ((string-match-p "\\`C-[a-zA-Z0-9_]\\|\\`C-c [a-z A-Z0-9_]\\|\\`M-[a-zA-Z0-9_]\\|\\`S-\\|\\`F1 \\|\\`<f[0-9]+" trimmed)
+         ((string-match-p "\\`C-[a-zA-Z0-9_#@] \\|\\`C-[a-zA-Z0-9_]\\|\\`C-c [a-z A-Z0-9_]\\|\\`C-c [a-z] [#@] \\|\\`C-c [a-z] [a-zA-Z0-9_#@]\\|\\`M-[a-zA-Z0-9_]\\|\\`S-\\|\\`F1 \\|\\`<f[0-9]+" trimmed)
           (push trimmed tokens))
          ((and tokens
-               (string-match-p "\\`[0-9a-zA-Z<>.,+_-]+\\'" trimmed))
+               (string-match-p "\\`[0-9a-zA-Z<>.,+_-#@]+\\'" trimmed))
           ;; Continue the previous token's prefix up to its last whitespace.
           (let ((prev (car tokens)))
             (let ((last-space (string-match " [^ ]+\\'" prev)))
