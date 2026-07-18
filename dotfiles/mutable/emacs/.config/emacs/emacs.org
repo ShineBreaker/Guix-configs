@@ -2836,6 +2836,39 @@ Phase 4.4:修正 \`custom-help-section-title\` → \`literal-help-section-title\
 ;; 关闭 buffer + 窗口直接用内置 kill-buffer-and-window(C-x k 绑它)。
 ;; 原自定义版 (condition-case nil ... (error nil)) 会静默吞掉所有错误(如未
 ;; 保存确认被拒绝时用户得不到任何反馈),内置版行为一致且不吞错误。
+
+;; indent-bars — tree-sitter 缩进竖线(Phase 7.2 配置)
+;; 类似 indent-guide,但基于 tree-sitter,只对启用了 ts-mode 的语言生效。
+;; PLAN §7.2 决定保留 + 配置(原 0 引用,本 commit 接入)。
+(use-package indent-bars
+  :defer t
+  ;; 只在 ts-mode 启用;非 ts-mode 缺乏可靠的缩进 AST,indent-bars 会画错。
+  :hook ((c-ts-mode c++-ts-mode go-ts-mode java-ts-mode json-ts-mode
+          python-ts-mode rust-ts-mode typescript-ts-mode yaml-ts-mode) .
+         indent-bars-mode)
+  :custom
+  ;; 竖线用浅色,继承 shadow;pattern 让连续缩进可视层级清晰
+  (indent-bars-color nil)                       ; 不自己算颜色,follow 主题
+  (indent-bars-color-by-depth '(:homogeneity 0.5)) ; 深度递减饱和度
+  (indent-bars-pattern ".")                     ; 单字符 dot 列
+  (indent-bars-width-frac 0.15)                 ; 竖线宽度(占字符宽度比例)
+  (indent-bars-pad-pos 1)                       ; padding 位置
+  (indent-bars-zigzag nil)                      ; 不用锯齿(避免 ts 节点抖动)
+  (indent-bars-no-stretch-char nil))
+
+;; goto-chg — 跳到上一处/下一处修改点(Phase 7.2 配置)
+;; 提供 undo-tree 风格的"按修改点跳转",比 undo 一次一次翻历史更精准。
+(use-package goto-chg
+  :defer t
+  :commands (goto-last-change goto-last-change-reverse))
+
+;; multiple-cursors — 多光标编辑(Phase 7.2 配置)
+;; 在选中 region 内每个匹配字符串处插入 cursor,适合批量重命名/格式化。
+(use-package multiple-cursors
+  :defer t
+  :commands (mc/edit-lines
+             mc/mark-next-like-this mc/mark-previous-like-this
+             mc/mark-all-like-this mc/mark-all-like-this-in-defun))
 #+end_src
 
 ** 终端集成 ghostel
@@ -2924,6 +2957,15 @@ ghostel 终端模拟器(libghostty-vt 后端): =literal/open-terminal= 在底部
                       (cl-set-difference (buffer-list) before))))))
       (when (buffer-live-p buf)
         (literal/display-or-focus buf literal:terminal-side-action t)))))
+
+;; Agent Shell(Phase 7.2 接入:原 0 引用,加 use-package + C-c a a 入口)
+;; PLAN §7.2:Agent Shell 若保留,必须在 C-c a 或其他声明式入口中可达。
+;; Agent Shell 是 AI agent 的 Emacs 端 UI,与 terminal / ghostel 独立。
+;; agent-shell 主入口加载完整 UI;agent-shell-toggle 切换显示/隐藏。
+(use-package agent-shell
+  :defer t
+  :commands (agent-shell agent-shell-toggle))
+;; C-c a a 入口见 *前缀键体系* 块。
 
 #+end_src
 
@@ -3264,6 +3306,17 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (use-package csharp-mode
   :mode ("\\.cs\\'" "\\.csx\\'" "\\.cake\\'")
   :defer t)
+
+;; PDF Tools(Phase 7.2 接入:原 0 引用,加 use-package + C-c a p 入口)
+;; PLAN §7.2:PDF Tools 必须在 C-c a 声明式入口中可达。
+;; pdf-tools-install 启动后端(epdfinfo 服务进程),pdf-view-mode 关联 .pdf。
+(use-package pdf-tools
+  :defer t
+  :mode ("\\.pdf\\'" . pdf-view-mode)
+  :magic ("%PDF" . pdf-view-mode)
+  :config
+  (pdf-tools-install t t))     ; no-prompt, no-func
+;; C-c a p 入口见 *前缀键体系* 块(打开 PDF 文件)
 #+end_src
 
 * 项目与导航
@@ -4629,6 +4682,15 @@ IDE 风格全局直达键,通过 =literal/set-key= 同源注册键位与 which-k
 (literal/set-key "M-<right>" #'windmove-right "右切窗口")
 (literal/set-key "M-<up>" #'windmove-up "上切窗口")
 (literal/set-key "M-<down>" #'windmove-down "下切窗口")
+
+;; C-c e:多光标 / 修改点跳转(Phase 7.2 新增前缀)
+(literal/set-key "C-c e l" #'mc/edit-lines "多光标-每行一个")
+(literal/set-key "C-c e n" #'mc/mark-next-like-this "多光标-标记下一个匹配")
+(literal/set-key "C-c e p" #'mc/mark-previous-like-this "多光标-标记上一个匹配")
+(literal/set-key "C-c e a" #'mc/mark-all-like-this "多光标-标记所有匹配")
+(literal/set-key "C-c e d" #'mc/mark-all-like-this-in-defun "多光标-函数内所有匹配")
+(literal/set-key "C-c e ." #'goto-last-change "跳到上一处修改")
+(literal/set-key "C-c e ," #'goto-last-change-reverse "跳到下一处修改")
 #+end_src
 
 ** 前缀键体系
@@ -4779,6 +4841,10 @@ Emacs 原生前缀扩展( =C-x= / =M-s= / =M-g= ) + 自定义 =C-c= 前缀分组
 (keymap-global-set "C-c a g s" #'snake)
 (keymap-global-set "C-c a g m" #'gomoku)
 (keymap-global-set "C-c a g p" #'pong)
+;; Phase 7.2:PDF Tools + Agent Shell 声明式入口(PLAN §7.2 强约束)
+(literal/set-key "C-c a p" #'find-file "应用-打开 PDF")
+(literal/set-key "C-c a a" #'agent-shell "应用-Agent Shell 主入口")
+(literal/set-key "C-c a A" #'agent-shell-toggle "应用-Agent Shell 切换")
 
 ;; C-c o k:知识库
 (keymap-global-set "C-c o k c" #'literal/knowledge-capture)

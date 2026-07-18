@@ -319,6 +319,13 @@
                      ("C-c o k v" . literal/knowledge-browse-human)
                      ("C-c o k b" . literal/knowledge-browse-agenote)
                      ("C-c o k V" . literal/knowledge-viz-open-browser)
+                     ;; Phase 7.2:Agent Shell + 编辑前缀声明式入口
+                     ("C-c a a" . agent-shell)
+                     ("C-c a A" . agent-shell-toggle)
+                     ("C-c e l" . mc/edit-lines)
+                     ("C-c e n" . mc/mark-next-like-this)
+                     ("C-c e ." . goto-last-change)
+                     ("C-c e ," . goto-last-change-reverse)
                      ("C-c l d" . literal/code-goto-definition)))
     (literal-configctl--assert
      (eq (key-binding (kbd (car binding))) (cdr binding))

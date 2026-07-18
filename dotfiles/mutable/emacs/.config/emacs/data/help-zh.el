@@ -13,7 +13,8 @@
         ("C-c d" . "调试")
         ("C-c g" . "Git")
         ("C-c w" . "窗口创建:文件查找、缓冲区、终端、Agent、目录、小地图")
-        ("C-c a" . "应用:Agent、日历、邮件、Telegram、Matrix、游戏")
+        ("C-c a" . "应用:Agent、日历、邮件、Telegram、Matrix、游戏、PDF")
+        ("C-c e" . "编辑:多光标、修改点跳转")
         ("C-c o" . "Org:议程、Babel、任务、笔记、知识库")))
 
 (setq literal:help-sections
@@ -150,9 +151,20 @@
          ("C-c w v" . "打开终端")
          ("C-c w a" . "切换 Agent 面板")
          ("C-c w u / U" . "撤销 / 重做窗口布局"))
+        ("编辑(多光标 / 修改点)"
+         ;; Phase 7.2:multiple-cursors + goto-chg 接入(PLAN §7.2)
+         ("C-c e l" . "多光标:每行一个光标")
+         ("C-c e n" . "多光标:标记下一个匹配")
+         ("C-c e p" . "多光标:标记上一个匹配")
+         ("C-c e a" . "多光标:标记所有匹配")
+         ("C-c e d" . "多光标:函数内所有匹配")
+         ("C-c e ." . "跳到上一处修改")
+         ("C-c e ," . "跳到下一处修改"))
         ("应用"
-         ;; Phase 6:删除 C-c a a* (Agent Shell 未实现的子菜单条目);
-         ;; 实现 agent-shell 公开 prefix map 后再加回(PLAN §6 C-c a 目标布局)。
+         ;; Phase 7.2:Agent Shell + PDF Tools 接入声明式入口(PLAN §6 C-c a 目标布局)
+         ("C-c a a" . "Agent Shell 主入口")
+         ("C-c a A" . "Agent Shell 切换显示/隐藏")
+         ("C-c a p" . "打开 PDF(关联 .pdf 自动进 pdf-view-mode)")
          ("C-c a g ..." . "游戏")
          ("C-c a c" . "日历")
          ("C-c a m" . "邮件")
