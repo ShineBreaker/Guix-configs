@@ -63,12 +63,32 @@
       gc-cons-percentage 0.6)
 
 (defvar literal--file-name-handler-alist-original file-name-handler-alist
-  "启动前的 file-name-handler-alist，启动完成后恢复。")
+  "启动前的 file-name-handler-alist,启动完成后恢复。
+Phase 7.1 决策:file-name-handler-alist 的完整 save/clear/restore 生命周期
+**只在 early-init.el 中做一次**。早期 main.el 也做了一遍 defvar,但那时变量
+早已被清空,导致 emacs-startup-hook 把 nil 写回——用户失去 jka-compr/gz/el.gz
+自动解压 + tramp handler。现在 main.el 不再重复。")
 (setq file-name-handler-alist nil)
+
+;; 启动完成后恢复 file-name-handler-alist。early-init.el 独占整个生命周期,
+;; 因此 restore hook 也必须在这里注册(原先在 main.el 中注册,捕获到的 original
+;; 已是 nil,等于把 jka-compr/tramp handler 永久关掉)。
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (setq file-name-handler-alist
+                  literal--file-name-handler-alist-original)))
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 文本渲染优化
 ;; ═════════════════════════════════════════════════════════════════════════════
+;;
+;; Phase 7.1 决策(保留):强制 LTR(左到右)显示方向。 bidi 重新排序在
+;; 大文件 / 长行渲染上开销显著(Emacs 30+ 已优化但仍有可测量差异),强制 LTR
+;; 让中文/英文/代码这种主流 LTR 内容受益。
+;;
+;; 风险:Arabic / Hebrew / RTL 自然语言文本会被错误显示为 LTR。本配置作者主要
+;; 用中文/英文/代码,不处理 RTL 自然语言文本,故可接受。若未来需要 RTL 支持,
+;; 删除下面三行 + 在 prog-mode-hook / text-mode-hook 内按需局部放开即可。
 (setq-default bidi-display-reordering 'left-to-right
               bidi-paragraph-direction 'left-to-right)
 (when (boundp 'bidi-inhibit-bpa)

@@ -284,5 +284,29 @@ configctl test 子命令由 scripts/configctl.el 提供,该文件作为 runner
       (should (equal (literal-configctl--prefix-of "C-c e l ...") "C-c e"))
       (should (equal (literal-configctl--prefix-of "C-c a g t") "C-c a g")))
 
+    (ert-deftest literal-config/startup-gc-no-handler-redeclaration ()
+      "Phase 7.1: `literal--file-name-handler-alist-original' 只在 early-init.el
+中 defvar 一次。早期 main.el 也做了一遍 defvar,但那时变量早已被 early-init
+清空,捕获到 nil,导致 emacs-startup-hook 把 nil 写回——用户失去 jka-compr
+/tramp handler。Phase 7.1 修复后 main.el 不再重复。
+
+这个测试读 emacs.org 源码块验证 main.el 的 tangle 产物不含该 defvar。"
+      (let* ((org-file (expand-file-name
+                        "emacs.org"
+                        (file-name-directory
+                         (or load-file-name buffer-file-name
+                             default-directory))))
+             ;; 测试文件被 copy 到 runtime/test 目录,需要往回找仓库根。
+             ;; main.el 已 tangle 加载到当前 batch 环境,直接从 main.el 源读也行。
+             (main-file (expand-file-name "main.el" user-emacs-directory)))
+        ;; 直接检查 main.el 内容(已 tangle 加载,文件存在)。
+        (when (file-readable-p main-file)
+          (with-temp-buffer
+            (insert-file-contents main-file)
+            (goto-char (point-min))
+            (should-not (re-search-forward
+                         "(defvar literal--file-name-handler-alist-original"
+                         nil t))))))
+
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here
