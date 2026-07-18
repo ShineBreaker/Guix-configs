@@ -164,6 +164,7 @@ startup -> appearance -> editing -> programming -> projects
 ```bash
 scripts/configctl check
 scripts/configctl load
+scripts/configctl test
 git diff --check
 git status --short
 ```
@@ -178,6 +179,28 @@ git status --short
 
 `load` 成功意味着临时 tangle 产物可在 Guix Emacs 包环境中加载。D-Bus session
 在 batch 环境不可用时允许出现颜色方案提示;其他 Lisp error 不允许忽略。
+
+`test` 在隔离运行时加载 `main.el` 后跑 `test/literal-config-tests.el`。包含
+两类 ERT 用例:
+
+- **必须通过的契约测试**(`literal-config/...`):固化纯函数行为(agenote 分组、
+  staleness 桶、Modeline tier 边界、Tab-line per-frame 隔离),后续 commit 必须保持。
+- **基线 bug 捕获测试**(`literal-config-baseline/...`,带 `:expected-result
+  :failed`):记录当前违反的 P0/P1 契约。每个用例注释中标注修复它的 commit 号;
+  该 commit 落地后删除 `:expected-result` 属性,让用例转为强制约束。
+
+`check-strict` 在 `check` 基础上同时运行 `audit-agenote-domain` 与
+`audit-private-api` 并把发现的违规计为失败。默认 `check` 不跑这些,以便基线
+在修复期间保持绿色;修复完成后再切到 `check-strict`。
+
+诊断子命令(每次修改都可按需运行,输出结构化报告,**不退出非零**,便于人读):
+
+```bash
+scripts/configctl audit-keys            # 键位 ↔ help-zh ↔ dashboard 一致性
+scripts/configctl audit-private-api     # 第三方私有 API 调用(compatibility 白名单除外)
+scripts/configctl audit-agenote-domain  # agenote 调用必须显式 --domain
+scripts/configctl audit-packages        # Guix manifest ↔ use-package/require 对照
+```
 
 翻译数据是唯一的外置数据例外：`data/which-key-zh.el` 和
 `data/context-menu-zh.el` 由 `appearance/i18n-data` 加载。两者只能包含注释和

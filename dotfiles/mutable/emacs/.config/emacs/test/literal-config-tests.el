@@ -1,0 +1,244 @@
+;;; literal-config-tests.el --- ERT tests for literal-config -*- lexical-binding: t; -*-
+
+;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;
+;; SPDX-License-Identifier: MIT
+
+;;; Commentary:
+;; This file is loaded by `scripts/configctl test' after `main.el' has been
+;; tangled and loaded in an isolated runtime. Tests fall into two categories:
+;;
+;;   1. Pure-function / state-contract tests — document and freeze the
+;;      expected behaviour that later commits must preserve. These MUST pass.
+;;
+;;   2. Baseline-bug tests (marked `:expected-result :failed') — capture the
+;;      P0/P1 contracts that the current code violates. Each such test names
+;;      the commit that will turn it green. When that commit lands, drop the
+;;      `:expected-result' property so the test enforces the new contract.
+;;
+;; A green `configctl test' run means: every category-1 test passes AND every
+;; category-2 test is failing (i.e. the bug is still present, exactly as
+;; captured). A category-2 test that turns green while still marked :failed is
+;; the signal to remove the mark and start enforcing the new contract.
+;;
+;; Many baseline bugs are easier to enumerate via `configctl audit-*' than via
+;; ERT (e.g. agenote-domain drift, private-API calls, package manifest
+;; gaps). Those live in scripts/configctl.el as audit subcommands; only the
+;; contracts that need an actual loaded environment are ERT tests here.
+
+;;; Code:
+
+(require 'ert)
+(require 'cl-lib)
+
+
+;;; ---------------------------------------------------------------------------
+;;; Category 1: state contracts (MUST pass today, MUST keep passing)
+;;; ---------------------------------------------------------------------------
+
+(ert-deftest literal-config/agenote-group-by-category-ordering ()
+  "Cards are grouped by category (dictionary order), each group by created desc."
+  (skip-unless (fboundp 'literal/agenote--group-by-category))
+  (let ((cards '((:id "a" :category "emacs"   :created "20260101-000000")
+                 (:id "b" :category "guix"    :created "20260102-000000")
+                 (:id "c" :category "emacs"   :created "20260103-000000")
+                 (:id "d" :category "emacs"   :created "20260102-120000")
+                 (:id "e" :category "general" :created "20260101-000000")
+                 (:id "f"))))
+    (let ((groups (literal/agenote--group-by-category cards)))
+      ;; Categories appear in dictionary order: emacs, general, guix, unknown.
+      (should (equal (mapcar #'car groups) '("emacs" "general" "guix" "unknown")))
+      ;; Within emacs: created desc — c (03), d (02-12), a (01).
+      (should (equal (mapcar (lambda (c) (plist-get c :id))
+                             (cdr (assoc "emacs" groups)))
+                     '("c" "d" "a"))))))
+
+(ert-deftest literal-config/agenote-sort-by-recency ()
+  "Cards are sorted by `created' in descending order (newest first)."
+  (skip-unless (fboundp 'literal/agenote--sort-by-recency))
+  (let ((cards '((:id "a" :created "20260101-000000")
+                 (:id "b" :created "20260301-000000")
+                 (:id "c" :created "20260201-000000"))))
+    (should (equal (mapcar (lambda (c) (plist-get c :id))
+                           (literal/agenote--sort-by-recency cards))
+                   '("b" "c" "a")))))
+
+(ert-deftest literal-config/dashboard-staleness-bucket-boundaries ()
+  "Staleness buckets fall at 7/30/60/180 days. Validates the bucketing logic.
+Once Commit 5 removes the in-Emacs staleness computation (it should live in
+the agenote CLI), this test should be deleted along with the function."
+  (skip-unless (fboundp 'literal/knowledge-viz--compute-staleness))
+  (let ((now (current-time)))
+    (dolist (case '((1   . fresh)
+                    (6   . fresh)
+                    (7   . recent)
+                    (8   . recent)
+                    (29  . recent)
+                    (30  . aging)
+                    (31  . aging)
+                    (59  . aging)
+                    (60  . stale)
+                    (61  . stale)
+                    (179 . stale)
+                    (180 . critical)
+                    (181 . critical)
+                    (400 . critical)))
+      (let* ((days (car case))
+             (want (cdr case))
+             ;; `encode-time' is robust across Emacs versions; days-to-time
+             ;; also works but encode-time is the documented inverse.
+             (past (time-subtract now (days-to-time days)))
+             (card `(:last_verified ,(format-time-string "[%Y-%m-%d Mon]" past)))
+             (got (cdr (literal/knowledge-viz--compute-staleness card))))
+        (should (eq got want))))))
+
+(ert-deftest literal-config/modeline-tier-boundaries ()
+  "Tier computation: wide >= 120, medium >= 100, narrow >= 80, else compact.
+Commit 8 will centralize tier computation into a single renderer; this test
+pins the boundary semantics so the refactor cannot silently shift them."
+  (skip-unless (fboundp 'literal/modeline-tier))
+  (cl-letf (((symbol-function 'window-width) (lambda (&optional _) 120)))
+    (should (eq (literal/modeline-tier) 'wide)))
+  (cl-letf (((symbol-function 'window-width) (lambda (&optional _) 119)))
+    (should (eq (literal/modeline-tier) 'medium)))
+  (cl-letf (((symbol-function 'window-width) (lambda (&optional _) 100)))
+    (should (eq (literal/modeline-tier) 'medium)))
+  (cl-letf (((symbol-function 'window-width) (lambda (&optional _) 99)))
+    (should (eq (literal/modeline-tier) 'narrow)))
+  (cl-letf (((symbol-function 'window-width) (lambda (&optional _) 80)))
+    (should (eq (literal/modeline-tier) 'narrow)))
+  (cl-letf (((symbol-function 'window-width) (lambda (&optional _) 79)))
+    (should (eq (literal/modeline-tier) 'compact))))
+
+(ert-deftest literal-config/tabs-per-frame-parameter-isolation ()
+  "Per-frame tab-buffer lists are stored on frame parameters and stay isolated.
+This test exercises the frame-parameter storage directly (not make-frame,
+which fails under `emacs --batch' with no terminal) to keep the per-frame
+contract pinned across the Commit 7 rewrite."
+  (skip-unless (fboundp 'literal--tabs-set-frame-buffer-list))
+  (skip-unless (fboundp 'literal--tabs-get-frame-buffer-list))
+  (let* ((mock-frame-a (list 'foo))
+         (mock-frame-b (list 'bar))
+         (buf-a (generate-new-buffer " *test-a*"))
+         (buf-b (generate-new-buffer " *test-b*"))
+         (buf-a2 (generate-new-buffer " *test-a2*")))
+    (unwind-protect
+        (progn
+          ;; set-frame-parameter / frame-parameter work on any frame-like
+          ;; object that has the right plist semantics; use the selected frame
+          ;; as the storage but address it through the literal accessors with
+          ;; explicit FRAME argument so the test isolates per-frame state.
+          (let ((real-frame (selected-frame)))
+            ;; Stub frame-parameter / set-frame-parameter to map our mock
+            ;; frames to independent plists, simulating two real frames.
+            (let ((store-a nil)
+                  (store-b nil))
+              (cl-letf
+                  (((symbol-function 'frame-parameter)
+                    (lambda (frame param)
+                      (cond
+                       ((eq frame mock-frame-a)
+                        (when (eq param 'literal--frame-tab-buffers) store-a))
+                       ((eq frame mock-frame-b)
+                        (when (eq param 'literal--frame-tab-buffers) store-b))
+                       (t (let ((orig (default-value 'frame-parameter)))
+                            ;; fall through for any other frame access
+                            nil)))))
+                   ((symbol-function 'set-frame-parameter)
+                    (lambda (frame param value)
+                      (cond
+                       ((eq frame mock-frame-a)
+                        (when (eq param 'literal--frame-tab-buffers)
+                          (setq store-a value)))
+                       ((eq frame mock-frame-b)
+                        (when (eq param 'literal--frame-tab-buffers)
+                          (setq store-b value)))))))
+                (literal--tabs-set-frame-buffer-list (list buf-a) mock-frame-a)
+                (literal--tabs-set-frame-buffer-list (list buf-b) mock-frame-b)
+                (should (equal (literal--tabs-get-frame-buffer-list mock-frame-a)
+                               (list buf-a)))
+                (should (equal (literal--tabs-get-frame-buffer-list mock-frame-b)
+                               (list buf-b)))
+                (literal--tabs-set-frame-buffer-list
+                 (append (literal--tabs-get-frame-buffer-list mock-frame-a)
+                         (list buf-a2))
+                 mock-frame-a)
+                ;; Frame B untouched by Frame A's append.
+                (should (equal (literal--tabs-get-frame-buffer-list mock-frame-b)
+                               (list buf-b)))
+                (should (equal (literal--tabs-get-frame-buffer-list mock-frame-a)
+                               (list buf-a buf-a2))))))
+          nil)
+      (ignore-errors (kill-buffer buf-a))
+      (ignore-errors (kill-buffer buf-b))
+      (ignore-errors (kill-buffer buf-a2)))))
+
+
+;;; ---------------------------------------------------------------------------
+;;; Category 2: baseline-bug contracts (expected to FAIL today)
+;;; ---------------------------------------------------------------------------
+;;
+;; Each test below documents a known P0/P1 bug from PLAN.md §2. They are
+;; marked `:expected-result :failed' so `configctl test' stays green while
+;; still reporting them. When the matching fix commit lands, remove the
+;; `:expected-result' property: a green test enforces the new contract; a
+;; still-red test means the fix is incomplete.
+
+(ert-deftest literal-config-baseline/agenote-call-entrypoint-exists ()
+  "P0 #1: agenote calls must go through a single `literal/agenote-call'
+entrypoint that requires an explicit `--domain'. Commit 2 introduces it and
+migrates every `literal/knowledge-*' call."
+  :expected-result :failed
+  (should (fboundp 'literal/agenote-call)))
+
+(ert-deftest literal-config-baseline/eglot-flymake-chain-intact ()
+  "P0 #2: Eglot must NOT opt out of Flymake. Today the config adds `flymake'
+to `eglot-stay-out-of', severing the Eglot → Flymake diagnostics chain.
+Commit 3 removes that line and rewires modeline + consult to Flymake."
+  :expected-result :failed
+  (require 'eglot nil t)
+  (should-not (and (boundp 'eglot-stay-out-of)
+                   (memq 'flymake eglot-stay-out-of))))
+
+(ert-deftest literal-config-baseline/flymake-goto-next-error-bound-to-m-g-n ()
+  "P0 #2 cont.: M-g n / M-g p must point at Flymake, not Flycheck wrappers,
+once Commit 3 lands. Today they wrap flycheck-next/previous-error."
+  :expected-result :failed
+  (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
+  (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
+
+(ert-deftest literal-config-baseline/help-claimed-bindings-resolve ()
+  "P0 #4: every binding claimed by help/dashboard text must exist in the live
+keymap. Today several C-c a * / C-c o f / C-c e b l entries are bogus. The
+full list is reported by `configctl audit-keys'; Commit 11 introduces a
+single binding spec and regenerates help/dashboard data from it."
+  :expected-result :failed
+  (dolist (claimed '("C-c a a a"        ; Agent Shell submenu — does not exist
+                     "C-c o f"          ; claimed agenda file — real is C-c o a
+                     "C-c e b l"))      ; claimed bookmark list — no C-c e prefix
+    ;; key-binding returns nil for unbound prefixes; commandp rejects nil.
+    (should (commandp (key-binding (kbd claimed))))))
+
+(ert-deftest literal-config-baseline/widget-button-not-globally-advised ()
+  "P1 #1: the Dashboard must not globally advice Widget's private
+`widget-button--check-and-call-button'. Commit 9 removes the advice in favour
+of standard dashboard generators and text-buttons."
+  :expected-result :failed
+  ;; Today the advice is registered via `define-advice' which creates a named
+  ;; function on the advice stack. Any non-empty advice list fails the test.
+  (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
+    (should-not advice)))
+
+(ert-deftest literal-config-baseline/corfu-popupinfo-is-sole-doc-source ()
+  "P1 #4: only `corfu-popupinfo' should be configured as the Corfu doc source.
+Today `corfu-doc' is also use-packaged and `M-d' is shadowed between them.
+Commit 10 removes `corfu-doc' / `corfu-doc-terminal' / `corfu-terminal'."
+  :expected-result :failed
+  ;; Today the config registers `corfu-doc-toggle' on M-d in corfu-map (line
+  ;; 5698). Once Commit 10 lands, M-d should bind only `corfu-popupinfo-toggle'.
+  (require 'corfu nil t)
+  (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
+    (should (eq m-d-cmd 'corfu-popupinfo-toggle))))
+
+(provide 'literal-config-tests)
+;;; literal-config-tests.el ends here

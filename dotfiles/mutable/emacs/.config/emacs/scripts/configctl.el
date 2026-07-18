@@ -341,6 +341,14 @@
    "context-menu translation data missing Undo -> 撤销")
   (literal-configctl--assert (consp literal:help-sections)
                              "shortcut help sections data missing")
+  ;; P0 #4 (partial): the C-c a / C-c o / C-x p prefixes themselves must
+  ;; resolve to keymaps. Individual leaf bindings are validated by
+  ;; `audit-keys' (not load). These prefixes exist today and must keep
+  ;; resolving across all later commits.
+  (dolist (prefix '("C-c a" "C-c o" "C-x p"))
+    (literal-configctl--assert
+     (keymapp (key-binding (kbd prefix)))
+     "%s prefix does not resolve to a keymap" prefix))
   t)
 
 (defun literal-configctl--tangle-and-audit ()
@@ -365,17 +373,6 @@
           (list runtime target (literal-configctl--audit-elisp target)))
       ;; The caller removes RUNTIME after an optional load.
       )))
-
-(defun literal-configctl-check (&optional keep-tangle)
-  (let ((data-assignments (literal-configctl--audit-i18n-data)))
-    (pcase-let* ((`(,blocks ,refs) (literal-configctl--check-structure))
-               (`(,runtime ,target (,forms ,definitions))
-                (literal-configctl--tangle-and-audit)))
-      (unless keep-tangle
-        (delete-directory runtime t))
-      (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions, %d external data assignments\n"
-                     blocks refs forms definitions data-assignments))
-      (when keep-tangle (list runtime target)))))
 
 (defun literal-configctl--bootstrap-guix-autoloads ()
   "Load per-package autoloads the way Guix `site-start' would.
@@ -414,18 +411,555 @@ Guix helper is on `load-path', and fall back to loading each
 
 (defun literal-configctl-usage ()
   (princ "Usage: scripts/configctl COMMAND [ARG]\n\n")
-  (princ "  map           list stable feature IDs and their source footprint\n")
-  (princ "  show ID       print one feature subtree\n")
-  (princ "  find REGEXP   locate matches with owning feature ID\n")
-  (princ "  check         audit structure, noweb graph, tangle and definitions\n")
-  (princ "  load          check and batch-load in an isolated runtime\n"))
+  (princ "  map                 list stable feature IDs and their source footprint\n")
+  (princ "  show ID             print one feature subtree\n")
+  (princ "  find REGEXP         locate matches with owning feature ID\n")
+  (princ "  check               audit structure, noweb graph, tangle and definitions\n")
+  (princ "  check-strict        also enforce domain/private-api audit rules\n")
+  (princ "  load                check and batch-load in an isolated runtime\n")
+  (princ "  test                run ERT tests against an isolated tangle\n")
+  (princ "  audit-keys          cross-check bindings vs help/dashboard data\n")
+  (princ "  audit-private-api   report third-party private symbol calls\n")
+  (princ "  audit-agenote-domain  verify agenote CLI calls carry --domain\n")
+  (princ "  audit-packages      cross-check Guix manifest vs config entry points\n"))
+
+
+;;; ---------------------------------------------------------------------------
+;;; Audit infrastructure
+;; ---------------------------------------------------------------------------
+;;
+;; The audit subcommands are informational: they print structured reports and
+;; return a non-zero status (via `literal-configctl--fail' at the end) when
+;; violations exist. They deliberately do NOT run during a default `check` so
+;; that the existing baseline stays green; opt in via `check --strict` or by
+;; invoking each audit directly. Violations are collected as `(CATEGORY . MSG)`
+;; pairs and printed once at the end so a single run surfaces every problem
+;; instead of bailing on the first.
+
+(defconst literal-configctl-compatibility-ids '("compatibility")
+  "CUSTOM_IDs whose source blocks are allowed to touch third-party private APIs.")
+
+(defvar literal-configctl--audit-violations nil
+  "Accumulated audit violations as a list of (CATEGORY . MESSAGE).")
+
+(defun literal-configctl--violation (category message)
+  "Record an audit violation under CATEGORY with MESSAGE."
+  (setq literal-configctl--audit-violations
+        (cons (cons category message)
+              literal-configctl--audit-violations)))
+
+(defun literal-configctl--report-audit (title)
+  "Print TITLE followed by all accumulated violations, then return count.
+Resets the violation list so the next audit starts clean."
+  (princ (format "=== %s ===\n" title))
+  (let ((count (length literal-configctl--audit-violations)))
+    (if (zerop count)
+        (princ "OK: no violations\n")
+      (princ (format "%d violation(s):\n" count))
+      (dolist (violation (nreverse literal-configctl--audit-violations))
+        (princ (format "  [%s] %s\n"
+                       (car violation) (cdr violation)))))
+    (setq literal-configctl--audit-violations nil)
+    count))
+
+(defun literal-configctl--src-blocks ()
+  "Return all emacs-lisp src blocks under their owning CUSTOM_ID.
+Each element is (CUSTOM_ID BEGIN BODY-START BODY-END BODY HEADER-ARGS).
+CUSTOM_ID is the nearest enclosing headline's stable id, or nil for blocks
+before any CUSTOM_ID headline."
+  (with-current-buffer (literal-configctl--org-buffer)
+    (save-excursion
+      (goto-char (point-min))
+      ;; Build (begin . id) entries: whenever a CUSTOM_ID line is found, walk
+      ;; backwards to the nearest headline start.
+      (let ((id-marker-alist nil)
+            (blocks nil)
+            (last-headline-pos 1))
+        (while (re-search-forward "^\\(:CUSTOM_ID:\\)[[:space:]]+\\([^:\n\r]+\\)[ \t]*$"
+                                  nil t)
+          (let ((id (string-trim (match-string 2))))
+            (save-excursion
+              (forward-line 0)
+              ;; Walk back to the nearest * headline.
+              (re-search-backward "^\\*+ " nil t)
+              (push (cons (point) id) id-marker-alist))))
+        (setq id-marker-alist (nreverse id-marker-alist))
+        (goto-char (point-min))
+        (while (re-search-forward
+                "^#\\+begin_src\\s-+emacs-lisp\\( .*\\)?$" nil t)
+          (let* ((begin (line-beginning-position))
+                 (header-args
+                  (buffer-substring-no-properties
+                   (line-beginning-position) (line-end-position)))
+                 (body-start (progn (forward-line 1) (point)))
+                 (body-end
+                  (progn
+                    (if (re-search-forward "^#\\+end_src" nil t)
+                        (line-beginning-position)
+                      (point-max))))
+                 ;; Owner is the last CUSTOM_ID headline that begins before BLOCK.
+                 (owner
+                  (let ((found nil))
+                    (dolist (entry id-marker-alist)
+                      (when (< (car entry) begin)
+                        (setq found (cdr entry))))
+                    found)))
+            (push (list owner begin body-start body-end
+                        (buffer-substring-no-properties body-start body-end)
+                        header-args)
+                  blocks)
+            ;; Leave point at body-end so the next re-search-forward continues.
+            (goto-char body-end)))
+        (nreverse blocks)))))
+
+(defun literal-configctl--binding-specs ()
+  "Parse `literal/set-key' and `keymap-global-set' / `keymap-set' forms.
+Returns a list of plists: (:key :command :desc :owner :begin).
+KEY is the raw quoted string; COMMAND is the symbol-name string;
+DESC is the which-key description for literal/set-key or nil."
+  (let (specs)
+    (dolist (block (literal-configctl--src-blocks))
+      (pcase-let* ((`(,owner ,_begin ,_body-start ,_body-end ,body ,_hdr)
+                    block))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          ;; literal/set-key "KEY" #'CMD "DESC"
+          (while (re-search-forward
+                  "(literal/set-key[[:space:]]+\"\\([^\"]+\\)\"[[:space:]]+#?'\\([^ )]+\\)\\([^\")]*\\))"
+                  nil t)
+            (let ((key (match-string 1))
+                  (cmd (match-string 2))
+                  (rest (match-string 3)))
+              (let ((desc
+                     (when (string-match
+                            "\"\\([^\"]+\\)\"" rest)
+                       (match-string 1 rest))))
+                (push (list :key key :command cmd :desc desc
+                            :owner owner) specs))))
+          ;; keymap-global-set "KEY" #'CMD  (also keymap-set for prefix maps)
+          (goto-char (point-min))
+          (while (re-search-forward
+                  "(keymap-global-set[[:space:]]+\"\\([^\"]+\\)\"[[:space:]]+#?'\\([^ )]+\\))"
+                  nil t)
+            (let ((key (match-string 1))
+                  (cmd (match-string 2)))
+              (push (list :key key :command cmd :desc nil
+                          :owner owner) specs)))
+          (goto-char (point-min))
+          (while (re-search-forward
+                  "(keymap-set[[:space:]]+\\S-+[[:space:]]+\"\\([^\"]+\\)\"[[:space:]]+#?'\\([^ )]+\\))"
+                  nil t)
+            (let ((key (match-string 1))
+                  (cmd (match-string 2)))
+              (push (list :key key :command cmd :desc nil
+                          :owner owner) specs))))))
+    specs))
+
+(defun literal-configctl--help-zh-data ()
+  "Return (sections dashboard-bindings) loaded from data/help-zh.el.
+Each section is (TITLE (key . desc) ...). Dashboard-bindings is the alist.
+The setq value is typically (quote (LIST)); we unwrap the quote."
+  (let* ((file (expand-file-name "data/help-zh.el" literal-configctl-root))
+         (sections nil)
+         (dashboard nil))
+    (when (file-readable-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (when (re-search-forward "(setq literal:help-sections\\_>" nil t)
+          ;; `re-search-forward' leaves point right after `literal:help-sections';
+          ;; the next sexp read is the VALUE (typically (quote (...))).
+          (let ((value (read (current-buffer))))
+            (setq sections (if (and (consp value) (eq (car value) 'quote))
+                               (cadr value)
+                             value))))
+        (goto-char (point-min))
+        (when (re-search-forward "(setq literal:help-dashboard-bindings\\_>" nil t)
+          (let ((value (read (current-buffer))))
+            (setq dashboard (if (and (consp value) (eq (car value) 'quote))
+                                (cadr value)
+                              value))))))
+    (list sections dashboard)))
+
+(defun literal-configctl--dashboard-hardcoded-hints ()
+  "Extract icon-hint binding strings embedded in dashboard generators.
+The card sections use `(TITLE' (ICON . \"C-x Y\") ...) patterns; we capture
+the right-hand binding strings so they can be cross-checked against the
+actual keymap."
+  (let (hints
+        (blocks (cl-remove-if-not
+                 (lambda (b) (equal (car b) "dashboard"))
+                 (literal-configctl--src-blocks))))
+    (dolist (block blocks)
+      (let ((body (nth 4 block)))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          (while (re-search-forward "\"[^\"]*\"[[:space:]]+'(\"[^\"]*\"[[:space:]]+\\.\"\\([^\"]+\\)\")"
+                                    nil t)
+            (let ((hint (match-string 1)))
+              ;; Filter out obvious non-bindings (icons only).
+              (when (string-match-p "\\`C-\\|\\`M-\\|\\`<f[0-9]+\\|\\`S-\\|\\`F1" hint)
+                (push hint hints)))))))
+    (delete-dups (nreverse hints))))
+
+(defun literal-configctl--audit-keys ()
+  "Cross-check declared bindings vs help data and dashboard hints.
+Only curated app-prefix bindings (C-c ?, C-x p, M-g, M-s, F1, C-x g, C-x t) are
+checked — raw single-char bindings like C-j are set by key-helper and not part
+of the help/dashboard single-source-of-truth."
+  (let* ((specs (literal-configctl--binding-specs))
+         (bound-keys (delete-dups (mapcar (lambda (s) (plist-get s :key)) specs)))
+         (help-data (literal-configctl--help-zh-data))
+         (sections (car help-data))
+         (dashboard (cadr help-data))
+         (help-keys nil)
+         (dashboard-keys (delq nil (mapcar
+                                    (lambda (entry)
+                                      (when (literal-configctl--curated-key-p (car entry))
+                                        (car entry)))
+                                    dashboard)))
+         (hardcoded-hints (literal-configctl--dashboard-hardcoded-hints)))
+    ;; Collect all curated keys mentioned in help-sections.
+    (dolist (section sections)
+      (dolist (binding (cdr section))
+        (dolist (token (literal-configctl--help-key-tokens (car binding)))
+          (when (literal-configctl--curated-key-p token)
+            (push token help-keys)))))
+    (setq help-keys (delete-dups (nreverse help-keys)))
+    ;; (a) help/dashboard/hardcoded hint strings that have no corresponding binding
+    (dolist (key help-keys)
+      (unless (member key bound-keys)
+        (literal-configctl--violation
+         "help-no-binding"
+         (format "%s declared in data/help-zh.el but no keymap-global-set/keymap-set/literal/set-key matches"
+                 key))))
+    (dolist (key dashboard-keys)
+      (unless (member key bound-keys)
+        (literal-configctl--violation
+         "dashboard-no-binding"
+         (format "%s declared in literal:help-dashboard-bindings but no binding matches"
+                 key))))
+    (dolist (hint hardcoded-hints)
+      (unless (member hint bound-keys)
+        ;; Some hints are compound (e.g. "C-c c i / o"). Tokenize and re-check.
+        (dolist (token (literal-configctl--help-key-tokens hint))
+          (when (literal-configctl--curated-key-p token)
+            (unless (member token bound-keys)
+              (literal-configctl--violation
+               "dashboard-hardcoded-no-binding"
+               (format "%s (from dashboard generator icon-hint) has no matching binding"
+                       token)))))))
+    ;; (b) curated bindings with no help entry (informational).
+    (dolist (spec specs)
+      (let ((key (plist-get spec :key)))
+        (when (and (literal-configctl--curated-key-p key)
+                   (not (member key help-keys))
+                   (not (member key dashboard-keys)))
+          (literal-configctl--violation
+           "binding-no-help"
+           (format "%s bound to %s but no help/dashboard entry mentions it"
+                   key (plist-get spec :command))))))
+    (literal-configctl--report-audit "audit-keys")))
+
+(defconst literal-configctl--curated-prefixes
+  ;; Help/dashboard entries whose first token starts with one of these are
+  ;; "curated" by the config (declared via literal/set-key / keymap-global-set).
+  ;; Raw single-char bindings like C-j / C-h (set by key-helper) and editor-style
+  ;; C-S-c / C-S-v are NOT curated by the help/dashboard single-source-of-truth,
+  ;; so the audit ignores them — they don't appear in bound-keys' app-prefix set.
+  '("C-c " "C-x p" "M-g " "M-s " "F1 " "C-x g" "C-x t"))
+
+(defun literal-configctl--curated-key-p (key-string)
+  "Return non-nil if KEY-STRING is a curated app-prefix binding."
+  (string-match-p "\\`C-c [a-z]\\|\\`C-x p\\|\\`C-x g\\|\\`C-x t\\|\\`M-g \\|\\`M-s \\|\\`F1 "
+                  key-string))
+
+(defun literal-configctl--help-key-tokens (key-string)
+  "Split a help/dashboard key display string into individual key tokens.
+\"C-x 2 / 3 / 0 / 1 / o\" → (\"C-x 2\" \"C-x 3\" \"C-x 0\" \"C-x 1\" \"C-x o\").
+\"C-c a a a\"            → (\"C-c a a a\").
+Returns only tokens that look like complete bindings (start with C-/M-/S-/F1/<fN>
+followed by a key spec). Incomplete fragments (e.g. \"<up\" after a / split) are
+dropped."
+  (let* ((slash-split (split-string key-string "[/]+"))
+         (tokens nil))
+    (dolist (branch slash-split)
+      (let ((trimmed (string-trim branch)))
+        ;; A branch is either a complete key (starts with a modifier) or a
+        ;; suffix of the first branch (e.g. "3" continues "C-x 2" → "C-x 3").
+        (cond
+         ((string-match-p "\\`C-[a-zA-Z0-9_]\\|\\`C-c [a-z A-Z0-9_]\\|\\`M-[a-zA-Z0-9_]\\|\\`S-\\|\\`F1 \\|\\`<f[0-9]+" trimmed)
+          (push trimmed tokens))
+         ((and tokens
+               (string-match-p "\\`[0-9a-zA-Z<>.,+_-]+\\'" trimmed))
+          ;; Continue the previous token's prefix up to its last whitespace.
+          (let ((prev (car tokens)))
+            (let ((last-space (string-match " [^ ]+\\'" prev)))
+              (if last-space
+                  (push (concat (substring prev 0 last-space) " " trimmed) tokens)
+                (push trimmed tokens))))))))
+    (delete-dups (nreverse tokens))))
+
+(defconst literal-configctl--own-namespaces
+  ;; Project-internal symbol prefixes. Symbols beginning with any of these
+  ;; (followed by `/') are first-party and excluded from the third-party
+  ;; private-API audit. The full first-party set is also derived dynamically
+  ;; from `defun' / `defvar' forms in emacs.org (see
+  ;; `literal-configctl--first-party-definitions').
+  '("literal" "custom" "literal-configctl"))
+
+(defun literal-configctl--first-party-definitions ()
+  "Return a hash table of all symbols defined in emacs.org source blocks.
+Covers `defun', `defmacro', `defsubst', `defvar', `defvar-local',
+`defconst', `defcustom', `defface'. A symbol found here is first-party even
+when its prefix is not in `literal-configctl--own-namespaces'."
+  (let ((table (make-hash-table :test 'equal)))
+    (dolist (block (literal-configctl--src-blocks))
+      (let ((body (nth 4 block)))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          (while (re-search-forward
+                  "(def\\(?:un\\|macro\\|subst\\|var\\(?:-local\\)?\\|const\\|custom\\|face\\)[[:space:]]+\\([a-zA-Z0-9_/:*-]+\\)"
+                  nil t)
+            (puthash (match-string 1) t table)))))
+    table))
+
+(defun literal-configctl--third-party-private-p (symbol first-party-table)
+  "Return non-nil if SYMBOL is a third-party private API (sym--name).
+First-party (defined in this config) symbols are looked up in
+FIRST-PARTY-TABLE. Symbols whose namespace prefix is in
+`literal-configctl--own-namespaces' are also considered first-party."
+  (if (gethash symbol first-party-table)
+      nil
+    (let* ((slash (or (string-match "[/:]" symbol)
+                      (string-match "--" symbol)))
+           (prefix (if slash (substring symbol 0 slash) symbol)))
+      (not (member prefix literal-configctl--own-namespaces)))))
+
+(defun literal-configctl--private-api-defensive-p (match-beg)
+  "Return non-nil if the symbol at MATCH-BEG is a defensive guard argument.
+Matches the common forms (fboundp \\='sym), (boundp \\='sym), (functionp
+\\='sym), (commandp \\='sym), #'sym, and quoted \\='sym used as a function
+designator."
+  (save-excursion
+    (save-match-data
+      (let ((preceding (buffer-substring-no-properties
+                        (max (point-min) (- match-beg 14))
+                        match-beg)))
+        (or (string-match
+             "\\(?:fboundp\\|boundp\\|functionp\\|commandp\\)[[:space:]]*'?$"
+             preceding)
+            (string-match "#'$" preceding)
+            (string-match "[[:space:](]'$" preceding))))))
+
+(defconst literal-configctl--private-api-call-rx
+  "\\(?:[a-zA-Z0-9_/:*-]+\\)--[[:alnum:]_]+"
+  "Matches a full Lisp symbol of the form prefix--name, where PREFIX may include
+/, :, * (for some packages), and hyphens. The caller further filters to
+third-party namespaces via `literal-configctl--third-party-private-p'.")
+
+(defun literal-configctl--audit-private-api ()
+  "Report direct calls to third-party private (symbol--name) APIs.
+Allow list: blocks whose owning CUSTOM_ID is in
+`literal-configctl-compatibility-ids', first-party namespaces, and defensive
+\(fboundp/boundp) guards."
+  (let ((first-party (literal-configctl--first-party-definitions)))
+    (dolist (block (literal-configctl--src-blocks))
+      (let ((owner (car block))
+            (body (nth 4 block)))
+        (when (not (member owner literal-configctl-compatibility-ids))
+          (with-temp-buffer
+            (insert body)
+            (goto-char (point-min))
+            (while (re-search-forward literal-configctl--private-api-call-rx nil t)
+              (let ((symbol (match-string 0))
+                    (match-beg (match-beginning 0)))
+                (when (literal-configctl--third-party-private-p symbol first-party)
+                  (unless (literal-configctl--private-api-defensive-p match-beg)
+                    (let ((ssyntax (syntax-ppss)))
+                      ;; Skip comments, strings, and character literals.
+                      (unless (or (nth 4 ssyntax) (nth 3 ssyntax))
+                        (literal-configctl--violation
+                         "private-api-call"
+                         (format "%s (%s, line %d) — move to compatibility block"
+                                 symbol owner (line-number-at-pos))))))))))))))
+  (literal-configctl--report-audit "audit-private-api"))
+
+(defun literal-configctl--audit-agenote-domain ()
+  "Verify every agenote CLI invocation explicitly passes --domain.
+Scans for `literal:executable-agenote' followed by argument lists."
+  (dolist (block (literal-configctl--src-blocks))
+    (let ((owner (car block))
+          (body (nth 4 block)))
+      (with-temp-buffer
+        (insert body)
+        (goto-char (point-min))
+        (while (re-search-forward
+                "literal:executable-agenote\\|literal/agenote-call\\|\"agenote\""
+                nil t)
+          (let ((line (line-number-at-pos))
+                (win-start (point))
+                (mbeg (match-beginning 0)))
+            (let ((window (buffer-substring-no-properties
+                           win-start (min (point-max) (+ win-start 400)))))
+              (unless (string-match-p "--domain\\|:domain" window)
+                (save-excursion
+                  (goto-char mbeg)
+                  (let ((ssyntax (syntax-ppss)))
+                    (unless (or (nth 4 ssyntax) (nth 3 ssyntax))
+                      (literal-configctl--violation
+                       "agenote-no-domain"
+                       (format "%s line %d without explicit --domain"
+                               owner line))))))))))))
+  (literal-configctl--report-audit "audit-agenote-domain"))
+
+(defconst literal-configctl-guix-manifest-file
+  (expand-file-name "../../../../../source/config.org" literal-configctl-root)
+  "Path to the Guix home manifest in the Guix-configs root repo.
+Resolved relative to this emacs config dir (.config/emacs → 5 levels up to the
+Guix-configs repo root, then source/config.org).")
+
+(defun literal-configctl--manifest-packages ()
+  "Return the list of \"emacs-NAME\" strings from the Guix manifest."
+  (let ((file literal-configctl-guix-manifest-file)
+        packages)
+    (when (file-readable-p file)
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (while (re-search-forward "\"\\(emacs-[a-z0-9-]+\\)\"" nil t)
+          (push (match-string 1) packages))))
+    (delete-dups (nreverse packages))))
+
+(defun literal-configctl--config-required-packages ()
+  "Return package-name strings referenced by emacs.org config.
+Covers `use-package NAME', `(require 'NAME)', and bare `NAME-mode' autoloads
+mentioned in hook registrations. NAME is the Emacs-level symbol (no emacs-
+prefix)."
+  (let ((use-package-names nil)
+        (require-names nil)
+        (mode-names nil))
+    (dolist (block (literal-configctl--src-blocks))
+      (let ((body (nth 4 block)))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          (while (re-search-forward "(use-package[[:space:]]+\\([a-z0-9-]+\\)" nil t)
+            (push (match-string 1) use-package-names))
+          (goto-char (point-min))
+          (while (re-search-forward "(require[[:space:]]+'\\([a-z0-9-]+\\)" nil t)
+            (push (match-string 1) require-names))
+          (goto-char (point-min))
+          ;; Mode autoloads referenced in hooks: '(hook . NAME-mode)
+          (while (re-search-forward "\\.\\s-*\\(#?'\\([a-z0-9-]+-mode\\)\\)" nil t)
+            (push (match-string 2) mode-names)))))
+    ;; Normalize: strip -mode for cross-checking with manifest names.
+    (list (delete-dups (nreverse use-package-names))
+          (delete-dups (nreverse require-names))
+          (delete-dups (nreverse mode-names)))))
+
+(defun literal-configctl--audit-packages ()
+  "Cross-check Guix manifest vs config use-package/require references."
+  (let* ((manifest (literal-configctl--manifest-packages))
+         (manifest-names (mapcar (lambda (p) (substring p 6)) manifest))
+         (manifest-set (delete-dups manifest-names))
+         (manifest-table (make-hash-table :test 'equal))
+         (required (literal-configctl--config-required-packages))
+         (use-packages (car required)))
+    (dolist (name manifest-set)
+      (puthash name t manifest-table))
+    ;; (a) use-package names not in manifest
+    (dolist (name (delete-dups use-packages))
+      (unless (gethash name manifest-table)
+        ;; Some packages ship under a different emacs- name (e.g. tree-sitter-langs).
+        (literal-configctl--violation
+         "use-package-no-manifest"
+         (format "(use-package %s) has no emacs-%s in manifest" name name))))
+    ;; (b) manifest entries with no use-package (informational; many are valid
+    ;; dependencies of other packages, not direct config entries).
+    (let ((use-table (make-hash-table :test 'equal)))
+      (dolist (name use-packages)
+        (puthash name t use-table))
+      (dolist (name manifest-set)
+        (unless (gethash name use-table)
+          (literal-configctl--violation
+           "manifest-no-use-package"
+           (format "emacs-%s in manifest but no (use-package %s)" name name)))))
+    (literal-configctl--report-audit "audit-packages")))
+
+
+;;; ---------------------------------------------------------------------------
+;;; ERT test runner
+;;; ---------------------------------------------------------------------------
+
+(defun literal-configctl-test ()
+  "Tangle emacs.org into an isolated runtime, load it, and run ERT tests."
+  (pcase-let* ((`(,runtime ,target) (literal-configctl-check t))
+               (user-emacs-directory (file-name-as-directory runtime))
+               (default-directory literal-configctl-root)
+               (test-file (expand-file-name "test/literal-config-tests.el"
+                                            literal-configctl-root))
+               (tests-target (expand-file-name "literal-config-tests.el" runtime)))
+    (unless (file-readable-p test-file)
+      (literal-configctl--fail "missing test file: %s" test-file))
+    (unwind-protect
+        (progn
+          (make-directory (expand-file-name "var/projectile/" runtime) t)
+          (with-temp-file (expand-file-name "var/projectile/known-projects.el" runtime))
+          (copy-file test-file tests-target t)
+          (literal-configctl--bootstrap-guix-autoloads)
+          (load target nil t)
+          ;; Tests may need a few smoke-side effects loaded.
+          (let ((kill-emacs-hook nil))
+            (load tests-target nil t)
+            (ert-run-tests-batch-and-exit t)))
+      (delete-directory runtime t))))
+
+
+;;; ---------------------------------------------------------------------------
+;;; check / load / new subcommands
+;;; ---------------------------------------------------------------------------
+
+(defun literal-configctl-check (&optional keep-tangle strict)
+  "Run structural and tangle audits. With STRICT, also enforce audit rules."
+  (let ((data-assignments (literal-configctl--audit-i18n-data)))
+    (pcase-let* ((`(,blocks ,refs) (literal-configctl--check-structure))
+                 (`(,runtime ,target (,forms ,definitions))
+                  (literal-configctl--tangle-and-audit)))
+      (when strict
+        (let ((agenote-violations 0)
+              (private-api-violations 0))
+          ;; Collect counts without resetting; the audit functions return the
+          ;; number of violations they just reported.
+          (setq agenote-violations (literal-configctl--audit-agenote-domain))
+          (setq private-api-violations (literal-configctl--audit-private-api))
+          (when (or (> agenote-violations 0) (> private-api-violations 0))
+            ;; Don't delete runtime if we're about to fail.
+            (literal-configctl--fail
+             "%d strict audit violation(s): agenote-domain=%d private-api=%d"
+             (+ agenote-violations private-api-violations)
+             agenote-violations private-api-violations))))
+      (unless keep-tangle
+        (delete-directory runtime t))
+      (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions, %d external data assignments\n"
+                     blocks refs forms definitions data-assignments))
+      (when keep-tangle (list runtime target)))))
 
 (pcase command-line-args-left
   (`("map") (literal-configctl-map))
   (`("show" ,query) (literal-configctl-show query))
   (`("find" ,regexp) (literal-configctl-find regexp))
-  (`("check") (literal-configctl-check))
+  (`("check") (literal-configctl-check nil nil))
+  (`("check-strict") (literal-configctl-check nil t))
   (`("load") (literal-configctl-load))
+  (`("test") (literal-configctl-test))
+  (`("audit-keys") (literal-configctl--audit-keys))
+  (`("audit-private-api") (literal-configctl--audit-private-api))
+  (`("audit-agenote-domain") (literal-configctl--audit-agenote-domain))
+  (`("audit-packages") (literal-configctl--audit-packages))
   ((or 'nil `("help") `("--help") `("-h")) (literal-configctl-usage))
   (_ (literal-configctl-usage)
      (literal-configctl--fail "invalid arguments: %S" command-line-args-left)))
