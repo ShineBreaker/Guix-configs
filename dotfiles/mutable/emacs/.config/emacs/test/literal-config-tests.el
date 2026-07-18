@@ -227,13 +227,12 @@ single binding spec and regenerates help/dashboard data from it."
 	;; key-binding returns nil for unbound prefixes; commandp rejects nil.
 	(should (commandp (key-binding (kbd claimed))))))
 
-    (ert-deftest literal-config-baseline/widget-button-not-globally-advised ()
+    (ert-deftest literal-config/widget-button-not-globally-advised ()
       "P1 #1: the Dashboard must not globally advice Widget's private
-`widget-button--check-and-call-button'. Commit 9 removes the advice in favour
-of standard dashboard generators and text-buttons."
-      :expected-result :failed
-      ;; Today the advice is registered via `define-advice' which creates a named
-      ;; function on the advice stack. Any non-empty advice list fails the test.
+`widget-button--check-and-call-button'. Phase 4.3 / Commit 9 removed the
+advice in favour of standard dashboard generators and text-buttons.
+Now a hard contract — any future regression fails this test."
+      ;; Phase 4.3 fix landed; promote from :expected-result :failed to mandatory.
       (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
 	(should-not advice)))
 
