@@ -193,18 +193,18 @@ catches any new direct CLI calls."
   (should (fboundp 'literal/agenote-call-async)))
 
 (ert-deftest literal-config-baseline/eglot-flymake-chain-intact ()
-  "P0 #2: Eglot must NOT opt out of Flymake. Today the config adds `flymake'
-to `eglot-stay-out-of', severing the Eglot → Flymake diagnostics chain.
-Commit 3 removes that line and rewires modeline + consult to Flymake."
-  :expected-result :failed
+  "P0 #2 (fixed by Commit 3): Eglot must NOT opt out of Flymake.
+Diagnostics flow through Flymake; the modeline + consult pipeline consumes
+the Flymake public API. Any future commit re-adding `flymake' to
+`eglot-stay-out-of' fails this test."
   (require 'eglot nil t)
   (should-not (and (boundp 'eglot-stay-out-of)
                    (memq 'flymake eglot-stay-out-of))))
 
 (ert-deftest literal-config-baseline/flymake-goto-next-error-bound-to-m-g-n ()
-  "P0 #2 cont.: M-g n / M-g p must point at Flymake, not Flycheck wrappers,
-once Commit 3 lands. Today they wrap flycheck-next/previous-error."
-  :expected-result :failed
+  "P0 #2 cont. (fixed by Commit 3): M-g n / M-g p point at Flymake, not
+Flycheck wrappers. Any future commit re-binding them to flycheck-* fails
+this test."
   (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
   (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
 

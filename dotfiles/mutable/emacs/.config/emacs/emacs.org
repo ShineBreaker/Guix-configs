@@ -837,7 +837,6 @@ TITLE 为分类标题,BINDINGS 为 ((key . desc) ...) 列表。"
 (declare-function nerd-icons-faicon "nerd-icons")
 (declare-function nerd-icons-mdicon "nerd-icons")
 (declare-function jsonrpc-running-p "jsonrpc")
-(defvar flycheck-current-errors)
 (defvar mode-line-format-right-align)
 
 ;; 常量与缓存
@@ -864,8 +863,10 @@ TITLE 为分类标题,BINDINGS 为 ((key . desc) ...) 列表。"
   (require 'nerd-icons nil t)
   "启动期一次性缓存 nerd-icons 是否可用。")
 
-(defvar-local literal:modeline--flycheck-counts '(0 0)
-  "当前 buffer 的 Flycheck 计数缓存，格式为 (ERRORS WARNINGS)。")
+(defvar-local literal:modeline--flymake-counts '(0 0)
+  "当前 buffer 的 Flymake 计数缓存，格式为 (ERRORS WARNINGS)。
+由 `flymake-after-diagnostics-hook' 刷新(P0 #2 修复后 Eglot 不再 stay-out-of
+flymake,诊断走 Flymake 公开 API)。")
 
 (defvar-local literal:modeline--eglot-info nil
   "当前 buffer 的 Eglot 缓存，格式为 (SERVER-NAME STATUS)。")
@@ -1021,14 +1022,23 @@ FILE 只在 KIND 为 `file' 时使用。图标不可用或出错时返回空串�
 #+begin_src emacs-lisp :noweb-ref appearance/modeline-cache :tangle no
 ;; 缓存刷新 hook
 
-(defun literal/modeline--refresh-flycheck-counts (&rest _)
-  "刷新当前 buffer 的 Flycheck 错误计数缓存。"
-  (setq literal:modeline--flycheck-counts
-        (if (and (bound-and-true-p flycheck-mode)
-                 (fboundp 'flycheck-count-errors))
-            (let* ((counts (ignore-errors (flycheck-count-errors flycheck-current-errors)))
-                   (errors (or (cdr (assq 'error counts)) 0))
-                   (warnings (or (cdr (assq 'warning counts)) 0)))
+(defun literal/modeline--refresh-flymake-counts (&rest _)
+  "刷新当前 buffer 的 Flymake 错误/警告计数缓存。
+走 Flymake 公开 API(`flymake-diagnostics' + `flymake-diagnostic-type'),
+不依赖任何私有符号。无 flymake-mode 时置 0/0。"
+  (setq literal:modeline--flymake-counts
+        (if (and (bound-and-true-p flymake-mode)
+                 (fboundp 'flymake-diagnostics))
+            (let ((errors 0) (warnings 0))
+              (dolist (diag (flymake-diagnostics))
+                (let* ((type (flymake-diagnostic-type diag))
+                       (sev (and type
+                                 (assq type flymake-diagnostic-types)
+                                 (cdr (assq 'severity
+                                            (cdr (assq type flymake-diagnostic-types)))))))
+                  (cond
+                   ((and sev (>= sev 2)) (cl-incf errors))      ; :error or worse
+                   ((and sev (>= sev 1)) (cl-incf warnings))))) ; :warning
               (list errors warnings))
           '(0 0))))
 
@@ -1058,11 +1068,11 @@ FILE 只在 KIND 为 `file' 时使用。图标不可用或出错时返回空串�
                 (list name status)))
           nil)))
 
-(with-eval-after-load 'flycheck
-  (add-hook 'flycheck-after-syntax-check-hook
-            #'literal/modeline--refresh-flycheck-counts)
-  (add-hook 'flycheck-mode-hook
-            #'literal/modeline--refresh-flycheck-counts))
+(with-eval-after-load 'flymake
+  (add-hook 'flymake-after-diagnostics-hook
+            #'literal/modeline--refresh-flymake-counts)
+  (add-hook 'flymake-mode-hook
+            #'literal/modeline--refresh-flymake-counts))
 
 (with-eval-after-load 'eglot
   (add-hook 'eglot-managed-mode-hook
@@ -1151,14 +1161,14 @@ FILE 只在 KIND 为 `file' 时使用。图标不可用或出错时返回空串�
      ((string-empty-p (literal/modeline-path)) name)
      (t (literal/modeline--separator-before name)))))
 
-(defun literal/modeline-flycheck ()
-  "返回 Flycheck 错误/警告数。"
+(defun literal/modeline-flymake ()
+  "返回 Flymake 错误/警告数。"
   (if (and (not (literal/modeline-compact-p))
            (not (literal/modeline-narrow-p))
-           (bound-and-true-p flycheck-mode)
-           (fboundp 'flycheck-count-errors))
-      (let* ((errors (or (car literal:modeline--flycheck-counts) 0))
-             (warnings (or (cadr literal:modeline--flycheck-counts) 0))
+           (bound-and-true-p flymake-mode)
+           (fboundp 'flymake-diagnostics))
+      (let* ((errors (or (car literal:modeline--flymake-counts) 0))
+             (warnings (or (cadr literal:modeline--flymake-counts) 0))
              (total (+ errors warnings))
              (tier (literal/modeline-tier))
              (icon (cond
@@ -1402,7 +1412,7 @@ FILE 只在 KIND 为 `file' 时使用。图标不可用或出错时返回空串�
         (:eval (literal/modeline-major-mode-section))
         mode-line-format-right-align
         " "
-        (:eval (literal/modeline-flycheck))
+        (:eval (literal/modeline-flymake))
         (:eval (literal/modeline--separator-before (literal/modeline-eglot)))
         (:eval (literal/modeline--separator-before (literal/modeline-global-status)))
         (:eval (literal/modeline--separator-before (literal/modeline-right-major-mode)))
@@ -2344,7 +2354,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
            (digits (max 3 (length (number-to-string max-line)))))
       (setq display-line-numbers-width (1+ digits))
       ;; 注意:不要在这里把 fringe 清零(set-window-fringes ... 0)。
-      ;; diff-hl 用 fringe 显示 Git 差异、flycheck-indication-mode 设为
+      ;; diff-hl 用 fringe 显示 Git 差异、flymake-fringe-indicator-position 设为
       ;; left-fringe,fringe 宽度为 0 时这些指示器全部不可见。
       )))
 
@@ -2476,7 +2486,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
           xref-find-definitions xref-find-references
           xref-go-back xref-go-forward
           literal/code-jump-back literal/code-jump-forward
-          flycheck-next-error flycheck-previous-error))
+          flymake-goto-next-error flymake-goto-prev-error))
   (pulsar-global-mode 1))
 
 ;; size-indication-mode / display-battery-mode(mode-line 右段)
@@ -2507,7 +2517,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
              t)
 (literal/register-side-window "^\\*ghostel\\|ghostel-mode\\b\\|^\\*term\\|term-mode\\b" 'bottom 0.33)
 (literal/register-side-window "^\\*Help\\*\\|^\\*helpful\\|help-mode\\b\\|helpful-mode\\b" 'bottom 0.4)
-(literal/register-side-window "^\\*Flycheck errors\\|flycheck-error-list-mode\\b" 'bottom 0.3)
+(literal/register-side-window "^\\*Flymake diagnostics\\|flymake-diagnostics-buffer-mode\\b" 'bottom 0.3)
 (literal/register-side-window "^\\*compilation\\|compilation-mode\\b" 'bottom 0.33)
 (literal/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
 
@@ -3346,7 +3356,11 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   :group 'literal)
 
 (use-package apheleia
-  :defer t
+  ;; P0 #5 修复(Phase 1.3):原 `:defer t' 没有可靠的首次加载入口,
+  ;; apheleia-global-mode 不会启用,保存时格式化在用户首次手动调 Apheleia
+  ;; 命令前都失效。改用 prog-mode-hook 触发加载:进任何 prog buffer 就启用
+  ;; global mode,保存时格式化立即生效。
+  :hook (prog-mode . apheleia-mode)
   :config
   (when literal/format-on-save-enabled
     (apheleia-global-mode 1))
@@ -3357,56 +3371,26 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
     (setf (alist-get (car mapping) apheleia-mode-alist)
           (cdr mapping))))
 
-;; Flycheck(代码诊断)
-(use-package flycheck
-  :defer 0.5
+;; Flymake(代码诊断,Emacs 内置)
+;; Eglot 默认通过 flymake 接收 LSP diagnostics,不再禁用 flymake 后端。
+;; 切换自原 Flycheck 链:P0 #2 修复(eglot-stay-out-of 不含 flymake)。
+;; flymake-mode 不需要 global 化 —— Eglot 在它管理的 buffer 内自动启用
+;; flymake-mode-hook;非 LSP buffer 由各 major mode 的 syntax-table 提供诊断。
+;; 全局跳转键 M-g n/p 与 C-c l e 在 *前缀键体系* 域统一绑定,不在此处 :bind
+;; (避免 flymake 未加载时键位悬空)。
+(use-package flymake
+  :ensure nil                                  ; 内置包,Guix 不必单列
   :custom
-  (flycheck-check-syntax-automatically '(save idle-change mode-enabled))
-  (flycheck-idle-change-delay 0.5)
-  (flycheck-error-list-minimum-level 'warning)
-  (flycheck-indication-mode 'left-fringe)
-  :config
-  (setq flycheck-checkers (delq 'org-lint flycheck-checkers))
-  (add-to-list 'flycheck-disabled-checkers 'org-lint)
-  (global-flycheck-mode 1)
-  ;; flycheck-error-list-mode-map 定义在 flycheck.el 本体里,没有独立的
-  ;; (provide 'flycheck-error-list) feature;此处 :config 执行时 flycheck 已加载,
-  ;; keymap 已存在,直接绑定即可(原先用 with-eval-after-load 'flycheck-error-list
-  ;; 永不触发,j/k/q/RET 全是死代码)。
-  (define-key flycheck-error-list-mode-map (kbd "j") #'flycheck-error-list-next-error)
-  (define-key flycheck-error-list-mode-map (kbd "k") #'flycheck-error-list-previous-error)
-  (define-key flycheck-error-list-mode-map (kbd "q") #'quit-window)
-  (define-key flycheck-error-list-mode-map (kbd "RET") #'flycheck-error-list-goto-error))
+  (flymake-fringe-indicator-position 'left-fringe)
+  (flymake-no-changes-timeout 0.5))
 
-;; 禁用 eglot 的 flymake 后端(避免与 flycheck 重复)
-;; 用官方支持的 eglot-stay-out-of:顶层 remove-hook 带 LOCAL=t 只在"当前 buffer"
-;; 里移除,顶层执行时无目标 buffer,等于空操作,eglot 管理的每个 buffer 仍会挂 flymake。
-(with-eval-after-load 'eglot
-  (add-to-list 'eglot-stay-out-of 'flymake))
-
-(defun literal/flycheck-next-error ()
-  "跳转到下一个错误。"
+(defun literal/flymake-list-errors-dwim ()
+  "打开/关闭 Flymake 诊断列表面板。"
   (interactive)
-  (flycheck-next-error 1 nil t))
-
-(defun literal/flycheck-previous-error ()
-  "跳转到上一个错误。"
-  (interactive)
-  (flycheck-previous-error 1 nil t))
-
-(defun literal/flycheck-toggle ()
-  "切换 flycheck 模式。"
-  (interactive)
-  (if flycheck-mode
-      (progn (flycheck-mode -1) (message "Flycheck 已禁用"))
-    (flycheck-mode 1) (message "Flycheck 已启用")))
-
-(defun literal/flycheck-list-errors-dwim ()
-  "打开/关闭错误列表面板。"
-  (interactive)
-  (if (get-buffer-window flycheck-error-list-buffer)
-      (quit-window nil (get-buffer-window flycheck-error-list-buffer))
-    (flycheck-list-errors)))
+  (let ((buf (get-buffer "*Flymake diagnostics*")))
+    (if (and buf (get-buffer-window buf))
+        (quit-window nil (get-buffer-window buf))
+      (flymake-show-buffer-diagnostics))))
 
 ;; envrc (direnv buffer-local 环境变量注入)
 (use-package envrc
@@ -3871,11 +3855,13 @@ experiences/ 下的类别子目录在 Capture 时按需创建，不在此处预�
 `org-capture nil \"k\"' 进入 k 前缀子菜单（note/mistake/ascended，
 对齐 agenote-base entry-types 语义），由 `org-capture-templates' 的
 kn/km/ka 三条模板负责生成结构化 PROPERTIES + body 章节，落到
-experiences/<category>/<timestamp>.org。模板定义见 org-mode.el。"
+experiences/<category>/<timestamp>.org。模板定义见 org-core 域。
+
+P0 #5 修复(Phase 1.3):不再预检查 `org-capture-templates'。`org-capture' 是
+autoload,首次调用会自动加载 org-capture 并装配模板;预检查反而会在 fresh
+daemon(org 未加载)时拒绝运行,要求用户先手动调一次。"
   (interactive)
-  (if (bound-and-true-p org-capture-templates)
-      (org-capture nil "k")
-    (message "org-capture-templates 未配置，无法捕获经验卡")))
+  (org-capture nil "k"))
 
 (defun literal/knowledge-rename-card ()
   "将当前经验卡片重命名为 <标题>-<时间戳>.org。
@@ -5281,12 +5267,12 @@ Emacs 原生前缀扩展( =C-x= / =M-s= / =M-g= ) + 自定义 =C-c= 前缀分组
 (keymap-global-set "M-s p" #'consult-ripgrep)
 (keymap-global-set "M-s b" #'consult-buffer)
 (keymap-global-set "M-s e" #'consult-eglot-symbols)
-(keymap-global-set "M-s f" #'consult-flycheck)
+(keymap-global-set "M-s f" #'consult-flymake)
 
-;; M-g:跳转、错误
-(keymap-global-set "M-g n" #'literal/flycheck-next-error)
-(keymap-global-set "M-g p" #'literal/flycheck-previous-error)
-(keymap-global-set "M-g l" #'literal/flycheck-list-errors-dwim)
+;; M-g:跳转、错误(Flymake 后端)
+(keymap-global-set "M-g n" #'flymake-goto-next-error)
+(keymap-global-set "M-g p" #'flymake-goto-prev-error)
+(keymap-global-set "M-g l" #'literal/flymake-list-errors-dwim)
 (keymap-global-set "M-g r" #'literal/code-goto-references)
 (keymap-global-set "M-g b" #'literal/code-jump-back)
 (keymap-global-set "M-g f" #'literal/code-jump-forward)
@@ -5315,8 +5301,7 @@ Emacs 原生前缀扩展( =C-x= / =M-s= / =M-g= ) + 自定义 =C-c= 前缀分组
 (keymap-global-set "C-c l a" #'eglot-code-actions)
 (keymap-global-set "C-c l n" #'eglot-rename)
 (keymap-global-set "C-c l c" #'completion-at-point)
-(keymap-global-set "C-c l e" #'literal/flycheck-list-errors-dwim)
-(keymap-global-set "C-c l t" #'literal/flycheck-toggle)
+(keymap-global-set "C-c l e" #'literal/flymake-list-errors-dwim)
 ;; C-c l x:LSP 协议扩展(eglot-x)
 (keymap-global-set "C-c l x d" #'eglot-find-declaration)
 (keymap-global-set "C-c l x i" #'eglot-find-implementation)
@@ -5833,12 +5818,9 @@ dabbrev + keyword（关键字）+ file（路径）。
   :defer t
   :commands (consult-eglot-symbols))
 
-;; Consult-flycheck - Flycheck 错误浏览
-
-;; 通过 Consult 界面浏览和跳转 Flycheck 诊断
-(use-package consult-flycheck
-  :defer t
-  :commands (consult-flycheck))
+;; Consult-flymake - Flymake 错误浏览(Emacs 29+ 内置,无独立包)
+;; consult 内置 consult-flymake 命令,通过 Consult 界面浏览和跳转 Flymake 诊断。
+;; M-s f 在前缀键体系绑定到 consult-flymake。
 
 #+end_src
 
@@ -6462,14 +6444,18 @@ ICON 是 Nerd Font 图标字符串。KEY 是快捷键提示字符串。"
        "书签" '("󰉋" . "C-c e b l") '(("暂无书签")) 4))))
 
 (defun literal/dashboard--compute-todo-items (max-items)
-  "实际扫描 `org-agenda-files' 计算未完成 TODO 项（无缓存）。"
+  "实际扫描 `org-agenda-files' 计算未完成 TODO 项（无缓存）。
+P0 #3 修复(Phase 1.3):原 `(when (featurep 'org) ...)' 在 fresh daemon
+(org 未加载)下静默返回 nil,Dashboard 显示"暂无待办事项"假状态。改为
+显式 (require 'org-agenda) + (require 'org)(轻量 autoload 触发),让
+扫描在 fresh daemon 首次渲染时就拿到真实任务;org-agenda-files 真的为
+空时才返回 nil(真实空,而非"未加载"假空)。"
+  (require 'org-agenda)
+  (require 'org)
   (let ((today-abs (calendar-absolute-from-gregorian (calendar-current-date)))
         (count 0)
         raw-items)
-    ;; org 已 :defer t:org-agenda-files 虽 autoload,但调用会触发 org 加载。
-    ;; org 未加载时返回 nil(agenda 卡片显示"暂无待办事项")。
-    (when (and (featurep 'org)
-               (fboundp 'org-agenda-files)
+    (when (and (fboundp 'org-agenda-files)
                (ignore-errors (org-agenda-files)))
       (dolist (file (org-agenda-files))
         (when (and (< count (* max-items 2)) (file-exists-p file))

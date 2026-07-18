@@ -326,11 +326,18 @@
   (dolist (key '("kn" "km" "ka"))
     (literal-configctl--assert (assoc key org-capture-templates)
                                "missing Org capture template %s" key))
-  (require 'flycheck)
+  ;; P0 #2 fix: Flymake chain intact (eglot-stay-out-of does not contain
+  ;; flymake; flymake public API reachable; M-g n bound to flymake).
+  (require 'flymake)
   (literal-configctl--assert
-   (eq (lookup-key flycheck-error-list-mode-map (kbd "RET"))
-       #'flycheck-error-list-goto-error)
-   "Flycheck error-list RET binding missing")
+   (boundp 'flymake-after-diagnostics-hook)
+   "flymake-after-diagnostics-hook missing")
+  (literal-configctl--assert
+   (fboundp 'flymake-goto-next-error)
+   "flymake-goto-next-error not bound")
+  (literal-configctl--assert
+   (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error)
+   "M-g n is not bound to flymake-goto-next-error")
   (require 'which-key)
   (literal-configctl--assert (null literal--pending-wk-descs)
                              "pending Which-key descriptions were not flushed")
