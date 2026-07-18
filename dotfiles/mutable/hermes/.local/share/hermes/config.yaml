@@ -1,6 +1,7 @@
 model:
   default: MiniMax-M3
   provider: minimax-cn
+  base_url: https://api.minimaxi.com/anthropic
 providers:
   minimax-cn:
     models:
@@ -248,7 +249,7 @@ display:
   tui_agents_nudge: true
   bell_on_complete: false
   show_reasoning: false
-  memory_notifications: 'on'
+  memory_notifications: true
   streaming: true
   timestamps: false
   final_response_markdown: strip
@@ -353,7 +354,7 @@ voice:
   silence_threshold: 200
   silence_duration: 3
 human_delay:
-  mode: 'off'
+  mode: false
   min_ms: 800
   max_ms: 2500
 context:
@@ -381,7 +382,6 @@ delegation:
   max_spawn_depth: 1
   orchestrator_enabled: true
   subagent_auto_approve: false
-  max_async_children: 3
 prefill_messages_file: ''
 goals:
   max_turns: 20
@@ -583,7 +583,7 @@ secrets:
 paste_collapse_threshold: 5
 paste_collapse_threshold_fallback: 5
 paste_collapse_char_threshold: 2000
-_config_version: 32
+_config_version: 33
 known_plugin_toolsets:
   cli:
     - spotify
@@ -618,6 +618,8 @@ plugins:
     db_path: ~/.local/share/hermes/memory_store.db
     default_trust: '0.5'
     hrr_dim: '1024'
+  enabled:
+    - orca-status
 session_reset:
   at_hour: 4
   idle_minutes: 1440
