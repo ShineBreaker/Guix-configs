@@ -2026,7 +2026,14 @@ end
                  (".config/qt5ct/qss/rounded.qss" ,(local-file
                                                     "../source/files/rounded.qss"))
                  (".config/qt6ct/qss/rounded.qss" ,(local-file
-                                                    "../source/files/rounded.qss")))))
+                                                    "../source/files/rounded.qss"))
+
+                 (".local/share/gnupg/gpg-agent.conf" ,(computed-substitution-with-inputs
+                                                        "gpg-agent.conf"
+                                                        (local-file
+                                                         "../source/files/gpg-agent.conf")
+                                                        (specs->pkgs
+                                                         "pinentry-qt"))))))
 #+end_src
 
 *** 环境变量
