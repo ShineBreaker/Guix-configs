@@ -156,73 +156,97 @@ ki=inbox, kt/kd/ke=agenda (task/dated/event), kr=roam, kn/km/ka=experiences
     (dolist (key required-keys)
       (should (member key present-keys)))))
 
-
+(ert-deftest literal-config/language-capabilities-derived-consistency ()
+  "Phase 3.2: language-treesit-remaps / eglot-auto-modes / eglot-server-programs
+/ apheleia-mode-alist all derive from the single source `language-capabilities'.
+Each :server entry's modes ⊆ language-eglot-auto-modes (with server declared).
+Each :ts-mode produces a remap from the first :modes entry."
+  (skip-unless (boundp 'literal:language-capabilities))
+  (should (consp literal:language-capabilities))
+  ;; Every :ts-mode has a matching remap entry.
+  (dolist (entry literal:language-capabilities)
+    (let ((ts-mode (plist-get entry :ts-mode)))
+      (when ts-mode
+        (let ((orig-mode (car (plist-get entry :modes))))
+          (should (assoc orig-mode literal:language-treesit-remaps))
+          (should (eq (cdr (assoc orig-mode literal:language-treesit-remaps))
+                      ts-mode))))))
+  ;; Every :formatter non-nil entry has its modes in apheleia-mode-alist.
+  (dolist (entry literal:language-capabilities)
+    (let ((formatter (plist-get entry :formatter)))
+      (when formatter
+        (dolist (mode (plist-get entry :modes))
+          (should (eq (cdr (assoc mode literal:language-apheleia-mode-alist))
+                      formatter)))))))
+
+
+    
 ;;; ---------------------------------------------------------------------------
 ;;; Category 2: baseline-bug contracts (expected to FAIL today)
 ;;; ---------------------------------------------------------------------------
-;;
-;; Each test below documents a known P0/P1 bug from PLAN.md §2. They are
-;; marked `:expected-result :failed' so `configctl test' stays green while
-;; still reporting them. When the matching fix commit lands, remove the
-;; `:expected-result' property: a green test enforces the new contract; a
-;; still-red test means the fix is incomplete.
+    ;;
+    ;; Each test below documents a known P0/P1 bug from PLAN.md §2. They are
+    ;; marked `:expected-result :failed' so `configctl test' stays green while
+    ;; still reporting them. When the matching fix commit lands, remove the
+    ;; `:expected-result' property: a green test enforces the new contract; a
+    ;; still-red test means the fix is incomplete.
 
-(ert-deftest literal-config-baseline/agenote-call-entrypoint-exists ()
-  "P0 #1 (fixed by Commit 2): agenote calls must go through a single
+    (ert-deftest literal-config-baseline/agenote-call-entrypoint-exists ()
+      "P0 #1 (fixed by Commit 2): agenote calls must go through a single
 `literal/agenote-call' entrypoint that requires an explicit `--domain'.
 All `literal/knowledge-*' calls route through it; `audit-agenote-domain'
 catches any new direct CLI calls."
-  (should (fboundp 'literal/agenote-call))
-  (should (fboundp 'literal/agenote-call-async)))
+      (should (fboundp 'literal/agenote-call))
+      (should (fboundp 'literal/agenote-call-async)))
 
-(ert-deftest literal-config-baseline/eglot-flymake-chain-intact ()
-  "P0 #2 (fixed by Commit 3): Eglot must NOT opt out of Flymake.
+    (ert-deftest literal-config-baseline/eglot-flymake-chain-intact ()
+      "P0 #2 (fixed by Commit 3): Eglot must NOT opt out of Flymake.
 Diagnostics flow through Flymake; the modeline + consult pipeline consumes
 the Flymake public API. Any future commit re-adding `flymake' to
 `eglot-stay-out-of' fails this test."
-  (require 'eglot nil t)
-  (should-not (and (boundp 'eglot-stay-out-of)
-                   (memq 'flymake eglot-stay-out-of))))
+      (require 'eglot nil t)
+      (should-not (and (boundp 'eglot-stay-out-of)
+                       (memq 'flymake eglot-stay-out-of))))
 
-(ert-deftest literal-config-baseline/flymake-goto-next-error-bound-to-m-g-n ()
-  "P0 #2 cont. (fixed by Commit 3): M-g n / M-g p point at Flymake, not
+    (ert-deftest literal-config-baseline/flymake-goto-next-error-bound-to-m-g-n ()
+      "P0 #2 cont. (fixed by Commit 3): M-g n / M-g p point at Flymake, not
 Flycheck wrappers. Any future commit re-binding them to flycheck-* fails
 this test."
-  (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
-  (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
+      (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
+      (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
 
-(ert-deftest literal-config-baseline/help-claimed-bindings-resolve ()
-  "P0 #4: every binding claimed by help/dashboard text must exist in the live
+    (ert-deftest literal-config-baseline/help-claimed-bindings-resolve ()
+      "P0 #4: every binding claimed by help/dashboard text must exist in the live
 keymap. Today several C-c a * / C-c o f / C-c e b l entries are bogus. The
 full list is reported by `configctl audit-keys'; Commit 11 introduces a
 single binding spec and regenerates help/dashboard data from it."
-  :expected-result :failed
-  (dolist (claimed '("C-c a a a"        ; Agent Shell submenu — does not exist
-                     "C-c o f"          ; claimed agenda file — real is C-c o a
-                     "C-c e b l"))      ; claimed bookmark list — no C-c e prefix
-    ;; key-binding returns nil for unbound prefixes; commandp rejects nil.
-    (should (commandp (key-binding (kbd claimed))))))
+      :expected-result :failed
+      (dolist (claimed '("C-c a a a"        ; Agent Shell submenu — does not exist
+			 "C-c o f"          ; claimed agenda file — real is C-c o a
+			 "C-c e b l"))      ; claimed bookmark list — no C-c e prefix
+	;; key-binding returns nil for unbound prefixes; commandp rejects nil.
+	(should (commandp (key-binding (kbd claimed))))))
 
-(ert-deftest literal-config-baseline/widget-button-not-globally-advised ()
-  "P1 #1: the Dashboard must not globally advice Widget's private
+    (ert-deftest literal-config-baseline/widget-button-not-globally-advised ()
+      "P1 #1: the Dashboard must not globally advice Widget's private
 `widget-button--check-and-call-button'. Commit 9 removes the advice in favour
 of standard dashboard generators and text-buttons."
-  :expected-result :failed
-  ;; Today the advice is registered via `define-advice' which creates a named
-  ;; function on the advice stack. Any non-empty advice list fails the test.
-  (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
-    (should-not advice)))
+      :expected-result :failed
+      ;; Today the advice is registered via `define-advice' which creates a named
+      ;; function on the advice stack. Any non-empty advice list fails the test.
+      (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
+	(should-not advice)))
 
-(ert-deftest literal-config-baseline/corfu-popupinfo-is-sole-doc-source ()
-  "P1 #4: only `corfu-popupinfo' should be configured as the Corfu doc source.
+    (ert-deftest literal-config-baseline/corfu-popupinfo-is-sole-doc-source ()
+      "P1 #4: only `corfu-popupinfo' should be configured as the Corfu doc source.
 Today `corfu-doc' is also use-packaged and `M-d' is shadowed between them.
 Commit 10 removes `corfu-doc' / `corfu-doc-terminal' / `corfu-terminal'."
-  :expected-result :failed
-  ;; Today the config registers `corfu-doc-toggle' on M-d in corfu-map (line
-  ;; 5698). Once Commit 10 lands, M-d should bind only `corfu-popupinfo-toggle'.
-  (require 'corfu nil t)
-  (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
-    (should (eq m-d-cmd 'corfu-popupinfo-toggle))))
+      :expected-result :failed
+      ;; Today the config registers `corfu-doc-toggle' on M-d in corfu-map (line
+      ;; 5698). Once Commit 10 lands, M-d should bind only `corfu-popupinfo-toggle'.
+      (require 'corfu nil t)
+      (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
+	(should (eq m-d-cmd 'corfu-popupinfo-toggle))))
 
-(provide 'literal-config-tests)
+    (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here

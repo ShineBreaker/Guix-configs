@@ -2081,11 +2081,9 @@ TAB 由 `tab-line-close-tab-function' 传入，为要关闭的 buffer 对象。"
                        (literal/tab-visible-p (current-buffer)))
               (literal--tabs-ensure-current-buffer-tab-line)
               (literal--tabs-register-buffer (current-buffer)))))
-;; 项目切换时清空标签列表
-(with-eval-after-load 'projectile
-  (add-hook 'projectile-after-switch-project-hook
-            (lambda ()
-              (literal/tabs-clear-for-frame))))
+;; 项目切换时清空标签列表:Phase 3 迁移到 project.el 的公开 hook
+;; (实际注册在 *项目与导航* 域 project-navigation 子树,Commit 7 重写
+;; tab-line 时会内联到 tab-line-hooks 片段)。
 #+end_src
 
 #+begin_src emacs-lisp
@@ -3169,9 +3167,8 @@ ghostel 终端模拟器(libghostty-vt 后端): =literal/open-terminal= 在底部
 有已显示的终端窗口则聚焦;有终端 buffer 但未显示则按
 `literal:terminal-side-action' 显示到底部;无则新建。"
   (interactive "P")
-  (let* ((project-root (when (and (fboundp 'projectile-project-root)
-                                  (ignore-errors (projectile-project-p)))
-                         (ignore-errors (projectile-project-root))))
+  (let* ((project-root (when-let* ((proj (project-current nil)))
+                         (project-root proj)))
          (shell (or shell-file-name
                     (getenv "SHELL")
                     "/bin/sh"))
@@ -3218,60 +3215,131 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
 #+begin_src emacs-lisp
 (require 'json)
 
-;; 语言注册表
+;; 语言能力表(Phase 3.2:单一真相源)
+;; PLAN §3.2:统一 major mode / tree-sitter mode / LSP server / formatter,
+;; 避免四份独立 alist 漂移。下面的 defconst 是派生数据;唯一真相源是
+;; `literal:language-capabilities',新增语言只改这一份。
+(defconst literal:language-capabilities
+  '((:modes (c-mode c-ts-mode)
+     :ts-mode c-ts-mode
+     :server ("ccls")
+     :formatter clang-format)
+    (:modes (c++-mode c++-ts-mode)
+     :ts-mode c++-ts-mode
+     :server ("ccls")
+     :formatter clang-format)
+    (:modes (gdscript-mode)
+     :server nil                       ; gdscript LSP 由 godot 自带
+     :formatter nil)
+    (:modes (go-mode go-ts-mode)
+     :ts-mode go-ts-mode
+     :server ("gopls")
+     :formatter gofmt)
+    (:modes (java-mode java-ts-mode)
+     :ts-mode java-ts-mode
+     :server nil
+     :formatter nil)
+    (:modes (json-mode json-ts-mode js-json-mode)
+     :ts-mode json-ts-mode
+     :server nil
+     :formatter js-beautify)
+    (:modes (markdown-mode gfm-mode)
+     :server nil
+     :formatter pandoc-markdown)
+    (:modes (nix-mode)
+     :server nil
+     :formatter nixfmt)
+    (:modes (python-mode python-ts-mode)
+     :ts-mode python-ts-mode
+     :server ("pylsp")
+     :formatter black)
+    (:modes (rust-mode rust-ts-mode)
+     :ts-mode rust-ts-mode
+     :server ("rust-analyzer")
+     :formatter rustfmt)
+    (:modes (typescript-mode typescript-ts-mode)
+     :ts-mode typescript-ts-mode
+     :server nil
+     :formatter js-beautify)
+    (:modes (sh-mode bash-mode)
+     :server nil
+     :formatter shfmt)
+    (:modes (fish-mode)
+     :server nil
+     :formatter fish-indent)
+    (:modes (yaml-mode)
+     :server nil
+     :formatter yq-yaml)
+    (:modes (zig-mode)
+     :server ("zls")
+     :formatter zig-fmt))
+  "统一的语言能力表。每条条目:
+  :modes     生效的所有 major mode 列表(传统 mode 在前,ts-mode 在后)
+  :ts-mode   Tree-sitter 对应 mode(nil 表示无 ts 版本)
+  :server    LSP server 启动命令列表(nil 表示无 LSP)
+  :formatter Apheleia formatter 符号(nil 表示不格式化)")
+
+(defun literal/language--collect (field &optional non-nil)
+  "收集所有语言能力表中 FIELD 的值。NON-NIL 时只收集非 nil 条目。"
+  (let (result)
+    (dolist (entry literal:language-capabilities)
+      (let ((value (plist-get entry field)))
+        (when (or (not non-nil) value)
+          (push value result))))
+    (nreverse result)))
+
+;; Tree-sitter remap:从能力表派生
 (defconst literal:language-treesit-remaps
-  '((c-mode . c-ts-mode)
-    (c++-mode . c++-ts-mode)
-    (go-mode . go-ts-mode)
-    (java-mode . java-ts-mode)
-    (json-mode . json-ts-mode)
-    (python-mode . python-ts-mode)
-    (rust-mode . rust-ts-mode)
-    (typescript-mode . typescript-ts-mode))
-  "Tree-sitter major mode remap 列表。")
+  (delq nil
+        (mapcar (lambda (entry)
+                  (let ((orig-mode (car (plist-get entry :modes)))
+                        (ts-mode (plist-get entry :ts-mode)))
+                    (when (and orig-mode ts-mode)
+                      (cons orig-mode ts-mode))))
+                literal:language-capabilities))
+  "Tree-sitter major mode remap 列表(从 `literal:language-capabilities' 派生)。")
 
+;; eglot auto-modes:所有声明了 :server 的 mode 列表(打平)
 (defconst literal:language-eglot-auto-modes
-  '(c-mode c-ts-mode
-           c++-mode c++-ts-mode
-           gdscript-mode
-           go-ts-mode
-           java-mode java-ts-mode
-           markdown-mode
-           nix-mode
-           python-mode python-ts-mode
-           rust-mode rust-ts-mode
-           zig-mode)
-  "进入这些 major mode 时自动触发 `eglot-ensure'。")
+  (apply #'append
+         (mapcar (lambda (entry)
+                   (if (plist-get entry :server)
+                       (plist-get entry :modes)
+                     nil))
+                 literal:language-capabilities))
+  "进入这些 major mode 时自动触发 `eglot-ensure'。
+Phase 3.2:不再用 `eglot--lookup-mode' 私有 API 检测可用性;进入 mode 时
+无条件 `eglot-ensure',错误由 Eglot 自身暴露(PLAN §3.2)。")
 
+;; eglot server programs:按 server 命令去重合并 modes
 (defconst literal:language-eglot-server-programs
-  '(((c-mode c-ts-mode c++-mode c++-ts-mode) . ("ccls"))
-    ((go-ts-mode) . ("gopls"))
-    ((python-mode python-ts-mode) . ("pylsp"))
-    ((rust-mode rust-ts-mode) . ("rust-analyzer"))
-    ((zig-mode) . ("zls")))
-  "附加到 `eglot-server-programs' 的语言服务器配置。")
+  (let ((seen (make-hash-table :test 'equal))
+        (result nil))
+    (dolist (entry literal:language-capabilities)
+      (let ((server (plist-get entry :server)))
+        (when server
+          (let ((key (mapconcat #'identity server " ")))
+            (if-let* ((pair (gethash key seen)))
+                (setcar pair (append (car pair) (plist-get entry :modes)))
+              (push (cons (plist-get entry :modes) server) result)
+              (puthash key (car result) seen))))))
+    (nreverse result))
+  "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生)。")
 
+;; Apheleia formatter 定义 + mode-alist(派生)
 (defconst literal:language-apheleia-formatters
   '((pandoc-markdown "pandoc" "-f" "gfm+yaml_metadata_block" "-t" "gfm" "--standalone" "--wrap=none"))
-  "Apheleia 自定义 formatter。")
+  "Apheleia 自定义 formatter 命令定义(mode-alist 只引用符号)。")
 
 (defconst literal:language-apheleia-mode-alist
-  '((c-mode . clang-format) (c-ts-mode . clang-format)
-    (c++-mode . clang-format) (c++-ts-mode . clang-format)
-    (fish-mode . fish-indent)
-    (gfm-mode . pandoc-markdown)
-    (go-ts-mode . gofmt)
-    (json-mode . js-beautify) (json-ts-mode . js-beautify)
-    (js-json-mode . js-beautify)
-    (markdown-mode . pandoc-markdown)
-    (nix-mode . nixfmt)
-    (python-mode . black) (python-ts-mode . black)
-    (rust-mode . rustfmt) (rust-ts-mode . rustfmt)
-    (sh-mode . shfmt) (bash-mode . shfmt)
-    (typescript-mode . js-beautify) (typescript-ts-mode . js-beautify)
-    (yaml-mode . yq-yaml)
-    (zig-mode . zig-fmt))
-  "Apheleia major mode 对应关系。")
+  (let (result)
+    (dolist (entry literal:language-capabilities)
+      (let ((formatter (plist-get entry :formatter)))
+        (when formatter
+          (dolist (mode (plist-get entry :modes))
+            (push (cons mode formatter) result)))))
+    (nreverse result))
+  "Apheleia major mode 对应关系(从 `literal:language-capabilities' 派生)。")
 
 ;; Tree-sitter
 ;; grammar 加载:Guix home-emacs-service 的 wrapper 通过 TREE_SITTER_GRAMMAR_PATH
@@ -3311,41 +3379,26 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
               (when (fboundp 'eglot-inlay-hints-mode)
                 (eglot-inlay-hints-mode 1)))))
 
-(defun literal/eglot-server-available-p (mode)
-  "判断 MODE 对应的 Eglot server 当前是否可用。"
-  (let* ((lookup (ignore-errors (eglot--lookup-mode mode)))
-         (contact (cdr-safe lookup)))
-    (cond
-     ((null contact) nil)
-     ((eq mode 'gdscript-mode) t)
-     ((functionp contact)
-      (condition-case nil
-          (progn (funcall contact nil nil) t)
-        (error nil)))
-     ((and (consp contact) (stringp (car contact)))
-      (or (file-executable-p (car contact))
-          (executable-find (car contact))))
-     (t t))))
+;; Phase 3.2:不再调 `eglot--lookup-mode' 私有 API 做可用性预检测。
+;; 进入声明了 :server 的 mode 时直接 eglot-ensure;server 缺失的错误由
+;; Eglot 自身暴露(PLAN §3.2)。
 
 (defun literal--eglot-setup-once ()
   "首次进入 prog-mode 时触发 eglot 加载,由 after-load 钩子完成实际配置。"
   ;; eglot 是 :defer t:首次进 prog-mode 时 require 它,eglot 加载后由下方
   ;; with-eval-after-load 注册 server 程序表与 auto-mode hooks。
-  ;; 不能在这里直接访问 eglot-server-programs / eglot--lookup-mode
-  ;; (eglot 未加载时它们是 void / void-function)。
   (remove-hook 'prog-mode-hook #'literal--eglot-setup-once)
   (require 'eglot))
 
 (add-hook 'prog-mode-hook #'literal--eglot-setup-once)
 
 ;; eglot 加载后(无论由 prog-mode-hook 触发 require,还是 eglot 命令 autoload):
-;; 注册语言服务器程序表 + 为可用语言挂 eglot-ensure。
+;; 注册语言服务器程序表 + 为声明了 :server 的语言挂 eglot-ensure。
 (with-eval-after-load 'eglot
   (dolist (prog literal:language-eglot-server-programs)
     (add-to-list 'eglot-server-programs prog))
   (dolist (mode literal:language-eglot-auto-modes)
-    (when (literal/eglot-server-available-p mode)
-      (add-hook (intern (format "%s-hook" mode)) #'eglot-ensure))))
+    (add-hook (intern (format "%s-hook" mode)) #'eglot-ensure)))
 
 ;; eglot-x — LSP 协议扩展(声明/实现/类型定义跳转)
 (with-eval-after-load 'eglot
@@ -3483,94 +3536,56 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 :PROPERTIES:
 :CUSTOM_ID: projects
 :END:
-项目管理(Projectile + consult-fd + consult-projectile)、文件与缓冲区导航。
+项目管理(project.el + consult-fd + consult-ripgrep)、文件与缓冲区导航。
 
-** 项目管理 Projectile
+** 项目管理 project.el
 :PROPERTIES:
 :CUSTOM_ID: project-navigation
 :END:
-配置 Projectile 项目管理工具:自动识别项目根、文件搜索、grep、consult-projectile 统一搜索、ibuffer 按项目分组。
+配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、grep、ibuffer 按项目分组。
 
-+ 自动识别包含 =.git= 、 =.projectile= 等标记的目录为项目根
-+ =consult-projectile= : 通过 Consult 界面统一搜索项目文件 / 缓冲区 / recentf
++ Phase 3 迁移自 Projectile:删 projectile / consult-projectile / ibuffer-projectile
++ =project-switch-commands= = Dired / consult-fd / consult-ripgrep
 + =consult-fd= : 项目内快速文件搜索( =literal/find-file-in-project= ),fd 缺失时降级为 find
-+ =ibuffer-projectile= : 在 ibuffer 中按 Projectile 项目分组过滤
++ ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
 + 项目前缀 =C-x p= 在 *键位与补全* 域绑定
-+ **性能**: Projectile 以 =:demand t= 加载,避免 dashboard 渲染时 =projectile-known-projects= 为 nil + =C-x p o= 触发内置 =project-any-command= 报错
-+ 项目文件索引走 =fd → rg → find= 三级降级:fd 最快(~150ms for 70k files,遵守 =.gitignore= ),rg 次之,find 兜底(不遵守 =.gitignore= );路径启动期缓存于 =literal:executable-fd/rg/git=
++ 项目切换清空当前 frame 的 tab-line( =project-after-switch-project-functions= )
 
 #+begin_src emacs-lisp
-;; 项目切换
+;; project.el 项目管理(Phase 3 迁移自 Projectile)
+;; PLAN §3.1:删除 projectile / consult-projectile / ibuffer-projectile,
+;; 改用内置 project.el 的公开 API。consult-fd / consult-ripgrep 接收
+;; project-root 作为 default-directory,不再依赖 Projectile 的项目检测。
 
-(defun literal--projectile-known-projects ()
-  "返回当前可用的 Projectile 项目列表。"
-  (delete-dups
-   (seq-filter #'file-directory-p
-               (mapcar #'file-name-as-directory projectile-known-projects))))
+(defun literal/project-root-or-default ()
+  "返回当前 project 的 root,不在项目中时返回 `default-directory'。"
+  (or (when-let* ((proj (project-current nil)))
+        (project-root proj))
+      default-directory))
 
 (defun literal/switch-project ()
-  "切换到已知 Projectile 项目,并以 Dired 打开项目根目录。
+  "切换到已知项目,并以 Dired 打开项目根目录。
 
-不同于 `projectile-switch-project',该命令不会在 daemon/client 场景
-触发交互式 `projectile-find-file',而是直接打开项目目录。"
+使用 `project-switch-project'(Emacs 29+ project.el);切换后
+`project-after-switch-project-functions' 触发(见 tab-line 域)。"
   (interactive)
-  (require 'projectile)
-  (unless (boundp 'projectile-known-projects)
-    (user-error "Projectile 尚未初始化"))
-  (let* ((projects (literal--projectile-known-projects))
-         (project-root (completing-read "切换到项目: " projects nil t nil nil
-                                        (car projects))))
-    (unless (and project-root (not (string-empty-p project-root)))
-      (user-error "未选择项目"))
-    (setq project-root (file-name-as-directory (expand-file-name project-root)))
-    (unless (file-directory-p project-root)
-      (user-error "项目目录不存在: %s" project-root))
-    (projectile-add-known-project project-root)
-    (setq default-directory project-root)
-    (dired project-root)))
-
-;; Projectile 配置
-(use-package projectile
-  :demand t
-  :custom
-  (projectile-mode-line '(:eval (format " [%s]" (projectile-project-name))))
-  (projectile-completion-system 'default)
-  (projectile-enable-caching t)
-  (projectile-indexing-method 'alien)
-  :config
-  (projectile-mode 1)
-
-  ;; 项目文件索引:fd → rg → find 三级降级
-  ;; projectile alien 模式按 \0(空字节)切分输出(projectile.el 的
-  ;; projectile-files-via-ext-command),故每条命令必须输出 null 分隔。
-  ;; 注意:fd 的短选项是 -t,不接受 -type(会把 "-type" 当 --type 解析,
-  ;; 吞掉 "ype" 报错 "invalid value 'ype'");必须用长选项 --type f。
-  ;; rg 分支同样需要 --null,否则整个换行分隔输出被当成单个文件名。
-  (setq projectile-generic-command
-        (cond
-         (literal:executable-fd
-          (concat literal:executable-fd
-                  " . --type f --color=never -0"
-                  " --strip-cwd-prefix --hidden --follow --exclude .git"))
-         (literal:executable-rg
-          (concat literal:executable-rg
-                  " --files --hidden --follow --color=never --null -g '!.git'"))
-         ((not (eq system-type 'windows-nt))
-          "find . -type f | cut -c3- | tr '\\n' '\\0'")
-         (t "find . -type f -print0"))))
+  (require 'project)
+  (call-interactively #'project-switch-project)
+  (when-let* ((proj (project-current nil))
+              (root (project-root proj)))
+    (dired root)))
 
 (defun literal/open-project-folder ()
   "打开任意文件夹:切换 `default-directory' 并显示 Dired。
 
-目录含 .git → 注册为 Projectile 项目。"
+含 .git 的目录会通过 `project-remember-project' 注册到已知项目。"
   (interactive)
-  (require 'projectile)
   (let ((dir (read-directory-name "项目目录: ")))
     (when (file-directory-p dir)
       (setq dir (file-name-as-directory (expand-file-name dir))
             default-directory dir)
       (when (file-directory-p (expand-file-name ".git" dir))
-        (projectile-add-known-project dir))
+        (project-remember-project (project-current nil)))
       (dired dir))))
 
 (defun literal/open-directory ()
@@ -3582,48 +3597,54 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
     (when dir
       (dired dir))))
 
-;; Consult-projectile - 统一项目搜索
+;; project.el 配置
+;; switch-commands 控制 `project-switch-project' 后默认动作;由 *键位与补全*
+;; 域的 C-x p prefix 提供更细粒度入口,这里只设置默认。
+(setq project-switch-commands
+      (list (cons "Dired" #'project-dired)
+            (cons "Find file (consult-fd)" #'literal/find-file-in-project)
+            (cons "Ripgrep" #'literal/project-search)))
 
-;; 通过 Consult 界面搜索项目文件、缓冲区和 recentf
-(use-package consult-projectile
-  :after (consult projectile)
-  :defer t
-  :commands (consult-projectile consult-projectile-find-file
-                                consult-projectile-switch-project))
-
-;; ibuffer-projectile - 按项目分组 ibuffer
-
-(use-package ibuffer-projectile
-  :after (ibuffer projectile)
-  :defer t
-  :config
+;; ibuffer 用内置 project filter 分组(替代 ibuffer-projectile)
+(with-eval-after-load 'ibuffer
   (add-hook 'ibuffer-hook
             (lambda ()
-              (when (fboundp 'ibuffer-projectile-set-filter-groups)
-                (ibuffer-projectile-set-filter-groups)
+              (require 'project)
+              (let ((ibuffer-filter-groups
+                     (cons (cons "project"
+                                 (lambda (buf)
+                                   (with-current-buffer buf
+                                     (when-let* ((proj (project-current nil)))
+                                       (project-root proj)))))
+                           ibuffer-filter-groups)))
                 (unless (eq ibuffer-sorting-mode 'major-mode)
                   (ibuffer-do-sort-by-major-mode))))))
-
-;; project.el 的 mode-line 显示关闭(防 projectile-mode-line 重复)
-(when (boundp 'project-mode-line)
-  (setq project-mode-line nil))
 
 ;; consult-fd - 项目内文件搜索
 
 (defun literal/find-file-in-project ()
-  "用 consult-fd 查找文件。
+  "用 consult-fd 查找当前项目内文件。
 
-在 Projectile 项目内时限定到项目根目录;否则从当前目录搜索。
+在 project.el 项目内时限定到项目根目录;否则从当前目录搜索。
 依赖外部命令 fd(启动期缓存在 `literal:executable-fd'),缺失时
 consult-fd 自动降级为 consult-find(find 命令)。"
   (interactive)
   (require 'consult)
-  (let ((default-directory
-         (or (and (fboundp 'projectile-project-root)
-                  (projectile-project-root))
-             default-directory)))
+  (let ((default-directory (literal/project-root-or-default)))
     (call-interactively #'consult-fd)))
 
+(defun literal/project-search ()
+  "用 consult-ripgrep 在当前项目内搜索。"
+  (interactive)
+  (require 'consult)
+  (let ((default-directory (literal/project-root-or-default)))
+    (call-interactively #'consult-ripgrep)))
+
+;; Tab-line 项目切换 hook:Phase 3 迁移自 projectile-after-switch-project-hook。
+;; Commit 7 重写 tab-line 时会一并处理;此处先注册等价行为保持不退化。
+(with-eval-after-load 'project
+  (add-hook 'project-after-switch-project-functions
+            (lambda (&rest _) (literal/tabs-clear-for-frame))))
 #+end_src
 
 * Org 与知识库
@@ -4849,7 +4870,7 @@ IDE 风格全局直达键,通过 =literal/set-key= 同源注册键位与 which-k
 (literal/set-key "C-S-<down>" #'literal/code-move-line-down "下移当前行")
 (literal/set-key "C-S-/" #'literal/code-comment-block "块注释")
 (literal/set-key "C-S-s" #'write-file "另存为")
-(literal/set-key "C-S-a" #'projectile-find-file "项目文件搜索")
+(literal/set-key "C-S-a" #'literal/find-file-in-project "项目文件搜索")
 
 ;; 代码导航
 (literal/set-key "<f2>" #'literal/rename-dwim "重命名")
@@ -4877,7 +4898,7 @@ IDE 风格全局直达键,通过 =literal/set-key= 同源注册键位与 which-k
 Emacs 原生前缀扩展( =C-x= / =M-s= / =M-g= ) + 自定义 =C-c= 前缀分组。
 
 + 前缀分组: =C-c g= Git / =C-c w= 窗口 / =C-c l= LSP / =C-c o= Org / =C-c a= 应用 / =C-c m= 补全 / =C-c z= 折叠 / =C-c f= 格式化 / =C-c h= 帮助
-+ =C-x p= 项目(projectile 配置 + consult-fd 体系见 *项目与导航 → 项目管理 Projectile* )
++ =C-x p= 项目(project.el 配置 + consult-fd 体系见 *项目与导航 → 项目管理 project.el* )
 + Git 操作函数( =literal/git-*= )定义在 [[#git-display][Git 与窗口路由]]
 
 #+begin_src emacs-lisp
@@ -4893,15 +4914,17 @@ Emacs 原生前缀扩展( =C-x= / =M-s= / =M-g= ) + 自定义 =C-c= 前缀分组
 (keymap-global-set "C-x t p" #'literal/tabs-previous)
 (keymap-global-set "C-x t g" #'literal/tabs-refresh-context)
 
-;; C-x p:项目(projectile 配置 + consult-fd 体系见 *项目与导航* 域)
-;; C-x p p 用 consult-projectile(对齐 general-config 行为):统一搜索项目文件/缓冲区/recentf。
-;; literal/switch-project(dired 直开项目根)保留备用,可 M-x 调用。
-(keymap-global-set "C-x p p" #'consult-projectile)
+;; C-x p:项目(project.el 配置 + consult-fd 体系见 *项目与导航* 域)
+;; Phase 3 迁移自 projectile:全部走 project.el 公开 API + consult-* 入口。
+;; C-x p p = project-switch-project(替代 consult-projectile),
+;; C-x p k = project-kill-buffers(替代 projectile-kill-buffers)。
+(keymap-global-set "C-x p p" #'project-switch-project)
 (keymap-global-set "C-x p f" #'project-find-file)
-(keymap-global-set "C-x p s" #'consult-ripgrep)
+(keymap-global-set "C-x p s" #'literal/project-search)
 (keymap-global-set "C-x p o" #'literal/open-project-folder)
 (keymap-global-set "C-x p O" #'literal/open-directory)
-(keymap-global-set "C-x p k" #'projectile-kill-buffers)
+(keymap-global-set "C-x p k" #'project-kill-buffers)
+(keymap-global-set "C-x p D" #'project-dired)
 
 ;; M-s:搜索
 (keymap-global-set "M-s l" #'consult-line)
@@ -6028,23 +6051,11 @@ ICON 是 Nerd Font 图标字符串。KEY 是快捷键提示字符串。"
 
 (defun literal/dashboard--compute-known-projects ()
   "实际计算 dashboard 可展示的项目列表（无缓存）。
-
-优先读取 Projectile 的已知项目缓存（仅当 Projectile 已加载），
-回落到 `project.el'。"
-  (let ((projects nil))
-    (when (featurep 'projectile)
-      (when (fboundp 'projectile-load-known-projects)
-        (projectile-load-known-projects))
-      (setq projects
-            (and (boundp 'projectile-known-projects)
-                 projectile-known-projects)))
-    (unless projects
-      (setq projects
-            (and (fboundp 'project-known-project-roots)
-                 (project-known-project-roots))))
-    (delete-dups
-     (seq-filter #'file-directory-p
-                 (mapcar #'file-name-as-directory projects)))))
+Phase 3 迁移自 Projectile:统一用 `project-known-project-roots'。"
+  (delete-dups
+   (seq-filter #'file-directory-p
+               (mapcar #'file-name-as-directory
+                       (project-known-project-roots)))))
 
 (defun literal/dashboard--known-projects ()
   "返回 dashboard 可展示的项目列表。

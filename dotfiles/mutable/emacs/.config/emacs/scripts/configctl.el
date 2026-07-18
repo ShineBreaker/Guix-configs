@@ -415,11 +415,9 @@ Guix helper is on `load-path', and fall back to loading each
                (default-directory literal-configctl-root))
     (unwind-protect
         (progn
-          (make-directory (expand-file-name "var/projectile/" runtime) t)
-          (with-temp-file (expand-file-name "var/projectile/known-projects.el" runtime)
-            (prin1 nil (current-buffer)))
-          (setq-default projectile-known-projects-file
-                        (expand-file-name "var/projectile/known-projects.el" runtime))
+          ;; Phase 3 迁移自 projectile:project.el 用 project-list-file 存已知项目
+          (setq-default project-list-file
+                        (expand-file-name "var/project-list.eld" runtime))
           (literal-configctl--bootstrap-guix-autoloads)
           (load target nil t)
           (literal-configctl--smoke-test)
@@ -936,8 +934,6 @@ prefix)."
       (literal-configctl--fail "missing test file: %s" test-file))
     (unwind-protect
         (progn
-          (make-directory (expand-file-name "var/projectile/" runtime) t)
-          (with-temp-file (expand-file-name "var/projectile/known-projects.el" runtime))
           (copy-file test-file tests-target t)
           (literal-configctl--bootstrap-guix-autoloads)
           (load target nil t)
