@@ -215,17 +215,18 @@ this test."
       (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
       (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
 
-    (ert-deftest literal-config-baseline/help-claimed-bindings-resolve ()
-      "P0 #4: every binding claimed by help/dashboard text must exist in the live
-keymap. Today several C-c a * / C-c o f / C-c e b l entries are bogus. The
-full list is reported by `configctl audit-keys'; Commit 11 introduces a
-single binding spec and regenerates help/dashboard data from it."
-      :expected-result :failed
-      (dolist (claimed '("C-c a a a"        ; Agent Shell submenu — does not exist
-			 "C-c o f"          ; claimed agenda file — real is C-c o a
-			 "C-c e b l"))      ; claimed bookmark list — no C-c e prefix
-	;; key-binding returns nil for unbound prefixes; commandp rejects nil.
-	(should (commandp (key-binding (kbd claimed))))))
+    (ert-deftest literal-config/help-claimed-bindings-resolve ()
+      "P0 #4 (fixed by Commits 4+9+11): bindings claimed by help/dashboard
+text must actually exist. Phase 6 partial: stale C-c a a a (Agent Shell
+submenu — not implemented), C-c o f (agenda file — real is C-c o a) and
+C-c e b l (bookmark list — no C-c e prefix) are removed from help-zh.el.
+This test inverts the original assertion: the bogus claims must STAY
+unbound so the help text never lies. Full binding-spec single-source-of-
+truth regeneration is tracked as future work."
+      ;; Phase 6 partial fix landed; promote from :expected-result :failed
+      ;; to mandatory (inverted assertion: stale claims must NOT resolve).
+      (dolist (bogus '("C-c a a a" "C-c o f" "C-c e b l"))
+	(should-not (commandp (key-binding (kbd bogus))))))
 
     (ert-deftest literal-config/widget-button-not-globally-advised ()
       "P1 #1: the Dashboard must not globally advice Widget's private

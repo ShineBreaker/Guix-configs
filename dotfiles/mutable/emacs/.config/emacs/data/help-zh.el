@@ -151,14 +151,8 @@
          ("C-c w a" . "切换 Agent 面板")
          ("C-c w u / U" . "撤销 / 重做窗口布局"))
         ("应用"
-         ("C-c a a" . "Agent Shell 子菜单(按 a 展开后可选 a/r/d/n/k/s/b)")
-         ("C-c a a a" . "切换 Agent 面板显示/隐藏")
-         ("C-c a a r" . "重载 Agent")
-         ("C-c a a d" . "Agent 切换目录")
-         ("C-c a a n" . "新建 Agent Shell")
-         ("C-c a a k" . "关闭 Agent Shell")
-         ("C-c a a s" . "选择 Agent Shell")
-         ("C-c a a b" . "选择 Agent 后端(agent-shell / ghostel)")
+         ;; Phase 6:删除 C-c a a* (Agent Shell 未实现的子菜单条目);
+         ;; 实现 agent-shell 公开 prefix map 后再加回(PLAN §6 C-c a 目标布局)。
          ("C-c a g ..." . "游戏")
          ("C-c a c" . "日历")
          ("C-c a m" . "邮件")
@@ -170,7 +164,6 @@
          ("C-c a e d / D" . "Matrix:断开当前 / 断开所有"))
         ("Org 扩展"
          ("C-c o a" . "议程视图")
-         ("C-c o f" . "打开待办文件")
          ("C-c o b ..." . "Babel:执行、跳转、Tangle、编辑")
          ("C-c o i / I" . "插入代码块 / 内联代码块")
          ("C-c o r ..." . "任务:标记完成/TODO、归档、窄化、添加标题")
