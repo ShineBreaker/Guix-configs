@@ -26,12 +26,15 @@ let
   fixedElectronHeadersHash = "sha256-zOl8rx6woWh7aeRUOlkTMviKc/EAQQX6nr/MxAx1ZPI";
   patchedPkgs = pkgs.appendOverlays [
     (final: prev: {
-      fetchurl = args:
-        if (args ? url)
-           && args.url
-              == "https://artifacts.electronjs.org/headers/dist/v41.9.1/node-v41.9.1-headers.tar.gz"
-        then prev.fetchurl (args // { sha256 = fixedElectronHeadersHash; })
-        else prev.fetchurl args;
+      fetchurl =
+        args:
+        if
+          (args ? url)
+          && args.url == "https://artifacts.electronjs.org/headers/dist/v41.9.1/node-v41.9.1-headers.tar.gz"
+        then
+          prev.fetchurl (args // { sha256 = fixedElectronHeadersHash; })
+        else
+          prev.fetchurl args;
     })
   ];
 
@@ -39,17 +42,13 @@ let
 
   # 用 patchedPkgs 重新实例化 hermes-agent 自带的 desktop.nix。
   # desktop.nix 的 src = ../.; 因此相对路径仍指向 hermes-agent 仓库根。
-  fixedHermesDesktop = patchedPkgs.callPackage
-    (inputs.hermes-agent + "/nix/desktop.nix")
-    {
-      hermesNpmLib = patchedPkgs.callPackage
-        (inputs.hermes-agent + "/nix/lib.nix")
-        {
-# npm-lockfile-fix is a transitive input of hermes-agent, not a direct one in this flake.
-          npm-lockfile-fix = inputs.hermes-agent.inputs.npm-lockfile-fix.packages.${system}.default;
-        };
-      hermesAgent = hermes-agent-packages.default;
+  fixedHermesDesktop = patchedPkgs.callPackage (inputs.hermes-agent + "/nix/desktop.nix") {
+    hermesNpmLib = patchedPkgs.callPackage (inputs.hermes-agent + "/nix/lib.nix") {
+      # npm-lockfile-fix is a transitive input of hermes-agent, not a direct one in this flake.
+      npm-lockfile-fix = inputs.hermes-agent.inputs.npm-lockfile-fix.packages.${system}.default;
     };
+    hermesAgent = hermes-agent-packages.default;
+  };
 in
 {
   home.packages = [

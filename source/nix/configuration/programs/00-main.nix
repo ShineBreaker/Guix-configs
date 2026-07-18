@@ -8,12 +8,15 @@
 
   home.packages = with pkgs; [
     ## Tools
-    apostrophe
     broot
     localsend
     gh
+    pods
     python314Packages.jieba
 
+    ## Editor
+    apostrophe
+    graphite
     (libreoffice.overrideAttrs {
       variant = "fresh";
       withHelp = false;
@@ -57,7 +60,7 @@
 
     # AI Agent
     claude-code
-    claude-agent-acp
+    # claude-agent-acp
     codex
     codex-acp
 

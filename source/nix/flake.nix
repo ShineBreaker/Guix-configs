@@ -15,6 +15,11 @@
       url = "github:NousResearch/hermes-agent";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    llm-agents = {
+      url = "github:numtide/llm-agents.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -30,7 +35,10 @@
         homeConfigurations.Guix = inputs.home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.${system};
 
-          modules = [ ./configuration/00-main/home.nix ];
+          modules = [
+            ./configuration/00-main/home.nix
+            ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.llm-agents.overlays.shared-nixpkgs ]; })
+          ];
 
           extraSpecialArgs = { inherit inputs; };
         };
