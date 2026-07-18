@@ -4435,12 +4435,18 @@ AVAILABLE-WIDTH 为当前 which-key 可用宽度。"
         which-key-sort-order #'which-key-prefix-then-key-order
         which-key-C-h-map-prompt
         " \\<which-key-C-h-map>\\[which-key-show-next-page-cycle]/\\[which-key-show-previous-page-cycle] 翻页,\\[which-key-show-standard-help] 帮助,\\[which-key-abort] 退出")
-  ;; 用基于 `string-width' 的中文友好版覆盖 which-key 原生 `which-key--pad-column'
-  ;; (原生版按 `length' 计算补齐,中文双宽字符会导致列错位)。
-  ;; 加 fboundp 守卫:which-key 已并入 Emacs 30 内置,未来若内部函数改名/移除,
-  ;; 这里静默跳过而非崩溃。
-  (when (fboundp 'which-key--pad-column)
-    (advice-add 'which-key--pad-column :override #'literal/which-key--pad-column-fixed-width)))
+  ;; Phase 5.2:用基于 `string-width' 的中文友好版覆盖 which-key 原生
+  ;; `which-key--pad-column'(原生版按 `length' 计算补齐,中文双宽字符会
+  ;; 导致列错位)。加版本守卫:which-key 3.6.1 仍用 length,补丁生效;
+  ;; 上游改用 string-width 后(版本 > 3.6.1 或函数签名变化)自动跳过,
+  ;; 不再静默 override 私有函数。完整 override 实现见上方函数定义。
+  ;; TODO(Phase 5.2):把此 override 物理移到 compatibility 子树并加 ERT。
+  (when (and (fboundp 'which-key--pad-column)
+             (boundp 'which-key-version)
+             (stringp which-key-version)
+             (string-match-p "\\`3\\.6\\." which-key-version))
+    (advice-add 'which-key--pad-column :override
+                #'literal/which-key--pad-column-fixed-width)))
 
 ;; Helpful(增强帮助系统)
 (use-package helpful
@@ -4810,8 +4816,8 @@ Vertico(接管 minibuffer,不再回退到 =*Completions*= buffer / =completion-l
 (require 'ispell)
 
 ;; savehist - 持久化 minibuffer 历史和 vertico 最后查询
-
-(savehist-mode 1)
+;; Phase 5.1:删除顶层重复 (savehist-mode 1);savehist 已在 *启动与基础设施*
+;; startup 域 use-package savehist :defer 0.5 + :config (savehist-mode 1) 启用。
 
 ;; Vertico - 垂直补全界面
 
@@ -5178,29 +5184,10 @@ dabbrev + keyword（关键字）+ file（路径）。
              (icon (or (cdr (assq kind-item icons)) (cdr (assq t icons)))))
         (propertize (concat " " icon " ") 'face 'corfu-default)))))
 
-;; Corfu-doc - 补全文档弹窗
-
-;; 在 Corfu 补全弹窗旁显示当前候选的文档字符串
-;; GUI 模式使用 corfu-doc childframe，终端使用 corfu-doc-terminal
-(use-package corfu-doc
-  :after corfu
-  :defer t
-  :commands (corfu-doc-mode corfu-doc-toggle)
-  :bind (:map corfu-map
-              ("M-d" . corfu-doc-toggle)
-              ("C-M-n" . corfu-doc-scroll-up)
-              ("C-M-p" . corfu-doc-scroll-down))
-  :custom
-  (corfu-doc-max-width 70)
-  (corfu-doc-max-height 20)
-  :config
-  ;; 默认关闭，按 M-d 手动切换（JetBrains 风格）
-  (corfu-doc-mode -1))
-
-;; 终端下 corfu-doc 的适配层
-(use-package corfu-doc-terminal
-  :after corfu-doc
-  :defer t)
+;; Phase 5.1:删除 corfu-doc / corfu-doc-terminal use-package。
+;; corfu-popupinfo 是 Corfu 2.10+ 官方推荐的文档显示入口,在 GUI 和 TTY
+;; 上行为一致(原 corfu-doc 的 M-d 绑定已由 corfu-popupinfo 接管)。
+;; PLAN §5.1:只保留 corfu-popupinfo 作为唯一文档入口。
 
 ;; Consult-eglot - Eglot 符号搜索
 
@@ -5219,28 +5206,32 @@ dabbrev + keyword（关键字）+ file（路径）。
 #+begin_src emacs-lisp :noweb-ref keys/completion-display :tangle no
 ;; Per-frame 补全显示设置(daemon 安全)
 
+;; Phase 5.1:单一 margin formatter,按当前 frame 的 display 类型选择 GUI
+;; kind-icon 或 TTY Nerd Font 图标。不再由 frame hook 全局 setq
+;; `corfu-margin-formatters'(PLAN §5.1:GUI/TTY 差异必须 frame-local,
+;; 禁止新 frame 修改全局变量后影响旧 frame)。
+(defun literal/completion--corfu-margin-formatter (metadata)
+  "根据当前 frame 的 display 类型选择 GUI / TTY 图标 formatter。"
+  (if (display-graphic-p)
+      (when (fboundp 'kind-icon-margin-formatter)
+        (funcall 'kind-icon-margin-formatter metadata))
+    (funcall 'literal/completion--corfu-terminal-margin-formatter metadata)))
+
 (defun literal/completion-setup-display (&optional frame)
   "根据 FRAME 的 display 类型设置补全框架的显示相关配置。
-GUI 模式：应用 PGTK childframe 修复 + kind-icon 图标。
-终端模式：启用 corfu-terminal 和 Nerd Font 图标。
-
-frame hook 由启动与基础设施域的 Frame 块提供。"
+Phase 5.1:Corfu 2.10+ 在 Emacs 31 原生支持 TTY childframe,删除
+corfu-terminal 依赖。GUI 模式仅保留 x-gtk-resize-child-frames 修复;
+margin formatter 由 \`literal/completion--corfu-margin-formatter\` 按
+当前 frame 动态选择,不再全局 setq。"
   (with-selected-frame (or frame (selected-frame))
     (with-eval-after-load 'corfu
-      (if (display-graphic-p)
-          (progn
-            ;; GUI: PGTK/Wayland 修复——childframe 位置偏移
-            (when (boundp 'x-gtk-resize-child-frames)
-              (setq x-gtk-resize-child-frames 'resize-mode))
-            (when (bound-and-true-p corfu-terminal-mode)
-              (corfu-terminal-mode -1))
-            (require 'kind-icon)
-            (setq corfu-margin-formatters '(kind-icon-margin-formatter)))
-        ;; 终端: corfu-terminal + Nerd Font 图标
-        (require 'corfu-terminal)
-        (corfu-terminal-mode 1)
-        (setq corfu-margin-formatters
-              '(literal/completion--corfu-terminal-margin-formatter))))))
+      ;; 单一 formatter 注册一次:内部按 (display-graphic-p) 分发
+      (setq corfu-margin-formatters
+            '(literal/completion--corfu-margin-formatter))
+      (when (display-graphic-p)
+        ;; GUI: PGTK/Wayland 修复 — childframe 位置偏移
+        (when (boundp 'x-gtk-resize-child-frames)
+          (setq x-gtk-resize-child-frames 'resize-mode))))))
 
 ;; 注册到 frame 生命周期（add-frame-hook 由 Frame 块提供）
 (literal/add-frame-hook #'literal/completion-setup-display)

@@ -236,13 +236,11 @@ Now a hard contract — any future regression fails this test."
       (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
 	(should-not advice)))
 
-    (ert-deftest literal-config-baseline/corfu-popupinfo-is-sole-doc-source ()
-      "P1 #4: only `corfu-popupinfo' should be configured as the Corfu doc source.
-Today `corfu-doc' is also use-packaged and `M-d' is shadowed between them.
-Commit 10 removes `corfu-doc' / `corfu-doc-terminal' / `corfu-terminal'."
-      :expected-result :failed
-      ;; Today the config registers `corfu-doc-toggle' on M-d in corfu-map (line
-      ;; 5698). Once Commit 10 lands, M-d should bind only `corfu-popupinfo-toggle'.
+    (ert-deftest literal-config/corfu-popupinfo-is-sole-doc-source ()
+      "P1 #4 (fixed by Commit 10): only `corfu-popupinfo' is configured as the
+Corfu doc source. Phase 5.1 removed `corfu-doc' / `corfu-doc-terminal'.
+Now a hard contract — M-d must bind only `corfu-popupinfo-toggle'."
+      ;; Phase 5.1 fix landed; promote from :expected-result :failed to mandatory.
       (require 'corfu nil t)
       (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
 	(should (eq m-d-cmd 'corfu-popupinfo-toggle))))
