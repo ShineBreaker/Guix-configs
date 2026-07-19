@@ -6,7 +6,7 @@ author: Hermes
 metadata:
   hermes:
     tags: [Crush, Extract, Sqlite, Agent-History, Per-Project]
-    related_skills: [agent-history-importer, importing-agent-prompts, hermes-agent]
+    related_skills: [agent-history-importer, importing-agent-prompts, hermes-agent, codex-session-extract]
 ---
 
 # Crush Session Extract
