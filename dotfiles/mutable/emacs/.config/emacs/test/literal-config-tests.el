@@ -308,5 +308,26 @@ configctl test 子命令由 scripts/configctl.el 提供,该文件作为 runner
                          "(defvar literal--file-name-handler-alist-original"
                          nil t))))))
 
+    (ert-deftest literal-config/agenote-call-process-signature ()
+      "Phase 7.1: `literal/agenote-call' 的 call-process 调用签名正确。
+
+原 bug:`(apply #'call-process argv nil (list t stderr-buffer) nil)` 把
+argv(list)当作 PROGRAM 传,导致 'Wrong type argument: stringp, (...)';
+后来改为 `(list stdout-buffer stderr-buffer)` 期望 stderr-buffer 是
+buffer object,但 call-process 的 list 形式要求 STDERR-DEST 是文件名
+(string),又触发 'stringp, #<killed buffer>'。
+
+修复:用 make-temp-file 创建 stderr 临时文件,call-process 用
+(list stdout-buffer stderr-file) 形式。本测试验证 agenote-call 在
+agenote 可用时返回 plist,不抛 wrong-type-argument。"
+      (skip-unless (executable-find "agenote"))
+      (let ((result (literal/agenote-call 'human "stats")))
+        (should (plistp result))
+        (should (memq (plist-get result :status) '(0 1 2)))
+        ;; :stdout 应为字符串(可能为空),不是 list 或 buffer
+        (should (stringp (plist-get result :stdout)))
+        ;; :stderr 同理
+        (should (stringp (plist-get result :stderr)))))
+
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here
