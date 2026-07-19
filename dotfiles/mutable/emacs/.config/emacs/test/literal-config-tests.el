@@ -410,5 +410,54 @@ agenote 可用时返回 plist,不抛 wrong-type-argument。"
         ;; :stderr 同理
         (should (stringp (plist-get result :stderr)))))
 
+    (ert-deftest literal-config/audit-packages-classification ()
+      "Phase 0 audit-packages 四类分类逻辑 (PLAN §7.2)。
+固化 `literal-configctl--classify-package' 与
+`literal-configctl--manifest-prefix-match' 的关键不变量:
+  - built-in:    Emacs 内置包,不需 manifest
+  - sub-feature: 由父包提供,不需独立 manifest
+  - runtime-dep: manifest 中显式登记,通过 require/autoload 使用
+  - used:        use-package 或 fn-call prefix-match manifest
+  - candidate:   manifest 中存在但无配置入口
+  - unknown:     配置引用但 manifest 缺失(违规类)
+
+任何让 audit-packages 重新产生 use-package-no-manifest 或
+manifest-no-use-package 二值违规的实现都违反 SoT 原则。"
+      (skip-unless (fboundp 'literal-configctl--classify-package))
+      (skip-unless (fboundp 'literal-configctl--manifest-prefix-match))
+      (let ((manifest '("magit" "avy" "ghostel" "vertico" "with-editor"))
+            (use-set '("magit" "avy")))  ; magit via fn-call, avy via fn-call
+        ;; manifest-prefix-match 行为
+        (should (equal (literal-configctl--manifest-prefix-match
+                        "magit-status-setup-buffer" manifest) "magit"))
+        (should (equal (literal-configctl--manifest-prefix-match
+                        "avy-goto-char-timer" manifest) "avy"))
+        (should (equal (literal-configctl--manifest-prefix-match
+                        "ghostel-mode" manifest) "ghostel"))
+        ;; 无 manifest 匹配的内置函数返回 nil
+        (should (null (literal-configctl--manifest-prefix-match
+                       "add-hook" manifest)))
+        (should (null (literal-configctl--manifest-prefix-match
+                       "nonexistent-foo" manifest)))
+        ;; classify-package 四类
+        ;; built-in: built-in-packages 中的元素
+        (should (eq (literal-configctl--classify-package
+                     "recentf" manifest use-set) 'built-in))
+        ;; sub-feature: vertico-multiform 等父包是 vertico
+        (should (eq (literal-configctl--classify-package
+                     "vertico-multiform" manifest use-set) 'sub-feature))
+        ;; runtime-dep: with-editor 在 manifest + runtime-deps
+        (should (eq (literal-configctl--classify-package
+                     "with-editor" manifest use-set) 'runtime-dep))
+        ;; used: magit 在 use-set
+        (should (eq (literal-configctl--classify-package
+                     "magit" manifest use-set) 'used))
+        ;; candidate: ghostel 在 manifest 但不在 use-set
+        (should (eq (literal-configctl--classify-package
+                     "ghostel" manifest use-set) 'candidate))
+        ;; unknown: nonexistent 既不在 manifest 也不在 use-set
+        (should (eq (literal-configctl--classify-package
+                     "nonexistent" manifest use-set) 'unknown))))
+
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here

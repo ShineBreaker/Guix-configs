@@ -990,11 +990,21 @@ Guix-configs repo root, then source/config.org).")
 
 (defun literal-configctl--config-required-packages ()
   "Return package-name strings referenced by emacs.org config.
-Covers `use-package NAME', `(require 'NAME)', and bare `NAME-mode' autoloads
-mentioned in hook registrations. NAME is the Emacs-level symbol (no emacs-
-prefix)."
+Covers four reference patterns, all returned as Emacs-level symbol names
+(no emacs- prefix):
+  1. `(use-package NAME)'         — direct declaration
+  2. `(require '\\='NAME)'          — explicit feature require
+  3. fn-call (manifest-aware)     — `#\\='NAME-foo' or `(NAME ...)' where NAME
+                                  matches a manifest entry; resolved by the
+                                  caller via `--audit-packages' filter
+  4. `with-eval-after-load '\\='NAME' — post-load hook
+
+NAME-mode autoloads in hook registrations are collected separately and
+normalized (strip -mode suffix) so they can match the manifest."
   (let ((use-package-names nil)
         (require-names nil)
+        (fn-call-names nil)
+        (after-load-names nil)
         (mode-names nil))
     (dolist (block (literal-configctl--src-blocks))
       (let ((body (nth 4 block)))
@@ -1007,42 +1017,240 @@ prefix)."
           (while (re-search-forward "(require[[:space:]]+'\\([a-z0-9-]+\\)" nil t)
             (push (match-string 1) require-names))
           (goto-char (point-min))
-          ;; Mode autoloads referenced in hooks: '(hook . NAME-mode)
+          (while (re-search-forward
+                  "#?'\\([a-z][a-z0-9-]+\\)\\_>" nil t)
+            (push (match-string 1) fn-call-names))
+          (goto-char (point-min))
+          (while (re-search-forward "(\\([a-z][a-z0-9-]+\\)[[:space:]]" nil t)
+            (push (match-string 1) fn-call-names))
+          (goto-char (point-min))
+          (while (re-search-forward
+                  "with-eval-after-load[[:space:]]+'\\([a-z0-9-]+\\)" nil t)
+            (push (match-string 1) after-load-names))
+          (goto-char (point-min))
           (while (re-search-forward "\\.\\s-*\\(#?'\\([a-z0-9-]+-mode\\)\\)" nil t)
             (push (match-string 2) mode-names)))))
-    ;; Normalize: strip -mode for cross-checking with manifest names.
-    (list (delete-dups (nreverse use-package-names))
-          (delete-dups (nreverse require-names))
-          (delete-dups (nreverse mode-names)))))
+    (let ((modes-as-packages
+           (delete-dups
+            (delq nil
+                  (mapcar (lambda (m)
+                            (let ((stripped
+                                   (replace-regexp-in-string "-mode\\'" "" m)))
+                              (unless (string-empty-p stripped) stripped)))
+                          mode-names)))))
+      (list (delete-dups (nreverse use-package-names))
+            (delete-dups (nreverse require-names))
+            (delete-dups (nreverse fn-call-names))
+            (delete-dups (nreverse after-load-names))
+            modes-as-packages))))
+
+(defun literal-configctl--manifest-prefix-match (name manifest-set)
+  "Return the longest prefix of NAME that matches a manifest entry.
+Strip NAME at hyphens right-to-left, trying each progressively shorter
+prefix. e.g. 'magit-status' tries 'magit-status', 'magit'; 'avy-goto-char'
+tries all three prefixes. Returns the manifest name (string) or nil."
+  (let ((parts (split-string name "-" t))
+        (best nil))
+    ;; Try progressively shorter prefixes: [magit status], [magit], []
+    (while parts
+      (let ((candidate (mapconcat #'identity parts "-")))
+        (when (member candidate manifest-set)
+          (setq best candidate)))
+      (setq parts (nbutlast parts)))
+    best))
+
+(defconst literal-configctl--built-in-packages
+  ;; Emacs 内置 feature。这些 feature 在本配置中出现 (use-package X)
+  ;; 或 (require 'X) 也不需要 manifest 条目 —— 它们由 Emacs 自身提供。
+  ;; 列表只覆盖本配置真实引用过的内置包;新增引用时同步扩充。
+  '("recentf" "savehist" "saveplace" "winner" "flymake" "project" "eldoc" "xref"
+    "compile" "gdb-mi" "dired" "dired-x" "dired-aux" "org-agenda" "org-capture"
+    "org-clock" "org-id" "ox" "ox-org" "ox-md" "ox-html" "paren" "hl-line" "whitespace"
+    "flyspell" "isearch" "ibuffer" "ibuf-ext" "reveal" "woman" "man")
+  "Emacs built-in packages referenced in this config.
+(use-package X) or (require 'X) for these names need no manifest entry.")
+
+(defconst literal-configctl--subfeature-map
+  ;; 父包名 → 该父包随附提供的子功能 symbol 列表(不需独立 manifest 条目)。
+  ;; 由 Guix 的父包 emacs-NAME 内部提供,manifest 只列父包。
+  '(("vertico" . ("vertico-multiform" "vertico-directory" "vertico-quick"
+                  "vertico-repeat" "vertico-prescient" "vertico-buffer"
+                  "vertico-mouse" "vertico-flat" "vertico-grid"
+                  "vertico-indexed" "vertico-scroll" "vertico-suspend"))
+    ("corfu"   . ("corfu-popupinfo" "corfu-prescient" "corfu-echo"
+                  "corfu-history" "corfu-indexed" "corfu-echo"))
+    ("embark"  . ("embark-consult"))
+    ("org"     . ("org-element" "org-keys" "org-refile" "org-src"
+                  "org-table" "org-timer" "org-indent" "org-faces"
+                  "org-list" "org-attach" "org-archive" "org-inlinetask"
+                  "org-compat" "org-macs" "org-fold" "org-cycle"))
+    ("eglot"   . ("eglot-x" "eglot-imenu" "eglot-events"))
+    ("consult" . ("consult-xref" "consult-flymake" "consult-org"
+                  "consult-isearch" "consult-register" "consult-yank"))
+    ("org-roam" . ("org-roam-db" "org-roam-node" "org-roam-buffer"
+                   "org-roam-dailies" "org-roam-protocol")))
+  "Alist of parent package → list of child subfeatures it provides.
+Subfeature names need no independent manifest entry (provided by parent).")
+
+(defconst literal-configctl--runtime-deps
+  ;; 显式登记的运行时依赖:manifest 必须存在,但本配置不 (use-package X)
+  ;; —— 这些包通过其他包的 require/autoload 隐式加载,或被 Emacs 端
+  ;; require 后由 manifest 提供实际代码。
+  '(;; Ghostel pre-spawn 需要 with-editor 内部 API
+    "with-editor"
+    ;; popup backend(kind-icon / corfu-popupinfo / embark 等隐式 require)
+    "posframe"
+    ;; org-export 后端
+    "htmlize" "ox-gfm"
+    ;; magit 隐式依赖
+    "git-modes" "magit-delta" "magit-todos"
+    ;; LSP 扩展(eglot 配置块内 require)
+    "eglot-x"
+    ;; use-package 宏本身(整个 emacs.org 都依赖,无独立 use-package)
+    "use-package")
+  "Manifest packages required at runtime but not declared via use-package.")
+
+(defun literal-configctl--subfeature-parent (name)
+  "Return parent package name if NAME is a subfeature, else nil."
+  (cl-block nil
+    (pcase-dolist (`(,parent . ,children) literal-configctl--subfeature-map)
+      (when (member name children)
+        (cl-return parent)))
+    nil))
+
+(defun literal-configctl--classify-package (name manifest-set use-set)
+  "Classify a single package NAME into one of four categories.
+MANIFEST-SET is the set of manifest names (no emacs- prefix).
+USE-SET is the set of names referenced via use-package/require/fn-call.
+Returns one of: \\='built-in, \\='sub-feature, \\='runtime-dep, \\='used, \\='candidate."
+  (cond
+   ((member name literal-configctl--built-in-packages) 'built-in)
+   ((literal-configctl--subfeature-parent name) 'sub-feature)
+   ((and (member name manifest-set)
+         (member name literal-configctl--runtime-deps)) 'runtime-dep)
+   ((member name use-set) 'used)
+   ((member name manifest-set) 'candidate)
+   (t 'unknown)))
 
 (defun literal-configctl--audit-packages ()
-  "Cross-check Guix manifest vs config use-package/require references."
+  "Cross-check Guix manifest vs config references.
+Output a four-class report (PLAN §7.2):
+  [used]        — declared via use-package/require/fn-call AND in manifest
+  [runtime-dep] — in manifest, used implicitly via require/autoload,
+                  listed in `literal-configctl--runtime-deps'
+  [built-in]    — Emacs built-in, no manifest entry needed
+  [sub-feature] — provided by a parent package in manifest
+  [candidate]   — in manifest but no direct use entry (audit informational)
+  [unknown]     — referenced in config but missing from manifest and not
+                  classified (this is the only class reported as violation).
+
+Reference scanning strategy: (use-package X) and (require 'X) are
+authoritative. Function-call references (#'NAME-foo, (NAME ...),
+with-eval-after-load 'NAME) are only counted when NAME exactly matches a
+manifest entry — this avoids false positives from Emacs built-ins like
+add-hook / assoc that share no name with any package."
   (let* ((manifest (literal-configctl--manifest-packages))
          (manifest-names (mapcar (lambda (p) (substring p 6)) manifest))
          (manifest-set (delete-dups manifest-names))
-         (manifest-table (make-hash-table :test 'equal))
          (required (literal-configctl--config-required-packages))
-         (use-packages (car required)))
-    (dolist (name manifest-set)
-      (puthash name t manifest-table))
-    ;; (a) use-package names not in manifest
-    (dolist (name (delete-dups use-packages))
-      (unless (gethash name manifest-table)
-        ;; Some packages ship under a different emacs- name (e.g. tree-sitter-langs).
+         (use-packages (nth 0 required))
+         (require-names (nth 1 required))
+         (fn-call-raw (nth 2 required))
+         (after-load-raw (nth 3 required))
+         (mode-as-packages (nth 4 required))
+         (_debug-start (current-time)))
+    (let* ((fn-call-names
+            (delq nil
+                  (delete-dups
+                   (mapcar (lambda (n)
+                             (literal-configctl--manifest-prefix-match
+                              n manifest-set))
+                           fn-call-raw))))
+           (after-load-names
+            (delq nil
+                  (delete-dups
+                   (mapcar (lambda (n)
+                             (literal-configctl--manifest-prefix-match
+                              n manifest-set))
+                           after-load-raw))))
+           (use-set (delete-dups
+                     (append use-packages require-names fn-call-names
+                             after-load-names mode-as-packages)))
+           (classes (make-hash-table :test 'eq))
+           (reports (make-hash-table :test 'eq))
+           (unknown-names nil)
+           (candidate-names nil)
+           (used-counts (make-hash-table :test 'equal)))
+      ;; Count references per use-set member for [used] reporting.
+      (dolist (n use-set)
+        (let ((count 0))
+          (when (member n use-packages) (cl-incf count))
+          (when (member n require-names) (cl-incf count))
+          (when (member n fn-call-names) (cl-incf count))
+          (when (member n after-load-names) (cl-incf count))
+          (when (member n mode-as-packages) (cl-incf count))
+          (puthash n count used-counts)))
+      ;; Classify every name that appears in either manifest or config references.
+      ;; copy-sequence on inputs: delete-dups is destructive and would corrupt
+      ;; manifest-set/use-set otherwise (we observed use-set shrinking from 99
+      ;; to 30 elements when sharing cells with the delete-dups target).
+      (let ((all-names (delete-dups (append (copy-sequence manifest-set)
+                                            (copy-sequence use-set)))))
+        (dolist (name all-names)
+          (let ((class (literal-configctl--classify-package
+                        name manifest-set use-set)))
+            (push name (gethash class classes nil))
+            (pcase class
+              ('used
+               (let ((reasons nil))
+                 (when (member name use-packages) (push "use-package" reasons))
+                 (when (member name require-names) (push "require" reasons))
+                 (when (member name fn-call-names) (push "fn-call" reasons))
+                 (when (member name after-load-names) (push "after-load" reasons))
+                 (when (member name mode-as-packages) (push "mode-ref" reasons))
+                 (puthash name
+                          (format "[used]              emacs-%s (%d refs: %s)"
+                                  name (gethash name used-counts 0)
+                                  (mapconcat #'identity (nreverse reasons) "+"))
+                          reports)))
+              ('runtime-dep
+               (puthash name
+                        (format "[runtime-dep]       emacs-%s (listed in runtime-deps)" name)
+                        reports))
+              ('built-in
+               (puthash name
+                        (format "[built-in]          %s (Emacs built-in, no manifest needed)" name)
+                        reports))
+              ('sub-feature
+               (let ((parent (literal-configctl--subfeature-parent name)))
+                 (puthash name
+                          (format "[sub-feature]       %s (provided by emacs-%s)" name parent)
+                          reports)))
+              ('candidate
+               (push name candidate-names)
+               (puthash name
+                        (format "[candidate]         emacs-%s (manifest only, no direct entry)" name)
+                        reports))
+              ('unknown
+               (push name unknown-names)
+               (puthash name
+                        (format "[unknown]           %s (referenced in config but no manifest entry)" name)
+                        reports))))))
+      ;; Emit reports (sorted within each class).
+      (princ (format "Total manifest: %d, total config refs: %d, classes:\n"
+                     (length manifest-set) (length use-set)))
+      (dolist (class '(used runtime-dep built-in sub-feature candidate unknown))
+        (let ((names (sort (gethash class classes nil) #'string<)))
+          (princ (format "  %s: %d\n" class (length names)))
+          (dolist (n names)
+            (princ (format "    %s\n" (gethash n reports ""))))))
+      ;; Only [unknown] is a real violation (config references missing package).
+      (dolist (name (sort unknown-names #'string<))
         (literal-configctl--violation
-         "use-package-no-manifest"
-         (format "(use-package %s) has no emacs-%s in manifest" name name))))
-    ;; (b) manifest entries with no use-package (informational; many are valid
-    ;; dependencies of other packages, not direct config entries).
-    (let ((use-table (make-hash-table :test 'equal)))
-      (dolist (name use-packages)
-        (puthash name t use-table))
-      (dolist (name manifest-set)
-        (unless (gethash name use-table)
-          (literal-configctl--violation
-           "manifest-no-use-package"
-           (format "emacs-%s in manifest but no (use-package %s)" name name)))))
-    (literal-configctl--report-audit "audit-packages")))
+         "package-missing"
+         (format "%s referenced in config but no emacs-%s in manifest"
+                 name name)))
+      (literal-configctl--report-audit "audit-packages"))))
 
 
 ;;; ---------------------------------------------------------------------------
