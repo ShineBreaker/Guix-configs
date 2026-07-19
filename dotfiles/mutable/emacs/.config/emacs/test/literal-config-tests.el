@@ -501,5 +501,73 @@ mock literal/agenote-call,验证:
           (should (member "--prune" called-args))
           (should called-stdin))))
 
+    (ert-deftest literal-config-baseline/dashboard-no-banner-advice ()
+      "Phase 4.3 基线:Dashboard 不再全局 advice dashboard-insert-banner / -footer。
+PLAN §4.3:用 dashboard 包内置 banner + dashboard-startup-banner 配置,
+任何未来 commit 重新 advice 全局 banner/footer 都违反契约。
+
+当前状态:仍 advice(用 literal/dashboard-insert-ascii-banner 插入自定义
+ASCII banner)。未来 dashboard 完整重写(改用 dashboard-banner-function)
+后,删掉 :expected-result :failed 让本测试转为强制约束。"
+      :expected-result :failed
+      (require 'dashboard nil t)
+      (when (fboundp 'dashboard-insert-banner)
+        (should-not (advice-member-p #'literal/dashboard-insert-ascii-banner
+                                     'dashboard-insert-banner)))
+      (when (fboundp 'dashboard-insert-footer)
+        (should-not (advice--p (symbol-function 'dashboard-insert-footer)))))
+
+    (ert-deftest literal-config-baseline/dashboard-no-singleton-width ()
+      "Phase 4.3 基线:删除 literal/dashboard--rendered-width defvar-local。
+PLAN §4.3:singleton buffer 宽度状态在多 frame 不同宽度时无法一致,
+改为 dashboard 包内置渲染或 generator 自行计算。
+
+当前状态:仍用 defvar-local 缓存渲染宽度。未来 dashboard 完整重写后,
+删掉 :expected-result :failed。"
+      :expected-result :failed
+      (should-not (boundp 'literal/dashboard--rendered-width)))
+
+    (ert-deftest literal-config-baseline/dashboard-no-retry-timer ()
+      "Phase 4.3 基线:删除 client-frame retry / idle timer 机制。
+PLAN §4.3:单一 server-ready hook 直接 dashboard-open,错过由用户主动补救。
+任何未来 commit 重新引入 retry/schedule 函数都违反契约。
+
+当前状态:未引入 retry(本测试目前应通过),但保留为 baseline 以防回归。
+未来 dashboard 重写时 review 是否仍需要本测试。"
+      :expected-result :failed
+      (should-not (fboundp 'literal/dashboard--schedule-open-for-frame))
+      (should-not (fboundp 'literal/dashboard--run-open-check))
+      (should-not (fboundp 'literal/dashboard--frame-startup-state))
+      (should-not (boundp 'literal:dashboard-open-retries))
+      (should-not (boundp 'literal:dashboard-open-idle-delay)))
+
+    (ert-deftest literal-config-baseline/dashboard-uses-package-items ()
+      "Phase 4.3 基线:dashboard-items 含 4 个标准 generator + 3 个自定义。
+PLAN §4.3:用 dashboard 包公开 API,自定义 generator 通过
+dashboard-item-generators 注册到 dashboard-items。
+
+当前状态:仍用 single dual generator(自定义布局),未拆分为标准 items。
+未来 dashboard 完整重写后,删掉 :expected-result :failed。"
+      :expected-result :failed
+      (skip-unless (boundp 'dashboard-items))
+      (let ((item-keys (mapcar #'car dashboard-items)))
+        ;; 4 个标准
+        (should (member 'recents item-keys))
+        (should (member 'projects item-keys))
+        (should (member 'agenda item-keys))
+        (should (member 'bookmarks item-keys))
+        ;; 3 个自定义
+        (should (member 'knowledge item-keys))
+        (should (member 'clock item-keys))
+        (should (member 'shortcuts item-keys)))
+      ;; 自定义 generator 已注册到 item-generators
+      (skip-unless (boundp 'dashboard-item-generators))
+      (should (eq (cdr (assoc 'knowledge dashboard-item-generators))
+                  'literal/dashboard-insert-knowledge))
+      (should (eq (cdr (assoc 'clock dashboard-item-generators))
+                  'literal/dashboard-insert-clock))
+      (should (eq (cdr (assoc 'shortcuts dashboard-item-generators))
+                  'literal/dashboard-insert-shortcuts)))
+
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here

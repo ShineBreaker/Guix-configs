@@ -901,6 +901,7 @@ Starship 风格响应式 mode-line。四档布局保留，但 redisplay 只经�
 (declare-function nerd-icons-icon-for-file "nerd-icons")
 (declare-function nerd-icons-icon-for-mode "nerd-icons")
 (declare-function nerd-icons-faicon "nerd-icons")
+(declare-function nerd-icons-mdicon "nerd-icons")
 (defvar mode-line-format-right-align)
 
 (defcustom literal:modeline-show-time t
@@ -933,12 +934,22 @@ Starship 风格响应式 mode-line。四档布局保留，但 redisplay 只经�
      (t 'compact))))
 
 (defun literal/modeline--icon (name &optional file)
-  "返回 Nerd Font 图标 NAME；FILE 非 nil 时按文件类型取图标。"
+  "返回 Nerd Font 图标 NAME；FILE 非 nil 时按文件类型取图标。
+
+NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\")。自动按前缀分发:
+  - \"nf-md-*\" → nerd-icons-mdicon
+  - \"nf-fa-*\"  → nerd-icons-faicon
+  - 其他         → 先试 mdicon 再试 faicon
+图形显示不可用或出错时返回空串(不抛错)。"
   (if (and (display-graphic-p) literal:modeline--nerd-icons-available)
       (or (ignore-errors
-            (if file
-                (nerd-icons-icon-for-file file)
-              (nerd-icons-faicon name)))
+            (cond
+             ((and file (stringp file)) (nerd-icons-icon-for-file file))
+             ((string-prefix-p "nf-md-" name) (nerd-icons-mdicon name))
+             ((string-prefix-p "nf-fa-" name) (nerd-icons-faicon name))
+             (t (if (string-prefix-p "nf-" name)
+                    (nerd-icons-mdicon name)
+                  (nerd-icons-faicon name)))))
           "")
     ""))
 
@@ -1072,12 +1083,13 @@ Starship 风格响应式 mode-line。四档布局保留，但 redisplay 只经�
       (if branch
           (literal/modeline--segment
            (literal/modeline--with-icon
-            (literal/modeline--icon "nf-fa-code_fork") branch)
+            (literal/modeline--icon "nf-md-source_branch") branch)
            'font-lock-type-face)
         ""))))
 
 (defun literal/modeline--vc-segment (tier)
-  "返回 TIER 对应的修改与 VC 状态。"
+  "返回 TIER 对应的修改与 VC 状态(含状态 icon)。
+复刻原版 git-status:10 种状态各自带语义化 nerd-icons icon + face。"
   (if (or (eq tier 'compact) (not buffer-file-name))
       ""
     (when (eq literal:modeline--vc-state-cache :unknown)
@@ -1086,108 +1098,197 @@ Starship 风格响应式 mode-line。四档布局保留，但 redisplay 只经�
                       'buffer-modified
                     literal:modeline--vc-state-cache))
            (spec (pcase state
-                   ('up-to-date '("clean" success))
-                   ('edited '("edited" warning))
-                   ('buffer-modified '("unsaved" warning))
-                   ('added '("added" success))
-                   ('removed '("removed" error))
-                   ((or 'missing 'conflict) '("conflict" error))
-                   ((or 'needs-merge 'needs-update) '("update" warning))
-                   ('unregistered '("untracked" warning)))))
+                   ('up-to-date       (list "clean"    "nf-md-check_circle"        'success))
+                   ('edited           (list "edited"   "nf-md-pencil"              'warning))
+                   ('buffer-modified  (list "unsaved"  "nf-md-content_save_alert"  'warning))
+                   ('added            (list "added"    "nf-md-plus_circle"         'success))
+                   ('removed          (list "removed"  "nf-md-minus_circle"        'error))
+                   ('missing          (list "missing"  "nf-md-alert_circle"        'error))
+                   ('conflict         (list "conflict" "nf-md-alert_octagon"       'error))
+                   ('needs-merge      (list "merge"    "nf-md-source_merge"        'warning))
+                   ('needs-update     (list "update"   "nf-md-cloud_download"      'warning))
+                   ('ignored          (list "ignored"  "nf-md-eye_off"             'shadow))
+                   ('unregistered     (list "untracked" "nf-md-help_circle"        'warning))
+                   (_ nil))))
       (if spec
-          (literal/modeline--segment (car spec) (cadr spec))
+          (pcase-let ((`(,text ,icon-name ,face) spec))
+            (literal/modeline--segment
+             (literal/modeline--with-icon
+              (literal/modeline--icon icon-name) text)
+             face))
         ""))))
 
 (defun literal/modeline--coding-segment (tier)
-  "返回 TIER 对应的编码。"
-  (if (memq tier '(wide medium))
+  "返回 TIER 对应的编码(narrow/medium/wide 显示)。"
+  (if (memq tier '(wide medium narrow))
       (literal/modeline--segment
-       (upcase
-        (symbol-name
-         (or (coding-system-base buffer-file-coding-system) 'undecided)))
+       (literal/modeline--with-icon
+        (literal/modeline--icon "nf-md-lock")
+        (upcase
+         (symbol-name
+          (or (coding-system-base buffer-file-coding-system) 'undecided))))
        'font-lock-string-face)
     ""))
 
 (defun literal/modeline--position-segment (tier)
-  "返回 TIER 对应的位置、百分比和 buffer 大小。"
-  (if (memq tier '(wide medium))
+  "返回 TIER 对应的位置百分比、行列与 buffer 大小(wide 显示大小)。"
+  (if (memq tier '(wide medium)
+          ;; narrow 不显示完整 position,只显示在 location-segment。
+          )
       (let* ((range (max 1 (- (point-max) (point-min))))
              (percent
               (round (* 100.0
                         (/ (float (- (point) (point-min))) range))))
-             (base (format "%d%%%% %d:%d"
-                           percent (line-number-at-pos) (current-column)))
+             (base (if (eq tier 'wide)
+                       (format "%s %d%%%%"
+                               (literal/modeline--with-icon
+                                (literal/modeline--icon "nf-md-flag_checkered")
+                                (format "%d" percent))
+                               (line-number-at-pos))
+                     (format "%d%%%%" percent)))
              (text (if (eq tier 'wide)
                        (format "%s %s" base
-                               (file-size-human-readable (buffer-size)))
+                               (literal/modeline--with-icon
+                                (literal/modeline--icon "nf-md-format_list_bulleted")
+                                (file-size-human-readable (buffer-size))))
                      base)))
         (literal/modeline--segment text 'font-lock-doc-face))
     ""))
 
-(defun literal/modeline--diagnostics-segment (tier)
-  "返回 TIER 对应的 Flymake 诊断计数。"
-  (if (and (memq tier '(wide medium))
-           (bound-and-true-p flymake-mode))
-      (pcase-let ((`(,errors ,warnings) literal:modeline--flymake-counts))
-        (literal/modeline--segment
-         (if (eq tier 'wide)
-             (format "E:%d W:%d" errors warnings)
-           (format "%d:%d" errors warnings))
-         (cond ((> errors 0) 'error)
-               ((> warnings 0) 'warning)
-               (t 'success))))
-    ""))
-
-(defun literal/modeline--eglot-segment (tier)
-  "返回 TIER 对应的 Eglot 状态。"
-  (if (and (memq tier '(wide medium)) literal:modeline--eglot-info)
-      (literal/modeline--segment
-       (if (eq tier 'wide) "eglot ●" "●")
-       'success)
-    ""))
-
-(defun literal/modeline--global-segment (tier)
-  "返回 TIER 对应的全局状态字符串。"
-  (if (memq tier '(wide medium))
-      (let* ((items (if (listp global-mode-string)
-                        global-mode-string
-                      (list global-mode-string)))
-             (filtered (remove 'battery-mode-line-string items))
-             (text (string-trim (format-mode-line filtered))))
-        (if (string-empty-p text) "" text))
-    ""))
-
-(defun literal/modeline--major-segment (tier)
-  "返回 TIER 对应的右侧 major mode。"
+(defun literal/modeline--location-segment (tier)
+  "返回 TIER 对应的行列坐标 (石石石,%c)。compact 档不显示。
+wide/medium/narrow 都显示(原版行为)。"
   (if (eq tier 'compact)
       ""
     (literal/modeline--segment
      (literal/modeline--with-icon
-      (literal/modeline--icon "nf-fa-code")
+      (literal/modeline--icon "nf-md-map_marker")
+      (format "(%d,%d)" (line-number-at-pos) (current-column)))
+     'shadow)))
+
+(defun literal/modeline--diagnostics-segment (tier)
+  "返回 TIER 对应的 Flymake 诊断计数(wide/medium/narrow 显示)。"
+  (if (and (memq tier '(wide medium narrow))
+           (bound-and-true-p flymake-mode))
+      (pcase-let ((`(,errors ,warnings) literal:modeline--flymake-counts))
+        (let* ((total (+ errors warnings))
+               (icon-name (cond
+                           ((> errors 0)   "nf-md-times_circle")
+                           ((> warnings 0) "nf-md-alert")
+                           (t              "nf-md-check_circle")))
+               (text (pcase tier
+                       ('wide    (format "E:%d W:%d" errors warnings))
+                       ('medium  (format "%d:%d" errors warnings))
+                       (_        (number-to-string total))))
+               (face (cond
+                      ((> errors 0)   'error)
+                      ((> warnings 0) 'warning)
+                      (t              'success))))
+          (literal/modeline--segment
+           (literal/modeline--with-icon (literal/modeline--icon icon-name) text)
+           face)))
+    ""))
+
+(defun literal/modeline--eglot-segment (tier)
+  "返回 TIER 对应的 Eglot 状态(三态 + wide 显示 server 名)。"
+  (if (and (memq tier '(wide medium narrow)) literal:modeline--eglot-info)
+      (pcase-let ((`(,name ,status) literal:modeline--eglot-info))
+        (let* ((point (pcase status
+                        ('connected "●")
+                        ('connecting "◐")
+                        (_ "○")))
+               (face (pcase status
+                       ('connected 'success)
+                       ('connecting 'warning)
+                       (_ 'shadow)))
+               (text (if (eq tier 'wide)
+                         (format "%s %s" name point)
+                       point)))
+          (literal/modeline--segment text face)))
+    ""))
+
+(defun literal/modeline--global-segment (tier)
+  "返回 TIER 对应的全局状态字符串。compact 档不显示。"
+  (if (eq tier 'compact)
+      ""
+    (let* ((items (if (listp global-mode-string)
+                      global-mode-string
+                    (list global-mode-string)))
+             (filtered (remove 'battery-mode-line-string items))
+             (text (string-trim (format-mode-line filtered))))
+        (if (string-empty-p text) "" text))))
+
+(defun literal/modeline--major-left-segment (tier)
+  "compact 档左侧 major mode(其他档在右侧显示)。"
+  (if (eq tier 'compact)
+      (literal/modeline--segment
+       (literal/modeline--with-icon
+        (literal/modeline--icon "nf-md-code")
+        (symbol-name major-mode))
+       'font-lock-keyword-face)
+    ""))
+
+(defun literal/modeline--major-right-segment (tier)
+  "非 compact 档右侧 major mode(带 icon)。"
+  (if (eq tier 'compact)
+      ""
+    (literal/modeline--segment
+     (literal/modeline--with-icon
+      (literal/modeline--icon "nf-md-code")
       (symbol-name major-mode))
      'font-lock-keyword-face)))
 
 (defun literal/modeline--battery-segment (tier)
-  "返回 wide 档电池状态。"
-  (if (and (eq tier 'wide)
-           (stringp battery-mode-line-string))
-      (literal/modeline--segment
-       (string-trim
-        (replace-regexp-in-string "%" "%%" battery-mode-line-string nil t))
-       'font-lock-doc-face)
+  "返回 wide 档电池状态(带 percent face 着色)。
+需要 `display-battery-mode' 启用才会填充 `battery-mode-line-string'。"
+  (if (eq tier 'wide)
+      (let* ((raw (and (boundp 'battery-mode-line-string)
+                       (stringp battery-mode-line-string)
+                       (string-trim battery-mode-line-string)))
+             (percent (and raw
+                           (string-match "\\([0-9]+\\)%%" raw)
+                           (string-to-number (match-string 1 raw))))
+             (face (cond
+                    ((not percent) 'font-lock-doc-face)
+                    ((>= percent 50) 'success)
+                    ((>= percent 20) 'warning)
+                    (t 'error))))
+        (if (and raw (not (string-empty-p raw)))
+            (literal/modeline--segment
+             (literal/modeline--with-icon
+              (literal/modeline--icon "nf-md-battery")
+              (replace-regexp-in-string "%" "%%" raw nil t))
+             face)
+          ""))
     ""))
 
 (defun literal/modeline--time-segment (tier)
-  "返回非 compact 档时间。"
+  "返回非 compact 档时间(wide 显示秒)。
+优先用 `display-time-mode' 维护的 `display-time-string',未启用时降级
+为单次 format-time-string。"
   (if (and literal:modeline-show-time (not (eq tier 'compact)))
-      (literal/modeline--segment
-       (string-trim
-        (or (and (stringp display-time-string) display-time-string) ""))
-       'font-lock-string-face)
+      (let* ((wide (eq tier 'wide))
+             (time-str (or (and (stringp display-time-string)
+                                (not (string-empty-p display-time-string))
+                                display-time-string)
+                           (format-time-string (if wide "%H:%M:%S" "%H:%M"))))
+             (text (string-trim
+                    (if wide time-str
+                      ;; 非 wide 截到 HH:MM(防止 display-time 带日期)
+                      (substring time-str 0 (min 5 (length time-str)))))))
+        (literal/modeline--segment
+         (literal/modeline--with-icon
+          (literal/modeline--icon "nf-md-clock")
+          text)
+         'font-lock-string-face))
     ""))
 
 (defun literal/modeline-render ()
-  "一次计算当前窗口的 tier，并组装完整 Starship mode-line。"
+  "一次计算当前窗口的 tier，并组装完整 Starship mode-line。
+
+布局(wide/medium/narrow/compact 四档):
+  左侧: path · buffer-name · branch · vc-status · coding · position · location · left-major(compact only)
+  右侧: diagnostics · eglot · global · right-major · battery · time"
   (let* ((tier (literal/modeline-tier))
          (left
           (literal/modeline--join
@@ -1196,13 +1297,15 @@ Starship 风格响应式 mode-line。四档布局保留，但 redisplay 只经�
            (literal/modeline--branch-segment tier)
            (literal/modeline--vc-segment tier)
            (literal/modeline--coding-segment tier)
-           (literal/modeline--position-segment tier)))
+           (literal/modeline--position-segment tier)
+           (literal/modeline--location-segment tier)
+           (literal/modeline--major-left-segment tier)))
          (right
           (literal/modeline--join
            (literal/modeline--diagnostics-segment tier)
            (literal/modeline--eglot-segment tier)
            (literal/modeline--global-segment tier)
-           (literal/modeline--major-segment tier)
+           (literal/modeline--major-right-segment tier)
            (literal/modeline--battery-segment tier)
            (literal/modeline--time-segment tier))))
     (list " " left mode-line-format-right-align " " right)))
@@ -1229,7 +1332,14 @@ Starship 风格响应式 mode-line。四档布局保留，但 redisplay 只经�
 (setq-default mode-line-inactive-format
               '((:eval (literal/modeline-render))))
 
+;; 数据源 minor mode 启用(原版行为):
+;; - display-time-mode 维护 `display-time-string'(modeline 时间段数据源)
+;; - display-battery-mode 维护 `battery-mode-line-string'(modeline 电池段数据源)
+;; - size-indication-mode 在 mode-line 末尾加 buffer 大小(由 modeline position
+;;   段在 wide 档直接显示 file-size-human-readable,不需要 size-indication-mode
+;;   再叠加,故保持默认 nil 避免重复显示)。
 (display-time-mode 1)
+(display-battery-mode 1)
 #+end_src
 
 ** Tab-line
