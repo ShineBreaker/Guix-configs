@@ -1,6 +1,6 @@
 ---
 name: guix-configs-workflow
-description: Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'guix system reconfigure', 'shepherd service', 'stow 死链', 'blue stow', 'AGENTS.md 翻新', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'wireplumber', '二轨 dotfiles', '恢复被删除的 dotfiles', or related. Ten sub-protocols — dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging, GNU Stow mutable config, restoring deleted dotfiles, ISO 移植, 需求澄清, 模块归属陷阱.
+description: Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'guix system reconfigure', 'shepherd service', 'stow 死链', 'blue stow', 'AGENTS.md 翻新', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'wireplumber', '二轨 dotfiles', '恢复被删除的 dotfiles', 'gpg-agent 不走 pinentry', 'pinentry 弹 tty', 'gpg 密码输入框', or related. Eleven sub-protocols — dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging (含 gpg-agent/pinentry 绝对 store 路径范式), GNU Stow mutable config, restoring deleted dotfiles, ISO 移植, 需求澄清, 模块归属陷阱.
 ---
 # guix-configs-workflow — Guix-configs 仓库高频工作流
 
@@ -260,6 +260,40 @@ herd restart <service-name>
 **为什么会并存**:`blue home` 部署新 .scm 后,如果 home-shepherd 守护进程没重启,Guix 不会主动终止它(它不是 `home-shepherd-service` 自身)。新 daemon 通常由用户手动起 / 由 PAM session 起;旧 daemon 继续持有旧服务定义,直到 logout / 重启才走。
 
 **根因机制**:home-shepherd 没有 cgroup 隔离,两个 daemon 完全平等,各自维护自己的服务表。
+
+### 4.6 gpg-agent / pinentry 范式:daemon 跑的 conf 必须用绝对 store 路径
+
+> 沉淀自 2026-07-18 实操。用户报 "gpg 弹密码走 tty 而不是 pinentry-qt"。**完整诊断 + 修复见 `references/gpg-agent-pinentry-absolute-store-path.md`**,本节是 SKILL 路由层。
+
+**症状**: `gpg` / `pass` / `keepassxc` / `git commit -S` 等需要 passphrase 时,弹出来的是 **TTY** 提示(直接在终端里读密码),不是预期的 pinentry-qt 窗口。
+
+**根因(一句话)**: gpg-agent 是 home-shepherd 起的 daemon,它的 `$HOME` 在启动时未必是 `/home/brokenshine`,所以 conf 里写的 `pinentry-program ~/.guix-home/profile/bin/pinentry-qt` 路径展开失败 → 走 gnupg 包 build-time fallback(`~/.guix-profile/bin/pinentry`,也不存在) → 再 fallback 到 **TTY**。
+
+**关键诊断命令**(一行定生死):
+
+```bash
+gpgconf --check-programs
+# 看 pinentry 一行显示的路径是不是你 conf 里写的路径
+# 显示 ~/.guix-profile/bin/pinentry 而 conf 写 ~/.guix-home/profile/bin/pinentry-qt
+# → 100% 确认 gpg-agent 没读你的 conf
+```
+
+**范式修复**: conf 改用绝对 store 路径,经 `home-files-service-type` + `computed-substitution-with-inputs` 部署:
+
+1. 新建 `source/files/gpg-agent.conf`,内容用 `pinentry-program $$bin/pinentry-qt$$`(rosenthal 路径注入语法)
+2. `git rm dotfiles/immutable/utilities/.local/share/gnupg/gpg-agent.conf`(旧 dotfile 源)
+3. 在 `source/config.org` 的 `home-files-services` 块加:
+   ```scheme
+   (".local/share/gnupg/gpg-agent.conf" ,(computed-substitution-with-inputs
+                                          "gpg-agent.conf"
+                                          (local-file "../source/files/gpg-agent.conf")
+                                          (specs->pkgs "pinentry-qt")))
+   ```
+4. `cd ~/Projects/Config/Guix-configs && blue home`
+5. **`gpgconf --reload gpg-agent`** —— 必须!blue home 不重启已在跑的 daemon
+6. `echo test | gpg --clearsign` 验证弹 GUI 窗口
+
+**推广**:任何 daemon 跑在 shepherd / dbus / 不继承 login shell 的上下文里,conf 里**绝对不能**写 `~` 或 `$HOME/...`,全部换成 `$$bin/...$$` / `$$share/...$$`(编译期展开成 `/gnu/store/...`)。这条对 mako / swaync / river / Hyprland 配置引用图标/字体路径同样适用。详细反模式 + 同类场景表见 `references/gpg-agent-pinentry-absolute-store-path.md`。
 
 ---
 
@@ -1107,3 +1141,4 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 - **ISO XFCE-on-labwc (Fedora 三件套落地 + `blue check` 手写 synthetic package 括号平衡调试)** 见 `references/iso-xfce-on-labwc-fedora-approach.md`(RPM 解包 / startxfce4 --wayland 机制 / 单引号 XML 属性 / 调收尾 `)` 数收敛)。
 - **ISO `blue build-iso` 运行范式 + 四个真实构建错误序列**(不需 sudo / agent 可直跑 / `%guix` 吞报错需手动复现 / `append` 拍平 noweb-list / `with-imported-modules` 修 trivial-build-system 模块缺失 / `operating-system-services` 双倍注册 essential 导致 `多余一个类为'X'的目标服务`)见 §10.7 + `references/iso-build-debug.md`。
 - **ISO KDE Plasma 装配**(XFCE→KDE 差异 / SDDM 字段带 `.desktop` 后缀 / elogind 必须显式加 / 完整错误序列 1-4 / 已构建成功的 `jeans-desktop-*.iso` 验证)见 §10.8 + `references/iso-kde-plasma-assembly.md`。
+- **gpg-agent / pinentry 范式**(daemon conf 必须用绝对 store 路径 / `$$bin/...$$` 路径注入 / `gpgconf --check-programs` 诊断信号 / home-shepherd 起的 daemon `$HOME` 不可靠 / blue home 后必走 `gpgconf --reload` / 推广到 mako / swaync / river 等同类场景)见 §4.6 + `references/gpg-agent-pinentry-absolute-store-path.md`。
