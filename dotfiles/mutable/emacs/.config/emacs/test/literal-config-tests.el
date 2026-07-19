@@ -37,31 +37,16 @@
 ;;; ---------------------------------------------------------------------------
 
 (ert-deftest literal-config/agenote-group-by-category-ordering ()
-  "Cards are grouped by category (dictionary order), each group by created desc."
-  (skip-unless (fboundp 'literal/agenote--group-by-category))
-  (let ((cards '((:id "a" :category "emacs"   :created "20260101-000000")
-                 (:id "b" :category "guix"    :created "20260102-000000")
-                 (:id "c" :category "emacs"   :created "20260103-000000")
-                 (:id "d" :category "emacs"   :created "20260102-120000")
-                 (:id "e" :category "general" :created "20260101-000000")
-                 (:id "f"))))
-    (let ((groups (literal/agenote--group-by-category cards)))
-      ;; Categories appear in dictionary order: emacs, general, guix, unknown.
-      (should (equal (mapcar #'car groups) '("emacs" "general" "guix" "unknown")))
-      ;; Within emacs: created desc — c (03), d (02-12), a (01).
-      (should (equal (mapcar (lambda (c) (plist-get c :id))
-                             (cdr (assoc "emacs" groups)))
-                     '("c" "d" "a"))))))
+  "Phase 2.3 PLAN:category grouping/recency sort 已下沉到 agenote CLI。
+本测试现已废弃;group/sort 逻辑由 CLI(agenote list)负责。
+保留此占位以提示历史;实际行为由 `literal/knowledge-list-cards' 通过
+CLI 透传,无需在 Emacs 侧固化顺序规则。"
+  (skip-unless nil))
 
 (ert-deftest literal-config/agenote-sort-by-recency ()
-  "Cards are sorted by `created' in descending order (newest first)."
-  (skip-unless (fboundp 'literal/agenote--sort-by-recency))
-  (let ((cards '((:id "a" :created "20260101-000000")
-                 (:id "b" :created "20260301-000000")
-                 (:id "c" :created "20260201-000000"))))
-    (should (equal (mapcar (lambda (c) (plist-get c :id))
-                           (literal/agenote--sort-by-recency cards))
-                   '("b" "c" "a")))))
+  "Phase 2.3 PLAN:同上,recency 排序由 agenote CLI 决定。
+本测试保留为占位。"
+  (skip-unless nil))
 
 (ert-deftest literal-config/modeline-tier-boundaries ()
   "Tier computation: wide >= 120, medium >= 100, narrow >= 80, else compact.
@@ -179,6 +164,78 @@ Each :ts-mode produces a remap from the first :modes entry."
           (should (eq (cdr (assoc mode literal:language-apheleia-mode-alist))
                       formatter)))))))
 
+(ert-deftest literal-config/capture-kr-targets-roam ()
+  "Phase 2.1+2.2: kr capture 必须写入 roam/ 目录(PLAN §2.1 四类生命周期)。
+原 bug:kr capture 曾误指向 experiences/;Phase 2.2 修复后 roam capture
+应使用 `literal/org-capture--roam-file' 返回 literal:org-roam-directory 下
+的路径。本测试固化目标函数的行为,避免回归。"
+  (skip-unless (fboundp 'literal/org-capture--roam-file))
+  (skip-unless (boundp 'literal:org-roam-directory))
+  ;; 因为 literal/org-capture--roam-file 会读字符串(交互输入),用 cl-letf
+  ;; 把 read-string 替换成无操作版本,只验证返回路径在 roam/ 下。
+  (cl-letf (((symbol-function 'read-string)
+             (lambda (&rest _) "测试标题")))
+    (let ((path (literal/org-capture--roam-file)))
+      (should (stringp path))
+      (should (string-prefix-p (file-name-as-directory
+                                (expand-file-name literal:org-roam-directory))
+                               (expand-file-name path)))
+      (should (string-match-p "\\.org\\'" path)))))
+
+(ert-deftest literal-config/treesit-grammar-auto-install-disabled ()
+  "Phase 3.2: Tree-sitter grammar 自动安装必须关闭(PLAN §3.2)。
+Guix 环境由 manifest 提供 grammar;允许 treesit-auto 在运行时下载会绕过
+Guix 的可复现部署契约。本测试固化配置不变量。"
+  (skip-unless (boundp 'treesit-auto-install-grammar))
+  (should (eq treesit-auto-install-grammar nil)))
+
+(ert-deftest literal-config/binding-spec-generates-help-and-dashboard ()
+  "Phase 6 binding-spec single-source-of-truth: 帮助分组与 Dashboard 摘要
+必须由 `literal:binding-spec' 派生,而非外置 help-zh.el。固化三点:
+  1. binding-spec 非空(配置已声明键位)。
+  2. `literal/binding-help-sections' 返回非空 sections 列表。
+  3. `literal/binding-dashboard-bindings' 返回 alist(可能为空,因为
+     Dashboard 标记是 opt-in)。
+任何未来 commit 让 help-zh.el 重新维护键位列表都会违反 SoT 原则。"
+  (skip-unless (boundp 'literal:binding-spec))
+  (should (consp literal:binding-spec))
+  (should (fboundp 'literal/binding-help-sections))
+  (should (consp (literal/binding-help-sections)))
+  (should (fboundp 'literal/binding-dashboard-bindings))
+  (should (listp (literal/binding-dashboard-bindings))))
+
+(ert-deftest literal-config/frame-phases-execute-once ()
+  "Phase 4.4: frame-created / server-ready 两个 phase 各自的 initializer
+通过 frame parameter 保证单次执行(PLAN §4.4)。本测试在 selected-frame 上
+直接调用 run-frame-initializers 两次,验证同一个 function 在同一 phase
+下只跑一次,且不同 phase 互相独立。
+
+使用 selected-frame 而非 make-frame 是因为 batch 环境无终端,make-frame
+会抛 'Unknown terminal type'。"
+  (skip-unless (fboundp 'literal--run-frame-initializers))
+  (let ((counter 0)
+        (frame (selected-frame))
+        (created-param 'literal-frame-created-done)
+        (server-param 'literal-frame-server-ready-done))
+    ;; 清空可能残留的 frame parameter(防御性)。
+    (set-frame-parameter frame created-param nil)
+    (set-frame-parameter frame server-param nil)
+    (cl-letf (((symbol-function 'test--counter-inc)
+               (lambda (_frame) (setq counter (1+ counter)))))
+      (literal--run-frame-initializers
+       frame 'created '(test--counter-inc))
+      ;; 第二次调用同一 phase:counter 不应再增加
+      (literal--run-frame-initializers
+       frame 'created '(test--counter-inc))
+      (should (= counter 1))
+      ;; 不同 phase 是独立 frame parameter,counter 应再加 1
+      (literal--run-frame-initializers
+       frame 'server-ready '(test--counter-inc))
+      (should (= counter 2)))
+    ;; 清理:测试结束后 frame parameter 不影响后续测试。
+    (set-frame-parameter frame created-param nil)
+    (set-frame-parameter frame server-param nil)))
+
 
     
 ;;; ---------------------------------------------------------------------------
@@ -283,6 +340,30 @@ configctl test 子命令由 scripts/configctl.el 提供,该文件作为 runner
       ;; (4) prefix-of 正确剥离尾随 ... 和空格。
       (should (equal (literal-configctl--prefix-of "C-c e l ...") "C-c e"))
       (should (equal (literal-configctl--prefix-of "C-c a g t") "C-c a g")))
+
+    (ert-deftest literal-config/binding-spec-parsers-phase6 ()
+      "Phase 6 audit-keys 必须消费 binding spec(literal/bind 声明),
+而非已删除的 help-zh.el 数据。固化三个新 helper:
+  1. `literal-configctl--binding-spec-entries' 解析所有 literal/bind 调用。
+  2. `literal-configctl--binding-help-sections' 按 group 分组(镜像 elisp 侧)。
+  3. `literal-configctl--binding-dashboard-bindings' 提取 :dashboard t 条目。
+
+任何回归让 audit-keys 重新读 data/help-zh.el 都会违反 SoT 原则。"
+      ;; (1) 解析器返回非空 entries 列表,每项是 plist 含 :key。
+      (let ((entries (literal-configctl--binding-spec-entries)))
+        (should (consp entries))
+        (dolist (entry entries)
+          (should (plist-get entry :key))))
+      ;; (2) help-sections 与 elisp 侧 literal/binding-help-sections 结构一致:
+      ;;     ((GROUP (key . desc) ...) ...)
+      (let ((sections (literal-configctl--binding-help-sections)))
+        (should (consp sections))
+        (should (stringp (caar sections))))   ; 第一项的 car 是 group 名
+      ;; (3) dashboard-bindings 是 alist(可能空),car 是 key 字符串。
+      (let ((dashboard (literal-configctl--binding-dashboard-bindings)))
+        (should (listp dashboard))
+        (dolist (entry dashboard)
+          (should (stringp (car entry))))))
 
     (ert-deftest literal-config/startup-gc-no-handler-redeclaration ()
       "Phase 7.1: `literal--file-name-handler-alist-original' 只在 early-init.el

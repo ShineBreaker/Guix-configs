@@ -24,8 +24,7 @@
     ("context-menu-zh.el"
      literal:context-menu-label-translations)
     ("help-zh.el"
-     literal:help-dashboard-bindings
-     literal:help-sections))
+     literal:help-introduction))
   "External data files and their required `setq' targets.")
 
 (defun literal-configctl--fail (format-string &rest args)
@@ -297,12 +296,14 @@
 
 (defun literal-configctl--smoke-test ()
   (literal-configctl--assert (featurep 'main) "main feature missing")
-  (dolist (function '(literal/add-frame-hook
+  (dolist (function '(literal/add-frame-created-hook
+                      literal/add-server-ready-hook
                       literal/call-process
                       literal/color-scheme-init
                       literal/completion-setup-display
                       literal/dashboard-open-for-client-frame
                       literal/display-or-focus
+                      literal/binding-help-sections
                       literal/help--extract-dashboard-bindings
                       literal/knowledge-collect-org-files
                       ;; Phase 2.3:统一浏览入口替代 knowledge-viz + agenote-browse
@@ -364,8 +365,12 @@
   (literal-configctl--assert
    (equal (cdr (assoc "Undo" literal:context-menu-label-translations)) "撤销")
    "context-menu translation data missing Undo -> 撤销")
-  (literal-configctl--assert (consp literal:help-sections)
-                             "shortcut help sections data missing")
+  ;; Phase 6: 帮助/Dashboard 数据已下沉到 binding spec。
+  ;; help-zh.el 只保留帮助页引言文字（literal:help-introduction）。
+  (literal-configctl--assert (consp literal:binding-spec)
+                             "binding spec missing — no literal/bind declarations?")
+  (literal-configctl--assert (consp (literal/binding-help-sections))
+                             "binding spec yielded no help sections")
   ;; P0 #4 (partial): the C-c a / C-c o / C-x p prefixes themselves must
   ;; resolve to keymaps. Individual leaf bindings are validated by
   ;; `audit-keys' (not load). These prefixes exist today and must keep
@@ -602,31 +607,68 @@ DESC is the which-key description for literal/set-key or nil."
                           :owner owner) specs))))))
     specs))
 
-(defun literal-configctl--help-zh-data ()
-  "Return (sections dashboard-bindings) loaded from data/help-zh.el.
-Each section is (TITLE (key . desc) ...). Dashboard-bindings is the alist.
-The setq value is typically (quote (LIST)); we unwrap the quote."
-  (let* ((file (expand-file-name "data/help-zh.el" literal-configctl-root))
-         (sections nil)
-         (dashboard nil))
-    (when (file-readable-p file)
-      (with-temp-buffer
-        (insert-file-contents file)
-        (goto-char (point-min))
-        (when (re-search-forward "(setq literal:help-sections\\_>" nil t)
-          ;; `re-search-forward' leaves point right after `literal:help-sections';
-          ;; the next sexp read is the VALUE (typically (quote (...))).
-          (let ((value (read (current-buffer))))
-            (setq sections (if (and (consp value) (eq (car value) 'quote))
-                               (cadr value)
-                             value))))
-        (goto-char (point-min))
-        (when (re-search-forward "(setq literal:help-dashboard-bindings\\_>" nil t)
-          (let ((value (read (current-buffer))))
-            (setq dashboard (if (and (consp value) (eq (car value) 'quote))
-                                (cadr value)
-                              value))))))
-    (list sections dashboard)))
+(defun literal-configctl--binding-spec-entries ()
+  "Parse `literal/bind' declarations in emacs.org source blocks.
+Return a list of plists: (:key :target :desc :group :prefix :dashboard).
+Only literal/bind is first-party SoT — literal/bind-local is local-mode
+and literal/declare-binding-prefix delegates to literal/bind internally."
+  (let (entries)
+    (dolist (block (literal-configctl--src-blocks))
+      (pcase-let* ((`(,_owner ,_begin ,_body-start ,_body-end ,body ,_hdr) block))
+        (with-temp-buffer
+          (insert body)
+          (goto-char (point-min))
+          ;; Form: (literal/bind \"KEY\" [#'CMD | nil] [\"DESC\"] [\"GROUP\"] [:prefix t :dashboard t]...)
+          ;; sexp parsing is more robust than regex: read from `(` to matching `)`.
+          (while (re-search-forward "(literal/bind[[:space:]]+" nil t)
+            (let ((start (match-beginning 0)))
+              (save-excursion
+                (goto-char start)
+                (condition-case nil
+                    (let* ((sexp (read (current-buffer)))
+                           (key (nth 1 sexp))
+                           (target (nth 2 sexp))
+                           (desc (nth 3 sexp))
+                           (group (nth 4 sexp))
+                           (rest (nthcdr 5 sexp)))
+                      (when (stringp key)
+                        (push (list :key key
+                                    :target (when target (format "%S" target))
+                                    :desc (when (stringp desc) desc)
+                                    :group (when (stringp group) group)
+                                    :prefix (and (plist-member rest :prefix)
+                                                 (eq (plist-get rest :prefix) t))
+                                    :dashboard (and (plist-member rest :dashboard)
+                                                    (eq (plist-get rest :dashboard) t)))
+                              entries)))
+                  (error nil))))))))
+    (nreverse entries)))
+
+(defun literal-configctl--binding-help-sections ()
+  "Mirror `literal/binding-help-sections' on parsed binding spec entries.
+Return a list of (GROUP (key . desc) ...) preserving source order."
+  (let (order table)
+    (dolist (entry (literal-configctl--binding-spec-entries))
+      (let ((group (plist-get entry :group)))
+        (when group
+          (unless (member group order)
+            (setq order (append order (list group))))
+          (push (cons (plist-get entry :key) (plist-get entry :desc))
+                (alist-get group table nil nil #'equal)))))
+    (mapcar
+     (lambda (group)
+       (cons group (nreverse (alist-get group table nil nil #'equal))))
+     order)))
+
+(defun literal-configctl--binding-dashboard-bindings ()
+  "Mirror `literal/binding-dashboard-bindings' on parsed entries.
+Return an alist of (key . desc) for entries flagged :dashboard t."
+  (delq nil
+        (mapcar
+         (lambda (entry)
+           (when (plist-get entry :dashboard)
+             (cons (plist-get entry :key) (plist-get entry :desc))))
+         (literal-configctl--binding-spec-entries))))
 
 (defun literal-configctl--dashboard-hardcoded-hints ()
   "Extract icon-hint binding strings embedded in dashboard generators.
@@ -673,20 +715,22 @@ Single-token strings return nil."
     (cl-some (lambda (k) (string-match-p prefix-re k)) bound-keys)))
 
 (defun literal-configctl--audit-keys ()
-  "Cross-check declared bindings vs help data and dashboard hints.
-Only curated app-prefix bindings (C-c ?, C-x p, M-g, M-s, F1, C-x g, C-x t) are
-checked — raw single-char bindings like C-j are set by key-helper and not part
-of the help/dashboard single-source-of-truth.
+  "Cross-check binding spec vs actual keymap and dashboard hardcoded hints.
+Phase 6: binding spec (`literal/bind') 是键位、Which-key、帮助与 Dashboard
+摘要的唯一真相源。本审计确保:
+  - binding spec 声明的 curated key 在真实 keymap 中可解析。
+  - dashboard generator 中硬编码的绑定串(非 spec 来源)在 keymap 中存在。
+  - curated keymap 绑定在 binding spec 中有声明。
 
-Phase 6 智能识别:
-  - \"C-c X y ...\" 前缀组声明:只要存在任意 C-c X y * 子绑定即视为满足。
-  - dashboard 单字母前缀(\"C-c l\" 等):是前缀组名,只要有任意 C-c l * 子绑定即满足。
-  - 第三方包内部绑定(C-c C-c 等):非本配置 single-source-of-truth 范围,跳过。"
+Only curated app-prefix bindings (C-c [a-z], C-x p/g/t, M-g, M-s, F1) are
+checked — raw single-char bindings like C-j are set by key-helper and not part
+of the help/dashboard single-source-of-truth."
   (let* ((specs (literal-configctl--binding-specs))
+         (spec-entries (literal-configctl--binding-spec-entries))
          (bound-keys (delete-dups (mapcar (lambda (s) (plist-get s :key)) specs)))
-         (help-data (literal-configctl--help-zh-data))
-         (sections (car help-data))
-         (dashboard (cadr help-data))
+         (spec-keys (delete-dups (mapcar (lambda (e) (plist-get e :key)) spec-entries)))
+         (sections (literal-configctl--binding-help-sections))
+         (dashboard (literal-configctl--binding-dashboard-bindings))
          (help-keys nil)
          (dashboard-keys (delq nil (mapcar
                                     (lambda (entry)
@@ -694,16 +738,17 @@ Phase 6 智能识别:
                                         (car entry)))
                                     dashboard)))
          (hardcoded-hints (literal-configctl--dashboard-hardcoded-hints)))
-    ;; Collect all curated keys mentioned in help-sections.
+    ;; Collect all curated keys mentioned in binding-spec-derived help-sections.
     (dolist (section sections)
       (dolist (binding (cdr section))
         (dolist (token (literal-configctl--help-key-tokens (car binding)))
           (when (literal-configctl--curated-key-p token)
             (push token help-keys)))))
     (setq help-keys (delete-dups (nreverse help-keys)))
-    ;; (a) help/dashboard/hardcoded hint strings that have no corresponding binding
+    ;; (a) help/dashboard spec keys must resolve to real bindings.
     (dolist (key help-keys)
       (unless (or (member key bound-keys)
+                  (member key spec-keys)
                   ;; 前缀组占位符(C-c X y ...):只要有任意子绑定即满足
                   (and (literal-configctl--prefix-group-p key)
                        (let ((prefix (literal-configctl--prefix-of key)))
@@ -713,10 +758,11 @@ Phase 6 智能识别:
                   (not (string-match-p "\\`C-c [a-z]" key)))
         (literal-configctl--violation
          "help-no-binding"
-         (format "%s declared in data/help-zh.el but no keymap-global-set/keymap-set/literal/set-key matches"
+         (format "%s declared in binding spec but no keymap-global-set/keymap-set/literal/bind matches"
                  key))))
     (dolist (key dashboard-keys)
       (unless (or (member key bound-keys)
+                  (member key spec-keys)
                   ;; dashboard 单字母前缀(C-c l / C-c a 等):是前缀组名,
                   ;; 只要存在任意 C-c l * 子绑定即视为声明有效。
                   (and (string-match-p "\\`C-c [a-z]\\'" key)
@@ -726,7 +772,7 @@ Phase 6 智能识别:
                        (literal-configctl--has-child-binding-p key bound-keys)))
         (literal-configctl--violation
          "dashboard-no-binding"
-         (format "%s declared in literal:help-dashboard-bindings but no binding matches"
+         (format "%s declared via :dashboard t in binding spec but no binding matches"
                  key))))
     (dolist (hint hardcoded-hints)
       (unless (member hint bound-keys)
@@ -738,7 +784,7 @@ Phase 6 智能识别:
                "dashboard-hardcoded-no-binding"
                (format "%s (from dashboard generator icon-hint) has no matching binding"
                        token)))))))
-    ;; (b) curated bindings with no help entry (informational).
+    ;; (b) curated bindings must be declared in binding spec (informational).
     (dolist (spec specs)
       (let ((key (plist-get spec :key)))
         (when (and (literal-configctl--curated-key-p key)
@@ -746,7 +792,7 @@ Phase 6 智能识别:
                    (not (member key dashboard-keys)))
           (literal-configctl--violation
            "binding-no-help"
-           (format "%s bound to %s but no help/dashboard entry mentions it"
+           (format "%s bound to %s but no binding spec entry mentions it"
                    key (plist-get spec :command))))))
     (literal-configctl--report-audit "audit-keys")))
 
@@ -873,10 +919,11 @@ Allow list: blocks whose owning CUSTOM_ID is in
     (dolist (block (literal-configctl--src-blocks))
       (let ((owner (car block))
             (body (nth 4 block)))
-        (when (not (member owner literal-configctl-compatibility-ids))
-          (with-temp-buffer
-            (insert body)
-            (goto-char (point-min))
+          (when (not (member owner literal-configctl-compatibility-ids))
+            (with-temp-buffer
+              (insert body)
+              (delay-mode-hooks (emacs-lisp-mode))
+              (goto-char (point-min))
             (while (re-search-forward literal-configctl--private-api-call-rx nil t)
               (let ((symbol (match-string 0))
                     (match-beg (match-beginning 0)))
@@ -1053,20 +1100,31 @@ prefix)."
                      blocks refs forms definitions data-assignments))
       (when keep-tangle (list runtime target)))))
 
-(pcase command-line-args-left
-  (`("map") (literal-configctl-map))
-  (`("show" ,query) (literal-configctl-show query))
-  (`("find" ,regexp) (literal-configctl-find regexp))
-  (`("check") (literal-configctl-check nil nil))
-  (`("check-strict") (literal-configctl-check nil t))
-  (`("load") (literal-configctl-load))
-  (`("test") (literal-configctl-test))
-  (`("audit-keys") (literal-configctl--audit-keys))
-  (`("audit-private-api") (literal-configctl--audit-private-api))
-  (`("audit-agenote-domain") (literal-configctl--audit-agenote-domain))
-  (`("audit-packages") (literal-configctl--audit-packages))
-  ((or 'nil `("help") `("--help") `("-h")) (literal-configctl-usage))
-  (_ (literal-configctl-usage)
-     (literal-configctl--fail "invalid arguments: %S" command-line-args-left)))
+(let ((status 0))
+  (condition-case err
+      (pcase command-line-args-left
+        (`("map") (literal-configctl-map))
+        (`("show" ,query) (literal-configctl-show query))
+        (`("find" ,regexp) (literal-configctl-find regexp))
+        (`("check") (literal-configctl-check nil nil))
+        (`("check-strict") (literal-configctl-check nil t))
+        (`("load") (literal-configctl-load))
+        (`("test") (literal-configctl-test))
+        (`("audit-keys") (literal-configctl--audit-keys))
+        (`("audit-private-api") (literal-configctl--audit-private-api))
+        (`("audit-agenote-domain") (literal-configctl--audit-agenote-domain))
+        (`("audit-packages") (literal-configctl--audit-packages))
+        ((or 'nil `("help") `("--help") `("-h")) (literal-configctl-usage))
+        (_ (literal-configctl-usage)
+           (literal-configctl--fail "invalid arguments: %S"
+                                    command-line-args-left)))
+    (error
+     (setq status 1)
+     (princ (format "ERROR: %s\n" (error-message-string err))
+            'external-debugging-output)))
+  (when-let* ((status-file (getenv "LITERAL_CONFIGCTL_STATUS_FILE")))
+    (with-temp-file status-file
+      (insert (number-to-string status))))
+  (kill-emacs status))
 
 ;;; configctl.el ends here

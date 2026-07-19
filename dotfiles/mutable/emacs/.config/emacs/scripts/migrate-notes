@@ -6,9 +6,9 @@
 #
 # 数据安全策略:
 #   - 默认 dry-run,不移动任何文件
-#   - --apply 才真正执行移动,且只对清单中明确分类的文件生效
-#   - 纯备份内容默认移到 archive/(只读,不加入 agenda/Roam DB/Dashboard)
-#   - 不删除任何源文件(由用户 review 后手工清理)
+#   - --apply 才复制/合并清单中的文件，源文件始终保留
+#   - 纯备份内容默认复制到 archive/(不加入 agenda/Roam DB/Dashboard)
+#   - 所有目标名通过递增后缀去重，不依赖秒级时间戳
 #
 # 用法:
 #   scripts/migrate-notes                 # 生成清单到 stdout
@@ -21,6 +21,7 @@ set -euo pipefail
 
 NOTES_DIR="${LITERAL_ORG_NOTES_DIR:-$HOME/Documents/Org/notes}"
 ROAM_DIR="${LITERAL_ORG_ROAM_DIR:-$HOME/Documents/Org/roam}"
+AGENDA_DIR="${LITERAL_ORG_AGENDA_DIR:-$HOME/Documents/Org/agenda}"
 INBOX_FILE="${LITERAL_ORG_INBOX_FILE:-$HOME/Documents/Org/inbox.org}"
 ARCHIVE_DIR="${LITERAL_ORG_ARCHIVE_DIR:-$HOME/Documents/Org/archive/notes-legacy}"
 APPLY=0
@@ -32,6 +33,7 @@ migrate-notes — notes/ 历史目录迁移清单生成器(PLAN §2.1)
 环境变量(可选):
   LITERAL_ORG_NOTES_DIR    notes/ 源目录(默认 ~/Documents/Org/notes)
   LITERAL_ORG_ROAM_DIR     Roam 目标目录(默认 ~/Documents/Org/roam)
+  LITERAL_ORG_AGENDA_DIR   Agenda 目标目录(默认 ~/Documents/Org/agenda)
   LITERAL_ORG_INBOX_FILE   inbox.org 路径(默认 ~/Documents/Org/inbox.org)
   LITERAL_ORG_ARCHIVE_DIR  只读归档目录(默认 ~/Documents/Org/archive/notes-legacy)
 
@@ -137,7 +139,7 @@ fi
 # --apply 执行
 echo "=== 执行迁移 ==="
 
-mkdir -p "$ROAM_DIR" "$ARCHIVE_DIR"
+mkdir -p "$ROAM_DIR" "$AGENDA_DIR" "$ARCHIVE_DIR"
 # inbox 文件需要追加,不创建新文件
 touch "$INBOX_FILE"
 
@@ -148,38 +150,54 @@ migrate_one() {
 
     case "$category" in
         agenda|roam)
-            local target
-            target="$ROAM_DIR/$base"
-            # 避免覆盖:加 .migrated-<timestamp> 后缀
-            if [[ -e "$target" ]]; then
-                target="$ROAM_DIR/${base%.org}.migrated-$(date +%Y%m%d-%H%M%S).org"
+            local target_dir target
+            if [[ "$category" == agenda ]]; then
+                target_dir="$AGENDA_DIR"
+            else
+                target_dir="$ROAM_DIR"
             fi
-            mv -v "$file" "$target"
+            target="$(unique_target "$target_dir" "$base" migrated)"
+            cp -pv "$file" "$target"
             ;;
         inbox)
-            # 追加到 inbox.org 末尾作为新 subtree
-            {
-                echo ""
-                echo "* TODO 迁移自 notes/$base"
-                echo ":PROPERTIES:"
-                echo ":CREATED: $(date '+[%Y-%m-%d %a]')"
-                echo ":END:"
-                echo ""
-                cat "$file"
-                echo ""
-            } >> "$INBOX_FILE"
-            echo "  追加到 inbox.org: $base"
-            rm -v "$file"
+            # 追加到 inbox.org 末尾作为新 subtree。
+            # 幂等保护:再次 --apply 时不重复追加同一文件(以 marker 行为准)。
+            local marker="* TODO 迁移自 notes/$base"
+            if [[ -f "$INBOX_FILE" ]] && grep -qF "$marker" "$INBOX_FILE" 2>/dev/null; then
+                echo "  跳过(已迁移): $base"
+            else
+                {
+                    echo ""
+                    echo "$marker"
+                    echo ":PROPERTIES:"
+                    echo ":CREATED: $(date '+[%Y-%m-%d %a]')"
+                    echo ":END:"
+                    echo ""
+                    cat "$file"
+                    echo ""
+                } >> "$INBOX_FILE"
+                echo "  追加到 inbox.org: $base"
+            fi
             ;;
         archive)
             local target
-            target="$ARCHIVE_DIR/$base"
-            if [[ -e "$target" ]]; then
-                target="$ARCHIVE_DIR/${base%.org}.archived-$(date +%Y%m%d-%H%M%S).org"
-            fi
-            mv -v "$file" "$target"
+            target="$(unique_target "$ARCHIVE_DIR" "$base" archived)"
+            cp -pv "$file" "$target"
             ;;
     esac
+}
+
+unique_target() {
+    local directory="$1" base="$2" suffix="$3"
+    local target="$directory/$base"
+    local stem="${base%.org}"
+    local counter=1
+
+    while [[ -e "$target" ]]; do
+        target="$directory/${stem}.${suffix}-${counter}.org"
+        counter=$((counter + 1))
+    done
+    printf '%s\n' "$target"
 }
 
 for f in "${agenda_files[@]:-}"; do [[ -n "$f" ]] && migrate_one agenda "$f"; done
@@ -188,5 +206,5 @@ for f in "${inbox_files[@]:-}";    do [[ -n "$f" ]] && migrate_one inbox  "$f"; 
 for f in "${archive_files[@]:-}";  do [[ -n "$f" ]] && migrate_one archive "$f"; done
 
 echo
-echo "迁移完成。源文件已移动(agenda/roam/archive)或合并(inbox)。"
-echo "下一步:运行 `agenote reindex` 重建知识库索引。"
+echo "迁移完成。源文件均保留；目标已复制(agenda/roam/archive)或合并(inbox)。"
+echo '下一步:运行 agenote --domain human reindex 重建知识库索引。'
