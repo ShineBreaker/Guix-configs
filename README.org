@@ -27,19 +27,29 @@
 --------------
 
 * 系统预览
+
 ** 桌面截图
+
 [[file:screenshots/daily.png]]
+
 ** ~Tmux~ + ~Foot~ 实现的终端布局
+
 [[file:screenshots/terminal.png]]
+
 ** Emacs 截图
+
 [[file:screenshots/emacs.png]]
+
 ** Zen Browser
+
 [[file:screenshots/browse.png]]
 
 * 核心概念速览
+
 在深入配置前, 先理解几个 Guix 特有的概念:
 
 ** 1. Channel (频道)
+
 Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix= 外还包含:
 
 + [[https://gitlab.com/nonguix/nonguix][nonguix]] — Linux 内核、专有驱动等
@@ -49,13 +59,14 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 频道定义在 [[./source/channel.scm][source/channel.scm]], 版本锁定在 [[./source/channel.lock][source/channel.lock]]。 =channel.lock= 利用 channel 参数中 =commit= 字段锁住具体 commit, 从而固定仓库。
 
 ** 2. System + Home (统一配置)
+
 *原则* : 能用 Home 解决就不用 System, 保持系统层最小化。
 
 + 在系统配置中利用了 ~guix-home-service-type~ 来导入用户配置, 在日常使用的时候利用 ~blue home~ 来 *临时* 部署home配置, 在确认无误后, 利用 ~blue rebuild~ 来将home配置 *固化* 到系统配置中。
-
 + 每次开机的时候, 系统会默认使用最新的配置世代, 其中会包括home配置, 这样即使误操作home配置导致部分软件无法正常工作时, 依旧可以依靠直接重启来恢复配置。
 
 ** 3. Org Mode 撰写配置
+
 配置写在 =.org= 文件中, 代码嵌入在 =src= 代码块里:
 
 配置和文档写在一起, 用 Emacs 的 =org-babel-tangle= 提取代码, 可以获得更好的阅读体验, 并且在 Emacs 中编辑时会更有条理。
@@ -66,12 +77,12 @@ Guix 的软件包定义分布在多个「频道」中。本配置除默认 =guix
 
 ** 关键入口
 
-| 文件 / 目录            | 用途                                      | 修改频率                 |
-|------------------------+-------------------------------------------+--------------------------|
+| 文件 / 目录              | 用途                                        | 修改频率                 |
+|--------------------------+---------------------------------------------+--------------------------|
 | =source/information.scm= | 用户名、Btrfs 子卷、持久化目录 =%data-dirs= | 初次使用时必改           |
-| =source/config.org=      | 系统 + 用户配置 (唯一 Org 源)             | 经常                     |
-| =blueprint.scm=          | blue 任务定义                             | 需要添加自定义任务时修改 |
-| =source/channel.scm=     | 频道定义                                  | 添加/删除频道时          |
+| =source/config.org=      | 系统 + 用户配置 (唯一 Org 源)               | 经常                     |
+| =blueprint.scm=          | blue 任务定义                               | 需要添加自定义任务时修改 |
+| =source/channel.scm=     | 频道定义                                    | 添加/删除频道时          |
 
 ** 构建管线
 
@@ -88,7 +99,9 @@ tmp/config.scm
 #+end_example
 
 * 快速开始
+
 ** 1. 安装系统 (新机器)
+
 #+begin_src sh
 # 进入 Guix 安装环境后, 克隆本仓库
 git clone https://codeberg.org/BrokenShine/Guix-configs
@@ -102,29 +115,31 @@ guix shell blue -- blue init
 
 完整列表运行 =blue list= 。 =blue --dry-run= 对任何命令生效, 仅做构建验证、不写入系统 (子进程统一短路)。
 
-| 命令                    | 作用                                             | 类别 |
-|-------------------------+--------------------------------------------------+------|
-| =blue rebuild=            | tangle → 括号检查 → system reconfigure → locate  | 部署 |
-| =blue home=               | 仅应用 Home 层 (含 dotfiles) , 不需 sudo         | 部署 |
+| 命令                      | 作用                                               | 类别 |
+|---------------------------+----------------------------------------------------+------|
+| =blue rebuild=            | tangle → 括号检查 → system reconfigure → locate    | 部署 |
+| =blue home=               | 仅应用 Home 层 (含 dotfiles) , 不需 sudo           | 部署 |
 | =blue init=               | 把系统配置安装到 =/mnt= （新装机用）               | 部署 |
 | =blue block-show NAME=    | 从 =source/config.org= 提取名为 NAME 的 Org 代码块 | 编辑 |
 | =blue block-replace NAME= | 把 =tmp/= 里的代码塞回 Org 源                      | 编辑 |
-| =blue secret-scan=        | 扫描文本配置中疑似泄漏的密钥                     | 校验 |
+| =blue secret-scan=        | 扫描文本配置中疑似泄漏的密钥                       | 校验 |
 | =blue update=             | 更新 =source/channel.lock= 并签名提交              | 频道 |
 | =blue pull=               | =guix pull --allow-downgrades=                     | 频道 |
-| =blue stow [MODE] PKG...= | GNU Stow 部署 dotfiles/mutable/ 下的包           | 直链 |
-| =blue stow-all [MODE]=    | 批量对 dotfiles/mutable/ 下所有包执行 stow 操作  | 直链 |
-| =blue clean-generations=  | 删除旧的 Guix System / Home 世代                 | 维护 |
-| =blue clean-artifacts=    | 移除仓库编译产物                                 | 维护 |
-| =blue gc=                 | 执行 Guix GC 并清理旧 Guix EFI 文件              | 维护 |
-| =blue reuse=              | 为文件补充 SPDX 版权和许可证头                   | 维护 |
-| =blue structor=           | 刷新 AGENTS.md 中自动生成的目录树章节            | 维护 |
-| =blue nix=                | 应用备用 Nix home-manager 配置                   | 二轨 |
-| =blue nix-init=           | 初始化 Nix channel 并安装 home-manager           | 二轨 |
-| =blue nix-update=         | 更新 Nix channel 和 flake                        | 二轨 |
+| =blue stow [MODE] PKG...= | GNU Stow 部署 dotfiles/mutable/ 下的包             | 直链 |
+| =blue stow-all [MODE]=    | 批量对 dotfiles/mutable/ 下所有包执行 stow 操作    | 直链 |
+| =blue clean-generations=  | 删除旧的 Guix System / Home 世代                   | 维护 |
+| =blue clean-artifacts=    | 移除仓库编译产物                                   | 维护 |
+| =blue gc=                 | 执行 Guix GC 并清理旧 Guix EFI 文件                | 维护 |
+| =blue reuse=              | 为文件补充 SPDX 版权和许可证头                     | 维护 |
+| =blue structor=           | 刷新 AGENTS.md 中自动生成的目录树章节              | 维护 |
+| =blue nix=                | 应用备用 Nix home-manager 配置                     | 二轨 |
+| =blue nix-init=           | 初始化 Nix channel 并安装 home-manager             | 二轨 |
+| =blue nix-update=         | 更新 Nix channel 和 flake                          | 二轨 |
 
 * 常用任务
+
 ** 修改用户名
+
 编辑 =source/information.scm=:
 
 #+begin_src scheme
@@ -134,6 +149,7 @@ guix shell blue -- blue init
 然后运行 =blue rebuild= 。
 
 ** 添加 Btrfs 持久化目录
+
 编辑 =source/information.scm=:
 
 #+begin_src scheme
@@ -144,6 +160,7 @@ guix shell blue -- blue init
 如需新增 Btrfs 子卷挂载, 同步编辑 =%btrfs-subvolumes=。然后在 =config.org= 的 Btrfs 配置部分添加对应的 bind-mount。
 
 ** 添加新的 Channel
+
 编辑 =source/channel.scm= 添加频道定义, 然后运行:
 
 #+begin_src sh
@@ -151,6 +168,7 @@ blue update
 #+end_src
 
 ** 自定义 blue 任务
+
 blue 命令通过 [[https://codeberg.org/lapislazuli/blue][blue]] 框架的 Scheme DSL 注册。普通 =(define (my-task) ...)= 不会被识别; 必须以 =(define-command (NAME-command arguments) ...)= 形式声明, 并登记到 =blueprint.scm= 末尾的 =(blueprint ... (commands (list ...)))= 列表中。
 
 *** 模板
@@ -186,12 +204,15 @@ blue 命令通过 [[https://codeberg.org/lapislazuli/blue][blue]] 框架的 Sche
 完成后运行 =blue my-task= (=blue --dry-run my-task= 仅构建验证、不真跑子进程)。
 
 * 故障排除
+
 ** 系统启动后数据丢失
+
 *注意*: =/= 分区是挂载在 =tmpfs= 上的,  *重启后会自动清空* , 所以需要利用 =Btrfs Subvols= 来持久化部分目录
 
 检查 =source/information.scm= 中的 =%data-dirs= 与 Btrfs 子卷配置是否正确；确保 =/data= 分区已正确挂载。
 
 ** Org 导出失败
+
 确保安装了 Emacs 且启用了 =org-babel-tangle=:
 
 #+begin_src sh
@@ -199,13 +220,14 @@ emacs --batch -l org --eval "(require 'ob-tangle)"
 #+end_src
 
 ** 修改过后报错
+
 修改 ~*.org~ 配置后, 可用 =dry-run= 模式验证语法 (不会实际应用到系统) :
 
 #+begin_src sh
 blue --dry-run rebuild
 #+end_src
 
-=blue rebuild= 在执行前会自动跑整体括号平衡检查 (在 =prepare-config= 里, 对 tangle 出的 =config.scm= )。独立的 =blue check= 则做*逐块*检查——直接解析 =config.org= 每个 =#+NAME= 块 + 周边 =.scm= 文件, 能定位到具体出错的块名, 且不依赖 tangle。若只想验证构建、不写入系统, 用 =blue --dry-run rebuild= 。
+=blue rebuild= 在执行前会自动跑整体括号平衡检查 (在 =prepare-config= 里, 对 tangle 出的 =config.scm= )。独立的 =blue check= 则做 *逐块* 检查——直接解析 =config.org= 每个 =#+NAME= 块 + 周边 =.scm= 文件, 能定位到具体出错的块名, 且不依赖 tangle。若只想验证构建、不写入系统, 用 =blue --dry-run rebuild= 。
 
 + 如果提示 =unbound variable=: 检查是否导入对应模块 (可以利用 [[https://search.guix.moe/][Toys]] 来查询)
 + 如果提示 =invalid field specifier=: 检查括号是否标错 (推荐用 =Emacs= 来进行检查)
