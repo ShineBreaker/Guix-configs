@@ -1,0 +1,353 @@
+<?xml version="1.0" ?>
+<labwc_config>
+
+  <placement>
+    <policy>center</policy>
+  </placement>
+
+  <theme>
+    <name>Adwaita</name>
+    <cornerRadius>8</cornerRadius>
+    <dropShadows>yes</dropShadows>
+    <font name="sans" size="10" />
+  </theme>
+
+  <desktops>
+    <popupTime>1000</popupTime>
+    <names>
+      <name>1</name>
+      <name>2</name>
+      <name>3</name>
+      <name>4</name>
+    </names>
+  </desktops>
+
+  <keyboard>
+    <default />
+    <numlock>on</numlock>
+
+    <keybind key="Print">
+      <action name="Execute" command="xfce4-screenshooter -r" />
+    </keybind>
+    <keybind key="C-Print">
+      <action name="Execute" command="xfce4-screenshooter -f" />
+    </keybind>
+    <keybind key="A-Print">
+      <action name="Execute" command="xfce4-screenshooter -w" />
+    </keybind>
+
+    <keybind key="W-0"><action name="GoToDesktop" to="1" /></keybind>
+    <keybind key="W-1"><action name="GoToDesktop" to="1" /></keybind>
+    <keybind key="W-2"><action name="GoToDesktop" to="2" /></keybind>
+    <keybind key="W-3"><action name="GoToDesktop" to="3" /></keybind>
+    <keybind key="W-4"><action name="GoToDesktop" to="4" /></keybind>
+
+    <keybind key="W-Space">
+      <action name="ShowMenu" menu="client-list-combined-menu">
+        <position><x>center</x><y>center</y></position>
+      </action>
+    </keybind>
+
+    <keybind key="W-A-Space">
+      <action name="Execute" command="xfce4-popup-whiskermenu" />
+    </keybind>
+
+    <keybind key="W-C-C">
+      <action name="AutoPlace" policy="center" />
+    </keybind>
+    <keybind key="W-C-F">
+      <action name="ToggleDecorations" />
+    </keybind>
+
+    <keybind key="W-C-H"><action name="MoveRelative" x="-64" y="0" /></keybind>
+    <keybind key="W-C-J"><action name="MoveRelative" x="0" y="64" /></keybind>
+    <keybind key="W-C-K"><action name="MoveRelative" x="0" y="-64" /></keybind>
+    <keybind key="W-C-L"><action name="MoveRelative" x="64" y="0" /></keybind>
+    <keybind key="W-C-Left"><action
+        name="MoveRelative"
+        x="-64"
+        y="0"
+      /></keybind>
+    <keybind key="W-C-Down"><action
+        name="MoveRelative"
+        x="0"
+        y="64"
+      /></keybind>
+    <keybind key="W-C-Up"><action name="MoveRelative" x="0" y="-64" /></keybind>
+    <keybind key="W-C-Right"><action
+        name="MoveRelative"
+        x="64"
+        y="0"
+      /></keybind>
+
+    <keybind key="W-C-Home">
+      <action name="SendToDesktop" to="1" follow="no" />
+    </keybind>
+    <keybind key="W-C-End">
+      <action name="SendToDesktop" to="10" follow="no" />
+    </keybind>
+
+    <keybind key="W-C-equal">
+      <action name="ResizeRelative" left="-32" right="32" />
+    </keybind>
+    <keybind key="W-C-minus">
+      <action name="ResizeRelative" left="32" right="-32" />
+    </keybind>
+
+    <keybind key="W-C-Page_Up">
+      <action name="SendToDesktop" to="left" follow="no" wrap="yes" />
+    </keybind>
+    <keybind key="W-C-Page_Down">
+      <action name="SendToDesktop" to="right" follow="no" wrap="yes" />
+    </keybind>
+
+    <keybind key="W-F"><action name="Maximize" /></keybind>
+    <keybind key="W-Q"><action name="Close" /></keybind>
+
+    <keybind key="W-R"><action
+        name="ToggleSnapToEdge"
+        direction="right"
+      /></keybind>
+
+    <keybind key="W-H"><action name="PreviousWindow" /></keybind>
+    <keybind key="W-J"><action name="NextWindow" /></keybind>
+    <keybind key="W-K"><action name="NextWindow" /></keybind>
+    <keybind key="W-L"><action name="NextWindow" /></keybind>
+    <keybind key="W-Left"><action name="PreviousWindow" /></keybind>
+    <keybind key="W-Down"><action name="NextWindow" /></keybind>
+    <keybind key="W-Up"><action name="NextWindow" /></keybind>
+    <keybind key="W-Right"><action name="NextWindow" /></keybind>
+
+    <keybind key="W-Home"><action name="PreviousWindow" /></keybind>
+    <keybind key="W-End"><action name="NextWindow" /></keybind>
+
+    <keybind key="W-Escape">
+      <action name="ShowMenu" menu="client-list-combined-menu">
+        <position><x>center</x><y>center</y></position>
+      </action>
+    </keybind>
+
+    <keybind key="W-W">
+      <action name="ShowMenu" menu="client-list-combined-menu">
+        <position><x>center</x><y>center</y></position>
+      </action>
+    </keybind>
+
+    <keybind key="W-Page_Up">
+      <action name="GoToDesktop" to="left" wrap="yes" />
+    </keybind>
+    <keybind key="W-Page_Down">
+      <action name="GoToDesktop" to="right" wrap="yes" />
+    </keybind>
+
+    <keybind key="W-S-1"><action
+        name="SendToDesktop"
+        to="1"
+        follow="yes"
+      /></keybind>
+    <keybind key="W-S-2"><action
+        name="SendToDesktop"
+        to="2"
+        follow="yes"
+      /></keybind>
+    <keybind key="W-S-3"><action
+        name="SendToDesktop"
+        to="3"
+        follow="yes"
+      /></keybind>
+    <keybind key="W-S-4"><action
+        name="SendToDesktop"
+        to="4"
+        follow="yes"
+      /></keybind>
+
+    <keybind key="W-S-C-H"><action
+        name="MoveToOutput"
+        direction="left"
+      /></keybind>
+    <keybind key="W-S-C-J"><action
+        name="MoveToOutput"
+        direction="down"
+      /></keybind>
+    <keybind key="W-S-C-K"><action
+        name="MoveToOutput"
+        direction="up"
+      /></keybind>
+    <keybind key="W-S-C-L"><action
+        name="MoveToOutput"
+        direction="right"
+      /></keybind>
+    <keybind key="W-S-C-Left"><action
+        name="MoveToOutput"
+        direction="left"
+      /></keybind>
+    <keybind key="W-S-C-Down"><action
+        name="MoveToOutput"
+        direction="down"
+      /></keybind>
+    <keybind key="W-S-C-Up"><action
+        name="MoveToOutput"
+        direction="up"
+      /></keybind>
+    <keybind key="W-S-C-Right"><action
+        name="MoveToOutput"
+        direction="right"
+      /></keybind>
+
+    <keybind key="W-S-H"><action
+        name="FocusOutput"
+        direction="left"
+      /></keybind>
+    <keybind key="W-S-J"><action
+        name="FocusOutput"
+        direction="down"
+      /></keybind>
+    <keybind key="W-S-K"><action name="FocusOutput" direction="up" /></keybind>
+    <keybind key="W-S-L"><action
+        name="FocusOutput"
+        direction="right"
+      /></keybind>
+    <keybind key="W-S-Left"><action
+        name="FocusOutput"
+        direction="left"
+      /></keybind>
+    <keybind key="W-S-Down"><action
+        name="FocusOutput"
+        direction="down"
+      /></keybind>
+    <keybind key="W-S-Up"><action name="FocusOutput" direction="up" /></keybind>
+    <keybind key="W-S-Right"><action
+        name="FocusOutput"
+        direction="right"
+      /></keybind>
+
+    <keybind key="W-S-F"><action name="ToggleFullscreen" /></keybind>
+
+    <keybind key="W-S-S">
+      <action name="Execute" command="xfce4-screenshooter -r" />
+    </keybind>
+
+    <keybind key="W-S-equal">
+      <action name="ResizeRelative" top="-32" bottom="32" />
+    </keybind>
+    <keybind key="W-S-minus">
+      <action name="ResizeRelative" top="32" bottom="-32" />
+    </keybind>
+
+    <keybind key="W-T"><action
+        name="Execute"
+        command="xfce4-terminal"
+      /></keybind>
+    <keybind key="W-E"><action
+        name="Execute"
+        command="emacsclient -c"
+      /></keybind>
+
+    <keybind key="W-B"><action
+        name="Execute"
+        command="exo-open --launch WebBrowser"
+      /></keybind>
+    <keybind key="W-F2"><action name="Execute" command="thunar" /></keybind>
+
+    <keybind key="W-C-Escape">
+      <action name="Reconfigure" />
+    </keybind>
+
+    <keybind key="XF86_AudioLowerVolume">
+      <action
+        name="Execute"
+        command="pactl set-sink-volume @DEFAULT_SINK@ -5%"
+      />
+    </keybind>
+    <keybind key="XF86_AudioRaiseVolume">
+      <action
+        name="Execute"
+        command="pactl set-sink-volume @DEFAULT_SINK@ +5%"
+      />
+    </keybind>
+    <keybind key="XF86_AudioMute">
+      <action
+        name="Execute"
+        command="pactl set-sink-mute @DEFAULT_SINK@ toggle"
+      />
+    </keybind>
+    <keybind key="XF86_AudioMicMute">
+      <action
+        name="Execute"
+        command="pactl set-source-mute @DEFAULT_SOURCE@ toggle"
+      />
+    </keybind>
+    <keybind key="XF86_Display">
+      <action name="Execute" command="xfce4-display-settings --minimal" />
+    </keybind>
+    <keybind key="XF86_PowerOff">
+      <action name="Execute" command="xfce4-session-logout" />
+    </keybind>
+    <keybind key="W-P">
+      <action name="Execute" command="xfce4-display-settings --minimal" />
+    </keybind>
+    <keybind key="W-V">
+      <action name="Execute" command="xfce4-popup-clipman" />
+    </keybind>
+
+    <keybind key="Super_L" onRelease="yes">
+      <action name="Execute" command="xfce4-popup-whiskermenu" />
+    </keybind>
+  </keyboard>
+
+  <mouse>
+    <default />
+    <context name="Root">
+      <mousebind direction="Up" action="Scroll">
+        <action name="GoToDesktop" to="left" wrap="yes" />
+      </mousebind>
+      <mousebind direction="Down" action="Scroll">
+        <action name="GoToDesktop" to="right" wrap="yes" />
+      </mousebind>
+      <mousebind direction="Left" action="Scroll">
+        <action name="PreviousWindow" />
+      </mousebind>
+      <mousebind direction="Right" action="Scroll">
+        <action name="NextWindow" />
+      </mousebind>
+
+      <mousebind direction="W-Up" action="Scroll">
+        <action name="GoToDesktop" to="left" wrap="yes" />
+      </mousebind>
+      <mousebind direction="W-Down" action="Scroll">
+        <action name="GoToDesktop" to="right" wrap="yes" />
+      </mousebind>
+      <mousebind direction="W-Left" action="Scroll">
+        <action name="PreviousWindow" />
+      </mousebind>
+      <mousebind direction="W-Right" action="Scroll">
+        <action name="NextWindow" />
+      </mousebind>
+
+      <mousebind direction="W-S-Up" action="Scroll">
+        <action name="PreviousWindow" />
+      </mousebind>
+      <mousebind direction="W-S-Down" action="Scroll">
+        <action name="NextWindow" />
+      </mousebind>
+
+      <mousebind direction="W-C-Up" action="Scroll">
+        <action name="ResizeRelative" left="-32" right="32" />
+      </mousebind>
+      <mousebind direction="W-C-Down" action="Scroll">
+        <action name="ResizeRelative" left="32" right="-32" />
+      </mousebind>
+      <mousebind direction="W-C-A-Up" action="Scroll">
+        <action name="ResizeRelative" top="-32" bottom="32" />
+      </mousebind>
+      <mousebind direction="W-C-A-Down" action="Scroll">
+        <action name="ResizeRelative" top="32" bottom="-32" />
+      </mousebind>
+    </context>
+  </mouse>
+
+  <snapping>
+    <range inner="10" outer="10" />
+  </snapping>
+
+</labwc_config>
