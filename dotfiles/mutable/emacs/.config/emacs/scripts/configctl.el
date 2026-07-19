@@ -305,7 +305,6 @@
                       literal/display-or-focus
                       literal/binding-help-sections
                       literal/help--extract-dashboard-bindings
-                      literal/knowledge-collect-org-files
                       ;; Phase 2.3:统一浏览入口替代 knowledge-viz + agenote-browse
                       literal/knowledge-browse-human
                       literal/knowledge-browse-agenote

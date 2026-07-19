@@ -57,6 +57,7 @@ from ag_lib.cards import (  # noqa: E402
     cmd_review,
     cmd_curate,
 )
+from ag_lib.inbox_archive import cmd_inbox_archive  # noqa: E402
 from ag_lib.memory import cmd_memory  # noqa: E402
 from ag_lib.lint import cmd_lint  # noqa: E402
 from ag_lib.orgfmt import cmd_format  # noqa: E402
@@ -711,6 +712,34 @@ def main() -> None:
     inbox_parser = subparsers.add_parser("inbox", help="快速捕获到 inbox.org")
     inbox_parser.add_argument("content", nargs="?", help="捕获内容")
 
+    # ── inbox-archive ──────────────────────────────────────────────────────
+    # PLAN §2.3:把 inbox 条目归档为结构化经验卡片,slug/reindex/prune 全部由 CLI 处理。
+    inbox_archive_parser = subparsers.add_parser(
+        "inbox-archive",
+        help="把 inbox 条目归档为 experiences/<category>/ 经验卡片",
+    )
+    inbox_archive_parser.add_argument(
+        "--category", required=True, help="目标 category(experiences/ 子目录)"
+    )
+    inbox_archive_parser.add_argument(
+        "--reason", help="可选,写入卡片顶部 Archive reason 注释"
+    )
+    inbox_archive_parser.add_argument(
+        "--no-reindex",
+        action="store_true",
+        help="跳过完成后的全量 reindex(批量场景)",
+    )
+    inbox_archive_parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="从 inbox.org 删除已归档条目(默认保留以备回查)",
+    )
+    inbox_archive_parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="显式从 stdin 读 JSON(默认即从 stdin 读)",
+    )
+
     # ── stats ───────────────────────────────────────────────────────────────
     subparsers.add_parser("stats", help="知识库统计概览")
 
@@ -935,6 +964,7 @@ def main() -> None:
         "lint": cmd_lint,
         "format": cmd_format,
         "inbox": cmd_inbox,
+        "inbox-archive": cmd_inbox_archive,
         "stats": cmd_stats,
         "connect": cmd_connect,
         "update": cmd_update,

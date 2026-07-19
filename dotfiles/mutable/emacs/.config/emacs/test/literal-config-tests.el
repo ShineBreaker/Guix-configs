@@ -459,5 +459,47 @@ manifest-no-use-package 二值违规的实现都违反 SoT 原则。"
         (should (eq (literal-configctl--classify-package
                      "nonexistent" manifest use-set) 'unknown))))
 
+    (ert-deftest literal-config/knowledge-no-dead-scanner ()
+      "Phase 2.3: literal/knowledge--collect-org-files 与 defalias 已删除。
+Dashboard 不再递归扫描 experiences/,改走 agenote list --json 索引。
+任何未来 commit 重新加入 scanner 都会违反 SoT 原则。"
+      (should-not (fboundp 'literal/knowledge--collect-org-files))
+      (should-not (fboundp 'literal/knowledge-collect-org-files)))
+
+    (ert-deftest literal-config/knowledge-archive-via-cli ()
+      "Phase 2.3: literal/knowledge-archive-inbox-entry 调用 CLI 的 inbox-archive,
+不再内联 slug 算法 + 手动 reindex。
+mock literal/agenote-call,验证:
+  1. 调用 'inbox-archive' 子命令(而非 'reindex')。
+  2. stdin 是 JSON 数组,含 heading + body。
+  3. --prune 透传(让 CLI 负责清理 inbox)。
+
+不真正调用 agenote,只验证调用契约。mock org-* 函数避免需要真实 org buffer。"
+      (skip-unless (fboundp 'literal/knowledge-archive-inbox-entry))
+      (let ((called-args nil)
+            (called-command nil)
+            (called-stdin nil))
+        (cl-letf (((symbol-function 'literal/agenote-call)
+                   (lambda (domain command &rest args)
+                     (setq called-command command
+                           called-args args)
+                     (when (member "--stdin" args)
+                       (setq called-stdin (car (member "--stdin" args))))
+                     (list :status 0 :stdout "/fake/path.org\nreindex: 1 cards"
+                           :stderr "")))
+                  ((symbol-function 'org-get-heading)
+                   (lambda (&rest _) "Mocked Heading"))
+                  ((symbol-function 'org-copy-subtree)
+                   (lambda (&rest _) (kill-new "* Mocked Heading\n:PROPERTIES:\n:END:\nbody text")))
+                  ((symbol-function 'kill-new)
+                   (lambda (s &rest _) (setq kill-ring (cons s kill-ring)) s)))
+          (literal/knowledge-archive-inbox-entry "test")
+          (should (equal called-command "inbox-archive"))
+          (should (member "--category" called-args))
+          (should (member "test" called-args))
+          (should (member "--stdin" called-args))
+          (should (member "--prune" called-args))
+          (should called-stdin))))
+
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here
