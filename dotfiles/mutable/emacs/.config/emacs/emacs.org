@@ -1052,15 +1052,19 @@ NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\")。自动按前缀分�
                      (file-relative-name directory root)
                    directory))
            (display (literal/modeline--path-initials path)))
-      (literal/modeline--segment
-       (truncate-string-to-width display literal:modeline-path-max-width 0 nil t)
-       'shadow))))
+      (if (string-empty-p (or display ""))
+          ""
+        (literal/modeline--segment
+         (literal/modeline--with-icon
+          (literal/modeline--icon "nf-md-folder_open")
+          (truncate-string-to-width display literal:modeline-path-max-width 0 nil t))
+         'shadow)))))
 
 (defun literal/modeline--name-segment (tier)
-  "返回 TIER 对应的 buffer 名或 compact major mode。"
+  "返回 TIER 对应的 buffer 名。compact 档由 major-left 段独占显示 major,
+此处返回空串避免 compact 档 major 名重复出现。"
   (if (eq tier 'compact)
-      (literal/modeline--segment
-       (symbol-name major-mode) 'font-lock-keyword-face)
+      ""
     (let* ((name (if buffer-file-name
                      (file-name-nondirectory buffer-file-name)
                    (buffer-name)))
@@ -1119,8 +1123,8 @@ NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\")。自动按前缀分�
         ""))))
 
 (defun literal/modeline--coding-segment (tier)
-  "返回 TIER 对应的编码(narrow/medium/wide 显示)。"
-  (if (memq tier '(wide medium narrow))
+  "返回 TIER 对应的编码(wide/medium 显示,与旧版 tier 密度一致)。"
+  (if (memq tier '(wide medium))
       (literal/modeline--segment
        (literal/modeline--with-icon
         (literal/modeline--icon "nf-md-lock")
@@ -1137,11 +1141,9 @@ NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\")。自动按前缀分�
              (percent
               (round (* 100.0
                         (/ (float (- (point) (point-min))) range))))
-             (base (if (eq tier 'wide)
-                       (literal/modeline--with-icon
-                        (literal/modeline--icon "nf-md-flag_checkered")
-                        (format "%d%%%%" percent))
-                     (format "%d%%%%" percent)))
+             (base (literal/modeline--with-icon
+                    (literal/modeline--icon "nf-md-flag_checkered")
+                    (format "%d%%%%" percent)))
              (text (if (eq tier 'wide)
                        (format "%s %s" base
                                (literal/modeline--with-icon
@@ -1163,8 +1165,8 @@ wide/medium/narrow 都显示(原版行为)。"
      'shadow)))
 
 (defun literal/modeline--diagnostics-segment (tier)
-  "返回 TIER 对应的 Flymake 诊断计数(wide/medium/narrow 显示)。"
-  (if (and (memq tier '(wide medium narrow))
+  "返回 TIER 对应的 Flymake 诊断计数(wide/medium 显示)。"
+  (if (and (memq tier '(wide medium))
            (bound-and-true-p flymake-mode))
       (pcase-let ((`(,errors ,warnings) literal:modeline--flymake-counts))
         (let* ((total (+ errors warnings))
@@ -1186,8 +1188,8 @@ wide/medium/narrow 都显示(原版行为)。"
     ""))
 
 (defun literal/modeline--eglot-segment (tier)
-  "返回 TIER 对应的 Eglot 状态(三态 + wide 显示 server 名)。"
-  (if (and (memq tier '(wide medium narrow)) literal:modeline--eglot-info)
+  "返回 TIER 对应的 Eglot 状态(三态 + wide 显示 server 名,wide/medium 显示)。"
+  (if (and (memq tier '(wide medium)) literal:modeline--eglot-info)
       (pcase-let ((`(,name ,status) literal:modeline--eglot-info))
         (let* ((point (pcase status
                         ('connected "●")
@@ -1200,7 +1202,10 @@ wide/medium/narrow 都显示(原版行为)。"
                (text (if (eq tier 'wide)
                          (format "%s %s" name point)
                        point)))
-          (literal/modeline--segment text face)))
+          (literal/modeline--segment
+           (literal/modeline--with-icon
+            (literal/modeline--icon "nf-md-server_network") text)
+           face)))
     ""))
 
 (defun literal/modeline--global-segment (tier)
@@ -1225,7 +1230,7 @@ wide/medium/narrow 都显示(原版行为)。"
   (if (eq tier 'compact)
       (literal/modeline--segment
        (literal/modeline--with-icon
-        (literal/modeline--icon "nf-md-code")
+        (literal/modeline--icon "nf-md-code_tags")
         (symbol-name major-mode))
        'font-lock-keyword-face)
     ""))
@@ -1236,7 +1241,7 @@ wide/medium/narrow 都显示(原版行为)。"
       ""
     (literal/modeline--segment
      (literal/modeline--with-icon
-      (literal/modeline--icon "nf-md-code")
+      (literal/modeline--icon "nf-md-code_tags")
       (symbol-name major-mode))
      'font-lock-keyword-face)))
 
@@ -1276,32 +1281,35 @@ wide/medium/narrow 都显示(原版行为)。"
          'font-lock-string-face))
     ""))
 
-(defun literal/modeline-render ()
-  "一次计算当前窗口的 tier，并组装完整 Starship mode-line。
+(defun literal/modeline-render-left ()
+  "计算并返回左段(文件相关)字符串。
 
-布局(wide/medium/narrow/compact 四档):
-  左侧: path · buffer-name · branch · vc-status · coding · position · location · left-major(compact only)
-  右侧: diagnostics · eglot · global · right-major · battery · time"
-  (let* ((tier (literal/modeline-tier))
-         (left
-          (literal/modeline--join
-           (literal/modeline--path-segment tier)
-           (literal/modeline--name-segment tier)
-           (literal/modeline--branch-segment tier)
-           (literal/modeline--vc-segment tier)
-           (literal/modeline--coding-segment tier)
-           (literal/modeline--position-segment tier)
-           (literal/modeline--location-segment tier)
-           (literal/modeline--major-left-segment tier)))
-         (right
-          (literal/modeline--join
-           (literal/modeline--diagnostics-segment tier)
-           (literal/modeline--eglot-segment tier)
-           (literal/modeline--global-segment tier)
-           (literal/modeline--major-right-segment tier)
-           (literal/modeline--battery-segment tier)
-           (literal/modeline--time-segment tier))))
-    (list " " left mode-line-format-right-align " " right)))
+拆分为 left/right 两个 renderer 而非单一 render 返回含
+`mode-line-format-right-align' 的 list:右对齐符号嵌套在 :eval 返回的
+list 里时,Emacs 测量后续内容像素宽失效(nerd-icons 图标像素宽≠列宽),
+会把右段推出窗口可见区。right-align 必须位于 mode-line-format 顶层
+list 才能正确测量(旧版结构,带图标右对齐也正确)。"
+  (let ((tier (literal/modeline-tier)))
+    (literal/modeline--join
+     (literal/modeline--path-segment tier)
+     (literal/modeline--name-segment tier)
+     (literal/modeline--branch-segment tier)
+     (literal/modeline--vc-segment tier)
+     (literal/modeline--coding-segment tier)
+     (literal/modeline--position-segment tier)
+     (literal/modeline--location-segment tier)
+     (literal/modeline--major-left-segment tier))))
+
+(defun literal/modeline-render-right ()
+  "计算并返回右段(系统/状态相关)字符串。见 `literal/modeline-render-left'。"
+  (let ((tier (literal/modeline-tier)))
+    (literal/modeline--join
+     (literal/modeline--diagnostics-segment tier)
+     (literal/modeline--eglot-segment tier)
+     (literal/modeline--global-segment tier)
+     (literal/modeline--major-right-segment tier)
+     (literal/modeline--battery-segment tier)
+     (literal/modeline--time-segment tier))))
 
 (with-eval-after-load 'flymake
   (add-hook 'flymake-after-diagnostics-hook
@@ -1320,10 +1328,20 @@ wide/medium/narrow 都显示(原版行为)。"
 (add-hook 'after-save-hook #'literal/modeline--reset-project-cache)
 (add-hook 'after-change-major-mode-hook #'literal/modeline--reset-project-cache)
 
+;; 顶层 list 结构:right-align 必须在顶层,嵌套在 :eval 返回 list 里会导致
+;; 右段像素测量错误而被推出窗口(见 render-left 注释)。
 (setq-default mode-line-format
-              '((:eval (literal/modeline-render))))
+              '(" "
+                (:eval (literal/modeline-render-left))
+                mode-line-format-right-align
+                " "
+                (:eval (literal/modeline-render-right))))
 (setq-default mode-line-inactive-format
-              '((:eval (literal/modeline-render))))
+              '(" "
+                (:eval (literal/modeline-render-left))
+                mode-line-format-right-align
+                " "
+                (:eval (literal/modeline-render-right))))
 
 ;; 数据源 minor mode 启用:
 ;; - display-battery-mode 维护 `battery-mode-line-string'(modeline 电池段数据源)
