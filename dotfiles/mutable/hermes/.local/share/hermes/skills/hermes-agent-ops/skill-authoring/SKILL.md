@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
 description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles — **self-contained** (all runnable artifacts ship inside the skill directory; backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — the directory layout, file-type rules, decision trees, **which of the 12 existing categories a new skill belongs to (never top-level `<skill-name>/`)**, and a pre-publish checklist. Triggers: writing a new skill, refactoring an existing one's structure, wondering 'should this go in SKILL.md vs references()' / 'which category fits', preparing for backup/share, noticing a self-contained or progressive-disclosure violation, the user complaining 'too verbose' / 'in the wrong place', or **discovering a real use case the skill doesn't cover** — patch the skill (§6 last row) instead of inventing a workaround."
-version: 1.7.0
+version: 1.8.0
 license: MIT
 metadata:
   hermes:
@@ -349,6 +349,108 @@ ignore_errors=True)`. The verify script itself is a fixture and
   so the failure mode is visible in the verify output. Otherwise
   the verify silently uses a broken ground-truth and produces
   wrong-but-internally-consistent FAILs.
+- **Case-sensitive substring assertions in `if "X" in text`.**
+  When verifying that SKILL.md / reference markdown contains a
+  quoted string, the verify check `if "Theater" in text` will
+  FAIL on `"theater"` (lowercase) even though the meaning is
+  identical. Use `in text.lower()` or include a lowercase variant
+  in the assertion list. Real hit: `adversarial-review-trigger`
+  verify failed once because the assertion was case-sensitive
+  against a lowercase passage quote.
+- **"Look-for" assertions need both directions.** A verify check
+  like `if "rm -rf" not in text` blindly fails when the SKILL.md
+  legitimately contains `"不用 rm -rf"` (a *warning*, not a use).
+  Either:
+  1. **Filter out** the warning context first: `clean = "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("#"))` — comments / inline warnings are not part of the rule's intent.
+  2. **Switch to intent-based check**: assert that the surrounding
+     text contains the warning phrase ("不用 / not / never / 禁止")
+     **near** the trigger string, rather than asserting absence of
+     the trigger string outright.
+  Real hit: `delegated-worktree-rules` and `authority-gate` verifiers
+  both initially failed because the warning text *"不用 rm -rf"*
+  contained the trigger *"rm -rf"* as a substring.
+- **Subprocess argv vs stdin for shell-special-char commands.**
+  When verify spawns `python3 detect.py <cmd>` via `argv`, the
+  **shell that runs the test** may consume `>>`, `>`, `<`, `|`, `$`
+  before argv even reaches `subprocess.run`. The detect script
+  receives `"echo 'export PATH=/opt' "` with the redirect missing.
+  Fix pattern: provide both invocation modes in the detect script
+  (argv or `cat` / `echo -` → stdin via `-` sentinel), and in the
+  verify layer pick stdin when the fixture contains any of
+  `> < | & ; \` $ \\`. Don't try to escape — escape failures are
+  subtle and locale-dependent.
+- **Sandbox tool limits are a verify-shape problem, not a script
+  bug.** When `execute_code` or a hermes TUI subprocess doesn't have
+  `git` / `grep` / `bash` in PATH (Guix isolation, container, missing
+  package), the verify should NOT pretend the e2e path passed —
+  downgrade that branch with explicit `[SKIP]` and a reason line,
+  not silent `[PASS]`. The user must be able to tell "ran but
+  skipped" from "ran and verified." Real hit: `delegated-worktree-rules`
+  verify e2e fell back to `bash -n` syntax checks because git
+  wasn't in the sandbox PATH. Output: `14/14 PASS, 1 SKIPPED
+  (sandbox git unavailable)` — not `15/15 PASS`.
+- **Cross-file distribution of rules needs cross-file verify.**
+  When SKILL.md intentionally points to `references/<topic>.md`
+  for detail (progressive disclosure), a verify check like
+  `if "R6" not in skill_md_text` will fail even though R6 lives
+  intentionally in `references/source-stability-rules.md`. Either:
+  1. **Verify both files**: `combined = skill_md_text + ref_text`
+     and assert against combined.
+  2. **Accept the distribution pattern**: the verify can require
+     a structural pattern (`references/X exists AND X contains rule`)
+     instead of a literal presence check.
+  Real hit: `delegated-worktree-rules` verify initially checked
+  R1-R6 in SKILL.md alone, missed that R6 was the reference file's
+  responsibility.
+- **`patch` tool can leave duplicate headers.** When the
+  `new_string` contains a heading that already exists in the
+  surrounding context, `patch` does not deduplicate — the file ends
+  up with two identical `## Header` lines (or worse, a `## Header`
+  followed by a `## Header` continuation). Always run `patch` and
+  then re-read the **full** target file (or run a verify check
+  that walks for duplicate headings) before declaring done. Real
+  hit: while expanding `adversarial-review-trigger`'s
+  "独立 reviewer 是同 blind spot 的另一个 reviewer" section with
+  multiple workaround sub-blocks, the patch appended the new
+  block but didn't remove the original heading line above it,
+  producing two consecutive `## 独立性硬约束` lines. Caught only
+  when `read_file` returned the file contents during a follow-up
+  patch.
+- **`patch` tool's "file was modified since you last read it"
+  warning is a real blocker, not noise.** When you edit a file's
+  frontmatter or a section that another tool just touched, `patch`
+  refuses to overwrite without a re-read first ("Re-read the file
+  before writing"). The fix is straightforward: `read_file` the
+  whole file (not just the section you intend to change), then
+  retry the patch. Don't try to outsmart it by splitting into
+  smaller patches — the warning fires per-patch anyway.
+- **Multi-skill verify aggregator is fragile under hermes TUI
+  sandbox.** When a single verify script (or an ad-hoc aggregator
+  loop) runs `subprocess.run([...])` for **multiple** skill
+  verify scripts in series, the sandbox can rewrite the
+  `returncode` and truncate `stdout` for the **3rd+** subprocess,
+  even when each skill verifies cleanly when run standalone. The
+  user sees "<skill>: <no tally>" and a `1/N` aggregator failure
+  that does not exist when the same verify script is run directly.
+  Fix pattern for ad-hoc aggregators: **run each verify as a
+  separate top-level `terminal()` call** (one foreground
+  invocation per skill) instead of looping inside one Python
+  process. The sandbox treats each top-level terminal call as a
+  fresh process boundary and does not carry state across them.
+  Inside a single `subprocess.run` loop, the aggregator itself
+  may report a FAIL while every individual skill is green — and
+  there is no way to tell from the aggregator output which
+  subprocess the sandbox broke. If you must use a single Python
+  aggregator, also re-run each failed skill standalone before
+  concluding anything.
+  Real hit: in the 2026-07-20 6-skill rollout, an aggregator
+  script returned `<no tally>` for `agent-loop-topology` while
+  every per-skill standalone invocation returned its expected
+  `N/N PASS`. Direct evidence: the `read_file` of that skill's
+  SKILL.md succeeded, `terminal()` invocation succeeded, but
+  `subprocess.run` inside the aggregator returned `returncode=2`
+  with `stdout_len=0`. The failure was sandbox-side, not
+  script-side.
 
 ### 8.2 Representative-sample-then-batch (one-skill-at-a-time)
 
