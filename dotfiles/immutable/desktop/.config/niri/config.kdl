@@ -9,7 +9,7 @@ include optional=true "settings/key-bindings-wm.kdl"
 include optional=true "settings/special.kdl"
 include optional=true "noctalia.kdl"
 
-spawn-sh-at-startup "herd set-environment graphical-session PATH=$PATH:$XDG_STATE_HOME/nix/profile/bin XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
+spawn-sh-at-startup "herd set-environment graphical-session PATH=$PATH:$XDG_STATE_HOME/nix/profile/bin:$HOME/.local/bin XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET"
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 spawn-sh-at-startup "fish -c 'dex -a'"
 
