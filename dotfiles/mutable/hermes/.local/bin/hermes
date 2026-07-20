@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# hermes — Pi 式（editable-checkout）启动 wrapper。
+#
+# 与 Pi 的 pi wrapper 同构：
+#   - runtime（checkout + venv）在 $HERMES_HOME/hermes-agent，
+#     由 hermes-update 生成，不进 dotfiles 仓库（gitignore）。
+#   - 首次未安装时 lazy bootstrap（调同目录 hermes-update）。
+#   - 启动前 unset PYTHONPATH/PYTHONHOME，避免 Guix Python 干扰
+#     （与上游 install.sh 的 shim 行为一致）。
+set -euo pipefail
+
+# 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置
+: "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
+export HERMES_HOME
+HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
+HERMES_BIN="${HERMES_RUNTIME}/venv/bin/hermes"
+
+# 首次未安装：引导（对齐 pi wrapper 的 lazy install）
+if [[ ! -x "${HERMES_BIN}" ]]; then
+  _up="$(dirname "$(readlink -f "$0")")/hermes-update"
+  if [[ -x "${_up}" ]]; then
+    echo "Hermes 未安装，执行首次安装..." >&2
+    "${_up}" || { echo "安装失败，见上方错误" >&2; exit 1; }
+  else
+    echo "hermes-update 未找到，无法引导安装（期望位于 ${_up}）" >&2
+    exit 1
+  fi
+fi
+
+# 清掉继承的 PYTHONPATH/PYTHONHOME，防 Guix Python 污染 venv 模块解析
+unset PYTHONPATH
+unset PYTHONHOME
+
+exec "${HERMES_BIN}" "$@"

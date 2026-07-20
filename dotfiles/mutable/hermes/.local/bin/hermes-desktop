@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# hermes-desktop — 在 Guix 的 FHS 容器里启动 Hermes Electron 桌面应用。
+#
+# 背景：A 方案（Pi 式 editable-checkout）下，纯 checkout + uv 安装不含
+# build 过的 Electron 二进制。需先 `hermes desktop --build-only` 用仓库内
+# npm + vite + electron-builder 打出 release/linux-unpacked/Hermes，再在本
+# 脚本里用 `guix shell --container --emulate-fhs`（复用 appimage-run 的
+# electron 库集）把它跑起来——弥补 Guix 缺 FHS 系统库（libglib-2.0 等）。
+#
+# 与 Pi 的 pi / hermes wrapper 同构：runtime 在 $HERMES_HOME/hermes-agent。
+# checkout 直接落在 hermes-agent 顶层（desktop 壳要求的源码根，isHermesSourceRoot
+# 检查 hermes_cli/main.py 在 ACTIVE_HERMES_ROOT 直接下级）。
+set -euo pipefail
+
+# 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置
+: "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
+HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
+CHECKOUT="${HERMES_RUNTIME}"
+RELEASE_DIR="${CHECKOUT}/apps/desktop/release/linux-unpacked"
+HERMES_BIN="${RELEASE_DIR}/Hermes"
+MANIFEST="$(dirname "$(readlink -f "$0")")/hermes-desktop-manifest.scm"
+
+# 1. 确保已 build（首跑需 npm install 1299 包 + electron-builder，几分钟；
+#    之后 node_modules 留在 checkout 内，重 build 很快）
+if [[ ! -x "${HERMES_BIN}" ]]; then
+  echo "Hermes Desktop 尚未 build，执行 build（首次需几分钟）..." >&2
+  hermes desktop --build-only
+fi
+
+# 3. 进 FHS 容器启动（语义对齐 appimage-run container.scm：preserve/share/exec 一致）
+RT_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+# 用真实 WAYLAND_DISPLAY（不硬编码 wayland-0，否则 expose 不存在的 socket，
+# Electron 连不上 compositor 导致窗口起不来）
+WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+
+# --preserve 正则（与 appimage-run 一致：GUI/Wayland/音频/dbus 变量透传）
+# 额外含 HERMES_HOME：desktop 壳(main.cjs) 靠它推导 ACTIVE_HERMES_ROOT=
+# HERMES_HOME/hermes-agent，不 preserve 会 fallback 到默认 ~/.hermes 而找不到安装
+# 额外含 FONTCONFIG_FILE/PATH：让容器复用宿主 fontconfig 配置，否则回退难看字体
+PRESERVE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR)$'
+
+# --share/--expose
+SHARE_FLAGS=(
+  "--share=/tmp"
+  "--share=${HOME}"
+  "--expose=${RT_DIR}"                                    # 含 wayland + dbus socket
+  "--expose=${RT_DIR}/${WAYLAND_DISPLAY}"                 # 真实 compositor socket
+)
+PULSE_DIR="${RT_DIR}/pulse/native"
+[[ -S "${PULSE_DIR}" ]] && SHARE_FLAGS+=("--expose=${PULSE_DIR}")
+# 系统字体目录挂进容器：宿主 609 字体里有更纱黑体(Sarasa)等，不挂则容器内
+# 只剩 ~ 下 132 个，Electron 回退文泉驿/DejaVu → 字体怪。guix 的 fontconfig
+# 默认扫描此路径，expose 后直接可见。
+[[ -d /run/current-system/profile/share/fonts ]] && SHARE_FLAGS+=("--expose=/run/current-system/profile/share/fonts")
+# /dev/dri 用 --share（读写 bind）挂进容器：GPU 进程要对 renderD128 发 ioctl，
+# 必须可写。此前的 SIGILL(exitCode 4) 是 --expose（只读 bind）造成的——只读
+# 设备节点上 ioctl 失败，Chromium GPU 进程直接崩。本机 renderD128 是
+# crw-rw-rw-、用户在 video 组，读写挂入后走硬件渲染（动画/合成层恢复正常）。
+[[ -d /dev/dri ]] && SHARE_FLAGS+=("--share=/dev/dri")
+# /sys 只读挂入：mesa 的 drmGetDevice() 要读 /sys/dev/char/<maj>:<min> 解析
+# DRM 设备的 PCI 信息，容器默认无 sysfs → "MESA-LOADER: failed to retrieve
+# device information" → 回退 llvmpipe 软件渲染。挂入后 glxinfo 实测为
+# Mesa Intel Arc (MTL) 硬件渲染器（OpenGL 4.6）。
+[[ -d /sys ]] && SHARE_FLAGS+=("--expose=/sys")
+# expose /gnu/store：venv 的 python 软链到 /gnu/store/<hash>/python3.11，
+# 不挂进容器则 venv python 解析不到 → isActiveRuntimeUsable() 失败 →
+# desktop 误判未完成、回退跑 install.sh（exit 127, "prerequisites"）。只读挂。
+[[ -d /gnu/store ]] && SHARE_FLAGS+=("--expose=/gnu/store")
+# 宿主 machine-id 挂进容器：FHS 容器内 /var /etc 只读，dbus-uuidgen 写不进；
+# 直接 expose 宿主 /etc/machine-id 让 dbus 初始化（否则报 machine-id 缺失）
+[[ -e /etc/machine-id ]] && SHARE_FLAGS+=("--expose=/etc/machine-id")
+# xwayland socket（DISPLAY=:0 时）透进容器，走 X11 backend
+[[ -n "${DISPLAY:-}" ]] && SHARE_FLAGS+=("--share=/tmp/.X11-unix")
+
+# 容器内执行：
+# - 走 X11/xwayland（你有 DISPLAY=:0，容器里比纯 wayland 稳；纯 wayland 需连
+#   真实 compositor socket 且更易出问题）
+# - 硬件 GPU：/dev/dri 已读写挂入（见上），不再设 LIBGL_ALWAYS_SOFTWARE，也不
+#   用 --enable-unsafe-swiftshader 软件渲染——那会让应用内动画全失效。
+#   --ignore-gpu-blocklist：容器内 GPU 信息探测不全，Chromium 可能把显卡列入
+#   黑名单回退软件渲染，此标志强制启用硬件路径。
+#   （若某机器硬件路径确实崩，可临时 `LIBGL_ALWAYS_SOFTWARE=1 hermes-desktop`
+#   回退软件渲染——该变量已在 PRESERVE 正则里透传。）
+# - --no-sandbox / --disable-gpu-sandbox：嵌套 guix shell 容器里 Chromium 沙箱
+#   起不来（渲染进程 exitCode=5 crash loop），关掉沙箱让窗口正常出（必需）
+# - dbus-launch 起 session bus（消 dbus 噪声，非致命）
+EXEC_STRING='cd /appimage-root && \
+export APPDIR=/appimage-root && \
+export LD_LIBRARY_PATH=/appimage-root:${LD_LIBRARY_PATH} && \
+export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb} && \
+export ELECTRON_OZONE_PLATFORM_HINT=${ELECTRON_OZONE_PLATFORM_HINT:-x11} && \
+if command -v dbus-launch >/dev/null 2>&1; then \
+  eval "$(dbus-launch --sh-syntax)"; \
+fi && \
+exec /appimage-root/Hermes --no-sandbox --disable-gpu-sandbox --ozone-platform=x11 --ignore-gpu-blocklist --disable-dev-shm-usage "$@"'
+
+exec guix shell --container --emulate-fhs --network \
+  --manifest="${MANIFEST}" \
+  --preserve="${PRESERVE}" \
+  "${SHARE_FLAGS[@]}" \
+  --share="${RELEASE_DIR}=/appimage-root" \
+  -- bash -c "${EXEC_STRING}" bash "$@"

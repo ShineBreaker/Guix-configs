@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# hermes-update — 安装 / 升级 Hermes Agent（Pi 式 editable-checkout）。
+#
+# 与 Pi 的 pi-update 同构：从 hermes-agent 仓库按 pin 的 tag 拉 checkout，
+# 再装依赖。安装模型**对齐上游 install.sh**（hermes-agent.nousresearch.com）：
+#
+#   1. Python 用 uv 自管（`uv python install 3.11`），不用系统 python。
+#      Guix 的 python 在 ~/.guix-home/profile 下，`blue home` 升级或 `guix gc`
+#      会换掉 store 路径，venv 的 python 软链随之失效 → 整库 module 找不到。
+#      uv 自管 python 落在 ~/.local/share/uv/python/<版本>/，路径稳定、不被 gc。
+#      （本机上它经 /lib64/ld-linux-x86-64.so.2 → nix-ld 正常运行，已实测。）
+#   2. 依赖优先 `uv sync --extra all --locked`（Tier 0，走 uv.lock 的 SHA256
+#      哈希校验，上游首选路径）；失败再降级 `uv pip install -e '.[all]'`，
+#      最后兜底基础安装。
+#   3. 钉死 UV_PYTHON 到本 venv 解释器，防止继承的 UV_PYTHON 让 uv 把 venv
+#      悄悄重建到别的 python 版本（上游 setup_venv 的同款防护）。
+#
+# 布局约定：Hermes desktop 壳(main.cjs) 硬编码
+#   ACTIVE_HERMES_ROOT = HERMES_HOME/hermes-agent
+#   VENV_ROOT           = ACTIVE_HERMES_ROOT/venv
+#   isHermesSourceRoot() 要求 ACTIVE_HERMES_ROOT 本身就是源码根（直接含 hermes_cli/main.py）
+#   isBootstrapComplete() 要求 .hermes-bootstrap-complete 是合法 JSON（schemaVersion=1 + pinnedCommit）
+# 故 checkout 直接落在 HERMES_HOME/hermes-agent 顶层（不嵌套 checkout/ 子层），
+# 由 hermes-update 自己写 bootstrap 标记。XDG 合规、零软链。
+#
+# 注意：用户级 skills/ 由 dotfiles/mutable/hermes 管理（git 跟踪），本脚本
+# 不调用上游 skills_sync.py，避免污染源仓库。
+set -euo pipefail
+
+REPO_URL="https://github.com/NousResearch/hermes-agent.git"
+PYTHON_VERSION="3.11"   # 与上游 install.sh 的 PYTHON_VERSION 一致
+
+# 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置
+: "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
+
+# checkout 直接落在 HERMES_HOME/hermes-agent 顶层（desktop 壳要求的源码根）
+HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
+CHECKOUT="${HERMES_RUNTIME}"
+VENV="${HERMES_RUNTIME}/venv"
+VERSION_FILE="$(dirname "$(readlink -f "$0")")/hermes-version"
+
+# 读 pin（默认 main）
+TAG="main"
+if [[ -f "${VERSION_FILE}" ]]; then
+  TAG="$(grep -E '^tag=' "${VERSION_FILE}" | head -1 | cut -d= -f2-)"
+  [[ -z "${TAG}" ]] && TAG="main"
+fi
+
+command -v uv >/dev/null 2>&1 || {
+  echo "uv 未安装（Guix: guix install uv 或走 nix profile）" >&2
+  exit 1
+}
+command -v git >/dev/null 2>&1 || {
+  echo "git 未安装（Guix: guix install git）" >&2
+  exit 1
+}
+
+# === 停掉旧 gateway（布局/venv 变动后旧进程持失效模块路径，MCP 会全挂）===
+# TUI 是 client + 常驻 gateway 架构：gateway 进程内存里的 mcp_tool.__file__
+# 指向更新前的路径，checkout 一动它就找不到 watchdog 脚本。graceful stop，
+# 失败（没在跑 / venv 已坏）都忽略。
+if [[ -x "${VENV}/bin/hermes" ]]; then
+  "${VENV}/bin/hermes" gateway stop >/dev/null 2>&1 || true
+fi
+
+# === checkout ===
+if [[ ! -d "${CHECKOUT}/.git" ]]; then
+  echo "克隆 hermes-agent (${TAG})..."
+  mkdir -p "${HERMES_RUNTIME}"
+  git clone --depth 1 --branch "${TAG}" "${REPO_URL}" "${CHECKOUT}"
+else
+  echo "更新 checkout (${TAG})..."
+  git -C "${CHECKOUT}" fetch --depth 1 origin "${TAG}" || git -C "${CHECKOUT}" fetch origin "${TAG}"
+  git -C "${CHECKOUT}" checkout -f "${TAG}" 2>/dev/null \
+    || git -C "${CHECKOUT}" checkout -f "origin/${TAG}" 2>/dev/null \
+    || true
+  git -C "${CHECKOUT}" clean -fdq 2>/dev/null || true
+fi
+
+# === Python（uv 自管，不用系统 python）===
+# uv python install 幂等：已装则秒过。python-build-standalone 经 nix-ld 可跑。
+echo "确保 uv 自管 Python ${PYTHON_VERSION}..."
+uv python install "${PYTHON_VERSION}"
+
+# === venv ===
+# 仅当 venv 缺失、或解释器不是 uv 自管 python（如旧版脚本建的、指向
+# ~/.guix-home/profile 的 venv）时才重建；否则复用，交给 uv sync 增量同步。
+_py_real="$(readlink -f "${VENV}/bin/python" 2>/dev/null || true)"
+if [[ ! -x "${VENV}/bin/python" ]] || [[ "${_py_real}" != *"uv/python"* ]]; then
+  echo "创建 venv (uv 自管 Python ${PYTHON_VERSION})..."
+  rm -rf "${VENV}"
+  uv venv "${VENV}" --python "${PYTHON_VERSION}"
+fi
+
+# 钉死 UV_PYTHON 到本 venv（上游 setup_venv 同款：防继承的 UV_PYTHON
+# 让后续 uv 命令把 venv 悄悄换到别的 python 版本）
+export UV_PYTHON="${VENV}/bin/python"
+export VIRTUAL_ENV="${VENV}"
+
+# === 安装（对齐上游 install.sh 的分层模型）===
+# Tier 0: uv sync --locked —— 走 uv.lock 的哈希校验（上游首选，防供应链投毒）
+# Tier 1: uv pip install -e '.[all]' —— lock 失配时重新解析 PyPI
+# Tier 2: 基础安装 —— 兜底，至少保证核心 CLI 能起
+cd "${CHECKOUT}"
+if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${VENV}" uv sync --extra all --locked; then
+  echo "依赖安装完成（hash-verified via uv.lock）"
+else
+  [[ -f uv.lock ]] && echo "  uv.lock sync 失败，降级到 PyPI 解析..." >&2
+  if ! uv pip install -e "${CHECKOUT}[all]"; then
+    echo "  [all] 安装失败，降级到基础安装..." >&2
+    uv pip install -e "${CHECKOUT}"
+  fi
+fi
+
+# === 写 bootstrap-complete 标记（让 desktop 壳跳过 GitHub bootstrap）===
+# 合法 JSON：schemaVersion=1 + pinnedCommit（取当前 HEAD 前 7 位）
+PINNED="$(git -C "${CHECKOUT}" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+cat > "${HERMES_RUNTIME}/.hermes-bootstrap-complete" <<EOF
+{
+  "schemaVersion": 1,
+  "pinnedCommit": "${PINNED}",
+  "pinnedBranch": "${TAG}",
+  "completedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "desktopVersion": "built-locally"
+}
+EOF
+
+# === 验证 ===
+"${VENV}/bin/hermes" --version
+echo ""
+echo "更新完成。"
+echo "  ⚠ 已在跑的 TUI / gateway / desktop 持旧代码路径，需重启后才生效："
+echo "    hermes gateway restart   （或重开 TUI 会话）"
+echo "  Web UI:  hermes serve   (浏览器打开提示的地址)"
+echo "  TUI:     直接运行 hermes"
+echo "  Desktop: hermes-desktop (Electron，读取 ${HERMES_RUNTIME})"

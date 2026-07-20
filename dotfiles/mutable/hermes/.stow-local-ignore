@@ -1,0 +1,20 @@
+# stow-local-ignore for stow/hermes — Perl regex, one per line, matched against
+# the tail of the relative path within the package. See GNU Stow manual.
+#
+# 源里只托管：配置（.local/share/hermes/{SOUL.md,config.yaml,memories/,skills/}）
+# 与启动脚本（.local/bin/{hermes,hermes-update,hermes-version}）。
+# 运行时产物（logs/sessions/cache/cron/...）生成在 ~/.local/share/hermes，不在源；
+# 若某天误放进源，下面这些规则让 stow 不把它们软链出去。
+
+# --- Python 缓存（skills/ 下用户级技能可能产生的 __pycache__ / *.pyc） ---
+__pycache__$
+.*\.pyc$
+
+# --- HERMES_HOME 运行时目录/文件（防御性忽略） ---
+logs/$
+sessions/$
+cache/$
+state\.db.*$
+cron/$
+audit/$
+Trash/$

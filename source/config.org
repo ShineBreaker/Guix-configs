@@ -1559,6 +1559,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; Python
         "python-mcp"
         "python-httpx-sse"
+        "python-openpyxl"
         "python-pydantic-settings"
         "python-pymupdf"
         "python-sse-starlette"
@@ -1957,7 +1958,7 @@ end
                                (requirement '(graphical-session))
                                (start #~(lambda args
                                           ((make-forkexec-constructor
-                                            (list (string-append (getenv "XDG_STATE_HOME") "/nix/profile/bin/hermes")
+                                            (list (string-append (getenv "HOME") "/.local/bin/hermes")
                                                   "dashboard" "--no-open"
                                                   "--host" "127.0.0.1" "--port" "9119")
                                             #:environment-variables (environ)
@@ -1972,7 +1973,7 @@ end
                                (requirement '(hermes-backend))
                                (start #~(lambda args
                                           ((make-forkexec-constructor
-                                            (list (string-append (getenv "XDG_STATE_HOME") "/nix/profile/bin/hermes")
+                                            (list (string-append (getenv "HOME") "/.local/bin/hermes")
                                                   "gateway" "run")
                                             #:environment-variables (environ)
                                             #:log-file (string-append (getenv "XDG_STATE_HOME")
@@ -2352,9 +2353,6 @@ end
                "icecat-l10n"
 
                ;; XFCE 套件
-               ;; xfce4-session 由 xfce-desktop-service-type 的 profile-service-type
-               ;; extension 自动装入 (4.20+ 自带 wayland-sessions/xfce-wayland.desktop,
-               ;; startxfce4 --wayland 会自动 command -v labwc 检测合成器).
                "xfce4-terminal"
                "xfce4-screenshooter"
                "xfce4-taskmanager"
@@ -2387,31 +2385,15 @@ end
     (append
      <<guix-substitutes>>
      (list (service elogind-service-type)
-           ;; labwc 设备访问走 elogind 的 logind 后端 (libseat LIBSEAT_BACKEND=logind),
-           ;; 不用 seatd-service-type —— 它与 elogind 都提供 file-system-/sys/fs/cgroup
-           ;; 会冲突 (Guix #74681). elogind + polkit 已足够让 labwc 打开 /dev/dri, /dev/input.
            (service xfce-desktop-service-type)
-           ;; LightDM 自动登录 live 用户 → xfce-wayland 会话.
-           ;; Guix 的 lightdm 服务模板 (gnu/services/lightdm.scm) 默认把
-           ;; xsessions 与 wayland-sessions 都写进 sessions-directory, 无需额外配置.
-           ;;   * allow-empty-passwords? —— live 的密码是弱密码 'live'
-           ;;     (见上面 users 字段),打开允许空/弱密码登录
-           ;;   * seats (name "*") —— 通配所有 seat,无需读硬件 seat
-           ;;   * user-session "xfce-wayland" —— xfce4-session 4.20+ 自带
-           ;;     share/wayland-sessions/xfce-wayland.desktop (Exec=startxfce4 --wayland),
-           ;;     startxfce4 自动 command -v labwc 检测合成器并拉起 xfce4-session.
-           ;;   * autologin-user —— 与 users 块里的 live 账户名对齐
-           ;; 已知风险: lightdm 的 X-greeter → wayland session hand-off 在某些发行版
-           ;; 报失败 (Debian #1106079). Live 环境失败则回退预案见 docs/iso-build.md.
            (service lightdm-service-type
                     (lightdm-configuration
-                     (allow-empty-passwords? #t)
+                     (allow-empty-passwords? #f)
                      (seats
                       (list
                        (lightdm-seat-configuration
                         (name "*")
                         (type 'local)
-                                        ; (user-session "xfce-wayland")
                         (user-session "xfce-wayland")
                         (autologin-user "live")))))))
      (modify-services (operating-system-user-services %live-base-os)

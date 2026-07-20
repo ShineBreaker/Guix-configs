@@ -36,7 +36,6 @@
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
-          "hermes-agent",
           "nixpkgs"
         ]
       },
@@ -72,31 +71,6 @@
       "original": {
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "type": "github"
-      }
-    },
-    "hermes-agent": {
-      "inputs": {
-        "flake-parts": "flake-parts",
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "npm-lockfile-fix": "npm-lockfile-fix",
-        "pyproject-build-systems": "pyproject-build-systems",
-        "pyproject-nix": "pyproject-nix",
-        "uv2nix": "uv2nix"
-      },
-      "locked": {
-        "lastModified": 1784521892,
-        "narHash": "sha256-EJUYY8n7d+LZw3UiOjCyvlCizdYCgbOlNIyoT47Ti+0=",
-        "owner": "NousResearch",
-        "repo": "hermes-agent",
-        "rev": "e702a45b5d35aeae8793ea2ce11aa61005251470",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NousResearch",
-        "repo": "hermes-agent",
         "type": "github"
       }
     },
@@ -161,7 +135,6 @@
     "npm-lockfile-fix": {
       "inputs": {
         "nixpkgs": [
-          "hermes-agent",
           "nixpkgs"
         ]
       },
@@ -182,15 +155,12 @@
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
-          "hermes-agent",
           "nixpkgs"
         ],
         "pyproject-nix": [
-          "hermes-agent",
           "pyproject-nix"
         ],
         "uv2nix": [
-          "hermes-agent",
           "uv2nix"
         ]
       },
@@ -211,7 +181,6 @@
     "pyproject-nix": {
       "inputs": {
         "nixpkgs": [
-          "hermes-agent",
           "nixpkgs"
         ]
       },
@@ -231,7 +200,6 @@
     },
     "root": {
       "inputs": {
-        "hermes-agent": "hermes-agent",
         "home-manager": "home-manager",
         "llm-agents": "llm-agents",
         "nixpkgs": "nixpkgs"
@@ -276,11 +244,9 @@
     "uv2nix": {
       "inputs": {
         "nixpkgs": [
-          "hermes-agent",
           "nixpkgs"
         ],
         "pyproject-nix": [
-          "hermes-agent",
           "pyproject-nix"
         ]
       },

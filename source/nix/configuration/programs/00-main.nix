@@ -2,7 +2,6 @@
 
 {
   imports = [
-    ./hermes.nix
     ./zed.nix
   ];
 
@@ -66,10 +65,13 @@
 
     # Communication
     discord
-    feishu
     feishu-cli
     wechat
     wemeet
+
+    (feishu.override {
+      commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";
+    })
 
     (qq.override {
       commandLineArgs = "--ozone-platform=wayland --enable-features=UseOzonePlatform,WaylandWindowDecorations --enable-wayland-ime --wayland-text-input-version=3";

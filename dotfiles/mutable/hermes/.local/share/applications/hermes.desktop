@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Hermes Agent
+GenericName=Hermes Desktop
+Comment=Hermes Agent — self-improving AI agent by Nous Research.
+TryExec=hermes-desktop
+StartupNotify=true
+Exec=hermes-desktop
+Icon=hermes
+Categories=Utility;TextEditor;Development;IDE;
+Keywords=hermes;
+MimeType=x-scheme-handler/hermes;
