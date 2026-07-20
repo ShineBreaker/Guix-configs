@@ -37,11 +37,51 @@ RT_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # Electron 连不上 compositor 导致窗口起不来）
 WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 
+# ── 从宿主动态解析 GUI 环境（不硬编码主题/输入法/路径） ──────────────────────
+# settings.ini 是 GTK3 用户配置源；解析后 export，由 PRESERVE 透传进容器。
+_gtk_settings="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/settings.ini"
+
+# GTK 主题：GTK_THEME 环境变量 > settings.ini gtk-theme-name
+_resolved_theme="${GTK_THEME:-$(sed -n 's/^gtk-theme-name=//p' "$_gtk_settings" 2>/dev/null)}"
+[[ -n "$_resolved_theme" ]] && export GTK_THEME="$_resolved_theme"
+
+# 输入法模块：GTK_IM_MODULE 环境变量 > settings.ini gtk-im-module
+_resolved_im="${GTK_IM_MODULE:-$(sed -n 's/^gtk-im-module=//p' "$_gtk_settings" 2>/dev/null)}"
+if [[ -n "$_resolved_im" ]]; then
+  export GTK_IM_MODULE="$_resolved_im"
+  export QT_IM_MODULE="${QT_IM_MODULE:-$_resolved_im}"
+  export XMODIFIERS="@im=${_resolved_im}"
+fi
+
+# GTK3 immodules 目录（含 im-*.so）：遍历宿主 profile 找第一个存在的
+if [[ -z "${GTK_IM_MODULE_DIR:-}" ]]; then
+  for _p in "${HOME}/.guix-home/profile" "/run/current-system/profile"; do
+    _d="${_p}/lib/gtk-3.0/3.0.0/immodules"
+    [[ -d "$_d" ]] && export GTK_IM_MODULE_DIR="$_d" && break
+  done
+fi
+
+# XDG_DATA_DIRS：前置宿主 profile 的 share（主题/图标/光标搜索路径）
+_extra_data=""
+for _p in "${HOME}/.guix-home/profile" "/run/current-system/profile"; do
+  [[ -d "${_p}/share" ]] && _extra_data="${_extra_data:+${_extra_data}:}${_p}/share"
+done
+export XDG_DATA_DIRS="${_extra_data:+${_extra_data}:}${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+# Ozone / QPA 平台：有 WAYLAND_DISPLAY → wayland，否则 x11
+if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then _ozone="wayland"; else _ozone="x11"; fi
+export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-$_ozone}"
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-$_ozone}"
+export GDK_BACKEND="${GDK_BACKEND:-$_ozone}"
+
 # --preserve 正则（与 appimage-run 一致：GUI/Wayland/音频/dbus 变量透传）
 # 额外含 HERMES_HOME：desktop 壳(main.cjs) 靠它推导 ACTIVE_HERMES_ROOT=
 # HERMES_HOME/hermes-agent，不 preserve 会 fallback 到默认 ~/.hermes 而找不到安装
 # 额外含 FONTCONFIG_FILE/PATH：让容器复用宿主 fontconfig 配置，否则回退难看字体
-PRESERVE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR)$'
+# 额外含 XDG_DATA_DIRS/XDG_CONFIG_HOME：让容器内 GTK 复用宿主主题/图标/光标搜索路径
+# 额外含 IME 变量（GTK_IM_MODULE/QT_IM_MODULE/XMODIFIERS）：fcitx5 输入法透传
+# 额外含 XCURSOR_PATH/XCURSOR_THEME：光标主题搜索路径
+PRESERVE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR|XDG_DATA_DIRS|XDG_CONFIG_HOME|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS|XCURSOR_PATH|XCURSOR_THEME|GTK_THEME|GTK_IM_MODULE_DIR|GDK_BACKEND)$'
 
 # --share/--expose
 SHARE_FLAGS=(
@@ -75,10 +115,12 @@ PULSE_DIR="${RT_DIR}/pulse/native"
 [[ -e /etc/machine-id ]] && SHARE_FLAGS+=("--expose=/etc/machine-id")
 # xwayland socket（DISPLAY=:0 时）透进容器，走 X11 backend
 [[ -n "${DISPLAY:-}" ]] && SHARE_FLAGS+=("--share=/tmp/.X11-unix")
+# 宿主系统 profile 的 share 目录（hicolor 图标主题等 fallback 资源）
+[[ -d /run/current-system/profile/share ]] && SHARE_FLAGS+=("--expose=/run/current-system/profile/share")
 
 # 容器内执行：
-# - 走 X11/xwayland（你有 DISPLAY=:0，容器里比纯 wayland 稳；纯 wayland 需连
-#   真实 compositor socket 且更易出问题）
+# - 走 Wayland 原生协议（niri compositor；WAYLAND_DISPLAY + RT_DIR socket 已
+#   expose 进容器，Electron 直连 compositor，不经 XWayland 中转）
 # - 硬件 GPU：/dev/dri 已读写挂入（见上），不再设 LIBGL_ALWAYS_SOFTWARE，也不
 #   用 --enable-unsafe-swiftshader 软件渲染——那会让应用内动画全失效。
 #   --ignore-gpu-blocklist：容器内 GPU 信息探测不全，Chromium 可能把显卡列入
@@ -87,16 +129,24 @@ PULSE_DIR="${RT_DIR}/pulse/native"
 #   回退软件渲染——该变量已在 PRESERVE 正则里透传。）
 # - --no-sandbox / --disable-gpu-sandbox：嵌套 guix shell 容器里 Chromium 沙箱
 #   起不来（渲染进程 exitCode=5 crash loop），关掉沙箱让窗口正常出（必需）
-# - dbus-launch 起 session bus（消 dbus 噪声，非致命）
+# - --enable-wayland-ime：启用 Wayland text-input 协议，fcitx5 的
+#   libwaylandim.so 通过此协议与 Chromium 通信（X11 下走 XIM/GTK IM，
+#   Wayland 下必须显式开启此标志）
+# - --gtk-version=3：让 Chromium 初始化 GTK3（原生文件对话框 + 主题集成）
+# - dbus：优先复用宿主 session bus（DBUS_SESSION_BUS_ADDRESS 已 preserve +
+#   RT_DIR 已 expose → 宿主 bus socket 可达）；仅在宿主 bus 不可达时才
+#   dbus-launch 起新 bus。这样 dconf/GSettings（暗色偏好）和 fcitx5
+#   D-Bus frontend 都能从容器内访问。
+# - GTK 主题/图标/光标/输入法/Ozone 平台等全部由上方动态解析段 export，
+#   经 PRESERVE 透传进容器，EXEC_STRING 内不再硬编码任何宿主特定值。
+# shellcheck disable=SC2016  # 单引号内 ${...} 故意留给容器内 bash -c 展开
 EXEC_STRING='cd /appimage-root && \
 export APPDIR=/appimage-root && \
 export LD_LIBRARY_PATH=/appimage-root:${LD_LIBRARY_PATH} && \
-export QT_QPA_PLATFORM=${QT_QPA_PLATFORM:-xcb} && \
-export ELECTRON_OZONE_PLATFORM_HINT=${ELECTRON_OZONE_PLATFORM_HINT:-x11} && \
-if command -v dbus-launch >/dev/null 2>&1; then \
+if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-launch >/dev/null 2>&1; then \
   eval "$(dbus-launch --sh-syntax)"; \
 fi && \
-exec /appimage-root/Hermes --no-sandbox --disable-gpu-sandbox --ozone-platform=x11 --ignore-gpu-blocklist --disable-dev-shm-usage "$@"'
+exec /appimage-root/Hermes --no-sandbox --disable-gpu-sandbox --ozone-platform="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}" --enable-wayland-ime --gtk-version=3 --ignore-gpu-blocklist --disable-dev-shm-usage "$@"'
 
 exec guix shell --container --emulate-fhs --network \
   --manifest="${MANIFEST}" \

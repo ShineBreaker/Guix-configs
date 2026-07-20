@@ -21,4 +21,9 @@
     "dbus" "expat" "eudev" "libxkbcommon" "xcb-util" "xcb-util-wm"
     "xcb-util-keysyms" "xdg-utils"
     ;; VA-API 视频硬件解码（GPU 进程 dlopen libva.so.2；缺它仅视频软解，非致命）
-    "libva"))
+    "libva"
+    ;; GSettings/dconf：GTK3 通过 GSettings 读 icon-theme / cursor-theme /
+    ;; color-scheme（org.gnome.desktop.interface）。缺 schemas 则 GTK3 拿不到
+    ;; 这些键，回退 Adwaita 图标 + 默认光标。dconf 后端直接读
+    ;; ~/.config/dconf/user 二进制库（--share=$HOME 已挂入），无需 D-Bus。
+    "gsettings-desktop-schemas" "dconf"))
