@@ -5,5 +5,5 @@ allowBuilds:
   context-mode: true
   glimpseui: true
   koffi: true
-  node-pty: set this to true or false
+  node-pty: true
   protobufjs: true
