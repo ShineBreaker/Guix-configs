@@ -1,0 +1,28 @@
+{
+  "_comment": "Frozen rules — 单一权威源。pi-gate 扩展与 completion reviewer 都从这里读取。本文件是 meta-frozen：agent 禁止通过 write/edit 工具修改它（防止优化器削弱约束自己的规则）；修改须人工编辑源文件后 blue home。",
+  "frozen_commands": [
+    "blue rebuild",
+    "blue init",
+    "blue clean",
+    "guix system reconfigure",
+    "guix system init",
+    "sudo"
+  ],
+  "frozen_paths": ["tmp/", "channel.lock", "~/.config/", "~/.local/"],
+  "redirect_conventions": {
+    "guix home reconfigure": "建议改用 blue home（锁定频道版本 + 括号检查，保证可复现）"
+  },
+  "human_only_actions": [
+    "blue rebuild（Guix System reconfigure，需 sudo）",
+    "blue init（装机到 /mnt，需 sudo）",
+    "blue clean / clean-generations（删世代 / EFI，需 sudo）",
+    "channel.lock 更新（blue update）",
+    "distill → skills/（agenote 蒸馏产物须人工 review）"
+  ],
+  "anchor_measurements": [
+    "blue check 退出码 = 0（括号平衡 + tangle 通过）",
+    "git diff 非空（有实际变更，非空报告）",
+    "测试套件实际执行（不是被跳过或标准被降低）",
+    "blue --dry-run rebuild 构建验证通过（系统配置改动前）"
+  ]
+}
