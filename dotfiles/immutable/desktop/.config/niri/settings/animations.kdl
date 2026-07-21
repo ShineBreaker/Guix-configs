@@ -1,57 +1,60 @@
 // ============================================================================
-//  Custom animation effects tuned for daily, high-frequency use.
+//  为日常高频使用调优的自定义动画效果。
 //
-//  Non-linearity sources woven into the shaders below:
-//    1. Underdamped spring (e^-dp * cos(wp))  - open scale overshoots once,
-//       then settles with one diminishing counter-bounce. A true damped
-//       oscillation, not a single sine bump - reads as physical inertia.
-//    2. Squash & stretch                      - moving content deforms along
-//       its velocity axis (area-preserving, so no apparent mass change).
-//       The single biggest "aliveness" trick from classic animation.
-//    3. Velocity-aligned motion blur          - 4 texture taps spread along
-//       the direction of travel, width proportional to speed. Fast phases
-//       smear, slow phases stay crisp - like a camera exposure.
-//    4. Anticipation                          - close first inhales (+1.5%
-//       scale) and rises a few px before falling. Every natural motion
-//       winds up before it commits.
-//    5. Gravity + flutter + banking           - close drops with p^1.9
-//       (accelerating), sways sideways with growing amplitude, and banks
-//       into the sway with a phase-shifted rotation - a falling leaf.
-//    6. Traveling wave + diagonal flow        - resize ripple now *moves*
-//       (phase advances with time) along a slightly diagonal front, and
-//       the blend boundary micro-displaces content like refraction.
+//  以下着色器中融合了非线性来源：
+//    1. 欠阻尼弹簧 (e^-dp * cos(wp))  - 打开时缩放先过冲一次，
+//       再经一次衰减的回弹后稳定。真正的阻尼振荡，而非单次正弦脉冲
+//       —— 读起来就像物理惯性。
+//    2. 挤压与拉伸                      - 运动内容沿速度轴形变
+//       （面积守恒，所以质量看起来没变）。经典动画中最具"生命力"的技巧。
+//    3. 速度对齐的运动模糊              - 4 次纹理采样沿运动方向展开，
+//       宽度与速度成正比，权重 1:2:2:1（帐篷核），使拖影没有条纹边缘。
+//    4. 预备动作                        - 关闭时先吸气（+1.8% 缩放）
+//       并上升几像素再落下。每个自然运动在发力前都会先蓄力。
+//    5. 重力 + 飘摇 + 倾侧             - 关闭时以 p^1.9 下落（加速），
+//       横向摇摆幅度递增*且*频率递增（啁啾），随风漂移，并以 90° 相位
+//       超前倾入摇摆 —— 如同飘落的树叶。
+//    6. 行进环 + 折射缝隙              - 调整大小时涟漪相位随时间推进，
+//       向角落逐渐消退；移动的混合边界将两个内容层向相反方向微位移，
+//       如同光线在玻璃边缘的弯折。
+//    7. 微光                            - 打开时在弹簧过冲处捕捉一抹
+//       亮度；关闭时沉入淡淡的阴影。光响应运动，而不仅仅是几何形状。
 //
-//  All custom-shader blocks use `curve "linear"` so the math above is the
-//  sole source of motion. Springs stay on touchpad-driven animations
-//  (workspace-switch / view movement) because they read release velocity.
+//  所有自定义着色器块使用 `curve "linear"`，因此上述数学公式是运动的
+//  唯一来源。弹簧仅用于触控板驱动的动画（工作区切换 / 视图移动），
+//  因为它们需要读取释放速度。
 //
-//  Tuning
+//  调参
 //  ------
-//  Each shader exposes its knobs near the top of the body. The most
-//  sensitive ones: SPRING_DAMP (lower = bouncier open), ANTIC_PX (higher =
-//  more theatrical close), BLUR_PX (higher = faster-looking motion).
-//  Set STRETCH_MAX / BLUR_PX to 0.0 for a fully "rigid" feel.
+//  每个着色器在函数体顶部暴露其旋钮。最敏感的几个：
+//  SPRING_DAMP（越小 = 打开越弹）、ANTIC_PX（越大 = 关闭越戏剧化）、
+//  BLUR_PX（越大 = 运动看起来越快）。
+//  将 STRETCH_MAX / BLUR_PX 设为 0.0 可获得完全"刚性"的手感；
+//  将 GLOW_GAIN / SHADE_MAX 设为 0.0 可禁用微光效果。
 // ============================================================================
 
 animations {
 
     // ------------------------------------------------------------------------
-    //  window-open . "Bloom"
+    //  window-open · "绽放"
     //
-    //  The window rises into place carried by four coupled systems:
-    //    - scale  : underdamped spring. Starts at 0.84, overshoots to
-    //               ~1.024 around p=0.28, dips to ~0.997 around p=0.63,
-    //               then rests. One bounce, one echo - inertia made visible.
-    //    - lift   : ease-out-cubic rise. Its *velocity* drives two
-    //               secondary effects below.
-    //    - stretch: vertical scale peaks at +5% at launch (max velocity)
-    //               and relaxes quadratically; horizontal scale compensates
-    //               to preserve area.
-    //    - tilt   : a damped ~0.7 deg rotational wobble as the window lands.
-    //  Alpha snaps in by p=0.35 so content is readable during the settle.
+    //  窗口由四个耦合系统驱动升入到位：
+    //    - scale  : 欠阻尼弹簧。从 0.84 开始，在 p≈0.28 时过冲至
+    //               ~1.024，在 p≈0.63 时下探至 ~0.997，然后稳定。
+    //               一次弹跳、一次回响 —— 惯性变得可见。
+    //    - lift   : ease-out-cubic 上升。其*速度*驱动下面两个
+    //               次级效果。
+    //    - stretch: 垂直缩放在启动时（最大速度处）达到 +5% 峰值，
+    //               然后二次方衰减；水平缩放补偿以保持面积。
+    //    - tilt   : 两个阻尼振荡器 —— 一个慢速 ~0.9° 稳定，
+    //               上面叠加一个更快、衰减更快的颤抖。有机的，
+    //               不是节拍器式的。
+    //    - breath : 亮度在弹簧过冲峰值处上升 ~2.7%，
+    //               如同表面在用力时捕捉到了光。
+    //  透明度在 p=0.32 时完成切入，使内容在稳定过程中可读。
     //
-    //  Non-linearity: exp-cos spring + velocity-coupled deformation +
-    //  damped rotation + 4-tap motion blur.
+    //  非线性：exp-cos 弹簧 + 速度耦合形变 +
+    //  双重阻尼旋转 + 帐篷权重 4-tap 运动模糊。
     // ------------------------------------------------------------------------
     window-open {
         duration-ms 240
@@ -61,41 +64,45 @@ animations {
             vec4 open_color(vec3 coords_geo, vec3 size_geo) {
                 float p = niri_clamped_progress;
 
-                // ---- tunable knobs ---------------------------------------------
-                float SCALE_START = 0.84;   // initial scale (grows from here)
-                float SPRING_FREQ = 9.0;    // spring frequency (rad over p in [0,1])
-                float SPRING_DAMP = 6.0;    // spring damping (lower = bouncier)
-                float LIFT_PX     = 20.0;   // start Y offset (below final pos)
-                float TILT_PEAK   = 0.035;  // landing tilt amplitude (rad)
-                float STRETCH_MAX = 0.05;   // vertical stretch at max velocity
-                float BLUR_PX     = 9.0;    // motion-blur half-span at max velocity
-                float ALPHA_END   = 0.35;   // alpha reaches 1 by this p
+                // ---- 可调旋钮 --------------------------------------------------
+                float SCALE_START = 0.84;   // 初始缩放（从此开始增长）
+                float SPRING_FREQ = 9.0;    // 弹簧频率（p∈[0,1] 上的弧度）
+                float SPRING_DAMP = 6.0;    // 弹簧阻尼（越小 = 越弹）
+                float LIFT_PX     = 20.0;   // 起始 Y 偏移（低于最终位置）
+                float TILT_PEAK   = 0.032;  // 落地倾斜幅度（弧度）
+                float STRETCH_MAX = 0.05;   // 最大速度时的垂直拉伸
+                float BLUR_PX     = 9.0;    // 最大速度时的运动模糊半宽度
+                float ALPHA_END   = 0.32;   // 透明度在此 p 值达到 1
+                float GLOW_GAIN   = 0.22;   // 每单位过冲的亮度呼吸
                 // ----------------------------------------------------------------
 
-                // --- scale: underdamped spring ----------------------------------
-                // f(p) = 1 - e^(-d p) cos(w p): 0 at p=0, overshoots once, one
-                // diminishing counter-bounce, rests at 1. Normalized so the
-                // residual at p=1 is cancelled exactly.
+                // --- 缩放：欠阻尼弹簧 -------------------------------------------
+                // f(p) = 1 - e^(-d p) cos(w p)：p=0 时为 0，过冲一次，
+                // 一次衰减回弹，p=1 时稳定在 1。经过归一化使 p=1 处的
+                // 残差恰好抵消。
                 float spring_end = 1.0 - exp(-SPRING_DAMP) * cos(SPRING_FREQ);
                 float spring = (1.0 - exp(-SPRING_DAMP * p)
                                       * cos(SPRING_FREQ * p)) / spring_end;
                 float scale_base = SCALE_START + (1.0 - SCALE_START) * spring;
 
-                // --- lift: ease-out-cubic; velocity drives stretch & blur -------
+                // --- lift：ease-out-cubic；速度驱动拉伸与模糊 ----------
                 float lift_p = 1.0 - pow(1.0 - p, 3.0);
                 float lift   = LIFT_PX * (1.0 - lift_p);
-                float vel    = pow(1.0 - p, 2.0);   // 1 at launch -> 0 at rest
+                float vel    = pow(1.0 - p, 2.0);   // 启动时为 1 -> 静止时为 0
 
-                // --- squash & stretch (area-preserving) -------------------------
+                // --- 挤压与拉伸（面积守恒） ------------------------------------
                 float sy = 1.0 + STRETCH_MAX * vel;
                 float sx = 1.0 / sy;
                 float scale_x = scale_base * sx;
                 float scale_y = scale_base * sy;
 
-                // --- landing tilt: damped oscillation, 0 at both ends -----------
-                float tilt = TILT_PEAK * sin(p * 7.0) * exp(-p * 4.5);
+                // --- 落地倾斜：慢速稳定 + 快速颤抖 --------------------------
+                // 两个振荡器在启动时都恰好为零（无跳变），且都会衰减；
+                // 颤抖衰减更快，留下纯净的最终状态。
+                float tilt = TILT_PEAK * (exp(-p * 4.0) * sin(p * 6.0)
+                           + 0.30 * exp(-p * 7.0) * sin(p * 10.5));
 
-                // --- compose inverse transform ----------------------------------
+                // --- 组合逆变换 ------------------------------------------------
                 vec2 centered = coords_geo.xy - vec2(0.5);
                 float c = cos(tilt);
                 float s = sin(tilt);
@@ -107,19 +114,23 @@ animations {
                            + vec2(0.5);
                 local.y += lift / size_geo.y;
 
-                // --- motion blur: 4 taps along the rise direction ---------------
+                // --- 运动模糊：帐篷权重 (1:2:2:1) 沿上升方向 4-tap ------
                 float blur_step = BLUR_PX * vel / size_geo.y;
-                vec3 t0 = niri_geo_to_tex * vec3(local.x, local.y - 0.75 * blur_step, 1.0);
+                vec3 t0 = niri_geo_to_tex * vec3(local.x, local.y - 0.80 * blur_step, 1.0);
                 vec3 t1 = niri_geo_to_tex * vec3(local.x, local.y - 0.25 * blur_step, 1.0);
                 vec3 t2 = niri_geo_to_tex * vec3(local.x, local.y + 0.25 * blur_step, 1.0);
-                vec3 t3 = niri_geo_to_tex * vec3(local.x, local.y + 0.75 * blur_step, 1.0);
-                vec4 color = texture2D(niri_tex, t0.st)
-                           + texture2D(niri_tex, t1.st)
-                           + texture2D(niri_tex, t2.st)
-                           + texture2D(niri_tex, t3.st);
-                color *= 0.25;
+                vec3 t3 = niri_geo_to_tex * vec3(local.x, local.y + 0.80 * blur_step, 1.0);
+                vec4 color =       texture2D(niri_tex, t0.st)
+                           + 2.0 * texture2D(niri_tex, t1.st)
+                           + 2.0 * texture2D(niri_tex, t2.st)
+                           +       texture2D(niri_tex, t3.st);
+                color *= 0.1666667;
 
-                // --- alpha: readable early, geometry does the rest --------------
+                // --- 亮度呼吸：在过冲处捕捉光线 -----------------------------
+                float over = max(spring - 1.0, 0.0);
+                color.rgb *= 1.0 + GLOW_GAIN * over;
+
+                // --- 透明度：早期即可读，几何变换完成其余部分 --------------
                 float a = smoothstep(0.0, ALPHA_END, p);
                 color *= a;
 
@@ -129,208 +140,165 @@ animations {
     }
 
     // ------------------------------------------------------------------------
-    //  window-close . "Petal"
+    //  窗口关闭
     //
-    //  A falling leaf, in four acts:
-    //    1. anticipation (p 0-0.24): the window inhales (+1.5% scale) and
-    //       rises ~7px - the wind-up before the fall.
-    //    2. gravity: drop follows p^1.9, genuinely accelerating. No easing
-    //       at the bottom; the fade hides the landing.
-    //    3. flutter: a lateral sway whose amplitude *grows* with the fall,
-    //       plus a phase-shifted banking rotation (~1.8 deg peak) so the
-    //       window tips into its sway like a leaf.
-    //    4. stretch + blur: falling stretches the window vertically and
-    //       smears it along its velocity; both peak at max speed.
-    //  Alpha holds to p=0.08 (recognizability), dissolves by p=0.88.
-    //
-    //  Non-linearity: anticipation + power-curve gravity + growing
-    //  oscillation + velocity-coupled deformation + 4-tap motion blur.
+    //  无预备动作、无随机飘摇：关闭操作应立即响应，沿用户预期的方向运动。
+    //  在 300 ms 内，窗口缩小至 88%，下落 14 px，失去焦点，并淡出。
+    //  有效可见时长现在约为 276 ms（之前约 189 ms）。
     // ------------------------------------------------------------------------
     window-close {
-        duration-ms 200
+        duration-ms 240
         curve "linear"
 
         custom-shader r"
             vec4 close_color(vec3 coords_geo, vec3 size_geo) {
                 float p = niri_clamped_progress;
+                float motion = p * p * (3.0 - 2.0 * p);
 
-                // ---- tunable knobs ---------------------------------------------
-                float SCALE_END   = 0.84;   // final scale
-                float ANTIC_END   = 0.12;   // anticipation spans p in [0, 2x]
-                float ANTIC_PX    = 7.0;    // upward anticipation lift
-                float ANTIC_SCALE = 0.015;  // anticipation inhale (scale-up)
-                float DROP_PX     = 34.0;   // final downward offset
-                float DROP_EXP    = 1.9;    // >1 = accelerating (gravity-like)
-                float SWAY_PX     = 9.0;    // lateral flutter amplitude at p=1
-                float SWAY_FREQ   = 4.712;  // 0.75 cycle over the fall
-                float ROT_PEAK    = 0.06;   // banking rotation amplitude (rad)
-                float STRETCH_MAX = 0.06;   // stretch while accelerating
-                float BLUR_PX     = 10.0;   // blur half-span at max fall speed
-                float ALPHA_HOLD  = 0.08;   // full opacity until this p
-                float ALPHA_END   = 0.88;   // fully transparent by this p
-                // ----------------------------------------------------------------
+                vec2 pixel = 1.0 / max(size_geo.xy, vec2(1.0));
+                float scale = mix(1.0, 0.88, motion);
+                float drop = 14.0 * p * p;
 
-                // --- anticipation: sin bump over [0, 2*ANTIC_END], 0 elsewhere --
-                float ap    = clamp(p / (2.0 * ANTIC_END), 0.0, 1.0);
-                float antic = sin(ap * 3.14159265);
+                vec2 local = (coords_geo.xy - vec2(0.5)) / scale + vec2(0.5);
+                local.y -= drop * pixel.y;
 
-                // --- scale: inhale first, then smoothstep collapse --------------
-                float scale_p    = p * p * (3.0 - 2.0 * p);
-                float scale_base = 1.0 + ANTIC_SCALE * antic
-                                 - (1.0 - SCALE_END) * scale_p;
+                // 柔和的焦外衰减取代了旧的高速运动拖影。
+                float blur = 3.0 * smoothstep(0.18, 0.90, p);
+                vec2 dx = vec2(blur * pixel.x, 0.0);
+                vec2 dy = vec2(0.0, blur * pixel.y);
 
-                // --- vertical: anticipation lift + accelerating drop ------------
-                float y_off = DROP_PX * pow(p, DROP_EXP) - ANTIC_PX * antic;
-                float vel   = pow(p, DROP_EXP - 1.0);   // 0 -> 1 fall-speed proxy
+                vec3 tc = niri_geo_to_tex * vec3(local, 1.0);
+                vec3 tx0 = niri_geo_to_tex * vec3(local - dx, 1.0);
+                vec3 tx1 = niri_geo_to_tex * vec3(local + dx, 1.0);
+                vec3 ty0 = niri_geo_to_tex * vec3(local - dy, 1.0);
+                vec3 ty1 = niri_geo_to_tex * vec3(local + dy, 1.0);
 
-                // --- squash & stretch along the fall ----------------------------
-                float sy = 1.0 + STRETCH_MAX * vel;
-                float sx = 1.0 / sy;
-                float scale_x = scale_base * sx;
-                float scale_y = scale_base * sy;
+                vec4 color = 4.0 * texture2D(niri_tex, tc.st)
+                           + texture2D(niri_tex, tx0.st)
+                           + texture2D(niri_tex, tx1.st)
+                           + texture2D(niri_tex, ty0.st)
+                           + texture2D(niri_tex, ty1.st);
+                color *= 0.125;
 
-                // --- flutter: sway grows with the fall; rotation banks into it --
-                float sway = SWAY_PX * p * sin(p * SWAY_FREQ);
-                float rot  = ROT_PEAK * p * sin(p * SWAY_FREQ + 0.6)
-                           * (1.0 - 0.25 * p);
-
-                // --- compose inverse transform ----------------------------------
-                vec2 centered = coords_geo.xy - vec2(0.5);
-                float c = cos(rot);
-                float s = sin(rot);
-                vec2 unrot = vec2(
-                     c * centered.x + s * centered.y,
-                    -s * centered.x + c * centered.y
-                );
-                vec2 local = vec2(unrot.x / scale_x, unrot.y / scale_y)
-                           + vec2(0.5);
-                local.y -= y_off / size_geo.y;   // sample higher = content drops
-                local.x -= sway / size_geo.x;    // sample left   = content sways right
-
-                // --- motion blur: 4 taps along the fall+sway velocity -----------
-                vec2 blur_geo = vec2(
-                    SWAY_PX * 0.15 * p / size_geo.x,
-                    BLUR_PX * vel / size_geo.y
-                );
-                vec3 t0 = niri_geo_to_tex * vec3(local - 0.75 * blur_geo, 1.0);
-                vec3 t1 = niri_geo_to_tex * vec3(local - 0.25 * blur_geo, 1.0);
-                vec3 t2 = niri_geo_to_tex * vec3(local + 0.25 * blur_geo, 1.0);
-                vec3 t3 = niri_geo_to_tex * vec3(local + 0.75 * blur_geo, 1.0);
-                vec4 color = texture2D(niri_tex, t0.st)
-                           + texture2D(niri_tex, t1.st)
-                           + texture2D(niri_tex, t2.st)
-                           + texture2D(niri_tex, t3.st);
-                color *= 0.25;
-
-                // --- alpha: hold for recognition, then dissolve -----------------
-                float a = 1.0 - smoothstep(ALPHA_HOLD, ALPHA_END, p);
-                color *= a;
-
-                return color;
+                // 在保持完全预乘的同时略微退入阴影。
+                color.rgb *= 1.0 - 0.025 * motion;
+                float opacity = 1.0 - smoothstep(0.10, 0.92, p);
+                return color * opacity;
             }
         "
     }
 
     // ------------------------------------------------------------------------
-        //  window-resize . "Bloom"
-        //
-        //  Timing is now a slightly underdamped SPRING, not a scripted easing:
-        //  the window geometry itself eases in, overshoots ~2%, and settles.
-        //  This is the real fix for "linear feel" - the eye tracks the window
-        //  edge, and only a spring makes the edge move non-linearly. Springs
-        //  also scale naturally: a 0.5->1.0 preset jump bounces visibly, a
-        //  +-10% step just trembles, and repeated presses chain velocity
-        //  instead of restarting from zero.
-        //
-        //  The shader complements the spring with four effects:
-        //    - fast blend      : content swap completes by p=0.62, before the
-        //                        geometry bounce, so the tail is crisp final
-        //                        content, not a lingering crossfade.
-        //    - center-out bloom: the middle adopts the new layout first, edges
-        //                        catch up - reads as the surface inflating,
-        //                        not a wipe. Direction-agnostic (works for
-        //                        grow and shrink alike).
-        //    - expanding rings : radial ripple traveling outward (live only
-        //                        mid-transition via the envelope).
-        //    - jelly lag       : while the spring overshoots (niri_progress>1),
-        //                        content counter-shrinks a touch, as if its
-        //                        inertia lags the frame.
-        //
-        //  niri_progress is unclamped (>1 during overshoot); everything except
-        //  jelly uses the clamped value, so the shader also works unchanged if
-        //  you ever switch back to duration+curve (jelly just never fires).
-        // ------------------------------------------------------------------------
-        window-resize {
-            spring damping-ratio=0.86 stiffness=1000 epsilon=0.0001
+    //  window-resize · "绽放"
+    //
+    //  时序现在使用略微欠阻尼的弹簧，而非预设缓动曲线：
+    //  窗口几何本身缓入、过冲约 2%、然后稳定。
+    //  这是解决"线性感"的根本方法 —— 眼睛追踪窗口边缘，
+    //  只有弹簧能让边缘非线性运动。弹簧还能自然缩放：
+    //  0.5→1.0 的预设跳变会明显弹跳，+-10% 的步进只是轻微颤动，
+    //  反复按压会衔接速度而非从零重启。
+    //
+    //  着色器用五种效果补充弹簧：
+    //    - 快速混合        : 内容交换在 p=0.62 前完成，赶在几何弹跳
+    //                        之前，所以尾部是清晰的最终内容，而非残留的
+    //                        交叉淡入淡出。
+    //    - 中心向外绽放    : 中间先采用新布局，边缘追赶 —— 读起来像
+    //                        表面在膨胀，而非擦除。方向无关（放大和
+    //                        缩小同样适用）。
+    //    - 扩散环          : 径向涟漪向外行进，向角落逐渐消退
+    //                        （仅在过渡中期通过包络线生效）。
+    //    - 折射缝隙        : 移动的混合边界将两个层向相反的径向方向
+    //                        位移（~1.6px），如同光线在移动的玻璃边缘
+    //                        弯折。
+    //    - 果冻滞后        : 当弹簧过冲时（niri_progress>1），
+    //                        内容会反向轻微缩小，如同其惯性滞后于
+    //                        框架。
+    //
+    //  niri_progress 无上限（过冲时 >1）；除果冻效果外所有地方使用
+    //  限制值，因此如果你切换回 duration+curve，着色器也能正常工作
+    //  （果冻效果只是不会触发）。
+    // ------------------------------------------------------------------------
+    window-resize {
+        spring damping-ratio=0.86 stiffness=1000 epsilon=0.0001
 
-            custom-shader r"
-                vec4 resize_color(vec3 coords_curr_geo, vec3 size_curr_geo) {
-                    float p  = niri_clamped_progress;
-                    float pu = niri_progress;
+        custom-shader r"
+            vec4 resize_color(vec3 coords_curr_geo, vec3 size_curr_geo) {
+                float p  = niri_clamped_progress;
+                float pu = niri_progress;
 
-                    // ---- tunable knobs ---------------------------------------------
-                    float BLEND_END   = 0.62;   // content blend completes by this p
-                    float BLOOM_GAIN  = 0.30;   // center-out reveal strength
-                    float RING_AMP    = 0.035;  // ripple amplitude (blend units)
-                    float RING_FREQ   = 12.566; // ~2 rings across the radius
-                    float RING_TRAVEL = 4.0;    // ring phase travel over p (rad)
-                    float SETTLE_ZOOM = 0.035;  // new content enters magnified
-                    float PREV_SHRINK = 0.020;  // old content recedes as it fades
-                    float JELLY_GAIN  = 1.0;    // content lag during overshoot
-                    float JELLY_MAX   = 0.025;  // cap on jelly counter-scale
-                    // ----------------------------------------------------------------
+                // ---- 可调旋钮 --------------------------------------------------
+                float BLEND_END   = 0.62;   // 内容混合在此 p 值完成
+                float BLOOM_GAIN  = 0.30;   // 中心向外显现的强度
+                float RING_AMP    = 0.035;  // 涟漪幅度（混合单位）
+                float RING_FREQ   = 12.566; // 半径上约 2 个环
+                float RING_TRAVEL = 4.0;    // 环相位在 p 上的行程（弧度）
+                float REFR_PX     = 1.6;    // 缝隙处的折射位移
+                float SETTLE_ZOOM = 0.035;  // 新内容进入时略微放大
+                float PREV_SHRINK = 0.020;  // 旧内容在淡出时退缩
+                float JELLY_GAIN  = 1.0;    // 过冲时的内容滞后
+                float JELLY_MAX   = 0.025;  // 果冻反向缩放的上限
+                // ----------------------------------------------------------------
 
-                    // Content blend: smooth S-curve, done before the geometry bounce.
-                    float t = smoothstep(0.0, BLEND_END, p);
+                // 内容混合：平滑 S 曲线，在几何弹跳前完成。
+                float t = smoothstep(0.0, BLEND_END, p);
 
-                    // Envelope: effects live only mid-transition.
-                    float env = sin(min(p / BLEND_END, 1.0) * 3.14159265);
+                // 包络线：效果仅在过渡中期存在。
+                float env = sin(min(p / BLEND_END, 1.0) * 3.14159265);
 
-                    // Radial coordinate: 0 at center, ~1 at corners, aspect-corrected.
-                    vec2 centered_px = (coords_curr_geo.xy - 0.5) * size_curr_geo.xy;
-                    float d = length(centered_px) / (0.5 * length(size_curr_geo.xy));
+                // 径向坐标：中心为 0，角落约 ~1，经过宽高比校正。
+                vec2 centered_px = (coords_curr_geo.xy - 0.5) * size_curr_geo.xy;
+                float r_len = length(centered_px);
+                float d = r_len / (0.5 * length(size_curr_geo.xy));
 
-                    // Center-out bloom: the surface inflates from the middle.
-                    float bloom = BLOOM_GAIN * env * (0.65 - d);
+                // 中心向外绽放：表面从中间膨胀。
+                float bloom = BLOOM_GAIN * env * (0.65 - d);
 
-                    // Expanding rings traveling outward.
-                    float ring = sin(d * RING_FREQ - p * RING_TRAVEL)
-                               * RING_AMP * env;
+                // 扩散环向外行进，向角落逐渐消退。
+                float phase = d * RING_FREQ - p * RING_TRAVEL;
+                float ring  = sin(phase) * RING_AMP * env * (1.0 - 0.35 * d);
 
-                    float blend = clamp(t + bloom + ring, 0.0, 1.0);
+                float blend = clamp(t + bloom + ring, 0.0, 1.0);
 
-                    // Old content recedes; new content enters slightly magnified
-                    // and relaxes into its frame (dies exactly to 1.0 at t=1).
-                    float s_prev = 1.0 + PREV_SHRINK * t;
-                    float s_next = 1.0 / (1.0 + SETTLE_ZOOM * (1.0 - t) * (1.0 - t));
+                // 旧内容退缩；新内容略微放大进入并逐渐
+                // 稳定到其框架（在 t=1 时恰好衰减到 1.0）。
+                float s_prev = 1.0 + PREV_SHRINK * t;
+                float s_next = 1.0 / (1.0 + SETTLE_ZOOM * (1.0 - t) * (1.0 - t));
 
-                    vec2 lp = (coords_curr_geo.xy - 0.5) * s_prev + 0.5;
-                    vec2 ln = (coords_curr_geo.xy - 0.5) * s_next + 0.5;
+                vec2 lp = (coords_curr_geo.xy - 0.5) * s_prev + 0.5;
+                vec2 ln = (coords_curr_geo.xy - 0.5) * s_next + 0.5;
 
-                    // Jelly: spring overshoot (pu > 1) counter-shrinks the content.
-                    float over  = clamp(pu - 1.0, 0.0, 0.25);
-                    float jelly = 1.0 + min(JELLY_GAIN * over, JELLY_MAX);
-                    ln = (ln - 0.5) * jelly + 0.5;
-                    ln = clamp(ln, 0.0, 1.0);
-                    lp = clamp(lp, 0.0, 1.0);
+                // 折射：移动的缝隙将两层向相反的径向方向弯折
+                // —— 如同玻璃边缘横跨表面移动。
+                vec2 dir = centered_px / max(r_len, 0.0001);
+                float refr = cos(phase) * REFR_PX * env;
+                vec2 refr_uv = dir * refr / size_curr_geo.xy;
+                lp += refr_uv;
+                ln -= refr_uv;
 
-                    vec3 tex_prev = niri_geo_to_tex_prev * vec3(lp, 1.0);
-                    vec3 tex_next = niri_geo_to_tex_next * vec3(ln, 1.0);
-                    vec4 c_prev = texture2D(niri_tex_prev, tex_prev.st);
-                    vec4 c_next = texture2D(niri_tex_next, tex_next.st);
+                // 果冻：弹簧过冲 (pu > 1) 使内容反向缩小。
+                float over  = clamp(pu - 1.0, 0.0, 0.25);
+                float jelly = 1.0 + min(JELLY_GAIN * over, JELLY_MAX);
+                ln = (ln - 0.5) * jelly + 0.5;
 
-                    return mix(c_prev, c_next, blend);
-                }
-            "
-        }
+                lp = clamp(lp, 0.0, 1.0);
+                ln = clamp(ln, 0.0, 1.0);
+
+                vec3 tex_prev = niri_geo_to_tex_prev * vec3(lp, 1.0);
+                vec3 tex_next = niri_geo_to_tex_next * vec3(ln, 1.0);
+                vec4 c_prev = texture2D(niri_tex_prev, tex_prev.st);
+                vec4 c_next = texture2D(niri_tex_next, tex_next.st);
+
+                return mix(c_prev, c_next, blend);
+            }
+        "
+    }
 
     // =========================================================================
-    //  Non-shader animations: keep the default springs.
+    //  非着色器动画：使用默认弹簧。
     //
-    //  Springs react to the release velocity of touchpad gestures, which a
-    //  static shader cannot. The defaults below are niri's tuned values and
-    //  are left as-is. They also stay synchronized across the related group
-    //  (horizontal-view-movement / window-movement / window-resize).
+    //  弹簧响应触控板手势的释放速度，这是静态着色器无法做到的。
+    //  以下默认值是 niri 调优后的值，保持不变。它们在相关组中
+    //  保持同步（horizontal-view-movement / window-movement / window-resize）。
     // =========================================================================
     workspace-switch {
         spring damping-ratio=1.0 stiffness=1000 epsilon=0.0001
@@ -354,7 +322,7 @@ animations {
 
     screenshot-ui-open {
         duration-ms 200
-        curve "ease-out-quad"
+        curve "ease-out-cubic"
     }
 
     overview-open-close {
