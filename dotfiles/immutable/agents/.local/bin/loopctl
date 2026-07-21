@@ -396,9 +396,17 @@ cmd_driver() {
             fi
         done
 
+        # 落盘本轮完整输出（H8 审计线索：完整 output 必须可重建，不能只在易失的 pane 滚屏里）
+        # 用 tmux capture-pane 抓取完整滚屏（不干扰 agent 运行时的终端处理）。
+        # 同时把路径写入 last_iteration_output —— prompt.sh 已按“文件路径”语义读它（[ -f ] + tail -c 200），
+        # 此前该字段恒为空串，导致每轮输出从未落盘。
+        _drv_output_file="$_drv_cache/iter-$(printf '%03d' "$_drv_next_iter").full.txt"
+        tmux capture-pane -t "$_drv_top_pane" -p -S - > "$_drv_output_file" 2>/dev/null || true
+
         # 更新 state
         state_update "$_drv_name" "iteration" "$_drv_next_iter"
         state_update "$_drv_name" "last_iteration_at" "$(iso_now)"
+        state_update "$_drv_name" "last_iteration_output" "$_drv_output_file"
     done
 
     _driver_echo "=== Loop '$_drv_name' 结束 ==="
