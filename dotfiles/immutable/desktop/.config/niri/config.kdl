@@ -5,6 +5,7 @@
 include "settings/key-bindings.kdl"
 include "settings/window-rules.kdl"
 
+include optional=true "settings/animations.kdl"
 include optional=true "settings/key-bindings-wm.kdl"
 include optional=true "settings/special.kdl"
 include optional=true "noctalia.kdl"

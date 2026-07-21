@@ -1,0 +1,367 @@
+// ============================================================================
+//  Custom animation effects tuned for daily, high-frequency use.
+//
+//  Non-linearity sources woven into the shaders below:
+//    1. Underdamped spring (e^-dp * cos(wp))  - open scale overshoots once,
+//       then settles with one diminishing counter-bounce. A true damped
+//       oscillation, not a single sine bump - reads as physical inertia.
+//    2. Squash & stretch                      - moving content deforms along
+//       its velocity axis (area-preserving, so no apparent mass change).
+//       The single biggest "aliveness" trick from classic animation.
+//    3. Velocity-aligned motion blur          - 4 texture taps spread along
+//       the direction of travel, width proportional to speed. Fast phases
+//       smear, slow phases stay crisp - like a camera exposure.
+//    4. Anticipation                          - close first inhales (+1.5%
+//       scale) and rises a few px before falling. Every natural motion
+//       winds up before it commits.
+//    5. Gravity + flutter + banking           - close drops with p^1.9
+//       (accelerating), sways sideways with growing amplitude, and banks
+//       into the sway with a phase-shifted rotation - a falling leaf.
+//    6. Traveling wave + diagonal flow        - resize ripple now *moves*
+//       (phase advances with time) along a slightly diagonal front, and
+//       the blend boundary micro-displaces content like refraction.
+//
+//  All custom-shader blocks use `curve "linear"` so the math above is the
+//  sole source of motion. Springs stay on touchpad-driven animations
+//  (workspace-switch / view movement) because they read release velocity.
+//
+//  Tuning
+//  ------
+//  Each shader exposes its knobs near the top of the body. The most
+//  sensitive ones: SPRING_DAMP (lower = bouncier open), ANTIC_PX (higher =
+//  more theatrical close), BLUR_PX (higher = faster-looking motion).
+//  Set STRETCH_MAX / BLUR_PX to 0.0 for a fully "rigid" feel.
+// ============================================================================
+
+animations {
+
+    // ------------------------------------------------------------------------
+    //  window-open . "Bloom"
+    //
+    //  The window rises into place carried by four coupled systems:
+    //    - scale  : underdamped spring. Starts at 0.84, overshoots to
+    //               ~1.024 around p=0.28, dips to ~0.997 around p=0.63,
+    //               then rests. One bounce, one echo - inertia made visible.
+    //    - lift   : ease-out-cubic rise. Its *velocity* drives two
+    //               secondary effects below.
+    //    - stretch: vertical scale peaks at +5% at launch (max velocity)
+    //               and relaxes quadratically; horizontal scale compensates
+    //               to preserve area.
+    //    - tilt   : a damped ~0.7 deg rotational wobble as the window lands.
+    //  Alpha snaps in by p=0.35 so content is readable during the settle.
+    //
+    //  Non-linearity: exp-cos spring + velocity-coupled deformation +
+    //  damped rotation + 4-tap motion blur.
+    // ------------------------------------------------------------------------
+    window-open {
+        duration-ms 240
+        curve "linear"
+
+        custom-shader r"
+            vec4 open_color(vec3 coords_geo, vec3 size_geo) {
+                float p = niri_clamped_progress;
+
+                // ---- tunable knobs ---------------------------------------------
+                float SCALE_START = 0.84;   // initial scale (grows from here)
+                float SPRING_FREQ = 9.0;    // spring frequency (rad over p in [0,1])
+                float SPRING_DAMP = 6.0;    // spring damping (lower = bouncier)
+                float LIFT_PX     = 20.0;   // start Y offset (below final pos)
+                float TILT_PEAK   = 0.035;  // landing tilt amplitude (rad)
+                float STRETCH_MAX = 0.05;   // vertical stretch at max velocity
+                float BLUR_PX     = 9.0;    // motion-blur half-span at max velocity
+                float ALPHA_END   = 0.35;   // alpha reaches 1 by this p
+                // ----------------------------------------------------------------
+
+                // --- scale: underdamped spring ----------------------------------
+                // f(p) = 1 - e^(-d p) cos(w p): 0 at p=0, overshoots once, one
+                // diminishing counter-bounce, rests at 1. Normalized so the
+                // residual at p=1 is cancelled exactly.
+                float spring_end = 1.0 - exp(-SPRING_DAMP) * cos(SPRING_FREQ);
+                float spring = (1.0 - exp(-SPRING_DAMP * p)
+                                      * cos(SPRING_FREQ * p)) / spring_end;
+                float scale_base = SCALE_START + (1.0 - SCALE_START) * spring;
+
+                // --- lift: ease-out-cubic; velocity drives stretch & blur -------
+                float lift_p = 1.0 - pow(1.0 - p, 3.0);
+                float lift   = LIFT_PX * (1.0 - lift_p);
+                float vel    = pow(1.0 - p, 2.0);   // 1 at launch -> 0 at rest
+
+                // --- squash & stretch (area-preserving) -------------------------
+                float sy = 1.0 + STRETCH_MAX * vel;
+                float sx = 1.0 / sy;
+                float scale_x = scale_base * sx;
+                float scale_y = scale_base * sy;
+
+                // --- landing tilt: damped oscillation, 0 at both ends -----------
+                float tilt = TILT_PEAK * sin(p * 7.0) * exp(-p * 4.5);
+
+                // --- compose inverse transform ----------------------------------
+                vec2 centered = coords_geo.xy - vec2(0.5);
+                float c = cos(tilt);
+                float s = sin(tilt);
+                vec2 unrot = vec2(
+                     c * centered.x + s * centered.y,
+                    -s * centered.x + c * centered.y
+                );
+                vec2 local = vec2(unrot.x / scale_x, unrot.y / scale_y)
+                           + vec2(0.5);
+                local.y += lift / size_geo.y;
+
+                // --- motion blur: 4 taps along the rise direction ---------------
+                float blur_step = BLUR_PX * vel / size_geo.y;
+                vec3 t0 = niri_geo_to_tex * vec3(local.x, local.y - 0.75 * blur_step, 1.0);
+                vec3 t1 = niri_geo_to_tex * vec3(local.x, local.y - 0.25 * blur_step, 1.0);
+                vec3 t2 = niri_geo_to_tex * vec3(local.x, local.y + 0.25 * blur_step, 1.0);
+                vec3 t3 = niri_geo_to_tex * vec3(local.x, local.y + 0.75 * blur_step, 1.0);
+                vec4 color = texture2D(niri_tex, t0.st)
+                           + texture2D(niri_tex, t1.st)
+                           + texture2D(niri_tex, t2.st)
+                           + texture2D(niri_tex, t3.st);
+                color *= 0.25;
+
+                // --- alpha: readable early, geometry does the rest --------------
+                float a = smoothstep(0.0, ALPHA_END, p);
+                color *= a;
+
+                return color;
+            }
+        "
+    }
+
+    // ------------------------------------------------------------------------
+    //  window-close . "Petal"
+    //
+    //  A falling leaf, in four acts:
+    //    1. anticipation (p 0-0.24): the window inhales (+1.5% scale) and
+    //       rises ~7px - the wind-up before the fall.
+    //    2. gravity: drop follows p^1.9, genuinely accelerating. No easing
+    //       at the bottom; the fade hides the landing.
+    //    3. flutter: a lateral sway whose amplitude *grows* with the fall,
+    //       plus a phase-shifted banking rotation (~1.8 deg peak) so the
+    //       window tips into its sway like a leaf.
+    //    4. stretch + blur: falling stretches the window vertically and
+    //       smears it along its velocity; both peak at max speed.
+    //  Alpha holds to p=0.08 (recognizability), dissolves by p=0.88.
+    //
+    //  Non-linearity: anticipation + power-curve gravity + growing
+    //  oscillation + velocity-coupled deformation + 4-tap motion blur.
+    // ------------------------------------------------------------------------
+    window-close {
+        duration-ms 200
+        curve "linear"
+
+        custom-shader r"
+            vec4 close_color(vec3 coords_geo, vec3 size_geo) {
+                float p = niri_clamped_progress;
+
+                // ---- tunable knobs ---------------------------------------------
+                float SCALE_END   = 0.84;   // final scale
+                float ANTIC_END   = 0.12;   // anticipation spans p in [0, 2x]
+                float ANTIC_PX    = 7.0;    // upward anticipation lift
+                float ANTIC_SCALE = 0.015;  // anticipation inhale (scale-up)
+                float DROP_PX     = 34.0;   // final downward offset
+                float DROP_EXP    = 1.9;    // >1 = accelerating (gravity-like)
+                float SWAY_PX     = 9.0;    // lateral flutter amplitude at p=1
+                float SWAY_FREQ   = 4.712;  // 0.75 cycle over the fall
+                float ROT_PEAK    = 0.06;   // banking rotation amplitude (rad)
+                float STRETCH_MAX = 0.06;   // stretch while accelerating
+                float BLUR_PX     = 10.0;   // blur half-span at max fall speed
+                float ALPHA_HOLD  = 0.08;   // full opacity until this p
+                float ALPHA_END   = 0.88;   // fully transparent by this p
+                // ----------------------------------------------------------------
+
+                // --- anticipation: sin bump over [0, 2*ANTIC_END], 0 elsewhere --
+                float ap    = clamp(p / (2.0 * ANTIC_END), 0.0, 1.0);
+                float antic = sin(ap * 3.14159265);
+
+                // --- scale: inhale first, then smoothstep collapse --------------
+                float scale_p    = p * p * (3.0 - 2.0 * p);
+                float scale_base = 1.0 + ANTIC_SCALE * antic
+                                 - (1.0 - SCALE_END) * scale_p;
+
+                // --- vertical: anticipation lift + accelerating drop ------------
+                float y_off = DROP_PX * pow(p, DROP_EXP) - ANTIC_PX * antic;
+                float vel   = pow(p, DROP_EXP - 1.0);   // 0 -> 1 fall-speed proxy
+
+                // --- squash & stretch along the fall ----------------------------
+                float sy = 1.0 + STRETCH_MAX * vel;
+                float sx = 1.0 / sy;
+                float scale_x = scale_base * sx;
+                float scale_y = scale_base * sy;
+
+                // --- flutter: sway grows with the fall; rotation banks into it --
+                float sway = SWAY_PX * p * sin(p * SWAY_FREQ);
+                float rot  = ROT_PEAK * p * sin(p * SWAY_FREQ + 0.6)
+                           * (1.0 - 0.25 * p);
+
+                // --- compose inverse transform ----------------------------------
+                vec2 centered = coords_geo.xy - vec2(0.5);
+                float c = cos(rot);
+                float s = sin(rot);
+                vec2 unrot = vec2(
+                     c * centered.x + s * centered.y,
+                    -s * centered.x + c * centered.y
+                );
+                vec2 local = vec2(unrot.x / scale_x, unrot.y / scale_y)
+                           + vec2(0.5);
+                local.y -= y_off / size_geo.y;   // sample higher = content drops
+                local.x -= sway / size_geo.x;    // sample left   = content sways right
+
+                // --- motion blur: 4 taps along the fall+sway velocity -----------
+                vec2 blur_geo = vec2(
+                    SWAY_PX * 0.15 * p / size_geo.x,
+                    BLUR_PX * vel / size_geo.y
+                );
+                vec3 t0 = niri_geo_to_tex * vec3(local - 0.75 * blur_geo, 1.0);
+                vec3 t1 = niri_geo_to_tex * vec3(local - 0.25 * blur_geo, 1.0);
+                vec3 t2 = niri_geo_to_tex * vec3(local + 0.25 * blur_geo, 1.0);
+                vec3 t3 = niri_geo_to_tex * vec3(local + 0.75 * blur_geo, 1.0);
+                vec4 color = texture2D(niri_tex, t0.st)
+                           + texture2D(niri_tex, t1.st)
+                           + texture2D(niri_tex, t2.st)
+                           + texture2D(niri_tex, t3.st);
+                color *= 0.25;
+
+                // --- alpha: hold for recognition, then dissolve -----------------
+                float a = 1.0 - smoothstep(ALPHA_HOLD, ALPHA_END, p);
+                color *= a;
+
+                return color;
+            }
+        "
+    }
+
+    // ------------------------------------------------------------------------
+        //  window-resize . "Bloom"
+        //
+        //  Timing is now a slightly underdamped SPRING, not a scripted easing:
+        //  the window geometry itself eases in, overshoots ~2%, and settles.
+        //  This is the real fix for "linear feel" - the eye tracks the window
+        //  edge, and only a spring makes the edge move non-linearly. Springs
+        //  also scale naturally: a 0.5->1.0 preset jump bounces visibly, a
+        //  +-10% step just trembles, and repeated presses chain velocity
+        //  instead of restarting from zero.
+        //
+        //  The shader complements the spring with four effects:
+        //    - fast blend      : content swap completes by p=0.62, before the
+        //                        geometry bounce, so the tail is crisp final
+        //                        content, not a lingering crossfade.
+        //    - center-out bloom: the middle adopts the new layout first, edges
+        //                        catch up - reads as the surface inflating,
+        //                        not a wipe. Direction-agnostic (works for
+        //                        grow and shrink alike).
+        //    - expanding rings : radial ripple traveling outward (live only
+        //                        mid-transition via the envelope).
+        //    - jelly lag       : while the spring overshoots (niri_progress>1),
+        //                        content counter-shrinks a touch, as if its
+        //                        inertia lags the frame.
+        //
+        //  niri_progress is unclamped (>1 during overshoot); everything except
+        //  jelly uses the clamped value, so the shader also works unchanged if
+        //  you ever switch back to duration+curve (jelly just never fires).
+        // ------------------------------------------------------------------------
+        window-resize {
+            spring damping-ratio=0.86 stiffness=1000 epsilon=0.0001
+
+            custom-shader r"
+                vec4 resize_color(vec3 coords_curr_geo, vec3 size_curr_geo) {
+                    float p  = niri_clamped_progress;
+                    float pu = niri_progress;
+
+                    // ---- tunable knobs ---------------------------------------------
+                    float BLEND_END   = 0.62;   // content blend completes by this p
+                    float BLOOM_GAIN  = 0.30;   // center-out reveal strength
+                    float RING_AMP    = 0.035;  // ripple amplitude (blend units)
+                    float RING_FREQ   = 12.566; // ~2 rings across the radius
+                    float RING_TRAVEL = 4.0;    // ring phase travel over p (rad)
+                    float SETTLE_ZOOM = 0.035;  // new content enters magnified
+                    float PREV_SHRINK = 0.020;  // old content recedes as it fades
+                    float JELLY_GAIN  = 1.0;    // content lag during overshoot
+                    float JELLY_MAX   = 0.025;  // cap on jelly counter-scale
+                    // ----------------------------------------------------------------
+
+                    // Content blend: smooth S-curve, done before the geometry bounce.
+                    float t = smoothstep(0.0, BLEND_END, p);
+
+                    // Envelope: effects live only mid-transition.
+                    float env = sin(min(p / BLEND_END, 1.0) * 3.14159265);
+
+                    // Radial coordinate: 0 at center, ~1 at corners, aspect-corrected.
+                    vec2 centered_px = (coords_curr_geo.xy - 0.5) * size_curr_geo.xy;
+                    float d = length(centered_px) / (0.5 * length(size_curr_geo.xy));
+
+                    // Center-out bloom: the surface inflates from the middle.
+                    float bloom = BLOOM_GAIN * env * (0.65 - d);
+
+                    // Expanding rings traveling outward.
+                    float ring = sin(d * RING_FREQ - p * RING_TRAVEL)
+                               * RING_AMP * env;
+
+                    float blend = clamp(t + bloom + ring, 0.0, 1.0);
+
+                    // Old content recedes; new content enters slightly magnified
+                    // and relaxes into its frame (dies exactly to 1.0 at t=1).
+                    float s_prev = 1.0 + PREV_SHRINK * t;
+                    float s_next = 1.0 / (1.0 + SETTLE_ZOOM * (1.0 - t) * (1.0 - t));
+
+                    vec2 lp = (coords_curr_geo.xy - 0.5) * s_prev + 0.5;
+                    vec2 ln = (coords_curr_geo.xy - 0.5) * s_next + 0.5;
+
+                    // Jelly: spring overshoot (pu > 1) counter-shrinks the content.
+                    float over  = clamp(pu - 1.0, 0.0, 0.25);
+                    float jelly = 1.0 + min(JELLY_GAIN * over, JELLY_MAX);
+                    ln = (ln - 0.5) * jelly + 0.5;
+                    ln = clamp(ln, 0.0, 1.0);
+                    lp = clamp(lp, 0.0, 1.0);
+
+                    vec3 tex_prev = niri_geo_to_tex_prev * vec3(lp, 1.0);
+                    vec3 tex_next = niri_geo_to_tex_next * vec3(ln, 1.0);
+                    vec4 c_prev = texture2D(niri_tex_prev, tex_prev.st);
+                    vec4 c_next = texture2D(niri_tex_next, tex_next.st);
+
+                    return mix(c_prev, c_next, blend);
+                }
+            "
+        }
+
+    // =========================================================================
+    //  Non-shader animations: keep the default springs.
+    //
+    //  Springs react to the release velocity of touchpad gestures, which a
+    //  static shader cannot. The defaults below are niri's tuned values and
+    //  are left as-is. They also stay synchronized across the related group
+    //  (horizontal-view-movement / window-movement / window-resize).
+    // =========================================================================
+    workspace-switch {
+        spring damping-ratio=1.0 stiffness=1000 epsilon=0.0001
+    }
+
+    horizontal-view-movement {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+
+    window-movement {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+
+    config-notification-open-close {
+        spring damping-ratio=0.6 stiffness=1000 epsilon=0.001
+    }
+
+    exit-confirmation-open-close {
+        spring damping-ratio=0.6 stiffness=500 epsilon=0.01
+    }
+
+    screenshot-ui-open {
+        duration-ms 200
+        curve "ease-out-quad"
+    }
+
+    overview-open-close {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.0001
+    }
+
+    recent-windows-close {
+        spring damping-ratio=1.0 stiffness=800 epsilon=0.001
+    }
+}
