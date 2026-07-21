@@ -31,7 +31,9 @@ ${_si_task}
 TASK_EOF
 
 	# 写初始 state.json（用 awk 避免变量注入风险）
-	# jstr 函数：转义 \ → \\ 和 " → \"，用于 JSON 字符串值
+	# jstr 函数：转义 \ 和 "，并把控制字符（换行/制表符/回车）归一为空格，
+	# 保证多行 task（如含 YAML frontmatter 的任务契约）产出合法的单行 JSON 字符串值。
+	# 完整 task 全文已由上方 heredoc 写入 task_file，state.json 的 task 字段仅作参考。
 	# 用 sprintf("%c",34) 生成引号字符，避免在单引号 awk 脚本中嵌套引号
 	_si_ts="$(iso_now)"
 	awk -v name="$_si_name" \
@@ -48,6 +50,9 @@ TASK_EOF
 		q = sprintf("%c", 34)
 		bq = "\\" q
 		gsub(q, bq, s)
+		gsub(/\n/, " ", s)
+		gsub(/\r/, " ", s)
+		gsub(/\t/, " ", s)
 		return s
 	}
 	BEGIN {
