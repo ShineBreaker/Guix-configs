@@ -1,3 +1,32 @@
 # 循环任务: ${LOOP_NAME}
 
 ${TASK}
+
+<!-- ────────────────────────────────────────────────────────────────
+  可选：任务契约 frontmatter（Phase 3 — 结构化完成边界）
+
+  在 ${TASK} 正文最前面添加 YAML frontmatter，声明"什么算误导性成功"，
+  让循环每一轮都有明确的完成边界。格式：
+
+  ---
+  false_success_conditions:
+    - "报告说完成了但没有实际修改文件"
+    - "测试通过但验收标准在过程中被降低"
+  acceptance_criteria:
+    - "运行 `blue check` 无错误"
+    - "git diff 显示预期的文件变更"
+  verification_command: "blue --dry-run home"
+  ---
+  <实际任务正文>
+
+  字段说明：
+  - false_success_conditions: "看似完成实则失败"的情形（每轮自检的重点）
+  - acceptance_criteria:      必须全部满足才算完成的标准
+  - verification_command:     用于核实完成的命令（可选）
+
+  loopctl 会把含 frontmatter 的 task 完整写入 task.md（state.json 的 task
+  字段归一为单行引用，不影响 task.md 全文）。atelier 的对抗性审查会解析
+  frontmatter 作为 reviewer 的攻击目标。
+
+  详见 .agents/templates/task-schema.md
+──────────────────────────────────────────────────────────────── -->
