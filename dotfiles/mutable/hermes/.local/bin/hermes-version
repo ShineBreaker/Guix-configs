@@ -1,6 +1,5 @@
 # Hermes Agent Pi 式安装版本 pin
 #
 # tag 对应 hermes-agent 仓库的 branch 或 release tag。
-# 当前锁定 v2026.7.7.2（= Python 包 0.18.2，已 POC 验证可在 Guix Python 3.12 运行）。
 # 升级：改此文件里的 tag，再跑 hermes-update。
-tag=v2026.7.7.2
+tag=v2026.7.20

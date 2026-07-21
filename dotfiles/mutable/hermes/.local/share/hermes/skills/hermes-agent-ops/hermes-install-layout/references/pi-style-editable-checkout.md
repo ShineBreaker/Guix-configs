@@ -109,9 +109,98 @@ fi
 ## `hermes-version`(pin)
 ```
 # tag 对应 hermes-agent 仓库 branch 或 release tag
-# 锁定 v2026.7.7.2 (= Python 包 0.18.2, 已 POC + 实装验证)
-tag=v2026.7.7.2
+# 锁定 v2026.7.20 (= Python 包 0.19.0, 自 hermes-update 自动写入 .hermes-bootstrap-complete)
+tag=v2026.7.20
 ```
+
+## 验证 `hermes-update` 是否真的跑过(取证指纹,2026-07-21 加)
+
+诊断 hermes 行为不符预期(命令找不到、版本不是预期、build 错误地指向老源)时,
+先确认 `hermes-update` 是不是**真的**跑过,而非停留在上一版。脚本末尾写了一个
+**`hermes-update` 独有的 heredoc 标记**(electron 壳和 hermes-update 之外的任何
+路径都不会写它),把它当签名用:
+
+```bash
+cat "$HERMES_HOME/hermes-agent/.hermes-bootstrap-complete"
+# 期望:
+#   {
+#     "schemaVersion": 1,
+#     "pinnedCommit": "3ef6bbd",         # 7 位短 SHA
+#     "pinnedBranch": "v2026.7.20",      # 与 hermes-version 的 tag= 对齐
+#     "completedAt": "2026-07-21T05:58:11Z",  # 该次 hermes-update 真实完成时刻
+#     "desktopVersion": "built-locally"  # ← 硬编码字面量,只有这个脚本写它
+#   }
+```
+
+`.hermes-bootstrap-complete` 缺失 → 从来没跑过 `hermes-update`(即使 HERMES_HOME
+非空、`hermes-agent/` 存在);存在即**确实在最近一次 `completedAt` 时刻被脚本
+覆盖过**。这是脚本签名,不是商店标志。
+
+**一票否决**:`pinnedCommit` 必须能 `git -C $HERMES_HOME/hermes-agent
+rev-parse --short=7 HEAD` 复现。`completedAt` 与 `hermes-agent/` 顶层目录
+`mtime` 应在同一小时级窗口内。不一致说明中间夹了别的脚本(手工 `git pull`,
+或别人手动 `git checkout` 别的 commit),需追查期间动过什么。
+
+**交叉校验必走三件套**:
+
+| 信号 | 期望 | 含义 |
+|---|---|---|
+| `hermes-version` 的 `tag=` ↔ `.hermes-bootstrap-complete.pinnedBranch` | 完全一致 | 标记未被外部脚本改写 |
+| `pinnedCommit` ↔ HEAD 第 1 行 | 同 SHA,且第一行 commit message 是 `chore: release vX.Y.Z (YYYY.M.D)` 格式 | 确实在打过 tag 的 commit 上 |
+| `venv/bin/python` ↔ `~/.local/share/uv/python/...` | 通过 | venv 是 uv 自管而非 Guix |
+
+`desktop.json` / `desktop-build-stamp.json` 是 **electron 壳独立构建**的 timestamp,
+**不受** `hermes-update` 覆盖。`builtAt` 比 `completedAt` 早是正常情况(用户先
+升级源码,后 build desktop);反向才是 **desktop 没重 build 就在跑**的征兆——源码
+最新但壳仍持旧模块路径,典型症状 electron UI 找不到某个新版 hermes CLI 暴露的
+命令。要修:`hermes desktop --build-only`,然后重开 `hermes-desktop` 进程。
+
+## 写 Hermes config 的两条规则(踩坑 2026-07-21)
+
+**1. `~/.local/share/hermes/config.yaml` 是受保护的**——Hermes 的 `patch` /
+`write_file` 工具会直接拒绝,报 *Refusing to write to Hermes config file: ...
+Agent cannot modify security-sensitive configuration*. 这是 **故意设计**,不要
+绕(改 hermes 源码注释掉守护 → 下次 update 被回滚)。正确路径:
+
+```bash
+hermes config set <key> <value>     # 写入(未知 key 会告警,但仍写入)
+hermes config get <key>             # 回读校验
+hermes config unset <key>           # 移除(整个条目消失,不是清值)
+```
+
+**2. `cli-config.yaml.example` 的缩进是误导**——example 里 `busy_input_mode`
+缩进两格,看上去属于上一个 `agent:` 块,实际**它属于 `display:`** 块(后者
+在 example 里排在 `agent:` 之后、跨很多页)。`hermes config set agent.busy_input_mode steer`
+会被 `hermes config` 自己的 schema 校验拒绝,提示 *"not a recognized config key
+— Did you mean: agent.image_input_mode"*——这是**正确键路径**的最权威信号,
+比对照 yaml 缩进可靠。
+
+要确认任意 key 的真实归属,直接在仓库 `hermes-agent` clone 里跑:
+
+```bash
+grep -rn 'save_config_value\\|"\\w*\\.\\w*"\\s*,' hermes_cli/cli_commands_mixin.py \
+  | grep <key候选词>
+```
+
+源码里 `save_config_value("display.busy_input_mode", arg)` 就是写入位置,
+完整路径(`display.busy_input_mode`)由这里确定,**比看 yaml example 缩进靠谱**。
+
+三步稳健流程:
+
+```bash
+# 1. 用 hermes config get 测一把,看是不是已经被认
+hermes config get <candidate_key>                    # 已设过 → 回值;未设 → "Config key not set"
+
+# 2. 写入,观察 schema 校验输出
+hermes config set <candidate_key> <value>            # ← 警示行即权威键路径提示
+
+# 3. 回读 + 直接读 yaml,确认写入位置正确(避免把孤儿 key 写到错误块下)
+hermes config get <candidate_key>
+grep -n "^  <candidate_key_short>:" ~/.local/share/hermes/config.yaml
+```
+
+如果误写了孤儿 key(例:`agent.busy_input_mode`),`hermes config unset` 干净
+移除该行(不留空键);yaml 文件结构不被破坏。
 
 ## 踩坑(迁移实战)
 - **venv 千万别用 Guix 系统 python**:`uv venv --python python3.12` 会解析到

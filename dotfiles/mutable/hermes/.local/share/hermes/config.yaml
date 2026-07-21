@@ -243,7 +243,7 @@ display:
   resume_max_assistant_chars: 200
   resume_max_assistant_lines: 3
   resume_skip_tool_only: true
-  busy_input_mode: interrupt
+  busy_input_mode: steer
   interface: cli
   tui_auto_resume_recent: false
   tui_agents_nudge: true
@@ -261,7 +261,7 @@ display:
   credits_notices: true
   turn_completion_explainer: true
   show_cost: false
-  skin: mono
+  skin: daylight
   language: zh
   tui_status_indicator: kaomoji
   cli_refresh_interval: 1
@@ -400,19 +400,7 @@ moa:
       aggregator:
         provider: zai
         model: glm-5.2
-    open-source:
-      enabled: true
-      reference_models:
-        - provider: minimax-cn
-          model: MiniMax-M3
-        - provider: deepseek
-          model: deepseek-v4-pro
-      aggregator:
-        provider: zai
-        model: glm-5.2
-      reference_temperature: 0.6
-      aggregator_temperature: 0.4
-      max_tokens: 4096
+      fanout: per_iteration
   reference_models:
     - provider: minimax-cn
       model: MiniMax-M3
@@ -421,9 +409,8 @@ moa:
   aggregator:
     provider: zai
     model: glm-5.2
-  reference_temperature: 0.6
-  aggregator_temperature: 0.4
   max_tokens: 4096
+  fanout: per_iteration
   enabled: true
 skills:
   external_dirs:
