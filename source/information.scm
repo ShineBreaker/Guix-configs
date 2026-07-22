@@ -23,6 +23,7 @@
 
 (define %data-dirs
   '(;; --- dotfile 持久化（tmpfs /home 启动后自动 bind-mount）---
+    ".local/share/containers"
     ".local/share/gnupg"
     ".local/share/keyrings"
     ".local/share/fish"
