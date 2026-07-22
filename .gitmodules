@@ -17,3 +17,6 @@
 [submodule "tools/linux-setup"]
 	path = tools/linux-setup
 	url = https://codeberg.org/BrokenShine/linux-setup
+[submodule ".agents/skills/guix-skills"]
+	path = .agents/skills/guix-skills
+	url = https://github.com/ShineBreaker/guix-skills
