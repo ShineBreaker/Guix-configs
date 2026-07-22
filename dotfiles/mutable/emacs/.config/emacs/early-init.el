@@ -11,7 +11,7 @@
 ;; 1. 禁用 package.el - 使用 Guix 管理包
 ;; 2. 提高 GC 阈值 - 启动时减少垃圾回收次数（启动后由 gcmh 重置）
 ;; 3. 防止 frame 重绘 - 减少启动时视觉闪烁
-;; 4. 设置深色背景 - 避免白屏闪烁
+;; 4. frame-background-mode 引导 - 让 daemon 启动期选对 face 变体（dark/light）
 ;; 5. Native-comp 调优 - 静默警告噪音
 ;; 6. exec-path 前置 - 让外部命令可由 PATH 解析
 
@@ -72,29 +72,26 @@
       use-dialog-box nil)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; 启动防闪屏（从颜色方案状态文件读取当前模式）
+;; frame-background-mode 引导（从颜色方案状态文件读取当前模式）
 ;; ═════════════════════════════════════════════════════════════════════════════
-(let* ((state-file (expand-file-name "var/color-scheme-state.el" user-emacs-directory))
-       (bg-color (if (file-exists-p state-file)
-                     (condition-case nil
-                         (with-temp-buffer
-                           (insert-file-contents state-file)
-                           (let ((content (buffer-string)))
-                             (if (string-match
-                                  "(setq[[:space:]\n]+literal/color-scheme-current-bg[[:space:]\n]+\"\\([^\"]+\\)\")"
-                                  content)
-                                 (match-string 1 content)
-                               "#0a0a0a")))
-                       (error "#0a0a0a"))
-                   "#0a0a0a"))
-       (fg-color (if (string= bg-color "#0a0a0a") "#d0d0d0" "#303030"))
-       (mode (if (string= bg-color "#0a0a0a") 'dark 'light)))
+;;
+;; Emacs 以 `emacs --fg-daemon' 启动，frame 由 client 按需创建（瞬时），
+;; 无 standalone 冷启动的 1 秒空白期，故无需防闪屏颜色注入。这里只设置
+;; `frame-background-mode'：它指导 daemon 启动期的 face 变体选择（dark/light），
+;; 避免在首个 GUI frame 创建前 ef-themes 还未加载时，Emacs 误选 light 变体
+;; 导致短暂闪烁。状态文件由颜色方案模块在主题切换时写入。
+(let ((state-file (expand-file-name "var/color-scheme-state.el" user-emacs-directory))
+      (mode 'dark))
+  (when (file-exists-p state-file)
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents state-file)
+          (when (string-match-p "light" (buffer-string))
+            (setq mode 'light)))
+      (error nil)))
   (setq frame-background-mode mode)
   (add-to-list 'default-frame-alist `(background-mode . ,mode))
-  (add-to-list 'initial-frame-alist `(background-mode . ,mode))
-  (when initial-window-system
-    (add-to-list 'initial-frame-alist `(background-color . ,bg-color))
-    (add-to-list 'initial-frame-alist `(foreground-color . ,fg-color))))
+  (add-to-list 'initial-frame-alist `(background-mode . ,mode)))
 
 (provide 'early-init)
 ;;; early-init.el ends here

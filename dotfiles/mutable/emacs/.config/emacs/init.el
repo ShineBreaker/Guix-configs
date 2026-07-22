@@ -22,6 +22,11 @@
 ;;
 ;; tangle 只在 emacs.org 变更后第一次重启时发生,平时直接 load 现有 main.el,
 ;; 启动开销与无 literate 配置一致(不加载 org)。
+;;
+;; Stow 软链陷阱:emacs.org 经 Stow 软链到仓库源,org 的全局 :tangle main.el 相对
+;; org 的 truename(仓库源目录)解析,故 tangle 实际落地仓库源 main.el,而非部署目录。
+;; TARGET-FILE 参数因每个块都有显式 :tangle 而被忽略。故 tangle 后需同步产物到部署目录
+;; (见下方 copy-file)。仓库源 main.el 已 gitignore,不会污染 git 状态。
 
 ;;; Code:
 
@@ -46,7 +51,21 @@
     ;; 推高阈值以加速(启动后由 gcmh 复位)。
     (let ((gc-cons-threshold most-positive-fixnum))
       (message "[literal] tangling emacs.org → main.el ...")
+      ;; Stow 软链陷阱:emacs.org 是软链,user-emacs-directory 下的 main-file 作为
+      ;; TARGET-FILE 传给 `org-babel-tangle-file' 时会被忽略——因为 emacs.org 的全局
+      ;; #+PROPERTY header-args:emacs-lisp :tangle main.el 给每个块显式指定了输出,
+      ;; 该相对路径相对 org 文件的 truename(仓库源目录)解析,而非软链所在部署目录。
+      ;; 故 tangle 实际落地到仓库源 main.el,部署目录的 main.el 永不更新、永远 stale。
+      ;; 这里保持调用签名不变(契约),tangle 后把仓库源产物同步到部署目录。
       (org-babel-tangle-file org-file main-file "emacs-lisp")
+      (let ((truename-main (expand-file-name
+                            "main.el"
+                            (file-name-directory (file-truename org-file)))))
+        (unless (file-equal-p truename-main main-file)
+          ;; 仓库源产物 != 部署目标(Stow 软链场景):同步过去
+          (copy-file truename-main main-file t)
+          (message "[literal] synced tangle product: %s → %s"
+                   truename-main main-file)))
       (message "[literal] tangle done.")))
 
   ;; 加载真正的配置
