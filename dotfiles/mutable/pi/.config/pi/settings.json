@@ -49,6 +49,7 @@
     "maxTasks": 8,
     "maxConcurrency": 4,
     "defaultTier": "pro",
+    "adversarialReview": true,
     "tiers": {
       "ultra": {
         "model": "zai/GLM-5.2",
@@ -87,7 +88,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.80.2",
+  "lastChangelogVersion": "0.80.10",
   "images": {
     "blockImages": false
   },
