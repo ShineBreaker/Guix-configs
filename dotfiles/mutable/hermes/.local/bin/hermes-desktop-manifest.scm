@@ -26,4 +26,6 @@
     ;; color-scheme（org.gnome.desktop.interface）。缺 schemas 则 GTK3 拿不到
     ;; 这些键，回退 Adwaita 图标 + 默认光标。dconf 后端直接读
     ;; ~/.config/dconf/user 二进制库（--share=$HOME 已挂入），无需 D-Bus。
-    "gsettings-desktop-schemas" "dconf"))
+    "gsettings-desktop-schemas" "dconf"
+    ;; Hermes Agent 运行时需要的一些工具
+    "sed" "ripgrep"))

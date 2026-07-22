@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
 description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles — **self-contained** (all runnable artifacts ship inside the skill directory; backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — the directory layout, file-type rules, decision trees, **which of the 12 existing categories a new skill belongs to (never top-level `<skill-name>/`)**, and a pre-publish checklist. Triggers: writing a new skill, refactoring an existing one's structure, wondering 'should this go in SKILL.md vs references()' / 'which category fits', preparing for backup/share, noticing a self-contained or progressive-disclosure violation, the user complaining 'too verbose' / 'in the wrong place', or **discovering a real use case the skill doesn't cover** — patch the skill (§6 last row) instead of inventing a workaround."
-version: 1.8.0
+version: 1.10.0
 license: MIT
 metadata:
   hermes:
@@ -97,6 +97,16 @@ quirks — lives in `references/` and is loaded on demand via
   `references/2026-07-04-zcode.md` is wrong; `references/zcode.md`
   with a "verified on 2026-07-04" note is right. Knowledge is
   reusable; dates are not.
+- **Write for the reader, not your own machine.** A skill is read by
+  people other than its author, often on different machines and
+  repos. Never hardcode *your* repo path, username, machine name,
+  personal channel set, or private file layout as if it were "how
+  the tool works." Teach the **universal pattern** first, then show
+  a concrete instance clearly framed as *one example* (e.g. move
+  repo-specific detail into `references/<repo>-example.md` and point
+  to it). Concrete instances are fine teaching aids — they must
+  never be mistaken for the general rule. Likewise **don't point
+  readers at other skills**; a skill must be self-contained (see §1).
 - `templates/` and `scripts/` are **not optional** for skills that
   produce or invoke artifacts. If your skill is a procedure
   ("to import X, do Y then Z"), at minimum write a `scripts/`
@@ -106,6 +116,28 @@ quirks — lives in `references/` and is loaded on demand via
   exists in a `references/` file, **delete it from SKILL.md** and
   replace with a one-line pointer. The duplication will rot — one
   copy will get updated, the other won't.
+- **Don't mirror full external docs into `references/` (or worse,
+  inline into `SKILL.md`).** A bundled copy of "GNU Guix Reference
+  Manual" / "Nonguix README" / "Rosenthal API" / any upstream-
+  complete document is an anti-pattern: it goes stale within weeks,
+  doubles the agent's context budget for content the agent could
+  fetch on demand via `web_extract`, and the user will eventually
+  delete it manually with the message *让 agents 自己去读网站就好*.
+  The right pattern is: in `SKILL.md` keep a one-line pointer
+  ("see `<url>` for full reference") plus a tiny summary of which
+  page to hit when; pull the page only when needed.
+  Real hit (2026-07-22): the `guix` skill shipped with `docs/`
+  containing 39 562 lines of the GNU Guix Reference Manual +
+  622 lines of nonguix.org. The user deleted that directory
+  mid-session, and the skill then dropped from 41 KB to 27 KB by
+  replacing those mirrors with `web_extract` pointers in SKILL.md.
+  Don't wait for the user to do this for you — the same logic
+  applies to any other skill that accumulated upstream-doc
+  mirrors: pi / crush / codex / claude reference dumps,
+  vendored API reference PDFs, copied SPEC.md files, etc.
+  Bundled ≠ free; the user's context budget and your maintenance
+  burden both pay for the duplication, with no upside once the
+  upstream drift starts.
 
 ## 3. Decision tree: which directory does this content go in?
 
@@ -222,6 +254,14 @@ content is correct.
       fanning, and `help` meta-command counting. Any one of these
       will produce a verify that runs cleanly but reports the wrong
       expected value.
+- [ ] **After any restructure, grep for dangling references.** When you
+      split a flat SKILL.md into `references/` or delete support files,
+      search the whole skill dir for pointers to things that no longer
+      exist — deleted `examples/*.scm` still cited, broken internal
+      anchors like "see §2.5 below", or `fact_store #NN` / `agenote
+      <id>` provenance pointers that send readers chasing memory IDs
+      outside the skill. Delete or rewrite every hit; a restructured
+      skill that still cites its own deleted content is broken.
 - [ ] **No `read_text()[:N]` + `write_text()` patterns in the
       workflow.** Any helper that "opens a file to change one
       field" must read the **whole** file, transform, then write
@@ -245,6 +285,10 @@ each one is a fix-on-sight.
 | CHECKS tuples use different key names than the yaml sections they read        | Silent empty-cfg dispatcher — every check runs on defaults                      | Add parity check; align keys; see §10                                                                                        |
 | `read_text()[:N]` + `write_text()` to "modify a single field"                 | Silently truncates files larger than the slice — wipes bodies of large SKILL.md | Use `patch()` for single-field edits; if doing read-modify-write, read the whole file and verify byte count before vs. after |
 | Skill doesn't cover a real use case → agent invents a "bridge" / "wrapping layer" / "post-process step" **instead of patching the skill** | The skill accretes assumptions it can't enforce; every future session reinvents the bridge from scratch; the bridge isn't in the skill's references so it disappears from backups. **The user explicitly granted permission to patch skill files in the 2026-07-16 session ("请尽情修改")**, so the assumption "I can't touch the skill" is wrong. | Stop the workflow. Open `references/` or SKILL.md. Add the missing case as a new section, example, or pitfall. If the bridge has reusable parts (a scripts/ helper, a verified recipe), put them in the skill directory. Doing the workaround in the calling script is fine for one-off; **documenting the workaround *as the canonical path* in the calling code is what creates the debt.** |
+| `references/` (or `SKILL.md`) mirrors an upstream doc verbatim — full GNU Guix Reference Manual, Nonguix README, vendored API reference, copied SPEC.md, agent-tool prompt dumps, etc. | Goes stale within weeks of upstream drift; doubles agent context budget for content `web_extract` can fetch on demand; eventually **the user deletes it manually** with "让 agents 自己去读网站就好" — leaving the skill stranded mid-cleanup rather than retrofittable. The skill loses the trust signal of caring about its own freshness. | Replace with a one-line URL pointer in `SKILL.md` ("see `<url>` for full reference") plus a summary of which page to hit for which symptom. Skill should keep only the parts that the agent **could not rediscover from a fresh `web_extract`** (project-specific field tables, repo-specific naming, known-good examples, anti-patterns observed in this codebase) — never the upstream-complete text. Update §6.1 (this row) as a standing reminder. |
+| `description:` frontmatter matches every skill and none — "Use this skill for any agent-related task" / "Helps with coding tasks" / no signal words | The agent's loader cannot decide whether to fire this skill; hot-loaded skills with weak descriptions either always-trigger (context bloat, wrong-skill routing) or never-trigger (silent blind spot). | Pick a specific trigger class and write it as "When the user says X, Y, or Z, or when [condition]" with concrete signal words. Test by rephrasing the task three ways; if the description doesn't fire on any, rewrite. |
+| Stale references left after a restructure (deleted `examples/x.scm` still cited; broken "§N below" internal anchors; `fact_store #NN` / `agenote <id>` provenance pointers; cross-skill "see skill Y" mentions) | Breaks self-containment and rot-checks; readers hit dead links or chase memory IDs that aren't inside the skill. Worst case the skill *looks* fine but silently points at deleted files. | Grep the whole skill dir for every filename/anchor you removed and every external-pointer pattern (`fact_store #`, `agenote `, other-skill names); delete or rewrite each hit. Also generify repo-specific hardcoding (see §2 "Write for the reader"). |
+| Skill hardcodes one author's repo path / machine / channel set as if it were general truth (e.g. "run `cd ~/Projects/Config/X && blue home`" presented as the only way) | The skill only works for that one person's environment; every other reader must mentally translate it, and it rots the moment their layout changes. | Teach the universal pattern (task runner wraps `guix`; dotfiles deploy via symlink; channels lock for reproducibility) and present the author's setup as *one framed example* in `references/<repo>-example.md`. |
 
 ## 7. clarify() options belong in `choices[]`, NEVER inside `question`
 
