@@ -92,7 +92,7 @@ startup -> appearance -> editing -> programming -> projects
 
 - 定义方必须在调用方之前。
 - Dashboard 固定在最后一个配置域,因为它消费 frame/help/knowledge/color-scheme。
-- Emacs 版本 workaround 集中在 `compatibility`,但用命名 noweb ref 展开到真实使用点。
+- Emacs 版本兜底 shim 集中在 `compatibility` 域(Ghostel/with-editor、which-key 中文宽度、arei `.elc`、vertico-buffer 形态降级)。这些是**生效中的版本兜底**,不是待完成功能——代码已生效,移除条件在上游修复。shim 用命名 noweb ref 展开到真实使用点。
 - 功能标题可改,稳定 `CUSTOM_ID` 不改;工具和其他 Agent 依赖 ID 定位。
 
 ## 4. Noweb 组织
@@ -136,7 +136,10 @@ startup -> appearance -> editing -> programming -> projects
 - 全局键位优先使用 `literal/set-key`,以同步 which-key 中文描述。
 - display-dependent 行为通过 `literal/add-frame-hook` 注册,覆盖 daemon/client。
 - 保留第三方包的正常 `require` / `use-package`;禁止的只有历史 `literal-*` feature。
-- 注释解释约束、兼容性和非显然决策;不要恢复整屏分隔线或已迁移模块头。
+- **约束与决策写 Org 正文,不写 inline `;;` 注释**。约束、兼容性、非显然决策、跨域依赖、被否决的替代方案,一律写到代码块外的 Org 正文,优先用表格 / 列表 / `[[#custom-id]]` 链接 / 脚注 / `#+begin_example` 呈现。
+- docstring 只保留 API 契约(参数 / 返回值 / 可调用行为),不写迁移历史或 commit 编号。
+- inline `;;` 注释只允许用于无法用 docstring 表达、且不值得单独 Org 说明的局部提醒(如 byte-compile 前向声明、下一行的非显然键位占用原因);仅复述下一行代码的琐碎注释和「包名 — 功能」式标签一律删除。
+- 不要恢复整屏分隔线或已迁移模块头。
 
 ## 6. 功能路由
 
@@ -155,7 +158,7 @@ startup -> appearance -> editing -> programming -> projects
 | 键位 / 补全               | `keybindings`, `completion`        |
 | Which-key / 右键菜单翻译  | `data/which-key-zh.el`, `data/context-menu-zh.el` |
 | Dashboard                 | `dashboard`                        |
-| 版本 workaround / 待确认  | `compatibility`                    |
+| 版本兜底 shim(生效中)   | `compatibility`                    |
 
 ## 7. 验收标准
 
