@@ -125,6 +125,20 @@ die() {
 	write_status "failed" "${2:-1}" "" "" "$1"
 	exit "${2:-1}"
 }
+# ── 安全网：保证 status.json 必有终态，避免父进程 waitForCompletion 永久轮询卡死 ──
+# 当 wrapper 因 set -e 中途 abort / 未捕获错误退出（没走到 write_status）时，
+# EXIT trap 兜底把仍为 running 的 status 写成 failed。（pipe hang 已由下方“落盘再 extract”修复。）
+finalize() {
+	set +e
+	if [[ -f "$status_file" ]] && grep -Eq '"status":[[:space:]]*"running"' "$status_file" 2>/dev/null; then
+		write_status "failed" "${EXIT_CODE:-1}" "${STARTED_AT:-}" "$(date +%s000)" \
+			"wrapper 在未写终态时退出（EXIT 安全网兜底）" 2>/dev/null || true
+	fi
+}
+trap finalize EXIT
+trap 'EXIT_CODE=130; exit 130' INT
+trap 'EXIT_CODE=143; exit 143' TERM
+trap 'EXIT_CODE=129; exit 129' HUP
 
 # 解析 agent .md 的 frontmatter（仅提取 tools）
 parse_agent_md() {
@@ -276,7 +290,33 @@ EXIT_CODE=0
 	printf '  model: %s\n' "${MODEL:-default}"
 	printf '  tools: %s\n\n' "${TOOLS:-read,grep,find,ls}"
 } >&2
-run_pi 2>"$RUN_DIR/stderr.log" | extract_result >"$result_file" || EXIT_CODE=$?
+# pi 的 stdout 落到文件（避开 pipe-EOF hang：pipe 需所有写端关闭，pi 的子孙若继承 stdout fd
+# 不关则 pipe 永不 EOF；普通文件 EOF 按大小判定，与是否仍 open 无关）。
+PI_STDOUT_FILE="$RUN_DIR/pi-stdout.jsonl"
+# 实时 pane 美化视图（已恢复）：后台 tail -F 该文件 | extract_result，extract 的 stderr=pane
+# （实时流，与旧版一致），stdout→/dev/null。tail 读普通文件 → 无 pipe-EOF 问题。
+# wrapper 只 wait pi，不等后台流；pi 退出后 SIGKILL 后台流（SIGKILL 不可被阻塞的 pty 写拦截，
+# 故 runaway 也卡不住 wrapper；extract 死后 tail 收 SIGPIPE 自退）。
+printf '%b  ▶ subagent 运行中（实时 pane 视图已恢复；wrapper 只等 pi，runaway 不阻塞）%b\n' "$c_dim" "$c_reset" >&2
+run_pi >"$PI_STDOUT_FILE" 2>"$RUN_DIR/stderr.log" &
+PI_PID=$!
+tail -n +1 -F "$PI_STDOUT_FILE" 2>/dev/null | extract_result >/dev/null &
+LIVE_PID=$!
+PI_EXIT=0
+wait "$PI_PID" || PI_EXIT=$?
+kill -KILL "$LIVE_PID" 2>/dev/null || true
+wait "$LIVE_PID" 2>/dev/null || true
+# 对完整文件做权威 extract（result.md + meta；stderr→/dev/null 不重复刷屏）
+EXTRACT_EXIT=0
+extract_result <"$PI_STDOUT_FILE" >"$result_file" 2>/dev/null || EXTRACT_EXIT=$?
+if [[ $PI_EXIT -ne 0 ]]; then
+	EXIT_CODE=$PI_EXIT
+elif [[ $EXTRACT_EXIT -ne 0 ]]; then
+	EXIT_CODE=$EXTRACT_EXIT
+else
+	EXIT_CODE=0
+fi
+printf '%b  ■ subagent 结束：exitCode=%s（0=completed）%b\n' "$c_dim" "$EXIT_CODE" "$c_reset" >&2
 
 FINISHED_AT="$(date +%s000)"
 
@@ -291,19 +331,25 @@ else
 import json
 import sys
 from pathlib import Path
-
-meta = Path(sys.argv[1])
-stderr = Path(sys.argv[2])
-message = ""
-if meta.exists():
-    try:
-        payload = json.loads(meta.read_text(encoding="utf-8"))
-        message = payload.get("errorMessage") or ""
-    except Exception:
-        pass
-if not message and stderr.exists():
-    message = stderr.read_text(encoding="utf-8").strip()[-2000:]
-print(message)
+try:
+    meta = Path(sys.argv[1])
+    stderr = Path(sys.argv[2])
+    message = ""
+    if meta.exists():
+        try:
+            payload = json.loads(meta.read_text(encoding="utf-8"))
+            message = payload.get("errorMessage") or ""
+        except Exception:
+            pass
+    if not message and stderr.exists():
+        try:
+            message = stderr.read_text(encoding="utf-8", errors="replace").strip()[-2000:]
+        except Exception:
+            message = ""
+    print(message)
+except Exception:
+    # 任何意外都不能让 wrapper 在 set -e 下 abort（否则 status 卡在 running）
+    print("")
 PY
 	)"
 fi
