@@ -47,7 +47,8 @@ utilities/
 │       ├── fcitx5/
 │       │   └── rime/
 │       └── gnupg/
-│           └── gpg-agent.conf
+│           ├── common.conf
+│           └── gpg.conf
 └── .nix-channels
 ```
 

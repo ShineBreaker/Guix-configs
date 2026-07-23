@@ -12,6 +12,8 @@
 
 ```
 Guix-configs///
+├── .agents/
+│   └── skills/
 ├── docs/
 │   ├── agenote.md
 │   ├── iso-build.md
@@ -26,8 +28,6 @@ Guix-configs///
 │   ├── daily.png
 │   ├── emacs.png
 │   └── terminal.png
-├── scripts/
-│   └── build-image.scm
 ├── source/
 │   ├── files/
 │   ├── nix/
@@ -39,6 +39,7 @@ Guix-configs///
 ├── tools/
 │   ├── linux-setup/
 │   ├── bootstrap.sh
+│   ├── build-image.scm
 │   ├── fxxk-link.sh
 │   └── secrets
 ├── .gitattributes
@@ -46,6 +47,7 @@ Guix-configs///
 ├── .gitmodules
 ├── CLAUDE.md
 ├── LICENSE
+├── PLAN.md
 ├── README.org
 └── blueprint.scm
 ```

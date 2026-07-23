@@ -8,12 +8,6 @@
 [submodule "appimage-run"]
 	path = dotfiles/mutable/appimage-run
 	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
-[submodule "pi-atelier"]
-	path = dotfiles/mutable/pi/.config/pi/extensions/atelier
-	url = https://github.com/ShineBreaker/pi-atelier.git
-[submodule "pi-ui"]
-	path = dotfiles/mutable/pi/.config/pi/extensions/pi-ui
-	url = https://github.com/ShineBreaker/pi-ui.git
 [submodule "tools/linux-setup"]
 	path = tools/linux-setup
 	url = https://codeberg.org/BrokenShine/linux-setup

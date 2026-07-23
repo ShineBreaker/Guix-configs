@@ -37,6 +37,8 @@ terminal/
     │       └── retry.fish
     ├── foot/
     │   └── foot.ini
+    ├── herdr/
+    │   └── config.toml
     └── starship.toml
 ```
 

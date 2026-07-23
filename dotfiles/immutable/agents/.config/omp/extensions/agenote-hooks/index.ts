@@ -20,7 +20,7 @@
  * 它复用同一套 ag_lib 内核，输出人类可读文本。
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";

@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# omp 配置包。agent 本体由 omp 官方安装脚本部署（不在此仓库管 npm 依赖），
+# 故无需排除 node_modules。运行时产物（agent.db / sessions）由
+# .stow-local-ignore 在 stow 部署时排除，不进 git。
+
+# extensions 的 TypeScript 编译产物（jiti 直接加载 .ts）
+extensions/**/*.js

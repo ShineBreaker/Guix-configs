@@ -37,7 +37,8 @@ mutable/
 │   │       ├── ag-ent
 │   │       ├── agenote
 │   │       ├── agenote_cli.py
-│   │       └── agenote_mcp.py
+│   │       ├── agenote_mcp.py
+│   │       └── orgfmt
 │   ├── .stow-folding
 │   └── .stow-local-ignore
 ├── appimage-run/
@@ -47,37 +48,29 @@ mutable/
 │   │   │   └── skills/
 │   │   └── emacs/
 │   │       ├── data/
+│   │       ├── docs/
 │   │       ├── scripts/
+│   │       ├── test/
 │   │       ├── .gitignore
 │   │       ├── early-init.el
 │   │       ├── emacs.org
 │   │       └── init.el
+│   ├── .local/
+│   │   └── share/
+│   │       └── applications/
 │   └── .stow-local-ignore
 ├── hermes/
 │   ├── .local/
-│   │   └── share/
-│   │       └── hermes/
-│   └── .stow-folding
-├── pi/
-│   ├── .config/
-│   │   └── pi/
-│   │       ├── extensions/
-│   │       ├── npm/
-│   │       ├── .gitignore
-│   │       ├── APPEND_SYSTEM.md
-│   │       ├── keybindings.json
-│   │       ├── lsp.json
-│   │       ├── mcp.json
-│   │       ├── models.json
-│   │       ├── plannotator.json
-│   │       └── settings.json
-│   ├── .local/
 │   │   ├── bin/
-│   │   │   ├── pi
-│   │   │   ├── pi-acp
-│   │   │   └── pi-update
+│   │   │   ├── hermes
+│   │   │   ├── hermes-desktop
+│   │   │   ├── hermes-desktop-manifest.scm
+│   │   │   ├── hermes-update
+│   │   │   └── hermes-version
 │   │   └── share/
-│   │       └── pi/
+│   │       ├── applications/
+│   │       └── hermes/
+│   ├── .stow-folding
 │   └── .stow-local-ignore
 ├── secrets/
 │   ├── .local/
@@ -100,7 +93,7 @@ mutable/
 | -------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                       |
 | `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                         |
-| `pi`     | `~/.config/pi/`、`~/.local/bin/{kb-agent,pi,pi-acp,pi-update}`、`~/.local/share/pi/`、`~/.config/agents/skills/` | pi-coding-agent 全部配置(settings/models/lsp/keybindings/plannotator、agents/_.md、prompts/_.md、extensions/{atelier,custom-shortcuts,default-timeout,global-context,agenote-hooks})、启动脚本与 scripts/ 辅助； |
+| `pi` | `~/.config/pi/`、`~/.local/share/pi/scripts/` | oh-my-pi (omp) 配置：`config.yml`、`models.yml`、`mcp.json`、`global-context.json`、`APPEND_SYSTEM.md`、`extensions/{pi-gate,agenote-hooks,global-context}`（自写扩展，agent 本体由 omp 官方安装脚本部署）；`share/pi/scripts/` 辅助脚本； |
 
 ## 工作流
 

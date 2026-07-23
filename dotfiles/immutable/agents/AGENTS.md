@@ -12,9 +12,10 @@
 agents/
 ├── .config/
 │   ├── agents/
-│   │   └── context/
-│   │       ├── 01-language.md
-│   │       └── 02-ultilities.md
+│   │   ├── context/
+│   │   │   ├── 01-language.md
+│   │   │   └── 02-ultilities.md
+│   │   └── anchors.json
 │   ├── crush/
 │   │   ├── bin/
 │   │   │   ├── bash-language-server
@@ -40,13 +41,23 @@ agents/
 │   │   │   ├── codex.json
 │   │   │   ├── crush.json
 │   │   │   ├── omp.json
-│   │   │   ├── opencode.json
-│   │   │   └── pi.json
+│   │   │   └── opencode.json
 │   │   └── docs/
 │   │       ├── examples/
 │   │       ├── README.md
 │   │       ├── adapter.md
 │   │       └── extract.md
+│   ├── omp/
+│   │   ├── extensions/
+│   │   │   ├── agenote-hooks/
+│   │   │   ├── global-context/
+│   │   │   └── pi-gate/
+│   │   ├── .gitignore
+│   │   ├── APPEND_SYSTEM.md
+│   │   ├── config.yml
+│   │   ├── global-context.json
+│   │   ├── mcp.json
+│   │   └── models.yml
 │   └── opencode/
 │       ├── commands/
 │       │   ├── plannotator-annotate.md
@@ -92,7 +103,7 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 
 ### Loop 体系（loopctl）
 
-跨 agent 长期迭代循环，通过 `.config/loopctl/` 与 `.local/bin/loopctl` 管理。Adapter 定义在 `adapters/`：`claude-code` / `codex` / `crush` / `omp` / `opencode` / `pi`。新增 agent = 复制 `_TEMPLATE.json`。
+跨 agent 长期迭代循环，通过 `.config/loopctl/` 与 `.local/bin/loopctl` 管理。Adapter 定义在 `adapters/`：`claude-code` / `codex` / `crush` / `omp` / `opencode`。新增 agent = 复制 `_TEMPLATE.json`。
 
 ### 启动脚本
 

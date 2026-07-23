@@ -1,0 +1,87 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# oh-my-pi (omp) 主配置
+#
+# 本文件由 source/config.org 的 PI_CODING_AGENT_DIR=$XDG_CONFIG_HOME/pi 重定向，
+# 故 omp 读 ~/.config/pi/config.yml（而非默认 ~/.omp/agent/config.yml）。
+#
+# 迁移自 pi settings.json（2026-07）。以下能力改由 omp 原生或独立文件承载：
+#   - subagents / plan mode / LSP / DAP / hashline / code review → omp 内置
+#   - MCP servers → 独立 mcp.json（同目录）
+#   - skills → omp agents provider 自动发现 ~/.config/agents/skills/
+#   - extensions → omp 自动发现 ~/.config/pi/extensions/
+#   - global-context 配置 → 独立 global-context.json（同目录，扩展自管）
+
+# ── 模型角色 ───────────────────────────────────────────────────────────────
+# pi 用 defaultProvider/defaultModel；omp 用 modelRoles + cycleOrder。
+# 原默认 minimax-cn/MiniMax-M3 设为 default 角色。
+# 原 atelier tiers（ultra/pro/quick/visual）映射为 omp 角色，按需通过 cycleOrder 切换。
+modelRoles:
+  default: minimax-cn/MiniMax-M3
+  # 原 atelier tiers（deepseek 为 pro 主力，xiaomi mimo 为 visual）
+  slow: zai/GLM-5.2
+  pro: deepseek/deepseek-v4-pro
+  smol: deepseek/deepseek-v4-flash
+  vision: xiaomi/mimo-v2.5
+
+cycleOrder:
+  - smol
+  - default
+  - slow
+
+# ── 上下文压缩 ─────────────────────────────────────────────────────────────
+# 字段名与 pi settings.json 一致（omp 兼容）
+compaction:
+  enabled: true
+  strategy: snapcompact # omp 默认策略，比 pi 的基础压缩更强
+  reserveTokens: 16384
+  keepRecentTokens: 20000
+
+# ── 重试与回退 ─────────────────────────────────────────────────────────────
+retry:
+  enabled: true
+  maxRetries: 3
+  baseDelayMs: 2000
+  modelFallback: true
+  # 原 atelier ultra fallback 链：GLM-5.2 → mimo-v2.5-pro → deepseek-v4-pro
+  fallbackChains:
+    slow:
+      - xiaomi/mimo-v2.5-pro
+      - deepseek/deepseek-v4-pro
+    default:
+      - deepseek/deepseek-v4-pro
+      - xiaomi/mimo-v2.5-pro
+      - zai/GLM-4.7
+
+# ── 思考 ───────────────────────────────────────────────────────────────────
+defaultThinkingLevel: high
+
+# ── 外观 ───────────────────────────────────────────────────────────────────
+# 原 pi-ui 扩展提供的 status bar / 欢迎框由 omp 内置 statusLine + theme 接管
+theme:
+  dark: titanium # omp 默认暗色主题
+
+statusLine:
+  preset: default
+
+# ── 终端与图像 ─────────────────────────────────────────────────────────────
+showHardwareCursor: false
+images:
+  blockImages: false
+
+# ── 启动 ───────────────────────────────────────────────────────────────────
+startup:
+  quiet: true # 原 quietStartup
+
+# ── 工具审批 ───────────────────────────────────────────────────────────────
+# pi-gate 扩展已承担命令/路径拦截；omp 原生审批默认 yolo（不二次确认）
+# 若希望 omp 对危险操作二次确认，改 tools.approvalMode 为 "whitelist" 或 "always"
+tools:
+  approvalMode: yolo
+
+# ── 记忆 ───────────────────────────────────────────────────────────────────
+# 原 context-mode 的会话级索引记忆由 omp hindsight 接管（retain/recall/reflect）
+memory:
+  backend: hindsight

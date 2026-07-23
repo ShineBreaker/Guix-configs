@@ -16,6 +16,7 @@ desktop/
 │   │   └── net.opentabletdriver.OpenTabletDriver.desktop
 │   ├── niri/
 │   │   ├── settings/
+│   │   │   ├── animations.kdl
 │   │   │   ├── key-bindings.kdl
 │   │   │   └── window-rules.kdl
 │   │   ├── app-switcher.json

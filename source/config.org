@@ -1457,9 +1457,9 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "crush-bin"
         "github-copilot"
         "mimocode-bin"
+        "oh-my-pi-bin"
         "opencode-desktop-bin"
         "orca-ide-bin"
-        "reasonix-desktop-bin"
         "codewhale-bin"
         "zcode"
 
@@ -2137,10 +2137,10 @@ end
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
-  ;; pi-agent
-  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
-  ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
-  ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
+  ;; pi
+  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/omp")
+  ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/omp")
+  ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/omp/sessions")
   ;; putty
   ("PYTTYDIR" . "$XDG_CONFIG_HOME/putty")
   ;; python

@@ -2,11 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-  buildSessionContext,
-  getAgentDir,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
+import { buildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -138,22 +135,28 @@ interface GlobalContextConfig {
 }
 
 /**
- * 从 settings.json 文件读取 globalContext 配置
+ * 读取 global-context 自身配置
  *
- * Pi ExtensionAPI 不提供 pi.settings，需要自行读取文件。
- * 查找顺序：getAgentDir()/settings.json → ~/.config/pi/settings.json
+ * omp 的 ExtensionAPI 不提供配置读取接口（无 pi.config / pi.getConfig），
+ * 扩展需自管配置文件。本扩展读 getAgentDir()/global-context.json。
+ * 兼容旧 pi：若 config.yml 不存在，回退读 settings.json 的 globalContext 字段。
  */
 function loadConfig(): GlobalContextConfig | undefined {
+  const agentDir = getAgentDir();
   const candidates = [
-    join(getAgentDir(), "settings.json"),
-    join(homedir(), ".config", "pi", "settings.json"),
+    join(agentDir, "global-context.json"), // omp：独立配置文件（推荐）
+    join(agentDir, "settings.json"), // 旧 pi：settings.json 内嵌字段（向后兼容）
   ];
 
-  for (const settingsPath of candidates) {
-    if (!existsSync(settingsPath)) continue;
+  for (const cfgPath of candidates) {
+    if (!existsSync(cfgPath)) continue;
     try {
-      const raw = JSON.parse(readFileSync(settingsPath, "utf8"));
-      return raw?.globalContext as GlobalContextConfig | undefined;
+      const raw = JSON.parse(readFileSync(cfgPath, "utf8"));
+      // 独立文件直接是配置对象；settings.json 内嵌在 globalContext 字段下
+      const cfg = cfgPath.endsWith("global-context.json")
+        ? raw
+        : raw?.globalContext;
+      return cfg as GlobalContextConfig | undefined;
     } catch {
       continue;
     }

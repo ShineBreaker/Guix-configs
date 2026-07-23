@@ -1,0 +1,34 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# oh-my-pi (omp) 自定义 provider 定义
+#
+# 迁移自 pi models.json（2026-07）。omp 把自定义 provider 放在独立 models.yml，
+# config.yml 通过 modelRoles 按 provider/model-id 引用。
+#
+# apiKey 行为：值优先当作环境变量名解析，找不到才当字面量。
+# 本 provider 走 Anthropic Messages 兼容接口（阿里云百炼 token-plan）。
+
+providers:
+  qwen:
+    name: "Aliyun Bailian Token Plan (Qwen)"
+    baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic"
+    api: "anthropic-messages"
+    apiKey: DASHSCOPE_API_KEY # 环境变量名（由 secrets 部署注入）；找不到时作字面量
+    models:
+      - id: "qwen3.8-max-preview"
+        name: "Qwen3.8-Max Preview"
+        reasoning: true
+        input: ["text", "image"]
+        contextWindow: 1000000
+        maxTokens: 32768
+        thinkingLevelMap:
+          minimal: null
+          low: null
+          medium: null
+        cost:
+          input: 0
+          output: 0
+          cacheRead: 0
+          cacheWrite: 0
