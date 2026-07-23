@@ -3,11 +3,42 @@
 // SPDX-License-Identifier: MIT
 
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { buildSessionContext, getAgentDir } from "@oh-my-pi/pi-coding-agent";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+
+// ─── 加载错误日志（omp 默认静默吞掉扩展错误，这里显式留痕）────────────────────
+const LOG_FILE = join(
+  homedir(),
+  ".config",
+  "omp",
+  "extensions",
+  ".load-errors.log",
+);
+function logLoadError(ext: string, where: string, err: unknown): void {
+  const msg =
+    err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+  appendFileSync(
+    LOG_FILE,
+    `[${new Date().toISOString()}] [${ext}] ${where}: ${msg}\n`,
+  );
+}
+
+/**
+ * 定位 omp 配置目录（替代旧 pi 的 getAgentDir()）。
+ *
+ * omp 17.0.7 没有把 getAgentDir 暴露给扩展运行时（value import 会
+ * `Cannot find module`）。这里按 omp 内部解析顺序定位：环境变量优先，
+ * 回退 ~/.config/omp（config.yml / mcp.json / global-context.json 都在这里）。
+ */
+function getOmpConfigDir(): string {
+  return (
+    process.env.OMP_CONFIG_DIR ||
+    process.env.PI_CONFIG_DIR ||
+    join(homedir(), ".config", "omp")
+  );
+}
 
 /**
  * global-context extension
@@ -138,11 +169,11 @@ interface GlobalContextConfig {
  * 读取 global-context 自身配置
  *
  * omp 的 ExtensionAPI 不提供配置读取接口（无 pi.config / pi.getConfig），
- * 扩展需自管配置文件。本扩展读 getAgentDir()/global-context.json。
+ * 扩展需自管配置文件。本扩展读 getOmpConfigDir()/global-context.json。
  * 兼容旧 pi：若 config.yml 不存在，回退读 settings.json 的 globalContext 字段。
  */
 function loadConfig(): GlobalContextConfig | undefined {
-  const agentDir = getAgentDir();
+  const agentDir = getOmpConfigDir();
   const candidates = [
     join(agentDir, "global-context.json"), // omp：独立配置文件（推荐）
     join(agentDir, "settings.json"), // 旧 pi：settings.json 内嵌字段（向后兼容）
@@ -267,6 +298,15 @@ async function listConfiguredFiles(config: GlobalContextConfig): Promise<
 // ─── Extension Entry ──────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
+  try {
+    return factoryBody(pi);
+  } catch (err) {
+    logLoadError("global-context", "factory", err);
+    throw err; // 重新抛出让 omp 记录到它自己的 load errors
+  }
+}
+
+function factoryBody(pi: ExtensionAPI) {
   const config = loadConfig();
   const isEnabled = config && config.enabled !== false;
 
@@ -351,15 +391,35 @@ export default function (pi: ExtensionAPI) {
     description: "导出当前所有 LLM 上下文（系统提示词 + 对话历史）到文件",
     handler: async (_args, ctx) => {
       const systemPrompt = ctx.getSystemPrompt();
-      const entries = ctx.sessionManager.getEntries();
-      const leafId = ctx.sessionManager.getLeafId();
-      const header = ctx.sessionManager.getHeader();
+      const sm = ctx.sessionManager as any;
+      const entries = sm.getEntries();
+      const leafId = sm.getLeafId();
+      const header = sm.getHeader();
 
-      // 用 pi 内部的 buildSessionContext 构建完整消息列表
-      const { messages, model, thinkingLevel } = buildSessionContext(
-        entries,
-        leafId,
-      );
+      // 旧版用模块级 buildSessionContext(entries, leafId)，但 omp 没有把该函数
+      // 暴露给扩展运行时。改用 ctx.sessionManager.buildContextEntries() 拿到
+      // compaction-aware 的活跃 entries，再手动投影出 messages / model / thinkingLevel。
+      // buildContextEntries 同样遵循 leaf 路径 + 处理 compaction，语义等价于
+      // buildSessionContext 的 entries 部分（后者内部也是先调 buildContextEntries）。
+      const contextEntries: any[] = sm.buildContextEntries
+        ? sm.buildContextEntries(entries, leafId)
+        : entries;
+
+      // 投影：message entry → AgentMessage；model_change / thinking_level_change
+      // 取最新一条（沿 leaf 路径从根到当前，最后出现的即当前生效值）。
+      const messages: any[] = [];
+      let model: { provider: string; modelId: string } | null = null;
+      let thinkingLevel = "default";
+      for (const e of contextEntries) {
+        if (!e || typeof e !== "object") continue;
+        if (e.type === "message" && e.message) {
+          messages.push(e.message);
+        } else if (e.type === "model_change") {
+          model = { provider: e.provider, modelId: e.modelId };
+        } else if (e.type === "thinking_level_change") {
+          thinkingLevel = e.thinkingLevel;
+        }
+      }
 
       const sections: string[] = [];
 

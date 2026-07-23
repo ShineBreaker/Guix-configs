@@ -22,11 +22,28 @@
 
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { execSync } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 const KB_SCRIPT = join(homedir(), ".local", "bin", "agenote_cli.py");
-const KB_AGENT = join(homedir(), ".local", "bin", "kb-agent");
+
+// ─── 加载错误日志（omp 默认静默吞掉扩展错误，这里显式留痕）────────────────────
+const LOG_FILE = join(
+  homedir(),
+  ".config",
+  "omp",
+  "extensions",
+  ".load-errors.log",
+);
+function logLoadError(ext: string, where: string, err: unknown): void {
+  const msg =
+    err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+  appendFileSync(
+    LOG_FILE,
+    `[${new Date().toISOString()}] [${ext}] ${where}: ${msg}\n`,
+  );
+}
 
 /**
  * 任务完成信号（取自 agenote-review skill references/triggers.md — 单一真相源）
@@ -103,23 +120,6 @@ function runKb(...args: string[]): string {
   }
 }
 
-/**
- * 运行 kb-agent 命令
- * 备注：direct backend 只支持 health/deduplicate/archive/reindex 关键词匹配，
- * 跑 curate / review 必须用 pi / opencode / crush backend 启动嵌套 agent。
- */
-function runKbAgent(action: string, backend = "pi"): string {
-  try {
-    return execSync(`bash "${KB_AGENT}" ${action} --backend ${backend}`, {
-      encoding: "utf-8",
-      timeout: 120000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-  } catch (err: any) {
-    return `(kb-agent 命令失败: ${err.message?.split("\n")[0] || err})`;
-  }
-}
-
 /** 获取简短的 agenote 状态摘要（session_start 注入用） */
 function getAgenoteStatusSummary(): string {
   const health = runKb("health");
@@ -169,24 +169,44 @@ function extractText(content: unknown): string {
 }
 
 /**
- * 当前进程是否是 subagent 工具 spawn 出来的独立 pi 进程。
+ * 当前进程是否是 subagent 工具 spawn 出来的独立 agent 进程。
  *
- * subagent 工具为每次委派 spawn 一个 `pi --mode json -p --no-session ...` 子进程，
- * 它也会加载本扩展。如果不识别并跳过，它内部对话里的 "完成 / 搞定 / done" 等信号
- * 会污染 handoff 输出：
- *   1. hook 在 worker 进程的 agent_end 触发
- *   2. 把 review 提示（buildReviewPrompt）作为 followUp 注入到 worker 进程
- *   3. worker 进程下一轮开始执行经验总结评估
- *   4. 主 agent 收到的不是干净 handoff，而是混入"请评估是否记录经验"的内容
+ * 背景：subagent 工具为每次委派 spawn 一个独立 agent 子进程（一次性 -p 模式），
+ * 它也会加载本扩展。如果不识别并跳过，worker 内部对话里的"完成/搞定/done"等信号
+ * 会污染 handoff 输出（review 提示被注入到 worker，主 agent 收到不干净的 handoff）。
  *
- * `--no-session` 是 subagent 工具独有的标志（interactive 模式 / 普通 `pi -p`
- * 一次性命令都不会带），用它识别最稳。
+ * 旧 pi 的 subagent 用 `--no-session` 标志；omp 的 subagent（task 工具 / Advisor）
+ * spawn 标志可能不同。这里做多重检测：
+ *   - `--no-session`（旧 pi）
+ *   - 环境变量 PI_BLOCKED_AGENT（omp task 会设置子进程标记）
+ *   - 同时出现 `--mode json` + `-p`（非交互式一次性命令，可能是 subagent）
+ *
+ * 无法 100% 确认 omp 的确切标志时，保守起见——首次 session_start 记录 argv 到
+ * 加载日志，便于后续根据真实运行情况收紧判定。
  */
+let subagentFlagLogged = false;
 function isSubagentProcess(): boolean {
-  return process.argv.includes("--no-session");
+  const argv = process.argv;
+  if (argv.includes("--no-session")) return true;
+  if (process.env.PI_BLOCKED_AGENT) return true;
+  // omp subagent 通常以 --mode json -p 一次性运行；但普通 `omp -p "..."` 也是 -p。
+  // 为避免误杀用户的一次性命令，仅在同时带 --mode json 时判定（subagent 用 JSON 协议）。
+  if (argv.includes("--mode") && argv.includes("json") && argv.includes("-p")) {
+    return true;
+  }
+  return false;
 }
 
 export default function init(pi: ExtensionAPI): void {
+  try {
+    initBody(pi);
+  } catch (err) {
+    logLoadError("agenote-hooks", "factory", err);
+    throw err;
+  }
+}
+
+function initBody(pi: ExtensionAPI): void {
   // session_start：状态显示已交给 pi-ui 扩展（欢迎框中显示）。
   // 原逻辑在这里 console.log 会导致 stdout 在 TUI 之前打印多行文本，
   // 且与 pi-ui 欢迎框重复。pi-ui 已调用 kb agenote health 解析后
@@ -198,6 +218,19 @@ export default function init(pi: ExtensionAPI): void {
   // "串台"到新会话，导致新会话刚开、agent 正干活时旧定时器到点误触发。
   // 故每次新会话开始：清定时器 + 归零所有触发状态。
   pi.on("session_start", () => {
+    // 首次记录一次 argv，便于确认 omp 下 subagent 判定是否准确
+    // （PI_BLOCKED_AGENT / --mode json 等信号是否如预期出现）
+    if (!subagentFlagLogged) {
+      subagentFlagLogged = true;
+      try {
+        appendFileSync(
+          LOG_FILE,
+          `[${new Date().toISOString()}] [agenote-hooks] session_start argv=${JSON.stringify(process.argv)} subagent=${isSubagentProcess()} mode=${process.env.PI_BLOCKED_AGENT ? "blocked-agent" : "main"}\n`,
+        );
+      } catch {
+        /* 日志失败不影响主流程 */
+      }
+    }
     if (isSubagentProcess()) return;
     if (idleTimer) clearTimeout(idleTimer);
     idleTimer = undefined;
@@ -302,12 +335,24 @@ export default function init(pi: ExtensionAPI): void {
   });
 
   // ── /agenote-curate 命令 ──（原 /curate）
+  // 原 runKbAgent 走 kb-agent（~/.local/bin/kb-agent），但该文件不存在；
+  // agenote_cli.py 复用同一套 ag_lib 内核，支持 curate 关键词，改走它。
+  // curate 是重操作（健康 + 去重 + 归档 + 权重重分配），给 120s 超时。
   pi.registerCommand("agenote-curate", {
     description: "执行 agenote 策展（健康 + 去重 + 归档 + 权重重分配）",
     handler: async (_args, ctx) => {
       ctx.ui.notify("[agenote] 开始策展...", "info");
 
-      const result = runKbAgent("curate", "pi");
+      let result: string;
+      try {
+        result = execSync(`python3 "${KB_SCRIPT}" curate`, {
+          encoding: "utf-8",
+          timeout: 120000,
+          stdio: ["pipe", "pipe", "pipe"],
+        }).trim();
+      } catch (err: any) {
+        result = `(agenote_cli curate 失败: ${err.message?.split("\n")[0] || err})`;
+      }
 
       ctx.ui.notify("[agenote] 策展完成", "info");
       console.log("=== 策展结果 ===");

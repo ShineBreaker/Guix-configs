@@ -18,9 +18,26 @@
  */
 
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { existsSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, relative } from "node:path";
+
+// ─── 加载错误日志（omp 默认静默吞掉扩展错误，这里显式留痕）────────────────────
+const LOG_FILE = join(
+  homedir(),
+  ".config",
+  "omp",
+  "extensions",
+  ".load-errors.log",
+);
+function logLoadError(ext: string, where: string, err: unknown): void {
+  const msg =
+    err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+  appendFileSync(
+    LOG_FILE,
+    `[${new Date().toISOString()}] [${ext}] ${where}: ${msg}\n`,
+  );
+}
 
 // ─── Anchors 配置（Phase 4 统一声明，此处内联默认值）─────────────────────────
 
@@ -286,6 +303,15 @@ function rewriteCommand(
 // ─── Extension Entry ────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
+  try {
+    return factoryBody(pi);
+  } catch (err) {
+    logLoadError("pi-gate", "factory", err);
+    throw err;
+  }
+}
+
+function factoryBody(pi: ExtensionAPI) {
   const anchors = loadAnchors();
 
   // ── Bash 命令拦截 ────────────────────────────────────────────────────────
