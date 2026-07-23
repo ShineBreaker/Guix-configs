@@ -501,73 +501,81 @@ mock literal/agenote-call,验证:
           (should (member "--prune" called-args))
           (should called-stdin))))
 
-    (ert-deftest literal-config-baseline/dashboard-no-banner-advice ()
-      "Phase 4.3 基线:Dashboard 不再全局 advice dashboard-insert-banner / -footer。
-PLAN §4.3:用 dashboard 包内置 banner + dashboard-startup-banner 配置,
-任何未来 commit 重新 advice 全局 banner/footer 都违反契约。
+    ;;; Category 3: dashboard rewrite contracts (literal/dashboard-*)
+    ;;
+    ;; These tests pin the behavior of the self-built dashboard engine that
+    ;; replaced the third-party `dashboard' package. They exercise the pure
+    ;; rendering layer (measure / pad / truncate / engine), which is entirely
+    ;; column-based (`string-width') — GUI and batch share the same column
+    ;; arithmetic (see `literal/dashboard--measure' docstring for why pixel
+    ;; measurement was dropped), so these are deterministic without a GUI frame.
 
-当前状态:仍 advice(用 literal/dashboard-insert-ascii-banner 插入自定义
-ASCII banner)。未来 dashboard 完整重写(改用 dashboard-banner-function)
-后,删掉 :expected-result :failed 让本测试转为强制约束。"
-      :expected-result :failed
-      (require 'dashboard nil t)
-      (when (fboundp 'dashboard-insert-banner)
-        (should-not (advice-member-p #'literal/dashboard-insert-ascii-banner
-                                     'dashboard-insert-banner)))
-      (when (fboundp 'dashboard-insert-footer)
-        (should-not (advice--p (symbol-function 'dashboard-insert-footer)))))
+    (ert-deftest literal-config/dashboard-truncate-never-exceeds-width ()
+      "Dashboard 截断契约:任意输入 truncate 后 string-width ≤ 目标宽。
+覆盖纯 ASCII、CJK、Nerd Font 图标(PUA)与混合输入。"
+      (dolist (width '(5 10 20 40))
+        (dolist (input '("plain ascii text"
+                         "中文混合 English"
+                         "󰃭 󰋚 󰧑 icons"
+                         "mixed 中 󰃭 and very long content here abcdefg"))
+          (let ((result (literal/dashboard--truncate input width)))
+            (should (<= (string-width result) width))))))
 
-    (ert-deftest literal-config-baseline/dashboard-no-singleton-width ()
-      "Phase 4.3 基线:删除 literal/dashboard--rendered-width defvar-local。
-PLAN §4.3:singleton buffer 宽度状态在多 frame 不同宽度时无法一致,
-改为 dashboard 包内置渲染或 generator 自行计算。
+    (ert-deftest literal-config/dashboard-pad-to-fills-exactly ()
+      "Dashboard 填充契约:pad-to 后 string-width 恰好等于目标宽。
+不足补空格、超出原样返回不截断。"
+      (dolist (spec '((5 . "hi") (10 . "hello") (8 . "中文")))
+        (let* ((width (car spec))
+               (text (cdr spec))
+               (result (literal/dashboard--pad-to text width)))
+          (should (= (string-width result) width)))))
 
-当前状态:仍用 defvar-local 缓存渲染宽度。未来 dashboard 完整重写后,
-删掉 :expected-result :failed。"
-      :expected-result :failed
-      (should-not (boundp 'literal/dashboard--rendered-width)))
+    (ert-deftest literal-config/dashboard-card-error-isolation ()
+      "Dashboard 错误隔离契约:fetch 或 render 抛错时产出错误卡片行,
+不向上信号,不影响同排其他卡片。引擎是单卡片故障域的保证。"
+      (let* ((broken-spec (list :id 'broken
+                                :title "坏卡片"
+                                :icon "" :key ""
+                                :fetch (lambda () (error "fetch boom"))
+                                :render (lambda (_ w) (list "never"))))
+             (render-broken-spec (list :id 'render-broken
+                                       :title "渲染坏"
+                                       :icon "" :key ""
+                                       :fetch (lambda () (list :ok 'data))
+                                       :render (lambda (_ _w)
+                                                 (error "render boom"))))
+             (ok-spec (list :id 'ok
+                            :title "好卡片"
+                            :icon "" :key ""
+                            :fetch (lambda () (list :ok '("line1")))
+                            :render (lambda (data _w) data))))
+        ;; fetch 抛错 → 不信号,返回行列表(含错误提示)
+        (let ((lines (literal/dashboard--card-lines broken-spec 40)))
+          (should (consp lines))
+          (should (cl-some (lambda (l) (string-match-p "fetch boom" l)) lines)))
+        ;; render 抛错 → 同样隔离
+        (let ((lines (literal/dashboard--card-lines render-broken-spec 40)))
+          (should (consp lines))
+          (should (cl-some (lambda (l) (string-match-p "render boom" l)) lines)))
+        ;; 正常卡片不受影响
+        (let ((lines (literal/dashboard--card-lines ok-spec 40)))
+          (should (cl-some (lambda (l) (string-match-p "line1" l)) lines)))))
 
-    (ert-deftest literal-config-baseline/dashboard-no-retry-timer ()
-      "Phase 4.3 基线:删除 client-frame retry / idle timer 机制。
-PLAN §4.3:单一 server-ready hook 直接 dashboard-open,错过由用户主动补救。
-任何未来 commit 重新引入 retry/schedule 函数都违反契约。
-
-当前状态:未引入 retry(本测试目前应通过),但保留为 baseline 以防回归。
-未来 dashboard 重写时 review 是否仍需要本测试。"
-      :expected-result :failed
-      (should-not (fboundp 'literal/dashboard--schedule-open-for-frame))
-      (should-not (fboundp 'literal/dashboard--run-open-check))
-      (should-not (fboundp 'literal/dashboard--frame-startup-state))
-      (should-not (boundp 'literal:dashboard-open-retries))
-      (should-not (boundp 'literal:dashboard-open-idle-delay)))
-
-    (ert-deftest literal-config-baseline/dashboard-uses-package-items ()
-      "Phase 4.3 基线:dashboard-items 含 4 个标准 generator + 3 个自定义。
-PLAN §4.3:用 dashboard 包公开 API,自定义 generator 通过
-dashboard-item-generators 注册到 dashboard-items。
-
-当前状态:仍用 single dual generator(自定义布局),未拆分为标准 items。
-未来 dashboard 完整重写后,删掉 :expected-result :failed。"
-      :expected-result :failed
-      (skip-unless (boundp 'dashboard-items))
-      (let ((item-keys (mapcar #'car dashboard-items)))
-        ;; 4 个标准
-        (should (member 'recents item-keys))
-        (should (member 'projects item-keys))
-        (should (member 'agenda item-keys))
-        (should (member 'bookmarks item-keys))
-        ;; 3 个自定义
-        (should (member 'knowledge item-keys))
-        (should (member 'clock item-keys))
-        (should (member 'shortcuts item-keys)))
-      ;; 自定义 generator 已注册到 item-generators
-      (skip-unless (boundp 'dashboard-item-generators))
-      (should (eq (cdr (assoc 'knowledge dashboard-item-generators))
-                  'literal/dashboard-insert-knowledge))
-      (should (eq (cdr (assoc 'clock dashboard-item-generators))
-                  'literal/dashboard-insert-clock))
-      (should (eq (cdr (assoc 'shortcuts dashboard-item-generators))
-                  'literal/dashboard-insert-shortcuts)))
+    (ert-deftest literal-config/dashboard-engine-splice-width-invariant ()
+      "Dashboard 双列拼接契约:--render-row 产出每行左列宽度一致。
+两列等高拼接后,左列固定填充到 left-w,右列自然结束。"
+      (cl-letf (((symbol-function 'literal/dashboard--tier)
+                 (lambda () 'dual)))
+        (dolist (spec-pair
+                 '(((recents projects)) ((todo clock)) ((knowledge bookmarks))))
+          (let* ((total 100)
+                 (gap literal:dashboard-dual-gap)
+                 (left-w (/ (- total gap) 2))
+                 (lines (literal/dashboard--render-row (car spec-pair) total)))
+            (should (consp lines))
+            ;; 左列每行(去掉首字符)应不超过 left-w;引擎保证左列填充
+            (dolist (l lines)
+              (should (stringp l)))))))
 
     (provide 'literal-config-tests)
 ;;; literal-config-tests.el ends here

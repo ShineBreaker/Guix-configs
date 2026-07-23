@@ -1675,7 +1675,6 @@ end
                              "emacs-consult-eglot"
 
                              ;; 界面与外观
-                             "emacs-dashboard"
                              "emacs-ef-themes"
                              "emacs-kind-icon"
                              "emacs-nerd-icons"
