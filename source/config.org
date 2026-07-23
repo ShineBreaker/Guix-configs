@@ -1383,11 +1383,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "blue"
         "just"
 
-        ;; Tmux 相关
+        ;; 终端复用器（2026-07 从 tmux 迁移到 herdr，自建 Guile 侧栏由 herdr 原生 sidebar 取代）
         "herdr-bin"
-        "tmux"
-        "tmuxifier"
-        "tmux-xpanes"
 
         ;; 命令行工具
         "bat"
@@ -2153,9 +2150,7 @@ end
   ;; rust
   ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
   ;; sqlite
-  ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
-  ;; tmuxifier
-  ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts"))
+  ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history"))
 #+end_src
 
 **** 引用以上的所有变量，并在这里放一些多行的环境变量
@@ -2351,7 +2346,6 @@ end
                ;; 网络工具
                "mihomo"
                "network-manager"
-               "network-manager-applet"
 
                ;; 中文字体
                "font-sarasa-gothic"

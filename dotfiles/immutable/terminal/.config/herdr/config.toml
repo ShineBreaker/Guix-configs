@@ -1,0 +1,77 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# 已完成首次引导，不重复弹 onboarding 设置。
+onboarding = false
+
+# =============================================================================
+# Herdr 配置 — 从 tmux 迁移而来（2026-07）
+# =============================================================================
+#
+# 迁移原则：tmux 肌肉记忆优先。
+#   - herdr 原生 sidebar 取代自建 Guile 长驻侧栏（sidebar-render.scm 700 行）
+#   - herdr goto（模糊导航）取代 fzf window-jump
+#   - herdr prefix+? 原生 help 取代 which-key 弹窗
+#
+# 概念映射：
+#   tmux session ≈ herdr workspace
+#   tmux window  ≈ herdr tab
+#   tmux pane    ≈ herdr pane
+#
+# 热加载：prefix+r，或 `herdr server reload-config`。
+
+# ===== 主题：跟随系统亮暗（继承 tmux 经 foot/darkman 自动切换的习惯）=====
+[theme]
+auto_switch = true
+dark_name = "terminal"     # 跟随终端 ANSI 色（对应原 tmux 无独立主题）
+light_name = "terminal"
+
+# ===== 终端 =====
+[terminal]
+# 新 pane/tab/workspace 继承源 pane 的 cwd（对应 tmux split-window -c pane_current_path）
+new_cwd = "follow"
+
+# ===== 键位：tmux 习惯优先 =====
+[keys]
+# 前缀键（原 tmux prefix C-z，短键程）。覆盖 herdr 默认 ctrl+b。
+prefix = "ctrl+x"
+
+# 分屏（对应 tmux `\` 和 `-`）
+split_vertical = "prefix+\\"           # tmux `\` (split -h) → 竖直分隔线，pane 左右排列
+split_horizontal = "prefix+minus"      # tmux `-` (split -v) → 水平分隔线，pane 上下排列
+
+# 窗格导航 Vi 风格（herdr 默认即 prefix+hjkl，显式声明便于查阅）
+focus_pane_left = "prefix+h"
+focus_pane_down = "prefix+j"
+focus_pane_up = "prefix+k"
+focus_pane_right = "prefix+l"
+
+# 标签（tmux window ≈ herdr tab；herdr 默认即此）
+new_tab = "prefix+c"
+close_pane = "prefix+x"
+close_tab = "prefix+shift+x"
+
+# 工作区（tmux session ≈ herdr workspace）
+new_workspace = "prefix+shift+c"       # tmux C = new-session
+close_workspace = "prefix+shift+k"     # tmux K = kill-session
+
+# 侧栏 / 导航
+toggle_sidebar = "prefix+b"            # tmux B → herdr 原生侧栏（默认即此）
+goto = "prefix+f"                      # tmux f fzf 跳转 → herdr goto 模糊导航
+help = "prefix+?"                      # tmux ? which-key（默认即此）
+
+# 配置/模式
+reload_config = "prefix+r"             # tmux r = 重载（覆盖 herdr 默认 prefix+shift+r）
+resize_mode = "prefix+ctrl+r"          # r 被 reload 占用，resize 移至此
+edit_scrollback = "prefix+["           # tmux [ copy-mode/回滚 → herdr edit_scrollback
+zoom = "prefix+z"                      # 窗格缩放（herdr 原生）
+
+# 无前缀直接切标签（对应 tmux M-1..5 无前缀切 window）
+[keys.indexed]
+tabs = "alt"                           # alt+1..9 直接切 tab
+
+# ===== UI =====
+[ui]
+sidebar_width = 32                     # 对应原 tmux @sidebar_width 32
+# mouse_capture / copy_on_select 保持默认 true（对应原 tmux mouse on + 拖拽自动复制）
