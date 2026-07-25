@@ -27,52 +27,52 @@
 
 ## --owner（执行者）
 
-| 值              | 说明                |
-| --------------- | ------------------- |
-| `ai`            | AI 独立完成（默认） |
-| `human`         | 人工独立完成        |
-| `collaborative` | 人机协作            |
+| 值       | 说明                |
+| -------- | ------------------- |
+| `ai`     | AI 独立完成（默认） |
+| `human`  | 人工独立完成        |
+| `collab` | 人机协作            |
 
 ## --entry / --entry-type（条目语义，可选）
 
-| 值         | 默认映射                               | 说明                 |
-| ---------- | -------------------------------------- | -------------------- |
-| `mistake`  | `type=debug`, `owner=collaborative`    | 用户纠错后的复盘卡片 |
-| `note`     | `type=workflow`, `owner=collaborative` | 长期注意事项         |
-| `ascended` | `type=debug`, `owner=collaborative`    | 飞升模式后的复盘卡片 |
+| 值         | 默认映射                        | 说明                 |
+| ---------- | ------------------------------- | -------------------- |
+| `mistake`  | `type=debug`, `owner=collab`    | 用户纠错后的复盘卡片 |
+| `note`     | `type=workflow`, `owner=collab` | 长期注意事项         |
+| `ascended` | `type=debug`, `owner=collab`    | 飞升模式后的复盘卡片 |
 
 显式传入 `--type` 或 `--owner` 时，以显式值为准。
 
 ## --status（状态，Phase 0 新增）
 
-| 值        | 说明                                  |
-| --------- | ------------------------------------- |
-| `done`    | 写作完成（新建默认）                  |
-| `stable`  | 经策展验证，长期有效                  |
-| `stale`   | >30 天未 LAST_VERIFIED                |
-| `archived`| 已归档                                |
+| 值         | 说明                   |
+| ---------- | ---------------------- |
+| `done`     | 写作完成（新建默认）   |
+| `stable`   | 经策展验证，长期有效   |
+| `stale`    | >30 天未 LAST_VERIFIED |
+| `archived` | 已归档                 |
 
 `--status stable` 时自动更新 LAST_VERIFIED 为当前时间。
 
 ## PROPERTIES 新增字段
 
-| 字段            | 说明                              |
-| --------------- | --------------------------------- |
-| `LAST_USED`     | 最后一次通过 kb get/touch 访问时间 |
-| `LAST_VERIFIED` | 最后策展验证时间                   |
-| `MERGED_INTO`   | 合并目标卡片 ID（被合并的卡片）   |
-| `MERGED_FROM`   | 合并来源卡片 ID 列表（主卡片）    |
-| `ARCHIVED_AT`   | 归档时间                          |
-| `ARCHIVE_REASON`| 归档原因                          |
+| 字段             | 说明                               |
+| ---------------- | ---------------------------------- |
+| `LAST_USED`      | 最后一次通过 kb get/touch 访问时间 |
+| `LAST_VERIFIED`  | 最后策展验证时间                   |
+| `MERGED_INTO`    | 合并目标卡片 ID（被合并的卡片）    |
+| `MERGED_FROM`    | 合并来源卡片 ID 列表（主卡片）     |
+| `ARCHIVED_AT`    | 归档时间                           |
+| `ARCHIVE_REASON` | 归档原因                           |
 
 ## 新命令概览
 
-| 命令          | 用法                                | 说明               |
-| ------------- | ----------------------------------- | ------------------ |
-| `kb touch`    | `kb touch <id> [--used-only]`       | 更新时间戳         |
-| `kb merge`    | `kb merge <primary> <sec>...`       | 合并卡片           |
-| `kb archive`  | `kb archive <id> [--stale]`         | 归档               |
-| `kb restore`  | `kb restore <id> [--status stable]` | 恢复               |
-| `kb deduplicate` | `kb deduplicate [--threshold 0.7]` | 检测重复           |
-| `kb review`   | `kb review <id> [--fix]`            | 审查卡片           |
-| `kb health`   | `kb health`                         | 健康度报告         |
+| 命令             | 用法                                | 说明       |
+| ---------------- | ----------------------------------- | ---------- |
+| `kb touch`       | `kb touch <id> [--used-only]`       | 更新时间戳 |
+| `kb merge`       | `kb merge <primary> <sec>...`       | 合并卡片   |
+| `kb archive`     | `kb archive <id> [--stale]`         | 归档       |
+| `kb restore`     | `kb restore <id> [--status stable]` | 恢复       |
+| `kb deduplicate` | `kb deduplicate [--threshold 0.7]`  | 检测重复   |
+| `kb review`      | `kb review <id> [--fix]`            | 审查卡片   |
+| `kb health`      | `kb health`                         | 健康度报告 |

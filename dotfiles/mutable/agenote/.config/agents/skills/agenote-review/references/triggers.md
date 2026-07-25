@@ -2,7 +2,7 @@
 
 > **单一真相源**：agenote-hooks 插件（`stow/pi/.config/pi/extensions/agenote-hooks/index.ts` 的 `COMPLETION_SIGNALS` 常量）以本文件的"任务完成信号"节为准。
 
-## 修正信号（→ type: debug, owner: collaborative）
+## 修正信号（→ type: debug, owner: collab）
 
 - "不对，应该是..."
 - "Actually, it should be..."
@@ -50,7 +50,6 @@
 2. **排除自注入**：最近一条用户消息若含 `<agenote-hook>` 标记（即本插件注入的评估提示），跳过检测——断开"提示词自身含完成词导致自我触发"的反馈环。
 3. **防抖**：显式信号触发后有 5 分钟冷却期。
 4. **空闲兜底（夜间无人值守）**：会话连续空闲超过 5 分钟、且本会话从未被显式信号触发过 → 自动触发一次评估。用于用户 kick-off 后离开、agent 自主完成、无人说"完成"的场景。本会话至多触发一次；一旦被显式信号触发过即永久禁用兜底，避免重复打扰。
-
 
 ### 中文显式完成
 

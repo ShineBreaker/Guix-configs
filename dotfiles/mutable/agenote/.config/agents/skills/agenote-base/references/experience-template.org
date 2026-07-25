@@ -2,16 +2,16 @@
 # format-time-string 等 Emacs Lisp 函数。不适用于 kb add CLI 流程。
 # CLI 用户请直接使用: kb add --title "标题" --category 类别 ...
 
-* TODO 任务总结：%?
+* DONE 任务总结：%?
 :PROPERTIES:
 :ID:       %(format-time-string "%Y%m%d-%H%M%S")
 :CREATED:  %(format-time-string "[%Y-%m-%d %a]")
 :CATEGORY: %(completing-read "类别: " '("emacs" "python" "rust" "go" "scheme" "shell" "nix" "web" "general"))
 :TECH:     %(completing-read "技术栈: " '("emacs-lisp" "python" "rust" "go" "scheme" "bash" "nix" "typescript" "html/css" "org-mode") nil nil nil nil "")
 :TYPE:     %(completing-read "类型: " '("debug" "refactor" "research" "workflow" "feature" "config"))
-:STATUS:   inprogress
+:STATUS:   done
 :EFFORT:
-:OWNER:    %(completing-read "执行者: " '("human" "ai" "collaborative"))
+:OWNER:    %(completing-read "执行者: " '("human" "ai" "collab"))
 :END:
 
 ** 任务描述

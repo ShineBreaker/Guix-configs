@@ -31,6 +31,9 @@ if [[ ! -x "${HERMES_BIN}" ]]; then
   hermes desktop --build-only
 fi
 
+# 2. 将桌面图标复制到icons文件夹中
+cp "${HERMES_RUNTIME}/apps/desktop/assets/icon.png" "${XDG_DATA_HOME}/icons/hicolor/1024x1024/apps/hermes.png"
+
 # 3. 进 FHS 容器启动（语义对齐 appimage-run container.scm：preserve/share/exec 一致）
 RT_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 # 用真实 WAYLAND_DISPLAY（不硬编码 wayland-0，否则 expose 不存在的 socket，

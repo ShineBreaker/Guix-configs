@@ -119,14 +119,6 @@ agenote commit -m "一句话总结"                                       # 提�
 agenote fields                                                       # 查看所有已有标签
 ```
 
-### 用户画像
-
-```
-agenote profile                           # 概览
-agenote profile <分类名>                  # 查看指定分类
-agenote profile --add "目标" --text "..."  # 追加条目
-```
-
 ### 卡片生命周期
 
 ```

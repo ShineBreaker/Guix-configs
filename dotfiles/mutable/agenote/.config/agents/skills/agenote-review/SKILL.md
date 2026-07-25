@@ -25,7 +25,7 @@ description: 会话后经验采集与留痕。**触发信号**：agenote-hooks �
 agenote list --category <相关类别> --all
 agenote get <明显相关的卡片ID>
 agenote search "<当前任务的关键技术 工具 症状>"
-agenote profile
+agenote memory
 ```
 
 **必须预检**：调试/排障、配置修改、已使用过的技术栈、与之前类似的问题。
@@ -116,7 +116,7 @@ agenote profile
 5. `agenote lint` 校验格式
 6. 传播联动 — 检查受影响的 pattern/卡片
 7. `agenote connect` 建立关联链接
-8. `agenote profile --add` 更新画像（如涉及偏好/项目变化）
+8. 如涉及偏好/项目变化，按 MEMORY 写入流程更新 `agenote memory`
 
 ### MEMORY 写入流程
 
@@ -161,11 +161,11 @@ agenote profile
 
 ### Entry type 映射
 
-| 来源语义     | `--entry`  | 推荐 type             | 推荐 owner      |
-| ------------ | ---------- | --------------------- | --------------- |
-| 用户纠错     | `mistake`  | `debug` / `config`    | `collaborative` |
-| 长期注意事项 | `note`     | `workflow` / `config` | `ai`            |
-| 飞升模式复盘 | `ascended` | `debug` / `workflow`  | `collaborative` |
+| 来源语义     | `--entry`  | 推荐 type             | 推荐 owner |
+| ------------ | ---------- | --------------------- | ---------- |
+| 用户纠错     | `mistake`  | `debug` / `config`    | `collab`   |
+| 长期注意事项 | `note`     | `workflow` / `config` | `ai`       |
+| 飞升模式复盘 | `ascended` | `debug` / `workflow`  | `collab`   |
 
 ## 卡片生命周期
 
@@ -202,7 +202,7 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 1. **知识内化检查** — 浏览最近 10 张卡片，问自己：这些经验是否已成为默认行为？
 2. **模式有效性** — 检查 patterns.org 中的模式，是否有已被新实践推翻的？
 3. **连接补全** — 扫描孤立卡片（无 connect 链接），评估是否需要建立关联
-4. **画像更新** — 检查 profile.org 是否反映当前真实偏好和项目状态
+4. **记忆更新** — 检查 MEMORY.org 与 project memory 是否反映当前真实偏好和项目状态
 
 回顾可手动执行，也可由 `agenote-curator` skill 在后台策展时一并完成。
 
@@ -214,24 +214,21 @@ done → stable(策展验证) → stale(>30天未验证) → archived(>90天)
 
 详细步骤见 [references/ascended-mode.md](references/ascended-mode.md)。
 
-## 用户画像维护
+## Memory 维护
 
 ### 触发条件
 
-- `profile.org` 的 `#+date` 距离当前日期超过 **7 天**
+- feedback / project memory 与当前偏好或项目状态不一致
 - 经验写入流程第 8 步中发现用户的**偏好变化**或**活跃项目变更**
-
-### 分类体系
-
-固定 5 个一级分类：**身份** / **偏好** / **习惯** / **活跃项目** / **目标**
 
 ### CLI 操作
 
 ```
-agenote profile                                 # 概览
-agenote profile <分类名>                        # 查看指定分类
-agenote profile --add "目标" --text "..."       # 追加条目
-echo "- 新内容" | agenote profile --set "偏好"  # 覆盖分类
+agenote memory                                  # 概览
+agenote memory --type feedback                  # 查看偏好记忆
+agenote memory --project .                      # 查看当前项目记忆
+echo "新偏好" | agenote memory --add --type feedback --title "标题" --stdin
+echo "项目状态" | agenote memory --add --type project --project <id> --title "标题" --stdin
 ```
 
 ## 留痕操作
