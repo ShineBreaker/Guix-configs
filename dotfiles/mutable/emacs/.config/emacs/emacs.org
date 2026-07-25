@@ -5,73 +5,14 @@
 #+STARTUP: content
 #+OPTIONS: toc:2
 
-* 启动顺序与模块依赖速查
-
-本文件含 8 个按顺序加载的配置域,以及本节、[[#agent-entry][Agent 修改入口]] 和末尾占位等非代码章节。模块依赖由文档顺序表达;同域内也不得把调用方移到定义方之前。
-
-| 顺序 | 配置域           | 主要功能                                                                | 必须已就绪的跨域接口                                     |
-|------+------------------+-------------------------------------------------------------------------+----------------------------------------------------------|
-|    1 | [[#startup][启动与基础设施]]   | 路径、外部命令、进程 helper、frame 生命周期、键位原语、基础行为         | 无                                                       |
-|    2 | [[#appearance][界面与外观]]       | Which-key 数据、右键菜单、帮助、modeline、tab-line、Git、主题与颜色方案 | =literal/add-frame-hook=                                   |
-|    3 | [[#editing][编辑与文本]]       | 通用编辑命令、DWIM、终端                                                | Git 的窗口路由接口                                       |
-|    4 | [[#programming][编程与开发]]       | Tree-sitter、Eglot、Flycheck、格式化、语言模式                          | 外部命令缓存、界面刷新接口                               |
-|    5 | [[#projects][项目与导航]]       | Projectile、目录与项目文件导航                                          | Git/display-buffer、终端                                 |
-|    6 | [[#org-knowledge][Org 与知识库]]     | Org、Roam、Knowledge、agenote                                           | 路径常量、=literal/call-process=                         |
-|    7 | [[#keys-completion][键位与补全]]       | Which-key 本体、直达键、前缀键、Vertico/Corfu                           | 前述所有交互命令、frame 生命周期                         |
-|    8 | [[#system-tools][系统工具与实验性]] | Guix、Dashboard、兼容性 workaround                                      | knowledge/help/color-scheme/frame;Dashboard 必须最后加载 |
-
-简化依赖图:
-
-#+begin_example
-startup -> appearance -> editing -> programming -> projects
-        -> org-knowledge -> keys-completion -> system-tools/dashboard
-#+end_example
-
-* Agent 修改入口
-:PROPERTIES:
-:CUSTOM_ID: agent-entry
-:END:
-
-后续 Agent 无需阅读全文。先用仓库脚本获得动态索引,再只读取目标子树:
-
-#+begin_example
-scripts/configctl map                 # 功能 ID、行号、代码量、noweb ref
-scripts/configctl show dashboard      # 只输出一个功能子树
-scripts/configctl find 'eglot|flycheck'
-scripts/configctl check               # 快速结构/语法/tangle 审计
-scripts/configctl load                # tangle 后 batch load
-#+end_example
-
-| 修改目标            | 功能 ID / 入口                 | 直接依赖                                  |
-|---------------------+--------------------------------+-------------------------------------------|
-| 启动路径与外部命令  | =bootstrap=                      | 无                                        |
-| 新 frame 行为       | =frame=                          | bootstrap                                 |
-| 主题、字体、深浅色  | =theme-fonts= / =color-scheme=     | frame                                     |
-| Modeline / Tab-line | =modeline= / =tab-line=            | theme-fonts                               |
-| 编辑命令与终端      | =editing-dwim= / =terminal=        | git-display                               |
-| LSP、诊断、格式化   | =programming-tools=              | bootstrap、appearance                     |
-| 项目导航            | =project-navigation=             | terminal、git-display                     |
-| Org / 知识库        | =org-core= / =knowledge= / =agenote= | bootstrap、process-helper                 |
-| 键位与补全          | =keybindings= / =completion=       | 对应命令必须先定义                        |
-| Dashboard           | =dashboard=                      | knowledge、help、color-scheme、frame      |
-| 临时兼容性处理      | =compatibility=                  | 使用方通过命名 noweb ref 在原加载位置展开 |
-
-维护约定:
-
-1. 功能章节使用稳定 =CUSTOM_ID= ;改名标题时不要改 ID。
-2. 大模块拆成 =module/section= 命名片段,章节末尾只有一个组装块写入 =main.el= 。
-3. 改动局限在一个功能子树;确有跨域接口变更时同步更新上方依赖表。
-4. 新包仍需同步 Guix 的 =home-emacs-packages= ;仅重排/精简现有代码不需要改包清单。
-5. 提交前至少运行 =scripts/configctl check= 与 =scripts/configctl load= 。
-
 * 启动与基础设施
 :PROPERTIES:
 :CUSTOM_ID: startup
 :END:
 
-Emacs 冷启动的第一阶段:GC / 路径常量 / 外部命令缓存 / Frame 生命周期 / 键位辅助 / 包管理 / 基础行为。
+Emacs 冷启动的第一阶段:GC / 路径常量 / 外部命令声明 / Frame 生命周期 / 键位辅助 / 包管理 / 基础行为。
 
-本域代码必须最先执行——后续所有功能域都依赖这里定义的常量、命令缓存与 =literal/set-key= / =literal/add-frame-hook= 等基础原语。
+本域代码必须最先执行——后续功能依赖这里定义的路径、进程、frame 与键位原语。
 
 ** GC 与启动优化
 :PROPERTIES:
@@ -81,7 +22,6 @@ Emacs 冷启动的第一阶段:GC / 路径常量 / 外部命令缓存 / Frame �
 GC 启动期优化(启动完成后由 gcmh 重置)
 
 + 与 early-init.el 的同设置重复,但保留作为 main.el 自身的防御性优化——若有人绕过 early-init.el 直接 batch-load main.el(如 =configctl load= ),GC threshold 仍需在 main.el 入口推高。
-+ early-init.el 的 =file-name-handler-alist = nil= 已足够覆盖正常启动路径,这里不再重复设置。
 + 临时调高 GC 阈值以加速启动,启动完成后由 =gcmh-mode= 接管。
 
 + =user-emacs-directory= 由当前单 profile 直接指向本目录
@@ -105,7 +45,7 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 (message "[literal-config] 基础设施加载完成")
 #+end_src
 
-** 路径常量与外部命令缓存
+** 路径常量与外部命令声明
 :PROPERTIES:
 :CUSTOM_ID: bootstrap
 :END:
@@ -146,7 +86,11 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 
 (defconst literal:tree-sitter-lib-dir
   (or (getenv "TREE_SITTER_GRAMMAR_PATH")
-      (expand-file-name "~/.guix-home/profile/lib/tree-sitter"))
+      (seq-some (lambda (dir)
+                  (let ((expanded (expand-file-name dir)))
+                    (when (file-directory-p expanded) expanded)))
+                '("~/.guix-home/profile/lib/tree-sitter"
+                  "~/.guix-profile/lib/tree-sitter")))
   "Tree-sitter grammar 动态库目录。")
 
 (defconst literal:guix-profile
@@ -163,23 +107,15 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 外部命令只保存命令名。Guix 保证包存在，实际进程启动时由当前 PATH 解析。
 
 #+begin_src emacs-lisp :noweb-ref bootstrap/executables :tangle no
-(defconst literal:executable-agenote  "agenote")
 (defconst literal:executable-aspell   "aspell")
 (defconst literal:executable-direnv   "direnv")
-(defconst literal:executable-dot      "dot")
-(defconst literal:executable-fd       "fd")
 (defconst literal:executable-fish     "fish")
 (defconst literal:executable-git      "git")
 (defconst literal:executable-godot    "godot")
 (defconst literal:executable-hunspell "hunspell")
-(defconst literal:executable-java     "java")
-(defconst literal:executable-jq       "jq")
-(defconst literal:executable-kotlinc  "kotlinc")
-(defconst literal:executable-python   "python3")
-(defconst literal:executable-rg       "rg")
 #+end_src
 
-bootstrap 组装：路径常量 + 外部命令缓存
+bootstrap 组装：路径常量 + 外部命令声明
 
 #+begin_src emacs-lisp
 <<bootstrap/paths>>
@@ -193,7 +129,6 @@ bootstrap 组装：路径常量 + 外部命令缓存
 
 统一的同步进程入口与 agenote CLI 适配层。
 
-+ =literal/call-process= :通用同步子进程(返回 =(STATUS . OUTPUT)=)
 + =literal/agenote-call= :agenote CLI 唯一入口,domain 必填,返回 plist
 + =literal/agenote-call-async= :长任务异步执行(reindex/lint/deduplicate/commit/viz)
 
@@ -205,13 +140,7 @@ Emacs 端必须为每次调用显式选择 domain —— 不依赖默认值,避�
 + daemon 长驻跨 Guix profile 更新时,缓存的 =/gnu/store/.../bin/agenote= 会指向旧 generation。
 + =literal/agenote-call= 内部按需 =(executable-find "agenote")=,让每次调用都解析当前 PATH。
 
-#+begin_src emacs-lisp :noweb-ref helpers/call-process :tangle no
-(defun literal/call-process (command &rest args)
-  "同步执行 COMMAND 与 ARGS,返回 (STATUS . OUTPUT)。"
-  (with-temp-buffer
-    (cons (or (apply #'call-process command nil t nil (remq nil args)) -1)
-          (string-trim (buffer-string)))))
-
+#+begin_src emacs-lisp :noweb-ref helpers/agenote-process :tangle no
 (defconst literal:agenote-valid-domains '(human agenote)
   "agenote CLI 支持的 domain 取值。与 ~agenote --help~ 对齐。")
 
@@ -334,14 +263,14 @@ Emacs。结果写入 `*agenote-<command>*' buffer(special-mode,`g' 重跑,`q' �
   "Keymap for `*agenote-<command>*' async result buffers.")
 
 (defun literal/agenote-call-string (domain command &rest args)
-  "同步调 agenote,返回 stdout 字符串(向后兼容 `literal/call-process' 调用)。
+  "同步调 agenote,返回 stdout 字符串，供只消费文本的旧调用点使用。
 DOMAIN/COMMAND/ARGS 同 `literal/agenote-call'。失败返回空串。
 新代码应直接用 `literal/agenote-call';本 wrapper 仅为兼容旧调用点保留。"
   (plist-get (apply #'literal/agenote-call domain command args) :stdout))
 #+end_src
 
 #+begin_src emacs-lisp
-<<helpers/call-process>>
+<<helpers/agenote-process>>
 #+end_src
 
 ** Frame 生命周期与 daemon
@@ -543,7 +472,7 @@ GC 策略、文件备份、历史记录、自动保存、custom-file 位置等�
 + ~savehist~ / =recentf= :minibuffer 历史与最近文件持久化
 + ~desktop~ :会话恢复(daemon 默认关闭,避免恢复成本转移到启动)
 + ~custom-file~ :指向 =etc/custom.el= ,避免 customize 污染 init.el
-+ 失去焦点时自动保存所有 buffer
++ 失去焦点后在空闲期保存正常访问的本地文件 buffer；不在焦点事件里同步写盘，也不保存内部/伪造临时 buffer
 
 GCMH + 智能垃圾回收管理 (启动后接管 GC)
 + =gcmh-idle-delay 'auto'= 让 GCMH 自适应 idle 时间 (短空闲快 GC、长空闲等更空闲再 GC), 避免编辑过程中被打断。
@@ -589,21 +518,54 @@ GCMH + 智能垃圾回收管理 (启动后接管 GC)
     (load custom-file t)))
 
 (use-package savehist
-  :defer 0.5
+  :demand t
   :config
   (savehist-mode 1))
 
 (use-package recentf
-  :defer 1
+  :demand t
   :custom
   (recentf-max-saved-items 300)
   :config
   (recentf-mode 1))
 
-(add-function :after after-focus-change-function
-              (lambda ()
-                (unless (frame-focus-state)
-                  (save-some-buffers t))))
+(defconst literal:focus-save-idle-delay 1
+  "失焦后保存用户文件 buffer 前等待的空闲秒数。")
+
+(defvar literal--focus-save-timer nil
+  "失焦保存的 pending idle timer。")
+
+(defun literal/user-file-buffer-p ()
+  "当前 buffer 是否为正常访问的、可保存的本地用户文件 buffer。"
+  (and buffer-file-name
+       buffer-file-truename
+       (buffer-modified-p)
+       (not buffer-read-only)
+       (not (buffer-base-buffer))
+       (not (file-remote-p buffer-file-name))))
+
+(defun literal/save-user-file-buffers ()
+  "保存已修改的本地用户文件 buffer，不触碰内部或远程 buffer。"
+  (setq literal--focus-save-timer nil)
+  (save-some-buffers t #'literal/user-file-buffer-p))
+
+(defun literal/any-frame-focused-p ()
+  "任一存活 frame 已聚焦或焦点状态未知时返回非 nil。"
+  (seq-some (lambda (frame)
+              (frame-focus-state frame))
+            (frame-list)))
+
+(defun literal/schedule-focus-save ()
+  "根据当前焦点状态安排或取消空闲保存。"
+  (when (timerp literal--focus-save-timer)
+    (cancel-timer literal--focus-save-timer)
+    (setq literal--focus-save-timer nil))
+  (unless (literal/any-frame-focused-p)
+    (setq literal--focus-save-timer
+          (run-with-idle-timer literal:focus-save-idle-delay nil
+                               #'literal/save-user-file-buffers))))
+
+(add-function :after after-focus-change-function #'literal/schedule-focus-save)
 
 (unless (or (daemonp) noninteractive)
   (server-mode 1))
@@ -832,6 +794,7 @@ TITLE 为分类标题,BINDINGS 为 ((key . desc) ...) 列表。"
 Starship 风格响应式 mode-line:
 + 四档布局保留，但 redisplay 只经过一个顶层 renderer
 + tier、路径和状态在一次调用内各计算一次。
++ 图标、路径和 buffer 名采用缓存；路径中的单独 =.= 目录保留为 =.= ，避免隐藏目录缩写产生空字符串。
 
 #+begin_src emacs-lisp
 (require 'battery)
@@ -858,10 +821,18 @@ Starship 风格响应式 mode-line:
 (defvar literal:modeline--nerd-icons-available
   (require 'nerd-icons nil t))
 
+(defvar literal:modeline--icon-cache (make-hash-table :test #'equal)
+  "Mode-line 静态图标缓存。")
+
+(defconst literal:modeline-icon-cache-limit 256
+  "Mode-line 图标缓存的最大条目数。")
+
 (defvar-local literal:modeline--flymake-counts '(0 0))
 (defvar-local literal:modeline--eglot-info nil)
 (defvar-local literal:modeline--project-cache :unknown)
 (defvar-local literal:modeline--vc-state-cache :unknown)
+(defvar-local literal:modeline--path-cache nil)
+(defvar-local literal:modeline--name-cache nil)
 
 (defun literal/modeline-tier (&optional window)
   "按 WINDOW 宽度返回 wide、medium、narrow 或 compact。"
@@ -882,15 +853,31 @@ NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\")。自动按前缀分�
 TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font），
 故不按 display 类型守卫，只看 nerd-icons 包是否可用。出错时返回空串。"
   (if literal:modeline--nerd-icons-available
-      (or (ignore-errors
-            (cond
-             ((and file (stringp file)) (nerd-icons-icon-for-file file))
-             ((string-prefix-p "nf-md-" name) (nerd-icons-mdicon name))
-             ((string-prefix-p "nf-fa-" name) (nerd-icons-faicon name))
-             (t (if (string-prefix-p "nf-" name)
-                    (nerd-icons-mdicon name)
-                  (nerd-icons-faicon name)))))
-          "")
+      (let* ((key (if (and file (stringp file))
+                      (list name (file-name-nondirectory file))
+                    name))
+             (cached (gethash key literal:modeline--icon-cache :missing)))
+        (if (not (eq cached :missing))
+            cached
+          (let ((icon
+                 (or (ignore-errors
+                       (cond
+                        ((and file (stringp file))
+                         (nerd-icons-icon-for-file file))
+                        ((string-prefix-p "nf-md-" name)
+                         (nerd-icons-mdicon name))
+                        ((string-prefix-p "nf-fa-" name)
+                         (nerd-icons-faicon name))
+                        (t
+                         (if (string-prefix-p "nf-" name)
+                             (nerd-icons-mdicon name)
+                           (nerd-icons-faicon name)))))
+                     "")))
+            (when (>= (hash-table-count literal:modeline--icon-cache)
+                      literal:modeline-icon-cache-limit)
+              (clrhash literal:modeline--icon-cache))
+            (puthash key icon literal:modeline--icon-cache)
+            icon)))
     ""))
 
 (defun literal/modeline--with-icon (icon text)
@@ -926,7 +913,10 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
           (mapcar
            (lambda (part)
              (if (string-prefix-p "." part)
-                 (concat "." (substring (string-remove-prefix "." part) 0 1))
+                 (let ((rest (string-remove-prefix "." part)))
+                   (if (string-empty-p rest)
+                       "."
+                     (concat "." (substring rest 0 1))))
                (substring part 0 1)))
            parts)))
     (concat remote (string-join short "/"))))
@@ -945,7 +935,8 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
 
 (defun literal/modeline--reset-project-cache (&rest _)
   "失效当前 buffer 的 project 缓存。"
-  (setq literal:modeline--project-cache :unknown))
+  (setq literal:modeline--project-cache :unknown
+        literal:modeline--path-cache nil))
 
 (defun literal/modeline--refresh-vc-state (&rest _)
   "通过 VC 公开接口刷新当前 buffer 的状态缓存。"
@@ -986,34 +977,47 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
   (if (or (eq tier 'compact) (not buffer-file-name))
       ""
     (let* ((project (literal/modeline--project-info))
-           (root (car-safe project))
-           (directory (file-name-directory buffer-file-name))
-           (path (if (and root (file-in-directory-p buffer-file-name root))
-                     (file-relative-name directory root)
-                   directory))
-           (display (literal/modeline--path-initials path)))
-      (if (string-empty-p (or display ""))
-          ""
-        (literal/modeline--segment
-         (literal/modeline--with-icon
-          (literal/modeline--icon "nf-md-folder_open")
-          (truncate-string-to-width display literal:modeline-path-max-width 0 nil t))
-         'shadow)))))
+           (key (list buffer-file-name project literal:modeline-path-max-width)))
+      (if (equal key (car-safe literal:modeline--path-cache))
+          (cdr literal:modeline--path-cache)
+        (let* ((root (car-safe project))
+               (directory (file-name-directory buffer-file-name))
+               (path (if (and root (file-in-directory-p buffer-file-name root))
+                         (file-relative-name directory root)
+                       directory))
+               (display (literal/modeline--path-initials path))
+               (segment
+                (if (string-empty-p (or display ""))
+                    ""
+                  (literal/modeline--segment
+                   (literal/modeline--with-icon
+                    (literal/modeline--icon "nf-md-folder_open")
+                    (truncate-string-to-width
+                     display literal:modeline-path-max-width 0 nil t))
+                   'shadow))))
+          (setq literal:modeline--path-cache (cons key segment))
+          segment)))))
 
 (defun literal/modeline--name-segment (tier)
   "返回 TIER 对应的 buffer 名。compact 档由 major-left 段独占显示 major,
 此处返回空串避免 compact 档 major 名重复出现。"
   (if (eq tier 'compact)
       ""
-    (let* ((name (if buffer-file-name
-                     (file-name-nondirectory buffer-file-name)
-                   (buffer-name)))
-           (width (pcase tier ('wide 32) ('medium 24) (_ 18))))
-      (literal/modeline--segment
-       (literal/modeline--with-icon
-        (literal/modeline--icon "nf-fa-file_o" buffer-file-name)
-        (truncate-string-to-width name width 0 nil t))
-       'font-lock-function-name-face))))
+    (let ((key (list tier buffer-file-name (buffer-name))))
+      (if (equal key (car-safe literal:modeline--name-cache))
+          (cdr literal:modeline--name-cache)
+        (let* ((name (if buffer-file-name
+                         (file-name-nondirectory buffer-file-name)
+                       (buffer-name)))
+               (width (pcase tier ('wide 32) ('medium 24) (_ 18)))
+               (segment
+                (literal/modeline--segment
+                 (literal/modeline--with-icon
+                  (literal/modeline--icon "nf-fa-file_o" buffer-file-name)
+                  (truncate-string-to-width name width 0 nil t))
+                 'font-lock-function-name-face)))
+          (setq literal:modeline--name-cache (cons key segment))
+          segment)))))
 
 (defun literal/modeline--branch-segment (tier)
   "返回 TIER 对应的 VCS 分支。"
@@ -1094,14 +1098,14 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
     ""))
 
 (defun literal/modeline--location-segment (tier)
-  "返回 TIER 对应的行列坐标 (石石石,%c)。compact 档不显示。
+  "返回 TIER 对应的行列坐标 (%l,%c)。compact 档不显示。
 wide/medium/narrow 都显示(原版行为)。"
   (if (eq tier 'compact)
       ""
     (literal/modeline--segment
      (literal/modeline--with-icon
       (literal/modeline--icon "nf-md-map_marker")
-      (format "(%d,%d)" (line-number-at-pos) (current-column)))
+      (format "(%s)" (format-mode-line "%l,%c")))
      'shadow)))
 
 (defun literal/modeline--diagnostics-segment (tier)
@@ -1310,6 +1314,9 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 (defconst literal:tabs-name-max-width 36
   "单个标签名最大宽度。")
 
+(defvar-local literal/tab-line--name-cache nil
+  "当前 buffer 的 tab-line 标签名缓存。")
+
 (defun literal/tab-visible-p (buffer)
   "判断 BUFFER 是否应该显示在标签栏中。
 白名单机制:只有关联文件的 buffer 才显示。"
@@ -1436,19 +1443,25 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
 
 (defun literal/tab-line-tab-name (buffer &optional _buffers)
   "生成 BUFFER 的标签名(图标 + 名称 + 修改标记)。"
-  (let* ((name (truncate-string-to-width
-                (buffer-name buffer)
-                literal:tabs-name-max-width 0 nil t))
-         (icon (when literal:modeline--nerd-icons-available
-                 (require 'nerd-icons)
-                 (with-current-buffer buffer
-                   (nerd-icons-icon-for-buffer))))
-         (prefix (if (and (stringp icon)
-                          (not (string-empty-p icon)))
-                     (concat icon " ")
-                   ""))
-         (suffix (if (buffer-modified-p buffer) " ●" "")))
-    (concat prefix name suffix)))
+  (with-current-buffer buffer
+    (let ((key (list (buffer-name) buffer-file-name major-mode
+                     (buffer-modified-p))))
+      (if (equal key (car-safe literal/tab-line--name-cache))
+          (cdr literal/tab-line--name-cache)
+        (let* ((name (truncate-string-to-width
+                      (buffer-name)
+                      literal:tabs-name-max-width 0 nil t))
+               (icon (when literal:modeline--nerd-icons-available
+                       (require 'nerd-icons)
+                       (nerd-icons-icon-for-buffer)))
+               (prefix (if (and (stringp icon)
+                                (not (string-empty-p icon)))
+                           (concat icon " ")
+                         ""))
+               (suffix (if (buffer-modified-p) " ●" ""))
+               (label (concat prefix name suffix)))
+          (setq literal/tab-line--name-cache (cons key label))
+          label)))))
 
 (defun literal--tab-line-help-echo (selected-p)
   "返回标签的中文提示文本。"
@@ -1677,7 +1690,7 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + COMMIT_EDITMSG 经 ~server-window~ 路由到上方主编辑窗口（保持「上编辑 + 下 magit」布局一致）
 + *文件级操作* ：blame / log / diff / stage / discard / timemachine
 + *仓库级操作* ：push / pull / stash push / stash pop
-+ 所有操作复用启动域缓存的 =literal:executable-git= 。
++ 所有操作复用启动域声明的 =literal:executable-git= 。
 
 #+begin_src emacs-lisp :noweb-ref appearance/git-commands :tangle no
 (defun literal/git-repo-root (&optional file)
@@ -1875,7 +1888,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 
 背景透明度、字体高度、行号、括号匹配、鼠标支持、ef-themes、spacious-padding、ultra-scroll、pulsar。
 
-+ *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。仅 GUI 加载主题;TTY 不加载(背景会遮挡终端模糊背景),改用终端 ANSI 语义色覆盖,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
++ *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。daemon 启动时全局预载主题以消除 GUI client 首用成本；TTY frame 随后用终端 ANSI 语义色和透明背景覆盖,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
 + *字体大小* :110(11pt),由 =literal:default-font-height= 控制
 + *行号* :相对行号 + 自适应宽度
 + 所有 ~display-dependent~ 设置都通过 =literal/apply-frame-appearance= 在新 frame 创建时触发
@@ -1885,7 +1898,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 :CUSTOM_ID: mixed-gui-tty-constraints
 :END:
 
-daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的设置不能在启动时一次性决定,必须 per-frame。现代终端(foot/tmux)普遍支持真彩(24-bit),但 ef-themes 的主题背景会涂满整个 frame、遮挡终端的模糊背景,故本配置 TTY 下不加载 ef-themes,改用终端 ANSI 语义色(由 foot + darkman 配色方案统一驱动)覆盖前景,背景一律 =unspecified= 实现透明。
+daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的 frame 参数仍必须 per-frame。Emacs theme 是全局状态；为消除首个 GUI client 的主题加载成本，daemon 启动时预载 Ef theme。TTY client 创建后立即用终端 ANSI 语义色(由 foot + darkman 配色方案统一驱动)覆盖主要 face，背景统一设为 =unspecified= 保持透明。独立 TTY 实例仍不会启用 Ef theme。
 
 #+attr_org: :width 75
 | 设置/包          | daemon 启动期陷阱             | TTY 行为                | 处理方式                            |
@@ -1895,14 +1908,14 @@ daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的
 | ultra-scroll     | 同上                          | 无效果                  | 无条件启用(GUI client 需要)         |
 | diff-hl(TTY)     | 无 fringe,fringe 指示器不可见 | 改用 margin             | =fboundp= 守卫 + TTY 分支按需启用     |
 | fringe 宽度      | 行号函数若清零 fringe         | —                       | 禁止在行号函数清零 fringe(详见下表) |
-| ef-themes        | =(display-graphic-p)= 永远 nil | 不加载主题,改用 ANSI 色 | =literal/display-supports-themes-p= 仅 GUI 加载主题 |
+| ef-themes        | =(display-graphic-p)= 永远 nil | daemon 继承全局主题后覆盖 | daemon 预载；TTY frame 立即重设 ANSI face 与透明背景 |
 | TTY 配色         | 无 alpha 通道                 | 终端 ANSI 语义色 + 透明 | =literal/apply-terminal-faces= 背景设 =unspecified= |
 | Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染          | 守卫改为 =literal:modeline--nerd-icons-available=,不查 display |
 #+TBLFM: $2=setq-default= 是全局副作用
 
-TTY 背景透明由 =literal/apply-terminal-faces= 实现:TTY 下不加载 ef-themes(主题背景会遮挡终端模糊背景),改用终端 ANSI 语义色覆盖前景,并把会整块涂背景的 face 背景设为 =unspecified=,让终端的模糊背景穿透。该函数只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。语义色(cyan/red/brightyellow 等)由终端配色方案(foot + darkman)统一驱动,与 tmux 状态栏一致。
+TTY 背景透明由 =literal/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，因此创建 frame 后立即用终端 ANSI 语义色覆盖主要前景，并把会整块涂背景的 face 背景设为 =unspecified=,让终端的模糊背景穿透。该函数只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。语义色(cyan/red/brightyellow 等)由终端配色方案(foot + darkman)统一驱动,与 tmux 状态栏一致。
 
-行号宽度函数 =literal/adjust-line-number-width= 故意不调 =(set-window-fringes ... 0)= ——=diff-hl= 和 =flymake= 的 fringe 指示器(=flymake-fringe-indicator-position= 设为 =left-fringe=)依赖 fringe 宽度,清零会让它们全部消失。
+行号设置函数 =literal/setup-file-line-numbers= 故意不调 =(set-window-fringes ... 0)= ——=diff-hl= 和 =flymake= 的 fringe 指示器(=flymake-fringe-indicator-position= 设为 =left-fringe=)依赖 fringe 宽度,清零会让它们全部消失。
 
 #+begin_src emacs-lisp
 (defcustom literal:frame-background-opacity 88
@@ -1925,16 +1938,23 @@ TTY 背景透明由 =literal/apply-terminal-faces= 实现:TTY 下不加载 ef-th
 (setq display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
 
-(defun literal/adjust-line-number-width ()
-  "按当前 buffer 的总行数设置行号列宽度,避免大文件滚动时列宽跳变。"
-  (when (and (boundp 'display-line-numbers-width)
-             buffer-file-name
-             global-display-line-numbers-mode)
-    (let* ((max-line (line-number-at-pos (point-max) 'absolute))
-           (digits (max 3 (length (number-to-string max-line)))))
-      (setq display-line-numbers-width (1+ digits)))))
+(defcustom literal:large-file-size-threshold (* 2 1024 1024)
+  "关闭高成本显示功能的文件大小阈值（字节）。"
+  :type 'integer
+  :group 'literal)
 
-(add-hook 'find-file-hook #'literal/adjust-line-number-width)
+(defun literal/setup-file-line-numbers ()
+  "为当前文件设置行号；大型文件直接关闭，避免扫描完整 buffer。"
+  (if (> (buffer-size) literal:large-file-size-threshold)
+      (display-line-numbers-mode -1)
+    (when (and (boundp 'display-line-numbers-width)
+               buffer-file-name
+               display-line-numbers)
+      (let* ((max-line (line-number-at-pos (point-max) 'absolute))
+             (digits (max 3 (length (number-to-string max-line)))))
+        (setq display-line-numbers-width (1+ digits))))))
+
+(add-hook 'find-file-hook #'literal/setup-file-line-numbers)
 
 (dolist (mode '(ghostel-mode term-mode eshell-mode shell-mode
                              dashboard-mode special-mode
@@ -1948,8 +1968,8 @@ TTY 背景透明由 =literal/apply-terminal-faces= 实现:TTY 下不加载 ef-th
 
 (defun literal/apply-terminal-faces (&optional frame)
   "为 TTY FRAME 应用终端语义色覆盖（仅 TTY，GUI 为 no-op）。
-TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 face 退回 Emacs 默认。
-本函数用终端 ANSI 语义色覆盖前景，并把会整块涂背景的 face 背景设为 unspecified，
+daemon 中 TTY frame 会继承全局 Ef theme；本函数用终端 ANSI 语义色覆盖前景，
+并把会整块涂背景的 face 背景设为 unspecified，
 让终端的模糊背景穿透。语义色（cyan/red/brightyellow 等）由终端配色方案统一驱动，
 与 tmux 状态栏、darkman 切换一致。仅在真实 TTY（非 batch、≥8 色）下生效。"
   (condition-case err
@@ -1958,6 +1978,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
                  (>= (display-color-cells frame) 8))
         (let ((tty (or frame (selected-frame))))
           (with-selected-frame tty
+            (set-face-attribute 'default                  tty :background 'unspecified)
             ;; 前景语义色（保留终端配色方案驱动的可读对比）
             (set-face-attribute 'highlight                tty :background 'unspecified :foreground "brightwhite")
             (set-face-attribute 'region                   tty :background 'unspecified :foreground "brightwhite" :extend nil)
@@ -1990,7 +2011,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
   "为 FRAME 应用所有 display-dependent 外观设置。
 + GUI: 字体高度、透明度、window-divider、tab-line face 重算
 + TTY: 背景透明（清遮挡终端背景的 face 背景）、diff-hl margin 模式。
-  TTY 的颜色由 ef-themes 直接提供（真彩/256 色），不再用 ANSI 16 色覆盖。"
+  TTY 的主要 face 使用终端 ANSI 语义色覆盖。"
   (condition-case err
       (with-selected-frame (or frame (selected-frame))
         (let ((graphic-p (display-graphic-p)))
@@ -2029,7 +2050,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
               #'literal/apply-tab-line-button-preset)))
 
 (use-package spacious-padding
-  :defer 0.5
+  :demand t
   :custom
   (spacious-padding-widths
    '(:internal-border-width 8
@@ -2046,7 +2067,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
     (literal/apply-terminal-faces)))
 
 (use-package ultra-scroll
-  :defer 0.5
+  :demand t
   :init
   (setq scroll-conservatively 101
         scroll-margin 0
@@ -2055,7 +2076,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
   (ultra-scroll-mode 1))
 
 (use-package pulsar
-  :defer 0.5
+  :demand t
   :custom
   (pulsar-pulse t)
   (pulsar-delay 0.045)
@@ -2173,7 +2194,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
     (setq literal:which-key-descriptions-applied t)))
 
 (with-eval-after-load 'which-key
-  ;; 先注册 literal/set-key 收集的延迟描述
+  ;; 先注册 literal/bind 收集的延迟描述
   (literal/register-pending-wk-descs)
   ;; 再注册集中维护的描述
   (literal/which-key-apply-descriptions))
@@ -2184,7 +2205,7 @@ TTY 不加载 ef-themes（主题背景会遮挡终端的模糊背景），故 fa
 :CUSTOM_ID: color-scheme
 :END:
 
-ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。仅 GUI 加载主题(=literal/display-supports-themes-p=);TTY 不加载主题(背景会遮挡终端模糊背景),改由 [[#mixed-gui-tty-constraints][=literal/apply-terminal-faces=]] 用终端 ANSI 语义色覆盖。
+ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时即预载当前主题并注册监听器，让首个 GUI client 不承担主题加载；TTY frame 随后由 [[#mixed-gui-tty-constraints][=literal/apply-terminal-faces=]] 清除背景并覆盖终端 ANSI 语义色。
 
 + =literal/color-scheme-init= 注册 D-Bus 监听器,深浅色变化时自动 =ef-themes-select= 对应主题
 + 通过 [[#frame][Frame 生命周期]] 在新 frame 创建时应用当前色彩状态
@@ -2282,8 +2303,7 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。仅 GUI 加载主�
 (defun literal/color-scheme-apply-theme (mode)
   "根据 MODE 加载对应的主题并保存状态。
 MODE 为 'light 或 'dark。
-当前 frame 支持主题（GUI 或 256 色以上 TTY）时加载；daemon 模式下只要存在
-任意支持主题的 frame 即加载。"
+独立实例仅在 GUI frame 中加载；daemon 在无 frame 阶段也预载主题。"
   (setq literal/color-scheme-current-mode mode)
   (literal/color-scheme-save-state mode)
   (unless literal/color-scheme--applying-theme
@@ -2293,8 +2313,8 @@ MODE 为 'light 或 'dark。
                           ('light literal/color-scheme-light-theme)
                           (_ nil))))
       (when target-theme
-        (when (or (literal/display-supports-themes-p)
-                  (and (daemonp) (literal/graphic-frame-exists-p)))
+        (when (or (daemonp)
+                  (literal/display-supports-themes-p))
           (unless (eq (car custom-enabled-themes) target-theme)
             (ef-themes-load-theme target-theme))
           (message "[color-scheme] 已同步主题: %s" target-theme))))))
@@ -2343,24 +2363,12 @@ MODE 为 'light 或 'dark。
 #+attr_org: :width 50
 | 运行模式   | 触发时机            | 原因                            |
 |------------+---------------------+---------------------------------|
-| daemon     | 首个图形 frame 创建 | 启动期无 GUI frame,无法加载主题 |
-| 独立 Emacs | 立即初始化          | 启动时 selected-frame 已存在    |
-
-daemon 模式下 =literal/color-scheme-delayed-init= 通过 [[#frame][Frame 生命周期]] 的 frame-created hook 注册,执行一次后自移除。
+| daemon     | daemon 启动阶段 | 启动时间不敏感，提前支付主题加载与 D-Bus 注册成本 |
+| 独立 Emacs | 立即初始化       | 启动时 selected-frame 已存在                      |
 
 #+begin_src emacs-lisp :noweb-ref appearance/color-scheme-init :tangle no
-(defun literal/graphic-frame-exists-p ()
-  "返回当前会话中是否存在任意 GUI frame。"
-  (catch 'found
-    (dolist (frame (frame-list))
-      (when (display-graphic-p frame)
-        (throw 'found t)))
-    nil))
-
 (defun literal/display-supports-themes-p (&optional frame)
-  "FRAME（默认 selected-frame）是否应加载 ef-themes 主题。
-仅 GUI frame 加载主题；TTY 即使支持真彩也不加载——主题背景会遮挡终端的
-模糊背景，TTY 改由 =literal/apply-terminal-faces= 用终端 ANSI 语义色覆盖。"
+  "FRAME（默认 selected-frame）是否为可直接呈现 Ef theme 的 GUI frame。"
   (with-selected-frame (or frame (selected-frame))
     (display-graphic-p)))
 
@@ -2402,23 +2410,9 @@ daemon 模式下 =literal/color-scheme-delayed-init= 通过 [[#frame][Frame 生�
             (ef-themes-load-theme target-theme)
             (message "[color-scheme] 新 frame 同步主题: %s" target-theme)))))))
 
-(defun literal/color-scheme-delayed-init (&optional frame)
-  "延迟初始化颜色方案（daemon 模式首帧创建时触发）。
-仅执行一次，之后自动移除自身。首帧可以是 GUI 或支持真彩/256 色的 TTY。"
-  (when (and frame
-             (literal/display-supports-themes-p frame)
-             (not literal/color-scheme--initialized))
-    (with-selected-frame frame
-      (require 'ef-themes)
-      (literal/color-scheme-init)))
-  nil)
-
-(if (daemonp)
-    (progn
-      (literal/add-frame-created-hook #'literal/color-scheme-delayed-init)
-      (literal/add-frame-created-hook #'literal/color-scheme-apply-for-frame))
-  (require 'ef-themes)
-  (literal/color-scheme-init))
+(require 'ef-themes)
+(literal/color-scheme-init)
+(literal/add-frame-created-hook #'literal/color-scheme-apply-for-frame)
 #+end_src
 
 *** Face 与缓冲区刷新
@@ -2465,19 +2459,23 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 
 (defun literal/color-scheme-refresh-registered-buffers ()
   "重新渲染所有可见窗口中已注册 mode 的缓冲区。"
-  (dolist (window (window-list nil 'no-minibuf))
-    (when (window-live-p window)
-      (let ((buffer (window-buffer window)))
-        (when (buffer-live-p buffer)
-          (with-current-buffer buffer
-            (let ((refresher (cdr (assq major-mode literal/theme-buffer-refreshers))))
-              (when (and refresher (functionp refresher))
-                (condition-case err
-                    (with-selected-window window
-                      (funcall refresher))
-                  (error
-                   (message "[color-scheme] buffer-refresh %s failed: %S"
-                            major-mode (error-message-string err))))))))))))
+  (dolist (frame (frame-list))
+    (when (frame-live-p frame)
+      (dolist (window (window-list frame 'no-minibuf))
+        (when (window-live-p window)
+          (let ((buffer (window-buffer window)))
+            (when (buffer-live-p buffer)
+              (with-current-buffer buffer
+                (let ((refresher
+                       (cdr (assq major-mode literal/theme-buffer-refreshers))))
+                  (when (and refresher (functionp refresher))
+                    (condition-case err
+                        (with-selected-window window
+                          (funcall refresher))
+                      (error
+                       (message "[color-scheme] buffer-refresh %s failed: %S"
+                                major-mode
+                                (error-message-string err))))))))))))))
 
 (literal/register-theme-refresh! #'literal/color-scheme-apply-custom-face-colors)
 (literal/register-theme-refresh! #'literal/color-scheme-refresh-registered-buffers)
@@ -2513,6 +2511,7 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 + ~smartparens~ :替代 ~electric-pair-mode~ ,支持 wrap/unwrap/slurp/barf
 + ~diff-hl~ :fringe 显示 Git 差异(终端用 margin)
 + 文档模式(org/markdown/text)自动 =visual-line-mode=
++ =global-so-long-mode= 自动降级超长行 buffer；大于阈值的文件关闭行号并跳过全 buffer 行数扫描
 
 #+begin_src emacs-lisp
 (setq-default indent-tabs-mode nil
@@ -2522,6 +2521,8 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
               truncate-lines t
               word-wrap nil)
 
+(global-so-long-mode 1)
+
 (show-paren-mode 1)
 (save-place-mode 1)
 (repeat-mode 1)
@@ -2529,7 +2530,7 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
   (setq show-paren-context-when-offscreen 'child-frame))
 
 (use-package editorconfig
-  :defer 0.3
+  :demand t
   :custom
   (editorconfig-trim-whitespaces-mode
    (if (fboundp 'delete-trailing-whitespace-mode)
@@ -3042,8 +3043,8 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
       (flymake-show-buffer-diagnostics))))
 
 (use-package envrc
-  :defer 0.5
-  :if literal:executable-direnv
+  :demand t
+  :if (executable-find literal:executable-direnv)
   :config
   (envrc-global-mode 1))
 
@@ -3061,19 +3062,20 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 + 各 mode 以 =:defer t= + =:mode= 触发,lazy-load
 + Arei(Guile 开发)只在真实 Scheme buffer 启用,跳过 org src 临时 buffer
 + *Arei 兼容性*:arei 0.9.7 的 Guix =.elc= 与 Emacs 31 =buffer-local-set-state= 宏不兼容。配置从 =.el= 源加载绕过(在 [[#compatibility][实验性与待确认]] 的 =emacs31/arei-compat= 片段定义,此处展开);=arei-mode= 调用包裹 =condition-case=,防止拖垮 scheme-mode 染色。Arei 的 =:init= 在 use-package 展开时立即执行(先于 autoload),确保首次加载就走源。
++ *Yasnippet 兼容性*:旧 =.elc= 缺少 Emacs 31 =define-globalized-minor-mode= 生成的 buffer-local 状态变量，会在新 client 的 major-mode hook 中报错。daemon 启动时从 =yasnippet.el= 源加载并立即启用，避免 timer 首用失败。
 
 #+begin_src emacs-lisp
 (use-package gdscript-mode
   :mode "\\.gd\\'"
   :defer t
   :custom
-  (gdscript-godot-executable (or literal:executable-godot "godot")))
+  (gdscript-godot-executable literal:executable-godot))
 
 (use-package fish-mode :mode "\\.fish\\'" :defer t)
 (use-package fish-completion
   :defer t
   :config
-  (when literal:executable-fish
+  (when (executable-find literal:executable-fish)
     (global-fish-completion-mode)))
 (add-to-list 'auto-mode-alist '("\\.json\\'" . json-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.rs\\'" . rust-ts-mode))
@@ -3092,8 +3094,9 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (use-package web-mode :mode ("\\.html\\'" "\\.jsx\\'" "\\.tsx\\'" "\\.vue\\'") :defer t)
 (use-package zig-mode :mode "\\.zig\\'" :defer t)
 
-;; Arei 兼容性 shim 定义在 compatibility 域,此处展开到加载点。
+<<emacs31/source-load-compat>>
 <<emacs31/arei-compat>>
+<<emacs31/yasnippet-compat>>
 
 (use-package arei
   :defer t
@@ -3101,7 +3104,12 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
   (literal--load-arei-from-source)
   :hook (scheme-mode . literal--maybe-enable-arei-mode))
 
-(use-package yasnippet :defer 0.5 :config (yas-global-mode 1))
+(use-package yasnippet
+  :demand t
+  :init
+  (literal--load-yasnippet-from-source)
+  :config
+  (yas-global-mode 1))
 (use-package yasnippet-snippets :after yasnippet :defer t)
 
 (use-package csharp-mode
@@ -3140,6 +3148,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 
 + 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
 + =project-switch-commands= = Dired / consult-fd / consult-ripgrep
++ Emacs 31 的命令项格式为 =(COMMAND LABEL &optional KEY)= ，显式键避免依赖 =project-prefix-map= 的间接查找。
 + =consult-fd= : 项目内快速文件搜索( =literal/find-file-in-project= ),fd 缺失时降级为 find
 + ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
 + 项目前缀 =C-x p= 在 [[#keybindings][键位与补全]] 域绑定
@@ -3189,9 +3198,9 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 ;; switch-commands 控制 project-switch-project 后的默认动作;更细粒度的 C-x p
 ;; 入口在 [[#keybindings][前缀键体系]] 注册,这里只设默认。
 (setq project-switch-commands
-      (list (cons "Dired" #'project-dired)
-            (cons "Find file (consult-fd)" #'literal/find-file-in-project)
-            (cons "Ripgrep" #'literal/project-search)))
+      '((project-dired "打开目录" ?d)
+        (literal/find-file-in-project "寻找文件" ?f)
+        (literal/project-search "查找关键字" ?r)))
 
 ;; ibuffer 用内置 predicate filter 按 project.el 已知根目录分组。
 (with-eval-after-load 'ibuffer
@@ -3215,8 +3224,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
   "用 consult-fd 查找当前项目内文件。
 
 在 project.el 项目内时限定到项目根目录;否则从当前目录搜索。
-依赖外部命令 fd(启动期缓存在 `literal:executable-fd'),缺失时
-consult-fd 自动降级为 consult-find(find 命令)。"
+依赖外部命令 fd；缺失时 consult-fd 自动降级为 consult-find(find 命令)。"
   (interactive)
   (require 'consult)
   (let ((default-directory (literal/project-root-or-default)))
@@ -4055,7 +4063,7 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 <<compat/which-key-width>>
 
 (use-package which-key
-  :defer 0.3
+  :demand t
   :config
   (which-key-mode 1)
   (setq which-key-idle-delay 0.3
@@ -4442,7 +4450,7 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
 *** Minibuffer 补全
 
 ~savehist~ - 持久化 minibuffer 历史和 vertico 最后查询
-+ savehist 已在 *启动与基础设施* ~startup~ 域 =use-package savehist :defer 0.5 + :config (savehist-mode 1)= 启用。
++ savehist 已在 *启动与基础设施* ~startup~ 域以 =:demand t= 启用，daemon 对外服务前即可复用历史。
 
 ~Vertico~ - 垂直补全界面
 + Vertico 提供简洁高效的垂直补全界面，接管 minibuffer 的 completing-read。
@@ -4610,7 +4618,7 @@ consult 内置 =consult-flymake= 命令,通过 Consult 界面浏览和跳转 Fly
 M-s f 在前缀键体系绑定到 =consult-flymake= 。
 
 #+begin_src emacs-lisp :noweb-ref keys/completion-region :tangle no
-;; ispell 词表发现(aspell/hunspell 使用启动域缓存)
+;; ispell 词表发现(aspell/hunspell 使用启动域命令声明)
 (defconst literal/completion:ispell-word-list-candidates
   (delq nil
         (list (and (getenv "GUIX_PROFILE")
@@ -4634,11 +4642,13 @@ M-s f 在前缀键体系绑定到 =consult-flymake= 。
 (defun literal/completion-setup-ispell-program ()
   "配置可用的 ispell 后端命令。
 两者均不可用时不修改 ispell 配置。"
-  (when-let* ((program (or literal:executable-aspell
-                           literal:executable-hunspell)))
-    (setq ispell-program-name program)
-    (when literal:executable-aspell
-      (setq ispell-extra-args '("--sug-mode=ultra")))))
+  (cond
+   ((executable-find literal:executable-aspell)
+    (setq ispell-program-name literal:executable-aspell
+          ispell-extra-args '("--sug-mode=ultra")))
+   ((executable-find literal:executable-hunspell)
+    (setq ispell-program-name literal:executable-hunspell
+          ispell-extra-args nil))))
 
 (defun literal/completion-remove-ispell-completion-at-point ()
   "从当前 buffer 的 CAPF 列表移除 `ispell-completion-at-point'。"
@@ -4664,7 +4674,7 @@ M-s f 在前缀键体系绑定到 =consult-flymake= 。
 (add-hook 'git-commit-setup-hook #'literal/completion-setup-ispell-word-list)
 
 (use-package corfu
-  :defer 0.2
+  :demand t
   :bind (:map corfu-map
               ("TAB" . corfu-insert)
               ("<tab>" . corfu-insert))
@@ -4814,7 +4824,7 @@ GUI 模式仅保留 x-gtk-resize-child-frames 修复;margin formatter 由
 :CUSTOM_ID: system-tools
 :END:
 
-Guix 环境检测、daemon 预热、Dashboard(延后加载)、Emacs 31 兼容性 hack、需要决策的配置。
+Guix 环境检测、daemon 预热、Dashboard、Emacs 31 兼容性 hack、需要决策的配置。
 
 ** Guix 集成与 daemon 预热
 :PROPERTIES:
@@ -4825,15 +4835,37 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 + =literal:in-guix-environment-p= :检测 Guix 环境
 + =exec-path= 在 early-init.el 已扩充(Guix profile bin + ~/.local/bin)
-+ 所有外部命令路径启动期缓存(见 [[#bootstrap][路径常量与外部命令缓存]])
++ 外部命令只缓存命令名，调用时通过当前 =exec-path= 解析，避免长驻 daemon 固定到旧 Guix generation
 + daemon 由 shepherd 的 =emacs-daemon= 服务管理( =emacs --fg-daemon= ),init.el 不重复启用 =server-mode= (仅 standalone 时启用)
-+ *预热策略*:不做无基准的批量预热。常用包依靠 autoload 首次加载;后续若 profiler 证明某个 feature 的首用延迟不可接受,再只为该 feature 建立白名单。
++ *预热策略*:daemon 启动时间不敏感，按冷 =require= 基准白名单预载常用交互 feature。不会启动 LSP、聊天或 PDF 子进程；应用型包仍按需加载。
++ 当前白名单消除的本机冷首用成本约为:Magit 0.37s、Org-roam 0.18s、Helpful/TRAMP 0.17s、Apheleia 0.05s、Embark 0.04s。
 
 #+begin_src emacs-lisp
 (when literal:in-guix-environment-p
   (message "[literal-config] Guix 环境: %s" literal:guix-profile))
 
-(message "[literal-config] 启动完成")
+(defconst literal:daemon-warmup-features
+  '(org-agenda org-capture org-roam
+               apheleia embark magit helpful tramp cape)
+  "daemon 启动阶段预载的常用交互 feature 白名单。")
+
+(defun literal/daemon-warmup ()
+  "同步预载 `literal:daemon-warmup-features'，让首个 client 直接复用。"
+  (let ((gc-cons-threshold most-positive-fixnum)
+        (gc-cons-percentage 0.6)
+        failed)
+    (dolist (feature literal:daemon-warmup-features)
+      (condition-case err
+          (unless (require feature nil t)
+            (push (cons feature "feature not found") failed))
+        (error
+         (push (cons feature (error-message-string err)) failed))))
+    (when (fboundp 'literal/dashboard-prime-caches)
+      (literal/dashboard-prime-caches))
+    (garbage-collect)
+    (when failed
+      (message "[literal-config] daemon 预热失败: %S" (nreverse failed)))
+    (null failed)))
 #+end_src
 
 ** Dashboard
@@ -4851,7 +4883,8 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =literal/dashboard-mode= (de
   - =literal/register-buffer-refresh!= (主题切换刷新)
   - =literal/add-server-ready-hook= (daemon/client frame 生命周期)
 
-+ 多 frame 限制: 当前所有 =literal/dashboard-mode= 窗口共享同一 =*dashboard*= buffer。两个不同宽度的 client frame 互相触发重渲时,内容宽度以最后触发刷新的窗口为准。这是 Phase 1 的临时限制;per-frame buffer(名如 =*dashboard*<N>=,frame parameter 关联 + =delete-frame-functions= 清理)留作后续增强。
++ 每个 client frame 持有独立 dashboard buffer；frame 参数关联所有权，删除 frame 时同步清理，宽度与渲染代数互不污染。
++ daemon 启动阶段同步预热初始缓存；知识库缓存过期后以 stale-while-revalidate 异步更新，UI 不等待 agenote CLI。
 
 *** 六层架构
 
@@ -4880,7 +4913,22 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =literal/dashboard-mode= (de
 (require 'calendar)
 
 (defconst literal:dashboard-buffer-name "*dashboard*"
-  "Dashboard 主缓冲区名称。")
+  "Dashboard buffer 名称前缀。")
+
+(defvar literal/dashboard--frame-sequence 0
+  "用于生成 per-frame dashboard buffer 名称的递增序号。")
+
+(defvar literal/dashboard--generation 0
+  "Dashboard 数据失效代数；缓存变化时递增。")
+
+(defvar-local literal/dashboard--owner-frame nil
+  "当前 dashboard buffer 所属 frame。")
+
+(defvar-local literal/dashboard--rendered-width nil
+  "当前 dashboard buffer 上次渲染的窗口宽度。")
+
+(defvar-local literal/dashboard--rendered-generation -1
+  "当前 dashboard buffer 上次渲染的数据代数。")
 
 (defconst literal:dashboard-cache-ttl 60
   "Dashboard 数据源缓存的有效期（秒）。
@@ -4934,9 +4982,11 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =literal/dashboard-mode= (de
 (defvar literal/dashboard--projects-cache nil
   "项目列表缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
 
-(defvar literal/dashboard--dirty t
-  "非 nil 表示 dashboard 内容需要重算。
-resize / 缓存失效 / 主题切换时置 t，渲染成功后清 nil。")
+(defvar literal/dashboard--knowledge-error nil
+  "最近一次异步知识库更新的错误信息。")
+
+(defvar literal/dashboard--knowledge-process nil
+  "当前异步知识库更新进程。")
 
 (defun literal/dashboard--cache-valid-p (cache key)
   "判断 CACHE (KEY TIME . DATA) 是否对 KEY 在 TTL 内有效。"
@@ -4962,9 +5012,11 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
   "清除 dashboard 所有数据源缓存，并标记下次刷新重算。
 可在 Org 保存、Magit 操作等改变底层数据后调用。"
   (setq literal/dashboard--todo-cache nil
-        literal/dashboard--knowledge-cache nil
         literal/dashboard--projects-cache nil
-        literal/dashboard--dirty t))
+        literal/dashboard--knowledge-error nil)
+  (when literal/dashboard--knowledge-cache
+    (setcar (cdr literal/dashboard--knowledge-cache) nil))
+  (cl-incf literal/dashboard--generation))
 
 #+end_src
 
@@ -4984,7 +5036,7 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 标题无间距、规则线截断、banner 居中失效（见 commit 修复前的 GUI 截图）。列模型
 下 `string-width' 对 Nerd Font PUA 图标算 1 列但字形可能占 2 列像素，存在至多
 1 列的右栏平移误差（见重设计文档 §1 #9），但所有算术单位一致、布局不会串位。
-该 1 列误差留作后续 per-frame buffer 增强的附带改进点。"
+该 1 列误差属于字体度量边界，不影响卡片间的列模型约束。"
   (string-width (or text "")))
 
 (defun literal/dashboard--fill (width)
@@ -5560,14 +5612,18 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
   "消费 `agenote --domain human list --json' 稳定索引计算最近条目（无缓存）。
 CLI 不可用时让异常上抛，由 fetch 层捕获为 :error（而非旧实现的静默吞错返回
 nil——那会让 CLI 挂掉显示「暂无条目」假状态）。返回 (ID CATEGORY TITLE) 三元组。"
-  (let ((cards (literal/knowledge-list-cards 'human max-items)))
-    (cl-loop
-     for card in cards
-     for id = (plist-get card :id)
-     for title = (or (plist-get card :title) "(无标题)")
-     for category = (or (plist-get card :category) "unknown")
-     when id
-     collect (list id category title))))
+  (literal/dashboard--knowledge-entries-from-cards
+   (literal/knowledge-list-cards 'human max-items)))
+
+(defun literal/dashboard--knowledge-entries-from-cards (cards)
+  "把 CARDS plist 列表转换为 (ID CATEGORY TITLE) 三元组。"
+  (cl-loop
+   for card in cards
+   for id = (plist-get card :id)
+   for title = (or (plist-get card :title) "(无标题)")
+   for category = (or (plist-get card :category) "unknown")
+   when id
+   collect (list id category title)))
 
 (defun literal/dashboard--recent-knowledge-entries (max-items)
   "返回最近的知识库条目作为 (ID CATEGORY TITLE) 三元组列表。
@@ -5580,10 +5636,108 @@ TTL 缓存（见 `literal:dashboard-cache-ttl'），可通过
    (lambda () (literal/dashboard--compute-recent-knowledge-entries max-items))))
 
 (defun literal/dashboard--fetch-knowledge ()
-  "知识库卡片 fetch：三态区分。
-缓存有效 → (:ok entries)；缓存失效时重算，CLI 失败上抛 → 由引擎包成 :error
-卡片（区分「CLI 挂掉」与「真无条目」）。"
-  (list :ok (literal/dashboard--recent-knowledge-entries 5)))
+  "知识库卡片 fetch：缓存过期时异步刷新并优先返回 stale 数据。"
+  (let ((max-items 5))
+    (cond
+     ((literal/dashboard--cache-valid-p literal/dashboard--knowledge-cache
+                                        max-items)
+      (list :ok (cddr literal/dashboard--knowledge-cache)))
+     (t
+      (unless (process-live-p literal/dashboard--knowledge-process)
+        (literal/dashboard--knowledge-start-async max-items))
+      (cond
+       ((and literal/dashboard--knowledge-cache
+             (cddr literal/dashboard--knowledge-cache))
+        (list :ok (cddr literal/dashboard--knowledge-cache)))
+       (literal/dashboard--knowledge-error
+        (list :error literal/dashboard--knowledge-error))
+       (t 'loading))))))
+
+(defun literal/dashboard--knowledge-start-async (max-items)
+  "异步刷新最近 MAX-ITEMS 张知识卡片，已有进程时保持幂等。"
+  (unless (process-live-p literal/dashboard--knowledge-process)
+    (if-let* ((exe (literal/agenote--resolve-executable)))
+        (let ((stdout (generate-new-buffer " *dashboard-knowledge-stdout*"))
+              (stderr (generate-new-buffer " *dashboard-knowledge-stderr*")))
+          (setq literal/dashboard--knowledge-error nil)
+          (condition-case err
+              (setq literal/dashboard--knowledge-process
+                    (make-process
+                     :name "dashboard-knowledge"
+                     :buffer stdout
+                     :stderr stderr
+                     :command (list exe "--domain" "human" "list"
+                                    "--recent" (number-to-string max-items) "--json")
+                     :connection-type 'pipe
+                     :noquery t
+                     :sentinel
+                     (lambda (process _event)
+                       (when (memq (process-status process) '(exit signal))
+                         (if (zerop (process-exit-status process))
+                             (condition-case parse-error
+                                 (let* ((json-object-type 'plist)
+                                        (json-array-type 'list)
+                                        (json-key-type 'keyword)
+                                        (output (if-let* ((buffer (process-buffer process))
+                                                          ((buffer-live-p buffer)))
+                                                    (with-current-buffer buffer
+                                                      (buffer-string))
+                                                  ""))
+                                        (cards (unless (string-empty-p output)
+                                                 (json-read-from-string output)))
+                                        (entries
+                                         (literal/dashboard--knowledge-entries-from-cards
+                                          cards)))
+                                   (setq literal/dashboard--knowledge-cache
+                                         (cons max-items
+                                               (cons (current-time) entries))
+                                         literal/dashboard--knowledge-error nil))
+                               (error
+                                (setq literal/dashboard--knowledge-error
+                                      (error-message-string parse-error))))
+                           (let ((message
+                                  (and (buffer-live-p stderr)
+                                       (string-trim
+                                        (with-current-buffer stderr
+                                          (buffer-string))))))
+                             (setq literal/dashboard--knowledge-error
+                                   (if (string-empty-p (or message ""))
+                                       "agenote process failed"
+                                     message))))
+                         (when (eq literal/dashboard--knowledge-process process)
+                           (setq literal/dashboard--knowledge-process nil))
+                         (when-let* ((buffer (process-buffer process))
+                                     ((buffer-live-p buffer)))
+                           (kill-buffer buffer))
+                         (when (buffer-live-p stderr)
+                           (kill-buffer stderr))
+                         (cl-incf literal/dashboard--generation)
+                         (condition-case refresh-error
+                             (literal/dashboard--refresh-if-visible)
+                           (error
+                            (message "[dashboard] knowledge refresh failed: %s"
+                                     (error-message-string refresh-error))))))))
+            (error
+             (when (buffer-live-p stdout)
+               (kill-buffer stdout))
+             (when (buffer-live-p stderr)
+               (kill-buffer stderr))
+             (setq literal/dashboard--knowledge-process nil
+                   literal/dashboard--knowledge-error
+                   (error-message-string err))
+             (cl-incf literal/dashboard--generation))))
+      (setq literal/dashboard--knowledge-error "agenote executable not found"))))
+
+(defun literal/dashboard-prime-caches ()
+  "在 daemon 启动阶段同步预热 Dashboard 的常用数据缓存。"
+  (dolist (fn (list (lambda () (literal/dashboard--todo-items 5))
+                    #'literal/dashboard--known-projects
+                    (lambda () (literal/dashboard--recent-knowledge-entries 5))))
+    (condition-case err
+        (funcall fn)
+      (error
+       (message "[dashboard] cache warmup failed: %s"
+                (error-message-string err))))))
 
 (defun literal/dashboard--render-knowledge (entries width)
   "知识库卡片 render。点击用卡片 ID 调 `literal/knowledge-show-card'。"
@@ -5722,7 +5876,7 @@ TTL 缓存（见 `literal:dashboard-cache-ttl'），可通过
 | 触发                   | 动作                    | 约束                                                                                     |
 |------------------------+-------------------------+------------------------------------------------------------------------------------------|
 | =literal/dashboard-mode= | 等宽字 + 关闭 hl-line   | 避免 variable-pitch 与当前行背景条切断左竖线                                             |
-| 窗口尺寸变化           | 防抖重渲染              | dirty flag 或宽度变化时才真正渲染                                                        |
+| 窗口尺寸变化           | 防抖重渲染              | 数据代数或宽度变化时才真正渲染                                                           |
 | 主题切换               | dashboard buffer 重渲染 | 走 =register-buffer-refresh!=，face 继承自动适配                                         |
 | frame hooks            | 单次调度打开 dashboard  | =after-make-frame= 与 =server-after-make-frame= 可能对同一 frame 连续触发，用 frame 参数去重 |
 
@@ -5838,28 +5992,69 @@ art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间
                     "\n"))))
         (insert "\n")))))
 
-(defun literal/dashboard-render ()
+(defun literal/dashboard--buffer-name-for-frame (frame)
+  "返回 FRAME 专属的 dashboard buffer 名称。"
+  (let ((id (frame-parameter frame 'literal-dashboard-id)))
+    (unless (integerp id)
+      (setq id (cl-incf literal/dashboard--frame-sequence))
+      (set-frame-parameter frame 'literal-dashboard-id id))
+    (format "%s<%d>" literal:dashboard-buffer-name id)))
+
+(defun literal/dashboard--frame-buffer (&optional frame)
+  "返回 FRAME 专属的 dashboard buffer，不存在时创建。"
+  (let* ((target-frame (or frame (selected-frame)))
+         (existing (frame-parameter target-frame 'literal-dashboard-buffer)))
+    (if (and (buffer-live-p existing)
+             (with-current-buffer existing
+               (eq literal/dashboard--owner-frame target-frame)))
+        existing
+      (set-frame-parameter target-frame 'literal-dashboard-id nil)
+      (let ((buffer (get-buffer-create
+                     (literal/dashboard--buffer-name-for-frame target-frame))))
+        (with-current-buffer buffer
+          (unless (derived-mode-p 'literal/dashboard-mode)
+            (literal/dashboard-mode))
+          (setq-local literal/dashboard--owner-frame target-frame))
+        (set-frame-parameter target-frame 'literal-dashboard-buffer buffer)
+        buffer))))
+
+(defun literal/dashboard--release-frame-buffer (frame)
+  "清理 FRAME 专属的 dashboard buffer。"
+  (let ((buffer (frame-parameter frame 'literal-dashboard-buffer)))
+    (when (and (buffer-live-p buffer)
+               (with-current-buffer buffer
+                 (eq literal/dashboard--owner-frame frame)))
+      (kill-buffer buffer))))
+
+(defun literal/dashboard-render (&optional frame)
   "自有渲染入口：erase → banner → 布局引擎 → insert。
-不经过第三方 dashboard 包任何函数。失败时保留旧 buffer 内容（两阶段：先在
-当前 buffer 构造，任何 error 由上层 condition-case 兜底）。"
+不经过第三方 dashboard 包任何函数；单卡片错误由布局引擎隔离。"
   (interactive)
-  (let ((buf (get-buffer-create literal:dashboard-buffer-name)))
+  (let* ((target-frame
+          (or (and frame (frame-live-p frame) frame)
+              (and (derived-mode-p 'literal/dashboard-mode)
+                   (frame-live-p literal/dashboard--owner-frame)
+                   literal/dashboard--owner-frame)
+              (selected-frame)))
+         (buf (literal/dashboard--frame-buffer target-frame)))
     (prog1 buf
       (with-current-buffer buf
         (unless (derived-mode-p 'literal/dashboard-mode)
-          (literal/dashboard-mode))
-        (let* ((window (or (get-buffer-window buf t)
-                           (frame-selected-window)))
-               (width (if window (window-body-width window) (frame-width)))
-               (content-width (max 1 (- width (* 2 literal:dashboard-dual-margin))))
+          (literal/dashboard-mode)
+          (setq-local literal/dashboard--owner-frame target-frame))
+        (let* ((window (or (get-buffer-window buf target-frame)
+                           (frame-selected-window target-frame)))
+               (width (if window (window-body-width window) (frame-width target-frame)))
                (margin-str (literal/dashboard--fill literal:dashboard-dual-margin)))
           (let ((inhibit-read-only t))
             (erase-buffer)
             (literal/dashboard--insert-banner width)
-            (dolist (line (literal/dashboard--build-lines content-width))
+            (dolist (line (literal/dashboard--build-lines width))
               (insert margin-str line "\n"))
             (goto-char (point-min))
-            (setq-local literal/dashboard--dirty nil)))))))
+            (setq-local literal/dashboard--rendered-width width
+                        literal/dashboard--rendered-generation
+                        literal/dashboard--generation)))))))
 
 (define-derived-mode literal/dashboard-mode special-mode "Dashboard"
   "自建 dashboard mode（derived from `special-mode'）。
@@ -5873,11 +6068,17 @@ art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间
   (when (boundp 'display-line-numbers-mode) (display-line-numbers-mode -1))
   (buffer-disable-undo)
   (let ((map (make-sparse-keymap)))
-    (define-key map "g" #'literal/dashboard-render)
+    (define-key map "g" #'literal/dashboard-refresh)
     (define-key map "n" #'next-line)
     (define-key map "p" #'previous-line)
     (define-key map "q" #'quit-window)
     (use-local-map map)))
+
+(defun literal/dashboard-refresh ()
+  "失效缓存并刷新当前 frame 的 Dashboard。"
+  (interactive)
+  (literal/dashboard-invalidate-cache)
+  (literal/dashboard-render literal/dashboard--owner-frame))
 
 (defconst literal:dashboard-placeholder-buffer-names
   '(" *server*" "*scratch*" "*Messages*")
@@ -5910,57 +6111,60 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
        (= (length (window-list frame 'no-minibuf)) 1)))
 
 (defun literal/dashboard--refresh-if-visible ()
-  "若 dashboard buffer 在某可见窗口，则立即重渲染。"
-  (let* ((buf (get-buffer literal:dashboard-buffer-name))
-         (window (and buf (get-buffer-window buf t))))
-    (when (and window (window-live-p window))
-      (with-selected-window window
-        (literal/dashboard-render)))))
+  "立即刷新所有可见 dashboard buffer。"
+  (literal/dashboard--refresh-visible-now))
 
 (defvar literal/dashboard--refresh-timer nil
   "dashboard 可见性刷新的 pending idle timer。")
 
 (defun literal/dashboard--refresh-visible-now ()
-  "立即检查所有可见 dashboard 窗口，dirty 或宽度变化者重新渲染。"
+  "立即检查所有可见 dashboard 窗口，数据代数或宽度变化者重新渲染。"
   (when (timerp literal/dashboard--refresh-timer)
     (cancel-timer literal/dashboard--refresh-timer))
   (setq literal/dashboard--refresh-timer nil)
-  (dolist (window (window-list nil 'no-minibuf))
-    (let ((buffer (window-buffer window)))
-      (when (buffer-live-p buffer)
-        (with-current-buffer buffer
-          (when (and (derived-mode-p 'literal/dashboard-mode)
-                     (or literal/dashboard--dirty t))
-            (with-selected-window window
-              (literal/dashboard-render))))))))
+  (dolist (frame (frame-list))
+    (when (frame-live-p frame)
+      (dolist (window (window-list frame 'no-minibuf))
+        (let ((buffer (window-buffer window)))
+          (when (buffer-live-p buffer)
+            (with-current-buffer buffer
+              (let ((width (window-body-width window)))
+                (when (and (derived-mode-p 'literal/dashboard-mode)
+                           (or (/= literal/dashboard--rendered-generation
+                                   literal/dashboard--generation)
+                               (not (equal literal/dashboard--rendered-width width))))
+                  (with-selected-window window
+                    (literal/dashboard-render frame)))))))))))
 
-(defun literal/dashboard--maybe-refresh-visible (_frame)
-  "若可见 dashboard 标记 dirty，则延迟重新渲染（合并连续尺寸变化）。"
-  (when (timerp literal/dashboard--refresh-timer)
-    (cancel-timer literal/dashboard--refresh-timer))
-  (setq literal/dashboard--refresh-timer
-        (run-with-idle-timer literal:dashboard-refresh-debounce
-                             nil
-                             #'literal/dashboard--refresh-visible-now)))
+(defun literal/dashboard--maybe-refresh-visible (frame)
+  "可见 dashboard 需要更新时延迟重渲染（合并连续尺寸变化）。"
+  (when (seq-some
+         (lambda (window)
+           (with-current-buffer (window-buffer window)
+             (derived-mode-p 'literal/dashboard-mode)))
+         (window-list frame 'no-minibuf))
+    (when (timerp literal/dashboard--refresh-timer)
+      (cancel-timer literal/dashboard--refresh-timer))
+    (setq literal/dashboard--refresh-timer
+          (run-with-idle-timer literal:dashboard-refresh-debounce
+                               nil
+                               #'literal/dashboard--refresh-visible-now))))
 
 (defun literal/dashboard--display-in-frame (frame)
   "在 FRAME 中显示并刷新 dashboard。"
   (when (and (frame-live-p frame)
              (literal/dashboard--single-window-frame-p frame))
     (with-selected-frame frame
-      (let ((buf (get-buffer-create literal:dashboard-buffer-name)))
+      (let ((buf (literal/dashboard--frame-buffer frame)))
         (when-let* ((window (frame-selected-window frame)))
-          (with-current-buffer buf
-            (unless (derived-mode-p 'literal/dashboard-mode)
-              (literal/dashboard-mode)))
           (set-window-buffer window buf)
           (with-selected-window window
-            (literal/dashboard-render)))))))
+            (literal/dashboard-render frame)))))))
 
-(defconst literal:dashboard-open-idle-delay 0.05
-  "新建 client frame 后等待 dashboard 判定的 idle 秒数。")
+(defconst literal:dashboard-open-delay 0
+  "新建 client frame 后等待事件循环下一拍再判定 dashboard。")
 
-(defconst literal:dashboard-open-retries 2
+(defconst literal:dashboard-open-retries 1
   "若首次判定过早，dashboard 允许追加重试的次数。")
 
 (defun literal/dashboard--frame-startup-state (frame)
@@ -6004,8 +6208,8 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
   (when (and (frame-live-p frame)
              (not (frame-parameter frame 'literal-dashboard-open-scheduled)))
     (set-frame-parameter frame 'literal-dashboard-open-scheduled t)
-    (run-with-idle-timer
-     literal:dashboard-open-idle-delay nil
+    (run-at-time
+     literal:dashboard-open-delay nil
      (lambda (idle-frame idle-retries-left)
        (when (frame-live-p idle-frame)
          (literal/dashboard--run-open-check idle-frame idle-retries-left)))
@@ -6034,64 +6238,13 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
    'literal/dashboard-mode #'literal/dashboard-render))
 
 (literal/add-server-ready-hook #'literal/dashboard-open-for-client-frame)
+(add-hook 'delete-frame-functions #'literal/dashboard--release-frame-buffer)
 
 #+end_src
 
-*** 未来增强（Phase 2 剩余）
+*** 可选增强
 
-下列增强项来自重设计文档 §六 Phase 2,本轮重构未实现,留作后续独立推进。每项标注价值、复杂度与前置改动,便于单独评估取舍。核心目标(对齐证明 / 错误隔离 / 可测试 / 弃用 dashboard 包)已在 Phase 1 达成,这些增强非必需。
-
-#+attr_org: :width 70
-| 增强项 | 价值 | 复杂度 | 前置改动 |
-|--------+------++--------+----------|
-| per-frame buffer | 高(修 A5 多 frame 抖动) | 高 | buffer 命名 + frame parameter + delete-frame 清理 |
-| knowledge 异步拉取 | 中(fresh daemon 首屏更快) | 中 | make-process 骨架 + sentinel + 幂等 |
-| 标题带计数 | 中(信息密度) | 低-中 | fetch 协议附 total |
-
-**** per-frame buffer（修 A5 多 frame 宽度抖动）
-
-当前所有 =literal/dashboard-mode= 窗口共享同一 =*dashboard*= buffer,见本节引言的[多 frame 限制]。两个不同宽度的 client frame 互相触发重渲时内容宽度以最后触发者为准,偶发抖动。
-
-目标:每个 frame 持有独立的 dashboard buffer(名如 =*dashboard*<N>=,N 为 frame 内部 id),互不影响。
-
-实现要点:
-
-1. =(literal/dashboard--frame-buffer frame)=:返回 frame 关联的 buffer,不存在则按命名约定创建。
-2. frame parameter =literal-dashboard-buffer= 持有 buffer 引用;=delete-frame-functions= 清理对应 buffer(避免泄漏)。
-3. =--refresh-if-visible= / =--display-in-frame= / =--maybe-refresh-visible= 全部从"操作唯一 =*dashboard*="改为"按 frame 取各自 buffer"。
-4. =literal:dashboard-buffer-name= 从常量改为函数 =literal/dashboard--buffer-name-for-frame=。
-
-风险:=C-x 5 2= 复制 frame 时新 frame 继承旧 buffer 引用,需显式重置 frame parameter。=winner-undo= / side-window 路由不涉及(buffer 在 frame 内的窗口只是显示层)。
-
-**** knowledge 异步拉取
-
-当前 =--fetch-knowledge= 同步调 =literal/knowledge-list-cards=(经 agenote CLI),fresh daemon 首次渲染时该 CLI 启动有可感知延迟。todo 已用 =--defer-until-org= + loading 态异步化,knowledge 可同样处理。
-
-目标:缓存过期时发起 =make-process= 异步拉取,先返回 stale 或 =loading=,sentinel 解析 JSON → 写缓存 → =--refresh-if-visible=。
-
-实现要点:
-
-1. =(literal/dashboard--knowledge-start-async)=:幂等,进程已在跑则跳过。
-2. sentinel 解析 JSON 成功后 =(setq literal/dashboard--knowledge-cache (cons ...))= 并置 =--dirty=。
-3. fetch 三态:缓存有效 → =(:ok data)=;失效且有进程跑 → =loading= 或返回 stale;失效且无进程 → 发起 + =loading=。
-4. =--org-defer-pending= 同款幂等标志防止并发拉取。
-
-风险:agenote CLI JSON schema 变动需同步;进程异常退出 sentinel 要清标志位,否则永久 loading。参考 =literal/agenote-call-async=(定义于 [[#process-helper][共享进程辅助]],knowledge 域已多处使用)已验证的 async 模式。
-
-**** 标题带计数
-
-当前标题固定显示(如"待办"),fetch 返回的是已截断的 max-items 条,丢失了 total。文档 §4.6 称此项"成本为零",但实际需改 fetch 协议。
-
-目标:标题显示 =󰃭 待办 (3)=,数字为实际未完成数(可能多于显示条数)。
-
-实现要点(二选一):
-
-- *方案 A(改协议)*:fetch 返回 =(:ok (DATA . TOTAL))=,render 接收 =data= 与 =total=。影响 7 张卡片 + 引擎 =--card-lines= 标题构造。
-- *方案 B(spec 附 count 函数)*:卡片 spec 增加 =:count= 槽(无参 → 数字或 nil),引擎调它得 total 拼 title。改动更局部,仅引擎 + 需计数的卡片。
-
-方案 B 更轻:只有 todo/knowledge 值得显示计数(其余卡片 data 本身即全部,=length= 即可),引擎在构造 title 时 =(plist-get spec :count)= 有则调用并追加 =(N)=。
-
-风险:recents/projects/bookmarks 的 total 即 =length data=,只有 todo 的 total 需额外扫描(=--compute-todo-items= 已在 =(* max-items 2)= 候选里统计,可顺便返回符合条件的全数)。
+标题计数仍可在以后按需加入；它需要扩展 fetch 协议返回未截断总数，与本轮 client 延迟优化无关。
 
 #+begin_src emacs-lisp
 <<system/dashboard-core>>
@@ -6109,7 +6262,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 
 *** 实验性
 
-本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、which-key 中文宽度、arei .elc 兼容、vertico-buffer 形态降级)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
+本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、which-key 中文宽度、Arei/Yasnippet .elc 兼容、vertico-buffer 形态降级)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
 
 以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= / =<<compat/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
 
@@ -6118,7 +6271,9 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 |----------------------------+--------------------------------------+--------------------------------+-----------------------------------------------------|
 | =compat/ghostel-with-editor= | with-editor 3.5.2 无 pre-spawn 接口  | ghostel 内 git commit          | Ghostel/with-editor 提供公开 pre-spawn 环境构造接口 |
 | =compat/which-key-width=     | which-key 自动列数中文宽度不等       | which-key 中文描述             | which-key 原生布局足够(=fboundp= 守卫容忍 API 变化)   |
+| =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei / Yasnippet               | 所有相关包改由 Emacs 31 重编译                        |
 | =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译                |
+| =emacs31/yasnippet-compat=   | yasnippet .elc 缺少 global mode 状态 | 新 client major-mode 初始化    | 升级 yasnippet 或 Guix 用 Emacs 31 重编译             |
 | vertico-buffer 形态降级    | bug#80812,buffer-local-set-state 宏  | vertico-buffer 形态            | vertico 上游修复 / Guix 重编译(见下方)              |
 
 **** Ghostel pre-spawn 的 with-editor 适配
@@ -6177,21 +6332,26 @@ AVAILABLE-WIDTH 为当前 which-key 可用宽度。固定网格布局下按等�
 
 arei 0.9.7 的 .elc(Guix 用旧版 Emacs byte-compile)与 Emacs 31 的 =buffer-local-set-state= 宏不兼容:arei-mode 第 356 行调用该宏,但旧 .elc 把它当函数调用,参数 =(sesman-system 'Arei)= 被整体传给 =buffer-local-set-state--get= → =wrong-type-argument (symbolp 'Arei)= 。此错误在 =scheme-mode-hook= 里抛出,会中断整个 scheme-mode 初始化,导致 font-lock 失效 → Scheme 代码不染色。
 
+#+begin_src emacs-lisp :noweb-ref emacs31/source-load-compat :tangle no
+(defun literal/load-library-from-source (library)
+  "从 LIBRARY 对应的 .el 源加载，绕过不兼容的 Guix .elc。"
+  (condition-case err
+      (when-let* ((found (locate-library library))
+                  (source (concat (file-name-sans-extension found) ".el"))
+                  ((file-exists-p source)))
+        (load source nil t t)
+        t)
+    (error
+     (message "[literal] %s 从源加载失败: %S" library err)
+     nil)))
+#+end_src
+
 #+begin_src emacs-lisp :noweb-ref emacs31/arei-compat :tangle no
 (defun literal--load-arei-from-source ()
   "从 .el 源强制加载 arei,绕过与 Emacs 31 不兼容的 .elc。
 GNU store 只读无法删 .elc,且 .el/.elc 时间戳相同(均为 epoch 1),
 `load-prefer-newer' 无效,故需显式从 .el 加载。返回 t 若成功。"
-  (condition-case err
-      (let* ((found (locate-library "arei"))
-             (arei-el (when found
-                        (concat (file-name-sans-extension found) ".el"))))
-        (when (and arei-el (file-exists-p arei-el))
-          (load arei-el nil t t)
-          t))
-    (error
-     (message "[literal] arei 从源加载失败: %S" err)
-     nil)))
+  (literal/load-library-from-source "arei"))
 
 (defun literal--maybe-enable-arei-mode ()
   "在真实 Scheme 编辑 buffer 中启用 `arei-mode'(跳过 org src 临时 buffer)。
@@ -6203,6 +6363,16 @@ GNU store 只读无法删 .elc,且 .el/.elc 时间戳相同(均为 epoch 1),
         (arei-mode 1)
       (error
        (message "[literal] arei-mode 启用失败,Scheme 染色不受影响: %S" err)))))
+#+end_src
+
+**** yasnippet global mode 状态变量缺失(bug#80812,同根因)
+
+Yasnippet 0.14.3 的 Guix =.elc= 在 Emacs 31 中加载后，=yas-global-mode= 虽为 non-nil，但 =yas-minor-mode--set-explicitly= / =yas-minor-mode--suppress-set-explicitly= 没有定义。新 client 切换 major mode 时，globalized minor mode hook 因 =void-variable= 中断。与 Arei 相同，运行时从 =.el= 源重新展开宏即可恢复完整定义。
+
+#+begin_src emacs-lisp :noweb-ref emacs31/yasnippet-compat :tangle no
+(defun literal--load-yasnippet-from-source ()
+  "从 .el 源加载 Yasnippet，补齐 Emacs 31 global mode 状态变量。"
+  (literal/load-library-from-source "yasnippet"))
 #+end_src
 
 **** vertico-buffer 形态降级(bug#80812,同根因)
@@ -6217,9 +6387,14 @@ vertico-buffer 形态在 Emacs 31 master + Guix Emacs 30 编译的 vertico elc �
 + *根因* :: Emacs 31 仍 defvar =byte-compile-root-dir= (见 =bytecomp.el:1232= ),但 bytecomp.el 是 lazy-load,默认不在初始环境
 + *根治* :: 升级到 elfeed-4.0.1
 
-* init.el ends here
+** 主配置收尾
 
 #+begin_src emacs-lisp
+(when (literal/daemon-runtime-p)
+  (literal/daemon-warmup))
+
+(message "[literal-config] 启动完成")
+
 (provide 'main)
 ;;; main.el ends here
 #+end_src

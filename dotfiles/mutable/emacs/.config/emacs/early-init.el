@@ -12,8 +12,7 @@
 ;; 2. 提高 GC 阈值 - 启动时减少垃圾回收次数（启动后由 gcmh 重置）
 ;; 3. 防止 frame 重绘 - 减少启动时视觉闪烁
 ;; 4. frame-background-mode 引导 - 让 daemon 启动期选对 face 变体（dark/light）
-;; 5. Native-comp 调优 - 静默警告噪音
-;; 6. exec-path 前置 - 让外部命令可由 PATH 解析
+;; 5. exec-path 前置 - 让外部命令可由 PATH 解析
 
 ;;; Code:
 
@@ -21,28 +20,17 @@
 (setq load-prefer-newer nil)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; Native-compilation 优化
-;; ═════════════════════════════════════════════════════════════════════════════
-(when (boundp 'comp-deferred-compilation)
-  (setq comp-deferred-compilation t))
-(when (boundp 'native-comp-async-warnings-errors-kind)
-  (setq native-comp-async-warnings-errors-kind 'important))
-(when (boundp 'comp-async-report-warnings-errors)
-  (setq comp-async-report-warnings-errors nil))
-
-;; ═════════════════════════════════════════════════════════════════════════════
 ;; 禁用 package.el 自动初始化（使用 Guix 管理包）
 ;; ═════════════════════════════════════════════════════════════════════════════
 (setq package-enable-at-startup nil)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; exec-path 前置（必须在 literal-bootstrap.el 的 executable-* 缓存 defvar 之前）
+;; exec-path 前置（必须在 main.el 解析外部命令之前）
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;;
-;; literal-bootstrap.el 在 init.el 加载早期 require，其 `defconst literal:executable-*'
-;; 在求值瞬间调用 `executable-find'。若此时 `~/.local/bin'（agenote/godot/dot 等
-;; 用户工具）或 Guix profile bin 尚未加入 exec-path，缓存会得到 nil，导致运行
-;; 时所有依赖这些工具的调用失效。
+;; main.el 的包启用条件与 agenote 调用会通过 `executable-find' 查询当前
+;; `exec-path'。先加入 Guix profile 与用户脚本目录，保证 daemon 启动和后续
+;; client 都能解析这些命令；配置本身只保存命令名，不缓存 store 绝对路径。
 (let* ((guix-profile (or (getenv "GUIX_PROFILE")
                          (expand-file-name "~/.guix-profile")))
        (guix-bin (expand-file-name "bin" guix-profile))

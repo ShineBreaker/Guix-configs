@@ -6,10 +6,7 @@
 
 ;;; Commentary:
 ;; 本文件是 literal-config 的固定 bootstrap 入口,**不由 emacs.org tangle 生成**,
-;; 永久纳入 git 跟踪。chemacs2 在选定 literal profile 后会加载本文件。
-;;
-;; chemacs2 迁移后(commit 0ca2c196)说明:已无 chemacs2 引导层,本文件由
-;; `emacs' 直接以 user-emacs-directory = 本仓库路径加载。
+;; 永久纳入 git 跟踪。`emacs' 直接从当前 `user-emacs-directory' 加载本文件。
 ;;
 ;; 职责(且仅此三步):
 ;;   1. 检测 emacs.org 是否比 main.el 新(或 main.el 不存在)

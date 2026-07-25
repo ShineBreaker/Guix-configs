@@ -298,7 +298,7 @@
   (literal-configctl--assert (featurep 'main) "main feature missing")
   (dolist (function '(literal/add-frame-created-hook
                       literal/add-server-ready-hook
-                      literal/call-process
+                      literal/agenote-call
                       literal/color-scheme-init
                       literal/completion-setup-display
                       literal/dashboard-open-for-client-frame

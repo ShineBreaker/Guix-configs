@@ -236,6 +236,176 @@ Guix 的可复现部署契约。本测试固化配置不变量。"
     (set-frame-parameter frame created-param nil)
     (set-frame-parameter frame server-param nil)))
 
+(ert-deftest literal-config/focus-save-rejects-synthetic-file-buffer ()
+  "失焦保存只接受正常访问的本地文件 buffer。"
+  (with-temp-buffer
+    (insert "modified")
+    (setq buffer-file-name "/tmp/literal-synthetic-save-test.el")
+    (should-not (literal/user-file-buffer-p))
+    (setq buffer-file-truename buffer-file-name)
+    (should (literal/user-file-buffer-p))
+    (setq buffer-read-only t)
+    (should-not (literal/user-file-buffer-p))
+    (setq buffer-read-only nil
+          buffer-file-name nil
+          buffer-file-truename nil)
+    (set-buffer-modified-p nil)))
+
+(ert-deftest literal-config/focus-save-waits-until-all-frames-unfocused ()
+  "多 client 下只在所有 frame 明确失焦后安排保存。"
+  (let ((states '((frame-a . t) (frame-b)))
+        (literal--focus-save-timer nil)
+        scheduled
+        cancelled)
+    (cl-letf (((symbol-function 'frame-list)
+               (lambda () '(frame-a frame-b)))
+              ((symbol-function 'frame-focus-state)
+               (lambda (frame) (alist-get frame states)))
+              ((symbol-function 'run-with-idle-timer)
+               (lambda (&rest _) (setq scheduled 'test-timer)))
+              ((symbol-function 'timerp)
+               (lambda (timer) (eq timer 'test-timer)))
+              ((symbol-function 'cancel-timer)
+               (lambda (timer) (setq cancelled timer))))
+      (literal/schedule-focus-save)
+      (should-not scheduled)
+      (setq states '((frame-a) (frame-b)))
+      (literal/schedule-focus-save)
+      (should (eq literal--focus-save-timer 'test-timer))
+      (setq states '((frame-a . unknown) (frame-b)))
+      (literal/schedule-focus-save)
+      (should (eq cancelled 'test-timer))
+      (should-not literal--focus-save-timer))))
+
+(ert-deftest literal-config/modeline-location-uses-mode-line-cache ()
+  "位置段必须走 mode-line 的 %l/%c 缓存，不逐次扫描 buffer。"
+  (cl-letf (((symbol-function 'line-number-at-pos)
+             (lambda (&rest _) (error "line-number-at-pos must not run")))
+            ((symbol-function 'format-mode-line)
+             (lambda (&rest _) "12,3")))
+    (should (string-match-p "12,3"
+                            (literal/modeline--location-segment 'wide)))))
+
+(ert-deftest literal-config/large-file-skips-line-number-scan ()
+  "大型文件必须先关闭行号，不调用全 buffer 行数扫描。"
+  (with-temp-buffer
+    (insert "large")
+    (let ((literal:large-file-size-threshold 1)
+          disabled)
+      (setq-local buffer-file-name "/tmp/literal-large-file.el"
+                  display-line-numbers t)
+      (cl-letf (((symbol-function 'line-number-at-pos)
+                 (lambda (&rest _) (error "large file must not be scanned")))
+                ((symbol-function 'display-line-numbers-mode)
+                 (lambda (arg) (setq disabled arg))))
+        (literal/setup-file-line-numbers))
+      (should (= disabled -1)))))
+
+(ert-deftest literal-config/daemon-warmup-stays-on-interaction-features ()
+  "Daemon 预热覆盖高频交互 feature，不启动应用型子系统。"
+  (dolist (feature '(org-agenda org-capture org-roam apheleia embark
+                               magit helpful tramp cape))
+    (should (memq feature literal:daemon-warmup-features)))
+  (dolist (feature '(pdf-tools notmuch elfeed ement agent-shell))
+    (should-not (memq feature literal:daemon-warmup-features))))
+
+(ert-deftest literal-config/yasnippet-global-mode-state-is-complete ()
+  "Yasnippet 源加载必须补齐 Emacs 31 globalized minor mode 状态。"
+  (should (featurep 'yasnippet))
+  (should (boundp 'yas-minor-mode--set-explicitly))
+  (should (boundp 'yas-minor-mode--suppress-set-explicitly))
+  (should (bound-and-true-p yas-global-mode)))
+
+(ert-deftest literal-config/dashboard-per-frame-buffer-isolation ()
+  "不同 frame 必须获得不同的 dashboard buffer。"
+  (let ((frame-a (list 'frame-a))
+        (frame-b (list 'frame-b))
+        (store (make-hash-table :test #'equal))
+        buffers)
+    (unwind-protect
+        (cl-letf (((symbol-function 'frame-live-p)
+                   (lambda (frame) (memq frame (list frame-a frame-b))))
+                  ((symbol-function 'frame-parameter)
+                   (lambda (frame parameter)
+                     (gethash (list frame parameter) store)))
+                  ((symbol-function 'set-frame-parameter)
+                   (lambda (frame parameter value)
+                     (puthash (list frame parameter) value store))))
+          (let ((buffer-a (literal/dashboard--frame-buffer frame-a))
+                (buffer-b (literal/dashboard--frame-buffer frame-b)))
+            (setq buffers (list buffer-a buffer-b))
+            (should (buffer-live-p buffer-a))
+            (should (buffer-live-p buffer-b))
+            (should-not (eq buffer-a buffer-b))
+            (with-current-buffer buffer-a
+              (should (eq literal/dashboard--owner-frame frame-a)))
+            (with-current-buffer buffer-b
+              (should (eq literal/dashboard--owner-frame frame-b)))
+            (literal/dashboard--release-frame-buffer frame-a)
+            (should-not (buffer-live-p buffer-a))
+            (should (buffer-live-p buffer-b))))
+      (dolist (buffer buffers)
+        (when (buffer-live-p buffer)
+          (kill-buffer buffer))))))
+
+(ert-deftest literal-config/dashboard-knowledge-stale-while-revalidate ()
+  "知识缓存过期时立即返回 stale 数据，同时发起异步刷新。"
+  (let ((literal/dashboard--knowledge-cache
+         (list 5 nil '("id" "emacs" "title")))
+        (literal/dashboard--knowledge-process nil)
+        (literal/dashboard--knowledge-error nil)
+        started)
+    (cl-letf (((symbol-function 'process-live-p) (lambda (_) nil))
+              ((symbol-function 'literal/dashboard--knowledge-start-async)
+               (lambda (max-items) (setq started max-items))))
+      (should (equal (literal/dashboard--fetch-knowledge)
+                     '(:ok (("id" "emacs" "title")))))
+      (should (= started 5)))))
+
+(ert-deftest literal-config/dashboard-knowledge-start-failure-cleans-buffers ()
+  "异步进程同步启动失败时不得泄漏 stdout/stderr buffer。"
+  (let* ((prefixes '(" *dashboard-knowledge-stdout*"
+                     " *dashboard-knowledge-stderr*"))
+         (count-buffers
+          (lambda ()
+            (seq-count
+             (lambda (buffer)
+               (seq-some
+                (lambda (prefix)
+                  (string-prefix-p prefix (buffer-name buffer)))
+                prefixes))
+             (buffer-list))))
+         (before (funcall count-buffers))
+         (literal/dashboard--knowledge-process nil)
+         (literal/dashboard--knowledge-error nil)
+         (literal/dashboard--generation 0))
+    (cl-letf (((symbol-function 'literal/agenote--resolve-executable)
+               (lambda () "/tmp/agenote"))
+              ((symbol-function 'make-process)
+               (lambda (&rest _) (error "spawn failed"))))
+      (literal/dashboard--knowledge-start-async 5))
+    (should-not literal/dashboard--knowledge-process)
+    (should (equal literal/dashboard--knowledge-error "spawn failed"))
+    (should (= before (funcall count-buffers)))))
+
+(ert-deftest literal-config/dashboard-does-not-replace-client-file ()
+  "client frame 已显示文件时 Dashboard 打开检查必须保持原 buffer。"
+  (let* ((frame (selected-frame))
+         (window (frame-selected-window frame))
+         (original (window-buffer window))
+         (file-buffer (generate-new-buffer " *literal-client-file*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer file-buffer
+            (setq buffer-file-name "/tmp/literal-client-file.el"
+                  buffer-file-truename buffer-file-name))
+          (set-window-buffer window file-buffer)
+          (should (eq (literal/dashboard--frame-startup-state frame) 'file))
+          (literal/dashboard--run-open-check frame 1)
+          (should (eq (window-buffer window) file-buffer)))
+      (set-window-buffer window original)
+      (kill-buffer file-buffer))))
+
 
     
 ;;; ---------------------------------------------------------------------------
