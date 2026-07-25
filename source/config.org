@@ -1433,6 +1433,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
         ;; 编辑器
         "helix"
+        "lem"
+        "sbcl-lem-extension-manager"
 
         ;; 数据库
         "postgresql"
@@ -1704,6 +1706,7 @@ end
                              "emacs-eglot-x"
                              "emacs-envrc"
                              "emacs-ghostel"
+                             "emacs-guix"
                              "emacs-posframe"
 
                              ;; 编程语言支持
@@ -1774,7 +1777,8 @@ end
                              "tree-sitter-nix"
                              "tree-sitter-python"
                              "tree-sitter-rust"
-                             "tree-sitter-typescript"))))))
+                             "tree-sitter-typescript"
+                             "tree-sitter-zig"))))))
 #+end_src
 
 *** 桌面常用软件的相关服务

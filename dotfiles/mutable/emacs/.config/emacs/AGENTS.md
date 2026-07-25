@@ -1,4 +1,4 @@
-# AGENTS.md - literal-config 工作规范
+# AGENTS.md - custom-config 工作规范
 
 本文件是本目录内 AI Agent 的唯一操作手册。`emacs.org` 只保存配置、功能语义和设计理由，不再重复 Agent 工作流、功能索引或验收规则。
 
@@ -6,15 +6,15 @@
 
 ## 1. 架构契约
 
-| 文件                           | 角色                   | 修改规则                            |
-| ------------------------------ | ---------------------- | ----------------------------------- |
-| `emacs.org`                    | 唯一配置真理源         | 日常功能修改只改这里                |
-| `init.el`                      | 固定 bootstrap         | 不改变 tangle 签名和单产物模型      |
-| `early-init.el`                | 启动前优化             | 只放必须早于 `main.el` 的行为       |
-| `main.el`                      | tangle 产物，gitignore | 禁止手改                            |
-| `data/*.el`                    | 外置翻译数据           | 只允许注释和预定变量的字面量 `setq` |
-| `scripts/configctl`            | 导航、审计和验收入口   | 维护能力优先扩展这里                |
-| `test/literal-config-tests.el` | ERT 契约测试           | 行为修复必须补回归测试              |
+| 文件                          | 角色                   | 修改规则                            |
+| ----------------------------- | ---------------------- | ----------------------------------- |
+| `emacs.org`                   | 唯一配置真理源         | 日常功能修改只改这里                |
+| `init.el`                     | 固定 bootstrap         | 不改变 tangle 签名和单产物模型      |
+| `early-init.el`               | 启动前优化             | 只放必须早于 `main.el` 的行为       |
+| `main.el`                     | tangle 产物，gitignore | 禁止手改                            |
+| `data/*.el`                   | 外置翻译数据           | 只允许注释和预定变量的字面量 `setq` |
+| `scripts/configctl`           | 导航、审计和验收入口   | 维护能力优先扩展这里                |
+| `test/custom-config-tests.el` | ERT 契约测试           | 行为修复必须补回归测试              |
 
 启动链：
 
@@ -35,7 +35,7 @@ emacs -> init.el -> 按需 tangle emacs.org -> main.el -> load main.el
 硬约束：
 
 - 只有一个生成物 `main.el`，禁止 `:tangle lisp/...`。
-- 禁止添加 `lisp/` load-path、`(require 'literal-...)` 或 `(provide 'literal-...)`。
+- 禁止添加 `lisp/` load-path、`(require 'custom-...)` 或 `(provide 'custom-...)`。
 - 文件末尾只保留 `(provide 'main)`。
 - 不添加全局 `:comments link`，避免 noweb 注释膨胀。
 - 新 Emacs 包必须同步根仓库 `source/config.org` 的 `home-emacs-packages`。
@@ -131,13 +131,13 @@ startup -> appearance -> editing -> programming -> projects
 - 每个 ref 只定义一次、只组装一次；片段必须 `:tangle no`。
 - 共享实现放在 `helpers/...`，并在所有调用方之前组装。
 - noweb 只负责组织与顺序，不模拟 `require`。
-- 公开函数和变量使用 `literal/...`，路径与静态常量使用 `literal:...`。
-- 私有函数使用 `literal/...--...`；不要添加顺序加载用的 `defvar nil` 注入点。
+- 公开函数和变量使用 `custom/...`，路径与静态常量使用 `custom:...`。
+- 私有函数使用 `custom/...--...`；不要添加顺序加载用的 `defvar nil` 注入点。
 - 同一符号不得重复 `defun`、`defvar` 或 `defconst`。
-- agenote 同步/异步调用统一走 `literal/agenote-call` 和 `literal/agenote-call-async`，每次显式传 domain。
-- 全局键使用 `literal/bind`，局部键使用 `literal/bind-local`，前缀声明使用 `literal/declare-binding-prefix`，保持键位、Which-key、帮助和 Dashboard 同源。
-- display 初始化注册到 `literal/add-frame-created-hook`；依赖 client 最终 buffer 的行为注册到 `literal/add-server-ready-hook`。
-- 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `literal-*` feature。
+- agenote 同步/异步调用统一走 `custom/agenote-call` 和 `custom/agenote-call-async`，每次显式传 domain。
+- 全局键使用 `custom/bind`，局部键使用 `custom/bind-local`，前缀声明使用 `custom/declare-binding-prefix`，保持键位、Which-key、帮助和 Dashboard 同源。
+- display 初始化注册到 `custom/add-frame-created-hook`；依赖 client 最终 buffer 的行为注册到 `custom/add-server-ready-hook`。
+- 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
 
 `emacs.org` 正文只记录靠近实现才有价值的功能语义、API 契约、兼容原因和设计取舍。Agent 工作流、索引、验收命令和通用性能规则只写在本文件。
 
@@ -245,6 +245,6 @@ scripts/configctl audit-packages
 额外静态检查：
 
 ```bash
-rg -n "require 'literal-|provide 'literal-|:tangle +lisp/|add-to-list 'load-path" emacs.org
+rg -n "require 'custom-|provide 'custom-|:tangle +lisp/|add-to-list 'load-path" emacs.org
 test ! -e lisp
 ```

@@ -4,7 +4,7 @@
 ;; SPDX-License-Identifier: MIT
 ;; This file contains data assignments only.  It is loaded by emacs.org.
 
-(setq literal:context-menu-label-translations
+(setq custom:context-menu-label-translations
       '(("Context Menu" . "右键菜单")
     ("Undo" . "撤销")
     ("Undo in Region" . "撤销选区")

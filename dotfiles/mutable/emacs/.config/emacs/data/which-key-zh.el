@@ -4,7 +4,7 @@
 ;; SPDX-License-Identifier: MIT
 ;; This file contains data assignments only.  It is loaded by emacs.org.
 
-(setq literal:which-key-description-spec
+(setq custom:which-key-description-spec
       '(("C-x" "文件/缓冲区/窗口/标签"
      ("C-@" . "返回全局标记")
      ("C-SPC" . "返回全局标记")
@@ -295,7 +295,7 @@
     ("M-," . "返回上一位置")
     ))
 
-(setq literal:which-key-major-mode-description-spec
+(setq custom:which-key-major-mode-description-spec
       '((markdown-mode
      ("C-c" "Markdown"
       ("<timeout>" . "复制选区")
@@ -782,7 +782,7 @@
      ("C-c" "TypeScript"
       ("'" . "转为模板字符串")))))
 
-(setq literal:which-key-regexp-replacements
+(setq custom:which-key-regexp-replacements
       '(((nil . "prefix") . (nil . "前缀"))
     (("^timeout$" . nil) . ("超时" . nil))
     (("^up$" . nil) . ("↑" . nil))

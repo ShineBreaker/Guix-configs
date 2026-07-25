@@ -3,6 +3,7 @@
 **状态**:草案,待你审查后手工执行
 **生成时间**:2026-07-19
 **关联**:
+
 - Commit 4 (87365ab) Phase 2.1:notes/ 标记为历史迁移区
 - Commit 12 (753ebe7) Phase 7.2 manifest 决策:Deft 是否删
 - `scripts/migrate-notes`:Commit 4 写的自动分类脚本(本方案替代它,见 §5)
@@ -30,23 +31,24 @@
 
 唯一结构化技术内容,5 个独立条目:
 
-| 行号 | 标题 | 内容类型 | 建议去向 |
-|------|------|---------|---------|
-| 1 | 备份与恢复脚本备份函... | Flatpak 备份脚本 | → `experiences/devops/<date>-flatpak-backup.org`(经验卡) |
-| 51 | 元时代偶然发现了偶尔... | dedomil.net 一句话记忆 | → 删除(太碎片化) |
-| 58 | 内存消耗应该是中间两... | JVM AOT 参数笔记 | → `experiences/devops/<date>-jvm-aot-memory.org` |
-| 65 | networking... | NixOS 屏蔽 QQ 域名 | → `experiences/guix/<date>-nix-block-domain.org` |
-| 75 | 升级版新增语法临时脚... | bubblewrap 沙盒脚本 | → `experiences/devops/<date>-bbox-bwrap.org`(独立卡片) |
-| 169 | 位天翼云盘访问码百度... | 系统镜像下载链接 | → 删除(链接可能已失效;如需要再查) |
-| 186 | bash-c"$(c... | 一行安装脚本 | → 删除(快照式,无复用价值) |
-| 193 | 可以添加在中打开这个... | iOS 越狱证书配置 | → `experiences/tooling/<date>-ios-jailbreak-cert.org`(若仍需要) |
-| 218 | 可期版链接 | Imagine UI 百度网盘 | → 删除(链接过期概率高) |
+| 行号 | 标题                    | 内容类型               | 建议去向                                                        |
+| ---- | ----------------------- | ---------------------- | --------------------------------------------------------------- |
+| 1    | 备份与恢复脚本备份函... | Flatpak 备份脚本       | → `experiences/devops/<date>-flatpak-backup.org`(经验卡)        |
+| 51   | 元时代偶然发现了偶尔... | dedomil.net 一句话记忆 | → 删除(太碎片化)                                                |
+| 58   | 内存消耗应该是中间两... | JVM AOT 参数笔记       | → `experiences/devops/<date>-jvm-aot-memory.org`                |
+| 65   | networking...           | NixOS 屏蔽 QQ 域名     | → `experiences/guix/<date>-nix-block-domain.org`                |
+| 75   | 升级版新增语法临时脚... | bubblewrap 沙盒脚本    | → `experiences/devops/<date>-bbox-bwrap.org`(独立卡片)          |
+| 169  | 位天翼云盘访问码百度... | 系统镜像下载链接       | → 删除(链接可能已失效;如需要再查)                               |
+| 186  | bash-c"$(c...           | 一行安装脚本           | → 删除(快照式,无复用价值)                                       |
+| 193  | 可以添加在中打开这个... | iOS 越狱证书配置       | → `experiences/tooling/<date>-ios-jailbreak-cert.org`(若仍需要) |
+| 218  | 可期版链接              | Imagine UI 百度网盘    | → 删除(链接过期概率高)                                          |
 
 **保留:5 条**;**删除:4 条**;**迁入 experiences:5 条**
 
 ### 2.2 `ai.org` / `creation.org` / `game.org` / `life.org` / `meme.org` / `nsfw.org` — **建议整体归档**
 
 这 6 个文件的内容画像高度一致:
+
 - 短句/段子/梗图配文,**非结构化**
 - 没有可执行的 TODO/任务
 - 没有双向链接 / Roam ID
@@ -128,6 +130,7 @@ git mv notes/ai.org notes/creation.org notes/game.org \
 ```
 
 **目标文件命名**:用今天日期作为 ID 前缀(对齐 agenote-base 惯例):
+
 - `20260719-<slug>.org`
 
 ### Step 5:删除剩余 tech.org 条目(4 条)
@@ -138,6 +141,7 @@ git mv notes/ai.org notes/creation.org notes/game.org \
 ```
 
 应删除的条目(本方案 §2.1 表格中标记"删除"的 4 条):
+
 - L51 元时代偶然发现了偶尔...
 - L169 位天翼云盘访问码百度...
 - L186 bash-c"$(c...
@@ -194,8 +198,8 @@ agenote reindex   # 在 ~/Documents/Org/ 目录执行
 
 ### Step 9:更新 emacs 配置(Phase 7.2 后续 commit)
 
-- 删除 `literal/note-new`(Commit 4 已标 DEPRECATED)
-- 删除 `literal:org-default-notes-file` 常量
+- 删除 `custom/note-new`(Commit 4 已标 DEPRECATED)
+- 删除 `custom:org-default-notes-file` 常量
 - 删除 `use-package deft`(本方案完成后)
 - manifest 删 `emacs-deft`(已建议)
 
@@ -203,10 +207,12 @@ agenote reindex   # 在 ~/Documents/Org/ 目录执行
 
 Commit 4 写的 `scripts/migrate-notes` 用启发式分类(TODO/DEADLINE/ROAM_REFS/文件大小),
 **对本例不适用**:
+
 - notes/ 内容没有任何 Org 结构(TODO/DEADLINE/ROAM_REFS 全是 false negative)
 - "短文件 → inbox"启发式会把 meme.org 之类也塞进 inbox(30K 不是短文件,但内容碎片)
 
 **建议**:本方案的手工分类(§2.1 + §2.2)比启发式更准确,因为只有你能判断:
+
 - 哪些 tech.org 条目仍值得长期保留
 - 梗图/段子是否要保留只读检索
 
@@ -240,12 +246,12 @@ cp -r ~/Documents/Org/notes.backup-<日期> ~/Documents/Org/notes
 
 ## 8. 风险评估
 
-| 风险 | 概率 | 影响 | 缓解 |
-|------|------|------|------|
-| 误删 tech.org 中有价值条目 | 中 | 中 | Step 1 全量备份;Step 4 每条单独迁移 |
-| 归档文件被 syncthing 同步冲突 | 低 | 低 | archive/ 不在 syncthing 同步路径(inbox.org 才是) |
-| Roam DB 残留旧文件引用 | 中 | 低 | `org-roam-db-sync` 重建;归档文件不进 DB |
-| Deft 配置仍指向不存在的 notes/ | 高 | 极低 | Deft 启动时找不到目录会报错但不崩溃;Step 9 同步删配置 |
+| 风险                           | 概率 | 影响 | 缓解                                                  |
+| ------------------------------ | ---- | ---- | ----------------------------------------------------- |
+| 误删 tech.org 中有价值条目     | 中   | 中   | Step 1 全量备份;Step 4 每条单独迁移                   |
+| 归档文件被 syncthing 同步冲突  | 低   | 低   | archive/ 不在 syncthing 同步路径(inbox.org 才是)      |
+| Roam DB 残留旧文件引用         | 中   | 低   | `org-roam-db-sync` 重建;归档文件不进 DB               |
+| Deft 配置仍指向不存在的 notes/ | 高   | 极低 | Deft 启动时找不到目录会报错但不崩溃;Step 9 同步删配置 |
 
 ## 9. 后续工作(不在本方案范围)
 

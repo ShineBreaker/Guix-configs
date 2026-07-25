@@ -1,4 +1,4 @@
-;;; early-init.el --- literal-config 启动期优化 -*- lexical-binding: t; -*-
+;;; early-init.el --- custom-config 启动期优化 -*- lexical-binding: t; -*-
 
 ;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai004@gmail.com>
 ;; SPDX-License-Identifier: MIT

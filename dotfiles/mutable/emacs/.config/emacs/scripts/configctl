@@ -2,8 +2,8 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-lock="/tmp/literal-config-configctl-${UID}.lock"
-status_file="$(mktemp /tmp/literal-configctl-status.XXXXXX)"
+lock="/tmp/custom-config-configctl-${UID}.lock"
+status_file="$(mktemp /tmp/custom-configctl-status.XXXXXX)"
 export LITERAL_CONFIGCTL_STATUS_FILE="$status_file"
 printf '1' >"$status_file"
 

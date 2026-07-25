@@ -1,11 +1,11 @@
-;;; init.el --- literal-config bootstrap(按需 tangle emacs.org → main.el) -*- lexical-binding: t; -*-
+;;; init.el --- custom-config bootstrap(按需 tangle emacs.org → main.el) -*- lexical-binding: t; -*-
 
 ;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;
 ;; SPDX-License-Identifier: MIT
 
 ;;; Commentary:
-;; 本文件是 literal-config 的固定 bootstrap 入口,**不由 emacs.org tangle 生成**,
+;; 本文件是 custom-config 的固定 bootstrap 入口,**不由 emacs.org tangle 生成**,
 ;; 永久纳入 git 跟踪。`emacs' 直接从当前 `user-emacs-directory' 加载本文件。
 ;;
 ;; 职责(且仅此三步):
@@ -68,5 +68,5 @@
   ;; 加载真正的配置
   (load main-file nil t))
 
-(provide 'literal-bootstrap-init)
+(provide 'custom-bootstrap-init)
 ;;; init.el ends here
