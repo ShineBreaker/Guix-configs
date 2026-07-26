@@ -4864,7 +4864,122 @@ GUI 模式仅保留 x-gtk-resize-child-frames 修复;margin formatter 由
 :CUSTOM_ID: system-tools
 :END:
 
-Guix 环境检测、daemon 预热、Dashboard、Emacs 31 兼容性 hack、需要决策的配置。
+Guix 环境检测、daemon 预热、生活应用入口、Dashboard、Emacs 31 兼容性 hack、需要决策的配置。
+
+** 实用应用
+:PROPERTIES:
+:CUSTOM_ID: applications
+:END:
+
+日常应用入口。所有应用遵循 *功能内聚* 原则:每个应用的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。=C-c a= 前缀声明见 [[#keybindings][前缀键体系]]。
+
++ =custom/bind= 内部通过 =custom--pending-wk-descs= 暂存 which-key 描述,延迟到 =with-eval-after-load 'which-key= 统一 flush;因此应用键位散落到此域(晚于 keys-completion)不影响描述注册。
++ Dashboard 通过 =custom/binding-dashboard-bindings= 扫描 =custom:binding-spec= 生成,与代码物理位置无关。
+
+*** RSS 阅读 (Elfeed)
+
+#+begin_src emacs-lisp
+(use-package elfeed
+  :defer t
+  :commands (elfeed elfeed-update))
+
+(custom/bind "C-c a f f" #'elfeed "打开 Elfeed" "生活应用")
+(custom/bind "C-c a f u" #'elfeed-update "更新 Elfeed" "生活应用")
+#+end_src
+
+*** 邮件 (Notmuch)
+
+#+begin_src emacs-lisp
+(use-package notmuch
+  :defer t
+  :commands (notmuch))
+
+(custom/bind "C-c a m" #'notmuch "邮件" "生活应用")
+#+end_src
+
+*** Matrix (Ement)
+
+#+begin_src emacs-lisp
+(use-package ement
+  :defer t
+  :commands (ement-connect ement-room-list ement-directory
+                           ement-notifications ement-disconnect))
+
+(defvar-keymap custom:ement-prefix-map
+  :doc "Ement 应用入口。"
+  "c" #'ement-connect
+  "l" #'ement-room-list
+  "f" #'ement-directory
+  "n" #'ement-notifications
+  "d" #'ement-disconnect)
+
+(custom/bind "C-c a e" custom:ement-prefix-map "Matrix" "生活应用")
+#+end_src
+
+*** Telegram (Telega)
+
+#+begin_src emacs-lisp
+(use-package telega
+  :demand t
+  :commands (telega telega-kill)
+  :config
+  (keymap-set telega-prefix-map "k" #'telega-kill))
+
+(custom/bind "C-c a t" telega-prefix-map "Telegram" "生活应用")
+#+end_src
+
+*** 日历 (Calfw)
+
+#+begin_src emacs-lisp
+(use-package calfw
+  :defer t
+  :commands (cfw:open-org-calendar))
+
+(custom/bind "C-c a c" #'cfw:open-org-calendar "日历" "生活应用")
+#+end_src
+
+*** 内置游戏
+
+Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =use-package= 。
+
+#+begin_src emacs-lisp
+(custom/bind "C-c a g t" #'tetris "俄罗斯方块" "生活应用")
+(custom/bind "C-c a g s" #'snake "贪吃蛇" "生活应用")
+(custom/bind "C-c a g m" #'gomoku "五子棋" "生活应用")
+(custom/bind "C-c a g p" #'pong "Pong" "生活应用")
+#+end_src
+
+*** Guix 包管理 (Emacs-Guix)
+
+[[https://git.savannah.gnu.org/cgit/guix/emacs-guix.git/][Emacs-Guix]] ( =guix.el= ) 是 GNU Guix 包管理器的 Emacs 接口。 =M-x guix= 提供 Magit-like popup 入口,可管理 profile、generations、包和服务。本配置启用三项功能:
+
++ *管理界面* :: =M-x guix= 的 popup 与 list/info 接口
++ *guix-devel-mode* :: scheme-mode 辅助 minor mode,处理 Guix =.scm= 包定义。手动启用,不挂全局 =scheme-mode-hook=,避免影响非 Guix 的 scheme 文件。
++ *guix-prettify-mode* :: 把 =/gnu/store/<hash>-name= 的 hash 部分显示为 =…=
+
+性能策略: 不纳入 daemon 预热白名单 (低频管理工具),用 =:defer t= 按需加载。 =global-guix-prettify-mode= 在 Guix 环境内启用 (非 Guix 环境下无 store 路径可美化)。
+
+#+begin_src emacs-lisp
+(use-package guix
+  :defer t
+  :when custom:in-guix-environment-p
+  :commands (guix
+             guix-search-by-regexp
+             guix-installed-user-packages
+             guix-generations
+             guix-prettify-mode
+             global-guix-prettify-mode
+             guix-devel-mode)
+  :config
+  (global-guix-prettify-mode 1))
+
+(custom/bind "C-c a x x" #'guix                          "Guix 管理界面"    "生活应用")
+(custom/bind "C-c a x s" #'guix-search-by-regexp         "搜索包"           "生活应用")
+(custom/bind "C-c a x i" #'guix-installed-user-packages  "已安装用户包"     "生活应用")
+(custom/bind "C-c a x g" #'guix-generations              "Profile 代系"     "生活应用")
+(custom/bind "C-c a x p" #'guix-prettify-mode            "切换 store 美化"  "生活应用")
+(custom/bind "C-c a x d" #'guix-devel-mode               "切换 devel 模式"  "生活应用")
+#+end_src
 
 ** Guix 集成与 daemon 预热
 :PROPERTIES:
