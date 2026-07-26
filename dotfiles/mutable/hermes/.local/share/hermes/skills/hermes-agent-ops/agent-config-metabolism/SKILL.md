@@ -19,25 +19,38 @@ This is **not** a one-shot cleanup — it's a recurring healthcheck. The cron jo
 
 ## User Preferences (load these first)
 
-Two user-stated principles that govern every interaction with this skill — captured after explicit corrections during the originating session.
+Three user-stated principles that govern every interaction with this skill — captured after explicit corrections during originating sessions.
 
-### 1. Report first, ask before acting — **never execute fixes without approval**
+### 1. Autonomous cron mode — fix false-positives, escalate real decisions
 
-When the audit surfaces red signals, **the deliverable is a detailed inspection report, not an auto-fix**. The agent's job:
+**This is the default behavior for the weekly cron job.** When the audit runs as a scheduled task (not interactive Q&A), the agent should:
+
+1. Run the audit script
+2. Cross-validate each RED via independent shell probes
+3. **Autonomously fix false-positives:**
+   - Script bugs (e.g. JSONC parser missing block comments) → patch the script + verify
+   - Thresholds too tight → adjust yaml with justification
+   - Missing whitelist entries → add exclude_paths/filters with justification
+4. **Escalate real problems to the user** with decision options (A/B/C) and a recommended direction
+5. Re-run the script after fixes to confirm greens
+
+The user explicitly opted into this mode on 2026-07-26: "只扫任务不解决问题？应该自主解决部分问题，然后假如有需要用户拍板的地方则直接说出来。"
+
+### 2. Interactive mode — report first, ask before acting
+
+When the user asks about the audit interactively (not via cron), stay in report-only mode:
 
 - Surface every red with: *which file / which line / what's the real signal behind the number*
 - Cross-validate each red against ground truth (independent shell pipeline) — never trust the script's first number
-- Present the report with **decision options** (e.g. "trim description? raise threshold? investigate upstream?") and **stop**
+- Present the report with **decision options** and **stop**
 - Wait for explicit user approval before touching any file
 
-Trigger phrases that must switch to report-only mode:
-- "你看看本次检查暴露出来了什么问题" (literally: "look at what the audit exposed" — implies report, not action)
+Trigger phrases that switch to interactive/report-only mode:
+- "你看看本次检查暴露出来了什么问题"
 - "向我汇报" / "report to me" / "find out what's wrong"
 - "审核" / "review" (without explicit fix instruction)
 
-When in doubt, default to **report mode**. Fixing on autopilot violates the user's "low-frequency but critical" preference that any autonomous-mode claim ("自主完成所有任务" / "你去休息") requires explicit opt-in first.
-
-### 2. **Solve the root cause directly — never hide problems behind excludes or threshold-raising**
+### 3. **Solve the root cause directly — never hide problems behind excludes or threshold-raising**
 
 When a red turns out to be a real signal (not noise), the right response is to make the script **recognize the real situation**, not to suppress it. Concrete prohibitions:
 
@@ -73,19 +86,51 @@ The canonical invocation through Hermes:
 # One-shot (interactive)
 terminal(command="python3 $HERMES_HOME/skills/hermes-agent-ops/agent-config-metabolism/scripts/metabolism_check.py")
 
-# Weekly cron (Sunday 09:00, no_agent=True — script IS the job)
+# Weekly cron (Sunday 09:00, LLM-driven — agent fixes false-positives autonomously)
 cronjob(
     action="create",
     schedule="0 9 * * 0",
     name="agent-config-metabolism-weekly",
-    prompt="",  # ignored when script+no_agent set
-    script="skills/hermes-agent-ops/agent-config-metabolism/scripts/metabolism_check.py",
-    no_agent=True,
+    skills=["agent-config-metabolism"],
+    prompt="""你是 Hermes Agent 的自主周检助手。加载 agent-config-metabolism skill，然后按以下流程执行：
+
+## 执行流程
+
+1. **跑审计脚本**
+   python3 $HERMES_HOME/skills/hermes-agent-ops/agent-config-metabolism/scripts/metabolism_check.py
+
+2. **分析 RED 项**（cross-validation）
+   对每个 RED，独立用 shell 探针验证真伪。重点排查：
+   - 脚本 bug（如 JSONC 解析器漏了块注释）
+   - 阈值配置过紧（inject 27KB/25KB 这种轻微超标）
+   - 白名单漏配（session dump Bearer、微信 poll 错误）
+   - 真实问题（真正需要修复的）
+
+3. **自主修复 false-positive**
+   - 脚本 bug → 直接 patch 脚本 + 跑一次验证
+   - 阈值过紧 → 调 yaml 并说明理由
+   - 白名单漏配 → 加 exclude_paths/grep 过滤并说明理由
+   - 修完后重跑脚本，确认 RED 变绿
+
+4. **汇报结果**
+   最终交付：
+   - **已自主修复**：修了什么、怎么修的、验证结果
+   - **真实问题需你拍板**：问题描述、选项（A/B/C）、建议方向
+   - **全绿**：简洁确认即可
+
+## 边界
+
+- ❌ 不要动 `~/.config/agents/skills/`（Guix Home immutable）
+- ❌ 不要碰 uncommit 的 git 文件
+- ❌ 不要 push 到 remote
+- ✅ 脚本 bug、阈值、白名单可以直接改
+- ✅ 真正拿不准的，给我选项让我决定""",
+    no_agent=False,  # LLM-driven, not script-driven
     deliver="origin",
 )
 ```
 
-Or directly via shell:
+Or directly via shell (read-only report):
 
 ```bash
 python3 ~/.local/share/hermes/skills/hermes-agent-ops/agent-config-metabolism/scripts/metabolism_check.py
@@ -131,17 +176,19 @@ The script returns a 14-line summary like:
 ...
 ```
 
-Each red is a concrete signal. The script does NOT auto-fix anything (cleanups are dangerous; humans should review).
+Each red is a concrete signal. In **interactive mode**, the script does NOT auto-fix anything. In **autonomous cron mode**, false-positives are auto-patched and real problems are escalated with options.
 
-### Step 3: Diagnose reds via the linked skill
+### Step 3: Diagnose reds and decide action mode
 
-| Red on check #... | Likely cause | Skill |
-|----|----|----|
-| 1 (inject too big) | duplicate rules injected twice | `hermes-skill-curation` §2 |
-| 2 (skill count) | zombie skills from past imports | `hermes-skill-curation` §2 |
-| 3 (broken symlinks) | dotfile source moved | `guix-configs-workflow` |
-| 7 (cron not alive) | daemon died | `hermes-agent` §Durable |
-| 14 (plaintext secret) | leaked credential | rotate immediately |
+| Red on check #... | Likely cause | Skill | Autonomous mode action |
+|----|----|----|----|
+| 1 (inject too big) | duplicate rules injected twice | `hermes-skill-curation` §2 | Cross-validate; if over threshold by <10%, adjust yaml with justification |
+| 2 (skill count) | zombie skills from past imports | `hermes-skill-curation` §2 | Cross-validate; escalate with cleanup options if real |
+| 3 (broken symlinks) | dotfile source moved | `guix-configs-workflow` | Escalate — broken symlinks need manual review |
+| 6 (JSON parseable) | JSONC block comments or trailing commas | this skill | **Fix parser** (patch `_parse_json_lenient`) |
+| 7 (cron not alive) | daemon died | `hermes-agent` §Durable | Escalate — cron daemon issues need investigation |
+| 9 (errors) | gateway poll errors, MCP failures | `hermes-agent` | Cross-validate; if same signature repeating ×N, it's one root cause — check if upstream fixable |
+| 14 (plaintext secret) | session dumps, test fixtures | this skill | Cross-validate; if session dump Bearer or test fixture, add exclude_paths |
 
 ### Step 4: Cross-validate the script's claims against ground truth
 
@@ -186,29 +233,62 @@ for p in home.rglob('*.json'):
 
 If the script's number disagrees with these by more than ±10%, the script has a bug — patch it before reporting reds to the user.
 
-### Step 5: Schedule via cron
+### Step 5: Schedule via cron (LLM-driven autonomous mode)
 
-Use `cronjob(action='create', ...)` with the script and `no_agent=True` (so the script IS the job — no LLM tokens burned on a watchdog that just prints status).
+Use `cronjob(action='create', ...)` with the skill and `no_agent=False` so the agent can autonomously fix false-positives and escalate real decisions.
 
 ```python
 cronjob(
     action="create",
     schedule="0 9 * * 0",
     name="agent-config-metabolism-weekly",
-    script="skills/hermes-agent-ops/agent-config-metabolism/scripts/metabolism_check.py",
-    no_agent=True,
-    deliver="origin",          # user preference — same as jeans-issue-fixer
-                                # sends results to current chat (QQ).
-                                # Other options: "telegram", "discord", "slack",
-                                # "all", or a specific platform:chat_id:thread_id
+    skills=["agent-config-metabolism"],
+    prompt="""你是 Hermes Agent 的自主周检助手。加载 agent-config-metabolism skill，然后按以下流程执行：
+
+## 执行流程
+
+1. **跑审计脚本**
+   python3 $HERMES_HOME/skills/hermes-agent-ops/agent-config-metabolism/scripts/metabolism_check.py
+
+2. **分析 RED 项**（cross-validation）
+   对每个 RED，独立用 shell 探针验证真伪。重点排查：
+   - 脚本 bug（如 JSONC 解析器漏了块注释）
+   - 阈值配置过紧（inject 27KB/25KB 这种轻微超标）
+   - 白名单漏配（session dump Bearer、微信 poll 错误）
+   - 真实问题（真正需要修复的）
+
+3. **自主修复 false-positive**
+   - 脚本 bug → 直接 patch 脚本 + 跑一次验证
+   - 阈值过紧 → 调 yaml 并说明理由
+   - 白名单漏配 → 加 exclude_paths/grep 过滤并说明理由
+   - 修完后重跑脚本，确认 RED 变绿
+
+4. **汇报结果**
+   最终交付：
+   - **已自主修复**：修了什么、怎么修的、验证结果
+   - **真实问题需你拍板**：问题描述、选项（A/B/C）、建议方向
+   - **全绿**：简洁确认即可
+
+## 边界
+
+- ❌ 不要动 `~/.config/agents/skills/`（Guix Home immutable）
+- ❌ 不要碰 uncommit 的 git 文件
+- ❌ 不要 push 到 remote
+- ✅ 脚本 bug、阈值、白名单可以直接改
+- ✅ 真正拿不准的，给我选项让我决定""",
+    no_agent=False,
+    deliver="origin",
 )
 ```
+
+**Exit code is always 0** — the report IS the signal. A non-zero exit would mark the cron job as "error" in the Hermes UI, which is exactly what we don't want even when there are REDs. The wrapper in `$HERMES_HOME/scripts/metabolism_check.py` swallows any non-zero exit from the real script as a safety net.
 
 To change delivery later: `cronjob(action='update', job_id='<id>', deliver='local')`.
 
 ## Pitfalls
 
 - **Don't auto-fix on red.** The script outputs a report, not a cleanup. Red means "investigate", not "delete". `hermes-skill-curation` handles actual cleanup.
+- **Autonomous cron mode is opt-in only.** The user explicitly activated it ("只扫任务不解决问题？应该自主解决..."). Don't assume it's universal — document the opt-in for other users.
 - **Thresholds are personal.** The script reads thresholds from a config file (`scripts/metabolism_thresholds.yaml`); adjust to your setup. 25KB inject / 160 skills are starting points, not universal truths.
 - **Check 11 (task ledger parity) requires kanban enabled.** If you don't use kanban, skip that check (set `enabled: false` in thresholds).
 - **Check 14 (plaintext secrets) is heuristic.** It greps for `sk-`, `aws_`, `ghp_`, `xoxb-`, `Bearer ` — these can false-positive on test fixtures. Review before rotating.

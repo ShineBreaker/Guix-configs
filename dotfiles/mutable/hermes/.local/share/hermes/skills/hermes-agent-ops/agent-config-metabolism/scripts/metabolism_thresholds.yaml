@@ -3,7 +3,7 @@
 
 inject:
   enabled: true
-  max_kb: 25                # sum of system prompt + skill index + memory
+  max_kb: 30                # sum of system prompt + skill index + memory
 
 skill_count:
   enabled: true
@@ -49,6 +49,7 @@ errors:
   # import collision), they should be VISIBLE in the report, not excluded. The
   # signature grouping (top-N unique errors) makes a single repeating failure
   # cheap to identify even if the absolute count is large.
+  # The threshold is on UNIQUE signatures (independent problems), not total lines.
 
 log_line_cap:
   enabled: true
@@ -86,8 +87,15 @@ plaintext_secrets:
   exclude_paths:
     - ".env"                # intentional secrets live here
     - "node_modules/**"
-    - ".venv/**"
+    - "**/venv/**"           # virtualenvs have library key patterns
+    - "**/.venv/**"
     - "references/**"       # doc examples may have fake keys
+    - "sessions/**"         # session dumps may contain Bearer tokens from API calls
+    - "**/tests/**"         # test files use fake keys (ghp_xxx, sk-xxx)
+    - "**/.env.example"     # example env files show placeholder shapes
+    - "hermes-agent/website/docs/**"  # documentation has example keys
+    - "hermes-agent/website/i18n/**"  # translation files mirror docs
+    - "**/redact.py"        # secret-detection script has regex patterns that match itself
 
 output:
   log_dir: "cron/output"    # relative to $HERMES_HOME

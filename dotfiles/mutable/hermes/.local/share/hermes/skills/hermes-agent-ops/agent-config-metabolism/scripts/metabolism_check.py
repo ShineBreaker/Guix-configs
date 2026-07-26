@@ -250,14 +250,47 @@ def check_rule_frontmatter(cfg: dict) -> tuple[str, str]:
 
 
 def _parse_json_lenient(text: str) -> tuple[bool, str]:
-    """Parse JSON with JSONC tolerance (trailing commas + // comments).
+    """Parse JSON with JSONC tolerance (trailing commas + // and /* */ comments).
 
     TypeScript's tsconfig and VSCode's tsdoc metadata use JSONC. Standard
-    `json.loads` rejects both. We strip those out before parsing.
+    `json.loads` rejects both line comments and block comments. We strip those
+    out before parsing.
     """
+    # Strip block comments (/* ... */) with string-awareness — /* inside a
+    # JSON string (e.g. "paths": {"@/*": [...]}) is data, not a comment.
+    out_chars = []
+    i = 0
+    in_str = False
+    esc = False
+    while i < len(text):
+        ch = text[i]
+        if esc:
+            out_chars.append(ch)
+            esc = False
+        elif ch == "\\" and in_str:
+            out_chars.append(ch)
+            esc = True
+        elif ch == '"':
+            in_str = not in_str
+            out_chars.append(ch)
+        elif not in_str and ch == "/" and i + 1 < len(text) and text[i + 1] == "*":
+            # skip until */
+            i += 2
+            while i < len(text) - 1:
+                if text[i] == "*" and text[i + 1] == "/":
+                    i += 2
+                    break
+                i += 1
+            else:
+                i = len(text)
+            continue
+        else:
+            out_chars.append(ch)
+        i += 1
+    text_no_block = "".join(out_chars)
     # Strip // line comments (but not // inside strings).
     out_lines = []
-    for line in text.split("\n"):
+    for line in text_no_block.split("\n"):
         in_str = False
         esc = False
         cleaned = []
@@ -281,7 +314,7 @@ def _parse_json_lenient(text: str) -> tuple[bool, str]:
         out_lines.append("".join(cleaned))
     cleaned = "\n".join(out_lines)
     # Strip trailing commas in objects/arrays: ,] or ,}
-    cleaned = re.sub(r",(\s*[\]}])", r"\1", cleaned)
+    cleaned = re.sub(r",(\s*[]}])", r"\1", cleaned)
     try:
         json.loads(cleaned)
         return True, ""
@@ -292,7 +325,7 @@ def _parse_json_lenient(text: str) -> tuple[bool, str]:
 def check_json_parseable(cfg: dict) -> tuple[str, str]:
     """6. Every *.json under HERMES_HOME is valid JSON (or JSONC).
 
-    JSONC tolerance catches tsconfig.json and tsdoc-metadata.json shipped
+    JSONC tolerance catches tsconfig.json and tsdoc metadata.json shipped
     by hermes LSP tooling (yaml-language-server, bash-language-server, etc.).
     These are NOT broken — they're JSONC, the de-facto TS/VSCode dialect.
     """
@@ -309,6 +342,15 @@ def check_json_parseable(cfg: dict) -> tuple[str, str]:
                     text = p.read_text(errors="ignore")
                 except OSError:
                     continue
+                # First try standard JSON — only fall back to lenient parser
+                # if standard fails. The lenient parser strips // inside
+                # strings, which corrupts valid JSON (e.g. URLs with https://).
+                try:
+                    json.loads(text)
+                    continue  # Valid standard JSON — done
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                # Standard parsing failed — try lenient (JSONC) parser
                 ok, err = _parse_json_lenient(text)
                 if not ok:
                     bad.append((rel, err))
@@ -386,21 +428,16 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                 except OSError:
                     continue
                 # Pre-extract the tail exception type per Traceback block.
-                # Walk the text line by line, finding each "Traceback" header and
-                # consuming subsequent indented frames until we hit the column-0
-                # exception line.
                 tail_by_offset: dict[int, str] = {}
                 lines = text.split("\n")
                 i = 0
                 while i < len(lines):
                     if lines[i].startswith("Traceback (most recent call last):"):
                         tb_start_offset = sum(len(l) + 1 for l in lines[:i])
-                        # find the column-0 exception line (no leading whitespace)
                         j = i + 1
                         tail = None
                         while j < len(lines):
                             if lines[j] and not lines[j][0].isspace():
-                                # column-0 line — should be the exception
                                 em = re.match(
                                     r"^([\w.]+(?:Error|Exception|Warning|Failure|Interrupt))",
                                     lines[j],
@@ -408,42 +445,43 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                                 if em:
                                     tail = em.group(1)
                                     break
-                                # not an exception line — leave block unmarked
                                 break
                             j += 1
                         tail_by_offset[tb_start_offset] = tail or "Exception"
                         i = j + 1 if tail else i + 1
                     else:
                         i += 1
-                # Walk lines, find each line's absolute offset in text.
+                # Count each Traceback block as 1 error (not each frame line).
+                # Count each ERROR line as 1 error.
                 pos = 0
+                tb_offsets_seen: set[int] = set()
                 for line in text.splitlines(keepends=True):
                     line_start = pos
                     pos += len(line)
-                    if "ERROR" not in line and "Traceback" not in line:
-                        continue
-                    err_count += 1
                     if "Traceback" in line:
-                        # find nearest preceding Traceback start
-                        tail = "Traceback"
+                        # Find which block this line belongs to
                         for tb_pos in sorted(tail_by_offset):
-                            if tb_pos <= line_start:
+                            if tb_pos <= line_start and tb_pos not in tb_offsets_seen:
+                                # First line of this traceback — count once
+                                tb_offsets_seen.add(tb_pos)
                                 tail = tail_by_offset[tb_pos]
-                            else:
+                                sig = f"{p.name}::{tail}"
+                                sig_count[sig] = sig_count.get(sig, 0) + 1
+                                err_count += 1
                                 break
-                        sig = f"{p.name}::{tail}"
-                    else:
+                    elif "ERROR" in line:
                         m = re.search(r"ERROR\s+([\w.]+):?\s*(.*)", line)
                         if m:
                             sig = f"{p.name}::{m.group(1)}:{(m.group(2) or '')[:40]}"
                         else:
                             sig = f"{p.name}::ERROR"
-                    sig_count[sig] = sig_count.get(sig, 0) + 1
+                        sig_count[sig] = sig_count.get(sig, 0) + 1
+                        err_count += 1
     n_unique = len(sig_count)
-    status = "GREEN" if err_count <= max_per else "RED"
+    status = "GREEN" if n_unique <= max_per else "RED"
     top = sorted(sig_count.items(), key=lambda x: -x[1])[:3]
     top_str = "; ".join(f"{k}×{v}" for k, v in top) if top else ""
-    return status, f"errors {err_count} ({n_unique} unique sigs: {top_str})"
+    return status, f"errors {n_unique} unique sigs (total {err_count}): {top_str}"
 
 
 def check_log_line_cap(cfg: dict) -> tuple[str, str]:
