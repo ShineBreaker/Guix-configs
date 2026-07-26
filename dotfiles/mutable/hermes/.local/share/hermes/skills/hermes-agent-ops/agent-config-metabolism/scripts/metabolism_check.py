@@ -637,10 +637,10 @@ def run() -> int:
         except OSError:
             pass
 
-    # exit code: 0 green only, 1 any red, 2 all skipped
-    if red_count == 0 and green_count == 0:
-        return 2
-    return 1 if red_count > 0 else 0
+    # exit code: always 0 — the report IS the signal, not the exit code
+    # Hermes cron delivers stdout regardless; a non-zero exit code would
+    # mark the job as "error" in the UI, which is exactly what we don't want.
+    return 0
 
 
 if __name__ == "__main__":

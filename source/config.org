@@ -1383,7 +1383,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "blue"
         "just"
 
-        ;; 终端复用器（2026-07 从 tmux 迁移到 herdr，自建 Guile 侧栏由 herdr 原生 sidebar 取代）
+        ;; 终端复用器
         "herdr-bin"
 
         ;; 命令行工具

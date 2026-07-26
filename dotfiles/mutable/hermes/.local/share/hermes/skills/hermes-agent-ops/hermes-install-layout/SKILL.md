@@ -209,6 +209,9 @@ Hermes 二进制**不再报 `libglib-2.0.so.0` 缺失**,直接进 Chromium 启�
 - **不要让 cron job 复用别人 wrapper** — 每个 skill 一个 wrapper,清晰命名 `<skill_name>_<script>.py`,避免一个 wrapper 退出异常影响其他 cron
 - **不要忘了 chmod +x** — wrapper 没执行位,hermes 报 "Script path is not a file" 或 "permission denied"
 - **不要再为 Hermes 搭 Nix flake** — 2026-07-20 已迁出。Electron desktop 的 FHS 库缺口用 `guix shell --emulate-fhs`(§5)补,不是 nix-ld makeWrapper。nix-ld 对 Electron 这种硬链 `/usr/lib` 的预编译二进制只能缓解一小块,`libglib-2.0.so.0` 仍会缺。
+- **`cronjob` 错误信息与实际行为不一致** — `cronjob(action='update', script='/abs/path')` 拒绝绝对路径时报 "Script path must be relative to ~/.hermes/scripts/",但本用户环境中 `~/.hermes/` **目录不存在**。实际运行时 Hermes 把裸 script 名解析为 `$HERMES_HOME/scripts/<name>`(本用户 `$HERMES_HOME=~/.local/share/hermes`)。这个矛盾是 Hermes 文档/实现偏差,不要误以为要把脚本放到 `~/.hermes/scripts/`。
+- **脚本 exit(1) 不是 cron 失败,是"有 RED"的正常退出** — `metabolism_check.py` 在发现任何 RED 检查项时 exit(1),全部 GREEN 才 exit(0)。Hermes cron 把非零退出码标记为 `last_status: "error"`,但这恰恰是脚本工作正常的标志——它的职责就是暴露问题。诊断 cron error 时,先看脚本输出:如果 14 项检查都正常打印了,说明脚本跑成功了;只有 `[ERROR]` 标签或脚本崩溃才是真正的故障。
+- **`_parse_json_lenient` 不处理 `/* */` 块注释** — `agent-config-metabolism` 的 JSONC 解析器只处理 `//` 行注释和尾逗号,不处理 `/* */` 块注释。TypeScript 的 `tsconfig.json` 大量使用块注释,所以 check #6 会永久性地把这些合法 JSONC 文件标记为 broken。修解析器(加块注释剥离),不要 exclude 这些文件。
 - **`hermes desktop` 不在 PATH 的后台/非登录 shell 跑会 "command not found"** — 后台进程(PATH 无 `~/.local/bin`)要用绝对路径 `~/.local/bin/hermes-desktop` 或显式 `export PATH=$HOME/.local/bin:$PATH`。
 - **desktop 升级后别忘 rebuild** — `git pull` 更新 checkout 不会动 `apps/desktop/release/`;`hermes-desktop` 懒检测会在产物缺失时自动 build,但首次会卡几分钟,属预期。
 - **别发早期的 `hermes-desktop` 版本** — 首版只 expose 单个 wayland socket、缺 `LD_LIBRARY_PATH`/`dbus-launch`,且把 `/dev/dri` **只读** expose 导致 GPU 进程 SIGILL,误判为"只能软件渲染"(`LIBGL_ALWAYS_SOFTWARE=1`)→ 应用内动画全失效。正确做法是 GPU 硬件渲染三件套(`--share=/dev/dri` 读写 + `--expose=/sys` + `--expose=/gnu/store`)。五个修复见 §5.2 / `references/desktop-fhs-rescue.md` §5,**照抄别省**。
@@ -232,6 +235,7 @@ chmod +x ~/.local/share/hermes/skills/hermes-agent-ops/hermes-install-layout/scr
 - `references/nix-install-layout.md` — Nix store 路径校验、版本兼容矩阵、hermes-agent-env 结构、`nix-store --query` 查路径正确性(legacy,本机 Nix 已移除)
 - `references/pi-style-editable-checkout.md` — Pi 式 editable-checkout 完整部署结构、三个脚本、踩坑、升级流程(本机当前形态)
 - `references/desktop-fhs-rescue.md` — Electron desktop 在 Guix 上的 `guix shell --emulate-fhs` 救活方案:build 步骤、wrapper 全文、manifest 清单、验证判据(§5 的展开)
+- `references/cron-exit-codes-and-jsonc-parser.md` — cron error ≠ 脚本失败(exit 1 是"有 RED"的正常退出)、JSONC 解析器 `/* */` 块注释盲区、`cronjob` 路径约束文档/实现偏差
 
 ## Related Skills
 

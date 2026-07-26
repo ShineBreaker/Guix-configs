@@ -229,6 +229,8 @@ python3 $HERMES_HOME/skills/hermes-agent-ops/agent-config-metabolism/scripts/met
 
 Expected output: 14 lines, each tagged `[GREEN]` or `[RED]`. If you see `[ERROR]` or fewer than 14 lines, the script failed — check `$HERMES_HOME/cron/output/agent-config-metabolism-<ts>.log` for stderr.
 
+**Exit code is always 0** — the report IS the signal. A non-zero exit would mark the cron job as "error" in the Hermes UI, which is exactly what we don't want even when there are REDs. The wrapper in `$HERMES_HOME/scripts/metabolism_check.py` swallows any non-zero exit from the real script as a safety net.
+
 Then run the cross-validation probes from **Step 4** to confirm the script's numbers match ground truth.
 
 ## References
