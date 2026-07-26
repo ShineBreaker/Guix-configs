@@ -59,6 +59,19 @@
       use-file-dialog nil
       use-dialog-box nil)
 
+;; TTY frame 必须在 main.el 加载前就继承终端默认前景/背景，否则 daemon
+;; client 和 standalone 启动阶段会短暂显示 Emacs 的有色默认 face。
+(let ((tty-parameters '((background-color . "unspecified-bg")
+                        (foreground-color . "unspecified-fg")
+                        (menu-bar-lines . 0)
+                        (tool-bar-lines . 0)
+                        (vertical-scroll-bars . nil)
+                        (horizontal-scroll-bars . nil))))
+  (if-let* ((entry (assq t window-system-default-frame-alist)))
+      (dolist (parameter tty-parameters)
+        (setf (alist-get (car parameter) (cdr entry)) (cdr parameter)))
+    (push (cons t tty-parameters) window-system-default-frame-alist)))
+
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; frame-background-mode 引导（从颜色方案状态文件读取当前模式）
 ;; ═════════════════════════════════════════════════════════════════════════════

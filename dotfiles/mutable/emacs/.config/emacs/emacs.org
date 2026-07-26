@@ -1775,7 +1775,7 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
   (interactive)
   (custom/git--ensure-repo)
   (custom/git--run "stash" "push" "-m"
-                    (format-time-string "stash-%Y%m%d-%H%M%S"))
+                   (format-time-string "stash-%Y%m%d-%H%M%S"))
   (message "已创建 stash"))
 
 (defun custom/git-stash-pop ()
@@ -1875,7 +1875,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 
 背景透明度、字体高度、行号、括号匹配、鼠标支持、ef-themes、spacious-padding、ultra-scroll、pulsar。
 
-+ *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。daemon 启动时全局预载主题以消除 GUI client 首用成本；TTY frame 随后用终端 ANSI 语义色和透明背景覆盖,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
++ *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。GUI 与真彩 TTY 共用主题前景 palette；TTY 仅清除背景,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
 + *字体大小* :110(11pt),由 =custom:default-font-height= 控制
 + *行号* :相对行号 + 自适应宽度
 + 所有 ~display-dependent~ 设置都通过 =custom/apply-frame-appearance= 在新 frame 创建时触发
@@ -1885,7 +1885,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 :CUSTOM_ID: mixed-gui-tty-constraints
 :END:
 
-daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的 frame 参数仍必须 per-frame。Emacs theme 是全局状态；为消除首个 GUI client 的主题加载成本，daemon 启动时预载 Ef theme。TTY client 创建后立即用终端 ANSI 语义色(由 foot + darkman 配色方案统一驱动)覆盖主要 face，背景统一设为 =unspecified= 保持透明。独立 TTY 实例仍不会启用 Ef theme。
+daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的 frame 参数仍必须 per-frame。Emacs theme 是全局状态；daemon 启动时预载 Ef theme，真彩 TTY 与 GUI 共用当前 Ef 明暗主题的前景 palette。TTY client 创建后只清除所有命名 face 的背景与反色属性，再用粗体、下划线等非颜色属性强化选区、搜索、补全等交互状态。
 
 #+attr_org: :width 75
 | 设置/包          | daemon 启动期陷阱             | TTY 行为                | 处理方式                            |
@@ -1895,12 +1895,12 @@ daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的
 | ultra-scroll     | 同上                          | 无效果                  | 无条件启用(GUI client 需要)         |
 | diff-hl(TTY)     | 无 fringe,fringe 指示器不可见 | 改用 margin             | =fboundp= 守卫 + TTY 分支按需启用     |
 | fringe 宽度      | 行号函数若清零 fringe         | —                       | 禁止在行号函数清零 fringe(详见下表) |
-| ef-themes        | =(display-graphic-p)= 永远 nil | daemon 继承全局主题后覆盖 | daemon 预载；TTY frame 立即重设 ANSI face 与透明背景 |
-| TTY 配色         | 无 alpha 通道                 | 终端 ANSI 语义色 + 透明 | =custom/apply-terminal-faces= 背景设 =unspecified= |
+| ef-themes        | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题 |
+| TTY 配色         | 无 alpha 通道                 | 主题前景 + 全 face 透明 | 清背景与反色，不覆盖主题前景 |
 | Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染          | 守卫改为 =custom:modeline--nerd-icons-available=,不查 display |
 #+TBLFM: $2=setq-default= 是全局副作用
 
-TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，因此创建 frame 后立即用终端 ANSI 语义色覆盖主要前景，并把会整块涂背景的 face 背景设为 =unspecified=,让终端的模糊背景穿透。该函数只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。语义色(cyan/red/brightyellow 等)由终端配色方案(foot + darkman)统一驱动,与 tmux 状态栏一致。
+TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后仅为 =hl-line= 恢复 Ef palette 的 =bg-dim= 背景，选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
 
 行号设置函数 =custom/setup-file-line-numbers= 故意不调 =(set-window-fringes ... 0)= ——=diff-hl= 和 =flymake= 的 fringe 指示器(=flymake-fringe-indicator-position= 设为 =left-fringe=)依赖 fringe 宽度,清零会让它们全部消失。
 
@@ -1914,6 +1914,25 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
   "默认字体大小(1/10 pt)。"
   :type 'integer
   :group 'faces)
+
+(defconst custom:terminal-frame-parameters
+  '((background-color . "unspecified-bg")
+    (foreground-color . "unspecified-fg")
+    (menu-bar-lines . 0)
+    (tool-bar-lines . 0)
+    (vertical-scroll-bars . nil)
+    (horizontal-scroll-bars . nil))
+  "TTY frame 在 face 初始化前应用的无色显示参数。")
+
+(defun custom/install-terminal-frame-defaults ()
+  "把透明 TTY 参数合并进 `window-system-default-frame-alist'。"
+  (if-let* ((entry (assq t window-system-default-frame-alist)))
+      (dolist (parameter custom:terminal-frame-parameters)
+        (setf (alist-get (car parameter) (cdr entry)) (cdr parameter)))
+    (push (cons t (copy-tree custom:terminal-frame-parameters))
+          window-system-default-frame-alist)))
+
+(custom/install-terminal-frame-defaults)
 
 (dolist (param '((menu-bar-lines . 0)
                  (tool-bar-lines . 0)
@@ -1953,52 +1972,90 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 (context-menu-mode 1)
 (global-hl-line-mode 1)
 
+(defconst custom:terminal-face-emphasis
+  '((highlight :underline t)
+    (region :underline t :extend nil)
+    (secondary-selection :underline t)
+    (match :underline t)
+    (show-paren-match :weight bold :underline t)
+    (show-paren-mismatch :weight bold :underline t)
+    (lazy-highlight :underline t)
+    (isearch :weight bold :underline t)
+    (isearch-fail :weight bold :underline t)
+    (line-number-current-line :weight bold)
+    (mode-line :box nil :overline t)
+    (mode-line-inactive :box nil)
+    (tab-line :height 0.95 :box nil)
+    (tab-line-tab-current :underline t :weight semi-bold :box nil)
+    (tab-line-tab-inactive :box nil)
+    (header-line :box nil :underline t)
+    (completions-highlight :weight bold :underline t)
+    (vertico-current :weight bold :underline t)
+    (corfu-current :weight bold :underline t))
+  "TTY 透明背景下补充的非颜色交互语义。")
+
+(defun custom/terminal-theme-background ()
+  "返回 TTY 当前行使用的 Ef theme 柔和背景色。
+背景取当前 palette 的 `bg-dim'；若主题 API 尚不可用则返回 nil，保持全透明。"
+  (when (fboundp 'ef-themes-get-color-value)
+    (condition-case nil
+        (ef-themes-get-color-value 'bg-dim)
+      (error nil))))
+
 (defun custom/apply-terminal-faces (&optional frame)
-  "为 TTY FRAME 应用终端语义色覆盖（仅 TTY，GUI 为 no-op）。
-daemon 中 TTY frame 会继承全局 Ef theme；本函数用终端 ANSI 语义色覆盖前景，
-并把会整块涂背景的 face 背景设为 unspecified，
-让终端的模糊背景穿透。语义色（cyan/red/brightyellow 等）由终端配色方案统一驱动，
-与 tmux 状态栏、darkman 切换一致。仅在真实 TTY（非 batch、≥8 色）下生效。"
+  "让 TTY FRAME 的所有命名 face 使用终端透明背景。
+清除背景与反色后，为 `hl-line' 恢复 Ef theme 的柔和背景，并用
+`custom:terminal-face-emphasis' 补充其余非颜色交互语义；所有前景色继续由
+当前 Ef theme 提供。Foot 需使用 alpha-mode=all 才能让 hl-line 背景半透明。
+仅在真实 TTY（非 batch、至少 8 色）下生效；GUI 为 no-op。"
   (condition-case err
       (when (and (not noninteractive)
                  (not (display-graphic-p frame))
                  (>= (display-color-cells frame) 8))
-        (let ((tty (or frame (selected-frame))))
+        (let ((tty (or frame (selected-frame)))
+              (hl-line-background (custom/terminal-theme-background)))
           (with-selected-frame tty
-            (set-face-attribute 'default                  tty :background 'unspecified)
-            ;; 前景语义色（保留终端配色方案驱动的可读对比）
-            (set-face-attribute 'highlight                tty :background 'unspecified :foreground "brightwhite")
-            (set-face-attribute 'region                   tty :background 'unspecified :foreground "brightwhite" :extend nil)
-            (set-face-attribute 'hl-line                  tty :background 'unspecified)
-            (set-face-attribute 'show-paren-match         tty :background 'unspecified :foreground "cyan" :weight 'bold)
-            (set-face-attribute 'show-paren-mismatch      tty :background 'unspecified :foreground "red"  :weight 'bold)
-            (set-face-attribute 'lazy-highlight           tty :background 'unspecified :foreground "brightyellow" :underline t)
-            (set-face-attribute 'isearch                  tty :background 'unspecified :foreground "cyan"  :weight 'bold)
-            (set-face-attribute 'line-number              tty :background 'unspecified :foreground "brightblack")
-            (set-face-attribute 'line-number-current-line tty :background 'unspecified :foreground "brightgreen" :weight 'bold)
-            (set-face-attribute 'mode-line                tty :background 'unspecified :foreground "brightwhite"      :box nil :overline "brightblack")
-            (set-face-attribute 'mode-line-inactive       tty :background 'unspecified :foreground "brightblack"      :box nil)
-            (set-face-attribute 'tab-line                 tty :background 'unspecified :foreground "brightblack" :height 0.95 :box nil)
-            (set-face-attribute 'tab-line-tab-current     tty :background 'unspecified :foreground "brightwhite" :underline t :weight 'semibold :box nil)
-            (set-face-attribute 'tab-line-tab-inactive    tty :background 'unspecified :foreground "brightblack" :box nil)
-            (set-face-attribute 'header-line              tty :background 'unspecified :foreground "brightwhite" :box nil :underline "brightblack")
-            (set-face-attribute 'help-key-binding         tty :background 'unspecified :foreground "cyan")
-            (set-face-attribute 'button                   tty :background 'unspecified :foreground "cyan")
-            (set-face-attribute 'font-lock-comment-face   tty :background 'unspecified :foreground "brightblack" :slant 'italic)
-            (set-face-attribute 'font-lock-keyword-face   tty :background 'unspecified :foreground "cyan"  :weight 'bold)
-            (set-face-attribute 'font-lock-string-face    tty :background 'unspecified :foreground "green")
-            (set-face-attribute 'font-lock-function-name-face tty :background 'unspecified :foreground "brightyellow")
-            (set-face-attribute 'font-lock-type-face      tty :background 'unspecified :foreground "brightyellow")
-            (set-face-attribute 'font-lock-constant-face  tty :background 'unspecified :foreground "brightmagenta")
-            (set-face-attribute 'font-lock-warning-face   tty :background 'unspecified :foreground "red"))))
+            (dolist (parameter custom:terminal-frame-parameters)
+              ;; Ef theme owns foreground-color after startup; only the initial
+              ;; frame defaults use unspecified-fg to avoid a pre-theme flash.
+              (unless (eq (car parameter) 'foreground-color)
+                (set-frame-parameter tty (car parameter) (cdr parameter))))
+            (dolist (face (face-list))
+              (set-face-attribute face tty
+                                  :background 'unspecified
+                                  :inverse-video nil))
+            (dolist (entry custom:terminal-face-emphasis)
+              (when (facep (car entry))
+                (apply #'set-face-attribute
+                       (car entry) tty (cdr entry))))
+            (when (and hl-line-background (facep 'hl-line))
+              (set-face-attribute 'hl-line tty
+                                  :background hl-line-background
+                                  :underline nil
+                                  :extend t)))))
     (error
      (message "custom/apply-terminal-faces: %s" (error-message-string err)))))
+
+(defun custom/refresh-terminal-faces (&rest _)
+  "重新对所有存活 TTY frame 应用透明背景策略。"
+  (unless noninteractive
+    (dolist (frame (frame-list))
+      (when (and (frame-live-p frame)
+                 (not (display-graphic-p frame)))
+        (custom/apply-terminal-faces frame)))))
+
+(defun custom/refresh-terminal-faces-after-load (_file)
+  "包加载并可能定义新 face 后刷新所有 TTY frame。"
+  (custom/refresh-terminal-faces))
+
+(add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
+(add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
 
 (defun custom/apply-frame-appearance (&optional frame)
   "为 FRAME 应用所有 display-dependent 外观设置。
 + GUI: 字体高度、透明度、window-divider、tab-line face 重算
 + TTY: 背景透明（清遮挡终端背景的 face 背景）、diff-hl margin 模式。
-  TTY 的主要 face 使用终端 ANSI 语义色覆盖。"
+  真彩 TTY 的前景色继续使用当前 Ef theme palette。"
   (condition-case err
       (with-selected-frame (or frame (selected-frame))
         (let ((graphic-p (display-graphic-p)))
@@ -2047,11 +2104,9 @@ daemon 中 TTY frame 会继承全局 Ef theme；本函数用终端 ANSI 语义�
                             :right-divider-width 1
                             :scroll-bar-width 8))
   :config
-  (spacious-padding-mode 1)
-  ;; spacious-padding 作为自定义主题启用会重置部分 face（含 TTY 下 apply-terminal-faces
-  ;; 设的语义色），故在它启用后重新应用一次终端配色。
-  (when (fboundp 'custom/apply-terminal-faces)
-    (custom/apply-terminal-faces)))
+  ;; spacious-padding 作为自定义主题启用；`enable-theme-functions' 会自动
+  ;; 恢复所有 TTY face 的透明背景策略。
+  (spacious-padding-mode 1))
 
 (use-package ultra-scroll
   :demand t
@@ -2192,7 +2247,7 @@ daemon 中 TTY frame 会继承全局 Ef theme；本函数用终端 ANSI 语义�
 :CUSTOM_ID: color-scheme
 :END:
 
-ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时即预载当前主题并注册监听器，让首个 GUI client 不承担主题加载；TTY frame 随后由 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]] 清除背景并覆盖终端 ANSI 语义色。
+ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时即预载当前主题并注册监听器，让 GUI 与 TTY client 共用一致的前景 palette；真彩 standalone TTY 也加载当前主题。TTY frame 随后由 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]] 仅清除背景与反色属性。
 
 + =custom/color-scheme-init= 注册 D-Bus 监听器,深浅色变化时自动 =ef-themes-select= 对应主题
 + 通过 [[#frame][Frame 生命周期]] 在新 frame 创建时应用当前色彩状态
@@ -2290,7 +2345,7 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 (defun custom/color-scheme-apply-theme (mode)
   "根据 MODE 加载对应的主题并保存状态。
 MODE 为 'light 或 'dark。
-独立实例仅在 GUI frame 中加载；daemon 在无 frame 阶段也预载主题。"
+独立实例在 GUI 或至少 256 色的 TTY frame 中加载；daemon 无 frame 时也预载主题。"
   (setq custom/color-scheme-current-mode mode)
   (custom/color-scheme-save-state mode)
   (unless custom/color-scheme--applying-theme
@@ -2355,9 +2410,11 @@ MODE 为 'light 或 'dark。
 
 #+begin_src emacs-lisp :noweb-ref appearance/color-scheme-init :tangle no
 (defun custom/display-supports-themes-p (&optional frame)
-  "FRAME（默认 selected-frame）是否为可直接呈现 Ef theme 的 GUI frame。"
+  "FRAME（默认 selected-frame）是否可呈现 Ef theme 的完整前景 palette。"
   (with-selected-frame (or frame (selected-frame))
-    (display-graphic-p)))
+    (or (display-graphic-p)
+        (and (not noninteractive)
+             (>= (display-color-cells) 256)))))
 
 (defun custom/color-scheme-init ()
   "初始化颜色方案适配：
@@ -2466,6 +2523,7 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 
 (custom/register-theme-refresh! #'custom/color-scheme-apply-custom-face-colors)
 (custom/register-theme-refresh! #'custom/color-scheme-refresh-registered-buffers)
+(custom/register-theme-refresh! #'custom/refresh-terminal-faces)
 (add-hook 'ef-themes-after-load-theme-hook #'custom/run-theme-refresh)
 (custom/run-theme-refresh)
 #+end_src
@@ -2758,10 +2816,13 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
       (when (buffer-live-p buf)
         (custom/display-or-focus buf custom:terminal-side-action t)))))
 
-;; Agent Shell:AI agent 的 Emacs 端 UI(与 terminal/ghostel 独立)。C-c a a 入口见 [[#keybindings][前缀键体系]]。
+;; Agent Shell:AI agent 的 Emacs 端 UI(与 terminal/ghostel 独立)。
 (use-package agent-shell
   :defer t
   :commands (agent-shell agent-shell-toggle))
+
+(custom/bind "C-c a a" #'agent-shell "Agent Shell" "生活应用")
+(custom/bind "C-c a A" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
 
 #+end_src
 
@@ -3100,6 +3161,8 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
                                            (string-match-p "\\.pdf\\'" candidate))))))
   (find-file file))
 
+(custom/bind "C-c a p" #'custom/pdf-open "打开 PDF" "生活应用")
+
 (use-package pdf-tools
   :defer t
   :mode ("\\.pdf\\'" . pdf-view-mode)
@@ -3259,11 +3322,21 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (org-agenda-files (list (expand-file-name "agenda" custom:org-directory)))
   (org-hide-emphasis-markers t)
   (org-startup-indented t)
+  (org-hide-leading-stars t)
+  (org-ellipsis "...")
+  (org-auto-align-tags nil)
+  (org-tags-column 0)
+  (org-catch-invisible-edits 'show-and-error)
+  (org-special-ctrl-a/e t)
+  (org-insert-heading-respect-content t)
   (org-pretty-entities t)
   (org-use-sub-superscripts '{})
   (org-cycle-separator-lines 2)
   (org-startup-folded 'overview)
   (org-blank-before-new-entry '((heading . t) (plain-list-item . auto)))
+  (org-fontify-whole-heading-line t)
+  (org-fontify-done-headline t)
+  (org-fontify-quote-and-verse-blocks t)
   (org-src-fontify-natively t)
   (org-src-tab-acts-natively t)
   (org-src-preserve-indentation t)
@@ -3275,6 +3348,11 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (defun custom--org-toggle-inline-images ()
     (setq-local org-startup-with-inline-images (display-graphic-p)))
   (add-hook 'org-mode-hook #'custom--org-toggle-inline-images)
+
+  (defun custom/org-setup-visuals ()
+    "减少 Org 文档视图中的编辑器噪音。"
+    (display-line-numbers-mode -1))
+  (add-hook 'org-mode-hook #'custom/org-setup-visuals)
 
   ;; C-j 在 Org 内分发:表格内走原命令,表格外走 next-line
   (defun custom/org-c-j-dispatch ()
@@ -3387,30 +3465,51 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 
 *** Org UI 与检索
 
-+ =org-modern= / =org-appear= :Org 视觉现代化与标记折叠展示。
-+ =org-modern-block-fringe= 无条件设为 4:daemon 启动期 =(display-graphic-p)= 永远为 nil,有条件的判断会让 GUI client 的 block fringe 被关掉;TTY 下 fringe 参数被忽略,设 4 无副作用。
++ =org-modern= / =org-appear= :Org 视觉现代化与光标处标记显隐。
++ 禁用 =org-indent-mode=:该模式会让 =org-modern= 自动关闭标题星号替换和代码块 fringe 边框；列表与正文层级仍由 Org 自身缩进表达。
++ =org-modern-table= 启用细线表格，=org-modern-block-fringe= 无条件设为 4:daemon 启动期 =(display-graphic-p)= 永远为 nil,有条件的判断会让 GUI client 的 block fringe 被关掉;TTY 下 fringe 参数被忽略,设 4 无副作用。
++ Org buffer 隐藏行号，减少文档阅读时的编辑器噪音；代码块、表格和元数据继续使用主题既有的等宽 face。
 + =org-roam= autosync 在首次 roam 命令(=:commands= 触发加载)后启动。
 + =deft= 只作历史 =notes/= 内容的只读检索入口(=deft-recursive nil=,不递归其他 Org 子目录)。新笔记统一走 [[#capture-templates][Capture 模板]](=ki= inbox / =kr= roam),不要用 Deft 创建。
 
 #+begin_src emacs-lisp
+(use-package org-appear
+  :hook (org-mode . org-appear-mode)
+  :custom
+  (org-appear-autoemphasis t)
+  (org-appear-autolinks t)
+  (org-appear-autosubmarkers t)
+  (org-appear-autoentities t))
+
+(use-package org-bullets-mode
+  :defer t
+  :config
+  :hook org-mode)
+
 (use-package org-modern
   :hook (org-mode . org-modern-mode)
   :custom
+  (org-modern-label-border 0.12)
   (org-modern-star 'replace)
-  (org-modern-hide-stars t)
-  (org-modern-table nil)
+  (org-modern-replace-stars '("" "" "󰜋" "󰜌" "" "" ""))
+  (org-modern-list
+   '((?- . "‣")
+     (?* . "•")
+     (?+ . "‣")))
+  (org-modern-hide-stars 'leading)
+  (org-modern-table t)
+  (org-modern-table-vertical 2)
+  (org-modern-table-horizontal 0.12)
   (org-modern-keyword t)
   (org-modern-todo t)
   (org-modern-tag t)
   (org-modern-block-name t)
   (org-modern-block-fringe 4))
 
-(use-package org-appear
-  :hook (org-mode . org-appear-mode)
-  :custom
-  (org-appear-autoemphasis t)
-  (org-appear-autolinks t)
-  (org-appear-autosubmarkers t))
+(use-package org-modern-indent
+  :defer t
+  :config
+  (add-hook 'org-mode-hook #'org-modern-indent-mode 90))
 
 (use-package org-roam
   :defer t
@@ -3461,7 +3560,7 @@ agenote CLI 集成的知识库 CRUD。
 |-----------------------------+-----------------------------------|
 | 索引列表                    | =agenote list --json=               |
 | inbox 归档 / slug / reindex | =agenote inbox-archive= 子命令      |
-| 交互调用 + buffer 刷新      | Emacs(=custom/knowledge-*=)        |
+| 交互调用 + buffer 刷新      | Emacs(=custom/knowledge-*=)         |
 | 递归扫描 experiences/       | 故意不存在(Dashboard 走 CLI 索引) |
 
 *** 路径与目录生命周期
@@ -3567,7 +3666,7 @@ slug 算法、PROPERTIES 模板与 reindex 触发全部由 agenote CLI 的
                  (or full-text "")))
          (stdin (json-encode `[(("heading" . ,heading) ("body" . ,body))]))
          (result (custom/agenote-call 'human "inbox-archive"
-                                       "--category" category "--stdin" "--prune")))
+                                      "--category" category "--stdin" "--prune")))
     (if (eq (plist-get result :status) 0)
         (progn
           (setq kill-ring (cdr kill-ring))
@@ -4353,41 +4452,6 @@ Emacs 原生前缀扩展与生活应用入口。所有绑定通过 =custom/bind=
 (custom/bind "C-c h ?" #'custom/show-help "快捷键帮助" "帮助")
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
 
-(use-package calfw :defer t :commands (cfw:open-org-calendar))
-(use-package elfeed :defer t :commands (elfeed elfeed-update))
-(use-package ement
-  :defer t
-  :commands (ement-connect ement-room-list ement-directory
-                           ement-notifications ement-disconnect))
-(use-package notmuch :defer t :commands (notmuch))
-(use-package telega
-  :demand t
-  :commands (telega telega-kill)
-  :config
-  (keymap-set telega-prefix-map "k" #'telega-kill))
-
-(defvar-keymap custom:ement-prefix-map
-  :doc "Ement 应用入口。"
-  "c" #'ement-connect
-  "l" #'ement-room-list
-  "f" #'ement-directory
-  "n" #'ement-notifications
-  "d" #'ement-disconnect)
-
-(custom/bind "C-c a a" #'agent-shell "Agent Shell" "生活应用")
-(custom/bind "C-c a A" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
-(custom/bind "C-c a c" #'cfw:open-org-calendar "日历" "生活应用")
-(custom/bind "C-c a e" custom:ement-prefix-map "Matrix" "生活应用")
-(custom/bind "C-c a f f" #'elfeed "打开 Elfeed" "生活应用")
-(custom/bind "C-c a f u" #'elfeed-update "更新 Elfeed" "生活应用")
-(custom/bind "C-c a g t" #'tetris "俄罗斯方块" "生活应用")
-(custom/bind "C-c a g s" #'snake "贪吃蛇" "生活应用")
-(custom/bind "C-c a g m" #'gomoku "五子棋" "生活应用")
-(custom/bind "C-c a g p" #'pong "Pong" "生活应用")
-(custom/bind "C-c a m" #'notmuch "邮件" "生活应用")
-(custom/bind "C-c a p" #'custom/pdf-open "打开 PDF" "生活应用")
-(custom/bind "C-c a t" telega-prefix-map "Telegram" "生活应用")
-
 (custom/bind "C-c o k c" #'custom/knowledge-capture "捕获经验卡" "Org 与知识库")
 (custom/bind "C-c o k s" #'custom/knowledge-search "搜索经验" "Org 与知识库")
 (custom/bind "C-c o k t" #'custom/knowledge-search-by-tag "按标签搜索" "Org 与知识库")
@@ -4407,7 +4471,7 @@ Emacs 原生前缀扩展与生活应用入口。所有绑定通过 =custom/bind=
 (custom/bind "C-c o k V" #'custom/knowledge-viz-open-browser "浏览器可视化" "Org 与知识库")
 
 (custom/bind-local 'markdown-mode 'markdown-mode 'markdown-mode-map
-                    "C-c p" #'markdown-preview "预览 Markdown" "模式局部")
+                   "C-c p" #'markdown-preview "预览 Markdown" "模式局部")
 #+end_src
 
 ** Completion 框架
@@ -4851,7 +4915,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 启动仪表盘:集成待办列表、文件管理器、前缀键概览和鼠标工作流提示。
 
-Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (derived from =special-mode=) + 纯函数渲染引擎,全部基于列模型(=string-width=),GUI 与 TTY / batch 单位一致,所有宽度算术可证明。Dashboard 依赖知识库、帮助、颜色方案和 frame 接口,因此固定在最后一个配置域加载。跨域调用保留 =fboundp= 守卫,但正常路径由文档顺序保证依赖已就绪。
+Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (derived from =special-mode=) + 纯函数渲染引擎。普通内容基于 =string-width= 列模型；固定 banner 字符集按单终端单元计数，规避 TTY CJK 宽度表与终端实际渲染不一致。Dashboard 依赖知识库、帮助、颜色方案和 frame 接口,因此固定在最后一个配置域加载。跨域调用保留 =fboundp= 守卫,但正常路径由文档顺序保证依赖已就绪。
 
 + Dashboard 调用的跨域函数:
   - =custom/knowledge-list-cards= / =custom/knowledge-show-card= (知识库卡片,走 agenote CLI JSON,见 [[#knowledge-ownership][职责归属]])
@@ -4878,7 +4942,7 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 
 - 卡片契约: =fetch= 无参 → =(:ok DATA)|(:error MSG)|loading= 三态; =render (DATA WIDTH)= 是纯函数返回行列表,行宽 ≤ WIDTH。空 / 加载中 / 错误 三态可区分,杜绝"假空状态"。
 - 错误隔离: 单张卡片任何异常被引擎包成错误卡片,绝不拖垮整页。
-- 测量层: 全部基于 =string-width= 的列模型,GUI 与 TTY / batch 统一,所有宽度算术单位一致(见 [[测量层][测量层章节]]为何放弃像素测量)。
+- 测量层: 普通内容基于 =string-width= 列模型；固定 banner 字符集按字符数计算实际终端单元(见 [[测量层][测量层章节]])。
 - 零临时 buffer: 卡片渲染器是纯函数,拼接是字符串操作,消除了旧实现每刷新 6 次 =generate-new-buffer= 的开销,且每张卡片可独立进 ERT。
 - 宽度显式传参: 删除旧的 =--forced-width= / =--override-margin= 动态绑定,宽度沿调用链显式传递。
 
@@ -4998,13 +5062,14 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 
 *** 测量层
 
-测量层是右列对齐的基石,全部基于 =string-width= 的列模型,GUI 与 TTY / batch 统一。这放弃了原设计的 GUI 像素测量方案——像素值与卡片宽度算术(=window-body-width= 列数)、规则线(=make-string= 按字符数)的单位不一致曾导致标题无间距、规则线截断、banner 居中失效。列模型下 Nerd Font PUA 图标至多 1 列误差(见重设计文档 §1 #9),但所有算术单位一致、布局不串位。
+测量层是右列对齐的基石。普通内容统一使用 =string-width= 列模型，放弃与 =window-body-width= 无法直接运算的 GUI 像素宽度。固定 banner 是唯一例外：其 block/box-drawing 字符在 Foot 中各占一个终端单元，但 Emacs TTY 的 CJK 宽度表可能把同一字符计为两列，因此按字符数计算。列模型下 Nerd Font PUA 图标至多 1 列误差(见重设计文档 §1 #9),但卡片布局单位一致、不串位。
 
 #+begin_src emacs-lisp :noweb-ref system/dashboard-measure :tangle no
 
 (defun custom/dashboard--measure (text)
   "返回 TEXT 的显示宽度（列数）。
-全部基于 `string-width'，GUI 与 TTY / batch 统一为列模型。
+普通 dashboard 内容基于 `string-width'，GUI 与 TTY / batch 统一为列模型；
+固定 banner 字符画由 `custom/dashboard--banner-art-width' 单独度量。
 
 为何不用像素测量（`string-pixel-width'）：原设计曾尝试 GUI 像素 + TTY 列双模，
 但 `string-pixel-width' 返回像素值，而卡片宽度算术（=window-body-width= 列数
@@ -5299,7 +5364,7 @@ help-echo 格式串（含一个 %s 占位 LABEL），否则 help-echo 显示 LAB
     (_ 'font-lock-variable-name-face)))
 
 (defun custom/dashboard--todo-date-info (today-abs deadline-str scheduled-str
-                                                    deadline-abs scheduled-abs)
+                                                   deadline-abs scheduled-abs)
   "返回 TODO 项的日期信息字符串，用于 dashboard 待办卡片。"
   (cond
    ((and deadline-abs (< deadline-abs today-abs))
@@ -5616,7 +5681,7 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
   (let ((max-items 5))
     (cond
      ((custom/dashboard--cache-valid-p custom/dashboard--knowledge-cache
-                                        max-items)
+                                       max-items)
       (list :ok (cddr custom/dashboard--knowledge-cache)))
      (t
       (unless (process-live-p custom/dashboard--knowledge-process)
@@ -5810,40 +5875,40 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
 ;; 卡片注册表：title / icon / key 与 binding-spec 中的 :dashboard 声明一一对应，
 ;; 由 configctl audit-keys 校验一致性。accent face 给图标上色，零主题耦合。
 (custom/dashboard-define-card 'todo
-                               :title "待办" :icon "󰃭" :key "C-c o a" :accent 'warning
-                               :fetch #'custom/dashboard--fetch-todo
-                               :render #'custom/dashboard--render-todo)
+                              :title "待办" :icon "󰃭" :key "C-c o a" :accent 'warning
+                              :fetch #'custom/dashboard--fetch-todo
+                              :render #'custom/dashboard--render-todo)
 
 (custom/dashboard-define-card 'clock
-                               :title "计时" :icon "󱎫" :key "C-c c i / o" :accent 'success
-                               :fetch #'custom/dashboard--fetch-clock
-                               :render #'custom/dashboard--render-clock)
+                              :title "计时" :icon "󱎫" :key "C-c c i / o" :accent 'success
+                              :fetch #'custom/dashboard--fetch-clock
+                              :render #'custom/dashboard--render-clock)
 
 (custom/dashboard-define-card 'recents
-                               :title "最近文件" :icon "󰋚" :key "C-x C-r"
-                               :accent 'font-lock-keyword-face
-                               :fetch #'custom/dashboard--fetch-recents
-                               :render #'custom/dashboard--render-recents)
+                              :title "最近文件" :icon "󰋚" :key "C-x C-r"
+                              :accent 'font-lock-keyword-face
+                              :fetch #'custom/dashboard--fetch-recents
+                              :render #'custom/dashboard--render-recents)
 
 (custom/dashboard-define-card 'projects
-                               :title "项目" :icon "󰝰" :key "C-x p p" :accent 'font-lock-type-face
-                               :fetch #'custom/dashboard--fetch-projects
-                               :render #'custom/dashboard--render-projects)
+                              :title "项目" :icon "󰝰" :key "C-x p p" :accent 'font-lock-type-face
+                              :fetch #'custom/dashboard--fetch-projects
+                              :render #'custom/dashboard--render-projects)
 
 (custom/dashboard-define-card 'knowledge
-                               :title "知识库" :icon "󰧑" :key "C-c o k I" :accent 'font-lock-string-face
-                               :fetch #'custom/dashboard--fetch-knowledge
-                               :render #'custom/dashboard--render-knowledge)
+                              :title "知识库" :icon "󰧑" :key "C-c o k I" :accent 'font-lock-string-face
+                              :fetch #'custom/dashboard--fetch-knowledge
+                              :render #'custom/dashboard--render-knowledge)
 
 (custom/dashboard-define-card 'bookmarks
-                               :title "书签" :icon "󰉋" :key "C-x r b" :accent 'font-lock-constant-face
-                               :fetch #'custom/dashboard--fetch-bookmarks
-                               :render #'custom/dashboard--render-bookmarks)
+                              :title "书签" :icon "󰉋" :key "C-x r b" :accent 'font-lock-constant-face
+                              :fetch #'custom/dashboard--fetch-bookmarks
+                              :render #'custom/dashboard--render-bookmarks)
 
 (custom/dashboard-define-card 'shortcuts
-                               :title "快捷键" :icon "󰌌" :key "F1 ?" :accent 'font-lock-keyword-face
-                               :fetch #'custom/dashboard--fetch-shortcuts
-                               :render #'custom/dashboard--render-shortcuts)
+                              :title "快捷键" :icon "󰌌" :key "F1 ?" :accent 'font-lock-keyword-face
+                              :fetch #'custom/dashboard--fetch-shortcuts
+                              :render #'custom/dashboard--render-shortcuts)
 #+end_src
 
 *** 生命周期与 Frame 状态机
@@ -5907,15 +5972,20 @@ LITERAL figlet art，box-drawing 字符 string-width≈80-85 列，
             init-time
             (or mode "?"))))
 
+(defun custom/dashboard--banner-art-width (line)
+  "返回固定 banner LINE 实际占用的终端单元数。
+banner 只含空格及 block/box-drawing 字符，在当前等宽 GUI 与 Foot TTY 中均为
+一字符一单元。不能用 `string-width'：真实 TTY 的 Emacs CJK 宽度表会把这些
+字符计为两列，即使终端仍只渲染一个单元，从而让居中 padding 少算近一半。"
+  (length line))
+
 (defun custom/dashboard--banner-min-width ()
   "banner ASCII art 居中显示所需的最小窗口列宽。
-随显示类型切换度量：GUI 用字符数（box-drawing 占 1 字符单元），TTY 用
-string-width（占 2 列），与 `custom/dashboard--insert-banner' 一致。
+固定 art 字符在 GUI 与 Foot TTY 中均按一字符一终端单元度量，与
+`custom/dashboard--insert-banner' 一致。
 另留 10 列左右边距，避免 art 紧贴窗口边缘。"
   (let* ((art-max-line "███████╗███╗   ███╗ █████╗  ██████╗███████╗")
-         (art-w (if (display-graphic-p)
-                    (length art-max-line)
-                  (string-width art-max-line))))
+         (art-w (custom/dashboard--banner-art-width art-max-line)))
     (+ art-w 10)))
 
 (defun custom/dashboard--insert-banner (width)
@@ -5924,18 +5994,15 @@ art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间
 状态行单独按自身宽度居中到窗口中央。窄窗口（低于
 `custom:dashboard-banner-min-width'）降级为纯文本单行。
 
-+ art 居中的宽度度量随显示类型切换: GUI 等宽字体(如 DejaVu Sans Mono)下
-  box-drawing 字符(█ ╗ ╝ ═)通常占 1 个字符单元,故用 =length= 算 pad;
-  TTY / batch 下这些字符占 2 列终端单元, =string-width= 报告的 2 更准确,
-  故用 =string-width=。用错误的度量会导致 banner 视觉偏左(GUI 用 string-width)
-  或偏右(TTY 用 length)。状态行是混合文本(ASCII + CJK + ·),两种环境都用
-  =string-width=。
++ art 使用固定的一单元字符集，GUI 与 Foot TTY 均用 =length= 算 pad。真实 TTY
+  中 Emacs 可能因 CJK 宽度表把这些字符报告为 2 列，而终端实际仍渲染 1 单元；
+  用 =string-width= 会让 banner 明显偏左。状态行是混合文本(ASCII + CJK + ·),
+  仍使用 =string-width=。
 
 空行（art 首尾的 \"\"）插入纯换行，不插入前导 padding 空格，避免产生
 满是空格的视觉空行。"
   (let ((banner-face 'font-lock-keyword-face)
-        (status-face 'custom/dashboard-dim)
-        (gui-p (display-graphic-p)))
+        (status-face 'custom/dashboard-dim))
     (if (< width (custom/dashboard--banner-min-width))
         (let ((pad (max 0 (/ (- width (length "LITERAL")) 2))))
           (insert "\n"
@@ -5947,9 +6014,10 @@ art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间
              (art-lines (cl-remove-if
                          (lambda (l) (or (string-empty-p l) (equal l status)))
                          lines))
-             ;; GUI 用 length(box-drawing 占 1 字符单元),TTY 用 string-width(占 2)
-             (art-width-fn (if gui-p #'length #'custom/dashboard--measure))
-             (art-max-w (apply #'max (mapcar art-width-fn art-lines)))
+             ;; 固定 art 字符在 GUI/Foot TTY 中都是一字符一单元。
+             (art-max-w (apply #'max
+                               (mapcar #'custom/dashboard--banner-art-width
+                                       art-lines)))
              (art-pad (max 0 (/ (- width art-max-w) 2))))
         (insert "\n")
         (dolist (line lines)

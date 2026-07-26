@@ -182,6 +182,35 @@ Each :ts-mode produces a remap from the first :modes entry."
                                (expand-file-name path)))
       (should (string-match-p "\\.org\\'" path)))))
 
+(ert-deftest custom-config/org-modern-visual-contract ()
+  "Org 现代化显示不得被 org-indent-mode 静默禁用。"
+  (require 'org-modern)
+  (with-temp-buffer
+    (insert "* Blocks\n\n"
+            "#+begin_src emacs-lisp\n(message \"hi\")\n#+end_src\n\n"
+            "| N | N^2 |\n|---+-----|\n| 2 | 4   |\n")
+    (org-mode)
+    (font-lock-ensure)
+    (should-not (bound-and-true-p org-indent-mode))
+    (should (bound-and-true-p org-modern-mode))
+    (should (eq org-modern-star 'replace))
+    (should (eq org-modern-hide-stars 'leading))
+    (should org-hide-leading-stars)
+    (should org-modern-table)
+    (should (= org-modern-block-fringe 4))
+    (should-not display-line-numbers)
+    (goto-char (point-min))
+    (should (equal (substring-no-properties
+                    (get-char-property (point) 'display))
+                   "⊙"))
+    (search-forward "#+begin_src")
+    (beginning-of-line)
+    (should (get-char-property (point) 'line-prefix))
+    (search-forward "| N")
+    (goto-char (- (point) 3))
+    (should (equal (get-char-property (point) 'display)
+                   '(space :width (2))))))
+
 (ert-deftest custom-config/binding-spec-generates-help-and-dashboard ()
   "Phase 6 binding-spec single-source-of-truth: 帮助分组与 Dashboard 摘要
 必须由 `custom:binding-spec' 派生,而非外置 help-zh.el。固化三点:
@@ -228,6 +257,91 @@ Each :ts-mode produces a remap from the first :modes entry."
     ;; 清理:测试结束后 frame parameter 不影响后续测试。
     (set-frame-parameter frame created-param nil)
     (set-frame-parameter frame server-param nil)))
+
+(ert-deftest custom-config/terminal-frame-defaults-are-transparent ()
+  "TTY frame 创建前就应继承终端本身的前景、背景并隐藏菜单栏。"
+  (let ((parameters (alist-get t window-system-default-frame-alist)))
+    (should (equal (alist-get 'background-color parameters)
+                   "unspecified-bg"))
+    (should (equal (alist-get 'foreground-color parameters)
+                   "unspecified-fg"))
+    (should (equal (alist-get 'menu-bar-lines parameters) 0))))
+
+(ert-deftest custom-config/terminal-truecolor-uses-theme-foregrounds ()
+  "真彩 TTY 应加载 Ef theme，透明适配不得硬编码 ANSI 前景色。"
+  (should-not
+   (seq-some (lambda (entry)
+               (plist-member (cdr entry) :foreground))
+             custom:terminal-face-emphasis))
+  (cl-letf (((symbol-function 'display-graphic-p)
+             (lambda (&optional _frame) nil))
+            ((symbol-function 'display-color-cells)
+             (lambda (&optional _frame) 16777216)))
+    (let ((noninteractive nil))
+      (should (custom/display-supports-themes-p (selected-frame)))))
+  (should (eq (car (last custom/theme-refresh-functions))
+              #'custom/refresh-terminal-faces)))
+
+(ert-deftest custom-config/terminal-faces-clear-every-background ()
+  "TTY gutter 应透明，当前行用 Ef theme 背景而非下划线。"
+  (let (face-calls frame-calls)
+    (cl-letf (((symbol-function 'display-graphic-p)
+               (lambda (&optional _frame) nil))
+              ((symbol-function 'display-color-cells)
+               (lambda (&optional _frame) 256))
+              ((symbol-function 'face-list)
+               (lambda () '(default fringe line-number
+                             line-number-current-line hl-line
+                             custom-test-late-face)))
+              ((symbol-function 'custom/terminal-theme-background)
+               (lambda () "#334455"))
+              ((symbol-function 'set-frame-parameter)
+               (lambda (frame parameter value)
+                 (push (list frame parameter value) frame-calls)))
+              ((symbol-function 'set-face-attribute)
+               (lambda (face frame &rest attributes)
+                 (push (list face frame attributes) face-calls))))
+      (let ((noninteractive nil))
+        (custom/apply-terminal-faces (selected-frame))))
+    (should (seq-some
+             (lambda (call)
+               (pcase-let ((`(_frame ,parameter ,value) call))
+                 (and (eq parameter 'background-color)
+                      (equal value "unspecified-bg"))))
+             frame-calls))
+    (should-not
+     (seq-some (lambda (call)
+                 (eq (cadr call) 'foreground-color))
+               frame-calls))
+    (dolist (face '(default fringe line-number line-number-current-line
+                    hl-line custom-test-late-face))
+      (should
+       (seq-some
+        (lambda (call)
+          (pcase-let ((`(,called-face _frame ,attributes) call))
+            (and (eq called-face face)
+                 (eq (plist-get attributes :background) 'unspecified)
+                 (plist-member attributes :inverse-video)
+                 (null (plist-get attributes :inverse-video)))))
+        face-calls)))
+    (should
+     (seq-some
+      (lambda (call)
+        (pcase-let ((`(,face _frame ,attributes) call))
+          (and (eq face 'hl-line)
+               (equal (plist-get attributes :background) "#334455")
+               (plist-member attributes :underline)
+               (null (plist-get attributes :underline))
+               (eq (plist-get attributes :extend) t))))
+      face-calls))
+    (should-not
+     (seq-some (lambda (entry)
+                 (and (eq (car entry) 'hl-line)
+                      (plist-get (cdr entry) :underline)))
+               custom:terminal-face-emphasis))
+    (should (memq #'custom/refresh-terminal-faces enable-theme-functions))
+    (should (memq #'custom/refresh-terminal-faces-after-load
+                  after-load-functions))))
 
 (ert-deftest custom-config/focus-save-rejects-synthetic-file-buffer ()
   "失焦保存只接受正常访问的本地文件 buffer。"
@@ -692,6 +806,29 @@ mock custom/agenote-call,验证:
                (text (cdr spec))
                (result (custom/dashboard--pad-to text width)))
           (should (= (string-width result) width)))))
+
+    (ert-deftest custom-config/dashboard-tty-banner-centers-by-terminal-cells ()
+      "TTY banner 应按终端实际单元宽度居中，不受 Emacs CJK 宽度表误判影响。"
+      (let* ((width 140)
+             (art-line "███████╗███╗   ███╗ █████╗  ██████╗███████╗")
+             (expected-pad (/ (- width (length art-line)) 2)))
+        (cl-letf (((symbol-function 'display-graphic-p)
+                   (lambda (&optional _frame) nil))
+                  ;; 复现真实 TTY：Emacs 报 80 列，但 Foot 实际渲染为 43 单元。
+                  ((symbol-function 'custom/dashboard--measure)
+                   (lambda (text)
+                     (if (string-match-p "█" text)
+                         80
+                       (string-width text))))
+                  ((symbol-function 'custom/dashboard--banner-min-width)
+                   (lambda () 1))
+                  ((symbol-function 'custom/dashboard--status-line)
+                   (lambda () nil)))
+          (with-temp-buffer
+            (custom/dashboard--insert-banner width)
+            (goto-char (point-min))
+            (should (re-search-forward "^\\( +\\)███████╗" nil t))
+            (should (= (length (match-string 1)) expected-pad))))))
 
     (ert-deftest custom-config/dashboard-card-error-isolation ()
       "Dashboard 错误隔离契约:fetch 或 render 抛错时产出错误卡片行,
