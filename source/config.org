@@ -28,7 +28,7 @@
 
 Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中声明。
 
-= ~/.config/<app>/= 指向 */gnu/store 只读副本* ，改源后必须 ~ blue home~ 重建软链接才生效。
+=~/.config/<app>/= 指向 */gnu/store 只读副本* ，改源后必须 ~ blue home~ 重建软链接才生效。
 
 ** 核心概念
 
@@ -1351,6 +1351,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; XDG 相关组件
         "desktop-file-utils"
         "xdg-dbus-proxy"
+        "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
         "xdg-desktop-portal-wlr"
         "xdg-user-dirs"
@@ -1359,11 +1360,9 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; 主题
         "adw-gtk3-theme"
         "bibata-cursor-theme"
-        "breeze"
         "papirus-icon-theme"
 
         ;; QT框架相关
-        "kvantum"
         "qt5ct"
         "qt6ct"))
 #+end_src
@@ -1526,7 +1525,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "element-desktop"
         "notmuch"
         "telegram-desktop"
-        "zulip-desktop"
 
         ;; 生产力工具
         "amule"
@@ -1740,7 +1738,9 @@ end
                              "emacs-olivetti"
                              "emacs-org"
                              "emacs-org-appear"
+                             "emacs-org-bullets"
                              "emacs-org-modern"
+                             "emacs-org-modern-indent"
                              "emacs-org-roam"
                              "emacs-ox-gfm"
 
