@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+set -euo pipefail
+
+# herdr-session-selector — herdr 会话选择器（fzf）
+#
+# 复刻原 tmux session-selector。背景：herdr 默认所有窗口连到同一个 default
+# server（herdr.sock），操作会同步；而命名 session（herdr --session <name>）
+# 各有独立 server + 独立 socket（sessions/<name>/herdr.sock），窗口间互不同步。
+# 本脚本让用户在每个 foot 窗口启动时选择会话，复刻 tmux 多 server 的隔离体验。
+#
+# 选项：
+#   - attach 已有命名 session（独立，可重连）
+#   - 新建独立 session
+#   - 进入 default 共享 session（多窗口同步，明确标注）
+#
+# 输出（stdout，单行）：
+#   <name>     选中的命名 session 名（fish 用 `herdr --session <name>`）
+#   NEW        新建独立 session（fish 用 `herdr --session term_<pid>`）
+#   DEFAULT    进入 default 共享 session（fish 用裸 `herdr`）
+#   ESC        取消，留在普通 shell
+#
+# 行为复刻原 tmux：无命名 session 时直接输出 NEW（不弹 fzf，零按键）。
+
+# 列出命名 session（排除 default）。字段：name \t running(true/false)
+mapfile -t lines < <(herdr session list --json 2>/dev/null \
+    | jq -r '.sessions[] | select(.default | not) | "\(.name)\t\(.running)"' \
+    || true)
+
+choices=()
+named_count=0
+
+for line in "${lines[@]}"; do
+    [[ -z "$line" ]] && continue
+    IFS=$'\t' read -r name running <<< "$line"
+    [[ -z "$name" ]] && continue
+    if [[ "$running" == "true" ]]; then
+        status="运行中"
+    else
+        status="已停止·可重连"
+    fi
+    # 列1 = 机器 key（session 名），列2 = fzf 显示文本
+    choices+=("$name"$'\t'"$name  [$status]")
+    named_count=$((named_count + 1))
+done
+
+# 无命名 session → 直接新建独立（复刻原 tmux：无 session 直接建，零按键）
+if [[ $named_count -eq 0 ]]; then
+    echo "NEW"
+    exit 0
+fi
+
+# 新建独立放第一位（fzf 默认选中，回车即新建——契合"每个终端独立"诉求）；
+# default 共享放最后（明确标注多窗口同步，避免误选）。
+choices=("NEW"$'\t'">> 新建独立会话（互不同步）"
+         "${choices[@]}"
+         "DEFAULT"$'\t'">> 默认共享会话（多窗口同步）")
+
+# fzf 选择：--with-nth=2.. 只显示/搜索列2（友好文本），列1 留作机器 key。
+result=$(printf '%s\n' "${choices[@]}" \
+    | fzf --reverse --no-multi \
+          --header="选择 herdr 会话 · 命名会话相互独立、互不同步" \
+          --height=~50% \
+          --delimiter=$'\t' \
+          --with-nth=2.. \
+    || true)
+
+# 取消 / ESC → 留在普通 shell
+if [[ -z "$result" ]]; then
+    echo "ESC"
+    exit 0
+fi
+
+# 取列1 机器 key 输出给 fish
+IFS=$'\t' read -r kind _ <<< "$result"
+echo "$kind"
