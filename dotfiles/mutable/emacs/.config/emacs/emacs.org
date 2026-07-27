@@ -1301,6 +1301,10 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 (defconst custom:tabs-name-max-width 36
   "单个标签名最大宽度。")
 
+(defconst custom:tab-line-height-display
+  '(space :width (0) :height (+ height (8)) :ascent 75)
+  "零宽标签高度 spacer；恢复原 4px box 提供的上下留白。")
+
 (defvar-local custom/tab-line--name-cache nil
   "当前 buffer 的 tab-line 标签名缓存。")
 
@@ -1469,22 +1473,41 @@ current/inactive 用内置 face,自动跟随主题。"
                  (cdr (assq 'name tab))))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
          (label (concat " " (string-replace "%" "%%" name)))
-         (help-echo (custom--tab-line-help-echo selected-p)))
+         (help-echo (custom--tab-line-help-echo selected-p))
+         (close
+          (when (and tab-line-close-button-show
+                     (or (eq tab-line-close-button-show t)
+                         (eq tab-line-close-button-show
+                             (if selected-p 'selected 'non-selected))))
+            (copy-sequence tab-line-close-button))))
     (dolist (fn tab-line-tab-face-functions)
       (setq face (funcall fn tab tabs face buffer-p selected-p)))
-    (propertize
-     (concat label
-             (when (and tab-line-close-button-show
-                        (or (eq tab-line-close-button-show t)
-                            (eq tab-line-close-button-show
-                                (if selected-p 'selected 'non-selected))))
-               tab-line-close-button))
-     'face face
-     'keymap tab-line-tab-map
-     'mouse-face (unless selected-p 'tab-line-highlight)
-     'help-echo help-echo
-     'follow-link 'ignore
-     'tab tab)))
+    (let* ((render-face
+            (if (and (listp face) (not (keywordp (car-safe face))))
+                (cons '(:box nil) face)
+              (list '(:box nil) face)))
+           (spacer
+            (propertize " "
+                        'face render-face
+                        'display custom:tab-line-height-display))
+           (rendered
+            (concat
+             spacer
+             (propertize label
+                         'face render-face
+                         'keymap tab-line-tab-map
+                         'mouse-face (unless selected-p 'tab-line-highlight)
+                         'help-echo help-echo
+                         'follow-link 'ignore)
+             (progn
+               (when close
+                 (add-face-text-property
+                  0 (length close) render-face t close))
+               (or close "")))))
+      (add-text-properties 0 (length rendered) (list 'tab tab) rendered)
+      (when selected-p
+        (add-text-properties 0 (length rendered) '(selected t) rendered))
+      rendered)))
 #+end_src
 
 *** 按钮与 Face
@@ -1497,11 +1520,11 @@ current/inactive 用内置 face,自动跟随主题。"
 #+attr_org: :width 70
 | 状态         | 继承自              | 追加属性           | 目的                    |
 |--------------+---------------------+--------------------+-------------------------|
-| 当前标签     | =mode-line=           | semibold + 下划线  | 强对比底色,清晰标识当前 |
+| 当前标签     | =mode-line=           | semibold + 下划线  | 强对比底色,无 box 边框  |
 | 非当前标签   | =shadow=              | 无                 | 低对比,弱化背景标签     |
 | 鼠标悬停高亮 | =mode-line-highlight= | 无                 | 复用主题原生 hover 表现 |
 | 关闭按钮高亮 | =error=               | 去背景/边框/下划线 | 关闭动作的警示语义      |
-| 标签栏整体   | 无                  | height 0.95        | 比正文略矮,视觉分隔     |
+| 标签栏整体   | 无                  | 零宽 spacer +8px   | 保留舒适高度,不用 box   |
 
 #+begin_src emacs-lisp :noweb-ref appearance/tab-line-faces :tangle no
 (defun custom/apply-tab-line-button-preset ()
@@ -1534,6 +1557,7 @@ current/inactive 用内置 face,自动跟随主题。"
 (set-face-attribute 'tab-line-tab-current nil
                     :inherit 'mode-line
                     :weight 'semibold
+                    :box nil
                     :underline t)
 (set-face-attribute 'tab-line-tab-inactive nil
                     :inherit 'shadow
@@ -1595,39 +1619,39 @@ current/inactive 用内置 face,自动跟随主题。"
         (custom--tabs-switch-to-buffer buffer target-window)
       (user-error "当前标签数量不足 %d 个" index))))
 
-(defun custom/tabs-close-buffer (&optional window)
-  "关闭当前标签(bury + unregister,不 kill buffer)。
-键盘与鼠标关闭语义一致;原鼠标分支缺 fallback 的不对称已修正。"
+(defun custom/tabs-close-buffer (&optional window buffer)
+  "在 WINDOW 隐藏 BUFFER 的标签(bury + unregister,不 kill buffer)。
+BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一致。"
   (interactive)
   (let* ((target-window (custom--tabs-target-window window))
-         (buffer (window-buffer target-window))
+         (target-buffer (or buffer (window-buffer target-window)))
          (target-frame (window-frame target-window)))
-    (custom--tabs-unregister-buffer buffer target-frame)
-    (if-let* ((next (seq-find (lambda (b)
-                                (and (buffer-live-p b)
-                                     (custom/tab-visible-p b)
-                                     (not (eq b buffer))))
-                              (custom--tabs-get-frame-buffer-list target-frame))))
-        (custom--tabs-switch-to-buffer next target-window)
-      (with-selected-window target-window
-        (bury-buffer buffer)
-        (let ((fallback (seq-find (lambda (b)
-                                    (and (buffer-live-p b)
-                                         (not (eq b buffer))))
-                                  (buffer-list target-frame))))
-          (when fallback
-            (switch-to-buffer fallback)))
-        (tab-line-force-update t)))))
+    (when (buffer-live-p target-buffer)
+      (custom--tabs-unregister-buffer target-buffer target-frame)
+      (when (eq target-buffer (window-buffer target-window))
+        (if-let* ((next (seq-find (lambda (candidate)
+                                    (and (buffer-live-p candidate)
+                                         (custom/tab-visible-p candidate)
+                                         (not (eq candidate target-buffer))))
+                                  (custom--tabs-get-frame-buffer-list target-frame))))
+            (custom--tabs-switch-to-buffer next target-window)
+          (with-selected-window target-window
+            (bury-buffer target-buffer)
+            (let ((fallback
+                   (seq-find (lambda (candidate)
+                               (and (buffer-live-p candidate)
+                                    (not (eq candidate target-buffer))))
+                             (buffer-list target-frame))))
+              (when fallback
+                (switch-to-buffer fallback))))))
+      (tab-line-force-update t))))
 
 (defun custom/tab-line-close-tab (tab)
   "鼠标关闭按钮回调:与键盘 close 走同一路径(语义对称)。"
   (interactive)
   (let ((buffer (if (bufferp tab) tab (current-buffer))))
     (when (buffer-live-p buffer)
-      (save-window-excursion
-        (select-window (custom--tabs-target-window))
-        (switch-to-buffer buffer)
-        (custom/tabs-close-buffer)))))
+      (custom/tabs-close-buffer (custom--tabs-target-window) buffer))))
 #+end_src
 
 *** 全局 Hook
@@ -2111,10 +2135,11 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
   :demand t
   :custom
   (spacious-padding-widths
-   '(:internal-border-width 8
+   '(:internal-border-width 0
                             :header-line-width 4
                             :mode-line-width 1
                             :tab-width 4
+                            :tab-line-width 0
                             :right-divider-width 1
                             :scroll-bar-width 8))
   :config
@@ -3653,9 +3678,9 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (org-modern-star 'replace)
   (org-modern-replace-stars '("" "" "󰜋" "󰜌" "" "" ""))
   (org-modern-list
-   '((?- . "‣")
-     (?* . "•")
-     (?+ . "‣")))
+   '((?- . "")
+     (?* . "")
+     (?+ . "")))
   (org-modern-hide-stars 'leading)
   (org-modern-table t)
   (org-modern-table-vertical 2)

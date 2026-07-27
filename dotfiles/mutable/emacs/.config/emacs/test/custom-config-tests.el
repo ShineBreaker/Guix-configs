@@ -31,7 +31,6 @@
 (require 'ert)
 (require 'cl-lib)
 
-
 ;;; ---------------------------------------------------------------------------
 ;;; Category 1: state contracts (MUST pass today, MUST keep passing)
 ;;; ---------------------------------------------------------------------------
@@ -128,6 +127,80 @@ contract pinned across the Commit 7 rewrite."
       (ignore-errors (kill-buffer buf-a))
       (ignore-errors (kill-buffer buf-b))
       (ignore-errors (kill-buffer buf-a2)))))
+
+(ert-deftest custom-config/tab-line-close-button-keeps-mouse-map ()
+  "格式化后的关闭按钮必须保留独立 mouse-map，不被标签选择 map 覆盖。"
+  (skip-unless (fboundp 'custom/tab-line-tab-name-format))
+  (let ((buffer (generate-new-buffer " *tab-close-map*"))
+        (tab-line-close-button-show t))
+    (unwind-protect
+        (let* ((rendered
+                (custom/tab-line-tab-name-format buffer (list buffer)))
+               (close-pos (string-match "x" rendered))
+               (keymap (and close-pos
+                            (get-text-property close-pos 'keymap rendered))))
+          (should close-pos)
+          (should (eq keymap tab-line-tab-close-map))
+          (should (eq (lookup-key keymap [tab-line mouse-1])
+                      #'tab-line-close-tab))
+          (should (eq (get-text-property close-pos 'tab rendered) buffer)))
+      (kill-buffer buffer))))
+
+(ert-deftest custom-config/tab-line-close-persists-window-switch ()
+  "点击关闭后应保留后继标签的窗口切换，同时只隐藏而不 kill buffer。"
+  (skip-unless (fboundp 'custom/tab-line-close-tab))
+  (let* ((frame (selected-frame))
+         (window (selected-window))
+         (original (window-buffer window))
+         (buffer-a (generate-new-buffer " *tab-close-a*"))
+         (buffer-b (generate-new-buffer " *tab-close-b*")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buffer-a
+            (setq buffer-file-name "/tmp/tab-close-a.el"))
+          (with-current-buffer buffer-b
+            (setq buffer-file-name "/tmp/tab-close-b.el"))
+          (set-window-buffer window buffer-a)
+          (custom--tabs-set-frame-buffer-list (list buffer-a buffer-b) frame)
+          (custom/tab-line-close-tab buffer-a)
+          (should (eq (window-buffer window) buffer-b))
+          (should (equal (custom--tabs-get-frame-buffer-list frame)
+                         (list buffer-b)))
+          (should (buffer-live-p buffer-a)))
+      (set-window-buffer window original)
+      (custom--tabs-set-frame-buffer-list nil frame)
+      (kill-buffer buffer-a)
+      (kill-buffer buffer-b))))
+
+(ert-deftest custom-config/tab-line-padding-does-not-draw-box-border ()
+  "Tab-line 禁用 spacious-padding 的 box，避免当前标签出现白色边框。"
+  (skip-unless (boundp 'spacious-padding-widths))
+  (should (equal (plist-get spacious-padding-widths :tab-line-width) 0))
+  (should-not (face-attribute 'tab-line-tab-current :box nil 'default)))
+
+(ert-deftest custom-config/tab-line-rendering-is-borderless-and-keeps-height ()
+  "渲染字符串显式清 box，并用零宽 spacer 恢复原 4px box 的高度。"
+  (let ((buffer (generate-new-buffer " *tab-visual-contract*"))
+        (tab-line-close-button-show t))
+    (unwind-protect
+        (let* ((rendered
+                (custom/tab-line-tab-name-format buffer (list buffer)))
+               (face-value (get-text-property 1 'face rendered))
+               (faces (if (and (listp face-value)
+                               (not (keywordp (car-safe face-value))))
+                          face-value
+                        (list face-value))))
+          (should
+           (equal (get-text-property 0 'display rendered)
+                  '(space :width (0) :height (+ height (8)) :ascent 75)))
+          (should
+           (seq-some
+            (lambda (entry)
+              (and (listp entry)
+                   (plist-member entry :box)
+                   (null (plist-get entry :box))))
+            faces)))
+      (kill-buffer buffer))))
 
 (ert-deftest custom-config/capture-templates-cover-lifecycle ()
   "Phase 2.2: org-capture-templates covers all four data lifecycles.
@@ -289,8 +362,8 @@ Each :ts-mode produces a remap from the first :modes entry."
                (lambda (&optional _frame) 256))
               ((symbol-function 'face-list)
                (lambda () '(default fringe line-number
-                             line-number-current-line hl-line
-                             custom-test-late-face)))
+                                    line-number-current-line hl-line
+                                    custom-test-late-face)))
               ((symbol-function 'custom/terminal-theme-background)
                (lambda () "#334455"))
               ((symbol-function 'set-frame-parameter)
@@ -312,7 +385,7 @@ Each :ts-mode produces a remap from the first :modes entry."
                  (eq (cadr call) 'foreground-color))
                frame-calls))
     (dolist (face '(default fringe line-number line-number-current-line
-                    hl-line custom-test-late-face))
+                            hl-line custom-test-late-face))
       (should
        (seq-some
         (lambda (call)
@@ -409,7 +482,7 @@ Each :ts-mode produces a remap from the first :modes entry."
 (ert-deftest custom-config/daemon-warmup-stays-on-interaction-features ()
   "Daemon 预热覆盖高频交互 feature，不启动应用型子系统。"
   (dolist (feature '(org-agenda org-capture org-roam apheleia embark
-                               magit helpful tramp cape))
+                                magit helpful tramp cape))
     (should (memq feature custom:daemon-warmup-features)))
   (dolist (feature '(pdf-tools notmuch elfeed ement agent-shell))
     (should-not (memq feature custom:daemon-warmup-features))))
@@ -512,74 +585,74 @@ Each :ts-mode produces a remap from the first :modes entry."
       (kill-buffer file-buffer))))
 
 
-    
+
 ;;; ---------------------------------------------------------------------------
 ;;; Category 2: baseline-bug contracts (expected to FAIL today)
 ;;; ---------------------------------------------------------------------------
-    ;;
-    ;; Each test below documents a known P0/P1 bug from PLAN.md §2. They are
-    ;; marked `:expected-result :failed' so `configctl test' stays green while
-    ;; still reporting them. When the matching fix commit lands, remove the
-    ;; `:expected-result' property: a green test enforces the new contract; a
-    ;; still-red test means the fix is incomplete.
+;;
+;; Each test below documents a known P0/P1 bug from PLAN.md §2. They are
+;; marked `:expected-result :failed' so `configctl test' stays green while
+;; still reporting them. When the matching fix commit lands, remove the
+;; `:expected-result' property: a green test enforces the new contract; a
+;; still-red test means the fix is incomplete.
 
-    (ert-deftest custom-config-baseline/agenote-call-entrypoint-exists ()
-      "P0 #1 (fixed by Commit 2): agenote calls must go through a single
+(ert-deftest custom-config-baseline/agenote-call-entrypoint-exists ()
+  "P0 #1 (fixed by Commit 2): agenote calls must go through a single
 `custom/agenote-call' entrypoint that requires an explicit `--domain'.
 All `custom/knowledge-*' calls route through it; `audit-agenote-domain'
 catches any new direct CLI calls."
-      (should (fboundp 'custom/agenote-call))
-      (should (fboundp 'custom/agenote-call-async)))
+  (should (fboundp 'custom/agenote-call))
+  (should (fboundp 'custom/agenote-call-async)))
 
-    (ert-deftest custom-config-baseline/eglot-flymake-chain-intact ()
-      "P0 #2 (fixed by Commit 3): Eglot must NOT opt out of Flymake.
+(ert-deftest custom-config-baseline/eglot-flymake-chain-intact ()
+  "P0 #2 (fixed by Commit 3): Eglot must NOT opt out of Flymake.
 Diagnostics flow through Flymake; the modeline + consult pipeline consumes
 the Flymake public API. Any future commit re-adding `flymake' to
 `eglot-stay-out-of' fails this test."
-      (require 'eglot nil t)
-      (should-not (and (boundp 'eglot-stay-out-of)
-                       (memq 'flymake eglot-stay-out-of))))
+  (require 'eglot nil t)
+  (should-not (and (boundp 'eglot-stay-out-of)
+                   (memq 'flymake eglot-stay-out-of))))
 
-    (ert-deftest custom-config-baseline/flymake-goto-next-error-bound-to-m-g-n ()
-      "P0 #2 cont. (fixed by Commit 3): M-g n / M-g p point at Flymake, not
+(ert-deftest custom-config-baseline/flymake-goto-next-error-bound-to-m-g-n ()
+  "P0 #2 cont. (fixed by Commit 3): M-g n / M-g p point at Flymake, not
 Flycheck wrappers. Any future commit re-binding them to flycheck-* fails
 this test."
-      (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
-      (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
+  (should (eq (key-binding (kbd "M-g n")) 'flymake-goto-next-error))
+  (should (eq (key-binding (kbd "M-g p")) 'flymake-goto-prev-error)))
 
-    (ert-deftest custom-config/help-claimed-bindings-resolve ()
-      "P0 #4 (fixed by Commits 4+9+11): bindings claimed by help/dashboard
+(ert-deftest custom-config/help-claimed-bindings-resolve ()
+  "P0 #4 (fixed by Commits 4+9+11): bindings claimed by help/dashboard
 text must actually exist. Phase 6 partial: stale C-c a a a (Agent Shell
 submenu — not implemented), C-c o f (agenda file — real is C-c o a) and
 C-c e b l (bookmark list — no C-c e prefix) are removed from help-zh.el.
 This test inverts the original assertion: the bogus claims must STAY
 unbound so the help text never lies. Full binding-spec single-source-of-
 truth regeneration is tracked as future work."
-      ;; Phase 6 partial fix landed; promote from :expected-result :failed
-      ;; to mandatory (inverted assertion: stale claims must NOT resolve).
-      (dolist (bogus '("C-c a a a" "C-c o f" "C-c e b l"))
-	(should-not (commandp (key-binding (kbd bogus))))))
+  ;; Phase 6 partial fix landed; promote from :expected-result :failed
+  ;; to mandatory (inverted assertion: stale claims must NOT resolve).
+  (dolist (bogus '("C-c a a a" "C-c o f" "C-c e b l"))
+	  (should-not (commandp (key-binding (kbd bogus))))))
 
-    (ert-deftest custom-config/widget-button-not-globally-advised ()
-      "P1 #1: the Dashboard must not globally advice Widget's private
+(ert-deftest custom-config/widget-button-not-globally-advised ()
+  "P1 #1: the Dashboard must not globally advice Widget's private
 `widget-button--check-and-call-button'. Phase 4.3 / Commit 9 removed the
 advice in favour of standard dashboard generators and text-buttons.
 Now a hard contract — any future regression fails this test."
-      ;; Phase 4.3 fix landed; promote from :expected-result :failed to mandatory.
-      (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
-	(should-not advice)))
+  ;; Phase 4.3 fix landed; promote from :expected-result :failed to mandatory.
+  (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
+	  (should-not advice)))
 
-    (ert-deftest custom-config/corfu-popupinfo-is-sole-doc-source ()
-      "P1 #4 (fixed by Commit 10): only `corfu-popupinfo' is configured as the
+(ert-deftest custom-config/corfu-popupinfo-is-sole-doc-source ()
+  "P1 #4 (fixed by Commit 10): only `corfu-popupinfo' is configured as the
 Corfu doc source. Phase 5.1 removed `corfu-doc' / `corfu-doc-terminal'.
 Now a hard contract — M-d must bind only `corfu-popupinfo-toggle'."
-      ;; Phase 5.1 fix landed; promote from :expected-result :failed to mandatory.
-      (require 'corfu nil t)
-      (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
-	(should (eq m-d-cmd 'corfu-popupinfo-toggle))))
+  ;; Phase 5.1 fix landed; promote from :expected-result :failed to mandatory.
+  (require 'corfu nil t)
+  (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
+	  (should (eq m-d-cmd 'corfu-popupinfo-toggle))))
 
-    (ert-deftest custom-config/audit-keys-helpers-phase6 ()
-      "Phase 6 binding-spec single-source-of-truth: audit-keys helper semantics.
+(ert-deftest custom-config/audit-keys-helpers-phase6 ()
+  "Phase 6 binding-spec single-source-of-truth: audit-keys helper semantics.
 固化三个关键不变量:
   1. `custom-configctl--curated-key-p' 只识别 C-c [a-z] *(case-sensitive),
      不应把 C-c C-c / C-c C-t 等第三方包内部 keymap 误判为 curated。
@@ -590,82 +663,82 @@ Now a hard contract — M-d must bind only `corfu-popupinfo-toggle'."
 configctl test 子命令由 scripts/configctl.el 提供,该文件作为 runner
 已经加载到当前 batch 环境,所以 audit helper 函数都是 fboundp 的;无需
 再 load 一次。"
-      ;; (1) curated-key-p 是 case-sensitive 的(C-c C-c 不应被识别)。
-      (let ((case-fold-search t))  ; 模拟默认环境,验证函数内已绑定 nil
-        (should-not (custom-configctl--curated-key-p "C-c C-c"))
-        (should-not (custom-configctl--curated-key-p "C-c C-t"))
-        (should-not (custom-configctl--curated-key-p "C-c C-p"))
-        (should (custom-configctl--curated-key-p "C-c a g"))
-        (should (custom-configctl--curated-key-p "C-c e l"))
-        (should (custom-configctl--curated-key-p "C-c d"))   ; 单字母前缀(虽无子绑定)
-        (should (custom-configctl--curated-key-p "C-x p f")))
-      ;; (2) prefix-group-p 识别占位符。
-      (should (custom-configctl--prefix-group-p "C-c a g ..."))
-      (should (custom-configctl--prefix-group-p "C-c o b ..."))
-      (should-not (custom-configctl--prefix-group-p "C-c a g t"))
-      ;; (3) help-key-tokens 正确切分。
-      (should (equal (custom-configctl--help-key-tokens "C-c g # / @")
-                     '("C-c g #" "C-c g @")))
-      (should (equal (custom-configctl--help-key-tokens "C-x 2 / 3 / 0 / 1 / o")
-                     '("C-x 2" "C-x 3" "C-x 0" "C-x 1" "C-x o")))
-      (should (equal (custom-configctl--help-key-tokens "Markdown: C-c p")
-                     '("C-c p")))
-      (should (equal (custom-configctl--help-key-tokens "C-c e . / ,")
-                     '("C-c e ." "C-c e ,")))
-      ;; (4) prefix-of 正确剥离尾随 ... 和空格。
-      (should (equal (custom-configctl--prefix-of "C-c e l ...") "C-c e"))
-      (should (equal (custom-configctl--prefix-of "C-c a g t") "C-c a g")))
+  ;; (1) curated-key-p 是 case-sensitive 的(C-c C-c 不应被识别)。
+  (let ((case-fold-search t))  ; 模拟默认环境,验证函数内已绑定 nil
+    (should-not (custom-configctl--curated-key-p "C-c C-c"))
+    (should-not (custom-configctl--curated-key-p "C-c C-t"))
+    (should-not (custom-configctl--curated-key-p "C-c C-p"))
+    (should (custom-configctl--curated-key-p "C-c a g"))
+    (should (custom-configctl--curated-key-p "C-c e l"))
+    (should (custom-configctl--curated-key-p "C-c d"))   ; 单字母前缀(虽无子绑定)
+    (should (custom-configctl--curated-key-p "C-x p f")))
+  ;; (2) prefix-group-p 识别占位符。
+  (should (custom-configctl--prefix-group-p "C-c a g ..."))
+  (should (custom-configctl--prefix-group-p "C-c o b ..."))
+  (should-not (custom-configctl--prefix-group-p "C-c a g t"))
+  ;; (3) help-key-tokens 正确切分。
+  (should (equal (custom-configctl--help-key-tokens "C-c g # / @")
+                 '("C-c g #" "C-c g @")))
+  (should (equal (custom-configctl--help-key-tokens "C-x 2 / 3 / 0 / 1 / o")
+                 '("C-x 2" "C-x 3" "C-x 0" "C-x 1" "C-x o")))
+  (should (equal (custom-configctl--help-key-tokens "Markdown: C-c p")
+                 '("C-c p")))
+  (should (equal (custom-configctl--help-key-tokens "C-c e . / ,")
+                 '("C-c e ." "C-c e ,")))
+  ;; (4) prefix-of 正确剥离尾随 ... 和空格。
+  (should (equal (custom-configctl--prefix-of "C-c e l ...") "C-c e"))
+  (should (equal (custom-configctl--prefix-of "C-c a g t") "C-c a g")))
 
-    (ert-deftest custom-config/binding-spec-parsers-phase6 ()
-      "Phase 6 audit-keys 必须消费 binding spec(custom/bind 声明),
+(ert-deftest custom-config/binding-spec-parsers-phase6 ()
+  "Phase 6 audit-keys 必须消费 binding spec(custom/bind 声明),
 而非已删除的 help-zh.el 数据。固化三个新 helper:
   1. `custom-configctl--binding-spec-entries' 解析所有 custom/bind 调用。
   2. `custom-configctl--binding-help-sections' 按 group 分组(镜像 elisp 侧)。
   3. `custom-configctl--binding-dashboard-bindings' 提取 :dashboard t 条目。
 
 任何回归让 audit-keys 重新读 data/help-zh.el 都会违反 SoT 原则。"
-      ;; (1) 解析器返回非空 entries 列表,每项是 plist 含 :key。
-      (let ((entries (custom-configctl--binding-spec-entries)))
-        (should (consp entries))
-        (dolist (entry entries)
-          (should (plist-get entry :key))))
-      ;; (2) help-sections 与 elisp 侧 custom/binding-help-sections 结构一致:
-      ;;     ((GROUP (key . desc) ...) ...)
-      (let ((sections (custom-configctl--binding-help-sections)))
-        (should (consp sections))
-        (should (stringp (caar sections))))   ; 第一项的 car 是 group 名
-      ;; (3) dashboard-bindings 是 alist(可能空),car 是 key 字符串。
-      (let ((dashboard (custom-configctl--binding-dashboard-bindings)))
-        (should (listp dashboard))
-        (dolist (entry dashboard)
-          (should (stringp (car entry))))))
+  ;; (1) 解析器返回非空 entries 列表,每项是 plist 含 :key。
+  (let ((entries (custom-configctl--binding-spec-entries)))
+    (should (consp entries))
+    (dolist (entry entries)
+      (should (plist-get entry :key))))
+  ;; (2) help-sections 与 elisp 侧 custom/binding-help-sections 结构一致:
+  ;;     ((GROUP (key . desc) ...) ...)
+  (let ((sections (custom-configctl--binding-help-sections)))
+    (should (consp sections))
+    (should (stringp (caar sections))))   ; 第一项的 car 是 group 名
+  ;; (3) dashboard-bindings 是 alist(可能空),car 是 key 字符串。
+  (let ((dashboard (custom-configctl--binding-dashboard-bindings)))
+    (should (listp dashboard))
+    (dolist (entry dashboard)
+      (should (stringp (car entry))))))
 
-    (ert-deftest custom-config/startup-gc-no-handler-redeclaration ()
-      "Phase 7.1: `custom--file-name-handler-alist-original' 只在 early-init.el
+(ert-deftest custom-config/startup-gc-no-handler-redeclaration ()
+  "Phase 7.1: `custom--file-name-handler-alist-original' 只在 early-init.el
 中 defvar 一次。早期 main.el 也做了一遍 defvar,但那时变量早已被 early-init
 清空,捕获到 nil,导致 emacs-startup-hook 把 nil 写回——用户失去 jka-compr
 /tramp handler。Phase 7.1 修复后 main.el 不再重复。
 
 这个测试读 emacs.org 源码块验证 main.el 的 tangle 产物不含该 defvar。"
-      (let* ((org-file (expand-file-name
-                        "emacs.org"
-                        (file-name-directory
-                         (or load-file-name buffer-file-name
-                             default-directory))))
-             ;; 测试文件被 copy 到 runtime/test 目录,需要往回找仓库根。
-             ;; main.el 已 tangle 加载到当前 batch 环境,直接从 main.el 源读也行。
-             (main-file (expand-file-name "main.el" user-emacs-directory)))
-        ;; 直接检查 main.el 内容(已 tangle 加载,文件存在)。
-        (when (file-readable-p main-file)
-          (with-temp-buffer
-            (insert-file-contents main-file)
-            (goto-char (point-min))
-            (should-not (re-search-forward
-                         "(defvar custom--file-name-handler-alist-original"
-                         nil t))))))
+  (let* ((org-file (expand-file-name
+                    "emacs.org"
+                    (file-name-directory
+                     (or load-file-name buffer-file-name
+                         default-directory))))
+         ;; 测试文件被 copy 到 runtime/test 目录,需要往回找仓库根。
+         ;; main.el 已 tangle 加载到当前 batch 环境,直接从 main.el 源读也行。
+         (main-file (expand-file-name "main.el" user-emacs-directory)))
+    ;; 直接检查 main.el 内容(已 tangle 加载,文件存在)。
+    (when (file-readable-p main-file)
+      (with-temp-buffer
+        (insert-file-contents main-file)
+        (goto-char (point-min))
+        (should-not (re-search-forward
+                     "(defvar custom--file-name-handler-alist-original"
+                     nil t))))))
 
-    (ert-deftest custom-config/agenote-call-process-signature ()
-      "Phase 7.1: `custom/agenote-call' 的 call-process 调用签名正确。
+(ert-deftest custom-config/agenote-call-process-signature ()
+  "Phase 7.1: `custom/agenote-call' 的 call-process 调用签名正确。
 
 原 bug:`(apply #'call-process argv nil (list t stderr-buffer) nil)` 把
 argv(list)当作 PROGRAM 传,导致 'Wrong type argument: stringp, (...)';
@@ -676,17 +749,17 @@ buffer object,但 call-process 的 list 形式要求 STDERR-DEST 是文件名
 修复:用 make-temp-file 创建 stderr 临时文件,call-process 用
 (list stdout-buffer stderr-file) 形式。本测试验证 agenote-call 在
 agenote 可用时返回 plist,不抛 wrong-type-argument。"
-      (skip-unless (executable-find "agenote"))
-      (let ((result (custom/agenote-call 'human "stats")))
-        (should (plistp result))
-        (should (memq (plist-get result :status) '(0 1 2)))
-        ;; :stdout 应为字符串(可能为空),不是 list 或 buffer
-        (should (stringp (plist-get result :stdout)))
-        ;; :stderr 同理
-        (should (stringp (plist-get result :stderr)))))
+  (skip-unless (executable-find "agenote"))
+  (let ((result (custom/agenote-call 'human "stats")))
+    (should (plistp result))
+    (should (memq (plist-get result :status) '(0 1 2)))
+    ;; :stdout 应为字符串(可能为空),不是 list 或 buffer
+    (should (stringp (plist-get result :stdout)))
+    ;; :stderr 同理
+    (should (stringp (plist-get result :stderr)))))
 
-    (ert-deftest custom-config/audit-packages-classification ()
-      "Phase 0 audit-packages 四类分类逻辑 (PLAN §7.2)。
+(ert-deftest custom-config/audit-packages-classification ()
+  "Phase 0 audit-packages 四类分类逻辑 (PLAN §7.2)。
 固化 `custom-configctl--classify-package' 与
 `custom-configctl--manifest-prefix-match' 的关键不变量:
   - built-in:    Emacs 内置包,不需 manifest
@@ -698,51 +771,51 @@ agenote 可用时返回 plist,不抛 wrong-type-argument。"
 
 任何让 audit-packages 重新产生 use-package-no-manifest 或
 manifest-no-use-package 二值违规的实现都违反 SoT 原则。"
-      (skip-unless (fboundp 'custom-configctl--classify-package))
-      (skip-unless (fboundp 'custom-configctl--manifest-prefix-match))
-      (let ((manifest '("magit" "avy" "ghostel" "vertico" "with-editor"))
-            (use-set '("magit" "avy")))  ; magit via fn-call, avy via fn-call
-        ;; manifest-prefix-match 行为
-        (should (equal (custom-configctl--manifest-prefix-match
-                        "magit-status-setup-buffer" manifest) "magit"))
-        (should (equal (custom-configctl--manifest-prefix-match
-                        "avy-goto-char-timer" manifest) "avy"))
-        (should (equal (custom-configctl--manifest-prefix-match
-                        "ghostel-mode" manifest) "ghostel"))
-        ;; 无 manifest 匹配的内置函数返回 nil
-        (should (null (custom-configctl--manifest-prefix-match
-                       "add-hook" manifest)))
-        (should (null (custom-configctl--manifest-prefix-match
-                       "nonexistent-foo" manifest)))
-        ;; classify-package 四类
-        ;; built-in: built-in-packages 中的元素
-        (should (eq (custom-configctl--classify-package
-                     "recentf" manifest use-set) 'built-in))
-        ;; sub-feature: vertico-multiform 等父包是 vertico
-        (should (eq (custom-configctl--classify-package
-                     "vertico-multiform" manifest use-set) 'sub-feature))
-        ;; runtime-dep: with-editor 在 manifest + runtime-deps
-        (should (eq (custom-configctl--classify-package
-                     "with-editor" manifest use-set) 'runtime-dep))
-        ;; used: magit 在 use-set
-        (should (eq (custom-configctl--classify-package
-                     "magit" manifest use-set) 'used))
-        ;; candidate: ghostel 在 manifest 但不在 use-set
-        (should (eq (custom-configctl--classify-package
-                     "ghostel" manifest use-set) 'candidate))
-        ;; unknown: nonexistent 既不在 manifest 也不在 use-set
-        (should (eq (custom-configctl--classify-package
-                     "nonexistent" manifest use-set) 'unknown))))
+  (skip-unless (fboundp 'custom-configctl--classify-package))
+  (skip-unless (fboundp 'custom-configctl--manifest-prefix-match))
+  (let ((manifest '("magit" "avy" "ghostel" "vertico" "with-editor"))
+        (use-set '("magit" "avy")))  ; magit via fn-call, avy via fn-call
+    ;; manifest-prefix-match 行为
+    (should (equal (custom-configctl--manifest-prefix-match
+                    "magit-status-setup-buffer" manifest) "magit"))
+    (should (equal (custom-configctl--manifest-prefix-match
+                    "avy-goto-char-timer" manifest) "avy"))
+    (should (equal (custom-configctl--manifest-prefix-match
+                    "ghostel-mode" manifest) "ghostel"))
+    ;; 无 manifest 匹配的内置函数返回 nil
+    (should (null (custom-configctl--manifest-prefix-match
+                   "add-hook" manifest)))
+    (should (null (custom-configctl--manifest-prefix-match
+                   "nonexistent-foo" manifest)))
+    ;; classify-package 四类
+    ;; built-in: built-in-packages 中的元素
+    (should (eq (custom-configctl--classify-package
+                 "recentf" manifest use-set) 'built-in))
+    ;; sub-feature: vertico-multiform 等父包是 vertico
+    (should (eq (custom-configctl--classify-package
+                 "vertico-multiform" manifest use-set) 'sub-feature))
+    ;; runtime-dep: with-editor 在 manifest + runtime-deps
+    (should (eq (custom-configctl--classify-package
+                 "with-editor" manifest use-set) 'runtime-dep))
+    ;; used: magit 在 use-set
+    (should (eq (custom-configctl--classify-package
+                 "magit" manifest use-set) 'used))
+    ;; candidate: ghostel 在 manifest 但不在 use-set
+    (should (eq (custom-configctl--classify-package
+                 "ghostel" manifest use-set) 'candidate))
+    ;; unknown: nonexistent 既不在 manifest 也不在 use-set
+    (should (eq (custom-configctl--classify-package
+                 "nonexistent" manifest use-set) 'unknown))))
 
-    (ert-deftest custom-config/knowledge-no-dead-scanner ()
-      "Phase 2.3: custom/knowledge--collect-org-files 与 defalias 已删除。
+(ert-deftest custom-config/knowledge-no-dead-scanner ()
+  "Phase 2.3: custom/knowledge--collect-org-files 与 defalias 已删除。
 Dashboard 不再递归扫描 experiences/,改走 agenote list --json 索引。
 任何未来 commit 重新加入 scanner 都会违反 SoT 原则。"
-      (should-not (fboundp 'custom/knowledge--collect-org-files))
-      (should-not (fboundp 'custom/knowledge-collect-org-files)))
+  (should-not (fboundp 'custom/knowledge--collect-org-files))
+  (should-not (fboundp 'custom/knowledge-collect-org-files)))
 
-    (ert-deftest custom-config/knowledge-archive-via-cli ()
-      "Phase 2.3: custom/knowledge-archive-inbox-entry 调用 CLI 的 inbox-archive,
+(ert-deftest custom-config/knowledge-archive-via-cli ()
+  "Phase 2.3: custom/knowledge-archive-inbox-entry 调用 CLI 的 inbox-archive,
 不再内联 slug 算法 + 手动 reindex。
 mock custom/agenote-call,验证:
   1. 调用 'inbox-archive' 子命令(而非 'reindex')。
@@ -750,130 +823,130 @@ mock custom/agenote-call,验证:
   3. --prune 透传(让 CLI 负责清理 inbox)。
 
 不真正调用 agenote,只验证调用契约。mock org-* 函数避免需要真实 org buffer。"
-      (skip-unless (fboundp 'custom/knowledge-archive-inbox-entry))
-      (let ((called-args nil)
-            (called-command nil)
-            (called-stdin nil))
-        (cl-letf (((symbol-function 'custom/agenote-call)
-                   (lambda (domain command &rest args)
-                     (setq called-command command
-                           called-args args)
-                     (when (member "--stdin" args)
-                       (setq called-stdin (car (member "--stdin" args))))
-                     (list :status 0 :stdout "/fake/path.org\nreindex: 1 cards"
-                           :stderr "")))
-                  ((symbol-function 'org-get-heading)
-                   (lambda (&rest _) "Mocked Heading"))
-                  ((symbol-function 'org-copy-subtree)
-                   (lambda (&rest _) (kill-new "* Mocked Heading\n:PROPERTIES:\n:END:\nbody text")))
-                  ((symbol-function 'kill-new)
-                   (lambda (s &rest _) (setq kill-ring (cons s kill-ring)) s)))
-          (custom/knowledge-archive-inbox-entry "test")
-          (should (equal called-command "inbox-archive"))
-          (should (member "--category" called-args))
-          (should (member "test" called-args))
-          (should (member "--stdin" called-args))
-          (should (member "--prune" called-args))
-          (should called-stdin))))
+  (skip-unless (fboundp 'custom/knowledge-archive-inbox-entry))
+  (let ((called-args nil)
+        (called-command nil)
+        (called-stdin nil))
+    (cl-letf (((symbol-function 'custom/agenote-call)
+               (lambda (domain command &rest args)
+                 (setq called-command command
+                       called-args args)
+                 (when (member "--stdin" args)
+                   (setq called-stdin (car (member "--stdin" args))))
+                 (list :status 0 :stdout "/fake/path.org\nreindex: 1 cards"
+                       :stderr "")))
+              ((symbol-function 'org-get-heading)
+               (lambda (&rest _) "Mocked Heading"))
+              ((symbol-function 'org-copy-subtree)
+               (lambda (&rest _) (kill-new "* Mocked Heading\n:PROPERTIES:\n:END:\nbody text")))
+              ((symbol-function 'kill-new)
+               (lambda (s &rest _) (setq kill-ring (cons s kill-ring)) s)))
+      (custom/knowledge-archive-inbox-entry "test")
+      (should (equal called-command "inbox-archive"))
+      (should (member "--category" called-args))
+      (should (member "test" called-args))
+      (should (member "--stdin" called-args))
+      (should (member "--prune" called-args))
+      (should called-stdin))))
 
     ;;; Category 3: dashboard rewrite contracts (custom/dashboard-*)
-    ;;
-    ;; These tests pin the behavior of the self-built dashboard engine that
-    ;; replaced the third-party `dashboard' package. They exercise the pure
-    ;; rendering layer (measure / pad / truncate / engine), which is entirely
-    ;; column-based (`string-width') — GUI and batch share the same column
-    ;; arithmetic (see `custom/dashboard--measure' docstring for why pixel
-    ;; measurement was dropped), so these are deterministic without a GUI frame.
+;;
+;; These tests pin the behavior of the self-built dashboard engine that
+;; replaced the third-party `dashboard' package. They exercise the pure
+;; rendering layer (measure / pad / truncate / engine), which is entirely
+;; column-based (`string-width') — GUI and batch share the same column
+;; arithmetic (see `custom/dashboard--measure' docstring for why pixel
+;; measurement was dropped), so these are deterministic without a GUI frame.
 
-    (ert-deftest custom-config/dashboard-truncate-never-exceeds-width ()
-      "Dashboard 截断契约:任意输入 truncate 后 string-width ≤ 目标宽。
+(ert-deftest custom-config/dashboard-truncate-never-exceeds-width ()
+  "Dashboard 截断契约:任意输入 truncate 后 string-width ≤ 目标宽。
 覆盖纯 ASCII、CJK、Nerd Font 图标(PUA)与混合输入。"
-      (dolist (width '(5 10 20 40))
-        (dolist (input '("plain ascii text"
-                         "中文混合 English"
-                         "󰃭 󰋚 󰧑 icons"
-                         "mixed 中 󰃭 and very long content here abcdefg"))
-          (let ((result (custom/dashboard--truncate input width)))
-            (should (<= (string-width result) width))))))
+  (dolist (width '(5 10 20 40))
+    (dolist (input '("plain ascii text"
+                     "中文混合 English"
+                     "󰃭 󰋚 󰧑 icons"
+                     "mixed 中 󰃭 and very long content here abcdefg"))
+      (let ((result (custom/dashboard--truncate input width)))
+        (should (<= (string-width result) width))))))
 
-    (ert-deftest custom-config/dashboard-pad-to-fills-exactly ()
-      "Dashboard 填充契约:pad-to 后 string-width 恰好等于目标宽。
+(ert-deftest custom-config/dashboard-pad-to-fills-exactly ()
+  "Dashboard 填充契约:pad-to 后 string-width 恰好等于目标宽。
 不足补空格、超出原样返回不截断。"
-      (dolist (spec '((5 . "hi") (10 . "hello") (8 . "中文")))
-        (let* ((width (car spec))
-               (text (cdr spec))
-               (result (custom/dashboard--pad-to text width)))
-          (should (= (string-width result) width)))))
+  (dolist (spec '((5 . "hi") (10 . "hello") (8 . "中文")))
+    (let* ((width (car spec))
+           (text (cdr spec))
+           (result (custom/dashboard--pad-to text width)))
+      (should (= (string-width result) width)))))
 
-    (ert-deftest custom-config/dashboard-tty-banner-centers-by-terminal-cells ()
-      "TTY banner 应按终端实际单元宽度居中，不受 Emacs CJK 宽度表误判影响。"
-      (let* ((width 140)
-             (art-line "███████╗███╗   ███╗ █████╗  ██████╗███████╗")
-             (expected-pad (/ (- width (length art-line)) 2)))
-        (cl-letf (((symbol-function 'display-graphic-p)
-                   (lambda (&optional _frame) nil))
-                  ;; 复现真实 TTY：Emacs 报 80 列，但 Foot 实际渲染为 43 单元。
-                  ((symbol-function 'custom/dashboard--measure)
-                   (lambda (text)
-                     (if (string-match-p "█" text)
-                         80
-                       (string-width text))))
-                  ((symbol-function 'custom/dashboard--banner-min-width)
-                   (lambda () 1))
-                  ((symbol-function 'custom/dashboard--status-line)
-                   (lambda () nil)))
-          (with-temp-buffer
-            (custom/dashboard--insert-banner width)
-            (goto-char (point-min))
-            (should (re-search-forward "^\\( +\\)███████╗" nil t))
-            (should (= (length (match-string 1)) expected-pad))))))
+(ert-deftest custom-config/dashboard-tty-banner-centers-by-terminal-cells ()
+  "TTY banner 应按终端实际单元宽度居中，不受 Emacs CJK 宽度表误判影响。"
+  (let* ((width 140)
+         (art-line "███████╗███╗   ███╗ █████╗  ██████╗███████╗")
+         (expected-pad (/ (- width (length art-line)) 2)))
+    (cl-letf (((symbol-function 'display-graphic-p)
+               (lambda (&optional _frame) nil))
+              ;; 复现真实 TTY：Emacs 报 80 列，但 Foot 实际渲染为 43 单元。
+              ((symbol-function 'custom/dashboard--measure)
+               (lambda (text)
+                 (if (string-match-p "█" text)
+                     80
+                   (string-width text))))
+              ((symbol-function 'custom/dashboard--banner-min-width)
+               (lambda () 1))
+              ((symbol-function 'custom/dashboard--status-line)
+               (lambda () nil)))
+      (with-temp-buffer
+        (custom/dashboard--insert-banner width)
+        (goto-char (point-min))
+        (should (re-search-forward "^\\( +\\)███████╗" nil t))
+        (should (= (length (match-string 1)) expected-pad))))))
 
-    (ert-deftest custom-config/dashboard-card-error-isolation ()
-      "Dashboard 错误隔离契约:fetch 或 render 抛错时产出错误卡片行,
+(ert-deftest custom-config/dashboard-card-error-isolation ()
+  "Dashboard 错误隔离契约:fetch 或 render 抛错时产出错误卡片行,
 不向上信号,不影响同排其他卡片。引擎是单卡片故障域的保证。"
-      (let* ((broken-spec (list :id 'broken
-                                :title "坏卡片"
-                                :icon "" :key ""
-                                :fetch (lambda () (error "fetch boom"))
-                                :render (lambda (_ w) (list "never"))))
-             (render-broken-spec (list :id 'render-broken
-                                       :title "渲染坏"
-                                       :icon "" :key ""
-                                       :fetch (lambda () (list :ok 'data))
-                                       :render (lambda (_ _w)
-                                                 (error "render boom"))))
-             (ok-spec (list :id 'ok
-                            :title "好卡片"
+  (let* ((broken-spec (list :id 'broken
+                            :title "坏卡片"
                             :icon "" :key ""
-                            :fetch (lambda () (list :ok '("line1")))
-                            :render (lambda (data _w) data))))
-        ;; fetch 抛错 → 不信号,返回行列表(含错误提示)
-        (let ((lines (custom/dashboard--card-lines broken-spec 40)))
-          (should (consp lines))
-          (should (cl-some (lambda (l) (string-match-p "fetch boom" l)) lines)))
-        ;; render 抛错 → 同样隔离
-        (let ((lines (custom/dashboard--card-lines render-broken-spec 40)))
-          (should (consp lines))
-          (should (cl-some (lambda (l) (string-match-p "render boom" l)) lines)))
-        ;; 正常卡片不受影响
-        (let ((lines (custom/dashboard--card-lines ok-spec 40)))
-          (should (cl-some (lambda (l) (string-match-p "line1" l)) lines)))))
+                            :fetch (lambda () (error "fetch boom"))
+                            :render (lambda (_ w) (list "never"))))
+         (render-broken-spec (list :id 'render-broken
+                                   :title "渲染坏"
+                                   :icon "" :key ""
+                                   :fetch (lambda () (list :ok 'data))
+                                   :render (lambda (_ _w)
+                                             (error "render boom"))))
+         (ok-spec (list :id 'ok
+                        :title "好卡片"
+                        :icon "" :key ""
+                        :fetch (lambda () (list :ok '("line1")))
+                        :render (lambda (data _w) data))))
+    ;; fetch 抛错 → 不信号,返回行列表(含错误提示)
+    (let ((lines (custom/dashboard--card-lines broken-spec 40)))
+      (should (consp lines))
+      (should (cl-some (lambda (l) (string-match-p "fetch boom" l)) lines)))
+    ;; render 抛错 → 同样隔离
+    (let ((lines (custom/dashboard--card-lines render-broken-spec 40)))
+      (should (consp lines))
+      (should (cl-some (lambda (l) (string-match-p "render boom" l)) lines)))
+    ;; 正常卡片不受影响
+    (let ((lines (custom/dashboard--card-lines ok-spec 40)))
+      (should (cl-some (lambda (l) (string-match-p "line1" l)) lines)))))
 
-    (ert-deftest custom-config/dashboard-engine-splice-width-invariant ()
-      "Dashboard 双列拼接契约:--render-row 产出每行左列宽度一致。
+(ert-deftest custom-config/dashboard-engine-splice-width-invariant ()
+  "Dashboard 双列拼接契约:--render-row 产出每行左列宽度一致。
 两列等高拼接后,左列固定填充到 left-w,右列自然结束。"
-      (cl-letf (((symbol-function 'custom/dashboard--tier)
-                 (lambda () 'dual)))
-        (dolist (spec-pair
-                 '(((recents projects)) ((todo clock)) ((knowledge bookmarks))))
-          (let* ((total 100)
-                 (gap custom:dashboard-dual-gap)
-                 (left-w (/ (- total gap) 2))
-                 (lines (custom/dashboard--render-row (car spec-pair) total)))
-            (should (consp lines))
-            ;; 左列每行(去掉首字符)应不超过 left-w;引擎保证左列填充
-            (dolist (l lines)
-              (should (stringp l)))))))
+  (cl-letf (((symbol-function 'custom/dashboard--tier)
+             (lambda () 'dual)))
+    (dolist (spec-pair
+             '(((recents projects)) ((todo clock)) ((knowledge bookmarks))))
+      (let* ((total 100)
+             (gap custom:dashboard-dual-gap)
+             (left-w (/ (- total gap) 2))
+             (lines (custom/dashboard--render-row (car spec-pair) total)))
+        (should (consp lines))
+        ;; 左列每行(去掉首字符)应不超过 left-w;引擎保证左列填充
+        (dolist (l lines)
+          (should (stringp l)))))))
 
-    (provide 'custom-config-tests)
+(provide 'custom-config-tests)
 ;;; custom-config-tests.el ends here
