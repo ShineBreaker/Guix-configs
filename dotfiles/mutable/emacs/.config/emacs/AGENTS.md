@@ -71,7 +71,7 @@ scripts/configctl find 'eglot|flymake'
 | 4    | `programming`     | Tree-sitter、Eglot、Flymake、格式化、语言模式 | `bootstrap`、`appearance`     |
 | 5    | `projects`        | project.el、目录与项目导航                    | `terminal`、`git-display`     |
 | 6    | `org-knowledge`   | Org、Roam、Knowledge、agenote                 | `bootstrap`、`process-helper` |
-| 7    | `keys-completion` | 全局键、前缀键、Vertico、Corfu                | 前述交互命令、frame 生命周期  |
+| 7    | `keys-completion` | 前缀声明、跨域基础键、Vertico、Corfu          | 前述交互命令、frame 生命周期  |
 | 8    | `system-tools`    | daemon 预热、Dashboard、版本兼容              | 前述全部；Dashboard 必须最后  |
 
 ```text
@@ -93,10 +93,28 @@ startup -> appearance -> editing -> programming -> projects
 | LSP / 诊断 / 格式化       | `programming-tools`                               | `bootstrap`, `appearance`            |
 | 项目导航                  | `project-navigation`                              | `terminal`, `git-display`            |
 | Org / Knowledge / agenote | `org-core`, `knowledge`                           | `bootstrap`, `process-helper`        |
-| 键位 / 补全               | `keybindings`, `completion`                       | 对应命令必须先定义                   |
+| 键位 / 补全               | 功能键随其功能域；跨域基础键 `keybindings`；补全 `completion` | 对应命令必须先定义                   |
 | 翻译数据                  | `data/which-key-zh.el`, `data/context-menu-zh.el` | `appearance/i18n-data`               |
 | Dashboard                 | `dashboard`                                       | knowledge、help、color-scheme、frame |
 | 版本兜底                  | `compatibility`                                   | noweb 展开到真实使用点               |
+
+### 键位归属规则
+
+键位默认跟随其功能实现所在的域（*功能内聚* 原则），不再集中到 `keybindings` 块。`custom/bind` 内部通过 `custom--pending-wk-descs` 暂存 which-key 描述、延迟到 `with-eval-after-load 'which-key` flush；Dashboard 通过扫描 `custom:binding-spec` 生成——二者均与代码物理位置无关。
+
+| 前缀 / 键类              | 归属域 / ID                              | 说明                                       |
+| ------------------------ | ---------------------------------------- | ------------------------------------------ |
+| `C-c g` Git              | `appearance` / `git-display`             | Git 函数所在域                             |
+| `C-c l` `M-g` `C-c f` `C-c z` 代码 | `programming` / `programming-keys` | 含 `code-commands` 函数族                  |
+| `C-c e` 编辑变换         | `editing` / `editing-dwim`               | DWIM 与 mc 函数所在域                      |
+| `C-c m` 补全             | `keys-completion` / `completion`         | Vertico / Corfu / Cape 配置同源            |
+| `C-x p` 项目             | `projects` / `project-navigation`        | project.el 函数所在域                      |
+| `C-c o` `C-c c` Org      | `org-knowledge` / `knowledge`            | Org / Knowledge 函数所在域                 |
+| `C-c a` 生活应用         | `system-tools` / `applications` 或应用 `use-package` 所在域 | 每个应用键紧跟其 `use-package` 声明  |
+| markdown 等局部键        | 对应 major mode 的 `use-package` 所在域  | `custom/bind-local` 紧跟 mode 声明         |
+| 无前缀 IDE 直达键（`C-` / `M-` / `F-`） | `keys-completion` / `global-keys` | 跨多域基础操作，保留为基础键位域          |
+| `C-x` `M-s` `C-c w` `C-c h` 跨域键 | `keys-completion` / `keybindings`   | 引用命令跨多个功能域，无单一归属           |
+| 14 个前缀声明（`custom/declare-binding-prefix`） | `keys-completion` / `keybindings` | Dashboard 前缀摘要的唯一声明源，必须集中   |
 
 ## 3. 标准修改流程
 
@@ -135,7 +153,7 @@ startup -> appearance -> editing -> programming -> projects
 - 私有函数使用 `custom/...--...`；不要添加顺序加载用的 `defvar nil` 注入点。
 - 同一符号不得重复 `defun`、`defvar` 或 `defconst`。
 - agenote 同步/异步调用统一走 `custom/agenote-call` 和 `custom/agenote-call-async`，每次显式传 domain。
-- 全局键使用 `custom/bind`，局部键使用 `custom/bind-local`，前缀声明使用 `custom/declare-binding-prefix`，保持键位、Which-key、帮助和 Dashboard 同源。
+- 全局键使用 `custom/bind`，局部键使用 `custom/bind-local`，前缀声明使用 `custom/declare-binding-prefix`，保持键位、Which-key、帮助和 Dashboard 同源。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有 14 个前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
 - display 初始化注册到 `custom/add-frame-created-hook`；依赖 client 最终 buffer 的行为注册到 `custom/add-server-ready-hook`。
 - 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
 

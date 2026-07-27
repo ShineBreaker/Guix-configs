@@ -1868,6 +1868,20 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 <<appearance/git-display>>
 #+end_src
 
+#+begin_src emacs-lisp
+(custom/bind "C-c g s" #'custom/git-status-dwim "版本控制状态" "Git")
+(custom/bind "C-c g b" #'custom/git-blame-current-file "当前文件追责" "Git")
+(custom/bind "C-c g l" #'custom/git-log-current-file "当前文件日志" "Git")
+(custom/bind "C-c g d" #'custom/git-diff-current-file "当前文件差异" "Git")
+(custom/bind "C-c g t" #'custom/git-timemachine-toggle "文件时光机" "Git")
+(custom/bind "C-c g S" #'custom/git-stage-current-file "暂存当前文件" "Git")
+(custom/bind "C-c g D" #'custom/git-discard-current-file "丢弃当前文件修改" "Git")
+(custom/bind "C-c g P" #'custom/git-push-current-repo "推送" "Git")
+(custom/bind "C-c g F" #'custom/git-pull-current-repo "拉取" "Git")
+(custom/bind "C-c g #" #'custom/git-stash-push "保存暂存" "Git")
+(custom/bind "C-c g @" #'custom/git-stash-pop "恢复暂存" "Git")
+#+end_src
+
 ** 主题与字体
 :PROPERTIES:
 :CUSTOM_ID: theme-fonts
@@ -2732,6 +2746,16 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
              mc/mark-all-like-this mc/mark-all-like-this-in-defun))
 #+end_src
 
+#+begin_src emacs-lisp
+(custom/bind "C-c e l" #'mc/edit-lines "每行一个多光标" "编辑变换")
+(custom/bind "C-c e n" #'mc/mark-next-like-this "标记下一个匹配" "编辑变换")
+(custom/bind "C-c e p" #'mc/mark-previous-like-this "标记上一个匹配" "编辑变换")
+(custom/bind "C-c e a" #'mc/mark-all-like-this "标记全部匹配" "编辑变换")
+(custom/bind "C-c e d" #'mc/mark-all-like-this-in-defun "函数内全部匹配" "编辑变换")
+(custom/bind "C-c e ." #'goto-last-change "上一处修改" "编辑变换")
+(custom/bind "C-c e ," #'goto-last-change-reverse "下一处修改" "编辑变换")
+#+end_src
+
 *** 编辑辅助包
 
 + =indent-bars= :基于 tree-sitter 的缩进竖线。只在 ts-mode 启用——非 ts-mode 缺乏可靠的缩进 AST,indent-bars 会画错。竖线不自己算颜色(=indent-bars-color nil=,follow 主题),按深度递减饱和度;pattern 用单字符 dot 列,关闭锯齿避免 ts 节点抖动。
@@ -3089,6 +3113,127 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
   :hook (prog-mode . rainbow-delimiters-mode))
 #+end_src
 
+** 代码操作辅助函数
+:PROPERTIES:
+:CUSTOM_ID: code-commands
+:END:
+
+供快捷键和右键菜单复用的代码操作函数:复制行、移动行、跳转、格式化、块注释。
+
++ =custom/tabs-next= / =custom/tabs-previous= / =custom/tabs-refresh-context= 由 [[#tab-line][Tab-line]] 提供
++ 本块定义的函数被 [[#global-keys][全局直达键]]、[[#programming-keys][代码与导航键]] 复用
+
+#+begin_src emacs-lisp
+(defun custom/code--current-line-text ()
+  "返回当前行文本,包含行尾换行。"
+  (buffer-substring (line-beginning-position)
+                    (line-beginning-position 2)))
+
+(defun custom/code-duplicate-line ()
+  "复制当前行并在下方粘贴。"
+  (interactive)
+  (let ((column (current-column))
+        (line (custom/code--current-line-text))
+        (insert-at (line-beginning-position 2)))
+    (goto-char insert-at)
+    (insert line)
+    (goto-char insert-at)
+    (move-to-column column)))
+
+(defun custom/code-move-line-up ()
+  "将当前行上移一行。"
+  (interactive)
+  (transpose-lines 1)
+  (forward-line -2))
+
+(defun custom/code-move-line-down ()
+  "将当前行下移一行。"
+  (interactive)
+  (forward-line 1)
+  (transpose-lines 1)
+  (forward-line -1))
+
+(defun custom/code-goto-definition ()
+  "跳转到定义。"
+  (interactive)
+  (call-interactively #'xref-find-definitions))
+
+(defun custom/code-goto-references ()
+  "查找所有引用。"
+  (interactive)
+  (call-interactively #'xref-find-references))
+
+(defun custom/code-jump-back ()
+  "跳回之前的位置。"
+  (interactive)
+  (if (fboundp 'xref-go-back) (xref-go-back) (pop-mark)))
+
+(defun custom/code-jump-forward ()
+  "跳到下一个位置。"
+  (interactive)
+  (if (fboundp 'xref-go-forward) (xref-go-forward)
+    (message "前进功能不可用")))
+
+(defun custom/code-format-dwim ()
+  "智能格式化:有选区格式化选区,否则格式化整个缓冲区。"
+  (interactive)
+  (if (use-region-p)
+      (indent-region (region-beginning) (region-end))
+    (cond
+     ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
+      (eglot-format-buffer))
+     (t
+      (indent-region (point-min) (point-max))))))
+
+(defun custom/code-comment-block ()
+  "使用块注释包围选区。"
+  (interactive)
+  (if (use-region-p)
+      (let ((comment-style 'multi-line))
+        (comment-region (region-beginning) (region-end)))
+    (message "请先选择要块注释的区域")))
+#+end_src
+
+** 代码与导航键
+:PROPERTIES:
+:CUSTOM_ID: programming-keys
+:END:
+
+代码 / LSP / 跳转 / 错误 / 格式化 / 折叠前缀键,绑定引用 [[#code-commands][代码操作辅助函数]] 和 Eglot / Flymake 命令。
+
+#+begin_src emacs-lisp
+(custom/bind "M-g n" #'flymake-goto-next-error "下一个错误" "跳转与错误")
+(custom/bind "M-g p" #'flymake-goto-prev-error "上一个错误" "跳转与错误")
+(custom/bind "M-g l" #'custom/flymake-list-errors-dwim "错误列表" "跳转与错误")
+(custom/bind "M-g r" #'custom/code-goto-references "查找引用" "跳转与错误")
+(custom/bind "M-g b" #'custom/code-jump-back "后退" "跳转与错误")
+(custom/bind "M-g f" #'custom/code-jump-forward "前进" "跳转与错误")
+(custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
+(custom/bind "M-," #'custom/code-jump-back "返回上一个位置" "跳转与错误")
+
+(custom/bind "C-c l d" #'custom/code-goto-definition "跳转到定义" "代码 / LSP")
+(custom/bind "C-c l r" #'custom/code-goto-references "查找引用" "代码 / LSP")
+(custom/bind "C-c l a" #'eglot-code-actions "代码操作" "代码 / LSP")
+(custom/bind "C-c l n" #'eglot-rename "重命名符号" "代码 / LSP")
+(custom/bind "C-c l c" #'completion-at-point "触发补全" "代码 / LSP")
+(custom/bind "C-c l e" #'custom/flymake-list-errors-dwim "错误列表" "代码 / LSP")
+(custom/bind "C-c l x d" #'eglot-find-declaration "跳转到声明" "代码 / LSP")
+(custom/bind "C-c l x i" #'eglot-find-implementation "跳转到实现" "代码 / LSP")
+(custom/bind "C-c l x t" #'eglot-find-typeDefinition "跳转到类型定义" "代码 / LSP")
+
+(custom/bind "C-c f f" #'custom/code-format-dwim "智能格式化" "格式化")
+(custom/bind "C-c f b" #'apheleia-format-buffer "格式化整个缓冲区" "格式化")
+
+(add-hook 'prog-mode-hook #'hs-minor-mode)
+(add-hook 'conf-mode-hook #'hs-minor-mode)
+(custom/bind "C-c z a" #'hs-toggle-hiding "切换当前折叠" "折叠")
+(custom/bind "C-c z c" #'hs-hide-block "关闭当前折叠" "折叠")
+(custom/bind "C-c z o" #'hs-show-block "打开当前折叠" "折叠")
+(custom/bind "C-c z m" #'hs-hide-all "全部折叠" "折叠")
+(custom/bind "C-c z r" #'hs-show-all "全部展开" "折叠")
+(custom/bind "<backtab>" #'hs-toggle-hiding "切换当前折叠" "折叠")
+#+end_src
+
 ** 各语言 major mode
 :PROPERTIES:
 :CUSTOM_ID: language-modes
@@ -3125,6 +3270,9 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
   :custom
   (markdown-command "pandoc")
   (markdown-fontify-code-blocks-natively t))
+
+(custom/bind-local 'markdown-mode 'markdown-mode 'markdown-mode-map
+                   "C-c p" #'markdown-preview "预览 Markdown" "模式局部")
 (use-package nix-mode :mode "\\.nix\\'" :defer t)
 (use-package yaml :defer t :commands (yaml-parse-string yaml-encode))
 (use-package yaml-mode :mode ("\\.ya?ml\\'" "\\.yml\\.dist\\'") :defer t)
@@ -3190,7 +3338,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 + Emacs 31 的命令项格式为 =(COMMAND LABEL &optional KEY)= ，显式键避免依赖 =project-prefix-map= 的间接查找。
 + =consult-fd= : 项目内快速文件搜索( =custom/find-file-in-project= ),fd 缺失时降级为 find
 + ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
-+ 项目前缀 =C-x p= 在 [[#keybindings][键位与补全]] 域绑定
++ 项目前缀 =C-x p= 在本域末尾绑定(功能内聚)
 + 项目切换清空当前 frame 的 tab-line( =project-after-switch-project-functions= ,见 [[#tab-line][Tab-line]])
 
 #+begin_src emacs-lisp
@@ -3280,6 +3428,18 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (with-eval-after-load 'project
   (add-hook 'project-after-switch-project-functions
             (lambda (&rest _) (custom/tabs-clear-for-frame))))
+#+end_src
+
+项目前缀 =C-x p= 与 =project.el= 同源,在下方 src-block 直接绑定。
+
+#+begin_src emacs-lisp
+(custom/bind "C-x p p" #'project-switch-project "切换项目" "项目")
+(custom/bind "C-x p f" #'project-find-file "查找项目文件" "项目")
+(custom/bind "C-x p s" #'custom/project-search "项目全文搜索" "项目")
+(custom/bind "C-x p o" #'custom/open-project-folder "打开项目目录" "项目")
+(custom/bind "C-x p O" #'custom/open-directory "目录浏览" "项目")
+(custom/bind "C-x p k" #'project-kill-buffers "关闭项目缓冲区" "项目")
+(custom/bind "C-x p D" #'project-dired "项目根 Dired" "项目")
 #+end_src
 
 * Org 与知识库
@@ -3466,7 +3626,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 *** Org UI 与检索
 
 + =org-modern= / =org-appear= :Org 视觉现代化与光标处标记显隐。
-+ 禁用 =org-indent-mode=:该模式会让 =org-modern= 自动关闭标题星号替换和代码块 fringe 边框；列表与正文层级仍由 Org 自身缩进表达。
++ =org-indent-mode= 启用( =org-startup-indented t= ),块缩进样式由 =org-modern-indent= 补回:原生 =org-modern= 在 org-indent 启用时会关闭代码块 fringe 边框,=org-modern-indent= 用 bracket + wrap-prefix 在 org-indent 下近似 =org-modern= 的块样式。
 + =org-modern-table= 启用细线表格，=org-modern-block-fringe= 无条件设为 4:daemon 启动期 =(display-graphic-p)= 永远为 nil,有条件的判断会让 GUI client 的 block fringe 被关掉;TTY 下 fringe 参数被忽略,设 4 无副作用。
 + Org buffer 隐藏行号，减少文档阅读时的编辑器噪音；代码块、表格和元数据继续使用主题既有的等宽 face。
 + =org-roam= autosync 在首次 roam 命令(=:commands= 触发加载)后启动。
@@ -4091,12 +4251,44 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 <<org/agenote-health>>
 #+end_src
 
+#+begin_src emacs-lisp
+(custom/bind "C-c o a" #'org-agenda "议程视图" "Org 与知识库")
+(custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
+(custom/bind "C-c o o" #'olivetti-mode "专注写作" "Org 与知识库")
+(custom/bind "C-c o d" #'deft "检索历史 notes" "Org 与知识库")
+(custom/bind "C-c o n f" #'org-roam-node-find "查找或新建 Roam 笔记" "Org 与知识库")
+(custom/bind "C-c o n i" #'org-roam-node-insert "插入 Roam 链接" "Org 与知识库")
+(custom/bind "C-c o n l" #'org-roam-buffer-toggle "切换反向链接" "Org 与知识库")
+(custom/bind "C-c c c" #'org-capture "统一 Capture 入口" "Org 与知识库")
+(custom/bind "C-c c i" #'org-clock-in "开始计时" "Org 与知识库")
+(custom/bind "C-c c o" #'org-clock-out "停止计时" "Org 与知识库")
+(custom/bind "C-c c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
+
+(custom/bind "C-c o k c" #'custom/knowledge-capture "捕获经验卡" "Org 与知识库")
+(custom/bind "C-c o k s" #'custom/knowledge-search "搜索经验" "Org 与知识库")
+(custom/bind "C-c o k t" #'custom/knowledge-search-by-tag "按标签搜索" "Org 与知识库")
+(custom/bind "C-c o k I" #'custom/knowledge-open-inbox "打开 Inbox" "Org 与知识库")
+(custom/bind "C-c o k S" #'custom/knowledge-stats "知识库统计" "Org 与知识库")
+(custom/bind "C-c o k v" #'custom/knowledge-browse-human "浏览人类知识库" "Org 与知识库")
+(custom/bind "C-c o k b" #'custom/knowledge-browse-agenote "浏览 agenote 域" "Org 与知识库")
+(custom/bind "C-c o k a" #'custom/knowledge-archive-inbox-entry "归档 Inbox 条目" "Org 与知识库")
+(custom/bind "C-c o k d" #'custom/knowledge-deduplicate "检测重复卡" "Org 与知识库")
+(custom/bind "C-c o k e" #'custom/knowledge-merge "合并卡片" "Org 与知识库")
+(custom/bind "C-c o k l" #'custom/knowledge-lint "校验知识库" "Org 与知识库")
+(custom/bind "C-c o k m" #'custom/knowledge-memory "记忆系统" "Org 与知识库")
+(custom/bind "C-c o k n" #'custom/knowledge-connect "链接卡片" "Org 与知识库")
+(custom/bind "C-c o k o" #'custom/knowledge-commit "提交知识库" "Org 与知识库")
+(custom/bind "C-c o k r" #'custom/knowledge-review "审查卡片" "Org 与知识库")
+(custom/bind "C-c o k u" #'custom/knowledge-touch "更新卡片时间" "Org 与知识库")
+(custom/bind "C-c o k V" #'custom/knowledge-viz-open-browser "浏览器可视化" "Org 与知识库")
+#+end_src
+
 * 键位与补全
 :PROPERTIES:
 :CUSTOM_ID: keys-completion
 :END:
 
-全局直达键 + 多前缀体系(C-x / C-c / M-s / M-g 等)+ which-key 本体加载 + helpful 增强帮助 + winner 窗口布局撤销 + 补全框架全家桶(Vertico / Corfu / Consult)。
+前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + helpful 增强帮助 + winner 窗口布局撤销 + 补全框架全家桶(Vertico / Corfu / Consult)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
 
 ** Which-key 本体与辅助包
 :PROPERTIES:
@@ -4176,87 +4368,6 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
   (winner-mode 1))
 #+end_src
 
-** 代码操作辅助函数
-:PROPERTIES:
-:CUSTOM_ID: code-commands
-:END:
-
-供快捷键和右键菜单复用的代码操作函数:复制行、移动行、跳转、格式化、块注释、标签切换。
-
-+ 这些函数集中定义在本块,与下面的 *全局直达键* 同源
-+ =custom/tabs-next= / =custom/tabs-previous= / =custom/tabs-refresh-context= 由 [[#tab-line][Tab-line]] 提供
-
-#+begin_src emacs-lisp
-(defun custom/code--current-line-text ()
-  "返回当前行文本,包含行尾换行。"
-  (buffer-substring (line-beginning-position)
-                    (line-beginning-position 2)))
-
-(defun custom/code-duplicate-line ()
-  "复制当前行并在下方粘贴。"
-  (interactive)
-  (let ((column (current-column))
-        (line (custom/code--current-line-text))
-        (insert-at (line-beginning-position 2)))
-    (goto-char insert-at)
-    (insert line)
-    (goto-char insert-at)
-    (move-to-column column)))
-
-(defun custom/code-move-line-up ()
-  "将当前行上移一行。"
-  (interactive)
-  (transpose-lines 1)
-  (forward-line -2))
-
-(defun custom/code-move-line-down ()
-  "将当前行下移一行。"
-  (interactive)
-  (forward-line 1)
-  (transpose-lines 1)
-  (forward-line -1))
-
-(defun custom/code-goto-definition ()
-  "跳转到定义。"
-  (interactive)
-  (call-interactively #'xref-find-definitions))
-
-(defun custom/code-goto-references ()
-  "查找所有引用。"
-  (interactive)
-  (call-interactively #'xref-find-references))
-
-(defun custom/code-jump-back ()
-  "跳回之前的位置。"
-  (interactive)
-  (if (fboundp 'xref-go-back) (xref-go-back) (pop-mark)))
-
-(defun custom/code-jump-forward ()
-  "跳到下一个位置。"
-  (interactive)
-  (if (fboundp 'xref-go-forward) (xref-go-forward)
-    (message "前进功能不可用")))
-
-(defun custom/code-format-dwim ()
-  "智能格式化:有选区格式化选区,否则格式化整个缓冲区。"
-  (interactive)
-  (if (use-region-p)
-      (indent-region (region-beginning) (region-end))
-    (cond
-     ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
-      (eglot-format-buffer))
-     (t
-      (indent-region (point-min) (point-max))))))
-
-(defun custom/code-comment-block ()
-  "使用块注释包围选区。"
-  (interactive)
-  (if (use-region-p)
-      (let ((comment-style 'multi-line))
-        (comment-region (region-beginning) (region-end)))
-    (message "请先选择要块注释的区域")))
-#+end_src
-
 ** 全局直达键
 :PROPERTIES:
 :CUSTOM_ID: global-keys
@@ -4311,22 +4422,17 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "M-<right>" #'windmove-right "右切窗口" "基础移动与直达键")
 (custom/bind "M-<up>" #'windmove-up "上切窗口" "基础移动与直达键")
 (custom/bind "M-<down>" #'windmove-down "下切窗口" "基础移动与直达键")
-
-(custom/bind "C-c e l" #'mc/edit-lines "每行一个多光标" "编辑变换")
-(custom/bind "C-c e n" #'mc/mark-next-like-this "标记下一个匹配" "编辑变换")
-(custom/bind "C-c e p" #'mc/mark-previous-like-this "标记上一个匹配" "编辑变换")
-(custom/bind "C-c e a" #'mc/mark-all-like-this "标记全部匹配" "编辑变换")
-(custom/bind "C-c e d" #'mc/mark-all-like-this-in-defun "函数内全部匹配" "编辑变换")
-(custom/bind "C-c e ." #'goto-last-change "上一处修改" "编辑变换")
-(custom/bind "C-c e ," #'goto-last-change-reverse "下一处修改" "编辑变换")
 #+end_src
 
-** 前缀键体系
+** 前缀声明与跨域基础键
 :PROPERTIES:
 :CUSTOM_ID: keybindings
 :END:
 
-Emacs 原生前缀扩展与生活应用入口。所有绑定通过 =custom/bind= 登记。
+Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键位。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾),不在此处集中。
+
++ *14 个前缀声明* :: =custom/declare-binding-prefix= 是 Dashboard 前缀摘要的唯一来源,必须集中。前缀下具体绑定随其功能域。
++ *=C-x*= / *=M-s*= / *=C-c w*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 窗口 / 终端 / 帮助),无单一归属,集中在本块。
 
 #+begin_src emacs-lisp
 (dolist (prefix
@@ -4355,77 +4461,11 @@ Emacs 原生前缀扩展与生活应用入口。所有绑定通过 =custom/bind=
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t g" #'custom/tabs-refresh-context "刷新标签上下文" "文件 / 缓冲区 / 标签")
 
-(custom/bind "C-x p p" #'project-switch-project "切换项目" "项目")
-(custom/bind "C-x p f" #'project-find-file "查找项目文件" "项目")
-(custom/bind "C-x p s" #'custom/project-search "项目全文搜索" "项目")
-(custom/bind "C-x p o" #'custom/open-project-folder "打开项目目录" "项目")
-(custom/bind "C-x p O" #'custom/open-directory "目录浏览" "项目")
-(custom/bind "C-x p k" #'project-kill-buffers "关闭项目缓冲区" "项目")
-(custom/bind "C-x p D" #'project-dired "项目根 Dired" "项目")
-
 (custom/bind "M-s l" #'consult-line "搜索当前缓冲区" "搜索")
 (custom/bind "M-s p" #'consult-ripgrep "搜索项目" "搜索")
 (custom/bind "M-s b" #'consult-buffer "搜索缓冲区" "搜索")
 (custom/bind "M-s e" #'consult-eglot-symbols "Eglot 符号搜索" "搜索")
 (custom/bind "M-s f" #'consult-flymake "Flymake 诊断" "搜索")
-
-(custom/bind "M-g n" #'flymake-goto-next-error "下一个错误" "跳转与错误")
-(custom/bind "M-g p" #'flymake-goto-prev-error "上一个错误" "跳转与错误")
-(custom/bind "M-g l" #'custom/flymake-list-errors-dwim "错误列表" "跳转与错误")
-(custom/bind "M-g r" #'custom/code-goto-references "查找引用" "跳转与错误")
-(custom/bind "M-g b" #'custom/code-jump-back "后退" "跳转与错误")
-(custom/bind "M-g f" #'custom/code-jump-forward "前进" "跳转与错误")
-(custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
-(custom/bind "M-," #'custom/code-jump-back "返回上一个位置" "跳转与错误")
-
-(custom/bind "C-c m R" #'vertico-reverse-mode "Vertico 反向显示" "补全框架")
-(custom/bind "C-c m j" #'vertico-quick-jump "Vertico 单键跳转" "补全框架")
-(custom/bind "C-c m s" #'vertico-suspend "挂起补全会话" "补全框架")
-(custom/bind "C-c m v" #'vertico-repeat "恢复补全会话" "补全框架")
-(custom/bind "C-c m a" #'prescient-toggle-anchored "切换锚定匹配" "补全框架")
-(custom/bind "C-c m p" #'prescient-toggle-prefix "切换前缀匹配" "补全框架")
-(custom/bind "C-c m f" #'prescient-toggle-fuzzy "切换模糊匹配" "补全框架")
-(custom/bind "C-c m r" #'prescient-toggle-regexp "切换正则匹配" "补全框架")
-(custom/bind "C-c m c" #'cape-interactive "选择 CAPF" "补全框架")
-(custom/bind "C-c m d" #'cape-dabbrev "缩写补全" "补全框架")
-(custom/bind "C-c m F" #'cape-file "文件路径补全" "补全框架")
-(custom/bind "C-c m h" #'cape-history "历史补全" "补全框架")
-(custom/bind "C-c m k" #'cape-keyword "关键字补全" "补全框架")
-(custom/bind "C-c m l" #'cape-line "整行补全" "补全框架")
-
-(custom/bind "C-c l d" #'custom/code-goto-definition "跳转到定义" "代码 / LSP")
-(custom/bind "C-c l r" #'custom/code-goto-references "查找引用" "代码 / LSP")
-(custom/bind "C-c l a" #'eglot-code-actions "代码操作" "代码 / LSP")
-(custom/bind "C-c l n" #'eglot-rename "重命名符号" "代码 / LSP")
-(custom/bind "C-c l c" #'completion-at-point "触发补全" "代码 / LSP")
-(custom/bind "C-c l e" #'custom/flymake-list-errors-dwim "错误列表" "代码 / LSP")
-(custom/bind "C-c l x d" #'eglot-find-declaration "跳转到声明" "代码 / LSP")
-(custom/bind "C-c l x i" #'eglot-find-implementation "跳转到实现" "代码 / LSP")
-(custom/bind "C-c l x t" #'eglot-find-typeDefinition "跳转到类型定义" "代码 / LSP")
-
-(custom/bind "C-c f f" #'custom/code-format-dwim "智能格式化" "格式化")
-(custom/bind "C-c f b" #'apheleia-format-buffer "格式化整个缓冲区" "格式化")
-
-(add-hook 'prog-mode-hook #'hs-minor-mode)
-(add-hook 'conf-mode-hook #'hs-minor-mode)
-(custom/bind "C-c z a" #'hs-toggle-hiding "切换当前折叠" "折叠")
-(custom/bind "C-c z c" #'hs-hide-block "关闭当前折叠" "折叠")
-(custom/bind "C-c z o" #'hs-show-block "打开当前折叠" "折叠")
-(custom/bind "C-c z m" #'hs-hide-all "全部折叠" "折叠")
-(custom/bind "C-c z r" #'hs-show-all "全部展开" "折叠")
-(custom/bind "<backtab>" #'hs-toggle-hiding "切换当前折叠" "折叠")
-
-(custom/bind "C-c g s" #'custom/git-status-dwim "版本控制状态" "Git")
-(custom/bind "C-c g b" #'custom/git-blame-current-file "当前文件追责" "Git")
-(custom/bind "C-c g l" #'custom/git-log-current-file "当前文件日志" "Git")
-(custom/bind "C-c g d" #'custom/git-diff-current-file "当前文件差异" "Git")
-(custom/bind "C-c g t" #'custom/git-timemachine-toggle "文件时光机" "Git")
-(custom/bind "C-c g S" #'custom/git-stage-current-file "暂存当前文件" "Git")
-(custom/bind "C-c g D" #'custom/git-discard-current-file "丢弃当前文件修改" "Git")
-(custom/bind "C-c g P" #'custom/git-push-current-repo "推送" "Git")
-(custom/bind "C-c g F" #'custom/git-pull-current-repo "拉取" "Git")
-(custom/bind "C-c g #" #'custom/git-stash-push "保存暂存" "Git")
-(custom/bind "C-c g @" #'custom/git-stash-pop "恢复暂存" "Git")
 
 (custom/bind "C-c w r" #'ibuffer "项目缓冲区列表" "窗口与终端")
 (custom/bind "C-c w d" #'custom/open-directory "目录浏览" "窗口与终端")
@@ -4433,45 +4473,12 @@ Emacs 原生前缀扩展与生活应用入口。所有绑定通过 =custom/bind=
 (custom/bind "C-c w u" #'winner-undo "撤销窗口布局" "窗口与终端")
 (custom/bind "C-c w U" #'winner-redo "重做窗口布局" "窗口与终端")
 
-(custom/bind "C-c o a" #'org-agenda "议程视图" "Org 与知识库")
-(custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
-(custom/bind "C-c o o" #'olivetti-mode "专注写作" "Org 与知识库")
-(custom/bind "C-c o d" #'deft "检索历史 notes" "Org 与知识库")
-(custom/bind "C-c o n f" #'org-roam-node-find "查找或新建 Roam 笔记" "Org 与知识库")
-(custom/bind "C-c o n i" #'org-roam-node-insert "插入 Roam 链接" "Org 与知识库")
-(custom/bind "C-c o n l" #'org-roam-buffer-toggle "切换反向链接" "Org 与知识库")
-(custom/bind "C-c c c" #'org-capture "统一 Capture 入口" "Org 与知识库")
-(custom/bind "C-c c i" #'org-clock-in "开始计时" "Org 与知识库")
-(custom/bind "C-c c o" #'org-clock-out "停止计时" "Org 与知识库")
-(custom/bind "C-c c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
-
 (custom/bind "C-c h f" #'helpful-callable "查看函数" "帮助")
 (custom/bind "C-c h v" #'helpful-variable "查看变量" "帮助")
 (custom/bind "C-c h k" #'helpful-key "查看按键" "帮助")
 (custom/bind "C-c h m" #'describe-mode "查看模式" "帮助")
 (custom/bind "C-c h ?" #'custom/show-help "快捷键帮助" "帮助")
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
-
-(custom/bind "C-c o k c" #'custom/knowledge-capture "捕获经验卡" "Org 与知识库")
-(custom/bind "C-c o k s" #'custom/knowledge-search "搜索经验" "Org 与知识库")
-(custom/bind "C-c o k t" #'custom/knowledge-search-by-tag "按标签搜索" "Org 与知识库")
-(custom/bind "C-c o k I" #'custom/knowledge-open-inbox "打开 Inbox" "Org 与知识库")
-(custom/bind "C-c o k S" #'custom/knowledge-stats "知识库统计" "Org 与知识库")
-(custom/bind "C-c o k v" #'custom/knowledge-browse-human "浏览人类知识库" "Org 与知识库")
-(custom/bind "C-c o k b" #'custom/knowledge-browse-agenote "浏览 agenote 域" "Org 与知识库")
-(custom/bind "C-c o k a" #'custom/knowledge-archive-inbox-entry "归档 Inbox 条目" "Org 与知识库")
-(custom/bind "C-c o k d" #'custom/knowledge-deduplicate "检测重复卡" "Org 与知识库")
-(custom/bind "C-c o k e" #'custom/knowledge-merge "合并卡片" "Org 与知识库")
-(custom/bind "C-c o k l" #'custom/knowledge-lint "校验知识库" "Org 与知识库")
-(custom/bind "C-c o k m" #'custom/knowledge-memory "记忆系统" "Org 与知识库")
-(custom/bind "C-c o k n" #'custom/knowledge-connect "链接卡片" "Org 与知识库")
-(custom/bind "C-c o k o" #'custom/knowledge-commit "提交知识库" "Org 与知识库")
-(custom/bind "C-c o k r" #'custom/knowledge-review "审查卡片" "Org 与知识库")
-(custom/bind "C-c o k u" #'custom/knowledge-touch "更新卡片时间" "Org 与知识库")
-(custom/bind "C-c o k V" #'custom/knowledge-viz-open-browser "浏览器可视化" "Org 与知识库")
-
-(custom/bind-local 'markdown-mode 'markdown-mode 'markdown-mode-map
-                   "C-c p" #'markdown-preview "预览 Markdown" "模式局部")
 #+end_src
 
 ** Completion 框架
@@ -4857,6 +4864,23 @@ GUI 模式仅保留 x-gtk-resize-child-frames 修复;margin formatter 由
 <<keys/completion-minibuffer>>
 <<keys/completion-region>>
 <<keys/completion-display>>
+#+end_src
+
+#+begin_src emacs-lisp
+(custom/bind "C-c m R" #'vertico-reverse-mode "Vertico 反向显示" "补全框架")
+(custom/bind "C-c m j" #'vertico-quick-jump "Vertico 单键跳转" "补全框架")
+(custom/bind "C-c m s" #'vertico-suspend "挂起补全会话" "补全框架")
+(custom/bind "C-c m v" #'vertico-repeat "恢复补全会话" "补全框架")
+(custom/bind "C-c m a" #'prescient-toggle-anchored "切换锚定匹配" "补全框架")
+(custom/bind "C-c m p" #'prescient-toggle-prefix "切换前缀匹配" "补全框架")
+(custom/bind "C-c m f" #'prescient-toggle-fuzzy "切换模糊匹配" "补全框架")
+(custom/bind "C-c m r" #'prescient-toggle-regexp "切换正则匹配" "补全框架")
+(custom/bind "C-c m c" #'cape-interactive "选择 CAPF" "补全框架")
+(custom/bind "C-c m d" #'cape-dabbrev "缩写补全" "补全框架")
+(custom/bind "C-c m F" #'cape-file "文件路径补全" "补全框架")
+(custom/bind "C-c m h" #'cape-history "历史补全" "补全框架")
+(custom/bind "C-c m k" #'cape-keyword "关键字补全" "补全框架")
+(custom/bind "C-c m l" #'cape-line "整行补全" "补全框架")
 #+end_src
 
 * 系统工具与实验性

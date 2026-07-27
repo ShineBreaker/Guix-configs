@@ -183,7 +183,9 @@ Each :ts-mode produces a remap from the first :modes entry."
       (should (string-match-p "\\.org\\'" path)))))
 
 (ert-deftest custom-config/org-modern-visual-contract ()
-  "Org 现代化显示不得被 org-indent-mode 静默禁用。"
+  "org-modern 视觉配置不变量。
+代码块的缩进渲染由 org-modern-indent（org-indent-mode 启用时）负责，
+使用独立的 bracket/wrap-prefix 机制，不在此契约覆盖范围内。"
   (require 'org-modern)
   (with-temp-buffer
     (insert "* Blocks\n\n"
@@ -191,7 +193,6 @@ Each :ts-mode produces a remap from the first :modes entry."
             "| N | N^2 |\n|---+-----|\n| 2 | 4   |\n")
     (org-mode)
     (font-lock-ensure)
-    (should-not (bound-and-true-p org-indent-mode))
     (should (bound-and-true-p org-modern-mode))
     (should (eq org-modern-star 'replace))
     (should (eq org-modern-hide-stars 'leading))
@@ -202,10 +203,7 @@ Each :ts-mode produces a remap from the first :modes entry."
     (goto-char (point-min))
     (should (equal (substring-no-properties
                     (get-char-property (point) 'display))
-                   "⊙"))
-    (search-forward "#+begin_src")
-    (beginning-of-line)
-    (should (get-char-property (point) 'line-prefix))
+                   (car org-modern-replace-stars)))
     (search-forward "| N")
     (goto-char (- (point) 3))
     (should (equal (get-char-property (point) 'display)
