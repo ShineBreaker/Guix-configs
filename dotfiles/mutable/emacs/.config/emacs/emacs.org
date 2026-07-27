@@ -394,6 +394,10 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使
   "声明 Dashboard 展示的前缀 KEY。"
   (custom/bind key nil description nil :prefix t :dashboard t))
 
+(defun custom/declare-binding-group (key description)
+  "声明 Which-key 展示的中间分组 KEY。"
+  (custom/bind key nil description nil :prefix t))
+
 (defun custom/register-pending-wk-descs ()
   "把暂存的全局键位描述注册到 Which-key。"
   (dolist (entry (nreverse custom--pending-wk-descs))
@@ -1929,7 +1933,7 @@ daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的
 | 设置/包          | daemon 启动期陷阱             | TTY 行为                | 处理方式                            |
 |------------------+-------------------------------+-------------------------+-------------------------------------|
 | 光标类型         | #ERROR                        | 后创 TTY frame 污染 GUI | 用 =set-frame-parameter 'cursor-type= |
-| spacious-padding | =(display-graphic-p)= 永远 nil  | no-op                   | 无条件启用                          |
+| spacious-padding | daemon F1 背景是伪颜色          | TTY 不加 padding         | 包同步加载,GUI frame 就绪后写 face  |
 | ultra-scroll     | 同上                          | 无效果                  | 无条件启用(GUI client 需要)         |
 | diff-hl(TTY)     | 无 fringe,fringe 指示器不可见 | 改用 margin             | =fboundp= 守卫 + TTY 分支按需启用     |
 | fringe 宽度      | 行号函数若清零 fringe         | —                       | 禁止在行号函数清零 fringe(详见下表) |
@@ -1964,6 +1968,7 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 
 (defun custom/install-terminal-frame-defaults ()
   "把透明 TTY 参数合并进 `window-system-default-frame-alist'。"
+  ;; `framep' 对文本终端返回 t；GUI frame 则返回 pgtk/x/ns 等符号。
   (if-let* ((entry (assq t window-system-default-frame-alist)))
       (dolist (parameter custom:terminal-frame-parameters)
         (setf (alist-get (car parameter) (cdr entry)) (cdr parameter)))
@@ -2089,6 +2094,23 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
 (add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
 
+(defun custom/refresh-spacious-padding-faces (&rest _)
+  "用一个存活 GUI frame 的真实主题颜色刷新 spacious-padding face。"
+  (when (fboundp 'spacious-padding-set-faces)
+    (when-let* ((frame (seq-find #'display-graphic-p (frame-list))))
+      (with-selected-frame frame
+        (spacious-padding-set-faces)))))
+
+(defun custom/apply-spacious-padding (&optional frame)
+  "为 GUI FRAME 应用 spacious-padding，TTY 与 daemon 伪 frame 保持不变。"
+  (let ((target (or frame (selected-frame))))
+    (when (and (display-graphic-p target)
+               (fboundp 'spacious-padding-modify-frame-parameters)
+               (fboundp 'spacious-padding-set-faces))
+      (with-selected-frame target
+        (spacious-padding-modify-frame-parameters target)
+        (spacious-padding-set-faces)))))
+
 (defun custom/apply-frame-appearance (&optional frame)
   "为 FRAME 应用所有 display-dependent 外观设置。
 + GUI: 字体高度、透明度、window-divider、tab-line face 重算
@@ -2102,6 +2124,7 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
               (progn
                 (set-face-attribute 'default nil :height custom:default-font-height)
                 (set-frame-parameter nil 'alpha-background custom:frame-background-opacity)
+                (custom/apply-spacious-padding)
                 (when (fboundp 'custom/apply-tab-line-button-preset)
                   (custom/apply-tab-line-button-preset))
                 (when (fboundp 'ef-themes-take-over-modus-themes-mode)
@@ -2143,9 +2166,12 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
                             :right-divider-width 1
                             :scroll-bar-width 8))
   :config
-  ;; spacious-padding 作为自定义主题启用；`enable-theme-functions' 会自动
-  ;; 恢复所有 TTY face 的透明背景策略。
-  (spacious-padding-mode 1))
+  ;; 包在 daemon 启动期同步加载，但只能在 GUI frame 上读取主题颜色。
+  ;; initial_terminal 的 default 背景是 "unspecified-bg"，直接启用全局 mode
+  ;; 会把伪颜色写进 spacious-padding theme，首个 GUI frame 因而高频报警。
+  (add-hook 'enable-theme-functions #'custom/refresh-spacious-padding-faces)
+  (dolist (frame (frame-list))
+    (custom/apply-spacious-padding frame)))
 
 (use-package ultra-scroll
   :demand t
@@ -2865,14 +2891,6 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
       (when (buffer-live-p buf)
         (custom/display-or-focus buf custom:terminal-side-action t)))))
 
-;; Agent Shell:AI agent 的 Emacs 端 UI(与 terminal/ghostel 独立)。
-(use-package agent-shell
-  :defer t
-  :commands (agent-shell agent-shell-toggle))
-
-(custom/bind "C-c a a" #'agent-shell "Agent Shell" "生活应用")
-(custom/bind "C-c a A" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
-
 #+end_src
 
 * 编程与开发
@@ -3242,6 +3260,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "C-c l n" #'eglot-rename "重命名符号" "代码 / LSP")
 (custom/bind "C-c l c" #'completion-at-point "触发补全" "代码 / LSP")
 (custom/bind "C-c l e" #'custom/flymake-list-errors-dwim "错误列表" "代码 / LSP")
+(custom/declare-binding-group "C-c l x" "更多代码跳转")
 (custom/bind "C-c l x d" #'eglot-find-declaration "跳转到声明" "代码 / LSP")
 (custom/bind "C-c l x i" #'eglot-find-implementation "跳转到实现" "代码 / LSP")
 (custom/bind "C-c l x t" #'eglot-find-typeDefinition "跳转到类型定义" "代码 / LSP")
@@ -4281,14 +4300,17 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 (custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
 (custom/bind "C-c o o" #'olivetti-mode "专注写作" "Org 与知识库")
 (custom/bind "C-c o d" #'deft "检索历史 notes" "Org 与知识库")
+(custom/declare-binding-group "C-c o n" "Org Roam")
 (custom/bind "C-c o n f" #'org-roam-node-find "查找或新建 Roam 笔记" "Org 与知识库")
 (custom/bind "C-c o n i" #'org-roam-node-insert "插入 Roam 链接" "Org 与知识库")
 (custom/bind "C-c o n l" #'org-roam-buffer-toggle "切换反向链接" "Org 与知识库")
+(custom/declare-binding-group "C-c c" "Capture 与计时")
 (custom/bind "C-c c c" #'org-capture "统一 Capture 入口" "Org 与知识库")
 (custom/bind "C-c c i" #'org-clock-in "开始计时" "Org 与知识库")
 (custom/bind "C-c c o" #'org-clock-out "停止计时" "Org 与知识库")
 (custom/bind "C-c c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
 
+(custom/declare-binding-group "C-c o k" "Knowledge / agenote")
 (custom/bind "C-c o k c" #'custom/knowledge-capture "捕获经验卡" "Org 与知识库")
 (custom/bind "C-c o k s" #'custom/knowledge-search "搜索经验" "Org 与知识库")
 (custom/bind "C-c o k t" #'custom/knowledge-search-by-tag "按标签搜索" "Org 与知识库")
@@ -4314,6 +4336,11 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 :END:
 
 前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + helpful 增强帮助 + winner 窗口布局撤销 + 补全框架全家桶(Vertico / Corfu / Consult)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+
+所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
+
++ =custom/bind= 内部通过 =custom--pending-wk-descs= 暂存 which-key 描述,延迟到 =with-eval-after-load 'which-key= 统一 flush;因此应用键位散落到此域(晚于 keys-completion)不影响描述注册。
++ Dashboard 通过 =custom/binding-dashboard-bindings= 扫描 =custom:binding-spec= 生成,与代码物理位置无关。
 
 ** Which-key 本体与辅助包
 :PROPERTIES:
@@ -4482,6 +4509,7 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "C-x B" #'ibuffer "缓冲区列表" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x k" #'kill-buffer-and-window "关闭窗口与缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x K" #'kill-buffer "关闭指定缓冲区" "文件 / 缓冲区 / 标签")
+(custom/declare-binding-group "C-x t" "标签")
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t g" #'custom/tabs-refresh-context "刷新标签上下文" "文件 / 缓冲区 / 标签")
@@ -4920,10 +4948,21 @@ Guix 环境检测、daemon 预热、生活应用入口、Dashboard、Emacs 31 �
 :CUSTOM_ID: applications
 :END:
 
-日常应用入口。所有应用遵循 *功能内聚* 原则:每个应用的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。=C-c a= 前缀声明见 [[#keybindings][前缀键体系]]。
+日常应用入口。=C-c a= 前缀声明见 [[#keybindings][前缀键体系]]。
 
-+ =custom/bind= 内部通过 =custom--pending-wk-descs= 暂存 which-key 描述,延迟到 =with-eval-after-load 'which-key= 统一 flush;因此应用键位散落到此域(晚于 keys-completion)不影响描述注册。
-+ Dashboard 通过 =custom/binding-dashboard-bindings= 扫描 =custom:binding-spec= 生成,与代码物理位置无关。
+*** Agent Shell
+
+AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
+
+#+begin_src emacs-lisp
+(use-package agent-shell
+  :defer t
+  :commands (agent-shell agent-shell-toggle))
+
+(custom/declare-binding-group "C-c a a" "Agent Shell")
+(custom/bind "C-c a a a" #'agent-shell "Agent Shell" "生活应用")
+(custom/bind "C-c a a t" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
+#+end_src
 
 *** RSS 阅读 (Elfeed)
 
@@ -4932,6 +4971,7 @@ Guix 环境检测、daemon 预热、生活应用入口、Dashboard、Emacs 31 �
   :defer t
   :commands (elfeed elfeed-update))
 
+(custom/declare-binding-group "C-c a f" "RSS / Elfeed")
 (custom/bind "C-c a f f" #'elfeed "打开 Elfeed" "生活应用")
 (custom/bind "C-c a f u" #'elfeed-update "更新 Elfeed" "生活应用")
 #+end_src
@@ -4992,6 +5032,7 @@ Guix 环境检测、daemon 预热、生活应用入口、Dashboard、Emacs 31 �
 Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =use-package= 。
 
 #+begin_src emacs-lisp
+(custom/declare-binding-group "C-c a g" "内置游戏")
 (custom/bind "C-c a g t" #'tetris "俄罗斯方块" "生活应用")
 (custom/bind "C-c a g s" #'snake "贪吃蛇" "生活应用")
 (custom/bind "C-c a g m" #'gomoku "五子棋" "生活应用")
@@ -5022,6 +5063,7 @@ Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =us
   :config
   (global-guix-prettify-mode 1))
 
+(custom/declare-binding-group "C-c a x" "Guix 包管理")
 (custom/bind "C-c a x x" #'guix                          "Guix 管理界面"    "生活应用")
 (custom/bind "C-c a x s" #'guix-search-by-regexp         "搜索包"           "生活应用")
 (custom/bind "C-c a x i" #'guix-installed-user-packages  "已安装用户包"     "生活应用")
@@ -5166,8 +5208,8 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
   "Dashboard 卡片标题的 face。从 `font-lock-keyword-face' 继承强调色 + 加粗。")
 
 (defface custom/dashboard-todo-title
-  '((t :inherit default))
-  "Dashboard TODO 标题的 face。标题用普通前景色；状态和日期各自独立上色。")
+  '((t :inherit font-lock-function-name-face))
+  "Dashboard TODO 标题的 face。状态、标题和日期各自独立上色。")
 
 (defface custom/dashboard-dim
   '((t :inherit shadow))
@@ -5176,6 +5218,10 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 (defface custom/dashboard-error
   '((t :inherit error))
   "Dashboard 错误卡片的 face:数据源加载失败时显示。")
+
+(defface custom/dashboard-item
+  '((t :inherit link :underline nil))
+  "Dashboard 可点击条目的 face。")
 
 (defvar custom/dashboard--todo-cache nil
   "TODO 项缓存，结构为 (KEY TIME . DATA)，KEY 为 MAX-ITEMS。")
@@ -5451,10 +5497,11 @@ tier=dual 时按 `custom:dashboard-layout' 原样。卡片间插入空行。"
                     (assq-delete-all 'default face-remapping-alist)))
   (setq-local truncate-lines t))
 
-(defun custom/dashboard--button (label action &optional help-format)
+(defun custom/dashboard--button (label action &optional help-format face)
   "返回一个带局部 keymap 的字符串，RET/mouse-1 时调用 ACTION。
 ACTION 是无参函数或 interactive 命令符号。HELP-FORMAT 非 nil 时作为
-help-echo 格式串（含一个 %s 占位 LABEL），否则 help-echo 显示 LABEL 本身。"
+help-echo 格式串（含一个 %s 占位 LABEL），否则 help-echo 显示 LABEL 本身。
+FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
   (let ((btn (copy-sequence label))
         (keymap (make-sparse-keymap)))
     (define-key keymap (kbd "RET")
@@ -5464,7 +5511,7 @@ help-echo 格式串（含一个 %s 占位 LABEL），否则 help-echo 显示 LAB
     (add-text-properties
      0 (length btn)
      (list 'keymap keymap
-           'face 'dashboard-items-face
+           'face (or face 'custom/dashboard-item)
            'mouse-face 'highlight
            'help-echo (format (or help-format "%s") label))
      btn)
@@ -5482,7 +5529,7 @@ help-echo 格式串（含一个 %s 占位 LABEL），否则 help-echo 显示 LAB
     (add-text-properties
      0 (length btn)
      (list 'keymap keymap
-           'face 'dashboard-items-face
+           'face 'custom/dashboard-item
            'mouse-face 'highlight
            'help-echo (format "运行 %s" command))
      btn)
@@ -5679,9 +5726,37 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
         (progn (custom/dashboard--defer-until-org) 'loading)
       (list :ok (custom/dashboard--todo-items 5)))))
 
+(defun custom/dashboard--todo-mark-done (file pos title)
+  "把 FILE 中 POS 附近标题为 TITLE 的 Org heading 改为 DONE 并保存。"
+  (let* ((existing-buffer (get-file-buffer file))
+         (buffer (find-file-noselect file)))
+    (unwind-protect
+        (with-current-buffer buffer
+          (unless (derived-mode-p 'org-mode)
+            (org-mode))
+          (org-with-wide-buffer
+           (goto-char (min (or pos (point-min)) (point-max)))
+           (unless (org-at-heading-p)
+             (org-back-to-heading t))
+           (unless (equal (org-get-heading t t t t) title)
+             (if-let* ((found (org-find-exact-headline-in-buffer
+                               title buffer t)))
+                 (goto-char found)
+               (user-error "找不到待办: %s" title)))
+           (unless (member (org-get-todo-state) org-done-keywords)
+             (unless (member "DONE" org-done-keywords)
+               (user-error "当前 Org 工作流没有 DONE 状态"))
+             (org-todo "DONE")
+             (save-buffer))))
+      (unless existing-buffer
+        (kill-buffer buffer))))
+  (custom/dashboard-invalidate-cache)
+  (when (fboundp 'custom/dashboard--refresh-if-visible)
+    (custom/dashboard--refresh-if-visible))
+  (message "已完成并保存: %s" title))
+
 (defun custom/dashboard--render-todo (items width)
-  "TODO 卡片 render。每行做成按钮：跳文件 → goto-char → org-reveal → recenter。
-跳转后 `pulsar-pulse' 高亮（pulsar 已全局启用）。"
+  "TODO 卡片 render。状态按钮标记 DONE，标题按钮跳转到原 Org heading。"
   (if (null items)
       (list (custom/dashboard--command-button "> 打开 Agenda" #'org-agenda))
     (append
@@ -5699,13 +5774,26 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
                          (when (fboundp 'org-reveal) (org-reveal))
                          (recenter)
                          (when (fboundp 'pulsar-pulse) (pulsar-pulse)))))
-               (prefix (concat "  " state-str))
-               (rest (concat title date-info))
+               (state-face (get-text-property 0 'face state-str))
+               (title-face (get-text-property 0 'face title))
+               (done (lambda ()
+                       (custom/dashboard--todo-mark-done file pos
+                                                         (substring-no-properties title))))
+               (state-button
+                (custom/dashboard--button
+                 state-str done
+                 (format "完成待办 %s" (substring-no-properties title))
+                 state-face))
+               (title-button
+                (custom/dashboard--button
+                 title jump
+                 (format "查看待办 %s" (substring-no-properties title))
+                 title-face))
+               (prefix (concat "  " state-button))
+               (rest (concat title-button date-info))
                (rest-w (max 0 (- width (custom/dashboard--measure prefix))))
                (rest-trimmed (custom/dashboard--truncate rest rest-w)))
-          (custom/dashboard--button
-           (concat prefix rest-trimmed) jump
-           (format "查看待办 %s" title))))
+          (concat prefix rest-trimmed)))
       items)
      (list (custom/dashboard--command-button "> 查看 Agenda..." #'org-agenda)))))
 
@@ -6078,12 +6166,12 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
 *** 生命周期与 Frame 状态机
 
 #+attr_org: :width 70
-| 触发                   | 动作                    | 约束                                                                                     |
-|------------------------+-------------------------+------------------------------------------------------------------------------------------|
+| 触发                  | 动作                    | 约束                                                                                     |
+|-----------------------+-------------------------+------------------------------------------------------------------------------------------|
 | =custom/dashboard-mode= | 等宽字 + 关闭 hl-line   | 避免 variable-pitch 与当前行背景条切断左竖线                                             |
-| 窗口尺寸变化           | 防抖重渲染              | 数据代数或宽度变化时才真正渲染                                                           |
-| 主题切换               | dashboard buffer 重渲染 | 走 =register-buffer-refresh!=，face 继承自动适配                                         |
-| frame hooks            | 单次调度打开 dashboard  | =after-make-frame= 与 =server-after-make-frame= 可能对同一 frame 连续触发，用 frame 参数去重 |
+| 窗口尺寸变化          | 防抖重渲染              | 数据代数或宽度变化时才真正渲染                                                           |
+| 主题切换              | dashboard buffer 重渲染 | 走 =register-buffer-refresh!=，face 继承自动适配                                         |
+| frame hooks           | 单次调度打开 dashboard  | =after-make-frame= 与 =server-after-make-frame= 可能对同一 frame 连续触发，用 frame 参数去重 |
 
 Dashboard 不对全局 =widget-button--check-and-call-button= 加 advice:该 advice 会影响所有 non-dashboard widget buffer,副作用过大。
 
@@ -6095,12 +6183,12 @@ LITERAL figlet art，box-drawing 字符 string-width≈80-85 列，
 在 110 列以上窗口可舒适居中。"
   (let* ((banner '(
                    ""
-                   "███████╗███╗   ███╗ █████╗  ██████╗███████╗"
-                   "██╔════╝████╗ ████║██╔══██╗██╔════╝██╔════╝"
-                   "█████╗  ██╔████╔██║███████║██║     ███████╗"
-                   "██╔══╝  ██║╚██╔╝██║██╔══██║██║     ╚════██║"
-                   "███████╗██║ ╚═╝ ██║██║  ██║╚██████╗███████║"
-                   "╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝"
+                   "███████╗  ███╗   ███╗   █████╗    ██████╗  ███████╗"
+                   "██╔════╝  ████╗ ████║  ██╔══██╗  ██╔════╝  ██╔════╝"
+                   "█████╗    ██╔████╔██║  ███████║  ██║       ███████╗"
+                   "██╔══╝    ██║╚██╔╝██║  ██╔══██║  ██║       ╚════██║"
+                   "███████╗  ██║ ╚═╝ ██║  ██║  ██║  ╚██████╗  ███████║"
+                   "╚══════╝  ╚═╝     ╚═╝  ╚═╝  ╚═╝   ╚═════╝  ╚══════╝"
                    ""))
          (status (custom/dashboard--status-line)))
     (if status
@@ -6148,7 +6236,7 @@ banner 只含空格及 block/box-drawing 字符，在当前等宽 GUI 与 Foot T
 固定 art 字符在 GUI 与 Foot TTY 中均按一字符一终端单元度量，与
 `custom/dashboard--insert-banner' 一致。
 另留 10 列左右边距，避免 art 紧贴窗口边缘。"
-  (let* ((art-max-line "███████╗███╗   ███╗ █████╗  ██████╗███████╗")
+  (let* ((art-max-line "███████╗  ███╗   ███╗   █████╗    ██████╗  ███████╗")
          (art-w (custom/dashboard--banner-art-width art-max-line)))
     (+ art-w 10)))
 

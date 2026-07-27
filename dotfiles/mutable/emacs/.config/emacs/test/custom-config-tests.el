@@ -297,6 +297,35 @@ Each :ts-mode produces a remap from the first :modes entry."
   (should (fboundp 'custom/binding-dashboard-bindings))
   (should (listp (custom/binding-dashboard-bindings))))
 
+(ert-deftest custom-config/binding-spec-describes-intermediate-prefixes ()
+  "自定义多级键的每个中间前缀都应显示具体功能名，而不是通用“前缀”。"
+  (let ((described-keys
+         (mapcar (lambda (entry) (plist-get entry :key))
+                 custom:binding-spec))
+        missing)
+    (dolist (entry custom:binding-spec)
+      (unless (plist-get entry :mode)
+        (let* ((events (vconcat (kbd (plist-get entry :key))))
+               (event-count (length events)))
+          ;; 单事件根前缀由 Emacs 自带 keymap 描述；这里只审计自定义子树。
+          (cl-loop for prefix-length from 2 below event-count
+                   for prefix = (key-description
+                                 (cl-subseq events 0 prefix-length))
+                   unless (member prefix described-keys)
+                   do (push prefix missing)))))
+    (should-not (delete-dups missing)))
+  (dolist (expected '(("C-c a a" . "Agent Shell")
+                      ("C-c a f" . "RSS / Elfeed")
+                      ("C-c a g" . "内置游戏")
+                      ("C-c a x" . "Guix 包管理")))
+    (let ((entry (seq-find
+                  (lambda (candidate)
+                    (equal (plist-get candidate :key) (car expected)))
+                  custom:binding-spec)))
+      (should entry)
+      (should (equal (plist-get entry :description) (cdr expected)))
+      (should (plist-get entry :prefix)))))
+
 (ert-deftest custom-config/frame-phases-execute-once ()
   "Phase 4.4: frame-created / server-ready 两个 phase 各自的 initializer
 通过 frame parameter 保证单次执行(PLAN §4.4)。本测试在 selected-frame 上
@@ -337,6 +366,40 @@ Each :ts-mode produces a remap from the first :modes entry."
     (should (equal (alist-get 'foreground-color parameters)
                    "unspecified-fg"))
     (should (equal (alist-get 'menu-bar-lines parameters) 0))))
+
+(ert-deftest custom-config/spacious-padding-avoids-terminal-pseudo-colors ()
+  "Daemon 无 GUI 时不得把 unspecified-bg 烘焙进 spacious-padding theme。"
+  (should-not (bound-and-true-p spacious-padding-mode))
+  (dolist (face '(fringe line-number header-line vertical-border))
+    (should-not
+     (string-match-p
+      "unspecified-bg"
+      (prin1-to-string (alist-get 'spacious-padding
+                                 (get face 'theme-face)))))))
+
+(ert-deftest custom-config/spacious-padding-applies-only-to-gui-frames ()
+  "Padding 参数与 face 只在拥有真实颜色的 GUI frame 上生成。"
+  (let (parameter-frame face-refresh)
+    (cl-letf (((symbol-function 'spacious-padding-modify-frame-parameters)
+               (lambda (frame &optional _reset)
+                 (setq parameter-frame frame)))
+              ((symbol-function 'spacious-padding-set-faces)
+               (lambda (&rest _) (setq face-refresh t)))
+              ((symbol-function 'display-graphic-p)
+               (lambda (&optional _frame) nil)))
+      (custom/apply-spacious-padding (selected-frame)))
+    (should-not parameter-frame)
+    (should-not face-refresh)
+    (cl-letf (((symbol-function 'spacious-padding-modify-frame-parameters)
+               (lambda (frame &optional _reset)
+                 (setq parameter-frame frame)))
+              ((symbol-function 'spacious-padding-set-faces)
+               (lambda (&rest _) (setq face-refresh t)))
+              ((symbol-function 'display-graphic-p)
+               (lambda (&optional _frame) t)))
+      (custom/apply-spacious-padding (selected-frame)))
+    (should (eq parameter-frame (selected-frame)))
+    (should face-refresh)))
 
 (ert-deftest custom-config/terminal-truecolor-uses-theme-foregrounds ()
   "真彩 TTY 应加载 Ef theme，透明适配不得硬编码 ANSI 前景色。"
@@ -622,15 +685,13 @@ this test."
 
 (ert-deftest custom-config/help-claimed-bindings-resolve ()
   "P0 #4 (fixed by Commits 4+9+11): bindings claimed by help/dashboard
-text must actually exist. Phase 6 partial: stale C-c a a a (Agent Shell
-submenu — not implemented), C-c o f (agenda file — real is C-c o a) and
-C-c e b l (bookmark list — no C-c e prefix) are removed from help-zh.el.
-This test inverts the original assertion: the bogus claims must STAY
-unbound so the help text never lies. Full binding-spec single-source-of-
-truth regeneration is tracked as future work."
+text must actually exist. Agent Shell now has a real submenu; the remaining
+stale C-c o f (agenda file — real is C-c o a) and C-c e b l (bookmark list —
+no C-c e prefix) must stay unbound so the help text never lies."
   ;; Phase 6 partial fix landed; promote from :expected-result :failed
   ;; to mandatory (inverted assertion: stale claims must NOT resolve).
-  (dolist (bogus '("C-c a a a" "C-c o f" "C-c e b l"))
+  (should (eq (key-binding (kbd "C-c a a a")) 'agent-shell))
+  (dolist (bogus '("C-c o f" "C-c e b l"))
 	  (should-not (commandp (key-binding (kbd bogus))))))
 
 (ert-deftest custom-config/widget-button-not-globally-advised ()
@@ -931,6 +992,56 @@ mock custom/agenote-call,验证:
     ;; 正常卡片不受影响
     (let ((lines (custom/dashboard--card-lines ok-spec 40)))
       (should (cl-some (lambda (l) (string-match-p "line1" l)) lines)))))
+
+(ert-deftest custom-config/dashboard-buttons-use-defined-faces ()
+  "Dashboard 按钮不得携带不存在的第三方 dashboard face。"
+  (dolist (button (list (custom/dashboard--button "项目" #'ignore)
+                        (custom/dashboard--command-button "更多" #'ignore)))
+    (let ((face (get-text-property 0 'face button)))
+      (should (eq face 'custom/dashboard-item))
+      (should (facep face))
+      (should-not (face-attribute face :underline nil 'default)))))
+
+(ert-deftest custom-config/dashboard-todo-mark-done-persists-file ()
+  "点击 Dashboard TODO 状态应写入 DONE 并保存对应 Org 文件。"
+  (let ((file (make-temp-file "custom-dashboard-todo-" nil ".org"
+                              "* TODO 完成 Dashboard 测试\n"))
+        (org-log-done nil))
+    (unwind-protect
+        (progn
+          (custom/dashboard--todo-mark-done
+           file 1 "完成 Dashboard 测试")
+          (with-temp-buffer
+            (insert-file-contents file)
+            (should (re-search-forward
+                     "^\\* DONE 完成 Dashboard 测试$" nil t))))
+      (when-let* ((buffer (get-file-buffer file)))
+        (kill-buffer buffer))
+      (delete-file file))))
+
+(ert-deftest custom-config/dashboard-todo-render-keeps-component-actions ()
+  "TODO 状态负责完成任务，标题负责跳转，二者不得被整行 face 覆盖。"
+  (let* ((file "/tmp/custom-dashboard-render.org")
+         (title "彩色待办")
+         called
+         (items (list (list (propertize "TODO  " 'face 'warning)
+                            (propertize title 'face 'custom/dashboard-todo-title)
+                            (propertize "  󰥕 明天截止" 'face 'font-lock-keyword-face)
+                            file 42))))
+    (cl-letf (((symbol-function 'custom/dashboard--todo-mark-done)
+               (lambda (&rest args) (setq called args))))
+      (let* ((line (car (custom/dashboard--render-todo items 80)))
+             (state-pos 2)
+             (title-pos (+ state-pos (length (nth 0 (car items)))))
+             (state-map (get-text-property state-pos 'keymap line))
+             (title-map (get-text-property title-pos 'keymap line)))
+        (should (eq (get-text-property state-pos 'face line) 'warning))
+        (should (eq (get-text-property title-pos 'face line)
+                    'custom/dashboard-todo-title))
+        (should (keymapp state-map))
+        (should (keymapp title-map))
+        (call-interactively (lookup-key state-map (kbd "RET")))
+        (should (equal called (list file 42 title)))))))
 
 (ert-deftest custom-config/dashboard-engine-splice-width-invariant ()
   "Dashboard 双列拼接契约:--render-row 产出每行左列宽度一致。
