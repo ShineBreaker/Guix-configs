@@ -47,27 +47,16 @@ agents/
 │   │       ├── README.md
 │   │       ├── adapter.md
 │   │       └── extract.md
-│   ├── omp/
-│   │   ├── extensions/
-│   │   │   ├── agenote-hooks/
-│   │   │   ├── global-context/
-│   │   │   └── pi-gate/
-│   │   ├── .gitignore
-│   │   ├── APPEND_SYSTEM.md
-│   │   ├── config.yml
-│   │   ├── global-context.json
-│   │   ├── mcp.json
-│   │   └── models.yml
-│   └── opencode/
-│       ├── commands/
-│       │   ├── plannotator-annotate.md
-│       │   ├── plannotator-archive.md
-│       │   ├── plannotator-last.md
-│       │   └── plannotator-review.md
-│       ├── scripts/
-│       │   └── update-plugins.sh
-│       ├── dcp.jsonc
-│       └── opencode.json
+│   └── omp/
+│       ├── extensions/
+│       │   ├── agenote-hooks/
+│       │   ├── global-context/
+│       │   └── pi-gate/
+│       ├── .gitignore
+│       ├── config.yml
+│       ├── global-context.json
+│       ├── mcp.json
+│       └── models.yml
 ├── .local/
 │   └── bin/
 │       ├── loop_lib/

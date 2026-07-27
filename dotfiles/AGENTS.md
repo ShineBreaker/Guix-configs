@@ -36,8 +36,7 @@ dotfiles/
 │   │   │   ├── agents/
 │   │   │   ├── crush/
 │   │   │   ├── loopctl/
-│   │   │   ├── omp/
-│   │   │   └── opencode/
+│   │   │   └── omp/
 │   │   ├── .local/
 │   │   │   └── bin/
 │   │   └── .gitignore
@@ -128,28 +127,6 @@ dotfiles/
 - `packages`：`agents desktop noctalia-suite system terminal utilities`
 - `excluded`：被排除的文件（`.git`、`.gitignore`、`AGENTS.md`、`README.md`、`__pycache__`、`.venv` 等）
 - 新增子目录或新增子目录中文件：直接 `blue rebuild`；新文件若需排除请更新 `excluded` 正则
-
-## 核心子系统
-
-### Emacs（`dotfiles/mutable/emacs/`）
-
-- Emacs 配置在 `dotfiles/mutable/emacs/`，通过 GNU Stow 直链部署，改源即生效
-- Guix 提供 Emacs Lisp 包依赖；新增包必须同步到 `source/config.org` home-packages
-- **不要直接编辑子模块内容**（详见 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`）
-
-### oh-my-pi + Crush + loopctl（`immutable/agents/`）
-
-- **OMP**：`jeans` 频道的 `oh-my-pi-bin`，`home-packages` 提供 `omp` 命令。**仓库不托管配置源**，本地维护 `~/.config/pi/omp/`
-- **Crush**：`.config/crush/`（crush.json、hooks、bin）
-- **loopctl**：`.config/loopctl/`（adapters 含 claude-code/codex/crush/omp/opencode/pi）
-- **共享基础设施**：`.config/agents/`（context、skills）
-- **启动脚本**：`.local/bin/`（kb、loopctl 等）
-- 详见 `dotfiles/immutable/agents/AGENTS.md`
-
-### Rime 输入法（`immutable/utilities/.local/share/fcitx5/rime/`）
-
-- Git 子模块（`github.com/iDvel/rime-ice`）：双拼、词典、Lua 扩展
-- **不要直接编辑子模块内容**（`custom_phrase.txt` 等用户自定义文件除外）
 
 ## 各子目录指引
 

@@ -38,6 +38,7 @@ Guix-configs///
 │   └── manifest.scm
 ├── tools/
 │   ├── linux-setup/
+│   ├── openuri-portal/
 │   ├── bootstrap.sh
 │   ├── build-image.scm
 │   ├── fxxk-link.sh
@@ -57,19 +58,10 @@ Guix-configs///
 ## 构建管线
 
 ```
-source/config.org
-        │
-        ▼  blue rebuild → Emacs org-babel-tangle（Noweb 拼合）
-tmp/config.scm
-        │
-        ▼  guix time-machine --channels=source/channel.lock system reconfigure
-单一 reconfigure：同时应用 operating-system 与 guix-home-service（含 home-environment）
+source/config.org → blue rebuild → tmp/config.scm → guix system reconfigure
 ```
 
-- Org 文件使用 Noweb `<<ref>>` 语法拼合代码块为完整 `.scm`
-- 所有 `guix` 命令通过 `guix time-machine --channels=source/channel.lock` 锁定频道版本
-- 单一 `blue rebuild` 完成：tangle → 括号检查 → reconfigure → `guix locate --update`
-- `blue --dry-run` 时：tangle + 括号检查仍真跑（构造验证所需产物），其余命令（reconfigure/clean/gc/stow 等）短路打印不执行
+单一 reconfigure 同时应用 operating-system 与 guix-home-service。详细构建流程见 `README.org`。
 
 ## 工作优先级
 
@@ -80,17 +72,18 @@ tmp/config.scm
 
 ## 任务路由表
 
-| 任务类型             | 优先读取位置                                 | 子目录指引                                |
-| -------------------- | -------------------------------------------- | ----------------------------------------- |
-| System + Home 配置   | `source/config.org` 头部的 Agent 专区        | `source/AGENTS.md`                        |
-| 全局变量             | `source/information.scm`                     | —                                         |
-| 频道定义             | `source/channel.scm`                         | `source/channel.lock` 锁定版本            |
-| 静态模板             | `source/files/`                              | `source/AGENTS.md` 中 files/ 模板系统一节 |
-| 各类 dotfiles        | `dotfiles/immutable/<app>/`                  | 各子目录 AGENTS.md                        |
-| 新机装机（官方 ISO） | `source/manifest.scm` + `tools/bootstrap.sh` | —                                         |
+| 任务类型             | 优先读取位置                                 | 子目录指引                     |
+| -------------------- | -------------------------------------------- | ------------------------------ |
+| System + Home 配置   | `source/config.org` 头部 Agent 专区          | `source/AGENTS.md`             |
+| 全局变量             | `source/information.scm`                     | —                              |
+| 频道定义             | `source/channel.scm`                         | `source/channel.lock` 锁定版本 |
+| 静态模板             | `source/files/`                              | `source/AGENTS.md` files/ 一节 |
+| 各类 dotfiles        | `dotfiles/immutable/<app>/`                  | 各子目录 AGENTS.md             |
+| 新机装机（官方 ISO） | `source/manifest.scm` + `tools/bootstrap.sh` | —                              |
+
+## 路由硬约束
 
 <critical>
-**路由硬约束**：
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
 2. 修改应用配置时优先改 `dotfiles/immutable/<app>/` 内文件，再 `blue home`
 3. **Emacs 修改**：先读 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`（literal-config 自包含工作规范）。新包必须同步 `source/config.org` 的 home-packages。**注意**：`dotfiles/mutable/emacs/.config/emacs/` 顶层就是 literal-config 仓库本体（init.el / early-init.el / emacs.org / main.el / scripts/），无 chemacs2 引导层、无 submodule；`~/.config/emacs/` 通过 GNU Stow 软链到仓库源（改源即生效，无需 `blue home`）。
@@ -101,12 +94,7 @@ tmp/config.scm
 
 ## 引导（新机安装）
 
-官方 Guix ISO 上只有 `blue` 需要预先引导（emacs 由 `guix time-machine shell emacs-minimal` 自动供给）。
-
-两个支撑文件：
-
-- `source/manifest.scm`：声明引导依赖（目前仅 `blue`）
-- `tools/bootstrap.sh`：锁定频道 + 提供可执行 `blue`
+官方 Guix ISO 上只有 `blue` 需要预先引导。支撑文件：`source/manifest.scm`（声明引导依赖）和 `tools/bootstrap.sh`（锁定频道 + 提供可执行 `blue`）。
 
 ```bash
 git clone <url> && cd Guix-configs
@@ -115,28 +103,11 @@ git clone <url> && cd Guix-configs
 blue init
 ```
 
-`bootstrap.sh` **不会**自动分区或跑 `blue init`。自制 ISO 可直接引用 `source/manifest.scm`。
-
 ## dotfiles 部署模型
 
-所有 `dotfiles/immutable/<app>/` 子目录统一通过 Guix Home 的 `home-dotfiles-service-type` 部署，定义在 `source/config.org` 的 `dotfile-services` 代码块：
+所有 `dotfiles/immutable/<app>/` 子目录统一通过 Guix Home 的 `home-dotfiles-service-type`（`layout 'stow`）部署。**机制要点**：构建时把文件复制到 `/gnu/store/<hash>-home-dotfiles-...`（只读副本），再从 store 软链接到 `$HOME`。**`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `blue home` 重建软链接才生效。
 
-```scheme
-(service home-dotfiles-service-type
-  (home-dotfiles-configuration
-   (directories '("../dotfiles/immutable"))
-   (layout 'stow)                         ; Stow 软链接语义
-   (packages '("agents" "desktop"
-                 "noctalia-suite" "system" "terminal" "utilities"))
-   (excluded '("\\.agents/workfile($|/.*)" ...))))
-```
-
-- 实际机制：构建时把文件 _复制到 `/gnu/store/<hash>-home-dotfiles-...`_（只读副本），再从 store 软链接到 `$HOME`。
-  **`~/.config/<app>/...` 指向 store 副本，不是仓库源** —— 改源后 store 副本不变，必须 `blue home` 重建软链接才生效
-- 不在 `excluded` 列表内的新增文件会在下次 `blue home` 后自动出现在 `~`
-- `disable/` 内目录不再部署，仅保留参考
-
-子模块列表见 `.gitmodules`（权威来源），**不要直接编辑子模块内容**。
+详细配置（directories / layout / packages / excluded）见 `dotfiles/AGENTS.md`。子模块列表见 `.gitmodules`（权威来源），**不要直接编辑子模块内容**。
 
 ## dotfiles/mutable/ — GNU Stow 直链部署
 
@@ -153,9 +124,7 @@ blue stow-all --restow           # 重建所有包
 
 ## Emacs 单 Profile 架构（literal-config）
 
-迁移历史：2026-07 commit `0ca2c196` 移除 chemacs2 后，emacs 配置直接位于
-`dotfiles/mutable/emacs/.config/emacs/` 顶层，以 GNU Stow 软链到 `~/.config/emacs/`。
-**无 chemacs2 引导层、无 submodule、单 profile**。
+迁移历史：2026-07 commit `0ca2c196` 移除 chemacs2 后，emacs 配置直接位于 `dotfiles/mutable/emacs/.config/emacs/` 顶层，以 GNU Stow 软链到 `~/.config/emacs/`。**无 chemacs2 引导层、无 submodule、单 profile**。
 
 ```
 ~/.config/emacs/                      ← Stow 软链到仓库源（改源即生效）
@@ -168,35 +137,20 @@ blue stow-all --restow           # 重建所有包
 └── .gitignore
 ```
 
-**启动路径**：`emacs` 启动 → `~/.config/emacs/init.el`
-（实际为 `dotfiles/mutable/emacs/.config/emacs/init.el`）→ 检测 `emacs.org` 是否比
-`main.el` 新 → 是则 `org-babel-tangle-file` 重新生成 `main.el` → `load main.el`。
-**Daemon**：rosenthal `home-emacs-service-type` 跑 `emacs --fg-daemon`，所有现有
-`emacsclient` 调用（niri Mod+E、skill 脚本、`.desktop`、`with-editor` GIT_EDITOR）
-依赖默认 socket 名 "server"，**零改动**。
-**常用操作**：
+**启动路径**：`emacs` 启动 → `init.el` → 检测 `emacs.org` 是否比 `main.el` 新 → 是则 `org-babel-tangle-file` 重新生成 `main.el` → `load main.el`。**Daemon**：rosenthal `home-emacs-service-type` 跑 `emacs --fg-daemon`，所有 `emacsclient` 调用依赖默认 socket 名 "server"，**零改动**。
 
-- 试新配置（前台实例，独立于 daemon）：`emacs`
-- 改 bootstrap：`dotfiles/mutable/emacs/.config/emacs/init.el`（人类手维护，AGENTS.md §1.2 固定签名的契约不变）
-- 改配置源：`dotfiles/mutable/emacs/.config/emacs/emacs.org`（按 _启动顺序与模块依赖速查_ 8 域组织）
-- 切 Guix Emacs 版本（影响包版本，不影响配置内容）：改 `source/config.org` 中 `home-emacs-packages` 后 `blue home`
+详见 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`。
 
 ## 目录结构图自动维护
 
-> **实现位置**：`blueprint.scm` 内的 `structor` 任务；11 个 `AGENTS.md` 里的 `<!-- structor:begin ...>...<!-- /structor -->` 标记对。
-
-仓库内所有 `AGENTS.md` 的"## 目录结构"章节用标记圈起，由 `blue structor` 自动重写。
-
-**使用约定**：
+**实现位置**：`blueprint.scm` 内的 `structor` 任务；11 个 `AGENTS.md` 里的 `<!-- structor:begin ...>...<!-- /structor -->` 标记对。
 
 - **不要手改**标记之间的内容——会被下次跑 `blue structor` 覆盖
 - 新增/移动文件后跑 `blue structor` 刷新所有结构图
 - 单文件调试：`blue structor source/AGENTS.md`
 - 预览不写文件：`ORG_STRUCTOR_DRY=1 blue structor`
-- 标记格式独立于运行器（不带 `blue:` 前缀），其他仓库用 justfile/Makefile 包装时复用同一约定
-- **可见性遵循 `.gitignore`**（`git ls-files --cached --others --exclude-standard` 驱动）：根 `.gitignore` + 所有嵌套 `.gitignore` + submodule gitlink 都自动生效。额外只结构化跳过 `AGENTS.md` 自身（树所在文件）与 `*.swp`（编辑器交换文件）
-- **深度可控**：在标记内写 `<!-- structor:begin depth=N -->`，优先级高于 `ORG_STRUCTOR_DEPTH` 环境变量与默认 4。`blue structor` 每次重写会把解析出的 `depth=N` 回写到 begin 标记（自描述、重跑不丢）
-- 新增 dotfile 子目录后想把它的 `AGENTS.md` 也自动维护：把路径加到 `blueprint.scm` 的 `%structor-targets`
+- **可见性遵循 `.gitignore`**（`git ls-files --cached --others --exclude-standard` 驱动）
+- **深度可控**：在标记内写 `<!-- structor:begin depth=N -->`
 
 ## 频道架构
 
@@ -218,7 +172,7 @@ blue stow-all --restow           # 重建所有包
 - **持久化**：Btrfs 子卷挂载到 `/var/lib`、`/gnu`、`/boot` 等
 - **用户数据**：`/data` 分区 bind-mount 到 `~`
 
-> 持久化目录必须同时在 `%data-dirs` 和 `%btrfs-subvolumes` 中登记。
+持久化目录必须同时在 `%data-dirs` 和 `%btrfs-subvolumes` 中登记。详见 `source/information.scm`。
 
 ## 全局变量速查（`source/information.scm`）
 

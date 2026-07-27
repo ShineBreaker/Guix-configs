@@ -93,7 +93,6 @@ mutable/
 | -------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                       |
 | `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                         |
-| `pi` | `~/.config/pi/`、`~/.local/share/pi/scripts/` | oh-my-pi (omp) 配置：`config.yml`、`models.yml`、`mcp.json`、`global-context.json`、`APPEND_SYSTEM.md`、`extensions/{pi-gate,agenote-hooks,global-context}`（自写扩展，agent 本体由 omp 官方安装脚本部署）；`share/pi/scripts/` 辅助脚本； |
 
 ## 工作流
 

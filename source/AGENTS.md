@@ -84,19 +84,7 @@ source/config.org → blue rebuild → tmp/config.scm → guix system reconfigur
 
 ## files/ 模板系统
 
-存放**需要路径注入**的静态模板，由 `home-files-service-type` 直接部署：
-
-```
-source/files/
-├── nftables.conf      # 防火墙规则
-├── rounded.qss        # Qt 圆角样式
-├── zed.json           # Zed 编辑器配置
-└── skel/              # 骨架文件
-    └── .config/mihomo/config.yaml
-```
-
-- **路径注入语法**：`$$bin/foo$$` 替换为 Guix 包绝对路径（rosenthal 的 `computed-substitution-with-inputs`）
-- **不要**把无需路径注入的 dotfile 放进此目录；纯配置文件请放 `dotfiles/immutable/<app>/`
+存放**需要路径注入**的静态模板，由 `home-files-service-type` 直接部署。路径注入语法：`$$bin/foo$$` 替换为 Guix 包绝对路径（rosenthal 的 `computed-substitution-with-inputs`）。**不要**把无需路径注入的 dotfile 放进此目录；纯配置文件请放 `dotfiles/immutable/<app>/`。
 
 ## 频道管理
 

@@ -79,7 +79,6 @@ loopctl 是一个 POSIX sh 实现的 CLI 工具，用于管理**跨 agent 的长
     ├── crush.json
     ├── omp.json
     ├── opencode.json
-    ├── pi.json
     └── README.md
 ```
 
@@ -482,7 +481,7 @@ loopctl list --all
 loopctl doctor
 
 # 创建并执行一个 3 轮循环
-loopctl my-task start --task "重构 auth 模块" --adapter pi --max-iterations 3
+loopctl my-task start --task "重构 auth 模块" --adapter omp --max-iterations 3
 loopctl my-task next
 loopctl my-task status
 loopctl my-task done
@@ -515,7 +514,7 @@ loopctl old-task archive
 loopctl adapter list
 
 # 查看 adapter 详情
-loopctl adapter show pi
+loopctl adapter show omp
 
 # 创建新 adapter
 loopctl adapter add my-tool

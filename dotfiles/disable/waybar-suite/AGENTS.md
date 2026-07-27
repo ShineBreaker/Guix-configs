@@ -11,7 +11,7 @@
 <!-- 此树形目录由 blue structor 自动维护，请勿手改 -->
 
 ```
-desktop-suite/
+waybar-suite/
 ├── .config/
 │   ├── darkman/
 │   │   ├── config/

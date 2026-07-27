@@ -46,8 +46,7 @@ blue build-iso [VARIANT] ...
 | `blue build-iso desktop` | 只构建 XFCE 镜像(主目标)             |
 | `blue build-iso minimal` | 只构建 minimal 镜像(纯 CLI fallback) |
 
-变体清单定义在 `blueprint.scm` §8.5 的 `%images` 常量。文件名前缀在
-`%live-iso-prefix`(`"jeans"`,本仓库自有名)。
+变体清单定义在 `blueprint.scm` §8.5 的 `%images` 常量。文件名前缀在 `%live-iso-prefix`(`"jeans"`,本仓库自有名)。
 
 ### 1.2 产物
 
@@ -84,18 +83,15 @@ sha256sum dist/jeans-desktop-*.iso
 
 ### §2.1 OS 定义写进 `source/config.org`,不另起 `config/live/*.scm`
 
-Testament 把 ISO 配置独立成 `config/live/<variant>.scm`,理由是"不走
-tangle,出错面小"。本仓库选择**写进主 config.org**:
+Testament 把 ISO 配置独立成 `config/live/<variant>.scm`,理由是"不走 tangle,出错面小"。本仓库选择**写进主 config.org**:
 
 - 配置统一:主机 + ISO 同一份源,改公钥/镜像一次改两边
 - Noweb 拼合已是熟练工具,分两个文件反而引入新概念
-- 代价:`source/config.org` 多一个 tangle 目标(`tmp/live-iso.scm`),
-  必须**绝对不能**与 `tmp/config.scm` 混 —— 见 §3.1 陷阱 1
+- 代价:`source/config.org` 多一个 tangle 目标(`tmp/live-iso.scm`), 必须**绝对不能**与 `tmp/config.scm` 混 —— 见 §3.1 陷阱 1
 
 ### §2.2 变体列表用 BLUE 常量,不走文件枚举
 
-Testament 用 `find` 扫 `config/live/*.scm` 推断变体。本仓库用
-`blueprint.scm` §8.5 的 `%images` 常量,显式列举:
+Testament 用 `find` 扫 `config/live/*.scm` 推断变体。本仓库用 `blueprint.scm` §8.5 的 `%images` 常量,显式列举:
 
 ```scheme
 (define %images '("desktop" "minimal"))
@@ -107,103 +103,72 @@ Testament 用 `find` 扫 `config/live/*.scm` 推断变体。本仓库用
 
 ### §2.3 `make-installation-os` 来自 guix core,不是 rosenthal
 
-这是 gril 阶段的最大事实更正 —— 多个文档路径早期误以为它来自
-`rosenthal services file-systems`,实测该模块**不**导出
-`make-installation-os`,只导出 `btrbk-service-type` /
-`dumb-runtime-dir-service-type` / `zfs-service-type`。
+早期误以为它来自 `rosenthal services file-systems`,实测该模块**不**导出 `make-installation-os`,只导出 `btrbk-service-type` / `dumb-runtime-dir-service-type` / `zfs-service-type`。
 
-真实位置:`(gnu system install)`,`gnu/system/install.scm:693`(guix
-`9e068cc`)。live-modules 块**必须** `(use-modules (gnu system install))`。
+真实位置:`(gnu system install)`,`gnu/system/install.scm:693`(guix `9e068cc`)。live-modules 块**必须** `(use-modules (gnu system install))`。
 
 ### §2.4 不复用 channel lock
 
-Testament 有独立 `config/live/channels.lock`(3 个频道,精简)。
-本仓库决定**复用 `source/channel.lock`**:
+Testament 有独立 `config/live/channels.lock`(3 个频道,精简)。本仓库决定**复用 `source/channel.lock`**:
 
 - 本仓库只有一份主机配置,ISO 用的频道是它的子集,重复 lock 是过度工程
-- 代价:ISO 镜像 closure 包含 bluebox / sops-guix 等主机专用频道的依赖
-  (实测未导致问题,若将来想精简,加 `source/live-channels.lock` 即可)
+- 代价:ISO 镜像 closure 包含 bluebox / sops-guix 等主机专用频道的依赖 (实测未导致问题,若将来想精简,加 `source/live-channels.lock` 即可)
 
 ### §2.5 substitute 镜像全复刻(4 套,不只是 nonguix)
 
-ISO 装机时 `guix pull` / nonguix kernel 拉 substitute 需要公钥,
-**少一个就拉不动**。本仓库配置 `source/config.org` 主机环境用 4 套
-镜像(nonguix / guix-moe / panther / sjtug),ISO 完整复刻 —— 而不是
-只配 nonguix。
+ISO 装机时 `guix pull` / nonguix kernel 拉 substitute 需要公钥, **少一个就拉不动**。本仓库配置 `source/config.org` 主机环境用 4 套镜像(nonguix / guix-moe / panther / sjtug),ISO 完整复刻 —— 而不是只配 nonguix。
 
-### §2.6 显式声明的 4 个 P 阶段(gril 拍板)
+### §2.6 显式声明的决策
 
-| 决策   | 内容                                              | 理由                                                                       |
-| ------ | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| **D1** | 首选变体 = KDE Plasma(desktop)                    | 用户要桌面辅助装机,`plasma-desktop-service-type` + `sddm`(Wayland)是标准件 |
-| **D2** | ISO OS 目标 = "提供装机用环境",不干预装好后       | 装好后用户自己 `blue rebuild` 重建                                         |
-| **D3** | 4 套 substitute 镜像全复刻(§2.5)                  | 装机时 `guix pull` 要用公钥                                                |
-| **D4** | 只装 mihomo 包,不引 service / config / tun        | ISO 内手动启;装好后由 `blue rebuild` 重建                                  |
-| **D5** | live user = `live` / `live`                       | sddm auto-login 后 sudo 需要明确密码                                       |
-| **D6** | 显式加 kmscon(由 `make-installation-os` 默认提供) | tty1 装机回退,X 失败时的救命 console                                       |
-| **D7** | 本文档**进**仓库                                  | 给接手 agent 留契约 —— 见 §6.2 维护纪律                                    |
+| 决策   | 内容                                              | 理由                                                                     |
+| ------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
+| **D1** | 首选变体 = XFCE Desktop(desktop)                  | 用户要桌面辅助装机，`xfce-desktop-service-type` + `lightdm`(X11)是标准件 |
+| **D2** | ISO OS 目标 = "提供装机用环境",不干预装好后       | 装好后用户自己 `blue rebuild` 重建                                       |
+| **D3** | 4 套 substitute 镜像全复刻(§2.5)                  | 装机时 `guix pull` 要用公钥                                              |
+| **D4** | 只装 mihomo 包,不引 service / config / tun        | ISO 内手动启;装好后由 `blue rebuild` 重建                                |
+| **D5** | live user = `live` / `live`                       | lightdm auto-login 后 sudo 需要明确密码                                  |
+| **D6** | 显式删 kmscon(由 `make-installation-os` 默认提供) | 直接进 XFCE 桌面,不走 TUI 安装器;需同步删 console-font                   |
+| **D7** | 本文档**进**仓库                                  | 给接手 agent 留契约 —— 见 §6.2 维护纪律                                  |
 
 ## §3 已知陷阱(接手维护必看)
 
-详细错误码表 / 决策矩阵见 `source/config.org` `* Live ISO` 章节头部注释。
-本节只列**最致命的 4 条**,改前请 grep 整个项目确认影响范围。
+详细错误码表 / 决策矩阵见 `source/config.org` `* Live ISO` 章节头部注释。本节只列**最致命的 4 条**,改前请 grep 整个项目确认影响范围。
 
 ### §3.1 tangle 目标绝对不能复用 `tmp/config.scm`
 
-若 `:tangle ../tmp/config.scm` 误用,`%live-installation-os` 会污染
-主机配置,`blue rebuild` 报 `unbound variable: %system` 或
-`multiple definition`。
+若 `:tangle ../tmp/config.scm` 误用,`%live-installation-os` 会污染主机配置,`blue rebuild` 报 `unbound variable: %system` 或 `multiple definition`。
 
-**验证**:`tail tmp/live-iso.scm` 末行应是 `%live-installation-os`
-(裸值,非 `(define ...)`);`grep -c '%live-installation-os' tmp/config.scm` 应为 0。
+**验证**:`tail tmp/live-iso.scm` 末行应是 `%live-installation-os` (裸值,非 `(define ...)`);`grep -c '%live-installation-os' tmp/config.scm` 应为 0。
 
 ### §3.2 `<<live-modules>>` 不能被主 main 块引用
 
-`blue check` 不做 cross-tangle 验证 —— 它只看每个 `#\+NAME:` 块自身的括号。
-如果 main 块误引用 `<<live-modules>>`,`tmp/config.scm` 里会出现
-ISO 块内容,直接撞死 `blue rebuild`。
+`blue check` 不做 cross-tangle 验证 —— 它只看每个 `#\+NAME:` 块自身的括号。如果 main 块误引用 `<<live-modules>>`,`tmp/config.scm` 里会出现 ISO 块内容,直接撞死 `blue rebuild`。
 
 **验证**:`grep -E 'live-(modules|installation)' tmp/config.scm` 应为空。
 
 ### §3.3 `blue --dry-run build-iso` 仍会真跑 tangle
 
-`--dry-run` 短路的是 `%run`(guix reconfigure / ISO 镜像构建等),
-但 `org-babel-tangle-file` 必须真跑(`#:real? #t`),否则 dry-run 验证
-拿不到 `tmp/live-iso.scm` 产物。
+`--dry-run` 短路的是 `%run`(guix reconfigure / ISO 镜像构建等), 但 `org-babel-tangle-file` 必须真跑(`#:real? #t`),否则 dry-run 验证拿不到 `tmp/live-iso.scm` 产物。
 
 ### §3.4 `make-installation-os` 来自 `(gnu system install)`
 
-(同 §2.3) 实施前更正记录里有 5 条相关修正,`source/config.org` `* Live ISO`
-章节顶部注释里有完整留路标。**不要凭印象改 use-modules 列表**。
+(同 §2.3) 实施前更正记录里有 5 条相关修正,`source/config.org` `* Live ISO` 章节顶部注释里有完整留路标。**不要凭印象改 use-modules 列表**。
 
 ### §3.5 `services` 字段里 `<<guix-substitutes>>` 不能当 `cons*` 元素
 
-`<<guix-substitutes>>` 块展开后本身是一个 `(list 4个simple-service ...)`。
-若写成 `(cons* (service xfce-desktop-service-type) <<guix-substitutes>>
-(service lightdm-service-type ...) ...)`,会把整个 list 当单个 service 元素
-嵌进 services 列表,报 `'services' field must contain a list of services`。
+`<<guix-substitutes>>` 块展开后本身是一个 `(list 4个simple-service ...)`。若写成 `(cons* (service xfce-desktop-service-type) <<guix-substitutes>> (service lightdm-service-type ...) ...)`,会把整个 list 当单个 service 元素嵌进 services 列表,报 `'services' field must contain a list of services`。
 
-**修复**:用 `append` 拍平 ——
-`(services (append <<guix-substitutes>>
-(list (service xfce-desktop-service-type)
-(service lightdm-service-type ...) ...)))`。
-`blue check` 只看块内括号平衡,**不会**抓到这类 "list-in-list" 类型错,
-只能靠 guix 真跑报 `must contain a list of services` 才发现。
+**修复**:用 `append` 拍平 —— `(services (append <<guix-substitutes>> (list (service xfce-desktop-service-type) (service lightdm-service-type ...) ...)))`。`blue check` 只看块内括号平衡,**不会**抓到这类 "list-in-list" 类型错, 只能靠 guix 真跑报 `must contain a list of services` 才发现。
 
 ### §3.6 builder 里 `(use-modules (guix build utils))` 必须 `with-imported-modules`
 
-trivial-build-system 的 builder 默认**不**导入 `(guix build utils)`,
-直接在 `#~(begin ...)` 里 `(use-modules (guix build utils))` 会报
-`no code for module (guix build utils)`(drv 编译阶段失败)。
+trivial-build-system 的 builder 默认**不**导入 `(guix build utils)`, 直接在 `#~(begin ...)` 里 `(use-modules (guix build utils))` 会报 `no code for module (guix build utils)`(drv 编译阶段失败)。
 
-**修复**:用 `(with-imported-modules '((guix build utils)) #~(begin ...))`
-包裹 gexp,把模块编译进构建环境。注意 `with-imported-modules` 多包一层,
-结尾需补一个右括号,否则 `blue check` 报对应块多 1 个左括号。
+**修复**:用 `(with-imported-modules '((guix build utils)) #~(begin ...))` 包裹 gexp,把模块编译进构建环境。注意 `with-imported-modules` 多包一层, 结尾需补一个右括号,否则 `blue check` 报对应块多 1 个左括号。
 
 ### §3.7 `delete kmscon` 后必须同时 `delete console-font`(否则进不了桌面)
 
-ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器。安装器是
-`make-installation-os` 在 tty1 上跑的 kmscon:
+ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器。安装器是 `make-installation-os` 在 tty1 上跑的 kmscon:
 
 ```scheme
 ;; gnu/system/install.scm:466-470 —— kmscon 在 tty1 且 login-program = 安装器
@@ -212,8 +177,7 @@ ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器�
                                (login-program installer)))
 ```
 
-但 kmscon 同时是 tty1 上 `term-tty1` 的**唯一提供者**,而 `console-font-service-type`
-(base.scm:920)对每个 tty 都 `requirement (term-<tty>)`。只删 kmscon 会导致:
+但 kmscon 同时是 tty1 上 `term-tty1` 的**唯一提供者**,而 `console-font-service-type` (base.scm:920)对每个 tty 都 `requirement (term-<tty>)`。只删 kmscon 会导致:
 
 ```
 服务 'console-font-tty1' 需要 'term-tty1',但没有任何服务提供该服务
@@ -227,9 +191,7 @@ ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器�
   (delete console-font-service-type))     ;; 删依赖 term-tty1 的 console-font
 ```
 
-console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副作用。
-`blue check` 不查 shepherd 依赖图,这类"服务依赖缺提供者"错只能靠真跑 `guix`
-构建暴露 —— 见 §4。
+console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副作用。`blue check` 不查 shepherd 依赖图,这类"服务依赖缺提供者"错只能靠真跑 `guix` 构建暴露 —— 见 §4。
 
 ## §4 出错怎么办(快速索引)
 
@@ -248,15 +210,11 @@ console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副�
 | `permission denied (store path)`                      | `/gnu/store` 权限,见 §5                               |
 | QEMU 启动但 X 启动失败                                | tty1 进 kmscon 调试,X 日志在 `~/.local/share/xorg/`   |
 
-接手 agent 真撞错时:先 grep `tmp/build-*.log`(若 `blue build-iso --keep-failed`
-启用),再查 Guix 手册对应 service / package 文档,最后才看上游 issue
-(codeberg `guix/guix#7373` 跟踪 installer 阻塞)。
+接手 agent 真撞错时:先 grep `tmp/build-*.log`(若 `blue build-iso --keep-failed` 启用),再查 Guix 手册对应 service / package 文档,最后才看上游 issue (codeberg `guix/guix#7373` 跟踪 installer 阻塞)。
 
 ## §5 网络与镜像
 
-装机时 substitute 拉取走 `source/config.org` 主机配置里 `simple-service` 块定义的
-4 套镜像(nonguix / guix-moe / panther / sjtug),ISO `live-installation-os` 完整
-复刻。公钥内嵌为 `plain-file`,**不**依赖 ISO 运行时联网拉公钥。
+装机时 substitute 拉取走 `source/config.org` 主机配置里 `simple-service` 块定义的 4 套镜像(nonguix / guix-moe / panther / sjtug),ISO `live-installation-os` 完整复刻。公钥内嵌为 `plain-file`,**不**依赖 ISO 运行时联网拉公钥。
 
 - 默认从 bordeaux 拉,nonguix 内核通常较快
 - 若某镜像宕,guix 自动 fallback —— 不会因单点失败整体死
@@ -266,12 +224,12 @@ console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副�
 
 ### §6.1 何时改本文档
 
-| 触发                        | 改哪                                               |
-| --------------------------- | -------------------------------------------------- |
-| 加新桌面变体(走 §7.1 流程)  | §1.1 变体表 + §2.6 D1 行                           |
-| 升 channel.lock 后 API 改名 | §3.4 引用 → `source/config.org` 注释同步           |
-| 撞到 §3/§4 没列的错误       | §3 / §4 各加一行,给下个接手 agent 留路标           |
-| 修了 §2 设计决策            | §2.x 加修订记录,**不**改原段落(保留 gril 拍板原貌) |
+| 触发                        | 改哪                                         |
+| --------------------------- | -------------------------------------------- |
+| 加新桌面变体(走 §7.1 流程)  | §1.1 变体表 + §2.6 D1 行                     |
+| 升 channel.lock 后 API 改名 | §3.4 引用 → `source/config.org` 注释同步     |
+| 撞到 §3/§4 没列的错误       | §3 / §4 各加一行,给下个接手 agent 留路标     |
+| 修了 §2 设计决策            | §2.x 加修订记录,**不**改原段落(保留决策原貌) |
 
 ### §6.2 维护纪律
 
@@ -279,8 +237,6 @@ console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副�
 2. **章节编号不变**(`§X` 是交叉引用锚点)
 3. **新增内容加进对应章节**,不开新文件
 4. **改完跑** `git diff docs/iso-build.md` 自查:行数应 ≤ 600
-5. **改本文档的人,不是 gril 拍板者** —— 决策变更需在 §2.x 末尾加修订注,
-   不直接改原决策行(原 gril session 的决定保留可见)
 
 ## §7 扩展矩阵(用户拍板,非 to-do)
 
