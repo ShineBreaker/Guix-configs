@@ -22,7 +22,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "b8d81deab28d0eb18236d7496ed1d8a8ce1ed7db")
+       (commit "b708f89fbbce19764eff28b064bc4ebafa026521")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -32,7 +32,7 @@
        (name 'nonguix)
        (url "https://gitlab.com/nonguix/nonguix")
        (branch "master")
-       (commit "7118b0bd3c335176d250f0ab8bcf8f94cd132430")
+       (commit "73baab37361b3a81f326aa3fdec78840f5acc577")
        (introduction
         (make-channel-introduction
          "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
