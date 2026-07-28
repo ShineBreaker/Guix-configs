@@ -1348,8 +1348,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; XDG 相关组件
         "desktop-file-utils"
         "xdg-dbus-proxy"
+        "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
-        "xdg-desktop-portal-wlr"
         "xdg-user-dirs"
         "xdg-utils"
 
