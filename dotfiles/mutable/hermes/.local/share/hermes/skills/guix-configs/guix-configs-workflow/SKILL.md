@@ -718,11 +718,11 @@ dbus-send --session --print-reply --dest=org.freedesktop.portal.Desktop \
 - ❌ **只改 packages 不改 shepherd** → portal daemon 没自启动，需要手动跑
 - ❌ **只改 shepherd 不改 packages** → 启动失败（二进制不存在）
 - ❌ **装多个 portal 但 conf 里只写一个** → 多余的 daemon 抢接口，行为不确定
-- ❌ **在 niri 下期望 gnome portal 的 ScreenCast 工作** → 不可能，这是上游限制
+- ❌ **在 niri 下期望 gnome portal 的 ScreenCast 工作** → 旧版 niri 确实不行（缺 Mutter ServiceChannel）；**niri ≥ 26.04 已原生注册 `org.gnome.Mutter.{ServiceChannel,ScreenCast}` + `org.gnome.Shell.Screenshot`**，gnome portal 的录屏/截图可用。详见 `guix-skills` `references/foot-guns.md` §22.4
 
 ### 7.5 niri GUI 应用注入 — 详见 §6
 
-niri `environment { }` + `herd set-environment` + `dbus-update-activation-environment` 三件套已在 §6 完整覆盖。Testament 的 `config/dorphine.org` niri.kdl 是这一范式的参考实现。
+niri `environment { }` + `herd set-environment` + `dbus-update-activation-environment` 三件套已在 §6 完整覆盖。注意范围：IME/字体/proxy 变量（fcitx 系列等）niri `--session` **不**自动设，三件套仍必需；但 `XDG_SESSION_TYPE` / `WAYLAND_DISPLAY` / `XDG_CURRENT_DESKTOP` / `DBUS_SESSION_BUS_ADDRESS` 等 portal/session 变量 niri `--session` 已自管，手写 `environment {}` 与 `dbus-update-activation-environment` 对它们是冗余的（见 `guix-skills` §22.5）。Testament 经 rosenthal preset 起 niri，其 IME 注入范式可参考，但 portal 场景不需额外 environment 块。
 
 ### 7.6 `#:environment-variables` in `make-forkexec-constructor` — 系统服务注入
 
