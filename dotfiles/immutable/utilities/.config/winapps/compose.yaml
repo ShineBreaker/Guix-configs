@@ -52,5 +52,6 @@ services:
       # All following disks (disk2, ...) WILL NOT BE FORMATTED.
       # - /dev/disk/by-id/<id>:/disk1
       # - /dev/disk/by-id/<id>:/disk2
-    group_add: # uncomment this line and the next one for using rootless podman containers
-      - keep-groups # to make /dev/kvm work with podman. needs "crun" installed, "runc" will not work! Add your user to the 'kvm' group or another that can access /dev/kvm.
+    group_add:
+      - keep-groups
+    cgroup_parent: "/"
