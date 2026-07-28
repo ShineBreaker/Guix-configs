@@ -188,6 +188,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
               <<terminal-packages-list>>
               <<devtools-packages-list>>
               <<user-packages-list>>
+              <<hermes-desktop-runtime-packages>>
               ))
 
    (services (append
@@ -451,19 +452,15 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
  ;; 系统核心组件
  "cryptsetup"
  "dialog"
- "iproute2"
- "iptables-nft"
  "ncurses"
  "pinentry"
  "rtkit"
- "strace"
 
  ;; 网络与连接
  "adb"
  "bluez"
  "curl"
  "dnsmasq"
- "fprintd"
  "mihomo"
  "netcat-openbsd"
  "wget"
@@ -491,7 +488,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
  "thunar-archive-plugin"
  "thunar-media-tags-plugin"
  "thunar-volman"
- "thunar-vcs-plugin"
 
  ;; 字体
  "font-sarasa-gothic"
@@ -518,12 +514,9 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
  "nix"
 
  ;; 工具
- "cpufrequtils"
  "gzip"
  "libnotify"
  "ntfs-3g"
- "tpm2-tools"
- "tpm2-tss"
  "unzip"
  "zip")
 #+end_src
@@ -1339,18 +1332,14 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "libnotify"
         "pavucontrol"
         "rofi"
-        "setxkbmap"
         "trash-cli"
         "wl-clipboard"
         "xprop"
         "xvfb-run"
 
         ;; XDG 相关组件
-        "desktop-file-utils"
-        "xdg-dbus-proxy"
         "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
-        "xdg-user-dirs"
         "xdg-utils"
 
         ;; 主题
@@ -1380,10 +1369,16 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
         ;; 终端复用器
         "herdr-bin"
+        "tmux"
+        "tmuxifier"
+        "tmux-xpanes"
 
         ;; 命令行工具
         "bat"
+        "binutils"
+        "du-dust"
         "fd"
+        "file"
         "ripgrep"
         "fzf"
         "lolcat"
@@ -1430,10 +1425,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "helix"
 
         ;; 数据库
-        "postgresql"
-        "redis"
         "sqlite"
-        "sqlitestudio"
 
         ;; 环境管理
         "bubblewrap"
@@ -1444,24 +1436,17 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; 构造工具
         "gcc-toolchain"
         "gradle"
-        "make"
-        "maven"
 
         ;; AI Agent
         "cc-switch-bin"
         "crush-bin"
         "github-copilot"
-        "mimocode-bin"
         "oh-my-pi-bin"
-        "opencode-desktop-bin"
-        "orca-ide-bin"
+        "opencode-bin"
         "codewhale-bin"
         "zcode"
 
         ;; 工具
-        "binutils"
-        "du-dust"
-        "file"
         "graphviz"
         "guile-json"
         "jq"
@@ -1469,6 +1454,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "reuse"
         "ripgrep"
         "squashfs-tools"
+        "strace"
         "texlive-scheme-basic"
         "xxd"
 
@@ -1477,13 +1463,10 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "git-credential-keepassxc"
         "git-filter-repo"
         "git-lfs"
-        "jujutsu"
 
         ;; 拼写检查
         "aspell"
         "aspell-dict-en"
-        "hunspell"
-        "hunspell-dict-en"
         "miscfiles"))
 #+end_src
 
@@ -1505,15 +1488,11 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "gst-plugins-ugly"
 
         ;; 影音
-        "audacity"
-        "easyeffects"
         "helvum"
         "mpv"
         "nomacs"
         "obs"
-        "obs-wlrobs"
         "obs-pipewire-audio-capture"
-        "obs-vkcapture"
 
         ;; 社交
         "element-desktop"
@@ -1549,8 +1528,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "kanata"
         "mesa-utils"
         "pinentry-qt"
-        "poppler"
-        "poppler-qt6"
         "tesseract-ocr"
 
         ;; Python
@@ -1956,17 +1933,17 @@ end
 #+begin_src scheme
 (let* ((make-shepherd-service
         (lambda* (pkg path requirement)
-                 (shepherd-service (provision (list (string->symbol (package-name pkg))))
-                                   (requirement requirement)
-                                   (start #~(lambda args
-                                              ((make-forkexec-constructor
-                                                (list #$(file-append pkg path))
-                                                #:environment-variables (environ)
-                                                #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
-                                                                          #$(package-name pkg) ".log")))
-                                              args))
-                                   (stop #~(make-kill-destructor))
-                                   (respawn? #t)))))
+          (shepherd-service (provision (list (string->symbol (package-name pkg))))
+                            (requirement requirement)
+                            (start #~(lambda args
+                                       ((make-forkexec-constructor
+                                         (list #$(file-append pkg path))
+                                         #:environment-variables (environ)
+                                         #:log-file (string-append (getenv "HOME") "/.local/state/shepherd/"
+                                                                   #$(package-name pkg) ".log")))
+                                       args))
+                            (stop #~(make-kill-destructor))
+                            (respawn? #t)))))
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
@@ -2164,7 +2141,9 @@ end
   ;; rust
   ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
   ;; sqlite
-  ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history"))
+  ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
+  ;; tmuxifier
+  ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts"))
 #+end_src
 
 **** 引用以上的所有变量，并在这里放一些多行的环境变量
