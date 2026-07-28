@@ -8,6 +8,8 @@
 # config.yml 通过 modelRoles 按 provider/model-id 引用。
 #
 # apiKey 行为：值优先当作环境变量名解析，找不到才当字面量。
+# 直接写字面量密钥即可（本文件在 mutable stow，改源即生效，无需 blue home）。
+# 注意：字面量密钥会进 git 历史——确保本 repo 为私有。
 # 本 provider 走 Anthropic Messages 兼容接口（阿里云百炼 token-plan）。
 
 providers:
@@ -15,7 +17,7 @@ providers:
     name: "Aliyun Bailian Token Plan (Qwen)"
     baseUrl: "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic"
     api: "anthropic-messages"
-    apiKey: DASHSCOPE_API_KEY # 环境变量名（由 secrets 部署注入）；找不到时作字面量
+    apiKey: DASHSCOPE_API_KEY
     models:
       - id: "qwen3.8-max-preview"
         name: "Qwen3.8-Max Preview"

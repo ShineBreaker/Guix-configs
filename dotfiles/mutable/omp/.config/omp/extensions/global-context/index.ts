@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: MIT
 
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -297,7 +296,7 @@ async function listConfiguredFiles(config: GlobalContextConfig): Promise<
 
 // ─── Extension Entry ──────────────────────────────────────────────────────────
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: any) {
   try {
     return factoryBody(pi);
   } catch (err) {

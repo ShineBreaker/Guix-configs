@@ -14,13 +14,12 @@
  * 信号清单、写入流程、卡片格式由 agenote-{base,curator,review} skill 提供，
  * 本插件只做"事件触发 + 命令快捷入口"，避免与 skill 重复维护。
  *
- * 调用路径：agenote 已改造为 MCP server（agenote_mcp.py），agent 主循环通过
- * MCP tool 调用。但 pi 的 ExtensionAPI 不提供 MCP 调用接口，本插件的命令
- * （/agenote-health、/agenote-curate）改调轻量 CLI shim（agenote_cli.py），
+ * 调用路径：agenote 已迁至 CLI（agenote）模式，agent 主循环通过 bash 调用
+ * agenote 命令。但 pi 的 ExtensionAPI 不提供 CLI 调用接口，本插件的命令
+ * （/agenote-health、/agenote-curate）调轻量 CLI shim（agenote_cli.py），
  * 它复用同一套 ag_lib 内核，输出人类可读文本。
  */
 
-import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { execSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -197,7 +196,7 @@ function isSubagentProcess(): boolean {
   return false;
 }
 
-export default function init(pi: ExtensionAPI): void {
+export default function init(pi: any): void {
   try {
     initBody(pi);
   } catch (err) {
