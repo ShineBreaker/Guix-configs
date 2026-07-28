@@ -1,0 +1,47 @@
+{
+  "_comment": "项目级 gate（Guix-configs 专属）。由 pi-gate 从 ctx.cwd 向上遍历加载，相对路径按本仓库根目录解析。本文件 agent 可写（由 writing-gates skill 引导维护）；如需锁定防止 agent 削弱，加 \"_meta_frozen\": true。ratchet 模型：只能在全局规则之上加码，无法移除全局/代码底层（sudo 等）。",
+
+  "frozen_commands": [
+    "blue rebuild",
+    "blue init",
+    "blue clean",
+    "guix system reconfigure",
+    "guix system init"
+  ],
+
+  "frozen_paths": [
+    "tmp/",
+    "channel.lock",
+    "~/.config/",
+    "~/.local/"
+  ],
+
+  "frozen_globs": [],
+
+  "redirect_conventions": {
+    "guix home reconfigure": "建议改用 blue home（锁定频道版本 + 括号检查，保证可复现）"
+  },
+
+  "path_hints": {
+    "dotfiles/": "此文件修改后需要运行 blue home 才能生效（~/.config 指向 store 只读副本，改源后须重建软链接）",
+    "source/": "修改 source/ 配置后，务必先用 blue --dry-run rebuild 验证，再提醒用户手动 blue rebuild 固化"
+  },
+
+  "rewrite": {},
+  "builtin_rewrite": true,
+
+  "human_only_actions": [
+    "blue rebuild（Guix System reconfigure，需 sudo）",
+    "blue init（装机到 /mnt，需 sudo）",
+    "blue clean / clean-generations（删世代 / EFI，需 sudo）",
+    "channel.lock 更新（blue update）",
+    "distill → skills/（agenote 蒸馏产物须人工 review）"
+  ],
+
+  "anchor_measurements": [
+    "blue check 退出码 = 0（括号平衡 + tangle 通过）",
+    "git diff 非空（有实际变更，非空报告）",
+    "测试套件实际执行（不是被跳过或标准被降低）",
+    "blue --dry-run rebuild 构建验证通过（系统配置改动前）"
+  ]
+}

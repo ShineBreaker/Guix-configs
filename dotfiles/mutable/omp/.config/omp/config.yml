@@ -1,5 +1,5 @@
 modelRoles: 
-  default: zhipu-coding-plan/glm-5.2
+  default: qwen/qwen3.8-max-preview:xhigh
   slow: zai/GLM-5.2
   pro: qwen/qwen3.8-max-preview
   smol: deepseek/deepseek-v4-flash
@@ -49,7 +49,7 @@ tools:
 memory: 
   backend: hindsight
 providers: 
-  webSearch: auto
+  {}
 symbolPreset: nerd
 setupVersion: 1
 terminal: 
