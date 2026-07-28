@@ -22,6 +22,7 @@ plans/
 .venv
 uv.lock
 
-# Agent 工作产物（不进入版本控制，但 .agent/ 下的 skill 等内容可跟踪）
+# Agent 工作产物（不进入版本控制）；但 .agents/skills 与项目级 gate（.agents/anchors.json）可跟踪
 .agents/*
 !.agents/skills
+!.agents/anchors.json

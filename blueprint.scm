@@ -19,9 +19,8 @@
 ;;;   §5  密钥扫描            —— secret-scan 命令的实现
 ;;;   §6  目录树生成器        —— structor 命令的实现
 ;;;   §7  GNU Stow 包装       —— stow / stow-all 命令的实现
-;;;   §8  指令清单            —— `blue list` 展示用的分类表
-;;;   §9  所有命令定义        —— 每条 `blue <指令>` 的实际逻辑
-;;;   §10 入口点              —— (blueprint ...) 注册一切
+;;;   §8  所有命令定义        —— 每条 `blue <指令>` 的实际逻辑（含 `blue list` 分类表）
+;;;   §9  入口点              —— (blueprint ...) 注册一切
 ;;;
 ;;; 【关键不变量】改动前请先理解：
 ;;;   * `blue build` / `blue check` / `blue clean` 等是 blue 框架的【内建
@@ -1062,6 +1061,30 @@
 
 ;;; ---------- 帮助 ----------
 
+;; 按类别分组打印全部自写指令（运行时引用，命令对象此时均已定义）。
+(define (print-command-list)
+  (let ((categories
+         `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
+           ("编辑 (editing)" ,block-show-command ,block-replace-command)
+           ("Guix 频道 (guix)" ,pull-command ,update-command)
+           ("维护 (maintenance)" ,clean-artifacts-command ,clean-generations-command
+            ,gc-command ,reuse-command ,structor-command)
+           ("Nix 备用 (nix)" ,nix-command ,nix-init-command ,nix-update-command)
+           ("Stow (stow)" ,stow-command ,stow-all-command)
+           ("验证 (validation)" ,secret-scan-command)
+           ("帮助 (help)" ,list-command))))
+    (display "本项目自写指令：\n")
+    (for-each
+     (lambda (cat)
+       (format #t "~%  ~a~%" (car cat))
+       (for-each
+        (lambda (cmd)
+          (format #t "    ~a	~a~%" (command-invoke cmd) (command-synopsis cmd)))
+        (cdr cat)))
+     categories)
+    (format #t "~%共 ~a 条。详细帮助：blue help <命令名>~%"
+            (apply + (map (lambda (c) (length (cdr c))) categories)))))
+
 ;; blue list —— 列出本项目所有指令（覆盖框架默认的 help 风格）。
 (define-command (list-command arguments)
   ((invoke "list")
@@ -1431,7 +1454,8 @@ folding 控制:
  (buildables (list %config-buildable))
  (testables (list %config-check))
  (commands
-  (list rebuild-command
+  (list list-command
+        rebuild-command
         home-command
         build-iso-command
         block-show-command
