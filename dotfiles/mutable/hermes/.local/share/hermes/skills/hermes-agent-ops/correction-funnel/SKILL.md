@@ -55,10 +55,7 @@ metadata:
 ### Step 2: 跑 `agenote_dream` 找候选
 
 ```bash
-mcp_agenote_agenote_dream(
-    window_days=90,  # 90 天窗口覆盖 ~90% facts
-    limit=5,
-)
+agenote dream --window-days 90 --limit 5
 ```
 
 返回的每个候选含 `source_trace` 字段（= fact_id），是溯源指针。
@@ -85,15 +82,13 @@ mcp_agenote_agenote_dream(
 ### Step 4: durable candidate → 入 KB
 
 ```bash
-mcp_agenote_agenote_add(
-    title="<lesson 标题>",
-    entry="note|mistake|ascended",  # 决定正文模板
-    category="<已有 category>",
-    tech="<技术栈>",
-    type="workflow|debug|knowledge|...",
-    summary="<一句话总结>",
-    body="<详细内容，含 evidence + 决策逻辑>",
-)
+agenote add --title "<lesson 标题>" \
+  --entry note|mistake|ascended \
+  --category "<已有 category>" --tech "<技术栈>" \
+  --type workflow|debug|knowledge \
+  --summary "<一句话总结>" --stdin <<EOF
+详细内容，含 evidence + 决策逻辑
+EOF
 ```
 
 **entry 选择**：
@@ -130,9 +125,9 @@ memory(
 ### Step 5: 留痕 + 闭环
 
 ```bash
-# 跑 agenote_curate（轻量，不需要 LLM）
+# 跑 agenote curate（轻量，不需要 LLM）
 # 不需要每次跑，但重大 correction 跑一次能加速索引 / 去重 / 健康度
-mcp_agenote_agenote_curate()
+agenote curate
 ```
 
 回报给用户：

@@ -7,7 +7,7 @@ description: 跨 agent 共享知识库（agenote）—— 任务开始时查、�
 
 agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 AI agent 记录而设。数据隔离在 `~/Documents/Org/agenote/` 子目录，与人类卡片互不污染。
 
-> **调用方式**：agenote 已改造为 MCP server，agent 主循环通过 MCP tool 调用（tool 名以 `agenote_` 为前缀）。pi-mcp-adapter lazy 连接，首次调用时自动启动 server。以下示例中的 `agenote_*` 均为 MCP tool 名。底层 CLI 为 `agenote` 命令（位于 `~/.local/bin/agenote`），默认操作 agenote 子库（与 MCP server 对齐），`--domain human` 切到人类知识库根。
+> **调用方式**：agenote 通过 `agenote` CLI 操作（`~/.local/bin/agenote`），所有增删查改操作可通过 bash 直接调用。以 `agenote` 开头的子命令（`agenote add`、`agenote search`、`agenote list` 等）即为本 skill 的入口。`--domain human` 切到人类知识库根，不指定时 search 默认做跨域加权检索。
 
 > **来源溯源**：每张 agent 写入的卡片自动打 `:SOURCE_AGENT:` 标签（取自启动 env
 > `AGENOTE_AGENT`，缺失回退 `pi`）。`agenote_health()` 的 `by_source` 字段可看各 agent
@@ -30,40 +30,46 @@ agenote 是人类知识库（`~/Documents/Org/`）的**并行子集**，专为 A
 - 临时调试输出、可从代码直接推导的信息
 - 一次性任务、不具复用价值的细节
 
-## 核心命令（MCP tool）
+## 核心命令（CLI）
 
 ```
 # 初始化（仅首次）
-agenote_init
+agenote init
 
 # 添加卡片（note/mistake/ascended）
-agenote_add(title="标题", entry="note", body="详细内容")
+agenote add --title "标题" --entry note --stdin <<EOF
+详细内容
+EOF
 
 # 读取卡片（用 ID，不是 title；先 list/search 找 ID）
-agenote_get(target="<ID>", used=true)      # used=true 留痕（USAGE_COUNT+1）
+agenote get <ID>                              # 读取
+agenote touch <ID>                            # 留痕（USAGE_COUNT+1）
 
 # 跨域加权检索（同时搜人类 + agent 卡片，人类权重更高）
-agenote_search(query="关键词")
+agenote search "关键词"                        # 默认跨域
+agenote search "关键词" --json                 # JSON 输出（含 domain/score 字段）
+agenote --domain human search "关键词"         # 仅搜人类域
 
 # 列出/统计/健康度
-agenote_list()
-agenote_stats()
-agenote_health()
+agenote list --category 类别 --all             # 按领域列出
+agenote stats                                  # 统计
+agenote health                                 # 健康度
 
 # 记忆系统
-agenote_memory_add(title="偏好", mem_type="feedback", body="内容")
-agenote_memory_overview()                   # 概览
-agenote_memory_search(stale=true)           # 陈旧记忆
+agenote memory --add --type feedback --title "偏好" --stdin
+agenote memory                                 # 概览
+agenote memory --stale                         # 陈旧记忆
 
 # 策展（健康+去重+归档+权重重分配）
-agenote_curate()
+agenote curate
+agenote commit -m "策展: 更新说明"             # 提交知识库变更
 
-# 跨 agent 协同（6 个 tool：reconcile/extract/dream/trace/distill/curate）
-agenote_reconcile(source="all")            # 抽取→索引（只读）
-agenote_extract(source="opencode", date="2026-07-09")  # 抽原始对话为 Org
-agenote_dream(window_days=90, limit=5)    # 启发式候选（IDF × √df × 形态学 + TF tie-breaker，只读不写 KB）
-agenote_trace(fact_id="<source_trace>")    # 回查 dream 候选的完整原始对话（不截断）
-agenote_distill(dry_run=True)              # 经验→SKILL 草稿
+# 跨 agent 协同（reconcile/extract/dream/trace/distill/curate）
+agenote reconcile --source all                 # 抽取→索引（只读）
+agenote extract --source opencode --date 2026-07-09  # 抽原始对话为 Org
+agenote dream --window-days 90 --limit 5       # 启发式候选（IDF × √df × 形态学 + TF tie-breaker，只读不写 KB）
+agenote trace --id "<source_trace>"            # 回查 dream 候选的完整原始对话（不截断）
+agenote distill --dry-run                      # 经验→SKILL 草稿
 ```
 
 ## `agenote` CLI 底层命令

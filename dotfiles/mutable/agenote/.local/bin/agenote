@@ -197,6 +197,14 @@ def cmd_commit(args: argparse.Namespace, ctx=None) -> None:
         print("没有待提交的变更。")
         return
 
+    # --dry-run 预览不提交
+    if args.dry_run:
+        staged = [line[3:] for line in status.splitlines() if line.strip()]
+        print(f'dry-run: 将 add 以下文件并 commit -m "{message}"')
+        for f in staged:
+            print(f"  + {f}")
+        return
+
     # add
     _run_git(["add"] + add_targets, cwd=repo_root_path)
 
@@ -406,7 +414,7 @@ def print_help() -> None:
 用法: agenote [--domain human|agenote] <子命令> [参数]
 
 全局选项:
-  --domain {{human,agenote}}  操作域（默认 agenote，与 MCP server 对齐）
+  --domain {{human,agenote}}  操作域（search 默认跨域，其余命令默认 agenote 域）
         agenote  → ~/Documents/Org/agenote/（agent 写入的卡片，本 CLI 默认）
         human    → ~/Documents/Org/（人类知识库根）
   --version              显示版本号
@@ -566,15 +574,16 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(
         prog="agenote",
-        description="agenote — 知识库命令行工具（默认 agenote 域，与 MCP server 对齐）",
+        description="agenote — 知识库命令行工具（默认 agenote 域；search 默认跨域）",
         add_help=False,
     )
     # 全局参数：--domain 决定读写哪棵目录树；--version 修复 argparse 露馅问题
     parser.add_argument(
         "--domain",
         choices=["human", "agenote"],
-        default="agenote",
-        help="操作域：agenote（默认，~/Documents/Org/agenote/）或 human（~/Documents/Org/）",
+        default="__auto__",
+        help="操作域：agenote（默认，~/Documents/Org/agenote/）或 human（~/Documents/Org/）。"
+        "不指定时 search 做跨域加权检索，其他命令默认 agenote 域。",
     )
     parser.add_argument(
         "--version",
@@ -785,8 +794,14 @@ def main() -> None:
         action="store_true",
         help="跳过 GPG 签名（默认遵循仓库 commit.gpgsign）",
     )
+    commit_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="只预览不提交（列出将 add 的文件）",
+    )
 
     # ── help ──────────────────────────────────────────────────────────────
+
     subparsers.add_parser("help", help="显示本帮助")
 
     # ── 新命令 ─────────────────────────────────────────────────────────────
@@ -988,12 +1003,18 @@ def main() -> None:
         "distill": cmd_distill,
         "extract": cmd_extract,
     }
-
     if args.command in commands:
-        # 解析 ctx：默认 agenote（与 MCP server 对齐），--domain human 切到人类 KB 根。
-        # init 子命令自己管理目录创建（含 ensure_dirs），其余命令按 ctx 确保骨架存在。
-        ctx = default_context() if args.domain == "human" else agenote_context()
-        if args.command != "init":
+        # 解析域：--domain 显式指定 → 仅该域；__auto__ → search 做跨域，其余默认 agenote
+        if args.domain == "human":
+            ctx = default_context()
+        elif args.domain == "agenote":
+            ctx = agenote_context()
+        elif args.command == "search":
+            ctx = agenote_context()  # 仅用于 ensure_dirs；search 内部做跨域
+            args._cross_domain = True
+        else:
+            ctx = agenote_context()
+        if ctx is not None and args.command != "init":
             ensure_dirs(ctx)
         commands[args.command](args, ctx)
     else:

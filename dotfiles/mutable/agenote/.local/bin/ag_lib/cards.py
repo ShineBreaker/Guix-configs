@@ -51,6 +51,7 @@ from ag_lib.core import (  # noqa: E402
     touch_card,
     _resolve_card,
     default_context,
+    agenote_context,
 )
 
 
@@ -277,8 +278,128 @@ def _make_search_snippet(
     return snippet
 
 
+
+def _cross_domain_search(
+    query: str,
+    limit: int = 20,
+    case_sensitive: bool = False,
+) -> list[dict]:
+    """跨域加权检索：同时扫人类域 + agenote 域 + reconcile 事实。
+
+    与 MCP agenote_search 行为对齐：各域权重取自 ctx.default_weight,
+    reconcile 默认 0.7。返回按加权分数降序排列的结果列表。
+    """
+    terms = _query_terms(query)
+    if not terms:
+        die("必须提供搜索关键词")
+
+    normalized_terms = terms if case_sensitive else [t.casefold() for t in terms]
+    results: list[dict] = []
+
+    for ctx in (default_context(), agenote_context()):
+        weight = ctx.default_weight
+        for filepath in _iter_search_targets(ctx):
+            try:
+                content = filepath.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            haystack = content if case_sensitive else content.casefold()
+            term_hits = [t for t in normalized_terms if t in haystack]
+            if not term_hits:
+                continue
+            occurrence_count = sum(haystack.count(t) for t in term_hits)
+            title = read_org_title(content)
+            title_hay = title if case_sensitive else title.casefold()
+            title_bonus = 25 * sum(1 for t in term_hits if t in title_hay)
+            raw_score = len(term_hits) * 100 + occurrence_count + title_bonus
+            results.append(
+                {
+                    "domain": ctx.name,
+                    "weight": weight,
+                    "raw_score": raw_score,
+                    "score": round(raw_score * weight, 1),
+                    "title": title,
+                    "file": str(filepath),
+                    "snippet": _make_search_snippet(
+                        {"content": content}, normalized_terms, case_sensitive
+                    ),
+                }
+            )
+
+    # reconcile 事实（其他 agent 的 memory，weight 低于 KB 卡片）
+    try:
+        from ag_lib.reconcile import load_reconcile_facts
+
+        for fact in load_reconcile_facts():
+            hay = fact.get("content", "")
+            haystack = hay if case_sensitive else hay.casefold()
+            term_hits = [t for t in normalized_terms if t in haystack]
+            if not term_hits:
+                continue
+            occurrence_count = sum(haystack.count(t) for t in term_hits)
+            title = fact.get("title", "")
+            title_hay = title if case_sensitive else title.casefold()
+            title_bonus = 25 * sum(1 for t in term_hits if t in title_hay)
+            raw_score = len(term_hits) * 100 + occurrence_count + title_bonus
+            fact_weight = fact.get("weight", 0.7)
+            results.append(
+                {
+                    "domain": "reconcile",
+                    "source": fact.get("source", ""),
+                    "weight": fact_weight,
+                    "raw_score": raw_score,
+                    "score": round(raw_score * fact_weight, 1),
+                    "title": title,
+                    "file": "",
+                    "id": fact.get("id", ""),
+                    "snippet": hay[:200] + ("..." if len(hay) > 200 else ""),
+                }
+            )
+    except Exception:
+        pass  # reconcile 索引不可用 → 静默跳过
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results[:limit]
+
+
+def _cmd_cross_domain_search(args: argparse.Namespace) -> None:
+    """跨域加权检索的输出与格式化。"""
+    results = _cross_domain_search(
+        args.query,
+        limit=getattr(args, "limit", 20),
+        case_sensitive=getattr(args, "case_sensitive", False),
+    )
+
+    if not results:
+        if getattr(args, "json", False):
+            print(json.dumps([], ensure_ascii=False, indent=2))
+        else:
+            print(f"未找到匹配: {args.query}")
+        return
+
+    if getattr(args, "json", False):
+        print(json.dumps(results, ensure_ascii=False, indent=2))
+        return
+
+    for idx, r in enumerate(results):
+        domain_tag = f"[{r.get('domain', '?')}]"
+        if r.get("source"):
+            domain_tag = f"[{r['domain']}:{r['source']}]"
+        print(f"{domain_tag} {r['title']}  score={r['score']}  {r.get('file', r.get('id', ''))}")
+        if r.get("snippet"):
+            for line in r["snippet"].splitlines():
+                print(f"  | {line}")
+        if idx < len(results) - 1:
+            print()
+
 def cmd_search(args: argparse.Namespace, ctx=None) -> None:
     """在 experiences/ 和 MEMORY.org 中全文检索。"""
+    # 跨域加权检索（default，匹配 MCP agenote_search 行为）
+    if getattr(args, "_cross_domain", False) and not getattr(args, "regex", False):
+        _cmd_cross_domain_search(args)
+        return
+
+    # 单域检索（--domain human/agenote 显式指定或 --regex 模式）
     ctx = ctx or default_context()
     query = args.query
     context = args.context

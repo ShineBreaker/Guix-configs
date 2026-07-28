@@ -578,14 +578,6 @@ _config_version: 33
 known_plugin_toolsets:
   cli:
     - spotify
-mcp_servers:
-  agenote:
-    command: /home/brokenshine/.guix-home/profile/bin/python3
-    args:
-      - /home/brokenshine/.local/bin/agenote_mcp.py
-    env:
-      PYTHONPATH: /home/brokenshine/.guix-home/profile/lib/python3.12/site-packages
-      AGENOTE_AGENT: hermes
 platform_toolsets:
   cli:
     - browser

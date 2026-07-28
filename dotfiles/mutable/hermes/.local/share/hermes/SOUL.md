@@ -153,10 +153,10 @@
       <scope>项目事实、调试结论、部署拓扑、命令诀窍</scope>
       <visibility>通过 prefetch(query) 按需召回</visibility>
     </system>
-    <system name="agenote" tool="mcp_agenote_*" operations="add/get/search/list/stats/health/reconcile/extract/dream/distill/touch/curate/deduplicate/archive/restore/reindex/memory_*">
+    <system name="agenote" tool="agenote *" operations="add/get/search/list/stats/health/reconcile/extract/dream/distill/touch/curate/deduplicate/archive/restore/reindex/memory">
       <storage>agenote 经验卡片库（.org 文件）</storage>
       <scope>跨 agent 共享的经验知识（踩坑、方案、工作流）</scope>
-      <visibility>通过 MCP 调用按需检索（`mcp_agenote_agenote_search`）</visibility>
+      <visibility>通过 `agenote search` 按需检索</visibility>
     </system>
   </systems>
 
@@ -195,16 +195,15 @@
 
   <agenote-rules>
     <query-triggers>
-      <rule trigger="开始非平凡任务（如编码任务）前" action="mcp_agenote_agenote_search 关键词" />
-      <rule trigger="遇到已踩过或疑似踩过的坑（症状/命令/工具名匹配）" action="mcp_agenote_agenote_search 关键词" />
-      <rule trigger="联网查到新方案" action="mcp_agenote_agenote_search 关键词 + 写卡留档" />
-      <rule trigger="用户纠正/纠正自己" action="mcp_agenote_agenote_search 关键词 + 写卡留档" />
-      <rule trigger="长任务结束" action="评估是否有 ascended/mistake 值得留痕" />
+      <rule trigger="开始非平凡任务（如编码任务）前" action="agenote search 关键词" />
+      <rule trigger="遇到已踩过或疑似踩过的坑（症状/命令/工具名匹配）" action="agenote search 关键词" />
+      <rule trigger="联网查到新方案" action="agenote search 关键词 + 写卡留档" />
+      <rule trigger="用户纠正/纠正自己" action="agenote search 关键词 + 写卡留档" />
     </query-triggers>
     <write-triggers>
-      <rule trigger="查询到的有用知识（联网/文档/参考方案）" entry="note" tool="mcp_agenote_agenote_add" />
-      <rule trigger="项目处理中的问题（调试踩坑、被用户纠正、走弯路）" entry="mistake" tool="mcp_agenote_agenote_add" />
-      <rule trigger="多轮试错的最优方案（多次失败后找到的正确做法）" entry="ascended" tool="mcp_agenote_agenote_add" />
+      <rule trigger="查询到的有用知识（联网/文档/参考方案）" entry="note" tool="agenote add" />
+      <rule trigger="项目处理中的问题（调试踩坑、被用户纠正、走弯路）" entry="mistake" tool="agenote add" />
+      <rule trigger="多轮试错的最优方案（多次失败后找到的正确做法）" entry="ascended" tool="agenote add" />
     </write-triggers>
     <skip>
       <item>纯浏览未采用的资料（只记录实际用到的）</item>
@@ -212,7 +211,7 @@
       <item>一次性任务、不具复用价值的细节</item>
     </skip>
 
-    <implementation>hermes 通过 MCP 调用（工具名前缀 `mcp_agenote_*`）。底层 CLI `~/.local/bin/agenote` 用于 debug/批处理。完整规则见 ~/.agents/skills/agenote-base/。</implementation>
+    <implementation>hermes 通过 `agenote` CLI 调用（bash: `agenote search/add/list/...`）。完整规则见 ~/.agents/skills/agenote-base/。</implementation>
 
   </agenote-rules>
 </persistence>

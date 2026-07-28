@@ -154,3 +154,4 @@ gcc -o openuri-portal openuri-portal.c \
 
 - references/gtk-portal-openuri-removal.md — GTK portal 上游移除 OpenURI 的变更记录与版本对照
 - templates/minimal-openuri-portal.c — 最小 OpenURI backend 模板
+- references/guix-home-portal-backend-switching.md — Guix Home + niri 环境下 wlr ↔ gnome 后端切换实战（三处同步：portals.conf / packages / shepherd）
