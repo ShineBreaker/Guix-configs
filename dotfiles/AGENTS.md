@@ -35,8 +35,7 @@ dotfiles/
 │   │   ├── .config/
 │   │   │   ├── agents/
 │   │   │   ├── crush/
-│   │   │   ├── loopctl/
-│   │   │   └── omp/
+│   │   │   └── loopctl/
 │   │   ├── .local/
 │   │   │   └── bin/
 │   │   └── .gitignore
@@ -107,6 +106,15 @@ dotfiles/
     │   │   └── share/
     │   ├── .stow-folding
     │   └── .stow-local-ignore
+    ├── omp/
+    │   ├── .config/
+    │   │   ├── agents/
+    │   │   └── omp/
+    │   ├── .gitignore
+    │   ├── .stow-local-ignore
+    │   ├── config.yml
+    │   ├── global-context.json
+    │   └── mcp.json
     ├── secrets/
     │   ├── .local/
     │   │   └── share/

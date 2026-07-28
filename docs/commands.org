@@ -1,0 +1,382 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#+TITLE:     自制命令行工具手册
+#+AUTHOR:    BrokenShine
+#+PROPERTY:  header-args:shell :dir ".." :results output :eval never-export
+#+STARTUP:   overview
+
+本文件收录仓库内全部自制指令，每条都附带可直接 =C-c C-c= 执行的 Org Babel
+代码块。相当于一个自制 CLI 的包装层——打开本文件，找到想跑的命令，光标移到
+代码块里按 =C-c C-c= 即可。
+
+* 前置条件
+
+- =blue= 需在 PATH 中（日常机器经 =blue home= 装到 =~/.guix-home/profile/bin/=；
+  干净 ISO 上先跑 =tools/bootstrap.sh= 进临时 shell）。
+- 所有 =blue= 命令必须在 *仓库根目录* 下执行（=blueprint.scm= 以 =(getcwd)=
+  定位项目）。本文件已通过 =:dir ".."= 全局指定，无需手动 cd。
+- 代码块默认 =:eval never-export=：导出时不自动执行；交互 =C-c C-c= 时仍会
+  弹出 =org-confirm-babel-evaluate= 的 y/n 确认。
+
+* 总览
+
+自制指令分两层：
+
+| 层级 | 数量 | 入口 | 说明 |
+|------+--------+----------+------------------------------------|
+| blue 子命令 | 20 | =blue <cmd>= | =blueprint.scm= 注册，覆盖部署/维护/编辑/验证 |
+| 独立工具 | 7 | 各自路径 | =tools/= 脚本 + dotfiles 内 CLI |
+
+运行 =blue list= 查看自写指令分类表，=blue help= 查看含内建命令的完整列表：
+
+#+begin_src shell
+blue list
+#+end_src
+
+* blue 子命令（20 条）
+
+详细帮助：=blue help <命令名>=（如 =blue help rebuild=）。
+=--dry-run= 对 *所有* 命令统一生效：tangle 与括号检查真跑，副作用操作短路打印。
+
+** 部署 (deployment)
+
+*** rebuild — 应用 Guix System 配置
+
+需 sudo，在真实终端中运行（babel 内无法输入密码）。
+先 clean-artifacts → tangle + 括号检查 → =guix system reconfigure=。
+
+#+begin_src shell :eval no
+blue rebuild
+#+end_src
+
+dry-run 验证（安全，不写系统）：
+
+#+begin_src shell
+blue --dry-run rebuild
+#+end_src
+
+*** home — 应用 Guix Home 配置
+
+不需 sudo，日常调试首选。
+
+#+begin_src shell
+blue home
+#+end_src
+
+*** init — 将系统配置安装到 /mnt
+
+新机装机用，需 sudo + 先挂载好根分区。在真实终端中运行。
+
+#+begin_src shell :eval no
+blue init
+#+end_src
+
+*** build-iso — 构建 Live ISO
+
+耗时 30+ 分钟，产物落到 =dist/=。不需 sudo，可指定变体名过滤。
+
+#+begin_src shell
+blue build-iso
+#+end_src
+
+** 编辑 (editing)
+
+*** block-show — 提取 Org 源代码块
+
+从 =source/config.org= 按 =#+NAME= 抽取代码块，输出到 =tmp/block-<NAME>.scm=。
+
+#+begin_src shell :var block="%system"
+blue block-show "$block"
+#+end_src
+
+*** block-replace — 替换 Org 源代码块
+
+将 =tmp/block-<NAME>.scm= 的内容写回 =config.org= 对应块。
+⚠ 直接改源文件，建议先 =git diff= 确认。
+
+#+begin_src shell :var block="%system"
+blue block-replace "$block"
+#+end_src
+
+** Guix 频道 (guix)
+
+*** pull — 锁定频道 guix pull
+
+#+begin_src shell
+blue pull
+#+end_src
+
+*** update — 更新 channel.lock 并提交
+
+拉取各频道最新 commit，写入 =source/channel.lock= 并 =git commit -S=。
+
+#+begin_src shell
+blue update
+#+end_src
+
+** 维护 (maintenance)
+
+*** clean-artifacts — 移除编译产物
+
+清理 =tmp/= 和 emacs 运行时缓存。=rebuild= / =home= 前会自动先跑。
+
+#+begin_src shell
+blue clean-artifacts
+#+end_src
+
+*** clean-generations — 删除旧世代
+
+system 世代需 sudo，在真实终端中运行。
+
+#+begin_src shell :eval no
+blue clean-generations
+#+end_src
+
+*** gc — Guix GC + EFI 清理
+
+依次执行 clean-generations → =guix gc= → 删旧 EFI。需 sudo（继承自
+clean-generations），在真实终端中运行。
+
+#+begin_src shell :eval no
+blue gc
+#+end_src
+
+*** reuse — 补充 SPDX 头
+
+#+begin_src shell
+blue reuse
+#+end_src
+
+*** structor — 刷新目录树
+
+刷新各 =AGENTS.md= 中 =<!-- structor:begin -->= 标记间的自动生成目录树。
+
+#+begin_src shell
+blue structor
+#+end_src
+
+预览（不写文件）：
+
+#+begin_src shell :env ORG_STRUCTOR_DRY=1
+blue structor
+#+end_src
+
+** Nix 备用 (nix)
+
+*** nix — 应用 Nix home-manager 配置
+
+#+begin_src shell
+blue nix
+#+end_src
+
+*** nix-init — 初始化 Nix
+
+#+begin_src shell
+blue nix-init
+#+end_src
+
+*** nix-update — 更新 Nix channel 和 flake
+
+#+begin_src shell
+blue nix-update
+#+end_src
+
+** Stow (stow)
+
+*** stow — 管理 mutable dotfiles
+
+#+begin_src shell :var pkg="hermes"
+blue stow "$pkg"
+#+end_src
+
+强制重建：
+
+#+begin_src shell :var pkg="hermes"
+blue stow --restow "$pkg"
+#+end_src
+
+*** stow-all — 批量 stow
+
+#+begin_src shell
+blue stow-all --restow
+#+end_src
+
+** 验证 (validation)
+
+*** secret-scan — 密钥泄漏扫描
+
+扫描文本配置文件中疑似泄漏的密钥。设 =GUIX_SECRET_SCAN_FAIL_ON_FIND=0= 则仅警告。
+
+#+begin_src shell
+blue secret-scan
+#+end_src
+
+** 内置 (builtin)
+
+以下由 blue 框架提供，非自写但常用：
+
+#+begin_src shell
+blue check
+#+end_src
+
+* 独立工具
+
+** tools/secrets — age 密钥管理
+
+基于 [[https://age-encryption.org][age]] 的本地密钥加密助手。8 个子命令，全部支持 =--dry-run=（置于子命令前）。
+
+| 子命令 | 用途 |
+|-------------------------+----------------------------------------------|
+| =init= | 生成 age 密钥对 |
+| =list= / =ls= | 列出密文 + 密钥状态 |
+| =encrypt <name>= | stdin → =.age= 密文 |
+| =decrypt <name>= | 解密到 =~/.local/share/secrets-decrypted/= |
+| =edit <name>= | 解密 → =$EDITOR= → 回写密文 |
+| =show <name>= | 解密后直接打印明文 |
+| =recipients= | 列出所有公钥 |
+| =re-encrypt [--with <key>]= | 密钥轮换 |
+
+#+begin_src shell
+tools/secrets list
+#+end_src
+
+#+begin_src shell
+tools/secrets recipients
+#+end_src
+
+dry-run 演练加密流程：
+
+#+begin_src shell
+echo "test-payload" | tools/secrets --dry-run encrypt my-secret
+#+end_src
+
+** tools/bootstrap.sh — 新机引导
+
+在干净 Guix ISO 上准备一个带 =blue= 的临时 shell（=guix time-machine= +
+=channel.lock= + =manifest.scm=）。不分区、不跑 =blue init=。
+
+#+begin_src shell :eval no
+tools/bootstrap.sh
+#+end_src
+
+** tools/fxxk-link.sh — 符号链接转实际文件
+
+递归将目录下的符号链接替换为实际文件副本。
+
+#+begin_src shell :var dir="."
+tools/fxxk-link.sh "$dir" --dry-run
+#+end_src
+
+** tools/build-image.scm — ISO 构建辅助
+
+由 =blue build-iso= 内部调用，一般不直接使用。
+
+#+begin_src shell :eval no
+guix repl -- tools/build-image.scm dist/output.iso tmp/live-iso.scm --image-type=iso9660
+#+end_src
+
+** appimage-run — AppImage 管理器
+
+基于 =guix shell --emulate-fhs= 的 AppImage 全生命周期管理（Guile 实现）。
+9 个子命令：
+
+| 子命令 | 用途 |
+|-----------------+--------------------------------------------|
+| =install <file>= | 解包 → manifest → profile → 桌面注册 |
+| =run <app>= | 运行已安装应用 |
+| =try <file>= | 临时运行，不持久化 |
+| =uninstall <app>= | 卸载（自动备份） |
+| =list= | 列出已安装应用 |
+| =diagnose <app>= | 诊断缺失动态库 |
+| =diagnose-gpu= | 诊断 GPU 渲染路径 |
+| =check-updates= | 检查更新 |
+| =setup= | 注册 MIME 类型 |
+
+#+begin_src shell
+appimage-run list
+#+end_src
+
+** hermes — Hermes Agent 套件
+
+Pi 式 editable-checkout 安装的 Hermes Agent。4 个可执行文件位于
+=dotfiles/mutable/hermes/.local/bin/=（经 Stow 部署到 PATH）：
+
+| 命令 | 用途 |
+|------------------+--------------------------------------|
+| =hermes= | TUI 启动 wrapper（首次自动引导安装） |
+| =hermes-update= | 安装 / 升级（uv 自管 Python，三层降级） |
+| =hermes-desktop= | Electron 桌面应用（FHS 容器内启动） |
+| =hermes-version= | 版本 pin 文件（改 tag 后跑 update） |
+
+版本 pin 当前值：
+
+#+begin_src shell :dir "../dotfiles/mutable/hermes/.local/bin"
+cat hermes-version
+#+end_src
+
+** loopctl — 跨 Agent 迭代循环驱动器
+
+接力棒模型：创建循环 → 逐轮由 agent adapter 执行 → 完成/失败/归档。
+位于 =dotfiles/immutable/agents/.local/bin/loopctl=（经 Guix Home 部署）。
+
+#+begin_src shell
+loopctl list --all
+#+end_src
+
+#+begin_src shell
+loopctl doctor
+#+end_src
+
+adapter 列表：
+
+#+begin_src shell
+loopctl adapter list
+#+end_src
+
+** configctl — Emacs 配置控制
+
+以 =emacs --batch= 操作 =emacs.org=（literal-config），无需读整个配置。
+位于 =dotfiles/mutable/emacs/.config/emacs/scripts/configctl=。
+
+#+begin_src shell :dir "../dotfiles/mutable/emacs/.config/emacs"
+scripts/configctl list
+#+end_src
+
+* Distrobox 容器管理 (justfile)
+
+=tools/linux-setup/justfile= 提供 Distrobox 容器的声明式管理。
+需安装 =just= 和 =distrobox=。在 =tools/linux-setup/= 目录下执行。
+
+| 任务 | 用途 |
+|-------------------------------+--------------------------------------|
+| =just list= | 列出所有容器 |
+| =just create-arch [name]= | 创建 Arch 容器 |
+| =just create-fedora [name]= | 创建 Fedora 容器 |
+| =just create-davinci [name]= | 创建 DaVinci Resolve 容器 |
+| =just create-ai [name]= | 创建 AI 推理容器（iGPU/NPU 透传） |
+| =just setup-env <name> [env]= | 注入环境修正脚本 |
+| =just patch-xdg-open <name>= | 修补 xdg-open 转发 |
+| =just register-scheme-handlers= | 同步 scheme handler 到宿主 |
+
+#+begin_src shell :dir "../tools/linux-setup"
+just list
+#+end_src
+
+* linux-setup 辅助脚本
+
+=tools/linux-setup/scripts/= 下的独立脚本（多由 justfile 调用，也可单独跑）：
+
+| 脚本 | 用途 |
+|---------------------------+--------------------------------------|
+| =subvol-setup.sh= | 初始化 Btrfs 子卷 + 生成挂载脚本 |
+| =link-data-folders.sh= | 扫描 /data 并链接到 ~ |
+| =patch-xdg-open.sh= | 修补 distrobox xdg-open |
+| =verify-ai-toolchain.sh= | 验证容器内 AI 工具链 |
+| =backup-flatpak-apps.sh= | 备份 flatpak 应用列表 |
+| =restore-flatpak-apps.sh= | 从备份恢复 flatpak 应用 |
+
+* 附注
+
+- =tools/openuri-portal/openuri-portal.c= 是 xdg-desktop-portal 的 openuri
+  后端（C 程序），由 Guix Home 服务管理，不作为 CLI 使用。

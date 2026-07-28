@@ -33,30 +33,20 @@ agents/
 │   │   │   ├── bash-gate.sh
 │   │   │   └── edit-gate.sh
 │   │   └── crush.json
-│   ├── loopctl/
-│   │   ├── adapters/
-│   │   │   ├── README.md
-│   │   │   ├── _TEMPLATE.json
-│   │   │   ├── claude-code.json
-│   │   │   ├── codex.json
-│   │   │   ├── crush.json
-│   │   │   ├── omp.json
-│   │   │   └── opencode.json
-│   │   └── docs/
-│   │       ├── examples/
-│   │       ├── README.md
-│   │       ├── adapter.md
-│   │       └── extract.md
-│   └── omp/
-│       ├── extensions/
-│       │   ├── agenote-hooks/
-│       │   ├── global-context/
-│       │   └── pi-gate/
-│       ├── .gitignore
-│       ├── config.yml
-│       ├── global-context.json
-│       ├── mcp.json
-│       └── models.yml
+│   └── loopctl/
+│       ├── adapters/
+│       │   ├── README.md
+│       │   ├── _TEMPLATE.json
+│       │   ├── claude-code.json
+│       │   ├── codex.json
+│       │   ├── crush.json
+│       │   ├── omp.json
+│       │   └── opencode.json
+│       └── docs/
+│           ├── examples/
+│           ├── README.md
+│           ├── adapter.md
+│           └── extract.md
 ├── .local/
 │   └── bin/
 │       ├── loop_lib/
@@ -99,7 +89,7 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 | 脚本          | 作用                                         |
 | ------------- | -------------------------------------------- |
 | `kb`          | 知识库 CLI                                   |
-| `agenote_mcp` | agenote MCP server（FastMCP, 17 tools）      |
+| `agenote`     | 知识库 CLI（agenote card + memory 操作）      |
 | `agenote_cli` | agenote CLI shim（纯 stdlib，供 hooks 调用） |
 | `loopctl`     | 跨 agent 循环框架入口                        |
 

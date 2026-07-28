@@ -72,6 +72,18 @@ mutable/
 │   │       └── hermes/
 │   ├── .stow-folding
 │   └── .stow-local-ignore
+├── omp/
+│   ├── .config/
+│   │   ├── agents/
+│   │   │   └── skills/
+│   │   └── omp/
+│   │       ├── extensions/
+│   │       └── models.yml
+│   ├── .gitignore
+│   ├── .stow-local-ignore
+│   ├── config.yml
+│   ├── global-context.json
+│   └── mcp.json
 ├── secrets/
 │   ├── .local/
 │   │   └── share/

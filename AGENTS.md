@@ -13,9 +13,11 @@
 ```
 Guix-configs///
 ├── .agents/
-│   └── skills/
+│   ├── skills/
+│   └── anchors.json
 ├── docs/
 │   ├── agenote.md
+│   ├── commands.org
 │   ├── iso-build.md
 │   ├── loopctl.md
 │   └── secrets.md
