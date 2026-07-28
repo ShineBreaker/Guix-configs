@@ -1140,10 +1140,7 @@ iifname "uap0" oifname != "uap0" masquerade
                                 (default-session-command
                                   (greetd-tuigreet-session))
                                 (initial-session-user username)
-                                (initial-session-command
-                                 (program-file "niri-session"
-                                               #~(execl #$(file-append niri "/bin/niri")
-                                                        "--session"))))))))))
+                                (initial-session-command "dbus-run-session niri --session"))))))))
 #+end_src
 
 50-hibernate.rules
@@ -1351,7 +1348,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; XDG 相关组件
         "desktop-file-utils"
         "xdg-dbus-proxy"
-        "xdg-desktop-portal-gnome"
         "xdg-desktop-portal-gtk"
         "xdg-desktop-portal-wlr"
         "xdg-user-dirs"
@@ -1432,8 +1428,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
         ;; 编辑器
         "helix"
-        "lem"
-        "sbcl-lem-extension-manager"
 
         ;; 数据库
         "postgresql"
@@ -1738,7 +1732,6 @@ end
                              "emacs-olivetti"
                              "emacs-org"
                              "emacs-org-appear"
-                             "emacs-org-bullets"
                              "emacs-org-modern"
                              "emacs-org-modern-indent"
                              "emacs-org-roam"
@@ -1948,16 +1941,8 @@ end
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
-                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
-                                        ; (make-shepherd-service swayidle "/bin/swayidle" '(graphical-session))
-                              (make-shepherd-service xdg-desktop-portal "/libexec/xdg-desktop-portal" '(graphical-session))
-                              (make-shepherd-service xdg-desktop-portal-gtk "/libexec/xdg-desktop-portal-gtk" '(graphical-session))
-                              (make-shepherd-service xdg-desktop-portal-wlr "/libexec/xdg-desktop-portal-wlr" '(graphical-session))))
+                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))))
 
-        ;; Hermes Agent —— 把 dashboard backend 和 messaging gateway 做成 shepherd 用户级守护进程，
-        ;; 与 NixOS nixosModules.hermes-agent 的 systemd 服务语义一致，但走 Shepherd 管理。
-        ;; 这样 hermes-desktop / hermes chat / messaging platforms 共享同一个常驻 backend，
-        ;; 不再依赖 desktop session 在线。
         (simple-service 'hermes-services home-shepherd-service-type
                         (list (shepherd-service
                                (provision '(hermes-backend))
@@ -2094,14 +2079,7 @@ end
   ("QS_ICON_THEME" . "Papirus-Dark")
   ("QT_QPA_PLATFORMTHEME" . "qt5ct")
 
-  ;; proxy
-  ("HTTP_PROXY" . "http://127.0.0.1:7890")
-  ("HTTPS_PROXY" . "http://127.0.0.1:7890")
-  ("http_proxy" . "http://127.0.0.1:7890")
-  ("https_proxy" . "http://127.0.0.1:7890")
-
   ;; Wayland support.
-  ("GDK_BACKEND" . "wayland")
   ("_JAVA_AWT_WM_NONREPARENTING" . "1")
   ("MOZ_ENABLE_WAYLAND" . "1")
   ("NIXOS_OZONE_WL" . "1")
