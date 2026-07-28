@@ -63,15 +63,19 @@ dotfiles/
 │   │       ├── user-dirs.dirs
 │   │       └── user-dirs.locale
 │   ├── terminal/
-│   │   └── .config/
-│   │       ├── atuin/
-│   │       ├── broot/
-│   │       ├── btop/
-│   │       ├── fastfetch/
-│   │       ├── fish/
-│   │       ├── foot/
-│   │       ├── herdr/
-│   │       └── starship.toml
+│   │   ├── .config/
+│   │   │   ├── atuin/
+│   │   │   ├── broot/
+│   │   │   ├── btop/
+│   │   │   ├── fastfetch/
+│   │   │   ├── fish/
+│   │   │   ├── foot/
+│   │   │   ├── herdr/
+│   │   │   ├── tmux/
+│   │   │   ├── tmuxifier/
+│   │   │   └── starship.toml
+│   │   └── .local/
+│   │       └── bin/
 │   └── utilities/
 │       ├── .config/
 │       │   ├── fcitx5/
@@ -111,10 +115,7 @@ dotfiles/
     │   │   ├── agents/
     │   │   └── omp/
     │   ├── .gitignore
-    │   ├── .stow-local-ignore
-    │   ├── config.yml
-    │   ├── global-context.json
-    │   └── mcp.json
+    │   └── .stow-local-ignore
     ├── secrets/
     │   ├── .local/
     │   │   └── share/

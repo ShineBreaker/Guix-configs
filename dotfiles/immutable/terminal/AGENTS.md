@@ -10,38 +10,50 @@
 
 ```
 terminal/
-└── .config/
-    ├── atuin/
-    │   └── config.toml
-    ├── broot/
-    │   ├── conf.hjson
-    │   └── verbs.hjson
-    ├── btop/
-    │   └── btop.conf
-    ├── fastfetch/
-    │   └── config.jsonc
-    ├── fish/
-    │   ├── conf.d/
-    │   │   ├── 00-load-functions.fish
-    │   │   ├── 01-guix.fish
-    │   │   ├── 05-java.fish
-    │   │   ├── 05-path.fish
-    │   │   ├── 10-settings.fish
-    │   │   ├── 20-greeting.fish
-    │   │   ├── 99-command-not-found.fish
-    │   │   └── 99-herdr.fish
-    │   └── functions/
-    │       ├── denv.fish
-    │       ├── fish_prompt.fish
-    │       ├── java_tools.fish
-    │       └── retry.fish
-    ├── foot/
-    │   └── foot.ini
-    ├── herdr/
-    │   ├── scripts/
-    │   │   └── herdr-session-selector
-    │   └── config.toml
-    └── starship.toml
+├── .config/
+│   ├── atuin/
+│   │   └── config.toml
+│   ├── broot/
+│   │   ├── conf.hjson
+│   │   └── verbs.hjson
+│   ├── btop/
+│   │   └── btop.conf
+│   ├── fastfetch/
+│   │   └── config.jsonc
+│   ├── fish/
+│   │   ├── conf.d/
+│   │   │   ├── 00-load-functions.fish
+│   │   │   ├── 01-guix.fish
+│   │   │   ├── 05-java.fish
+│   │   │   ├── 05-path.fish
+│   │   │   ├── 10-settings.fish
+│   │   │   ├── 20-greeting.fish
+│   │   │   ├── 99-command-not-found.fish
+│   │   │   └── 99-selector.fish
+│   │   └── functions/
+│   │       ├── denv.fish
+│   │       ├── fish_prompt.fish
+│   │       ├── java_tools.fish
+│   │       └── retry.fish
+│   ├── foot/
+│   │   └── foot.ini
+│   ├── herdr/
+│   │   └── config.toml
+│   ├── tmux/
+│   │   ├── scripts/
+│   │   │   ├── session-selector
+│   │   │   ├── sidebar-render.scm
+│   │   │   ├── sidebar-toggle
+│   │   │   ├── which-key
+│   │   │   └── window-jump
+│   │   └── tmux.conf
+│   ├── tmuxifier/
+│   │   └── layouts/
+│   │       └── termide.session.sh
+│   └── starship.toml
+└── .local/
+    └── bin/
+        └── termide
 ```
 
 <!-- /structor -->

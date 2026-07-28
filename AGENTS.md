@@ -40,7 +40,6 @@ Guix-configs///
 │   └── manifest.scm
 ├── tools/
 │   ├── linux-setup/
-│   ├── openuri-portal/
 │   ├── bootstrap.sh
 │   ├── build-image.scm
 │   ├── fxxk-link.sh

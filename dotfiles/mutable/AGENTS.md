@@ -37,7 +37,6 @@ mutable/
 │   │       ├── ag-ent
 │   │       ├── agenote
 │   │       ├── agenote_cli.py
-│   │       ├── agenote_mcp.py
 │   │       └── orgfmt
 │   ├── .stow-folding
 │   └── .stow-local-ignore
@@ -64,7 +63,6 @@ mutable/
 │   │   ├── bin/
 │   │   │   ├── hermes
 │   │   │   ├── hermes-desktop
-│   │   │   ├── hermes-desktop-manifest.scm
 │   │   │   ├── hermes-update
 │   │   │   └── hermes-version
 │   │   └── share/
@@ -78,12 +76,12 @@ mutable/
 │   │   │   └── skills/
 │   │   └── omp/
 │   │       ├── extensions/
+│   │       ├── config.yml
+│   │       ├── global-context.json
+│   │       ├── mcp.json
 │   │       └── models.yml
 │   ├── .gitignore
-│   ├── .stow-local-ignore
-│   ├── config.yml
-│   ├── global-context.json
-│   └── mcp.json
+│   └── .stow-local-ignore
 ├── secrets/
 │   ├── .local/
 │   │   └── share/
