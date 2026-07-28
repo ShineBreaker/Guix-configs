@@ -163,6 +163,34 @@ startup -> appearance -> editing -> programming -> projects
 - inline `;;` 只用于局部且非显然的提醒，不复述下一行代码。
 - 不恢复整屏分隔线、模块标签或无信息量的说明。
 
+### 4.1 Org 章节编排约定
+
+`emacs.org` 的文档结构遵循以下编排约定，增强可读性与 AI 导航性：
+
+**1. 配置域总览头节**
+
+文件顶部 `* 配置域总览`（CUSTOM_ID: `overview`）是 8 域架构地图，列明每域职责与加载前提。这是新增功能的入口定位点——确认归属域后再改代码。该节只含 org prose 与表格，无源代码块，因此对 tangle 输出零影响。
+
+**2. 组装块用 `#+NAME:` 定址**
+
+每个 noweb 组装块（即包含 `<<ref>>` 的 `#+begin_src emacs-lisp` 块）以 `#+NAME:` 标记，提供 org 间跳转锚和 `configctl map` 定位入口。命名格式为 `<domain>-assembly`（如 `#+NAME: appearance-tab-line-assembly`），全小写连字符，与 noweb-ref 的 `module/section` 风格区分以避免混淆。
+
+**3. 节首 prose 声明契约**
+
+每个 `*`/`**` 节开头的 prose 段落声明：section 的职责、必须已就绪的外部依赖、与跨域设计的根因。`#+attr_org: :width 70` 的 org table 优先于自由文本表述结构关系（如 face 继承链、API 路由表）。
+
+**4. 安全门：tangle 差异零容忍**
+
+编排修改只改 prose、headings 与 `#+NAME:`/CUSTOM_ID，不得改动 `#+begin_src emacs-lisp` 的 body（除非分解为 noweb 片段 + 组装块并以 diff 验证）。验证流程：
+
+1. 基线：`cp main.el /tmp/main.baseline.el && md5sum /tmp/main.baseline.el`
+2. 编辑 prose/结构
+3. 重新 tangle：`emacs --batch -Q --eval '(progn (require (quote org)) (org-babel-tangle-file "emacs.org"))'`
+4. 验证：`diff /tmp/main.baseline.el main.el` 必须为空
+5. 结构：`scripts/configctl check` 必须通过
+
+分解 monolith 为 noweb 片段时，组装块的 `<<ref>>` 必须在列 0（无缩进），避免 org 重复缩进导致的空白噪音 diff。
+
 ## 5. 性能硬约束
 
 性能优先级固定为：

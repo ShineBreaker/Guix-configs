@@ -5,6 +5,27 @@
 #+STARTUP: content
 #+OPTIONS: toc:2
 
+* 配置域总览
+:PROPERTIES:
+:CUSTOM_ID: overview
+:END:
+:
+本文档 =emacs.org= 是 =custom-config= 的唯一配置真理源。8 个配置域按固定顺序加载（文档顺序 = 求值顺序），定义方必须在调用方之前。配置域的边界、职责与 CUSTOM_ID 一旦建立即稳定不变——新增功能合并到最匹配的现有域，不创建第 9 个。
+:
+| 顺序 | 配置域 | CUSTOM_ID | 主要职责 | 加载前提 |
+|------+--------+-----------+----------+--------|
+| 1 | 启动与基础设施 | [[#startup]] | GC / 路径常量 / Frame 生命周期 / 键位原语 / 包管理 / 基础行为 | 无 |
+| 2 | 界面与外观 | [[#appearance]] | Mode-line / Tab-line / 主题字体 / 窗口布局 / Git / 颜色方案 | startup |
+| 3 | 编辑与文本 | [[#editing]] | 缩进括号 / EditorConfig / DWIM / mc / 终端集成 | appearance 的窗口路由 |
+| 4 | 编程与开发 | [[#programming]] | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表 | bootstrap, appearance |
+| 5 | 项目与导航 | [[#projects]] | project.el / 文件缓冲区导航 | terminal, git-display |
+| 6 | Org 与知识库 | [[#org-knowledge]] | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板 | bootstrap, process-helper |
+| 7 | 键位与补全 | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / Vertico / Corfu / Consult | 前述全部域的命令 |
+| 8 | 系统工具 | [[#system-tools]] | 应用 / Daemon 预热 / Dashboard / 兼容性 shim | 前述全部域 |
+:
+各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。Noweb 组装块以 =#+NAME:= 标记，便于 =scripts/configctl map= 定位和 org 间跳转。
+:
+内置 =scripts/configctl= 工具提供配置域导航与验证：=configctl map= （结构总览）、=configctl show <ID>= （只读一个功能子树）、=configctl find <regexp>= （跨域符号搜索）。修改配置后运行 =configctl check load test= 验收。
 * 启动与基础设施
 :PROPERTIES:
 :CUSTOM_ID: startup
@@ -104,6 +125,7 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 
 bootstrap 组装：路径常量 + 外部命令声明
 
+#+NAME: bootstrap-assembly
 #+begin_src emacs-lisp
 <<bootstrap/paths>>
 <<bootstrap/executables>>
@@ -256,6 +278,7 @@ DOMAIN/COMMAND/ARGS 同 `custom/agenote-call'。失败返回空串。
   (plist-get (apply #'custom/agenote-call domain command args) :stdout))
 #+end_src
 
+#+NAME: process-helper-assembly
 #+begin_src emacs-lisp
 <<helpers/agenote-process>>
 #+end_src
@@ -617,6 +640,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 (custom/load-i18n-data)
 #+end_src
 
+#+NAME: appearance-i18n-data-assembly
 #+begin_src emacs-lisp
 <<appearance/i18n-data>>
 #+end_src
@@ -705,6 +729,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
                 #'custom/context-menu--translate-string)))
 #+end_src
 
+#+NAME: appearance-context-menu-assembly
 #+begin_src emacs-lisp
 <<appearance/context-menu-engine>>
 #+end_src
@@ -772,6 +797,7 @@ TITLE 为分类标题,BINDINGS 为 ((key . desc) ...) 列表。"
 
 #+end_src
 
+#+NAME: appearance-help-assembly
 #+begin_src emacs-lisp
 <<appearance/help-data>>
 <<appearance/help-render>>
@@ -1293,8 +1319,9 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 
 基于内置 =tab-line= 的 per-frame 文件标签,隔离多个 emacsclient frame 的缓冲区序列。
 
-+ 禁用 frame 级 =tab-bar=,改用 window-local =tab-line= 作为文件标签栏——每个 window 一条标签栏,避免与 [[#frame][Frame 生命周期]] 的 per-frame 隔离冲突。
++ 禁用 frame 级 =tab-bar=,改用 window-local =tab-line= 作为文件标签栏——每个文件 buffer 的 window 一条标签栏,避免与 [[#frame][Frame 生命周期]] 的 per-frame 隔离冲突。
 + 只有关联文件的 buffer 才出现在标签栏(=custom/tab-visible-p= 白名单),临时 buffer 与 minibuffer 自动排除。
++ 标签栏本身也只在文件 buffer 的 window 渲染(=tab-line-exclude-functions= 复用同一白名单),终端模拟器、scratch、help、Dashboard 等 window 不显示标签栏。
 
 *** 常量与窗口定位
 
@@ -1317,6 +1344,13 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 白名单机制:只有关联文件的 buffer 才显示。"
   (and (buffer-live-p buffer)
        (buffer-file-name buffer)))
+
+(defun custom--tab-line-exclude-non-file-buffer ()
+  "非文件 buffer 不启用 tab-line,返回非 nil 表示排除。
+供 `tab-line-exclude-functions' 调用,使标签栏只渲染在
+`custom/tab-visible-p' 为真的 buffer 所在 window;终端模拟器、
+scratch、help、Dashboard 等 window 因此不显示标签栏。"
+  (not (custom/tab-visible-p (current-buffer))))
 
 (defun custom--tabs-target-window (&optional window)
   "返回标签命令应优先操作的 WINDOW。"
@@ -1675,6 +1709,12 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
 
 (custom/apply-tab-line-button-preset)
 
+;; 标签栏本身也只在文件 buffer 的 window 渲染:终端/特殊 buffer 排除。
+;; 必须在 `global-tab-line-mode' 之前设置,否则 daemon 启动时已存在的
+;; 非文件 buffer 会被 globalized turn-on 错误启用 buffer-local tab-line-mode。
+(setq tab-line-exclude-functions
+      (list #'custom--tab-line-exclude-non-file-buffer))
+
 (global-tab-line-mode 1)
 
 (add-hook 'window-buffer-change-functions #'custom--tabs-on-window-buffer-change)
@@ -1682,6 +1722,7 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
 (add-hook 'delete-frame-functions #'custom--tabs-on-frame-deletion)
 #+end_src
 
+#+NAME: appearance-tab-line-assembly
 #+begin_src emacs-lisp
 <<appearance/tab-line-core>>
 <<appearance/tab-line-tracking>>
@@ -1891,6 +1932,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
         (display-buffer buffer action)))))
 #+end_src
 
+#+NAME: appearance-git-assembly
 #+begin_src emacs-lisp
 <<appearance/git-commands>>
 <<appearance/git-display>>
@@ -1942,7 +1984,7 @@ daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的
 | Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染          | 守卫改为 =custom:modeline--nerd-icons-available=,不查 display |
 #+TBLFM: $2=setq-default= 是全局副作用
 
-TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后仅为 =hl-line= 恢复 Ef palette 的 =bg-dim= 背景，选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
+TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后为 =hl-line= 恢复 Ef palette 的 =bg-dim= 背景、为 =org-block= 族恢复 =bg-alt= 中性面板(代码块在终端无 fringe,靠这块底色成组),选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
 
 行号设置函数 =custom/setup-file-line-numbers= 故意不调 =(set-window-fringes ... 0)= ——=diff-hl= 和 =flymake= 的 fringe 指示器(=flymake-fringe-indicator-position= 设为 =left-fringe=)依赖 fringe 宽度,清零会让它们全部消失。
 
@@ -2037,17 +2079,30 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
     (corfu-current :weight bold :underline t))
   "TTY 透明背景下补充的非颜色交互语义。")
 
-(defun custom/terminal-theme-background ()
-  "返回 TTY 当前行使用的 Ef theme 柔和背景色。
-背景取当前 palette 的 `bg-dim'；若主题 API 尚不可用则返回 nil，保持全透明。"
+(defconst custom:terminal-block-faces
+  '(org-block org-block-begin-line org-block-end-line)
+  "TTY 上恢复主题底色的代码块 face。
+ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern 的 fringe
+边框区分代码块;TTY 无 fringe,故用 palette 的 `bg-alt' 给整块一个中性面板,让
+=#+begin_src= 块在终端仍可辨识。`org-quote'/`org-verse' 继承 `org-block',自动随之着色。")
+
+(defun custom/terminal-theme-color (key)
+  "返回当前 Ef theme palette 中 KEY 对应的颜色,失败时返回 nil。
+用于在透明 TTY 上为少数命名 face 恢复主题底色(当前行、代码块面板等)。"
   (when (fboundp 'ef-themes-get-color-value)
     (condition-case nil
-        (ef-themes-get-color-value 'bg-dim)
+        (ef-themes-get-color-value key)
       (error nil))))
+
+(defun custom/terminal-theme-background ()
+  "返回 TTY 当前行使用的 Ef theme 柔和背景色(palette 的 `bg-dim')。
+主题 API 尚不可用时返回 nil,保持全透明。"
+  (custom/terminal-theme-color 'bg-dim))
 
 (defun custom/apply-terminal-faces (&optional frame)
   "让 TTY FRAME 的所有命名 face 使用终端透明背景。
-清除背景与反色后，为 `hl-line' 恢复 Ef theme 的柔和背景，并用
+清除背景与反色后，为 `hl-line' 恢复 Ef theme 的柔和背景，为代码块恢复 `bg-alt'
+面板，并用
 `custom:terminal-face-emphasis' 补充其余非颜色交互语义；所有前景色继续由
 当前 Ef theme 提供。Foot 需使用 alpha-mode=all 才能让 hl-line 背景半透明。
 仅在真实 TTY（非 batch、至少 8 色）下生效；GUI 为 no-op。"
@@ -2075,7 +2130,14 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
               (set-face-attribute 'hl-line tty
                                   :background hl-line-background
                                   :underline nil
-                                  :extend t)))))
+                                  :extend t))
+            (when-let* ((block-background
+                         (custom/terminal-theme-color 'bg-alt)))
+              (dolist (face custom:terminal-block-faces)
+                (when (facep face)
+                  (set-face-attribute face tty
+                                      :background block-background
+                                      :extend t)))))))
     (error
      (message "custom/apply-terminal-faces: %s" (error-message-string err)))))
 
@@ -2593,6 +2655,7 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 (custom/run-theme-refresh)
 #+end_src
 
+#+NAME: appearance-color-scheme-assembly
 #+begin_src emacs-lisp
 <<appearance/color-scheme-core>>
 <<appearance/color-scheme-dbus>>
@@ -3672,6 +3735,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 + =org-modern= / =org-appear= :Org 视觉现代化与光标处标记显隐。
 + =org-indent-mode= 启用( =org-startup-indented t= ),块缩进样式由 =org-modern-indent= 补回:原生 =org-modern= 在 org-indent 启用时会关闭代码块 fringe 边框,=org-modern-indent= 用 bracket + wrap-prefix 在 org-indent 下近似 =org-modern= 的块样式。
 + =org-modern-table= 启用细线表格，=org-modern-block-fringe= 无条件设为 4:daemon 启动期 =(display-graphic-p)= 永远为 nil,有条件的判断会让 GUI client 的 block fringe 被关掉;TTY 下 fringe 参数被忽略,设 4 无副作用。
++ TTY 降级:表格竖线与星号替换都是 font-lock 写入的内联 =:inverse-video= / Nerd 字形,透明终端上变实心块,命名 face 透明化管不到。=custom/org-modern--apply-display= 在 TTY 上 buffer-local 关闭 =org-modern-table=、改用 =custom:org-modern-tty-stars= 通用 Unicode 子弹,前导星号交 =org-indent-mode= 隐藏;GUI 不变。历史 =org-bullets= 与 =org-modern= 星号替换冲突且其 =compose-region= + 内联前景在 TTY 产生白底块,已移除,GUI 子弹统一由 =org-modern-star= 提供。
 + Org buffer 隐藏行号，减少文档阅读时的编辑器噪音；代码块、表格和元数据继续使用主题既有的等宽 face。
 + =org-roam= autosync 在首次 roam 命令(=:commands= 触发加载)后启动。
 + =deft= 只作历史 =notes/= 内容的只读检索入口(=deft-recursive nil=,不递归其他 Org 子目录)。新笔记统一走 [[#capture-templates][Capture 模板]](=ki= inbox / =kr= roam),不要用 Deft 创建。
@@ -3684,11 +3748,6 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (org-appear-autolinks t)
   (org-appear-autosubmarkers t)
   (org-appear-autoentities t))
-
-(use-package org-bullets-mode
-  :defer t
-  :config
-  :hook org-mode)
 
 (use-package org-modern
   :hook (org-mode . org-modern-mode)
@@ -3709,6 +3768,30 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (org-modern-tag t)
   (org-modern-block-name t)
   (org-modern-block-fringe 4))
+
+(defun custom/org-modern--tty-safe-p ()
+  "当前 frame 是真实彩色 TTY 时返回非 nil。"
+  (and (not noninteractive)
+       (not (display-graphic-p))
+       (>= (display-color-cells) 8)))
+
+(defun custom/org-modern--apply-display ()
+  "按当前 frame 类型降级 `org-modern' 的星号与表格渲染。
+`org-modern' 用内联 `:inverse-video' 画表格竖线、用 Nerd 字形替换星号;二者都是
+font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]]
+的命名 face 透明化,故透明 TTY 上会变成实心/反色块(表格竖条与星号白底)。TTY 下
+因此退回纯 ASCII 表格与 Unicode 子弹,前导星号交给 `org-indent-mode' 隐藏;GUI 保留
+像素级细线与 Nerd 子弹。本函数深度 -90,先于 `org-modern-mode' 运行,使按 buffer 构建
+的星号缓存取自正确取值。跨 GUI/TTY 共享的 buffer 保留首次启用该 mode 的 frame 设置
+(`org-modern' 缓存为 buffer-local,无法 per-frame,见 mixed-gui-tty-constraints)。"
+  (when (custom/org-modern--tty-safe-p)
+    (setq-local org-modern-table nil
+                org-modern-table-vertical nil
+                org-modern-table-horizontal nil
+                org-modern-star 'replace
+                org-modern-hide-stars 'leading)))
+
+(add-hook 'org-mode-hook #'custom/org-modern--apply-display -90)
 
 (use-package org-modern-indent
   :defer t
@@ -4240,6 +4323,7 @@ RECENT 非 nil 时只请求最近的 RECENT 条；顺序和筛选完全由 CLI �
   (custom/agenote-call-async 'human "viz" "--open"))
 #+end_src
 
+#+NAME: org-knowledge-assembly
 #+begin_src emacs-lisp
 <<org/knowledge-core>>
 <<org/knowledge-capture>>
@@ -4291,6 +4375,7 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
     (message "未找到 agenote 命令")))
 #+end_src
 
+#+NAME: org-agenote-health-assembly
 #+begin_src emacs-lisp
 <<org/agenote-health>>
 #+end_src
@@ -4483,7 +4568,7 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 
 Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键位。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾),不在此处集中。
 
-+ *14 个前缀声明* :: =custom/declare-binding-prefix= 是 Dashboard 前缀摘要的唯一来源,必须集中。前缀下具体绑定随其功能域。
++ *前缀声明* :: =custom/declare-binding-prefix= 是 Dashboard 前缀摘要的唯一来源,必须集中。前缀下具体绑定随其功能域。
 + *=C-x*= / *=M-s*= / *=C-c w*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 窗口 / 终端 / 帮助),无单一归属,集中在本块。
 
 #+begin_src emacs-lisp
@@ -4494,7 +4579,6 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
            ("M-g" . "跳转 / 错误")
            ("C-c l" . "代码 / LSP")
            ("C-c g" . "Git")
-           ("C-c w" . "窗口与终端")
            ("C-c a" . "生活应用")
            ("C-c e" . "编辑变换")
            ("C-c o" . "Org 与知识库")
@@ -4519,12 +4603,6 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "M-s b" #'consult-buffer "搜索缓冲区" "搜索")
 (custom/bind "M-s e" #'consult-eglot-symbols "Eglot 符号搜索" "搜索")
 (custom/bind "M-s f" #'consult-flymake "Flymake 诊断" "搜索")
-
-(custom/bind "C-c w r" #'ibuffer "项目缓冲区列表" "窗口与终端")
-(custom/bind "C-c w d" #'custom/open-directory "目录浏览" "窗口与终端")
-(custom/bind "C-c w v" #'custom/open-terminal "打开终端" "窗口与终端")
-(custom/bind "C-c w u" #'winner-undo "撤销窗口布局" "窗口与终端")
-(custom/bind "C-c w U" #'winner-redo "重做窗口布局" "窗口与终端")
 
 (custom/bind "C-c h f" #'helpful-callable "查看函数" "帮助")
 (custom/bind "C-c h v" #'helpful-variable "查看变量" "帮助")
@@ -4913,6 +4991,7 @@ GUI 模式仅保留 x-gtk-resize-child-frames 修复;margin formatter 由
 (custom/add-frame-created-hook #'custom/completion-setup-display)
 #+end_src
 
+#+NAME: keys-completion-assembly
 #+begin_src emacs-lisp
 <<keys/completion-minibuffer>>
 <<keys/completion-region>>
@@ -6542,6 +6621,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 
 标题计数仍可在以后按需加入；它需要扩展 fetch 协议返回未截断总数，与本轮 client 延迟优化无关。
 
+#+NAME: system-dashboard-assembly
 #+begin_src emacs-lisp
 <<system/dashboard-core>>
 <<system/dashboard-measure>>
@@ -6567,9 +6647,9 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 |----------------------------+--------------------------------------+--------------------------------+-----------------------------------------------------|
 | =compat/ghostel-with-editor= | with-editor 3.5.2 无 pre-spawn 接口  | ghostel 内 git commit          | Ghostel/with-editor 提供公开 pre-spawn 环境构造接口 |
 | =compat/which-key-width=     | which-key 自动列数中文宽度不等       | which-key 中文描述             | which-key 原生布局足够(=fboundp= 守卫容忍 API 变化)   |
-| =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei / Yasnippet               | 所有相关包改由 Emacs 31 重编译                        |
+| =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei / Yasnippet               | 所有相关包改由 Emacs 31 重编译                      |
 | =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译                |
-| =emacs31/yasnippet-compat=   | yasnippet .elc 缺少 global mode 状态 | 新 client major-mode 初始化    | 升级 yasnippet 或 Guix 用 Emacs 31 重编译             |
+| =emacs31/yasnippet-compat=   | yasnippet .elc 缺少 global mode 状态 | 新 client major-mode 初始化    | 升级 yasnippet 或 Guix 用 Emacs 31 重编译           |
 | vertico-buffer 形态降级    | bug#80812,buffer-local-set-state 宏  | vertico-buffer 形态            | vertico 上游修复 / Guix 重编译(见下方)              |
 
 **** Ghostel pre-spawn 的 with-editor 适配
@@ -6586,7 +6666,7 @@ with-editor 3.5.2 的公开导出函数只支持已经存在的 shell/term/vterm
 
 **** Which-key 中文宽度与网格布局补丁
 
-which-key 3.6.1 已内置 =string-width= 计算，但自动列数在底部 side-window 下仍可能导致中文描述列宽不等。补丁用 =advice-add :override= 替换 =which-key--pad-column=，在固定网格布局下按等宽分栏。加 =fboundp= 守卫：which-key 已并入 Emacs 30+ 内置，未来若内部函数改名/移除，静默跳过。
+which-key 3.6.1 已内置 =string-width= 计算，但自动列数在底部 side-window 下仍可能导致中文描述列宽不等。补丁用 =advice-add :override= 替换 =which-key--pad-column= ，在固定网格布局下按等宽分栏。加 =fboundp= 守卫：which-key 已并入 Emacs 30+ 内置，未来若内部函数改名/移除，静默跳过。
 
 #+begin_src emacs-lisp :noweb-ref compat/which-key-width :tangle no
 (defun custom/which-key--pad-column-fixed-width (col-keys available-width)
