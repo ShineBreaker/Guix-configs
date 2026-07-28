@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 # Foot 中自动进入 herdr（2026-07 从 tmux 迁移）。
-# herdr 是独立 TUI 复用器，`herdr` 命令自带 attach/create 持久会话逻辑，
-# 无需 tmux 时代的 session-selector fzf 选择器。
+#
+# herdr 默认所有窗口连到同一个 default server，操作会同步。为复刻 tmux 多
+# server 的隔离体验，这里调用 herdr-session-selector 让用户选择会话：
+# 命名 session（herdr --session <name>）各有独立 server/socket，互不同步。
 #
 # 防护条件：
 #   - 仅交互式 shell
@@ -17,6 +19,34 @@ if status is-interactive
         and not set -q HERDR_ENV
         and not set -q TMUX
         and not set -q CONTAINER_ID
-        exec herdr
+
+        set -l selector ~/.config/herdr/scripts/herdr-session-selector
+
+        # 选择器未部署时的 fallback：直接进 default 共享会话
+        if not test -x "$selector"
+            exec herdr
+        end
+
+        set -l choice ("$selector")
+
+        # 选择器异常（无输出）→ 留在普通 shell
+        if test -z "$choice"
+            return
+        end
+
+        switch "$choice"
+            case ESC
+                # 用户取消 → 留在普通 shell
+                return
+            case NEW
+                # 新建独立会话（唯一名，互不同步）
+                exec herdr --session "term_$fish_pid"
+            case DEFAULT
+                # 进入 default 共享会话（多窗口同步）
+                exec herdr
+            case '*'
+                # attach 已有命名会话
+                exec herdr --session "$choice"
+        end
     end
 end

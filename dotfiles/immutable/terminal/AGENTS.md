@@ -38,6 +38,8 @@ terminal/
     ├── foot/
     │   └── foot.ini
     ├── herdr/
+    │   ├── scripts/
+    │   │   └── herdr-session-selector
     │   └── config.toml
     └── starship.toml
 ```
