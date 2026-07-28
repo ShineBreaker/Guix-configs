@@ -1,7 +1,8 @@
 model:
-  default: tencent/hy3:free
-  provider: nous
-  base_url: https://api.minimaxi.com/anthropic
+  default: LongCat-2.0
+  provider: custom
+  base_url: https://api.longcat.chat/openai
+  api_key: ak_2dV0dh97x2jc6Ip8hX6gu6WB1IJ90
 providers:
   minimax-cn:
     models:
@@ -261,7 +262,7 @@ display:
   credits_notices: true
   turn_completion_explainer: true
   show_cost: false
-  skin: daylight
+  skin: mono
   language: zh
   tui_status_indicator: kaomoji
   cli_refresh_interval: 1
@@ -286,12 +287,12 @@ display:
       - cwd
   copy_shortcut: auto
   pet:
-    enabled: true
+    enabled: false
     slug: dimo-stand
     scale: 0.6
   tool_progress: all
 dashboard:
-  theme: default
+  theme: mono
   show_token_analytics: false
   oauth:
     client_id: ''
@@ -303,6 +304,7 @@ dashboard:
     secret: ''
     session_ttl_seconds: 0
   public_url: ''
+  font: theme
 privacy:
   redact_pii: false
 tts:

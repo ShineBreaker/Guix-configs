@@ -541,7 +541,265 @@ Exec=<app-wrapper-path> --ozone-platform=wayland --enable-features=UseOzonePlatf
 
 ---
 
-## 7. GNU Stow 二轨 dotfile 部署（stow/ + blue stow）
+## 7. XDG 与环境变量注入全家桶（Testament 范式）
+
+> Testament 仓库（`~/Projects/Config/Testament`）用一套多层次的环境变量注入体系覆盖桌面场景。**核心原则：不同层次的进程用不同机制喂环境变量，不存在银弹。**本节提炼自 `modules/common.scm` `%xdg-base-directory-env-vars`、`config/dorphine.org` niri.kdl / zfs-auto-snapshot / gpg-agent、`config/nuporta.org` guix-moe-mirror-publish / setup-mirror.scm。
+
+### 7.1 注入机制分层
+
+| 层次 | 机制 | 适用场景 | Testament 位置 |
+|------|------|----------|----------------|
+| **用户 session** | `home-environment-variables-service-type` | XDG 基础目录、EDITOR、PAGER 等 shell/GUI 通用变量 | `modules/common.scm` `%xdg-base-directory-env-vars` |
+| **Wayland session** | `home-graphical-session-service-type` | `XDG_SESSION_TYPE` / `WAYLAND_DISPLAY` 等 session 标记 | `config/dorphine.org` |
+| **GUI 应用** | niri `environment { }` + `spawn-sh-at-startup` | IME、Wayland、桌面集成（详见 §6） | `config/dorphine.org` niri.kdl |
+| **Portal 路由** | `xdg-desktop-portal/portals.conf` 三处同步 | 截图/文件选择器/通知后端路由 | `config/dorphine.org` niri-portals.conf |
+### 7.2 `home-environment-variables-service-type` — XDG 基础目录全家桶
+
+Testament 在 `modules/common.scm` 定义了一个全面的 XDG 环境变量 alist，通过 `home-environment-variables-service-type` 注入用户 session：
+
+```scheme
+;; modules/common.scm
+(define %xdg-data-home
+  (or (getenv "XDG_DATA_HOME")
+      (in-vicinity (getenv "HOME") ".local/share")))
+
+(define %xdg-base-directory-env-vars
+  '(;; bash
+    ("HISTFILE" . "$XDG_STATE_HOME/bash/history")
+    ;; docker
+    ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
+    ;; gdb
+    ("GDBHISTFILE" . "$XDG_STATE_HOME/gdb/history")
+    ;; go
+    ("GOMODCACHE" . "$XDG_CACHE_HOME/go/mod")
+    ("GOPATH" . "$XDG_DATA_HOME/go")
+    ;; gradle
+    ("GRADLE_USER_HOME" . "$XDG_DATA_HOME/gradle")
+    ;; guile
+    ("GUILE_HISTORY" . "$XDG_STATE_HOME/guile/history")
+    ;; java
+    ("_JAVA_OPTIONS" . "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java")
+    ;; node
+    ("NPM_CONFIG_USERCONFIG" . "$XDG_CONFIG_HOME/npm/npmrc")
+    ;; nvidia-driver
+    ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
+    ;; password-store
+    ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
+    ;; python
+    ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
+    ;; rust
+    ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
+    ;; sqlite
+    ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
+    ;; wget
+    ("WGETRC" . "$XDG_CONFIG_HOME/wgetrc")))
+```
+
+在 host 配置里通过 `simple-service` 注入：
+
+```scheme
+;; config/dorphine.org
+(simple-service 'xdg-base-directory home-environment-variables-service-type
+  %xdg-base-directory-env-vars)
+```
+
+**添加新变量**：直接在 `%xdg-base-directory-env-vars` alist 里加一项，`blue home` 后生效。
+
+**常见扩展**：
+
+```scheme
+;; Emacs 集成
+(simple-service 'emacs-environment home-environment-variables-service-type
+  `(("EDITOR" . "emacsclient")
+    ("VISUAL" . "$EDITOR")
+    ("ESHELL" . ,(file-append fish "/bin/fish"))))
+
+;; PAGER
+(simple-service 'moor-pager home-environment-variables-service-type
+  `(("PAGER" . "moor")))
+
+;; nonguix sandbox home
+(simple-service 'nonguix-sandbox-home home-environment-variables-service-type
+  `(("GUIX_SANDBOX_HOME" . "/var/lib/Sandbox"))))
+```
+
+### 7.3 `home-graphical-session-service-type` — Wayland session 标记
+
+这个 service-type 在用户登录时自动设置 `XDG_SESSION_TYPE` 等 session 标记，是 Portal 正常工作的前提：
+
+```scheme
+;; config/dorphine.org
+(service home-graphical-session-service-type
+  (home-graphical-session-configuration
+    (wayland? #t)
+    (x11? #t)))
+```
+
+**作用**：告诉所有组件"当前是 wayland session"，Portal 的 ScreenCast/Screenshot 接口依赖这个标记来路由到正确的后端。不配的话 flatpak/snap 应用的截图/文件选择器会静默失败。
+
+### 7.4 `xdg-desktop-portal/portals.conf` — 后端路由（三处必须同步）
+
+Testament 的 `config/dorphine.org` 通过 portals.conf 声明默认后端和各接口优先级：
+
+```ini
+;; config/dorphine.org niri-portals.conf
+[preferred]
+default=gnome;gtk;
+org.freedesktop.impl.portal.Access=gtk;
+org.freedesktop.impl.portal.FileChooser=gtk;
+org.freedesktop.impl.portal.Notification=gtk;
+```
+
+**实现 ID 对照**：
+
+| 包名 | 实现 ID |
+|------|---------|
+| `xdg-desktop-portal-gnome` | `gnome` |
+| `xdg-desktop-portal-gtk` | `gtk` |
+| `xdg-desktop-portal-wlr` | `wlr` |
+
+**GNOME portal 在 niri 下的已知限制**：GNOME portal 的 ScreenCast 和 Screenshot 接口依赖 GNOME Shell 的内置实现，在 niri 下不工作。如果需要截图/录屏，必须用 wlr 后端。
+
+**三处必须同步**（从 `xdg-desktop-portal` reference 提炼）：
+
+| 位置 | 文件 | 作用 | 漏改后果 |
+|------|------|------|----------|
+| **A. portals.conf** | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明后端优先级 | 后端不被调用 |
+| **B. packages 列表** | `source/config.org` 的 `user-packages` 块 | 声明安装的 portal 包 | 二进制不存在 |
+| **C. shepherd 服务** | `source/config.org` 的 `home-shepherd-services` 块 | 声明自启动的 portal daemon | portal 没跑起来 |
+
+**切换流程**（以 wlr → gnome 为例）：
+
+```bash
+# 1) 改 portals.conf
+#    编辑 dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf
+#    default=wlr;gtk → default=gnome;gtk
+#    删除 wlr 特有的接口行（ScreenCast/Screenshot/RemoteDesktop）
+
+# 2) 改 source/config.org packages 列表
+#    删除 "xdg-desktop-portal-wlr"
+
+# 3) 改 source/config.org home-shepherd-services 块
+#    删除 (make-shepherd-service xdg-desktop-portal-wlr ...) 行
+
+# 4) 括号检查
+cd ~/Projects/Config/Guix-configs && blue check
+
+# 5) 部署
+blue home
+
+# 6) 验证 portals.conf 同步
+cat ~/.config/xdg-desktop-portal/portals.conf
+# 确认 store hash 变了: readlink ~/.config/xdg-desktop-portal/portals.conf
+
+# 7) 重启 niri 会话（portal daemon 在 session 启动时加载）
+pkill -f 'niri --session'
+```
+
+**验证命令**：
+
+```bash
+# 看当前 portal 进程在跑什么
+pgrep -af xdg-desktop-portal
+
+# 看 portals.conf 是否被读（通过 dbus 查询）
+dbus-send --session --print-reply --dest=org.freedesktop.portal.Desktop \
+  /org/freedesktop/portal/desktop org.freedesktop.DBus.Properties.Get \
+  string:org.freedesktop.portal.Settings string:version 2>&1
+
+# 截图测试（验证 Screenshot portal 是否工作）
+# gnome: 应该弹 gnome-shell 的截图 UI
+# wlr: 应该弹 grim/slurp 的区域选择光标
+```
+
+**反模式**：
+
+- ❌ **只改 portals.conf 不改 packages** → 报 "no implementation for wlr"（包没了但 conf 还在选）
+- ❌ **只改 packages 不改 shepherd** → portal daemon 没自启动，需要手动跑
+- ❌ **只改 shepherd 不改 packages** → 启动失败（二进制不存在）
+- ❌ **装多个 portal 但 conf 里只写一个** → 多余的 daemon 抢接口，行为不确定
+- ❌ **在 niri 下期望 gnome portal 的 ScreenCast 工作** → 不可能，这是上游限制
+
+### 7.5 niri GUI 应用注入 — 详见 §6
+
+niri `environment { }` + `herd set-environment` + `dbus-update-activation-environment` 三件套已在 §6 完整覆盖。Testament 的 `config/dorphine.org` niri.kdl 是这一范式的参考实现。
+
+### 7.6 `#:environment-variables` in `make-forkexec-constructor` — 系统服务注入
+
+当 shepherd 起的**系统级 daemon** 需要特定环境变量时，用 `#:environment-variables` 参数：
+
+```scheme
+;; config/nuporta.org — guix-moe-mirror-publish 需要 XDG_CACHE_HOME
+(make-forkexec-constructor
+  (list "/run/current-system/profile/bin/publish-substitutes" ...)
+  #:user "guix-moe"
+  #:group "guix-moe"
+  #:log-file "/var/log/guix-moe-mirror-publish.log"
+  #:environment-variables
+  (cons* "XDG_CACHE_HOME=/var/cache/guix-moe/user-cache/.cache"
+         (default-environment-variables)))
+```
+
+**关键**：`(default-environment-variables)` 保留默认 env（PATH 等），用 `cons*` 追加新变量。不要从头构建 env 列表。
+
+### 7.7 `setenv` in gexp — shepherd 定时器/脚本运行时注入
+
+shepherd 定时器/脚本在 gexp 里运行时，用 `setenv` 设置运行时变量：
+
+```scheme
+;; config/dorphine.org — zfs-auto-snapshot 需要 PATH
+#~(begin
+    (use-modules (guix build utils))
+    (setenv "PATH" "/run/current-system/profile/bin:/run/current-system/profile/sbin")
+    (invoke #$(file-append zfs-auto-snapshot "/sbin/zfs-auto-snapshot") ...))
+```
+
+```scheme
+;; config/nuporta.org — guix-moe-mirror 需要 PATH
+#~(begin
+    (use-modules (guix build syscalls) (guix build utils))
+    (setenv "PATH" "/run/current-system/profile/bin")
+    ...))
+```
+
+**模式**：在 gexp 的 `#~(begin ...)` 顶部 `(use-modules (guix build utils))` 后调 `setenv`，然后才 `invoke` 外部命令。
+
+### 7.8 daemon 配置绝对路径 — 详见 §4.6
+
+`home-gpg-agent-service-type` + `computed-substitution-with-inputs` + `$$bin/...$$` 路径注入范式已在 §4.6 完整覆盖。
+
+### 7.9 选择指南
+
+```
+需要环境变量的进程是谁起的？
+├─ 用户 shell / GUI 应用（终端、编辑器、浏览器）
+│   ├─ XDG 基础目录类（CARGO_HOME、GOPATH...）
+│   │   └─ §7.2 home-environment-variables-service-type
+│   └─ IME / Wayland / 桌面集成类
+│       └─ §6.2 niri 三件套
+├─ Wayland session 标记（XDG_SESSION_TYPE）
+│   └─ §7.3 home-graphical-session-service-type
+├─ 截图/文件选择器/通知
+│   └─ §7.4 xdg-desktop-portal/portals.conf 三处同步
+├─ shepherd 起的系统 daemon
+│   └─ §7.6 #:environment-variables
+├─ shepherd 定时器/脚本
+│   └─ §7.7 setenv in gexp
+└─ daemon 配置文件里的路径
+    └─ §4.6 绝对 store 路径
+```
+
+### 7.10 反模式
+
+- ❌ **所有变量都塞 niri `environment { }`** — niri 只喂子进程，不喂系统服务；且 XDG 基础目录变量用 `home-environment-variables-service-type` 更合适（shell 也能拿到）
+- ❌ **shepherd 定时器里不调 `setenv` 直接用绝对路径** — 能跑但脆弱；PATH 变了就挂
+- ❌ **`#:environment-variables` 不用 `(default-environment-variables)` 兜底** — 丢了 PATH 等基础变量，服务起不来
+- ❌ **在 `home-environment-variables-service-type` 里写 `~`-relative 路径** — 依赖 `$HOME$ 解析，对 daemon 不稳；daemon 配置走 §4.6
+- ❌ **只改 portals.conf 不改 packages 和 shepherd** — portal 后端不被调用或没自启动
+
+---
+
+## 8. GNU Stow 二轨 dotfile 部署（stow/ + blue stow）
 
 适用场景：**频繁手改 + 需要 git 备份**的配置文件(agent context、SOUL.md、MEMORY.md、prompt 等),不想为每次小改付 `blue home` 的代价。
 
@@ -571,11 +829,11 @@ blue stow --delete hermes        # 撤销链(~ 下变回实际文件)
 
 ---
 
-## 8. 改 `source/config.org` system 层 service 定义的安全协议
+## 9. 改 `source/config.org` system 层 service 定义的安全协议
 
-> 适用场景：需要直接修改 `source/config.org` 的某个 `#\+NAME:` 服务块(典型：`networking-services` / `kernel-services` / `home-shepherd-services` / `basic-services`),新增 `(service ...)` 或 `(simple-service ...)`。**与 §3(多行编辑)和 §4(service 排查)互补**——本节专门覆盖「改源 → DRY_RUN」的端到端流程与五类常见踩坑。
+> 适用场景：需要直接修改 `source/config.org` 的某个 `#+NAME:` 服务块(典型：`networking-services` / `kernel-services` / `home-shepherd-services` / `basic-services`),新增 `(service ...)` 或 `(simple-service ...)`。**与 §3(多行编辑)和 §4(service 排查)互补**——本节专门覆盖「改源 → DRY_RUN」的端到端流程与五类常见踩坑。
 
-### 8.1 标准 4 步流程(必走)
+### 9.1 标准 4 步流程(必走)
 
 ```
 ① cd ~/Projects/Config/Guix-configs          # 必须在仓库根
@@ -586,7 +844,7 @@ blue stow --delete hermes        # 撤销链(~ 下变回实际文件)
 
 DRY_RUN 通过后才能让用户跑 `blue rebuild`(AI 禁跑,sudo 卡 CLI)。
 
-### 8.2 五类典型坑(必看)
+### 9.2 五类典型坑(必看)
 
 #### 坑 1：`patch` 工具 fuzzy match 偷偷换括号数
 
@@ -660,7 +918,7 @@ sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
             "utilities"
             "wireplumber"      ; 跟 "noctalia-suite" 对齐
             "noctalia-suite")))
-```
+- 出错先 `git checkout source/config.org` 重做；不要去动 `channel.lock` / `information.scm`。
 
 #### 坑 5b：改 packages/services 列表时把单个 `append` 拆成两个 append（paren 失衡）
 
@@ -670,7 +928,7 @@ sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
 结果第一个 append 只剩一个参数且**缺闭合括号**，`blue check` 报 `多余 1 个左括号 (open=116 close=115)`。
 
 **防护**：
-- 新增包/服务项时，**并进去同一个 append**，不要新开第二个 append（见 §10.6 (c)）。
+- 新增包/服务项时，**并进去同一个 append**，不要新开第二个 append（见 §11.6 (c)）。
 - patch 的 `old_string` 必须覆盖**完整的**受影响行——本会话还顺带误删了相邻的 `"network-manager-applet"`（第二个 patch 的 old_string 没包含它）。写多个兄弟项的列表时，old_string 要把整段同列表行都包进去，不要为"精准"漏掉兄弟项。
 - 出错先 `git checkout source/config.org` 重做；不要去动 `channel.lock` / `information.scm`。
 
@@ -678,7 +936,7 @@ sed -n '<改点行-2>,<改点行+2>p' source/config.org | cat -A
 
 `(autologin-user "live")` 单独存在时，lightdm 自动登录后不知道进哪个桌面，**停在 greeter 等选 session**，
 看起来像"没自动登录"。修复：补 `(user-session "xfce")`（值 = `share/xsessions/<name>.desktop` 去扩展名）。
-完整字段表 + labwc Wayland session 注入法见 `references/iso-lightdm-labwc-wayland.md`（§10.6）。
+完整字段表 + labwc Wayland session 注入法见 `references/iso-lightdm-labwc-wayland.md`（§11.6）。
 
 **补遗（2026-07-16 实战）**：live 用户密码是 `(crypt "live" "$6$abc")` 故意弱密码，但
 `lightdm-configuration` 顶级字段 **`allow-empty-passwords?` 默认 `#f`**——只配
@@ -716,7 +974,7 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 
 正确做法：**先 stash 验证 baseline 是不是真有错**,如果 baseline 也有——是另一个独立 issue,跟当前任务**完全无关**,**不要让当前任务的部署卡在 pre-existing 问题上**。可以把 baseline 错误作为"另外发现的 issue"汇报给用户,但不要为此拖住当前任务进度。
 
-### 8.3 字段引用小抄
+### 9.3 字段引用小抄
 
 | 想用                            | 来自                           | 已 use-modules?                 |
 | ------------------------------- | ------------------------------ | ------------------------------- |
@@ -726,15 +984,15 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 | `dnsmasq`(包)                  | `(gnu packages dns)`           | ❌ 需手动加 use-package-modules |
 | `iw`(包)                       | `(gnu packages linux)`         | ✅ `linux`                      |
 
-### 8.4 DRY_RUN 报错 → 排查速查表
+### 9.4 DRY_RUN 报错 → 排查速查表
 
 | 错误特征                                           | 坑位                              | 修复                                      |
 | -------------------------------------------------- | --------------------------------- | ----------------------------------------- |
-| `[ERROR] 多余 N 个右括号`                          | §8.2 坑 1                         | git checkout 重做 patch                   |
-| `extraneous field initializers (...)`              | §8.2 坑 2                         | 拉 upstream 查字段定义                    |
-| `Wrong type argument ... expecting empty list`     | §8.2 坑 3                         | 检查新加 service 是否漏括号               |
-| `列宽不一致 / 缩进跳格`                            | §8.2 坑 4                         | 看 baseline 周围列宽,补足到一致           |
-| `blue check cascade (括号 / wrong-number-of-args)` | §8.2 坑 5                         | git stash 验证 baseline;别动 channel.lock |
+| `[ERROR] 多余 N 个右括号`                          | §9.2 坑 1                         | git checkout 重做 patch                   |
+| `extraneous field initializers (...)`              | §9.2 坑 2                         | 拉 upstream 查字段定义                    |
+| `Wrong type argument ... expecting empty list`     | §9.2 坑 3                         | 检查新加 service 是否漏括号               |
+| `列宽不一致 / 缩进跳格`                            | §9.2 坑 4                         | 看 baseline 周围列宽,补足到一致           |
+| `blue check cascade (括号 / wrong-number-of-args)` | §9.2 坑 5                         | git stash 验证 baseline;别动 channel.lock |
 | `unbound variable: <name>`                         | use-modules 没引                  | 加对应模块                                |
 | `Symbol's value as variable is void: replaced`     | `blue block-replace` 工具自身 bug | 不用 block-replace,直接 patch            |
 
@@ -742,7 +1000,7 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 
 ---
 
-## 9. 系统服务 user-level 兜底配置(wireplumber / 之类 Lua 钩子范式)
+## 10. 系统服务 user-level 兜底配置(wireplumber / 之类 Lua 钩子范式)
 
 > 适用场景：**用户态 daemon**(wireplumber / swayidle / gammastep / 各类 systemd --user 服务)的行为不符合预期,而 service 本身的 Guix 配置没有这个开关。需要在 `~/.config/<daemon>/` 下注入 user-level 配置或脚本,但 daemon 默认配置目录**在系统层(`/etc` 或 `/gnu/store`)**,用户态 `~/.config/<daemon>/` 不存在——直接放不会被加载。
 
@@ -877,11 +1135,11 @@ wpctl status    # 看 sink 是否还 MUTED
 
 ---
 
-## 10. 需求澄清顺序(用户偏好,2026-07-06)
+## 11. 需求澄清顺序(用户偏好,2026-07-06)
 
 > **任何"为仓库加新能力 / 新管线 / 新变体"的任务,开工前先问"你想要哪种 X",再列技术可能性。**
 
-### 10.1 反模式:以工具可能性当目标
+### 11.1 反模式:以工具可能性当目标
 
 看到上游仓库(Testament)或文档里有 `minimal` / `niri` 两个现成变体,**直接默认沿用其中一个** —— 这是惰性,不是判断。**正确做法**:
 
@@ -889,13 +1147,13 @@ wpctl status    # 看 sink 是否还 MUTED
 2. **再列技术可能性**:基于用户的回答,去 Guix 手册 / Guix 仓库 / 上游频道里找现成 service-type
 3. **最后给选项 + 默认**:clarify 给 3-4 个候选,每个候选附"现成度"和"工作量"
 
-### 10.2 实证案例(ISO 移植,2026-07-06)
+### 11.2 实证案例(ISO 移植,2026-07-06)
 
 - ❌ 默认选 `minimal`("先做最简单的")—— 用户要的是带桌面
 - ❌ 默认选 `niri`("Testament 有现成的")—— 用户没装过 niri,不熟
 - ✅ 应该问:"你想要哪种桌面?XFCE / KDE / GNOME / MATE?" 给候选 + 工作量预估
 
-### 10.3 模块归属陷阱(与 §8.2 坑 2 同套路)
+### 11.3 模块归属陷阱(与 §9.2 坑 2 同套路)
 
 §8.2 坑 2("凭空捏造 Guix service 字段名")说的是字段级陷阱。**类比到服务类型级**:
 
@@ -922,7 +1180,7 @@ EOF
 
 输出 `#<variable ... value: #<service-type xfce-desktop ...>>` 才算确认。**不要相信 `defined?` 的布尔返回**(它对 `bound vs unbound` 判断不靠谱)。
 
-### 10.4 文档交接习惯(用户偏好 2026-07-06,**对 agent 的硬约束**)
+### 11.4 文档交接习惯(用户偏好 2026-07-06,**对 agent 的硬约束**)
 
 > **核心规则**: 用户说 "不要动手" / "先好好细化文档" / "我后续让其他 agent 接手" —— **立刻停手,不再做任何代码改动**,只产出完整方案文档。这是用户偏好,**不是建议**。
 >
@@ -943,7 +1201,7 @@ EOF
 - ❌ 决策不写理由 —— 接手 agent 不知道为啥这么选
 - ❌ 自己默认选变体/工具 —— 见 §10.1 "以工具可能性当目标"
 
-#### 10.4.bis 文档/决策/代码漂移时的修订纪律（2026-07-16 实战）
+#### 11.4.bis 文档/决策/代码漂移时的修订纪律（2026-07-16 实战）
 
 `docs/iso-build.md` §6.2 维护纪律明确写明："**决策变更加修订注，不直接改原决策行**(原 gril session 的决定保留可见)"。这条**已经经过本次会话实战验证**——`iso-build.md` §2.6 决策表 D1 是 gril 拍板"Plasma + sddm"，但实际仓库 `live-installation-os` 跑的是 XFCE + lightdm（详见 §10.8 同步修正注）。
 
@@ -958,7 +1216,7 @@ EOF
 - ❌ 看到事实描述章节错了就**加修订注而不修正文** —— 事实章节本来就不该有修订注，决策章节才有；混了等于把脏话留给后续接手 agent
 - ❌ 改完 `source/config.org` 后**忘了同步** `label / documentation` 描述 —— 会出现"代码改了 label 还是 KDE"的二次漂移
 
-#### 10.4.ter ISO 文档与代码漂移时的判断树
+#### 11.4.ter ISO 文档与代码漂移时的判断树
 
 ```
 config.org 实际做了什么?
@@ -973,7 +1231,7 @@ config.org 实际做了什么?
            └─ source/config.org label   → 同步
 ```
 
-### 10.5 ISO 移植相关参考
+### 11.5 ISO 移植相关参考
 
 完整 ISO 移植方案(1986 行 / v0.5,§接手必读 + §0~§15)见 `~/Projects/Config/Guix-configs/docs/iso-build.md`。**接手 agent 必读路径**:
 
@@ -988,7 +1246,7 @@ config.org 实际做了什么?
 
 ISO 移植沉淀详细复盘见 `references/iso-build-handoff.md`(本次会话沉淀,v0.5 已同步更新)。
 
-### 10.6 ISO 里加 lightdm 自动登录 + Wayland session（labwc，2026-07-07 实战）
+### 11.6 ISO 里加 lightdm 自动登录 + Wayland session（labwc，2026-07-07 实战）
 
 > 完整字段验证 + synthetic package 模板 + 改 packages 段的两个真实坑见 `references/iso-lightdm-labwc-wayland.md`。
 
@@ -1061,7 +1319,7 @@ no code for module (guix build utils)
 
 `(guix gexp)` 已在 `live-modules` 导入,`with-imported-modules` 可用。完整 synthetic package 模板 + 调试路径见 `references/iso-xfce-on-labwc-fedora-approach.md`。
 
-### 10.7 `blue build-iso` 运行范式（不需 sudo, agent 可后台直跑）
+### 11.7 `blue build-iso` 运行范式（不需 sudo, agent 可后台直跑）
 
 > **重要修正（用户 2026-07-07 拍板）**：`blue build-iso` **不需要 sudo**,与 `blue rebuild` 不同。Agent 可以直接后台跑它,**不要**在文档 / blueprint 里写“agent 别跑 / 建议手动执行”的警告。
 
@@ -1092,7 +1350,7 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 3. `缺少右括号`（手写 synthetic package 收尾 `)` 数错）→ §10.6 / `references/iso-xfce-on-labwc-fedora-approach.md` §4 的“调收尾 `)` 数量收敛”
 4. **`多余一个类为'X'的目标服务`（X = account / pam / profile 等单实例核心服务）** → 根因 + 修复见下方「KDE Plasma 装配」段：services 字段**绝不能用 `operating-system-services`**（它会自动 append 一次 `essential-services`，导致 `system`/`pam`/`account` 注册两遍）；改用 `operating-system-user-services`，让 `operating-system` 自己补 essential 一次。这条**掩盖了前面所有括号错**——base-only 也报 account 错就是它在作怪，原 XFCE 版同样踩坑只是没真跑到 fold-services 阶段。
 
-### 10.8 KDE Plasma 装配（2026-07-07 实战，已构建成功）
+### 11.8 KDE Plasma 装配（2026-07-07 实战，已构建成功）
 
 > 把 Live ISO 从 XFCE 换成 KDE Plasma 的完整装配要点 + 错误序列 + 端到端验证见 `references/iso-kde-plasma-assembly.md`。
 
@@ -1132,13 +1390,14 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 - hermes-gateway 作为 shepherd service 的 self-kick loop 诊断见 `references/hermes-gateway-shepherd-service.md`(日志模式识别、`--replace` 触发机制、清理多个并存 home-shepherd、orphan gateway 进程)。
 - Electron Wayland IME 完整调试流程(QQ 案例、flag 对照表、Electron 版本速查、Nix 修复范式)见 `references/electron-wayland-ime-debug.md`。
 - GNU Stow 二轨 dotfile 部署策略(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
-- 从 git history 恢复已删除的 dotfile 到 `dotfiles/mutable/<pkg>/` 或 `dotfiles/immutable/<app>/`(过期 README 路径、删除 commit 索引、git archive 导出、多版本候选决策、gitlink 子模块跳过、用户已明确范围时的 clarify 边界)见 `references/git-restore-deleted-dotfiles.md`。
-- **source/config.org system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判、lightdm autologin 三件套 `autologin-user` + `user-session` + `allow-empty-passwords?`)见 §8 + `references/config-org-modify-safely.md`。
-- **user-level daemon 兜底配置范式**(wireplumber 类、配置层 + 行为层双管齐下、加载顺序、blue home 部署失败兜底防线)见 §9。
-- **需求澄清顺序**(以工具可能性当目标的反模式、模块归属陷阱、文档交接习惯、**gril 决策表与代码漂移时的修订纪律实战**——决策表原行不动 + 加修订注 vs 事实章节直接修的判断树)见 §10 + §10.4.bis + §10.4.ter。
-- **ISO 移植完整方案 + 接手协议**(XFCE 首选 / 1200 行方案文档 / 失败诊断树 / 验收清单 / 接手 agent 必读路径)见 §10.5 + `references/iso-build-handoff.md`。
-- **ISO lightdm 自动登录 + labwc Wayland session 注入**(字段表 / synthetic package 模板 / append 拆分坑 / 离线查 guix 源码法)见 §10.6 + `references/iso-lightdm-labwc-wayland.md`。
+- **XDG 与环境变量注入全家桶**（Testament 范式：7 层注入机制分层、`home-environment-variables-service-type` XDG 全家桶、`home-graphical-session-service-type` Wayland session 标记、`xdg-desktop-portal/portals.conf` 三处同步、`#:environment-variables` 系统服务注入、`setenv` in gexp 定时器运行时注入、选择指南 + 反模式）见 §7。
+- **GNU Stow 二轨 dotfile 部署策略**(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
+- **改 `source/config.org` system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判、lightdm autologin 三件套 `autologin-user` + `user-session` + `allow-empty-passwords?`)见 §9 + `references/config-org-modify-safely.md`。
+- **user-level daemon 兜底配置范式**(wireplumber 类、配置层 + 行为层双管齐下、加载顺序、blue home 部署失败兜底防线)见 §10。
+- **需求澄清顺序**(以工具可能性当目标的反模式、模块归属陷阱、文档交接习惯、**gril 决策表与代码漂移时的修订纪律实战**——决策表原行不动 + 加修订注 vs 事实章节直接修的判断树)见 §11 + §11.4.bis + §11.4.ter。
+- **ISO 移植完整方案 + 接手协议**(XFCE 首选 / 1200 行方案文档 / 失败诊断树 / 验收清单 / 接手 agent 必读路径)见 §11.5 + `references/iso-build-handoff.md`。
+- **ISO lightdm 自动登录 + labwc Wayland session 注入**(字段表 / synthetic package 模板 / append 拆分坑 / 离线查 guix 源码法)见 §11.6 + `references/iso-lightdm-labwc-wayland.md`。
 - **ISO XFCE-on-labwc (Fedora 三件套落地 + `blue check` 手写 synthetic package 括号平衡调试)** 见 `references/iso-xfce-on-labwc-fedora-approach.md`(RPM 解包 / startxfce4 --wayland 机制 / 单引号 XML 属性 / 调收尾 `)` 数收敛)。
-- **ISO `blue build-iso` 运行范式 + 四个真实构建错误序列**(不需 sudo / agent 可直跑 / `%guix` 吞报错需手动复现 / `append` 拍平 noweb-list / `with-imported-modules` 修 trivial-build-system 模块缺失 / `operating-system-services` 双倍注册 essential 导致 `多余一个类为'X'的目标服务`)见 §10.7 + `references/iso-build-debug.md`。
-- **ISO KDE Plasma 装配**(XFCE→KDE 差异 / SDDM 字段带 `.desktop` 后缀 / elogind 必须显式加 / 完整错误序列 1-4 / 已构建成功的 `jeans-desktop-*.iso` 验证)见 §10.8 + `references/iso-kde-plasma-assembly.md`。
+- **ISO `blue build-iso` 运行范式 + 四个真实构建错误序列**(不需 sudo / agent 可直跑 / `%guix` 吞报错需手动复现 / `append` 拍平 noweb-list / `with-imported-modules` 修 trivial-build-system 模块缺失 / `operating-system-services` 双倍注册 essential 导致 `多余一个类为'X'的目标服务`)见 §11.7 + `references/iso-build-debug.md`。
+- **ISO KDE Plasma 装配**(XFCE→KDE 差异 / SDDM 字段带 `.desktop` 后缀 / elogind 必须显式加 / 完整错误序列 1-4 / 已构建成功的 `jeans-desktop-*.iso` 验证)见 §11.8 + `references/iso-kde-plasma-assembly.md`。
 - **gpg-agent / pinentry 范式**(daemon conf 必须用绝对 store 路径 / `$$bin/...$$` 路径注入 / `gpgconf --check-programs` 诊断信号 / home-shepherd 起的 daemon `$HOME` 不可靠 / blue home 后必走 `gpgconf --reload` / 推广到 mako / swaync / river 等同类场景)见 §4.6 + `references/gpg-agent-pinentry-absolute-store-path.md`。

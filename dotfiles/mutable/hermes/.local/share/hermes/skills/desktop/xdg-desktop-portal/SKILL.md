@@ -7,6 +7,10 @@ triggers:
   - portal interface missing
   - xdg-desktop-portal backend not registering interface
   - OpenURI AppChooser not available
+  - XDG_SESSION_TYPE=tty portal settings only
+  - gnome portal Non-compatible display server
+  - obs screen capture not working niri
+  - xdg-desktop-portal-gnome only exposing settings
 ---
 
 # xdg-desktop-portal 诊断与修复
@@ -150,8 +154,84 @@ gcc -o openuri-portal openuri-portal.c \
      /org/freedesktop/portal/desktop \
      org.freedesktop.DBus.Introspectable.Introspect | grep -i openuri
 
-## 参考文件
+## niri 下 ScreenCast/Screenshot 修复（后端路由方案）
 
-- references/gtk-portal-openuri-removal.md — GTK portal 上游移除 OpenURI 的变更记录与版本对照
-- templates/minimal-openuri-portal.c — 最小 OpenURI backend 模板
-- references/guix-home-portal-backend-switching.md — Guix Home + niri 环境下 wlr ↔ gnome 后端切换实战（三处同步：portals.conf / packages / shepherd）
+### niri 下各 portal 后端的实际接口（2026-07-28 实测）
+
+通过 `busctl --user introspect` 在 niri 25.x 环境下实测：
+
+| 后端 | 包名 | 实际提供的接口 | 原因 |
+|------|------|---------------|------|
+| gnome | `xdg-desktop-portal-gnome` | **仅 Settings** | 缺少 Mutter ServiceChannel（`org.gnome.Mutter.ServiceChannel`） |
+| gtk | `xdg-desktop-portal-gtk` | FileChooser/Access/Notification/Lockdown/Print/Wallpaper | `.portal` 文件未声明 ScreenCast/Screenshot |
+| wlr | `xdg-desktop-portal-wlr` | ScreenCast/Screenshot/RemoteDesktop | 通过 wlr-screencopy 协议 |
+
+### 根因
+
+- **gnome portal**：`libgxdp/src/gxdp-wayland.c:236` 的 `gxdp_wayland_init()` 尝试连接 `org.gnome.Mutter.ServiceChannel` 获取 Wayland fd，niri 不提供该接口 → 降级到 `init_gtk_wayland_fallback()` → 只导出 Settings。**上游限制，非配置问题**。
+- **gtk portal**：`.portal` 文件的 Interfaces 列表里没有 ScreenCast/Screenshot。
+
+### niri 下的完整路由方案
+
+```ini
+[preferred]
+default=gnome;gtk;
+org.freedesktop.impl.portal.Settings=darkman
+org.freedesktop.impl.portal.FileChooser=gtk
+org.freedesktop.impl.portal.Access=gtk;
+org.freedesktop.impl.portal.Notification=gtk;
+org.freedesktop.impl.portal.Secret=gnome-keyring;
+org.freedesktop.impl.portal.ScreenCast=wlr
+org.freedesktop.impl.portal.Screenshot=wlr
+org.freedesktop.impl.portal.RemoteDesktop=wlr
+```
+
+### 三处必须同步
+
+| 位置 | 文件 | 作用 |
+|------|------|------|
+| portals.conf | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明后端优先级 |
+| packages 列表 | `source/config.org` 的 `user-packages` 块 | 声明安装的 portal 包 |
+| shepherd 服务 | `source/config.org` 的 `home-shepherd-services` 块 | 声明自启动的 portal daemon |
+
+### `GDK_BACKEND=wayland` 全局陷阱
+
+niki wiki 原文：*"Do not set the GDK_BACKEND environment variable globally as this will break the screencast portal."*
+
+如果 `config.org` 里有 `("GDK_BACKEND" . "wayland")` 全局声明，需要删掉——让 GTK 应用自动选择 Wayland。
+
+### `putenv` 模式 — 给单个 portal 注入环境变量
+
+```scheme
+(simple-service 'xdg-desktop-portal-gnome home-shepherd-service-type
+  (list (shepherd-service
+         (provision '(xdg-desktop-portal-gnome))
+         (requirement '(xdg-desktop-portal))
+         (start #~(lambda args
+                    (putenv "XDG_CURRENT_DESKTOP=gnome")
+                    ((make-forkexec-constructor
+                      (list #$(file-append xdg-desktop-portal-gnome "/libexec/xdg-desktop-portal-gnome"))
+                      #:environment-variables (environ)
+                      #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                                "/shepherd/xdg-desktop-portal-gnome.log"))
+                     args)))
+         (stop #~(make-kill-destructor))
+         (respawn? #t))))
+```
+
+**注意**：即使设了 `XDG_CURRENT_DESKTOP=gnome`，gnome portal 在 niri 下仍然只提供 Settings。
+
+### 验证命令
+
+```bash
+# 看各 backend 注册了哪些接口
+busctl --user introspect org.freedesktop.impl.portal.desktop.gnome /org/freedesktop/portal/desktop | grep interface
+busctl --user introspect org.freedesktop.impl.portal.desktop.gtk /org/freedesktop/portal/desktop | grep interface
+busctl --user introspect org.freedesktop.portal.Desktop /org/freedesktop/portal/desktop | grep interface
+
+# 看 portal 进程在跑什么
+pgrep -af xdg-desktop-portal
+
+# 看 D-Bus 名占用
+busctl --user list | grep -i portal
+```
