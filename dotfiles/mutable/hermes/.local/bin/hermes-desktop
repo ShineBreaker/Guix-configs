@@ -22,7 +22,7 @@ HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
 CHECKOUT="${HERMES_RUNTIME}"
 RELEASE_DIR="${CHECKOUT}/apps/desktop/release/linux-unpacked"
 HERMES_BIN="${RELEASE_DIR}/Hermes"
-MANIFEST="$(dirname "$(readlink -f "$0")")/hermes-desktop-manifest.scm"
+MANIFEST="${HERMES_HOME}/manifest.scm"
 
 # 1. 确保已 build（首跑需 npm install 1299 包 + electron-builder，几分钟；
 #    之后 node_modules 留在 checkout 内，重 build 很快）

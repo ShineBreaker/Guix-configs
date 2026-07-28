@@ -1554,15 +1554,44 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "tesseract-ocr"
 
         ;; Python
-        "python-mcp"
-        "python-httpx-sse"
-        "python-openpyxl"
-        "python-pydantic-settings"
-        "python-pymupdf"
-        "python-sse-starlette"
-        "python-starlette"
-        "python-uvicorn"
-        "python-typer"))
+        "python-openpyxl"))
+#+end_src
+
+hermes-desktop 的 FHS 容器运行时
+#+NAME: hermes-desktop-pkg-specs
+#+begin_src scheme
+;; 基线（appimage-run baseline-packages）
+"coreutils" "bash" "zlib" "mesa" "libglvnd" "alsa-lib" "fontconfig"
+"freetype" "nss-certs" "gcc-toolchain" "font-sarasa-gothic"
+;; electron / chromium GUI 运行时栈
+"ffmpeg" "nss" "at-spi2-core" "cups" "libdrm" "p11-kit"
+"pango"  "libx11" "libxext" "libxfixes"
+"libxcb" "libxcomposite" "libxdamage" "libxrandr" "libxtst"
+"dbus" "expat" "eudev" "libxkbcommon" "xcb-util" "xcb-util-wm"
+"xcb-util-keysyms" "xdg-utils"
+;; VA-API 视频硬件解码
+"libva"
+;; GSettings/dconf
+"gsettings-desktop-schemas"
+;; Hermes Agent 运行时需要的一些工具
+"sed" "ripgrep" "python-openpyxl"
+#+end_src
+
+进 ~home-packages~ ：被 home profile 当前 generation 引用 -> GC root，guix gc 不清理。
+#+NAME: hermes-desktop-runtime-packages
+#+begin_src scheme :noweb yes
+(specs->pkgs+out
+ <<hermes-desktop-pkg-specs>>)
+#+end_src
+
+tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数据目录。
+#+NAME: hermes-desktop-manifest-file
+#+begin_src scheme :noweb yes :tangle ../tmp/hermes-desktop-manifest.scm
+(specifications->manifest
+ (list
+  ;; 会跟系统中软件包冲突的包
+  "cairo" "dconf" "glib" "gtk+"
+  <<hermes-desktop-pkg-specs>>))
 #+end_src
 
 ** Servics
@@ -2060,7 +2089,10 @@ end
                                                         (local-file
                                                          "../source/files/gpg-agent.conf")
                                                         (specs->pkgs
-                                                         "pinentry-qt"))))))
+                                                         "pinentry-qt")))
+
+                 (".local/share/hermes/manifest.scm" ,(local-file
+                                                       "../tmp/hermes-desktop-manifest.scm")))))
 #+end_src
 
 *** 环境变量
