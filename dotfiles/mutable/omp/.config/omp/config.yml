@@ -1,4 +1,4 @@
-modelRoles: 
+modelRoles:
   default: qwen/qwen3.8-max-preview:xhigh
   slow: zai/GLM-5.2
   pro: qwen/qwen3.8-max-preview
@@ -8,60 +8,59 @@ modelRoles:
   commit: deepseek/deepseek-v4-flash
   advisor: qwen/qwen3.8-max-preview
   task: zhipu-coding-plan/glm-5.2
-cycleOrder: 
+cycleOrder:
   - smol
   - default
   - slow
-compaction: 
+compaction:
   enabled: true
   strategy: snapcompact
   reserveTokens: 16384
   keepRecentTokens: 20000
-retry: 
+retry:
   enabled: true
   maxRetries: 3
   baseDelayMs: 2000
   modelFallback: true
-  fallbackChains: 
-    slow: 
+  fallbackChains:
+    slow:
       - xiaomi/mimo-v2.5-pro
       - deepseek/deepseek-v4-pro
-    default: 
+    default:
       - deepseek/deepseek-v4-pro
       - xiaomi/mimo-v2.5-pro
       - zai/GLM-4.7
 defaultThinkingLevel: high
-theme: 
+theme:
   dark: titanium
   light: light-cirrus
-statusLine: 
+statusLine:
   preset: default
   separator: powerline-thin
   transparent: true
   compactThinkingLevel: true
 showHardwareCursor: false
-images: 
+images:
   blockImages: false
-startup: 
+startup:
   quiet: true
-tools: 
+tools:
   approvalMode: yolo
-memory: 
+memory:
   backend: hindsight
-providers: 
-  {}
+providers: {}
 symbolPreset: nerd
 setupVersion: 1
-terminal: 
+terminal:
   showProgress: false
-tui: 
+tui:
   scrollbackRebuild: true
   imeSafeCursor: true
-display: 
+display:
   showTokenUsage: true
   cacheMissMarker: true
-advisor: 
+advisor:
   enabled: true
   subagents: false
-prewalk: 
+prewalk:
   enabled: true
