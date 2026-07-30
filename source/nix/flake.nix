@@ -15,6 +15,11 @@
       url = "github:numtide/llm-agents.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    affinity-nix = {
+      url = "github:mrshmllow/affinity-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -32,7 +37,15 @@
 
           modules = [
             ./configuration/00-main/home.nix
-            ({ pkgs, ... }: { nixpkgs.overlays = [ inputs.llm-agents.overlays.shared-nixpkgs ]; })
+            (
+              { pkgs, ... }:
+              {
+                nixpkgs.overlays = [
+                  inputs.llm-agents.overlays.shared-nixpkgs
+                  inputs.affinity-nix.overlays.default
+                ];
+              }
+            )
           ];
 
           extraSpecialArgs = { inherit inputs; };
