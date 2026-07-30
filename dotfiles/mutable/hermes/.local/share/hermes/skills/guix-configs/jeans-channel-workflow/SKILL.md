@@ -142,6 +142,8 @@ When asked to "fix the new issue" in jeans:
 都可能因 upstream 变更而失效。诊断时优先检查 build log 中的 `Hunk #N FAILED`。
 若 patch 只是 cosmetic（docstring 修正、注释调整），直接移除比重新生成更稳妥。
 
+**幽灵陷阱（2026-07-30 补充）：** 当升级涉及**内联 vendored 依赖**（如 ghostel 通过 `./deps/ghostty/` 内联 ghostty 源码构建 libghostty-vt），vendored 依赖本身的 `build.zig` / `build.zig.zon` 可能也随上游 commit 更新，导致 zig 版本要求、API 调用签名全部变化。这类失败的特征不是 `Hunk #N FAILED`，而是 zig 编译错误（`error: no field named 'linkLibC'` / `error: member function expected 3 argument(s), found 2`）。此时**不是 patch 兼容性**问题，而是整个内联依赖与新的 zig 版本不兼容。
+
 ### 1.6 url-fetch origin 在 build phase 中是 tarball，不是目录
 
 **关键陷阱（本会话发现）：** 当辅助 origin（private source 定义，如
@@ -216,6 +218,41 @@ https://api.github.com/repos/<owner>/<repo>/releases?per_page=30
 
 - ❌ 自己改 cron 直接给所有 `update_versions.py` 调用挂代理——治标不治本
 - ❌ 把这个错误当成"正常无更新"假装成功——这会延迟下游 issue 报警
+
+### 1.10 emacs-ghostel 版本升级的连锁依赖陷阱（2026-07-30 实测）
+
+`emacs-ghostel` 的版本升级经常牵动整条依赖链：
+
+1. **zig 版本升级**：ghostel 0.46.0 起 `required_zig` 从 `0.15.2` 升到 `0.16.0`（`build.zig` 里的 `comptime` 检查）。`native-inputs` 里的 `zig-0.15` 必须同步改为 `zig-0.16`。
+
+2. **vendored ghostty 依赖也要求 zig 0.16**：ghostel 通过 `./deps/ghostty/` 目录内联 ghostty 源码构建 libghostty-vt。ghostty commit `ab0b9da`（ghostel 0.46.0 的 `build.zig.zon` 引用）的 `build.zig.zon` 声明 `minimum_zig_version = "0.16.0"`，且其依赖（libxev / vaxis / z2d / zig-objc / zig-js / uucode / zig-wayland / zf / gobject）全部是 zig-0.16 兼容版本。
+
+3. **zig-0.16 API 破坏性变更**：即使 `native-inputs` 改为 `zig-0.16`，ghostty 的 build scripts 仍可能因 zig-0.16 API 变更而失败（如 `linkLibC` 字段移除、`environ_map` 字段移除、`b.modules.put` 签名从 2 变 3 参数等）。
+
+**诊断特征**：
+
+```
+build.zig:11:9: error: ghostel requires exactly Zig 0.16.0, found 0.15.2
+```
+
+→ 先改 `native-inputs` 里的 `zig-0.15` → `zig-0.16`。
+
+```
+deps/ghostty/pkg/zlib/build.zig:15:8: error: no field or member function named 'linkLibC' in 'Build.Step.Compile'
+deps/ghostty/src/build/zig.zig:13:9: error: Your Zig version v0.16.0 does not meet the required build version of v0.15.2
+```
+
+→ 说明 vendored ghostty 的 build scripts 与 zig-0.16 不兼容。此时**不要继续调试**，revert 版本升级并报告。
+
+**修复方向（按优先级）**：
+
+1. ✅ **等 ghostty 1.4.0 正式发布后再升级 ghostel**：ghostty 的 zig-0.16 迁移（issue #12228）在 2026-04 完成，但 ghostel 内联的 ghostty commit 可能尚未包含所有修复。等 ghostty 1.4.0 发布后，ghostel 下一版本大概率会引用兼容的 ghostty commit。
+
+2. ❌ **手动 patch ghostty build scripts**：工作量巨大（libxev / vaxis / z2d 等十几个依赖全部需要同步），且每次 ghostel 升级都要重新 patch。不可持续。
+
+3. ⚠️ **降级 zig 到 0.15**：ghostel 0.46.0 的 `build.zig` 有 `comptime` 检查，强制要求 zig-0.16，无法降级。
+
+**Cron 行为**：遇到此类连锁依赖失败，**立即 revert**，不要尝试在 cron 里修复。将失败原因写入报告，留给用户决定是否手动介入。
 
 ### 1.8.1 `blue upgrade` 慢 / 卡死的根因 + 旁路（2026-07-18 实测）
 
@@ -446,7 +483,7 @@ git diff HEAD --stat   # 期望: 空
 - ❌ `rm -rf .git/refs/stash` 或 `git stash clear` 想"清掉 stash"——丢失 stash 内容
 - ❌ `git reflog expire --all --expire=now` 想"清 reflog"——丢失所有 dangling commit 引用
 
-### 4.3 GPG 签 commit 在 cron 环境下的死结（2026-07-18 实测）
+### 4.3 GPG 签 commit 在 cron 环境下的死结（2026-07-18 实测，2026-07-30 补充 fallback）
 
 仓库历史所有 commit 都是 `G` (GPG good signature)，**commit message 规范隐含要求 GPG 签**。但本机 GPG 在 cron session 里几乎必踩以下死结：
 
@@ -467,14 +504,14 @@ git diff HEAD --stat   # 期望: 空
 - **不要把 GPG 签失败当成 cron 卡点**——如果 GPG 死结，准备好"无签 commit 也接受"的 fallback（用户后续可手工 rebase 时重签）
 - **不要为了 GPG 签反复尝试 wrapper 注入**——浪费时间且容易把 working tree 搞乱（参见 §4.2 reset 陷阱）
 - **最干净的解法**是用户侧一次性解决：(a) 把本地 GPG 私钥换成无 passphrase 的测试 key（仅用于本地 cron 签），或 (b) 在 `~/.gnupg/gpg-agent.conf` 里 preset passphrase 后 cron 重启 gpg-agent
-
-**如果当前 session 已经走到 commit 但 GPG 卡住**：先 baseline 工作树状态 → `git diff HEAD > /tmp/lost.patch` 备份 → 再尝试 workaround；workaround 失败时可以直接 `git commit --no-verify`（绕过 pre-commit hook，但 GPG 是 commit-level 不是 hook-level，所以可能仍失败），最终还是 fallback 到"留 patch 不 commit + 用户手动 rebase 重签"。
+- **本会话实际 fallback**：`git commit --no-gpg-sign` 绕过签名，commit 成功但无 GPG 签名。用户后续可 `git rebase --exec 'git commit --amend --no-edit --gpg-sign'` 批量重签。
 
 **反模式（已在本会话踩过）：**
 
 - ❌ 配 wrapper 时把 stdin 重定向到 `3<&0` 给 gpg 当 passphrase fd —— 会破坏 gpg-agent IPC 通信路径
 - ❌ `git commit --allow-empty` 测试 GPG → 撞 §4.2 的 reset 陷阱
 - ❌ 反复 `gpgconf --kill gpg-agent` 重启 agent —— 本机 agent 配置是 read-only `/home/brokenshine/.local/share/gnupg/`，只能 kill 不能改配置
+- ❌ 反复重试 `git commit` —— GPG pinentry 弹框超时（约 30s）后 fail，反复重试只会多次弹出 pinentry 阻塞 CLI
 
 ## 4.1 Commit message format (project-specific, supplements AGENTS.md)
 
@@ -577,9 +614,11 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 | AppImage binary segfaults at runtime                                      | AGENTS.md "裸 ELF 的陷阱" — check for dlopen'd native addons needing `(,gcc "lib")`                                                                                                                                                      |
 | 改 `jeans-issue-fixer` cron job 的 prompt                                 | §1.7（先验 action + 分支决策 + retry guard 设计） + `references/cron-issue-fixer-prompt-template.md`（完整 prompt 模板 + 调试路径 + 各分支决策表）                                                                                       |
 | CI 显示 "包仍然失败" 但之前修过 git-fetch                                 | §1.3：**检查 build-report.json artifact**，失败原因可能已改变（patch 不兼容 / license 阶段等）                                                                                                                                           |
-| `install-license-files` match-error（copy-build-system）                  | §1.4：AppImage/二进制包需 `(delete 'install-license-files)`                                                                                                                                                                              |
+| `install-license-files` match-error（copy-build-system）                  | §1.4：AppImage/二进制包需 `(delete 'install-license-files)`                                                                                                                                                                             |
 | `Hunk #N FAILED` in patch application                                     | §1.5：版本升级后 patch 与 upstream 不兼容；cosmetic patch 直接移除                                                                                                                                                                       |
 | `NotDir` or `unable to load package manifest` in zig/build phase          | §1.6：url-fetch origin 是 tarball 文件，不能用 copy-recursively；改用 tar xf                                                                                                                                                             |
+| `ghostel requires exactly Zig 0.16.0, found 0.15.2`                       | §1.10：ghostel 0.46.0+ 要求 zig-0.16，连带 vendored ghostty 也要求 zig-0.16；先改 native-inputs 再评估 ghostty build scripts 兼容性                                                                                                     |
+| ghostel 升级后 zig build 报 `linkLibC` / `environ_map` / `modules.put` 参数错 | `references/ghostel-ghostty-zig-version-chain.md`：vendored ghostty build scripts 与 zig-0.16 API 不兼容；不要 patch，revert 版本等 ghostty 1.4.0 发布后再跟进                                                                         |
 | 添加 langpack / 翻译资源 / 主题资源到现有 Guix 包（如 LibreOffice zh-CN） | `references/langpack-resource-merge-pattern.md` —— fundamentalrc 写死相对 argv[0] 路径，profile union 不进 `lib/<app>/`，必须 `inherit + copy-recursively + union-build`                                                                 |
 | 新建包文件后 `guix lint` 报 `未知软件包`                                  | §5 / §5.1：先确定 `define-public` 存在，然后检查 `%public-modules` 是否注册了该模块；lint 在文件级沙箱里报的"未知"往往是 re-export 链断了，不是包本身有错。                                                                              |
 | `search-path %load-path` 在 REPL/lint 里频刷"解析为相对于当前目录"        | §5.2：已知 carry-over warning；不影响解析结果，审阅时忽略。                                                                                                                                                                                                                                                                                                                                                                              |
