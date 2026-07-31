@@ -44,9 +44,6 @@
     mangojuice
     sunshine
 
-    ## Creative
-    affinity-v3
-
     ## Environment management
     biome
     bun
