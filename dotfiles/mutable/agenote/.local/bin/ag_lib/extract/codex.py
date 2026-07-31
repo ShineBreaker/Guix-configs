@@ -11,7 +11,7 @@ Schema:
     → builds session_id → {title, cwd, ts} index
   - sessions/YYYY/MM/rollout-*.jsonl: each line {type, message, timestamp, ...}
     type ∈ session | user | assistant | tool | response
-    → rebuild user→assistant pairs by timestamp order (NOT parentId like pi)
+    → rebuild user→assistant pairs by timestamp order (NOT parentId like omp)
 
 Read-only: JSONL read-only, never constructs writes.
 """
@@ -29,7 +29,7 @@ CODEX_HOME = resolve_xdg_path("CODEX_HOME", "$XDG_CONFIG_HOME/codex")
 HISTORY_JSONL = CODEX_HOME / "history.jsonl"
 SESSIONS_ROOT = CODEX_HOME / "sessions"
 
-# codex 外部源：trust 0.5 → weight 0.6（略低于 hermes/pi 的 0.7）
+# codex 外部源：trust 0.5 → weight 0.6（略低于 hermes/omp 的 0.7）
 EXTERNAL_RECONCILE_WEIGHT = round(RECONCILE_DEFAULT_WEIGHT - 0.1, 2)
 
 

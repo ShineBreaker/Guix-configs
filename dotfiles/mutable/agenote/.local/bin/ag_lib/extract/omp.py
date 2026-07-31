@@ -1,0 +1,292 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+"""omp conversation extractor (JSONL event stream, parentId reconstruction).
+
+omp 是 pi-coding-agent 的下游 fork,会话存储在 XDG_CONFIG_HOME/omp/sessions/,
+按项目分子目录存放 .jsonl 文件。
+
+OMP_SESSIONS_DIR = $XDG_CONFIG_HOME/omp/sessions
+
+Schema: 与 pi 相同,JSONL 事件流,每条 {type, id, parentId, timestamp, ...}
+  type=session  → {id, timestamp (ISO UTC), cwd}
+  type=message  → {id, parentId, role, content, model, ...}
+
+Key: rebuild message order by parentId chain (NOT timestamp, unlike codex/claude).
+ISO UTC timestamp needs timezone normalization.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime
+from pathlib import Path
+
+from ag_lib.reconcile import ReconciledFact, RECONCILE_DEFAULT_WEIGHT
+from ag_lib.extract import resolve_xdg_path, extract_title
+
+OMP_SESSIONS_DIR = resolve_xdg_path(
+    "OMP_SESSIONS_DIR",
+    "$XDG_CONFIG_HOME/omp/sessions",
+)
+
+RECONCILE_DEFAULT_WEIGHT  # omp 是自家 agent,沿用 reconcile 统一基准 0.7
+
+
+def _parse_iso_timestamp(ts: str) -> datetime | None:
+    """Parse ISO UTC timestamp (handle trailing Z)."""
+    if not ts:
+        return None
+    try:
+        ts = ts.replace("Z", "+00:00")
+        return datetime.fromisoformat(ts).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        return None
+
+
+def _normalize_content(content) -> str:
+    """Extract text from omp message content (str, list of parts)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts: list[str] = []
+        for part in content:
+            if isinstance(part, dict):
+                ptype = part.get("type", "")
+                if ptype == "text":
+                    texts.append(part.get("text", ""))
+                elif ptype == "tool_use":
+                    texts.append(
+                        f"[tool_use: {part.get('name', '?')}] "
+                        f"{json.dumps(part.get('input', {}), ensure_ascii=False)[:300]}"
+                    )
+                elif ptype == "tool_result":
+                    c = part.get("content", "")
+                    if isinstance(c, str):
+                        texts.append(f"[tool_result] {c[:500]}")
+                    else:
+                        texts.append(
+                            f"[tool_result] {json.dumps(c, ensure_ascii=False)[:500]}"
+                        )
+            elif isinstance(part, str):
+                texts.append(part)
+        return "\n".join(t for t in texts if t)
+    return str(content)
+
+
+def _is_advisor_file(path: Path) -> bool:
+    """Check if the path is an __advisor.jsonl sub-conversation (skip)."""
+    return path.name == "__advisor.jsonl"
+
+
+def _extract_session_file(jsonl_path: Path) -> tuple[list[ReconciledFact], list[str]]:
+    """Extract from one .jsonl session file (parentId-ordered)."""
+    facts: list[ReconciledFact] = []
+    errors: list[str] = []
+    session_meta: dict = {}
+    messages: list[dict] = []
+
+    try:
+        with open(jsonl_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                etype = evt.get("type", "")
+                if etype == "session":
+                    session_meta = {
+                        "id": evt.get("id", jsonl_path.stem),
+                        "cwd": evt.get("cwd", ""),
+                    }
+                elif etype == "message":
+                    messages.append(evt)
+    except OSError as e:
+        return [], [str(e)]
+
+    if not messages:
+        return facts, errors
+
+    # Build parentId tree
+    msg_by_id: dict[str, dict] = {m.get("id", ""): m for m in messages if m.get("id")}
+    children: dict[str, list[str]] = {}
+    for m in messages:
+        pid = m.get("parentId", "") or ""
+        if pid:
+            children.setdefault(pid, []).append(m.get("id", ""))
+
+    # Find roots (no parentId or parent not in messages)
+    root_ids: list[str] = []
+    for m in messages:
+        pid = m.get("parentId", "") or ""
+        if not pid or pid not in msg_by_id:
+            rid = m.get("id", "")
+            if rid:
+                root_ids.append(rid)
+
+    # Iterative DFS walk (avoid Python recursion limit on deep 700+ chains)
+    ordered: list[dict] = []
+
+    for rid in root_ids:
+        stack: list[str] = [rid]
+        while stack:
+            mid = stack.pop()
+            if mid not in msg_by_id:
+                continue
+            ordered.append(msg_by_id[mid])
+            # Push children in reverse so leftmost is processed first
+            cids = children.get(mid, [])
+            for cid in reversed(cids):
+                stack.append(cid)
+
+    # First user message as title
+    title = "Untitled"
+    for m in ordered:
+        msg = m.get("message", {}) if isinstance(m.get("message"), dict) else {}
+        if msg.get("role") == "user":
+            text = _normalize_content(msg.get("content", "")).strip()
+            title = extract_title(text) or "Untitled"
+            break
+
+    session_id = session_meta.get("id", jsonl_path.stem)
+    cwd = session_meta.get("cwd", "")
+    tag = cwd.split("/")[-1] if cwd else "omp"
+
+    # user → assistant pairing (role/content nested under message.* per real schema)
+    current_user: str | None = None
+    current_user_ts: str = ""
+    for m in ordered:
+        msg = m.get("message", {}) if isinstance(m.get("message"), dict) else {}
+        role = msg.get("role", "")
+        text = _normalize_content(msg.get("content", "")).strip()
+        if role == "user":
+            current_user = text
+            current_user_ts = str(m.get("timestamp") or msg.get("timestamp") or "")
+        elif role == "assistant" and current_user and text:
+            facts.append(
+                ReconciledFact(
+                    id=f'omp:{session_id}:{m.get("id", ordered.index(m))}',
+                    source="omp",
+                    native_id=m.get("id", str(ordered.index(m))),
+                    title=title,
+                    category="general",
+                    content=f"USER: {current_user[:1000]}\n\nASSISTANT: {text[:2000]}",
+                    trust_score=0.5,
+                    weight=RECONCILE_DEFAULT_WEIGHT,
+                    tags=[tag],
+                    timestamp=current_user_ts,
+                )
+            )
+            current_user = None
+            current_user_ts = ""
+    return facts, errors
+
+
+def extract_omp() -> tuple[list[ReconciledFact], list[str]]:
+    """Extract from omp sessions/ (read-only, parentId-rebuilt, recursive).
+
+    omp 的 session JSONL 分散在 $XDG_CONFIG_HOME/omp/sessions/ 的子目录中,
+    需要递归遍历 **/*.jsonl,并跳过 __advisor.jsonl 子对话文件。
+    """
+    all_facts: list[ReconciledFact] = []
+    all_errors: list[str] = []
+    if not OMP_SESSIONS_DIR.exists():
+        return [], [f"omp sessions dir 不存在: {OMP_SESSIONS_DIR}"]
+    for jsonl_path in sorted(OMP_SESSIONS_DIR.glob("**/*.jsonl")):
+        if _is_advisor_file(jsonl_path):
+            continue
+        facts, errors = _extract_session_file(jsonl_path)
+        all_facts.extend(facts)
+        all_errors.extend(errors)
+    return all_facts, all_errors
+
+
+def trace_session(session_id: str) -> dict:
+    """回查一个 omp session 的完整原始对话(dream trace 溯源用,不截断)。
+
+    omp 的 session_id 对应一个 .jsonl 文件,但文件可能在 sessions/ 的某个子目录中。
+    用 glob 递归匹配文件名尾部。
+    """
+    matches = sorted(OMP_SESSIONS_DIR.glob(f"**/*{session_id}.jsonl"))
+    # 过滤掉 __advisor.jsonl
+    matches = [m for m in matches if not _is_advisor_file(m)]
+    if not matches:
+        return {
+            "error": f"omp session 文件不存在: {session_id}",
+            "session_id": session_id,
+        }
+    jsonl_path = matches[0]
+
+    session_meta: dict = {}
+    messages: list[dict] = []
+    try:
+        with open(jsonl_path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if evt.get("type") == "session":
+                    session_meta = evt
+                elif evt.get("type") == "message":
+                    messages.append(evt)
+    except OSError as e:
+        return {"error": str(e), "session_id": session_id}
+
+    if not messages:
+        return {
+            "source": "omp",
+            "session_id": session_id,
+            "session": session_meta,
+            "messages": [],
+        }
+
+    # parentId 重建(与 _extract_session_file 一致)
+    msg_by_id = {m.get("id", ""): m for m in messages if m.get("id")}
+    children: dict[str, list[str]] = {}
+    for m in messages:
+        pid = m.get("parentId", "") or ""
+        if pid:
+            children.setdefault(pid, []).append(m.get("id", ""))
+    root_ids = [
+        m.get("id", "")
+        for m in messages
+        if not (m.get("parentId") or "") or m.get("parentId") not in msg_by_id
+    ]
+    ordered: list[dict] = []
+    for rid in root_ids:
+        stack = [rid]
+        while stack:
+            mid = stack.pop()
+            if mid not in msg_by_id:
+                continue
+            ordered.append(msg_by_id[mid])
+            for cid in reversed(children.get(mid, [])):
+                stack.append(cid)
+
+    msgs_out: list[dict] = []
+    for m in ordered:
+        msg = m.get("message", {}) if isinstance(m.get("message"), dict) else {}
+        if not msg:
+            continue
+        content = msg.get("content", "")
+        msgs_out.append(
+            {
+                "role": msg.get("role", ""),
+                "ts": str(m.get("timestamp") or msg.get("timestamp") or ""),
+                "content": content,  # 原样保留,不做 [:1000]/[:2000] 截断
+            }
+        )
+    return {
+        "source": "omp",
+        "session_id": session_id,
+        "session": session_meta,
+        "messages": msgs_out,
+    }

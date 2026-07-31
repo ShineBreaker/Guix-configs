@@ -12,13 +12,15 @@ include optional=true "noctalia.kdl"
 
 prefer-no-csd
 
-spawn-sh-at-startup "herd set-environment graphical-session XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS PATH=$PATH:$XDG_STATE_HOME/nix/profile/bin:$HOME/.local/bin"
+spawn-sh-at-startup "herd set-environment graphical-session XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS WAYLAND_DISPLAY=$WAYLAND_DISPLAY PATH=$PATH:$XDG_STATE_HOME/nix/profile/bin:$HOME/.local/bin"
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 spawn-sh-at-startup "fish -c 'dex -a'"
 
 // 虽然这个看起来很奇怪，但是跑这么一下hermes desktop才可以正常使用
 spawn-sh-at-startup "fish -c 'hermes --version'"
 
+// 重启noctalia，以便其继承正确的环境变量
+spawn-sh-at-startup "herd restart noctalia"
 
 blur {
   passes 4

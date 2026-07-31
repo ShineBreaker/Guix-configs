@@ -39,9 +39,8 @@ VALID_ENTRY_TYPES = {"mistake", "note", "ascended"}
 # 写入时从 os.environ["AGENOTE_AGENT"] 取值；人类手写的卡片留空（source_agent=""）。
 # 白名单用于 sanity check（缺失或不在白名单只警告，不阻塞，便于新增 agent）。
 KNOWN_AGENTS = {
-    "pi",  # pi-coding-agent（agenote-hooks 自动写入）
+    "omp",  # omp (oh-my-pi, pi 下游)
     "hermes",  # hermes-agent
-    "omp",  # oh-my-pi（用户偏好暂不托管，预留）
     "crush",  # crush agent
     "opencode",  # opencode fork
     "mimocode",  # MiMoCode（opencode fork）
@@ -53,14 +52,14 @@ KNOWN_AGENTS = {
 
 # AGENOTE_AGENT 环境变量名（各 agent 的 MCP 启动入口需设置）
 AGENT_ENV_VAR = "AGENOTE_AGENT"
-# 兜底默认值：未设置环境变量时（如人类直接 kb add）记为 pi，保持向后兼容
-DEFAULT_AGENT = "pi"
+# 兜底默认值：未设置环境变量时（如人类直接 kb add）记为 omp，保持向后兼容
+DEFAULT_AGENT = "omp"
 
 
 def default_agent() -> str:
     """读取当前调用者所属 agent 名。
 
-    优先取 AGENOTE_AGENT 环境变量；缺失时回退 DEFAULT_AGENT（"pi"）。
+    优先取 AGENOTE_AGENT 环境变量；缺失时回退 DEFAULT_AGENT（"omp"）。
     空/只空白视为未设置（回退默认值），避免 SOURCE_AGENT 写成空串。
     """
     val = os.environ.get(AGENT_ENV_VAR, "").strip()
@@ -250,7 +249,7 @@ def agenote_context(agent_name: str | None = None) -> KBContext:
     agent_name 决定该上下文写入卡片时的 SOURCE_AGENT 标签：
     - 显式传参时用传入值（便于 dream/distill 等系统工作流标记自身）
     - 否则读 AGENOTE_AGENT 环境变量（MCP 启动入口设置）
-    - 都缺失时回退 DEFAULT_AGENT（"pi"），保持向后兼容
+    - 都缺失时回退 DEFAULT_AGENT（"omp"），保持向后兼容
     """
     root = KB_ROOT / "agenote"
     return KBContext(

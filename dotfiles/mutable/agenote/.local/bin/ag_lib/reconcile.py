@@ -227,9 +227,9 @@ KNOWN_SOURCES: dict[str, tuple] = {
         ).extract_claude(),
         "claude XDG (CLAUDE_CONFIG_DIR + XDG_DATA_HOME/claude/transcripts)",
     ),
-    "pi": (
-        lambda: __import__("ag_lib.extract.pi", fromlist=["extract_pi"]).extract_pi(),
-        "pi JSONL 事件流 (parentId 重建)",
+    "omp": (
+        lambda: __import__("ag_lib.extract.omp", fromlist=["extract_omp"]).extract_omp(),
+        "omp JSONL 事件流 (parentId 重建, 递归子目录)",
     ),
     "zcode": (
         lambda: __import__(
@@ -409,7 +409,7 @@ def load_reconcile_facts() -> list[dict]:
 
 
 # ── trace 溯源（dream 候选 → 回查原始完整对话）─────────────────
-# fact_id 三段式："{source}:{session_id}:{msg_id}"（opencode/zcode/pi/claude 等）
+# fact_id 三段式："{source}:{session_id}:{msg_id}"（opencode/zcode/omp/claude 等）
 # 或两段式："{source}:{native_id}"（hermes/crush 等）。trace 从中拆出 source +
 # session_id，按 source 分发到对应 extractor 的 trace_session（不截断回查原始 DB）。
 # 未实现 trace_session 的 source 优雅降级：返回索引层 content（截断摘要）+ 说明。
@@ -421,7 +421,7 @@ def trace_fact(fact_id: str) -> dict:
     fact_id 来自 DreamCandidate.source_trace（= reconcile fact 的 id）。
     解析三段式拆出 source + session_id，按 source 分发：
       - opencode/zcode：trace_session 查 SQLite（完整 message+part，不截断）
-      - pi：trace_session 读 .jsonl（完整 parentId 树，不截断）
+      - omp：trace_session 读 .jsonl（完整 parentId 树，不截断）
       - 其余（hermes/crush/codex/claude）：暂未实现 trace_session，降级返回
         索引层 content（截断摘要）+ 降级说明
 
@@ -438,7 +438,7 @@ def trace_fact(fact_id: str) -> dict:
     _TRACE_DISPATCH = {
         "opencode": "ag_lib.extract.opencode",
         "zcode": "ag_lib.extract.zcode",
-        "pi": "ag_lib.extract.pi",
+        "omp": "ag_lib.extract.omp",
     }
     mod_name = _TRACE_DISPATCH.get(source)
     if mod_name:

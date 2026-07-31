@@ -4,7 +4,7 @@
 """ag_lib.extract — cross-agent conversation extraction common layer.
 
 Provide XDG-aware path resolution, SQLite read-only open helper, title extractor.
-Each source (opencode/crush/codex/claude/pi) lives in its own file with signature:
+Each source (opencode/crush/codex/claude/omp) lives in its own file with signature:
     (list[ReconciledFact], list[str])
 """
 
@@ -86,7 +86,7 @@ def extract_title(content: str, max_len: int = 60) -> str:
 # source 名 → extractor 解析器（lazy 解析，避免顶层 import 循环）
 def _resolve_extractors() -> dict:
     """返回 source → extractor callable 的映射。lazy import。"""
-    from ag_lib.extract import opencode, crush, codex, claude, pi, zcode
+    from ag_lib.extract import opencode, crush, codex, claude, omp, zcode
     from ag_lib.reconcile import extract_hermes
 
     return {
@@ -94,7 +94,7 @@ def _resolve_extractors() -> dict:
         "crush": crush.extract_crush,
         "codex": codex.extract_codex,
         "claude": claude.extract_claude,
-        "pi": pi.extract_pi,
+        "omp": omp.extract_omp,
         "hermes": extract_hermes,
         "zcode": zcode.extract_zcode,
     }
@@ -114,7 +114,7 @@ def run_extract(
       - run_extract：抽取**原始对话**（DB/JSONL），输出 Org 文件供人/agent 提炼新经验
 
     Args:
-        source: opencode | crush | codex | claude | pi | hermes | zcode | all
+        source: opencode | crush | codex | claude | omp | hermes | zcode | all
         date: 目标日期 YYYY-MM-DD。非空时**按对话时间戳过滤**——只抽取该日的对话
             （基于 ReconciledFact.timestamp；extractor 未填时间戳的源退化为全量）。
             空 = 不按日期过滤（全量抽取）。同时决定默认输出目录名。
