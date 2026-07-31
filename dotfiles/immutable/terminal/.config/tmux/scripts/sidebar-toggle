@@ -140,16 +140,20 @@ ensure_sidebar() {
 
 case "${1:-toggle}" in
     toggle)
-        if [[ "$(tmux show-option -gqv @sidebar_visible 2>/dev/null || echo 0)" == "1" ]]; then
+        # 读取走 session 级优先（-qv）：session 级未设时回退全局默认（0=纯净）。
+        # 写也落在 session 级，让每个 session 独立决定侧栏开关，互不干扰。
+        if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null || echo 0)" == "1" ]]; then
             kill_all_sidebars
-            tmux set-option -g @sidebar_visible 0
+            tmux set-option @sidebar_visible 0
         else
-            tmux set-option -g @sidebar_visible 1
+            tmux set-option @sidebar_visible 1
             ensure_sidebar
         fi
         ;;
     follow)
-        if [[ "$(tmux show-option -gqv @sidebar_visible 2>/dev/null || echo 0)" == "1" ]]; then
+        # 读取走 session 级优先（-qv）：agent session（无 session 级覆盖）回退全局 0 → 纯净；
+        # 用户 session（99-selector.fish 设 session 级 1）→ 建侧栏。
+        if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null || echo 0)" == "1" ]]; then
             ensure_sidebar
         fi
         ;;

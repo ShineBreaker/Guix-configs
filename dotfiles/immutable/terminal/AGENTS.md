@@ -38,10 +38,11 @@ terminal/
 │   ├── foot/
 │   │   └── foot.ini
 │   ├── herdr/
+│   │   ├── scripts/
+│   │   │   └── herdr-session-selector
 │   │   └── config.toml
 │   ├── tmux/
 │   │   ├── scripts/
-│   │   │   ├── session-selector
 │   │   │   ├── sidebar-render.scm
 │   │   │   ├── sidebar-toggle
 │   │   │   ├── which-key

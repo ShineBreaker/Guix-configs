@@ -29,10 +29,21 @@ if status is-interactive
         set -l choices
         set -a choices "tmux"$TAB"tmux (默认)"
 
-        # 列出已有 tmux session（可快速 attach）
+        # 列出已有 tmux session（可快速 attach）。迁移自 session-selector 的
+        # BUSY 保护：attached>0 的 session（被其他客户端占用）标 [使用中]，
+        # action key 用 tmux-busy-<name> 与可用 session 区分，case '*' 拒绝 attach。
+        # tmux 格式串用 | 分隔（session 名不会含 |），避免把 fish 的 TAB 变量
+        # 嵌进 #{} 模板——制表符不是合法变量名会被吞掉。
         if tmux has-session 2>/dev/null
-            for s in (tmux list-sessions -F '#{session_name}' 2>/dev/null)
-                set -a choices "tmux-"$s"$TAB  ⬡ $s"
+            for line in (tmux list-sessions -F '#{session_name}|#{session_attached}' 2>/dev/null)
+                set -l parts (string split '|' -- $line)
+                set -l s_name $parts[1]
+                set -l s_attached $parts[2]
+                if test "$s_attached" -gt 0
+                    set -a choices "tmux-busy-"$s_name"$TAB  ⬡ "$s_name" [使用中]"
+                else
+                    set -a choices "tmux-"$s_name"$TAB  ⬡ "$s_name
+                end
             end
         end
 
@@ -41,37 +52,49 @@ if status is-interactive
         end
         set -a choices "shell"$TAB"Shell (无终端复用器)"
 
+        # 第一层选择：ESC / Ctrl-C / 无匹配 → fzf 退出非零，choice 为空。
+        # 不用 `|| echo tmux` 兜底——那会把用户取消误当作"默认进 tmux"。
+        # 取消即取消：留在普通 shell。
         set -l choice (printf '%s\n' $choices \
             | fzf --reverse --no-multi \
                 --header="选择会话环境" \
                 --height=~50% \
                 --with-nth=2.. \
                 --delimiter="$TAB" \
-            2>/dev/null || echo "tmux")
+            2>/dev/null)
+
+        # 用户取消（ESC）或 fzf 异常 → 留在普通 shell
+        if test -z "$choice"
+            return
+        end
 
         set -l action (string split -f1 $TAB -- $choice)
 
         # ===== 第二层：按选择执行 =====
         switch "$action"
             case tmux
-                # 默认 tmux → 新建或 attach 已有 session
-                if tmux has-session 2>/dev/null
-                    set -l ses (~/.config/tmux/scripts/session-selector)
-                    switch "$ses"
-                        case ESC
-                            return
-                        case NEW
-                            exec tmux new-session -s main -n "$window_name" -c "$cwd"
-                        case '*'
-                            exec tmux attach-session -t "$ses"
-                    end
+                # 默认项语义：有 main session 则 attach，否则新建 main。
+                # 第一层已平铺具体 session（含 BUSY 标记），用户要 attach 别的
+                # session 直接在第一层选 tmux-<name>；选默认 tmux 项 = 回到 main。
+                # session-selector 已删除，其 BUSY 保护迁移到第一层平铺逻辑。
+                #
+                # 侧栏 opt-in：tmux 默认纯净（@sidebar_visible 全局 = 0），用户入口在此
+                # 用 session 级覆盖为 1。agent 程序化创建的 session 不经此入口 → 纯净。
+                #
+                # attach 场景：set-option 不能与 attach-session 串联（命令链竞态会让
+                # client 异常退出 = 闪退）。先独立 set-option，attach 命令保持干净，
+                # 由 tmux.conf 的 client-attached hook 自动触发 follow 建侧栏。
+                # new-session 场景：after-new-session hook 在 set-option 之前触发，
+                # 故需串联显式 follow 兜底。
+                if tmux has-session -t main 2>/dev/null
+                    tmux set-option -t main @sidebar_visible 1
+                    exec tmux attach-session -t main
                 else
-                    exec tmux new-session -s main -n "$window_name" -c "$cwd"
+                    exec tmux new-session -s main -n "$window_name" -c "$cwd" \; set-option @sidebar_visible 1 \; run-shell ~/.config/tmux/scripts/sidebar-toggle follow
                 end
 
             case herdr
-                # 调用 herdr-session-selector 选会话，与 tmux 分支调
-                # session-selector 对称。selector 输出单行机器 key：
+                # 调用 herdr-session-selector 选会话。selector 输出单行机器 key：
                 #   NEW / DEFAULT / ESC / <命名 session 名>
                 # 命名 session 多为自动生成的 term_<pid>，故不在第一层平铺，
                 # 而在此以"运行中 / 已停止·可重连"状态呈现。
@@ -110,8 +133,18 @@ if status is-interactive
                 return
 
             case '*'
-                # attach 已有 tmux session（action 模式 tmux-<name>）
+                # 第一层选了具体 session 条目。BUSY 拦截：tmux-busy-<name> 表示该
+                # session 正被其他客户端占用，拒绝 attach（保护对方，避免意外断开）；
+                # tmux-<name> 为可用 session，直接 attach。
+                # attach 不串联 set-option/follow（命令链竞态致闪退）：先独立 set-option，
+                # 由 client-attached hook 自动 follow 建侧栏。
+                if string match -q 'tmux-busy-*' -- "$action"
+                    set -l session_name (string replace -r '^tmux-busy-' '' -- "$action")
+                    echo "session [$session_name] 正在被其他客户端使用，未 attach。" >&2
+                    return
+                end
                 set -l session_name (string replace -r '^tmux-' '' -- "$action")
+                tmux set-option -t "$session_name" @sidebar_visible 1
                 exec tmux attach-session -t "$session_name"
         end
     end
