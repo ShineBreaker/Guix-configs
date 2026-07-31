@@ -477,6 +477,16 @@ Each :ts-mode produces a remap from the first :modes entry."
     (should (memq #'custom/refresh-terminal-faces-after-load
                   after-load-functions))))
 
+(ert-deftest custom-config/terminal-clears-ghostel-fake-cursor-box ()
+  "TTY 透明背景策略必须清除 `ghostel-fake-cursor' 的 GUI 负宽 box。
+该 box 无 :color,TTY 背景透明后颜色无法解析,ghostel 在
+`pre-redisplay-functions' 重绘提示游标时 redisplay 抛
+`Invalid face box :color unspecified :line-width (-1 . -1)'。"
+  (should (assq 'ghostel-fake-cursor custom:terminal-face-emphasis))
+  (should (equal (cdr (assq 'ghostel-fake-cursor
+                            custom:terminal-face-emphasis))
+                 '(:box nil))))
+
 (ert-deftest custom-config/focus-save-rejects-synthetic-file-buffer ()
   "失焦保存只接受正常访问的本地文件 buffer。"
   (with-temp-buffer

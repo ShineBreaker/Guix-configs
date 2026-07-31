@@ -2076,7 +2076,12 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
     (header-line :box nil :underline t)
     (completions-highlight :weight bold :underline t)
     (vertico-current :weight bold :underline t)
-    (corfu-current :weight bold :underline t))
+    (corfu-current :weight bold :underline t)
+    ;; ghostel-fake-cursor 的 GUI 负宽 box 无 :color,TTY 背景透明后 box 颜色无法
+    ;; 解析,ghostel 在 pre-redisplay-functions 重绘提示游标时触发
+    ;; "Invalid face box :color unspecified :line-width (-1 . -1)"。清除之;
+    ;; TTY 提示游标靠 cursor-type 本身即可辨识。
+    (ghostel-fake-cursor :box nil))
   "TTY 透明背景下补充的非颜色交互语义。")
 
 (defconst custom:terminal-block-faces
