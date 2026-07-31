@@ -1357,6 +1357,9 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+NAME: terminal-packages-list
 #+begin_src scheme
 (cons* (specs->pkgs+out
+        ;; 终端
+        "kitty"
+
         ;; 工具
         "atuin"
         "btop"
@@ -1443,7 +1446,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "github-copilot"
         "oh-my-pi-bin"
         "opencode-bin"
-        "codewhale-bin"
+        "reasonix-desktop-bin"
         "zcode"
 
         ;; 工具
@@ -2089,6 +2092,7 @@ end
   ("QT_QPA_PLATFORMTHEME" . "qt5ct")
 
   ;; Wayland support.
+  ("GTK_USE_PORTAL" . "1")
   ("_JAVA_AWT_WM_NONREPARENTING" . "1")
   ("MOZ_ENABLE_WAYLAND" . "1")
   ("NIXOS_OZONE_WL" . "1")
