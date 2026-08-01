@@ -25,6 +25,25 @@ checkout → update_versions.py → detect changes →
 - `scripts/check-updates/update_versions.py` queries GitHub API, bumps `version` + recomputes `base32` for url-fetch packages, or `git clone --depth=1` to compute nar-base32 for git-fetch packages. Updates are written in-memory first, then flushed to disk in `apply_pending_updates()`.
 - `scripts/check-updates/test_updated_packages.py` reads `report.json`, runs `guix build -L modules <pkg>` for every entry with `status=updated`, creates a GitHub issue titled `❌ Updated package build failures — <sha1[:8]>` on any failure, exits 1 to block the commit step.
 
+### 1.0 CI 失败类型判定（先判定再动手，2026-08-01 实战确立）
+
+**不是所有 CI failure 都要修包。** 先判定失败类型：
+
+- **基础设施失败（无需修复）**：run 创建后几十秒内即 completed+failure，卡在 `Install Guix` / `Checkout` / `Set up job` / `Prepare /etc/gitconfig` 等**早期步骤**，`Build test updated packages` 从未开始，且**无新 issue** 生成。典型观测：`Install Guix` step 5 秒内 failure（如 2026-07-30 run 30535193381、2026-08-01 run 30685995735 均为 4-5 秒卡死 Install Guix）。→ **直接 `gh workflow run auto-update.yml --repo ShineBreaker/jeans --ref main` 重跑，不修任何包。**
+- **真实构建失败（需要修复）**：CI 跑到 `Build test updated packages` 步骤后失败，`test_updated_packages.py` 创建 `❌ Updated package build failures — <sha>` issue。**只有看到这种 issue 才修包。**
+
+判定命令（gh 用绝对路径，注意 `~/.nix-profile` 已废弃、新路径是 `~/.local/state/nix/profile/bin/gh`）：
+
+```bash
+GH=/home/brokenshine/.local/state/nix/profile/bin/gh
+$GH api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' \
+  --jq '.workflow_runs[] | select(.name=="Auto Update Packages") | {id, status, conclusion, event, created_at, updated_at}'
+$GH issue list --repo ShineBreaker/jeans --state open --json number,title,labels,createdAt
+```
+
+- run 的 `conclusion: failure` + `updated_at - created_at < 60s` → 基础设施失败
+- `updated_at - created_at > 几分钟` + 有 `❌` issue → 构建失败，进修复流程
+
 ### 1.1 Known CI failure mode: sandbox git-fetch can never finish (issue #20 / #21)
 
 **Status (2026-06-25):** 经三轮尝试后确认有效修复。
@@ -210,7 +229,12 @@ https://api.github.com/repos/<owner>/<repo>/releases?per_page=30
 
 **修复方向(任选,不强制实施):**
 
-1. **`GITHUB_TOKEN` 注入**:`export GITHUB_TOKEN=$(gh auth token 2>/dev/null)` 给 cron 加上,5000/h 上限即可彻底脱困。`update_versions.py:301` 已经支持 `Authorization: token <...>` header,无需改脚本。
+1. **`GITHUB_TOKEN` 注入**:`export GITHUB_TOKEN=$(gh auth token 2>/dev/null)` 给 cron 加上,5000/h 上限即可彻底脱困。`update_versions.py:301` 已经支持 `Authorization: token <...>` header,无需改脚本。**本机注意：`gh` CLI 未安装**（`gh: 未找到命令`），改从 `~/.config/gh/hosts.yml` 提取（python3 无 yaml 模块，用 sed 即可）：
+   ```bash
+   export GITHUB_TOKEN=$(sed -n 's/^[[:space:]]*oauth_token:[[:space:]]*//p' ~/.config/gh/hosts.yml | head -1)
+   # 验证：curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit  # 期望 200
+   # guix refresh 读 GitHub API 用的是专属变量名 GUIX_GITHUB_TOKEN（不是 GITHUB_TOKEN），两个都要 export
+   ```
 2. **Retry-After 处理**:把 `is_retryable_http_error` 扩展到 403 且 `Retry-After` header 存在的情形,按 header 等待后重试。
 3. **fail-fast 早退**:无 token 时第一个 403 就 `sys.exit("no GITHUB_TOKEN; aborting to avoid burning quota")`,别跑完 41 个空请求。
 
@@ -298,6 +322,38 @@ NEW_BASE32 = "0000000000000000000000000000000000000000000000000000"
 ```
 
 这是脚本**写入新 hash 前的占位**（后续会被真实 hash 替换）。扫描仓库时**唯一真占位**是这条；不要把它和"以 0 开头的 base32 字母表首位字符"混淆——52 字符里第一个字符是 0 是完全合法的（base32 字母表第一位是 0）。**真正占位是整串 52 个 0**，grep 必须用 `0{52}` 而不是 `^0`。
+
+**写盘延迟（2026-08-01 实测）**：`update_versions.py` 先收集全部变更（内存），全部包检查完才统一批量写盘（`apply_pending_updates`）。脚本运行中途 `git status` / `git diff` 始终为空是**正常中间态**，不要误判"没生效"去重跑；等脚本退出后再看 diff。report.json 会记录每个包的 old/new/status，是核对更新集合的唯一权威来源。
+
+### 1.8.2 大资产下载失败：`无法计算 hash` 的手动修复路径（2026-08-01 实测）
+
+脚本对 GitHub release 资产调 `guix download` 计算 base32。**大体积资产（>100MiB，如 oh-my-pi 的 `omp-linux-x64` 175MiB）下载慢且易超时**，报 `❌ 无法计算 hash` 后该包停在旧版本（report.json `status: failed`），但版本信息已在日志里出现（`✅ 发现新版本`）。
+
+手动补完路径（无需改脚本）：
+
+```bash
+# 1. 用 guix download 手动算 hash（进度条刷屏，用 tail 截取）
+guix download "https://github.com/<org>/<repo>/releases/download/<tag>/<asset>" 2>&1 | tail -3
+# 输出形如：/gnu/store/<h>-<asset> + <base32>
+
+# 2. patch 对应 .scm：version + base32 两处（参考 AGENTS.md 版本号约定，v 前缀去除）
+```
+
+实测 175MiB 资产 guix download 约 4 分钟；脚本侧超时或 CI 网络波动时走此路径，hash 与脚本算的一致（store 路径即验证）。CI 若反复在同一大资产失败，可建议用户给脚本的 guix download 超时加大或改用 `curl -L --retry`。
+
+### 1.8.3 `guix refresh` 本地 dry-run（2026-08-01 实测）
+
+CI 的 refresh 层本地复现用（不带 `-u` 即只报告不改写）：
+
+```bash
+export GUIX_GITHUB_TOKEN=$GITHUB_TOKEN   # refresh 的专属变量名，必须与 GITHUB_TOKEN 分开设
+guix refresh -L modules -L <nonguix-dir> <pkg1> <pkg2> ...   # 输出 "would be upgraded from X to Y"
+```
+
+注意点：
+- **TLS 网络错误会中断整批**：某个包（如 emacs-msgu）撞 gnutls handshake 错误时 refresh 直接 abort，已检查包的结果丢失。**分批跑**（每批 5-10 个包）或对报错包单独重试，不要一次塞 30 个。
+- 包列表按 CI workflow 显式列出（refresh 不管 zcode/font-misans/kimi-code-bin/jdtls-bin/librewolf-nongnu/reasonix-desktop-bin，这些留给 Python updater）。
+- `generic-git` updater 会把日期 tag 规范化为 `2025.07.31` 格式，属预期行为。
 
 ### 1.9 `blue gen-docs` drift detection(本次 2026-07-16 实测)
 

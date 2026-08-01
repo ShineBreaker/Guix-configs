@@ -35,7 +35,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 - 运行列表：`/actions/runs?per_page=N`（加 `?created=>...` 按时间过滤）
 - 单 workflow：`/actions/workflows/{auto-update.yml|mirror-codeberg.yml}/runs`
 - 运行内 job + 步骤结论：`/actions/runs/{run_id}/jobs`（**先看哪个 step failed，再拉日志**）
-- 完整日志：`/actions/jobs/{job_id}/logs`（加 `-L` 跟随重定向；浏览器看日志要登录，API 不用）
+- 完整日志：`/actions/jobs/{job_id}/logs`（加 `-L` 跟随重定向；浏览器看日志要登录，API 不用）。**2026-08-01 实测：未授权访问返回 403 `Must have admin rights to Repository`** —— 拿不到日志时不要死磕，fallback = 本地复现失败 + 读 report.json / build-report.json artifact（`/actions/artifacts/<id>/zip`）。
 - 网页版 `/actions` 与 `/issues` 可做只读总览（无 API 限流问题），但渲染不稳（"Sorry, something went wrong"），以 API 为准。
 
 ## CI 失败诊断 4 步（2026-08-01 实战验证）
@@ -55,6 +55,17 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 
 ## 构建验证回填（重要）
 
+构建需要 nonguix 通道。本机 nonguix checkout 在 `~/.cache/guix/checkouts/<hash>/`（guix pull 通道缓存），定位并注入 load path：
+
+```bash
+NONGUIX_DIR=$(for d in ~/.cache/guix/checkouts/*/; do
+  [ "$(git -C "$d" remote get-url origin 2>/dev/null)" = "https://gitlab.com/nonguix/nonguix" ] && echo "$d" && break
+done)
+export GUIX_EXTRA_LOAD_PATH="$NONGUIX_DIR"
+# 注意：nonguix 的 nongnu/ 目录直接在 checkout 根下，没有 modules/ 前缀
+guix build -L modules -L "$NONGUIX_DIR" <pkg>
+```
+
 `test_updated_packages.py` 的构建测试**在第一个失败包处中断**，失败包之后的包全部未测。修复了阻塞包后，必须**回填验证**失败点之后的所有更新包：
 
 ```bash
@@ -67,7 +78,11 @@ guix build -L modules --no-grafts <pkg1> <pkg2> ...
 
 ## 工作边界（cron 无用户在场时的判断准则）
 
-- **不跑 `update_versions.py`**（它会写文件）：定时 CI 数小时内会跑，抢跑会与其竞态。只读 report.json 判断更新集合。
+存在**两类 cron**，边界不同：
+- **只读巡检 cron**（CI 诊断）：不跑 `update_versions.py`（会写文件），只读 report.json。
+- **更新助手 cron**（本次任务形态）：用户显式授权跑 `blue upgrade` / `guix refresh -u` 并把可用更新**应用到本地 .scm**，再逐个 `blue build` 验证；产物留在工作树，**绝不 commit/push**（GPG 签名只能在用户在场时做）。
+
+- **不跑 `update_versions.py`**（它会写文件）：定时 CI 数小时内会跑，抢跑会与其竞态。只读 report.json 判断更新集合。（更新助手 cron 例外：任务明确要求应用更新时照跑，但注意它是**先收集后批量写盘**，中途 git diff 为空是正常中间态。）
 - **不代推 workflow 改动**：历史 `FIX: (ci)` 提交全是用户本人做的（89e28aa / 85cda2f / 13f9147 / 1fc7d60）。发现 CI 加固点（如 Install Guix 重试）→ 写进报告建议，不擅自 push。尤其 mirror 正在挂的时候，任何 push 都会再触发一次失败运行。
 - **不提交/推送包更新**：那是 CI 的职责（GPG 签名提交）。本地验证结果作为报告证据。
 - 工作树保持干净：诊断只读，构建只写 store。

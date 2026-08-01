@@ -281,7 +281,7 @@ cronjob(
 )
 ```
 
-**Exit code is always 0** — the report IS the signal. A non-zero exit would mark the cron job as "error" in the Hermes UI, which is exactly what we don't want even when there are REDs. The wrapper in `$HERMES_HOME/scripts/metabolism_check.py` swallows any non-zero exit from the real script as a safety net.
+**Exit code is always 0** — the report IS the signal. A non-zero exit would mark the cron job as "error" in the Hermes UI, which is exactly what we don't want even when there are REDs. 注意：实际部署中**并不存在 wrapper 脚本**兜底——早期 script 模式（no_agent=True）下脚本在 RED 时以 exit 1 结束，cron 直接标记 failed 且报告投递异常（2026-07-19、07-25、07-26 三次自动运行因此失败，用户从未收到报告）。当前正确形态是 **LLM 模式（no_agent=False）**：报告作为 agent 最终回复投递，不存在 exit code 问题。不要再切回 no_agent script 模式，除非先补一个真正吞掉非零退出码的 wrapper。
 
 To change delivery later: `cronjob(action='update', job_id='<id>', deliver='local')`.
 
@@ -309,7 +309,7 @@ python3 $HERMES_HOME/skills/hermes-agent-ops/agent-config-metabolism/scripts/met
 
 Expected output: 14 lines, each tagged `[GREEN]` or `[RED]`. If you see `[ERROR]` or fewer than 14 lines, the script failed — check `$HERMES_HOME/cron/output/agent-config-metabolism-<ts>.log` for stderr.
 
-**Exit code is always 0** — the report IS the signal. A non-zero exit would mark the cron job as "error" in the Hermes UI, which is exactly what we don't want even when there are REDs. The wrapper in `$HERMES_HOME/scripts/metabolism_check.py` swallows any non-zero exit from the real script as a safety net.
+**Exit code is always 0** — the report IS the signal. A non-zero exit would mark the cron job as "error" in the Hermes UI, which is exactly what we don't want even when there are REDs. 注意：实际部署中**并不存在 wrapper 脚本**兜底——早期 script 模式（no_agent=True）下脚本在 RED 时以 exit 1 结束，cron 直接标记 failed 且报告投递异常（2026-07-19、07-25、07-26 三次自动运行因此失败，用户从未收到报告）。当前正确形态是 **LLM 模式（no_agent=False）**：报告作为 agent 最终回复投递，不存在 exit code 问题。不要再切回 no_agent script 模式，除非先补一个真正吞掉非零退出码的 wrapper。
 
 Then run the cross-validation probes from **Step 4** to confirm the script's numbers match ground truth.
 

@@ -1,194 +1,80 @@
-# `jeans-issue-fixer` cron prompt 模板（2026-07-06 实战验证版）
+# `jeans-issue-fixer` cron prompt 设计参考（2026-08-01 更新）
 
 对应 cron job: `job_id=3ba1524b02f2`，schedule `0 11 * * 2,4,6`（周二/四/六 11:00 北京时间），
-workdir `~/Projects/Config/jeans`，skills `[guix-configs-workflow]`。
+workdir `~/Projects/Config/jeans`。**注意：当前 job 不带 skill（skills=[]），prompt 自包含**；
+model 固定 `deepseek-v4-flash`。此前版本（2026-07-06）曾挂 `guix-configs-workflow` skill +
+retry-guard 设计，已被 2026-07-11+ 的重写取代（当前部署版 = "自动修复 + 更新助手"）。
 
-## 模板全文（已部署，可直接复用）
+> ⚠️ **此文件是设计参考，不是可直接覆盖的模板全文**。改 prompt 前先 `cronjob action=list`
+> 读当前部署的 prompt，在其基础上增量修改，不要整段替换回旧版。
 
-````markdown
-你是 jeans Guix channel（https://github.com/ShineBreaker/jeans）的自动修复助手。
-本任务的核心前提：先确认 GitHub Actions 定时任务（auto-update.yml）是否跑成功，再决定后续动作。
+## 当前部署版 prompt 的核心结构（2026-08-01 实测）
 
-## 关键约束（前置：任何写操作之前必须满足）
+1. **开头**：声明"自动修复 + 更新助手"，要求先 `read_file` 加载 `.agents/skills/pack-guix/SKILL.md`
+   获取打包规范，再动手。
+2. **核心原则（2026-08-01 新增，最重要）**：先判定 CI 失败类型，再决定要不要修：
+   - **基础设施失败（无需修复）**：run 创建后几十秒内 completed+failure，卡 `Install Guix` /
+     `Checkout` / `Set up job` 等早期步骤，`Build test updated packages` 从未开始，且无新 issue。
+     → 直接 `gh workflow run auto-update.yml` 重跑，不修任何包。
+   - **真实构建失败（需要修复）**：CI 跑到 `Build test updated packages` 步骤后失败，
+     `test_updated_packages.py` 创建 `❌ Updated package build failures — <sha>` issue。
+     **只有看到这种 issue 才修包。**
+3. **执行流程**：git pull → 查 CI 状态（gh api runs + issue list）→ 按判定分支处理 →
+   修包（如需要）→ `blue build` 验证 → `blue upgrade` 全量更新检查 → 改动只留本地工作树。
+4. **边界（硬性）**：❌ 不 commit / push / add；❌ 不改 CI workflow、AGENTS.md、blueprint.scm；
+   ❌ 不碰 `~/.config/agents/skills/`；❌ 不跑 sudo / reconfigure；✅ 可改 `modules/**/*.scm`、
+   可跑 `blue build` / `blue upgrade` / `guix refresh -u`。
+5. **最终交付**：判定结论 + 改动摘要表 + gitmessage（供用户复制提交）+ 待决策项。
 
-**gh 二进制路径**：所有 gh 命令必须使用完整路径 `/home/brokenshine/.nix-profile/bin/gh`。
-如果 PATH 里没有，可显式 `export PATH=/home/brokenshine/.nix-profile/bin:$PATH` 后再调用。
-
-**时间窗口**：本次 cron 触发时间（北京时间每周二/四/六 11:00）通常比 action 调度
-（每周二/四/六 02:00 UTC = 10:00 北京）晚 1 小时。但 action 实测完成时间常延迟到
-13:00~14:00 北京时间，"action 还没跑完"是常见情况，必须显式处理。
-
----
-
-## 任务流程
-
-### 1. 拉取最新代码
-
-```bash
-cd ~/Projects/Config/jeans && git pull origin main
-```
-````
-
-如果冲突：记下冲突文件，**不要强推**，直接进入第 8 步报告错误并结束。
-
-### 2. 探测最近一次 Auto Update Packages action 的状态
-
-**API**：列出最近 10 次 run，按 `name == "Auto Update Packages"` 过滤
-（不能用 `?workflow=auto-update.yml`，该参数不生效）：
+## 判定命令（gh 绝对路径）
 
 ```bash
-gh api 'repos/ShineBreaker/jeans/actions/runs?per_page=10' \
-  --jq '.workflow_runs[] | select(.name=="Auto Update Packages") | {id, status, conclusion, event, created_at, head_sha, display_title}' \
-  | head -5
+GH=/home/brokenshine/.local/state/nix/profile/bin/gh   # ⚠️ ~/.nix-profile 已废弃（2026-08-01 确认）
+$GH api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' \
+  --jq '.workflow_runs[] | select(.name=="Auto Update Packages") | {id, status, conclusion, event, created_at, updated_at}'
+$GH issue list --repo ShineBreaker/jeans --state open --json number,title,labels,createdAt
 ```
 
-### 3. 分支决策
+- run 的 `conclusion: failure` + `updated_at - created_at < 60s` → 基础设施失败 → 重跑
+- `updated_at - created_at > 几分钟` + 有 `❌` issue → 构建失败 → 修复流程
 
-读取**最近一次** Auto Update Packages run（即上面输出的第一行），按下列分支处理：
+## 2026-08-01 关键失败模式：Install Guix 秒挂（ftpmirror 502）
 
-#### 3a. 还在跑（status == "in_progress" 或 "queued"）
+**症状**：run 创建后 ~5 秒 failure，卡 `Install Guix` 步骤（4-5 秒内），后续全部 skipped。
+2026-07-30（run 30535193381）与 2026-08-01（run 30685995735）各发生一次。
 
-不扫 issue，不修复。先检查 §9 retry guard，未达上限则用 `cronjob` 工具创建 1 小时后
-的一次性 job，`deliver="local"` 静默退出。
-
-#### 3b. 成功（conclusion == "success"）
-
-走原修复流程（第 4 步）。
-
-#### 3c. 失败 / 取消 / 超时
-
-先检查 §9 retry guard；未达上限则：
-
-- 对每个匹配 issue 用 gh issue comment 告知"已自动重跑"
-- `gh workflow run auto-update.yml` 重跑
-- 创建 1 小时后 retry job
-- `deliver="local"` 静默退出
-
-#### 3d. 找不到最近一次 run（过去 2 小时内没跑过）
-
-视作失败：先重跑 action + 创建 retry job。
-
-### 4. 成功路径：扫 issue → 修复
-
-```bash
-gh issue list --repo ShineBreaker/jeans --state open --json number,title,labels,createdAt,author
-```
-
-筛选：作者是 `ShineBreaker` 或 `github-actions[bot]`；与包构建失败相关；评论区无历史
-修复；最多 3 个 issue。
-
-### 5. 修复流程（详细步骤见 jeans-channel-workflow §1.4~§1.6）
-
-常见修复模式覆盖：hash 不匹配 / 版本号 / 依赖缺失 / rust crate / patch cosmetic /
-install-license-files / url-fetch origin tarball。
-
-### 6. 提交推送
-
-**必须**用 HerEDOC 传 multi-line 中文 commit message：
-
-```bash
-git add modules/
-cat > /tmp/commit-msg <<'EOF'
-FIX: <简短描述> (closes #<issue号>)
-
-问题：
-根因：
-修复：
-验证：
-EOF
-git commit -F /tmp/commit-msg
-git push origin main
-```
-
-**不要**添加 Generated with Crush / Hermes trailer（jeans 仓库惯例不带）。
-
-### 7. 关闭 Issue + 重跑 Action
-
-修复推送后评论 + 关闭 issue；所有 issue 处理完毕后触发 workflow_dispatch。
-
-### 9. Retry guard（保护 action 异常长时无限排 retry）
-
-单次 action run 总 retry 次数最多 5 次。job name 编码序号：
+**根因**（从 actions job logs 确认）：
 
 ```
-jeans-issue-fixer                      # N=0（原 job）
-jeans-issue-fixer-retry-<run_id8>-N    # 1≤N≤5
+https://ftpmirror.gnu.org/gnu/guix/:
+2026-08-01 05:31:48 ERROR 502: Bad Gateway.
+##[error]Process completed with exit code 8.
 ```
 
-```bash
-N=$(echo "$JOB_NAME" | grep -oP '(?<=retry-[0-9a-f]{8}-)\d+' || echo 0)
-N=${N:-0}
-if [ "$N" -ge 5 ]; then
-  # deliver=origin 报告用户人工介入，不再排 retry
-fi
-```
+install.sh 从 `ftpmirror.gnu.org` 动态重定向到镜像池（wayne.edu / ibiblio 等），
+选中坏镜像时 502 → install.sh 下载 guix 安装包失败 → exit 8。**跟 jeans 代码无关。**
 
-新 retry name 模板：`jeans-issue-fixer-retry-<run_id_short>-<N+1>`。
+**处理**：直接重跑 action。镜像通常几分钟内恢复（实测重跑后 Install Guix 正常 20+ 分钟跑完）。
 
-```markdown
-## 各分支决策表
+**注意**：`gh api .../actions/runs?workflow=auto-update.yml` 参数**不生效**（会返回所有
+workflow 的 run，包括 mirror-codeberg.yml），必须在 client 端按
+`select(.name=="Auto Update Packages")` 过滤。
 
-| last run.status          | last run.conclusion                   | 分支 | 动作                                | 排 retry? | deliver |
-| ------------------------ | ------------------------------------- | ---- | ----------------------------------- | --------- | ------- |
-| `in_progress` / `queued` | (任意)                                | 3a   | 仅排 retry + 静默退出               | ✅        | local   |
-| `completed`              | `success`                             | 3b   | 扫 issue → 修复 → 推 → dispatch     | ❌        | origin  |
-| `completed`              | `failure` / `cancelled` / `timed_out` | 3c   | 评论 issue + 重跑 action + 排 retry | ✅        | local   |
-| (2h 内无 run)            | –                                     | 3d   | 主动 dispatch + 排 retry            | ✅        | local   |
+## gh 二进制路径变更史
 
-## 关键设计决策的理由
+- 旧：`/home/brokenshine/.nix-profile/bin/gh`（Nix 旧式 home symlink）
+- 新（2026-08-01 确认）：`/home/brokenshine/.local/state/nix/profile/bin/gh`（Nix 新式 profile，
+  实测 gh 2.96.0）。`~/.nix-profile` 目录已不存在。改 prompt / 脚本时用新路径。
 
-### 为什么 retry guard 设 5 次而不是更激进
+## 分支决策表（当前部署版）
 
-实测 action 跑完时间通常 11:00~~14:00 北京（即 1h~~4h 不等）。单次超出 4h 的
-边界情况下，5 次 retry × 1h 间隔 = 5h 极限，给真正的慢 build 留缓冲。又不至于
-让一个真正卡死的 action 在 jobs.json 里堆出几十个静默 job。
-
-### 为什么 retry job 用 `deliver="local"` 而不是 origin
-
-cron 子 agent **创建 retry 是预期动作**，不是异常。每跑一次就 deliver=origin
-刷屏用户没价值。`local` 落盘到 `~/.local/share/hermes/cron/output/`，人工想看也能
-看到，正常不打扰。
-
-### 为什么 prompt 强调 `cronjob action=create` 而不是手动编辑 jobs.json
-
-`execute_code` 直接 edit `~/.local/share/hermes/cron/jobs.json` 会被 hermes 沙箱
-风控阻断（实测 BLOCKED 错误）。`cronjob` 工具走 hermes 自己的原子写入路径，自己
-负责 lock + reload + 状态广播，更稳。
-
-### Fallback：`cronjob` 工具不可用时怎么手动追加 retry job（2026-07-07 更新）
-
-实测 `cronjob` 工具在 cron 子 agent 里不可达，主会话可以直接编辑 `jobs.json`，
-但要走 **tmp-file + rename 原子写**。hermes cron 沙箱对不同写法的拦截情况如下：
-
-| 写法                                                    | 结果                                        |
-| ------------------------------------------------------- | ------------------------------------------- |
-| `execute_code` 工具直接改 `jobs.json`                   | ❌ BLOCKED（cron 沙箱风控拒绝 Python 执行） |
-| `python3 -c '...'` 单行（通过 terminal）                | ✅ 可执行，但 JSON 构造不方便               |
-| `python3 << 'PYEOF' ... PYEOF` heredoc（通过 terminal） | ✅ 可执行                                   |
-| `write_file` 工具写任意文件                             | ✅ 不受此风控限制                           |
-
-**推荐范式**：
-
-# 1) 用 write_file 工具写 /tmp/add_retry_job.py（含完整 JSON 构造逻辑）
-
-# 2) 用 terminal 工具执行：python3 /tmp/add_retry_job.py
-
-# 3) verify：jq '.jobs | length' jobs.json，应比原值 +1
-```
-
-注意：`write_file` + `python3 /tmp/<script>.py` 是唯一一条**稳定通过**的组合。`execute_code` 在 cron 环境下完全不可用。`python3 -c` 可用于短逻辑但不宜构造多行 JSON。
-
-## Scheduler 行为：jobs.json 自动清理 completed-once retry（2026-07-06 实测）
-
-实测确认 hermes cron scheduler **会自动清理 completed-once 的 retry job**：
-
-- 旧 retry job（如 `jeans-issue-fixer-retry-28696797-1`）执行完后，
-  scheduler 在某个时间点将其从 `jobs.json` 中移除。
-- 验证方法：刚跑完一次新 retry 后 grep `"name":`，只会看到 base job + 当前
-  新建的 retry，旧的 completed-once retry 不会出现。
-- **诊断含义**：不要根据"jobs.json 里应该有几个 retry job"反推 retry 次数。
-  retry guard 的状态来源应是当前执行的 `JOB_NAME` 环境变量，而不是
-  jobs.json 里的条目数。
+| last run 状态 | 判定 | 动作 | 修包? |
+|---|---|---|---|
+| `in_progress`/`queued` | 还在跑 | 报告等待，不修 | ❌ |
+| `completed` + `success` | 成功 | 查 issue，有 ❌ issue 则修复 | 仅当有 issue |
+| `completed` + `failure` 且 <60s 卡早期步骤 | 基础设施失败 | 重跑 action，不修 | ❌ |
+| `completed` + `failure` 且跑到 Build test 步骤 | 构建失败 | 修复 issue 对应包 | ✅ |
+| 无最近 run | 未跑 | 重跑 action | ❌ |
 
 ## 调试路径（下次 cron 出问题怎么查）
 
@@ -198,35 +84,30 @@ cron 子 agent **创建 retry 是预期动作**，不是异常。每跑一次就
    ls -lt ~/.local/share/hermes/cron/output/ | head -5
    ```
 
-   看 stderr/stdout/return code。
-
-2. **检查 jobs.json 现状**（注意：cron 子 agent 没法直接看，要主会话）：
+2. **检查 jobs.json 现状**：
 
    ```bash
-   cat ~/.local/share/hermes/cron/jobs.json | jq '.jobs[] | {id, name, schedule, last_status, last_run_at}'
+   cat ~/.local/share/hermes/cron/jobs.json | python3 -c "import json,sys; [print(j['id'], j['name'], j.get('last_status'), j.get('last_run_at')) for j in json.load(sys.stdin)['jobs']]"
    ```
-
-   关注 `last_status: error` 的 job，可能是 prompt 设计有 bug。
 
 3. **检查最近 action run 实况**：
 
    ```bash
-   gh api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' \
+   $GH api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' \
      --jq '.workflow_runs[] | select(.name=="Auto Update Packages") | {id, status, conclusion, created_at}'
    ```
 
-   看 status 是否长时间 stuck 在 in_progress（sandbox hang 等）。
+4. **拉 action job 日志看 Install Guix 失败原因**：
 
-4. **测试单个 retry job 是否真能跑**：在主会话用 `cronjob run` 手动触发一次，
-   然后看 `output/` 落盘结果。
+   ```bash
+   JOBID=$($GH api 'repos/ShineBreaker/jeans/actions/runs/<run_id>/jobs' --jq '.jobs[0].id')
+   $GH api "repos/ShineBreaker/jeans/actions/jobs/$JOBID/logs" | grep -i "error\|502\|exit code"
+   ```
 
 ## 注意事项（更新此 prompt 之前确认）
 
-- 改 jeans CI workflow 文件 (`.github/workflows/auto-update.yml`) 后，本 prompt 的
-  分支判断逻辑可能漂移（新增 step 改了 conclusion 语义）。要重新跑 gh api 一次确认。
-- 如果未来给 retry job 加 `enabled_toolsets: ["terminal", "file", "web"]`，prompt
-  里 cronjob 工具的 fallback 路径就不再必要了（确认 cron 子 agent 的 cronjob 工具可达）。
-- action schedule 从 `0 2 * * 2,4,6` 改了的话，cron `0 11 * * 2,4,6` 这 1h 缓冲的
-  假设也要重新评估；历史数据 action 跑完时间是 11:00~14:00 北京，所以当前 1h 缓冲
-  对迟到的 action 不够用 —— 这就是为什么分支表里有 3a/3c 处理"动作还没完"的状态
-  而不是默认 1h 一定够。
+- 改 jeans CI workflow 文件 (`.github/workflows/auto-update.yml`) 后，prompt 的
+  失败类型判定逻辑可能漂移（新增 step 改了 conclusion 语义）。要重新跑 gh api 确认。
+- 当前 prompt 假设"CI 失败 = 有 issue 才修"，**不要**改回旧的"失败即修"逻辑。
+- job 当前不带 skill；若未来恢复挂 skill，注意 prompt 里的流程要与 skill 内容一致，
+  避免双源漂移。

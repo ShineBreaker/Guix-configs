@@ -90,6 +90,41 @@ startup path is alive using **Xvfb**:
   human eye on the actual window. State this blocker honestly — never claim the GUI
   works from headless evidence alone.
 
+## Hermes Desktop: 容器内 agent 环境残缺 → Remote gateway 模式
+
+容器跑起来的 Electron 壳（hermes-desktop）会**在容器内** spawn 自己的后端
+（argv 形如 `python -m hermes_cli.main serve --host 127.0.0.1 --port 0`）。容器
+manifest 只为 GUI 准备（libglib/gtk/nss…），不含 guix/git/blue 等工具，于是
+desktop 里 agent 的 terminal/文件工具全部落在残缺容器环境。**先查宿主是否已有
+纳管的后端服务**（如 Guix-configs 的 hermes-backend shepherd 服务 9119），有则
+复用——不要新建服务。
+
+解法（官方 Remote gateway 模式，env 直通，无需 UI 操作）：
+1. 启动脚本注入两个 env（desktop 壳 main.ts `resolveRemoteBackend` 的 env
+   override 路径，设置后**不再 spawn 本地 serve**）：
+   - `HERMES_DESKTOP_REMOTE_URL=http://127.0.0.1:9119`
+   - `HERMES_DESKTOP_REMOTE_TOKEN=<token>`
+2. token **动态抓取**：后端每次重启用 `secrets.token_urlsafe(32)` 重新生成
+   （除非显式设 `HERMES_DASHBOARD_SESSION_TOKEN`），注入首页 HTML 的
+   `__HERMES_SESSION_TOKEN__`。启动脚本 curl 首页 grep 该字段即可，不写死 secret。
+3. 两个 env 必须加进 `--preserve` 正则才能透传进容器。
+
+关键事实（每条都实测验证过）：
+- **`guix shell --container --network` 与宿主共享网络栈**：/proc/net/dev 和路由表
+  与宿主完全一致（无独立 netns）。容器内直连宿主 `127.0.0.1:9119` 零转发。这与
+  直觉相反，排查连通性前先 `cat /proc/<pid>/net/dev` 对照宿主确认。
+- 认证模式由 `/api/status` 的 `auth_required` 决定：`false` → token 模式（REST
+  用 `X-Hermes-Session-Token` 头，WS 用 `?token=`）；`true` → OAuth（cookie +
+  ws-ticket，desktop 会走 Sign in）。
+- **WS 验证技巧**：`curl -H "X-Hermes-Session-Token: $TOKEN" http://127.0.0.1:9119/api/ws`
+  返回 404（过了 auth gate，只是 curl 非 upgrade 请求）而 401 是被拦——一测便知
+  token 是否有效。
+- 回退策略：后端不可达时保持原容器内 serve（可用但残缺），stderr 打警告，不要
+  硬失败。
+
+详细机制（token 认证路径、main.ts env override 代码位置、issue #38412 历史修复、
+verification 脚本模板）：`references/hermes-desktop-remote-backend.md`
+
 ## Pitfalls / gotchas
 - **`write_file` does not set +x.** Scripts deployed via stow land as `-rw-------` and
   the stow symlink is also non-executable. `chmod +x` the SOURCE before/after writing.
@@ -111,6 +146,7 @@ startup path is alive using **Xvfb**:
 ## References
 - `references/manifest.scm` — electron library manifest (copy + adjust)
 - `references/run-electron.sh` — launcher template (container + X11 + hardware GPU)
+- `references/hermes-desktop-remote-backend.md` — desktop Remote gateway 模式源码级机制（env override、token 认证、验证方法）
 - `scripts/verify-electron-xvfb.sh` — headless startup-path verifier
 
 ## Related
