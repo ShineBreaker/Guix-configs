@@ -2,4 +2,4 @@
 #
 # tag 对应 hermes-agent 仓库的 branch 或 release tag。
 # 升级：改此文件里的 tag，再跑 hermes-update。
-tag=v2026.7.20
+tag=v2026.7.30
