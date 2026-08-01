@@ -81,17 +81,19 @@ if status is-interactive
                 # 侧栏 opt-in：tmux 默认纯净（@sidebar_visible 全局 = 0），用户入口在此
                 # 用 session 级覆盖为 1。agent 程序化创建的 session 不经此入口 → 纯净。
                 #
-                # attach 场景：set-option 不能与 attach-session 串联（命令链竞态会让
-                # client 异常退出 = 闪退）。先独立 set-option，attach 命令保持干净，
-                # 由 tmux.conf 的 client-attached hook 自动触发 follow 建侧栏。
-                # new-session 场景：after-new-session hook 在 set-option 之前触发，
-                # 故需串联显式 follow 兜底。
-                if tmux has-session -t main 2>/dev/null
-                    tmux set-option -t main @sidebar_visible 1
-                    exec tmux attach-session -t main
-                else
-                    exec tmux new-session -s main -n "$window_name" -c "$cwd" \; set-option @sidebar_visible 1 \; run-shell ~/.config/tmux/scripts/sidebar-toggle follow
+                # 关键：attach-session / new-session（无 -d）都让 client 接管终端进入
+                # 前台交互模式。若在其后用 \; 串联 set-option / run-shell，命令链竞态
+                # 会让 client 异常退出 = 闪退。故统一模式：先在 server 端把 session 级
+                # 选项设好、侧栏建好（detached，无前台竞态），最后用纯 attach-session
+                # （无 \; 串联）接管终端。无 server 时用 new-session -d 启动 server。
+                if not tmux has-session -t main 2>/dev/null
+                    # 无 main（含无 server 情形）→ detached 新建，先启动 server
+                    tmux new-session -d -s main -n "$window_name" -c "$cwd"
                 end
+                # 此时 server 必在、main session 必在（detached）
+                tmux set-option -t main @sidebar_visible 1
+                ~/.config/tmux/scripts/sidebar-toggle follow >/dev/null 2>&1
+                exec tmux attach-session -t main
 
             case herdr
                 # 调用 herdr-session-selector 选会话。selector 输出单行机器 key：
@@ -136,8 +138,8 @@ if status is-interactive
                 # 第一层选了具体 session 条目。BUSY 拦截：tmux-busy-<name> 表示该
                 # session 正被其他客户端占用，拒绝 attach（保护对方，避免意外断开）；
                 # tmux-<name> 为可用 session，直接 attach。
-                # attach 不串联 set-option/follow（命令链竞态致闪退）：先独立 set-option，
-                # 由 client-attached hook 自动 follow 建侧栏。
+                # attach 前不串联命令（命令链竞态致闪退）：先独立 set-option + follow，
+                # 再用纯 attach-session 接管终端（与 case tmux 同模式）。
                 if string match -q 'tmux-busy-*' -- "$action"
                     set -l session_name (string replace -r '^tmux-busy-' '' -- "$action")
                     echo "session [$session_name] 正在被其他客户端使用，未 attach。" >&2
@@ -145,6 +147,7 @@ if status is-interactive
                 end
                 set -l session_name (string replace -r '^tmux-' '' -- "$action")
                 tmux set-option -t "$session_name" @sidebar_visible 1
+                ~/.config/tmux/scripts/sidebar-toggle follow >/dev/null 2>&1
                 exec tmux attach-session -t "$session_name"
         end
     end
