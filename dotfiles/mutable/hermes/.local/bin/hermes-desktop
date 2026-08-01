@@ -84,7 +84,9 @@ export GDK_BACKEND="${GDK_BACKEND:-$_ozone}"
 # 额外含 XDG_DATA_DIRS/XDG_CONFIG_HOME：让容器内 GTK 复用宿主主题/图标/光标搜索路径
 # 额外含 IME 变量（GTK_IM_MODULE/QT_IM_MODULE/XMODIFIERS）：fcitx5 输入法透传
 # 额外含 XCURSOR_PATH/XCURSOR_THEME：光标主题搜索路径
-PRESERVE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR|XDG_DATA_DIRS|XDG_CONFIG_HOME|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS|XCURSOR_PATH|XCURSOR_THEME|GTK_THEME|GTK_IM_MODULE_DIR|GDK_BACKEND)$'
+# 额外含 HERMES_DESKTOP_REMOTE_URL/TOKEN：Remote gateway 模式（连宿主
+# hermes-backend 9119）时透传给 desktop 壳，避免它在容器内 spawn 残缺 serve
+PRESERVE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|HERMES_DESKTOP_REMOTE_URL|HERMES_DESKTOP_REMOTE_TOKEN|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR|XDG_DATA_DIRS|XDG_CONFIG_HOME|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS|XCURSOR_PATH|XCURSOR_THEME|GTK_THEME|GTK_IM_MODULE_DIR|GDK_BACKEND)$'
 
 # --share/--expose
 SHARE_FLAGS=(
@@ -150,6 +152,33 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-launch >/dev/null 2
   eval "$(dbus-launch --sh-syntax)"; \
 fi && \
 exec /appimage-root/Hermes --no-sandbox --disable-gpu-sandbox --ozone-platform="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}" --enable-wayland-ime --gtk-version=3 --ignore-gpu-blocklist --disable-dev-shm-usage "$@"'
+
+# ── Remote gateway 模式：连宿主 hermes-backend(9119)，不在容器内跑 serve ──
+# 背景：容器只是为 Electron GUI 准备的（manifest 只含运行时库），若让
+# desktop 在容器内 spawn 自己的 `hermes serve`，agent 的工具环境就是残缺的
+# （没有 guix/git/blue 等）。宿主 shepherd 服务 hermes-backend 跑在完整
+# 环境里，desktop 以 Remote gateway 模式连它（127.0.0.1:9119，容器与宿主
+# 共享网络栈，直连即可）。desktop 壳读取 HERMES_DESKTOP_REMOTE_URL +
+# HERMES_DESKTOP_REMOTE_TOKEN（main.ts env override 路径）后不再启动本地
+# serve，所有 agent 操作都落到宿主的完整环境。
+#
+# token 每次 backend 重启都会重新生成（web_server.py 里 secrets.token_urlsafe
+# 32，除非显式设 HERMES_DASHBOARD_SESSION_TOKEN），所以这里启动时动态抓取，
+# 不写死任何 secret。9119 不可达时回退到默认的容器内本地 serve（保持可用，
+# 但环境残缺——应优先确保 hermes-backend 已启动）。
+REMOTE_BASE="http://127.0.0.1:9119"
+if curl -sf -m 2 -o /dev/null "${REMOTE_BASE}/api/status"; then
+  _session_token="$(curl -sf -m 2 "${REMOTE_BASE}/" | grep -oE '__HERMES_SESSION_TOKEN__="[^"]+"' | head -1 | sed -E 's/.*="([^"]+)"/\1/')"
+  if [[ -n "${_session_token}" ]]; then
+    export HERMES_DESKTOP_REMOTE_URL="${REMOTE_BASE}"
+    export HERMES_DESKTOP_REMOTE_TOKEN="${_session_token}"
+    echo "hermes-desktop: Remote gateway → ${REMOTE_BASE}（agent 跑在宿主完整环境）" >&2
+  else
+    echo "hermes-desktop: 警告：${REMOTE_BASE} 在线但抓不到 session token，回退容器内 serve（环境残缺）" >&2
+  fi
+else
+  echo "hermes-desktop: 警告：${REMOTE_BASE} 不可达（hermes-backend 未启动？），回退容器内 serve（环境残缺）" >&2
+fi
 
 exec guix shell --container --emulate-fhs --network \
   --manifest="${MANIFEST}" \

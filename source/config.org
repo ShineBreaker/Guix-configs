@@ -1553,8 +1553,6 @@ hermes-desktop 的 FHS 容器运行时
 "libva"
 ;; GSettings/dconf
 "gsettings-desktop-schemas"
-;; Hermes Agent 运行时需要的一些工具
-"sed" "ripgrep" "python-openpyxl"
 #+end_src
 
 进 ~home-packages~ ：被 home profile 当前 generation 引用 -> GC root，guix gc 不清理。
