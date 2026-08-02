@@ -29,40 +29,73 @@ HERMES_HOME = Path(
 )
 
 
+def _strip_comment(val: str) -> str:
+    """Strip a trailing ' #...' inline comment, respecting quotes.
+
+    `#` counts as a comment start only at line start or after whitespace,
+    per YAML rules. Quoted strings may legally contain '#'.
+    """
+    in_q = None
+    for i, ch in enumerate(val):
+        if in_q:
+            if ch == in_q:
+                in_q = None
+        elif ch in ("'", '"'):
+            in_q = ch
+        elif ch == "#" and (i == 0 or val[i - 1] in " \t"):
+            return val[:i].rstrip()
+    return val.strip()
+
+
 def _yaml_fallback(text: str) -> dict:
     """Minimal YAML subset loader — no PyYAML dep.
 
-    Supports the flat key: value / list-of-strings structure used by
-    metabolism_thresholds.yaml. Nested via 2-space indent.
+    Supports the dialect used by metabolism_thresholds.yaml:
+      - `key: value` scalars (with inline ` #` comments stripped)
+      - 2-space nested blocks
+      - block lists (`key:` followed by `- item` lines, either same
+        indent or deeper) and flow lists (`[a, b, c]`)
     """
     root: dict = {}
-    stack: list[tuple[int, dict]] = [(-1, root)]
+    # stack entries: (indent, container, key_in_parent)
+    stack: list[tuple[int, dict | list, str]] = [(-1, root, "")]
     for raw in text.splitlines():
         line = raw.rstrip()
         if not line or line.lstrip().startswith("#"):
             continue
         indent = len(line) - len(line.lstrip())
         content = line.strip()
-        # pop deeper levels
-        while stack and stack[-1][0] >= indent:
-            stack.pop()
-        parent = stack[-1][1]
         if content.startswith("- "):
-            val = content[2:].strip()
-            # ensure parent is a list
-            if not isinstance(parent, list):
-                # convert dict-as-list — shouldn't happen with our schema
-                continue
-            parent.append(_coerce(val))
+            val = _strip_comment(content[2:].strip())
+            # pop containers nested deeper than this item; keep a list
+            # container at the same indent so sibling items append to it
+            while stack and stack[-1][0] > indent:
+                stack.pop()
+            parent = stack[-1][1]
+            if isinstance(parent, list):
+                parent.append(_coerce(val))
+            elif isinstance(parent, dict) and not parent and len(stack) >= 2:
+                # `key:` empty block becomes a list on its first item
+                key = stack[-1][2]
+                lst = [_coerce(val)]
+                outer = stack[-2][1]
+                if isinstance(outer, dict):
+                    outer[key] = lst
+                stack[-1] = (indent, lst, key)
+            # else: dangling list item without a container — ignore
         elif ":" in content:
             key, _, val = content.partition(":")
             key = key.strip()
-            val = val.strip()
+            val = _strip_comment(val)
+            # pop deeper levels (>= pops siblings at the same indent)
+            while stack and stack[-1][0] >= indent:
+                stack.pop()
+            parent = stack[-1][1]
             if val == "":
-                # nested block
+                # nested block (dict by default; converted to list by items)
                 child: dict | list = {}
                 parent[key] = child
-                stack.append((indent, child))
+                stack.append((indent, child, key))
             else:
                 parent[key] = _coerce(val)
     return root
@@ -70,6 +103,7 @@ def _yaml_fallback(text: str) -> dict:
 
 def _coerce(val: str):
     """Coerce YAML-ish scalar to python value."""
+    val = val.strip()
     if val in ("true", "True", "yes"):
         return True
     if val in ("false", "False", "no"):
@@ -81,6 +115,12 @@ def _coerce(val: str):
         val.startswith("'") and val.endswith("'")
     ):
         return val[1:-1]
+    # flow-style list: [a, b, c]
+    if val.startswith("[") and val.endswith("]"):
+        inner = val[1:-1].strip()
+        if not inner:
+            return []
+        return [_coerce(x.strip()) for x in inner.split(",")]
     # int / float
     try:
         return int(val)
@@ -407,15 +447,21 @@ def check_pipeline_fresh(cfg: dict) -> tuple[str, str]:
 
 
 def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
-    """9. Error count in scanned logs.
+    """9. Error count in scanned logs, within a rolling window.
 
-    Groups errors by (file:module:exception) signature so "26246 errors" reads as
-    "47 unique signatures" — the metabolic point is whether you have N independent
-    problems or one repeating failure. Signature expansion includes the actual
-    exception type from Traceback tails (e.g. ModuleNotFoundError vs ImportError).
+    Groups errors by (file:module:exception) signature so N repeating
+    lines read as one problem. Only lines inside the last `window_days`
+    (default 7) are counted — a root cause that gets fixed stops counting
+    as soon as it ages out of the window. The metabolic signal is "how
+    many independent problems are active NOW", not "how many error lines
+    ever existed". Retry counters like `poll error (1/3)` are normalized
+    to `(n/3)`: three retries of one connection failure are one problem.
     """
     max_per = cfg.get("max_per_day", 5)
+    window_days = float(cfg.get("window_days", 7))
     log_globs = cfg.get("log_globs", [])
+    cutoff = _dt.datetime.now() - _dt.timedelta(days=window_days)
+    ts_re = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
     err_count = 0
     sig_count: dict[str, int] = {}
     if HERMES_HOME.exists():
@@ -427,52 +473,54 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                     text = p.read_text(errors="ignore")
                 except OSError:
                     continue
-                # Pre-extract the tail exception type per Traceback block.
-                tail_by_offset: dict[int, str] = {}
-                lines = text.split("\n")
-                i = 0
-                while i < len(lines):
-                    if lines[i].startswith("Traceback (most recent call last):"):
-                        tb_start_offset = sum(len(l) + 1 for l in lines[:i])
-                        j = i + 1
-                        tail = None
-                        while j < len(lines):
-                            if lines[j] and not lines[j][0].isspace():
-                                em = re.match(
-                                    r"^([\w.]+(?:Error|Exception|Warning|Failure|Interrupt))",
-                                    lines[j],
-                                )
-                                if em:
-                                    tail = em.group(1)
-                                    break
-                                break
-                            j += 1
-                        tail_by_offset[tb_start_offset] = tail or "Exception"
-                        i = j + 1 if tail else i + 1
+                cur_ts: _dt.datetime | None = None
+                in_tb = False  # currently inside a Traceback block
+                for raw in text.split("\n"):
+                    line = raw.rstrip("\r")
+                    if not line:
+                        continue
+                    m = ts_re.match(line)
+                    if m:
+                        try:
+                            cur_ts = _dt.datetime.strptime(
+                                m.group(1), "%Y-%m-%d %H:%M:%S"
+                            )
+                        except ValueError:
+                            cur_ts = None
+                        rest = line[m.end():]
                     else:
-                        i += 1
-                # Count each Traceback block as 1 error (not each frame line).
-                # Count each ERROR line as 1 error.
-                pos = 0
-                tb_offsets_seen: set[int] = set()
-                for line in text.splitlines(keepends=True):
-                    line_start = pos
-                    pos += len(line)
-                    if "Traceback" in line:
-                        # Find which block this line belongs to
-                        for tb_pos in sorted(tail_by_offset):
-                            if tb_pos <= line_start and tb_pos not in tb_offsets_seen:
-                                # First line of this traceback — count once
-                                tb_offsets_seen.add(tb_pos)
-                                tail = tail_by_offset[tb_pos]
-                                sig = f"{p.name}::{tail}"
-                                sig_count[sig] = sig_count.get(sig, 0) + 1
-                                err_count += 1
-                                break
-                    elif "ERROR" in line:
-                        m = re.search(r"ERROR\s+([\w.]+):?\s*(.*)", line)
-                        if m:
-                            sig = f"{p.name}::{m.group(1)}:{(m.group(2) or '')[:40]}"
+                        rest = line
+                    outside = cur_ts is not None and cur_ts < cutoff
+                    if outside and rest.startswith("Traceback"):
+                        in_tb = True  # block ages out with its timestamp
+                        continue
+                    if in_tb:
+                        if outside:
+                            continue
+                        if rest and not rest[0].isspace():
+                            # column-0 line ends the traceback: exception type
+                            em = re.match(
+                                r"^([\w.]+(?:Error|Exception|Warning|Failure|Interrupt))",
+                                rest,
+                            )
+                            sig = f"{p.name}::{em.group(1) if em else 'Exception'}"
+                            sig_count[sig] = sig_count.get(sig, 0) + 1
+                            err_count += 1
+                            in_tb = False
+                        continue
+                    if outside:
+                        continue
+                    if rest.startswith("Traceback"):
+                        in_tb = True
+                        continue
+                    if "ERROR" in rest:
+                        m2 = re.search(r"ERROR\s+([\w.]+):?\s*(.*)", rest)
+                        if m2:
+                            mod = m2.group(1)
+                            msg = m2.group(2) or ""
+                            # normalize retry counters: (1/3)(2/3)(3/3) -> (n/3)
+                            msg = re.sub(r"\(\d/(\d+)\)", r"(n/\1)", msg)
+                            sig = f"{p.name}::{mod}:{msg[:40]}"
                         else:
                             sig = f"{p.name}::ERROR"
                         sig_count[sig] = sig_count.get(sig, 0) + 1
@@ -481,7 +529,10 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
     status = "GREEN" if n_unique <= max_per else "RED"
     top = sorted(sig_count.items(), key=lambda x: -x[1])[:3]
     top_str = "; ".join(f"{k}×{v}" for k, v in top) if top else ""
-    return status, f"errors {n_unique} unique sigs (total {err_count}): {top_str}"
+    return (
+        status,
+        f"errors {n_unique} unique sigs ({window_days:.0f}d window, total {err_count}): {top_str}",
+    )
 
 
 def check_log_line_cap(cfg: dict) -> tuple[str, str]:

@@ -3,7 +3,8 @@
 
 inject:
   enabled: true
-  max_kb: 30                # sum of system prompt + skill index + memory
+  max_kb: 32                # measured 30.8KB (2026-08-02); 32 keeps ~4% headroom
+                            # while still catching runaway growth (skill doubling)
 
 skill_count:
   enabled: true
@@ -43,6 +44,7 @@ pipeline_fresh:
 errors:
   enabled: true
   max_per_day: 5
+  window_days: 7            # count only errors inside this rolling window
   log_globs:
     - "logs/*.log"          # scan ALL logs — duplicates and noise surface via signature grouping
   # When real problems exist (e.g. mcp server failing to start, web_server cron
@@ -86,10 +88,10 @@ plaintext_secrets:
     - "-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"
   exclude_paths:
     - ".env"                # intentional secrets live here
-    - "node_modules/**"
+    - "**/node_modules/**"  # fnmatch needs the **/ prefix to match nested dirs
     - "**/venv/**"           # virtualenvs have library key patterns
     - "**/.venv/**"
-    - "references/**"       # doc examples may have fake keys
+    - "**/references/**"    # doc examples may have fake keys (sk-xxx placeholders)
     - "sessions/**"         # session dumps may contain Bearer tokens from API calls
     - "**/tests/**"         # test files use fake keys (ghp_xxx, sk-xxx)
     - "**/.env.example"     # example env files show placeholder shapes
