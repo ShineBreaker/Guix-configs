@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./llm-agents.nix
     ./zed.nix
   ];
 
@@ -56,12 +57,6 @@
     package-version-server
     typescript-language-server
     vscode-langservers-extracted
-
-    # AI Agent
-    claude-code
-    # claude-agent-acp
-    codex
-    codex-acp
 
     # Communication
     discord
