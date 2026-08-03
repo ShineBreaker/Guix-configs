@@ -1444,7 +1444,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "cc-switch-bin"
         "crush-bin"
         "github-copilot"
-        "oh-my-pi-bin"
         "opencode-bin"
         "reasonix-desktop-bin"
         "zcode"
@@ -1495,10 +1494,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "mpv"
         "nomacs"
         "obs"
-        "obs-pipewire-audio-capture"
 
         ;; 社交
-        "element-desktop"
         "notmuch"
         "telegram-desktop"
 
@@ -1527,11 +1524,11 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
         ;; 命令行工具
         "age"
-        "amber-pm"
+        "grim"
         "kanata"
         "mesa-utils"
         "pinentry-qt"
-        "tesseract-ocr"
+        "slurp"
 
         ;; Python
         "python-openpyxl"))
@@ -2237,7 +2234,8 @@ end
              (gnu packages package-management)
              (gnu packages base)
              (gnu packages linux)
-             (gnu services lightdm)
+             (gnu packages xfce)      ;; xfce4-session 包（startxfce4 的 store 路径）
+             (gnu services ssh)
              (gnu packages guile)
              (gnu packages texinfo)
              (gnu packages networking)
@@ -2292,7 +2290,7 @@ end
   (operating-system
    (inherit %live-base-os)
    (timezone "Asia/Shanghai" )
-   (locale "zh_CN.utf8" )
+   (locale "en_GB.utf8" )
    (host-name "live-system")
    (label (format #f "Guix Desktop (~a build)"
                   (date->string (current-date) "~Y-~m-~d")))
@@ -2327,6 +2325,7 @@ end
              '(;; CLI 工具
                "curl"
                "file"
+               "fish"
                "git"
                "gnupg"
                "mosh"
@@ -2381,21 +2380,43 @@ end
    (services
     (append
      <<guix-substitutes>>
-     (list (service elogind-service-type)
+     (list (service elogind-service-type)  ;; PAM session 管理：创建 /run/user/<uid>、提供 loginctl
+           ;; （labwc 的 libseat logind 后端通过 elogind 获取 seat）
            (service xfce-desktop-service-type)
-           (service lightdm-service-type
-                    (lightdm-configuration
-                     (allow-empty-passwords? #f)
-                     (seats
-                      (list
-                       (lightdm-seat-configuration
-                        (name "*")
-                        (type 'local)
-                        (user-session "xfce-wayland")
-                        (autologin-user "live")))))))
+           (service greetd-service-type
+                    (greetd-configuration
+                     (greeter-supplementary-groups '("input" "video"))
+                     (terminals
+                      (list (greetd-terminal-configuration
+                             (terminal-vt "7")
+                             (terminal-switch #t)
+                             ;; 开机直接 autologin live 用户进 xfce-wayland 桌面。
+                             ;; greetd 直接 execl 会话命令，不走 xinitrc/session-wrapper
+                             ;; （lightdm 正是因此无法启动 wayland 会话）。
+                             (initial-session-user "live")
+                             ;; greetd-user-session 编译成 Guile execl（不查 PATH），
+                             ;; command 必须用 file-append 给出 store 绝对路径。
+                             ;; xdg-session-type "wayland" + xdg-env? 让脚本设好
+                             ;; XDG_SESSION_TYPE 和 XDG_RUNTIME_DIR 后再 execl。
+                             (initial-session-command
+                              (greetd-user-session
+                               (command (file-append xfce4-session "/bin/startxfce4"))
+                               (command-args '("--wayland"))
+                               (xdg-session-type "wayland")
+                               (xdg-env? #t)))
+                             ;; fallback greeter：autologin 退出后显示文本登录
+                             (default-session-command
+                              (greetd-agreety-session))))))))
      (modify-services (operating-system-user-services %live-base-os)
                       (delete kmscon-service-type)
                       (delete console-font-service-type)
+                      (openssh-service-type
+                       config => (openssh-configuration
+                                  (inherit config)
+                                  ;; 调试用：让 sshd 随系统启动（base OS 默认 %auto-start? #f）
+                                  (%auto-start? #t)
+                                  (permit-root-login #t)
+                                  (password-authentication? #t)))
                       (guix-service-type
                        config => (guix-configuration (inherit config)
                                                      (channels channels-with-nonguix))))))))

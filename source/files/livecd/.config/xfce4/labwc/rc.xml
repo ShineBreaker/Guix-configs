@@ -240,7 +240,7 @@
       /></keybind>
     <keybind key="W-E"><action
         name="Execute"
-        command="emacsclient -c"
+        command="mousepad"
       /></keybind>
 
     <keybind key="W-B"><action
