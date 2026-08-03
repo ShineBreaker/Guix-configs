@@ -4,15 +4,14 @@
   home.packages = with pkgs.llm-agents; [
     claude-agent-acp
     claude-code
-    claude-desktop
 
     codex
     codex-acp
 
+    grok
     kimi-code
-
     omp
-
-    opencode2
+    opencode
+    skills
   ];
 }
