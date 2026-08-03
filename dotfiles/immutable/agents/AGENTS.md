@@ -86,12 +86,12 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 
 ### 启动脚本
 
-| 脚本          | 作用                                         |
-| ------------- | -------------------------------------------- |
-| `kb`          | 知识库 CLI                                   |
-| `agenote`     | 知识库 CLI（agenote card + memory 操作）      |
-| `agenote_cli` | agenote CLI shim（纯 stdlib，供 hooks 调用） |
-| `loopctl`     | 跨 agent 循环框架入口                        |
+| 脚本          | 作用                                                                |
+| ------------- | ------------------------------------------------------------------- |
+| `kb`          | 知识库 CLI                                                          |
+| `agenote`     | 知识库 CLI（agenote card + memory 操作）。由 `uv tool install` 提供（仓库 `github.com/ShineBreaker/agenote`），**不在本 stow 包** |
+| `agenote-cli` | agenote CLI shim（供 omp-hooks 扩展 execSync 调用）。同上，由 uv tool 提供 |
+| `loopctl`     | 跨 agent 循环框架入口                                               |
 
 ### Crush（`.config/crush/`）
 

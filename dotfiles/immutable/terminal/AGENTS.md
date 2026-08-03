@@ -41,6 +41,8 @@ terminal/
 │   │   ├── scripts/
 │   │   │   └── herdr-session-selector
 │   │   └── config.toml
+│   ├── kitty/
+│   │   └── kitty.conf
 │   ├── tmux/
 │   │   ├── scripts/
 │   │   │   ├── sidebar-render.scm

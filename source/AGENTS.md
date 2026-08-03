@@ -13,10 +13,12 @@ source/
 ├── files/
 │   ├── livecd/
 │   │   ├── .config/
+│   │   │   ├── Thunar/
 │   │   │   ├── fish/
 │   │   │   ├── gtk-3.0/
 │   │   │   ├── gtk-4.0/
-│   │   │   └── xfce4/
+│   │   │   ├── xfce4/
+│   │   │   └── mimeapps.list
 │   │   └── .gtkrc-2.0
 │   ├── skel/
 │   │   └── .config/
@@ -30,6 +32,7 @@ source/
 │   │   │   └── nix.nix
 │   │   └── programs/
 │   │       ├── 00-main.nix
+│   │       ├── llm-agents.nix
 │   │       └── zed.nix
 │   ├── flake.lock
 │   └── flake.nix

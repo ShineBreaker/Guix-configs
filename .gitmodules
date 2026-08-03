@@ -14,3 +14,9 @@
 [submodule ".agents/skills/guix-skills"]
 	path = .agents/skills/guix-skills
 	url = https://github.com/ShineBreaker/guix-skills
+[submodule "dotfiles/mutable/agenote/.config/agents/skills"]
+	path = dotfiles/mutable/agenote/.config/agents/skills
+	url = https://github.com/ShineBreaker/agenote-skills.git
+[submodule "dotfiles/mutable/agenote/.config/omp/extensions/agenote-hooks"]
+	path = dotfiles/mutable/agenote/.config/omp/extensions/agenote-hooks
+	url = https://github.com/ShineBreaker/pi-agenote.git

@@ -71,6 +71,7 @@ dotfiles/
 │   │   │   ├── fish/
 │   │   │   ├── foot/
 │   │   │   ├── herdr/
+│   │   │   ├── kitty/
 │   │   │   ├── tmux/
 │   │   │   ├── tmuxifier/
 │   │   │   └── starship.toml
@@ -91,10 +92,8 @@ dotfiles/
 └── mutable/
     ├── agenote/
     │   ├── .config/
-    │   │   └── agents/
-    │   ├── .local/
-    │   │   └── bin/
-    │   ├── .stow-folding
+    │   │   ├── agents/
+    │   │   └── omp/
     │   └── .stow-local-ignore
     ├── appimage-run/
     ├── emacs/

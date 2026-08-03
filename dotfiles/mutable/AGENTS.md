@@ -29,16 +29,10 @@
 mutable/
 ├── agenote/
 │   ├── .config/
-│   │   └── agents/
-│   │       └── skills/
-│   ├── .local/
-│   │   └── bin/
-│   │       ├── ag_lib/
-│   │       ├── ag-ent
-│   │       ├── agenote
-│   │       ├── agenote_cli.py
-│   │       └── orgfmt
-│   ├── .stow-folding
+│   │   ├── agents/
+│   │   │   └── skills/
+│   │   └── omp/
+│   │       └── extensions/
 │   └── .stow-local-ignore
 ├── appimage-run/
 ├── emacs/
@@ -103,6 +97,7 @@ mutable/
 | -------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                       |
 | `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                         |
+| `agenote` | `~/.config/agents/skills/` + `~/.config/omp/extensions/`                                                       | **纯 submodule 容器包**。两个子模块：`agenote-skills`（3 个 agent skill，→ `github.com/ShineBreaker/agenote-skills`）+ `pi-agenote`（omp 扩展，→ `github.com/ShineBreaker/pi-agenote`）。程序本体（CLI/ag_lib）**不在此包**，由 `uv tool install` 独立安装到 `~/.local/bin/`（→ `github.com/ShineBreaker/agenote`）。 |
 
 ## 工作流
 
