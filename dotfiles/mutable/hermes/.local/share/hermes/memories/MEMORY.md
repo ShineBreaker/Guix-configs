@@ -2,8 +2,6 @@
 §
 用户偏好:记忆分工——markdown 常驻文档(MEMORY.md/USER.md)只写跨所有仓库通用的规范与偏好(通用原则、回复风格、工具约定);项目专属事实(某仓库的部署拓扑、踩坑、环境细节、命令诀窍)一律写入 fact_store 按需检索。两者互补、不二选一。判断标准:换一个仓库是否还有意义——是则入 markdown,否则入 fact_store。
 §
-verify 脚本里的 regex 陷阱(2026-07-20 实战): (1) `\b` 在两个非 word 字符之间不成立(如 `>>` 之间),改用 `(?:^|[^a-zA-Z0-9_])` 前缀。(2) verify fixture 里出现 shell 重定向 (`>>` `>` `<` `|` `&` `;` `` ` `` `$` `\\`) 时,subprocess argv 会被 shell 提前解析,必须改用 stdin 传命令。SKILL.md 里反向警告文字(如"不要用 rm -rf")命中 verify 是 false-positive,要写"只看非注释行的 shell 命令"才稳。
-§
 hermes sandbox "半盲"特性下的诊断纪律: 沙盒里看不到 sudo / ip / virsh 等工具,只能读 /proc/net/*、/sys/class/net。看到 nobody-uid listen 53/67 或类似"service 占着资源"时,不能直接断言是 config.org 里的 service 占的 —— 可能是 systemd-resolved / avahi / 上次失败的 service 残留。诊断三步: ① `sudo herd status <service>` ② `sudo ss -tlnup 'sport = :X'` ③ `pgrep -af '<keyword>'`。
 §
 用户偏好:skill 自包含铁律(2026-07-22 起,当日重构 guix-skills 时强化)。三层含义:(1) 不内嵌完整上游文档/规范当 reference——走 `web_extract <url>` on-demand,skill 内只缓存 agent 现场查不到的部分(项目特定命名/已知踩坑/字段验证表/反模式);用户原话"让 agents 自己去读网站就好",bundled ≠ free。(2) **不得 cross-reference 其他 skill(包括我们自己的,如 guix-configs-workflow)**——每个 skill 必须能独立备份、独立运行,备份=可用。(3) 重构/重写 skill 时**主动清理已删除文件的残留引用**(如 examples/lightweight-desktop.scm 被删后 SKILL.md 里的 3 处指针+表格行)与失效内部锚点(如指向不存在的"Tier 2.5 below"),并核对 `name:` 与目录名一致、frontmatter 用 Hermes 原生(name/description/version/metadata.hermes.tags)而非 Claude 式(allowed-tools/paths/when_to_use)。同条适用于 pi/crush/codex/claude 等外部 agent 的 prompt dump、API PDF、复制 SPEC.md。注:`skill-authoring` 是 Hermes 自带 bundled skill(受保护不可改),此偏好本应写进它,但退而求其次记此处——下次碰到类似 skill-authoring 覆盖不到的点,优先扩这条而非新建。
@@ -12,6 +10,6 @@ hermes sandbox "半盲"特性下的诊断纪律: 沙盒里看不到 sudo / ip / 
 §
 用户偏好: 排查桌面环境问题时,要求 agent 实际追踪源码和运行时状态,不要凭假设下判断。本次反复纠正 agent 对 gnome portal 在 niri 下行为的假设,强调要看源码、读真实环境变量、对比参考实现(Testament)。另: 判断"某配置不存在"前必须先读 channel service preset 模块源码(如 (rosenthal services desktop)), 不能只扫顶层 config.org 就下结论(本次误判 Testament 无 home-dbus 即一例)。
 §
-niri + Guix portal 调试(2026-07-28 实战, 见 guix-skills §22): 根因=D-Bus 双总线拓扑——greetd `dbus-run-session niri --session` 建 /tmp 总线(wayland/niri, 健康), home-dbus-service-type 建 /run/user/1000/bus(tty 环境);portal 被激活到两条总线, 落 tty 侧 backend 回退 settings-only。关键: (1) niri ≥26.04 自注册 org.gnome.Mutter.{ServiceChannel,ScreenCast}+org.gnome.Shell.Screenshot, gnome portal 录屏/截图可用(旧"只能 Settings"结论过时); (2) `niri --session` 内部已跑 dbus-update-activation-environment, config.kdl **不需** environment{} 块或额外 dbus-update-activation-environment。修复: config.kdl `herd set-environment graphical-session ...` 追加 DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS, 把 shepherd 图形服务并入 niri 的 /tmp 总线。诊断: 查 app 真实总线(/proc/<pid>/environ 看 DBUS_SESSION_BUS_ADDRESS), 绝不在前台跑 xdg-document-portal 污染现场。**OBS 录屏不要 reflex 加 wlr portal**: niri ≥26.04 下 gnome backend 经 `default=gnome;gtk`(FileChooser=gtk, Secret=gnome-keyring) 直接服务 ScreenCast/Screenshot; 加 wlr 会重新引入双总线/backend 分裂(§22.1)。若 ScreenCast 真失败先按 §22.2 在 niri 总线诊断。
-§
 OCR 工具选择偏好（2026-07-29 实战验证）：Tesseract 对中文支持极差（无语言包时输出全乱码），中文场景首选 RapidOCR（轻量、快速、准确）或 PaddleOCR（精度更高但模型大）。已搭建 ~/Programs/ocr-system/ 项目，含 RapidOCR + PaddleOCR 双后端。
+§
+agenote 策展实战(2026-08-03):①agenote extract CLI 已可用,多日需循环(--date 单日),14天×7源≈1298条 ②dream top 候选常为 zcode XML 标签噪声(task-notification/output-file 等),先用 agenote search 查重再决定是否 trace ③agenote commit --no-gpg-sign 兜底无 pinentry ④遗留改动与策展产物分两个 commit
