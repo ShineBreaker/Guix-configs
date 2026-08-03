@@ -104,7 +104,6 @@ function renderStale() {
   var bar = document.getElementById("stale-alert");
   var sStale = STATS.stale_count || 0,
     sArchive = STATS.archive_count || 0,
-    staleDays = STATS.stale_threshold_days || 30,
     archiveDays = STATS.archive_threshold_days || 90;
   if (sStale === 0 && sArchive === 0) {
     bar.innerHTML = "";
@@ -112,18 +111,21 @@ function renderStale() {
     return;
   }
   bar.style.display = "block";
+  // 对齐 curator 状态机：stale = STATUS==stale；archive = 其中 LAST_VERIFIED>90天（待归档）
   bar.innerHTML =
     "<div>" +
     "<strong>⚠ 陈旧卡片</strong>" +
-    "<span>" +
-    staleDays +
-    " 天以上未使用 <strong style='color:var(--orange)'>" +
+    "<span>STATUS=stale 的卡片 <strong style='color:var(--orange)'>" +
     sStale +
-    "</strong> 张 · " +
-    archiveDays +
-    " 天以上未使用 <strong style='color:var(--red)'>" +
-    sArchive +
-    "</strong> 张，建议验证或归档</span>" +
+    "</strong> 张" +
+    (sArchive > 0
+      ? " · 其中 LAST_VERIFIED 超 " +
+        archiveDays +
+        " 天（待归档）<strong style='color:var(--red)'>" +
+        sArchive +
+        "</strong> 张"
+      : "") +
+    "，建议验证或归档</span>" +
     "</div>";
 }
 

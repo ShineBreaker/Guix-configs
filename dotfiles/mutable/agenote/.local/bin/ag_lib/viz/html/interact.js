@@ -155,29 +155,22 @@ function highlightSelected(id) {
 
 function renderHeroStats() {
   var el = document.getElementById("hero-stats");
-  var staleDays = STATS.stale_threshold_days || 30,
-    archiveDays = STATS.archive_threshold_days || 90;
+  var archiveDays = STATS.archive_threshold_days || 90;
   el.innerHTML =
     '<div class="hero-stat" title="知识库总卡片数">' +
     '<span class="num">' +
     (STATS.total || 0) +
     '</span><span class="label">总卡片</span></div>' +
-    '<div class="hero-stat" title="' +
-    staleDays +
-    ' 天以上未使用（stale）">' +
+    '<div class="hero-stat" title="STATUS=stale 的卡片（被策展标记为陈旧）">' +
     '<span class="num" style="color:var(--orange)">' +
     (STATS.stale_count || 0) +
-    '</span><span class="label">' +
-    staleDays +
-    "d+</span></div>" +
-    '<div class="hero-stat" title="' +
+    '</span><span class="label">stale</span></div>' +
+    '<div class="hero-stat" title="STATUS=stale 且 LAST_VERIFIED 超 ' +
     archiveDays +
-    ' 天以上未使用（建议归档）">' +
+    " 天（下次 curate 会归档）\">" +
     '<span class="num" style="color:var(--red)">' +
     (STATS.archive_count || 0) +
-    '</span><span class="label">' +
-    archiveDays +
-    "d+</span></div>";
+    '</span><span class="label">待归档</span></div>';
 }
 
 // ════════════════════════════════════════════════════════════════

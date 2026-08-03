@@ -1082,6 +1082,48 @@ def _archive_auto_stale(ctx=None) -> None:
     print(f"自动归档完成: {count} 张卡片")
 
 
+def _mark_auto_stale(ctx=None) -> None:
+    """自动把超阈值未使用的非终态卡片标记为 stale（done/stable → stale）。
+
+    补全 curator 状态机缺失的一跳：curate 第 2 步权重重分配已对 LAST_USED
+    超 STALE_DAYS 的卡片打 0.8 权重惩罚，本函数用同一判定条件同步降级 STATUS，
+    使其进入第 4 步 ``_archive_auto_stale`` 的归档候选。不动 archived（终态）
+    和已是 stale 的卡片（幂等）。
+    """
+    ctx = ctx or default_context()
+    index = _load_index(ctx)
+    count = 0
+    now_dt = datetime.now()
+    for card_info in index["cards"]:
+        if card_info.get("status", "done") not in ("done", "stable"):
+            continue
+        last_used = card_info.get("last_used", "")
+        if not last_used:
+            continue
+        try:
+            lu_date = re.sub(r"[\[\]]", "", last_used).split()[0]
+            days = (now_dt - datetime.strptime(lu_date, "%Y-%m-%d")).days
+        except (ValueError, IndexError):
+            continue
+        if days > STALE_DAYS:
+            card = _resolve_card(card_info["id"], ctx)
+            if card and card.exists():
+                content = card.read_text(encoding="utf-8")
+                if ":STATUS:" in content:
+                    content = re.sub(r":STATUS:\s*.+", ":STATUS:   stale", content)
+                else:
+                    content = content.replace(
+                        ":END:", ":STATUS:   stale\n:END:", 1
+                    )
+                card.write_text(content, encoding="utf-8")
+                _upsert_card(index, card, ctx)
+                count += 1
+                print(f"  标记 stale: {card.name} (>{STALE_DAYS}天未使用)")
+    if count:
+        _save_index(index, ctx)
+    print(f"状态降级完成: {count} 张卡片 done/stable → stale")
+
+
 def cmd_restore(args: argparse.Namespace, ctx=None) -> None:
     """恢复归档卡片。"""
     ctx = ctx or default_context()
@@ -1315,6 +1357,10 @@ def cmd_curate(args: argparse.Namespace, ctx=None) -> None:
         card["weight"] = new_weight
     _save_index(index, ctx)
     print(f"  重新分配权重: {reassigned}/{len(index['cards'])} 张卡片变化")
+
+    # 2.5 状态降级：长期未使用的 done/stable → stale（与第 2 步同判定条件）
+    print("\n── 2.5 状态降级 ──")
+    _mark_auto_stale(ctx)
 
     # 3. 去重检测
     print("\n── 3. 去重检测 ──")

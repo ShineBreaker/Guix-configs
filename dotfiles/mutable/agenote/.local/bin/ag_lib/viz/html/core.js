@@ -178,7 +178,6 @@ function openDetail(id) {
   });
   if (!c) return;
   STATE.selectedId = id;
-  var days = daysSinceDate(c.last_used);
   var cat = c.category || "—";
   var catColor = CATEGORY_COLORS[cat] || "var(--accent)";
   var owner = c.owner || "—";
@@ -202,13 +201,18 @@ function openDetail(id) {
       ? '<div class="body">' + c.body + "</div>"
       : '<div class="body body-empty">（无内容）</div>';
 
+  // 对齐 curator 状态机：只在 STATUS==stale 时提示。
+  // archive 分支用 LAST_VERIFIED 超 90 天（与 _archive_auto_stale 一致）
   var staleHtml = "";
-  if (days > 180) {
-    staleHtml =
-      '<div class="stale-warn">⚠ 已超过 180 天未使用，建议验证或归档</div>';
-  } else if (days > 60) {
-    staleHtml =
-      '<div class="stale-warn">⚠ 已超过 60 天未使用，建议检查时效</div>';
+  if (c.status === "stale") {
+    var verifiedDays = daysSinceDate(c.last_verified);
+    if (verifiedDays > 90) {
+      staleHtml =
+        '<div class="stale-warn">⚠ STATUS=stale 且 LAST_VERIFIED 已超 90 天，下次 curate 将归档</div>';
+    } else {
+      staleHtml =
+        '<div class="stale-warn">⚠ STATUS=stale，建议验证（agenote update --status stable）或等待归档</div>';
+    }
   }
 
   // 顶部 meta 块

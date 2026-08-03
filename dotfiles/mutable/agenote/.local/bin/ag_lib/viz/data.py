@@ -12,7 +12,7 @@ import sys
 from collections import Counter
 from datetime import datetime
 
-from ag_lib.core import ARCHIVE_THRESHOLD_DAYS, KB_ROOT, STALE_THRESHOLD_DAYS
+from ag_lib.core import ARCHIVE_THRESHOLD_DAYS, KB_ROOT
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # --filter 字段白名单（与索引卡片字段对齐）
@@ -100,7 +100,7 @@ def parse_filter(s: str) -> dict:
 
 
 def normalize_cards(cards: list[dict]) -> list[dict]:
-    """规整日期字段并透传 agenote 体系字段（domain/weight/usage_count/source_agent）。"""
+    """规整日期字段并透传 agenote 体系字段（domain/weight/usage_count/source_agent/status）。"""
     out = []
     for c in cards:
         nc = dict(c)
@@ -111,6 +111,7 @@ def normalize_cards(cards: list[dict]) -> list[dict]:
         nc.setdefault("source_agent", "")
         nc.setdefault("weight", 1.5 if nc["domain"] == "human" else 1.0)
         nc.setdefault("usage_count", 0)
+        nc.setdefault("status", "")
         out.append(nc)
     return out
 
@@ -118,17 +119,22 @@ def normalize_cards(cards: list[dict]) -> list[dict]:
 def compute_stats(cards: list[dict], memory: dict | None = None) -> dict:
     """Python 端预计算：总数、陈旧列表、按域分布。
 
-    陈旧判定对齐 agenote 体系状态机：
-      - stale: last_used 距今 > STALE_THRESHOLD_DAYS(30)
-      - archive: last_used 距今 > ARCHIVE_THRESHOLD_DAYS(90)
+    陈旧判定对齐 curator 状态机（``_archive_auto_stale``，cards.py）：
+      - stale: STATUS == "stale"（被策展流程主动标记为陈旧的卡片）
+      - archive: STATUS == "stale" 且 LAST_VERIFIED 距今 > ARCHIVE_THRESHOLD_DAYS(90)
+        ——即 curator 下次 curate 会真正归档的那些卡片
+
+    不再用 LAST_USED 天数判定陈旧（那会把 done 态卡片误报为陈旧，与 curator
+    的归档条件 ``STATUS==stale`` 完全脱节）。curator 不会自动把 done→stale，
+    STATUS 只能由 ``agenote update --status stale`` 主动设置。
     `memory` 参数保留为可选以兼容旧调用，但不再生成相关数据。
     """
     normalized = normalize_cards(cards)
-    stale_cards = [
-        c for c in normalized if 0 < days_since(c["last_used"]) > STALE_THRESHOLD_DAYS
-    ]
+    stale_cards = [c for c in normalized if c.get("status") == "stale"]
     archive_cards = [
-        c for c in normalized if 0 < days_since(c["last_used"]) > ARCHIVE_THRESHOLD_DAYS
+        c
+        for c in stale_cards
+        if 0 < days_since(c["last_verified"]) > ARCHIVE_THRESHOLD_DAYS
     ]
     # 按域分布（三域区分统计）
     domain_counts = Counter(c.get("domain", "human") for c in normalized)
@@ -136,9 +142,6 @@ def compute_stats(cards: list[dict], memory: dict | None = None) -> dict:
         "total": len(cards),
         "stale_count": len(stale_cards),
         "archive_count": len(archive_cards),
-        "stale_ids": [c["id"] for c in stale_cards],
-        "archive_ids": [c["id"] for c in archive_cards],
-        "stale_threshold_days": STALE_THRESHOLD_DAYS,
         "archive_threshold_days": ARCHIVE_THRESHOLD_DAYS,
         "domain_counts": dict(domain_counts),
     }
