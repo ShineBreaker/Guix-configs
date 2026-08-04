@@ -31,7 +31,7 @@ mutable/
 │   ├── .config/
 │   │   ├── agents/
 │   │   │   └── skills/
-│   │   └── omp/
+│   │   └── pi/
 │   │       └── extensions/
 │   └── .stow-local-ignore
 ├── appimage-run/
@@ -64,17 +64,22 @@ mutable/
 │   │       └── hermes/
 │   ├── .stow-folding
 │   └── .stow-local-ignore
-├── omp/
+├── pi/
 │   ├── .config/
 │   │   ├── agents/
 │   │   │   └── skills/
-│   │   └── omp/
+│   │   └── pi/
 │   │       ├── extensions/
-│   │       ├── config.yml
+│   │       ├── npm/
+│   │       ├── .gitignore
+│   │       ├── APPEND_SYSTEM.md
 │   │       ├── global-context.json
+│   │       ├── keybindings.json
 │   │       ├── mcp.json
-│   │       └── models.yml
-│   ├── .gitignore
+│   │       ├── models.json
+│   │       ├── pi-lsp.json
+│   │       ├── plannotator.json
+│   │       └── settings.json
 │   └── .stow-local-ignore
 ├── secrets/
 │   ├── .local/

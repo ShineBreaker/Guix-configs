@@ -34,10 +34,7 @@ dotfiles/
 │   ├── agents/
 │   │   ├── .config/
 │   │   │   ├── agents/
-│   │   │   ├── crush/
-│   │   │   └── loopctl/
-│   │   ├── .local/
-│   │   │   └── bin/
+│   │   │   └── crush/
 │   │   └── .gitignore
 │   ├── desktop/
 │   │   ├── .config/
@@ -93,7 +90,7 @@ dotfiles/
     ├── agenote/
     │   ├── .config/
     │   │   ├── agents/
-    │   │   └── omp/
+    │   │   └── pi/
     │   └── .stow-local-ignore
     ├── appimage-run/
     ├── emacs/
@@ -109,11 +106,10 @@ dotfiles/
     │   │   └── share/
     │   ├── .stow-folding
     │   └── .stow-local-ignore
-    ├── omp/
+    ├── pi/
     │   ├── .config/
     │   │   ├── agents/
-    │   │   └── omp/
-    │   ├── .gitignore
+    │   │   └── pi/
     │   └── .stow-local-ignore
     ├── secrets/
     │   ├── .local/

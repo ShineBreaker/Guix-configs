@@ -16,7 +16,6 @@ Guix-configs///
 │   ├── skills/
 │   └── anchors.json
 ├── docs/
-│   ├── commands.org
 │   ├── iso-build.md
 │   ├── loopctl.md
 │   └── secrets.md

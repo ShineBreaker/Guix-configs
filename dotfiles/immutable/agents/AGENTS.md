@@ -16,50 +16,23 @@ agents/
 │   │   │   ├── 01-language.md
 │   │   │   └── 02-ultilities.md
 │   │   └── anchors.json
-│   ├── crush/
-│   │   ├── bin/
-│   │   │   ├── bash-language-server
-│   │   │   ├── context7-mcp
-│   │   │   ├── filesystem-mcp
-│   │   │   ├── mcp-server-memory
-│   │   │   ├── mcp-server-sequential-thinking
-│   │   │   ├── typescript-language-server
-│   │   │   ├── vscode-css-language-server
-│   │   │   ├── vscode-eslint-language-server
-│   │   │   ├── vscode-html-language-server
-│   │   │   ├── vscode-json-language-server
-│   │   │   └── vscode-markdown-language-server
-│   │   ├── hooks/
-│   │   │   ├── bash-gate.sh
-│   │   │   └── edit-gate.sh
-│   │   └── crush.json
-│   └── loopctl/
-│       ├── adapters/
-│       │   ├── README.md
-│       │   ├── _TEMPLATE.json
-│       │   ├── claude-code.json
-│       │   ├── codex.json
-│       │   ├── crush.json
-│       │   ├── omp.json
-│       │   └── opencode.json
-│       └── docs/
-│           ├── examples/
-│           ├── README.md
-│           ├── adapter.md
-│           └── extract.md
-├── .local/
-│   └── bin/
-│       ├── loop_lib/
-│       │   ├── extract/
-│       │   ├── templates/
-│       │   ├── tests/
-│       │   ├── adapter-cmds.sh
-│       │   ├── agent.sh
-│       │   ├── common.sh
-│       │   ├── log.sh
-│       │   ├── prompt.sh
-│       │   └── state.sh
-│       └── loopctl
+│   └── crush/
+│       ├── bin/
+│       │   ├── bash-language-server
+│       │   ├── context7-mcp
+│       │   ├── filesystem-mcp
+│       │   ├── mcp-server-memory
+│       │   ├── mcp-server-sequential-thinking
+│       │   ├── typescript-language-server
+│       │   ├── vscode-css-language-server
+│       │   ├── vscode-eslint-language-server
+│       │   ├── vscode-html-language-server
+│       │   ├── vscode-json-language-server
+│       │   └── vscode-markdown-language-server
+│       ├── hooks/
+│       │   ├── bash-gate.sh
+│       │   └── edit-gate.sh
+│       └── crush.json
 └── .gitignore
 ```
 
