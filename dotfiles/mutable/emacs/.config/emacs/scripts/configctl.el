@@ -298,7 +298,7 @@
   (custom-configctl--assert (featurep 'main) "main feature missing")
   (dolist (function '(custom/add-frame-created-hook
                       custom/add-server-ready-hook
-                      custom/agenote-call
+                      agenote-call
                       custom/color-scheme-init
                       custom/completion-setup-display
                       custom/dashboard-open-for-client-frame
@@ -306,19 +306,19 @@
                       custom/binding-help-sections
                       custom/help--extract-dashboard-bindings
                       ;; Phase 2.3:统一浏览入口替代 knowledge-viz + agenote-browse
-                      custom/knowledge-browse-human
-                      custom/knowledge-browse-agenote
-                      custom/knowledge-viz-open-browser
+                      agenote-knowledge-browse-human
+                      agenote-knowledge-browse-agenote
+                      agenote-knowledge-viz-open-browser
                       custom/open-terminal
                       custom/tabs-next))
     (custom-configctl--assert (fboundp function) "missing function %s" function))
   (dolist (binding '(("C-S-c" . custom/copy-dwim)
                      ("C-<tab>" . custom/tabs-next)
-                     ("C-c o k s" . custom/knowledge-search)
+                     ("C-c o k s" . agenote-knowledge-search)
                      ;; Phase 2.3:统一浏览入口的绑定
-                     ("C-c o k v" . custom/knowledge-browse-human)
-                     ("C-c o k b" . custom/knowledge-browse-agenote)
-                     ("C-c o k V" . custom/knowledge-viz-open-browser)
+                     ("C-c o k v" . agenote-knowledge-browse-human)
+                     ("C-c o k b" . agenote-knowledge-browse-agenote)
+                     ("C-c o k V" . agenote-knowledge-viz-open-browser)
                      ;; Agent Shell 子菜单 + 编辑前缀声明式入口
                      ("C-c a a a" . agent-shell)
                      ("C-c a a t" . agent-shell-toggle)
@@ -469,7 +469,7 @@ Guix helper is on `load-path', and fall back to loading each
 (defconst custom-configctl-agenote-adapter-ids
   '("bootstrap" "process-helper")
   "CUSTOM_IDs that define the agenote executable path constant and the
-`custom/agenote-call' adapter. These blocks legitimately reference the
+`agenote-call' adapter. These blocks legitimately reference the
 agenote executable without passing --domain at every site (the adapter itself
 enforces it), so `audit-agenote-domain' skips them.")
 
@@ -940,8 +940,8 @@ Allow list: blocks whose owning CUSTOM_ID is in
 (defun custom-configctl--audit-agenote-domain ()
   "Verify every agenote CLI invocation explicitly passes --domain.
 Skips `bootstrap' / `process-helper' (the executable constant and the
-`custom/agenote-call' adapter live there; the adapter enforces --domain).
-Other blocks must route through `custom/agenote-call' / `custom/agenote-call-async'
+`agenote-call' adapter live there; the adapter enforces --domain).
+Other blocks must route through `agenote-call' / `agenote-call-async'
 (which always pass --domain) and must not reference `custom:executable-agenote'
 directly (the dedicated CLI executable constant). Bare `\"agenote\"' string
 literals are NOT flagged — too ambiguous (path components, mode display names)."
@@ -965,7 +965,7 @@ literals are NOT flagged — too ambiguous (path components, mode display names)
                   (unless (or (nth 4 ssyntax) (nth 3 ssyntax))
                     (custom-configctl--violation
                      "agenote-no-domain"
-                     (format "%s line %d references custom:executable-agenote directly (route through custom/agenote-call)"
+                     (format "%s line %d references custom:executable-agenote directly (route through agenote-call)"
                              owner line)))))))))))
   (custom-configctl--report-audit "audit-agenote-domain"))
 

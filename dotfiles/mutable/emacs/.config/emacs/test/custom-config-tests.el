@@ -38,7 +38,7 @@
 (ert-deftest custom-config/agenote-group-by-category-ordering ()
   "Phase 2.3 PLAN:category grouping/recency sort 已下沉到 agenote CLI。
 本测试现已废弃;group/sort 逻辑由 CLI(agenote list)负责。
-保留此占位以提示历史;实际行为由 `custom/knowledge-list-cards' 通过
+保留此占位以提示历史;实际行为由 `agenote-knowledge-list-cards' 通过
 CLI 透传,无需在 Emacs 侧固化顺序规则。"
   (skip-unless nil))
 
@@ -630,7 +630,7 @@ Each :ts-mode produces a remap from the first :modes entry."
          (custom/dashboard--knowledge-process nil)
          (custom/dashboard--knowledge-error nil)
          (custom/dashboard--generation 0))
-    (cl-letf (((symbol-function 'custom/agenote--resolve-executable)
+    (cl-letf (((symbol-function 'agenote-resolve-executable)
                (lambda () "/tmp/agenote"))
               ((symbol-function 'make-process)
                (lambda (&rest _) (error "spawn failed"))))
@@ -671,11 +671,11 @@ Each :ts-mode produces a remap from the first :modes entry."
 
 (ert-deftest custom-config-baseline/agenote-call-entrypoint-exists ()
   "P0 #1 (fixed by Commit 2): agenote calls must go through a single
-`custom/agenote-call' entrypoint that requires an explicit `--domain'.
-All `custom/knowledge-*' calls route through it; `audit-agenote-domain'
+`agenote-call' entrypoint that requires an explicit `--domain'.
+All `agenote-knowledge-*' calls route through it; `audit-agenote-domain'
 catches any new direct CLI calls."
-  (should (fboundp 'custom/agenote-call))
-  (should (fboundp 'custom/agenote-call-async)))
+  (should (fboundp 'agenote-call))
+  (should (fboundp 'agenote-call-async)))
 
 (ert-deftest custom-config-baseline/eglot-flymake-chain-intact ()
   "P0 #2 (fixed by Commit 3): Eglot must NOT opt out of Flymake.
@@ -809,7 +809,7 @@ configctl test 子命令由 scripts/configctl.el 提供,该文件作为 runner
                      nil t))))))
 
 (ert-deftest custom-config/agenote-call-process-signature ()
-  "Phase 7.1: `custom/agenote-call' 的 call-process 调用签名正确。
+  "Phase 7.1: `agenote-call' 的 call-process 调用签名正确。
 
 原 bug:`(apply #'call-process argv nil (list t stderr-buffer) nil)` 把
 argv(list)当作 PROGRAM 传,导致 'Wrong type argument: stringp, (...)';
@@ -821,7 +821,7 @@ buffer object,但 call-process 的 list 形式要求 STDERR-DEST 是文件名
 (list stdout-buffer stderr-file) 形式。本测试验证 agenote-call 在
 agenote 可用时返回 plist,不抛 wrong-type-argument。"
   (skip-unless (executable-find "agenote"))
-  (let ((result (custom/agenote-call 'human "stats")))
+  (let ((result (agenote-call 'human "stats")))
     (should (plistp result))
     (should (memq (plist-get result :status) '(0 1 2)))
     ;; :stdout 应为字符串(可能为空),不是 list 或 buffer
@@ -879,26 +879,26 @@ manifest-no-use-package 二值违规的实现都违反 SoT 原则。"
                  "nonexistent" manifest use-set) 'unknown))))
 
 (ert-deftest custom-config/knowledge-no-dead-scanner ()
-  "Phase 2.3: custom/knowledge--collect-org-files 与 defalias 已删除。
+  "Phase 2.3: agenote-knowledge--collect-org-files 与 defalias 已删除。
 Dashboard 不再递归扫描 experiences/,改走 agenote list --json 索引。
 任何未来 commit 重新加入 scanner 都会违反 SoT 原则。"
-  (should-not (fboundp 'custom/knowledge--collect-org-files))
-  (should-not (fboundp 'custom/knowledge-collect-org-files)))
+  (should-not (fboundp 'agenote-knowledge--collect-org-files))
+  (should-not (fboundp 'agenote-knowledge-collect-org-files)))
 
 (ert-deftest custom-config/knowledge-archive-via-cli ()
-  "Phase 2.3: custom/knowledge-archive-inbox-entry 调用 CLI 的 inbox-archive,
+  "Phase 2.3: agenote-knowledge-archive-inbox-entry 调用 CLI 的 inbox-archive,
 不再内联 slug 算法 + 手动 reindex。
-mock custom/agenote-call,验证:
+mock agenote-call,验证:
   1. 调用 'inbox-archive' 子命令(而非 'reindex')。
   2. stdin 是 JSON 数组,含 heading + body。
   3. --prune 透传(让 CLI 负责清理 inbox)。
 
 不真正调用 agenote,只验证调用契约。mock org-* 函数避免需要真实 org buffer。"
-  (skip-unless (fboundp 'custom/knowledge-archive-inbox-entry))
+  (skip-unless (fboundp 'agenote-knowledge-archive-inbox-entry))
   (let ((called-args nil)
         (called-command nil)
         (called-stdin nil))
-    (cl-letf (((symbol-function 'custom/agenote-call)
+    (cl-letf (((symbol-function 'agenote-call)
                (lambda (domain command &rest args)
                  (setq called-command command
                        called-args args)
@@ -912,7 +912,7 @@ mock custom/agenote-call,验证:
                (lambda (&rest _) (kill-new "* Mocked Heading\n:PROPERTIES:\n:END:\nbody text")))
               ((symbol-function 'kill-new)
                (lambda (s &rest _) (setq kill-ring (cons s kill-ring)) s)))
-      (custom/knowledge-archive-inbox-entry "test")
+      (agenote-knowledge-archive-inbox-entry "test")
       (should (equal called-command "inbox-archive"))
       (should (member "--category" called-args))
       (should (member "test" called-args))

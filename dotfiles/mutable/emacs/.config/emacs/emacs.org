@@ -97,10 +97,6 @@ GC 启动期优化(启动完成后由 gcmh 重置)
   (expand-file-name "experiences" custom:org-directory)
   "知识库经验卡片目录（人类域）。")
 
-(defconst custom:agenote-directory
-  (expand-file-name "agenote" custom:org-directory)
-  "agenote 子域目录（agent 写入的卡片 + index.json）。")
-
 (defconst custom:guix-profile
   (or (getenv "GUIX_PROFILE")
       (expand-file-name "~/.guix-profile"))
@@ -136,151 +132,19 @@ bootstrap 组装：路径常量 + 外部命令声明
 :CUSTOM_ID: process-helper
 :END:
 
-统一的同步进程入口与 agenote CLI 适配层。
+agenote CLI 的同步/异步进程适配层已抽离为独立 elisp 包 =agenote=（见 [[#bootstrap][bootstrap]] 的 =use-package= 声明），本仓库只保留入口契约说明：
 
-+ =custom/agenote-call= :agenote CLI 唯一入口,domain 必填,返回 plist
-+ =custom/agenote-call-async= :长任务异步执行(reindex/lint/deduplicate/commit/viz)
++ =agenote-call= :agenote CLI 唯一入口,domain 必填,返回 plist =(:status :stdout :stderr :command :domain)=
++ =agenote-call-async= :长任务异步执行(reindex/lint/deduplicate/commit/viz)
++ =agenote-call-string= :只消费 stdout 的旧调用兼容 wrapper
 
-agenote CLI 支持 =--domain human|agenote=,默认 agenote(与 MCP server 对齐)。
+agenote CLI 支持 =--domain human|agenote=,默认 agenote(与 MCP server 对齐)。Emacs 端必须为每次调用显式选择 domain —— 不依赖默认值,避免人类域操作静默打到 agent 子域。
 
-Emacs 端必须为每次调用显式选择 domain —— 不依赖默认值,避免人类域操作静默打到 agent 子域。
+**不缓存 Guix store 绝对路径**：适配层内部按需 =(executable-find "agenote")=,让 daemon 跨 Guix generation 后解析当前 PATH。
 
-**不缓存 Guix store 绝对路径* *:
-+ daemon 长驻跨 Guix profile 更新时,缓存的 =/gnu/store/.../bin/agenote= 会指向旧 generation。
-+ =custom/agenote-call= 内部按需 =(executable-find "agenote")=,让每次调用都解析当前 PATH。
-
-#+begin_src emacs-lisp :noweb-ref helpers/agenote-process :tangle no
-(defconst custom:agenote-valid-domains '(human agenote)
-  "agenote CLI 支持的 domain 取值。与 ~agenote --help~ 对齐。")
-
-(defun custom/agenote--resolve-executable ()
-  "按需解析 agenote 命令路径。返回可执行路径字符串或 nil。
-不缓存绝对 store 路径:daemon 跨 Guix generation 后能找到新 profile 的 agenote。
-实际调用始终走本函数。"
-  (executable-find "agenote"))
-
-(defun custom/agenote--ensure-domain (domain)
-  "校验 DOMAIN,返回小写 symbol。无效值 fail-fast。"
-  (let ((d (if (stringp domain) (intern (downcase domain)) domain)))
-    (unless (memq d custom:agenote-valid-domains)
-      (error "custom/agenote-call: domain must be %s, got %S"
-             (mapconcat #'symbol-name custom:agenote-valid-domains "|")
-             domain))
-    d))
-
-(cl-defun custom/agenote-call (domain command &rest args)
-  "同步调用 agenote CLI,DOMAIN 必填(human 或 agenote),COMMAND 子命令字符串,
-ARGS 附加参数。
-
-返回 plist:`(:status :stdout :stderr :command :domain)'。
-- :status  进程退出码(-1 表示无法启动)
-- :stdout  stdout 字符串(trimmed)
-- :stderr  stderr 字符串(trimmed)
-- :command  完整 argv 列表(便于诊断)
-- :domain  实际使用的 domain symbol
-
-用法示例:
-  (custom/agenote-call 'human \"list\" \"--all\")
-  (custom/agenote-call 'agenote \"search\" \"emacs\" \"--limit\" \"10\")
-  (plist-get (custom/agenote-call 'human \"stats\") :stdout)"
-  (let* ((dom (custom/agenote--ensure-domain domain))
-         (exe (custom/agenote--resolve-executable))
-         (argv (delq nil (append (list exe "--domain" (symbol-name dom) command) args))))
-    (if (not exe)
-        (list :status -1 :stdout "" :stderr "agenote executable not found"
-              :command argv :domain dom)
-      (let ((stdout-buffer (generate-new-buffer " *agenote-stdout*"))
-            (stderr-file (make-temp-file "agenote-stderr"))
-            status)
-        (unwind-protect
-            (progn
-              ;; call-process 签名:(PROGRAM INFILE BUFFER DISPLAY &rest ARGS)
-              ;; BUFFER 为 list 形式时:(STDOUT-DEST STDERR-DEST),STDERR-DEST
-              ;; 必须是文件名(string),不是 buffer object。我们用临时文件
-              ;; 捕获 stderr,再读回字符串。
-              ;; PROGRAM 必须是 string;argv 是 (exe "--domain" "..." cmd args...),
-              ;; 拆出 exe 作为 PROGRAM,其余作为 ARGS。
-              (setq status
-                    (apply #'call-process
-                           (car argv) nil (list stdout-buffer stderr-file) nil
-                           (cdr argv)))
-              (list :status (or status -1)
-                    :stdout (string-trim
-                             (with-current-buffer stdout-buffer (buffer-string)))
-                    :stderr (string-trim
-                             (with-temp-buffer
-                               (insert-file-contents stderr-file)
-                               (buffer-string)))
-                    :command argv
-                    :domain dom))
-          (when (buffer-live-p stdout-buffer) (kill-buffer stdout-buffer))
-          (when (file-exists-p stderr-file) (delete-file stderr-file)))))))
-
-(cl-defun custom/agenote-call-async (domain command &rest args)
-  "异步调用 agenote CLI,参数同 `custom/agenote-call'。
-长任务(reindex / lint / deduplicate / commit / viz)应使用本函数,避免阻塞
-Emacs。结果写入 `*agenote-<command>*' buffer(special-mode,`g' 重跑,`q' 退出)。
-
-返回启动的 process 对象;同步路径请用 `custom/agenote-call'。"
-  (let* ((dom (custom/agenote--ensure-domain domain))
-         (exe (custom/agenote--resolve-executable))
-         (argv (delq nil (append (list exe "--domain" (symbol-name dom) command) args)))
-         (buf-name (format "*agenote-%s*" command))
-         (buffer (get-buffer-create buf-name)))
-    (if (not exe)
-        (progn
-          (with-current-buffer buffer
-            (let ((inhibit-read-only t))
-              (erase-buffer)
-              (insert "agenote executable not found\n")))
-          (display-buffer buffer)
-          nil)
-      (with-current-buffer buffer
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (insert (format "$ %s\n\n" (string-join argv " ")))
-          (special-mode)
-          ;; `g' re-runs the same command.
-          (let ((mode-map custom/agenote-async-mode-map))
-            (use-local-map (or mode-map (make-sparse-keymap))))
-          (define-key (current-local-map) "g"
-                      (lambda () (interactive)
-                        (apply #'custom/agenote-call-async dom command args)))))
-      (let ((proc (make-process
-                   :name (format "agenote %s" command)
-                   :buffer buffer
-                   :command argv
-                   :connection-type 'pipe
-                   :sentinel (lambda (proc event)
-                               (let ((buf (process-buffer proc)))
-                                 (when (buffer-live-p buf)
-                                   (with-current-buffer buf
-                                     (let ((inhibit-read-only t))
-                                       (goto-char (point-max))
-                                       (insert
-                                        (format "\n[process %s]\n"
-                                                (string-trim event)))))))))))
-        (display-buffer buffer)
-        proc))))
-
-;; minimal keymap for async result buffers (defined here so async functions can
-;; reference it before the dashboard/knowledge sections are loaded)
-(defvar custom/agenote-async-mode-map
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m special-mode-map)
-    m)
-  "Keymap for `*agenote-<command>*' async result buffers.")
-
-(defun custom/agenote-call-string (domain command &rest args)
-  "同步调 agenote,返回 stdout 字符串，供只消费文本的旧调用点使用。
-DOMAIN/COMMAND/ARGS 同 `custom/agenote-call'。失败返回空串。
-新代码应直接用 `custom/agenote-call';本 wrapper 仅为兼容旧调用点保留。"
-  (plist-get (apply #'custom/agenote-call domain command args) :stdout))
-#+end_src
-
-#+NAME: process-helper-assembly
 #+begin_src emacs-lisp
-<<helpers/agenote-process>>
+;; agenote CLI 适配层由独立包 `agenote' 提供（agenote-call / -async / -string）。
+;; 路径常量随该包的 defcustom 设定，见 bootstrap 节的 use-package 声明。
 #+end_src
 
 ** Frame 生命周期与 daemon
@@ -472,6 +336,19 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使
 (when (fboundp 'startup-redirect-eln-cache)
   (startup-redirect-eln-cache
    (expand-file-name "var/eln-cache/" user-emacs-directory)))
+
+;; agenote 知识库集成（适配层 + knowledge + health + dashboard 数据 + 键位 map）。
+;; 独立 elisp 包，随 agenote 程序仓库发行。路径常量对齐本仓库的 org 根目录。
+(use-package agenote
+  :ensure nil
+  :load-path "~/.local/share/agenote-el"
+  :custom
+  (agenote-org-directory custom:org-directory)
+  (agenote-experiences-directory custom:org-knowledge-directory)
+  (agenote-inbox-file custom:org-inbox-file)
+  :config
+  (require 'agenote-knowledge)
+  (require 'agenote-health))
 #+end_src
 
 ** 基础行为设置
@@ -3672,7 +3549,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (custom--ensure-org-directories)
   (let* ((choices (or (condition-case nil
                           (split-string
-                           (custom/agenote-call-string 'human "fields" "--category")
+                           (agenote-call-string 'human "fields" "--category")
                            "\n" t "[ \t]+")
                         (error nil))
                       '("emacs" "guix" "general" "gamedev" "devops"
@@ -3836,8 +3713,8 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 agenote CLI 集成的知识库 CRUD。
 
-+ =custom/knowledge-*= :知识库经验卡片 CRUD 与双视图
-+ =custom/agenote-*= :agenote 子域浏览与健康度面板
++ =agenote-knowledge-*= :知识库经验卡片 CRUD 与双视图
++ =agenote-*= :agenote 子域浏览与健康度面板
 + Knowledge 与 agenote 直接复用启动域路径常量和 [[#process-helper][共享进程辅助]],不维护重复注入点或私有进程封装
 
 *** 职责归属
@@ -3852,41 +3729,12 @@ agenote CLI 集成的知识库 CRUD。
 |-----------------------------+-----------------------------------|
 | 索引列表                    | =agenote list --json=               |
 | inbox 归档 / slug / reindex | =agenote inbox-archive= 子命令      |
-| 交互调用 + buffer 刷新      | Emacs(=custom/knowledge-*=)         |
+| 交互调用 + buffer 刷新      | Emacs(=agenote-knowledge-*=)         |
 | 递归扫描 experiences/       | 故意不存在(Dashboard 走 CLI 索引) |
 
 *** 路径与目录生命周期
 
-目录创建采用按需幂等 =ensure=,而非固定延迟 timer。原因:固定 3 秒的 =run-with-idle-timer= 会与用户的 capture / inbox 打开 / before-save 操作竞态(timer 触发时文件可能正被写入)。=custom--ensure-knowledge-directories= 挂在 =org-capture-before-finalize-hook= 和 =org-mode-hook= 上,确保目录在真正需要时才存在,=experiences/<category>/= 子目录在 Capture 时按需创建。
-
-#+begin_src emacs-lisp :noweb-ref org/knowledge-core :tangle no
-(defun custom--ensure-knowledge-directories ()
-  "确保知识库相关目录和索引文件存在(幂等)。
-experiences/ 下的类别子目录在 Capture 时按需创建，不在此处预建。
-inbox.org 不存在时用最小骨架初始化,已存在则保持原样。"
-  (let ((dirs (list (expand-file-name "experiences" custom:org-directory))))
-    (dolist (dir dirs)
-      (unless (file-exists-p dir)
-        (make-directory dir t))))
-  (dolist (file (list custom:org-inbox-file))
-    (unless (file-exists-p file)
-      (let ((base (file-name-base file)))
-        (with-temp-buffer
-          (insert (format "#+title: %s\n#+date: [%s]\n\n* Inbox\n"
-                          base (format-time-string "%Y-%m-%d %a")))
-          (write-region (point-min) (point-max) file))))))
-
-(with-eval-after-load 'org-capture
-  (add-hook 'org-capture-before-finalize-hook
-            #'custom--ensure-knowledge-directories))
-(with-eval-after-load 'org
-  (add-hook 'org-mode-hook
-            (lambda ()
-              (when (and buffer-file-name
-                         (string-prefix-p custom:org-directory buffer-file-name))
-                (custom--ensure-knowledge-directories)))))
-
-#+end_src
+目录创建采用按需幂等 =ensure=,而非固定延迟 timer。原因:固定 3 秒的 =run-with-idle-timer= 会与用户的 capture / inbox 打开 / before-save 操作竞态(timer 触发时文件可能正被写入)。目录 ensure 逻辑（=agenote--ensure-knowledge-directories=）挂在 =org-capture-before-finalize-hook= 和 =org-mode-hook= 上,确保目录在真正需要时才存在,=experiences/<category>/= 子目录在 Capture 时按需创建。该函数由独立包 =agenote-knowledge= 提供。
 
 *** Capture 与卡片命名
 
@@ -3894,447 +3742,25 @@ inbox.org 不存在时用最小骨架初始化,已存在则保持原样。"
 + =org-capture-templates= 的 =kn/km/ka= 模板用 =%(format-time-string ...)= 在 Emacs 侧生成 ID/CREATED 时间戳与结构化 PROPERTIES(见 [[#capture-templates][Capture 模板]])。
 + =agenote inbox-archive= 子命令负责 inbox 条目的 slug、归档与 reindex。
 
-#+begin_src emacs-lisp :noweb-ref org/knowledge-capture :tangle no
-(defun custom/knowledge-capture ()
-  "捕获一张经验卡片，走 org-capture 模板。
-`org-capture nil \"k\"' 进入 k 前缀子菜单（note/mistake/ascended，
-对齐 agenote-base entry-types 语义），由 `org-capture-templates' 的
-kn/km/ka 三条模板负责生成结构化 PROPERTIES + body 章节，落到
-experiences/<category>/<timestamp>.org。模板定义见 org-core 域。
-
-不预检查 `org-capture-templates':`org-capture' 是 autoload,首次调用
-会自动加载 org-capture 并装配模板;预检查反而会在 fresh daemon
-(org 未加载)时拒绝运行,要求用户先手动调一次。"
-  (interactive)
-  (org-capture nil "k"))
-#+end_src
+=agenote-knowledge-capture= 仅是 =(org-capture nil "k")= 的薄封装（模板装配由 org-capture autoload 负责）；它由独立包 =agenote-knowledge= 提供。
 
 *** 检索与 Inbox
 
-#+begin_src emacs-lisp :noweb-ref org/knowledge-search :tangle no
-(defun custom/knowledge-search (query)
-  "在知识库中全文检索经验。
-使用 consult-ripgrep 递归搜索 experiences/。"
-  (interactive "s检索关键词: ")
-  (let ((dir (expand-file-name "experiences" custom:org-directory)))
-    (cond
-     ((fboundp 'consult-ripgrep)
-      (consult-ripgrep (list dir) query))
-     ((fboundp 'rgrep)
-      (rgrep query "*.org" (list dir)))
-     (t
-      (message "未找到可用的搜索工具")))))
-
-(defun custom/knowledge-search-by-tag (tag)
-  "在知识库中按标签检索经验。
-优先使用 agenote tags 命令，回退到 ripgrep 搜索 :TAG: 模式。"
-  (interactive "s标签: ")
-  (if (custom/agenote--resolve-executable)
-      (let ((buf (get-buffer-create "*agenote-tags*")))
-        (with-current-buffer buf
-          (erase-buffer)
-          (insert (custom/agenote-call-string 'human "tags" tag)))
-        (display-buffer buf))
-    (custom/knowledge-search (format ":%s:" tag))))
-
-(defun custom/knowledge-archive-inbox-entry (category)
-  "将 inbox.org 中光标所在的条目归档到 experiences/<CATEGORY>/ 目录。
-slug 算法、PROPERTIES 模板与 reindex 触发全部由 agenote CLI 的
-`inbox-archive' 子命令负责,Emacs 只负责收集 heading + body 并调 CLI。"
-  (interactive
-   (list (completing-read "归档分类: "
-                          (or (condition-case nil
-                                  (split-string
-                                   (custom/agenote-call-string 'human "fields" "--category")
-                                   "\n" t "[ \t]+")
-                                (error nil))
-                              '("emacs" "guix" "general" "gamedev" "devops" "research" "tooling"))
-                          nil t)))
-  (let* ((heading (or (org-get-heading t t t t) ""))
-         (full-text (progn (org-copy-subtree) (car kill-ring)))
-         (body (if (and full-text (string-match "^\\*+ [^\n]+\n:PROPERTIES:\n\\(?:[^\n]*\n\\)*?:END:\n"
-                                                full-text))
-                   (substring full-text (match-end 0))
-                 (or full-text "")))
-         (stdin (json-encode `[(("heading" . ,heading) ("body" . ,body))]))
-         (result (custom/agenote-call 'human "inbox-archive"
-                                      "--category" category "--stdin" "--prune")))
-    (if (eq (plist-get result :status) 0)
-        (progn
-          (setq kill-ring (cdr kill-ring))
-          (when (buffer-live-p (get-buffer custom:org-inbox-file))
-            (with-current-buffer (get-buffer custom:org-inbox-file)
-              (revert-buffer t t t)))
-          (message "已归档: %s" (string-trim (plist-get result :stdout))))
-      (message "归档失败: %s" (plist-get result :stderr)))))
-
-#+end_src
 
 inbox 归档的 body 提取逻辑: =org-copy-subtree= 把当前 subtree(含 heading 与 =PROPERTIES= 块)复制到 kill-ring,这里只取正文——从第一行 heading 之后到第一个 =:END:= 之间的 =PROPERTIES= 块被正则剥离,剩余作为 body 通过 =--stdin= 传给 CLI。CLI 完成归档后会 reindex + prune inbox,Emacs 端只需清理 kill-ring 并 =revert-buffer= 刷新 inbox buffer。
 
 *** 生命周期与 CLI
 
-卡片生命周期命令(=touch= / =archive= / =restore= / =review=)作用于人类域 =experiences/= 卡片,ID 从当前 buffer 的 =:ID:= 属性取;在非经验卡片 buffer 调用会提示并 abort(=custom/knowledge--ensure-experience-buffer= 守卫,排除 agenote 子域与无 ID 文件)。
+卡片生命周期命令(=touch= / =archive= / =restore= / =review=)作用于人类域 =experiences/= 卡片,ID 从当前 buffer 的 =:ID:= 属性取;在非经验卡片 buffer 调用会提示并 abort(=agenote-knowledge--ensure-experience-buffer= 守卫,排除 agenote 子域与无 ID 文件)。
 
-#+begin_src emacs-lisp :noweb-ref org/knowledge-cli :tangle no
-(defun custom/knowledge-stats ()
-  "显示人类知识库统计信息（调 `agenote --domain human stats`）。"
-  (interactive)
-  (if (custom/agenote--resolve-executable)
-      (let ((buf (get-buffer-create "*agenote-stats*")))
-        (with-current-buffer buf
-          (erase-buffer)
-          (insert (custom/agenote-call-string 'human "stats"))
-          (goto-char (point-min)))
-        (display-buffer buf))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-open-file (file)
-  "打开知识库 FILE。"
-  (interactive "f知识库文件: ")
-  (let ((target-file (expand-file-name file)))
-    (find-file target-file)))
-
-(defun custom/knowledge-open-inbox ()
-  "打开知识库收件箱。"
-  (interactive)
-  (custom/knowledge-open-file custom:org-inbox-file))
-
-(defun custom/knowledge--current-id ()
-  "从当前 buffer 的 PROPERTIES 取 :ID: 值。
-返回 ID 字符串或 nil（当前 buffer 非经验卡片 / 无 :ID:）。"
-  (when (and (eq major-mode 'org-mode)
-             (buffer-file-name))
-    (org-with-wide-buffer
-     (goto-char (point-min))
-     (when (re-search-forward "^:ID:\\s-+\\([0-9]\\{8\\}-[0-9]\\{6\\}\\)" nil t)
-       (match-string 1)))))
-
-(defun custom/knowledge--ensure-experience-buffer ()
-  "确保当前 buffer 是人类域经验卡片，返回其 :ID:。
-否则 message 报错并返回 nil。人类域 = buffer 文件位于
-`custom:org-knowledge-directory' 之下（不含 agenote 子域）。"
-  (let ((id (custom/knowledge--current-id))
-        (file (buffer-file-name))
-        (exp-dir (expand-file-name custom:org-knowledge-directory))
-        (agenote-dir (expand-file-name "agenote" custom:org-directory)))
-    (cond
-     ((null file)
-      (message "当前 buffer 无关联文件") nil)
-     ((string-prefix-p agenote-dir (expand-file-name file))
-      (message "当前卡片在 agenote 子域；人类域操作请打开 experiences/ 下的卡片") nil)
-     ((not (string-prefix-p exp-dir (expand-file-name file)))
-      (message "当前文件不在 experiences/ 下") nil)
-     ((null id)
-      (message "当前卡片无 :ID: 属性") nil)
-     (t id))))
-
-(defun custom/knowledge-touch (&optional used-only)
-  "更新当前经验卡片的 LAST_USED + LAST_VERIFIED（人类域,调 `agenote touch <ID>'）。
-带前缀参数 USED-ONLY 时只更新 LAST_USED。"
-  (interactive "P")
-  (let ((id (custom/knowledge--ensure-experience-buffer)))
-    (when id
-      (if (custom/agenote--resolve-executable)
-          (let ((result (apply #'custom/agenote-call
-                               'human "touch" id
-                               (when used-only '("--used-only")))))
-            (if (zerop (plist-get result :status))
-                (message "已 touch: %s%s" id (if used-only " (仅 USED)" ""))
-              (message "touch 失败: %s" (plist-get result :stderr))))
-        (message "未找到 agenote 命令")))))
-
-(defun custom/knowledge-archive (reason)
-  "归档当前经验卡片（人类域,调 `agenote archive <ID> --reason REASON'）。
-卡片被移到 archived/，可通过 `custom/knowledge-restore' 恢复。"
-  (interactive "s归档原因: ")
-  (let ((id (custom/knowledge--ensure-experience-buffer)))
-    (when id
-      (if (custom/agenote--resolve-executable)
-          (let* ((result (custom/agenote-call 'human "archive" id "--reason" reason)))
-            (if (zerop (plist-get result :status))
-                (message "已归档: %s (%s)" id reason)
-              (message "归档失败: %s" (plist-get result :stderr))))
-        (message "未找到 agenote 命令")))))
-
-(defun custom/knowledge-restore (id)
-  "恢复已归档的经验卡片（人类域,调 `agenote restore <ID>'）。
-ID 通过 completing-read 从归档列表选取（若可获取），否则手动输入。"
-  (interactive
-   (list (read-string "恢复的卡片 ID: "
-                      (when-let* ((cur (custom/knowledge--current-id)))
-                        cur))))
-  (if (custom/agenote--resolve-executable)
-      (let ((result (custom/agenote-call 'human "restore" id)))
-        (if (zerop (plist-get result :status))
-            (message "已恢复: %s" id)
-          (message "恢复失败: %s" (plist-get result :stderr))))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-review ()
-  "审查当前经验卡片（人类域,调 `agenote review <ID>'），输出显示在专用 buffer。"
-  (interactive)
-  (let ((id (custom/knowledge--ensure-experience-buffer)))
-    (when id
-      (if (custom/agenote--resolve-executable)
-          (let ((buf (get-buffer-create "*agenote-review*"))
-                (result (custom/agenote-call 'human "review" id)))
-            (with-current-buffer buf
-              (erase-buffer)
-              (insert (plist-get result :stdout))
-              (goto-char (point-min)))
-            (display-buffer buf))
-        (message "未找到 agenote 命令")))))
-
-(defun custom/knowledge-memory (arg)
-  "人类域记忆系统概览或操作。
-无前缀：调 `agenote --domain human memory' 显示概览到 buffer。
-前缀 ARG 非 nil：让用户输入 --flag 参数(自由文本,透传给 CLI)。"
-  (interactive "P")
-  (if (custom/agenote--resolve-executable)
-      (let* ((extra-args (if arg
-                             (let ((input (read-string
-                                           "memory 参数 (如 --stale, --type feedback, 留空显示概览): ")))
-                               (split-string-and-unquote input))
-                           nil))
-             (result (apply #'custom/agenote-call 'human "memory" extra-args))
-             (buf (get-buffer-create "*agenote-memory*")))
-        (with-current-buffer buf
-          (erase-buffer)
-          (insert (plist-get result :stdout))
-          (goto-char (point-min)))
-        (display-buffer buf))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-connect (id-a id-b &optional desc)
-  "双向链接两张卡片（人类域,调 `agenote connect ID_A ID_B --desc DESC'）。
-ID-A 默认取当前 buffer 的 :ID:，ID-B 与 DESC 在 minibuffer 收集。"
-  (interactive
-   (let* ((a (or (custom/knowledge--current-id)
-                 (read-string "主卡片 ID: ")))
-          (b (read-string "链接到卡片 ID: "))
-          (d (read-string "描述 (可选): ")))
-     (list a b d)))
-  (if (custom/agenote--resolve-executable)
-      (let* ((extra-args (delq nil (list id-a id-b
-                                         (unless (string-empty-p desc) "--desc")
-                                         (unless (string-empty-p desc) desc))))
-             (result (apply #'custom/agenote-call 'human "connect" extra-args)))
-        (if (zerop (plist-get result :status))
-            (message "已链接: %s ↔ %s" id-a id-b)
-          (message "链接失败: %s" (plist-get result :stderr))))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-merge (primary-id secondary-ids reason)
-  "合并卡片：把 SECONDARY-IDS 并入 PRIMARY-ID（人类域,调 `agenote merge'）。
-SECONDARY-IDS 为空格分隔的多个 ID，REASON 记录合并原因。"
-  (interactive
-   (let* ((p (or (custom/knowledge--current-id)
-                 (read-string "主卡片 ID（保留）: ")))
-          (s (read-string "次卡片 ID（合并后删除，多个用空格）: "))
-          (r (read-string "合并原因: ")))
-     (list p (split-string s) r)))
-  (if (custom/agenote--resolve-executable)
-      (let* ((extra-args (append (list primary-id) secondary-ids
-                                 (unless (string-empty-p reason)
-                                   (list "--reason" reason))))
-             (result (apply #'custom/agenote-call 'human "merge" extra-args)))
-        (if (zerop (plist-get result :status))
-            (message "已合并 %d 张到 %s" (length secondary-ids) primary-id)
-          (message "合并失败: %s" (plist-get result :stderr))))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-deduplicate ()
-  "检测重复卡片（人类域,异步调 `agenote deduplicate'），结果显示在 buffer。"
-  (interactive)
-  (if (custom/agenote--resolve-executable)
-      (custom/agenote-call-async 'human "deduplicate")
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-lint (arg)
-  "格式校验所有经验卡片（人类域,异步调 `agenote lint'）。
-无前缀：仅检查并显示报告。
-前缀 ARG 非 nil：调 `agenote lint --fix' 自动修复。"
-  (interactive "P")
-  (if (custom/agenote--resolve-executable)
-      (let ((args (if arg '("--fix") '("--check"))))
-        (apply #'custom/agenote-call-async 'human "lint" args)
-        (when arg (message "正在自动修复格式问题...")))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge-commit (summary)
-  "提交知识库变更到 git（人类域,异步调 `agenote commit -m SUMMARY'）。
-index.json 由 .gitignore 排除，仅提交卡片与 MEMORY 变更。"
-  (interactive "s提交总结: ")
-  (if (custom/agenote--resolve-executable)
-      (progn
-        (custom/agenote-call-async 'human "commit" "-m" summary)
-        (message "正在提交: %s" summary))
-    (message "未找到 agenote 命令")))
-
-(defun custom/knowledge--setup-agenda ()
-  "将经验目录加入 agenda 自定义命令。"
-  (add-to-list
-   'org-agenda-custom-commands
-   '("K" "知识库回顾"
-     ((tags "difficulties|lessons"
-            ((org-agenda-files (list (expand-file-name "experiences" custom:org-directory)))
-             (org-agenda-sorting-strategy '(timestamp-down))))))
-   t))
-
-(with-eval-after-load 'org-agenda
-  (custom/knowledge--setup-agenda))
-
-#+end_src
 
 *** 知识库浏览(统一 mode)
 
-#+begin_src emacs-lisp :noweb-ref org/knowledge-browse :tangle no
-(defconst custom:knowledge-browse--buffer-name "*knowledge-browse*")
-
-(defun custom/knowledge-list-cards (domain &optional recent)
-  "通过 agenote CLI 返回 DOMAIN 的卡片列表。
-RECENT 非 nil 时只请求最近的 RECENT 条；顺序和筛选完全由 CLI 决定。"
-  (let* ((args (append (when recent
-                         (list "--recent" (number-to-string recent)))
-                       (list "--json")))
-         (result (apply #'custom/agenote-call domain "list" args))
-         (status (plist-get result :status))
-         (output (plist-get result :stdout)))
-    (unless (eq status 0)
-      (error "agenote list 失败: %s" (plist-get result :stderr)))
-    (let ((json-object-type 'plist)
-          (json-array-type 'list)
-          (json-key-type 'keyword))
-      (if (string-empty-p output)
-          nil
-        (json-read-from-string output)))))
-
-(defvar-local custom--knowledge-card-domain nil)
-(defvar-local custom--knowledge-card-id nil)
-
-(defun custom/knowledge-card-refresh (&rest _)
-  "通过 CLI 刷新当前卡片详情。"
-  (let* ((result
-          (custom/agenote-call
-           custom--knowledge-card-domain "get" custom--knowledge-card-id))
-         (inhibit-read-only t))
-    (erase-buffer)
-    (insert (if (eq (plist-get result :status) 0)
-                (plist-get result :stdout)
-              (format "agenote get 失败:\n%s" (plist-get result :stderr))))
-    (goto-char (point-min))))
-
-(defun custom/knowledge-show-card (domain id)
-  "用只读 Org buffer 展示 DOMAIN 中 ID 对应的卡片。"
-  (let ((buffer (get-buffer-create "*knowledge-card*")))
-    (with-current-buffer buffer
-      (org-mode)
-      (setq-local custom--knowledge-card-domain domain
-                  custom--knowledge-card-id id
-                  revert-buffer-function #'custom/knowledge-card-refresh)
-      (custom/knowledge-card-refresh)
-      (view-mode 1)
-      (setq header-line-format
-            (format " [%s] %s · g 刷新 · q 关闭" domain id)))
-    (pop-to-buffer buffer)))
-
-(defun custom/knowledge-browse--format-line (domain card)
-  "把 DOMAIN 的 CARD 格式化为可点击行。"
-  (let* ((id (or (plist-get card :id) ""))
-         (title (or (plist-get card :title) "(无标题)"))
-         (category (or (plist-get card :category) "unknown"))
-         (created (or (plist-get card :created) ""))
-         (line (format "%-12s  %-10s  %s" category created title))
-         (map (make-sparse-keymap)))
-    (define-key map (kbd "RET")
-                (lambda ()
-                  (interactive)
-                  (custom/knowledge-show-card domain id)))
-    (define-key map [mouse-1]
-                (lambda ()
-                  (interactive)
-                  (custom/knowledge-show-card domain id)))
-    (add-text-properties
-     0 (length line)
-     (list 'custom-knowledge-id id
-           'keymap map
-           'mouse-face 'highlight
-           'help-echo (format "查看 %s" id)
-           'follow-link t)
-     line)
-    line))
-
-(defvar-local custom--knowledge-browse-domain 'human)
-(defvar-local custom--knowledge-browse-cards nil)
-
-(defun custom/knowledge-browse-refresh (&rest _)
-  "从 CLI 重新加载当前域并重绘列表。"
-  (interactive)
-  (setq custom--knowledge-browse-cards
-        (custom/knowledge-list-cards custom--knowledge-browse-domain))
-  (let ((inhibit-read-only t))
-    (erase-buffer)
-    (insert (propertize
-             (format "%s · %d 张\n\n"
-                     custom--knowledge-browse-domain
-                     (length custom--knowledge-browse-cards))
-             'face 'bold))
-    (dolist (card custom--knowledge-browse-cards)
-      (insert (custom/knowledge-browse--format-line
-               custom--knowledge-browse-domain card)
-              "\n"))
-    (goto-char (point-min))))
-
-(defun custom/knowledge-browse-open-browser ()
-  "用 agenote viz 打开当前域的网页可视化。"
-  (interactive)
-  (custom/agenote-call-async custom--knowledge-browse-domain "viz" "--open"))
-
-(defvar custom/knowledge-browse-mode-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map special-mode-map)
-    (define-key map "g" #'custom/knowledge-browse-refresh)
-    (define-key map "o" #'custom/knowledge-browse-open-browser)
-    (define-key map "q" #'quit-window)
-    map))
-
-(define-derived-mode custom/knowledge-browse-mode special-mode "KB-Browse"
-  "CLI 驱动的知识库列表视图。"
-  (setq-local revert-buffer-function #'custom/knowledge-browse-refresh))
-
-(defun custom/knowledge-browse--open (domain)
-  "打开 DOMAIN 的统一知识库列表。"
-  (let ((buffer (get-buffer-create custom:knowledge-browse--buffer-name)))
-    (with-current-buffer buffer
-      (custom/knowledge-browse-mode)
-      (setq custom--knowledge-browse-domain domain)
-      (custom/knowledge-browse-refresh))
-    (pop-to-buffer buffer)))
-
-(defun custom/knowledge-browse-human ()
-  "打开人类域知识库列表。"
-  (interactive)
-  (custom/knowledge-browse--open 'human))
-
-(defun custom/knowledge-browse-agenote ()
-  "打开 agenote 域知识库列表。"
-  (interactive)
-  (custom/knowledge-browse--open 'agenote))
-
-(defun custom/knowledge-viz-open-browser ()
-  "在浏览器打开人类域知识库可视化。"
-  (interactive)
-  (custom/agenote-call-async 'human "viz" "--open"))
-#+end_src
 
 #+NAME: org-knowledge-assembly
 #+begin_src emacs-lisp
-<<org/knowledge-core>>
-<<org/knowledge-capture>>
-<<org/knowledge-search>>
-<<org/knowledge-cli>>
-<<org/knowledge-browse>>
+;; Knowledge 系统（capture / search / cli / browse）由独立包 `agenote-knowledge' 提供。
+;; 入口函数见 `agenote-knowledge-*'；命令键位见 keys-completion 域。
 #+end_src
 
 *** 健康度面板
@@ -4347,42 +3773,10 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 
 注意：agenote health 只读 *人类域* （ ~experiences/~ ），agent 子域健康度需另查 ~index.json~ （见浏览视图）。
 
-#+begin_src emacs-lisp :noweb-ref org/agenote-health :tangle no
-(define-derived-mode custom/agenote-health-mode special-mode "agenote-health"
-  "展示 `agenote health' 知识库健康度报告（人类域）。
-\\{custom/agenote-health-mode-map}")
-
-(defvar custom/agenote-health-mode-map
-  (let ((m (make-sparse-keymap)))
-    (define-key m "g" #'custom/agenote-health)
-    m))
-
-(defun custom/agenote--refresh-health-buffer ()
-  "重新调 `agenote --domain human health --quality' 并填充当前 health buffer。"
-  (let ((inhibit-read-only t))
-    (erase-buffer)
-    (insert (or (custom/agenote-call-string 'human "health" "--quality")
-                "（agenote 命令不可用）"))
-    (goto-char (point-min))))
-
-;;;###autoload
-(defun custom/agenote-health ()
-  "打开人类知识库健康度面板 *agenote-health*（调 `agenote --domain human health --quality'）。
-`g' 刷新。"
-  (interactive)
-  (if (custom/agenote--resolve-executable)
-      (let ((buf (get-buffer-create "*agenote-health*")))
-        (with-current-buffer buf
-          (unless (eq major-mode 'custom/agenote-health-mode)
-            (custom/agenote-health-mode))
-          (custom/agenote--refresh-health-buffer))
-        (switch-to-buffer buf))
-    (message "未找到 agenote 命令")))
-#+end_src
 
 #+NAME: org-agenote-health-assembly
 #+begin_src emacs-lisp
-<<org/agenote-health>>
+;; 健康度面板（agenote-health-mode / agenote-health）由独立包 `agenote-health' 提供。
 #+end_src
 
 #+begin_src emacs-lisp
@@ -4401,23 +3795,23 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 (custom/bind "C-c c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
 
 (custom/declare-binding-group "C-c o k" "Knowledge / agenote")
-(custom/bind "C-c o k c" #'custom/knowledge-capture "捕获经验卡" "Org 与知识库")
-(custom/bind "C-c o k s" #'custom/knowledge-search "搜索经验" "Org 与知识库")
-(custom/bind "C-c o k t" #'custom/knowledge-search-by-tag "按标签搜索" "Org 与知识库")
-(custom/bind "C-c o k I" #'custom/knowledge-open-inbox "打开 Inbox" "Org 与知识库")
-(custom/bind "C-c o k S" #'custom/knowledge-stats "知识库统计" "Org 与知识库")
-(custom/bind "C-c o k v" #'custom/knowledge-browse-human "浏览人类知识库" "Org 与知识库")
-(custom/bind "C-c o k b" #'custom/knowledge-browse-agenote "浏览 agenote 域" "Org 与知识库")
-(custom/bind "C-c o k a" #'custom/knowledge-archive-inbox-entry "归档 Inbox 条目" "Org 与知识库")
-(custom/bind "C-c o k d" #'custom/knowledge-deduplicate "检测重复卡" "Org 与知识库")
-(custom/bind "C-c o k e" #'custom/knowledge-merge "合并卡片" "Org 与知识库")
-(custom/bind "C-c o k l" #'custom/knowledge-lint "校验知识库" "Org 与知识库")
-(custom/bind "C-c o k m" #'custom/knowledge-memory "记忆系统" "Org 与知识库")
-(custom/bind "C-c o k n" #'custom/knowledge-connect "链接卡片" "Org 与知识库")
-(custom/bind "C-c o k o" #'custom/knowledge-commit "提交知识库" "Org 与知识库")
-(custom/bind "C-c o k r" #'custom/knowledge-review "审查卡片" "Org 与知识库")
-(custom/bind "C-c o k u" #'custom/knowledge-touch "更新卡片时间" "Org 与知识库")
-(custom/bind "C-c o k V" #'custom/knowledge-viz-open-browser "浏览器可视化" "Org 与知识库")
+(custom/bind "C-c o k c" #'agenote-knowledge-capture "捕获经验卡" "Org 与知识库")
+(custom/bind "C-c o k s" #'agenote-knowledge-search "搜索经验" "Org 与知识库")
+(custom/bind "C-c o k t" #'agenote-knowledge-search-by-tag "按标签搜索" "Org 与知识库")
+(custom/bind "C-c o k I" #'agenote-knowledge-open-inbox "打开 Inbox" "Org 与知识库")
+(custom/bind "C-c o k S" #'agenote-knowledge-stats "知识库统计" "Org 与知识库")
+(custom/bind "C-c o k v" #'agenote-knowledge-browse-human "浏览人类知识库" "Org 与知识库")
+(custom/bind "C-c o k b" #'agenote-knowledge-browse-agenote "浏览 agenote 域" "Org 与知识库")
+(custom/bind "C-c o k a" #'agenote-knowledge-archive-inbox-entry "归档 Inbox 条目" "Org 与知识库")
+(custom/bind "C-c o k d" #'agenote-knowledge-deduplicate "检测重复卡" "Org 与知识库")
+(custom/bind "C-c o k e" #'agenote-knowledge-merge "合并卡片" "Org 与知识库")
+(custom/bind "C-c o k l" #'agenote-knowledge-lint "校验知识库" "Org 与知识库")
+(custom/bind "C-c o k m" #'agenote-knowledge-memory "记忆系统" "Org 与知识库")
+(custom/bind "C-c o k n" #'agenote-knowledge-connect "链接卡片" "Org 与知识库")
+(custom/bind "C-c o k o" #'agenote-knowledge-commit "提交知识库" "Org 与知识库")
+(custom/bind "C-c o k r" #'agenote-knowledge-review "审查卡片" "Org 与知识库")
+(custom/bind "C-c o k u" #'agenote-knowledge-touch "更新卡片时间" "Org 与知识库")
+(custom/bind "C-c o k V" #'agenote-knowledge-viz-open-browser "浏览器可视化" "Org 与知识库")
 #+end_src
 
 * 键位与补全
@@ -5208,7 +4602,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (derived from =special-mode=) + 纯函数渲染引擎。普通内容基于 =string-width= 列模型；固定 banner 字符集按单终端单元计数，规避 TTY CJK 宽度表与终端实际渲染不一致。Dashboard 依赖知识库、帮助、颜色方案和 frame 接口,因此固定在最后一个配置域加载。跨域调用保留 =fboundp= 守卫,但正常路径由文档顺序保证依赖已就绪。
 
 + Dashboard 调用的跨域函数:
-  - =custom/knowledge-list-cards= / =custom/knowledge-show-card= (知识库卡片,走 agenote CLI JSON,见 [[#knowledge-ownership][职责归属]])
+  - =agenote-knowledge-list-cards= / =agenote-knowledge-show-card= (知识库卡片,走 agenote CLI JSON,见 [[#knowledge-ownership][职责归属]])
   - =custom/help--extract-dashboard-bindings= (快捷键卡片)
   - =custom/register-buffer-refresh!= (主题切换刷新)
   - =custom/add-server-ready-hook= (daemon/client frame 生命周期)
@@ -5990,7 +5384,7 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
 CLI 不可用时让异常上抛，由 fetch 层捕获为 :error（而非旧实现的静默吞错返回
 nil——那会让 CLI 挂掉显示「暂无条目」假状态）。返回 (ID CATEGORY TITLE) 三元组。"
   (custom/dashboard--knowledge-entries-from-cards
-   (custom/knowledge-list-cards 'human max-items)))
+   (agenote-knowledge-list-cards 'human max-items)))
 
 (defun custom/dashboard--knowledge-entries-from-cards (cards)
   "把 CARDS plist 列表转换为 (ID CATEGORY TITLE) 三元组。"
@@ -6033,7 +5427,7 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
 (defun custom/dashboard--knowledge-start-async (max-items)
   "异步刷新最近 MAX-ITEMS 张知识卡片，已有进程时保持幂等。"
   (unless (process-live-p custom/dashboard--knowledge-process)
-    (if-let* ((exe (custom/agenote--resolve-executable)))
+    (if-let* ((exe (agenote-resolve-executable)))
         (let ((stdout (generate-new-buffer " *dashboard-knowledge-stdout*"))
               (stderr (generate-new-buffer " *dashboard-knowledge-stderr*")))
           (setq custom/dashboard--knowledge-error nil)
@@ -6117,7 +5511,7 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
                 (error-message-string err))))))
 
 (defun custom/dashboard--render-knowledge (entries width)
-  "知识库卡片 render。点击用卡片 ID 调 `custom/knowledge-show-card'。"
+  "知识库卡片 render。点击用卡片 ID 调 `agenote-knowledge-show-card'。"
   (if (null entries)
       (list (propertize "知识库暂无条目" 'face 'custom/dashboard-dim))
     (mapcar
@@ -6131,7 +5525,7 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
          (concat prefix
                  (custom/dashboard--button
                   (custom/dashboard--truncate display w)
-                  (lambda () (custom/knowledge-show-card 'human id))
+                  (lambda () (agenote-knowledge-show-card 'human id))
                   (format "查看知识卡片 %s" display)))))
      entries)))
 
