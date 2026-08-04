@@ -3,32 +3,42 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# hermes-update — 安装 / 升级 Hermes Agent（Pi 式 editable-checkout）。
+# hermes-update — Hermes Agent 安装 / 升级 wrapper（对齐官方 `hermes update`）。
 #
-# 与 Pi 的 pi-update 同构：从 hermes-agent 仓库按 pin 的 tag 拉 checkout，
-# 再装依赖。安装模型**对齐上游 install.sh**（hermes-agent.nousresearch.com）：
+# 设计：放弃 pin-tag，改跟 main。把「已安装 checkout」的更新整套委托给官方
+# `hermes update`（fetch → stash → pull + syntax guard/rollback → 依赖重装 →
+# config 迁移 → skills sync → desktop build），我们只补官方做不了的、与本机
+# Guix 布局强相关的四件事：
 #
-#   1. Python 用 uv 自管（`uv python install 3.11`），不用系统 python。
-#      Guix 的 python 在 ~/.guix-home/profile 下，`blue home` 升级或 `guix gc`
-#      会换掉 store 路径，venv 的 python 软链随之失效 → 整库 module 找不到。
-#      uv 自管 python 落在 ~/.local/share/uv/python/<版本>/，路径稳定、不被 gc。
-#      （本机上它经 /lib64/ld-linux-x86-64.so.2 → nix-ld 正常运行，已实测。）
-#   2. 依赖优先 `uv sync --extra all --locked`（Tier 0，走 uv.lock 的 SHA256
-#      哈希校验，上游首选路径）；失败再降级 `uv pip install -e '.[all]'`，
-#      最后兜底基础安装。
-#   3. 钉死 UV_PYTHON 到本 venv 解释器，防止继承的 UV_PYTHON 让 uv 把 venv
-#      悄悄重建到别的 python 版本（上游 setup_venv 的同款防护）。
+#   1. 首次安装（官方 update 在 checkout 不存在时报 "Not a git repository" 退出）
+#   2. 更新前停旧 gateway（官方不管；旧进程持失效模块路径，MCP 全挂）
+#   3. uv 隔离（防官方在 $HERMES_HOME/bin 装独立 managed uv，偏离 Guix 系统 uv）
+#   4. 更新后 herd restart hermes 服务（让常驻进程加载新代码）
 #
-# 布局约定：Hermes desktop 壳(main.cjs) 硬编码
+# == uv 隔离 ==
+# 官方 `ensure_uv()`（managed_uv.py:43-51）只查 `$HERMES_HOME/bin/uv` 是否存在，
+# 不存在就从 astral.sh 下载一个独立 uv，完全无视 Guix 装的系统 uv。最干净的反制：
+# 在 `$HERMES_HOME/bin/uv` 预置一个指向系统 uv profile 路径的 symlink →
+# `resolve_uv()` 的 `p.is_file()` 会 follow symlink 返回 True → 官方直接用系统 uv。
+# （`update_managed_uv` 跑的 `uv self update` 对 Guix store 只读路径会失败，但
+#  那是 logger.debug 级别、非致命，managed_uv.py:184-187。）
+#
+# == 跟 main / 放弃 pin ==
+# 首次 clone 用 `--branch main`；已装走 `hermes update "$@"`，透传所有官方
+# 参数（--check / --branch NAME / --backup / --no-backup / --yes 等）。用户想跟
+# 别的分支：`hermes-update --branch NAME`。
+#
+# == 不用 exec 委托 ==
+# 官方 update 完成后还需 herd restart 收尾（让常驻 backend/gateway 加载新代码），
+# 故委托用普通调用而非 exec，保留退出码并在成功后跑收尾。
+#
+# 布局约定（desktop 壳 main.cjs 硬编码）：
 #   ACTIVE_HERMES_ROOT = HERMES_HOME/hermes-agent
 #   VENV_ROOT           = ACTIVE_HERMES_ROOT/venv
 #   isHermesSourceRoot() 要求 ACTIVE_HERMES_ROOT 本身就是源码根（直接含 hermes_cli/main.py）
 #   isBootstrapComplete() 要求 .hermes-bootstrap-complete 是合法 JSON（schemaVersion=1 + pinnedCommit）
 # 故 checkout 直接落在 HERMES_HOME/hermes-agent 顶层（不嵌套 checkout/ 子层），
-# 由 hermes-update 自己写 bootstrap 标记。XDG 合规、零软链。
-#
-# 注意：用户级 skills/ 由 dotfiles/mutable/hermes 管理（git 跟踪），本脚本
-# 不调用上游 skills_sync.py，避免污染源仓库。
+# 首次安装由本脚本写 bootstrap 标记。XDG 合规、零软链。
 set -euo pipefail
 
 REPO_URL="https://github.com/NousResearch/hermes-agent.git"
@@ -41,15 +51,11 @@ PYTHON_VERSION="3.11"   # 与上游 install.sh 的 PYTHON_VERSION 一致
 HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
 CHECKOUT="${HERMES_RUNTIME}"
 VENV="${HERMES_RUNTIME}/venv"
-VERSION_FILE="$(dirname "$(readlink -f "$0")")/hermes-version"
 
-# 读 pin（默认 main）
-TAG="main"
-if [[ -f "${VERSION_FILE}" ]]; then
-  TAG="$(grep -E '^tag=' "${VERSION_FILE}" | head -1 | cut -d= -f2-)"
-  [[ -z "${TAG}" ]] && TAG="main"
-fi
+# herd 管理的 hermes 常驻服务（gateway 依赖 backend，故重启顺序 backend → gateway）
+HERMES_HERD_SERVICES=(hermes-backend hermes-gateway)
 
+# === 依赖前置校验 ===
 command -v uv >/dev/null 2>&1 || {
   echo "uv 未安装（Guix: guix install uv 或走 nix profile）" >&2
   exit 1
@@ -59,82 +65,144 @@ command -v git >/dev/null 2>&1 || {
   exit 1
 }
 
-# === 停掉旧 gateway（布局/venv 变动后旧进程持失效模块路径，MCP 会全挂）===
-# TUI 是 client + 常驻 gateway 架构：gateway 进程内存里的 mcp_tool.__file__
-# 指向更新前的路径，checkout 一动它就找不到 watchdog 脚本。graceful stop，
-# 失败（没在跑 / venv 已坏）都忽略。
-if [[ -x "${VENV}/bin/hermes" ]]; then
-  "${VENV}/bin/hermes" gateway stop >/dev/null 2>&1 || true
-fi
-
-# === checkout ===
-if [[ ! -d "${CHECKOUT}/.git" ]]; then
-  echo "克隆 hermes-agent (${TAG})..."
-  mkdir -p "${HERMES_RUNTIME}"
-  git clone --depth 1 --branch "${TAG}" "${REPO_URL}" "${CHECKOUT}"
-else
-  echo "更新 checkout (${TAG})..."
-  git -C "${CHECKOUT}" fetch --depth 1 origin "${TAG}" || git -C "${CHECKOUT}" fetch origin "${TAG}"
-  git -C "${CHECKOUT}" checkout -f "${TAG}" 2>/dev/null \
-    || git -C "${CHECKOUT}" checkout -f "origin/${TAG}" 2>/dev/null \
-    || true
-  git -C "${CHECKOUT}" clean -fdq 2>/dev/null || true
-fi
-
-# === Python（uv 自管，不用系统 python）===
-# uv python install 幂等：已装则秒过。python-build-standalone 经 nix-ld 可跑。
-echo "确保 uv 自管 Python ${PYTHON_VERSION}..."
-uv python install "${PYTHON_VERSION}"
-
-# === venv ===
-# 仅当 venv 缺失、或解释器不是 uv 自管 python（如旧版脚本建的、指向
-# ~/.guix-home/profile 的 venv）时才重建；否则复用，交给 uv sync 增量同步。
-_py_real="$(readlink -f "${VENV}/bin/python" 2>/dev/null || true)"
-if [[ ! -x "${VENV}/bin/python" ]] || [[ "${_py_real}" != *"uv/python"* ]]; then
-  echo "创建 venv (uv 自管 Python ${PYTHON_VERSION})..."
-  rm -rf "${VENV}"
-  uv venv "${VENV}" --python "${PYTHON_VERSION}"
-fi
-
-# 钉死 UV_PYTHON 到本 venv（上游 setup_venv 同款：防继承的 UV_PYTHON
-# 让后续 uv 命令把 venv 悄悄换到别的 python 版本）
-export UV_PYTHON="${VENV}/bin/python"
-export VIRTUAL_ENV="${VENV}"
-
-# === 安装（对齐上游 install.sh 的分层模型）===
-# Tier 0: uv sync --locked —— 走 uv.lock 的哈希校验（上游首选，防供应链投毒）
-# Tier 1: uv pip install -e '.[all]' —— lock 失配时重新解析 PyPI
-# Tier 2: 基础安装 —— 兜底，至少保证核心 CLI 能起
-cd "${CHECKOUT}"
-if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${VENV}" uv sync --extra all --locked; then
-  echo "依赖安装完成（hash-verified via uv.lock）"
-else
-  [[ -f uv.lock ]] && echo "  uv.lock sync 失败，降级到 PyPI 解析..." >&2
-  if ! uv pip install -e "${CHECKOUT}[all]"; then
-    echo "  [all] 安装失败，降级到基础安装..." >&2
-    uv pip install -e "${CHECKOUT}"
-  fi
-fi
-
-# === 写 bootstrap-complete 标记（让 desktop 壳跳过 GitHub bootstrap）===
-# 合法 JSON：schemaVersion=1 + pinnedCommit（取当前 HEAD 前 7 位）
-PINNED="$(git -C "${CHECKOUT}" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
-cat > "${HERMES_RUNTIME}/.hermes-bootstrap-complete" <<EOF
+# --- 写 bootstrap-complete 标记（首次安装用；让 desktop 壳跳过 GitHub bootstrap）---
+# 合法 JSON：schemaVersion=1 + pinnedCommit（取当前 HEAD 前 7 位）。
+# 官方 update 不碰此文件，仅首装时由本脚本写一次。
+_write_bootstrap_marker() {
+  local pinned branch
+  pinned="$(git -C "${CHECKOUT}" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+  # 首装都是 main（--branch main），pinnedBranch 记录实际分支名
+  branch="$(git -C "${CHECKOUT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+  cat > "${HERMES_RUNTIME}/.hermes-bootstrap-complete" <<EOF
 {
   "schemaVersion": 1,
-  "pinnedCommit": "${PINNED}",
-  "pinnedBranch": "${TAG}",
+  "pinnedCommit": "${pinned}",
+  "pinnedBranch": "${branch}",
   "completedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "desktopVersion": "built-locally"
 }
 EOF
+}
 
-# === 验证 ===
-"${VENV}/bin/hermes" --version
+# --- herd restart 收尾（让常驻服务加载新代码）---
+# gateway 依赖 backend，先 backend 后 gateway；respawn? #t 的服务 herd 会按依赖
+# 图处理，但显式两条更直观。--check 时官方 update 不改任何文件，跳过重启。
+_restart_herd_services() {
+  if ! command -v herd >/dev/null 2>&1; then
+    echo "  ⚠ herd 未找到，跳过常驻服务重启（手动: herd restart ${HERMES_HERD_SERVICES[*]}）"
+    return 0
+  fi
+  echo "→ 重启 herd 管理的 hermes 服务（加载新代码）..."
+  for _svc in "${HERMES_HERD_SERVICES[@]}"; do
+    herd restart "${_svc}" >/dev/null 2>&1 \
+      && echo "  ✓ ${_svc} 已重启" \
+      || echo "  ⚠ ${_svc} 重启失败（手动: herd restart ${_svc}）"
+  done
+}
+
+# ============================================================
+# 路径 A：首次安装（checkout 不存在）
+# ============================================================
+# 官方 `hermes update` 在 PROJECT_ROOT/.git 不存在且非 pip 时直接报
+# "Not a git repository" 退出（main.py:10008-10023），无法引导首次安装，
+# 故首装由本脚本完成：clone + uv 自管 python + 分层装依赖 + 写 bootstrap 标记。
+if [[ ! -d "${CHECKOUT}/.git" ]]; then
+  echo "首次安装 Hermes Agent（clone main + uv 自管 Python ${PYTHON_VERSION}）..."
+  mkdir -p "${HERMES_RUNTIME}"
+  git clone --depth 1 --branch main "${REPO_URL}" "${CHECKOUT}"
+
+  # uv 自管 Python（幂等；已装秒过）。Guix python 在 ~/.guix-home/profile 下，
+  # blue home 升级或 guix gc 换掉 store 路径 → venv python 软链失效 → 整库 module
+  # 找不到。uv 自管 python 落在 ~/.local/share/uv/python/<版本>/，路径稳定不被 gc。
+  echo "确保 uv 自管 Python ${PYTHON_VERSION}..."
+  uv python install "${PYTHON_VERSION}"
+
+  echo "创建 venv (uv 自管 Python ${PYTHON_VERSION})..."
+  uv venv "${VENV}" --python "${PYTHON_VERSION}"
+
+  # 钉死 UV_PYTHON 到本 venv（防继承的 UV_PYTHON 让 uv 把 venv 悄悄重建到别的
+  # python 版本；上游 setup_venv 的同款防护）
+  export UV_PYTHON="${VENV}/bin/python"
+  export VIRTUAL_ENV="${VENV}"
+
+  # 分层安装（对齐上游 install.sh）：
+  # Tier 0: uv sync --locked —— 走 uv.lock 的 SHA256 哈希校验（上游首选，防供应链投毒）
+  # Tier 1: uv pip install -e '.[all]' —— lock 失配时重新解析 PyPI
+  # Tier 2: 基础安装 —— 兜底，至少保证核心 CLI 能起
+  cd "${CHECKOUT}"
+  if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${VENV}" uv sync --extra all --locked; then
+    echo "依赖安装完成（hash-verified via uv.lock）"
+  else
+    [[ -f uv.lock ]] && echo "  uv.lock sync 失败，降级到 PyPI 解析..." >&2
+    if ! uv pip install -e "${CHECKOUT}[all]"; then
+      echo "  [all] 安装失败，降级到基础安装..." >&2
+      uv pip install -e "${CHECKOUT}"
+    fi
+  fi
+
+  _write_bootstrap_marker
+
+  "${VENV}/bin/hermes" --version
+  echo ""
+  echo "首次安装完成。"
+  echo "  Web UI:  hermes serve / hermes dashboard"
+  echo "  TUI:     直接运行 hermes"
+  echo "  Desktop: hermes-desktop（Electron）"
+  exit 0
+fi
+
+# ============================================================
+# 路径 B：已安装 → 委托官方 `hermes update`
+# ============================================================
+echo "已安装，委托官方 \`hermes update\` 更新（透传参数: $*）..."
+
+# --- B.1 停旧 gateway（官方 update 不做）---
+# TUI 是 client + 常驻 gateway 架构：gateway 进程内存里的 mcp_tool.__file__
+# 指向更新前的路径，checkout 一动它就找不到 watchdog 脚本。graceful stop，
+# 失败（没在跑 / venv 已坏）都忽略。herd 管理的 hermes-gateway 有 respawn? #t，
+# 这里 gateway stop 后会被 shepherd 拉起持旧代码——更新后的统一重启在 B.3 处理；
+# 此处只是先让运行中的旧 gateway 干净退出，避免 pull 时持锁。
+if [[ -x "${VENV}/bin/hermes" ]]; then
+  "${VENV}/bin/hermes" gateway stop >/dev/null 2>&1 || true
+fi
+
+# --- B.2 uv 隔离（防官方在 $HERMES_HOME/bin 装独立 managed uv）---
+# 预置指向系统 uv 的 symlink。command -v uv 返回 profile 路径
+# （~/.guix-home/profile/bin/uv），比 store hash 稳定（blue home 升级只换 store
+# hash，profile 软链不变）。
+_uv_managed="${HERMES_HOME}/bin/uv"
+_uv_system="$(command -v uv)"
+if [[ -n "${_uv_system}" ]] && [[ ! -e "${_uv_managed}" ]]; then
+  mkdir -p "${HERMES_HOME}/bin"
+  ln -s "${_uv_system}" "${_uv_managed}"
+  echo "  uv 隔离: ${_uv_managed} -> ${_uv_system}（阻止官方下载独立 managed uv）"
+fi
+
+# --- B.3 委托官方 update（透传所有参数）---
+# 官方接管：pre-update backup → fetch → stash → pull（syntax guard + rollback）
+# → 依赖重装 → config 迁移 → skills sync（已被 .no-bundled-skills opt-out 跳过）
+# → desktop build（desktop-build-stamp.json hash 不变则秒过）→ 完成。
+# 不用 exec：需在成功后跑 herd restart 收尾。保留官方 update 的退出码。
+_update_rc=0
+"${VENV}/bin/hermes" update "$@" || _update_rc=$?
+
+# --check / 失败时不做收尾（官方 update 退出码非 0 或参数含 --check）
+_is_check=0
+for _a in "$@"; do [[ "$_a" == "--check" ]] && _is_check=1; done
+
+if [[ "${_update_rc}" -ne 0 ]]; then
+  echo "✗ 官方 update 失败（退出码 ${_update_rc}），未重启服务" >&2
+  exit "${_update_rc}"
+fi
+
+if [[ "${_is_check}" -eq 1 ]]; then
+  # --check 只读探测，不改文件，无需重启
+  exit 0
+fi
+
+# --- B.4 herd restart 收尾（让常驻服务加载新代码）---
+_restart_herd_services
+
 echo ""
-echo "更新完成。"
-echo "  ⚠ 已在跑的 TUI / gateway / desktop 持旧代码路径，需重启后才生效："
-echo "    hermes gateway restart   （或重开 TUI 会话）"
-echo "  Web UI:  hermes serve   (浏览器打开提示的地址)"
-echo "  TUI:     直接运行 hermes"
-echo "  Desktop: hermes-desktop (Electron，读取 ${HERMES_RUNTIME})"
+echo "✓ 更新完成，常驻服务已重启加载新代码。"
+echo "  ⚠ 已开的 TUI 会话 / desktop 窗口持旧代码，需手动重开。"
