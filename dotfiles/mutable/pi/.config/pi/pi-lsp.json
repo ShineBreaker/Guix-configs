@@ -1,0 +1,30 @@
+{
+  "gopls": {
+    "command": ["gopls"],
+    "extensions": [".go"]
+  },
+  "rust-analyzer": {
+    "command": ["rust-analyzer"],
+    "extensions": [".rs"]
+  },
+  "clangd": {
+    "command": ["clangd"],
+    "extensions": [".c", ".cpp", ".cxx", ".cc", ".h", ".hpp", ".hxx", ".hh"]
+  },
+  "zls": {
+    "command": ["zls"],
+    "extensions": [".zig"]
+  },
+  "guile-lsp-server": {
+    "command": ["guile-lsp-server"],
+    "extensions": [".scm", ".ss"]
+  },
+  "pylsp": {
+    "command": ["pylsp"],
+    "extensions": [".py", ".pyi"]
+  },
+  "ruff": {
+    "command": ["ruff", "server"],
+    "extensions": [".py", ".pyi"]
+  }
+}

@@ -7,16 +7,22 @@
 	url = https://github.com/iDvel/rime-ice.git
 [submodule "appimage-run"]
 	path = dotfiles/mutable/appimage-run
-	url = https://codeberg.org/BrokenShine/appimage-run-guix.git
+	url = https://github.com/ShineBreaker/appimage-run-guix.git
 [submodule "tools/linux-setup"]
 	path = tools/linux-setup
-	url = https://codeberg.org/BrokenShine/linux-setup
+	url = https://github.com/ShineBreaker/linux-setup.git
 [submodule ".agents/skills/guix-skills"]
 	path = .agents/skills/guix-skills
 	url = https://github.com/ShineBreaker/guix-skills
 [submodule "dotfiles/mutable/agenote/.config/agents/skills"]
 	path = dotfiles/mutable/agenote/.config/agents/skills
 	url = https://github.com/ShineBreaker/agenote-skills.git
-[submodule "dotfiles/mutable/agenote/.config/omp/extensions/agenote-hooks"]
-	path = dotfiles/mutable/agenote/.config/omp/extensions/agenote-hooks
+[submodule "dotfiles/mutable/agenote/.config/pi/extensions/agenote-hooks"]
+	path = dotfiles/mutable/agenote/.config/pi/extensions/agenote-hooks
 	url = https://github.com/ShineBreaker/pi-agenote.git
+[submodule "dotfiles/mutable/pi/.config/pi/extensions/atelier"]
+	url = https://github.com/ShineBreaker/pi-atelier.git
+	path = dotfiles/mutable/pi/.config/pi/extensions/atelier
+[submodule "dotfiles/mutable/pi/.config/pi/extensions/pi-ui"]
+	url = https://github.com/ShineBreaker/pi-ui.git
+	path = dotfiles/mutable/pi/.config/pi/extensions/pi-ui
