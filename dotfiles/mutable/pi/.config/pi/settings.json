@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "minimax-cn",
-  "defaultModel": "MiniMax-M3",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-pro",
   "npmCommand": [
     "pnpm"
   ],
@@ -41,46 +41,6 @@
       "mode": "abbreviated"
     }
   },
-  "atelier": {
-    "pollIntervalMs": 2000,
-    "panePrefix": "sub:",
-    "keepResults": 24,
-    "timeoutMs": 1800000,
-    "maxTasks": 8,
-    "maxConcurrency": 4,
-    "defaultTier": "pro",
-    "adversarialReview": true,
-    "tiers": {
-      "ultra": {
-        "model": "zai/GLM-5.2",
-        "fallback": [
-          "minimax-cn/MiniMax-M3",
-          "xiaomi/mimo-v2.5-pro",
-          "deepseek/deepseek-v4-pro"
-        ]
-      },
-      "pro": {
-        "model": "minimax-cn/MiniMax-M3",
-        "fallback": [
-          "deepseek/deepseek-v4-pro",
-          "xiaomi/mimo-v2.5-pro",
-          "zai/GLM-4.7"
-        ]
-      },
-      "quick": {
-        "model": "deepseek/deepseek-v4-flash",
-        "fallback": [
-          "minimax-cn/MiniMax-M2.7"
-        ]
-      },
-      "visual": {
-        "model": "xiaomi/mimo-v2.5",
-        "fallback": [
-          "minimax-cn/MiniMax-M3"
-        ]
-      }
-    }
-  },
   "globalContext": {
     "enabled": true,
     "contextDir": "$XDG_CONFIG_HOME/agents/context",
@@ -88,7 +48,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.80.10",
+  "lastChangelogVersion": "0.83.0",
   "images": {
     "blockImages": false
   },
