@@ -4,6 +4,13 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixos-unstable";
 
+    codex-desktop-linux = {
+      url = "github:ilysenko/codex-desktop-linux";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs = {
@@ -31,6 +38,9 @@
 
           modules = [
             ./configuration/00-main/home.nix
+
+            inputs.codex-desktop-linux.homeManagerModules.default
+
             (
               { pkgs, ... }:
               {
