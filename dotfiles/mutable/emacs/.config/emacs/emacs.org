@@ -595,9 +595,9 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
   "翻译 `context-menu-map' 返回的 MENU。"
   (custom/context-menu--translate-keymap menu))
 
-(when (fboundp 'context-menu-map)
-  (unless (advice-member-p #'custom/context-menu-translate #'context-menu-map)
-    (advice-add 'context-menu-map :filter-return #'custom/context-menu-translate)))
+;; context-menu-map 为 Emacs 28+ 内置,直接挂翻译 advice。
+(unless (advice-member-p #'custom/context-menu-translate #'context-menu-map)
+  (advice-add 'context-menu-map :filter-return #'custom/context-menu-translate))
 
 (with-eval-after-load 'magit-section
   (unless (advice-member-p #'custom/context-menu--translate-string
@@ -1087,8 +1087,7 @@ wide/medium/narrow 都显示(原版行为)。"
   "返回 wide 档电池状态(带 percent face 着色)。
 需要 `display-battery-mode' 启用才会填充 `battery-mode-line-string'。"
   (if (eq tier 'wide)
-      (let* ((raw (and (boundp 'battery-mode-line-string)
-                       (stringp battery-mode-line-string)
+      (let* ((raw (and (stringp battery-mode-line-string)
                        (string-trim battery-mode-line-string)))
              (percent (and raw
                            (string-match "\\([0-9]+\\)%%" raw)
@@ -1915,8 +1914,7 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
   "为当前文件设置行号；大型文件直接关闭，避免扫描完整 buffer。"
   (if (> (buffer-size) custom:large-file-size-threshold)
       (display-line-numbers-mode -1)
-    (when (and (boundp 'display-line-numbers-width)
-               buffer-file-name
+    (when (and buffer-file-name
                display-line-numbers)
       (let* ((max-line (line-number-at-pos (point-max) 'absolute))
              (digits (max 3 (length (number-to-string max-line)))))
@@ -2591,8 +2589,8 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 (show-paren-mode 1)
 (save-place-mode 1)
 (repeat-mode 1)
-(when (boundp 'show-paren-context-when-offscreen)
-  (setq show-paren-context-when-offscreen 'child-frame))
+;; Emacs 29+ 内置:匹配的括号在屏幕外时用 child frame 显示上下文。
+(setq show-paren-context-when-offscreen 'child-frame)
 
 (use-package editorconfig
   :demand t
@@ -2691,8 +2689,7 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
          (eglot-managed-p)
          (fboundp 'eglot-rename))
     (call-interactively #'eglot-rename))
-   ((and buffer-file-name
-         (fboundp 'rename-visited-file))
+   (buffer-file-name
     (call-interactively #'rename-visited-file))
    (t
     (user-error "当前缓冲区不支持重命名"))))
@@ -3141,15 +3138,14 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
   (call-interactively #'xref-find-references))
 
 (defun custom/code-jump-back ()
-  "跳回之前的位置。"
+  "跳回之前的位置(xref 历史,Emacs 28+ 内置)。"
   (interactive)
-  (if (fboundp 'xref-go-back) (xref-go-back) (pop-mark)))
+  (xref-go-back))
 
 (defun custom/code-jump-forward ()
-  "跳到下一个位置。"
+  "跳到下一个位置(xref 历史,Emacs 28+ 内置)。"
   (interactive)
-  (if (fboundp 'xref-go-forward) (xref-go-forward)
-    (message "前进功能不可用")))
+  (xref-go-forward))
 
 (defun custom/code-format-dwim ()
   "智能格式化:有选区格式化选区,否则格式化整个缓冲区。"
@@ -4012,7 +4008,6 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
 + *consult-dir* (minibuffer 内目录切换, =C-x C-d= / =C-x C-j= )已移入本模块,与 vertico-map 集成
 + *Org 禁用 corfu-auto* 逻辑已移入本模块的 =custom/completion-setup-cape-org=
 + 补全相关命令的前缀分组键位( =C-c m= )见 [[#keybindings][前缀键体系]]
-+ vertico-buffer 形态因 Emacs 31 兼容性问题临时降级为 indexed,详见 [[#compatibility][实验性与待确认]]
 
 *** Minibuffer 补全
 
@@ -4031,7 +4026,7 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
 + ~大纲类（imenu / outline / bookmark）~ ：indexed —— 候选前加 [1] [2] 数字索引，用 M-<数字> 快速跳转，比 minibuffer 一行行扫强得多
 + ~M-x（execute-extended-command）~ ：unobtrusive —— 不喧宾夺主
 + ~file category~ ：grid —— 文件名横排成多列，路径补全同时挂 directory-map 的 RET/L 并行补全能力
-+ ~consult-grep category~ ：indexed —— 搜索结果加数字索引便于跳转。下方 multiform 用 indexed 替代 buffer 的原因见 [[#compatibility][实验性与待确认]]。
++ ~consult-grep category~ ：buffer —— 长搜索结果在独立 buffer 展示(vertico 2.11 重编译后 buffer 形态在 Emacs 31 已恢复可用)。
 
 #+begin_src emacs-lisp :noweb-ref keys/completion-minibuffer :tangle no
 (require 'ispell)
@@ -4055,7 +4050,7 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
 
   (setq vertico-multiform-categories
         '((file grid (:keymap . vertico-directory-map))
-          (consult-grep indexed)
+          (consult-grep buffer)
           (imenu indexed)
           (bookmark indexed)
           (symbol (vertico-sort-function . vertico-sort-alpha))
@@ -4152,8 +4147,8 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
   (require 'wgrep)
   (keymap-set grep-mode-map "e" #'wgrep-change-to-wgrep-mode)
   (keymap-set grep-mode-map "C-c C-e" #'wgrep-change-to-wgrep-mode)
-  (when (boundp 'grep-use-headings)
-    (setq grep-use-headings t)))
+  ;; Emacs 31+ 内置:grep 结果按文件分组标题显示。
+  (setq grep-use-headings t))
 
 #+end_src
 
@@ -6028,7 +6023,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 
 *** 实验性
 
-本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、which-key 中文宽度、Arei/Yasnippet .elc 兼容、vertico-buffer 形态降级)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
+本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、which-key 中文宽度、Arei/Yasnippet .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
 
 以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= / =<<compat/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
 
@@ -6040,7 +6035,6 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 | =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei / Yasnippet               | 所有相关包改由 Emacs 31 重编译                      |
 | =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译                |
 | =emacs31/yasnippet-compat=   | yasnippet .elc 缺少 global mode 状态 | 新 client major-mode 初始化    | 升级 yasnippet 或 Guix 用 Emacs 31 重编译           |
-| vertico-buffer 形态降级    | bug#80812,buffer-local-set-state 宏  | vertico-buffer 形态            | vertico 上游修复 / Guix 重编译(见下方)              |
 
 **** Ghostel pre-spawn 的 with-editor 适配
 
@@ -6140,18 +6134,6 @@ Yasnippet 0.14.3 的 Guix =.elc= 在 Emacs 31 中加载后，=yas-global-mode= �
   "从 .el 源加载 Yasnippet，补齐 Emacs 31 global mode 状态变量。"
   (custom/load-library-from-source "yasnippet"))
 #+end_src
-
-**** vertico-buffer 形态降级(bug#80812,同根因)
-
-vertico-buffer 形态在 Emacs 31 master + Guix Emacs 30 编译的 vertico elc 下报 =vertico-buffer--setup: Wrong type argument: symbolp= 。根因与 arei 相同:Emacs 31 重构了 =setq-local= (基于新 =set-local= 函数,bug#80812),而 vertico-buffer 内部用的 =buffer-local-set-state= 宏在 30 编译的 elc 里展开不兼容。上游追踪:[[https://github.com/minad/vertico/issues/670][minad/vertico#670]]。修复前所有原本想用 =buffer= 的形态临时降级为 =indexed= ;vertico 上游修复或 Guix 用 Emacs 31 重编译后,在 [[#completion][Completion 框架]] 数据块的 =vertico-multiform-categories= 里把对应条目从 =indexed= 恢复为 =buffer= (如 =(consult-imenu indexed)= → =(consult-imenu buffer)= )。
-
-**** byte-compile-root-dir(elfeed-3.4.2 tangle 崩溃)
-
-=tangle= 阶段 =elfeed-link.el= 注册的 =elfeed= org link 被 =org-babel-tangle--unbracketed-link= 经 =org-store-link= 试探,触发 autoload → =require 'elfeed-show= → =require 'elfeed= 。elfeed.el 内 =(cl-eval-when (load eval) (unless byte-compile-root-dir ...))= 这段 byte-code 假设变量已 bound,但 elfeed-3.4.2 不可绕开,Emacs 31 下报 void-variable。
-
-+ *shim 位置* :: =init.el= (非 emacs.org tangle 产物;bootstrap 阶段 =org-babel-tangle-file= 之前 =(defvar byte-compile-root-dir nil)= )
-+ *根因* :: Emacs 31 仍 defvar =byte-compile-root-dir= (见 =bytecomp.el:1232= ),但 bytecomp.el 是 lazy-load,默认不在初始环境
-+ *根治* :: 升级到 elfeed-4.0.1
 
 ** 主配置收尾
 
