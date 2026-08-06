@@ -33,15 +33,6 @@
   ;; 按需 tangle:main.el 缺失,或 emacs.org 比 main.el 新
   (when (or (not (file-exists-p main-file))
             (file-newer-than-file-p org-file main-file))
-    ;; Emacs 31 仍 defvar `byte-compile-root-dir'(见 bytecomp.el:1232),但 bytecomp.el
-    ;; 是 lazy-load,默认不在初始环境。`elfeed-link.el' 注册的 `elfeed' org link
-    ;; 会被 `org-babel-tangle--unbracketed-link' 通过 `org-store-link' 试探,触发
-    ;; autoload → `require 'elfeed-show' → `require 'elfeed'。elfeed.el 内
-    ;; `(cl-eval-when (load eval) (unless byte-compile-root-dir ...))' 这段
-    ;; byte-code 假设变量已 bound,但 elfeed-3.4.2 不可绕开。预先 defvar 即可
-    ;; 让字节码读到 nil 而不是 void-variable;真正根治需升级到 elfeed-4.0.1。
-    (when (not (boundp 'byte-compile-root-dir))
-      (defvar byte-compile-root-dir nil))
     (require 'org)
     (require 'ob-tangle)
     ;; Emacs 28+ 在 daemon/批处理下 org-babel-tangle 可能触发 GC 抖动,
