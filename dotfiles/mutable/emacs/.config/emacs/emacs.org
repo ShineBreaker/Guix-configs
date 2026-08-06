@@ -1834,7 +1834,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 :CUSTOM_ID: theme-fonts
 :END:
 
-背景透明度、字体高度、行号、括号匹配、鼠标支持、ef-themes、spacious-padding、ultra-scroll、pulsar。
+背景透明度、字体高度、行号、括号匹配、鼠标支持、ef-themes、spacious-padding、内置像素滚动惯性(pixel-scroll)、内置脉冲高亮(pulse.el)。
 
 + *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。GUI 与真彩 TTY 共用主题前景 palette；TTY 仅清除背景,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
 + *字体大小* :110(11pt),由 =custom:default-font-height= 控制
@@ -1853,7 +1853,7 @@ daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的
 |------------------+-------------------------------+-------------------------+-------------------------------------|
 | 光标类型         | #ERROR                        | 后创 TTY frame 污染 GUI | 用 =set-frame-parameter 'cursor-type= |
 | spacious-padding | daemon F1 背景是伪颜色          | TTY 不加 padding         | 包同步加载,GUI frame 就绪后写 face  |
-| ultra-scroll     | 同上                          | 无效果                  | 无条件启用(GUI client 需要)         |
+| pixel-scroll     | 同上                          | 退化为行级滚动          | 无条件启用(GUI client 需要)         |
 | diff-hl(TTY)     | 无 fringe,fringe 指示器不可见 | 改用 margin             | =fboundp= 守卫 + TTY 分支按需启用     |
 | fringe 宽度      | 行号函数若清零 fringe         | —                       | 禁止在行号函数清零 fringe(详见下表) |
 | ef-themes        | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题 |
@@ -2117,34 +2117,39 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
   (dolist (frame (frame-list))
     (custom/apply-spacious-padding frame)))
 
-(use-package ultra-scroll
-  :demand t
-  :init
-  (setq scroll-conservatively 101
-        scroll-margin 0
-        pixel-scroll-precision-interpolate-page t)
-  :config
-  (ultra-scroll-mode 1))
+;; Emacs 31 内置像素级精确滚动 + 动能惯性,替代 ultra-scroll:
+;; `pixel-scroll-precision-use-momentum' 为 31 新增,触控板松手后惯性滚动;
+;; scroll-conservatively 101 让行级滚动也走平滑路径。
+(setq scroll-conservatively 101
+      scroll-margin 0
+      pixel-scroll-precision-interpolate-page t
+      pixel-scroll-precision-use-momentum t)
+(pixel-scroll-precision-mode 1)
 
-(use-package pulsar
-  :demand t
-  :custom
-  (pulsar-pulse t)
-  (pulsar-delay 0.045)
-  (pulsar-iterations 8)
-  (pulsar-face 'pulsar-cyan)
-  :config
-  (setq pulsar-pulse-functions
-        '(recenter-top-bottom
-          reposition-window
-          other-window
-          windmove-left windmove-right windmove-up windmove-down
-          consult-line consult-ripgrep consult-buffer
-          xref-find-definitions xref-find-references
-          xref-go-back xref-go-forward
-          custom/code-jump-back custom/code-jump-forward
-          flymake-goto-next-error flymake-goto-prev-error))
-  (pulsar-global-mode 1))
+;; 跳转目标行脉冲高亮:内置 pulse.el 替代 pulsar。从 `highlight' face 背景
+;; (跟随 ef-themes) 向默认背景渐变淡出,8 帧 × 45ms。post-command-hook 内
+;; 只做 memq 判定,无 IO。TTY 下背景被透明策略清除,自然降级为不可见。
+(defconst custom:pulse-commands
+  '(recenter-top-bottom
+    reposition-window
+    other-window
+    windmove-left windmove-right windmove-up windmove-down
+    consult-line consult-ripgrep consult-buffer
+    xref-find-definitions xref-find-references
+    xref-go-back xref-go-forward
+    custom/code-jump-back custom/code-jump-forward
+    flymake-goto-next-error flymake-goto-prev-error)
+  "执行后会触发当前行脉冲高亮的命令列表。")
+
+(defun custom--pulse-after-command ()
+  "若刚执行的命令在 `custom:pulse-commands' 中,脉冲高亮 point 所在行。"
+  (when (memq this-command custom:pulse-commands)
+    (pulse-momentary-highlight-one-line (point) 'highlight)))
+
+(require 'pulse)
+(setq pulse-delay 0.045
+      pulse-iterations 8)
+(add-hook 'post-command-hook #'custom--pulse-after-command)
 
 (size-indication-mode 1)
 (display-battery-mode 1)
@@ -2557,13 +2562,14 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 :CUSTOM_ID: editing-defaults
 :END:
 
-缩进 / tab、括号匹配、EditorConfig、选区扩展、Git 差异高亮、Smartparens、文档模式自动换行。
+缩进 / tab、括号匹配、EditorConfig、Git 差异高亮、内置自动配对、文档模式自动换行。
 
 + ~indent-tabs-mode nil~ + ~tab-width 2~ :默认用空格缩进
++ ~word-wrap-by-category~ :CJK 文本按字符类别折行(内置)
 + ~show-paren-mode~ :高亮匹配括号
 + ~save-place-mode~ / ~repeat-mode~ :内置体验增强
-+ ~~editorconfig~ :遵循项目 =.editorconfig=
-+ ~smartparens~ :替代 ~electric-pair-mode~ ,支持 wrap/unwrap/slurp/barf
++ ~editorconfig~ :遵循项目 =.editorconfig=
++ ~electric-pair-mode~ :内置自动配对(替代 smartparens——配置从未绑定 sp-* 结构化命令,配对即全部用法)
 + ~diff-hl~ :fringe 显示 Git 差异(终端用 margin)
 + 文档模式(org/markdown/text)自动 =visual-line-mode=
 + =global-so-long-mode= 自动降级超长行 buffer；大于阈值的文件关闭行号并跳过全 buffer 行数扫描
@@ -2576,6 +2582,10 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
               truncate-lines t
               word-wrap nil)
 
+;; CJK 文本允许在任意字符处折行(Emacs 29+ 内置),配合文档模式的
+;; visual-line-mode,避免长段落因找不到空格断点而整行不折。
+(setq word-wrap-by-category t)
+
 (global-so-long-mode 1)
 
 (show-paren-mode 1)
@@ -2587,24 +2597,13 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 (use-package editorconfig
   :demand t
   :custom
-  (editorconfig-trim-whitespaces-mode
-   (if (fboundp 'delete-trailing-whitespace-mode)
-       'delete-trailing-whitespace-mode
-     'ws-butler-mode))
+  (editorconfig-trim-whitespaces-mode 'delete-trailing-whitespace-mode)
   :config
   (editorconfig-mode 1))
 
-(use-package expand-region
-  :defer t
-  :commands (er/expand-region er/contract-region))
-
-;; 行尾空格清理:Emacs 31+ 用内置 delete-trailing-whitespace-mode,29-30 fallback ws-butler。
-(if (fboundp 'delete-trailing-whitespace-mode)
-    (add-hook 'text-mode-hook #'delete-trailing-whitespace-mode)
-  (use-package ws-butler
-    :defer t
-    :hook ((text-mode . ws-butler-mode)
-           (prog-mode . ws-butler-mode))))
+;; 行尾空格清理:Emacs 31 内置 delete-trailing-whitespace-mode,保存前清理
+;; 整个 buffer 的行尾空格(比旧 ws-butler「仅编辑触碰行」更彻底)。
+(add-hook 'text-mode-hook #'delete-trailing-whitespace-mode)
 
 ;; diff-hl 的 margin 模式只在 TTY 启用(GUI 走 fringe):原先 daemon 启动期
 ;; (unless (display-graphic-p) ...) 判断永远为 nil,会强启 GUI client 的 margin
@@ -2617,20 +2616,10 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
   :config
   (global-diff-hl-mode 1))
 
-(use-package smartparens
-  :hook ((prog-mode . smartparens-mode)
-         (markdown-mode . smartparens-mode)
-         (org-mode . smartparens-mode))
-  :config
-  (require 'smartparens-config))
-
-(use-package crux
-  :defer t
-  :commands (crux-open-with
-             crux-rename-file-and-buffer
-             crux-delete-file-and-buffer
-             crux-copy-file-preserve-attributes
-             crux-duplicate-current-line-or-region))
+;; 自动配对用内置 electric-pair-mode 替代 smartparens:本配置从未绑定
+;; sp-* 结构化命令(slurp/barf/wrap),实际只用配对插入与选区包裹,
+;; electric-pair-mode 全部覆盖(含 region 激活时输入括号包裹选区)。
+(electric-pair-mode 1)
 
 ;; git-messenger 用 C-c g m(非 b):C-c g b 已被 custom/git-blame-current-file
 ;; 占用,而 :bind 是 git-messenger 唯一的加载触发器,键被覆盖会让整个包不可用。
@@ -3937,6 +3926,7 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-_" #'custom/comment-dwim-stable "注释" "基础移动与直达键")
 (custom/bind "C-S-c" #'custom/copy-dwim "复制" "基础移动与直达键")
 (custom/bind "C-S-v" #'yank "粘贴" "基础移动与直达键")
+(custom/bind "M-y" #'yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
 (custom/bind "C-S-x" #'custom/cut-dwim "剪切" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
 (custom/bind "C-S-t" #'consult-recent-file "最近文件" "基础移动与直达键")
@@ -5251,7 +5241,8 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
                          (goto-char pos)
                          (when (fboundp 'org-reveal) (org-reveal))
                          (recenter)
-                         (when (fboundp 'pulsar-pulse) (pulsar-pulse)))))
+                         (when (fboundp 'pulse-momentary-highlight-one-line)
+                           (pulse-momentary-highlight-one-line (point) 'highlight)))))
                (state-face (get-text-property 0 'face state-str))
                (title-face (get-text-property 0 'face title))
                (done (lambda ()
