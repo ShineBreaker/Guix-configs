@@ -950,9 +950,11 @@ mock agenote-call,验证:
       (should (= (string-width result) width)))))
 
 (ert-deftest custom-config/dashboard-tty-banner-centers-by-terminal-cells ()
-  "TTY banner 应按终端实际单元宽度居中，不受 Emacs CJK 宽度表误判影响。"
+  "TTY banner 应按终端实际单元宽度居中，不受 Emacs CJK 宽度表误判影响。
+块居中语义：所有 art 行的左边缘 pad 由最长行长度决定（figlet 行间左对齐）。"
   (let* ((width 140)
-         (art-line "███████╗███╗   ███╗ █████╗  ██████╗███████╗")
+         ;; 与 `custom/dashboard--ascii-banner-lines' 当前最长行一致。
+         (art-line "███████╗  ███╗   ███╗   █████╗    ██████╗  ███████╗")
          (expected-pad (/ (- width (length art-line)) 2)))
     (cl-letf (((symbol-function 'display-graphic-p)
                (lambda (&optional _frame) nil))
