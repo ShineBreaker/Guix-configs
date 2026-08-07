@@ -31,6 +31,7 @@ checkout → update_versions.py → detect changes →
 
 - **基础设施失败（无需修复）**：run 创建后几十秒内即 completed+failure，卡在 `Install Guix` / `Checkout` / `Set up job` / `Prepare /etc/gitconfig` 等**早期步骤**，`Build test updated packages` 从未开始，且**无新 issue** 生成。典型观测：`Install Guix` step 5 秒内 failure（如 2026-07-30 run 30535193381、2026-08-01 run 30685995735 均为 4-5 秒卡死 Install Guix）。→ **直接 `gh workflow run auto-update.yml --repo ShineBreaker/jeans --ref main` 重跑，不修任何包。**
 - **真实构建失败（需要修复）**：CI 跑到 `Build test updated packages` 步骤后失败，`test_updated_packages.py` 创建 `❌ Updated package build failures — <sha>` issue。**只有看到这种 issue 才修包。**
+- **测试/脚本同步失败（需要修代码，不是重跑，2026-08-06 实例确立）**：run 创建后 ~10-20 秒内 failure——时间上与基础设施失败几乎一样短，**但失败步骤是一个测试步骤**（如 `Test updater release tag prefixes`），不是 Install Guix / Checkout。日志特征是 Python Traceback / `KeyError` / 断言失败，**无构建 issue**。典型根因：某次提交删除了包（`define-public`），但回归测试用例 / config 注释 / CI 包列表仍引用该包名 → 测试与仓库不同步。实例：commit `293affd`（2026-08-02）删除 `open-interpreter-bin` 等 6 个包，`test_tag_prefix.py` 的用例仍引用它 → `KeyError: 'open-interpreter-bin'`。修法：删掉/更新过时引用，**本地先复跑同款测试命令**（`python3 scripts/check-updates/test_tag_prefix.py`）验证通过，再交用户 commit/push。
 
 判定命令（gh 用绝对路径，注意 `~/.nix-profile` 已废弃、新路径是 `~/.local/state/nix/profile/bin/gh`）：
 
@@ -43,6 +44,24 @@ $GH issue list --repo ShineBreaker/jeans --state open --json number,title,labels
 
 - run 的 `conclusion: failure` + `updated_at - created_at < 60s` → 基础设施失败
 - `updated_at - created_at > 几分钟` + 有 `❌` issue → 构建失败，进修复流程
+- **判断失败类型必须看失败步骤名，不能只看 run 时长**：基础设施失败和测试/脚本同步失败都可能几十秒内完成（2026-08-06 run 31067714158 约 13 秒挂在 `Test updater release tag prefixes`）。先 `gh run view <run_id> --jobs` 定位 failed step，再 `gh run view <run_id> --log-failed` 抓真实错误行（grep `Traceback|KeyError|error`）。
+
+### 1.0.1 重跑 action 的时机陷阱（2026-08-06 实测踩坑）
+
+**本地修复未 commit/push 时，`gh workflow run` 重跑 CI 用的是远端 main 分支代码——修复不生效，重跑必败**（本次实测：修复 test_tag_prefix.py 后立即重跑，20 秒内又以同样 KeyError 失败，日志里还是旧代码）。正确顺序：
+
+1. 本地修复 → **本地复跑 CI 同款命令验证**（如 `python3 scripts/check-updates/test_tag_prefix.py`，测试脚本本身无 guix 依赖，直接可跑）
+2. 用 ad-hoc 验证脚本做针对性验证（临时文件放 /tmp、前缀 `hermes-verify-`，跑完删除；可加"反向验证"断言——如确认旧用例对当前代码确实失败，证明修复针对真实失败模式而非掩盖问题）
+3. 重跑留给用户 commit/push 之后，或报告里说明"需提交后 CI 才生效"
+
+### 1.0.2 删除包后的引用清理清单（2026-08-06 确立）
+
+删除一个 `define-public` 包时（或接手他人已删包的失败时），同步检查三处残留引用：
+
+- `scripts/check-updates/test_tag_prefix.py` 等**回归测试用例**——引用已删包 → CI 测试步骤硬失败（无容错），本次即此
+- `scripts/check-updates/config.json` 的注释/配置（`tag_prefix`、`notes` 等）——不影响功能但保持描述准确
+- `.github/workflows/auto-update.yml` 的 `guix refresh` 包列表——**不能由 agent 改**（workflow 边界），但残留只警告不阻塞（refresh 步骤 `set +e`，注释明示"个别包失败不阻塞整体"）；报告给用户手动清理
+- 更新 `docs/packages.md`（`blue gen-docs`）
 
 ### 1.1 Known CI failure mode: sandbox git-fetch can never finish (issue #20 / #21)
 
@@ -690,6 +709,6 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 | GPG 签 commit 在 cron 里 fail(`cannot open '/dev/tty'` / "损坏的密码")      | §4.3:本机 passphrase 非空 + 无 loopback pinentry + 无专用 secret key;workaround 全有副作用。fallback 到"留 patch 不 commit + 用户手动 rebase 重签"
 | 系统调起 skill 时拽错了(例如把 `guix-configs-workflow` 拽到 jeans 任务里) | 优先读 jeans 工作目录里的 `AGENTS.md`(本仓库用的任务是 `blue` 不是 `blue home`)。本 skill 是 jeans 的专属 class 级 skill;`guix-configs-workflow` 专治 `~/Projects/Config/Guix-configs` 仓库,跟 jeans 不互通。 |
 | cron 跑 `git pull` 超时(60s) | 本机网络拉 GitHub 较慢,pull 可能卡在 channel tarball unpack。cron 里 `git pull` 用 `timeout 30` 包一下,超时就跳过——下一次 cron 会续上。 |
-| GitHub API rate limit 403 查不到 CI 状态 | 本机没装 `gh`,curl 又会被 rate limit。用 `git log --oneline origin/main` 看最新 commit 是否已落本地,再 `git show <sha> --stat` 看改了什么,间接判断 CI 是否跑通。 |
+| GitHub API rate limit 403 查不到 CI 状态 | 本机 gh CLI 已可用（绝对路径 `/home/brokenshine/.local/state/nix/profile/bin/gh`，2026-08-06 实测正常）：`gh api` / `gh run view <id> --log-failed` / `gh issue list` 优先用；仍 403 时用 `git log --oneline origin/main` 看最新 commit 是否已落本地,再 `git show <sha> --stat` 看改了什么,间接判断 CI 是否跑通。 |
 | AGENTS.md 描述里有 `source/channel.lock`，但仓库只有 `.guix-channel`          | `references/lint-recipes.md` §Recipe 4：blueprint 走 `.guix-channel` + `-L modules`；不要为对齐文档建假的 `source/`。                                                                                                                                                                                                                                                                                                                       |
 | `modules/jeans.scm` 补完 re-export 后要同步的事                           | `blue gen-docs` 重新生成 `docs/packages.md`，并在同一 commit 中提交。                                                                                                                                                                                                                                                                                                                                                                      |

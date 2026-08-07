@@ -14,7 +14,7 @@ metadata:
 
 Hermes Agent 在本用户环境下**通过 Pi 式 editable-checkout 部署**(2026-07-20 从 Nix 迁出):`git clone` 整仓到 `$HERMES_HOME/hermes-agent` **顶层**(无 checkout/ 子层),uv 自管 Python(`uv python install 3.11`)+ `uv venv` + `uv sync --extra all --locked`(对齐上游 install.sh),二进制在 `$HERMES_HOME/hermes-agent/venv/bin/hermes`。**不再是** `/nix/store/*-hermes-agent-env` 路径(那条路径已随 `source/nix/configuration/programs/hermes.nix` 删除而失效)。
 
-完整的 Pi 式部署结构、三个脚本(`hermes` / `hermes-update` / `hermes-version`)、踩坑与升级流程见 `references/pi-style-editable-checkout.md` —— 直接 copy-modify 即可。本节只讲 CLI 二进制解析的两种形态 + cron 约束。
+完整的 Pi 式部署结构、两个脚本(`hermes` / `hermes-update`)、踩坑与升级流程见 `references/pi-style-editable-checkout.md` —— 直接 copy-modify 即可。本节只讲 CLI 二进制解析的两种形态 + cron 约束。
 
 本 skill 是 Hermes 安装/运维层面的"踩坑知识库",三个核心主题:
 

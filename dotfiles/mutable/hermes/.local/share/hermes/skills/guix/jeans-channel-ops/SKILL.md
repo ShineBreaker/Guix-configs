@@ -23,7 +23,17 @@ description: 巡检与修复 jeans Guix channel（~/Projects/Config/jeans，gith
 
 ## GitHub API 访问范式（绕开 403 rate limit）
 
-未认证 API 会撞 rate limit（403）。**仓库 origin remote 内嵌 x-access-token**，提取后作 Bearer 即可：
+gh CLI 已可用（绝对路径 `/home/brokenshine/.local/state/nix/profile/bin/gh`，2026-08-06 实测）——**优先用 gh，命令更短且自带鉴权**：
+
+```bash
+GH=/home/brokenshine/.local/state/nix/profile/bin/gh
+$GH api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' --jq '.workflow_runs[] | {id, status, conclusion, created_at, updated_at}'
+$GH run view <run_id> --jobs          # 定位 failed step（比翻全文快）
+$GH run view <run_id> --log-failed    # 只输出失败步骤日志，配合 grep 'Traceback|KeyError|error' 抓根因
+$GH issue list --repo ShineBreaker/jeans --state open
+```
+
+gh 不可用或撞 403 时，用仓库 origin remote 内嵌的 x-access-token 提取后作 Bearer 即可：
 
 ```bash
 TOKEN=$(git remote get-url origin | sed -E 's#https://x-access-token:([^@]+)@.*#\1#')
@@ -51,6 +61,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" \
 - **exit code 8 + `ERROR 502: Bad Gateway`（ftpmirror.gnu.org）** = Install Guix 步骤撞上 GNU 镜像瞬时故障，wget exit 8 是"服务器错误响应"。修法：重试（临时）+ 给 Install Guix 步骤套重试循环（加固建议，用户拍板才推）。
 - **exit 128 + `remote: Bye` + 403（codeberg push）** = Codeberg 拒绝：FORGEJO_TOKEN 过期/吊销 或 封 runner IP。鉴别：查 Codeberg API `https://codeberg.org/api/v1/repos/BrokenShine/jeans/commits` 看最后镜像 commit —— 停在旧 commit 就是从那一次开始断的。token 是 GitHub secret，本地无法验证，只能报告用户。
 - **`No files were found: report.json` + 运行时长 <30s** = 死在 Install Guix 之前（Python updater 根本没跑），不是 updater 的锅。
+- **Python `Traceback` / `KeyError: '<pkg-name>'` + 失败步骤是 `Test updater release tag prefixes`**（2026-08-06 run 30880286426 / 31067714158）= 回归测试引用了已删除的包：某 commit 删了 `define-public`（如 `293affd` 删 `open-interpreter-bin`）但 `test_tag_prefix.py` 用例 / config.json 注释没同步删。修法：删过时引用 + 本地 `python3 scripts/check-updates/test_tag_prefix.py` 验证；**注意时间特征与基础设施失败几乎一样短（~13s），必须看失败步骤名区分**；**重跑 action 无效**——CI 用远端 main 代码，本地修复未 push 时重跑必败，验证留给用户 commit/push 之后。
 - `Node.js 20 is deprecated` 警告 = 噪音，不影响结果。
 
 ## 构建验证回填（重要）

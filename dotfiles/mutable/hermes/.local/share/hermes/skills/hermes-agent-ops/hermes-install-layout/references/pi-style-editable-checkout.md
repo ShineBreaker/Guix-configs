@@ -19,14 +19,16 @@
 - **Electron desktop 已救活**:`hermes-desktop` wrapper 用 `guix shell
   --emulate-fhs` 容器跑 build 出的 Electron 二进制(含 GPU 硬件渲染),
   详见 `desktop-fhs-rescue.md`。TUI(`hermes`)与 desktop 并存。
-- 升级: 改 `hermes-version` 的 `tag=` + 跑 `hermes-update`。
-  **更新后必须重启 TUI/gateway/desktop**——常驻 gateway 进程内存里持有旧
-  模块路径(checkout 一动,`mcp_tool.__file__` 推导的 watchdog 路径即失效,
-  MCP server 全报 "can't open file ... No such file or directory")。
-  hermes-update 会先 graceful stop gateway,但已开的 TUI 会话/desktop 要手动重开。
+- 升级: 直接跑 `hermes-update`(委托官方 `hermes update`,跟 main;透传参数如
+  `--branch NAME` / `--check` / `--backup` 等)。**放弃 pin-tag 模型**(不再有
+  `hermes-version` 文件)。更新后 herd 管理的 `hermes-backend` / `hermes-gateway`
+  会被 `hermes-update` 自动 restart 加载新代码,但**已开的 TUI 会话/desktop 窗口
+  持旧代码路径,需手动重开**——常驻 gateway 进程内存里持有旧模块路径(checkout
+  一动,`mcp_tool.__file__` 推导的 watchdog 路径即失效,MCP server 全报 "can't
+  open file ... No such file or directory")。
 
 ## 目录结构
-- 启动脚本: `dotfiles/mutable/hermes/.local/bin/{hermes, hermes-update, hermes-version, hermes-desktop, hermes-desktop-manifest.scm}`
+- 启动脚本: `dotfiles/mutable/hermes/.local/bin/{hermes, hermes-update, hermes-desktop, hermes-desktop-manifest.scm}`
   - 由 `blue stow hermes` 部署到 `~/.local/bin/`(GNU Stow 直链,改源即生效)
 - runtime(不进仓库, gitignore): `$HERMES_HOME/hermes-agent/`(checkout 直接在
   **顶层**,无 `checkout/` 子层——desktop 壳 `isHermesSourceRoot()` 要求
@@ -57,103 +59,100 @@ unset PYTHONHOME
 exec "${HERMES_BIN}" "$@"
 ```
 
-## `hermes-update`(安装/升级,对齐上游 install.sh 安装模型)
+## `hermes-update`(安装/升级,委托官方 `hermes update`,跟 main)
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 REPO_URL="https://github.com/NousResearch/hermes-agent.git"
-PYTHON_VERSION="3.11"   # 与上游 install.sh 一致
+PYTHON_VERSION="3.11"
 : "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
 HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
-CHECKOUT="${HERMES_RUNTIME}"          # checkout 直接在顶层
+CHECKOUT="${HERMES_RUNTIME}"
 VENV="${HERMES_RUNTIME}/venv"
-VERSION_FILE="$(dirname "$(readlink -f "$0")")/hermes-version"
-TAG="main"
-[[ -f "$VERSION_FILE" ]] && TAG="$(grep -E '^tag=' "$VERSION_FILE" | head -1 | cut -d= -f2-)"
+HERMES_HERD_SERVICES=(hermes-backend hermes-gateway)
 command -v uv >/dev/null 2>&1 || { echo "uv 未安装" >&2; exit 1; }
 command -v git >/dev/null 2>&1 || { echo "git 未安装" >&2; exit 1; }
 
-# 停旧 gateway(布局/venv 变动后旧进程持失效模块路径,MCP 会全挂)
+# 【路径 A: 首次安装】官方 update 在 checkout 不存在时报 "Not a git repository",
+# 故首装由本脚本完成: clone main + uv 自管 python + 分层装依赖 + 写 bootstrap 标记。
+if [[ ! -d "${CHECKOUT}/.git" ]]; then
+  git clone --depth 1 --branch main "${REPO_URL}" "${CHECKOUT}"
+  uv python install "${PYTHON_VERSION}"
+  uv venv "${VENV}" --python "${PYTHON_VERSION}"
+  export UV_PYTHON="${VENV}/bin/python" VIRTUAL_ENV="${VENV}"
+  cd "${CHECKOUT}"
+  if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${VENV}" uv sync --extra all --locked; then
+    :  # Tier 0: 走 uv.lock 哈希校验
+  elif ! uv pip install -e "${CHECKOUT}[all]"; then
+    uv pip install -e "${CHECKOUT}"   # Tier 2 兜底
+  fi
+  # 写 .hermes-bootstrap-complete(desktop 壳靠它跳过 GitHub bootstrap)
+  ...
+  exit 0
+fi
+
+# 【路径 B: 已装 → 委托官方 update】
+# B.1 停旧 gateway(官方不管;旧进程持失效模块路径,MCP 全挂)
 [[ -x "${VENV}/bin/hermes" ]] && "${VENV}/bin/hermes" gateway stop >/dev/null 2>&1 || true
 
-if [[ ! -d "${CHECKOUT}/.git" ]]; then
-  mkdir -p "${HERMES_RUNTIME}"
-  git clone --depth 1 --branch "${TAG}" "${REPO_URL}" "${CHECKOUT}"
-else
-  git -C "${CHECKOUT}" fetch --depth 1 origin "${TAG}" || git -C "${CHECKOUT}" fetch origin "${TAG}"
-  git -C "${CHECKOUT}" checkout -f "${TAG}" 2>/dev/null || git -C "${CHECKOUT}" checkout -f "origin/${TAG}" 2>/dev/null || true
-  git -C "${CHECKOUT}" clean -fdq 2>/dev/null || true
-fi
+# B.2 uv 隔离: 预置 $HERMES_HOME/bin/uv → 系统 uv 的 symlink,阻止官方 ensure_uv
+#     从 astral.sh 下载独立 managed uv(官方只查该路径是否存在,不查 PATH)
+_uv_managed="${HERMES_HOME}/bin/uv"
+[[ -n "$(command -v uv)" && ! -e "${_uv_managed}" ]] && ln -s "$(command -v uv)" "${_uv_managed}"
 
-# uv 自管 python(幂等);venv 缺失或解释器非 uv 管理路径时才重建
-uv python install "${PYTHON_VERSION}"
-_py_real="$(readlink -f "${VENV}/bin/python" 2>/dev/null || true)"
-if [[ ! -x "${VENV}/bin/python" ]] || [[ "${_py_real}" != *"uv/python"* ]]; then
-  rm -rf "${VENV}"
-  uv venv "${VENV}" --python "${PYTHON_VERSION}"
-fi
-export UV_PYTHON="${VENV}/bin/python" VIRTUAL_ENV="${VENV}"   # 钉死,防继承环境污染
+# B.3 委托官方 update(透传所有参数: --check / --branch NAME / --backup / --yes ...)
+# 不用 exec: 成功后需 herd restart 收尾。官方接管 fetch→pull(syntax guard+rollback)
+# →依赖重装→config 迁移→skills sync(已被 .no-bundled-skills 跳过)→desktop build(hash stamp 跳过)
+"${VENV}/bin/hermes" update "$@"
 
-# 分层安装: Tier 0 uv sync --locked(哈希校验) → Tier 1 .[all] → Tier 2 基础
-cd "${CHECKOUT}"
-if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${VENV}" uv sync --extra all --locked; then
-  :
-elif ! uv pip install -e "${CHECKOUT}[all]"; then
-  uv pip install -e "${CHECKOUT}"
-fi
-"${VENV}/bin/hermes" --version
+# B.4 herd restart(让常驻 backend/gateway 加载新代码; --check 时跳过)
+for _svc in "${HERMES_HERD_SERVICES[@]}"; do herd restart "${_svc}"; done
 ```
-(完整版含 bootstrap-complete 标记写入与重启提示,见仓库
+(完整版含退出码处理 / --check 跳过重启 / 首装 bootstrap 标记写入,见仓库
 `dotfiles/mutable/hermes/.local/bin/hermes-update`。)
 
-## `hermes-version`(pin)
-```
-# tag 对应 hermes-agent 仓库 branch 或 release tag
-# 锁定 v2026.7.20 (= Python 包 0.19.0, 自 hermes-update 自动写入 .hermes-bootstrap-complete)
-tag=v2026.7.20
-```
+> **为什么委托官方 update**: 官方 update 在 editable 安装下能正确定位 checkout
+> (`PROJECT_ROOT = Path(__file__).parent.parent` 直指 checkout 源码),判为 `git`
+> 安装走标准 `git pull` + 依赖重装路径。它自带我们旧脚本缺的能力: pre-update
+> backup、post-pull syntax guard + 自动 rollback、venv 健康检查 + 修复、config
+> 迁移、cron jobs 安全网。我们只补它做不了的: 首次安装 + 停旧 gateway + uv 隔离
+> + herd restart。
 
-## 验证 `hermes-update` 是否真的跑过(取证指纹,2026-07-21 加)
+## 验证 `hermes-update` 是否真的跑过(取证指纹)
 
-诊断 hermes 行为不符预期(命令找不到、版本不是预期、build 错误地指向老源)时,
-先确认 `hermes-update` 是不是**真的**跑过,而非停留在上一版。脚本末尾写了一个
-**`hermes-update` 独有的 heredoc 标记**(electron 壳和 hermes-update 之外的任何
-路径都不会写它),把它当签名用:
+> **2026-08-04 模型变更**: 委托官方 `hermes update` 后,`.hermes-bootstrap-complete`
+> 只在**首次安装**时由本脚本写一次(官方 update 不碰它)。它不再能证明"最近一次
+> update 跑过",只能证明"首装完成"。要确认最近 update,看 git log + herd 服务状态。
 
+诊断 hermes 行为不符预期(命令找不到、版本不是预期、build 错误地指向老源)时:
+
+**1. 确认首装标记存在(desktop 壳靠它跳过 GitHub bootstrap)**:
 ```bash
 cat "$HERMES_HOME/hermes-agent/.hermes-bootstrap-complete"
-# 期望:
-#   {
-#     "schemaVersion": 1,
-#     "pinnedCommit": "3ef6bbd",         # 7 位短 SHA
-#     "pinnedBranch": "v2026.7.20",      # 与 hermes-version 的 tag= 对齐
-#     "completedAt": "2026-07-21T05:58:11Z",  # 该次 hermes-update 真实完成时刻
-#     "desktopVersion": "built-locally"  # ← 硬编码字面量,只有这个脚本写它
-#   }
+# pinnedCommit 是首装时的 HEAD(后续 update 不刷新此字段)
 ```
 
-`.hermes-bootstrap-complete` 缺失 → 从来没跑过 `hermes-update`(即使 HERMES_HOME
-非空、`hermes-agent/` 存在);存在即**确实在最近一次 `completedAt` 时刻被脚本
-覆盖过**。这是脚本签名,不是商店标志。
+**2. 确认最近 update 真的拉了新代码**(委托官方后,看 git 而非标记):
+```bash
+git -C "$HERMES_HOME/hermes-agent" log --oneline -3          # HEAD 是否前进
+git -C "$HERMES_HOME/hermes-agent" log -1 --format='%ci'     # 最近 commit 时间
+herd status hermes-backend                                    # 重启时间应晚于该 commit
+```
 
-**一票否决**:`pinnedCommit` 必须能 `git -C $HERMES_HOME/hermes-agent
-rev-parse --short=7 HEAD` 复现。`completedAt` 与 `hermes-agent/` 顶层目录
-`mtime` 应在同一小时级窗口内。不一致说明中间夹了别的脚本(手工 `git pull`,
-或别人手动 `git checkout` 别的 commit),需追查期间动过什么。
-
-**交叉校验必走三件套**:
+**交叉校验**:
 
 | 信号 | 期望 | 含义 |
 |---|---|---|
-| `hermes-version` 的 `tag=` ↔ `.hermes-bootstrap-complete.pinnedBranch` | 完全一致 | 标记未被外部脚本改写 |
-| `pinnedCommit` ↔ HEAD 第 1 行 | 同 SHA,且第一行 commit message 是 `chore: release vX.Y.Z (YYYY.M.D)` 格式 | 确实在打过 tag 的 commit 上 |
-| `venv/bin/python` ↔ `~/.local/share/uv/python/...` | 通过 | venv 是 uv 自管而非 Guix |
+| `HEAD` ↔ `origin/main` | `git rev-parse HEAD` == `git rev-parse origin/main` | 本地已追平远端 |
+| `venv/bin/python` ↔ `~/.local/share/uv/python/...` | `readlink -f` 指向 uv 自管 python | venv 是 uv 自管而非 Guix |
+| herd 服务重启时间 ↔ HEAD commit 时间 | 服务 `启动于` 晚于 commit 时间 | hermes-update 的 B.4 herd restart 跑过了 |
 
 `desktop.json` / `desktop-build-stamp.json` 是 **electron 壳独立构建**的 timestamp,
-**不受** `hermes-update` 覆盖。`builtAt` 比 `completedAt` 早是正常情况(用户先
-升级源码,后 build desktop);反向才是 **desktop 没重 build 就在跑**的征兆——源码
-最新但壳仍持旧模块路径,典型症状 electron UI 找不到某个新版 hermes CLI 暴露的
-命令。要修:`hermes desktop --build-only`,然后重开 `hermes-desktop` 进程。
+官方 update 在 `apps/desktop/` 源变了时会触发 `desktop --build-only`(content-hash
+stamp 不匹配),源没变则秒过。`builtAt` 比 HEAD commit 早是正常情况(用户先 update
+源码,desktop build 由 stamp 决定是否重跑);反向才是 **desktop 没重 build 就在跑**
+的征兆——源码最新但壳仍持旧模块路径,典型症状 electron UI 找不到某个新版 hermes
+CLI 暴露的命令。要修:`hermes desktop --build-only`,然后重开 `hermes-desktop` 进程。
 
 ## 写 Hermes config 的两条规则(踩坑 2026-07-21)
 
