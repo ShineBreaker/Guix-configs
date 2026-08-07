@@ -1678,7 +1678,6 @@ end
                              ;; 编辑与导航
                              "emacs-avy"
                              "emacs-diff-hl"
-                             "emacs-helpful"
                              "emacs-indent-bars"
                              "emacs-multiple-cursors"
                              "emacs-prescient"
