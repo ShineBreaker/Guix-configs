@@ -4133,20 +4133,9 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
          ("C-x C-d" . consult-dir)
          ("C-x C-j" . consult-dir-jump-file)))
 
-;; Wgrep:Consult + Embark 导出的 grep buffer 可进入 wgrep,像编辑普通 buffer 一样
-;; 批量修改搜索结果再统一写回文件。
-(use-package wgrep
-  :defer t
-  :commands (wgrep-change-to-wgrep-mode wgrep-finish-edit
-                                        wgrep-abort-changes wgrep-save-all-buffers)
-  :custom
-  (wgrep-auto-save-buffer t)
-  (wgrep-change-readonly-file t))
-
+;; Emacs 31+ 内置 Grep Edit:在 *grep* buffer 按 e 进入编辑,
+;; 修改自动反映到源文件,C-c C-c 提交。替代原 wgrep。
 (with-eval-after-load 'grep
-  (require 'wgrep)
-  (keymap-set grep-mode-map "e" #'wgrep-change-to-wgrep-mode)
-  (keymap-set grep-mode-map "C-c C-e" #'wgrep-change-to-wgrep-mode)
   ;; Emacs 31+ 内置:grep 结果按文件分组标题显示。
   (setq grep-use-headings t))
 
