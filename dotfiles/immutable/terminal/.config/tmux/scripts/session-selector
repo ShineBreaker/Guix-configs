@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+set -euo pipefail
+
+# session-selector — 统一的 tmux/herdr 会话选择器（fzf）
+#
+# 设计依据：tmux 和 herdr 在 session 管理上同构——
+#   - 都有 DEFAULT（tmux=main 约定 / herdr=default 内建）
+#   - 都有命名/独立会话（tmux new-session -s / herdr --session）
+#   - 都需要状态标注（运行中 / 已停止可重连）
+#   - 都缺命名能力（NEW 由 fish 侧 prompt 输入语义名）
+#
+# 参数：<tmux|herdr>
+#
+# 统一输出契约（stdout 单行，fish 侧直接 switch）：
+#   NEW        新建会话（fish 侧 read prompt 输入名字）
+#   DEFAULT    进入默认/共享会话（tmux=main, herdr=default）
+#   <name>     attach 该命名会话
+#   (空)       ESC/取消，留在普通 shell
+#
+# 行为复刻：无命名 session 时直接输出 DEFAULT（不弹 fzf，零按键）。
+
+usage() {
+    printf 'usage: session-selector <tmux|herdr>\n' >&2
+    exit 2
+}
+
+[[ $# -eq 1 ]] || usage
+mux="$1"
+
+# 列出命名 session（排除默认），输出 name<TAB>status 两列
+list_named_sessions() {
+    case "$mux" in
+        tmux)
+            # tmux 的 main 是 DEFAULT 入口的代表，跳过避免重复。
+            # attached>0 标 [运行中]（与 herdr 的 running 对齐）。
+            # tmux 无"已停止可重连"态——session 不会脱离 server 存在。
+            tmux list-sessions -F '#{session_name}|#{session_attached}' 2>/dev/null \
+                | while IFS='|' read -r name attached; do
+                    [[ "$name" == "main" ]] && continue
+                    if [[ "$attached" -gt 0 ]]; then
+                        printf '%s\t%s\t[运行中]\n' "$name" "$name"
+                    else
+                        printf '%s\t%s\n' "$name" "$name"
+                    fi
+                done
+            ;;
+        herdr)
+            # herdr 的 default 由 .default=true 标记，跳过。
+            # running 区分 [运行中] / [已停止·可重连]（herdr 独有维度）。
+            herdr session list --json 2>/dev/null \
+                | jq -r '.sessions[] | select(.default | not) | "\(.name)\t\(.running)"' 2>/dev/null \
+                | while IFS=$'\t' read -r name running; do
+                    [[ -z "$name" ]] && continue
+                    if [[ "$running" == "true" ]]; then
+                        printf '%s\t%s\t[运行中]\n' "$name" "$name"
+                    else
+                        printf '%s\t%s\t[已停止·可重连]\n' "$name" "$name"
+                    fi
+                done
+            ;;
+        *)
+            printf 'session-selector: unknown multiplexer "%s"\n' "$mux" >&2
+            exit 2
+            ;;
+    esac
+}
+
+default_label() {
+    case "$mux" in
+        tmux)  printf 'main' ;;
+        herdr) printf 'default' ;;
+    esac
+}
+
+# 收集命名 session
+mapfile -t lines < <(list_named_sessions || true)
+named_count=0
+choices=()
+
+for line in "${lines[@]}"; do
+    [[ -z "$line" ]] && continue
+    # line = name<TAB>display[<TAB>status]，列1 留作机器 key
+    choices+=("$line")
+    named_count=$((named_count + 1))
+done
+
+# 无命名 session → 直接进默认（零按键，复刻原 session-selector 行为）
+if [[ $named_count -eq 0 ]]; then
+    echo "DEFAULT"
+    exit 0
+fi
+
+# 组装 fzf 输入：NEW 置顶（默认选中，回车即新建），DEFAULT 置底
+default_name="$(default_label)"
+choices=("NEW"$'\t'">> 新建会话"
+         "${choices[@]}"
+         "DEFAULT"$'\t'">> 默认会话 ('"$default_name"')")
+
+# fzf 选择：--with-nth=2.. 只显示/搜索后续列，列1 留作机器 key
+result=$(printf '%s\n' "${choices[@]}" \
+    | fzf --reverse --no-multi \
+          --header="选择 $mux 会话" \
+          --height=~50% \
+          --delimiter=$'\t' \
+          --with-nth=2.. \
+    || true)
+
+# 取消 / ESC → 留在普通 shell
+if [[ -z "$result" ]]; then
+    exit 0
+fi
+
+# 取列1 机器 key 输出给 fish
+IFS=$'\t' read -r kind _ <<< "$result"
+echo "$kind"
