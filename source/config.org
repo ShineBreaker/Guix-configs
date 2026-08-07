@@ -1702,8 +1702,6 @@ end
                              "emacs-kotlin-mode"
                              "emacs-nix-mode"
                              "emacs-web-mode"
-                             "emacs-yaml"
-                             "emacs-yaml-mode"
                              "emacs-yasnippet"
                              "emacs-yasnippet-snippets"
                              "emacs-zig-mode"
@@ -1759,6 +1757,7 @@ end
                              "tree-sitter-python"
                              "tree-sitter-rust"
                              "tree-sitter-typescript"
+                             "tree-sitter-yaml"
                              "tree-sitter-zig"))))))
 #+end_src
 
