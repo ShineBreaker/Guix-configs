@@ -1678,12 +1678,10 @@ end
                              ;; 编辑与导航
                              "emacs-avy"
                              "emacs-diff-hl"
-                             "emacs-editorconfig"
                              "emacs-helpful"
                              "emacs-indent-bars"
                              "emacs-multiple-cursors"
                              "emacs-prescient"
-                             "emacs-wgrep"
                              "emacs-with-editor"
                              "emacs-goto-chg"
 
