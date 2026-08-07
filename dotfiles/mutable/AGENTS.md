@@ -57,8 +57,7 @@ mutable/
 │   │   ├── bin/
 │   │   │   ├── hermes
 │   │   │   ├── hermes-desktop
-│   │   │   ├── hermes-update
-│   │   │   └── hermes-version
+│   │   │   └── hermes-update
 │   │   └── share/
 │   │       ├── applications/
 │   │       └── hermes/
@@ -73,6 +72,7 @@ mutable/
 │   │       ├── npm/
 │   │       ├── .gitignore
 │   │       ├── APPEND_SYSTEM.md
+│   │       ├── atelier.json
 │   │       ├── global-context.json
 │   │       ├── keybindings.json
 │   │       ├── mcp.json
