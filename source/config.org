@@ -1657,20 +1657,8 @@ end
                              "emacs-no-littering"
                              "emacs-next-pgtk:doc"
 
-                             ;; 补全与迷你缓冲区
-                             "emacs-cape"
-                             "emacs-consult"
-                             "emacs-consult-dir"
-                             "emacs-corfu"
-                             "emacs-embark"
-                             "emacs-marginalia"
-                             "emacs-orderless"
-                             "emacs-vertico"
-                             "emacs-consult-eglot"
-
                              ;; 界面与外观
                              "emacs-ef-themes"
-                             "emacs-kind-icon"
                              "emacs-nerd-icons"
                              "emacs-rainbow-delimiters"
                              "emacs-spacious-padding"
@@ -1680,7 +1668,6 @@ end
                              "emacs-diff-hl"
                              "emacs-indent-bars"
                              "emacs-multiple-cursors"
-                             "emacs-prescient"
                              "emacs-with-editor"
                              "emacs-goto-chg"
 
