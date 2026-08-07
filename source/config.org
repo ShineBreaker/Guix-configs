@@ -1653,8 +1653,6 @@ end
                 (shepherd-requirement '(graphical-session))
                 (packages (specifications->manifest
                            '(;; Emacs 核心与基础
-                             ;; use-package / which-key / eglot 已随 Emacs 30+/31 内置,
-                             ;; 不再从 Guix 安装同版或更旧副本。
                              "emacs-gcmh"
                              "emacs-no-littering"
                              "emacs-next-pgtk:doc"
@@ -1671,9 +1669,6 @@ end
                              "emacs-consult-eglot"
 
                              ;; 界面与外观
-                             ;; pulsar → 内置 pulse.el; ultra-scroll → 内置
-                             ;; pixel-scroll-precision-mode (31 动能惯性);
-                             ;; which-key → Emacs 30+ 内置。
                              "emacs-ef-themes"
                              "emacs-kind-icon"
                              "emacs-nerd-icons"
@@ -1681,10 +1676,6 @@ end
                              "emacs-spacious-padding"
 
                              ;; 编辑与导航
-                             ;; smartparens → 内置 electric-pair-mode;
-                             ;; ws-butler → 内置 delete-trailing-whitespace-mode (31);
-                             ;; crux / expand-region 无键位绑定,功能已有内置等价
-                             ;; (duplicate-line / rename-visited-file),移除。
                              "emacs-avy"
                              "emacs-diff-hl"
                              "emacs-editorconfig"
@@ -1697,7 +1688,6 @@ end
                              "emacs-goto-chg"
 
                              ;; 开发工具
-                             ;; posframe 无任何配置引用,移除。
                              "emacs-agent-shell"
                              "emacs-apheleia"
                              "emacs-eglot-x"
@@ -1706,7 +1696,6 @@ end
                              "emacs-guix"
 
                              ;; 编程语言支持
-                             ;; csharp-mode 已随 Emacs 28+ 内置。
                              "emacs-arei"
                              "emacs-fish-mode"
                              "emacs-fish-completion"
@@ -1723,7 +1712,6 @@ end
                              "emacs-zig-mode"
 
                              ;; 版本控制与项目管理
-                             ;; magit-todos / magit-delta 无配置引用,移除。
                              "emacs-git-messenger"
                              "emacs-git-timemachine"
                              "emacs-magit"
@@ -1752,8 +1740,6 @@ end
                              ;; 拼写检查
                              "aspell"
                              "aspell-dict-en"
-                             "hunspell"
-                             "hunspell-dict-en"
                              "miscfiles"
 
                              ;; Tree-sitter
