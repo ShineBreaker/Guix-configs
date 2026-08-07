@@ -2628,7 +2628,7 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
   (git-messenger:show-detail t)
   (git-messenger:use-magit-popup t))
 
-(dolist (hook '(org-mode-hook markdown-mode-hook gfm-mode-hook text-mode-hook))
+(dolist (hook '(org-mode-hook markdown-ts-mode-hook text-mode-hook))
   (add-hook hook #'visual-line-mode))
 #+end_src
 
@@ -2883,7 +2883,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :ts-mode json-ts-mode
             :server nil
             :formatter js-beautify)
-    (:modes (markdown-mode gfm-mode)
+    (:modes (markdown-ts-mode)
             :server nil
             :formatter pandoc-markdown)
     (:modes (nix-mode)
@@ -3238,15 +3238,21 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 (use-package kdl-mode :mode "\\.kdl\\'" :defer t)
 (use-package kotlin-mode :mode "\\.kt\\'" :defer t)
-(use-package markdown-mode
+(use-package markdown-ts-mode
   :mode ("\\.md\\'" "\\.markdown\\'")
   :defer t
-  :custom
-  (markdown-command "pandoc")
-  (markdown-fontify-code-blocks-natively t))
+  :config
+  ;; Guix 的 tree-sitter-markdown 包构建出 libtree-sitter-markdown_inline.so
+  ;; (下划线),Emacs 默认查找 libtree-sitter-markdown-inline.so(连字符)。
+  ;; 通过 override 列表显式映射,否则 markdown-inline parser 加载失败。
+  (add-to-list 'treesit-load-name-override-list
+               '(markdown-inline "libtree-sitter-markdown_inline"
+                                 "tree_sitter_markdown_inline"))
+  ;; 转换默认走 pandoc(与旧 markdown-mode 一致),用 eww 内嵌预览。
+  (setq markdown-ts-default-converter '(html . pandoc)))
 
-(custom/bind-local 'markdown-mode 'markdown-mode 'markdown-mode-map
-                   "C-c p" #'markdown-preview "预览 Markdown" "模式局部")
+(custom/bind-local 'markdown-ts-mode 'markdown-ts-mode 'markdown-ts-mode-map
+                   "C-c p" #'markdown-ts-convert "预览 Markdown" "模式局部")
 (use-package nix-mode :mode "\\.nix\\'" :defer t)
 (use-package yaml :defer t :commands (yaml-parse-string yaml-encode))
 (use-package yaml-mode :mode ("\\.ya?ml\\'" "\\.yml\\.dist\\'") :defer t)
