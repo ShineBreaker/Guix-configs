@@ -554,8 +554,8 @@ Each :ts-mode produces a remap from the first :modes entry."
 
 (ert-deftest custom-config/daemon-warmup-stays-on-interaction-features ()
   "Daemon 预热覆盖高频交互 feature，不启动应用型子系统。"
-  (dolist (feature '(org-agenda org-capture org-roam apheleia embark
-                                magit helpful tramp cape))
+  (dolist (feature '(org-agenda org-capture org-roam apheleia
+                                magit tramp))
     (should (memq feature custom:daemon-warmup-features)))
   (dolist (feature '(pdf-tools notmuch elfeed ement agent-shell))
     (should-not (memq feature custom:daemon-warmup-features))))
@@ -713,14 +713,15 @@ Now a hard contract — any future regression fails this test."
   (let ((advice (advice--p (symbol-function 'widget-button--check-and-call-button))))
 	  (should-not advice)))
 
-(ert-deftest custom-config/corfu-popupinfo-is-sole-doc-source ()
-  "P1 #4 (fixed by Commit 10): only `corfu-popupinfo' is configured as the
-Corfu doc source. Phase 5.1 removed `corfu-doc' / `corfu-doc-terminal'.
-Now a hard contract — M-d must bind only `corfu-popupinfo-toggle'."
-  ;; Phase 5.1 fix landed; promote from :expected-result :failed to mandatory.
-  (require 'corfu nil t)
-  (let ((m-d-cmd (lookup-key corfu-map (kbd "M-d"))))
-	  (should (eq m-d-cmd 'corfu-popupinfo-toggle))))
+(ert-deftest custom-config/completion-preview-is-in-region-source ()
+  "内置 completion-preview-mode 接管 in-region 补全(替代 corfu 家族)。
+Emacs 30+ 内置,daemon 加载期全局启用,不依赖第三方包。"
+  (should (fboundp 'completion-preview-mode))
+  (should (fboundp 'global-completion-preview-mode))
+  (should (bound-and-true-p global-completion-preview-mode))
+  ;; minibuffer 补全走内置 minibuffer-visible-completions。
+  (should (eq minibuffer-visible-completions 'up-down))
+  (should completion-eager-display))
 
 (ert-deftest custom-config/audit-keys-helpers-phase6 ()
   "Phase 6 binding-spec single-source-of-truth: audit-keys helper semantics.

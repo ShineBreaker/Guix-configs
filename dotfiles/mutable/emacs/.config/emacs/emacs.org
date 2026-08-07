@@ -1950,8 +1950,6 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
     (tab-line-tab-inactive :box nil)
     (header-line :box nil :underline t)
     (completions-highlight :weight bold :underline t)
-    (vertico-current :weight bold :underline t)
-    (corfu-current :weight bold :underline t)
     ;; ghostel-fake-cursor 的 GUI 负宽 box 无 :color,TTY 背景透明后 box 颜色无法
     ;; 解析,ghostel 在 pre-redisplay-functions 重绘提示游标时触发
     ;; "Invalid face box :color unspecified :line-width (-1 . -1)"。清除之;
@@ -2132,7 +2130,6 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
     reposition-window
     other-window
     windmove-left windmove-right windmove-up windmove-down
-    consult-line consult-ripgrep consult-buffer
     xref-find-definitions xref-find-references
     xref-go-back xref-go-forward
     custom/code-jump-back custom/code-jump-forward
@@ -3306,7 +3303,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 :CUSTOM_ID: projects
 :END:
 
-项目管理(project.el + consult-fd + consult-ripgrep)、文件与缓冲区导航。
+项目管理(project.el 内置文件搜索与 grep)、文件与缓冲区导航。
 
 ** 项目管理 project.el
 :PROPERTIES:
@@ -3316,9 +3313,9 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、grep、ibuffer 按项目分组。
 
 + 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
-+ =project-switch-commands= = Dired / consult-fd / consult-ripgrep
++ =project-switch-commands= = Dired / project-find-file / project-find-regexp
 + Emacs 31 的命令项格式为 =(COMMAND LABEL &optional KEY)= ，显式键避免依赖 =project-prefix-map= 的间接查找。
-+ =consult-fd= : 项目内快速文件搜索( =custom/find-file-in-project= ),fd 缺失时降级为 find
++ =project-find-file= : 项目内快速文件搜索( =custom/find-file-in-project= )
 + ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
 + 项目前缀 =C-x p= 在本域末尾绑定(功能内聚)
 + 项目切换清空当前 frame 的 tab-line( =project-after-switch-project-functions= ,见 [[#tab-line][Tab-line]])
@@ -3390,21 +3387,20 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
             #'custom/ibuffer-set-project-groups))
 
 (defun custom/find-file-in-project ()
-  "用 consult-fd 查找当前项目内文件。
+  "用 project.el 查找当前项目内文件。
 
-在 project.el 项目内时限定到项目根目录;否则从当前目录搜索。
-依赖外部命令 fd；缺失时 consult-fd 自动降级为 consult-find(find 命令)。"
+在 project.el 项目内时限定到项目根目录;否则从当前目录搜索。"
   (interactive)
-  (require 'consult)
+  (require 'project)
   (let ((default-directory (custom/project-root-or-default)))
-    (call-interactively #'consult-fd)))
+    (call-interactively #'project-find-file)))
 
 (defun custom/project-search ()
-  "用 consult-ripgrep 在当前项目内搜索。"
+  "用 project.el 在当前项目内搜索。"
   (interactive)
-  (require 'consult)
+  (require 'project)
   (let ((default-directory (custom/project-root-or-default)))
-    (call-interactively #'consult-ripgrep)))
+    (call-interactively #'project-find-regexp)))
 
 ;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原 projectile-after-switch-project-hook)。
 (with-eval-after-load 'project
@@ -3906,11 +3902,11 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-z" #'undo "撤销" "基础移动与直达键")
 (custom/bind "C-S-z" #'undo-redo "重做" "基础移动与直达键")
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
-(custom/bind "C-f" #'consult-line "缓冲区搜索" "基础移动与直达键")
+(custom/bind "C-f" #'isearch-forward "缓冲区搜索" "基础移动与直达键")
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
-(custom/bind "C-S-f" #'consult-ripgrep "项目全文搜索" "基础移动与直达键")
-(custom/bind "C-S-b" #'consult-buffer "切换缓冲区" "基础移动与直达键")
-(custom/bind "C-S-o" #'consult-imenu "符号大纲" "基础移动与直达键")
+(custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
+(custom/bind "C-S-b" #'switch-to-buffer "切换缓冲区" "基础移动与直达键")
+(custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
 (custom/bind "C-S-j" #'avy-goto-char-timer "屏幕内快速跳转" "基础移动与直达键")
 (custom/bind "C-S-p" #'execute-extended-command "命令面板" "基础移动与直达键")
 (custom/bind "C-<tab>" #'custom/tabs-next "下一个标签" "基础移动与直达键")
@@ -3926,7 +3922,7 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "M-y" #'yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
 (custom/bind "C-S-x" #'custom/cut-dwim "剪切" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
-(custom/bind "C-S-t" #'consult-recent-file "最近文件" "基础移动与直达键")
+(custom/bind "C-S-t" #'recentf-open-files "最近文件" "基础移动与直达键")
 (custom/bind "C-S-d" #'custom/code-duplicate-line "复制当前行" "基础移动与直达键")
 (custom/bind "C-S-<up>" #'custom/code-move-line-up "上移当前行" "基础移动与直达键")
 (custom/bind "C-S-<down>" #'custom/code-move-line-down "下移当前行" "基础移动与直达键")
@@ -3974,8 +3970,8 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
            ("C-c h" . "帮助")))
   (custom/declare-binding-prefix (car prefix) (cdr prefix)))
 
-(custom/bind "C-x C-r" #'consult-recent-file "最近文件" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x b" #'consult-buffer "切换缓冲区" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x b" #'switch-to-buffer "切换缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x B" #'ibuffer "缓冲区列表" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x k" #'kill-buffer-and-window "关闭窗口与缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x K" #'kill-buffer "关闭指定缓冲区" "文件 / 缓冲区 / 标签")
@@ -3984,11 +3980,11 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t g" #'custom/tabs-refresh-context "刷新标签上下文" "文件 / 缓冲区 / 标签")
 
-(custom/bind "M-s l" #'consult-line "搜索当前缓冲区" "搜索")
-(custom/bind "M-s p" #'consult-ripgrep "搜索项目" "搜索")
-(custom/bind "M-s b" #'consult-buffer "搜索缓冲区" "搜索")
-(custom/bind "M-s e" #'consult-eglot-symbols "Eglot 符号搜索" "搜索")
-(custom/bind "M-s f" #'consult-flymake "Flymake 诊断" "搜索")
+(custom/bind "M-s l" #'isearch-forward "搜索当前缓冲区" "搜索")
+(custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
+(custom/bind "M-s b" #'switch-to-buffer "搜索缓冲区" "搜索")
+(custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
+(custom/bind "M-s f" #'flymake-goto-next-error "Flymake 诊断" "搜索")
 
 (custom/bind "C-c h f" #'describe-function "查看函数" "帮助")
 (custom/bind "C-c h v" #'describe-variable "查看变量" "帮助")
@@ -4003,136 +3999,49 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 :CUSTOM_ID: completion
 :END:
 
-Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion-list-mode= )、Corfu(接管 in-region 代码补全)、Consult / Embark / Orderless / Marginalia / Prescient / Cape 全家桶。
+Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-display 接管 minibuffer,completion-preview-mode 接管 in-region,dabbrev 兜底,flex 模糊匹配。
 
 + 直接复用启动域的 aspell/hunspell 路径缓存与 [[#frame][Frame 生命周期]]
-+ *consult-dir* (minibuffer 内目录切换, =C-x C-d= / =C-x C-j= )已移入本模块,与 vertico-map 集成
-+ *Org 禁用 corfu-auto* 逻辑已移入本模块的 =custom/completion-setup-cape-org=
 + 补全相关命令的前缀分组键位( =C-c m= )见 [[#keybindings][前缀键体系]]
 
 *** Minibuffer 补全
 
-~savehist~ - 持久化 minibuffer 历史和 vertico 最后查询
+~savehist~ - 持久化 minibuffer 历史
 + savehist 已在 *启动与基础设施* ~startup~ 域以 =:demand t= 启用，daemon 对外服务前即可复用历史。
 
-~Vertico~ - 垂直补全界面
-+ Vertico 提供简洁高效的垂直补全界面，接管 minibuffer 的 completing-read。
-+ 启用后 Emacs 不再回退到内置 *Completions* buffer（ =completion-list-mode= ）。
+~minibuffer-visible-completions~ - 候选即显(替代 Vertico)
++ Emacs 30+ 内置:minibuffer 激活时直接显示 *Completions* buffer,方向键导航候选。
++ Emacs 31 新增 =up-down= 值:仅上下键移动候选,左右键仍编辑 minibuffer。
++ ~completion-eager-display~ / ~completion-eager-update~ (31 新增):立即显示并随输入实时更新 *Completions*。
 
-~Vertico Multiform~ - 按命令/补全类别切换 Vertico 形态
-+ =vertico-multiform-mode= 允许按 completing-read 命令或 completion category 切换 Vertico 显示形态（vertical / buffer / flat / grid / unobtrusive 等），还能附带 keymap、sort function、buffer-local 设置。
-+ 形态切换见 =vertico-multiform-map= ：M-B buffer、M-F flat、M-G grid、M-U unobtrusive、M-V vertical。
+~completion-styles~ - flex 模糊匹配(替代 Orderless)
++ Emacs 31 重写 flex 算法,更快更准(pattern "scope" 正确排序 elisp-scope-* 函数)。
++ 文件类别保留 basic+partial-completion(路径补全需要)。
 
-配置策略（参考 vertico README *"Configuration per command"* ）：
-+ ~大纲类（imenu / outline / bookmark）~ ：indexed —— 候选前加 [1] [2] 数字索引，用 M-<数字> 快速跳转，比 minibuffer 一行行扫强得多
-+ ~M-x（execute-extended-command）~ ：unobtrusive —— 不喧宾夺主
-+ ~file category~ ：grid —— 文件名横排成多列，路径补全同时挂 directory-map 的 RET/L 并行补全能力
-+ ~consult-grep category~ ：buffer —— 长搜索结果在独立 buffer 展示(vertico 2.11 重编译后 buffer 形态在 Emacs 31 已恢复可用)。
+~completions-sort~ - 历史优先排序(替代 Prescient 的轻量部分)
++ 候选按字母序 + minibuffer 历史最近优先。
 
 #+begin_src emacs-lisp :noweb-ref keys/completion-minibuffer :tangle no
 (require 'ispell)
 
-(use-package vertico
-  :custom
-  (vertico-count 12)
-  (vertico-cycle t)
-  :config
-  (vertico-mode 1))
+;; Emacs 30+ 内置 minibuffer 补全界面:minibuffer 激活即显示 *Completions*,
+;; 方向键导航候选(替代 Vertico)。Emacs 31 的 up-down 值:上下键移动候选,
+;; 左右键仍编辑 minibuffer;eager-display/eager-update 让候选即显并随输入更新。
+(setq minibuffer-visible-completions 'up-down)
+(setq completion-eager-display t)
+(setq completion-eager-update t)
+(setq completion-auto-wrap t)
 
-(use-package vertico-multiform
-  :after vertico
-  :config
-  (setq vertico-multiform-commands
-        '((consult-imenu indexed)
-          (consult-outline indexed)
-          (consult-bookmark indexed)
-          (consult-theme indexed)
-          (execute-extended-command unobtrusive)))
+;; Emacs 31 重写 flex 算法:更快更准的模糊匹配(替代 Orderless 主用途)。
+;; 文件类别保留 basic+partial-completion,路径补全需要前缀语义。
+(setq completion-styles '(flex basic))
+(setq completion-category-overrides
+      '((file (styles basic partial-completion))))
 
-  (setq vertico-multiform-categories
-        '((file grid (:keymap . vertico-directory-map))
-          (consult-grep buffer)
-          (imenu indexed)
-          (bookmark indexed)
-          (symbol (vertico-sort-function . vertico-sort-alpha))
-          (library (vertico-sort-function . vertico-sort-alpha))))
+;; 历史优先排序(替代 Prescient 的轻量部分):候选按字母序,最近使用靠前。
+(setq completions-sort 'historical)
 
-  (vertico-multiform-mode 1))
-
-;; vertico-directory-map 覆盖所有文件补全场景(不只 grid file 形态):
-;; vertico-multiform 只把 directory-map 挂到 grid file,这里额外绑到 vertico-map。
-(use-package vertico-directory
-  :after vertico
-  :bind (:map vertico-map
-              ("RET" . vertico-directory-enter)
-              ("DEL" . vertico-directory-delete-char)
-              ("M-DEL" . vertico-directory-delete-word)
-              ("C-l" . vertico-directory-up))
-  :hook (rfn-eshadow-update-overlay . vertico-directory-tidy))
-
-(use-package vertico-quick
-  :after vertico
-  :bind (:map vertico-map
-              ("M-j" . vertico-quick-jump)
-              ("M-J" . vertico-quick-exit)))
-
-(use-package vertico-repeat
-  :after vertico
-  :bind (:map vertico-map
-              ("M-R" . vertico-repeat)))
-
-;; Prescient:维护本地候选历史,按使用频率 + 最近使用排序。vertico-prescient /
-;; corfu-prescient 分别接入 Vertico minibuffer 与 Corfu in-region 补全;
-;; prescient-persist-mode 把状态存到 prescient-save-file,跨 session 保留排序记忆。
-(use-package prescient
-  :config
-  (prescient-persist-mode 1))
-
-(use-package vertico-prescient
-  :after (vertico prescient)
-  :config
-  (vertico-prescient-mode 1))
-
-(use-package corfu-prescient
-  :after (corfu prescient)
-  :config
-  (corfu-prescient-mode 1))
-
-(use-package marginalia
-  :config
-  (marginalia-mode 1))
-
-(use-package orderless
-  :custom
-  (completion-styles '(orderless basic))
-  (completion-category-overrides '((file (styles basic partial-completion)))))
-
-;; Consult 的全局快捷键(consult-line / consult-buffer / consult-ripgrep 等)
-;; 在 [[#global-keys][全局直达键]] / [[#keybindings][前缀键体系]] 注册,本块只配 use-package 本体。
-(use-package consult
-  :defer t
-  :custom
-  (xref-show-xrefs-function #'consult-xref)
-  (xref-show-definitions-function #'consult-xref))
-
-;; Embark 的全局键位(C-. embark-act / C-; embark-dwim)在 [[#keybindings][前缀键体系]] 注册。
-(use-package embark
-  :defer t
-  :init
-  (setq prefix-help-command #'embark-prefix-help-command))
-
-(use-package embark-consult
-  :after (embark consult)
-  :defer t)
-
-(use-package consult-dir
-  :after consult
-  :defer t
-  :commands (consult-dir consult-dir-jump-file)
-  :bind (("C-x C-d" . consult-dir)
-         :map vertico-map
-         ("C-x C-d" . consult-dir)
-         ("C-x C-j" . consult-dir-jump-file)))
+;; xref 使用内置默认列表展示。
 
 ;; Emacs 31+ 内置 Grep Edit:在 *grep* buffer 按 e 进入编辑,
 ;; 修改自动反映到源文件,C-c C-c 提交。替代原 wgrep。
@@ -4144,30 +4053,17 @@ Vertico(接管 minibuffer,不再回退到 = *Completions* = buffer / =completion
 
 *** In-region 补全
 
-Corfu 提供轻量级的代码补全界面，接管 in-region 补全（替代 *Completions* 回退）; 延迟 0.2 秒加载以加速启动。
+Emacs 30+ 内置 ~completion-preview-mode~ 提供 in-buffer 补全预览（替代 Corfu 弹出菜单）:
++ 输入时在光标处显示 ghost-text 候选预览
++ TAB 接受候选（~completion-preview-insert~）
++ M-n / M-p 切换候选（~completion-preview-next/prev-candidate~）
++ 无弹出菜单与 kind 图标,交互更轻量
 
-配置说明：
-+ ~corfu-auto~ : 自动弹出补全
-+ ~corfu-auto-prefix~ : 输入几个字符后触发补全
-+ ~corfu-quit-no-match~ : 无匹配时的行为
-+ ~corfu-cycle~ : 循环选择候选项
+~dabbrev~ 内置动态缩写(替代 cape-dabbrev / cape-line / cape-keyword 主用途),capf 链由各 major-mode 自带。
 
-Cape 提供 ~Completion-At-Point~ 扩展后端（CAPF），与 Corfu 的 in-region 补全完全兼容。
-各 capf 通过 buffer-local 追加到 =completion-at-point-functions= ，排在已有 major-mode / LSP capf 之后兜底。
+ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 
-可用 capf 清单（cape 2.7）：
-+ ~cape-dabbrev~ : 当前 buffer 内动态缩写展开（覆盖旧 cape-symbol 功能）
-+ ~cape-file~ :    字符串内路径补全
-+ ~cape-history~ : 当前 minibuffer/region 历史回填
-+ ~cape-keyword~ : 编程语言关键字补全（仅 prog-mode 有意义）
-+ ~cape-line~ :    当前 buffer 内整行近似补全（性能略重，单独控制）
-+ ~cape-tex~ :     LaTeX 数学符号补全（按需）
-
-按模式分组配置 capf，避免 LSP 管理的 prog-mode 被无关 capf 干扰。
-
-~Consult-flymake~ - Flymake 错误浏览(Emacs 29+ 内置,无独立包)
-consult 内置 =consult-flymake= 命令,通过 Consult 界面浏览和跳转 Flymake 诊断。
-M-s f 在前缀键体系绑定到 =consult-flymake= 。
+~Flymake~ 错误浏览(Emacs 29+ 内置)M-s f 绑定 =flymake-goto-next-error= 。
 
 #+begin_src emacs-lisp :noweb-ref keys/completion-region :tangle no
 ;; ispell 词表发现(aspell/hunspell 使用启动域命令声明)
@@ -4225,141 +4121,55 @@ M-s f 在前缀键体系绑定到 =consult-flymake= 。
 (add-hook 'org-mode-hook #'custom/completion-setup-ispell-word-list)
 (add-hook 'git-commit-setup-hook #'custom/completion-setup-ispell-word-list)
 
-(use-package corfu
-  :demand t
-  :bind (:map corfu-map
-              ("TAB" . corfu-insert)
-              ("<tab>" . corfu-insert))
-  :custom
-  (corfu-auto t)
-  (corfu-auto-prefix 2)
-  (corfu-quit-no-match 'separator)
-  (corfu-cycle t)
-  :config
-  (global-corfu-mode 1))
+;; Emacs 30+ 内置 in-buffer 补全预览(替代 Corfu):输入时在光标处显示
+;; ghost-text 候选, TAB 接受, M-n/M-p 切换。无弹出菜单与 kind 图标。
+(global-completion-preview-mode 1)
 
-(use-package cape
-  :defer t
-  :commands (cape-dabbrev cape-file cape-history cape-keyword cape-line))
+;; dabbrev 内置动态缩写(替代 cape-dabbrev / cape-line / cape-keyword 主用途);
+;; capf 链由各 major-mode 自带,无需手动组装。
+;; 保留 ispell 词表逻辑(ispell-completion-at-point 为内置 capf)。
 
-(defun custom/completion-cape-add-capfs (capfs)
-  "把 CAPFS（符号列表）追加到当前 buffer 的 `completion-at-point-functions'。
-每个 capf 仅在已 fboundp 时追加，避免 cape 版本差异导致报错。"
-  (dolist (capf capfs)
-    (when (fboundp capf)
-      (add-hook 'completion-at-point-functions capf t t))))
-
-(defun custom/completion-setup-cape-org ()
-  "Org mode 的 cape capf 组合：只保留 file（路径补全）。
-由于 org-mode 是 text-mode 的衍生模式，`text-mode-hook' 会先运行并插入
-cape-dabbrev / cape-line；因此本函数先移除这两个 capf，再追加 cape-file，
-避免普通写作中弹出大量无关缩写和整行候选。org 自身关键字 / 链接 / roam
-补全仍保留。
-
-同时关闭 Org buffer 的 corfu-auto（手动 M-Tab 仍可用），减少写作干扰。"
+(defun custom/completion-setup-capfs-org ()
+  "Org mode 的 capf 收束:移除 text-mode 带入的通用 capf。
+由于 org-mode 是 text-mode 的衍生模式,`text-mode-hook' 会先运行;
+org 自身关键字 / 链接 / roam 补全仍保留,无需额外追加。"
   (setq-local completion-at-point-functions
-              (remove #'cape-line
-                      (remove 'cape-line
-                              (remove #'cape-dabbrev
-                                      (remove 'cape-dabbrev
-                                              completion-at-point-functions)))))
-  (custom/completion-cape-add-capfs '(cape-file))
-  (when (boundp 'corfu-auto)
-    (setq-local corfu-auto nil)))
+              (delq 'ispell-completion-at-point
+                    completion-at-point-functions)))
 
-(defun custom/completion-setup-cape-text ()
-  "文本类 buffer（text/conf）的 cape capf 组合：
-dabbrev（缩写展开）+ file（路径）+ line（行近似）。
-ispell 拼写补全由 `custom/completion-setup-ispell-word-list' 单独管理
-（在找到 word list 时保留 Emacs 自带的 `ispell-completion-at-point'）。"
-  (custom/completion-cape-add-capfs '(cape-dabbrev cape-file cape-line)))
+(defun custom/completion-setup-capfs-text ()
+  "文本类 buffer（text/conf）:ispell 拼写补全单独管理
+（在找到 word list 时保留 Emacs 自带的 `ispell-completion-at-point'）。")
 
-(defun custom/completion-setup-cape-prog ()
-  "编程类 buffer 的 cape capf 组合：
-dabbrev + keyword（关键字）+ file（路径）。
-不挂 cape-line，避免大 buffer 拖慢 LSP 补全响应。"
-  (custom/completion-cape-add-capfs '(cape-dabbrev cape-keyword cape-file)))
+(defun custom/completion-setup-capfs-prog ()
+  "编程类 buffer:由 major-mode / LSP capf 提供服务,无需手动追加。")
 
-(add-hook 'prog-mode-hook #'custom/completion-setup-cape-prog)
-(add-hook 'conf-mode-hook #'custom/completion-setup-cape-prog)
-(add-hook 'text-mode-hook #'custom/completion-setup-cape-text)
-(add-hook 'org-mode-hook #'custom/completion-setup-cape-org)
+(add-hook 'prog-mode-hook #'custom/completion-setup-capfs-prog)
+(add-hook 'conf-mode-hook #'custom/completion-setup-capfs-prog)
+(add-hook 'text-mode-hook #'custom/completion-setup-capfs-text)
+(add-hook 'org-mode-hook #'custom/completion-setup-capfs-org)
 
-(with-eval-after-load 'eglot
-  (add-hook 'eglot-managed-mode-hook #'custom/completion-setup-cape-prog))
+;; eldoc 内置文档显示(替代 corfu-popupinfo):Eglot 补全时 echo area 显示文档。
 
-;; corfu-popupinfo 在补全弹窗旁显示文档详情;默认不自动显示,仅通过显式动作(如 M-d)打开。
-(use-package corfu-popupinfo
-  :after corfu
-  :bind (:map corfu-map
-              ("M-d" . corfu-popupinfo-toggle))
-  :custom
-  (corfu-popupinfo-delay 0.5)
-  :config
-  ;; JetBrains 风格:默认仅显示候选列表,文档按需手动打开(M-d)。
-  (corfu-popupinfo-mode -1))
-
-(use-package kind-icon
-  :commands (kind-icon-margin-formatter)
-  :init
-  (setq kind-icon-default-face 'corfu-default))
-
-;; TTY 用的 Nerd Font 文字图标映射(无 display 依赖,可安全放顶层)。
-(defvar custom/completion--corfu-terminal-kind-icons
-  '((file     . "󰈔") (folder    . "󰉋") (function    . "󰊕") (variable       . "󰀫")
-    (module   . "󰏗") (interface . "󰡧") (keyword     . "󰌋") (method         . "󰊕")
-    (property . "󰜢") (unit      . "󰑘") (value       . "󰎠") (enum           . "󰕘")
-    (operator . "󰆕") (class     . "󰌗") (struct      . "󰌗") (type-parameter . "󰊄")
-    (snippet  . "󰘍") (color     . "󰏘") (reference   . "󰈇") (text           . "󰉿")
-    (event    . "󰉁") (constant  . "󰏿") (enum-member . "󰀬")
-    (t        . "󰀫"))
-  "补全类型到 Nerd Font 图标的映射表。")
-
-(defun custom/completion--corfu-terminal-margin-formatter (metadata)
-  "终端模式下使用 Nerd Font 图标格式化 Corfu 边距。"
-  (let* ((kind (or (completion-metadata-get metadata 'company-kind)
-                   (completion-metadata-get metadata 'kind)))
-         (icons custom/completion--corfu-terminal-kind-icons))
-    (lambda (candidate)
-      (let* ((kind-sym (and kind (funcall kind candidate)))
-             (kind-item (or kind-sym t))
-             (icon (or (cdr (assq kind-item icons)) (cdr (assq t icons)))))
-        (propertize (concat " " icon " ") 'face 'corfu-default)))))
-
-(use-package consult-eglot
-  :defer t
-  :commands (consult-eglot-symbols))
+;; Emacs 31 内置 eglot workspace symbols 补全:C-u M-. (xref-find-apropos)
+;; 列出并补全当前 workspace 符号,替代 consult-eglot-symbols。
 #+end_src
 
 *** Frame 显示适配
 
 Per-frame 补全显示设置(daemon 安全)
-+ 单一 ~margin formatter~,按当前 frame 的 display 类型选择 GUI
-+ kind-icon 或 TTY Nerd Font 图标。不再由 frame hook 全局 =setq corfu-margin-formatters=
++ PGTK/Wayland 下 minibuffer 补全窗口位置修复(completion-preview 无 childframe,无需 margin formatter)。
 
 #+begin_src emacs-lisp :noweb-ref keys/completion-display :tangle no
-(defun custom/completion--corfu-margin-formatter (metadata)
-  "根据当前 frame 的 display 类型选择 GUI / TTY 图标 formatter。"
-  (if (display-graphic-p)
-      (when (fboundp 'kind-icon-margin-formatter)
-        (funcall 'kind-icon-margin-formatter metadata))
-    (funcall 'custom/completion--corfu-terminal-margin-formatter metadata)))
-
 (defun custom/completion-setup-display (&optional frame)
   "根据 FRAME 的 display 类型设置补全框架的显示相关配置。
-Corfu 2.10+ 在 Emacs 31 原生支持 TTY childframe,故无 corfu-terminal 依赖。
-GUI 模式仅保留 x-gtk-resize-child-frames 修复;margin formatter 由
-\`custom/completion--corfu-margin-formatter\` 按当前 frame 动态选择,不再
-全局 setq。"
+GUI 模式仅保留 x-gtk-resize-child-frames 修复(completion-preview 无
+childframe,不需要 margin formatter)。"
   (with-selected-frame (or frame (selected-frame))
-    (with-eval-after-load 'corfu
-      ;; 单一 formatter 注册一次:内部按 (display-graphic-p) 分发
-      (setq corfu-margin-formatters
-            '(custom/completion--corfu-margin-formatter))
-      (when (display-graphic-p)
-        ;; GUI: PGTK/Wayland 修复 — childframe 位置偏移
-        (when (boundp 'x-gtk-resize-child-frames)
-          (setq x-gtk-resize-child-frames 'resize-mode))))))
+    (when (display-graphic-p)
+      ;; GUI: PGTK/Wayland 修复 — childframe 位置偏移
+      (when (boundp 'x-gtk-resize-child-frames)
+        (setq x-gtk-resize-child-frames 'resize-mode)))))
 
 ;; 注册到 frame 生命周期（add-frame-hook 由 Frame 块提供）
 (custom/add-frame-created-hook #'custom/completion-setup-display)
@@ -4373,20 +4183,12 @@ GUI 模式仅保留 x-gtk-resize-child-frames 修复;margin formatter 由
 #+end_src
 
 #+begin_src emacs-lisp
-(custom/bind "C-c m R" #'vertico-reverse-mode "Vertico 反向显示" "补全框架")
-(custom/bind "C-c m j" #'vertico-quick-jump "Vertico 单键跳转" "补全框架")
-(custom/bind "C-c m s" #'vertico-suspend "挂起补全会话" "补全框架")
-(custom/bind "C-c m v" #'vertico-repeat "恢复补全会话" "补全框架")
-(custom/bind "C-c m a" #'prescient-toggle-anchored "切换锚定匹配" "补全框架")
-(custom/bind "C-c m p" #'prescient-toggle-prefix "切换前缀匹配" "补全框架")
-(custom/bind "C-c m f" #'prescient-toggle-fuzzy "切换模糊匹配" "补全框架")
-(custom/bind "C-c m r" #'prescient-toggle-regexp "切换正则匹配" "补全框架")
-(custom/bind "C-c m c" #'cape-interactive "选择 CAPF" "补全框架")
-(custom/bind "C-c m d" #'cape-dabbrev "缩写补全" "补全框架")
-(custom/bind "C-c m F" #'cape-file "文件路径补全" "补全框架")
-(custom/bind "C-c m h" #'cape-history "历史补全" "补全框架")
-(custom/bind "C-c m k" #'cape-keyword "关键字补全" "补全框架")
-(custom/bind "C-c m l" #'cape-line "整行补全" "补全框架")
+;; 补全框架 C-c m 前缀:内置命令。dabbrev 动态缩写;completion-preview
+;; 手动触发;文件路径用 ffap。
+(custom/bind "C-c m d" #'dabbrev-expand "动态缩写补全" "补全框架")
+(custom/bind "C-c m p" #'completion-preview-complete "补全预览(手动)" "补全框架")
+(custom/bind "C-c m f" #'ffap "文件路径补全" "补全框架")
+(custom/bind "C-c m h" #'minibuffer-history-complete "历史补全" "补全框架")
 #+end_src
 
 * 系统工具与实验性
@@ -4537,7 +4339,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 + 外部命令只缓存命令名，调用时通过当前 =exec-path= 解析，避免长驻 daemon 固定到旧 Guix generation
 + daemon 由 shepherd 的 =emacs-daemon= 服务管理( =emacs --fg-daemon= ),init.el 不重复启用 =server-mode= (仅 standalone 时启用)
 + *预热策略*:daemon 启动时间不敏感，按冷 =require= 基准白名单预载常用交互 feature。不会启动 LSP、聊天或 PDF 子进程；应用型包仍按需加载。
-+ 当前白名单消除的本机冷首用成本约为:Magit 0.37s、Org-roam 0.18s、TRAMP 0.17s、Apheleia 0.05s、Embark 0.04s。
++ 当前白名单消除的本机冷首用成本约为:Magit 0.37s、Org-roam 0.18s、TRAMP 0.17s、Apheleia 0.05s。
 
 #+begin_src emacs-lisp
 (when custom:in-guix-environment-p
@@ -4545,7 +4347,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 (defconst custom:daemon-warmup-features
   '(org-agenda org-capture org-roam
-               apheleia embark magit tramp)
+               apheleia magit tramp)
   "daemon 启动阶段预载的常用交互 feature 白名单。")
 
 (defun custom/daemon-warmup ()
