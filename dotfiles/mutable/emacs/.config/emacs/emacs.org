@@ -3254,8 +3254,10 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (custom/bind-local 'markdown-ts-mode 'markdown-ts-mode 'markdown-ts-mode-map
                    "C-c p" #'markdown-ts-convert "预览 Markdown" "模式局部")
 (use-package nix-mode :mode "\\.nix\\'" :defer t)
-(use-package yaml :defer t :commands (yaml-parse-string yaml-encode))
-(use-package yaml-mode :mode ("\\.ya?ml\\'" "\\.yml\\.dist\\'") :defer t)
+;; yaml-ts-mode 内置且自动注册 auto-mode-alist (yaml-ts-mode-maybe) 与
+;; major-mode-remap-alist,无需 use-package; 旧 emacs-yaml 解析包无调用点。
+;; 补 .yml.dist 后缀(内置仅注册 \.ya?ml\')。
+(add-to-list 'auto-mode-alist '("\\.yml\\.dist\\'" . yaml-ts-mode-maybe))
 (use-package web-mode :mode ("\\.html\\'" "\\.jsx\\'" "\\.tsx\\'" "\\.vue\\'") :defer t)
 (use-package zig-mode :mode "\\.zig\\'" :defer t)
 
