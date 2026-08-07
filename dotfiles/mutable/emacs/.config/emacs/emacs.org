@@ -2173,7 +2173,7 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
                (custom/display-buffer-in-main-window))
              t)
 (custom/register-side-window "^\\*ghostel\\|ghostel-mode\\b\\|^\\*term\\|term-mode\\b" 'bottom 0.33)
-(custom/register-side-window "^\\*Help\\*\\|^\\*helpful\\|help-mode\\b\\|helpful-mode\\b" 'bottom 0.4)
+(custom/register-side-window "^\\*Help\\*\\|help-mode\\b" 'bottom 0.4)
 (custom/register-side-window "^\\*Flymake diagnostics\\|flymake-diagnostics-buffer-mode\\b" 'bottom 0.3)
 (custom/register-side-window "^\\*compilation\\|compilation-mode\\b" 'bottom 0.33)
 (custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
@@ -3812,7 +3812,7 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 :CUSTOM_ID: keys-completion
 :END:
 
-前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + helpful 增强帮助 + winner 窗口布局撤销 + 补全框架全家桶(Vertico / Corfu / Consult)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + 补全框架全家桶(Vertico / Corfu / Consult)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
 
 所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
 
@@ -3824,7 +3824,7 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 :CUSTOM_ID: which-key-runtime
 :END:
 
-加载 which-key 本体并配置显示参数;helpful 增强帮助系统;winner 窗口布局撤销 / 重做。
+加载 which-key 本体并配置显示参数;内置 describe-* 帮助系统;winner 窗口布局撤销 / 重做。
 
 + which-key 中文描述注册由 *界面与外观 → 右键菜单与 Which-key 中文化* 域处理( =custom/which-key-apply-descriptions= + =custom/register-pending-wk-descs= )
 + *中文字符对齐修复*: which-key 3.6.1 已内置 =string-width= 计算,但自动列数在底部 side-window 下仍可能导致中文描述列宽不等。这里用 =advice-add :override= 替换 =which-key--pad-column= ,在底部多列布局下固定为等宽分栏(默认 =custom:which-key-grid-columns 3= 列)
@@ -3879,13 +3879,6 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
   ;; 并在固定网格布局下按等宽分栏。加 fboundp 守卫:which-key 已并入 Emacs 30+
   ;; 内置,未来若内部函数改名/移除,静默跳过而非崩溃。
   (custom/which-key-install-width-fix))
-
-(use-package helpful
-  :defer t
-  :bind (([remap describe-function] . helpful-callable)
-         ([remap describe-command]  . helpful-command)
-         ([remap describe-variable] . helpful-variable)
-         ([remap describe-key]      . helpful-key)))
 
 (use-package winner
   :custom
@@ -3997,9 +3990,9 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "M-s e" #'consult-eglot-symbols "Eglot 符号搜索" "搜索")
 (custom/bind "M-s f" #'consult-flymake "Flymake 诊断" "搜索")
 
-(custom/bind "C-c h f" #'helpful-callable "查看函数" "帮助")
-(custom/bind "C-c h v" #'helpful-variable "查看变量" "帮助")
-(custom/bind "C-c h k" #'helpful-key "查看按键" "帮助")
+(custom/bind "C-c h f" #'describe-function "查看函数" "帮助")
+(custom/bind "C-c h v" #'describe-variable "查看变量" "帮助")
+(custom/bind "C-c h k" #'describe-key "查看按键" "帮助")
 (custom/bind "C-c h m" #'describe-mode "查看模式" "帮助")
 (custom/bind "C-c h ?" #'custom/show-help "快捷键帮助" "帮助")
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
@@ -4544,7 +4537,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 + 外部命令只缓存命令名，调用时通过当前 =exec-path= 解析，避免长驻 daemon 固定到旧 Guix generation
 + daemon 由 shepherd 的 =emacs-daemon= 服务管理( =emacs --fg-daemon= ),init.el 不重复启用 =server-mode= (仅 standalone 时启用)
 + *预热策略*:daemon 启动时间不敏感，按冷 =require= 基准白名单预载常用交互 feature。不会启动 LSP、聊天或 PDF 子进程；应用型包仍按需加载。
-+ 当前白名单消除的本机冷首用成本约为:Magit 0.37s、Org-roam 0.18s、Helpful/TRAMP 0.17s、Apheleia 0.05s、Embark 0.04s。
++ 当前白名单消除的本机冷首用成本约为:Magit 0.37s、Org-roam 0.18s、TRAMP 0.17s、Apheleia 0.05s、Embark 0.04s。
 
 #+begin_src emacs-lisp
 (when custom:in-guix-environment-p
@@ -4552,7 +4545,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 (defconst custom:daemon-warmup-features
   '(org-agenda org-capture org-roam
-               apheleia embark magit helpful tramp cape)
+               apheleia embark magit tramp)
   "daemon 启动阶段预载的常用交互 feature 白名单。")
 
 (defun custom/daemon-warmup ()
