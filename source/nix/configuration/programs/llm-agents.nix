@@ -10,8 +10,8 @@
 
     grok
     kimi-code
-    omp
     opencode
+    pi
     skills
   ];
 

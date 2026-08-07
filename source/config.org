@@ -1444,7 +1444,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "cc-switch-bin"
         "crush-bin"
         "github-copilot"
-        "opencode-bin"
         "reasonix-desktop-bin"
         "zcode"
 
@@ -2129,7 +2128,6 @@ end
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
   ;; pi-agent
-  ("PI_CONFIG_DIR" . "$XDG_CONFIG_HOME/pi/omp")
   ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
   ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
   ;; putty
