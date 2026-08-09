@@ -7,4 +7,4 @@
 
 (setq custom:help-introduction
       '("本配置按 Emacs 原生前缀组织命令；下表由实际键位声明实时生成。"
-        "C-h 保留为左移，F1 是原生帮助前缀，C-c h 提供 Helpful 入口。"))
+        "C-h 保留为左移，F1 是原生帮助前缀，C-c h 提供内置 describe-* 入口。"))

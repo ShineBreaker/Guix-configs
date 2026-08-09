@@ -326,7 +326,9 @@
                      ("C-c e n" . mc/mark-next-like-this)
                      ("C-c e ." . goto-last-change)
                      ("C-c e ," . goto-last-change-reverse)
-                     ("C-c l d" . custom/code-goto-definition)))
+                     ;; 跳转键直接绑内置 xref 命令(精简掉了转发 wrapper)。
+                     ("C-c l d" . xref-find-definitions)
+                     ("M-g b" . xref-go-back)))
     (custom-configctl--assert
      (eq (key-binding (kbd (car binding))) (cdr binding))
      "%s is not bound to %s" (car binding) (cdr binding)))

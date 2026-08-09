@@ -71,7 +71,7 @@ scripts/configctl find 'eglot|flymake'
 | 4    | `programming`     | Tree-sitter、Eglot、Flymake、格式化、语言模式 | `bootstrap`、`appearance`     |
 | 5    | `projects`        | project.el、目录与项目导航                    | `terminal`、`git-display`     |
 | 6    | `org-knowledge`   | Org、Roam、Knowledge、agenote                 | `bootstrap`、`process-helper` |
-| 7    | `keys-completion` | 前缀声明、跨域基础键、Vertico、Corfu          | 前述交互命令、frame 生命周期  |
+| 7    | `keys-completion` | 前缀声明、跨域基础键、内置补全栈              | 前述交互命令、frame 生命周期  |
 | 8    | `system-tools`    | daemon 预热、Dashboard、版本兼容              | 前述全部；Dashboard 必须最后  |
 
 ```text
@@ -107,7 +107,7 @@ startup -> appearance -> editing -> programming -> projects
 | `C-c g` Git              | `appearance` / `git-display`             | Git 函数所在域                             |
 | `C-c l` `M-g` `C-c f` `C-c z` 代码 | `programming` / `programming-keys` | 含 `code-commands` 函数族                  |
 | `C-c e` 编辑变换         | `editing` / `editing-dwim`               | DWIM 与 mc 函数所在域                      |
-| `C-c m` 补全             | `keys-completion` / `completion`         | Vertico / Corfu / Cape 配置同源            |
+| `C-c m` 补全             | `keys-completion` / `completion`         | 内置补全栈（Emacs 31）配置同源             |
 | `C-x p` 项目             | `projects` / `project-navigation`        | project.el 函数所在域                      |
 | `C-c o` `C-c c` Org      | `org-knowledge` / `knowledge`            | Org / Knowledge 函数所在域                 |
 | `C-c a` 生活应用         | `system-tools` / `applications` 或应用 `use-package` 所在域 | 每个应用键紧跟其 `use-package` 声明  |
@@ -190,6 +190,18 @@ startup -> appearance -> editing -> programming -> projects
 5. 结构：`scripts/configctl check` 必须通过
 
 分解 monolith 为 noweb 片段时，组装块的 `<<ref>>` 必须在列 0（无缩进），避免 org 重复缩进导致的空白噪音 diff。
+
+### 4.2 精简公约
+
+配置代码持续做减法，遵循以下公约：
+
+- 只用一次的小函数直接内联到调用方；零转发 wrapper（函数体仅原样调用另一函数）禁止保留，调用方直接用被包装者。
+- 内置命令直接绑定，不包「`(interactive)` + `call-interactively`」转发层；跳转类键位直接绑 `xref-*` 等内置命令。
+- 同构命令用工厂宏统一生成（如 `custom/git--define-file-command` / `custom/git--define-repo-command`），不逐个手写；宏生成的命令名仍遵守 `custom/` 命名规范。
+- 同构渲染 / 数据逻辑提取参数化 helper 收敛（如 `custom/dashboard--render-item-list` 统一列表卡片渲染），重复分支与重复计算合并。
+- 优先用内置 `seq` / `subr-x` / `cl-lib` 函数替代手写 lambda（如 `seq-some #'fn`）。
+- 删除符号时必须同步清理全部引用点：`data/*.el` 翻译数据、prose、docstring、`custom:pulse-commands` 等列表，不留失效引用。
+- 全局绑定的命令必须已定义（或为 keymap）；`binding-spec-global-commands-resolve` ERT 契约强制这一点，新增绑定前先确认命令存在。
 
 ## 5. 性能硬约束
 
@@ -276,7 +288,7 @@ scripts/configctl audit-packages
 
 - `check`：8 域顺序、header、ID、noweb、单产物、括号和顶层定义全部通过。
 - `load`：隔离 runtime 完整加载，除明确的 Emacs 31/第三方 warning 外无 Lisp error。
-- `test`：必须是 `0 unexpected`。当前两个历史占位用例会 skipped，Emacs 31 可能因此返回 1；不要为退出码增加 workaround，以测试汇总为准。
+- `test`：必须是 `0 unexpected`。当前两个历史占位用例会 skipped，Emacs 31 可能因此返回 1；不要为退出码增加 workaround，以测试汇总为准。含 `binding-spec-global-commands-resolve` 绑定完整性契约：`custom:binding-spec` 的每个全局绑定命令必须可解析为已定义命令或 keymap。
 - `check-strict` 和四项 audit：零违规、零 unknown package。
 - `git diff --check`：无空白错误；`git status` 只包含本任务文件和已知用户改动。
 

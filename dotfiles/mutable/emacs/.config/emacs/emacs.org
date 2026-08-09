@@ -20,7 +20,7 @@
 | 4 | 编程与开发 | [[#programming]] | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表 | bootstrap, appearance |
 | 5 | 项目与导航 | [[#projects]] | project.el / 文件缓冲区导航 | terminal, git-display |
 | 6 | Org 与知识库 | [[#org-knowledge]] | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板 | bootstrap, process-helper |
-| 7 | 键位与补全 | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / Vertico / Corfu / Consult | 前述全部域的命令 |
+| 7 | 键位与补全 | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 内置补全栈 | 前述全部域的命令 |
 | 8 | 系统工具 | [[#system-tools]] | 应用 / Daemon 预热 / Dashboard / 兼容性 shim | 前述全部域 |
 :
 各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。Noweb 组装块以 =#+NAME:= 标记，便于 =scripts/configctl map= 定位和 org 间跳转。
@@ -440,18 +440,13 @@ GCMH + 智能垃圾回收管理 (启动后接管 GC)
   (setq custom--focus-save-timer nil)
   (save-some-buffers t #'custom/user-file-buffer-p))
 
-(defun custom/any-frame-focused-p ()
-  "任一存活 frame 已聚焦或焦点状态未知时返回非 nil。"
-  (seq-some (lambda (frame)
-              (frame-focus-state frame))
-            (frame-list)))
-
 (defun custom/schedule-focus-save ()
-  "根据当前焦点状态安排或取消空闲保存。"
+  "根据当前焦点状态安排或取消空闲保存。
+任一存活 frame 已聚焦或焦点状态未知时不保存。"
   (when (timerp custom--focus-save-timer)
     (cancel-timer custom--focus-save-timer)
     (setq custom--focus-save-timer nil))
-  (unless (custom/any-frame-focused-p)
+  (unless (seq-some #'frame-focus-state (frame-list))
     (setq custom--focus-save-timer
           (run-with-idle-timer custom:focus-save-idle-delay nil
                                #'custom/save-user-file-buffers))))
@@ -637,18 +632,6 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
   "返回 dashboard 需要展示的关键前缀绑定。"
   (custom/binding-dashboard-bindings))
 
-(defun custom/help--insert-section (title bindings)
-  "向当前 buffer 插入一个分类段落。
-TITLE 为分类标题,BINDINGS 为 ((key . desc) ...) 列表。"
-  (insert (propertize (format "═══ %s ═══" title)
-                      'face 'custom-help-section-title))
-  (insert "\n\n")
-  (dolist (binding bindings)
-    (insert (format "  %-24s %s\n"
-                    (propertize (car binding) 'face 'font-lock-keyword-face)
-                    (cdr binding))))
-  (insert "\n"))
-
 (defun custom/show-help ()
   "显示完整的快捷键帮助。"
   (interactive)
@@ -664,7 +647,15 @@ TITLE 为分类标题,BINDINGS 为 ((key . desc) ...) 列表。"
           (insert paragraph "\n"))
         (insert "\n")
         (dolist (section (custom/binding-help-sections))
-          (custom/help--insert-section (car section) (cdr section)))
+          (insert (propertize (format "═══ %s ═══" (car section))
+                              'face 'custom-help-section-title))
+          (insert "\n\n")
+          (dolist (binding (cdr section))
+            (insert (format "  %-24s %s\n"
+                            (propertize (car binding)
+                                        'face 'font-lock-keyword-face)
+                            (cdr binding))))
+          (insert "\n"))
         (insert (propertize "提示:" 'face '(:weight bold)))
         (insert " 按 ")
         (insert (propertize "q" 'face 'font-lock-keyword-face))
@@ -1368,12 +1359,6 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
           (setq custom/tab-line--name-cache (cons key label))
           label)))))
 
-(defun custom--tab-line-help-echo (selected-p)
-  "返回标签的中文提示文本。"
-  (if selected-p
-      "当前标签:鼠标中键关闭,右键打开菜单"
-    "左键切换标签,鼠标中键关闭,右键打开菜单"))
-
 (defun custom/tab-line-tab-name-format (tab tabs)
   "以接近 IDE 的样式格式化 TAB。
 face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
@@ -1387,7 +1372,9 @@ current/inactive 用内置 face,自动跟随主题。"
                  (cdr (assq 'name tab))))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
          (label (concat " " (string-replace "%" "%%" name)))
-         (help-echo (custom--tab-line-help-echo selected-p))
+         (help-echo (if selected-p
+                        "当前标签:鼠标中键关闭,右键打开菜单"
+                      "左键切换标签,鼠标中键关闭,右键打开菜单"))
          (close
           (when (and tab-line-close-button-show
                      (or (eq tab-line-close-button-show t)
@@ -1523,16 +1510,6 @@ current/inactive 用内置 face,自动跟随主题。"
   (interactive "p")
   (custom/tabs-next (- (or arg 1))))
 
-(defun custom/tabs-select-index (index)
-  "切换到当前标签列表中的第 INDEX 个标签。"
-  (interactive)
-  (let* ((target-window (custom--tabs-target-window))
-         (buffers (custom--tabs-frame-buffers target-window))
-         (buffer (nth (1- index) buffers)))
-    (if buffer
-        (custom--tabs-switch-to-buffer buffer target-window)
-      (user-error "当前标签数量不足 %d 个" index))))
-
 (defun custom/tabs-close-buffer (&optional window buffer)
   "在 WINDOW 隐藏 BUFFER 的标签(bury + unregister,不 kill buffer)。
 BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一致。"
@@ -1623,6 +1600,7 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + *文件级操作* ：blame / log / diff / stage / discard / timemachine
 + *仓库级操作* ：push / pull / stash push / stash pop
 + 所有操作复用启动域声明的 =custom:executable-git= 。
++ 「确认前提后转发 Magit 交互命令」的同构命令由 =custom/git--define-file-command= / =custom/git--define-repo-command= 工厂宏生成,避免逐个手写。
 
 #+begin_src emacs-lisp :noweb-ref appearance/git-commands :tangle no
 (defun custom/git-repo-root (&optional file)
@@ -1640,43 +1618,52 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
   (or (custom/git-repo-root file)
       (user-error "当前不在 Git 仓库中")))
 
-(defun custom/git--executable ()
-  "返回 Git 命令名，由当前 `exec-path' 在调用时解析。"
-  custom:executable-git)
-
 (defun custom/git--run (&rest args)
-  "在当前仓库中执行 Git ARGS。"
+  "在当前仓库中执行 Git ARGS。
+命令名取 `custom:executable-git',由当前 `exec-path' 在调用时解析。"
   (let ((default-directory (custom/git--ensure-repo)))
     (with-temp-buffer
-      (let ((status (apply #'process-file (custom/git--executable) nil t nil args))
+      (let ((status (apply #'process-file custom:executable-git nil t nil args))
             (output (string-trim (buffer-string))))
         (unless (eq status 0)
           (error "Git 命令失败: %s"
                  (if (string-empty-p output) (string-join args " ") output)))
         output))))
 
+(defmacro custom/git--define-file-command (name doc magit-command)
+  "定义命令 NAME:确认当前 buffer 关联文件后,转发 MAGIT-COMMAND。"
+  `(defun ,name ()
+     ,doc
+     (interactive)
+     (custom/git-buffer-file)
+     (call-interactively #',magit-command)))
+
+(defmacro custom/git--define-repo-command (name doc magit-command)
+  "定义命令 NAME:确认位于 Git 仓库后,转发 MAGIT-COMMAND。"
+  `(defun ,name ()
+     ,doc
+     (interactive)
+     (custom/git--ensure-repo)
+     (call-interactively #',magit-command)))
+
 (defun custom/git-status-dwim ()
   "打开当前仓库的 Magit 状态页。"
   (interactive)
   (magit-status-setup-buffer (custom/git--ensure-repo)))
 
-(defun custom/git-blame-current-file ()
-  "对当前文件执行 blame。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'magit-blame-addition))
+(custom/git--define-file-command custom/git-blame-current-file
+  "对当前文件执行 blame。" magit-blame-addition)
+(custom/git--define-file-command custom/git-log-current-file
+  "查看当前文件历史。" magit-log-buffer-file)
+(custom/git--define-file-command custom/git-diff-current-file
+  "查看当前文件 diff。" magit-diff-buffer-file)
+(custom/git--define-file-command custom/git-timemachine-toggle
+  "切换当前文件的 git-timemachine。" git-timemachine-toggle)
 
-(defun custom/git-log-current-file ()
-  "查看当前文件历史。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'magit-log-buffer-file))
-
-(defun custom/git-diff-current-file ()
-  "查看当前文件 diff。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'magit-diff-buffer-file))
+(custom/git--define-repo-command custom/git-push-current-repo
+  "Push 当前仓库。" magit-push-current-to-upstream)
+(custom/git--define-repo-command custom/git-pull-current-repo
+  "Pull 当前仓库。" magit-pull-from-upstream)
 
 (defun custom/git-stage-current-file ()
   "Stage 当前文件。"
@@ -1696,24 +1683,6 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
       (custom/git--run "restore" "--source=HEAD" "--staged" "--worktree" "--" file)
       (revert-buffer t t t)
       (message "已丢弃: %s" (file-name-nondirectory file)))))
-
-(defun custom/git-timemachine-toggle ()
-  "切换当前文件的 git-timemachine。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'git-timemachine-toggle))
-
-(defun custom/git-push-current-repo ()
-  "Push 当前仓库。"
-  (interactive)
-  (custom/git--ensure-repo)
-  (call-interactively #'magit-push-current-to-upstream))
-
-(defun custom/git-pull-current-repo ()
-  "Pull 当前仓库。"
-  (interactive)
-  (custom/git--ensure-repo)
-  (call-interactively #'magit-pull-from-upstream))
 
 (defun custom/git-stash-push ()
   "Stash 当前仓库中的修改。"
@@ -1922,9 +1891,10 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 
 (add-hook 'find-file-hook #'custom/setup-file-line-numbers)
 
-(dolist (mode '(ghostel-mode term-mode eshell-mode shell-mode
-                             dashboard-mode special-mode
-                             agent-shell-mode))
+;; org-mode 也在其中:Org 文档视图隐藏行号,减少阅读噪音。
+(dolist (mode '(org-mode ghostel-mode term-mode eshell-mode shell-mode
+                           dashboard-mode special-mode
+                           agent-shell-mode))
   (add-hook (intern (concat (symbol-name mode) "-hook"))
             (lambda () (display-line-numbers-mode -1))))
 
@@ -2132,7 +2102,6 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
     windmove-left windmove-right windmove-up windmove-down
     xref-find-definitions xref-find-references
     xref-go-back xref-go-forward
-    custom/code-jump-back custom/code-jump-forward
     flymake-goto-next-error flymake-goto-prev-error)
   "执行后会触发当前行脉冲高亮的命令列表。")
 
@@ -2231,9 +2200,9 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
   "将中文描述注册到 `which-key'。"
   (when (and (featurep 'which-key)
              (not custom:which-key-descriptions-applied))
-    (dolist (entry custom:which-key-regexp-replacements)
-      (setq which-key-replacement-alist
-            (append which-key-replacement-alist (list entry))))
+    (setq which-key-replacement-alist
+          (append which-key-replacement-alist
+                  custom:which-key-regexp-replacements))
     (dolist (entry custom:which-key-replacements)
       (which-key-add-key-based-replacements (car entry) (cdr entry)))
     (dolist (mode-entry custom:which-key-major-mode-description-spec)
@@ -2351,6 +2320,13 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
      (message "[color-scheme] D-Bus 获取失败: %s" (error-message-string err))
      nil)))
 
+(defun custom/color-scheme--theme-for-mode (mode)
+  "返回 MODE('light 或 'dark)对应的主题符号,未知 MODE 返回 nil。"
+  (pcase mode
+    ('dark custom/color-scheme-dark-theme)
+    ('light custom/color-scheme-light-theme)
+    (_ nil)))
+
 (defun custom/color-scheme-apply-theme (mode)
   "根据 MODE 加载对应的主题并保存状态。
 MODE 为 'light 或 'dark。
@@ -2359,10 +2335,7 @@ MODE 为 'light 或 'dark。
   (custom/color-scheme-save-state mode)
   (unless custom/color-scheme--applying-theme
     (let ((custom/color-scheme--applying-theme t)
-          (target-theme (pcase mode
-                          ('dark custom/color-scheme-dark-theme)
-                          ('light custom/color-scheme-light-theme)
-                          (_ nil))))
+          (target-theme (custom/color-scheme--theme-for-mode mode)))
       (when target-theme
         (when (or (daemonp)
                   (custom/display-supports-themes-p))
@@ -2454,10 +2427,8 @@ MODE 为 'light 或 'dark。
         (ef-themes-take-over-modus-themes-mode 1))
       (if (not custom/color-scheme--initialized)
           (custom/color-scheme-init)
-        (let ((target-theme (pcase custom/color-scheme-current-mode
-                              ('dark custom/color-scheme-dark-theme)
-                              ('light custom/color-scheme-light-theme)
-                              (_ nil))))
+        (let ((target-theme (custom/color-scheme--theme-for-mode
+                             custom/color-scheme-current-mode)))
           (when (and target-theme
                      (not (eq (car custom-enabled-themes) target-theme)))
             (ef-themes-load-theme target-theme)
@@ -2797,27 +2768,25 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
   (interactive "P")
   (let* ((project-root (when-let* ((proj (project-current nil)))
                          (project-root proj)))
-         (shell (or shell-file-name
-                    (getenv "SHELL")
-                    "/bin/sh"))
          (default-directory
-          (cond
-           (arg default-directory)                  ; 前缀参数:当前文件目录
-           (project-root project-root)              ; 在项目中:项目根目录
-           (t default-directory))))                 ; 不在项目中:当前目录
-    ;; let 绑定 shell-file-name(原 setq 是永久全局副作用,污染后续所有子进程)。
-    ;; ghostel 在此 let 内 spawn,继承动态绑定的值;let 退出后恢复原值。
-    (let ((shell-file-name shell)
-          (buf (or (custom--terminal-existing-buffer)
-                   ;; 无现存普通 ghostel:用 save-window-excursion 隔离窗口副作用
-                   (let ((before (buffer-list)))
-                     (save-window-excursion (ghostel))
-                     (cl-find-if
-                      (lambda (b)
-                        (with-current-buffer b (derived-mode-p 'ghostel-mode)))
-                      (cl-set-difference (buffer-list) before))))))
-      (when (buffer-live-p buf)
-        (custom/display-or-focus buf custom:terminal-side-action t)))))
+          (if arg
+              default-directory                     ; 前缀参数:当前文件目录
+            (or project-root default-directory)))   ; 项目根目录,否则当前目录
+         ;; let 绑定 shell-file-name 而非 setq,避免永久全局副作用污染后续
+         ;; 子进程;ghostel 在此 let 内 spawn,继承动态绑定的值。
+         (shell-file-name (or shell-file-name
+                              (getenv "SHELL")
+                              "/bin/sh"))
+         (buf (or (custom--terminal-existing-buffer)
+                  ;; 无现存普通 ghostel:用 save-window-excursion 隔离窗口副作用
+                  (let ((before (buffer-list)))
+                    (save-window-excursion (ghostel))
+                    (cl-find-if
+                     (lambda (b)
+                       (with-current-buffer b (derived-mode-p 'ghostel-mode)))
+                     (cl-set-difference (buffer-list) before))))))
+    (when (buffer-live-p buf)
+      (custom/display-or-focus buf custom:terminal-side-action t))))
 
 #+end_src
 
@@ -2915,15 +2884,6 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   :ts-mode   Tree-sitter 对应 mode(nil 表示无 ts 版本)
   :server    LSP server 启动命令列表(nil 表示无 LSP)
   :formatter Apheleia formatter 符号(nil 表示不格式化)")
-
-(defun custom/language--collect (field &optional non-nil)
-  "收集所有语言能力表中 FIELD 的值。NON-NIL 时只收集非 nil 条目。"
-  (let (result)
-    (dolist (entry custom:language-capabilities)
-      (let ((value (plist-get entry field)))
-        (when (or (not non-nil) value)
-          (push value result))))
-    (nreverse result)))
 
 (defconst custom:language-treesit-remaps
   (delq nil
@@ -3089,22 +3049,19 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 :CUSTOM_ID: code-commands
 :END:
 
-供快捷键和右键菜单复用的代码操作函数:复制行、移动行、跳转、格式化、块注释。
+供快捷键和右键菜单复用的代码操作函数:复制行、移动行、格式化、块注释。
 
-+ =custom/tabs-next= / =custom/tabs-previous= / =custom/tabs-refresh-context= 由 [[#tab-line][Tab-line]] 提供
++ =custom/tabs-next= / =custom/tabs-previous= 由 [[#tab-line][Tab-line]] 提供
++ 定义/引用/前进/后退跳转直接绑定内置 =xref-find-definitions= / =xref-find-references= / =xref-go-forward= / =xref-go-back=,不再包一层转发命令
 + 本块定义的函数被 [[#global-keys][全局直达键]]、[[#programming-keys][代码与导航键]] 复用
 
 #+begin_src emacs-lisp
-(defun custom/code--current-line-text ()
-  "返回当前行文本,包含行尾换行。"
-  (buffer-substring (line-beginning-position)
-                    (line-beginning-position 2)))
-
 (defun custom/code-duplicate-line ()
-  "复制当前行并在下方粘贴。"
+  "复制当前行(含行尾换行)并在下方粘贴。"
   (interactive)
   (let ((column (current-column))
-        (line (custom/code--current-line-text))
+        (line (buffer-substring (line-beginning-position)
+                                (line-beginning-position 2)))
         (insert-at (line-beginning-position 2)))
     (goto-char insert-at)
     (insert line)
@@ -3123,26 +3080,6 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
   (forward-line 1)
   (transpose-lines 1)
   (forward-line -1))
-
-(defun custom/code-goto-definition ()
-  "跳转到定义。"
-  (interactive)
-  (call-interactively #'xref-find-definitions))
-
-(defun custom/code-goto-references ()
-  "查找所有引用。"
-  (interactive)
-  (call-interactively #'xref-find-references))
-
-(defun custom/code-jump-back ()
-  "跳回之前的位置(xref 历史,Emacs 28+ 内置)。"
-  (interactive)
-  (xref-go-back))
-
-(defun custom/code-jump-forward ()
-  "跳到下一个位置(xref 历史,Emacs 28+ 内置)。"
-  (interactive)
-  (xref-go-forward))
 
 (defun custom/code-format-dwim ()
   "智能格式化:有选区格式化选区,否则格式化整个缓冲区。"
@@ -3175,14 +3112,14 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "M-g n" #'flymake-goto-next-error "下一个错误" "跳转与错误")
 (custom/bind "M-g p" #'flymake-goto-prev-error "上一个错误" "跳转与错误")
 (custom/bind "M-g l" #'custom/flymake-list-errors-dwim "错误列表" "跳转与错误")
-(custom/bind "M-g r" #'custom/code-goto-references "查找引用" "跳转与错误")
-(custom/bind "M-g b" #'custom/code-jump-back "后退" "跳转与错误")
-(custom/bind "M-g f" #'custom/code-jump-forward "前进" "跳转与错误")
+(custom/bind "M-g r" #'xref-find-references "查找引用" "跳转与错误")
+(custom/bind "M-g b" #'xref-go-back "后退" "跳转与错误")
+(custom/bind "M-g f" #'xref-go-forward "前进" "跳转与错误")
 (custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
-(custom/bind "M-," #'custom/code-jump-back "返回上一个位置" "跳转与错误")
+(custom/bind "M-," #'xref-go-back "返回上一个位置" "跳转与错误")
 
-(custom/bind "C-c l d" #'custom/code-goto-definition "跳转到定义" "代码 / LSP")
-(custom/bind "C-c l r" #'custom/code-goto-references "查找引用" "代码 / LSP")
+(custom/bind "C-c l d" #'xref-find-definitions "跳转到定义" "代码 / LSP")
+(custom/bind "C-c l r" #'xref-find-references "查找引用" "代码 / LSP")
 (custom/bind "C-c l a" #'eglot-code-actions "代码操作" "代码 / LSP")
 (custom/bind "C-c l n" #'eglot-rename "重命名符号" "代码 / LSP")
 (custom/bind "C-c l c" #'completion-at-point "触发补全" "代码 / LSP")
@@ -3197,6 +3134,11 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 
 (add-hook 'prog-mode-hook #'hs-minor-mode)
 (add-hook 'conf-mode-hook #'hs-minor-mode)
+;; hideshow 上游只给 `hs-minor-mode' 挂了 autoload,交互命令没有;手动补齐,
+;; 否则进入首个 prog buffer 前按 C-c z / <backtab> 会是 void-function。
+(dolist (cmd '(hs-toggle-hiding hs-hide-block hs-show-block
+                 hs-hide-all hs-show-all))
+  (autoload cmd "hideshow" nil t))
 (custom/bind "C-c z a" #'hs-toggle-hiding "切换当前折叠" "折叠")
 (custom/bind "C-c z c" #'hs-hide-block "关闭当前折叠" "折叠")
 (custom/bind "C-c z o" #'hs-show-block "打开当前折叠" "折叠")
@@ -3326,18 +3268,6 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
   (or (when-let* ((proj (project-current nil)))
         (project-root proj))
       default-directory))
-
-(defun custom/switch-project ()
-  "切换到已知项目,并以 Dired 打开项目根目录。
-
-使用 `project-switch-project'(Emacs 29+ project.el);切换后
-`project-after-switch-project-functions' 触发(见 tab-line 域)。"
-  (interactive)
-  (require 'project)
-  (call-interactively #'project-switch-project)
-  (when-let* ((proj (project-current nil))
-              (root (project-root proj)))
-    (dired root)))
 
 (defun custom/open-project-folder ()
   "打开任意文件夹:切换 `default-directory' 并显示 Dired。
@@ -3487,10 +3417,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
     (setq-local org-startup-with-inline-images (display-graphic-p)))
   (add-hook 'org-mode-hook #'custom--org-toggle-inline-images)
 
-  (defun custom/org-setup-visuals ()
-    "减少 Org 文档视图中的编辑器噪音。"
-    (display-line-numbers-mode -1))
-  (add-hook 'org-mode-hook #'custom/org-setup-visuals)
+  ;; 行号噪音由 [[#mixed-gui-tty-constraints][主题与字体]] 的禁用行号 mode 列表统一处理(org-mode 在列)。
 
   ;; C-j 在 Org 内分发:表格内走原命令,表格外走 next-line
   (defun custom/org-c-j-dispatch ()
@@ -3808,7 +3735,7 @@ agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域�
 :CUSTOM_ID: keys-completion
 :END:
 
-前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + 补全框架全家桶(Vertico / Corfu / Consult)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + Emacs 31 内置补全栈(minibuffer-visible-completions / completion-preview-mode / dabbrev / flex)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
 
 所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
 
@@ -3930,8 +3857,8 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-S-s" #'write-file "另存为" "基础移动与直达键")
 (custom/bind "C-S-a" #'custom/find-file-in-project "项目文件搜索" "基础移动与直达键")
 (custom/bind "<f2>" #'custom/rename-dwim "重命名" "基础移动与直达键")
-(custom/bind "C-<f12>" #'custom/code-goto-definition "跳转到定义" "基础移动与直达键")
-(custom/bind "C-S-<f12>" #'custom/code-goto-references "查找引用" "基础移动与直达键")
+(custom/bind "C-<f12>" #'xref-find-definitions "跳转到定义" "基础移动与直达键")
+(custom/bind "C-S-<f12>" #'xref-find-references "查找引用" "基础移动与直达键")
 (custom/bind "C-S-i" #'custom/code-format-dwim "智能格式化" "基础移动与直达键")
 (custom/bind "C-`" #'custom/open-terminal "打开终端" "基础移动与直达键")
 (custom/bind "C-=" #'text-scale-increase "放大" "基础移动与直达键")
@@ -3978,7 +3905,6 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/declare-binding-group "C-x t" "标签")
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x t g" #'custom/tabs-refresh-context "刷新标签上下文" "文件 / 缓冲区 / 标签")
 
 (custom/bind "M-s l" #'isearch-forward "搜索当前缓冲区" "搜索")
 (custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
@@ -4098,22 +4024,18 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
     (setq ispell-program-name custom:executable-hunspell
           ispell-extra-args nil))))
 
-(defun custom/completion-remove-ispell-completion-at-point ()
-  "从当前 buffer 的 CAPF 列表移除 `ispell-completion-at-point'。"
-  (setq-local completion-at-point-functions
-              (remove 'ispell-completion-at-point
-                      (remove #'ispell-completion-at-point
-                              completion-at-point-functions))))
-
 (defun custom/completion-setup-ispell-word-list ()
   "为当前 buffer 配置单词补全词表。
 
 若找不到 plain word list，则移除当前 buffer 的
-`ispell-completion-at-point'，避免 Corfu 自动补全触发缺词表错误。"
+`ispell-completion-at-point'，避免自动补全触发缺词表错误。"
   (let ((word-list (custom/completion-ispell-find-word-list)))
     (if word-list
         (setq-local ispell-alternate-dictionary word-list)
-      (custom/completion-remove-ispell-completion-at-point))))
+      (setq-local completion-at-point-functions
+                  (remove 'ispell-completion-at-point
+                          (remove #'ispell-completion-at-point
+                                  completion-at-point-functions))))))
 
 (custom/completion-setup-ispell-program)
 
@@ -4130,23 +4052,15 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 ;; 保留 ispell 词表逻辑(ispell-completion-at-point 为内置 capf)。
 
 (defun custom/completion-setup-capfs-org ()
-  "Org mode 的 capf 收束:移除 text-mode 带入的通用 capf。
+  "Org mode 的 capf 收束:移除 text-mode 带入的 ispell capf。
 由于 org-mode 是 text-mode 的衍生模式,`text-mode-hook' 会先运行;
-org 自身关键字 / 链接 / roam 补全仍保留,无需额外追加。"
+org 自身关键字 / 链接 / roam 补全仍保留,无需额外追加。
+文本类与编程类 buffer 的 capf 链分别由 `custom/completion-setup-ispell-word-list'
+与 major-mode / LSP 提供,无需额外 hook。"
   (setq-local completion-at-point-functions
               (delq 'ispell-completion-at-point
                     completion-at-point-functions)))
 
-(defun custom/completion-setup-capfs-text ()
-  "文本类 buffer（text/conf）:ispell 拼写补全单独管理
-（在找到 word list 时保留 Emacs 自带的 `ispell-completion-at-point'）。")
-
-(defun custom/completion-setup-capfs-prog ()
-  "编程类 buffer:由 major-mode / LSP capf 提供服务,无需手动追加。")
-
-(add-hook 'prog-mode-hook #'custom/completion-setup-capfs-prog)
-(add-hook 'conf-mode-hook #'custom/completion-setup-capfs-prog)
-(add-hook 'text-mode-hook #'custom/completion-setup-capfs-text)
 (add-hook 'org-mode-hook #'custom/completion-setup-capfs-org)
 
 ;; eldoc 内置文档显示(替代 corfu-popupinfo):Eglot 补全时 echo area 显示文档。
@@ -4184,11 +4098,11 @@ childframe,不需要 margin formatter)。"
 
 #+begin_src emacs-lisp
 ;; 补全框架 C-c m 前缀:内置命令。dabbrev 动态缩写;completion-preview
-;; 手动触发;文件路径用 ffap。
+;; 手动触发;文件路径用 ffap。历史浏览直接用 minibuffer 内置 M-p / M-n
+;; (旧 C-c m h 绑定的 minibuffer-history-complete 在 Emacs 31 不存在)。
 (custom/bind "C-c m d" #'dabbrev-expand "动态缩写补全" "补全框架")
 (custom/bind "C-c m p" #'completion-preview-complete "补全预览(手动)" "补全框架")
 (custom/bind "C-c m f" #'ffap "文件路径补全" "补全框架")
-(custom/bind "C-c m h" #'minibuffer-history-complete "历史补全" "补全框架")
 #+end_src
 
 * 系统工具与实验性
@@ -4358,7 +4272,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
     (dolist (feature custom:daemon-warmup-features)
       (condition-case err
           (unless (require feature nil t)
-            (push (cons feature "feature not found") failed))
+            (push (cons feature "未找到 feature") failed))
         (error
          (push (cons feature (error-message-string err)) failed))))
     (when (fboundp 'custom/dashboard-prime-caches)
@@ -4390,14 +4304,14 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 *** 六层架构
 
 #+attr_org: :width 70
-| 层   | noweb ref                   | 职责                                       | 副作用       |
-|------+-----------------------------+--------------------------------------------+--------------|
-| 核心 | =system/dashboard-core=       | face 定义、buffer 常量、TTL 缓存原语       | face         |
-| 测量 | =system/dashboard-measure=    | 列模型:measure / pad / truncate            | 纯函数       |
-| 注册 | =system/dashboard-registry= | 布局声明 + 卡片 spec 注册表 + tier 判定    | 纯函数       |
-| 引擎 | =system/dashboard-engine=     | 三态卡片 + 错误隔离 + 响应式拼接           | 纯函数       |
-| 卡片 | =system/dashboard-cards=      | 7 张卡片 fetch/render + IO/计算            | IO           |
-| 生命 | =system/dashboard-lifecycle=  | mode、render、frame 状态机、防抖、主题刷新 | 唯一副作用层 |
+| 层   | noweb ref                  | 职责                                       | 副作用       |
+|------+----------------------------+--------------------------------------------+--------------|
+| 核心 | =system/dashboard-core=      | face 定义、buffer 常量、TTL 缓存原语       | face         |
+| 测量 | =system/dashboard-measure=   | 列模型:measure / pad / truncate            | 纯函数       |
+| 注册 | =system/dashboard-registry=  | 布局声明 + 卡片 spec 注册表 + tier 判定    | 纯函数       |
+| 引擎 | =system/dashboard-engine=    | 三态卡片 + 错误隔离 + 响应式拼接           | 纯函数       |
+| 卡片 | =system/dashboard-cards=     | 7 张卡片 fetch/render + IO/计算            | IO           |
+| 生命 | =system/dashboard-lifecycle= | mode、render、frame 状态机、防抖、主题刷新 | 唯一副作用层 |
 
 设计要点:
 
@@ -4440,9 +4354,6 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 
 (defconst custom:dashboard-dual-gap 3
   "双列布局左右卡片之间的间隔列数。")
-
-(defconst custom:dashboard-card-inner-padding 2
-  "Dashboard 卡片内容区左右统一保留的内边距列数。")
 
 (defconst custom:dashboard-shortcuts-column-gap 4
   "Dashboard 快捷键双列之间的固定间隔列数。")
@@ -4775,20 +4686,26 @@ FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
 (defun custom/dashboard--command-button (label command)
   "返回一个调用交互命令 COMMAND 的按钮字符串。
 用于 Dashboard 卡片底部「更多」跳转；RET/mouse-1 调用 COMMAND。"
-  (let ((btn (copy-sequence label))
-        (keymap (make-sparse-keymap)))
-    (define-key keymap (kbd "RET")
-                (lambda () (interactive) (call-interactively command)))
-    (define-key keymap [mouse-1]
-                (lambda () (interactive) (call-interactively command)))
-    (add-text-properties
-     0 (length btn)
-     (list 'keymap keymap
-           'face 'custom/dashboard-item
-           'mouse-face 'highlight
-           'help-echo (format "运行 %s" command))
-     btn)
-    btn))
+  (custom/dashboard--button label
+                            (lambda () (call-interactively command))
+                            (format "运行 %s" command)))
+
+(defun custom/dashboard--render-item-list (items width empty-text item-fn)
+  "把 ITEMS 渲染为 WIDTH 宽的按钮行列表;空列表显示弱化 EMPTY-TEXT。
+ITEM-FN 接收单个条目,返回 (DISPLAY ACTION HELP) 三元组:
+DISPLAY 为按钮文本(内部按列宽截断),ACTION 为点击回调,HELP 为提示。"
+  (if (null items)
+      (list (propertize empty-text 'face 'custom/dashboard-dim))
+    (mapcar
+     (lambda (item)
+       (pcase-let* ((`(,display ,action ,help) (funcall item-fn item))
+                    (prefix "  ")
+                    (w (max 0 (- width (custom/dashboard--measure prefix)))))
+         (concat prefix
+                 (custom/dashboard--button
+                  (custom/dashboard--truncate display w)
+                  action help))))
+     items)))
 
 (defun custom/dashboard--compact-path (path)
   "将 PATH 中间目录压缩为首字母，首尾保留完整。
@@ -4842,7 +4759,6 @@ FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
     (let ((diff (- deadline-abs today-abs)))
       (propertize
        (cond ((= diff 1) "  󰥕 明天截止")
-             ((<= diff 3) (format "  󰥕 %d天后截止" diff))
              ((<= diff 7) (format "  󰥕 %d天后截止" diff))
              (t (format "  󰥕 %s"
                         (substring deadline-str 1 11))))
@@ -4861,6 +4777,16 @@ FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
                 'face 'font-lock-keyword-face))
    (t "")))
 
+(defun custom/dashboard--todo-urgency (today-abs deadline-abs scheduled-abs)
+  "返回 TODO 条目的紧急度排名(越小越紧急),用于排序。"
+  (cond
+   ((and deadline-abs (< deadline-abs today-abs)) 0)
+   ((and deadline-abs (= deadline-abs today-abs)) 1)
+   ((and scheduled-abs (< scheduled-abs today-abs)) 2)
+   (deadline-abs 3)
+   (scheduled-abs 4)
+   (t 5)))
+
 (defun custom/dashboard--compute-todo-items (max-items)
   "实际扫描 `org-agenda-files' 计算未完成 TODO 项（无缓存）。
 每个条目记录 (STATE TITLE DATE-INFO FILE POS)，POS 为 heading 在 file 中的
@@ -4872,12 +4798,13 @@ FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
   (require 'org-agenda)
   (require 'org)
   (let ((today-abs (calendar-absolute-from-gregorian (calendar-current-date)))
+        (scan-limit (* max-items 2))
         (count 0)
         raw-items)
     (when (and (fboundp 'org-agenda-files)
                (ignore-errors (org-agenda-files)))
       (dolist (file (org-agenda-files))
-        (when (and (< count (* max-items 2)) (file-exists-p file))
+        (when (and (< count scan-limit) (file-exists-p file))
           (let ((buf (cl-letf (((symbol-function 'ask-user-about-supersession-threat)
                                 (lambda (&rest _) nil)))
                        (find-file-noselect file))))
@@ -4885,7 +4812,7 @@ FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
                 (with-current-buffer buf
                   (org-with-wide-buffer
                    (goto-char (point-min))
-                   (while (and (< count (* max-items 2))
+                   (while (and (< count scan-limit)
                                (re-search-forward org-heading-regexp nil t))
                      (let* ((heading-pos (match-beginning 0))
                             (components (org-heading-components))
@@ -4895,19 +4822,13 @@ FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
                             (deadline (org-entry-get (point) "DEADLINE")))
                        (when (and todo-state
                                   (not (member todo-state '("DONE" "CANCELLED"))))
-                         (let* ((deadline-abs (and deadline
-                                                   (org-time-string-to-absolute deadline)))
-                                (scheduled-abs (and scheduled
-                                                    (org-time-string-to-absolute scheduled)))
-                                (urgency
-                                 (cond
-                                  ((and deadline-abs (< deadline-abs today-abs)) 0)
-                                  ((and deadline-abs (= deadline-abs today-abs)) 1)
-                                  ((and scheduled-abs (< scheduled-abs today-abs)) 2)
-                                  (deadline-abs 3)
-                                  (scheduled-abs 4)
-                                  (t 5))))
-                           (push (list urgency todo-state title deadline
+                         (let ((deadline-abs (and deadline
+                                                  (org-time-string-to-absolute deadline)))
+                               (scheduled-abs (and scheduled
+                                                   (org-time-string-to-absolute scheduled))))
+                           (push (list (custom/dashboard--todo-urgency
+                                        today-abs deadline-abs scheduled-abs)
+                                       todo-state title deadline
                                        scheduled deadline-abs scheduled-abs
                                        file heading-pos)
                                  raw-items)
@@ -4968,8 +4889,8 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
        (require 'org)
        (setq custom/dashboard--org-defer-pending nil)
        (custom/dashboard-invalidate-cache)
-       (when (fboundp 'custom/dashboard--refresh-if-visible)
-         (custom/dashboard--refresh-if-visible))))))
+       (when (fboundp 'custom/dashboard--refresh-visible-now)
+         (custom/dashboard--refresh-visible-now))))))
 
 (defun custom/dashboard--fetch-todo ()
   "TODO 卡片 fetch：三态。
@@ -5006,8 +4927,8 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
       (unless existing-buffer
         (kill-buffer buffer))))
   (custom/dashboard-invalidate-cache)
-  (when (fboundp 'custom/dashboard--refresh-if-visible)
-    (custom/dashboard--refresh-if-visible))
+  (when (fboundp 'custom/dashboard--refresh-visible-now)
+    (custom/dashboard--refresh-visible-now))
   (message "已完成并保存: %s" title))
 
 (defun custom/dashboard--render-todo (items width)
@@ -5105,19 +5026,12 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
 
 (defun custom/dashboard--render-recents (files width)
   "最近文件卡片 render。每行做成按钮，点击 find-file。"
-  (if (null files)
-      (list (propertize "暂无最近文件" 'face 'custom/dashboard-dim))
-    (mapcar
-     (lambda (f)
-       (let* ((display (custom/dashboard--abbreviate-path f width))
-              (prefix "  ")
-              (w (max 0 (- width (custom/dashboard--measure prefix)))))
-         (concat prefix
-                 (custom/dashboard--button
-                  (custom/dashboard--truncate display w)
-                  (lambda () (find-file f))
-                  (format "打开 %s" f)))))
-     files)))
+  (custom/dashboard--render-item-list
+   files width "暂无最近文件"
+   (lambda (f)
+     (list (custom/dashboard--abbreviate-path f width)
+           (lambda () (find-file f))
+           (format "打开 %s" f)))))
 
 (defun custom/dashboard--compute-known-projects ()
   "实际计算 dashboard 可展示的项目列表（无缓存）。
@@ -5142,20 +5056,12 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
 
 (defun custom/dashboard--render-projects (projects width)
   "项目卡片 render。"
-  (if (null projects)
-      (list (propertize "暂无已知项目 — C-x p o 添加"
-                        'face 'custom/dashboard-dim))
-    (mapcar
-     (lambda (p)
-       (let* ((display (custom/dashboard--abbreviate-path p width))
-              (prefix "  ")
-              (w (max 0 (- width (custom/dashboard--measure prefix)))))
-         (concat prefix
-                 (custom/dashboard--button
-                  (custom/dashboard--truncate display w)
-                  (lambda () (find-file p))
-                  (format "打开项目 %s" p)))))
-     projects)))
+  (custom/dashboard--render-item-list
+   projects width "暂无已知项目 — C-x p o 添加"
+   (lambda (p)
+     (list (custom/dashboard--abbreviate-path p width)
+           (lambda () (find-file p))
+           (format "打开项目 %s" p)))))
 
 (defun custom/dashboard--compute-recent-knowledge-entries (max-items)
   "消费 `agenote --domain human list --json' 稳定索引计算最近条目（无缓存）。
@@ -5249,10 +5155,10 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
                                        (string-trim
                                         (with-current-buffer stderr
                                           (buffer-string))))))
-                             (setq custom/dashboard--knowledge-error
-                                   (if (string-empty-p (or message ""))
-                                       "agenote process failed"
-                                     message))))
+       (setq custom/dashboard--knowledge-error
+             (if (string-empty-p (or message ""))
+                 "agenote 进程失败"
+               message))))
                          (when (eq custom/dashboard--knowledge-process process)
                            (setq custom/dashboard--knowledge-process nil))
                          (when-let* ((buffer (process-buffer process))
@@ -5262,9 +5168,9 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
                            (kill-buffer stderr))
                          (cl-incf custom/dashboard--generation)
                          (condition-case refresh-error
-                             (custom/dashboard--refresh-if-visible)
+                             (custom/dashboard--refresh-visible-now)
                            (error
-                            (message "[dashboard] knowledge refresh failed: %s"
+                            (message "[dashboard] 知识库刷新失败: %s"
                                      (error-message-string refresh-error))))))))
             (error
              (when (buffer-live-p stdout)
@@ -5275,7 +5181,7 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
                    custom/dashboard--knowledge-error
                    (error-message-string err))
              (cl-incf custom/dashboard--generation))))
-      (setq custom/dashboard--knowledge-error "agenote executable not found"))))
+      (setq custom/dashboard--knowledge-error "未找到 agenote 可执行文件"))))
 
 (defun custom/dashboard-prime-caches ()
   "在 daemon 启动阶段同步预热 Dashboard 的常用数据缓存。"
@@ -5290,22 +5196,14 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
 
 (defun custom/dashboard--render-knowledge (entries width)
   "知识库卡片 render。点击用卡片 ID 调 `agenote-knowledge-show-card'。"
-  (if (null entries)
-      (list (propertize "知识库暂无条目" 'face 'custom/dashboard-dim))
-    (mapcar
-     (lambda (e)
-       (let* ((id (nth 0 e))
-              (category (nth 1 e))
-              (title (nth 2 e))
-              (display (concat category "/" title))
-              (prefix "  ")
-              (w (max 0 (- width (custom/dashboard--measure prefix)))))
-         (concat prefix
-                 (custom/dashboard--button
-                  (custom/dashboard--truncate display w)
-                  (lambda () (agenote-knowledge-show-card 'human id))
-                  (format "查看知识卡片 %s" display)))))
-     entries)))
+  (custom/dashboard--render-item-list
+   entries width "知识库暂无条目"
+   (lambda (e)
+     (pcase-let ((`(,id ,category ,title) e))
+       (let ((display (concat category "/" title)))
+         (list display
+               (lambda () (agenote-knowledge-show-card 'human id))
+               (format "查看知识卡片 %s" display)))))))
 
 (defun custom/dashboard--fetch-bookmarks ()
   "书签卡片 fetch。"
@@ -5314,18 +5212,12 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
 
 (defun custom/dashboard--render-bookmarks (names width)
   "书签卡片 render。"
-  (if (null names)
-      (list (propertize "暂无书签" 'face 'custom/dashboard-dim))
-    (mapcar
-     (lambda (b)
-       (let* ((prefix "  ")
-              (w (max 0 (- width (custom/dashboard--measure prefix)))))
-         (concat prefix
-                 (custom/dashboard--button
-                  (custom/dashboard--truncate b w)
-                  (lambda () (bookmark-jump b))
-                  (format "跳转书签 %s" b)))))
-     names)))
+  (custom/dashboard--render-item-list
+   names width "暂无书签"
+   (lambda (b)
+     (list b
+           (lambda () (bookmark-jump b))
+           (format "跳转书签 %s" b)))))
 
 (defun custom/dashboard--format-shortcut-column (binding width)
   "格式化单列快捷键 BINDING 以适应 WIDTH 列宽。"
@@ -5344,11 +5236,6 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
               display-desc
               (custom/dashboard--fill (max 0 (- width used)))))))
 
-(defun custom/dashboard--extract-top-level-bindings ()
-  "提取 dashboard 需要展示的关键顶层快捷键。"
-  (when (fboundp 'custom/help--extract-dashboard-bindings)
-    (funcall #'custom/help--extract-dashboard-bindings)))
-
 (defun custom/dashboard--render-shortcuts (_data width)
   "快捷键卡片 render（全宽）。_DATA 未使用（绑定来自 help 系统）。
 双列布局，每列等宽，列间固定间隔。"
@@ -5358,7 +5245,9 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
          (col-count 2)
          (col-gap custom:dashboard-shortcuts-column-gap)
          (col-width (/ (max 1 (- available-width col-gap)) col-count))
-         (prefix-bindings (custom/dashboard--extract-top-level-bindings))
+         ;; 跨域调用保留 fboundp 守卫(正常路径由文档顺序保证 help 已就绪)。
+         (prefix-bindings (when (fboundp 'custom/help--extract-dashboard-bindings)
+                            (custom/help--extract-dashboard-bindings)))
          (total (length prefix-bindings))
          (rows-count (ceiling total (float col-count)))
          (row-lines nil))
@@ -5500,7 +5389,7 @@ banner 只含空格及 block/box-drawing 字符，在当前等宽 GUI 与 Foot T
   "在当前 buffer 插入居中的 banner（art + 状态行）。
 art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间左对齐），
 状态行单独按自身宽度居中到窗口中央。窄窗口（低于
-`custom:dashboard-banner-min-width'）降级为纯文本单行。
+`custom/dashboard--banner-min-width'）降级为纯文本单行。
 
 + art 使用固定的一单元字符集，GUI 与 Foot TTY 均用 =length= 算 pad。真实 TTY
   中 Emacs 可能因 CJK 宽度表把这些字符报告为 2 列，而终端实际仍渲染 1 单元；
@@ -5662,15 +5551,12 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
   (and (frame-live-p frame)
        (= (length (window-list frame 'no-minibuf)) 1)))
 
-(defun custom/dashboard--refresh-if-visible ()
-  "立即刷新所有可见 dashboard buffer。"
-  (custom/dashboard--refresh-visible-now))
-
 (defvar custom/dashboard--refresh-timer nil
   "dashboard 可见性刷新的 pending idle timer。")
 
 (defun custom/dashboard--refresh-visible-now ()
-  "立即检查所有可见 dashboard 窗口，数据代数或宽度变化者重新渲染。"
+  "立即刷新所有可见 dashboard buffer。
+检查所有可见 dashboard 窗口，数据代数或宽度变化者重新渲染。"
   (when (timerp custom/dashboard--refresh-timer)
     (cancel-timer custom/dashboard--refresh-timer))
   (setq custom/dashboard--refresh-timer nil)
@@ -5721,11 +5607,9 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
 
 (defun custom/dashboard--frame-startup-state (frame)
   "返回 FRAME 当前的启动缓冲区状态。"
-  (cond
-   ((not (custom/dashboard--single-window-frame-p frame)) 'busy)
-   (t
-    (if-let* ((window (and (frame-live-p frame)
-                           (frame-selected-window frame)))
+  (if (not (custom/dashboard--single-window-frame-p frame))
+      'busy
+    (if-let* ((window (frame-selected-window frame))
               (buffer (window-buffer window)))
         (with-current-buffer buffer
           (cond
@@ -5734,7 +5618,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
            ((buffer-file-name) 'file)
            ((custom/dashboard--placeholder-buffer-p buffer) 'placeholder)
            (t 'busy)))
-      'pending))))
+      'pending)))
 
 (defun custom/dashboard--run-open-check (frame retries-left)
   "根据 FRAME 当前状态决定是否显示或重试 dashboard。"
@@ -5747,9 +5631,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
        (when-let* ((window (frame-selected-window frame)))
          (with-selected-window window
            (custom/dashboard-render))))
-      ('file nil)
-      ('server-edit nil)
-      ('busy nil)
+      ((or 'file 'server-edit 'busy) nil)
       (_
        (when (> retries-left 0)
          (custom/dashboard--schedule-open-for-frame
@@ -5781,7 +5663,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
                        (string-prefix-p (expand-file-name custom:org-directory)
                                         (expand-file-name buffer-file-name)))
               (custom/dashboard-invalidate-cache)
-              (custom/dashboard--refresh-if-visible))))
+              (custom/dashboard--refresh-visible-now))))
 
 (add-hook 'window-size-change-functions #'custom/dashboard--maybe-refresh-visible)
 

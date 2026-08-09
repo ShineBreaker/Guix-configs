@@ -1056,6 +1056,22 @@ mock agenote-call,验证:
         (call-interactively (lookup-key state-map (kbd "RET")))
         (should (equal called (list file 42 title)))))))
 
+(ert-deftest custom-config/binding-spec-global-commands-resolve ()
+  "binding-spec 中每个全局绑定的命令在配置加载完成后必须可解析为
+已定义的函数或 keymap。C-x t g 曾绑定到从未定义的
+`custom/tabs-refresh-context',按下即 void-function;本测试固化绑定
+完整性,防止此类回归。
+局部 (:mode) 绑定在对应 feature 加载后才落地,命令可能尚未定义,
+不在本契约范围内。"
+  (skip-unless (boundp 'custom:binding-spec))
+  (dolist (entry custom:binding-spec)
+    (let ((command (plist-get entry :command)))
+      (when (and command (not (plist-get entry :mode)))
+        (unless (or (keymapp command)
+                    (and (symbolp command) (fboundp command)))
+          (ert-fail (format "未定义的绑定命令: %s -> %S"
+                            (plist-get entry :key) command)))))))
+
 (ert-deftest custom-config/dashboard-engine-splice-width-invariant ()
   "Dashboard 双列拼接契约:--render-row 产出每行左列宽度一致。
 两列等高拼接后,左列固定填充到 left-w,右列自然结束。"
