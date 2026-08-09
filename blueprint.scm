@@ -1278,6 +1278,7 @@
      ("*.o" file)
      ("*.a" file)
      ("*.so" file)
+     ("main.el" file)
      ("org-roam.db" file)
      (,(string-append %stow-dir "/emacs/.config/emacs/etc") directory)
      (,(string-append %stow-dir "/emacs/.config/emacs/var") directory))))
