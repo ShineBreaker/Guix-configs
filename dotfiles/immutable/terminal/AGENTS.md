@@ -38,13 +38,12 @@ terminal/
 │   ├── foot/
 │   │   └── foot.ini
 │   ├── herdr/
-│   │   ├── scripts/
-│   │   │   └── herdr-session-selector
 │   │   └── config.toml
 │   ├── kitty/
 │   │   └── kitty.conf
 │   ├── tmux/
 │   │   ├── scripts/
+│   │   │   ├── session-selector
 │   │   │   ├── sidebar-render.scm
 │   │   │   ├── sidebar-toggle
 │   │   │   ├── which-key
