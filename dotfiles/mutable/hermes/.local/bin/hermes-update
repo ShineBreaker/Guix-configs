@@ -100,6 +100,46 @@ _restart_herd_services() {
   done
 }
 
+# --- 确保 Hermes-managed Node 树存在（dashboard 启动依赖它）---
+# 背景：hermes-backend (dashboard) 启动时跑 `npm install --workspace web` 构建
+# 前端。root package.json 的 engines.npm 约束很窄（如 "<11.10.0 || >=11.17.0"），
+# Guix profile 的 npm 可能正好卡在禁止区间（本次故障：npm 11.16.0）→ EBADENGINE
+# → web build 失败 → backend crash-loop（端口 9119 起不来）。Hermes 官方的解法是
+# 在 $HERMES_HOME/node 维护一棵私有 Node 树（含满足约束的 npm），所有 npm 调用
+# 优先用它（find_node_executable 在 managed 树存在时不 fallback 到 PATH）。
+#
+# 为什么不能依赖官方 ensure_node：它在 PATH 有 modern node 时（Guix node v24
+# 满足 engines.node）直接返回，**只查 node 版本不查 npm 版本** —— 而本次故障的
+# 约束恰恰卡在 npm 上。故这里绕过 ensure_node，直接调底层 _nb_install_bundled_node。
+#
+# HERMES_NODE_SKIP_LINKS=1：不把 managed node/npm/npx 软链到 ~/.local/bin，避免
+# shadow Guix toolchain（与 B.2 的 uv 隔离同精神 —— 各管各的，互不污染）。
+#
+# 预编译 Node 二进制的动态库加载由 nix-ld 兜底（config.org nix-ld-service 的
+# gcc-toolchain 提供 libstdc++.so，nix-ld 能 follow symlink 解析，已验证可用）。
+#
+# 幂等性：底层 _nb_install_bundled_node 会 rm -rf + 重下，故本函数先查存在性，
+# 已有则秒过（首装/升级时才可能缺失）。
+_ensure_managed_node() {
+  local _node_bin="${HERMES_HOME}/node/bin/node"
+  if [[ -x "${_node_bin}" ]]; then
+    return 0
+  fi
+  echo "→ Provisioning Hermes-managed Node 树到 ${HERMES_HOME}/node ..."
+  local _bootstrap="${HERMES_RUNTIME}/scripts/lib/node-bootstrap.sh"
+  if [[ ! -f "${_bootstrap}" ]]; then
+    echo "  ⚠ node-bootstrap.sh 未找到（${_bootstrap}），跳过 managed node provision" >&2
+    echo "    backend 若 crash-loop，手动跑: source ${_bootstrap} && HERMES_NODE_SKIP_LINKS=1 _nb_install_bundled_node" >&2
+    return 0
+  fi
+  # shellcheck disable=SC1090  # checkout 内脚本，按源头源
+  if HERMES_NODE_SKIP_LINKS=1 bash -c "source '${_bootstrap}' && _nb_install_bundled_node"; then
+    echo "  ✓ managed node 已 provision（$("${_node_bin}" --version 2>/dev/null || echo '版本未知')）"
+  else
+    echo "  ⚠ managed node provision 失败，backend web build 可能失败" >&2
+  fi
+}
+
 # ============================================================
 # 路径 A：首次安装（checkout 不存在）
 # ============================================================
@@ -142,6 +182,10 @@ if [[ ! -d "${CHECKOUT}/.git" ]]; then
 
   _write_bootstrap_marker
 
+  # 首装即 provision managed Node（Guix profile 的 npm 版本可能不满足 root
+  # package.json 的 engines.npm 约束 → backend dashboard 启动即 EBADENGINE）。
+  _ensure_managed_node
+
   "${VENV}/bin/hermes" --version
   echo ""
   echo "首次安装完成。"
@@ -177,6 +221,14 @@ if [[ -n "${_uv_system}" ]] && [[ ! -e "${_uv_managed}" ]]; then
   ln -s "${_uv_system}" "${_uv_managed}"
   echo "  uv 隔离: ${_uv_managed} -> ${_uv_system}（阻止官方下载独立 managed uv）"
 fi
+
+# --- B.2.5 确保 managed Node 树（官方 update 会修 managed uv/python 但漏 node）---
+# 官方 update 重装依赖时不碰 $HERMES_HOME/node，但 checkout 的 package.json
+# engines.npm 约束可能变动，旧 managed tree（若有）的 npm 可能不再满足；更常见
+# 的是首装后从未 provision（本次故障根因）。provision 后 backend restart 才能正常
+# 构建 web UI。--check 只读探测时也查一下（无害，秒过当存在），让 --check 能发现
+# managed node 缺失的诊断信号。
+_ensure_managed_node
 
 # --- B.3 委托官方 update（透传所有参数）---
 # 官方接管：pre-update backup → fetch → stash → pull（syntax guard + rollback）
