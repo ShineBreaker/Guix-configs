@@ -104,12 +104,27 @@ metadata:
 - `.agents/workfile/{name}/` 持久化约定(改成 hermes 的输出:handoff 文本 + 显式 write_file)
 - `## 通用部分(主会话和 subagent 都看)` 这种双视角分段(hermes 是单视角)
 
+**⚠️ 致命陷阱:这是「迁移到 hermes」专用建议,不是「在 pi agent 内部重写提示词」的指南。** 如果你只是打磨 pi agent 自己的 `.md` 文件(不改部署框架),`<!-- @atelier:subagent -->` / `<!-- /@atelier:subagent -->` 必须保留——`subagent-wrapper.sh` 靠这对标记切分子 agent 专属段,丢了插件就解析失败。见下方 §3.1。
+
 要保留的(语义层):
 
 - 人格描述("你是 XX,你的工作是 YY")
 - 工作流(风格定调 + 工作步骤)
 - 输出格式模板
 - 重要规则("每个质疑必须有替代建议" 这类不可妥协的硬约束)
+
+### 3.1 迁移 vs 原地编辑(关键判断)
+
+**迁移到 hermes** = 把 pi 文件的内容改造成 hermes SKILL.md,放到 `~/.local/share/hermes/skills/` 下。按 §3 删 pi 私有元数据。
+
+**原地编辑** = 在 pi agent 内部重写/打磨 `.md` 文件(不改部署框架)。**不要删**以下标记:
+
+- `<!-- @atelier:subagent -->` / `<!-- /@atelier:subagent -->` — `subagent-wrapper.sh` 靠这对标记切分子 agent 专属段
+- `tier:` / `tools:` — pi 自己的 frontmatter,hermes 不认但 pi 自己用
+- `.agents/workfile/{name}/` — pi 的持久化约定
+- `## 通用部分(主会话和 subagent 都看)` — pi 的双视角分段
+
+**判断标准**:用户说「帮我打磨 pi 的 agent 提示词」→ 原地编辑,保留所有 pi 私有标记。用户说「把 pi 的 agent 搬到 hermes」→ 迁移,删 pi 私有标记。
 
 ### 4. 改写为 SKILL.md(hermes 格式)
 
@@ -213,7 +228,7 @@ hermes skills list | grep <name>
 
 1. **先判定归宿再动手** —— 不是所有外部 prompt 都该变成 skill
 2. **全文就是 prompt,不要再嵌 snippet 章节** —— 加载后整文都生效
-3. **裁剪 pi/Claude 私有元数据** —— `tier` / `tools` / `<atelier:subagent>` / `.agents/workfile/` 全删
+3. **裁剪 pi/Claude 私有元数据(仅迁移场景)** —— `tier` / `tools` / `<atelier:subagent>` / `.agents/workfile/` 全删;但**原地编辑时保留**(见 §3.1)
 4. **description 必须列具体触发短语** —— 自动匹配全靠它
 5. **一次做一个,做完实际触发测试** —— 别堆
 6. **不强行套 hermes 工具**(比如硬把 pi 的视觉 subagent 改成 hermes skill,实际内置工具更合适)

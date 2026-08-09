@@ -13,3 +13,9 @@ hermes sandbox "半盲"特性下的诊断纪律: 沙盒里看不到 sudo / ip / 
 OCR 工具选择偏好（2026-07-29 实战验证）：Tesseract 对中文支持极差（无语言包时输出全乱码），中文场景首选 RapidOCR（轻量、快速、准确）或 PaddleOCR（精度更高但模型大）。已搭建 ~/Programs/ocr-system/ 项目，含 RapidOCR + PaddleOCR 双后端。
 §
 agenote 策展实战(2026-08-03):①agenote extract CLI 已可用,多日需循环(--date 单日),14天×7源≈1298条 ②dream top 候选常为 zcode XML 标签噪声(task-notification/output-file 等),先用 agenote search 查重再决定是否 trace ③agenote commit --no-gpg-sign 兜底无 pinentry ④遗留改动与策展产物分两个 commit
+§
+Guix 环境 shebang 铁律：Guix 系统没有 `/bin/bash`，只有 `/usr/bin/env bash`。所有 handler 脚本、shell 脚本第一行**必须**写 `#!/usr/bin/env bash`，否则 `xdg-open` 等工具调用时会报 `env: "...": 没有那个文件或目录`。
+§
+Wine OAuth 回调调试要点：handler 触发 ≠ 回调数据转发成功。第二实例打印 "Login already in progress; joining the active request" 后若仍卡住，通常是因为 Wine 二进制不匹配导致 IPC 通道断开。修复方向：统一用同一个 Wine 启动应用和 handler（不混用 Bottles/Proton/Guix 的 Wine）。
+§
+外部连接失败诊断（2026-08-09 周检实战）：`getent hosts <域名>` 返回 198.18.0.0/15 保留段地址 = fake-ip 代理 DNS 残留。配合 `ip route`（找 fake-ip 设备，如 `198.18.0.0/30 dev Meta`）+ `pgrep` 代理进程 + `/proc/<pid>/environ` 查 proxy env 三步，可区分"代理没在跑"（环境问题，escalate 而非修配置）与远程服务真故障。判断错误活跃性用按天分布聚合：单日聚类 = 已老化噪声，每日出现 = 活跃外部故障。

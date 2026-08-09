@@ -1,0 +1,13 @@
+#+TITLE: ${1:文章标题}
+#+DATE: <`(format-time-string "%Y-%m-%d %a")`>
+#+AUTHOR: ${2:作者}
+#+FILETAGS: :${3:tag1:tag2}:
+#+DESCRIPTION: ${4:摘要}
+
+* ${5:第一个标题}
+
+正文内容。注意 emphasis 标记后跟空格或英文标点： **加粗** 且 /斜体/ 和 =代码= 在句中。
+
+#+BEGIN_SRC ${6:language}
+$0
+#+END_SRC

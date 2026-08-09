@@ -13,3 +13,7 @@
 用户偏好: 系统已设的环境变量(如 HERMES_HOME)直接读取使用, 不要默认当未设置或硬编码默认值; fallback 仅变量确实读不到时兜底。原话: '你就直接读变量啊, 这个我是在系统里设置了的, 你可以加一个读不到的fallback'。
 §
 用户确实需 hermes 的 Electron desktop GUI(独立窗口/系统托盘/hermes://), 不接受纯 TUI 替代。迁移 hermes 时勿默认丢 desktop; Guix 跑 Electron 需额外容器/库, 用户愿付该维护成本。
+§
+用户偏好: 博客发布工作流中,拒绝 Org→Markdown 转换路线(2026-08-09 明确表态)。原话:"我其实不太想直接把org转换成markdown,正如那篇博客里面写的那样,容易丢失一些相关的元数据"。与 0WD0 建站文核心理念一致——Org 语义(ID/CUSTOM_ID/property drawer/org-roam 链接)在 Markdown 化时丢失。因此 ox-hugo/hexo-renderer-org 等转换路线不被接受;真正可行的方向是「让现有 Hexo 直接消费 Org 语义」(自建 renderer + Emacs 导出脚本输出 JSON)或「换掉 Hexo 用原生理解 Org 的方案」。
+§
+用户博客环境: Hexo 8.1.1 + 完全自写的"ASCII Orbit / just"主题(EJS模板 + TypeScript + Vite + ASCII globe动画 + Pagefind搜索 + 6套配色 + Playwright e2e测试),部署在 Codeberg Pages(repo: BrokenShine/pages)。博客仓库 ~/Documents/Blog/。这是用户大量投入的工程项目,任何博客方案变更都应优先考虑保留这套主题资产。

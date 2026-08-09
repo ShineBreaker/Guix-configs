@@ -37,7 +37,9 @@
 | `tools: read, grep, find, ls, write, bash` | pi YAML frontmatter | hermes 走 toolset 系统,不认这个白名单 |
 | `<!-- @atelier:subagent --> ... <!-- /@atelier:subagent -->` | pi HTML 注释块 | pi 渲染指令,hermes 没这个分隔语义 |
 | `.agents/workfile/{agent}/{YYYY-MM-DD}-{slug}.md` | pi 持久化约定 | hermes 的输出是 handoff 文本回主会话 + 显式 `write_file` 写用户指定路径 |
-| `## 通用部分(主会话和 subagent 都看)` 双视角分段 | pi 章节设计 | hermes 是单视角 prompt,没有"主/子"分裂 |
+| `## 通用部分(主会话和 subagent 都看)` 双视角分段 | pi 章节设计 | hermes 是单视角 prompt,没有「主/子」分裂 |
+
+**⚠️ 重要:以上「需要裁掉的元数据」仅适用于「把 pi 文件迁移到 hermes skill」的场景。** 如果你只是在 pi agent 内部重写/打磨 `.md` 文件(不改部署框架),`<!-- @atelier:subagent -->` / `<!-- /@atelier:subagent -->` **必须保留**——`subagent-wrapper.sh` 靠这对标记切分子 agent 专属段,丢了插件就解析失败。
 
 ## hermes SKILL.md 模板(从 pi 改造的样板)
 
