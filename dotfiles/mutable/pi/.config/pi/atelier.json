@@ -9,38 +9,29 @@
   "tiers": {
     "ultra": {
       "model": "zai/GLM-5.2",
-      "fallback": [
-        "minimax-cn/MiniMax-M3",
-        "xiaomi/mimo-v2.5-pro",
-        "deepseek/deepseek-v4-pro"
-      ]
+      "fallback": ["deepseek/deepseek-v4-pro", "xiaomi/mimo-v2.5-pro"]
     },
     "pro": {
-      "model": "minimax-cn/MiniMax-M3",
+      "model": "deepseek/deepseek-v4-pro",
       "fallback": [
-        "deepseek/deepseek-v4-pro",
+        "deepseek/deepseek-v4-flash",
         "xiaomi/mimo-v2.5-pro",
         "zai/GLM-4.7"
       ]
     },
     "quick": {
       "model": "deepseek/deepseek-v4-flash",
-      "fallback": [
-        "minimax-cn/MiniMax-M2.7"
-      ]
+      "fallback": ["xiaomi/mimo-v2.5"]
     },
     "visual": {
-      "model": "xiaomi/mimo-v2.5",
-      "fallback": [
-        "minimax-cn/MiniMax-M3"
-      ]
+      "model": "xiaomi/mimo-v2.5"
     }
   },
   "modelSchedules": {
     "zai/GLM-5.2": {
       "deny": ["Mon-Fri 14:00-18:00"]
     },
-    "qwen/qwen-3.8max": {
+    "qwen/qwen3.8-max": {
       "allow": ["22:00-08:00"]
     }
   }

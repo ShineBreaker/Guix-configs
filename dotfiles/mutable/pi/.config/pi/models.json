@@ -6,8 +6,8 @@
       "api": "anthropic-messages",
       "models": [
         {
-          "id": "qwen3.8-max-preview",
-          "name": "Qwen3.8-Max Preview",
+          "id": "qwen3.8-max",
+          "name": "Qwen3.8-Max",
           "reasoning": true,
           "input": ["text", "image"],
           "contextWindow": 1000000,

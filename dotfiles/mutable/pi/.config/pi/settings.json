@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-v4-pro",
+  "defaultProvider": "zai-coding-cn",
+  "defaultModel": "glm-5.2",
   "npmCommand": [
     "pnpm"
   ],
@@ -48,7 +48,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.83.0",
+  "lastChangelogVersion": "0.84.1",
   "images": {
     "blockImages": false
   },
