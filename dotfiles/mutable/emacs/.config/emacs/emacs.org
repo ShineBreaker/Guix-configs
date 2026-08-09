@@ -1652,18 +1652,18 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
   (magit-status-setup-buffer (custom/git--ensure-repo)))
 
 (custom/git--define-file-command custom/git-blame-current-file
-  "对当前文件执行 blame。" magit-blame-addition)
+                                 "对当前文件执行 blame。" magit-blame-addition)
 (custom/git--define-file-command custom/git-log-current-file
-  "查看当前文件历史。" magit-log-buffer-file)
+                                 "查看当前文件历史。" magit-log-buffer-file)
 (custom/git--define-file-command custom/git-diff-current-file
-  "查看当前文件 diff。" magit-diff-buffer-file)
+                                 "查看当前文件 diff。" magit-diff-buffer-file)
 (custom/git--define-file-command custom/git-timemachine-toggle
-  "切换当前文件的 git-timemachine。" git-timemachine-toggle)
+                                 "切换当前文件的 git-timemachine。" git-timemachine-toggle)
 
 (custom/git--define-repo-command custom/git-push-current-repo
-  "Push 当前仓库。" magit-push-current-to-upstream)
+                                 "Push 当前仓库。" magit-push-current-to-upstream)
 (custom/git--define-repo-command custom/git-pull-current-repo
-  "Pull 当前仓库。" magit-pull-from-upstream)
+                                 "Pull 当前仓库。" magit-pull-from-upstream)
 
 (defun custom/git-stage-current-file ()
   "Stage 当前文件。"
@@ -1893,8 +1893,8 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 
 ;; org-mode 也在其中:Org 文档视图隐藏行号,减少阅读噪音。
 (dolist (mode '(org-mode ghostel-mode term-mode eshell-mode shell-mode
-                           dashboard-mode special-mode
-                           agent-shell-mode))
+                         dashboard-mode special-mode
+                         agent-shell-mode))
   (add-hook (intern (concat (symbol-name mode) "-hook"))
             (lambda () (display-line-numbers-mode -1))))
 
@@ -3137,7 +3137,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 ;; hideshow 上游只给 `hs-minor-mode' 挂了 autoload,交互命令没有;手动补齐,
 ;; 否则进入首个 prog buffer 前按 C-c z / <backtab> 会是 void-function。
 (dolist (cmd '(hs-toggle-hiding hs-hide-block hs-show-block
-                 hs-hide-all hs-show-all))
+                                hs-hide-all hs-show-all))
   (autoload cmd "hideshow" nil t))
 (custom/bind "C-c z a" #'hs-toggle-hiding "切换当前折叠" "折叠")
 (custom/bind "C-c z c" #'hs-hide-block "关闭当前折叠" "折叠")
@@ -5155,10 +5155,10 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
                                        (string-trim
                                         (with-current-buffer stderr
                                           (buffer-string))))))
-       (setq custom/dashboard--knowledge-error
-             (if (string-empty-p (or message ""))
-                 "agenote 进程失败"
-               message))))
+                             (setq custom/dashboard--knowledge-error
+                                   (if (string-empty-p (or message ""))
+                                       "agenote 进程失败"
+                                     message))))
                          (when (eq custom/dashboard--knowledge-process process)
                            (setq custom/dashboard--knowledge-process nil))
                          (when-let* ((buffer (process-buffer process))
