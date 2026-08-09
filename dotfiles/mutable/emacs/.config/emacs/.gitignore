@@ -11,3 +11,7 @@ var
 
 # main.el 由 emacs.org tangle 自动生成,init.el bootstrap 会按需重建
 main.el
+
+# Agent
+.reasonix
+PLAN.md
