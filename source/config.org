@@ -999,7 +999,8 @@ iifname "uap0" oifname != "uap0" masquerade
                                                #:minutes '(0))
                                             #~("/run/current-system/profile/bin/guix"
                                                "gc"
-                                               "--delete-generations=14d")
+                                               "-d" "30d"
+                                               "-F" "20G")
                                             #:requirement '(user-processes
                                                             guix-daemon))
                             ;; 用于自动更新 flatpak 系统安装的软件包
@@ -1072,7 +1073,9 @@ iifname "uap0" oifname != "uap0" masquerade
                                             (guix-configuration (inherit config)
                                                                 (channels guix-channels)
                                                                 (guix (guix-for-channels guix-channels))
-                                                                (extra-options (list "--cores=20" "--max-jobs=6"))
+                                                                (extra-options (list "--cores=20"
+                                                                                     "--max-jobs=6"
+                                                                                     "--gc-keep-outputs=yes"))
                                                                 (http-proxy "http://127.0.0.1:7890")
                                                                 (discover? #f)
                                                                 (tmpdir "/var/tmp")))
@@ -1489,6 +1492,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "gst-plugins-ugly"
 
         ;; 影音
+        "gimp"
         "helvum"
         "mpv"
         "nomacs"
@@ -1501,15 +1505,15 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; 生产力工具
         "agenote"
         "amule"
-        "freerdp@3"
-        "gimp"
         "filezilla"
         "keepassxc"
         "kdeconnect"
         "motrix-next-bin"
         "seahorse"
+        "wine64"
 
         ;; 虚拟机
+        "freerdp@3"
         "virt-manager"
         "winapps"
 
@@ -1736,8 +1740,9 @@ end
                              "tree-sitter-java"
                              "tree-sitter-java-properties"
                              "tree-sitter-javascript"
-                             "tree-sitter-markdown"
+                             "tree-sitter-jsdoc"
                              "tree-sitter-json"
+                             "tree-sitter-markdown"
                              "tree-sitter-kdl"
                              "tree-sitter-nix"
                              "tree-sitter-python"
@@ -2110,7 +2115,9 @@ end
   ;; sqlite
   ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
   ;; tmuxifier
-  ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts"))
+  ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts")
+  ;; wine
+  ("WINEPREFIX" . "$XDG_DATA_HOME/wine"))
 #+end_src
 
 **** 引用以上的所有变量，并在这里放一些多行的环境变量
