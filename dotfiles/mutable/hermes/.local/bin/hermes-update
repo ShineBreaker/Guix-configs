@@ -140,6 +140,52 @@ _ensure_managed_node() {
   fi
 }
 
+# --- 生成 hicolor 桌面图标（幂等；已部署则跳过）---
+# hermes.desktop 用 `Icon=hermes` 按名引用，靠 XDG 图标主题在 hicolor 下解析。
+# hermes 仓库只给单张 1024px 源图（apps/desktop/assets/icon.png），面板/任务栏
+# 请求的是 16~48 小尺寸，GTK 在指定尺寸目录找不到就解析失败 → 图标空白。
+# 故从源图批量生成 hicolor 标准尺寸。幂等：sentinel 尺寸存在即视为已部署，
+# hermes 升级不会重做（想强刷 logo：删 hicolor/*/apps/hermes.png 后重跑）。
+_install_hicolor_icon() {
+  local _icon_src="${CHECKOUT}/apps/desktop/assets/icon.png"
+  : "${XDG_DATA_HOME:=$HOME/.local/share}"
+  local _hicolor="${XDG_DATA_HOME}/icons/hicolor"
+  local _sentinel="${_hicolor}/48x48/apps/hermes.png"
+
+  # sentinel 在即跳过（图标名 hermes 唯一，不会与其它软件冲突）
+  [[ -f "${_sentinel}" ]] && return 0
+
+  if [[ ! -f "${_icon_src}" ]]; then
+    echo "  ⚠ 图标源缺失（${_icon_src}），跳过图标生成" >&2
+    return 0
+  fi
+  if ! python3 -c 'import PIL' >/dev/null 2>&1; then
+    echo "  ⚠ Pillow 不可用，跳过图标生成（python3 -m pip install Pillow）" >&2
+    return 0
+  fi
+
+  echo "→ 生成 hicolor 桌面图标（源: ${_icon_src##*/}）..."
+  if python3 - "${_icon_src}" "${_hicolor}" <<'PYEOF'
+import sys, os
+from PIL import Image
+try:
+    resample = Image.Resampling.LANCZOS
+except AttributeError:          # Pillow < 9.1
+    resample = Image.LANCZOS
+src, hicolor = sys.argv[1], sys.argv[2]
+img = Image.open(src).convert("RGBA")
+for s in (16, 32, 48, 128, 256, 512):
+    d = os.path.join(hicolor, "%dx%d/apps" % (s, s))
+    os.makedirs(d, exist_ok=True)
+    img.resize((s, s), resample).save(os.path.join(d, "hermes.png"))
+PYEOF
+  then
+    echo "  ✓ hicolor 图标已生成（16/32/48/128/256/512）"
+  else
+    echo "  ⚠ 图标生成失败" >&2
+  fi
+}
+
 # ============================================================
 # 路径 A：首次安装（checkout 不存在）
 # ============================================================
@@ -186,6 +232,8 @@ if [[ ! -d "${CHECKOUT}/.git" ]]; then
   # package.json 的 engines.npm 约束 → backend dashboard 启动即 EBADENGINE）。
   _ensure_managed_node
 
+  _install_hicolor_icon
+
   "${VENV}/bin/hermes" --version
   echo ""
   echo "首次安装完成。"
@@ -229,6 +277,9 @@ fi
 # 构建 web UI。--check 只读探测时也查一下（无害，秒过当存在），让 --check 能发现
 # managed node 缺失的诊断信号。
 _ensure_managed_node
+
+# --- B.2.6 补桌面图标（官方 update 不碰 hicolor）---
+_install_hicolor_icon
 
 # --- B.3 委托官方 update（透传所有参数）---
 # 官方接管：pre-update backup → fetch → stash → pull（syntax guard + rollback）
