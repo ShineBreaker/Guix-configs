@@ -19,13 +19,13 @@
              (guix scripts system))
 
 (match (command-line)
-  ((_ dst . args)
-   (let* ((output
+  [(_ dst . args)
+   (let* ([output
            (with-output-to-string
              (lambda ()
-               (apply guix-system "image" args))))
-          (src (string-trim-both output)))
+               (apply guix-system "image" args)))]
+          [src (string-trim-both output)])
      (when (file-exists? src)
        (mkdir-p (dirname dst))
        (copy-file src dst)
-       (make-file-writable dst)))))
+       (make-file-writable dst)))])

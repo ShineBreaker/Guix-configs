@@ -69,7 +69,7 @@
 
 ;; 判断某个环境变量是否"被设置且非空"。blue --dry-run 之外的若干开关用它读。
 (define (%env-set? name)
-  (let ((value (getenv name)))
+  (let ([value (getenv name)])
     (and value (not (string-null? value)))))
 
 ;;; ============================================================
@@ -91,15 +91,15 @@
 ;;   * 真跑时若退出码非 0，立即 error 中止——避免"静默失败后继续 reconfigure"。
 (define* (%run command #:key real?)
   (match command
-    ((program . args)
+    [(program . args)
      (if (and (dry-build?) (not real?))
          (begin
            (format #t "\t[预演]\t~a ~{~a ~}~%" program args)
            #t)
-         (let ((status (popen program args)))
+         (let ([status (popen program args)])
            (unless (zero? status)
              (error (format #f "命令执行失败 (~a): ~s" status command)))
-           #t)))))
+           #t))]))
 
 ;; ---- %guix：锁定频道的 guix 包装 ----------------------------------------
 ;;
@@ -107,9 +107,9 @@
 ;; 否则用的频道版本和 channel.lock 不一致，构建结果不可复现。
 ;; `#:sudo? #t' 时在最前面加 sudo（system reconfigure 需要 root）。
 (define* (%guix args #:key (channels %channel-lock) sudo?)
-  (let ((command `("guix" "time-machine"
+  (let ([command `("guix" "time-machine"
                    ,(string-append "--channels=" channels) "--"
-                   ,@args)))
+                   ,@args)])
     (%run (if sudo? (cons "sudo" command) command))))
 
 ;; ---- %guix-command：构造（但不执行）一条锁定频道的 guix 命令 ------------
@@ -144,8 +144,8 @@
 ;; 任何中途异常（thunk 抛错、rename 失败）都清理临时文件，绝不让目标
 ;; 文件停留在"写一半"状态。config.org / channel.lock 等关键文件都用它。
 (define (%write-file-atomically file thunk)
-  (let* ((template (string-append file ".XXXXXX"))
-         (port (mkstemp! template)))
+  (let* ([template (string-append file ".XXXXXX")]
+         [port (mkstemp! template)])
     (with-throw-handler #t
                         (lambda ()
                           (thunk port)
@@ -158,7 +158,7 @@
 
 ;; 追加一段文本到文件末尾（用于把 %system / %home 追加到 config.scm）。
 (define (%append-to-file file text)
-  (let ((port (open-file file "a")))
+  (let ([port (open-file file "a")])
     (display text port)
     (close-port port)))
 
@@ -166,9 +166,9 @@
 ;; 注意：command 是单个 shell 字符串（含管道/重定向），由调用方自行 quote。
 ;; 退出码非 0 时 error。用于 update（读 guix describe 输出）等场景。
 (define (%pipe->string command)
-  (let* ((pipe (open-input-pipe command))
-         (content (get-string-all pipe))
-         (status (close-pipe pipe)))
+  (let* ([pipe (open-input-pipe command)]
+         [content (get-string-all pipe)]
+         [status (close-pipe pipe)])
     (unless (zero? (status:exit-val status))
       (error (format #f "命令执行失败 (~a): ~a"
                      (status:exit-val status) command)))
@@ -178,9 +178,9 @@
 ;; 与 %pipe->string 的区别：分行返回，便于逐行解析（密钥扫描结果用）。
 ;; 这里【不检查退出码】，因为密钥扫描依赖 grep 的非 0 退出码语义。
 (define (%pipe->lines command)
-  (let ((pipe (open-input-pipe command)))
-    (let loop ((lines '()))
-      (let ((line (read-line pipe)))
+  (let ([pipe (open-input-pipe command)])
+    (let loop ([lines '()])
+      (let ([line (read-line pipe)])
         (if (eof-object? line)
             (begin
               (close-pipe pipe)
@@ -231,7 +231,7 @@
 (define-blue-method (ask-build-manifest (this <org-config>)
                                         (inputs <list>)
                                         (output <string>))
-  (let ((input (first inputs)))
+  (let ([input (first inputs)])
     (make-build-manifest
      (string-append "编织\t" output)            ; 显示用标题
      (lambda ()                                  ; 实际执行体
@@ -266,50 +266,86 @@
 ;;   * prepare-config（本节下方，rebuild/home 用）：对完整 tangle 出的
 ;;     config.scm 调 check-paren-balance，作 reconfigure 前的整体兜底。
 
-;; 数 port 里的左/右括号数量，返回 (opens . closes)。
+;; 数 port 里的圆括号和方括号，返回 5 元素向量：
+;;   #(paren-open paren-close bracket-open bracket-close mismatch?)
+;; Guile reader 要求 [ ] / ( ) 严格配对，混搭（如 [ 配 )）是语法错误。
+;; 用一个栈记录每个开括号的类型，遇到闭括号时检查是否与栈顶匹配。
 (define (count-parens port)
-  (let loop ((char (read-char port)) (opens 0) (closes 0))
+  (let loop ([char (read-char port)]
+             [popen 0] [pclose 0]      ; 圆括号计数
+             [bopen 0] [bclose 0]      ; 方括号计数
+             [stack '()]               ; 括号类型栈：'paren 或 'bracket
+             [mismatch? #f])
     (cond
-     ((eof-object? char) (cons opens closes))
-     ((eq? char #\() (loop (read-char port) (+ opens 1) closes))
-     ((eq? char #\)) (loop (read-char port) opens (+ closes 1)))
+     [mismatch?
+      (vector popen pclose bopen bclose #t)]
+     [(eof-object? char)
+      (vector popen pclose bopen bclose #f)]
+     ;; 圆括号
+     [(eq? char #\()
+      (loop (read-char port) (+ popen 1) pclose bopen bclose
+            (cons 'paren stack) #f)]
+     [(eq? char #\))
+      (match stack
+        [('paren . rest)
+         (loop (read-char port) popen (+ pclose 1) bopen bclose rest #f)]
+        [_
+         ;; 栈顶不是圆括号（空栈或栈顶是方括号）→ 类型错配
+         (vector popen pclose bopen bclose #t)])]
+     ;; 方括号
+     [(eq? char #\[)
+      (loop (read-char port) popen pclose (+ bopen 1) bclose
+            (cons 'bracket stack) #f)]
+     [(eq? char #\])
+      (match stack
+        [('bracket . rest)
+         (loop (read-char port) popen pclose bopen (+ bclose 1) rest #f)]
+        [_
+         (vector popen pclose bopen bclose #t)])]
      ;; 双引号字符串：读到下一个未转义的 " 为止
-     ((eq? char #\")
-      (let skip-string ((char (read-char port)))
+     [(eq? char #\")
+      (let skip-string ([c (read-char port)])
         (cond
-         ((eof-object? char) (cons opens closes))
-         ((eq? char #\") (loop (read-char port) opens closes))
-         ((eq? char #\\) (read-char port) (skip-string (read-char port)))
-         (else (skip-string (read-char port))))))
+         [(eof-object? c)
+          (vector popen pclose bopen bclose mismatch?)]
+         [(eq? c #\") (loop (read-char port) popen pclose bopen bclose
+                            stack mismatch?)]
+         [(eq? c #\\) (read-char port) (skip-string (read-char port))]
+         [else (skip-string (read-char port))]))]
      ;; 分号行注释：读到行尾
-     ((eq? char #\;)
-      (let skip-comment ((char (read-char port)))
+     [(eq? char #\;)
+      (let skip-comment ([c (read-char port)])
         (cond
-         ((eof-object? char) (cons opens closes))
-         ((eq? char #\newline) (loop (read-char port) opens closes))
-         (else (skip-comment (read-char port))))))
-     (else (loop (read-char port) opens closes)))))
+         [(eof-object? c)
+          (vector popen pclose bopen bclose mismatch?)]
+         [(eq? c #\newline) (loop (read-char port) popen pclose bopen bclose
+                                  stack mismatch?)]
+         [else (skip-comment (read-char port))]))]
+     [else (loop (read-char port) popen pclose bopen bclose
+                 stack mismatch?)])))
 
 ;; 检查单个文件的括号平衡。返回 #t/#f，并打印 [OK]/[ERROR] 结果。
 (define (check-paren-balance file)
   (call-with-input-file file
     (lambda (port)
       (match (count-parens port)
-        ((opens . closes)
-         (cond
-          ((= opens closes)
-           (format #t "[OK] 括号平衡: ~a 对 (~a)~%" opens file)
-           #t)
-          ((> opens closes)
-           (format (current-error-port)
-                   "[ERROR] 多余 ~a 个左括号 (open=~a close=~a)~%"
-                   (- opens closes) opens closes)
-           #f)
-          (else
-           (format (current-error-port)
-                   "[ERROR] 多余 ~a 个右括号 (open=~a close=~a)~%"
-                   (- closes opens) opens closes)
-           #f)))))))
+        [#(popen pclose bopen bclose mismatch?)
+         (let ([p-balanced? (= popen pclose)]
+               [b-balanced? (= bopen bclose)])
+           (cond
+            [mismatch?
+             (format (current-error-port)
+                     "[ERROR] 括号类型错配 ([配) 或 (配])：(~a)~%" file)
+             #f]
+            [(and p-balanced? b-balanced?)
+             (format #t "[OK] 括号平衡: ( ~a 对 ) + [ ~a 对 ] (~a)~%"
+                     popen bopen file)
+             #t]
+            [(or (not p-balanced?) (not b-balanced?))
+             (format (current-error-port)
+                     "[ERROR] 括号不平衡 (~a): ( open=~a close=~a ) [ open=~a close=~a ]~%"
+                     file popen pclose bopen bclose)
+             #f]))]))))
 
 ;; `blue check` 触发时调这个：逐块 + 周边 scm 括号检查，全过则写占位标记。
 ;; 不再依赖 tangle（不消费 inputs），直接解析 config.org 的命名块。
@@ -348,7 +384,7 @@
 ;; dry-run 时改成 `guix <subsystem> build --dry-run`（只验证不写入）。
 ;; 成功后清掉 tmp/ 中间产物。`after' 是成功后的回调（rebuild 用它跑 locate）。
 (define* (apply-config subsystem tail-expression #:key sudo? after)
-  (let ((scm (prepare-config tail-expression)))
+  (let ([scm (prepare-config tail-expression)])
     (if (dry-build?)
         (begin
           (format #t "[预演] 验证 ~a 配置~%" subsystem)
@@ -470,7 +506,7 @@
 ;; 把一段 elisp 写到 tmp/<name>.el，返回文件路径。block-show/block-replace 用。
 (define (write-temp-elisp name body)
   (mkdir-p %tmp-dir)
-  (let ((file (string-append %tmp-dir "/" name)))
+  (let ([file (string-append %tmp-dir "/" name)])
     (call-with-output-file file
       (lambda (port) (display body port)))
     file))
@@ -491,43 +527,43 @@
 ;; 返回 ((name lang noweb body) ...) 列表。body 已去掉首尾换行。
 ;; blue check 用它拿到每个块的 body 做逐块括号检查。
 (define (%extract-all-blocks)
-  (let* ((script (write-temp-elisp "block-list.el" block-list-el))
-         (output (%run-elisp-script script '())))
-    (let loop ((lines (string-split output #\newline))
-               (current #f)            ; 当前记录的 (name lang noweb)
-               (body-acc '())          ; body 行累积（逆序）
-               (result '()))
+  (let* ([script (write-temp-elisp "block-list.el" block-list-el)]
+         [output (%run-elisp-script script '())])
+    (let loop ([lines (string-split output #\newline)]
+               [current #f]            ; 当前记录的 (name lang noweb)
+               [body-acc '()]          ; body 行累积（逆序）
+               [result '()])
       (cond
        ;; 输入耗尽：返回结果（末尾应有空行，current 应已是 #f）
-       ((null? lines)
-        (reverse result))
+       [(null? lines)
+        (reverse result)]
        ;; 记录头 >>>name=...	lang=...	noweb=...
-       ((string-prefix? ">>>" (car lines))
-        (let* ((header (substring (car lines) 3)) ; 去掉 ">>>"
-               (fields (map (lambda (field)
+       [(string-prefix? ">>>" (car lines))
+        (let* ([header (substring (car lines) 3)] ; 去掉 ">>>"
+               [fields (map (lambda (field)
                               (cons (car (string-split field #\=))
                                     (string-join
                                      (cdr (string-split field #\=)) "=")))
-                            (string-split header #\tab))))
+                            (string-split header #\tab))])
           (loop (cdr lines)
                 (list (or (assoc-ref fields "name") "")
                       (or (assoc-ref fields "lang") "")
                       (or (assoc-ref fields "noweb") ""))
                 '()
-                result)))
+                result))]
        ;; 记录结束 <<<：收尾当前记录，body 行逆序拼回字符串
-       ((string=? "<<<" (car lines))
+       [(string=? "<<<" (car lines))
         (if current
             (loop (cdr lines) #f '()
                   (cons (append current
                                 (list (string-join (reverse body-acc) "\n")))
                         result))
-            (loop (cdr lines) #f '() result)))
+            (loop (cdr lines) #f '() result))]
        ;; body 行：累积（仅在记录内才有意义；记录外的行丢弃）
-       (else
+       [else
         (loop (cdr lines) current
               (if current (cons (car lines) body-acc) body-acc)
-              result))))))
+              result)]))))
 
 ;; ---- 逐块 + 周边 scm 括号检查（blue check 的核心） -----------------------
 ;;
@@ -546,46 +582,48 @@
 ;; main 块也检查——<<ref>> 占位本身括号平衡，能抓 main 自身的括号错。
 (define (%check-block-parens block)
   (match block
-    ((name lang noweb body)
+    [(name lang noweb body)
      (if (string=? lang "scheme")
          (call-with-input-string body
                                  (lambda (port)
                                    (match (count-parens port)
-                                     ((opens . closes)
-                                      (cond
-                                       ((= opens closes)
-                                        (format #t "[OK] 块 ~a: ~a 对~%" name opens)
-                                        #t)
-                                       ((> opens closes)
-                                        (format (current-error-port)
-                                                "[ERROR] 块 ~a: 多余 ~a 个左括号 (open=~a close=~a)~%"
-                                                name (- opens closes) opens closes)
-                                        #f)
-                                       (else
-                                        (format (current-error-port)
-                                                "[ERROR] 块 ~a: 多余 ~a 个右括号 (open=~a close=~a)~%"
-                                                name (- closes opens) opens closes)
-                                        #f))))))
+                                     [#(popen pclose bopen bclose mismatch?)
+                                      (let ([p-balanced? (= popen pclose)]
+                                            [b-balanced? (= bopen bclose)])
+                                        (cond
+                                         [mismatch?
+                                          (format (current-error-port)
+                                                  "[ERROR] 块 ~a: 括号类型错配 ([配) 或 (配])~%" name)
+                                          #f]
+                                         [(and p-balanced? b-balanced?)
+                                          (format #t "[OK] 块 ~a: ( ~a 对 ) + [ ~a 对 ]~%"
+                                                  name popen bopen)
+                                          #t]
+                                         [else
+                                          (format (current-error-port)
+                                                  "[ERROR] 块 ~a: 不平衡 ( open=~a close=~a ) [ open=~a close=~a ]~%"
+                                                  name popen pclose bopen bclose)
+                                          #f]))])))
          (begin
            (format #t "[SKIP] 块 ~a (~a)~%" name lang)
-           #t)))))
+           #t))]))
 
 ;; 逐块检查 config.org + 整体检查周边 scm 文件。全部通过返回 #t，任一失败 #f。
 ;; 失败不立即中止——继续跑完，让用户一次看到所有错误。
 (define (%check-config-blocks)
-  (let* ((blocks (%extract-all-blocks))
-         (scheme-count (length (filter (lambda (b) (string=? (cadr b) "scheme"))
-                                       blocks)))
-         (block-results (map %check-block-parens blocks))
-         (scm-results
+  (let* ([blocks (%extract-all-blocks)]
+         [scheme-count (length (filter (lambda (b) (string=? (cadr b) "scheme"))
+                                       blocks))]
+         [block-results (map %check-block-parens blocks)]
+         [scm-results
           (map (lambda (file)
                  (if (file-exists? file)
                      (check-paren-balance file)
                      (begin
                        (format (current-error-port) "[ERROR] 文件不存在: ~a~%" file)
                        #f)))
-               %peripheral-scm-files)))
-    (let ((all-ok? (every identity (append block-results scm-results))))
+               %peripheral-scm-files)])
+    (let ([all-ok? (every identity (append block-results scm-results))])
       (if all-ok?
           (format #t "[OK] 全部通过: ~a 个 scheme 块 + ~a 个周边文件~%"
                   scheme-count (length %peripheral-scm-files))
@@ -646,11 +684,11 @@
 
 ;; 统计 dir 下参与扫描的文件数（仅用于扫描结束后的提示信息）。
 (define (%secret-count-files dir)
-  (let ((lines
+  (let ([lines
          (%pipe->lines
           (string-append (%secret-grep-options "grep -rIl")
                          " -e '.' " (%shell-quote dir)
-                         " 2>/dev/null | wc -l"))))
+                         " 2>/dev/null | wc -l"))])
     (if (null? lines)
         0
         (or (string->number (string-trim-both (first lines))) 0))))
@@ -658,27 +696,27 @@
 ;; 扫描 dir。fail?=真 时发现密钥就 error；extra-patterns 是用户额外传入的正则。
 ;; 返回 #t（无命中或仅警告）/ 抛错（fail? 且有命中）。
 (define (scan-secrets dir fail? extra-patterns)
-  (let ((patterns (append %secret-patterns
+  (let ([patterns (append %secret-patterns
                           (map (cut cons "user-pattern" <>)
-                               extra-patterns)))
-        (found 0)
-        (file-count (%secret-count-files dir)))
+                               extra-patterns))]
+        [found 0]
+        [file-count (%secret-count-files dir)])
     (for-each
      (match-lambda
        ((name . pattern)
-        (let ((hits
+        (let ([hits
                (%pipe->lines
                 (string-append (%secret-grep-options "grep -HrnIE")
                                " -e " (%shell-quote pattern)
-                               " " (%shell-quote dir) " 2>/dev/null"))))
+                               " " (%shell-quote dir) " 2>/dev/null"))])
           (for-each
            (lambda (raw)
-             (let ((match (string-match "^([^:]+):([0-9]+):(.*)$" raw)))
+             (let ([match (string-match "^([^:]+):([0-9]+):(.*)$" raw)])
                (when match
-                 (let* ((path (match:substring match 1))
-                        (lineno (match:substring match 2))
-                        (content (match:substring match 3))
-                        (size (stat:size (stat path))))
+                 (let* ([path (match:substring match 1)]
+                        [lineno (match:substring match 2)]
+                        [content (match:substring match 3)]
+                        [size (stat:size (stat path))])
                    ;; 只报小于 1MB 的文件，避免误报二进制/大文件
                    (when (< size 1048576)
                      (format #t "[HINT] ~a:~a:~a:~a~%"
@@ -690,14 +728,14 @@
            hits))))
      patterns)
     (cond
-     ((zero? found)
+     [(zero? found)
       (format #t "[OK] 未发现密钥，已扫描 ~a 个文件~%" file-count)
-      #t)
-     (fail?
-      (error (format #f "密钥扫描: 发现 ~a 处密钥" found)))
-     (else
+      #t]
+     [fail?
+      (error (format #f "密钥扫描: 发现 ~a 处密钥" found))]
+     [else
       (format #t "[WARN] 密钥扫描: 发现 ~a 处疑似密钥~%" found)
-      #t))))
+      #t])))
 
 ;;; ============================================================
 ;;; §6  目录树生成器（structor 命令）
@@ -733,7 +771,7 @@
 ;; 枚举仓库内所有需要维护目录树的 AGENTS.md/README.md（返回相对路径）。
 ;; 排除 .git / disable / tmp / .blue-store / .agents 下的文件。
 (define (%structor-targets)
-  (let ((root %repo-root))
+  (let ([root %repo-root])
     (filter-map
      (lambda (path)
        (and (file-exists? path)
@@ -757,15 +795,15 @@
 ;; scope）。--cached 含已跟踪文件，--others 含未跟踪文件，--exclude-standard
 ;; 应用 .gitignore。退出码非 0（非 git 仓库）→ error 中止。
 (define (%structor-git-visible-paths scope)
-  (let* ((pipe (open-input-pipe
+  (let* ([pipe (open-input-pipe
                 (string-append "git -C " (%shell-quote scope)
-                               " ls-files --cached --others --exclude-standard")))
-         (paths (let loop ((lines '()))
-                  (let ((line (read-line pipe)))
+                               " ls-files --cached --others --exclude-standard"))]
+         [paths (let loop ([lines '()])
+                  (let ([line (read-line pipe)])
                     (if (eof-object? line)
                         (reverse lines)
-                        (loop (cons line lines))))))
-         (status (close-pipe pipe)))
+                        (loop (cons line lines)))))]
+         [status (close-pipe pipe)])
     (unless (zero? (status:exit-val status))
       (error (format #f "structor: 无法枚举 git 可见路径 (~a): ~a"
                      (status:exit-val status) scope)))
@@ -775,7 +813,7 @@
 ;; 可见 ⟺ visible 中存在等于 rel、或以 `<rel>/` 为前缀的路径（后者让"git
 ;; 只列了子文件"的目录也被判为可见）。
 (define (%structor-visible? rel visible)
-  (let ((prefix (string-append rel "/")))
+  (let ([prefix (string-append rel "/")])
     (any (lambda (p) (or (string=? p rel) (string-prefix? prefix p))) visible)))
 
 ;; 列出 dir 的直接子条目，目录在前文件在后，各自字母序。返回 ((is-dir? . name) ...)。
@@ -783,18 +821,18 @@
 ;; 决定尾斜杠与递归（submodule gitlink 目录在文件系统层是目录，正确显示为目录）。
 ;; rel-of 把 dir 内的 name 翻译成相对 scope 的路径，供可见性判断用。
 (define (%structor-children dir scope visible rel-of)
-  (let* ((entries (scandir dir (negate %structor-skip?)))
-         (visible-entries
+  (let* ([entries (scandir dir (negate %structor-skip?))]
+         [visible-entries
           (filter (lambda (name)
                     (%structor-visible? (rel-of name) visible))
-                  entries))
-         (typed (map (lambda (name)
+                  entries)]
+         [typed (map (lambda (name)
                        (cons (file-is-directory?
                               (string-append dir "/" name))
                              name))
-                     visible-entries))
-         (dirs (filter car typed))
-         (files (filter (compose not car) typed)))
+                     visible-entries)]
+         [dirs (filter car typed)]
+         [files (filter (compose not car) typed)])
     (append (sort dirs (lambda (a b) (string<? (cdr a) (cdr b))))
             (sort files (lambda (a b) (string<? (cdr a) (cdr b)))))))
 
@@ -802,27 +840,27 @@
 ;; rel-of 翻译当前 dir 内条目名 → 相对 scope 路径（供 %structor-children
 ;; 做可见性判断）；每下钻一层 rel-of 套一层子目录前缀。
 (define (%structor-render dir scope visible max-depth depth prefix rel-of)
-  (let* ((entries (%structor-children dir scope visible rel-of))
-         (count (length entries)))
-    (let loop ((index 0) (lines '()))
+  (let* ([entries (%structor-children dir scope visible rel-of)]
+         [count (length entries)])
+    (let loop ([index 0] [lines '()])
       (if (>= index count)
           (reverse lines)
-          (let* ((entry (list-ref entries index))
-                 (is-dir? (car entry))
-                 (name (cdr entry))
-                 (path (string-append dir "/" name))
-                 (last? (= (+ index 1) count))
-                 (connector (if last? "└── " "├── "))
-                 (child-prefix (string-append prefix
-                                              (if last? "    " "│   ")))
-                 (line (string-append prefix connector name
-                                      (if is-dir? "/" "")))
-                 (children (if (and is-dir? (< (+ depth 1) max-depth))
+          (let* ([entry (list-ref entries index)]
+                 [is-dir? (car entry)]
+                 [name (cdr entry)]
+                 [path (string-append dir "/" name)]
+                 [last? (= (+ index 1) count)]
+                 [connector (if last? "└── " "├── ")]
+                 [child-prefix (string-append prefix
+                                              (if last? "    " "│   "))]
+                 [line (string-append prefix connector name
+                                      (if is-dir? "/" ""))]
+                 [children (if (and is-dir? (< (+ depth 1) max-depth))
                                (%structor-render path scope visible max-depth
                                                  (+ depth 1) child-prefix
                                                  (lambda (n)
                                                    (rel-of (string-append name "/" n))))
-                               '())))
+                               '())])
             (loop (+ index 1)
                   (append (reverse children) (cons line lines))))))))
 
@@ -830,7 +868,7 @@
 ;; `<repo>/.`，basename 返回 "."，退一阶用 (basename (dirname dir))（如
 ;; "Guix-configs"）。其他 scope 行为不变。
 (define (%structor-root-label dir)
-  (let ((base (basename dir)))
+  (let ([base (basename dir)])
     (if (string=? base ".")
         (basename (dirname dir))
         base)))
@@ -844,57 +882,57 @@
 ;; 从 AGENTS.md 的正文 content 里解析第一个 structor begin 标记带的 depth。
 ;; 返回整数 depth 或 #f（无标记 / 标记无 depth 参数）。
 (define (%structor-parse-depth content)
-  (let loop ((lines (string-split content #\newline)))
+  (let loop ([lines (string-split content #\newline)])
     (match lines
-      (() #f)
-      ((line . rest)
-       (let ((m (regexp-exec %structor-depth-regex (string-trim-both line))))
+      [() #f]
+      [(line . rest)
+       (let ([m (regexp-exec %structor-depth-regex (string-trim-both line))])
          (if m
-             (let ((d (match:substring m 2)))
+             (let ([d (match:substring m 2)])
                (and d (string->number d)))
-             (loop rest)))))))
+             (loop rest)))])))
 
 ;; 在 AGENTS.md 的正文 content 里，用 replacement 替换 structor 标记之间的
 ;; 内容。返回新内容（若没找到标记则返回 #f 表示无需改动）。
 ;; begin 行用 %structor-depth-regex 匹配（兼容 `depth=N` 写法）；end 行精确匹配。
 (define (%replace-structor-block content replacement)
-  (let loop ((lines (string-split content #\newline))
-             (out '())
-             (state 'normal)
-             (changed? #f))
+  (let loop ([lines (string-split content #\newline)]
+             [out '()]
+             [state 'normal]
+             [changed? #f])
     (match lines
-      (()
-       (and changed? (string-join (reverse out) "\n")))
-      ((line . rest)
+      [()
+       (and changed? (string-join (reverse out) "\n"))]
+      [(line . rest)
        (cond
         ;; 进入标记：把整段替换内容塞进输出，状态切到 in-block
-        ((and (eq? state 'normal)
+        [(and (eq? state 'normal)
               (regexp-exec %structor-depth-regex (string-trim-both line)))
-         (loop rest (append (reverse replacement) out) 'in-block #t))
+         (loop rest (append (reverse replacement) out) 'in-block #t)]
         ;; 离开标记：状态切回 normal（标记行本身被丢弃）
-        ((and (eq? state 'in-block)
+        [(and (eq? state 'in-block)
               (string=? (string-trim-both line) %structor-marker-end))
-         (loop rest out 'normal changed?))
+         (loop rest out 'normal changed?)]
         ;; normal 态：原样保留
-        ((eq? state 'normal)
-         (loop rest (cons line out) state changed?))
+        [(eq? state 'normal)
+         (loop rest (cons line out) state changed?)]
         ;; in-block 态：丢弃原标记区内容
-        (else
-         (loop rest out state changed?)))))))
+        [else
+         (loop rest out state changed?)])])))
 
 ;; 对每个 target AGENTS.md 渲染并写回目录树。dry?=#t 时只打印不写。
 ;; depth 作为全局回退默认；标记内 `depth=N`（经 %structor-parse-depth）优先。
 (define* (run-structor targets #:key (depth 4) dry?)
   (for-each
    (lambda (rel-path)
-     (let* ((file (string-append %repo-root "/" rel-path))
-            (dir (string-append %repo-root "/" (dirname rel-path))))
+     (let* ([file (string-append %repo-root "/" rel-path)]
+            [dir (string-append %repo-root "/" (dirname rel-path))])
        (when (file-exists? file)
-         (let* ((content (call-with-input-file file get-string-all))
-                (doc-depth (%structor-parse-depth content))
-                (eff-depth (or doc-depth depth))
-                (visible (%structor-git-visible-paths dir)))
-           (let* ((replacement
+         (let* ([content (call-with-input-file file get-string-all)]
+                [doc-depth (%structor-parse-depth content)]
+                [eff-depth (or doc-depth depth)]
+                [visible (%structor-git-visible-paths dir)])
+           (let* ([replacement
                    (append
                     (list (format #f "<!-- structor:begin depth=~a -->" eff-depth)
                           ""
@@ -902,8 +940,8 @@
                           ""
                           "```")
                     (%structor-tree dir dir visible eff-depth)
-                    (list "```" "" %structor-marker-end)))
-                  (new-content (%replace-structor-block content replacement)))
+                    (list "```" "" %structor-marker-end))]
+                  [new-content (%replace-structor-block content replacement)])
              (if new-content
                  (begin
                    (format #t "[~a] ~a (scan=~a depth=~a~a)~%"
@@ -933,18 +971,18 @@
 ;; 把 --adopt/--restow/--delete 模式名翻译成 stow 命令行 flag。
 (define (%stow-flag mode)
   (case (string->symbol mode)
-    ((adopt) "--adopt")
-    ((restow) "--restow")
-    ((delete) "--delete")
-    (else "")))
+    [(adopt) "--adopt"]
+    [(restow) "--restow"]
+    [(delete) "--delete"]
+    [else ""]))
 
 ;; 模式名翻译成中文动词（日志显示用）。
 (define (%stow-verb mode)
   (case (string->symbol mode)
-    ((adopt) "收养")
-    ((restow) "重建")
-    ((delete) "撤销")
-    (else "部署")))
+    [(adopt) "收养"]
+    [(restow) "重建"]
+    [(delete) "撤销"]
+    [else "部署"]))
 
 ;; 标记文件名：放在 dotfiles/mutable/<PKG>/.stow-folding 即对该包启用 tree folding
 ;; （目标目录整目录折叠成单条软链）。无标记的包走默认 --no-folding（真实目录 +
@@ -959,11 +997,11 @@
 ;; --ignore=\.stow-folding$ 始终带上，确保标记文件本身永不部署到 $HOME（否则多个
 ;; 包的同名标记会冲突，且把无意义的元文件塞进用户目录）。
 (define (%stow-package pkg mode home)
-  (let ((pkg-dir (string-append %stow-dir "/" pkg)))
+  (let ([pkg-dir (string-append %stow-dir "/" pkg)])
     (unless (file-exists? pkg-dir)
       (error (format #f "stow 包不存在: ~a" pkg-dir)))
-    (let* ((folding? (%stow-folding? pkg))
-           (flag (%stow-flag mode)))
+    (let* ([folding? (%stow-folding? pkg)]
+           [flag (%stow-flag mode)])
       (format #t "[~a] ~a -> ~a (~a)~%"
               (%stow-verb mode) pkg home
               (if folding? "folding" "no-folding"))
@@ -990,18 +1028,18 @@
 ;; 返回 alist：((mode . "adopt"|"restow"|"delete"|"stow") (packages . (...)))
 ;; 裸参数视为包名；--adopt/--restow/--delete 设置模式。
 (define (parse-stow-args args)
-  (let loop ((rest args) (mode "stow") (packages '()))
+  (let loop ([rest args] [mode "stow"] [packages '()])
     (match rest
-      (()
-       `((mode . ,mode) (packages . ,packages)))
-      (("--adopt" . rest)
-       (loop rest "adopt" packages))
-      (("--restow" . rest)
-       (loop rest "restow" packages))
-      (("--delete" . rest)
-       (loop rest "delete" packages))
-      ((pkg . rest)
-       (loop rest mode (append packages (list pkg)))))))
+      [()
+       `((mode . ,mode) (packages . ,packages))]
+      [("--adopt" . rest)
+       (loop rest "adopt" packages)]
+      [("--restow" . rest)
+       (loop rest "restow" packages)]
+      [("--delete" . rest)
+       (loop rest "delete" packages)]
+      [(pkg . rest)
+       (loop rest mode (append packages (list pkg)))])))
 
 ;;; ============================================================
 ;;; §8  所有命令定义
@@ -1063,7 +1101,7 @@
 
 ;; 按类别分组打印全部自写指令（运行时引用，命令对象此时均已定义）。
 (define (print-command-list)
-  (let ((categories
+  (let ([categories
          `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
            ("编辑 (editing)" ,block-show-command ,block-replace-command)
            ("Guix 频道 (guix)" ,pull-command ,update-command)
@@ -1072,7 +1110,7 @@
            ("Nix 备用 (nix)" ,nix-command ,nix-init-command ,nix-update-command)
            ("Stow (stow)" ,stow-command ,stow-all-command)
            ("验证 (validation)" ,secret-scan-command)
-           ("帮助 (help)" ,list-command))))
+           ("帮助 (help)" ,list-command))])
     (display "本项目自写指令：\n")
     (for-each
      (lambda (cat)
@@ -1125,7 +1163,7 @@
    (category 'deployment)
    (synopsis "将系统配置安装到 /mnt")
    (help "将 operating-system 表安装到 /mnt。"))
-  (let ((scm (prepare-config "%system")))
+  (let ([scm (prepare-config "%system")])
     (format #t "正在将系统安装到 /mnt~%")
     (%guix `("system" "init" ,scm "/mnt") #:sudo? #t)
     (false-if-exception (delete-file-recursively %tmp-dir))))
@@ -1148,13 +1186,13 @@
   (tangle-config)
   ;; 2) 遍历变体，逐个调 guix repl 跑 build-image.scm
   (mkdir-p (%live-iso-output-dir))
-  (let ((scm (string-append %tmp-dir "/live-iso.scm")))
+  (let ([scm (string-append %tmp-dir "/live-iso.scm")])
     (every
      (cut eq? #t <>)
      (map
       (lambda (variant)
-        (let* ((iso-name (%live-iso-filename variant))
-               (iso-path (string-append (%live-iso-output-dir) "/" iso-name)))
+        (let* ([iso-name (%live-iso-filename variant)]
+               [iso-path (string-append (%live-iso-output-dir) "/" iso-name)])
           (format #t "\tBUILD ISO\t~a~%" iso-name)
           (%guix `("repl" "--" ,(%live-build-image-script)
                    ,iso-path ,scm
@@ -1173,14 +1211,14 @@
    (help "BLOCK
 从 source/config.org 提取 BLOCK 到 tmp/block-BLOCK.scm 并打印路径。"))
   (match arguments
-    ((name)
-     (let* ((script (write-temp-elisp "block-show.el" block-extract-el))
-            (out-file (string-append %tmp-dir "/block-" name ".scm"))
-            (content (%run-elisp-script script (list name))))
+    [(name)
+     (let* ([script (write-temp-elisp "block-show.el" block-extract-el)]
+            [out-file (string-append %tmp-dir "/block-" name ".scm")]
+            [content (%run-elisp-script script (list name))])
        (call-with-output-file out-file
          (lambda (port) (display content port)))
-       (format #t "~a~%" out-file)))
-    (_ (error "usage: blue block-show BLOCK"))))
+       (format #t "~a~%" out-file))]
+    [_ (error "usage: blue block-show BLOCK")]))
 
 ;; blue block-replace BLOCK BODY-FILE —— 用 BODY-FILE 替换 config.org 中的
 ;; BLOCK 块。若被替换的是 scheme 块，自动跑 tangle+括号检查验证；失败时
@@ -1192,14 +1230,14 @@
    (help "BLOCK BODY-FILE
 用 BODY-FILE 替换 source/config.org 中的 BLOCK。替换后自动验证 Scheme 代码块。"))
   (match arguments
-    ((name body-file)
-     (let* ((script (write-temp-elisp "block-replace.el" block-replace-el))
-            (out-org (string-append %tmp-dir "/config.org.new"))
-            (output (%run-elisp-script script
-                                       (list name body-file out-org)))
-            (lang (if (string-prefix? "lang=" output)
+    [(name body-file)
+     (let* ([script (write-temp-elisp "block-replace.el" block-replace-el)]
+            [out-org (string-append %tmp-dir "/config.org.new")]
+            [output (%run-elisp-script script
+                                       (list name body-file out-org))]
+            [lang (if (string-prefix? "lang=" output)
                       (string-trim-both (substring output 5))
-                      "")))
+                      "")])
        (%write-file-atomically
         %config-org
         (lambda (port)
@@ -1213,8 +1251,8 @@
              (format #t "[OK] 代码块 ~a 已替换并验证~%" name))
            (begin
              (false-if-exception (delete-file-recursively %tmp-dir))
-             (format #t "[OK] 代码块 ~a（~a）已替换~%" name lang)))))
-    (_ (error "usage: blue block-replace BLOCK BODY-FILE"))))
+             (format #t "[OK] 代码块 ~a（~a）已替换~%" name lang))))]
+    [_ (error "usage: blue block-replace BLOCK BODY-FILE")]))
 
 ;;; ---------- Guix 频道 ----------
 
@@ -1231,14 +1269,14 @@
   ((invoke "update")
    (category 'guix)
    (synopsis "更新 source/channel.lock 并提交"))
-  (let ((content
+  (let ([content
          (%pipe->string
           (string-join
            (map %shell-quote
                 (list "guix" "time-machine"
                       (string-append "--channels=" %channel-scm)
                       "--" "describe" "--format=channels"))
-           " "))))
+           " "))])
     (%write-file-atomically %channel-lock
                             (lambda (port) (display content port)))
     (%run `("git" "commit" "-S" "-m"
@@ -1318,9 +1356,9 @@
 刷新所有 structor 目标，或仅刷新指定的 AGENTS.md。
 可见性遵循 .gitignore（git ls-files 驱动）。
 深度优先级：标记内 `<!-- structor:begin depth=N -->` > ORG_STRUCTOR_DEPTH > 默认 4。"))
-  (let* ((depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4))
-         (targets (if (null? arguments) (%structor-targets) arguments))
-         (dry? (%env-set? "ORG_STRUCTOR_DRY")))
+  (let* ([depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4)]
+         [targets (if (null? arguments) (%structor-targets) arguments)]
+         [dry? (%env-set? "ORG_STRUCTOR_DRY")])
     (run-structor targets #:depth depth #:dry? dry?)))
 
 ;;; ---------- Nix 备用 ----------
@@ -1367,9 +1405,9 @@
    (help "[DIR] [PATTERN] ...
 扫描 DIR（默认为 dotfiles/immutable）。额外正则模式可作为后续参数传入。
 设置 GUIX_SECRET_SCAN_FAIL_ON_FIND=0 可仅警告而不报错。"))
-  (let* ((dir (if (null? arguments) "dotfiles/immutable" (first arguments)))
-         (extra (if (null? arguments) '() (cdr arguments)))
-         (fail? (not (string=? (or (getenv "GUIX_SECRET_SCAN_FAIL_ON_FIND") "1") "0"))))
+  (let* ([dir (if (null? arguments) "dotfiles/immutable" (first arguments))]
+         [extra (if (null? arguments) '() (cdr arguments))]
+         [fail? (not (string=? (or (getenv "GUIX_SECRET_SCAN_FAIL_ON_FIND") "1") "0"))])
     (scan-secrets dir fail? extra)))
 
 ;;; ---------- Stow ----------
@@ -1403,10 +1441,10 @@ folding 控制:
 
 源目录布局: dotfiles/mutable/PKG/.local/share/hermes/ -> ~/.local/share/hermes/
 改后用 git commit 备份。配合 dotfiles/immutable/ 的 Guix stow（仅读源）使用。"))
-  (let* ((parsed (parse-stow-args arguments))
-         (mode (assq-ref parsed 'mode))
-         (packages (assq-ref parsed 'packages))
-         (home (or (getenv "HOME") "/root")))
+  (let* ([parsed (parse-stow-args arguments)]
+         [mode (assq-ref parsed 'mode)]
+         [packages (assq-ref parsed 'packages)]
+         [home (or (getenv "HOME") "/root")])
     (when (null? packages)
       (error "stow: 至少需要一个包名（批量操作请用 blue stow-all）"))
     (unless (file-exists? %stow-dir)
@@ -1428,17 +1466,17 @@ folding 控制:
   blue stow-all --adopt      把 $HOME 下已有文件收养进各包源
 
 逐一执行，遇错即停（与 blue stow 一致）。语义同 blue stow，见其帮助。"))
-  (let* ((parsed (parse-stow-args arguments))
-         (mode (assq-ref parsed 'mode))
+  (let* ([parsed (parse-stow-args arguments)]
+         [mode (assq-ref parsed 'mode)]
          ;; --restow 等模式开关之外的裸参数视为包名过滤；为空则取全部。
-         (only (assq-ref parsed 'packages))
-         (home (or (getenv "HOME") "/root")))
+         [only (assq-ref parsed 'packages)]
+         [home (or (getenv "HOME") "/root")])
     (unless (file-exists? %stow-dir)
       (error (format #f "stow 源目录不存在: ~a" %stow-dir)))
-    (let ((packages
+    (let ([packages
            (if (null? only)
                (%stow-list-packages)
-               (filter (cut member <> only) (%stow-list-packages)))))
+               (filter (cut member <> only) (%stow-list-packages)))])
       (when (null? packages)
         (error "stow-all: dotfiles/mutable/ 下无可用包（或指定的包不存在）"))
       (format #t "stow-all: 共 ~a 个包，模式=~a~%" (length packages) mode)

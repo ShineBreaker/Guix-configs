@@ -562,17 +562,17 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                                              #~(begin
                                                  (use-modules (guix build
                                                                     utils))
-                                                 (let* ((pw (getpwnam #$username))
-                                                        (uid (passwd:uid pw))
-                                                        (gid (passwd:gid pw))
-                                                        (home (string-append
+                                                 (let* ([pw (getpwnam #$username)]
+                                                        [uid (passwd:uid pw)]
+                                                        [gid (passwd:gid pw)]
+                                                        [home (string-append
                                                                "/home/"
-                                                               #$username)))
+                                                               #$username)])
                                                    (for-each (lambda (dir)
-                                                               (let ((path (string-append
+                                                               (let ([path (string-append
                                                                             home
                                                                             "/"
-                                                                            dir)))
+                                                                            dir)])
                                                                  (mkdir-p
                                                                   path)
                                                                  (chown path
@@ -648,12 +648,12 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
-(let* ((trusted-wifi-connections
+(let* ([trusted-wifi-connections
         (local-file
-         "../dotfiles/mutable/secrets/.local/share/secrets-encrypted/wifi-trust.age"))
-       (dispatcher-template
-        (local-file "nm-dispatcher-trusted-connection"))
-       (dispatcher-script
+         "../dotfiles/mutable/secrets/.local/share/secrets-encrypted/wifi-trust.age")]
+       [dispatcher-template
+        (local-file "nm-dispatcher-trusted-connection")]
+       [dispatcher-script
         (computed-file
          "nm-dispatcher-trusted-connection"
          (with-imported-modules '((guix build utils))
@@ -671,7 +671,7 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                  (("@NFT_BIN@")
                                                   #$(file-append nftables "/sbin/nft"))
                                                  (("@GREP_BIN@")
-                                                  #$(file-append grep "/bin/grep"))))))))
+                                                  #$(file-append grep "/bin/grep"))))))])
 
   (list (service nftables-service-type
                  (nftables-configuration (ruleset (local-file
@@ -690,7 +690,7 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
         ;; /etc/NetworkManager 是 btrfs 持久化挂载点，etc-service-type 无法直接写入，
         ;; 故用 activation-service-type 在每次 reconfigure 时拷贝脚本到位。
         (simple-service 'nm-dispatcher-trusted-ssid activation-service-type
-                        #~(let ((dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"))
+                        #~(let ([dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"])
                             (system* "mkdir" "-p"
                                      "/etc/NetworkManager/dispatcher.d")
                             (system* "install" "-m" "755"
@@ -752,14 +752,14 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                                    "add" "uap0" "type" "__ap")))
                                                ;; NetworkManager learns about a newly-created
                                                ;; netdev asynchronously; wait before nmcli up.
-                                               (let loop ((attempts 20))
+                                               (let loop ([attempts 20])
                                                  (cond
-                                                  ((zero? (system* "nmcli" "-t" "-g"
+                                                  [(zero? (system* "nmcli" "-t" "-g"
                                                                    "GENERAL.STATE" "device"
-                                                                   "show" "uap0")) #t)
-                                                  ((zero? attempts) #f)
-                                                  (else (sleep 1)
-                                                        (loop (1- attempts))))))))
+                                                                   "show" "uap0")) #t]
+                                                  [(zero? attempts) #f]
+                                                  [else (sleep 1)
+                                                        (loop (1- attempts))])))))
                                (stop #~(lambda _
                                          (if (zero? (system* #$(file-append iw "/bin/iw")
                                                              "dev" "uap0" "info"))
@@ -1108,7 +1108,7 @@ iifname "uap0" oifname != "uap0" masquerade
               (simple-service 'hibernate-polkit polkit-service-type
                               (list (computed-file
                                      "polkit-hibernate-rules"
-                                     (let ((rules-file (local-file "50-hibernate.rules")))
+                                     (let ([rules-file (local-file "50-hibernate.rules")])
                                        #~(begin
                                            (mkdir #$output)
                                            (mkdir (string-append #$output "/share"))
@@ -1447,7 +1447,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "cc-switch-bin"
         "crush-bin"
         "github-copilot"
-        "reasonix-desktop-bin"
+        ; "reasonix-desktop-bin"
         "zcode"
 
         ;; 工具
@@ -1903,7 +1903,7 @@ end
 
 #+NAME: home-shepherd-services
 #+begin_src scheme
-(let* ((make-shepherd-service
+(let* ([make-shepherd-service
         (lambda* (pkg path requirement)
           (shepherd-service (provision (list (string->symbol (package-name pkg))))
                             (requirement requirement)
@@ -1915,7 +1915,7 @@ end
                                                                    #$(package-name pkg) ".log")))
                                        args))
                             (stop #~(make-kill-destructor))
-                            (respawn? #t)))))
+                            (respawn? #t)))])
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
@@ -2163,7 +2163,7 @@ end
 (list (simple-service 'extend-fontconfig home-fontconfig-service-type
                       (list "~/.local/share/fonts"
                             "/run/current-system/profile/share/fonts"
-                            (let ((emoji "Noto Color Emoji"))
+                            (let ([emoji "Noto Color Emoji"])
                               `((alias (family "sans-serif")
                                        (prefer (family ,"Sarasa Gothic SC")
                                                (family ,emoji)))

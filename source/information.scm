@@ -14,9 +14,9 @@
   (include "./channel.lock"))
 
 (define (generate-machine-id username)
-  (let* ((input (string->utf8 username))
-         (hash (md5 input))
-         (hex-string (bytevector->base16-string hash)))
+  (let* ([input (string->utf8 username)]
+         [hash (md5 input)]
+         [hex-string (bytevector->base16-string hash)])
     (string-downcase hex-string)))
 
 (define fixed-machine-id (generate-machine-id username))
