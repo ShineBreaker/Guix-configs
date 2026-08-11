@@ -59,9 +59,11 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 (setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.6)
 
-(add-hook 'emacs-startup-hook
-          (lambda ()
-            (setq gc-cons-percentage 0.1)))
+(defun custom--reset-gc-percentage ()
+  "启动完成后将 `gc-cons-percentage' 恢复为稳态值。"
+  (setq gc-cons-percentage 0.1))
+
+(add-hook 'emacs-startup-hook #'custom--reset-gc-percentage)
 
 (message "[custom-config] 基础设施加载完成")
 #+end_src
@@ -1316,6 +1318,12 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
   "FRAME 删除时清理标签状态。"
   (custom--tabs-set-frame-buffer-list nil frame))
 
+(defun custom--tabs-on-project-switch (&rest _)
+  "`project-after-switch-project-functions' 回调：清空当前 frame 标签列表。
+忽略传入的项目参数（与 `custom/tabs-clear-for-frame' 的 `&optional frame' 元数不同，
+故需独立适配回调）。"
+  (custom/tabs-clear-for-frame))
+
 (defun custom--tabs-frame-buffers (&optional window)
   "返回 WINDOW 所在 frame 的存活 + 可见缓冲区列表。"
   (let* ((target-window (custom--tabs-target-window window))
@@ -1625,7 +1633,7 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
     (with-temp-buffer
       (let ((status (apply #'process-file custom:executable-git nil t nil args))
             (output (string-trim (buffer-string))))
-        (unless (eq status 0)
+        (unless (= status 0)
           (error "Git 命令失败: %s"
                  (if (string-empty-p output) (string-join args " ") output)))
         output))))
@@ -1891,12 +1899,16 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 
 (add-hook 'find-file-hook #'custom/setup-file-line-numbers)
 
+(defun custom/disable-file-line-numbers ()
+  "为当前 buffer 关闭行号显示（非编辑型 mode 的阅读视图）。"
+  (display-line-numbers-mode -1))
+
 ;; org-mode 也在其中:Org 文档视图隐藏行号,减少阅读噪音。
 (dolist (mode '(org-mode ghostel-mode term-mode eshell-mode shell-mode
                          dashboard-mode special-mode
                          agent-shell-mode))
   (add-hook (intern (concat (symbol-name mode) "-hook"))
-            (lambda () (display-line-numbers-mode -1))))
+            #'custom/disable-file-line-numbers))
 
 (xterm-mouse-mode 1)
 (context-menu-mode 1)
@@ -2398,6 +2410,16 @@ MODE 为 'light 或 'dark。
         (and (not noninteractive)
              (>= (display-color-cells) 256)))))
 
+(defun custom/color-scheme--reconcile-dbus ()
+  "延迟核对 D-Bus 与当前主题状态，不一致时以 D-Bus 为准。
+`custom/color-scheme-init' 启动期立即应用状态文件主题，本函数在 1 秒后
+再读取 D-Bus 原始值作权威校正，消除状态文件与 D-Bus 启动竞态。"
+  (let ((dbus-mode (custom/color-scheme-get-from-dbus)))
+    (when (and dbus-mode
+               (not (eq dbus-mode custom/color-scheme-current-mode)))
+      (message "[color-scheme] 状态文件与 D-Bus 不一致，更新为 %s" dbus-mode)
+      (custom/color-scheme-apply-theme dbus-mode))))
+
 (defun custom/color-scheme-init ()
   "初始化颜色方案适配：
 1. 先从状态文件读取模式，立即应用主题
@@ -2409,13 +2431,7 @@ MODE 为 'light 或 'dark。
     (custom/color-scheme-apply-theme initial-mode)
     (setq custom/color-scheme--initialized t)
     (custom/color-scheme-register-listener)
-    (run-with-idle-timer 1 nil
-                         (lambda ()
-                           (let ((dbus-mode (custom/color-scheme-get-from-dbus)))
-                             (when (and dbus-mode
-                                        (not (eq dbus-mode custom/color-scheme-current-mode)))
-                               (message "[color-scheme] 状态文件与 D-Bus 不一致，更新为 %s" dbus-mode)
-                               (custom/color-scheme-apply-theme dbus-mode)))))))
+    (run-with-idle-timer 1 nil #'custom/color-scheme--reconcile-dbus)))
 
 (defun custom/color-scheme-apply-for-frame (&optional frame)
   "在 FRAME 可用时补齐与主题相关的 frame 初始化。
@@ -2960,6 +2976,11 @@ Eglot 是 =:defer t=,延迟加载的激活链:
 3. 进入声明了 =:server= 的 mode 时直接 =eglot-ensure=;server 缺失的错误由 Eglot 自身暴露,不预检测可用性。
 
 #+begin_src emacs-lisp
+(defun custom--eglot-enable-inlay-hints ()
+  "eglot-managed-mode 回调：开启 inlay hints（Emacs 31+ 可用时）。"
+  (when (fboundp 'eglot-inlay-hints-mode)
+    (eglot-inlay-hints-mode 1)))
+
 (use-package eglot
   :defer t
   :custom
@@ -2973,10 +2994,7 @@ Eglot 是 =:defer t=,延迟加载的激活链:
                         :mccabe (:enabled ,json-false)
                         :pyflakes (:enabled ,json-false))))))
   :config
-  (add-hook 'eglot-managed-mode-hook
-            (lambda ()
-              (when (fboundp 'eglot-inlay-hints-mode)
-                (eglot-inlay-hints-mode 1)))))
+  (add-hook 'eglot-managed-mode-hook #'custom--eglot-enable-inlay-hints))
 
 (defun custom--eglot-setup-once ()
   "首次进入 prog-mode 时触发 eglot 加载,由 after-load 钩子完成实际配置。"
@@ -3335,7 +3353,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 ;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原 projectile-after-switch-project-hook)。
 (with-eval-after-load 'project
   (add-hook 'project-after-switch-project-functions
-            (lambda (&rest _) (custom/tabs-clear-for-frame))))
+            #'custom--tabs-on-project-switch))
 #+end_src
 
 项目前缀 =C-x p= 与 =project.el= 同源,在下方 src-block 直接绑定。
@@ -3496,6 +3514,12 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 (defun custom/org-capture--roam-title-value ()
   "返回当前 Roam capture 标题。"
   (or custom/org-capture--roam-title "未命名笔记"))
+
+(defun custom/org-capture--clear-state ()
+  "`org-capture-after-finalize-hook' 回调：清理本次 capture 的临时状态。"
+  (setq custom/org-capture--last-category nil
+        custom/org-capture--roam-title nil))
+
 (with-eval-after-load 'org-capture
   (setq org-capture-templates
         `(("ki" "Inbox 草稿" entry
@@ -3523,9 +3547,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
            (file custom/org-capture--experience-file)
            "* %^{标题}\n:PROPERTIES:\n:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")\n:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")\n:CATEGORY: %(custom/org-capture--category)\n:TECH:     %^{技术栈}\n:TYPE:     debug\n:STATUS:   done\n:ENTRY_TYPE: ascended\n:END:\n#+filetags: :%^{标签}:\n\n** 前几轮失败的根因\n%?\n** 检索过的知识源\n\n** 核对过的真实文件或输出\n\n** 最终采用的最强方案\n")))
   (add-hook 'org-capture-after-finalize-hook
-            (lambda ()
-              (setq custom/org-capture--last-category nil
-                    custom/org-capture--roam-title nil))))
+            #'custom/org-capture--clear-state))
 #+end_src
 
 *** Org UI 与检索
@@ -3632,68 +3654,6 @@ agenote CLI 集成的知识库 CRUD。
 + =agenote-knowledge-*= :知识库经验卡片 CRUD 与双视图
 + =agenote-*= :agenote 子域浏览与健康度面板
 + Knowledge 与 agenote 直接复用启动域路径常量和 [[#process-helper][共享进程辅助]],不维护重复注入点或私有进程封装
-
-*** 职责归属
-:PROPERTIES:
-:CUSTOM_ID: knowledge-ownership
-:END:
-
-知识库的文件系统操作全部下沉给 agenote CLI,Emacs 只负责交互调用和缓冲区刷新。这种分层避免 Emacs 与 CLI 的索引/扫描逻辑漂移:
-
-#+attr_org: :width 70
-| 职责                        | 归属                              |
-|-----------------------------+-----------------------------------|
-| 索引列表                    | =agenote list --json=               |
-| inbox 归档 / slug / reindex | =agenote inbox-archive= 子命令      |
-| 交互调用 + buffer 刷新      | Emacs(=agenote-knowledge-*=)         |
-| 递归扫描 experiences/       | 故意不存在(Dashboard 走 CLI 索引) |
-
-*** 路径与目录生命周期
-
-目录创建采用按需幂等 =ensure=,而非固定延迟 timer。原因:固定 3 秒的 =run-with-idle-timer= 会与用户的 capture / inbox 打开 / before-save 操作竞态(timer 触发时文件可能正被写入)。目录 ensure 逻辑（=agenote--ensure-knowledge-directories=）挂在 =org-capture-before-finalize-hook= 和 =org-mode-hook= 上,确保目录在真正需要时才存在,=experiences/<category>/= 子目录在 Capture 时按需创建。该函数由独立包 =agenote-knowledge= 提供。
-
-*** Capture 与卡片命名
-
-经验卡片的标题 slug 化、PROPERTIES 规范化、reindex 索引同步由两部分共同完成:
-+ =org-capture-templates= 的 =kn/km/ka= 模板用 =%(format-time-string ...)= 在 Emacs 侧生成 ID/CREATED 时间戳与结构化 PROPERTIES(见 [[#capture-templates][Capture 模板]])。
-+ =agenote inbox-archive= 子命令负责 inbox 条目的 slug、归档与 reindex。
-
-=agenote-knowledge-capture= 仅是 =(org-capture nil "k")= 的薄封装（模板装配由 org-capture autoload 负责）；它由独立包 =agenote-knowledge= 提供。
-
-*** 检索与 Inbox
-
-
-inbox 归档的 body 提取逻辑: =org-copy-subtree= 把当前 subtree(含 heading 与 =PROPERTIES= 块)复制到 kill-ring,这里只取正文——从第一行 heading 之后到第一个 =:END:= 之间的 =PROPERTIES= 块被正则剥离,剩余作为 body 通过 =--stdin= 传给 CLI。CLI 完成归档后会 reindex + prune inbox,Emacs 端只需清理 kill-ring 并 =revert-buffer= 刷新 inbox buffer。
-
-*** 生命周期与 CLI
-
-卡片生命周期命令(=touch= / =archive= / =restore= / =review=)作用于人类域 =experiences/= 卡片,ID 从当前 buffer 的 =:ID:= 属性取;在非经验卡片 buffer 调用会提示并 abort(=agenote-knowledge--ensure-experience-buffer= 守卫,排除 agenote 子域与无 ID 文件)。
-
-
-*** 知识库浏览(统一 mode)
-
-
-#+NAME: org-knowledge-assembly
-#+begin_src emacs-lisp
-;; Knowledge 系统（capture / search / cli / browse）由独立包 `agenote-knowledge' 提供。
-;; 入口函数见 `agenote-knowledge-*'；命令键位见 keys-completion 域。
-#+end_src
-
-*** 健康度面板
-
-agenote CLI 集成:在 Emacs 内浏览 =~/Documents/Org/agenote/= 下的子域视图。
-
-健康度面板（agenote health，人类域）
-+ =agenote health= 输出本身已是结构化人类可读文本（节标题 / 指标行带阈值与 ✅），无需重新解析。
-+ 直接展示在 ~special-mode~ buffer， ~g~ 调 =agenote health --quality= 取更全数据（含内容长度 / 质量问题节）。
-
-注意：agenote health 只读 *人类域* （ ~experiences/~ ），agent 子域健康度需另查 ~index.json~ （见浏览视图）。
-
-
-#+NAME: org-agenote-health-assembly
-#+begin_src emacs-lisp
-;; 健康度面板（agenote-health-mode / agenote-health）由独立包 `agenote-health' 提供。
-#+end_src
 
 #+begin_src emacs-lisp
 (custom/bind "C-c o a" #'org-agenda "议程视图" "Org 与知识库")
@@ -4876,6 +4836,16 @@ MAX-ITEMS 带 TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
    max-items
    (lambda () (custom/dashboard--compute-todo-items max-items))))
 
+(defun custom/dashboard--load-org-and-refresh ()
+  "延迟加载 org-agenda/org 后失效缓存并重绘可见 dashboard。
+`custom/dashboard--defer-until-org' 的 one-shot timer 回调。"
+  (require 'org-agenda)
+  (require 'org)
+  (setq custom/dashboard--org-defer-pending nil)
+  (custom/dashboard-invalidate-cache)
+  (when (fboundp 'custom/dashboard--refresh-visible-now)
+    (custom/dashboard--refresh-visible-now)))
+
 (defun custom/dashboard--defer-until-org ()
   "保证 org-agenda 在空闲时加载一次，加载后失效缓存并重绘 dashboard。
 fresh daemon 首次渲染时 org-agenda 尚未加载，同步扫描会阻塞首屏；
@@ -4883,14 +4853,7 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
   (unless (bound-and-true-p custom/dashboard--org-defer-pending)
     (setq custom/dashboard--org-defer-pending t)
     (run-with-idle-timer
-     2 nil
-     (lambda ()
-       (require 'org-agenda)
-       (require 'org)
-       (setq custom/dashboard--org-defer-pending nil)
-       (custom/dashboard-invalidate-cache)
-       (when (fboundp 'custom/dashboard--refresh-visible-now)
-         (custom/dashboard--refresh-visible-now))))))
+     2 nil #'custom/dashboard--load-org-and-refresh)))
 
 (defun custom/dashboard--fetch-todo ()
   "TODO 卡片 fetch：三态。
@@ -5354,7 +5317,7 @@ LITERAL figlet art，box-drawing 字符 string-width≈80-85 列，
          (init-seconds (and (fboundp 'emacs-init-time)
                             (condition-case nil (emacs-init-time) nil)))
          (init-time (cond
-                     ((null init-seconds) "?")
+                     ((not init-seconds) "?")
                      ;; 数字开头（batch 返回 "0.002s" / 交互返回 "0.5 seconds"）
                      ((string-match "\\`\\([0-9.]+\\)" init-seconds)
                       (let ((secs (string-to-number (match-string 1 init-seconds))))
@@ -5637,6 +5600,12 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
          (custom/dashboard--schedule-open-for-frame
           frame (1- retries-left)))))))
 
+(defun custom/dashboard--run-open-check-delayed (frame retries-left)
+  "`run-at-time' 回调：FRAME 仍存活时执行一次 dashboard 打开检查。
+RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
+  (when (frame-live-p frame)
+    (custom/dashboard--run-open-check frame retries-left)))
+
 (defun custom/dashboard--schedule-open-for-frame (frame retries-left)
   "为 FRAME 安排一次 dashboard 打开检查。RETRIES-LEFT 为剩余重试次数。"
   (when (and (frame-live-p frame)
@@ -5644,9 +5613,7 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
     (set-frame-parameter frame 'custom-dashboard-open-scheduled t)
     (run-at-time
      custom:dashboard-open-delay nil
-     (lambda (idle-frame idle-retries-left)
-       (when (frame-live-p idle-frame)
-         (custom/dashboard--run-open-check idle-frame idle-retries-left)))
+     #'custom/dashboard--run-open-check-delayed
      frame retries-left)))
 
 (defun custom/dashboard-open-for-client-frame (&optional frame)
@@ -5657,13 +5624,15 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
    custom:dashboard-open-retries))
 
 ;; Org 文件保存后失效缓存：dashboard 的 todo/knowledge 数据源可能已变。
-(add-hook 'after-save-hook
-          (lambda ()
-            (when (and buffer-file-name
-                       (string-prefix-p (expand-file-name custom:org-directory)
-                                        (expand-file-name buffer-file-name)))
-              (custom/dashboard-invalidate-cache)
-              (custom/dashboard--refresh-visible-now))))
+(defun custom/dashboard--invalidate-on-org-save ()
+  "`after-save-hook' 回调：保存 Org 文件时失效 dashboard 缓存并立即重绘。"
+  (when (and buffer-file-name
+             (string-prefix-p (expand-file-name custom:org-directory)
+                              (expand-file-name buffer-file-name)))
+    (custom/dashboard-invalidate-cache)
+    (custom/dashboard--refresh-visible-now)))
+
+(add-hook 'after-save-hook #'custom/dashboard--invalidate-on-org-save)
 
 (add-hook 'window-size-change-functions #'custom/dashboard--maybe-refresh-visible)
 
