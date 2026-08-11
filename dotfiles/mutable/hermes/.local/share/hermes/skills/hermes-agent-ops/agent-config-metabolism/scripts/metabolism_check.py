@@ -382,6 +382,11 @@ def check_json_parseable(cfg: dict) -> tuple[str, str]:
                     text = p.read_text(errors="ignore")
                 except OSError:
                     continue
+                # Strip UTF-8 BOM — some third-party files (e.g. @vscode/codicons
+                # manifest.transforms.json under node_modules) ship with a BOM.
+                # json.loads rejects BOM-prefixed text; strip it so both the
+                # standard and lenient parsers see clean input.
+                text = text.lstrip("\ufeff")
                 # First try standard JSON — only fall back to lenient parser
                 # if standard fails. The lenient parser strips // inside
                 # strings, which corrupts valid JSON (e.g. URLs with https://).
