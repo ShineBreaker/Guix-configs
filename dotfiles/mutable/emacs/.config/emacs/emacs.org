@@ -25,7 +25,39 @@
 :
 各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。Noweb 组装块以 =#+NAME:= 标记，便于 =scripts/configctl map= 定位和 org 间跳转。
 :
-内置 =scripts/configctl= 工具提供配置域导航与验证：=configctl map= （结构总览）、=configctl show <ID>= （只读一个功能子树）、=configctl find <regexp>= （跨域符号搜索）。修改配置后运行 =configctl check load test= 验收。
+内置 =scripts/configctl= 是面向 AI agent 的片段操纵工具：=map= 结构总览、=show <ID>= 提取子树、=locate <ID|ref>= 定位块行号、=tangle= 拼合产物、=check= 轻量原则检查（域顺序 / noweb / 单产物 / 括号 / 重复定义）。深度验证（load 报错、ERT 等）由 agent 直接跑 Emacs，不封装进本工具。
+
+** 修改与扩展指引
+
+接手者改代码前先读本节的契约，再按功能定位到具体域动手。
+
+*** 添加 / 修改功能
+
+1. *定位归属域*：按功能语义合并到 8 个现有域之一（不新建第 9 域）。键位随功能实现所在的域（功能内聚），不集中到键位块。
+2. *定位插入点*：=configctl show <ID>= 提取目标子树，=configctl locate <ID|ref>= 定位块行号区间；跨域符号用 =rg= 搜。
+3. *遵守约定*：命名 / 键位 / noweb / 架构硬约束见下；新 Emacs 包必须同步根仓库 =source/config.org= 的 =home-emacs-packages=。
+
+*** 命名约定
+
++ 公开 =custom/...= ；私有 =custom/...--...= ；路径与静态常量 =custom:...= 。
++ 同一符号不得重复 =defun= / =defvar= / =defconst= 。
++ =add-hook= / timer / 异步回调一律用命名函数，不用匿名 lambda。
+
+*** 键位约定
+
++ 全局 =custom/bind= 、局部 =custom/bind-local= 、前缀声明 =custom/declare-binding-prefix= 。
++ 只有 14 个前缀声明、跨域基础键（=C-x= / =M-s= / =C-c w= / =C-c h=）和无前缀 IDE 直达键集中在 [[#keys-completion]]，其余键位跟随功能域。
++ Which-key 描述、帮助分组、Dashboard 摘要三者同源，均从 =custom:binding-spec= 生成。
+
+*** Noweb 分片约定
+
++ 小模块用单个 =emacs-lisp= 块；大模块拆命名片段（=:noweb-ref module/section :tangle no=），章节末尾用唯一组装块（=#+NAME: <domain>-assembly=）确定加载顺序。
++ 每个 ref 只定义一次、只组装一次；=<<ref>>= 必须在列 0；共享实现放 =helpers/...= 并在调用方之前组装。
+
+*** 架构硬约束（不可破坏）
+
++ 唯一生成物 =main.el= ；禁止把配置 tangle 到 =lisp/= 子目录、禁止 =lisp/= load-path、禁止历史 =custom-*= feature 的 require/provide 引用。
++ 文件末尾只保留 =(provide 'main)= ；不添加全局 =:comments link= 。
 * 启动与基础设施
 :PROPERTIES:
 :CUSTOM_ID: startup
@@ -42,12 +74,8 @@ Emacs 冷启动的第一阶段:GC / 路径常量 / 外部命令声明 / Frame �
 
 GC 启动期优化(启动完成后由 gcmh 重置)
 
-+ 与 early-init.el 的同设置重复,但保留作为 main.el 自身的防御性优化——若有人绕过 early-init.el 直接 batch-load main.el(如 =configctl load= ),GC threshold 仍需在 main.el 入口推高。
-+ 临时调高 GC 阈值以加速启动,启动完成后由 =gcmh-mode= 接管。
-
-+ =user-emacs-directory= 由当前单 profile 直接指向本目录
-+ =gc-cons-threshold= 启动期推到 =most-positive-fixnum= ,启动完成后由 =gcmh-mode= 重置为合理值(见 *基础行为设置* )
-+ =gc-cons-percentage= 启动期推到 0.6(减少启动期 GC),启动完成后显式恢复到 0.1——GCMH 只动态调整 =gc-cons-threshold= ,不管 =gc-cons-percentage= ,故必须显式恢复,否则 GCMH 接管后 percentage 仍停留在 0.6。
++ =gc-cons-threshold= 推到 =most-positive-fixnum= 、=gc-cons-percentage= 推到 0.6 以减少启动期 GC；与 early-init.el 的同设置重复是刻意的——绕过 early-init 直接 batch-load main.el(如 agent 手动加载验证)时入口仍需推高。
++ =gc-cons-percentage= 启动完成后必须显式恢复 0.1:GCMH 只动态调整 =gc-cons-threshold= ,不碰 percentage,否则 GCMH 接管后 percentage 仍停留 0.6。
 + 保留 Emacs 31 默认的 =file-name-handler-alist= 与 bidi 行为。daemon 冷启动不是目标，不能用未测量的优化破坏 TRAMP、压缩文件或 RTL 文本。
 
 #+begin_src emacs-lisp
@@ -478,8 +506,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 *** 外置翻译数据
 
 翻译表是独立的数据资产：[[file:data/which-key-zh.el][Which-key 中文描述]]、[[file:data/context-menu-zh.el][右键菜单中文描述]] 与 [[file:data/help-zh.el][快捷键帮助中文描述]]。
-修改数据文件后重启 Emacs 即可生效；其中只能写注释和预定变量的字面量 =setq=，不得定义函数、feature 或副作用。
-=scripts/configctl check= 会校验文件名、变量名、括号和数据边界。
+修改数据文件后重启 Emacs 即可生效；其中只能写注释和预定变量的字面量 =setq=，不得定义函数、feature 或副作用。违反上述约定会在 tangle 后因变量未定义而报错，由 agent 加载验证。
 
 #+begin_src emacs-lisp :noweb-ref appearance/i18n-data :tangle no
 (defconst custom:i18n-data-directory
@@ -630,10 +657,6 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 *** 帮助渲染与入口
 
 #+begin_src emacs-lisp :noweb-ref appearance/help-render :tangle no
-(defun custom/help--extract-dashboard-bindings ()
-  "返回 dashboard 需要展示的关键前缀绑定。"
-  (custom/binding-dashboard-bindings))
-
 (defun custom/show-help ()
   "显示完整的快捷键帮助。"
   (interactive)
@@ -1356,7 +1379,6 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
                       (buffer-name)
                       custom:tabs-name-max-width 0 nil t))
                (icon (when custom:modeline--nerd-icons-available
-                       (require 'nerd-icons)
                        (nerd-icons-icon-for-buffer)))
                (prefix (if (and (stringp icon)
                                 (not (string-empty-p icon)))
@@ -1789,6 +1811,14 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 #+begin_src emacs-lisp
 <<appearance/git-commands>>
 <<appearance/git-display>>
+#+end_src
+
+#+begin_src emacs-lisp
+;; git-timemachine 经 C-c g t → custom/git-timemachine-toggle 转发调用,
+;; 显式声明 :commands 使 autoload 可解析，首个 C-c g t 才真正加载。
+(use-package git-timemachine
+  :defer t
+  :commands (git-timemachine-toggle))
 #+end_src
 
 #+begin_src emacs-lisp
@@ -2365,6 +2395,16 @@ MODE 为 'light 或 'dark。
 (defvar custom/color-scheme-dbus-handler nil
   "D-Bus 信号监听器的注册 ID。")
 
+(defun custom/color-scheme--on-darkman-mode-change (mode)
+  "Darkman `ModeChanged' 信号回调：MODE 变化时应用对应主题。"
+  (let ((new-mode (cond
+                   ((string= mode "light") 'light)
+                   ((string= mode "dark") 'dark))))
+    (when (and new-mode
+               (not (eq new-mode custom/color-scheme-current-mode)))
+      (message "[color-scheme] Darkman 模式变化: %s" mode)
+      (custom/color-scheme-apply-theme new-mode))))
+
 (defun custom/color-scheme-register-listener ()
   "注册 D-Bus 信号监听器，响应 Darkman 模式变化。"
   (condition-case err
@@ -2377,14 +2417,7 @@ MODE 为 'light 或 'dark。
                custom/color-scheme-dbus-path
                custom/color-scheme-dbus-interface
                "ModeChanged"
-               (lambda (mode)
-                 (let ((new-mode (cond
-                                  ((string= mode "light") 'light)
-                                  ((string= mode "dark") 'dark))))
-                   (when (and new-mode
-                              (not (eq new-mode custom/color-scheme-current-mode)))
-                     (message "[color-scheme] Darkman 模式变化: %s" mode)
-                     (custom/color-scheme-apply-theme new-mode))))))
+               #'custom/color-scheme--on-darkman-mode-change))
         (message "[color-scheme] 已注册 D-Bus 监听器"))
     (error
      (message "[color-scheme] 无法注册 D-Bus 监听器: %s" (error-message-string err))
@@ -3220,18 +3253,17 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 
 <<emacs31/source-load-compat>>
 <<emacs31/arei-compat>>
-<<emacs31/yasnippet-compat>>
 
 (use-package arei
   :defer t
   :init
-  (custom--load-arei-from-source)
+  (custom/load-library-from-source "arei")
   :hook (scheme-mode . custom--maybe-enable-arei-mode))
 
 (use-package yasnippet
   :demand t
   :init
-  (custom--load-yasnippet-from-source)
+  (custom/load-library-from-source "yasnippet")
   :config
   (yas-global-mode 1))
 (use-package yasnippet-snippets :after yasnippet :defer t)
@@ -3710,36 +3742,13 @@ agenote CLI 集成的知识库 CRUD。
 加载 which-key 本体并配置显示参数;内置 describe-* 帮助系统;winner 窗口布局撤销 / 重做。
 
 + which-key 中文描述注册由 *界面与外观 → 右键菜单与 Which-key 中文化* 域处理( =custom/which-key-apply-descriptions= + =custom/register-pending-wk-descs= )
-+ *中文字符对齐修复*: which-key 3.6.1 已内置 =string-width= 计算,但自动列数在底部 side-window 下仍可能导致中文描述列宽不等。这里用 =advice-add :override= 替换 =which-key--pad-column= ,在底部多列布局下固定为等宽分栏(默认 =custom:which-key-grid-columns 3= 列)
++ which-key 3.6.1 已内置 =string-width= 计算,中文描述列宽对齐无需额外补丁。
 + =which-key-idle-delay 0.3= :延迟显示,避免干扰快速操作
 + =winner-dont-bind-my-keys t= :避免 winner 抢占 =C-c ←= / =C-c →= (本配置在 =C-c w= 体系下手动绑定 winner-undo / redo)
 
 #+begin_src emacs-lisp
-;; 中文菜单固定三列网格布局:底部 side-window 下等宽分栏,
-;; 避免 which-key 自动列数导致中文描述列宽不等。
 (defconst custom:which-key-grid-columns 3
   "Which-key 中文菜单默认使用的固定网格列数。")
-
-(defun custom/which-key--fixed-grid-layout-p ()
-  "判断当前是否启用固定多列 which-key 网格布局。"
-  (and (boundp 'which-key-max-display-columns)
-       (integerp which-key-max-display-columns)
-       (> which-key-max-display-columns 1)
-       (boundp 'which-key-popup-type)
-       (eq which-key-popup-type 'side-window)
-       (boundp 'which-key-side-window-location)
-       (eq which-key-side-window-location 'bottom)))
-
-(defun custom/which-key--target-grid-column-width (available-width)
-  "根据 AVAILABLE-WIDTH 计算固定网格布局下每列的目标宽度。"
-  (if (custom/which-key--fixed-grid-layout-p)
-      (let* ((columns which-key-max-display-columns)
-             (gaps (max 0 (1- columns))))
-        (/ (max 1 (- available-width gaps)) columns))
-    available-width))
-
-;; 中文宽度兼容层(私有 API override)见 [[#compatibility][实验性与待确认]] 的 =compat/which-key-width= 片段。
-<<compat/which-key-width>>
 
 (use-package which-key
   :demand t
@@ -3757,11 +3766,7 @@ agenote CLI 集成的知识库 CRUD。
         which-key-side-window-max-height 0.38
         which-key-sort-order #'which-key-prefix-then-key-order
         which-key-C-h-map-prompt
-        " \\<which-key-C-h-map>\\[which-key-show-next-page-cycle]/\\[which-key-show-previous-page-cycle] 翻页,\\[which-key-show-standard-help] 帮助,\\[which-key-abort] 退出")
-  ;; 用基于 `string-width' 的中文友好版覆盖 which-key 原生 `which-key--pad-column',
-  ;; 并在固定网格布局下按等宽分栏。加 fboundp 守卫:which-key 已并入 Emacs 30+
-  ;; 内置,未来若内部函数改名/移除,静默跳过而非崩溃。
-  (custom/which-key-install-width-fix))
+        " \\<which-key-C-h-map>\\[which-key-show-next-page-cycle]/\\[which-key-show-previous-page-cycle] 翻页,\\[which-key-show-standard-help] 帮助,\\[which-key-abort] 退出"))
 
 (use-package winner
   :custom
@@ -4137,10 +4142,13 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
 *** Telegram (Telega)
 
 #+begin_src emacs-lisp
+;; telega-prefix-map 由 telega-autoloads.el 在 site-start 阶段完整定义
+;; (含全部子命令),无需 :demand 加载整个聊天客户端;仅把 k=telega-kill
+;; 挂到 autoload 后的 map 上,首个 C-c a t t 才真正 require telega。
 (use-package telega
-  :demand t
+  :defer t
   :commands (telega telega-kill)
-  :config
+  :init
   (keymap-set telega-prefix-map "k" #'telega-kill))
 
 (custom/bind "C-c a t" telega-prefix-map "Telegram" "生活应用")
@@ -4254,7 +4262,7 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 
 + Dashboard 调用的跨域函数:
   - =agenote-knowledge-list-cards= / =agenote-knowledge-show-card= (知识库卡片,走 agenote CLI JSON,见 [[#knowledge-ownership][职责归属]])
-  - =custom/help--extract-dashboard-bindings= (快捷键卡片)
+  - =custom/binding-dashboard-bindings= (快捷键卡片)
   - =custom/register-buffer-refresh!= (主题切换刷新)
   - =custom/add-server-ready-hook= (daemon/client frame 生命周期)
 
@@ -4278,7 +4286,7 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 - 卡片契约: =fetch= 无参 → =(:ok DATA)|(:error MSG)|loading= 三态; =render (DATA WIDTH)= 是纯函数返回行列表,行宽 ≤ WIDTH。空 / 加载中 / 错误 三态可区分,杜绝"假空状态"。
 - 错误隔离: 单张卡片任何异常被引擎包成错误卡片,绝不拖垮整页。
 - 测量层: 普通内容基于 =string-width= 列模型；固定 banner 字符集按字符数计算实际终端单元(见 [[测量层][测量层章节]])。
-- 零临时 buffer: 卡片渲染器是纯函数,拼接是字符串操作,消除了旧实现每刷新 6 次 =generate-new-buffer= 的开销,且每张卡片可独立进 ERT。
+- 零临时 buffer: 卡片渲染器是纯函数,拼接是字符串操作,消除了旧实现每刷新 6 次 =generate-new-buffer= 的开销,且每张卡片可独立测试。
 - 宽度显式传参: 删除旧的 =--forced-width= / =--override-margin= 动态绑定,宽度沿调用链显式传递。
 
 *** 核心定义
@@ -4358,6 +4366,12 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 (defvar custom/dashboard--projects-cache nil
   "项目列表缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
 
+(defvar custom/dashboard--recents-cache nil
+  "最近文件缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
+
+(defvar custom/dashboard--bookmarks-cache nil
+  "书签名称缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
+
 (defvar custom/dashboard--knowledge-error nil
   "最近一次异步知识库更新的错误信息。")
 
@@ -4389,6 +4403,8 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 可在 Org 保存、Magit 操作等改变底层数据后调用。"
   (setq custom/dashboard--todo-cache nil
         custom/dashboard--projects-cache nil
+        custom/dashboard--recents-cache nil
+        custom/dashboard--bookmarks-cache nil
         custom/dashboard--knowledge-error nil)
   (when custom/dashboard--knowledge-cache
     (setcar (cdr custom/dashboard--knowledge-cache) nil))
@@ -4398,7 +4414,7 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 
 *** 测量层
 
-测量层是右列对齐的基石。普通内容统一使用 =string-width= 列模型，放弃与 =window-body-width= 无法直接运算的 GUI 像素宽度。固定 banner 是唯一例外：其 block/box-drawing 字符在 Foot 中各占一个终端单元，但 Emacs TTY 的 CJK 宽度表可能把同一字符计为两列，因此按字符数计算。列模型下 Nerd Font PUA 图标至多 1 列误差(见重设计文档 §1 #9),但卡片布局单位一致、不串位。
+测量层统一用 =string-width= 列模型（而非 GUI 像素），保证 GUI / TTY / batch 下卡片布局一致；固定 banner 例外，按字符数计数以规避 TTY CJK 宽度表差异。具体取舍见 =custom/dashboard--measure= 的 docstring。
 
 #+begin_src emacs-lisp :noweb-ref system/dashboard-measure :tangle no
 
@@ -4971,30 +4987,43 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
             (if clocking-p "> 跳转到计时任务..." "> 开始计时...")
             jump-cmd)))))
 
-(defun custom/dashboard--fetch-recents ()
-  "最近文件卡片 fetch。
+(defun custom/dashboard--compute-recents ()
+  "实际计算最近文件列表（无缓存）。
 先排除 remote 路径（避免渲染期触发 TRAMP 连接阻塞 UI），再查 `file-exists-p'
 过滤已删除文件。取 4 倍候选再过滤，避免过滤后不足条目数。"
+  (let* ((size 6)
+         (cands (seq-take (or (and (boundp 'recentf-list) recentf-list)
+                              (default-value 'recentf-list))
+                          (* 4 size)))
+         (files (seq-filter (lambda (f)
+                              (and (not (file-remote-p f))
+                                   (file-exists-p f)))
+                            cands)))
+    (seq-take files size)))
+
+(defun custom/dashboard--recents ()
+  "返回 dashboard 展示的最近文件列表，结果带 TTL 缓存。"
+  (custom/dashboard--cached 'custom/dashboard--recents-cache nil
+                            #'custom/dashboard--compute-recents))
+
+(defun custom/dashboard--fetch-recents ()
+  "最近文件卡片 fetch。"
   (if (not (bound-and-true-p recentf-mode))
       (list :error "recentf 未启用")
-    (let* ((size 6)
-           (cands (seq-take (or (and (boundp 'recentf-list) recentf-list)
-                                (default-value 'recentf-list))
-                            (* 4 size)))
-           (files (seq-filter (lambda (f)
-                                (and (not (file-remote-p f))
-                                     (file-exists-p f)))
-                              cands)))
-      (list :ok (seq-take files size)))))
+    (list :ok (custom/dashboard--recents))))
+
+(defun custom/dashboard--render-path-list (paths width empty-text help-format)
+  "把 PATHS 渲染为 find-file 按钮列表，HELP-FORMAT 是 help-echo 的 format 串。"
+  (custom/dashboard--render-item-list
+   paths width empty-text
+   (lambda (p)
+     (list (custom/dashboard--abbreviate-path p width)
+           (lambda () (find-file p))
+           (format help-format p)))))
 
 (defun custom/dashboard--render-recents (files width)
   "最近文件卡片 render。每行做成按钮，点击 find-file。"
-  (custom/dashboard--render-item-list
-   files width "暂无最近文件"
-   (lambda (f)
-     (list (custom/dashboard--abbreviate-path f width)
-           (lambda () (find-file f))
-           (format "打开 %s" f)))))
+  (custom/dashboard--render-path-list files width "暂无最近文件" "打开 %s"))
 
 (defun custom/dashboard--compute-known-projects ()
   "实际计算 dashboard 可展示的项目列表（无缓存）。
@@ -5019,12 +5048,8 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
 
 (defun custom/dashboard--render-projects (projects width)
   "项目卡片 render。"
-  (custom/dashboard--render-item-list
-   projects width "暂无已知项目 — C-x p o 添加"
-   (lambda (p)
-     (list (custom/dashboard--abbreviate-path p width)
-           (lambda () (find-file p))
-           (format "打开项目 %s" p)))))
+  (custom/dashboard--render-path-list
+   projects width "暂无已知项目 — C-x p o 添加" "打开项目 %s"))
 
 (defun custom/dashboard--compute-recent-knowledge-entries (max-items)
   "消费 `agenote --domain human list --json' 稳定索引计算最近条目（无缓存）。
@@ -5071,6 +5096,57 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
         (list :error custom/dashboard--knowledge-error))
        (t 'loading))))))
 
+(defun custom/dashboard--knowledge-sentinel (process _event)
+  "知识库异步进程的 sentinel：解析输出、写缓存、清理并重绘。
+stderr buffer 与 max-items 经 `process-put' 挂在 process 上，供本回调读取。"
+  (when (memq (process-status process) '(exit signal))
+    (let ((stderr (process-get process :stderr-buffer))
+          (max-items (process-get process :max-items)))
+      (if (zerop (process-exit-status process))
+          (condition-case parse-error
+              (let* ((json-object-type 'plist)
+                     (json-array-type 'list)
+                     (json-key-type 'keyword)
+                     (output (if-let* ((buffer (process-buffer process))
+                                       ((buffer-live-p buffer)))
+                                 (with-current-buffer buffer
+                                   (buffer-string))
+                               ""))
+                     (cards (unless (string-empty-p output)
+                              (json-read-from-string output)))
+                     (entries
+                      (custom/dashboard--knowledge-entries-from-cards
+                       cards)))
+                (setq custom/dashboard--knowledge-cache
+                      (cons max-items
+                            (cons (current-time) entries))
+                      custom/dashboard--knowledge-error nil))
+            (error
+             (setq custom/dashboard--knowledge-error
+                   (error-message-string parse-error))))
+        (let ((message
+               (and (buffer-live-p stderr)
+                    (string-trim
+                     (with-current-buffer stderr
+                       (buffer-string))))))
+          (setq custom/dashboard--knowledge-error
+                (if (string-empty-p (or message ""))
+                    "agenote 进程失败"
+                  message))))
+      (when (eq custom/dashboard--knowledge-process process)
+        (setq custom/dashboard--knowledge-process nil))
+      (when-let* ((buffer (process-buffer process))
+                  ((buffer-live-p buffer)))
+        (kill-buffer buffer))
+      (when (buffer-live-p stderr)
+        (kill-buffer stderr))
+      (cl-incf custom/dashboard--generation)
+      (condition-case refresh-error
+          (custom/dashboard--refresh-visible-now)
+        (error
+         (message "[dashboard] 知识库刷新失败: %s"
+                  (error-message-string refresh-error)))))))
+
 (defun custom/dashboard--knowledge-start-async (max-items)
   "异步刷新最近 MAX-ITEMS 张知识卡片，已有进程时保持幂等。"
   (unless (process-live-p custom/dashboard--knowledge-process)
@@ -5079,62 +5155,18 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
               (stderr (generate-new-buffer " *dashboard-knowledge-stderr*")))
           (setq custom/dashboard--knowledge-error nil)
           (condition-case err
-              (setq custom/dashboard--knowledge-process
-                    (make-process
-                     :name "dashboard-knowledge"
-                     :buffer stdout
-                     :stderr stderr
-                     :command (list exe "--domain" "human" "list"
-                                    "--recent" (number-to-string max-items) "--json")
-                     :connection-type 'pipe
-                     :noquery t
-                     :sentinel
-                     (lambda (process _event)
-                       (when (memq (process-status process) '(exit signal))
-                         (if (zerop (process-exit-status process))
-                             (condition-case parse-error
-                                 (let* ((json-object-type 'plist)
-                                        (json-array-type 'list)
-                                        (json-key-type 'keyword)
-                                        (output (if-let* ((buffer (process-buffer process))
-                                                          ((buffer-live-p buffer)))
-                                                    (with-current-buffer buffer
-                                                      (buffer-string))
-                                                  ""))
-                                        (cards (unless (string-empty-p output)
-                                                 (json-read-from-string output)))
-                                        (entries
-                                         (custom/dashboard--knowledge-entries-from-cards
-                                          cards)))
-                                   (setq custom/dashboard--knowledge-cache
-                                         (cons max-items
-                                               (cons (current-time) entries))
-                                         custom/dashboard--knowledge-error nil))
-                               (error
-                                (setq custom/dashboard--knowledge-error
-                                      (error-message-string parse-error))))
-                           (let ((message
-                                  (and (buffer-live-p stderr)
-                                       (string-trim
-                                        (with-current-buffer stderr
-                                          (buffer-string))))))
-                             (setq custom/dashboard--knowledge-error
-                                   (if (string-empty-p (or message ""))
-                                       "agenote 进程失败"
-                                     message))))
-                         (when (eq custom/dashboard--knowledge-process process)
-                           (setq custom/dashboard--knowledge-process nil))
-                         (when-let* ((buffer (process-buffer process))
-                                     ((buffer-live-p buffer)))
-                           (kill-buffer buffer))
-                         (when (buffer-live-p stderr)
-                           (kill-buffer stderr))
-                         (cl-incf custom/dashboard--generation)
-                         (condition-case refresh-error
-                             (custom/dashboard--refresh-visible-now)
-                           (error
-                            (message "[dashboard] 知识库刷新失败: %s"
-                                     (error-message-string refresh-error))))))))
+              (let ((process (make-process
+                              :name "dashboard-knowledge"
+                              :buffer stdout
+                              :stderr stderr
+                              :command (list exe "--domain" "human" "list"
+                                             "--recent" (number-to-string max-items) "--json")
+                              :connection-type 'pipe
+                              :noquery t
+                              :sentinel #'custom/dashboard--knowledge-sentinel)))
+                (process-put process :stderr-buffer stderr)
+                (process-put process :max-items max-items)
+                (setq custom/dashboard--knowledge-process process))
             (error
              (when (buffer-live-p stdout)
                (kill-buffer stdout))
@@ -5150,7 +5182,9 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
   "在 daemon 启动阶段同步预热 Dashboard 的常用数据缓存。"
   (dolist (fn (list (lambda () (custom/dashboard--todo-items 5))
                     #'custom/dashboard--known-projects
-                    (lambda () (custom/dashboard--recent-knowledge-entries 5))))
+                    (lambda () (custom/dashboard--recent-knowledge-entries 5))
+                    #'custom/dashboard--recents
+                    #'custom/dashboard--bookmarks))
     (condition-case err
         (funcall fn)
       (error
@@ -5168,10 +5202,19 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
                (lambda () (agenote-knowledge-show-card 'human id))
                (format "查看知识卡片 %s" display)))))))
 
+(defun custom/dashboard--compute-bookmarks ()
+  "实际计算书签名称列表（无缓存）。"
+  (require 'bookmark)
+  (bookmark-all-names))
+
+(defun custom/dashboard--bookmarks ()
+  "返回书签名称列表，结果带 TTL 缓存。"
+  (custom/dashboard--cached 'custom/dashboard--bookmarks-cache nil
+                            #'custom/dashboard--compute-bookmarks))
+
 (defun custom/dashboard--fetch-bookmarks ()
   "书签卡片 fetch。"
-  (require 'bookmark)
-  (list :ok (bookmark-all-names)))
+  (list :ok (custom/dashboard--bookmarks)))
 
 (defun custom/dashboard--render-bookmarks (names width)
   "书签卡片 render。"
@@ -5209,8 +5252,8 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
          (col-gap custom:dashboard-shortcuts-column-gap)
          (col-width (/ (max 1 (- available-width col-gap)) col-count))
          ;; 跨域调用保留 fboundp 守卫(正常路径由文档顺序保证 help 已就绪)。
-         (prefix-bindings (when (fboundp 'custom/help--extract-dashboard-bindings)
-                            (custom/help--extract-dashboard-bindings)))
+         (prefix-bindings (when (fboundp 'custom/binding-dashboard-bindings)
+                            (custom/binding-dashboard-bindings)))
          (total (length prefix-bindings))
          (rows-count (ceiling total (float col-count)))
          (row-lines nil))
@@ -5233,7 +5276,7 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
   (list :ok t))
 
 ;; 卡片注册表：title / icon / key 与 binding-spec 中的 :dashboard 声明一一对应，
-;; 由 configctl audit-keys 校验一致性。accent face 给图标上色，零主题耦合。
+;; accent face 给图标上色，零主题耦合。
 (custom/dashboard-define-card 'todo
                               :title "待办" :icon "󰃭" :key "C-c o a" :accent 'warning
                               :fetch #'custom/dashboard--fetch-todo
@@ -5666,7 +5709,7 @@ RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
 
 *** 实验性
 
-本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、which-key 中文宽度、Arei/Yasnippet .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
+本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、Arei/Yasnippet .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
 
 以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= / =<<compat/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
 
@@ -5674,10 +5717,8 @@ RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
 | Shim                       | 根因                                 | 受影响功能                     | 移除条件                                            |
 |----------------------------+--------------------------------------+--------------------------------+-----------------------------------------------------|
 | =compat/ghostel-with-editor= | with-editor 3.5.2 无 pre-spawn 接口  | ghostel 内 git commit          | Ghostel/with-editor 提供公开 pre-spawn 环境构造接口 |
-| =compat/which-key-width=     | which-key 自动列数中文宽度不等       | which-key 中文描述             | which-key 原生布局足够(=fboundp= 守卫容忍 API 变化)   |
 | =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei / Yasnippet               | 所有相关包改由 Emacs 31 重编译                      |
 | =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译                |
-| =emacs31/yasnippet-compat=   | yasnippet .elc 缺少 global mode 状态 | 新 client major-mode 初始化    | 升级 yasnippet 或 Guix 用 Emacs 31 重编译           |
 
 **** Ghostel pre-spawn 的 with-editor 适配
 
@@ -5691,53 +5732,15 @@ with-editor 3.5.2 的公开导出函数只支持已经存在的 shell/term/vterm
       (with-editor--setup))))
 #+end_src
 
-**** Which-key 中文宽度与网格布局补丁
-
-which-key 3.6.1 已内置 =string-width= 计算，但自动列数在底部 side-window 下仍可能导致中文描述列宽不等。补丁用 =advice-add :override= 替换 =which-key--pad-column= ，在固定网格布局下按等宽分栏。加 =fboundp= 守卫：which-key 已并入 Emacs 30+ 内置，未来若内部函数改名/移除，静默跳过。
-
-#+begin_src emacs-lisp :noweb-ref compat/which-key-width :tangle no
-(defun custom/which-key--pad-column-fixed-width (col-keys available-width)
-  "为 COL-KEYS 生成更适合中文的 which-key 列布局。
-AVAILABLE-WIDTH 为当前 which-key 可用宽度。固定网格布局下按等宽分栏,
-非网格布局下按 which-key 原生逻辑但用 `string-width' 计算。"
-  (let* ((grid-layout-p (custom/which-key--fixed-grid-layout-p))
-         (col-key-width (+ which-key-add-column-padding
-                           (which-key--max-len col-keys 0)))
-         (col-sep-width (which-key--max-len col-keys 1))
-         (target-col-width (custom/which-key--target-grid-column-width available-width))
-         (desc-space (max 1 (- target-col-width col-key-width col-sep-width)))
-         (col-desc-width (if grid-layout-p
-                             desc-space
-                           (max which-key-min-column-description-width desc-space)))
-         (col-width (+ col-key-width col-sep-width col-desc-width))
-         (col-format (concat "%" (int-to-string col-key-width) "s%s%s")))
-    (cons col-width
-          (mapcar
-           (pcase-lambda (`(,key ,sep ,desc ,_doc))
-             (let* ((display-desc (truncate-string-to-width
-                                   desc col-desc-width 0 nil which-key-ellipsis))
-                    (padding (max 0 (- col-desc-width (string-width display-desc)))))
-               (concat
-                (format col-format key sep display-desc)
-                (make-string padding ?\s))))
-           col-keys))))
-
-(defun custom/which-key-install-width-fix ()
-  "安装 Which-key 中文宽度与网格布局补丁。
-加 fboundp 守卫:which-key 已并入 Emacs 30+ 内置,未来若内部函数改名/移除,
-静默跳过而非崩溃。"
-  (when (fboundp 'which-key--pad-column)
-    (advice-add 'which-key--pad-column :override
-                #'custom/which-key--pad-column-fixed-width)))
-#+end_src
-
 **** arei .elc 与 buffer-local-set-state 不兼容(bug#80812)
 
 arei 0.9.7 的 .elc(Guix 用旧版 Emacs byte-compile)与 Emacs 31 的 =buffer-local-set-state= 宏不兼容:arei-mode 第 356 行调用该宏,但旧 .elc 把它当函数调用,参数 =(sesman-system 'Arei)= 被整体传给 =buffer-local-set-state--get= → =wrong-type-argument (symbolp 'Arei)= 。此错误在 =scheme-mode-hook= 里抛出,会中断整个 scheme-mode 初始化,导致 font-lock 失效 → Scheme 代码不染色。
 
 #+begin_src emacs-lisp :noweb-ref emacs31/source-load-compat :tangle no
 (defun custom/load-library-from-source (library)
-  "从 LIBRARY 对应的 .el 源加载，绕过不兼容的 Guix .elc。"
+  "从 LIBRARY 对应的 .el 源加载，绕过不兼容的 Guix .elc。
+GNU store 只读无法删 .elc，且 .el/.elc 时间戳相同（epoch 1）使
+`load-prefer-newer' 无效，故需显式从 .el 加载。返回 t 若成功。"
   (condition-case err
       (when-let* ((found (locate-library library))
                   (source (concat (file-name-sans-extension found) ".el"))
@@ -5750,12 +5753,6 @@ arei 0.9.7 的 .elc(Guix 用旧版 Emacs byte-compile)与 Emacs 31 的 =buffer-l
 #+end_src
 
 #+begin_src emacs-lisp :noweb-ref emacs31/arei-compat :tangle no
-(defun custom--load-arei-from-source ()
-  "从 .el 源强制加载 arei,绕过与 Emacs 31 不兼容的 .elc。
-GNU store 只读无法删 .elc,且 .el/.elc 时间戳相同(均为 epoch 1),
-`load-prefer-newer' 无效,故需显式从 .el 加载。返回 t 若成功。"
-  (custom/load-library-from-source "arei"))
-
 (defun custom--maybe-enable-arei-mode ()
   "在真实 Scheme 编辑 buffer 中启用 `arei-mode'(跳过 org src 临时 buffer)。
 
@@ -5770,13 +5767,7 @@ GNU store 只读无法删 .elc,且 .el/.elc 时间戳相同(均为 epoch 1),
 
 **** yasnippet global mode 状态变量缺失(bug#80812,同根因)
 
-Yasnippet 0.14.3 的 Guix =.elc= 在 Emacs 31 中加载后，=yas-global-mode= 虽为 non-nil，但 =yas-minor-mode--set-explicitly= / =yas-minor-mode--suppress-set-explicitly= 没有定义。新 client 切换 major mode 时，globalized minor mode hook 因 =void-variable= 中断。与 Arei 相同，运行时从 =.el= 源重新展开宏即可恢复完整定义。
-
-#+begin_src emacs-lisp :noweb-ref emacs31/yasnippet-compat :tangle no
-(defun custom--load-yasnippet-from-source ()
-  "从 .el 源加载 Yasnippet，补齐 Emacs 31 global mode 状态变量。"
-  (custom/load-library-from-source "yasnippet"))
-#+end_src
+Yasnippet 0.14.3 的 Guix =.elc= 在 Emacs 31 中加载后，=yas-global-mode= 虽为 non-nil，但 =yas-minor-mode--set-explicitly= / =yas-minor-mode--suppress-set-explicitly= 没有定义。新 client 切换 major mode 时，globalized minor mode hook 因 =void-variable= 中断。与 Arei 相同，运行时从 =.el= 源重新展开宏即可恢复完整定义；use-package 的 =:init= 直接调用 =custom/load-library-from-source "yasnippet"= 完成加载。
 
 ** 主配置收尾
 
