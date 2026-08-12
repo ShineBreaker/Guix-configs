@@ -1,9 +1,7 @@
 model:
-  default: glm-5.2
-  provider: zai
-  api_key: ak_2dV0dh97x2jc6Ip8hX6gu6WB1IJ90
-  base_url: https://api.z.ai/api/coding/paas/v4
-  api_mode: chat_completions
+  default: upstage/solar-pro4:free
+  provider: nous
+  base_url: ''
 providers:
   minimax-cn:
     models:
@@ -148,8 +146,8 @@ auxiliary:
     timeout: 60
     download_timeout: 30
   web_extract:
-    provider: deepseek
-    model: deepseek-v4-flash
+    provider: nous
+    model: upstage/solar-pro4:free
     timeout: 60
   compression:
     provider: auto
@@ -325,7 +323,7 @@ tts:
     voice: en_US-lessac-medium
 stt:
   enabled: true
-  provider: local
+  provider: openai
   local:
     model: base
     language: ''
