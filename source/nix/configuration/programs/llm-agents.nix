@@ -2,6 +2,9 @@
 
 {
   home.packages = with pkgs.llm-agents; [
+    aionui
+    officecli
+
     claude-agent-acp
     claude-code
 
@@ -10,7 +13,7 @@
 
     grok
     kimi-code
-    opencode
+    opencode2
     pi
     skills
   ];
