@@ -3,12 +3,14 @@ name: wine-protocol-forwarding
 description: "修复 Wine 应用自定义 URL 协议（OAuth 回调 app://）在 Linux 浏览器无法跳回的方案。覆盖 handler 注册、Wine 二进制匹配诊断、flatpak 容器内/外 IPC 兼容性。"
 triggers:
   - Wine app login opens browser but callback never returns
+  - Wine 应用点登录后浏览器打不开，或报 "already running but not responding"
   - 浏览器提示没有程序能处理自定义协议
   - OAuth redirect_uri 指向自定义 scheme 无法回调
   - Wine 应用注册了 URL Protocol 但 Linux 不响应
   - handler 触发了但应用日志显示 "joining" 后回调数据未转发
   - Wine 二进制不匹配（Bottles Proton-CachyOS vs Guix 标准版）
   - Bottles Wine 容器外报 `/lib/ld-linux.so.2: could not open`
+  - Wine 应用打开浏览器时好时坏（间歇性成功）—— 典型 DBus 地址不匹配
 ---
 
 # Wine 自定义 URL 协议转发（Linux 宿主端）
@@ -29,7 +31,19 @@ Wine 应用 → LaunchURL(https://oauth.server/...)
 
 Wine 注册表里虽然注册了协议（`HKCU\Software\Classes\<scheme>\shell\open\command`），但这**只对 Wine 内部有效**。原生 Linux 浏览器走 XDG MIME 查询 handler，不会读 Wine 注册表。
 
-## 修复三步
+## 两条链路
+
+OAuth 闭环有两条独立的转发链路，各自有独立的故障模式：
+
+1. **正向链路（app → browser）**：Wine 应用调 `LaunchURL(https://...)` → Wine winebrowser → Linux 浏览器
+   - 故障：浏览器报 "already running but not responding" / 打不开 / 间歇性成功
+   - 根因通常是 **DBus 地址不匹配**（见陷阱 0）
+
+2. **反向链路（browser → app）**：浏览器收到 302 重定向到 `app://callback` → Linux XDG MIME handler → Wine 应用
+   - 故障：浏览器报"没有程序能处理该协议" / handler 不触发 / 回调数据传不到第一个实例
+   - 根因通常是 **缺少 XDG handler 注册**（见修复三步）或 **Wine 二进制不匹配**（见陷阱 1）
+
+## 修复三步（反向链路）
 
 ### 1. 编写 Handler 脚本
 
@@ -85,6 +99,19 @@ xdg-mime query default x-scheme-handler/<scheme>
 
 ## 诊断流程
 
+### 先判断是哪条链路出了问题
+
+- **浏览器打不开 / 报 "already running"** → 正向链路问题（陷阱 0：DBus 地址不匹配）
+- **浏览器能打开但回调转不回来** → 反向链路问题（修复三步 / 陷阱 1-3）
+
+### 正向链路诊断（app → browser）
+
+1. **比较 DBus 地址**：读取浏览器主进程和 Wine/wineserver 进程的 `/proc/PID/environ`，看 DBUS_SESSION_BUS_ADDRESS 是否一致
+2. **检查 compositor 启动方式**：`ps aux | grep dbus-run-session` —— 如果 compositor 是通过 `dbus-run-session` 启动的，私有总线问题几乎必然存在
+3. **确认 winebrowser 配置**：`grep -A2 'Classes\\\\https\\\\shell\\\\open\\\\command' <WINEPREFIX>/system.reg` —— 默认是 `winebrowser.exe "%1"`，需要改成 env-bridge launcher
+
+### 反向链路诊断（browser → app）
+
 1. **确认 Wine 注册表已有协议注册**
    ```bash
    WINEPREFIX=<prefix> wine reg query "HKCU\Software\Classes\<scheme>\shell\open\command"
@@ -109,7 +136,44 @@ xdg-mime query default x-scheme-handler/<scheme>
 
 ## 关键陷阱
 
-### 1. Wine 二进制不匹配（最常见死穴）
+### 0. DBus 地址不匹配（正向链路 #1 死穴 — "时好时坏"的根因）
+
+**症状**：Wine 应用点登录后，浏览器报 "already running, but is not responding. To use X, you must first close the existing process"。或者时好时坏——有时能打开浏览器，有时不行。
+
+**根因**：当 compositor（如 niri）通过 `dbus-run-session` 启动时，桌面应用运行在一个**私有 DBus 总线**上（地址形如 `/tmp/dbus-XXXXX`）。但 Wine 子进程（winebrowser → xdg-open → 浏览器）可能继承到**另一个** DBus 地址（通常是系统默认的 `/run/user/<uid>/bus`）。两个不同的 session bus 导致：
+
+- 浏览器的新实例无法通过 DBus IPC 发现正在运行的旧实例
+- 浏览器以为没有实例在跑 → 尝试启动 → profile lock 冲突
+- → "already running but not responding"
+
+**为什么"时好时坏"**：取决于 Wine 进程启动时继承了哪个 DBus 地址。如果应用从桌面环境启动（继承正确地址），正常；如果从其他途径启动（terminal、manager），可能拿到错误地址。
+
+**诊断**：比较浏览器主进程和 Wine 进程的 DBUS_SESSION_BUS_ADDRESS：
+```bash
+# 浏览器主进程（正确地址）
+ZEN_PID=$(pgrep -x zen | head -1)  # 或 firefox / chrome
+tr '\0' '\n' < /proc/$ZEN_PID/environ | grep DBUS_SESSION_BUS_ADDRESS
+# → unix:path=/tmp/dbus-XXXXX
+
+# Wine 进程（可能拿到错误地址）
+WINE_PID=$(pgrep -f wineserver | head -1)
+tr '\0' '\n' < /proc/$WINE_PID/environ | grep DBUS_SESSION_BUS_ADDRESS
+# → unix:path=/run/user/1000/bus  ← 不同！
+```
+
+**修复**：创建 env-bridging launcher 脚本，从正在运行的浏览器进程读取正确环境，然后用修正后的环境调用 xdg-open。把 Wine 注册表里的 http/https handler 指向这个脚本。
+
+1. 创建 launcher 脚本（模板见 `templates/env-bridge-launcher.sh`）
+2. 修改 Wine 注册表：
+```bash
+WINEPREFIX=<prefix> wine reg add "HKCR\\https\\shell\\open\\command" /ve /t REG_SZ \
+  /d "\"Z:\\path\\to\\env-bridge-launcher.sh\" \"%1\"" /f
+WINEPREFIX=<prefix> wine reg add "HKCR\\http\\shell\\open\\command" /ve /t REG_SZ \
+  /d "\"Z:\\path\\to\\env-bridge-launcher.sh\" \"%1\"" /f
+```
+Wine 的 Z: 盘默认映射到 `/`，所以 Unix 路径 `/home/user/bin/script.sh` 在 Wine 里是 `Z:\home\user\bin\script.sh`。
+
+### 1. Wine 二进制不匹配（反向链路 #1 死穴）
 
 **handler 用错了 Wine = 回调永远传不过去**
 
@@ -194,6 +258,7 @@ WINEPREFIX=<prefix> <same-wine-as-first> <exe> "--starecho-callback=<url>"
 - **参数名不匹配**：从 Wine 注册表或 `strings <exe> | grep callback` 确认参数名（如 `--starecho-callback`）
 - **桌面环境缓存**：创建 desktop entry 和 mimeapps.list 后可能需要重新登录 DE/WM（niri 需重新登录会话）
 
-## 参考实例
+## 参考实例与模板
 
-见 `references/starecho-xutry.md` —— 实际修复 starecho.xutryeditor OAuth 回调的完整记录。
+- `references/starecho-xutry.md` —— starecho.xutryeditor OAuth 回调修复的完整记录（含反向链路 handler 注册 + 正向链路 DBus 修复）
+- `templates/env-bridge-launcher.sh` —— 正向链路 env-bridging launcher 脚本模板（修复 DBus/Display/Wayland 地址不匹配）

@@ -149,3 +149,64 @@ handler 用错了 Wine 二进制 → 两个不同来源的 Wine 进程无法通�
 ### 后续验证
 
 截至会话结束，handler 已能正确触发（`xdg-open` 测试通过），但完整 OAuth 流程尚未验证（用户需重新登录桌面环境后才能测试）。下次会话应跟进完整登录流程是否成功。
+
+## 正向链路修复：DBus 地址不匹配（2026-08-12）
+
+### 故障现象
+
+用户反馈："之前测试过几次可以使用，但是现在又不行了"。更具体地：应用点登录后浏览器报 "Zen is already running, but is not responding. To use Zen, you must first close the existing Zen process"。
+
+这是正向链路问题（app → browser），和之前的反向链路问题（browser → app）完全不同。
+
+### 根因
+
+niri 通过 `dbus-run-session niri --session` 启动，创建了私有 DBus 总线 `/tmp/dbus-mjvDzvig4q`。zen 浏览器运行在这个总线上。
+
+但 Wine 及其子进程（winebrowser → xdg-open → zen）拿到的是另一个 DBus 地址 `/run/user/1000/bus`（系统默认总线）。
+
+```
+zen 主进程 (PID 10559):  DBUS=unix:path=/tmp/dbus-mjvDzvig4q  ← 正确
+Wine 调起的 zen (32294): DBUS=unix:path=/run/user/1000/bus      ← 错误！
+```
+
+两个不同的 session bus → zen 新实例无法通过 DBus IPC 发现正在运行的旧实例 → 以为没有实例 → 尝试启动 → profile lock 冲突 → "already running but not responding"。
+
+**为什么"时好时坏"**：取决于 xuTry 从哪个环境启动。从桌面启动（继承正确 DBus）→ 正常；从 terminal 启动 → 可能拿到错误 DBus。
+
+### 诊断命令
+
+```bash
+# 1. 检查是否有两个不同的 DBus 地址
+ps aux | grep dbus-daemon | grep -v grep
+# 如果看到 dbus-run-session + 多个 dbus-daemon，说明有私有总线
+
+# 2. 比较浏览器主进程和 Wine 进程的 DBus 地址
+ZEN_PID=$(pgrep -x zen | head -1)
+tr '\0' '\n' < /proc/$ZEN_PID/environ | grep DBUS_SESSION_BUS_ADDRESS
+# vs
+tr '\0' '\n' < /proc/$WINE_PID/environ | grep DBUS_SESSION_BUS_ADDRESS
+```
+
+### 修复
+
+1. 创建 `~/.local/bin/wine-browser-launcher.sh`（模板见 `templates/env-bridge-launcher.sh`）
+   - 扫描 /proc 找到 zen 主进程（`.zen-real` comm 名，非 `-contentproc` 子进程）
+   - 从 `/proc/PID/environ` 提取正确的 DBUS_SESSION_BUS_ADDRESS、DISPLAY、WAYLAND_DISPLAY
+   - 用修正后的环境调用 `xdg-open`
+
+2. 修改 Wine 注册表，把 http/https handler 从 winebrowser 改为直接调 launcher 脚本：
+```bash
+WINEPREFIX=/home/brokenshine/.local/share/wine wine reg add "HKCR\\https\\shell\\open\\command" \
+  /ve /t REG_SZ /d "\"Z:\\home\\brokenshine\\.local\\bin\\wine-browser-launcher.sh\" \"%1\"" /f
+WINEPREFIX=/home/brokenshine/.local/share/wine wine reg add "HKCR\\http\\shell\\open\\command" \
+  /ve /t REG_SZ /d "\"Z:\\home\\brokenshine\\.local\\bin\\wine-browser-launcher.sh\" \"%1\"" /f
+```
+
+3. 验证：`wine reg query "HKCR\\https\\shell\\open\\command" /ve` 确认指向 launcher 脚本
+
+### 关键技术点
+
+- **/proc 扫描优于 pgrep**：在某些受限环境中 pgrep 可能看不到所有进程，直接遍历 `/proc/[0-9]*/comm` 更可靠
+- **浏览器主进程识别**：通过排除 `-contentproc` / `parentPid` 来区分主进程和子进程
+- **Z: 盘映射**：Wine 默认把 `/` 映射为 `Z:`，所以 Unix 路径可以直接在 Wine 注册表里以 `Z:\...` 形式引用
+- **shebang 铁律（Guix）**：launcher 脚本也必须用 `#!/usr/bin/env bash`，不能写 `#!/bin/bash`
