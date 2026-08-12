@@ -23,3 +23,5 @@ Wine OAuth 回调要点：handler 触发 ≠ 回调转发成功；卡住通常�
 用户偏好(2026-08-10):Guix-configs/jeans 仓库 Scheme 代码采用全套 R6RS Appendix C 方括号风格——let/let*/letrec/let-values/cond/case/match/do/case-lambda 的绑定/子句位置用 []，函数调用保持 ()。Guile reader 要求 []/() 严格配对（混搭是语法错非风格）。配套 count-parens 已升级为栈式。相关 skill(scheme-bracket-conventions、guix-configs-workflow)为 user-owned，需 hermes curator adopt 后落地。
 §
 设计优先准则:遇到可修复的设计缺陷时,优先思考"如何让这类错误不可能再发生"(更好的设计/结构/抽象),而非 merely"写测试来捕获下次出错"。原文准则:"Less 'let me write tests to catch the next time that error happens' — More 'let me make that class of error impossible with a better design'"。这是思考优先级的调整,不是否定测试的价值;具体语境下(安全关键/频繁复发的缺陷)设计改进的长期 ROI 远高于测试覆盖。
+§
+Emacs which-key 汉化的两层模型（2026-08-12 固化）：第一层是 custom/bind 声明的自定义键位（emacs.org 里），用 which-key-gap-scan.py 审计；第二层是第三方/内置 keymap 的原生绑定（org-mode-map 等，不走 custom/bind），只能从运行中的 Emacs dump keymap 后比对（scripts/dump-keymaps.el + compare-keymap-dump.py）。之前只扫第一层导致第二层全是盲区——用户截图里发现的 org-list-make-subtree、outline-next-visible-heading 等未翻译条目就是第二层的典型代表。详见 skill emacs-l10n-audit。

@@ -406,10 +406,11 @@ git commit -m "DOC: (docs/packages.md) regen via 'blue gen-docs' to include <新
 
 ## 2. Adding/upgrading a package
 
-Standard flow lives in `AGENTS.md` (see `blue build`, `blue upgrade`, `blue import-crate`). Two recurring pitfalls:
+Standard flow lives in `AGENTS.md` (see `blue build`, `blue upgrade`, `blue import-crate`). Recurring pitfalls:
 
 - **`rust-crates.scm` is auto-managed.** Never edit by hand. `guix import crate -f ./Cargo.lock` rewrites it whole. Manual edits cause `cargo build --offline` failures later.
 - **`-bin` suffix packages use one of three templates** depending on artifact shape (AppImage / archive / bare ELF). Pattern details + the "bare ELF still links libgcc_s via dlopen'd .node addon" trap are in AGENTS.md "预编译二进制包" — re-read that section before touching a -bin package.
+- **Rust packages with `option_env!()` compile-time config** (e.g. nix-ld's `DEFAULT_NIX_LD`) bake NixOS paths into the binary if the env var isn't set at build time, causing runtime `Posix(2)`/ENOENT panics. Diagnosis recipe + fix pattern + cargo-build-system input-label mechanics (`"glibc"` vs `"libc"` dual-label gotcha) + two-step verification when guix build is network-blocked: `references/rust-packaging-patterns.md`.
 
 ## 2.1 Wrapping an existing Guix package to add resources (langpack / theme / extension)
 
@@ -712,3 +713,4 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 | GitHub API rate limit 403 查不到 CI 状态 | 本机 gh CLI 已可用（绝对路径 `/home/brokenshine/.local/state/nix/profile/bin/gh`，2026-08-06 实测正常）：`gh api` / `gh run view <id> --log-failed` / `gh issue list` 优先用；仍 403 时用 `git log --oneline origin/main` 看最新 commit 是否已落本地,再 `git show <sha> --stat` 看改了什么,间接判断 CI 是否跑通。 |
 | AGENTS.md 描述里有 `source/channel.lock`，但仓库只有 `.guix-channel`          | `references/lint-recipes.md` §Recipe 4：blueprint 走 `.guix-channel` + `-L modules`；不要为对齐文档建假的 `source/`。                                                                                                                                                                                                                                                                                                                       |
 | `modules/jeans.scm` 补完 re-export 后要同步的事                           | `blue gen-docs` 重新生成 `docs/packages.md`，并在同一 commit 中提交。                                                                                                                                                                                                                                                                                                                                                                      |
+| Rust 包运行时 panic `Posix(2)` / ENOENT（如 nix-ld `src/main.rs:187`）     | `references/rust-packaging-patterns.md` §1：`option_env!()` 编译时常量未设，baked 了 NixOS 默认路径。诊断：`strings` 二进制查 baked 值；修复：build phase `setenv` + `native-inputs (list glibc)`。input label 是 `"glibc"` 不是 `"libc"`。 |
