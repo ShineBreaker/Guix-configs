@@ -155,6 +155,7 @@ startup -> appearance -> editing -> programming -> projects
 - agenote 同步/异步调用统一走 `custom/agenote-call` 和 `custom/agenote-call-async`，每次显式传 domain。
 - 全局键使用 `custom/bind`，局部键使用 `custom/bind-local`，前缀声明使用 `custom/declare-binding-prefix`，保持键位、Which-key、帮助和 Dashboard 同源。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有 14 个前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
 - display 初始化注册到 `custom/add-frame-created-hook`；依赖 client 最终 buffer 的行为注册到 `custom/add-server-ready-hook`。
+- `add-hook` / `run-with-idle-timer` / `run-at-time` 的回调必须用命名函数（`#'custom/...`），不得用匿名 lambda；需要忽略 hook 参数或适配参数元数时，定义专门的 `custom--...-on-<event>` 回调（如 `custom--tabs-on-project-switch`）。回调定义放在所属功能域，且必须在 hook 注册之前。
 - 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
 
 `emacs.org` 正文只记录靠近实现才有价值的功能语义、API 契约、兼容原因和设计取舍。Agent 工作流、索引、验收命令和通用性能规则只写在本文件。
