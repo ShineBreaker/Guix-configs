@@ -1,28 +1,44 @@
 {
-  "_comment": "Frozen rules — 单一权威源。pi-gate 扩展与 completion reviewer 都从这里读取。本文件是 meta-frozen：agent 禁止通过 write/edit 工具修改它（防止优化器削弱约束自己的规则）；修改须人工编辑源文件后 blue home。",
-  "frozen_commands": [
-    "blue rebuild",
-    "blue init",
-    "blue clean",
-    "guix system reconfigure",
-    "guix system init",
-    "sudo"
+  "_comment": "全局 agent 防护规则（跨所有 workspace 的通用约束，与仓库无关）。仓库专属规则（blue/guix/channel.lock/tmp/dotfiles/source 等）在各 <root>/.agents/anchors.json。代码底层（sudo 恒冻、rm 防护、git 写操作限制、~/.config·~/.local 部署位置保护）在各 hook 脚本硬编、恒定生效。本文件承载可配置的数据驱动规则，meta-frozen：agent 禁止通过 write/edit 修改它，调整须人工编辑源文件后 blue home。",
+  "frozen_commands": ["sudo"],
+  "frozen_paths": [],
+  "frozen_globs": [],
+  "interactive_commands": [
+    "vi",
+    "vim",
+    "nvim",
+    "nano",
+    "pico",
+    "ed",
+    "less",
+    "more",
+    "most",
+    "pg",
+    "man",
+    "ipython"
   ],
-  "frozen_paths": ["tmp/", "channel.lock", "~/.config/", "~/.local/"],
-  "redirect_conventions": {
-    "guix home reconfigure": "建议改用 blue home（锁定频道版本 + 括号检查，保证可复现）"
-  },
-  "human_only_actions": [
-    "blue rebuild（Guix System reconfigure，需 sudo）",
-    "blue init（装机到 /mnt，需 sudo）",
-    "blue clean / clean-generations（删世代 / EFI，需 sudo）",
-    "channel.lock 更新（blue update）",
-    "distill → skills/（agenote 蒸馏产物须人工 review）"
+  "sensitive_patterns": [
+    {
+      "pattern": "sk-[a-zA-Z0-9]{20,}",
+      "label": "疑似 API key（sk-...）",
+      "flags": "i"
+    },
+    {
+      "pattern": "(password|passwd|secret|token|api[_-]?key)\\s*[:=]\\s*[\"'][^\"'\\s]{8,}[\"']",
+      "label": "明文密码/secret/token",
+      "flags": "i"
+    },
+    {
+      "pattern": "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+      "label": "SSH 私钥"
+    },
+    { "pattern": "AKIA[0-9A-Z]{16}", "label": "疑似 AWS access key" },
+    { "pattern": "ghp_[a-zA-Z0-9]{36}", "label": "疑似 GitHub token" }
   ],
-  "anchor_measurements": [
-    "blue check 退出码 = 0（括号平衡 + tangle 通过）",
-    "git diff 非空（有实际变更，非空报告）",
-    "测试套件实际执行（不是被跳过或标准被降低）",
-    "blue --dry-run rebuild 构建验证通过（系统配置改动前）"
-  ]
+  "redirect_conventions": {},
+  "rewrite": {},
+  "path_hints": {},
+  "builtin_rewrite": true,
+  "human_only_actions": [],
+  "anchor_measurements": []
 }

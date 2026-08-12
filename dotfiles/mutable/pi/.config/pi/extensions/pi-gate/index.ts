@@ -67,6 +67,12 @@ export interface AnchorsConfig {
   human_only_actions: string[];
   /** 文档性：完成度度量锚点。 */
   anchor_measurements: string[];
+  /** 交互式命令（无 TTY 会挂起）：出现即禁，命令起始位置 + 词边界匹配。名单来自全局 anchors.json。 */
+  interactive_commands: string[];
+  /** 裸 REPL 命令：仅无参数时禁（命令起始位置 + 行尾）。名单来自全局 anchors.json。 */
+  bare_repl_commands: string[];
+  /** 敏感信息检测：正则 + 标签 + 可选 flags（如 "i"）。名单来自全局 anchors.json。 */
+  sensitive_patterns: Array<{ pattern: string; label: string; flags?: string }>;
 }
 
 /** anchors.json 原始内容（所有字段可选，含元字段）。 */
@@ -89,6 +95,9 @@ export const DEFAULT_ANCHORS: AnchorsConfig = {
   builtin_rewrite: true,
   human_only_actions: [],
   anchor_measurements: [],
+  interactive_commands: [],
+  bare_repl_commands: [],
+  sensitive_patterns: [],
 };
 
 const arr = (v: unknown): string[] =>
@@ -102,6 +111,39 @@ const map = (v: unknown): Record<string, string> => {
   return out;
 };
 const uniq = (a: string[]): string[] => [...new Set(a)];
+
+/** 从 unknown 提取 sensitive_patterns（校验 pattern 为 string；label 缺失补空串）。 */
+const patternArr = (
+  v: unknown,
+): Array<{ pattern: string; label: string; flags?: string }> => {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter(
+      (x): x is Record<string, unknown> =>
+        x != null &&
+        typeof x === "object" &&
+        typeof (x as Record<string, unknown>).pattern === "string",
+    )
+    .map((x) => ({
+      pattern: x.pattern as string,
+      label: typeof x.label === "string" ? x.label : "",
+      flags: typeof x.flags === "string" ? x.flags : undefined,
+    }));
+};
+/** 按 pattern 去重（保留首次出现，ratchet：全局层胜出）。 */
+const dedupPatterns = (
+  a: Array<{ pattern: string; label: string; flags?: string }>,
+): Array<{ pattern: string; label: string; flags?: string }> => {
+  const seen = new Set<string>();
+  const out: Array<{ pattern: string; label: string; flags?: string }> = [];
+  for (const p of a) {
+    if (!seen.has(p.pattern)) {
+      seen.add(p.pattern);
+      out.push(p);
+    }
+  }
+  return out;
+};
 
 /** 将 extra 合并到 base 之上（ratchet）：数组并集、映射浅合并（extra 覆盖）、builtin_rewrite 由 extra 决定（若给出）。 */
 export function mergeAnchors(
@@ -132,6 +174,18 @@ export function mergeAnchors(
     anchor_measurements: uniq([
       ...base.anchor_measurements,
       ...arr(extra.anchor_measurements),
+    ]),
+    interactive_commands: uniq([
+      ...base.interactive_commands,
+      ...arr(extra.interactive_commands),
+    ]),
+    bare_repl_commands: uniq([
+      ...base.bare_repl_commands,
+      ...arr(extra.bare_repl_commands),
+    ]),
+    sensitive_patterns: dedupPatterns([
+      ...base.sensitive_patterns,
+      ...patternArr(extra.sensitive_patterns),
     ]),
   };
 }
@@ -243,27 +297,8 @@ export function loadGates(cwd: string): LoadedGates {
 const PREFIX = /(?:^|[;&|\n(]|&&|\|\||\$\()\s*/;
 const cp = (r: RegExp) => new RegExp(PREFIX.source + r.source);
 
-/** 交互式命令（无 TTY 会挂起）——仅在命令起始位置匹配 */
-const INTERACTIVE_PATTERNS: Array<{ re: RegExp; msg: string }> = [
-  {
-    re: cp(/(vi|vim|nvim|nano|pico|ed|emacs)\b/),
-    msg: "禁止交互式编辑器，请使用 edit/write 工具",
-  },
-  {
-    re: cp(/(less|more|most|pg)\b/),
-    msg: "禁止交互式 pager，请使用 read/grep 工具",
-  },
-  { re: cp(/man(?:\s|$)/), msg: "禁止 man，请使用 --help 或在线文档" },
-  {
-    re: cp(/(python|python3)\s*$/),
-    msg: "禁止裸 REPL，请使用 python -c '...' 或 python script.py",
-  },
-  {
-    re: cp(/node\s*$/),
-    msg: "禁止裸 REPL，请使用 node -e '...' 或 node script.js",
-  },
-  { re: cp(/ipython\b/), msg: "禁止 ipython，请使用 python -c '...'" },
-];
+// 交互式命令名单（出现即禁 / 仅裸调用禁）数据驱动，来自 anchors.json 的
+// interactive_commands 与 bare_repl_commands；匹配机制（PREFIX + \b / $）在 checkBashCommand 内构造。
 
 /** Git 写操作限制——同样仅命令起始位置 */
 const RE_GIT_COMMIT = cp(/git\s+commit\b/);
@@ -305,9 +340,16 @@ export function checkBashCommand(
     return "🚫 禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 `blue --dry-run rebuild`；固化请提醒用户手动运行。";
   }
 
-  // Phase 1b: 交互式命令（无 TTY 会挂起）
-  for (const { re, msg } of INTERACTIVE_PATTERNS) {
-    if (re.test(cmd)) return `🚫 ${msg}`;
+  // Phase 1b: 交互式命令（无 TTY 会挂起）——名单来自 anchors.json，匹配在此构造
+  for (const name of merged.interactive_commands) {
+    if (cp(new RegExp(`${escapeRe(name)}\\b`)).test(cmd)) {
+      return `🚫 禁止交互式命令 ${name}（无 TTY 会挂起），请使用对应工具`;
+    }
+  }
+  for (const name of merged.bare_repl_commands) {
+    if (cp(new RegExp(`${escapeRe(name)}\\s*$`)).test(cmd)) {
+      return `🚫 禁止裸 REPL ${name}，请使用 ${name} -c '...' 或脚本`;
+    }
   }
 
   // Phase 1c: Git 限制
@@ -523,24 +565,19 @@ export function matchGlob(
 
 // ─── 敏感信息检测 ──────────────────────────────────────────────────────────
 
-const SENSITIVE_PATTERNS: Array<{ re: RegExp; label: string }> = [
-  { re: /sk-[a-zA-Z0-9]{20,}/i, label: "疑似 API key（sk-...）" },
-  {
-    re: /(password|passwd|secret|token|api[_-]?key)\s*[:=]\s*["'][^"'\s]{8,}["']/i,
-    label: "明文密码/secret/token",
-  },
-  {
-    re: /-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----/,
-    label: "SSH 私钥",
-  },
-  { re: /AKIA[0-9A-Z]{16}/, label: "疑似 AWS access key" },
-  { re: /ghp_[a-zA-Z0-9]{36}/, label: "疑似 GitHub token" },
-];
+// 敏感信息检测模式数据驱动，来自 anchors.json 的 sensitive_patterns（正则 + 标签 + 可选 flags）。
 
-export function detectSensitiveInfo(content: string): string[] {
+export function detectSensitiveInfo(
+  content: string,
+  merged: AnchorsConfig,
+): string[] {
   const found: string[] = [];
-  for (const { re, label } of SENSITIVE_PATTERNS) {
-    if (re.test(content)) found.push(label);
+  for (const { pattern, label, flags } of merged.sensitive_patterns) {
+    try {
+      if (new RegExp(pattern, flags ?? "").test(content)) found.push(label);
+    } catch {
+      // 无效正则跳过（配置损坏不应让 hook 崩溃）
+    }
   }
   return found;
 }
@@ -686,7 +723,7 @@ function factoryBody(pi: ExtensionAPI) {
     }
 
     if (content) {
-      const sensitive = detectSensitiveInfo(content);
+      const sensitive = detectSensitiveInfo(content, gates.merged);
       if (sensitive.length > 0) {
         const reason = `🚫 检测到敏感信息: ${sensitive.join("; ")}。如确认无风险请手动操作。`;
         if (ctx.hasUI) {

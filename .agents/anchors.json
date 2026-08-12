@@ -11,9 +11,7 @@
 
   "frozen_paths": [
     "tmp/",
-    "channel.lock",
-    "~/.config/",
-    "~/.local/"
+    "channel.lock"
   ],
 
   "frozen_globs": [],
