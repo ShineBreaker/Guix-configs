@@ -88,7 +88,25 @@
 ;;     reconfigure / gc / stow 等"会改系统"的命令因此全部安全短路。
 ;;   * 但有两类操作即使在 dry-run 时也必须真跑：tangle（要生成 config.scm
 ;;     才能验证括号）和括号检查本身。这类调用显式传 `#:real? #t` 跳过短路。
-;;   * 真跑时若退出码非 0，立即 error 中止——避免"静默失败后继续 reconfigure"。
+;;   * 真跑时若退出码非 0，走 %subprocess-fail! 打印一行错误并以非零码
+;;     退出——避免"静默失败后继续 reconfigure"。
+;; ---- %subprocess-fail!：子进程失败的统一出口 ----------------------------
+;;
+;; 打印一行错误并以子进程的退出码终止进程。刻意不用 (error ...) 抛异常：
+;; blue 框架会为【任何】异常打印整套 Guile backtrace（Traceback ...），而
+;; "子进程非零退出"是预期内失败——那份堆栈只是框架内部调用链，没有诊断
+;; 价值，反而淹没真正的报错。直接 primitive-exit 则绕过 backtrace，只留
+;; 下这一行。
+;;
+;; 注意：这只影响"子进程失败"一条路径。本文件其余 (error ...)（逻辑校验、
+;; usage 等）仍抛异常、仍打 backtrace，保留 Scheme 逻辑 bug 的定位能力。
+(define (%subprocess-fail! status message)
+  (format (current-error-port) "~a~%" message)
+  ;; 必须用 primitive-exit：Guile 的 `exit' 会抛 `quit' 异常，仍被 blue
+  ;; 框架的 with-exception-handler 捕获、照打 backtrace。primitive-exit
+  ;; 直接调 C 级 exit，不抛异常、不经过框架，才真正干净退出。
+  (primitive-exit (or status 1)))
+
 (define* (%run command #:key real?)
   (match command
     [(program . args)
@@ -98,7 +116,8 @@
            #t)
          (let ([status (popen program args)])
            (unless (zero? status)
-             (error (format #f "命令执行失败 (~a): ~s" status command)))
+             (%subprocess-fail! status
+                                (format #f "命令执行失败 (~a): ~s" status command)))
            #t))]))
 
 ;; ---- %guix：锁定频道的 guix 包装 ----------------------------------------
@@ -170,8 +189,10 @@
          [content (get-string-all pipe)]
          [status (close-pipe pipe)])
     (unless (zero? (status:exit-val status))
-      (error (format #f "命令执行失败 (~a): ~a"
-                     (status:exit-val status) command)))
+      (%subprocess-fail!
+       (status:exit-val status)
+       (format #f "命令执行失败 (~a): ~a"
+               (status:exit-val status) command)))
     content))
 
 ;; 把一条 shell 命令的【标准输出按行】读成 list。
@@ -805,8 +826,10 @@
                         (loop (cons line lines)))))]
          [status (close-pipe pipe)])
     (unless (zero? (status:exit-val status))
-      (error (format #f "structor: 无法枚举 git 可见路径 (~a): ~a"
-                     (status:exit-val status) scope)))
+      (%subprocess-fail!
+       (status:exit-val status)
+       (format #f "structor: 无法枚举 git 可见路径 (~a): ~a"
+               (status:exit-val status) scope)))
     paths))
 
 ;; 条目 rel（相对 scope 的路径）是否在 git 可见路径集合 visible 中。
