@@ -2,9 +2,6 @@
 
 {
   home.packages = with pkgs.llm-agents; [
-    aionui
-    officecli
-
     claude-agent-acp
     claude-code
 
@@ -17,15 +14,4 @@
     pi
     skills
   ];
-
-  programs.codexDesktopLinux = {
-    enable = true;
-    computerUseUi.enable = true;
-    remoteMobileControl.enable = true;
-    linuxFeatures = [
-      "appshots"
-      "open-target-discovery"
-    ];
-    remoteControl.enable = true;
-  };
 }

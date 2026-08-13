@@ -44,6 +44,7 @@
     gamescope
     mangojuice
     sunshine
+    winetricks
 
     ## Environment management
     biome
