@@ -1,6 +1,6 @@
 model:
-  default: upstage/solar-pro4:free
-  provider: nous
+  default: deepseek-v4-flash
+  provider: deepseek
   base_url: ''
 providers:
   minimax-cn:
@@ -43,7 +43,7 @@ agent:
 terminal:
   backend: local
   modal_mode: auto
-  cwd: .
+  cwd: ~/Projects/
   timeout: 180
   env_passthrough: []
   home_mode: auto
@@ -146,38 +146,28 @@ auxiliary:
     timeout: 60
     download_timeout: 30
   web_extract:
-    provider: nous
-    model: upstage/solar-pro4:free
+    provider: auto
+    model: ''
     timeout: 60
   compression:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 120
   skills_hub:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 30
   approval:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 30
   mcp:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 30
   title_generation:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 60
     language: ''
   tts_audio_tags:
@@ -189,26 +179,18 @@ auxiliary:
   triage_specifier:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 120
   kanban_decomposer:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 180
   profile_describer:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 60
   curator:
     provider: auto
     model: ''
-    base_url: ''
-    api_key: ''
     timeout: 600
   monitor:
     provider: auto
@@ -599,7 +581,8 @@ plugins:
     default_trust: '0.5'
     hrr_dim: '1024'
   enabled:
-    - orca-status
+    - ponytail
+  disabled: []
 session_reset:
   at_hour: 4
   idle_minutes: 1440

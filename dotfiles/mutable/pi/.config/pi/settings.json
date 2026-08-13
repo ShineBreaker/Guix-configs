@@ -30,7 +30,8 @@
     "npm:pi-cache-graph",
     "npm:@juicesharp/rpiv-todo",
     "npm:@juicesharp/rpiv-btw",
-    "npm:@juicesharp/rpiv-ask-user-question"
+    "npm:@juicesharp/rpiv-ask-user-question",
+    "git:github.com/DietrichGebert/ponytail"
   ],
   "skills": [
     "~/.config/agents/skills/*"
