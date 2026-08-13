@@ -291,14 +291,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
          (needed-for-boot? #t)
          (check? #f))
         (file-system
-         (mount-point "/tmp")
-         (device "tmpfs")
-         (type "tmpfs")
-         (options "mode=1777,nr_inodes=1m,size=75%")
-         (needed-for-boot? #t)
-         (create-mount-point? #t)
-         (check? #f))
-        (file-system
          (device "tmpfs")
          (mount-point "/var/lock")
          (type "tmpfs")
@@ -318,7 +310,8 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
            (dependencies %mapped-devices-config)
            (options (string-append "subvol=" subvol ",compress=zstd:6"))
            (create-mount-point? #t)
-           (needed-for-boot? #t)
+           ;; /tmp 非启动必需：挂载失败时优雅降级为根 tmpfs 的子目录
+           (needed-for-boot? (not (string=? mount-point "/tmp")))
            (check? (string=? mount-point "/gnu"))))) %btrfs-subvolumes))
 
 (define %data-filesystem
@@ -549,6 +542,36 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                                           (lambda (port)
                                             (display "259:3" port))))))))
 
+      ;; 开机清空 /tmp：/tmp 已改为 btrfs 持久化挂载，
+      ;; 用此服务替代原 tmpfs 的"重启自动清空"行为
+      (simple-service 'cleanup-/tmp
+                      shepherd-root-service-type
+                      (list (shepherd-service
+                             (documentation "Empty /tmp on boot.")
+                             (provision '(cleanup-/tmp))
+                             (requirement '(file-systems))
+                             (one-shot? #t)
+                             (start
+                              (with-imported-modules (source-module-closure
+                                                      '((guix build utils)))
+                                                     #~(lambda ()
+                                                         (use-modules (guix build utils))
+                                                         ;; 删除 /tmp 下所有内容（mindepth 1 保留目录本身），
+                                                         ;; 单条目删除失败不应阻断启动
+                                                         (false-if-exception
+                                                          (invoke #$(file-append findutils "/bin/find")
+                                                                  "/tmp" "-mindepth" "1" "-delete"))
+                                                         ;; btrfs 子卷挂载点默认权限可能非 1777，强制修正粘滞位
+                                                         (chmod "/tmp" #o1777)
+                                                         #t))))))
+
+      ;; 把 cleanup-/tmp 注入 user-processes 的 requirement，使所有经
+      ;; user-processes 启动的服务（dbus/桌面/ssh-agent 等）确定性地排在
+      ;; /tmp 清空之后。复用 Guix 官方 file-systems→user-processes 注入机制
+      ;; （见 gnu/services/base.scm 的 file-system-service-type 同款手法）。
+      (simple-service 'cleanup-/tmp-prereq user-processes-service-type
+                      (list 'cleanup-/tmp))
+
       (simple-service 'fix-data-perms activation-service-type
                       #~(begin
                           (use-modules (guix build utils))
@@ -584,43 +607,23 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 
 *** 网络相关配置
 
-**** 防火墙与可信 WiFi
++ 防火墙与可信 WiFi
 
-使用一份静态 nftables 规则集，NetworkManager dispatcher 只原子更新
-
-=inet filter= 表的 =trusted_ifaces= 集合。它绝不执行 =flush ruleset=，因而不会
-
-删除 libvirt 或其他服务在运行时安装的 nftables 规则。
+使用一份静态 nftables 规则集，NetworkManager dispatcher 只原子更新 =inet filter= 表的 =trusted_ifaces= 集合。它绝不执行 =flush ruleset=，因而不会删除 libvirt 或其他服务在运行时安装的 nftables 规则。
 
 - =source/files/nftables.conf= —— 唯一由 =nftables-service-type= 加载的规则集
 - 可信 connection profile 列表只保存在 age 密文中，不在 Scheme 源码保留明文副本
-- dispatcher 在可信 profile 的 =up= 事件中加入 =wlp0s20f3=；在非可信或 =down=
-  事件中删除它，失败时默认严格
+- dispatcher 在可信 profile 的 =up= 事件中加入 =wlp0s20f3= ；在非可信或 =down= 事件中删除它，失败时默认严格
 
-白名单使用 NetworkManager 的 =CONNECTION_ID=（profile 名称），不是 SSID；它必须与
+白名单使用 NetworkManager 的 ~CONNECTION_ID=（profile 名称）~ ，不是 SSID；它必须与 ~nmcli connection show~ 的名称一致。列表以 age 密文保存在 =dotfiles/mutable/secrets/.local/share/secrets-encrypted/wifi-trust.age= 。dispatcher 只注入密文与 =age=、=nft=、=grep= 的 store 路径，事件触发时把解密结果直接通过管道交给 =grep= ，不产生持久化明文。私钥缺失或解密失败时仅撤销 WiFi 信任，NetworkManager 继续正常运行，因此不会阻断普通联网。
 
-=nmcli connection show= 的名称一致。列表以 age 密文保存在
-
-=dotfiles/mutable/secrets/.local/share/secrets-encrypted/wifi-trust.age=。dispatcher
-
-只注入密文与 =age=、=nft=、=grep= 的 store 路径，事件触发时把解密结果直接通过管道
-
-交给 =grep=，不产生持久化明文。私钥缺失或解密失败时仅撤销 WiFi 信任，NetworkManager
-
-继续正常运行，因此不会阻断普通联网。
-
-**** 热点 AP + WiFi 客户端并发
++ 热点 AP + WiFi 客户端并发
 
 硬件确认：Intel Meteor Lake CNVi 支持 =managed + AP= 并发（同信道）。
 
-系统服务用 =iw= 创建 =uap0=，NetworkManager 只管理该已存在的 AP 接口；profile 名称本身
+系统服务用 =iw= 创建 =uap0= ，NetworkManager 只管理该已存在的 AP 接口；profile 名称本身不会创建虚拟无线接口。两个接口共享同一 radio，AP 必须与客户端使用同一信道。服务启动时会幂等迁移已有的热点 profile（保留现有 SSID 和密钥），并在创建 =uap0= 之前关闭 NetworkManager 自动激活。
 
-不会创建虚拟无线接口。两个接口共享同一 radio，AP 必须与客户端使用同一信道。
-
-服务启动时会幂等迁移已有的热点 profile（保留现有 SSID 和密钥），并在创建
-
-=uap0= 之前关闭 NetworkManager 自动激活。也可在部署前手动执行同一命令预检：
-
+也可在部署前手动执行同一命令预检：
 #+begin_src bash
 nmcli connection modify auto-hotspot \
       connection.interface-name uap0 \
@@ -629,7 +632,6 @@ nmcli connection modify auto-hotspot \
 #+end_src
 
 若尚未创建 profile，再运行：
-
 #+begin_src bash
 nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
       ssid <你的SSID> 802-11-wireless.mode ap \
@@ -802,7 +804,6 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
 #+end_src
 
 nm-dispatcher-trusted-connection
-
 #+name: nm-dispatcher-trusted-connection
 #+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
 #!/bin/sh
@@ -851,7 +852,6 @@ esac
 #+end_src
 
 nftable 配置
-
 #+begin_src conf :tangle ../tmp/nftables.conf
 # Static ruleset loaded only by nftables-service-type at boot.
 # The NetworkManager dispatcher atomically updates trusted_ifaces; it never
@@ -1447,7 +1447,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "cc-switch-bin"
         "crush-bin"
         "github-copilot"
-        ; "reasonix-desktop-bin"
         "zcode"
 
         ;; 工具
@@ -1510,7 +1509,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "kdeconnect"
         "motrix-next-bin"
         "seahorse"
-        "wine64"
+        "wine64-staging"
 
         ;; 虚拟机
         "freerdp@3"
@@ -2065,7 +2064,12 @@ end
   ("_JAVA_AWT_WM_NONREPARENTING" . "1")
   ("MOZ_ENABLE_WAYLAND" . "1")
   ("NIXOS_OZONE_WL" . "1")
-  ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1"))
+  ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1")
+
+  ;; nix: GitHub API token 供 flake 解析认证（避免 403 限流）。
+  ;; token 本体在 ~/.config/nix/gh-token.conf（0600，不进 git），
+  ;; 此变量让 nix 客户端额外加载该私有配置。
+  ("NIX_USER_CONF_FILES" . "$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/nix.conf"))
 #+end_src
 
 **** 为了让软件尽量遵守XDG规范而提供的变量
@@ -2381,7 +2385,7 @@ end
                                (xdg-env? #t)))
                              ;; fallback greeter：autologin 退出后显示文本登录
                              (default-session-command
-                              (greetd-agreety-session))))))))
+                               (greetd-agreety-session))))))))
      (modify-services (operating-system-user-services %live-base-os)
                       (delete kmscon-service-type)
                       (delete console-font-service-type)

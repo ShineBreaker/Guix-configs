@@ -70,6 +70,7 @@
     ("SYSTEM/Guix/@persist/log"            "/var/log")
     ("SYSTEM/Guix/@persist/mihomo"         "/.config")
     ("SYSTEM/Guix/@persist/tmp"             "/var/tmp")
+    ("SYSTEM/Guix/@tmp"                     "/tmp")
 
     ("SYSTEM/Guix/@etc/guix"               "/etc/guix")
     ("SYSTEM/Guix/@etc/ipsec.secrets"      "/etc/ipsec.secrets")
