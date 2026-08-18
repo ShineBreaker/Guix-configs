@@ -42,10 +42,36 @@
     ];
 
     userSettings = {
+      theme = {
+        mode = "system";
+        light = "Ayu Light";
+        dark = "Colorizer";
+      };
 
-      # theme = "Noctalia Dark";
+      agent_servers = {
+        opencode = {
+          type = "registry";
+          default_config_options = {
+            effort = "max";
+            model = "opencode/deepseek-v4-flash-free";
+          };
+        };
+        codex-acp = {
+          type = "registry";
+        };
+        glm-acp-agent = {
+          type = "registry";
+        };
+        claude-acp = {
+          type = "registry";
+        };
+      };
+
+      proxy = "";
 
       agent = {
+        dock = "right";
+        sidebar_side = "right";
         tool_permissions = {
           default = "allow";
         };
@@ -101,6 +127,7 @@
 
       autoscroll_on_clicks = false;
       cursor_shape = "bar";
+      cli_default_open_behavior = "existing_window";
       on_last_window_closed = "quit_app";
       when_closing_with_no_tabs = "keep_window_open";
 
@@ -112,6 +139,7 @@
       auto_update = false;
       autosave = "on_focus_change";
       base_keymap = "VSCode";
+      buffer_font_family = "Maple Mono NF CN";
       buffer_font_size = lib.mkForce 14;
       buffer_font_weight = 400.0;
 
@@ -135,9 +163,11 @@
       git_panel = {
         button = true;
         dock = "left";
+        tree_view = true;
       };
 
       icon_theme = lib.mkForce "Catppuccin Frappé";
+      ui_font_family = "Sarasa UI SC";
       ui_font_size = lib.mkForce 15;
       ui_font_weight = 500.0;
       unnecessary_code_fade = 0.7;
@@ -322,6 +352,7 @@
 
       outline_panel = {
         button = true;
+        dock = "left";
       };
     };
   };
