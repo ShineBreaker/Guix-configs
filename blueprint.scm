@@ -39,11 +39,13 @@
              (blue types command)       ; define-command 宏
              (blue types testable)      ; <testable> 基类（接 blue check）
              (blue subprocess)          ; popen（子进程，返回退出码）
+             (guix channels)            ; channel 记录 / channel->code（update 单频道刷新用）
              (guix utils)               ; %current-system（build-iso 文件名用）
              (guix build utils)         ; mkdir-p / delete-file-recursively
              (ice-9 ftw)                ; scandir（列目录）
              (ice-9 match)              ; match / match-lambda（模式匹配）
              (ice-9 popen)              ; open-input-pipe（读管道）
+             (ice-9 pretty-print)       ; pretty-print（临时 channels 文件序列化）
              (ice-9 rdelim)             ; read-line / get-string-all
              (ice-9 regex)              ; string-match（密钥扫描用）
              (ice-9 textual-ports)      ; get-string-all（读整个文件）
@@ -1286,25 +1288,90 @@
    (synopsis "通过锁定频道执行 guix pull"))
   (%guix '("pull" "--allow-downgrades" "--fallback")))
 
-;; blue update —— 用 channel.scm（可变分支）跑 guix describe，把结果写回
-;; channel.lock（固定 commit），然后 git commit -S 锁定。
+;; ---- 单频道刷新辅助（blue update CHANNEL 用） ------------------------------
+;;
+;; 原理：Guix 的 channels 文件原生支持「pin 混搭」——带 (commit ...) 的频道
+;; 固定在该 commit（update-cached-checkout 不拉新），不带的跟随 branch 最新
+;; （手册 "Specifying Channels"）。单刷新 = 生成一份临时 channels 文件：
+;; 目标频道用 channel.scm 的可变定义，其余频道换成 channel.lock 的锁定版本，
+;; 再照常用 time-machine describe 产出完整的新 lock。
+
+;; 求值 channels 文件，返回 channel 记录列表。加载环境必须同时提供 (guile)
+;; 核心绑定和 (guix channels) 接口：channel.scm 用了 %default-channels /
+;; inherit（后者导出）也用了 append 等核心过程，直接在 (guix channels)
+;; 接口上 primitive-load 会丢掉核心绑定。channel.scm 的 guix 条目与
+;; %default-channels 同名重复，按 latest-channel-instances 的语义
+;; （保留先出现者）由 %partial-channels-file 去重。
+(define (%load-channels file)
+  (let ([module (make-fresh-user-module)])
+    (module-use! module (resolve-interface '(guix channels)))
+    (save-module-excursion
+     (lambda ()
+       (set-current-module module)
+       (primitive-load file)))))
+
+;; 构造单频道刷新用的临时 channels 文件（tmp/update-channels.scm）：
+;; target 用 channel.scm 定义（可变，跟随分支最新），其余频道换成
+;; channel.lock 的同名 pin 版替换；lock 中没有的新频道保持可变（首次纳入）。
+;; 返回临时文件路径。
+(define (%partial-channels-file target)
+  (let* ([scm-channels (%load-channels %channel-scm)]
+         [lock-by-name
+          (map (lambda (c) (cons (channel-name c) c))
+               (%load-channels %channel-lock))]
+         [names (delete-duplicates (map channel-name scm-channels))]
+         [target-name (string->symbol target)])
+    (unless (memq target-name names)
+      (error (format #f "update: 未知频道 ~a（可用：~a）"
+                     target (string-join (map symbol->string names) " "))))
+    (let ([merged
+           (let loop ([rest scm-channels] [seen '()] [out '()])
+             (match rest
+               [() (reverse out)]
+               [(ch . more)
+                (let ([name (channel-name ch)])
+                  (if (memq name seen)
+                      (loop more seen out)
+                      (loop more (cons name seen)
+                            (cons (if (eq? name target-name)
+                                      ch                      ; 目标：可变定义
+                                      (or (assq-ref lock-by-name name) ch))
+                                  out))))]))])
+      (mkdir-p %tmp-dir)
+      (let ([file (string-append %tmp-dir "/update-channels.scm")])
+        (call-with-output-file file
+          (lambda (port)
+            (pretty-print `(list ,@(map channel->code merged)) port)))
+        file))))
+
+;; blue update [CHANNEL] —— 用可变频道定义跑 guix describe，把结果写回
+;; channel.lock（固定 commit），然后 git commit -S 锁定。不带参数刷新全部
+;; 频道；带 CHANNEL 只刷新该频道，其余保持 channel.lock 中的 commit 不变。
 (define-command (update-command arguments)
   ((invoke "update")
    (category 'guix)
-   (synopsis "更新 source/channel.lock 并提交"))
-  (let ([content
-         (%pipe->string
-          (string-join
-           (map %shell-quote
-                (list "guix" "time-machine"
-                      (string-append "--channels=" %channel-scm)
-                      "--" "describe" "--format=channels"))
-           " "))])
-    (%write-file-atomically %channel-lock
-                            (lambda (port) (display content port)))
-    (%run `("git" "commit" "-S" "-m"
-            "UPDATE: (channel.lock) bump version."
-            ,%channel-lock))))
+   (synopsis "更新 source/channel.lock 并提交")
+   (help "[CHANNEL]
+不带参数：刷新全部频道到 channel.scm 声明的分支最新。
+带 CHANNEL：只刷新该频道，其余频道保持 channel.lock 中锁定的 commit 不变。"))
+  (let ([channels-file
+         (match arguments
+           [() %channel-scm]
+           [(target) (%partial-channels-file target)]
+           [_ (error "usage: blue update [CHANNEL]")])])
+    (let ([content
+           (%pipe->string
+            (string-join
+             (map %shell-quote
+                  (list "guix" "time-machine"
+                        (string-append "--channels=" channels-file)
+                        "--" "describe" "--format=channels"))
+             " "))])
+      (%write-file-atomically %channel-lock
+                              (lambda (port) (display content port)))
+      (%run `("git" "commit" "-S" "-m"
+              "UPDATE: (channel.lock) bump version."
+              ,%channel-lock)))))
 
 ;;; ---------- 维护 ----------
 
