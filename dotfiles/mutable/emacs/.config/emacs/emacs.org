@@ -9,53 +9,47 @@
 :PROPERTIES:
 :CUSTOM_ID: overview
 :END:
-:
+
 本文档 =emacs.org= 是 =custom-config= 的唯一配置真理源。8 个配置域按固定顺序加载（文档顺序 = 求值顺序），定义方必须在调用方之前。配置域的边界、职责与 CUSTOM_ID 一旦建立即稳定不变——新增功能合并到最匹配的现有域，不创建第 9 个。
-:
-| 顺序 | 配置域 | CUSTOM_ID | 主要职责 | 加载前提 |
-|------+--------+-----------+----------+--------|
-| 1 | 启动与基础设施 | [[#startup]] | GC / 路径常量 / Frame 生命周期 / 键位原语 / 包管理 / 基础行为 | 无 |
-| 2 | 界面与外观 | [[#appearance]] | Mode-line / Tab-line / 主题字体 / 窗口布局 / Git / 颜色方案 | startup |
-| 3 | 编辑与文本 | [[#editing]] | 缩进括号 / EditorConfig / DWIM / mc / 终端集成 | appearance 的窗口路由 |
-| 4 | 编程与开发 | [[#programming]] | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表 | bootstrap, appearance |
-| 5 | 项目与导航 | [[#projects]] | project.el / 文件缓冲区导航 | terminal, git-display |
-| 6 | Org 与知识库 | [[#org-knowledge]] | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板 | bootstrap, process-helper |
-| 7 | 键位与补全 | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 内置补全栈 | 前述全部域的命令 |
-| 8 | 系统工具 | [[#system-tools]] | 应用 / Daemon 预热 / Dashboard / 兼容性 shim | 前述全部域 |
-:
+
+| 顺序 | 配置域         | CUSTOM_ID        | 主要职责                                                      | 加载前提                  |
+|------+----------------+------------------+---------------------------------------------------------------+---------------------------|
+|    1 | 启动与基础设施 | [[#startup]]         | GC / 路径常量 / Frame 生命周期 / 键位原语 / 包管理 / 基础行为 | 无                        |
+|    2 | 界面与外观     | [[#appearance]]      | Mode-line / Tab-line / 主题字体 / 窗口布局 / Git / 颜色方案   | startup                   |
+|    3 | 编辑与文本     | [[#editing]]         | 缩进括号 / EditorConfig / DWIM / mc / 终端集成                | appearance 的窗口路由     |
+|    4 | 编程与开发     | [[#programming]]     | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表         | bootstrap, appearance     |
+|    5 | 项目与导航     | [[#projects]]        | project.el / 文件缓冲区导航                                   | terminal, git-display     |
+|    6 | Org 与知识库   | [[#org-knowledge]]   | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板     | bootstrap, process-helper |
+|    7 | 键位与补全     | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 内置补全栈                    | 前述全部域的命令          |
+|    8 | 系统工具       | [[#system-tools]]    | 应用 / Daemon 预热 / Dashboard / 兼容性 shim                  | 前述全部域                |
+
 各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。Noweb 组装块以 =#+NAME:= 标记，便于 =scripts/configctl map= 定位和 org 间跳转。
-:
-内置 =scripts/configctl= 是面向 AI agent 的片段操纵工具：=map= 结构总览、=show <ID>= 提取子树、=locate <ID|ref>= 定位块行号、=tangle= 拼合产物、=check= 轻量原则检查（域顺序 / noweb / 单产物 / 括号 / 重复定义）。深度验证（load 报错、ERT 等）由 agent 直接跑 Emacs，不封装进本工具。
+
+内置 =scripts/configctl= 是面向 AI agent 的片段操纵工具： =map= 结构总览、 =show <ID>= 提取子树、 =locate <ID|ref>= 定位块行号、 =tangle= 拼合产物、 =check= 轻量原则检查（域顺序 / noweb / 单产物 / 括号 / 重复定义）。深度验证（load 报错、ERT 等）由 agent 直接跑 Emacs，不封装进本工具。
 
 ** 修改与扩展指引
-
 接手者改代码前先读本节的契约，再按功能定位到具体域动手。
 
 *** 添加 / 修改功能
-
-1. *定位归属域*：按功能语义合并到 8 个现有域之一（不新建第 9 域）。键位随功能实现所在的域（功能内聚），不集中到键位块。
-2. *定位插入点*：=configctl show <ID>= 提取目标子树，=configctl locate <ID|ref>= 定位块行号区间；跨域符号用 =rg= 搜。
-3. *遵守约定*：命名 / 键位 / noweb / 架构硬约束见下；新 Emacs 包必须同步根仓库 =source/config.org= 的 =home-emacs-packages=。
+1. *定位归属域* ：按功能语义合并到 8 个现有域之一（不新建第 9 域）。键位随功能实现所在的域（功能内聚），不集中到键位块。
+2. *定位插入点* ： =configctl show <ID>= 提取目标子树， =configctl locate <ID|ref>= 定位块行号区间；跨域符号用 =rg= 搜。
+3. *遵守约定* ：命名 / 键位 / noweb / 架构硬约束见下；新 Emacs 包必须同步根仓库 =source/config.org= 的 =home-emacs-packages= 。
 
 *** 命名约定
-
 + 公开 =custom/...= ；私有 =custom/...--...= ；路径与静态常量 =custom:...= 。
 + 同一符号不得重复 =defun= / =defvar= / =defconst= 。
 + =add-hook= / timer / 异步回调一律用命名函数，不用匿名 lambda。
 
 *** 键位约定
-
 + 全局 =custom/bind= 、局部 =custom/bind-local= 、前缀声明 =custom/declare-binding-prefix= 。
-+ 只有 14 个前缀声明、跨域基础键（=C-x= / =M-s= / =C-c w= / =C-c h=）和无前缀 IDE 直达键集中在 [[#keys-completion]]，其余键位跟随功能域。
++ 跨域基础键（=C-x= / =M-s= / =C-c w= / =C-c h=）和无前缀 IDE 直达键集中在 [[#keys-completion]]，其余键位跟随功能域。
 + Which-key 描述、帮助分组、Dashboard 摘要三者同源，均从 =custom:binding-spec= 生成。
 
 *** Noweb 分片约定
-
 + 小模块用单个 =emacs-lisp= 块；大模块拆命名片段（=:noweb-ref module/section :tangle no=），章节末尾用唯一组装块（=#+NAME: <domain>-assembly=）确定加载顺序。
-+ 每个 ref 只定义一次、只组装一次；=<<ref>>= 必须在列 0；共享实现放 =helpers/...= 并在调用方之前组装。
++ 每个 ref 只定义一次、只组装一次； =<<ref>>= 必须在列 0；共享实现放 =helpers/...= 并在调用方之前组装。
 
 *** 架构硬约束（不可破坏）
-
 + 唯一生成物 =main.el= ；禁止把配置 tangle 到 =lisp/= 子目录、禁止 =lisp/= load-path、禁止历史 =custom-*= feature 的 require/provide 引用。
 + 文件末尾只保留 =(provide 'main)= ；不添加全局 =:comments link= 。
 * 启动与基础设施
@@ -93,7 +87,7 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 
 (add-hook 'emacs-startup-hook #'custom--reset-gc-percentage)
 
-(message "[custom-config] 基础设施加载完成")
+(message "[LOAD] 基础设施加载完成")
 #+end_src
 
 ** 路径常量与外部命令声明
@@ -146,35 +140,13 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 (defconst custom:executable-fish     "fish")
 (defconst custom:executable-git      "git")
 (defconst custom:executable-godot    "godot")
-(defconst custom:executable-hunspell "hunspell")
 #+end_src
 
 bootstrap 组装：路径常量 + 外部命令声明
-
 #+NAME: bootstrap-assembly
 #+begin_src emacs-lisp
 <<bootstrap/paths>>
 <<bootstrap/executables>>
-#+end_src
-
-** 共享进程辅助
-:PROPERTIES:
-:CUSTOM_ID: process-helper
-:END:
-
-agenote CLI 的同步/异步进程适配层已抽离为独立 elisp 包 =agenote=（见 [[#bootstrap][bootstrap]] 的 =use-package= 声明），本仓库只保留入口契约说明：
-
-+ =agenote-call= :agenote CLI 唯一入口,domain 必填,返回 plist =(:status :stdout :stderr :command :domain)=
-+ =agenote-call-async= :长任务异步执行(reindex/lint/deduplicate/commit/viz)
-+ =agenote-call-string= :只消费 stdout 的旧调用兼容 wrapper
-
-agenote CLI 支持 =--domain human|agenote=,默认 agenote(与 MCP server 对齐)。Emacs 端必须为每次调用显式选择 domain —— 不依赖默认值,避免人类域操作静默打到 agent 子域。
-
-**不缓存 Guix store 绝对路径**：适配层内部按需 =(executable-find "agenote")=,让 daemon 跨 Guix generation 后解析当前 PATH。
-
-#+begin_src emacs-lisp
-;; agenote CLI 适配层由独立包 `agenote' 提供（agenote-call / -async / -string）。
-;; 路径常量随该包的 defcustom 设定，见 bootstrap 节的 use-package 声明。
 #+end_src
 
 ** Frame 生命周期与 daemon
@@ -396,14 +368,13 @@ GC 策略、文件备份、历史记录、自动保存、custom-file 位置等�
 + 失去焦点后在空闲期保存正常访问的本地文件 buffer；不在焦点事件里同步写盘，也不保存内部/伪造临时 buffer
 
 GCMH + 智能垃圾回收管理 (启动后接管 GC)
+
 + =gcmh-idle-delay 'auto'= 让 GCMH 自适应 idle 时间 (短空闲快 GC、长空闲等更空闲再 GC), 避免编辑过程中被打断。
-+ =gcmh-high-cons-threshold 32 MiB= 是 daemon 长运行环境的合理上限:
-  太小 (默认 16 MiB) → GC 频繁; 太大 (64+ MiB) → 单次 GC 卡顿长。
-  32 MiB 在 8+ GiB 内存机器上不构成压力,与 gcmh-mode 维持的 low-cons-threshold (默认 1 MiB) 的差距让 GCMH 能区分"短暂峰值"和"持续压力"。
-+ 不再在 use-package 外手动 =setq gc-cons-threshold=:
-  GCMH 接管后该变量由 GCMH 动态调整,手动 setq 会与 GCMH 打架。
++ =gcmh-high-cons-threshold 32 MiB= 是 daemon 长运行环境的合理上限: 太小 (默认 16 MiB) → GC 频繁; 太大 (64+ MiB) → 单次 GC 卡顿长。32 MiB 在 8+ GiB 内存机器上不构成压力,与 gcmh-mode 维持的 low-cons-threshold (默认 1 MiB) 的差距让 GCMH 能区分"短暂峰值"和"持续压力"。
++ 不再在 use-package 外手动 =setq gc-cons-threshold=: GCMH 接管后该变量由 GCMH 动态调整,手动 setq 会与 GCMH 打架。
 
 启动画面与基础体验
+
 + daemon 长驻下 client 关闭 *不退出 Emacs*; 真正 kill-emacs 时无需二次确认
 + 所有未保存内容在 focus-loss 时已落盘, 见下方 =after-focus-change-function= 。
 
@@ -503,12 +474,11 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 
 全局键、major mode 局部键与正则替换规则的数据源。行为注册位于 [[#which-key-ui][Which-key 菜单注册]]。
 
-*** 外置翻译数据
-
 翻译表是独立的数据资产：[[file:data/which-key-zh.el][Which-key 中文描述]]、[[file:data/context-menu-zh.el][右键菜单中文描述]] 与 [[file:data/help-zh.el][快捷键帮助中文描述]]。
 修改数据文件后重启 Emacs 即可生效；其中只能写注释和预定变量的字面量 =setq=，不得定义函数、feature 或副作用。违反上述约定会在 tangle 后因变量未定义而报错，由 agent 加载验证。
 
-#+begin_src emacs-lisp :noweb-ref appearance/i18n-data :tangle no
+#+NAME: appearance-i18n-data
+#+begin_src emacs-lisp
 (defconst custom:i18n-data-directory
   (expand-file-name "data/" custom:emacs-dir)
   "本地化纯数据文件目录。")
@@ -541,25 +511,16 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 (custom/load-i18n-data)
 #+end_src
 
-#+NAME: appearance-i18n-data-assembly
-#+begin_src emacs-lisp
-<<appearance/i18n-data>>
-#+end_src
-
 ** 右键菜单本地化
 :PROPERTIES:
 :CUSTOM_ID: context-menu-i18n
 :END:
 
 集中维护菜单标签翻译,并在最终 keymap 上递归替换显示文本;不改写各包的菜单生成逻辑。
-
-*** 翻译数据
-
 翻译表位于 [[file:data/context-menu-zh.el][data/context-menu-zh.el]]。
 
-*** Keymap 翻译引擎
-
-#+begin_src emacs-lisp :noweb-ref appearance/context-menu-engine :tangle no
+#+NAME: appearance-context-menu
+#+begin_src emacs-lisp
 (defun custom/context-menu--translate-string (string)
   "翻译 STRING；未登记时返回原字符串。"
   (let* ((plain (substring-no-properties string))
@@ -630,11 +591,6 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
                 #'custom/context-menu--translate-string)))
 #+end_src
 
-#+NAME: appearance-context-menu-assembly
-#+begin_src emacs-lisp
-<<appearance/context-menu-engine>>
-#+end_src
-
 ** 快捷键帮助
 :PROPERTIES:
 :CUSTOM_ID: help
@@ -643,7 +599,6 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 维护完整快捷键参考与 Dashboard 复用的精简入口。
 
 *** 帮助数据
-
 键位、Which-key 描述、帮助分组和 Dashboard 摘要统一由 [[#keybindings][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections= 与 =custom/binding-dashboard-bindings=)。本节只剩帮助页引言文字(=custom:help-introduction=)和外置到 [[file:data/help-zh.el][data/help-zh.el]] 的非键位说明;键位相关的描述不再外置。
 
 #+begin_src emacs-lisp :noweb-ref appearance/help-data :tangle no
@@ -2184,7 +2139,7 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 (custom/register-side-window "^\\*Help\\*\\|help-mode\\b" 'bottom 0.4)
 (custom/register-side-window "^\\*Flymake diagnostics\\|flymake-diagnostics-buffer-mode\\b" 'bottom 0.3)
 (custom/register-side-window "^\\*compilation\\|compilation-mode\\b" 'bottom 0.33)
-(custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
+(custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*deadgrep\\|deadgrep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
 
 (setq server-window #'custom/display-buffer-in-main-window)
 #+end_src
@@ -2430,10 +2385,10 @@ MODE 为 'light 或 'dark。
 主题初始化时机按运行模式分流:
 
 #+attr_org: :width 50
-| 运行模式   | 触发时机            | 原因                            |
-|------------+---------------------+---------------------------------|
+| 运行模式   | 触发时机        | 原因                                              |
+|------------+-----------------+---------------------------------------------------|
 | daemon     | daemon 启动阶段 | 启动时间不敏感，提前支付主题加载与 D-Bus 注册成本 |
-| 独立 Emacs | 立即初始化       | 启动时 selected-frame 已存在                      |
+| 独立 Emacs | 立即初始化      | 启动时 selected-frame 已存在                      |
 
 #+begin_src emacs-lisp :noweb-ref appearance/color-scheme-init :tangle no
 (defun custom/display-supports-themes-p (&optional frame)
@@ -3302,10 +3257,11 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 :CUSTOM_ID: project-navigation
 :END:
 
-配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、grep、ibuffer 按项目分组。
+配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、deadgrep 全文搜索、ibuffer 按项目分组。
 
 + 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
-+ =project-switch-commands= = Dired / project-find-file / project-find-regexp
++ 项目全文搜索主入口是 deadgrep(异步 ripgrep 面板,按文件分组折叠,结果可编辑写回);=project-find-regexp= 保留为 M-x 可用的 xref 集成正则搜索,后端同为 ripgrep。
++ =project-switch-commands= = Dired / project-find-file / deadgrep
 + Emacs 31 的命令项格式为 =(COMMAND LABEL &optional KEY)= ，显式键避免依赖 =project-prefix-map= 的间接查找。
 + =project-find-file= : 项目内快速文件搜索( =custom/find-file-in-project= )
 + ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
@@ -3346,7 +3302,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (setq project-switch-commands
       '((project-dired "打开目录" ?d)
         (custom/find-file-in-project "寻找文件" ?f)
-        (custom/project-search "查找关键字" ?r)))
+        (deadgrep "查找关键字" ?r)))
 
 ;; ibuffer 用内置 predicate filter 按 project.el 已知根目录分组。
 (with-eval-after-load 'ibuffer
@@ -3375,12 +3331,15 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
   (let ((default-directory (custom/project-root-or-default)))
     (call-interactively #'project-find-file)))
 
-(defun custom/project-search ()
-  "用 project.el 在当前项目内搜索。"
-  (interactive)
-  (require 'project)
-  (let ((default-directory (custom/project-root-or-default)))
-    (call-interactively #'project-find-regexp)))
+;; project-find-regexp 的后端由 xref-search-program 决定;默认 grep,
+;; 不会自动检测已安装的 rg,显式切换(ripgrep 在 home 包清单中)。
+(setq xref-search-program 'ripgrep)
+
+;; 项目全文搜索主入口:deadgrep 用异步 ripgrep 进程驱动独立结果面板,
+;; 按文件分组折叠、结果可编辑写回(与内置 Grep Edit 同心智)。
+;; 搜索根自动取 project root,非项目时退回 default-directory。
+(use-package deadgrep
+  :commands (deadgrep))
 
 ;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原 projectile-after-switch-project-hook)。
 (with-eval-after-load 'project
@@ -3393,7 +3352,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 #+begin_src emacs-lisp
 (custom/bind "C-x p p" #'project-switch-project "切换项目" "项目")
 (custom/bind "C-x p f" #'project-find-file "查找项目文件" "项目")
-(custom/bind "C-x p s" #'custom/project-search "项目全文搜索" "项目")
+(custom/bind "C-x p s" #'deadgrep "项目全文搜索" "项目")
 (custom/bind "C-x p o" #'custom/open-project-folder "打开项目目录" "项目")
 (custom/bind "C-x p O" #'custom/open-directory "目录浏览" "项目")
 (custom/bind "C-x p k" #'project-kill-buffers "关闭项目缓冲区" "项目")
@@ -3796,7 +3755,7 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
 (custom/bind "C-f" #'isearch-forward "缓冲区搜索" "基础移动与直达键")
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
-(custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
+(custom/bind "C-S-f" #'deadgrep "项目全文搜索" "基础移动与直达键")
 (custom/bind "C-S-b" #'switch-to-buffer "切换缓冲区" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
 (custom/bind "C-S-j" #'avy-goto-char-timer "屏幕内快速跳转" "基础移动与直达键")
@@ -3872,7 +3831,7 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 
 (custom/bind "M-s l" #'isearch-forward "搜索当前缓冲区" "搜索")
-(custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
+(custom/bind "M-s p" #'deadgrep "搜索项目" "搜索")
 (custom/bind "M-s b" #'switch-to-buffer "搜索缓冲区" "搜索")
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
 (custom/bind "M-s f" #'flymake-goto-next-error "Flymake 诊断" "搜索")
@@ -3957,7 +3916,7 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 ~Flymake~ 错误浏览(Emacs 29+ 内置)M-s f 绑定 =flymake-goto-next-error= 。
 
 #+begin_src emacs-lisp :noweb-ref keys/completion-region :tangle no
-;; ispell 词表发现(aspell/hunspell 使用启动域命令声明)
+;; ispell 词表发现(aspell 使用启动域命令声明)
 (defconst custom/completion:ispell-word-list-candidates
   (delq nil
         (list (and (getenv "GUIX_PROFILE")
@@ -3984,10 +3943,7 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
   (cond
    ((executable-find custom:executable-aspell)
     (setq ispell-program-name custom:executable-aspell
-          ispell-extra-args '("--sug-mode=ultra")))
-   ((executable-find custom:executable-hunspell)
-    (setq ispell-program-name custom:executable-hunspell
-          ispell-extra-args nil))))
+          ispell-extra-args '("--sug-mode=ultra")))))
 
 (defun custom/completion-setup-ispell-word-list ()
   "为当前 buffer 配置单词补全词表。
@@ -4413,23 +4369,19 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 #+end_src
 
 *** 测量层
-
 测量层统一用 =string-width= 列模型（而非 GUI 像素），保证 GUI / TTY / batch 下卡片布局一致；固定 banner 例外，按字符数计数以规避 TTY CJK 宽度表差异。具体取舍见 =custom/dashboard--measure= 的 docstring。
+
+返回 TEXT 的显示宽度（列数）:
++ 普通 dashboard 内容基于 string-width ，GUI 与 TTY / batch 统一为列模型；固定 banner 字符画由 ~custom/dashboard--banner-art-width~ 单独度量。
+
+为何不用像素测量（ string-pixel-width ）：
++ 原设计曾尝试 GUI 像素 + TTY 列双模，但 =string-pixel-width= 返回像素值，而卡片宽度算术（ =window-body-width= 列数减边距）、规则线（ =make-string= 按字符数）等全部以列为单位。两种单位混用导致标题无间距、规则线截断、banner 居中失效（见 commit 修复前的 GUI 截图）。
++ 列模型下 =string-width= 对 Nerd Font PUA 图标算 1 列但字形可能占 2 列像素，存在至多 1 列的右栏平移误差（见重设计文档 §1 #9），但所有算术单位一致、布局不会串位。该 1 列误差属于字体度量边界，不影响卡片间的列模型约束。
 
 #+begin_src emacs-lisp :noweb-ref system/dashboard-measure :tangle no
 
 (defun custom/dashboard--measure (text)
-  "返回 TEXT 的显示宽度（列数）。
-普通 dashboard 内容基于 `string-width'，GUI 与 TTY / batch 统一为列模型；
-固定 banner 字符画由 `custom/dashboard--banner-art-width' 单独度量。
-
-为何不用像素测量（`string-pixel-width'）：原设计曾尝试 GUI 像素 + TTY 列双模，
-但 `string-pixel-width' 返回像素值，而卡片宽度算术（=window-body-width= 列数
-减边距）、规则线（`make-string' 按字符数）等全部以列为单位。两种单位混用导致
-标题无间距、规则线截断、banner 居中失效（见 commit 修复前的 GUI 截图）。列模型
-下 `string-width' 对 Nerd Font PUA 图标算 1 列但字形可能占 2 列像素，存在至多
-1 列的右栏平移误差（见重设计文档 §1 #9），但所有算术单位一致、布局不会串位。
-该 1 列误差属于字体度量边界，不影响卡片间的列模型约束。"
+  "返回 TEXT 的显示宽度（列数）。"
   (string-width (or text "")))
 
 (defun custom/dashboard--fill (width)
@@ -4462,7 +4414,6 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 #+end_src
 
 *** 布局声明与卡片注册表
-
 布局变成数据: 调整卡片顺序 / 增删只动这份声明,引擎不变。每行 1 个 id = 全宽卡片, 2 个 id = 双列并排。
 
 #+begin_src emacs-lisp :noweb-ref system/dashboard-registry :tangle no
@@ -4516,7 +4467,6 @@ SPEC 是 plist，关键字见 `custom:dashboard-card-specs'。幂等：重复注
 #+end_src
 
 *** 渲染引擎
-
 引擎统一包边框（左竖线 + 标题 + 规则线）、三态降级与错误隔离,卡片渲染器无需重复处理这些。单张卡片任何异常被隔离为错误卡片(见 A2 修复),绝不拖垮整页。
 
 #+begin_src emacs-lisp :noweb-ref system/dashboard-engine :tangle no
@@ -4626,10 +4576,9 @@ tier=dual 时按 `custom:dashboard-layout' 原样。卡片间插入空行。"
 #+end_src
 
 *** 卡片实现
-
 7 张卡片按 =fetch → (:ok|:error|loading)= + =render (DATA WIDTH) → lines= 协议实现。TTL 缓存三件套(todo/knowledge/projects)原样保留,只改外层协议包装。
 
-+ 按钮构造: 所有可点击项用 =custom/dashboard--button= 生成带局部 keymap 的字符串,RET/mouse-1 调用回调。
+按钮构造: 所有可点击项用 =custom/dashboard--button= 生成带局部 keymap 的字符串,RET/mouse-1 调用回调。
 
 #+begin_src emacs-lisp :noweb-ref system/dashboard-cards :tangle no
 (defun custom/dashboard--apply-fixed-pitch ()
@@ -5708,7 +5657,6 @@ RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
 :END:
 
 *** 实验性
-
 本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、Arei/Yasnippet .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
 
 以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= / =<<compat/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
@@ -5721,7 +5669,6 @@ RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
 | =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译                |
 
 **** Ghostel pre-spawn 的 with-editor 适配
-
 with-editor 3.5.2 的公开导出函数只支持已经存在的 shell/term/vterm 进程；Ghostel 的 pre-spawn hook 运行在进程创建前。当前必须复用宏内部 setup，删除条件是 Ghostel 或 with-editor 提供公开的 pre-spawn 环境构造接口。
 
 #+begin_src emacs-lisp :noweb-ref compat/ghostel-with-editor :tangle no
@@ -5733,7 +5680,6 @@ with-editor 3.5.2 的公开导出函数只支持已经存在的 shell/term/vterm
 #+end_src
 
 **** arei .elc 与 buffer-local-set-state 不兼容(bug#80812)
-
 arei 0.9.7 的 .elc(Guix 用旧版 Emacs byte-compile)与 Emacs 31 的 =buffer-local-set-state= 宏不兼容:arei-mode 第 356 行调用该宏,但旧 .elc 把它当函数调用,参数 =(sesman-system 'Arei)= 被整体传给 =buffer-local-set-state--get= → =wrong-type-argument (symbolp 'Arei)= 。此错误在 =scheme-mode-hook= 里抛出,会中断整个 scheme-mode 初始化,导致 font-lock 失效 → Scheme 代码不染色。
 
 #+begin_src emacs-lisp :noweb-ref emacs31/source-load-compat :tangle no
@@ -5748,7 +5694,7 @@ GNU store 只读无法删 .elc，且 .el/.elc 时间戳相同（epoch 1）使
         (load source nil t t)
         t)
     (error
-     (message "[literal] %s 从源加载失败: %S" library err)
+     (message "[ERROR] %s 从源加载失败: %S" library err)
      nil)))
 #+end_src
 
@@ -5762,11 +5708,10 @@ GNU store 只读无法删 .elc，且 .el/.elc 时间戳相同（epoch 1）使
     (condition-case err
         (arei-mode 1)
       (error
-       (message "[literal] arei-mode 启用失败,Scheme 染色不受影响: %S" err)))))
+       (message "[ERROR] arei-mode 启用失败,Scheme 染色不受影响: %S" err)))))
 #+end_src
 
 **** yasnippet global mode 状态变量缺失(bug#80812,同根因)
-
 Yasnippet 0.14.3 的 Guix =.elc= 在 Emacs 31 中加载后，=yas-global-mode= 虽为 non-nil，但 =yas-minor-mode--set-explicitly= / =yas-minor-mode--suppress-set-explicitly= 没有定义。新 client 切换 major mode 时，globalized minor mode hook 因 =void-variable= 中断。与 Arei 相同，运行时从 =.el= 源重新展开宏即可恢复完整定义；use-package 的 =:init= 直接调用 =custom/load-library-from-source "yasnippet"= 完成加载。
 
 ** 主配置收尾
@@ -5775,7 +5720,7 @@ Yasnippet 0.14.3 的 Guix =.elc= 在 Emacs 31 中加载后，=yas-global-mode= �
 (when (custom/daemon-runtime-p)
   (custom/daemon-warmup))
 
-(message "[custom-config] 启动完成")
+(message "[DONE] 启动完成")
 
 (provide 'main)
 ;;; main.el ends here
