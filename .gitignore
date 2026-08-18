@@ -26,3 +26,4 @@ uv.lock
 .agents/*
 !.agents/skills
 !.agents/anchors.json
+.mimosa/

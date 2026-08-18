@@ -32,8 +32,6 @@
           modules = [
             ./configuration/00-main/home.nix
 
-            inputs.codex-desktop-linux.homeManagerModules.default
-
             (
               { pkgs, ... }:
               {

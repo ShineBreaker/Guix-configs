@@ -551,6 +551,11 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                              (provision '(cleanup-/tmp))
                              (requirement '(file-systems))
                              (one-shot? #t)
+                             ;; 禁止自动启动：reconfigure 的 to-start 只挑 auto-start? #t
+                             ;; 的服务（guix/scripts/system/reconfigure.scm:221-225），
+                             ;; 否则每次 reconfigure 都会主动 start 它、清空运行中的 /tmp。
+                             ;; 开机时由 user-processes 依赖链拉起，不受此项影响
+                             (auto-start? #f)
                              (start
                               (with-imported-modules (source-module-closure
                                                       '((guix build utils)))
@@ -1479,8 +1484,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+begin_src scheme
 (cons* (specs->pkgs+out
         ;; 浏览器 & 插件
-        "ublock-origin-chromium"
-        "ungoogled-chromium-wayland"
         "zen-browser-bin"
 
         ;; 解码器
@@ -1655,7 +1658,8 @@ end
                 (emacs emacs-next-pgtk)
                 (shepherd-requirement '(graphical-session))
                 (packages (specifications->manifest
-                           '(;; Emacs 核心与基础
+                           '(;; Emacs 插件
+                             ;; Emacs 核心与基础
                              "emacs-gcmh"
                              "emacs-no-littering"
                              "emacs-next-pgtk:doc"
@@ -1668,6 +1672,7 @@ end
 
                              ;; 编辑与导航
                              "emacs-avy"
+                             "emacs-deadgrep"
                              "emacs-diff-hl"
                              "emacs-indent-bars"
                              "emacs-multiple-cursors"
@@ -1721,10 +1726,19 @@ end
                              "emacs-pdf-tools"
                              "emacs-telega"
 
+                             ;; Emacs 配置所依赖的包
                              ;; 拼写检查
                              "aspell"
                              "aspell-dict-en"
                              "miscfiles"
+
+                             ;; 命令行工具
+                             "agenote"
+                             "direnv"
+                             "fish"
+                             "git"
+                             "godot"
+                             "ripgrep"
 
                              ;; Tree-sitter
                              "tree-sitter"
@@ -1754,14 +1768,14 @@ end
 *** 桌面常用软件的相关服务
 
 **** 全局服务
+这里用了一个空的 ~dbus~ 服务为依赖其的服务提供服务，同时防止它与拉起 niri 所用的 ~dbus-run-session~ 中的会话冲突
 
 #+NAME: user-desktop-services
 #+begin_src scheme :noweb yes
 <<default-applications>>
 ;; <<waybar-desktop-services>>
 
-(list (service home-dbus-service-type)
-      (service home-noctalia-service-type)
+(list (service home-noctalia-service-type)
       (service home-pipewire-service-type)
       (service home-syncthing-service-type)
 
@@ -1772,6 +1786,12 @@ end
                 (use-geoclue #f)
                 (dbus-server #t)
                 (portal #t)))
+
+      (simple-service 'dbus home-shepherd-service-type
+                      (list (shepherd-service
+                             (provision '(dbus))
+                             (start #~(const #t))
+                             (stop #~(const #f)))))
 
       (service home-graphical-session-service-type
 	             (home-graphical-session-configuration
