@@ -486,9 +486,11 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
  "font-sarasa-gothic"
 
  ;; 命令行工具
+ "kitty"
+ "kitty:terminfo"
+
  "fastfetch-minimal"
  "fish"
- "foot"
  "git"
  "stow"
 

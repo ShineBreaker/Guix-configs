@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# 终端会话选择器 — 在 foot 窗口启动时弹出一个合并 fzf 列表：
+# 终端会话选择器 — 在 foot/kitty 窗口启动时弹出一个合并 fzf 列表：
 # 所有 tmux 会话 + 所有 herdr 会话 + Shell，一屏选完。
 #
 # 设计：tmux 与 herdr 完全对称，各自有：
@@ -115,8 +115,8 @@ function __selector_run_mux
 end
 
 if status is-interactive
-    # 仅 foot 终端弹选择器；已有 tmux/herdr/容器 pane 跳过
-    if test "$TERM" = foot; and not set -q TMUX; and not test "$HERDR_ENV" = 1; and not set -q CONTAINER_ID
+    # 仅 foot/kitty 终端弹选择器；已有 tmux/herdr/容器 pane 跳过
+    if contains -- "$TERM" foot xterm-kitty; and not set -q TMUX; and not test "$HERDR_ENV" = 1; and not set -q CONTAINER_ID
         set -l cwd (pwd)
         set -l window_name (__selector_make_session_name "" "$cwd")
 
