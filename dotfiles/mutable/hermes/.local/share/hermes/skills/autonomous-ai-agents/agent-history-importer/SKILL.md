@@ -170,6 +170,18 @@ FROM message m1, message m2 WHERE ...相邻两条...
 
 ## 已知 pitfall
 
+### Markdown memory import (zcode → hermes)
+
+6. **Memory tool space fills fast**: 64 zcode files → ~45 fact_store entries + 15 agenote cards + 4 memory entries. The `memory` markdown file hit 86% after just a few imports — consolidate overlapping entries before adding more.
+7. **Stale content check**: zcode memories may be outdated (e.g., "plan not yet committed" when the plan was committed days ago). Verify against current state before importing.
+8. **fact_store `entity` matters**: group facts by project name (`guix-configs`, `emacs-mobile`, `jeans`) so `probe(entity=...)` retrieves all related facts at once.
+9. **`agenote add --type`**: only accepts `config`, `debug`, `feature`, `refactor`, `research`, `workflow`. `reference` triggers a warning but still writes — choose `debug` or `config` instead.
+10. **Parallel tool calls**: fact_store and agenote calls are independent — batch them in a single response to avoid round-trip overhead.
+
+### References
+
+- `references/import-external-memory.md` — full workflow for importing external markdown memories into Hermes' three-channel system (zcode-specific pitfalls, verification commands, batch patterns)
+
 - **不要把 `.schema <table>` 输出当真相** —— zcode 里 schema 显示 `data text not null`,但**真正的结构在 JSON 里**。必须 `SELECT json(data) FROM ...` 抽样本
 - **不要在 message 数量为 0 的 session 上做 sanity check** —— 验证不了任何 part type
 - **不要假设 part 表一定有 time 字段** —— 一些工具(part 是 message 的 children)只存 message 级别的时间

@@ -8,15 +8,13 @@ hermes sandbox "半盲"特性下的诊断纪律：沙盒里看不到 sudo/ip/vir
 §
 调试纪律(2026-07-22 固化)：当假设涉及"某进程解析到哪个可执行文件/看到什么环境"时，只读真实进程状态，绝不合成环境来佐证（env -i PATH=... 或手敲 bash -c 会静默偏离真实进程）。正确做法：对 /proc/$PID/environ 读字面 PATH 后粘贴验证，容器内路径必须从该 namespace 内 ls/test -e 验证。详见 fact_store("调试纪律 合成环境")。
 §
-用户偏好: 排查桌面环境问题时,要求 agent 实际追踪源码和运行时状态,不要凭假设下判断。本次反复纠正 agent 对 gnome portal 在 niri 下行为的假设,强调要看源码、读真实环境变量、对比参考实现(Testament)。另: 判断"某配置不存在"前必须先读 channel service preset 模块源码(如 (rosenthal services desktop)), 不能只扫顶层 config.org 就下结论(本次误判 Testament 无 home-dbus 即一例)。
+用户协作偏好(综合):选推荐项; plan批准后授权全量自主推进不中途请示; 不主动 commit; 一次性批量提问(带推荐); 直接执行优先于形式化产物(goal/plan/spec); 本地实跑全链路+just 包装常用命令; Python 用 uv 不用 pip; commit 后立即 push。
 §
 OCR 工具选择偏好：Tesseract 对中文支持极差，中文场景首选 RapidOCR（轻量快速）或 PaddleOCR（精度更高但模型大）。项目 ~/Programs/ocr-system/ 含双后端。细节见 fact_store("OCR RapidOCR")。
 §
 agenote 策展实战：extract CLI 多日需循环，dream top 候选常为噪声需查重，agent 环境 GPG 缺私钥用 --no-gpg-sign 兜底。细节见 fact_store("agenote 策展")。
 §
-Guix 环境 shebang 铁律：Guix 系统没有 `/bin/bash`，只有 `/usr/bin/env bash`。所有 handler 脚本、shell 脚本第一行**必须**写 `#!/usr/bin/env bash`，否则 `xdg-open` 等工具调用时会报 `env: "...": 没有那个文件或目录`。
-§
-Wine OAuth 回调要点：handler 触发 ≠ 回调转发成功；卡住通常是 Wine 二进制不匹配导致 IPC 断开，修法是应用和 handler 用同一个 Wine。细节见 skill wine-protocol-forwarding + fact_store("Wine OAuth")。
+用户偏好: 排查桌面环境问题时,要求 agent 实际追踪源码和运行时状态,不要凭假设下判断; 判断"某配置不存在"前必须先读 channel service preset 模块源码(如 (rosenthal services desktop)), 不能只扫顶层 config.org 就下结论。
 §
 外部连接失败诊断：getent hosts 返回 198.18.0.0/15 = fake-ip 代理 DNS 残留（mihomo）。区分"代理没在跑"与远程真故障用三步法。判断错误活跃性用按天分布：单日聚类=老化噪声，每日出现=活跃故障。细节见 fact_store("外部连接失败诊断")。
 §
@@ -27,3 +25,5 @@ Wine OAuth 回调要点：handler 触发 ≠ 回调转发成功；卡住通常�
 Emacs which-key 汉化的两层模型（2026-08-12 固化）：第一层是 custom/bind 声明的自定义键位（emacs.org 里），用 which-key-gap-scan.py 审计；第二层是第三方/内置 keymap 的原生绑定（org-mode-map 等，不走 custom/bind），只能从运行中的 Emacs dump keymap 后比对（scripts/dump-keymaps.el + compare-keymap-dump.py）。之前只扫第一层导致第二层全是盲区——用户截图里发现的 org-list-make-subtree、outline-next-visible-heading 等未翻译条目就是第二层的典型代表。详见 skill emacs-l10n-audit。
 §
 Hermes QQ Bot 平台已接入并在线（qqbot adapter，QQ_APP_ID=1904112724，QQBOT_HOME_CHANNEL 已设于 .env）；cron deliver='qqbot' 即可投递到用户 QQ。gateway 日志在 $HERMES_HOME/logs/gateway.log（QQ 连接状态 grep QQBot）。
+§
+anchors.json 是跨工具冻结规则单一权威源（pi/crush/zcode 共用），定义 frozen_commands/frozen_paths/human_only_actions；agent 禁止改它。

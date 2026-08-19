@@ -210,5 +210,6 @@ This applies to *any* "is X loaded?" question in this user's setup, not just mem
 ## Files in this skill
 
 - `references/code-wiring.md` — exact file paths and line numbers in the Hermes source tree for `memory_tool.py`, `MemoryManager.on_memory_write`, holographic internals, and config keys. Use when debugging or patching.
+- `references/import-external-memory.md` — full workflow for importing external markdown memories (from zcode, pi, crush, Claude Code, Codex) into Hermes' three-channel system. Covers routing rule, batch patterns, stale content checking, and zcode-specific pitfalls.
 - `templates/soul-memory-rule.md` — drop-in SOUL.md block implementing Option A (dual-channel routing rule). Copy into `~/.local/share/hermes/SOUL.md` and edit the category list to match your projects.
 - `scripts/probe-memory-routing.sh` — runs the diagnosis heuristic from this skill in one shot. Exit code 2 means routing is broken. Run as `bash scripts/probe-memory-routing.sh` (or `chmod +x` once and invoke directly).
