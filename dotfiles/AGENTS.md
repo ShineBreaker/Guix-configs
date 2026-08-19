@@ -60,20 +60,18 @@ dotfiles/
 │   │       ├── user-dirs.dirs
 │   │       └── user-dirs.locale
 │   ├── terminal/
-│   │   ├── .config/
-│   │   │   ├── atuin/
-│   │   │   ├── broot/
-│   │   │   ├── btop/
-│   │   │   ├── fastfetch/
-│   │   │   ├── fish/
-│   │   │   ├── foot/
-│   │   │   ├── herdr/
-│   │   │   ├── kitty/
-│   │   │   ├── tmux/
-│   │   │   ├── tmuxifier/
-│   │   │   └── starship.toml
-│   │   └── .local/
-│   │       └── bin/
+│   │   └── .config/
+│   │       ├── atuin/
+│   │       ├── broot/
+│   │       ├── btop/
+│   │       ├── fastfetch/
+│   │       ├── fish/
+│   │       ├── foot/
+│   │       ├── herdr/
+│   │       ├── kitty/
+│   │       ├── tmux/
+│   │       ├── tmuxifier/
+│   │       └── starship.toml
 │   └── utilities/
 │       ├── .config/
 │       │   ├── fcitx5/

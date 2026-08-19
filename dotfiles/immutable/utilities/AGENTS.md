@@ -40,9 +40,7 @@ utilities/
 ├── .local/
 │   ├── bin/
 │   │   ├── keepassxc-credential-setup
-│   │   ├── nixgpu-update
-│   │   ├── opencode-update
-│   │   └── xdg-bwrap
+│   │   └── nixgpu-update
 │   └── share/
 │       ├── fcitx5/
 │       │   └── rime/

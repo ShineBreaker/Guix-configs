@@ -41,9 +41,7 @@ mutable/
 │   │   │   └── skills/
 │   │   └── emacs/
 │   │       ├── data/
-│   │       ├── docs/
 │   │       ├── scripts/
-│   │       ├── test/
 │   │       ├── .gitignore
 │   │       ├── early-init.el
 │   │       ├── emacs.org
