@@ -114,7 +114,13 @@ ensure_sidebar() {
         return 0
     fi
 
+    width="${SIDEBAR_WIDTH:-$configured_width}"
+    [[ "$width" =~ ^[0-9]+$ ]] || width=32
+
     if [[ -n "$sidebar_id" ]]; then
+        # tmux 窗口 resize 时按比例重排布局，侧栏会被等比例放大（无原生的
+        # pane 定宽选项），这里在 follow 链路（client-resized 等 hook）里拉回。
+        tmux resize-pane -t "$sidebar_id" -x "$width" 2>/dev/null || true
         send_event "$sidebar_id" "refresh"
         return 0
     fi
@@ -124,9 +130,6 @@ ensure_sidebar() {
         tmux display-message "侧边栏创建失败：当前窗口没有普通窗格"
         return 1
     fi
-
-    width="${SIDEBAR_WIDTH:-$configured_width}"
-    [[ "$width" =~ ^[0-9]+$ ]] || width=32
 
     local new_id
     new_id="$(tmux split-window -d -t "$target_id" -h -b -f -l "$width" -P -F '#{pane_id}' \

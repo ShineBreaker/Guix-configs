@@ -8,7 +8,9 @@
 ;; sidebar-render.scm — tmux 侧边栏长驻渲染进程
 ;;
 ;; 外部接口只有两个：
-;;   daemon  长驻侧栏 pane，通过 FIFO 接收 refresh/click/toggle-group 事件
+;;   daemon  长驻侧栏 pane，通过 FIFO 接收 refresh/click/toggle-group 事件；
+;;           聚焦本 pane 时还监听 stdin 键盘输入（hjkl/方向键移动光标，
+;;           Enter 激活，h/l 折叠展开节点，q/Esc 返回主 pane）
 ;;   render  单次渲染到 stdout，供检查与基准测试使用
 ;;
 ;; daemon 每次刷新只执行一次 tmux list-panes。当前上下文、侧栏宽度、
@@ -69,7 +71,8 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                  (cond
                   ((string=? pane-id current-pane)
                    (let ((context* (list session idx collapsed-sessions collapsed-groups
-                                         pane-width option-width status-branch)))
+                                         pane-width option-width status-branch
+                                         active)))
                      (if (tmux-sidebar-pane? title start)
                          (loop (cdr raw-lines) context* panes)
                          (loop (cdr raw-lines)
@@ -95,6 +98,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define ansi-reset "\x1b[0m")
 (define ansi-bold "\x1b[1m")
 (define ansi-dim "\x1b[2m")
+(define ansi-reverse "\x1b[7m")
 (define ansi-session "\x1b[97m")
 (define ansi-group "\x1b[96m")
 (define ansi-active "\x1b[94m")
@@ -420,19 +424,17 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
     (display ansi-erase-line))   ;; 清除窗口缩窄时右侧的旧字符
   (newline))
 
-(define (emit-styled-line row)
+(define (emit-styled-line row cursor?)
+  (define (emit text color bold?)
+    (when cursor? (display ansi-reverse))
+    (when color (display color))
+    (when bold? (display ansi-bold))
+    (emit-line text)
+    (when (or cursor? color bold?) (display ansi-reset)))
   (match row
-    ((text _action color bold?)
-     (when color (display color))
-     (when bold? (display ansi-bold))
-     (emit-line text)
-     (when (or color bold?) (display ansi-reset)))
-    ((text _action color)
-     (when color (display color))
-     (emit-line text)
-     (when color (display ansi-reset)))
-    ((text _action)
-     (emit-line text))))
+    ((text _action color bold?) (emit text color bold?))
+    ((text _action color) (emit text color #f))
+    ((text _action) (emit text #f #f))))
 
 (define (center-text text width)
   (let* ((text* (truncate-string text width))
@@ -752,6 +754,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define %current-context #f)
 (define %current-panes '())
 (define %current-actions '())
+(define %cursor-row #f)
 (define %last-screen #f)
 
 (define (context-value index fallback)
@@ -780,11 +783,14 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
     (unless (string=? branch previous)
       (tmux-cmd "set-option" "-w" "@status_git_branch" branch))))
 
-(define (rows->screen rows)
+(define (rows->screen rows cursor-row)
   (call-with-output-string
    (lambda (port)
      (parameterize ((current-output-port port))
-       (for-each emit-styled-line rows)))))
+       (let loop ((rs rows) (i 0))
+         (unless (null? rs)
+           (emit-styled-line (car rs) (and cursor-row (= i cursor-row)))
+           (loop (cdr rs) (+ i 1))))))))
 
 (define (refresh-state!)
   (let ((state (collect-state)))
@@ -805,16 +811,22 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define (render-current! cursor-control?)
   (refresh-state!)
   (let* ((rows (current-rows))
-         (screen (rows->screen rows)))
-    (set! %current-actions (rows-actions rows))
-    (when (or (not cursor-control?)
-              (not %last-screen)
-              (not (string=? screen %last-screen)))
-      (when cursor-control? (display "\x1b[H"))
-      (display screen)
-      (when cursor-control? (display "\x1b[J"))
-      (force-output)
-      (set! %last-screen screen))))
+         (actions (rows-actions rows))
+         ;; 光标只在 daemon 模式且侧栏 pane 聚焦时显示；位置失效时回落到
+         ;; 当前 window 行（找不到则首个条目行）。
+         (cursor (and cursor-control? (resolve-cursor actions))))
+    (set! %current-actions actions)
+    ;; 失焦/无条目时 cursor 为 #f，但 %cursor-row 保留旧位置，供再聚焦恢复
+    (set! %cursor-row (or cursor %cursor-row))
+    (let ((screen (rows->screen rows cursor)))
+      (when (or (not cursor-control?)
+                (not %last-screen)
+                (not (string=? screen %last-screen)))
+        (when cursor-control? (display "\x1b[H"))
+        (display screen)
+        (when cursor-control? (display "\x1b[J"))
+        (force-output)
+        (set! %last-screen screen)))))
 
 (define (row-action row actions)
   (let ((found (find (lambda (entry) (= (car entry) row)) actions)))
@@ -883,6 +895,144 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                                      (group-collapse-key session group-key))))
               (loop (cdr panes))))))))
 
+;; === Keyboard navigation ===
+
+;; 光标只在侧栏 pane 聚焦（pane_active=1）时显示；失焦时位置保留，
+;; 再次聚焦回到原条目。侧栏 pane 自身的 active 存于 context 第 8 项。
+(define (cursor-focused?)
+  (string=? (context-value 7 "0") "1"))
+
+(define (find-current-row actions)
+  "当前 window/pane 对应的行号，作为光标初始化落点。"
+  (let ((session (context-value 0 ""))
+        (idx (context-value 1 "")))
+    (let loop ((entries actions))
+      (if (null? entries)
+          #f
+          (match (cadar entries)
+            (('window s i)
+             (if (and (string=? s session) (string=? i idx))
+                 (caar entries) (loop (cdr entries))))
+            (('pane s i _pane-idx)
+             (if (and (string=? s session) (string=? i idx))
+                 (caar entries) (loop (cdr entries))))
+            (_ (loop (cdr entries))))))))
+
+(define (resolve-cursor actions)
+  (cond
+   ((not (cursor-focused?)) #f)
+   ((and %cursor-row (row-action %cursor-row actions)) %cursor-row)
+   (else (or (find-current-row actions)
+             (and (pair? actions) (caar actions))))))
+
+(define (cursor-move delta)
+  "在有 action 的行之间移动（跳过空行与纯装饰行），DELTA 为 ±1。"
+  (let ((rows (map car %current-actions)))
+    (when (pair? rows)
+      (let* ((current (or %cursor-row (car rows)))
+             (next (if (positive? delta)
+                       (find (lambda (r) (> r current)) rows)
+                       (find (lambda (r) (< r current)) (reverse rows)))))
+        (when next (set! %cursor-row next))))))
+
+(define (cursor-action)
+  (and %cursor-row (row-action %cursor-row %current-actions)))
+
+(define (action-row-number action)
+  (let ((found (find (lambda (e) (equal? (cadr e) action)) %current-actions)))
+    (and found (car found))))
+
+(define (focused-client)
+  "正在观看本 session 的 client 名（供 switch-client -c），无则空串。"
+  (let* ((result (tmux-cmd "list-clients" "-F" "#{client_name}"
+                           "-t" (context-value 0 "")))
+         (names (if (zero? (car result))
+                    (filter nonempty (string-split (cdr result) #\newline))
+                    '())))
+    (if (pair? names) (car names) "")))
+
+(define (activate-cursor!)
+  (let ((action (cursor-action)))
+    (when action (handle-action action (focused-client)))))
+
+(define (toggle-and-track action)
+  "折叠/展开后光标跟随该节点移动到新行号。"
+  (handle-action action "")
+  (render-current! #t)
+  (set! %cursor-row (or (action-row-number action)
+                        (and (pair? %current-actions) (caar %current-actions)))))
+
+(define (cursor-fold mode)
+  "MODE 为 'fold / 'unfold：作用于光标处 session/group 节点；状态已符合
+则 no-op。window/pane 行上 fold 跳到上方最近节点、unfold 等同 Enter。"
+  (match (cursor-action)
+    (('session skey)
+     (let ((collapsed? (member skey (split-option-value (context-value 2 "")))))
+       (when (if (eq? mode 'fold) (not collapsed?) collapsed?)
+         (toggle-and-track (cursor-action)))))
+    (('group gkey)
+     (let ((collapsed? (member gkey (split-option-value (context-value 3 "")))))
+       (when (if (eq? mode 'fold) (not collapsed?) collapsed?)
+         (toggle-and-track (cursor-action)))))
+    (_
+     (if (eq? mode 'fold)
+         (let ((node (find (lambda (e)
+                             (and (< (car e) (or %cursor-row 0))
+                                  (match (cadr e)
+                                    (('session _) #t)
+                                    (('group _) #t)
+                                    (_ #f))))
+                           (reverse %current-actions))))
+           (when node (set! %cursor-row (car node))))
+         (activate-cursor!)))))
+
+(define (handle-key key)
+  (case key
+    ((down) (cursor-move 1))
+    ((up) (cursor-move -1))
+    ((enter) (activate-cursor!))
+    ((left) (cursor-fold 'fold))
+    ((right) (cursor-fold 'unfold))
+    ((esc quit) (tmux-cmd "last-pane"))
+    (else #f)))
+
+;; cbreak 模式：按键即时到达且不回显。只动输入端标志（-icanon -echo），
+;; 不用 raw（raw 会同时清 OPOST，破坏 emit-line 的换行输出）。
+(define (stty-cbreak!)
+  (false-if-exception (system* "stty" "-icanon" "-echo")))
+
+(define (read-key port)
+  "读一个按键并解析为符号；EOF 为 #f，无法识别为 'ignore。
+方向键为 ESC [ A/B/C/D 序列（tmux 转发时整键一次写入，无需等待）。"
+  (define (dispatch c)
+    (case c
+      ((#\j) 'down) ((#\k) 'up) ((#\h) 'left) ((#\l) 'right)
+      ((#\q) 'quit)
+      ((#\newline #\return) 'enter)
+      (else 'ignore)))
+  (let ((c (read-char port)))
+    (cond
+     ((eof-object? c) #f)
+     ((char=? c #\escape)
+      (if (and (char-ready? port)
+               (let ((leader (peek-char port)))
+                 (or (char=? leader #\[) (char=? leader #\O))))
+          (begin (read-char port)
+                 (if (char-ready? port)
+                     (case (read-char port)
+                       ((#\A) 'up) ((#\B) 'down) ((#\C) 'right) ((#\D) 'left)
+                       (else 'ignore))
+                     'ignore))
+          'esc))
+     (else (dispatch c)))))
+
+(define (drain-keys port)
+  (let loop ()
+    (when (char-ready? port)
+      (let ((key (read-key port)))
+        (when key (handle-key key))
+        (loop)))))
+
 ;; === FIFO daemon ===
 
 (define (fifo-path)
@@ -921,6 +1071,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
   (let* ((fifo (open-event-fifo))
          (path (car fifo))
          (port (cdr fifo))
+         (stdin (current-input-port))
          (cleaned? #f))
     (define (cleanup)
       (unless cleaned?
@@ -938,13 +1089,18 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
      (list SIGHUP SIGINT SIGTERM))
     (dynamic-wind
       (lambda ()
+        (stty-cbreak!)
         (display "\x1b[?25l\x1b[2J\x1b[H")
         (force-output))
       (lambda ()
         (let loop ()
           (render-current! #t)
-          (let ((readable (car (select (list port) '() '() 30))))
-            (when (pair? readable) (drain-events port)))
+          ;; FIFO 与 stdin 一起等；drain 内部用 char-ready? 兜底区分来源
+          ;; （select 对 buffered port 的返回形式不保证，双 drain 无害）。
+          (let ((readable (car (select (list port stdin) '() '() 30))))
+            (when (pair? readable)
+              (drain-events port)
+              (drain-keys stdin)))
           (loop)))
       cleanup)))
 
