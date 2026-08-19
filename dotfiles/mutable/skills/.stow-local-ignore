@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# skills 包每包忽略清单（Perl 正则，逐行，# 注释与空行允许）。
+# 本包只部署：管理脚本（.local/bin/askill）与锁（.config/agents/skills/skills-lock.json）。
+# skill 内容由 askill 直接安装到 ~/.config/agents/skills/（真实文件，不经 stow）。
+
+# npx skills project-scope 落盘暂存区（basename 精确匹配 .agents，
+# 位于 .config/agents/skills/ 下）——不得软链到 ~
+\.agents$
+
+# mimosa 安全扫描运行时产物（basename 精确匹配）
+\.mimosa$

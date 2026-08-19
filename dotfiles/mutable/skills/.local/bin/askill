@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# askill — 声明式管理第三方 agent skills（lock 驱动，内容不进 git）
+#
+# 模型（对齐 source/channel.lock 哲学）：
+#   仓库只声明（skills-lock.json + 本脚本）；skill 内容按需从上游安装到
+#   ~/.config/agents/skills/，由 lock 的 computedHash 提供完整性基线。
+#
+# 布局（npx cwd = <pkg>/.config/agents/skills/）：
+#   <cwd>/skills-lock.json         锁真身（stow 部署后在 ~/.config/agents/skills/ 直接可查）
+#   <cwd>/.agents/skills/          npx project-scope 落盘暂存区（gitignore，不部署）
+#   ~/.config/agents/skills/       部署位置：lock + 真实 skill 目录（自建 skill 与此共存）
+#
+# 引擎：npx skills (vercel-labs)，project scope + universal agent + --copy。
+# 版本冻结：ref 跟踪上游最新（无 commit pin），锁语义由 git 提交 skills-lock.json 承担。
+set -euo pipefail
+
+# 自定位：本脚本经 stow 单文件软链部署为 ~/.local/bin/askill，
+# readlink -f 解析回仓库源后再取包根（.local/bin 上两级）。
+SELF=$(readlink -f "$0")
+PKG_ROOT=$(cd "$(dirname "$SELF")/../.." && pwd)
+NPX_CWD="$PKG_ROOT/.config/agents/skills"
+DEST="$HOME/.config/agents/skills"
+STAGING="$NPX_CWD/.agents/skills"
+LOCK="$NPX_CWD/skills-lock.json"
+
+export DISABLE_TELEMETRY=1
+export SKILLS_CLONE_TIMEOUT_MS="${SKILLS_CLONE_TIMEOUT_MS:-600000}"
+SKILLS_VER="skills@1.5.23"
+
+die() { echo "askill: $*" >&2; exit 1; }
+
+npx_skills() { (cd "$NPX_CWD" && npx -y "$SKILLS_VER" "$@"); }
+
+# 按锁清单逐 skill 同步暂存区 → 部署位置。
+# 逐条操作且只处理锁内名字：部署位置的自建 skill（lock 外）绝不触碰。
+# cp -aL 展开软链（update 重装走 symlink 模式时也摊平成真实文件）。
+sync_from_staging() {
+  [ -e "$LOCK" ] || die "找不到 $LOCK（先 askill add 生成锁）"
+  local names name tmp
+  names=$(jq -r '.skills | keys[]' "$LOCK")
+  [ -n "$names" ] || { echo "锁为空，无可同步"; return 0; }
+  while IFS= read -r name; do
+    [ -d "$STAGING/$name" ] || { echo "  跳过（暂存区无）: $name"; continue; }
+    tmp="$DEST/.$name.incoming"
+    rm -rf "$tmp"
+    cp -aL "$STAGING/$name" "$tmp"
+    rm -rf "${DEST:?}/$name"     # 无斜杠：对旧 stow 软链只删链本身
+    mv "$tmp" "$DEST/$name"
+    echo "  已同步: $name"
+  done <<< "$names"
+}
+
+case "${1:-help}" in
+  add)
+    [ $# -ge 2 ] || die "用法: askill add <owner/repo> [-s <skill>[,<skill>...]] [-l 只列出不安装]"
+    shift
+    npx_skills add "$@" -a universal --copy -y
+    sync_from_staging
+    echo "完成。git diff 审查 skills-lock.json 后提交以冻结版本。"
+    ;;
+  update)
+    npx_skills update -p -y
+    sync_from_staging
+    echo "完成。git diff 审查后提交以冻结新版本。"
+    ;;
+  install)
+    # 新机/暂存区丢失时从锁恢复：experimental_install 重装到暂存区 → 同步部署位置。
+    # 注意 ref 无 commit pin，恢复的是上游当前最新；与锁内 computedHash 的偏差
+    # 会体现在随后 npx update 的检测里。
+    npx_skills experimental_install
+    sync_from_staging
+    ;;
+  remove)
+    [ $# -ge 2 ] || die "用法: askill remove <skill> [<skill>...]"
+    shift
+    for name in "$@"; do
+      case "$name" in */*|.*|'') die "非法 skill 名: $name" ;; esac
+    done
+    npx_skills remove "$@" -y
+    for name in "$@"; do
+      rm -rf "${DEST:?}/$name"
+      echo "  已删除: $name"
+    done
+    ;;
+  sync)
+    sync_from_staging ;;
+  list)
+    npx_skills list -p ;;
+  *)
+    cat <<'EOF'
+askill — 声明式管理第三方 agent skills（引擎: npx skills project scope）
+
+  askill add <owner/repo> [-s a,b]   安装上游 skill（写锁 + 落盘 ~/.config/agents/skills/）
+  askill update                     按锁检查并更新全部（git diff 审查后提交冻结）
+  askill install                    从 skills-lock.json 恢复（新机 clone + stow 后跑这个）
+  askill remove <skill>...          卸载（删锁条目 + 部署目录）
+  askill sync                       仅同步暂存区 → 部署位置（按锁清单）
+  askill list                       列出已纳管 skills
+
+skill 内容不进 git：仓库只跟踪 skills-lock.json（位于包内
+.config/agents/skills/ 下）与本脚本。
+自建 skill（不在锁内）不受任何命令影响。
+EOF
+    ;;
+esac
