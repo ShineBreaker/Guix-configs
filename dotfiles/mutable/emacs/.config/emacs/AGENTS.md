@@ -129,13 +129,29 @@ startup -> appearance -> editing -> programming -> projects
 
 ## 4. Noweb、命名与文档
 
-小模块可以使用一个普通 source block。大模块按子功能拆成命名片段，并在章节末尾用唯一组装块确定最终加载顺序：
+标题层级是代码组织的唯一轴：`**` 模块内，每个 `***` 方面子节通过 PROPERTIES drawer 声明一个 noweb ref，节内代码块裸头直写；模块末尾以 `*** 加载组装` 子节承载唯一组装块：
 
 ```org
-#+begin_src emacs-lisp :noweb-ref module/data :tangle no
+*** 数据
+:PROPERTIES:
+:CUSTOM_ID: module-data
+:header-args:emacs-lisp: :noweb-ref module/data :tangle no :noweb-sep "\n\n"
+:END:
+
+prose 解释本方面行为，与代码相邻。
+
+#+begin_src emacs-lisp
 ...
 #+end_src
 
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: module-assembly
+:END:
+
+组装顺序即求值顺序：数据 → 渲染 → hook。
+
+#+NAME: module-assembly-block
 #+begin_src emacs-lisp
 <<module/data>>
 <<module/render>>
@@ -145,8 +161,10 @@ startup -> appearance -> editing -> programming -> projects
 
 规则：
 
-- ref 使用英文 `module/section` 或既有 `module-section` 风格。
-- 每个 ref 只定义一次、只组装一次；片段必须 `:tangle no`。
+- ref 使用英文 `module/section` 或既有 `module-section` 风格；drawer 声明必须用语言专属 `:header-args:emacs-lisp:`（普通 `:header-args:` 会被文件级语言设置覆盖，导致库块同时直接 tangle 又被组装展开，产物重复）。
+- 每个 ref 集中在一个方面子节内，可拆多块穿插 prose（拆块点必须在原有空行边界，配合 `noweb-sep "\n\n"` 保证产物零变化）；每个 ref 恰好被组装一次。
+- 组装块收在模块末尾的 `*** 加载组装` 子节内；`<<ref>>` 引用必须列 0——noweb 展开会把引用处行首到 `<<` 之间的前缀复制到被插入文本的每一行。
+- 纯文本数据（如 capture 模板）用 `#+name` 数据块：`org` 语言、`:tangle no`、紧跟唯一引用者；块内行首 `*` / `**` / `#+` 以逗号转义（`,*`）保字面（否则 org 视作标题截断代码块），含双引号的 elisp 表达式写 `\"`；字符串内引用时开引号留在上一行、ref 顶格、尾部按需补 `\n`。被引用的 name 块由 `configctl check` 强制 `:tangle no`。
 - 共享实现放在 `helpers/...`，并在所有调用方之前组装。
 - noweb 只负责组织与顺序，不模拟 `require`。
 - 公开函数和变量使用 `custom/...`，路径与静态常量使用 `custom:...`。
@@ -172,9 +190,9 @@ startup -> appearance -> editing -> programming -> projects
 
 文件顶部 `* 配置域总览`（CUSTOM_ID: `overview`）是 8 域架构地图，列明每域职责与加载前提。这是新增功能的入口定位点——确认归属域后再改代码。该节只含 org prose 与表格，无源代码块，因此对 tangle 输出零影响。
 
-**2. 组装块用 `#+NAME:` 定址**
+**2. 组装块用 `#+NAME:` 定址并收入组装子节**
 
-每个 noweb 组装块（即包含 `<<ref>>` 的 `#+begin_src emacs-lisp` 块）以 `#+NAME:` 标记，提供 org 间跳转锚和 `configctl map` 定位入口。命名格式为 `<domain>-assembly`（如 `#+NAME: appearance-tab-line-assembly`），全小写连字符，与 noweb-ref 的 `module/section` 风格区分以避免混淆。
+每个 noweb 组装块（即包含 `<<ref>>` 的 `#+begin_src emacs-lisp` 块）以 `#+NAME:` 标记，提供 org 间跳转锚和 `configctl map` 定位入口。命名格式为 `<domain>-assembly`（如 `#+NAME: appearance-tab-line-assembly`），全小写连字符，与 noweb-ref 的 `module/section` 风格区分以避免混淆。组装块收在所属模块末尾的 `*** 加载组装` 子节（CUSTOM_ID `<module>-assembly`）内，浏览代码时折叠组装子节即可。
 
 **3. 节首 prose 声明契约**
 

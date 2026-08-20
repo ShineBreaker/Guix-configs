@@ -46,8 +46,10 @@
 + Which-key 描述、帮助分组、Dashboard 摘要三者同源，均从 =custom:binding-spec= 生成。
 
 *** Noweb 分片约定
-+ 小模块用单个 =emacs-lisp= 块；大模块拆命名片段（=:noweb-ref module/section :tangle no=），章节末尾用唯一组装块（=#+NAME: <domain>-assembly=）确定加载顺序。
-+ 每个 ref 只定义一次、只组装一次； =<<ref>>= 必须在列 0；共享实现放 =helpers/...= 并在调用方之前组装。
++ 标题层级是代码组织的唯一轴: =**= 模块内,每个 =***= 方面子节通过 drawer 声明一个 ref——  =:header-args:emacs-lisp: :noweb-ref <domain/aspect> :tangle no :noweb-sep "\n\n"= ,块头裸写 =#+begin_src emacs-lisp= 。必须用语言专属 =:header-args:emacs-lisp:= (普通 =:header-args:= 会被文件级语言设置覆盖,导致产物重复)。
++ 方面子节内可拆多块穿插 prose(拆块点必须在原有空行边界,配合 =noweb-sep "\n\n"= 保证产物零变化);同一 ref 的块不得跨子节。
++ 每个模块末尾设 =*** 加载组装= 子节(CUSTOM_ID =<module>-assembly=)承载唯一组装块 =#+NAME: <domain>-assembly= ; =<<ref>>= 引用必须列 0(noweb 展开会把引用处行首前缀复制到文本每一行)。每个 ref 恰好组装一次;共享实现放 =helpers/...= 并在调用方之前组装。
++ 纯文本数据(如 capture 模板)用 =#+name= 数据块: =org= 语言、=:tangle no=、紧跟唯一引用者;块内行首 =*= / =**= / =#+= 以逗号转义(=,*=)保字面,含双引号的 elisp 表达式写 =\"= ;字符串内引用时开引号留在上一行、ref 顶格,尾部按需补 =\n= 。被引用的 name 块由 =configctl check= 强制 =:tangle no= 。
 
 *** 架构硬约束（不可破坏）
 + 唯一生成物 =main.el= ；禁止把配置 tangle 到 =lisp/= 子目录、禁止 =lisp/= load-path、禁止历史 =custom-*= feature 的 require/provide 引用。
@@ -101,7 +103,13 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 + =early-init.el= 把 =GUIX_PROFILE/bin= 和 =~/.local/bin= 加入 =exec-path= 。
 + 后续所有功能域都引用这里的 =custom:org-directory= 、 =custom:executable-*=
 
-#+begin_src emacs-lisp :noweb-ref bootstrap/paths :tangle no
+*** 路径常量
+:PROPERTIES:
+:CUSTOM_ID: bootstrap-paths
+:header-args:emacs-lisp: :noweb-ref bootstrap/paths :tangle no :noweb-sep "\n\n"
+:END:
+
+#+begin_src emacs-lisp
 (defconst custom:emacs-dir user-emacs-directory
   "当前 Emacs profile 的根目录。")
 
@@ -132,9 +140,15 @@ GC 启动期优化(启动完成后由 gcmh 重置)
   "是否运行在 Guix 环境中。")
 #+end_src
 
+*** 外部命令声明
+:PROPERTIES:
+:CUSTOM_ID: bootstrap-executables
+:header-args:emacs-lisp: :noweb-ref bootstrap/executables :tangle no :noweb-sep "\n\n"
+:END:
+
 外部命令只保存命令名。Guix 保证包存在，实际进程启动时由当前 PATH 解析。
 
-#+begin_src emacs-lisp :noweb-ref bootstrap/executables :tangle no
+#+begin_src emacs-lisp
 (defconst custom:executable-aspell   "aspell")
 (defconst custom:executable-direnv   "direnv")
 (defconst custom:executable-fish     "fish")
@@ -142,7 +156,13 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 (defconst custom:executable-godot    "godot")
 #+end_src
 
-bootstrap 组装：路径常量 + 外部命令声明
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: bootstrap-assembly
+:END:
+
+组装顺序即求值顺序：路径常量 → 外部命令声明。
+
 #+NAME: bootstrap-assembly
 #+begin_src emacs-lisp
 <<bootstrap/paths>>
@@ -599,9 +619,14 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 维护完整快捷键参考与 Dashboard 复用的精简入口。
 
 *** 帮助数据
+:PROPERTIES:
+:CUSTOM_ID: help-data
+:header-args:emacs-lisp: :noweb-ref appearance/help-data :tangle no :noweb-sep "\n\n"
+:END:
+
 键位、Which-key 描述、帮助分组和 Dashboard 摘要统一由 [[#keybindings][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections= 与 =custom/binding-dashboard-bindings=)。本节只剩帮助页引言文字(=custom:help-introduction=)和外置到 [[file:data/help-zh.el][data/help-zh.el]] 的非键位说明;键位相关的描述不再外置。
 
-#+begin_src emacs-lisp :noweb-ref appearance/help-data :tangle no
+#+begin_src emacs-lisp
 (defface custom-help-section-title
   '((t :weight bold :height 1.2))
   "帮助缓冲区分类标题样式。前景色由 color-scheme hook 统一设置。"
@@ -610,8 +635,12 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 #+end_src
 
 *** 帮助渲染与入口
+:PROPERTIES:
+:CUSTOM_ID: help-render
+:header-args:emacs-lisp: :noweb-ref appearance/help-render :tangle no :noweb-sep "\n\n"
+:END:
 
-#+begin_src emacs-lisp :noweb-ref appearance/help-render :tangle no
+#+begin_src emacs-lisp
 (defun custom/show-help ()
   "显示完整的快捷键帮助。"
   (interactive)
@@ -644,6 +673,13 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
     (pop-to-buffer buf)))
 
 #+end_src
+
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: help-assembly
+:END:
+
+组装顺序即求值顺序：帮助数据 → 帮助渲染。
 
 #+NAME: appearance-help-assembly
 #+begin_src emacs-lisp
@@ -1171,8 +1207,12 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 + 标签栏本身也只在文件 buffer 的 window 渲染(=tab-line-exclude-functions= 复用同一白名单),终端模拟器、scratch、help、Dashboard 等 window 不显示标签栏。
 
 *** 常量与窗口定位
+:PROPERTIES:
+:CUSTOM_ID: tab-line-core
+:header-args:emacs-lisp: :noweb-ref appearance/tab-line-core :tangle no :noweb-sep "\n\n"
+:END:
 
-#+begin_src emacs-lisp :noweb-ref appearance/tab-line-core :tangle no
+#+begin_src emacs-lisp
 (require 'tab-line)
 (tab-bar-mode -1)
 
@@ -1206,6 +1246,10 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
 #+end_src
 
 *** Per-frame 缓冲区跟踪
+:PROPERTIES:
+:CUSTOM_ID: tab-line-tracking
+:header-args:emacs-lisp: :noweb-ref appearance/tab-line-tracking :tangle no :noweb-sep "\n\n"
+:END:
 
 每个 frame 维护一个有序的文件 buffer 列表,存储在 frame parameter =custom--frame-tab-buffers= 中。这是多 emacsclient frame 隔离的核心:不同 frame 的标签序列完全独立。
 
@@ -1219,7 +1263,7 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
 
 注册顺序即标签排列顺序(append-only),保证用户切换的稳定心智模型。=window-buffer-change-functions= 是唯一的注册入口,不再依赖 =find-file-hook= / =server-switch-hook= 等重复触发源。
 
-#+begin_src emacs-lisp :noweb-ref appearance/tab-line-tracking :tangle no
+#+begin_src emacs-lisp
 (defun custom--tabs-get-frame-buffer-list (&optional frame)
   "返回 FRAME 的标签缓冲区列表。"
   (frame-parameter (or frame (selected-frame)) 'custom--frame-tab-buffers))
@@ -1227,7 +1271,11 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
 (defun custom--tabs-set-frame-buffer-list (buffers &optional frame)
   "设置 FRAME 的标签缓冲区列表为 BUFFERS。"
   (set-frame-parameter (or frame (selected-frame)) 'custom--frame-tab-buffers buffers))
+#+end_src
 
+注册与注销是一对对称操作:注册做尾部追加(去重),注销做删除;两者只维护 frame parameter 列表,不直接操作窗口。
+
+#+begin_src emacs-lisp
 (defun custom--tabs-register-buffer (buffer &optional frame)
   "将 BUFFER 注册到 FRAME 的标签列表尾部(去重)。"
   (let* ((target-frame (or frame (selected-frame)))
@@ -1245,7 +1293,11 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
       (custom--tabs-set-frame-buffer-list
        (delq buffer buffers)
        target-frame))))
+#+end_src
 
+=window-buffer-change-functions= 的回调适配两种调用形态:全局 hook 传 frame 时遍历该 frame 所有 window,buffer-local hook 传 window 时直接取其 buffer。
+
+#+begin_src emacs-lisp
 (defun custom--tabs-on-window-buffer-change (frame-or-window)
   "缓冲区变更时,把新缓冲区注册到对应 frame。
 FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
@@ -1268,7 +1320,11 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
                  (custom/tab-visible-p buffer)
                  (not (minibufferp buffer)))
         (custom--tabs-register-buffer buffer frame))))))
+#+end_src
 
+三类清理路径:buffer 被 kill 时从所有 frame 移除;frame 删除时丢弃自身列表;项目切换时清空当前 frame(交互命令也可直接调用,顺带失效 window 级 tab-line 缓存)。
+
+#+begin_src emacs-lisp
 (defun custom--tabs-on-kill-buffer ()
   "缓冲区被关闭时,从所有 frame 的标签列表中移除。"
   (let ((buffer (current-buffer)))
@@ -1301,7 +1357,11 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
 忽略传入的项目参数（与 `custom/tabs-clear-for-frame' 的 `&optional frame' 元数不同，
 故需独立适配回调）。"
   (custom/tabs-clear-for-frame))
+#+end_src
 
+渲染与标签操作统一经此查询入口:按白名单过滤出存活可见的 buffer 列表。
+
+#+begin_src emacs-lisp
 (defun custom--tabs-frame-buffers (&optional window)
   "返回 WINDOW 所在 frame 的存活 + 可见缓冲区列表。"
   (let* ((target-window (custom--tabs-target-window window))
@@ -1314,10 +1374,14 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
 #+end_src
 
 *** 标签渲染
+:PROPERTIES:
+:CUSTOM_ID: tab-line-render
+:header-args:emacs-lisp: :noweb-ref appearance/tab-line-render :tangle no :noweb-sep "\n\n"
+:END:
 
-渲染阶段不构造任何主题相关的 RGB 值,只选择内置语义 face(current/inactive),具体配色交给 =tab-line-tab-face-functions= 钩子和 [[tab-line-face-policy][face 继承策略]]。
+渲染阶段不构造任何主题相关的 RGB 值,只选择内置语义 face(current/inactive),具体配色交给 =tab-line-tab-face-functions= 钩子和 [[tab-line-faces][face 继承策略]]。
 
-#+begin_src emacs-lisp :noweb-ref appearance/tab-line-render :tangle no
+#+begin_src emacs-lisp
 (defun custom/tab-line-tabs ()
   "返回当前窗口标签栏要展示的 buffer 列表。"
   (or (custom--tabs-frame-buffers (selected-window))
@@ -1398,7 +1462,8 @@ current/inactive 用内置 face,自动跟随主题。"
 
 *** 按钮与 Face
 :PROPERTIES:
-:CUSTOM_ID: tab-line-face-policy
+:CUSTOM_ID: tab-line-faces
+:header-args:emacs-lisp: :noweb-ref appearance/tab-line-faces :tangle no :noweb-sep "\n\n"
 :END:
 
 标签栏所有 face 走主题语义色继承,不构造任何显式 RGB 值。主题切换时由继承关系自动更新。TTY 下 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]] 把 =tab-line-tab-current= 的 =:background= 设为 =unspecified=（透明）、前景用 =brightwhite= + 下划线实现"当前标签"语义,无需专门维护 TTY plist。
@@ -1412,7 +1477,7 @@ current/inactive 用内置 face,自动跟随主题。"
 | 关闭按钮高亮 | =error=               | 去背景/边框/下划线 | 关闭动作的警示语义      |
 | 标签栏整体   | 无                  | 零宽 spacer +8px   | 保留舒适高度,不用 box   |
 
-#+begin_src emacs-lisp :noweb-ref appearance/tab-line-faces :tangle no
+#+begin_src emacs-lisp
 (defun custom/apply-tab-line-button-preset ()
   "应用统一的标签栏按钮文本样式。"
   (setq tab-line-close-button
@@ -1458,6 +1523,10 @@ current/inactive 用内置 face,自动跟随主题。"
 #+end_src
 
 *** 标签操作
+:PROPERTIES:
+:CUSTOM_ID: tab-line-actions
+:header-args:emacs-lisp: :noweb-ref appearance/tab-line-actions :tangle no :noweb-sep "\n\n"
+:END:
 
 关闭语义对键盘和鼠标统一为 =bury + unregister=,不 kill buffer:标签从列表移除,但 buffer 内容保留,可被 =recentf= 或其他 window 重新引用。
 
@@ -1467,7 +1536,7 @@ current/inactive 用内置 face,自动跟随主题。"
 | 键盘关闭 | bury + unregister | 否           | 切到下一个可见 buffer,无则 bury |
 | 鼠标关闭 | 同上(共享路径)    | 否           | 同上                            |
 
-#+begin_src emacs-lisp :noweb-ref appearance/tab-line-actions :tangle no
+#+begin_src emacs-lisp
 (defun custom--tabs-switch-to-buffer (buffer &optional window)
   "在 WINDOW 中切换到 BUFFER,并刷新标签显示。"
   (when (buffer-live-p buffer)
@@ -1530,12 +1599,16 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
       (custom/tabs-close-buffer (custom--tabs-target-window) buffer))))
 #+end_src
 
-*** 全局 Hook
+*** 全局启用与 Hook 注册
+:PROPERTIES:
+:CUSTOM_ID: tab-line-hooks
+:header-args:emacs-lisp: :noweb-ref appearance/tab-line-hooks :tangle no :noweb-sep "\n\n"
+:END:
 
-项目切换时清空当前 frame 的标签列表
+绑定 tab-line 的渲染入口到本模块函数,并注册全局 hook。项目切换时清空当前 frame 的标签列表
 + 等价行为已在 *项目与导航* 域 ~project-navigation~ 子树通过 =project-after-switch-project-functions= 注册。
 
-#+begin_src emacs-lisp :noweb-ref appearance/tab-line-hooks :tangle no
+#+begin_src emacs-lisp
 (setq tab-line-tabs-function #'custom/tab-line-tabs
       tab-line-tab-name-function #'custom/tab-line-tab-name
       tab-line-tab-name-format-function #'custom/tab-line-tab-name-format
@@ -1560,6 +1633,13 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
 (add-hook 'delete-frame-functions #'custom--tabs-on-frame-deletion)
 #+end_src
 
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: tab-line-assembly
+:END:
+
+组装顺序即求值顺序:常量与原语 → 缓冲区跟踪 → 渲染 → face → 操作 → 全局启用。
+
 #+NAME: appearance-tab-line-assembly
 #+begin_src emacs-lisp
 <<appearance/tab-line-core>>
@@ -1578,6 +1658,10 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
 提供 Git 文件/仓库操作及 Magit、终端等复用的 display-buffer 路由。
 
 *** Git 命令
+:PROPERTIES:
+:CUSTOM_ID: git-commands
+:header-args:emacs-lisp: :noweb-ref appearance/git-commands :tangle no :noweb-sep "\n\n"
+:END:
 
 Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + Magit 状态页路由到底部 ~side-window~ （40% 高度）
@@ -1587,7 +1671,7 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + 所有操作复用启动域声明的 =custom:executable-git= 。
 + 「确认前提后转发 Magit 交互命令」的同构命令由 =custom/git--define-file-command= / =custom/git--define-repo-command= 工厂宏生成,避免逐个手写。
 
-#+begin_src emacs-lisp :noweb-ref appearance/git-commands :tangle no
+#+begin_src emacs-lisp
 (defun custom/git-repo-root (&optional file)
   "返回 FILE 所在 Git 仓库根目录。"
   (when-let* ((target (or file (buffer-file-name) default-directory)))
@@ -1614,7 +1698,11 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
           (error "Git 命令失败: %s"
                  (if (string-empty-p output) (string-join args " ") output)))
         output))))
+#+end_src
 
+四个原语先行:仓库定位、文件获取、前置校验与同步执行;后续命令全部构建在其上。
+
+#+begin_src emacs-lisp
 (defmacro custom/git--define-file-command (name doc magit-command)
   "定义命令 NAME:确认当前 buffer 关联文件后,转发 MAGIT-COMMAND。"
   `(defun ,name ()
@@ -1649,7 +1737,11 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
                                  "Push 当前仓库。" magit-push-current-to-upstream)
 (custom/git--define-repo-command custom/git-pull-current-repo
                                  "Pull 当前仓库。" magit-pull-from-upstream)
+#+end_src
 
+工厂宏消掉同构转发命令;stage/discard/stash 与提交消息识别是带交互确认或副作用的命令,手写实现。
+
+#+begin_src emacs-lisp
 (defun custom/git-stage-current-file ()
   "Stage 当前文件。"
   (interactive)
@@ -1696,8 +1788,12 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 #+end_src
 
 *** Display-buffer 路由
+:PROPERTIES:
+:CUSTOM_ID: git-window-routing
+:header-args:emacs-lisp: :noweb-ref appearance/git-display :tangle no :noweb-sep "\n\n"
+:END:
 
-#+begin_src emacs-lisp :noweb-ref appearance/git-display :tangle no
+#+begin_src emacs-lisp
 (cl-defun custom/register-side-window (regex side size &key slot width)
   "把 REGEX 匹配的 buffer 路由到 SIDE 边的 side-window，占用 SIZE 比例。
 
@@ -1761,6 +1857,13 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
       (let ((display-buffer-alist nil))
         (display-buffer buffer action)))))
 #+end_src
+
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: git-assembly
+:END:
+
+组装顺序即求值顺序：Git 命令 → Display-buffer 路由。随后的 use-package 声明与键位绑定不属于组装内容。
 
 #+NAME: appearance-git-assembly
 #+begin_src emacs-lisp
@@ -2238,8 +2341,12 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 + 导出 =custom/register-buffer-refresh!= / =custom/register-theme-refresh!= 供 Dashboard 使用
 
 *** 状态与主题应用
+:PROPERTIES:
+:CUSTOM_ID: color-scheme-core
+:header-args:emacs-lisp: :noweb-ref appearance/color-scheme-core :tangle no :noweb-sep "\n\n"
+:END:
 
-#+begin_src emacs-lisp :noweb-ref appearance/color-scheme-core :tangle no
+#+begin_src emacs-lisp
 
 (require 'dbus)
 
@@ -2352,8 +2459,12 @@ MODE 为 'light 或 'dark。
 #+end_src
 
 *** D-Bus 监听
+:PROPERTIES:
+:CUSTOM_ID: color-scheme-dbus
+:header-args:emacs-lisp: :noweb-ref appearance/color-scheme-dbus :tangle no :noweb-sep "\n\n"
+:END:
 
-#+begin_src emacs-lisp :noweb-ref appearance/color-scheme-dbus :tangle no
+#+begin_src emacs-lisp
 ;; D-Bus 信号监听
 
 (defvar custom/color-scheme-dbus-handler nil
@@ -2390,6 +2501,10 @@ MODE 为 'light 或 'dark。
 #+end_src
 
 *** Frame 初始化
+:PROPERTIES:
+:CUSTOM_ID: color-scheme-init
+:header-args:emacs-lisp: :noweb-ref appearance/color-scheme-init :tangle no :noweb-sep "\n\n"
+:END:
 
 主题初始化时机按运行模式分流:
 
@@ -2399,7 +2514,7 @@ MODE 为 'light 或 'dark。
 | daemon     | daemon 启动阶段 | 启动时间不敏感，提前支付主题加载与 D-Bus 注册成本 |
 | 独立 Emacs | 立即初始化      | 启动时 selected-frame 已存在                      |
 
-#+begin_src emacs-lisp :noweb-ref appearance/color-scheme-init :tangle no
+#+begin_src emacs-lisp
 (defun custom/display-supports-themes-p (&optional frame)
   "FRAME（默认 selected-frame）是否可呈现 Ef theme 的完整前景 palette。"
   (with-selected-frame (or frame (selected-frame))
@@ -2453,10 +2568,14 @@ MODE 为 'light 或 'dark。
 #+end_src
 
 *** Face 与缓冲区刷新
+:PROPERTIES:
+:CUSTOM_ID: color-scheme-refresh
+:header-args:emacs-lisp: :noweb-ref appearance/color-scheme-refresh :tangle no :noweb-sep "\n\n"
+:END:
 
 本配置只拥有 Ef 主题;颜色通过 face 继承或 Ef palette API 获取,不在刷新函数里硬编码 RGB,也不依赖 Modus palette。主题切换后的级联刷新通过 =custom/theme-refresh-functions= 列表(各功能模块用 =custom/register-theme-refresh!= 幂等注册)统一驱动,见 [[#dashboard][Dashboard]] 的边框 bar face 更新。
 
-#+begin_src emacs-lisp :noweb-ref appearance/color-scheme-refresh :tangle no
+#+begin_src emacs-lisp
 (defun custom/color-scheme-apply-custom-face-colors ()
   "主题切换后重新应用自定义 face 颜色。
 dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard-card-bar'),
@@ -2520,6 +2639,13 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 (add-hook 'ef-themes-after-load-theme-hook #'custom/run-theme-refresh)
 (custom/run-theme-refresh)
 #+end_src
+
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: color-scheme-assembly
+:END:
+
+组装顺序即求值顺序：状态与主题应用 → D-Bus 监听 → Frame 初始化 → Face 与缓冲区刷新。
 
 #+NAME: appearance-color-scheme-assembly
 #+begin_src emacs-lisp
@@ -3532,33 +3658,210 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   "`org-capture-after-finalize-hook' 回调：清理本次 capture 的临时状态。"
   (setq custom/org-capture--last-category nil
         custom/org-capture--roam-title nil))
+#+end_src
 
+每条模板拆成两部分:=defconst= 块持有键、类型与目标文件,以列 0 的 noweb 引用拼入模板体;紧跟其后的 =#+name= 文本块(=org= 语言,=:tangle no=)即模板原文——行首 =*= / =#+= 以逗号转义保字面,含双引号的 elisp 表达式写 =\"=,引用行前的开引号留在上一行(noweb 展开会把引用处行首前缀复制到文本每一行)。目标文件为常量路径的模板在定义时展开(反引号 =,=);需要交互选择的(agenda 文件、经验卡路径)传入函数,由 org-capture 在 capture 时调用。
+
+=ki= Inbox 草稿:最小阻力收集,一句话 TODO + CREATED 时间戳,留待 inbox 分流。
+
+#+begin_src emacs-lisp
+(defconst custom:org-capture-tpl-inbox
+  `("ki" "Inbox 草稿" entry
+    (file ,custom:org-inbox-file)
+    "
+<<org-capture-tpl-inbox>>\n")
+  "一句话草稿、待分流事项。")
+#+end_src
+
+#+name: org-capture-tpl-inbox
+#+begin_src org :tangle no
+,* TODO %?
+:PROPERTIES:
+:CREATED: %U
+:END:
+%i
+#+end_src
+
+=kt= / =kd= / =ke= agenda 三条:普通任务、带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。目标文件由 =custom/org-capture--agenda-file= 运行时解析,三条模板体结构一致,只有首行关键字与日期行差异。
+
+#+begin_src emacs-lisp
+(defconst custom:org-capture-tpl-task
+  '("kt" "任务 (agenda)" entry
+    (file custom/org-capture--agenda-file)
+    "
+<<org-capture-tpl-task>>\n")
+  "普通任务,进 agenda。")
+
+(defconst custom:org-capture-tpl-task-date
+  '("kd" "带日期任务 (agenda)" entry
+    (file custom/org-capture--agenda-file)
+    "
+<<org-capture-tpl-task-date>>\n")
+  "任务 + SCHEDULED 日期。")
+
+(defconst custom:org-capture-tpl-event
+  '("ke" "日程事件 (agenda)" entry
+    (file custom/org-capture--agenda-file)
+    "
+<<org-capture-tpl-event>>\n")
+  "日程事件,无 TODO 关键字。")
+#+end_src
+
+#+name: org-capture-tpl-task
+#+begin_src org :tangle no
+,* TODO %?
+:PROPERTIES:
+:CREATED: %U
+:END:
+%i
+#+end_src
+
+#+name: org-capture-tpl-task-date
+#+begin_src org :tangle no
+,* TODO %?
+SCHEDULED: %^t
+:PROPERTIES:
+:CREATED: %U
+:END:
+%i
+#+end_src
+
+#+name: org-capture-tpl-event
+#+begin_src org :tangle no
+,* %?
+:PROPERTIES:
+:CREATED: %U
+:END:
+%i
+#+end_src
+
+=kr= Roam 长期笔记:文件级条目,标题取自交互输入,ID 由 =org-id-new= 生成,落入 roam 目录。模板值不以换行结尾,故引用行不补 =\n=。
+
+#+begin_src emacs-lisp
+(defconst custom:org-capture-tpl-roam
+  '("kr" "Roam 长期笔记" plain
+    (file custom/org-capture--roam-file)
+    "
+<<org-capture-tpl-roam>>")
+  "长期笔记与双向关联知识。")
+#+end_src
+
+#+name: org-capture-tpl-roam
+#+begin_src org :tangle no
+,#+title: %(custom/org-capture--roam-title-value)
+:PROPERTIES:
+:ID:       %(org-id-new)
+:CREATED:  %U
+:END:
+
+%?
+#+end_src
+
+经验三卡(note / mistake / ascended)对齐 =agenote-base= 的 entry-types:属性 drawer 记录 =ENTRY_TYPE= 与 =CATEGORY=,模板体预置各卡的复盘章节骨架——每章标题即复盘时需要回答的问题。三卡模板结构同源,仅 =ENTRY_TYPE= / =TYPE= 与章节骨架不同。
+
+#+begin_src emacs-lisp
+(defconst custom:org-capture-tpl-note
+  '("kn" "经验-笔记 (note)" plain
+    (file custom/org-capture--experience-file)
+    "
+<<org-capture-tpl-note>>\n")
+  "note 条目:工作流经验。")
+
+(defconst custom:org-capture-tpl-mistake
+  '("km" "经验-踩坑 (mistake)" plain
+    (file custom/org-capture--experience-file)
+    "
+<<org-capture-tpl-mistake>>\n")
+  "mistake 条目:踩坑记录。")
+
+(defconst custom:org-capture-tpl-ascended
+  '("ka" "经验-试错后最优 (ascended)" plain
+    (file custom/org-capture--experience-file)
+    "
+<<org-capture-tpl-ascended>>\n")
+  "ascended 条目:多轮试错后的最优解。")
+#+end_src
+
+#+name: org-capture-tpl-note
+#+begin_src org :tangle no
+,* %^{标题}
+:PROPERTIES:
+:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
+:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
+:CATEGORY: %(custom/org-capture--category)
+:TECH:     %^{技术栈}
+:TYPE:     workflow
+:STATUS:   done
+:ENTRY_TYPE: note
+:END:
+,#+filetags: :%^{标签}:
+
+,** 事项内容
+%?
+,** 为什么值得长期保留
+
+,** 适用场景与例外
+
+,** 后续行动
+#+end_src
+
+#+name: org-capture-tpl-mistake
+#+begin_src org :tangle no
+,* %^{标题}
+:PROPERTIES:
+:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
+:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
+:CATEGORY: %(custom/org-capture--category)
+:TECH:     %^{技术栈}
+:TYPE:     debug
+:STATUS:   done
+:ENTRY_TYPE: mistake
+:END:
+,#+filetags: :%^{标签}:
+
+,** 原始问题
+%?
+,** 纠错反馈
+
+,** 这次到底错在哪里
+
+,** 最终正确处理
+#+end_src
+
+#+name: org-capture-tpl-ascended
+#+begin_src org :tangle no
+,* %^{标题}
+:PROPERTIES:
+:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
+:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
+:CATEGORY: %(custom/org-capture--category)
+:TECH:     %^{技术栈}
+:TYPE:     debug
+:STATUS:   done
+:ENTRY_TYPE: ascended
+:END:
+,#+filetags: :%^{标签}:
+
+,** 前几轮失败的根因
+%?
+,** 检索过的知识源
+
+,** 核对过的真实文件或输出
+
+,** 最终采用的最强方案
+#+end_src
+
+#+begin_src emacs-lisp
 (with-eval-after-load 'org-capture
   (setq org-capture-templates
-        `(("ki" "Inbox 草稿" entry
-           (file ,custom:org-inbox-file)
-           "* TODO %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%i\n")
-          ("kt" "任务 (agenda)" entry
-           (file custom/org-capture--agenda-file)
-           "* TODO %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%i\n")
-          ("kd" "带日期任务 (agenda)" entry
-           (file custom/org-capture--agenda-file)
-           "* TODO %?\nSCHEDULED: %^t\n:PROPERTIES:\n:CREATED: %U\n:END:\n%i\n")
-          ("ke" "日程事件 (agenda)" entry
-           (file custom/org-capture--agenda-file)
-           "* %?\n:PROPERTIES:\n:CREATED: %U\n:END:\n%i\n")
-          ("kr" "Roam 长期笔记" plain
-           (file custom/org-capture--roam-file)
-           "#+title: %(custom/org-capture--roam-title-value)\n:PROPERTIES:\n:ID:       %(org-id-new)\n:CREATED:  %U\n:END:\n\n%?")
-          ("kn" "经验-笔记 (note)" plain
-           (file custom/org-capture--experience-file)
-           "* %^{标题}\n:PROPERTIES:\n:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")\n:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")\n:CATEGORY: %(custom/org-capture--category)\n:TECH:     %^{技术栈}\n:TYPE:     workflow\n:STATUS:   done\n:ENTRY_TYPE: note\n:END:\n#+filetags: :%^{标签}:\n\n** 事项内容\n%?\n** 为什么值得长期保留\n\n** 适用场景与例外\n\n** 后续行动\n")
-          ("km" "经验-踩坑 (mistake)" plain
-           (file custom/org-capture--experience-file)
-           "* %^{标题}\n:PROPERTIES:\n:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")\n:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")\n:CATEGORY: %(custom/org-capture--category)\n:TECH:     %^{技术栈}\n:TYPE:     debug\n:STATUS:   done\n:ENTRY_TYPE: mistake\n:END:\n#+filetags: :%^{标签}:\n\n** 原始问题\n%?\n** 纠错反馈\n\n** 这次到底错在哪里\n\n** 最终正确处理\n")
-          ("ka" "经验-试错后最优 (ascended)" plain
-           (file custom/org-capture--experience-file)
-           "* %^{标题}\n:PROPERTIES:\n:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")\n:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")\n:CATEGORY: %(custom/org-capture--category)\n:TECH:     %^{技术栈}\n:TYPE:     debug\n:STATUS:   done\n:ENTRY_TYPE: ascended\n:END:\n#+filetags: :%^{标签}:\n\n** 前几轮失败的根因\n%?\n** 检索过的知识源\n\n** 核对过的真实文件或输出\n\n** 最终采用的最强方案\n")))
+        (list custom:org-capture-tpl-inbox
+              custom:org-capture-tpl-task
+              custom:org-capture-tpl-task-date
+              custom:org-capture-tpl-event
+              custom:org-capture-tpl-roam
+              custom:org-capture-tpl-note
+              custom:org-capture-tpl-mistake
+              custom:org-capture-tpl-ascended))
   (add-hook 'org-capture-after-finalize-hook
             #'custom/org-capture--clear-state))
 #+end_src
@@ -3877,6 +4180,10 @@ Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-displ
 + 补全相关命令的前缀分组键位( =C-c m= )见 [[#keybindings][前缀键体系]]
 
 *** Minibuffer 补全
+:PROPERTIES:
+:CUSTOM_ID: completion-minibuffer
+:header-args:emacs-lisp: :noweb-ref keys/completion-minibuffer :tangle no :noweb-sep "\n\n"
+:END:
 
 ~savehist~ - 持久化 minibuffer 历史
 + savehist 已在 *启动与基础设施* ~startup~ 域以 =:demand t= 启用，daemon 对外服务前即可复用历史。
@@ -3893,7 +4200,7 @@ Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-displ
 ~completions-sort~ - 历史优先排序(替代 Prescient 的轻量部分)
 + 候选按字母序 + minibuffer 历史最近优先。
 
-#+begin_src emacs-lisp :noweb-ref keys/completion-minibuffer :tangle no
+#+begin_src emacs-lisp
 (require 'ispell)
 
 ;; Emacs 30+ 内置 minibuffer 补全界面:minibuffer 激活即显示 *Completions*,
@@ -3924,6 +4231,10 @@ Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-displ
 #+end_src
 
 *** In-region 补全
+:PROPERTIES:
+:CUSTOM_ID: completion-region
+:header-args:emacs-lisp: :noweb-ref keys/completion-region :tangle no :noweb-sep "\n\n"
+:END:
 
 Emacs 30+ 内置 ~completion-preview-mode~ 提供 in-buffer 补全预览（替代 Corfu 弹出菜单）:
 + 输入时在光标处显示 ghost-text 候选预览
@@ -3937,7 +4248,7 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 
 ~Flymake~ 错误浏览(Emacs 29+ 内置)M-s f 绑定 =flymake-goto-next-error= 。
 
-#+begin_src emacs-lisp :noweb-ref keys/completion-region :tangle no
+#+begin_src emacs-lisp
 ;; ispell 词表发现(aspell 使用启动域命令声明)
 (defconst custom/completion:ispell-word-list-candidates
   (delq nil
@@ -3985,7 +4296,11 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 (add-hook 'text-mode-hook #'custom/completion-setup-ispell-word-list)
 (add-hook 'org-mode-hook #'custom/completion-setup-ispell-word-list)
 (add-hook 'git-commit-setup-hook #'custom/completion-setup-ispell-word-list)
+#+end_src
 
+词表与后端就绪后注册到文本模式，随后启用内置预览补全。
+
+#+begin_src emacs-lisp
 ;; Emacs 30+ 内置 in-buffer 补全预览(替代 Corfu):输入时在光标处显示
 ;; ghost-text 候选, TAB 接受, M-n/M-p 切换。无弹出菜单与 kind 图标。
 (global-completion-preview-mode 1)
@@ -4013,11 +4328,15 @@ org 自身关键字 / 链接 / roam 补全仍保留,无需额外追加。
 #+end_src
 
 *** Frame 显示适配
+:PROPERTIES:
+:CUSTOM_ID: completion-display
+:header-args:emacs-lisp: :noweb-ref keys/completion-display :tangle no :noweb-sep "\n\n"
+:END:
 
 Per-frame 补全显示设置(daemon 安全)
 + PGTK/Wayland 下 minibuffer 补全窗口位置修复(completion-preview 无 childframe,无需 margin formatter)。
 
-#+begin_src emacs-lisp :noweb-ref keys/completion-display :tangle no
+#+begin_src emacs-lisp
 (defun custom/completion-setup-display (&optional frame)
   "根据 FRAME 的 display 类型设置补全框架的显示相关配置。
 GUI 模式仅保留 x-gtk-resize-child-frames 修复(completion-preview 无
@@ -4031,6 +4350,13 @@ childframe,不需要 margin formatter)。"
 ;; 注册到 frame 生命周期（add-frame-hook 由 Frame 块提供）
 (custom/add-frame-created-hook #'custom/completion-setup-display)
 #+end_src
+
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: completion-assembly
+:END:
+
+组装顺序即求值顺序：Minibuffer 补全 → In-region 补全 → Frame 显示适配。
 
 #+NAME: keys-completion-assembly
 #+begin_src emacs-lisp
@@ -4239,8 +4565,12 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 - 宽度显式传参: 删除旧的 =--forced-width= / =--override-margin= 动态绑定,宽度沿调用链显式传递。
 
 *** 核心定义
+:PROPERTIES:
+:CUSTOM_ID: dashboard-core
+:header-args:emacs-lisp: :noweb-ref system/dashboard-core :tangle no :noweb-sep "\n\n"
+:END:
 
-#+begin_src emacs-lisp :noweb-ref system/dashboard-core :tangle no
+#+begin_src emacs-lisp
 
 (require 'calendar)
 
@@ -4278,7 +4608,11 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 (defconst custom:dashboard-refresh-debounce 0.3
   "window-size-change 触发 dashboard 重新渲染的 idle 延迟（秒）。
 连续窗口尺寸变化会被合并为一次刷新。")
+#+end_src
 
+常量与帧序号在此奠基，后续 face 与缓存均依赖于此。
+
+#+begin_src emacs-lisp
 (defface custom/dashboard-card-bar
   '((t :inherit font-lock-comment-face :slant normal :weight normal))
   "Dashboard 卡片边框（左竖线 `|' + 标题分隔线 `-'）的 face。
@@ -4305,7 +4639,11 @@ Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (der
 (defface custom/dashboard-item
   '((t :inherit link :underline nil))
   "Dashboard 可点击条目的 face。")
+#+end_src
 
+卡片边框与标题 face 继承主题语义，弱化与错误态各自独立。
+
+#+begin_src emacs-lisp
 (defvar custom/dashboard--todo-cache nil
   "TODO 项缓存，结构为 (KEY TIME . DATA)，KEY 为 MAX-ITEMS。")
 
@@ -4360,8 +4698,12 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
   (cl-incf custom/dashboard--generation))
 
 #+end_src
-
 *** 测量层
+:PROPERTIES:
+:CUSTOM_ID: dashboard-measure
+:header-args:emacs-lisp: :noweb-ref system/dashboard-measure :tangle no :noweb-sep "\n\n"
+:END:
+
 测量层统一用 =string-width= 列模型（而非 GUI 像素），保证 GUI / TTY / batch 下卡片布局一致；固定 banner 例外，按字符数计数以规避 TTY CJK 宽度表差异。具体取舍见 =custom/dashboard--measure= 的 docstring。
 
 返回 TEXT 的显示宽度（列数）:
@@ -4371,7 +4713,7 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 + 原设计曾尝试 GUI 像素 + TTY 列双模，但 =string-pixel-width= 返回像素值，而卡片宽度算术（ =window-body-width= 列数减边距）、规则线（ =make-string= 按字符数）等全部以列为单位。两种单位混用导致标题无间距、规则线截断、banner 居中失效（见 commit 修复前的 GUI 截图）。
 + 列模型下 =string-width= 对 Nerd Font PUA 图标算 1 列但字形可能占 2 列像素，存在至多 1 列的右栏平移误差（见重设计文档 §1 #9），但所有算术单位一致、布局不会串位。该 1 列误差属于字体度量边界，不影响卡片间的列模型约束。
 
-#+begin_src emacs-lisp :noweb-ref system/dashboard-measure :tangle no
+#+begin_src emacs-lisp
 
 (defun custom/dashboard--measure (text)
   "返回 TEXT 的显示宽度（列数）。"
@@ -4405,11 +4747,15 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
     (concat left (custom/dashboard--fill (max 0 gap)) right)))
 
 #+end_src
-
 *** 布局声明与卡片注册表
+:PROPERTIES:
+:CUSTOM_ID: dashboard-registry
+:header-args:emacs-lisp: :noweb-ref system/dashboard-registry :tangle no :noweb-sep "\n\n"
+:END:
+
 布局变成数据: 调整卡片顺序 / 增删只动这份声明,引擎不变。每行 1 个 id = 全宽卡片, 2 个 id = 双列并排。
 
-#+begin_src emacs-lisp :noweb-ref system/dashboard-registry :tangle no
+#+begin_src emacs-lisp
 (defcustom custom:dashboard-layout
   '((todo clock)
     (recents projects)
@@ -4458,11 +4804,15 @@ SPEC 是 plist，关键字见 `custom:dashboard-card-specs'。幂等：重复注
     'single))
 
 #+end_src
-
 *** 渲染引擎
+:PROPERTIES:
+:CUSTOM_ID: dashboard-engine
+:header-args:emacs-lisp: :noweb-ref system/dashboard-engine :tangle no :noweb-sep "\n\n"
+:END:
+
 引擎统一包边框（左竖线 + 标题 + 规则线）、三态降级与错误隔离,卡片渲染器无需重复处理这些。单张卡片任何异常被隔离为错误卡片(见 A2 修复),绝不拖垮整页。
 
-#+begin_src emacs-lisp :noweb-ref system/dashboard-engine :tangle no
+#+begin_src emacs-lisp
 (defun custom/dashboard--bar ()
   "返回左竖线字符（带边框 face）。宽度恒为 1 列。"
   (propertize "|" 'face 'custom/dashboard-card-bar))
@@ -4474,7 +4824,11 @@ SPEC 是 plist，关键字见 `custom:dashboard-card-specs'。幂等：重复注
 无右边缘），所以按列铺满已足够。"
   (propertize (make-string (max 0 body-width) ?-)
               'face 'custom/dashboard-card-bar))
+#+end_src
 
+单卡片在此完成边框包裹与三态隔离，异常被收敛为错误行。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--card-lines (spec width)
   "把 SPEC 渲染成 WIDTH 宽的完整卡片行列表（含边框/标题/规则线/正文）。
 单个卡片的任何异常（fetch 抛错、render 抛错）都被隔离为错误卡片，
@@ -4526,7 +4880,11 @@ SPEC 是 plist，关键字见 `custom:dashboard-card-specs'。幂等：重复注
                  (concat bar " " trimmed)))
              body)
      (list bar))))
+#+end_src
 
+行级拼接处理双列等高与单列降级，空行由外层统一插入。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--render-row (card-ids total-width)
   "渲染一行（1 或 2 张卡片），返回行字符串列表。
 2 张卡片时等高拼接：短卡片补带左竖线的空延续行；右列不补尾部填充，
@@ -4567,13 +4925,17 @@ tier=dual 时按 `custom:dashboard-layout' 原样。卡片间插入空行。"
         (push "" all-lines)))
     (nreverse all-lines)))
 #+end_src
-
 *** 卡片实现
+:PROPERTIES:
+:CUSTOM_ID: dashboard-cards
+:header-args:emacs-lisp: :noweb-ref system/dashboard-cards :tangle no :noweb-sep "\n\n"
+:END:
+
 7 张卡片按 =fetch → (:ok|:error|loading)= + =render (DATA WIDTH) → lines= 协议实现。TTL 缓存三件套(todo/knowledge/projects)原样保留,只改外层协议包装。
 
 按钮构造: 所有可点击项用 =custom/dashboard--button= 生成带局部 keymap 的字符串,RET/mouse-1 调用回调。
 
-#+begin_src emacs-lisp :noweb-ref system/dashboard-cards :tangle no
+#+begin_src emacs-lisp
 (defun custom/dashboard--apply-fixed-pitch ()
   "强制 dashboard buffer 使用固定宽度的默认 face。"
   (setq-local face-remapping-alist
@@ -4783,7 +5145,11 @@ DISPLAY 为按钮文本(内部按列宽截断),ACTION 为点击回调,HELP 为�
                   result)
             (setq n (1+ n)))))
       (nreverse result))))
+#+end_src
 
+待办项的扫描与 urgency 排序在此完成，结果经 TTL 缓存复用。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--todo-items (max-items)
   "返回所有未完成的 Org TODO 项。
 每条 = (STATE-STR TITLE-STR DATE-INFO-STR FILE POS)。按紧急度排序，结果按
@@ -5019,7 +5385,11 @@ TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
    'custom/dashboard--knowledge-cache
    max-items
    (lambda () (custom/dashboard--compute-recent-knowledge-entries max-items))))
+#+end_src
 
+知识库采用异步进程与 stale-while-revalidate，首屏不等待 CLI。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--fetch-knowledge ()
   "知识库卡片 fetch：缓存过期时异步刷新并优先返回 stale 数据。"
   (let ((max-items 5))
@@ -5255,8 +5625,11 @@ stderr buffer 与 max-items 经 `process-put' 挂在 process 上，供本回调�
                               :fetch #'custom/dashboard--fetch-shortcuts
                               :render #'custom/dashboard--render-shortcuts)
 #+end_src
-
 *** 生命周期与 Frame 状态机
+:PROPERTIES:
+:CUSTOM_ID: dashboard-lifecycle
+:header-args:emacs-lisp: :noweb-ref system/dashboard-lifecycle :tangle no :noweb-sep "\n\n"
+:END:
 
 #+attr_org: :width 70
 | 触发                  | 动作                    | 约束                                                                                     |
@@ -5268,7 +5641,7 @@ stderr buffer 与 max-items 经 `process-put' 挂在 process 上，供本回调�
 
 Dashboard 不对全局 =widget-button--check-and-call-button= 加 advice:该 advice 会影响所有 non-dashboard widget buffer,副作用过大。
 
-#+begin_src emacs-lisp :noweb-ref system/dashboard-lifecycle :tangle no
+#+begin_src emacs-lisp
 
 (defun custom/dashboard--ascii-banner-lines ()
   "返回 banner 行列表与状态行（不含居中 padding）。
@@ -5380,7 +5753,11 @@ art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间
                     (propertize line 'face banner-face)
                     "\n"))))
         (insert "\n")))))
+#+end_src
 
+Banner 与状态行负责首屏视觉，宽度按字符数与列模型分别度量。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--buffer-name-for-frame (frame)
   "返回 FRAME 专属的 dashboard buffer 名称。"
   (let ((id (frame-parameter frame 'custom-dashboard-id)))
@@ -5535,7 +5912,11 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
           (run-with-idle-timer custom:dashboard-refresh-debounce
                                nil
                                #'custom/dashboard--refresh-visible-now))))
+#+end_src
 
+可见窗口的防抖刷新与 frame 归属在此衔接，销毁时同步清理。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--display-in-frame (frame)
   "在 FRAME 中显示并刷新 dashboard。"
   (when (and (frame-live-p frame)
@@ -5629,10 +6010,16 @@ RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
 (add-hook 'delete-frame-functions #'custom/dashboard--release-frame-buffer)
 
 #+end_src
-
 *** 可选增强
 
 标题计数仍可在以后按需加入；它需要扩展 fetch 协议返回未截断总数，与本轮 client 延迟优化无关。
+
+*** 加载组装
+:PROPERTIES:
+:CUSTOM_ID: dashboard-assembly
+:END:
+
+组装顺序即求值顺序：核心常量 → 测量与注册 → 引擎 → 卡片 → 生命周期，末尾统一 tangle 为单文件。
 
 #+NAME: system-dashboard-assembly
 #+begin_src emacs-lisp

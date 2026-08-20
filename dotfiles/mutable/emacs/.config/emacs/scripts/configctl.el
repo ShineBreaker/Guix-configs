@@ -59,23 +59,66 @@
                   result))))
       (nreverse result))))
 
+(defun custom-configctl--headline-params (headline)
+  "HEADLINE 子树 drawer 声明的 header-args（语言专属优先于普通级）。"
+  (append
+   (org-babel-parse-header-arguments
+    (or (org-element-property :HEADER-ARGS:EMACS-LISP headline) ""))
+   (org-babel-parse-header-arguments
+    (or (org-element-property :HEADER-ARGS headline) ""))))
+
+(defun custom-configctl--block-header (block)
+  "返回 BLOCK 生效的 (REF TANGLE OWNER KIND)。
+REF/TANGLE 块头参数优先，否则用最近祖先标题 drawer 的 noweb-ref 声明；
+OWNER 为最近祖先标题的 CUSTOM_ID。KIND 为 noweb-ref 或 name：
+前者要求恰好被组装一次，后者（#+name 数据块）仅作引用解析目标。
+TANGLE 默认 main.el。"
+  (let* ((params (org-babel-parse-header-arguments
+                  (or (org-element-property :parameters block) "")))
+         (ref (cdr (assq :noweb-ref params)))
+         (kind 'noweb-ref)
+         (tangle (cdr (assq :tangle params)))
+         (owner nil)
+         (node (org-element-property :parent block)))
+    (while node
+      (when (eq (org-element-type node) 'headline)
+        (unless owner
+          (when-let* ((id (org-element-property :CUSTOM_ID node)))
+            (setq owner id)))
+        (unless ref
+          (let ((hparams (custom-configctl--headline-params node)))
+            (when-let* ((h-ref (cdr (assq :noweb-ref hparams))))
+              (setq ref h-ref)
+              (unless tangle
+                (setq tangle (cdr (assq :tangle hparams))))))))
+      (setq node (org-element-property :parent node)))
+    (unless ref
+      (when-let* ((name (org-element-property :name block)))
+        (setq ref name
+              kind 'name)))
+    (list ref (or tangle "main.el") owner kind)))
+
+(defun custom-configctl--block-p (block)
+  "BLOCK 是否纳入索引：emacs-lisp 块或带 #+name 的任意语言数据块。"
+  (or (string= (org-element-property :language block) "emacs-lisp")
+      (org-element-property :name block)))
+
 (defun custom-configctl--all-blocks ()
   "返回所有 emacs-lisp src block 的 (BEGIN END REF TANGLE BODY)。
-BEGIN/END 为 buffer 绝对位置，REF 为 noweb-ref 名或 nil，TANGLE 为输出目标。"
+BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 drawer）或 nil，TANGLE 为输出目标。"
   (with-current-buffer (custom-configctl--org-buffer)
     (let ((tree (org-element-parse-buffer))
           result)
       (org-element-map tree 'src-block
         (lambda (block)
-          (when (string= (org-element-property :language block) "emacs-lisp")
-            (let* ((b (org-element-property :begin block))
-                   (e (org-element-property :end block))
-                   (params (org-babel-parse-header-arguments
-                            (or (org-element-property :parameters block) "")))
-                   (ref (cdr (assq :noweb-ref params)))
-                   (tangle (or (cdr (assq :tangle params)) "main.el"))
-                   (body (org-element-property :value block)))
-              (push (list b e ref tangle body) result)))))
+          (when (custom-configctl--block-p block)
+            (pcase-let ((`(,ref ,tangle _owner _kind)
+                         (custom-configctl--block-header block)))
+              (push (list (org-element-property :begin block)
+                          (org-element-property :end block)
+                          ref tangle
+                          (org-element-property :value block))
+                    result)))))
       (nreverse result))))
 
 (defun custom-configctl--source-info (begin end)
@@ -87,16 +130,15 @@ BEGIN/END 为 buffer 绝对位置，REF 为 noweb-ref 名或 nil，TANGLE 为输
           refs)
       (org-element-map tree 'src-block
         (lambda (block)
-          (when (string= (org-element-property :language block) "emacs-lisp")
-            (cl-incf blocks)
-            (cl-incf code-lines
-                     (length (split-string
-                              (org-element-property :value block) "\n" t)))
-            (when-let* ((ref (cdr (assq :noweb-ref
-                                         (org-babel-parse-header-arguments
-                                          (or (org-element-property :parameters block) ""))))))
+          (when (custom-configctl--block-p block)
+            (when (string= (org-element-property :language block) "emacs-lisp")
+              (cl-incf blocks)
+              (cl-incf code-lines
+                       (length (split-string
+                                (org-element-property :value block) "\n" t))))
+            (when-let* ((ref (car (custom-configctl--block-header block))))
               (push ref refs)))))
-      (list blocks code-lines (nreverse refs)))))
+      (list blocks code-lines (delete-dups (nreverse refs))))))
 
 ;;; map — 结构总览
 
@@ -227,29 +269,39 @@ BEGIN/END 为 buffer 绝对位置，REF 为 noweb-ref 名或 nil，TANGLE 为输
           (blocks 0))
       (org-element-map tree 'src-block
         (lambda (block)
-          (when (string= (org-element-property :language block) "emacs-lisp")
+          (when (custom-configctl--block-p block)
             (cl-incf blocks)
-            (let* ((params (org-babel-parse-header-arguments
-                            (or (org-element-property :parameters block) "")))
-                   (ref (cdr (assq :noweb-ref params)))
-                   (tangle (cdr (assq :tangle params)))
-                   (body (org-element-property :value block)))
+            (pcase-let* ((body (org-element-property :value block))
+                         (`(,ref ,tangle ,owner ,kind)
+                          (custom-configctl--block-header block)))
               (when ref
-                (unless (equal tangle "no")
-                  (custom-configctl--fail "%s must use :tangle no" ref))
-                (when (gethash ref definitions)
-                  (custom-configctl--fail "duplicate noweb definition: %s" ref))
-                (puthash ref (org-element-property :begin block) definitions))
+                (let ((prev (gethash ref definitions)))
+                  (if prev
+                      (unless (equal (nth 0 prev) owner)
+                        (custom-configctl--fail
+                         "noweb ref %s defined across sections: %s / %s"
+                         ref (nth 0 prev) owner))
+                    (puthash ref (list owner kind tangle) definitions))))
               (let ((start 0))
-                (while (string-match "<<\\([^>\n()]+\\)\\(?:([^>\n]*)\\)?>>" body start)
+                (while (string-match "<<\\([^>\n()]+\\)\\(?:([^>\n()]*)\\)?>>" body start)
                   (puthash (match-string 1 body)
                            (1+ (gethash (match-string 1 body) uses 0)) uses)
                   (setq start (match-end 0))))))))
-      (maphash (lambda (ref _position)
-                 (unless (= (gethash ref uses 0) 1)
-                   (custom-configctl--fail
-                    "noweb ref %s must be assembled exactly once (found %d)"
-                    ref (gethash ref uses 0))))
+      (maphash (lambda (ref entry)
+                 (pcase-let ((`(,owner ,kind ,tangle) entry))
+                   (cond
+                    ((eq kind 'noweb-ref)
+                     (unless (equal tangle "no")
+                       (custom-configctl--fail "%s must use :tangle no" ref))
+                     (unless (= (gethash ref uses 0) 1)
+                       (custom-configctl--fail
+                        "noweb ref %s must be assembled exactly once (found %d)"
+                        ref (gethash ref uses 0))))
+                    ((and (eq kind 'name) (> (gethash ref uses 0) 0)
+                          (not (equal tangle "no")))
+                     (custom-configctl--fail
+                      "named data block %s is referenced and must use :tangle no"
+                      ref)))))
                definitions)
       (maphash (lambda (ref _count)
                  (unless (gethash ref definitions)

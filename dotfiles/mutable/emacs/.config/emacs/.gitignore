@@ -15,3 +15,6 @@ main.el
 # Agent
 .reasonix
 PLAN.md
+.agents/*
+!.agents/skills
+!.agents/anchors.json
