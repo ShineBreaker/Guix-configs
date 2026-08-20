@@ -1788,6 +1788,15 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (custom/bind "C-c g F" #'custom/git-pull-current-repo "拉取" "Git")
 (custom/bind "C-c g #" #'custom/git-stash-push "保存暂存" "Git")
 (custom/bind "C-c g @" #'custom/git-stash-pop "恢复暂存" "Git")
+
+;; Emacs 31 VC worktree / cherry-pick (magit 之外的轻量补充,走内置 vc)
+(custom/declare-binding-group "C-c g w" "Worktree")
+(custom/bind "C-c g w c" #'vc-create-worktree "创建 Worktree" "Git")
+(custom/bind "C-c g w k" #'vc-remove-worktree "删除 Worktree" "Git")
+(custom/bind "C-c g w s" #'vc-switch-worktree "切换 Worktree" "Git")
+(custom/bind "C-c g w l" #'vc-list-worktrees "列出 Worktree" "Git")
+(custom/bind "C-c g y" #'vc-cherry-pick "Cherry-pick" "Git")
+(custom/bind "C-c g X" #'vc-delete-revision "删除 Revision" "Git")
 #+end_src
 
 ** 主题与字体
@@ -2139,7 +2148,7 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 (custom/register-side-window "^\\*Help\\*\\|help-mode\\b" 'bottom 0.4)
 (custom/register-side-window "^\\*Flymake diagnostics\\|flymake-diagnostics-buffer-mode\\b" 'bottom 0.3)
 (custom/register-side-window "^\\*compilation\\|compilation-mode\\b" 'bottom 0.33)
-(custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*deadgrep\\|deadgrep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
+(custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
 
 (setq server-window #'custom/display-buffer-in-main-window)
 #+end_src
@@ -2882,7 +2891,11 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :formatter yq-yaml)
     (:modes (zig-mode)
             :server ("zls")
-            :formatter zig-fmt))
+            :formatter zig-fmt)
+    (:modes (csharp-mode csharp-ts-mode)
+            :ts-mode csharp-ts-mode
+            :server nil
+            :formatter nil))
   "统一的语言能力表。每条条目:
   :modes     生效的所有 major mode 列表(传统 mode 在前,ts-mode 在后)
   :ts-mode   Tree-sitter 对应 mode(nil 表示无 ts 版本)
@@ -2948,8 +2961,23 @@ Grammar 的供给链完全由 Guix 处理,配置侧不需要参与:
 + =(setq treesit-enabled-modes t)= 和 =(setq treesit-auto-install-grammar nil)= 已是 Emacs 29+/31 的默认值,不重复设置;grammar 运行时下载由 manifest 禁,可复现性由 Guix 侧而非这里保证。
 
 #+begin_src emacs-lisp
+(defconst custom--treesit-lang-overrides
+  '((c++-ts-mode . cpp) (csharp-ts-mode . c-sharp))
+  "Tree-sitter 语言名与 `*-ts-mode' 命名不一致的覆盖表。")
+
+(defun custom--treesit-mode-ready-p (ts-mode)
+  "TS-MODE 的 grammar 是否就绪。"
+  (let* ((name (symbol-name ts-mode))
+         (override (cdr (assq ts-mode custom--treesit-lang-overrides)))
+         (lang (or override
+                   (intern (string-remove-suffix "-ts-mode" name)))))
+    (condition-case nil
+        (and (fboundp 'treesit-ready-p) (treesit-ready-p lang t))
+      (error nil))))
+
 (dolist (mapping custom:language-treesit-remaps)
-  (when (fboundp (cdr mapping))
+  (when (and (fboundp (cdr mapping))
+             (custom--treesit-mode-ready-p (cdr mapping)))
     (add-to-list 'major-mode-remap-alist mapping)))
 #+end_src
 
@@ -3257,11 +3285,11 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 :CUSTOM_ID: project-navigation
 :END:
 
-配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、deadgrep 全文搜索、ibuffer 按项目分组。
+配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、xref 正则搜索、ibuffer 按项目分组。
 
 + 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
-+ 项目全文搜索主入口是 deadgrep(异步 ripgrep 面板,按文件分组折叠,结果可编辑写回);=project-find-regexp= 保留为 M-x 可用的 xref 集成正则搜索,后端同为 ripgrep。
-+ =project-switch-commands= = Dired / project-find-file / deadgrep
++ 项目全文搜索主入口是 =project-find-regexp=(xref 集成,后端 ripgrep,结果走 *xref* / *grep* buffer,支持 Emacs 31 内置 `grep-edit`)
++ =project-switch-commands= = Dired / project-find-file / project-find-regexp
 + Emacs 31 的命令项格式为 =(COMMAND LABEL &optional KEY)= ，显式键避免依赖 =project-prefix-map= 的间接查找。
 + =project-find-file= : 项目内快速文件搜索( =custom/find-file-in-project= )
 + ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
@@ -3302,7 +3330,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (setq project-switch-commands
       '((project-dired "打开目录" ?d)
         (custom/find-file-in-project "寻找文件" ?f)
-        (deadgrep "查找关键字" ?r)))
+        (project-find-regexp "查找关键字" ?r)))
 
 ;; ibuffer 用内置 predicate filter 按 project.el 已知根目录分组。
 (with-eval-after-load 'ibuffer
@@ -3335,12 +3363,6 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 ;; 不会自动检测已安装的 rg,显式切换(ripgrep 在 home 包清单中)。
 (setq xref-search-program 'ripgrep)
 
-;; 项目全文搜索主入口:deadgrep 用异步 ripgrep 进程驱动独立结果面板,
-;; 按文件分组折叠、结果可编辑写回(与内置 Grep Edit 同心智)。
-;; 搜索根自动取 project root,非项目时退回 default-directory。
-(use-package deadgrep
-  :commands (deadgrep))
-
 ;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原 projectile-after-switch-project-hook)。
 (with-eval-after-load 'project
   (add-hook 'project-after-switch-project-functions
@@ -3352,7 +3374,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 #+begin_src emacs-lisp
 (custom/bind "C-x p p" #'project-switch-project "切换项目" "项目")
 (custom/bind "C-x p f" #'project-find-file "查找项目文件" "项目")
-(custom/bind "C-x p s" #'deadgrep "项目全文搜索" "项目")
+(custom/bind "C-x p s" #'project-find-regexp "项目全文搜索" "项目")
 (custom/bind "C-x p o" #'custom/open-project-folder "打开项目目录" "项目")
 (custom/bind "C-x p O" #'custom/open-directory "目录浏览" "项目")
 (custom/bind "C-x p k" #'project-kill-buffers "关闭项目缓冲区" "项目")
@@ -3755,7 +3777,7 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
 (custom/bind "C-f" #'isearch-forward "缓冲区搜索" "基础移动与直达键")
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
-(custom/bind "C-S-f" #'deadgrep "项目全文搜索" "基础移动与直达键")
+(custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
 (custom/bind "C-S-b" #'switch-to-buffer "切换缓冲区" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
 (custom/bind "C-S-j" #'avy-goto-char-timer "屏幕内快速跳转" "基础移动与直达键")
@@ -3831,7 +3853,7 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 
 (custom/bind "M-s l" #'isearch-forward "搜索当前缓冲区" "搜索")
-(custom/bind "M-s p" #'deadgrep "搜索项目" "搜索")
+(custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
 (custom/bind "M-s b" #'switch-to-buffer "搜索缓冲区" "搜索")
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
 (custom/bind "M-s f" #'flymake-goto-next-error "Flymake 诊断" "搜索")
@@ -4076,25 +4098,6 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
 (custom/bind "C-c a m" #'notmuch "邮件" "生活应用")
 #+end_src
 
-*** Matrix (Ement)
-
-#+begin_src emacs-lisp
-(use-package ement
-  :defer t
-  :commands (ement-connect ement-room-list ement-directory
-                           ement-notifications ement-disconnect))
-
-(defvar-keymap custom:ement-prefix-map
-  :doc "Ement 应用入口。"
-  "c" #'ement-connect
-  "l" #'ement-room-list
-  "f" #'ement-directory
-  "n" #'ement-notifications
-  "d" #'ement-disconnect)
-
-(custom/bind "C-c a e" custom:ement-prefix-map "Matrix" "生活应用")
-#+end_src
-
 *** Telegram (Telega)
 
 #+begin_src emacs-lisp
@@ -4108,16 +4111,6 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
   (keymap-set telega-prefix-map "k" #'telega-kill))
 
 (custom/bind "C-c a t" telega-prefix-map "Telegram" "生活应用")
-#+end_src
-
-*** 日历 (Calfw)
-
-#+begin_src emacs-lisp
-(use-package calfw
-  :defer t
-  :commands (cfw:open-org-calendar))
-
-(custom/bind "C-c a c" #'cfw:open-org-calendar "日历" "生活应用")
 #+end_src
 
 *** 内置游戏

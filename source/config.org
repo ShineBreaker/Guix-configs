@@ -1674,7 +1674,6 @@ end
 
                              ;; 编辑与导航
                              "emacs-avy"
-                             "emacs-deadgrep"
                              "emacs-diff-hl"
                              "emacs-indent-bars"
                              "emacs-multiple-cursors"
@@ -1693,6 +1692,7 @@ end
                              "emacs-arei"
                              "emacs-fish-mode"
                              "emacs-fish-completion"
+                             "emacs-csharp-mode"
                              "emacs-gdscript-mode"
                              "emacs-kdl-mode"
                              "emacs-kotlin-mode"
@@ -1710,20 +1710,16 @@ end
 
                              ;; Org Mode 生态
                              "emacs-deft"
-                             "emacs-htmlize"
                              "emacs-olivetti"
                              "emacs-org"
                              "emacs-org-appear"
                              "emacs-org-modern"
                              "emacs-org-modern-indent"
                              "emacs-org-roam"
-                             "emacs-ox-gfm"
 
                              ;; 应用工具
                              "emacs-agenote"
-                             "emacs-calfw"
                              "emacs-elfeed"
-                             "emacs-ement"
                              "emacs-notmuch"
                              "emacs-pdf-tools"
                              "emacs-telega"
@@ -1760,6 +1756,7 @@ end
                              "tree-sitter-markdown"
                              "tree-sitter-kdl"
                              "tree-sitter-nix"
+                             "tree-sitter-c-sharp"
                              "tree-sitter-python"
                              "tree-sitter-rust"
                              "tree-sitter-typescript"
