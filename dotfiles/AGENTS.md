@@ -116,7 +116,12 @@ dotfiles/
     └── skills/
         ├── .config/
         │   └── agents/
-        └── .stow-folding
+        ├── .local/
+        │   └── bin/
+        ├── .gitignore
+        ├── .stow-folding
+        ├── .stow-local-ignore
+        └── README.md
 ```
 
 <!-- /structor -->

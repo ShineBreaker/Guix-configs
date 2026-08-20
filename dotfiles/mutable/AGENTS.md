@@ -89,7 +89,13 @@ mutable/
     ├── .config/
     │   └── agents/
     │       └── skills/
-    └── .stow-folding
+    ├── .local/
+    │   └── bin/
+    │       └── askill
+    ├── .gitignore
+    ├── .stow-folding
+    ├── .stow-local-ignore
+    └── README.md
 ```
 
 <!-- /structor -->
@@ -97,10 +103,11 @@ mutable/
 ## 当前纳管的包
 
 | 包       | 部署目标                                                                                                         | 包含文件                                                                                                                                                                                                         |
-| -------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| -------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                       |
 | `emacs`  | `~/.config/emacs/`                                                                                               | 子模块 `codeberg.org/BrokenShine/.emacs.d`（init.el、early-init.el、core/、configs/ 等）                                                                                                                         |
 | `agenote` | `~/.config/agents/skills/` + `~/.config/omp/extensions/`                                                       | **纯 submodule 容器包**。两个子模块：`agenote-skills`（3 个 agent skill，→ `github.com/ShineBreaker/agenote-skills`）+ `pi-agenote`（omp 扩展，→ `github.com/ShineBreaker/pi-agenote`）。程序本体（CLI/ag_lib）**不在此包**，由 `uv tool install` 独立安装到 `~/.local/bin/`（→ `github.com/ShineBreaker/agenote`）。 |
+| `skills` | `~/.local/bin/askill` + `~/.config/agents/skills/skills-lock.json`                                              | **第三方 skills 声明式管理包**（详见包内 README.md）：仓库只跟踪锁与管理脚本，skill 内容不进 git，由 `askill`（引擎 `npx skills` project scope）安装到 `~/.config/agents/skills/`。新机恢复：`blue stow skills` 后跑 `askill install`。自建 skill（agenote/emacs 包）不在此包管辖。 |
 
 ## 工作流
 

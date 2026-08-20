@@ -42,7 +42,6 @@ Guix-configs///
 │   ├── build-image.scm
 │   ├── fxxk-link.sh
 │   ├── json-to-nix.py
-│   ├── mount-all.sh
 │   └── secrets
 ├── .gitattributes
 ├── .gitignore
