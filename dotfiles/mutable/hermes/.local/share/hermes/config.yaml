@@ -1,6 +1,6 @@
 model:
-  default: deepseek-v4-flash
-  provider: deepseek
+  default: hy3
+  provider: opencode-go
   base_url: ''
 providers:
   minimax-cn:
