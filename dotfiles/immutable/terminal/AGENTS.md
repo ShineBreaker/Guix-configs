@@ -21,6 +21,21 @@ terminal/
     ├── fastfetch/
     │   └── config.jsonc
     ├── fish/
+    │   ├── completions/
+    │   │   ├── appimage-run.fish
+    │   │   ├── askill.fish
+    │   │   ├── blue.fish
+    │   │   ├── denv.fish
+    │   │   ├── fxxk-link.fish
+    │   │   ├── hermes.fish
+    │   │   ├── jbuild.fish
+    │   │   ├── jdk.fish
+    │   │   ├── jrun.fish
+    │   │   ├── json-to-nix.fish
+    │   │   ├── keepassxc-credential-setup.fish
+    │   │   ├── nixgpu-update.fish
+    │   │   ├── retry.fish
+    │   │   └── secrets.fish
     │   ├── conf.d/
     │   │   ├── 00-load-functions.fish
     │   │   ├── 01-guix.fish

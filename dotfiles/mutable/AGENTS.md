@@ -191,6 +191,10 @@ blue stow --restow hermes
 blue stow-all --restow
 ```
 
+## 新增脚本的补全约束
+
+在 `dotfiles/mutable/<PKG>/.local/bin/` 新增可执行（如 `appimage-run`、`hermes*`、`askill`、`tools/secrets`），必须同步在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 新增鱼壳 Tab 补全（`complete -c <name>`）。补全文件随 `blue home` 部署到 `~/.config/fish/completions/`。`blue`/`denv` 除外（前者按仓库动态不钉死，后者另行维护）。
+
 ## 与 Guix stow 的边界
 
 - **不要**把 `dotfiles/mutable/` 下的任何文件加入 `dotfiles/immutable/`（会产生双重部署冲突）
