@@ -16,7 +16,7 @@ description: Use when the user works inside ~/Projects/Config/Guix-configs and m
 
 3. **AI 禁跑** `blue rebuild` / `guix system reconfigure` / `guix home reconfigure` (sudo 卡死 CLI)。改源后只能 `blue home` 暂用,固化等用户操作。**例外**:`blue structor` 只重写 AGENTS.md 标记对内容,AI 可以跑(见 §5.3)。
 4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。
-5. **commit 严格遵循 gitmessage 规范** + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。
+5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。
 6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
 7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
 

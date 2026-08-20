@@ -13,7 +13,7 @@ description: 巡检与修复 jeans Guix channel（~/Projects/Config/jeans，gith
 2. 构建/更新用 BLUE：`blue build <pkg>` / `blue upgrade` / `blue gen-docs`；等价 `guix build -L modules <pkg>`。
 3. 自动更新架构：**guix refresh 主力 + Python 脚本兜底**（`scripts/check-updates/update_versions.py`），两层在 CI 同一 job 串行，合并后统一构建测试。`rust-crates.scm` 禁止手改，只走 `blue import-crate`。
 4. CI `auto-update.yml` 每周二/四/六跑；构建失败**阻止提交**并创建 GitHub Issue。
-5. 提交前缀：`ADD:` / `FIX:` / `UPDATE:` / `FEATURE:` / `MIGRATE:`。
+5. 提交前缀遵循 Conventional Commits：`feat:` / `fix:` / `update:` / `refactor:` / `docs:` / `chore:`（旧前缀 `ADD:` / `FIX:` / `UPDATE:` / `FEATURE:` / `MIGRATE:` 已映射到标准类型，见 `~/.config/git/gitmessage`）。
 
 ## CI 调度事实（防误判的关键）
 

@@ -144,7 +144,7 @@ Both passed structural paren-balance check and dry-run build after conversion.
    most common automated-conversion error.
 5. **Apply**: overwrite the original only after review.
 6. **Verify**: the three-step verification above.
-7. **Commit per project convention** (e.g. `UPDATE: (blueprint.scm) R6RS bracket refactor.`).
+7. **Commit per project convention** (e.g. `refactor(blueprint.scm): convert to R6RS brackets`).
 
 ## Pitfalls
 

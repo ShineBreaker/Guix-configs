@@ -80,7 +80,7 @@ echo 'token = "..."' > /tmp/example.toml
 trash /tmp/example.toml
 
 git add dotfiles/mutable/secrets/.local/share/secrets-encrypted/example.age
-git commit -S -m "UPDATE: (secrets) added example.age"
+git commit -S -m "feat(secrets): add example.age"
 git push
 ```
 

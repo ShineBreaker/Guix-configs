@@ -27,3 +27,5 @@ Emacs which-key 汉化的两层模型（2026-08-12 固化）：第一层是 cust
 Hermes QQ Bot 平台已接入并在线（qqbot adapter，QQ_APP_ID=1904112724，QQBOT_HOME_CHANNEL 已设于 .env）；cron deliver='qqbot' 即可投递到用户 QQ。gateway 日志在 $HERMES_HOME/logs/gateway.log（QQ 连接状态 grep QQBot）。
 §
 anchors.json 是跨工具冻结规则单一权威源（pi/crush/zcode 共用），定义 frozen_commands/frozen_paths/human_only_actions；agent 禁止改它。
+§
+提交规范(2026-08-19):所有 commit message 遵循 Conventional Commits 规范 —— <type>[optional scope]: <description>。类型包括 build/chore/ci/docs/feat/fix/perf/refactor/revert/style/test。描述用祈使句、小写开头、句末无句号。Body 解释 what/why 而非 how。Footer 放 BREAKING CHANGE: 或 Refs #123。项目特定前缀(FIX:/ADD:/UPDATE:/FEATURE:/MIGRATE:/DOC:)已映射到标准类型,见 ~/.config/git/gitmessage。

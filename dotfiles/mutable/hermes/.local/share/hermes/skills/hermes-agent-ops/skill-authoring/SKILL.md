@@ -222,6 +222,7 @@ content is correct.
 
 - [ ] **`SKILL.md` is under 500 lines.** If not, refactor into
       `references/` first.
+- [ ] **Commit conventions follow [Conventional Commits](https://www.conventionalcommits.org/).** If the skill references commit messages (e.g. in examples, AGENTS.md pointers, or workflow steps), they must use `<type>[optional scope]: <description>` format — not ad-hoc prefixes like `DOC:` or `fix:` without scope context. Project-specific conventions (like `DOC:` in jeans-channel-workflow) are fine when they coexist with the type prefix, but the type field should still be present.
 - [ ] **Every runnable artifact lives in `scripts/` (or
       `templates/` for starters).** No paths to
       `~/.local/share/<agent>/tools/...` or other side

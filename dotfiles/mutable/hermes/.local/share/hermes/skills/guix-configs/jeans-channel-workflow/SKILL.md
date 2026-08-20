@@ -392,9 +392,9 @@ git status --short   # 期望:clean
 git diff docs/packages.md | head -30
 # 应该只看到 ±1 行同名包位置迁移
 
-# 3. commit(必须带前缀 DOC:)
+# 3. commit(必须带前缀 docs:)
 git add docs/packages.md
-git commit -m "DOC: (docs/packages.md) regen via 'blue gen-docs' to include <新包名>"
+git commit -m "docs(packages.md): regen via 'blue gen-docs' to include <新包名>"
 # 不 push,留给用户
 ```
 
@@ -589,9 +589,46 @@ git diff HEAD --stat   # 期望: 空
 - ❌ 反复 `gpgconf --kill gpg-agent` 重启 agent —— 本机 agent 配置是 read-only `/home/brokenshine/.local/share/gnupg/`，只能 kill 不能改配置
 - ❌ 反复重试 `git commit` —— GPG pinentry 弹框超时（约 30s）后 fail，反复重试只会多次弹出 pinentry 阻塞 CLI
 
-## 4.1 Commit message format (project-specific, supplements AGENTS.md)
+## 4.1 Commit message format (project-specific, supplements Conventional Commits)
 
-AGENTS.md names the prefixes (`FIX:` / `ADD:` / `UPDATE:` / `FEATURE:` / `MIGRATE:`) but does not lock the body shape. jeans in practice uses a five-section Chinese body with two-space indentation, scoped like `FIX: (<file-class>) <一句话> (closes #N)`. Section names observed in commit `1fc7d60` and earlier: `问题：` / `根因：` / `修复：` / `验证：` / `附注：`. Sections are flexible — drop any that don't apply, but keep the five-name vocabulary for grep-ability. Reference: `git log --format='%B' -3`.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) with project-specific scope:
+
+```
+<type>(<scope>): <description>
+
+[body]
+
+[footer]
+```
+
+**Types** (aligned with Conventional Commits + project needs):
+- `fix:` — bug fix (maps from old `FIX:` prefix)
+- `feat:` — new feature / new package (maps from old `ADD:` / `FEATURE:`)
+- `update:` — version bump / dependency update (maps from old `UPDATE:`)
+- `refactor:` — code restructuring (maps from old `MIGRATE:`)
+- `docs:` — documentation changes (maps from old `DOC:`)
+- `chore:` — CI, tooling, misc
+
+**Scope**: file class or module (e.g. `docs/packages.md`, `modules/jeans/packages/ghostel.scm`)
+
+**Description**: imperative mood, lowercase, no trailing period
+
+**Body** (five-section Chinese format, scoped to what applies):
+- `问题：` / `根因：` / `修复：` / `验证：` / `附注：`
+
+**Footer**: `Refs #N` / `Closes #N` / `BREAKING CHANGE:`
+
+**Example**:
+```
+fix(ghostel): resolve zig version mismatch with vendored ghostty
+
+问题：ghostel 0.46.0 requires zig-0.16 but vendored ghostty build scripts incompatible
+根因：ghostty commit ab0b9da declares minimum_zig_version = "0.16.0" but build scripts use removed APIs
+修复：revert to ghostel 0.45.1 until ghostty 1.4.0 releases
+验证：blue build ghostel succeeds with zig-0.15
+
+Refs #42
+```
 
 Body must be passed via HerEDOC (`cat > /tmp/msg <<'EOF' ... EOF` then `git commit -F /tmp/msg`), not as `git commit -m "..."` arg — multi-line `-m` strings break on shell escaping of Chinese punctuation.
 

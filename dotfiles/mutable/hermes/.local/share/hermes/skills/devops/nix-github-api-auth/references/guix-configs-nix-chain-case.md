@@ -7,7 +7,7 @@
 ```scheme
 (%run '("nix-channel" "--update"))
 (%run `("nix" "flake" "update" "--flake" ,%nix-dir))          ; %nix-dir = <repo>/source/nix
-(%run `("git" "commit" "-S" "-m" "UPDATE: (flake.lock) bump version." ...))
+(%run `("git" "commit" "-S" "-m" "build(flake.lock): bump flake inputs" ...))
 ```
 
 flake 输入全部是 `github:` 引用（codex-desktop-linux / home-manager / llm-agents.nix / registry nixpkgs），解析时未认证打 api.github.com → 限流 403 → 回退缓存。

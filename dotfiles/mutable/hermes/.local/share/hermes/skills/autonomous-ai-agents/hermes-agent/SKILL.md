@@ -1011,13 +1011,35 @@ Full design notes, the exact emitted strings, and testing pitfalls:
 
 ### Commit Conventions
 
-```
-type: concise subject line
+Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-Optional body.
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
 ```
 
-Types: `fix:`, `feat:`, `refactor:`, `docs:`, `chore:`
+**Types:** `build:`, `chore:`, `ci:`, `docs:`, `feat:`, `fix:`, `perf:`, `refactor:`, `revert:`, `style:`, `test:`
+
+**Rules:**
+- Description must be imperative mood ("add" not "added")
+- No capitalization after the colon
+- No period at the end of description
+- Body explains *what* and *why*, not *how*
+- Footer contains `BREAKING CHANGE:` or `Refs #123` style references
+
+**Examples:**
+```
+feat: add holographic memory provider integration
+
+fix: resolve session_search timeout on large databases
+
+docs: update hermes-agent commit conventions to follow full spec
+
+refactor: extract prompt builder environment hints into helper
+```
 
 ### Key Rules
 

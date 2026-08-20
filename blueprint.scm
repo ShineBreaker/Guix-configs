@@ -1370,7 +1370,7 @@
       (%write-file-atomically %channel-lock
                               (lambda (port) (display content port)))
       (%run `("git" "commit" "-S" "-m"
-              "UPDATE: (channel.lock) bump version."
+              "build(channel.lock): bump channels"
               ,%channel-lock)))))
 
 ;;; ---------- 维护 ----------
@@ -1480,7 +1480,7 @@
   (%run '("nix-channel" "--update"))
   (%run `("nix" "flake" "update" "--flake" ,%nix-dir))
   (%run `("git" "commit" "-S" "-m"
-          "UPDATE: (flake.lock) bump version."
+          "build(flake.lock): bump flake inputs"
           ,(string-append %nix-dir "/flake.lock"))))
 
 ;;; ---------- 校验 ----------

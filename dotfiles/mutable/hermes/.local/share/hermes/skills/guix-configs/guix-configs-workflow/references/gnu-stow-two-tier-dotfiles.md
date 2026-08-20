@@ -131,8 +131,8 @@ ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=stow/AGENTS.md blue structor
 
 按仓库 gitmessage 规范分两个 serial commit：
 
-1. `FEATURE: (blue) added \`stow\` command for direct symlink deployment.`——`blueprint.scm`+ 根`AGENTS.md`
-2. `FEATURE: (stow) added \`<pkg>\` package for ... backing.`——`stow/AGENTS.md`+`stow/<pkg>/`源文件 +`blue structor` 自动连锁更新的其他 AGENTS.md
+1. `feat(blue): added \`stow\` command for direct symlink deployment.`——`blueprint.scm`+ 根`AGENTS.md`
+2. `feat(stow): added \`<pkg>\` package for ... backing.`——`stow/AGENTS.md`+`stow/<pkg>/`源文件 +`blue structor` 自动连锁更新的其他 AGENTS.md
 
 混在一起 commit 信息会模糊；分两个让 git log 可读。
 

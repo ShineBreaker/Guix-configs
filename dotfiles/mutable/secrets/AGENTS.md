@@ -60,7 +60,7 @@ tools/secrets decrypt example --stdout
 
 # 4. 提交(只 add 密文,不要 add 解密产物)
 git add dotfiles/mutable/secrets/.local/share/secrets-encrypted/example.age
-git commit -S -m "UPDATE: (secrets) added example.age"
+git commit -S -m "feat(secrets): add example.age"
 ```
 
 ### 修改已有密文
