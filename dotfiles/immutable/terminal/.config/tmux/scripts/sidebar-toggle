@@ -75,11 +75,105 @@ kill_all_sidebars() {
     done < <(tmux list-panes -a -F $'#{pane_id}\t#{pane_title}\t#{pane_start_command}' 2>/dev/null || true)
 }
 
+# === 宽度管理：区分“终端窗口 resize”与“手动拖拽” ===
+#
+# 信号：window_width 是否变化。window\|@last 的读取必须用非 Tab 分隔
+# （|）避免空的 @no_sidebar 导致 IFS-tab 的空字段丢失、字段左移错位。
+# 真正 bug 曾为：@no_sidebar 为空时 IFS=$'\t' read 跳过空字段，
+# 使 configured_width 误读为 window_width，导致 @w 被污染为 201 等。
+#
+# 策略：
+# - 仅当 window 未变 且 sidebar 明显偏离 @sidebar_width 时才持久化拖拽。
+# - window 已变时绝不覆盖 @sidebar_width，交由 follow 链路把侧栏拉回。
+# - @sidebar_last_* 的更新由 follow 统一负责；layout-changed 仅在 window 变化
+#   且未进入 resize 流程时才更新 last，避免抢跑竞态。
+# - 12–80 的范围过滤用于排除窗口缩窄时的临时挤压状态。
+# - 额外：client-resized 时若 window 落后于 client，需先让 window 跟 client
+#   同步到 client 大小，再固定侧栏，否则放大后右侧会留虚点空白（window 尺寸
+#   是大小决定因素之一，未跟上 client 时 window 仍旧 140）。
+
+persist_sidebar_width_if_dragged() {
+    local window_id sidebar_id actual_width configured_width current_win_width last_win_width
+    window_id="$1"
+    sidebar_id="$2"
+    actual_width="$3"
+    configured_width="${4:-}"
+    current_win_width="${5:-}"
+    last_win_width="${6:-}"
+
+    [[ -n "$window_id" && -n "$sidebar_id" && -n "$actual_width" ]] || return 0
+    [[ "$configured_width" =~ ^[0-9]+$ ]] || return 0
+    [[ "$actual_width" =~ ^[0-9]+$ ]] || return 0
+    [[ "$actual_width" != "$configured_width" ]] || return 0
+    [[ -n "$current_win_width" && -n "$last_win_width" ]] || return 0
+    [[ "$current_win_width" == "$last_win_width" ]] || return 0
+    (( actual_width >= 12 && actual_width <= 80 )) || return 0
+
+    tmux set-option -g @sidebar_width "$actual_width" 2>/dev/null || true
+    if [[ -n "$current_win_width" ]]; then
+        tmux set-option -g @sidebar_last_window_width "$current_win_width" 2>/dev/null || true
+    fi
+}
+
+sync_window_to_client() {
+    local win_w client_w
+    win_w="$(tmux display-message -p '#{window_width}' 2>/dev/null)" || return 0
+    # client_width 需在有 client 关联时才有值；无 client 时跳过。
+    client_w="$(tmux display-message -p '#{client_width}' 2>/dev/null)" || return 0
+    [[ -n "$win_w" && -n "$client_w" ]] || return 0
+    [[ "$win_w" =~ ^[0-9]+$ && "$client_w" =~ ^[0-9]+$ ]] || return 0
+    # 仅当放大后 window 落后于 client 时同步，避免无谓的重复 resize。
+    if (( win_w < client_w )); then
+        tmux resize-window -x "$client_w" 2>/dev/null || true
+    fi
+}
+
+handle_layout_changed() {
+    # 仅负责拖拽持久化；resize 的拉回由 follow 统一处理，避免双写入竞态。
+    local context window_id configured_width current_window_width last_window_width
+    context="$(tmux display-message -p '#{window_id}|#{@sidebar_width}|#{window_width}|#{@sidebar_last_window_width}' 2>/dev/null)" || {
+        signal_current
+        return 0
+    }
+    IFS='|' read -r window_id configured_width current_window_width last_window_width <<<"$context"
+    [[ -n "$window_id" ]] || { signal_current; return 0; }
+
+    if [[ -z "$last_window_width" && -n "$current_window_width" ]]; then
+        tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+        last_window_width="$current_window_width"
+    fi
+
+    local pane_id title start width_val sidebar_id="" sidebar_width=""
+    while IFS=$'\t' read -r pane_id title start width_val; do
+        if is_sidebar "$title" "$start"; then
+            sidebar_id="$pane_id"
+            sidebar_width="$width_val"
+            break
+        fi
+    done < <(tmux list-panes -t "$window_id" -F $'#{pane_id}\t#{pane_title}\t#{pane_start_command}\t#{pane_width}' 2>/dev/null || true)
+
+    if [[ -n "$sidebar_id" && -n "$sidebar_width" ]]; then
+        if [[ -n "$current_window_width" && "$current_window_width" == "$last_window_width" ]]; then
+            persist_sidebar_width_if_dragged "$window_id" "$sidebar_id" \
+                "$sidebar_width" "$configured_width" \
+                "$current_window_width" "$last_window_width"
+        fi
+    fi
+    signal_current
+}
+
 ensure_sidebar() {
+    # 关键：window\|@no_sidebar 之间用 | 分隔，避免空的 @no_sidebar 导致
+    # IFS-tab 的空字段丢失、configured_width 错读为 window_width。
     local context window_id no_sidebar configured_width width socket_key lock_file
-    context="$(tmux display-message -p $'#{window_id}\t#{@no_sidebar}\t#{@sidebar_width}' 2>/dev/null)" || return 0
-    IFS=$'\t' read -r window_id no_sidebar configured_width <<<"$context"
+    context="$(tmux display-message -p $'#{window_id}|#{@no_sidebar}|#{@sidebar_width}|#{window_width}|#{@sidebar_last_window_width}' 2>/dev/null)" || return 0
+    IFS='|' read -r window_id no_sidebar configured_width current_window_width last_window_width <<<"$context"
     [[ -n "$window_id" ]] || return 0
+
+    if [[ -z "$last_window_width" && -n "$current_window_width" ]]; then
+        tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+        last_window_width="$current_window_width"
+    fi
 
     socket_key="${TMUX%%,*}"
     socket_key="${socket_key##*/}-${window_id#@}"
@@ -89,12 +183,14 @@ ensure_sidebar() {
 
     local pane_id active title start
     local sidebar_id="" target_id="" fallback_id=""
+    local sidebar_width="" main_width=""
     local -a duplicate_ids=()
 
-    while IFS=$'\t' read -r pane_id active title start; do
+    while IFS=$'\t' read -r pane_id active title start width_val; do
         if is_sidebar "$title" "$start"; then
             if [[ -z "$sidebar_id" ]]; then
                 sidebar_id="$pane_id"
+                sidebar_width="$width_val"
             else
                 duplicate_ids+=("$pane_id")
             fi
@@ -102,8 +198,11 @@ ensure_sidebar() {
         fi
 
         [[ -n "$fallback_id" ]] || fallback_id="$pane_id"
-        [[ "$active" == "1" ]] && target_id="$pane_id"
-    done < <(tmux list-panes -t "$window_id" -F $'#{pane_id}\t#{pane_active}\t#{pane_title}\t#{pane_start_command}' 2>/dev/null || true)
+        if [[ "$active" == "1" ]]; then
+            target_id="$pane_id"
+            main_width="$width_val"
+        fi
+    done < <(tmux list-panes -t "$window_id" -F $'#{pane_id}\t#{pane_active}\t#{pane_title}\t#{pane_start_command}\t#{pane_width}' 2>/dev/null || true)
 
     for pane_id in "${duplicate_ids[@]}"; do
         kill_sidebar_pane "$pane_id"
@@ -118,10 +217,24 @@ ensure_sidebar() {
     [[ "$width" =~ ^[0-9]+$ ]] || width=32
 
     if [[ -n "$sidebar_id" ]]; then
-        # tmux 窗口 resize 时按比例重排布局，侧栏会被等比例放大（无原生的
-        # pane 定宽选项），这里在 follow 链路（client-resized 等 hook）里拉回。
-        tmux resize-pane -t "$sidebar_id" -x "$width" 2>/dev/null || true
+        # 拖拽持久化优先于拉回；window 已变时不覆盖。
+        if [[ -n "$sidebar_width" && -n "$current_window_width" && "$current_window_width" == "$last_window_width" ]]; then
+            persist_sidebar_width_if_dragged "$window_id" "$sidebar_id" \
+                "$sidebar_width" "$configured_width" \
+                "$current_window_width" "$last_window_width"
+            if [[ "$sidebar_width" != "$width" ]] && (( sidebar_width >= 12 && sidebar_width <= 80 )); then
+                width="$sidebar_width"
+            fi
+        fi
+        local actual_before
+        actual_before="${sidebar_width:-$(tmux display-message -p -t "$sidebar_id" '#{pane_width}' 2>/dev/null || echo "")}"
+        if [[ "$actual_before" != "$width" ]]; then
+            tmux resize-pane -t "$sidebar_id" -x "$width" 2>/dev/null || true
+        fi
         send_event "$sidebar_id" "refresh"
+        if [[ -n "$current_window_width" && "$current_window_width" =~ ^[0-9]+$ ]]; then
+            tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+        fi
         return 0
     fi
 
@@ -139,6 +252,9 @@ ensure_sidebar() {
         return 1
     }
     tmux select-pane -t "$new_id" -T "$sidebar_title" 2>/dev/null || true
+    if [[ -n "$current_window_width" && "$current_window_width" =~ ^[0-9]+$ ]]; then
+        tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+    fi
 }
 
 case "${1:-toggle}" in
@@ -154,11 +270,13 @@ case "${1:-toggle}" in
         fi
         ;;
     follow)
-        # 读取走 session 级优先（-qv）：agent session（无 session 级覆盖）回退全局 0 → 纯净；
-        # 用户 session（99-selector.fish 设 session 级 1）→ 建侧栏。
         if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null || echo 0)" == "1" ]]; then
+            sync_window_to_client
             ensure_sidebar
         fi
+        ;;
+    layout-changed)
+        handle_layout_changed
         ;;
     signal)
         signal_current
@@ -172,7 +290,7 @@ case "${1:-toggle}" in
         [[ -n "$pane_id" ]] && send_event "$pane_id" "toggle-group" || true
         ;;
     *)
-        printf 'usage: sidebar-toggle [toggle|follow|signal|click|toggle-group]\n' >&2
+        printf 'usage: sidebar-toggle [toggle|follow|signal|click|toggle-group|layout-changed]\n' >&2
         exit 2
         ;;
 esac
