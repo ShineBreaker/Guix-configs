@@ -221,6 +221,18 @@ prose 解释本方面行为，与代码相邻。
 - 优先用内置 `seq` / `subr-x` / `cl-lib` 函数替代手写 lambda（如 `seq-some #'fn`）。
 - 删除符号时必须同步清理全部引用点：`data/*.el` 翻译数据、prose、docstring、`custom:pulse-commands` 等列表，不留失效引用。
 - 全局绑定的命令必须已定义（或为 keymap）；新增绑定前先确认命令存在，加载后若命令缺失会报 `void-function`。
+- 惰性加载包的数据函数要显式 `(require '…)`（如 dashboard 计时卡片先 `require 'org-clock` 再调 `org-clock-sum-today`），不要用 `fboundp` 缺席降级到假数据（0h 0m）。
+- 模仿既有同类时先核对取值域：调用点全部使用固定前缀/固定状态时，分发逻辑不留「其他情况」兜底分支。
+
+### 4.3 守卫与防御公约
+
+守卫只放在真实边界上，同产物内部调用不防御：
+
+- `fboundp` / `boundp` / `featurep` 仅允许两类场景：**延迟加载的第三方包函数**（`diff-hl-margin-mode`、`eglot-managed-p`、with-editor 内部 API 等运行时可能未加载的符号）与**跨构建变量**（`x-gtk-resize-child-frames`）。同一 `main.el` 产物内的函数互调不加守卫——文档顺序（定义先于调用）或运行时顺序（hook/timer 触发时已全部定义）保证可用。
+- 存活检查只保留在**异步回调持有引用**的场景（timer、D-Bus、sentinel、frame hook 中的 frame/window 参数）。`frame-list` / `window-list` / `window-buffer` 返回的对象恒存活，遍历时不再逐层 `frame-live-p` / `window-live-p` / `buffer-live-p`。
+- `condition-case` 只包裹真实会失败的操作：文件 IO、外部进程、D-Bus 调用、全量 face 改写。内置查询 API（`project-current`、`vc-backend`/`vc-state`、`treesit-ready-p`、`org-agenda-files`）约定返回 nil 而非抛错，不加包裹。
+- 仓库内静态资产（`data/*.el`）不写运行时格式校验；违反数据约定的错误由消费点或加载验证暴露。
+- 拆除守卫后必须跑加载验证（7.2）：守卫删除错误表现为 `void-function` / `void-variable`，一次 batch-load 即可定位。
 
 ## 5. 性能硬约束
 

@@ -355,9 +355,8 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使
       package-enable-at-startup nil)
 
 ;; native-comp 的 eln 缓存重定向到 var/,避免污染配置根目录(Emacs 29+)。
-(when (fboundp 'startup-redirect-eln-cache)
-  (startup-redirect-eln-cache
-   (expand-file-name "var/eln-cache/" user-emacs-directory)))
+(startup-redirect-eln-cache
+ (expand-file-name "var/eln-cache/" user-emacs-directory))
 
 ;; agenote 知识库集成（适配层 + knowledge + health + dashboard 数据 + 键位 map）。
 ;; 独立 elisp 包，随 agenote 程序仓库发行。路径常量对齐本仓库的 org 根目录。
@@ -514,19 +513,12 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 (defvar custom:help-introduction nil)
 
 (defun custom/load-i18n-data ()
-  "加载并验证本地化纯数据文件。"
+  "加载本地化纯数据文件。"
   (dolist (name custom:i18n-data-files)
     (let ((file (expand-file-name name custom:i18n-data-directory)))
       (unless (file-readable-p file)
         (error "本地化数据文件不可读: %s" file))
-      (load file nil 'nomessage)))
-  (dolist (symbol '(custom:which-key-description-spec
-                    custom:which-key-major-mode-description-spec
-                    custom:which-key-regexp-replacements
-                    custom:context-menu-label-translations
-                    custom:help-introduction))
-    (unless (listp (symbol-value symbol))
-      (error "本地化数据格式无效: %s" symbol))))
+      (load file nil 'nomessage))))
 
 (custom/load-i18n-data)
 #+end_src
@@ -543,13 +535,11 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 #+begin_src emacs-lisp
 (defun custom/context-menu--translate-string (string)
   "翻译 STRING；未登记时返回原字符串。"
-  (let* ((plain (substring-no-properties string))
-         (translation (cdr (assoc plain custom:context-menu-label-translations))))
-    (if (not translation)
-        string
-      (if (> (length string) 0)
-          (apply #'propertize translation (text-properties-at 0 string))
-        translation))))
+  (if-let* ((translation
+             (cdr (assoc (substring-no-properties string)
+                         custom:context-menu-label-translations))))
+      (apply #'propertize translation (text-properties-at 0 string))
+    string))
 
 (defun custom/context-menu--translate-object (object)
   "递归翻译 OBJECT 中的字符串。"
@@ -628,8 +618,8 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 
 #+begin_src emacs-lisp
 (defface custom-help-section-title
-  '((t :weight bold :height 1.2))
-  "帮助缓冲区分类标题样式。前景色由 color-scheme hook 统一设置。"
+  '((t :inherit font-lock-keyword-face :weight bold :height 1.2))
+  "帮助缓冲区分类标题样式。"
   :group 'help)
 
 #+end_src
@@ -747,10 +737,8 @@ Starship 风格响应式 mode-line:
 (defun custom/modeline--icon (name &optional file)
   "返回 Nerd Font 图标 NAME；FILE 非 nil 时按文件类型取图标。
 
-NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\")。自动按前缀分发:
-  - \"nf-md-*\" → nerd-icons-mdicon
-  - \"nf-fa-*\"  → nerd-icons-faicon
-  - 其他         → 先试 mdicon 再试 faicon
+NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\"):\"nf-fa-*\" 前缀分发到
+nerd-icons-faicon,其余交给 nerd-icons-mdicon。
 TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font），
 故不按 display 类型守卫，只看 nerd-icons 包是否可用。出错时返回空串。"
   (if custom:modeline--nerd-icons-available
@@ -765,14 +753,10 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
                        (cond
                         ((and file (stringp file))
                          (nerd-icons-icon-for-file file))
-                        ((string-prefix-p "nf-md-" name)
-                         (nerd-icons-mdicon name))
                         ((string-prefix-p "nf-fa-" name)
                          (nerd-icons-faicon name))
                         (t
-                         (if (string-prefix-p "nf-" name)
-                             (nerd-icons-mdicon name)
-                           (nerd-icons-faicon name)))))
+                         (nerd-icons-mdicon name))))
                      "")))
             (when (>= (hash-table-count custom:modeline--icon-cache)
                       custom:modeline-icon-cache-limit)
@@ -784,13 +768,13 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
 (defun custom/modeline--with-icon (icon text)
   "组合 ICON 与 TEXT。"
   (cond
-   ((string-empty-p (or icon "")) (or text ""))
-   ((string-empty-p (or text "")) icon)
+   ((string-empty-p icon) (or text ""))
+   ((string-empty-p text) icon)
    (t (concat icon " " text))))
 
 (defun custom/modeline--segment (text face)
   "用 FACE 呈现非空 TEXT。"
-  (if (string-empty-p (or text ""))
+  (if (string-empty-p text)
       ""
     (propertize text 'face face)))
 
@@ -826,12 +810,10 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
   "返回当前 buffer 的 (ROOT NAME) project 缓存。"
   (when (eq custom:modeline--project-cache :unknown)
     (setq custom:modeline--project-cache
-          (condition-case nil
-              (when-let* ((project (project-current nil))
-                          (root (project-root project)))
-                (list root
-                      (file-name-nondirectory (directory-file-name root))))
-            (error nil))))
+          (when-let* ((project (project-current nil))
+                      (root (project-root project)))
+            (list root
+                  (file-name-nondirectory (directory-file-name root))))))
   custom:modeline--project-cache)
 
 (defun custom/modeline--reset-project-cache (&rest _)
@@ -842,17 +824,14 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
 (defun custom/modeline--refresh-vc-state (&rest _)
   "通过 VC 公开接口刷新当前 buffer 的状态缓存。"
   (setq custom:modeline--vc-state-cache
-        (when buffer-file-name
-          (condition-case nil
-              (when-let* ((backend (vc-backend buffer-file-name)))
-                (vc-state buffer-file-name backend))
-            (error nil)))))
+        (when-let* ((backend (and buffer-file-name
+                                  (vc-backend buffer-file-name))))
+          (vc-state buffer-file-name backend))))
 
 (defun custom/modeline--refresh-flymake-counts (&rest _)
   "通过 Flymake 公开接口刷新错误与警告计数。"
   (setq custom:modeline--flymake-counts
-        (if (and (bound-and-true-p flymake-mode)
-                 (fboundp 'flymake-diagnostics))
+        (if (bound-and-true-p flymake-mode)
             (let ((errors 0)
                   (warnings 0))
               (dolist (diagnostic (flymake-diagnostics))
@@ -867,11 +846,9 @@ TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font�
           '(0 0))))
 
 (defun custom/modeline--refresh-eglot-info (&rest _)
-  "通过 Eglot 公开接口刷新连接状态缓存。"
+  "通过 Eglot 公开接口刷新连接状态缓存(仅记录是否已连接)。"
   (setq custom:modeline--eglot-info
-        (when (fboundp 'eglot-current-server)
-          (when (ignore-errors (eglot-current-server))
-            '("eglot" connected)))))
+        (and (ignore-errors (eglot-current-server)) t)))
 
 (defun custom/modeline--path-segment (tier)
   "返回 TIER 对应的路径段。"
@@ -1033,25 +1010,13 @@ wide/medium/narrow 都显示(原版行为)。"
     ""))
 
 (defun custom/modeline--eglot-segment (tier)
-  "返回 TIER 对应的 Eglot 状态(三态 + wide 显示 server 名,wide/medium 显示)。"
-  (if (and (memq tier '(wide medium)) custom:modeline--eglot-info)
-      (pcase-let ((`(,name ,status) custom:modeline--eglot-info))
-        (let* ((point (pcase status
-                        ('connected "●")
-                        ('connecting "◐")
-                        (_ "○")))
-               (face (pcase status
-                       ('connected 'success)
-                       ('connecting 'warning)
-                       (_ 'shadow)))
-               (text (if (eq tier 'wide)
-                         (format "%s %s" name point)
-                       point)))
-          (custom/modeline--segment
-           (custom/modeline--with-icon
-            (custom/modeline--icon "nf-md-server_network") text)
-           face)))
-    ""))
+  "返回 TIER 对应的 Eglot 连接状态(wide 档附加名称,wide/medium 显示)。"
+  (when (and (memq tier '(wide medium)) custom:modeline--eglot-info)
+    (custom/modeline--segment
+     (custom/modeline--with-icon
+      (custom/modeline--icon "nf-md-server_network")
+      (if (eq tier 'wide) "eglot ●" "●"))
+     'success)))
 
 (defun custom/modeline--global-segment (tier)
   "返回 TIER 对应的全局状态字符串。compact 档不显示。
@@ -1070,25 +1035,13 @@ wide/medium/narrow 都显示(原版行为)。"
            (text (string-trim (format-mode-line filtered))))
       (if (string-empty-p text) "" text))))
 
-(defun custom/modeline--major-left-segment (tier)
-  "compact 档左侧 major mode(其他档在右侧显示)。"
-  (if (eq tier 'compact)
-      (custom/modeline--segment
-       (custom/modeline--with-icon
-        (custom/modeline--icon "nf-md-code_tags")
-        (symbol-name major-mode))
-       'font-lock-keyword-face)
-    ""))
-
-(defun custom/modeline--major-right-segment (tier)
-  "非 compact 档右侧 major mode(带 icon)。"
-  (if (eq tier 'compact)
-      ""
-    (custom/modeline--segment
-     (custom/modeline--with-icon
-      (custom/modeline--icon "nf-md-code_tags")
-      (symbol-name major-mode))
-     'font-lock-keyword-face)))
+(defun custom/modeline--major-segment ()
+  "major mode 段(带 icon)。compact 档放左段,其余档放右段。"
+  (custom/modeline--segment
+   (custom/modeline--with-icon
+    (custom/modeline--icon "nf-md-code_tags")
+    (symbol-name major-mode))
+   'font-lock-keyword-face))
 
 (defun custom/modeline--battery-segment (tier)
   "返回 wide 档电池状态(带 percent face 着色)。
@@ -1142,7 +1095,7 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
      (custom/modeline--coding-segment tier)
      (custom/modeline--position-segment tier)
      (custom/modeline--location-segment tier)
-     (custom/modeline--major-left-segment tier))))
+     (when (eq tier 'compact) (custom/modeline--major-segment)))))
 
 (defun custom/modeline-render-right ()
   "计算并返回右段(系统/状态相关)字符串。见 `custom/modeline-render-left'。"
@@ -1151,7 +1104,7 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
      (custom/modeline--diagnostics-segment tier)
      (custom/modeline--eglot-segment tier)
      (custom/modeline--global-segment tier)
-     (custom/modeline--major-right-segment tier)
+     (unless (eq tier 'compact) (custom/modeline--major-segment))
      (custom/modeline--battery-segment tier)
      (custom/modeline--time-segment tier))))
 
@@ -1174,18 +1127,13 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 
 ;; 顶层 list 结构:right-align 必须在顶层,嵌套在 :eval 返回 list 里会导致
 ;; 右段像素测量错误而被推出窗口(见 render-left 注释)。
-(setq-default mode-line-format
-              '(" "
+(let ((format '(" "
                 (:eval (custom/modeline-render-left))
                 mode-line-format-right-align
                 " "
-                (:eval (custom/modeline-render-right))))
-(setq-default mode-line-inactive-format
-              '(" "
-                (:eval (custom/modeline-render-left))
-                mode-line-format-right-align
-                " "
-                (:eval (custom/modeline-render-right))))
+                (:eval (custom/modeline-render-right)))))
+  (setq-default mode-line-format format
+                mode-line-inactive-format format))
 
 ;; 数据源 minor mode 启用:
 ;; - display-battery-mode 维护 `battery-mode-line-string'(modeline 电池段数据源)
@@ -1327,12 +1275,11 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
 #+begin_src emacs-lisp
 (defun custom--tabs-on-kill-buffer ()
   "缓冲区被关闭时,从所有 frame 的标签列表中移除。"
-  (let ((buffer (current-buffer)))
-    (dolist (frame (frame-list))
-      (when (frame-live-p frame)
-        (let ((buffers (custom--tabs-get-frame-buffer-list frame)))
-          (when (memq buffer buffers)
-            (custom--tabs-set-frame-buffer-list (delq buffer buffers) frame)))))))
+  (dolist (frame (frame-list))
+    (when (memq (current-buffer) (custom--tabs-get-frame-buffer-list frame))
+      (custom--tabs-set-frame-buffer-list
+       (delq (current-buffer) (custom--tabs-get-frame-buffer-list frame))
+       frame))))
 
 (defun custom/tabs-clear-for-frame (&optional frame)
   "清空 FRAME 的标签缓冲区列表(项目切换时调用)。
@@ -1367,10 +1314,7 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
   (let* ((target-window (custom--tabs-target-window window))
          (target-frame (window-frame target-window))
          (frame-buffers (custom--tabs-get-frame-buffer-list target-frame)))
-    (seq-filter (lambda (buf)
-                  (and (buffer-live-p buf)
-                       (custom/tab-visible-p buf)))
-                (or frame-buffers '()))))
+    (seq-filter #'custom/tab-visible-p frame-buffers)))
 #+end_src
 
 *** 标签渲染
@@ -1794,27 +1738,21 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 :END:
 
 #+begin_src emacs-lisp
-(cl-defun custom/register-side-window (regex side size &key slot width)
+(defun custom/register-side-window (regex side size)
   "把 REGEX 匹配的 buffer 路由到 SIDE 边的 side-window，占用 SIZE 比例。
 
 REGEX : buffer-name 匹配字符串正则
 SIDE  : bottom / right / left / top（符号）
 SIZE  : 0~1 浮点比例
-SLOT  : 默认 0（同 side 多窗口的堆叠顺序）
-WIDTH : 非 nil 强制按 window-width；nil（默认）时按 SIDE 自动推导
-        （left/right → window-width，top/bottom → window-height）。
 
 规则追加到 `display-buffer-alist' 末尾。顺序敏感：更具体的规则应先注册。"
-  (let* ((slot (or slot 0))
-         (use-width (or width (memq side '(left right))))
-         (window-dim (if use-width 'window-width 'window-height)))
-    (add-to-list 'display-buffer-alist
-                 `(,regex
-                   (display-buffer-in-side-window)
-                   (side . ,side)
-                   (slot . ,slot)
-                   (,window-dim . ,size))
-                 t)))
+  (add-to-list 'display-buffer-alist
+               `(,regex
+                 (display-buffer-in-side-window)
+                 (side . ,side)
+                 (slot . 0)
+                 (,(if (memq side '(left right)) 'window-width 'window-height) . ,size))
+               t))
 
 (defun custom/display-buffer-in-main-window (buffer &optional _alist)
   "把 BUFFER 显示在「主编辑窗口」并选中。
@@ -2046,10 +1984,9 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 (defun custom/terminal-theme-color (key)
   "返回当前 Ef theme palette 中 KEY 对应的颜色,失败时返回 nil。
 用于在透明 TTY 上为少数命名 face 恢复主题底色(当前行、代码块面板等)。"
-  (when (fboundp 'ef-themes-get-color-value)
-    (condition-case nil
-        (ef-themes-get-color-value key)
-      (error nil))))
+  (condition-case nil
+      (ef-themes-get-color-value key)
+    (error nil)))
 
 (defun custom/terminal-theme-background ()
   "返回 TTY 当前行使用的 Ef theme 柔和背景色(palette 的 `bg-dim')。
@@ -2102,8 +2039,7 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
   "重新对所有存活 TTY frame 应用透明背景策略。"
   (unless noninteractive
     (dolist (frame (frame-list))
-      (when (and (frame-live-p frame)
-                 (not (display-graphic-p frame)))
+      (unless (display-graphic-p frame)
         (custom/apply-terminal-faces frame)))))
 
 (defun custom/refresh-terminal-faces-after-load (_file)
@@ -2115,17 +2051,14 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 
 (defun custom/refresh-spacious-padding-faces (&rest _)
   "用一个存活 GUI frame 的真实主题颜色刷新 spacious-padding face。"
-  (when (fboundp 'spacious-padding-set-faces)
-    (when-let* ((frame (seq-find #'display-graphic-p (frame-list))))
-      (with-selected-frame frame
-        (spacious-padding-set-faces)))))
+  (when-let* ((frame (seq-find #'display-graphic-p (frame-list))))
+    (with-selected-frame frame
+      (spacious-padding-set-faces))))
 
 (defun custom/apply-spacious-padding (&optional frame)
   "为 GUI FRAME 应用 spacious-padding，TTY 与 daemon 伪 frame 保持不变。"
   (let ((target (or frame (selected-frame))))
-    (when (and (display-graphic-p target)
-               (fboundp 'spacious-padding-modify-frame-parameters)
-               (fboundp 'spacious-padding-set-faces))
+    (when (display-graphic-p target)
       (with-selected-frame target
         (spacious-padding-modify-frame-parameters target)
         (spacious-padding-set-faces)))))
@@ -2144,10 +2077,8 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
                 (set-face-attribute 'default nil :height custom:default-font-height)
                 (set-frame-parameter nil 'alpha-background custom:frame-background-opacity)
                 (custom/apply-spacious-padding)
-                (when (fboundp 'custom/apply-tab-line-button-preset)
-                  (custom/apply-tab-line-button-preset))
-                (when (fboundp 'ef-themes-take-over-modus-themes-mode)
-                  (ef-themes-take-over-modus-themes-mode 1)))
+                (custom/apply-tab-line-button-preset)
+                (ef-themes-take-over-modus-themes-mode 1))
             (progn
               (window-divider-mode -1)
               (custom/apply-terminal-faces)
@@ -2169,9 +2100,8 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
   (ef-themes-mixed-fonts t)
   (ef-themes-italic-constructs t)
   :config
-  (when (fboundp 'custom/apply-tab-line-button-preset)
-    (add-hook 'ef-themes-after-load-theme-hook
-              #'custom/apply-tab-line-button-preset)))
+  (add-hook 'ef-themes-after-load-theme-hook
+            #'custom/apply-tab-line-button-preset))
 
 (use-package spacious-padding
   :demand t
@@ -2224,8 +2154,6 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
       pulse-iterations 8)
 (add-hook 'post-command-hook #'custom--pulse-after-command)
 
-(size-indication-mode 1)
-(display-battery-mode 1)
 #+end_src
 
 ** 窗口与面板布局
@@ -2418,8 +2346,7 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 (defun custom/color-scheme-get-from-dbus ()
   "通过 D-Bus 获取当前 Darkman 模式。返回 'light、'dark 或 nil。"
   (condition-case err
-      (when (featurep 'dbus)
-        (let ((mode (dbus-get-property
+      (let ((mode (dbus-get-property
                      :session
                      custom/color-scheme-dbus-service
                      custom/color-scheme-dbus-path
@@ -2428,7 +2355,7 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
           (cond
            ((string= mode "light") 'light)
            ((string= mode "dark") 'dark)
-           (t nil))))
+           (t nil)))
     (error
      (message "[color-scheme] D-Bus 获取失败: %s" (error-message-string err))
      nil)))
@@ -2440,6 +2367,13 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
     ('light custom/color-scheme-light-theme)
     (_ nil)))
 
+(defun custom/color-scheme--load-theme-if-needed (theme)
+  "THEME 非 nil 且未启用时加载它,已启用时是 no-op。"
+  (when (and theme
+             (not (eq (car custom-enabled-themes) theme)))
+    (ef-themes-load-theme theme)
+    (message "[color-scheme] 已同步主题: %s" theme)))
+
 (defun custom/color-scheme-apply-theme (mode)
   "根据 MODE 加载对应的主题并保存状态。
 MODE 为 'light 或 'dark。
@@ -2447,14 +2381,10 @@ MODE 为 'light 或 'dark。
   (setq custom/color-scheme-current-mode mode)
   (custom/color-scheme-save-state mode)
   (unless custom/color-scheme--applying-theme
-    (let ((custom/color-scheme--applying-theme t)
-          (target-theme (custom/color-scheme--theme-for-mode mode)))
-      (when target-theme
-        (when (or (daemonp)
-                  (custom/display-supports-themes-p))
-          (unless (eq (car custom-enabled-themes) target-theme)
-            (ef-themes-load-theme target-theme))
-          (message "[color-scheme] 已同步主题: %s" target-theme))))))
+    (let ((custom/color-scheme--applying-theme t))
+      (when (or (daemonp) (custom/display-supports-themes-p))
+        (custom/color-scheme--load-theme-if-needed
+         (custom/color-scheme--theme-for-mode mode))))))
 
 #+end_src
 
@@ -2483,8 +2413,7 @@ MODE 为 'light 或 'dark。
 (defun custom/color-scheme-register-listener ()
   "注册 D-Bus 信号监听器，响应 Darkman 模式变化。"
   (condition-case err
-      (when (and (featurep 'dbus)
-                 (not custom/color-scheme-dbus-handler))
+      (unless custom/color-scheme-dbus-handler
         (setq custom/color-scheme-dbus-handler
               (dbus-register-signal
                :session
@@ -2551,16 +2480,12 @@ MODE 为 'light 或 'dark。
 几乎同时创建 frame 时容易在 PGTK/GTK 初始化路径中崩溃。"
   (with-selected-frame (or frame (selected-frame))
     (when (custom/display-supports-themes-p)
-      (when (fboundp 'ef-themes-take-over-modus-themes-mode)
-        (ef-themes-take-over-modus-themes-mode 1))
+      (ef-themes-take-over-modus-themes-mode 1)
       (if (not custom/color-scheme--initialized)
           (custom/color-scheme-init)
-        (let ((target-theme (custom/color-scheme--theme-for-mode
-                             custom/color-scheme-current-mode)))
-          (when (and target-theme
-                     (not (eq (car custom-enabled-themes) target-theme)))
-            (ef-themes-load-theme target-theme)
-            (message "[color-scheme] 新 frame 同步主题: %s" target-theme)))))))
+        (custom/color-scheme--load-theme-if-needed
+         (custom/color-scheme--theme-for-mode
+          custom/color-scheme-current-mode))))))
 
 (require 'ef-themes)
 (custom/color-scheme-init)
@@ -2576,14 +2501,6 @@ MODE 为 'light 或 'dark。
 本配置只拥有 Ef 主题;颜色通过 face 继承或 Ef palette API 获取,不在刷新函数里硬编码 RGB,也不依赖 Modus palette。主题切换后的级联刷新通过 =custom/theme-refresh-functions= 列表(各功能模块用 =custom/register-theme-refresh!= 幂等注册)统一驱动,见 [[#dashboard][Dashboard]] 的边框 bar face 更新。
 
 #+begin_src emacs-lisp
-(defun custom/color-scheme-apply-custom-face-colors ()
-  "主题切换后重新应用自定义 face 颜色。
-dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard-card-bar'),
-不再涂整行背景,故主题切换无需同步卡片背景色。"
-  (when (facep 'custom-help-section-title)
-    (set-face-attribute 'custom-help-section-title nil
-                        :inherit 'font-lock-keyword-face)))
-
 (defvar custom/theme-refresh-functions nil
   "主题切换后需要调用的刷新函数列表。")
 
@@ -2607,33 +2524,24 @@ dashboard 卡片已改用边框风格(左竖线 + 标题分隔线,见 `dashboard
 
 (defun custom/register-buffer-refresh! (mode refresh-fn)
   "为 MAJOR-MODE 注册主题切换后的 buffer 重渲染函数 REFRESH-FN。幂等。"
-  (let ((entry (assq mode custom/theme-buffer-refreshers)))
-    (unless (and entry (eq (cdr entry) refresh-fn))
-      (if entry
-          (setcdr entry refresh-fn)
-        (push (cons mode refresh-fn) custom/theme-buffer-refreshers)))))
+  (if-let* ((entry (assq mode custom/theme-buffer-refreshers)))
+      (setcdr entry refresh-fn)
+    (push (cons mode refresh-fn) custom/theme-buffer-refreshers)))
 
 (defun custom/color-scheme-refresh-registered-buffers ()
   "重新渲染所有可见窗口中已注册 mode 的缓冲区。"
   (dolist (frame (frame-list))
-    (when (frame-live-p frame)
-      (dolist (window (window-list frame 'no-minibuf))
-        (when (window-live-p window)
-          (let ((buffer (window-buffer window)))
-            (when (buffer-live-p buffer)
-              (with-current-buffer buffer
-                (let ((refresher
-                       (cdr (assq major-mode custom/theme-buffer-refreshers))))
-                  (when (and refresher (functionp refresher))
-                    (condition-case err
-                        (with-selected-window window
-                          (funcall refresher))
-                      (error
-                       (message "[color-scheme] buffer-refresh %s failed: %S"
-                                major-mode
-                                (error-message-string err))))))))))))))
+    (dolist (window (window-list frame 'no-minibuf))
+      (let ((refresher (with-current-buffer (window-buffer window)
+                         (cdr (assq major-mode custom/theme-buffer-refreshers)))))
+        (when refresher
+          (condition-case err
+              (with-selected-window window
+                (funcall refresher))
+            (error
+             (message "[color-scheme] buffer-refresh failed: %S"
+                      (error-message-string err)))))))))
 
-(custom/register-theme-refresh! #'custom/color-scheme-apply-custom-face-colors)
 (custom/register-theme-refresh! #'custom/color-scheme-refresh-registered-buffers)
 (custom/register-theme-refresh! #'custom/refresh-terminal-faces)
 (add-hook 'ef-themes-after-load-theme-hook #'custom/run-theme-refresh)
@@ -2880,8 +2788,7 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
 ;; ghostel 惰性加载,hook/keymap 加载前为 void,故用 with-eval-after-load 守卫。
 (with-eval-after-load 'ghostel
   (add-hook 'ghostel-pre-spawn-hook #'custom/ghostel-export-git-editor)
-  (when (boundp 'ghostel-mode-map)
-    (define-key ghostel-mode-map (kbd "C-h") #'custom/ghostel-send-ctrl-h)))
+  (define-key ghostel-mode-map (kbd "C-h") #'custom/ghostel-send-ctrl-h))
 
 (defconst custom:terminal-side-action
   '((display-buffer-in-side-window
@@ -2911,11 +2818,6 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
           (if arg
               default-directory                     ; 前缀参数:当前文件目录
             (or project-root default-directory)))   ; 项目根目录,否则当前目录
-         ;; let 绑定 shell-file-name 而非 setq,避免永久全局副作用污染后续
-         ;; 子进程;ghostel 在此 let 内 spawn,继承动态绑定的值。
-         (shell-file-name (or shell-file-name
-                              (getenv "SHELL")
-                              "/bin/sh"))
          (buf (or (custom--terminal-existing-buffer)
                   ;; 无现存普通 ghostel:用 save-window-excursion 隔离窗口副作用
                   (let ((before (buffer-list)))
@@ -2956,9 +2858,9 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
 #+attr_org: :width 70
 | 字段       | 含义                                          | 派生消费者                                |
 |------------+-----------------------------------------------+-------------------------------------------|
-| =:modes=     | 生效的所有 major mode(传统 mode 在前,ts 在后) | eglot auto-modes、Apheleia mode-alist     |
-| =:ts-mode=   | Tree-sitter 对应 mode(nil = 无 ts 版本)       | =major-mode-remap-alist=                    |
-| =:server=    | LSP server 启动命令(nil = 无 LSP)             | =eglot-server-programs=、eglot auto-modes |
+| =:modes=     | 生效的所有 major mode(传统 mode 在前,ts 在后) | =major-mode-remap-alist=、Apheleia mode-alist |
+| =:ts-mode=   | Tree-sitter 对应 mode(nil = 无 ts 版本)       | =major-mode-remap-alist=                      |
+| =:server=    | LSP server 启动命令(nil = 无 LSP)             | =eglot-server-programs=                       |
 | =:formatter= | Apheleia formatter 符号(nil = 不格式化)       | Apheleia mode-alist                       |
 
 #+begin_src emacs-lisp
@@ -3038,17 +2940,6 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
                 custom:language-capabilities))
   "Tree-sitter major mode remap 列表(从 `custom:language-capabilities' 派生)。")
 
-(defconst custom:language-eglot-auto-modes
-  (apply #'append
-         (mapcar (lambda (entry)
-                   (if (plist-get entry :server)
-                       (plist-get entry :modes)
-                     nil))
-                 custom:language-capabilities))
-  "进入这些 major mode 时自动触发 `eglot-ensure'。
-不调 `eglot--lookup-mode' 私有 API 做可用性预检测;进入 mode 时无条件
-`eglot-ensure',server 缺失的错误由 Eglot 自身暴露。")
-
 (defconst custom:language-eglot-server-programs
   (let ((seen (make-hash-table :test 'equal))
         (result nil))
@@ -3097,9 +2988,7 @@ Grammar 的供给链完全由 Guix 处理,配置侧不需要参与:
          (override (cdr (assq ts-mode custom--treesit-lang-overrides)))
          (lang (or override
                    (intern (string-remove-suffix "-ts-mode" name)))))
-    (condition-case nil
-        (and (fboundp 'treesit-ready-p) (treesit-ready-p lang t))
-      (error nil))))
+    (treesit-ready-p lang t)))
 
 (dolist (mapping custom:language-treesit-remaps)
   (when (and (fboundp (cdr mapping))
@@ -3109,22 +2998,25 @@ Grammar 的供给链完全由 Guix 处理,配置侧不需要参与:
 
 *** Eglot 激活序列
 
-Eglot 是 =:defer t=,延迟加载的激活链:
+Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
 
-1. 首次进入任意 =prog-mode= → =custom--eglot-setup-once= 触发 =(require 'eglot)=。
-2. Eglot 加载后(无论由 prog-mode-hook 触发 require,还是 eglot 命令 autoload),=with-eval-after-load 'eglot= 注册:
-   - 语言服务器程序表(=custom:language-eglot-server-programs= 附加到 =eglot-server-programs=)
-   - 为声明了 =:server= 的语言 mode 挂 =eglot-ensure=
-3. 进入声明了 =:server= 的 mode 时直接 =eglot-ensure=;server 缺失的错误由 Eglot 自身暴露,不预检测可用性。
+1. 首次进入任意 =prog-mode= → =eglot-ensure= 触发 autoload =(require 'eglot)=。
+2. =:config= 在 require 时同步执行:语言服务器程序表(=custom:language-eglot-server-programs=
+   附加到 =eglot-server-programs=)与 eglot-x 就位。
+3. 随后 =eglot-ensure= 函数体继续执行,当前 buffer 立即连接 LSP。对未注册 server 的
+   major mode 它是 no-op,不预检测可用性,server 缺失的错误由 Eglot 自身暴露。
 
 #+begin_src emacs-lisp
 (defun custom--eglot-enable-inlay-hints ()
-  "eglot-managed-mode 回调：开启 inlay hints（Emacs 31+ 可用时）。"
-  (when (fboundp 'eglot-inlay-hints-mode)
-    (eglot-inlay-hints-mode 1)))
+  "eglot-managed-mode 回调：开启 inlay hints。"
+  (eglot-inlay-hints-mode 1))
 
+;; eglot-ensure 对无 server 的 major mode 是 no-op,直接挂 prog-mode-hook 即可;
+;; 首次调用触发 autoload 加载 eglot,:config 先于 ensure 函数体执行,
+;; server programs 与 eglot-x 就位后当前 buffer 立即连上 LSP。
 (use-package eglot
   :defer t
+  :hook (prog-mode . eglot-ensure)
   :custom
   (eglot-autoshutdown t)
   (eglot-workspace-configuration
@@ -3136,22 +3028,9 @@ Eglot 是 =:defer t=,延迟加载的激活链:
                         :mccabe (:enabled ,json-false)
                         :pyflakes (:enabled ,json-false))))))
   :config
-  (add-hook 'eglot-managed-mode-hook #'custom--eglot-enable-inlay-hints))
-
-(defun custom--eglot-setup-once ()
-  "首次进入 prog-mode 时触发 eglot 加载,由 after-load 钩子完成实际配置。"
-  (remove-hook 'prog-mode-hook #'custom--eglot-setup-once)
-  (require 'eglot))
-
-(add-hook 'prog-mode-hook #'custom--eglot-setup-once)
-
-(with-eval-after-load 'eglot
   (dolist (prog custom:language-eglot-server-programs)
     (add-to-list 'eglot-server-programs prog))
-  (dolist (mode custom:language-eglot-auto-modes)
-    (add-hook (intern (format "%s-hook" mode)) #'eglot-ensure)))
-
-(with-eval-after-load 'eglot
+  (add-hook 'eglot-managed-mode-hook #'custom--eglot-enable-inlay-hints)
   (require 'eglot-x)
   (eglot-x-setup))
 #+end_src
@@ -3434,13 +3313,12 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 
 含 .git 的目录会通过 `project-remember-project' 注册到已知项目。"
   (interactive)
-  (let ((dir (read-directory-name "项目目录: ")))
-    (when (file-directory-p dir)
-      (setq dir (file-name-as-directory (expand-file-name dir))
-            default-directory dir)
-      (when (file-directory-p (expand-file-name ".git" dir))
-        (project-remember-project (project-current nil)))
-      (dired dir))))
+  (let ((dir (file-name-as-directory
+              (expand-file-name (read-directory-name "项目目录: ")))))
+    (setq default-directory dir)
+    (when (file-exists-p (expand-file-name ".git" dir))
+      (project-remember-project (project-current nil)))
+    (dired dir)))
 
 (defun custom/open-directory ()
   "打开当前文件所在目录(或当前 default-directory)的 Dired。"
@@ -4201,8 +4079,6 @@ Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-displ
 + 候选按字母序 + minibuffer 历史最近优先。
 
 #+begin_src emacs-lisp
-(require 'ispell)
-
 ;; Emacs 30+ 内置 minibuffer 补全界面:minibuffer 激活即显示 *Completions*,
 ;; 方向键导航候选(替代 Vertico)。Emacs 31 的 up-down 值:上下键移动候选,
 ;; 左右键仍编辑 minibuffer;eager-display/eager-update 让候选即显并随输入更新。
@@ -4249,6 +4125,8 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 ~Flymake~ 错误浏览(Emacs 29+ 内置)M-s f 绑定 =flymake-goto-next-error= 。
 
 #+begin_src emacs-lisp
+(require 'ispell)
+
 ;; ispell 词表发现(aspell 使用启动域命令声明)
 (defconst custom/completion:ispell-word-list-candidates
   (delq nil
@@ -4271,12 +4149,10 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
             (seq-find #'file-readable-p custom/completion:ispell-word-list-candidates))))
 
 (defun custom/completion-setup-ispell-program ()
-  "配置可用的 ispell 后端命令。
-两者均不可用时不修改 ispell 配置。"
-  (cond
-   ((executable-find custom:executable-aspell)
+  "配置 aspell 作为 ispell 后端命令,不可用时保持默认。"
+  (when (executable-find custom:executable-aspell)
     (setq ispell-program-name custom:executable-aspell
-          ispell-extra-args '("--sug-mode=ultra")))))
+          ispell-extra-args '("--sug-mode=ultra"))))
 
 (defun custom/completion-setup-ispell-word-list ()
   "为当前 buffer 配置单词补全词表。
@@ -4288,8 +4164,7 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
         (setq-local ispell-alternate-dictionary word-list)
       (setq-local completion-at-point-functions
                   (remove 'ispell-completion-at-point
-                          (remove #'ispell-completion-at-point
-                                  completion-at-point-functions))))))
+                          completion-at-point-functions)))))
 
 (custom/completion-setup-ispell-program)
 
@@ -4518,8 +4393,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
             (push (cons feature "未找到 feature") failed))
         (error
          (push (cons feature (error-message-string err)) failed))))
-    (when (fboundp 'custom/dashboard-prime-caches)
-      (custom/dashboard-prime-caches))
+    (custom/dashboard-prime-caches)
     (garbage-collect)
     (when failed
       (message "[custom-config] daemon 预热失败: %S" (nreverse failed)))
@@ -4533,7 +4407,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 启动仪表盘:集成待办列表、文件管理器、前缀键概览和鼠标工作流提示。
 
-Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (derived from =special-mode=) + 纯函数渲染引擎。普通内容基于 =string-width= 列模型；固定 banner 字符集按单终端单元计数，规避 TTY CJK 宽度表与终端实际渲染不一致。Dashboard 依赖知识库、帮助、颜色方案和 frame 接口,因此固定在最后一个配置域加载。跨域调用保留 =fboundp= 守卫,但正常路径由文档顺序保证依赖已就绪。
+Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (derived from =special-mode=) + 纯函数渲染引擎。普通内容基于 =string-width= 列模型；固定 banner 字符集按单终端单元计数，规避 TTY CJK 宽度表与终端实际渲染不一致。Dashboard 依赖知识库、帮助、颜色方案和 frame 接口,因此固定在最后一个配置域加载。同产物内的跨域调用不加守卫(文档顺序与运行时顺序保证已定义);仅对延迟加载的第三方包函数保留 =fboundp=。
 
 + Dashboard 调用的跨域函数:
   - =agenote-knowledge-list-cards= / =agenote-knowledge-show-card= (知识库卡片,走 agenote CLI JSON,见 [[#knowledge-ownership][职责归属]])
@@ -4717,13 +4591,11 @@ COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
 
 (defun custom/dashboard--measure (text)
   "返回 TEXT 的显示宽度（列数）。"
-  (string-width (or text "")))
+  (string-width text))
 
 (defun custom/dashboard--fill (width)
   "生成 WIDTH 列宽的 ASCII 空格填充。"
-  (if (<= width 0)
-      ""
-    (make-string width ?\s)))
+  (make-string (max 0 width) ?\s))
 
 (defun custom/dashboard--pad-to (text width)
   "把 TEXT 右填充到恰好 WIDTH 列（不足补空格，超出原样返回不截断）。"
@@ -5081,8 +4953,7 @@ DISPLAY 为按钮文本(内部按列宽截断),ACTION 为点击回调,HELP 为�
         (scan-limit (* max-items 2))
         (count 0)
         raw-items)
-    (when (and (fboundp 'org-agenda-files)
-               (ignore-errors (org-agenda-files)))
+    (when (org-agenda-files)
       (dolist (file (org-agenda-files))
         (when (and (< count scan-limit) (file-exists-p file))
           (let ((buf (cl-letf (((symbol-function 'ask-user-about-supersession-threat)
@@ -5167,8 +5038,7 @@ MAX-ITEMS 带 TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
   (require 'org)
   (setq custom/dashboard--org-defer-pending nil)
   (custom/dashboard-invalidate-cache)
-  (when (fboundp 'custom/dashboard--refresh-visible-now)
-    (custom/dashboard--refresh-visible-now)))
+  (custom/dashboard--refresh-visible-now))
 
 (defun custom/dashboard--defer-until-org ()
   "保证 org-agenda 在空闲时加载一次，加载后失效缓存并重绘 dashboard。
@@ -5214,8 +5084,7 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
       (unless existing-buffer
         (kill-buffer buffer))))
   (custom/dashboard-invalidate-cache)
-  (when (fboundp 'custom/dashboard--refresh-visible-now)
-    (custom/dashboard--refresh-visible-now))
+  (custom/dashboard--refresh-visible-now)
   (message "已完成并保存: %s" title))
 
 (defun custom/dashboard--render-todo (items width)
@@ -5234,10 +5103,9 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
                        (find-file file)
                        (when pos
                          (goto-char pos)
-                         (when (fboundp 'org-reveal) (org-reveal))
+                         (org-reveal)
                          (recenter)
-                         (when (fboundp 'pulse-momentary-highlight-one-line)
-                           (pulse-momentary-highlight-one-line (point) 'highlight)))))
+                         (pulse-momentary-highlight-one-line (point) 'highlight))))
                (state-face (get-text-property 0 'face state-str))
                (title-face (get-text-property 0 'face title))
                (done (lambda ()
@@ -5265,10 +5133,8 @@ fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
   "计时卡片 fetch。org 未加载时返回 :error（显示打开 org 文件提示）。"
   (if (not (featurep 'org))
       (list :error "打开 org 文件后显示计时")
-    (let* ((clocking-p (and (fboundp 'org-clocking-p) (org-clocking-p)))
-           (today-min (if (fboundp 'org-clock-sum-today)
-                          (org-clock-sum-today) 0)))
-      (list :ok (list clocking-p today-min)))))
+    (require 'org-clock)
+    (list :ok (list (org-clocking-p) (org-clock-sum-today)))))
 
 (defun custom/dashboard--render-clock (data width)
   "计时卡片 render。DATA = (CLOCKING-P TODAY-MIN)。"
@@ -5563,9 +5429,7 @@ stderr buffer 与 max-items 经 `process-put' 挂在 process 上，供本回调�
          (col-count 2)
          (col-gap custom:dashboard-shortcuts-column-gap)
          (col-width (/ (max 1 (- available-width col-gap)) col-count))
-         ;; 跨域调用保留 fboundp 守卫(正常路径由文档顺序保证 help 已就绪)。
-         (prefix-bindings (when (fboundp 'custom/binding-dashboard-bindings)
-                            (custom/binding-dashboard-bindings)))
+         (prefix-bindings (custom/binding-dashboard-bindings))
          (total (length prefix-bindings))
          (rows-count (ceiling total (float col-count)))
          (row-lines nil))
@@ -5669,11 +5533,9 @@ LITERAL figlet art，box-drawing 字符 string-width≈80-85 列，
 `(emacs-version)' 返回 \"GNU Emacs 31.0.90 ...\"，正则需匹配 GNU 前缀。
 启动耗时用秒数自行格式化为紧凑形式（`(emacs-init-time)' 在 batch 下返回
 原始秒数字符串如 \"0.002s\"，交互下返回 \"0.5 seconds\"，统一格式化避免漂移）。"
-  (let* ((emacs-ver (and (fboundp 'emacs-version)
-                         (string-match "GNU Emacs \\([0-9.]+\\)" (emacs-version))
+  (let* ((emacs-ver (and (string-match "GNU Emacs \\([0-9.]+\\)" (emacs-version))
                          (match-string 1 (emacs-version))))
-         (init-seconds (and (fboundp 'emacs-init-time)
-                            (condition-case nil (emacs-init-time) nil)))
+         (init-seconds (ignore-errors (emacs-init-time)))
          (init-time (cond
                      ((not init-seconds) "?")
                      ;; 数字开头（batch 返回 "0.002s" / 交互返回 "0.5 seconds"）
@@ -5830,8 +5692,8 @@ Banner 与状态行负责首屏视觉，宽度按字符数与列模型分别度�
   (setq-local cursor-type nil
               line-spacing 0.15
               show-trailing-whitespace nil)
-  (when (fboundp 'hl-line-mode) (hl-line-mode -1))
-  (when (boundp 'display-line-numbers-mode) (display-line-numbers-mode -1))
+  (hl-line-mode -1)
+  (display-line-numbers-mode -1)
   (buffer-disable-undo)
   (let ((map (make-sparse-keymap)))
     (define-key map "g" #'custom/dashboard-refresh)
@@ -5886,18 +5748,15 @@ Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、�
     (cancel-timer custom/dashboard--refresh-timer))
   (setq custom/dashboard--refresh-timer nil)
   (dolist (frame (frame-list))
-    (when (frame-live-p frame)
-      (dolist (window (window-list frame 'no-minibuf))
-        (let ((buffer (window-buffer window)))
-          (when (buffer-live-p buffer)
-            (with-current-buffer buffer
-              (let ((width (window-body-width window)))
-                (when (and (derived-mode-p 'custom/dashboard-mode)
-                           (or (/= custom/dashboard--rendered-generation
-                                   custom/dashboard--generation)
-                               (not (equal custom/dashboard--rendered-width width))))
-                  (with-selected-window window
-                    (custom/dashboard-render frame)))))))))))
+    (dolist (window (window-list frame 'no-minibuf))
+      (with-current-buffer (window-buffer window)
+        (when (derived-mode-p 'custom/dashboard-mode)
+          (let ((width (window-body-width window)))
+            (when (or (/= custom/dashboard--rendered-generation
+                          custom/dashboard--generation)
+                      (not (equal custom/dashboard--rendered-width width)))
+              (with-selected-window window
+                (custom/dashboard-render frame)))))))))
 
 (defun custom/dashboard--maybe-refresh-visible (frame)
   "可见 dashboard 需要更新时延迟重渲染（合并连续尺寸变化）。"
@@ -6002,9 +5861,8 @@ RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
 
 (add-hook 'window-size-change-functions #'custom/dashboard--maybe-refresh-visible)
 
-(when (fboundp 'custom/register-buffer-refresh!)
-  (custom/register-buffer-refresh!
-   'custom/dashboard-mode #'custom/dashboard-render))
+(custom/register-buffer-refresh!
+ 'custom/dashboard-mode #'custom/dashboard-render)
 
 (custom/add-server-ready-hook #'custom/dashboard-open-for-client-frame)
 (add-hook 'delete-frame-functions #'custom/dashboard--release-frame-buffer)
