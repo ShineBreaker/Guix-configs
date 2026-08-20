@@ -70,3 +70,4 @@ terminal/
 - fish 新 shell 自动生效；tmux 内 `prefix+r` 或 `tmux source ~/.config/tmux/tmux.conf` 热加载
 - 新增 fish 函数放 `functions/`；conf 块放 `conf.d/` 加数字前缀控制排序
 - foot 保持 `TERM=foot`，tmux pane 保持 `TERM=tmux-256color`；不要手工覆写为 `xterm-*`
+- **新增自定义脚本/可执行必须同步补全**：每个新增的 `functions/<name>.fish` 或 `tools/`/`.local/bin/` 下的可执行，都必须在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 同步新增鱼壳 Tab 补全（`complete -c <name>`），否则视为未完成。例外：`blue`/`blueprint.scm` 按仓库动态不钉死、`denv` 由负责人另行维护除外

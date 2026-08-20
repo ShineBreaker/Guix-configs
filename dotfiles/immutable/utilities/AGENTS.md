@@ -91,3 +91,4 @@ utilities/
 - Rime 子模块修改需在子模块内 commit/push 到上游
 - Git commit 模板：`~/.config/git/gitmessage`
 - winapps 改后需重建 VM
+- **新增脚本必须同步补全**：在 `.local/bin/` 新增可执行（如 `keepassxc-credential-setup`、`nixgpu-update`），必须同步在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 新增鱼壳 Tab 补全（`complete -c <name>`）
