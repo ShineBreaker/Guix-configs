@@ -139,9 +139,9 @@ dotfiles/
 
 | 子目录                      | AGENTS.md | 主要职责                                           |
 | --------------------------- | --------- | -------------------------------------------------- |
-| `immutable/agents/`         | ✅ 已有   | OMP、Crush、KB、loopctl、共享 skills、知识库       |
+| `immutable/agents/`         | ✅ 已有   | OMP、Crush、KB、共享 skills、知识库               |
 | `immutable/desktop/`        | ✅ 已有   | niri、autostart、xdg-portal、xfce4 helpers         |
 | `immutable/noctalia-suite/` | ❌ 无     | darkman、noctalia 适配                             |
 | `immutable/system/`         | ✅ 已有   | containers、pipewire、xdg user-dirs                |
 | `immutable/terminal/`       | ✅ 已有   | fish、tmux、foot、btop、starship、broot、fastfetch |
-| `immutable/utilities/`      | ✅ 已有   | helix、git、kanata、pnpm、winapps、rime、gnupg     |
+| `immutable/utilities/`      | ✅ 已有   | fcitx5、git、helix、kanata、pnpm、winapps；Rime 子模块在 `.local/share/fcitx5/rime/`；gnupg 在 `.local/share/gnupg/` |

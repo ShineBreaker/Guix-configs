@@ -17,7 +17,6 @@ Guix-configs///
 │   └── anchors.json
 ├── docs/
 │   ├── iso-build.md
-│   ├── loopctl.md
 │   └── secrets.md
 ├── dotfiles/
 │   ├── disable/

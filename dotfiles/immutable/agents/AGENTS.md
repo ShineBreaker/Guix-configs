@@ -62,7 +62,7 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 
 - **全局 `~/.config/agents/anchors.json`**（meta-frozen）：跨所有 workspace 的通用 agent 约束 — `sudo`、`interactive_commands`（vi/less/man… 出现即禁）、`bare_repl_commands`（python/node 裸调用禁）、`sensitive_patterns`（sk-/密码/私钥/AWS/GitHub token）
 - **项目级 `<root>/.agents/anchors.json`**（agent 可写，ratchet 加码）：仓库专属 — `frozen_commands` / `frozen_paths` / `redirect_conventions` / `path_hints` / `human_only_actions` / `anchor_measurements`
-- **代码底层（各 hook 脚本硬编，恒定生效）**：rm 破坏性防护、git 写操作限制（commit 需 -m / 禁 add -p / 禁 rebase -i）、~~/.config·~~/.local 部署位置保护
+- **代码底层（各 hook 脚本硬编，恒定生效）**：rm 破坏性防护、git 写操作限制（commit 需 -m / 禁 add -p / 禁 rebase -i）、~/.config/ 和 ~/.local/ 部署位置保护
 
 调整通用约束改全局 anchors.json；仓库规则改项目级；pi-gate / crush / zcode 三方同步生效。
 
