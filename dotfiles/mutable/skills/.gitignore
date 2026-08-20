@@ -1,6 +1,0 @@
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
-
-# npx skills project-scope 落盘暂存区（skill 内容不进 git，只跟踪 skills-lock.json）
-.config/agents/skills/.agents/

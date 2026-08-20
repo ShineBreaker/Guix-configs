@@ -1,6 +1,6 @@
 # Agent 资产配置
 
-本目录集中管理本仓库用到的所有 Agent 相关配置：Pi Agent、Crush、共享的 KB / loopctl 基础设施、跨 agent 技能集（submodule）。统一通过 Guix Home 的 `home-dotfiles-service-type`（stow layout）部署到 `~/.config/`、`~/.local/` 等路径。
+本目录集中管理本仓库用到的 Agent 相关配置：Crush、共享的 anchors 基础设施。统一通过 Guix Home 的 `home-dotfiles-service-type`（stow layout）部署到 `~/.config/`。
 
 ## 目录结构
 
@@ -43,29 +43,12 @@ agents/
 
 ```
 dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
-├── .config/
-│   ├── crush/                → ~/.config/crush/      # Crush 配置 + hooks + bin
-│   ├── agents/               → ~/.config/agents/     # 共享基础设施（context, skills）
-│   └── loopctl/              → ~/.config/loopctl/    # 跨 agent 循环框架
-└── .local/
-    ├── bin/                  → ~/.local/bin/         # 启动脚本（kb、loopctl 等）
-    └── share/                → ~/.local/share/       # applications/hermes.desktop、hermes 运行时数据
+└── .config/
+    ├── crush/                → ~/.config/crush/      # Crush 配置 + hooks + bin
+    └── agents/               → ~/.config/agents/     # 共享基础设施（context, anchors）
 ```
 
-`.gitignore` 排除 `.agents/workfile`、`node_modules`、`__pycache__`。文档类的 `AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
-
-### Loop 体系（loopctl）
-
-跨 agent 长期迭代循环，通过 `.config/loopctl/` 与 `.local/bin/loopctl` 管理。Adapter 定义在 `adapters/`：`claude-code` / `codex` / `crush` / `omp` / `opencode`。新增 agent = 复制 `_TEMPLATE.json`。
-
-### 启动脚本
-
-| 脚本          | 作用                                                                                                                              |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `kb`          | 知识库 CLI                                                                                                                        |
-| `agenote`     | 知识库 CLI（agenote card + memory 操作）。由 `uv tool install` 提供（仓库 `github.com/ShineBreaker/agenote`），**不在本 stow 包** |
-| `agenote-cli` | agenote CLI shim（供 omp-hooks 扩展 execSync 调用）。同上，由 uv tool 提供                                                        |
-| `loopctl`     | 跨 agent 循环框架入口                                                                                                             |
+`.gitignore` 排除 `.agents/workfile`、`node_modules`、`__pycache__`。`AGENTS.md` / `README.md` 由 `home-dotfiles-service-type` 的 `excluded` 规则排除，不会进入 `~`。
 
 ### Crush（`.config/crush/`）
 
@@ -83,6 +66,10 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 
 调整通用约束改全局 anchors.json；仓库规则改项目级；pi-gate / crush / zcode 三方同步生效。
 
-## 修改约束
+### Skills — 第三方 agent skills 声明式管理（`dotfiles/mutable/skills/`）
 
-- **loopctl adapter**：改 `adapters/<name>.json` 后用 `loopctl adapter test <name>` 验证
+第三方 skills 不在本包管理，改由 `dotfiles/mutable/skills/` 以 `skills-lock.json` 为唯一声明、通过 `~/.local/bin/askill` 按需从上游恢复（引擎 `npx skills` project scope + `universal` + `--copy`）。详见 `dotfiles/mutable/skills/README.md`：
+
+- `askill add <repo> -s <name>` / `askill update` / `askill install` / `askill remove` / `askill list`
+- 锁文件 `~/.config/agents/skills/skills-lock.json`（`computedHash` 基线，ref 跟踪最新，版本冻结由 git 提交承担）
+- `~/.config/agents/skills/.agents/skills/` 为 npx 暂存区；锁外目录（agenote/emacs 等自建 skill）不经 askill 触碰
