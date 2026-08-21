@@ -40,6 +40,7 @@ Guix-configs///
 │   ├── bootstrap.sh
 │   ├── build-image.scm
 │   ├── fxxk-link.sh
+│   ├── gen-partial.scm
 │   ├── json-to-nix.py
 │   └── secrets
 ├── .gitattributes
@@ -47,7 +48,6 @@ Guix-configs///
 ├── .gitmodules
 ├── CLAUDE.md
 ├── LICENSE
-├── PLAN.md
 ├── README.org
 └── blueprint.scm
 ```

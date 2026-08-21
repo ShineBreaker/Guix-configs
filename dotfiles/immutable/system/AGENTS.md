@@ -10,20 +10,25 @@
 
 ```
 system/
-└── .config/
-    ├── containers/
-    │   ├── containers.conf
-    │   └── policy.json
-    ├── pipewire/
-    │   └── pipewire.conf.d/
-    │       └── 10-latency-fix.conf
-    ├── wireplumber/
-    │   ├── scripts/
-    │   │   └── 40-alsa/
-    │   └── wireplumber.conf.d/
-    │       └── 50-disable-automute.conf
-    ├── user-dirs.dirs
-    └── user-dirs.locale
+├── .config/
+│   ├── containers/
+│   │   ├── containers.conf
+│   │   └── policy.json
+│   ├── hypr/
+│   │   └── hypridle.conf
+│   ├── pipewire/
+│   │   └── pipewire.conf.d/
+│   │       └── 10-latency-fix.conf
+│   ├── wireplumber/
+│   │   ├── scripts/
+│   │   │   └── 40-alsa/
+│   │   └── wireplumber.conf.d/
+│   │       └── 50-disable-automute.conf
+│   ├── user-dirs.dirs
+│   └── user-dirs.locale
+└── .local/
+    └── bin/
+        └── usb-power-gate
 ```
 
 <!-- /structor -->

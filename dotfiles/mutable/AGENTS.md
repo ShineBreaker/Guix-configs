@@ -33,8 +33,29 @@ mutable/
 │   │   │   └── skills/
 │   │   └── pi/
 │   │       └── extensions/
+│   ├── .zcode/
+│   │   └── plugins/
+│   │       ├── agenote-zcode/
+│   │       └── assisted-by-zcode/
 │   └── .stow-local-ignore
-├── appimage-run/
+├── agents/
+│   ├── hermes/
+│   │   ├── .local/
+│   │   │   ├── bin/
+│   │   │   └── share/
+│   │   ├── .stow-folding
+│   │   └── .stow-local-ignore
+│   ├── pi/
+│   │   ├── .config/
+│   │   │   ├── agents/
+│   │   │   └── pi/
+│   │   └── .stow-local-ignore
+│   └── zcode/
+│       └── .zcode/
+│           ├── agents/
+│           ├── cli/
+│           ├── commands/
+│           └── hooks/
 ├── emacs/
 │   ├── .config/
 │   │   ├── agents/
@@ -50,52 +71,12 @@ mutable/
 │   │   └── share/
 │   │       └── applications/
 │   └── .stow-local-ignore
-├── hermes/
-│   ├── .local/
-│   │   ├── bin/
-│   │   │   ├── hermes
-│   │   │   ├── hermes-desktop
-│   │   │   └── hermes-update
-│   │   └── share/
-│   │       ├── applications/
-│   │       └── hermes/
-│   ├── .stow-folding
-│   └── .stow-local-ignore
-├── pi/
-│   ├── .config/
-│   │   ├── agents/
-│   │   │   └── skills/
-│   │   └── pi/
-│   │       ├── extensions/
-│   │       ├── npm/
-│   │       ├── .gitignore
-│   │       ├── APPEND_SYSTEM.md
-│   │       ├── atelier.json
-│   │       ├── global-context.json
-│   │       ├── keybindings.json
-│   │       ├── mcp.json
-│   │       ├── models.json
-│   │       ├── pi-lsp.json
-│   │       ├── plannotator.json
-│   │       └── settings.json
-│   └── .stow-local-ignore
-├── secrets/
-│   ├── .local/
-│   │   └── share/
-│   │       ├── keys/
-│   │       └── secrets-encrypted/
-│   └── .stow-local-ignore
-└── skills/
-    ├── .config/
-    │   └── agents/
-    │       └── skills/
-    ├── .local/
-    │   └── bin/
-    │       └── askill
-    ├── .gitignore
-    ├── .stow-folding
-    ├── .stow-local-ignore
-    └── README.md
+└── tools/
+    ├── appimage-run/
+    └── secrets/
+        ├── .local/
+        │   └── share/
+        └── .stow-local-ignore
 ```
 
 <!-- /structor -->
@@ -104,7 +85,10 @@ mutable/
 
 | 包       | 部署目标                                                                                                         | 包含文件                                                                                                                                                                                                         |
 | -------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hermes` | `~/.local/share/hermes/`                                                                                         | SOUL.md、config.yaml、memories/MEMORY.md、memories/USER.md                                                                                                                                                       |
+| `agents/hermes` | `~/.local/share/hermes/` + `~/.local/bin/hermes*`                                                                                         | SOUL.md、config.yaml、memories/、skills/、plugins/、启动脚本（hermes/hermes-update/hermes-desktop）、hermes.desktop                                                                                                                                                       |
+| `agents/pi` | `~/.config/pi/` + `~/.config/agents/skills/`                                                                                               | settings.json、mcp.json、models.json 等 pi 配置、extensions/（含 atelier、pi-ui 子模块）、agents/skills/ 自建 skill                                                                                                                                                      |
+| `tools/appimage-run` | `~/.local/bin/appimage-run`                                                                                          | AppImage 运行器（**submodule** → `github.com/ShineBreaker/appimage-run-guix`）                                                                                                                                                                                          |
+| `tools/secrets` | `~/.local/share/keys/`                                                                                                     | age 密钥对（私钥不入 git）+ secrets 加解密脚本，详见包内 AGENTS.md；密文目录 secrets-encrypted 被 stow 排除，仅存仓库源                                                                                                                                                    |
 | `emacs`  | `~/.config/emacs/`                                                                                               | literal-config 仓库本体（init.el、early-init.el、emacs.org、scripts/、data/），GNU Stow 软链到 `~/.config/emacs/`，改源即生效。无 chemacs2 引导层、无 submodule、单 profile。详见根 AGENTS.md「Emacs 单 Profile 架构」节。 |
 | `agenote` | `~/.config/agents/skills/` + `~/.config/omp/extensions/`                                                       | **纯 submodule 容器包**。两个子模块：`agenote-skills`（3 个 agent skill，→ `github.com/ShineBreaker/agenote-skills`）+ `pi-agenote`（omp 扩展，→ `github.com/ShineBreaker/pi-agenote`）。程序本体（CLI/ag_lib）**不在此包**，由 `uv tool install` 独立安装到 `~/.local/bin/`（→ `github.com/ShineBreaker/agenote`）。 |
 | `skills` | `~/.local/bin/askill` + `~/.config/agents/skills/skills-lock.json`                                              | **第三方 skills 声明式管理包**（详见包内 README.md）：仓库只跟踪锁与管理脚本，skill 内容不进 git，由 `askill`（引擎 `npx skills` project scope）安装到 `~/.config/agents/skills/`。新机恢复：`blue stow skills` 后跑 `askill install`。自建 skill（agenote/emacs 包）不在此包管辖。 |
@@ -113,10 +97,10 @@ mutable/
 
 ### 修改已纳管的配置
 
-直接编辑 `dotfiles/mutable/hermes/.local/share/hermes/<file>`，保存即生效（hermes 进程会重新读取）。
+直接编辑 `dotfiles/mutable/agents/hermes/.local/share/hermes/<file>`，保存即生效（hermes 进程会重新读取）。
 
 ```bash
-$EDITOR dotfiles/mutable/hermes/.local/share/hermes/SOUL.md
+$EDITOR dotfiles/mutable/agents/hermes/.local/share/hermes/SOUL.md
 git add dotfiles/mutable/ && git commit -S -m "..."
 ```
 
@@ -124,10 +108,10 @@ git add dotfiles/mutable/ && git commit -S -m "..."
 
 ```bash
 # 1. 把文件复制到源目录
-cp ~/.local/share/hermes/new-file dotfiles/mutable/hermes/.local/share/hermes/new-file
+cp ~/.local/share/hermes/new-file dotfiles/mutable/agents/hermes/.local/share/hermes/new-file
 
 # 2. 让 stow 建链（替换原文件为软链接）
-blue stow --restow hermes
+blue stow --restow agents/hermes
 
 # 3. 验证软链接生效
 ls -la ~/.local/share/hermes/new-file
@@ -164,7 +148,7 @@ git add dotfiles/mutable/<new-pkg>/ && git commit -S -m "..."
 
 ### 批量操作所有包（stow-all）
 
-枚举 `dotfiles/mutable/` 下所有直接子目录为包，逐个执行（包不能嵌套；`.git`/`.agents` 等元目录自动跳过）。逐一执行、遇错即停。
+枚举 `dotfiles/mutable/` 下所有包，逐个执行（`.git`/`.agents` 等元目录自动跳过）。支持一层分组目录：目录内含 dot 开头条目（`.config`/`.local`/`.stow-*`）即为包，否则视为纯分组下钻一层（如 `agents/hermes`、`agents/pi`）。逐一执行、遇错即停。
 
 ```bash
 blue stow-all              # 部署所有包
@@ -176,9 +160,9 @@ blue stow-all --adopt      # 把 ~ 下已有文件收养进各包源
 ### 临时撤销 stow 部署（软链接回退为实际文件）
 
 ```bash
-blue stow --delete hermes   # ~ 下变回实际文件；源目录不变
+blue stow --delete agents/hermes   # ~ 下变回实际文件；源目录不变
 # 恢复：
-blue stow hermes
+blue stow agents/hermes
 # 或一次恢复所有：
 blue stow-all
 ```
@@ -186,7 +170,7 @@ blue stow-all
 ### 重建软链接（文件被改过位置后）
 
 ```bash
-blue stow --restow hermes
+blue stow --restow agents/hermes
 # 或全部重建：
 blue stow-all --restow
 ```
@@ -199,13 +183,13 @@ blue stow-all --restow
 
 - **不要**把 `dotfiles/mutable/` 下的任何文件加入 `dotfiles/immutable/`（会产生双重部署冲突）
 - `home-dotfiles-service-type` 的 `directories` 默认为 `("../dotfiles/immutable")`，不涉及 `dotfiles/mutable/`
-- `~/.local/share/hermes/` 下其他文件（logs/、state.db、sessions/ 等运行时产物）**不属于** `dotfiles/mutable/hermes/` 范围，stow 不会动它们
+- `~/.local/share/hermes/` 下其他文件（logs/、state.db、sessions/ 等运行时产物）**不属于** `dotfiles/mutable/agents/hermes/` 范围，stow 不会动它们
 
 ## 备份与恢复
 
 文件在 `dotfiles/mutable/` 下由 git 跟踪，无需额外备份。误删后用 git 恢复：
 
 ```bash
-git checkout HEAD -- dotfiles/mutable/hermes/
-blue stow --restow hermes
+git checkout HEAD -- dotfiles/mutable/agents/hermes/
+blue stow --restow agents/hermes
 ```

@@ -23,6 +23,7 @@ source/
 │   ├── skel/
 │   │   └── .config/
 │   │       └── mihomo/
+│   ├── check-white.svg
 │   ├── gpg-agent.conf
 │   └── rounded.qss
 ├── nix/

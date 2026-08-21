@@ -15,6 +15,8 @@ agents/
 │   │   ├── context/
 │   │   │   ├── 01-language.md
 │   │   │   └── 02-ultilities.md
+│   │   ├── skills/
+│   │   │   └── skills-lock.json
 │   │   ├── anchors-lib.sh
 │   │   └── anchors.json
 │   └── crush/
@@ -34,6 +36,9 @@ agents/
 │       │   ├── bash-gate.sh
 │       │   └── edit-gate.sh
 │       └── crush.json
+├── .local/
+│   └── bin/
+│       └── askill
 └── .gitignore
 ```
 

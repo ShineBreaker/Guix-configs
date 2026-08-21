@@ -35,6 +35,8 @@ dotfiles/
 │   │   ├── .config/
 │   │   │   ├── agents/
 │   │   │   └── crush/
+│   │   ├── .local/
+│   │   │   └── bin/
 │   │   └── .gitignore
 │   ├── desktop/
 │   │   ├── .config/
@@ -53,12 +55,15 @@ dotfiles/
 │   │   └── .local/
 │   │       └── share/
 │   ├── system/
-│   │   └── .config/
-│   │       ├── containers/
-│   │       ├── pipewire/
-│   │       ├── wireplumber/
-│   │       ├── user-dirs.dirs
-│   │       └── user-dirs.locale
+│   │   ├── .config/
+│   │   │   ├── containers/
+│   │   │   ├── hypr/
+│   │   │   ├── pipewire/
+│   │   │   ├── wireplumber/
+│   │   │   ├── user-dirs.dirs
+│   │   │   └── user-dirs.locale
+│   │   └── .local/
+│   │       └── bin/
 │   ├── terminal/
 │   │   └── .config/
 │   │       ├── atuin/
@@ -89,8 +94,19 @@ dotfiles/
     │   ├── .config/
     │   │   ├── agents/
     │   │   └── pi/
+    │   ├── .zcode/
+    │   │   └── plugins/
     │   └── .stow-local-ignore
-    ├── appimage-run/
+    ├── agents/
+    │   ├── hermes/
+    │   │   ├── .local/
+    │   │   ├── .stow-folding
+    │   │   └── .stow-local-ignore
+    │   ├── pi/
+    │   │   ├── .config/
+    │   │   └── .stow-local-ignore
+    │   └── zcode/
+    │       └── .zcode/
     ├── emacs/
     │   ├── .config/
     │   │   ├── agents/
@@ -98,30 +114,11 @@ dotfiles/
     │   ├── .local/
     │   │   └── share/
     │   └── .stow-local-ignore
-    ├── hermes/
-    │   ├── .local/
-    │   │   ├── bin/
-    │   │   └── share/
-    │   ├── .stow-folding
-    │   └── .stow-local-ignore
-    ├── pi/
-    │   ├── .config/
-    │   │   ├── agents/
-    │   │   └── pi/
-    │   └── .stow-local-ignore
-    ├── secrets/
-    │   ├── .local/
-    │   │   └── share/
-    │   └── .stow-local-ignore
-    └── skills/
-        ├── .config/
-        │   └── agents/
-        ├── .local/
-        │   └── bin/
-        ├── .gitignore
-        ├── .stow-folding
-        ├── .stow-local-ignore
-        └── README.md
+    └── tools/
+        ├── appimage-run/
+        └── secrets/
+            ├── .local/
+            └── .stow-local-ignore
 ```
 
 <!-- /structor -->

@@ -9,9 +9,9 @@
 
 | 层   | 路径                                                                               | 进 git? | 出现在 `~`?    | 权限 |
 | ---- | ---------------------------------------------------------------------------------- | ------- | -------------- | ---- |
-| 密文 | `dotfiles/mutable/secrets/.local/share/secrets-encrypted/<name>.age`               | ✓       | ✗（Stow 排除） | 644  |
-| 公钥 | `dotfiles/mutable/secrets/.local/share/keys/age.pub`                               | ✓       | ✓              | 644  |
-| 私钥 | `dotfiles/mutable/secrets/.local/share/keys/age`(软链到 `~/.local/share/keys/age`) | ✗       | ✓              | 600  |
+| 密文 | `dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/<name>.age`               | ✓       | ✗（Stow 排除） | 644  |
+| 公钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age.pub`                               | ✓       | ✓              | 644  |
+| 私钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age`(软链到 `~/.local/share/keys/age`) | ✗       | ✓              | 600  |
 | 明文 | `~/.local/share/secrets-decrypted/<name>`                                          | ✗       | ✓              | 600  |
 
 整个仓库 push 到 origin 的字节里,**没有**任何明文,也没有解密所需的私钥。
@@ -33,7 +33,7 @@
 
 ```
 Guix-configs/
-├── dotfiles/mutable/secrets/
+├── dotfiles/mutable/tools/secrets/
 │   ├── .local/share/keys/
 │   │   ├── .gitignore                    # 精确忽略私钥 age
 │   │   ├── age                           # X25519 私钥,mode 600,不进 git
@@ -59,7 +59,7 @@ Guix-configs/
 
 ```bash
 cd ~/Projects/Config/Guix-configs
-./tools/secrets init                # 生成密钥对到 dotfiles/mutable/secrets/.local/share/keys/age
+./tools/secrets init                # 生成密钥对到 dotfiles/mutable/tools/secrets/.local/share/keys/age
 blue stow secrets                   # 建软链 ~/.local/share/keys/age
 ./tools/secrets list                # 验证一切就绪
 ```
@@ -67,8 +67,8 @@ blue stow secrets                   # 建软链 ~/.local/share/keys/age
 `init` 会:
 
 1. 调用 `age-keygen` 生成 X25519 密钥对
-2. 写私钥到 `dotfiles/mutable/secrets/.local/share/keys/age`,权限 600
-3. 从私钥首行注释提取公钥,写到 `dotfiles/mutable/secrets/.local/share/keys/age.pub`,权限 644
+2. 写私钥到 `dotfiles/mutable/tools/secrets/.local/share/keys/age`,权限 600
+3. 从私钥首行注释提取公钥,写到 `dotfiles/mutable/tools/secrets/.local/share/keys/age.pub`,权限 644
 4. 提示下一步:`blue stow secrets`
 
 ### 3.2 添加新密文
@@ -79,7 +79,7 @@ echo 'token = "..."' > /tmp/example.toml
 ./tools/secrets decrypt example --stdout      # 回圆验证
 trash /tmp/example.toml
 
-git add dotfiles/mutable/secrets/.local/share/secrets-encrypted/example.age
+git add dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/example.age
 git commit -S -m "feat(secrets): add example.age"
 git push
 ```
@@ -120,11 +120,11 @@ source ~/.local/share/secrets-decrypted/dotenv
 
 ```bash
 # 1. 备份旧私钥(重加密期间需要它解密旧密文,不能先删)
-cp dotfiles/mutable/secrets/.local/share/keys/age /tmp/age.old
+cp dotfiles/mutable/tools/secrets/.local/share/keys/age /tmp/age.old
 chmod 600 /tmp/age.old
 
 # 2. trash 旧私钥,生成新密钥对(init 检测到旧 age 会拒绝,必须先 trash)
-trash dotfiles/mutable/secrets/.local/share/keys/age
+trash dotfiles/mutable/tools/secrets/.local/share/keys/age
 ./tools/secrets init                    # 生成新 age + 覆盖 age.pub
 blue stow --restow secrets              # 重建 ~/.local/share/keys/age 软链指向新私钥
 
@@ -136,7 +136,7 @@ blue stow --restow secrets              # 重建 ~/.local/share/keys/age 软链�
 
 # 5. 验证 + 提交
 ./tools/secrets list
-git add dotfiles/mutable/secrets/.local/share/keys/age.pub dotfiles/mutable/secrets/.local/share/secrets-encrypted/*.age
+git add dotfiles/mutable/tools/secrets/.local/share/keys/age.pub dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/*.age
 git commit -S -m "ROTATE: (secrets) regenerated keypair + re-encrypted all .age"
 git push
 
@@ -163,7 +163,7 @@ blue stow secrets                   # 建 ~/.local/share/keys/age 软链
 
 ```bash
 # 旧机
-scp dotfiles/mutable/secrets/.local/share/keys/age user@newhost:~/.local/share/keys/age
+scp dotfiles/mutable/tools/secrets/.local/share/keys/age user@newhost:~/.local/share/keys/age
 chmod 600 ~/.local/share/keys/age
 
 # 新机
@@ -193,7 +193,7 @@ chmod 600 ~/.local/share/keys/age
 | ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------- |
 | `tools/secrets decrypt` 报找不到私钥     | stow 没部署或软链失效                     | `cd Guix-configs && blue stow --restow secrets`            |
 | `list` 报 `DECREPT_DIR: 未绑定的变量`    | 脚本 typo 触发 `set -euo pipefail`        | 修脚本;`bash -n` 不查变量绑定,必须真跑                     |
-| `age: error: no identity`                | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/secrets/.local/share/keys/age` |
+| `age: error: no identity`                | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/tools/secrets/.local/share/keys/age` |
 | `init` 后 `.age.pub` 是空的              | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init,或手动 `awk` 提取                    |
 | `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录       | 修复 ignore 后 `blue stow --restow secrets`                |
 | `re-encrypt` 报 `failed to decrypt`      | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)                   |
@@ -216,5 +216,5 @@ sops。当前体量下 age 足够。
 
 - [age 官方文档](https://age-encryption.org/)
 - [`tools/secrets` 源码](../tools/secrets)
-- [`dotfiles/mutable/secrets/AGENTS.md`](../dotfiles/mutable/secrets/AGENTS.md) — 维护范式
-- [`keys/.gitignore`](../dotfiles/mutable/secrets/.local/share/keys/.gitignore) — 私钥排除规则
+- [`dotfiles/mutable/tools/secrets/AGENTS.md`](../dotfiles/mutable/tools/secrets/AGENTS.md) — 维护范式
+- [`keys/.gitignore`](../dotfiles/mutable/tools/secrets/.local/share/keys/.gitignore) — 私钥排除规则
