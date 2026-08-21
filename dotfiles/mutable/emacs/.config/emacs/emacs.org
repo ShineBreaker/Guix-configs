@@ -3372,6 +3372,14 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 ;; 不会自动检测已安装的 rg,显式切换(ripgrep 在 home 包清单中)。
 (setq xref-search-program 'ripgrep)
 
+;; Dired 目录导航复用当前 buffer:RET / ^ 在面板或单窗口情形原地切换,
+;; 不再堆积同目录 Dired buffer。内置 <mouse-2> 绑定的
+;; `dired-mouse-find-file-other-window' 显式指定 other-window 打开目录,
+;; 绕过该变量,一并改回原地版。
+(setq dired-kill-when-opening-new-dired-buffer t)
+(with-eval-after-load 'dired
+  (define-key dired-mode-map [mouse-2] #'dired-mouse-find-file))
+
 ;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原 projectile-after-switch-project-hook)。
 (with-eval-after-load 'project
   (add-hook 'project-after-switch-project-functions
