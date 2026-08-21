@@ -22,8 +22,11 @@
 # 基本格式：
 #   Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [TOOL1] [TOOL2]
 #
-# 标签中应包含 AI 代理的名称、模型的具体版本号，
-# 以及使用的其他辅助工具。
+# 标签中应包含:
+# - AI 代理的名称 (AGENT_NAME)
+# - 模型的具体版本号 (MODEL_VERSION)，
+# - 以及使用的其他辅助工具 (TOOL, 可选)。
+# e.g. Assisted-by: Claude:claude-3-opus coccinelle sparse
 #
 # ┌───────────────────────┐
 # │      类型速查表       │
