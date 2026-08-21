@@ -1,0 +1,617 @@
+/*
+ * SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* ============================================================
+   Rounded Theme for Qt Applications (Adwaita)
+   贴合最新 GNOME Adwaita（libadwaita）设计语言的 Qt 样式表，
+   由 qt6ct 消费
+
+   设计基准：
+   - 圆角体系：控件 6px / 输入胶囊 10px / 弹层与卡片 12px /
+     对话框按钮大圆角药丸
+     （Qt QSS 的 border-radius 超过短边一半时圆弧相互穿越，
+     背景坍缩成纺锤形，不能用 CSS 式 999px 无穷大圆角）
+   - 颜色零硬编码：全部使用 palette()，明暗双模式通用
+     （调色板由 Noctalia 按日夜自动重写，两态角色方向已核对）
+   - accent 蓝（highlight）仅用于语义：开关选中、聚焦环、
+     文本选区、滑块/进度填充、对话框主按钮
+   - 悬停与列表/菜单选中一律中性灰，不使用蓝色
+   ============================================================ */
+
+/* -----------------------------------------------------------
+   1. 基础容器与窗口 (Base Containers)
+   -----------------------------------------------------------
+   注意：QFrame 是众多控件的基类，直接设置 border-radius
+   会导致所有子控件继承圆角，造成布局错乱。
+   因此只设置背景，不设置圆角。
+*/
+
+QFrame {
+    background: palette(base);
+    border: none;
+}
+
+/* 特定容器保持透明无边框 */
+QScrollArea {
+    border: none;
+    background: transparent;
+}
+
+/* 菜单栏、工具栏、状态栏使用窗口底色 */
+QMenuBar, QToolBar, QStatusBar {
+    border: none;
+    background: palette(window);
+    padding: 2px;
+}
+
+/* -----------------------------------------------------------
+   2. 弹层 (Popovers)：菜单 / 工具提示 / 下拉弹出
+   -----------------------------------------------------------
+   Adwaita 弹层：12px 圆角、窗口底色、细边框；
+   菜单项悬停为中性灰，禁用项淡化
+*/
+
+QMenu {
+    background-color: palette(window);
+    border: 1px solid palette(alternate-base);
+    border-radius: 12px;
+    padding: 6px;
+}
+
+QMenu::item {
+    padding: 6px 24px 6px 10px;
+    background-color: transparent;
+    border-radius: 6px;
+    margin: 1px 2px;
+    color: palette(text);
+}
+
+QMenu::item:selected {
+    background-color: palette(alternate-base);
+    color: palette(text);
+}
+
+QMenu::item:disabled {
+    color: palette(mid);
+}
+
+QMenu::separator {
+    height: 1px;
+    background: palette(alternate-base);
+    margin: 6px 8px;
+}
+
+QMenuBar::item {
+    padding: 6px 12px;
+    background: transparent;
+    border-radius: 6px;
+}
+
+QMenuBar::item:selected {
+    background: palette(alternate-base);
+}
+
+QMenuBar::item:pressed {
+    background: palette(mid);
+}
+
+/* 工具提示：Adwaita 为与窗口同深的圆角卡片，细边框分层 */
+QToolTip {
+    background-color: palette(base);
+    color: palette(text);
+    border: 1px solid palette(alternate-base);
+    border-radius: 10px;
+    padding: 6px 10px;
+}
+
+/* 下拉框弹出列表：与菜单同级的 12px 弹层，
+   列表项沿用第 7 节的通用项规则 */
+QComboBox QAbstractItemView {
+    background-color: palette(window);
+    border: 1px solid palette(alternate-base);
+    border-radius: 12px;
+    padding: 4px;
+    outline: none;
+}
+
+/* -----------------------------------------------------------
+   3. 按钮组件 (Buttons)
+   -----------------------------------------------------------
+   最新 Adwaita 按钮：常态灰底无边框 6px 圆角，悬停变中性灰，
+   按下更深；对话框按钮区为药丸形，default（suggested-action
+   语义）与 checked（开关语义）使用 accent 蓝
+*/
+
+QPushButton {
+    background-color: palette(alternate-base);
+    border: none;
+    border-radius: 6px;
+    padding: 5px 16px;
+    margin: 2px 4px;
+    color: palette(text);
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background-color: palette(mid);
+}
+
+QPushButton:pressed {
+    background-color: palette(dark);
+    color: palette(bright-text);
+}
+
+QPushButton:checked {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border: none;
+}
+
+/* checked 态悬停/按下保持 accent，防止被通用交互态覆盖 */
+QPushButton:checked:hover,
+QPushButton:checked:pressed {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+/* 对话框主操作按钮 = Adwaita suggested-action，
+   悬停/按下同样保持 accent */
+QDialogButtonBox QPushButton {
+    border-radius: 16px;
+    padding: 7px 20px;
+    min-height: 26px;
+}
+
+QDialogButtonBox QPushButton:default {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border: none;
+}
+
+QDialogButtonBox QPushButton:default:hover,
+QDialogButtonBox QPushButton:default:pressed {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+QPushButton:disabled {
+    background-color: palette(alternate-base);
+    color: palette(mid);
+}
+
+QToolButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 1px;
+    color: palette(text);
+    min-height: 20px;
+}
+
+QToolButton:hover {
+    background-color: palette(alternate-base);
+}
+
+QToolButton:pressed {
+    background-color: palette(dark);
+}
+
+QToolButton:checked {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+    border: none;
+}
+
+QToolButton:checked:hover {
+    background-color: palette(highlight);
+    color: palette(highlighted-text);
+}
+
+QToolButton:disabled {
+    color: palette(mid);
+}
+
+/* 隐藏工具栏按钮的下拉箭头区域，避免显示异常 */
+QToolButton::menu-button {
+    border: none;
+    background: transparent;
+    width: 16px;
+}
+
+/* 工具栏下拉指示器 - 完全隐藏 */
+QToolButton::menu-indicator {
+    image: none;
+    width: 0px;
+    height: 0px;
+}
+
+/* 工具栏分隔线 */
+QToolBar::separator {
+    background: palette(alternate-base);
+    width: 1px;
+    margin: 4px 6px;
+}
+
+/* -----------------------------------------------------------
+   4. 复选框 / 单选钮 (Check & Radio)
+   -----------------------------------------------------------
+   Adwaita 语义：
+   - 复选框为圆角方形，未选中细灰框；选中 accent 蓝底 +
+     白色对勾（对勾由 check-white.svg 以 image 叠绘）
+   - 单选钮为正圆，未选中细灰环；选中 accent 粗环 +
+     白色圆心（径向渐变绘制，指示器尺寸选中前后恒定，
+     且避开粗边框被圆角渲染压成方形的坑）
+*/
+
+QCheckBox, QRadioButton {
+    background: transparent;
+    spacing: 8px;
+    color: palette(text);
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid palette(mid);
+    border-radius: 4px;
+    background: palette(base);
+}
+
+QCheckBox::indicator:hover {
+    border: 1px solid palette(dark);
+}
+
+QCheckBox::indicator:checked,
+QCheckBox::indicator:checked:hover {
+    background: palette(highlight);
+    border: 1px solid palette(highlight);
+    border-radius: 6px;
+    image: url(/home/brokenshine/.config/qt6ct/qss/check-white.svg);
+}
+
+QCheckBox::indicator:disabled {
+    border: 1px solid palette(alternate-base);
+    background: palette(alternate-base);
+}
+
+QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid palette(mid);
+    border-radius: 8px;
+    background: palette(base);
+}
+
+QRadioButton::indicator:hover {
+    border: 1px solid palette(dark);
+}
+
+/* 选中：accent 粗环 + 白色圆心。QSS 渐变 stop 不支持
+   palette()，故用粗边框画环；content 尺寸按 border 补偿，
+   保证指示器选中前后总尺寸恒定且外缘为正圆 */
+QRadioButton::indicator:checked,
+QRadioButton::indicator:checked:hover {
+    width: 6px;
+    height: 6px;
+    border: 5px solid palette(highlight);
+    border-radius: 8px;
+    background: palette(bright-text);
+}
+
+QRadioButton::indicator:disabled {
+    border: 1px solid palette(alternate-base);
+    background: palette(alternate-base);
+}
+
+/* -----------------------------------------------------------
+   5. 滑块 (Slider)
+   -----------------------------------------------------------
+   Adwaita 滑块：4px 细圆角轨道 + accent 已填充段 +
+   圆形 handle
+*/
+
+QSlider {
+    background: transparent;
+    min-height: 24px;
+}
+
+QSlider::groove:horizontal {
+    height: 4px;
+    background: palette(alternate-base);
+    border-radius: 2px;
+}
+
+QSlider::sub-page:horizontal {
+    background: palette(highlight);
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    width: 18px;
+    height: 18px;
+    margin: -7px 0;
+    border-radius: 9px;
+    background: palette(window);
+    border: 1px solid palette(mid);
+}
+
+QSlider::handle:horizontal:hover {
+    border: 1px solid palette(highlight);
+}
+
+QSlider::groove:vertical {
+    width: 4px;
+    background: palette(alternate-base);
+    border-radius: 2px;
+}
+
+QSlider::add-page:vertical {
+    background: palette(highlight);
+    border-radius: 2px;
+}
+
+QSlider::handle:vertical {
+    max-width: 18px;
+    max-height: 18px;
+    margin: 0 -7px;
+    border-radius: 9px;
+    background: palette(window);
+    border: 1px solid palette(mid);
+}
+
+/* 禁用：填充段退回轨道色 */
+QSlider::sub-page:horizontal:disabled,
+QSlider::add-page:vertical:disabled {
+    background: palette(alternate-base);
+}
+
+/* -----------------------------------------------------------
+   6. 输入控件 (Input Widgets)
+   -----------------------------------------------------------
+   最新 Adwaita 输入与下拉：底色亮于窗口的中性胶囊面，
+   无边框、10px 圆角；聚焦时 accent 边框，
+   边框 1px→2px 变化用 padding 补偿避免布局跳动
+*/
+
+QLineEdit, QTextEdit, QPlainTextEdit,
+QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: palette(alternate-base);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 6px 10px;
+    min-height: 24px;
+    color: palette(text);
+    selection-background-color: palette(highlight);
+    selection-color: palette(highlighted-text);
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
+QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border: 2px solid palette(highlight);
+    padding: 5px 9px;
+}
+
+QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled,
+QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
+    background-color: palette(window);
+    color: palette(mid);
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left-width: 0px;
+    background: transparent;
+    border-top-right-radius: 10px;
+    border-bottom-right-radius: 10px;
+}
+
+/* -----------------------------------------------------------
+   7. 列表与视图 (Item Views)
+   -----------------------------------------------------------
+   容器为 Adwaita boxed-list 卡片：12px 圆角 + 细边框；
+   列表项为圆角行，悬停与选中一律中性灰（与侧栏一致），
+   蓝色只留给开关语义
+*/
+
+QListView, QTableView, QTreeView {
+    background-color: palette(base);
+    alternate-background-color: palette(window);
+    border: 1px solid palette(alternate-base);
+    border-radius: 12px;
+    outline: none;
+    padding: 4px;
+}
+
+/* 通用列表项：圆角行（含下拉框弹出列表） */
+QAbstractItemView::item {
+    padding: 6px 8px;
+    margin: 1px 2px;
+    border: none;
+    border-radius: 6px;
+}
+
+QAbstractItemView::item:hover {
+    background: palette(alternate-base);
+}
+
+QAbstractItemView::item:selected {
+    background: palette(alternate-base);
+    color: palette(text);
+}
+
+/* 表头样式 */
+QHeaderView::section {
+    padding: 6px 10px;
+    border: none;
+    border-right: 1px solid palette(alternate-base);
+    background-color: palette(window);
+}
+
+QHeaderView::section:hover {
+    background-color: palette(alternate-base);
+}
+
+QTableCornerButton::section {
+    background-color: palette(window);
+    border: none;
+}
+
+/* -----------------------------------------------------------
+   8. 标签页 (Tab Widget)
+   -----------------------------------------------------------
+   Adwaita notebook：灰底标签条上浮起 12px 圆角卡片，
+   选中态不用蓝色
+*/
+
+QTabWidget::pane {
+    border: 1px solid palette(alternate-base);
+    border-radius: 12px;
+    background: palette(base);
+    /* 为标签预留空间 */
+    padding-top: 6px;
+}
+
+QTabBar::tab {
+    background: transparent;
+    color: palette(text);
+    border-radius: 6px;
+    padding: 6px 14px;
+    margin: 2px 2px 4px 2px;
+    border: 1px solid transparent;
+}
+
+QTabBar::tab:hover:!selected {
+    background: palette(alternate-base);
+}
+
+QTabBar::tab:selected {
+    background: palette(window);
+    border: 1px solid palette(alternate-base);
+    color: palette(text);
+}
+
+QTabBar::tab:disabled {
+    color: palette(mid);
+}
+
+/* -----------------------------------------------------------
+   9. 分组框与停靠窗 (Group Box & Dock)
+   -----------------------------------------------------------
+   Adwaita 卡片式分组：细边框 + 12px 圆角；
+   不设背景色——Noctalia 调色板中 window 与 base 同值，
+   设底色无法产生卡片层次，靠边框勾勒
+*/
+
+QGroupBox {
+    border: 1px solid palette(alternate-base);
+    border-radius: 12px;
+    padding-top: 24px;
+    margin-top: 12px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    left: 10px;
+    color: palette(text);
+}
+
+QDockWidget::title {
+    background: palette(window);
+    padding: 6px 10px;
+    border: none;
+}
+
+/* -----------------------------------------------------------
+   10. 滚动条 (Scroll Bars)
+   -----------------------------------------------------------
+   Adwaita 细滚动条：轨道透明，仅显示圆润 handle
+*/
+
+QScrollBar:vertical {
+    border: none;
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: palette(mid);
+    min-height: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: palette(dark);
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical,
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    height: 0px;
+    background: none;
+}
+
+QScrollBar:horizontal {
+    border: none;
+    background: transparent;
+    height: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background: palette(mid);
+    min-width: 20px;
+    border-radius: 4px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: palette(dark);
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    width: 0px;
+    background: none;
+}
+
+/* -----------------------------------------------------------
+   11. 标签与进度条 (Label & Progress Bar)
+   -----------------------------------------------------------
+   标签保持透明不遮挡父容器；
+   进度条为细圆角轨道 + accent 填充
+*/
+
+QLabel {
+    background-color: transparent;
+    border: none;
+    background: none;
+}
+
+QProgressBar {
+    background: palette(alternate-base);
+    border: none;
+    border-radius: 4px;
+    min-height: 8px;
+    text-align: center;
+    color: transparent;
+}
+
+QProgressBar::chunk {
+    background: palette(highlight);
+    border-radius: 4px;
+}
+
+QProgressBar::chunk:disabled {
+    background: palette(alternate-base);
+}
