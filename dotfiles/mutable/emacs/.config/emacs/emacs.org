@@ -2791,9 +2791,11 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
   (define-key ghostel-mode-map (kbd "C-h") #'custom/ghostel-send-ctrl-h))
 
 (defconst custom:terminal-side-action
-  '((display-buffer-in-side-window
-     (side . bottom) (slot . 0) (window-height . 0.33)))
-  "终端面板的 display-buffer action:底部 side-window,高度 1/3。")
+  '(display-buffer-in-side-window
+    (side . bottom) (slot . 0) (window-height . 0.33))
+  "终端面板的 display-buffer action:底部 side-window,高度 1/3。
+action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
+条目误解析为函数列表,静默回落 side 默认值 bottom 与默认高度。")
 
 (defun custom--terminal-existing-buffer ()
   "返回当前已存在的普通 ghostel buffer(非 agent 后端),无则 nil。"
@@ -3383,6 +3385,84 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (custom/bind "C-x p O" #'custom/open-directory "目录浏览" "项目")
 (custom/bind "C-x p k" #'project-kill-buffers "关闭项目缓冲区" "项目")
 (custom/bind "C-x p D" #'project-dired "项目根 Dired" "项目")
+#+end_src
+
+** 左侧 Dired 面板
+:PROPERTIES:
+:CUSTOM_ID: panel-dired
+:END:
+
+仿 Zed project panel 的左侧文件面板:项目根 Dired 固定在左侧 side-window(宽度 0.2),默认隐藏文件详情以适配窄列。RET / mouse-2 / =^= 语义与 Zed 一致——文件在主编辑窗口打开且面板保留,目录(含 =..=)在面板内原地切换(显式 =set-window-buffer= 替换面板 buffer 并 kill 旧 buffer,不堆积;side-window 会拒绝 =find-alternate-file= 内部的 =switch-to-buffer=,故不可用它),面板定制由 =custom/dired--panel-setup= 在每次替换后重放。=C-c w= 前缀声明与总开关见 [[#keybindings][前缀键体系]]。
+
+#+begin_src emacs-lisp
+(defconst custom:dired-side-action
+  '(display-buffer-in-side-window
+    (side . left) (slot . 0) (window-width . 0.2))
+  "左侧 Dired 面板的 display-buffer action:宽度 0.2(Zed project panel 比例)。")
+
+(defun custom/dired--panel-setup (buffer)
+  "对 BUFFER 应用面板定制:窄视图、header 路径与面板访问键。
+所有 Dired buffer 共享 `dired-mode-map',面板 remap 必须落在 buffer
+私有的 keymap copy 上,否则会污染其他 Dired buffer。"
+  (with-current-buffer buffer
+    (dired-hide-details-mode 1)
+    (setq-local header-line-format 'default-directory)
+    (use-local-map (copy-keymap dired-mode-map))
+    (define-key (current-local-map) [remap dired-find-file]
+                #'custom/dired-find-file-in-main)
+    (define-key (current-local-map) [remap dired-up-directory]
+                #'custom/dired-up-in-panel)
+    (define-key (current-local-map) [mouse-2]
+                #'custom/dired-mouse-find-file-in-main)))
+
+(defun custom/dired--panel-visit (filename)
+  "面板访问语义:目录原地替换面板 buffer,文件进主编辑窗口。
+目录不能走 `find-alternate-file':其内部 `switch-to-buffer' 会被
+side-window 拒绝而把新 Dired 投到其他窗口,故显式 `set-window-buffer'
+替换面板窗口并 kill 旧面板 buffer;`dired-noselect' 天然复用已存在的
+同目录 Dired buffer,不堆积。"
+  (if (not (file-directory-p filename))
+      (custom/display-buffer-in-main-window (find-file-noselect filename))
+    (let* ((old-buf (current-buffer))
+           (new-buf (dired-noselect filename)))
+      (unless (eq new-buf old-buf)
+        (custom/dired--panel-setup new-buf)
+        (set-window-buffer nil new-buf)
+        (set-buffer new-buf)
+        (kill-buffer old-buf)))))
+
+(defun custom/dired-find-file-in-main ()
+  "面板版 RET:目录原地替换面板 buffer,文件进主编辑窗口。
+side-window 内直接 RET 会把文件开进面板,故走本命令改写目标窗口。"
+  (interactive)
+  (custom/dired--panel-visit (dired-get-filename)))
+
+(defun custom/dired-up-in-panel ()
+  "面板内回到上级目录(原地替换,保持面板定制)。"
+  (interactive)
+  (custom/dired--panel-visit
+   (file-name-directory (directory-file-name (dired-current-directory)))))
+
+(defun custom/dired-mouse-find-file-in-main (event)
+  "面板版 mouse-2:与 `custom/dired-find-file-in-main' 同语义。
+内置 <mouse-2> 的 other-window 变体会把文件开进面板或新窗口,不走它。"
+  (interactive "e")
+  (let ((window (posn-window (event-end event)))
+        (pos (posn-point (event-end event))))
+    (unless (windowp window) (error "No file chosen"))
+    (select-window window)
+    (save-excursion
+      (goto-char pos)
+      (custom/dired--panel-visit (dired-get-filename)))))
+
+(defun custom/panel-dired ()
+  "打开项目根(不在项目则当前目录)的左侧 Dired 面板。
+有已显示的面板窗口则聚焦;buffer 存在则重新显示;无则新建。
+窄面板默认隐藏文件详情,header-line 显示完整路径。"
+  (interactive)
+  (let ((buf (dired-noselect (custom/project-root-or-default))))
+    (custom/dired--panel-setup buf)
+    (custom/display-or-focus buf custom:dired-side-action t)))
 #+end_src
 
 * Org 与知识库
@@ -4005,7 +4085,8 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键位。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾),不在此处集中。
 
 + *前缀声明* :: =custom/declare-binding-prefix= 是 Dashboard 前缀摘要的唯一来源,必须集中。前缀下具体绑定随其功能域。
-+ *=C-x*= / *=M-s*= / *=C-c w*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 窗口 / 终端 / 帮助),无单一归属,集中在本块。
++ *=C-x*= / *=M-s*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 帮助),无单一归属,集中在本块。
++ *=C-c w*= :: 窗口与面板体系: =f= / =t= / =a= 复用各功能域的打开命令(左侧 Dired / 底部 ghostel / 右侧 agent-shell), =T= 为三面板布局总开关, =u= / =r= 兑现 winner 手动绑定(见 [[#which-key-runtime]] 的 =winner-dont-bind-my-keys= 说明)。
 
 #+begin_src emacs-lisp
 (dolist (prefix
@@ -4021,7 +4102,8 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
            ("C-c m" . "补全框架")
            ("C-c f" . "格式化")
            ("C-c z" . "折叠")
-           ("C-c h" . "帮助")))
+           ("C-c h" . "帮助")
+           ("C-c w" . "窗口与面板")))
   (custom/declare-binding-prefix (car prefix) (cdr prefix)))
 
 (custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
@@ -4045,6 +4127,47 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "C-c h m" #'describe-mode "查看模式" "帮助")
 (custom/bind "C-c h ?" #'custom/show-help "快捷键帮助" "帮助")
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
+
+;; C-c w 面板体系:左 Dired([[#panel-dired]])/ 底终端([[#terminal]])/ 右 Agent
+;; ([[#applications]])各自复用其功能域的打开命令,这里只承载跨域的布局总开关。
+(defun custom/panels--agent-buffers ()
+  "返回全部 agent-shell-mode buffer 列表(可能为空)。
+扫描 `buffer-list' 而非调 agent-shell API,避免强制加载惰性包。
+收集全部而非首个:多 agent 会话并存时,总开关要能一并关闭。"
+  (cl-remove-if-not
+   (lambda (buf)
+     (with-current-buffer buf (derived-mode-p 'agent-shell-mode)))
+   (buffer-list)))
+
+(defun custom/panels-toggle ()
+  "一键开关三面板布局(左 Dired / 底终端 / 右 Agent)。
+任一面板已显示则全部隐藏(缓冲区保留,终端与 agent 会话不中断);
+全部隐藏时重新打开。开关后焦点均回到主编辑窗口(Zed dock 行为)。"
+  (interactive)
+  (let ((buffers (cons (dired-noselect (custom/project-root-or-default))
+                       (cons (custom--terminal-existing-buffer)
+                             (custom/panels--agent-buffers)))))
+    (if (cl-some
+         (lambda (buf) (and (buffer-live-p buf) (get-buffer-window buf)))
+         buffers)
+        (dolist (buf buffers)
+          (when-let* ((win (and (buffer-live-p buf)
+                                (get-buffer-window buf))))
+            (delete-window win)))
+      (custom/panel-dired)
+      (custom/open-terminal)
+      (agent-shell)))
+  (when-let* ((main (cl-find-if
+                     (lambda (w) (not (window-parameter w 'window-side)))
+                     (window-list (selected-frame)))))
+    (select-window main)))
+
+(custom/bind "C-c w f" #'custom/panel-dired "文件面板" "窗口与面板")
+(custom/bind "C-c w t" #'custom/open-terminal "终端面板" "窗口与面板")
+(custom/bind "C-c w a" #'agent-shell "Agent 面板" "窗口与面板")
+(custom/bind "C-c w T" #'custom/panels-toggle "三面板总开关" "窗口与面板")
+(custom/bind "C-c w u" #'winner-undo "撤销窗口变更" "窗口与面板")
+(custom/bind "C-c w r" #'winner-redo "重做窗口变更" "窗口与面板")
 #+end_src
 
 ** Completion 框架
@@ -4267,10 +4390,19 @@ Guix 环境检测、daemon 预热、生活应用入口、Dashboard、Emacs 31 �
 
 AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
 
+面板路由:=agent-shell-display-action= 是包内所有显示路径( =agent-shell--display-buffer= )的唯一 action 源,且显式 action 优先于 =display-buffer-alist= ,故在此设置为右侧 side-window(宽度 0.25,Zed assistant panel 比例),无需注册 alist 规则。
+
 #+begin_src emacs-lisp
+(defconst custom:agent-side-action
+  '(display-buffer-in-side-window
+    (side . right) (slot . 0) (window-width . 0.25))
+  "Agent Shell 面板的 display-buffer action:右侧 side-window,宽度 0.25。")
+
 (use-package agent-shell
   :defer t
-  :commands (agent-shell agent-shell-toggle))
+  :commands (agent-shell agent-shell-toggle)
+  :config
+  (setq agent-shell-display-action custom:agent-side-action))
 
 (custom/declare-binding-group "C-c a a" "Agent Shell")
 (custom/bind "C-c a a a" #'agent-shell "Agent Shell" "生活应用")
