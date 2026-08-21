@@ -3428,10 +3428,12 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 
 (defun custom/dired--panel-visit (filename)
   "面板访问语义:目录原地替换面板 buffer,文件进主编辑窗口。
-目录不能走 `find-alternate-file':其内部 `switch-to-buffer' 会被
-side-window 拒绝而把新 Dired 投到其他窗口,故显式 `set-window-buffer'
-替换面板窗口并 kill 旧面板 buffer;`dired-noselect' 天然复用已存在的
-同目录 Dired buffer,不堆积。"
+FILENAME 须为绝对路径(`dired-get-file-for-visit' 对 =..= 返回
+相对名,调用前展开)。目录不能走 `find-alternate-file':其内部
+`switch-to-buffer' 会被 side-window 拒绝而把新 Dired 投到其他窗口,
+故显式 `set-window-buffer' 替换面板窗口并 kill 旧面板 buffer;
+`dired-noselect' 天然复用已存在的同目录 Dired buffer,不堆积。"
+  (setq filename (expand-file-name filename))
   (if (not (file-directory-p filename))
       (custom/display-buffer-in-main-window (find-file-noselect filename))
     (let* ((old-buf (current-buffer))
@@ -3444,9 +3446,11 @@ side-window 拒绝而把新 Dired 投到其他窗口,故显式 `set-window-buffe
 
 (defun custom/dired-find-file-in-main ()
   "面板版 RET:目录原地替换面板 buffer,文件进主编辑窗口。
-side-window 内直接 RET 会把文件开进面板,故走本命令改写目标窗口。"
+side-window 内直接 RET 会把文件开进面板,故走本命令改写目标窗口。
+取行文件名必须用 `dired-get-file-for-visit':裸 `dired-get-filename'
+对 =.= / =..= 行会抛 \"Cannot operate on '.' or '..'\"。"
   (interactive)
-  (custom/dired--panel-visit (dired-get-filename)))
+  (custom/dired--panel-visit (dired-get-file-for-visit)))
 
 (defun custom/dired-up-in-panel ()
   "面板内回到上级目录(原地替换,保持面板定制)。"
@@ -3464,7 +3468,7 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
     (select-window window)
     (save-excursion
       (goto-char pos)
-      (custom/dired--panel-visit (dired-get-filename)))))
+      (custom/dired--panel-visit (dired-get-file-for-visit)))))
 
 (defun custom/panel-dired ()
   "打开项目根(不在项目则当前目录)的左侧 Dired 面板。
