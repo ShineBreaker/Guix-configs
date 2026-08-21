@@ -14,7 +14,7 @@ dist
 .pi-lens
 plans/
 .sisyphus
-.zcode
+.zcode/plans
 
 .keys/
 
