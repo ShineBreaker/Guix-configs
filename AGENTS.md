@@ -91,6 +91,17 @@ source/config.org → blue rebuild → tmp/config.scm → guix system reconfigur
 6. 优先使用 `blue help` 内可以使用的相关命令
 </critical>
 
+## Scheme 代码规范（R6RS 中括号）
+
+所有 Scheme 代码遵循 [R6RS 附录 C](https://r6rs.org/final/html/r6rs-app/r6rs-app-Z-H-5.html#node_chap_C) 的方括号惯例：方括号与圆括号语法等价，但**只用于「否则会出现两个连续左括号」的句法位置**，其余位置一律圆括号：
+
+- `cond` / `case` / `guard` 的子句：`(cond [(eof-object? c) #f] [else ...])`
+- `let` / `let*` / `letrec` / `letrec*` / `let-values` / `do` 的每个绑定：`(let ([x 1] [y 2]) body)`（绑定列表整体仍是圆括号）
+- `case-lambda` / `syntax-rules` / `syntax-case` 的子句
+- 本仓库延伸：Guile `match` / `match-lambda` 的子句同样用方括号：`(match x [(a b) ...] [_ ...])`
+
+注意：函数调用、`lambda` 参数表、quote 数据等**不用**方括号。
+
 ## 引导（新机安装）
 
 官方 Guix ISO 上只有 `blue` 需要预先引导。支撑文件：`source/manifest.scm`（声明引导依赖）和 `tools/bootstrap.sh`（锁定频道 + 提供可执行 `blue`）。

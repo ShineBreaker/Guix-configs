@@ -725,7 +725,7 @@
         [file-count (%secret-count-files dir)])
     (for-each
      (match-lambda
-       ((name . pattern)
+       [(name . pattern)
         (let ([hits
                (%pipe->lines
                 (string-append (%secret-grep-options "grep -HrnIE")
@@ -747,7 +747,7 @@
                                  (substring content 0 80)
                                  content))
                      (set! found (+ found 1)))))))
-           hits))))
+           hits))])
      patterns)
     (cond
      [(zero? found)
@@ -1396,14 +1396,14 @@
    (help "移除仓库内的 __pycache__、*.elc、*.o、*.a、*.so 文件以及 Emacs 运行时缓存目录。"))
   (for-each
    (match-lambda
-     ((target type)
+     [(target type)
       (if (eq? type 'directory)
           (when (file-exists? target)
             (format #t "移除 ~a~%" target)
             (delete-file-recursively target))
           (%run `("find" ,%repo-root "-type" "f" "-name" ,target
                   "-not" "-path" "*/.git/*"
-                  "-print" "-delete")))))
+                  "-print" "-delete")))])
    `(("__pycache__" directory)
      ("*.elc" file)
      ("*.o" file)

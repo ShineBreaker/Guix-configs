@@ -30,9 +30,9 @@
 
 (define (tmux-cmd . args)
   "执行 tmux 命令，返回 (exit-code . output)。"
-  (let* ((port (apply open-pipe* OPEN_READ "tmux" args))
-         (output (read-string port))
-         (status (close-pipe port)))
+  (let* ([port (apply open-pipe* OPEN_READ "tmux" args)]
+         [output (read-string port)]
+         [status (close-pipe port)])
     (cons status (string-trim-right output))))
 
 (define (tmux-sidebar-pane? title start-command)
@@ -44,8 +44,8 @@
 (define (collect-state)
   "用一次 list-panes 返回 (context pane-fields...)。
 CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
-  (let* ((current-pane (or (getenv "TMUX_PANE") ""))
-         (format-string
+  (let* ([current-pane (or (getenv "TMUX_PANE") "")]
+         [format-string
           (string-append
            "#{pane_id}\t#{session_name}\t#{window_index}\t#{window_id}\t"
            "#{window_name}\t#{pane_current_path}\t#{pane_current_command}\t"
@@ -54,25 +54,25 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
            "#{@sidebar_window_title}\t#{@sidebar_window_desc}\t"
            "#{@tabby_pane_title}\t#{@sidebar_collapsed_sessions}\t"
            "#{@sidebar_collapsed_groups}\t#{pane_width}\t#{@sidebar_width}\t"
-           "#{@status_git_branch}\t__END__"))
-         (result (tmux-cmd "list-panes" "-a" "-F" format-string)))
+           "#{@status_git_branch}\t__END__")]
+         [result (tmux-cmd "list-panes" "-a" "-F" format-string)])
     (if (not (zero? (car result)))
         #f
-        (let loop ((raw-lines (string-split (cdr result) #\newline))
-                   (context #f)
-                   (panes '()))
+        (let loop ([raw-lines (string-split (cdr result) #\newline)]
+                   [context #f]
+                   [panes '()])
           (if (null? raw-lines)
               (list context (reverse panes))
               (match (string-split (car raw-lines) #\tab)
-                ((pane-id session idx win-id name path command active title pid pane-idx
+                [(pane-id session idx win-id name path command active title pid pane-idx
                           start ai-title custom-title custom-desc locked-title
                           collapsed-sessions collapsed-groups pane-width option-width
                           status-branch _end)
                  (cond
-                  ((string=? pane-id current-pane)
-                   (let ((context* (list session idx collapsed-sessions collapsed-groups
+                  [(string=? pane-id current-pane)
+                   (let ([context* (list session idx collapsed-sessions collapsed-groups
                                          pane-width option-width status-branch
-                                         active)))
+                                         active)])
                      (if (tmux-sidebar-pane? title start)
                          (loop (cdr raw-lines) context* panes)
                          (loop (cdr raw-lines)
@@ -80,17 +80,17 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                                (cons (list session idx win-id name path command active
                                            title pid pane-idx ai-title custom-title
                                            custom-desc locked-title)
-                                     panes)))))
-                  ((tmux-sidebar-pane? title start)
-                   (loop (cdr raw-lines) context panes))
-                  (else
+                                     panes))))]
+                  [(tmux-sidebar-pane? title start)
+                   (loop (cdr raw-lines) context panes)]
+                  [else
                    (loop (cdr raw-lines)
                          context
                          (cons (list session idx win-id name path command active
                                      title pid pane-idx ai-title custom-title
                                      custom-desc locked-title)
-                               panes)))))
-                (_ (loop (cdr raw-lines) context panes))))))))
+                               panes))])]
+                [_ (loop (cdr raw-lines) context panes)]))))))
 
 ;; === ANSI ===
 
@@ -108,7 +108,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 ;; === Width ===
 
 (define (string->positive-integer s fallback)
-  (let ((n (and s (string->number s))))
+  (let ([n (and s (string->number s))])
     (if (and n (> n 0)) n fallback)))
 
 ;; 宽度缓存：每个 Guile 进程（即每次渲染/点击处理）内只计算一次，
@@ -116,9 +116,9 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define %sidebar-width-value 31)
 
 (define (set-sidebar-width! pane-width option-width)
-  (let* ((pane (string->positive-integer pane-width 0))
-         (option (string->positive-integer option-width 32))
-         (width (if (> pane 0) pane option)))
+  (let* ([pane (string->positive-integer pane-width 0)]
+         [option (string->positive-integer option-width 32)]
+         [width (if (> pane 0) pane option)])
     (set! %sidebar-width-value (max 18 (- width 1)))))
 
 (define (sidebar-width) %sidebar-width-value)
@@ -162,9 +162,9 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
   (tmux-cmd "set" "-g" name (string-join values ",")))
 
 (define (toggle-list-value! option current-value key)
-  (let ((values (if (string-null? current-value)
+  (let ([values (if (string-null? current-value)
                     '()
-                    (string-split current-value #\,))))
+                    (string-split current-value #\,))])
     (set-option-list! option
                       (if (member key values)
                           (delete key values)
@@ -177,15 +177,15 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
   (string-append "g:" (number->string (string-hash (string-append session ":" group-key)) 16)))
 
 (define (basename-of-path path)
-  (let ((idx (string-rindex path #\/)))
+  (let ([idx (string-rindex path #\/)])
     (if idx (substring path (+ idx 1)) path)))
 
 (define (char-width c)
-  (let ((n (char->integer c))
-        (category (char-general-category c)))
+  (let ([n (char->integer c)]
+        [category (char-general-category c)])
     (cond
-     ((memq category '(Mn Me Cf)) 0)
-     ((or (and (>= n #x3400) (<= n #x4DBF))
+     [(memq category '(Mn Me Cf)) 0]
+     [(or (and (>= n #x3400) (<= n #x4DBF))
           (and (>= n #x4E00) (<= n #x9FFF))
           (and (>= n #xF900) (<= n #xFAFF))
           (and (>= n #xAC00) (<= n #xD7AF))
@@ -193,8 +193,8 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
           (and (>= n #xFFE0) (<= n #xFFE6))
           (and (>= n #x20000) (<= n #x2FFFD))
           (and (>= n #x30000) (<= n #x3FFFD)))
-      2)
-     (else 1))))
+      2]
+     [else 1])))
 
 (define (string-width text)
   (fold (lambda (c width) (+ width (char-width c)))
@@ -202,24 +202,24 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
         (string->list text)))
 
 (define (truncate-string text max-width)
-  (let ((ellipsis "…"))
+  (let ([ellipsis "…"])
     (cond
-     ((<= max-width 0) "")
-     ((<= (string-width text) max-width) text)
-     ((= max-width 1) ellipsis)
-     (else
-      (let loop ((chars (string->list text))
-                 (width 0)
-                 (result '()))
+     [(<= max-width 0) ""]
+     [(<= (string-width text) max-width) text]
+     [(= max-width 1) ellipsis]
+     [else
+      (let loop ([chars (string->list text)]
+                 [width 0]
+                 [result '()])
         (if (or (null? chars)
                 (> (+ width (char-width (car chars))) (- max-width 1)))
             (string-append (list->string (reverse result)) ellipsis)
             (loop (cdr chars)
                   (+ width (char-width (car chars)))
-                  (cons (car chars) result))))))))
+                  (cons (car chars) result))))])))
 
 (define (pad-string text width)
-  (let ((padding (- width (string-width text))))
+  (let ([padding (- width (string-width text))])
     (if (positive? padding)
         (string-append text (make-string padding #\space))
         text)))
@@ -242,66 +242,66 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (gitdir-from-marker directory marker)
   (cond
-   ((directory-path? marker) marker)
-   ((file-exists? marker)
-    (let ((content (string-trim-both (call-with-input-file marker read-string))))
+   [(directory-path? marker) marker]
+   [(file-exists? marker)
+    (let ([content (string-trim-both (call-with-input-file marker read-string))])
       (and (string-prefix? "gitdir: " content)
-           (let* ((value (string-drop content 8))
-                  (path (if (absolute-path? value)
+           (let* ([value (string-drop content 8)]
+                  [path (if (absolute-path? value)
                             value
-                            (string-append directory "/" value))))
-             (false-if-exception (canonicalize-path path))))))
-   (else #f)))
+                            (string-append directory "/" value))])
+             (false-if-exception (canonicalize-path path)))))]
+   [else #f]))
 
 (define (find-git-head path)
-  (let* ((now (get-internal-real-time))
-         (cached (hash-ref %git-head-paths path #f)))
+  (let* ([now (get-internal-real-time)]
+         [cached (hash-ref %git-head-paths path #f)])
     (if (and cached (< now (car cached)))
         (cdr cached)
-        (let* ((start (false-if-exception (canonicalize-path path)))
-               (head
+        (let* ([start (false-if-exception (canonicalize-path path))]
+               [head
                 (and start
-                     (let loop ((directory start))
-                       (let* ((marker (string-append directory "/.git"))
-                              (gitdir (gitdir-from-marker directory marker)))
+                     (let loop ([directory start])
+                       (let* ([marker (string-append directory "/.git")]
+                              [gitdir (gitdir-from-marker directory marker)])
                          (cond
-                          (gitdir
-                          (let ((candidate (string-append gitdir "/HEAD")))
-                             (and (file-exists? candidate) candidate)))
-                          ((string=? directory "/") #f)
-                          (else
-                           (let ((parent (parent-path directory)))
+                          [gitdir
+                          (let ([candidate (string-append gitdir "/HEAD")])
+                             (and (file-exists? candidate) candidate))]
+                          [(string=? directory "/") #f]
+                          [else
+                           (let ([parent (parent-path directory)])
                              (if (string=? parent directory)
                                  #f
-                                 (loop parent))))))))))
+                                 (loop parent)))]))))])
           (hash-set! %git-head-paths path
                      (cons (+ now git-path-cache-ticks) head))
           head))))
 
 (define (head-content->branch content)
   (cond
-   ((string-prefix? "ref: refs/heads/" content)
-    (let ((branch (string-drop content (string-length "ref: refs/heads/"))))
-      (and (not (string-null? branch)) branch)))
-   ((and (>= (string-length content) 7)
+   [(string-prefix? "ref: refs/heads/" content)
+    (let ([branch (string-drop content (string-length "ref: refs/heads/"))])
+      (and (not (string-null? branch)) branch))]
+   [(and (>= (string-length content) 7)
          (string-every hex-char? content))
-    (substring content 0 7))
-   (else #f)))
+    (substring content 0 7)]
+   [else #f]))
 
 (define (read-git-head path)
-  (let ((head (find-git-head path)))
+  (let ([head (find-git-head path)])
     (and head
          (false-if-exception
-          (let* ((info (stat head))
-                 (stamp (list (stat:mtime info)
+          (let* ([info (stat head)]
+                 [stamp (list (stat:mtime info)
                               (stat:mtimensec info)
-                              (stat:size info)))
-                 (cached (hash-ref %git-branches head #f)))
+                              (stat:size info))]
+                 [cached (hash-ref %git-branches head #f)])
             (if (and cached (equal? (car cached) stamp))
                 (cdr cached)
-                (let* ((content (string-trim-both
-                                 (call-with-input-file head read-string)))
-                       (branch (head-content->branch content)))
+                (let* ([content (string-trim-both
+                                 (call-with-input-file head read-string))]
+                       [branch (head-content->branch content)])
                   (hash-set! %git-branches head (cons stamp branch))
                   branch)))))))
 
@@ -309,44 +309,44 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define cmdline-cache-ticks (* 2 internal-time-units-per-second))
 
 (define (process-argv pid)
-  (let ((file (string-append "/proc/" pid "/cmdline")))
+  (let ([file (string-append "/proc/" pid "/cmdline")])
     (and (file-exists? file)
-         (let ((args (filter (lambda (arg) (not (string-null? arg)))
+         (let ([args (filter (lambda (arg) (not (string-null? arg)))
                              (string-split (call-with-input-file file read-string)
-                                           #\nul))))
+                                           #\nul))])
            (and (pair? args) args)))))
 
 (define (child-pids pid)
-  (let ((file (string-append "/proc/" pid "/task/" pid "/children")))
+  (let ([file (string-append "/proc/" pid "/task/" pid "/children")])
     (if (file-exists? file)
-        (let ((raw (string-trim-both (call-with-input-file file read-string))))
+        (let ([raw (string-trim-both (call-with-input-file file read-string))])
           (if (string-null? raw)
               '()
               (string-split raw #\space)))
         '())))
 
 (define (foreground-argv/uncached pid)
-  (let loop ((queue (if (nonempty pid) (list pid) '()))
-             (last #f)
-             (seen '()))
+  (let loop ([queue (if (nonempty pid) (list pid) '())]
+             [last #f]
+             [seen '()])
     (if (null? queue)
         last
-        (let* ((pid* (car queue))
-               (rest (cdr queue)))
+        (let* ([pid* (car queue)]
+               [rest (cdr queue)])
           (if (member pid* seen)
               (loop rest last seen)
-              (let ((argv (process-argv pid*))
-                    (children (child-pids pid*)))
+              (let ([argv (process-argv pid*)]
+                    [children (child-pids pid*)])
                 (loop (append children rest)
                       (or argv last)
                       (cons pid* seen))))))))
 
 (define (foreground-argv pid)
-  (let* ((now (get-internal-real-time))
-         (cached (and (nonempty pid) (hash-ref %cmdline-cache pid #f))))
+  (let* ([now (get-internal-real-time)]
+         [cached (and (nonempty pid) (hash-ref %cmdline-cache pid #f))])
     (if (and cached (< now (car cached)))
         (cdr cached)
-        (let ((argv (foreground-argv/uncached pid)))
+        (let ([argv (foreground-argv/uncached pid)])
           (when (nonempty pid)
             (hash-set! %cmdline-cache pid
                        (cons (+ now cmdline-cache-ticks) argv)))
@@ -355,21 +355,21 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define (shorten-argv argv command)
   (if (not (pair? argv))
       ""
-      (let* ((raw-program (basename-of-path (car argv)))
-             (program (if (string-prefix? "-" raw-program)
+      (let* ([raw-program (basename-of-path (car argv))]
+             [program (if (string-prefix? "-" raw-program)
                           (string-drop raw-program 1)
-                          raw-program))
-             (args (cdr argv))
-             (trimmed-args (filter (lambda (arg)
+                          raw-program)]
+             [args (cdr argv)]
+             [trimmed-args (filter (lambda (arg)
                                      (not (member arg '("--login" "-l" "-i"))))
-                                   args))
-             (short (string-join (cons program (take trimmed-args (min 3 (length trimmed-args)))) " ")))
+                                   args)]
+             [short (string-join (cons program (take trimmed-args (min 3 (length trimmed-args)))) " ")])
         short)))
 
 (define (display-title fields)
-  (let* ((name (row-window-name fields))
-         (command (row-command fields))
-         (pane-title (row-pane-title fields)))
+  (let* ([name (row-window-name fields)]
+         [command (row-command fields)]
+         [pane-title (row-pane-title fields)])
     (or (nonempty (row-custom-title fields))
         (nonempty (row-ai-title fields))
         (nonempty (row-locked-pane-title fields))
@@ -380,46 +380,46 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (display-desc fields)
   (or (nonempty (row-custom-desc fields))
-      (let* ((path (row-path fields))
-             (command (row-command fields))
-             (cmdline (shorten-argv (foreground-argv (row-pane-pid fields)) command))
-             (path-label (basename-display path)))
+      (let* ([path (row-path fields)]
+             [command (row-command fields)]
+             [cmdline (shorten-argv (foreground-argv (row-pane-pid fields)) command)]
+             [path-label (basename-display path)])
         (cond
-         ((and (nonempty cmdline) (not (string=? cmdline command)))
-          (format #f "~a · ~a" path-label cmdline))
-         ((nonempty path-label) path-label)
-         (else "")))))
+         [(and (nonempty cmdline) (not (string=? cmdline command)))
+          (format #f "~a · ~a" path-label cmdline)]
+         [(nonempty path-label) path-label]
+         [else ""]))))
 
 (define (format-pane-title* fields available-width)
-  (let* ((idx (row-index fields))
-         (title-text (display-title fields))
-         (pane-idx (row-pane-index fields))
-         (number (if (nonempty pane-idx) pane-idx idx))
-         (number-part (format #f "~a " number))
-         (label-width (max 1 (- available-width (string-width number-part))))
-         (base (truncate-string title-text label-width)))
+  (let* ([idx (row-index fields)]
+         [title-text (display-title fields)]
+         [pane-idx (row-pane-index fields)]
+         [number (if (nonempty pane-idx) pane-idx idx)]
+         [number-part (format #f "~a " number)]
+         [label-width (max 1 (- available-width (string-width number-part)))]
+         [base (truncate-string title-text label-width)])
     (truncate-string (format #f "~a~a" number-part base)
                      available-width)))
 
 (define (format-tab-title* window available-width)
   (match window
-    ((_key session idx name _rep-fields panes)
-     (let* ((count (length panes))
-            (suffix (format #f " [~a]" count))
-            (available (max 4 (- available-width
+    [(_key session idx name _rep-fields panes)
+     (let* ([count (length panes)]
+            [suffix (format #f " [~a]" count)]
+            [available (max 4 (- available-width
                                  (string-width idx)
                                  1
-                                 (string-width suffix))))
-            (base (truncate-string name available)))
+                                 (string-width suffix)))]
+            [base (truncate-string name available)])
        (truncate-string (format #f "~a ~a~a" idx base suffix)
-                        available-width)))))
+                        available-width))]))
 
 (define (emit-line text)
   "输出一行文本，填充到侧栏宽度、清除行尾残留、换行。"
-  (let* ((w (sidebar-width))
-         (text* (if (> (string-width text) w)
+  (let* ([w (sidebar-width)]
+         [text* (if (> (string-width text) w)
                     (truncate-string text w)
-                    text)))
+                    text)])
     (display (pad-string text* w))
     (display ansi-erase-line))   ;; 清除窗口缩窄时右侧的旧字符
   (newline))
@@ -432,51 +432,51 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
     (emit-line text)
     (when (or cursor? color bold?) (display ansi-reset)))
   (match row
-    ((text _action color bold?) (emit text color bold?))
-    ((text _action color) (emit text color #f))
-    ((text _action) (emit text #f #f))))
+    [(text _action color bold?) (emit text color bold?)]
+    [(text _action color) (emit text color #f)]
+    [(text _action) (emit text #f #f)]))
 
 (define (center-text text width)
-  (let* ((text* (truncate-string text width))
-         (tw (string-width text*))
-         (left (max 0 (quotient (- width tw) 2)))
-         (right (max 0 (- width tw left))))
+  (let* ([text* (truncate-string text width)]
+         [tw (string-width text*)]
+         [left (max 0 (quotient (- width tw) 2))]
+         [right (max 0 (- width tw left))])
     (string-append (make-string left #\space) text* (make-string right #\space))))
 
 ;; === Grouping ===
 
 (define (trim-trailing-slashes path)
-  (let loop ((end (string-length path)))
+  (let loop ([end (string-length path)])
     (cond
-     ((<= end 1) (substring path 0 end))
-     ((char=? (string-ref path (- end 1)) #\/) (loop (- end 1)))
-     (else (substring path 0 end)))))
+     [(<= end 1) (substring path 0 end)]
+     [(char=? (string-ref path (- end 1)) #\/) (loop (- end 1))]
+     [else (substring path 0 end)])))
 
 (define (parent-path path)
-  (let* ((clean (trim-trailing-slashes path))
-         (home (or (getenv "HOME") "")))
+  (let* ([clean (trim-trailing-slashes path)]
+         [home (or (getenv "HOME") "")])
     (cond
-     ((or (string=? clean "") (string=? clean "/")) "/")
-     ((string=? clean home) home)
-     (else
-      (let ((idx (string-rindex clean #\/)))
+     [(or (string=? clean "") (string=? clean "/")) "/"]
+     [(string=? clean home) home]
+     [else
+      (let ([idx (string-rindex clean #\/)])
         (cond
-         ((not idx) ".")
-         ((zero? idx) "/")
-         (else (substring clean 0 idx))))))))
+         [(not idx) "."]
+         [(zero? idx) "/"]
+         [else (substring clean 0 idx)]))])))
 
 (define (basename-display path)
-  (let* ((clean (trim-trailing-slashes path))
-         (home (or (getenv "HOME") "")))
+  (let* ([clean (trim-trailing-slashes path)]
+         [home (or (getenv "HOME") "")])
     (cond
-     ((string=? clean "/") "/")
-     ((string=? clean home) "~")
-     (else
-      (let ((idx (string-rindex clean #\/)))
-        (if idx (substring clean (+ idx 1)) clean))))))
+     [(string=? clean "/") "/"]
+     [(string=? clean home) "~"]
+     [else
+      (let ([idx (string-rindex clean #\/)])
+        (if idx (substring clean (+ idx 1)) clean))])))
 
 (define (path-group-key path)
-  (let ((group-path (parent-path path)))
+  (let ([group-path (parent-path path)])
     (list (number->string (string-hash group-path) 16)
           (basename-display group-path)
           group-path)))
@@ -487,11 +487,11 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (window-objects panes)
   "Return ((window-key session index name representative-fields pane-fields) ...)."
-  (let ((windows (make-hash-table))
-        (order '()))
+  (let ([windows (make-hash-table)]
+        [order '()])
     (for-each
      (lambda (fields)
-       (let ((key (window-key fields)))
+       (let ([key (window-key fields)])
          (unless (hash-ref windows key #f)
            (set! order (cons key order))
            (hash-set! windows key
@@ -500,18 +500,18 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                             (row-window-name fields)
                             fields
                             '())))
-         (let* ((window (hash-ref windows key))
-                (session (list-ref window 0))
-                (idx (list-ref window 1))
-                (name (list-ref window 2))
-                (rep-fields (list-ref window 3))
-                (window-panes (list-ref window 4))
-                (rep* (if (row-pane-active? fields) fields rep-fields)))
+         (let* ([window (hash-ref windows key)]
+                [session (list-ref window 0)]
+                [idx (list-ref window 1)]
+                [name (list-ref window 2)]
+                [rep-fields (list-ref window 3)]
+                [window-panes (list-ref window 4)]
+                [rep* (if (row-pane-active? fields) fields rep-fields)])
            (hash-set! windows key
                       (list session idx name rep* (cons fields window-panes))))))
      panes)
     (map (lambda (key)
-           (let ((window (hash-ref windows key)))
+           (let ([window (hash-ref windows key)])
              (list key
                    (list-ref window 0)
                    (list-ref window 1)
@@ -522,34 +522,34 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (group-windows panes)
   "Return ((group-key group-name (window-objects ...)) ...), preserving order."
-  (let ((groups (make-hash-table))
-        (order '()))
+  (let ([groups (make-hash-table)]
+        [order '()])
     (for-each
      (lambda (window)
        (match window
-         ((_key _session _idx _name rep-fields _panes)
+         [(_key _session _idx _name rep-fields _panes)
           (match (path-group-key (row-path rep-fields))
-            ((group-key display _group-path)
+            [(group-key display _group-path)
              (unless (hash-ref groups group-key #f)
                (set! order (cons group-key order))
                (hash-set! groups group-key (list display '())))
-             (let* ((group (hash-ref groups group-key))
-                    (windows (cadr group)))
+             (let* ([group (hash-ref groups group-key)]
+                    [windows (cadr group)])
                (hash-set! groups group-key
-                          (list display (cons window windows)))))))))
+                          (list display (cons window windows))))])]))
      (window-objects panes))
     (map (lambda (key)
-           (let ((group (hash-ref groups key)))
+           (let ([group (hash-ref groups key)])
              (list key (car group) (reverse (cadr group)))))
          (reverse order))))
 
 (define (session-blocks panes)
   "Return ((session-name session-key (group ...)) ...), preserving order."
-  (let ((sessions (make-hash-table))
-        (order '()))
+  (let ([sessions (make-hash-table)]
+        [order '()])
     (for-each
      (lambda (fields)
-       (let ((session (row-session fields)))
+       (let ([session (row-session fields)])
          (unless (hash-ref sessions session #f)
            (set! order (cons session order))
            (hash-set! sessions session '()))
@@ -569,35 +569,35 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 ;; === Layout ===
 
 (define (make-row text action . style)
-  (let ((color (if (null? style) #f (car style)))
-        (bold? (if (or (null? style) (null? (cdr style))) #f (cadr style))))
+  (let ([color (if (null? style) #f (car style))]
+        [bold? (if (or (null? style) (null? (cdr style))) #f (cadr style))])
     (list text action color bold?)))
 
 (define (session-box-rows session skey collapsed? current?)
-  (let* ((w (sidebar-width))
-         (inner (max 4 (- w 2)))
-         (color (if current? ansi-session-active ansi-session))
-         (top (string-append "┌" (make-string inner #\─) "┐"))
-         (middle (string-append "│" (center-text session inner) "│"))
-         (bottom-icon (if collapsed? "▸" "▾"))
-         (bottom (string-append "└─" bottom-icon
+  (let* ([w (sidebar-width)]
+         [inner (max 4 (- w 2))]
+         [color (if current? ansi-session-active ansi-session)]
+         [top (string-append "┌" (make-string inner #\─) "┐")]
+         [middle (string-append "│" (center-text session inner) "│")]
+         [bottom-icon (if collapsed? "▸" "▾")]
+         [bottom (string-append "└─" bottom-icon
                                 (make-string (max 0 (- w 4)) #\─)
-                                "┘"))
-         (action (list 'session skey)))
+                                "┘")]
+         [action (list 'session skey)])
     (list (make-row top action color #t)
           (make-row middle action color #t)
           (make-row bottom action color #t))))
 
 (define (group-row session group-key group-name count last? collapsed?)
-  (let* ((w (sidebar-width))
-         (prefix (if last? "  └─ " "  ├─ "))
-         (icon (if collapsed? "▸ " "▾ "))
-         (suffix (format #f " [~a]" count))
-         (available (max 4 (- w
+  (let* ([w (sidebar-width)]
+         [prefix (if last? "  └─ " "  ├─ ")]
+         [icon (if collapsed? "▸ " "▾ ")]
+         [suffix (format #f " [~a]" count)]
+         [available (max 4 (- w
                               (string-width prefix)
                               (string-width icon)
-                              (string-width suffix))))
-         (label (truncate-string group-name available)))
+                              (string-width suffix)))]
+         [label (truncate-string group-name available)])
     (make-row (string-append prefix icon label suffix)
               (list 'group (group-collapse-key session group-key))
               ansi-group
@@ -619,41 +619,41 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (tab-row window current-session current-window group-last? last-window?)
   (match window
-    ((_key session idx _name _rep-fields panes)
-     (let* ((current? (and (string=? session current-session)
-                           (string=? idx current-window)))
-            (prefix (tab-prefix group-last? last-window?))
-            (marker (if current? "● " "  "))
-            (title-width (max 1 (- (sidebar-width)
+    [(_key session idx _name _rep-fields panes)
+     (let* ([current? (and (string=? session current-session)
+                           (string=? idx current-window))]
+            [prefix (tab-prefix group-last? last-window?)]
+            [marker (if current? "● " "  ")]
+            [title-width (max 1 (- (sidebar-width)
                                    (string-width prefix)
-                                   (string-width marker))))
-            (title (format-tab-title* window title-width))
-            (action (list 'window session idx))
-            (style (if current? ansi-active #f)))
+                                   (string-width marker)))]
+            [title (format-tab-title* window title-width)]
+            [action (list 'window session idx)]
+            [style (if current? ansi-active #f)])
        (make-row (string-append prefix marker title)
                  action
                  style
-                 current?)))))
+                 current?))]))
 
 (define (pane-row fields current-session current-window group-last? window-last? last-pane?)
-  (let* ((session (row-session fields))
-         (idx (row-index fields))
-         (pane-idx (row-pane-index fields))
-         (current? (and (string=? session current-session)
+  (let* ([session (row-session fields)]
+         [idx (row-index fields)]
+         [pane-idx (row-pane-index fields)]
+         [current? (and (string=? session current-session)
                         (string=? idx current-window)
-                        (row-pane-active? fields)))
-         (prefix (pane-prefix group-last? window-last? last-pane?))
-         (desc-prefix (pane-desc-prefix group-last? window-last? last-pane?))
-         (sw (sidebar-width))
-         (marker (if current? "● " "  "))
-         (title-width (max 1 (- sw
+                        (row-pane-active? fields))]
+         [prefix (pane-prefix group-last? window-last? last-pane?)]
+         [desc-prefix (pane-desc-prefix group-last? window-last? last-pane?)]
+         [sw (sidebar-width)]
+         [marker (if current? "● " "  ")]
+         [title-width (max 1 (- sw
                                 (string-width prefix)
-                                (string-width marker))))
-         (title (format-pane-title* fields title-width))
-         (desc (truncate-string (display-desc fields) (max 4 (- sw (string-width desc-prefix)))))
-         (action (list 'pane session idx pane-idx))
-         (style (if current? ansi-active #f))
-         (title-row (make-row (string-append prefix marker title) action style current?)))
+                                (string-width marker)))]
+         [title (format-pane-title* fields title-width)]
+         [desc (truncate-string (display-desc fields) (max 4 (- sw (string-width desc-prefix))))]
+         [action (list 'pane session idx pane-idx)]
+         [style (if current? ansi-active #f)]
+         [title-row (make-row (string-append prefix marker title) action style current?)])
     (if (nonempty desc)
         (list title-row
               (make-row (string-append desc-prefix desc) action ansi-desc #f))
@@ -661,10 +661,10 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (window-rows window current-session current-window group-last? last-window?)
   (match window
-    ((_key _session _idx _name _rep-fields panes)
-     (let pane-loop ((ps panes)
-                     (rows (list (tab-row window current-session current-window
-                                          group-last? last-window?))))
+    [(_key _session _idx _name _rep-fields panes)
+     (let pane-loop ([ps panes]
+                     [rows (list (tab-row window current-session current-window
+                                          group-last? last-window?))])
        (if (null? ps)
            (reverse rows)
            (pane-loop (cdr ps)
@@ -675,7 +675,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                                          group-last?
                                          last-window?
                                          (null? (cdr ps))))
-                              rows)))))))
+                              rows))))]))
 
 (define (split-option-value str)
   "将逗号分隔的选项值拆分为列表，空值返回空列表。"
@@ -684,50 +684,50 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
       (string-split str #\,)))
 
 (define (layout-rows-with-context blocks context-parts)
-  (let* ((current-session (if (> (length context-parts) 0) (list-ref context-parts 0) ""))
-         (current-window (if (> (length context-parts) 1) (list-ref context-parts 1) ""))
-         (collapsed-sessions (split-option-value (if (> (length context-parts) 2) (list-ref context-parts 2) "")))
-         (collapsed-groups (split-option-value (if (> (length context-parts) 3) (list-ref context-parts 3) ""))))
+  (let* ([current-session (if (> (length context-parts) 0) (list-ref context-parts 0) "")]
+         [current-window (if (> (length context-parts) 1) (list-ref context-parts 1) "")]
+         [collapsed-sessions (split-option-value (if (> (length context-parts) 2) (list-ref context-parts 2) ""))]
+         [collapsed-groups (split-option-value (if (> (length context-parts) 3) (list-ref context-parts 3) ""))])
     (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)))
 
 (define (layout-rows* blocks current-session current-window collapsed-sessions collapsed-groups)
   "核心布局逻辑，接收预计算上下文参数。"
-  (let block-loop ((bs blocks)
-                   (rows '()))
+  (let block-loop ([bs blocks]
+                   [rows '()])
     (if (null? bs)
         (reverse rows)
         (match (car bs)
-          ((session skey groups)
-           (let* ((session-collapsed? (member skey collapsed-sessions))
-                  (current? (string=? session current-session))
-                  (box-rows (session-box-rows session skey session-collapsed? current?))
-                  (rows* (append (reverse box-rows) rows)))
+          [(session skey groups)
+           (let* ([session-collapsed? (member skey collapsed-sessions)]
+                  [current? (string=? session current-session)]
+                  [box-rows (session-box-rows session skey session-collapsed? current?)]
+                  [rows* (append (reverse box-rows) rows)])
              (if session-collapsed?
                  (block-loop (cdr bs)
                              (if (null? (cdr bs))
                                  rows*
                                  (cons (make-row "" #f) rows*)))
-                 (let group-loop ((gs groups)
-                                  (g-rows rows*))
+                 (let group-loop ([gs groups]
+                                  [g-rows rows*])
                      (if (null? gs)
                          (block-loop (cdr bs)
                                      (if (null? (cdr bs))
                                          g-rows
                                          (cons (make-row "" #f) g-rows)))
                          (match (car gs)
-                           ((group-key group-name windows)
-                            (let* ((last-group? (null? (cdr gs)))
-                                   (collapse-key (group-collapse-key session group-key))
-                                   (group-collapsed? (member collapse-key collapsed-groups))
-                                   (g-rows* (cons (group-row session group-key group-name
+                           [(group-key group-name windows)
+                            (let* ([last-group? (null? (cdr gs))]
+                                   [collapse-key (group-collapse-key session group-key)]
+                                   [group-collapsed? (member collapse-key collapsed-groups)]
+                                   [g-rows* (cons (group-row session group-key group-name
                                                              (length windows)
                                                              last-group?
                                                              group-collapsed?)
-                                                  g-rows)))
+                                                  g-rows)])
                               (if group-collapsed?
                                   (group-loop (cdr gs) g-rows*)
-                                  (let window-loop ((ws windows)
-                                                    (w-rows g-rows*))
+                                  (let window-loop ([ws windows]
+                                                    [w-rows g-rows*])
                                     (if (null? ws)
                                         (group-loop (cdr gs) w-rows)
                                         (window-loop (cdr ws)
@@ -736,15 +736,15 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                                                                                   current-window
                                                                                   last-group?
                                                                                   (null? (cdr ws))))
-                                                             w-rows)))))))))))))))))
+                                                             w-rows))))))])))))]))))
 
 (define (rows-actions rows)
-  (let loop ((rs rows)
-             (row 0)
-             (actions '()))
+  (let loop ([rs rows]
+             [row 0]
+             [actions '()])
     (if (null? rs)
         (reverse actions)
-        (let ((action (cadar rs)))
+        (let ([action (cadar rs)])
           (loop (cdr rs)
                 (+ row 1)
                 (if action (cons (list row action) actions) actions))))))
@@ -763,13 +763,13 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
       fallback))
 
 (define (current-git-branch)
-  (let ((session (context-value 0 ""))
-        (window (context-value 1 "")))
-    (let loop ((panes %current-panes)
-               (fallback #f))
+  (let ([session (context-value 0 "")]
+        [window (context-value 1 "")])
+    (let loop ([panes %current-panes]
+               [fallback #f])
       (if (null? panes)
           (if fallback (or (read-git-head fallback) "") "")
-          (let ((fields (car panes)))
+          (let ([fields (car panes)])
             (if (and (string=? (row-session fields) session)
                      (string=? (row-index fields) window))
                 (if (row-pane-active? fields)
@@ -778,8 +778,8 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                 (loop (cdr panes) fallback)))))))
 
 (define (update-statusbar-branch!)
-  (let ((branch (current-git-branch))
-        (previous (context-value 6 "")))
+  (let ([branch (current-git-branch)]
+        [previous (context-value 6 "")])
     (unless (string=? branch previous)
       (tmux-cmd "set-option" "-w" "@status_git_branch" branch))))
 
@@ -787,13 +787,13 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
   (call-with-output-string
    (lambda (port)
      (parameterize ((current-output-port port))
-       (let loop ((rs rows) (i 0))
+       (let loop ([rs rows] [i 0])
          (unless (null? rs)
            (emit-styled-line (car rs) (and cursor-row (= i cursor-row)))
            (loop (cdr rs) (+ i 1))))))))
 
 (define (refresh-state!)
-  (let ((state (collect-state)))
+  (let ([state (collect-state)])
     (when state
       (set! %current-context (car state))
       (set! %current-panes (cadr state)))
@@ -804,21 +804,21 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define (current-rows)
   (if (or (not %current-context) (null? %current-panes))
       (list (make-row " [no tmux data]" #f ansi-dim #f))
-      (let* ((session (context-value 0 ""))
-             (blocks (active-session-first (session-blocks %current-panes) session)))
+      (let* ([session (context-value 0 "")]
+             [blocks (active-session-first (session-blocks %current-panes) session)])
         (layout-rows-with-context blocks %current-context))))
 
 (define (render-current! cursor-control?)
   (refresh-state!)
-  (let* ((rows (current-rows))
-         (actions (rows-actions rows))
+  (let* ([rows (current-rows)]
+         [actions (rows-actions rows)]
          ;; 光标只在 daemon 模式且侧栏 pane 聚焦时显示；位置失效时回落到
          ;; 当前 window 行（找不到则首个条目行）。
-         (cursor (and cursor-control? (resolve-cursor actions))))
+         [cursor (and cursor-control? (resolve-cursor actions))])
     (set! %current-actions actions)
     ;; 失焦/无条目时 cursor 为 #f，但 %cursor-row 保留旧位置，供再聚焦恢复
     (set! %cursor-row (or cursor %cursor-row))
-    (let ((screen (rows->screen rows cursor)))
+    (let ([screen (rows->screen rows cursor)])
       (when (or (not cursor-control?)
                 (not %last-screen)
                 (not (string=? screen %last-screen)))
@@ -829,19 +829,19 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
         (set! %last-screen screen)))))
 
 (define (row-action row actions)
-  (let ((found (find (lambda (entry) (= (car entry) row)) actions)))
+  (let ([found (find (lambda (entry) (= (car entry) row)) actions)])
     (and found (cadr found))))
 
 (define (nearby-action row actions)
-  (let loop ((candidates (list row (- row 1) (+ row 1))))
+  (let loop ([candidates (list row (- row 1) (+ row 1))])
     (if (null? candidates)
         #f
         (or (row-action (car candidates) actions)
             (loop (cdr candidates))))))
 
 (define (screen-row-candidates mouse-y pane-top)
-  (let* ((local (- mouse-y pane-top))
-         (local-prev (- local 1)))
+  (let* ([local (- mouse-y pane-top)]
+         [local-prev (- local 1)])
     (delete-duplicates
      (filter (lambda (n) (>= n 0))
              (list local local-prev mouse-y (- mouse-y 1))))))
@@ -854,45 +854,45 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 (define (handle-action action client)
   (when action
     (match action
-      (('session skey)
+      [('session skey)
        (toggle-list-value! "@sidebar_collapsed_sessions"
-                           (context-value 2 "") skey))
-      (('group gkey)
+                           (context-value 2 "") skey)]
+      [('group gkey)
        (toggle-list-value! "@sidebar_collapsed_groups"
-                           (context-value 3 "") gkey))
-      (('window session idx)
-       (switch-client-to client (string-append session ":" idx)))
-      (('pane session idx pane-idx)
+                           (context-value 3 "") gkey)]
+      [('window session idx)
+       (switch-client-to client (string-append session ":" idx))]
+      [('pane session idx pane-idx)
        (switch-client-to client (string-append session ":" idx))
        (when (nonempty pane-idx)
          (tmux-cmd "select-pane" "-t"
-                   (string-append session ":" idx "." pane-idx))))
-      (_ #f))))
+                   (string-append session ":" idx "." pane-idx)))]
+      [_ #f])))
 
 (define (handle-click mouse-y pane-top client)
-  (let ((action (let loop ((candidates (screen-row-candidates mouse-y pane-top)))
+  (let ([action (let loop ([candidates (screen-row-candidates mouse-y pane-top)])
                    (if (null? candidates)
                        #f
                        (or (nearby-action (car candidates) %current-actions)
-                           (loop (cdr candidates)))))))
+                           (loop (cdr candidates)))))])
     (handle-action action client)))
 
 (define (toggle-current-group)
-  (let ((current-session (context-value 0 ""))
-        (current-window (context-value 1 "")))
-    (let loop ((panes %current-panes))
+  (let ([current-session (context-value 0 "")]
+        [current-window (context-value 1 "")])
+    (let loop ([panes %current-panes])
       (unless (null? panes)
-        (let* ((fields (car panes))
-               (session (row-session fields))
-               (idx (row-index fields))
-               (path (row-path fields)))
+        (let* ([fields (car panes)]
+               [session (row-session fields)]
+               [idx (row-index fields)]
+               [path (row-path fields)])
           (if (and (string=? session current-session)
                    (string=? idx current-window))
               (match (path-group-key path)
-                ((group-key _display _group-path)
+                [(group-key _display _group-path)
                  (toggle-list-value! "@sidebar_collapsed_groups"
                                      (context-value 3 "")
-                                     (group-collapse-key session group-key))))
+                                     (group-collapse-key session group-key))])
               (loop (cdr panes))))))))
 
 ;; === Keyboard navigation ===
@@ -904,55 +904,55 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 (define (find-current-row actions)
   "当前 window/pane 对应的行号，作为光标初始化落点。"
-  (let ((session (context-value 0 ""))
-        (idx (context-value 1 "")))
-    (let loop ((entries actions))
+  (let ([session (context-value 0 "")]
+        [idx (context-value 1 "")])
+    (let loop ([entries actions])
       (if (null? entries)
           #f
           (match (cadar entries)
-            (('window s i)
+            [('window s i)
              (if (and (string=? s session) (string=? i idx))
-                 (caar entries) (loop (cdr entries))))
-            (('pane s i _pane-idx)
+                 (caar entries) (loop (cdr entries)))]
+            [('pane s i _pane-idx)
              (if (and (string=? s session) (string=? i idx))
-                 (caar entries) (loop (cdr entries))))
-            (_ (loop (cdr entries))))))))
+                 (caar entries) (loop (cdr entries)))]
+            [_ (loop (cdr entries))])))))
 
 (define (resolve-cursor actions)
   (cond
-   ((not (cursor-focused?)) #f)
-   ((and %cursor-row (row-action %cursor-row actions)) %cursor-row)
-   (else (or (find-current-row actions)
-             (and (pair? actions) (caar actions))))))
+   [(not (cursor-focused?)) #f]
+   [(and %cursor-row (row-action %cursor-row actions)) %cursor-row]
+   [else (or (find-current-row actions)
+             (and (pair? actions) (caar actions)))]))
 
 (define (cursor-move delta)
   "在有 action 的行之间移动（跳过空行与纯装饰行），DELTA 为 ±1。"
-  (let ((rows (map car %current-actions)))
+  (let ([rows (map car %current-actions)])
     (when (pair? rows)
-      (let* ((current (or %cursor-row (car rows)))
-             (next (if (positive? delta)
+      (let* ([current (or %cursor-row (car rows))]
+             [next (if (positive? delta)
                        (find (lambda (r) (> r current)) rows)
-                       (find (lambda (r) (< r current)) (reverse rows)))))
+                       (find (lambda (r) (< r current)) (reverse rows)))])
         (when next (set! %cursor-row next))))))
 
 (define (cursor-action)
   (and %cursor-row (row-action %cursor-row %current-actions)))
 
 (define (action-row-number action)
-  (let ((found (find (lambda (e) (equal? (cadr e) action)) %current-actions)))
+  (let ([found (find (lambda (e) (equal? (cadr e) action)) %current-actions)])
     (and found (car found))))
 
 (define (focused-client)
   "正在观看本 session 的 client 名（供 switch-client -c），无则空串。"
-  (let* ((result (tmux-cmd "list-clients" "-F" "#{client_name}"
-                           "-t" (context-value 0 "")))
-         (names (if (zero? (car result))
+  (let* ([result (tmux-cmd "list-clients" "-F" "#{client_name}"
+                           "-t" (context-value 0 ""))]
+         [names (if (zero? (car result))
                     (filter nonempty (string-split (cdr result) #\newline))
-                    '())))
+                    '())])
     (if (pair? names) (car names) "")))
 
 (define (activate-cursor!)
-  (let ((action (cursor-action)))
+  (let ([action (cursor-action)])
     (when action (handle-action action (focused-client)))))
 
 (define (toggle-and-track action)
@@ -966,35 +966,35 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
   "MODE 为 'fold / 'unfold：作用于光标处 session/group 节点；状态已符合
 则 no-op。window/pane 行上 fold 跳到上方最近节点、unfold 等同 Enter。"
   (match (cursor-action)
-    (('session skey)
-     (let ((collapsed? (member skey (split-option-value (context-value 2 "")))))
+    [('session skey)
+     (let ([collapsed? (member skey (split-option-value (context-value 2 "")))])
        (when (if (eq? mode 'fold) (not collapsed?) collapsed?)
-         (toggle-and-track (cursor-action)))))
-    (('group gkey)
-     (let ((collapsed? (member gkey (split-option-value (context-value 3 "")))))
+         (toggle-and-track (cursor-action))))]
+    [('group gkey)
+     (let ([collapsed? (member gkey (split-option-value (context-value 3 "")))])
        (when (if (eq? mode 'fold) (not collapsed?) collapsed?)
-         (toggle-and-track (cursor-action)))))
-    (_
+         (toggle-and-track (cursor-action))))]
+    [_
      (if (eq? mode 'fold)
-         (let ((node (find (lambda (e)
+         (let ([node (find (lambda (e)
                              (and (< (car e) (or %cursor-row 0))
                                   (match (cadr e)
-                                    (('session _) #t)
-                                    (('group _) #t)
-                                    (_ #f))))
-                           (reverse %current-actions))))
+                                    [('session _) #t]
+                                    [('group _) #t]
+                                    [_ #f])))
+                           (reverse %current-actions))])
            (when node (set! %cursor-row (car node))))
-         (activate-cursor!)))))
+         (activate-cursor!))]))
 
 (define (handle-key key)
   (case key
-    ((down) (cursor-move 1))
-    ((up) (cursor-move -1))
-    ((enter) (activate-cursor!))
-    ((left) (cursor-fold 'fold))
-    ((right) (cursor-fold 'unfold))
-    ((esc quit) (tmux-cmd "last-pane"))
-    (else #f)))
+    [(down) (cursor-move 1)]
+    [(up) (cursor-move -1)]
+    [(enter) (activate-cursor!)]
+    [(left) (cursor-fold 'fold)]
+    [(right) (cursor-fold 'unfold)]
+    [(esc quit) (tmux-cmd "last-pane")]
+    [else #f]))
 
 ;; cbreak 模式：按键即时到达且不回显。只动输入端标志（-icanon -echo），
 ;; 不用 raw（raw 会同时清 OPOST，破坏 emit-line 的换行输出）。
@@ -1006,73 +1006,73 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 方向键为 ESC [ A/B/C/D 序列（tmux 转发时整键一次写入，无需等待）。"
   (define (dispatch c)
     (case c
-      ((#\j) 'down) ((#\k) 'up) ((#\h) 'left) ((#\l) 'right)
-      ((#\q) 'quit)
-      ((#\newline #\return) 'enter)
-      (else 'ignore)))
-  (let ((c (read-char port)))
+      [(#\j) 'down] [(#\k) 'up] [(#\h) 'left] [(#\l) 'right]
+      [(#\q) 'quit]
+      [(#\newline #\return) 'enter]
+      [else 'ignore]))
+  (let ([c (read-char port)])
     (cond
-     ((eof-object? c) #f)
-     ((char=? c #\escape)
+     [(eof-object? c) #f]
+     [(char=? c #\escape)
       (if (and (char-ready? port)
-               (let ((leader (peek-char port)))
+               (let ([leader (peek-char port)])
                  (or (char=? leader #\[) (char=? leader #\O))))
           (begin (read-char port)
                  (if (char-ready? port)
                      (case (read-char port)
-                       ((#\A) 'up) ((#\B) 'down) ((#\C) 'right) ((#\D) 'left)
-                       (else 'ignore))
+                       [(#\A) 'up] [(#\B) 'down] [(#\C) 'right] [(#\D) 'left]
+                       [else 'ignore])
                      'ignore))
-          'esc))
-     (else (dispatch c)))))
+          'esc)]
+     [else (dispatch c)])))
 
 (define (drain-keys port)
   (let loop ()
     (when (char-ready? port)
-      (let ((key (read-key port)))
+      (let ([key (read-key port)])
         (when key (handle-key key))
         (loop)))))
 
 ;; === FIFO daemon ===
 
 (define (fifo-path)
-  (let* ((pane (or (getenv "TMUX_PANE") "unknown"))
-         (id (if (and (positive? (string-length pane))
+  (let* ([pane (or (getenv "TMUX_PANE") "unknown")]
+         [id (if (and (positive? (string-length pane))
                       (char=? (string-ref pane 0) #\%))
                  (substring pane 1)
-                 pane)))
+                 pane)])
     (format #f "/tmp/tmux-sidebar-~a-~a.fifo" (getuid) id)))
 
 (define (open-event-fifo)
-  (let ((path (fifo-path)))
+  (let ([path (fifo-path)])
     (when (file-exists? path) (delete-file path))
     (mknod path 'fifo #o600 0)
     (cons path (open-file path "r+"))))
 
 (define (handle-event line)
   (match (string-split line #\tab)
-    (("refresh") #t)
-    (("toggle-group") (toggle-current-group))
-    (("click" mouse-y pane-top client)
-     (let ((y (string->number mouse-y))
-           (top (string->number pane-top)))
-       (when (and y top) (handle-click y top client))))
-    (_ #f)))
+    [("refresh") #t]
+    [("toggle-group") (toggle-current-group)]
+    [("click" mouse-y pane-top client)
+     (let ([y (string->number mouse-y)]
+           [top (string->number pane-top)])
+       (when (and y top) (handle-click y top client)))]
+    [_ #f]))
 
 (define (drain-events port)
   (let loop ()
     (when (char-ready? port)
-      (let ((line (read-line port)))
+      (let ([line (read-line port)])
         (unless (eof-object? line)
           (handle-event line)
           (loop))))))
 
 (define (run-daemon)
-  (let* ((fifo (open-event-fifo))
-         (path (car fifo))
-         (port (cdr fifo))
-         (stdin (current-input-port))
-         (cleaned? #f))
+  (let* ([fifo (open-event-fifo)]
+         [path (car fifo)]
+         [port (cdr fifo)]
+         [stdin (current-input-port)]
+         [cleaned? #f])
     (define (cleanup)
       (unless cleaned?
         (set! cleaned? #t)
@@ -1097,7 +1097,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
           (render-current! #t)
           ;; FIFO 与 stdin 一起等；drain 内部用 char-ready? 兜底区分来源
           ;; （select 对 buffered port 的返回形式不保证，双 drain 无害）。
-          (let ((readable (car (select (list port stdin) '() '() 30))))
+          (let ([readable (car (select (list port stdin) '() '() 30))])
             (when (pair? readable)
               (drain-events port)
               (drain-keys stdin)))
@@ -1106,17 +1106,17 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
 
 ;; === Entry ===
 
-(guard (ex (#t
+(guard (ex [#t
             (format (current-error-port) "sidebar-render error: ~a~%" ex)
-            (exit 1)))
-  (let ((args (command-line)))
+            (exit 1)])
+  (let ([args (command-line)])
     (cond
-     ((and (> (length args) 1) (string=? (cadr args) "daemon"))
-      (run-daemon))
-     ((and (> (length args) 1) (string=? (cadr args) "render"))
-      (render-current! #f))
-     ((and (> (length args) 1) (string=? (cadr args) "--as-library"))
-      #t)
-     (else
+     [(and (> (length args) 1) (string=? (cadr args) "daemon"))
+      (run-daemon)]
+     [(and (> (length args) 1) (string=? (cadr args) "render"))
+      (render-current! #f)]
+     [(and (> (length args) 1) (string=? (cadr args) "--as-library"))
+      #t]
+     [else
       (format (current-error-port) "usage: sidebar-render.scm daemon|render~%")
-      (exit 2)))))
+      (exit 2)])))
