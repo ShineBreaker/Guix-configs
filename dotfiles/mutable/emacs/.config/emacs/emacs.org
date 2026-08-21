@@ -1180,12 +1180,13 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
   (and (buffer-live-p buffer)
        (buffer-file-name buffer)))
 
-(defun custom--tab-line-exclude-non-file-buffer ()
-  "非文件 buffer 不启用 tab-line,返回非 nil 表示排除。
-供 `tab-line-exclude-functions' 调用,使标签栏只渲染在
+(defun custom--tab-line-exclude-non-file-buffer (&optional buffer)
+  "非文件 BUFFER 不启用 tab-line,返回非 nil 表示排除。
+作为 `tab-line-exclude-buffers' 的 `buffer-match-p' 谓词条件
+(Emacs 31 机制,接收 buffer 名或 buffer 对象),使标签栏只渲染在
 `custom/tab-visible-p' 为真的 buffer 所在 window;终端模拟器、
 scratch、help、Dashboard 等 window 因此不显示标签栏。"
-  (not (custom/tab-visible-p (current-buffer))))
+  (not (custom/tab-visible-p (get-buffer (or buffer (current-buffer))))))
 
 (defun custom--tabs-target-window (&optional window)
   "返回标签命令应优先操作的 WINDOW。"
@@ -1565,10 +1566,12 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
 (custom/apply-tab-line-button-preset)
 
 ;; 标签栏本身也只在文件 buffer 的 window 渲染:终端/特殊 buffer 排除。
-;; 必须在 `global-tab-line-mode' 之前设置,否则 daemon 启动时已存在的
-;; 非文件 buffer 会被 globalized turn-on 错误启用 buffer-local tab-line-mode。
-(setq tab-line-exclude-functions
-      (list #'custom--tab-line-exclude-non-file-buffer))
+;; `tab-line-exclude-buffers' 是 Emacs 31 机制,值为 `buffer-match-p'
+;; 条件(此处为裸谓词);必须在 `global-tab-line-mode' 之前设置,否则
+;; daemon 启动时已存在的非文件 buffer 会被 globalized turn-on 错误启用
+;; buffer-local tab-line-mode。
+(setq tab-line-exclude-buffers
+      #'custom--tab-line-exclude-non-file-buffer)
 
 (global-tab-line-mode 1)
 
