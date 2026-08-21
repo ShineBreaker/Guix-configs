@@ -1017,6 +1017,16 @@
 (define (%stow-folding? pkg)
   (file-exists? (string-append %stow-dir "/" pkg "/" %stow-folding-marker)))
 
+;; 把 "group/pkg" 形式的包名拆成 (实际 stow-dir . 一级包名)。分组前缀并入
+;; --dir，stow 本身永远只收一级包名（GNU Stow 不保证接受带斜杠的包名）。
+(define (%stow-split-pkg pkg)
+  (let loop ([i (- (string-length pkg) 1)])
+    (cond [(< i 0) (cons %stow-dir pkg)]
+          [(char=? (string-ref pkg i) #\/)
+           (cons (string-append %stow-dir "/" (substring pkg 0 i))
+                 (substring pkg (+ i 1) (string-length pkg)))]
+          [else (loop (- i 1))])))
+
 ;; 对单个包执行 stow。folding 由 .stow-folding 标记决定（默认 --no-folding）。
 ;; --ignore=\.stow-folding$ 始终带上，确保标记文件本身永不部署到 $HOME（否则多个
 ;; 包的同名标记会冲突，且把无意义的元文件塞进用户目录）。
@@ -1024,7 +1034,8 @@
   (let ([pkg-dir (string-append %stow-dir "/" pkg)])
     (unless (file-exists? pkg-dir)
       (error (format #f "stow 包不存在: ~a" pkg-dir)))
-    (let* ([folding? (%stow-folding? pkg)]
+    (let* ([split (%stow-split-pkg pkg)]
+           [folding? (%stow-folding? pkg)]
            [flag (%stow-flag mode)])
       (format #t "[~a] ~a -> ~a (~a)~%"
               (%stow-verb mode) pkg home
@@ -1032,19 +1043,39 @@
       (%run `("stow"
               "--ignore=\\.stow-folding$"
               ,@(if folding? '() (list "--no-folding"))
-              ,(string-append "--dir=" %stow-dir)
+              ,(string-append "--dir=" (car split))
               ,(string-append "--target=" home)
               ,@(if (string=? flag "") '() (list flag))
-              ,pkg)))))
+              ,(cdr split))))))
 
-;; 枚举 dotfiles/mutable/ 下所有直接子目录（包不能嵌套），过滤元目录，按字母序返回。
+;; 枚举 dotfiles/mutable/ 下所有包，按字母序返回。支持一层分组目录
+;; （如 agents/hermes）：目录内含 dot 开头条目（.config/.local/.stow-*）
+;; 即为包；否则视为纯分组目录，下钻收集其中同样是包的子目录。
+(define (%stow-package-dir? path)
+  (any (lambda (name)
+         (and (> (string-length name) 0)
+              (char=? (string-ref name 0) #\.)))
+       (filter (lambda (name) (not (member name '("." ".."))))
+               (or (scandir path) '()))))
+
 (define (%stow-list-packages)
   (sort
-   (filter-map
+   (append-map
     (lambda (name)
-      (and (not (member name %stow-meta-names))
-           (file-is-directory? (string-append %stow-dir "/" name))
-           name))
+      (let ([path (string-append %stow-dir "/" name)])
+        (cond [(or (member name %stow-meta-names)
+                   (not (file-is-directory? path)))
+               '()]
+              [(%stow-package-dir? path) (list name)]
+              [else
+               (filter-map
+                (lambda (sub)
+                  (let ([sub-path (string-append path "/" sub)])
+                    (and (not (member sub %stow-meta-names))
+                         (file-is-directory? sub-path)
+                         (%stow-package-dir? sub-path)
+                         (string-append name "/" sub))))
+                (or (scandir path) '()))])))
     (or (scandir %stow-dir) '()))
    string<?))
 
@@ -1489,6 +1520,8 @@ GNU Stow 直链部署 dotfiles/mutable/PKG/ 到 $HOME。改源即生效（无需
   blue stow --restow PKG ... 强制重建所有软链接（先删除再重建）
   blue stow --delete PKG ... 删除软链接（$HOME 下变回实际文件）
 
+PKG 支持一层分组路径（如 agents/hermes，对应 dotfiles/mutable/agents/hermes/）。
+
 --no-folding（默认）/ folding: 目标目录默认保持为真实目录、stow 只对单个文件建软链，
 保护应用运行时产物（logs/、state.db、sessions/ 等）不污染源。想让某个包改用整目录
 折叠（目标目录本身变成指向源的软链），在该包目录下放 .stow-folding 标记文件即可。
@@ -1520,7 +1553,7 @@ folding 控制:
    (category 'stow)
    (synopsis "对 dotfiles/mutable/ 下所有包批量执行 stow 操作")
    (help "[--adopt|--restow|--delete]
-枚举 dotfiles/mutable/ 下所有直接子目录作为包，逐个执行（包不能嵌套）。默认为部署。
+枚举 dotfiles/mutable/ 下所有包（含一层分组目录内的包，如 agents/hermes），逐个执行。默认为部署。
 
   blue stow-all              部署所有包
   blue stow-all --restow     重建所有软链接（最常用）

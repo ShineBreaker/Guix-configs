@@ -6,7 +6,7 @@
 	path = dotfiles/immutable/utilities/.local/share/fcitx5/rime
 	url = https://github.com/iDvel/rime-ice.git
 [submodule "appimage-run"]
-	path = dotfiles/mutable/appimage-run
+	path = dotfiles/mutable/tools/appimage-run
 	url = https://github.com/ShineBreaker/appimage-run-guix.git
 [submodule "tools/linux-setup"]
 	path = tools/linux-setup
@@ -20,9 +20,9 @@
 [submodule "dotfiles/mutable/agenote/.config/pi/extensions/agenote-hooks"]
 	path = dotfiles/mutable/agenote/.config/pi/extensions/agenote-hooks
 	url = https://github.com/ShineBreaker/pi-agenote.git
-[submodule "dotfiles/mutable/pi/.config/pi/extensions/atelier"]
+[submodule "dotfiles/mutable/agents/pi/.config/pi/extensions/atelier"]
 	url = https://github.com/ShineBreaker/pi-atelier.git
-	path = dotfiles/mutable/pi/.config/pi/extensions/atelier
-[submodule "dotfiles/mutable/pi/.config/pi/extensions/pi-ui"]
+	path = dotfiles/mutable/agents/pi/.config/pi/extensions/atelier
+[submodule "dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui"]
 	url = https://github.com/ShineBreaker/pi-ui.git
-	path = dotfiles/mutable/pi/.config/pi/extensions/pi-ui
+	path = dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui
