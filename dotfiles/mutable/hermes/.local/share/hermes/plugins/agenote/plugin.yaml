@@ -1,0 +1,10 @@
+name: agenote
+version: 0.1.0
+description: "agenote 集成：任务完成检测 + /agenote-* 斜杠命令（对位 pi 的 agenote-hooks）。"
+author: BrokenShine
+provides_hooks:
+  - pre_llm_call
+provides_commands:
+  - agenote-summarize
+  - agenote-curate
+  - agenote-health
