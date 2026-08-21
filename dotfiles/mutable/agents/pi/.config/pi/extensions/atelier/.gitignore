@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# pi runtime artifacts
+.agents/
+sessions/
+*.db
+*.db-shm
+*.db-wal
+
+# OS
+.DS_Store
+
+# Python（extract-pi-result.py 本地语法校验产物）
+__pycache__/
+*.pyc
