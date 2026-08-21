@@ -1049,8 +1049,15 @@ iifname "uap0" oifname != "uap0" masquerade
                             (udev-rule "60-sunshine-uinput.rules"
                                        "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\""))
 
-        (udev-rules-service 'ac-power-profile ac-power-rules)
-        (udev-rules-service 'usb-power-perms usb-power-perm-rules)
+        (udev-rules-service 'ac-power-profile
+                            ;; file->udev-rule 把单文件包装成含
+                            ;; lib/udev/rules.d/ 结构的目录派生，
+                            ;; 裸 computed-file 会被 rules union 静默跳过
+                            (file->udev-rule "90-ac-power-profile.rules"
+                                             ac-power-rules))
+        (udev-rules-service 'usb-power-perms
+                            (file->udev-rule "95-usb-power-control-perms.rules"
+                                             usb-power-perm-rules))
 
         ;; 开机时按当前电源状态初始化一次（udev 冷插拔事件早于 PPD 启动，
         ;; 那次调用会因 PPD 未上线而静默失败，这里补一次）
