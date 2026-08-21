@@ -1,0 +1,19 @@
+{
+  "name": "assisted-by-zcode",
+  "description": "Assisted-by commit trailer enforcement for ZCode: PreToolUse reminder layer plus an opt-in global prepare-commit-msg fallback hook.",
+  "description_i18n": {
+    "en": "Assisted-by commit trailer enforcement for ZCode: PreToolUse reminder layer plus an opt-in global prepare-commit-msg fallback hook.",
+    "zh-CN": "ZCode 会话的 Assisted-by 提交规范保障：PreToolUse 提醒层 + 可选安装的全局 prepare-commit-msg 兜底 hook。"
+  },
+  "version": "0.1.0",
+  "author": {
+    "name": "BrokenShine",
+    "url": "https://github.com/ShineBreaker"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "assisted-by",
+    "hooks"
+  ]
+}

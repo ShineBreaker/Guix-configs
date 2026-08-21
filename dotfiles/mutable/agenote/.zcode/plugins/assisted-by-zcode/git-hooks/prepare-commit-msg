@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# Assisted-by 兜底层：AI 会话（zcode）中的 git commit 缺 trailer 时自动补齐。
+# 提醒层由 agenote-zcode 插件的 PreToolUse hook 承担（模型写完整版
+# Assisted-by: <模型名>:<版本>）；本脚本只兜底补 agent 名。
+#
+# 安装（全局生效，见插件 README）：
+#   mkdir -p ~/.config/git/hooks
+#   ln -sf <插件根>/git-hooks/prepare-commit-msg ~/.config/git/hooks/
+#   ln -sf <插件根>/git-hooks/forward-to-repo-hook ~/.config/git/hooks/<各转发名>
+#   git config --global core.hooksPath ~/.config/git/hooks
+
+set -u
+
+# 仅 AI 环境生效：zcode 的 Bash 工具子进程带 ZCODE_APP_VERSION，手动终端没有
+[ -n "${ZCODE_APP_VERSION:-}" ] || exit 0
+
+# 只处理常规提交路径：$2 为空（编辑器）、message（-m/-F）、template（模板）。
+# merge/squash/amend($2=commit) 不动。
+case "${2:-}" in
+  "" | message | template) ;;
+  *) exit 0 ;;
+esac
+
+# 模型已按提醒写了完整 trailer（含版本号）则不覆盖
+grep -q '^Assisted-by:' "$1" && exit 0
+
+printf '\nAssisted-by: zcode\n' >>"$1"
+exit 0

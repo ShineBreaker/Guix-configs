@@ -1,0 +1,19 @@
+{
+  "name": "agenote-zcode",
+  "description": "agenote integration for ZCode: session-start KB rules injection, completion-signal detection for experience review, Assisted-by commit trailer enforcement, and /agenote-zcode:* slash commands.",
+  "description_i18n": {
+    "en": "agenote integration for ZCode: session-start KB rules injection, completion-signal detection for experience review, Assisted-by commit trailer enforcement, and slash command shortcuts.",
+    "zh-CN": "agenote 的 ZCode 集成：会话启动注入记事本规则、检测任务完成信号触发经验评估、Assisted-by 提交规范保障，以及斜杠命令快捷入口。"
+  },
+  "version": "0.1.0",
+  "author": {
+    "name": "BrokenShine",
+    "url": "https://github.com/ShineBreaker"
+  },
+  "keywords": [
+    "agenote",
+    "knowledge-base",
+    "hooks",
+    "assisted-by"
+  ]
+}

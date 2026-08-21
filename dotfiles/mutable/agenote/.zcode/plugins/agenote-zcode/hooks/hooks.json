@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/session-start.mjs"],
+            "timeoutMs": 5000,
+            "statusMessage": "agenote-zcode: 读取记事本状态…"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "搞定|做完了|测试通过|可以用了|一切正常|都没问题|都正常|就这些|先这样|暂时够了|就这样|没了|ship it|looks good|[Dd]one[.!]",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/prompt-submit.mjs"],
+            "timeoutMs": 3000,
+            "statusMessage": "agenote-zcode: 检测到完成信号…"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/pre-tool-use.mjs"],
+            "timeoutMs": 3000,
+            "statusMessage": "agenote-zcode: 检查命令规范…"
+          }
+        ]
+      }
+    ]
+  }
+}

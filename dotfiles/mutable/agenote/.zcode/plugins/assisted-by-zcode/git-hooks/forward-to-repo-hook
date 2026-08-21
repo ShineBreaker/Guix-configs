@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# git hook 通用转发器。
+#
+# 背景：core.hooksPath 指向全局目录后，git 不再查找仓库自身的 .git/hooks/，
+# 仓库级 hook（如 Guix-configs 的 post-checkout/post-commit/post-merge/pre-push、
+# pre-commit 框架安装的 hook）会全部失效。把本脚本按对应 hook 名 symlink 到
+# 全局 hooks 目录（一个文件多个名字），即可把调用转发回仓库自身 hook：
+#
+#   ln -sf forward-to-repo-hook ~/.config/git/hooks/post-commit
+#   ln -sf forward-to-repo-hook ~/.config/git/hooks/pre-push
+#   ...
+#
+# 转发语义与 git 原生行为一致：仓库 hook 存在且可执行才执行，stdin/参数透传；
+# 仓库 hook 缺失或执行失败不阻断 git 操作（与 hook 不存在时同义，仅诊断信息
+# 丢失，可接受）。
+
+set -u
+
+hook="$(basename "$0")"
+git_dir="$(git rev-parse --git-dir 2>/dev/null)" || exit 0
+repo_hook="${git_dir}/hooks/${hook}"
+
+[ -x "$repo_hook" ] || exit 0
+exec "$repo_hook" "$@"
