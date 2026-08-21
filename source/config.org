@@ -308,7 +308,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
            (mount-point mount-point)
            (type "btrfs")
            (dependencies %mapped-devices-config)
-           (options (string-append "subvol=" subvol ",compress=zstd:6"))
+           (options (string-append "subvol=" subvol ",compress=zstd:3,noatime"))
            (create-mount-point? #t)
            ;; /tmp 非启动必需：挂载失败时优雅降级为根 tmpfs 的子目录
            (needed-for-boot? (not (string=? mount-point "/tmp")))
@@ -320,7 +320,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
    (mount-point "/data")
    (type "btrfs")
    (dependencies %mapped-devices-config)
-   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:6"))
+   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:3,noatime"))
    (create-mount-point? #t)))
 
 (define %bind-mounts
@@ -367,10 +367,14 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
         "loglevel=0"
         "modprobe.blacklist=wacom,hid_uclogic"
         "snd-intel-dspcfg.dsp_driver=3"
+        ;; 中断线程化：SOF/HDA 中断处理成为可调度线程，
+        ;; 可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun
+        "threadirqs"
         "quiet"
-        "usbcore.autosuspend=120"
+        ;; USB 自动挂起改由熄屏脚本 usb-power-gate 按白名单显式控制；
+        ;; 此参数只改挂起延迟、不产生实际效果，删除
         "zswap.enabled=1"
-        "zswap.max_pool_percent=90"
+        "zswap.max_pool_percent=35"
         %default-kernel-arguments))
 
 (kernel-loadable-modules (list v4l2loopback-linux-module))
@@ -384,7 +388,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+begin_src scheme
 (list (simple-service 'extend-kernel-module-loader
                       kernel-module-loader-service-type
-                      '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq_pie"
+                      '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq"
                         "tcp_bbr" "uhid" "uinput" "v4l2loopback"))
 
       (simple-service 'extend-sysctl sysctl-service-type
@@ -397,16 +401,23 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                         ("vm.vfs_cache_pressure" . "50")
                         ("vm.page_lock_unfairness" . "1")
                         ("vm.stat_interval" . "120")
+                        ;; 空闲时减少 SSD 唤醒（续航）；笔记本有电池，掉电风险可忽略
+                        ("vm.dirty_writeback_centisecs" . "1500")
 
-                        ("net.core.default_qdisc" . "fq_pie")
-                        ("net.core.rmem_max" . "7500000")
-                        ("net.core.wmem_max" . "7500000")
+                        ;; BBR 的 pacing 依赖 fq 的 EDT 模型；fq_pie 会让 BBR
+                        ;; 退化为内核软件 pacing（CPU 开销更高、突发延迟更差）
+                        ("net.core.default_qdisc" . "fq")
+                        ("net.core.rmem_max" . "16777216")
+                        ("net.core.wmem_max" . "16777216")
                         ("net.core.rmem_default" . "524288")
                         ("net.core.wmem_default" . "524288")
                         ("net.core.netdev_max_backlog" . "5000")
                         ("net.ipv4.ip_forward" . "1")
                         ("net.ipv4.tcp_congestion_control" . "bbr")
-                        ("net.ipv4.tcp_low_latency" . "1")
+                        ;; 高 BDP（跨国代理链路）下放开自动调优上限；
+                        ;; 只设 *_max 不设三元组时 tcp_wmem 仍受默认 4M 限制
+                        ("net.ipv4.tcp_rmem" . "4096 131072 16777216")
+                        ("net.ipv4.tcp_wmem" . "4096 65536 16777216")
                         ("net.ipv4.tcp_fastopen" . "3")
                         ("net.ipv4.tcp_mtu_probing" . "1")
                         ("net.ipv4.tcp_notsent_lowat" . "16384")
@@ -958,30 +969,105 @@ iifname "uap0" oifname != "uap0" masquerade
 
 #+NAME: udev-services
 #+begin_src scheme
-(list (simple-service 'backlight udev-service-type (list ddcutil light))
+;; AC 状态联动脚本：插电 → PPD performance + WiFi 省电关；
+;; 拔电 → power-saver + WiFi 省电开。由下方 udev 规则在
+;; power_supply add/change 事件时以 root 调用。
+(let* ([ac-power-script
+        (program-file
+         "ac-power-profile"
+         #~(let ((mode (if (> (length (command-line)) 1)
+                           (cadr (command-line))
+                           ""))
+                 (ppdctl (file-append (spec->pkg "power-profiles-daemon")
+                                      "/bin/powerprofilesctl"))
+                 (iw-bin (file-append (spec->pkg "iw") "/bin/iw")))
+             (define (run . args) (apply system* args) #t)
+             (if (string=? mode "on")
+                 (begin (run ppdctl "set" "performance")
+                        (run iw-bin "dev" "wlp0s20f3" "set" "power_save" "off"))
+                 (begin (run ppdctl "set" "power-saver")
+                        (run iw-bin "dev" "wlp0s20f3" "set" "power_save" "on")))))]
 
-      (udev-rules-service 'android android-udev-rules
-                          #:groups '("adbusers"))
+       [ac-power-rules
+        (computed-file
+         "90-ac-power-profile.rules"
+         #~(call-with-output-file #$output
+             (lambda (port)
+               (display
+                (string-append
+                 "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
+                 "ATTR{type}==\"Mains\", ATTR{online}==\"1\", "
+                 "RUN+=\"" #$ac-power-script " on\"\n"
+                 "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
+                 "ATTR{type}==\"Mains\", ATTR{online}==\"0\", "
+                 "RUN+=\"" #$ac-power-script " off\"\n")
+                port))))]
 
-      (udev-rules-service 'steam-devices steam-devices-udev-rules)
+       ;; USB 设备的 power/control 默认 root:root 0644，用户不可写。
+       ;; 设备注册时放开为 0666，让熄屏脚本 usb-power-gate 能以普通
+       ;; 用户身份挂起/恢复 USB 设备。设备重新枚举时 add 事件自愈。
+       [usb-power-perm-rules
+        (computed-file
+         "95-usb-power-control-perms.rules"
+         #~(call-with-output-file #$output
+             (lambda (port)
+               (display
+                (string-append
+                 "ACTION==\"add\", SUBSYSTEM==\"usb\", TEST==\"power/control\", "
+                 "RUN+=\"" (file-append (spec->pkg "coreutils") "/bin/chmod")
+                 " 666 %S%p/power/control\"\n")
+                port))))])
 
-      (udev-rules-service 'controller
-                          (udev-rule "60-controller-permission.rules"
-                                     "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
-      (udev-rules-service 'cpu-dma
-                          (udev-rule "99-cpu-dma-latency.rules"
-                                     "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))
+  (list (simple-service 'backlight udev-service-type (list ddcutil light))
 
-      (udev-rules-service 'intel-vpu
-                          (udev-rule "60-intel-vpu.rules"
-                                     "SUBSYSTEM==\"accel\", MODE=\"0660\", GROUP=\"video\""))
+        (udev-rules-service 'android android-udev-rules
+                            #:groups '("adbusers"))
 
-      (udev-rules-service 'sayodevice
-                          (udev-rule "60-sayodevice.rules"
-                                     "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
-      (udev-rules-service 'sunshine
-                          (udev-rule "60-sunshine-uinput.rules"
-                                     "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"")))
+        (udev-rules-service 'steam-devices steam-devices-udev-rules)
+
+        (udev-rules-service 'controller
+                            (udev-rule "60-controller-permission.rules"
+                                       "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
+        (udev-rules-service 'cpu-dma
+                            (udev-rule "99-cpu-dma-latency.rules"
+                                       "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))
+
+        (udev-rules-service 'intel-vpu
+                            (udev-rule "60-intel-vpu.rules"
+                                       "SUBSYSTEM==\"accel\", MODE=\"0660\", GROUP=\"video\""))
+
+        (udev-rules-service 'sayodevice
+                            (udev-rule "60-sayodevice.rules"
+                                       "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
+        (udev-rules-service 'sunshine
+                            (udev-rule "60-sunshine-uinput.rules"
+                                       "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\""))
+
+        (udev-rules-service 'ac-power-profile ac-power-rules)
+        (udev-rules-service 'usb-power-perms usb-power-perm-rules)
+
+        ;; 开机时按当前电源状态初始化一次（udev 冷插拔事件早于 PPD 启动，
+        ;; 那次调用会因 PPD 未上线而静默失败，这里补一次）
+        (simple-service 'ac-power-init shepherd-root-service-type
+                        (list (shepherd-service
+                               (provision '(ac-power-init))
+                               (documentation
+                                "按当前电源状态初始化 PPD profile 与 WiFi 省电。")
+                               (requirement '(power-profiles-daemon user-processes))
+                               (start #~(lambda _
+                                          (let* ((port (false-if-exception
+                                                        (open-input-file
+                                                         "/sys/class/power_supply/ADP1/online")))
+                                                 (val (and port (read port))))
+                                            (when port (close-port port))
+                                            (zero? (system* #$ac-power-script
+                                                            (if (eq? val 1)
+                                                                "on"
+                                                                "off"))))))
+                               (stop #~(lambda _ #t))
+                               (one-shot? #t)
+                               (auto-start? #t)
+                               (respawn? #f))))))
 #+end_src
 
 *** 基础服务
@@ -1011,13 +1097,23 @@ iifname "uap0" oifname != "uap0" masquerade
                                             #:requirement '(user-processes
                                                             guix-daemon))
                             ;; 用于自动更新 flatpak 系统安装的软件包
+                            ;; （仅在使用外接电源时执行，避免电池下大下载）
                             (shepherd-timer '(flatpak-system-update)
                                             #~(calendar-event #:hours '(18)
                                                               #:minutes '(0))
-                                            #~("/run/current-system/profile/bin/flatpak"
-                                               "update" "--system" "-y")
+                                            #~("/bin/sh" "-c"
+                                               "/run/current-system/profile/bin/grep -q 1 /sys/class/power_supply/A*/online 2>/dev/null && exec /run/current-system/profile/bin/flatpak update --system -y")
                                             #:requirement '(user-processes
-                                                            network-manager))))
+                                                            network-manager))
+                            ;; Btrfs discard=async 之外的每周兜底 TRIM
+                            (shepherd-timer '(fstrim)
+                                            #~(calendar-event
+                                               #:days-of-week '(sunday)
+                                               #:hours '(19)
+                                               #:minutes '(0))
+                                            #~("/run/current-system/profile/bin/fstrim"
+                                               "-av")
+                                            #:requirement '(file-systems))))
 
       (service nix-ld-service-type
                (nix-ld-configuration
@@ -1103,7 +1199,8 @@ iifname "uap0" oifname != "uap0" masquerade
                                                 (handle-suspend-key 'ignore)
                                                 (handle-hibernate-key 'ignore))))
 
-        (list (service fprintd-service-type)
+        (list (service earlyoom-service-type)
+              (service fprintd-service-type)
               (service gamemode-service-type)
               (service gnome-keyring-service-type)
               (service gvfs-service-type)
@@ -1339,6 +1436,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "dconf-editor"
         "dex"
         "file-roller"
+        "hypridle"
         "libnotify"
         "pavucontrol"
         "rofi"
@@ -1937,7 +2035,8 @@ end
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
                         (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
                               (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
-                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))))
+                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+                              (make-shepherd-service hypridle "/bin/hypridle" '(graphical-session))))
 
         (simple-service 'hermes-services home-shepherd-service-type
                         (list (shepherd-service
@@ -1967,7 +2066,29 @@ end
                                                                       "/shepherd/hermes-gateway.log"))
                                            args)))
                                (stop #~(make-kill-destructor))
-                               (respawn? #t))))))
+                               (respawn? #t))))
+
+        ;; 按需持有 /dev/cpu_dma_latency（audio 组可写），把允许的 C-state
+        ;; 保持在最浅档，消除深度睡眠唤醒抖动。代价是待机功耗上升，
+        ;; 因此默认不自启；需要最低音频延迟时手动：
+        ;;   herd start cpu-dma-latency / herd stop cpu-dma-latency
+        (simple-service 'cpu-dma-latency-service home-shepherd-service-type
+                        (list (shepherd-service
+                               (provision '(cpu-dma-latency))
+                               (documentation
+                                "Hold /dev/cpu_dma_latency=0 to keep C-states shallow.")
+                               (requirement '())
+                               (start #~(lambda args
+                                          ((make-forkexec-constructor
+                                            (list "/bin/sh" "-c"
+                                                  "exec 3>/dev/cpu_dma_latency && printf '\\000\\000\\000\\000' >&3 && exec sleep infinity")
+                                            #:environment-variables (environ)
+                                            #:log-file (string-append (getenv "HOME")
+                                                                      "/.local/state/shepherd/cpu-dma-latency.log"))
+                                           args)))
+                               (stop #~(make-kill-destructor))
+                               (auto-start? #f)
+                               (respawn? #f))))))
 #+end_src
 
 *** 计时器服务
@@ -1977,11 +2098,12 @@ end
 (list (simple-service 'auto-update home-shepherd-service-type
                       (list
                        ;; 用于自动更新 flatpak 用户安装的软件包
+                       ;; （仅在使用外接电源时执行，避免电池下大下载）
                        (shepherd-timer '(flatpak-user-update)
                                        #~(calendar-event #:hours '(18)
                                                          #:minutes '(0))
-                                       #~("/run/current-system/profile/bin/flatpak"
-                                          "update" "--user" "-y")
+                                       #~("/bin/sh" "-c"
+                                          "/run/current-system/profile/bin/grep -q 1 /sys/class/power_supply/A*/online 2>/dev/null && exec /run/current-system/profile/bin/flatpak update --user -y")
                                        #:requirement '(dbus)))))
 #+end_src
 

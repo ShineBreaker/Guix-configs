@@ -1,0 +1,45 @@
+#!/bin/sh
+# usb-power-gate —— 熄屏空闲时挂起非白名单 USB 设备，唤醒时全部恢复。
+#
+# 由 hypridle 调用：
+#   usb-power-gate suspend   空闲超时：把非白名单设备的 power/control 置 auto
+#   usb-power-gate resume    恢复：全部置回 on
+#
+# 白名单（永不挂起，保证远程操控时网络畅通与唤醒可靠）：
+#   - USB 网卡：任一接口下注册了 net/ 设备（有线/无线 USB 网卡通吃）
+#   - 蓝牙适配器：驱动 btusb
+#   - HID 输入设备：接口下有 input/（键盘/鼠标，保证唤醒）
+#
+# 依赖：udev 规则 95-usb-power-control-perms.rules 已把各设备
+# power/control 放开为 0666，本脚本以普通用户身份运行。
+# 内核 runtime PM 保证：父设备（hub）挂起前子设备必须已挂起，
+# 因此白名单设备会阻塞其所在 hub 的挂起，不会连带断电。
+
+mode="${1:-resume}"
+
+excluded() {
+    dev=$1
+    for iface in /sys/bus/usb/devices/*:*; do
+        case "${iface##*/}" in
+            "$dev":*) ;;
+            *) continue ;;
+        esac
+        # 网卡：接口下有 net/ 子目录
+        set -- "$iface"/net/*; [ -e "$1" ] && return 0
+        # HID 输入
+        set -- "$iface"/input/*; [ -e "$1" ] && return 0
+        # 蓝牙
+        case "$(readlink "$iface/driver" 2>/dev/null)" in *btusb*) return 0 ;; esac
+    done
+    return 1
+}
+
+for dev in /sys/bus/usb/devices/*-*; do
+    case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
+    [ -f "$dev/power/control" ] || continue
+    if [ "$mode" = suspend ]; then
+        excluded "${dev##*/}" || echo auto > "$dev/power/control" 2>/dev/null
+    else
+        echo on > "$dev/power/control" 2>/dev/null
+    fi
+done
