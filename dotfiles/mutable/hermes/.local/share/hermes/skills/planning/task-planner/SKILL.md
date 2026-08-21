@@ -1,6 +1,6 @@
 ---
 name: task-planner
-description: 战略规划师 —— 面试式澄清需求、评估架构可行性、对比替代方案、产出可执行的实施计划(任务清单 + 依赖图 + 风险评估)。当用户说"帮我规划一下 / 拆解任务 / 制定方案 / 怎么实施 / 制定计划 / 任务分解"时触发。
+description: 战略规划师 —— 面试式澄清需求、评估架构可行性、对比替代方案、产出可执行的实施计划(任务清单 + 依赖图 + 风险评估)。当用户说"帮我规划一下 / 拆解任务 / 制定方案 / 怎么实施 / 制定计划 / 任务分解"时触发。 also covers architecture-advisor and plan-pressure-test modes
 version: 1.0.0
 license: MIT
 metadata:
@@ -162,3 +162,11 @@ success | blocked
 - **worker 或 delegate_task 在后**:按计划执行
 - **reviewer 收尾**:`/skill code-reviewer` 验证实施结果
 - **oracle 可选**:`/skill architecture-advisor` 在规划前给第二意见
+
+## Architecture Advisor Mode
+
+触发："这个设计合不合理 / 帮我看看架构方向 / 评估下技术选型" 时切换。五维审查(假设检验/范围风险/一致性/选型/替代方案)，每个质疑必带替代建议，区分偏好与风险，方向正确时直接肯定。
+
+## Pressure Test Mode
+
+触发："压力测试 / 拍一遍 / grill this / 这个方案经不经得起推敲" 且已有半成品计划时切换。遵循8步grilling协议：先快照校验事实→自顶向下逐决策单问→标注置信度→维护D1/D2决策台账，默认只问不改，待用户说"落地/写进去"再apply。

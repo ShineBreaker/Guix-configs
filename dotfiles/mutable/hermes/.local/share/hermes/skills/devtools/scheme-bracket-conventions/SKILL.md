@@ -1,6 +1,6 @@
 ---
 name: scheme-bracket-conventions
-description: "Use for R6RS Appendix C square-bracket placement in Scheme."
+description: "Use for R6RS Appendix C square-bracket placement and refactor conversion in Scheme."
 version: 0.1.0
 author: Hermes
 metadata.hermes.tags: [Scheme, R6RS, StyleGuide, Syntax]
@@ -83,3 +83,7 @@ Read the code you've written. For each `cond`, `let`, `case`, `syntax-case`,
 - Are function calls still in regular parentheses?
 
 If yes, the code follows R6RS Appendix C conventions.
+
+## Refactor mode (bulk conversion, from scheme-bracket-refactor)
+
+Includes refactor mode: batch-convert all-parens code via `scripts/convert-brackets.py` (`scm`/`org` modes, char-level scan skipping strings/comments/char-literals); trap — `case`/`match` key/expr stays `()` (only clauses → `[]`); verify with paren-balance + `guile -c '(load ...)'` + spot-check `case`/`match` keys.

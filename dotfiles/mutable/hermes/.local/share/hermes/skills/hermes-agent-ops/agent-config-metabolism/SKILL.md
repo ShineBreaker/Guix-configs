@@ -324,3 +324,15 @@ Then run the cross-validation probes from **Step 4** to confirm the script's num
 - `references/parsers-and-extractors.md` — reusable Python patterns: JSONC lenient parser, Traceback tail extractor, yaml/CHECKS parity guard, cross-validation probes. Distilled from real bugs found while developing this skill.
 - `scripts/metabolism_check.py` — the runnable audit (14 checks).
 - `scripts/metabolism_thresholds.yaml` — editable thresholds.
+
+## Appendix — Merged from agent-config-audit (zombie skills / injection-budget)
+
+> 来源 `agent-config-audit` 独有、metabolism 原版未覆盖的 2 条检测，已以附录并入。
+
+### A. Zombie skills — 僵尸镜像检测
+- 勿信 `hermes skills list` 清单；以 `find $HERMES_HOME/skills -name SKILL.md | wc -l` 为准。
+- 僵尸镜像：`find $HERMES_HOME/skills -type l ! -exec test -e {} \; -print` 找出指向已删除目标的 symlink。
+
+### B. Injection-budget — 重复注入 / 预算
+- 查重：`diff $HERMES_HOME/memories/MEMORY.md $HERMES_HOME/memories/USER.md`；多位置：`find $HERMES_HOME -name MEMORY.md`。
+- Guix stow 下 MEMORY.md 为 symlink，必须 `stat -Lc%s` 跟随取真实体积，`stat -c%s` 只得 ~100B 导致假绿。

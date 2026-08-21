@@ -170,3 +170,9 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 - marker-pdf downloads ~2.5GB of models to `~/.cache/huggingface/` on first use
 - For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
 - For PowerPoint: see the `powerpoint` skill (uses python-pptx)
+
+---
+## Appendix: Raster Image OCR — RapidOCR vs PaddleOCR (from image-ocr)
+
+For PNG/JPG/screenshots outside the PDF flow: **RapidOCR** (`rapidocr-onnxruntime`, ~100 MB, ~2 s/image, ONNX CPU) is the default for Chinese+English mixed / UI text / screenshots; **PaddleOCR** (~500 MB+, ~5 s/image, GPU-optional) only when maximum accuracy / tables / handwriting / complex layouts justify the cost. **Tesseract** is English-only fallback — poor Chinese even with `chi_sim` pack, and requires dark-bg inversion (`corner brightness <150 → invert → autocontrast → scale 2× → sharpen`) and `-l chi_sim+eng`.
+Decision: Chinese or unknown language → RapidOCR; English-only simple docs → Tesseract; accuracy-critical complex layout → PaddleOCR.

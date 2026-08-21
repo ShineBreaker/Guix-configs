@@ -153,3 +153,6 @@ verification 脚本模板）：`references/hermes-desktop-remote-backend.md`
 - `appimage-run` skill: same FHS-container technique but for AppImage files.
 - `electron-wayland-ime`: fcitx5 IME under Wayland — different concern (input), use
   after this skill gets the window on screen.
+## Appendix — appimage-run 4-layer checklist (merged 20260630)
+- 4 layers: GUI libs (cairo/gtk/pango + libxcb not xcb-util), gcc-toolchain runtime, GPU LD_LIBRARY_PATH=/appimage-root, font-wqy-zenhei; verify: no shared-open error, no error_code 1002, fc-list :charset=0x4E2D hits Chinese font. See agenote 20260630.
+

@@ -1,6 +1,6 @@
 ---
 name: agent-session-import
-description: "Import conversation history from a third-party coding-agent CLI/TUI (pi, Claude Code, Codex, OpenCode, Aider, zcode, …) into Hermes's local session store so the conversations appear in `hermes sessions list` and can be resumed with `hermes --resume <id>`. Triggers: 'import pi/zcode sessions', '把 claude code / zcode 对话导入 hermes', 'migrate my chat history', '把 .codex/sessions 灌进 hermes', '恢复被删的 dotfiles'. Also handles recap work when hermes's `session_search` is empty but another agent left local state behind. **Before writing any importer against an agent's data dir, run `find ~ -name '*.db' -o -name '*.sqlite*' 2>/dev/null | grep -i <agent>` first — many agents (zcode, pi context-mode) keep the real session tree in a SQLite DB even when an obvious `*.jsonl` directory exists nearby.** For the related but narrower task of generating a schema reconnaissance report without writing the importer, see `agent-history-importer`."
+description: "Import conversation history from a third-party coding-agent CLI/TUI (pi, Claude Code, Codex, OpenCode, Aider, zcode, …) into Hermes's local session store so the conversations appear in `hermes sessions list` and can be resumed with `hermes --resume <id>`. Triggers: 'import pi/zcode sessions', '把 claude code / zcode 对话导入 hermes', 'migrate my chat history', '把 .codex/sessions 灌进 hermes', '恢复被删的 dotfiles'. Also handles recap work when hermes's `session_search` is empty but another agent left local state behind. **Before writing any importer against an agent's data dir, run `find ~ -name '*.db' -o -name '*.sqlite*' 2>/dev/null | grep -i <agent>` first — many agents (zcode, pi context-mode) keep the real session tree in a SQLite DB even when an obvious `*.jsonl` directory exists nearby.** For the related but narrower task of generating a schema reconnaissance report without writing the importer, see `agent-history-importer`. unified: pi/zcode/codex/crush/history"
 version: 1.4.0
 license: MIT
 metadata:
@@ -482,3 +482,10 @@ you'll hit them too:
   is. The two structural principles (self-contained +
   progressive disclosure) are documented there, with this skill
   as the worked example.
+
+## Adapters
+
+- **zcode** (`~/.zcode/cli/db/db.sqlite`): SQLite `session/message/part` 三表，`data` 列为 JSON TEXT；`time_created` 为毫秒、`part.data.callID` 为 tool-call 关联键、`synthetic:true` 的 user part 需折为 `[system-reminder]` 一行。
+- **crush** (`<project>/.crush/crush.db` per-project): `messages.parts` 为 JSON 数组；`created_at` 实际为秒（schema 注释写 ms 是错的，需 `datetime(v,'unixepoch')` 验证）；`messages.id` 非全局唯一，`$$` 后缀为 subagent 调用。
+- **codex** (`~/.config/codex/sessions/YYYY/MM/DD/rollout-*.jsonl`): 行式 JSONL，类型 `session_meta/turn_context/response_item/compacted`；`custom_tool_call` 为 JS shim 需抽 JSON；`reasoning encrypted_content` 无明文直接丢弃、长工具输出 800/4000 分级截断（见 `transcript-density-policy.md`）。
+- **history** (`references/import-external-memory.md`): 将 zcode 等外部 markdown memories 导入 Hermes 三通道（`fact_store`/`agenote`/`memory`），按 `entity` 分组批量 `agenote add --type`，`memory` 文件超 86% 时先合并去重再写入。

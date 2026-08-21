@@ -751,3 +751,14 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 | AGENTS.md 描述里有 `source/channel.lock`，但仓库只有 `.guix-channel`          | `references/lint-recipes.md` §Recipe 4：blueprint 走 `.guix-channel` + `-L modules`；不要为对齐文档建假的 `source/`。                                                                                                                                                                                                                                                                                                                       |
 | `modules/jeans.scm` 补完 re-export 后要同步的事                           | `blue gen-docs` 重新生成 `docs/packages.md`，并在同一 commit 中提交。                                                                                                                                                                                                                                                                                                                                                                      |
 | Rust 包运行时 panic `Posix(2)` / ENOENT（如 nix-ld `src/main.rs:187`）     | `references/rust-packaging-patterns.md` §1：`option_env!()` 编译时常量未设，baked 了 NixOS 默认路径。诊断：`strings` 二进制查 baked 值；修复：build phase `setenv` + `native-inputs (list glibc)`。input label 是 `"glibc"` 不是 `"libc"`。 |
+
+## 4.4 Merged from `guix/jeans-channel-ops` (2026-08) — CI 补充要点
+- cron 实际 05:12-05:29 UTC 触发（非 02:00），06:00 前勿判调度失效；运行号按 workflow 分开计数；`gh` 绝对路径 `~/.local/state/nix/profile/bin/gh`，403 回退 `x-access-token` Bearer。
+- CI 签名速查：`exit 8+502 Bad Gateway`→重试 Install Guix；`exit 128+403 codeberg`→FORGEJO_TOKEN/IP；`report.json 无文件+<30s`→死于 Install Guix 前；详表见原 ci-failure-signatures。
+- `guix refresh` 列表含 1 个 unknown package 即整批 exit 1 零更新；字母版本号（如 1.21b vs 1.21.10b）需核 `gh api .../releases`；`/releases/latest 404` 仅意味全为 prerelease。
+- 回填验证：`NONGUIX_DIR` 扫 `~/.cache/guix/checkouts` + `GUIX_EXTRA_LOAD_PATH` + `guix build -L modules -L $NONGUIX_DIR`；-bin 包验 store 内 bin/.desktop/ELF 内容。
+## Appendix — packaging pitfalls (agenote 202608, merged)
+- neomacs: wrap-program → .neomacs-real 无限循环; 用 libexec + exec -a 手写 wrapper (20260818-201651).
+- bun --compile: patchelf/ld-linux wrapper 破坏 .bun section / /proc/self/exe; 用 nix-ld + NIX_LD_LIBRARY_PATH (20260818-201643).
+- ffmpeg: Guix 无 7.x 需私有 helper pin 7.1.5 (20260818-201800); waywallen Qt6 需 libglvnd + 4 Quick 模块已知缺失; wine64 11.0 stub/regedit/wineserver 缺陷链见 agenote 20260818-201633.
+

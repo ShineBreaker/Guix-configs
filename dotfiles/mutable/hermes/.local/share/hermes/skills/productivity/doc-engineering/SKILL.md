@@ -1,6 +1,6 @@
 ---
 name: doc-engineering
-description: "When the user says '校对文档 / 检查文档是否还有效 / sync doc with code / 扩写 README / 改写文档 / 把这个 PLAN/plan/任务书做成文档 / 文档并入主文档', or when a `refs/*.md` document may be drifting from the tool/CLI/源码 it describes, or when a PLAN file needs to become a user-facing reference doc. Covers three entry points — check, rewrite, plan-to-doc — backed by a `scripts/doc-check.py` checker that catches silent drift between a doc and its source-of-truth (CLI flags, MCP tool names, file paths). Trigger when the user names a doc path and asks whether it's still accurate, when adding a new CLI/MCP/API surface that old docs don't mention, or when a PLAN/任务书/thread needs to graduate into a stable reference."
+description: "When the user says '校对文档 / 检查文档是否还有效 / sync doc with code / 扩写 README / 改写文档 / 把这个 PLAN/plan/任务书做成文档 / 文档并入主文档', or when a `refs/*.md` document may be drifting from the tool/CLI/源码 it describes, or when a PLAN file needs to become a user-facing reference doc. Covers three entry points — check, rewrite, plan-to-doc — backed by a `scripts/doc-check.py` checker that catches silent drift between a doc and its source-of-truth (CLI flags, MCP tool names, file paths). Includes audit mode (existence/consistency/redundancy three-axis check). Trigger when the user names a doc path and asks whether it's still accurate, when adding a new CLI/MCP/API surface that old docs don't mention, or when a PLAN/任务书/thread needs to graduate into a stable reference."
 version: 0.2.0
 license: MIT
 metadata:
@@ -293,3 +293,43 @@ See `skill-authoring` §8 for the verification-evidence contract.
 - `scripts/doc-check.py` — the checker; primary entry point for §3. Verified
   7/7 PASS on 2026-07-07 against `docs/agenote_mcp.md` (ad-hoc verification,
   not a test suite — see §7 and `skill-authoring` §8 for the contract).
+
+## 9. Audit Mode (audit mode) — 三轴检查
+
+> 合并自 `doc-audit`。当用户说 `遍历文档检查是否反映最新状态 / 简化 AGENTS.md / 文档校对 / 检查文档一致性 / 清理冗余文档` 或需对多文档做系统性体检时，启用本模式。三个轴、一次出报告，每项修复追溯到 ground truth。
+
+### 9.1 Existence（存在性）
+
+对文档中声称的每个文件路径 / 包名 / adapter 名 / CLI 命令，验证其真实存在：
+
+```bash
+search_files pattern=<claimed-path> target=files
+guix search <package-name>
+find <config-dir> -name "<name>.*"
+```
+
+常见失效：文档列出 `nftables.conf` / `zed.json` 但 `source/files/` 没有；声称 `pi.json` adapter 但实际只有 `omp.json`；引用 `dotfiles/mutable/pi` 目录但不存在。
+
+### 9.2 Consistency（一致性）
+
+对在多处文档中描述的同一实体，交叉核对是否一致（如 ISO 使用的 DE、display manager `sddm` vs `lightdm`、service 的增删描述、adapter 命名）。**规则：文档不一致时以实际代码/配置为 ground truth，只改文档不改代码。**
+
+### 9.3 Redundancy（冗余性）
+
+对 `AGENTS.md` 每段自问："AI 能否从别处获得此信息？" 若满足则指针化：
+
+| 若... | 则... |
+| ----- | ----- |
+| scheme 代码块重复了有独立文档的配置 | 替换为指向该文档的指针 |
+| 段落复述了另一个 AGENTS.md | 替换为指向该 AGENTS.md 的指针 |
+| 描述是对 `source/config.org` 代码块的口头复述 | 替换为指向该代码块的指针 |
+
+保留：任务路由表、`<critical>` 硬约束、`<!-- structor:begin -->...<!-- /structor -->` 标记对、指向他处文档的指针。删除：重复 `source/config.org` 的完整 scheme 块、有独立 AGENTS.md 的系统的详细描述、指向已不存在文件/包的死引用、与兄弟文档重叠的重复段落。替换示例：完整 `(service home-dotfiles-service-type ...)` 块 → 一句 `详细配置见 dotfiles/AGENTS.md`。
+
+### 9.4 80-column hard wrap 清理
+
+Markdown 源码不强制 80 列硬换行（GUI 无视觉收益，且增加 `patch` 模糊匹配难度）。检测：`search_files pattern="^.{80,}$" target=content file_glob="*.md"`，修复时将硬换行合并为自然段落，保留表格/代码块/列表。
+
+### 9.5 报告格式与校验
+
+报告分三节：**Fact fixes**（File | Line | Error | Fix | Evidence）、**Redundancy cleanup**（File | Removed | Replaced with）、**Consistency fixes**（Documents | Disagreement | Ground truth | Unified to）。改完后：重跑 existence/consistency 检查、确认 structor 标记未破坏、确认路由表完整。

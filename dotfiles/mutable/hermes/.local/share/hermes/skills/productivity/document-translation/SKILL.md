@@ -349,3 +349,52 @@ English source as ground truth.
 - `references/audit-translation.md` — recipes for §7 audit workflow:
   URL HEAD probing, SWHID validation, multi-line string pitfall, reverse-grep
   verification, common-bad-string sweep.
+
+## 8. Resume / checkpoint extras (absorbed from `pdf-translation`)
+
+Preserves the `pdf-translation` incremental / resumable specifics with no
+equivalent in §1–7. Source skill retired; its git history retains
+`scripts/reconcile_manifest.py`, `scripts/split.py`,
+`references/pymupdf-extraction.md`, and `templates/manifest.json`.
+
+### 8.1 Sample chapter first (先译样板章再放量)
+
+Before bulk translation, complete **one short chapter** (e.g. Chapter 1) and
+get user sign-off on style / terminology. Catches drift that would otherwise
+require rework across 300k+ words. Only then proceed chapter-by-chapter.
+
+### 8.2 Reconcile details (supplements §4)
+
+§4 mandates reconcile at session start. The `pdf-translation` implementation
+adds two points:
+
+- **Default is report-only** — `scripts/reconcile_manifest.py` without flags
+  only reports orphans; pass `--repair` to actually mutate `manifest.json`
+  and move `untranslated/<id>.en.md` → `archive/` (if `archive/` already has
+  the same name, drop the `untranslated/` copy).
+- **Second inconsistency** — `status == translated` but
+  `translated/<id>.zh.md` is missing or `untranslated/<id>.en.md` still
+  present → state vs filesystem diverge, needs manual check (don't auto-repair).
+- After reconcile, always re-run `assemble.py` to verify the stitched output.
+
+### 8.3 Slice boundary edge cases
+
+When slicing by detected headings:
+
+- **Multiple headings on one page** — slice interval is
+  `[current heading bottom, next heading top)` using `(page, y0)` of the next
+  heading; don't use page boundaries alone.
+- **Last slice has no next heading** — `clip=None` / extract to end of
+  document; don't error on `next_top == None`.
+- **Index / appendix false positives** — single-letter entries (`A`/`B`/`C`)
+  and short tokens like `2FA` in the Concept Index masquerade as H1 by font
+  size. Filter: skip blocks with `len <= 2` pure-alpha, and beyond the index
+  threshold page only accept `Concept Index` itself as a heading.
+
+### 8.4 Tool selection (Guix preference, supplements Environment note)
+
+Guix Home: `guix search python-pymupdf` → `guix install python-pymupdf`
+(provides `fitz`) per user preference over `pip install`. Fallbacks if `fitz`
+unavailable: `poppler` (`pdftotext`, lightest but drops layout),
+`python-pdfminer-six`, `python-pikepdf`. `pypdf`/`pdfplumber` also work
+(already noted in Environment).

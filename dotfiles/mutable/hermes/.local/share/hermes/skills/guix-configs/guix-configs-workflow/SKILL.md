@@ -1401,3 +1401,7 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 - **ISO `blue build-iso` 运行范式 + 四个真实构建错误序列**(不需 sudo / agent 可直跑 / `%guix` 吞报错需手动复现 / `append` 拍平 noweb-list / `with-imported-modules` 修 trivial-build-system 模块缺失 / `operating-system-services` 双倍注册 essential 导致 `多余一个类为'X'的目标服务`)见 §11.7 + `references/iso-build-debug.md`。
 - **ISO KDE Plasma 装配**(XFCE→KDE 差异 / SDDM 字段带 `.desktop` 后缀 / elogind 必须显式加 / 完整错误序列 1-4 / 已构建成功的 `jeans-desktop-*.iso` 验证)见 §11.8 + `references/iso-kde-plasma-assembly.md`。
 - **gpg-agent / pinentry 范式**(daemon conf 必须用绝对 store 路径 / `$$bin/...$$` 路径注入 / `gpgconf --check-programs` 诊断信号 / home-shepherd 起的 daemon `$HOME` 不可靠 / blue home 后必走 `gpgconf --reload` / 推广到 mako / swaync / river 等同类场景)见 §4.6 + `references/gpg-agent-pinentry-absolute-store-path.md`。
+## Appendix — agenote 20260629/20260716 (merged)
+- blue check 局部括号错位但总数平衡 → guix invalid field specifier; 用 guile reader 逐文件验真平衡而非总数 (agenote 20260629).
+- 源码包 hash 漂移须用实际源码重算 hash (agenote 20260716).
+
