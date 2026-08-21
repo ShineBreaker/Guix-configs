@@ -480,14 +480,14 @@
               (delete-region body-start (line-beginning-position))
               (goto-char body-start)
               (insert (string-trim-right new-body \"\\n\") \"\\n\")
-              (setq replaced t))))))
+              (setq replaced t)))))
       (if replaced
           (progn
             (write-region (point-min) (point-max) out-file)
             (princ (format \"lang=%s\\n\" (or lang \"\"))))
-          (progn
-            (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
-            (kill-emacs 1)))))")
+        (progn
+          (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
+          (kill-emacs 1)))))")
 
 ;; 枚举：一次性遍历 file，导出【所有】 #+NAME 块。blue check 用它做逐块检查，
 ;; 避免每个块启动一次 emacs。与 block-extract-el 共用同一套正则风格，可对照阅读。
