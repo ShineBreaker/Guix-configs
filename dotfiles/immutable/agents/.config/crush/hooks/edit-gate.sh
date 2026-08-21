@@ -10,7 +10,7 @@
 #   - 全局 ~/.config/agents/anchors.json（meta-frozen，人工维护）
 #   - 项目级 <root>/.agents/anchors.json（ratchet 加码）
 #   合并由 anchors-lib.sh 的 load_merged_anchors 完成。
-# 语义对齐：dotfiles/mutable/pi/.config/pi/extensions/pi-gate/index.ts
+# 语义对齐：dotfiles/mutable/agents/pi/.config/pi/extensions/pi-gate/index.ts
 #   - checkProtectedPath（meta-frozen / frozen_paths / 部署位置保护）
 #   - detectSensitiveInfo（敏感信息）
 #   - collectPathHints（path_hints 软提示）

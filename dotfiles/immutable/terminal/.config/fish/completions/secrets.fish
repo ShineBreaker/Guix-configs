@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 function __fish_secrets_names
-    set -l root (string join "/" -- (git rev-parse --show-toplevel 2>/dev/null) dotfiles/mutable/secrets/.local/share/secrets-encrypted)
+    set -l root (string join "/" -- (git rev-parse --show-toplevel 2>/dev/null) dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted)
     if test -d $root
         for f in $root/*.age
             test -f "$f"; or continue
@@ -11,7 +11,7 @@ function __fish_secrets_names
         end
         return
     end
-    set -l fallback $HOME/Projects/Config/Guix-configs/dotfiles/mutable/secrets/.local/share/secrets-encrypted
+    set -l fallback $HOME/Projects/Config/Guix-configs/dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted
     if test -d "$fallback"
         for f in $fallback/*.age
             test -f "$f"; or continue

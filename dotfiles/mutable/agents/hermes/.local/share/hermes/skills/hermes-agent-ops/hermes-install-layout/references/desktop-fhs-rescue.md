@@ -170,7 +170,7 @@ wrapper,**照抄别省**):
 
 ## 6. 复用 appimage-run 范式
 
-`dotfiles/mutable/appimage-run/.local/bin/appimage-run_lib/` 里有现成的
+`dotfiles/mutable/tools/appimage-run/.local/bin/appimage-run_lib/` 里有现成的
 `container.scm`(`build-run-command`:preserve-env 正则、share/expose 路径、`--emulate-fhs`
 调用)。本 wrapper 的逻辑是它针对 Hermes 的简化内联版;若未来要支持 `--debug-shell` /
 profile 复用,可直接 source 那个模块而非重写。

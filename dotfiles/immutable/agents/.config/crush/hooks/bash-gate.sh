@@ -10,7 +10,7 @@
 #   - 全局 ~/.config/agents/anchors.json（meta-frozen，人工维护）
 #   - 项目级 <root>/.agents/anchors.json（ratchet 加码；从 $PWD 向上到 git 根）
 #   合并由 anchors-lib.sh 的 load_merged_anchors 完成。
-# 语义对齐：dotfiles/mutable/pi/.config/pi/extensions/pi-gate/index.ts
+# 语义对齐：dotfiles/mutable/agents/pi/.config/pi/extensions/pi-gate/index.ts
 #
 # crush hook 协议：
 #   - 环境变量 CRUSH_TOOL_INPUT_COMMAND 传入命令

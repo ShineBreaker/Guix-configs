@@ -6,7 +6,7 @@
 
 # anchors-lib.sh — crush hook 共享的 anchors.json 加载 / 合并库
 #
-# 被 bash-gate.sh 与 edit-gate.sh source。语义对齐 pi-gate（dotfiles/mutable/pi/
+# 被 bash-gate.sh 与 edit-gate.sh source。语义对齐 pi-gate（dotfiles/mutable/agents/pi/
 # .config/pi/extensions/pi-gate/index.ts）的分层 ratchet 模型：
 #   - 全局 ~/.config/agents/anchors.json（meta-frozen，人工维护，承载 sudo 等不可削弱项）
 #   - 项目级 <root>/.agents/anchors.json（从起点向上遍历到 git 根，收集每一层）

@@ -178,7 +178,7 @@ exec guix shell --container --emulate-fhs --network \
 4. **GPU 硬件渲染三件套**:`--share=/dev/dri`(**读写** bind;只读 `--expose` 会让 GPU 进程写 ioctl 失败 SIGILL exitCode 4)+ `--expose=/sys`(mesa `drmGetDevice()` 读 sysfs 解析 PCI 设备,缺它静默回退 llvmpipe)+ `--expose=/gnu/store`(Guix mesa 的 DRI 驱动路径硬编码 store 绝对路径)。Electron 参数配 `--ignore-gpu-blocklist`,**不要**设 `LIBGL_ALWAYS_SOFTWARE=1` / `--enable-unsafe-swiftshader`(软件渲染会让应用内动画全失效)。实测容器内 `glxinfo` = `Mesa Intel(R) Arc(tm) Graphics (MTL)`,GPU 进程稳定运行。
 5. `--no-sandbox --disable-gpu-sandbox` —— 嵌套 guix shell 容器里 Chromium 沙箱起不来(渲染进程 exitCode=5 crash loop),必须关。
 
-`hermes-desktop-manifest.scm` 包清单(与 `dotfiles/mutable/appimage-run` 的 electron 类型完全一致,**不要显式加 glibc**——`--emulate-fhs` 自动注入 glibc-for-fhs 并读 `/etc/ld.so.cache`):
+`hermes-desktop-manifest.scm` 包清单(与 `dotfiles/mutable/tools/appimage-run` 的 electron 类型完全一致,**不要显式加 glibc**——`--emulate-fhs` 自动注入 glibc-for-fhs 并读 `/etc/ld.so.cache`):
 ```
 coreutils bash zlib mesa libglvnd alsa-lib fontconfig freetype nss-certs gcc-toolchain font-wqy-zenhei
 ffmpeg nss at-spi2-core cups libdrm p11-kit glib gtk+ pango cairo libx11 libxext libxfixes
