@@ -972,15 +972,21 @@ iifname "uap0" oifname != "uap0" masquerade
 ;; AC 状态联动脚本：插电 → PPD performance + WiFi 省电关；
 ;; 拔电 → power-saver + WiFi 省电开。由下方 udev 规则在
 ;; power_supply add/change 事件时以 root 调用。
-(let* ([ac-power-script
+(let* ([ppdctl (file-append (spec->pkg "power-profiles-daemon")
+                            "/bin/powerprofilesctl")]
+       [iw-bin (file-append (spec->pkg "iw") "/bin/iw")]
+       [chmod-bin (file-append (spec->pkg "coreutils") "/bin/chmod")]
+
+       [ac-power-script
         (program-file
          "ac-power-profile"
          #~(let ((mode (if (> (length (command-line)) 1)
                            (cadr (command-line))
                            ""))
-                 (ppdctl (file-append (spec->pkg "power-profiles-daemon")
-                                      "/bin/powerprofilesctl"))
-                 (iw-bin (file-append (spec->pkg "iw") "/bin/iw")))
+                 ;; 宿主侧算好的 store 路径经 #$ 注入；
+                 ;; gexp 内不能裸调 file-append/spec->pkg（builder 无此绑定）
+                 (ppdctl #$ppdctl)
+                 (iw-bin #$iw-bin))
              (define (run . args) (apply system* args) #t)
              (if (string=? mode "on")
                  (begin (run ppdctl "set" "performance")
@@ -1014,7 +1020,7 @@ iifname "uap0" oifname != "uap0" masquerade
                (display
                 (string-append
                  "ACTION==\"add\", SUBSYSTEM==\"usb\", TEST==\"power/control\", "
-                 "RUN+=\"" (file-append (spec->pkg "coreutils") "/bin/chmod")
+                 "RUN+=\"" #$chmod-bin
                  " 666 %S%p/power/control\"\n")
                 port))))])
 
