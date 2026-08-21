@@ -308,7 +308,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
            (mount-point mount-point)
            (type "btrfs")
            (dependencies %mapped-devices-config)
-           (options (string-append "subvol=" subvol ",compress=zstd:3,noatime"))
+           (options (string-append "subvol=" subvol ",compress=zstd:3"))
            (create-mount-point? #t)
            ;; /tmp 非启动必需：挂载失败时优雅降级为根 tmpfs 的子目录
            (needed-for-boot? (not (string=? mount-point "/tmp")))
@@ -320,7 +320,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
    (mount-point "/data")
    (type "btrfs")
    (dependencies %mapped-devices-config)
-   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:3,noatime"))
+   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:3"))
    (create-mount-point? #t)))
 
 (define %bind-mounts
@@ -556,31 +556,33 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
                                             (display "259:3" port))))))))
 
       ;; 开机清空 /tmp：/tmp 已改为 btrfs 持久化挂载，
-      ;; 用此服务替代原 tmpfs 的"重启自动清空"行为
+      ;; 用此服务替代原 tmpfs 的"重启自动清空"行为。
+      ;; 幂等设计：reconfigure 与依赖解析会在运行期间反复 start 本服务
+      ;; （日志实测一次 rebuild 可触发十余次），/run 为 tmpfs（重启即空），
+      ;; 标志文件保证每个开机周期只有首次执行真正清空，其余全部跳过
       (simple-service 'cleanup-/tmp
                       shepherd-root-service-type
                       (list (shepherd-service
-                             (documentation "Empty /tmp on boot.")
+                             (documentation "Empty /tmp once per boot.")
                              (provision '(cleanup-/tmp))
                              (requirement '(file-systems))
                              (one-shot? #t)
-                             ;; 禁止自动启动：reconfigure 的 to-start 只挑 auto-start? #t
-                             ;; 的服务（guix/scripts/system/reconfigure.scm:221-225），
-                             ;; 否则每次 reconfigure 都会主动 start 它、清空运行中的 /tmp。
-                             ;; 开机时由 user-processes 依赖链拉起，不受此项影响
-                             (auto-start? #f)
                              (start
                               (with-imported-modules (source-module-closure
                                                       '((guix build utils)))
                                                      #~(lambda ()
                                                          (use-modules (guix build utils))
-                                                         ;; 删除 /tmp 下所有内容（mindepth 1 保留目录本身），
-                                                         ;; 单条目删除失败不应阻断启动
-                                                         (false-if-exception
-                                                          (invoke #$(file-append findutils "/bin/find")
-                                                                  "/tmp" "-mindepth" "1" "-delete"))
-                                                         ;; btrfs 子卷挂载点默认权限可能非 1777，强制修正粘滞位
-                                                         (chmod "/tmp" #o1777)
+                                                         (unless (file-exists? "/run/cleanup-tmp-done")
+                                                           ;; 删除 /tmp 下所有内容（mindepth 1 保留目录本身），
+                                                           ;; 单条目删除失败不应阻断启动
+                                                           (false-if-exception
+                                                            (invoke #$(file-append findutils "/bin/find")
+                                                                    "/tmp" "-mindepth" "1" "-delete"))
+                                                           ;; btrfs 子卷挂载点默认权限可能非 1777，强制修正粘滞位
+                                                           (chmod "/tmp" #o1777)
+                                                           (call-with-output-file "/run/cleanup-tmp-done"
+                                                             (lambda (port)
+                                                               (display "done" port))))
                                                          #t))))))
 
       ;; 把 cleanup-/tmp 注入 user-processes 的 requirement，使所有经
