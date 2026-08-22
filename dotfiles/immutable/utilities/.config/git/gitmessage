@@ -16,17 +16,15 @@
 #   - Body 解释「为什么改」
 #     Footer 写 BREAKING CHANGE:
 #     - <说明> 或 Closes #<issue>
-#     - LLM 工作时撰写 Assisted-by 标签
+#     - LLM 工作时撰写 Co-authored-by 标签
 #
-# Assisted-by 标签
+# Co-authored-by 标签（GitHub 官方多作者约定，UI 渲染共同作者头像）
 # 基本格式：
-#   Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [TOOL1] [TOOL2]
+#   Co-authored-by: NAME <EMAIL>
 #
-# 标签中应包含:
-# - AI 代理的名称 (AGENT_NAME)
-# - 模型的具体版本号 (MODEL_VERSION)，
-# - 以及使用的其他辅助工具 (TOOL, 可选)。
-# e.g. Assisted-by: Claude:claude-3-opus coccinelle sparse
+# AI 辅助时 NAME 写 agent 名并括注模型，EMAIL 用 agent 的 noreply 地址:
+# e.g. Co-authored-by: ZCode (GLM-5.3) <noreply@z.ai>
+# 多个共同作者各占一行，行间不空行；EMAIL 尖括号不可省略
 #
 # ┌───────────────────────┐
 # │      类型速查表       │
