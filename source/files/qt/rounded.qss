@@ -121,9 +121,15 @@ QComboBox QAbstractItemView {
    3. 按钮组件 (Buttons)
    -----------------------------------------------------------
    最新 Adwaita 按钮：常态灰底无边框 6px 圆角，悬停变中性灰，
-   按下更深；对话框按钮区为药丸形，default（suggested-action
-   语义）与 checked（开关语义）使用 accent 蓝
+   按下更深；对话框按钮区与普通按钮同形（libadwaita 全局统一
+   小圆角，不做药丸形），default（suggested-action 语义）
+   与 checked（开关语义）使用 accent 蓝
 */
+QDialogButtonBox QPushButton {
+    border-radius: 8px;
+    padding: 7px 20px;
+    min-height: 26px;
+}
 
 QPushButton {
     background-color: palette(alternate-base);
@@ -159,11 +165,6 @@ QPushButton:checked:pressed {
 
 /* 对话框主操作按钮 = Adwaita suggested-action，
    悬停/按下同样保持 accent */
-QDialogButtonBox QPushButton {
-    border-radius: 16px;
-    padding: 7px 20px;
-    min-height: 26px;
-}
 
 QDialogButtonBox QPushButton:default {
     background-color: palette(highlight);
@@ -282,7 +283,7 @@ QRadioButton::indicator {
     width: 16px;
     height: 16px;
     border: 1px solid palette(mid);
-    border-radius: 8px;
+    border-radius: 9px;
     background: palette(base);
 }
 
@@ -291,14 +292,14 @@ QRadioButton::indicator:hover {
 }
 
 /* 选中：accent 粗环 + 白色圆心。QSS 渐变 stop 不支持
-   palette()，故用粗边框画环；content 尺寸按 border 补偿，
-   保证指示器选中前后总尺寸恒定且外缘为正圆 */
+   palette()，故用粗边框画环；content 按 border 反向缩减，
+   两态总径恒为 18px（16+1×2 = 8+5×2），行高稳定齐平 */
 QRadioButton::indicator:checked,
 QRadioButton::indicator:checked:hover {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     border: 5px solid palette(highlight);
-    border-radius: 8px;
+    border-radius: 9px;
     background: palette(bright-text);
 }
 
@@ -379,9 +380,9 @@ QSlider::add-page:vertical:disabled {
 
 QLineEdit, QTextEdit, QPlainTextEdit,
 QSpinBox, QDoubleSpinBox, QComboBox {
-    background-color: palette(alternate-base);
-    border: 1px solid transparent;
-    border-radius: 10px;
+    background-color: palette(base);
+    border: 1px solid palette(mid);
+    border-radius: 8px;
     padding: 6px 10px;
     min-height: 24px;
     color: palette(text);
@@ -389,10 +390,24 @@ QSpinBox, QDoubleSpinBox, QComboBox {
     selection-color: palette(highlighted-text);
 }
 
-QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
+QLineEdit:hover, QTextEdit:hover, QPlainTextEdit:hover,
+QSpinBox:hover, QDoubleSpinBox:hover, QComboBox:hover {
+    border: 1px solid palette(dark);
+}
+
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:hover,
 QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
     border: 2px solid palette(highlight);
     padding: 5px 9px;
+}
+
+/* focus 态下 spinbox 子控件圆角跟随新轮廓 */
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    border-top-right-radius: 7px;
+}
+
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    border-bottom-right-radius: 7px;
 }
 
 QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled,
@@ -401,14 +416,66 @@ QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {
     color: palette(mid);
 }
 
+/* SpinBox 上下按钮：透明底融入胶囊输入框，箭头用 border 三角绘制；
+   Fusion 默认画的独立深色方块会溢出 10px 圆角轮廓（截图问题2/3） */
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    width: 20px;
+    border: none;
+    background: transparent;
+    border-top-right-radius: 9px;
+}
+
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    width: 20px;
+    border: none;
+    background: transparent;
+    border-bottom-right-radius: 9px;
+}
+
+QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {
+    background: palette(mid);
+    border-top-right-radius: 9px;
+}
+
+QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
+    background: palette(mid);
+    border-bottom-right-radius: 9px;
+}
+
+QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
+    background: palette(dark);
+}
+
+/* 箭头：QSS 无法用 border 画三角（会渲染成方块），改用 chevron 线条 SVG，
+   中性灰在明暗两态均可见 */
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    subcontrol-origin: border;
+    subcontrol-position: top right;
+    image: url(/home/brokenshine/.config/qt6ct/qss/chevron-up.svg);
+    width: 16px;
+    height: 16px;
+}
+
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    subcontrol-origin: border;
+    subcontrol-position: bottom right;
+    image: url(/home/brokenshine/.config/qt6ct/qss/chevron-down.svg);
+    width: 16px;
+    height: 16px;
+}
 QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: 24px;
     border-left-width: 0px;
     background: transparent;
-    border-top-right-radius: 10px;
-    border-bottom-right-radius: 10px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
 }
 
 /* -----------------------------------------------------------
@@ -440,7 +507,20 @@ QAbstractItemView::item:hover {
     background: palette(alternate-base);
 }
 
+/* 选中 = Adwaita 中性灰(约 #e6e6e6),不用蓝 */
 QAbstractItemView::item:selected {
+    background: palette(mid);
+    color: palette(text);
+}
+
+/* 接管原生选中刷：不设这两条时 Qt 用 highlight 蓝画选中行，
+   与 Adwaita 的中性灰选中不一致（截图问题1 的蓝色漏出） */
+QListView, QTableView, QTreeView {
+    selection-background-color: palette(alternate-base);
+    selection-color: palette(text);
+}
+
+QListView:item:selected, QTableView:item:selected, QTreeView:item:selected {
     background: palette(alternate-base);
     color: palette(text);
 }
