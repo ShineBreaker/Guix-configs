@@ -10,7 +10,7 @@
 
 全局变量定义在 =source/information.scm= （username、%btrfs-subvolumes、%data-dirs、guix-channels）。
 
-=source/files/= 存放需路径注入的静态模板（nftables.conf、qt/rounded.qss 与 qt/check-white.svg、zed.json、skel/），走 home-files-service-type。
+=source/files/= 存放需路径注入的静态模板（nftables.conf、qt/rounded.qss 与 qt/check-white.svg、qt/chevron-{up,down}.svg、zed.json、skel/），走 home-files-service-type。
 
 原则：系统层最小化，能用 Home 解决不上浮到 System。
 
@@ -2277,6 +2277,15 @@ end
                                                         "../source/files/qt/check-white.svg"))
                 (".config/qt6ct/qss/check-white.svg" ,(local-file
                                                         "../source/files/qt/check-white.svg"))
+                ;; SpinBox 上下按钮的 chevron 箭头，QSS 内以绝对路径引用
+                (".config/qt5ct/qss/chevron-up.svg" ,(local-file
+                                                      "../source/files/qt/chevron-up.svg"))
+                (".config/qt6ct/qss/chevron-up.svg" ,(local-file
+                                                      "../source/files/qt/chevron-up.svg"))
+                (".config/qt5ct/qss/chevron-down.svg" ,(local-file
+                                                        "../source/files/qt/chevron-down.svg"))
+                (".config/qt6ct/qss/chevron-down.svg" ,(local-file
+                                                        "../source/files/qt/chevron-down.svg"))
 
                  (".local/share/gnupg/gpg-agent.conf" ,(computed-substitution-with-inputs
                                                         "gpg-agent.conf"
