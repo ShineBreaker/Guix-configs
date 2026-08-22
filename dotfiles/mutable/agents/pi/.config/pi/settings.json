@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "zai-coding-cn",
-  "defaultModel": "glm-5.2",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "ox-alpha-free",
   "npmCommand": [
     "pnpm"
   ],
@@ -24,12 +24,8 @@
     "npm:@plannotator/pi-extension",
     "npm:pi-hashline-edit",
     "npm:@narumitw/pi-lsp",
-    "npm:pi-code-review",
-    "npm:pi-gitnexus",
     "npm:@ff-labs/pi-fff",
-    "npm:pi-cache-graph",
     "npm:@juicesharp/rpiv-todo",
-    "npm:@juicesharp/rpiv-btw",
     "npm:@juicesharp/rpiv-ask-user-question",
     "git:github.com/DietrichGebert/ponytail"
   ],
@@ -49,7 +45,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.84.1",
+  "lastChangelogVersion": "0.84.2",
   "images": {
     "blockImages": false
   },
@@ -58,5 +54,5 @@
   "transport": "auto",
   "collapseChangelog": true,
   "quietStartup": true,
-  "defaultThinkingLevel": "high"
+  "defaultThinkingLevel": "max"
 }

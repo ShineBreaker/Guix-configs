@@ -14,4 +14,8 @@
     pi
     skills
   ];
+
+  home.packages = with pkgs; [
+    pi-acp
+  ];
 }
