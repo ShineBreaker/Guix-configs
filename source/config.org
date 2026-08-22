@@ -361,7 +361,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+begin_src scheme
 (initrd microcode-initrd)
 (firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
-(kernel linux-7.0)
+(kernel linux)
 
 (kernel-arguments
  (cons* "resume=UUID=169557cc-00a4-448c-9bb6-7bd80fc2b023"
@@ -499,6 +499,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
  "libgnome-keyring"
  "libsecret"
  "poweralertd"
+ "trash-cli"
 
  ;; 文件管理器
  "exo"
@@ -1520,9 +1521,10 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "file-roller"
         "hypridle"
         "libnotify"
+        "open-wallpaper-engine-bin"
         "pavucontrol"
         "rofi"
-        "trash-cli"
+        "waywallen-bin"
         "wl-clipboard"
         "xprop"
         "xvfb-run"
@@ -1615,6 +1617,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         "zig-zls"
 
         ;; 编辑器
+        "fresh-editor-bin"
         "helix"
 
         ;; 数据库
@@ -1629,8 +1632,10 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
         ;; 构造工具
         "gcc-toolchain"
         "gradle"
+        "make"
 
         ;; AI Agent
+        "ai-usagebar-bin"
         "cc-switch-bin"
         "crush-bin"
         "github-copilot"
