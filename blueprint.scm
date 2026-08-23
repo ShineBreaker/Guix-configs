@@ -6,292 +6,191 @@
 ;;; blueprint.scm —— blue 任务运行器（项目主入口）
 ;;; ============================================================
 ;;;
-;;; 这个文件定义了 `blue` 命令行工具在本项目里能跑的所有"指令"
-;;; （sub-commands），以及把它们接进 blue 框架所需的 buildable/testable
-;;; 钩子。读完本文件就能完全理解 `blue <指令>` 背后到底做了什么。
+;;; 定义 `blue` 在本项目能跑的全部指令（sub-commands），并接入 blue 框架
+;;; 所需的 buildable / testable 钩子。全文按"从底层到上层"分节：
 ;;;
-;;; 全文按"从底层到上层"的顺序分节：
-;;;   §0  路径常量            —— 本文件到处引用的绝对路径集中在此
-;;;   §1  执行原语            —— 跑外部命令（guix/emacs/任意程序）的统一出口
-;;;   §2  文件 I/O 辅助       —— 原子写、管道读、shell 转义
-;;;   §3  配置构建管线        —— config.org → config.scm → reconfigure
-;;;   §4  Org 代码块编辑      —— block-show / block-replace 的 elisp 脚本
+;;;   §0  路径常量            —— 绝对路径集中于此，方便整体迁移
+;;;   §1  子进程执行          —— %run 及 guix / emacs 包装（唯一子进程出口）
+;;;   §2  文件与管道 I/O      —— 原子写、shell 拼接、管道读取
+;;;   §3  括号平衡检查        —— 手写词法扫描 + 统一报告
+;;;   §4  配置管线与块解析    —— config.org → config.scm → reconfigure
 ;;;   §5  密钥扫描            —— secret-scan 命令的实现
 ;;;   §6  目录树生成器        —— structor 命令的实现
 ;;;   §7  GNU Stow 包装       —— stow / stow-all 命令的实现
-;;;   §8  所有命令定义        —— 每条 `blue <指令>` 的实际逻辑（含 `blue list` 分类表）
+;;;   §8  命令定义            —— 每条 `blue <指令>` 的实际逻辑
 ;;;   §9  入口点              —— (blueprint ...) 注册一切
 ;;;
 ;;; 【关键不变量】改动前请先理解：
-;;;   * `blue build` / `blue check` / `blue clean` 等是 blue 框架的【内建
-;;;     命令】，不在本文件定义；本文件只是通过 <org-config>（buildable）
-;;;     和 <paren-check>（testable）两个类，告诉内建命令"建什么/测什么"。
-;;;   * `%run` 是所有子进程的唯一出口。`blue --dry-run` 时它默认短路（只
-;;;     打印不执行）；少数必须真跑的（tangle、括号检查）用 `#:real? #t`。
-;;;   * 改源 ≠ 生效：~/.config/<app>/ 指向 /gnu/store 只读副本，改完 dotfiles
-;;;     要 `blue home` 才同步。本文件的命令不会自动触发那一步。
+;;;   * `blue build` / `blue check` / `blue clean` 是 blue 框架的【内建
+;;;     命令】；本文件通过 <org-config>（buildable）和 <paren-check>
+;;;     （testable）两个类告诉它们"建什么 / 测什么"。
+;;;   * `%run` 是所有直接子进程的唯一出口。`blue --dry-run` 时它默认短路
+;;;     （只打印不执行）；必须真跑的（tangle、括号检查）传 `#:real? #t`。
+;;;     走 shell 管道读取的命令（%pipe->string / %pipe->lines）不经过
+;;;     %run 短路，调用方需自行确认在 dry-run 下无害。
+;;;   * tools/*.scm 与 tools/*.el 必须跑在 guix / emacs 子进程环境：blue
+;;;     的 Guile 进程没有 guix 模块树（展开 openpgp-fingerprint 宏会报
+;;;     unbound variable），见 §8 的 update / build-iso。
+;;;   * 改源 ≠ 生效：~/.config/<app>/ 指向 /gnu/store 只读副本，改完
+;;;     dotfiles 要 `blue home` 才同步。
 
-(use-modules (blue build)               ; make-build-manifest 等
-             (blue states)              ; dry-build? 等运行态参数
+(use-modules (blue build)               ; make-build-manifest
+             (blue states)              ; dry-build?
              (blue types)               ; define-blue-class / define-blue-method
              (blue types blueprint)     ; blueprint 主入口
              (blue types buildable)     ; <buildable> 基类
              (blue types command)       ; define-command 宏
              (blue types testable)      ; <testable> 基类（接 blue check）
              (blue subprocess)          ; popen（子进程，返回退出码）
-             (guix utils)               ; %current-system（build-iso 文件名用）
-             (guix build utils)         ; mkdir-p / delete-file-recursively
+             (guix utils)               ; %current-system（ISO 文件名用）
+             (guix build utils)         ; mkdir-p / delete-file-recursively / find-files
              (ice-9 ftw)                ; scandir（列目录）
-             (ice-9 match)              ; match / match-lambda（模式匹配）
-             (ice-9 popen)              ; open-input-pipe（读管道）
-             (ice-9 pretty-print)       ; pretty-print（临时 channels 文件序列化）
-             (ice-9 rdelim)             ; read-line / get-string-all
-             (ice-9 regex)              ; string-match（密钥扫描用）
+             (ice-9 format)             ; format 完整版（~{ ~} 迭代指令需要，
+                                        ;  core 的 simple-format 不支持）
+             (ice-9 match)              ; match / match-lambda
+             (ice-9 popen)              ; open-input-pipe / close-pipe
+             (ice-9 rdelim)             ; read-line
+             (ice-9 regex)              ; string-match / make-regexp
              (ice-9 textual-ports)      ; get-string-all（读整个文件）
-             (srfi srfi-1)              ; list 工具：first / fold / filter-map
-             (srfi srfi-19)             ; 日期（reuse 命令取当前年份）
+             (srfi srfi-1)              ; first / filter-map / any / every / concatenate
+             (srfi srfi-19)             ; date->string（ISO 文件名）
              (srfi srfi-26))            ; cut（简写 lambda）
 
 ;;; ============================================================
 ;;; §0  路径常量
 ;;; ============================================================
-;;; 把本文件用到的绝对路径集中在这里，方便日后整体迁移或改名。
 ;;; `%repo-root' 取决于运行 blue 时的工作目录（见 bootstrap.sh 的 cd）。
 
-(define %repo-root    (getcwd))                                    ; 仓库根
-(define %home-dir     (getenv "HOME"))                             ; 用户主目录
+(define %repo-root    (getcwd))
+(define %home-dir     (getenv "HOME"))
 (define %config-org   (string-append %repo-root "/source/config.org")) ; 唯一 Org 源
 (define %nix-dir      (string-append %repo-root "/source/nix"))    ; Nix 备用配置
 (define %tmp-dir      (string-append %repo-root "/tmp"))           ; tangle 中间产物
-(define %config-scm   (string-append %tmp-dir   "/config.scm"))      ; tangle 产物
-(define %channel-scm  (string-append %repo-root "/source/channel.scm")) ; 频道定义（可变分支）
+(define %config-scm   (string-append %tmp-dir "/config.scm"))      ; tangle 产物
+(define %channel-scm  (string-append %repo-root "/source/channel.scm"))  ; 频道定义（可变分支）
 (define %channel-lock (string-append %repo-root "/source/channel.lock")) ; 频道锁（固定 commit）
 (define %stow-dir     (string-append %repo-root "/dotfiles/mutable"))
-
-;; 判断某个环境变量是否"被设置且非空"。blue --dry-run 之外的若干开关用它读。
-(define (%env-set? name)
-  (let ([value (getenv name)])
-    (and value (not (string-null? value)))))
+(define %tools-dir    (string-append %repo-root "/tools"))         ; 外置脚本与 elisp
 
 ;;; ============================================================
-;;; §1  执行原语 —— 所有"跑外部命令"的统一出口
-;;; =================================================;;=========
-;;;
-;;; 这一组函数是本文件里【唯一】允许启动子进程的地方。统一出口带来两个
-;;; 好处：(1) `blue --dry-run` 只需在这里加一层短路就能让全项目命令都进
-;;; 入预演模式；(2) 命令构造方式一致，便于阅读和审计。
+;;; §1  子进程执行 —— 跑外部命令的统一出口
+;;; ============================================================
 
-;; ---- %run：子进程唯一出口 -----------------------------------------------
-;;
-;; 设计要点（dry-run 短路 + #:real? 逃生口）：
-;;   * `blue --dry-run` 会把框架的 (dry-build?) 设为 #t。此时 %run 默认
-;;     【不执行】命令，只打印一行 `[预演]\t程序 参数...` 然后返回 #t。
-;;     reconfigure / gc / stow 等"会改系统"的命令因此全部安全短路。
-;;   * 但有两类操作即使在 dry-run 时也必须真跑：tangle（要生成 config.scm
-;;     才能验证括号）和括号检查本身。这类调用显式传 `#:real? #t` 跳过短路。
-;;   * 真跑时若退出码非 0，走 %subprocess-fail! 打印一行错误并以非零码
-;;     退出——避免"静默失败后继续 reconfigure"。
-;; ---- %subprocess-fail!：子进程失败的统一出口 ----------------------------
-;;
-;; 打印一行错误并以子进程的退出码终止进程。刻意不用 (error ...) 抛异常：
-;; blue 框架会为【任何】异常打印整套 Guile backtrace（Traceback ...），而
-;; "子进程非零退出"是预期内失败——那份堆栈只是框架内部调用链，没有诊断
-;; 价值，反而淹没真正的报错。直接 primitive-exit 则绕过 backtrace，只留
-;; 下这一行。
-;;
-;; 注意：这只影响"子进程失败"一条路径。本文件其余 (error ...)（逻辑校验、
-;; usage 等）仍抛异常、仍打 backtrace，保留 Scheme 逻辑 bug 的定位能力。
+;; 子进程失败的统一出口：打一行错误并以子进程退出码终止。刻意不用
+;; (error ...)：blue 框架会给任何异常打整套 Guile backtrace，而"子进程
+;; 非零退出"是预期内失败，堆栈无诊断价值。必须用 primitive-exit——Guile
+;; 的 `exit' 抛 `quit' 异常仍会被框架捕获照打 backtrace。本文件其余逻辑
+;; 校验的 error 保留 backtrace，便于定位 Scheme 逻辑 bug。
 (define (%subprocess-fail! status message)
   (format (current-error-port) "~a~%" message)
-  ;; 必须用 primitive-exit：Guile 的 `exit' 会抛 `quit' 异常，仍被 blue
-  ;; 框架的 with-exception-handler 捕获、照打 backtrace。primitive-exit
-  ;; 直接调 C 级 exit，不抛异常、不经过框架，才真正干净退出。
   (primitive-exit (or status 1)))
 
-(define* (%run command #:key real?)
+;; dry-run 预演打印。%run 短路时用它；需要手动短路管道命令的调用方
+;; （如 update 的 describe）也用它，保证预演输出格式一致。
+(define (%print-preview command)
   (match command
     [(program . args)
-     (if (and (dry-build?) (not real?))
-         (begin
-           (format #t "\t[预演]\t~a ~{~a ~}~%" program args)
-           #t)
+     (format #t "\t[预演]\t~a ~{~a ~}~%" program args)]))
+
+;; 唯一允许启动子进程的地方。`blue --dry-run' 时默认只打印不执行；
+;; #:real? #t 是逃生口（tangle、括号检查等 dry-run 下也必须真跑）。
+(define* (%run command #:key real?)
+  (if (and (dry-build?) (not real?))
+      (begin (%print-preview command) #t)
+      (match command
+        [(program . args)
          (let ([status (popen program args)])
            (unless (zero? status)
              (%subprocess-fail! status
                                 (format #f "命令执行失败 (~a): ~s" status command)))
-           #t))]))
+           #t)])))
 
-;; ---- %guix：锁定频道的 guix 包装 ----------------------------------------
-;;
-;; 所有 guix 调用都必须走 `guix time-machine --channels=source/channel.lock`，
-;; 否则用的频道版本和 channel.lock 不一致，构建结果不可复现。
-;; `#:sudo? #t' 时在最前面加 sudo（system reconfigure 需要 root）。
-(define* (%guix args #:key (channels %channel-lock) sudo?)
-  (let ([command `("guix" "time-machine"
-                   ,(string-append "--channels=" channels) "--"
-                   ,@args)])
-    (%run (if sudo? (cons "sudo" command) command))))
-
-;; ---- %guix-command：构造（但不执行）一条锁定频道的 guix 命令 ------------
-;;
-;; 只返回命令列表（program . args），交给调用方决定怎么跑。%emacs-command
-;; 用它把 emacs 包进 `guix shell emacs-minimal -- emacs ...` 里。
-(define (%guix-command args)
+;; 构造（但不执行）一条锁定频道的 guix 命令。所有 guix 调用都必须走
+;; `guix time-machine --channels=...'，否则频道版本与 channel.lock 不一致，
+;; 构建结果不可复现。%guix、%emacs-command、update 命令共用此构造。
+(define* (%guix-command args #:key (channels %channel-lock))
   `("guix" "time-machine"
-    ,(string-append "--channels=" %channel-lock) "--"
+    ,(string-append "--channels=" channels) "--"
     ,@args))
 
-;; ---- %emacs-command：用 emacs-minimal 跑 emacs --------------------------
-;;
-;; 为什么要 unset 五个 EMACS* 环境变量？
-;;   当 blue 本身运行在用户的 emacs 里（或继承了它的环境）时，这些变量
-;;   会干扰新启动的 emacs-minimal，导致它加载错误的 load-path/data。
-;;   `env -u VAR` 在子进程里把这些变量清掉，保证用的是 emacs-minimal 自带环境。
+;; 执行一条锁定频道的 guix 命令；#:sudo? #t 时在最前面加 sudo。
+(define* (%guix args #:key sudo?)
+  (let ([command (%guix-command args)])
+    (%run (if sudo? (cons "sudo" command) command))))
+
+;; 用 emacs-minimal 跑 emacs。unset 五个 EMACS* 变量：blue 可能运行在
+;; 用户 emacs 的环境里，这些变量会干扰新进程的 load-path / data。
 (define (%emacs-command args)
   `("env"
-    "-u" "EMACSLOADPATH"
-    "-u" "EMACSDATA"
-    "-u" "EMACSDOC"
-    "-u" "EMACSPATH"
-    "-u" "INSIDE_EMACS"
+    "-u" "EMACSLOADPATH" "-u" "EMACSDATA" "-u" "EMACSDOC"
+    "-u" "EMACSPATH" "-u" "INSIDE_EMACS"
     ,@(%guix-command `("shell" "emacs-minimal" "--" "emacs" ,@args))))
 
 ;;; ============================================================
-;;; §2  文件 I/O 辅助
-;;; =================================================;;=========
+;;; §2  文件与管道 I/O
+;;; ============================================================
 
-;; 原子写文件：先写到 file.XXXXXX 临时文件，成功后再 rename 覆盖目标。
-;; 任何中途异常（thunk 抛错、rename 失败）都清理临时文件，绝不让目标
-;; 文件停留在"写一半"状态。config.org / channel.lock 等关键文件都用它。
+;; 原子写文件：先写 file.XXXXXX 临时文件，成功后 rename 覆盖目标。任何
+;; 中途异常都清理临时文件，目标绝不停留在"写一半"状态。config.org /
+;; channel.lock / AGENTS.md 等关键文件都用它。
 (define (%write-file-atomically file thunk)
   (let* ([template (string-append file ".XXXXXX")]
          [port (mkstemp! template)])
     (with-throw-handler #t
-                        (lambda ()
-                          (thunk port)
-                          (force-output port)
-                          (close-port port)
-                          (rename-file template file))
-                        (lambda _
-                          (false-if-exception (delete-file template))
-                          (false-if-exception (close-port port))))))
+      (lambda ()
+        (thunk port)
+        (force-output port)
+        (close-port port)
+        (rename-file template file))
+      (lambda _
+        (false-if-exception (delete-file template))
+        (false-if-exception (close-port port))))))
 
-;; 追加一段文本到文件末尾（用于把 %system / %home 追加到 config.scm）。
-(define (%append-to-file file text)
-  (let ([port (open-file file "a")])
-    (display text port)
-    (close-port port)))
-
-;; 把一条 shell 命令的【标准输出整体】读成字符串。
-;; 注意：command 是单个 shell 字符串（含管道/重定向），由调用方自行 quote。
-;; 退出码非 0 时 error。用于 update（读 guix describe 输出）等场景。
-(define (%pipe->string command)
-  (let* ([pipe (open-input-pipe command)]
-         [content (get-string-all pipe)]
-         [status (close-pipe pipe)])
-    (unless (zero? (status:exit-val status))
-      (%subprocess-fail!
-       (status:exit-val status)
-       (format #f "命令执行失败 (~a): ~a"
-               (status:exit-val status) command)))
-    content))
-
-;; 把一条 shell 命令的【标准输出按行】读成 list。
-;; 与 %pipe->string 的区别：分行返回，便于逐行解析（密钥扫描结果用）。
-;; 这里【不检查退出码】，因为密钥扫描依赖 grep 的非 0 退出码语义。
-(define (%pipe->lines command)
-  (let ([pipe (open-input-pipe command)])
-    (let loop ([lines '()])
-      (let ([line (read-line pipe)])
-        (if (eof-object? line)
-            (begin
-              (close-pipe pipe)
-              (reverse lines))
-            (loop (cons line lines)))))))
-
-;; POSIX shell 单引号转义：把任意字符串安全地包进单引号。
-;; 思路：用 '\'' 切断再重开单引号，这是把 ' 嵌入单引号串的标准技巧。
-;; %pipe->string / %pipe->lines 拼命令时用它避免注入。
+;; POSIX shell 单引号转义：用 '\'' 切断再重开单引号，防注入。
 (define (%shell-quote string)
   (string-append "'" (string-join (string-split string #\') "'\\''") "'"))
 
+;; 把命令 list 转成一条 shell 字符串（各参数逐个 quote）。
+(define (%shell-command command)
+  (string-join (map %shell-quote command) " "))
+
+;; 把一条 shell 命令的 stdout 按行读成 list。默认【不检查退出码】——
+;; grep 等工具依赖非 0 退出码语义；#:check? #t 时非 0 视为失败（git 等）。
+(define* (%pipe->lines command #:key check?)
+  (let* ([pipe (open-input-pipe command)]
+         [lines (let loop ([acc '()])
+                  (let ([line (read-line pipe)])
+                    (if (eof-object? line)
+                        (reverse acc)
+                        (loop (cons line acc)))))]
+         [status (status:exit-val (close-pipe pipe))])
+    (when (and check? (not (zero? status)))
+      (%subprocess-fail! status
+                         (format #f "命令执行失败 (~a): ~a" status command)))
+    lines))
+
+;; 把一条 shell 命令的 stdout 整体读成字符串，退出码非 0 视为失败。
+(define (%pipe->string command)
+  (let* ([pipe (open-input-pipe command)]
+         [content (get-string-all pipe)]
+         [status (status:exit-val (close-pipe pipe))])
+    (unless (zero? status)
+      (%subprocess-fail! status
+                         (format #f "命令执行失败 (~a): ~a" status command)))
+    content))
+
 ;;; ============================================================
-;;; §3  配置构建管线：source/config.org → tmp/config.scm
-;;; =================================================;;=========
+;;; §3  括号平衡检查
+;;; ============================================================
 ;;;
-;;; 这一段是整个项目的心脏。流水线分三步：
-;;;
-;;;   config.org ──tangle──▶ config.scm ──括号检查──▶ (通过) ──reconfigure──▶ 系统
-;;;
-;;; 其中 tangle 由 Org Mode 的 ob-tangle 完成（把 Noweb <<ref>> 拼合成完整
-;;; .scm）。两个 blue 类把 tangle 和括号检查接进 blue 的内建命令：
-;;;
-;;;   * <org-config>（继承 <buildable>） → `blue build` 会触发 tangle
-;;;   * <paren-check>（继承 <testable>） → `blue check` 会触发括号检查
-;;;
-;;; 所以 `blue build` 等价于 tangle。`blue check` 走的是另一条路：不 tangle，
-;;; 而是直接解析 config.org 的每个 #+NAME 块 + 周边 scm 文件，逐个做括号平衡
-;;; 检查（见 §4 的 %check-config-blocks）——能定位到具体出错的块名。
-
-;; ---- 两个 blue 类 --------------------------------------------------------
-
-;; "Org 配置" buildable：输入 config.org，输出 config.scm。
-(define-blue-class <org-config>
-  (inherit <buildable>)
-  (constructor org-config)
-  (predicate org-config?))
-
-;; "括号检查" testable：不依赖 buildable（不 tangle），输出占位标记。
-(define-blue-class <paren-check>
-  (inherit <testable>)
-  (constructor paren-check)
-  (predicate paren-check?))
-
-;; `blue build` 触发时，框架对每个 buildable 调 ask-build-manifest 拿到
-;; "要执行的构建动作"。这里返回的动作 = 用 emacs-minimal 跑 ob-tangle。
-;; 用 #:real? #t：即使在 --dry-run 下 tangle 也必须真跑，否则没法验证括号。
-(define-blue-method (ask-build-manifest (this <org-config>)
-                                        (inputs <list>)
-                                        (output <string>))
-  (let ([input (first inputs)])
-    (make-build-manifest
-     (string-append "编织\t" output)            ; 显示用标题
-     (lambda ()                                  ; 实际执行体
-       (mkdir-p (dirname output))
-       (%run (%emacs-command
-              `("--quick" "--batch" "-l" "org"
-                "--eval" "(require 'ob-tangle)"
-                "--eval" ,(format #f "(org-babel-tangle-file ~s)" input))
-              #:real? #t))))))
-
-;; 两个实例：注册到 (blueprint (buildables ...)) / (testables ...) 即可被
-;; `blue build` / `blue check` 发现。
-(define %config-buildable
-  (org-config
-   (inputs '("source/config.org"))
-   (outputs '("tmp/config.scm"))))
-
-(define %config-check
-  (paren-check
-   (inputs '())                                  ; 不依赖 tangle，直接解析 config.org
-   (outputs '("tmp/config.scm.check"))))         ; 仅作占位，内容见下
-
-;; ---- 括号平衡检查（手写 Scheme 词法扫描） --------------------------------
-;;
-;; 为什么不用 guile 自带的 read？因为 config.org 的块/tangle 出的 config.scm
-;; 可能含 unquote / 各种读取器宏，read 报错时定位差。这里只做最朴素的"数括号"
-;; 检查，且正确跳过字符串字面量和 ; 注释，足以抓出最常见的"括号不匹配"症状。
-;;
-;; 两处复用：
-;;   * blue check（§4 的 %check-config-blocks）：对每个 scheme 块的 body 调
-;;     count-parens，出错定位到块名。
-;;   * prepare-config（本节下方，rebuild/home 用）：对完整 tangle 出的
-;;     config.scm 调 check-paren-balance，作 reconfigure 前的整体兜底。
+;;; 手写词法扫描而非用 guix 的 read：config.org 的块 / tangle 产物可能含
+;;; unquote 等读取器宏，read 报错时定位差。只数括号并正确跳过字符串字面量
+;;; 与 ; 注释，足以抓最常见的括号失配。Guile reader 要求 [ ] / ( ) 严格
+;;; 配对，混搭（[ 配 )）也算错。
 
 ;; 数 port 里的圆括号和方括号，返回 5 元素向量：
 ;;   #(paren-open paren-close bracket-open bracket-close mismatch?)
-;; Guile reader 要求 [ ] / ( ) 严格配对，混搭（如 [ 配 )）是语法错误。
-;; 用一个栈记录每个开括号的类型，遇到闭括号时检查是否与栈顶匹配。
+;; 用栈记录每个开括号的类型，闭括号须与栈顶同类。
 (define (count-parens port)
   (let loop ([char (read-char port)]
              [popen 0] [pclose 0]      ; 圆括号计数
@@ -346,65 +245,211 @@
      [else (loop (read-char port) popen pclose bopen bclose
                  stack mismatch?)])))
 
-;; 检查单个文件的括号平衡。返回 #t/#f，并打印 [OK]/[ERROR] 结果。
-(define (check-paren-balance file)
-  (call-with-input-file file
-    (lambda (port)
-      (match (count-parens port)
-        [#(popen pclose bopen bclose mismatch?)
-         (let ([p-balanced? (= popen pclose)]
-               [b-balanced? (= bopen bclose)])
-           (cond
-            [mismatch?
-             (format (current-error-port)
-                     "[ERROR] 括号类型错配 ([配) 或 (配])：(~a)~%" file)
-             #f]
-            [(and p-balanced? b-balanced?)
-             (format #t "[OK] 括号平衡: ( ~a 对 ) + [ ~a 对 ] (~a)~%"
-                     popen bopen file)
-             #t]
-            [(or (not p-balanced?) (not b-balanced?))
-             (format (current-error-port)
-                     "[ERROR] 括号不平衡 (~a): ( open=~a close=~a ) [ open=~a close=~a ]~%"
-                     file popen pclose bopen bclose)
-             #f]))]))))
+;; 统一报告路径：检查 port 内容并打印 [OK]/[ERROR]（label 为文件路径或
+;; "块 <名>"），返回布尔。逐块检查与整文件兜底共用这一份逻辑。
+(define (%report-parens label port)
+  (match (count-parens port)
+    [#(popen pclose bopen bclose mismatch?)
+     (cond
+      [mismatch?
+       (format (current-error-port)
+               "[ERROR] ~a: 括号类型错配 ([配) 或 (配])~%" label)
+       #f]
+      [(and (= popen pclose) (= bopen bclose))
+       (format #t "[OK] ~a: ( ~a 对 ) + [ ~a 对 ]~%" label popen bopen)
+       #t]
+      [else
+       (format (current-error-port)
+               "[ERROR] ~a: 不平衡 ( open=~a close=~a ) [ open=~a close=~a ]~%"
+               label popen pclose bopen bclose)
+       #f])]))
 
-;; `blue check` 触发时调这个：逐块 + 周边 scm 括号检查，全过则写占位标记。
-;; 不再依赖 tangle（不消费 inputs），直接解析 config.org 的命名块。
+;; 检查单个文件的括号平衡（tangle 产物 / 周边 scm 整体兜底）。
+(define (check-paren-balance file)
+  (call-with-input-file file (cut %report-parens file <>)))
+
+;;; ============================================================
+;;; §4  配置构建管线与 Org 块解析
+;;; ============================================================
+;;;
+;;;   config.org ──tangle──▶ config.scm ──括号检查──▶ (通过) ──reconfigure──▶ 系统
+;;;
+;;; 两个 blue 类把 tangle / 检查接进内建命令：
+;;;   * <org-config>（继承 <buildable>）→ `blue build` 触发 tangle
+;;;   * <paren-check>（继承 <testable>）→ `blue check` 逐块括号检查：
+;;;     不 tangle，直接解析 config.org 的每个 #+NAME 块 + 周边 scm 文件，
+;;;     出错定位到具体块名
+;;;
+;;; 块编辑的 elisp 脚本外置在 tools/block-{extract,replace,list}.el，
+;;; 经 %run-elisp 以 emacs-minimal --script 方式运行。
+
+;; ---- 两个 blue 类 --------------------------------------------------------
+
+;; "Org 配置" buildable：输入 config.org，输出 config.scm。
+(define-blue-class <org-config>
+  (inherit <buildable>)
+  (constructor org-config)
+  (predicate org-config?))
+
+;; "括号检查" testable：不依赖 buildable（不 tangle），输出占位标记。
+(define-blue-class <paren-check>
+  (inherit <testable>)
+  (constructor paren-check)
+  (predicate paren-check?))
+
+;; 对任意 org 文件跑 ob-tangle（把 Noweb <<ref>> 拼合成完整 .scm）。
+;; #:real? #t：dry-run 下也必须真跑，否则没法验证括号。
+(define (%tangle-file org-file)
+  (%run (%emacs-command
+         `("--quick" "--batch" "-l" "org"
+           "--eval" "(require 'ob-tangle)"
+           "--eval" ,(format #f "(org-babel-tangle-file ~s)" org-file)))
+        #:real? #t))
+
+;; `blue build` 触发时对每个 buildable 调 ask-build-manifest 拿构建动作。
+(define-blue-method (ask-build-manifest (this <org-config>)
+                                        (inputs <list>)
+                                        (output <string>))
+  (let ([input (first inputs)])
+    (make-build-manifest
+     (string-append "编织\t" output)             ; 显示用标题
+     (lambda ()                                  ; 实际执行体
+       (mkdir-p (dirname output))
+       (%tangle-file input)))))
+
 (define-blue-method (ask-build-manifest (this <paren-check>)
                                         (inputs <list>)
                                         (output <string>))
   (make-build-manifest
    (string-append "检查\t" %config-org)
    (lambda ()
-     (unless (%check-config-blocks)             ; 见 §4（块感知检查）
+     (unless (%check-config-blocks)
        (error "括号平衡检查失败"))
+     (mkdir-p (dirname output))
      (call-with-output-file output
        (lambda (port)
          (format port "已检查 ~a~%" %config-org))))))
+
+;; 两个实例：注册到 (blueprint (buildables ...)) / (testables ...) 即可被
+;; `blue build` / `blue check` 发现。
+(define %config-buildable
+  (org-config
+   (inputs '("source/config.org"))
+   (outputs '("tmp/config.scm"))))
+
+(define %config-check
+  (paren-check
+   (inputs '())                                  ; 不依赖 tangle，直接解析 config.org
+   (outputs '("tmp/config.scm.check"))))         ; 仅作占位，内容见上
+
+;; ---- Org 块解析（blue check 与块编辑命令的共用层） ------------------------
+
+;; 跑 tools/<name>.el（emacs-minimal --script），extra-args 成为脚本的
+;; command-line-args-left，返回脚本 stdout。
+(define (%run-elisp name . extra-args)
+  (%pipe->string
+   (%shell-command
+    (%emacs-command
+     `("--quick" "--batch" "--script"
+       ,(string-append %tools-dir "/" name ".el")
+       ,%config-org ,@extra-args)))))
+
+;; block-list.el 一次遍历导出全部命名块（避免每块起一个 emacs），输出用
+;; >>> ... <<< 作记录分隔（避免与 body 内任意文本冲突）：
+;;   >>>name=<n>\tlang=<l>\tnoweb=plain|noweb
+;;   <body>
+;;   <<<
+;; 解析成 ((name lang noweb body) ...)；body 已去掉首尾换行。
+(define %block-header-re
+  (make-regexp "^>>>name=([^[:space:]]+)\tlang=([^[:space:]]+)\tnoweb=(.+)$"))
+
+(define (%extract-all-blocks)
+  (let loop ([lines (string-split (%run-elisp "block-list") #\newline)]
+             [current #f]            ; 当前记录的 (name lang noweb)
+             [body '()]              ; body 行累积（逆序）
+             [blocks '()])
+    (match lines
+      [() (reverse blocks)]
+      [(line . rest)
+       (cond
+        [(regexp-exec %block-header-re line)
+         => (lambda (m)
+              (loop rest
+                    (map (cut match:substring m <>) '(1 2 3))
+                    '() blocks))]
+        [(string=? line "<<<")
+         (loop rest #f '()
+               (if current
+                   (cons (append current
+                                 (list (string-join (reverse body) "\n")))
+                         blocks)
+                   blocks))]
+        [else
+         ;; body 行：累积（记录外的行丢弃）
+         (loop rest current
+               (if current (cons line body) body)
+               blocks)])])))
+
+;; 单块检查：只查 scheme 块（fish/bash 是嵌在 scheme 字符串里的内容）。
+;; main 块也查——<<ref>> 占位本身括号平衡，能抓 main 自身的括号错。
+(define (%check-block-parens block)
+  (match block
+    [(name lang _ body)
+     (if (string=? lang "scheme")
+         (call-with-input-string body
+           (cut %report-parens (format #f "块 ~a" name) <>))
+         (begin
+           (format #t "[SKIP] 块 ~a (~a)~%" name lang)
+           #t))]))
+
+;; 与 config.org 同级的独立 Scheme 源，逐个整体检查。
+(define %peripheral-scm-files
+  (map (cut string-append %repo-root "/" <>)
+       '("source/channel.scm" "source/information.scm" "source/manifest.scm")))
+
+;; 逐块 + 周边文件全量检查，返回总布尔。失败不立即中止——继续跑完，
+;; 让用户一次看到所有错误。
+(define (%check-config-blocks)
+  (let* ([blocks (%extract-all-blocks)]
+         [results (append (map %check-block-parens blocks)
+                          (map (lambda (file)
+                                 (if (file-exists? file)
+                                     (check-paren-balance file)
+                                     (begin
+                                       (format (current-error-port)
+                                               "[ERROR] 文件不存在: ~a~%" file)
+                                       #f)))
+                               %peripheral-scm-files))]
+         [ok? (every identity results)]
+         [scheme-count (length (filter (lambda (b) (string=? (cadr b) "scheme"))
+                                       blocks))])
+    (if ok?
+        (format #t "[OK] 全部通过: ~a 个 scheme 块 + ~a 个周边文件~%"
+                scheme-count (length %peripheral-scm-files))
+        (format (current-error-port) "[FAIL] 括号检查未通过~%"))
+    ok?))
+
 ;; ---- 三步流水线（被各 reconfigure 命令复用） -----------------------------
 
-;; 步骤 1：跑 tangle，生成 tmp/config.scm。#:real? #t 保证 dry-run 也真跑。
+;; 步骤 1：tangle config.org → tmp/config.scm。
 (define (tangle-config)
   (mkdir-p %tmp-dir)
-  (%run (%emacs-command
-         `("--quick" "--batch" "-l" "org"
-           "--eval" "(require 'ob-tangle)"
-           "--eval" ,(format #f "(org-babel-tangle-file ~s)" %config-org)))
-        #:real? #t))
+  (%tangle-file %config-org))
 
-;; 步骤 1+2：tangle 后，把 tail-expression（通常是 %system 或 %home 变量名）
-;; 追加到 config.scm 末尾，然后跑括号检查。返回最终 config.scm 路径。
+;; 步骤 1+2：tangle 后把 tail-expression（通常是 %system 或 %home 变量名）
+;; 追加到 config.scm 末尾，再整体括号兜底。返回最终 config.scm 路径。
 (define (prepare-config tail-expression)
   (tangle-config)
-  (%append-to-file %config-scm (string-append "\n" tail-expression "\n"))
+  (let ([port (open-file %config-scm "a")])
+    (display (string-append "\n" tail-expression "\n") port)
+    (close-port port))
   (unless (check-paren-balance %config-scm)
     (error "配置括号平衡检查失败"))
   %config-scm)
 
 ;; 步骤 3：对 subsystem（"system" 或 "home"）执行 reconfigure。
 ;; dry-run 时改成 `guix <subsystem> build --dry-run`（只验证不写入）。
-;; 成功后清掉 tmp/ 中间产物。`after' 是成功后的回调（rebuild 用它跑 locate）。
+;; 成功后清掉 tmp/ 中间产物。`after' 是成功后的回调（rebuild 跑 locate 用）。
 (define* (apply-config subsystem tail-expression #:key sudo? after)
   (let ([scm (prepare-config tail-expression)])
     (if (dry-build?)
@@ -420,241 +465,8 @@
   (when after (after)))
 
 ;;; ============================================================
-;;; §4  Org 代码块编辑（block-show / block-replace 的 elisp）
-;;; =================================================;;=========
-;;;
-;;; 这两段是嵌入式 Emacs Lisp，由 %emacs-command 以 `--script` 方式跑。
-;;; 作用：在不读整个 config.org（2000+ 行）的前提下，按 #+NAME 精确抽取
-;;; 或替换单个代码块，方便 agent / 脚本做"块级编辑"。
-;;;
-;;; 它们以 Scheme 字符串常量形式存这里，运行时写到 tmp/*.el 再交给 emacs。
-;;; 逻辑独立、调试周期长，所以原样保留，只在 Scheme 包装层做整理。
-
-;; 抽取：从 file 中找名为 name 的 #+NAME 块，打印 "lang\nnoweb|plain\n<body>"。
-(define block-extract-el
-  "(let* ((file (nth 0 command-line-args-left))
-         (name (nth 1 command-line-args-left))
-         lang body has-noweb)
-    (with-temp-buffer
-      (insert-file-contents file)
-      (goto-char (point-min))
-      (when (re-search-forward
-             (concat \"^#[+]NAME:[[:space:]]+\" (regexp-quote name) \"[[:space:]]*$\") nil t)
-        (forward-line 1)
-        (when (re-search-forward \"^#[+]begin_src[[:space:]]+\\\\([^[:space:]\\n]+\\\\)\" nil t)
-          (setq lang (match-string-no-properties 1))
-          (forward-line 1)
-          (let ((body-start (point)))
-            (when (re-search-forward \"^#[+]end_src\" nil t)
-              (setq body (buffer-substring-no-properties
-                          body-start (line-beginning-position)))
-              (setq has-noweb (string-match-p \"<<[^>]+>>\" body))))))
-      (unless body
-        (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
-        (kill-emacs 1))
-      (princ (format \"%s\\n%s\\n\" (or lang \"\") (if has-noweb \"noweb\" \"plain\")))
-      (princ (string-trim body \"\\n\" \"\\n\")))
-    (kill-emacs 0))")
-
-;; 替换：把 file 中名为 name 的块 body 换成 body-file 的内容，输出到 out-file。
-;; 打印 "lang=..." 让外层知道被替换块的语言（scheme 块要额外做括号验证）。
-(define block-replace-el
-  "(let* ((file (nth 0 command-line-args-left))
-         (name (nth 1 command-line-args-left))
-         (body-file (nth 2 command-line-args-left))
-         (out-file (nth 3 command-line-args-left))
-         (new-body (with-temp-buffer
-                     (insert-file-contents body-file)
-                     (buffer-string))))
-    (find-file file)
-    (goto-char (point-min))
-    (let (lang replaced)
-      (when (re-search-forward
-             (concat \"^#[+]NAME:[[:space:]]+\" (regexp-quote name) \"[[:space:]]*$\") nil t)
-        (forward-line 1)
-        (when (re-search-forward \"^#[+]begin_src[[:space:]]+\\\\([^[:space:]\\n]+\\\\)\" nil t)
-          (setq lang (match-string-no-properties 1))
-          (forward-line 1)
-          (let ((body-start (point)))
-            (when (re-search-forward \"^#[+]end_src\" nil t)
-              (delete-region body-start (line-beginning-position))
-              (goto-char body-start)
-              (insert (string-trim-right new-body \"\\n\") \"\\n\")
-              (setq replaced t)))))
-      (if replaced
-          (progn
-            (write-region (point-min) (point-max) out-file)
-            (princ (format \"lang=%s\\n\" (or lang \"\"))))
-        (progn
-          (princ (format \"[ERROR] 未找到代码块 %s\\n\" name))
-          (kill-emacs 1)))))")
-
-;; 枚举：一次性遍历 file，导出【所有】 #+NAME 块。blue check 用它做逐块检查，
-;; 避免每个块启动一次 emacs。与 block-extract-el 共用同一套正则风格，可对照阅读。
-;;
-;; 输出格式（用 >>> / <<< 作记录分隔，避免与 body 内任意文本冲突）：
-;;   >>>name=<n>\tlang=<l>\tnoweb=plain|noweb
-;;   <body 第 1 行>
-;;   ...
-;;   <<<
-;; 每条记录：一行 >>> 头 + body（已 string-trim 首尾换行）+ 一行 <<< 结束。
-(define block-list-el
-  "(let* ((file (nth 0 command-line-args-left))
-         (name-re \"^#[+]NAME:[[:space:]]+\\\\([^[:space:]\n]+\\\\)\")
-         (begin-re \"^#[+]begin_src[[:space:]]+\\\\([^[:space:]\n]+\\\\)\")
-         (end-re \"^#[+]end_src\")
-         name lang body-start has-noweb)
-    (with-temp-buffer
-      (insert-file-contents file)
-      (goto-char (point-min))
-      (while (re-search-forward name-re nil t)
-        (setq name (match-string-no-properties 1))
-        (forward-line 1)
-        (when (re-search-forward begin-re nil t)
-          (setq lang (match-string-no-properties 1))
-          (forward-line 1)
-          (setq body-start (point))
-          (when (re-search-forward end-re nil t)
-            (let ((body (buffer-substring-no-properties
-                         body-start (line-beginning-position))))
-              (setq has-noweb (string-match-p \"<<[^>]+>>\" body))
-              (princ (format \">>>name=%s\\tlang=%s\\tnoweb=%s\\n\"
-                             name (or lang \"\")
-                             (if has-noweb \"noweb\" \"plain\")))
-              (princ (string-trim body \"\\n\" \"\\n\"))
-              (princ \"\\n<<<\\n\"))))))
-    (kill-emacs 0))")
-
-;; 把一段 elisp 写到 tmp/<name>.el，返回文件路径。block-show/block-replace 用。
-(define (write-temp-elisp name body)
-  (mkdir-p %tmp-dir)
-  (let ([file (string-append %tmp-dir "/" name)])
-    (call-with-output-file file
-      (lambda (port) (display body port)))
-    file))
-
-;; 公共包装：用 emacs-minimal 跑一段已写到 tmp 的 .el 脚本，传入额外参数，
-;; 返回脚本的标准输出字符串。把 block-show / block-replace 里重复的
-;; "拼 shell 命令 → %pipe->string" 模式抽出来。
-(define (%run-elisp-script script-file extra-args)
-  (%pipe->string
-   (string-join
-    (map %shell-quote
-         (%emacs-command
-          `("--quick" "--batch" "--script" ,script-file
-            ,%config-org ,@extra-args)))
-    " ")))
-
-;; 跑 block-list-el 导出 config.org 里所有命名块，解析 >>>...<<< 记录，
-;; 返回 ((name lang noweb body) ...) 列表。body 已去掉首尾换行。
-;; blue check 用它拿到每个块的 body 做逐块括号检查。
-(define (%extract-all-blocks)
-  (let* ([script (write-temp-elisp "block-list.el" block-list-el)]
-         [output (%run-elisp-script script '())])
-    (let loop ([lines (string-split output #\newline)]
-               [current #f]            ; 当前记录的 (name lang noweb)
-               [body-acc '()]          ; body 行累积（逆序）
-               [result '()])
-      (cond
-       ;; 输入耗尽：返回结果（末尾应有空行，current 应已是 #f）
-       [(null? lines)
-        (reverse result)]
-       ;; 记录头 >>>name=...	lang=...	noweb=...
-       [(string-prefix? ">>>" (car lines))
-        (let* ([header (substring (car lines) 3)] ; 去掉 ">>>"
-               [fields (map (lambda (field)
-                              (cons (car (string-split field #\=))
-                                    (string-join
-                                     (cdr (string-split field #\=)) "=")))
-                            (string-split header #\tab))])
-          (loop (cdr lines)
-                (list (or (assoc-ref fields "name") "")
-                      (or (assoc-ref fields "lang") "")
-                      (or (assoc-ref fields "noweb") ""))
-                '()
-                result))]
-       ;; 记录结束 <<<：收尾当前记录，body 行逆序拼回字符串
-       [(string=? "<<<" (car lines))
-        (if current
-            (loop (cdr lines) #f '()
-                  (cons (append current
-                                (list (string-join (reverse body-acc) "\n")))
-                        result))
-            (loop (cdr lines) #f '() result))]
-       ;; body 行：累积（仅在记录内才有意义；记录外的行丢弃）
-       [else
-        (loop (cdr lines) current
-              (if current (cons (car lines) body-acc) body-acc)
-              result)]))))
-
-;; ---- 逐块 + 周边 scm 括号检查（blue check 的核心） -----------------------
-;;
-;; 这三个函数复用 §3 的 count-parens / check-paren-balance 和上面的
-;; %extract-all-blocks，实现"逐块定位"的括号检查。blue check 不再 tangle，
-;; 而是解析 config.org 的每个命名块单独检查——出错时能报具体块名。
-
-;; 周边 scm 文件：与 config.org 同级的独立 Scheme 源，逐个整体检查。
-(define %peripheral-scm-files
-  (list (string-append %repo-root "/source/channel.scm")
-        (string-append %repo-root "/source/information.scm")
-        (string-append %repo-root "/source/manifest.scm")))
-
-;; 检查单个块：(name lang noweb body) → #t/#f。
-;; 只检查 lang=scheme 的块（fish/bash/js 是嵌在 scheme 字符串里的内容，跳过）。
-;; main 块也检查——<<ref>> 占位本身括号平衡，能抓 main 自身的括号错。
-(define (%check-block-parens block)
-  (match block
-    [(name lang noweb body)
-     (if (string=? lang "scheme")
-         (call-with-input-string body
-                                 (lambda (port)
-                                   (match (count-parens port)
-                                     [#(popen pclose bopen bclose mismatch?)
-                                      (let ([p-balanced? (= popen pclose)]
-                                            [b-balanced? (= bopen bclose)])
-                                        (cond
-                                         [mismatch?
-                                          (format (current-error-port)
-                                                  "[ERROR] 块 ~a: 括号类型错配 ([配) 或 (配])~%" name)
-                                          #f]
-                                         [(and p-balanced? b-balanced?)
-                                          (format #t "[OK] 块 ~a: ( ~a 对 ) + [ ~a 对 ]~%"
-                                                  name popen bopen)
-                                          #t]
-                                         [else
-                                          (format (current-error-port)
-                                                  "[ERROR] 块 ~a: 不平衡 ( open=~a close=~a ) [ open=~a close=~a ]~%"
-                                                  name popen pclose bopen bclose)
-                                          #f]))])))
-         (begin
-           (format #t "[SKIP] 块 ~a (~a)~%" name lang)
-           #t))]))
-
-;; 逐块检查 config.org + 整体检查周边 scm 文件。全部通过返回 #t，任一失败 #f。
-;; 失败不立即中止——继续跑完，让用户一次看到所有错误。
-(define (%check-config-blocks)
-  (let* ([blocks (%extract-all-blocks)]
-         [scheme-count (length (filter (lambda (b) (string=? (cadr b) "scheme"))
-                                       blocks))]
-         [block-results (map %check-block-parens blocks)]
-         [scm-results
-          (map (lambda (file)
-                 (if (file-exists? file)
-                     (check-paren-balance file)
-                     (begin
-                       (format (current-error-port) "[ERROR] 文件不存在: ~a~%" file)
-                       #f)))
-               %peripheral-scm-files)])
-    (let ([all-ok? (every identity (append block-results scm-results))])
-      (if all-ok?
-          (format #t "[OK] 全部通过: ~a 个 scheme 块 + ~a 个周边文件~%"
-                  scheme-count (length %peripheral-scm-files))
-          (format (current-error-port) "[FAIL] 括号检查未通过~%"))
-      all-ok?)))
-
-;;; ============================================================
 ;;; §5  密钥扫描（secret-scan 命令）
-;;; =================================================;;=========
+;;; ============================================================
 ;;;
 ;;; 用 grep 在文本配置里搜疑似泄漏的凭据（GitHub PAT、OpenAI key、私钥……）。
 ;;; 命中只代表"看起来像"，是否真泄漏需人工判断。默认找到就 error（可用于
@@ -690,33 +502,30 @@
     ("access-token" . "access_token[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9_-]{16,}")
     ("password" . "password[[:space:]]*[:=][[:space:]]*[\"'][^\"']{8,}[\"']")))
 
-;; 拼 grep 的 --include / --exclude-dir 选项串。flags 是 grep 前置参数。
+;; 拼两条 grep 命令共用的 --include / --exclude-dir 选项串。
 (define (%secret-grep-options flags)
   (string-append
    flags " "
    (string-join
-    (map (lambda (ext) (%shell-quote (string-append "--include=" ext)))
-         %secret-exts)
-    " ")
-   " "
-   (string-join
-    (map (lambda (dir) (%shell-quote (string-append "--exclude-dir=" dir)))
-         %secret-exclude-dirs)
+    (append
+     (map (lambda (ext) (%shell-quote (string-append "--include=" ext)))
+          %secret-exts)
+     (map (lambda (dir) (%shell-quote (string-append "--exclude-dir=" dir)))
+          %secret-exclude-dirs))
     " ")))
 
 ;; 统计 dir 下参与扫描的文件数（仅用于扫描结束后的提示信息）。
 (define (%secret-count-files dir)
-  (let ([lines
-         (%pipe->lines
-          (string-append (%secret-grep-options "grep -rIl")
-                         " -e '.' " (%shell-quote dir)
-                         " 2>/dev/null | wc -l"))])
+  (let ([lines (%pipe->lines
+                (string-append (%secret-grep-options "grep -rIl")
+                               " -e '.' " (%shell-quote dir)
+                               " 2>/dev/null | wc -l"))])
     (if (null? lines)
         0
         (or (string->number (string-trim-both (first lines))) 0))))
 
-;; 扫描 dir。fail?=真 时发现密钥就 error；extra-patterns 是用户额外传入的正则。
-;; 返回 #t（无命中或仅警告）/ 抛错（fail? 且有命中）。
+;; 扫描 dir。fail?=真 时发现密钥就 error；extra-patterns 是用户额外传入的
+;; 正则。返回 #t（无命中或仅警告）/ 抛错（fail? 且有命中）。
 (define (scan-secrets dir fail? extra-patterns)
   (let ([patterns (append %secret-patterns
                           (map (cut cons "user-pattern" <>)
@@ -725,29 +534,25 @@
         [file-count (%secret-count-files dir)])
     (for-each
      (match-lambda
-       [(name . pattern)
-        (let ([hits
-               (%pipe->lines
-                (string-append (%secret-grep-options "grep -HrnIE")
-                               " -e " (%shell-quote pattern)
-                               " " (%shell-quote dir) " 2>/dev/null"))])
-          (for-each
-           (lambda (raw)
-             (let ([match (string-match "^([^:]+):([0-9]+):(.*)$" raw)])
-               (when match
-                 (let* ([path (match:substring match 1)]
-                        [lineno (match:substring match 2)]
-                        [content (match:substring match 3)]
-                        [size (stat:size (stat path))])
-                   ;; 只报小于 1MB 的文件，避免误报二进制/大文件
-                   (when (< size 1048576)
+      [(name . pattern)
+       (for-each
+        (lambda (raw)
+          (match (string-match "^([^:]+):([0-9]+):(.*)$" raw)
+            [#f #f]
+            [m (let ([path (match:substring m 1)])
+                 ;; 只报小于 1MB 的文件，避免误报二进制/大文件
+                 (when (< (stat:size (stat path)) 1048576)
+                   (let ([content (match:substring m 3)])
                      (format #t "[HINT] ~a:~a:~a:~a~%"
-                             path lineno name
+                             path (match:substring m 2) name
                              (if (> (string-length content) 80)
                                  (substring content 0 80)
                                  content))
-                     (set! found (+ found 1)))))))
-           hits))])
+                     (set! found (+ found 1)))))]))
+        (%pipe->lines
+         (string-append (%secret-grep-options "grep -HrnIE")
+                        " -e " (%shell-quote pattern)
+                        " " (%shell-quote dir) " 2>/dev/null")))])
      patterns)
     (cond
      [(zero? found)
@@ -761,7 +566,7 @@
 
 ;;; ============================================================
 ;;; §6  目录树生成器（structor 命令）
-;;; =================================================;;=========
+;;; ============================================================
 ;;;
 ;;; 仓库里每个 AGENTS.md 都有一个被标记圈起的"## 目录结构"章节，内容由
 ;;; 本节代码自动生成（树形 ASCII 图）。新增/移动文件后跑 `blue structor`
@@ -772,125 +577,95 @@
 ;;;   ... 自动生成的树 ...
 ;;;   <!-- /structor -->
 ;;;
-;;; 【可见性 = git 驱动】被忽略的条目直接交给 git：对每个 target 所在目录
-;;; 跑 `git -C <scope> ls-files --cached --others --exclude-standard`，拿到
-;;; "git 能看见的所有相对路径"。一个条目可见 ⟺ 列表里有等于它、或以
-;;; `<它>/` 为前缀的路径。这样根 `.gitignore` + 所有嵌套 `.gitignore` +
-;;; submodule gitlink 都自动正确。额外只结构化跳过两类 git 不会帮我们挡的：
-;;; AGENTS.md（树所在文件本身，不能列出自己）和 `*.swp`（编辑器交换文件）。
+;;; 【可见性 = git 驱动】对每个 target 所在目录跑
+;;; `git ls-files --cached --others --exclude-standard`，拿到"git 能看见的
+;;; 所有相对路径"。一个条目可见 ⟺ 列表里有等于它、或以 `<它>/` 为前缀的
+;;; 路径。这样根 .gitignore + 所有嵌套 .gitignore + submodule gitlink 都
+;;; 自动正确。额外只结构化跳过两类 git 不会帮我们挡的：AGENTS.md（树所在
+;;; 文件本身，不能列出自己）和 `*.swp`（编辑器交换文件）。
 
-(define %structor-marker-start "<!-- structor:begin -->")
 (define %structor-marker-end "<!-- /structor -->")
 
 ;; 同时识别 begin 标记行并抽取 depth=N。depth 组整体可选（兼容无参数标记）。
-;; 例：`<!-- structor:begin -->` → 命中，depth=#f；
-;;     `<!-- structor:begin depth=6 -->` → 命中，depth="6"。
 ;; Guile ERE：`(`、`)` 是分组符号（不是字面括号），故无需 `\\` 转义。
 (define %structor-depth-regex
   (make-regexp
    "<!--[[:space:]]*structor:begin([[:space:]]+depth[[:space:]]*=[[:space:]]*([0-9]+))?[[:space:]]*-->"))
 
 ;; 枚举仓库内所有需要维护目录树的 AGENTS.md/README.md（返回相对路径）。
-;; 排除 .git / disable / tmp / .blue-store / .agents 下的文件。
 (define (%structor-targets)
-  (let ([root %repo-root])
-    (filter-map
-     (lambda (path)
-       (and (file-exists? path)
-            (not (string-contains path "/.git/"))
-            (not (string-contains path "/disable/"))
-            (not (string-contains path "/tmp/"))
-            (not (string-contains path "/.blue-store/"))
-            (not (string-contains path "/.agents/"))
-            (substring path (string-length root))))
-     (find-files root "(^|/)(AGENTS|README)\\.md$"))))
+  (filter-map
+   (lambda (path)
+     (and (file-exists? path)
+          (not (string-contains path "/.git/"))
+          (not (string-contains path "/disable/"))
+          (not (string-contains path "/tmp/"))
+          (not (string-contains path "/.blue-store/"))
+          (not (string-contains path "/.agents/"))
+          (substring path (string-length %repo-root))))
+   (find-files %repo-root "(^|/)(AGENTS|README)\\.md$")))
 
-;; 某个目录条目是否应被 structor 忽略。
 ;; git 之外的硬性跳过：`.` / `..` 隐式条目、AGENTS.md（树所在文件自身）、
-;; `*.swp` 编辑器交换文件（可能被 git 跟踪）。其余（.git/.github/.agents/
-;; node_modules/.blue-store/dist/.zcode/.keys/…）一律由 git 可见性决定。
+;; `*.swp` 编辑器交换文件（可能被 git 跟踪）。其余一律由 git 可见性决定。
 (define (%structor-skip? name)
   (or (member name '("." ".." "AGENTS.md"))
       (string-suffix? ".swp" name)))
 
-;; 对 scope 目录跑 git ls-files，返回"git 能看见的所有相对路径"列表（相对
-;; scope）。--cached 含已跟踪文件，--others 含未跟踪文件，--exclude-standard
-;; 应用 .gitignore。退出码非 0（非 git 仓库）→ error 中止。
+;; 对 scope 目录跑 git ls-files，返回"git 能看见的所有相对路径"列表
+;; （相对 scope）。退出码非 0（非 git 仓库）→ error 中止。
 (define (%structor-git-visible-paths scope)
-  (let* ([pipe (open-input-pipe
-                (string-append "git -C " (%shell-quote scope)
-                               " ls-files --cached --others --exclude-standard"))]
-         [paths (let loop ([lines '()])
-                  (let ([line (read-line pipe)])
-                    (if (eof-object? line)
-                        (reverse lines)
-                        (loop (cons line lines)))))]
-         [status (close-pipe pipe)])
-    (unless (zero? (status:exit-val status))
-      (%subprocess-fail!
-       (status:exit-val status)
-       (format #f "structor: 无法枚举 git 可见路径 (~a): ~a"
-               (status:exit-val status) scope)))
-    paths))
+  (%pipe->lines
+   (%shell-command
+    `("git" "-C" ,scope "ls-files" "--cached" "--others" "--exclude-standard"))
+   #:check? #t))
 
 ;; 条目 rel（相对 scope 的路径）是否在 git 可见路径集合 visible 中。
-;; 可见 ⟺ visible 中存在等于 rel、或以 `<rel>/` 为前缀的路径（后者让"git
-;; 只列了子文件"的目录也被判为可见）。
 (define (%structor-visible? rel visible)
   (let ([prefix (string-append rel "/")])
     (any (lambda (p) (or (string=? p rel) (string-prefix? prefix p))) visible)))
 
-;; 列出 dir 的直接子条目，目录在前文件在后，各自字母序。返回 ((is-dir? . name) ...)。
-;; 只保留：非 %structor-skip? 且在 git 可见集合 visible 里。用 file-is-directory?
-;; 决定尾斜杠与递归（submodule gitlink 目录在文件系统层是目录，正确显示为目录）。
-;; rel-of 把 dir 内的 name 翻译成相对 scope 的路径，供可见性判断用。
-(define (%structor-children dir scope visible rel-of)
-  (let* ([entries (scandir dir (negate %structor-skip?))]
-         [visible-entries
-          (filter (lambda (name)
-                    (%structor-visible? (rel-of name) visible))
-                  entries)]
-         [typed (map (lambda (name)
-                       (cons (file-is-directory?
-                              (string-append dir "/" name))
-                             name))
-                     visible-entries)]
-         [dirs (filter car typed)]
-         [files (filter (compose not car) typed)])
-    (append (sort dirs (lambda (a b) (string<? (cdr a) (cdr b))))
-            (sort files (lambda (a b) (string<? (cdr a) (cdr b)))))))
+;; 列出 dir 的直接子条目，目录在前文件在后（各自字母序）。返回
+;; ((is-dir? . name) ...)。rel-of 把 dir 内的 name 翻译成相对 scope 的
+;; 路径，供可见性判断用（每下钻一层由 %structor-render 套一层前缀）。
+(define (%structor-children dir visible rel-of)
+  (let* ([entries
+          (map (lambda (name)
+                 (cons (file-is-directory? (string-append dir "/" name)) name))
+               (sort (filter (lambda (name)
+                               (%structor-visible? (rel-of name) visible))
+                             (scandir dir (negate %structor-skip?)))
+                     string<?))]
+         [dirs (filter car entries)]
+         [files (filter (compose not car) entries)])
+    (append dirs files)))
 
 ;; 递归渲染 dir 的树形行列表。max-depth 限制深度；depth/prefix 是递归状态。
-;; rel-of 翻译当前 dir 内条目名 → 相对 scope 路径（供 %structor-children
-;; 做可见性判断）；每下钻一层 rel-of 套一层子目录前缀。
-(define (%structor-render dir scope visible max-depth depth prefix rel-of)
-  (let* ([entries (%structor-children dir scope visible rel-of)]
+(define (%structor-render dir visible max-depth depth prefix rel-of)
+  (let* ([entries (%structor-children dir visible rel-of)]
          [count (length entries)])
     (let loop ([index 0] [lines '()])
       (if (>= index count)
           (reverse lines)
           (let* ([entry (list-ref entries index)]
-                 [is-dir? (car entry)]
                  [name (cdr entry)]
-                 [path (string-append dir "/" name)]
                  [last? (= (+ index 1) count)]
-                 [connector (if last? "└── " "├── ")]
-                 [child-prefix (string-append prefix
-                                              (if last? "    " "│   "))]
-                 [line (string-append prefix connector name
-                                      (if is-dir? "/" ""))]
-                 [children (if (and is-dir? (< (+ depth 1) max-depth))
-                               (%structor-render path scope visible max-depth
-                                                 (+ depth 1) child-prefix
-                                                 (lambda (n)
-                                                   (rel-of (string-append name "/" n))))
+                 [line (string-append prefix
+                                      (if last? "└── " "├── ")
+                                      name
+                                      (if (car entry) "/" ""))]
+                 [children (if (and (car entry) (< (+ depth 1) max-depth))
+                               (%structor-render
+                                (string-append dir "/" name)
+                                visible max-depth (+ depth 1)
+                                (string-append prefix (if last? "    " "│   "))
+                                (lambda (n)
+                                  (rel-of (string-append name "/" n))))
                                '())])
             (loop (+ index 1)
                   (append (reverse children) (cons line lines))))))))
 
 ;; dir 的根标签：通常 (basename dir)。但 scope 为仓库根时 dir 形如
-;; `<repo>/.`，basename 返回 "."，退一阶用 (basename (dirname dir))（如
-;; "Guix-configs"）。其他 scope 行为不变。
+;; `<repo>/.`，basename 返回 "."，退一阶取仓库名（如 "Guix-configs"）。
 (define (%structor-root-label dir)
   (let ([base (basename dir)])
     (if (string=? base ".")
@@ -898,13 +673,12 @@
         base)))
 
 ;; 渲染 dir 的整棵树，顶部加一行根目录名。
-(define (%structor-tree dir scope visible depth)
+(define (%structor-tree dir visible depth)
   (cons (string-append (%structor-root-label dir) "/")
-        (%structor-render dir scope visible depth 0 ""
-                          (lambda (n) n))))
+        (%structor-render dir visible depth 0 "" identity)))
 
-;; 从 AGENTS.md 的正文 content 里解析第一个 structor begin 标记带的 depth。
-;; 返回整数 depth 或 #f（无标记 / 标记无 depth 参数）。
+;; 从 AGENTS.md 的正文 content 里解析第一个 structor begin 标记带的
+;; depth。返回整数 depth 或 #f（无标记 / 标记无 depth 参数）。
 (define (%structor-parse-depth content)
   (let loop ([lines (string-split content #\newline)])
     (match lines
@@ -916,9 +690,9 @@
                (and d (string->number d)))
              (loop rest)))])))
 
-;; 在 AGENTS.md 的正文 content 里，用 replacement 替换 structor 标记之间的
-;; 内容。返回新内容（若没找到标记则返回 #f 表示无需改动）。
-;; begin 行用 %structor-depth-regex 匹配（兼容 `depth=N` 写法）；end 行精确匹配。
+;; 在 content 里用 replacement 替换 structor 标记之间的内容。返回新内容
+;; （没找到标记则 #f 表示无需改动）。begin 行用 regex 匹配（兼容 depth=N
+;; 写法）；end 行精确匹配。
 (define (%replace-structor-block content replacement)
   (let loop ([lines (string-split content #\newline)]
              [out '()]
@@ -937,10 +711,9 @@
         [(and (eq? state 'in-block)
               (string=? (string-trim-both line) %structor-marker-end))
          (loop rest out 'normal changed?)]
-        ;; normal 态：原样保留
+        ;; normal 态：原样保留；in-block 态：丢弃原标记区内容
         [(eq? state 'normal)
          (loop rest (cons line out) state changed?)]
-        ;; in-block 态：丢弃原标记区内容
         [else
          (loop rest out state changed?)])])))
 
@@ -963,7 +736,7 @@
                           "<!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->"
                           ""
                           "```")
-                    (%structor-tree dir dir visible eff-depth)
+                    (%structor-tree dir visible eff-depth)
                     (list "```" "" %structor-marker-end))]
                   [new-content (%replace-structor-block content replacement)])
              (if new-content
@@ -982,17 +755,17 @@
 
 ;;; ============================================================
 ;;; §7  GNU Stow 包装（stow / stow-all 命令）
-;;; =================================================;;=========
+;;; ============================================================
 ;;;
-;;; dotfiles/mutable/ 目录用 GNU Stow 直接建软链接到仓库源（改源即生效，无需 blue home），
-;;; 与 dotfiles/immutable/（Guix Home stow，只读 store 副本）互补。适合频繁手改
-;;; 且需 git 备份的配置（emacs / pi / hermes）。
+;;; dotfiles/mutable/ 目录用 GNU Stow 直接建软链接到仓库源（改源即生效，
+;;; 无需 blue home），与 dotfiles/immutable/（Guix Home stow，只读 store
+;;; 副本）互补。适合频繁手改且需 git 备份的配置（emacs / pi / hermes）。
 
 ;; dotfiles/mutable/ 下被视为元目录、不当作包的直接子目录。
 (define %stow-meta-names
   '("." ".." ".git" ".github" ".agents" "node_modules" ".blue-store"))
 
-;; 把 --adopt/--restow/--delete 模式名翻译成 stow 命令行 flag。
+;; 把 --adopt/--restow/--delete 模式名翻译成 stow 命令行 flag 与中文动词。
 (define (%stow-flag mode)
   (case (string->symbol mode)
     [(adopt) "--adopt"]
@@ -1000,7 +773,6 @@
     [(delete) "--delete"]
     [else ""]))
 
-;; 模式名翻译成中文动词（日志显示用）。
 (define (%stow-verb mode)
   (case (string->symbol mode)
     [(adopt) "收养"]
@@ -1008,12 +780,11 @@
     [(delete) "撤销"]
     [else "部署"]))
 
-;; 标记文件名：放在 dotfiles/mutable/<PKG>/.stow-folding 即对该包启用 tree folding
-;; （目标目录整目录折叠成单条软链）。无标记的包走默认 --no-folding（真实目录 +
-;; 逐文件软链，保护应用运行时产物不污染源）。
+;; 标记文件名：放在 dotfiles/mutable/<PKG>/.stow-folding 即对该包启用
+;; tree folding（目标目录整目录折叠成单条软链）。无标记的包走默认
+;; --no-folding（真实目录 + 逐文件软链，保护应用运行时产物不污染源）。
 (define %stow-folding-marker ".stow-folding")
 
-;; 判断 pkg 是否启用了 folding（其目录下存在 .stow-folding 标记文件）。
 (define (%stow-folding? pkg)
   (file-exists? (string-append %stow-dir "/" pkg "/" %stow-folding-marker)))
 
@@ -1027,9 +798,8 @@
                  (substring pkg (+ i 1) (string-length pkg)))]
           [else (loop (- i 1))])))
 
-;; 对单个包执行 stow。folding 由 .stow-folding 标记决定（默认 --no-folding）。
-;; --ignore=\.stow-folding$ 始终带上，确保标记文件本身永不部署到 $HOME（否则多个
-;; 包的同名标记会冲突，且把无意义的元文件塞进用户目录）。
+;; 对单个包执行 stow。--ignore=\.stow-folding$ 始终带上，确保标记文件
+;; 本身永不部署到 $HOME（多个包的同名标记会冲突）。
 (define (%stow-package pkg mode home)
   (let ([pkg-dir (string-append %stow-dir "/" pkg)])
     (unless (file-exists? pkg-dir)
@@ -1048,9 +818,8 @@
               ,@(if (string=? flag "") '() (list flag))
               ,(cdr split))))))
 
-;; 枚举 dotfiles/mutable/ 下所有包，按字母序返回。支持一层分组目录
-;; （如 agents/hermes）：目录内含 dot 开头条目（.config/.local/.stow-*）
-;; 即为包；否则视为纯分组目录，下钻收集其中同样是包的子目录。
+;; 目录内含 dot 开头条目（.config/.local/.stow-*）即为包；否则视为纯
+;; 分组目录，下钻收集其中同样是包的子目录。
 (define (%stow-package-dir? path)
   (any (lambda (name)
          (and (> (string-length name) 0)
@@ -1058,6 +827,7 @@
        (filter (lambda (name) (not (member name '("." ".."))))
                (or (scandir path) '()))))
 
+;; 枚举 dotfiles/mutable/ 下所有包（含一层分组目录内的包），按字母序。
 (define (%stow-list-packages)
   (sort
    (append-map
@@ -1079,9 +849,9 @@
     (or (scandir %stow-dir) '()))
    string<?))
 
-;; 解析 blue stow / blue stow-all 的命令行参数。
+;; 解析 blue stow / blue stow-all 的命令行参数：裸参数视为包名，
+;; --adopt/--restow/--delete 设置模式。
 ;; 返回 alist：((mode . "adopt"|"restow"|"delete"|"stow") (packages . (...)))
-;; 裸参数视为包名；--adopt/--restow/--delete 设置模式。
 (define (parse-stow-args args)
   (let loop ([rest args] [mode "stow"] [packages '()])
     (match rest
@@ -1097,8 +867,8 @@
        (loop rest mode (append packages (list pkg)))])))
 
 ;;; ============================================================
-;;; §8  所有命令定义
-;;; =================================================;;=========
+;;; §8  命令定义
+;;; ============================================================
 ;;;
 ;;; 每条命令用 define-command 定义，统一形态：
 ;;;   (define-command (xxx-command arguments)
@@ -1108,83 +878,8 @@
 ;;;      (help "..."))            ; 多行帮助（blue help xxx 用）
 ;;;     <body>)
 ;;;
-;;; `arguments' 是命令行剩余参数列表。`(command-procedure foo-command)' 取
-;;; 另一条命令的过程，用于复用（如 rebuild 先跑 clean-artifacts）。
-;;; 命令顺序按类别聚簇，方便对照 §8 的清单。
-
-;;; ============================================================
-;;; §8.5  Live ISO 构建辅助（build-iso-command 用）
-;;; =================================================;;=========
-;;;
-;;; 给 §9 的 build-iso-command 提供：变体列表、文件名拼合、参数过滤。
-;;; 仿 Testament blueprint.scm 的 %images / images-from-arguments，
-;;; 但前缀改为本仓库自有名 "jeans-"（不用 rosenthal-，那是上游频道）。
-
-;; ISO 变体列表（用户拍板 2026-07-06）。首选 desktop（GUI 装机辅助），
-;; minimal 作为辅助变体留给 desktop 跑不动的硬件（纯 CLI installer）。
-;; 顺序即构建顺序：先 desktop（主目标），再 minimal（fallback）。
-;; 注：minimal 变体目前共用同一份 live-installation-os（source/config.org 里只定义了 desktop 版本）；要做 minimal 得在 config.org 加独立的 OS 块。
-(define %images '("desktop" "minimal"))
-
-;; ISO 文件名前缀：写死为 "jeans"（本仓库自有名）。改发布名只动这里。
-(define %live-iso-prefix "jeans")
-
-;; 把命令参数（变体名列表）过滤成实际要构建的子集。
-;; 空 arguments → 全部 %images；非空 → 只保留出现在 arguments 里的变体。
-(define (images-from-arguments arguments)
-  (if (null? arguments)
-      %images
-      (filter (lambda (v) (member v arguments)) %images)))
-
-;; tools/build-image.scm 的绝对路径（被 guix repl 调用）。
-(define (%live-build-image-script)
-  (string-append %repo-root "/tools/build-image.scm"))
-
-;; dist/ 输出目录的绝对路径（build-iso 产物落地区）。
-(define (%live-iso-output-dir)
-  (string-append %repo-root "/dist"))
-
-;; 拼合 ISO 文件名（不含路径）：<prefix>-<variant>-<YYYYMMDD>.<arch>.iso。
-(define (%live-iso-filename variant)
-  (format #f "~a-~a-~a.~a.iso"
-          %live-iso-prefix
-          variant
-          (date->string (current-date) "~Y~m~d")
-          (%current-system)))
-
-;;; ---------- 帮助 ----------
-
-;; 按类别分组打印全部自写指令（运行时引用，命令对象此时均已定义）。
-(define (print-command-list)
-  (let ([categories
-         `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
-           ("编辑 (editing)" ,block-show-command ,block-replace-command)
-           ("Guix 频道 (guix)" ,pull-command ,update-command)
-           ("维护 (maintenance)" ,clean-artifacts-command ,clean-generations-command
-            ,gc-command ,reuse-command ,structor-command)
-           ("Nix 备用 (nix)" ,nix-command ,nix-init-command ,nix-update-command)
-           ("Stow (stow)" ,stow-command ,stow-all-command)
-           ("验证 (validation)" ,secret-scan-command)
-           ("帮助 (help)" ,list-command))])
-    (display "本项目自写指令：\n")
-    (for-each
-     (lambda (cat)
-       (format #t "~%  ~a~%" (car cat))
-       (for-each
-        (lambda (cmd)
-          (format #t "    ~a	~a~%" (command-invoke cmd) (command-synopsis cmd)))
-        (cdr cat)))
-     categories)
-    (format #t "~%共 ~a 条。详细帮助：blue help <命令名>~%"
-            (apply + (map (lambda (c) (length (cdr c))) categories)))))
-
-;; blue list —— 列出本项目所有指令（覆盖框架默认的 help 风格）。
-(define-command (list-command arguments)
-  ((invoke "list")
-   (category 'help)
-   (synopsis "列出项目指令")
-   (help "列出本项目可用指令及其用途。"))
-  (print-command-list))
+;;; `arguments' 是命令行剩余参数列表。`(command-procedure foo-command)'
+;;; 取另一条命令的过程，用于复用（如 rebuild 先跑 clean-artifacts）。
 
 ;;; ---------- 部署 ----------
 
@@ -1203,7 +898,6 @@
                 #:after (lambda () (%guix '("locate" "--update")))))
 
 ;; blue home —— 应用 Guix Home 配置（不需 sudo，首选调试方式）。
-;; 流程：先清编译产物 → tangle+括号检查 → home reconfigure。
 (define-command (home-command arguments)
   ((invoke "home")
    (category 'deployment)
@@ -1223,35 +917,52 @@
     (%guix `("system" "init" ,scm "/mnt") #:sudo? #t)
     (false-if-exception (delete-file-recursively %tmp-dir))))
 
+;; ---- Live ISO 辅助（build-iso-command 用） -----------------------------
+;;
+;; 仿 Testament blueprint.scm 的 %images / images-from-arguments，前缀为
+;; 本仓库自有名 "jeans"。minimal 目前共用 desktop 的 live-installation-os
+;; （config.org 只定义了 desktop 版本）；要做 minimal 得加独立 OS 块。
+
+;; ISO 变体列表（顺序即构建顺序：先 desktop 主目标，再 minimal fallback）。
+(define %images '("desktop" "minimal"))
+
+;; 把命令参数（变体名列表）过滤成实际要构建的子集。
+(define (images-from-arguments arguments)
+  (if (null? arguments)
+      %images
+      (filter (cut member <> arguments) %images)))
+
+;; 拼合 ISO 文件名（不含路径）：<prefix>-<variant>-<YYYYMMDD>.<arch>.iso。
+(define (%live-iso-filename variant)
+  (format #f "~a-~a-~a.~a.iso"
+          "jeans" variant
+          (date->string (current-date) "~Y~m~d")
+          (%current-system)))
+
 ;; blue build-iso [VARIANT] ... —— 构建 Guix System Live ISO。
-;; 先 tangle source/config.org（让 :tangle ../tmp/live-iso.scm 的块出产物，
-;; dry-run 也真跑 #:real? #t），再对每个变体调 tools/build-image.scm。
-;; 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
-;; ISO 构建耗时 30+ 分钟，适合后台运行（见 docs/iso-build.md）。
+;; 先 tangle（让 :tangle ../tmp/live-iso.scm 的块出产物），再对每个变体
+;; 调 tools/build-image.scm（跑在 guix repl 环境，见文件头）。不带参数
+;; 构建全部变体。构建耗时 30+ 分钟，见 docs/iso-build.md。
 (define-command (build-iso-command arguments)
   ((invoke "build-iso")
    (category 'deployment)
    (synopsis "构建 Guix System Live ISO")
    (help "[VARIANT] ...
-构建 Live ISO 镜像，产物落到 dist/<prefix>-<variant>-<YYYYMMDD>.<arch>.iso。
-不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。
-构建 Live ISO 镜像（不需要 sudo）。产物落到 dist/<prefix>-<variant>-<date>.<arch>.iso。
+构建 Live ISO 镜像，产物落到 dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso。
 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。"))
-  ;; 1) tangle（dry-run 也真跑，验证括号需要产物；复用现成的 tangle-config）
   (tangle-config)
-  ;; 2) 遍历变体，逐个调 guix repl 跑 build-image.scm
-  (mkdir-p (%live-iso-output-dir))
+  (mkdir-p (string-append %repo-root "/dist"))
   (let ([scm (string-append %tmp-dir "/live-iso.scm")])
     (every
      (cut eq? #t <>)
      (map
       (lambda (variant)
         (let* ([iso-name (%live-iso-filename variant)]
-               [iso-path (string-append (%live-iso-output-dir) "/" iso-name)])
+               [iso-path (string-append %repo-root "/dist/" iso-name)])
           (format #t "\tBUILD ISO\t~a~%" iso-name)
-          (%guix `("repl" "--" ,(%live-build-image-script)
-                   ,iso-path ,scm
-                   "--image-type=iso9660"))))
+          (%guix `("repl" "--"
+                   ,(string-append %tools-dir "/build-image.scm")
+                   ,iso-path ,scm "--image-type=iso9660"))))
       (images-from-arguments arguments)))))
 
 ;;; ---------- 编辑 ----------
@@ -1267,17 +978,17 @@
 从 source/config.org 提取 BLOCK 到 tmp/block-BLOCK.scm 并打印路径。"))
   (match arguments
     [(name)
-     (let* ([script (write-temp-elisp "block-show.el" block-extract-el)]
-            [out-file (string-append %tmp-dir "/block-" name ".scm")]
-            [content (%run-elisp-script script (list name))])
+     (mkdir-p %tmp-dir)
+     (let* ([content (%run-elisp "block-extract" name)]
+            [out-file (string-append %tmp-dir "/block-" name ".scm")])
        (call-with-output-file out-file
          (lambda (port) (display content port)))
        (format #t "~a~%" out-file))]
     [_ (error "usage: blue block-show BLOCK")]))
 
-;; blue block-replace BLOCK BODY-FILE —— 用 BODY-FILE 替换 config.org 中的
-;; BLOCK 块。若被替换的是 scheme 块，自动跑 tangle+括号检查验证；失败时
-;; 提示用 git 还原 config.org。
+;; blue block-replace BLOCK BODY-FILE —— 用 BODY-FILE 替换 config.org 中
+;; 的 BLOCK 块。若被替换的是 scheme 块，自动跑 tangle+括号检查验证；失败
+;; 时提示用 git 还原 config.org。
 (define-command (block-replace-command arguments)
   ((invoke "block-replace")
    (category 'editing)
@@ -1286,10 +997,9 @@
 用 BODY-FILE 替换 source/config.org 中的 BLOCK。替换后自动验证 Scheme 代码块。"))
   (match arguments
     [(name body-file)
-     (let* ([script (write-temp-elisp "block-replace.el" block-replace-el)]
-            [out-org (string-append %tmp-dir "/config.org.new")]
-            [output (%run-elisp-script script
-                                       (list name body-file out-org))]
+     (mkdir-p %tmp-dir)
+     (let* ([out-org (string-append %tmp-dir "/config.org.new")]
+            [output (%run-elisp "block-replace" name body-file out-org)]
             [lang (if (string-prefix? "lang=" output)
                       (string-trim-both (substring output 5))
                       "")])
@@ -1311,7 +1021,7 @@
 
 ;;; ---------- Guix 频道 ----------
 
-;; blue pull —— 用锁定的频道跑 guix pull（更新本机 guix 到 channel.lock 版本）。
+;; blue pull —— 用锁定的频道跑 guix pull。
 (define-command (pull-command arguments)
   ((invoke "pull")
    (category 'guix)
@@ -1325,31 +1035,30 @@
 ;; （手册 "Specifying Channels"）。单刷新 = 生成一份临时 channels 文件：
 ;; 目标频道用 channel.scm 的可变定义，其余频道换成 channel.lock 的锁定版本，
 ;; 再照常用 time-machine describe 产出完整的新 lock。
-
-;; 单频道刷新不在 blue 的 Guile 进程内直接解析 channel.scm/channel.lock：
-;; blue 的 Guile 环境缺少 (guix openpgp)/(gcrypt hash) 等模块，直接在沙盒里
-;; 展开 openpgp-fingerprint 宏会报 "unbound variable" / "no code for module"。
-;; 改为走 `guix repl` 子进程（guix 的 Guile 环境自带这些模块），由
-;; tools/gen-partial.scm 在该环境里生成临时 channels 文件。
-(define %gen-partial-script
-  (string-append %repo-root "/tools/gen-partial.scm"))
-
+;;
+;; 临时文件由 tools/gen-partial.scm 生成：blue 的 Guile 环境缺 (guix
+;; openpgp) 等模块，展开 openpgp-fingerprint 宏会报 unbound variable，
+;; 必须走 guix repl 子进程（guix 的 Guile 环境自带这些模块）。
 (define (%partial-channels-file target)
   (let ([out (string-append %tmp-dir "/update-channels.scm")])
     (if (dry-build?)
         (begin
-          (format (current-output-port) "[预演] 生成单频道刷新文件 ~a（目标: ~a，其余 pin）\n" out target)
+          (format #t "[预演] 生成单频道刷新文件 ~a（目标: ~a，其余 pin）~%" out target)
           ;; 预演时不实际生成临时文件，直接复用原 channel.scm 以通过后续的 dry-run 分支
           %channel-scm)
         (begin
           (mkdir-p %tmp-dir)
-          (%run `("guix" "repl" ,%gen-partial-script ,target ,out) #:real? #t)
+          (%run `("guix" "repl"
+                  ,(string-append %tools-dir "/gen-partial.scm")
+                  ,target ,out)
+                #:real? #t)
           out))))
-
 
 ;; blue update [CHANNEL] —— 用可变频道定义跑 guix describe，把结果写回
 ;; channel.lock（固定 commit），然后 git commit -S 锁定。不带参数刷新全部
 ;; 频道；带 CHANNEL 只刷新该频道，其余保持 channel.lock 中的 commit 不变。
+;; dry-run 下仅预演、不写 channel.lock：describe 是捕获 stdout 的管道命令，
+;; 不走 %run 短路，必须在此手动短路。
 (define-command (update-command arguments)
   ((invoke "update")
    (category 'guix)
@@ -1357,24 +1066,22 @@
    (help "[CHANNEL]
 不带参数：刷新全部频道到 channel.scm 声明的分支最新。
 带 CHANNEL：只刷新该频道，其余频道保持 channel.lock 中锁定的 commit 不变。"))
-  (let ([channels-file
-         (match arguments
-           [() %channel-scm]
-           [(target) (%partial-channels-file target)]
-           [_ (error "usage: blue update [CHANNEL]")])])
-    (let ([content
-           (%pipe->string
-            (string-join
-             (map %shell-quote
-                  (list "guix" "time-machine"
-                        (string-append "--channels=" channels-file)
-                        "--" "describe" "--format=channels"))
-             " "))])
-      (%write-file-atomically %channel-lock
-                              (lambda (port) (display content port)))
-      (%run `("git" "commit" "-S" "-m"
-              "build(channel.lock): bump channels"
-              ,%channel-lock)))))
+  (let* ([channels-file
+          (match arguments
+            [() %channel-scm]
+            [(target) (%partial-channels-file target)]
+            [_ (error "usage: blue update [CHANNEL]")])]
+         [describe (%guix-command '("describe" "--format=channels")
+                                  #:channels channels-file)])
+    (if (dry-build?)
+        (%print-preview describe)
+        (let ([content (%pipe->string (%shell-command describe))])
+          (%write-file-atomically %channel-lock
+                                  (lambda (port) (display content port)))))
+    ;; git commit 走 %run：dry-run 下自动短路为预演打印。
+    (%run `("git" "commit" "-S" "-m"
+            "build(channel.lock): bump channels"
+            ,%channel-lock))))
 
 ;;; ---------- 维护 ----------
 
@@ -1396,14 +1103,14 @@
    (help "移除仓库内的 __pycache__、*.elc、*.o、*.a、*.so 文件以及 Emacs 运行时缓存目录。"))
   (for-each
    (match-lambda
-     [(target type)
-      (if (eq? type 'directory)
-          (when (file-exists? target)
-            (format #t "移除 ~a~%" target)
-            (delete-file-recursively target))
-          (%run `("find" ,%repo-root "-type" "f" "-name" ,target
-                  "-not" "-path" "*/.git/*"
-                  "-print" "-delete")))])
+    [(target type)
+     (if (eq? type 'directory)
+         (when (file-exists? target)
+           (format #t "移除 ~a~%" target)
+           (delete-file-recursively target))
+         (%run `("find" ,%repo-root "-type" "f" "-name" ,target
+                 "-not" "-path" "*/.git/*"
+                 "-print" "-delete")))])
    `(("__pycache__" directory)
      ("*.elc" file)
      ("*.o" file)
@@ -1414,7 +1121,7 @@
      (,(string-append %stow-dir "/emacs/.config/emacs/etc") directory)
      (,(string-append %stow-dir "/emacs/.config/emacs/var") directory))))
 
-;; blue gc —— 一键大扫除：先 clean-generations，再 guix gc，最后删旧 EFI 文件。
+;; blue gc —— 一键大扫除：先 clean-generations，再 guix gc，最后删旧 EFI。
 (define-command (gc-command arguments)
   ((invoke "gc")
    (category 'maintenance)
@@ -1437,9 +1144,7 @@
           ".")))
 
 ;; blue structor [TARGET] ... —— 刷新 AGENTS.md 的自动目录树。
-;; 不带参数刷所有目标；带参数只刷指定 AGENTS.md。
-;; 可见性遵循 .gitignore（git ls-files 驱动）。深度优先级：
-;;   标记内 depth=N > ORG_STRUCTOR_DEPTH > 默认 4。
+;; 深度优先级：标记内 depth=N > ORG_STRUCTOR_DEPTH > 默认 4。
 ;; 环境变量：ORG_STRUCTOR_DEPTH=N 全局回退深度；ORG_STRUCTOR_DRY=1 预览。
 (define-command (structor-command arguments)
   ((invoke "structor")
@@ -1451,7 +1156,7 @@
 深度优先级：标记内 `<!-- structor:begin depth=N -->` > ORG_STRUCTOR_DEPTH > 默认 4。"))
   (let* ([depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4)]
          [targets (if (null? arguments) (%structor-targets) arguments)]
-         [dry? (%env-set? "ORG_STRUCTOR_DRY")])
+         [dry? (and=> (getenv "ORG_STRUCTOR_DRY") (negate string-null?))])
     (run-structor targets #:depth depth #:dry? dry?)))
 
 ;;; ---------- Nix 备用 ----------
@@ -1505,8 +1210,8 @@
 
 ;;; ---------- Stow ----------
 
-;; blue stow [--adopt|--restow|--delete] PKG ... —— 用 GNU Stow 部署 dotfiles/mutable/PKG。
-;; 详见命令 help 文本（含忽略机制三层说明）。
+;; blue stow [--adopt|--restow|--delete] PKG ... —— 用 GNU Stow 部署
+;; dotfiles/mutable/PKG。详见命令 help 文本（含忽略机制三层说明）。
 (define-command (stow-command arguments)
   ((invoke "stow")
    (category 'stow)
@@ -1546,8 +1251,8 @@ folding 控制:
       (error (format #f "stow 源目录不存在: ~a" %stow-dir)))
     (for-each (cut %stow-package <> mode home) packages)))
 
-;; blue stow-all [--adopt|--restow|--delete] —— 对 dotfiles/mutable/ 下所有包批量操作。
-;; 裸参数作为包名过滤（为空则取全部）。逐一执行，遇错即停。
+;; blue stow-all [--adopt|--restow|--delete] —— 对 dotfiles/mutable/ 下所有
+;; 包批量操作。裸参数作为包名过滤（为空则取全部）。逐一执行，遇错即停。
 (define-command (stow-all-command arguments)
   ((invoke "stow-all")
    (category 'stow)
@@ -1577,34 +1282,49 @@ folding 控制:
       (format #t "stow-all: 共 ~a 个包，模式=~a~%" (length packages) mode)
       (for-each (cut %stow-package <> mode home) packages))))
 
+;;; ---------- 帮助 ----------
+
+;; blue list —— 列出本项目所有指令（覆盖框架默认的 help 风格）。
+(define-command (list-command arguments)
+  ((invoke "list")
+   (category 'help)
+   (synopsis "列出项目指令")
+   (help "列出本项目可用指令及其用途。"))
+  (print-command-list))
+
+;; 命令分类表：单一清单，同时驱动 blue list 的展示与 §9 的注册。
+;; 必须定义在全部命令（含上面的 list-command）之后——quasi-quote 在定义
+;; 求值时刻就取各命令变量的值。
+(define %command-categories
+  `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
+    ("编辑 (editing)" ,block-show-command ,block-replace-command)
+    ("Guix 频道 (guix)" ,pull-command ,update-command)
+    ("维护 (maintenance)" ,clean-artifacts-command ,clean-generations-command
+     ,gc-command ,reuse-command ,structor-command)
+    ("Nix 备用 (nix)" ,nix-command ,nix-init-command ,nix-update-command)
+    ("Stow (stow)" ,stow-command ,stow-all-command)
+    ("验证 (validation)" ,secret-scan-command)
+    ("帮助 (help)" ,list-command)))
+
+;; 按类别分组打印全部自写指令。
+(define (print-command-list)
+  (display "本项目自写指令：\n")
+  (for-each
+   (lambda (cat)
+     (format #t "~%  ~a~%" (car cat))
+     (for-each
+      (lambda (cmd)
+        (format #t "    ~a\t~a~%" (command-invoke cmd) (command-synopsis cmd)))
+      (cdr cat)))
+   %command-categories)
+  (format #t "~%共 ~a 条。详细帮助：blue help <命令名>~%"
+          (length (concatenate (map cdr %command-categories)))))
+
 ;;; ============================================================
-;;; §9 入口点 —— 把上面定义的一切注册给 blue 框架
-;;; =================================================;;=========
-;;;
-;;; buildables / testables 接进 `blue build` / `blue check`；
-;;; commands 是 `blue <指令>` 能调到的全部自写命令（顺序仅影响源码可读性）。
+;;; §9  入口点 —— 把上面定义的一切注册给 blue 框架
+;;; ============================================================
 
 (blueprint
  (buildables (list %config-buildable))
  (testables (list %config-check))
- (commands
-  (list list-command
-        rebuild-command
-        home-command
-        build-iso-command
-        block-show-command
-        block-replace-command
-        clean-generations-command
-        clean-artifacts-command
-        secret-scan-command
-        gc-command
-        init-command
-        nix-command
-        nix-init-command
-        nix-update-command
-        pull-command
-        reuse-command
-        update-command
-        stow-command
-        stow-all-command
-        structor-command)))
+ (commands (concatenate (map cdr %command-categories))))

@@ -37,6 +37,9 @@ Guix-configs///
 │   └── manifest.scm
 ├── tools/
 │   ├── linux-setup/
+│   ├── block-extract.el
+│   ├── block-list.el
+│   ├── block-replace.el
 │   ├── bootstrap.sh
 │   ├── build-image.scm
 │   ├── fxxk-link.sh
