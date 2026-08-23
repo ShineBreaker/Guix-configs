@@ -20,7 +20,7 @@
 |    4 | 编程与开发     | [[#programming]]     | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表         | bootstrap, appearance     |
 |    5 | 项目与导航     | [[#projects]]        | project.el / 文件缓冲区导航                                   | terminal, git-display     |
 |    6 | Org 与知识库   | [[#org-knowledge]]   | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板     | bootstrap, process-helper |
-|    7 | 键位与补全     | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 内置补全栈                    | 前述全部域的命令          |
+|    7 | 键位与补全     | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 补全 7 件套                    | 前述全部域的命令          |
 |    8 | 系统工具       | [[#system-tools]]    | 应用 / Daemon 预热 / Dashboard / 兼容性 shim                  | 前述全部域                |
 
 各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。Noweb 组装块以 =#+NAME:= 标记，便于 =scripts/configctl map= 定位和 org 间跳转。
@@ -437,6 +437,9 @@ GCMH + 智能垃圾回收管理 (启动后接管 GC)
   :demand t
   :custom
   (recentf-max-saved-items 300)
+  ;; Emacs 31:daemon 长驻下定期自动保存,异常死亡不丢历史
+  ;; (默认只在 kill-emacs 时写)。
+  (recentf-autosave-interval 5)
   :config
   (recentf-mode 1))
 
@@ -682,465 +685,33 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 :CUSTOM_ID: modeline
 :END:
 
-Starship 风格响应式 mode-line:
-+ 四档布局保留，但 redisplay 只经过一个顶层 renderer
-+ tier、路径和状态在一次调用内各计算一次。
-+ 图标、路径和 buffer 名采用缓存；路径中的单独 =.= 目录保留为 =.= ，避免隐藏目录缩写产生空字符串。
+=doom-modeline= 承担全部 mode-line 渲染,替代旧自研 Starship 风格 renderer。自研版的 segment 清单(nerd-icons 图标、路径缩写、buffer 名、VCS 分支与状态、编码、位置与行列、Flymake 计数、Eglot 状态、battery、时间、major mode、global-mode-string 透传、窄窗口降级)在 doom-modeline 4.2 中全部有对应实现,segment 缓存与像素测量由上游维护。
+
++ 路径风格 =truncate-upto-project= 等价旧版首字母缩写契约:project 名完整、内部路径完整、仅父目录缩写。
++ =doom-modeline-override-time= / =override-battery= 自动把 =display-time-string= / =battery-mode-line-string= 移出 =global-mode-string=,时间与电量各只渲染一次;=misc-info= segment 透传其余全局状态。
++ GUI daemon 下图标必须显式 =doom-modeline-icon t=(server 模式默认关闭);TTY 下 Nerd Font 字形以文字渲染,bar 与 height 仅 GUI 生效。
++ mode-line 是首个 client 立即渲染的高频 UI,无 mode/hook/commands 触发入口,=:demand t= 同步启用。
 
 #+begin_src emacs-lisp
-(require 'battery)
-(require 'project)
-
-(declare-function nerd-icons-icon-for-file "nerd-icons")
-(declare-function nerd-icons-icon-for-mode "nerd-icons")
-(declare-function nerd-icons-faicon "nerd-icons")
-(declare-function nerd-icons-mdicon "nerd-icons")
-(defvar mode-line-format-right-align)
-
-(defcustom custom:modeline-show-time t
-  "是否在 mode-line 右段显示时间。"
-  :type 'boolean)
-
-(defcustom custom:modeline-show-vcs t
-  "是否在 mode-line 显示 VCS 分支。"
-  :type 'boolean)
-
-(defcustom custom:modeline-path-max-width 40
-  "路径段最大显示宽度。"
-  :type 'integer)
-
-(defvar custom:modeline--nerd-icons-available
-  (require 'nerd-icons nil t))
-
-(defvar custom:modeline--icon-cache (make-hash-table :test #'equal)
-  "Mode-line 静态图标缓存。")
-
-(defconst custom:modeline-icon-cache-limit 256
-  "Mode-line 图标缓存的最大条目数。")
-
-(defvar-local custom:modeline--flymake-counts '(0 0))
-(defvar-local custom:modeline--eglot-info nil)
-(defvar-local custom:modeline--project-cache :unknown)
-(defvar-local custom:modeline--vc-state-cache :unknown)
-(defvar-local custom:modeline--path-cache nil)
-(defvar-local custom:modeline--name-cache nil)
-
-(defun custom/modeline-tier (&optional window)
-  "按 WINDOW 宽度返回 wide、medium、narrow 或 compact。"
-  (let ((width (window-width window)))
-    (cond
-     ((>= width 120) 'wide)
-     ((>= width 100) 'medium)
-     ((>= width 80) 'narrow)
-     (t 'compact))))
-
-(defun custom/modeline--icon (name &optional file)
-  "返回 Nerd Font 图标 NAME；FILE 非 nil 时按文件类型取图标。
-
-NAME 是 nerd-icons 图标名(如 \"nf-md-source_branch\"):\"nf-fa-*\" 前缀分发到
-nerd-icons-faicon,其余交给 nerd-icons-mdicon。
-TTY 下 Nerd Font 字形以普通文字渲染（用户终端已安装 Nerd Font），
-故不按 display 类型守卫，只看 nerd-icons 包是否可用。出错时返回空串。"
-  (if custom:modeline--nerd-icons-available
-      (let* ((key (if (and file (stringp file))
-                      (list name (file-name-nondirectory file))
-                    name))
-             (cached (gethash key custom:modeline--icon-cache :missing)))
-        (if (not (eq cached :missing))
-            cached
-          (let ((icon
-                 (or (ignore-errors
-                       (cond
-                        ((and file (stringp file))
-                         (nerd-icons-icon-for-file file))
-                        ((string-prefix-p "nf-fa-" name)
-                         (nerd-icons-faicon name))
-                        (t
-                         (nerd-icons-mdicon name))))
-                     "")))
-            (when (>= (hash-table-count custom:modeline--icon-cache)
-                      custom:modeline-icon-cache-limit)
-              (clrhash custom:modeline--icon-cache))
-            (puthash key icon custom:modeline--icon-cache)
-            icon)))
-    ""))
-
-(defun custom/modeline--with-icon (icon text)
-  "组合 ICON 与 TEXT。"
-  (cond
-   ((string-empty-p icon) (or text ""))
-   ((string-empty-p text) icon)
-   (t (concat icon " " text))))
-
-(defun custom/modeline--segment (text face)
-  "用 FACE 呈现非空 TEXT。"
-  (if (string-empty-p text)
-      ""
-    (propertize text 'face face)))
-
-(defun custom/modeline--join (&rest segments)
-  "以 Starship 风格分隔符连接非空 SEGMENTS。"
-  (string-join (seq-filter
-                (lambda (segment)
-                  (and (stringp segment) (not (string-empty-p segment))))
-                segments)
-               " · "))
-
-(defun custom/modeline--path-initials (path)
-  "把 PATH 的目录部分缩成首字母。"
-  (let* ((remote (or (file-remote-p path) ""))
-         (local (or (file-remote-p path 'localname) path))
-         (parts (split-string
-                 (string-remove-prefix
-                  "~/" (abbreviate-file-name (directory-file-name local)))
-                 "/" t))
-         (short
-          (mapcar
-           (lambda (part)
-             (if (string-prefix-p "." part)
-                 (let ((rest (string-remove-prefix "." part)))
-                   (if (string-empty-p rest)
-                       "."
-                     (concat "." (substring rest 0 1))))
-               (substring part 0 1)))
-           parts)))
-    (concat remote (string-join short "/"))))
-
-(defun custom/modeline--project-info ()
-  "返回当前 buffer 的 (ROOT NAME) project 缓存。"
-  (when (eq custom:modeline--project-cache :unknown)
-    (setq custom:modeline--project-cache
-          (when-let* ((project (project-current nil))
-                      (root (project-root project)))
-            (list root
-                  (file-name-nondirectory (directory-file-name root))))))
-  custom:modeline--project-cache)
-
-(defun custom/modeline--reset-project-cache (&rest _)
-  "失效当前 buffer 的 project 缓存。"
-  (setq custom:modeline--project-cache :unknown
-        custom:modeline--path-cache nil))
-
-(defun custom/modeline--refresh-vc-state (&rest _)
-  "通过 VC 公开接口刷新当前 buffer 的状态缓存。"
-  (setq custom:modeline--vc-state-cache
-        (when-let* ((backend (and buffer-file-name
-                                  (vc-backend buffer-file-name))))
-          (vc-state buffer-file-name backend))))
-
-(defun custom/modeline--refresh-flymake-counts (&rest _)
-  "通过 Flymake 公开接口刷新错误与警告计数。"
-  (setq custom:modeline--flymake-counts
-        (if (bound-and-true-p flymake-mode)
-            (let ((errors 0)
-                  (warnings 0))
-              (dolist (diagnostic (flymake-diagnostics))
-                (let* ((type (flymake-diagnostic-type diagnostic))
-                       (severity
-                        (alist-get 'severity
-                                   (alist-get type flymake-diagnostic-types))))
-                  (cond
-                   ((and severity (>= severity 2)) (cl-incf errors))
-                   ((and severity (>= severity 1)) (cl-incf warnings)))))
-              (list errors warnings))
-          '(0 0))))
-
-(defun custom/modeline--refresh-eglot-info (&rest _)
-  "通过 Eglot 公开接口刷新连接状态缓存(仅记录是否已连接)。"
-  (setq custom:modeline--eglot-info
-        (and (ignore-errors (eglot-current-server)) t)))
-
-(defun custom/modeline--path-segment (tier)
-  "返回 TIER 对应的路径段。"
-  (if (or (eq tier 'compact) (not buffer-file-name))
-      ""
-    (let* ((project (custom/modeline--project-info))
-           (key (list buffer-file-name project custom:modeline-path-max-width)))
-      (if (equal key (car-safe custom:modeline--path-cache))
-          (cdr custom:modeline--path-cache)
-        (let* ((root (car-safe project))
-               (directory (file-name-directory buffer-file-name))
-               (path (if (and root (file-in-directory-p buffer-file-name root))
-                         (file-relative-name directory root)
-                       directory))
-               (display (custom/modeline--path-initials path))
-               (segment
-                (if (string-empty-p (or display ""))
-                    ""
-                  (custom/modeline--segment
-                   (custom/modeline--with-icon
-                    (custom/modeline--icon "nf-md-folder_open")
-                    (truncate-string-to-width
-                     display custom:modeline-path-max-width 0 nil t))
-                   'shadow))))
-          (setq custom:modeline--path-cache (cons key segment))
-          segment)))))
-
-(defun custom/modeline--name-segment (tier)
-  "返回 TIER 对应的 buffer 名。compact 档由 major-left 段独占显示 major,
-此处返回空串避免 compact 档 major 名重复出现。"
-  (if (eq tier 'compact)
-      ""
-    (let ((key (list tier buffer-file-name (buffer-name))))
-      (if (equal key (car-safe custom:modeline--name-cache))
-          (cdr custom:modeline--name-cache)
-        (let* ((name (if buffer-file-name
-                         (file-name-nondirectory buffer-file-name)
-                       (buffer-name)))
-               (width (pcase tier ('wide 32) ('medium 24) (_ 18)))
-               (segment
-                (custom/modeline--segment
-                 (custom/modeline--with-icon
-                  (custom/modeline--icon "nf-fa-file_o" buffer-file-name)
-                  (truncate-string-to-width name width 0 nil t))
-                 'font-lock-function-name-face)))
-          (setq custom:modeline--name-cache (cons key segment))
-          segment)))))
-
-(defun custom/modeline--branch-segment (tier)
-  "返回 TIER 对应的 VCS 分支。"
-  (if (or (eq tier 'compact) (not custom:modeline-show-vcs))
-      ""
-    (let ((branch
-           (when (and (stringp vc-mode)
-                      (string-match
-                       "\\(?:Git\\|Hg\\|SVN\\)[-:]\\([^() ]+\\)" vc-mode))
-             (string-trim (match-string 1 vc-mode)))))
-      (if branch
-          (custom/modeline--segment
-           (custom/modeline--with-icon
-            (custom/modeline--icon "nf-md-source_branch") branch)
-           'font-lock-type-face)
-        ""))))
-
-(defun custom/modeline--vc-segment (tier)
-  "返回 TIER 对应的修改与 VC 状态(含状态 icon)。
-复刻原版 git-status:10 种状态各自带语义化 nerd-icons icon + face。"
-  (if (or (eq tier 'compact) (not buffer-file-name))
-      ""
-    (when (eq custom:modeline--vc-state-cache :unknown)
-      (custom/modeline--refresh-vc-state))
-    (let* ((state (if (buffer-modified-p)
-                      'buffer-modified
-                    custom:modeline--vc-state-cache))
-           (spec (pcase state
-                   ('up-to-date       (list "clean"     "nf-md-check_circle"        'success))
-                   ('edited           (list "edited"    "nf-md-pencil"              'warning))
-                   ('buffer-modified  (list "unsaved"   "nf-md-content_save_alert"  'warning))
-                   ('added            (list "added"     "nf-md-plus_circle"         'success))
-                   ('removed          (list "removed"   "nf-md-minus_circle"        'error))
-                   ('missing          (list "missing"   "nf-md-alert_circle"        'error))
-                   ('conflict         (list "conflict"  "nf-md-alert_octagon"       'error))
-                   ('needs-merge      (list "merge"     "nf-md-source_merge"        'warning))
-                   ('needs-update     (list "update"    "nf-md-cloud_download"      'warning))
-                   ('ignored          (list "ignored"   "nf-md-eye_off"             'shadow))
-                   ('unregistered     (list "untracked" "nf-md-help_circle"         'warning))
-                   (_ nil))))
-      (if spec
-          (pcase-let ((`(,text ,icon-name ,face) spec))
-            (custom/modeline--segment
-             (custom/modeline--with-icon
-              (custom/modeline--icon icon-name) text)
-             face))
-        ""))))
-
-(defun custom/modeline--coding-segment (tier)
-  "返回 TIER 对应的编码(wide/medium 显示,与旧版 tier 密度一致)。"
-  (if (memq tier '(wide medium))
-      (custom/modeline--segment
-       (custom/modeline--with-icon
-        (custom/modeline--icon "nf-md-lock")
-        (upcase
-         (symbol-name
-          (or (coding-system-base buffer-file-coding-system) 'undecided))))
-       'font-lock-string-face)
-    ""))
-
-(defun custom/modeline--position-segment (tier)
-  "返回 TIER 对应的位置百分比与 buffer 大小(wide 显示大小)。"
-  (if (memq tier '(wide medium))
-      (let* ((range (max 1 (- (point-max) (point-min))))
-             (percent
-              (round (* 100.0
-                        (/ (float (- (point) (point-min))) range))))
-             (base (custom/modeline--with-icon
-                    (custom/modeline--icon "nf-md-flag_checkered")
-                    (format "%d%%%%" percent)))
-             (text (if (eq tier 'wide)
-                       (format "%s %s" base
-                               (custom/modeline--with-icon
-                                (custom/modeline--icon "nf-md-format_list_bulleted")
-                                (file-size-human-readable (buffer-size))))
-                     base)))
-        (custom/modeline--segment text 'font-lock-doc-face))
-    ""))
-
-(defun custom/modeline--location-segment (tier)
-  "返回 TIER 对应的行列坐标 (%l,%c)。compact 档不显示。
-wide/medium/narrow 都显示(原版行为)。"
-  (if (eq tier 'compact)
-      ""
-    (custom/modeline--segment
-     (custom/modeline--with-icon
-      (custom/modeline--icon "nf-md-map_marker")
-      (format "(%s)" (format-mode-line "%l,%c")))
-     'shadow)))
-
-(defun custom/modeline--diagnostics-segment (tier)
-  "返回 TIER 对应的 Flymake 诊断计数(wide/medium 显示)。"
-  (if (and (memq tier '(wide medium))
-           (bound-and-true-p flymake-mode))
-      (pcase-let ((`(,errors ,warnings) custom:modeline--flymake-counts))
-        (let* ((total (+ errors warnings))
-               (icon-name (cond
-                           ((> errors 0)   "nf-md-times_circle")
-                           ((> warnings 0) "nf-md-alert")
-                           (t              "nf-md-check_circle")))
-               (text (pcase tier
-                       ('wide    (format "E:%d W:%d" errors warnings))
-                       ('medium  (format "%d:%d" errors warnings))
-                       (_        (number-to-string total))))
-               (face (cond
-                      ((> errors 0)   'error)
-                      ((> warnings 0) 'warning)
-                      (t              'success))))
-          (custom/modeline--segment
-           (custom/modeline--with-icon (custom/modeline--icon icon-name) text)
-           face)))
-    ""))
-
-(defun custom/modeline--eglot-segment (tier)
-  "返回 TIER 对应的 Eglot 连接状态(wide 档附加名称,wide/medium 显示)。"
-  (when (and (memq tier '(wide medium)) custom:modeline--eglot-info)
-    (custom/modeline--segment
-     (custom/modeline--with-icon
-      (custom/modeline--icon "nf-md-server_network")
-      (if (eq tier 'wide) "eglot ●" "●"))
-     'success)))
-
-(defun custom/modeline--global-segment (tier)
-  "返回 TIER 对应的全局状态字符串。compact 档不显示。
-过滤 `battery-mode-line-string' 和 `display-time-string',
-避免与自定义 battery/time 段重复。"
-  (if (eq tier 'compact)
-      ""
-    (let* ((items (if (listp global-mode-string)
-                      global-mode-string
-                    (list global-mode-string)))
-           (filtered (seq-remove
-                      (lambda (item)
-                        (memq item '(battery-mode-line-string
-                                     display-time-string)))
-                      items))
-           (text (string-trim (format-mode-line filtered))))
-      (if (string-empty-p text) "" text))))
-
-(defun custom/modeline--major-segment ()
-  "major mode 段(带 icon)。compact 档放左段,其余档放右段。"
-  (custom/modeline--segment
-   (custom/modeline--with-icon
-    (custom/modeline--icon "nf-md-code_tags")
-    (symbol-name major-mode))
-   'font-lock-keyword-face))
-
-(defun custom/modeline--battery-segment (tier)
-  "返回 wide 档电池状态(带 percent face 着色)。
-需要 `display-battery-mode' 启用才会填充 `battery-mode-line-string'。"
-  (if (eq tier 'wide)
-      (let* ((raw (and (stringp battery-mode-line-string)
-                       (string-trim battery-mode-line-string)))
-             (percent (and raw
-                           (string-match "\\([0-9]+\\)%%" raw)
-                           (string-to-number (match-string 1 raw))))
-             (face (cond
-                    ((not percent) 'font-lock-doc-face)
-                    ((>= percent 50) 'success)
-                    ((>= percent 20) 'warning)
-                    (t 'error))))
-        (if (and raw (not (string-empty-p raw)))
-            (custom/modeline--segment
-             (custom/modeline--with-icon
-              (custom/modeline--icon "nf-md-battery")
-              (replace-regexp-in-string "%" "%%" raw nil t))
-             face)
-          ""))
-    ""))
-
-(defun custom/modeline--time-segment (tier)
-  "返回非 compact 档时间(wide 显示秒)。"
-  (if (and custom:modeline-show-time (not (eq tier 'compact)))
-      (let* ((wide (eq tier 'wide))
-             (time (format-time-string (if wide "%H:%M:%S" "%H:%M"))))
-        (custom/modeline--segment
-         (custom/modeline--with-icon
-          (custom/modeline--icon "nf-md-clock")
-          time)
-         'font-lock-string-face))
-    ""))
-
-(defun custom/modeline-render-left ()
-  "计算并返回左段(文件相关)字符串。
-
-拆分为 left/right 两个 renderer 而非单一 render 返回含
-`mode-line-format-right-align' 的 list:右对齐符号嵌套在 :eval 返回的
-list 里时,Emacs 测量后续内容像素宽失效(nerd-icons 图标像素宽≠列宽),
-会把右段推出窗口可见区。right-align 必须位于 mode-line-format 顶层
-list 才能正确测量(旧版结构,带图标右对齐也正确)。"
-  (let ((tier (custom/modeline-tier)))
-    (custom/modeline--join
-     (custom/modeline--path-segment tier)
-     (custom/modeline--name-segment tier)
-     (custom/modeline--branch-segment tier)
-     (custom/modeline--vc-segment tier)
-     (custom/modeline--coding-segment tier)
-     (custom/modeline--position-segment tier)
-     (custom/modeline--location-segment tier)
-     (when (eq tier 'compact) (custom/modeline--major-segment)))))
-
-(defun custom/modeline-render-right ()
-  "计算并返回右段(系统/状态相关)字符串。见 `custom/modeline-render-left'。"
-  (let ((tier (custom/modeline-tier)))
-    (custom/modeline--join
-     (custom/modeline--diagnostics-segment tier)
-     (custom/modeline--eglot-segment tier)
-     (custom/modeline--global-segment tier)
-     (unless (eq tier 'compact) (custom/modeline--major-segment))
-     (custom/modeline--battery-segment tier)
-     (custom/modeline--time-segment tier))))
-
-(with-eval-after-load 'flymake
-  (add-hook 'flymake-after-diagnostics-hook
-            #'custom/modeline--refresh-flymake-counts)
-  (add-hook 'flymake-mode-hook
-            #'custom/modeline--refresh-flymake-counts))
-
-(with-eval-after-load 'eglot
-  (add-hook 'eglot-managed-mode-hook #'custom/modeline--refresh-eglot-info)
-  (add-hook 'eglot-server-initialized-hook
-            #'custom/modeline--refresh-eglot-info))
-
-(add-hook 'find-file-hook #'custom/modeline--refresh-vc-state)
-(add-hook 'after-save-hook #'custom/modeline--refresh-vc-state)
-(add-hook 'after-revert-hook #'custom/modeline--refresh-vc-state)
-(add-hook 'after-save-hook #'custom/modeline--reset-project-cache)
-(add-hook 'after-change-major-mode-hook #'custom/modeline--reset-project-cache)
-
-;; 顶层 list 结构:right-align 必须在顶层,嵌套在 :eval 返回 list 里会导致
-;; 右段像素测量错误而被推出窗口(见 render-left 注释)。
-(let ((format '(" "
-                (:eval (custom/modeline-render-left))
-                mode-line-format-right-align
-                " "
-                (:eval (custom/modeline-render-right)))))
-  (setq-default mode-line-format format
-                mode-line-inactive-format format))
-
-;; 数据源 minor mode 启用:
-;; - display-battery-mode 维护 `battery-mode-line-string'(modeline 电池段数据源)
-;; - 时间由 `format-time-string' 在 time-segment 内直接计算,不启用
-;;   display-time-mode(避免其写入 global-mode-string 导致时间重复显示)。
-;; - size-indication-mode 保持 nil:position 段 wide 档已显示 buffer 大小。
-(display-battery-mode 1)
+(use-package doom-modeline
+  :demand t
+  :config
+  (setq doom-modeline-height 25
+        doom-modeline-bar-width 4
+        doom-modeline-icon t
+        doom-modeline-buffer-file-name-style 'truncate-upto-project
+        doom-modeline-project-detection 'project
+        doom-modeline-vcs-max-length 24
+        doom-modeline-check 'auto
+        doom-modeline-window-width-limit 85
+        doom-modeline-time-live-icon nil)
+  ;; 时间与电量数据源:display-time-mode / display-battery-mode 维护
+  ;; display-time-string / battery-mode-line-string,doom-modeline 接管其
+  ;; global-mode-string 投放,由自家 segment 独占渲染。
+  (setq display-time-format "%H:%M")
+  (display-time-mode 1)
+  (display-battery-mode 1)
+  (doom-modeline-mode 1))
 #+end_src
 
 ** Tab-line
@@ -1162,7 +733,14 @@ list 才能正确测量(旧版结构,带图标右对齐也正确)。"
 
 #+begin_src emacs-lisp
 (require 'tab-line)
+(require 'project)
 (tab-bar-mode -1)
+
+;; nerd-icons 可用性只看包是否加载,不查 display 类型:TTY 终端已安装
+;; Nerd Font,字形以普通文字渲染(见 GUI/TTY 混合 daemon 约束)。
+(defvar custom:nerd-icons-available
+  (require 'nerd-icons nil t)
+  "nerd-icons 包是否已加载;图标渲染的统一守卫变量。")
 
 (defconst custom:tabs-name-max-width 36
   "单个标签名最大宽度。")
@@ -1342,7 +920,7 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
         (let* ((name (truncate-string-to-width
                       (buffer-name)
                       custom:tabs-name-max-width 0 nil t))
-               (icon (when custom:modeline--nerd-icons-available
+               (icon (when custom:nerd-icons-available
                        (nerd-icons-icon-for-buffer)))
                (prefix (if (and (stringp icon)
                                 (not (string-empty-p icon)))
@@ -1872,7 +1450,7 @@ daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的
 | fringe 宽度      | 行号函数若清零 fringe         | —                       | 禁止在行号函数清零 fringe(详见下表) |
 | ef-themes        | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题 |
 | TTY 配色         | 无 alpha 通道                 | 主题前景 + 全 face 透明 | 清背景与反色，不覆盖主题前景 |
-| Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染          | 守卫改为 =custom:modeline--nerd-icons-available=,不查 display |
+| Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染          | 守卫用 =custom:nerd-icons-available=,不查 display |
 #+TBLFM: $2=setq-default= 是全局副作用
 
 TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后为 =hl-line= 恢复 Ef palette 的 =bg-dim= 背景、为 =org-block= 族恢复 =bg-alt= 中性面板(代码块在终端无 fringe,靠这块底色成组),选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
@@ -2185,6 +1763,13 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 (custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
 
 (setq server-window #'custom/display-buffer-in-main-window)
+
+;; q 关闭无状态的派生视图 buffer(kill 而非 bury,Emacs 31);文件 buffer
+;; 维持 bury,tab-line 的关闭语义(bury + unregister)走自身命令不受影响。
+(setq quit-window-kill-buffer
+      '(help-mode diff-mode grep-mode occur-mode
+        flymake-diagnostics-buffer-mode proced-mode ibuffer-mode
+        xref-buffer-mode))
 #+end_src
 
 ** 右键菜单与 Which-key 中文化
@@ -2606,6 +2191,9 @@ MODE 为 'light 或 'dark。
 
 (show-paren-mode 1)
 (save-place-mode 1)
+;; Emacs 31:daemon 长驻下定期自动保存 buffer 位置(默认只在 kill-emacs
+;; 时写);:set 副作用会重排 timer,故用 setopt 而非 setq。
+(setopt save-place-autosave-interval 300)
 (repeat-mode 1)
 ;; Emacs 29+ 内置:匹配的括号在屏幕外时用 child frame 显示上下文。
 (setq show-paren-context-when-offscreen 'child-frame)
@@ -2646,8 +2234,21 @@ MODE 为 'light 或 'dark。
   (git-messenger:show-detail t)
   (git-messenger:use-magit-popup t))
 
-(dolist (hook '(org-mode-hook markdown-ts-mode-hook text-mode-hook))
+(dolist (hook '(org-mode-hook markdown-mode-hook text-mode-hook))
   (add-hook hook #'visual-line-mode))
+
+;; 编辑 DWIM 杂项(均 Emacs 30/31 内置):
+;; C-w 无活动 region 时杀掉光标前一个词而非报错,与终端 C-w 习惯一致。
+(setq kill-region-dwim t)
+;; 入 kill ring 的多行文本去掉公共缩进列,yank 到别处不再带多余前导空格。
+(kill-ring-deindent-mode 1)
+
+;; 浏览与搜索显示:
+;; Dired 长文件名以窗口右缘截断显示中间部分;行首/行尾循环移动;grep
+;; 输出按文件分节(rg --heading 风格,无每行文件名前缀)。
+(setq dired-filename-display-length 'window
+      dired-movement-style 'cycle
+      grep-use-headings t)
 #+end_src
 
 ** DWIM 智能编辑函数
@@ -2724,7 +2325,8 @@ MODE 为 'light 或 'dark。
 (use-package indent-bars
   :defer t
   :hook ((c-ts-mode c++-ts-mode go-ts-mode java-ts-mode json-ts-mode
-                    python-ts-mode rust-ts-mode typescript-ts-mode yaml-ts-mode) .
+                    python-ts-mode rust-ts-mode typescript-ts-mode tsx-ts-mode
+                    yaml-ts-mode) .
                     indent-bars-mode)
   :custom
   (indent-bars-color nil)
@@ -2754,6 +2356,13 @@ MODE 为 'light 或 'dark。
 (custom/bind "C-c e d" #'mc/mark-all-like-this-in-defun "函数内全部匹配" "编辑变换")
 (custom/bind "C-c e ." #'goto-last-change "上一处修改" "编辑变换")
 (custom/bind "C-c e ," #'goto-last-change-reverse "下一处修改" "编辑变换")
+;; 均为 Emacs 30/31 新内置命令:
+;; q 与 M-q 填充对偶(unfill);r 正则替换先出 diff 预览再按 patch 应用,
+;; 多文件版在 Dired 标记文件上跑 dired-do-replace-regexp-as-diff;
+;; C-w 按空白分词回杀(终端 readline 风格),与 kill-region-dwim 互补。
+(custom/bind "C-c e q" #'unfill-paragraph "取消段落填充" "编辑变换")
+(custom/bind "C-c e r" #'replace-regexp-as-diff "正则替换预览" "编辑变换")
+(custom/bind "C-c e C-w" #'unix-word-rubout "按词回杀" "编辑变换")
 #+end_src
 
 *** 编辑辅助包
@@ -2895,7 +2504,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :ts-mode json-ts-mode
             :server nil
             :formatter js-beautify)
-    (:modes (markdown-ts-mode)
+    (:modes (markdown-mode)
             :server nil
             :formatter pandoc-markdown)
     (:modes (nix-mode)
@@ -2913,6 +2522,19 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :ts-mode typescript-ts-mode
             :server nil
             :formatter js-beautify)
+    ;; tsx-ts-mode 与 typescript-ts-mode 同文件定义,无传统 mode 需 remap,
+    ;; 仅注册 auto-mode-alist(见 [[#language-modes]]);formatter/LSP 与
+    ;; typescript 分开维护,js-beautify 不理解 JSX 语法。
+    (:modes (tsx-ts-mode)
+            :server nil
+            :formatter nil)
+    ;; mhtml-ts-mode(Emacs 31 内置)处理 HTML 与内嵌 JS/CSS,替代 web-mode。
+    ;; html-mode 经 remap 走 TS 版;grammar 语言名与 mode 名不一致
+    ;; (mode 前缀 mhtml,grammar 是 html),见 custom--treesit-lang-overrides。
+    (:modes (html-mode mhtml-ts-mode)
+            :ts-mode mhtml-ts-mode
+            :server nil
+            :formatter nil)
     (:modes (sh-mode bash-mode)
             :server nil
             :formatter shfmt)
@@ -2984,7 +2606,7 @@ Grammar 的供给链完全由 Guix 处理,配置侧不需要参与:
 
 #+begin_src emacs-lisp
 (defconst custom--treesit-lang-overrides
-  '((c++-ts-mode . cpp) (csharp-ts-mode . c-sharp))
+  '((c++-ts-mode . cpp) (csharp-ts-mode . c-sharp) (mhtml-ts-mode . html))
   "Tree-sitter 语言名与 `*-ts-mode' 命名不一致的覆盖表。")
 
 (defun custom--treesit-mode-ready-p (ts-mode)
@@ -3044,7 +2666,7 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
 
 Apheleia 用 =:hook (prog-mode . apheleia-mode)= 而非 =:defer t= 触发加载:后者没有可靠的首次加载入口,=apheleia-global-mode= 不会启用,保存时格式化在用户首次手动调 Apheleia 命令前都失效。进任何 prog buffer 就启用 global mode,保存时格式化立即生效。
 
-Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =flymake-mode-hook=;非 LSP buffer 由各 major mode 的 =syntax-table= 提供诊断。全局跳转键 =M-g n/p= 与 =C-c l e= 在 [[#keybindings][前缀键体系]] 域统一绑定,不在此处 =:bind=,避免 flymake 未加载时键位悬空。
+Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =flymake-mode-hook=;非 LSP buffer 由各 major mode 的 =syntax-table= 提供诊断。全局跳转与错误列表键 =M-g n/p/l= 在 [[#keybindings][前缀键体系]] 域统一绑定,不在此处 =:bind=,避免 flymake 未加载时键位悬空。
 
 #+begin_src emacs-lisp
 (defcustom custom/format-on-save-enabled t
@@ -3150,7 +2772,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 :CUSTOM_ID: programming-keys
 :END:
 
-代码 / LSP / 跳转 / 错误 / 格式化 / 折叠前缀键,绑定引用 [[#code-commands][代码操作辅助函数]] 和 Eglot / Flymake 命令。
+代码前缀 =C-c c=(导航 / 操作 / 格式化 / 折叠)与 =M-g= 跳转家族,绑定引用 [[#code-commands][代码操作辅助函数]] 和 Eglot / Flymake 命令。引用查找走 =M-g r=,不在此重复。
 
 #+begin_src emacs-lisp
 (custom/bind "M-g n" #'flymake-goto-next-error "下一个错误" "跳转与错误")
@@ -3162,33 +2784,31 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
 (custom/bind "M-," #'xref-go-back "返回上一个位置" "跳转与错误")
 
-(custom/bind "C-c l d" #'xref-find-definitions "跳转到定义" "代码 / LSP")
-(custom/bind "C-c l r" #'xref-find-references "查找引用" "代码 / LSP")
-(custom/bind "C-c l a" #'eglot-code-actions "代码操作" "代码 / LSP")
-(custom/bind "C-c l n" #'eglot-rename "重命名符号" "代码 / LSP")
-(custom/bind "C-c l c" #'completion-at-point "触发补全" "代码 / LSP")
-(custom/bind "C-c l e" #'custom/flymake-list-errors-dwim "错误列表" "代码 / LSP")
-(custom/declare-binding-group "C-c l x" "更多代码跳转")
-(custom/bind "C-c l x d" #'eglot-find-declaration "跳转到声明" "代码 / LSP")
-(custom/bind "C-c l x i" #'eglot-find-implementation "跳转到实现" "代码 / LSP")
-(custom/bind "C-c l x t" #'eglot-find-typeDefinition "跳转到类型定义" "代码 / LSP")
+(custom/bind "C-c c d" #'xref-find-definitions "跳转到定义" "代码")
+(custom/bind "C-c c a" #'eglot-code-actions "代码操作" "代码")
+(custom/bind "C-c c n" #'eglot-rename "重命名符号" "代码")
+(custom/bind "C-c c c" #'completion-at-point "触发补全" "代码")
+(custom/declare-binding-group "C-c c x" "更多代码跳转")
+(custom/bind "C-c c x d" #'eglot-find-declaration "跳转到声明" "代码")
+(custom/bind "C-c c x i" #'eglot-find-implementation "跳转到实现" "代码")
+(custom/bind "C-c c x t" #'eglot-find-typeDefinition "跳转到类型定义" "代码")
 
-(custom/bind "C-c f f" #'custom/code-format-dwim "智能格式化" "格式化")
-(custom/bind "C-c f b" #'apheleia-format-buffer "格式化整个缓冲区" "格式化")
+(custom/bind "C-c c f" #'custom/code-format-dwim "智能格式化" "代码")
+(custom/bind "C-c c F" #'apheleia-format-buffer "格式化整个缓冲区" "代码")
 
 (add-hook 'prog-mode-hook #'hs-minor-mode)
 (add-hook 'conf-mode-hook #'hs-minor-mode)
-;; hideshow 上游只给 `hs-minor-mode' 挂了 autoload,交互命令没有;手动补齐,
-;; 否则进入首个 prog buffer 前按 C-c z / <backtab> 会是 void-function。
-(dolist (cmd '(hs-toggle-hiding hs-hide-block hs-show-block
-                                hs-hide-all hs-show-all))
-  (autoload cmd "hideshow" nil t))
-(custom/bind "C-c z a" #'hs-toggle-hiding "切换当前折叠" "折叠")
-(custom/bind "C-c z c" #'hs-hide-block "关闭当前折叠" "折叠")
-(custom/bind "C-c z o" #'hs-show-block "打开当前折叠" "折叠")
-(custom/bind "C-c z m" #'hs-hide-all "全部折叠" "折叠")
-(custom/bind "C-c z r" #'hs-show-all "全部展开" "折叠")
-(custom/bind "<backtab>" #'hs-toggle-hiding "切换当前折叠" "折叠")
+;; Emacs 31:hs 交互命令已带上游 autoload,不再手动补齐。fringe 折叠指示器
+;; 与折叠处显示隐藏行数(大 buffer 自动关闭,上游默认 2MB 上限)。
+(setq hs-show-indicators t
+      hs-display-lines-hidden t)
+(custom/bind "C-c c z a" #'hs-cycle "循环当前折叠" "代码")
+(custom/bind "C-c c z c" #'hs-hide-block "关闭当前折叠" "代码")
+(custom/bind "C-c c z o" #'hs-show-block "打开当前折叠" "代码")
+(custom/bind "C-c c z m" #'hs-hide-all "全部折叠" "代码")
+(custom/bind "C-c c z r" #'hs-show-all "全部展开" "代码")
+(custom/bind "C-c c z s" #'hs-toggle-all "开关全部折叠" "代码")
+(custom/bind "<backtab>" #'hs-cycle "循环当前折叠" "代码")
 #+end_src
 
 ** 各语言 major mode
@@ -3196,7 +2816,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 :CUSTOM_ID: language-modes
 :END:
 
-GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web / Zig、Scheme (Guile) + Arei、Yasnippet。
+GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX / JSX) / mhtml(HTML) / Zig、Scheme (Guile) + Arei、Yasnippet。
 
 + 各 mode 以 =:defer t= + =:mode= 触发,lazy-load
 + Arei(Guile 开发)只在真实 Scheme buffer 启用,跳过 org src 临时 buffer
@@ -3221,27 +2841,28 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript / Web
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 (use-package kdl-mode :mode "\\.kdl\\'" :defer t)
 (use-package kotlin-mode :mode "\\.kt\\'" :defer t)
-(use-package markdown-ts-mode
+;; markdown-mode:传统 font-lock 实现。Guix 无 markdown-ts-mode 包,旧配置
+;; 引用它从未加载成功(.md 打开即 void-function);markdown-ts 的 pandoc/eww
+;; 预览链路由 markdown-mode 的导出/预览命令与语言表的 pandoc-markdown
+;; formatter 承接。
+(use-package markdown-mode
   :mode ("\\.md\\'" "\\.markdown\\'")
-  :defer t
-  :config
-  ;; Guix 的 tree-sitter-markdown 包构建出 libtree-sitter-markdown_inline.so
-  ;; (下划线),Emacs 默认查找 libtree-sitter-markdown-inline.so(连字符)。
-  ;; 通过 override 列表显式映射,否则 markdown-inline parser 加载失败。
-  (add-to-list 'treesit-load-name-override-list
-               '(markdown-inline "libtree-sitter-markdown_inline"
-                                 "tree_sitter_markdown_inline"))
-  ;; 转换默认走 pandoc(与旧 markdown-mode 一致),用 eww 内嵌预览。
-  (setq markdown-ts-default-converter '(html . pandoc)))
+  :defer t)
 
-(custom/bind-local 'markdown-ts-mode 'markdown-ts-mode 'markdown-ts-mode-map
-                   "C-c p" #'markdown-ts-convert "预览 Markdown" "模式局部")
+(custom/bind-local 'markdown-mode 'markdown-mode 'markdown-mode-map
+                   "C-c p" #'markdown-export "导出 Markdown" "模式局部")
 (use-package nix-mode :mode "\\.nix\\'" :defer t)
 ;; yaml-ts-mode 内置且自动注册 auto-mode-alist (yaml-ts-mode-maybe) 与
 ;; major-mode-remap-alist,无需 use-package; 旧 emacs-yaml 解析包无调用点。
 ;; 补 .yml.dist 后缀(内置仅注册 \.ya?ml\')。
 (add-to-list 'auto-mode-alist '("\\.yml\\.dist\\'" . yaml-ts-mode-maybe))
-(use-package web-mode :mode ("\\.html\\'" "\\.jsx\\'" "\\.tsx\\'" "\\.vue\\'") :defer t)
+;; mhtml-ts-mode(Emacs 31 内置)替代 web-mode:HTML 与内嵌 JS/CSS 的缩进、
+;; 染色、注释;.html 由 html-mode 经语言表 remap,无需手动注册。
+;; tsx-ts-mode 与 typescript-ts-mode 同文件(加载 typescript-ts-mode 即
+;; 就位),内置不注册 .tsx/.jsx 关联,显式补上;JSX 是 TSX 语法的常见场景。
+(require 'typescript-ts-mode)
+(add-to-list 'auto-mode-alist '("\\.tsx\\'" . tsx-ts-mode))
+(add-to-list 'auto-mode-alist '("\\.jsx\\'" . tsx-ts-mode))
 (use-package zig-mode :mode "\\.zig\\'" :defer t)
 
 <<emacs31/source-load-compat>>
@@ -3949,15 +3570,15 @@ agenote CLI 集成的知识库 CRUD。
 (custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
 (custom/bind "C-c o o" #'olivetti-mode "专注写作" "Org 与知识库")
 (custom/bind "C-c o d" #'deft "检索历史 notes" "Org 与知识库")
-(custom/declare-binding-group "C-c o n" "Org Roam")
-(custom/bind "C-c o n f" #'org-roam-node-find "查找或新建 Roam 笔记" "Org 与知识库")
-(custom/bind "C-c o n i" #'org-roam-node-insert "插入 Roam 链接" "Org 与知识库")
-(custom/bind "C-c o n l" #'org-roam-buffer-toggle "切换反向链接" "Org 与知识库")
-(custom/declare-binding-group "C-c c" "Capture 与计时")
-(custom/bind "C-c c c" #'org-capture "统一 Capture 入口" "Org 与知识库")
-(custom/bind "C-c c i" #'org-clock-in "开始计时" "Org 与知识库")
-(custom/bind "C-c c o" #'org-clock-out "停止计时" "Org 与知识库")
-(custom/bind "C-c c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
+(custom/declare-binding-group "C-c o r" "Org Roam")
+(custom/bind "C-c o r f" #'org-roam-node-find "查找或新建 Roam 笔记" "Org 与知识库")
+(custom/bind "C-c o r i" #'org-roam-node-insert "插入 Roam 链接" "Org 与知识库")
+(custom/bind "C-c o r l" #'org-roam-buffer-toggle "切换反向链接" "Org 与知识库")
+(custom/declare-binding-group "C-c o c" "Capture 与计时")
+(custom/bind "C-c o c c" #'org-capture "统一 Capture 入口" "Org 与知识库")
+(custom/bind "C-c o c i" #'org-clock-in "开始计时" "Org 与知识库")
+(custom/bind "C-c o c o" #'org-clock-out "停止计时" "Org 与知识库")
+(custom/bind "C-c o c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
 
 (custom/declare-binding-group "C-c o k" "Knowledge / agenote")
 (custom/bind "C-c o k c" #'agenote-knowledge-capture "捕获经验卡" "Org 与知识库")
@@ -3984,7 +3605,7 @@ agenote CLI 集成的知识库 CRUD。
 :CUSTOM_ID: keys-completion
 :END:
 
-前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + Emacs 31 内置补全栈(minibuffer-visible-completions / completion-preview-mode / dabbrev / flex)。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + vertico 生态补全 7 件套(vertico / orderless / marginalia / prescient / consult / embark / cape,见 [[#completion]])与内置 completion-preview。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
 
 所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
 
@@ -4051,10 +3672,12 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-z" #'undo "撤销" "基础移动与直达键")
 (custom/bind "C-S-z" #'undo-redo "重做" "基础移动与直达键")
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
-(custom/bind "C-f" #'isearch-forward "缓冲区搜索" "基础移动与直达键")
+;; C-f 缓冲区搜索用 consult-line:实时候选列表 + orderless 多词过滤 +
+;; 选中即预览跳转,比 isearch 逐字符增量更顺手;增量搜索后备入口 M-s i。
+(custom/bind "C-f" #'consult-line "缓冲区搜索" "基础移动与直达键")
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
 (custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
-(custom/bind "C-S-b" #'switch-to-buffer "切换缓冲区" "基础移动与直达键")
+(custom/bind "C-S-b" #'consult-buffer "切换缓冲区" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
 (custom/bind "C-S-j" #'avy-goto-char-timer "屏幕内快速跳转" "基础移动与直达键")
 (custom/bind "C-S-p" #'execute-extended-command "命令面板" "基础移动与直达键")
@@ -4068,7 +3691,13 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-_" #'custom/comment-dwim-stable "注释" "基础移动与直达键")
 (custom/bind "C-S-c" #'custom/copy-dwim "复制" "基础移动与直达键")
 (custom/bind "C-S-v" #'yank "粘贴" "基础移动与直达键")
-(custom/bind "M-y" #'yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
+(custom/bind "M-y" #'consult-yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
+;; embark 上下文动作直达键(命令实现见 [[#completion]]):对 minibuffer 候选、
+;; 光标符号、区域执行动作,动作菜单复用 which-key 提示。
+(custom/bind "C-." #'embark-act "上下文动作" "基础移动与直达键")
+;; cape-dabbrev 直达键(命令实现见 [[#completion]]):覆盖原生 dabbrev-expand,
+;; 大 buffer 不进自动链,仅手动触发,经 in-region 补全呈现候选。
+(custom/bind "M-/" #'cape-dabbrev "动态缩写补全" "基础移动与直达键")
 (custom/bind "C-S-x" #'custom/cut-dwim "剪切" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
 (custom/bind "C-S-t" #'recentf-open-files "最近文件" "基础移动与直达键")
@@ -4101,7 +3730,7 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 
 + *前缀声明* :: =custom/declare-binding-prefix= 是 Dashboard 前缀摘要的唯一来源,必须集中。前缀下具体绑定随其功能域。
 + *=C-x*= / *=M-s*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 帮助),无单一归属,集中在本块。
-+ *=C-c w*= :: 窗口与面板体系: =f= / =t= / =a= 复用各功能域的打开命令(左侧 Dired / 底部 ghostel / 右侧 agent-shell), =T= 为三面板布局总开关, =u= / =r= 兑现 winner 手动绑定(见 [[#which-key-runtime]] 的 =winner-dont-bind-my-keys= 说明)。
++ *=C-c w*= :: 窗口与面板体系: =f= / =t= / =a= 复用各功能域的打开命令(左侧 Dired / 底部 ghostel / 右侧 agent-shell), =T= 为三面板布局总开关, =u= / =r= 兑现 winner 手动绑定(见 [[#which-key-runtime]] 的 =winner-dont-bind-my-keys= 说明);方向键 / =x= / =o= / =c= / =s= 为 Emacs 31 内置的布局变换与 frame 拆合命令族。
 
 #+begin_src emacs-lisp
 (dolist (prefix
@@ -4109,32 +3738,29 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
            ("C-x p" . "项目")
            ("M-s" . "搜索")
            ("M-g" . "跳转 / 错误")
-           ("C-c l" . "代码 / LSP")
+           ("C-c c" . "代码")
            ("C-c g" . "Git")
            ("C-c a" . "生活应用")
            ("C-c e" . "编辑变换")
            ("C-c o" . "Org 与知识库")
-           ("C-c m" . "补全框架")
-           ("C-c f" . "格式化")
-           ("C-c z" . "折叠")
            ("C-c h" . "帮助")
            ("C-c w" . "窗口与面板")))
   (custom/declare-binding-prefix (car prefix) (cdr prefix)))
 
 (custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x b" #'switch-to-buffer "切换缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x B" #'ibuffer "缓冲区列表" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x k" #'kill-buffer-and-window "关闭窗口与缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x K" #'kill-buffer "关闭指定缓冲区" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x C-f" #'ffap "打开文件(光标处路径优先)" "文件 / 缓冲区 / 标签")
 (custom/declare-binding-group "C-x t" "标签")
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 
-(custom/bind "M-s l" #'isearch-forward "搜索当前缓冲区" "搜索")
-(custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
-(custom/bind "M-s b" #'switch-to-buffer "搜索缓冲区" "搜索")
+;; M-s 搜索前缀:缓冲区 / 行 / 项目搜索入口随 consult 命令族在
+;; [[#completion]] 声明;此处保留跨域的 xref 符号搜索,以及
+;; C-f(consult-line)之外的增量搜索后备入口。
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
-(custom/bind "M-s f" #'flymake-goto-next-error "Flymake 诊断" "搜索")
+(custom/bind "M-s i" #'isearch-forward "增量搜索" "搜索")
 
 (custom/bind "C-c h f" #'describe-function "查看函数" "帮助")
 (custom/bind "C-c h v" #'describe-variable "查看变量" "帮助")
@@ -4183,6 +3809,22 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 (custom/bind "C-c w T" #'custom/panels-toggle "三面板总开关" "窗口与面板")
 (custom/bind "C-c w u" #'winner-undo "撤销窗口变更" "窗口与面板")
 (custom/bind "C-c w r" #'winner-redo "重做窗口变更" "窗口与面板")
+;; 窗口布局变换(均 Emacs 31 内置):方向键按视觉直觉旋转/镜像整个窗口树,
+;; x 转置(横竖分割互换),o/O 轮转窗口内容(buffer 不动,类似 Zed 的 swap pane);
+;; c/C 把相邻窗口临时合并为组(聚焦单一内容的大视图),uncombine 恢复原布局,
+;; 与三面板总开关互补——总开关切面板显隐,combine 切主区聚焦。
+;; s/S 在 frame 间搬运窗口:split 抽窗口到新 frame,merge 合并两 frame。
+(custom/bind "C-c w <right>" #'window-layout-rotate-clockwise "顺时针旋转布局" "窗口与面板")
+(custom/bind "C-c w <left>" #'window-layout-rotate-anticlockwise "逆时针旋转布局" "窗口与面板")
+(custom/bind "C-c w <up>" #'window-layout-flip-topdown "上下镜像布局" "窗口与面板")
+(custom/bind "C-c w <down>" #'window-layout-flip-leftright "左右镜像布局" "窗口与面板")
+(custom/bind "C-c w x" #'window-layout-transpose "转置窗口分割" "窗口与面板")
+(custom/bind "C-c w o" #'rotate-windows "轮转窗口内容" "窗口与面板")
+(custom/bind "C-c w O" #'rotate-windows-back "逆向轮转窗口内容" "窗口与面板")
+(custom/bind "C-c w c" #'combine-windows "合并窗口为组" "窗口与面板")
+(custom/bind "C-c w C" #'uncombine-window "恢复窗口分组" "窗口与面板")
+(custom/bind "C-c w s" #'split-frame "拆分窗口到新 Frame" "窗口与面板")
+(custom/bind "C-c w S" #'merge-frames "合并 Frame 窗口" "窗口与面板")
 #+end_src
 
 ** Completion 框架
@@ -4190,58 +3832,128 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 :CUSTOM_ID: completion
 :END:
 
-Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-display 接管 minibuffer,completion-preview-mode 接管 in-region,dabbrev 兜底,flex 模糊匹配。
+Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表) / orderless(空格分隔模糊匹配) / marginalia(候选注解) / prescient(历史频率排序) / consult(搜索导航命令族) / embark(上下文动作) / cape(补全后端扩展);in-region 补全用内置 ~completion-preview-mode~ (ghost-text 预览,比弹出菜单更轻量)。全部为纯 Lisp,daemon 启动期同步加载,首个 client 的第一次 =M-x= 即具备完整补全体验。
 
-+ 直接复用启动域的 aspell/hunspell 路径缓存与 [[#frame][Frame 生命周期]]
-+ 补全相关命令的前缀分组键位( =C-c m= )见 [[#keybindings][前缀键体系]]
++ 直接复用启动域的 aspell/hunspell 路径缓存、savehist 历史与 [[#frame][Frame 生命周期]]
++ ef-themes 内置全部补全包 face 适配,无需手动定义补全相关 face
++ 补全栈的直达键( =C-.= embark-act / =M-/= cape-dabbrev)集中在 [[#global-keys]],consult 命令族键位见本域末尾
 
-*** Minibuffer 补全
+*** Minibuffer 补全栈
 :PROPERTIES:
 :CUSTOM_ID: completion-minibuffer
 :header-args:emacs-lisp: :noweb-ref keys/completion-minibuffer :tangle no :noweb-sep "\n\n"
 :END:
 
-~savehist~ - 持久化 minibuffer 历史
-+ savehist 已在 *启动与基础设施* ~startup~ 域以 =:demand t= 启用，daemon 对外服务前即可复用历史。
+~vertico~ - minibuffer 候选纵向列表
++ 候选直接显示在 minibuffer 内,输入实时过滤;vertico-cycle 让 C-n/C-p 循环导航。
++ ~vertico-directory~ 让文件补全的 RET 进入目录、DEL 返回上级目录。
 
-~minibuffer-visible-completions~ - 候选即显(替代 Vertico)
-+ Emacs 30+ 内置:minibuffer 激活时直接显示 *Completions* buffer,方向键导航候选。
-+ Emacs 31 新增 =up-down= 值:仅上下键移动候选,左右键仍编辑 minibuffer。
-+ ~completion-eager-display~ / ~completion-eager-update~ (31 新增):立即显示并随输入实时更新 *Completions*。
+~orderless~ - 空格分隔多模式模糊匹配
++ 输入 =foo bar= 匹配同时含 foo 与 bar 的候选,顺序任意;basic 兜底 orderless 不覆盖的场景。
++ 文件类别保留 basic+partial-completion,=/e/n/p= 这类路径缩写展开需要前缀语义。
 
-~completion-styles~ - flex 模糊匹配(替代 Orderless)
-+ Emacs 31 重写 flex 算法,更快更准(pattern "scope" 正确排序 elisp-scope-* 函数)。
-+ 文件类别保留 basic+partial-completion(路径补全需要)。
+~marginalia~ - 候选右侧注解
++ 命令显示 docstring、变量显示值、文件显示大小与权限,与 vertico 同屏。
 
-~completions-sort~ - 历史优先排序(替代 Prescient 的轻量部分)
-+ 候选按字母序 + minibuffer 历史最近优先。
+~prescient~ - 历史与频率排序
++ 过滤交给 orderless,排序经 =vertico-sort-override-function= 接入,减少两层过滤语义重叠。
++ ~prescient-persist-mode~ 把候选选择历史持久化到 =var/= ,与 savehist(记录 minibuffer 输入)互补。
 
 #+begin_src emacs-lisp
-;; Emacs 30+ 内置 minibuffer 补全界面:minibuffer 激活即显示 *Completions*,
-;; 方向键导航候选(替代 Vertico)。Emacs 31 的 up-down 值:上下键移动候选,
-;; 左右键仍编辑 minibuffer;eager-display/eager-update 让候选即显并随输入更新。
-(setq minibuffer-visible-completions 'up-down)
-(setq completion-eager-display t)
-(setq completion-eager-update t)
-(setq completion-auto-wrap t)
+;; vertico:minibuffer 候选纵向列表。TTY frame 同样工作(无 childframe)。
+(use-package vertico
+  :demand t
+  :config
+  (setq vertico-cycle t)
+  (vertico-mode 1)
+  ;; 文件补全中 RET 进入目录、DEL 返回上级,与下方文件类别的
+  ;; partial-completion 路径缩写协同。DEL 必须用 delete-char 而非
+  ;; vertico-directory-up:后者带 file-category 守卫,在 consult-line 等
+  ;; 非文件补全里是 no-op,minibuffer 将无法退格;delete-char 仅在光标
+  ;; 前是 / 且为文件补全时才删目录段,否则回退 delete-backward-char。
+  (require 'vertico-directory)
+  (define-key vertico-map (kbd "RET") #'vertico-directory-enter)
+  (define-key vertico-map (kbd "DEL") #'vertico-directory-delete-char))
 
-;; Emacs 31 重写 flex 算法:更快更准的模糊匹配(替代 Orderless 主用途)。
-;; 文件类别保留 basic+partial-completion,路径补全需要前缀语义。
-(setq completion-styles '(flex basic))
-(setq completion-category-overrides
-      '((file (styles basic partial-completion))))
+;; orderless:空格分隔多模式模糊匹配;basic 兜底。
+;; completion-category-defaults 置空避免个别 category 的默认样式
+;; 覆盖 orderless;文件类别保留 basic+partial-completion。
+(use-package orderless
+  :demand t
+  :config
+  (setq completion-styles '(orderless basic)
+        completion-category-defaults nil
+        completion-category-overrides
+        '((file (styles basic partial-completion)))))
 
-;; 历史优先排序(替代 Prescient 的轻量部分):候选按字母序,最近使用靠前。
-(setq completions-sort 'historical)
+;; marginalia:候选右侧注解(命令 docstring / 变量值 / 文件属性)。
+(use-package marginalia
+  :demand t
+  :config
+  (marginalia-mode 1))
 
-;; xref 使用内置默认列表展示。
+;; prescient:按使用历史与频率排序,过滤交由 orderless。
+(use-package prescient
+  :demand t
+  :config
+  (setq prescient-save-file
+        (no-littering-expand-var-file-name "prescient-save.el"))
+  ;; Guix 无 vertico-prescient 包(旧配置引用它从未加载成功)。vertico 原生的
+  ;; 排序覆盖入口等价实现其「只排序、不过滤」的接线:覆盖各 category 的
+  ;; display-sort-function,候选顺序与 minibuffer 历史/频率一致。
+  (setq vertico-sort-override-function #'prescient-completion-sort)
+  (prescient-persist-mode 1))
 
-;; Emacs 31+ 内置 Grep Edit:在 *grep* buffer 按 e 进入编辑,
-;; 修改自动反映到源文件,C-c C-c 提交。替代原 wgrep。
-(with-eval-after-load 'grep
-  ;; Emacs 31+ 内置:grep 结果按文件分组标题显示。
-  (setq grep-use-headings t))
+;; completion-preview(Emacs 30 内置):打字时 ghost-text 行内补全预览,
+;; 与 vertico(minibuffer 层)互补,capf 后端(eglot LSP / cape)全部复用。
+;; M-n/M-p 在候选间移动,M-i 弹出 *Completions* 菜单,TAB 接受并继续。
+(use-package completion-preview
+  :demand t
+  :config
+  (global-completion-preview-mode 1)
+  ;; 排序与 vertico 一致(prescient 频率优先),两层补全体验统一;
+  ;; 候选集合有 metadata 排序时(如 eglot)上游优先用之,此处仅兜底。
+  (setq completion-preview-sort-function #'prescient-completion-sort))
+#+end_src
 
+*** 搜索导航与上下文动作
+:PROPERTIES:
+:CUSTOM_ID: completion-consult
+:header-args:emacs-lisp: :noweb-ref keys/completion-consult :tangle no :noweb-sep "\n\n"
+:END:
+
+~consult~ - 搜索与导航命令族,与 vertico 组合获得候选预览
++ 候选预览:选中 grep / line / buffer 候选时,目标 buffer 在原窗口实时滚动到位。
++ ~consult-buffer~ 聚合多源(缓冲区 / 最近文件 / 书签)在 vertico 统一过滤;项目场景用 ~consult-project-buffer~ 。
++ ~consult-ripgrep~ :项目全文实时搜索,复用启动域声明的 ripgrep;原有 =project-find-regexp= 入口(xref 集成 + 内置 grep-edit)保留在 =C-x p s= 。
++ ~consult-yank-from-kill-ring~ 替换默认 =yank-from-kill-ring= :候选带预览。
+
+~embark~ - 上下文动作
++ =C-.= ( ~embark-act~ )对当前目标执行动作:minibuffer 候选、光标符号、区域、文件均可达,动作菜单的按键提示复用 which-key。
++ ~embark-consult~ (随 embark 包发行)提供集合导出:grep 候选导出为可编辑 buffer、line 候选导出为 occur 视图。
+
+#+begin_src emacs-lisp
+(use-package consult
+  :demand t
+  :config
+  ;; isearch 增强保留(M-s i 增量搜索后备入口):lazy-count 让
+  ;; isearch 显示当前匹配序号/总数。
+  (setq isearch-lazy-count t)
+  ;; Emacs 31+ 内置 Grep Edit:*grep* buffer 按 e 进入编辑,
+  ;; 修改自动反映到源文件,C-c C-c 提交。grep 结果按文件分组标题显示。
+  ;; project-find-regexp(C-x p s)的结果走此 buffer。
+  (with-eval-after-load 'grep
+    (setq grep-use-headings t)))
+
+;; embark:对 minibuffer 候选 / 光标符号 / 区域执行上下文动作。
+;; 全局 C-. 入口声明在 [[#global-keys]];minibuffer 内经全局 map 直达。
+(use-package embark
+  :demand t
+  :config
+  ;; embark-consult:embark export 集成 consult 视图(grep / occur)。
+  (require 'embark-consult)
+  ;; embark-collect 生成的候选 buffer 内光标处直接预览。
+  (add-hook 'embark-collect-mode-hook #'consult-preview-at-point-mode))
 #+end_src
 
 *** In-region 补全
@@ -4250,17 +3962,11 @@ Emacs 31 内置补全栈:minibuffer-visible-completions + completion-eager-displ
 :header-args:emacs-lisp: :noweb-ref keys/completion-region :tangle no :noweb-sep "\n\n"
 :END:
 
-Emacs 30+ 内置 ~completion-preview-mode~ 提供 in-buffer 补全预览（替代 Corfu 弹出菜单）:
-+ 输入时在光标处显示 ghost-text 候选预览
-+ TAB 接受候选（~completion-preview-insert~）
-+ M-n / M-p 切换候选（~completion-preview-next/prev-candidate~）
-+ 无弹出菜单与 kind 图标,交互更轻量
+~completion-preview-mode~ - Emacs 30+ 内置 in-region ghost-text 补全
++ 输入时在光标处显示 ghost-text 候选预览,TAB 接受候选,M-n / M-p 切换候选;无弹出菜单打断,交互轻量。
++ capf 链由各 major-mode / Eglot 提供;~cape-file~ 补路径,~cape-dabbrev~ 手动触发( =M-/= )。
 
-~dabbrev~ 内置动态缩写(替代 cape-dabbrev / cape-line / cape-keyword 主用途),capf 链由各 major-mode 自带。
-
-ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
-
-~Flymake~ 错误浏览(Emacs 29+ 内置)M-s f 绑定 =flymake-goto-next-error= 。
+ispell 词表逻辑保留( ~ispell-completion-at-point~ 为内置 capf,文本模式自动补全词表来源)。
 
 #+begin_src emacs-lisp
 (require 'ispell)
@@ -4314,13 +4020,16 @@ ispell 词表逻辑保留(ispell-completion-at-point 为内置 capf)。
 词表与后端就绪后注册到文本模式，随后启用内置预览补全。
 
 #+begin_src emacs-lisp
-;; Emacs 30+ 内置 in-buffer 补全预览(替代 Corfu):输入时在光标处显示
-;; ghost-text 候选, TAB 接受, M-n/M-p 切换。无弹出菜单与 kind 图标。
+;; Emacs 30+ 内置 in-buffer 补全预览:输入时在光标处显示 ghost-text
+;; 候选,TAB 接受,M-n/M-p 切换。无弹出菜单与 kind 图标,交互轻量。
 (global-completion-preview-mode 1)
 
-;; dabbrev 内置动态缩写(替代 cape-dabbrev / cape-line / cape-keyword 主用途);
-;; capf 链由各 major-mode 自带,无需手动组装。
-;; 保留 ispell 词表逻辑(ispell-completion-at-point 为内置 capf)。
+;; cape:补全后端扩展。cape-file 追加在 capf 链尾(路径补全兜底);
+;; cape-dabbrev 不进自动链(避免大 buffer 扫描),经 M-/ 手动触发。
+(use-package cape
+  :demand t
+  :config
+  (add-to-list 'completion-at-point-functions #'cape-file t))
 
 (defun custom/completion-setup-capfs-org ()
   "Org mode 的 capf 收束:移除 text-mode 带入的 ispell capf。
@@ -4334,10 +4043,10 @@ org 自身关键字 / 链接 / roam 补全仍保留,无需额外追加。
 
 (add-hook 'org-mode-hook #'custom/completion-setup-capfs-org)
 
-;; eldoc 内置文档显示(替代 corfu-popupinfo):Eglot 补全时 echo area 显示文档。
+;; eldoc 内置文档显示:Eglot 补全时 echo area 显示文档。
 
 ;; Emacs 31 内置 eglot workspace symbols 补全:C-u M-. (xref-find-apropos)
-;; 列出并补全当前 workspace 符号,替代 consult-eglot-symbols。
+;; 列出并补全当前 workspace 符号,经 vertico 呈现。
 #+end_src
 
 *** Frame 显示适配
@@ -4347,7 +4056,7 @@ org 自身关键字 / 链接 / roam 补全仍保留,无需额外追加。
 :END:
 
 Per-frame 补全显示设置(daemon 安全)
-+ PGTK/Wayland 下 minibuffer 补全窗口位置修复(completion-preview 无 childframe,无需 margin formatter)。
++ PGTK/Wayland 下补全显示无 childframe(vertico 在 minibuffer 内嵌渲染,completion-preview 为 ghost-text),仅保留通用 childframe 位置修复作预留。
 
 #+begin_src emacs-lisp
 (defun custom/completion-setup-display (&optional frame)
@@ -4369,22 +4078,25 @@ childframe,不需要 margin formatter)。"
 :CUSTOM_ID: completion-assembly
 :END:
 
-组装顺序即求值顺序：Minibuffer 补全 → In-region 补全 → Frame 显示适配。
+组装顺序即求值顺序：Minibuffer 补全栈 → 搜索导航与上下文动作 → In-region 补全 → Frame 显示适配。
 
 #+NAME: keys-completion-assembly
 #+begin_src emacs-lisp
 <<keys/completion-minibuffer>>
+<<keys/completion-consult>>
 <<keys/completion-region>>
 <<keys/completion-display>>
 #+end_src
 
 #+begin_src emacs-lisp
-;; 补全框架 C-c m 前缀:内置命令。dabbrev 动态缩写;completion-preview
-;; 手动触发;文件路径用 ffap。历史浏览直接用 minibuffer 内置 M-p / M-n
-;; (旧 C-c m h 绑定的 minibuffer-history-complete 在 Emacs 31 不存在)。
-(custom/bind "C-c m d" #'dabbrev-expand "动态缩写补全" "补全框架")
-(custom/bind "C-c m p" #'completion-preview-complete "补全预览(手动)" "补全框架")
-(custom/bind "C-c m f" #'ffap "文件路径补全" "补全框架")
+;; consult 命令族键位(功能内聚:命令实现于本域)。C-x b / M-s b 与原
+;; 内置入口平行升级为 consult-buffer(多源 + 预览);ibuffer(C-x B)、
+;; xref 符号(M-s e)保留原入口,见 [[#keybindings]]。
+(custom/bind "C-x b" #'consult-buffer "切换缓冲区(多源)" "文件 / 缓冲区 / 标签")
+(custom/bind "M-s b" #'consult-buffer "搜索缓冲区" "搜索")
+(custom/bind "C-x p b" #'consult-project-buffer "项目缓冲区(多源)" "项目")
+(custom/bind "M-s l" #'consult-line "搜索当前缓冲区" "搜索")
+(custom/bind "M-s p" #'consult-ripgrep "搜索项目" "搜索")
 #+end_src
 
 * 系统工具与实验性
@@ -5606,7 +5318,7 @@ stderr buffer 与 max-items 经 `process-put' 挂在 process 上，供本回调�
                               :render #'custom/dashboard--render-todo)
 
 (custom/dashboard-define-card 'clock
-                              :title "计时" :icon "󱎫" :key "C-c c i / o" :accent 'success
+                              :title "计时" :icon "󱎫" :key "C-c o c i / o" :accent 'success
                               :fetch #'custom/dashboard--fetch-clock
                               :render #'custom/dashboard--render-clock)
 
