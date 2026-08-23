@@ -3,12 +3,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-// assisted-by-zcode PreToolUse(Bash) hook — Assisted-by 规范提醒层
+// assisted-by-zcode PreToolUse(Bash) hook — Co-authored-by 规范提醒层
 //
 // zcode hook 不支持改写命令，只能通过 additionalContext 提醒：
-// git commit 时提醒模型在消息末尾写完整 trailer（含模型名与版本号）。
+// git commit 时提醒模型在消息末尾写完整 trailer（含模型名括注）。
 // 兜底层是 ~/.config/git/hooks/prepare-commit-msg（见插件 README），
-// 模型遗漏时自动补 agent 名。
+// 模型遗漏时自动补不带模型名的版本。
 //
 // 手动冒烟测试：
 //   printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"git commit -m \"x\""}}' \
@@ -37,7 +37,7 @@ process.stdout.write(
     hookSpecificOutput: {
       hookEventName: eventName,
       additionalContext:
-        "💡 commit message 需以 Assisted-by trailer 结尾：Assisted-by: <你的模型名>:<模型版本>，请在 -m 信息末尾附加；格式详见 ~/.config/git/gitmessage",
+        "💡 commit message 需以 Co-authored-by trailer 结尾：Co-authored-by: ZCode (<你的模型名>) <noreply@z.ai>，请在 -m 信息末尾附加；格式详见 ~/.config/git/gitmessage",
     },
   }),
 );

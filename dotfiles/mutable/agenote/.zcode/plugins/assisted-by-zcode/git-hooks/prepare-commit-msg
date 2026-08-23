@@ -4,9 +4,10 @@
 #
 # SPDX-License-Identifier: MIT
 
-# Assisted-by 兜底层：AI 会话（zcode）中的 git commit 缺 trailer 时自动补齐。
-# 提醒层由 agenote-zcode 插件的 PreToolUse hook 承担（模型写完整版
-# Assisted-by: <模型名>:<版本>）；本脚本只兜底补 agent 名。
+# Co-authored-by 兜底层：AI 会话（zcode）中的 git commit 缺 trailer 时自动补齐。
+# 提醒层由本插件 pre-tool-use.mjs 承担（模型写完整版
+# Co-authored-by: ZCode (<模型名>) <noreply@z.ai>）；本脚本只兜底补
+# 不带模型名的版本（shell 拿不到模型名）。
 #
 # 安装（全局生效，见插件 README）：
 #   mkdir -p ~/.config/git/hooks
@@ -23,11 +24,12 @@ set -u
 # merge/squash/amend($2=commit) 不动。
 case "${2:-}" in
   "" | message | template) ;;
-  *) exit 0 ;;
+  *) exit 0
 esac
 
-# 模型已按提醒写了完整 trailer（含版本号）则不覆盖
-grep -q '^Assisted-by:' "$1" && exit 0
+# 模型已按提醒写了 Co-authored-by（含 ZCode 署名）则不覆盖；
+# 他人/其他 agent 的 Co-authored-by 行不算，仍需补本会话署名
+grep -qi '^Co-authored-by:.*zcode' "$1" && exit 0
 
-printf '\nAssisted-by: zcode\n' >>"$1"
+printf '\nCo-authored-by: ZCode <noreply@z.ai>\n' >>"$1"
 exit 0
