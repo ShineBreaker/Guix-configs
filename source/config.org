@@ -255,7 +255,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 --------------
 
 ** Bootloader
-
 在这里使用了由 =rosenthal= 频道提供的 *Limine*
 
 #+NAME: bootloader-configs
@@ -266,12 +265,9 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 ** FileSystems
+这里的配置文件需要根据自己的实际情况进行修改。
 
-这里的配置文件需要根据自己的实际情况进行修改
-
-我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能
-
-具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
+我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能，具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -352,7 +348,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 ** Kernel
 
 *** 内核相关参数设置
-
 使用 =nonguix= 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
 
 =threadirqs= 开启中断线程化：SOF/HDA 中断处理成为可调度线程，可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun。USB 自动挂起则改由熄屏脚本 =usb-power-gate= 按白名单显式控制，不走内核参数。
@@ -379,7 +374,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 *** 内核相关服务设置
-
 包含了很多与内核相关的service，比如说内核模块的加载、内核参数的设置等等
 
 #+NAME: kernel-services
@@ -406,7 +400,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 **** sysctl 调优
-
 - =vm.dirty_writeback_centisecs= —— 空闲时减少 SSD 唤醒（续航）；笔记本有电池，掉电风险可忽略
 - =net.core.default_qdisc=fq= —— BBR 的 pacing 依赖 fq 的 EDT 模型，fq_pie 会让 BBR 退化为内核软件 pacing（CPU 开销更高、突发延迟更差）
 - =net.ipv4.tcp_rmem= 与 =tcp_wmem= 三元组 —— 高 BDP（跨国代理链路）下放开自动调优上限；只设 =*_max= 不设三元组时 tcp_wmem 仍受默认 4M 限制
@@ -447,7 +440,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 **** 音频实时优先级
-
 给 =@audio= 组开放 RT 调度与无限 memlock，配合 =threadirqs= 降低音频 xrun；全体进程的 nofile 上限同步放开
 
 #+NAME: pam-limits-services
@@ -466,7 +458,6 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 ** Packages
-
 一些需要用到的软件包， *非必要不修改*
 
 #+NAME: packages-list
@@ -1037,12 +1028,9 @@ iifname "uap0" oifname != "uap0" masquerade
 #+end_src
 
 **** AC 电源状态联动
-
 插电 → PPD performance + WiFi 省电关；拔电 → power-saver + WiFi 省电开。由 udev 规则在 power_supply add/change 事件时以 root 调用。
 
-store 路径在宿主侧算好后经 =#\$= 注入 gexp——gexp 内不能裸调 =file-append= / =spec->pkg= （builder 无此绑定）。
-
-udev 冷插拔事件早于 PPD 启动，那次调用会因 PPD 未上线而静默失败， =ac-power-init= 在开机时按当前电源状态补跑一次。
+store 路径在宿主侧算好后经 =#\$= 注入 gexp——gexp 内不能裸调 =file-append= / =spec->pkg= （builder 无此绑定）。udev 冷插拔事件早于 PPD 启动，那次调用会因 PPD 未上线而静默失败， =ac-power-init= 在开机时按当前电源状态补跑一次。
 
 #+NAME: ac-power-services
 #+begin_src scheme
@@ -1107,7 +1095,6 @@ udev 冷插拔事件早于 PPD 启动，那次调用会因 PPD 未上线而静�
 #+end_src
 
 **** USB 电源权限
-
 USB 设备的 =power/control= 默认 root:root 0644，用户不可写。设备注册时放开为 0666，让熄屏脚本 =usb-power-gate= 能以普通用户身份挂起/恢复 USB 设备。设备重新枚举时 add 事件自愈。
 
 #+NAME: usb-power-services
@@ -1141,7 +1128,6 @@ USB 设备的 =power/control= 默认 root:root 0644，用户不可写。设备�
 #+end_src
 
 **** KMS 控制台
-
 tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台
 
 #+NAME: kmscon-services
@@ -1195,7 +1181,6 @@ tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台
 #+end_src
 
 **** nix-ld 运行时库
-
 为 nix 与其他渠道来的预编译二进制补齐常用动态库，分类见代码内标签
 
 #+NAME: nix-ld-services
@@ -1243,14 +1228,9 @@ tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台
 #+end_src
 
 *** 桌面服务
+使用 Guix 原生的 =%desktop-services= 作为基础，删除默认的显示管理器和 mingetty 替换为 greetd + tuigreet 登录管理器，并添加蓝牙、屏幕锁、背光控制等桌面服务。
 
-使用 Guix 原生的 =%desktop-services= 作为基础，删除默认的显示管理器和 mingetty
-
-替换为 greetd + tuigreet 登录管理器，并添加蓝牙、屏幕锁、背光控制等桌面服务
-
-原先的 =modify-services= 大部分已拆分为独立的 service 列表，仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例）
-
-elogind 的挂起/休眠键一律忽略（插电源时不允许任何进程突然中断系统）； =hibernate-polkit= 允许本地活跃用户（elogind + polkit 判定）执行休眠/挂起/混合休眠。
+=modify-services= 仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例），elogind 的挂起/休眠键一律忽略（插电源时不允许任何进程突然中断系统）； =hibernate-polkit= 允许本地活跃用户（elogind + polkit 判定）执行休眠/挂起/混合休眠。
 
 #+NAME: desktop-services
 #+begin_src scheme :noweb yes
@@ -1763,7 +1743,6 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 #+end_src
 
 ** Servics
-
 注意：用 ~specs->pkgs+out~ 这个函数来进行软件包的管理的话，是 =不需要= 导入 modules 的
 
 *** modprobe 服务
@@ -1834,7 +1813,6 @@ end
 #+end_src
 
 *** Emacs 服务
-
 这个服务可以做到两件事：
 
 1. 利用 ~emacs --fg-daemon~ 来开启一个 emacs 服务
@@ -2026,29 +2004,63 @@ end
                            ("image/bmp" . "org.nomacs.ImageLounge.desktop")
                            ("image/tiff" . "org.nomacs.ImageLounge.desktop")
                            ("image/svg+xml" . "org.nomacs.ImageLounge.desktop")
-                           ("image/x-icon" . "org.nomacs.ImageLounge.desktop")
+                           ("image/avif" . "org.nomacs.ImageLounge.desktop")
+                           ("image/heif" . "org.nomacs.ImageLounge.desktop")
+                           ("image/jxl" . "org.nomacs.ImageLounge.desktop")
+                           ("image/vnd.microsoft.icon" . "org.nomacs.ImageLounge.desktop")
+                           ("image/x-eps" . "org.nomacs.ImageLounge.desktop")
+                           ("image/x-portable-bitmap" . "org.nomacs.ImageLounge.desktop")
+                           ("image/x-portable-graymap" . "org.nomacs.ImageLounge.desktop")
+                           ("image/x-portable-pixmap" . "org.nomacs.ImageLounge.desktop")
                            ;; 图片编辑
                            ("image/x-xcf" . "gimp.desktop")
+                           ("image/vnd.adobe.photoshop" . "gimp.desktop")
                            ;; 音视频
                            ("video/mp4" . "mpv.desktop")
                            ("video/webm" . "mpv.desktop")
+                           ("video/mpeg" . "mpv.desktop")
                            ("video/x-matroska" . "mpv.desktop")
-                           ("video/x-msvideo" . "mpv.desktop")
+                           ("application/x-matroska" . "mpv.desktop")
+                           ("audio/x-matroska" . "mpv.desktop")
+                           ("video/vnd.avi" . "mpv.desktop")
                            ("video/x-flv" . "mpv.desktop")
                            ("video/quicktime" . "mpv.desktop")
+                           ("video/x-ms-wmv" . "mpv.desktop")
+                           ("application/vnd.ms-asf" . "mpv.desktop")
+                           ("video/mp2t" . "mpv.desktop")
+                           ("video/3gpp" . "mpv.desktop")
                            ("audio/mpeg" . "mpv.desktop")
                            ("audio/ogg" . "mpv.desktop")
+                           ("application/ogg" . "mpv.desktop")
+                           ("audio/x-vorbis+ogg" . "mpv.desktop")
+                           ("audio/x-opus+ogg" . "mpv.desktop")
+                           ("audio/opus" . "mpv.desktop")
                            ("audio/flac" . "mpv.desktop")
-                           ("audio/wav" . "mpv.desktop")
+                           ("audio/vnd.wave" . "mpv.desktop")
+                           ("audio/x-wav" . "mpv.desktop")
                            ("audio/aac" . "mpv.desktop")
                            ("audio/x-m4a" . "mpv.desktop")
+                           ("audio/x-mpegurl" . "mpv.desktop")
+                           ("application/vnd.apple.mpegurl" . "mpv.desktop")
                            ;; 文本/代码编辑
                            ("text/plain" . "emacsclient.desktop")
+                           ("text/org" . "emacsclient.desktop")
                            ("text/markdown" . "emacsclient.desktop")
+                           ("text/javascript" . "emacsclient.desktop")
+                           ("application/javascript" . "emacsclient.desktop")
                            ("text/x-scheme" . "emacsclient.desktop")
                            ("text/x-emacs-lisp" . "emacsclient.desktop")
                            ("text/csv" . "emacsclient.desktop")
                            ("text/css" . "emacsclient.desktop")
+                           ("text/x-nix" . "emacsclient.desktop")
+                           ("text/x-zig" . "emacsclient.desktop")
+                           ("text/x-lua" . "emacsclient.desktop")
+                           ("application/x-gdscript" . "emacsclient.desktop")
+                           ("application/x-fishscript" . "emacsclient.desktop")
+                           ("text/x-go" . "emacsclient.desktop")
+                           ("text/x-cmake" . "emacsclient.desktop")
+                           ("text/x-patch" . "emacsclient.desktop")
+                           ("application/x-ipynb+json" . "emacsclient.desktop")
                            ("application/json" . "emacsclient.desktop")
                            ("application/xml" . "emacsclient.desktop")
                            ("application/yaml" . "emacsclient.desktop")
@@ -2062,7 +2074,7 @@ end
                            ("text/x-c++hdr" . "emacsclient.desktop")
                            ("text/x-java" . "emacsclient.desktop")
                            ("text/x-python" . "emacsclient.desktop")
-                           ("text/x-rust" . "emacsclient.desktop")
+                           ("text/rust" . "emacsclient.desktop")
                            ;; PDF
                            ("application/pdf" . "emacsclient.desktop")
                            ;; KeePassXC 密码库
@@ -2071,16 +2083,59 @@ end
                            ("application/zip" . "org.gnome.FileRoller.desktop")
                            ("application/x-tar" . "org.gnome.FileRoller.desktop")
                            ("application/gzip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-compressed-tar" . "org.gnome.FileRoller.desktop")
                            ("application/x-xz" . "org.gnome.FileRoller.desktop")
-                           ("application/x-bzip2" . "org.gnome.FileRoller.desktop")
+                           ("application/x-xz-compressed-tar" . "org.gnome.FileRoller.desktop")
+                           ("application/x-bzip" . "org.gnome.FileRoller.desktop")
+                           ("application/x-bzip2-compressed-tar" . "org.gnome.FileRoller.desktop")
+                           ("application/zstd" . "org.gnome.FileRoller.desktop")
+                           ("application/x-zstd-compressed-tar" . "org.gnome.FileRoller.desktop")
                            ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
-                           ("application/x-rar-compressed" . "org.gnome.FileRoller.desktop")
+                           ("application/vnd.rar" . "org.gnome.FileRoller.desktop")
+                           ("application/x-java-archive" . "org.gnome.FileRoller.desktop")
                            ;; 邮件
                            ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
+                           ;; Emacs org-protocol
+                           ("x-scheme-handler/org-protocol" . "emacsclient.desktop")
                            ;; 即时通讯
                            ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
+                           ("x-scheme-handler/tonsite" . "org.telegram.desktop.desktop")
+                           ;; 桌面互联（KDE Connect）
+                           ("x-scheme-handler/tel" . "org.kde.kdeconnect.handler.desktop")
+                           ("x-scheme-handler/sms" . "org.kde.kdeconnect.handler.desktop")
+                           ;; 下载器
+                           ("x-scheme-handler/magnet" . "MotrixNext.desktop")
+                           ("application/x-bittorrent" . "MotrixNext.desktop")
+                           ("x-scheme-handler/thunder" . "MotrixNext.desktop")
+                           ("x-scheme-handler/ed2k" . "amule.desktop")
+                           ;; Windows 程序（Wine）
+                           ("application/x-ms-dos-executable" . "wine.desktop")
+                           ("application/x-msi" . "wine.desktop")
+                           ("application/x-bat" . "wine.desktop")
+                           ("application/x-ms-shortcut" . "wine.desktop")
+                           ("application/x-mswinurl" . "wine.desktop")
+                           ;; 游戏平台
+                           ("x-scheme-handler/steam" . "steam.desktop")
+                           ("x-scheme-handler/steamlink" . "steam.desktop")
+                           ("x-scheme-handler/curseforge" . "org.prismlauncher.PrismLauncher.desktop")
+                           ("x-scheme-handler/prismlauncher" . "org.prismlauncher.PrismLauncher.desktop")
+                           ("application/x-modrinth-modpack+zip" . "org.prismlauncher.PrismLauncher.desktop")
+                           ("x-scheme-handler/osu" . "osu!.desktop")
+                           ("application/x-osu-beatmap" . "osu!.desktop")
+                           ("application/x-osu-beatmap-archive" . "osu!.desktop")
+                           ("application/x-osu-skin-archive" . "osu!.desktop")
+                           ("application/x-osu-replay" . "osu!.desktop")
+                           ("application/x-godot-project" . "godot.desktop")
+                           ("application/x-godot-scene" . "godot.desktop")
                            ;; 密钥管理
-                           ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop"))))))
+                           ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop")
+                           ("application/x-pem-file" . "org.gnome.seahorse.Application.desktop")
+                           ("application/x-x509-ca-cert" . "org.gnome.seahorse.Application.desktop")
+                           ;; AI 工具
+                           ("x-scheme-handler/zcode" . "zcode.desktop")
+                           ("x-scheme-handler/ccswitch" . "CC Switch.desktop")
+                           ("x-scheme-handler/gh" . "github-copilot.desktop")
+                           ("x-scheme-handler/github-app" . "github-copilot.desktop"))))))
 #+end_src
 
 **** ~Waybar~ 体系桌面服务
@@ -2110,12 +2165,6 @@ end
 
 *** 软件自启动
 
-这里利用 *scheme* 的 =lambda= 函数来包装了一个列表;
-
-这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容。
-
-这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作。
-
 #+NAME: home-shepherd-services
 #+begin_src scheme :noweb yes
 (append
@@ -2125,6 +2174,8 @@ end
 #+end_src
 
 **** 桌面常驻组件
+这里利用 *scheme* 的 =lambda= 函数来包装了一个列表;这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容。
+这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作。
 
 #+NAME: essential-desktop-services
 #+begin_src scheme
@@ -2149,6 +2200,7 @@ end
 #+end_src
 
 **** Hermes 后端与网关
+直接在开机的时候启动对应的 =dashboard= 和 =gateway= , 并且我们目前的 ~hermes-desktop~ 包装实际上也会直接将当前创建的这个服务作为需要连接到的网关，以获得最完整的运行环境。
 
 #+NAME: hermes-services
 #+begin_src scheme
@@ -2184,7 +2236,6 @@ end
 #+end_src
 
 **** cpu-dma-latency
-
 按需持有 =/dev/cpu_dma_latency= （audio 组可写），把允许的 C-state 保持在最浅档，消除深度睡眠唤醒抖动。代价是待机功耗上升，因此默认不自启；需要最低音频延迟时手动 ~herd start cpu-dma-latency~ ，用完 ~herd stop cpu-dma-latency~ 。
 
 #+NAME: cpu-dma-latency-service
@@ -2209,8 +2260,8 @@ end
 #+end_src
 
 *** 计时器服务
-
-每天 18:00 自动更新 flatpak 用户安装的软件包，仅在使用外接电源时执行（避免电池下大下载）。
+目前的计时器任务如下：
++ 每天 18:00 自动更新 flatpak 用户安装的软件包，仅在使用外接电源时执行（避免电池下大下载）。
 
 #+NAME: timer-services
 #+begin_src scheme
@@ -2226,7 +2277,9 @@ end
 
 *** dotfiles 管理相关服务
 
-**** 主要的一些内容
+**** dotfiles 管理服务
+这个服务可以直接将我们目前的 ~dotfiles/~ 文件夹整体移交给 =Guix Home= 管理。
+在这里，我使用了 ~stow~ 的 layout，这样可以把 dotfiles 分组进行管理
 
 #+NAME: dotfile-services
 #+begin_src scheme
@@ -2269,14 +2322,10 @@ end
                            (list openjdk25 openjdk21 openjdk17))))
 #+end_src
 
-**** 区别对待某些配置文件
+**** 文件管理服务
+这个服务可以让你自行指定需要管理的文件，以及其目的地。
 
-有一些软件会需要在其配置文件内写入某个二进制的具体位置，此时就可以使用由
-
-*rosenthal* 提供的 =computed-substitution-with-inputs= 函数
-
-用法为：
-
+有一些软件会需要在其配置文件内写入某个二进制的具体位置，此时就可以使用由 *rosenthal* 提供的 =computed-substitution-with-inputs= 函数，用法为：
 1. 在需要的配置文件内以 =$$bin/foo$$= 的形式来写你所需要写入的二进制路径
 2. 在 =specs->pkgs= 参数中写入能够提供这些二进制的软件包
 
@@ -2289,6 +2338,7 @@ end
                                                    "../source/files/qt/rounded.qss"))
                 (".config/qt6ct/qss/rounded.qss" ,(local-file
                                                    "../source/files/qt/rounded.qss"))
+
                 ;; 复选框选中态的白色对勾，QSS 内以绝对路径引用
                 (".config/qt5ct/qss/check-white.svg" ,(local-file
                                                         "../source/files/qt/check-white.svg"))
