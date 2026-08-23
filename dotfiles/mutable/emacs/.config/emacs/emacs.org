@@ -1043,6 +1043,14 @@ current/inactive 用内置 face,自动跟随主题。"
                     :background 'unspecified
                     :box nil
                     :underline nil)
+
+;; Emacs 31 新增窗口级 face:非选中窗口的整条标签栏经此变暗(标签级的
+;; current/inactive 见上表,两者互补)。ef-themes 尚未适配,叠继承 shadow
+;; 取主题弱化前景;TTY 由透明策略统一清背景。
+(set-face-attribute 'tab-line-inactive nil
+                    :inherit '(tab-line shadow))
+(set-face-attribute 'tab-line-active nil
+                    :inherit 'tab-line)
 #+end_src
 
 *** 标签操作
@@ -1120,6 +1128,31 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
   (let ((buffer (if (bufferp tab) tab (current-buffer))))
     (when (buffer-live-p buffer)
       (custom/tabs-close-buffer (custom--tabs-target-window) buffer))))
+
+;; 标签重排:官方 tab-line-move-tab-forward 带 tabs-function 守卫,只对
+;; 内置 tab-line-tabs-fixed-window-buffers 生效,对本模块 frame 列表驱动
+;; 的 custom/tab-line-tabs 是静默 no-op,故直接操作 frame 列表实现。
+(defun custom/tabs-move (&optional arg)
+  "把当前标签在 frame 标签列表中移动 ARG 位(正向后移,负值前移)。"
+  (interactive "p")
+  (let* ((frame (selected-frame))
+         (buffers (custom--tabs-get-frame-buffer-list frame))
+         (buffer (current-buffer))
+         (pos (seq-position buffers buffer)))
+    (when (and pos (> (length buffers) 1))
+      (let* ((rest (delq buffer buffers))
+             (new-pos (mod (+ pos (or arg 1)) (length buffers))))
+        (custom--tabs-set-frame-buffer-list
+         (append (seq-take rest new-pos)
+                 (list buffer)
+                 (seq-drop rest new-pos))
+         frame)
+        (tab-line-force-update t)))))
+
+(defun custom/tabs-move-backward (&optional arg)
+  "把当前标签在 frame 标签列表中前移 ARG 位。"
+  (interactive "p")
+  (custom/tabs-move (- (or arg 1))))
 #+end_src
 
 *** 全局启用与 Hook 注册
@@ -1419,6 +1452,16 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (custom/bind "C-c g w l" #'vc-list-worktrees "列出 Worktree" "Git")
 (custom/bind "C-c g y" #'vc-cherry-pick "Cherry-pick" "Git")
 (custom/bind "C-c g X" #'vc-delete-revision "删除 Revision" "Git")
+
+;; Emacs 31 VC outgoing 族:推送前预览、本地全部工作(未推提交+未提交
+;; 修改)一个 diff 看完,与 C-c g P(直接推送)互补。
+(custom/bind "C-c g o" #'vc-root-diff-outgoing "预览待推送提交" "Git")
+(custom/bind "C-c g O" #'vc-root-diff-outgoing-and-edited "本地全部工作" "Git")
+
+;; 只对 VCS-tracked 文件自动 revert(比 global-auto-revert-mode 省得多):
+;; 切分支 / 拉取 / worktree 操作后 buffer 自动刷新,避免旧 buffer 静默
+;; 覆盖新内容。
+(vc-auto-revert-mode 1)
 #+end_src
 
 ** 主题与字体
@@ -1431,7 +1474,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 + *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。GUI 与真彩 TTY 共用主题前景 palette；TTY 仅清除背景,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
 + *字体大小* :110(11pt),由 =custom:default-font-height= 控制
 + *行号* :相对行号 + 自适应宽度
-+ 所有 ~display-dependent~ 设置都通过 =custom/apply-frame-appearance= 在新 frame 创建时触发
++ 所有 ~display-dependent~ 设置都通过 =custom/apply-frame-fappearance= 在新 frame 创建时触发
 
 *** GUI/TTY 混合 daemon 约束
 :PROPERTIES:
@@ -1487,6 +1530,15 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
           window-system-default-frame-alist)))
 
 (custom/install-terminal-frame-defaults)
+
+;; TTY 光标形状/颜色跟随 GUI 设置:xterm 兼容终端经转义序列同步,
+;; GUI 的光标样式(bar/颜色)在终端同款显示。
+(setopt xterm-update-cursor t)
+
+;; TTY/无 fringe frame 的折行与截断符号美化(替代默认 $ 与 \);
+;; buffer-local mode,代码与文本两大模式族挂接即可覆盖长行场景。
+(dolist (hook '(prog-mode-hook text-mode-hook))
+  (add-hook hook #'prettify-special-glyphs-mode))
 
 (dolist (param '((menu-bar-lines . 0)
                  (tool-bar-lines . 0)
@@ -1768,8 +1820,8 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 ;; 维持 bury,tab-line 的关闭语义(bury + unregister)走自身命令不受影响。
 (setq quit-window-kill-buffer
       '(help-mode diff-mode grep-mode occur-mode
-        flymake-diagnostics-buffer-mode proced-mode ibuffer-mode
-        xref-buffer-mode))
+                  flymake-diagnostics-buffer-mode proced-mode ibuffer-mode
+                  xref-buffer-mode))
 #+end_src
 
 ** 右键菜单与 Which-key 中文化
@@ -1935,15 +1987,15 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
   "通过 D-Bus 获取当前 Darkman 模式。返回 'light、'dark 或 nil。"
   (condition-case err
       (let ((mode (dbus-get-property
-                     :session
-                     custom/color-scheme-dbus-service
-                     custom/color-scheme-dbus-path
-                     custom/color-scheme-dbus-interface
-                     "Mode")))
-          (cond
-           ((string= mode "light") 'light)
-           ((string= mode "dark") 'dark)
-           (t nil)))
+                   :session
+                   custom/color-scheme-dbus-service
+                   custom/color-scheme-dbus-path
+                   custom/color-scheme-dbus-interface
+                   "Mode")))
+        (cond
+         ((string= mode "light") 'light)
+         ((string= mode "dark") 'dark)
+         (t nil)))
     (error
      (message "[color-scheme] D-Bus 获取失败: %s" (error-message-string err))
      nil)))
@@ -2235,13 +2287,17 @@ MODE 为 'light 或 'dark。
   (git-messenger:use-magit-popup t))
 
 (dolist (hook '(org-mode-hook markdown-mode-hook text-mode-hook))
-  (add-hook hook #'visual-line-mode))
+  (add-hook hook #'visual-line-mode)
+  ;; 续行按上下文计算 wrap-prefix(列表/引用缩进对齐),仅显示不改文本。
+  (add-hook hook #'visual-wrap-prefix-mode))
 
 ;; 编辑 DWIM 杂项(均 Emacs 30/31 内置):
 ;; C-w 无活动 region 时杀掉光标前一个词而非报错,与终端 C-w 习惯一致。
 (setq kill-region-dwim t)
 ;; 入 kill ring 的多行文本去掉公共缩进列,yank 到别处不再带多余前导空格。
 (kill-ring-deindent-mode 1)
+;; yank 的文本自动按 major-mode 重缩进(粘贴代码不再错位)。
+(setopt electric-indent-actions '(yank))
 
 ;; 浏览与搜索显示:
 ;; Dired 长文件名以窗口右缘截断显示中间部分;行首/行尾循环移动;grep
@@ -2360,9 +2416,27 @@ MODE 为 'light 或 'dark。
 ;; q 与 M-q 填充对偶(unfill);r 正则替换先出 diff 预览再按 patch 应用,
 ;; 多文件版在 Dired 标记文件上跑 dired-do-replace-regexp-as-diff;
 ;; C-w 按空白分词回杀(终端 readline 风格),与 kill-region-dwim 互补。
+;; CJK 全半角 DWIM(Emacs 31 内置 fullwidth/halfwidth 命令):有选区转
+;; 选区,无选区转光标处词,中英混排内容统一字母/数字/标点宽度。
+(defun custom/fullwidth-dwim ()
+  "有选区时把选区转全角,无选区时转光标处词。"
+  (interactive)
+  (if (use-region-p)
+      (call-interactively #'fullwidth-region)
+    (call-interactively #'fullwidth-word)))
+
+(defun custom/halfwidth-dwim ()
+  "有选区时把选区转半角,无选区时转光标处词。"
+  (interactive)
+  (if (use-region-p)
+      (call-interactively #'halfwidth-region)
+    (call-interactively #'halfwidth-word)))
+
 (custom/bind "C-c e q" #'unfill-paragraph "取消段落填充" "编辑变换")
 (custom/bind "C-c e r" #'replace-regexp-as-diff "正则替换预览" "编辑变换")
 (custom/bind "C-c e C-w" #'unix-word-rubout "按词回杀" "编辑变换")
+(custom/bind "C-c e F" #'custom/fullwidth-dwim "转全角" "编辑变换")
+(custom/bind "C-c e f" #'custom/halfwidth-dwim "转半角" "编辑变换")
 #+end_src
 
 *** 编辑辅助包
@@ -2798,6 +2872,9 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 
 (add-hook 'prog-mode-hook #'hs-minor-mode)
 (add-hook 'conf-mode-hook #'hs-minor-mode)
+
+;; Ctrl+click 跳转定义(与其他编辑器惯例一致,与右键菜单体系互补)。
+(global-xref-mouse-mode 1)
 ;; Emacs 31:hs 交互命令已带上游 autoload,不再手动补齐。fringe 折叠指示器
 ;; 与折叠处显示隐藏行数(大 buffer 自动关闭,上游默认 2MB 上限)。
 (setq hs-show-indicators t
@@ -2881,6 +2958,10 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
   :config
   (yas-global-mode 1))
 (use-package yasnippet-snippets :after yasnippet :defer t)
+
+;; emacs-lisp 语义染色(Emacs 31):按代码分析区分函数调用/变量/宏引用,
+;; 写配置与 elisp 时比正则 font-lock 精确。
+(setopt elisp-fontify-semantically t)
 
 (use-package csharp-mode
   :mode ("\\.cs\\'" "\\.csx\\'" "\\.cake\\'")
@@ -3162,11 +3243,14 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (org-src-window-setup 'current-window)
   (org-edit-src-content-indentation 0)
   (org-image-actual-width '(300))
+  ;; attr_org 指定超大宽度时以 fill-column 为上限,与 actual-width 双保险。
+  (org-image-max-width t)
   :config
-  ;; daemon/client 下按 frame 判断图片显示能力
-  (defun custom--org-toggle-inline-images ()
-    (setq-local org-startup-with-inline-images (display-graphic-p)))
-  (add-hook 'org-mode-hook #'custom--org-toggle-inline-images)
+  ;; daemon/client 下按 frame 判断图片显示能力。变量随 Org 9.8 由
+  ;; org-startup-with-inline-images 更名为 link-previews 体系。
+  (defun custom--org-toggle-link-previews ()
+    (setq-local org-startup-with-link-previews (display-graphic-p)))
+  (add-hook 'org-mode-hook #'custom--org-toggle-link-previews)
 
   ;; 行号噪音由 [[#mixed-gui-tty-constraints][主题与字体]] 的禁用行号 mode 列表统一处理(org-mode 在列)。
 
@@ -3271,7 +3355,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 #+begin_src org :tangle no
 ,* TODO %?
 :PROPERTIES:
-:CREATED: %U
+:CREATED:  %U
 :END:
 %i
 #+end_src
@@ -3305,7 +3389,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 #+begin_src org :tangle no
 ,* TODO %?
 :PROPERTIES:
-:CREATED: %U
+:CREATED:  %U
 :END:
 %i
 #+end_src
@@ -3315,7 +3399,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 ,* TODO %?
 SCHEDULED: %^t
 :PROPERTIES:
-:CREATED: %U
+:CREATED:  %U
 :END:
 %i
 #+end_src
@@ -3324,7 +3408,7 @@ SCHEDULED: %^t
 #+begin_src org :tangle no
 ,* %?
 :PROPERTIES:
-:CREATED: %U
+:CREATED:  %U
 :END:
 %i
 #+end_src
@@ -3686,6 +3770,8 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-S-<tab>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
 (custom/bind "C-<next>" #'custom/tabs-next "下一个标签" "基础移动与直达键")
 (custom/bind "C-<prior>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
+(custom/bind "C-x M-<right>" #'custom/tabs-move "标签后移" "基础移动与直达键")
+(custom/bind "C-x M-<left>" #'custom/tabs-move-backward "标签前移" "基础移动与直达键")
 (custom/bind "C-a" #'mark-whole-buffer "全选" "基础移动与直达键")
 (custom/bind "C-/" #'custom/comment-dwim-stable "注释" "基础移动与直达键")
 (custom/bind "C-_" #'custom/comment-dwim-stable "注释" "基础移动与直达键")
@@ -3906,14 +3992,25 @@ Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表)
 
 ;; completion-preview(Emacs 30 内置):打字时 ghost-text 行内补全预览,
 ;; 与 vertico(minibuffer 层)互补,capf 后端(eglot LSP / cape)全部复用。
-;; M-n/M-p 在候选间移动,M-i 弹出 *Completions* 菜单,TAB 接受并继续。
+;; TAB 接受候选,M-n/M-p 循环候选,M-i 补全公共前缀(再按弹 *Completions*);
+;; 预览激活时 M-f/M-<right> 逐词、C-M-f/C-M-<right> 逐表达式部分接受。
+;; 循环与部分接受命令上游内置但默认键位被注释,此处显式接线;
+;; remap 仅在预览激活的 buffer 生效,不影响普通词/表达式移动。
 (use-package completion-preview
   :demand t
   :config
   (global-completion-preview-mode 1)
   ;; 排序与 vertico 一致(prescient 频率优先),两层补全体验统一;
   ;; 候选集合有 metadata 排序时(如 eglot)上游优先用之,此处仅兜底。
-  (setq completion-preview-sort-function #'prescient-completion-sort))
+  (setq completion-preview-sort-function #'prescient-completion-sort)
+  (define-key completion-preview-active-mode-map (kbd "M-n")
+              #'completion-preview-next-candidate)
+  (define-key completion-preview-active-mode-map (kbd "M-p")
+              #'completion-preview-prev-candidate)
+  (define-key completion-preview-active-mode-map [remap forward-word]
+              #'completion-preview-insert-word)
+  (define-key completion-preview-active-mode-map [remap forward-sexp]
+              #'completion-preview-insert-sexp))
 #+end_src
 
 *** 搜索导航与上下文动作
@@ -3964,7 +4061,7 @@ Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表)
 
 ~completion-preview-mode~ - Emacs 30+ 内置 in-region ghost-text 补全
 + 输入时在光标处显示 ghost-text 候选预览,TAB 接受候选,M-n / M-p 切换候选;无弹出菜单打断,交互轻量。
-+ capf 链由各 major-mode / Eglot 提供;~cape-file~ 补路径,~cape-dabbrev~ 手动触发( =M-/= )。
++ capf 链由各 major-mode / Eglot 提供;链尾兜底 =cape-file= (路径) / =cape-line= (相似行) / =cape-abbrev= (缩写表),~cape-dabbrev~ 手动触发( =M-/= )。
 
 ispell 词表逻辑保留( ~ispell-completion-at-point~ 为内置 capf,文本模式自动补全词表来源)。
 
@@ -4024,12 +4121,15 @@ ispell 词表逻辑保留( ~ispell-completion-at-point~ 为内置 capf,文本模
 ;; 候选,TAB 接受,M-n/M-p 切换。无弹出菜单与 kind 图标,交互轻量。
 (global-completion-preview-mode 1)
 
-;; cape:补全后端扩展。cape-file 追加在 capf 链尾(路径补全兜底);
+;; cape:补全后端扩展,按序追加在 capf 链尾兜底:cape-file 补路径,
+;; cape-line 用 buffer 内相似行整行补全(配置/JSON/日志类重复结构
+;; ghost 直接预览整行),cape-abbrev 补全全局 abbrev 表(空表时无候选)。
 ;; cape-dabbrev 不进自动链(避免大 buffer 扫描),经 M-/ 手动触发。
 (use-package cape
   :demand t
   :config
-  (add-to-list 'completion-at-point-functions #'cape-file t))
+  (dolist (backend '(cape-file cape-line cape-abbrev))
+    (add-to-list 'completion-at-point-functions backend t)))
 
 (defun custom/completion-setup-capfs-org ()
   "Org mode 的 capf 收束:移除 text-mode 带入的 ispell capf。
