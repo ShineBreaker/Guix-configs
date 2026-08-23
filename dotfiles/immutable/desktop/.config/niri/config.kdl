@@ -100,6 +100,11 @@ layer-rule {
   block-out-from "screencast"
 }
 
+layer-rule {
+  match namespace="^waywallen-wallpaper"
+  place-within-backdrop true
+}
+
 switch-events {
   lid-close { spawn "niri" "msg" "action" "power-off-monitors"; }
   lid-open  { spawn "niri" "msg" "action" "power-on-monitors"; }

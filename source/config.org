@@ -1803,6 +1803,7 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
                                                               "atuin"
                                                               "direnv"
                                                               "fzf"
+                                                              "niri"
                                                               "starship"
                                                               "zoxide")))))
 
@@ -1823,6 +1824,7 @@ and begin
 
 $$bin/atuin$$ init fish | source
 $$bin/direnv$$ hook fish | source
+$$bin/niri$$ completions fish | source
 $$bin/fzf$$ --fish | source
 $$bin/zoxide$$ init fish | source
 $$bin/starship$$ init fish | source
@@ -1852,6 +1854,7 @@ end
                              "emacs-next-pgtk:doc"
 
                              ;; 界面与外观
+                             "emacs-doom-modeline"
                              "emacs-ef-themes"
                              "emacs-nerd-icons"
                              "emacs-rainbow-delimiters"
@@ -1864,6 +1867,15 @@ end
                              "emacs-multiple-cursors"
                              "emacs-with-editor"
                              "emacs-goto-chg"
+
+                             ;; 补全与搜索(vertico 生态)
+                             "emacs-vertico"
+                             "emacs-orderless"
+                             "emacs-marginalia"
+                             "emacs-prescient"
+                             "emacs-consult"
+                             "emacs-embark"
+                             "emacs-cape"
 
                              ;; 开发工具
                              "emacs-agent-shell"
@@ -1881,8 +1893,8 @@ end
                              "emacs-gdscript-mode"
                              "emacs-kdl-mode"
                              "emacs-kotlin-mode"
+                             "emacs-markdown-mode"
                              "emacs-nix-mode"
-                             "emacs-web-mode"
                              "emacs-yasnippet"
                              "emacs-yasnippet-snippets"
                              "emacs-zig-mode"
