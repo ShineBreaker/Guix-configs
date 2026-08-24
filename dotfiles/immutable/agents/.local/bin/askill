@@ -5,23 +5,19 @@
 #   仓库只声明（skills-lock.json + 本脚本）；skill 内容按需从上游安装到
 #   ~/.config/agents/skills/，由 lock 的 computedHash 提供完整性基线。
 #
-# 布局（npx cwd = <pkg>/.config/agents/skills/）：
-#   <cwd>/skills-lock.json         锁真身（stow 部署后在 ~/.config/agents/skills/ 直接可查）
-#   <cwd>/.agents/skills/          npx project-scope 落盘暂存区（gitignore，不部署）
-#   ~/.config/agents/skills/       部署位置：lock + 真实 skill 目录（自建 skill 与此共存）
+# 布局（immutable 脚本 + mutable 锁直链，运行不依赖仓库路径）：
+#   ~/.config/agents/skills/                  工作区 = 部署位置（真实 skill 目录，自建 skill 共存）
+#   ~/.config/agents/skills/skills-lock.json  锁真身在 dotfiles/mutable/agents/skills/（Stow 单文件
+#                                             直链，改锁即改仓库源，git diff 直接可见）
+#   ~/.config/agents/skills/.agents/skills/   npx project-scope 落盘暂存区（部署位真目录内）
 #
 # 引擎：npx skills (vercel-labs)，project scope + universal agent + --copy。
 # 版本冻结：ref 跟踪上游最新（无 commit pin），锁语义由 git 提交 skills-lock.json 承担。
 set -euo pipefail
 
-# 自定位：本脚本经 stow 单文件软链部署为 ~/.local/bin/askill，
-# readlink -f 解析回仓库源后再取包根（.local/bin 上两级）。
-SELF=$(readlink -f "$0")
-PKG_ROOT=$(cd "$(dirname "$SELF")/../.." && pwd)
-NPX_CWD="$PKG_ROOT/.config/agents/skills"
-DEST="$HOME/.config/agents/skills"
-STAGING="$NPX_CWD/.agents/skills"
-LOCK="$NPX_CWD/skills-lock.json"
+WORK="$HOME/.config/agents/skills"
+STAGING="$WORK/.agents/skills"
+LOCK="$WORK/skills-lock.json"
 
 export DISABLE_TELEMETRY=1
 export SKILLS_CLONE_TIMEOUT_MS="${SKILLS_CLONE_TIMEOUT_MS:-600000}"
@@ -29,7 +25,7 @@ SKILLS_VER="skills@1.5.23"
 
 die() { echo "askill: $*" >&2; exit 1; }
 
-npx_skills() { (cd "$NPX_CWD" && npx -y "$SKILLS_VER" "$@"); }
+npx_skills() { (cd "$WORK" && npx -y "$SKILLS_VER" "$@"); }
 
 # 按锁清单逐 skill 同步暂存区 → 部署位置。
 # 逐条操作且只处理锁内名字：部署位置的自建 skill（lock 外）绝不触碰。
@@ -41,11 +37,11 @@ sync_from_staging() {
   [ -n "$names" ] || { echo "锁为空，无可同步"; return 0; }
   while IFS= read -r name; do
     [ -d "$STAGING/$name" ] || { echo "  跳过（暂存区无）: $name"; continue; }
-    tmp="$DEST/.$name.incoming"
+    tmp="$WORK/.$name.incoming"
     rm -rf "$tmp"
     cp -aL "$STAGING/$name" "$tmp"
-    rm -rf "${DEST:?}/$name"     # 无斜杠：对旧 stow 软链只删链本身
-    mv "$tmp" "$DEST/$name"
+    rm -rf "${WORK:?}/$name"     # 无斜杠：对旧 stow 软链只删链本身
+    mv "$tmp" "$WORK/$name"
     echo "  已同步: $name"
   done <<< "$names"
 }
@@ -56,17 +52,20 @@ case "${1:-help}" in
     shift
     npx_skills add "$@" -a universal --copy -y
     sync_from_staging
-    echo "完成。git diff 审查 skills-lock.json 后提交以冻结版本。"
+    echo "完成。锁已更新（mutable 直链），git diff 审查后提交以冻结版本。"
     ;;
   update)
+    [ -e "$LOCK" ] || die "找不到 $LOCK（先 blue stow agents/skills 部署锁）"
     npx_skills update -p -y
     sync_from_staging
-    echo "完成。git diff 审查后提交以冻结新版本。"
+    echo "完成。锁已更新（mutable 直链），git diff 审查后提交以冻结新版本。"
     ;;
   install)
-    # 新机/暂存区丢失时从锁恢复：experimental_install 重装到暂存区 → 同步部署位置。
+    # 新机/暂存区丢失时从锁恢复（锁经 blue stow agents/skills 已直链到位）：
+    # experimental_install 重装到暂存区 → 同步部署位置。
     # 注意 ref 无 commit pin，恢复的是上游当前最新；与锁内 computedHash 的偏差
     # 会体现在随后 npx update 的检测里。
+    [ -e "$LOCK" ] || die "找不到 $LOCK（先 blue stow agents/skills 部署锁）"
     npx_skills experimental_install
     sync_from_staging
     ;;
@@ -78,9 +77,10 @@ case "${1:-help}" in
     done
     npx_skills remove "$@" -y
     for name in "$@"; do
-      rm -rf "${DEST:?}/$name"
+      rm -rf "${WORK:?}/$name"
       echo "  已删除: $name"
     done
+    echo "完成。锁已更新（mutable 直链），git diff 审查后提交。"
     ;;
   sync)
     sync_from_staging ;;
@@ -97,8 +97,8 @@ askill — 声明式管理第三方 agent skills（引擎: npx skills project sc
   askill sync                       仅同步暂存区 → 部署位置（按锁清单）
   askill list                       列出已纳管 skills
 
-skill 内容不进 git：仓库只跟踪 skills-lock.json（位于包内
-.config/agents/skills/ 下）与本脚本。
+skill 内容不进 git：仓库只跟踪 skills-lock.json（mutable Stow 直链部署，
+npx 写锁即写仓库源）与本脚本（immutable）。
 自建 skill（不在锁内）不受任何命令影响。
 EOF
     ;;

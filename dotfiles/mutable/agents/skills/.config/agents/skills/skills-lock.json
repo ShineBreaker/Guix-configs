@@ -41,13 +41,13 @@
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/embedded-captions/SKILL.md",
-      "computedHash": "a35b5368fad9a9c0c3408bd3fa64ba84241ef44f3b7491b49a51bc222298ba69"
+      "computedHash": "a0e2dda8b8084a3d25aea7d67364a6eba845a675ea08d8ff8b256f3baef32cd0"
     },
     "faceless-explainer": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/faceless-explainer/SKILL.md",
-      "computedHash": "9c7844ec2bfe208057f2601322bcfb8bb1d51a80011fe522b716c237bf4af72c"
+      "computedHash": "3175b6301b963b62129de7460c35eee8d9ee25cad37723a044d706102fa16059"
     },
     "find-skills": {
       "source": "vercel-labs/skills",
@@ -77,7 +77,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
-      "computedHash": "a16b2f661db6caf310d7e02dd0d069e597cb888873e210e66f641eae715c5f23"
+      "computedHash": "4dd886b0196bf43729d954ae326016f2bd9f5f79d892500b407c33a753362f14"
     },
     "handoff": {
       "source": "mattpocock/skills",
@@ -101,7 +101,7 @@
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/hyperframes-cli/SKILL.md",
-      "computedHash": "0bc09279973ecff86472a81b74d217df5cc11da0848e9a26bc912ab18130c493"
+      "computedHash": "05b383e1daf9bf26662bbb42d9be0769aad921812e9b79c8e497da2c9dd925c8"
     },
     "hyperframes-core": {
       "source": "heygen-com/hyperframes",
@@ -137,7 +137,7 @@
       "source": "tw93/Kami",
       "sourceType": "github",
       "skillPath": "SKILL.md",
-      "computedHash": "ebae23a2b9423d780668d62d41ef5de86d8acf14b08c9fc3ada9dd3075c50ab0"
+      "computedHash": "cefd848148b27a380be78ad0ca35c2c8131bf6c8190199b94e0d9ba83ca1185e"
     },
     "loop-me": {
       "source": "mattpocock/skills",

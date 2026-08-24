@@ -15,8 +15,6 @@ agents/
 │   │   ├── context/
 │   │   │   ├── 01-language.md
 │   │   │   └── 02-ultilities.md
-│   │   ├── skills/
-│   │   │   └── skills-lock.json
 │   │   ├── anchors-lib.sh
 │   │   └── anchors.json
 │   └── crush/
@@ -71,10 +69,11 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 
 调整通用约束改全局 anchors.json；仓库规则改项目级；pi-gate / crush / zcode 三方同步生效。
 
-### Skills — 第三方 agent skills 声明式管理（`dotfiles/mutable/skills/`）
+### Skills — 第三方 agent skills 声明式管理（askill）
 
-第三方 skills 不在本包管理，改由 `dotfiles/mutable/skills/` 以 `skills-lock.json` 为唯一声明、通过 `~/.local/bin/askill` 按需从上游恢复（引擎 `npx skills` project scope + `universal` + `--copy`）。详见 `dotfiles/mutable/skills/README.md`：
+本包仅含 `askill` 管理脚本（`.local/bin/askill`，部署为 `~/.local/bin/askill`）。第三方 skills 的锁真身在 `dotfiles/mutable/agents/skills/`（Stow 单文件直链到 `~/.config/agents/skills/skills-lock.json`，npx 写锁即写仓库源，git diff 直接可见）：
 
 - `askill add <repo> -s <name>` / `askill update` / `askill install` / `askill remove` / `askill list`
-- 锁文件 `~/.config/agents/skills/skills-lock.json`（`computedHash` 基线，ref 跟踪最新，版本冻结由 git 提交承担）
+- 工作区 = 部署位置 `~/.config/agents/skills/`（npx cwd；`computedHash` 基线，ref 跟踪最新，版本冻结由 git 提交承担）
 - `~/.config/agents/skills/.agents/skills/` 为 npx 暂存区；锁外目录（agenote/emacs 等自建 skill）不经 askill 触碰
+- 已知坑：`heygen-com/hyperframes` 仓库过大，git clone 必被 TLS 掐断且 LFS 内容被剥离；更新该源用 `gh api repos/heygen-com/hyperframes/tarball/main` 解出 `skills/` 后拷入暂存区，再 `askill sync`
