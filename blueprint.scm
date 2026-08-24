@@ -1028,7 +1028,7 @@
    (synopsis "通过锁定频道执行 guix pull"))
   (%guix '("pull" "--allow-downgrades" "--fallback")))
 
-;; ---- 单频道刷新辅助（blue update CHANNEL 用） ------------------------------
+;; ---- 单频道刷新辅助（blue update --channel 用） ----------------------------
 ;;
 ;; 原理：Guix 的 channels 文件原生支持「pin 混搭」——带 (commit ...) 的频道
 ;; 固定在该 commit（update-cached-checkout 不拉新），不带的跟随 branch 最新
@@ -1054,34 +1054,81 @@
                 #:real? #t)
           out))))
 
-;; blue update [CHANNEL] —— 用可变频道定义跑 guix describe，把结果写回
-;; channel.lock（固定 commit），然后 git commit -S 锁定。不带参数刷新全部
-;; 频道；带 CHANNEL 只刷新该频道，其余保持 channel.lock 中的 commit 不变。
+;; 解析 blue update 的参数 → (guix nix)。每侧为 #f（不更新）、'all（全量）
+;; 或频道/flake 名（单目标）。--channel 需搭配 --guix、--flake 需搭配 --nix，
+;; 其余未知参数报 usage。
+(define (%update-scope arguments)
+  (let loop ([rest arguments] [guix #f] [nix #f])
+    (match rest
+      [() (list guix nix)]
+      [("--guix" . more)
+       (if guix (error "重复指定 --guix") (loop more 'all nix))]
+      [("--nix" . more)
+       (if nix (error "重复指定 --nix") (loop more guix 'all))]
+      [("--channel" name . more)
+       (match guix
+         ['all (loop more name nix)]
+         [_ (error "--channel 需搭配 --guix（用法: blue update --guix --channel NAME）")])]
+      [("--flake" name . more)
+       (match nix
+         ['all (loop more guix name)]
+         [_ (error "--flake 需搭配 --nix（用法: blue update --nix --flake NAME）")])]
+      [_ (error "usage: blue update [--guix [--channel NAME]] [--nix [--flake NAME]]")])))
+
+;; 锁文件有实际变化才提交：单频道/单 flake 刷新常无新版本，git commit 的
+;; 空提交以非零退出会让 %run 当失败报错。git status 只读，真跑无害；
+;; dry-run 下锁文件不会被写，直接视作有变化以保留 commit 预演输出。
+(define (%commit-lock file message)
+  (when (or (dry-build?)
+            (pair? (%pipe->lines (%shell-command
+                                  `("git" "status" "--porcelain" "--" ,file)))))
+    (%run `("git" "commit" "-S" "-m" ,message ,file))))
+
+;; guix 侧更新：用可变频道定义跑 guix describe，结果原子写回 channel.lock。
+;; target 为 'all（channel.scm 全量）或频道名（单频道刷新，其余 pin）。
 ;; dry-run 下仅预演、不写 channel.lock：describe 是捕获 stdout 的管道命令，
 ;; 不走 %run 短路，必须在此手动短路。
-(define-command (update-command arguments)
-  ((invoke "update")
-   (category 'guix)
-   (synopsis "更新 source/channel.lock 并提交")
-   (help "[CHANNEL]
-不带参数：刷新全部频道到 channel.scm 声明的分支最新。
-带 CHANNEL：只刷新该频道，其余频道保持 channel.lock 中锁定的 commit 不变。"))
-  (let* ([channels-file
-          (match arguments
-            [() %channel-scm]
-            [(target) (%partial-channels-file target)]
-            [_ (error "usage: blue update [CHANNEL]")])]
+(define (%update-guix target)
+  (let* ([channels-file (if (eq? target 'all)
+                            %channel-scm
+                            (%partial-channels-file target))]
          [describe (%guix-command '("describe" "--format=channels")
                                   #:channels channels-file)])
     (if (dry-build?)
         (%print-preview describe)
         (let ([content (%pipe->string (%shell-command describe))])
           (%write-file-atomically %channel-lock
-                                  (lambda (port) (display content port)))))
-    ;; git commit 走 %run：dry-run 下自动短路为预演打印。
-    (%run `("git" "commit" "-S" "-m"
-            "build(channel.lock): bump channels"
-            ,%channel-lock))))
+                                  (lambda (port) (display content port))))))
+  (%commit-lock %channel-lock "build(channel.lock): bump channels"))
+
+;; nix 侧更新：'all 先刷 nix channel 再全量刷新 flake.lock；给 flake 名则
+;; 只更新该 input（nix 2.19+ 语法）。nix 命令全走 %run，dry-run 自动短路。
+(define (%update-nix target)
+  (when (eq? target 'all)
+    (%run '("nix-channel" "--update")))
+  (%run `("nix" "flake" "update"
+          ,@(if (string? target) (list target) '())
+          "--flake" ,%nix-dir))
+  (%commit-lock (string-append %nix-dir "/flake.lock")
+                "build(flake.lock): bump flake inputs"))
+
+;; blue update [--guix [--channel NAME]] [--nix [--flake NAME]] —— 刷新
+;; channel.lock / flake.lock 并各自 git commit -S。不带参数两侧全量刷新。
+(define-command (update-command arguments)
+  ((invoke "update")
+   (category 'guix)
+   (synopsis "更新 channel.lock / flake.lock 并提交")
+   (help "[--guix [--channel NAME]] [--nix [--flake NAME]]
+不带参数：guix 频道与 Nix 全部刷新。
+--guix：只刷新 guix 频道；--channel NAME 只刷新该频道，其余保持 channel.lock 锁定的 commit。
+--nix：只更新 Nix；--flake NAME 只更新该 flake input（不刷 nix channel）。"))
+  (match (match (%update-scope arguments)
+           ;; 无任何参数 → 两侧全量
+           [(#f #f) '(all all)]
+           [scope scope])
+    [(guix nix)
+     (when guix (%update-guix guix))
+     (when nix (%update-nix nix))]))
 
 ;;; ---------- 维护 ----------
 
@@ -1181,15 +1228,12 @@
   (%run '("nix-shell" "<home-manager>" "-A" "install")))
 
 ;; blue nix-update —— 更新 Nix channel 和 flake.lock，并 git commit -S。
+;; 等价 blue update --nix，保留作为 Nix 节的快捷入口。
 (define-command (nix-update-command arguments)
   ((invoke "nix-update")
    (category 'nix)
    (synopsis "更新 Nix channel 和 flake"))
-  (%run '("nix-channel" "--update"))
-  (%run `("nix" "flake" "update" "--flake" ,%nix-dir))
-  (%run `("git" "commit" "-S" "-m"
-          "build(flake.lock): bump flake inputs"
-          ,(string-append %nix-dir "/flake.lock"))))
+  (%update-nix 'all))
 
 ;;; ---------- 校验 ----------
 
