@@ -581,6 +581,7 @@ plugins:
     default_trust: '0.5'
     hrr_dim: '1024'
   enabled:
+    - herdr-agent-state
     - ponytail
     - agenote
   disabled: []
