@@ -17,12 +17,12 @@
 [submodule "dotfiles/mutable/agenote/.config/agents/skills"]
 	path = dotfiles/mutable/agenote/.config/agents/skills
 	url = https://github.com/ShineBreaker/agenote-skills.git
-[submodule "dotfiles/mutable/agenote/.config/pi/extensions/agenote-hooks"]
-	path = dotfiles/mutable/agenote/.config/pi/extensions/agenote-hooks
-	url = https://github.com/ShineBreaker/pi-agenote.git
-[submodule "dotfiles/mutable/agents/pi/.config/pi/extensions/atelier"]
+[submodule "dotfiles/mutable/agents/omp/.config/omp/agent/extensions/atelier"]
+	path = dotfiles/mutable/agents/omp/.config/omp/agent/extensions/atelier
 	url = https://github.com/ShineBreaker/pi-atelier.git
-	path = dotfiles/mutable/agents/pi/.config/pi/extensions/atelier
-[submodule "dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui"]
+[submodule "dotfiles/mutable/agents/omp/.config/omp/agent/extensions/pi-ui"]
+	path = dotfiles/mutable/agents/omp/.config/omp/agent/extensions/pi-ui
 	url = https://github.com/ShineBreaker/pi-ui.git
-	path = dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui
+[submodule "dotfiles/mutable/agenote/.config/omp/extensions/agenote-hooks"]
+	path = dotfiles/mutable/agenote/.config/omp/extensions/agenote-hooks
+	url = https://github.com/ShineBreaker/pi-agenote.git

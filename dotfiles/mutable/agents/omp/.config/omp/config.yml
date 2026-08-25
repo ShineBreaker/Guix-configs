@@ -1,0 +1,32 @@
+defaultThinkingLevel: max
+theme: 
+  dark: dark
+  light: light
+showHardwareCursor: false
+startup: 
+  quiet: true
+  changelogMode: summary
+compaction: 
+  enabled: true
+  reserveTokens: 16384
+  keepRecentTokens: 20000
+retry: 
+  enabled: true
+  maxRetries: 3
+  baseDelayMs: 2000
+skills: 
+  customDirectories: 
+    - ~/.config/agents/skills
+statusLine: 
+  preset: default
+setupVersion: 2
+symbolPreset: nerd
+providers: 
+  webSearchOrder: 
+    []
+modelRoles: 
+  smol: opencode-go/muse-spark-1.2-contributor:xhigh
+  advisor: opencode-go/muse-spark-1.2-contributor:xhigh
+  tiny: opencode-go/hy3:xhigh
+  default: opencode-go/ox-alpha-free:max
+  vision: opencode-go/mimo-v2.5:high

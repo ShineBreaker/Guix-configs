@@ -10,12 +10,8 @@
 
     grok
     kimi-code
+    omp
     opencode2
-    pi
     skills
-  ];
-
-  home.packages = with pkgs; [
-    pi-acp
   ];
 }

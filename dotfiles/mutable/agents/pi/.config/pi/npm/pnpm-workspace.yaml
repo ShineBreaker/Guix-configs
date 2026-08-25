@@ -1,9 +1,0 @@
-nodeLinker: hoisted
-allowBuilds:
-  '@google/genai': true
-  better-sqlite3: true
-  context-mode: true
-  glimpseui: true
-  koffi: true
-  node-pty: true
-  protobufjs: true

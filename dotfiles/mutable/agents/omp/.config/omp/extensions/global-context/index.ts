@@ -12,6 +12,7 @@ const LOG_FILE = join(
   homedir(),
   ".config",
   "omp",
+  "agent",
   "extensions",
   ".load-errors.log",
 );
@@ -25,18 +26,20 @@ function logLoadError(ext: string, where: string, err: unknown): void {
 }
 
 /**
- * 定位 omp 配置目录（替代旧 pi 的 getAgentDir()）。
+ * 定位 omp agent 目录（替代旧 pi 的 getAgentDir()）。
  *
- * omp 17.0.7 没有把 getAgentDir 暴露给扩展运行时（value import 会
- * `Cannot find module`）。这里按 omp 内部解析顺序定位：环境变量优先，
- * 回退 ~/.config/omp（config.yml / mcp.json / global-context.json 都在这里）。
+ * omp 18 没有把 getAgentDir 暴露给扩展运行时（value import 会
+ * `Cannot find module`）。这里按 omp 内部解析顺序定位：
+ * PI_CONFIG_DIR 是「home 下相对目录名」（fish conf.d 设为 .config/omp），
+ * 必须 resolve(homedir(), ...) 绝对化——直接 join 会相对 cwd 解析。
+ * agent dir = <config root>/agent（global-context.json / mcp.json 在这层）。
  */
 function getOmpConfigDir(): string {
-  return (
-    process.env.OMP_CONFIG_DIR ||
-    process.env.PI_CONFIG_DIR ||
-    join(homedir(), ".config", "omp")
+  const root = resolve(
+    homedir(),
+    process.env.PI_CONFIG_DIR || join(".config", "omp"),
   );
+  return join(root, "agent");
 }
 
 /**
