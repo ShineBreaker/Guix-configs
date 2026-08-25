@@ -505,7 +505,7 @@ pgrep -af 'systemd --user'
 })
 ```
 
-或用 `xdg.desktopEntries` 生成 .desktop(如 hermes.nix)。然后 `home-manager switch --flake .#Guix`。
+或用 `xdg.desktopEntries` 生成 .desktop(如 hermes.nix)。然后 `nh home switch --configuration Guix source/nix`（旧命令 `home-manager switch --flake .#Guix` 已由 `nh` 接管）。
 
 **方案 B — Guix dotfiles .desktop 覆盖(兜底)**
 
