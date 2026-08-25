@@ -31,7 +31,7 @@ mutable/
 │   ├── .config/
 │   │   ├── agents/
 │   │   │   └── skills/
-│   │   └── pi/
+│   │   └── omp/
 │   │       └── extensions/
 │   ├── .zcode/
 │   │   └── plugins/
@@ -45,11 +45,12 @@ mutable/
 │   │   │   └── share/
 │   │   ├── .stow-folding
 │   │   └── .stow-local-ignore
-│   ├── pi/
-│   │   ├── .config/
-│   │   │   ├── agents/
-│   │   │   └── pi/
-│   │   └── .stow-local-ignore
+│   ├── omp/
+│   │   └── .config/
+│   │       └── omp/
+│   ├── skills/
+│   │   └── .config/
+│   │       └── agents/
 │   └── zcode/
 │       └── .zcode/
 │           ├── agents/
@@ -83,15 +84,15 @@ mutable/
 
 ## 当前纳管的包
 
-| 包       | 部署目标                                                                                                         | 包含文件                                                                                                                                                                                                         |
-| -------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents/hermes` | `~/.local/share/hermes/` + `~/.local/bin/hermes*`                                                                                         | SOUL.md、config.yaml、memories/、skills/、plugins/、启动脚本（hermes/hermes-update/hermes-desktop）、hermes.desktop                                                                                                                                                       |
-| `agents/pi` | `~/.config/pi/` + `~/.config/agents/skills/`                                                                                               | settings.json、mcp.json、models.json 等 pi 配置、extensions/（含 atelier、pi-ui 子模块）、agents/skills/ 自建 skill                                                                                                                                                      |
-| `tools/appimage-run` | `~/.local/bin/appimage-run`                                                                                          | AppImage 运行器（**submodule** → `github.com/ShineBreaker/appimage-run-guix`）                                                                                                                                                                                          |
-| `tools/secrets` | `~/.local/share/keys/`                                                                                                     | age 密钥对（私钥不入 git）+ secrets 加解密脚本，详见包内 AGENTS.md；密文目录 secrets-encrypted 被 stow 排除，仅存仓库源                                                                                                                                                    |
-| `emacs`  | `~/.config/emacs/`                                                                                               | literal-config 仓库本体（init.el、early-init.el、emacs.org、scripts/、data/），GNU Stow 软链到 `~/.config/emacs/`，改源即生效。无 chemacs2 引导层、无 submodule、单 profile。详见根 AGENTS.md「Emacs 单 Profile 架构」节。 |
-| `agenote` | `~/.config/agents/skills/` + `~/.config/omp/extensions/`                                                       | **纯 submodule 容器包**。两个子模块：`agenote-skills`（3 个 agent skill，→ `github.com/ShineBreaker/agenote-skills`）+ `pi-agenote`（omp 扩展，→ `github.com/ShineBreaker/pi-agenote`）。程序本体（CLI/ag_lib）**不在此包**，由 `uv tool install` 独立安装到 `~/.local/bin/`（→ `github.com/ShineBreaker/agenote`）。 |
-| `skills` | `~/.local/bin/askill` + `~/.config/agents/skills/skills-lock.json`                                              | **第三方 skills 声明式管理包**（详见包内 README.md）：仓库只跟踪锁与管理脚本，skill 内容不进 git，由 `askill`（引擎 `npx skills` project scope）安装到 `~/.config/agents/skills/`。新机恢复：`blue stow skills` 后跑 `askill install`。自建 skill（agenote/emacs 包）不在此包管辖。 |
+| 包                   | 部署目标                                                 | 包含文件                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes*`        | SOUL.md、config.yaml、memories/、skills/、plugins/、启动脚本（hermes/hermes-update/hermes-desktop）、hermes.desktop                                                                                                                                                                                                                                                 |
+| `agents/omp`         | `~/.config/omp` + `~/.config/agents/skills/`             | config.yml（主配置）、mcp.json、models.json 等 omp 配置、extensions/（含 atelier、pi-ui 子模块）。2026-08 自 pi 迁移，XDG 化：`PI_CONFIG_DIR=.config/omp`（fish conf.d）                                                                                                                                                                                            |
+| `tools/appimage-run` | `~/.local/bin/appimage-run`                              | AppImage 运行器（**submodule** → `github.com/ShineBreaker/appimage-run-guix`）                                                                                                                                                                                                                                                                                      |
+| `tools/secrets`      | `~/.local/share/keys/`                                   | age 密钥对（私钥不入 git）+ secrets 加解密脚本，详见包内 AGENTS.md；密文目录 secrets-encrypted 被 stow 排除，仅存仓库源                                                                                                                                                                                                                                             |
+| `emacs`              | `~/.config/emacs/`                                       | literal-config 仓库本体（init.el、early-init.el、emacs.org、scripts/、data/），GNU Stow 软链到 `~/.config/emacs/`，改源即生效。无 chemacs2 引导层、无 submodule、单 profile。详见根 AGENTS.md「Emacs 单 Profile 架构」节。                                                                                                                                          |
+| `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` | **纯 submodule 容器包**。两个子模块：`agenote-skills`（3 个 agent skill，→ `github.com/ShineBreaker/agenote-skills`）+ `pi-agenote`（omp 扩展，→ `github.com/ShineBreaker/pi-agenote`）。程序本体（CLI/ag_lib）**不在此包**，由 `uv tool install` 独立安装到 `~/.local/bin/`（→ `github.com/ShineBreaker/agenote`）。                                               |
+| `agents/skills`      | `~/.config/agents/skills/skills-lock.json`               | **第三方 skills 声明式锁包**：只含 skills-lock.json（Stow 单文件直链，npx 写锁即写仓库源）。askill 脚本本体在 `dotfiles/immutable/agents/.local/bin/`。skill 内容不进 git，由 `askill`（引擎 `npx skills` project scope）安装到 `~/.config/agents/skills/`。新机恢复：`blue stow agents/skills` 后跑 `askill install`。自建 skill（agenote/emacs 包）不在此包管辖。 |
 
 ## 工作流
 

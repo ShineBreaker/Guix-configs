@@ -89,7 +89,7 @@ source/config.org → blue rebuild → tmp/config.scm → guix system reconfigur
 1. 遇到 Home / System 配置任务时，先读 `source/config.org` 头部的 *Agent 指引* 两节（系统段与用户段）+ `source/AGENTS.md`
 2. 修改应用配置时优先改 `dotfiles/immutable/<app>/` 内文件，再 `blue home`
 3. **Emacs 修改**：先读 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`（literal-config 自包含工作规范）。新包必须同步 `source/config.org` 的 home-packages。**注意**：`dotfiles/mutable/emacs/.config/emacs/` 顶层就是 literal-config 仓库本体（init.el / early-init.el / emacs.org / main.el / scripts/），无 chemacs2 引导层、无 submodule；`~/.config/emacs/` 通过 GNU Stow 软链到仓库源（改源即生效，无需 `blue home`）。
-4. **Agent 配置（Pi/Crush）**：先读 `dotfiles/immutable/agents/AGENTS.md`（部署模型、settings.json 归属表）
+4. **Agent 配置（omp/Crush）**：先读 `dotfiles/immutable/agents/AGENTS.md`（部署模型、anchors 归属表）；omp 扩展在 `dotfiles/mutable/agents/omp/`
 5. **绝对不要**直接编辑 `tmp/` 下任何产物（重新 tangle 会被覆盖）
 6. 优先使用 `blue help` 内可以使用的相关命令
 </critical>
@@ -124,7 +124,7 @@ blue init
 
 ## dotfiles/mutable/ — GNU Stow 直链部署
 
-与 `dotfiles/immutable/`（Guix Home stow）互补：`dotfiles/mutable/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置（emacs、pi、hermes）。
+与 `dotfiles/immutable/`（Guix Home stow）互补：`dotfiles/mutable/` 用 GNU Stow 直接建软链接到仓库源，**改源即生效**，无需 `blue home`。适合频繁手改且需要 git 备份的配置（emacs、omp、hermes）。
 
 ```bash
 blue stow hermes                 # 部署（建软链接）

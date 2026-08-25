@@ -20,12 +20,15 @@ source/
 │   │   │   ├── xfce4/
 │   │   │   └── mimeapps.list
 │   │   └── .gtkrc-2.0
+│   ├── qt/
+│   │   ├── check-white.svg
+│   │   ├── chevron-down.svg
+│   │   ├── chevron-up.svg
+│   │   └── rounded.qss
 │   ├── skel/
 │   │   └── .config/
 │   │       └── mihomo/
-│   ├── check-white.svg
-│   ├── gpg-agent.conf
-│   └── rounded.qss
+│   └── gpg-agent.conf
 ├── nix/
 │   ├── configuration/
 │   │   ├── 00-main/

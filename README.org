@@ -123,7 +123,7 @@ guix shell blue -- blue init
 | =blue block-show NAME=    | 从 =source/config.org= 提取名为 NAME 的 Org 代码块 | 编辑 |
 | =blue block-replace NAME= | 把 =tmp/= 里的代码塞回 Org 源                      | 编辑 |
 | =blue secret-scan=        | 扫描文本配置中疑似泄漏的密钥                       | 校验 |
-| =blue update=             | 更新 =source/channel.lock= 并签名提交              | 频道 |
+| =blue update=             | 刷新 =channel.lock= / =flake.lock= 并签名提交       | 频道 |
 | =blue pull=               | =guix pull --allow-downgrades=                     | 频道 |
 | =blue stow [MODE] PKG...= | GNU Stow 部署 dotfiles/mutable/ 下的包             | 直链 |
 | =blue stow-all [MODE]=    | 批量对 dotfiles/mutable/ 下所有包执行 stow 操作    | 直链 |

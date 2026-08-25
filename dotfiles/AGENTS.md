@@ -93,7 +93,7 @@ dotfiles/
     ├── agenote/
     │   ├── .config/
     │   │   ├── agents/
-    │   │   └── pi/
+    │   │   └── omp/
     │   ├── .zcode/
     │   │   └── plugins/
     │   └── .stow-local-ignore
@@ -102,9 +102,10 @@ dotfiles/
     │   │   ├── .local/
     │   │   ├── .stow-folding
     │   │   └── .stow-local-ignore
-    │   ├── pi/
-    │   │   ├── .config/
-    │   │   └── .stow-local-ignore
+    │   ├── omp/
+    │   │   └── .config/
+    │   ├── skills/
+    │   │   └── .config/
     │   └── zcode/
     │       └── .zcode/
     ├── emacs/

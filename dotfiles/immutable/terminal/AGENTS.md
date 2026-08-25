@@ -56,7 +56,8 @@ terminal/
     ├── herdr/
     │   └── config.toml
     ├── kitty/
-    │   └── kitty.conf
+    │   ├── kitty.conf
+    │   └── quick-access-terminal.conf
     ├── tmux/
     │   ├── scripts/
     │   │   ├── session-selector
