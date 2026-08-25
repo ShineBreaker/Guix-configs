@@ -20,7 +20,7 @@
 |    4 | 编程与开发     | [[#programming]]     | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表         | bootstrap, appearance     |
 |    5 | 项目与导航     | [[#projects]]        | project.el / 文件缓冲区导航                                   | terminal, git-display     |
 |    6 | Org 与知识库   | [[#org-knowledge]]   | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板     | bootstrap, process-helper |
-|    7 | 键位与补全     | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 补全 7 件套                    | 前述全部域的命令          |
+|    7 | 键位与补全     | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 补全 6 件套                    | 前述全部域的命令          |
 |    8 | 系统工具       | [[#system-tools]]    | 应用 / Daemon 预热 / Dashboard / 兼容性 shim                  | 前述全部域                |
 
 各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。Noweb 组装块以 =#+NAME:= 标记，便于 =scripts/configctl map= 定位和 org 间跳转。
@@ -786,7 +786,7 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
 | 缓冲区可见    | =window-buffer-change-functions=         | 唯一注册路径:追加到 frame 列表尾部(去重) |
 | 缓冲区被 kill | =kill-buffer-hook=                       | 从所有 frame 的列表移除                  |
 | frame 被删除  | =delete-frame-functions=                 | 丢弃该 frame 的标签状态                  |
-| 项目切换      | =project-after-switch-project-functions= | 清空当前 frame 列表(见 [[#project-navigation][项目与导航]])       |
+| 项目切换      | advice =project-switch-project= :after   | 清空当前 frame 列表(见 [[#project-navigation][项目与导航]])       |
 
 注册顺序即标签排列顺序(append-only),保证用户切换的稳定心智模型。=window-buffer-change-functions= 是唯一的注册入口,不再依赖 =find-file-hook= / =server-switch-hook= 等重复触发源。
 
@@ -879,7 +879,7 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
   (custom--tabs-set-frame-buffer-list nil frame))
 
 (defun custom--tabs-on-project-switch (&rest _)
-  "`project-after-switch-project-functions' 回调：清空当前 frame 标签列表。
+  "`project-switch-project' 的 :after advice 回调：清空当前 frame 标签列表。
 忽略传入的项目参数（与 `custom/tabs-clear-for-frame' 的 `&optional frame' 元数不同，
 故需独立适配回调）。"
   (custom/tabs-clear-for-frame))
@@ -1162,7 +1162,7 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。键盘与鼠标关闭语义一�
 :END:
 
 绑定 tab-line 的渲染入口到本模块函数,并注册全局 hook。项目切换时清空当前 frame 的标签列表
-+ 等价行为已在 *项目与导航* 域 ~project-navigation~ 子树通过 =project-after-switch-project-functions= 注册。
++ 等价行为已在 *项目与导航* 域 ~project-navigation~ 子树通过 advice =project-switch-project= :after 注册。
 
 #+begin_src emacs-lisp
 (setq tab-line-tabs-function #'custom/tab-line-tabs
@@ -1604,7 +1604,12 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
     ;; 解析,ghostel 在 pre-redisplay-functions 重绘提示游标时触发
     ;; "Invalid face box :color unspecified :line-width (-1 . -1)"。清除之;
     ;; TTY 提示游标靠 cursor-type 本身即可辨识。
-    (ghostel-fake-cursor :box nil))
+    (ghostel-fake-cursor :box nil)
+    ;; 同类问题:org-modern 的 label/habit face 以 "unspecified-bg" 作 box 色,
+    ;; TTY 下打开 org buffer 时 redisplay 报同款 Invalid face box。清 box 后
+    ;; 标签语义由前背景色承载,不受影响。
+    (org-modern-label :box nil)
+    (org-modern-habit :box nil))
   "TTY 透明背景下补充的非颜色交互语义。")
 
 (defconst custom:terminal-block-faces
@@ -2247,6 +2252,8 @@ MODE 为 'light 或 'dark。
 ;; 时写);:set 副作用会重排 timer,故用 setopt 而非 setq。
 (setopt save-place-autosave-interval 300)
 (repeat-mode 1)
+;; 寄存器读取带候选预览与覆盖确认(Emacs 30+)。
+(setq register-use-preview t)
 ;; Emacs 29+ 内置:匹配的括号在屏幕外时用 child frame 显示上下文。
 (setq show-paren-context-when-offscreen 'child-frame)
 
@@ -2413,8 +2420,8 @@ MODE 为 'light 或 'dark。
 (custom/bind "C-c e ." #'goto-last-change "上一处修改" "编辑变换")
 (custom/bind "C-c e ," #'goto-last-change-reverse "下一处修改" "编辑变换")
 ;; 均为 Emacs 30/31 新内置命令:
-;; q 与 M-q 填充对偶(unfill);r 正则替换先出 diff 预览再按 patch 应用,
-;; 多文件版在 Dired 标记文件上跑 dired-do-replace-regexp-as-diff;
+;; q 与 M-q 填充对偶(unfill);r/R 正则替换先出 diff 预览再按 patch 应用
+;; (R 为多文件全局入口,Dired 内另有标记文件版 dired-do-replace-regexp-as-diff);
 ;; C-w 按空白分词回杀(终端 readline 风格),与 kill-region-dwim 互补。
 ;; CJK 全半角 DWIM(Emacs 31 内置 fullwidth/halfwidth 命令):有选区转
 ;; 选区,无选区转光标处词,中英混排内容统一字母/数字/标点宽度。
@@ -2434,6 +2441,7 @@ MODE 为 'light 或 'dark。
 
 (custom/bind "C-c e q" #'unfill-paragraph "取消段落填充" "编辑变换")
 (custom/bind "C-c e r" #'replace-regexp-as-diff "正则替换预览" "编辑变换")
+(custom/bind "C-c e R" #'multi-file-replace-regexp-as-diff "多文件正则替换预览" "编辑变换")
 (custom/bind "C-c e C-w" #'unix-word-rubout "按词回杀" "编辑变换")
 (custom/bind "C-c e F" #'custom/fullwidth-dwim "转全角" "编辑变换")
 (custom/bind "C-c e f" #'custom/halfwidth-dwim "转半角" "编辑变换")
@@ -2621,8 +2629,10 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
     (:modes (zig-mode)
             :server ("zls")
             :formatter zig-fmt)
-    (:modes (csharp-mode csharp-ts-mode)
-            :ts-mode csharp-ts-mode
+    ;; C# 仅 ts-mode(内置 csharp-ts-mode,grammar 由 Guix 提供);
+    ;; 传统 csharp-mode 包已退役,.csx/.cake 不再注册。
+    (:modes (csharp-ts-mode)
+            :ts-mode nil
             :server nil
             :formatter nil))
   "统一的语言能力表。每条条目:
@@ -2764,6 +2774,8 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
   :ensure nil
   :custom
   (flymake-fringe-indicator-position 'left-fringe)
+  ;; Emacs 31:诊断摘要在受影响行下方以 unicode 图形排版(fancy)。
+  (flymake-show-diagnostics-at-end-of-line 'fancy)
   (flymake-no-changes-timeout 0.5))
 
 (defun custom/flymake-list-errors-dwim ()
@@ -2963,9 +2975,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 ;; 写配置与 elisp 时比正则 font-lock 精确。
 (setopt elisp-fontify-semantically t)
 
-(use-package csharp-mode
-  :mode ("\\.cs\\'" "\\.csx\\'" "\\.cake\\'")
-  :defer t)
+(add-to-list 'auto-mode-alist '("\\.cs\\'" . csharp-ts-mode))
 
 (defun custom/pdf-open (file)
   "选择并打开 PDF FILE。"
@@ -3001,12 +3011,12 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 
 + 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
 + 项目全文搜索主入口是 =project-find-regexp=(xref 集成,后端 ripgrep,结果走 *xref* / *grep* buffer,支持 Emacs 31 内置 `grep-edit`)
-+ =project-switch-commands= = Dired / project-find-file / project-find-regexp
-+ Emacs 31 的命令项格式为 =(COMMAND LABEL &optional KEY)= ，显式键避免依赖 =project-prefix-map= 的间接查找。
++ =project-switch-commands= 带标签菜单(d/f/r/a):切换项目后弹菜单,=a= 入口对项目根执行任意全局命令(=project-any-command=,功能上覆盖整个 =C-x p= 键表;upstream 中带标签菜单与 =project-switch-use-entire-map= 的裸键提示互斥,故不启用后者)
++ =project-prune-zombie-projects= alist:已删除的项目根在 prompt / 首次读取 / 写回三处自动从已知列表清除(daemon 长驻下列表自洁)
 + =project-find-file= : 项目内快速文件搜索( =custom/find-file-in-project= )
 + ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
 + 项目前缀 =C-x p= 在本域末尾绑定(功能内聚)
-+ 项目切换清空当前 frame 的 tab-line( =project-after-switch-project-functions= ,见 [[#tab-line][Tab-line]])
++ 项目切换清空当前 frame 的 tab-line( advice =project-switch-project= :after,见 [[#tab-line][Tab-line]])
 
 #+begin_src emacs-lisp
 (defun custom/project-root-or-default ()
@@ -3036,12 +3046,23 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
     (when dir
       (dired dir))))
 
-;; switch-commands 控制 project-switch-project 后的默认动作;更细粒度的 C-x p
-;; 入口在 [[#keybindings][前缀键体系]] 注册,这里只设默认。
+;; switch-commands 用带标签菜单(d/f/r 沿用原三项,a 为任意全局命令入口)。
+;; 注意 upstream 约束:use-entire-map=t 时提示退化为裸键列表(project--keymap-prompt),
+;; 与带标签菜单互斥;a 入口的 project-any-command 可执行任意全局命令,
+;; 功能上覆盖整个键表,故不设 use-entire-map。
+;; 更细粒度的 C-x p 直达键见下方与 [[#keybindings][前缀键体系]]。
 (setq project-switch-commands
       '((project-dired "打开目录" ?d)
         (custom/find-file-in-project "寻找文件" ?f)
-        (project-find-regexp "查找关键字" ?r)))
+        (project-find-regexp "查找关键字" ?r)
+        (project-any-command "其他命令" ?a)))
+;; 已知项目根目录被删除后自动从项目列表清除。
+;; 取值是 alist (WHEN . PREDICATE)，WHEN ∈ {list-first-read,list-write,prompt,interactively}；
+;; 设为 t 会在 (alist-get …) 时报 Wrong type argument: listp, t。
+(setq project-prune-zombie-projects
+      '((prompt . project-prune-zombies-default)
+        (list-first-read . project-prune-zombies-default)
+        (list-write . project-prune-zombies-default)))
 
 ;; ibuffer 用内置 predicate filter 按 project.el 已知根目录分组。
 (with-eval-after-load 'ibuffer
@@ -3082,10 +3103,13 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 (with-eval-after-load 'dired
   (define-key dired-mode-map [mouse-2] #'dired-mouse-find-file))
 
-;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原 projectile-after-switch-project-hook)。
+;; 项目切换时清空当前 frame 的 tab-line 标签列表(等价原
+;; projectile-after-switch-project-hook)。project.el 没有切换后钩子,
+;; 改用 advice 挂在 project-switch-project 之后;回调的 (&rest _) 签名
+;; 恰好兼容 advice 转发的 (dir) 参数。
 (with-eval-after-load 'project
-  (add-hook 'project-after-switch-project-functions
-            #'custom--tabs-on-project-switch))
+  (advice-add #'project-switch-project :after
+              #'custom--tabs-on-project-switch))
 #+end_src
 
 项目前缀 =C-x p= 与 =project.el= 同源,在下方 src-block 直接绑定。
@@ -3098,6 +3122,10 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 (custom/bind "C-x p O" #'custom/open-directory "目录浏览" "项目")
 (custom/bind "C-x p k" #'project-kill-buffers "关闭项目缓冲区" "项目")
 (custom/bind "C-x p D" #'project-dired "项目根 Dired" "项目")
+;; Emacs 30/31 新命令:m 在相似文件树的项目(git worktree)间跳到对应 buffer,
+;; S 只保存当前项目的 buffer。
+(custom/bind "C-x p m" #'project-find-matching-buffer "worktree 对应缓冲区" "项目")
+(custom/bind "C-x p S" #'project-save-some-buffers "保存本项目缓冲区" "项目")
 #+end_src
 
 ** 左侧 Dired 面板
@@ -3689,7 +3717,7 @@ agenote CLI 集成的知识库 CRUD。
 :CUSTOM_ID: keys-completion
 :END:
 
-前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + vertico 生态补全 7 件套(vertico / orderless / marginalia / prescient / consult / embark / cape,见 [[#completion]])与内置 completion-preview。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + vertico 生态补全 6 件套(vertico / orderless / marginalia / consult / embark / cape,见 [[#completion]])与内置 completion-preview。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
 
 所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
 
@@ -3918,7 +3946,7 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
 :CUSTOM_ID: completion
 :END:
 
-Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表) / orderless(空格分隔模糊匹配) / marginalia(候选注解) / prescient(历史频率排序) / consult(搜索导航命令族) / embark(上下文动作) / cape(补全后端扩展);in-region 补全用内置 ~completion-preview-mode~ (ghost-text 预览,比弹出菜单更轻量)。全部为纯 Lisp,daemon 启动期同步加载,首个 client 的第一次 =M-x= 即具备完整补全体验。
+Minibuffer 补全采用 vertico 生态 6 件套:vertico(minibuffer 候选列表) / orderless(空格分隔模糊匹配) / marginalia(候选注解) / consult(搜索导航命令族) / embark(上下文动作) / cape(补全后端扩展);in-region 补全用内置 ~completion-preview-mode~ (ghost-text 预览,比弹出菜单更轻量)。全部为纯 Lisp,daemon 启动期同步加载,首个 client 的第一次 =M-x= 即具备完整补全体验。
 
 + 直接复用启动域的 aspell/hunspell 路径缓存、savehist 历史与 [[#frame][Frame 生命周期]]
 + ef-themes 内置全部补全包 face 适配,无需手动定义补全相关 face
@@ -3932,6 +3960,7 @@ Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表)
 
 ~vertico~ - minibuffer 候选纵向列表
 + 候选直接显示在 minibuffer 内,输入实时过滤;vertico-cycle 让 C-n/C-p 循环导航。
++ 默认排序 =vertico-sort-history-length-alpha= :按 savehist minibuffer 历史 + 时间衰减 + 长度字母序,近期输入过的候选排前。
 + ~vertico-directory~ 让文件补全的 RET 进入目录、DEL 返回上级目录。
 
 ~orderless~ - 空格分隔多模式模糊匹配
@@ -3940,10 +3969,6 @@ Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表)
 
 ~marginalia~ - 候选右侧注解
 + 命令显示 docstring、变量显示值、文件显示大小与权限,与 vertico 同屏。
-
-~prescient~ - 历史与频率排序
-+ 过滤交给 orderless,排序经 =vertico-sort-override-function= 接入,减少两层过滤语义重叠。
-+ ~prescient-persist-mode~ 把候选选择历史持久化到 =var/= ,与 savehist(记录 minibuffer 输入)互补。
 
 #+begin_src emacs-lisp
 ;; vertico:minibuffer 候选纵向列表。TTY frame 同样工作(无 childframe)。
@@ -3978,18 +4003,6 @@ Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表)
   :config
   (marginalia-mode 1))
 
-;; prescient:按使用历史与频率排序,过滤交由 orderless。
-(use-package prescient
-  :demand t
-  :config
-  (setq prescient-save-file
-        (no-littering-expand-var-file-name "prescient-save.el"))
-  ;; Guix 无 vertico-prescient 包(旧配置引用它从未加载成功)。vertico 原生的
-  ;; 排序覆盖入口等价实现其「只排序、不过滤」的接线:覆盖各 category 的
-  ;; display-sort-function,候选顺序与 minibuffer 历史/频率一致。
-  (setq vertico-sort-override-function #'prescient-completion-sort)
-  (prescient-persist-mode 1))
-
 ;; completion-preview(Emacs 30 内置):打字时 ghost-text 行内补全预览,
 ;; 与 vertico(minibuffer 层)互补,capf 后端(eglot LSP / cape)全部复用。
 ;; TAB 接受候选,M-n/M-p 循环候选,M-i 补全公共前缀(再按弹 *Completions*);
@@ -4000,9 +4013,6 @@ Minibuffer 补全采用 vertico 生态 7 件套:vertico(minibuffer 候选列表)
   :demand t
   :config
   (global-completion-preview-mode 1)
-  ;; 排序与 vertico 一致(prescient 频率优先),两层补全体验统一;
-  ;; 候选集合有 metadata 排序时(如 eglot)上游优先用之,此处仅兜底。
-  (setq completion-preview-sort-function #'prescient-completion-sort)
   (define-key completion-preview-active-mode-map (kbd "M-n")
               #'completion-preview-next-candidate)
   (define-key completion-preview-active-mode-map (kbd "M-p")
