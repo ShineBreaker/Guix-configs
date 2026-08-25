@@ -1642,6 +1642,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "gcc-toolchain"
    "gradle"
    "make"
+   "node-gyp-build"
 
    ;; AI Agent
    "ai-usagebar-bin"
@@ -1864,7 +1865,6 @@ end
                              "emacs-vertico"
                              "emacs-orderless"
                              "emacs-marginalia"
-                             "emacs-prescient"
                              "emacs-consult"
                              "emacs-embark"
                              "emacs-cape"
@@ -1881,7 +1881,6 @@ end
                              "emacs-arei"
                              "emacs-fish-mode"
                              "emacs-fish-completion"
-                             "emacs-csharp-mode"
                              "emacs-gdscript-mode"
                              "emacs-kdl-mode"
                              "emacs-kotlin-mode"
@@ -1900,7 +1899,6 @@ end
                              ;; Org Mode 生态
                              "emacs-deft"
                              "emacs-olivetti"
-                             "emacs-org"
                              "emacs-org-appear"
                              "emacs-org-modern"
                              "emacs-org-modern-indent"
@@ -2277,6 +2275,7 @@ end
 *** 计时器服务
 目前的计时器任务如下：
 + 每周六 18:00 自动更新 flatpak 用户安装的软件包，仅在使用外接电源时执行（避免电池下大下载）。
++ 每周日 19:30 清理 Nix 用户 profiles 中 30 天前的旧 generation 并回收 store（在 18:00 的 guix-gc 之后错峰执行）。
 
 #+NAME: timer-services
 #+begin_src scheme
@@ -2293,7 +2292,17 @@ end
                                                 " && exec "
                                                 #$(file-append flatpak "/bin/flatpak")
                                                 " update --user -y"))
-                                       #:requirement '(dbus)))))
+                                       #:requirement '(dbus))
+
+                       (shepherd-timer '(nix-gc)
+                                       #~(calendar-event #:days-of-week '(sunday)
+                                                         #:hours '(19)
+                                                         #:minutes '(30))
+                                       ;; 必须用户身份跑：use-xdg-base-directories 下
+                                       ;; profiles 在 ~/.local/state/nix（root 侧为空），
+                                       ;; store 回收经 nix-daemon 以 root 执行
+                                       #~("/run/current-system/profile/bin/nix-collect-garbage"
+                                          "--delete-older-than" "30d")))))
 #+end_src
 
 *** dotfiles 管理相关服务
@@ -2447,9 +2456,6 @@ end
   ("PI_CONFIG_DIR" . ".config/omp") ; omp 会以 $HOME 作为根
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
-  ;; pi-agent
-  ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/pi")
-  ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/pi/sessions")
   ;; python
   ("PYTHON_HISTORY" . "$XDG_STATE_HOME/python/history")
   ;; reasonix
