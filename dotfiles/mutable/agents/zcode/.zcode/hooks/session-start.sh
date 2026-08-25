@@ -54,4 +54,13 @@ PH="$(jq -r '.path_hints | if length>0 then "📝 路径提示（改后需对应
 HO="$(jq -r '.human_only_actions | if length>0 then "👤 仅人工操作（agent 不可执行）：\n" + ([.[] | "  " + .] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$HO" ]] && SUMMARY+=$'\n\n'"$HO"
 
+# ─── 全局上下文（~/.config/agents/context/*.md）─────────────────────────────
+# 与 omp global-context / crush context_paths 同源：跨 agent 共享的工作规则。
+# 文件名前缀（01-、02-…）决定拼接顺序。
+CTX=""
+for f in "$HOME"/.config/agents/context/*.md; do
+  [[ -f $f ]] && CTX+="$(cat "$f")"$'\n\n'
+done
+[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.config/agents/context/*.md，与 omp / crush 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
+
 printf '{"additionalContext":%s}\n' "$(printf '%s' "$SUMMARY" | jq -Rs .)"
