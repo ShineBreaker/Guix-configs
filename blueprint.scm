@@ -1209,15 +1209,15 @@
 ;;; ---------- Nix 备用 ----------
 
 ;; blue nix —— 应用备用 Nix home-manager 配置（与 Guix 不互通，独立使用）。
+;; 通过 nh（nix helper）封装切换，自动处理备份与构建输出；flake 路径
+;; 通过位置参数传入，配置名显式指定为 Guix（flake.nix: homeConfigurations.Guix）。
 (define-command (nix-command arguments)
   ((invoke "nix")
    (category 'nix)
    (synopsis "应用备用 Nix home-manager 配置"))
-  (%run `(,(string-append %home-dir "/.local/state/nix/profile/bin/home-manager")
-          "switch" "-b" "backup"
-          "--flake" ,(string-append %nix-dir "/#Guix")
-          "--extra-experimental-features" "nix-command"
-          "--extra-experimental-features" "flakes")))
+  (%run `("nh" "home" "switch" ,%nix-dir
+          "--configuration" "Guix"
+          "--backup-extension" "backup")))
 
 ;; blue nix-init —— 初始化 Nix channel 并安装 home-manager（首次用）。
 (define-command (nix-init-command arguments)
