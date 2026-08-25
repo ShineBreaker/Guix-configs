@@ -105,6 +105,22 @@ layer-rule {
   place-within-backdrop true
 }
 
+layer-rule {
+  match namespace="^kitty-quick-access"
+
+  background-effect {
+    xray false
+  }
+
+  shadow {
+    on
+    softness 16
+    spread 0.6
+    offset x=0 y=0
+    draw-behind-window false
+  }
+}
+
 switch-events {
   lid-close { spawn "niri" "msg" "action" "power-off-monitors"; }
   lid-open  { spawn "niri" "msg" "action" "power-on-monitors"; }
