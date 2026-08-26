@@ -743,7 +743,8 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
-(let* ([trusted-wifi-connections
+(let* ([nmcli-bin (file-append network-manager "/bin/nmcli")]
+       [trusted-wifi-connections
         (local-file
          "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age")]
        [dispatcher-template
@@ -839,7 +840,8 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                (provision '(hotspot-profile-safety))
                                (requirement '(NetworkManager))
                                (start #~(lambda _
-                                          (zero? (system* "nmcli" "connection" "modify"
+                                          (zero? (system* #$nmcli-bin
+                                                          "connection" "modify"
                                                           "auto-hotspot"
                                                           "connection.interface-name" "uap0"
                                                           "connection.autoconnect" "no"
@@ -863,7 +865,8 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                                    "add" "uap0" "type" "__ap")))
                                                (let loop ([attempts 20])
                                                  (cond
-                                                  [(zero? (system* "nmcli" "-t" "-g"
+                                                  [(zero? (system* #$nmcli-bin
+                                                                   "-t" "-g"
                                                                    "GENERAL.STATE" "device"
                                                                    "show" "uap0")) #t]
                                                   [(zero? attempts) #f]
@@ -886,10 +889,12 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                (provision '(auto-hotspot))
                                (requirement '(wifi-ap-interface))
                                (start #~(lambda _
-                                          (zero? (system* "nmcli" "connection" "up"
+                                          (zero? (system* #$nmcli-bin
+                                                          "connection" "up"
                                                           "auto-hotspot" "ifname" "uap0"))))
                                (stop #~(lambda _
-                                         (zero? (system* "nmcli" "connection" "down"
+                                         (zero? (system* #$nmcli-bin
+                                                         "connection" "down"
                                                          "auto-hotspot"))))
                                (one-shot? #t)
                                (auto-start? #t)
