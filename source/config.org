@@ -750,12 +750,13 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
         (local-file "nm-dispatcher-trusted-connection")]
        ;; NM 每次连接都把 WiFi 省电重置为默认开启，dispatcher 在 up 事件
        ;; 补救的方式实测不可靠（NM 默认启用省电覆盖了它）。改为 [connection]
-       ;; 段默认 wifi.powersave=1（禁用）：连接时永远 off（低延迟，远程
-       ;; 操控优先）；电池时由 udev ac-power 规则在插拔瞬间切 on（省电）。
-       ;; 代价：电池期间新建连接不省电，直到下次插拔循环纠正。
+       ;; 段默认 wifi.powersave：连接时恒不省电（低延迟，远程操控优先）；
+       ;; 电池时由 udev ac-power 规则在插拔瞬间切 on（省电）。
+       ;; 注意 [connection] 段的枚举与 profile 属性不同：
+       ;; 0=NM默认 1=ignore(NM不碰) 2=disable省电 3=enable省电。
        [nm-powersave-conf
         (plain-file "wifi-powersave.conf"
-                    "[connection]\nwifi.powersave=1\n")]
+                    "[connection]\nwifi.powersave=2\n")]
        [dispatcher-script
         (computed-file
          "nm-dispatcher-trusted-connection"
