@@ -714,7 +714,7 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 
 硬件确认：Intel Meteor Lake CNVi 支持 =managed + AP= 并发（同信道）。
 
-系统服务用 =iw= 创建 =uap0= ，NetworkManager 只管理该已存在的 AP 接口；profile 名称本身不会创建虚拟无线接口。两个接口共享同一 radio，AP 必须与客户端使用同一信道。服务启动时会幂等迁移已有的热点 profile（保留现有 SSID 和密钥），并在创建 =uap0= 之前关闭 NetworkManager 自动激活。NetworkManager 对新建 netdev 的感知是异步的， =wifi-ap-interface= 创建 =uap0= 后会轮询等待其出现在 nmcli 中（最多 20 秒）再交给后续服务拉起热点。
+系统服务用 =iw= 创建 =uap0= ，必须 =type managed= 而非 =__ap= ：NM 初始化 wifi 设备时让 wpa_supplicant 抓接口，AP 类型接口抓取失败后 NM 会 giving up，设备永久 =unavailable= ；managed 接口正常初始化，NM 激活 AP profile 时自行切换接口模式。NetworkManager 只管理该已存在的接口；profile 名称本身不会创建虚拟无线接口。两个接口共享同一 radio，AP 必须与客户端使用同一信道。服务启动时会幂等迁移已有的热点 profile（保留现有 SSID 和密钥），并在创建 =uap0= 之前关闭 NetworkManager 自动激活。NetworkManager 对新建 netdev 的感知是异步的， =wifi-ap-interface= 创建 =uap0= 后会轮询等待其出现在 nmcli 中（最多 20 秒）再交给后续服务拉起热点。
 
 也可在部署前手动执行同一命令预检：
 #+begin_src bash
@@ -862,7 +862,7 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                                    "dev" "uap0" "info"))
                                                    (zero? (system* #$(file-append iw "/sbin/iw")
                                                                    "dev" "wlp0s20f3" "interface"
-                                                                   "add" "uap0" "type" "__ap")))
+                                                                   "add" "uap0" "type" "managed")))
                                                (let loop ([attempts 20])
                                                  (cond
                                                   [(zero? (system* #$nmcli-bin
