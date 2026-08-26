@@ -1,6 +1,14 @@
 {
   "_comment": "全局 agent 防护规则（跨所有 workspace 的通用约束，与仓库无关）。仓库专属规则（blue/guix/channel.lock/tmp/dotfiles/source 等）在各 <root>/.agents/anchors.json。代码底层（sudo 恒冻、rm 防护、git 写操作限制、~/.config·~/.local 部署位置保护）在各 hook 脚本硬编、恒定生效。本文件承载可配置的数据驱动规则，meta-frozen：agent 禁止通过 write/edit 修改它，调整须人工编辑源文件后 blue home。",
-  "frozen_commands": ["sudo"],
+  "frozen_commands": [
+    "sudo",
+    "guix install",
+    "guix package -i",
+    "guix package --install",
+    "nix-env -i",
+    "nix-env --install",
+    "nix profile install"
+  ],
   "frozen_paths": [],
   "frozen_globs": [],
   "interactive_commands": [
