@@ -74,6 +74,7 @@
     ("SYSTEM/Guix/@etc/guix"               "/etc/guix")
     ("SYSTEM/Guix/@etc/libvirt"            "/etc/libvirt")
     ("SYSTEM/Guix/@etc/NetworkManager"     "/etc/NetworkManager")
+    ("SYSTEM/Guix/@etc/ssh"                "/etc/ssh")
 
     ("DATA/Flatpak"                        "/var/lib/flatpak")
     ("DATA/Home/Guix"                      "/home")
