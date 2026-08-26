@@ -50,7 +50,17 @@ case "${1:-help}" in
   add)
     [ $# -ge 2 ] || die "用法: askill add <owner/repo> [-s <skill>[,<skill>...]] [-l 只列出不安装]"
     shift
-    npx_skills add "$@" -a universal --copy -y
+    # npx skills 的 -s 不支持逗号多值（会报 No matching skills found），展开为重复 -s
+    args=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -s) IFS=',' read -ra _names <<< "$2"
+            for _n in "${_names[@]}"; do args+=(-s "$_n"); done
+            shift 2 ;;
+        *)  args+=("$1"); shift ;;
+      esac
+    done
+    npx_skills add "${args[@]}" -a universal --copy -y
     sync_from_staging
     echo "完成。锁已更新（mutable 直链），git diff 审查后提交以冻结版本。"
     ;;
