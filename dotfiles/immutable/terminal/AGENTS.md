@@ -57,6 +57,7 @@ terminal/
     │   └── config.toml
     ├── kitty/
     │   ├── kitty.conf
+    │   ├── quake.session
     │   └── quick-access-terminal.conf
     ├── tmux/
     │   ├── scripts/

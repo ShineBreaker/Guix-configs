@@ -1,0 +1,10 @@
+# quick-access-terminal 初始会话：两个标签页
+# 由 quick-access-terminal.conf 的 kitty_override startup_session 引用
+# tmux/herdr 均为 attach-or-create 语义，关闭面板后会话在服务端持久
+
+new_tab Quake·tmux
+# 对齐 99-selector.fish 的侧栏三步：确保会话存在 → session 级 opt-in → follow → 纯 attach
+launch sh -c 'tmux has-session -t Quake 2>/dev/null || tmux new-session -d -s Quake; tmux set-option -t Quake @sidebar_visible 1; ~/.config/tmux/scripts/sidebar-toggle follow >/dev/null 2>&1; exec tmux attach-session -t Quake'
+
+new_tab Quake·herdr
+launch herdr --session Quake
