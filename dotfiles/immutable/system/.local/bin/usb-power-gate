@@ -1,7 +1,7 @@
 #!/bin/sh
 # usb-power-gate —— 熄屏空闲时挂起非白名单 USB 设备，唤醒时全部恢复。
 #
-# 由 hypridle 调用：
+# 由 usb-power-watch（背光信号轮询守护）调用：
 #   usb-power-gate suspend   空闲超时：把非白名单设备的 power/control 置 auto
 #   usb-power-gate resume    恢复：全部置回 on
 #
@@ -18,28 +18,41 @@
 mode="${1:-resume}"
 
 excluded() {
-    dev=$1
+    name=$1
     for iface in /sys/bus/usb/devices/*:*; do
         case "${iface##*/}" in
-            "$dev":*) ;;
+            "$name":*) ;;
             *) continue ;;
         esac
         # 网卡：接口下有 net/ 子目录
-        set -- "$iface"/net/*; [ -e "$1" ] && return 0
-        # HID 输入
+        [ -d "$iface/net" ] && return 0
+        # HID 输入：input/ 直挂（usbhid）或经 HID 层（0003:VID:PID.* 目录）
         set -- "$iface"/input/*; [ -e "$1" ] && return 0
-        # 蓝牙
+        set -- "$iface"/0003:*; [ -e "$1" ] && return 0
+        # 蓝牙：接口下有 bluetooth/ 子目录或 btusb 驱动
+        [ -d "$iface/bluetooth" ] && return 0
         case "$(readlink "$iface/driver" 2>/dev/null)" in *btusb*) return 0 ;; esac
     done
     return 1
 }
 
-for dev in /sys/bus/usb/devices/*-*; do
-    case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
-    [ -f "$dev/power/control" ] || continue
-    if [ "$mode" = suspend ]; then
-        excluded "${dev##*/}" || echo auto > "$dev/power/control" 2>/dev/null
-    else
-        echo on > "$dev/power/control" 2>/dev/null
-    fi
-done
+# resume 只恢复自己挂起过的设备：驱动默认即 auto 的设备（如摄像头）
+# 不被顺手写成 on，避免夺走其原有省电。
+state_file="${XDG_RUNTIME_DIR:-/tmp}/usb-power-gate.suspended"
+
+if [ "$mode" = suspend ]; then
+    : > "$state_file"
+    for dev in /sys/bus/usb/devices/*-*; do
+        case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
+        [ -f "$dev/power/control" ] || continue
+        if ! excluded "${dev##*/}"; then
+            echo auto > "$dev/power/control" 2>/dev/null && echo "${dev##*/}" >> "$state_file"
+        fi
+    done
+else
+    [ -f "$state_file" ] || exit 0
+    while IFS= read -r name; do
+        [ -n "$name" ] && echo on > "/sys/bus/usb/devices/$name/power/control" 2>/dev/null
+    done < "$state_file"
+    : > "$state_file"
+fi
