@@ -458,8 +458,14 @@
           (%guix `(,subsystem "build" ,scm "--dry-run")))
         (begin
           (format #t "正在应用 ~a 配置~%" subsystem)
+          ;; --no-kexec：reconfigure 默认 kexec-load 新内核，此后 elogind 的
+          ;; reboot 会走 kexec 路径并挂死（action_in_progress 卡住，后续一切
+          ;; 电源操作被 OperationInProgress 静默拒绝）。home 不认此选项。
           (%guix `(,subsystem "reconfigure" ,scm
-                              "--allow-downgrades" "--fallback")
+                              "--allow-downgrades" "--fallback"
+                              ,@(if (string=? subsystem "system")
+                                    '("--no-kexec")
+                                    '()))
                  #:sudo? sudo?)
           (false-if-exception (delete-file-recursively %tmp-dir)))))
   (when after (after)))
