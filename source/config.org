@@ -856,9 +856,9 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                (provision '(wifi-ap-interface))
                                (requirement '(hotspot-profile-safety iw-reg-cn))
                                (start #~(lambda _
-                                          (and (or (zero? (system* #$(file-append iw "/bin/iw")
+                                          (and (or (zero? (system* #$(file-append iw "/sbin/iw")
                                                                    "dev" "uap0" "info"))
-                                                   (zero? (system* #$(file-append iw "/bin/iw")
+                                                   (zero? (system* #$(file-append iw "/sbin/iw")
                                                                    "dev" "wlp0s20f3" "interface"
                                                                    "add" "uap0" "type" "__ap")))
                                                (let loop ([attempts 20])
@@ -870,9 +870,9 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                   [else (sleep 1)
                                                         (loop (1- attempts))])))))
                                (stop #~(lambda _
-                                         (if (zero? (system* #$(file-append iw "/bin/iw")
+                                         (if (zero? (system* #$(file-append iw "/sbin/iw")
                                                              "dev" "uap0" "info"))
-                                             (zero? (system* #$(file-append iw "/bin/iw")
+                                             (zero? (system* #$(file-append iw "/sbin/iw")
                                                              "dev" "uap0" "del"))
                                              #t)))
                                (one-shot? #t)
@@ -901,7 +901,7 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                (provision '(iw-reg-cn))
                                (requirement '(user-processes))
                                (start #~(lambda _
-                                          (zero? (system* #$(file-append iw "/bin/iw")
+                                          (zero? (system* #$(file-append iw "/sbin/iw")
                                                           "reg" "set" "CN"))))
                                (stop #~(lambda _ #t))
                                (one-shot? #t)
@@ -1099,7 +1099,7 @@ store 路径在宿主侧算好后经 =#\$= 注入 gexp——gexp 内不能裸调
 #+begin_src scheme
 (let* ([ppdctl (file-append (spec->pkg "power-profiles-daemon")
                             "/bin/powerprofilesctl")]
-       [iw-bin (file-append (spec->pkg "iw") "/bin/iw")]
+       [iw-bin (file-append (spec->pkg "iw") "/sbin/iw")]
 
        [ac-power-script
         (program-file
