@@ -4369,8 +4369,8 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
          "书签" "跳转书签 (C-x r b)"
          (lambda (&rest _) (call-interactively #'bookmark-jump)))
    (list (nerd-icons-octicon "nf-oct-book" :height 1.2 :v-adjust -0.05)
-         "知识库" "打开 Inbox (C-c o k I)"
-         (lambda (&rest _) (call-interactively #'agenote-knowledge-open-inbox)))
+         "知识库" "知识库总览 (RET 打开卡片)"
+         (lambda (&rest _) (call-interactively #'agenote-knowledge-browse-human)))
    (list (nerd-icons-octicon "nf-oct-question" :height 1.2 :v-adjust -0.05)
          "快捷键" "快捷键帮助 (F1 ?)"
          (lambda (&rest _) (call-interactively #'custom/show-help)))))
