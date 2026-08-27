@@ -4345,6 +4345,8 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
+标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:待办区置顶,标题左缘补齐条目缩进、右缘按板块最宽行贴快捷键提示,经 advice 挂接而不复制上游渲染逻辑。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
+
 #+begin_src emacs-lisp
 (defun custom/dashboard-initial-buffer ()
   "emacsclient 无文件参数时显示 dashboard。
@@ -4354,20 +4356,103 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。"
   (dashboard-open))
 
 (defun custom/dashboard--nav-buttons ()
-  "Dashboard navigator 一行四个二级入口(icon title help action)。"
+  "Dashboard navigator 一行四个二级入口(icon title help action)。
+action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
   (list
    (list (nerd-icons-octicon "nf-oct-clock" :height 1.2 :v-adjust -0.05)
          "计时" "开始计时 (C-c o c i)"
-         (lambda (_widget) (call-interactively #'org-clock-in)))
+         (lambda (&rest _) (call-interactively #'org-clock-in)))
    (list (nerd-icons-octicon "nf-oct-bookmark" :height 1.2 :v-adjust -0.05)
          "书签" "跳转书签 (C-x r b)"
-         (lambda (_widget) (call-interactively #'bookmark-jump)))
+         (lambda (&rest _) (call-interactively #'bookmark-jump)))
    (list (nerd-icons-octicon "nf-oct-book" :height 1.2 :v-adjust -0.05)
          "知识库" "打开 Inbox (C-c o k I)"
-         (lambda (_widget) (call-interactively #'agenote-knowledge-open-inbox)))
+         (lambda (&rest _) (call-interactively #'agenote-knowledge-open-inbox)))
    (list (nerd-icons-octicon "nf-oct-question" :height 1.2 :v-adjust -0.05)
          "快捷键" "快捷键帮助 (F1 ?)"
-         (lambda (_widget) (call-interactively #'custom/show-help)))))
+         (lambda (&rest _) (call-interactively #'custom/show-help)))))
+
+;; 标题行右缘的快捷键提示,按 dashboard-items 声明顺序位置映射
+;; (GUI 下行首 icon 字符无法用文本匹配可靠定位,位置映射最稳)。
+(defconst custom:dashboard-heading-keys
+  '("C-c o a" "C-x C-r" "C-x p p")
+  "各标题行右缘显示的快捷键,顺序与 `dashboard-items' 一致。")
+
+(defun custom/dashboard--decorate-headings (&rest _)
+  "渲染后把标题行与板块边界对齐并附快捷键。
+标题行左补 4 空格对齐条目缩进,行尾按板块最宽条目行补空格后右贴
+`custom:dashboard-heading-keys' 对应键位。
+
+定位走 heading overlay(`dashboard-heading' face)而非
+`dashboard--section-starts':渲染末尾的 page-separator 替换会使后者的
+绝对位置漂移。经 advice 挂在 `dashboard-insert-startupify-lists' 之后,
+每次整 buffer 重画后在干净 buffer 上运行,天然幂等。"
+  (with-current-buffer (get-buffer dashboard-buffer-name)
+    (let* ((ovs (sort
+                 (cl-remove-if-not
+                  (lambda (ov)
+                    (and (eq (overlay-get ov 'face) 'dashboard-heading)
+                         ;; 重渲染后旧 overlay 塌缩成空壳仍残留,剔除
+                         (> (overlay-end ov) (overlay-start ov))))
+                  (overlays-in (point-min) (point-max)))
+                 (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+           (icon-w (if (and (dashboard-display-icons-p)
+                            dashboard-set-heading-icons)
+                       2 0))
+           (inhibit-read-only t))
+      ;; 位置配对后倒序处理:前面的 insert 会使后面 heading 的 buffer
+      ;; 位置失效,从最后一个往回插则互不影响。
+      (cl-loop
+       for (ov . key) in (reverse (cl-mapcar #'cons ovs
+                                             custom:dashboard-heading-keys))
+       for line-start = (save-excursion
+                          (goto-char (overlay-start ov))
+                          (line-beginning-position))
+       ;; 板块边界 = 标题行后第一个空行(page-separator 为 "\n\n")
+       for end = (save-excursion
+                   (goto-char line-start)
+                   (forward-line 1)
+                   (while (and (< (point) (point-max))
+                               (not (string-empty-p
+                                     (buffer-substring-no-properties
+                                      (line-beginning-position)
+                                      (line-end-position)))))
+                     (forward-line 1))
+                   (line-end-position))
+       when key
+       do (let* ((name (or (overlay-get ov 'display)
+                           (buffer-substring-no-properties
+                            (overlay-start ov) (overlay-end ov))))
+                 (used (+ 4 2 icon-w (string-width name)))
+                 (width 0))
+            (save-excursion
+              ;; 板块宽 = 条目区最大行宽(标题行不计入)
+              (goto-char line-start)
+              (forward-line 1)
+              (while (< (point) end)
+                (setq width (max width
+                                 (string-width
+                                  (buffer-substring-no-properties
+                                   (line-beginning-position)
+                                   (line-end-position)))))
+                (forward-line 1))
+              (goto-char line-start)
+              ;; heading overlay 是 front-advance:TTY 无 icon 时其起点恰在
+              ;; 行首,行首插入的缩进会被吞进 overlay(display 替换后消失)。
+              ;; 记住原文本范围,插入后把 overlay 拨回。
+              (let ((off-s (- (overlay-start ov) line-start))
+                    (off-e (- (overlay-end ov) line-start))
+                    ;; 插入的缩进必须继承行首的 line-prefix(center-content
+                    ;; 的 align-to 缩进),否则标题行脱离板块整体缩进。
+                    (prefix (get-text-property line-start 'line-prefix)))
+                (insert (propertize "    " 'line-prefix prefix))
+                (move-overlay ov (+ line-start 4 off-s)
+                              (+ line-start 4 off-e)))
+              (goto-char (line-end-position))
+              (insert (concat
+                       (make-string
+                        (max 1 (- width used (string-width key))) ?\s)
+                       (propertize key 'face 'font-lock-comment-face)))))))))
 
 (setq initial-buffer-choice #'custom/dashboard-initial-buffer)
 
@@ -4375,22 +4460,31 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。"
   :demand t
   :config
   (require 'nerd-icons)
-  (setq dashboard-center-content t
+  ;; 两个 icon 变量的默认值都在库加载时求值(那时 set-heading-icons 尚未
+  ;; 设置,icon-type 默认恒 nil,heading-icons 的 pcase 落空),必须显式指定,
+  ;; 否则 heading icon 静默缺失或报 icon-not-found。
+  (setq dashboard-icon-type 'nerd-icons
+        dashboard-heading-icons '((recents . "nf-oct-history")
+                                  (agenda . "nf-oct-calendar")
+                                  (projects . "nf-oct-rocket"))
+        dashboard-center-content t
         dashboard-startup-banner 'logo
         dashboard-set-heading-icons t
         dashboard-set-navigator t
         dashboard-show-shortcuts nil
-        dashboard-items '((recents . 6) (projects . 6) (agenda . 5))
+        dashboard-items '((agenda . 5) (recents . 6) (projects . 6))
         dashboard-projects-backend 'project-el
         dashboard-week-agenda nil
         dashboard-filter-agenda-entry #'dashboard-filter-agenda-by-todo
         dashboard-agenda-sort-strategy '(time-up)
-        dashboard-agenda-prefix-format " %i %s "
+        dashboard-agenda-prefix-format "%i %s"
         dashboard-agenda-release-buffers t
-        dashboard-item-names '(("Recent Files:" . "最近文件")
-                               ("Projects:" . "项目")
-                               ("Agenda for today:" . "待办"))
-        dashboard-navigator-buttons (list (custom/dashboard--nav-buttons))))
+        dashboard-item-names '(("Agenda for today:" . "待办")
+                               ("Recent Files:" . "最近文件")
+                               ("Projects:" . "项目"))
+        dashboard-navigator-buttons (list (custom/dashboard--nav-buttons)))
+  (advice-add 'dashboard-insert-startupify-lists :after
+              #'custom/dashboard--decorate-headings))
 #+end_src
 
 ** 实验性与待确认
