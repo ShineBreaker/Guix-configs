@@ -72,7 +72,7 @@ scripts/configctl locate appearance/tab-line-core
 | 5    | `projects`        | project.el、目录与项目导航                    | `terminal`、`git-display`     |
 | 6    | `org-knowledge`   | Org、Roam、Knowledge、agenote                 | `bootstrap`、`process-helper` |
 | 7    | `keys-completion` | 前缀声明、跨域基础键、vertico 补全栈          | 前述交互命令、frame 生命周期  |
-| 8    | `system-tools`    | daemon 预热、Dashboard、版本兼容              | 前述全部；Dashboard 必须最后  |
+| 8    | `system-tools`    | daemon 预热、Dashboard、版本兼容              | 前述全部                      |
 
 ```text
 startup -> appearance -> editing -> programming -> projects
@@ -95,12 +95,12 @@ startup -> appearance -> editing -> programming -> projects
 | Org / Knowledge / agenote | `org-core`, `knowledge`                                       | `bootstrap`, `process-helper`        |
 | 键位 / 补全               | 功能键随其功能域；跨域基础键 `keybindings`；补全 `completion` | 对应命令必须先定义                   |
 | 翻译数据                  | `data/which-key-zh.el`, `data/context-menu-zh.el`             | `appearance/i18n-data`               |
-| Dashboard                 | `dashboard`                                                   | knowledge、help、color-scheme、frame |
+| Dashboard                 | `dashboard`                                                   | 无强依赖（emacs-dashboard 插件自治） |
 | 版本兜底                  | `compatibility`                                               | noweb 展开到真实使用点               |
 
 ### 键位归属规则
 
-键位默认跟随其功能实现所在的域（_功能内聚_ 原则），不再集中到 `keybindings` 块。`custom/bind` 内部通过 `custom--pending-wk-descs` 暂存 which-key 描述、延迟到 `with-eval-after-load 'which-key` flush；Dashboard 通过扫描 `custom:binding-spec` 生成——二者均与代码物理位置无关。
+键位默认跟随其功能实现所在的域（_功能内聚_ 原则），不再集中到 `keybindings` 块。`custom/bind` 内部通过 `custom--pending-wk-descs` 暂存 which-key 描述、延迟到 `with-eval-after-load 'which-key` flush；帮助分组由扫描 `custom:binding-spec` 生成——均与代码物理位置无关。
 
 | 前缀 / 键类                                      | 归属域 / ID                                                 | 说明                                     |
 | ------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------- |
@@ -113,7 +113,7 @@ startup -> appearance -> editing -> programming -> projects
 | markdown 等局部键                                | 对应 major mode 的 `use-package` 所在域                     | `custom/bind-local` 紧跟 mode 声明       |
 | 无前缀 IDE 直达键（`C-` / `M-` / `F-`）          | `keys-completion` / `global-keys`                           | 跨多域基础操作，保留为基础键位域         |
 | `C-x` `M-s` `C-c w` `C-c h` 跨域键               | `keys-completion` / `keybindings`                           | 引用命令跨多个功能域，无单一归属         |
-| 11 个前缀声明（`custom/declare-binding-prefix`） | `keys-completion` / `keybindings`                           | Dashboard 前缀摘要的唯一声明源，必须集中 |
+| 11 个前缀声明（`custom/declare-binding-group`） | `keys-completion` / `keybindings`                           | Which-key 顶层前缀的唯一声明源，必须集中 |
 
 ## 3. 标准修改流程
 
@@ -170,7 +170,7 @@ prose 解释本方面行为，与代码相邻。
 - 私有函数使用 `custom/...--...`；不要添加顺序加载用的 `defvar nil` 注入点。
 - 同一符号不得重复 `defun`、`defvar` 或 `defconst`。
 - agenote 同步/异步调用统一走 `custom/agenote-call` 和 `custom/agenote-call-async`，每次显式传 domain。
-- 全局键使用 `custom/bind`，局部键使用 `custom/bind-local`，前缀声明使用 `custom/declare-binding-prefix`，保持键位、Which-key、帮助和 Dashboard 同源。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有 11 个前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
+- 全局键使用 `custom/bind`，局部键使用 `custom/bind-local`，前缀声明使用 `custom/declare-binding-group`，保持键位、Which-key 和帮助同源。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有 11 个前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
 - display 初始化注册到 `custom/add-frame-created-hook`；依赖 client 最终 buffer 的行为注册到 `custom/add-server-ready-hook`。
 - `add-hook` / `run-with-idle-timer` / `run-at-time` 的回调必须用命名函数（`#'custom/...`），不得用匿名 lambda；需要忽略 hook 参数或适配参数元数时，定义专门的 `custom--...-on-<event>` 回调（如 `custom--tabs-on-project-switch`）。回调定义放在所属功能域，且必须在 hook 注册之前。
 - 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
@@ -216,11 +216,11 @@ prose 解释本方面行为，与代码相邻。
 - 只用一次的小函数直接内联到调用方；零转发 wrapper（函数体仅原样调用另一函数）禁止保留，调用方直接用被包装者。
 - 内置命令直接绑定，不包「`(interactive)` + `call-interactively`」转发层；跳转类键位直接绑 `xref-*` 等内置命令。
 - 同构命令用工厂宏统一生成（如 `custom/git--define-file-command` / `custom/git--define-repo-command`），不逐个手写；宏生成的命令名仍遵守 `custom/` 命名规范。
-- 同构渲染 / 数据逻辑提取参数化 helper 收敛（如 `custom/dashboard--render-item-list` 统一列表卡片渲染），重复分支与重复计算合并。
+- 同构渲染 / 数据逻辑提取参数化 helper 收敛（如 `custom/dashboard--nav-buttons` 统一 navigator 按钮构造），重复分支与重复计算合并。
 - 优先用内置 `seq` / `subr-x` / `cl-lib` 函数替代手写 lambda（如 `seq-some #'fn`）。
 - 删除符号时必须同步清理全部引用点：`data/*.el` 翻译数据、prose、docstring、`custom:pulse-commands` 等列表，不留失效引用。
 - 全局绑定的命令必须已定义（或为 keymap）；新增绑定前先确认命令存在，加载后若命令缺失会报 `void-function`。
-- 惰性加载包的数据函数要显式 `(require '…)`（如 dashboard 计时卡片先 `require 'org-clock` 再调 `org-clock-sum-today`），不要用 `fboundp` 缺席降级到假数据（0h 0m）。
+- 惰性加载包的数据函数要显式 `(require '…)`（如 dashboard 渲染 agenda 前先 `require 'org-agenda`），不要用 `fboundp` 缺席降级到假数据（0h 0m）。
 - 模仿既有同类时先核对取值域：调用点全部使用固定前缀/固定状态时，分发逻辑不留「其他情况」兜底分支。
 
 ### 4.3 守卫与防御公约
@@ -263,8 +263,8 @@ daemon 启动慢可以接受，但不能把工作推迟到首个 client 或高�
 
 - 交互 UI 不等待外部 CLI。使用 `make-process`、缓存和 stale-while-revalidate；旧数据可以立即展示，后台刷新完成后再增加 generation 并重绘。
 - process 成功、失败、signal 和同步启动异常都必须清理 stdout/stderr buffer、timer 和全局 process 引用。
-- Dashboard buffer、owner、rendered width/generation 和 tab 列表必须 per-frame 隔离；数据 generation 可以全局共享。删除 frame 时同步释放所有权和 buffer。
-- `server-after-make-frame-hook` 早于最终文件切换。Dashboard 只能在下一事件循环判定 placeholder，绝不能覆盖 `emacsclient FILE`、with-editor 或已分窗的 client。
+- Dashboard 是全局单 `*dashboard*` buffer 的 emacs-dashboard 插件（1.8.0，接受多 frame 共享的已知取舍）；渲染入口收敛于 `initial-buffer-choice #'custom/dashboard-initial-buffer`——仅在 client 无文件参数时显示，天然不覆盖 `emacsclient FILE`。不要为它重建 per-frame 状态机或 placeholder 判定。
+- navigator/自定义 section 的数据形状必须以实装源码为准（`dashboard-item-generators`、navigator 外层是「行」内层是「按钮」），不凭 README 记忆写结构；改后必须真机渲染验证而不是只跑静态检查。
 - 连续 resize/theme/data 变化必须合并刷新，避免每个事件立即完整重渲染。
 
 ### 5.4 正确性边界
@@ -325,9 +325,10 @@ test ! -e lisp
 涉及上述域时，用唯一命名 daemon 验证（agent 自行起 daemon + client，验证后清理）：
 
 - 预热 feature、主题、D-Bus、缓存和兼容状态在 server ready 前已就绪。
-- 两个 client frame 的 Dashboard/tab 状态互不污染。
+- Dashboard 渲染出中文 section 与 navigator 按钮行（`M-x dashboard-open` 可强刷重排）。
 - `emacsclient FILE` 保持文件 buffer，不被 Dashboard 覆盖。
 - GUI 与 TTY 分支按 frame 生效。
+- 测试前确认无残留 daemon 进程与 stale socket（`pgrep -x emacs`），否则旧实例的 socket 会吞掉连接造成假象。
 - 测试 daemon、socket、process buffer 和临时文件全部清理。
 
 ### 7.5 包清单同步

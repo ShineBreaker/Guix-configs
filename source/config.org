@@ -1692,6 +1692,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "gradle"
    "make"
    "node-gyp-build"
+   "pkg-config"
 
    ;; AI Agent
    "ai-usagebar-bin"
@@ -1746,7 +1747,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
    ;; 社交
    "notmuch"
-   "telegram-desktop"
+   ; "telegram-desktop"
 
    ;; 生产力工具
    "agenote"
@@ -1896,6 +1897,7 @@ end
                              "emacs-next-pgtk:doc"
 
                              ;; 界面与外观
+                             "emacs-dashboard"
                              "emacs-doom-modeline"
                              "emacs-ef-themes"
                              "emacs-nerd-icons"

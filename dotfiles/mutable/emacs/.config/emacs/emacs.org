@@ -41,9 +41,9 @@
 + =add-hook= / timer / 异步回调一律用命名函数，不用匿名 lambda。
 
 *** 键位约定
-+ 全局 =custom/bind= 、局部 =custom/bind-local= 、前缀声明 =custom/declare-binding-prefix= 。
++ 全局 =custom/bind= 、局部 =custom/bind-local= 、前缀声明 =custom/declare-binding-group= 。
 + 跨域基础键（=C-x= / =M-s= / =C-c w= / =C-c h=）和无前缀 IDE 直达键集中在 [[#keys-completion]]，其余键位跟随功能域。
-+ Which-key 描述、帮助分组、Dashboard 摘要三者同源，均从 =custom:binding-spec= 生成。
++ Which-key 描述、帮助分组二者同源，均从 =custom:binding-spec= 生成。
 
 *** Noweb 分片约定
 + 标题层级是代码组织的唯一轴: =**= 模块内,每个 =***= 方面子节通过 drawer 声明一个 ref——  =:header-args:emacs-lisp: :noweb-ref <domain/aspect> :tangle no :noweb-sep "\n\n"= ,块头裸写 =#+begin_src emacs-lisp= 。必须用语言专属 =:header-args:emacs-lisp:= (普通 =:header-args:= 会被文件级语言设置覆盖,导致产物重复)。
@@ -238,7 +238,7 @@ daemon/client 架构下的两阶段 frame 生命周期：created 只处理 displ
 :CUSTOM_ID: key-helper
 :END:
 
-=custom:binding-spec= 是本地键位、Which-key、帮助与 Dashboard 的唯一声明源。每条声明在绑定真实 keymap 的同时登记描述；第三方既有 keymap 的翻译继续留在 =data/which-key-zh.el= 。
+=custom:binding-spec= 是本地键位、Which-key 与帮助的唯一声明源。每条声明在绑定真实 keymap 的同时登记描述；第三方既有 keymap 的翻译继续留在 =data/which-key-zh.el= 。
 
 #+begin_src emacs-lisp
 (defvar custom:binding-spec nil
@@ -272,7 +272,7 @@ daemon/client 架构下的两阶段 frame 生命周期：created 只处理 displ
 
 (defun custom/bind (key target description group &rest properties)
   "声明并绑定全局 KEY 到 TARGET。
-DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使用。"
+DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
   (let ((entry (append (list :key key
                              :command target
                              :description description
@@ -299,10 +299,6 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使
         (custom/binding--register-which-key key description mode)))
     entry))
 
-(defun custom/declare-binding-prefix (key description)
-  "声明 Dashboard 展示的前缀 KEY。"
-  (custom/bind key nil description nil :prefix t :dashboard t))
-
 (defun custom/declare-binding-group (key description)
   "声明 Which-key 展示的中间分组 KEY。"
   (custom/bind key nil description nil :prefix t))
@@ -312,14 +308,6 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使
   (dolist (entry (nreverse custom--pending-wk-descs))
     (which-key-add-key-based-replacements (car entry) (cdr entry)))
   (setq custom--pending-wk-descs nil))
-
-(defun custom/binding-dashboard-bindings ()
-  "从 binding spec 生成 Dashboard 前缀摘要。"
-  (mapcar
-   (lambda (entry)
-     (cons (plist-get entry :key) (plist-get entry :description)))
-   (seq-filter (lambda (entry) (plist-get entry :dashboard))
-               custom:binding-spec)))
 
 (defun custom/binding-help-sections ()
   "从 binding spec 生成帮助分组。"
@@ -358,7 +346,7 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key、帮助和 Dashboard 使
 (startup-redirect-eln-cache
  (expand-file-name "var/eln-cache/" user-emacs-directory))
 
-;; agenote 知识库集成（适配层 + knowledge + health + dashboard 数据 + 键位 map）。
+;; agenote 知识库集成（适配层 + knowledge + health + 键位 map）。
 ;; 独立 elisp 包，随 agenote 程序仓库发行。路径常量对齐本仓库的 org 根目录。
 (use-package agenote
   :ensure nil
@@ -485,7 +473,7 @@ GCMH + 智能垃圾回收管理 (启动后接管 GC)
 :CUSTOM_ID: appearance
 :END:
 
-所有 display-dependent 的视觉配置:主题、字体、窗口分割、面板布局、mode-line、tab-line、dashboard、帮助系统、右键菜单与 which-key 中文化。
+所有 display-dependent 的视觉配置:主题、字体、窗口分割、面板布局、mode-line、tab-line、帮助系统、右键菜单与 which-key 中文化。
 
 display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 frame 创建时触发(见 *主题与字体* )。
 
@@ -609,7 +597,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 :CUSTOM_ID: help
 :END:
 
-维护完整快捷键参考与 Dashboard 复用的精简入口。
+维护完整快捷键参考。
 
 *** 帮助数据
 :PROPERTIES:
@@ -617,7 +605,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 :header-args:emacs-lisp: :noweb-ref appearance/help-data :tangle no :noweb-sep "\n\n"
 :END:
 
-键位、Which-key 描述、帮助分组和 Dashboard 摘要统一由 [[#keybindings][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections= 与 =custom/binding-dashboard-bindings=)。本节只剩帮助页引言文字(=custom:help-introduction=)和外置到 [[file:data/help-zh.el][data/help-zh.el]] 的非键位说明;键位相关的描述不再外置。
+键位、Which-key 描述和帮助分组统一由 [[#keybindings][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections=)。本节只剩帮助页引言文字(=custom:help-introduction=)和外置到 [[file:data/help-zh.el][data/help-zh.el]] 的非键位说明;键位相关的描述不再外置。
 
 #+begin_src emacs-lisp
 (defface custom-help-section-title
@@ -1911,7 +1899,7 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 
 + =custom/color-scheme-init= 注册 D-Bus 监听器,深浅色变化时自动 =ef-themes-select= 对应主题
 + 通过 [[#frame][Frame 生命周期]] 在新 frame 创建时应用当前色彩状态
-+ 导出 =custom/register-buffer-refresh!= / =custom/register-theme-refresh!= 供 Dashboard 使用
++ 导出 =custom/register-theme-refresh!= 供其他功能模块注册刷新回调
 
 *** 状态与主题应用
 :PROPERTIES:
@@ -2143,7 +2131,7 @@ MODE 为 'light 或 'dark。
 :header-args:emacs-lisp: :noweb-ref appearance/color-scheme-refresh :tangle no :noweb-sep "\n\n"
 :END:
 
-本配置只拥有 Ef 主题;颜色通过 face 继承或 Ef palette API 获取,不在刷新函数里硬编码 RGB,也不依赖 Modus palette。主题切换后的级联刷新通过 =custom/theme-refresh-functions= 列表(各功能模块用 =custom/register-theme-refresh!= 幂等注册)统一驱动,见 [[#dashboard][Dashboard]] 的边框 bar face 更新。
+本配置只拥有 Ef 主题;颜色通过 face 继承或 Ef palette API 获取,不在刷新函数里硬编码 RGB,也不依赖 Modus palette。主题切换后的级联刷新通过 =custom/theme-refresh-functions= 列表(各功能模块用 =custom/register-theme-refresh!= 幂等注册)统一驱动。
 
 #+begin_src emacs-lisp
 (defvar custom/theme-refresh-functions nil
@@ -2164,30 +2152,6 @@ MODE 为 'light 或 'dark。
        (message "[color-scheme] theme-refresh %S failed: %S"
                 fn (error-message-string err))))))
 
-(defvar custom/theme-buffer-refreshers nil
-  "Alist of (MAJOR-MODE . REFRESH-FN) pairs。")
-
-(defun custom/register-buffer-refresh! (mode refresh-fn)
-  "为 MAJOR-MODE 注册主题切换后的 buffer 重渲染函数 REFRESH-FN。幂等。"
-  (if-let* ((entry (assq mode custom/theme-buffer-refreshers)))
-      (setcdr entry refresh-fn)
-    (push (cons mode refresh-fn) custom/theme-buffer-refreshers)))
-
-(defun custom/color-scheme-refresh-registered-buffers ()
-  "重新渲染所有可见窗口中已注册 mode 的缓冲区。"
-  (dolist (frame (frame-list))
-    (dolist (window (window-list frame 'no-minibuf))
-      (let ((refresher (with-current-buffer (window-buffer window)
-                         (cdr (assq major-mode custom/theme-buffer-refreshers)))))
-        (when refresher
-          (condition-case err
-              (with-selected-window window
-                (funcall refresher))
-            (error
-             (message "[color-scheme] buffer-refresh failed: %S"
-                      (error-message-string err)))))))))
-
-(custom/register-theme-refresh! #'custom/color-scheme-refresh-registered-buffers)
 (custom/register-theme-refresh! #'custom/refresh-terminal-faces)
 (add-hook 'ef-themes-after-load-theme-hook #'custom/run-theme-refresh)
 (custom/run-theme-refresh)
@@ -3722,7 +3686,6 @@ agenote CLI 集成的知识库 CRUD。
 所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
 
 + =custom/bind= 内部通过 =custom--pending-wk-descs= 暂存 which-key 描述,延迟到 =with-eval-after-load 'which-key= 统一 flush;因此应用键位散落到此域(晚于 keys-completion)不影响描述注册。
-+ Dashboard 通过 =custom/binding-dashboard-bindings= 扫描 =custom:binding-spec= 生成,与代码物理位置无关。
 
 ** Which-key 本体与辅助包
 :PROPERTIES:
@@ -3840,9 +3803,9 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 :CUSTOM_ID: keybindings
 :END:
 
-Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键位。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾),不在此处集中。
+Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能域的基础键位。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾),不在此处集中。
 
-+ *前缀声明* :: =custom/declare-binding-prefix= 是 Dashboard 前缀摘要的唯一来源,必须集中。前缀下具体绑定随其功能域。
++ *前缀声明* :: =custom/declare-binding-group= 声明 Which-key 展示的前缀 KEY,必须集中。前缀下具体绑定随其功能域。
 + *=C-x*= / *=M-s*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 帮助),无单一归属,集中在本块。
 + *=C-c w*= :: 窗口与面板体系: =f= / =t= / =a= 复用各功能域的打开命令(左侧 Dired / 底部 ghostel / 右侧 agent-shell), =T= 为三面板布局总开关, =u= / =r= 兑现 winner 手动绑定(见 [[#which-key-runtime]] 的 =winner-dont-bind-my-keys= 说明);方向键 / =x= / =o= / =c= / =s= 为 Emacs 31 内置的布局变换与 frame 拆合命令族。
 
@@ -3859,7 +3822,7 @@ Dashboard 前缀摘要的唯一声明源 + 真正跨多个功能域的基础键�
            ("C-c o" . "Org 与知识库")
            ("C-c h" . "帮助")
            ("C-c w" . "窗口与面板")))
-  (custom/declare-binding-prefix (car prefix) (cdr prefix)))
+  (custom/declare-binding-group (car prefix) (cdr prefix)))
 
 (custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x B" #'ibuffer "缓冲区列表" "文件 / 缓冲区 / 标签")
@@ -4362,7 +4325,6 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
             (push (cons feature "未找到 feature") failed))
         (error
          (push (cons feature (error-message-string err)) failed))))
-    (custom/dashboard-prime-caches)
     (garbage-collect)
     (when failed
       (message "[custom-config] daemon 预热失败: %S" (nreverse failed)))
@@ -4374,1488 +4336,61 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 :CUSTOM_ID: dashboard
 :END:
 
-启动仪表盘:集成待办列表、文件管理器、前缀键概览和鼠标工作流提示。
+启动仪表盘,基于第三方 =dashboard= 包(1.8.0)的 doom 风格定制:待办(Agenda)、最近文件、项目三个高频区 + 一行 navigator 二级入口按钮(计时/书签/知识库/快捷键帮助)。
 
-Dashboard 不依赖第三方 =dashboard= 包:自建 =custom/dashboard-mode= (derived from =special-mode=) + 纯函数渲染引擎。普通内容基于 =string-width= 列模型；固定 banner 字符集按单终端单元计数，规避 TTY CJK 宽度表与终端实际渲染不一致。Dashboard 依赖知识库、帮助、颜色方案和 frame 接口,因此固定在最后一个配置域加载。同产物内的跨域调用不加守卫(文档顺序与运行时顺序保证已定义);仅对延迟加载的第三方包函数保留 =fboundp=。
+加载模型依赖两个机制而非自建状态机:
 
-+ Dashboard 调用的跨域函数:
-  - =agenote-knowledge-list-cards= / =agenote-knowledge-show-card= (知识库卡片,走 agenote CLI JSON,见 [[#knowledge-ownership][职责归属]])
-  - =custom/binding-dashboard-bindings= (快捷键卡片)
-  - =custom/register-buffer-refresh!= (主题切换刷新)
-  - =custom/add-server-ready-hook= (daemon/client frame 生命周期)
+- =initial-buffer-choice= 指向 =custom/dashboard-initial-buffer= ——仅当 client 无文件参数时才渲染,=emacsclient FILE= 天然不被覆盖。
+- 全局单 =*dashboard*= buffer 由插件维护(多 frame 共享;GUI/TTY 宽窄差异混开时已知有错位取舍,接受)。窗口尺寸变化后用 =M-x dashboard-open= 重排。
 
-+ 每个 client frame 持有独立 dashboard buffer；frame 参数关联所有权，删除 frame 时同步清理，宽度与渲染代数互不污染。
-+ daemon 启动阶段同步预热初始缓存；知识库缓存过期后以 stale-while-revalidate 异步更新，UI 不等待 agenote CLI。
-
-*** 六层架构
-
-#+attr_org: :width 70
-| 层   | noweb ref                  | 职责                                       | 副作用       |
-|------+----------------------------+--------------------------------------------+--------------|
-| 核心 | =system/dashboard-core=      | face 定义、buffer 常量、TTL 缓存原语       | face         |
-| 测量 | =system/dashboard-measure=   | 列模型:measure / pad / truncate            | 纯函数       |
-| 注册 | =system/dashboard-registry=  | 布局声明 + 卡片 spec 注册表 + tier 判定    | 纯函数       |
-| 引擎 | =system/dashboard-engine=    | 三态卡片 + 错误隔离 + 响应式拼接           | 纯函数       |
-| 卡片 | =system/dashboard-cards=     | 7 张卡片 fetch/render + IO/计算            | IO           |
-| 生命 | =system/dashboard-lifecycle= | mode、render、frame 状态机、防抖、主题刷新 | 唯一副作用层 |
-
-设计要点:
-
-- 卡片契约: =fetch= 无参 → =(:ok DATA)|(:error MSG)|loading= 三态; =render (DATA WIDTH)= 是纯函数返回行列表,行宽 ≤ WIDTH。空 / 加载中 / 错误 三态可区分,杜绝"假空状态"。
-- 错误隔离: 单张卡片任何异常被引擎包成错误卡片,绝不拖垮整页。
-- 测量层: 普通内容基于 =string-width= 列模型；固定 banner 字符集按字符数计算实际终端单元(见 [[测量层][测量层章节]])。
-- 零临时 buffer: 卡片渲染器是纯函数,拼接是字符串操作,消除了旧实现每刷新 6 次 =generate-new-buffer= 的开销,且每张卡片可独立测试。
-- 宽度显式传参: 删除旧的 =--forced-width= / =--override-margin= 动态绑定,宽度沿调用链显式传递。
-
-*** 核心定义
-:PROPERTIES:
-:CUSTOM_ID: dashboard-core
-:header-args:emacs-lisp: :noweb-ref system/dashboard-core :tangle no :noweb-sep "\n\n"
-:END:
+Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
 #+begin_src emacs-lisp
-
-(require 'calendar)
-
-(defconst custom:dashboard-buffer-name "*dashboard*"
-  "Dashboard buffer 名称前缀。")
-
-(defvar custom/dashboard--frame-sequence 0
-  "用于生成 per-frame dashboard buffer 名称的递增序号。")
-
-(defvar custom/dashboard--generation 0
-  "Dashboard 数据失效代数；缓存变化时递增。")
-
-(defvar-local custom/dashboard--owner-frame nil
-  "当前 dashboard buffer 所属 frame。")
-
-(defvar-local custom/dashboard--rendered-width nil
-  "当前 dashboard buffer 上次渲染的窗口宽度。")
-
-(defvar-local custom/dashboard--rendered-generation -1
-  "当前 dashboard buffer 上次渲染的数据代数。")
-
-(defconst custom:dashboard-cache-ttl 60
-  "Dashboard 数据源缓存的有效期（秒）。
-超过此时间则视为过期，下次取用时重新计算。")
-
-(defconst custom:dashboard-dual-margin 4
-  "双列布局左右页面边距列数。")
-
-(defconst custom:dashboard-dual-gap 3
-  "双列布局左右卡片之间的间隔列数。")
-
-(defconst custom:dashboard-shortcuts-column-gap 4
-  "Dashboard 快捷键双列之间的固定间隔列数。")
-
-(defconst custom:dashboard-refresh-debounce 0.3
-  "window-size-change 触发 dashboard 重新渲染的 idle 延迟（秒）。
-连续窗口尺寸变化会被合并为一次刷新。")
-#+end_src
-
-常量与帧序号在此奠基，后续 face 与缓存均依赖于此。
-
-#+begin_src emacs-lisp
-(defface custom/dashboard-card-bar
-  '((t :inherit font-lock-comment-face :slant normal :weight normal))
-  "Dashboard 卡片边框（左竖线 `|' + 标题分隔线 `-'）的 face。
-边框用宽度恒为 1 列的 ASCII 字符画左框与标题下分隔线。该 face 只设前景、
-不设背景，无论中文/图标占几列、窗口多宽，左竖线永远在第 0 列对齐。继承
-`font-lock-comment-face' 让边框呈柔和灰调，主题切换自动适配。")
-
-(defface custom/dashboard-card-title
-  '((t :inherit font-lock-keyword-face :weight bold))
-  "Dashboard 卡片标题的 face。从 `font-lock-keyword-face' 继承强调色 + 加粗。")
-
-(defface custom/dashboard-todo-title
-  '((t :inherit font-lock-function-name-face))
-  "Dashboard TODO 标题的 face。状态、标题和日期各自独立上色。")
-
-(defface custom/dashboard-dim
-  '((t :inherit shadow))
-  "Dashboard 弱化信息的 face:快捷键提示、空状态、加载中。")
-
-(defface custom/dashboard-error
-  '((t :inherit error))
-  "Dashboard 错误卡片的 face:数据源加载失败时显示。")
-
-(defface custom/dashboard-item
-  '((t :inherit link :underline nil))
-  "Dashboard 可点击条目的 face。")
-#+end_src
-
-卡片边框与标题 face 继承主题语义，弱化与错误态各自独立。
-
-#+begin_src emacs-lisp
-(defvar custom/dashboard--todo-cache nil
-  "TODO 项缓存，结构为 (KEY TIME . DATA)，KEY 为 MAX-ITEMS。")
-
-(defvar custom/dashboard--knowledge-cache nil
-  "知识库条目缓存，结构为 (KEY TIME . DATA)，KEY 为 MAX-ITEMS。")
-
-(defvar custom/dashboard--projects-cache nil
-  "项目列表缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
-
-(defvar custom/dashboard--recents-cache nil
-  "最近文件缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
-
-(defvar custom/dashboard--bookmarks-cache nil
-  "书签名称缓存，结构为 (KEY TIME . DATA)，KEY 恒为 nil（无查询参数）。")
-
-(defvar custom/dashboard--knowledge-error nil
-  "最近一次异步知识库更新的错误信息。")
-
-(defvar custom/dashboard--knowledge-process nil
-  "当前异步知识库更新进程。")
-
-(defun custom/dashboard--cache-valid-p (cache key)
-  "判断 CACHE (KEY TIME . DATA) 是否对 KEY 在 TTL 内有效。"
-  (and (consp cache)
-       (eq (car cache) key)
-       (let ((time (cadr cache)))
-         (and time
-              (<= (float-time (time-since time))
-                  custom:dashboard-cache-ttl)))))
-
-(defun custom/dashboard--cached (cache-var key compute-fn)
-  "返回 CACHE-VAR 中 KEY 对应的缓存数据；失效则调用 COMPUTE-FN 重算并缓存。
-CACHE-VAR 是缓存变量符号，缓存结构统一为 (KEY TIME . DATA)。
-COMPUTE-FN 为无参函数或函数符号，返回要缓存的数据。"
-  (let ((cache (symbol-value cache-var)))
-    (if (custom/dashboard--cache-valid-p cache key)
-        (cddr cache)
-      (let ((data (funcall compute-fn)))
-        (set cache-var (cons key (cons (current-time) data)))
-        data))))
-
-(defun custom/dashboard-invalidate-cache ()
-  "清除 dashboard 所有数据源缓存，并标记下次刷新重算。
-可在 Org 保存、Magit 操作等改变底层数据后调用。"
-  (setq custom/dashboard--todo-cache nil
-        custom/dashboard--projects-cache nil
-        custom/dashboard--recents-cache nil
-        custom/dashboard--bookmarks-cache nil
-        custom/dashboard--knowledge-error nil)
-  (when custom/dashboard--knowledge-cache
-    (setcar (cdr custom/dashboard--knowledge-cache) nil))
-  (cl-incf custom/dashboard--generation))
-
-#+end_src
-*** 测量层
-:PROPERTIES:
-:CUSTOM_ID: dashboard-measure
-:header-args:emacs-lisp: :noweb-ref system/dashboard-measure :tangle no :noweb-sep "\n\n"
-:END:
-
-测量层统一用 =string-width= 列模型（而非 GUI 像素），保证 GUI / TTY / batch 下卡片布局一致；固定 banner 例外，按字符数计数以规避 TTY CJK 宽度表差异。具体取舍见 =custom/dashboard--measure= 的 docstring。
-
-返回 TEXT 的显示宽度（列数）:
-+ 普通 dashboard 内容基于 string-width ，GUI 与 TTY / batch 统一为列模型；固定 banner 字符画由 ~custom/dashboard--banner-art-width~ 单独度量。
-
-为何不用像素测量（ string-pixel-width ）：
-+ 原设计曾尝试 GUI 像素 + TTY 列双模，但 =string-pixel-width= 返回像素值，而卡片宽度算术（ =window-body-width= 列数减边距）、规则线（ =make-string= 按字符数）等全部以列为单位。两种单位混用导致标题无间距、规则线截断、banner 居中失效（见 commit 修复前的 GUI 截图）。
-+ 列模型下 =string-width= 对 Nerd Font PUA 图标算 1 列但字形可能占 2 列像素，存在至多 1 列的右栏平移误差（见重设计文档 §1 #9），但所有算术单位一致、布局不会串位。该 1 列误差属于字体度量边界，不影响卡片间的列模型约束。
-
-#+begin_src emacs-lisp
-
-(defun custom/dashboard--measure (text)
-  "返回 TEXT 的显示宽度（列数）。"
-  (string-width text))
-
-(defun custom/dashboard--fill (width)
-  "生成 WIDTH 列宽的 ASCII 空格填充。"
-  (make-string (max 0 width) ?\s))
-
-(defun custom/dashboard--pad-to (text width)
-  "把 TEXT 右填充到恰好 WIDTH 列（不足补空格，超出原样返回不截断）。"
-  (let ((slack (- width (custom/dashboard--measure text))))
-    (if (> slack 0)
-        (concat text (custom/dashboard--fill slack))
-      text)))
-
-(defun custom/dashboard--truncate (text width)
-  "截断 TEXT 到 WIDTH 列，超宽补 \"...\"。
-三个 ASCII 点宽度恒定（3 列），全局统一，避免 \"…\" 的宽度随字体漂移。"
-  (if (<= (custom/dashboard--measure text) width)
-      text
-    (truncate-string-to-width text width 0 nil "...")))
-
-(defun custom/dashboard--spread (left right width)
-  "LEFT 靠左、RIGHT 靠右，中间填充到恰好 WIDTH 列。"
-  (let ((gap (- width
-                (custom/dashboard--measure left)
-                (custom/dashboard--measure right))))
-    (concat left (custom/dashboard--fill (max 0 gap)) right)))
-
-#+end_src
-*** 布局声明与卡片注册表
-:PROPERTIES:
-:CUSTOM_ID: dashboard-registry
-:header-args:emacs-lisp: :noweb-ref system/dashboard-registry :tangle no :noweb-sep "\n\n"
-:END:
-
-布局变成数据: 调整卡片顺序 / 增删只动这份声明,引擎不变。每行 1 个 id = 全宽卡片, 2 个 id = 双列并排。
-
-#+begin_src emacs-lisp
-(defcustom custom:dashboard-layout
-  '((todo clock)
-    (recents projects)
-    (knowledge bookmarks)
-    (shortcuts))
-  "Dashboard 行布局声明。
-每行 1 个 id = 全宽卡片；2 个 id = 双列并排（宽度足够时）。改布局只动这份
-声明，引擎不变。id 必须在 `custom:dashboard-card-specs' 中已注册。"
-  :type '(repeat (repeat symbol)))
-
-(defcustom custom:dashboard-dual-breakpoint 110
-  "窗口正文宽度（列）低于此值时，双列布局降级为单列堆叠。
-与 modeline tier 的窄窗口降级哲学一致。"
-  :type 'integer)
-
-(defvar custom:dashboard-card-specs nil
-  "已注册的卡片 spec 列表。
-每个 spec 是 plist：:id / :title / :icon / :key / :accent / :size / :fetch / :render。
-  :fetch  无参函数 → (:ok DATA) | (:error MSG) | 符号 loading
-  :render (DATA WIDTH) → 行字符串列表（纯函数，每行 display-width ≤ WIDTH）
-  :size   条目数上限（传给 fetch）
-卡片 spec 由 `custom/dashboard-define-card' 注册，引擎通过
-`custom/dashboard--card-spec' 按 id 查找。")
-
-(defun custom/dashboard-define-card (id &rest spec)
-  "注册或更新 id 为 ID 的卡片 spec。
-SPEC 是 plist，关键字见 `custom:dashboard-card-specs'。幂等：重复注册同 id
-覆盖旧 spec。spec plist 的 :id 槽会被设为 ID。"
-  (plist-put spec :id id)
-  (let ((existing (custom/dashboard--card-spec id)))
-    (setq custom:dashboard-card-specs
-          (cons spec
-                (delq existing custom:dashboard-card-specs))))
-  spec)
-
-(defun custom/dashboard--card-spec (id)
-  "返回 id 为 ID 的卡片 spec，未注册时返回 nil。
-`custom:dashboard-card-specs' 是 spec plist 的列表，每个 plist 的 :id 槽
-持有其标识，故用 `cl-find' 按 :id 匹配而非 `assq'。"
-  (cl-find id custom:dashboard-card-specs :key (lambda (s) (plist-get s :id)) :test #'eq))
-
-(defun custom/dashboard--tier ()
-  "返回当前布局 tier：dual（宽窗口双列）或 single（窄窗口单列）。"
-  (if (>= (window-body-width) custom:dashboard-dual-breakpoint)
-      'dual
-    'single))
-
-#+end_src
-*** 渲染引擎
-:PROPERTIES:
-:CUSTOM_ID: dashboard-engine
-:header-args:emacs-lisp: :noweb-ref system/dashboard-engine :tangle no :noweb-sep "\n\n"
-:END:
-
-引擎统一包边框（左竖线 + 标题 + 规则线）、三态降级与错误隔离,卡片渲染器无需重复处理这些。单张卡片任何异常被隔离为错误卡片(见 A2 修复),绝不拖垮整页。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--bar ()
-  "返回左竖线字符（带边框 face）。宽度恒为 1 列。"
-  (propertize "|" 'face 'custom/dashboard-card-bar))
-
-(defun custom/dashboard--rule (body-width)
-  "返回标题下分隔线（body-width 列的 `-'，带边框 face）。
-列模型下 `-' 的 char-width 恒为 1，make-string N 个 `-' 的视觉宽 == N 列，
-恰好等于内容区；像素模式下 `-' 同样可控。规则线右端无需对齐（边框设计本就
-无右边缘），所以按列铺满已足够。"
-  (propertize (make-string (max 0 body-width) ?-)
-              'face 'custom/dashboard-card-bar))
-#+end_src
-
-单卡片在此完成边框包裹与三态隔离，异常被收敛为错误行。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--card-lines (spec width)
-  "把 SPEC 渲染成 WIDTH 宽的完整卡片行列表（含边框/标题/规则线/正文）。
-单个卡片的任何异常（fetch 抛错、render 抛错）都被隔离为错误卡片，
-不影响同排其他卡片。返回行字符串列表，行间不含空行（空行由布局层加）。"
-  (let* ((body-width (max 0 (- width 2)))
-         (bar (custom/dashboard--bar))
-         (state (condition-case err
-                    (funcall (plist-get spec :fetch))
-                  (error `(:error ,(error-message-string err)))))
-         (body
-          (pcase state
-            (`(:ok ,data)
-             (condition-case err
-                 (or (funcall (plist-get spec :render) data body-width)
-                     (list ""))
-               (error
-                (list (propertize (format "渲染失败：%s"
-                                          (error-message-string err))
-                                  'face 'custom/dashboard-error)))))
-            (`(:error ,msg)
-             (list (propertize (format "󰙦 暂不可用：%s" msg)
-                               'face 'custom/dashboard-error)
-                   (propertize "按 g 重试"
-                               'face 'custom/dashboard-dim)))
-            ('loading
-             (list (propertize "... 加载中"
-                               'face 'custom/dashboard-dim)))
-            (_ (list ""))))
-         (icon (propertize (or (plist-get spec :icon) "")
-                           'face (or (plist-get spec :accent)
-                                     'custom/dashboard-card-title)))
-         (title-text (propertize (or (plist-get spec :title) "")
-                                 'face 'custom/dashboard-card-title))
-         (key-text (propertize (or (plist-get spec :key) "")
-                               'face 'custom/dashboard-dim))
-         (title-line (custom/dashboard--spread
-                      (if (string-empty-p icon)
-                          title-text
-                        (concat icon " " title-text))
-                      key-text
-                      body-width))
-         (rule (custom/dashboard--rule body-width)))
-    (append
-     (list bar)
-     (list (concat bar " " title-line))
-     (list (concat bar rule))
-     (mapcar (lambda (line)
-               (let ((trimmed (custom/dashboard--truncate line body-width)))
-                 (concat bar " " trimmed)))
-             body)
-     (list bar))))
-#+end_src
-
-行级拼接处理双列等高与单列降级，空行由外层统一插入。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--render-row (card-ids total-width)
-  "渲染一行（1 或 2 张卡片），返回行字符串列表。
-2 张卡片时等高拼接：短卡片补带左竖线的空延续行；右列不补尾部填充，
-消除行尾空白。"
-  (pcase (length card-ids)
-    (1 (custom/dashboard--card-lines
-        (custom/dashboard--card-spec (car card-ids)) total-width))
-    (2 (let* ((left-spec (custom/dashboard--card-spec (nth 0 card-ids)))
-              (right-spec (custom/dashboard--card-spec (nth 1 card-ids)))
-              (gap custom:dashboard-dual-gap)
-              (left-w (max 1 (/ (- total-width gap) 2)))
-              (right-w (max 1 (- total-width gap left-w)))
-              (left-lines (custom/dashboard--card-lines left-spec left-w))
-              (right-lines (custom/dashboard--card-lines right-spec right-w))
-              (height (max (length left-lines) (length right-lines)))
-              (empty-left (custom/dashboard--pad-to (custom/dashboard--bar) left-w))
-              (empty-right (custom/dashboard--bar)))
-         (cl-loop for i below height collect
-                  (concat
-                   (custom/dashboard--pad-to
-                    (or (nth i left-lines) empty-left) left-w)
-                   (custom/dashboard--fill gap)
-                   (or (nth i right-lines) empty-right)))))))
-
-(defun custom/dashboard--build-lines (width)
-  "按当前 tier 展开布局，返回完整行字符串列表。
-tier=single 时双列行拆成两个全宽卡片堆叠（响应式降级）；
-tier=dual 时按 `custom:dashboard-layout' 原样。卡片间插入空行。"
-  (let* ((rows (if (eq (custom/dashboard--tier) 'dual)
-                   custom:dashboard-layout
-                 (mapcar #'list (apply #'append custom:dashboard-layout))))
-         (content-width (max 1 (- width (* 2 custom:dashboard-dual-margin))))
-         (all-lines nil))
-    (dolist (row rows)
-      (let ((row-lines (custom/dashboard--render-row row content-width)))
-        (dolist (l row-lines)
-          (push l all-lines))
-        (push "" all-lines)))
-    (nreverse all-lines)))
-#+end_src
-*** 卡片实现
-:PROPERTIES:
-:CUSTOM_ID: dashboard-cards
-:header-args:emacs-lisp: :noweb-ref system/dashboard-cards :tangle no :noweb-sep "\n\n"
-:END:
-
-7 张卡片按 =fetch → (:ok|:error|loading)= + =render (DATA WIDTH) → lines= 协议实现。TTL 缓存三件套(todo/knowledge/projects)原样保留,只改外层协议包装。
-
-按钮构造: 所有可点击项用 =custom/dashboard--button= 生成带局部 keymap 的字符串,RET/mouse-1 调用回调。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--apply-fixed-pitch ()
-  "强制 dashboard buffer 使用固定宽度的默认 face。"
-  (setq-local face-remapping-alist
-              (cons '(default fixed-pitch)
-                    (assq-delete-all 'default face-remapping-alist)))
-  (setq-local truncate-lines t))
-
-(defun custom/dashboard--button (label action &optional help-format face)
-  "返回一个带局部 keymap 的字符串，RET/mouse-1 时调用 ACTION。
-ACTION 是无参函数或 interactive 命令符号。HELP-FORMAT 非 nil 时作为
-help-echo 格式串（含一个 %s 占位 LABEL），否则 help-echo 显示 LABEL 本身。
-FACE 非 nil 时覆盖默认的 `custom/dashboard-item'。"
-  (let ((btn (copy-sequence label))
-        (keymap (make-sparse-keymap)))
-    (define-key keymap (kbd "RET")
-                (lambda () (interactive) (funcall action)))
-    (define-key keymap [mouse-1]
-                (lambda () (interactive) (funcall action)))
-    (add-text-properties
-     0 (length btn)
-     (list 'keymap keymap
-           'face (or face 'custom/dashboard-item)
-           'mouse-face 'highlight
-           'help-echo (format (or help-format "%s") label))
-     btn)
-    btn))
-
-(defun custom/dashboard--command-button (label command)
-  "返回一个调用交互命令 COMMAND 的按钮字符串。
-用于 Dashboard 卡片底部「更多」跳转；RET/mouse-1 调用 COMMAND。"
-  (custom/dashboard--button label
-                            (lambda () (call-interactively command))
-                            (format "运行 %s" command)))
-
-(defun custom/dashboard--render-item-list (items width empty-text item-fn)
-  "把 ITEMS 渲染为 WIDTH 宽的按钮行列表;空列表显示弱化 EMPTY-TEXT。
-ITEM-FN 接收单个条目,返回 (DISPLAY ACTION HELP) 三元组:
-DISPLAY 为按钮文本(内部按列宽截断),ACTION 为点击回调,HELP 为提示。"
-  (if (null items)
-      (list (propertize empty-text 'face 'custom/dashboard-dim))
-    (mapcar
-     (lambda (item)
-       (pcase-let* ((`(,display ,action ,help) (funcall item-fn item))
-                    (prefix "  ")
-                    (w (max 0 (- width (custom/dashboard--measure prefix)))))
-         (concat prefix
-                 (custom/dashboard--button
-                  (custom/dashboard--truncate display w)
-                  action help))))
-     items)))
-
-(defun custom/dashboard--compact-path (path)
-  "将 PATH 中间目录压缩为首字母，首尾保留完整。
-隐藏目录（以 . 开头）取其第二个字符，避免 ~/./e 这种怪异的路径。"
-  (let* ((parts (split-string path "/" t))
-         (len (length parts)))
-    (if (<= len 3)
-        path
-      (let* ((head (car parts))
-             (file (car (last parts)))
-             (middle (cl-subseq parts 1 (1- len)))
-             (compressed (mapcar (lambda (d)
-                                   (cond ((string-empty-p d) d)
-                                         ((string-prefix-p "." d)
-                                          (if (> (length d) 1)
-                                              (concat "." (substring d 1 2))
-                                            d))
-                                         (t (substring d 0 1))))
-                                 middle)))
-        (concat head "/"
-                (mapconcat #'identity compressed "/")
-                "/" file)))))
-
-(defun custom/dashboard--abbreviate-path (path width)
-  "将 PATH 缩写以适应 WIDTH 列宽。
-先压缩中间目录为首字母，仍超宽则交给测量层 `--truncate' 截断加 \"...\"。
-注意：调用方需在 dashboard buffer 上下文内（命中 fixed-pitch remap）。"
-  (custom/dashboard--truncate (custom/dashboard--compact-path path) width))
-
-(defun custom/dashboard--todo-state-face (todo-state)
-  "返回 TODO-STATE 在 dashboard 待办卡片中使用的标签 face。"
-  (pcase todo-state
-    ("TODO" 'font-lock-warning-face)
-    ("NEXT" 'font-lock-type-face)
-    ("INPROGRESS" 'font-lock-constant-face)
-    ("WAITING" 'font-lock-comment-face)
-    ("DONE" 'success)
-    ("CANCELLED" 'shadow)
-    (_ 'font-lock-variable-name-face)))
-
-(defun custom/dashboard--todo-date-info (today-abs deadline-str scheduled-str
-                                                   deadline-abs scheduled-abs)
-  "返回 TODO 项的日期信息字符串，用于 dashboard 待办卡片。"
-  (cond
-   ((and deadline-abs (< deadline-abs today-abs))
-    (propertize (format "  󰥕 过期%d天" (- today-abs deadline-abs))
-                'face 'error))
-   ((and deadline-abs (= deadline-abs today-abs))
-    (propertize "  󰥕 今天截止" 'face 'error))
-   (deadline-str
-    (let ((diff (- deadline-abs today-abs)))
-      (propertize
-       (cond ((= diff 1) "  󰥕 明天截止")
-             ((<= diff 7) (format "  󰥕 %d天后截止" diff))
-             (t (format "  󰥕 %s"
-                        (substring deadline-str 1 11))))
-       'face (cond ((<= diff 1) 'error)
-                   ((<= diff 3) 'warning)
-                   ((<= diff 7) 'font-lock-variable-name-face)
-                   (t 'font-lock-keyword-face)))))
-   ((and scheduled-abs (< scheduled-abs today-abs))
-    (propertize (format "  󰔠 过期%d天" (- today-abs scheduled-abs))
-                'face 'error))
-   ((and scheduled-abs (= scheduled-abs today-abs))
-    (propertize (format "  󰔠 %s" (substring scheduled-str 1 11))
-                'face 'error))
-   (scheduled-str
-    (propertize (format "  󰔠 %s" (substring scheduled-str 1 11))
-                'face 'font-lock-keyword-face))
-   (t "")))
-
-(defun custom/dashboard--todo-urgency (today-abs deadline-abs scheduled-abs)
-  "返回 TODO 条目的紧急度排名(越小越紧急),用于排序。"
-  (cond
-   ((and deadline-abs (< deadline-abs today-abs)) 0)
-   ((and deadline-abs (= deadline-abs today-abs)) 1)
-   ((and scheduled-abs (< scheduled-abs today-abs)) 2)
-   (deadline-abs 3)
-   (scheduled-abs 4)
-   (t 5)))
-
-(defun custom/dashboard--compute-todo-items (max-items)
-  "实际扫描 `org-agenda-files' 计算未完成 TODO 项（无缓存）。
-每个条目记录 (STATE TITLE DATE-INFO FILE POS)，POS 为 heading 在 file 中的
-字符位置，用于点击跳转。
-
-`ask-user-about-supersession-threat' 是函数，用 `cl-letf' 绑定其
-`symbol-function'（而非 let 绑定变量——那是 dead binding，无法抑制磁盘变更
-询问）。fresh daemon 首次渲染的同步 `require' 由 fetch 层的 loading 态兜底。"
-  (require 'org-agenda)
-  (require 'org)
-  (let ((today-abs (calendar-absolute-from-gregorian (calendar-current-date)))
-        (scan-limit (* max-items 2))
-        (count 0)
-        raw-items)
-    (when (org-agenda-files)
-      (dolist (file (org-agenda-files))
-        (when (and (< count scan-limit) (file-exists-p file))
-          (let ((buf (cl-letf (((symbol-function 'ask-user-about-supersession-threat)
-                                (lambda (&rest _) nil)))
-                       (find-file-noselect file))))
-            (unwind-protect
-                (with-current-buffer buf
-                  (org-with-wide-buffer
-                   (goto-char (point-min))
-                   (while (and (< count scan-limit)
-                               (re-search-forward org-heading-regexp nil t))
-                     (let* ((heading-pos (match-beginning 0))
-                            (components (org-heading-components))
-                            (todo-state (nth 2 components))
-                            (title (nth 4 components))
-                            (scheduled (org-entry-get (point) "SCHEDULED"))
-                            (deadline (org-entry-get (point) "DEADLINE")))
-                       (when (and todo-state
-                                  (not (member todo-state '("DONE" "CANCELLED"))))
-                         (let ((deadline-abs (and deadline
-                                                  (org-time-string-to-absolute deadline)))
-                               (scheduled-abs (and scheduled
-                                                   (org-time-string-to-absolute scheduled))))
-                           (push (list (custom/dashboard--todo-urgency
-                                        today-abs deadline-abs scheduled-abs)
-                                       todo-state title deadline
-                                       scheduled deadline-abs scheduled-abs
-                                       file heading-pos)
-                                 raw-items)
-                           (setq count (1+ count)))))))))
-            (when (buffer-live-p buf)
-              (kill-buffer buf))))))
-    (setq raw-items
-          (sort raw-items
-                (lambda (a b)
-                  (or (< (car a) (car b))
-                      (and (= (car a) (car b))
-                           (and (nth 5 a) (nth 5 b)
-                                (< (nth 5 a) (nth 5 b))))))))
-    (let ((result nil)
-          (n 0))
-      (dolist (item raw-items)
-        (when (< n max-items)
-          (let* ((todo-state (nth 1 item))
-                 (title (nth 2 item))
-                 (deadline-str (nth 3 item))
-                 (scheduled-str (nth 4 item))
-                 (deadline-abs (nth 5 item))
-                 (scheduled-abs (nth 6 item))
-                 (file (nth 7 item))
-                 (pos (nth 8 item))
-                 (state-face (custom/dashboard--todo-state-face todo-state))
-                 (date-info (custom/dashboard--todo-date-info
-                             today-abs deadline-str scheduled-str
-                             deadline-abs scheduled-abs)))
-            (push (list (propertize (concat todo-state "  ") 'face state-face)
-                        (propertize title 'face 'custom/dashboard-todo-title)
-                        date-info
-                        file pos)
-                  result)
-            (setq n (1+ n)))))
-      (nreverse result))))
-#+end_src
-
-待办项的扫描与 urgency 排序在此完成，结果经 TTL 缓存复用。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--todo-items (max-items)
-  "返回所有未完成的 Org TODO 项。
-每条 = (STATE-STR TITLE-STR DATE-INFO-STR FILE POS)。按紧急度排序，结果按
-MAX-ITEMS 带 TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
-`custom/dashboard-invalidate-cache' 失效。"
-  (custom/dashboard--cached
-   'custom/dashboard--todo-cache
-   max-items
-   (lambda () (custom/dashboard--compute-todo-items max-items))))
-
-(defun custom/dashboard--load-org-and-refresh ()
-  "延迟加载 org-agenda/org 后失效缓存并重绘可见 dashboard。
-`custom/dashboard--defer-until-org' 的 one-shot timer 回调。"
-  (require 'org-agenda)
-  (require 'org)
-  (setq custom/dashboard--org-defer-pending nil)
-  (custom/dashboard-invalidate-cache)
-  (custom/dashboard--refresh-visible-now))
-
-(defun custom/dashboard--defer-until-org ()
-  "保证 org-agenda 在空闲时加载一次，加载后失效缓存并重绘 dashboard。
-fresh daemon 首次渲染时 org-agenda 尚未加载，同步扫描会阻塞首屏；
-fetch 先返回 loading，由本函数异步加载后触发重绘。幂等。"
-  (unless (bound-and-true-p custom/dashboard--org-defer-pending)
-    (setq custom/dashboard--org-defer-pending t)
-    (run-with-idle-timer
-     2 nil #'custom/dashboard--load-org-and-refresh)))
-
-(defun custom/dashboard--fetch-todo ()
-  "TODO 卡片 fetch：三态。
-缓存有效 → (:ok items)；org-agenda 未加载 → loading 并触发延迟加载；
-否则扫描。"
-  (if (custom/dashboard--cache-valid-p custom/dashboard--todo-cache 5)
-      (list :ok (cddr custom/dashboard--todo-cache))
-    (if (not (featurep 'org-agenda))
-        (progn (custom/dashboard--defer-until-org) 'loading)
-      (list :ok (custom/dashboard--todo-items 5)))))
-
-(defun custom/dashboard--todo-mark-done (file pos title)
-  "把 FILE 中 POS 附近标题为 TITLE 的 Org heading 改为 DONE 并保存。"
-  (let* ((existing-buffer (get-file-buffer file))
-         (buffer (find-file-noselect file)))
-    (unwind-protect
-        (with-current-buffer buffer
-          (unless (derived-mode-p 'org-mode)
-            (org-mode))
-          (org-with-wide-buffer
-           (goto-char (min (or pos (point-min)) (point-max)))
-           (unless (org-at-heading-p)
-             (org-back-to-heading t))
-           (unless (equal (org-get-heading t t t t) title)
-             (if-let* ((found (org-find-exact-headline-in-buffer
-                               title buffer t)))
-                 (goto-char found)
-               (user-error "找不到待办: %s" title)))
-           (unless (member (org-get-todo-state) org-done-keywords)
-             (unless (member "DONE" org-done-keywords)
-               (user-error "当前 Org 工作流没有 DONE 状态"))
-             (org-todo "DONE")
-             (save-buffer))))
-      (unless existing-buffer
-        (kill-buffer buffer))))
-  (custom/dashboard-invalidate-cache)
-  (custom/dashboard--refresh-visible-now)
-  (message "已完成并保存: %s" title))
-
-(defun custom/dashboard--render-todo (items width)
-  "TODO 卡片 render。状态按钮标记 DONE，标题按钮跳转到原 Org heading。"
-  (if (null items)
-      (list (custom/dashboard--command-button "> 打开 Agenda" #'org-agenda))
-    (append
-     (mapcar
-      (lambda (item)
-        (let* ((state-str (nth 0 item))
-               (title (nth 1 item))
-               (date-info (nth 2 item))
-               (file (nth 3 item))
-               (pos (nth 4 item))
-               (jump (lambda ()
-                       (find-file file)
-                       (when pos
-                         (goto-char pos)
-                         (org-reveal)
-                         (recenter)
-                         (pulse-momentary-highlight-one-line (point) 'highlight))))
-               (state-face (get-text-property 0 'face state-str))
-               (title-face (get-text-property 0 'face title))
-               (done (lambda ()
-                       (custom/dashboard--todo-mark-done file pos
-                                                         (substring-no-properties title))))
-               (state-button
-                (custom/dashboard--button
-                 state-str done
-                 (format "完成待办 %s" (substring-no-properties title))
-                 state-face))
-               (title-button
-                (custom/dashboard--button
-                 title jump
-                 (format "查看待办 %s" (substring-no-properties title))
-                 title-face))
-               (prefix (concat "  " state-button))
-               (rest (concat title-button date-info))
-               (rest-w (max 0 (- width (custom/dashboard--measure prefix))))
-               (rest-trimmed (custom/dashboard--truncate rest rest-w)))
-          (concat prefix rest-trimmed)))
-      items)
-     (list (custom/dashboard--command-button "> 查看 Agenda..." #'org-agenda)))))
-
-(defun custom/dashboard--fetch-clock ()
-  "计时卡片 fetch。org 未加载时返回 :error（显示打开 org 文件提示）。"
-  (if (not (featurep 'org))
-      (list :error "打开 org 文件后显示计时")
-    (require 'org-clock)
-    (list :ok (list (org-clocking-p) (org-clock-sum-today)))))
-
-(defun custom/dashboard--render-clock (data width)
-  "计时卡片 render。DATA = (CLOCKING-P TODAY-MIN)。"
-  (let* ((clocking-p (nth 0 data))
-         (today-min (nth 1 data))
-         (today-str (format "%dh %dm" (/ today-min 60) (% today-min 60)))
-         (jump-cmd (if clocking-p #'org-clock-goto #'org-clock-in)))
-    (append
-     (if clocking-p
-         (let* ((clock-string (substring-no-properties (org-clock-get-clock-string)))
-                (task-name (if (string-match org-ts-regexp-both clock-string)
-                               (string-trim (substring clock-string (match-end 0)))
-                             clock-string)))
-           (list (concat (propertize "▶ 计时中：" 'face 'success)
-                         task-name
-                         "  "
-                         (propertize today-str 'face 'font-lock-type-face))
-                 (concat "今日累计："
-                         (propertize today-str 'face 'font-lock-keyword-face))))
-       (list "当前没有计时的任务"
-             (concat "今日累计："
-                     (propertize today-str 'face 'font-lock-comment-face))))
-     (list (custom/dashboard--command-button
-            (if clocking-p "> 跳转到计时任务..." "> 开始计时...")
-            jump-cmd)))))
-
-(defun custom/dashboard--compute-recents ()
-  "实际计算最近文件列表（无缓存）。
-先排除 remote 路径（避免渲染期触发 TRAMP 连接阻塞 UI），再查 `file-exists-p'
-过滤已删除文件。取 4 倍候选再过滤，避免过滤后不足条目数。"
-  (let* ((size 6)
-         (cands (seq-take (or (and (boundp 'recentf-list) recentf-list)
-                              (default-value 'recentf-list))
-                          (* 4 size)))
-         (files (seq-filter (lambda (f)
-                              (and (not (file-remote-p f))
-                                   (file-exists-p f)))
-                            cands)))
-    (seq-take files size)))
-
-(defun custom/dashboard--recents ()
-  "返回 dashboard 展示的最近文件列表，结果带 TTL 缓存。"
-  (custom/dashboard--cached 'custom/dashboard--recents-cache nil
-                            #'custom/dashboard--compute-recents))
-
-(defun custom/dashboard--fetch-recents ()
-  "最近文件卡片 fetch。"
-  (if (not (bound-and-true-p recentf-mode))
-      (list :error "recentf 未启用")
-    (list :ok (custom/dashboard--recents))))
-
-(defun custom/dashboard--render-path-list (paths width empty-text help-format)
-  "把 PATHS 渲染为 find-file 按钮列表，HELP-FORMAT 是 help-echo 的 format 串。"
-  (custom/dashboard--render-item-list
-   paths width empty-text
-   (lambda (p)
-     (list (custom/dashboard--abbreviate-path p width)
-           (lambda () (find-file p))
-           (format help-format p)))))
-
-(defun custom/dashboard--render-recents (files width)
-  "最近文件卡片 render。每行做成按钮，点击 find-file。"
-  (custom/dashboard--render-path-list files width "暂无最近文件" "打开 %s"))
-
-(defun custom/dashboard--compute-known-projects ()
-  "实际计算 dashboard 可展示的项目列表（无缓存）。
-用内置 `project-known-project-roots' 取已知项目。"
-  (delete-dups
-   (seq-filter #'file-directory-p
-               (mapcar #'file-name-as-directory
-                       (project-known-project-roots)))))
-
-(defun custom/dashboard--known-projects ()
-  "返回 dashboard 可展示的项目列表。
-回落到 `project.el'。结果带 TTL 缓存（见 `custom:dashboard-cache-ttl'），
-可通过 `custom/dashboard-invalidate-cache' 失效。"
-  (custom/dashboard--cached
-   'custom/dashboard--projects-cache
-   nil
-   #'custom/dashboard--compute-known-projects))
-
-(defun custom/dashboard--fetch-projects ()
-  "项目卡片 fetch。"
-  (list :ok (custom/dashboard--known-projects)))
-
-(defun custom/dashboard--render-projects (projects width)
-  "项目卡片 render。"
-  (custom/dashboard--render-path-list
-   projects width "暂无已知项目 — C-x p o 添加" "打开项目 %s"))
-
-(defun custom/dashboard--compute-recent-knowledge-entries (max-items)
-  "消费 `agenote --domain human list --json' 稳定索引计算最近条目（无缓存）。
-CLI 不可用时让异常上抛，由 fetch 层捕获为 :error（而非旧实现的静默吞错返回
-nil——那会让 CLI 挂掉显示「暂无条目」假状态）。返回 (ID CATEGORY TITLE) 三元组。"
-  (custom/dashboard--knowledge-entries-from-cards
-   (agenote-knowledge-list-cards 'human max-items)))
-
-(defun custom/dashboard--knowledge-entries-from-cards (cards)
-  "把 CARDS plist 列表转换为 (ID CATEGORY TITLE) 三元组。"
-  (cl-loop
-   for card in cards
-   for id = (plist-get card :id)
-   for title = (or (plist-get card :title) "(无标题)")
-   for category = (or (plist-get card :category) "unknown")
-   when id
-   collect (list id category title)))
-
-(defun custom/dashboard--recent-knowledge-entries (max-items)
-  "返回最近的知识库条目作为 (ID CATEGORY TITLE) 三元组列表。
-顺序与筛选由 agenote CLI 决定，Emacs 不递归扫描文件。结果按 MAX-ITEMS 带
-TTL 缓存（见 `custom:dashboard-cache-ttl'），可通过
-`custom/dashboard-invalidate-cache' 失效。"
-  (custom/dashboard--cached
-   'custom/dashboard--knowledge-cache
-   max-items
-   (lambda () (custom/dashboard--compute-recent-knowledge-entries max-items))))
-#+end_src
-
-知识库采用异步进程与 stale-while-revalidate，首屏不等待 CLI。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--fetch-knowledge ()
-  "知识库卡片 fetch：缓存过期时异步刷新并优先返回 stale 数据。"
-  (let ((max-items 5))
-    (cond
-     ((custom/dashboard--cache-valid-p custom/dashboard--knowledge-cache
-                                       max-items)
-      (list :ok (cddr custom/dashboard--knowledge-cache)))
-     (t
-      (unless (process-live-p custom/dashboard--knowledge-process)
-        (custom/dashboard--knowledge-start-async max-items))
-      (cond
-       ((and custom/dashboard--knowledge-cache
-             (cddr custom/dashboard--knowledge-cache))
-        (list :ok (cddr custom/dashboard--knowledge-cache)))
-       (custom/dashboard--knowledge-error
-        (list :error custom/dashboard--knowledge-error))
-       (t 'loading))))))
-
-(defun custom/dashboard--knowledge-sentinel (process _event)
-  "知识库异步进程的 sentinel：解析输出、写缓存、清理并重绘。
-stderr buffer 与 max-items 经 `process-put' 挂在 process 上，供本回调读取。"
-  (when (memq (process-status process) '(exit signal))
-    (let ((stderr (process-get process :stderr-buffer))
-          (max-items (process-get process :max-items)))
-      (if (zerop (process-exit-status process))
-          (condition-case parse-error
-              (let* ((json-object-type 'plist)
-                     (json-array-type 'list)
-                     (json-key-type 'keyword)
-                     (output (if-let* ((buffer (process-buffer process))
-                                       ((buffer-live-p buffer)))
-                                 (with-current-buffer buffer
-                                   (buffer-string))
-                               ""))
-                     (cards (unless (string-empty-p output)
-                              (json-read-from-string output)))
-                     (entries
-                      (custom/dashboard--knowledge-entries-from-cards
-                       cards)))
-                (setq custom/dashboard--knowledge-cache
-                      (cons max-items
-                            (cons (current-time) entries))
-                      custom/dashboard--knowledge-error nil))
-            (error
-             (setq custom/dashboard--knowledge-error
-                   (error-message-string parse-error))))
-        (let ((message
-               (and (buffer-live-p stderr)
-                    (string-trim
-                     (with-current-buffer stderr
-                       (buffer-string))))))
-          (setq custom/dashboard--knowledge-error
-                (if (string-empty-p (or message ""))
-                    "agenote 进程失败"
-                  message))))
-      (when (eq custom/dashboard--knowledge-process process)
-        (setq custom/dashboard--knowledge-process nil))
-      (when-let* ((buffer (process-buffer process))
-                  ((buffer-live-p buffer)))
-        (kill-buffer buffer))
-      (when (buffer-live-p stderr)
-        (kill-buffer stderr))
-      (cl-incf custom/dashboard--generation)
-      (condition-case refresh-error
-          (custom/dashboard--refresh-visible-now)
-        (error
-         (message "[dashboard] 知识库刷新失败: %s"
-                  (error-message-string refresh-error)))))))
-
-(defun custom/dashboard--knowledge-start-async (max-items)
-  "异步刷新最近 MAX-ITEMS 张知识卡片，已有进程时保持幂等。"
-  (unless (process-live-p custom/dashboard--knowledge-process)
-    (if-let* ((exe (agenote-resolve-executable)))
-        (let ((stdout (generate-new-buffer " *dashboard-knowledge-stdout*"))
-              (stderr (generate-new-buffer " *dashboard-knowledge-stderr*")))
-          (setq custom/dashboard--knowledge-error nil)
-          (condition-case err
-              (let ((process (make-process
-                              :name "dashboard-knowledge"
-                              :buffer stdout
-                              :stderr stderr
-                              :command (list exe "--domain" "human" "list"
-                                             "--recent" (number-to-string max-items) "--json")
-                              :connection-type 'pipe
-                              :noquery t
-                              :sentinel #'custom/dashboard--knowledge-sentinel)))
-                (process-put process :stderr-buffer stderr)
-                (process-put process :max-items max-items)
-                (setq custom/dashboard--knowledge-process process))
-            (error
-             (when (buffer-live-p stdout)
-               (kill-buffer stdout))
-             (when (buffer-live-p stderr)
-               (kill-buffer stderr))
-             (setq custom/dashboard--knowledge-process nil
-                   custom/dashboard--knowledge-error
-                   (error-message-string err))
-             (cl-incf custom/dashboard--generation))))
-      (setq custom/dashboard--knowledge-error "未找到 agenote 可执行文件"))))
-
-(defun custom/dashboard-prime-caches ()
-  "在 daemon 启动阶段同步预热 Dashboard 的常用数据缓存。"
-  (dolist (fn (list (lambda () (custom/dashboard--todo-items 5))
-                    #'custom/dashboard--known-projects
-                    (lambda () (custom/dashboard--recent-knowledge-entries 5))
-                    #'custom/dashboard--recents
-                    #'custom/dashboard--bookmarks))
-    (condition-case err
-        (funcall fn)
-      (error
-       (message "[dashboard] cache warmup failed: %s"
-                (error-message-string err))))))
-
-(defun custom/dashboard--render-knowledge (entries width)
-  "知识库卡片 render。点击用卡片 ID 调 `agenote-knowledge-show-card'。"
-  (custom/dashboard--render-item-list
-   entries width "知识库暂无条目"
-   (lambda (e)
-     (pcase-let ((`(,id ,category ,title) e))
-       (let ((display (concat category "/" title)))
-         (list display
-               (lambda () (agenote-knowledge-show-card 'human id))
-               (format "查看知识卡片 %s" display)))))))
-
-(defun custom/dashboard--compute-bookmarks ()
-  "实际计算书签名称列表（无缓存）。"
-  (require 'bookmark)
-  (bookmark-all-names))
-
-(defun custom/dashboard--bookmarks ()
-  "返回书签名称列表，结果带 TTL 缓存。"
-  (custom/dashboard--cached 'custom/dashboard--bookmarks-cache nil
-                            #'custom/dashboard--compute-bookmarks))
-
-(defun custom/dashboard--fetch-bookmarks ()
-  "书签卡片 fetch。"
-  (list :ok (custom/dashboard--bookmarks)))
-
-(defun custom/dashboard--render-bookmarks (names width)
-  "书签卡片 render。"
-  (custom/dashboard--render-item-list
-   names width "暂无书签"
-   (lambda (b)
-     (list b
-           (lambda () (bookmark-jump b))
-           (format "跳转书签 %s" b)))))
-
-(defun custom/dashboard--format-shortcut-column (binding width)
-  "格式化单列快捷键 BINDING 以适应 WIDTH 列宽。"
-  (if (not binding)
-      (custom/dashboard--fill width)
-    (let* ((key (car binding))
-           (desc (cdr binding))
-           (key-gap "  ")
-           (key-w (custom/dashboard--measure key))
-           (gap-w (custom/dashboard--measure key-gap))
-           (desc-w (max 0 (- width key-w gap-w)))
-           (display-desc (custom/dashboard--truncate desc desc-w))
-           (used (+ key-w gap-w (custom/dashboard--measure display-desc))))
-      (concat (propertize key 'face 'font-lock-keyword-face)
-              key-gap
-              display-desc
-              (custom/dashboard--fill (max 0 (- width used)))))))
-
-(defun custom/dashboard--render-shortcuts (_data width)
-  "快捷键卡片 render（全宽）。_DATA 未使用（绑定来自 help 系统）。
-双列布局，每列等宽，列间固定间隔。"
-  (let* ((prefix "  ")
-         (prefix-w (custom/dashboard--measure prefix))
-         (available-width (max 1 (- width prefix-w)))
-         (col-count 2)
-         (col-gap custom:dashboard-shortcuts-column-gap)
-         (col-width (/ (max 1 (- available-width col-gap)) col-count))
-         (prefix-bindings (custom/binding-dashboard-bindings))
-         (total (length prefix-bindings))
-         (rows-count (ceiling total (float col-count)))
-         (row-lines nil))
-    (dotimes (i rows-count)
-      (let* ((left-idx i)
-             (right-idx (+ i rows-count))
-             (left (nth left-idx prefix-bindings))
-             (right (when (< right-idx total) (nth right-idx prefix-bindings)))
-             (left-col (custom/dashboard--format-shortcut-column left col-width))
-             (right-col (custom/dashboard--format-shortcut-column right col-width)))
-        (push (concat prefix
-                      left-col
-                      (custom/dashboard--fill col-gap)
-                      right-col)
-              row-lines)))
-    (nreverse row-lines)))
-
-(defun custom/dashboard--fetch-shortcuts ()
-  "快捷键卡片 fetch（数据延迟到 render 时取，fetch 只返回占位 :ok）。"
-  (list :ok t))
-
-;; 卡片注册表：title / icon / key 与 binding-spec 中的 :dashboard 声明一一对应，
-;; accent face 给图标上色，零主题耦合。
-(custom/dashboard-define-card 'todo
-                              :title "待办" :icon "󰃭" :key "C-c o a" :accent 'warning
-                              :fetch #'custom/dashboard--fetch-todo
-                              :render #'custom/dashboard--render-todo)
-
-(custom/dashboard-define-card 'clock
-                              :title "计时" :icon "󱎫" :key "C-c o c i / o" :accent 'success
-                              :fetch #'custom/dashboard--fetch-clock
-                              :render #'custom/dashboard--render-clock)
-
-(custom/dashboard-define-card 'recents
-                              :title "最近文件" :icon "󰋚" :key "C-x C-r"
-                              :accent 'font-lock-keyword-face
-                              :fetch #'custom/dashboard--fetch-recents
-                              :render #'custom/dashboard--render-recents)
-
-(custom/dashboard-define-card 'projects
-                              :title "项目" :icon "󰝰" :key "C-x p p" :accent 'font-lock-type-face
-                              :fetch #'custom/dashboard--fetch-projects
-                              :render #'custom/dashboard--render-projects)
-
-(custom/dashboard-define-card 'knowledge
-                              :title "知识库" :icon "󰧑" :key "C-c o k I" :accent 'font-lock-string-face
-                              :fetch #'custom/dashboard--fetch-knowledge
-                              :render #'custom/dashboard--render-knowledge)
-
-(custom/dashboard-define-card 'bookmarks
-                              :title "书签" :icon "󰉋" :key "C-x r b" :accent 'font-lock-constant-face
-                              :fetch #'custom/dashboard--fetch-bookmarks
-                              :render #'custom/dashboard--render-bookmarks)
-
-(custom/dashboard-define-card 'shortcuts
-                              :title "快捷键" :icon "󰌌" :key "F1 ?" :accent 'font-lock-keyword-face
-                              :fetch #'custom/dashboard--fetch-shortcuts
-                              :render #'custom/dashboard--render-shortcuts)
-#+end_src
-*** 生命周期与 Frame 状态机
-:PROPERTIES:
-:CUSTOM_ID: dashboard-lifecycle
-:header-args:emacs-lisp: :noweb-ref system/dashboard-lifecycle :tangle no :noweb-sep "\n\n"
-:END:
-
-#+attr_org: :width 70
-| 触发                  | 动作                    | 约束                                                                                     |
-|-----------------------+-------------------------+------------------------------------------------------------------------------------------|
-| =custom/dashboard-mode= | 等宽字 + 关闭 hl-line   | 避免 variable-pitch 与当前行背景条切断左竖线                                             |
-| 窗口尺寸变化          | 防抖重渲染              | 数据代数或宽度变化时才真正渲染                                                           |
-| 主题切换              | dashboard buffer 重渲染 | 走 =register-buffer-refresh!=，face 继承自动适配                                         |
-| frame hooks           | 单次调度打开 dashboard  | =after-make-frame= 与 =server-after-make-frame= 可能对同一 frame 连续触发，用 frame 参数去重 |
-
-Dashboard 不对全局 =widget-button--check-and-call-button= 加 advice:该 advice 会影响所有 non-dashboard widget buffer,副作用过大。
-
-#+begin_src emacs-lisp
-
-(defun custom/dashboard--ascii-banner-lines ()
-  "返回 banner 行列表与状态行（不含居中 padding）。
-LITERAL figlet art，box-drawing 字符 string-width≈80-85 列，
-在 110 列以上窗口可舒适居中。"
-  (let* ((banner '(
-                   ""
-                   "███████╗  ███╗   ███╗   █████╗    ██████╗  ███████╗"
-                   "██╔════╝  ████╗ ████║  ██╔══██╗  ██╔════╝  ██╔════╝"
-                   "█████╗    ██╔████╔██║  ███████║  ██║       ███████╗"
-                   "██╔══╝    ██║╚██╔╝██║  ██╔══██║  ██║       ╚════██║"
-                   "███████╗  ██║ ╚═╝ ██║  ██║  ██║  ╚██████╗  ███████║"
-                   "╚══════╝  ╚═╝     ╚═╝  ╚═╝  ╚═╝   ╚═════╝  ╚══════╝"
-                   ""))
-         (status (custom/dashboard--status-line)))
-    (if status
-        (append banner (list status))
-      banner)))
-
-(defun custom/dashboard--status-line ()
-  "返回 banner 下方的状态行字符串，或 nil。
-汇总 Emacs 版本、启动耗时与当前主题模式；任何字段缺失该槽显示 ?。
-全部 nil 守卫，batch / fresh daemon 下安全。
-
-`(emacs-version)' 返回 \"GNU Emacs 31.0.90 ...\"，正则需匹配 GNU 前缀。
-启动耗时用秒数自行格式化为紧凑形式（`(emacs-init-time)' 在 batch 下返回
-原始秒数字符串如 \"0.002s\"，交互下返回 \"0.5 seconds\"，统一格式化避免漂移）。"
-  (let* ((emacs-ver (and (string-match "GNU Emacs \\([0-9.]+\\)" (emacs-version))
-                         (match-string 1 (emacs-version))))
-         (init-seconds (ignore-errors (emacs-init-time)))
-         (init-time (cond
-                     ((not init-seconds) "?")
-                     ;; 数字开头（batch 返回 "0.002s" / 交互返回 "0.5 seconds"）
-                     ((string-match "\\`\\([0-9.]+\\)" init-seconds)
-                      (let ((secs (string-to-number (match-string 1 init-seconds))))
-                        (if (>= secs 1)
-                            (format "%.1fs" secs)
-                          (format "%.0fms" (* secs 1000)))))
-                     (t init-seconds)))
-         (mode (when (boundp 'custom/color-scheme-current-mode)
-                 (symbol-name custom/color-scheme-current-mode))))
-    (format "Emacs %s · 启动 %s · %s"
-            (or emacs-ver "?")
-            init-time
-            (or mode "?"))))
-
-(defun custom/dashboard--banner-art-width (line)
-  "返回固定 banner LINE 实际占用的终端单元数。
-banner 只含空格及 block/box-drawing 字符，在当前等宽 GUI 与 Foot TTY 中均为
-一字符一单元。不能用 `string-width'：真实 TTY 的 Emacs CJK 宽度表会把这些
-字符计为两列，即使终端仍只渲染一个单元，从而让居中 padding 少算近一半。"
-  (length line))
-
-(defun custom/dashboard--banner-min-width ()
-  "banner ASCII art 居中显示所需的最小窗口列宽。
-固定 art 字符在 GUI 与 Foot TTY 中均按一字符一终端单元度量，与
-`custom/dashboard--insert-banner' 一致。
-另留 10 列左右边距，避免 art 紧贴窗口边缘。"
-  (let* ((art-max-line "███████╗  ███╗   ███╗   █████╗    ██████╗  ███████╗")
-         (art-w (custom/dashboard--banner-art-width art-max-line)))
-    (+ art-w 10)))
-
-(defun custom/dashboard--insert-banner (width)
-  "在当前 buffer 插入居中的 banner（art + 状态行）。
-art 各行左边缘对齐到最长行的居中 padding（figlet art 要求行间左对齐），
-状态行单独按自身宽度居中到窗口中央。窄窗口（低于
-`custom/dashboard--banner-min-width'）降级为纯文本单行。
-
-+ art 使用固定的一单元字符集，GUI 与 Foot TTY 均用 =length= 算 pad。真实 TTY
-  中 Emacs 可能因 CJK 宽度表把这些字符报告为 2 列，而终端实际仍渲染 1 单元；
-  用 =string-width= 会让 banner 明显偏左。状态行是混合文本(ASCII + CJK + ·),
-  仍使用 =string-width=。
-
-空行（art 首尾的 \"\"）插入纯换行，不插入前导 padding 空格，避免产生
-满是空格的视觉空行。"
-  (let ((banner-face 'font-lock-keyword-face)
-        (status-face 'custom/dashboard-dim))
-    (if (< width (custom/dashboard--banner-min-width))
-        (let ((pad (max 0 (/ (- width (length "LITERAL")) 2))))
-          (insert "\n"
-                  (custom/dashboard--fill pad)
-                  (propertize "LITERAL" 'face banner-face)
-                  "\n\n"))
-      (let* ((lines (custom/dashboard--ascii-banner-lines))
-             (status (custom/dashboard--status-line))
-             (art-lines (cl-remove-if
-                         (lambda (l) (or (string-empty-p l) (equal l status)))
-                         lines))
-             ;; 固定 art 字符在 GUI/Foot TTY 中都是一字符一单元。
-             (art-max-w (apply #'max
-                               (mapcar #'custom/dashboard--banner-art-width
-                                       art-lines)))
-             (art-pad (max 0 (/ (- width art-max-w) 2))))
-        (insert "\n")
-        (dolist (line lines)
-          (cond
-           ((string-empty-p line) (insert "\n"))
-           ((equal line status)
-            ;; 状态行用 string-width 居中（混合文本，两环境一致）
-            (let ((status-pad (max 0 (/ (- width (custom/dashboard--measure line)) 2))))
-              (insert (custom/dashboard--fill status-pad)
-                      (propertize line 'face status-face)
-                      "\n")))
-           (t
-            ;; art 行统一 pad
-            (insert (custom/dashboard--fill art-pad)
-                    (propertize line 'face banner-face)
-                    "\n"))))
-        (insert "\n")))))
-#+end_src
-
-Banner 与状态行负责首屏视觉，宽度按字符数与列模型分别度量。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--buffer-name-for-frame (frame)
-  "返回 FRAME 专属的 dashboard buffer 名称。"
-  (let ((id (frame-parameter frame 'custom-dashboard-id)))
-    (unless (integerp id)
-      (setq id (cl-incf custom/dashboard--frame-sequence))
-      (set-frame-parameter frame 'custom-dashboard-id id))
-    (format "%s<%d>" custom:dashboard-buffer-name id)))
-
-(defun custom/dashboard--frame-buffer (&optional frame)
-  "返回 FRAME 专属的 dashboard buffer，不存在时创建。"
-  (let* ((target-frame (or frame (selected-frame)))
-         (existing (frame-parameter target-frame 'custom-dashboard-buffer)))
-    (if (and (buffer-live-p existing)
-             (with-current-buffer existing
-               (eq custom/dashboard--owner-frame target-frame)))
-        existing
-      (set-frame-parameter target-frame 'custom-dashboard-id nil)
-      (let ((buffer (get-buffer-create
-                     (custom/dashboard--buffer-name-for-frame target-frame))))
-        (with-current-buffer buffer
-          (unless (derived-mode-p 'custom/dashboard-mode)
-            (custom/dashboard-mode))
-          (setq-local custom/dashboard--owner-frame target-frame))
-        (set-frame-parameter target-frame 'custom-dashboard-buffer buffer)
-        buffer))))
-
-(defun custom/dashboard--release-frame-buffer (frame)
-  "清理 FRAME 专属的 dashboard buffer。"
-  (let ((buffer (frame-parameter frame 'custom-dashboard-buffer)))
-    (when (and (buffer-live-p buffer)
-               (with-current-buffer buffer
-                 (eq custom/dashboard--owner-frame frame)))
-      (kill-buffer buffer))))
-
-(defun custom/dashboard-render (&optional frame)
-  "自有渲染入口：erase → banner → 布局引擎 → insert。
-不经过第三方 dashboard 包任何函数；单卡片错误由布局引擎隔离。"
-  (interactive)
-  (let* ((target-frame
-          (or (and frame (frame-live-p frame) frame)
-              (and (derived-mode-p 'custom/dashboard-mode)
-                   (frame-live-p custom/dashboard--owner-frame)
-                   custom/dashboard--owner-frame)
-              (selected-frame)))
-         (buf (custom/dashboard--frame-buffer target-frame)))
-    (prog1 buf
-      (with-current-buffer buf
-        (unless (derived-mode-p 'custom/dashboard-mode)
-          (custom/dashboard-mode)
-          (setq-local custom/dashboard--owner-frame target-frame))
-        (let* ((window (or (get-buffer-window buf target-frame)
-                           (frame-selected-window target-frame)))
-               (width (if window (window-body-width window) (frame-width target-frame)))
-               (margin-str (custom/dashboard--fill custom:dashboard-dual-margin)))
-          (let ((inhibit-read-only t))
-            (erase-buffer)
-            (custom/dashboard--insert-banner width)
-            (dolist (line (custom/dashboard--build-lines width))
-              (insert margin-str line "\n"))
-            (goto-char (point-min))
-            (setq-local custom/dashboard--rendered-width width
-                        custom/dashboard--rendered-generation
-                        custom/dashboard--generation)))))))
-
-(define-derived-mode custom/dashboard-mode special-mode "Dashboard"
-  "自建 dashboard mode（derived from `special-mode'）。
-不依赖第三方 dashboard 包：渲染完全由 `custom/dashboard-render' 驱动。"
-  (setq-local truncate-lines t)
-  (custom/dashboard--apply-fixed-pitch)
-  (setq-local cursor-type nil
-              line-spacing 0.15
-              show-trailing-whitespace nil)
-  (hl-line-mode -1)
-  (display-line-numbers-mode -1)
-  (buffer-disable-undo)
-  (let ((map (make-sparse-keymap)))
-    (define-key map "g" #'custom/dashboard-refresh)
-    (define-key map "n" #'next-line)
-    (define-key map "p" #'previous-line)
-    (define-key map "q" #'quit-window)
-    (use-local-map map)))
-
-(defun custom/dashboard-refresh ()
-  "失效缓存并刷新当前 frame 的 Dashboard。"
-  (interactive)
-  (custom/dashboard-invalidate-cache)
-  (custom/dashboard-render custom/dashboard--owner-frame))
-
-(defconst custom:dashboard-placeholder-buffer-names
-  '(" *server*" "*scratch*" "*Messages*")
-  "允许 dashboard 自动接管的 Emacs 初始占位 buffer 名称。")
-
-(defun custom/dashboard--placeholder-buffer-p (buffer)
-  "判断 BUFFER 是否仍是 client frame 的占位缓冲区。"
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (and (not (minibufferp buffer))
-           (not buffer-file-name)
-           (or (member (buffer-name buffer)
-                       custom:dashboard-placeholder-buffer-names)
-               (and (eq major-mode 'fundamental-mode)
-                    (string-prefix-p " " (buffer-name buffer))))))))
-
-(defun custom/dashboard--server-edit-buffer-p (buffer)
-  "判断 BUFFER 是否正在服务 emacsclient / with-editor 编辑请求。"
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (or (bound-and-true-p server-buffer-clients)
-          (bound-and-true-p with-editor-mode)
-          (derived-mode-p 'git-commit-mode)))))
-
-(defun custom/dashboard--single-window-frame-p (frame)
-  "判断 FRAME 是否仍只有一个普通窗口。
-Dashboard 只接管这种新 client frame 的空白启动状态；若 Magit、提交编辑器
-或其他命令已经分裂窗口，则保留现有窗口配置。"
-  (and (frame-live-p frame)
-       (= (length (window-list frame 'no-minibuf)) 1)))
-
-(defvar custom/dashboard--refresh-timer nil
-  "dashboard 可见性刷新的 pending idle timer。")
-
-(defun custom/dashboard--refresh-visible-now ()
-  "立即刷新所有可见 dashboard buffer。
-检查所有可见 dashboard 窗口，数据代数或宽度变化者重新渲染。"
-  (when (timerp custom/dashboard--refresh-timer)
-    (cancel-timer custom/dashboard--refresh-timer))
-  (setq custom/dashboard--refresh-timer nil)
-  (dolist (frame (frame-list))
-    (dolist (window (window-list frame 'no-minibuf))
-      (with-current-buffer (window-buffer window)
-        (when (derived-mode-p 'custom/dashboard-mode)
-          (let ((width (window-body-width window)))
-            (when (or (/= custom/dashboard--rendered-generation
-                          custom/dashboard--generation)
-                      (not (equal custom/dashboard--rendered-width width)))
-              (with-selected-window window
-                (custom/dashboard-render frame)))))))))
-
-(defun custom/dashboard--maybe-refresh-visible (frame)
-  "可见 dashboard 需要更新时延迟重渲染（合并连续尺寸变化）。"
-  (when (seq-some
-         (lambda (window)
-           (with-current-buffer (window-buffer window)
-             (derived-mode-p 'custom/dashboard-mode)))
-         (window-list frame 'no-minibuf))
-    (when (timerp custom/dashboard--refresh-timer)
-      (cancel-timer custom/dashboard--refresh-timer))
-    (setq custom/dashboard--refresh-timer
-          (run-with-idle-timer custom:dashboard-refresh-debounce
-                               nil
-                               #'custom/dashboard--refresh-visible-now))))
-#+end_src
-
-可见窗口的防抖刷新与 frame 归属在此衔接，销毁时同步清理。
-
-#+begin_src emacs-lisp
-(defun custom/dashboard--display-in-frame (frame)
-  "在 FRAME 中显示并刷新 dashboard。"
-  (when (and (frame-live-p frame)
-             (custom/dashboard--single-window-frame-p frame))
-    (with-selected-frame frame
-      (let ((buf (custom/dashboard--frame-buffer frame)))
-        (when-let* ((window (frame-selected-window frame)))
-          (set-window-buffer window buf)
-          (with-selected-window window
-            (custom/dashboard-render frame)))))))
-
-(defconst custom:dashboard-open-delay 0
-  "新建 client frame 后等待事件循环下一拍再判定 dashboard。")
-
-(defconst custom:dashboard-open-retries 1
-  "若首次判定过早，dashboard 允许追加重试的次数。")
-
-(defun custom/dashboard--frame-startup-state (frame)
-  "返回 FRAME 当前的启动缓冲区状态。"
-  (if (not (custom/dashboard--single-window-frame-p frame))
-      'busy
-    (if-let* ((window (frame-selected-window frame))
-              (buffer (window-buffer window)))
-        (with-current-buffer buffer
-          (cond
-           ((derived-mode-p 'custom/dashboard-mode) 'dashboard)
-           ((custom/dashboard--server-edit-buffer-p buffer) 'server-edit)
-           ((buffer-file-name) 'file)
-           ((custom/dashboard--placeholder-buffer-p buffer) 'placeholder)
-           (t 'busy)))
-      'pending)))
-
-(defun custom/dashboard--run-open-check (frame retries-left)
-  "根据 FRAME 当前状态决定是否显示或重试 dashboard。"
-  (when (frame-live-p frame)
-    (set-frame-parameter frame 'custom-dashboard-open-scheduled nil)
-    (pcase (custom/dashboard--frame-startup-state frame)
-      ('placeholder
-       (custom/dashboard--display-in-frame frame))
-      ('dashboard
-       (when-let* ((window (frame-selected-window frame)))
-         (with-selected-window window
-           (custom/dashboard-render))))
-      ((or 'file 'server-edit 'busy) nil)
-      (_
-       (when (> retries-left 0)
-         (custom/dashboard--schedule-open-for-frame
-          frame (1- retries-left)))))))
-
-(defun custom/dashboard--run-open-check-delayed (frame retries-left)
-  "`run-at-time' 回调：FRAME 仍存活时执行一次 dashboard 打开检查。
-RETRIES-LEFT 为剩余重试次数，由 timer ARGS 传入。"
-  (when (frame-live-p frame)
-    (custom/dashboard--run-open-check frame retries-left)))
-
-(defun custom/dashboard--schedule-open-for-frame (frame retries-left)
-  "为 FRAME 安排一次 dashboard 打开检查。RETRIES-LEFT 为剩余重试次数。"
-  (when (and (frame-live-p frame)
-             (not (frame-parameter frame 'custom-dashboard-open-scheduled)))
-    (set-frame-parameter frame 'custom-dashboard-open-scheduled t)
-    (run-at-time
-     custom:dashboard-open-delay nil
-     #'custom/dashboard--run-open-check-delayed
-     frame retries-left)))
-
-(defun custom/dashboard-open-for-client-frame (&optional frame)
-  "在 daemon 创建的 client FRAME 中打开 dashboard。
-仅当该 frame 仍停留在占位缓冲区时接管，避免覆盖 `emacsclient FILE`。"
-  (custom/dashboard--schedule-open-for-frame
-   (or frame (selected-frame))
-   custom:dashboard-open-retries))
-
-;; Org 文件保存后失效缓存：dashboard 的 todo/knowledge 数据源可能已变。
-(defun custom/dashboard--invalidate-on-org-save ()
-  "`after-save-hook' 回调：保存 Org 文件时失效 dashboard 缓存并立即重绘。"
-  (when (and buffer-file-name
-             (string-prefix-p (expand-file-name custom:org-directory)
-                              (expand-file-name buffer-file-name)))
-    (custom/dashboard-invalidate-cache)
-    (custom/dashboard--refresh-visible-now)))
-
-(add-hook 'after-save-hook #'custom/dashboard--invalidate-on-org-save)
-
-(add-hook 'window-size-change-functions #'custom/dashboard--maybe-refresh-visible)
-
-(custom/register-buffer-refresh!
- 'custom/dashboard-mode #'custom/dashboard-render)
-
-(custom/add-server-ready-hook #'custom/dashboard-open-for-client-frame)
-(add-hook 'delete-frame-functions #'custom/dashboard--release-frame-buffer)
-
-#+end_src
-*** 可选增强
-
-标题计数仍可在以后按需加入；它需要扩展 fetch 协议返回未截断总数，与本轮 client 延迟优化无关。
-
-*** 加载组装
-:PROPERTIES:
-:CUSTOM_ID: dashboard-assembly
-:END:
-
-组装顺序即求值顺序：核心常量 → 测量与注册 → 引擎 → 卡片 → 生命周期，末尾统一 tangle 为单文件。
-
-#+NAME: system-dashboard-assembly
-#+begin_src emacs-lisp
-<<system/dashboard-core>>
-<<system/dashboard-measure>>
-<<system/dashboard-registry>>
-<<system/dashboard-engine>>
-<<system/dashboard-cards>>
-<<system/dashboard-lifecycle>>
+(defun custom/dashboard-initial-buffer ()
+  "emacsclient 无文件参数时显示 dashboard。
+agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。"
+  (unless (featurep 'org-agenda)
+    (require 'org-agenda))
+  (dashboard-open))
+
+(defun custom/dashboard--nav-buttons ()
+  "Dashboard navigator 一行四个二级入口(icon title help action)。"
+  (list
+   (list (nerd-icons-octicon "nf-oct-clock" :height 1.2 :v-adjust -0.05)
+         "计时" "开始计时 (C-c o c i)"
+         (lambda (_widget) (call-interactively #'org-clock-in)))
+   (list (nerd-icons-octicon "nf-oct-bookmark" :height 1.2 :v-adjust -0.05)
+         "书签" "跳转书签 (C-x r b)"
+         (lambda (_widget) (call-interactively #'bookmark-jump)))
+   (list (nerd-icons-octicon "nf-oct-book" :height 1.2 :v-adjust -0.05)
+         "知识库" "打开 Inbox (C-c o k I)"
+         (lambda (_widget) (call-interactively #'agenote-knowledge-open-inbox)))
+   (list (nerd-icons-octicon "nf-oct-question" :height 1.2 :v-adjust -0.05)
+         "快捷键" "快捷键帮助 (F1 ?)"
+         (lambda (_widget) (call-interactively #'custom/show-help)))))
+
+(setq initial-buffer-choice #'custom/dashboard-initial-buffer)
+
+(use-package dashboard
+  :demand t
+  :config
+  (require 'nerd-icons)
+  (setq dashboard-center-content t
+        dashboard-startup-banner 'logo
+        dashboard-set-heading-icons t
+        dashboard-set-navigator t
+        dashboard-show-shortcuts nil
+        dashboard-items '((recents . 6) (projects . 6) (agenda . 5))
+        dashboard-projects-backend 'project-el
+        dashboard-week-agenda nil
+        dashboard-filter-agenda-entry #'dashboard-filter-agenda-by-todo
+        dashboard-agenda-sort-strategy '(time-up)
+        dashboard-agenda-prefix-format " %i %s "
+        dashboard-agenda-release-buffers t
+        dashboard-item-names '(("Recent Files:" . "最近文件")
+                               ("Projects:" . "项目")
+                               ("Agenda for today:" . "待办"))
+        dashboard-navigator-buttons (list (custom/dashboard--nav-buttons))))
 #+end_src
 
 ** 实验性与待确认
