@@ -1,6 +1,6 @@
 model:
-  default: stealth/ox-alpha
-  provider: openrouter
+  default: glm-5.3-flash
+  provider: zai
   base_url: ''
 providers:
   minimax-cn:
@@ -360,26 +360,33 @@ goals:
 moa:
   presets:
     default:
+      enabled: false
       reference_models:
         - provider: minimax-cn
           model: MiniMax-M3
+          enabled: true
         - provider: deepseek
           model: deepseek-v4-pro
+          enabled: true
       aggregator:
         provider: zai
         model: glm-5.2
+      degraded_reference_policy: loud
       fanout: per_iteration
   reference_models:
     - provider: minimax-cn
       model: MiniMax-M3
+      enabled: true
     - provider: deepseek
       model: deepseek-v4-pro
+      enabled: true
   aggregator:
     provider: zai
     model: glm-5.2
   max_tokens: 4096
   fanout: per_iteration
-  enabled: true
+  enabled: false
+  degraded_reference_policy: loud
 skills:
   external_dirs:
     - ~/.agents/skills
