@@ -2,7 +2,7 @@
 name: "worker"
 description: "自主深度工作者——接收明确目标后，独立完成任务（在需要批量工作时首选）"
 color: cyan
-model: "custom:450900f6-f8db-4dfa-a7f3-2742e23fa1d7:muse-spark-1.2-contributor"
+model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3-Flash"
 injectAgentsMd: true
 ---
 

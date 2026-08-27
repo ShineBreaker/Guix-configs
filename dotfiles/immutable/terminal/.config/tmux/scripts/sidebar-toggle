@@ -116,15 +116,21 @@ persist_sidebar_width_if_dragged() {
 }
 
 sync_window_to_client() {
-    local win_w client_w
-    win_w="$(tmux display-message -p '#{window_width}' 2>/dev/null)" || return 0
-    # client_width 需在有 client 关联时才有值；无 client 时跳过。
-    client_w="$(tmux display-message -p '#{client_width}' 2>/dev/null)" || return 0
+    local win_id ses_id win_w client_w
+    win_id="$(tmux display-message -p '#{window_id}' 2>/dev/null)" || return 0
+    [[ -n "$win_id" ]] || return 0
+    ses_id="$(tmux display-message -p -t "$win_id" '#{session_id}' 2>/dev/null)" || return 0
+    win_w="$(tmux display-message -p -t "$win_id" '#{window_width}' 2>/dev/null)" || return 0
+    # client_width 必须取自本 window 所属 session 的 client：裸调用（selector、
+    # quick-access 的 sh -c 均无 TMUX env）不属于任何 client，隐式 client 会回落
+    # 到「最近活跃 client」——若那是 quick-access 面板的全宽 layer surface，
+    # 就会把面板宽度当成目标宽度 resize-window，撑爆无关 window。
+    client_w="$(tmux list-clients -t "$ses_id" -F '#{client_width}' 2>/dev/null | sort -n | tail -1)"
     [[ -n "$win_w" && -n "$client_w" ]] || return 0
     [[ "$win_w" =~ ^[0-9]+$ && "$client_w" =~ ^[0-9]+$ ]] || return 0
     # 仅当放大后 window 落后于 client 时同步，避免无谓的重复 resize。
     if (( win_w < client_w )); then
-        tmux resize-window -x "$client_w" 2>/dev/null || true
+        tmux resize-window -t "$win_id" -x "$client_w" 2>/dev/null || true
     fi
 }
 
@@ -175,7 +181,11 @@ ensure_sidebar() {
         last_window_width="$current_window_width"
     fi
 
-    socket_key="${TMUX%%,*}"
+    # 无 TMUX env 的裸调用（selector / quick-access 的 sh -c）连的也是 default
+    # socket；unset 时按 default 处理既避免 set -u 击杀脚本，也与 attached
+    # caller 共享同一锁键，保证 flock 串行对所有调用方一致生效。
+    socket_key="default"
+    [[ -n "${TMUX:-}" ]] && socket_key="${TMUX%%,*}"
     socket_key="${socket_key##*/}-${window_id#@}"
     lock_file="/tmp/tmux-sidebar-${UID}-${socket_key}.lock"
     exec 9>"$lock_file"

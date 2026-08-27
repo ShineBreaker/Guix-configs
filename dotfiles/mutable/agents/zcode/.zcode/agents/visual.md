@@ -2,7 +2,8 @@
 name: "visual"
 description: "视觉分析员——分析图片、截图、UI 界面等视觉内容，提取文字、描述布局、诊断问题"
 color: yellow
-model: "custom:5bd4977e-9c4d-4d41-a893-8aad8b4363bc:mimo-v2.5"
+model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3-Flash"
+thoughtLevel: high
 tools:
   - Read
   - Grep

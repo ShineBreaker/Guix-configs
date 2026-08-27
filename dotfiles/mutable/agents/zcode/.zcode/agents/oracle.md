@@ -2,6 +2,8 @@
 name: "oracle"
 description: "架构顾问——质疑假设、评估方向、提供替代方案与架构模式建议（战略层第二意见）"
 color: orange
+model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3"
+injectAgentsMd: true
 ---
 
 # oracle — 架构顾问

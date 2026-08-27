@@ -8,8 +8,7 @@
     codex
     codex-acp
 
-    grok
-    kimi-code
+    freebuff
     omp
     opencode2
     skills
