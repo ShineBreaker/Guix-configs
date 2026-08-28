@@ -9,3 +9,6 @@
 需 CLI/库时先 guix search，列给用户 guix install 装；不默认 pip。环境变量(HERMES_HOME 等)直接读，读不到才 fallback。
 §
 commit 遵循 Conventional Commits：<type>[scope]: <description> (祈使句/小写/无句号)，Body 讲 what/why，Footer 放 BREAKING CHANGE/Refs。vision 优先直用、Electron desktop 必留、Org→Markdown 拒绝、博客 Hexo 资产等见 fact_store。
+§
+§
+计划审批流程偏好(2026-08-29)：大型计划走「v1→外派审查→复核裁决→v2→二审→v3→grilling 批量提问(一次问全,不逐题)→终稿落盘→用户过目同意→零提问实施到底」。实施期内任何问题提前在 grilling 阶段问完；期内小缺陷当场修并标注、需拍板的跳过进待裁决清单、绝不扩范围。重要配置/补丁/脚本资产一律入 Guix-configs 仓库 stow 源(用户:"所有重要配置都存入到仓库中")。审查报告(含外派 harness 的)的新主张逐条实证后才并入——审查权不豁免举证责任。
