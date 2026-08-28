@@ -62,6 +62,8 @@ agenote dream --window-days 90 --limit 5
 
 **不要直接调用 dream 把候选转 KB** —— dream 是**只读候选发现器**，绝不在 KB 里写任何东西（这是 agenote-curator skill 的设计约束）。
 
+**候选查重（例行步骤，2026-08-29 补）**：评估每个 candidate 前先 `agenote search "<关键词>"` 查重——命中既有卡片则走 `agenote touch <卡片ID>` 留痕（更新 LAST_VERIFIED，强化索引权重），不重复 add；确无命中才进 Step 3 评估。本轮用到的既有资料同样 touch 留痕。
+
 ### Step 3: 评估 candidate → 3 个判定
 
 对每个 candidate，主会话**逐条**判断：

@@ -155,6 +155,7 @@ Code locations if you need to debug or patch:
 - **SOUL.md documentation can lie about what's injected** — A SOUL.md may say "global context: `~/.agents/context/01-language.md`", but that file is *not* injected unless the actual code path loads it. Always grep the codebase to confirm before claiming "X is in your system prompt." (See "Verify before claiming" below.)
 - **`memory` 工具写后必须以 read_file 实际文件确认落盘位置 — 不要仅凭返回 `entry_count` 推断工具/磁盘状态** — 一次 `memory(action='add', target='user', ...)` 实际落到了 `MEMORY.md` 而非 `USER.md`（返回 `entry_count` 对应的是 MEMORY.md 条数，与 USER.md 磁盘行数对不上，初看像"通道分裂"）。教训：调用 `memory` 写操作后，**读一下目标文件真实内容**确认落盘，再判断；不要仅凭工具返回的计数与磁盘行数不符就推断"工具与磁盘分裂 / 有覆盖风险"并告警用户——那是把工具内部计数当成磁盘真相的误判。注意 `search_files` 默认跳过点目录（`.local` 等隐藏目录），定位/读取 `memories/*.md` 要用绝对路径直接 `read_file`，否则会搜不到而误以为文件不存在。
 - **markdown 只装通用规范，项目专属事实归 fact_store（用户的硬规则）** — 判断标准："换一个仓库是否还有意义？是 → 入 markdown，否 → 入 fact_store"。hermes 部署拓扑、某仓库的 age 加密流程、guix 在某文件系统上的踩坑等，都属于"换个仓库就没意义"的项目专属事实，必须进 fact_store（按需检索，不占常驻 prompt 预算），不能堆在 MEMORY.md/USER.md。markdown 常驻文档只放跨所有仓库适用的规范与偏好（通用原则、回复风格、工具约定）。
+- **检索后必评（trust 训练的唯一点火路径）** — fact_store(search/probe/reason) 返回的条目若实际影响了判断，立即 `fact_feedback(helpful)`；发现过时/误导的标 `unhelpful`。trust 只经 fact_feedback 漂移：检索排序是 `final_score = relevance × trust`，全部 0.5 时退化为纯相关性排序，过时事实会永远挤在前列污染 prefetch。注意计数陷阱：`retrieval_count` 的 UPDATE 只在 `store.search_facts`，而 prefetch 和工具路径都走 `FactRetriever.search`（retrieval.py:48）——计数恒 0 ≠ 检索没发生，判断"读取是否活着"要看会话里有没有注入 `[trust] content` 块。
 
 ## Verify before claiming "this is in your context"
 

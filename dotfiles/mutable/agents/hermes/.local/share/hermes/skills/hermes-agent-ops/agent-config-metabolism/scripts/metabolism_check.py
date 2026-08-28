@@ -224,10 +224,14 @@ def check_skill_count(cfg: dict) -> tuple[str, str]:
 def check_broken_symlinks(cfg: dict) -> tuple[str, str]:
     """3. Broken symlinks under HERMES_HOME."""
     max_n = cfg.get("max", 0)
+    exclude = cfg.get("exclude_paths", [])
     broken: list[str] = []
     if HERMES_HOME.exists():
         for p in HERMES_HOME.rglob("*"):
             if p.is_symlink() and not p.exists():
+                rel = p.relative_to(HERMES_HOME).as_posix()
+                if any(_glob_match(rel, ex) for ex in exclude):
+                    continue
                 broken.append(str(p))
     n = len(broken)
     status = "GREEN" if n <= max_n else "RED"
@@ -634,9 +638,19 @@ def check_plaintext_secrets(cfg: dict) -> tuple[str, str]:
             except (OSError, UnicodeDecodeError):
                 continue
             for pat in patterns:
-                if re.search(pat, text):
-                    hits.append(f"{rel}:{pat}")
-                    break
+                ms = list(re.finditer(pat, text))
+                if not ms:
+                    continue
+                # degenerate placeholder (e.g. sk- + 20 x's in doc examples) is not a real key
+                real = [
+                    m
+                    for m in ms
+                    if len(set(re.sub(r"[^A-Za-z0-9]", "", m.group(0))[6:])) > 1
+                ]
+                if not real:
+                    continue
+                hits.append(f"{rel}:{pat}")
+                break
     n = len(hits)
     status = "GREEN" if n == 0 else "RED"
     detail = "secrets none" if n == 0 else f"secrets {n} hits: {','.join(hits[:3])}"
