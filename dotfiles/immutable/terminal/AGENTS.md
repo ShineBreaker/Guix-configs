@@ -61,6 +61,7 @@ terminal/
     │   └── quick-access-terminal.conf
     ├── tmux/
     │   ├── scripts/
+    │   │   ├── sidebar/
     │   │   ├── session-selector
     │   │   ├── sidebar-render.scm
     │   │   ├── sidebar-toggle

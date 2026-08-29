@@ -21,7 +21,10 @@ is_sidebar() {
 
 fifo_path() {
     local pane_id="${1#%}"
-    printf '/tmp/tmux-sidebar-%s-%s.fifo' "$UID" "$pane_id"
+    # FIFO 放 XDG_RUNTIME_DIR（per-user 运行时目录），避免世界可读写的
+    # /tmp 带来的竞态与占位面；变量缺省时回退 /tmp 保持旧行为。
+    # 文件名模式必须与 sidebar-render.scm 的 fifo-path 保持一致。
+    printf '%s/tmux-sidebar-%s-%s.fifo' "${XDG_RUNTIME_DIR:-/tmp}" "$UID" "$pane_id"
 }
 
 send_event() {
@@ -187,7 +190,8 @@ ensure_sidebar() {
     socket_key="default"
     [[ -n "${TMUX:-}" ]] && socket_key="${TMUX%%,*}"
     socket_key="${socket_key##*/}-${window_id#@}"
-    lock_file="/tmp/tmux-sidebar-${UID}-${socket_key}.lock"
+    # 锁文件与 FIFO 同住 XDG_RUNTIME_DIR；缺省回退 /tmp 保持旧行为。
+    lock_file="${XDG_RUNTIME_DIR:-/tmp}/tmux-sidebar-${UID}-${socket_key}.lock"
     exec 9>"$lock_file"
     flock -n 9 || return 0
 
