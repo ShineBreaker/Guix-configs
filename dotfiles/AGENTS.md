@@ -10,26 +10,6 @@
 
 ```
 dotfiles/
-├── disable/
-│   ├── dms-suite/
-│   │   ├── .config/
-│   │   │   ├── darkman/
-│   │   │   ├── foot/
-│   │   │   └── niri/
-│   │   └── .local/
-│   │       └── share/
-│   └── waybar-suite/
-│       ├── .config/
-│       │   ├── darkman/
-│       │   ├── foot/
-│       │   ├── fuzzel/
-│       │   ├── mako/
-│       │   ├── niri/
-│       │   ├── swayidle/
-│       │   ├── swaylock/
-│       │   └── waybar/
-│       └── .local/
-│           └── share/
 ├── immutable/
 │   ├── agents/
 │   │   ├── .config/
@@ -57,7 +37,6 @@ dotfiles/
 │   ├── system/
 │   │   ├── .config/
 │   │   │   ├── containers/
-│   │   │   ├── hypr/
 │   │   │   ├── pipewire/
 │   │   │   ├── wireplumber/
 │   │   │   ├── user-dirs.dirs
