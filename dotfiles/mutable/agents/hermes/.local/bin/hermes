@@ -11,22 +11,20 @@
 #   - 首次未安装时 lazy bootstrap（调同目录 hermes-update）。
 #   - 启动前 unset PYTHONPATH/PYTHONHOME，避免 Guix Python 干扰
 #     （与上游 install.sh 的 shim 行为一致）。
+# 布局常量与 HERMES_HOME 解析见兄弟层 ../libexec/hermes-lib.sh。
 set -euo pipefail
 
-# 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置
-: "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
-export HERMES_HOME
-HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
-HERMES_BIN="${HERMES_RUNTIME}/venv/bin/hermes"
+_bin_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck disable=SC1091  # lib 移出 PATH（bin 的兄弟层 libexec/），按 stow 直链的源头 source
+source "$(dirname "${_bin_dir}")/libexec/hermes-lib.sh"
 
 # 首次未安装：引导（对齐 pi wrapper 的 lazy install）
-if [[ ! -x "${HERMES_BIN}" ]]; then
-  _up="$(dirname "$(readlink -f "$0")")/hermes-update"
-  if [[ -x "${_up}" ]]; then
+if [[ ! -x "${HERMES_CLI_BIN}" ]]; then
+  if [[ -x "${_bin_dir}/hermes-update" ]]; then
     echo "Hermes 未安装，执行首次安装..." >&2
-    "${_up}" || { echo "安装失败，见上方错误" >&2; exit 1; }
+    "${_bin_dir}/hermes-update" || { echo "安装失败，见上方错误" >&2; exit 1; }
   else
-    echo "hermes-update 未找到，无法引导安装（期望位于 ${_up}）" >&2
+    echo "hermes-update 未找到，无法引导安装（期望位于 ${_bin_dir}/hermes-update）" >&2
     exit 1
   fi
 fi
@@ -35,4 +33,4 @@ fi
 unset PYTHONPATH
 unset PYTHONHOME
 
-exec "${HERMES_BIN}" "$@"
+exec "${HERMES_CLI_BIN}" "$@"

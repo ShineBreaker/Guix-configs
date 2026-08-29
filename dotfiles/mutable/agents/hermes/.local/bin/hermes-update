@@ -44,13 +44,13 @@ set -euo pipefail
 REPO_URL="https://github.com/NousResearch/hermes-agent.git"
 PYTHON_VERSION="3.11"   # 与上游 install.sh 的 PYTHON_VERSION 一致
 
-# 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置
-: "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
+_bin_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck disable=SC1091  # lib 移出 PATH（bin 的兄弟层 libexec/），按 stow 直链的源头 source
+source "$(dirname "${_bin_dir}")/libexec/hermes-lib.sh"
 
-# checkout 直接落在 HERMES_HOME/hermes-agent 顶层（desktop 壳要求的源码根）
-HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
-CHECKOUT="${HERMES_RUNTIME}"
-VENV="${HERMES_RUNTIME}/venv"
+# 本脚本历史命名兼容别名（常量真身在 hermes-lib.sh；布局约定见头注释）
+CHECKOUT="${HERMES_CHECKOUT}"
+VENV="${HERMES_VENV}"
 
 # herd 管理的 hermes 常驻服务（gateway 依赖 backend，故重启顺序 backend → gateway）
 HERMES_HERD_SERVICES=(hermes-backend hermes-gateway)
@@ -148,8 +148,7 @@ _ensure_managed_node() {
 # hermes 升级不会重做（想强刷 logo：删 hicolor/*/apps/hermes.png 后重跑）。
 _install_hicolor_icon() {
   local _icon_src="${CHECKOUT}/apps/desktop/assets/icon.png"
-  : "${XDG_DATA_HOME:=$HOME/.local/share}"
-  local _hicolor="${XDG_DATA_HOME}/icons/hicolor"
+  local _hicolor="${HERMES_HICOLOR_ROOT}"   # XDG_DATA_HOME 默认值解析收敛在 lib
   local _sentinel="${_hicolor}/48x48/apps/hermes.png"
 
   # sentinel 在即跳过（图标名 hermes 唯一，不会与其它软件冲突）

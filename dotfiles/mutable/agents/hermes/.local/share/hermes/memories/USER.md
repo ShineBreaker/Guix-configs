@@ -2,7 +2,7 @@
 §
 新建 skill 必须进现有 11 分类之一(<category>/<skill-name>/)，装不下才新建且需确认；不动 ~/.config/agents/skills/(Guix Home immutable)。决策树见 skill-authoring §9。
 §
-用户拍板即执行不复议，全仓清误导表述；"自主完成/去休息"即转自主模式推到 commit+报告。commit 边界：git add -- <精确路径> + diff --cached 核对 + status 复查；无 GPG 时 --no-gpg-sign。
+commit 边界(2026-08-29 精化)：git add -- <精确路径>；diff --cached 核对必须是**独立调用**、确认文件数=预期后才 commit（核对与 commit 串同一管道会拦不住 index 遗留混入）；commit 后 git show --stat HEAD 复查文件数；无 GPG 时 --no-gpg-sign。
 §
 大型迁移/批量先拿中等样本端到端验证再放量。
 §

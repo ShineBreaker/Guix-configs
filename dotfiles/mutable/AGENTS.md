@@ -35,13 +35,13 @@ mutable/
 │   │       └── extensions/
 │   ├── .zcode/
 │   │   └── plugins/
-│   │       ├── agenote-zcode/
-│   │       └── assisted-by-zcode/
+│   │       └── agenote-zcode/
 │   └── .stow-local-ignore
 ├── agents/
 │   ├── hermes/
 │   │   ├── .local/
 │   │   │   ├── bin/
+│   │   │   ├── libexec/
 │   │   │   └── share/
 │   │   ├── .stow-folding
 │   │   └── .stow-local-ignore
@@ -56,7 +56,8 @@ mutable/
 │           ├── agents/
 │           ├── cli/
 │           ├── commands/
-│           └── hooks/
+│           ├── hooks/
+│           └── plugins/
 ├── emacs/
 │   ├── .config/
 │   │   ├── agents/

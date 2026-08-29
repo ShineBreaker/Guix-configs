@@ -14,122 +14,40 @@
 # 与 Pi 的 pi / hermes wrapper 同构：runtime 在 $HERMES_HOME/hermes-agent。
 # checkout 直接落在 hermes-agent 顶层（desktop 壳要求的源码根，isHermesSourceRoot
 # 检查 hermes_cli/main.py 在 ACTIVE_HERMES_ROOT 直接下级）。
+# 布局常量、宿主 GUI 环境解析、容器 preserve/share 配置见兄弟层 ../libexec/hermes-lib.sh。
 set -euo pipefail
 
-# 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置
-: "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
-HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
-CHECKOUT="${HERMES_RUNTIME}"
-RELEASE_DIR="${CHECKOUT}/apps/desktop/release/linux-unpacked"
-HERMES_BIN="${RELEASE_DIR}/Hermes"
-MANIFEST="${HERMES_HOME}/manifest.scm"
+_bin_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck disable=SC1091  # lib 移出 PATH（bin 的兄弟层 libexec/），按 stow 直链的源头 source
+source "$(dirname "${_bin_dir}")/libexec/hermes-lib.sh"
 
 # 1. 确保已 build（首跑需 npm install 1299 包 + electron-builder，几分钟；
 #    之后 node_modules 留在 checkout 内，重 build 很快）
-if [[ ! -x "${HERMES_BIN}" ]]; then
+if [[ ! -x "${HERMES_DESKTOP_BIN}" ]]; then
   echo "Hermes Desktop 尚未 build，执行 build（首次需几分钟）..." >&2
   hermes desktop --build-only
 fi
 
-# 2. 将桌面图标复制到icons文件夹中
-cp "${HERMES_RUNTIME}/apps/desktop/assets/icon.png" "${XDG_DATA_HOME}/icons/hicolor/1024x1024/apps/hermes.png"
+# 2. 将桌面图标复制到 icons 文件夹中
+#    （lib 的 hermes_install_icon_1024 带 XDG_DATA_HOME 默认值解析 + mkdir -p；
+#    此前内联版无默认值——set -u 下未导出 XDG_DATA_HOME 直接崩，且目标目录
+#    缺失时 cp 失败）
+hermes_install_icon_1024 "${HERMES_RUNTIME}/apps/desktop/assets/icon.png"
 
-# 3. 进 FHS 容器启动（语义对齐 appimage-run container.scm：preserve/share/exec 一致）
-RT_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-# 用真实 WAYLAND_DISPLAY（不硬编码 wayland-0，否则 expose 不存在的 socket，
-# Electron 连不上 compositor 导致窗口起不来）
-WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
-
-# ── 从宿主动态解析 GUI 环境（不硬编码主题/输入法/路径） ──────────────────────
-# settings.ini 是 GTK3 用户配置源；解析后 export，由 PRESERVE 透传进容器。
-_gtk_settings="${XDG_CONFIG_HOME:-$HOME/.config}/gtk-3.0/settings.ini"
-
-# GTK 主题：GTK_THEME 环境变量 > settings.ini gtk-theme-name
-_resolved_theme="${GTK_THEME:-$(sed -n 's/^gtk-theme-name=//p' "$_gtk_settings" 2>/dev/null)}"
-[[ -n "$_resolved_theme" ]] && export GTK_THEME="$_resolved_theme"
-
-# 输入法模块：GTK_IM_MODULE 环境变量 > settings.ini gtk-im-module
-_resolved_im="${GTK_IM_MODULE:-$(sed -n 's/^gtk-im-module=//p' "$_gtk_settings" 2>/dev/null)}"
-if [[ -n "$_resolved_im" ]]; then
-  export GTK_IM_MODULE="$_resolved_im"
-  export QT_IM_MODULE="${QT_IM_MODULE:-$_resolved_im}"
-  export XMODIFIERS="@im=${_resolved_im}"
-fi
-
-# GTK3 immodules 目录（含 im-*.so）：遍历宿主 profile 找第一个存在的
-if [[ -z "${GTK_IM_MODULE_DIR:-}" ]]; then
-  for _p in "${HOME}/.guix-home/profile" "/run/current-system/profile"; do
-    _d="${_p}/lib/gtk-3.0/3.0.0/immodules"
-    [[ -d "$_d" ]] && export GTK_IM_MODULE_DIR="$_d" && break
-  done
-fi
-
-# XDG_DATA_DIRS：前置宿主 profile 的 share（主题/图标/光标搜索路径）
-_extra_data=""
-for _p in "${HOME}/.guix-home/profile" "/run/current-system/profile"; do
-  [[ -d "${_p}/share" ]] && _extra_data="${_extra_data:+${_extra_data}:}${_p}/share"
-done
-export XDG_DATA_DIRS="${_extra_data:+${_extra_data}:}${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-
-# Ozone / QPA 平台：有 WAYLAND_DISPLAY → wayland，否则 x11
-if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then _ozone="wayland"; else _ozone="x11"; fi
-export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-$_ozone}"
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-$_ozone}"
-export GDK_BACKEND="${GDK_BACKEND:-$_ozone}"
-
-# --preserve 正则（与 appimage-run 一致：GUI/Wayland/音频/dbus 变量透传）
-# 额外含 HERMES_HOME：desktop 壳(main.cjs) 靠它推导 ACTIVE_HERMES_ROOT=
-# HERMES_HOME/hermes-agent，不 preserve 会 fallback 到默认 ~/.hermes 而找不到安装
-# 额外含 FONTCONFIG_FILE/PATH：让容器复用宿主 fontconfig 配置，否则回退难看字体
-# 额外含 XDG_DATA_DIRS/XDG_CONFIG_HOME：让容器内 GTK 复用宿主主题/图标/光标搜索路径
-# 额外含 IME 变量（GTK_IM_MODULE/QT_IM_MODULE/XMODIFIERS）：fcitx5 输入法透传
-# 额外含 XCURSOR_PATH/XCURSOR_THEME：光标主题搜索路径
-# 额外含 HERMES_DESKTOP_REMOTE_URL/TOKEN：Remote gateway 模式（连宿主
-# hermes-backend 9119）时透传给 desktop 壳，避免它在容器内 spawn 残缺 serve
-PRESERVE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|HERMES_DESKTOP_REMOTE_URL|HERMES_DESKTOP_REMOTE_TOKEN|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR|XDG_DATA_DIRS|XDG_CONFIG_HOME|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS|XCURSOR_PATH|XCURSOR_THEME|GTK_THEME|GTK_IM_MODULE_DIR|GDK_BACKEND)$'
-
-# --share/--expose
-SHARE_FLAGS=(
-  "--share=/tmp"
-  "--share=${HOME}"
-  "--expose=${RT_DIR}"                                    # 含 wayland + dbus socket
-  "--expose=${RT_DIR}/${WAYLAND_DISPLAY}"                 # 真实 compositor socket
-)
-PULSE_DIR="${RT_DIR}/pulse/native"
-[[ -S "${PULSE_DIR}" ]] && SHARE_FLAGS+=("--expose=${PULSE_DIR}")
-# 系统字体目录挂进容器：宿主 609 字体里有更纱黑体(Sarasa)等，不挂则容器内
-# 只剩 ~ 下 132 个，Electron 回退文泉驿/DejaVu → 字体怪。guix 的 fontconfig
-# 默认扫描此路径，expose 后直接可见。
-[[ -d /run/current-system/profile/share/fonts ]] && SHARE_FLAGS+=("--expose=/run/current-system/profile/share/fonts")
-# /dev/dri 用 --share（读写 bind）挂进容器：GPU 进程要对 renderD128 发 ioctl，
-# 必须可写。此前的 SIGILL(exitCode 4) 是 --expose（只读 bind）造成的——只读
-# 设备节点上 ioctl 失败，Chromium GPU 进程直接崩。本机 renderD128 是
-# crw-rw-rw-、用户在 video 组，读写挂入后走硬件渲染（动画/合成层恢复正常）。
-[[ -d /dev/dri ]] && SHARE_FLAGS+=("--share=/dev/dri")
-# /sys 只读挂入：mesa 的 drmGetDevice() 要读 /sys/dev/char/<maj>:<min> 解析
-# DRM 设备的 PCI 信息，容器默认无 sysfs → "MESA-LOADER: failed to retrieve
-# device information" → 回退 llvmpipe 软件渲染。挂入后 glxinfo 实测为
-# Mesa Intel Arc (MTL) 硬件渲染器（OpenGL 4.6）。
-[[ -d /sys ]] && SHARE_FLAGS+=("--expose=/sys")
-# expose /gnu/store：venv 的 python 软链到 /gnu/store/<hash>/python3.11，
-# 不挂进容器则 venv python 解析不到 → isActiveRuntimeUsable() 失败 →
-# desktop 误判未完成、回退跑 install.sh（exit 127, "prerequisites"）。只读挂。
-[[ -d /gnu/store ]] && SHARE_FLAGS+=("--expose=/gnu/store")
-# 宿主 machine-id 挂进容器：FHS 容器内 /var /etc 只读，dbus-uuidgen 写不进；
-# 直接 expose 宿主 /etc/machine-id 让 dbus 初始化（否则报 machine-id 缺失）
-[[ -e /etc/machine-id ]] && SHARE_FLAGS+=("--expose=/etc/machine-id")
-# xwayland socket（DISPLAY=:0 时）透进容器，走 X11 backend
-[[ -n "${DISPLAY:-}" ]] && SHARE_FLAGS+=("--share=/tmp/.X11-unix")
-# 宿主系统 profile 的 share 目录（hicolor 图标主题等 fallback 资源）
-[[ -d /run/current-system/profile/share ]] && SHARE_FLAGS+=("--expose=/run/current-system/profile/share")
+# 3. 宿主环境解析 + 容器边界配置（原内联段收敛进 lib；执行顺序不可换：
+#    session init 提供 WAYLAND_DISPLAY 默认值 → GUI 解析依赖它定 Ozone →
+#    share 旗标依赖 RT_DIR / WAYLAND_DISPLAY）
+hermes_session_env_init
+hermes_gui_env_resolve
+hermes_build_share_flags
 
 # 容器内执行：
 # - 走 Wayland 原生协议（niri compositor；WAYLAND_DISPLAY + RT_DIR socket 已
 #   expose 进容器，Electron 直连 compositor，不经 XWayland 中转）
-# - 硬件 GPU：/dev/dri 已读写挂入（见上），不再设 LIBGL_ALWAYS_SOFTWARE，也不
-#   用 --enable-unsafe-swiftshader 软件渲染——那会让应用内动画全失效。
-#   --ignore-gpu-blocklist：容器内 GPU 信息探测不全，Chromium 可能把显卡列入
-#   黑名单回退软件渲染，此标志强制启用硬件路径。
+# - 硬件 GPU：/dev/dri 已读写挂入（见 lib 内 share 旗标注释），不再设
+#   LIBGL_ALWAYS_SOFTWARE，也不用 --enable-unsafe-swiftshader 软件渲染——那会让
+#   应用内动画全失效。--ignore-gpu-blocklist：容器内 GPU 信息探测不全，Chromium
+#   可能把显卡列入黑名单回退软件渲染，此标志强制启用硬件路径。
 #   （若某机器硬件路径确实崩，可临时 `LIBGL_ALWAYS_SOFTWARE=1 hermes-desktop`
 #   回退软件渲染——该变量已在 PRESERVE 正则里透传。）
 # - --no-sandbox / --disable-gpu-sandbox：嵌套 guix shell 容器里 Chromium 沙箱
@@ -142,7 +60,7 @@ PULSE_DIR="${RT_DIR}/pulse/native"
 #   RT_DIR 已 expose → 宿主 bus socket 可达）；仅在宿主 bus 不可达时才
 #   dbus-launch 起新 bus。这样 dconf/GSettings（暗色偏好）和 fcitx5
 #   D-Bus frontend 都能从容器内访问。
-# - GTK 主题/图标/光标/输入法/Ozone 平台等全部由上方动态解析段 export，
+# - GTK 主题/图标/光标/输入法/Ozone 平台等全部由 lib 的动态解析段 export，
 #   经 PRESERVE 透传进容器，EXEC_STRING 内不再硬编码任何宿主特定值。
 # shellcheck disable=SC2016  # 单引号内 ${...} 故意留给容器内 bash -c 展开
 EXEC_STRING='cd /appimage-root && \
@@ -181,8 +99,8 @@ else
 fi
 
 exec guix shell --container --emulate-fhs --network \
-  --manifest="${MANIFEST}" \
-  --preserve="${PRESERVE}" \
-  "${SHARE_FLAGS[@]}" \
-  --share="${RELEASE_DIR}=/appimage-root" \
+  --manifest="${HERMES_MANIFEST}" \
+  --preserve="${HERMES_PRESERVE_RE}" \
+  "${HERMES_SHARE_FLAGS[@]}" \
+  --share="${HERMES_DESKTOP_RELEASE_DIR}=/appimage-root" \
   -- bash -c "${EXEC_STRING}" bash "$@"
