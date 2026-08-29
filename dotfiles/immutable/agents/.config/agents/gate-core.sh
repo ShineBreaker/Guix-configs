@@ -26,9 +26,15 @@
 #   NOTES / RM_HINT / REDIRECT / HINT   非阻塞提示
 #
 # 安全不变量（历史绕过教训，改动前先读）：
-#   * 冻结命令匹配先做归一化（删引号/反斜杠/命令替换定界符），堵
-#     `blue reb''uild`、`$(printf %s su)do` 类拼接绕过；代价是字符串
-#     字面量里的冻结词同样命中——方向 fail-closed，与原子串匹配一致。
+#   * 冻结命令按「命令位置词序列」匹配：第一个词，或 ; & | ( ) ` 、
+#     ` -- ` 、换行之后的词。参数/字符串/heredoc 正文里的冻结词不再命中
+#     （误报主源：commit message、文档字符串）。词序列匹配前剥引号，
+#     堵 `reb''uild` 类拆分；再执行通道（sh -c / xargs / find -exec …）
+#     的段内子串兜底堵引号包裹的间接执行；`$(` `)` 视为命令边界，命令
+#     替换体内的冻结词照常命中。
+#   * 明确放弃的极端 case：`$(printf %s su)do` 这类命令替换输出拼接
+#     成冻结词的形态（运行时才存在，静态可见即回全文子串=误报之源；
+#     系对抗性构造，非 agent 自然行为）。
 #   * --dry-run 豁免仅限 blue 前缀命令（`blue --dry-run rebuild` 放行）；
 #     `sudo ... --dry-run` 这类把 --dry-run 当免死金牌的不豁免。
 #   * edit 走双路径：逻辑路径（不解析 symlink）做 meta-frozen / 部署位置
@@ -75,18 +81,56 @@ trim() {
   printf '%s' "$s"
 }
 
-# 冻结命令匹配专用归一化：删引号 / 反斜杠 / `$(` `)` 反引号定界 + 压缩空白。
-# `$(printf %s su)do` → `printf %s sudo`（子串命中 sudo）；命令替换的输出
-# 会拼进外层命令，字符串层面按拼接后的形态检查。
-normalize_cmd() {
-  local s="$1"
-  s="${s//\'/}"
-  s="${s//\"/}"
-  s="${s//\\/}"
-  s="${s//\$\(/}"
-  s="${s//\)/}"
-  s="${s//\`/}"
-  printf '%s' "$s" | tr -s '[:space:]' ' '
+# 冻结命令匹配预处理：剔除 heredoc 正文（数据非命令），按命令边界
+# （; & | ( ) ` 、` -- ` 参数终结符及换行）切分为每行一个命令片段，
+# 片段内剥引号/反斜杠并压缩空白（堵 reb''uild 类拆分）。
+_cmd_segments() {
+  awk '
+    indelim != "" {
+      if ($0 ~ "^[[:space:]]*" indelim "[[:space:]]*$") indelim = ""
+      next
+    }
+    {
+      if (match($0, /<<-?[[:space:]]*("[^"]+"|\x27[^\x27]+\x27|[A-Za-z_][A-Za-z0-9_]*)/)) {
+        d = substr($0, RSTART, RLENGTH)
+        sub(/^<<-?[[:space:]]*/, "", d)
+        gsub(/^["\x27]|["\x27]$/, "", d)
+        indelim = d
+      }
+      print
+    }
+  ' | sed -e "s/'//g" -e 's/"//g' -e 's/\\//g' \
+          -e 's/[[:space:]][[:space:]]*/ /g' -e 's/^[[:space:]]*//' \
+          -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/ -- /\n/g' -e 's/[;&|()`]/\n/g' \
+          -e 's/\n[[:space:]]*/\n/g' -e '/^[[:space:]]*$/d'
+}
+
+# 在片段流中找冻结命令。主规则：片段行首词序列命中（冻结词必须出现在
+# 命令位置——第一个词，或 ; & | ( ) ` / -- / 换行之后的词）；兜底规则：
+# 片段行首是再执行通道（sh -c / xargs / find -exec 等，参数会被当作
+# 命令执行）时退回段内子串匹配，堵引号包裹的间接执行。
+# 输出命中的 frozen 项，无命中输出空。
+_match_frozen_in_segments() {  # $1=片段流 $2=frozen 列表(换行分隔)
+  printf '%s\n' "$1" | awk -v frozen="$2" '
+    BEGIN {
+      n = split(frozen, arr, "\n")
+      for (i = 1; i <= n; i++) {
+        f = arr[i]
+        if (f == "") continue
+        orig[++m] = f
+        gsub(/[\\^$.|+()\[\]{}*?]/, "\\\\&", f)
+        pats[m] = "^" f "([[:space:]]|$)"
+      }
+    }
+    /^(sh|bash|dash|ash|env|nohup|xargs|ssh|parallel|find|exec)([[:space:]]|$)/ { channel = 1 }
+    {
+      for (j = 1; j <= m; j++) {
+        if ($0 ~ pats[j]) { print orig[j]; exit }
+        if (channel && index($0, orig[j]) > 0) { print orig[j]; exit }
+      }
+      channel = 0
+    }
+  '
 }
 
 # resolve_path <path> <logical|physical>
@@ -115,24 +159,25 @@ PREFIX='(^|[;&|()$]|&&|\|\|)[[:space:]]*'
 
 gate_bash() {
   local CMD="$1"
-  local NORM FIRST BASE
-  NORM="$(normalize_cmd "$CMD")"
+  local FIRST BASE
   FIRST="$(trim "$CMD")"
   FIRST="${FIRST%%[[:space:]]*}"
   BASE="$(basename "${FIRST:-cmd}" 2>/dev/null || printf '%s' "${FIRST:-cmd}")"
 
-  # 1a 冻结命令（归一化子串）+ guix system 宽匹配。
+  # 1a 冻结命令（命令位置词序列匹配）+ guix system 宽匹配。
   # --dry-run 豁免仅当命令首个词是 blue（blue 的验证通道）。
   if [[ "$CMD" != *"--dry-run"* || "$BASE" != "blue" ]]; then
-    local frozen
-    while IFS= read -r frozen; do
-      [[ -z "$frozen" ]] && continue
-      if [[ "$NORM" == *"$frozen"* ]]; then
-        emit BLOCK "🚫 冻结命令「${frozen}」需 sudo 提权或为系统级操作，禁止执行。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
+    local frozen_list segments hit
+    frozen_list="$(jq -r '.frozen_commands[]?' <<<"$MERGED" 2>/dev/null)"
+    if [[ -n "${frozen_list//$'\n'/}" ]]; then
+      segments="$(printf '%s\n' "$CMD" | _cmd_segments)"
+      hit="$(_match_frozen_in_segments "$segments" "$frozen_list")"
+      if [[ -n "$hit" ]]; then
+        emit BLOCK "🚫 冻结命令「${hit}」需 sudo 提权或为系统级操作，禁止执行。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
         return 0
       fi
-    done < <(jq -r '.frozen_commands[]?' <<<"$MERGED" 2>/dev/null)
-    if [[ "$NORM" == *"guix"* ]] && printf '%s' "$NORM" | grep -qE '\bsystem[[:space:]]+(reconfigure|init)\b'; then
+    fi
+    if [[ "$CMD" == *"guix"* ]] && printf '%s' "$CMD" | grep -qE '\bsystem[[:space:]]+(reconfigure|init)\b'; then
       emit BLOCK "🚫 禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
       return 0
     fi
