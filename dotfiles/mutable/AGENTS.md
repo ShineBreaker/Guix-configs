@@ -73,6 +73,11 @@ mutable/
 │   │   └── share/
 │   │       └── applications/
 │   └── .stow-local-ignore
+├── lem/
+│   ├── .config/
+│   │   └── lem/
+│   │       └── init.lisp
+│   └── .stow-local-ignore
 └── tools/
     ├── appimage-run/
     └── secrets/

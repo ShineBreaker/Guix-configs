@@ -1,0 +1,6 @@
+# lem 运行时产物不部署（生成于 ~/.config/lem/ 真实目录侧，stow 不应看到）
+# 防御性规则：即使误生成在源树也不入链接
+^/logs
+^/history
+^/quicklisp
+^/config\.lisp

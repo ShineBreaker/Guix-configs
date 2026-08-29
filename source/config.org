@@ -1678,6 +1678,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "fresh-editor-bin"
    "helix"
 
+   "lem"
+
    ;; 数据库
    "sqlite"
 

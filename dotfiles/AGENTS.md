@@ -94,6 +94,10 @@ dotfiles/
     │   ├── .local/
     │   │   └── share/
     │   └── .stow-local-ignore
+    ├── lem/
+    │   ├── .config/
+    │   │   └── lem/
+    │   └── .stow-local-ignore
     └── tools/
         ├── appimage-run/
         └── secrets/
