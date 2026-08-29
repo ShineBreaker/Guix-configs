@@ -19,7 +19,6 @@ Guix-configs///
 │   ├── iso-build.md
 │   └── secrets.md
 ├── dotfiles/
-│   ├── disable/
 │   ├── immutable/
 │   └── mutable/
 ├── screenshots/
@@ -42,7 +41,6 @@ Guix-configs///
 │   ├── block-replace.el
 │   ├── bootstrap.sh
 │   ├── build-image.scm
-│   ├── fxxk-link.sh
 │   ├── gen-partial.scm
 │   ├── json-to-nix.py
 │   └── secrets
