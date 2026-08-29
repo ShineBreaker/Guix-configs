@@ -16,6 +16,12 @@ set -euo pipefail
 GPU_DIR="/var/lib/non-nixos-gpu"
 TMPFILES_CONF="/etc/tmpfiles.d/non-nixos-gpu.conf"
 
+# root 前置检查：写 /etc/ 与 /var/lib/，非 root 会在中途留下半成品
+if [[ $EUID -ne 0 ]]; then
+	echo "error: must run as root (writes /etc and /var/lib)" >&2
+	exit 1
+fi
+
 # 1) 调 non-nixos-gpu-setup 装好 /etc/tmpfiles.d/non-nixos-gpu.conf
 #    新版 setup 行为:删旧 /etc/systemd/system/non-nixos-gpu.service
 #                    软链 /etc/tmpfiles.d/non-nixos-gpu.conf 到 store
@@ -36,6 +42,11 @@ fi
 target=$(awk '/^L\+ \/run\/opengl-driver/ { print $NF }' "$TMPFILES_CONF")
 if [[ -z "$target" ]]; then
 	echo "error: failed to parse target from $TMPFILES_CONF" >&2
+	exit 1
+fi
+# target 来自 conf 末字段，建链前强制校验前缀，防止异常 conf 把链接指到任意路径
+if [[ "$target" != /nix/store/* ]]; then
+	echo "error: target is not under /nix/store: $target" >&2
 	exit 1
 fi
 

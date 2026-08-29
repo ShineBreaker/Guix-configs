@@ -61,7 +61,7 @@ if [[ -z "$map_lines" ]]; then
 fi
 
 declare -A kv=()
-sed_script="$(mktemp)"
+sed_script="$(mktemp "${TMPDIR:-/tmp}/set-theme-sed.XXXXXX")"
 cleanup() {
   rm -f -- "$sed_script"
 }
@@ -78,6 +78,18 @@ done <<< "$map_lines"
 while IFS= read -r -d '' src; do
   rel="${src#${template_dir}/}"
   dst="${target_root}/${rel}"
+
+  # 解析后目标必须仍落在 $HOME 内：模板文件名可携带 .. 或符号链接，
+  # 写入前做 realpath 前缀校验，防止越界写到 $HOME 之外
+  resolved_dst="$(realpath -m -- "$dst")"
+  case "$resolved_dst" in
+    "$HOME"/*) ;;
+    *)
+      printf 'Error: destination escapes $HOME, aborting: %s -> %s\n' "$src" "$resolved_dst" >&2
+      exit 1
+      ;;
+  esac
+
   dst_dir="$(dirname -- "$dst")"
   mkdir -p -- "$dst_dir"
 

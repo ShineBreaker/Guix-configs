@@ -14,8 +14,6 @@ system/
 │   ├── containers/
 │   │   ├── containers.conf
 │   │   └── policy.json
-│   ├── hypr/
-│   │   └── hypridle.conf
 │   ├── pipewire/
 │   │   └── pipewire.conf.d/
 │   │       └── 10-latency-fix.conf

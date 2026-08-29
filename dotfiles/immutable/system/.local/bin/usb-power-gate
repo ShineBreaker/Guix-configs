@@ -38,7 +38,18 @@ excluded() {
 
 # resume 只恢复自己挂起过的设备：驱动默认即 auto 的设备（如摄像头）
 # 不被顺手写成 on，避免夺走其原有省电。
-state_file="${XDG_RUNTIME_DIR:-/tmp}/usb-power-gate.suspended"
+# 安全：state 文件路径强制要求 XDG_RUNTIME_DIR（用户私有 runtime 目录）。
+# 回落到 /tmp 会被同机其他用户预置符号链接劫持，覆写任意可写文件。
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    printf '%s: XDG_RUNTIME_DIR is not set, refusing insecure /tmp fallback\n' "$0" >&2
+    exit 1
+fi
+state_file="${XDG_RUNTIME_DIR}/usb-power-gate.suspended"
+# 写前防劫持：目标已是符号链接则拒绝（链接可指向任意文件）
+if [ -L "$state_file" ]; then
+    printf '%s: %s is a symlink, refusing to write\n' "$0" "$state_file" >&2
+    exit 1
+fi
 
 if [ "$mode" = suspend ]; then
     : > "$state_file"
