@@ -4,16 +4,20 @@
 #
 # SPDX-License-Identifier: MIT
 
-# anchors-lib.sh — crush hook 共享的 anchors.json 加载 / 合并库
+# anchors-lib.sh — 三方 gate 共享的 anchors.json 加载 / 合并库
 #
-# 被 bash-gate.sh 与 edit-gate.sh source。语义对齐 pi-gate（dotfiles/mutable/agents/pi/
-# .config/pi/extensions/pi-gate/index.ts）的分层 ratchet 模型：
+# 被同目录 gate-core.sh（决策核）source；gate-core 再被三方适配器调用：
+#   - zcode   dotfiles/mutable/agents/zcode/.zcode/hooks/{bash,edit}-gate.sh
+#   - crush   dotfiles/immutable/agents/.config/crush/hooks/{bash,edit}-gate.sh
+#   - pi      dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/index.ts
+# 分层 ratchet 模型：
 #   - 全局 ~/.config/agents/anchors.json（meta-frozen，人工维护，承载 sudo 等不可削弱项）
 #   - 项目级 <root>/.agents/anchors.json（从起点向上遍历到 git 根，收集每一层）
 #   - 合并顺序：全局（底）→ 项目根 → … → 项目近；数组 unique 并集、映射近层覆盖远层
 #   - 代码底层 DEFAULT：frozen_commands 恒含 "sudo"（agent 任何场景都不需要提权）
 #
-# 设计原则：本库只做「读 + 合并」，不做拦截决策——拦截语义在各 hook 里，规则源单一。
+# 设计原则：本库只做「读 + 合并」，判定语义全部在 gate-core.sh——规则源与
+# 决策核各自单一，避免三方适配器复制演化。
 
 # 允许重复 source（幂等）
 if [[ -n "${_ANCHORS_LIB_LOADED:-}" ]]; then return 0 2>/dev/null || true; fi
@@ -128,15 +132,26 @@ load_merged_anchors() {
   fi
 }
 
-# ─── frozen_globs 告警 ───────────────────────────────────────────────────────
-# bash hook 不实现 glob→regex 匹配（pi-gate 有专门的 globToRegex）。
-# 当前两层 anchors.json 的 frozen_globs 均为空，零影响；非空时记日志，不静默忽略。
-warn_globs_if_any() {
-  local merged="$1"
-  local n
-  n="$(jq '.frozen_globs | length' <<<"$merged" 2>/dev/null || printf '0')"
-  if [[ "$n" -gt 0 ]]; then
-    log_gate_error "crush-gate" "frozen_globs" \
-      "anchors.json 含 ${n} 条 frozen_globs，crush bash hook 暂不支持 glob 匹配（完整语义见 pi-gate globToRegex），这些 glob 不会在 crush 生效。"
-  fi
+# ─── frozen_globs 匹配 ───────────────────────────────────────────────────────
+# glob → 锚定 ERE：`**` → .*（并吞 **/ 的斜杠），`*` → [^/]*，`?` → [^/]。
+# 语义对齐 pi-gate 旧实现的 globToRegex；由 gate-core.sh 在 frozen_globs
+# 匹配时调用（含 / 的对相对路径匹配，不含 / 的对 basename 匹配）。
+glob_to_ere() {
+  local g="$1" out="" i=0 c
+  while (( i < ${#g} )); do
+    c="${g:$i:1}"
+    case "$c" in
+      '*')
+        if [[ "${g:$((i+1)):1}" == '*' ]]; then
+          out+='.*'; ((i++))
+          [[ "${g:$((i+1)):1}" == '/' ]] && ((i++))
+        else
+          out+='[^/]*'
+        fi ;;
+      '?') out+='[^/]' ;;
+      *)   out+="$(printf '%s' "$c" | sed 's/[.[\*^$()+?{|\\]/\\&/g')" ;;
+    esac
+    ((i++))
+  done
+  printf '%s' "^${out}$"
 }

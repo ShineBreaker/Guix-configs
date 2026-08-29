@@ -14,9 +14,13 @@ agents/
 │   ├── agents/
 │   │   ├── context/
 │   │   │   ├── 01-language.md
-│   │   │   └── 02-ultilities.md
+│   │   │   ├── 02-subagents.md
+│   │   │   ├── 03-packages.md
+│   │   │   ├── 04-git.md
+│   │   │   └── 05-tools.md
 │   │   ├── anchors-lib.sh
-│   │   └── anchors.json
+│   │   ├── anchors.json
+│   │   └── gate-core.sh
 │   └── crush/
 │       ├── bin/
 │       │   ├── bash-language-server
@@ -55,19 +59,19 @@ dotfiles/immutable/agents/   → Guix Home (stow layout) → 实际路径
 
 ### Crush（`.config/crush/`）
 
-`crush.json` + `bin/` + `hooks/`。`hooks/` 两个脚本（`bash-gate.sh` / `edit-gate.sh`）`source` 共享的 `~/.config/agents/anchors-lib.sh`（见下「共享基础设施」），从合并后的 anchors.json 读取冻结规则，行为对齐 pi-gate（`checkBashCommand` / `checkProtectedPath`）。
+`crush.json` + `bin/` + `hooks/`。`hooks/` 两个脚本（`bash-gate.sh` / `edit-gate.sh`）是纯协议适配器：调用共享决策核 `~/.config/agents/gate-core.sh` 完成全部判定（见下「共享基础设施」）。
 
 ### 共享基础设施（`.config/agents/`）
 
-`anchors.json`（规则）+ `anchors-lib.sh`（协议无关的加载/合并库）。lib 完成分层 ratchet 合并（全局 + 项目级，数组并集、映射近层覆盖远层、`sensitive_patterns` 按 `pattern` 去重）。三方消费者（pi-gate TS、crush 两 bash hook、zcode 三 bash hook）共享此 lib 与 anchors.json 单一真相源。
+`anchors.json`（规则）+ `anchors-lib.sh`（协议无关的加载/合并库）+ `gate-core.sh`（决策核）。lib 完成分层 ratchet 合并（全局 + 项目级，数组并集、映射近层覆盖远层、`sensitive_patterns` 按 `pattern` 去重）；core 承载全部判定语义（冻结命令归一化匹配、`--dry-run` 豁免仅限 blue 前缀、frozen_paths 双路径解析、frozen_globs 实装、部署位置保护、敏感信息、改写与提示），以 stdout 行协议（`BLOCK` / `SENSITIVE` / `AUTO_ALLOW` / `REWRITTEN` / 提示类）输出。三方适配器（pi-gate TS、crush 两 bash hook、zcode 两 bash hook）只做协议转换——anchors.json 与判定语义双单一真相源，修一处三方同步生效。
 
 **分层职责**：
 
-- **全局 `~/.config/agents/anchors.json`**（meta-frozen）：跨所有 workspace 的通用 agent 约束 — `sudo`、`interactive_commands`（vi/less/man… 出现即禁）、`bare_repl_commands`（python/node 裸调用禁）、`sensitive_patterns`（sk-/密码/私钥/AWS/GitHub token）
+- **全局 `~/.config/agents/anchors.json`**（meta-frozen）：跨所有 workspace 的通用 agent 约束 — `sudo`、`interactive_commands`（vi/less/man… 出现即禁）、`sensitive_patterns`（sk-/密码/私钥/AWS/GitHub token）
 - **项目级 `<root>/.agents/anchors.json`**（agent 可写，ratchet 加码）：仓库专属 — `frozen_commands` / `frozen_paths` / `redirect_conventions` / `path_hints` / `human_only_actions` / `anchor_measurements`
-- **代码底层（各 hook 脚本硬编，恒定生效）**：rm 破坏性防护、git 写操作限制（commit 需 -m / 禁 add -p / 禁 rebase -i）、~/.config/ 和 ~/.local/ 部署位置保护
+- **代码底层（gate-core.sh 硬编，恒定生效）**：rm 破坏性防护、git 写操作限制（commit 需 -m / 禁 add -p / 禁 rebase -i）、~/.config/ 和 ~/.local/ 部署位置保护、只读命令白名单
 
-调整通用约束改全局 anchors.json；仓库规则改项目级；pi-gate / crush / zcode 三方同步生效。
+调整通用约束改全局 anchors.json；仓库规则改项目级；判定语义改 gate-core.sh——pi-gate / crush / zcode 三方同步生效。
 
 ### Skills — 第三方 agent skills 声明式管理（askill）
 
