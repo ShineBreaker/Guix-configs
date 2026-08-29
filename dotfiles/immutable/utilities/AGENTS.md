@@ -83,7 +83,7 @@ utilities/
 ### Nix 备份分支
 
 - `source/nix/` 与 `.nix-channels` 构成独立 Nix home-manager 配置，与 Guix **不互通**
-- 操作：`blue nix`（经 `nh home switch`）/ `blue nix-init` / `blue nix-update`
+- 操作：`blue nix`（经 `nh home switch`）/ `blue nix-init` / `blue update --nix`
 
 ## 修改约束
 

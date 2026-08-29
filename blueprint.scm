@@ -1138,12 +1138,9 @@
 
 ;;; ---------- 维护 ----------
 
-;; blue clean-generations —— 删旧的 system/home generations（system 需 sudo）。
-(define-command (clean-generations-command arguments)
-  ((invoke "clean-generations")
-   (category 'maintenance)
-   (synopsis "删除旧的 Guix System/Home 世代")
-   (help "删除旧 system 和 home 世代。删除 system 世代可能需要 sudo 权限。"))
+;; 删旧的 system/home generations（system 需 sudo）。原为独立命令
+;; clean-generations，现已并入 gc，仅作为内部过程保留。
+(define (%clean-generations)
   (%run '("sh" "-c" "sudo guix system delete-generations > /dev/null"))
   (%run '("sh" "-c" "guix home delete-generations > /dev/null")))
 
@@ -1174,15 +1171,25 @@
      (,(string-append %stow-dir "/emacs/.config/emacs/etc") directory)
      (,(string-append %stow-dir "/emacs/.config/emacs/var") directory))))
 
-;; blue gc —— 一键大扫除：先 clean-generations，再 guix gc，最后删旧 EFI。
+;; blue gc —— 一键大扫除：删旧世代 → guix gc → 删旧 EFI（均需人工触发）。
 (define-command (gc-command arguments)
   ((invoke "gc")
    (category 'maintenance)
-   (synopsis "执行 Guix GC 并清理旧 Guix EFI 文件")
-   (help "依次执行 clean-generations、guix gc 并删除 /boot/EFI/Guix/OLD-*.EFI。"))
-  ((command-procedure clean-generations-command) '())
+   (synopsis "删除旧世代、执行 Guix GC 并清理旧 Guix EFI 文件")
+   (help "依次删除旧 system/home 世代、执行 guix gc 并删除 /boot/EFI/Guix/OLD-*.EFI。删除 system 世代与 EFI 文件需要 sudo。"))
+  (%clean-generations)
   (%run '("guix" "gc"))
-  (%run '("sudo" "rm" "-rf" "/boot/EFI/Guix/OLD-*.EFI")))
+  ;; %run 经 popen 直 exec、无 shell 展开，OLD-*.EFI 须在 Guile 侧收集
+  ;; 后逐个删除。ESP 挂载点是 /efi（limine-efi-removable-bootloader 的
+  ;; targets），旧命令的 /boot/EFI/Guix 路径在这台机器上并不存在。
+  (let ([stale (or (false-if-exception
+                    (scandir "/efi/EFI/Guix" (cut string-prefix? "OLD-" <>)))
+                   '())])
+    (if (null? stale)
+        (format #t "没有待清理的 OLD-*.EFI~%")
+        (for-each (lambda (name)
+                    (%run `("sudo" "rm" "-rf" ,(string-append "/efi/EFI/Guix/" name))))
+                  stale))))
 
 ;; blue reuse —— 用 reuse 工具给仓库文件批量补 SPDX 版权/许可证头。
 (define-command (reuse-command arguments)
@@ -1232,14 +1239,6 @@
    (synopsis "初始化 Nix channel 并安装 home-manager"))
   (%run '("nix-channel" "--update"))
   (%run '("nix-shell" "<home-manager>" "-A" "install")))
-
-;; blue nix-update —— 更新 Nix channel 和 flake.lock，并 git commit -S。
-;; 等价 blue update --nix，保留作为 Nix 节的快捷入口。
-(define-command (nix-update-command arguments)
-  ((invoke "nix-update")
-   (category 'nix)
-   (synopsis "更新 Nix channel 和 flake"))
-  (%update-nix 'all))
 
 ;;; ---------- 校验 ----------
 
@@ -1349,9 +1348,9 @@ folding 控制:
   `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
     ("编辑 (editing)" ,block-show-command ,block-replace-command)
     ("Guix 频道 (guix)" ,pull-command ,update-command)
-    ("维护 (maintenance)" ,clean-artifacts-command ,clean-generations-command
+    ("维护 (maintenance)" ,clean-artifacts-command
      ,gc-command ,reuse-command ,structor-command)
-    ("Nix 备用 (nix)" ,nix-command ,nix-init-command ,nix-update-command)
+    ("Nix 备用 (nix)" ,nix-command ,nix-init-command)
     ("Stow (stow)" ,stow-command ,stow-all-command)
     ("验证 (validation)" ,secret-scan-command)
     ("帮助 (help)" ,list-command)))

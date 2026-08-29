@@ -31,7 +31,7 @@
   "human_only_actions": [
     "blue rebuild（Guix System reconfigure，需 sudo）",
     "blue init（装机到 /mnt，需 sudo）",
-    "blue clean / clean-generations（删世代 / EFI，需 sudo）",
+    "blue clean / gc（删世代 / EFI，需 sudo）",
     "channel.lock 更新（blue update）",
     "distill → skills/（agenote 蒸馏产物须人工 review）"
   ],

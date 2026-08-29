@@ -127,14 +127,12 @@ guix shell blue -- blue init
 | =blue pull=               | =guix pull --allow-downgrades=                     | 频道 |
 | =blue stow [MODE] PKG...= | GNU Stow 部署 dotfiles/mutable/ 下的包             | 直链 |
 | =blue stow-all [MODE]=    | 批量对 dotfiles/mutable/ 下所有包执行 stow 操作    | 直链 |
-| =blue clean-generations=  | 删除旧的 Guix System / Home 世代                   | 维护 |
 | =blue clean-artifacts=    | 移除仓库编译产物                                   | 维护 |
-| =blue gc=                 | 执行 Guix GC 并清理旧 Guix EFI 文件                | 维护 |
+| =blue gc=                 | 删旧世代 + Guix GC + 清理旧 Guix EFI 文件          | 维护 |
 | =blue reuse=              | 为文件补充 SPDX 版权和许可证头                     | 维护 |
 | =blue structor=           | 刷新 AGENTS.md 中自动生成的目录树章节              | 维护 |
 | =blue nix=                | 应用备用 Nix home-manager 配置                     | 二轨 |
 | =blue nix-init=           | 初始化 Nix channel 并安装 home-manager             | 二轨 |
-| =blue nix-update=         | 更新 Nix channel 和 flake                          | 二轨 |
 
 * 常用任务
 
