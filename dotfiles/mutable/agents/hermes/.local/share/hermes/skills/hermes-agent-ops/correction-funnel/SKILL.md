@@ -41,7 +41,7 @@ metadata:
 - 查询 / 闲聊任务
 - 已经在 KB 里的同一个 correction（先 search 再 add）
 
-## 工作流程（5 步）
+## 工作流程（6 步）
 
 ### Step 1: 触发 + 收口
 
@@ -63,6 +63,8 @@ agenote dream --window-days 90 --limit 5
 **不要直接调用 dream 把候选转 KB** —— dream 是**只读候选发现器**，绝不在 KB 里写任何东西（这是 agenote-curator skill 的设计约束）。
 
 **候选查重（例行步骤，2026-08-29 补）**：评估每个 candidate 前先 `agenote search "<关键词>"` 查重——命中既有卡片则走 `agenote touch <卡片ID>` 留痕（更新 LAST_VERIFIED，强化索引权重），不重复 add；确无命中才进 Step 3 评估。本轮用到的既有资料同样 touch 留痕。
+
+**复发检查（WikiSkill 证据累积，2026-08-29 补）**：命中既有卡片时，判断本次是**第几次独立出现**（读卡片正文里的 Evidence 列表）。若为复发，用 `agenote update <ID> --append-to "关键发现" --append-text "Evidence YYYY-MM-DD: <本次触发场景一句话>"` 追加一条带日期的证据行——而不是只 touch。**同一坑 ≥3 次独立出现 → 触发 Step 5.5（KB→skill 晋升评估）**。
 
 ### Step 3: 评估 candidate → 3 个判定
 
@@ -124,7 +126,26 @@ memory(
 - 环境事实 / 工具约定 → `target=memory`
 - 项目专属 → `fact_store` (按需检索，不入 markdown)
 
-### Step 5: 留痕 + 闭环
+### Step 5.5: KB→skill 晋升评估（≥3 次复发的 mistake 卡触发）
+
+同一坑在 Evidence 里累积 ≥3 次独立出现时，触发一次**原子** skill 修改评估（WikiSkill 单提案原则）：
+
+1. `read_file ~/.local/share/hermes/skills/skill-impact.md` —— 先读审计簿，确认这个方向没有被拒过的先例（被拒原因写明的路不要再走）
+2. 挑证据最厚的卡片 → 起草**一个**最小 skill 修改（新建或 patch 单个 skill；skill 放置走 `skill-authoring` §9 分类树）
+3. SKILL.md frontmatter 后加一行反向链接：`来源: agenote <卡片ID>`（卡片被推翻时知道要回头审哪个 skill）
+4. 用户过目拍板 → 落地 → 无论 Accept/Reject 都按 Step 5.6 登记审计簿
+5. 卡片侧用 `agenote update <ID> --status done` 标记已消化，正文补一行 `→ 已晋升为 skill <名字> (YYYY-MM-DD)`
+
+不达 3 次门槛的卡片**不**晋升——一次失误不是模式，防 over-broad lesson 在这里二次兜底。
+
+### Step 5.6: 被拒提案登记（审计簿，WikiSkill skill-impact）
+
+任何 skill 修改提案被拒（用户否决 / verify 失败 / 门禁拒绝）时，**当场**向
+`~/.local/share/hermes/skills/skill-impact.md` 登记簿顶部追加一条（格式见该文件头）：
+skill 名、diff 摘要、拒绝原因。**被拒绝的尝试是知识**——下次任何会话提案前先读它，避免原样重提。
+Accepted 的提案同样登记（一行即可），让簿子成为 skill 层的完整变更史。
+
+### Step 6: 留痕 + 闭环
 
 ```bash
 # 跑 agenote curate（轻量，不需要 LLM）
@@ -151,7 +172,8 @@ punkjazz.ai 强调**独立 review** 防 over-broad。本 skill 落地为：
 - **`task-contract`**：任务**结束**触发 correction funnel（task-contract 的核对清单对应 Step 4 的 evidence）
 - **`adversarial-review-trigger`**：找到的 finding → correction funnel
 - **`agenote-base`**：KB 写入的 protocol
-- **`agenote-curator`**：KB 健康度 / 周期 curate
+- **`agenote-curator`**：KB 健康度 / 周期 curate + KB→skill 晋升执行（curator Step 4.5）
+- **`~/.local/share/hermes/skills/skill-impact.md`**：skill 修改提案审计簿（Step 5.5 读、Step 5.6 写）
 - **`memory` tool**：用户偏好（不是技术事实）的另一通道
 
 ## 不做的事
