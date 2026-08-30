@@ -29,14 +29,26 @@
 ;;   info.scm   git 状态与 /proc 进程信息采集
 ;;   layout.scm 分组聚合与布局行渲染
 ;;   input.scm  键盘输入解析与 FIFO 事件循环
-;; 脚本由 tmux run-shell 调用，工作目录不可靠，load 路径基于脚本自身
-;; 位置解析（current-filename 为被 load 时传入的路径）。
+;; 脚本由 tmux run-shell 调用，工作目录不可靠。current-filename 经软链
+;; canonicalize：immutable 部署下本文件是独立 store 单文件项，dirname 落在
+;; /gnu/store，同目录没有 sidebar/。因此先试部署位置
+;; $HOME/.config/tmux/scripts/sidebar/，仓库源树（current-filename 同目录）
+;; 回退；%sidebar-module-dir 统一指模块所在目录，都找不到时保留 %script-dir
+;; 让 load 报出可定位的路径。
 (define %script-dir (dirname (current-filename)))
 
-(load (string-append %script-dir "/sidebar/text.scm"))
-(load (string-append %script-dir "/sidebar/info.scm"))
-(load (string-append %script-dir "/sidebar/layout.scm"))
-(load (string-append %script-dir "/sidebar/input.scm"))
+(define %sidebar-module-dir
+  (or (find (lambda (dir)
+              (access? (string-append dir "/text.scm") R_OK))
+            (list (string-append (or (getenv "HOME") "")
+                                 "/.config/tmux/scripts/sidebar")
+                  (string-append %script-dir "/sidebar")))
+      %script-dir))
+
+(load (string-append %sidebar-module-dir "/text.scm"))
+(load (string-append %sidebar-module-dir "/info.scm"))
+(load (string-append %sidebar-module-dir "/layout.scm"))
+(load (string-append %sidebar-module-dir "/input.scm"))
 
 ;; === tmux snapshot ===
 
