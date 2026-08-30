@@ -35,11 +35,34 @@
         (setf (variable-value sym :global) val)
         (vs-warn (list pkg name)))))
 
-(defun vs-bind (keyspec pkg name)
-  "逐条 define-key（函数式）：命令符号 find-symbol 动态解析，缺失只告警。"
+;; --- 键位注册表（45-keyhelp 帮助页的数据源，which-key 替代的描述层）---
+(defparameter *vs-binding-groups* nil
+  "分组登记表：(分组ID 标题) 列表，vs-declare-group 按声明顺序展示。")
+(defparameter *vs-binding-registry* nil
+  "已注册键位：(键串 命令名 分组ID 描述) 列表，vs-bind 落键时登记。")
+(defparameter *vs-help-notes* nil
+  "帮助页附注：(分组ID 键串 描述) 列表——登记不经 vs-bind 的绑定
+（language-mode 默认键、局部 keymap 内的键），只作展示。")
+
+(defun vs-declare-group (id title)
+  "声明键位分组（帮助页按声明顺序渲染分组标题）。"
+  (unless (assoc id *vs-binding-groups* :test #'string=)
+    (setf *vs-binding-groups*
+          (nconc *vs-binding-groups* (list (list id title))))))
+
+(defun vs-help-note (group keyspec desc)
+  "向帮助页附注一条不经 vs-bind 的绑定（仅展示，不落键）。
+条目与注册表同构：(键串 命令名 分组ID 描述)，命令名留空占位。"
+  (push (list keyspec "" group desc) *vs-help-notes*))
+
+(defun vs-bind (keyspec pkg name &optional (group "other") (desc ""))
+  "逐条 define-key（函数式）：命令符号 find-symbol 动态解析，缺失只告警。
+同时登记进 *vs-binding-registry*（帮助页数据源）。"
   (let ((sym (vs$ pkg name)))
     (if sym
-        (define-key *global-keymap* keyspec sym)
+        (progn
+          (define-key *global-keymap* keyspec sym)
+          (push (list keyspec name group desc) *vs-binding-registry*))
         (vs-warn (list pkg name)))))
 
 (defparameter *lem-source-tree*

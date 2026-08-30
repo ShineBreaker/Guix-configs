@@ -321,6 +321,25 @@
 (define-key *vs-explorer-keymap* "r" 'vscode-explorer-refresh)
 (define-key *vs-explorer-keymap* "g" 'vscode-explorer-refresh)
 
+;; Up/Down 不能放行给 global 的 next-line/previous-line：本 buffer 为
+;; 只读 + 行由属性渲染，next-line 的 virtual-line-column 在此返回 NIL，
+;; 直接以 TWO-ARG-< 炸 backtrace（E2E 实测，M-Left 移焦进侧栏即触发）。
+;; 用纯点操作的行级移动绕开 virtual column 机制。
+(define-command vscode-explorer-next-line () ()
+  (let* ((point (current-point))
+         (line (line-number-at-point point)))
+    (move-to-line point (1+ line))
+    (back-to-indentation point)))
+
+(define-command vscode-explorer-previous-line () ()
+  (let* ((point (current-point))
+         (line (line-number-at-point point)))
+    (move-to-line point (max 1 (1- line)))
+    (back-to-indentation point)))
+
+(define-key *vs-explorer-keymap* "Down" 'vscode-explorer-next-line)
+(define-key *vs-explorer-keymap* "Up" 'vscode-explorer-previous-line)
+
 ;; Activity 图标行对应视图（1-5 跳转；4/5 暂无对应物）
 (defun vs-run-command (pkg name)
   (vs-focus-main-window)
@@ -384,9 +403,12 @@ get-buffer 撞名；树状态在 *vs-open-dirs*，buffer 无状态损失。"
 
 ;; --- 激活：首个真实文件 buffer 出现 → 挂载其工作区文件树 ---
 (defun vs-explorer-activate (file)
-  "把工作区根挂到 file 所在项目并重绘侧栏；file 为 namestring。"
+  "把工作区根挂到 file 所在项目并重绘侧栏；file 为 namestring。
+注意转目录要用 pathname-directory-pathname（取所在目录）；不能用
+pathname-parent-directory-pathname——它只看 pathname-directory 组件，
+对文件路径会连工作区段一起剥掉（root 错位一层，E2E 实测）。"
   (setf *vs-explorer-root*
-        (vs-project-root (uiop:pathname-parent-directory-pathname file)))
+        (vs-project-root (make-pathname :directory (pathname-directory file))))
   (vs-explorer-render))
 
 (defun vs-explorer-on-find-file (buffer)
