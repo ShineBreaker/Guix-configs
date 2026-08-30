@@ -76,6 +76,7 @@ mutable/
 ├── lem/
 │   ├── .config/
 │   │   └── lem/
+│   │       ├── modules/
 │   │       └── init.lisp
 │   └── .stow-local-ignore
 └── tools/
