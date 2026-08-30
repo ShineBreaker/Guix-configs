@@ -4047,7 +4047,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
-标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:待办区置顶,标题左缘补齐条目缩进、右缘按板块最宽行贴快捷键提示,经 advice 挂接而不复制上游渲染逻辑。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
+标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽,装饰完成后重跑 =dashboard-center-text= 以版心为基准整体居中。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
 
 #+begin_src emacs-lisp
 (defun custom/dashboard-initial-buffer ()
@@ -4094,40 +4094,97 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
   '("C-c o a" "C-x C-r" "C-x p p")
   "各标题行右缘显示的快捷键,顺序与 `dashboard-items' 一致。")
 
-(defun custom/dashboard--section-info (ov)
-  "返回 heading overlay OV 的板块信息 (LINE-START END WIDTH)。
-END 为标题行后第一个空行(插件 page-separator)的行尾;WIDTH 为条目区
-最大行宽(标题行不计入)。"
-  (save-excursion
-    (goto-char (overlay-start ov))
-    (let ((line-start (line-beginning-position)))
-      (goto-char line-start)
-      (forward-line 1)
-      (let ((width 0))
-        (while (and (< (point) (point-max))
-                    (not (string-empty-p
-                          (buffer-substring-no-properties
-                           (line-beginning-position)
-                           (line-end-position)))))
-          (setq width (max width
-                           (string-width
-                            (buffer-substring-no-properties
-                             (line-beginning-position)
-                             (line-end-position)))))
-          (forward-line 1))
-        (list line-start (line-end-position) width)))))
+(defcustom custom:dashboard-content-ratio 0.8
+  "Dashboard 版心占窗口正文宽度的比例,两侧空列各占 (1-ratio)/2。
+按 100/140/200 三档常用列宽调优,不做逐列自适应。"
+  :type 'number)
 
-(defun custom/dashboard--decorate-headings (&rest _)
+(defcustom custom:dashboard-sep-char-width 2
+  "TTY 下分割线字符 ─ 的渲染列宽(CJK locale 终端按 East Asian wide
+双列显示则为 2;终端按单列显示的改成 1)。GUI frame 恒按单列。"
+  :type 'integer)
+
+(defun custom/dashboard--content-width (&optional window)
+  "WINDOW(默认 selected)下的 dashboard 版心宽度(列)。"
+  (floor (* custom:dashboard-content-ratio
+            (window-body-width window))))
+
+(defun custom/dashboard--compact-path (path)
+  "把 PATH 中间目录压缩为首字母,首尾段保留。
+隐藏目录(以 . 开头)取其第二个字符,避免 ~/./e 这种怪异的路径。"
+  (let* ((parts (split-string path "/" t))
+         (len (length parts)))
+    (if (<= len 3)
+        path
+      (let* ((head (car parts))
+             (file (car (last parts)))
+             (middle (cl-subseq parts 1 (1- len)))
+             (compressed (mapcar (lambda (d)
+                                   (cond ((string-empty-p d) d)
+                                         ((string-prefix-p "." d)
+                                          (if (> (length d) 1)
+                                              (concat "." (substring d 1 2))
+                                            d))
+                                         (t (substring d 0 1))))
+                                 middle)))
+        (concat head "/"
+                (mapconcat #'identity compressed "/")
+                "/" file)))))
+
+(defun custom/dashboard--fit-path (path width)
+  "把 PATH 压进 WIDTH 列:先首字母压缩中间目录,仍超则头部 ... 截断。"
+  (let ((p (custom/dashboard--compact-path path)))
+    (if (<= (string-width p) width)
+        p
+      (if (<= width 3)
+          "..."
+        (concat (substring p 0 (- width 3)) "...")))))
+
+(defun custom/dashboard--shorten-path (path _type)
+  "dashboard-shorten-path 的替代:超版心的路径两级降级。
+显示文本与真实路径经 plugin 的 path-alist 解耦,缩短不影响点击跳转。"
+  (custom/dashboard--fit-path
+   (abbreviate-file-name path)
+   (custom/dashboard--content-width)))
+
+(defun custom/dashboard--dashboard-window ()
+  "返回 client frame 中显示 dashboard 的窗口,无则 nil。
+必须过滤掉 daemon 的 initial frame(它没有 'client 参数):switch-to-buffer
+会把 dashboard 泄漏到那个超宽的哑 frame 上,误选它版心宽度就错了。"
+  (car (seq-filter
+        (lambda (w)
+          (frame-parameter (window-frame w) 'client))
+        (get-buffer-window-list dashboard-buffer-name nil 0))))
+
+(defvar custom/dashboard--rendered-width nil
+  "上次渲染 dashboard 时的窗口正文宽度,resize 节流用。")
+
+(defun custom/dashboard--refresh-in-window ()
+  "在显示 dashboard 的窗口上下文里强制重渲染并装饰。
+渲染与装饰都必须以该窗口为 selected:版心、路径缩短和 center-text
+的宽度全部取自这里,别的 frame 上下文算出来是错的。"
+  (when-let* ((win (custom/dashboard--dashboard-window)))
+    (with-selected-window win
+      (setq custom/dashboard--rendered-width (window-body-width win))
+      (dashboard-open)
+      ;; dashboard-open 的 switch-to-buffer 可能切走 selected,
+      ;; 装饰必须显式仍以目标窗口为准
+      (custom/dashboard--decorate-headings win))))
+
+(defun custom/dashboard--decorate-headings (&optional window)
   "渲染后装饰标题行、右贴快捷键并插入板块分割线。
-所有标题行与分割线都补齐到全局最宽板块的宽度(而非各板块自身宽度),
-整版右缘对齐。定位走 heading overlay(`dashboard-heading' face)而非
-`dashboard--section-starts':渲染末尾的 page-separator 替换会使后者的
-绝对位置漂移。经 advice 挂在 `dashboard-open' 之后——它是唯一带
-force-refresh 的渲染入口(整 buffer 重画,本函数总在干净 buffer 上运行,
-天然幂等);resize hook 走的 `dashboard-insert-startupify-lists' 无 force
-不重画,若挂在那里会在旧 buffer 上叠加装饰,分割线宽度正反馈暴涨。"
+标题行与分割线都补齐到版心宽(=custom/dashboard--content-width= ),
+装饰完成后重跑 `dashboard-center-text':分割线是 buffer 最宽行,以它
+为基准整体居中,两侧空列恰好各占设定比例。定位走 heading overlay
+(`dashboard-heading' face)而非 `dashboard--section-starts':渲染末尾的
+page-separator 替换会使后者的绝对位置漂移。只从
+`custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。"
   (with-current-buffer (get-buffer dashboard-buffer-name)
-    (let* ((ovs (sort
+    (let* ((width (custom/dashboard--content-width window))
+           (icon-w (if (and (dashboard-display-icons-p)
+                            dashboard-set-heading-icons)
+                       2 0))
+           (ovs (sort
                  (cl-remove-if-not
                   (lambda (ov)
                     (and (eq (overlay-get ov 'face) 'dashboard-heading)
@@ -4135,54 +4192,76 @@ force-refresh 的渲染入口(整 buffer 重画,本函数总在干净 buffer 上
                          (> (overlay-end ov) (overlay-start ov))))
                   (overlays-in (point-min) (point-max)))
                  (lambda (a b) (< (overlay-start a) (overlay-start b)))))
-           (icon-w (if (and (dashboard-display-icons-p)
-                            dashboard-set-heading-icons)
-                       2 0))
-           (inhibit-read-only t)
-           ;; 第一遍:正序无副作用扫描,全局基准 = 最宽板块
-           (sections (mapcar #'custom/dashboard--section-info ovs))
-           (global-width (apply #'max 1 (mapcar #'caddr sections))))
-      ;; 第二遍:倒序插入,前面的 insert 不影响后面 heading 的位置
+           (inhibit-read-only t))
+      ;; 倒序插入,前面的 insert 不影响后面 heading 的位置
       (cl-loop
        for (ov . key) in (reverse (cl-mapcar #'cons ovs
                                              custom:dashboard-heading-keys))
-       for (_line-start end _width) in (reverse sections)
        when key
        do (let* ((name (or (overlay-get ov 'display)
                            (buffer-substring-no-properties
                             (overlay-start ov) (overlay-end ov))))
-                 (used (+ 4 2 icon-w (string-width name))))
+                 (used (+ 4 icon-w (string-width name))))
             (save-excursion
-              ;; 分割线替换板块末空行,前置空格按窗口宽度居中(line-prefix
-              ;; 属性对替换插入的整行不生效,渲染时直接计算)。
-              (let ((pad (max 0 (/ (- (window-body-width) global-width) 2))))
-                (goto-char end)
-                (goto-char (line-beginning-position))
-                (delete-region (point) (line-end-position))
-                (insert (concat
-                         (make-string pad ?\s)
-                         (propertize (make-string global-width ?─)
-                                     'face 'shadow))))
-              ;; 标题行缩进 + 快捷键右贴到 global-width
+              ;; 分割线替换板块末空行(板块边界 = 标题行后第一个空行)
               (goto-char (overlay-start ov))
-              (let ((line-start (line-beginning-position))
-                    (off-s (- (overlay-start ov) (line-beginning-position)))
-                    (off-e (- (overlay-end ov) (line-beginning-position))))
-                (goto-char line-start)
-                ;; heading overlay 是 front-advance:TTY 无 icon 时其起点恰在
-                ;; 行首,行首插入的缩进会被吞进 overlay(display 替换后消失)。
-                ;; 记住原文本范围,插入后把 overlay 拨回。缩进继承行首的
-                ;; line-prefix,否则标题行脱离板块整体缩进。
-                (let ((prefix (get-text-property line-start 'line-prefix)))
-                  (insert (propertize "    " 'line-prefix prefix))
-                  (move-overlay ov (+ line-start 4 off-s)
-                                (+ line-start 4 off-e)))
-                (goto-char (line-end-position))
-                (insert (concat
-                         (make-string
-                          (max 1 (- global-width used (string-width key)))
-                          ?\s)
-                         (propertize key 'face 'font-lock-comment-face))))))))))
+              (forward-line 1)
+              (while (and (< (point) (point-max))
+                          (not (string-empty-p
+                                (buffer-substring-no-properties
+                                 (line-beginning-position)
+                                 (line-end-position)))))
+                (forward-line 1))
+              (delete-region (line-beginning-position) (line-end-position))
+              ;; ─ 是 East Asian ambiguous 宽字符:CJK locale 的 TTY 按
+              ;; 双列渲染(char-width 表),GUI 字体单列;字符数按 frame
+              ;; 类型除以 `custom:dashboard-sep-char-width',保证版心铺满。
+              (insert (propertize
+                       (make-string (/ width
+                                       (if (display-graphic-p
+                                            (window-frame (selected-window)))
+                                           1
+                                         custom:dashboard-sep-char-width))
+                                    ?─)
+                       'face 'shadow)))
+            ;; 标题行缩进 + 快捷键右贴到版心宽
+            (goto-char (overlay-start ov))
+            (let ((line-start (line-beginning-position))
+                  (off-s (- (overlay-start ov) (line-beginning-position)))
+                  (off-e (- (overlay-end ov) (line-beginning-position))))
+              (goto-char line-start)
+              ;; heading overlay 是 front-advance:TTY 无 icon 时其起点恰在
+              ;; 行首,行首插入的缩进会被吞进 overlay(display 替换后消失)。
+              ;; 记住原文本范围,插入后把 overlay 拨回。缩进继承行首的
+              ;; line-prefix,否则标题行脱离板块整体缩进。
+              (let ((prefix (get-text-property line-start 'line-prefix)))
+                (insert (propertize "    " 'line-prefix prefix))
+                (move-overlay ov (+ line-start 4 off-s)
+                              (+ line-start 4 off-e)))
+              (goto-char (line-end-position))
+              (insert (concat
+                       (make-string
+                        (max 1 (- width used (string-width key))) ?\s)
+                       (propertize key 'face 'font-lock-comment-face))))))
+      ;; 以版心(分割线 = buffer 最宽行)为基准重跑整体居中
+      (dashboard-center-text (point-min) (point-max)))))
+
+(defun custom/dashboard--on-frame-make (&rest _)
+  "新 client frame 就绪后按其真实宽度重渲染 dashboard。
+initial-buffer-choice 阶段 selected window 可能仍是 daemon 旧 frame,
+首帧版心会按错误宽度装饰;frame/window 就绪后本回调重渲染自愈。"
+  (run-at-time 0 nil #'custom/dashboard--refresh-in-window))
+
+(defun custom/dashboard--on-resize (frame)
+  "FRAME 尺寸变化时按新宽度重渲染 dashboard,宽度未变则跳过。
+daemon initial frame 的尺寸事件直接忽略(见 `dashboard--dashboard-window')。"
+  (when (and (frame-live-p frame)
+             (frame-parameter frame 'client))
+    (let ((win (get-buffer-window dashboard-buffer-name frame)))
+      (when (and win (/= (window-body-width win)
+                         (or custom/dashboard--rendered-width 0)))
+        (with-selected-window win
+          (custom/dashboard--refresh-in-window))))))
 
 (setq initial-buffer-choice #'custom/dashboard-initial-buffer)
 
@@ -4214,8 +4293,10 @@ force-refresh 的渲染入口(整 buffer 重画,本函数总在干净 buffer 上
                                ("Recent Files:" . "最近文件")
                                ("Projects:" . "项目"))
         dashboard-navigator-buttons (list (custom/dashboard--nav-buttons)))
-  (advice-add 'dashboard-open :after
-              #'custom/dashboard--decorate-headings))
+  (advice-add 'dashboard-shorten-path :override
+              #'custom/dashboard--shorten-path)
+  (add-hook 'server-after-make-frame-hook #'custom/dashboard--on-frame-make)
+  (add-hook 'window-size-change-functions #'custom/dashboard--on-resize))
 #+end_src
 
 ** 实验性与待确认
