@@ -77,6 +77,23 @@ make-leftside-window 的 balance-windows 会把已 split 的窗树重新均分
         (vs-resize-terminal-in buffer new)))
     root))
 
+(defun vs-restore-panel-geometry ()
+  "恢复面板 1/3 高度。heal 的侧栏重建走 make-leftside-window →
+balance-windows，会把已有的上下 split 均分（1/3 → 1/2）。注意不能
+用 (setf window-height) 修：它只写叶子窗对象，窗树节点的分割比例
+会在下次 layout 时把数值洗回均分值（SDL2 实测，trace 为证）。这里
+直接删窗重切——与 toggle 隐藏/重开同一条 vs-open-terminal-panel
+管线，比例必然正确；healing 期 size-change 被抑制，无循环。"
+  (let* ((buf (vs-terminal-buffer))
+         (win (and buf (find buf (window-list) :key #'window-buffer))))
+    (when (and win (cdr (window-list)))
+      (delete-window win)
+      (let ((main (vs-open-terminal-panel buf)))
+        ;; resplit 会把焦点带进面板，交还主编辑区（与启动语义一致）
+        (when main (setf (current-window) main))))))
+
+(pushnew 'vs-restore-panel-geometry *vs-heal-hooks*)
+
 (define-command vscode-toggle-terminal () ()
   "VSCode Ctrl+`：显示/隐藏底部终端面板（vterm 实现）。
 隐藏只删窗不杀 buffer（终端进程保活，重开续用同一会话）；重开走

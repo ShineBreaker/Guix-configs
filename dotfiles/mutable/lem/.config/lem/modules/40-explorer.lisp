@@ -28,7 +28,7 @@
 
 ;; --- 状态 ---
 (defparameter *vs-explorer-buffer-name* "*Explorer*")
-(defparameter *vs-explorer-width* 34 "VSCode Side Bar ≈300px ≈ 34 列")
+(defparameter *vs-explorer-width* 28 "VSCode Side Bar；SDL2 大字号下 34 列过宽，收窄到 28")
 (defparameter *vs-explorer-root* nil)
 (defparameter *vs-open-dirs* (make-hash-table :test 'equal)
   "展开状态记忆：目录 namestring → t（侧栏关闭重开后仍保持）")
@@ -362,18 +362,26 @@ get-buffer 撞名；树状态在 *vs-open-dirs*，buffer 无状态损失。"
 
 (defun vs-resize-heal (window)
   (declare (ignore window))
-  (setf *vs-need-heal* t))
+  ;; healing 期内的尺寸变化（toggle 重建、面板恢复）都是自愈动作自身
+  ;; 引起的，不置位——否则「heal 改尺寸 → size-change 置位 → 再 heal」
+  ;; 永动循环。
+  (unless *vs-healing*
+    (setf *vs-need-heal* t)))
 
 (defun vs-maybe-heal ()
   "post-command 安全期消费 resize 标志：关开一遍侧栏重建 leftside view。
 末次 make-leftside-window 的 balance 会再触发一次 size-change 置位，
-治疗完成后清除标志——只把清除之后的新 resize 视为下一次治疗需求。"
+治疗完成后清除标志——只把清除之后的新 resize 视为下一次治疗需求。
+重建会 balance-windows 均分既有 split，跑 *vs-heal-hooks* 让各模块
+恢复自己的布局（50-terminal 的面板 1/3 高度）。"
   (when (and *vs-need-heal* (not *vs-healing*))
     (setf *vs-need-heal* nil
           *vs-healing* t)
     (ignore-errors
       (when (vs-explorer-window)
         (vscode-toggle-sidebar)
-        (vscode-toggle-sidebar)))
+        (vscode-toggle-sidebar))
+      (dolist (fn *vs-heal-hooks*)
+        (ignore-errors (funcall fn))))
     (setf *vs-need-heal* nil
           *vs-healing* nil)))

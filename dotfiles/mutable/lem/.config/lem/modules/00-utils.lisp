@@ -49,3 +49,17 @@
 (defun vs-load-lem-source (relpath)
   "从 store 源码树加载扩展源文件（相对 *lem-source-tree* 的路径）。"
   (vs-load-source (merge-pathnames relpath *lem-source-tree*)))
+
+(defparameter *vs-heal-hooks* nil
+  "resize 自愈（侧栏重建）完成后的布局恢复钩子。侧栏重建内部走
+make-leftside-window → balance-windows，会把已有的上下 split 均分；
+依赖特定 split 比例的模块（如终端面板 1/3）在此注册恢复函数。
+定义于 00（最先加载），触发在 40-explorer 的 vs-maybe-heal。")
+
+(defun vs-trace (fmt &rest args)
+  "诊断日志直写文件（lem 的 with-editor-stream 会吞 *error-output*）。"
+  (ignore-errors
+    (with-open-file (out "/tmp/vs-trace.log"
+                         :direction :output :if-exists :append
+                         :if-does-not-exist :create)
+      (format out "~&~A~%" (apply #'format nil fmt args)))))
