@@ -26,6 +26,14 @@
           (setf (current-window) main))))
     (vs-focus-main-window)))
 
+;; find-file 主通道（覆盖 prompt 确定等 post-command 盲区）+ 兜底。
+;; *find-file-hook* 的 home 包是 lem/buffer/file（未 reexport 进 :lem，
+;; vs$ :lem 解析必空），按仓库规范走 vs$ 动态解析；找不到只跳过挂载，
+;; 还有 post-command 兜底。
+(let ((hook (vs$ :lem/buffer/file "*FIND-FILE-HOOK*")))
+  (when hook
+    (add-hook (symbol-value hook) 'vs-explorer-on-find-file)))
 (add-hook *post-command-hook* 'vs-open-workspace-on-startup)
+(add-hook *post-command-hook* 'vs-explorer-maybe-activate)
 (add-hook *post-command-hook* 'vs-maybe-heal)
 (add-hook *window-size-change-functions* 'vs-resize-heal)

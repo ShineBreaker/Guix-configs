@@ -6,6 +6,11 @@
 ;;; 架构：lem 框架级 leftside window（make-leftside-window）承载自绘
 ;;; buffer —— EXPLORER 标题 + 内嵌 Activity 图标行 + 工作区 section +
 ;;; 文件树（目录记忆 + git 状态染色）。
+;;;
+;;; 空状态语义（对齐 VSCode 欢迎页）：*vs-explorer-root* 为 nil 即
+;;; 「NO FOLDER OPENED」——侧栏只显示引导文案，不渲染文件树；首个
+;;; 真实文件 buffer 出现时经 vs-explorer-maybe-activate（post-command）
+;;; 单向激活为该文件所在工作区，此后不回退。
 
 (in-package :lem-user)
 
@@ -38,8 +43,9 @@
   '("lisp" "lsp" "scm" "el" "py" "c" "h" "cc" "cpp" "rs" "go" "js" "ts"
     "json" "yaml" "yml" "toml" "nix" "sh" "org" "md"))
 
-;; --- 工作区根探测：向上走 .git（与 VSCode 默认 workspace 语义一致） ---
-(defun vs-project-root ()
+;; --- 工作区根探测：向上走 .git（与 VSCode 默认 workspace 语义一致）；
+;;     start 缺省取当前 buffer 目录，激活路径传打开文件所在目录 ---
+(defun vs-project-root (&optional start)
   (labels ((walk (dir count)
              (cond ((or (null dir) (> count 32)
                         (equal (namestring dir) "/"))
@@ -48,7 +54,8 @@
                     dir)
                    (t (walk (uiop:pathname-parent-directory-pathname dir)
                             (1+ count))))))
-    (let ((start (or (ignore-errors (buffer-directory (current-buffer)))
+    (let ((start (or start
+                     (ignore-errors (buffer-directory (current-buffer)))
                      (uiop:getcwd))))
       (or (walk start 0) start))))
 
@@ -152,13 +159,16 @@
     (vs-pad-to-width point)
     (insert-character point #\newline))
   (insert-character point #\newline)
-  ;; 工作区 section 头（▾ 大写项目名，VSCode 形态）
+  ;; 工作区 section 头（▾；激活后为大写项目名，空状态为 NO FOLDER OPENED）
   (insert-string point (format nil " ~C " (vs-icon :chevron-down))
                  :attribute 'vs-tree-chevron)
-  (insert-string point (string-upcase
-                        (or (car (last (pathname-directory *vs-explorer-root*)))
-                            "WORKSPACE"))
-                 :attribute 'vs-section-header)
+  (if *vs-explorer-root*
+      (insert-string point (string-upcase
+                            (or (car (last (pathname-directory *vs-explorer-root*)))
+                                "WORKSPACE"))
+                     :attribute 'vs-section-header)
+      (insert-string point "NO FOLDER OPENED"
+                     :attribute 'vs-section-header))
   (vs-pad-to-width point)
   (insert-character point #\newline))
 
@@ -203,21 +213,46 @@
       (when open
         (vs-render-dir point child (1+ depth))))))
 
+(defun vs-explorer-render-empty (point)
+  "「无打开的文件夹」空状态正文（对齐 VSCode 欢迎页 Explorer）：
+不渲染文件树，只给引导文案与按键提示。"
+  (insert-string point "   " :attribute 'vs-sidebar-bg)
+  (insert-string point (string (vs-icon :folder))
+                 :attribute 'vs-activity-inactive)
+  (insert-string point " 尚未打开文件夹。" :attribute 'vs-explorer-titlebar)
+  (vs-pad-to-width point)
+  (insert-character point #\newline)
+  (insert-character point #\newline)
+  (insert-string point "   " :attribute 'vs-sidebar-bg)
+  (insert-string point "C-x C-f" :attribute 'vs-tree-file)
+  (insert-string point " 打开文件后，" :attribute 'vs-explorer-titlebar)
+  (vs-pad-to-width point)
+  (insert-character point #\newline)
+  (insert-string point "   此处显示工作区文件树。"
+                 :attribute 'vs-explorer-titlebar)
+  (vs-pad-to-width point)
+  (insert-character point #\newline))
+
+(defun vs-explorer-redraw (buffer)
+  "按当前状态重绘 explorer buffer：root 已挂载 → git 状态 + 文件树；
+未挂载 → 「无打开的文件夹」空状态。toggle 开启与刷新共用此管线。"
+  (with-buffer-read-only buffer nil
+    (let ((line (line-number-at-point (buffer-point buffer))))
+      (erase-buffer buffer)
+      (vs-explorer-render-header (buffer-point buffer))
+      (if *vs-explorer-root*
+          (progn
+            (vs-refresh-git-status)
+            (vs-render-dir (buffer-point buffer) *vs-explorer-root* 0))
+          (vs-explorer-render-empty (buffer-point buffer)))
+      (move-to-line (buffer-point buffer) line))))
+
 (defun vs-explorer-render ()
-  (when *vs-explorer-root*
-    (let ((buffer (vs-explorer-buffer)))
-      (when buffer
-        (handler-case
-            (progn
-              (vs-refresh-git-status)
-              (with-buffer-read-only buffer nil
-                (let ((line (line-number-at-point (buffer-point buffer))))
-                  (erase-buffer buffer)
-                  (vs-explorer-render-header (buffer-point buffer))
-                  (vs-render-dir (buffer-point buffer) *vs-explorer-root* 0)
-                  (move-to-line (buffer-point buffer) line))))
-          (error (e)
-            (message "Explorer 渲染失败: ~A" e)))))))
+  (let ((buffer (vs-explorer-buffer)))
+    (when buffer
+      (handler-case (vs-explorer-redraw buffer)
+        (error (e)
+          (message "Explorer 渲染失败: ~A" e))))))
 
 ;; --- major mode + 键位 ---
 (defparameter *vs-explorer-keymap* (make-keymap))
@@ -342,14 +377,45 @@ get-buffer 撞名；树状态在 *vs-open-dirs*，buffer 无状态损失。"
                                    :temporary t)))
           (change-buffer-mode buffer 'vscode-explorer-mode)
           (setf (not-switchable-buffer-p buffer) t)
-          (setf *vs-explorer-root* (vs-project-root))
-          (vs-refresh-git-status)
-          (with-buffer-read-only buffer nil
-            (erase-buffer buffer)
-            (vs-explorer-render-header (buffer-point buffer))
-            (vs-render-dir (buffer-point buffer) *vs-explorer-root* 0)
-            (move-to-line (buffer-point buffer) 1))
+          (when *vs-explorer-root*
+            (setf *vs-explorer-root* (vs-project-root)))
+          (vs-explorer-redraw buffer)
           (make-leftside-window buffer :width *vs-explorer-width*)))))
+
+;; --- 激活：首个真实文件 buffer 出现 → 挂载其工作区文件树 ---
+(defun vs-explorer-activate (file)
+  "把工作区根挂到 file 所在项目并重绘侧栏；file 为 namestring。"
+  (setf *vs-explorer-root*
+        (vs-project-root (uiop:pathname-parent-directory-pathname file)))
+  (vs-explorer-render))
+
+(defun vs-explorer-on-find-file (buffer)
+  "*find-file-hook*（lem/buffer/file）——所有 find-file 打开路径
+（C-x C-f / Quick Open / explorer select / 命令行参数）都在文件读入后
+触发本钩子。post-command 在 prompt 确定路径下不保证跑，故以本钩子为
+主通道；run-hooks 传 buffer，签名必须收下。"
+  (unless *vs-explorer-root*
+    (ignore-errors
+      (let ((file (buffer-filename buffer)))
+        (when file
+          (vs-explorer-activate file))))))
+
+(defun vs-explorer-maybe-activate ()
+  "兜底：空状态下扫描 buffer-list，出现首个真实文件 buffer 即挂载其
+工作区（覆盖新建文件等不读盘的 find-file 分支）。单向激活：此后关闭
+文件不回退空状态——与 VSCode 关闭编辑器后 Explorer 仍显示文件树一致。
+挂 post-command，root 已置时零开销短路；整体 ignore-errors——
+post-command 链上抛错会连累排在后面的 heal。"
+  (unless *vs-explorer-root*
+    (ignore-errors
+      (let (file)
+        (dolist (b (buffer-list))
+          (unless file
+            (let ((f (ignore-errors (buffer-filename b))))
+              (when f
+                (setf file f)))))
+        (when file
+          (vs-explorer-activate file))))))
 
 ;; --- resize 自愈：上游只给 rightside 挂 resize 补偿（window.lisp 只调
 ;; resize-rightside-window），leftside 的 ncurses view 在终端尺寸变化后
