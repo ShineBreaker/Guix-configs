@@ -1,9 +1,7 @@
-<rules>
+<rules scope="git">
 
-<rule scope="git">
-
+<rule name="git 操作规范">
 **禁止**：
-
 - 整文件重写实现小功能、清理/格式化无关内容、提交无关文件
 - 不遵守 `~/.config/git/gitmessage` 中的 commit 规范进行对应操作
 
@@ -22,13 +20,10 @@
 - 正确性/安全性/回归优先于纯风格评论
 - pre-commit 检查失败时修复而非绕过
 - 再次 `git status --short`，确认提交内容仅含本次任务
-
 停止并汇报：同一文件存在明显并行冲突、无法判断改动来源、需要破坏性 git 命令。
-
 </rule>
 
-<rule scope="commit">
-
+<rule name="commit 规范">
 操作规范:
 
 1. 格式：<type>(<scope>): <简短描述>
@@ -52,13 +47,10 @@
 
 4.Co-authored-by 标签
 
-基本格式: Co-authored-by: NAME <EMAIL>
-
-AI 辅助时 NAME 写 agent 名并括注模型，EMAIL 用 agent 的 noreply 地址:
-e.g. Co-authored-by: ZCode (GLM-5.3) <noreply@z.ai>
-
-多个共同作者各占一行，行间不空行；EMAIL 尖括号不可省略
-
+- 基本格式: Co-authored-by: NAME <EMAIL>
+- AI 辅助时 NAME 写 agent 名并括注模型，EMAIL 用 agent 的 noreply 地址:
+  e.g. Co-authored-by: ZCode (GLM-5.3) <noreply@z.ai>
+- 多个共同作者各占一行，行间不空行；EMAIL 尖括号不可省略
 </rule>
 
 </rules>
