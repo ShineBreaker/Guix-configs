@@ -118,7 +118,8 @@
 (vs-bind "C--" :lem "FONT-SIZE-DECREASE" "ui" "字号减小（SDL2）")
 (vs-bind "C-F12" :lem/language-mode "FIND-DEFINITIONS" "code" "跳转定义")
 (vs-bind "Shift-C-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用")
-(vs-bind "F1" :lem-user "VS-SHOW-KEYBINDINGS" "help" "键位帮助页（本配置全量）")
+(vs-bind "F1" :lem-user "VS-TRANSIENT-SHOW" "help" "键位菜单（选组→选键→执行）")
+(vs-bind "C-c h" :lem-user "VS-SHOW-KEYBINDINGS" "help" "键位帮助页（静态全量）")
 
 ;; --- 默认键附注（不经 vs-bind 的绑定，只进帮助页） ---
 (vs-help-note "code" "M-." "跳转定义（language-mode 默认）")

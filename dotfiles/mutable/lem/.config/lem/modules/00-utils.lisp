@@ -39,7 +39,8 @@
 (defparameter *vs-binding-groups* nil
   "分组登记表：(分组ID 标题) 列表，vs-declare-group 按声明顺序展示。")
 (defparameter *vs-binding-registry* nil
-  "已注册键位：(键串 命令名 分组ID 描述) 列表，vs-bind 落键时登记。")
+  "已注册键位：(键串 命令名 分组ID 描述 命令符号) 列表，vs-bind 落键时
+登记；第五位符号供 vs-transient-show 菜单直接执行。")
 (defparameter *vs-help-notes* nil
   "帮助页附注：(分组ID 键串 描述) 列表——登记不经 vs-bind 的绑定
 （language-mode 默认键、局部 keymap 内的键），只作展示。")
@@ -62,7 +63,7 @@
     (if sym
         (progn
           (define-key *global-keymap* keyspec sym)
-          (push (list keyspec name group desc) *vs-binding-registry*))
+          (push (list keyspec name group desc sym) *vs-binding-registry*))
         (vs-warn (list pkg name)))))
 
 (defparameter *lem-source-tree*

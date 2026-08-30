@@ -61,9 +61,60 @@
 
 (define-command vs-show-keybindings () ()
   "F1 键位帮助页：按分组列出全部自定义绑定与默认键附注（中文描述）。
-对齐用户 Emacs 的 custom/show-help 自制帮助页；which-key 的逐前缀
-idle 弹窗受 lem 命令循环限制不做，本页是完整静态替代。"
+对齐用户 Emacs 的 custom/show-help 自制帮助页。"
   (let ((buffer (or (get-buffer "*键位帮助*")
                     (make-buffer "*键位帮助*"))))
     (vs-help-render-buffer buffer)
     (switch-to-buffer buffer)))
+
+;; --- transient 风格菜单（which-key/transient 的 2.3.0 等效物） ---
+;; 上游 extensions/transient（which-key 替代品）挂在 core 的 keymap
+;; 重构上（keymap-properties / prefix 类 / keymap-activate 钩子），
+;; Guix 的 lem 2.3.0 还是哈希表 keymap 模型，装不上且其自动弹出
+;; （前缀输入即浮窗）在 2.3.0 无钩点可用。此处用 prompt 补全
+;; （M-x 同款浮窗过滤）做两级菜单：F1 选组 → 选键位 → 直接执行；
+;; 交互模式上等价于 transient 的「浏览并触发键位」。
+
+(defun vs-transient-display (entry)
+  "注册表条目 → 菜单行：键串 + 描述（空描述回落命令名）。"
+  (format nil "~A  ~A" (first entry)
+          (if (plusp (length (fourth entry)))
+              (fourth entry)
+              (string-downcase (second entry)))))
+
+(defun vs-transient-filter (str candidates)
+  "大小写不敏感子串过滤（completion-strings 未导出，不依赖）。"
+  (if (or (null str) (string= str ""))
+      candidates
+      (remove-if-not (lambda (s) (search str s :test #'char-equal))
+                     candidates)))
+
+(define-command vs-transient-show () ()
+  "F1 键位菜单：先选分组，再选键位并直接执行（prompt 补全浮窗）。
+必须用 define-command 定义：keymap 绑定靠同名命令类分发，普通
+defun 符号绑键后执行会找不到命令类。"
+  (let* ((groups (append (mapcar #'second *vs-binding-groups*)
+                         (list "* 全部键位（静态页）")))
+         (group (prompt-for-string
+                 "键位组: "
+                 :completion-function
+                 (lambda (str) (vs-transient-filter str groups)))))
+    (cond ((null group))
+          ((string= group "* 全部键位（静态页）")
+           (vs-show-keybindings))
+          (t
+           (let* ((entries (vs-help-entries group))
+                  (display (mapcar #'vs-transient-display entries))
+                  (table (pairlis display entries))
+                  (chosen (prompt-for-string
+                           "键位: "
+                           :completion-function
+                           (lambda (str)
+                             (vs-transient-filter str display)))))
+             (let ((hit (assoc chosen table :test #'string=)))
+               (when hit
+                 (let ((sym (fifth (cdr hit))))
+                   (if (and sym (fboundp sym))
+                       (funcall sym)
+                       (message "该条目无可直接执行的符号，请按 ~A"
+                                (first (cdr hit))))))))))))
