@@ -13,7 +13,7 @@ agents/
 ├── .config/
 │   ├── agents/
 │   │   ├── context/
-│   │   │   ├── 01-language.md
+│   │   │   ├── 01-style.md
 │   │   │   ├── 02-subagents.md
 │   │   │   ├── 03-packages.md
 │   │   │   ├── 04-git.md
