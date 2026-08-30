@@ -15,10 +15,12 @@
 (vs-load-lem-source "extensions/terminal/terminal.lisp")
 (vs-load-lem-source "extensions/terminal/terminal-mode.lisp")
 
-;; process（纯 Lisp 进程管理）→ shell-mode（交互式 shell buffer）。
-;; 启动终端面板用 shell-mode：vterm 的 C 层 forkpty 在 SBCL 多线程下
-;; 随机失败（实测 fish 进程静默消失、面板恒空白），shell-mode 走
-;; uiop:run-program 稳定；TUI 全屏程序（htop 等）不支持属可接受折衷。
+;; process（纯 Lisp 进程管理）→ shell-mode（交互式 listener buffer，M-x
+;; run-shell 仍可用）。终端面板 2026-08-30 起用 vterm：shell-mode 底下的
+;; async-process 开 pty 从不设控制终端（O_NOCTTY + 无 TIOCSCTTY），fish
+;; 4.7.1 无 ctty 直接 exit 1（bash 容忍），面板成空壳；vterm 的 forkpty
+;; 标准流程实测 fish 正常，早年「forkpty 在 SBCL 多线程下随机失败」未再
+;; 复现。详见 50-terminal 头注释。
 (vs-load-lem-source "extensions/process/package.lisp")
 (vs-load-lem-source "extensions/process/process.lisp")
 (vs-load-lem-source "extensions/process/stream.lisp")

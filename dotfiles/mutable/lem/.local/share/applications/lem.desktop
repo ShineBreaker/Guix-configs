@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Lem
+GenericName=Text Editor
+Comment=Lem editor (SDL2 window)
+Exec=lem -i sdl2 %F
+TryExec=lem
+Icon=lem
+Terminal=false
+StartupNotify=true
+StartupWMClass=lem
+Categories=Development;TextEditor;Utility;
+Keywords=lem;editor;lisp;
+MimeType=text/plain;text/x-lisp;text/x-common-lisp;text/x-scheme;text/english;

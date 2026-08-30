@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Lem (Terminal)
+GenericName=Text Editor
+Comment=Edit text in a terminal
+Exec=kitty -- lem %F
+TryExec=lem
+Icon=lem
+Terminal=false
+StartupNotify=true
+StartupWMClass=kitty
+Categories=Development;TextEditor;Utility;
+Keywords=lem;terminal;editor;
+MimeType=text/plain;text/x-lisp;text/x-common-lisp;text/x-scheme;text/english;

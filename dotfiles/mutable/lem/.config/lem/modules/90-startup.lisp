@@ -1,7 +1,7 @@
 ;;; modules/90-startup.lisp — 启动行为与钩子登记
 ;;;
-;;; 依赖：explorer（toggle-sidebar / heal）、terminal（vs-main-window）、
-;;; extensions（shell-mode：RUN-SHELL-INTERNAL）。必须最后加载。
+;;; 依赖：explorer（toggle-sidebar / heal）、terminal（vs-ensure-terminal-buffer
+;;; / vs-open-terminal-panel）。必须最后加载。
 
 (in-package :lem-user)
 
@@ -17,11 +17,11 @@
     (setf *vs-startup-opened* t)
     ;; 1) Explorer 侧栏（leftside 独立槽位，不影响主窗树）
     (vscode-toggle-sidebar)
-    ;; 2) 底部终端面板（split 管线与顺序约束见 50-terminal
-    ;;    的 vs-open-shell-panel）
-    (let ((buf (vs-call :lem-shell-mode "RUN-SHELL-INTERNAL")))
+    ;; 2) 底部终端面板（vterm；split 管线与顺序约束见 50-terminal
+    ;;    的 vs-open-terminal-panel）
+    (let ((buf (vs-ensure-terminal-buffer)))
       (when buf
-        (let ((main (vs-open-shell-panel buf)))
+        (let ((main (vs-open-terminal-panel buf)))
           ;; 3) 焦点交还主编辑区（VSCode 启动语义）
           (setf (current-window) main))))
     (vs-focus-main-window)))
