@@ -33,6 +33,7 @@ dotfiles/
 │   │   │   ├── darkman/
 │   │   │   └── niri/
 │   │   └── .local/
+│   │       ├── libexec/
 │   │       └── share/
 │   ├── system/
 │   │   ├── .config/
