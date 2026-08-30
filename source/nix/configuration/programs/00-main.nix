@@ -2,6 +2,7 @@
 
 {
   imports = [
+    ./code.nix
     ./llm-agents.nix
     ./zed.nix
   ];
