@@ -33,7 +33,8 @@ desktop/
 │       └── helpers.rc
 └── .local/
     └── bin/
-        └── niri-app-switcher
+        ├── niri-app-switcher
+        └── niri-quake-toggle
 ```
 
 <!-- /structor -->

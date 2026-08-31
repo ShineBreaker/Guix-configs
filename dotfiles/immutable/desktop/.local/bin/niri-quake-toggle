@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# Mod+grave 入口：呼出/收起 quick-access 下拉面板。
+# darkman hook 切主题时对面板的刷新不可靠（darkman 后代身份的 RC 写被 kitty
+# 忽略，hidden 态重载还会延迟），故在呼出瞬间以会话身份对面板做一次
+# load-config——panel 未运行时无 socket，直接跳过。
+sock="$(awk '$NF ~ /quick-access-/ {print $NF; exit}' /proc/net/unix 2>/dev/null)"
+if [ -n "$sock" ] && command -v kitten >/dev/null 2>&1; then
+	kitten @ --to "unix:$sock" load-config >/dev/null 2>&1 || true
+fi
+exec kitten quick-access-terminal "$@"
