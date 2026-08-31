@@ -4047,7 +4047,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
-标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽,装饰完成后重跑 =dashboard-center-text= 以版心为基准整体居中。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
+标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽,条目行之间插一个空行;分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中不重用 =dashboard-center-text= 的最长行测量(─ 是 East Asian ambiguous,测量值与渲染列数在部分字体下不一致,会把整体推偏),而是按版心宽直接重写全 buffer 的 =line-prefix= ,左缘固定在 =center - 版心/2= ,与字体无关。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
 
 #+begin_src emacs-lisp
 (defun custom/dashboard-initial-buffer ()
@@ -4099,10 +4099,19 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
 按 100/140/200 三档常用列宽调优,不做逐列自适应。"
   :type 'number)
 
-(defcustom custom:dashboard-sep-char-width 2
-  "TTY 下分割线字符 ─ 的渲染列宽(CJK locale 终端按 East Asian wide
-双列显示则为 2;终端按单列显示的改成 1)。GUI frame 恒按单列。"
-  :type 'integer)
+(defun custom/dashboard--separator-length (width)
+  "WIDTH 列版心需要的分割线字符 ─ 的个数。
+─ 是 East Asian ambiguous:CJK locale 的 TTY 与部分 GUI 字体按双列,
+另一些 GUI 字体单列,固定字符数或按 frame 类型猜测都无法两全;按
+当前 frame 实测的单字符像素宽折算,任何字体下都恰好铺满版心。"
+  (max 1 (/ (* width (frame-char-width))
+            (max 1 (string-pixel-width "─")))))
+
+(defun custom/dashboard--blank-line-p ()
+  "当前行是否为空行。"
+  (string-empty-p
+   (buffer-substring-no-properties
+    (line-beginning-position) (line-end-position))))
 
 (defun custom/dashboard--content-width (&optional window)
   "WINDOW(默认 selected)下的 dashboard 版心宽度(列)。"
@@ -4161,7 +4170,7 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
 
 (defun custom/dashboard--refresh-in-window ()
   "在显示 dashboard 的窗口上下文里强制重渲染并装饰。
-渲染与装饰都必须以该窗口为 selected:版心、路径缩短和 center-text
+渲染与装饰都必须以该窗口为 selected:版心、路径缩短和居中前缀
 的宽度全部取自这里,别的 frame 上下文算出来是错的。"
   (when-let* ((win (custom/dashboard--dashboard-window)))
     (with-selected-window win
@@ -4172,10 +4181,11 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
       (custom/dashboard--decorate-headings win))))
 
 (defun custom/dashboard--decorate-headings (&optional window)
-  "渲染后装饰标题行、右贴快捷键并插入板块分割线。
+  "渲染后装饰标题行、右贴快捷键、条目间空行与板块分割线。
 标题行与分割线都补齐到版心宽(=custom/dashboard--content-width= ),
-装饰完成后重跑 `dashboard-center-text':分割线是 buffer 最宽行,以它
-为基准整体居中,两侧空列恰好各占设定比例。定位走 heading overlay
+条目行之间插一个空行,分割线替换板块尾的第一段空行。完成后按版心
+宽重写全 buffer 的 `line-prefix' 整体居中(不用 `dashboard-center-text'
+的最长行测量,理由见节首 prose)。定位走 heading overlay
 (`dashboard-heading' face)而非 `dashboard--section-starts':渲染末尾的
 page-separator 替换会使后者的绝对位置漂移。只从
 `custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。"
@@ -4203,27 +4213,27 @@ page-separator 替换会使后者的绝对位置漂移。只从
                             (overlay-start ov) (overlay-end ov))))
                  (used (+ 4 icon-w (string-width name))))
             (save-excursion
-              ;; 分割线替换板块末空行(板块边界 = 标题行后第一个空行)
+              ;; 条目间插空行;板块尾部第一段空行替换为分割线。条目间
+              ;; 插入的空行不能被误判成板块边界,故空行判定与插入在
+              ;; 同一次前向扫描里完成。
               (goto-char (overlay-start ov))
               (forward-line 1)
               (while (and (< (point) (point-max))
-                          (not (string-empty-p
-                                (buffer-substring-no-properties
-                                 (line-beginning-position)
-                                 (line-end-position)))))
-                (forward-line 1))
-              (delete-region (line-beginning-position) (line-end-position))
-              ;; ─ 是 East Asian ambiguous 宽字符:CJK locale 的 TTY 按
-              ;; 双列渲染(char-width 表),GUI 字体单列;字符数按 frame
-              ;; 类型除以 `custom:dashboard-sep-char-width',保证版心铺满。
-              (insert (propertize
-                       (make-string (/ width
-                                       (if (display-graphic-p
-                                            (window-frame (selected-window)))
-                                           1
-                                         custom:dashboard-sep-char-width))
-                                    ?─)
-                       'face 'shadow)))
+                          (not (custom/dashboard--blank-line-p)))
+                (when (save-excursion
+                        (forward-line 1)
+                        (and (< (point) (point-max))
+                             (not (custom/dashboard--blank-line-p))))
+                  ;; 空行插在下一行行首 = 当前条目之后
+                  (save-excursion (forward-line 1) (insert "\n"))
+                  (forward-line 1))      ; 跳过刚插的空行
+                (forward-line 1))        ; 下一条件目
+              (when (< (point) (point-max))
+                (delete-region (line-beginning-position) (line-end-position))
+                (insert (propertize
+                         (make-string
+                          (custom/dashboard--separator-length width) ?─)
+                         'face 'shadow))))
             ;; 标题行缩进 + 快捷键右贴到版心宽
             (goto-char (overlay-start ov))
             (let ((line-start (line-beginning-position))
@@ -4243,8 +4253,14 @@ page-separator 替换会使后者的绝对位置漂移。只从
                        (make-string
                         (max 1 (- width used (string-width key))) ?\s)
                        (propertize key 'face 'font-lock-comment-face))))))
-      ;; 以版心(分割线 = buffer 最宽行)为基准重跑整体居中
-      (dashboard-center-text (point-min) (point-max)))))
+      ;; 居中:左缘固定对齐 center - 版心/2,重写全 buffer 的
+      ;; line-prefix;测量式 `dashboard-center-text' 会被分割线的
+      ;; ambiguous 像素宽干扰,定宽改写与字体无关。
+      (let ((prefix (propertize
+                     " " 'display
+                     `(space . (:align-to (- center ,(/ width 2)))))))
+        (add-text-properties (point-min) (point-max)
+                             `(line-prefix ,prefix indent-prefix ,prefix))))))
 
 (defun custom/dashboard--on-frame-make (&rest _)
   "新 client frame 就绪后按其真实宽度重渲染 dashboard。
