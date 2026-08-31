@@ -1400,16 +1400,16 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的 frame 参数仍必须 per-frame。Emacs theme 是全局状态；daemon 启动时预载 Ef theme，真彩 TTY 与 GUI 共用当前 Ef 明暗主题的前景 palette。TTY client 创建后只清除所有命名 face 的背景与反色属性，再用粗体、下划线等非颜色属性强化选区、搜索、补全等交互状态。
 
 #+attr_org: :width 75
-| 设置/包          | daemon 启动期陷阱             | TTY 行为                | 处理方式                            |
-|------------------+-------------------------------+-------------------------+-------------------------------------|
-| 光标类型         | #ERROR                        | 后创 TTY frame 污染 GUI | 用 =set-frame-parameter 'cursor-type= |
-| spacious-padding | daemon F1 背景是伪颜色          | TTY 不加 padding         | 包同步加载,GUI frame 就绪后写 face  |
-| pixel-scroll     | 同上                          | 退化为行级滚动          | 无条件启用(GUI client 需要)         |
-| diff-hl(TTY)     | 无 fringe,fringe 指示器不可见 | 改用 margin             | =fboundp= 守卫 + TTY 分支按需启用     |
-| fringe 宽度      | 行号函数若清零 fringe         | —                       | 禁止在行号函数清零 fringe(详见下表) |
-| ef-themes        | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题 |
-| TTY 配色         | 无 alpha 通道                 | 主题前景 + 全 face 透明 | 清背景与反色，不覆盖主题前景 |
-| Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染          | 守卫用 =custom:nerd-icons-available=,不查 display |
+| 设置/包          | daemon 启动期陷阱              | TTY 行为                     | 处理方式                                          |
+|------------------+--------------------------------+------------------------------+---------------------------------------------------|
+| 光标类型         | #ERROR                         | 后创 TTY frame 污染 GUI      | 用 =set-frame-parameter 'cursor-type=             |
+| spacious-padding | daemon F1 背景是伪颜色         | TTY 不加 padding             | 包同步加载,GUI frame 就绪后写 face                |
+| pixel-scroll     | 同上                           | 退化为行级滚动               | 无条件启用(GUI client 需要)                       |
+| diff-hl(TTY)     | 无 fringe,fringe 指示器不可见  | 改用 margin                  | =fboundp= 守卫 + TTY 分支按需启用                 |
+| fringe 宽度      | 行号函数若清零 fringe          | —                            | 禁止在行号函数清零 fringe(详见下表)               |
+| ef-themes        | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题       |
+| TTY 配色         | 无 alpha 通道                  | 主题前景 + 全 face 透明      | 清背景与反色，不覆盖主题前景                      |
+| Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染               | 守卫用 =custom:nerd-icons-available=,不查 display |
 #+TBLFM: $2=setq-default= 是全局副作用
 
 TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后为 =hl-line= 恢复 Ef palette 的 =bg-dim= 背景、为 =org-block= 族恢复 =bg-alt= 中性面板(代码块在终端无 fringe,靠这块底色成组),选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
@@ -4047,15 +4047,27 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
+全量渲染(item 生成 + agenda 扫描 + 装饰)单次上百毫秒,触发侧必须收敛:=dashboard-insert-section= 宏对 list 参数求值 4 次,agenda 的 =org-map-entries= 全量扫描随之重复 4 次,由渲染入口的请求级 advice 合并为 1 次(跨渲染不缓存);=server-after-make-frame-hook= 回调比较渲染宽度,相符(同宽新帧或正常路径)则跳过,只有首帧哑上下文宽度错误才重渲染自愈;resize 事件只挂 idle timer,拖拽的连续中间宽度不逐次全量渲染,静止 0.3s 后按最终宽度刷一次。
+
 标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中分两组:板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)逐行按自身行宽 =align-to center - 行宽/2= 各自居中——整块左对齐对长短不一的行是错的。两组都必须先 =remove-text-properties= 清掉既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
 
 #+begin_src emacs-lisp
+(defvar custom/dashboard--rendered-width nil
+  "上次渲染 dashboard 时的窗口正文宽度。
+渲染宽度与目标窗口相符时跳过全量重渲染(frame 就绪回调与 resize
+合并刷新共用),不符才重刷。")
+
 (defun custom/dashboard-initial-buffer ()
   "emacsclient 无文件参数时显示 dashboard。
-agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。"
+agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。渲染后
+立即装饰并记录当时的窗口宽度:frame 就绪回调比较宽度,相符则跳过
+重渲染,首帧只渲染一次;GUI daemon 首帧可能仍在哑 frame 上下文渲染
+(宽度错),回调比较不符才重渲染自愈。"
   (unless (featurep 'org-agenda)
     (require 'org-agenda))
-  (dashboard-open))
+  (prog1 (dashboard-open)
+    (custom/dashboard--decorate-headings)
+    (setq custom/dashboard--rendered-width (window-body-width))))
 
 (defun custom/dashboard--nav-buttons ()
   "Dashboard navigator 一行四个二级入口(icon title help action)。
@@ -4169,9 +4181,6 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
         (lambda (w)
           (frame-parameter (window-frame w) 'client))
         (get-buffer-window-list dashboard-buffer-name nil 0))))
-
-(defvar custom/dashboard--rendered-width nil
-  "上次渲染 dashboard 时的窗口正文宽度,resize 节流用。")
 
 (defun custom/dashboard--refresh-in-window ()
   "在显示 dashboard 的窗口上下文里强制重渲染并装饰。
@@ -4314,22 +4323,63 @@ page-separator 替换会使后者的绝对位置漂移。只从
                       (progn (forward-line 1) t))
             (funcall center-line)))))))
 
+(defun custom/dashboard--refresh-if-stale ()
+  "目标窗口宽度与上次渲染不同时才重渲染 dashboard。
+frame 就绪回调与 resize 合并刷新共用:全量渲染(item 生成 + agenda
+扫描 + 装饰)成本高,宽度相符就跳过。"
+  (when-let* ((win (custom/dashboard--dashboard-window)))
+    (when (/= (window-body-width win)
+              (or custom/dashboard--rendered-width 0))
+      (custom/dashboard--refresh-in-window))))
+
 (defun custom/dashboard--on-frame-make (&rest _)
-  "新 client frame 就绪后按其真实宽度重渲染 dashboard。
+  "新 client frame 就绪后,渲染宽度不匹配才重渲染自愈。
 initial-buffer-choice 阶段 selected window 可能仍是 daemon 旧 frame,
-首帧版心会按错误宽度装饰;frame/window 就绪后本回调重渲染自愈。"
-  (run-at-time 0 nil #'custom/dashboard--refresh-in-window))
+首帧版心会按错误宽度装饰且记录下错误宽度,本回调比较后自愈;宽度
+相符(正常路径或同宽新帧)则零成本跳过。"
+  (run-at-time 0 nil #'custom/dashboard--refresh-if-stale))
+
+(defvar custom/dashboard--resize-timer nil
+  "Resize 合并刷新的 pending idle timer,静止后触发一次。")
+
+(defun custom/dashboard--on-resize-idle ()
+  "Resize 静止后的合并刷新回调。"
+  (setq custom/dashboard--resize-timer nil)
+  (custom/dashboard--refresh-if-stale))
 
 (defun custom/dashboard--on-resize (frame)
-  "FRAME 尺寸变化时按新宽度重渲染 dashboard,宽度未变则跳过。
-daemon initial frame 的尺寸事件直接忽略(见 `dashboard--dashboard-window')。"
+  "FRAME 尺寸变化时合并重渲染 dashboard,不逐事件全量渲染。
+拖拽 resize 每个中间宽度一个事件,逐次渲染会把主循环卡死在连续
+全量 item 生成上;只挂一个 idle timer,静止 0.3s 后按最终宽度刷
+一次。daemon initial frame 的尺寸事件直接忽略(见
+`custom/dashboard--dashboard-window')。"
   (when (and (frame-live-p frame)
-             (frame-parameter frame 'client))
-    (let ((win (get-buffer-window dashboard-buffer-name frame)))
-      (when (and win (/= (window-body-width win)
-                         (or custom/dashboard--rendered-width 0)))
-        (with-selected-window win
-          (custom/dashboard--refresh-in-window))))))
+             (frame-parameter frame 'client)
+             (get-buffer-window dashboard-buffer-name frame))
+    (unless custom/dashboard--resize-timer
+      (setq custom/dashboard--resize-timer
+            (run-with-idle-timer
+             0.3 nil #'custom/dashboard--on-resize-idle)))))
+
+(defvar custom/dashboard--agenda-once nil
+  "单次渲染内的 agenda 结果请求级缓存。
+仅渲染入口的 let 绑定内有效;跨渲染不缓存,数据新鲜度与插件原生
+行为一致。")
+
+(defun custom/dashboard--agenda-scan-once (orig &rest _)
+  "dashboard-get-agenda 的 :around advice:单次渲染内只扫一次。
+插件 \`dashboard-insert-section' 宏对 list 参数求值 4 次(heading
+判断 / if 分支 / subseq / section-list 的 car),agenda 的
+org-map-entries 全量扫描被重复 4 次,是渲染耗时与 GC 压力的大头;
+缓存命中直接复用,未命中扫一次并记住。"
+  (or custom/dashboard--agenda-once
+      (setq custom/dashboard--agenda-once (funcall orig))))
+
+(defun custom/dashboard--insert-lists-once (orig &rest args)
+  "dashboard-insert-startupify-lists 的 :around advice:渲染入口。
+let 绑定请求级缓存变量,渲染结束自动丢弃,下次渲染重新扫描。"
+  (let ((custom/dashboard--agenda-once nil))
+    (apply orig args)))
 
 (setq initial-buffer-choice #'custom/dashboard-initial-buffer)
 
@@ -4363,6 +4413,10 @@ daemon initial frame 的尺寸事件直接忽略(见 `dashboard--dashboard-windo
         dashboard-navigator-buttons (list (custom/dashboard--nav-buttons)))
   (advice-add 'dashboard-shorten-path :override
               #'custom/dashboard--shorten-path)
+  (advice-add 'dashboard-get-agenda :around
+              #'custom/dashboard--agenda-scan-once)
+  (advice-add 'dashboard-insert-startupify-lists :around
+              #'custom/dashboard--insert-lists-once)
   (add-hook 'server-after-make-frame-hook #'custom/dashboard--on-frame-make)
   (add-hook 'window-size-change-functions #'custom/dashboard--on-resize))
 #+end_src
