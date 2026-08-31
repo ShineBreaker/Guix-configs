@@ -4047,7 +4047,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
-标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中不重用 =dashboard-center-text= 的最长行测量(─ 是 East Asian ambiguous,测量值与渲染列数在部分字体下不一致,会把整体推偏),而是先 =remove-text-properties= 清掉全 buffer 既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)再按版心宽重写 =line-prefix= ,左缘固定在 =center - 版心/2= ,banner/navigator/板块全体与字体无关地居中。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
+标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中分两组:板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)逐行按自身行宽 =align-to center - 行宽/2= 各自居中——整块左对齐对长短不一的行是错的。两组都必须先 =remove-text-properties= 清掉既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
 
 #+begin_src emacs-lisp
 (defun custom/dashboard-initial-buffer ()
@@ -4189,10 +4189,9 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
   "渲染后装饰标题行、右贴快捷键、行间距与板块分割线。
 标题行与分割线都补齐到版心宽(=custom/dashboard--content-width= ),
 板块内标题与条目行统一加 `custom:dashboard-line-spacing' 行间距,
-分割线替换板块尾第一段空行。完成后清掉全 buffer 既有前缀再按版心
-宽重写 `line-prefix' 整体居中(不用 `dashboard-center-text' 的最长行
-测量,理由见节首 prose;不先 remove 则插件/banner 自设的前缀不会被
-add-text-properties 覆盖)。定位走 heading overlay
+分割线替换板块尾第一段空行。完成后分组居中:板块区按版心左缘统一
+前缀,其余行逐行自身居中,理由见节首 prose;不先 remove 则插件/banner
+自设的前缀不会被 add-text-properties 覆盖。定位走 heading overlay
 (`dashboard-heading' face)而非 `dashboard--section-starts':渲染末尾的
 page-separator 替换会使后者的绝对位置漂移。只从
 `custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。"
@@ -4265,17 +4264,55 @@ page-separator 替换会使后者的绝对位置漂移。只从
                        (make-string
                         (max 1 (- width used (string-width key))) ?\s)
                        (propertize key 'face 'font-lock-comment-face))))))
-      ;; 居中:必须先 remove 再 add——add-text-properties 不覆盖已有
-      ;; 属性,banner/Welcome/navigator/标题区都带插件自设的测量式
-      ;; 前缀(测量被 ─ 的 ambiguous 像素宽拉大,GUI 下整块偏左)。
-      ;; 左缘固定对齐 center - 版心/2,与字体无关。
+      ;; 分组居中:先 remove 再改写——add-text-properties 不覆盖已有
+      ;; 属性,banner/Welcome/navigator/footer 都带插件自设的测量式
+      ;; 前缀。板块区(首板块标题行→末分割线行)统一版心前缀,整体
+      ;; 居中、块内左对齐;其余行(banner/Welcome/navigator/init-info/
+      ;; footer)长短不一,逐行按自身行宽各自居中,整块左对齐会全贴
+      ;; 版心左缘。
       (remove-text-properties (point-min) (point-max)
                               '(line-prefix nil indent-prefix nil))
-      (let ((prefix (propertize
-                     " " 'display
-                     `(space . (:align-to (- center ,(/ width 2)))))))
-        (add-text-properties (point-min) (point-max)
-                             `(line-prefix ,prefix indent-prefix ,prefix))))))
+      (let* ((sec-beg (save-excursion
+                        (goto-char (overlay-start (car ovs)))
+                        (line-beginning-position)))
+             (sec-end (save-excursion
+                        (goto-char (point-max))
+                        (search-backward "─" nil t)
+                        (line-end-position)))
+             (block-prefix (propertize
+                            " " 'display
+                            `(space . (:align-to (- center ,(/ width 2))))))
+             (center-line
+              (lambda ()
+                ;; 行宽用插件的像素折算测量:string-width 会把 ─ ═ 等
+                ;; ambiguous 字符按双列计,GUI 实际渲染单列,居中会偏;
+                ;; dashboard-str-len 与插件原生 footer 居中同款公式。
+                (let ((w (dashboard-str-len
+                          (buffer-substring
+                           (line-beginning-position)
+                           (line-end-position)))))
+                  (when (> w 0)
+                    (let ((p (propertize
+                              " " 'display
+                              `(space . (:align-to (- center ,(/ w 2)))))))
+                      (put-text-property
+                       (line-beginning-position) (line-end-position)
+                       'line-prefix p)
+                      (put-text-property
+                       (line-beginning-position) (line-end-position)
+                       'indent-prefix p)))))))
+        (save-excursion
+          (goto-char (point-min))
+          (while (< (point) sec-beg)
+            (funcall center-line)
+            (forward-line 1))
+          (add-text-properties sec-beg sec-end
+                               `(line-prefix ,block-prefix
+                                 indent-prefix ,block-prefix))
+          (goto-char sec-end)
+          (while (and (< (point) (point-max))
+                      (progn (forward-line 1) t))
+            (funcall center-line)))))))
 
 (defun custom/dashboard--on-frame-make (&rest _)
   "新 client frame 就绪后按其真实宽度重渲染 dashboard。
