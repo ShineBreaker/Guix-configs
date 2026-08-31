@@ -173,7 +173,7 @@ gate_bash() {
       segments="$(printf '%s\n' "$CMD" | _cmd_segments)"
       hit="$(_match_frozen_in_segments "$segments" "$frozen_list")"
       if [[ -n "$hit" ]]; then
-        emit BLOCK "🚫 冻结命令「${hit}」需 sudo 提权或为系统级操作，禁止执行。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
+        emit BLOCK "🚫 冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
         return 0
       fi
     fi

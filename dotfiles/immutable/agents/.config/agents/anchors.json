@@ -7,7 +7,10 @@
     "guix package --install",
     "nix-env -i",
     "nix-env --install",
-    "nix profile install"
+    "nix profile install",
+    "tmux kill-server",
+    "tmux kill-session -a",
+    "herdr server stop"
   ],
   "frozen_paths": [],
   "frozen_globs": [],

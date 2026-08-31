@@ -9,10 +9,7 @@
     "guix system init"
   ],
 
-  "frozen_paths": [
-    "tmp/",
-    "channel.lock"
-  ],
+  "frozen_paths": ["tmp/", "channel.lock"],
 
   "frozen_globs": [],
 
@@ -21,7 +18,7 @@
   },
 
   "path_hints": {
-    "dotfiles/": "此文件修改后需要运行 blue home 才能生效（~/.config 指向 store 只读副本，改源后须重建软链接）",
+    "dotfiles/immutable": "此文件修改后需要运行 blue home 才能生效（~/.config 指向 store 只读副本，改源后须重建软链接）",
     "source/": "修改 source/ 配置后，务必先用 blue --dry-run rebuild 验证，再提醒用户手动 blue rebuild 固化"
   },
 
