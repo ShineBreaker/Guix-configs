@@ -36,6 +36,7 @@ source/
 │   │   │   └── nix.nix
 │   │   └── programs/
 │   │       ├── 00-main.nix
+│   │       ├── code.nix
 │   │       ├── llm-agents.nix
 │   │       └── zed.nix
 │   ├── flake.lock

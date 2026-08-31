@@ -98,6 +98,8 @@ dotfiles/
     ├── lem/
     │   ├── .config/
     │   │   └── lem/
+    │   ├── .local/
+    │   │   └── share/
     │   └── .stow-local-ignore
     └── tools/
         ├── appimage-run/

@@ -78,6 +78,9 @@ mutable/
 │   │   └── lem/
 │   │       ├── modules/
 │   │       └── init.lisp
+│   ├── .local/
+│   │   └── share/
+│   │       └── icons/
 │   └── .stow-local-ignore
 └── tools/
     ├── appimage-run/
