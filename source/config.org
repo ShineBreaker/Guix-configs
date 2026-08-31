@@ -1657,6 +1657,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "plantuml"
    "python"
    "rust"
+   "sbcl"
    "zig"
 
    ;; LSP & Formatter
@@ -1676,9 +1677,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
    ;; 编辑器
    "fresh-editor-bin"
-   "helix"
-
-   "lem"
+   "helix-steel"
+   "lem-next-bin"
 
    ;; 数据库
    "sqlite"
