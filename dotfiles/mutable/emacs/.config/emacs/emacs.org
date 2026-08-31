@@ -4047,9 +4047,9 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
 
-全量渲染(item 生成 + agenda 扫描 + 装饰)单次上百毫秒,触发侧必须收敛:=dashboard-insert-section= 宏对 list 参数求值 4 次,agenda 的 =org-map-entries= 全量扫描随之重复 4 次,由渲染入口的请求级 advice 合并为 1 次(跨渲染不缓存);=server-after-make-frame-hook= 回调比较渲染宽度,相符(同宽新帧或正常路径)则跳过,只有首帧哑上下文宽度错误才重渲染自愈;resize 事件只挂 idle timer,拖拽的连续中间宽度不逐次全量渲染,静止 0.3s 后按最终宽度刷一次。
+全量渲染(item 生成 + agenda 扫描 + 装饰)单次上百毫秒,触发侧必须收敛:=dashboard-insert-section= 宏对 list 参数求值 4 次,agenda 的 =org-map-entries= 全量扫描随之重复 4 次,由渲染入口的请求级 advice 合并为 1 次(跨渲染不缓存);=server-after-make-frame-hook= 回调比较渲染宽度,相符(同宽新帧或正常路径)则跳过,只有首帧哑上下文宽度错误才重渲染自愈;resize 事件只挂 idle timer,拖拽的连续中间宽度不逐次全量渲染,静止 0.3s 后按最终宽度刷一次。版心不足 =custom:dashboard-min-content-width= 的窗口(拖拽经过的窄中间态)不做渲染,保留上一次可读内容。
 
-标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中分两组:板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)逐行按自身行宽 =align-to center - 行宽/2= 各自居中——整块左对齐对长短不一的行是错的。两组都必须先 =remove-text-properties= 清掉既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
+标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中分两组:板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)逐行按自身行宽 =align-to center - 行宽/2= 各自居中——整块左对齐对长短不一的行是错的。行宽超过窗口宽的行不加前缀直接贴左:align-to 负值会把整行推出屏幕左缘(内容只剩行尾残片),而 space spec 表达式里没有可用的 max 钳制(Emacs 31 下 max 求值静默回退 0),只能在装饰时静态排除;窗口比渲染时更窄的瞬态(拖拽间隙、多 frame 混开)仍有负对齐破碎,由 resize 合并刷新与已知取舍覆盖。两组都必须先 =remove-text-properties= 清掉既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
 
 #+begin_src emacs-lisp
 (defvar custom/dashboard--rendered-width nil
@@ -4110,6 +4110,12 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
   "Dashboard 版心占窗口正文宽度的比例,两侧空列各占 (1-ratio)/2。
 按 100/140/200 三档常用列宽调优,不做逐列自适应。"
   :type 'number)
+
+(defcustom custom:dashboard-min-content-width 40
+  "触发渲染的最小版心宽度(列)。版心低于此值的窗口(含 resize
+拖拽经过的窄中间态)不做全量渲染,保留上一次可读内容,避免破碎
+显示;align-to 前缀的 max 0 钳制负责这类场景的显示兜底。"
+  :type 'integer)
 
 (defcustom custom:dashboard-line-spacing 6
   "板块内行间距(像素),标题与条目统一生效。
@@ -4291,16 +4297,21 @@ page-separator 替换会使后者的绝对位置漂移。只从
              (block-prefix (propertize
                             " " 'display
                             `(space . (:align-to (- center ,(/ width 2))))))
+             (body-width (window-body-width window))
              (center-line
               (lambda ()
                 ;; 行宽用插件的像素折算测量:string-width 会把 ─ ═ 等
                 ;; ambiguous 字符按双列计,GUI 实际渲染单列,居中会偏;
                 ;; dashboard-str-len 与插件原生 footer 居中同款公式。
+                ;; 行宽超过窗口时不加前缀:align-to 负值会把整行推出
+                ;; 屏幕左缘(内容只剩行尾残片),贴左至少完整可读;
+                ;; align-to 表达式没有可用的 max 钳制(Emacs 31 静默
+                ;; 回退 0),只能在装饰时静态排除。
                 (let ((w (dashboard-str-len
                           (buffer-substring
                            (line-beginning-position)
                            (line-end-position)))))
-                  (when (> w 0)
+                  (when (and (> w 0) (<= w body-width))
                     (let ((p (propertize
                               " " 'display
                               `(space . (:align-to (- center ,(/ w 2)))))))
@@ -4326,11 +4337,16 @@ page-separator 替换会使后者的绝对位置漂移。只从
 (defun custom/dashboard--refresh-if-stale ()
   "目标窗口宽度与上次渲染不同时才重渲染 dashboard。
 frame 就绪回调与 resize 合并刷新共用:全量渲染(item 生成 + agenda
-扫描 + 装饰)成本高,宽度相符就跳过。"
+扫描 + 装饰)成本高,宽度相符就跳过。窗口过窄(版心不足
+custom:dashboard-min-content-width)时跳过且不记录宽度——极窄渲染
+出来也是破碎的,保留上一次可读的内容,窗口拖宽后宽度仍不匹配,
+自然触发重渲染。"
   (when-let* ((win (custom/dashboard--dashboard-window)))
-    (when (/= (window-body-width win)
-              (or custom/dashboard--rendered-width 0))
-      (custom/dashboard--refresh-in-window))))
+    (and (>= (custom/dashboard--content-width win)
+             custom:dashboard-min-content-width)
+         (/= (window-body-width win)
+             (or custom/dashboard--rendered-width 0))
+         (custom/dashboard--refresh-in-window))))
 
 (defun custom/dashboard--on-frame-make (&rest _)
   "新 client frame 就绪后,渲染宽度不匹配才重渲染自愈。
