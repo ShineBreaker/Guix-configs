@@ -4,9 +4,9 @@
 ;;; 结构：参照 oh-my-lem（github.com/xenodesire/oh-my-lem）的模块化拆分——
 ;;;   本文件只做引导；modules/ 目录下全部 .lisp 按文件名字典序自动遍历
 ;;;   加载（新增模块建文件即可，无需改本文件）。加载顺序由数字前缀控制：
-;;;     00-utils → 10-extensions → 20-icons → 30-themes → 40-explorer
-;;;     → 50-terminal → 60-editor-config → 70-keybindings
-;;;     → 80-modes-base → 81-modes-<lang>（同层互不依赖）
+;;;     00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer
+;;;     → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config
+;;;     → 70-keybindings → 80-modes-base → 81-modes-<lang>（同层互不依赖）
 ;;;     → 90-startup（钩子登记，必须最后）
 ;;;   前缀间隔 10 留插入位；跨模块依赖与顺序约束详见各模块头注释。
 ;;;

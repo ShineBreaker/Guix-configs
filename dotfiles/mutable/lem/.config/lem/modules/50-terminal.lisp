@@ -1,8 +1,9 @@
 ;;; modules/50-terminal.lisp — 终端面板（VSCode Ctrl+` / Ctrl+J toggle 语义）
 ;;;
-;;; 依赖：utils、extensions（terminal 三件套）、explorer（vs-project-root 与
-;;; vscode-toggle-sidebar 进 bypass 表）；被 keybindings（C-j / M-`）、
-;;; startup（vs-ensure-terminal-buffer / vs-open-terminal-panel）依赖。
+;;; 依赖：utils、上游内置 lem-terminal（nightly 镜像扩展全内置，无需补载）、
+;;; explorer（vs-project-root 与 vscode-toggle-sidebar 进 bypass 表）；被
+;;; keybindings（C-j / M-`）、startup（vs-ensure-terminal-buffer /
+;;; vs-open-terminal-panel）依赖。
 ;;;
 ;;; 面板实现为 vterm（lem terminal 扩展：libvterm + forkpty 全语义终端）。
 ;;; 曾用 shell-mode（lem-process/async-process），2026-08-30 弃用：

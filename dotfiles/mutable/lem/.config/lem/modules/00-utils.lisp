@@ -1,10 +1,12 @@
-;;; modules/00-utils.lisp — 动态符号解析辅助 + store 源码树加载器
+;;; modules/00-utils.lisp — 动态符号解析辅助 + 键位注册表
 ;;;
 ;;; 依赖：init.lisp（vs-load-source）；被其余所有模块依赖，必须最先加载。
 ;;;
 ;;; 设计动机：配置里直接书写 lem 内部/扩展包的包前缀符号，会在编译期
 ;;; 因符号不存在而炸死进程（handler-case 无效）。所有非核心符号一律
 ;;; find-symbol 动态解析，缺失只告警跳过——扩展版本变动只降级不崩。
+;;; （原 store 扩展补载器 vs-load-lem-source 已随 10-extensions 废弃：
+;;; nightly 镜像扩展全内置且无源码树。）
 
 (in-package :lem-user)
 
@@ -33,6 +35,17 @@
   (let ((sym (vs$ pkg name)))
     (if sym
         (setf (variable-value sym :global) val)
+        (vs-warn (list pkg name)))))
+
+(defun vs-setglobal (pkg name val)
+  "直接 setf special variable 的 symbol-value。
+区别于 vs-setvar（variable-value plist 机制）：上游代码不经
+variable-value 而直接引用 special variable 时（grep 的 *last-query*、
+format 的 *auto-format*、line-numbers 的 *relative-line* 均是），
+必须走这里，否则 plist 改了、运行时读到的仍是镜像默认值。" 
+  (let ((sym (vs$ pkg name)))
+    (if sym
+        (setf (symbol-value sym) val)
         (vs-warn (list pkg name)))))
 
 ;; --- 键位注册表（45-keyhelp 帮助页的数据源，which-key 替代的描述层）---
@@ -65,14 +78,6 @@
           (define-key *global-keymap* keyspec sym)
           (push (list keyspec name group desc sym) *vs-binding-registry*))
         (vs-warn (list pkg name)))))
-
-(defparameter *lem-source-tree*
-  (asdf:system-source-directory :lem)
-  "lem 自身源码树（Guix store 只读副本）。升级换 hash 后自动跟随。")
-
-(defun vs-load-lem-source (relpath)
-  "从 store 源码树加载扩展源文件（相对 *lem-source-tree* 的路径）。"
-  (vs-load-source (merge-pathnames relpath *lem-source-tree*)))
 
 (defparameter *vs-heal-hooks* nil
   "resize 自愈（侧栏重建）完成后的布局恢复钩子。侧栏重建内部走

@@ -11,14 +11,14 @@
 | `modules/NN-*.lisp` | 功能模块（NN 数字前缀定序）      | 字典序即加载序，间隔 10 留插入位；新模块建文件即可，init 零登记 |
 | `modules/90-*`      | startup：钩子登记                | 必须最后加载                                                    |
 
-加载序（数字前缀即依赖序）：`00-utils → 10-extensions → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 80-modes-base → 81-modes-<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 81-* 互不依赖。
+加载序（数字前缀即依赖序）：`00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 80-modes-base → 81-modes-<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 81-* 互不依赖。
 
 硬约束（违反即加载失败或运行期炸死）：
 
 - 每个模块必须以 `(in-package :lem-user)` 开头，否则编译期触发包锁崩溃。
 - **配置里静态书写「包前缀 + 不存在的符号」会在编译期炸死进程**，handler-case 无效。非 `:lem`/`:lem-user` 核心符号一律 `vs$` 动态解析，缺失只告警跳过。
 - **keymap 绑定的符号必须是 `define-command` 产物**：执行靠同名命令类分发，普通 `defun` 符号绑键后按键即炸。
-- Guix 打包的 lem 镜像内 `asdf:load-system` 不可用（output-translations 指向只读 store）；加载 store 扩展源码走 `vs-load-lem-source`（相对 `*lem-source-tree*`，升级换 hash 自动跟随），serial 顺序依赖的扩展逐文件按序加载（见 10-extensions 的 terminal/legit 先例）。
+- nightly AppImage（lem-next-bin，用户自打包官方 `Lem-x86_64-nightly.AppImage`）**扩展全部内置编译进 core**（terminal/legit/process/shell-mode/patch-mode/dashboard/lsp-mode/completion-mode 等），镜像**无源码树**（`asdf:system-source-directory` 返回构建容器路径，本机不存在）——原 store 扩展补载机制（10-extensions / `vs-load-lem-source`）已废除，运行时只允许 `vs-load-source` 加载配置目录内文件。
 
 ## 2. 符号速查（home 包陷阱）
 
@@ -28,6 +28,7 @@
 | ------------------------- | ----------------------------- | --------------------------------------------------------------- |
 | `*FIND-FILE-HOOK*`        | `:lem/buffer/file`            | **未 reexport 进 :lem**，`vs$ :lem` 解析必空                    |
 | `RUN-COMPLETION` 等补全族 | `:lem/completion-mode`        | 同上；弹窗补全公开 API 即 `run-completion`                      |
+| `ISEARCH-FORWARD`         | `:lem/isearch`                | nightly 起不再从 :lem reexport；`UNMATCH-ISEARCH-ATTRIBUTE` 已删 |
 | `*TERMINAL-MODE-KEYMAP*`  | `:lem-terminal/terminal-mode` | 终端面板局部键                                                  |
 | `LEGIT-STATUS`            | `:lem/legit`                  | `PROJECT-GREP` 在 `:lem/grep`                                   |
 | `LSP-RENAME`              | `:lem-lsp-mode`               | language 泛型命令（find-definitions 等）在 `:lem/language-mode` |
@@ -37,27 +38,35 @@
 - `buffer-filename` 返回 **namestring**（字符串），不是 pathname。
 - 文件路径转目录用 `(make-pathname :directory (pathname-directory file))`；**不能**用 `uiop:pathname-parent-directory-pathname`——它只看 directory 组件再剥尾段，对文件路径返回的是祖父目录（explorer root 错位一层的根因）。
 - `frame-multiplexer` 的 `C-z` 是前缀 keymap：任何绑定到 `C-z` 的命令都会整体覆盖数字快切。
+- **`vs-setvar` 与 `vs-setglobal` 二分**：`vs-setvar` 走 lem 的 `variable-value` plist 机制；但上游大量变量是**直接引用的 special variable**（grep 的 `*grep-command*`/`*last-query*`、format 的 `*auto-format*`、line-numbers 的 `*relative-line*` 等），plist 改了运行时读到的仍是镜像默认值——这类必须 `vs-setglobal`（setf symbol-value）。判断法：上游源码里 `(when *auto-format* ...)` 这种裸引用就是 vs-setglobal。
+- **keymap 有两代模型，探针写法不同**：20260531 构建起是 PR #2100 的**前缀树**（`KEYMAP*` 类，槽 `PREFIXES/CHILDREN/PARENTS/FUNCTION-TABLE`，无 TABLE）——检查绑定走 `(lem-core:keymap-prefixes km)` 遍历 PREFIX 对象、比较 `(format nil "~A" (lem-core:prefix-key p))`，多键序列沿 suffix（子 keymap）逐层下钻；`define-key` 仍收字符串 keyspec + 命令符号，配置侧零改动。20250810 旧构建是哈希表模型（键为 key 结构体，`gethash` 新串必 NIL，须 maphash + 打印表示比较）。
 
 ## 3. 键位与帮助体系
 
 - 全局键一律 `vs-bind`（keyspec 包名 命令名 分组 中文描述），落键同时登记 `*vs-binding-registry*`——45-keyhelp 的 F1 菜单与 C-c h 静态帮助页的数据源，**不经 vs-bind 的绑定不进帮助页**（局部 keymap / 默认键用 `vs-help-note` 收编，`vs-declare-group` 声明分组顺序）。
 - `Shift` 必须写全拼 `"Shift-C-x"`（`S-` 是 super）。
-- 已占用键：`C-p/C-f/C-s/C-b/C-j/C-\`/C-Tab/F2 等 VSCode 高频键覆盖 lem 同位键，被覆盖的移动退 Meta 系；`C-z`=undo、`C-/`=注释、`C-a`=全选（行首退 Home）为 Emacs 对齐键；`F1`=键位菜单、`C-c h`=静态帮助页、`M-/`=dabbrev。
+- 已占用键：`C-p/C-f/C-s/C-b/C-j/C-\`/C-Tab/F2 等 VSCode 高频键覆盖 lem 同位键，被覆盖的移动退 Meta 系；`C-z`=undo、`C-/`=注释、`C-a`=全选（行首退 Home）、`C-=`/`C--`=字号为 Emacs/通用对齐键；`C-.`=Code Action（LSP）、`C-d`=多光标加光标（isearch 活动时逐个命中加光标，非搜索态 no-op）；`F1`=键位菜单、`C-c h`=静态帮助页、`M-/`=dabbrev。**`C-c h` 双语义**：全局是帮助页，但 lsp-mode 局部 keymap 把 `C-c h` 绑成了 hover（上游默认，未覆盖），LSP buffer 内会被遮蔽。lisp-mode 局部 `C-c C-d h`=CL Hyperspec。上游默认键（C-u 数字参数、C-x (/)/e 键盘宏、C-x SPC 矩形模式、Shift+方向选区、F3/Shift-F3 查找导航、isearch 内 C-M-n/p 多光标）不经 vs-bind，已用 vs-help-note 收编进帮助页。
 - 弹窗补全站在 `lem/completion-mode:run-completion` 上（LSP 补全同管线）；候选必须是 `make-completion-item :label ...` 对象，字符串列表会在插入时炸。
 
 ## 4. 上游缺陷与规避（勿踩二遍）
 
+- **nightly 图形前端是 webview（WebKitGTK + Canvas/JS），不是 SDL2**：`:sdl2-*` 系列 config 键已无读者；字体走运行时 API `set-font-name`（fontconfig 家族名，非 ttf 路径）+ `set-font-size`（**CSS 逻辑像素**，物理尺寸 = N×DPR；2x 屏 13 ≈ 旧 SDL2 26 物理像素观感）。webview **不持久化字号**，每次启动由 25-fonts 设置；ncurses 下这些调用报错，故包 ignore-errors。部署 config.lisp 里遗留 `:SDL2-*` 键属无害残留。
+- **lem-core 的 make-timer/start-timer 在 webview 前端不 fire**（缺 timer tick 调度点）：沙箱验证需要延迟执行时，用 `sb-thread:make-thread` + sleep 做只读探测，不要依赖 timer。
 - **`with-pop-up-typeout-window` 的 floating window 存活期间按移动键必炸**（MOVE-TO-VIRTUAL-LINE-COLUMN 收到 NIL column）——帮助类内容一律渲染进只读 buffer 再 `switch-to-buffer`。
 - **属性渲染的只读 buffer（explorer）上放行 next-line/previous-line 必炸**（virtual-column 为 NIL）：mode keymap 必须显式拦 `Up`/`Down`（40-explorer 尾部的纯点操作命令），任何新「渲染型 buffer」照抄该模式。
 - `M-` 系与 `F1` 等键序在本机 tmux 的 send-keys 下不可靠（Escape 前缀被拆），**自动化验证不走键注入**（见第 5 节）。
-- lem 的 `with-editor-stream` 吞 `*error-output*`（ncurses/SDL2 双无声）：诊断一律 `vs-trace` 直写 `/tmp/vs-trace.log`。
+- lem 的 `with-editor-stream` 吞 `*error-output*`（webview/ncurses 双无声）：诊断一律 `vs-trace` 直写 `/tmp/vs-trace.log`。
+- **20260531 构建「闪退」签名**：UI 起来后偶发 SBCL fatal `cannot suspend thread 0x…: 3 (ESRCH)`（webview/GTK 外部线程 vs GC 竞态，上游运行时 bug，间歇性——同构建有连跑数小时先例）。fatal 进 LDB 后：CLI 启动时 LDB 文本会落进 *Terminal* 面板（进程半死）；desktop 启动 stdin=EOF → LDB 退出带崩全进程 = 用户视角的「闪退」。处置：直接重启即可（勿当配置回归排查——2026-08-31 实测一轮：裸配置/沙箱全配置/真实配置交替「复现」，最终确认与配置无关）。**timeout 杀 wrapper 会留下 lem.real 孤儿**，多实例并存会加剧竞态，排查前先 `pgrep -af lem.real` 清场（注意 pgrep -f 会匹配到自己的命令行，过滤之）；`~/.config/lem/debug.log` 只记启动不记崩溃。
+- **插件通道三坑**（lem-extension-manager + 内置 Quicklisp）：① `*PACKAGES-DIRECTORY*` 在镜像构建期被固化成 `/root/.config/lem/packages/`（构建容器 HOME 残留），不可写，60-editor-config 已 `vs-setglobal` 重设到 `~/.config/lem/packages/`；② 镜像里 quicklisp **客户端在但 dist 为空**（`ql-systems=0`），首次装包前须 `(ql-dist:install-dist "https://beta.quicklisp.org/dist/quicklisp.txt" :replace nil :prompt nil)`（官方 dist 里**没有任何 lem 系统**——第三方 lem 扩展走 `lem-use-package :source '(:type :git ...)` 从 GitHub 直装，ql 通道只用于通用 CL 库）；③ `LEM-USE-PACKAGE` 是**宏**不是函数，程序化调用要 eval/macroexpand，不能 funcall。
+- **webview 前端下 `--eval` 探针不可用**（与多实例无关）：webview 前端初始化与 apply-args 的求值序不兼容，`--eval` 的 load 经常整段不执行（探针文件连 marker 都不落地）或直接挂起；剥离 display 跑则崩在 webview 初始化（fatal ERROR，stderr 被吞只留 `compilation unit aborted` 摘要）。**探针一律走 ncurses 通道**（见第 5 节第 2 条）。
+- **tabbar（webview 顶栏 buffer 列表条）双坑**：① 上游 `*enable-tabbar-on-startup*` 默认 t，显示**全部 buffer**（含 *terminal*/*dashboard* 等临时 buffer，无过滤点）；60-editor-config 已 wrap `lem/tabbar::get-tabbar-buffers` 过滤为只显示文件 buffer，tab 的点击切换/关闭/dirty 圆点为 webview 原生。② **ncurses 前端下 tabbar 渲染走 lem-server 的 HTML 管线、view 类型不匹配必崩**（redraw 即 fatal），60-editor-config 按前端分派：webview 开、其余关（探针通道能跑正是依赖此关闭）。
 
 ## 5. 验证管线
 
-1. **语法验证（每次修改后必跑）**：SBCL stub 包 read-only parse 全部 .lisp。stub 只需满足 reader 解析：`:lem-user`/`:uiop`（directory-pathname-p/getcwd/getenv 等）/`:lem`（config/icon-value）/`:asdf`/`:lem-core` 存在即可；运行用 `sbcl --noinform --load`（`--script` 静默丢输出）。
-2. **行为自检（LEM_HOME 沙箱）**：临时目录 `init.lisp` 里先 `(load "~/.config/lem/init.lisp")` 再挂验证代码；**`LEM_HOME` 值必须带尾斜杠**（`merge-pathnames` 把无斜杠当文件名，init 会静默不加载）。延迟执行用 `make-timer` + `start-timer`（`lem-core` 导出，回调进主循环，界面就绪后安全跑），断言写 /tmp log，**零按键、零焦点纠缠**——逐键推进的 post-command 自检会与 startup/popup 焦点互噬产生假炸点。
-3. **真 UI 驱动**：`lem --eval '(load "/tmp/xxx.lisp")'`——**eval 表达式在启动 parse 期就被 read 进 cl-user**（先写的 in-package 救不了，符号包已固化），所以必须经 load 文件、文件内 in-package 才生效。
+1. **语法验证（每次修改后必跑）**：SBCL stub 包 read-only parse 全部 .lisp。stub 需满足 reader 解析：`:lem-user`/`:uiop`/`:lem`/`:asdf`/`:lem-core` 包存在，且配置里静态引用的各包符号须在 stub 中 **大写 export**（read 的 :upcase 语义）；运行用 `sbcl --noinform --load`（`--script` 静默丢输出）。
+2. **行为自检（ncurses `--eval` 通道；LEM_HOME 沙箱与 webview `--eval` 均不可用，见第 4 节）**：`tmux new-session -d -s lemprobe -x 220 -y 50 "env -u WAYLAND_DISPLAY -u DISPLAY lem -i ncurses --eval '(load \"/tmp/xxx.lisp\")'"`——`-i ncurses` 强制 ncurses 前端（tabbar 已被 60-editor-config 关闭，不会崩），load 在**用户配置加载完成之后**执行（after-init → apply-args 序），直接读 `*vs-binding-registry*` 条数、变量 symbol-value、keymap 绑定即为生效态。断言写 /tmp log、文件末尾 `(sb-ext:exit :code 0)` 自退出；**flet/labels 局部函数名勿用 `log` 等 CL 外部符号**（包锁违规 → load 编译期 fatal）。延迟执行用 `sb-thread:make-thread` + sleep（timer 不 fire，见第 4 节），**零按键、零焦点纠缠**。
+3. **--eval 的 reader 限制**：eval 表达式在启动 parse 期就被 read 进 cl-user（先写的 in-package 救不了，符号包已固化），所以必须经 load 文件、文件内 in-package 才生效。
 4. **tmux 观测**：capture-pane 看画面；字符注入只用 `set-buffer` + `paste-buffer`（`send-keys -l` 首字符后必丢）；启动后必须先发一键才触发 post-command 启动钩子（无按键只见 dashboard，不是加载失败）。
-5. **渲染类改动（侧栏/主题/字体）必须真机 capture 验证**，静态检查不算数；SDL2 字体 config 只持久化到 config.lisp、**下一次启动才生效**。
+5. **渲染类改动（侧栏/主题/字体）必须真机 capture 验证**，静态检查不算数。webview 前端在 xvfb 下恒黑屏（webkit 无 GPU 渲染问题，加 WEBKIT_DISABLE_* 环境变量也无效），渲染验证走**真机 wayland：沙箱 LEM_HOME 起实例 + grim 截屏 + 及时 kill**。webview 字号不持久化，字体改动重启即生效。注意：**桌面处于锁屏时 grim 只能截到锁屏层**（编辑器被虚化不可读）——夜间自动化遇到锁屏时，webview 视觉验证只能改期，可先用 ncurses 通道验证非前端相关的渲染逻辑（侧栏 buffer 内容与码点可 capture-pane 校验）。
 
 禁令沿用仓库根 AGENTS.md：不运行 `blue rebuild` / `guix system reconfigure`（提醒用户手动），不编辑 `channel.lock` 与 `tmp/`，不持久安装包。本目录为 mutable Stow 源，普通修改无需 `blue home`。

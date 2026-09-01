@@ -34,12 +34,12 @@
                   :foreground "#6E7681" :background "#1F1F1F")
          (vs-spec :lem/line-numbers "ACTIVE-LINE-NUMBER-ATTRIBUTE"
                   :foreground "#CCCCCC" :background "#1F1F1F")
-         ;; isearch（findMatch #9E6A03 / findMatchHighlight 近似）
+         ;; isearch（findMatch #9E6A03 / findMatchHighlight 近似；
+         ;; 上游 nightly 已删除 UNMATCH-ISEARCH-ATTRIBUTE）
          (vs-spec :lem/isearch "ISEARCH-HIGHLIGHT-ACTIVE-ATTRIBUTE"
                   :foreground "#1F1F1F" :background "#9E6A03")
          (vs-spec :lem/isearch "ISEARCH-HIGHLIGHT-ATTRIBUTE"
                   :foreground "#CCCCCC" :background "#613214")
-         (vs-spec :lem/isearch "UNMATCH-ISEARCH-ATTRIBUTE" :foreground "#868686")
          ;; 语法高亮（Dark+ token 色板）
          (vs-spec :lem "SYNTAX-COMMENT-ATTRIBUTE" :foreground "#6A9955")
          (vs-spec :lem "SYNTAX-KEYWORD-ATTRIBUTE" :foreground "#569CD6")

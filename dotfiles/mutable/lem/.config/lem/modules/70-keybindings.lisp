@@ -2,7 +2,8 @@
 ;;;
 ;;; 依赖：utils（vs-bind/vs-declare-group/vs-help-note）、keyhelp（F1）、
 ;;; completion（M-/）、explorer + terminal（VSCODE-TOGGLE-* 命令）、
-;;; extensions（terminal/legit/grep）、icons 之后的全部模块。
+;;; 上游内置扩展（terminal/legit/grep，nightly 全内置）、icons 之后的
+;;; 全部模块。
 ;;;
 ;;; 三节结构：
 ;;;   1. 自研命令：M-方向窗口焦点（windmove 对齐，lem 无现成方向切窗）
@@ -68,7 +69,7 @@
 ;; --- VSCode 核心区 ---
 (vs-bind "C-p" :lem "FIND-FILE-RECURSIVELY" "nav" "Quick Open 打开文件")
 (vs-bind "M-p" :lem "PREVIOUS-LINE" "nav" "光标上移（原 C-p 退位）")
-(vs-bind "C-f" :lem "ISEARCH-FORWARD" "nav" "查找（isearch）")
+(vs-bind "C-f" :lem/isearch "ISEARCH-FORWARD" "nav" "查找（isearch）")
 (vs-bind "M-f" :lem "FORWARD-CHAR" "nav" "前进一字符（原 C-f 退位）")
 (vs-bind "C-s" :lem "SAVE-BUFFER" "editor" "保存")
 (vs-bind "C-b" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "侧栏开关")
@@ -85,9 +86,9 @@
 ;; （就是普通 `；扩展协议序列 ncurses 不解，ESC+` 又被 terminal-mode 的
 ;; Escape 键拆解）；C-j 与 Return 同码 0x0A，vterm 聚焦时被 terminfo 报为
 ;; Return 直喂终端（换行语义不可牺牲）。故 vterm 内隐藏面板走 M-`
-;; （terminal-mode-keymap 显式绑定）；SDL2 前端无此约束，C-j / C-` 原样可达
-;; （bypass 表保证终端聚焦时命令仍生效，见 50-terminal 尾部）。
-(vs-bind "C-j" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关（SDL2/协议终端）")
+;; （terminal-mode-keymap 显式绑定）；图形前端（webview）无此约束，
+;; C-j / C-` 原样可达（bypass 表保证终端聚焦时命令仍生效，见 50-terminal 尾部）。
+(vs-bind "C-j" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关（图形前端）")
 (vs-bind "M-j" :lem "NEXT-LINE" "nav" "光标下移（原 C-j 退位）")
 (vs-bind "C-`" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关（kitty 协议）")
 (vs-bind "M-`" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关")
@@ -98,6 +99,12 @@
 (vs-help-note "ui" "M-`" "终端聚焦时隐藏面板（terminal-mode 内）")
 ;; --- F2 符号重命名（LSP） ---
 (vs-bind "F2" :lem-lsp-mode "LSP-RENAME" "code" "重命名符号（LSP）")
+;; --- Code Action（VSCode C-. 快速修复/重构菜单，LSP） ---
+(vs-bind "C-." :lem-lsp-mode "LSP-CODE-ACTION" "code" "代码操作（快速修复/重构，LSP）")
+;; --- 多光标（VSCode Ctrl+D 同位键：isearch 活动时逐个命中加光标，
+;;     非搜索态安全 no-op；Delete 键仍承担删字符） ---
+(vs-bind "C-d" :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH" "editor"
+         "多光标：查找时逐个命中加光标")
 
 ;; --- Emacs 体验对齐区（对齐 emacs.org 的 IDE 风格键组） ---
 (vs-bind "C-z" :lem "UNDO" "editor" "撤销（覆盖 multiplexer C-z 快切前缀）")
@@ -114,10 +121,10 @@
 (vs-bind "M-g g" :lem "GOTO-LINE" "nav" "跳转到行")
 (vs-bind "Shift-C-p" :lem "EXECUTE-COMMAND" "nav" "命令面板（M-x 等价）")
 (vs-bind "Shift-C-w" :lem-user "VS-KILL-CURRENT-BUFFER" "editor" "关闭当前 buffer（不问名）")
-(vs-bind "C-=" :lem "FONT-SIZE-INCREASE" "ui" "字号增大（SDL2）")
-(vs-bind "C--" :lem "FONT-SIZE-DECREASE" "ui" "字号减小（SDL2）")
+(vs-bind "C-=" :lem "FONT-SIZE-INCREASE" "ui" "字号增大")
+(vs-bind "C--" :lem "FONT-SIZE-DECREASE" "ui" "字号减小")
 (vs-bind "C-F12" :lem/language-mode "FIND-DEFINITIONS" "code" "跳转定义")
-(vs-bind "Shift-C-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用")
+(vs-bind "Shift-C-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用（peek 内联视图）")
 (vs-bind "F1" :lem-user "VS-TRANSIENT-SHOW" "help" "键位菜单（选组→选键→执行）")
 (vs-bind "C-c h" :lem-user "VS-SHOW-KEYBINDINGS" "help" "键位帮助页（静态全量）")
 
@@ -138,3 +145,14 @@
 (vs-help-note "nav" "C-M-a / C-M-e" "defun 首 / 尾（language-mode）")
 (vs-help-note "nav" "M-<" "buffer 开头")
 (vs-help-note "nav" "M->" "buffer 结尾")
+(vs-help-note "nav" "F3 / Shift-F3" "查找下一个 / 上一个（isearch 高亮）")
+
+;; --- nightly 内置默认键收编（上游 global keymap 已绑，只进帮助页） ---
+(vs-help-note "editor" "C-u" "数字参数前缀（C-u 3 → 三倍重复）")
+(vs-help-note "editor" "M-0..M-9 / M--" "数字参数 / 负数参数")
+(vs-help-note "editor" "C-x ( / C-x )" "键盘宏 录制开始 / 结束")
+(vs-help-note "editor" "C-x e" "键盘宏 执行（C-u n 连跑 n 次）")
+(vs-help-note "editor" "C-x SPC" "矩形选区模式（列选区；常规复制/剪切按列生效，C-o 插列、C-t 填串）")
+(vs-help-note "editor" "M-x query-replace-symbol" "按符号边界替换")
+(vs-help-note "code" "C-c h" "hover 文档（LSP buffer 内，同鼠标悬停；非 LSP buffer 是全局帮助页）")
+(vs-help-note "code" "鼠标悬停" "hover 文档（webview 前端原生）")

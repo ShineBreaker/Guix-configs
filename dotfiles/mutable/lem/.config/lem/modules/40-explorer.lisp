@@ -4,8 +4,10 @@
 ;;; keybindings（C-b / Ctrl+Shift+E）、startup（启动展开 + heal 钩子）依赖。
 ;;;
 ;;; 架构：lem 框架级 leftside window（make-leftside-window）承载自绘
-;;; buffer —— EXPLORER 标题 + 内嵌 Activity 图标行 + 工作区 section +
-;;; 文件树（目录记忆 + git 状态染色）。
+;;; buffer —— EXPLORER 标题 + 内嵌 Activity 图标行（files/search/scm/
+;;; extensions，键 1-4）+ 工作区 section（右缘 new-file/new-folder/
+;;; refresh/collapse-all 操作排，键 n/d/r/c）+ 文件树（目录记忆 + git
+;;; 状态染色）。
 ;;;
 ;;; 空状态语义（对齐 VSCode 欢迎页）：*vs-explorer-root* 为 nil 即
 ;;; 「NO FOLDER OPENED」——侧栏只显示引导文案，不渲染文件树；首个
@@ -141,14 +143,13 @@
                      :attribute 'vs-sidebar-bg))))
 
 (defun vs-explorer-render-header (point)
-  ;; 标题行（EXPLORER + 右缘 ⋯）
+  ;; 标题行（VSCode 的 ⋯ 更多操作菜单无对应物，不渲染右缘按钮）
   (insert-string point " EXPLORER" :attribute 'vs-explorer-title)
   (vs-pad-to-width point)
-  (insert-string point (string (vs-icon :ellipsis))
-                 :attribute 'vs-explorer-titlebar)
   (insert-character point #\newline)
-  ;; Activity Bar 内嵌图标行（explorer 激活白，其余灰）
-  (let ((icons '(:files :search :scm :debug :extensions)))
+  ;; Activity Bar 内嵌图标行（explorer 激活白，其余灰；debug 无 DAP 对应物
+  ;; 不渲染，extensions 接 lem/extension-commands 的安装命令）
+  (let ((icons '(:files :search :scm :extensions)))
     (insert-string point " " :attribute 'vs-sidebar-bg)
     (dolist (i icons)
       (insert-string point (string (vs-icon i))
@@ -159,7 +160,9 @@
     (vs-pad-to-width point)
     (insert-character point #\newline))
   (insert-character point #\newline)
-  ;; 工作区 section 头（▾；激活后为大写项目名，空状态为 NO FOLDER OPENED）
+  ;; 工作区 section 头（▾ 项目名；激活后为大写项目名，空状态为 NO FOLDER
+  ;; OPENED；右缘操作图标排对齐 VSCode：new-file/new-folder/refresh/
+  ;; collapse-all，对应键 n/d/r/c）
   (insert-string point (format nil " ~C " (vs-icon :chevron-down))
                  :attribute 'vs-tree-chevron)
   (if *vs-explorer-root*
@@ -169,6 +172,15 @@
                      :attribute 'vs-section-header)
       (insert-string point "NO FOLDER OPENED"
                      :attribute 'vs-section-header))
+  (when *vs-explorer-root*
+    (let ((pad (- *vs-explorer-width* 9 (point-charpos point))))
+      (when (plusp pad)
+        (insert-string point (make-string pad :initial-element #\space)
+                       :attribute 'vs-sidebar-bg)))
+    (dolist (g '(:file :folder :refresh :chevron-down))
+      (insert-string point (string (vs-icon g))
+                     :attribute 'vs-explorer-titlebar)
+      (insert-string point " " :attribute 'vs-sidebar-bg)))
   (vs-pad-to-width point)
   (insert-character point #\newline))
 
@@ -340,13 +352,14 @@
 (define-key *vs-explorer-keymap* "Down" 'vscode-explorer-next-line)
 (define-key *vs-explorer-keymap* "Up" 'vscode-explorer-previous-line)
 
-;; Activity 图标行对应视图（1-5 跳转；4/5 暂无对应物）
+;; Activity 图标行对应视图（1-4 跳转；debug 无 DAP 对应物不设键）
 (defun vs-run-command (pkg name)
   (vs-focus-main-window)
   (vs-call pkg name))
 
 (define-command vscode-activity-explorer () ()
-  (message "Explorer"))
+  "1：切换 Explorer 侧栏（与 C-b / Ctrl+Shift+E 同语义）。"
+  (vscode-toggle-sidebar))
 
 (define-command vscode-activity-search () ()
   (vs-run-command :lem/grep "PROJECT-GREP"))
@@ -354,17 +367,40 @@
 (define-command vscode-activity-scm () ()
   (vs-run-command :lem/legit "LEGIT-STATUS"))
 
-(define-command vscode-activity-debug () ()
-  (message "Run and Debug：暂无对应物"))
-
 (define-command vscode-activity-extensions () ()
-  (message "Extensions：暂无对应物"))
+  "4：扩展管理（Quicklisp 包安装列表）。"
+  (vs-run-command :lem/extension-commands "EXTENSION-MANAGER-INSTALL-QL-PACKAGE"))
 
 (define-key *vs-explorer-keymap* "1" 'vscode-activity-explorer)
 (define-key *vs-explorer-keymap* "2" 'vscode-activity-search)
 (define-key *vs-explorer-keymap* "3" 'vscode-activity-scm)
-(define-key *vs-explorer-keymap* "4" 'vscode-activity-debug)
-(define-key *vs-explorer-keymap* "5" 'vscode-activity-extensions)
+(define-key *vs-explorer-keymap* "4" 'vscode-activity-extensions)
+
+;; --- section 头操作排（对齐 VSCode Explorer 的 new-file/new-folder/
+;;     refresh/collapse-all；refresh 已有 r/g 键） ---
+(define-command vscode-explorer-new-file () ()
+  "n：新建文件（find-file 输入新路径即建新 buffer，保存时落地）。"
+  (vs-focus-main-window)
+  (vs-call :lem "FIND-FILE"))
+
+(define-command vscode-explorer-new-folder () ()
+  "d：新建文件夹（工作区内相对路径）。"
+  (when *vs-explorer-root*
+    (let ((rel (vs-call :lem "PROMPT-FOR-STRING" "New folder (relative): ")))
+      (when (and (stringp rel) (plusp (length rel)))
+        (ignore-errors
+         (ensure-directories-exist
+          (merge-pathnames rel *vs-explorer-root*)))
+        (vs-explorer-render)))))
+
+(define-command vscode-explorer-collapse-all () ()
+  "c：折叠全部目录。"
+  (clrhash *vs-open-dirs*)
+  (vs-explorer-render))
+
+(define-key *vs-explorer-keymap* "n" 'vscode-explorer-new-file)
+(define-key *vs-explorer-keymap* "d" 'vscode-explorer-new-folder)
+(define-key *vs-explorer-keymap* "c" 'vscode-explorer-collapse-all)
 
 ;; --- 侧栏开关（Ctrl+B / Ctrl+Shift+E） ---
 (defun vs-explorer-window ()
