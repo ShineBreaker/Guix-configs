@@ -142,27 +142,46 @@
       (insert-string point (make-string pad :initial-element #\space)
                      :attribute 'vs-sidebar-bg))))
 
+(defun vs-make-icon-click (cmd)
+  "图标行 clickable 回调工厂：忽略 (window point) 参数直接执行命令。"
+  (lambda (window point)
+    (declare (ignore window point))
+    (funcall cmd)))
+
+(defun vs-clickable-region (click start point cmd)
+  (when click
+    (funcall click start point (vs-make-icon-click cmd))))
+
 (defun vs-explorer-render-header (point)
   ;; 标题行（VSCode 的 ⋯ 更多操作菜单无对应物，不渲染右缘按钮）
   (insert-string point " EXPLORER" :attribute 'vs-explorer-title)
   (vs-pad-to-width point)
   (insert-character point #\newline)
   ;; Activity Bar 内嵌图标行（explorer 激活白，其余灰；debug 无 DAP 对应物
-  ;; 不渲染，extensions 接 lem/extension-commands 的安装命令）
-  (let ((icons '(:files :search :scm :extensions)))
+  ;; 不渲染，extensions 接 lem/extension-commands 的安装命令）；图标可点击
+  ;; 切换对应功能（VSCode 语义）
+  (let ((icons '(:files :search :scm :extensions))
+        (cmds '(vscode-activity-explorer
+                vscode-activity-search
+                vscode-activity-scm
+                vscode-activity-extensions))
+        (click (vs$ :lem-core "SET-CLICKABLE")))
     (insert-string point " " :attribute 'vs-sidebar-bg)
-    (dolist (i icons)
-      (insert-string point (string (vs-icon i))
-                     :attribute (if (eq i :files)
-                                    'vs-activity-active
-                                    'vs-activity-inactive))
-      (insert-string point "  " :attribute 'vs-sidebar-bg))
+    (loop :for i :in icons
+          :for cmd :in cmds
+          :do (with-point ((start point))
+                (insert-string point (string (vs-icon i))
+                               :attribute (if (eq i :files)
+                                              'vs-activity-active
+                                              'vs-activity-inactive))
+                (vs-clickable-region click start point cmd))
+              (insert-string point "  " :attribute 'vs-sidebar-bg))
     (vs-pad-to-width point)
     (insert-character point #\newline))
   (insert-character point #\newline)
   ;; 工作区 section 头（▾ 项目名；激活后为大写项目名，空状态为 NO FOLDER
   ;; OPENED；右缘操作图标排对齐 VSCode：new-file/new-folder/refresh/
-  ;; collapse-all，对应键 n/d/r/c）
+  ;; collapse-all，对应键 n/d/r/c；图标同样可点击）
   (insert-string point (format nil " ~C " (vs-icon :chevron-down))
                  :attribute 'vs-tree-chevron)
   (if *vs-explorer-root*
@@ -177,10 +196,18 @@
       (when (plusp pad)
         (insert-string point (make-string pad :initial-element #\space)
                        :attribute 'vs-sidebar-bg)))
-    (dolist (g '(:file :folder :refresh :chevron-down))
-      (insert-string point (string (vs-icon g))
-                     :attribute 'vs-explorer-titlebar)
-      (insert-string point " " :attribute 'vs-sidebar-bg)))
+    (let ((ops '(:file :folder :refresh :chevron-down))
+          (op-cmds '(vscode-explorer-new-file
+                     vscode-explorer-new-folder
+                     vscode-explorer-refresh
+                     vscode-explorer-collapse-all))
+          (click (vs$ :lem-core "SET-CLICKABLE")))
+      (dolist (g ops)
+        (with-point ((start point))
+          (insert-string point (string (vs-icon g))
+                         :attribute 'vs-explorer-titlebar)
+          (vs-clickable-region click start point (pop op-cmds)))
+        (insert-string point " " :attribute 'vs-sidebar-bg))))
   (vs-pad-to-width point)
   (insert-character point #\newline))
 
@@ -214,7 +241,15 @@
     (with-point ((start point))
       (line-start start)
       (put-text-property start point :vs-item
-                         (list :path path :dir-p dir-p)))))
+                         (list :path path :dir-p dir-p))
+      ;; 整行可点击：目录展开/收缩、文件打开（上游 mouse.lisp 的
+      ;; side-window click-callback 通道）
+      (let ((click (vs$ :lem-core "SET-CLICKABLE")))
+        (when click
+          (funcall click start point
+                   (lambda (window pt)
+                     (declare (ignore window))
+                     (vs-explorer-act-on-point pt))))))))
 
 (defun vs-render-dir (point dir depth)
   (dolist (child (vs-dir-children dir))
@@ -282,9 +317,10 @@
   (unless (member (current-window) (window-list))
     (setf (current-window) (car (window-list)))))
 
-(define-command vscode-explorer-select () ()
-  "Return：目录展开/折叠，文件在主窗打开并把焦点交还编辑区。"
-  (let ((item (vs-item-at-point)))
+(defun vs-explorer-act-on-point (point)
+  "点击/Return 共用的条目动作：目录切换展开态，文件在主窗打开。
+click 回调传入的 point 不移动 current-point，必须以参数为准。"
+  (let ((item (text-property-at point :vs-item)))
     (when item
       (if (getf item :dir-p)
           (progn
@@ -296,6 +332,10 @@
           (progn
             (vs-focus-main-window)
             (find-file (getf item :path)))))))
+
+(define-command vscode-explorer-select () ()
+  "Return：目录展开/折叠，文件在主窗打开并把焦点交还编辑区。"
+  (vs-explorer-act-on-point (back-to-indentation (current-point))))
 
 (define-command vscode-explorer-toggle-dir () ()
   "Tab：只切换展开态，不打开文件。"
