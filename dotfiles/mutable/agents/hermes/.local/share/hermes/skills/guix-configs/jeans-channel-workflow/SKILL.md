@@ -1,6 +1,6 @@
 ---
 name: jeans-channel-workflow
-description: Maintain the personal Guix channel at ~/Projects/Config/jeans (Just Enough AI-geNerated Slops). Use when the user asks to "fix the CI build failure issue", "升级 X 包", "add a package", "check upstream updates", "跑 blue upgrade", "修复 auto-update 流水线的 issue #N", or any other task inside the jeans Guix channel — including the recurring auto-fix cron (blue upgrade → blue gen-docs drift sweep → docs sync commit). Covers the dual build-system (cargo-build-system + url-fetch bin packages), the weekly Auto Update Packages GitHub Actions workflow, the bot-driven commit pipeline, and the `jeans-issue-fixer` cron entrypoint that auto-fixes build failures when CI surfaces an issue.
+description: Maintain the personal Guix channel at ~/Projects/Config/jeans (Just Enough AI-geNerated Slops). Use when the user asks to "fix the CI build failure issue", "升级 X 包", "add a package", "check upstream updates", "跑 blue upgrade", "修复 auto-update 流水线的 issue #N", or any other task inside the jeans Guix channel — including the recurring auto-fix cron (blue upgrade → blue gen-docs drift sweep → docs sync commit). Covers the dual build-system (cargo-build-system + url-fetch bin packages), the weekly Auto Update Packages GitHub Actions workflow, the bot-driven commit pipeline, and the `jeans-issue-fixer` cron entrypoint (CI failure triage: rerun infra failures, fix real build-failure issues only — version updates are CI's job, the cron never runs blue upgrade locally).
 category: guix-packaging
 ---
 
@@ -486,7 +486,8 @@ Critical: **do not auto-push or auto-commit** GPG-signed fixes for jeans. The cr
 | 可以做 ✅ | 不可以做 ❌ | 边界依据 |
 | --- | --- | --- |
 | `git pull`(无冲突时) | `git push` 到任何 remote | 不变量 + AGENTS.md "禁止 commit 中 push 到 remote" |
-| 跑 `blue upgrade` 读日志 | 改 `update_versions.py` 让它能改 hash | cron 是"汇报 + 修 drift",不是"修工具" |
+| `git pull`(无冲突时) | `git push` 到任何 remote | 不变量 + AGENTS.md "禁止 commit 中 push 到 remote" |
+| ❌ `blue upgrade` / `guix refresh -u` 本地更新（2026-09-01 教训：CI 绿时本地再跑一遍更新 = 与 CI 当天推送完全重复，制造 merge 冲突；版本更新是 CI 职责，cron 只管 CI 失败重跑 + 修构建 issue） | 改 `update_versions.py` 让它能改 hash | cron 是"汇报 + 修 drift",不是"修工具" |
 | 跑 `blue gen-docs` 重生成 docs | 手编辑 docs/packages.md | `gen-docs` 是 deterministic,手写易引 §1.9 的反向漂移 |
 | `git commit`(单文件 serial) | 任何批量 `git checkout HEAD -- .` | §AGENTS.md 不变量 |
 | 修 docs 漂移并 commit | 修包定义本身(`modules/jeans/packages/*.scm`) | 包定义修改属于 issue-fixer cron 范畴(§1.7),不是基础修复 cron |

@@ -398,6 +398,7 @@ skills:
   guard_agent_created: false
   write_approval: false
   creation_nudge_interval: 15
+  disabled: []
 curator:
   enabled: true
   interval_hours: 168
@@ -541,6 +542,7 @@ updates:
   pre_update_backup: false
   backup_keep: 5
   non_interactive_local_changes: stash
+  refresh_cua_driver: false
 lsp:
   enabled: true
   wait_mode: document
@@ -562,15 +564,17 @@ secrets:
 paste_collapse_threshold: 5
 paste_collapse_threshold_fallback: 5
 paste_collapse_char_threshold: 2000
-_config_version: 38
+_config_version: 39
 known_plugin_toolsets:
   cli:
+    - a2a
     - spotify
 platform_toolsets:
   cli:
     - browser
     - clarify
     - code_execution
+    - computer_use
     - context_engine
     - cronjob
     - delegation
@@ -598,6 +602,34 @@ session_reset:
   at_hour: 4
   idle_minutes: 1440
   mode: both
+known_builtin_toolsets:
+  cli:
+    - browser
+    - clarify
+    - code_execution
+    - computer_use
+    - context_engine
+    - cronjob
+    - delegation
+    - discord
+    - discord_admin
+    - file
+    - homeassistant
+    - image_gen
+    - memory
+    - session_search
+    - skills
+    - spotify
+    - stt
+    - terminal
+    - todo
+    - tts
+    - video
+    - video_gen
+    - vision
+    - web
+    - x_search
+    - yuanbao
 
 # ── Fallback Model ────────────────────────────────────────────────────
 # Automatic provider failover when primary is unavailable.
