@@ -8,11 +8,22 @@
       "superpowers@zcode-plugins-official": false,
       "mimosa@zcode-plugins-official": true,
       "example-plugin@zcode-plugins-official": true,
-      "restore-legacy-sessions@zcode-plugins-official": true
+      "restore-legacy-sessions@zcode-plugins-official": true,
+      "context7@claude-plugins-official": true,
+      "feature-dev@claude-plugins-official": true,
+      "playwright@claude-plugins-official": true,
+      "github@zcode-plugins-official": true,
+      "code-review@claude-plugins-official": true
     }
   },
   "mcp": {
-    "servers": {}
+    "servers": {
+      "cua-driver": {
+        "type": "stdio",
+        "command": "cua-driver",
+        "args": []
+      }
+    }
   },
   "hooks": {
     "enabled": true,
