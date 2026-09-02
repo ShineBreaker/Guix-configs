@@ -72,6 +72,8 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 
 + =gc-cons-threshold= 推到 =most-positive-fixnum= 、=gc-cons-percentage= 推到 0.6 以减少启动期 GC；与 early-init.el 的同设置重复是刻意的——绕过 early-init 直接 batch-load main.el(如 agent 手动加载验证)时入口仍需推高。
 + =gc-cons-percentage= 启动完成后必须显式恢复 0.1:GCMH 只动态调整 =gc-cons-threshold= ,不碰 percentage,否则 GCMH 接管后 percentage 仍停留 0.6。
++ =inhibit-compacting-font-caches= 阻止 GC 压缩 font cache,避免 daemon 长驻期字体渲染抖动。
++ =auto-mode-case-fold nil= : =auto-mode-alist= 匹配不 fold case,减少每个 find-file 的匹配开销。
 + 保留 Emacs 31 默认的 =file-name-handler-alist= 与 bidi 行为。daemon 冷启动不是目标，不能用未测量的优化破坏 TRAMP、压缩文件或 RTL 文本。
 
 #+begin_src emacs-lisp
@@ -81,7 +83,9 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 ;; SPDX-License-Identifier: MIT
 
 (setq gc-cons-threshold most-positive-fixnum
-      gc-cons-percentage 0.6)
+      gc-cons-percentage 0.6
+      inhibit-compacting-font-caches t
+      auto-mode-case-fold nil)
 
 (defun custom--reset-gc-percentage ()
   "启动完成后将 `gc-cons-percentage' 恢复为稳态值。"
@@ -100,7 +104,7 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 集中定义所有路径常量(org 目录、Guix profile)与外部命令名。
 
 + 只保存命令名，不缓存 Guix store 绝对路径；长驻 daemon 跨 generation 后仍由当前 =exec-path= 解析新命令。
-+ =early-init.el= 把 =GUIX_PROFILE/bin= 和 =~/.local/bin= 加入 =exec-path= 。
++ =GUIX_PROFILE/bin= 和 =~/.local/bin= 在本域开头加入 =exec-path= ,保证后续所有 =executable-find= 查询能解析。
 + 后续所有功能域都引用这里的 =custom:org-directory= 、 =custom:executable-*=
 
 *** 路径常量
@@ -137,6 +141,18 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 外部命令只保存命令名。Guix 保证包存在，实际进程启动时由当前 PATH 解析。
 
 #+begin_src emacs-lisp
+;; exec-path 前置:daemon 启动与 batch-load main.el 的包启用条件、agenote 调用
+;; 都经 `executable-find' 查询当前 `exec-path';配置只保存命令名,不缓存
+;; store 绝对路径,跨 generation 后仍由当前 PATH 解析。
+(let* ((guix-profile (or (getenv "GUIX_PROFILE")
+                         (expand-file-name "~/.guix-profile")))
+       (guix-bin (expand-file-name "bin" guix-profile))
+       (local-bin (expand-file-name "~/.local/bin")))
+  (when (file-directory-p guix-bin)
+    (add-to-list 'exec-path guix-bin))
+  (when (file-directory-p local-bin)
+    (add-to-list 'exec-path local-bin)))
+
 (defconst custom:executable-aspell   "aspell")
 (defconst custom:executable-direnv   "direnv")
 (defconst custom:executable-fish     "fish")
@@ -341,7 +357,9 @@ GCMH + 智能垃圾回收管理 (启动后接管 GC)
 (setq inhibit-startup-screen t
       initial-scratch-message nil
       ring-bell-function 'ignore
-      confirm-kill-processes nil)
+      confirm-kill-processes nil
+      use-dialog-box nil
+      use-file-dialog nil)
 
 (use-package no-littering
   :demand t
@@ -1149,13 +1167,16 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + *文件级操作* ：blame / log / diff / stage / discard / timemachine
 + *仓库级操作* ：push / pull / stash push / stash pop
 + 所有操作复用启动域声明的 =custom:executable-git= 。
++ 仓库定位走 =vc-backend= / =vc-call-backend= 内置 API(worktree/submodule 安全,且有 vc 缓存),不手扫 =.git= 哨兵文件。
 + 「确认前提后转发 Magit 交互命令」的同构命令由 =custom/git--define-file-command= / =custom/git--define-repo-command= 工厂宏生成,避免逐个手写。
 
 #+begin_src emacs-lisp
 (defun custom/git-repo-root (&optional file)
-  "返回 FILE 所在 Git 仓库根目录。"
+  "返回 FILE 所在 Git 仓库根目录(vc 内置 rev-parse,worktree/submodule 安全)。
+不能改用 `vc-backend' 做类型判定:它只回答「对象是否被注册」,对目录恒 nil,
+而本函数的入参常是 `default-directory'。非 Git 目录安全返回 nil。"
   (when-let* ((target (or file (buffer-file-name) default-directory)))
-    (locate-dominating-file target ".git")))
+    (vc-call-backend 'Git 'root target)))
 
 (defun custom/git-buffer-file ()
   "返回当前 buffer 对应的文件，不存在时抛出用户错误。"
@@ -1322,14 +1343,14 @@ SIZE  : 0~1 浮点比例
 
 (defun custom/display-or-focus (buffer action &optional select)
   "有则聚焦，无则按 ACTION 创建。
-BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则用 ACTION
-（display-buffer 动作列表）创建新窗口。临时绑定 display-buffer-alist 为 nil，
-避免递归匹配 display-buffer-alist 中的规则。"
+BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则把 ACTION 绑定为
+`display-buffer-overriding-action' 创建——它的优先级高于 `display-buffer-alist',
+只影响本次调用，绕过 side-window 规则的同时不屏蔽其他包注册的路由。"
   (when (buffer-live-p buffer)
     (if-let* ((win (get-buffer-window buffer)))
         (when select (select-window win))
-      (let ((display-buffer-alist nil))
-        (display-buffer buffer action)))))
+      (let ((display-buffer-overriding-action action))
+        (display-buffer buffer)))))
 #+end_src
 
 *** 加载组装
@@ -1434,15 +1455,10 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
     (tool-bar-lines . 0)
     (vertical-scroll-bars . nil)
     (horizontal-scroll-bars . nil))
-  "TTY frame 在 face 初始化前应用的无色显示参数。")
-
-;; 把透明 TTY 参数合并进 `window-system-default-frame-alist'。
-;; `framep' 对文本终端返回 t；GUI frame 则返回 pgtk/x/ns 等符号。
-(if-let* ((entry (assq t window-system-default-frame-alist)))
-    (dolist (parameter custom:terminal-frame-parameters)
-      (setf (alist-get (car parameter) (cdr entry)) (cdr parameter)))
-  (push (cons t (copy-tree custom:terminal-frame-parameters))
-        window-system-default-frame-alist))
+  "TTY frame 在 face 初始化前应用的无色显示参数。
+注入 `window-system-default-frame-alist' 的 t 条目由 =early-init.el= 在
+main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-terminal-faces'
+对已创建的 TTY frame 逐个应用。")
 
 ;; TTY 光标形状/颜色跟随 GUI 设置:xterm 兼容终端经转义序列同步,
 ;; GUI 的光标样式(bar/颜色)在终端同款显示。
@@ -1453,14 +1469,12 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
 (dolist (hook '(prog-mode-hook text-mode-hook))
   (add-hook hook #'prettify-special-glyphs-mode))
 
-(dolist (param '((menu-bar-lines . 0)
-                 (tool-bar-lines . 0)
-                 (vertical-scroll-bars)
-                 (horizontal-scroll-bars)))
-  (unless (assq (car param) default-frame-alist)
-    (push param default-frame-alist)))
+;; 菜单栏/工具栏/滚动条的关闭由 early-init.el 的 t 条目与上方 defconst 覆盖
+;; 所有 window-system 的 frame 参数,无需再写 default-frame-alist。
 
-(setq display-line-numbers-type 'relative)
+(setq display-line-numbers-type 'relative
+      ;; 行号宽度按 buffer 实际行数自动设置,替代手动全 buffer 扫描计数
+      display-line-numbers-width-start t)
 (global-display-line-numbers-mode 1)
 
 (defcustom custom:large-file-size-threshold (* 2 1024 1024)
@@ -1469,14 +1483,10 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继�
   :group 'literal)
 
 (defun custom/setup-file-line-numbers ()
-  "为当前文件设置行号；大型文件直接关闭，避免扫描完整 buffer。"
-  (if (> (buffer-size) custom:large-file-size-threshold)
-      (display-line-numbers-mode -1)
-    (when (and buffer-file-name
-               display-line-numbers)
-      (let* ((max-line (line-number-at-pos (point-max) 'absolute))
-             (digits (max 3 (length (number-to-string max-line)))))
-        (setq display-line-numbers-width (1+ digits))))))
+  "大型文件直接关闭行号，避免扫描完整 buffer。
+行号宽度由 `display-line-numbers-width-start' 按需计算，无需手动预设。"
+  (when (> (buffer-size) custom:large-file-size-threshold)
+    (display-line-numbers-mode -1)))
 
 (add-hook 'find-file-hook #'custom/setup-file-line-numbers)
 
@@ -1539,11 +1549,6 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
       (ef-themes-get-color-value key)
     (error nil)))
 
-(defun custom/terminal-theme-background ()
-  "返回 TTY 当前行使用的 Ef theme 柔和背景色(palette 的 `bg-dim')。
-主题 API 尚不可用时返回 nil,保持全透明。"
-  (custom/terminal-theme-color 'bg-dim))
-
 (defun custom/apply-terminal-faces (&optional frame)
   "让 TTY FRAME 的所有命名 face 使用终端透明背景。
 清除背景与反色后，为 `hl-line' 恢复 Ef theme 的柔和背景，为代码块恢复 `bg-alt'
@@ -1556,7 +1561,7 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
                  (not (display-graphic-p frame))
                  (>= (display-color-cells frame) 8))
         (let ((tty (or frame (selected-frame)))
-              (hl-line-background (custom/terminal-theme-background)))
+              (hl-line-background (custom/terminal-theme-color 'bg-dim)))
           (with-selected-frame tty
             (dolist (parameter custom:terminal-frame-parameters)
               ;; Ef theme owns foreground-color after startup; only the initial
@@ -1586,16 +1591,33 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
     (error
      (message "custom/apply-terminal-faces: %s" (error-message-string err)))))
 
+(defvar custom--tty-face-count 0
+  "上次 TTY 刷新时的 face 总数;只有加载了定义新 face 的文件后才需要重刷。")
+
+(defun custom--tty-transparency-broken-p ()
+  "是否存在 default 背景被重设的 TTY frame。
+frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算,
+透明背景随之失效;default 是 theme 必设项,可作重算发生的哨兵。"
+  (and (not noninteractive)
+       (cl-some (lambda (frame)
+                  (unless (display-graphic-p frame)
+                    (face-background 'default frame)))
+                (frame-list))))
+
 (defun custom/refresh-terminal-faces (&rest _)
   "重新对所有存活 TTY frame 应用透明背景策略。"
   (unless noninteractive
+    (setq custom--tty-face-count (length (face-list)))
     (dolist (frame (frame-list))
       (unless (display-graphic-p frame)
         (custom/apply-terminal-faces frame)))))
 
 (defun custom/refresh-terminal-faces-after-load (_file)
-  "包加载并可能定义新 face 后刷新所有 TTY frame。"
-  (custom/refresh-terminal-faces))
+  "包加载引入新 face 或透明背景被 face 重算重设时刷新所有 TTY frame。
+多数 `load'/`require' 两者皆无,用计数与 default 背景双守卫避免每次全量重刷。"
+  (when (or (< custom--tty-face-count (length (face-list)))
+            (custom--tty-transparency-broken-p))
+    (custom/refresh-terminal-faces)))
 
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
 (add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
@@ -1714,16 +1736,18 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 #+begin_src emacs-lisp
 (add-hook 'find-file-hook #'custom/git-commit-setup-buffer-maybe)
 
-(custom/register-side-window "^\\*magit: \\|magit-status-mode\\b" 'bottom 0.4)
+;; display-buffer-alist 的正则只匹配 buffer-name,major mode 名分支永不命中,
+;; 路由规则一律写 buffer 名前缀。
+(custom/register-side-window "^\\*magit: " 'bottom 0.4)
 (add-to-list 'display-buffer-alist
              '("^\\*git-commit\\|\\`COMMIT_EDITMSG\\|\\`MERGE_MSG"
                (custom/display-buffer-in-main-window))
              t)
-(custom/register-side-window "^\\*ghostel\\|ghostel-mode\\b\\|^\\*term\\|term-mode\\b" 'bottom 0.33)
-(custom/register-side-window "^\\*Help\\*\\|help-mode\\b" 'bottom 0.4)
-(custom/register-side-window "^\\*Flymake diagnostics\\|flymake-diagnostics-buffer-mode\\b" 'bottom 0.3)
-(custom/register-side-window "^\\*compilation\\|compilation-mode\\b" 'bottom 0.33)
-(custom/register-side-window "^\\*grep\\|grep-mode\\b\\|^\\*xref\\|xref--xref-buffer-mode\\b" 'bottom 0.4)
+(custom/register-side-window "^\\*ghostel\\|^\\*term" 'bottom 0.33)
+(custom/register-side-window "^\\*Help\\*" 'bottom 0.4)
+(custom/register-side-window "^\\*Flymake diagnostics" 'bottom 0.3)
+(custom/register-side-window "^\\*compilation" 'bottom 0.33)
+(custom/register-side-window "^\\*grep\\|^\\*xref" 'bottom 0.4)
 
 (setq server-window #'custom/display-buffer-in-main-window)
 
@@ -2111,12 +2135,12 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 :CUSTOM_ID: editing-dwim
 :END:
 
-智能复制 / 剪切 / 注释 / 重命名等 DWIM 函数,以及前向声明。
+智能复制 / 剪切 / 重命名等 DWIM 函数,以及前向声明。
 
 + =custom/copy-dwim= :有选区复制选区,否则复制当前行(类 VS Code)
 + =delete-selection-mode= :有选区时输入/粘贴自动覆盖选区(替代旧 =custom/paste-dwim= ,内置且覆盖所有插入类命令,不止 yank)
 + =custom/cut-dwim= :有选区剪切选区,否则剪切整行
-+ =custom/comment-dwim-stable= :稳定执行注释(region 优先)
++ 行注释直接绑内置 =comment-line= (region 激活时逐行注释/取消注释,否则当前行)
 + =custom/rename-dwim= :eglot 管理时调 eglot-rename,否则 rename-visited-file
 + 全选用内置 =mark-whole-buffer= (C-a),关闭窗口+buffer 用内置 =kill-buffer-and-window= (C-x k)
 
@@ -2138,22 +2162,13 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (delete-selection-mode 1)
 
 (defun custom/cut-dwim ()
-  "智能剪切:有选区时剪切选区,否则剪切当前行。"
+  "智能剪切:有选区时剪切选区,否则剪切整行。"
   (interactive)
   (cond
    ((use-region-p)
     (kill-region (region-beginning) (region-end)))
    (t
     (kill-whole-line))))
-
-(defun custom/comment-dwim-stable ()
-  "稳定执行注释/取消注释。优先处理 region,否则处理当前行。"
-  (interactive)
-  (if (use-region-p)
-      (progn
-        (comment-or-uncomment-region (region-beginning) (region-end))
-        (deactivate-mark))
-    (comment-line 1)))
 
 (defun custom/rename-dwim ()
   "重命名符号或当前文件。"
@@ -2584,25 +2599,14 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 :CUSTOM_ID: code-commands
 :END:
 
-供快捷键和右键菜单复用的代码操作函数:复制行、移动行、格式化、块注释。
+供快捷键和右键菜单复用的代码操作函数:移动行、格式化、块注释。
 
 + =custom/tabs-next= / =custom/tabs-previous= 由 [[#tab-line][Tab-line]] 提供
++ 行复制直接绑内置 =duplicate-dwim= (Emacs 29+),行注释直接绑内置 =comment-line= ,不再包一层转发命令
 + 定义/引用/前进/后退跳转直接绑定内置 =xref-find-definitions= / =xref-find-references= / =xref-go-forward= / =xref-go-back=,不再包一层转发命令
 + 本块定义的函数被 [[#global-keys][全局直达键]]、[[#programming-keys][代码与导航键]] 复用
 
 #+begin_src emacs-lisp
-(defun custom/code-duplicate-line ()
-  "复制当前行(含行尾换行)并在下方粘贴。"
-  (interactive)
-  (let ((column (current-column))
-        (line (buffer-substring (line-beginning-position)
-                                (line-beginning-position 2)))
-        (insert-at (line-beginning-position 2)))
-    (goto-char insert-at)
-    (insert line)
-    (goto-char insert-at)
-    (move-to-column column)))
-
 (defun custom/code-move-line-up ()
   "将当前行上移一行;首行时不动。"
   (interactive)
@@ -2635,12 +2639,6 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
       (let ((comment-style 'multi-line))
         (comment-region (region-beginning) (region-end)))
     (message "请先选择要块注释的区域")))
-
-(defun custom/hs-cycle ()
-  "循环当前折叠;hs-cycle 无上游 autoload,首次调用前加载 hideshow。"
-  (interactive)
-  (require 'hideshow)
-  (call-interactively #'hs-cycle))
 #+end_src
 
 ** 代码与导航键
@@ -2675,18 +2673,19 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 
 ;; Ctrl+click 跳转定义(与其他编辑器惯例一致,与右键菜单体系互补)。
 (global-xref-mouse-mode 1)
-;; hideshow 交互命令除 hs-minor-mode 外均无 autoload,全局裸键先经
-;; custom/hs-cycle 加载;fringe 折叠指示器与折叠处显示隐藏行数
-;; (大 buffer 自动关闭,上游默认 2MB 上限)。
+;; hideshow 交互命令除 hs-minor-mode 外均无 autoload;prog/conf buffer 经
+;; hs-minor-mode 已加载,全局裸键先显式声明 hs-cycle 的 autoload;
+;; fringe 折叠指示器与折叠处显示隐藏行数(大 buffer 自动关闭,上游默认 2MB 上限)。
 (setq hs-show-indicators t
       hs-display-lines-hidden t)
-(custom/bind "C-c c z a" #'custom/hs-cycle "循环当前折叠" "代码")
+(autoload 'hs-cycle "hideshow")
+(custom/bind "C-c c z a" #'hs-cycle "循环当前折叠" "代码")
 (custom/bind "C-c c z c" #'hs-hide-block "关闭当前折叠" "代码")
 (custom/bind "C-c c z o" #'hs-show-block "打开当前折叠" "代码")
 (custom/bind "C-c c z m" #'hs-hide-all "全部折叠" "代码")
 (custom/bind "C-c c z r" #'hs-show-all "全部展开" "代码")
 (custom/bind "C-c c z s" #'hs-toggle-all "开关全部折叠" "代码")
-(custom/bind "<backtab>" #'custom/hs-cycle "循环当前折叠" "代码")
+(custom/bind "<backtab>" #'hs-cycle "循环当前折叠" "代码")
 #+end_src
 
 ** 各语言 major mode
@@ -2795,15 +2794,15 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
       default-directory))
 
 (defun custom/open-project-folder ()
-  "打开任意文件夹:切换 `default-directory' 并显示 Dired。
-
-含 .git 的目录会通过 `project-remember-project' 注册到已知项目。"
+  "打开任意文件夹:显示 Dired,并把可识别的项目根注册到已知项目。
+`default-directory' 只在 let 内指向目标目录,不污染当前 buffer。"
   (interactive)
-  (let ((dir (file-name-as-directory
-              (expand-file-name (read-directory-name "项目目录: ")))))
-    (setq default-directory dir)
-    (when (file-exists-p (expand-file-name ".git" dir))
-      (project-remember-project (project-current nil)))
+  (let* ((dir (file-name-as-directory
+               (expand-file-name (read-directory-name "项目目录: "))))
+         (default-directory dir)
+         (project (project-current nil)))
+    (when project
+      (project-remember-project project))
     (dired dir)))
 
 ;; switch-commands 用带标签菜单(d/f/r 沿用原三项,a 为任意全局命令入口)。
@@ -3548,8 +3547,8 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-x M-<right>" #'custom/tabs-move "标签后移" "基础移动与直达键")
 (custom/bind "C-x M-<left>" #'custom/tabs-move-backward "标签前移" "基础移动与直达键")
 (custom/bind "C-a" #'mark-whole-buffer "全选" "基础移动与直达键")
-(custom/bind "C-/" #'custom/comment-dwim-stable "注释" "基础移动与直达键")
-(custom/bind "C-_" #'custom/comment-dwim-stable "注释" "基础移动与直达键")
+(custom/bind "C-/" #'comment-line "注释" "基础移动与直达键")
+(custom/bind "C-_" #'comment-line "注释" "基础移动与直达键")
 (custom/bind "C-S-c" #'custom/copy-dwim "复制" "基础移动与直达键")
 (custom/bind "C-S-v" #'yank "粘贴" "基础移动与直达键")
 (custom/bind "M-y" #'consult-yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
@@ -3562,7 +3561,7 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "C-S-x" #'custom/cut-dwim "剪切" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
 (custom/bind "C-S-t" #'recentf-open-files "最近文件" "基础移动与直达键")
-(custom/bind "C-S-d" #'custom/code-duplicate-line "复制当前行" "基础移动与直达键")
+(custom/bind "C-S-d" #'duplicate-dwim "复制当前行" "基础移动与直达键")
 (custom/bind "C-S-<up>" #'custom/code-move-line-up "上移当前行" "基础移动与直达键")
 (custom/bind "C-S-<down>" #'custom/code-move-line-down "下移当前行" "基础移动与直达键")
 (custom/bind "C-S-/" #'custom/code-comment-block "块注释" "基础移动与直达键")

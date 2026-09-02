@@ -7,17 +7,18 @@
 ;; 在 GUI 初始化之前尽早执行：加速启动、减少闪屏、避免 package.el 介入。
 ;;
 ;; 本文件独立维护，不由 emacs.org tangle 生成（避免防闪屏逻辑被 tangle 影响）。
-;; 优化项：
+;; 只保留必须早于 main.el 生效的行为；其余优化与偏好设置在 emacs.org 的
+;; startup / core-behavior 域：
 ;; 1. 禁用 package.el - 使用 Guix 管理包
-;; 2. 提高 GC 阈值 - 启动时减少垃圾回收次数（启动后由 gcmh 重置）
-;; 3. 防止 frame 重绘 - 减少启动时视觉闪烁
-;; 4. frame-background-mode 引导 - 让 daemon 启动期选对 face 变体（dark/light）
-;; 5. exec-path 前置 - 让外部命令可由 PATH 解析
+;; 2. 提高 GC 阈值 - 启动时减少垃圾回收次数（startup-gc 域与 main.el 入口有
+;;    刻意重复，供 batch-load main.el 场景；启动后由 gcmh 重置）
+;; 3. 防止 frame 重绘 / 像素级 resize - standalone 首帧在 init.el 之前创建，
+;;    frame 几何行为必须在此设置
+;; 4. TTY frame 初始参数 - 注入 window-system-default-frame-alist 的 t 条目，
+;;    避免启动阶段显示 Emacs 默认有色 face
+;; 5. frame-background-mode 引导 - 让 daemon 启动期选对 face 变体（dark/light）
 
 ;;; Code:
-
-;; 优先加载 .elc
-(setq load-prefer-newer nil)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
 ;; 禁用 package.el 自动初始化（使用 Guix 管理包）
@@ -25,39 +26,16 @@
 (setq package-enable-at-startup nil)
 
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; exec-path 前置（必须在 main.el 解析外部命令之前）
-;; ═════════════════════════════════════════════════════════════════════════════
-;;
-;; main.el 的包启用条件与 agenote 调用会通过 `executable-find' 查询当前
-;; `exec-path'。先加入 Guix profile 与用户脚本目录，保证 daemon 启动和后续
-;; client 都能解析这些命令；配置本身只保存命令名，不缓存 store 绝对路径。
-(let* ((guix-profile (or (getenv "GUIX_PROFILE")
-                         (expand-file-name "~/.guix-profile")))
-       (guix-bin (expand-file-name "bin" guix-profile))
-       (local-bin (expand-file-name "~/.local/bin")))
-  (when (file-directory-p guix-bin)
-    (add-to-list 'exec-path guix-bin))
-  (when (file-directory-p local-bin)
-    (add-to-list 'exec-path local-bin)))
-
-;; ═════════════════════════════════════════════════════════════════════════════
 ;; 启动性能优化
 ;; ═════════════════════════════════════════════════════════════════════════════
 (setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.6)
 
-;; 保留 Emacs 31 默认的 file-name-handler 与 bidi 行为。daemon 冷启动不是目标，
-;; 且生活应用需要压缩文件、TRAMP 与 RTL 文本始终正确。
-(setq auto-mode-case-fold nil)
-
 ;; ═════════════════════════════════════════════════════════════════════════════
-;; GUI 优化
+;; GUI frame 几何（standalone 首帧先于 init.el 创建，必须在此设置）
 ;; ═════════════════════════════════════════════════════════════════════════════
 (setq frame-inhibit-implied-resize t
-      inhibit-compacting-font-caches t
-      frame-resize-pixelwise t
-      use-file-dialog nil
-      use-dialog-box nil)
+      frame-resize-pixelwise t)
 
 ;; TTY frame 必须在 main.el 加载前就继承终端默认前景/背景，否则 daemon
 ;; client 和 standalone 启动阶段会短暂显示 Emacs 的有色默认 face。
