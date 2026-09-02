@@ -142,15 +142,22 @@
       (insert-string point (make-string pad :initial-element #\space)
                      :attribute 'vs-sidebar-bg))))
 
+(defparameter *vs-set-clickable* (vs$ :lem-core "SET-CLICKABLE")
+  "上游 clickable 区域登记函数；加载期解析一次——渲染热路径每个树行
+都要调用，原先写法每行 find-symbol 一次（千行树 = 千次包查找）。")
+
 (defun vs-make-icon-click (cmd)
-  "图标行 clickable 回调工厂：忽略 (window point) 参数直接执行命令。"
-  (lambda (window point)
-    (declare (ignore window point))
+  "图标行 clickable 回调工厂：忽略回调参数直接执行命令。
+必须用 &rest：上游 main 源码按 (window point) 两参调用，但本构建
+webview 前端的实际分发是 0 参（用户实测点击文件树触发
+Invalid number of arguments: 0），固定形参列表任一约定下都会炸。"
+  (lambda (&rest args)
+    (declare (ignore args))
     (funcall cmd)))
 
-(defun vs-clickable-region (click start point cmd)
-  (when click
-    (funcall click start point (vs-make-icon-click cmd))))
+(defun vs-clickable-region (start point cmd)
+  (when *vs-set-clickable*
+    (funcall *vs-set-clickable* start point (vs-make-icon-click cmd))))
 
 (defun vs-explorer-render-header (point)
   ;; 标题行（VSCode 的 ⋯ 更多操作菜单无对应物，不渲染右缘按钮）
@@ -164,8 +171,7 @@
         (cmds '(vscode-activity-explorer
                 vscode-activity-search
                 vscode-activity-scm
-                vscode-activity-extensions))
-        (click (vs$ :lem-core "SET-CLICKABLE")))
+                vscode-activity-extensions)))
     (insert-string point " " :attribute 'vs-sidebar-bg)
     (loop :for i :in icons
           :for cmd :in cmds
@@ -174,7 +180,7 @@
                                :attribute (if (eq i :files)
                                               'vs-activity-active
                                               'vs-activity-inactive))
-                (vs-clickable-region click start point cmd))
+                (vs-clickable-region start point cmd))
               (insert-string point "  " :attribute 'vs-sidebar-bg))
     (vs-pad-to-width point)
     (insert-character point #\newline))
@@ -200,13 +206,12 @@
           (op-cmds '(vscode-explorer-new-file
                      vscode-explorer-new-folder
                      vscode-explorer-refresh
-                     vscode-explorer-collapse-all))
-          (click (vs$ :lem-core "SET-CLICKABLE")))
+                     vscode-explorer-collapse-all)))
       (dolist (g ops)
         (with-point ((start point))
           (insert-string point (string (vs-icon g))
                          :attribute 'vs-explorer-titlebar)
-          (vs-clickable-region click start point (pop op-cmds)))
+          (vs-clickable-region start point (pop op-cmds)))
         (insert-string point " " :attribute 'vs-sidebar-bg))))
   (vs-pad-to-width point)
   (insert-character point #\newline))
@@ -243,13 +248,17 @@
       (put-text-property start point :vs-item
                          (list :path path :dir-p dir-p))
       ;; 整行可点击：目录展开/收缩、文件打开（上游 mouse.lisp 的
-      ;; side-window click-callback 通道）
-      (let ((click (vs$ :lem-core "SET-CLICKABLE")))
-        (when click
-          (funcall click start point
-                   (lambda (window pt)
-                     (declare (ignore window))
-                     (vs-explorer-act-on-point pt))))))))
+      ;; side_window click-callback 通道）。条目数据闭包捕获 + &rest 签名：
+      ;; 本构建 webview 前端分发回调时收 0 参（上游 main 源码是
+      ;; (window point) 两参），固定形参列表会以 Invalid number of
+      ;; arguments 炸进 debugger（2026-09-02 用户实测）。
+      (vs-clickable-region
+       start point
+       (let ((item-path path)
+             (item-dir-p dir-p))
+         (lambda (&rest args)
+           (declare (ignore args))
+           (vs-explorer-act-on-item item-path item-dir-p)))))))
 
 (defun vs-render-dir (point dir depth)
   (dolist (child (vs-dir-children dir))
@@ -280,24 +289,26 @@
   (vs-pad-to-width point)
   (insert-character point #\newline))
 
-(defun vs-explorer-redraw (buffer)
+(defun vs-explorer-redraw (buffer &optional (rescan-git t))
   "按当前状态重绘 explorer buffer：root 已挂载 → git 状态 + 文件树；
-未挂载 → 「无打开的文件夹」空状态。toggle 开启与刷新共用此管线。"
+未挂载 → 「无打开的文件夹」空状态。toggle 开启与刷新共用此管线。
+rescan-git 控制是否重跑 git status（fork 子进程，大仓库上百 ms）——
+折叠/展开等纯树操作传 nil 用缓存染色表，refresh/激活/开侧栏才重扫。"
   (with-buffer-read-only buffer nil
     (let ((line (line-number-at-point (buffer-point buffer))))
       (erase-buffer buffer)
       (vs-explorer-render-header (buffer-point buffer))
       (if *vs-explorer-root*
           (progn
-            (vs-refresh-git-status)
+            (when rescan-git (vs-refresh-git-status))
             (vs-render-dir (buffer-point buffer) *vs-explorer-root* 0))
           (vs-explorer-render-empty (buffer-point buffer)))
       (move-to-line (buffer-point buffer) line))))
 
-(defun vs-explorer-render ()
+(defun vs-explorer-render (&optional rescan-git)
   (let ((buffer (vs-explorer-buffer)))
     (when buffer
-      (handler-case (vs-explorer-redraw buffer)
+      (handler-case (vs-explorer-redraw buffer rescan-git)
         (error (e)
           (message "Explorer 渲染失败: ~A" e))))))
 
@@ -317,21 +328,25 @@
   (unless (member (current-window) (window-list))
     (setf (current-window) (car (window-list)))))
 
-(defun vs-explorer-act-on-point (point)
+(defun vs-explorer-act-on-item (path dir-p)
   "点击/Return 共用的条目动作：目录切换展开态，文件在主窗打开。
-click 回调传入的 point 不移动 current-point，必须以参数为准。"
+点击路径直接拿渲染期闭包捕获的条目（回调参数约定不可靠，见
+vs-insert-tree-line 注释），Return 路径经 :vs-item 属性。"
+  (if dir-p
+      (let ((key (namestring path)))
+        (if (gethash key *vs-open-dirs*)
+            (remhash key *vs-open-dirs*)
+            (setf (gethash key *vs-open-dirs*) t))
+        (vs-explorer-render nil))
+      (progn
+        (vs-focus-main-window)
+        (find-file path))))
+
+(defun vs-explorer-act-on-point (point)
+  "按 point 处的 :vs-item 属性执行条目动作（键盘 Return/Space 通道）。"
   (let ((item (text-property-at point :vs-item)))
     (when item
-      (if (getf item :dir-p)
-          (progn
-            (let ((key (namestring (getf item :path))))
-              (if (gethash key *vs-open-dirs*)
-                  (remhash key *vs-open-dirs*)
-                  (setf (gethash key *vs-open-dirs*) t)))
-            (vs-explorer-render))
-          (progn
-            (vs-focus-main-window)
-            (find-file (getf item :path)))))))
+      (vs-explorer-act-on-item (getf item :path) (getf item :dir-p)))))
 
 (define-command vscode-explorer-select () ()
   "Return：目录展开/折叠，文件在主窗打开并把焦点交还编辑区。"
@@ -345,25 +360,25 @@ click 回调传入的 point 不移动 current-point，必须以参数为准。"
         (if (gethash key *vs-open-dirs*)
             (remhash key *vs-open-dirs*)
             (setf (gethash key *vs-open-dirs*) t)))
-      (vs-explorer-render))))
+      (vs-explorer-render nil))))
 
 (define-command vscode-explorer-collapse () ()
   "Left：折叠当前目录。"
   (let ((item (vs-item-at-point)))
     (when (and item (getf item :dir-p))
       (remhash (namestring (getf item :path)) *vs-open-dirs*)
-      (vs-explorer-render))))
+      (vs-explorer-render nil))))
 
 (define-command vscode-explorer-expand () ()
   "Right：展开当前目录。"
   (let ((item (vs-item-at-point)))
     (when (and item (getf item :dir-p))
       (setf (gethash (namestring (getf item :path)) *vs-open-dirs*) t)
-      (vs-explorer-render))))
+      (vs-explorer-render nil))))
 
 (define-command vscode-explorer-refresh () ()
   "r/g：重扫文件系统 + git 状态。"
-  (vs-explorer-render))
+  (vs-explorer-render t))
 
 (define-key *vs-explorer-keymap* "Return" 'vscode-explorer-select)
 (define-key *vs-explorer-keymap* "Space" 'vscode-explorer-select)
@@ -431,12 +446,12 @@ click 回调传入的 point 不移动 current-point，必须以参数为准。"
         (ignore-errors
          (ensure-directories-exist
           (merge-pathnames rel *vs-explorer-root*)))
-        (vs-explorer-render)))))
+        (vs-explorer-render nil)))))
 
 (define-command vscode-explorer-collapse-all () ()
   "c：折叠全部目录。"
   (clrhash *vs-open-dirs*)
-  (vs-explorer-render))
+  (vs-explorer-render nil))
 
 (define-key *vs-explorer-keymap* "n" 'vscode-explorer-new-file)
 (define-key *vs-explorer-keymap* "d" 'vscode-explorer-new-folder)
@@ -485,7 +500,7 @@ pathname-parent-directory-pathname——它只看 pathname-directory 组件，
 对文件路径会连工作区段一起剥掉（root 错位一层，E2E 实测）。"
   (setf *vs-explorer-root*
         (vs-project-root (make-pathname :directory (pathname-directory file))))
-  (vs-explorer-render))
+  (vs-explorer-render t))
 
 (defun vs-explorer-on-find-file (buffer)
   "*find-file-hook*（lem/buffer/file）——所有 find-file 打开路径
@@ -502,8 +517,11 @@ pathname-parent-directory-pathname——它只看 pathname-directory 组件，
   "兜底：空状态下扫描 buffer-list，出现首个真实文件 buffer 即挂载其
 工作区（覆盖新建文件等不读盘的 find-file 分支）。单向激活：此后关闭
 文件不回退空状态——与 VSCode 关闭编辑器后 Explorer 仍显示文件树一致。
-挂 post-command，root 已置时零开销短路；整体 ignore-errors——
-post-command 链上抛错会连累排在后面的 heal。"
+挂 post-command；root 已置（无论经由 find-file 主通道还是本兜底）即
+从 post-command 链摘除自己（remove-hook 是宏不可 funcall，用 eval
+构造调用，vs-hook-add 同款手法）——单向语义摘除后无回调损失，
+post-command 链少一个常驻函数。整体 ignore-errors——post-command
+链上抛错会连累排在后面的 heal。"
   (unless *vs-explorer-root*
     (ignore-errors
       (let (file)
@@ -513,7 +531,10 @@ post-command 链上抛错会连累排在后面的 heal。"
               (when f
                 (setf file f)))))
         (when file
-          (vs-explorer-activate file))))))
+          (vs-explorer-activate file)))))
+  (when *vs-explorer-root*
+    (eval '(remove-hook *post-command-hook*
+                        'vs-explorer-maybe-activate))))
 
 ;; --- resize 自愈：上游只给 rightside 挂 resize 补偿（window.lisp 只调
 ;; resize-rightside-window），leftside 的 ncurses view 在终端尺寸变化后

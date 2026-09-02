@@ -35,21 +35,37 @@
                (funcall orig)))))))
 
 ;; VSCode Status Bar 风格：左（ 分支）· 右（Ln,Col / 编码 / EOL / 语言）
+;; git 分支查询必须缓存：SBCL 大堆镜像上 fork+exec 一次 git 实测 ~84ms，
+;; 而 modeline 随每个命令重绘——不缓存等于每键付一次 fork 开销（按键
+;; 卡顿主因）。按目录缓存 + TTL 过期重查；切换分支后最多 TTL 秒陈旧。
+(defparameter *vs-branch-cache* (make-hash-table :test 'equal)
+  "目录 namestring → (分支名 . 查询时刻 universal-time)。")
+(defparameter *vs-branch-cache-ttl* 30 "秒内重绘免 fork，过期后首次重绘同步重查。")
+
+(defun vs-git-branch (dir)
+  (let* ((key (namestring dir))
+         (cell (gethash key *vs-branch-cache*)))
+    (unless (and cell (<= (- (get-universal-time) (cdr cell))
+                          *vs-branch-cache-ttl*))
+      (setf cell (cons (string-trim
+                        '(#\Newline #\Space)
+                        (uiop:run-program
+                         (list "git" "-C" key "rev-parse" "--abbrev-ref" "HEAD")
+                         :output '(:string :stripped t)
+                         :ignore-error-status t))
+                       (get-universal-time))
+            (gethash key *vs-branch-cache*) cell))
+    (car cell)))
+
 (defun vscode-modeline-branch (window)
-  (declare (ignore window))
   (ignore-errors
-    (let* ((file (buffer-filename (current-buffer)))
+    (let* ((buffer (window-buffer window))
+           (file (buffer-filename buffer))
            (dir (if file
                     (make-pathname :directory (pathname-directory file))
-                    (buffer-directory (current-buffer)))))
+                    (buffer-directory buffer))))
       (when dir
-        (let ((branch (string-trim
-                       '(#\Newline #\Space)
-                       (uiop:run-program
-                        (list "git" "-C" (namestring dir)
-                              "rev-parse" "--abbrev-ref" "HEAD")
-                        :output '(:string :stripped t)
-                        :ignore-error-status t))))
+        (let ((branch (vs-git-branch dir)))
           (when (and branch (plusp (length branch)))
             (values (format nil "  ~C ~A " (vs-icon :branch) branch)
                     'modeline-name-attribute)))))))
