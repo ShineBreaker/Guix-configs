@@ -7,28 +7,32 @@
 
 (in-package :lem-user)
 
-;; VSCode Tab 栏 = webview 前端 tabbar（buffer 列表条，上游默认开启且显示
-;; 全部 buffer——含 *terminal*/*dashboard* 等临时 buffer）。wrap
+;; VSCode Tab 栏 = webview 前端 tabbar（buffer 列表条，上游显示全部
+;; buffer——含 *terminal*/*dashboard* 等临时 buffer）。wrap
 ;; get-tabbar-buffers 收窄为只显示打开的文件（VSCode 编辑器 tab 语义）；
-;; 原函数的增量缓存逻辑不动，只过滤出口。ncurses 前端下 tabbar 渲染走
-;; lem-server 的 HTML 管线、view 类型不匹配必崩（nightly 实测），显式关闭。
+;; 原函数的增量缓存逻辑不动，只过滤出口。
+;;
+;; 开关分派用「排除法」：上游由 after-init hook 消费
+;; *enable-tabbar-on-startup*，而 webview 下加载本模块时 IMPLEMENTATION
+;; 尚未就绪（frontend 解析为 nil）——旧写法 eq :webview 判定失败会误关
+;; tabbar。ncurses 前端 display 先于配置加载就绪、frontend 可成功解析为
+;; :ncurses，且其 tabbar 渲染走 lem-server HTML 管线必崩（nightly 实测），
+;; 唯独它要关；其余前端（webview/nil/SDL2 系）一律开。
 (let* ((impl-fn (vs$ :lem "IMPLEMENTATION"))
        ;; IMPLEMENTATION-NAME 未 export 进 :lem，home 包 :lem-core 解析
        (name-fn (vs$ :lem-core "IMPLEMENTATION-NAME"))
        (frontend (and (fboundp impl-fn) (fboundp name-fn)
-                      (ignore-errors (funcall name-fn (funcall impl-fn)))))
-       (get-bufs (vs$ :lem/tabbar "GET-TABBAR-BUFFERS")))
-  (cond ((eq frontend :webview)
-         (when (and get-bufs (fboundp get-bufs))
-           (let ((orig (symbol-function get-bufs)))
-             (setf (symbol-function get-bufs)
-                   (lambda ()
-                     (remove-if-not
-                      (lambda (b) (ignore-errors (buffer-filename b)))
-                      (funcall orig))))))
-         (vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*" t))
-        (t
-         (vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*" nil))))
+                      (ignore-errors (funcall name-fn (funcall impl-fn))))))
+  (vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*"
+                (not (eq frontend :ncurses))))
+(let ((get-bufs (vs$ :lem/tabbar "GET-TABBAR-BUFFERS")))
+  (when (and get-bufs (fboundp get-bufs))
+    (let ((orig (symbol-function get-bufs)))
+      (setf (symbol-function get-bufs)
+            (lambda ()
+              (remove-if-not
+               (lambda (b) (ignore-errors (buffer-filename b)))
+               (funcall orig)))))))
 
 ;; VSCode Status Bar 风格：左（ 分支）· 右（Ln,Col / 编码 / EOL / 语言）
 (defun vscode-modeline-branch (window)
