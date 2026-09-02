@@ -25,6 +25,7 @@ terminal/
     │   │   ├── appimage-run.fish
     │   │   ├── askill.fish
     │   │   ├── blue.fish
+    │   │   ├── cua-driver.fish
     │   │   ├── denv.fish
     │   │   ├── fxxk-link.fish
     │   │   ├── hermes.fish

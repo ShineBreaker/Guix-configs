@@ -60,6 +60,7 @@
 - **插件通道三坑**（lem-extension-manager + 内置 Quicklisp）：① `*PACKAGES-DIRECTORY*` 在镜像构建期被固化成 `/root/.config/lem/packages/`（构建容器 HOME 残留），不可写，60-editor-config 已 `vs-setglobal` 重设到 `~/.config/lem/packages/`；② 镜像里 quicklisp **客户端在但 dist 为空**（`ql-systems=0`），首次装包前须 `(ql-dist:install-dist "https://beta.quicklisp.org/dist/quicklisp.txt" :replace nil :prompt nil)`（官方 dist 里**没有任何 lem 系统**——第三方 lem 扩展走 `lem-use-package :source '(:type :git ...)` 从 GitHub 直装，ql 通道只用于通用 CL 库）；③ `LEM-USE-PACKAGE` 是**宏**不是函数，程序化调用要 eval/macroexpand，不能 funcall。
 - **webview 前端下 `--eval` 探针不可用**（与多实例无关）：webview 前端初始化与 apply-args 的求值序不兼容，`--eval` 的 load 经常整段不执行（探针文件连 marker 都不落地）或直接挂起；剥离 display 跑则崩在 webview 初始化（fatal ERROR，stderr 被吞只留 `compilation unit aborted` 摘要）。**探针一律走 ncurses 通道**（见第 5 节第 2 条）。
 - **tabbar（webview 顶栏 buffer 列表条）双坑**：① 上游 `*enable-tabbar-on-startup*` 默认 t，显示**全部 buffer**（含 *terminal*/*dashboard* 等临时 buffer，无过滤点）；60-editor-config 已 wrap `lem/tabbar::get-tabbar-buffers` 过滤为只显示文件 buffer，tab 的点击切换/关闭/dirty 圆点为 webview 原生。② **ncurses 前端下 tabbar 渲染走 lem-server 的 HTML 管线、view 类型不匹配必崩**（redraw 即 fatal），60-editor-config 按前端分派：webview 开、其余关（探针通道能跑正是依赖此关闭）。
+- **`set-clickable` 回调签名前端不一致（2026-09-02 explorer 点击实测）**：`SET-CLICKABLE` 在 `:lem-core`（internal）。上游 main 源码与 ncurses 实测都是 `(window point)` 两参 funcall，但 **webview 前端实际分发收 0 参**——固定形参 lambda 点一下就 `Invalid number of arguments: 0` 炸进 SBCL debugger。配置侧 clickable 回调**一律 `(lambda (&rest args) ...)` + 渲染期闭包捕获条目数据**（40-explorer 的 vs-make-icon-click / vs-insert-tree-line 模式），不依赖回调参数、不在回调里读属性。
 
 ## 5. 验证管线
 
@@ -68,5 +69,6 @@
 3. **--eval 的 reader 限制**：eval 表达式在启动 parse 期就被 read 进 cl-user（先写的 in-package 救不了，符号包已固化），所以必须经 load 文件、文件内 in-package 才生效。
 4. **tmux 观测**：capture-pane 看画面；字符注入只用 `set-buffer` + `paste-buffer`（`send-keys -l` 首字符后必丢）；启动后必须先发一键才触发 post-command 启动钩子（无按键只见 dashboard，不是加载失败）。
 5. **渲染类改动（侧栏/主题/字体）必须真机 capture 验证**，静态检查不算数。webview 前端在 xvfb 下恒黑屏（webkit 无 GPU 渲染问题，加 WEBKIT_DISABLE_* 环境变量也无效），渲染验证走**真机 wayland：沙箱 LEM_HOME 起实例 + grim 截屏 + 及时 kill**。webview 字号不持久化，字体改动重启即生效。注意：**桌面处于锁屏时 grim 只能截到锁屏层**（编辑器被虚化不可读）——夜间自动化遇到锁屏时，webview 视觉验证只能改期，可先用 ncurses 通道验证非前端相关的渲染逻辑（侧栏 buffer 内容与码点可 capture-pane 校验）。
+6. **探针执行模型三教训（2026-09-02 explorer 点击排查实测）**：① 外来线程（make-thread + sleep 轮询）会**无声死掉**（错误进被吞的 *error-output*，日志一行不留）——复杂探针改走 `(lem:send-event #'fn)` 在**编辑线程内**执行，观察步骤再 `send-event` 链式排队（FIFO 保序，不用 sleep）；② lem 编辑线程绑定 `*print-readably`=T，探针日志用 `~S` 打印 lem 对象（window/cursor/package）必抛 print-not-readable，**日志格式串一律 `~A` 并先 `(let ((*print-readably* nil)) ...)`**；③ 合成鼠标点击：`(lem:receive-mouse-button-down x y px py :button-1 1)` 传 frame 单元坐标——leftside 侧栏行 N 的 frame-y = `(window-y win) + N - (view-point 行号)`，写错一行就静默点空（上游无任何报错）。探针文件发布前先 python 括号平衡检查（本轮三份探针各炸一次）。
 
 禁令沿用仓库根 AGENTS.md：不运行 `blue rebuild` / `guix system reconfigure`（提醒用户手动），不编辑 `channel.lock` 与 `tmp/`，不持久安装包。本目录为 mutable Stow 源，普通修改无需 `blue home`。

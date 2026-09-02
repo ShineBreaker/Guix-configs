@@ -15,8 +15,6 @@ dotfiles/
 │   │   ├── .config/
 │   │   │   ├── agents/
 │   │   │   └── crush/
-│   │   ├── .local/
-│   │   │   └── bin/
 │   │   └── .gitignore
 │   ├── desktop/
 │   │   ├── .config/
@@ -36,14 +34,12 @@ dotfiles/
 │   │       ├── libexec/
 │   │       └── share/
 │   ├── system/
-│   │   ├── .config/
-│   │   │   ├── containers/
-│   │   │   ├── pipewire/
-│   │   │   ├── wireplumber/
-│   │   │   ├── user-dirs.dirs
-│   │   │   └── user-dirs.locale
-│   │   └── .local/
-│   │       └── bin/
+│   │   └── .config/
+│   │       ├── containers/
+│   │       ├── pipewire/
+│   │       ├── wireplumber/
+│   │       ├── user-dirs.dirs
+│   │       └── user-dirs.locale
 │   ├── terminal/
 │   │   └── .config/
 │   │       ├── atuin/
@@ -85,12 +81,12 @@ dotfiles/
     │   ├── omp/
     │   │   └── .config/
     │   ├── skills/
-    │   │   └── .config/
+    │   │   ├── .config/
+    │   │   └── .local/
     │   └── zcode/
     │       └── .zcode/
     ├── emacs/
     │   ├── .config/
-    │   │   ├── agents/
     │   │   └── emacs/
     │   ├── .local/
     │   │   └── share/
@@ -98,8 +94,6 @@ dotfiles/
     ├── lem/
     │   ├── .config/
     │   │   └── lem/
-    │   ├── .local/
-    │   │   └── share/
     │   └── .stow-local-ignore
     └── tools/
         ├── appimage-run/

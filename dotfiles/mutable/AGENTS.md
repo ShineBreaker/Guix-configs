@@ -49,8 +49,10 @@ mutable/
 │   │   └── .config/
 │   │       └── omp/
 │   ├── skills/
-│   │   └── .config/
-│   │       └── agents/
+│   │   ├── .config/
+│   │   │   └── agents/
+│   │   └── .local/
+│   │       └── bin/
 │   └── zcode/
 │       └── .zcode/
 │           ├── agents/
@@ -60,8 +62,6 @@ mutable/
 │           └── plugins/
 ├── emacs/
 │   ├── .config/
-│   │   ├── agents/
-│   │   │   └── skills/
 │   │   └── emacs/
 │   │       ├── data/
 │   │       ├── scripts/
@@ -78,9 +78,6 @@ mutable/
 │   │   └── lem/
 │   │       ├── modules/
 │   │       └── init.lisp
-│   ├── .local/
-│   │   └── share/
-│   │       └── icons/
 │   └── .stow-local-ignore
 └── tools/
     ├── appimage-run/
@@ -102,7 +99,7 @@ mutable/
 | `tools/secrets`      | `~/.local/share/keys/`                                   | age 密钥对（私钥不入 git）+ secrets 加解密脚本，详见包内 AGENTS.md；密文目录 secrets-encrypted 被 stow 排除，仅存仓库源                                                                                                                                                                                                                                             |
 | `emacs`              | `~/.config/emacs/`                                       | literal-config 仓库本体（init.el、early-init.el、emacs.org、scripts/、data/），GNU Stow 软链到 `~/.config/emacs/`，改源即生效。无 chemacs2 引导层、无 submodule、单 profile。详见根 AGENTS.md「Emacs 单 Profile 架构」节。                                                                                                                                          |
 | `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` | **纯 submodule 容器包**。两个子模块：`agenote-skills`（3 个 agent skill，→ `github.com/ShineBreaker/agenote-skills`）+ `pi-agenote`（omp 扩展，→ `github.com/ShineBreaker/pi-agenote`）。程序本体（CLI/ag_lib）**不在此包**，由 `uv tool install` 独立安装到 `~/.local/bin/`（→ `github.com/ShineBreaker/agenote`）。                                               |
-| `agents/skills`      | `~/.config/agents/skills/skills-lock.json`               | **第三方 skills 声明式锁包**：只含 skills-lock.json（Stow 单文件直链，npx 写锁即写仓库源）。askill 脚本本体在 `dotfiles/immutable/agents/.local/bin/`。skill 内容不进 git，由 `askill`（引擎 `npx skills` project scope）安装到 `~/.config/agents/skills/`。新机恢复：`blue stow agents/skills` 后跑 `askill install`。自建 skill（agenote/emacs 包）不在此包管辖。 |
+| `agents/skills`      | `~/.config/agents/skills/`（锁 + 自建 skill）            | **第三方锁 + 自建 skill 统一包**。第三方：只含 skills-lock.json（Stow 单文件直链，npx 写锁即写仓库源），内容不进 git，由 `askill`（引擎 `npx skills` project scope）安装；askill 脚本本体在 `dotfiles/immutable/agents/.local/bin/`，新机恢复 `blue stow agents/skills` 后跑 `askill install`。自建（git 跟踪，锁外目录，npx 不碰）：`emacs-config`、`emacs-lisp`（自 emacs 包迁入）、`herdr`、`officecli`（自部署位收编）、`writing-gates`（教写 anchors.json，曾于 pi↔omp 迁移中丢失、自 `375d843e` 恢复）。agenote 的 3 个 skill 属 submodule 包，不在此包。 |
 
 ## 工作流
 

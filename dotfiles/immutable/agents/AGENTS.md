@@ -38,9 +38,6 @@ agents/
 │       │   ├── bash-gate.sh
 │       │   └── edit-gate.sh
 │       └── crush.json
-├── .local/
-│   └── bin/
-│       └── askill
 └── .gitignore
 ```
 
