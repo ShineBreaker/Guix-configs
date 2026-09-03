@@ -685,9 +685,10 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
   (not (custom/tab-visible-p (get-buffer (or buffer (current-buffer))))))
 
 (defun custom--tabs-target-window (&optional window)
-  "返回标签命令应优先操作的 WINDOW。"
-  (or (and (window-live-p window) window)
-      (selected-window)))
+  "返回标签命令应优先操作的 WINDOW,缺省当前窗口。
+所有调用点的 WINDOW 实参都来自即时枚举(selected-window 或本函数
+返回值的透传),恒存活,不做 live 检查。"
+  (or window (selected-window)))
 #+end_src
 
 *** Per-frame 缓冲区跟踪
@@ -859,9 +860,8 @@ current/inactive 用内置 face,自动跟随主题。"
          (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
          (label (concat " " (string-replace "%" "%%" name) " "))
-         (help-echo (if selected-p
-                        "当前标签:鼠标中键关闭,右键打开菜单"
-                      "左键切换标签,鼠标中键关闭,右键打开菜单"))
+         (help-echo (concat (if selected-p "当前标签:" "左键切换标签,")
+                            "鼠标中键关闭,右键打开菜单"))
          ;; `tab-line-close-button-show' 全库唯一写点 pin 为 'selected
          ;; (见 tab-line-hooks 组装),故谓词坍缩为 selected-p。发散矩阵:
          ;; show=t/selected/non-selected/nil × 选中态下,旧通用分发与新
@@ -1019,29 +1019,28 @@ current/inactive 用内置 face,自动跟随主题。"
 
 (defun custom/tabs-close-buffer (&optional window buffer)
   "在 WINDOW 隐藏 BUFFER 的标签(bury + unregister,不 kill buffer)。
-BUFFER 默认为 WINDOW 当前显示的 buffer。"
+BUFFER 默认为 WINDOW 当前显示的 buffer:窗口 buffer 恒存活,显式
+BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫。"
   (interactive)
   (let* ((target-window (custom--tabs-target-window window))
          (target-buffer (or buffer (window-buffer target-window)))
          (target-frame (window-frame target-window)))
-    (when (buffer-live-p target-buffer)
-      (custom--tabs-unregister-buffer target-buffer target-frame)
-      (when (eq target-buffer (window-buffer target-window))
-        (if-let* ((next (seq-find (lambda (candidate)
-                                    (custom--tabs-visible-other-p
-                                     candidate target-buffer))
-                                  (custom--tabs-get-frame-buffer-list target-frame))))
-            (custom--tabs-switch-to-buffer next target-window)
-          (with-selected-window target-window
-            (bury-buffer target-buffer)
-            (let ((fallback
-                   (seq-find (lambda (candidate)
-                               (and (buffer-live-p candidate)
-                                    (not (eq candidate target-buffer))))
-                             (buffer-list target-frame))))
-              (when fallback
-                (switch-to-buffer fallback))))))
-      (tab-line-force-update t))))
+    (custom--tabs-unregister-buffer target-buffer target-frame)
+    (when (eq target-buffer (window-buffer target-window))
+      (if-let* ((next (seq-find (lambda (candidate)
+                                  (custom--tabs-visible-other-p
+                                   candidate target-buffer))
+                                (custom--tabs-get-frame-buffer-list target-frame))))
+          (custom--tabs-switch-to-buffer next target-window)
+        (with-selected-window target-window
+          (bury-buffer target-buffer)
+          (let ((fallback
+                 (seq-find (lambda (candidate)
+                             (not (eq candidate target-buffer)))
+                           (buffer-list target-frame))))
+            (when fallback
+              (switch-to-buffer fallback))))))
+    (tab-line-force-update t)))
 
 (defun custom/tab-line-close-tab (tab)
   "鼠标关闭按钮回调:与键盘 close 走同一路径(语义对称)。"
@@ -2121,8 +2120,6 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (setq dired-filename-display-length 'window
       dired-movement-style 'cycle
       grep-use-headings t)
-;; eldoc 文档超长时截断显示符号名而非挤占 echo area(Emacs 31 内置)。
-(setq eldoc-echo-area-use-multiline-p 'truncate-sym-name-if-fit)
 
 ;; 当前函数名显示(面包屑替代):which-function-mode 把光标所在 defun 名
 ;; 写入 header-line / mode-line,doom-modeline 直接透传,无需 breadcrumb 包。
@@ -2291,7 +2288,7 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
 
 (defconst custom:terminal-side-action
   '(display-buffer-in-side-window
-    (side . bottom) (slot . 0) (window-height . 0.33))
+    (side . bottom) (window-height . 0.33))
   "终端面板的 display-buffer action:底部 side-window,高度 1/3。
 action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 条目误解析为函数列表,静默回落 side 默认值 bottom 与默认高度。")
@@ -3796,7 +3793,7 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
 #+begin_src emacs-lisp
 (defconst custom:agent-side-action
   '(display-buffer-in-side-window
-    (side . right) (slot . 0) (window-width . 0.25))
+    (side . right) (window-width . 0.25))
   "Agent Shell 面板的 display-buffer action:右侧 side-window,宽度 0.25。")
 
 (use-package agent-shell
@@ -3953,8 +3950,7 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。渲染
 立即装饰并记录当时的窗口宽度:frame 就绪回调比较宽度,相符则跳过
 重渲染,首帧只渲染一次;GUI daemon 首帧可能仍在哑 frame 上下文渲染
 (宽度错),回调比较不符才重渲染自愈。"
-  (unless (featurep 'org-agenda)
-    (require 'org-agenda))
+  (require 'org-agenda)
   (prog1 (dashboard-open)
     (custom/dashboard--decorate-headings)
     (setq custom/dashboard--rendered-width (window-body-width))))
@@ -4058,11 +4054,13 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
           (frame-parameter (window-frame w) 'client))
         (get-buffer-window-list dashboard-buffer-name nil 0))))
 
-(defun custom/dashboard--refresh-in-window ()
-  "在显示 dashboard 的窗口上下文里强制重渲染并装饰。
-渲染与装饰都必须以该窗口为 selected:版心、路径缩短和居中前缀
-的宽度全部取自这里,别的 frame 上下文算出来是错的。"
-  (when-let* ((win (custom/dashboard--dashboard-window)))
+(defun custom/dashboard--refresh-in-window (&optional win)
+  "在显示 dashboard 的窗口 WIN 上下文里强制重渲染并装饰。
+WIN 缺省重新定位 dashboard 窗口;调用方已持有时透传,避免二次
+get-buffer-window 查询。渲染与装饰都必须以该窗口为 selected:版心、
+路径缩短和居中前缀的宽度全部取自这里,别的 frame 上下文算出来
+是错的。"
+  (when-let* ((win (or win (custom/dashboard--dashboard-window))))
     (with-selected-window win
       (setq custom/dashboard--rendered-width (window-body-width win))
       (dashboard-open)
@@ -4146,7 +4144,7 @@ align-to 表达式没有可用的 max 钳制(Emacs 31 静默
 回退 0),只能在装饰时静态排除。"
   (let* ((beg (line-beginning-position))
          (end (line-end-position))
-         (w (dashboard-str-len (buffer-substring beg end))))
+         (w (dashboard-str-len (buffer-substring-no-properties beg end))))
     (when (and (> w 0) (<= w body-width))
       (let ((p (propertize
                 " " 'display
@@ -4235,7 +4233,7 @@ custom:dashboard-min-content-width)时跳过且不记录宽度——极窄渲染
              custom:dashboard-min-content-width)
          (/= (window-body-width win)
              (or custom/dashboard--rendered-width 0))
-         (custom/dashboard--refresh-in-window))))
+         (custom/dashboard--refresh-in-window win))))
 
 (defun custom/dashboard--on-frame-make (&rest _)
   "新 client frame 就绪后,渲染宽度不匹配才重渲染自愈。
