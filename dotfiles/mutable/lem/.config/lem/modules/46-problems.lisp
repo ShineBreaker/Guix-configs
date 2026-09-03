@@ -6,7 +6,9 @@
 ;;;       运行期软依赖 lsp-mode：全部 vs$ 动态解析，无 LSP 运行态时
 ;;;       显示空态不炸。被无模块依赖（叶子）。加载序：45 与 50 之间。
 ;;;
-;;; Shift-C-m 打开/刷新 *Problems* 只读 buffer（禁止 floating window：
+;;; C-M（物理 Ctrl+Shift+M，webview 到达形式=大写 sym 无 shift，见
+;;; 70-keybindings 文件头键语法注）打开/刷新 *Problems* 只读 buffer
+;;; （禁止 floating window：
 ;;; AGENTS.md 第 4 节 MOVE-TO-VIRTUAL-LINE-COLUMN 炸点；渲染型只读
 ;;; buffer 的 Up/Down 必须拦成纯点移动——照抄 40-explorer 尾部模式）。
 ;;; g/r 重扫诊断，Return/Space 跳到诊断文件:行:列。
@@ -233,7 +235,7 @@ information，绝不让上游异常炸进命令循环。"
   (let ((buffer (get-buffer *vs-problems-buffer-name*)))
     (if buffer
         (vs-problems-render-buffer buffer)
-        (message "Problems 面板未打开（Shift-C-m 开启）"))))
+        (message "Problems 面板未打开（C-M 开启，物理 Ctrl+Shift+M）"))))
 
 (define-key *vs-problems-keymap* "Return" 'vscode-problems-jump)
 (define-key *vs-problems-keymap* "Space" 'vscode-problems-jump)
@@ -243,7 +245,7 @@ information，绝不让上游异常炸进命令循环。"
 (define-key *vs-problems-keymap* "Up" 'vscode-explorer-previous-line)
 
 (define-command vs-problems-show () ()
-  "Shift-C-m：打开/刷新 Problems 诊断面板（VSCode 同语义）。
+  "C-M（物理 Ctrl+Shift+M）：打开/刷新 Problems 诊断面板（VSCode 同语义）。
 无 LSP 运行态时显示空态；面板为可切换的只读 buffer（非浮窗）。"
   (vs-problems-collect)
   (let ((buffer (or (get-buffer *vs-problems-buffer-name*)
@@ -272,6 +274,6 @@ nil 会打出字面 \"NIL\"。"
     (funcall add 'vs-modeline-diagnostics)))
 
 ;; --- 全局键位 + 帮助页收编 ---
-(vs-bind "Shift-C-m" :lem-user "VS-PROBLEMS-SHOW" "code" "问题面板（诊断列表）")
+(vs-bind "C-M" :lem-user "VS-PROBLEMS-SHOW" "code" "问题面板（诊断列表，物理 Ctrl+Shift+M）")
 (vs-help-note "code" "Return / Space" "跳转到诊断位置（Problems 面板内）")
 (vs-help-note "code" "g / r" "重扫诊断列表（Problems 面板内）")

@@ -13,7 +13,14 @@
 ;;;   3. Emacs 对齐区：对齐用户 emacs.org 的 IDE 风格键组（undo/注释/
 ;;;      全选/dabbrev/goto-line/字号/xref），全部键位带分组+中文描述，
 ;;;      F1 帮助页按此渲染（which-key 替代，见 45-keyhelp）。
-;;; 键语法注意：Shift 必须写全拼 "Shift-"（S- 是 super！）
+;;; 键语法注意：Shift 必须写全拼 "Shift-"（S- 是 super！）；但 **Shift 与字母
+;;; 的组合键例外**：webview 前端 JS 对 Shift+字母 派发大写字母 sym 且 shift
+;;; 标志被 convert-keyevent 强制清 nil（单字符 insertion 键），物理 Ctrl+Shift+F
+;;; 到达形式 = {sym "F" ctrl}；而 parse-keyspec("Shift-C-f") 存 {sym "f" ctrl
+;;; shift}——lookup 精确匹配失败，Shift-C-<字母> 键串在 webview 全是死键
+;;; （2026-09-04 lookup 探针实测 SELF-INSERT）。故 Shift+Ctrl+字母 一律绑
+;;; "C-<大写>"（如 "C-F"）、Shift+Alt+字母 绑 "M-<大写>"——物理按键不变，
+;;; 键串是 webview 的到达形式。方向键/F 键/Tab 等命名键不受影响，仍写全拼。
 
 (in-package :lem-user)
 
@@ -159,9 +166,9 @@
 (vs-bind "C-b" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "侧栏开关")
 (vs-bind "M-b" :lem "BACKWARD-CHAR" "nav" "后退一字符（原 C-b 退位）")
 (vs-bind "C-\\" :lem "SPLIT-ACTIVE-WINDOW-HORIZONTALLY" "window" "垂直分屏")
-(vs-bind "Shift-C-e" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "切换侧栏（资源管理器）")
-(vs-bind "Shift-C-g" :lem/legit "LEGIT-STATUS" "ui" "源代码管理（Git 状态）")
-(vs-bind "Shift-C-f" :lem/grep "PROJECT-GREP" "nav" "跨文件搜索（项目 grep）")
+(vs-bind "C-E" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "切换侧栏（资源管理器，物理 Ctrl+Shift+E）")
+(vs-bind "C-G" :lem/legit "LEGIT-STATUS" "ui" "源代码管理（Git 状态，物理 Ctrl+Shift+G）")
+(vs-bind "C-F" :lem/grep "PROJECT-GREP" "nav" "跨文件搜索（项目 grep，物理 Ctrl+Shift+F）")
 ;; --- Tab 切换（VSCode C-Tab 循环编辑器 tab；不能直接用
 ;;     frame-multiplexer：它循环虚拟 frame，单 frame 下恒 no-op
 ;;     （ncurses 实测连按三次不动），且会落到 tabbar 不显示的隐藏
@@ -215,7 +222,7 @@
 ;;     结果渲染进 peek 内联视图，Enter 跳转 / Esc 或 q 退出；
 ;;     命令是 define-command 产物但未导出，vs$ find-symbol 可达，
 ;;     与下方 LSP-RENAME 同法） ---
-(vs-bind "Shift-C-o" :lem-lsp-mode "LSP-DOCUMENT-SYMBOL" "code" "转到文件内符号（大纲）")
+(vs-bind "C-O" :lem-lsp-mode "LSP-DOCUMENT-SYMBOL" "code" "转到文件内符号（大纲，物理 Ctrl+Shift+O）")
 ;; --- 多光标（VSCode Ctrl+D 同位键：isearch 活动时逐个命中加光标，
 ;;     非搜索态安全 no-op；Delete 键仍承担删字符） ---
 (vs-bind "C-d" :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH" "editor"
@@ -233,14 +240,15 @@
 (vs-help-note "editor" "C-M-p" "多光标：查找时在上一命中处加光标（isearch 内）")
 ;; --- 行操作（VSCode C-S-k / C-S-d 删除整行；上游 KILL-WHOLE-LINE 为
 ;;     define-command 产物可直接绑，两键同绑防终端拦截差异） ---
-(vs-bind "Shift-C-k" :lem "KILL-WHOLE-LINE" "editor" "删除整行")
-(vs-bind "Shift-C-d" :lem "KILL-WHOLE-LINE" "editor" "删除整行（备用）")
+(vs-bind "C-K" :lem "KILL-WHOLE-LINE" "editor" "删除整行（物理 Ctrl+Shift+K）")
+(vs-bind "C-D" :lem "KILL-WHOLE-LINE" "editor" "删除整行（备用，物理 Ctrl+Shift+D）")
 ;; --- 行移动/复制（VSCode Alt+Up/Down 移动行、Shift+Alt+Down 复制行；
 ;;     M-方向已被窗口焦点占用，此处用 M-S- 系：M-S-Up/Down 移动行、
-;;     M-S-d 复制行。命令定义见上自研区，v42-v44 探针确认键全局空闲） ---
+;;     M-D 复制行（物理 Alt+Shift+D；Shift+字母绑大写形式，原因见文件头
+;;     键语法注）。命令定义见上自研区，v42-v44 探针确认键全局空闲） ---
 (vs-bind "M-S-Up" :lem-user "VS-MOVE-LINE-UP" "editor" "上移当前行")
 (vs-bind "M-S-Down" :lem-user "VS-MOVE-LINE-DOWN" "editor" "下移当前行")
-(vs-bind "M-S-d" :lem-user "VS-DUPLICATE-LINE" "editor" "复制当前行到下方")
+(vs-bind "M-D" :lem-user "VS-DUPLICATE-LINE" "editor" "复制当前行到下方（物理 Alt+Shift+D）")
 ;; --- 换行开关（VSCode Alt+Z；命令定义在 60-editor-config） ---
 (vs-bind "M-z" :lem-user "VSCODE-TOGGLE-LINE-WRAP" "editor" "切换自动换行")
 ;; --- 右键菜单（define-key 不接受 Mouse-Right 键串，parse error；
@@ -251,7 +259,7 @@
 ;; --- Emacs 体验对齐区（对齐 emacs.org 的 IDE 风格键组） ---
 (vs-bind "C-z" :lem "UNDO" "editor" "撤销（覆盖 multiplexer C-z 快切前缀）")
 (vs-bind "C-x u" :lem "UNDO" "editor" "撤销（Emacs 传统键）")
-(vs-bind "Shift-C-z" :lem "REDO" "editor" "重做")
+(vs-bind "C-Z" :lem "REDO" "editor" "重做（物理 Ctrl+Shift+Z）")
 (vs-bind "C-/" :lem/language-mode "COMMENT-OR-UNCOMMENT-REGION" "editor"
          "注释/反注释（无选区注释当前行；覆盖默认 redo）")
 (vs-bind "C-a" :lem "MARK-SET-WHOLE-BUFFER" "editor" "全选（行首退 Home）")
@@ -284,8 +292,8 @@
 (vs-bind "C-2" :lem-user "VS-FOCUS-GROUP-2" "window" "焦点到第 2 编辑器组")
 (vs-bind "C-3" :lem-user "VS-FOCUS-GROUP-3" "window" "焦点到第 3 编辑器组")
 (vs-bind "M-g g" :lem "GOTO-LINE" "nav" "跳转到行")
-(vs-bind "Shift-C-p" :lem "EXECUTE-COMMAND" "nav" "命令面板（M-x 等价）")
-(vs-bind "Shift-C-w" :lem-user "VS-KILL-CURRENT-BUFFER" "editor" "关闭当前 buffer（不问名）")
+(vs-bind "C-P" :lem "EXECUTE-COMMAND" "nav" "命令面板（M-x 等价，物理 Ctrl+Shift+P）")
+(vs-bind "C-W" :lem-user "VS-KILL-CURRENT-BUFFER" "editor" "关闭当前 buffer（不问名，物理 Ctrl+Shift+W）")
 (vs-bind "C-=" :lem "FONT-SIZE-INCREASE" "ui" "字号增大")
 (vs-bind "C--" :lem "FONT-SIZE-DECREASE" "ui" "字号减小")
 (vs-bind "C-F12" :lem/language-mode "FIND-DEFINITIONS" "code" "跳转定义")
