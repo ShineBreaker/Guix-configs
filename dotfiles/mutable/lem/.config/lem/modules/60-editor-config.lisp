@@ -255,10 +255,86 @@
 (vs-setglobal :lem/grep "*LAST-QUERY*" "rg --vimgrep ")
 
 ;; 保存时格式化（nightly *auto-format*，format.lisp 直接引用该 special
-;; variable）：formatter 缺失或执行出错时静默跳过，未注册 formatter 的
-;; 模式不受影响。已注册面：lisp=纯缩进、c=clang-format、go=gofmt、
-;; js/ts/vue=prettier、rust=rustfmt、json=prettier。
+;; variable）：special variable，走 vs-setglobal。触发点在上游
+;; after-save-hook——保存落盘 → hook 回调 (format-buffer :buffer b :auto t)
+;; → formatter-impl 按 mode 名符号 eql 分派 → 结尾 save-without-hooks
+;; 回写格式化结果；auto 路径 formatter 抛错一律 handler-case 静默吞掉，
+;; 二次保存走 write-hook 豁免（不会无限递归）。
+;;
+;; 注册面 = 上游自带 + 配置补注册两条线：
+;; - 上游 define-major-mode 的 :formatter（镜像内置即注册，见 extensions/
+;;   各 mode 的 define-major-mode）：lisp-mode=indent-buffer（纯 Lisp 缩进
+;;   零依赖）、rust-mode=rustfmt（filter-buffer 管道）——这两条本机可用；
+;;   c-mode=clang-format（-i 改文件 + revert）、go-mode=gofmt（-w 改文件
+;;   + revert）——「改文件后 revert 回读」型在同秒内改写时必失效（见下）；
+;;   json-mode/js-mode=prettier（本机未装＝死注册，无害：工具缺失按
+;;   非零状态处理，buffer 原文不动）。
+;;   上游 go/c 缺陷（2026-09-04 ncurses 实测）：改文件型 formatter 跑在
+;;   after-save-hook 内，此时本次保存刚 update-changed-disk-date，工具又
+;;   在同一秒内改写文件——SBCL file-write-date 秒级粒度，revert-buffer 的
+;;   changed-disk-p 判否 → 跳过回读 → format-buffer 结尾 save-without-hooks
+;;   把脏 buffer 写回，格式化结果被覆盖丢失。故 c/go 由配置以同 specializer
+;;   替换语义覆盖为 stdin→stdout 管道（不碰文件、无竞态）。
+;; - 配置补注册（vs-register-formatter，stdin→stdout 管道，本机实测）：
+;;   nix=nixfmt（modes/nix.lisp）、sh=shfmt（modes/shell.lisp）、
+;;   json=clang-format（modes/json.lisp，:FILE 注入 buffer 路径做
+;;   .clang-format/.clang-format 发现与语言判定）、c=clang-format
+;;   （modes/cc.lisp，覆盖上游竞态版）、go=gofmt（modes/go.lisp，同）。
+;;   本机未装、暂不注册的补装位：python→ruff、lua→stylua（装好后在本
+;;   目录对应语言文件加一行 vs-register-formatter 即可）；fish_indent 因
+;;   lem 无 fish-mode 无处挂接，不注册。
 (vs-setglobal :lem "*AUTO-FORMAT*" t)
+
+;; formatter 注册器（modes/ 各语言文件调用；本模块先于 modes/ 加载）。
+;; register-formatter 是 :lem-core 导出宏，不能 funcall，运行时注册走
+;; eval 展开（与 80-modes-base 的 vs-hook-add 同一手法）；mode 符号经
+;; vs$ 动态解析，任一缺失整条跳过。argv 中的关键字 :FILE 在运行时替换
+;; 为 buffer 文件名（供 clang-format --assume-filename 做 .clang-format
+;; 发现与语言判定；buffer 无文件名时该次格式化整体跳过）。handler 全文
+;; 经 argv 管道替换，失败兜底三层：ignore-errors（工具不存在等启动异
+;; 常）、非零退出、输出为空或与原文逐字相同——任一命中都不动 buffer，
+;; 绝不丢用户代码；成功才替换并保留行列（照抄上游 filter-buffer 的点
+;; 恢复）。重载幂等：同 specializer 的 defmethod 是 CLOS 替换语义，不叠加。
+(defun vs-register-formatter (mode-pkg mode-name argv)
+  (let ((rf (vs$ :lem-core "REGISTER-FORMATTER"))
+        (mode (vs$ mode-pkg mode-name)))
+    (when (and rf mode)
+      (eval
+       `(,rf ,mode
+             (lambda (buffer)
+               (let* ((argv (mapcar (lambda (a)
+                                      (if (eq a :file)
+                                          (buffer-filename buffer)
+                                          a))
+                                    ',argv))
+                      (text (buffer-text buffer))
+                      status
+                      out)
+                 (unless (member nil argv)
+                   (setf out
+                         (with-output-to-string (o)
+                           (with-input-from-string (i text)
+                             (multiple-value-bind (v e s)
+                                 (ignore-errors
+                                   (uiop:run-program argv
+                                                     :input i
+                                                     :output o
+                                                     :error-output :string
+                                                     :ignore-error-status t))
+                               (declare (ignore v e))
+                               (setf status s)))))
+                   (when (and (eql status 0)
+                              (plusp (length out))
+                              (string/= out text))
+                     (let ((pt (buffer-point buffer))
+                           (start (buffer-start-point buffer))
+                           (end (buffer-end-point buffer)))
+                       (let ((line (line-number-at-point pt))
+                             (charpos (point-charpos pt)))
+                         (delete-between-points start end)
+                         (insert-string start out)
+                         (move-to-line pt line)
+                         (line-offset pt 0 charpos))))))))))))
 
 ;; 相对行号（当前行保持绝对行号；*relative-line* 为直接引用的
 ;; special variable，见 line-numbers.lisp）
