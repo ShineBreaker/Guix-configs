@@ -91,9 +91,18 @@ kill_all_sidebars() {
 # - @sidebar_last_* 的更新由 follow 统一负责；layout-changed 仅在 window 变化
 #   且未进入 resize 流程时才更新 last，避免抢跑竞态。
 # - 12–80 的范围过滤用于排除窗口缩窄时的临时挤压状态。
-# - 额外：client-resized 时若 window 落后于 client，需先让 window 跟 client
-#   同步到 client 大小，再固定侧栏，否则放大后右侧会留虚点空白（window 尺寸
-#   是大小决定因素之一，未跟上 client 时 window 仍旧 140）。
+# - 额外：client attach/resize 后若 window 落后于 client，需先让 window 跟
+#   client 同步到 client 大小（宽高都要），再固定侧栏，否则放大后会留虚点
+#   空白（window 尺寸是大小决定因素之一，未跟上 client 时 window 仍旧是手机
+#   压出来的小尺寸）。
+# - 同步只放大不缩小：手机小屏按 window-size latest 压小 window 是 tmux 自行
+#   管理的合法方向；小屏离开后 tmux 不会把后台 window 放大回来，这里补这个
+#   缺口。缩小方向 server 不抢。
+# - 同步扫全 server 所有 window（不只当前 window）：切到后台 window 时才
+#   follow 已经晚了——直接全拉回，切过去即用。无 client 的 session（agent
+#   纯净会话、已 detach）直接跳过。
+# - client 宽高各取最大值而非同一 client 整行：手机 detach 残留的小 client 行
+#   不能拖累桌面 client 的放大方向。
 
 persist_sidebar_width_if_dragged() {
     local window_id sidebar_id actual_width configured_width current_win_width last_win_width
@@ -119,22 +128,28 @@ persist_sidebar_width_if_dragged() {
 }
 
 sync_window_to_client() {
-    local win_id ses_id win_w client_w
-    win_id="$(tmux display-message -p '#{window_id}' 2>/dev/null)" || return 0
-    [[ -n "$win_id" ]] || return 0
-    ses_id="$(tmux display-message -p -t "$win_id" '#{session_id}' 2>/dev/null)" || return 0
-    win_w="$(tmux display-message -p -t "$win_id" '#{window_width}' 2>/dev/null)" || return 0
-    # client_width 必须取自本 window 所属 session 的 client：裸调用（selector、
-    # quick-access 的 sh -c 均无 TMUX env）不属于任何 client，隐式 client 会回落
-    # 到「最近活跃 client」——若那是 quick-access 面板的全宽 layer surface，
-    # 就会把面板宽度当成目标宽度 resize-window，撑爆无关 window。
-    client_w="$(tmux list-clients -t "$ses_id" -F '#{client_width}' 2>/dev/null | sort -n | tail -1)"
-    [[ -n "$win_w" && -n "$client_w" ]] || return 0
-    [[ "$win_w" =~ ^[0-9]+$ && "$client_w" =~ ^[0-9]+$ ]] || return 0
-    # 仅当放大后 window 落后于 client 时同步，避免无谓的重复 resize。
-    if (( win_w < client_w )); then
-        tmux resize-window -t "$win_id" -x "$client_w" 2>/dev/null || true
-    fi
+    local win_id ses_id win_w win_h client_w client_h resize_flags
+    while IFS=$'\t' read -r win_id ses_id win_w win_h; do
+        [[ -n "$win_id" && -n "$ses_id" ]] || continue
+        # client 尺寸必须取自本 window 所属 session 的 client。-t 限定 session
+        # 后裸调用回落到「最近活跃 client」的风险已排除（只看本 session 的行）。
+        client_w="$(tmux list-clients -t "$ses_id" -F '#{client_width}' 2>/dev/null | sort -n | tail -1)"
+        client_h="$(tmux list-clients -t "$ses_id" -F '#{client_height}' 2>/dev/null | sort -n | tail -1)"
+        # 无 client 的 session（agent 纯净会话、已 detach）直接跳过。
+        [[ -n "$client_w" && -n "$client_h" ]] || continue
+        [[ "$win_w" =~ ^[0-9]+$ && "$client_w" =~ ^[0-9]+$ ]] || continue
+        [[ "$win_h" =~ ^[0-9]+$ && "$client_h" =~ ^[0-9]+$ ]] || continue
+        resize_flags=()
+        if (( win_w < client_w )); then
+            resize_flags+=(-x "$client_w")
+        fi
+        if (( win_h < client_h )); then
+            resize_flags+=(-y "$client_h")
+        fi
+        if ((${#resize_flags[@]} > 0)); then
+            tmux resize-window -t "$win_id" "${resize_flags[@]}" 2>/dev/null || true
+        fi
+    done < <(tmux list-windows -a -F $'#{window_id}\t#{session_id}\t#{window_width}\t#{window_height}' 2>/dev/null || true)
 }
 
 handle_layout_changed() {
