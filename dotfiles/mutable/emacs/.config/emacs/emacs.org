@@ -2662,6 +2662,13 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
 
 (custom/bind "C-c c d" #'xref-find-definitions "跳转到定义" "代码")
+;; eglot 上游未给这些交互命令 autoload cookie,全局直绑在 eglot 加载前
+;; (非 prog buffer)按键会 void-function,显式声明补齐。
+(autoload 'eglot-code-actions "eglot")
+(autoload 'eglot-rename "eglot")
+(autoload 'eglot-find-declaration "eglot")
+(autoload 'eglot-find-implementation "eglot")
+(autoload 'eglot-find-typeDefinition "eglot")
 (custom/bind "C-c c a" #'eglot-code-actions "代码操作" "代码")
 (custom/bind "C-c c n" #'eglot-rename "重命名符号" "代码")
 (custom/bind "C-c c c" #'completion-at-point "触发补全" "代码")
@@ -2686,11 +2693,13 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 ;; Ctrl+click 跳转定义(与其他编辑器惯例一致,与右键菜单体系互补)。
 (global-xref-mouse-mode 1)
 ;; hideshow 交互命令除 hs-minor-mode 外均无 autoload;prog/conf buffer 经
-;; hs-minor-mode 已加载,全局裸键先显式声明 hs-cycle 的 autoload;
+;; hs-minor-mode 已加载,全局裸键先显式声明全部命令的 autoload;
 ;; fringe 折叠指示器与折叠处显示隐藏行数(大 buffer 自动关闭,上游默认 2MB 上限)。
 (setq hs-show-indicators t
       hs-display-lines-hidden t)
-(autoload 'hs-cycle "hideshow")
+(dolist (cmd '(hs-cycle hs-hide-block hs-show-block
+               hs-hide-all hs-show-all hs-toggle-all))
+  (autoload cmd "hideshow"))
 (custom/bind "C-c c z a" #'hs-cycle "循环当前折叠" "代码")
 (custom/bind "C-c c z c" #'hs-hide-block "关闭当前折叠" "代码")
 (custom/bind "C-c c z o" #'hs-show-block "打开当前折叠" "代码")
