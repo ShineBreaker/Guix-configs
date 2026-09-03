@@ -27,12 +27,20 @@
                 (not (eq frontend :ncurses))))
 (let ((get-bufs (vs$ :lem/tabbar "GET-TABBAR-BUFFERS")))
   (when (and get-bufs (fboundp get-bufs))
-    (let ((orig (symbol-function get-bufs)))
+    ;; 重载幂等：orig 只记首次的上游原始函数（重载不复写），每次重载
+    ;; 都按同一 orig 重包一层再整体 setf——wrap 链深度恒 1，不随重载
+    ;; 叠加（旧写法每次 load 都把上一轮的 wrap lambda 当 orig 再包）。
+    ;; 登记挂符号 plist（get/setf get 不触发包锁）；'vs-tabbar-cur 供
+    ;; 探针校验「当前函数 = 本轮登记的 wrap」。
+    (let ((orig (or (get get-bufs 'vs-tabbar-orig)
+                    (symbol-function get-bufs))))
       (setf (symbol-function get-bufs)
             (lambda ()
               (remove-if-not
                (lambda (b) (ignore-errors (buffer-filename b)))
-               (funcall orig)))))))
+               (funcall orig))))
+      (setf (get get-bufs 'vs-tabbar-orig) orig)
+      (setf (get get-bufs 'vs-tabbar-cur) (symbol-function get-bufs)))))
 
 ;; VSCode Status Bar 风格：左（ 分支）· 右（Ln,Col / 编码 / EOL / 语言）
 ;; git 分支查询必须缓存：SBCL 大堆镜像上 fork+exec 一次 git 实测 ~84ms，
@@ -137,6 +145,23 @@
                (string= n "BUTTON-3") (string= n "BUTTON3")
                (string= n "RIGHT-BUTTON"))))))
 
+;; 重载幂等挂接：defmethod 产物登记——重载时先摘除上次自己定义的方法
+;; 再重新 defmethod。CLOS 对同 qualifiers+specializers 的 defmethod 本是
+;; 替换语义（20260531 构建实测重载计数不变），此处的显式摘挂是幂等
+;; 保障：specializer 文本一旦漂移（改参数特化）替换即失效成叠加。
+;; 只摘本配置登记的 method 对象，绝不触碰上游/其他扩展的方法；
+;; method 对象失效（已脱离 gf 等）一律 ignore-errors 兜底——最坏退化为
+;; 替换语义本身的行为，不会崩。SBCL 的 defmethod 求值返回 method 对象。
+(defun vs-replace-method (key new-method)
+  (let ((old (get key 'vs-owned-method)))
+    (when (typep old 'method)
+      (ignore-errors
+        (let ((gf (method-generic-function old)))
+          (when gf (remove-method gf old))))))
+  (setf (get key 'vs-owned-method)
+        (when (typep new-method 'method) new-method))
+  new-method)
+
 ;; 注意：菜单不能在鼠标分发里同步调——prompt 在 button-down 上下文
 ;; 内起不来（ignore-errors 吞掉，真机右键 trace 走但菜单不现，
 ;; 2026-09-04 实测）。改走 send-event 延后到编辑线程（探针链同款
@@ -145,7 +170,9 @@
       (btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
       (send (vs$ :lem "SEND-EVENT")))
   (when (and gf-name btn)
-    (eval `(defmethod ,gf-name :around (buffer event &key)
+    (vs-replace-method
+     :vs-right-click-menu
+     (eval `(defmethod ,gf-name :around (buffer event &key)
              (let ((res (multiple-value-list (call-next-method))))
                (when (vs-right-click-p event ',btn)
                  (vs-trace "right-click menu fired")
@@ -155,7 +182,7 @@
                          (ignore-errors
                           (funcall ',send (lambda () (funcall menu))))
                          (ignore-errors (funcall menu))))))
-               (values-list res))))))
+               (values-list res)))))))
 
 ;; 悬停文档增强（VSCode 鼠标悬停语义）：around HANDLE-MOUSE-HOVER，
 ;; 先 call-next-method 走上游默认悬浮，再尝试 LSP 文档覆盖——取当前点
@@ -180,7 +207,9 @@
 ;; 全程 ignore-errors，不影响 hover 文档链。
 (let ((gf-name (vs$ :lem-core "HANDLE-MOUSE-HOVER")))
   (when gf-name
-    (eval `(defmethod ,gf-name :around (buffer event &key)
+    (vs-replace-method
+     :vs-hover-enhance
+     (eval `(defmethod ,gf-name :around (buffer event &key)
              ;; primary 在合成事件/无 hover 上下文时可能抛错，先包住，
              ;; 保证增强分支总有机会执行（右键 around 同理已包）。
              (let ((res (ignore-errors
@@ -211,7 +240,7 @@
                          (let ((ov (funcall find-ov (current-point))))
                            (when ov
                              (funcall set-msg ov doc))))))))
-               (values-list res))))))
+               (values-list res)))))))
 
 ;; --- nightly 增益 ---
 

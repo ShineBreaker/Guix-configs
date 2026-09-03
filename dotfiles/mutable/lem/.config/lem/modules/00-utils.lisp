@@ -49,12 +49,17 @@ format 的 *auto-format*、line-numbers 的 *relative-line* 均是），
         (vs-warn (list pkg name)))))
 
 ;; --- 键位注册表（45-keyhelp 帮助页的数据源，which-key 替代的描述层）---
-(defparameter *vs-binding-groups* nil
+;; 三个表用 defvar 而非 defparameter：defparameter 重载 00 时会把表重置
+;; 为 nil——部分重载场景下已灌入的数据全丢；defvar 首载行为与
+;; defparameter 完全一致（未绑定时同样 setf 初始值），重载时保留现值，
+;; 条数不叠加由 vs-bind / vs-help-note / vs-declare-group 的去重语义
+;; 保证（「重载一遍后注册表条数不变」的幂等目标）。
+(defvar *vs-binding-groups* nil
   "分组登记表：(分组ID 标题) 列表，vs-declare-group 按声明顺序展示。")
-(defparameter *vs-binding-registry* nil
+(defvar *vs-binding-registry* nil
   "已注册键位：(键串 命令名 分组ID 描述 命令符号) 列表，vs-bind 落键时
 登记；第五位符号供 vs-transient-show 菜单直接执行。")
-(defparameter *vs-help-notes* nil
+(defvar *vs-help-notes* nil
   "帮助页附注：(分组ID 键串 描述) 列表——登记不经 vs-bind 的绑定
 （language-mode 默认键、局部 keymap 内的键），只作展示。")
 
@@ -66,16 +71,29 @@ format 的 *auto-format*、line-numbers 的 *relative-line* 均是），
 
 (defun vs-help-note (group keyspec desc)
   "向帮助页附注一条不经 vs-bind 的绑定（仅展示，不落键）。
-条目与注册表同构：(键串 命令名 分组ID 描述)，命令名留空占位。"
+条目与注册表同构：(键串 命令名 分组ID 描述)，命令名留空占位。
+重载幂等：同 (分组 键串) 旧条目先移除再登记——后写的赢。"
+  (setf *vs-help-notes*
+        (remove-if (lambda (e)
+                     (and (stringp (first e)) (string= (first e) keyspec)
+                          (stringp (third e)) (string= (third e) group)))
+                   *vs-help-notes*))
   (push (list keyspec "" group desc) *vs-help-notes*))
 
 (defun vs-bind (keyspec pkg name &optional (group "other") (desc ""))
   "逐条 define-key（函数式）：命令符号 find-symbol 动态解析，缺失只告警。
-同时登记进 *vs-binding-registry*（帮助页数据源）。"
+同时登记进 *vs-binding-registry*（帮助页数据源）。重载幂等：同键串旧
+条目先移除再登记——后写的赢，与 define-key 的覆盖语义一致（70 的
+C-Tab 手动 remove-if 清理是同一先例）。"
   (let ((sym (vs$ pkg name)))
     (if sym
         (progn
           (define-key *global-keymap* keyspec sym)
+          (setf *vs-binding-registry*
+                (remove-if (lambda (e)
+                             (and (stringp (first e))
+                                  (string= (first e) keyspec)))
+                           *vs-binding-registry*))
           (push (list keyspec name group desc sym) *vs-binding-registry*))
         (vs-warn (list pkg name)))))
 
