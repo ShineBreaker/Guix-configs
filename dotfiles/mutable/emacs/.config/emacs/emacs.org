@@ -1724,43 +1724,13 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 右键菜单翻译 + which-key 中文描述注册。
 
 + *context-menu* : 对 =context-menu-map= 做 advice,翻译右键菜单英文项(数据见 =data/context-menu-zh.el=)
-+ *which-key 数据* : 集中维护 C-x / C-c / M-s / M-g 等前缀子树的中文描述,数据见 =data/which-key-zh.el=
-  - 全局前缀 + 叶子命令: =custom:which-key-description-spec=
-  - major mode 局部前缀: =custom:which-key-major-mode-description-spec=
++ *which-key 数据* : 集中维护全局键与 major mode 局部键的中文描述,数据见 =data/which-key-zh.el=
+  - 全局键扁平表 =(KEY-SEQUENCE . DESC)= ,KEY-SEQUENCE 为展开后的完整键序列: =custom:which-key-description-spec=
+  - major mode 局部键扁平表 =(MODE KEY-SEQUENCE . DESC)= : =custom:which-key-major-mode-description-spec=
   - 通用 key/description 替换: =custom:which-key-regexp-replacements=
-  - =(KEY . DESC)= 表示叶子命令; =(KEY DESC CHILD...)= 表示前缀组,自动展开为完整键序列
 + which-key 本体在 *键位与补全* 域用 use-package 加载;本块仅注册描述,=with-eval-after-load 'which-key= 触发
 
 #+begin_src emacs-lisp
-
-(defun custom/which-key--join-key (prefix key)
-  "将 PREFIX 与 KEY 合并为 which-key 可用的键序列字符串。"
-  (if (and prefix (> (length prefix) 0))
-      (concat prefix " " key)
-    key))
-
-(defun custom/which-key--flatten-spec (prefix spec)
-  "将 PREFIX 下的单个 SPEC 展开为 ((key . desc) ...) 列表。"
-  (pcase spec
-    (`(,key ,desc . ,children)
-     (let ((full-key (custom/which-key--join-key prefix key)))
-       (append (list (cons full-key desc))
-               (custom/which-key--flatten-specs full-key children))))
-    (`(,key . ,desc)
-     (list (cons (custom/which-key--join-key prefix key) desc)))
-    (_
-     (error "无法识别的 which-key 描述项: %S" spec))))
-
-(defun custom/which-key--flatten-specs (prefix specs)
-  "将 PREFIX 下的 SPECS 展开为平铺的 ((key . desc) ...) 列表。"
-  (seq-mapcat (lambda (spec)
-                (custom/which-key--flatten-spec prefix spec))
-              specs
-              'list))
-
-(defconst custom:which-key-replacements
-  (custom/which-key--flatten-specs nil custom:which-key-description-spec)
-  "Which-key 全局中文描述映射表。")
 
 (defun custom/which-key--apply-keymap-spec (mapvar)
   "把 `custom:which-key-keymap-description-spec' 中 MAPVAR 的描述注册到 which-key。
@@ -1774,14 +1744,11 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
   (setq which-key-replacement-alist
         (append which-key-replacement-alist
                 custom:which-key-regexp-replacements))
-  (dolist (entry custom:which-key-replacements)
+  (dolist (entry custom:which-key-description-spec)
     (which-key-add-key-based-replacements (car entry) (cdr entry)))
-  (dolist (mode-entry custom:which-key-major-mode-description-spec)
-    (let ((mode (car mode-entry))
-          (specs (cdr mode-entry)))
-      (dolist (entry (custom/which-key--flatten-specs nil specs))
-        (which-key-add-major-mode-key-based-replacements
-          mode (car entry) (cdr entry))))))
+  (dolist (entry custom:which-key-major-mode-description-spec)
+    (which-key-add-major-mode-key-based-replacements
+      (car entry) (cadr entry) (cddr entry))))
 
 (with-eval-after-load 'which-key
   ;; 先注册 custom/bind 收集的延迟描述,再注册集中维护的描述
