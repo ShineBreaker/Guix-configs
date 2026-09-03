@@ -289,4 +289,3 @@
 (vs-help-note "editor" "C-z 数字 0-9" "原 multiplexer 数字快切：已被撤销覆盖，仅剩 C-Tab 顺序切换")
 (vs-help-note "code" "C-c h" "hover 文档（LSP buffer 内，同鼠标悬停；非 LSP buffer 是全局帮助页）")
 (vs-help-note "code" "鼠标悬停" "hover 文档（webview 前端原生）")
-(vs-help-note "editor" "鼠标右键" "上下文菜单（webview 原生；keymap 模型不支持鼠标键串，见上）")
