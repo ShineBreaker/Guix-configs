@@ -5,7 +5,7 @@
 ;;   show    — 提取一个功能子树全文
 ;;   locate  — 精确定位某个 CUSTOM_ID 的块行号区间，或某个 noweb ref 的定义/组装位置
 ;;   tangle  — 拼合 emacs.org -> main.el
-;;   check   — 轻量原则检查（域顺序 / noweb 图 / 单产物 / 括号 / 重复定义）
+;;   check   — 轻量原则检查（域顺序 / noweb 图 / 单产物 / 括号 / 重复定义 / 双源键）
 ;;
 ;; 深度验证（load 是否报错、ERT、包清单审计）不在本工具内，由 agent 直接跑 emacs 命令。
 
@@ -23,6 +23,9 @@
 
 (defconst custom-configctl-main-file
   (expand-file-name "main.el" custom-configctl-root))
+
+(defconst custom-configctl-which-key-data-file
+  (expand-file-name "data/which-key-zh.el" custom-configctl-root))
 
 (defconst custom-configctl-required-order
   '("startup" "appearance" "editing" "programming" "projects"
@@ -335,10 +338,143 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
                                   (error-message-string err))))
       (list forms (hash-table-count definitions)))))
 
+;;; check — 数据卫生（双源键门禁）
+
+(defun custom-configctl--calls-declare-group-p (form)
+  "FORM 中是否出现 (custom/declare-binding-group …) 调用。"
+  (and (consp form)
+       (or (eq (car form) 'custom/declare-binding-group)
+           (custom-configctl--calls-declare-group-p (car form))
+           (custom-configctl--calls-declare-group-p (cdr form)))))
+
+(defun custom-configctl--collect-dolist-declared-keys (form keys)
+  "顶层前缀声明形态的键收集。
+(dolist (VAR '(ALIST)) BODY) 且 BODY 调用 custom/declare-binding-group
+（键经 (car VAR) 传入）时，ALIST 的字符串 car 均为声明键。"
+  (let* ((spec (cadr form))
+         (list-expr (and (consp spec) (cadr spec)))
+         (alist (and (consp list-expr) (eq (car list-expr) 'quote)
+                     (cadr list-expr))))
+    (when (and (listp alist)
+               (custom-configctl--calls-declare-group-p (cddr form)))
+      (dolist (entry alist)
+        (let ((key (if (consp entry) (car entry) entry)))
+          (when (stringp key)
+            (puthash key t keys)))))))
+
+(defun custom-configctl--collect-declared-keys (form keys)
+  "递归收集 FORM 中 custom/bind 体系的字面量声明键并入 KEYS。
+覆盖 (custom/bind \"KEY\" …)、(custom/declare-binding-group \"KEY\" …)
+与顶层前缀 dolist 三种形态；键参非字面量（变量/表达式）静态不可解析，
+不计入声明集合。"
+  (cond
+   ((atom form))
+   ((memq (car form) '(custom/bind custom/declare-binding-group))
+    (let ((key (cadr form)))
+      (when (stringp key)
+        (puthash key t keys)))
+    (custom-configctl--collect-declared-keys (cddr form) keys))
+   ((eq (car form) 'dolist)
+    (custom-configctl--collect-dolist-declared-keys form keys)
+    (custom-configctl--collect-declared-keys (cdr form) keys))
+   (t
+    (custom-configctl--collect-declared-keys (car form) keys)
+    (custom-configctl--collect-declared-keys (cdr form) keys))))
+
+(defun custom-configctl--read-block-forms (body)
+  "把 emacs-lisp 块 BODY 读成 form 列表；读失败时整体报错。"
+  (let ((forms nil))
+    (with-temp-buffer
+      (insert body)
+      (goto-char (point-min))
+      (condition-case err
+          (while t
+            (push (read (current-buffer)) forms))
+        (end-of-file nil)
+        (error
+         (custom-configctl--fail "cannot read emacs.org src block: %s"
+                                  (error-message-string err)))))
+    (nreverse forms)))
+
+(defun custom-configctl--declared-bind-keys ()
+  "静态收集 emacs.org 全部 emacs-lisp 块内 custom/bind 体系声明的键集合。
+纯 sexp 解析，不执行任何表单。"
+  (let ((keys (make-hash-table :test #'equal))
+        (bodies nil))
+    (with-current-buffer (custom-configctl--org-buffer)
+      (let ((tree (org-element-parse-buffer)))
+        (org-element-map tree 'src-block
+          (lambda (block)
+            (when (string= (org-element-property :language block) "emacs-lisp")
+              (push (org-element-property :value block) bodies))))))
+    (dolist (body (nreverse bodies))
+      (dolist (form (custom-configctl--read-block-forms body))
+        (custom-configctl--collect-declared-keys form keys)))
+    keys))
+
+(defun custom-configctl--which-key-global-entries ()
+  "静态读取数据文件的全局描述表，返回 (KEY . DESC) 点对列表。
+只解析 (setq custom:which-key-description-spec '(…)) 字面量，不加载
+文件；表缺失或值非 quoted 字面量时报错，避免门禁静默失效。"
+  (with-temp-buffer
+    (insert-file-contents custom-configctl-which-key-data-file)
+    (let ((entries nil)
+          (found nil))
+      (condition-case err
+          (while t
+            (pcase (read (current-buffer))
+              (`(setq custom:which-key-description-spec (quote ,spec))
+               (setq found t)
+               (unless (listp spec)
+                 (custom-configctl--fail
+                  "which-key 全局描述表必须是字面量列表"))
+               (dolist (entry spec)
+                 (when (consp entry)
+                   (let ((key (car entry))
+                         (desc (cdr entry)))
+                     (when (and (stringp key) (stringp desc))
+                       (push (cons key desc) entries))))))))
+        (end-of-file nil)
+        (error
+         (custom-configctl--fail "cannot read %s: %s"
+                                  custom-configctl-which-key-data-file
+                                  (error-message-string err))))
+      (unless found
+        (custom-configctl--fail
+         "缺少 custom:which-key-description-spec 字面量 setq: %s"
+         (file-relative-name custom-configctl-which-key-data-file
+                             custom-configctl-root)))
+      (nreverse entries))))
+
+(defun custom-configctl--check-dual-source ()
+  "双源键门禁：全局描述表与 custom/bind 声明键的交集必须为空。
+自有键的中文描述只在 custom/bind 声明处维护，数据表只承担内置/第三方键
+的描述；两处重复注册（双源）会让 which-key 替换链与帮助分组各自漂移。
+返回检查的描述键数，交集非空时逐键列出（文件 键 描述）后报错。"
+  (let* ((declared (custom-configctl--declared-bind-keys))
+         (table (custom-configctl--which-key-global-entries))
+         (clashes nil))
+    (pcase-dolist (`(,key . ,desc) table)
+      (when (gethash key declared)
+        (push (cons key desc) clashes)))
+    (when clashes
+      (custom-configctl--fail
+       "which-key 全局描述表存在 %d 个双源键，描述必须选边（自有键进 custom/bind，内置/第三方键进数据表）:%s"
+       (length clashes)
+       (mapconcat (lambda (clash)
+                    (format "\n  %s  \"%s\" . \"%s\""
+                            (file-relative-name
+                             custom-configctl-which-key-data-file
+                             custom-configctl-root)
+                            (car clash) (cdr clash)))
+                  (nreverse clashes) "")))
+    (length table)))
+
 (defun custom-configctl-check ()
-  "结构检查 + 隔离 tangle + 括号/重复定义检查，不写真实 main.el。"
+  "结构检查 + 双源键门禁 + 隔离 tangle + 括号/重复定义检查，不写真实 main.el。"
   (let ((org-confirm-babel-evaluate nil))
     (pcase-let* ((`(,blocks ,refs) (custom-configctl--check-structure))
+                 (wk-keys (custom-configctl--check-dual-source))
                  (runtime (make-temp-file "custom-configctl-check-" t))
                  (org-copy (expand-file-name "emacs.org" runtime))
                  (target (expand-file-name "main.el" runtime)))
@@ -348,8 +484,8 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
             (org-babel-tangle-file org-copy target "emacs-lisp")
             (pcase-let* ((`(,forms ,definitions)
                           (custom-configctl--audit-elisp target)))
-              (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions\n"
-                             blocks refs forms definitions))))
+              (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions, %d which-key desc keys\n"
+                             blocks refs forms definitions wk-keys))))
         (delete-directory runtime t)))))
 
 (defun custom-configctl-usage ()
@@ -358,7 +494,7 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
   (princ "  show ID        提取一个功能子树全文\n")
   (princ "  locate ID|REF  定位块行号区间（CUSTOM_ID）或 noweb ref 定义/组装位置\n")
   (princ "  tangle         拼合 emacs.org -> main.el\n")
-  (princ "  check          轻量原则检查（域顺序/noweb/单产物/括号/重复定义）\n"))
+  (princ "  check          轻量原则检查（域顺序/noweb/单产物/括号/重复定义/双源键）\n"))
 
 (let ((status 0))
   (condition-case err
