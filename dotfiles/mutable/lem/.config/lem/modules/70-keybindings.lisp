@@ -1,9 +1,9 @@
 ;;; modules/70-keybindings.lisp — 键位：VSCode 核心 + Emacs 体验对齐
 ;;;
 ;;; 依赖：utils（vs-bind/vs-declare-group/vs-help-note）、keyhelp（F1）、
-;;; completion（M-/）、explorer + terminal（VSCODE-TOGGLE-* 命令）、
-;;; 上游内置扩展（terminal/legit/grep，nightly 全内置）、icons 之后的
-;;; 全部模块。
+;;; completion（M-/）、explorer + terminal + editor-config
+;;; （VSCODE-TOGGLE-* 命令、vs-terminal-buffer）、上游内置扩展（terminal/legit/grep，
+;;; nightly 全内置）、icons 之后的全部模块。
 ;;;
 ;;; 三节结构：
 ;;;   1. 自研命令：M-方向窗口焦点（windmove 对齐，lem 无现成方向切窗）
@@ -58,6 +58,70 @@
 (define-command vs-kill-current-buffer () ()
   (kill-buffer (current-buffer)))
 
+;; --- 自研命令：行移动/复制（VSCode Alt+Up/Down、Shift+Alt+Down；
+;;     上游无对应命令。实现只用已验证 API：LINE-NUMBER-AT-POINT 取整数
+;;     行号（point-line 返回 LINE 对象非整数，不能算术，v6 实测）、
+;;     line-string 取行文本、KILL-WHOLE-LINE 删整行（有命令类可
+;;     funcall）、move-to-line 绝对定位（溢出钳制，v6 实测）、
+;;     insert-string/character 插入、point-column/move-to-column 保持列。
+;;     kill 后光标落点前端不一致（末行 kill 落尾空行，v45 实测），故全程
+;;     用绝对行号定位，不依赖 kill 后光标位置） ---
+(defun vs-restore-column (col)
+  "尽量恢复列 col（行短则钳制行尾）。"
+  (ignore-errors (move-to-column (current-point) col)))
+
+(defun vs-line-num ()
+  "当前整数行号。"
+  (let ((fn (vs$ :lem "LINE-NUMBER-AT-POINT")))
+    (and fn (funcall fn (current-point)))))
+
+(define-command vs-move-line-up () ()
+  (let ((n (vs-line-num)))
+    (when (and n (> n 1))
+      (let ((text (line-string (current-point)))
+            (col (point-column (current-point)))
+            (kill (vs$ :lem "KILL-WHOLE-LINE")))
+        (when kill
+          (funcall kill)
+          ;; 到 N-1 行行首插入 text+换行，原 N-1 行被挤到 N；再到 N 行。
+          (move-to-line (current-point) (1- n))
+          (line-start (current-point))
+          (insert-string (current-point) text)
+          (insert-character (current-point) #\newline)
+          (move-to-line (current-point) n)
+          (vs-restore-column col))))))
+
+(define-command vs-move-line-down () ()
+  ;; 下移 N 行 = 先到 N+1 行再上移（复用已验证的 up 逻辑）。到底判定：
+  ;; buffer 尾空行语义下 last-line-p 不可靠；且 NEXT-LINE 在末行会开新
+  ;; 空行（非钳制），故分两支：下去后行号不变即钳制到底；行号 +1 但新
+  ;; 行是空的即开新行到底——删掉空行回 N 行 no-op。
+  ;; 注意 NEXT-LINE 的可选参数 N 无缺省值（PREVIOUS-LINE 缺省 1），无参
+  ;; funcall 会在内部算术上炸 NIL 不是 REAL，必须显式传 1。
+  (let ((n (vs-line-num))
+        (next (vs$ :lem "NEXT-LINE"))
+        (kill (vs$ :lem "KILL-WHOLE-LINE")))
+    (when (and n next kill)
+      (funcall next 1)
+      (let ((m (or (vs-line-num) n)))
+        (cond ((= m n)
+               (move-to-line (current-point) n))
+              ((and (= m (1+ n))
+                    (string= (line-string (current-point)) ""))
+               (funcall kill)
+               (move-to-line (current-point) n))
+              (t (funcall 'vs-move-line-up)))))))
+
+(define-command vs-duplicate-line () ()
+  (let ((n (vs-line-num)))
+    (when n
+      (let ((text (line-string (current-point)))
+            (col (point-column (current-point))))
+        (line-end (current-point))
+        (insert-character (current-point) #\newline)
+        (insert-string (current-point) text)
+        (vs-restore-column col)))))
+
 ;; --- 分组声明（F1 帮助页按此顺序渲染） ---
 (vs-declare-group "nav" "移动与查找")
 (vs-declare-group "editor" "编辑与文件")
@@ -81,22 +145,14 @@
 ;; --- Tab 切换（frame-multiplexer；C-z 数字快切被 undo 覆盖，见下） ---
 (vs-bind "C-Tab" :lem/frame-multiplexer "FRAME-MULTIPLEXER-NEXT" "ui" "下一个 Tab")
 (vs-bind "Shift-C-Tab" :lem/frame-multiplexer "FRAME-MULTIPLEXER-PREV" "ui" "上一个 Tab")
-;; --- 终端（VSCode Ctrl+` / Ctrl+J toggle 面板） ---
-;; 面板为 vterm。输入协议约束（传统终端 legacy 序列下）：Ctrl+` 不可表达
-;; （就是普通 `；扩展协议序列 ncurses 不解，ESC+` 又被 terminal-mode 的
-;; Escape 键拆解）；C-j 与 Return 同码 0x0A，vterm 聚焦时被 terminfo 报为
-;; Return 直喂终端（换行语义不可牺牲）。故 vterm 内隐藏面板走 M-`
-;; （terminal-mode-keymap 显式绑定）；图形前端（webview）无此约束，
-;; C-j / C-` 原样可达（bypass 表保证终端聚焦时命令仍生效，见 50-terminal 尾部）。
-(vs-bind "C-j" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关（图形前端）")
+;; --- 终端（VSCode Ctrl+` / Ctrl+J toggle 面板；双通道设计见 50-terminal） ---
+;; 终端 buffer 内 mode keymap 的 undefined-key 透传优先，全局绑定不可达，
+;; 聚焦时局部覆盖键（M-` / C-`；C-j 与 Return 同码 0x0A 不绑，保留多行
+;; 输入）由 50-terminal 在 mode keymap 显式落键。
+(vs-bind "C-j" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关")
 (vs-bind "M-j" :lem "NEXT-LINE" "nav" "光标下移（原 C-j 退位）")
 (vs-bind "C-`" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关（kitty 协议）")
 (vs-bind "M-`" :lem-user "VSCODE-TOGGLE-TERMINAL" "ui" "终端面板开关")
-(let ((tkm (vs$ :lem-terminal/terminal-mode "*TERMINAL-MODE-KEYMAP*")))
-  (when tkm
-    (let ((cmd (vs$ :lem-user "VSCODE-TOGGLE-TERMINAL")))
-      (define-key (symbol-value tkm) "M-`" cmd))))
-(vs-help-note "ui" "M-`" "终端聚焦时隐藏面板（terminal-mode 内）")
 ;; --- F2 符号重命名（LSP） ---
 (vs-bind "F2" :lem-lsp-mode "LSP-RENAME" "code" "重命名符号（LSP）")
 ;; --- Code Action（VSCode C-. 快速修复/重构菜单，LSP） ---
@@ -105,6 +161,22 @@
 ;;     非搜索态安全 no-op；Delete 键仍承担删字符） ---
 (vs-bind "C-d" :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH" "editor"
          "多光标：查找时逐个命中加光标")
+;; --- 行操作（VSCode C-S-k / C-S-d 删除整行；上游 KILL-WHOLE-LINE 为
+;;     define-command 产物可直接绑，两键同绑防终端拦截差异） ---
+(vs-bind "Shift-C-k" :lem "KILL-WHOLE-LINE" "editor" "删除整行")
+(vs-bind "Shift-C-d" :lem "KILL-WHOLE-LINE" "editor" "删除整行（备用）")
+;; --- 行移动/复制（VSCode Alt+Up/Down 移动行、Shift+Alt+Down 复制行；
+;;     M-方向已被窗口焦点占用，此处用 M-S- 系：M-S-Up/Down 移动行、
+;;     M-S-d 复制行。命令定义见上自研区，v42-v44 探针确认键全局空闲） ---
+(vs-bind "M-S-Up" :lem-user "VS-MOVE-LINE-UP" "editor" "上移当前行")
+(vs-bind "M-S-Down" :lem-user "VS-MOVE-LINE-DOWN" "editor" "下移当前行")
+(vs-bind "M-S-d" :lem-user "VS-DUPLICATE-LINE" "editor" "复制当前行到下方")
+;; --- 换行开关（VSCode Alt+Z；命令定义在 60-editor-config） ---
+(vs-bind "M-z" :lem-user "VSCODE-TOGGLE-LINE-WRAP" "editor" "切换自动换行")
+;; --- 右键菜单（define-key 不接受 Mouse-Right 键串，parse error；
+;;     接线在 60-editor-config：around 方法先走原分发再调自研
+;;     VSCODE-CONTEXT-MENU（75-context-menu），与 Shift-F10 同命令） ---
+(vs-help-note "editor" "鼠标右键" "上下文菜单（同 Shift-F10）")
 
 ;; --- Emacs 体验对齐区（对齐 emacs.org 的 IDE 风格键组） ---
 (vs-bind "C-z" :lem "UNDO" "editor" "撤销（覆盖 multiplexer C-z 快切前缀）")
@@ -118,6 +190,29 @@
 (vs-bind "M-Right" :lem-user "VS-WINDOW-FOCUS-RIGHT" "window" "焦点移到右窗口")
 (vs-bind "M-Up" :lem-user "VS-WINDOW-FOCUS-UP" "window" "焦点移到上窗口")
 (vs-bind "M-Down" :lem-user "VS-WINDOW-FOCUS-DOWN" "window" "焦点移到下窗口")
+;; --- 编辑器组焦点（VSCode C-1/2/3；终端面板不占组号，无对应组时 no-op） ---
+(defun vs-editor-windows ()
+  "编辑器组窗口（window-list 排除终端面板；侧栏是 leftside 不在其中）。"
+  (let ((tb (ignore-errors (vs-terminal-buffer))))
+    (if tb
+        (remove-if (lambda (w) (eq (window-buffer w) tb)) (window-list))
+        (window-list))))
+
+(define-command vs-focus-group-1 () ()
+  (let ((ws (vs-editor-windows)))
+    (when (first ws) (switch-to-window (first ws)))))
+
+(define-command vs-focus-group-2 () ()
+  (let ((ws (vs-editor-windows)))
+    (when (second ws) (switch-to-window (second ws)))))
+
+(define-command vs-focus-group-3 () ()
+  (let ((ws (vs-editor-windows)))
+    (when (third ws) (switch-to-window (third ws)))))
+
+(vs-bind "C-1" :lem-user "VS-FOCUS-GROUP-1" "window" "焦点到第 1 编辑器组")
+(vs-bind "C-2" :lem-user "VS-FOCUS-GROUP-2" "window" "焦点到第 2 编辑器组")
+(vs-bind "C-3" :lem-user "VS-FOCUS-GROUP-3" "window" "焦点到第 3 编辑器组")
 (vs-bind "M-g g" :lem "GOTO-LINE" "nav" "跳转到行")
 (vs-bind "Shift-C-p" :lem "EXECUTE-COMMAND" "nav" "命令面板（M-x 等价）")
 (vs-bind "Shift-C-w" :lem-user "VS-KILL-CURRENT-BUFFER" "editor" "关闭当前 buffer（不问名）")
@@ -154,5 +249,10 @@
 (vs-help-note "editor" "C-x e" "键盘宏 执行（C-u n 连跑 n 次）")
 (vs-help-note "editor" "C-x SPC" "矩形选区模式（列选区；常规复制/剪切按列生效，C-o 插列、C-t 填串）")
 (vs-help-note "editor" "M-x query-replace-symbol" "按符号边界替换")
+(vs-help-note "editor" "M-%" "查找替换（isearch 通道；VSCode C-h 同位）")
+(vs-help-note "editor" "C-Space / C-@" "设置选区标记（VSCode Shift+方向同位，默认已绑）")
+(vs-help-note "editor" "C-Shift-Backspace" "删除整行（上游默认键）")
+(vs-help-note "editor" "C-z 数字 0-9" "原 multiplexer 数字快切：已被撤销覆盖，仅剩 C-Tab 顺序切换")
 (vs-help-note "code" "C-c h" "hover 文档（LSP buffer 内，同鼠标悬停；非 LSP buffer 是全局帮助页）")
 (vs-help-note "code" "鼠标悬停" "hover 文档（webview 前端原生）")
+(vs-help-note "editor" "鼠标右键" "上下文菜单（webview 原生；keymap 模型不支持鼠标键串，见上）")
