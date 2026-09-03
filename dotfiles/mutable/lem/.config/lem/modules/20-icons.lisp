@@ -2,11 +2,12 @@
 ;;;
 ;;; 依赖：utils（vs$）；被 explorer（树/图标行）/ editor-config（分支图标）依赖。
 ;;;
-;;; 终端字体 Maple Mono NF CN；码点已经 fontTools cmap 逐一验证在册，
-;;; git-branch 用经典 U+E0A0（cod-git_branch U+EC6F 本字体未收录）。
-;;; PUA 区单宽字形，wcwidth=1，无双宽陷阱。
+;;; 终端字体 Maple Mono NF CN；码点已经 fontTools cmap 逐一验证在册
+;;; （cod-git_branch U+EC6F 本字体未收录），PUA 区单宽字形 wcwidth=1，
+;;; 无双宽陷阱。
 ;;; 注意：U+E000–E0FF 落在 lem *char-replacement* 替换表内（渲染成 \数字
-;;; 文本），选码点必须避开该段——branch 因此用 U+F418 而非 U+E0A0。
+;;; 文本），选码点必须避开该段——经典 git-branch 码点 U+E0A0 恰落该段
+;;; 不可用，branch 因此用 U+F418。
 
 (in-package :lem-user)
 

@@ -1,4 +1,4 @@
-;;; modules/editor-config.lisp — 编辑器外观与行为变量
+;;; modules/60-editor-config.lisp — 编辑器外观与行为变量
 ;;;
 ;;; 依赖：utils（vs-setvar）、icons（modeline 分支图标）；下游 keybindings
 ;;; 引用本模块命令（VSCODE-TOGGLE-LINE-WRAP，M-z）。

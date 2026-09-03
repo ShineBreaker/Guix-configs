@@ -12,14 +12,14 @@
 | `modules/modes/*.lisp` | 各语言 mode（LSP / paredit 接线） | 字典序，同层互不依赖；由 init 插在 80 之后、90 之前加载 |
 | `modules/90-*`      | startup：钩子登记                | 必须最后加载                                                    |
 
-加载序（数字前缀即依赖序）：`00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 80-modes-base → modes/<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 modes/ 互不依赖。
+加载序（数字前缀即依赖序）：`00-utils → 10-performance → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 75-context-menu → 80-modes-base → modes/<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 modes/ 互不依赖。
 
 硬约束（违反即加载失败或运行期炸死）：
 
 - 每个模块必须以 `(in-package :lem-user)` 开头，否则编译期触发包锁崩溃。
 - **配置里静态书写「包前缀 + 不存在的符号」会在编译期炸死进程**，handler-case 无效。非 `:lem`/`:lem-user` 核心符号一律 `vs$` 动态解析，缺失只告警跳过。
 - **keymap 绑定的符号必须是 `define-command` 产物**：执行靠同名命令类分发，普通 `defun` 符号绑键后按键即炸。
-- nightly AppImage（lem-next-bin，用户自打包官方 `Lem-x86_64-nightly.AppImage`）**扩展全部内置编译进 core**（terminal/legit/process/shell-mode/patch-mode/dashboard/lsp-mode/completion-mode 等），镜像**无源码树**（`asdf:system-source-directory` 返回构建容器路径，本机不存在）——原 store 扩展补载机制（10-extensions / `vs-load-lem-source`）已废除，运行时只允许 `vs-load-source` 加载配置目录内文件。
+- nightly AppImage（lem-next-bin，用户自打包官方 `Lem-x86_64-nightly.AppImage`）**扩展全部内置编译进 core**（terminal/legit/process/shell-mode/patch-mode/dashboard/lsp-mode/completion-mode 等），且镜像**无源码树**（`asdf:system-source-directory` 返回构建容器路径，本机不存在）——此两条仅适用 AppImage 构建；当前 git 源码构建（lem-next-2.3.0-0.68e85e0）在 store 内**带完整上游源码树**（`/gnu/store/vqbd1hhl5yvyjhc3p1phgjwv5iiy61qr-lem-next-2.3.0-0.68e85e0/share/common-lisp/sbcl/lem-next/`），API 疑问可直接读源码验证。原 store 扩展补载机制（10-extensions / `vs-load-lem-source`）已废除，运行时只允许 `vs-load-source` 加载配置目录内文件。
 
 ## 2. 符号速查（home 包陷阱）
 

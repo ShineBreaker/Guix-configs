@@ -17,8 +17,8 @@
 
 (defun vs-hook-add (hook-symbol fn-symbol)
   "运行时向 hook 变量登记回调。add-hook 是 place 宏（展开期取符号位置），
-运行时拿到 hook 符号值必须 eval 构造调用（与 50-terminal 的 bypass
-defmethod 重定义同一手法）。"
+运行时拿到 hook 符号值必须 eval 构造调用（与 60-editor-config 的
+defmethod :around 挂接同一手法）。"
   (eval `(add-hook ,hook-symbol ',fn-symbol)))
 
 (defun vs-lsp-wire (mode language-id root-patterns command)

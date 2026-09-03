@@ -3,10 +3,11 @@
 ;;; lem 2.3.0 全树 grep 零 which-key 类扩展，自研两层替代：
 ;;;   描述层 = 00-utils 注册表（vs-bind 落键时登记 分组+中文描述，
 ;;;            vs-help-note 收编不经 vs-bind 的默认键）；
-;;;   展示层 = 本模块 F1 帮助页——渲染进可切换的只读 buffer
+;;;   展示层 = 本模块 C-c h 静态帮助页——渲染进可切换的只读 buffer
 ;;;            （不用 with-pop-up-typeout-window：其 floating-window
 ;;;            存活期间按移动键会在 MOVE-TO-VIRTUAL-LINE-COLUMN 上
-;;;            以 column=NIL 炸 backtrace，E2E 实测）。
+;;;            以 column=NIL 炸 backtrace，E2E 实测）+ F1 两级菜单
+;;;            （选组 → 选键位 → 直接执行）。
 ;;; 用户 Emacs 侧对应物是 custom/show-help（自制分组帮助页）+
 ;;; which-key 中文化，F1 键位与其 <f1> ? / C-c h ? 一致。
 ;;;
@@ -55,10 +56,10 @@ vs-help-entries 一致用 third：first 是键串，永不可能等于分组 ID�
                 (nconc (vs-help-entries (first g))
                        (vs-help-note-entries (first g)))))
              (vs-help-format-section stream "其他" (vs-help-entries "other"))
-             (format stream "~%   再按 F1 重开本页；C-x o 切回工作窗口。~%")
+             (format stream "~%   再按 C-c h 重开本页（F1 为键位菜单）；C-x o 切回工作窗口。~%")
              (finish-output stream))
         (close stream))))
-      (setf (buffer-read-only-p buffer) t)
+    (setf (buffer-read-only-p buffer) t)
     ;; 挂自研 mode：Up/Down 走纯点移动（上），其余键沿 global。
     ;; change-buffer-mode 为 buffer 级操作（scheme 的 .lock 关联同款），
     ;; 不碰窗口，load 期可直调。
@@ -81,7 +82,7 @@ vs-help-entries 一致用 third：first 是键串，永不可能等于分组 ID�
      :keymap *vs-help-keymap*))
 
 (define-command vs-show-keybindings () ()
-  "F1 键位帮助页：按分组列出全部自定义绑定与默认键附注（中文描述）。
+  "C-c h 键位帮助页：按分组列出全部自定义绑定与默认键附注（中文描述）。
 对齐用户 Emacs 的 custom/show-help 自制帮助页。"
   (let ((buffer (or (get-buffer "*键位帮助*")
                     (make-buffer "*键位帮助*"))))

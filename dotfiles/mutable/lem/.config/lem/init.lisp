@@ -5,11 +5,12 @@
 ;;;   本文件只做引导；modules/ 目录下全部 .lisp 与 modules/modes/ 下
 ;;;   各语言文件按文件名字典序自动遍历加载（新增模块建文件即可，
 ;;;   无需改本文件）。加载顺序由数字前缀控制：
-;;;     00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer
-;;;     → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config
-;;;     → 70-keybindings → 80-modes-base → modes/<lang>（同层互不依赖）
-;;;     → 90-startup（钩子登记，必须最后）
 ;;;   前缀间隔 10 留插入位；跨模块依赖与顺序约束详见各模块头注释。
+;;;     00-utils → 10-performance → 20-icons → 25-fonts → 30-themes
+;;;     → 40-explorer → 45-keyhelp → 50-terminal → 55-completion
+;;;     → 60-editor-config → 70-keybindings → 75-context-menu
+;;;     → 80-modes-base → modes/<lang>（同层互不依赖）
+;;;     → 90-startup（钩子登记，必须最后）
 ;;;
 ;;; 机制约束（勿违反，详见仓库 AGENTS 记忆）：
 ;;; 1. 必须以 (in-package :lem-user) 开头，否则文件编译期触发包锁崩溃
