@@ -2194,9 +2194,7 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   (indent-bars-color-by-depth '(:homogeneity 0.5))
   (indent-bars-pattern ".")
   (indent-bars-width-frac 0.15)
-  (indent-bars-pad-pos 1)
-  (indent-bars-zigzag nil)
-  (indent-bars-no-stretch-char nil))
+  (indent-bars-zigzag nil))
 
 (defun custom--maybe-enable-indent-bars ()
   "ts-mode hook 回调:仅图形 frame 开 `indent-bars-mode'。
@@ -3346,7 +3344,6 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
   :commands (org-roam-node-find org-roam-node-insert org-roam-buffer-toggle)
   :custom
   (org-roam-directory custom:org-roam-directory)
-  (org-roam-database-connector 'sqlite)
   (org-roam-completion-everywhere nil)
   :config
   (org-roam-db-autosync-mode))
