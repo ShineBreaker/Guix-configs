@@ -142,9 +142,43 @@
 (vs-bind "Shift-C-e" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "切换侧栏（资源管理器）")
 (vs-bind "Shift-C-g" :lem/legit "LEGIT-STATUS" "ui" "源代码管理（Git 状态）")
 (vs-bind "Shift-C-f" :lem/grep "PROJECT-GREP" "nav" "跨文件搜索（项目 grep）")
-;; --- Tab 切换（frame-multiplexer；C-z 数字快切被 undo 覆盖，见下） ---
-(vs-bind "C-Tab" :lem/frame-multiplexer "FRAME-MULTIPLEXER-NEXT" "ui" "下一个 Tab")
-(vs-bind "Shift-C-Tab" :lem/frame-multiplexer "FRAME-MULTIPLEXER-PREV" "ui" "上一个 Tab")
+;; --- Tab 切换（VSCode C-Tab 循环编辑器 tab；不能直接用
+;;     frame-multiplexer：它循环虚拟 frame，单 frame 下恒 no-op
+;;     （ncurses 实测连按三次不动），且会落到 tabbar 不显示的隐藏
+;;     buffer（真机主窗变空视图实证）。自研命令只在文件 buffer 内
+;;     循环，与 tabbar 显示口径一致；0/1 个文件时 no-op） ---
+(defun vs-tab-file-buffers ()
+  "文件 buffer 列表（buffer-filename 非空；ncurses 下 tabbar 管线关闭，
+此处不走 GET-TABBAR-BUFFERS，保证双前端一致）。"
+  (remove-if-not (lambda (b) (ignore-errors (buffer-filename b)))
+                 (buffer-list)))
+
+(defun vs-tab-cycle (dir)
+  "DIR=+1 下一个/-1 上一个：当前 buffer 在表内则顺/逆移一位，
+在表外（终端等）则落到首个文件 tab。"
+  (let ((tabs (vs-tab-file-buffers)))
+    (when (cdr tabs)
+      (let ((pos (position (current-buffer) tabs)))
+        (switch-to-buffer
+         (nth (mod (+ (or pos (if (plusp dir) -1 0)) dir)
+                   (length tabs))
+              tabs))))))
+
+(define-command vs-tab-next-file () ()
+  (vs-tab-cycle 1))
+
+(define-command vs-tab-prev-file () ()
+  (vs-tab-cycle -1))
+
+;; 旧 multiplexer 绑定退位：先清掉该键串既有登记再落键，否则帮助页
+;; 一行两条（重载配置也不会复加）。
+(setf *vs-binding-registry*
+      (remove-if (lambda (e)
+                   (member (first e) '("C-Tab" "Shift-C-Tab")
+                           :test #'string=))
+                 *vs-binding-registry*))
+(vs-bind "C-Tab" :lem-user "VS-TAB-NEXT-FILE" "ui" "下一个 Tab")
+(vs-bind "Shift-C-Tab" :lem-user "VS-TAB-PREV-FILE" "ui" "上一个 Tab")
 ;; --- 终端（VSCode Ctrl+` / Ctrl+J toggle 面板；双通道设计见 50-terminal） ---
 ;; 终端 buffer 内 mode keymap 的 undefined-key 透传优先，全局绑定不可达，
 ;; 聚焦时局部覆盖键（M-` / C-`；C-j 与 Return 同码 0x0A 不绑，保留多行
