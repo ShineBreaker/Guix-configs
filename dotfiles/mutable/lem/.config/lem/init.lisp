@@ -9,7 +9,7 @@
 ;;;     00-utils → 10-performance → 20-icons → 25-fonts → 30-themes
 ;;;     → 40-explorer → 45-keyhelp → 50-terminal → 55-completion
 ;;;     → 60-editor-config → 70-keybindings → 75-context-menu
-;;;     → 80-modes-base → modes/<lang>（同层互不依赖）
+;;;     → 76-whichkey → 80-modes-base → modes/<lang>（同层互不依赖）
 ;;;     → 90-startup（钩子登记，必须最后）
 ;;;
 ;;; 机制约束（勿违反，详见仓库 AGENTS 记忆）：
