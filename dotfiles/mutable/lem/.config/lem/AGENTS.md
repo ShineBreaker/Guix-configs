@@ -9,9 +9,10 @@
 | `init.lisp`         | 薄引导                           | 不改：配置目录定位 + read+eval 加载器 + 模块遍历，已稳定        |
 | `modules/00-*`      | utils：vs$ 解析族、注册表、trace | 被全部模块依赖，必须最先加载                                    |
 | `modules/NN-*.lisp` | 功能模块（NN 数字前缀定序）      | 字典序即加载序，间隔 10 留插入位；新模块建文件即可，init 零登记 |
+| `modules/modes/*.lisp` | 各语言 mode（LSP / paredit 接线） | 字典序，同层互不依赖；由 init 插在 80 之后、90 之前加载 |
 | `modules/90-*`      | startup：钩子登记                | 必须最后加载                                                    |
 
-加载序（数字前缀即依赖序）：`00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 80-modes-base → 81-modes-<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 81-* 互不依赖。
+加载序（数字前缀即依赖序）：`00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 80-modes-base → modes/<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 modes/ 互不依赖。
 
 硬约束（违反即加载失败或运行期炸死）：
 
@@ -61,14 +62,16 @@
 - **webview 前端下 `--eval` 探针不可用**（与多实例无关）：webview 前端初始化与 apply-args 的求值序不兼容，`--eval` 的 load 经常整段不执行（探针文件连 marker 都不落地）或直接挂起；剥离 display 跑则崩在 webview 初始化（fatal ERROR，stderr 被吞只留 `compilation unit aborted` 摘要）。**探针一律走 ncurses 通道**（见第 5 节第 2 条）。
 - **tabbar（webview 顶栏 buffer 列表条）双坑**：① 上游 `*enable-tabbar-on-startup*` 默认 t，显示**全部 buffer**（含 *terminal*/*dashboard* 等临时 buffer，无过滤点）；60-editor-config 已 wrap `lem/tabbar::get-tabbar-buffers` 过滤为只显示文件 buffer，tab 的点击切换/关闭/dirty 圆点为 webview 原生。② **ncurses 前端下 tabbar 渲染走 lem-server 的 HTML 管线、view 类型不匹配必崩**（redraw 即 fatal），60-editor-config 按前端分派：webview 开、其余关（探针通道能跑正是依赖此关闭）。
 - **`set-clickable` 回调签名前端不一致（2026-09-02 explorer 点击实测）**：`SET-CLICKABLE` 在 `:lem-core`（internal）。上游 main 源码与 ncurses 实测都是 `(window point)` 两参 funcall，但 **webview 前端实际分发收 0 参**——固定形参 lambda 点一下就 `Invalid number of arguments: 0` 炸进 SBCL debugger。配置侧 clickable 回调**一律 `(lambda (&rest args) ...)` + 渲染期闭包捕获条目数据**（40-explorer 的 vs-make-icon-click / vs-insert-tree-line 模式），不依赖回调参数、不在回调里读属性。
+- **终端双通道与 vterm 构建门槛（2026-09-03 git 构建实测收口）**：50-terminal 为双通道——vterm（`lem-terminal`，libvterm 真终端）+ fish（`sb-posix:setenv "SHELL"` 注入，上游 terminal-new 只读 `$SHELL`，无 Lisp 覆盖点），退化通道为 shell-mode + bash + `script(1)`。**20260531 AppImage 构建的 vterm 通道带上游 I/O 线程数据竞争（#2209/#2211 于 2026-06-03/05 修复）**：terminal 包与 terminal.so 均正常加载、fish 能 spawn，但 spawn 后主进程随机 SIGSEGV fatal（ncurses 实测复现）——旧结论「配置层不可修、弃用」在修复版构建上不再成立。构建自识别读 `sb-impl::*runtime-pathname*`（`uiop:argv0` / `sb-ext:runtime-pathname` / `*lem-version*` 均被镜像剥离为 NIL，/proc/self/exe 指向 ld-linux 拿不到）：AppImage 包名（`lem-next-bin-YYYYMMDD`）按 ≥20260605 门槛；**git 源码构建（`lem-next-<版本>-<hash>`，当前 lem-next-2.3.0-0.68e85e0 = 2026-08-31）默认信任**。**shell-mode 退化通道不能用 fish**：哑管道下 fish 0.13s 发出能力查询包（kitty `?u` / XTVERSION / OSC 11 / DECRQM）后阻塞等应答，~30s 才出提示符（pty 实测），bash 无查询即时出（0.02s）。vterm+fish 在 webview 下已终验（fastfetch 全彩 + starship 提示符 + 项目根 cwd + toggle 管线）。另：90-startup 的 workspace 钩子在面板已显示时跳过 split（用户启动即按 C-j 场景，否则叠加双终端窗）；webview 前端下 startup 同样需要首键触发。
 
 ## 5. 验证管线
 
-1. **语法验证（每次修改后必跑）**：SBCL stub 包 read-only parse 全部 .lisp。stub 需满足 reader 解析：`:lem-user`/`:uiop`/`:lem`/`:asdf`/`:lem-core` 包存在，且配置里静态引用的各包符号须在 stub 中 **大写 export**（read 的 :upcase 语义）；运行用 `sbcl --noinform --load`（`--script` 静默丢输出）。
+1. **语法验证（每次修改后必跑）**：SBCL stub 包 read-only parse modules/ 下全部 .lisp（含 modes/ 子目录，递归）。stub 需满足 reader 解析：`:lem-user`/`:uiop`/`:lem`/`:asdf`/`:lem-core` 包存在，且配置里静态引用的各包符号须在 stub 中 **大写 export**（read 的 :upcase 语义）；运行用 `sbcl --noinform --load`（`--script` 静默丢输出）。
 2. **行为自检（ncurses `--eval` 通道；LEM_HOME 沙箱与 webview `--eval` 均不可用，见第 4 节）**：`tmux new-session -d -s lemprobe -x 220 -y 50 "env -u WAYLAND_DISPLAY -u DISPLAY lem -i ncurses --eval '(load \"/tmp/xxx.lisp\")'"`——`-i ncurses` 强制 ncurses 前端（tabbar 已被 60-editor-config 关闭，不会崩），load 在**用户配置加载完成之后**执行（after-init → apply-args 序），直接读 `*vs-binding-registry*` 条数、变量 symbol-value、keymap 绑定即为生效态。断言写 /tmp log、文件末尾 `(sb-ext:exit :code 0)` 自退出；**flet/labels 局部函数名勿用 `log` 等 CL 外部符号**（包锁违规 → load 编译期 fatal）。延迟执行用 `sb-thread:make-thread` + sleep（timer 不 fire，见第 4 节），**零按键、零焦点纠缠**。
 3. **--eval 的 reader 限制**：eval 表达式在启动 parse 期就被 read 进 cl-user（先写的 in-package 救不了，符号包已固化），所以必须经 load 文件、文件内 in-package 才生效。
 4. **tmux 观测**：capture-pane 看画面；字符注入只用 `set-buffer` + `paste-buffer`（`send-keys -l` 首字符后必丢）；启动后必须先发一键才触发 post-command 启动钩子（无按键只见 dashboard，不是加载失败）。
 5. **渲染类改动（侧栏/主题/字体）必须真机 capture 验证**，静态检查不算数。webview 前端在 xvfb 下恒黑屏（webkit 无 GPU 渲染问题，加 WEBKIT_DISABLE_* 环境变量也无效），渲染验证走**真机 wayland：沙箱 LEM_HOME 起实例 + grim 截屏 + 及时 kill**。webview 字号不持久化，字体改动重启即生效。注意：**桌面处于锁屏时 grim 只能截到锁屏层**（编辑器被虚化不可读）——夜间自动化遇到锁屏时，webview 视觉验证只能改期，可先用 ncurses 通道验证非前端相关的渲染逻辑（侧栏 buffer 内容与码点可 capture-pane 校验）。
 6. **探针执行模型三教训（2026-09-02 explorer 点击排查实测）**：① 外来线程（make-thread + sleep 轮询）会**无声死掉**（错误进被吞的 *error-output*，日志一行不留）——复杂探针改走 `(lem:send-event #'fn)` 在**编辑线程内**执行，观察步骤再 `send-event` 链式排队（FIFO 保序，不用 sleep）；② lem 编辑线程绑定 `*print-readably`=T，探针日志用 `~S` 打印 lem 对象（window/cursor/package）必抛 print-not-readable，**日志格式串一律 `~A` 并先 `(let ((*print-readably* nil)) ...)`**；③ 合成鼠标点击：`(lem:receive-mouse-button-down x y px py :button-1 1)` 传 frame 单元坐标——leftside 侧栏行 N 的 frame-y = `(window-y win) + N - (view-point 行号)`，写错一行就静默点空（上游无任何报错）。探针文件发布前先 python 括号平衡检查（本轮三份探针各炸一次）。
+7. **`--eval` load 期禁窗口操作（2026-09-02 终端重写实测）**：load 阶段（apply-args 序）直接 funcall 涉及 split-window/delete-window/switch-to-buffer 的命令（如 vscode-toggle-terminal）会让进程**当场死掉**（无 LDB 输出、tmux session 连带消失）——与 90-startup「after-init 期窗口操作 display 层拒绘」同根。探针里的窗口动作一律 `make-thread sleep → send-event` 延后到命令循环期执行。另：探针日志 `with-open-file` 勿用 `:if-exists :supersede`（每次调用截断覆盖，多行日志只剩最后一行），用 `:append`。
 
 禁令沿用仓库根 AGENTS.md：不运行 `blue rebuild` / `guix system reconfigure`（提醒用户手动），不编辑 `channel.lock` 与 `tmp/`，不持久安装包。本目录为 mutable Stow 源，普通修改无需 `blue home`。
