@@ -14,23 +14,28 @@
 ;; 每命令一次的钩子遍历）。
 (defparameter *vs-startup-opened* nil)
 
+;; 整体 ignore-errors：display 层操作（toggle/split）在边界场景可能抛错，
+;; post-command 链上抛错会连累排在后面的 activate/heal 钩子（与
+;; 40-explorer 的钩子同款防护）。中途抛错则 remove-hook 不执行、钩子
+;; 残留，但标志位已置，此后每次触发只空转 no-op，无害。
 (defun vs-open-workspace-on-startup ()
   (unless *vs-startup-opened*
     (setf *vs-startup-opened* t)
-    ;; 1) Explorer 侧栏（leftside 独立槽位，不影响主窗树）
-    (vscode-toggle-sidebar)
-    ;; 2) 底部终端面板（split 管线与顺序约束见 50-terminal 的
-    ;;    vs-open-terminal-panel）；首键若已是 C-j（toggle 先开了面板），
-    ;;    此处跳过 split，否则会叠加出第二个终端窗
-    (let ((buf (vs-ensure-terminal-buffer)))
-      (when buf
-        (unless (find buf (window-list) :key #'window-buffer)
-          (let ((main (vs-open-terminal-panel buf)))
-            ;; 3) 焦点交还主编辑区（VSCode 启动语义）
-            (setf (current-window) main)))))
-    (vs-focus-main-window)
-    (eval '(remove-hook *post-command-hook*
-                        'vs-open-workspace-on-startup))))
+    (ignore-errors
+      ;; 1) Explorer 侧栏（leftside 独立槽位，不影响主窗树）
+      (vscode-toggle-sidebar)
+      ;; 2) 底部终端面板（split 管线与顺序约束见 50-terminal 的
+      ;;    vs-open-terminal-panel）；首键若已是 C-j（toggle 先开了面板），
+      ;;    此处跳过 split，否则会叠加出第二个终端窗
+      (let ((buf (vs-ensure-terminal-buffer)))
+        (when buf
+          (unless (find buf (window-list) :key #'window-buffer)
+            (let ((main (vs-open-terminal-panel buf)))
+              ;; 3) 焦点交还主编辑区（VSCode 启动语义）
+              (setf (current-window) main)))))
+      (vs-focus-main-window)
+      (eval '(remove-hook *post-command-hook*
+                          'vs-open-workspace-on-startup)))))
 
 ;; find-file 主通道（覆盖 prompt 确定等 post-command 盲区）+ 兜底。
 ;; *find-file-hook* 的 home 包是 lem/buffer/file（未 reexport 进 :lem，
