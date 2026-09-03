@@ -7,6 +7,13 @@
 ;;;     Return 选中）；
 ;;;   - 本模块补缺：dabbrev（全 buffer 词候选），M-/ 触发——对齐用户
 ;;;     Emacs 的 M-/ cape-dabbrev（其补全链尾手动项）。
+;;; 候选管线：收集 → 过滤+排序（vs-dabbrev-filter-sort：前缀命中先于
+;;; 子串命中，同档稳定保持收集序）→ completion-item。上游 run-completion
+;;; 不做任何前缀过滤（completion-mode 源码确认，spec 返回什么就显示
+;;; 什么），过滤/排序只能在配置侧做。大小写策略：匹配大小写不敏感
+;;; （对齐 dabbrev case-fold 语义，ALPHAbet 可被 alp 命中）；插入不做
+;;; case 改写——上游 completion-insert 为原样替换目标词（delete-between
+;;; + insert-string label，源码确认），候选词词形天然保持。
 ;;; 依赖：utils；lem/completion-mode 符号全部动态解析（该包未
 ;;; use-reexport 进 :lem，静态前缀引用会在编译期炸死进程）。
 
@@ -41,10 +48,25 @@
                         (push w words))))))
       (nreverse words))))
 
+(defun vs-dabbrev-filter-sort (prefix words)
+  "过滤+排序：仅保留含 prefix 的词（大小写不敏感），前缀命中（词首
+即 prefix）档在前、子串命中档在后，同档稳定保持收集序（buffer 内
+出现序；跨 buffer 时当前 buffer 段先于其余文件 buffer 段）。
+push 收集须 nreverse 还原收集序，stable-sort 才有「同档保序」可言。"
+  (let ((tiered '()))
+    (dolist (w words)
+      (let ((pos (search prefix w :test #'char-equal)))
+        (when pos
+          (push (cons (if (zerop pos) 0 1) w) tiered))))
+    (mapcar #'cdr (stable-sort (nreverse tiered) #'< :key #'car))))
+
 (defun vs-dabbrev-candidates (point)
   "completion-spec 函数：全 buffer 词候选 → completion-item 列表。
-当前 buffer 优先，其余按 buffer-list 顺序只收文件 buffer
-（explorer/dashboard 等交互 buffer 的路径词是纯噪声）。"
+过滤为含起补词的词并排序（前缀命中先于子串命中，同档保持收集序，
+见 vs-dabbrev-filter-sort）；当前 buffer 优先，其余按 buffer-list
+顺序只收文件 buffer（explorer/dashboard 等交互 buffer 的路径词是
+纯噪声）。候选必须是 make-completion-item 对象（字符串列表会在
+插入时炸，AGENTS 第 3 节）。"
   (let* ((word (vs-word-before-point point))
          (mk-item (vs$ :lem/completion-mode "MAKE-COMPLETION-ITEM")))
     (when (and word mk-item)
@@ -57,7 +79,8 @@
                      (or (eq b cur) (buffer-filename b)))
             (setf words
                   (nconc words (vs-buffer-words b seen *vs-dabbrev-max-words*)))))
-        (mapcar (lambda (w) (funcall mk-item :label w)) words)))))
+        (mapcar (lambda (w) (funcall mk-item :label w))
+                (vs-dabbrev-filter-sort word words))))))
 
 (define-command vs-dabbrev-complete () ()
   "M-/ dabbrev 补全：收集全 buffer 词弹窗补全。
