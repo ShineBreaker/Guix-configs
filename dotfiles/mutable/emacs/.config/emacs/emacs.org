@@ -1411,7 +1411,9 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 
 ;; 只对 VCS-tracked 文件自动 revert(比 global-auto-revert-mode 省得多):
 ;; 切分支 / 拉取 / worktree 操作后 buffer 自动刷新,避免旧 buffer 静默
-;; 覆盖新内容。
+;; 覆盖新内容。revert 的内容刷新本身可感知,静默成串出现的
+;; "Reverting buffer" 提示(dotfiles 被 stow/blue home 重新生成时)。
+(setq auto-revert-verbose nil)
 (vc-auto-revert-mode 1)
 #+end_src
 
@@ -3723,6 +3725,16 @@ ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode
 #+end_src
 
 词表与后端就绪后注册到文本模式。
+
+=M-/= 在当前 buffer 无匹配时会转扫其他 buffer。Emacs 31 在这条路径上新增了两类无选项可关的 echo 提示:progress reporter 的 "Scanning for dabbrevs...done"(=progress-reporter-done= 不受中间进度门控,任何一次未命中都无条件打印,扫描瞬间完成也照打)与扩展来源换 buffer 即打的 "Expansion found in ...";默认 =dabbrev-check-all-buffers=t= 还会把 daemon 里全部 buffer(含 Eglot events、vterm 回滚等巨型 buffer)纳入同步正则扫描。这里把范围收敛到同 major-mode,并用原生消息过滤机制静音这两类提示——=inhibit-message= 函数挂到 =set-message-functions= 首位,按 =inhibit-message-regexps= 匹配丢弃,其余消息不受影响。
+
+#+begin_src emacs-lisp
+(setq dabbrev-check-all-buffers nil
+      inhibit-message-regexps
+      '("Scanning for dabbrevs" "Expansion found in"))
+
+(add-to-list 'set-message-functions #'inhibit-message)
+#+end_src
 
 #+begin_src emacs-lisp
 ;; eldoc 内置文档显示:Eglot 补全时 echo area 显示文档。
