@@ -10,7 +10,8 @@
 ;;; 用户 Emacs 侧对应物是 custom/show-help（自制分组帮助页）+
 ;;; which-key 中文化，F1 键位与其 <f1> ? / C-c h ? 一致。
 ;;;
-;;; 依赖：utils（注册表）；被 70-keybindings 依赖（本命令名供其绑 F1）。
+;;; 依赖：utils（注册表）；explorer（Up/Down 纯点移动命令复用，
+;;; 40 先加载）；被 70-keybindings 依赖（本命令名供其绑 F1）。
 
 (in-package :lem-user)
 
@@ -58,8 +59,26 @@ vs-help-entries 一致用 third：first 是键串，永不可能等于分组 ID�
              (finish-output stream))
         (close stream))))
       (setf (buffer-read-only-p buffer) t)
+    ;; 挂自研 mode：Up/Down 走纯点移动（上），其余键沿 global。
+    ;; change-buffer-mode 为 buffer 级操作（scheme 的 .lock 关联同款），
+    ;; 不碰窗口，load 期可直调。
+    (let ((change (vs$ :lem "CHANGE-BUFFER-MODE")))
+      (when change
+        (ignore-errors (funcall change buffer 'vscode-help-mode))))
     (buffer-start (buffer-point buffer))
     (buffer-unmark buffer))
+
+;; 只读纯文本渲染行上 global 的 next-line/previous-line 同样会炸
+;; （帮助页 ncurses 实测 The value NIL is not of type REAL，与 40 侧栏
+;; 同类）。Up/Down 拦成纯点操作，命令复用 40-explorer（行级 point
+;; 移动，无树语义，不另写一套）。
+(defparameter *vs-help-keymap* (make-keymap))
+(define-key *vs-help-keymap* "Up" 'vscode-explorer-previous-line)
+(define-key *vs-help-keymap* "Down" 'vscode-explorer-next-line)
+
+(define-major-mode vscode-help-mode ()
+    (:name "Help"
+     :keymap *vs-help-keymap*))
 
 (define-command vs-show-keybindings () ()
   "F1 键位帮助页：按分组列出全部自定义绑定与默认键附注（中文描述）。
