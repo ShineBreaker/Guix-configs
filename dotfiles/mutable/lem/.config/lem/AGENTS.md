@@ -12,7 +12,7 @@
 | `modules/modes/*.lisp` | 各语言 mode（LSP / paredit 接线） | 字典序，同层互不依赖；由 init 插在 80 之后、90 之前加载 |
 | `modules/90-*`      | startup：钩子登记                | 必须最后加载                                                    |
 
-加载序（数字前缀即依赖序）：`00-utils → 10-performance → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 75-context-menu → 76-whichkey → 80-modes-base → modes/<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 modes/ 互不依赖。
+加载序（数字前缀即依赖序）：`00-utils → 10-performance → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 46-problems → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 75-context-menu → 76-whichkey → 80-modes-base → modes/<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 modes/ 互不依赖。
 
 硬约束（违反即加载失败或运行期炸死）：
 

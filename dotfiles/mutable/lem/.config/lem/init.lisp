@@ -7,7 +7,8 @@
 ;;;   无需改本文件）。加载顺序由数字前缀控制：
 ;;;   前缀间隔 10 留插入位；跨模块依赖与顺序约束详见各模块头注释。
 ;;;     00-utils → 10-performance → 20-icons → 25-fonts → 30-themes
-;;;     → 40-explorer → 45-keyhelp → 50-terminal → 55-completion
+;;;     → 40-explorer → 45-keyhelp → 46-problems → 50-terminal
+;;;     → 55-completion
 ;;;     → 60-editor-config → 70-keybindings → 75-context-menu
 ;;;     → 76-whichkey → 80-modes-base → modes/<lang>（同层互不依赖）
 ;;;     → 90-startup（钩子登记，必须最后）
