@@ -13,6 +13,19 @@
 ;;; 「NO FOLDER OPENED」——侧栏只显示引导文案，不渲染文件树；首个
 ;;; 真实文件 buffer 出现时经 vs-explorer-maybe-activate（post-command）
 ;;; 单向激活为该文件所在工作区，此后不回退。
+;;;
+;;; 文件操作（树内键，操作层纯函数 + 命令层交互分层，探针可直接调
+;;; 操作层断言文件系统）：F2 重命名 / Delete 删除（目录仅空目录）/
+;;; a·A 新建文件·文件夹（相对当前条目目录，多级自动建目录）/ M-C
+;;; 复制绝对路径。F2 双语义取舍：explorer 局部 keymap 覆盖全局
+;;; LSP-RENAME——树聚焦时是文件重命名、编辑区仍是符号重命名，与
+;;; VSCode 同位。键串按物理键书写而非修饰符名：lem 两个前端对
+;;; 「Shift+字母」都派发为大写字母 sym 且 shift 标志为 nil（ncurses
+;;; char-to-key 直接得 #\A；webview convert-keyevent 对单字符 sym
+;;; 强制 shift=nil），故 Shift+a 绑 "A" 而非 "Shift-a"（死键）、
+;;; VSCode Shift+Alt+C 绑 "M-C" 而非 "M-S-c"（S- 是 super）；两键
+;;; 在树内遮蔽全局多光标 add-cursors-to-next-line，无损失（只读树
+;;; 内无多光标场景）。
 
 (in-package :lem-user)
 
@@ -457,6 +470,137 @@ vs-insert-tree-line 注释），Return 路径经 :vs-item 属性。"
 (define-key *vs-explorer-keymap* "n" 'vscode-explorer-new-file)
 (define-key *vs-explorer-keymap* "d" 'vscode-explorer-new-folder)
 (define-key *vs-explorer-keymap* "c" 'vscode-explorer-collapse-all)
+
+;; --- 树内文件操作：操作层纯函数（无 prompt 无确认，错误信号给调用
+;;     方）+ 命令层交互（prompt/确认/message）。操作成功后重绘树（带
+;;     git 重扫：文件增删改会变染色）。影响已打开 buffer 的场景不处理
+;;     ——lem buffer 仍指旧路径，保存会另存到旧名（上游 filer 同样
+;;     不管，低频操作可接受）。 ---
+(defun vs-explorer-rename-path (old new)
+  "重命名 old → new（文件或目录；SBCL rename-file 走 POSIX rename，
+目录同盘可用）。返回新 pathname。"
+  (prog1 (rename-file old new)
+    (vs-explorer-render t)))
+
+(defun vs-explorer-delete-path (path)
+  "删除文件；目录只删空目录（uiop:delete-empty-directory 非空报错，
+不做递归炸弹）。"
+  (let ((probed (probe-file path)))
+    (if (and probed (uiop:directory-pathname-p probed))
+        (uiop:delete-empty-directory probed)
+        (delete-file path)))
+  (vs-explorer-render t))
+
+(defun vs-explorer-create-file (path)
+  "新建文件：父目录自动创建（VSCode 输入 a/b/c.txt 语义）；已存在
+则不动（幂等，不清空）。"
+  (ensure-directories-exist path)
+  (unless (probe-file path)
+    (with-open-file (out path
+                         :direction :output
+                         :if-exists nil
+                         :if-does-not-exist :create)
+      (declare (ignore out))))
+  (vs-explorer-render t)
+  (probe-file path))
+
+(defun vs-explorer-create-dir (path)
+  "新建目录：多级自动创建（ensure-directories-exist 幂等）。"
+  (prog1 (ensure-directories-exist path)
+    (vs-explorer-render t)))
+
+(defun vs-explorer-checked-item ()
+  "当前树条目（:vs-item 属性）；光标不在条目行（标题/图标/空状态）
+时提示并返回 nil，供各文件操作命令前置守卫。"
+  (or (vs-item-at-point)
+      (progn (message "Explorer: 光标不在文件条目上") nil)))
+
+(defun vs-explorer-item-parent-dir (item)
+  "条目动作的落点目录：目录条目取自身，文件条目取所在目录。文件路径
+转目录必须用 pathname-directory 重组（AGENTS.md 第 2 节坑位）。"
+  (let ((path (getf item :path)))
+    (if (getf item :dir-p)
+        path
+        (make-pathname :directory (pathname-directory path)))))
+
+(define-command vscode-explorer-rename () ()
+  "F2（树内）：重命名当前条目。initial-value 为旧名，输入含分隔符
+则相对旧条目父目录落点（宽容处理）。"
+  (let ((item (vs-explorer-checked-item)))
+    (when item
+      (let* ((path (getf item :path))
+             (new-name (vs-call :lem "PROMPT-FOR-STRING"
+                                (format nil "Rename ~A to: " (vs-item-name path))
+                                :initial-value (vs-item-name path))))
+        (let ((trimmed (and (stringp new-name) (string-right-trim "/ " new-name))))
+          (when (and trimmed (plusp (length trimmed)))
+            (handler-case
+                (vs-explorer-rename-path
+                 path
+                 (merge-pathnames trimmed (vs-explorer-item-parent-dir item)))
+              (error (e)
+                (message "Explorer 重命名失败: ~A" e)))))))))
+
+(define-command vscode-explorer-delete () ()
+  "Delete（树内）：删除当前条目（目录仅空目录），y/n 确认显示相对
+工作区根的路径。"
+  (let ((item (vs-explorer-checked-item)))
+    (when item
+      (let ((path (getf item :path)))
+        (when (vs-call :lem "PROMPT-FOR-Y-OR-N-P"
+                       (format nil "Delete ~A" (vs-relative path)))
+          (handler-case
+              (vs-explorer-delete-path path)
+            (error (e)
+              (message "Explorer 删除失败: ~A" e))))))))
+
+(defun vs-explorer-create-entry (prompt fn)
+  "新建文件/文件夹共用交互：落点目录下 prompt 相对路径（剥尾部
+分隔符防误输入目录形态），交操作层。"
+  (let ((item (vs-explorer-checked-item)))
+    (when item
+      (let ((rel (vs-call :lem "PROMPT-FOR-STRING" prompt)))
+        (let ((trimmed (and (stringp rel) (string-right-trim "/ " rel))))
+          (when (and trimmed (plusp (length trimmed)))
+            (handler-case
+                (funcall fn (merge-pathnames trimmed
+                                             (vs-explorer-item-parent-dir item)))
+              (error (e)
+                (message "Explorer 新建失败: ~A" e)))))))))
+
+(define-command vscode-explorer-create-file () ()
+  "a（树内）：在当前条目目录下新建文件，多级路径自动建目录。"
+  (vs-explorer-create-entry "New file (relative): " #'vs-explorer-create-file))
+
+(define-command vscode-explorer-create-dir () ()
+  "A（树内，物理 Shift+a）：在当前条目目录下新建文件夹。"
+  (vs-explorer-create-entry "New folder (relative): " #'vs-explorer-create-dir))
+
+(define-command vscode-explorer-copy-path () ()
+  "M-C（树内，VSCode Shift+Alt+C 同位）：复制当前条目绝对路径到
+kill-ring + 系统剪贴板。"
+  (let ((item (vs-explorer-checked-item)))
+    (when item
+      (let ((s (namestring (getf item :path)))
+            (fn (vs$ :lem "COPY-TO-CLIPBOARD-WITH-KILLRING")))
+        (if fn
+            (progn (funcall fn s) (message "已复制路径: ~A" s))
+            (message "路径: ~A（剪贴板 API 缺失，仅提示）" s))))))
+
+;; 键串物理语义见模块头注释：Shift+字母 两前端都派发为大写字母 sym
+;; （shift 标志 nil），M-S-c 的 S- 是 super。
+(define-key *vs-explorer-keymap* "F2" 'vscode-explorer-rename)
+(define-key *vs-explorer-keymap* "Delete" 'vscode-explorer-delete)
+(define-key *vs-explorer-keymap* "a" 'vscode-explorer-create-file)
+(define-key *vs-explorer-keymap* "A" 'vscode-explorer-create-dir)
+(define-key *vs-explorer-keymap* "M-C" 'vscode-explorer-copy-path)
+
+;; 帮助页收编（局部 keymap 绑定不经 vs-bind，不进注册表只进附注；
+;; 仅在 Explorer 树聚焦时生效）
+(vs-help-note "editor" "F2" "重命名文件/文件夹（Explorer 树聚焦时；编辑区 F2 是 LSP 符号重命名）")
+(vs-help-note "editor" "Delete" "删除文件/空文件夹（Explorer 树聚焦时，y/n 确认）")
+(vs-help-note "editor" "a / A" "新建文件 / 文件夹（Explorer 树聚焦时，相对当前条目，多级自动建目录）")
+(vs-help-note "editor" "M-C" "复制文件绝对路径（Explorer 树聚焦时，VSCode Shift+Alt+C 同位）")
 
 ;; --- 侧栏开关（Ctrl+B / Ctrl+Shift+E） ---
 (defun vs-explorer-window ()
