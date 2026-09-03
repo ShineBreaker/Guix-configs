@@ -641,6 +641,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 + 禁用 frame 级 =tab-bar=,改用 window-local =tab-line= 作为文件标签栏——每个文件 buffer 的 window 一条标签栏,避免与 [[#frame][Frame 生命周期]] 的 per-frame 隔离冲突。
 + 只有关联文件的 buffer 才出现在标签栏(=custom/tab-visible-p= 白名单),临时 buffer 与 minibuffer 自动排除。
 + 标签栏本身也只在文件 buffer 的 window 渲染(=tab-line-exclude-functions= 复用同一白名单),终端模拟器、scratch、help、Dashboard 等 window 不显示标签栏。
++ 自研复杂度红线:新增 tab 功能(拖拽、会话持久化等)一律拒绝,代码超过 400 行即评估剥离为独立包或换方案。
 
 *** 常量与窗口定位
 :PROPERTIES:
@@ -3934,7 +3935,7 @@ Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 sc
 
 全量渲染(item 生成 + agenda 扫描 + 装饰)单次上百毫秒,触发侧必须收敛:=dashboard-insert-section= 宏对 list 参数求值 4 次,agenda 的 =org-map-entries= 全量扫描随之重复 4 次,由渲染入口的请求级 advice 合并为 1 次(跨渲染不缓存);=server-after-make-frame-hook= 回调比较渲染宽度,相符(同宽新帧或正常路径)则跳过,只有首帧哑上下文宽度错误才重渲染自愈;resize 事件只挂 idle timer,拖拽的连续中间宽度不逐次全量渲染,静止 0.3s 后按最终宽度刷一次。版心不足 =custom:dashboard-min-content-width= 的窗口(拖拽经过的窄中间态)不做渲染,保留上一次可读内容。
 
-标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中分两组:板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)逐行按自身行宽 =align-to center - 行宽/2= 各自居中——整块左对齐对长短不一的行是错的。行宽超过窗口宽的行不加前缀直接贴左:align-to 负值会把整行推出屏幕左缘(内容只剩行尾残片),而 space spec 表达式里没有可用的 max 钳制(Emacs 31 下 max 求值静默回退 0),只能在装饰时静态排除;窗口比渲染时更窄的瞬态(拖拽间隙、多 frame 混开)仍有负对齐破碎,由 resize 合并刷新与已知取舍覆盖。两组都必须先 =remove-text-properties= 清掉既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
+标题行装饰(=custom/dashboard--decorate-headings= )在每次渲染后运行:版心宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下比例的一半,按 100/140/200 三档常用列宽调优),标题行与分割线都补齐到版心宽;板块内条目行与标题行统一加 =line-spacing= 行间距(像素,仅 GUI 生效),标题与首条目同距。分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满版心。居中分两组:板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)逐行按自身行宽 =align-to center - 行宽/2= 各自居中——整块左对齐对长短不一的行是错的。行宽超过窗口宽的行不加前缀直接贴左:align-to 负值会把整行推出屏幕左缘(内容只剩行尾残片),而 space spec 表达式里没有可用的 max 钳制(Emacs 31 下 max 求值静默回退 0),只能在装饰时静态排除;窗口比渲染时更窄的瞬态(拖拽间隙、多 frame 混开)仍有负对齐破碎,由 resize 合并刷新与已知取舍覆盖。两组都必须先 =remove-text-properties= 清掉既有前缀(banner/标题区带插件自设的测量式前缀,而 add-text-properties 不覆盖已有属性)。超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。navigator 按钮的 action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。装饰层(overlay 二次排版)与 emacs-dashboard 1.8.0 的内部渲染实现耦合,升级插件版本必须重新验证装饰效果(渲染回归见 AGENTS.md 7.4)。
 
 #+begin_src emacs-lisp
 (defvar custom/dashboard--rendered-width nil
