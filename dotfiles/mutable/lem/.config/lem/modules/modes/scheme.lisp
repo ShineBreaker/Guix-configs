@@ -11,3 +11,21 @@
              '("guile-lsp-server"))
 
 (vs-paredit (vs$ :lem-scheme-mode "SCHEME-MODE"))
+
+;; Guix channel.lock 内容即 scheme（(list (channel ...) ...)），但 .lock
+;; 后缀无 mode 关联、打开是 Fundamental（真机截图实测：注释与代码同色
+;; 无高亮）。经 *find-file-hook*（buffer 单参，explorer 同款通道）补关联。
+(defun vs-scheme-lock-hook (buffer)
+  (ignore-errors
+    (let ((file (buffer-filename buffer))
+          (mode (vs$ :lem-scheme-mode "SCHEME-MODE"))
+          (change (vs$ :lem "CHANGE-BUFFER-MODE")))
+      (when (and file mode change
+                 (let ((name (string-downcase file)))
+                   (and (> (length name) 5)
+                        (string= (subseq name (- (length name) 5)) ".lock"))))
+        (funcall change buffer mode)))))
+
+(let ((hook (vs$ :lem/buffer/file "*FIND-FILE-HOOK*")))
+  (when hook
+    (vs-hook-add hook 'vs-scheme-lock-hook)))
