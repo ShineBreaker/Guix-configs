@@ -1154,10 +1154,10 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + Magit 状态页路由到底部 ~side-window~ （40% 高度）
 + COMMIT_EDITMSG 经 ~server-window~ 路由到上方主编辑窗口（保持「上编辑 + 下 magit」布局一致）
 + *文件级操作* ：blame / log / diff / stage / discard
-+ *仓库级操作* ：push / pull / stash push / stash pop
++ *仓库级操作* ：stash push / stash pop
 + 所有操作复用启动域声明的 =custom:executable-git= 。
 + 仓库定位走 =vc-backend= / =vc-call-backend= 内置 API(worktree/submodule 安全,且有 vc 缓存),不手扫 =.git= 哨兵文件。
-+ 「确认前提后转发 Magit 交互命令」的同构命令由 =custom/git--define-file-command= / =custom/git--define-repo-command= 工厂宏生成,避免逐个手写。
++ 「确认前提后转发 Magit 交互命令」的同构命令由 =custom/git--define-file-command= 工厂宏生成,避免逐个手写。
 
 #+begin_src emacs-lisp
 (defun custom/git-repo-root (&optional file)
@@ -1201,14 +1201,6 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
      (custom/git-buffer-file)
      (call-interactively #',magit-command)))
 
-(defmacro custom/git--define-repo-command (name doc magit-command)
-  "定义命令 NAME:确认位于 Git 仓库后,转发 MAGIT-COMMAND。"
-  `(defun ,name ()
-     ,doc
-     (interactive)
-     (custom/git--ensure-repo)
-     (call-interactively #',magit-command)))
-
 (defun custom/git-status-dwim ()
   "打开当前仓库的 Magit 状态页。"
   (interactive)
@@ -1220,11 +1212,6 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
                                  "查看当前文件历史。" magit-log-buffer-file)
 (custom/git--define-file-command custom/git-diff-current-file
                                  "查看当前文件 diff。" magit-diff-buffer-file)
-
-(custom/git--define-repo-command custom/git-push-current-repo
-                                 "Push 当前仓库。" magit-push-current-to-upstream)
-(custom/git--define-repo-command custom/git-pull-current-repo
-                                 "Pull 当前仓库。" magit-pull-from-upstream)
 #+end_src
 
 工厂宏消掉同构转发命令;stage/discard/stash 与提交消息识别是带交互确认或副作用的命令,手写实现。
@@ -1395,8 +1382,6 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (custom/bind "C-c g d" #'custom/git-diff-current-file "当前文件差异" "Git")
 (custom/bind "C-c g S" #'custom/git-stage-current-file "暂存当前文件" "Git")
 (custom/bind "C-c g D" #'custom/git-discard-current-file "丢弃当前文件修改" "Git")
-(custom/bind "C-c g P" #'custom/git-push-current-repo "推送" "Git")
-(custom/bind "C-c g F" #'custom/git-pull-current-repo "拉取" "Git")
 (custom/bind "C-c g #" #'custom/git-stash-push "保存暂存" "Git")
 (custom/bind "C-c g @" #'custom/git-stash-pop "恢复暂存" "Git")
 
@@ -1405,7 +1390,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (custom/bind "C-c g X" #'vc-delete-revision "删除修订" "Git")
 
 ;; Emacs 31 VC outgoing 族:推送前预览、本地全部工作(未推提交+未提交
-;; 修改)一个 diff 看完,与 C-c g P(直接推送)互补。
+;; 修改)一个 diff 看完;推送/拉取本身在 magit 状态页内完成。
 (custom/bind "C-c g o" #'vc-root-diff-outgoing "预览待推送提交" "Git")
 (custom/bind "C-c g O" #'vc-root-diff-outgoing-and-edited "本地全部工作" "Git")
 
@@ -1505,9 +1490,9 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
   :group 'literal)
 ;; 大文件统一策略:超过 `custom:large-file-size-threshold'(2MB)的 buffer,
 ;; 行号(hs 折叠、eglot LSP)逐个设防,而非各写各的阈值——
-;; `custom/setup-file-line-numbers'(行号)、`custom--maybe-enable-prog-helpers'
-;; (LSP 与折叠合一,见 [[#programming-tools]])、`custom/code-format-dwim'
-;; (全 buffer 格式化确认,见 [[#code-commands]])三处共用此阈值。
+;; `custom/setup-file-line-numbers'(行号)与 `custom--maybe-enable-prog-helpers'
+;; (LSP 与折叠合一,见 [[#programming-tools]])两处共用此阈值;Apheleia 格式化
+;; 走异步外部进程,大文件无需确认门。
 ;; `global-so-long-mode' 另管超长行,与本阈值互补。
 
 (defun custom/setup-file-line-numbers ()
@@ -1628,16 +1613,6 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 (defvar custom--tty-face-count 0
   "上次 TTY 刷新时的 face 总数;只有加载了定义新 face 的文件后才需要重刷。")
 
-(defun custom--tty-transparency-broken-p ()
-  "是否存在 default 背景被重设的 TTY frame。
-frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算,
-透明背景随之失效;default 是 theme 必设项,可作重算发生的哨兵。"
-  (and (not noninteractive)
-       (seq-some (lambda (frame)
-                   (unless (display-graphic-p frame)
-                     (face-background 'default frame)))
-                 (frame-list))))
-
 (defun custom/refresh-terminal-faces (&rest _)
   "重新对所有存活 TTY frame 应用透明背景策略。"
   (unless noninteractive
@@ -1647,10 +1622,9 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
         (custom/apply-terminal-faces frame)))))
 
 (defun custom/refresh-terminal-faces-after-load (_file)
-  "包加载引入新 face 或透明背景被 face 重算重设时刷新所有 TTY frame。
-多数 `load'/`require' 两者皆无,用计数与 default 背景双守卫避免每次全量重刷。"
-  (when (or (< custom--tty-face-count (length (face-list)))
-            (custom--tty-transparency-broken-p))
+  "包加载引入新 face 时刷新所有 TTY frame。
+多数 `load'/`require' 不定义 face,用 face 计数避免每次全量重刷。"
+  (when (< custom--tty-face-count (length (face-list)))
     (custom/refresh-terminal-faces)))
 
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
@@ -2266,13 +2240,18 @@ ghostel 终端模拟器(libghostty-vt 后端): =custom/open-terminal= 在底部 
 + 底部 side-window(高度 1/3),自动切换到项目根目录;不在项目则用当前目录;带前缀参数则用当前文件所在目录
 + 有已显示的终端窗口则聚焦;有终端 buffer 但未显示则显示到底部;无则新建
 + =C-h= 在 ghostel 内重绑为发送原始 Ctrl+H(全局被 backward-char 占用), =M-方向键= 保持窗口切换
-+ 关键 hack:终端里的 =git commit= / =git rebase -i= 需要 EDITOR 返回;ghostel 的 pre-spawn-hook 跑在进程创建 *之前* , =get-buffer-process= 返回 nil,故不能用 =with-editor-export-git-editor= (会抛 "Cannot export environment variables in this buffer"),必须直接调 =with-editor--setup= (内部 API),手动绑定 =with-editor--envvar=
++ 终端里的 =git commit= / =git rebase -i= 由 emacsclient 接管:pre-spawn hook 里 =(setenv "GIT_EDITOR" "emacsclient")= ,提交消息 buffer 经 =server-window= 路由到主编辑窗口;完成手势从 with-editor 的 =C-c C-c= 变为在 Emacs 里关闭该 buffer(=C-x #=),git 随之继续
 
 #+begin_src emacs-lisp
 ;; agent-shell 后端标记的前向声明,避免 byte-compile free variable 警告
 (defvar custom--agent-ghostel-p nil)
 
-<<compat/ghostel-with-editor>>
+(defun custom/ghostel-export-git-editor ()
+  "在 Ghostel 创建进程前把 GIT_EDITOR 设为 emacsclient。
+setenv 修改的是全局 `process-environment',pre-spawn 之后 spawn 的子进程
+一律继承;emacsclient 需要已运行的 server(daemon 常驻或 standalone 的
+`server-mode'),提交 buffer 由 `server-window' 路由到主编辑窗口。"
+  (setenv "GIT_EDITOR" "emacsclient"))
 
 (defun custom/ghostel-send-ctrl-h ()
   "向 ghostel 发送 C-h(全局被 backward-char 占用,需显式重绑)。"
@@ -2551,6 +2530,8 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
 
 Apheleia 用 =:hook (prog-mode . apheleia-mode)= 而非 =:defer t= 触发加载:后者没有可靠的首次加载入口,=apheleia-global-mode= 不会启用,保存时格式化在用户首次手动调 Apheleia 命令前都失效。进任何 prog buffer 就启用 global mode,保存时格式化立即生效。
 
+手动入口 =C-c c f= 直绑 =apheleia-format-buffer= (包 autoload 已注册)。Apheleia 没有把格式化委托给 LSP 的能力(无 eglot formatter 条目,上游 issue #62 长期未实现):eglot 管理的 buffer 与普通 buffer 一样走 mode-alist 里的外部 formatter,语言→formatter 对应关系见 [[#programming-tools]] 的能力表。个别无外部 formatter 而又有 LSP 的语言(如 tsx)需要 LSP 格式化时手动 =M-x eglot-format-buffer= 。
+
 Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =flymake-mode-hook=;非 LSP buffer 由各 major mode 的 =syntax-table= 提供诊断。全局跳转与错误列表键 =M-g n/p/l= 在 [[#keybindings][前缀键体系]] 域统一绑定,不在此处 =:bind=,避免 flymake 未加载时键位悬空。
 
 #+begin_src emacs-lisp
@@ -2605,7 +2586,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 :CUSTOM_ID: code-commands
 :END:
 
-供快捷键和右键菜单复用的代码操作函数:移动行、格式化、块注释。
+供快捷键复用的代码操作函数:移动行。
 
 + =custom/tabs-next= / =custom/tabs-previous= 由 [[#tab-line][Tab-line]] 提供
 + 行复制直接绑内置 =duplicate-dwim= (Emacs 29+),行注释直接绑内置 =comment-line= ,不再包一层转发命令
@@ -2628,21 +2609,6 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 ;; custom/bind 无法传参,上/下两键各留一个定参入口。
 (defun custom/code-move-line-up () (interactive) (custom/code-move-line -1))
 (defun custom/code-move-line-down () (interactive) (custom/code-move-line 1))
-
-(defun custom/code-format-dwim ()
-  "智能格式化:有选区格式化选区,否则格式化整个缓冲区。
-无选区且 buffer 超过 `custom:large-file-size-threshold' 时先确认:
-全 buffer `indent-region' 对大文件是同步高成本操作,选区格式化不受影响。"
-  (interactive)
-  (if (use-region-p)
-      (indent-region (region-beginning) (region-end))
-    (when (or (<= (buffer-size) custom:large-file-size-threshold)
-              (y-or-n-p "Buffer 较大,全 buffer 格式化可能卡顿,继续? "))
-      (cond
-       ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
-        (eglot-format-buffer))
-       (t
-        (indent-region (point-min) (point-max)))))))
 #+end_src
 
 ** 代码与导航键
@@ -2660,6 +2626,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "M-g b" #'xref-go-back "后退" "跳转与错误")
 (custom/bind "M-g f" #'xref-go-forward "前进" "跳转与错误")
 (custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
+(custom/bind "M-g h" #'eldoc-doc-buffer "文档缓冲区" "跳转与错误")
 
 (custom/bind "C-c c d" #'xref-find-definitions "跳转到定义" "代码")
 ;; eglot 上游未给这些交互命令 autoload cookie,全局直绑在 eglot 加载前
@@ -2683,7 +2650,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "C-c c x i" #'eglot-find-implementation "跳转到实现" "代码")
 (custom/bind "C-c c x t" #'eglot-find-typeDefinition "跳转到类型定义" "代码")
 
-(custom/bind "C-c c f" #'custom/code-format-dwim "智能格式化" "代码")
+(custom/bind "C-c c f" #'apheleia-format-buffer "格式化" "代码")
 
 ;; conf-mode 不是 prog-mode 派生,折叠入口需单独挂;LSP 与折叠共用
 ;; `custom--maybe-enable-prog-helpers'(定义见 [[#programming-tools]]),
@@ -3441,11 +3408,8 @@ agenote CLI 集成的知识库 CRUD。
   (setq which-key-idle-delay 0.3
         which-key-prefix-prefix ""
         which-key-allow-multiple-replacements t
-        which-key-max-description-length 28
         ;; 中文条目在终端里更适合稳定的等宽分栏布局:默认三列,超宽屏可升到四列,窄窗口可降回两列。
         which-key-max-display-columns 3
-        which-key-min-column-description-width 16
-        which-key-add-column-padding 1
         which-key-min-display-lines 10
         which-key-side-window-max-height 0.38
         which-key-sort-order #'which-key-prefix-then-key-order
@@ -3485,13 +3449,10 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
 (custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
-(custom/bind "C-S-j" #'avy-goto-char-timer "屏幕内快速跳转" "基础移动与直达键")
 (custom/bind "C-S-p" #'execute-extended-command "命令面板" "基础移动与直达键")
 (custom/bind "C-<tab>" #'custom/tabs-next "下一个标签" "基础移动与直达键")
 (custom/bind "C-<iso-lefttab>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
 (custom/bind "C-S-<tab>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
-(custom/bind "C-<next>" #'custom/tabs-next "下一个标签" "基础移动与直达键")
-(custom/bind "C-<prior>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
 (custom/bind "C-x M-<right>" #'custom/tabs-move "标签后移" "基础移动与直达键")
 (custom/bind "C-x M-<left>" #'custom/tabs-move-backward "标签前移" "基础移动与直达键")
 (custom/bind "C-a" #'mark-whole-buffer "全选" "基础移动与直达键")
@@ -3502,7 +3463,6 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "M-y" #'yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
 (custom/bind "C-S-x" #'custom/cut-dwim "剪切(行/选区)" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
-(custom/bind "C-S-t" #'recentf-open-files "最近文件" "基础移动与直达键")
 (custom/bind "C-S-d" #'duplicate-dwim "复制当前行" "基础移动与直达键")
 (custom/bind "C-S-<up>" #'custom/code-move-line-up "上移当前行" "基础移动与直达键")
 (custom/bind "C-S-<down>" #'custom/code-move-line-down "下移当前行" "基础移动与直达键")
@@ -3569,7 +3529,6 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
 (custom/bind "M-s i" #'isearch-forward "增量搜索" "搜索")
 
-(custom/bind "C-c h ?" #'custom/show-help "快捷键帮助" "帮助")
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
 ;; dashboard 无直达键则 TTY 用户只能 M-x:dashboard 常驻(:demand t),
 ;; 直接绑定;S-<f10>/<menu> 在无鼠标终端上是打开右键菜单的键盘路径。
@@ -4339,27 +4298,15 @@ let 绑定请求级缓存变量,渲染结束自动丢弃,下次渲染重新扫�
 :END:
 
 *** 实验性
-本节集中放置生效中的版本兜底 shim(Ghostel/with-editor、Arei .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
+本节集中放置生效中的版本兜底 shim(Arei .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
 
-以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= / =<<compat/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
+以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
 
 #+attr_org: :width 70
 | Shim                       | 根因                                 | 受影响功能                     | 移除条件                                            |
 |----------------------------+--------------------------------------+--------------------------------+-----------------------------------------------------|
-| =compat/ghostel-with-editor= | with-editor 3.5.2 无 pre-spawn 接口  | ghostel 内 git commit          | Ghostel/with-editor 提供公开 pre-spawn 环境构造接口 |
 | =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei                          | 所有相关包改由 Emacs 31 重编译                      |
 | =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译                |
-
-**** Ghostel pre-spawn 的 with-editor 适配
-with-editor 3.5.2 的公开导出函数只支持已经存在的 shell/term/vterm 进程；Ghostel 的 pre-spawn hook 运行在进程创建前。当前必须复用宏内部 setup，删除条件是 Ghostel 或 with-editor 提供公开的 pre-spawn 环境构造接口。
-
-#+begin_src emacs-lisp :noweb-ref compat/ghostel-with-editor :tangle no
-(defun custom/ghostel-export-git-editor ()
-  "在 Ghostel 创建进程前把 GIT_EDITOR 注入动态 `process-environment'。"
-  (when (fboundp 'with-editor--setup)
-    (let ((with-editor--envvar "GIT_EDITOR"))
-      (with-editor--setup))))
-#+end_src
 
 **** arei .elc 与 buffer-local-set-state 不兼容(bug#80812)
 arei 0.9.7 的 .elc(Guix 用旧版 Emacs byte-compile)与 Emacs 31 的 =buffer-local-set-state= 宏不兼容:arei-mode 第 356 行调用该宏,但旧 .elc 把它当函数调用,参数 =(sesman-system 'Arei)= 被整体传给 =buffer-local-set-state--get= → =wrong-type-argument (symbolp 'Arei)= 。此错误在 =scheme-mode-hook= 里抛出,会中断整个 scheme-mode 初始化,导致 font-lock 失效 → Scheme 代码不染色。
