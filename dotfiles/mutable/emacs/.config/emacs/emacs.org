@@ -1400,6 +1400,14 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 ;; "Reverting buffer" 提示(dotfiles 被 stow/blue home 重新生成时)。
 (setq auto-revert-verbose nil)
 (vc-auto-revert-mode 1)
+
+;; Forge 随 magit 加载:为 magit status 页注入 @ 前缀(issue / PR / 通知),
+;; 零独立键位零 config;数据库与发帖缓存由 no-littering 自动落到 var/forge/。
+;; 用 :demand t 而非 :defer t——use-package 对「空 body + :defer」的声明
+;; 不生成任何加载代码,只有 :demand 才展开出 eval-after-load 内的 require。
+(use-package forge
+  :demand t
+  :after magit)
 #+end_src
 
 ** 主题与字体
@@ -2186,6 +2194,33 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
   :commands (mc/edit-lines
              mc/mark-next-like-this mc/mark-previous-like-this
              mc/mark-all-like-this mc/mark-all-like-this-in-defun))
+
+(use-package vundo
+  :defer t
+  :commands (vundo))
+
+(use-package tempel
+  :defer t
+  :commands (tempel-expand tempel-complete)
+  :init
+  ;; 模板库走 no-littering 布局 etc/templates/(lisp-data-mode 格式的
+  ;; *.eld,用户自建,不随配置分发;目录未建时 glob 空转、补全静默为空)。
+  ;; 上游默认 user-emacs-directory/templates 会在配置根留散目录;且
+  ;; tempel 1.14 的 tempel-path 必须是文件/glob,裸目录路径读入时报错。
+  (setq tempel-path (no-littering-expand-etc-file-name "templates/*.eld")))
+
+;; 模板名补全接入 capf:前置到 prog/text buffer 的 buffer-local capf 链首
+;; ——本地静态列表零延迟,未命中模板名才轮到链尾 eglot 的 LSP 补全(eglot
+;; 连接时向链尾 append,顺序天然成立);显式展开另有 C-c e t。capf 以符号
+;; 引用,首次补全时经 autoload 加载 tempel。
+(defun custom/tempel--setup-capf ()
+  "把 tempel-complete 前置到 buffer-local capf 链首。"
+  (setq-local completion-at-point-functions
+              (cons 'tempel-complete
+                    (remq 'tempel-complete completion-at-point-functions))))
+
+(dolist (hook '(prog-mode-hook text-mode-hook))
+  (add-hook hook #'custom/tempel--setup-capf))
 #+end_src
 
 #+begin_src emacs-lisp
@@ -2196,6 +2231,8 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
 (custom/bind "C-c e d" #'mc/mark-all-like-this-in-defun "函数内全部匹配" "编辑变换")
 (custom/bind "C-c e ." #'goto-last-change "上一处修改" "编辑变换")
 (custom/bind "C-c e ," #'goto-last-change-reverse "下一处修改" "编辑变换")
+(custom/bind "C-c e u" #'vundo "撤销树" "编辑变换")
+(custom/bind "C-c e t" #'tempel-expand "展开模板" "编辑变换")
 ;; 均为 Emacs 30/31 新内置命令:
 ;; q 与 M-q 填充对偶(unfill);r/R 正则替换先出 diff 预览再按 patch 应用
 ;; (R 为多文件全局入口,Dired 内另有标记文件版 dired-do-replace-regexp-as-diff);
@@ -2229,6 +2266,8 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
 + =indent-bars= :基于 tree-sitter 的缩进竖线。只在 ts-mode 启用——非 ts-mode 缺乏可靠的缩进 AST,indent-bars 会画错。竖线不自己算颜色(=indent-bars-color nil=,follow 主题),按深度递减饱和度;pattern 用单字符 dot 列,关闭锯齿避免 ts 节点抖动。
 + =goto-chg= :undo-tree 风格的「按修改点跳转」,比 undo 逐次翻历史更精准。
 + =multiple-cursors= :在选中 region 内每个匹配字符串处插入 cursor,适合批量重命名/格式化。
++ =vundo= :undo 历史树可视化,在分支节点间移动回退到任意历史状态;=C-c e u= 进入,RET 确认、q 退出。
++ =tempel= :模板展开。模板名经 capf 参与 prog/text buffer 补全(链首,未命中才轮到 eglot),或 =C-c e t= 显式展开;模板库 =etc/templates/*.eld= 由用户自建,目录未建时为空。模板内字段跳转用 =tempel-map= 默认键(M-{ / M-} / M-RET),不再自定义。
 
 ** 终端集成 ghostel
 :PROPERTIES:
@@ -2579,6 +2618,13 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 ;; GDB(内置 gud):多窗口布局 + 内联断点图标,键位 C-c c G d 见项目域。
 (setq gdb-many-windows t
       gdb-show-main t)
+
+;; Dape(DAP 客户端):经调试适配器协议驱动各语言的 DAP server(python
+;; debugpy、delve、js-debug 等),与 gdb 的 GDB/MI 原生前端分工,零配置
+;; 可用内置适配器默认值;键位 C-c c G e 见项目域。
+(use-package dape
+  :defer t
+  :commands (dape))
 #+end_src
 
 ** 代码操作辅助函数
@@ -2844,11 +2890,13 @@ GDScript、Fish、JSON / kdl / Markdown / Nix / Rust / TypeScript(TSX / JSX) / m
 (custom/bind "C-x p m" #'project-find-matching-buffer "worktree 对应缓冲区" "项目")
 (custom/bind "C-x p S" #'project-save-some-buffers "保存本项目缓冲区" "项目")
 ;; 编译调试走 C-c c G 前缀(运行/调试族):project-compile 复用项目根的
-;; 编译命令,gdb 内置 GDB 前端(命令实现见 programming-tools 的 GDB 段)。
+;; 编译命令,gdb 内置 GDB 前端、dape 走 DAP 适配器(实现见
+;; programming-tools 的 GDB / Dape 段)。
 (custom/declare-binding-group "C-c c G" "编译与调试")
 (custom/bind "C-c c G c" #'project-compile "项目编译" "代码")
 (custom/bind "C-c c G d" #'gdb "GDB 调试" "代码")
 (custom/bind "C-c c G r" #'recompile "重新编译" "代码")
+(custom/bind "C-c c G e" #'dape "DAP 调试" "代码")
 #+end_src
 
 ** 左侧 Dired 面板
