@@ -961,7 +961,7 @@ current/inactive 用内置 face,自动跟随主题。"
                     :underline nil)
 
 ;; Emacs 31 新增窗口级 face:非选中窗口的整条标签栏经此变暗(标签级的
-;; current/inactive 见上表,两者互补)。ef-themes 尚未适配,叠继承 shadow
+;; current/inactive 见上表,两者互补)。Modus 主题尚未适配,叠继承 shadow
 ;; 取主题弱化前景;TTY 由透明策略统一清背景。
 (set-face-attribute 'tab-line-inactive nil
                     :inherit '(tab-line shadow))
@@ -1153,7 +1153,7 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。"
 Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
 + Magit 状态页路由到底部 ~side-window~ （40% 高度）
 + COMMIT_EDITMSG 经 ~server-window~ 路由到上方主编辑窗口（保持「上编辑 + 下 magit」布局一致）
-+ *文件级操作* ：blame / log / diff / stage / discard / timemachine
++ *文件级操作* ：blame / log / diff / stage / discard
 + *仓库级操作* ：push / pull / stash push / stash pop
 + 所有操作复用启动域声明的 =custom:executable-git= 。
 + 仓库定位走 =vc-backend= / =vc-call-backend= 内置 API(worktree/submodule 安全,且有 vc 缓存),不手扫 =.git= 哨兵文件。
@@ -1220,8 +1220,6 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
                                  "查看当前文件历史。" magit-log-buffer-file)
 (custom/git--define-file-command custom/git-diff-current-file
                                  "查看当前文件 diff。" magit-diff-buffer-file)
-(custom/git--define-file-command custom/git-timemachine-toggle
-                                 "切换当前文件的 git-timemachine。" git-timemachine-toggle)
 
 (custom/git--define-repo-command custom/git-push-current-repo
                                  "Push 当前仓库。" magit-push-current-to-upstream)
@@ -1355,18 +1353,10 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 #+end_src
 
 #+begin_src emacs-lisp
-;; git-timemachine 经 C-c g t → custom/git-timemachine-toggle 转发调用,
-;; 显式声明 :commands 使 autoload 可解析，首个 C-c g t 才真正加载。
-(use-package git-timemachine
-  :commands (git-timemachine-toggle))
-#+end_src
-
-#+begin_src emacs-lisp
 (custom/bind "C-c g s" #'custom/git-status-dwim "版本控制状态" "Git")
 (custom/bind "C-c g b" #'custom/git-blame-current-file "当前文件追责" "Git")
 (custom/bind "C-c g l" #'custom/git-log-current-file "当前文件日志" "Git")
 (custom/bind "C-c g d" #'custom/git-diff-current-file "当前文件差异" "Git")
-(custom/bind "C-c g t" #'custom/git-timemachine-toggle "文件时光机" "Git")
 (custom/bind "C-c g S" #'custom/git-stage-current-file "暂存当前文件" "Git")
 (custom/bind "C-c g D" #'custom/git-discard-current-file "丢弃当前文件修改" "Git")
 (custom/bind "C-c g P" #'custom/git-push-current-repo "推送" "Git")
@@ -1394,9 +1384,9 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 :CUSTOM_ID: theme-fonts
 :END:
 
-背景透明度、字体高度、行号、括号匹配、鼠标支持、ef-themes、spacious-padding、内置像素滚动惯性(pixel-scroll)、内置脉冲高亮(pulse.el)。
+背景透明度、字体高度、行号、括号匹配、鼠标支持、内置 Modus 主题、内置像素滚动惯性(pixel-scroll)、内置脉冲高亮(pulse.el)。
 
-+ *主题* : =ef-themes= 通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。GUI 与真彩 TTY 共用主题前景 palette；TTY 仅清除背景,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
++ *主题* : 内置 Modus 主题通过本域 [[#color-scheme][颜色方案]] 跟随 Darkman 自动切换深浅色。GUI 与真彩 TTY 共用主题前景 palette；TTY 仅清除背景,详见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]
 + *字体大小* :110(11pt),由 =custom:default-font-height= 控制
 + *行号* :相对行号 + 自适应宽度
 + 所有 ~display-dependent~ 设置都通过 =custom/apply-frame-fappearance= 在新 frame 创建时触发
@@ -1406,22 +1396,21 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 :CUSTOM_ID: mixed-gui-tty-constraints
 :END:
 
-daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的 frame 参数仍必须 per-frame。Emacs theme 是全局状态；daemon 启动时预载 Ef theme，真彩 TTY 与 GUI 共用当前 Ef 明暗主题的前景 palette。TTY client 创建后只清除所有命名 face 的背景与反色属性，再用粗体、下划线等非颜色属性强化选区、搜索、补全等交互状态。
+daemon 启动期 =(display-graphic-p)= 恒为 nil,所有依赖 display 类型的 frame 参数仍必须 per-frame。Emacs theme 是全局状态；daemon 启动时预载当前主题，真彩 TTY 与 GUI 共用当前 Modus 明暗主题的前景 palette。TTY client 创建后只清除所有命名 face 的背景与反色属性，再用粗体、下划线等非颜色属性强化选区、搜索、补全等交互状态。
 
 #+attr_org: :width 75
 | 设置/包          | daemon 启动期陷阱              | TTY 行为                     | 处理方式                                          |
 |------------------+--------------------------------+------------------------------+---------------------------------------------------|
 | 光标类型         | #ERROR                         | 后创 TTY frame 污染 GUI      | 用 =set-frame-parameter 'cursor-type=             |
-| spacious-padding | daemon F1 背景是伪颜色         | TTY 不加 padding             | 包同步加载,GUI frame 就绪后写 face                |
 | pixel-scroll     | 同上                           | 退化为行级滚动               | 无条件启用(GUI client 需要)                       |
 | diff-hl(TTY)     | 无 fringe,fringe 指示器不可见  | 改用 margin                  | =fboundp= 守卫 + TTY 分支按需启用                 |
 | fringe 宽度      | 行号函数若清零 fringe          | —                            | 禁止在行号函数清零 fringe(详见下表)               |
-| ef-themes        | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题       |
+| Modus 主题       | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题       |
 | TTY 配色         | 无 alpha 通道                  | 主题前景 + 全 face 透明      | 清背景与反色，不覆盖主题前景                      |
 | Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染               | 守卫用 =custom:nerd-icons-available=,不查 display |
 #+TBLFM: $2=setq-default= 是全局副作用
 
-TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局 Ef theme，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后为 =hl-line= 恢复 Ef palette 的 =bg-dim= 背景、为 =org-block= 族恢复 =bg-alt= 中性面板(代码块在终端无 fringe,靠这块底色成组),选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
+TTY 背景透明由 =custom/apply-terminal-faces= 实现:daemon 中 TTY 会继承全局主题，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单。该函数恢复 TTY frame 的透明背景参数，对全部命名 face 统一设置 =:background unspecified= 与 =:inverse-video nil=，确保 fringe 与行号 gutter 不绘制主题底色；随后为 =hl-line= 恢复主题 palette 的 =bg-dim= 背景、为 =org-block= 族恢复 =bg-inactive= 中性面板(代码块在终端无 fringe,靠这块底色成组),选区、搜索、补全等状态仍用粗体和下划线区分。Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，因此当前行是半透明色块而非实色或横线。主题启用和 Lisp 文件加载后自动重施，使主题修改的 frame 参数与后出现的 face 都遵守透明策略。=early-init.el= 与 =window-system-default-frame-alist= 负责在 main.el 之前注入初始终端参数，避免启动闪屏。该策略只在真实 TTY 会话(非 batch、≥8 色)下生效,batch/GUI 为 no-op。
 
 行号设置函数 =custom/setup-file-line-numbers= 故意不调 =(set-window-fringes ... 0)= ——=diff-hl= 和 =flymake= 的 fringe 指示器(=flymake-fringe-indicator-position= 设为 =left-fringe=)依赖 fringe 宽度,清零会让它们全部消失。
 
@@ -1540,28 +1529,28 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
 (defconst custom:terminal-block-faces
   '(org-block org-block-begin-line org-block-end-line)
   "TTY 上恢复主题底色的代码块 face。
-ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern 的 fringe
-边框区分代码块;TTY 无 fringe,故用 palette 的 `bg-alt' 给整块一个中性面板,让
+Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern 的 fringe
+边框区分代码块;TTY 无 fringe,故用 palette 的 `bg-inactive' 给整块一个中性面板,让
 =#+begin_src= 块在终端仍可辨识。`org-quote'/`org-verse' 继承 `org-block',自动随之着色。")
 
 (defun custom/terminal-theme-color (key)
-  "返回当前 Ef theme palette 中 KEY 对应的颜色,失败时返回 nil。
-`ef-themes-get-color-value' 对未知键返回 `unspecified' 而非抛错,故
+  "返回当前 Modus 主题 palette 中 KEY 对应的颜色,失败时返回 nil。
+`modus-themes-get-color-value' 对未知键返回 `unspecified' 而非抛错,故
 只需判 nil/unspecified。`fboundp' 守卫覆盖 standalone 启动窗口期:
-`custom/apply-frame-appearance' 注册时即对首帧派发,而无条件的
-`(require 'ef-themes)' 在文档顺序上更靠后;ef-themes 属延迟加载的
-第三方包,此守卫符合守卫公约(先例见 `diff-hl-margin-mode' 调用点)。"
-  (when (fboundp 'ef-themes-get-color-value)
-    (let ((color (ef-themes-get-color-value key)))
+`custom/apply-frame-appearance' 注册时即对首帧派发,而主题库要等到
+[[#color-scheme]] 的 `load-theme' 才加载,此守卫符合守卫公约
+(运行时可能未加载的符号)。"
+  (when (fboundp 'modus-themes-get-color-value)
+    (let ((color (modus-themes-get-color-value key)))
       (unless (memq color '(nil unspecified))
         color))))
 
 (defun custom/apply-terminal-faces (&optional frame)
   "让 TTY FRAME 的所有命名 face 使用终端透明背景。
-清除背景与反色后，为 `hl-line' 恢复 Ef theme 的柔和背景，为代码块恢复 `bg-alt'
+清除背景与反色后，为 `hl-line' 恢复主题的柔和背景，为代码块恢复 `bg-inactive'
 面板，并用
 `custom:terminal-face-emphasis' 补充其余非颜色交互语义；所有前景色继续由
-当前 Ef theme 提供。Foot 需使用 alpha-mode=all 才能让 hl-line 背景半透明。
+当前主题提供。Foot 需使用 alpha-mode=all 才能让 hl-line 背景半透明。
 仅在真实 TTY（非 batch、至少 8 色）下生效；GUI 为 no-op。"
   (condition-case err
       (when (and (not noninteractive)
@@ -1571,8 +1560,8 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
               (hl-line-background (custom/terminal-theme-color 'bg-dim)))
           (with-selected-frame tty
             (dolist (parameter custom:terminal-frame-parameters)
-              ;; Ef theme owns foreground-color after startup; only the initial
-              ;; frame defaults use unspecified-fg to avoid a pre-theme flash.
+              ;; 主题在启动后接管 foreground-color;只有初始 frame
+              ;; defaults 用 unspecified-fg 避免 pre-theme 闪屏。
               (unless (eq (car parameter) 'foreground-color)
                 (set-frame-parameter tty (car parameter) (cdr parameter))))
             (dolist (face (face-list))
@@ -1589,7 +1578,7 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
                                   :underline nil
                                   :extend t))
             (when-let* ((block-background
-                         (custom/terminal-theme-color 'bg-alt)))
+                         (custom/terminal-theme-color 'bg-inactive)))
               (dolist (face custom:terminal-block-faces)
                 (when (facep face)
                   (set-face-attribute face tty
@@ -1629,23 +1618,11 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
 (add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
 
-(defun custom/apply-spacious-padding (&optional frame)
-  "为 GUI FRAME 应用 spacious-padding，无可用 GUI frame 时 no-op。
-FRAME 非 GUI frame（nil、TTY frame，或 enable-theme-functions 传入的
-theme 符号）时回退任一存活 GUI frame；daemon 伪 frame 场景保持 no-op。"
-  (let ((target (if (framep frame) frame (selected-frame))))
-    (unless (display-graphic-p target)
-      (setq target (seq-find #'display-graphic-p (frame-list))))
-    (when target
-      (with-selected-frame target
-        (spacious-padding-modify-frame-parameters target)
-        (spacious-padding-set-faces)))))
-
 (defun custom/apply-frame-appearance (&optional frame)
   "为 FRAME 应用所有 display-dependent 外观设置。
 + GUI: 字体高度、透明度、window-divider、tab-line face 重算
 + TTY: 背景透明（清遮挡终端背景的 face 背景）、diff-hl margin 模式。
-  真彩 TTY 的前景色继续使用当前 Ef theme palette。"
+  真彩 TTY 的前景色继续使用当前主题 palette。"
   (condition-case err
       (with-selected-frame (or frame (selected-frame))
         (let ((graphic-p (display-graphic-p)))
@@ -1653,8 +1630,7 @@ theme 符号）时回退任一存活 GUI frame；daemon 伪 frame 场景保持 n
           (if graphic-p
               (progn
                 (set-face-attribute 'default nil :height custom:default-font-height)
-                (set-frame-parameter nil 'alpha-background custom:frame-background-opacity)
-                (custom/apply-spacious-padding))
+                (set-frame-parameter nil 'alpha-background custom:frame-background-opacity))
             (progn
               (window-divider-mode -1)
               (custom/apply-terminal-faces)
@@ -1670,33 +1646,6 @@ theme 符号）时回退任一存活 GUI frame；daemon 伪 frame 场景保持 n
 (add-hook 'after-make-frame-functions #'custom/apply-frame-appearance)
 (unless (daemonp)
   (funcall #'custom/apply-frame-appearance (selected-frame)))
-
-(use-package ef-themes
-  :defer t
-  :bind
-  (("C-<f6>" . ef-themes-select)
-   ("M-<f6>" . ef-themes-load-random))
-  :custom
-  (ef-themes-mixed-fonts t)
-  (ef-themes-italic-constructs t))
-
-(use-package spacious-padding
-  :demand t
-  :custom
-  (spacious-padding-widths
-   '(:internal-border-width 0
-                            :header-line-width 4
-                            :mode-line-width 1
-                            :tab-width 4
-                            :tab-line-width 0
-                            :right-divider-width 1
-                            :scroll-bar-width 8))
-  :config
-  ;; 包在 daemon 启动期同步加载，但只能在 GUI frame 上读取主题颜色。
-  ;; initial_terminal 的 default 背景是 "unspecified-bg"，直接启用全局 mode
-  ;; 会把伪颜色写进 spacious-padding theme，首个 GUI frame 因而高频报警。
-  (add-hook 'enable-theme-functions #'custom/apply-spacious-padding)
-  (custom/apply-spacious-padding))
 
 ;; Emacs 31 内置像素级精确滚动 + 动能惯性,替代 ultra-scroll:
 ;; `pixel-scroll-precision-use-momentum' 为 31 新增,触控板松手后惯性滚动;
@@ -1827,14 +1776,14 @@ theme 符号）时回退任一存活 GUI frame；daemon 伪 frame 场景保持 n
     (custom/which-key--apply-keymap-spec 'arei-mode-map)))
 #+end_src
 
-** 颜色方案(ef-themes)
+** 颜色方案(Modus 主题)
 :PROPERTIES:
 :CUSTOM_ID: color-scheme
 :END:
 
-ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时即预载当前主题并注册监听器，让 GUI 与 TTY client 共用一致的前景 palette；真彩 standalone TTY 也加载当前主题。TTY frame 随后由 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]] 仅清除背景与反色属性。
+内置 Modus 主题(与 ef-themes 同作者 Protesilaos)通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时即预载当前主题并注册监听器，让 GUI 与 TTY client 共用一致的前景 palette；真彩 standalone TTY 也加载当前主题。TTY frame 随后由 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]] 仅清除背景与反色属性。
 
-+ =custom/color-scheme-init= 注册 D-Bus 监听器,深浅色变化时自动 =ef-themes-select= 对应主题
++ =custom/color-scheme-init= 注册 D-Bus 监听器,深浅色变化时自动加载对应主题
 + 通过 [[#frame][Frame 生命周期]] 在新 frame 创建时应用当前色彩状态
 
 *** 状态与主题应用
@@ -1847,12 +1796,12 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 
 (require 'dbus)
 
-(defcustom custom/color-scheme-light-theme 'ef-cyprus
+(defcustom custom/color-scheme-light-theme 'modus-operandi-tinted
   "浅色模式下加载的主题。"
   :type 'symbol
   :group 'appearance)
 
-(defcustom custom/color-scheme-dark-theme 'ef-owl
+(defcustom custom/color-scheme-dark-theme 'modus-vivendi-tinted
   "深色模式下加载的主题。"
   :type 'symbol
   :group 'appearance)
@@ -1895,10 +1844,12 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
     (_ nil)))
 
 (defun custom/color-scheme--load-theme-if-needed (theme)
-  "THEME 非 nil 且未启用时加载它,已启用时是 no-op。"
+  "THEME 非 nil 且未启用时加载它,已启用时是 no-op。
+先禁用已启用主题再加载,避免主题 face 叠加。"
   (when (and theme
              (not (eq (car custom-enabled-themes) theme)))
-    (ef-themes-load-theme theme)
+    (mapc #'disable-theme custom-enabled-themes)
+    (load-theme theme t)
     (message "[color-scheme] 已同步主题: %s" theme)))
 
 (defun custom/color-scheme-apply-theme (mode)
@@ -1969,7 +1920,7 @@ MODE 为 'light 或 'dark。
 
 #+begin_src emacs-lisp
 (defun custom/display-supports-themes-p (&optional frame)
-  "FRAME（默认 selected-frame）是否可呈现 Ef theme 的完整前景 palette。"
+  "FRAME（默认 selected-frame）是否可呈现主题的完整前景 palette。"
   (with-selected-frame (or frame (selected-frame))
     (or (display-graphic-p)
         (and (not noninteractive)
@@ -1990,14 +1941,12 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 几乎同时创建 frame 时容易在 PGTK/GTK 初始化路径中崩溃。"
   (with-selected-frame (or frame (selected-frame))
     (when (custom/display-supports-themes-p)
-      (ef-themes-take-over-modus-themes-mode 1)
       (if (not custom/color-scheme--initialized)
           (custom/color-scheme-init)
         (custom/color-scheme--load-theme-if-needed
          (custom/color-scheme--theme-for-mode
           custom/color-scheme-current-mode))))))
 
-(require 'ef-themes)
 (custom/color-scheme-init)
 (add-hook 'after-make-frame-functions #'custom/color-scheme-apply-for-frame)
 (unless (daemonp)
@@ -2090,15 +2039,6 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 ;; sp-* 结构化命令(slurp/barf/wrap),实际只用配对插入与选区包裹,
 ;; electric-pair-mode 全部覆盖(含 region 激活时输入括号包裹选区)。
 (electric-pair-mode 1)
-
-;; git-messenger 用 C-c g m(非 b):C-c g b 已被 custom/git-blame-current-file
-;; 占用,而 :bind 是 git-messenger 唯一的加载触发器,键被覆盖会让整个包不可用。
-(use-package git-messenger
-  :defer t
-  :bind ("C-c g m" . git-messenger:popup-message)
-  :custom
-  (git-messenger:show-detail t)
-  (git-messenger:use-magit-popup t))
 
 (dolist (hook '(org-mode-hook markdown-mode-hook text-mode-hook))
   (add-hook hook #'visual-line-mode)
@@ -2343,7 +2283,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、格式化、拼写检查
 
 Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式化、Flymake 诊断、envrc direnv 集成。
 
-+ ~eglot~ :Emacs 29+ 内置 LSP 客户端,配合 =eglot-x= 扩展协议(声明/实现/类型定义跳转)
++ ~eglot~ :Emacs 29+ 内置 LSP 客户端(31 已内置声明/实现/类型定义跳转与 hierarchy)
 + LSP 服务器注册延迟到首次进入 prog-mode(避免启动期 spawn 进程)
 + ~apheleia~ :保存时自动格式化(语言对应关系集中维护)
 + ~flymake~ :代码诊断(Emacs 内置)。Eglot 默认通过 flymake 接收 LSP diagnostics
@@ -2509,7 +2449,7 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
 
 1. 首次进入任意 =prog-mode= → =eglot-ensure= 触发 autoload =(require 'eglot)=。
 2. =:config= 在 require 时同步执行:语言服务器程序表(=custom:language-eglot-server-programs=
-   附加到 =eglot-server-programs=)与 eglot-x 就位。
+   附加到 =eglot-server-programs=)就位。
 3. 随后 =eglot-ensure= 函数体继续执行,当前 buffer 立即连接 LSP。对未注册 server 的
    major mode 它是 no-op,不预检测可用性,server 缺失的错误由 Eglot 自身暴露。
 
@@ -2530,7 +2470,7 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
 
 ;; eglot-ensure 对无 server 的 major mode 是 no-op,直接挂 prog-mode-hook 即可;
 ;; 首次调用触发 autoload 加载 eglot,:config 先于 ensure 函数体执行,
-;; server programs 与 eglot-x 就位后当前 buffer 立即连上 LSP。
+;; server programs 就位后当前 buffer 立即连上 LSP。
 (use-package eglot
   :defer t
   :hook (prog-mode . custom--maybe-enable-prog-helpers)
@@ -2547,9 +2487,7 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
   :config
   (dolist (prog custom:language-eglot-server-programs)
     (add-to-list 'eglot-server-programs prog))
-  (add-hook 'eglot-managed-mode-hook #'custom--eglot-enable-inlay-hints)
-  (require 'eglot-x)
-  (eglot-x-setup))
+  (add-hook 'eglot-managed-mode-hook #'custom--eglot-enable-inlay-hints))
 #+end_src
 
 *** Apheleia 与 Flymake
@@ -2670,13 +2608,12 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "C-c c a" #'eglot-code-actions "代码操作" "代码")
 (custom/bind "C-c c n" #'eglot-rename "重命名符号" "代码")
 (custom/bind "C-c c c" #'completion-at-point "触发补全" "代码")
-;; TTY 安全镜像:consult-imenu / flymake / xref / bookmark 走 C-c c 前缀,
-;; 与 C-S-o / M-g l / M-s e / dashboard 书签按钮同语义;consult 已 :demand t
-;; 常驻,此处直接引用无需 autoload。
-(custom/bind "C-c c i" #'consult-imenu "符号大纲(预览)" "代码")
-(custom/bind "C-c c k" #'consult-flymake "诊断列表(预览)" "代码")
-(custom/bind "C-c c s" #'consult-xref "引用搜索(预览)" "代码")
-(custom/bind "C-c c b" #'consult-bookmark "书签跳转(预览)" "代码")
+;; TTY 安全镜像:imenu / flymake / xref / bookmark 走 C-c c 前缀,
+;; 与 C-S-o / M-g l / M-g r / dashboard 书签按钮同语义,全部为内置命令。
+(custom/bind "C-c c i" #'imenu "符号大纲" "代码")
+(custom/bind "C-c c k" #'custom/flymake-list-errors-dwim "诊断列表" "代码")
+(custom/bind "C-c c s" #'xref-find-references "引用搜索" "代码")
+(custom/bind "C-c c b" #'bookmark-jump "书签跳转" "代码")
 (custom/declare-binding-group "C-c c x" "更多代码跳转")
 (custom/bind "C-c c x d" #'eglot-find-declaration "跳转到声明" "代码")
 (custom/bind "C-c c x i" #'eglot-find-implementation "跳转到实现" "代码")
@@ -2711,7 +2648,7 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 :CUSTOM_ID: language-modes
 :END:
 
-GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX / JSX) / mhtml(HTML) / Zig、Scheme (Guile) + Arei。
+GDScript、Fish、JSON / kdl / Markdown / Nix / Rust / TypeScript(TSX / JSX) / mhtml(HTML) / Zig、Scheme (Guile) + Arei。
 
 + 各 mode 以 =:defer t= + =:mode= 触发,lazy-load
 + Arei(Guile 开发)只在真实 Scheme buffer 启用,跳过 org src 临时 buffer
@@ -2729,7 +2666,6 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 (add-to-list 'auto-mode-alist '("\\.rs\\'" . rust-ts-mode))
 (add-to-list 'auto-mode-alist '("\\.ts\\'" . typescript-ts-mode))
 (use-package kdl-mode :mode "\\.kdl\\'" :defer t)
-(use-package kotlin-mode :mode "\\.kt\\'" :defer t)
 ;; markdown-mode:传统 font-lock 实现。Guix 无 markdown-ts-mode 包,旧配置
 ;; 引用它从未加载成功(.md 打开即 void-function);markdown-ts 的 pandoc/eww
 ;; 预览链路由 markdown-mode 的导出/预览命令与语言表的 pandoc-markdown
@@ -3282,7 +3218,7 @@ SCHEDULED: %^t
 + TTY 降级:表格竖线与星号替换都是 font-lock 写入的内联 =:inverse-video= / Nerd 字形,透明终端上变实心块,命名 face 透明化管不到。=custom/org-modern--apply-display= 在 TTY 上 buffer-local 关闭 =org-modern-table=、改用 =custom:org-modern-tty-stars= 通用 Unicode 子弹,前导星号交 =org-indent-mode= 隐藏;GUI 不变。历史 =org-bullets= 与 =org-modern= 星号替换冲突且其 =compose-region= + 内联前景在 TTY 产生白底块,已移除,GUI 子弹统一由 =org-modern-star= 提供。
 + Org buffer 隐藏行号，减少文档阅读时的编辑器噪音；代码块、表格和元数据继续使用主题既有的等宽 face。
 + =org-roam= autosync 在首次 roam 命令(=:commands= 触发加载)后启动。
-+ 历史 =notes/= 内容检索用 =C-c o k s=(agenote)或 =M-s p= 限目录 consult-ripgrep。
++ 历史 =notes/= 内容检索用 =C-c o k s=(agenote)或 =M-s p= 限目录 project-find-regexp。
 
 #+begin_src emacs-lisp
 (use-package org-appear
@@ -3410,7 +3346,7 @@ agenote CLI 集成的知识库 CRUD。
 :CUSTOM_ID: keys-completion
 :END:
 
-前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + vertico 生态补全 6 件套(vertico / orderless / marginalia / consult / embark / cape,见 [[#completion]])与内置 completion-preview。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + 内置补全栈(默认 *Completions* 与 completion-preview,见 [[#completion]])。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
 
 所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
 
@@ -3464,7 +3400,7 @@ agenote CLI 集成的知识库 CRUD。
 
 IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护帮助或 Which-key 数据。
 
-TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct 序列,foot/xterm/tmux/ssh 默认不区分)、=C-<tab>= (退化成 TAB)、=M-<arrow>= (被解析成 ESC 序列或窗口管理器拦截)。本节的高频键若属此三类,必须在功能域配 =C-c= 前缀镜像,见 =C-c c i/k/s/b=(consult 预览族)、=C-c w hjkl=(窗口切换)、=C-c h d=(仪表盘)、=S-<f10>=/=menu=(右键菜单)。新增直达键前先查本总则,三类键一律配镜像。
+TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct 序列,foot/xterm/tmux/ssh 默认不区分)、=C-<tab>= (退化成 TAB)、=M-<arrow>= (被解析成 ESC 序列或窗口管理器拦截)。本节的高频键若属此三类,必须在功能域配 =C-c= 前缀镜像,见 =C-c c i/k/s/b=(内置导航镜像族)、=C-c w hjkl=(窗口切换)、=C-c h d=(仪表盘)、=S-<f10>=/=menu=(右键菜单)。新增直达键前先查本总则,三类键一律配镜像。
 
 #+begin_src emacs-lisp
 (custom/bind "C-h" #'backward-char "左移" "基础移动与直达键")
@@ -3475,9 +3411,8 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "C-z" #'undo "撤销" "基础移动与直达键")
 (custom/bind "C-S-z" #'undo-redo "重做" "基础移动与直达键")
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
-;; C-f 缓冲区搜索用 consult-line:实时候选列表 + orderless 多词过滤 +
-;; 选中即预览跳转,比 isearch 逐字符增量更顺手;增量搜索后备入口 M-s i。
-(custom/bind "C-f" #'consult-line "缓冲区搜索" "基础移动与直达键")
+;; C-f 保持内置 forward-char(与 C-h/C-j/C-k/C-l 移动族相对);
+;; 缓冲区搜索走 M-s l(occur 列表)与 M-s i(isearch 增量)。
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
 (custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
@@ -3495,13 +3430,7 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "C-_" #'comment-line "注释" "基础移动与直达键")
 (custom/bind "C-S-c" #'custom/copy-dwim "复制" "基础移动与直达键")
 (custom/bind "C-S-v" #'yank "粘贴" "基础移动与直达键")
-(custom/bind "M-y" #'consult-yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
-;; embark 上下文动作直达键(命令实现见 [[#completion]]):对 minibuffer 候选、
-;; 光标符号、区域执行动作,动作菜单复用 which-key 提示。
-(custom/bind "C-." #'embark-act "上下文动作" "基础移动与直达键")
-;; cape-dabbrev 直达键(命令实现见 [[#completion]]):覆盖原生 dabbrev-expand,
-;; 大 buffer 不进自动链,仅手动触发,经 in-region 补全呈现候选。
-(custom/bind "M-/" #'cape-dabbrev "动态缩写补全" "基础移动与直达键")
+(custom/bind "M-y" #'yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
 (custom/bind "C-S-x" #'custom/cut-dwim "剪切" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
 (custom/bind "C-S-t" #'recentf-open-files "最近文件" "基础移动与直达键")
@@ -3565,9 +3494,9 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 
-;; M-s 搜索前缀:缓冲区 / 行 / 项目搜索入口随 consult 命令族在
-;; [[#completion]] 声明;此处保留跨域的 xref 符号搜索,以及
-;; C-f(consult-line)之外的增量搜索后备入口。
+;; M-s 搜索前缀:缓冲区搜索(occur)与项目搜索(project-find-regexp)
+;; 入口在 [[#completion]] 声明;此处保留跨域的 xref 符号搜索与
+;; isearch 增量搜索后备入口。
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
 (custom/bind "M-s i" #'isearch-forward "增量搜索" "搜索")
 
@@ -3645,11 +3574,11 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 :CUSTOM_ID: completion
 :END:
 
-Minibuffer 补全采用 vertico 生态 6 件套:vertico(minibuffer 候选列表) / orderless(空格分隔模糊匹配) / marginalia(候选注解) / consult(搜索导航命令族) / embark(上下文动作) / cape(补全后端扩展);in-region 补全用内置 ~completion-preview-mode~ (ghost-text 预览,比弹出菜单更轻量)。全部为纯 Lisp,daemon 启动期同步加载,首个 client 的第一次 =M-x= 即具备完整补全体验。
+补全完全走内置栈:minibuffer 用默认 ~*Completions*~ 候选窗口(Emacs 31 起即显 + 随打更新为默认行为,=M-<up>/M-<down>= 选中候选、RET 确认),匹配样式 ~flex~ + 历史排序;in-region 补全用内置 ~completion-preview-mode~ (ghost-text 预览,比弹出菜单更轻量)。零第三方补全包,daemon 启动期同步配置,首个 client 的第一次 =M-x= 即具备完整补全体验。
 
 + 直接复用启动域的 aspell/hunspell 路径缓存、savehist 历史与 [[#frame][Frame 生命周期]]
-+ ef-themes 内置全部补全包 face 适配,无需手动定义补全相关 face
-+ 补全栈的直达键( =C-.= embark-act / =M-/= cape-dabbrev)集中在 [[#global-keys]],consult 命令族键位见本域末尾
++ ~completions-sort='historical~ 复用 savehist 积累的 minibuffer 历史,近期输入过的候选排前
++ 内置命令族的直达键集中在 [[#global-keys]],搜索导航键位见本域末尾
 
 *** Minibuffer 补全栈
 :PROPERTIES:
@@ -3657,53 +3586,21 @@ Minibuffer 补全采用 vertico 生态 6 件套:vertico(minibuffer 候选列表)
 :header-args:emacs-lisp: :noweb-ref keys/completion-minibuffer :tangle no :noweb-sep "\n\n"
 :END:
 
-~vertico~ - minibuffer 候选纵向列表
-+ 候选直接显示在 minibuffer 内,输入实时过滤;vertico-cycle 让 C-n/C-p 循环导航。
-+ 默认排序 =vertico-sort-history-length-alpha= :按 savehist minibuffer 历史 + 时间衰减 + 长度字母序,近期输入过的候选排前。
-+ ~vertico-directory~ 让文件补全的 RET 进入目录、DEL 返回上级目录。
-
-~orderless~ - 空格分隔多模式模糊匹配
-+ 输入 =foo bar= 匹配同时含 foo 与 bar 的候选,顺序任意;basic 兜底 orderless 不覆盖的场景。
-+ 文件类别保留 basic+partial-completion,=/e/n/p= 这类路径缩写展开需要前缀语义。
-
-~marginalia~ - 候选右侧注解
-+ 命令显示 docstring、变量显示值、文件显示大小与权限,与 vertico 同屏。
+~*Completions*~ - 内置 minibuffer 候选窗口
++ Emacs 31 起即显(~completion-eager-display~)与随打更新(~completion-eager-update~)默认开启:输入时候选窗口自动展开并跟随过滤,无需任何补全框架。
++ minibuffer 内 =M-<up>/M-<down>= 选中候选、RET 确认;候选按行排布,大量候选时依然快速。
++ ~flex~ 样式:输入的字符只需按序出现即可匹配(=mbl= 匹配 =magit-blame=),basic 兜底;文件类别的 partial-completion 路径缩写(=/e/n/p=)由内置默认 ~completion-category-overrides~ 保留。
++ ~completions-sort='historical~ :候选按 savehist minibuffer 历史排序,近期用过的排前。
 
 #+begin_src emacs-lisp
-;; vertico:minibuffer 候选纵向列表。TTY frame 同样工作(无 childframe)。
-(use-package vertico
-  :demand t
-  :config
-  (setq vertico-cycle t)
-  (vertico-mode 1)
-  ;; 文件补全中 RET 进入目录、DEL 返回上级,与下方文件类别的
-  ;; partial-completion 路径缩写协同。DEL 必须用 delete-char 而非
-  ;; vertico-directory-up:后者带 file-category 守卫,在 consult-line 等
-  ;; 非文件补全里是 no-op,minibuffer 将无法退格;delete-char 仅在光标
-  ;; 前是 / 且为文件补全时才删目录段,否则回退 delete-backward-char。
-  (require 'vertico-directory)
-  (define-key vertico-map (kbd "RET") #'vertico-directory-enter)
-  (define-key vertico-map (kbd "DEL") #'vertico-directory-delete-char))
-
-;; orderless:空格分隔多模式模糊匹配;basic 兜底。
-;; completion-category-defaults 置空避免个别 category 的默认样式
-;; 覆盖 orderless;文件类别保留 basic+partial-completion。
-(use-package orderless
-  :demand t
-  :config
-  (setq completion-styles '(orderless basic)
-        completion-category-defaults nil
-        completion-category-overrides
-        '((file (styles basic partial-completion)))))
-
-;; marginalia:候选右侧注解(命令 docstring / 变量值 / 文件属性)。
-(use-package marginalia
-  :demand t
-  :config
-  (marginalia-mode 1))
+;; 内置 *Completions*:Emacs 31 的即显 + 随打更新是默认行为,无需显式
+;; 启用;此处只设定匹配样式与排序。flex 覆盖日常模糊输入,basic 兜底
+;; 前缀与实体匹配。
+(setq completion-styles '(flex basic)
+      completions-sort 'historical)
 
 ;; completion-preview(Emacs 30 内置):打字时 ghost-text 行内补全预览,
-;; 与 vertico(minibuffer 层)互补,capf 后端(eglot LSP / cape)全部复用。
+;; 与 *Completions*(minibuffer 层)互补,capf 后端(eglot LSP)全部复用。
 ;; TAB 接受候选,M-n/M-p 循环候选,M-i 补全公共前缀(再按弹 *Completions*);
 ;; 预览激活时 M-f/M-<right> 逐词、C-M-f/C-M-<right> 逐表达式部分接受。
 ;; 循环与部分接受命令上游内置但默认键位被注释,此处显式接线;
@@ -3722,44 +3619,22 @@ Minibuffer 补全采用 vertico 生态 6 件套:vertico(minibuffer 候选列表)
               #'completion-preview-insert-sexp))
 #+end_src
 
-*** 搜索导航与上下文动作
+*** 搜索导航增强
 :PROPERTIES:
 :CUSTOM_ID: completion-consult
 :header-args:emacs-lisp: :noweb-ref keys/completion-consult :tangle no :noweb-sep "\n\n"
 :END:
 
-~consult~ - 搜索与导航命令族,与 vertico 组合获得候选预览
-+ 候选预览:选中 grep / line / buffer 候选时,目标 buffer 在原窗口实时滚动到位。
-+ ~consult-buffer~ 聚合多源(缓冲区 / 最近文件 / 书签)在 vertico 统一过滤;项目场景用 ~consult-project-buffer~ 。
-+ ~consult-ripgrep~ :项目全文实时搜索,复用启动域声明的 ripgrep;原有 =project-find-regexp= 入口(xref 集成 + 内置 grep-edit)保留在 =C-x p s= 。
-+ ~consult-yank-from-kill-ring~ 替换默认 =yank-from-kill-ring= :候选带预览。
-
-~embark~ - 上下文动作
-+ =C-.= ( ~embark-act~ )对当前目标执行动作:minibuffer 候选、光标符号、区域、文件均可达,动作菜单的按键提示复用 which-key。
-+ ~embark-consult~ (随 embark 包发行)提供集合导出:grep 候选导出为可编辑 buffer、line 候选导出为 occur 视图。
+内置搜索导航的轻量增强,不引入命令族包:
++ ~isearch-lazy-count~ :增量搜索( =M-s i= )显示当前匹配序号/总数。
++ ~grep-use-headings~ :grep/project-find-regexp 结果按文件分节显示(类似 =git grep --heading= )。
++ Emacs 31 内置 Grep Edit:=*grep*= buffer 按 =e= 进入编辑,修改自动反映到源文件,=C-c C-c= 提交。
 
 #+begin_src emacs-lisp
-(use-package consult
-  :demand t
-  :config
-  ;; isearch 增强保留(M-s i 增量搜索后备入口):lazy-count 让
-  ;; isearch 显示当前匹配序号/总数。
-  (setq isearch-lazy-count t)
-  ;; Emacs 31+ 内置 Grep Edit:*grep* buffer 按 e 进入编辑,
-  ;; 修改自动反映到源文件,C-c C-c 提交。grep 结果按文件分组标题显示。
-  ;; project-find-regexp(C-x p s)的结果走此 buffer。
-  (with-eval-after-load 'grep
-    (setq grep-use-headings t)))
+(setq isearch-lazy-count t)
 
-;; embark:对 minibuffer 候选 / 光标符号 / 区域执行上下文动作。
-;; 全局 C-. 入口声明在 [[#global-keys]];minibuffer 内经全局 map 直达。
-(use-package embark
-  :demand t
-  :config
-  ;; embark-consult:embark export 集成 consult 视图(grep / occur)。
-  (require 'embark-consult)
-  ;; embark-collect 生成的候选 buffer 内光标处直接预览。
-  (add-hook 'embark-collect-mode-hook #'consult-preview-at-point-mode))
+(with-eval-after-load 'grep
+  (setq grep-use-headings t))
 #+end_src
 
 *** In-region 补全
@@ -3770,9 +3645,9 @@ Minibuffer 补全采用 vertico 生态 6 件套:vertico(minibuffer 候选列表)
 
 ~completion-preview-mode~ - Emacs 30+ 内置 in-region ghost-text 补全
 + 输入时在光标处显示 ghost-text 候选预览,TAB 接受候选,M-n / M-p 切换候选;无弹出菜单打断,交互轻量。
-+ capf 链由各 major-mode / Eglot 提供;链尾兜底 =cape-file= (路径) / =cape-line= (相似行) / =cape-abbrev= (缩写表),~cape-dabbrev~ 手动触发( =M-/= )。
++ capf 链完全由各 major-mode / Eglot 提供,不额外追加后端;英文词补全用内置 =M-/= ( ~dabbrev-expand~ ,buffer 内动态缩写)。
 
-ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode 默认 capf 链含 =ispell-completion-at-point= (Emacs 30+),本机无 plain word list( =share/dict/words= ),缺词表的该 capf 只会在补全时白跑,故统一移除。英文词补全由 =cape-dabbrev= ( =M-/= )承担。
+ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode 默认 capf 链含 =ispell-completion-at-point= (Emacs 30+),本机无 plain word list( =share/dict/words= ),缺词表的该 capf 只会在补全时白跑,故统一移除。英文词补全由 =M-/= 承担。
 
 #+begin_src emacs-lisp
 (defun custom/completion-text-ispell-setup ()
@@ -3791,20 +3666,10 @@ ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode
 词表与后端就绪后注册到文本模式。
 
 #+begin_src emacs-lisp
-;; cape:补全后端扩展,按序追加在 capf 链尾兜底:cape-file 补路径,
-;; cape-line 用 buffer 内相似行整行补全(配置/JSON/日志类重复结构
-;; ghost 直接预览整行),cape-abbrev 补全全局 abbrev 表(空表时无候选)。
-;; cape-dabbrev 不进自动链(避免大 buffer 扫描),经 M-/ 手动触发。
-(use-package cape
-  :demand t
-  :config
-  (dolist (backend '(cape-file cape-line cape-abbrev))
-    (add-to-list 'completion-at-point-functions backend t)))
-
 ;; eldoc 内置文档显示:Eglot 补全时 echo area 显示文档。
 
 ;; Emacs 31 内置 eglot workspace symbols 补全:C-u M-. (xref-find-apropos)
-;; 列出并补全当前 workspace 符号,经 vertico 呈现。
+;; 列出并补全当前 workspace 符号,经 *Completions* 呈现。
 #+end_src
 
 *** 加载组装
@@ -3822,13 +3687,14 @@ ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode
 #+end_src
 
 #+begin_src emacs-lisp
-;; consult 命令族键位(功能内聚:命令实现于本域)。C-x b / M-s b 与原
-;; 内置入口平行升级为 consult-buffer(多源 + 预览);ibuffer(C-x B)、
-;; xref 符号(M-s e)保留原入口,见 [[#keybindings]]。
-(custom/bind "C-x b" #'consult-buffer "切换缓冲区(多源)" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x p b" #'consult-project-buffer "项目缓冲区(多源)" "项目")
-(custom/bind "M-s l" #'consult-line "搜索当前缓冲区" "搜索")
-(custom/bind "M-s p" #'consult-ripgrep "搜索项目" "搜索")
+;; 内置搜索导航键位(功能内聚:命令属于本域)。C-x b / C-x p b 与内置
+;; 默认入口一致;M-s l 用 occur(列表式,结果可编辑),M-s p 与 C-x p s /
+;; C-S-f 同指 project-find-regexp。ibuffer(C-x B)、xref 符号(M-s e)
+;; 保留原入口,见 [[#keybindings]]。
+(custom/bind "C-x b" #'switch-to-buffer "切换缓冲区" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x p b" #'project-switch-to-buffer "项目缓冲区" "项目")
+(custom/bind "M-s l" #'occur "搜索当前缓冲区" "搜索")
+(custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
 #+end_src
 
 * 系统工具与实验性
@@ -3868,26 +3734,20 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
 (custom/bind "C-c a a t" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
 #+end_src
 
-*** RSS 阅读 (Elfeed)
+*** RSS 阅读 (Newsticker)
+
+内置 ~newsticker~ :树形视图( =newsticker-treeview= )左侧 feed 列表、右侧条目,
+界面内 =g= 刷新、=n/p= 上下条目、=SPC= 浏览摘要、=RET= 用 =browse-url= 打开原文。
+订阅源默认为 Emacs 官方 feed( =newsticker-url-list= 可自行追加)。
 
 #+begin_src emacs-lisp
-(use-package elfeed
+(use-package newsticker
   :defer t
-  :commands (elfeed elfeed-update))
+  :commands (newsticker-treeview newsticker-get-all-news))
 
-(custom/declare-binding-group "C-c a f" "RSS / Elfeed (订阅)")
-(custom/bind "C-c a f f" #'elfeed "打开 Elfeed" "生活应用")
-(custom/bind "C-c a f u" #'elfeed-update "更新 Elfeed" "生活应用")
-#+end_src
-
-*** 邮件 (Notmuch)
-
-#+begin_src emacs-lisp
-(use-package notmuch
-  :defer t
-  :commands (notmuch))
-
-(custom/bind "C-c a m" #'notmuch "邮件" "生活应用")
+(custom/declare-binding-group "C-c a f" "RSS / Newsticker (订阅)")
+(custom/bind "C-c a f f" #'newsticker-treeview "打开 RSS 阅读器" "生活应用")
+(custom/bind "C-c a f u" #'newsticker-get-all-news "拉取全部订阅" "生活应用")
 #+end_src
 
 *** Telegram (Telega)

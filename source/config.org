@@ -267,7 +267,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 
 我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能，具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
 
-swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休眠二选一时保留了休眠。已知取舍：休眠镜像会把内存明文写到该分区。
+Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休眠二选一时保留了休眠，所以休眠镜像会把内存 *明文* 写到该分区。
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -293,7 +293,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
          (mount-point "/var/lock")
          (type "tmpfs")
          (flags '(no-suid no-dev strict-atime))
-         ;; 锁目录用量极小，上限从 20% 压到 1% 即可
          (options "mode=1777,nr_inodes=100k,size=1%")
          (needed-for-boot? #t)
          (create-mount-point? #t)
@@ -309,7 +308,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
            (dependencies %mapped-devices-config)
            (options (string-append "subvol=" subvol ",compress=zstd:3"))
            (create-mount-point? #t)
-           ;; /tmp 非启动必需：挂载失败时优雅降级为根 tmpfs 的子目录
            (needed-for-boot? (not (string=? mount-point "/tmp")))
            (check? (string=? mount-point "/gnu"))))) %btrfs-subvolumes))
 
@@ -353,7 +351,8 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 *** 内核相关参数设置
 使用 =nonguix= 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
 
-=threadirqs= 开启中断线程化：SOF/HDA 中断处理成为可调度线程，可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun。USB 自动挂起则改由熄屏守护 =usb-power-watch= 按白名单显式控制，不走内核参数。
+=threadirqs= 开启中断线程化：
++ SOF/HDA 中断处理成为可调度线程，可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun
 
 #+NAME: kernel-configs
 #+begin_src scheme
@@ -371,7 +370,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
         "quiet"
         "zswap.enabled=1"
         "zswap.max_pool_percent=35"
-        ;; zstd 压缩比优于默认 lzo 且速度可接受
         "zswap.compressor=zstd"
         %default-kernel-arguments))
 
@@ -390,19 +388,19 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 #+end_src
 
 **** 内核模块加载
+~ip_tables/iptable_nat~ 是 iptables 兼容层，libvirt 与 podman 的网络后端依赖它，与 nftables 规则集共存
+
+zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modprobe，cmdline 的 ~zswap.compressor=zstd~ 必然回退 lzo；此处在模块加载后运行时切换（官方支持：旧页留原池，新页用新算法）。
 
 #+NAME: kernel-module-services
 #+begin_src scheme
 (list (simple-service 'extend-kernel-module-loader
                       kernel-module-loader-service-type
-                      ;; ip_tables/iptable_nat 是 iptables 兼容层，
-                      ;; libvirt 与 podman 的网络后端依赖它，与 nftables 规则集共存
+
                       '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq"
                         "tcp_bbr" "uhid" "uinput" "v4l2loopback" "zstd"))
 
-      ;; zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace
-      ;; modprobe，cmdline 的 zswap.compressor=zstd 必然回退 lzo；此处在
-      ;; 模块加载后运行时切换（官方支持：旧页留原池，新页用新算法）。
+
       (simple-service 'zswap-zstd shepherd-root-service-type
                       (list (shepherd-service
                              (documentation
@@ -581,7 +579,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 #+end_src
 
 **** 固定 machine-id
-
 *fixed-machine-id* 负责固定 =/etc/machine-id= 这个文件中的内容，具体的算法在 [[../information.scm][information.scm]] 中
 
 #+NAME: machine-id-service
@@ -592,7 +589,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 #+end_src
 
 **** 休眠 resume 设备
-
 每次启动时将 swap 分区写入 =/sys/power/resume= （休眠必需）
 
 #+NAME: resume-device-service
@@ -622,12 +618,9 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 #+end_src
 
 **** 开机清空 /tmp
-
 /tmp 已改为 btrfs 持久化挂载，用此服务替代原 tmpfs 的「重启自动清空」行为。
-
-幂等设计：reconfigure 与依赖解析会在运行期间反复 start 本服务（日志实测一次 rebuild 可触发十余次），/run 为 tmpfs（重启即空），标志文件保证每个开机周期只有首次执行真正清空，其余全部跳过。清空时用 =find -mindepth 1 -delete= 保留目录本身，单条目删除失败不阻断启动；随后把粘滞位强制修正为 1777（btrfs 子卷挂载点默认权限可能非 1777）。
-
-*cleanup-/tmp-prereq* 把 =cleanup-/tmp= 注入 =user-processes= 的 requirement，使所有经 user-processes 启动的服务（dbus/桌面/ssh-agent 等）确定性地排在 /tmp 清空之后。复用 Guix 官方 file-systems→user-processes 注入机制（见 gnu/services/base.scm 的 file-system-service-type 同款手法）。
++ 标志文件保证每个开机周期只有首次执行真正清空，其余全部跳过。清空时用 =find -mindepth 1 -delete= 保留目录本身，单条目删除失败不阻断启动；随后把粘滞位强制修正为 1777（btrfs 子卷挂载点默认权限可能非 1777）。
++ *cleanup-/tmp-prereq* 把 =cleanup-/tmp= 注入 =user-processes= 的 requirement，使所有经 user-processes 启动的服务（dbus/桌面/ssh-agent 等）确定性地排在 /tmp 清空之后。复用 Guix 官方 file-systems→user-processes 注入机制（见 gnu/services/base.scm 的 file-system-service-type 同款手法）。
 
 #+NAME: cleanup-tmp-services
 #+begin_src scheme
@@ -658,7 +651,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 #+end_src
 
 **** /data 权限与 XDG 目录
-
 + *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
 + *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
 
@@ -698,9 +690,6 @@ swap 分区为明文（未入 LUKS）：Guix 的 Guile initrd 不支持从加密
 #+end_src
 
 *** 网络相关配置
-
-+ 防火墙与可信 WiFi
-
 使用一份静态 nftables 规则集，NetworkManager dispatcher 只原子更新 =inet filter= 表的 =trusted_ifaces= 集合。它绝不执行 =flush ruleset=，因而不会删除 libvirt 或其他服务在运行时安装的 nftables 规则。
 
 - =source/files/nftables.conf= —— 唯一由 =nftables-service-type= 加载的规则集
@@ -1590,6 +1579,9 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "xvfb-run"
 
    ;; XDG 相关组件
+   ;; darkman 只装包不配 shepherd 服务：shepherd fork 环境无 DBUS_SESSION_BUS_ADDRESS，
+   ;; darkman 注册不了总线名会与 D-Bus activation 实例形成双实例；靠 activation 按需拉起即可
+   "darkman"
    "xdg-desktop-portal-gnome"
    "xdg-desktop-portal-gtk"
    "xdg-utils"
@@ -1678,8 +1670,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    ;; 编辑器
    "fresh-editor-bin"
    "helix-steel"
-   "lem-next-bin"
-   "neomacs-bin"
+   "lem-next"
 
    ;; 数据库
    "sqlite"
@@ -1903,10 +1894,8 @@ end
                              ;; 界面与外观
                              "emacs-dashboard"
                              "emacs-doom-modeline"
-                             "emacs-ef-themes"
                              "emacs-nerd-icons"
                              "emacs-rainbow-delimiters"
-                             "emacs-spacious-padding"
 
                              ;; 编辑与导航
                              "emacs-avy"
@@ -1916,18 +1905,9 @@ end
                              "emacs-with-editor"
                              "emacs-goto-chg"
 
-                             ;; 补全与搜索(vertico 生态)
-                             "emacs-vertico"
-                             "emacs-orderless"
-                             "emacs-marginalia"
-                             "emacs-consult"
-                             "emacs-embark"
-                             "emacs-cape"
-
                              ;; 开发工具
                              "emacs-agent-shell"
                              "emacs-apheleia"
-                             "emacs-eglot-x"
                              "emacs-envrc"
                              "emacs-ghostel"
                              "emacs-guix"
@@ -1937,16 +1917,12 @@ end
                              "emacs-fish-mode"
                              "emacs-gdscript-mode"
                              "emacs-kdl-mode"
-                             "emacs-kotlin-mode"
                              "emacs-markdown-mode"
                              "emacs-nix-mode"
                              "emacs-zig-mode"
 
                              ;; 版本控制与项目管理
-                             "emacs-git-messenger"
-                             "emacs-git-timemachine"
                              "emacs-magit"
-                             "emacs-git-modes"
 
                              ;; Org Mode 生态
                              "emacs-olivetti"
@@ -1957,8 +1933,6 @@ end
 
                              ;; 应用工具
                              "emacs-agenote"
-                             "emacs-elfeed"
-                             "emacs-notmuch"
                              "emacs-pdf-tools"
                              "emacs-telega"
 
@@ -2016,14 +1990,6 @@ end
  (list (service home-noctalia-service-type)
        (service home-pipewire-service-type)
        (service home-syncthing-service-type)
-
-       (service home-darkman-service-type
-                (home-darkman-configuration
-                 (latitude 31.2304)
-                 (longitude 121.4737)
-                 (use-geoclue #f)
-                 (dbus-server #t)
-                 (portal #t)))
 
        (simple-service 'dbus home-shepherd-service-type
                        (list (shepherd-service
@@ -2566,6 +2532,12 @@ done
   ("MOZ_ENABLE_WAYLAND" . "1")
   ("NIXOS_OZONE_WL" . "1")
   ("QT_AUTO_SCREEN_SCALE_FACTOR" . "1")
+  ;; libXcursor 读取；XWayland 应用缺此变量会回退到 X core 字体光标。
+  ;; XCURSOR_PATH 追加 $XDG_DATA_HOME/icons 让 default 主题的
+  ;; Inherits 链（noctalia-suite 包部署的 index.theme）可达。
+  ("XCURSOR_PATH" . "$XCURSOR_PATH:$XDG_DATA_HOME/icons")
+  ("XCURSOR_SIZE" . "26")
+  ("XCURSOR_THEME" . "Bibata-Modern-Classic")
 
   ("NIX_USER_CONF_FILES" . "$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/nix.conf"))
 #+end_src
