@@ -1904,6 +1904,8 @@ end
                              "emacs-multiple-cursors"
                              "emacs-with-editor"
                              "emacs-goto-chg"
+                             "emacs-tempel"
+                             "emacs-vundo"
 
                              ;; 开发工具
                              "emacs-agent-shell"
@@ -1911,6 +1913,7 @@ end
                              "emacs-envrc"
                              "emacs-ghostel"
                              "emacs-guix"
+                             "emacs-dape"
 
                              ;; 编程语言支持
                              "emacs-arei"
@@ -1922,6 +1925,7 @@ end
                              "emacs-zig-mode"
 
                              ;; 版本控制与项目管理
+                             "emacs-forge"
                              "emacs-magit"
 
                              ;; Org Mode 生态
