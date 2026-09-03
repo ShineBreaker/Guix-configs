@@ -2,11 +2,12 @@
 ;;;
 ;;; 部署：dotfiles/mutable/lem/ 经 GNU Stow 直链 ~/.config/lem/（改源即生效）
 ;;; 结构：参照 oh-my-lem（github.com/xenodesire/oh-my-lem）的模块化拆分——
-;;;   本文件只做引导；modules/ 目录下全部 .lisp 按文件名字典序自动遍历
-;;;   加载（新增模块建文件即可，无需改本文件）。加载顺序由数字前缀控制：
+;;;   本文件只做引导；modules/ 目录下全部 .lisp 与 modules/modes/ 下
+;;;   各语言文件按文件名字典序自动遍历加载（新增模块建文件即可，
+;;;   无需改本文件）。加载顺序由数字前缀控制：
 ;;;     00-utils → 20-icons → 25-fonts → 30-themes → 40-explorer
 ;;;     → 45-keyhelp → 50-terminal → 55-completion → 60-editor-config
-;;;     → 70-keybindings → 80-modes-base → 81-modes-<lang>（同层互不依赖）
+;;;     → 70-keybindings → 80-modes-base → modes/<lang>（同层互不依赖）
 ;;;     → 90-startup（钩子登记，必须最后）
 ;;;   前缀间隔 10 留插入位；跨模块依赖与顺序约束详见各模块头注释。
 ;;;
@@ -51,13 +52,28 @@
     path))
 
 ;; 模块自动发现：modules/ 下全部 .lisp 按文件名字典序加载
-;; （顺序由 NN- 前缀控制，见文件头注释）
-(dolist (f (sort (remove-if-not (lambda (p)
-                                  (string-equal "lisp" (pathname-type p)))
-                                (list-directory
-                                 (merge-pathnames "modules/"
-                                                  *vs-config-directory*)))
-                  #'string< :key #'namestring))
+;; （顺序由 NN- 前缀控制，见文件头注释）；各语言文件位于
+;; modules/modes/ 下（字典序，同层互不依赖），插在 80-modes-base
+;; 之后、90-startup 之前（合并排序会把 modes/ 排到 90- 之后，
+;; 故分三段拼接；modes/ 缺失时退化为顶层顺序）。
+(defun vs-final-module-p (path)
+  "90- 前缀模块（startup 收尾）判别。"
+  (let ((name (file-namestring path)))
+    (and (>= (length name) 3)
+         (string= (subseq name 0 3) "90-"))))
+(dolist (f (let ((mods (merge-pathnames "modules/" *vs-config-directory*)))
+             (flet ((lisp-files (dir)
+                      (sort (remove-if-not
+                             (lambda (p)
+                               (string-equal "lisp" (pathname-type p)))
+                             (list-directory dir))
+                            #'string< :key #'namestring)))
+               (let ((top (lisp-files mods))
+                     (langdir (merge-pathnames "modes/" mods)))
+                 (append (remove-if #'vs-final-module-p top)
+                         (and (probe-file langdir)
+                              (lisp-files langdir))
+                         (remove-if-not #'vs-final-module-p top))))))
   (handler-case
       (vs-load-source f)
     (error (e)
