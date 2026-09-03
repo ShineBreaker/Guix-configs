@@ -1812,6 +1812,27 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
 (defvar custom/color-scheme--initialized nil
   "颜色方案模块是否已完成初始化。")
 
+;; fringe 与行号 gutter 改映射到 bg-main,与正文背景融为一体。
+;; Modus 全变体(含标准版)原生把 fringe/bg-line-number-inactive
+;; 映射到 bg-dim:不透明下只是 8px 窄带的细微层次,但 GUI frame
+;; 半透明(custom:frame-background-opacity) + 亮壁纸 + 合成器 blur
+;; 会把这点差异放大成窗口两侧可见的灰带。四个变体一起覆盖,切
+;; 换主题风格不复发。只改这两个映射键,不动 bg-dim 本体
+;; (hl-line/按钮/prose 块继续用),行号数字前景与当前行 bg-active
+;; 保留。
+(setq modus-operandi-palette-overrides
+      '((fringe bg-main)
+        (bg-line-number-inactive bg-main))
+      modus-operandi-tinted-palette-overrides
+      '((fringe bg-main)
+        (bg-line-number-inactive bg-main))
+      modus-vivendi-palette-overrides
+      '((fringe bg-main)
+        (bg-line-number-inactive bg-main))
+      modus-vivendi-tinted-palette-overrides
+      '((fringe bg-main)
+        (bg-line-number-inactive bg-main)))
+
 ;; D-Bus 接口常量(service 与 interface 同名,内联到两处调用点)
 
 (defconst custom/color-scheme-dbus-path "/nl/whynothugo/darkman"
