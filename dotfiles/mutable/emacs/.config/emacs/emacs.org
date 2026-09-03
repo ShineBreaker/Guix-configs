@@ -155,7 +155,6 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 
 (defconst custom:executable-aspell   "aspell")
 (defconst custom:executable-direnv   "direnv")
-(defconst custom:executable-fish     "fish")
 (defconst custom:executable-git      "git")
 (defconst custom:executable-godot    "godot")
 #+end_src
@@ -178,40 +177,7 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 :CUSTOM_ID: frame
 :END:
 
-daemon/client 架构下的 frame 生命周期：display 初始化注册到 created 阶段，在 =after-make-frame-functions= 触发。每个 initializer 通过 frame parameter 保证成功执行一次。
-
-#+begin_src emacs-lisp
-(defvar custom--frame-created-initializers nil)
-
-(defun custom--run-frame-initializers (frame functions)
-  "在 FRAME 运行 FUNCTIONS，每个函数成功执行一次。"
-  (when (frame-live-p frame)
-    (let ((done (frame-parameter frame 'custom-frame-created-done)))
-      (dolist (function functions)
-        (unless (memq function done)
-          (condition-case err
-              (progn
-                (funcall function frame)
-                (push function done)
-                (set-frame-parameter frame 'custom-frame-created-done done))
-            (error
-             (message "[frame] %s 失败: %s"
-                      function (error-message-string err)))))))))
-
-(defun custom--dispatch-frame-created (frame)
-  "运行 FRAME 的 created initializer。"
-  (custom--run-frame-initializers
-   frame custom--frame-created-initializers))
-
-(defun custom/add-frame-created-hook (function)
-  "把 FUNCTION 注册到 frame-created 阶段。"
-  (unless (memq function custom--frame-created-initializers)
-    (setq custom--frame-created-initializers
-          (append custom--frame-created-initializers (list function))))
-  (add-hook 'after-make-frame-functions #'custom--dispatch-frame-created)
-  (unless (daemonp)
-    (custom--dispatch-frame-created (selected-frame))))
-#+end_src
+daemon/client 架构下的 frame 生命周期：display 初始化直接挂 =after-make-frame-functions= ；独立 Emacs 的首帧在注册点立即执行一次（daemon 启动时无 frame，由 hook 覆盖后续 frame）。initializer 自身幂等且自带 condition-case，无需额外记账。
 
 ** 键位声明
 :PROPERTIES:
@@ -550,17 +516,15 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 (unless (advice-member-p #'custom/context-menu-translate #'context-menu-map)
   (advice-add 'context-menu-map :filter-return #'custom/context-menu-translate))
 
-(defun custom/menu-bar-translate ()
-  "`menu-bar-update-hook' 回调:翻译全部活动 keymap 菜单栏的英文项。
-`custom/context-menu--translate-keymap' 查不到时原样返回,故幂等;
-Geiser/SMerge/Hide-Show 等第三方子菜单(多挂在 minor-mode map,如
-`geiser-mode-map')同样覆盖。`current-active-maps' 含全局/local/minor
-全部活动 map,比只翻前两者彻底。"
-  (dolist (map (current-active-maps))
-    (custom/context-menu--translate-keymap
-     (lookup-key map [menu-bar]))))
+;; 菜单栏一次性翻译:启动时翻 `global-map' 的 [menu-bar] 一次;Geiser 的
+;; 菜单栏挂在其 minor-mode map 上,随包加载补翻一次。translate-keymap
+;; 查不到原样返回且原地幂等,故只翻已知包,未知 minor-mode 菜单栏保持英文。
+(custom/context-menu--translate-keymap
+ (lookup-key global-map [menu-bar]))
 
-(add-hook 'menu-bar-update-hook #'custom/menu-bar-translate)
+(with-eval-after-load 'geiser-mode
+  (custom/context-menu--translate-keymap
+   (lookup-key geiser-mode-map [menu-bar])))
 
 (with-eval-after-load 'magit-section
   (unless (advice-member-p #'custom/context-menu--translate-string
@@ -582,15 +546,7 @@ Geiser/SMerge/Hide-Show 等第三方子菜单(多挂在 minor-mode map,如
 :header-args:emacs-lisp: :noweb-ref appearance/help-data :tangle no :noweb-sep "\n\n"
 :END:
 
-键位、Which-key 描述和帮助分组统一由 [[#keybindings][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections=)。本节只剩帮助页引言文字(=custom:help-introduction=)和外置到 [[file:data/help-zh.el][data/help-zh.el]] 的非键位说明;键位相关的描述不再外置。
-
-#+begin_src emacs-lisp
-(defface custom-help-section-title
-  '((t :inherit font-lock-keyword-face :weight bold :height 1.2))
-  "帮助缓冲区分类标题样式。"
-  :group 'help)
-
-#+end_src
+键位、Which-key 描述和帮助分组统一由 [[#keybindings][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections=)。帮助页引言文字(=custom:help-introduction=)与非键位说明外置到 [[file:data/help-zh.el][data/help-zh.el]];键位相关的描述不再外置。
 
 *** 帮助渲染与入口
 :PROPERTIES:
@@ -615,7 +571,7 @@ Geiser/SMerge/Hide-Show 等第三方子菜单(多挂在 minor-mode map,如
         (insert "\n")
         (dolist (section (custom/binding-help-sections))
           (insert (propertize (format "═══ %s ═══" (car section))
-                              'face 'custom-help-section-title))
+                              'face '(:inherit font-lock-keyword-face :weight bold :height 1.2)))
           (insert "\n\n")
           (dolist (binding (cdr section))
             (insert (format "  %-24s %s\n"
@@ -637,11 +593,10 @@ Geiser/SMerge/Hide-Show 等第三方子菜单(多挂在 minor-mode map,如
 :CUSTOM_ID: help-assembly
 :END:
 
-组装顺序即求值顺序：帮助数据 → 帮助渲染。
+组装顺序即求值顺序：帮助渲染。帮助页引言文字经 =custom/load-i18n-data= 在本域开头加载,无需在此组装。
 
 #+NAME: appearance-help-assembly
 #+begin_src emacs-lisp
-<<appearance/help-data>>
 <<appearance/help-render>>
 #+end_src
 
@@ -899,26 +854,23 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
   "以接近 IDE 的样式格式化 TAB。
 face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
 current/inactive 用内置 face,自动跟随主题。"
-  (let* ((buffer-p (bufferp tab))
-         (selected-p (if buffer-p
-                         (eq tab (window-buffer))
-                       (cdr (assq 'selected tab))))
-         (name (if buffer-p
-                   (funcall tab-line-tab-name-function tab tabs)
-                 (cdr (assq 'name tab))))
+  (let* ((selected-p (eq tab (window-buffer)))
+         (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
          (label (concat " " (string-replace "%" "%%" name) " "))
          (help-echo (if selected-p
                         "当前标签:鼠标中键关闭,右键打开菜单"
                       "左键切换标签,鼠标中键关闭,右键打开菜单"))
-         (close
-          (when (and tab-line-close-button-show
-                     (or (eq tab-line-close-button-show t)
-                         (eq tab-line-close-button-show
-                             (if selected-p 'selected 'non-selected))))
-            (copy-sequence tab-line-close-button))))
+         ;; `tab-line-close-button-show' 全库唯一写点 pin 为 'selected
+         ;; (见 tab-line-hooks 组装),故谓词坍缩为 selected-p。发散矩阵:
+         ;; show=t/selected/non-selected/nil × 选中态下,旧通用分发与新
+         ;; (and selected-p …) 逐字一致,见 batch 等效验证。
+         (close (and selected-p
+                     (copy-sequence tab-line-close-button))))
+  ;; 唯一生产者 `custom/tab-line-tabs' 只产出 buffer,alist 防御分支
+    ;; 无生产者:删 buffer-p 分发,face hook 的 BUFFER-P 实参恒为 t。
     (dolist (fn tab-line-tab-face-functions)
-      (setq face (funcall fn tab tabs face buffer-p selected-p)))
+      (setq face (funcall fn tab tabs face t selected-p)))
     (let* ((render-face
             (if (and (listp face) (not (keywordp (car-safe face))))
                 (cons '(:box nil) face)
@@ -936,14 +888,14 @@ current/inactive 用内置 face,自动跟随主题。"
                          'mouse-face (unless selected-p 'tab-line-highlight)
                          'help-echo help-echo
                          'follow-link 'ignore)
-             (progn
-               (when close
-                 (add-face-text-property
-                  0 (length close) render-face t close))
-               (or close "")))))
-      (add-text-properties 0 (length rendered) (list 'tab tab) rendered)
-      (when selected-p
-        (add-text-properties 0 (length rendered) '(selected t) rendered))
+             (when close
+               (add-face-text-property
+                0 (length close) render-face t close)
+               close))))
+      (add-text-properties
+       0 (length rendered)
+       `(tab ,tab ,@(and selected-p '(selected t)))
+       rendered)
       rendered)))
 #+end_src
 
@@ -1121,6 +1073,15 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。"
   "把当前标签在 frame 标签列表中前移 ARG 位。"
   (interactive "p")
   (custom/tabs-move (- (or arg 1))))
+
+;; C-<tab> / C-x M-<right> 连按的 repeat 入口(repeat-mode 已全局启用):
+;; 单键 n/p/m 连续切换与移动,不删上述修饰键镜像入口。
+(defvar custom/tabs-repeat-map (make-sparse-keymap))
+(dolist (pair '((?n . custom/tabs-next)
+                (?p . custom/tabs-previous)
+                (?m . custom/tabs-move)))
+  (define-key custom/tabs-repeat-map (char-to-string (car pair)) (cdr pair))
+  (put (cdr pair) 'repeat-map 'custom/tabs-repeat-map))
 #+end_src
 
 *** 全局启用与 Hook 注册
@@ -1335,8 +1296,7 @@ SIZE  : 0~1 浮点比例
                `(,regex
                  (display-buffer-in-side-window)
                  (side . ,side)
-                 (slot . 0)
-                 (,(if (memq side '(left right)) 'window-width 'window-height) . ,size))
+                 (window-height . ,size))
                t))
 
 (defun custom/display-buffer-in-main-window (buffer &optional _alist)
@@ -1518,11 +1478,10 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
   :group 'literal)
 ;; 大文件统一策略:超过 `custom:large-file-size-threshold'(2MB)的 buffer,
 ;; 行号(hs 折叠、eglot LSP)逐个设防,而非各写各的阈值——
-;; `custom/setup-file-line-numbers'(行号)、`custom--maybe-enable-hs-minor-mode'
-;; (折叠,见 [[#programming-keys]])、`custom--maybe-eglot-ensure'(LSP,见
-;; [[#programming-tools]])、`custom/code-format-dwim'(全 buffer 格式化确认,见
-;; [[#code-commands]])四处共用此阈值。`global-so-long-mode' 另管超长行,
-;; 与本阈值互补。
+;; `custom/setup-file-line-numbers'(行号)、`custom--maybe-enable-prog-helpers'
+;; (LSP 与折叠合一,见 [[#programming-tools]])、`custom/code-format-dwim'
+;; (全 buffer 格式化确认,见 [[#code-commands]])三处共用此阈值。
+;; `global-so-long-mode' 另管超长行,与本阈值互补。
 
 (defun custom/setup-file-line-numbers ()
   "大型文件直接关闭行号，避免扫描完整 buffer。
@@ -1670,16 +1629,14 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
 (add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
 
-(defun custom/refresh-spacious-padding-faces (&rest _)
-  "用一个存活 GUI frame 的真实主题颜色刷新 spacious-padding face。"
-  (when-let* ((frame (seq-find #'display-graphic-p (frame-list))))
-    (with-selected-frame frame
-      (spacious-padding-set-faces))))
-
 (defun custom/apply-spacious-padding (&optional frame)
-  "为 GUI FRAME 应用 spacious-padding，TTY 与 daemon 伪 frame 保持不变。"
-  (let ((target (or frame (selected-frame))))
-    (when (display-graphic-p target)
+  "为 GUI FRAME 应用 spacious-padding，无可用 GUI frame 时 no-op。
+FRAME 非 GUI frame（nil、TTY frame，或 enable-theme-functions 传入的
+theme 符号）时回退任一存活 GUI frame；daemon 伪 frame 场景保持 no-op。"
+  (let ((target (if (framep frame) frame (selected-frame))))
+    (unless (display-graphic-p target)
+      (setq target (seq-find #'display-graphic-p (frame-list))))
+    (when target
       (with-selected-frame target
         (spacious-padding-modify-frame-parameters target)
         (spacious-padding-set-faces)))))
@@ -1710,7 +1667,9 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
     (error
      (message "custom/apply-frame-appearance: %s" (error-message-string err)))))
 
-(custom/add-frame-created-hook #'custom/apply-frame-appearance)
+(add-hook 'after-make-frame-functions #'custom/apply-frame-appearance)
+(unless (daemonp)
+  (funcall #'custom/apply-frame-appearance (selected-frame)))
 
 (use-package ef-themes
   :defer t
@@ -1736,9 +1695,8 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
   ;; 包在 daemon 启动期同步加载，但只能在 GUI frame 上读取主题颜色。
   ;; initial_terminal 的 default 背景是 "unspecified-bg"，直接启用全局 mode
   ;; 会把伪颜色写进 spacious-padding theme，首个 GUI frame 因而高频报警。
-  (add-hook 'enable-theme-functions #'custom/refresh-spacious-padding-faces)
-  (dolist (frame (frame-list))
-    (custom/apply-spacious-padding frame)))
+  (add-hook 'enable-theme-functions #'custom/apply-spacious-padding)
+  (custom/apply-spacious-padding))
 
 ;; Emacs 31 内置像素级精确滚动 + 动能惯性,替代 ultra-scroll:
 ;; `pixel-scroll-precision-use-momentum' 为 31 新增,触控板松手后惯性滚动;
@@ -1747,29 +1705,6 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
       pixel-scroll-precision-interpolate-page t
       pixel-scroll-precision-use-momentum t)
 (pixel-scroll-precision-mode 1)
-
-;; 跳转目标行脉冲高亮:内置 pulse.el 替代 pulsar。从 `highlight' face 背景
-;; (跟随 ef-themes) 向默认背景渐变淡出,8 帧 × 45ms。post-command-hook 内
-;; 只做 memq 判定,无 IO。TTY 下背景被透明策略清除,自然降级为不可见。
-(defconst custom:pulse-commands
-  '(recenter-top-bottom
-    reposition-window
-    other-window
-    windmove-left windmove-right windmove-up windmove-down
-    xref-find-definitions xref-find-references
-    xref-go-back xref-go-forward
-    flymake-goto-next-error flymake-goto-prev-error)
-  "执行后会触发当前行脉冲高亮的命令列表。")
-
-(defun custom--pulse-after-command ()
-  "若刚执行的命令在 `custom:pulse-commands' 中,脉冲高亮 point 所在行。"
-  (when (memq this-command custom:pulse-commands)
-    (pulse-momentary-highlight-one-line (point) 'highlight)))
-
-(require 'pulse)
-(setq pulse-delay 0.045
-      pulse-iterations 8)
-(add-hook 'post-command-hook #'custom--pulse-after-command)
 
 #+end_src
 
@@ -1856,21 +1791,12 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
   (custom/which-key--flatten-specs nil custom:which-key-description-spec)
   "Which-key 全局中文描述映射表。")
 
-(defvar custom:which-key--applied-keymaps nil
-  "已注册 keymap 级描述的 map 变量名,防重复堆积。")
-
-(defun custom/which-key-apply-keymap-descriptions ()
-  "补注册 minor-mode keymap 级描述(包懒加载后调用)。
-`which-key-add-keymap-based-replacements' 同一 map+key 重复注册会堆积,
-故用 `custom:which-key--applied-keymaps' 记账,每个 map 只注册一次。"
-  (dolist (map-entry custom:which-key-keymap-description-spec)
-    (let ((mapvar (car map-entry)))
-      (when (and (boundp mapvar) (keymapp (symbol-value mapvar))
-                 (not (memq mapvar custom:which-key--applied-keymaps)))
-        (dolist (entry (cdr map-entry))
-          (which-key-add-keymap-based-replacements
-           (symbol-value mapvar) (car entry) (cdr entry)))
-        (push mapvar custom:which-key--applied-keymaps)))))
+(defun custom/which-key--apply-keymap-spec (mapvar)
+  "把 `custom:which-key-keymap-description-spec' 中 MAPVAR 的描述注册到 which-key。
+调用点须保证 MAPVAR 与 which-key 均已加载;同一 map 只会注册一次。"
+  (dolist (entry (alist-get mapvar custom:which-key-keymap-description-spec))
+    (which-key-add-keymap-based-replacements
+     (symbol-value mapvar) (car entry) (cdr entry))))
 
 (defun custom/which-key-apply-descriptions ()
   "将中文描述注册到 `which-key'(仅在 which-key 加载后调用一次)。"
@@ -1884,22 +1810,21 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
           (specs (cdr mode-entry)))
       (dolist (entry (custom/which-key--flatten-specs nil specs))
         (which-key-add-major-mode-key-based-replacements
-          mode (car entry) (cdr entry)))))
-  ;; minor-mode keymap 级描述:Geiser/Arei 的 C-c 子树挂在 minor-mode map,
-  ;; major-mode 注册覆盖不到;map 未加载时由下面的 eval-after-load 补注册。
-  (custom/which-key-apply-keymap-descriptions))
+          mode (car entry) (cdr entry))))))
 
 (with-eval-after-load 'which-key
-  ;; 先注册 custom/bind 收集的延迟描述
+  ;; 先注册 custom/bind 收集的延迟描述,再注册集中维护的描述
   (custom/register-pending-wk-descs)
-  ;; 再注册集中维护的描述
   (custom/which-key-apply-descriptions))
 
-;; Geiser/Arei 懒加载:which-key 先就绪时 map 尚无定义,包加载后补注册。
-(dolist (pkg '(geiser-mode arei))
-  (with-eval-after-load pkg
-    (when (featurep 'which-key)
-      (custom/which-key-apply-keymap-descriptions))))
+;; minor-mode keymap 级描述:Geiser/Arei 的 C-c 子树挂在 minor-mode map,
+;; major-mode 注册覆盖不到;两包懒加载,包与 which-key 双向就绪后各注册一次。
+(with-eval-after-load 'geiser-mode
+  (with-eval-after-load 'which-key
+    (custom/which-key--apply-keymap-spec 'geiser-mode-map)))
+(with-eval-after-load 'arei
+  (with-eval-after-load 'which-key
+    (custom/which-key--apply-keymap-spec 'arei-mode-map)))
 #+end_src
 
 ** 颜色方案(ef-themes)
@@ -1911,7 +1836,6 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 
 + =custom/color-scheme-init= 注册 D-Bus 监听器,深浅色变化时自动 =ef-themes-select= 对应主题
 + 通过 [[#frame][Frame 生命周期]] 在新 frame 创建时应用当前色彩状态
-+ 导出 =custom/register-theme-refresh!= 供其他功能模块注册刷新回调
 
 *** 状态与主题应用
 :PROPERTIES:
@@ -1939,19 +1863,10 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 (defvar custom/color-scheme--initialized nil
   "颜色方案模块是否已完成初始化。")
 
-(defvar custom/color-scheme--applying-theme nil
-  "是否正在执行主题切换，避免 frame hook 重入。")
-
-;; D-Bus 接口常量
-
-(defconst custom/color-scheme-dbus-service "nl.whynothugo.darkman"
-  "Darkman D-Bus 服务名称。")
+;; D-Bus 接口常量(service 与 interface 同名,内联到两处调用点)
 
 (defconst custom/color-scheme-dbus-path "/nl/whynothugo/darkman"
   "Darkman D-Bus 对象路径。")
-
-(defconst custom/color-scheme-dbus-interface "nl.whynothugo.darkman"
-  "Darkman D-Bus 接口。")
 
 ;; 核心函数
 
@@ -1960,9 +1875,9 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
   (condition-case err
       (let ((mode (dbus-get-property
                    :session
-                   custom/color-scheme-dbus-service
+                   "nl.whynothugo.darkman"
                    custom/color-scheme-dbus-path
-                   custom/color-scheme-dbus-interface
+                   "nl.whynothugo.darkman"
                    "Mode")))
         (cond
          ((string= mode "light") 'light)
@@ -1991,11 +1906,9 @@ ef-themes 通过 D-Bus 跟随 Darkman 自动切换深浅色。daemon 启动时�
 MODE 为 'light 或 'dark。
 独立实例在 GUI 或至少 256 色的 TTY frame 中加载；daemon 无 frame 时也预载主题。"
   (setq custom/color-scheme-current-mode mode)
-  (unless custom/color-scheme--applying-theme
-    (let ((custom/color-scheme--applying-theme t))
-      (when (or (daemonp) (custom/display-supports-themes-p))
-        (custom/color-scheme--load-theme-if-needed
-         (custom/color-scheme--theme-for-mode mode))))))
+  (when (or (daemonp) (custom/display-supports-themes-p))
+    (custom/color-scheme--load-theme-if-needed
+     (custom/color-scheme--theme-for-mode mode))))
 
 #+end_src
 
@@ -2028,9 +1941,9 @@ MODE 为 'light 或 'dark。
         (setq custom/color-scheme-dbus-handler
               (dbus-register-signal
                :session
-               custom/color-scheme-dbus-service
+               "nl.whynothugo.darkman"
                custom/color-scheme-dbus-path
-               custom/color-scheme-dbus-interface
+               "nl.whynothugo.darkman"
                "ModeChanged"
                #'custom/color-scheme--on-darkman-mode-change))
         (message "[color-scheme] 已注册 D-Bus 监听器"))
@@ -2086,7 +1999,9 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 
 (require 'ef-themes)
 (custom/color-scheme-init)
-(custom/add-frame-created-hook #'custom/color-scheme-apply-for-frame)
+(add-hook 'after-make-frame-functions #'custom/color-scheme-apply-for-frame)
+(unless (daemonp)
+  (funcall #'custom/color-scheme-apply-for-frame (selected-frame)))
 #+end_src
 
 *** 加载组装
@@ -2265,11 +2180,6 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
    (t
     (user-error "当前缓冲区不支持重命名"))))
 
-(defun custom/reset-text-scale ()
-  "重置当前缓冲区缩放级别。"
-  (interactive)
-  (text-scale-set 0))
-
 ;; 关闭 buffer + 窗口直接用内置 kill-buffer-and-window(C-x k 绑它):
 ;; 原自定义版 (condition-case nil ... (error nil)) 会静默吞掉所有错误(如未
 ;; 保存确认被拒绝时用户得不到任何反馈),内置版行为一致且不吞错误。
@@ -2321,19 +2231,19 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
 ;; C-w 按空白分词回杀(终端 readline 风格),与 kill-region-dwim 互补。
 ;; CJK 全半角 DWIM(Emacs 31 内置 fullwidth/halfwidth 命令):有选区转
 ;; 选区,无选区转光标处词,中英混排内容统一字母/数字/标点宽度。
-(defun custom/fullwidth-dwim ()
-  "有选区时把选区转全角,无选区时转光标处词。"
-  (interactive)
-  (if (use-region-p)
-      (call-interactively #'fullwidth-region)
-    (call-interactively #'fullwidth-word)))
+(defmacro custom/cjk-width--define-dwim (name doc width)
+  "定义命令 NAME:有选区转选区,无选区转光标处词,按 WIDTH 全/半角转换。"
+  `(defun ,name ()
+     ,doc
+     (interactive)
+     (if (use-region-p)
+         (call-interactively #',(intern (format "%s-region" width)))
+       (call-interactively #',(intern (format "%s-word" width))))))
 
-(defun custom/halfwidth-dwim ()
-  "有选区时把选区转半角,无选区时转光标处词。"
-  (interactive)
-  (if (use-region-p)
-      (call-interactively #'halfwidth-region)
-    (call-interactively #'halfwidth-word)))
+(custom/cjk-width--define-dwim custom/fullwidth-dwim
+  "有选区时把选区转全角,无选区时转光标处词。" fullwidth)
+(custom/cjk-width--define-dwim custom/halfwidth-dwim
+  "有选区时把选区转半角,无选区时转光标处词。" halfwidth)
 
 (custom/bind "C-c e q" #'unfill-paragraph "取消段落填充" "编辑变换")
 (custom/bind "C-c e r" #'replace-regexp-as-diff "正则替换预览" "编辑变换")
@@ -2533,10 +2443,6 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   :server    LSP server 启动命令列表(nil 表示无 LSP)
   :formatter Apheleia formatter 符号(nil 表示不格式化)")
 
-(defun custom--language-server-key (entry)
-  "ENTRY 的 LSP server 命令(无 server 返回 nil,供 `seq-group-by' 分组)。"
-  (plist-get entry :server))
-
 (defconst custom:language-treesit-remaps
   (seq-filter #'cdr
               (seq-map (lambda (entry)
@@ -2552,8 +2458,8 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             (cons (seq-mapcat (lambda (entry) (plist-get entry :modes))
                               (cdr group))
                   (car group)))
-          (seq-group-by #'custom--language-server-key
-                        (seq-filter #'custom--language-server-key
+          (seq-group-by (lambda (entry) (plist-get entry :server))
+                        (seq-filter (lambda (entry) (plist-get entry :server))
                                     custom:language-capabilities)))
   "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生,按 server 命令去重)。")
 
@@ -2612,20 +2518,22 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
   "eglot-managed-mode 回调：开启 inlay hints。"
   (eglot-inlay-hints-mode 1))
 
-(defun custom--maybe-eglot-ensure ()
-  "`prog-mode-hook' 回调:小文件才 `eglot-ensure'。
+(defun custom--maybe-enable-prog-helpers ()
+  "`prog/conf-mode-hook' 回调:小 buffer 才启用 LSP 与折叠。
 大文件(buffer 超过 `custom:large-file-size-threshold')的 LSP 索引
-(rust-analyzer 全 crate 扫描)是同步高成本操作,故跳过;用户仍可用
-M-x eglot 手动启动。"
+(rust-analyzer 全 crate 扫描)与 hs 折叠块解析是同步高成本操作,且与
+`global-so-long-mode' 的降级路径互斥,故跳过;LSP 仍可用 M-x eglot
+手动启动。"
   (unless (> (buffer-size) custom:large-file-size-threshold)
-    (eglot-ensure)))
+    (eglot-ensure)
+    (hs-minor-mode 1)))
 
 ;; eglot-ensure 对无 server 的 major mode 是 no-op,直接挂 prog-mode-hook 即可;
 ;; 首次调用触发 autoload 加载 eglot,:config 先于 ensure 函数体执行,
 ;; server programs 与 eglot-x 就位后当前 buffer 立即连上 LSP。
 (use-package eglot
   :defer t
-  :hook (prog-mode . custom--maybe-eglot-ensure)
+  :hook (prog-mode . custom--maybe-enable-prog-helpers)
   :custom
   (eglot-autoshutdown t)
   (eglot-workspace-configuration
@@ -2710,19 +2618,21 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 + 本块定义的函数被 [[#global-keys][全局直达键]]、[[#programming-keys][代码与导航键]] 复用
 
 #+begin_src emacs-lisp
-(defun custom/code-move-line-up ()
-  "将当前行上移一行;首行时不动。"
-  (interactive)
-  (when (> (line-beginning-position) (point-min))
-    (transpose-lines 1)
-    (forward-line -2)))
+(defun custom/code-move-line (n)
+  "将当前行下移 N 行;N 为负则上移,首行上移时不动。"
+  (interactive "p")
+  (dotimes (_ (abs n))
+    (if (< n 0)
+        (when (> (line-beginning-position) (point-min))
+          (transpose-lines 1)
+          (forward-line -2))
+      (forward-line 1)
+      (transpose-lines 1)
+      (forward-line -1))))
 
-(defun custom/code-move-line-down ()
-  "将当前行下移一行。"
-  (interactive)
-  (forward-line 1)
-  (transpose-lines 1)
-  (forward-line -1))
+;; custom/bind 无法传参,上/下两键各留一个定参入口。
+(defun custom/code-move-line-up () (interactive) (custom/code-move-line -1))
+(defun custom/code-move-line-down () (interactive) (custom/code-move-line 1))
 
 (defun custom/code-format-dwim ()
   "智能格式化:有选区格式化选区,否则格式化整个缓冲区。
@@ -2738,14 +2648,6 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
         (eglot-format-buffer))
        (t
         (indent-region (point-min) (point-max)))))))
-
-(defun custom/code-comment-block ()
-  "使用块注释包围选区。"
-  (interactive)
-  (if (use-region-p)
-      (let ((comment-style 'multi-line))
-        (comment-region (region-beginning) (region-end)))
-    (message "请先选择要块注释的区域")))
 #+end_src
 
 ** 代码与导航键
@@ -2782,15 +2684,10 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 
 (custom/bind "C-c c f" #'custom/code-format-dwim "智能格式化" "代码")
 
-(defun custom--maybe-enable-hs-minor-mode ()
-  "`prog/conf-mode-hook' 回调:小文件才开 `hs-minor-mode'。
-大文件(buffer 超过 `custom:large-file-size-threshold')的折叠块解析是
-同步高成本操作,且与 `global-so-long-mode' 的降级路径互斥,故跳过。"
-  (unless (> (buffer-size) custom:large-file-size-threshold)
-    (hs-minor-mode 1)))
-
-(add-hook 'prog-mode-hook #'custom--maybe-enable-hs-minor-mode)
-(add-hook 'conf-mode-hook #'custom--maybe-enable-hs-minor-mode)
+;; conf-mode 不是 prog-mode 派生,折叠入口需单独挂;LSP 与折叠共用
+;; `custom--maybe-enable-prog-helpers'(定义见 [[#programming-tools]]),
+;; eglot-ensure 对 conf 无注册 server 是 no-op。
+(add-hook 'conf-mode-hook #'custom--maybe-enable-prog-helpers)
 
 ;; Ctrl+click 跳转定义(与其他编辑器惯例一致,与右键菜单体系互补)。
 (global-xref-mouse-mode 1)
@@ -2896,14 +2793,12 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 :CUSTOM_ID: project-navigation
 :END:
 
-配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、xref 正则搜索、ibuffer 按项目分组。
+配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、xref 正则搜索。
 
 + 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
 + 项目全文搜索主入口是 =project-find-regexp=(xref 集成,后端 ripgrep,结果走 *xref* / *grep* buffer,支持 Emacs 31 内置 `grep-edit`)
 + =project-switch-commands= 带标签菜单(d/f/r/a):切换项目后弹菜单,=a= 入口对项目根执行任意全局命令(=project-any-command=,功能上覆盖整个 =C-x p= 键表;upstream 中带标签菜单与 =project-switch-use-entire-map= 的裸键提示互斥,故不启用后者)
 + =project-prune-zombie-projects= alist:已删除的项目根在 prompt / 首次读取 / 写回三处自动从已知列表清除(daemon 长驻下列表自洁)
-+ =project-find-file= : 项目内快速文件搜索( =custom/find-file-in-project= )
-+ ibuffer 用内置 project filter 分组( =project-current= + =project-root= )
 + 项目前缀 =C-x p= 在本域末尾绑定(功能内聚)
 + 项目切换清空当前 frame 的 tab-line( advice =project-switch-project= :after,见 [[#tab-line][Tab-line]])
 
@@ -2943,33 +2838,6 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
       '((prompt . project-prune-zombies-default)
         (list-first-read . project-prune-zombies-default)
         (list-write . project-prune-zombies-default)))
-
-;; ibuffer 用内置 predicate filter 按 project.el 已知根目录分组。
-(with-eval-after-load 'ibuffer
-  (require 'ibuf-ext)
-  (defun custom/ibuffer-set-project-groups ()
-    "按 `project-known-project-roots' 设置当前 Ibuffer 的项目分组。"
-    (setq ibuffer-filter-groups
-          (mapcar
-           (lambda (root)
-             (list (file-name-nondirectory (directory-file-name root))
-                   (cons 'predicate
-                         `(when-let* ((project
-                                       (project-current nil default-directory)))
-                            (equal (project-root project) ,root)))))
-           (project-known-project-roots)))
-    (ibuffer-update nil t))
-  (add-hook 'ibuffer-hook
-            #'custom/ibuffer-set-project-groups))
-
-(defun custom/find-file-in-project ()
-  "用 project.el 查找当前项目内文件。
-
-在 project.el 项目内时限定到项目根目录;否则从当前目录搜索。"
-  (interactive)
-  (require 'project)
-  (let ((default-directory (custom/project-root-or-default)))
-    (call-interactively #'project-find-file)))
 
 ;; project-find-regexp 的后端由 xref-search-program 决定;默认 grep,
 ;; 不会自动检测已安装的 rg,显式切换(ripgrep 在 home 包清单中)。
@@ -3024,7 +2892,7 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 #+begin_src emacs-lisp
 (defconst custom:dired-side-action
   '(display-buffer-in-side-window
-    (side . left) (slot . 0) (window-width . 0.2))
+    (side . left) (window-width . 0.2))
   "左侧 Dired 面板的 display-buffer action:宽度 0.2(Zed project panel 比例)。")
 
 (defun custom/dired--panel-setup (buffer)
@@ -3167,17 +3035,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   (add-hook 'org-mode-hook #'custom--org-toggle-link-previews)
 
   ;; 行号噪音由 [[#mixed-gui-tty-constraints][主题与字体]] 的禁用行号 mode 列表统一处理(org-mode 在列)。
-
-  ;; C-j 在 Org 内分发:表格内走原命令,表格外走 next-line
-  (defun custom/org-c-j-dispatch ()
-    "在 Org buffer 中分发 C-j:表格内走 `org-return-and-maybe-indent',
-其余位置走 `next-line'。"
-    (interactive)
-    (call-interactively
-     (if (org-at-table-p)
-         #'org-return-and-maybe-indent
-       #'next-line)))
-  (define-key org-mode-map (kbd "C-j") #'custom/org-c-j-dispatch))
+  )
 #+end_src
 
 *** Org Capture 模板
@@ -3185,13 +3043,12 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 :CUSTOM_ID: capture-templates
 :END:
 
-=org= 用 =:defer t= 加载,capture 模板从 org 的 =:config= 移出到独立的 =with-eval-after-load 'org-capture=:这些辅助函数只依赖 bootstrap 常量(无 org 依赖),但 =org-capture-templates= 需 org-capture 加载后设置才有意义。模板设置延迟到首次 capture 时。=k= 前缀是经验/笔记子菜单,=ki/kt/kd/ke/kr/kn/km/ka= 八条模板覆盖四类数据生命周期:
+=org= 用 =:defer t= 加载,capture 模板从 org 的 =:config= 移出到独立的 =with-eval-after-load 'org-capture=:这些辅助函数只依赖 bootstrap 常量(无 org 依赖),但 =org-capture-templates= 需 org-capture 加载后设置才有意义。模板设置延迟到首次 capture 时。=k= 前缀是经验/笔记子菜单,=ki/kd/ke/kr/kn/km/ka= 七条模板覆盖四类数据生命周期:
 
 #+attr_org: :width 70
 | 键 | 名称            | 目标         | 生命周期语义                             |
 |----+-----------------+--------------+------------------------------------------|
 | =ki= | Inbox 草稿      | =inbox.org=    | 一句话草稿、待分流事项                   |
-| =kt= | 任务            | =agenda/=      | 普通任务(进 agenda)                      |
 | =kd= | 带日期任务      | =agenda/=      | 任务 + SCHEDULED 日期                    |
 | =ke= | 日程事件        | =agenda/=      | 日程事件(无 TODO 关键字)                 |
 | =kr= | Roam 长期笔记   | =roam/=        | 长期笔记与双向关联知识                   |
@@ -3204,9 +3061,6 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
   "本次 capture 的经验卡 category。")
 (defvar custom/org-capture--roam-title nil
   "本次 Roam capture 的标题。")
-(defun custom/org-capture--category ()
-  "返回本次 capture 选定的 category。"
-  (or custom/org-capture--last-category "general"))
 (defun custom/org-capture--experience-file ()
   "生成经验卡片目标文件路径(人类域,从 `agenote fields --category' 拉分类)。"
   (custom--ensure-org-directories)
@@ -3225,12 +3079,6 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
       (make-directory dir t))
     (expand-file-name (format "%s.org" (format-time-string "%Y%m%d-%H%M%S"))
                       dir)))
-(defun custom/org-capture--agenda-file ()
-  "返回本次 capture 的目标 agenda 文件。
-当前 `org-agenda-files' 只有一项;未来扩展为多文件时改为 completing-read。"
-  (custom--ensure-org-directories)
-  (car (org-agenda-files)))
-
 (defun custom/org-capture--roam-file ()
   "返回本次长期笔记的 Roam 文件路径。"
   (custom--ensure-org-directories)
@@ -3240,17 +3088,13 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
    (format "%s.org" (format-time-string "%Y%m%d-%H%M%S"))
    custom:org-roam-directory))
 
-(defun custom/org-capture--roam-title-value ()
-  "返回当前 Roam capture 标题。"
-  (or custom/org-capture--roam-title "未命名笔记"))
-
 (defun custom/org-capture--clear-state ()
   "`org-capture-after-finalize-hook' 回调：清理本次 capture 的临时状态。"
   (setq custom/org-capture--last-category nil
         custom/org-capture--roam-title nil))
 #+end_src
 
-每条模板拆成两部分:=defconst= 块持有键、类型与目标文件,以列 0 的 noweb 引用拼入模板体;紧跟其后的 =#+name= 文本块(=org= 语言,=:tangle no=)即模板原文——行首 =*= / =#+= 以逗号转义保字面,含双引号的 elisp 表达式写 =\"=,引用行前的开引号留在上一行(noweb 展开会把引用处行首前缀复制到文本每一行)。目标文件为常量路径的模板在定义时展开(反引号 =,=);需要交互选择的(agenda 文件、经验卡路径)传入函数,由 org-capture 在 capture 时调用。
+每条模板拆成两部分:=defconst= 块持有键、类型与目标文件,以列 0 的 noweb 引用拼入模板体;紧跟其后的 =#+name= 文本块(=org= 语言,=:tangle no=)即模板原文——行首 =*= / =#+= 以逗号转义保字面,含双引号的 elisp 表达式写 =\"=,引用行前的开引号留在上一行(noweb 展开会把引用处行首前缀复制到文本每一行)。目标文件为常量路径的模板在定义时展开(反引号 =,=);agenda 三条的目标文件在 org-capture 加载的组装期求值一次,需要交互选择的(经验卡路径、Roam 标题)传入函数,由 org-capture 在 capture 时调用。
 
 =ki= Inbox 草稿:最小阻力收集,一句话 TODO + CREATED 时间戳,留待 inbox 分流。
 
@@ -3272,38 +3116,12 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 %i
 #+end_src
 
-=kt= / =kd= / =ke= agenda 三条:普通任务、带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。目标文件由 =custom/org-capture--agenda-file= 运行时解析,三条模板体结构一致,只有首行关键字与日期行差异。
+=kd= / =ke= agenda 两条:带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。两条由 =custom/org-capture--agenda-tpl= 在 org-capture 加载的组装期以同一目标文件生成;=kd= / =ke= 仅日期行与首行关键字差异(普通无日期任务被 =kd= 覆盖:SCHEDULED 行可留空跳过)。
 
 #+begin_src emacs-lisp
-(defconst custom:org-capture-tpl-task
-  '("kt" "任务 (agenda)" entry
-    (file custom/org-capture--agenda-file)
-    "
-<<org-capture-tpl-task>>\n")
-  "普通任务,进 agenda。")
-
-(defconst custom:org-capture-tpl-task-date
-  '("kd" "带日期任务 (agenda)" entry
-    (file custom/org-capture--agenda-file)
-    "
-<<org-capture-tpl-task-date>>\n")
-  "任务 + SCHEDULED 日期。")
-
-(defconst custom:org-capture-tpl-event
-  '("ke" "日程事件 (agenda)" entry
-    (file custom/org-capture--agenda-file)
-    "
-<<org-capture-tpl-event>>\n")
-  "日程事件,无 TODO 关键字。")
-#+end_src
-
-#+name: org-capture-tpl-task
-#+begin_src org :tangle no
-,* TODO %?
-:PROPERTIES:
-:CREATED:  %U
-:END:
-%i
+(defun custom/org-capture--agenda-tpl (key desc file body)
+  "生成 agenda capture 模板:KEY/DESC/目标 FILE 加 BODY 模板体。"
+  (list key desc 'entry (list 'file file) body))
 #+end_src
 
 #+name: org-capture-tpl-task-date
@@ -3338,7 +3156,7 @@ SCHEDULED: %^t
 
 #+name: org-capture-tpl-roam
 #+begin_src org :tangle no
-,#+title: %(custom/org-capture--roam-title-value)
+,#+title: %(or custom/org-capture--roam-title \"未命名笔记\")
 :PROPERTIES:
 :ID:       %(org-id-new)
 :CREATED:  %U
@@ -3347,7 +3165,17 @@ SCHEDULED: %^t
 %?
 #+end_src
 
-经验三卡(note / mistake / ascended)对齐 =agenote-base= 的 entry-types:属性 drawer 记录 =ENTRY_TYPE= 与 =CATEGORY=,模板体预置各卡的复盘章节骨架——每章标题即复盘时需要回答的问题。三卡模板结构同源,仅 =ENTRY_TYPE= / =TYPE= 与章节骨架不同。
+经验三卡(note / mistake / ascended)对齐 =agenote-base= 的 entry-types:属性 drawer 记录 =ENTRY_TYPE= 与 =CATEGORY=,模板体预置各卡的复盘章节骨架——每章标题即复盘时需要回答的问题。三卡模板结构同源,公共表头抽为下方 =#+name= 块,各卡以列 0 引用拼入,仅 =TYPE= / =ENTRY_TYPE= 与章节骨架保留在卡内;数据块自带 =:noweb yes= 才会在 tangle 上下文递归展开嵌套引用。
+
+#+name: org-capture-tpl-experience-head
+#+begin_src org :tangle no :noweb yes
+,* %^{标题}
+:PROPERTIES:
+:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
+:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
+:CATEGORY: %(or custom/org-capture--last-category \"general\")
+:TECH:     %^{技术栈}
+#+end_src
 
 #+begin_src emacs-lisp
 (defconst custom:org-capture-tpl-note
@@ -3373,13 +3201,8 @@ SCHEDULED: %^t
 #+end_src
 
 #+name: org-capture-tpl-note
-#+begin_src org :tangle no
-,* %^{标题}
-:PROPERTIES:
-:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
-:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
-:CATEGORY: %(custom/org-capture--category)
-:TECH:     %^{技术栈}
+#+begin_src org :tangle no :noweb yes
+<<org-capture-tpl-experience-head>>
 :TYPE:     workflow
 :STATUS:   done
 :ENTRY_TYPE: note
@@ -3396,13 +3219,8 @@ SCHEDULED: %^t
 #+end_src
 
 #+name: org-capture-tpl-mistake
-#+begin_src org :tangle no
-,* %^{标题}
-:PROPERTIES:
-:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
-:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
-:CATEGORY: %(custom/org-capture--category)
-:TECH:     %^{技术栈}
+#+begin_src org :tangle no :noweb yes
+<<org-capture-tpl-experience-head>>
 :TYPE:     debug
 :STATUS:   done
 :ENTRY_TYPE: mistake
@@ -3419,13 +3237,8 @@ SCHEDULED: %^t
 #+end_src
 
 #+name: org-capture-tpl-ascended
-#+begin_src org :tangle no
-,* %^{标题}
-:PROPERTIES:
-:ID:       %(format-time-string \"%Y%m%d-%H%M%S\")
-:CREATED:  %(format-time-string \"[%Y-%m-%d %a]\")
-:CATEGORY: %(custom/org-capture--category)
-:TECH:     %^{技术栈}
+#+begin_src org :tangle no :noweb yes
+<<org-capture-tpl-experience-head>>
 :TYPE:     debug
 :STATUS:   done
 :ENTRY_TYPE: ascended
@@ -3443,15 +3256,20 @@ SCHEDULED: %^t
 
 #+begin_src emacs-lisp
 (with-eval-after-load 'org-capture
-  (setq org-capture-templates
-        (list custom:org-capture-tpl-inbox
-              custom:org-capture-tpl-task
-              custom:org-capture-tpl-task-date
-              custom:org-capture-tpl-event
-              custom:org-capture-tpl-roam
-              custom:org-capture-tpl-note
-              custom:org-capture-tpl-mistake
-              custom:org-capture-tpl-ascended))
+  ;; agenda 目标组装期求值一次:org-agenda-files 配置为单一目录,
+  ;; 展开后的首个 .org 文件即两条 agenda 模板的共同落点。
+  (custom--ensure-org-directories)
+  (let ((agenda-file (car (org-agenda-files))))
+    (setq org-capture-templates
+          (list custom:org-capture-tpl-inbox
+                (custom/org-capture--agenda-tpl "kd" "带日期任务 (agenda)" agenda-file "
+<<org-capture-tpl-task-date>>\n")
+                (custom/org-capture--agenda-tpl "ke" "日程事件 (agenda)" agenda-file "
+<<org-capture-tpl-event>>\n")
+                custom:org-capture-tpl-roam
+                custom:org-capture-tpl-note
+                custom:org-capture-tpl-mistake
+                custom:org-capture-tpl-ascended)))
   (add-hook 'org-capture-after-finalize-hook
             #'custom/org-capture--clear-state))
 #+end_src
@@ -3611,9 +3429,6 @@ agenote CLI 集成的知识库 CRUD。
 + =winner-dont-bind-my-keys t= :避免 winner 抢占 =C-c ←= / =C-c →= (本配置在 =C-c w= 体系下手动绑定 winner-undo / redo)
 
 #+begin_src emacs-lisp
-(defconst custom:which-key-grid-columns 3
-  "Which-key 中文菜单默认使用的固定网格列数。")
-
 (use-package which-key
   :demand t
   :config
@@ -3623,7 +3438,7 @@ agenote CLI 集成的知识库 CRUD。
         which-key-allow-multiple-replacements t
         which-key-max-description-length 28
         ;; 中文条目在终端里更适合稳定的等宽分栏布局:默认三列,超宽屏可升到四列,窄窗口可降回两列。
-        which-key-max-display-columns custom:which-key-grid-columns
+        which-key-max-display-columns 3
         which-key-min-column-description-width 16
         which-key-add-column-padding 1
         which-key-min-display-lines 10
@@ -3693,16 +3508,16 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "C-S-d" #'duplicate-dwim "复制当前行" "基础移动与直达键")
 (custom/bind "C-S-<up>" #'custom/code-move-line-up "上移当前行" "基础移动与直达键")
 (custom/bind "C-S-<down>" #'custom/code-move-line-down "下移当前行" "基础移动与直达键")
-(custom/bind "C-S-/" #'custom/code-comment-block "块注释" "基础移动与直达键")
+(custom/bind "C-S-/" #'comment-box "块注释" "基础移动与直达键")
 (custom/bind "C-S-s" #'write-file "另存为" "基础移动与直达键")
-(custom/bind "C-S-a" #'custom/find-file-in-project "项目文件搜索" "基础移动与直达键")
+(custom/bind "C-S-a" #'project-find-file "项目文件搜索" "基础移动与直达键")
 (custom/bind "<f2>" #'custom/rename-dwim "重命名" "基础移动与直达键")
 (custom/bind "C-<f12>" #'xref-find-definitions "跳转到定义" "基础移动与直达键")
 (custom/bind "C-S-<f12>" #'xref-find-references "查找引用" "基础移动与直达键")
 (custom/bind "C-`" #'custom/open-terminal "打开终端" "基础移动与直达键")
 (custom/bind "C-=" #'text-scale-increase "放大" "基础移动与直达键")
 (custom/bind "C--" #'text-scale-decrease "缩小" "基础移动与直达键")
-(custom/bind "C-0" #'custom/reset-text-scale "重置缩放" "基础移动与直达键")
+(custom/bind "C-0" (lambda () (interactive) (text-scale-set 0)) "重置缩放" "基础移动与直达键")
 (custom/bind "M-<left>" #'windmove-left "左切窗口" "基础移动与直达键")
 (custom/bind "M-<right>" #'windmove-right "右切窗口" "基础移动与直达键")
 (custom/bind "M-<up>" #'windmove-up "上切窗口" "基础移动与直达键")
@@ -3729,6 +3544,7 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 #+begin_src emacs-lisp
 (dolist (prefix
          '(("C-x" . "文件 / 缓冲区 / 窗口 / 标签")
+           ("C-x t" . "标签")
            ("C-x p" . "项目")
            ("M-s" . "搜索")
            ("M-g" . "跳转 / 错误")
@@ -3746,7 +3562,6 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "C-x k" #'kill-buffer-and-window "关闭窗口与缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x K" #'kill-buffer "关闭指定缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x C-f" #'ffap "打开文件(光标处路径优先)" "文件 / 缓冲区 / 标签")
-(custom/declare-binding-group "C-x t" "标签")
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 
@@ -3766,31 +3581,30 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 
 ;; C-c w 面板体系:左 Dired([[#panel-dired]])/ 底终端([[#terminal]])/ 右 Agent
 ;; ([[#applications]])各自复用其功能域的打开命令,这里只承载跨域的布局总开关。
-(defun custom/panels--agent-buffers ()
-  "返回全部 agent-shell-mode buffer 列表(可能为空)。
-扫描 `buffer-list' 而非调 agent-shell API,避免强制加载惰性包。
-收集全部而非首个:多 agent 会话并存时,总开关要能一并关闭。"
-  (seq-filter
-   (lambda (buf)
-     (with-current-buffer buf (derived-mode-p 'agent-shell-mode)))
-   (buffer-list)))
-
-(defun custom/panels--visible-buffers-p (buffers)
-  "BUFFERS 中是否有任一存活且已显示的 buffer。
-`buffer-list' 恒返回存活 buffer,此处 buffer 均来自 `buffer-list' 或
-`dired-noselect',同步上下文不做存活检查;`get-buffer-window' 对已
-kill buffer 返回 nil,不抛错。"
-  (cl-some #'get-buffer-window buffers))
-
 (defun custom/panels-toggle ()
   "一键开关三面板布局(左 Dired / 底终端 / 右 Agent)。
 任一面板已显示则全部隐藏(缓冲区保留,终端与 agent 会话不中断);
 全部隐藏时重新打开。开关后焦点均回到主编辑窗口(Zed dock 行为)。"
   (interactive)
-  (let ((buffers (cons (dired-noselect (custom/project-root-or-default))
-                       (cons (custom--terminal-existing-buffer)
-                             (custom/panels--agent-buffers)))))
-    (if (custom/panels--visible-buffers-p buffers)
+  ;; 显隐判断只用已存在 buffer:dired 按 dired-noselect 的复用规则查找
+  ;; (dired-mode + dired-directory 匹配项目根),隐藏路径不为此创建 buffer。
+  (let* ((root (expand-file-name (custom/project-root-or-default)))
+         (dired-buf (seq-find
+                     (lambda (buf)
+                       (with-current-buffer buf
+                         (and (eq major-mode 'dired-mode)
+                              (stringp dired-directory)
+                              (equal (expand-file-name dired-directory) root))))
+                     (buffer-list)))
+         (buffers (append
+                   (remq nil (list dired-buf
+                                   (custom--terminal-existing-buffer)))
+                   (seq-filter
+                    (lambda (buf)
+                      (with-current-buffer buf
+                        (derived-mode-p 'agent-shell-mode)))
+                    (buffer-list)))))
+    (if (cl-some #'get-buffer-window buffers)
         (dolist (buf buffers)
           (when-let* ((win (get-buffer-window buf)))
             (delete-window win)))
@@ -3961,22 +3775,17 @@ Minibuffer 补全采用 vertico 生态 6 件套:vertico(minibuffer 候选列表)
 ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode 默认 capf 链含 =ispell-completion-at-point= (Emacs 30+),本机无 plain word list( =share/dict/words= ),缺词表的该 capf 只会在补全时白跑,故统一移除。英文词补全由 =cape-dabbrev= ( =M-/= )承担。
 
 #+begin_src emacs-lisp
-(require 'ispell)
-
-(defun custom/completion-setup-ispell-program ()
-  "配置 aspell 作为 ispell 后端命令,不可用时保持默认。"
+(defun custom/completion-text-ispell-setup ()
+  "text-mode 回调:aspell 作 ispell 后端,并移除缺词表白跑的词表补全 capf。"
+  (require 'ispell)
   (when (executable-find custom:executable-aspell)
     (setq ispell-program-name custom:executable-aspell
-          ispell-extra-args '("--sug-mode=ultra"))))
-
-(defun custom/completion-remove-ispell-capf ()
-  "从当前 buffer 的 capf 链移除 `ispell-completion-at-point'。"
+          ispell-extra-args '("--sug-mode=ultra")))
   (setq-local completion-at-point-functions
               (remq 'ispell-completion-at-point
                     completion-at-point-functions)))
 
-(custom/completion-setup-ispell-program)
-(add-hook 'text-mode-hook #'custom/completion-remove-ispell-capf)
+(add-hook 'text-mode-hook #'custom/completion-text-ispell-setup)
 #+end_src
 
 词表与后端就绪后注册到文本模式。
@@ -4217,22 +4026,21 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。渲染
 (defun custom/dashboard--nav-buttons ()
   "Dashboard navigator 一行四个二级入口(icon title help action)。
 action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
-  (list
-   (list (nerd-icons-octicon "nf-oct-clock" :height 1.2 :v-adjust -0.05)
-         "计时" "计时的任务: 跳转;否则打开今日议程(按 I 计时)"
-         (lambda (&rest _)
-           (require 'org-clock)
-           (call-interactively
-            (if (org-clocking-p) #'org-clock-goto #'org-agenda-list))))
-   (list (nerd-icons-octicon "nf-oct-bookmark" :height 1.2 :v-adjust -0.05)
-         "书签" "跳转书签 (C-x r b)"
-         (lambda (&rest _) (call-interactively #'bookmark-jump)))
-   (list (nerd-icons-octicon "nf-oct-book" :height 1.2 :v-adjust -0.05)
-         "知识库" "知识库总览 (RET 打开卡片)"
-         (lambda (&rest _) (call-interactively #'agenote-knowledge-browse)))
-   (list (nerd-icons-octicon "nf-oct-question" :height 1.2 :v-adjust -0.05)
-         "快捷键" "快捷键帮助 (F1 ?)"
-         (lambda (&rest _) (call-interactively #'custom/show-help)))))
+  (cl-flet ((ic (name)
+              (nerd-icons-octicon name :height 1.2 :v-adjust -0.05)))
+    (list
+     (list (ic "nf-oct-clock") "计时"
+           "计时的任务: 跳转;否则打开今日议程(按 I 计时)"
+           (lambda (&rest _)
+             (require 'org-clock)
+             (call-interactively
+              (if (org-clocking-p) #'org-clock-goto #'org-agenda-list))))
+     (list (ic "nf-oct-bookmark") "书签" "跳转书签 (C-x r b)"
+           (lambda (&rest _) (call-interactively #'bookmark-jump)))
+     (list (ic "nf-oct-book") "知识库" "知识库总览 (RET 打开卡片)"
+           (lambda (&rest _) (call-interactively #'agenote-knowledge-browse)))
+     (list (ic "nf-oct-question") "快捷键" "快捷键帮助 (F1 ?)"
+           (lambda (&rest _) (call-interactively #'custom/show-help))))))
 
 ;; 旧自研 dashboard 的 figlet 字符画;box-drawing 字符均为单宽,
 ;; 'ascii banner 直接 insert 字符串,GUI/TTY 渲染一致。
@@ -4267,64 +4075,43 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
 text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
   :type 'integer)
 
-(defun custom/dashboard--separator-length (width)
-  "WIDTH 列版心需要的分割线字符 ─ 的个数。
-─ 是 East Asian ambiguous:CJK locale 的 TTY 与部分 GUI 字体按双列,
-另一些 GUI 字体单列,固定字符数或按 frame 类型猜测都无法两全;按
-当前 frame 实测的单字符像素宽折算,任何字体下都恰好铺满版心。"
-  (max 1 (/ (* width (frame-char-width))
-            (max 1 (string-pixel-width "─")))))
-
-(defun custom/dashboard--blank-line-p ()
-  "当前行是否为空行。"
-  (string-empty-p
-   (buffer-substring-no-properties
-    (line-beginning-position) (line-end-position))))
-
 (defun custom/dashboard--content-width (&optional window)
   "WINDOW(默认 selected)下的 dashboard 版心宽度(列)。"
   (floor (* custom:dashboard-content-ratio
             (window-body-width window))))
 
-(defun custom/dashboard--abbrev-dir (dir)
-  "把单个目录名 DIR 缩为首字母。
-隐藏目录(以 . 开头)取其第二个字符,避免 ~/./e 这种怪异的路径。"
-  (cond ((string-empty-p dir) dir)
-        ((string-prefix-p "." dir)
-         (if (> (length dir) 1)
-             (concat "." (substring dir 1 2))
-           dir))
-        (t (substring dir 0 1))))
-
-(defun custom/dashboard--compact-path (path)
-  "把 PATH 中间目录压缩为首字母,首尾段保留。"
-  (let* ((parts (split-string path "/" t))
-         (len (length parts)))
-    (if (<= len 3)
-        path
-      (let* ((head (car parts))
-             (file (car (last parts)))
-             (middle (cl-subseq parts 1 (1- len)))
-             (compressed (seq-map #'custom/dashboard--abbrev-dir middle)))
-        (concat head "/"
-                (mapconcat #'identity compressed "/")
-                "/" file)))))
-
-(defun custom/dashboard--fit-path (path width)
-  "把 PATH 压进 WIDTH 列:先首字母压缩中间目录,仍超则头部 ... 截断。"
-  (let ((p (custom/dashboard--compact-path path)))
+(defun custom/dashboard--shorten-path (path _type)
+  "dashboard-shorten-path 的替代:超版心的路径两级降级。
+先压缩中间目录为首字母(隐藏目录以 . 开头,取其第二个字符),仍超
+则头部 ... 截断。显示文本与真实路径经 plugin 的 path-alist 解耦,
+缩短不影响点击跳转。"
+  (let* ((abbrev (abbreviate-file-name path))
+         (width (custom/dashboard--content-width))
+         (parts (split-string abbrev "/" t))
+         (len (length parts))
+         (p (if (<= len 3)
+                abbrev
+              (let* ((head (car parts))
+                     (file (car (last parts)))
+                     (middle (cl-subseq parts 1 (1- len)))
+                     (compressed
+                      (seq-map
+                       (lambda (dir)
+                         (cond ((string-empty-p dir) dir)
+                               ((string-prefix-p "." dir)
+                                (if (> (length dir) 1)
+                                    (concat "." (substring dir 1 2))
+                                  dir))
+                               (t (substring dir 0 1))))
+                       middle)))
+                (concat head "/"
+                        (mapconcat #'identity compressed "/")
+                        "/" file)))))
     (if (<= (string-width p) width)
         p
       (if (<= width 3)
           "..."
         (concat (substring p 0 (- width 3)) "...")))))
-
-(defun custom/dashboard--shorten-path (path _type)
-  "dashboard-shorten-path 的替代:超版心的路径两级降级。
-显示文本与真实路径经 plugin 的 path-alist 解耦,缩短不影响点击跳转。"
-  (custom/dashboard--fit-path
-   (abbreviate-file-name path)
-   (custom/dashboard--content-width)))
 
 (defun custom/dashboard--dashboard-window ()
   "返回 client frame 中显示 dashboard 的窗口,无则 nil。
@@ -4358,8 +4145,9 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
     (overlays-in (point-min) (point-max)))
    (lambda (a b) (< (overlay-start a) (overlay-start b)))))
 
-(defun custom/dashboard--decorate-section (ov key width icon-w)
+(defun custom/dashboard--decorate-section (ov key width icon-w separator)
   "装饰单个板块:OV 标题 overlay,KEY 右贴快捷键,WIDTH 版心宽。
+SEPARATOR 是调用方按版心折算好的 propertized 分割线串。
 含三步:板块尾空行换分割线、板块内行加行间距、标题行缩进+快捷键右贴。
 倒序调用,前面的 insert 不影响后面 heading 的位置。"
   (let* ((name (or (overlay-get ov 'display)
@@ -4367,29 +4155,27 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
                     (overlay-start ov) (overlay-end ov))))
          (used (+ 4 icon-w (string-width name))))
     (save-excursion
-      ;; 分割线替换板块尾第一段空行(板块边界 = 标题行后第一个空行)
+      ;; 分割线替换板块尾第一段空行(板块边界 = 标题行后第一个空行)。
+      ;; 从标题行起一遍扫描,顺手收集行范围;扫到空行即边界,
+      ;; 走到 point-max 仍无空行则整体跳过(末板块无分割线)
       (goto-char (overlay-start ov))
-      (forward-line 1)
-      (while (and (< (point) (point-max))
-                  (not (custom/dashboard--blank-line-p)))
-        (forward-line 1))
-      (when (< (point) (point-max))
-        ;; 板块内标题与条目行统一行间距:不插空行,靠 GUI 行距
-        ;; 拉开;标题行也在内,与首条目保持同一间距
-        (let ((sec-end (line-beginning-position)))
-          (goto-char (overlay-start ov))
-          (while (< (point) sec-end)
-            (unless (custom/dashboard--blank-line-p)
-              (put-text-property
-               (line-beginning-position) (line-end-position)
-               'line-spacing custom:dashboard-line-spacing))
-            (forward-line 1))
-          (goto-char sec-end))
-        (delete-region (line-beginning-position) (line-end-position))
-        (insert (propertize
-                 (make-string
-                  (custom/dashboard--separator-length width) ?─)
-                 'face 'shadow))))
+      (let ((lines '())
+            blank)
+        (while (and (not blank) (< (point) (point-max)))
+          (let ((beg (line-beginning-position))
+                (end (line-end-position)))
+            (if (= end beg)
+                (setq blank t)
+              (push (cons beg end) lines)
+              (forward-line 1))))
+        (when blank
+          ;; 板块内标题与条目行统一行间距:不插空行,靠 GUI 行距
+          ;; 拉开;标题行也在内,与首条目保持同一间距
+          (dolist (line lines)
+            (put-text-property (car line) (cdr line)
+                               'line-spacing custom:dashboard-line-spacing))
+          (delete-region (line-beginning-position) (line-end-position))
+          (insert separator))))
     ;; 标题行缩进 + 快捷键右贴到版心宽
     (goto-char (overlay-start ov))
     (let ((line-start (line-beginning-position))
@@ -4422,20 +4208,15 @@ dashboard-str-len 与插件原生 footer 居中同款公式。
 屏幕左缘(内容只剩行尾残片),贴左至少完整可读;
 align-to 表达式没有可用的 max 钳制(Emacs 31 静默
 回退 0),只能在装饰时静态排除。"
-  (let ((w (dashboard-str-len
-            (buffer-substring
-             (line-beginning-position)
-             (line-end-position)))))
+  (let* ((beg (line-beginning-position))
+         (end (line-end-position))
+         (w (dashboard-str-len (buffer-substring beg end))))
     (when (and (> w 0) (<= w body-width))
       (let ((p (propertize
                 " " 'display
                 `(space . (:align-to (- center ,(/ w 2)))))))
-        (put-text-property
-         (line-beginning-position) (line-end-position)
-         'line-prefix p)
-        (put-text-property
-         (line-beginning-position) (line-end-position)
-         'indent-prefix p)))))
+        (add-text-properties beg end
+                             (list 'line-prefix p 'indent-prefix p))))))
 
 (defun custom/dashboard--center-groups (ovs width window)
   "分组居中:先 remove 再改写——add-text-properties 不覆盖已有
@@ -4488,6 +4269,14 @@ page-separator 替换会使后者的绝对位置漂移。只从
            (icon-w (if (and (dashboard-display-icons-p)
                             dashboard-set-heading-icons)
                        2 0))
+           ;; 分隔线每渲染只折算一次:同次渲染内 frame/字体不变,
+           ;; ─ 为 East Asian ambiguous,按当前 frame 实测像素宽折算
+           ;; 才能恰好铺满版心(各板块共用同一结果)
+           (separator (propertize
+                       (make-string
+                        (max 1 (/ (* width (frame-char-width))
+                                  (max 1 (string-pixel-width "─")))) ?─)
+                       'face 'shadow))
            (ovs (custom/dashboard--heading-overlays))
            (inhibit-read-only t))
       ;; 倒序插入,前面的 insert 不影响后面 heading 的位置
@@ -4495,7 +4284,7 @@ page-separator 替换会使后者的绝对位置漂移。只从
        for (ov . key) in (reverse (cl-mapcar #'cons ovs
                                              custom:dashboard-heading-keys))
        when key
-       do (custom/dashboard--decorate-section ov key width icon-w))
+       do (custom/dashboard--decorate-section ov key width icon-w separator))
       (custom/dashboard--center-groups ovs width window))))
 
 (defun custom/dashboard--refresh-if-stale ()
