@@ -26,6 +26,21 @@
 ;;; VSCode Shift+Alt+C 绑 "M-C" 而非 "M-S-c"（S- 是 super）；两键
 ;;; 在树内遮蔽全局多光标 add-cursors-to-next-line，无损失（只读树
 ;;; 内无多光标场景）。
+;;;
+;;; git 状态异步刷新：git status 采集（fork 子进程，大仓库/慢盘上百
+;;; ms）走 sb-thread 短命线程，不再冻结编辑线程；完成后经
+;;; lem:send-event 把回写函数排回编辑线程执行（vs-git-refresh-commit）
+;;; ——后台线程全程只做纯数据操作（跑 git + 解析出染色表），绝不碰
+;;; buffer/window。去抖为「单飞 + 合并」：采集在途（*vs-git-refreshing*）
+;;; 时新请求只置 *vs-git-refresh-queued*，回写完成后补发一轮，保证
+;;; 在途期间的文件变更最终可见；回写按「代际 + root」双校验，工作区
+;;; 已切换的陈旧结果直接丢弃（vs-explorer-set-root 是 root 唯一写
+;;; 入口，每次变更推进 *vs-git-epoch*，root A→B→A 的 ABA 也判旧，
+;;; 宁缺勿错）。首绘时序：redraw 一帧内一律用既有缓存表渲染树（树
+;;; 不等待 git，侧栏立现），rescan-git=t 时仅「发起」异步采集，染色
+;;; 在回写帧自动重绘补齐——首绘与 git 耗时解耦。线程生命周期：单次
+;;; run-program 即退、短命无 join；lem 退出时在途采集线程随进程回收，
+;;; 无持久状态可损，最坏损失是末轮回写未送达，正确性无损。
 
 (in-package :lem-user)
 
@@ -54,6 +69,22 @@
   "展开状态记忆：目录 namestring → t（侧栏关闭重开后仍保持）")
 (defparameter *vs-git-status* (make-hash-table :test 'equal)
   "相对路径 → :modified/:untracked/:deleted/:conflict")
+
+;; --- git 状态异步刷新的标志与投递槽（设计见头注释）。标志与槽的
+;;     读写只在编辑线程发生（发起/回写都排在编辑线程），后台线程仅
+;;     生产投递槽、消费前不读——无锁单写者模型。 ---
+(defparameter *vs-send-event* (vs$ :lem "SEND-EVENT")
+  "lem:send-event（把回调排回编辑线程执行）；加载期解析一次。")
+(defparameter *vs-git-refreshing* nil
+  "单飞标志：git 采集线程在途时 t（含 send-event 已排队未执行的回写）。")
+(defparameter *vs-git-refresh-queued* nil
+  "合并标志：采集在途期间又来了刷新请求 → t，回写完成后补发一轮。")
+(defparameter *vs-git-epoch* 0
+  "工作区代际：root 每次变更 +1，回写按代际丢弃陈旧采集结果。")
+(defparameter *vs-git-deliver-table* nil
+  "投递槽：采集线程解析好的染色表（单飞保证同一时刻至多一个生产者）。")
+(defparameter *vs-git-deliver-epoch* 0 "投递槽：采集发起时的代际。")
+(defparameter *vs-git-deliver-root* nil "投递槽：采集发起时的 root namestring。")
 (defparameter *vs-code-exts*
   '("lisp" "lsp" "scm" "el" "py" "c" "h" "cc" "cpp" "rs" "go" "js" "ts"
     "json" "yaml" "yml" "toml" "nix" "sh" "org" "md" "html" "css" "scss"
@@ -79,40 +110,109 @@
 (defun vs-status-priority (s)
   (ecase s (:conflict 4) (:deleted 3) (:modified 2) (:untracked 1)))
 
-(defun vs-refresh-git-status ()
+(defun vs-explorer-set-root (root)
+  "工作区根唯一写入口：root 变更时推进代际（*vs-git-epoch*），使在途
+git 采集的结果在回写帧按代际判旧丢弃。"
+  (unless (equal root *vs-explorer-root*)
+    (setf *vs-explorer-root* root)
+    (incf *vs-git-epoch*)))
+
+(defun vs-git-parse-status (lines)
+  "git status --porcelain 行列表 → 染色表（路径/祖先目录 → 状态）。
+纯数据操作，线程安全。标记映射：U=conflict、D=deleted、?/A=untracked
+（A 是 staged 新文件，VSCode 染绿，与 untracked 同色）、其余=modified；
+rename「old -> new」取 new；C 引号路径剥外层引号。"
   (let ((table (make-hash-table :test 'equal)))
-    (when *vs-explorer-root*
-      (ignore-errors
-        (dolist (line (uiop:run-program
-                       (list "git" "-C" (namestring *vs-explorer-root*)
-                             "status" "--porcelain" "-uall")
-                       :output :lines :ignore-error-status t))
-          (when (>= (length line) 4)
-            (let* ((xy (subseq line 0 2))
-                   (raw (subseq line 3))
-                   ;; rename「old -> new」取 new；C 引号路径剥外层引号
-                   (path (let ((p (if (and (>= (length raw) 2)
-                                           (char= (char raw 0) #\"))
-                                      (string-trim '(#\") raw)
-                                      raw)))
-                           (let ((arrow (search " -> " p)))
-                             (if arrow (subseq p (+ arrow 4)) p))))
-                   (status (cond ((find #\U xy) :conflict)
-                                 ((find #\D xy) :deleted)
-                                 ((char= (char line 0) #\?) :untracked)
-                                 ((find #\A xy) :untracked)
-                                 (t :modified))))
-              (setf (gethash path table) status)
-              ;; 祖先目录按最高优先级染色
-              (loop :for i :from 0 :below (length path)
-                    :when (char= (char path i) #\/)
-                    :do (let ((dir (subseq path 0 i)))
-                          (let ((old (gethash dir table)))
-                            (when (or (null old)
-                                      (< (vs-status-priority old)
-                                         (vs-status-priority status)))
-                              (setf (gethash dir table) status))))))))))
-    (setf *vs-git-status* table)))
+    (dolist (line lines table)
+      (when (>= (length line) 4)
+        (let* ((xy (subseq line 0 2))
+               (raw (subseq line 3))
+               (path (let ((p (if (and (>= (length raw) 2)
+                                       (char= (char raw 0) #\"))
+                                  (string-trim '(#\") raw)
+                                  raw)))
+                       (let ((arrow (search " -> " p)))
+                         (if arrow (subseq p (+ arrow 4)) p))))
+               (status (cond ((find #\U xy) :conflict)
+                             ((find #\D xy) :deleted)
+                             ((char= (char line 0) #\?) :untracked)
+                             ((find #\A xy) :untracked)
+                             (t :modified))))
+          (setf (gethash path table) status)
+          ;; 祖先目录按最高优先级染色
+          (loop :for i :from 0 :below (length path)
+                :when (char= (char path i) #\/)
+                :do (let ((dir (subseq path 0 i)))
+                      (let ((old (gethash dir table)))
+                        (when (or (null old)
+                                  (< (vs-status-priority old)
+                                     (vs-status-priority status)))
+                          (setf (gethash dir table) status))))))))))
+
+(defun vs-git-collect-status (root)
+  "后台线程侧：同步跑 git status（阻塞的是采集线程自身）并解析为
+染色表。全程只做纯数据操作；任何错误写 vs-trace 后返回空表（表现
+为该帧染色清空），绝不把错误抛回线程体外炸 lem。"
+  (handler-case
+      (vs-git-parse-status
+       (uiop:run-program
+        (list "git" "-C" (namestring root) "status" "--porcelain" "-uall")
+        :output :lines :ignore-error-status t))
+    (serious-condition (e)
+      (vs-trace "explorer git 采集失败: ~A" e)
+      (make-hash-table :test 'equal))))
+
+(defun vs-git-refresh-commit ()
+  "编辑线程回写（经 send-event 排队，后台线程绝不直接碰编辑状态）：
+清单飞标志 → 代际 + root 双校验（陈旧结果丢弃）→ 落表并用缓存重绘
+（rescan-git=nil：不再触发采集，防回写→采集死循环）→ 消费合并标志
+补发一轮（收编在途期间漏掉的文件变更）。"
+  (setf *vs-git-refreshing* nil)
+  (let ((table *vs-git-deliver-table*)
+        (epoch *vs-git-deliver-epoch*)
+        (root *vs-git-deliver-root*))
+    (setf *vs-git-deliver-table* nil)
+    (if (and (= epoch *vs-git-epoch*)
+             (equal root (and *vs-explorer-root*
+                              (namestring *vs-explorer-root*))))
+        (progn
+          (setf *vs-git-status* table)
+          (vs-trace "explorer git 回写 ~A 条" (hash-table-count table))
+          (vs-explorer-render nil))
+        (vs-trace "explorer git 回写丢弃（工作区已切换的陈旧结果）"))
+    (when *vs-git-refresh-queued*
+      (setf *vs-git-refresh-queued* nil)
+      (vs-refresh-git-status))))
+
+(defun vs-refresh-git-status ()
+  "异步刷新入口（旧同步 fork 版的重写）：发起后台采集后立即返回，
+编辑线程不等 git。单飞去抖：采集在途时新请求合并进 queued（回写后
+补一轮）而非重复 spawn。线程短命无 join：一次 run-program 即退；
+lem 退出时在途采集线程随进程回收——无 join 无持久状态，最坏损失
+是末轮回写未送达，正确性无损。"
+  (when *vs-explorer-root*
+    (if *vs-git-refreshing*
+        (setf *vs-git-refresh-queued* t)
+        (let ((root *vs-explorer-root*)
+              (epoch *vs-git-epoch*))
+          (setf *vs-git-refreshing* t)
+          (sb-thread:make-thread
+           (lambda ()
+             (handler-case
+                 (progn
+                   (setf *vs-git-deliver-table* (vs-git-collect-status root)
+                         *vs-git-deliver-epoch* epoch
+                         *vs-git-deliver-root* (namestring root))
+                   (if *vs-send-event*
+                       (funcall *vs-send-event* #'vs-git-refresh-commit)
+                       (vs-trace "explorer git 回写跳过：SEND-EVENT 解析缺失")))
+               (serious-condition (e)
+                 ;; 异常恢复：放掉单飞标志（标志只在编辑线程常规读写，
+                 ;; 此处是线程兜底路径的一次布尔写，单写者场景原子性
+                 ;; 足够），否则后续刷新全部卡在 queued 永不再采集
+                 (vs-trace "explorer git 采集线程异常: ~A" e)
+                 (setf *vs-git-refreshing* nil))))
+           :name "vs-explorer-git-status")))))
 
 (defun vs-status-attribute (s)
   (ecase s
@@ -306,8 +406,10 @@ Invalid number of arguments: 0），固定形参列表任一约定下都会炸�
 (defun vs-explorer-redraw (buffer &optional (rescan-git t))
   "按当前状态重绘 explorer buffer：root 已挂载 → git 状态 + 文件树；
 未挂载 → 「无打开的文件夹」空状态。toggle 开启与刷新共用此管线。
-rescan-git 控制是否重跑 git status（fork 子进程，大仓库上百 ms）——
-折叠/展开等纯树操作传 nil 用缓存染色表，refresh/激活/开侧栏才重扫。"
+本帧一律用既有缓存表渲染（树不等待 git）；rescan-git 只控制是否
+「发起」异步重扫——折叠/展开等纯树操作传 nil 连采集都不发起，
+refresh/激活/开侧栏/文件操作传 t，采集完成后回写帧自动重绘补染色
+（时序详见头注释 git 异步段）。"
   (with-buffer-read-only buffer nil
     (let ((line (line-number-at-point (buffer-point buffer))))
       (erase-buffer buffer)
@@ -639,10 +741,10 @@ get-buffer 撞名；树状态在 *vs-open-dirs*，buffer 无状态损失。"
           (when *vs-explorer-root*
             (let ((file (ignore-errors (buffer-filename (current-buffer)))))
               (when file
-                (setf *vs-explorer-root*
-                      (vs-project-root
-                       (make-pathname
-                        :directory (pathname-directory file)))))))
+                (vs-explorer-set-root
+                 (vs-project-root
+                  (make-pathname
+                   :directory (pathname-directory file)))))))
           (vs-explorer-redraw buffer)
           (make-leftside-window buffer :width *vs-explorer-width*)))))
 
@@ -652,8 +754,8 @@ get-buffer 撞名；树状态在 *vs-open-dirs*，buffer 无状态损失。"
 注意转目录要用 pathname-directory-pathname（取所在目录）；不能用
 pathname-parent-directory-pathname——它只看 pathname-directory 组件，
 对文件路径会连工作区段一起剥掉（root 错位一层，E2E 实测）。"
-  (setf *vs-explorer-root*
-        (vs-project-root (make-pathname :directory (pathname-directory file))))
+  (vs-explorer-set-root
+   (vs-project-root (make-pathname :directory (pathname-directory file))))
   (vs-explorer-render t))
 
 (defun vs-explorer-on-find-file (buffer)
