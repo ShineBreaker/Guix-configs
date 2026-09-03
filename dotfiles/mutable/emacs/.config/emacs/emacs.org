@@ -1275,6 +1275,42 @@ Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
     (git-commit-setup-check-buffer)))
 #+end_src
 
+Magit 状态页内 RET 打开文件走 ~pop-to-buffer-same-window~ ,会把底部
+side-window 里的 Magit 顶掉。重定向 diff section 的 visit 入口到主编辑窗口
+(与 COMMIT_EDITMSG 的路由一致,保持「上编辑 + 下 magit」布局),并让双击
+文件/hunk 行与 RET 同路径:
+
+#+begin_src emacs-lisp
+(defun custom/magit-visit-file ()
+  "在主编辑窗口打开光标处文件的对应版本。
+定位逻辑与 `magit-diff-visit-file' 一致(diff 中 added/context 行进
+新版、removed 行进旧版),仅显示目标不同。"
+  (interactive)
+  (magit-diff-visit-file--internal
+   (and magit-diff-visit-prefer-worktree
+        (memq (magit-diff--dwim) '(staged unstaged)))
+   #'custom/display-buffer-in-main-window))
+
+(defun custom/magit-mouse-visit-file (event)
+  "双击打开光标处文件到主编辑窗口。"
+  (interactive "e")
+  (mouse-set-point event)
+  (custom/magit-visit-file))
+
+(with-eval-after-load 'magit-diff
+  ;; RET 经 remap 重定向,只影响文件/hunk 行;Unstaged/Staged/commit 等
+  ;; section 有自己的 remap 条目,不受影响。
+  (define-key magit-diff-section-map [remap magit-visit-thing]
+    #'custom/magit-visit-file)
+  ;; 双击 = 打开文件;聚合 section(Unstaged/Staged 标题)不在绑定范围,
+  ;; 双击保持折叠。double-down 绑 ignore 防止第二击退化为普通
+  ;; down-mouse-1 被 mouse-drag-region 吞掉(展开文件行的 heading
+  ;; keymap 自带该绑定,hunk 行与折叠文件行没有,需补上)。
+  (dolist (map (list magit-file-section-map magit-hunk-section-map))
+    (define-key map [double-down-mouse-1] #'ignore)
+    (define-key map [double-mouse-1] #'custom/magit-mouse-visit-file)))
+#+end_src
+
 *** Display-buffer 路由
 :PROPERTIES:
 :CUSTOM_ID: git-window-routing
@@ -1673,7 +1709,9 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
 
 ;; display-buffer-alist 的正则只匹配 buffer-name,major mode 名分支永不命中,
 ;; 路由规则一律写 buffer 名前缀。
-(custom/register-side-window "^\\*magit: " 'bottom 0.4)
+;; magit 4 起 `magit-uniquify-buffer-names' 默认 t,buffer 名无星号
+;; 前缀(如 "magit: repo"),regex 不能带 \\*。
+(custom/register-side-window "^magit: " 'bottom 0.4)
 (add-to-list 'display-buffer-alist
              '("^\\*git-commit\\|\\`COMMIT_EDITMSG\\|\\`MERGE_MSG"
                (custom/display-buffer-in-main-window))
