@@ -56,10 +56,10 @@ vs-help-entries 一致用 third：first 是键串，永不可能等于分组 ID�
              (vs-help-format-section stream "其他" (vs-help-entries "other"))
              (format stream "~%   再按 F1 重开本页；C-x o 切回工作窗口。~%")
              (finish-output stream))
-        (close stream))
-      (setf (buffer-read-only-p buffer) t))
+        (close stream))))
+      (setf (buffer-read-only-p buffer) t)
     (buffer-start (buffer-point buffer))
-    (buffer-unmark buffer)))
+    (buffer-unmark buffer))
 
 (define-command vs-show-keybindings () ()
   "F1 键位帮助页：按分组列出全部自定义绑定与默认键附注（中文描述）。
