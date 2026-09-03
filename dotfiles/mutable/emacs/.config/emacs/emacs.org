@@ -3516,7 +3516,7 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 
 #+begin_src emacs-lisp
 (dolist (prefix
-         '(("C-x" . "文件 / 缓冲区 / 窗口 / 标签")
+         '(("C-x" . "文件/缓冲区/窗口/标签")
            ("C-x t" . "标签")
            ("C-x p" . "项目")
            ("M-s" . "搜索")
@@ -3531,10 +3531,10 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
   (custom/declare-binding-group (car prefix) (cdr prefix)))
 
 (custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x B" #'ibuffer "缓冲区列表" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x k" #'kill-buffer-and-window "关闭窗口与缓冲区" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x B" #'ibuffer "缓冲区列表 (ibuffer)" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x k" #'kill-buffer-and-window "关闭当前缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x K" #'kill-buffer "关闭指定缓冲区" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x C-f" #'ffap "打开文件(光标处路径优先)" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x C-f" #'ffap "打开文件" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
 
@@ -3745,7 +3745,7 @@ ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode
 ;; C-S-f 同指 project-find-regexp。ibuffer(C-x B)、xref 符号(M-s e)
 ;; 保留原入口,见 [[#keybindings]]。
 (custom/bind "C-x b" #'switch-to-buffer "切换缓冲区" "文件 / 缓冲区 / 标签")
-(custom/bind "C-x p b" #'project-switch-to-buffer "项目缓冲区" "项目")
+(custom/bind "C-x p b" #'project-switch-to-buffer "切换项目缓冲区" "项目")
 (custom/bind "M-s l" #'occur "搜索当前缓冲区" "搜索")
 (custom/bind "M-s p" #'project-find-regexp "搜索项目" "搜索")
 #+end_src
