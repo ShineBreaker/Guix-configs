@@ -122,6 +122,26 @@
         (insert-string (current-point) text)
         (vs-restore-column col)))))
 
+;; --- 自研命令：多光标向上加光标（VSCode Ctrl+Alt+Up；上游
+;;     lem-core/commands/multiple-cursors 只有 next-line 版（经 :lem
+;;     use-reexport），无上一行版。本命令镜像上游 add-cursors-to-next-line：
+;;     buffer-cursors 按 point< 升序，向上落点撞上前一项（上方光标）即
+;;     跳过防叠；make-fake-cursor/buffer-cursors 走 vs$，旧构建缺失时
+;;     整条 no-op 不炸） ---
+(define-command vs-add-cursors-to-previous-line () ()
+  (let ((make-cursor (vs$ :lem "MAKE-FAKE-CURSOR"))
+        (get-cursors (vs$ :lem "BUFFER-CURSORS")))
+    (when (and make-cursor get-cursors)
+      (let ((cursors (funcall get-cursors (current-buffer)))
+            prev)
+        (dolist (cursor cursors)
+          (with-point ((p cursor))
+            (when (and (line-offset p -1 (point-charpos p))
+                       (or (null prev)
+                           (not (same-line-p p prev))))
+              (funcall make-cursor p)))
+          (setf prev cursor))))))
+
 ;; --- 分组声明（F1 帮助页按此顺序渲染） ---
 (vs-declare-group "nav" "移动与查找")
 (vs-declare-group "editor" "编辑与文件")
@@ -191,10 +211,26 @@
 (vs-bind "F2" :lem-lsp-mode "LSP-RENAME" "code" "重命名符号（LSP）")
 ;; --- Code Action（VSCode C-. 快速修复/重构菜单，LSP） ---
 (vs-bind "C-." :lem-lsp-mode "LSP-CODE-ACTION" "code" "代码操作（快速修复/重构，LSP）")
+;; --- 转到符号（VSCode Ctrl+Shift+O 同位；LSP documentSymbol，
+;;     结果渲染进 peek 内联视图，Enter 跳转 / Esc 或 q 退出；
+;;     命令是 define-command 产物但未导出，vs$ find-symbol 可达，
+;;     与下方 LSP-RENAME 同法） ---
+(vs-bind "Shift-C-o" :lem-lsp-mode "LSP-DOCUMENT-SYMBOL" "code" "转到文件内符号（大纲）")
 ;; --- 多光标（VSCode Ctrl+D 同位键：isearch 活动时逐个命中加光标，
 ;;     非搜索态安全 no-op；Delete 键仍承担删字符） ---
 (vs-bind "C-d" :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH" "editor"
          "多光标：查找时逐个命中加光标")
+;; --- 多光标上下加光标（VSCode Ctrl+Alt+Down/Up 同位；next-line 是
+;;     上游命令（lem-core/commands/multiple-cursors 经 :lem reexport），
+;;     previous-line 上游无对应，绑自研 wrapper（定义见自研命令区）。
+;;     注意 C-M-n/p 已被 isearch 局部 keymap 占为逐命中加光标，本组
+;;     全局键与其互不干扰） ---
+(vs-bind "C-M-Down" :lem "ADD-CURSORS-TO-NEXT-LINE" "code" "在下方加光标（多光标）")
+(vs-bind "C-M-Up" :lem-user "VS-ADD-CURSORS-TO-PREVIOUS-LINE" "code" "在上方加光标（多光标）")
+;; isearch 局部 keymap 默认键（上游 *isearch-keymap* 绑定，仅 isearch
+;; 活动期内生效；与上面 C-d 同族，不经 vs-bind 只进帮助页）：
+(vs-help-note "editor" "C-M-n" "多光标：查找时在下一命中处加光标（isearch 内）")
+(vs-help-note "editor" "C-M-p" "多光标：查找时在上一命中处加光标（isearch 内）")
 ;; --- 行操作（VSCode C-S-k / C-S-d 删除整行；上游 KILL-WHOLE-LINE 为
 ;;     define-command 产物可直接绑，两键同绑防终端拦截差异） ---
 (vs-bind "Shift-C-k" :lem "KILL-WHOLE-LINE" "editor" "删除整行")
@@ -254,6 +290,12 @@
 (vs-bind "C--" :lem "FONT-SIZE-DECREASE" "ui" "字号减小")
 (vs-bind "C-F12" :lem/language-mode "FIND-DEFINITIONS" "code" "跳转定义")
 (vs-bind "Shift-C-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用（peek 内联视图）")
+;; M-F12（VSCode Alt+F12 Peek 定义）不设：上游无独立 peek-definition
+;; 命令，peek 内联视图即 FIND-DEFINITIONS 多结果时的展示路径
+;; （language-mode:display-xref-locations：多结果 peek 窗口、单结果直接
+;; 跳转+高亮），与 C-F12 同管线；要做「永不跳转的纯 peek」得克隆上游
+;; 未导出渲染内部（call-with-collecting-sources/xref-insert-headline/
+;; sort-xref-locations），脆弱且不值，故放弃。
 (vs-bind "F1" :lem-user "VS-TRANSIENT-SHOW" "help" "键位菜单（选组→选键→执行）")
 (vs-bind "C-c h" :lem-user "VS-SHOW-KEYBINDINGS" "help" "键位帮助页（静态全量）")
 
