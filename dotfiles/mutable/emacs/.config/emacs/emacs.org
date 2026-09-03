@@ -280,7 +280,7 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
         (push (cons (plist-get entry :key)
                     (plist-get entry :description))
               (alist-get group table nil nil #'equal))))
-    (mapcar
+    (seq-map
      (lambda (group)
        (cons group (nreverse (alist-get group table nil nil #'equal))))
      order)))
@@ -382,8 +382,10 @@ GCMH + 智能垃圾回收管理 (启动后接管 GC)
   :custom
   (recentf-max-saved-items 300)
   ;; Emacs 31:daemon 长驻下定期自动保存,异常死亡不丢历史
-  ;; (默认只在 kill-emacs 时写)。
-  (recentf-autosave-interval 5)
+  ;; (默认只在 kill-emacs 时写)。列表仅在开合文件时变化,5s 属高频空转。
+  (recentf-autosave-interval 300)
+  ;; autosave 每次写盘都会在 echo area 打 "Wrote ...";上游 31.1 起默认关闭。
+  (recentf-show-messages nil)
   :config
   (recentf-mode 1))
 
@@ -528,6 +530,13 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
        (cond
         ((and (consp binding) (eq (car binding) 'menu-item))
          (custom/context-menu--translate-menu-item binding))
+        ;; (标题 . 子keymap) 形态:Geiser 的 (cons "Run" keymap) 子菜单即此形,
+        ;; 标题在 car,递归子表。
+        ((and (consp binding) (stringp (car binding))
+              (keymapp (cdr binding)))
+         (setcar binding
+                 (custom/context-menu--translate-string (car binding)))
+         (custom/context-menu--translate-keymap (cdr binding)))
         ((keymapp binding)
          (custom/context-menu--translate-keymap binding))))
      keymap))
@@ -540,6 +549,18 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 ;; context-menu-map 为 Emacs 28+ 内置,直接挂翻译 advice。
 (unless (advice-member-p #'custom/context-menu-translate #'context-menu-map)
   (advice-add 'context-menu-map :filter-return #'custom/context-menu-translate))
+
+(defun custom/menu-bar-translate ()
+  "`menu-bar-update-hook' 回调:翻译全部活动 keymap 菜单栏的英文项。
+`custom/context-menu--translate-keymap' 查不到时原样返回,故幂等;
+Geiser/SMerge/Hide-Show 等第三方子菜单(多挂在 minor-mode map,如
+`geiser-mode-map')同样覆盖。`current-active-maps' 含全局/local/minor
+全部活动 map,比只翻前两者彻底。"
+  (dolist (map (current-active-maps))
+    (custom/context-menu--translate-keymap
+     (lookup-key map [menu-bar]))))
+
+(add-hook 'menu-bar-update-hook #'custom/menu-bar-translate)
 
 (with-eval-after-load 'magit-section
   (unless (advice-member-p #'custom/context-menu--translate-string
@@ -741,9 +762,15 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
   (set-frame-parameter (or frame (selected-frame)) 'custom--frame-tab-buffers buffers))
 #+end_src
 
-注册与注销是一对对称操作:注册做尾部追加(去重),注销做删除;两者只维护 frame parameter 列表,不直接操作窗口。
+注册与注销是一对对称操作:注册做尾部追加(去重),注销做删除;两者只维护 frame parameter 列表,不直接操作窗口。是否跟踪的判定收敛于 =custom--tabs-should-track-p=,两类回调共用。
 
 #+begin_src emacs-lisp
+(defun custom--tabs-should-track-p (buffer)
+  "BUFFER 是否应进入标签列表:关联文件、存活、非 minibuffer。
+`custom/tab-visible-p' 已含存活检查,此处只补 minibuffer 排除。"
+  (and (custom/tab-visible-p buffer)
+       (not (minibufferp buffer))))
+
 (defun custom--tabs-register-buffer (buffer &optional frame)
   "将 BUFFER 注册到 FRAME 的标签列表尾部(去重)。"
   (let* ((target-frame (or frame (selected-frame)))
@@ -776,17 +803,13 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
      (lambda (window)
        (when (eq (window-frame window) frame-or-window)
          (let ((buffer (window-buffer window)))
-           (when (and (buffer-live-p buffer)
-                      (custom/tab-visible-p buffer)
-                      (not (minibufferp buffer)))
+           (when (custom--tabs-should-track-p buffer)
              (custom--tabs-register-buffer buffer frame-or-window)))))
      'no-mini frame-or-window))
    ((window-live-p frame-or-window)
     (let ((buffer (window-buffer frame-or-window))
           (frame (window-frame frame-or-window)))
-      (when (and (buffer-live-p buffer)
-                 (custom/tab-visible-p buffer)
-                 (not (minibufferp buffer)))
+      (when (custom--tabs-should-track-p buffer)
         (custom--tabs-register-buffer buffer frame))))))
 #+end_src
 
@@ -884,7 +907,7 @@ current/inactive 用内置 face,自动跟随主题。"
                    (funcall tab-line-tab-name-function tab tabs)
                  (cdr (assq 'name tab))))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
-         (label (concat " " (string-replace "%" "%%" name)))
+         (label (concat " " (string-replace "%" "%%" name) " "))
          (help-echo (if selected-p
                         "当前标签:鼠标中键关闭,右键打开菜单"
                       "左键切换标签,鼠标中键关闭,右键打开菜单"))
@@ -945,7 +968,7 @@ current/inactive 用内置 face,自动跟随主题。"
 (defun custom/apply-tab-line-button-preset ()
   "应用统一的标签栏按钮文本样式。"
   (setq tab-line-close-button
-        (propertize " x "
+        (propertize "x "
                     'rear-nonsticky nil
                     'keymap tab-line-tab-close-map
                     'mouse-face 'tab-line-close-highlight
@@ -1035,6 +1058,12 @@ current/inactive 用内置 face,自动跟随主题。"
   (interactive "p")
   (custom/tabs-next (- (or arg 1))))
 
+(defun custom--tabs-visible-other-p (candidate target-buffer)
+  "CANDIDATE 是否可作 TARGET-BUFFER 关闭后的接替标签:存活且可见且非自身。
+`custom/tab-visible-p' 已含存活检查。"
+  (and (custom/tab-visible-p candidate)
+       (not (eq candidate target-buffer))))
+
 (defun custom/tabs-close-buffer (&optional window buffer)
   "在 WINDOW 隐藏 BUFFER 的标签(bury + unregister,不 kill buffer)。
 BUFFER 默认为 WINDOW 当前显示的 buffer。"
@@ -1046,9 +1075,8 @@ BUFFER 默认为 WINDOW 当前显示的 buffer。"
       (custom--tabs-unregister-buffer target-buffer target-frame)
       (when (eq target-buffer (window-buffer target-window))
         (if-let* ((next (seq-find (lambda (candidate)
-                                    (and (buffer-live-p candidate)
-                                         (custom/tab-visible-p candidate)
-                                         (not (eq candidate target-buffer))))
+                                    (custom--tabs-visible-other-p
+                                     candidate target-buffer))
                                   (custom--tabs-get-frame-buffer-list target-frame))))
             (custom--tabs-switch-to-buffer next target-window)
           (with-selected-window target-window
@@ -1387,8 +1415,8 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (custom/bind "C-c g @" #'custom/git-stash-pop "恢复暂存" "Git")
 
 ;; Emacs 31 VC cherry-pick (magit 之外的轻量补充,走内置 vc)
-(custom/bind "C-c g y" #'vc-cherry-pick "Cherry-pick" "Git")
-(custom/bind "C-c g X" #'vc-delete-revision "删除 Revision" "Git")
+(custom/bind "C-c g y" #'vc-cherry-pick "拣选提交 (Cherry-pick)" "Git")
+(custom/bind "C-c g X" #'vc-delete-revision "删除修订" "Git")
 
 ;; Emacs 31 VC outgoing 族:推送前预览、本地全部工作(未推提交+未提交
 ;; 修改)一个 diff 看完,与 C-c g P(直接推送)互补。
@@ -1469,8 +1497,15 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
 (dolist (hook '(prog-mode-hook text-mode-hook))
   (add-hook hook #'prettify-special-glyphs-mode))
 
-;; 菜单栏/工具栏/滚动条的关闭由 early-init.el 的 t 条目与上方 defconst 覆盖
-;; 所有 window-system 的 frame 参数,无需再写 default-frame-alist。
+;; GUI frame 的菜单栏/工具栏/滚动条关闭。early-init 的
+;; window-system-default-frame-alist t 条目只匹配 TTY(framep 对终端返回 t,
+;; 对 GUI 返回 pgtk 等符号),覆盖不到 GUI frame,必须写进 default-frame-alist。
+(dolist (param '((menu-bar-lines . 0)
+                 (tool-bar-lines . 0)
+                 (vertical-scroll-bars)
+                 (horizontal-scroll-bars)))
+  (unless (assq (car param) default-frame-alist)
+    (push param default-frame-alist)))
 
 (setq display-line-numbers-type 'relative
       ;; 行号宽度按 buffer 实际行数自动设置,替代手动全 buffer 扫描计数
@@ -1481,6 +1516,13 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
   "关闭高成本显示功能的文件大小阈值（字节）。"
   :type 'integer
   :group 'literal)
+;; 大文件统一策略:超过 `custom:large-file-size-threshold'(2MB)的 buffer,
+;; 行号(hs 折叠、eglot LSP)逐个设防,而非各写各的阈值——
+;; `custom/setup-file-line-numbers'(行号)、`custom--maybe-enable-hs-minor-mode'
+;; (折叠,见 [[#programming-keys]])、`custom--maybe-eglot-ensure'(LSP,见
+;; [[#programming-tools]])、`custom/code-format-dwim'(全 buffer 格式化确认,见
+;; [[#code-commands]])四处共用此阈值。`global-so-long-mode' 另管超长行,
+;; 与本阈值互补。
 
 (defun custom/setup-file-line-numbers ()
   "大型文件直接关闭行号，避免扫描完整 buffer。
@@ -1501,7 +1543,8 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
   (add-hook (intern (concat (symbol-name mode) "-hook"))
             #'custom/disable-file-line-numbers))
 
-(xterm-mouse-mode 1)
+;; 右键菜单全局启用(鼠标与 S-<f10>/<menu> 键盘路径共用);
+;; xterm-mouse 已收进 `custom/apply-frame-appearance' 的 TTY 分支。
 (context-menu-mode 1)
 (global-hl-line-mode 1)
 
@@ -1544,10 +1587,15 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 
 (defun custom/terminal-theme-color (key)
   "返回当前 Ef theme palette 中 KEY 对应的颜色,失败时返回 nil。
-用于在透明 TTY 上为少数命名 face 恢复主题底色(当前行、代码块面板等)。"
-  (condition-case nil
-      (ef-themes-get-color-value key)
-    (error nil)))
+`ef-themes-get-color-value' 对未知键返回 `unspecified' 而非抛错,故
+只需判 nil/unspecified。`fboundp' 守卫覆盖 standalone 启动窗口期:
+`custom/apply-frame-appearance' 注册时即对首帧派发,而无条件的
+`(require 'ef-themes)' 在文档顺序上更靠后;ef-themes 属延迟加载的
+第三方包,此守卫符合守卫公约(先例见 `diff-hl-margin-mode' 调用点)。"
+  (when (fboundp 'ef-themes-get-color-value)
+    (let ((color (ef-themes-get-color-value key)))
+      (unless (memq color '(nil unspecified))
+        color))))
 
 (defun custom/apply-terminal-faces (&optional frame)
   "让 TTY FRAME 的所有命名 face 使用终端透明背景。
@@ -1599,10 +1647,10 @@ ef-themes 2.2.0 与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-moder
 frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算,
 透明背景随之失效;default 是 theme 必设项,可作重算发生的哨兵。"
   (and (not noninteractive)
-       (cl-some (lambda (frame)
-                  (unless (display-graphic-p frame)
-                    (face-background 'default frame)))
-                (frame-list))))
+       (seq-some (lambda (frame)
+                   (unless (display-graphic-p frame)
+                     (face-background 'default frame)))
+                 (frame-list))))
 
 (defun custom/refresh-terminal-faces (&rest _)
   "重新对所有存活 TTY frame 应用透明背景策略。"
@@ -1653,6 +1701,9 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
             (progn
               (window-divider-mode -1)
               (custom/apply-terminal-faces)
+              ;; TTY 鼠标事件接收:GUI 下 xterm-mouse 是 no-op,收进 per-frame
+              ;; 分支与周边 TTY 逻辑约定一致,而非启动期全局裸调用。
+              (xterm-mouse-mode 1)
               (when (fboundp 'diff-hl-margin-mode)
                 (diff-hl-margin-mode 1))))
           (force-mode-line-update t)))
@@ -1796,14 +1847,30 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
 
 (defun custom/which-key--flatten-specs (prefix specs)
   "将 PREFIX 下的 SPECS 展开为平铺的 ((key . desc) ...) 列表。"
-  (apply #'append
-         (mapcar (lambda (spec)
-                   (custom/which-key--flatten-spec prefix spec))
-                 specs)))
+  (seq-mapcat (lambda (spec)
+                (custom/which-key--flatten-spec prefix spec))
+              specs
+              'list))
 
 (defconst custom:which-key-replacements
   (custom/which-key--flatten-specs nil custom:which-key-description-spec)
   "Which-key 全局中文描述映射表。")
+
+(defvar custom:which-key--applied-keymaps nil
+  "已注册 keymap 级描述的 map 变量名,防重复堆积。")
+
+(defun custom/which-key-apply-keymap-descriptions ()
+  "补注册 minor-mode keymap 级描述(包懒加载后调用)。
+`which-key-add-keymap-based-replacements' 同一 map+key 重复注册会堆积,
+故用 `custom:which-key--applied-keymaps' 记账,每个 map 只注册一次。"
+  (dolist (map-entry custom:which-key-keymap-description-spec)
+    (let ((mapvar (car map-entry)))
+      (when (and (boundp mapvar) (keymapp (symbol-value mapvar))
+                 (not (memq mapvar custom:which-key--applied-keymaps)))
+        (dolist (entry (cdr map-entry))
+          (which-key-add-keymap-based-replacements
+           (symbol-value mapvar) (car entry) (cdr entry)))
+        (push mapvar custom:which-key--applied-keymaps)))))
 
 (defun custom/which-key-apply-descriptions ()
   "将中文描述注册到 `which-key'(仅在 which-key 加载后调用一次)。"
@@ -1817,13 +1884,22 @@ frame 的 background-mode 等参数变化会触发全 face 按 theme spec 重算
           (specs (cdr mode-entry)))
       (dolist (entry (custom/which-key--flatten-specs nil specs))
         (which-key-add-major-mode-key-based-replacements
-          mode (car entry) (cdr entry))))))
+          mode (car entry) (cdr entry)))))
+  ;; minor-mode keymap 级描述:Geiser/Arei 的 C-c 子树挂在 minor-mode map,
+  ;; major-mode 注册覆盖不到;map 未加载时由下面的 eval-after-load 补注册。
+  (custom/which-key-apply-keymap-descriptions))
 
 (with-eval-after-load 'which-key
   ;; 先注册 custom/bind 收集的延迟描述
   (custom/register-pending-wk-descs)
   ;; 再注册集中维护的描述
   (custom/which-key-apply-descriptions))
+
+;; Geiser/Arei 懒加载:which-key 先就绪时 map 尚无定义,包加载后补注册。
+(dolist (pkg '(geiser-mode arei))
+  (with-eval-after-load pkg
+    (when (featurep 'which-key)
+      (custom/which-key-apply-keymap-descriptions))))
 #+end_src
 
 ** 颜色方案(ef-themes)
@@ -2128,6 +2204,12 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (setq dired-filename-display-length 'window
       dired-movement-style 'cycle
       grep-use-headings t)
+;; eldoc 文档超长时截断显示符号名而非挤占 echo area(Emacs 31 内置)。
+(setq eldoc-echo-area-use-multiline-p 'truncate-sym-name-if-fit)
+
+;; 当前函数名显示(面包屑替代):which-function-mode 把光标所在 defun 名
+;; 写入 header-line / mode-line,doom-modeline 直接透传,无需 breadcrumb 包。
+(which-function-mode 1)
 #+end_src
 
 ** DWIM 智能编辑函数
@@ -2197,7 +2279,7 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   :hook ((c-ts-mode c++-ts-mode go-ts-mode java-ts-mode json-ts-mode
                     python-ts-mode rust-ts-mode typescript-ts-mode tsx-ts-mode
                     yaml-ts-mode) .
-                    indent-bars-mode)
+                    custom--maybe-enable-indent-bars)
   :custom
   (indent-bars-color nil)
   (indent-bars-color-by-depth '(:homogeneity 0.5))
@@ -2206,6 +2288,13 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   (indent-bars-pad-pos 1)
   (indent-bars-zigzag nil)
   (indent-bars-no-stretch-char nil))
+
+(defun custom--maybe-enable-indent-bars ()
+  "ts-mode hook 回调:仅图形 frame 开 `indent-bars-mode'。
+depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
+(`indent-bars--get-color' arith-error),TTY 下竖线亦无像素可画,故跳过。"
+  (when (display-graphic-p)
+    (indent-bars-mode 1)))
 
 (use-package goto-chg
   :defer t
@@ -2297,10 +2386,9 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 
 (defun custom--terminal-existing-buffer ()
   "返回当前已存在的普通 ghostel buffer(非 agent 后端),无则 nil。"
-  (cl-find-if
+  (seq-find
    (lambda (buf)
-     (and (buffer-live-p buf)
-          (with-current-buffer buf (derived-mode-p 'ghostel-mode))
+     (and (with-current-buffer buf (derived-mode-p 'ghostel-mode))
           (not (buffer-local-value 'custom--agent-ghostel-p buf))))
    (buffer-list)))
 
@@ -2445,28 +2533,28 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   :server    LSP server 启动命令列表(nil 表示无 LSP)
   :formatter Apheleia formatter 符号(nil 表示不格式化)")
 
+(defun custom--language-server-key (entry)
+  "ENTRY 的 LSP server 命令(无 server 返回 nil,供 `seq-group-by' 分组)。"
+  (plist-get entry :server))
+
 (defconst custom:language-treesit-remaps
-  (delq nil
-        (mapcar (lambda (entry)
-                  (let ((orig-mode (car (plist-get entry :modes)))
-                        (ts-mode (plist-get entry :ts-mode)))
-                    (when (and orig-mode ts-mode)
-                      (cons orig-mode ts-mode))))
-                custom:language-capabilities))
+  (seq-filter #'cdr
+              (seq-map (lambda (entry)
+                         (let ((orig-mode (car (plist-get entry :modes)))
+                               (ts-mode (plist-get entry :ts-mode)))
+                           (when (and orig-mode ts-mode)
+                             (cons orig-mode ts-mode))))
+                       custom:language-capabilities))
   "Tree-sitter major mode remap 列表(从 `custom:language-capabilities' 派生)。")
 
 (defconst custom:language-eglot-server-programs
-  (let ((seen (make-hash-table :test 'equal))
-        (result nil))
-    (dolist (entry custom:language-capabilities)
-      (let ((server (plist-get entry :server)))
-        (when server
-          (let ((key (mapconcat #'identity server " ")))
-            (if-let* ((pair (gethash key seen)))
-                (setcar pair (append (car pair) (plist-get entry :modes)))
-              (push (cons (plist-get entry :modes) server) result)
-              (puthash key (car result) seen))))))
-    (nreverse result))
+  (mapcar (lambda (group)
+            (cons (seq-mapcat (lambda (entry) (plist-get entry :modes))
+                              (cdr group))
+                  (car group)))
+          (seq-group-by #'custom--language-server-key
+                        (seq-filter #'custom--language-server-key
+                                    custom:language-capabilities)))
   "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生,按 server 命令去重)。")
 
 (defconst custom:language-apheleia-formatters
@@ -2474,13 +2562,11 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   "Apheleia 自定义 formatter 命令定义(mode-alist 只引用符号)。")
 
 (defconst custom:language-apheleia-mode-alist
-  (let (result)
-    (dolist (entry custom:language-capabilities)
-      (let ((formatter (plist-get entry :formatter)))
-        (when formatter
-          (dolist (mode (plist-get entry :modes))
-            (push (cons mode formatter) result)))))
-    (nreverse result))
+  (seq-mapcat (lambda (entry)
+                (seq-map (lambda (mode) (cons mode (plist-get entry :formatter)))
+                         (plist-get entry :modes)))
+              (seq-filter (lambda (entry) (plist-get entry :formatter))
+                          custom:language-capabilities))
   "Apheleia major mode 对应关系(从 `custom:language-capabilities' 派生)。")
 #+end_src
 
@@ -2526,12 +2612,20 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
   "eglot-managed-mode 回调：开启 inlay hints。"
   (eglot-inlay-hints-mode 1))
 
+(defun custom--maybe-eglot-ensure ()
+  "`prog-mode-hook' 回调:小文件才 `eglot-ensure'。
+大文件(buffer 超过 `custom:large-file-size-threshold')的 LSP 索引
+(rust-analyzer 全 crate 扫描)是同步高成本操作,故跳过;用户仍可用
+M-x eglot 手动启动。"
+  (unless (> (buffer-size) custom:large-file-size-threshold)
+    (eglot-ensure)))
+
 ;; eglot-ensure 对无 server 的 major mode 是 no-op,直接挂 prog-mode-hook 即可;
 ;; 首次调用触发 autoload 加载 eglot,:config 先于 ensure 函数体执行,
 ;; server programs 与 eglot-x 就位后当前 buffer 立即连上 LSP。
 (use-package eglot
   :defer t
-  :hook (prog-mode . eglot-ensure)
+  :hook (prog-mode . custom--maybe-eglot-ensure)
   :custom
   (eglot-autoshutdown t)
   (eglot-workspace-configuration
@@ -2592,6 +2686,15 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 
 (use-package rainbow-delimiters
   :hook (prog-mode . rainbow-delimiters-mode))
+
+;; smerge(内置):git 冲突标记的 diff3 展示与一键取舍。只在 prog/text
+;; buffer 启用(无冲突标记时为轻量 no-op);`C-c c G' 编译调试前缀见
+;; 项目域,此处只配行为。
+(dolist (hook '(prog-mode-hook text-mode-hook))
+  (add-hook hook #'smerge-mode))
+;; GDB(内置 gud):多窗口布局 + 内联断点图标,键位 C-c c G d 见项目域。
+(setq gdb-many-windows t
+      gdb-show-main t)
 #+end_src
 
 ** 代码操作辅助函数
@@ -2622,15 +2725,19 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
   (forward-line -1))
 
 (defun custom/code-format-dwim ()
-  "智能格式化:有选区格式化选区,否则格式化整个缓冲区。"
+  "智能格式化:有选区格式化选区,否则格式化整个缓冲区。
+无选区且 buffer 超过 `custom:large-file-size-threshold' 时先确认:
+全 buffer `indent-region' 对大文件是同步高成本操作,选区格式化不受影响。"
   (interactive)
   (if (use-region-p)
       (indent-region (region-beginning) (region-end))
-    (cond
-     ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
-      (eglot-format-buffer))
-     (t
-      (indent-region (point-min) (point-max))))))
+    (when (or (<= (buffer-size) custom:large-file-size-threshold)
+              (y-or-n-p "Buffer 较大,全 buffer 格式化可能卡顿,继续? "))
+      (cond
+       ((and (fboundp 'eglot-managed-p) (eglot-managed-p))
+        (eglot-format-buffer))
+       (t
+        (indent-region (point-min) (point-max)))))))
 
 (defun custom/code-comment-block ()
   "使用块注释包围选区。"
@@ -2661,6 +2768,13 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (custom/bind "C-c c a" #'eglot-code-actions "代码操作" "代码")
 (custom/bind "C-c c n" #'eglot-rename "重命名符号" "代码")
 (custom/bind "C-c c c" #'completion-at-point "触发补全" "代码")
+;; TTY 安全镜像:consult-imenu / flymake / xref / bookmark 走 C-c c 前缀,
+;; 与 C-S-o / M-g l / M-s e / dashboard 书签按钮同语义;consult 已 :demand t
+;; 常驻,此处直接引用无需 autoload。
+(custom/bind "C-c c i" #'consult-imenu "符号大纲(预览)" "代码")
+(custom/bind "C-c c k" #'consult-flymake "诊断列表(预览)" "代码")
+(custom/bind "C-c c s" #'consult-xref "引用搜索(预览)" "代码")
+(custom/bind "C-c c b" #'consult-bookmark "书签跳转(预览)" "代码")
 (custom/declare-binding-group "C-c c x" "更多代码跳转")
 (custom/bind "C-c c x d" #'eglot-find-declaration "跳转到声明" "代码")
 (custom/bind "C-c c x i" #'eglot-find-implementation "跳转到实现" "代码")
@@ -2668,8 +2782,15 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 
 (custom/bind "C-c c f" #'custom/code-format-dwim "智能格式化" "代码")
 
-(add-hook 'prog-mode-hook #'hs-minor-mode)
-(add-hook 'conf-mode-hook #'hs-minor-mode)
+(defun custom--maybe-enable-hs-minor-mode ()
+  "`prog/conf-mode-hook' 回调:小文件才开 `hs-minor-mode'。
+大文件(buffer 超过 `custom:large-file-size-threshold')的折叠块解析是
+同步高成本操作,且与 `global-so-long-mode' 的降级路径互斥,故跳过。"
+  (unless (> (buffer-size) custom:large-file-size-threshold)
+    (hs-minor-mode 1)))
+
+(add-hook 'prog-mode-hook #'custom--maybe-enable-hs-minor-mode)
+(add-hook 'conf-mode-hook #'custom--maybe-enable-hs-minor-mode)
 
 ;; Ctrl+click 跳转定义(与其他编辑器惯例一致,与右键菜单体系互补)。
 (global-xref-mouse-mode 1)
@@ -2885,6 +3006,12 @@ GDScript、Fish、JSON / kdl / Kotlin / Markdown / Nix / Rust / TypeScript(TSX /
 ;; S 只保存当前项目的 buffer。
 (custom/bind "C-x p m" #'project-find-matching-buffer "worktree 对应缓冲区" "项目")
 (custom/bind "C-x p S" #'project-save-some-buffers "保存本项目缓冲区" "项目")
+;; 编译调试走 C-c c G 前缀(运行/调试族):project-compile 复用项目根的
+;; 编译命令,gdb 内置 GDB 前端(命令实现见 programming-tools 的 GDB 段)。
+(custom/declare-binding-group "C-c c G" "编译与调试")
+(custom/bind "C-c c G c" #'project-compile "项目编译" "代码")
+(custom/bind "C-c c G d" #'gdb "GDB 调试" "代码")
+(custom/bind "C-c c G r" #'recompile "重新编译" "代码")
 #+end_src
 
 ** 左侧 Dired 面板
@@ -3430,7 +3557,7 @@ agenote CLI 集成的知识库 CRUD。
 (custom/bind "C-c o a" #'org-agenda "议程视图" "Org 与知识库")
 (custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
 (custom/bind "C-c o o" #'olivetti-mode "专注写作" "Org 与知识库")
-(custom/declare-binding-group "C-c o r" "Org Roam")
+(custom/declare-binding-group "C-c o r" "Org Roam (网状笔记)")
 (custom/bind "C-c o r f" #'org-roam-node-find "查找或新建 Roam 笔记" "Org 与知识库")
 (custom/bind "C-c o r i" #'org-roam-node-insert "插入 Roam 链接" "Org 与知识库")
 (custom/bind "C-c o r l" #'org-roam-buffer-toggle "切换反向链接" "Org 与知识库")
@@ -3440,7 +3567,7 @@ agenote CLI 集成的知识库 CRUD。
 (custom/bind "C-c o c o" #'org-clock-out "停止计时" "Org 与知识库")
 (custom/bind "C-c o c g" #'org-clock-goto "跳到当前计时" "Org 与知识库")
 
-(custom/declare-binding-group "C-c o k" "Knowledge / agenote")
+(custom/declare-binding-group "C-c o k" "知识库 / agenote")
 (custom/bind "C-c o k c" #'agenote-knowledge-capture "捕获经验卡" "Org 与知识库")
 (custom/bind "C-c o k s" #'agenote-knowledge-search "搜索经验" "Org 与知识库")
 (custom/bind "C-c o k t" #'agenote-knowledge-search-by-tag "按标签搜索" "Org 与知识库")
@@ -3522,6 +3649,8 @@ agenote CLI 集成的知识库 CRUD。
 
 IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护帮助或 Which-key 数据。
 
+TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct 序列,foot/xterm/tmux/ssh 默认不区分)、=C-<tab>= (退化成 TAB)、=M-<arrow>= (被解析成 ESC 序列或窗口管理器拦截)。本节的高频键若属此三类,必须在功能域配 =C-c= 前缀镜像,见 =C-c c i/k/s/b=(consult 预览族)、=C-c w hjkl=(窗口切换)、=C-c h d=(仪表盘)、=S-<f10>=/=menu=(右键菜单)。新增直达键前先查本总则,三类键一律配镜像。
+
 #+begin_src emacs-lisp
 (custom/bind "C-h" #'backward-char "左移" "基础移动与直达键")
 (custom/bind "<f1>" help-map "帮助前缀" "基础移动与直达键")
@@ -3578,6 +3707,12 @@ IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护
 (custom/bind "M-<right>" #'windmove-right "右切窗口" "基础移动与直达键")
 (custom/bind "M-<up>" #'windmove-up "上切窗口" "基础移动与直达键")
 (custom/bind "M-<down>" #'windmove-down "下切窗口" "基础移动与直达键")
+;; M-<arrow> 在多数终端被吃掉(ESC 编码或被窗口管理器拦截):C-c w hjkl
+;; 走可打印字符,终端/ssh/tmux 全可达,与 C-c w 方向键同语义。
+(custom/bind "C-c w h" #'windmove-left "左切窗口" "窗口与面板")
+(custom/bind "C-c w j" #'windmove-down "下切窗口" "窗口与面板")
+(custom/bind "C-c w k" #'windmove-up "上切窗口" "窗口与面板")
+(custom/bind "C-c w l" #'windmove-right "右切窗口" "窗口与面板")
 #+end_src
 
 ** 前缀声明与跨域基础键
@@ -3623,6 +3758,11 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 
 (custom/bind "C-c h ?" #'custom/show-help "快捷键帮助" "帮助")
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
+;; dashboard 无直达键则 TTY 用户只能 M-x:dashboard 常驻(:demand t),
+;; 直接绑定;S-<f10>/<menu> 在无鼠标终端上是打开右键菜单的键盘路径。
+(custom/bind "C-c h d" #'dashboard-open "打开仪表盘" "帮助")
+(custom/bind "S-<f10>" #'context-menu-open "打开右键菜单" "帮助")
+(custom/bind "<menu>" #'context-menu-open "打开右键菜单" "帮助")
 
 ;; C-c w 面板体系:左 Dired([[#panel-dired]])/ 底终端([[#terminal]])/ 右 Agent
 ;; ([[#applications]])各自复用其功能域的打开命令,这里只承载跨域的布局总开关。
@@ -3630,10 +3770,17 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
   "返回全部 agent-shell-mode buffer 列表(可能为空)。
 扫描 `buffer-list' 而非调 agent-shell API,避免强制加载惰性包。
 收集全部而非首个:多 agent 会话并存时,总开关要能一并关闭。"
-  (cl-remove-if-not
+  (seq-filter
    (lambda (buf)
      (with-current-buffer buf (derived-mode-p 'agent-shell-mode)))
    (buffer-list)))
+
+(defun custom/panels--visible-buffers-p (buffers)
+  "BUFFERS 中是否有任一存活且已显示的 buffer。
+`buffer-list' 恒返回存活 buffer,此处 buffer 均来自 `buffer-list' 或
+`dired-noselect',同步上下文不做存活检查;`get-buffer-window' 对已
+kill buffer 返回 nil,不抛错。"
+  (cl-some #'get-buffer-window buffers))
 
 (defun custom/panels-toggle ()
   "一键开关三面板布局(左 Dired / 底终端 / 右 Agent)。
@@ -3643,12 +3790,9 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
   (let ((buffers (cons (dired-noselect (custom/project-root-or-default))
                        (cons (custom--terminal-existing-buffer)
                              (custom/panels--agent-buffers)))))
-    (if (cl-some
-         (lambda (buf) (and (buffer-live-p buf) (get-buffer-window buf)))
-         buffers)
+    (if (custom/panels--visible-buffers-p buffers)
         (dolist (buf buffers)
-          (when-let* ((win (and (buffer-live-p buf)
-                                (get-buffer-window buf))))
+          (when-let* ((win (get-buffer-window buf)))
             (delete-window win)))
       (custom/panel-dired)
       (custom/open-terminal)
@@ -3910,8 +4054,8 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
   :config
   (setq agent-shell-display-action custom:agent-side-action))
 
-(custom/declare-binding-group "C-c a a" "Agent Shell")
-(custom/bind "C-c a a a" #'agent-shell "Agent Shell" "生活应用")
+(custom/declare-binding-group "C-c a a" "Agent Shell (智能终端)")
+(custom/bind "C-c a a a" #'agent-shell "Agent Shell (智能终端)" "生活应用")
 (custom/bind "C-c a a t" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
 #+end_src
 
@@ -3922,7 +4066,7 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
   :defer t
   :commands (elfeed elfeed-update))
 
-(custom/declare-binding-group "C-c a f" "RSS / Elfeed")
+(custom/declare-binding-group "C-c a f" "RSS / Elfeed (订阅)")
 (custom/bind "C-c a f f" #'elfeed "打开 Elfeed" "生活应用")
 (custom/bind "C-c a f u" #'elfeed-update "更新 Elfeed" "生活应用")
 #+end_src
@@ -3949,7 +4093,7 @@ AI agent 的 Emacs 端 UI,与 terminal/ghostel 独立。
   :init
   (keymap-set telega-prefix-map "k" #'telega-kill))
 
-(custom/bind "C-c a t" telega-prefix-map "Telegram" "生活应用")
+(custom/bind "C-c a t" telega-prefix-map "Telegram (电报)" "生活应用")
 #+end_src
 
 *** 内置游戏
@@ -3961,7 +4105,7 @@ Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =us
 (custom/bind "C-c a g t" #'tetris "俄罗斯方块" "生活应用")
 (custom/bind "C-c a g s" #'snake "贪吃蛇" "生活应用")
 (custom/bind "C-c a g m" #'gomoku "五子棋" "生活应用")
-(custom/bind "C-c a g p" #'pong "Pong" "生活应用")
+(custom/bind "C-c a g p" #'pong "乒乓 (Pong)" "生活应用")
 #+end_src
 
 *** Guix 包管理 (Emacs-Guix)
@@ -4045,6 +4189,8 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 - 全局单 =*dashboard*= buffer 由插件维护(多 frame 共享;GUI/TTY 宽窄差异混开时已知有错位取舍,接受)。窗口尺寸变化后用 =M-x dashboard-open= 重排。
 
 Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
+
+项目区条目的点击经插件的 =dashboard-projects-switch-function= 定制点指向 =project-switch-project=:插件默认只设 =default-directory= 跑 =project-find-file=,会绕过 =C-x p p= 的完整链路——remember 进 recent 项目列表、弹 =project-switch-commands= 菜单、清 tab-line 的 :after advice;指向同一命令后 dashboard 点击与键位行为同源,无需复制任何切换副作用。
 
 全量渲染(item 生成 + agenda 扫描 + 装饰)单次上百毫秒,触发侧必须收敛:=dashboard-insert-section= 宏对 list 参数求值 4 次,agenda 的 =org-map-entries= 全量扫描随之重复 4 次,由渲染入口的请求级 advice 合并为 1 次(跨渲染不缓存);=server-after-make-frame-hook= 回调比较渲染宽度,相符(同宽新帧或正常路径)则跳过,只有首帧哑上下文宽度错误才重渲染自愈;resize 事件只挂 idle timer,拖拽的连续中间宽度不逐次全量渲染,静止 0.3s 后按最终宽度刷一次。版心不足 =custom:dashboard-min-content-width= 的窗口(拖拽经过的窄中间态)不做渲染,保留上一次可读内容。
 
@@ -4140,9 +4286,18 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
   (floor (* custom:dashboard-content-ratio
             (window-body-width window))))
 
-(defun custom/dashboard--compact-path (path)
-  "把 PATH 中间目录压缩为首字母,首尾段保留。
+(defun custom/dashboard--abbrev-dir (dir)
+  "把单个目录名 DIR 缩为首字母。
 隐藏目录(以 . 开头)取其第二个字符,避免 ~/./e 这种怪异的路径。"
+  (cond ((string-empty-p dir) dir)
+        ((string-prefix-p "." dir)
+         (if (> (length dir) 1)
+             (concat "." (substring dir 1 2))
+           dir))
+        (t (substring dir 0 1))))
+
+(defun custom/dashboard--compact-path (path)
+  "把 PATH 中间目录压缩为首字母,首尾段保留。"
   (let* ((parts (split-string path "/" t))
          (len (length parts)))
     (if (<= len 3)
@@ -4150,14 +4305,7 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
       (let* ((head (car parts))
              (file (car (last parts)))
              (middle (cl-subseq parts 1 (1- len)))
-             (compressed (mapcar (lambda (d)
-                                   (cond ((string-empty-p d) d)
-                                         ((string-prefix-p "." d)
-                                          (if (> (length d) 1)
-                                              (concat "." (substring d 1 2))
-                                            d))
-                                         (t (substring d 0 1))))
-                                 middle)))
+             (compressed (seq-map #'custom/dashboard--abbrev-dir middle)))
         (concat head "/"
                 (mapconcat #'identity compressed "/")
                 "/" file)))))
@@ -4199,6 +4347,129 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
       ;; 装饰必须显式仍以目标窗口为准
       (custom/dashboard--decorate-headings win))))
 
+(defun custom/dashboard--heading-overlays ()
+  "收集 dashboard buffer 内有效的标题 overlay,按位置排序。
+重渲染后旧 overlay 塌缩成空壳仍残留,按起止位置剔除。"
+  (sort
+   (cl-remove-if-not
+    (lambda (ov)
+      (and (eq (overlay-get ov 'face) 'dashboard-heading)
+           (> (overlay-end ov) (overlay-start ov))))
+    (overlays-in (point-min) (point-max)))
+   (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+
+(defun custom/dashboard--decorate-section (ov key width icon-w)
+  "装饰单个板块:OV 标题 overlay,KEY 右贴快捷键,WIDTH 版心宽。
+含三步:板块尾空行换分割线、板块内行加行间距、标题行缩进+快捷键右贴。
+倒序调用,前面的 insert 不影响后面 heading 的位置。"
+  (let* ((name (or (overlay-get ov 'display)
+                   (buffer-substring-no-properties
+                    (overlay-start ov) (overlay-end ov))))
+         (used (+ 4 icon-w (string-width name))))
+    (save-excursion
+      ;; 分割线替换板块尾第一段空行(板块边界 = 标题行后第一个空行)
+      (goto-char (overlay-start ov))
+      (forward-line 1)
+      (while (and (< (point) (point-max))
+                  (not (custom/dashboard--blank-line-p)))
+        (forward-line 1))
+      (when (< (point) (point-max))
+        ;; 板块内标题与条目行统一行间距:不插空行,靠 GUI 行距
+        ;; 拉开;标题行也在内,与首条目保持同一间距
+        (let ((sec-end (line-beginning-position)))
+          (goto-char (overlay-start ov))
+          (while (< (point) sec-end)
+            (unless (custom/dashboard--blank-line-p)
+              (put-text-property
+               (line-beginning-position) (line-end-position)
+               'line-spacing custom:dashboard-line-spacing))
+            (forward-line 1))
+          (goto-char sec-end))
+        (delete-region (line-beginning-position) (line-end-position))
+        (insert (propertize
+                 (make-string
+                  (custom/dashboard--separator-length width) ?─)
+                 'face 'shadow))))
+    ;; 标题行缩进 + 快捷键右贴到版心宽
+    (goto-char (overlay-start ov))
+    (let ((line-start (line-beginning-position))
+          (off-s (- (overlay-start ov) (line-beginning-position)))
+          (off-e (- (overlay-end ov) (line-beginning-position))))
+      (goto-char line-start)
+      ;; heading overlay 是 front-advance:TTY 无 icon 时其起点恰在
+      ;; 行首,行首插入的缩进会被吞进 overlay(display 替换后消失)。
+      ;; 记住原文本范围,插入后把 overlay 拨回。缩进继承行首的
+      ;; line-prefix,否则标题行脱离板块整体缩进。
+      (let ((prefix (get-text-property line-start 'line-prefix)))
+        ;; 缩进是 display 行首字符,line-spacing 由它决定,须带上
+        (insert (propertize "    " 'line-prefix prefix
+                            'line-spacing
+                            custom:dashboard-line-spacing))
+        (move-overlay ov (+ line-start 4 off-s)
+                      (+ line-start 4 off-e)))
+      (goto-char (line-end-position))
+      (insert (concat
+               (make-string
+                (max 1 (- width used (string-width key))) ?\s)
+               (propertize key 'face 'font-lock-comment-face))))))
+
+(defun custom/dashboard--center-line (body-width)
+  "把当前行按自身行宽居中(行首加 align-to 前缀)。
+行宽用插件的像素折算测量:string-width 会把 ─ ═ 等
+ambiguous 字符按双列计,GUI 实际渲染单列,居中会偏;
+dashboard-str-len 与插件原生 footer 居中同款公式。
+行宽超过窗口时不加前缀:align-to 负值会把整行推出
+屏幕左缘(内容只剩行尾残片),贴左至少完整可读;
+align-to 表达式没有可用的 max 钳制(Emacs 31 静默
+回退 0),只能在装饰时静态排除。"
+  (let ((w (dashboard-str-len
+            (buffer-substring
+             (line-beginning-position)
+             (line-end-position)))))
+    (when (and (> w 0) (<= w body-width))
+      (let ((p (propertize
+                " " 'display
+                `(space . (:align-to (- center ,(/ w 2)))))))
+        (put-text-property
+         (line-beginning-position) (line-end-position)
+         'line-prefix p)
+        (put-text-property
+         (line-beginning-position) (line-end-position)
+         'indent-prefix p)))))
+
+(defun custom/dashboard--center-groups (ovs width window)
+  "分组居中:先 remove 再改写——add-text-properties 不覆盖已有
+属性,banner/Welcome/navigator/footer 都带插件自设的测量式
+前缀。板块区(首板块标题行→末分割线行)统一版心前缀,整体
+居中、块内左对齐;其余行(banner/Welcome/navigator/init-info/
+footer)长短不一,逐行按自身行宽各自居中,整块左对齐会全贴
+版心左缘。"
+  (remove-text-properties (point-min) (point-max)
+                          '(line-prefix nil indent-prefix nil))
+  (let* ((sec-beg (save-excursion
+                    (goto-char (overlay-start (car ovs)))
+                    (line-beginning-position)))
+         (sec-end (save-excursion
+                    (goto-char (point-max))
+                    (search-backward "─" nil t)
+                    (line-end-position)))
+         (block-prefix (propertize
+                        " " 'display
+                        `(space . (:align-to (- center ,(/ width 2))))))
+         (body-width (window-body-width window)))
+    (save-excursion
+      (goto-char (point-min))
+      (while (< (point) sec-beg)
+        (custom/dashboard--center-line body-width)
+        (forward-line 1))
+      (add-text-properties sec-beg sec-end
+                           `(line-prefix ,block-prefix
+                             indent-prefix ,block-prefix))
+      (goto-char sec-end)
+      (while (and (< (point) (point-max))
+                  (progn (forward-line 1) t))
+        (custom/dashboard--center-line body-width)))))
+
 (defun custom/dashboard--decorate-headings (&optional window)
   "渲染后装饰标题行、右贴快捷键、行间距与板块分割线。
 标题行与分割线都补齐到版心宽(=custom/dashboard--content-width= ),
@@ -4208,130 +4479,24 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
 自设的前缀不会被 add-text-properties 覆盖。定位走 heading overlay
 (`dashboard-heading' face)而非 `dashboard--section-starts':渲染末尾的
 page-separator 替换会使后者的绝对位置漂移。只从
-`custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。"
+`custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。
+三步拆分:`custom/dashboard--heading-overlays' 收集、
+`custom/dashboard--decorate-section' 单板块装饰、
+`custom/dashboard--center-groups' 分组居中。"
   (with-current-buffer (get-buffer dashboard-buffer-name)
     (let* ((width (custom/dashboard--content-width window))
            (icon-w (if (and (dashboard-display-icons-p)
                             dashboard-set-heading-icons)
                        2 0))
-           (ovs (sort
-                 (cl-remove-if-not
-                  (lambda (ov)
-                    (and (eq (overlay-get ov 'face) 'dashboard-heading)
-                         ;; 重渲染后旧 overlay 塌缩成空壳仍残留,剔除
-                         (> (overlay-end ov) (overlay-start ov))))
-                  (overlays-in (point-min) (point-max)))
-                 (lambda (a b) (< (overlay-start a) (overlay-start b)))))
+           (ovs (custom/dashboard--heading-overlays))
            (inhibit-read-only t))
       ;; 倒序插入,前面的 insert 不影响后面 heading 的位置
       (cl-loop
        for (ov . key) in (reverse (cl-mapcar #'cons ovs
                                              custom:dashboard-heading-keys))
        when key
-       do (let* ((name (or (overlay-get ov 'display)
-                           (buffer-substring-no-properties
-                            (overlay-start ov) (overlay-end ov))))
-                 (used (+ 4 icon-w (string-width name))))
-            (save-excursion
-              ;; 分割线替换板块尾第一段空行(板块边界 = 标题行后第一个空行)
-              (goto-char (overlay-start ov))
-              (forward-line 1)
-              (while (and (< (point) (point-max))
-                          (not (custom/dashboard--blank-line-p)))
-                (forward-line 1))
-              (when (< (point) (point-max))
-                ;; 板块内标题与条目行统一行间距:不插空行,靠 GUI 行距
-                ;; 拉开;标题行也在内,与首条目保持同一间距
-                (let ((sec-end (line-beginning-position)))
-                  (goto-char (overlay-start ov))
-                  (while (< (point) sec-end)
-                    (unless (custom/dashboard--blank-line-p)
-                      (put-text-property
-                       (line-beginning-position) (line-end-position)
-                       'line-spacing custom:dashboard-line-spacing))
-                    (forward-line 1))
-                  (goto-char sec-end))
-                (delete-region (line-beginning-position) (line-end-position))
-                (insert (propertize
-                         (make-string
-                          (custom/dashboard--separator-length width) ?─)
-                         'face 'shadow))))
-            ;; 标题行缩进 + 快捷键右贴到版心宽
-            (goto-char (overlay-start ov))
-            (let ((line-start (line-beginning-position))
-                  (off-s (- (overlay-start ov) (line-beginning-position)))
-                  (off-e (- (overlay-end ov) (line-beginning-position))))
-              (goto-char line-start)
-              ;; heading overlay 是 front-advance:TTY 无 icon 时其起点恰在
-              ;; 行首,行首插入的缩进会被吞进 overlay(display 替换后消失)。
-              ;; 记住原文本范围,插入后把 overlay 拨回。缩进继承行首的
-              ;; line-prefix,否则标题行脱离板块整体缩进。
-              (let ((prefix (get-text-property line-start 'line-prefix)))
-                ;; 缩进是 display 行首字符,line-spacing 由它决定,须带上
-                (insert (propertize "    " 'line-prefix prefix
-                                    'line-spacing
-                                    custom:dashboard-line-spacing))
-                (move-overlay ov (+ line-start 4 off-s)
-                              (+ line-start 4 off-e)))
-              (goto-char (line-end-position))
-              (insert (concat
-                       (make-string
-                        (max 1 (- width used (string-width key))) ?\s)
-                       (propertize key 'face 'font-lock-comment-face))))))
-      ;; 分组居中:先 remove 再改写——add-text-properties 不覆盖已有
-      ;; 属性,banner/Welcome/navigator/footer 都带插件自设的测量式
-      ;; 前缀。板块区(首板块标题行→末分割线行)统一版心前缀,整体
-      ;; 居中、块内左对齐;其余行(banner/Welcome/navigator/init-info/
-      ;; footer)长短不一,逐行按自身行宽各自居中,整块左对齐会全贴
-      ;; 版心左缘。
-      (remove-text-properties (point-min) (point-max)
-                              '(line-prefix nil indent-prefix nil))
-      (let* ((sec-beg (save-excursion
-                        (goto-char (overlay-start (car ovs)))
-                        (line-beginning-position)))
-             (sec-end (save-excursion
-                        (goto-char (point-max))
-                        (search-backward "─" nil t)
-                        (line-end-position)))
-             (block-prefix (propertize
-                            " " 'display
-                            `(space . (:align-to (- center ,(/ width 2))))))
-             (body-width (window-body-width window))
-             (center-line
-              (lambda ()
-                ;; 行宽用插件的像素折算测量:string-width 会把 ─ ═ 等
-                ;; ambiguous 字符按双列计,GUI 实际渲染单列,居中会偏;
-                ;; dashboard-str-len 与插件原生 footer 居中同款公式。
-                ;; 行宽超过窗口时不加前缀:align-to 负值会把整行推出
-                ;; 屏幕左缘(内容只剩行尾残片),贴左至少完整可读;
-                ;; align-to 表达式没有可用的 max 钳制(Emacs 31 静默
-                ;; 回退 0),只能在装饰时静态排除。
-                (let ((w (dashboard-str-len
-                          (buffer-substring
-                           (line-beginning-position)
-                           (line-end-position)))))
-                  (when (and (> w 0) (<= w body-width))
-                    (let ((p (propertize
-                              " " 'display
-                              `(space . (:align-to (- center ,(/ w 2)))))))
-                      (put-text-property
-                       (line-beginning-position) (line-end-position)
-                       'line-prefix p)
-                      (put-text-property
-                       (line-beginning-position) (line-end-position)
-                       'indent-prefix p)))))))
-        (save-excursion
-          (goto-char (point-min))
-          (while (< (point) sec-beg)
-            (funcall center-line)
-            (forward-line 1))
-          (add-text-properties sec-beg sec-end
-                               `(line-prefix ,block-prefix
-                                 indent-prefix ,block-prefix))
-          (goto-char sec-end)
-          (while (and (< (point) (point-max))
-                      (progn (forward-line 1) t))
-            (funcall center-line)))))))
+       do (custom/dashboard--decorate-section ov key width icon-w))
+      (custom/dashboard--center-groups ovs width window))))
 
 (defun custom/dashboard--refresh-if-stale ()
   "目标窗口宽度与上次渲染不同时才重渲染 dashboard。
@@ -4417,6 +4582,9 @@ let 绑定请求级缓存变量,渲染结束自动丢弃,下次渲染重新扫�
         dashboard-show-shortcuts nil
         dashboard-items '((agenda . 5) (recents . 6) (projects . 6))
         dashboard-projects-backend 'project-el
+        ;; 插件默认点击只跑 project-find-file,指回 project-switch-project
+        ;; 才与 C-x p p 同源(remember + 切换菜单 + tab-line 清空 advice)
+        dashboard-projects-switch-function #'project-switch-project
         dashboard-week-agenda nil
         dashboard-filter-agenda-entry #'dashboard-filter-agenda-by-todo
         dashboard-agenda-sort-strategy '(time-up)
