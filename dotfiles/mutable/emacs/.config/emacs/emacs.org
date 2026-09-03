@@ -3492,7 +3492,7 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "C-S-c" #'custom/copy-dwim "复制" "基础移动与直达键")
 (custom/bind "C-S-v" #'yank "粘贴" "基础移动与直达键")
 (custom/bind "M-y" #'yank-from-kill-ring "从剪贴环选择粘贴" "基础移动与直达键")
-(custom/bind "C-S-x" #'custom/cut-dwim "剪切" "基础移动与直达键")
+(custom/bind "C-S-x" #'custom/cut-dwim "剪切(行/选区)" "基础移动与直达键")
 (custom/bind "C-S-w" #'kill-current-buffer "关闭缓冲区" "基础移动与直达键")
 (custom/bind "C-S-t" #'recentf-open-files "最近文件" "基础移动与直达键")
 (custom/bind "C-S-d" #'duplicate-dwim "复制当前行" "基础移动与直达键")
