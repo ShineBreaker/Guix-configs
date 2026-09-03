@@ -540,25 +540,25 @@
         [file-count (%secret-count-files dir)])
     (for-each
      (match-lambda
-      [(name . pattern)
-       (for-each
-        (lambda (raw)
-          (match (string-match "^([^:]+):([0-9]+):(.*)$" raw)
-            [#f #f]
-            [m (let ([path (match:substring m 1)])
-                 ;; 只报小于 1MB 的文件，避免误报二进制/大文件
-                 (when (< (stat:size (stat path)) 1048576)
-                   (let ([content (match:substring m 3)])
-                     (format #t "[HINT] ~a:~a:~a:~a~%"
-                             path (match:substring m 2) name
-                             (if (> (string-length content) 80)
-                                 (substring content 0 80)
-                                 content))
-                     (set! found (+ found 1)))))]))
-        (%pipe->lines
-         (string-append (%secret-grep-options "grep -HrnIE")
-                        " -e " (%shell-quote pattern)
-                        " " (%shell-quote dir) " 2>/dev/null")))])
+       [(name . pattern)
+        (for-each
+         (lambda (raw)
+           (match (string-match "^([^:]+):([0-9]+):(.*)$" raw)
+             [#f #f]
+             [m (let ([path (match:substring m 1)])
+                  ;; 只报小于 1MB 的文件，避免误报二进制/大文件
+                  (when (< (stat:size (stat path)) 1048576)
+                    (let ([content (match:substring m 3)])
+                      (format #t "[HINT] ~a:~a:~a:~a~%"
+                              path (match:substring m 2) name
+                              (if (> (string-length content) 80)
+                                  (substring content 0 80)
+                                  content))
+                      (set! found (+ found 1)))))]))
+         (%pipe->lines
+          (string-append (%secret-grep-options "grep -HrnIE")
+                         " -e " (%shell-quote pattern)
+                         " " (%shell-quote dir) " 2>/dev/null")))])
      patterns)
     (cond
      [(zero? found)
@@ -766,10 +766,15 @@
 ;;; dotfiles/mutable/ 目录用 GNU Stow 直接建软链接到仓库源（改源即生效，
 ;;; 无需 blue home），与 dotfiles/immutable/（Guix Home stow，只读 store
 ;;; 副本）互补。适合频繁手改且需 git 备份的配置（emacs / pi / hermes）。
+;;;
+;;; 包身份与行为均由包目录下的标记文件显式声明：.stow-package 声明
+;;; "这是一个包"（stow-all 枚举依据），.stow-folding 按包 opt-in 整目录
+;;; 折叠。无标记目录只可能是分组容器，下钻一层找带标记的子包。
 
-;; dotfiles/mutable/ 下被视为元目录、不当作包的直接子目录。
-(define %stow-meta-names
-  '("." ".." ".git" ".github" ".agents" "node_modules" ".blue-store"))
+;; 枚举包时跳过的仓库元目录。包身份由 .stow-package 标记声明，无标记
+;; 目录（.mimosa/.github/node_modules 等 dot 杂物）只会作为分组下钻、
+;; 天然产不出包，故名单只剩 .git——避免下钻时 scandir 巨大的对象库。
+(define %stow-meta-names '("." ".." ".git"))
 
 ;; 把 --adopt/--restow/--delete 模式名翻译成 stow 命令行 flag 与中文动词。
 (define (%stow-flag mode)
@@ -794,6 +799,11 @@
 (define (%stow-folding? pkg)
   (file-exists? (string-append %stow-dir "/" pkg "/" %stow-folding-marker)))
 
+;; 标记文件名：放在 dotfiles/mutable/<PKG>/.stow-package 即声明该目录是
+;; 一个 stow 包（stow-all 的枚举依据）。空文件，仅作身份声明；blue stow
+;; 显式指定包名不受此限（只查目录存在）。
+(define %stow-package-marker ".stow-package")
+
 ;; 把 "group/pkg" 形式的包名拆成 (实际 stow-dir . 一级包名)。分组前缀并入
 ;; --dir，stow 本身永远只收一级包名（GNU Stow 不保证接受带斜杠的包名）。
 (define (%stow-split-pkg pkg)
@@ -804,8 +814,8 @@
                  (substring pkg (+ i 1) (string-length pkg)))]
           [else (loop (- i 1))])))
 
-;; 对单个包执行 stow。--ignore=\.stow-folding$ 始终带上，确保标记文件
-;; 本身永不部署到 $HOME（多个包的同名标记会冲突）。
+;; 对单个包执行 stow。--ignore=\.stow-(folding|package)$ 始终带上，确保
+;; 标记文件本身永不部署到 $HOME（多个包的同名标记会冲突）。
 (define (%stow-package pkg mode home)
   (let ([pkg-dir (string-append %stow-dir "/" pkg)])
     (unless (file-exists? pkg-dir)
@@ -817,21 +827,18 @@
               (%stow-verb mode) pkg home
               (if folding? "folding" "no-folding"))
       (%run `("stow"
-              "--ignore=\\.stow-folding$"
+              "--ignore=\\.stow-(folding|package)$"
               ,@(if folding? '() (list "--no-folding"))
               ,(string-append "--dir=" (car split))
               ,(string-append "--target=" home)
               ,@(if (string=? flag "") '() (list flag))
               ,(cdr split))))))
 
-;; 目录内含 dot 开头条目（.config/.local/.stow-*）即为包；否则视为纯
-;; 分组目录，下钻收集其中同样是包的子目录。
+;; 包身份唯一判据：目录下存在 .stow-package 标记。此前的启发式（目录内
+;; 含 dot 条目即包）会被分组目录里的 dot 杂物（.gitignore/.mimosa 等）
+;; 误触发、也会漏掉尚未放内容的空包，故改为显式声明。
 (define (%stow-package-dir? path)
-  (any (lambda (name)
-         (and (> (string-length name) 0)
-              (char=? (string-ref name 0) #\.)))
-       (filter (lambda (name) (not (member name '("." ".."))))
-               (or (scandir path) '()))))
+  (file-exists? (string-append path "/" %stow-package-marker)))
 
 ;; 枚举 dotfiles/mutable/ 下所有包（含一层分组目录内的包），按字母序。
 (define (%stow-list-packages)
@@ -1153,14 +1160,14 @@
    (help "移除仓库内的 __pycache__、*.elc、*.o、*.a、*.so 文件以及 Emacs 运行时缓存目录。"))
   (for-each
    (match-lambda
-    [(target type)
-     (if (eq? type 'directory)
-         (when (file-exists? target)
-           (format #t "移除 ~a~%" target)
-           (delete-file-recursively target))
-         (%run `("find" ,%repo-root "-type" "f" "-name" ,target
-                 "-not" "-path" "*/.git/*"
-                 "-print" "-delete")))])
+     [(target type)
+      (if (eq? type 'directory)
+          (when (file-exists? target)
+            (format #t "移除 ~a~%" target)
+            (delete-file-recursively target))
+          (%run `("find" ,%repo-root "-type" "f" "-name" ,target
+                  "-not" "-path" "*/.git/*"
+                  "-print" "-delete")))])
    `(("__pycache__" directory)
      ("*.elc" file)
      ("*.o" file)
@@ -1276,6 +1283,9 @@ GNU Stow 直链部署 dotfiles/mutable/PKG/ 到 $HOME。改源即生效（无需
 
 PKG 支持一层分组路径（如 agents/hermes，对应 dotfiles/mutable/agents/hermes/）。
 
+包识别（stow-all 枚举依据）:
+  dotfiles/mutable/<PKG>/.stow-package      存在即该目录是一个包（空文件，仅作身份声明）
+  无标记目录视为分组，下钻一层收集带标记子目录；blue stow 显式包名只查目录存在
 --no-folding（默认）/ folding: 目标目录默认保持为真实目录、stow 只对单个文件建软链，
 保护应用运行时产物（logs/、state.db、sessions/ 等）不污染源。想让某个包改用整目录
 折叠（目标目录本身变成指向源的软链），在该包目录下放 .stow-folding 标记文件即可。
@@ -1286,7 +1296,7 @@ folding 控制:
   其余包默认 --no-folding
 忽略机制（每包 + 命令行）:
   dotfiles/mutable/<PKG>/.stow-local-ignore  每包 Perl 正则，逐行，# 注释允许
-  --ignore=REGEX              命令行一次性（blueprint 内部固定加 --ignore=\\.stow-folding$）
+  --ignore=REGEX              命令行一次性（blueprint 内部固定加 --ignore=\\.stow-(folding|package)$）
 
 源目录布局: dotfiles/mutable/PKG/.local/share/hermes/ -> ~/.local/share/hermes/
 改后用 git commit 备份。配合 dotfiles/immutable/ 的 Guix stow（仅读源）使用。"))
