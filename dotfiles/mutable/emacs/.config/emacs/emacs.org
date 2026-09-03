@@ -3335,10 +3335,14 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 (add-hook 'org-mode-hook #'custom/org-modern--apply-display -90)
 
+;; :commands 生成 autoload 入口,首次 org-mode-hook 触发包加载;hook
+;; 注册放顶层而非 :config(否则包永远等不到触发,声明成死锁)。深度
+;; 90 晚于 org-modern-mode(0)与上方 -90 的 TTY 降级。
 (use-package org-modern-indent
   :defer t
-  :config
-  (add-hook 'org-mode-hook #'org-modern-indent-mode 90))
+  :commands (org-modern-indent-mode))
+
+(add-hook 'org-mode-hook #'org-modern-indent-mode 90)
 
 (use-package org-roam
   :defer t
