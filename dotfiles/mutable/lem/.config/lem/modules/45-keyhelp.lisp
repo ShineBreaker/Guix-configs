@@ -21,9 +21,11 @@
                   *vs-binding-registry*)))
 
 (defun vs-help-note-entries (group)
-  "group 分组的附注键位（language-mode 默认键等）。"
+  "group 分组的附注键位（language-mode 默认键等）。
+条目形状与注册表同构（键串在 first、分组在 third），过滤位必须与
+vs-help-entries 一致用 third：first 是键串，永不可能等于分组 ID。"
   (reverse
-   (remove-if-not (lambda (e) (string= (first e) group))
+   (remove-if-not (lambda (e) (string= (third e) group))
                   *vs-help-notes*)))
 
 (defun vs-help-format-section (stream title entries)
