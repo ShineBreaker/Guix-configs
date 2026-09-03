@@ -43,7 +43,8 @@
   "相对路径 → :modified/:untracked/:deleted/:conflict")
 (defparameter *vs-code-exts*
   '("lisp" "lsp" "scm" "el" "py" "c" "h" "cc" "cpp" "rs" "go" "js" "ts"
-    "json" "yaml" "yml" "toml" "nix" "sh" "org" "md"))
+    "json" "yaml" "yml" "toml" "nix" "sh" "org" "md" "html" "css" "scss"
+    "rb" "xml" "sql" "lock" "sld" "rkt"))
 
 ;; --- 工作区根探测：向上走 .git（与 VSCode 默认 workspace 语义一致）；
 ;;     start 缺省取当前 buffer 目录，激活路径传打开文件所在目录 ---
@@ -487,8 +488,17 @@ get-buffer 撞名；树状态在 *vs-open-dirs*，buffer 无状态损失。"
                                    :temporary t)))
           (change-buffer-mode buffer 'vscode-explorer-mode)
           (setf (not-switchable-buffer-p buffer) t)
+          ;; 只跟随真实文件 buffer 重算根：heal 重建或焦点在终端/
+          ;; dashboard 时重开，必须保持旧根——否则鱼 shell CWD
+          ;; （/tmp 等）会把工作区冲掉（C-j roundtrip 后根变 TMP，
+          ;; 真机实证；vs-project-root 无参版读 buffer-directory/CWD）。
           (when *vs-explorer-root*
-            (setf *vs-explorer-root* (vs-project-root)))
+            (let ((file (ignore-errors (buffer-filename (current-buffer)))))
+              (when file
+                (setf *vs-explorer-root*
+                      (vs-project-root
+                       (make-pathname
+                        :directory (pathname-directory file)))))))
           (vs-explorer-redraw buffer)
           (make-leftside-window buffer :width *vs-explorer-width*)))))
 
