@@ -1,0 +1,17 @@
+# stow-local-ignore for stow/dsh — Perl regex, one per line, matched against
+# the tail of the relative path within the package. See GNU Stow manual.
+#
+# 源里只托管：home 级 cordis.patch.yml 与 profiles/web 的四个配置文件、
+# 启动 wrapper（.local/bin/dsh-web）、desktop 条目与图标。
+# 运行时产物（凭据/存储/模块缓存/node_modules）生成在 ~/.local/share/dsh
+# 部署侧真实目录，不在源；若误放进源，这些规则让 stow 不把它们软链出去。
+# .credentials.yaml 含 API key，绝不入 git、绝不被 stow 链出。
+
+# --- DSH_HOME 运行时产物（防御性忽略） ---
+\.anonymous-user-id$
+\.credentials\.yaml$
+storages/$
+sessions/$
+\.dsh-module-fallback/$
+node_modules/$
+pnpm-lock\.yaml$

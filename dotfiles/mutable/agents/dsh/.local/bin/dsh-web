@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# dsh-web — DeepSeek Harness Web UI 启动 wrapper。
+#
+# 注入 DSH_HOME（wheel 版 dsh 拒绝隐式 ~/.dsh；niri 会话环境不经 fish
+# conf.d，desktop 入口拿不到 export，故 wrapper 自带，语义同 conf.d 的
+# 10-dsh.fish）。本体是 uv tool 装的 console script，位置固定。
+# 认证 token URL 由 dsh web 打印并自动开浏览器；已在运行的第二个实例会
+# 因端口 3080 被占而退出，属预期。
+set -euo pipefail
+
+: "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
+export DSH_HOME
+
+exec "$HOME/.local/bin/dsh" web "$@"

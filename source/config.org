@@ -2554,6 +2554,8 @@ done
   ("CODEX_HOME" . "$XDG_CONFIG_HOME/codex")
   ;; docker
   ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
+  ;; dsh
+  ("DSH_HOME" . "$XDG_DATA_HOME/dsh")
   ;; gdb
   ("GDBHISTFILE" . "$XDG_STATE_HOME/gdb/history")
   ;; gnupg

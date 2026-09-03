@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DeepSeek Harness
+GenericName=dsh web
+Comment=Launch DeepSeek Harness Web UI
+Exec=/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agents/dsh/.local/bin/dsh-web
+Icon=/home/brokenshine/.local/share/icons/dsh.png
+Terminal=false
+Categories=Utility;Development;
+StartupNotify=true

@@ -1,0 +1,5 @@
+# 上游 0.1.2a3 wheel 闭包漏打包 @deepseek-ai/dsh-session-title-llm
+# （dsh-session-title-first-prompt-llm 的依赖），临时禁用该 entry 绕过启动崩溃；
+# upstream 修复后（uv tool upgrade 后）移除本条目。
+- id: session-title-llm
+  disabled: true
