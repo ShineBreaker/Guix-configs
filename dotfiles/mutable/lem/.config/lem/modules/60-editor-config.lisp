@@ -1,7 +1,7 @@
 ;;; modules/editor-config.lisp — 编辑器外观与行为变量
 ;;;
-;;; 依赖：utils（vs-setvar）、icons（modeline 分支图标）；无下游依赖
-;;; （keybindings/startup 不引用本模块符号）。
+;;; 依赖：utils（vs-setvar）、icons（modeline 分支图标）；下游 keybindings
+;;; 引用本模块命令（VSCODE-TOGGLE-LINE-WRAP，M-z）。
 ;;;
 ;;; editor variable 同样符号身份敏感：必须用定义包的符号（vs-setvar）。
 
@@ -97,8 +97,121 @@
 (vs-setvar :lem "HIGHLIGHT-LINE" t)
 
 ;; dashboard（VSCode 欢迎页）镜像内置默认开启
-;; line-wrap 关闭（VSCode 默认不换行；Alt+Z 切换语义迭代阶段接）
+;; line-wrap 关闭（VSCode 默认不换行；Alt+Z 切换见下 vscode-toggle-line-wrap，
+;; 绑在 70-keybindings 的 M-z）
 (vs-setvar :lem "LINE-WRAP" nil)
+
+;; 换行开关（VSCode Alt+Z；toggle 全局编辑器变量，当前 buffer 立即生效，
+;; 新 buffer 继承全局值）。必须是 define-command 产物才能绑键。
+(define-command vscode-toggle-line-wrap () ()
+  (let ((sym (vs$ :lem "LINE-WRAP")))
+    (when sym
+      (setf (variable-value sym :global)
+            (not (variable-value sym :global)))
+      (message "自动换行: ~A"
+               (if (variable-value sym :global) "开" "关")))))
+
+;; 鼠标滚轮速度（上游 *SCROLL-SPEED* 默认 3 行/格；VSCodium 侧滚轮一格
+;; 多行，对齐其手感提到 6。special variable，走 vs-setglobal）。
+(vs-setglobal :lem-core "*SCROLL-SPEED*" 6)
+
+;; 右键命令菜单（VSCode 右键语义）：上游鼠标键不走 keymap 模型
+;; （define-key 不接受 Mouse-Right 键串，parse error；MOUSE-BUTTON-DOWN-
+;; FUNCTIONS 在本构建未绑定），改挂 HANDLE-MOUSE-BUTTON-DOWN 的 :around
+;; 方法——右键按下时先 call-next-method 走原分发（保留定位/选区等默认
+;; 行为），再调自研 VSCODE-CONTEXT-MENU（75-context-menu，prompt 过滤
+;; 菜单）。BUTTON 槽取值前端不一致：ncurses 合成事件为 :RIGHT，真机
+;; webview 右键为 BUTTON-3 符号（trace 实测），故按名字比对。
+;;
+;; 手法注意：不能 setf 上游 generic 的 symbol-function（LEM-CORE 包锁，
+;; 配置加载期的逐 form 容错会静默吞掉整个 form，v20 实测），defmethod
+;; :around 是 CLOS 标准挂接，不触发包锁。defmethod 为宏，运行时动态
+;; 定义须 eval 构造（与 80-modes-base 的 vs-hook-add 同一手法）。菜单
+;; 命令在回调体内动态解析（75 后于 60 加载，加载期解析必空）。
+(defun vs-right-click-p (event btn-reader)
+  "右键判定：BUTTON 槽按符号名比对（:RIGHT / BUTTON-3，大小写无关）。"
+  (let ((b (ignore-errors (funcall btn-reader event))))
+    (and (symbolp b)
+         (let ((n (string-upcase (string b))))
+           (or (string= n "RIGHT") (string= n ":RIGHT")
+               (string= n "BUTTON-3") (string= n "BUTTON3")
+               (string= n "RIGHT-BUTTON"))))))
+
+;; 注意：菜单不能在鼠标分发里同步调——prompt 在 button-down 上下文
+;; 内起不来（ignore-errors 吞掉，真机右键 trace 走但菜单不现，
+;; 2026-09-04 实测）。改走 send-event 延后到编辑线程（探针链同款
+;; 手法），右键即返，菜单随后弹出。
+(let ((gf-name (vs$ :lem-core "HANDLE-MOUSE-BUTTON-DOWN"))
+      (btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
+      (send (vs$ :lem "SEND-EVENT")))
+  (when (and gf-name btn)
+    (eval `(defmethod ,gf-name :around (buffer event &key)
+             (let ((res (multiple-value-list (call-next-method))))
+               (when (vs-right-click-p event ',btn)
+                 (vs-trace "right-click menu fired")
+                 (let ((menu (vs$ :lem-user "VSCODE-CONTEXT-MENU")))
+                   (when (and menu (fboundp menu))
+                     (if (and ',send (fboundp ',send))
+                         (ignore-errors
+                          (funcall ',send (lambda () (funcall menu))))
+                         (ignore-errors (funcall menu))))))
+               (values-list res))))))
+
+;; 悬停文档增强（VSCode 鼠标悬停语义）：around HANDLE-MOUSE-HOVER，
+;; 先 call-next-method 走上游默认悬浮，再尝试 LSP 文档覆盖——取当前点
+;; 调 LSP-HOVER（无 LSP 时返回 NIL 天然穿透），非空则经 hover overlay
+;; 显示。overlay 链：UPDATE-HOVER-OVERLAY 落位 → FIND-OVERLAY-THAT-
+;; CAN-HOVER 取 overlay → SET-HOVER-MESSAGE 写文本，全程 ignore-errors，
+;; 任一环节缺失即退回上游默认行为。LSP-HOVER 传 point（v48 实测无 LSP
+;; 时回 NIL；有 LSP 时行为由真机验证）。
+(defun vs-left-click-p (event btn-reader)
+  "左键判定：BUTTON 槽按符号名比对（:LEFT / BUTTON-1 / BUTTON1）。vs-right-click-p 同款手法。"
+  (let ((b (ignore-errors (funcall btn-reader event))))
+    (and (symbolp b)
+         (let ((n (string-upcase (string b))))
+           (or (string= n "LEFT") (string= n ":LEFT")
+               (string= n "BUTTON-1") (string= n "BUTTON1"))))))
+
+;; 拖拽选中（VSCode 左键拖拽语义）：上游 motion 走 RECEIVE-MOUSE-MOTION
+;; （普通函数，无 around 挂接点），但 motion 下游必经 HANDLE-MOUSE-HOVER
+;; （同 MOUSE-EVENT 事件，带 BUTTON 状态），故在 hover 的 around 里补：
+;; 左键按下中且 mark 未激活 → 在当前点设 mark 起点，选区随光标延伸。
+;; mark 已激活则不动（拖拽延续）；单击（无 motion）由上游默认处理。
+;; 全程 ignore-errors，不影响 hover 文档链。
+(let ((gf-name (vs$ :lem-core "HANDLE-MOUSE-HOVER")))
+  (when gf-name
+    (eval `(defmethod ,gf-name :around (buffer event &key)
+             ;; primary 在合成事件/无 hover 上下文时可能抛错，先包住，
+             ;; 保证增强分支总有机会执行（右键 around 同理已包）。
+             (let ((res (ignore-errors
+                          (multiple-value-list (call-next-method)))))
+               (ignore-errors
+                 (let ((hover (vs$ :lem-lsp-mode "LSP-HOVER"))
+                       (update (vs$ :lem-core "UPDATE-HOVER-OVERLAY"))
+                       (find-ov (vs$ :lem-core "FIND-OVERLAY-THAT-CAN-HOVER"))
+                       (set-msg (vs$ :lem-core "SET-HOVER-MESSAGE"))
+                       (btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
+                       (setm (vs$ :lem-core "SET-CURSOR-MARK"))
+                       (bmp (vs$ :lem "BUFFER-MARK-P")))
+                   ;; 拖拽起点（先执行，保证 mark 在文档链之前就位；
+                   ;; 独立 ignore-errors，与文档链互不连累）
+                   (ignore-errors
+                     (when (and btn setm bmp
+                                (vs-left-click-p event btn)
+                                (not (ignore-errors (funcall bmp buffer))))
+                       (vs-trace "drag mark set")
+                       (funcall setm (current-point)
+                                (copy-point (current-point)))))
+                   ;; LSP 文档覆盖
+                   (when (and hover update find-ov set-msg)
+                     (let ((doc (funcall hover (current-point))))
+                       (when doc
+                         (vs-trace "hover doc fired")
+                         (funcall update (current-point))
+                         (let ((ov (funcall find-ov (current-point))))
+                           (when ov
+                             (funcall set-msg ov doc))))))))
+               (values-list res))))))
 
 ;; --- nightly 增益 ---
 
