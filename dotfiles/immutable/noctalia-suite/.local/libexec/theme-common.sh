@@ -76,13 +76,16 @@ log "set-theme: ok"
 pkill -u "$USER" --signal="$foot_signal" ^foot$ || true
 log "foot reload signal sent"
 
+# noctalia-shell 负责写入 kitty 的主题文件（themes/noctalia.conf），而 kitty 的
+# 配置监控不追踪 include 文件，只能靠 SIGUSR1 重载。信号必须等文件写完后再发，
+# 否则 kitty 读到的是上一个模式的主题。
+run_optional "noctalia-shell ${mode}Mode" timeout 5 noctalia msg theme-mode-set "$mode"
+
 if command -v kitty >/dev/null 2>&1; then
 	run_optional "kitty config reload" pkill -u "$USER" --signal=SIGUSR1 ^kitty$
 else
 	log "kitty theme reload: skipped (kitty not found)"
 fi
-
-run_optional "noctalia-shell ${mode}Mode" timeout 5 noctalia msg theme-mode-set "$mode"
 
 makoctl reload || true
 log "mako reload requested"
