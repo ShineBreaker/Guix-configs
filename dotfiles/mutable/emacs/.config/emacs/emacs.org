@@ -3326,7 +3326,11 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 ;; 90 晚于 org-modern-mode(0)与上方 -90 的 TTY 降级。
 (use-package org-modern-indent
   :defer t
-  :commands (org-modern-indent-mode))
+  :commands (org-modern-indent-mode)
+  :config
+  ;; 竖线默认继承 org-meta-line(元注释色),与代码正文对比过强;
+  ;; 改继承 shadow(主题次要文本灰)让块边框退为背景层,与版心和谐。
+  (face-spec-set 'org-modern-indent-bracket-line '((t :inherit (shadow)))))
 
 (add-hook 'org-mode-hook #'org-modern-indent-mode 90)
 
