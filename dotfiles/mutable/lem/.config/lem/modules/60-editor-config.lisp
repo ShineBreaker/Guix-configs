@@ -285,6 +285,16 @@
 ;;   lem 无 fish-mode 无处挂接，不注册。
 (vs-setglobal :lem "*AUTO-FORMAT*" t)
 
+;; 自动保存（VSCodium files.autoSave=onFocusChange 的对应物）：
+;; 上游 lem/auto-save 全局 minor mode：idle 定时 + 每 256 键 checkpoint
+;; 写回真实文件。webview 前端 timer 不 fire，idle 路径失效，实际靠
+;; 按键计数路径（约 256 键一存）；changed-disk-p 守卫 + 只碰已存盘
+;; 文件（未存盘新 buffer 不写）。*make-backup-files* 保持 nil，不产
+;; 生 ~ 备份文件。2026-09-04 ncurses 探针：符号存在、启用无错。
+(let ((mode (vs$ :lem/auto-save "AUTO-SAVE-MODE")))
+  (when (and mode (fboundp mode))
+    (ignore-errors (funcall mode t))))
+
 ;; formatter 注册器（modes/ 各语言文件调用；本模块先于 modes/ 加载）。
 ;; register-formatter 是 :lem-core 导出宏，不能 funcall，运行时注册走
 ;; eval 展开（与 80-modes-base 的 vs-hook-add 同一手法）；mode 符号经
