@@ -7,13 +7,35 @@
 
 (in-package :lem-user)
 
-;; 上游 tabbar（webview 顶栏 buffer 列表条）禁用：标签栏职责交给
-;; frame-multiplexer（30-themes 已配色，C-z 前缀切换，见 70-keybindings）。
-;; 只杀 buffer 过滤包装没用——变量不关它照样起；必须置 *ENABLE-TABBAR-
-;; ON-STARTUP* nil（上游 after-init hook 消费，ncurses/webview 全前端无读者
-;; 副作用为零）。vs-setglobal：direct special variable（tabbar-config.lisp
-;; defvar + hook 裸引用）。
-(vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*" nil)
+;; 上游 tabbar（webview 顶栏 buffer 列表条）= VSCode 编辑器 tab 的对位物：
+;; HTML 管线、原生点击切换/关闭/dirty 圆点（webview 自带交互）。默认显示
+;; 全部 buffer（含 *terminal*/*dashboard* 等临时 tab），wrap get-tabbar-buffers
+;; 收窄为只显示文件 buffer（原函数增量缓存逻辑不动，只过滤出口）。
+;; 旧方案（禁 tabbar + frame-multiplexer 当标签条）被否：vf 是 frame 条非文件
+;; tab（单显示项、无点击关闭），与 VSCode 语义差距更大。
+;; 开关分派用「排除法」：webview 下加载本模块时 IMPLEMENTATION 尚未就绪
+;; （frontend 解析为 nil），eq :webview 判定会误关；ncurses 的 tabbar 渲染走
+;; lem-server HTML 管线必崩（AGENTS 实测），唯独它要关；其余前端一律开。
+(let* ((impl-fn (vs$ :lem "IMPLEMENTATION"))
+       ;; IMPLEMENTATION-NAME 未 export 进 :lem，home 包 :lem-core 解析
+       (name-fn (vs$ :lem-core "IMPLEMENTATION-NAME"))
+       (frontend (and (fboundp impl-fn) (fboundp name-fn)
+                      (ignore-errors (funcall name-fn (funcall impl-fn))))))
+  (vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*"
+                (not (eq frontend :ncurses))))
+(let ((get-bufs (vs$ :lem/tabbar "GET-TABBAR-BUFFERS")))
+  (when (and get-bufs (fboundp get-bufs))
+    ;; 重载幂等：orig 只记首次的上游原始函数（重载不复写），每次重载
+    ;; 都按同一 orig 重包一层再整体 setf——wrap 链深度恒 1，不随重载
+    ;; 叠加。登记挂符号 plist（get/setf get 不触发包锁）。
+    (let ((orig (or (get get-bufs 'vs-tabbar-orig)
+                    (symbol-function get-bufs))))
+      (setf (symbol-function get-bufs)
+            (lambda ()
+              (remove-if-not
+               (lambda (b) (ignore-errors (buffer-filename b)))
+               (funcall orig))))
+      (setf (get get-bufs 'vs-tabbar-orig) orig))))
 
 ;; ATTRIBUTE-FOREGROUND 疯弹窗修复（上游 server 前端缺陷）：webview 渲染链
 ;; put() → ensure-attribute(attr nil)，attr=NIL（无 :attribute 的 insert-string

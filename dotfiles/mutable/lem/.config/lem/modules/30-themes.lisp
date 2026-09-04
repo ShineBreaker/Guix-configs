@@ -206,3 +206,41 @@ toggle 的翻转基准才可信。启动恒为 :dark（历史行为不变）。"
                 "vscode-light-modern"))
 (vs-call :lem-user "VS-EXPLORER-SET-CHROME" *vs-theme-mode*)
 (vs-call :lem-user "VS-PROBLEMS-SET-CHROME" *vs-theme-mode*)
+
+;; tabbar（webview 顶栏文件 tab 条）HTML token 换肤：上游 generate-html 的
+;; CSS token 硬编码暗色（--tab-bg #181818 等），仅激活 tab 底色取 editor-bg，
+;; 浅色主题下整条深底白字与编辑区脱节。wrap 输出：dark 直通原函数；light 把
+;; :root 暗色 token 与 close hover 高光替换为浅色对（色值对齐 VSCode Light
+;; Modern：tab 栏 #F8F8F8 / 激活 #FFFFFF / 文字 #6F6F6F→#3B3B3B / 边 #E2E2E2 /
+;; 强调 #0098FF）。上游 *after-load-theme-hook* 已挂 update-on-theme-change
+;; （重生成 HTML + 重绘），toggle-theme 时本 wrap 自动换色，无需额外钩子。
+;; wrap 幂等同款：orig 挂符号 plist，重载不叠包。
+(defun vs-html-replace-all (old new s)
+  ;; 纯 string 无依赖：逐处字面替换（token 均唯一，长度可变但无递归回带）。
+  (let ((out s) (pos 0))
+    (loop
+      (let ((i (search old out :start2 pos)))
+        (unless i (return out))
+        (setf out (concatenate 'string (subseq out 0 i) new (subseq out (+ i (length old))))
+              pos (+ i (length new)))))))
+
+(let ((gen (vs$ :lem/tabbar "GENERATE-HTML")))
+  (when (and gen (fboundp gen))
+    (let ((orig (or (get gen 'vs-tabbar-html-orig) (symbol-function gen))))
+      (setf (symbol-function gen)
+            (lambda ()
+              (if (eq *vs-theme-mode* :dark)
+                  (funcall orig)
+                  (let ((html (funcall orig)))
+                    (dolist (pair
+                              '(("--tab-bg: #181818" . "--tab-bg: #F8F8F8")
+                                ("--tab-bg-hover: #252525" . "--tab-bg-hover: #ECECEC")
+                                ("--tab-fg: #8b8b8b" . "--tab-fg: #6F6F6F")
+                                ("--tab-fg-active: #e0e0e0" . "--tab-fg-active: #3B3B3B")
+                                ("--tab-border: #2a2a2a" . "--tab-border: #E2E2E2")
+                                ("--tab-accent: #4cc2ff" . "--tab-accent: #0098FF")
+                                ("background: rgba(255,255,255,.1)"
+                                 . "background: rgba(0,0,0,.08)")))
+                      (setf html (vs-html-replace-all (car pair) (cdr pair) html)))
+                    html))))
+      (setf (get gen 'vs-tabbar-html-orig) orig))))

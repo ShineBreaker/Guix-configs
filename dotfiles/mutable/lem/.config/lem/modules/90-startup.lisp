@@ -47,11 +47,17 @@
 ;; 抛错被吞（ncurses 同配置 hws=1、webview login views 无 header view 实测）。
 ;; 补救：首次命令（此时编辑线程与 frame 世界已就绪）off → init 幂等重建，
 ;; ncurses 探针 hws 1→0→1 验证。off 只 delete 既有 vf（缺失则 no-op）。
+;; 仅 ncurses 补建：webview 下 tabbar（60 的文件 tab 条）是顶层标签条，
+;; vf 的 "0: <buffer>" 单行与它重复，双重显示反而碍眼。
 (defun vs-ensure-frame-multiplexer ()
   (ignore-errors
     (let ((off (vs$ :lem/frame-multiplexer "FRAME-MULTIPLEXER-OFF"))
-          (init (vs$ :lem/frame-multiplexer "FRAME-MULTIPLEXER-INIT")))
-      (when (and off init)
+          (init (vs$ :lem/frame-multiplexer "FRAME-MULTIPLEXER-INIT"))
+          (impl-fn (vs$ :lem "IMPLEMENTATION"))
+          (name-fn (vs$ :lem-core "IMPLEMENTATION-NAME"))
+          (frontend (and (fboundp impl-fn) (fboundp name-fn)
+                         (ignore-errors (funcall name-fn (funcall impl-fn))))))
+      (when (and off init (eq frontend :ncurses))
         (funcall off)
         (funcall init)))))
 
