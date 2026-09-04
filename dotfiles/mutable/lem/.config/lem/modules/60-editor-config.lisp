@@ -7,40 +7,25 @@
 
 (in-package :lem-user)
 
-;; VSCode Tab 栏 = webview 前端 tabbar（buffer 列表条，上游显示全部
-;; buffer——含 *terminal*/*dashboard* 等临时 buffer）。wrap
-;; get-tabbar-buffers 收窄为只显示打开的文件（VSCode 编辑器 tab 语义）；
-;; 原函数的增量缓存逻辑不动，只过滤出口。
-;;
-;; 开关分派用「排除法」：上游由 after-init hook 消费
-;; *enable-tabbar-on-startup*，而 webview 下加载本模块时 IMPLEMENTATION
-;; 尚未就绪（frontend 解析为 nil）——旧写法 eq :webview 判定失败会误关
-;; tabbar。ncurses 前端 display 先于配置加载就绪、frontend 可成功解析为
-;; :ncurses，且其 tabbar 渲染走 lem-server HTML 管线必崩（nightly 实测），
-;; 唯独它要关；其余前端（webview/nil/SDL2 系）一律开。
-(let* ((impl-fn (vs$ :lem "IMPLEMENTATION"))
-       ;; IMPLEMENTATION-NAME 未 export 进 :lem，home 包 :lem-core 解析
-       (name-fn (vs$ :lem-core "IMPLEMENTATION-NAME"))
-       (frontend (and (fboundp impl-fn) (fboundp name-fn)
-                      (ignore-errors (funcall name-fn (funcall impl-fn))))))
-  (vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*"
-                (not (eq frontend :ncurses))))
-(let ((get-bufs (vs$ :lem/tabbar "GET-TABBAR-BUFFERS")))
-  (when (and get-bufs (fboundp get-bufs))
-    ;; 重载幂等：orig 只记首次的上游原始函数（重载不复写），每次重载
-    ;; 都按同一 orig 重包一层再整体 setf——wrap 链深度恒 1，不随重载
-    ;; 叠加（旧写法每次 load 都把上一轮的 wrap lambda 当 orig 再包）。
-    ;; 登记挂符号 plist（get/setf get 不触发包锁）；'vs-tabbar-cur 供
-    ;; 探针校验「当前函数 = 本轮登记的 wrap」。
-    (let ((orig (or (get get-bufs 'vs-tabbar-orig)
-                    (symbol-function get-bufs))))
-      (setf (symbol-function get-bufs)
-            (lambda ()
-              (remove-if-not
-               (lambda (b) (ignore-errors (buffer-filename b)))
-               (funcall orig))))
-      (setf (get get-bufs 'vs-tabbar-orig) orig)
-      (setf (get get-bufs 'vs-tabbar-cur) (symbol-function get-bufs)))))
+;; 上游 tabbar（webview 顶栏 buffer 列表条）禁用：标签栏职责交给
+;; frame-multiplexer（30-themes 已配色，C-z 前缀切换，见 70-keybindings）。
+;; 只杀 buffer 过滤包装没用——变量不关它照样起；必须置 *ENABLE-TABBAR-
+;; ON-STARTUP* nil（上游 after-init hook 消费，ncurses/webview 全前端无读者
+;; 副作用为零）。vs-setglobal：direct special variable（tabbar-config.lisp
+;; defvar + hook 裸引用）。
+(vs-setglobal :lem/tabbar "*ENABLE-TABBAR-ON-STARTUP*" nil)
+
+;; ATTRIBUTE-FOREGROUND 疯弹窗修复（上游 server 前端缺陷）：webview 渲染链
+;; put() → ensure-attribute(attr nil)，attr=NIL（无 :attribute 的 insert-string
+;; 普遍如此）时兜底条件 *background-color-of-drawing-window* 恒 NIL（server
+;; 前端从不 setf，src/interface.lisp L77 defvar nil；ncurses 侧同变量由其自身
+;; 渲染路径赋值）→ attribute 保持 NIL → attribute-to-hash(NIL) →
+;; attribute-foreground(NIL) → no-applicable-method，每次重绘弹一个错误窗。
+;; 修法：把该变量置为主题工作台底色（40/46 load 期已读 *vs-theme-mode*，
+;; 此处同源取值），NIL attr 兜底为带底色的 attribute 对象，弹窗绝迹。
+;; 注：只影响「无属性文本」的兜底渲染色，正常属性文本不受影响。
+(let ((bg (if (eq *vs-theme-mode* :dark) "#1F1F1F" "#FFFFFF")))
+  (vs-setglobal :lem-if "*BACKGROUND-COLOR-OF-DRAWING-WINDOW*" bg))
 
 ;; VSCode Status Bar 风格：左（ 分支）· 右（Ln,Col / 编码 / EOL / 语言）
 ;; git 分支查询必须缓存：SBCL 大堆镜像上 fork+exec 一次 git 实测 ~84ms，

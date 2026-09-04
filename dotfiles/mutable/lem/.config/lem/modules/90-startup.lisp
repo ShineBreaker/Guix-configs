@@ -1,7 +1,8 @@
 ;;; modules/90-startup.lisp — 启动行为与钩子登记
 ;;;
 ;;; 依赖：explorer（toggle-sidebar / heal）、terminal（vs-ensure-terminal-buffer
-;;; / vs-open-terminal-panel）。必须最后加载。
+;;; / vs-open-terminal-panel）、welcome（vs-setup-welcome 重申欢迎页布局，
+;;; 防 dashboard 扩展后加载覆盖默认鹦鹉页）。必须最后加载。
 
 (in-package :lem-user)
 
@@ -22,6 +23,8 @@
   (unless *vs-startup-opened*
     (setf *vs-startup-opened* t)
     (ignore-errors
+      ;; 0) 欢迎页布局重申（85 load 期已覆盖首绘；此处防扩展后加载覆盖）
+      (vs-setup-welcome)
       ;; 1) Explorer 侧栏（leftside 独立槽位，不影响主窗树）
       (vscode-toggle-sidebar)
       ;; 2) 底部终端面板（split 管线与顺序约束见 50-terminal 的

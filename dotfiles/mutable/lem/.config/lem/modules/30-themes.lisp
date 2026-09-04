@@ -94,6 +94,19 @@ toggle 的翻转基准才可信。启动恒为 :dark（历史行为不变）。"
                :foreground (if dark "#569CD6" "#0000FF"))
       (vs-spec :lem "SYNTAX-WARNING-ATTRIBUTE"
                :foreground (if dark "#CCA700" "#BF8803"))
+      ;; document 系（欢迎页/帮助页标题与链接）：上游 lem-default 主题把
+      ;; header1-3/link 写死深色值，会遮掉 define-attribute 自带的 :light
+      ;; 分支（白字白底隐身，欢迎页标题消失的根因）；此处按模式重设，
+      ;; dark 沿用旧值零变化，light 取浅色对应值（header1 用
+      ;; settings.headerForeground，链接系用 textLink #005FB8）。
+      (vs-spec :lem "DOCUMENT-HEADER1-ATTRIBUTE"
+               :foreground (if dark "#FFFFFF" "#1F1F1F") :bold t)
+      (vs-spec :lem "DOCUMENT-HEADER2-ATTRIBUTE"
+               :foreground (if dark "#90BEE1" "#005FB8") :bold t)
+      (vs-spec :lem "DOCUMENT-HEADER3-ATTRIBUTE"
+               :foreground (if dark "#BED6FF" "#005FB8") :bold t)
+      (vs-spec :lem "DOCUMENT-LINK-ATTRIBUTE"
+               :foreground (if dark "#90BEE1" "#005FB8") :underline t)
       ;; 诊断（light warning/info 取 workbench light default）
       (vs-spec :lem-lsp-mode/lsp-mode "DIAGNOSTIC-ERROR-ATTRIBUTE"
                :foreground (if dark "#F14C4C" "#F85149"))
@@ -174,11 +187,20 @@ toggle 的翻转基准才可信。启动恒为 :dark（历史行为不变）。"
                "VSCode Light Modern")))
 
 ;; 载入（load-theme 同时把主题名持久化到 ~/.config/lem/config.lisp；
-;; VS_THEME=light 启动即浅色：沙箱截屏与偏好预置入口，40/46 load 期读
+;; VS_THEME=light 启动即浅色：沙箱截屏与偏好预置入口，优先级最高；
+;; 未显式指定时跟随 darkman 系统配色（VSCodium window.autoDetectColorScheme
+;; 的对应物），读不到/失败回落深色（历史默认）。40/46 load 期读
 ;; *vs-theme-mode* 而非写死 :dark，故与本块联动）。
 (let ((startup (uiop:getenv "VS_THEME")))
-  (when (and startup (string-equal startup "light"))
-    (setf *vs-theme-mode* :light)))
+  (cond ((and startup (string-equal startup "light"))
+         (setf *vs-theme-mode* :light))
+        ((null startup)
+         (ignore-errors
+           (when (string= (uiop:run-program '("darkman" "get")
+                                            :output '(:string :stripped t)
+                                            :ignore-error-status t)
+                          "light")
+             (setf *vs-theme-mode* :light))))))
 (load-theme (if (eq *vs-theme-mode* :dark)
                 "vscode-dark-modern"
                 "vscode-light-modern"))
