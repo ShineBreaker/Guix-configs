@@ -1809,18 +1809,32 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 ;; 换主题风格不复发。只改这两个映射键,不动 bg-dim 本体
 ;; (hl-line/按钮/prose 块继续用),行号数字前景与当前行 bg-active
 ;; 保留。
+;;
+;; bg-prose-block-contents/-delimiter 是 modus 专用键,只服务
+;; org-block 三族(代码块底板与 begin/end 行):GUI 代码块的分组感
+;; 由 org-modern-indent 竖线与缩进承担,面板底色在半透明+blur 下
+;; 反而成噪,同映射到 bg-main 撤掉。TTY 不受影响:apply-terminal-
+;; faces 在 frame 级为 org-block 族恢复 bg-inactive,独立于此。
 (setq modus-operandi-palette-overrides
       '((fringe bg-main)
-        (bg-line-number-inactive bg-main))
+        (bg-line-number-inactive bg-main)
+        (bg-prose-block-contents bg-main)
+        (bg-prose-block-delimiter bg-main))
       modus-operandi-tinted-palette-overrides
       '((fringe bg-main)
-        (bg-line-number-inactive bg-main))
+        (bg-line-number-inactive bg-main)
+        (bg-prose-block-contents bg-main)
+        (bg-prose-block-delimiter bg-main))
       modus-vivendi-palette-overrides
       '((fringe bg-main)
-        (bg-line-number-inactive bg-main))
+        (bg-line-number-inactive bg-main)
+        (bg-prose-block-contents bg-main)
+        (bg-prose-block-delimiter bg-main))
       modus-vivendi-tinted-palette-overrides
       '((fringe bg-main)
-        (bg-line-number-inactive bg-main)))
+        (bg-line-number-inactive bg-main)
+        (bg-prose-block-contents bg-main)
+        (bg-prose-block-delimiter bg-main)))
 
 ;; D-Bus 接口常量(service 与 interface 同名,内联到两处调用点)
 
