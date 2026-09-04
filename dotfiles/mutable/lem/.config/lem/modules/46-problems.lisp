@@ -36,14 +36,27 @@
 (in-package :lem-user)
 
 ;; --- attribute（只染色前景：本面板是 switch-to-buffer 的普通窗口
-;;     buffer，背景跟随主题；不像 40 侧栏那样整行铺底色） ---
-(define-attribute vs-problems-title (t :foreground "#CCCCCC" :bold t))
-(define-attribute vs-problems-section (t :foreground "#9D9D9D" :bold t))
-;; VSCode problemsError/WarningForeground（Dark Modern）
-(define-attribute vs-problems-error (t :foreground "#F14C4C"))
-(define-attribute vs-problems-warning (t :foreground "#CCA700"))
-(define-attribute vs-problems-info (t :foreground "#3794FF"))
-(define-attribute vs-problems-location (t :foreground "#9D9D9D"))
+;;     buffer，背景跟随主题；不像 40 侧栏那样整行铺底色。
+;;     浅色由 vscode-toggle-theme 经本函数重 skin） ---
+(defun vs-problems-set-chrome (mode)
+  "按 MODE（:dark/:light）重设问题面板 attribute 前景。
+load 期以 :dark 调用（与旧顶层定义等价）；主题切换时由 30-themes 回调。"
+  (let ((dark (eq mode :dark)))
+    (define-attribute vs-problems-title
+        (t :foreground (if dark "#CCCCCC" "#3B3B3B") :bold t))
+    (define-attribute vs-problems-section
+        (t :foreground (if dark "#9D9D9D" "#616161") :bold t))
+    ;; VSCode problemsError/WarningForeground（light 取浅色对应值；
+    ;; warning/info light 为 workbench light default）
+    (define-attribute vs-problems-error
+        (t :foreground (if dark "#F14C4C" "#F85149")))
+    (define-attribute vs-problems-warning
+        (t :foreground (if dark "#CCA700" "#BF8803")))
+    (define-attribute vs-problems-info
+        (t :foreground (if dark "#3794FF" "#1A85FF")))
+    (define-attribute vs-problems-location
+        (t :foreground (if dark "#9D9D9D" "#616161")))))
+(vs-problems-set-chrome (if (boundp '*vs-theme-mode*) *vs-theme-mode* :dark))
 
 ;; --- 状态 ---
 (defparameter *vs-problems-buffer-name* "*Problems*")

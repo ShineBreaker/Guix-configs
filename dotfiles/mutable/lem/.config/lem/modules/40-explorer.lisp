@@ -44,22 +44,44 @@
 
 (in-package :lem-user)
 
-;; --- 侧栏 attribute（直接定义、不经主题：load-theme 不会覆盖） ---
-(define-attribute vs-sidebar-bg (t :foreground "#CCCCCC" :background "#181818"))
-(define-attribute vs-explorer-title (t :foreground "#CCCCCC" :background "#181818" :bold t))
-(define-attribute vs-explorer-titlebar (t :foreground "#9D9D9D" :background "#181818"))
-(define-attribute vs-activity-active (t :foreground "#FFFFFF" :background "#181818" :bold t))
-(define-attribute vs-activity-inactive (t :foreground "#6E7681" :background "#181818"))
-(define-attribute vs-section-header (t :foreground "#CCCCCC" :background "#181818" :bold t))
-(define-attribute vs-tree-chevron (t :foreground "#9D9D9D" :background "#181818"))
-;; VSCode Seti 风格文件夹黄
-(define-attribute vs-tree-folder (t :foreground "#C09553" :background "#181818"))
-(define-attribute vs-tree-file (t :foreground "#CCCCCC" :background "#181818"))
-;; git 染色（list.warningForeground 系：modified/delete/undo 系）
-(define-attribute vs-git-modified (t :foreground "#E2C08D" :background "#181818"))
-(define-attribute vs-git-untracked (t :foreground "#73C991" :background "#181818"))
-(define-attribute vs-git-deleted (t :foreground "#C74E39" :background "#181818"))
-(define-attribute vs-git-conflict (t :foreground "#E4676B" :background "#181818"))
+;; --- 侧栏 attribute（直接定义、不经主题：load-theme 不会覆盖；
+;;     浅色由 vscode-toggle-theme 经本函数重 skin。工作台色取
+;;     light_modern.json，git 染色取 git 扩展声明的 light 默认值；
+;;     Seti 文件夹黄两主题同色，保持 #C09553） ---
+(defun vs-explorer-set-chrome (mode)
+  "按 MODE（:dark/:light）重设侧栏 attribute 前景/背景。
+load 期以 :dark 调用（与旧顶层定义等价）；主题切换时由 30-themes 回调。"
+  (let ((dark (eq mode :dark))
+        (bg (if (eq mode :dark) "#181818" "#F8F8F8")))
+    (define-attribute vs-sidebar-bg
+        (t :foreground (if dark "#CCCCCC" "#3B3B3B") :background bg))
+    (define-attribute vs-explorer-title
+        (t :foreground (if dark "#CCCCCC" "#3B3B3B") :background bg :bold t))
+    (define-attribute vs-explorer-titlebar
+        (t :foreground (if dark "#9D9D9D" "#616161") :background bg))
+    (define-attribute vs-activity-active
+        (t :foreground (if dark "#FFFFFF" "#1F1F1F") :background bg :bold t))
+    (define-attribute vs-activity-inactive
+        (t :foreground (if dark "#6E7681" "#616161") :background bg))
+    (define-attribute vs-section-header
+        (t :foreground (if dark "#CCCCCC" "#3B3B3B") :background bg :bold t))
+    (define-attribute vs-tree-chevron
+        (t :foreground (if dark "#9D9D9D" "#616161") :background bg))
+    ;; VSCode Seti 风格文件夹黄
+    (define-attribute vs-tree-folder
+        (t :foreground "#C09553" :background bg))
+    (define-attribute vs-tree-file
+        (t :foreground (if dark "#CCCCCC" "#3B3B3B") :background bg))
+    ;; git 染色（light 值为 git 扩展声明的 light 默认值）
+    (define-attribute vs-git-modified
+        (t :foreground (if dark "#E2C08D" "#895503") :background bg))
+    (define-attribute vs-git-untracked
+        (t :foreground (if dark "#73C991" "#007100") :background bg))
+    (define-attribute vs-git-deleted
+        (t :foreground (if dark "#C74E39" "#AD0707") :background bg))
+    (define-attribute vs-git-conflict
+        (t :foreground (if dark "#E4676B" "#AD0707") :background bg))))
+(vs-explorer-set-chrome (if (boundp '*vs-theme-mode*) *vs-theme-mode* :dark))
 
 ;; --- 状态 ---
 (defparameter *vs-explorer-buffer-name* "*Explorer*")
