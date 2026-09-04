@@ -1671,6 +1671,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "fresh-editor-bin"
    "helix-steel"
    "lem-next"
+   "zedg-bin"
+   "zedg-bin:shim"
 
    ;; 数据库
    "sqlite"
@@ -2275,62 +2277,62 @@ excluded() {
     for iface in /sys/bus/usb/devices/*:*; do
         case "${iface##*/}" in
             "$name":*) ;;
-            *) continue ;;
-        esac
-        # 网卡：接口下有 net/ 子目录
-        [ -d "$iface/net" ] && return 0
-        # HID 输入：input/ 直挂（usbhid）或经 HID 层（0003:VID:PID.* 目录）
-        set -- "$iface"/input/*; [ -e "$1" ] && return 0
-        set -- "$iface"/0003:*; [ -e "$1" ] && return 0
-        # 蓝牙：接口下有 bluetooth/ 子目录或 btusb 驱动
-        [ -d "$iface/bluetooth" ] && return 0
-        case "$(readlink "$iface/driver" 2>/dev/null)" in *btusb*) return 0 ;; esac
-    done
-    return 1
-}
-
-# 只挂起非白名单设备并记住挂了谁（sysfs 设备名不含空格）；resume 只
-# 恢复这些设备——驱动默认即 auto 的设备（如摄像头）不被顺手写成 on，
-# 避免夺走其原有省电。常驻单进程，状态留在内存，无需落盘。
-suspended=""
-suspend_all() {
-    suspended=""
-    for dev in /sys/bus/usb/devices/*-*; do
-        case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
-        [ -f "$dev/power/control" ] || continue
-        if ! excluded "${dev##*/}"; then
-            echo auto > "$dev/power/control" 2>/dev/null && suspended="$suspended ${dev##*/}"
-        fi
-    done
-}
-
-resume_all() {
-    for name in $suspended; do
-        echo on > "/sys/bus/usb/devices/$name/power/control" 2>/dev/null
-    done
-    suspended=""
-}
-
-off_since=0
-state=on
-while :; do
-    lit=0; dark=0
-    for b in /sys/class/backlight/*/bl_power; do
-        [ -r "$b" ] || continue
-        if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
-    done
-    if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
-        now=$(date +%s)
-        [ "$off_since" = 0 ] && off_since=$now
-        if [ $((now - off_since)) -ge $THRESHOLD ] && [ "$state" != off ]; then
-            suspend_all; state=off
-        fi
-    else
-        off_since=0
-        if [ "$state" != on ]; then resume_all; state=on; fi
-    fi
-    sleep $INTERVAL
+,*) continue ;;
+esac
+# 网卡：接口下有 net/ 子目录
+[ -d "$iface/net" ] && return 0
+# HID 输入：input/ 直挂（usbhid）或经 HID 层（0003:VID:PID.* 目录）
+set -- "$iface"/input/*; [ -e "$1" ] && return 0
+set -- "$iface"/0003:*; [ -e "$1" ] && return 0
+# 蓝牙：接口下有 bluetooth/ 子目录或 btusb 驱动
+[ -d "$iface/bluetooth" ] && return 0
+case "$(readlink "$iface/driver" 2>/dev/null)" in *btusb*) return 0 ;; esac
 done
+return 1
+}
+
+ # 只挂起非白名单设备并记住挂了谁（sysfs 设备名不含空格）；resume 只
+ # 恢复这些设备——驱动默认即 auto 的设备（如摄像头）不被顺手写成 on，
+ # 避免夺走其原有省电。常驻单进程，状态留在内存，无需落盘。
+ suspended=""
+ suspend_all() {
+     suspended=""
+     for dev in /sys/bus/usb/devices/*-*; do
+         case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
+ [ -f "$dev/power/control" ] || continue
+ if ! excluded "${dev##*/}"; then
+     echo auto > "$dev/power/control" 2>/dev/null && suspended="$suspended ${dev##*/}"
+ fi
+done
+ }
+
+  resume_all() {
+      for name in $suspended; do
+          echo on > "/sys/bus/usb/devices/$name/power/control" 2>/dev/null
+      done
+      suspended=""
+  }
+
+  off_since=0
+  state=on
+  while :; do
+      lit=0; dark=0
+      for b in /sys/class/backlight/*/bl_power; do
+          [ -r "$b" ] || continue
+          if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
+      done
+      if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
+          now=$(date +%s)
+          [ "$off_since" = 0 ] && off_since=$now
+          if [ $((now - off_since)) -ge $THRESHOLD ] && [ "$state" != off ]; then
+              suspend_all; state=off
+          fi
+      else
+          off_since=0
+          if [ "$state" != on ]; then resume_all; state=on; fi
+      fi
+      sleep $INTERVAL
+  done
 #+end_src
 
 **** Hermes 后端与网关
@@ -2509,7 +2511,33 @@ done
                                                          "pinentry-qt")))
 
                  (".local/share/hermes/manifest.scm" ,(local-file
-                                                       "../tmp/hermes-desktop-manifest.scm")))))
+                                                       "../tmp/hermes-desktop-manifest.scm"))
+
+                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
+	                                              "zed.json"
+	                                              (local-file
+	                                               "../source/files/zed.json")
+	                                              (specs->pkgs
+	                                               "ccls"
+	                                               "clang"
+	                                               "go"
+	                                               "gopls"
+	                                               "guile-lsp-server"
+	                                               "jdtls-bin"
+	                                               "maven"
+	                                               "nixfmt"
+	                                               "node"
+	                                               "omnisharp"
+	                                               "python-black"
+	                                               "python-jsbeautifier"
+	                                               "python-lsp-black"
+	                                               "python-lsp-server"
+	                                               "rust"
+	                                               "rust-analyzer"
+	                                               "shfmt"
+	                                               "yq"
+	                                               "zig"
+	                                               "zig-zls"))))))
 #+end_src
 
 *** 环境变量
