@@ -37,8 +37,23 @@
               ;; 3) 焦点交还主编辑区（VSCode 启动语义）
               (setf (current-window) main)))))
       (vs-focus-main-window)
+      ;; 4) 补建 frame-multiplexer 条（webview 下 after-init 期 vf 常缺）
+      (vs-ensure-frame-multiplexer)
       (eval '(remove-hook *post-command-hook*
                           'vs-open-workspace-on-startup)))))
+
+;; frame-multiplexer 的 vf header 条（顶部 "0: <buffer>" 行）在 webview 下
+;; 常缺失：after-init 期 current-frame 尚未就绪，enable hook 里 make-virtual-frame
+;; 抛错被吞（ncurses 同配置 hws=1、webview login views 无 header view 实测）。
+;; 补救：首次命令（此时编辑线程与 frame 世界已就绪）off → init 幂等重建，
+;; ncurses 探针 hws 1→0→1 验证。off 只 delete 既有 vf（缺失则 no-op）。
+(defun vs-ensure-frame-multiplexer ()
+  (ignore-errors
+    (let ((off (vs$ :lem/frame-multiplexer "FRAME-MULTIPLEXER-OFF"))
+          (init (vs$ :lem/frame-multiplexer "FRAME-MULTIPLEXER-INIT")))
+      (when (and off init)
+        (funcall off)
+        (funcall init)))))
 
 ;; find-file 主通道（覆盖 prompt 确定等 post-command 盲区）+ 兜底。
 ;; *find-file-hook* 的 home 包是 lem/buffer/file（未 reexport 进 :lem，
