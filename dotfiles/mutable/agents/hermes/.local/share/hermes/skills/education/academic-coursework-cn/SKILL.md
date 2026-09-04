@@ -22,6 +22,10 @@ description: |
 
 ## 标准工作流（5 步）
 
+写作前先应用 `unslop`（去 AI 味，必须全程套用）与 `academic-writing`（学术写作
+规范）skill；写完按其模式自查一遍——重点核对引用编号与来源一一对应、不虚构
+因果归属（论文的结论不能挂到别的文献头上）。
+
 ### 1. 解析输入材料
 - 用户给的 `.docx` 直接 `pandoc input.docx -o /tmp/raw.md`
 - 用户给的 `.doc`（二进制）**pandoc 不能直接读**，需要先 LibreOffice 转 docx，
@@ -65,6 +69,18 @@ print(f"中文字数: {zh}")  # 这是学校通常核的"字数"
 - 一般性的活动设计（如"开展文献综述 + 远程访谈 + 实地走访"）
 - "以线上为主、线下为辅"这种调研方式（避免造假数据的常见做法）
 
+**没有一手数据时的正路：二手分析型定位**（2026-09 实战验证）：
+
+用户来不及发问卷时，不要编造本校数据，把报告重定位为**基于权威公开调查数据的
+二手分析型调查报告**：
+
+- 分析对象改为权威机构已发布的大样本调查（政府部门/央媒调研/行业研究院/学术
+  期刊），全部编号引用、注明样本量与口径
+- 「调查方法」一节如实写成文献调查/二手数据分析，并说明选择理由（权威样本量
+  远超课程调查可达水平、时间经费约束下的最优真实性）
+- 小组已设计的问卷放**附录**，定位为"后续一手抽样调查方案"，与全国数据形成互证
+- 交付时主动提示：若老师要求必须含本校一手数据，此定位需说明或后续补发问卷
+
 **主动声明边界**：在产出前，向用户明确：
 > "如果这些数字/姓名/单位不是真实发生的，建议你在小组内对一下口径，
 > 或者把它们弱化。我现在的版本是基于源材料做的合理化表达。"
@@ -91,6 +107,11 @@ pandoc input.md -o output.docx \
 - 中文字体名**不要**带空格以外的特殊字符
 - `geometry:margin=` 写法（不是 `geometry=[margin=2.5cm]`），后者是 YAML 头写法
 - 想加页眉页脚用 `--header-includes` 或 `header.tex` 模板
+- `-V mainfont/geometry/fontsize` 等 **只对 PDF/LaTeX 输出生效，docx 输出会静默忽略**——
+  docx 的排版控制靠 python-docx 后处理或 `--reference-doc`
+- 用户要求「符合国内大学论文排版规范」（黑体标题/宋体正文/首行缩进2字符/标题黑色）
+  时：pandoc 生成骨架后**必须 python-docx 后处理**——pandoc 的 Heading 样式默认
+  **蓝色**，国内规范要求黑色。完整管线见 `references/cn-thesis-docx-styling.md`
 
 ### 5. 占位符策略（避免编造真实信息）
 
@@ -266,6 +287,7 @@ def check(doc_path, ref_path):
 | 用户给了文档但只要求"按这个写"，没要求格式 | pandoc |
 | 模板里大量表格 / 自定义边框 / 单元格合并 | python-docx |
 | 只是 Markdown 章节 + 简单表格 | pandoc |
+| 没有模板但要求国内论文规范排版 | pandoc + python-docx 后处理 |
 
 完整骨架见 `references/template-format-mimicry.md`。
 
@@ -310,6 +332,7 @@ def add_page_header(slide, page_num, total, title, time_hint=None):
 - `references/template-format-mimicry.md` — **附件 1 格式复刻范式**（python-docx 骨架 + 字号特征表 + 验证脚本）
 - `references/word-count-verification.md` — 中文字数核验脚本与边界情况
 - `references/pandoc-cjk.md` — pandoc 渲染中文 docx 的完整配置范例
+- `references/cn-thesis-docx-styling.md` — **国内论文排版规范 docx 管线**（pandoc 骨架 + python-docx 后处理 + 三层核验 + distrobox 渲染检查）
 - `scripts/check_word_count.py` — 字数核验 CLI：
 
   ```bash
@@ -327,5 +350,6 @@ def add_page_header(slide, page_num, total, title, time_hint=None):
 - [ ] 汇报讲稿按 30/60/45/15 秒等段落标好时长
 - [ ] 教师评价栏留空（手写签名 + 评阅时间）
 - [ ] pandoc 渲染后 docx 文件大小 > 15KB（过小说明字体没生效）
+- [ ] docx 标题为黑色（pandoc 默认蓝色，需 python-docx 改黑）；中文走 eastAsia 字体（黑体标题/宋体正文）
 - [ ] 主动提示用户："哪部分是合理化表述/不是真实实践"
 - [ ] **如果用户给了附件 1 模板**：用 python-docx 复刻格式后，逐段对照模板跑 sig() 核验
