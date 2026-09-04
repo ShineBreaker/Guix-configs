@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "academic-writing": {
+      "source": "jamditis/claude-skills-journalism",
+      "sourceType": "github",
+      "skillPath": "research-toolkit/skills/academic-writing/SKILL.md",
+      "computedHash": "50a87583cdd05ebbe7e968f1492389130383341d9e7d4e6dcab7694c5249b348"
+    },
     "agent-browser": {
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
