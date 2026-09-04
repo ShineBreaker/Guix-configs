@@ -4,7 +4,7 @@
 
 ## 目录结构
 
-<!-- structor:begin depth=4 -->
+<!-- structor:begin depth=2 -->
 
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
@@ -12,29 +12,13 @@
 desktop/
 ├── .config/
 │   ├── autostart/
-│   │   ├── kdeconnect-indicator.desktop
-│   │   └── net.opentabletdriver.OpenTabletDriver.desktop
 │   ├── niri/
-│   │   ├── settings/
-│   │   │   ├── animations.kdl
-│   │   │   ├── key-bindings.kdl
-│   │   │   └── window-rules.kdl
-│   │   ├── app-switcher.json
-│   │   └── config.kdl
 │   ├── pcmanfm-qt/
-│   │   └── default/
-│   │       ├── recent-files.conf
-│   │       └── settings.conf
 │   ├── rofi/
-│   │   └── config.rasi
 │   ├── xdg-desktop-portal/
-│   │   └── portals.conf
 │   └── xfce4/
-│       └── helpers.rc
 └── .local/
     └── bin/
-        ├── niri-app-switcher
-        └── niri-quake-toggle
 ```
 
 <!-- /structor -->

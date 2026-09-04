@@ -4,7 +4,7 @@
 
 ## 目录结构
 
-<!-- structor:begin depth=4 -->
+<!-- structor:begin depth=2 -->
 
 <!-- 此树形目录由 structor 自动生成，请勿手动编辑。 -->
 
@@ -12,16 +12,8 @@
 system/
 └── .config/
     ├── containers/
-    │   ├── containers.conf
-    │   └── policy.json
     ├── pipewire/
-    │   └── pipewire.conf.d/
-    │       └── 10-latency-fix.conf
     ├── wireplumber/
-    │   ├── scripts/
-    │   │   └── 40-alsa/
-    │   └── wireplumber.conf.d/
-    │       └── 50-disable-automute.conf
     ├── user-dirs.dirs
     └── user-dirs.locale
 ```
