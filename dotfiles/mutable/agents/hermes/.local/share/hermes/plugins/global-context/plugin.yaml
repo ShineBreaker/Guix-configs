@@ -1,0 +1,7 @@
+name: global-context
+version: 0.2.0
+description: "注入 ~/.config/agents/context/ 全局上下文到系统提示词（对位 omp global-context；注入清单由 context-select.sh 统一决策）。"
+author: BrokenShine
+provides_hooks: []
+provides_commands:
+  - global-context

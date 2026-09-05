@@ -20,7 +20,7 @@ agents/
 
 ## 共享决策核架构
 
-`anchors.json`（规则）+ `anchors-lib.sh`（协议无关的加载/合并库：分层 ratchet 合并，数组并集、映射近层覆盖远层）+ `gate-core.sh`（决策核：冻结命令归一化匹配、`--dry-run` 豁免仅限 blue 前缀、frozen_paths/globs、部署位置保护、敏感信息判定，以 stdout 行协议输出 `BLOCK`/`SENSITIVE`/`AUTO_ALLOW`/`REWRITTEN`/提示）。三方适配器（pi-gate TS、crush 两 bash hook、zcode 两 bash hook）**只做协议转换**——规则与判定语义双单一真相源，修一处三方同步生效。
+`anchors.json`（规则）+ `anchors-lib.sh`（协议无关的加载/合并库：分层 ratchet 合并，数组并集、映射近层覆盖远层）+ `gate-core.sh`（决策核：冻结命令归一化匹配、`--dry-run` 豁免仅限 blue 前缀、frozen_paths/globs、部署位置保护、敏感信息判定，以 stdout 行协议输出 `BLOCK`/`SENSITIVE`/`AUTO_ALLOW`/`REWRITTEN`/提示）。四方适配器（pi-gate TS、crush 两 bash hook、zcode 两 bash hook、hermes gate py 插件）**只做协议转换**——规则与判定语义双单一真相源，修一处四方同步生效。
 
 **分层职责**：
 

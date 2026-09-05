@@ -9,6 +9,8 @@
 # 会话开始时注入当前项目的 anchors 防护规则摘要到 context（additionalContext），
 # 让 agent 启动即知边界：冻结命令/路径、重定向建议、路径提示、仅人工操作。
 # 规则源与 pi-gate / crush / zcode gate 同：anchors.json（全局 + 项目级 ratchet）。
+# 另注入全局上下文（~/.config/agents/context/）：注入哪些文件由 context-select.sh
+# 统一决策（决策核与 omp / hermes 共享），本脚本只做协议转换与预算控制。
 
 set -euo pipefail
 
@@ -54,13 +56,40 @@ PH="$(jq -r '.path_hints | if length>0 then "📝 路径提示（改后需对应
 HO="$(jq -r '.human_only_actions | if length>0 then "👤 仅人工操作（agent 不可执行）：\n" + ([.[] | "  " + .] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$HO" ]] && SUMMARY+=$'\n\n'"$HO"
 
-# ─── 全局上下文（~/.config/agents/context/*.md）─────────────────────────────
-# 与 omp global-context / crush context_paths 同源：跨 agent 共享的工作规则。
-# 文件名前缀（01-、02-…）决定拼接顺序。
+# ─── 全局上下文（context-select.sh 决策注入）────────────────────────────────
+# 源 ~/.config/agents/context/；注入清单由 context-select.sh 统一决策（决策核
+# 与 omp / hermes 共享）：00-core 与 INDEX 恒注入，git 仓库内自动附加 coding 域。
+# 预算对齐 omp：单文件 64KiB 跳过，总量 192KiB 截断。
+SELECTOR="${CONTEXT_SELECT_BIN:-$HOME/.config/agents/context-select.sh}"
 CTX=""
-for f in "$HOME"/.config/agents/context/*.md; do
-  [[ -f $f ]] && CTX+="$(cat "$f")"$'\n\n'
+CTX_FILES=()
+if [[ -x "$SELECTOR" ]]; then
+  mapfile -t CTX_FILES < <("$SELECTOR" --platform zcode --cwd "$CWD" 2>/dev/null || true)
+else
+  # fallback：selector 未部署时直接 cat 恒注入两件（存在才 cat），保证不空转
+  for f in "$HOME/.config/agents/context/00-core.md" "$HOME/.config/agents/context/INDEX.md"; do
+    [[ -f "$f" ]] && CTX_FILES+=("$f")
+  done
+fi
+
+CTX_FILE_MAX=$((64 * 1024))
+CTX_MAX=$((192 * 1024))
+CTX_TOTAL=0
+for f in ${CTX_FILES[@]+"${CTX_FILES[@]}"}; do
+  [[ -f "$f" ]] || continue
+  size="$(wc -c <"$f")"
+  if (( size > CTX_FILE_MAX )); then
+    printf 'session-start: 跳过超大上下文文件（%d B > %d B 上限）：%s\n' "$size" "$CTX_FILE_MAX" "$f" >&2
+    continue
+  fi
+  if (( CTX_TOTAL + size > CTX_MAX )); then
+    CTX+="$(head -c "$((CTX_MAX - CTX_TOTAL))" "$f")"$'\n\n'
+    printf 'session-start: 上下文总量触顶 %d B，已截断：%s\n' "$CTX_MAX" "$f" >&2
+    break
+  fi
+  CTX+="$(cat "$f")"$'\n\n'
+  CTX_TOTAL=$((CTX_TOTAL + size))
 done
-[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.config/agents/context/*.md，与 omp / crush 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
+[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.config/agents/context/，由 context-select.sh 决策：恒注入 00-core / INDEX，git 仓库内自动附加 coding 域；决策核与 omp / hermes 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
 
 printf '{"additionalContext":%s}\n' "$(printf '%s' "$SUMMARY" | jq -Rs .)"

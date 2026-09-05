@@ -1,0 +1,7 @@
+name: gate
+version: 0.1.0
+description: 权限边界 gate：调共享 gate-core.sh 决策核拦截冻结命令/敏感写入（对位 omp pi-gate 适配器）。
+author: BrokenShine
+provides_hooks:
+  - pre_tool_call
+  - transform_tool_result

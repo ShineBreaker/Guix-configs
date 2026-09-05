@@ -6,13 +6,13 @@ import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 
 // ─── 加载错误日志（omp 默认静默吞掉扩展错误，这里显式留痕）────────────────────
 const LOG_FILE = join(
   homedir(),
   ".config",
   "omp",
-  "agent",
   "extensions",
   ".load-errors.log",
 );
@@ -26,37 +26,54 @@ function logLoadError(ext: string, where: string, err: unknown): void {
 }
 
 /**
- * 定位 omp agent 目录（替代旧 pi 的 getAgentDir()）。
+ * 定位 omp 配置根（~/.config/omp）。
  *
- * omp 18 没有把 getAgentDir 暴露给扩展运行时（value import 会
- * `Cannot find module`）。这里按 omp 内部解析顺序定位：
+ * omp 18 没有把配置路径 API 暴露给扩展运行时，这里按 omp 内部解析顺序定位：
  * PI_CONFIG_DIR 是「home 下相对目录名」（fish conf.d 设为 .config/omp），
  * 必须 resolve(homedir(), ...) 绝对化——直接 join 会相对 cwd 解析。
- * agent dir = <config root>/agent（global-context.json / mcp.json 在这层）。
+ * global-context.json / mcp.json / agent.db 等均直接位于配置根，
+ * 不存在 agent/ 子目录层（旧注释假设 `<config root>/agent` 是错的，
+ * 那曾导致 loadConfig 永远找不到配置、注入整体休眠）。
  */
 function getOmpConfigDir(): string {
-  const root = resolve(
+  return resolve(
     homedir(),
     process.env.PI_CONFIG_DIR || join(".config", "omp"),
   );
-  return join(root, "agent");
 }
 
 /**
  * global-context extension
  *
- * 使用 before_agent_start hook 将内容追加到系统提示词。
+ * 使用 before_agent_start hook 将上下文文件注入系统提示词。
+ * 注入文件列表由决策核 ~/.config/agents/context-select.sh 统一裁决
+ * （--platform omp + 当前会话 cwd 门控），本扩展只做协议适配与预算控制，
+ * 与 zcode / crush / hermes 端共享同一注入映射表。selector 缺失或执行
+ * 失败时降级为扫描默认 context 目录全量注入（部署是渐进的，扩展可能
+ * 先于 selector 的 blue home 上线）。
  *
- * 支持的配置（settings.json → globalContext 字段）：
- *   - enabled: boolean     — 显式启用/禁用（默认：有配置时启用）
- *   - contextDir: string   — 上下文文件目录（必需）
- *   - files: string[]       — contextDir 内的文件列表（默认按文件名排序加载目录下所有 .md）
- *   - extraFiles: string[]  — 额外的绝对路径文件列表
- *   - separator: string     — 文件之间的分隔符（默认 \n\n）
- *   - maxFiles: number      — 最多注入文件数（默认 8）
+ * 配置（<omp 配置根>/global-context.json，扩展自管——omp 的 ExtensionAPI
+ * 不提供配置读取接口）：
+ *   - enabled: boolean       — 显式启用/禁用（默认：有配置时启用）
+ *   - separator: string      — 文件之间的分隔符（默认 \n\n）
+ *   - maxFiles: number       — 最多注入文件数（默认 8）
  *   - maxBytesPerFile: number — 单文件最大读取字节（默认 65536）
- *   - maxTotalBytes: number — 总注入字节预算（默认 196608）
+ *   - maxTotalBytes: number  — 总注入字节预算（默认 196608）
+ *
+ * selector 路径可用环境变量 CONTEXT_SELECT_BIN 覆盖（默认
+ * ~/.config/agents/context-select.sh，blue home 部署前调试用）。
  */
+
+// ─── 决策核 selector（CONTEXT_SELECT_BIN 可覆盖，供部署前调试）───────────────
+const SELECTOR_BIN =
+  process.env.CONTEXT_SELECT_BIN ||
+  join(homedir(), ".config", "agents", "context-select.sh");
+// 降级扫描目录：selector 内置的默认 context 目录（$XDG_CONFIG_HOME/agents/context）
+const DEFAULT_CONTEXT_DIR = resolve(
+  process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
+  "agents",
+  "context",
+);
 
 /**
  * 将 content blocks 数组转为可读文本
@@ -130,37 +147,10 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function resolveConfiguredPath(input: string): string {
-  let expanded = input;
-  if (expanded === "~") {
-    expanded = homedir();
-  } else if (expanded.startsWith("~/")) {
-    expanded = resolve(homedir(), expanded.slice(2));
-  }
-
-  expanded = expanded.replace(
-    /\$([A-Z_][A-Z0-9_]*)|\$\{([A-Z_][A-Z0-9_]*)\}/gi,
-    (_match, bare, braced) => {
-      const key = bare ?? braced;
-      if (process.env[key]) return process.env[key]!;
-      if (key === "HOME") return homedir();
-      if (key === "XDG_CONFIG_HOME") return resolve(homedir(), ".config");
-      if (key === "XDG_DATA_HOME") return resolve(homedir(), ".local", "share");
-      if (key === "XDG_CACHE_HOME") return resolve(homedir(), ".cache");
-      return "";
-    },
-  );
-
-  return resolve(expanded);
-}
-
 // ─── 配置类型 ────────────────────────────────────────────────────────────────
 
 interface GlobalContextConfig {
   enabled?: boolean;
-  contextDir?: string;
-  files?: string[];
-  extraFiles?: string[];
   separator?: string;
   maxFiles?: number;
   maxBytesPerFile?: number;
@@ -171,14 +161,15 @@ interface GlobalContextConfig {
  * 读取 global-context 自身配置
  *
  * omp 的 ExtensionAPI 不提供配置读取接口（无 pi.config / pi.getConfig），
- * 扩展需自管配置文件。本扩展读 getOmpConfigDir()/global-context.json。
+ * 扩展需自管配置文件。本扩展读 <omp 配置根>/global-context.json
+ * （getOmpConfigDir() 即配置根，无 agent/ 子目录层）。
  * 兼容旧 pi：若 config.yml 不存在，回退读 settings.json 的 globalContext 字段。
  */
 function loadConfig(): GlobalContextConfig | undefined {
-  const agentDir = getOmpConfigDir();
+  const configRoot = getOmpConfigDir();
   const candidates = [
-    join(agentDir, "global-context.json"), // omp：独立配置文件（推荐）
-    join(agentDir, "settings.json"), // 旧 pi：settings.json 内嵌字段（向后兼容）
+    join(configRoot, "global-context.json"), // omp：独立配置文件（推荐）
+    join(configRoot, "settings.json"), // 旧 pi：settings.json 内嵌字段（向后兼容）
   ];
 
   for (const cfgPath of candidates) {
@@ -198,103 +189,101 @@ function loadConfig(): GlobalContextConfig | undefined {
 }
 
 /**
- * 列出配置所指向的所有文件路径（不实际读取内容）
+ * 调决策核 selector 获取本会话应注入的文件列表。
  *
- * 返回每个文件的：解析后路径、是否存在、文件大小（不存在时为 -1）
+ * 以参数数组传参（禁止字符串拼接 shell 命令——cwd 含空格/特殊字符会炸）。
+ * 成败以 stdout 为契约（忽略 returncode）：仅 spawn 级失败（selector 缺失
+ * 等）或 stdout 全空才降级目录扫描——部署是渐进的，扩展可能先于
+ * selector 的 blue home 上线。
  */
-async function listConfiguredFiles(config: GlobalContextConfig): Promise<
-  {
-    path: string;
-    resolved: string;
-    exists: boolean;
-    size: number;
-    source: string;
-  }[]
-> {
+function runContextSelector(cwd: string): string[] | undefined {
+  let res;
+  try {
+    res = spawnSync(
+      "bash",
+      [SELECTOR_BIN, "--platform", "omp", "--cwd", cwd],
+      { encoding: "utf8", timeout: 10_000 },
+    );
+  } catch (err) {
+    console.warn(
+      `[global-context] selector 调用异常，降级目录扫描: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
+  const stdout = typeof res.stdout === "string" ? res.stdout : "";
+  if (res.error || (res.status !== 0 && stdout.trim() === "")) {
+    const detail = res.error ?? `exit ${res.status}`;
+    const stderr = typeof res.stderr === "string" ? res.stderr.trim() : "";
+    console.warn(
+      `[global-context] selector 不可用（${detail}${stderr ? `: ${stderr}` : ""}），降级目录扫描`,
+    );
+    return undefined;
+  }
+  return stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * 降级路径：按名排序扫描默认 context 目录（selector 未部署时的现状行为）。
+ */
+async function scanDefaultContextDir(maxFiles: number): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(DEFAULT_CONTEXT_DIR);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((f) => f.endsWith(".md"))
+    .sort()
+    .map((f) => resolve(DEFAULT_CONTEXT_DIR, f))
+    .slice(0, Math.max(0, maxFiles));
+}
+
+/**
+ * 解析本会话应注入的文件路径列表（selector 裁决，失败降级扫描）。
+ * 返回路径列表 + 来源标记（供 /global-context 展示）。
+ */
+async function resolveInjectionFiles(
+  config: GlobalContextConfig,
+  cwd: string,
+): Promise<{ paths: string[]; via: "selector" | "fallback" }> {
   const maxFiles = config.maxFiles ?? 8;
-  const contextDir = config.contextDir
-    ? resolveConfiguredPath(config.contextDir)
-    : undefined;
-  const results: {
-    path: string;
-    resolved: string;
-    exists: boolean;
-    size: number;
-    source: string;
-  }[] = [];
-
-  // 1) contextDir 中的文件
-  if (contextDir) {
-    let filesToLoad: string[];
-
-    if (config.files && config.files.length > 0) {
-      filesToLoad = config.files.map((f) =>
-        f.startsWith("/") || f.startsWith("~") || f.includes("$")
-          ? resolveConfiguredPath(f)
-          : resolve(contextDir, f),
-      );
-    } else {
-      let entries: string[];
-      try {
-        entries = await readdir(contextDir);
-      } catch {
-        entries = [];
-      }
-      filesToLoad = entries
-        .filter((f) => f.endsWith(".md"))
-        .sort()
-        .map((f) => resolve(contextDir, f));
-    }
-
-    for (const filePath of filesToLoad.slice(0, maxFiles)) {
-      try {
-        const info = await stat(filePath);
-        results.push({
-          path: filePath, // resolved 已经是绝对路径
-          resolved: filePath,
-          exists: true,
-          size: info.size,
-          source: config.files ? "files[]" : "contextDir",
-        });
-      } catch {
-        results.push({
-          path: filePath,
-          resolved: filePath,
-          exists: false,
-          size: -1,
-          source: config.files ? "files[]" : "contextDir",
-        });
-      }
-    }
+  const selected = runContextSelector(cwd);
+  if (selected) {
+    return {
+      paths: selected.slice(0, Math.max(0, maxFiles)),
+      via: "selector",
+    };
   }
+  return { paths: await scanDefaultContextDir(maxFiles), via: "fallback" };
+}
 
-  // 2) extraFiles
-  if (config.extraFiles && config.extraFiles.length > 0) {
-    const remaining = Math.max(0, maxFiles - results.length);
-    for (const raw of config.extraFiles.slice(0, remaining)) {
-      const resolved = resolveConfiguredPath(raw);
+/**
+ * stat 校验路径列表（不实际读取内容），供 /global-context 展示。
+ * 返回每个文件的：路径、是否存在、文件大小（不存在时为 -1）
+ */
+async function inspectFiles(
+  paths: string[],
+  source: string,
+): Promise<{ path: string; exists: boolean; size: number; source: string }[]> {
+  return Promise.all(
+    paths.map(async (p) => {
       try {
-        const info = await stat(resolved);
-        results.push({
-          path: raw,
-          resolved,
-          exists: true,
-          size: info.size,
-          source: "extraFiles[]",
-        });
+        const info = await stat(p);
+        return {
+          path: p,
+          exists: info.isFile(),
+          size: info.isFile() ? info.size : -1,
+          source,
+        };
       } catch {
-        results.push({
-          path: raw,
-          resolved,
-          exists: false,
-          size: -1,
-          source: "extraFiles[]",
-        });
+        return { path: p, exists: false, size: -1, source };
       }
-    }
-  }
-
-  return results;
+    }),
+  );
 }
 
 // ─── Extension Entry ──────────────────────────────────────────────────────────
@@ -312,7 +301,7 @@ function factoryBody(pi: ExtensionAPI) {
   const config = loadConfig();
   const isEnabled = config && config.enabled !== false;
 
-  // ── registerCommand（始终注册，不受 enabled/contextDir 影响）──
+  // ── registerCommand（始终注册，不受 enabled 影响）──
 
   pi.registerCommand("global-context", {
     description: "显示 global-context 插件注入的上下文文件及其路径",
@@ -338,28 +327,17 @@ function factoryBody(pi: ExtensionAPI) {
       }
 
       // 配置摘要
-      const contextDir = config.contextDir
-        ? resolveConfiguredPath(config.contextDir)
-        : undefined;
       lines.push("");
       lines.push("配置:");
-      if (contextDir)
-        lines.push(`  contextDir: ${config.contextDir} → ${contextDir}`);
-      else lines.push("  contextDir: (未配置)");
-      if (config.files?.length)
-        lines.push(
-          `  files: [${config.files.map((f) => `"${f}"`).join(", ")}]`,
-        );
-      if (config.extraFiles?.length)
-        lines.push(
-          `  extraFiles: [${config.extraFiles.map((f) => `"${f}"`).join(", ")}]`,
-        );
+      lines.push(`  selector: ${SELECTOR_BIN}`);
       lines.push(
         `  限制: maxFiles=${config.maxFiles ?? 8}, maxBytesPerFile=${formatBytes(config.maxBytesPerFile ?? 65536)}, maxTotalBytes=${formatBytes(config.maxTotalBytes ?? 196608)}`,
       );
 
-      // 文件列表（实时扫描）
-      const files = await listConfiguredFiles(config);
+      // 文件列表（selector 裁决，失败降级扫描）
+      const cwd = ctx?.cwd ?? process.cwd();
+      const { paths, via } = await resolveInjectionFiles(config, cwd);
+      const files = await inspectFiles(paths, via);
       if (files.length === 0) {
         lines.push("");
         lines.push("文件: (无)");
@@ -367,19 +345,16 @@ function factoryBody(pi: ExtensionAPI) {
         const totalBytes = files
           .filter((f) => f.exists)
           .reduce((sum, f) => sum + f.size, 0);
+        const viaLabel =
+          via === "selector" ? "selector 裁决" : "降级扫描（selector 不可用）";
         lines.push("");
-        lines.push(`文件 (${files.length} 个, ${formatBytes(totalBytes)}):`);
+        lines.push(
+          `文件 (${viaLabel}, ${files.length} 个, ${formatBytes(totalBytes)}):`,
+        );
         for (const f of files) {
           const icon = f.exists ? "✅" : "❌";
           const sizeStr = f.exists ? ` (${formatBytes(f.size)})` : "";
-          const srcTag = f.source === "extraFiles[]" ? " [extra]" : "";
-          if (f.path === f.resolved) {
-            lines.push(`  ${icon} ${f.path}${sizeStr}${srcTag}`);
-          } else {
-            lines.push(
-              `  ${icon} ${f.path} → ${f.resolved}${sizeStr}${srcTag}`,
-            );
-          }
+          lines.push(`  ${icon} ${f.path}${sizeStr}`);
         }
       }
 
@@ -478,45 +453,20 @@ function factoryBody(pi: ExtensionAPI) {
     },
   });
 
-  // ── before_agent_start hook（仅在 enabled + contextDir 有效时注册）──
+  // ── before_agent_start hook（仅在 enabled 时注册）──
 
-  if (!isEnabled || !config.contextDir) {
+  if (!isEnabled) {
     return;
   }
 
   const separator = config.separator ?? "\n\n";
-  const contextDir = resolveConfiguredPath(config.contextDir);
   const maxFiles = config.maxFiles ?? 8;
   const maxBytesPerFile = config.maxBytesPerFile ?? 65536;
   const maxTotalBytes = config.maxTotalBytes ?? 196608;
 
   pi.on("before_agent_start", async (event, _ctx) => {
-    let filesToLoad: string[];
-
-    if (config?.files && config.files.length > 0) {
-      filesToLoad = config.files.map((f) =>
-        f.startsWith("/") || f.startsWith("~") || f.includes("$")
-          ? resolveConfiguredPath(f)
-          : resolve(contextDir, f),
-      );
-    } else {
-      let entries: string[];
-      try {
-        entries = await readdir(contextDir);
-      } catch {
-        entries = [];
-      }
-      filesToLoad = entries
-        .filter((f) => f.endsWith(".md"))
-        .sort()
-        .map((f) => resolve(contextDir, f));
-    }
-
-    if (config?.extraFiles && config.extraFiles.length > 0) {
-      filesToLoad.push(...config.extraFiles.map(resolveConfiguredPath));
-    }
-
-    filesToLoad = filesToLoad.slice(0, Math.max(0, maxFiles));
+    const cwd = _ctx?.cwd ?? process.cwd();
+    const { paths: filesToLoad } = await resolveInjectionFiles(config, cwd);
 
     if (filesToLoad.length === 0) {
       return;

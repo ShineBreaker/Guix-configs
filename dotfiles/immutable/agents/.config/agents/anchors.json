@@ -28,24 +28,24 @@
     "man",
     "ipython"
   ],
-  "sensitive_patterns": [
-    {
-      "pattern": "sk-[a-zA-Z0-9]{20,}",
-      "label": "疑似 API key（sk-...）",
-      "flags": "i"
-    },
-    {
-      "pattern": "(password|passwd|secret|token|api[_-]?key)\\s*[:=]\\s*[\"'][^\"'\\s]{8,}[\"']",
-      "label": "明文密码/secret/token",
-      "flags": "i"
-    },
-    {
-      "pattern": "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
-      "label": "SSH 私钥"
-    },
-    { "pattern": "AKIA[0-9A-Z]{16}", "label": "疑似 AWS access key" },
-    { "pattern": "ghp_[a-zA-Z0-9]{36}", "label": "疑似 GitHub token" }
-  ],
+  "sensitive_patterns": [{
+    "pattern": "sk-[a-zA-Z0-9]{20,}",
+    "label": "疑似 API key（sk-...）",
+    "flags": "i"
+  }, {
+    "pattern": "(password|passwd|secret|token|api[_-]?key)\\s*[:=]\\s*[\"'][^\"'\\s]{8,}[\"']",
+    "label": "明文密码/secret/token",
+    "flags": "i"
+  }, {
+    "pattern": "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+    "label": "SSH 私钥"
+  }, {
+    "pattern": "AKIA[0-9A-Z]{16}",
+    "label": "疑似 AWS access key"
+  }, {
+    "pattern": "ghp_[a-zA-Z0-9]{36}",
+    "label": "疑似 GitHub token"
+  }],
   "redirect_conventions": {},
   "rewrite": {},
   "path_hints": {},

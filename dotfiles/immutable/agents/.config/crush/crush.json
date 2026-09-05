@@ -11,8 +11,8 @@
   },
   "options": {
     "context_paths": [
-      "~/.agents/context/01-language.md",
-      "~/.agents/context/02-ultilities.md"
+      "~/.config/agents/context/00-core.md",
+      "~/.config/agents/context/INDEX.md"
     ],
     "tui": {
       "compact_mode": true,
