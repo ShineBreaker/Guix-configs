@@ -8,7 +8,8 @@
 #
 # 注入内容分层（源：~/.config/agents/context/）：
 #   00-core.md   跨领域通用原则，恒注入
-#   INDEX.md     领域路由表（带红线摘要），恒注入；crush 等无门控端靠它指引手动拉取
+#   INDEX.md     领域路由表（XML <domain name file>，何时用哪个域文件），恒注入；
+#                crush 等无门控端靠它指引手动拉取
 #   domains/*.md 领域专用原则，按门控注入
 #
 # 消费者（适配器只做协议转换，判定语义集中于此）：
@@ -93,9 +94,9 @@ list_all() { # 映射表全集（不做门控判定）；消费者用它注册 s
 # ─── 一致性自检 ───────────────────────────────────────────────────────────────
 # 抓两类历史事故：文件改名/移动后引用断链（crush 曾断供）、加域文件忘登记三步联动。
 
-index_domains() { # INDEX.md 的 `## <name> —` 条目集合
-	awk '/^## [a-z0-9-]+ —/ { s = $0; sub(/^## /, "", s); sub(/ —.*/, "", s); print s }' \
-		"$CTX_DIR/INDEX.md" 2>/dev/null
+index_domains() { # INDEX.md 的 <domain name="..."> 条目集合
+	grep -o '<domain name="[a-z0-9-]*"' "$CTX_DIR/INDEX.md" 2>/dev/null |
+		sed 's/^<domain name="//;s/"$//'
 }
 
 check() {
@@ -130,14 +131,14 @@ check() {
 		fi
 	done
 
-	# 3. INDEX.md 条目集合 == domains/ 文件集合，且条目给出文件路径
+	# 3. INDEX.md 条目集合 == domains/ 文件集合，且条目 file 属性与 name 同名
 	if [[ -f "$CTX_DIR/INDEX.md" ]]; then
 		local -A idx=()
 		while IFS= read -r name; do
 			[[ -n "$name" ]] || continue
 			idx["$name"]=1
-			if ! grep -q "文件：.*domains/$name\.md" "$CTX_DIR/INDEX.md"; then
-				echo "✗ INDEX.md 条目「$name」缺「文件：…domains/$name.md」行"
+			if ! grep -q "<domain name=\"$name\" file=\"domains/$name\.md\">" "$CTX_DIR/INDEX.md"; then
+				echo "✗ INDEX.md 条目「$name」缺 file=\"domains/$name.md\" 声明"
 				fail=1
 			fi
 		done < <(index_domains)
