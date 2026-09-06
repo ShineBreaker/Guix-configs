@@ -1,5 +1,5 @@
 {
-  "_comment": "全局 agent 防护规则（跨所有 workspace 的通用约束，与仓库无关）。仓库专属规则（blue/guix/channel.lock/tmp/dotfiles/source 等）在各 <root>/.agents/anchors.json。代码底层（sudo 恒冻、rm 防护、git 写操作限制、~/.config·~/.local 部署位置保护）在各 hook 脚本硬编、恒定生效。本文件承载可配置的数据驱动规则，meta-frozen：agent 禁止通过 write/edit 修改它，调整须人工编辑源文件后 blue home。",
+  "_comment": "全局 agent 防护规则（跨所有 workspace 的通用约束，与仓库无关）。仓库专属规则（blue/guix/channel.lock/tmp/dotfiles/source 等）在各 <root>/.agents/anchors.json。代码底层（sudo 恒冻、git 写操作限制、~/.config·~/.local 部署位置保护）在各 hook 脚本硬编、恒定生效；rm 冻结在此声明（agent 一律走 trash-put / mv /tmp，不给直接删除能力）。本文件承载可配置的数据驱动规则，meta-frozen：agent 禁止通过 write/edit 修改它，调整须人工编辑源文件后 blue home。",
   "frozen_commands": [
     "sudo",
     "guix install",
@@ -10,9 +10,43 @@
     "nix profile install",
     "tmux kill-server",
     "tmux kill-session -a",
-    "herdr server stop"
+    "herdr server stop",
+    "rm",
+    "dd",
+    "passwd",
+    "chpasswd",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "mkfs",
+    "mkfs.ext2",
+    "mkfs.ext3",
+    "mkfs.ext4",
+    "mkfs.btrfs",
+    "mkfs.vfat",
+    "mkfs.fat",
+    "mkfs.xfs",
+    "mkfs.f2fs",
+    "mkfs.ntfs",
+    "wipefs",
+    "blkdiscard",
+    "fdisk",
+    "sfdisk",
+    "parted",
+    "gdisk",
+    "cfdisk",
+    "git push --force",
+    "git push -f",
+    "git reset --hard",
+    "git clean"
   ],
-  "frozen_paths": [],
+  "frozen_paths": [
+    "~/Projects/Config/Guix-configs/dotfiles/immutable/agents/.config/agents/",
+    "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/hooks/",
+    "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/",
+    "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/"
+  ],
   "frozen_globs": [],
   "interactive_commands": [
     "vi",
@@ -28,24 +62,30 @@
     "man",
     "ipython"
   ],
-  "sensitive_patterns": [{
-    "pattern": "sk-[a-zA-Z0-9]{20,}",
-    "label": "疑似 API key（sk-...）",
-    "flags": "i"
-  }, {
-    "pattern": "(password|passwd|secret|token|api[_-]?key)\\s*[:=]\\s*[\"'][^\"'\\s]{8,}[\"']",
-    "label": "明文密码/secret/token",
-    "flags": "i"
-  }, {
-    "pattern": "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
-    "label": "SSH 私钥"
-  }, {
-    "pattern": "AKIA[0-9A-Z]{16}",
-    "label": "疑似 AWS access key"
-  }, {
-    "pattern": "ghp_[a-zA-Z0-9]{36}",
-    "label": "疑似 GitHub token"
-  }],
+  "sensitive_patterns": [
+    {
+      "pattern": "sk-[a-zA-Z0-9]{20,}",
+      "label": "疑似 API key（sk-...）",
+      "flags": "i"
+    },
+    {
+      "pattern": "(password|passwd|secret|token|api[_-]?key)\\s*[:=]\\s*[\"'][^\"'\\s]{8,}[\"']",
+      "label": "明文密码/secret/token",
+      "flags": "i"
+    },
+    {
+      "pattern": "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----",
+      "label": "SSH 私钥"
+    },
+    {
+      "pattern": "AKIA[0-9A-Z]{16}",
+      "label": "疑似 AWS access key"
+    },
+    {
+      "pattern": "ghp_[a-zA-Z0-9]{36}",
+      "label": "疑似 GitHub token"
+    }
+  ],
   "redirect_conventions": {},
   "rewrite": {},
   "path_hints": {},
