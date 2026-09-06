@@ -142,9 +142,12 @@
 (define (drain-keys port)
   (let loop ()
     (when (char-ready? port)
+      ;; read-key 的 #f 是 EOF：EOF 处 char-ready? 恒 #t，必须停止 loop
+      ;; 防止原地自旋；'ignore（无法识别键）为真值，不受影响继续消费。
       (let ([key (read-key port)])
-        (when key (handle-key key))
-        (loop)))))
+        (when key
+          (handle-key key)
+          (loop))))))
 
 ;; === FIFO daemon ===
 
@@ -166,14 +169,17 @@
     (mknod path 'fifo #o600 0)
     (cons path (open-file path "r+"))))
 
+;; 返回值即"是否变更型事件"：toggle-group 与 click 会改变折叠/聚焦状态，
+;; refresh 行与无法识别的行不会。drain-events 据此决定是否批内刷新快照。
 (define (handle-event line)
   (match (string-split line #\tab)
-    [("refresh") #t]
-    [("toggle-group") (toggle-current-group)]
+    [("refresh") #f]
+    [("toggle-group") (toggle-current-group) #t]
     [("click" mouse-y pane-top client)
      (let ([y (string->number mouse-y)]
            [top (string->number pane-top)])
-       (when (and y top) (handle-click y top client)))]
+       (when (and y top) (handle-click y top client))
+       #t)]
     [_ #f]))
 
 (define (drain-events port)
@@ -181,7 +187,12 @@
     (when (char-ready? port)
       (let ([line (read-line port)])
         (unless (eof-object? line)
-          (handle-event line)
+          ;; 变更型事件后只 refresh-state!（刷新 %current-context/
+          ;; %current-panes，批内后续 toggle/click 基于新快照），绝不能调
+          ;; render-current!——click 命中检测依赖 %current-actions，而它
+          ;; 只在真正重绘时更新，须与用户当前所见屏幕保持一致。
+          (when (handle-event line)
+            (refresh-state!))
           (loop))))))
 
 (define (run-daemon)
@@ -245,12 +256,21 @@ O_NONBLOCK 打开成功即有存活读端，无读端才删除。"
         (force-output))
       (lambda ()
         (let loop ()
-          (render-current! #t)
-          ;; FIFO 与 stdin 一起等；drain 内部用 char-ready? 兜底区分来源
-          ;; （select 对 buffered port 的返回形式不保证，双 drain 无害）。
-          (let ([readable (car (select (list port stdin) '() '() 30))])
-            (when (pair? readable)
-              (drain-events port)
-              (drain-keys stdin)))
+          ;; daemon 韧性：单帧异常记到 stderr 后继续循环（降级为丢一帧），
+          ;; 而非进程死亡。用 boot-9 内建 catch 而非 srfi-34 的 guard：
+          ;; 本文件不加 use-modules，不依赖主文件的 import，保持「仅运行期
+          ;; 依赖、load 顺序无要求」的性质。
+          (catch #t
+            (lambda ()
+              (render-current! #t)
+              ;; FIFO 与 stdin 一起等；drain 内部用 char-ready? 兜底区分来源
+              ;; （select 对 buffered port 的返回形式不保证，双 drain 无害）。
+              (let ([readable (car (select (list port stdin) '() '() 30))])
+                (when (pair? readable)
+                  (drain-events port)
+                  (drain-keys stdin))))
+            (lambda (key . args)
+              (format (current-error-port)
+                      "sidebar: frame error ~a ~s; keep running\n" key args)))
           (loop)))
       cleanup)))

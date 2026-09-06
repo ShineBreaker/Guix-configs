@@ -17,8 +17,10 @@
 # 界面让用户重选。正常退出（退出码 0，含用户主动退出 TUI）则结束选择。
 
 # ===== tmux 辅助函数（须先定义后调用）=====
-# 统一 tmux 的 attach/create 模式：detach 创建（若需）→ set 侧栏选项 →
-# follow 建侧栏 → 纯 attach-session（不串联 \;，避免命令链竞态闪退）。
+# 统一 tmux 的 attach/create 模式，三步链收敛进 attach-entry 脚本：
+# detached 创建（若需/--create）→ set 侧栏选项 → follow 建侧栏 → 纯
+# attach-session（脚本内 attach 恒为最后一条独立命令，绝不串联 \;，
+# 避免命令链竞态闪退；退出码经 exec attach 原样传播）。
 # 侧栏 opt-in：tmux 默认纯净（@sidebar_visible 全局 = 0），用户入口在此
 # 用 session 级覆盖为 1。agent 程序化创建的 session 不经此入口 → 纯净。
 #
@@ -28,31 +30,14 @@ function __selector_tmux_attach_or_create
     set -l ses_name $argv[1]
     set -l win_name $argv[2]
     set -l cwd $argv[3]
-
-    # 名字冲突预检（tmux new-session 重复名退出码不可靠，用 has-session 预检）
-    if tmux has-session -t "$ses_name" 2>/dev/null
-        __selector_tmux_attach "$ses_name"
-        return $status
-    end
-
-    # detached 新建（启动 server + 创建 session，不 attach，无前台竞态）
-    tmux new-session -d -s "$ses_name" -n "$win_name" -c "$cwd"
-    __selector_tmux_setup_sidebar "$ses_name"
-    tmux attach-session -t "$ses_name"
+    ~/.config/tmux/scripts/attach-entry "$ses_name" --create -n "$win_name" -c "$cwd"
 end
 
-# attach 已有 tmux session（设侧栏选项 + follow + 纯 attach）
+# attach 已有 tmux session（opt-in + follow + 纯 attach 同经 attach-entry；
+# 无 --create，session 缺失时脚本即刻非零退出 → 外层错误回环）
 function __selector_tmux_attach
     set -l ses_name $argv[1]
-    __selector_tmux_setup_sidebar "$ses_name"
-    tmux attach-session -t "$ses_name"
-end
-
-# 在 server 端设置侧栏（不与 attach 串联，避免命令链竞态）
-function __selector_tmux_setup_sidebar
-    set -l ses_name $argv[1]
-    tmux set-option -t "$ses_name" @sidebar_visible 1
-    ~/.config/tmux/scripts/sidebar-toggle follow >/dev/null 2>&1
+    ~/.config/tmux/scripts/attach-entry "$ses_name"
 end
 
 # 从用户输入构造一个合法的会话名（清洗非法字符、限长、纯数字加前缀）
@@ -139,6 +124,8 @@ if status is-interactive
             end
 
             # key 格式：<mux>|<kind>  或  shell  或  __header__（误选标题行）
+            # kind 含 | 时保留完整：按首个 | 切分，剩余整体作为会话名
+            # （存在与否由 tmux/herdr 决定，不存在走下方现有错误回环）。
             if test "$key" = shell
                 return
             end
@@ -148,22 +135,26 @@ if status is-interactive
                 continue
             end
 
-            # 解析 mux|kind
-            set -l parts (string split '|' -- "$key")
+            # 解析 mux|kind（-m 1 = 最多切 1 刀：mux 取第一段，kind 剩余 join）
+            set -l parts (string split -m 1 '|' -- "$key")
             set -l mux $parts[1]
-            set -l kind $parts[2]
+            set -l kind ""
+            if test (count $parts) -ge 2
+                set kind (string join '|' -- $parts[2..-1])
+            end
 
             __selector_run_mux "$mux" "$kind" "$window_name" "$cwd"
+            set -l rc $status
 
             # 退出码 0（含用户主动退出 TUI）→ 结束选择
             # 退出码 ≠ 0（报错/异常）→ 回循环重弹选择界面
-            if test $status -eq 0
+            if test $rc -eq 0
                 return
             end
 
             # 异常：提示后回循环（用户能看到错误信息，再选一次）
             echo
-            echo ">>> $mux 启动失败（退出码 $status），请重选"
+            echo ">>> $mux 启动失败（退出码 $rc），请重选"
             echo
         end
     end

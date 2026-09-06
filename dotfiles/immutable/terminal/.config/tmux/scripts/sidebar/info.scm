@@ -5,7 +5,9 @@
 ;; sidebar/info.scm — 外部状态采集：git HEAD/分支探测（带时间戳缓存）
 ;; 与 /proc 子进程 argv 解析（带缓存）。依赖 text.scm 的路径/文本工具。
 
-(use-modules (ice-9 textual-ports) (srfi srfi-1))
+;; read-string 位于 (ice-9 rdelim)。主文件先 import 后 load 本文件，daemon
+;; 场景下此声明冗余；单文件加载/语法检查（不经主文件）时必需。
+(use-modules (ice-9 textual-ports) (ice-9 rdelim) (srfi srfi-1))
 
 (define %git-head-paths (make-hash-table))
 (define %git-branches (make-hash-table))
@@ -19,8 +21,12 @@
   (cond
    [(directory-path? marker) marker]
    [(file-exists? marker)
-    (let ([content (string-trim-both (call-with-input-file marker read-string))])
-      (and (string-prefix? "gitdir: " content)
+    ;; file-exists? 与读取之间存在竞态（marker 被删/权限变化 → ENOENT）：
+    ;; 读失败按非 gitdir 文件处理返回 #f，不让单次探测击穿 daemon。
+    (let ([content (false-if-exception
+                    (string-trim-both (call-with-input-file marker read-string)))])
+      (and content
+           (string-prefix? "gitdir: " content)
            (let* ([value (string-drop content 8)]
                   [path (if (absolute-path? value)
                             value
@@ -86,18 +92,23 @@
 (define (process-argv pid)
   (let ([file (string-append "/proc/" pid "/cmdline")])
     (and (file-exists? file)
-         (let ([args (filter (lambda (arg) (not (string-null? arg)))
-                             (string-split (call-with-input-file file read-string)
-                                           #\nul))])
+         ;; file-exists? 与读取间同样存在竞态；读失败（#f）令整个 and
+         ;; 链返回 #f，与文件消失分支语义一致。
+         (let ([args (false-if-exception
+                      (filter (lambda (arg) (not (string-null? arg)))
+                              (string-split (call-with-input-file file read-string)
+                                            #\nul)))])
            (and (pair? args) args)))))
 
 (define (child-pids pid)
   (let ([file (string-append "/proc/" pid "/task/" pid "/children")])
     (if (file-exists? file)
-        (let ([raw (string-trim-both (call-with-input-file file read-string))])
-          (if (string-null? raw)
-              '()
-              (string-split raw #\space)))
+        (let ([raw (false-if-exception
+                    (string-trim-both (call-with-input-file file read-string)))])
+          ;; 读失败（#f）与空文件同样返回 '()，保持列表类型一致。
+          (if (and raw (not (string-null? raw)))
+              (string-split raw #\space)
+              '()))
         '())))
 
 (define (foreground-argv/uncached pid)

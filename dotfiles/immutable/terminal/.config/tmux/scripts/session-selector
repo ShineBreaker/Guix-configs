@@ -49,6 +49,9 @@ if command -v tmux >/dev/null 2>&1; then
     others=()
     while IFS='|' read -r name attached; do
         [[ -z "$name" ]] && continue
+        # 契约约束：| 是输出 key 的字段分隔符（tmux|<name>）。tmux 只禁 . 和
+        # :，名含 | 时 IFS 切分即错位（残片落进 attached），两侧都查才滤得净。
+        [[ "$name" == *"|"* || "$attached" == *"|"* ]] && continue
         if [[ "$name" == "main" ]]; then
             [[ "${attached:-0}" -gt 0 ]] && main_status="[运行中]"
         else
@@ -106,6 +109,9 @@ if command -v herdr >/dev/null 2>&1; then
     if [[ -n "$herdr_json" ]] && command -v jq >/dev/null 2>&1; then
         while IFS=$'\t' read -r name running; do
             [[ -z "$name" ]] && continue
+            # 同 tmux 段：会话名含契约分隔符 | 时防御性跳过（此处 IFS 是
+            # tab，$name 检查即可精确命中）。
+            [[ "$name" == *"|"* ]] && continue
             if [[ "$running" == "true" ]]; then
                 st="  ${C_DIM}[运行中]${C_RST}"
             else
@@ -125,6 +131,12 @@ add "shell" "Shell (无终端复用器)"
 # 无任何复用器 → 直接 Shell（不弹单选项菜单）
 if [[ $has_mux -eq 0 ]]; then
     echo "shell"
+    exit 0
+fi
+
+# fzf 缺失时等同 ESC 取消：stderr 提示 + 空 stdout，fish 侧留普通 shell。
+if ! command -v fzf >/dev/null 2>&1; then
+    echo "session-selector: fzf 未安装，无法弹出选择列表" >&2
     exit 0
 fi
 

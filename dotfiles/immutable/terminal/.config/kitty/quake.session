@@ -3,8 +3,9 @@
 # tmux/herdr 均为 attach-or-create 语义，关闭面板后会话在服务端持久
 
 new_tab Quake·tmux
-# 对齐 99-selector.fish 的侧栏三步：确保会话存在 → session 级 opt-in → follow → 纯 attach
-launch sh -c 'tmux has-session -t Quake 2>/dev/null || tmux new-session -d -s Quake; tmux set-option -t Quake @sidebar_visible 1; ~/.config/tmux/scripts/sidebar-toggle follow >/dev/null 2>&1; exec tmux attach-session -t Quake'
+# 入口链（预检/--create 创建 → session 级 opt-in → follow → 纯 attach）已收敛
+# 进 attach-entry，与 99-selector.fish 同一路径；attach 经 exec 收尾、退出码透传
+launch sh -c 'exec ~/.config/tmux/scripts/attach-entry --create Quake'
 
 new_tab Quake·herdr
 launch herdr --session Quake

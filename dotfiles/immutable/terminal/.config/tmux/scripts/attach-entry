@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+set -euo pipefail
+
+# attach-entry — tmux 会话统一入口（attach-or-create 三步收敛）
+#
+# 用法: attach-entry <session> [-n win] [-c dir] [--create]
+#
+# 语义（对齐 99-selector.fish / quake.session 的用户入口链）：
+#   1. has-session 预检；--create 且缺失时 detached 新建（无前台竞态）
+#   2. session 级 @sidebar_visible 1（opt-in；agent 创建的 session 不经此
+#      入口，保持 tmux 默认纯净）
+#   3. sidebar-toggle follow（建侧栏 + 窗口宽度向 client 同步）
+#   4. 纯 exec tmux attach-session 收尾
+#
+# 纪律：绝不串联 tmux 命令链（分号串联的竞态闪退）；attach 恒为最后一条
+# 独立命令，退出码经 exec 透传（0 = 正常 detach；≠0 = 异常，调用方回退/重选）。
+
+usage() {
+    printf 'usage: attach-entry <session> [-n win] [-c dir] [--create]\n' >&2
+    exit 2
+}
+
+ses=""
+win=""
+cwd=""
+create=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -n)
+            [[ $# -ge 2 ]] || usage
+            win="$2"
+            shift 2
+            ;;
+        -c)
+            [[ $# -ge 2 ]] || usage
+            cwd="$2"
+            shift 2
+            ;;
+        --create)
+            create=1
+            shift
+            ;;
+        -*)
+            usage
+            ;;
+        *)
+            [[ -z "$ses" ]] || usage
+            ses="$1"
+            shift
+            ;;
+    esac
+done
+[[ -n "$ses" ]] || usage
+
+# 三步之一：预检 + 按需 detached 创建（tmux new-session 重复名退出码不可靠，
+# 用 has-session 预检）。无 --create 且缺失：即刻非零退出，调用方按异常回退，
+# 不做无谓的 set-option / follow。
+if ! tmux has-session -t "$ses" 2>/dev/null; then
+    if [[ $create -eq 1 ]]; then
+        new_args=(-d -s "$ses")
+        if [[ -n "$win" ]]; then
+            new_args+=(-n "$win")
+        fi
+        if [[ -n "$cwd" ]]; then
+            new_args+=(-c "$cwd")
+        fi
+        tmux new-session "${new_args[@]}"
+    else
+        exit 1
+    fi
+fi
+
+# 三步之二/三：opt-in + follow。中间步骤失败不阻断 attach（与原 fish 入口
+# 语义一致：setup 失败仍尝试 attach，由 attach 的退出码决定回退）。
+tmux set-option -t "$ses" @sidebar_visible 1 2>/dev/null || true
+"${HOME}/.config/tmux/scripts/sidebar-toggle" follow >/dev/null 2>&1 || true
+
+# attach 必须是最后一条独立命令；exit code 经 exec 传播
+exec tmux attach-session -t "$ses"
