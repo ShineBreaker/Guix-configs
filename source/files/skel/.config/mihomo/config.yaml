@@ -36,13 +36,19 @@ proxy-providers:
 mixed-port: 7890
 # redir-port: 7892
 # tproxy-port: 7893
-allow-lan: true
+# allow-lan 若需让局域网/热点设备走本机代理再开 true（bind-address 相应收窄到
+# 具体接口 IP）；false 时仅本机可用，无开放代理暴露面
+allow-lan: false
 bind-address: "*"
 mode: rule
 ipv6: true
 udp: true
 log-level: error
-external-controller: 0.0.0.0:9090
+# 控制 API 只绑回环 + 必须设 secret（zashboard 登录时填同一 secret）。
+# 绝不可 0.0.0.0 + 空 secret：任何能连到本机 9090 的设备（含热点客户端）
+# 都能无认证改写代理配置、读取流量信息。
+external-controller: 127.0.0.1:9090
+secret: "change-me-openssl-rand-hex-16"
 external-ui: UI
 external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
 
