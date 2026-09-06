@@ -75,6 +75,10 @@ cd Guix-configs
 
 # 修改 source/information.scm 里的用户名等基本信息，然后初始化系统
 blue init
+
+# 配置不携带初始密码 hash（公开仓库不存凭据）：首次进入新系统后
+# 立即设置用户密码，否则账户无法登录
+passwd
 #+end_src
 
 - 自建 Live ISO 替代官方 ISO：见 [[./docs/iso-build.md][docs/iso-build.md]]
