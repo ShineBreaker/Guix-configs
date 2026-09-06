@@ -18,6 +18,12 @@ plans/
 
 .keys/
 
+# age 私钥（tools/secrets 与任何其他 secrets 根；公钥 age.pub 不匹配此规则，正常入库）
+dotfiles/mutable/tools/secrets/.local/share/keys/age
+**/.local/share/keys/age
+dotfiles/mutable/tools/secrets/.local/share/secrets-decrypted/
+**/.local/share/secrets-decrypted/
+
 # uv 虚拟环境与锁文件（运行时由 uv run 现场生成，不进版本控制）
 .venv
 uv.lock
