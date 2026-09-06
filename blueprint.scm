@@ -1046,30 +1046,35 @@
 ;; 原理：Guix 的 channels 文件原生支持「pin 混搭」——带 (commit ...) 的频道
 ;; 固定在该 commit（update-cached-checkout 不拉新），不带的跟随 branch 最新
 ;; （手册 "Specifying Channels"）。单刷新 = 生成一份临时 channels 文件：
-;; 目标频道用 channel.scm 的可变定义，其余频道换成 channel.lock 的锁定版本，
-;; 再照常用 time-machine describe 产出完整的新 lock。
+;; 目标频道用 channel.scm 的可变定义（commit 参数非 #f 时直接 pin 到该
+;; commit），其余频道换成 channel.lock 的锁定版本，再照常用 time-machine
+;; describe 产出完整的新 lock。
 ;;
 ;; 临时文件由 tools/gen-partial.scm 生成：blue 的 Guile 环境缺 (guix
 ;; openpgp) 等模块，展开 openpgp-fingerprint 宏会报 unbound variable，
 ;; 必须走 guix repl 子进程（guix 的 Guile 环境自带这些模块）。
-(define (%partial-channels-file target)
+(define (%partial-channels-file target commit)
   (let ([out (string-append %tmp-dir "/update-channels.scm")])
     (if (dry-build?)
         (begin
-          (format #t "[预演] 生成单频道刷新文件 ~a（目标: ~a，其余 pin）~%" out target)
+          (format #t "[预演] 生成单频道刷新文件 ~a（目标: ~a~a，其余 pin）~%"
+                  out target (if commit (format #f " pin@~a" commit) ""))
           ;; 预演时不实际生成临时文件，直接复用原 channel.scm 以通过后续的 dry-run 分支
           %channel-scm)
         (begin
           (mkdir-p %tmp-dir)
           (%run `("guix" "repl"
                   ,(string-append %tools-dir "/gen-partial.scm")
-                  ,target ,out)
+                  ,target ,out
+                  ,@(if commit (list commit) '()))
                 #:real? #t)
           out))))
 
 ;; 解析 blue update 的参数 → (guix nix)。每侧为 #f（不更新）、'all（全量）
-;; 或频道/flake 名（单目标）。--channel 需搭配 --guix、--flake 需搭配 --nix，
-;; 其余未知参数报 usage。
+;; 或单目标：nix 侧为 flake 名字符串，guix 侧为 (频道名 . commit) 对——
+;; commit 为 #f 表示刷新到 branch 最新，字符串表示 pin 到该 commit。
+;; -c/--channel 选频道（需搭配 --guix）、-C/--commit 指定 pin 的 commit
+;; （需搭配 -c）、--flake 需搭配 --nix，其余未知参数报 usage。
 (define (%update-scope arguments)
   (let loop ([rest arguments] [guix #f] [nix #f])
     (match rest
@@ -1078,15 +1083,27 @@
        (if guix (error "重复指定 --guix") (loop more 'all nix))]
       [("--nix" . more)
        (if nix (error "重复指定 --nix") (loop more guix 'all))]
-      [("--channel" name . more)
+      [((or "-c" "--channel") name . more)
        (match guix
-         ['all (loop more name nix)]
-         [_ (error "--channel 需搭配 --guix（用法: blue update --guix --channel NAME）")])]
+         [(n . _) (error "重复指定 -c/--channel")]
+         ['all
+          (if (string-null? name)
+              (error "-c/--channel 不能为空")
+              (loop more (cons name #f) nix))]
+         [_ (error "-c/--channel 需搭配 --guix（用法: blue update --guix -c NAME [-C COMMIT]）")])]
+      [((or "-C" "--commit") commit . more)
+       (match guix
+         [(name . #f)
+          (if (string-null? commit)
+              (error "-C/--commit 不能为空")
+              (loop more (cons name commit) nix))]
+         [(name . _) (error "重复指定 -C/--commit")]
+         [_ (error "-C/--commit 需搭配 -c/--channel（用法: blue update --guix -c NAME -C COMMIT）")])]
       [("--flake" name . more)
        (match nix
          ['all (loop more guix name)]
          [_ (error "--flake 需搭配 --nix（用法: blue update --nix --flake NAME）")])]
-      [_ (error "usage: blue update [--guix [--channel NAME]] [--nix [--flake NAME]]")])))
+      [_ (error "usage: blue update [--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]]")])))
 
 ;; 锁文件有实际变化才提交：单频道/单 flake 刷新常无新版本，git commit 的
 ;; 空提交以非零退出会让 %run 当失败报错。git status 只读，真跑无害；
@@ -1097,14 +1114,25 @@
                                   `("git" "status" "--porcelain" "--" ,file)))))
     (%run `("git" "commit" "-S" "-m" ,message ,file))))
 
+;; channel.lock 的提交信息按 target 区分，让 git log 直接可读：全量 bump、
+;; 单频道 bump、单频道 pin（commit 取前 8 位短哈希）。
+(define (%lock-commit-message target)
+  (match target
+    ['all "build(channel.lock): bump channels"]
+    [(name . #f) (format #f "build(channel.lock): bump ~a" name)]
+    [(name . commit)
+     (format #f "build(channel.lock): pin ~a at ~a"
+             name (substring commit 0 (min 8 (string-length commit))))]))
+
 ;; guix 侧更新：用可变频道定义跑 guix describe，结果原子写回 channel.lock。
-;; target 为 'all（channel.scm 全量）或频道名（单频道刷新，其余 pin）。
+;; target 为 'all（channel.scm 全量）、(name . #f)（单频道刷新到最新，其余
+;; pin）或 (name . commit)（单频道 pin 到指定 commit，其余 pin）。
 ;; dry-run 下仅预演、不写 channel.lock：describe 是捕获 stdout 的管道命令，
 ;; 不走 %run 短路，必须在此手动短路。
 (define (%update-guix target)
   (let* ([channels-file (if (eq? target 'all)
                             %channel-scm
-                            (%partial-channels-file target))]
+                            (%partial-channels-file (car target) (cdr target)))]
          [describe (%guix-command '("describe" "--format=channels")
                                   #:channels channels-file)])
     (if (dry-build?)
@@ -1112,7 +1140,7 @@
         (let ([content (%pipe->string (%shell-command describe))])
           (%write-file-atomically %channel-lock
                                   (lambda (port) (display content port))))))
-  (%commit-lock %channel-lock "build(channel.lock): bump channels"))
+  (%commit-lock %channel-lock (%lock-commit-message target)))
 
 ;; nix 侧更新：'all 先刷 nix channel 再全量刷新 flake.lock；给 flake 名则
 ;; 只更新该 input（nix 2.19+ 语法）。nix 命令全走 %run，dry-run 自动短路。
@@ -1123,17 +1151,20 @@
           ,@(if (string? target) (list target) '())
           "--flake" ,%nix-dir))
   (%commit-lock (string-append %nix-dir "/flake.lock")
-                "build(flake.lock): bump flake inputs"))
+                (if (string? target)
+                    (format #f "build(flake.lock): bump ~a" target)
+                    "build(flake.lock): bump flake inputs")))
 
-;; blue update [--guix [--channel NAME]] [--nix [--flake NAME]] —— 刷新
+;; blue update [--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]] —— 刷新
 ;; channel.lock / flake.lock 并各自 git commit -S。不带参数两侧全量刷新。
 (define-command (update-command arguments)
   ((invoke "update")
    (category 'guix)
    (synopsis "更新 channel.lock / flake.lock 并提交")
-   (help "[--guix [--channel NAME]] [--nix [--flake NAME]]
+   (help "[--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]]
 不带参数：guix 频道与 Nix 全部刷新。
---guix：只刷新 guix 频道；--channel NAME 只刷新该频道，其余保持 channel.lock 锁定的 commit。
+--guix：只刷新 guix 频道；-c/--channel NAME 只刷新该频道，其余保持 channel.lock 锁定的 commit。
+-C/--commit COMMIT：搭配 -c 使用，目标频道 pin 到指定 commit 而非刷新到最新。
 --nix：只更新 Nix；--flake NAME 只更新该 flake input（不刷 nix channel）。"))
   (match (match (%update-scope arguments)
            ;; 无任何参数 → 两侧全量
