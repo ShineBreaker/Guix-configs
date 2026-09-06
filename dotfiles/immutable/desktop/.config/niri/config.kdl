@@ -31,7 +31,7 @@ blur {
 
 cursor {
   xcursor-theme "Bibata-Modern-Classic"
-  xcursor-size 26
+  xcursor-size 24
 }
 
 gestures {
