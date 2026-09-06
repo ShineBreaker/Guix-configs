@@ -19,6 +19,8 @@ CORE="$HOME/.config/agents/gate-core.sh"
 deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 # ─── Phase 0: 读 stdin，fail-closed 解析 ─────────────────────────────────────
+# python3 缺失时无法解析输入，fail-closed 拦截（而非静默跳过路径/敏感检查）
+command -v python3 >/dev/null 2>&1 || deny "🚫 edit-gate：python3 不可用，无法解析输入（fail-closed 拦截）。"
 INPUT="$(cat 2>/dev/null || true)"
 
 eval "$(printf '%s' "$INPUT" | python3 -c "

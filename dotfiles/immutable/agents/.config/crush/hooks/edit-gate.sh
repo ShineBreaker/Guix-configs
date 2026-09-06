@@ -27,13 +27,16 @@ deny() { printf '%s\n' "$1" >&2; exit 2; }
 [ -n "$FILE" ] || exit 0
 
 # 从 stdin JSON 提取待检内容（write/edit/multiedit 三形态）
+# python3 缺失或 JSON 非法 → fail-closed 拦截（crush 的输入恒为合法 JSON，
+# 异常态宁可误拦不可跳过敏感信息检查）
+command -v python3 >/dev/null 2>&1 || deny "🚫 edit-gate：python3 不可用（fail-closed 拦截）。"
 INPUT="$(cat 2>/dev/null || true)"
 CONTENT="$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
 try:
     inp = json.load(sys.stdin)
 except Exception:
-    raise SystemExit
+    raise SystemExit(3)
 ti = inp.get('tool_input') or {}
 if 'content' in ti:
     c = ti.get('content', '')
@@ -44,7 +47,7 @@ elif 'edits' in ti:
 else:
     c = ''
 print(c if isinstance(c, str) else '', end='')
-" 2>/dev/null || true)"
+" 2>/dev/null)" || deny "🚫 edit-gate：stdin JSON 解析失败（fail-closed 拦截）。"
 
 # 核未部署：降级提醒（不再像旧版那样静默跳过路径保护）
 if [[ ! -f "$CORE" ]]; then
