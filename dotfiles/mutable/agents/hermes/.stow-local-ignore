@@ -10,6 +10,13 @@
 __pycache__$
 .*\.pyc$
 
+# --- 插件测试（plugins/<name>/tests/ 只留仓库，不软链进部署位） ---
+(^|/)tests/$
+
+# --- 工具运行时产物（blue 编译缓存 / mimosa 扫描，误入源时也不部署） ---
+\.blue-store$
+\.mimosa
+
 # --- HERMES_HOME 运行时目录/文件（防御性忽略） ---
 logs/$
 sessions/$

@@ -2,12 +2,12 @@
 
 管理**频繁变动且需要版本备份**的配置，与 `dotfiles/immutable/`（Guix Home stow → store 只读副本，改源须 `blue home`）互补：GNU Stow 把**单文件**软链直接建到 `dotfiles/mutable/PKG/` 仓库源，**改源即生效**，无需任何命令。
 
-| 维度         | `immutable/`                 | `mutable/`                                    |
-| ------------ | ---------------------------- | --------------------------------------------- |
-| 部署         | Guix Home → store 只读副本   | `blue stow` → 直链仓库源                      |
-| 目标目录     | store 副本                   | **默认真实目录**（`--no-folding`，运行时可写） |
-| 改源后生效   | 必须 `blue home`             | 直接生效                                      |
-| 适合         | 稳定配置（niri、fish 等）    | 频繁手改、需 git 追踪（emacs、hermes 等）     |
+| 维度       | `immutable/`               | `mutable/`                                     |
+| ---------- | -------------------------- | ---------------------------------------------- |
+| 部署       | Guix Home → store 只读副本 | `blue stow` → 直链仓库源                       |
+| 目标目录   | store 副本                 | **默认真实目录**（`--no-folding`，运行时可写） |
+| 改源后生效 | 必须 `blue home`           | 直接生效                                       |
+| 适合       | 稳定配置（niri、fish 等）  | 频繁手改、需 git 追踪（emacs、hermes 等）      |
 
 ## 部署模型
 
@@ -52,18 +52,18 @@ mutable/
 
 ## 当前纳管的包
 
-| 包                   | 部署目标                                                     | 说明                                                                                     |
-| -------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes*`            | SOUL.md、config.yaml、memories/skills/plugins、启动脚本与 .desktop                        |
-| `agents/omp`         | `~/.config/omp` + `~/.config/agents/skills/`                 | omp 配置 + extensions/；2026-08 自 pi 迁移（`PI_CONFIG_DIR=.config/omp`）                 |
-| `agents/skills`      | `~/.config/agents/skills/`                                   | 第三方锁 skills-lock.json（askill 引擎装）+ 自建 skill（git 跟踪）；恢复后跑 `askill install` |
-| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh-web`               | DeepSeek Harness 配置层 + wrapper；程序本体经 `uv tool install deepseek-harness-runtime-bin`，`$DSH_HOME` 由 conf.d 与 wrapper 双注入 |
-| `emacs`              | `~/.config/emacs/`                                           | literal-config 本体，单 profile 无 chemacs2；规范见包内 `AGENTS.md`                        |
-| `lem`                | `~/.config/lem/`                                             | VSCode 风格配置（init.lisp + modules/），规范见包内 `AGENTS.md`                            |
-| `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/`     | 纯 submodule 容器（agenote-skills + pi-agenote）；CLI 本体由 `uv tool install` 独立装      |
-| `agents/zcode`       | `~/.zcode/`                                                  | zcode 配置（cli/commands/hooks/agents/plugins）                                            |
-| `tools/appimage-run` | `~/.local/bin/appimage-run`                                  | AppImage 运行器（**submodule**）                                                          |
-| `tools/secrets`      | `~/.local/share/keys/`                                       | age 密钥对 + 加解密脚本，规范见包内 `AGENTS.md`；密文目录被 stow 排除                      |
+| 包                   | 部署目标                                                 | 说明                                                                                                                                                                                                                                                                                             |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes*`        | SOUL.md、config.yaml、memories/skills/plugins、启动脚本与 .desktop                                                                                                                                                                                                                               |
+| `agents/omp`         | `~/.config/omp` + `~/.config/agents/skills/`             | omp 配置 + extensions/；2026-08 自 pi 迁移（`PI_CONFIG_DIR=.config/omp`）                                                                                                                                                                                                                        |
+| `agents/skills`      | `~/.config/agents/skills/`                               | 第三方锁 skills-lock.json（askill 引擎装）+ 自建 skill（git 跟踪）；恢复后跑 `askill install`                                                                                                                                                                                                    |
+| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh-web`           | DeepSeek Harness 配置层 + wrapper；程序本体经 `uv tool install deepseek-harness-runtime-bin`，`$DSH_HOME` 由 conf.d 与 wrapper 双注入。profiles/web/package.json 里手装的 `@deepseek-ai/dsh-client-modules` 是补上游 0.1.2a3 wheel 闭包缺包（缺则前端报 "Failed to load plugins"），升级后可试删 |
+| `emacs`              | `~/.config/emacs/`                                       | literal-config 本体，单 profile 无 chemacs2；规范见包内 `AGENTS.md`                                                                                                                                                                                                                              |
+| `lem`                | `~/.config/lem/`                                         | VSCode 风格配置（init.lisp + modules/），规范见包内 `AGENTS.md`                                                                                                                                                                                                                                  |
+| `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` | 纯 submodule 容器（agenote-skills + pi-agenote）；CLI 本体由 `uv tool install` 独立装                                                                                                                                                                                                            |
+| `agents/zcode`       | `~/.zcode/`                                              | zcode 配置（cli/commands/hooks/agents/plugins）                                                                                                                                                                                                                                                  |
+| `tools/appimage-run` | `~/.local/bin/appimage-run`                              | AppImage 运行器（**submodule**）                                                                                                                                                                                                                                                                 |
+| `tools/secrets`      | `~/.local/share/keys/`                                   | age 密钥对 + 加解密脚本，规范见包内 `AGENTS.md`；密文目录被 stow 排除                                                                                                                                                                                                                            |
 
 ## 工作流
 

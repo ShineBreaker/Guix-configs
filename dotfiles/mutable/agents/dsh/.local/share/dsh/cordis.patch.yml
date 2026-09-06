@@ -1,5 +1,10 @@
-# 上游 0.1.2a3 wheel 闭包漏打包 @deepseek-ai/dsh-session-title-llm
-# （dsh-session-title-first-prompt-llm 的依赖），临时禁用该 entry 绕过启动崩溃；
-# upstream 修复后（uv tool upgrade 后）移除本条目。
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+# 上游 0.1.2a3 wheel 闭包漏打包 @deepseek-ai/dsh-session-title-llm（
+# dsh-session-title-first-prompt-llm 的依赖），禁用该 entry 绕过启动崩溃。
+# 注：此类服务端缺包不能用 dsh plugin 补（SEA 的 ESM 解析只认内嵌闭包、
+# 不 fallback 到 profile node_modules；client-modules 能补是因为 webserver
+# 显式扫描 profile 目录），只能 disable，wheel 修复升级后移除本条目。
 - id: session-title-llm
   disabled: true

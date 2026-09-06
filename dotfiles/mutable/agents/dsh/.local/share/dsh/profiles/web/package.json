@@ -1,7 +1,9 @@
 {
   "name": "dsh-profile-web",
   "private": true,
-  "dependencies": {},
+  "dependencies": {
+    "@deepseek-ai/dsh-client-modules": "0.1.2-alpha.3"
+  },
   "dsh": {
     "profile": {
       "bundles": [

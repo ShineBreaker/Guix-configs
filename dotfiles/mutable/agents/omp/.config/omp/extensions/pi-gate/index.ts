@@ -18,6 +18,7 @@
  * 姊妹适配器：
  *   - dotfiles/mutable/agents/zcode/.zcode/hooks/{bash,edit}-gate.sh
  *   - dotfiles/immutable/agents/.config/crush/hooks/{bash,edit}-gate.sh
+ *   - dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/__init__.py
  */
 
 import { appendFileSync } from "node:fs";
@@ -55,11 +56,7 @@ interface Verdict {
 }
 
 /** 调决策核并解析行协议（每行 `TYPE<TAB>payload`）。 */
-function runCore(
-  args: string[],
-  cwd: string,
-  input?: string,
-): Verdict | null {
+function runCore(args: string[], cwd: string, input?: string): Verdict | null {
   let res;
   try {
     res = spawnSync("bash", [GATE_CORE, ...args], {
