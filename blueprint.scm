@@ -928,7 +928,9 @@
   (let ([scm (prepare-config "%system")])
     (format #t "正在将系统安装到 /mnt~%")
     (%guix `("system" "init" ,scm "/mnt") #:sudo? #t)
-    (false-if-exception (delete-file-recursively %tmp-dir))))
+    ;; dry-run 下 reconfigure 未发生，保留 tmp/ 产物供检查（同 apply-config 守卫）
+    (unless (dry-build?)
+      (false-if-exception (delete-file-recursively %tmp-dir)))))
 
 ;; ---- Live ISO 辅助（build-iso-command 用） -----------------------------
 ;;
@@ -980,6 +982,16 @@
 
 ;;; ---------- 编辑 ----------
 
+;; 块名只允许字母/数字/连字符/下划线：block-show 的 name 拼进输出文件路径、
+;; block-replace 的 name 交给 elisp 处理，特殊字符（../ 与空白）会构成
+;; 路径穿越 / 匹配注入面
+(define (%valid-block-name? name)
+  (and (string? name) (not (string-null? name))
+       (string-every (lambda (c)
+                       (or (char-alphabetic? c) (char-numeric? c)
+                           (memv c '(#\- #\_))))
+                     name)))
+
 ;; blue block-show BLOCK —— 从 config.org 抽取名为 BLOCK 的代码块。
 ;; 输出写到 tmp/block-<BLOCK>.scm 并打印其路径；内容前两行是 lang 和
 ;; noweb/plain 标记，第三行起才是 body。
@@ -991,6 +1003,8 @@
 从 source/config.org 提取 BLOCK 到 tmp/block-BLOCK.scm 并打印路径。"))
   (match arguments
     [(name)
+     (unless (%valid-block-name? name)
+       (error "block name 只允许字母/数字/-/_：" name))
      (mkdir-p %tmp-dir)
      (let* ([content (%run-elisp "block-extract" name)]
             [out-file (string-append %tmp-dir "/block-" name ".scm")])
@@ -1010,6 +1024,12 @@
 用 BODY-FILE 替换 source/config.org 中的 BLOCK。替换后自动验证 Scheme 代码块。"))
   (match arguments
     [(name body-file)
+     (unless (%valid-block-name? name)
+       (error "block name 只允许字母/数字/-/_：" name))
+     ;; block-replace 真实写 source/config.org（tangle 与 tmp 清理也真跑），
+     ;; dry-run 承诺「不写入」——这里短路而不是半途留下产物
+     (when (dry-build?)
+       (error "block-replace 会写入 source/config.org，dry-run 模式下禁用"))
      (mkdir-p %tmp-dir)
      (let* ([out-org (string-append %tmp-dir "/config.org.new")]
             [output (%run-elisp "block-replace" name body-file out-org)]
@@ -1254,7 +1274,8 @@
 深度优先级：标记内 `<!-- structor:begin depth=N -->` > ORG_STRUCTOR_DEPTH > 默认 4。"))
   (let* ([depth (or (and=> (getenv "ORG_STRUCTOR_DEPTH") string->number) 4)]
          [targets (if (null? arguments) (%structor-targets) arguments)]
-         [dry? (and=> (getenv "ORG_STRUCTOR_DRY") (negate string-null?))])
+         [dry? (or (and=> (getenv "ORG_STRUCTOR_DRY") (negate string-null?))
+                   (dry-build?))])
     (run-structor targets #:depth depth #:dry? dry?)))
 
 ;;; ---------- Nix 备用 ----------
