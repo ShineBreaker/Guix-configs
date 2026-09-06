@@ -6,7 +6,7 @@
 
 ** System
 
-职责： *operating-system* 层。引导器（Limine）、文件系统（LUKS+Btrfs+tmpfs）、内核（nonguix linux-7.0）、八个按职责拆分的服务块、用户账户。
+职责： *operating-system* 层。引导器（Limine）、文件系统（LUKS+Btrfs+tmpfs）、内核（自编译 CachyOS LTS =linux-cachyos-lts= ，定义见自定义包板块）、八个按职责拆分的服务块、用户账户。
 
 全局变量定义在 =source/information.scm= （username、%btrfs-subvolumes、%data-dirs、guix-channels）。
 
@@ -88,6 +88,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
              (gnu system nss)
              (gnu system pam)
              (guix channels)
+             (guix download)
              (guix gexp)
              (guix modules)
              (guix packages)
@@ -182,6 +183,8 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 
 <<filesystem-defines>>
 
+<<custom-package-defs>>
+
 (define %home
   (home-environment
    (packages (append
@@ -189,6 +192,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
               <<terminal-packages-list>>
               <<devtools-packages-list>>
               <<user-packages-list>>
+              <<custom-packages-list>>
               <<hermes-desktop-runtime-packages>>
               ))
 
@@ -349,7 +353,7 @@ Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休�
 ** Kernel
 
 *** 内核相关参数设置
-使用 =nonguix= 频道提供的固件和内核，以让系统能够在现代硬件中正常运行
+固件仍取自 =nonguix= 频道；内核为自编译的 =linux-cachyos-lts= （CachyOS 6.18 LTS 源码，定义与取舍见 =custom-package-defs= 块）。自编译内核无替代物，升级点版本即本机全量编译。
 
 =threadirqs= 开启中断线程化：
 + SOF/HDA 中断处理成为可调度线程，可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun
@@ -358,7 +362,7 @@ Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休�
 #+begin_src scheme
 (initrd microcode-initrd)
 (firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
-(kernel linux)
+(kernel linux-cachyos-lts)
 
 (kernel-arguments
  (cons* (string-append "resume=UUID=" %swap-uuid)
@@ -1818,6 +1822,155 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
   <<hermes-desktop-pkg-specs>>))
 #+end_src
 
+*** 自定义包与补丁
+
+自建变体包与上游补丁的集中地。~custom-package-defs~ 放顶层
+~define~，经 noweb 拼进 ~main~ 顶层；~custom-packages-list~ 只放
+表达式 —— 它在 ~%home~ 的 ~(append ...)~ 引用点被内联，表达式位置
+写不了 ~define~。新增包：先在 defs 块定义，再登记进 list 块。
+
+*历史（workaround 已移除）*：gst-plugins-good（matroskademux off-by-one）
+与 libcamera-minimal（i686 x87 浮点精度）曾各挂一个变体 workaround，
+2026-09-06 上游同日修复（guix ~c2ddcf3613~、~b0934bb792~）后移除。
+板块与两块结构保留，备后续自建包与补丁。
+
+#+NAME: custom-package-defs
+#+begin_src scheme :noweb yes
+<<cachyos-lts-kernel>>
+#+end_src
+
+**** CachyOS LTS 内核
+
+对标上游 linux-cachyos-lts 变体：CachyOS 官方预拼补丁的 6.18 LTS 源码 tarball（Cachy Sauce + EEVDF 调度器，无 BORE、无 LTO），nonguix =linux-6.18= 出构建配方，经 =customize-linux= 换源换配置。defconfig 取自 Testament 作者 hako 的 kernel-config 仓库 =defconfig_server= （钉 49c98a1，已在 6.18 线多机验证，钉在本仓 =source/files/kernel/defconfig-cachyos-lts= ），kconfig 片段把它调成桌面档并叠加本机需求。
+
+策略：其他软件编译要快、内核性能优先、LTS 降低重编频率。
+
++ 编译提速最大头：反选 debuginfo 全家（server 版 defconfig 默认 DWARF5+BTF+GDB 脚本，关掉省下大块构建时间与产物体积）
++ 性能项：-O3、=-march=native= （=CONFIG_X86_NATIVE_CPU= ，本机即目标机）、Cachy Sauce、1000Hz、动态抢占默认 full、THP always、BBR 默认拥塞控制配 fq 队列（与内核模块服务块联动）
++ =CONFIG_USER_NS=y= 必须保留：guix 构建沙箱依赖用户命名空间
++ 片段经 =verify-config= 硬校验：被 defconfig 钉住又要反选的符号必须逐个列出（裸符号 = 反选），漏列即构建失败并点名符号
+
+不启用 BORE：6.18 LTS 源码不含 BORE（CachyOS 官方 LTS 即 EEVDF + Cachy Sauce）；官方 kernel-patches 仓库的 6.18 BORE 补丁自 2026-03 起未更新，对 6.18.48 干跑 25 个 hunk 挂 1 个。想启用需手工修补丁并在片段加 ="CONFIG_SCHED_BORE=y"= 。
+
+不启用 ThinLTO/AutoFDO（CachyOS 主线默认是 Clang ThinLTO + AutoFDO/Propeller）：Phoronix/Google 数据显示 Clang+LTO 相对普通 GCC 约 +5%，但相对本配置的 GCC -O3 + native 基线增量约 1-3% 且负载相关（Gentoo wiki 明确可能持平或倒退）；clang-LTO 内核还要求外部模块同链 clang 工具链（v4l2loopback 会被波及）；AutoFDO 依赖 perf LBR 采样与 autofdo 工具链（guix 频道无此包）加两遍式 profile 基建。收益与复杂度不成比例，留作后续可选实验。
+
+升级点版本（如 6.18.49-1）：改 =%cachyos-lts-version= 与 base32（下载 tarball 后 =guix hash <tarball>= ），defconfig 与片段通常不动。tarball 的 Makefile 决定 =uname -r= （6.18.48），包版本号 6.18.48-2 只是元数据。
+
+#+NAME: cachyos-lts-kernel
+#+begin_src scheme
+;; CachyOS LTS 内核：官方 6.18 源码 + hako defconfig_server + 桌面化片段
+(define %cachyos-lts-version "6.18.48-2")
+
+(define linux-cachyos-lts
+  (let ([kernel
+         (customize-linux
+          #:name "linux-cachyos-lts"
+          #:linux linux-6.18
+          #:source (origin
+                    (method url-fetch)
+                    (uri (string-append
+                          "https://github.com/CachyOS/linux/releases/download/cachyos-"
+                          %cachyos-lts-version "/cachyos-" %cachyos-lts-version ".tar.gz"))
+                    ;; 不用 (sha256 …) 兼容写法也不用 (content-hash bv sha256)：
+                    ;; 两者都靠 syntax-case 的 sha256 字面量匹配，而本模块作用域
+                    ;; 里 (gcrypt hash) 的同名绑定会让匹配失效；字符串单参形式
+                    ;; 的默认算法经卫生展开引入 sha256，不受遮蔽影响
+                    (hash (content-hash
+                           "1ayb463hzqdfflvk4b3w2bqqnw9k7xl6rx6yx9hp2a9lhja8py4z")))
+          ;; hako kernel-config @49c98a1 的 defconfig_server，发行版级硬件覆盖
+          ;; （BTRFS=y、NLS、NTSYNC、IWLWIFI、I915+XE、SOF 音频、KVM、VIRTIO）
+          #:defconfig (local-file "../source/files/kernel/defconfig-cachyos-lts")
+          #:configs
+          (list
+           ;; 处理器：本机即目标机，-march=native（CachyOS 补丁符号）
+           "CONFIG_GENERIC_CPU"
+           "CONFIG_MZEN4"
+           "CONFIG_X86_NATIVE_CPU=y"
+           ;; 选 native 后基线 ISA 档位符号不可见
+           "CONFIG_X86_64_VERSION"
+           ;; Cachy Sauce（server defconfig 默认关，桌面档打开）
+           "CONFIG_CACHY=y"
+           ;; 1000Hz + idle dynticks（NO_HZ_FULL 对重编译型负载有上下文跟踪开销）
+           "CONFIG_HZ_300"
+           "CONFIG_HZ_1000=y"
+           "CONFIG_HZ=1000"
+           "CONFIG_HZ_PERIODIC"
+           "CONFIG_NO_HZ_FULL"
+           "CONFIG_NO_HZ_IDLE=y"
+           "CONFIG_NO_HZ=y"
+           "CONFIG_NO_HZ_COMMON=y"
+           ;; RCU_LAZY 依赖 RCU_NOCB_CPU（其默认仅在 NO_HZ_FULL 下为 y），
+           ;; 改 idle dynticks 后连带失效，显式反选
+           "CONFIG_RCU_LAZY"
+           "CONFIG_RCU_LAZY_DEFAULT_OFF"
+           ;; 动态抢占，默认 full（启动参数可切 none/voluntary/lazy）
+           "CONFIG_PREEMPT_DYNAMIC=y"
+           "CONFIG_PREEMPT=y"
+           "CONFIG_PREEMPT_VOLUNTARY"
+           "CONFIG_PREEMPT_LAZY"
+           "CONFIG_PREEMPT_NONE"
+           ;; -O3
+           "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE"
+           "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y"
+           ;; BBR 默认拥塞控制 + fq 队列（模块服务即为此加载）
+           "CONFIG_DEFAULT_CUBIC"
+           "CONFIG_DEFAULT_BBR=y"
+           "CONFIG_DEFAULT_TCP_CONG=\"bbr\""
+           ;; THP always
+           "CONFIG_TRANSPARENT_HUGEPAGE_MADVISE"
+           "CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=y"
+           ;; guix 构建沙箱依赖用户命名空间
+           "CONFIG_USER_NS=y"
+           ;; 编译提速：反选 debuginfo 全家（DWARF5/BTF/GDB 脚本）
+           "CONFIG_DEBUG_INFO"
+           "CONFIG_DEBUG_INFO_DWARF5"
+           "CONFIG_DEBUG_INFO_BTF"
+           "CONFIG_GDB_SCRIPTS"
+           ;; BTF 关闭的连带牺牲（均硬依赖 DEBUG_INFO_BTF）：
+           ;; sched_ext(e6) 调度器类与 BPF qdisc
+           "CONFIG_SCHED_CLASS_EXT"
+           "CONFIG_NET_SCH_BPF"
+           ;; initrd 必需符号（对应 %default-initrd-modules，自 Testament 移植）
+           "CONFIG_NLS_ISO8859_1=m"
+           "CONFIG_CRYPTO_SERPENT=m"
+           "CONFIG_CRYPTO_WP512=m"
+           "CONFIG_DM_CRYPT=m"
+           "CONFIG_BLK_DEV_NVME=m"
+           "CONFIG_MMC_BLOCK=m"
+           "CONFIG_SATA_AHCI=m"
+           "CONFIG_USB_STORAGE=m"
+           "CONFIG_USB_UAS=m"
+           "CONFIG_PATA_ACPI=m"
+           "CONFIG_PATA_ATIIXP=m"
+           "CONFIG_SCSI_ISCI=m"
+           "CONFIG_HW_RANDOM_VIRTIO=m"
+           "CONFIG_SCSI_VIRTIO=m"
+           "CONFIG_VIRTIO_BALLOON=m"
+           "CONFIG_VIRTIO_BLK=m"
+           "CONFIG_VIRTIO_CONSOLE=m"
+           "CONFIG_VIRTIO_MMIO=m"
+           "CONFIG_VIRTIO_NET=m"
+           "CONFIG_VIRTIO_PCI=m"
+           "CONFIG_HID_GENERIC=m"
+           "CONFIG_USB_HID=m"
+           "CONFIG_HID_APPLE=m"
+           ;; 本机模块服务清单钉住（防 defconfig 漂移）
+           "CONFIG_NTSYNC=m"
+           "CONFIG_INPUT_UINPUT=m"
+           "CONFIG_KVM_INTEL=m"
+           ;; CRYPTO_ZSTD 不钉：BTRFS=y 会把它 select 成 y，
+           ;; 钉 m 反而触发 verify-config 失败
+           ))])
+    (package
+     (inherit kernel)
+     (version %cachyos-lts-version))))
+#+end_src
+
+#+NAME: custom-packages-list
+#+begin_src scheme
+(list)
+#+end_src
+
 ** Services
 包列表统一使用 Guix 内置的 ~specifications->packages~ （经 =(gnu)= 复合模块可用，无需额外导入包模块）：
 + 接受 ='("name@version:output" ...)= 规格列表，
@@ -2547,7 +2700,7 @@ done
 
   ;; 光标设置
   ("XCURSOR_PATH" . "$XCURSOR_PATH:$XDG_DATA_HOME/icons")
-  ("XCURSOR_SIZE" . "26")
+  ("XCURSOR_SIZE" . "24")
   ("XCURSOR_THEME" . "Bibata-Modern-Classic")
 
   ("NIX_USER_CONF_FILES" . "$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/nix.conf"))
