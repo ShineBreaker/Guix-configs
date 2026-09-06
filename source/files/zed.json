@@ -32,7 +32,7 @@
     "model_parameters": [],
     "play_sound_when_agent_done": true,
     "tool_permissions": {
-      "default": "allow"
+      "default": "ask"
     }
   },
   "auto_install_extensions": {
@@ -51,7 +51,7 @@
     "python": true,
     "scheme": true,
     "scss": true,
-    "sinppets": true,
+    "snippets": true,
     "toml": true
   },
   "auto_signature_help": true,
