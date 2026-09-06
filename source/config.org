@@ -655,7 +655,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** /data 权限与 XDG 目录
-+ *fix-data-perms* 负责修复 =/data= 目录下所有文件夹的权限
++ *fix-data-perms* 负责修复 =/data= 目录权限（0755：目录条目的创建/删除都由 root 在 activation 完成，普通用户无需写 =/data= 根）
 + *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
 
 #+NAME: data-dirs-services
@@ -664,7 +664,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
                       #~(begin
                           (use-modules (guix build utils))
                           (mkdir-p "/data")
-                          (chmod "/data" #o1777)))
+                          (chmod "/data" #o755)))
 
       (simple-service 'create-xdg-dirs activation-service-type
                       (with-imported-modules (source-module-closure '((guix
@@ -680,6 +680,14 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
                                                                "/home/"
                                                                #$username)])
                                                    (for-each (lambda (dir)
+                                                               ;; /data 侧目录是 bind-mount 的源，缺它挂载会失败，
+                                                               ;; home 侧目录是挂载点，两侧都要建
+                                                               (let ([data-path (string-append
+                                                                                 "/data/"
+                                                                                 dir)])
+                                                                 (mkdir-p data-path)
+                                                                 (chown data-path
+                                                                        uid gid))
                                                                (let ([path (string-append
                                                                             home
                                                                             "/"
@@ -804,7 +812,10 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
 
         (service openssh-service-type
                  (openssh-configuration
-                  (password-authentication? #f)))
+                  (password-authentication? #f)
+                  ;; 显式声明：root 锁定密码仅允许密钥登录（默认值显式化，防上游默认漂移）
+                  (permit-root-login 'prohibit-password)
+                  (x11-forwarding? #f)))
 
         (service tailscale-service-type
                  (tailscale-configuration
@@ -1593,17 +1604,7 @@ polkit.addRule(function(action, subject) {
 
 用户信息
 
-=password= 行可以用于设置默认密码
-
-利用 =(password (crypt "InitialPassword!" "$6$abc")))=
-
-可以创建一个初始密码，其中crypt函数的第一个字符串为 *明文的密码*
-
-然后在进入系统之后重新注释，并自行设置密码，或者将 *password*
-
-后的函数设置为 *Hash化后的密码*
-
-利用
+=password= 字段仅作为账户**首次创建**时的初始密码写入 =/etc/shadow=；账户已存在时 reconfigure 恒保留现有 shadow 条目（=passwd->shadow= 复用语义）。因此装机后应保持 =(password #f)= 并用 =passwd= 管理密码——密码 hash 一旦写进仓库（本仓库公开托管在 codeberg）即永久暴露给离线爆破，且 git 历史无法撤回。如需初始密码，装机时临时填入，进入系统后改回 =#f= 并提交。
 
 #+begin_src bash
 echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
@@ -1627,8 +1628,9 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
               (user-account
                (name username)
                (group "users")
-               (password
-                "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
+               ;; 密码由 passwd 管理（见上方说明）：shadow 已有条目，
+               ;; #f 不影响现有登录，仅不再公开初始 hash
+               (password #f)
                (supplementary-groups '("adbusers"
                                        "audio"
                                        "cgroup"
