@@ -191,7 +191,8 @@ any attempt to access that path from within the build sandbox. See §12.
 - All other updated packages (7 `-bin` packages) were url-fetch and
   unaffected
 - GitHub API calls require authenticated token (rate limiting on
-  unauthenticated IP); use `~/.config/gh/hosts.yml` oauth_token
+  unauthenticated IP); ~~use `~/.config/gh/hosts.yml` oauth_token~~
+  (已废止的旧做法——现直接读 `GITHUB_TOKEN` 环境变量，见 §11)
 
 ## 10. Commit history for this issue
 
@@ -204,18 +205,18 @@ any attempt to access that path from within the build sandbox. See §12.
 
 ## 11. Diagnostic: using GitHub API with token when rate-limited
 
-The session hit GitHub API rate limits on unauthenticated IP. Token retrieval:
+The session hit GitHub API rate limits on unauthenticated IP. Token source:
+read the already-injected `GITHUB_TOKEN` environment variable (fish
+`conf.d/10-github-token.fish` injects it from the `gh` CLI credential store
+on every interactive shell). Tokens are env-only: never copy them into files
+under /tmp, embed them in scripts, or parse credential files (`hosts.yml`)
+from tooling.
 
 ```bash
-# Token is stored in gh CLI config
-grep -oP 'oauth_token: \K.*' ~/.config/gh/hosts.yml | head -1
-# Use first line only (file may contain duplicates)
-
-# Call API with urllib:
+# Call API with urllib, token straight from the environment:
 python3 -c "
-import json, urllib.request
-with open('/tmp/gh-token.txt') as f:
-    token = f.readline().strip()
+import json, os, urllib.request
+token = os.environ['GITHUB_TOKEN'].strip()
 req = urllib.request.Request('https://api.github.com/repos/ShineBreaker/jeans/issues?state=open&per_page=10')
 req.add_header('Authorization', 'Bearer ' + token)
 req.add_header('Accept', 'application/vnd.github+json')
@@ -225,9 +226,9 @@ with urllib.request.urlopen(req) as resp:
 ```
 
 Error pattern: `json.decoder.JSONDecodeError: Expecting value` means the
-curl output is empty or non-JSON — usually because the token was mangled
-by shell quoting (token may contain newlines if grep matched multiple lines).
-Always use `f.readline().strip()` (first line only) not `f.read().strip()`.
+response body was empty or non-JSON — usually a 401/403 (missing or expired
+token in non-interactive contexts). Fail loudly on auth errors instead of
+silently retrying unauthenticated.
 
 ## 12. Why `rm -f /etc/gitconfig` also does NOT work (2026-06-25 finding)
 

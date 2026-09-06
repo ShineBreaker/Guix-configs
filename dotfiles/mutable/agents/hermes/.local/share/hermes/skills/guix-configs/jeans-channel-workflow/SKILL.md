@@ -248,10 +248,10 @@ https://api.github.com/repos/<owner>/<repo>/releases?per_page=30
 
 **修复方向(任选,不强制实施):**
 
-1. **`GITHUB_TOKEN` 注入**:`export GITHUB_TOKEN=$(gh auth token 2>/dev/null)` 给 cron 加上,5000/h 上限即可彻底脱困。`update_versions.py:301` 已经支持 `Authorization: token <...>` header,无需改脚本。**本机注意：`gh` CLI 未安装**（`gh: 未找到命令`），改从 `~/.config/gh/hosts.yml` 提取（python3 无 yaml 模块，用 sed 即可）：
+1. **`GITHUB_TOKEN` 注入**:交互 shell 已由 `~/.config/fish/conf.d/10-github-token.fish` 注入 `GITHUB_TOKEN`/`GH_TOKEN`（事实源 `gh` CLI），直接读环境变量即可。cron/shepherd 等非交互环境没有该注入时，由用户在任务定义里显式传入——**不要在脚本里解析凭据文件**（hosts.yml/credentials 不进脚本与日志），也不要把 token 写到 /tmp。`update_versions.py:301` 已经支持 `Authorization: token <...>` header,无需改脚本。
    ```bash
-   export GITHUB_TOKEN=$(sed -n 's/^[[:space:]]*oauth_token:[[:space:]]*//p' ~/.config/gh/hosts.yml | head -1)
-   # 验证：curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit  # 期望 200
+   # 验证已有 token 可用（期望 200）
+   curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/rate_limit
    # guix refresh 读 GitHub API 用的是专属变量名 GUIX_GITHUB_TOKEN（不是 GITHUB_TOKEN），两个都要 export
    ```
 2. **Retry-After 处理**:把 `is_retryable_http_error` 扩展到 403 且 `Retry-After` header 存在的情形,按 header 等待后重试。
