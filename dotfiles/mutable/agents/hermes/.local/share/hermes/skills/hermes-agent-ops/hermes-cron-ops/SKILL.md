@@ -37,6 +37,17 @@ Hermes cron 定时任务的创建、诊断与投递配置。覆盖：把用户�
 5. **3 分钟硬中断限制**：复杂任务（guix refresh、批量 API 抓取）可能跑不完。prompt 里要设计优先级兜底：「时间紧张时优先保证核心步骤（如频道活动+上游版本），changelog 抓多少算多少」。
 6. **格式适配**：投递到 IM 平台（QQ 等）时，报告用 markdown（emoji 分区 + 表格 + 加粗），不要用 org 格式的竖线表格（手机上难读）。详见 `references/qqbot-delivery.md`。
 
+## 更新巡检类任务：weather 口径与就近回溯
+
+适用：「扫描上游更新 + 编译就绪检查 + 自动更新」类 cron（如 guix-package-update-scanner）。
+
+**weather 检查口径 = 用户的包集合，不是上游更新包全集**。2026-09-05 教训：按上游全部更新包跑 `guix time-machine -- weather`，librewolf/nss-rapid 未就绪 → 判「部分就绪，不更新」；实际这两个包根本不在用户 config.org 里，白白卡住一轮更新。包清单从用户配置源提取（如 config.org 的 `specifications->packages` 字符串 spec），不是从 commit message 收集的更新包列表。
+
+**决策：更新到「全就绪的最新 commit」，不是「有缺就不更新」**（2026-09-06 用户拍板，取代旧的「部分包未编译好 → 整体等待」）：
+1. 先对上游 HEAD + 用户包集合跑 weather；全就绪 → 直接更新 lock 到 HEAD
+2. 有缺 → 从 HEAD 往回找「用户所需包全部就绪」的最新 commit，把 lock pin 到那里（可二分），简报说明 pin 位置与 HEAD 仍缺的包
+3. pin 走正规入口：`blue update --guix -c NAME -C COMMIT`（`-c/--channel` 选频道、`-C/--commit` 指定 commit，其余频道保持 lock 现值；2026-09-06 已落地）。无需再手动改 channel.lock，commit message 由 blue 自动生成为 `build(channel.lock): pin <name> at <短哈希>`
+
 ## 模型 pin 铁律（最重要的坑）
 
 **背景**：`cronjob` 工具的 schema **没有** model/provider 参数——inference pins 是 user-owned，agent 无法自设。未 pin 的任务跟随全局默认模型，并在创建时**快照**当时的全局配置。
@@ -79,3 +90,4 @@ hermes gateway status                # gateway 是否在跑（不显示各平台
 - 用户改全局默认模型后，**所有未 pin 的 cron 任务都会静默罢工**——不只新建的那个。巡检现有任务时先看有没有 `model: null`。
 - `last_delivery_error` 里的 rate limit / 连接错误 ≠ 任务失败：看 `last_status` 区分（ok + delivery error = 报告生成了但没送到；error = 没跑）。
 - cron 报告里要求「可追溯、不臆造」（版本号/hash 必须有来源，抓不到标未获取）——复杂巡检类任务的通用约束，直接写进 prompt。
+- 手动触发 `hermes cron run` 必须 nohup 后台（`nohup hermes cron run <id> >/dev/null 2>&1 &`）：run 的 owner=当前会话进程，会话被杀（daily reset / 前台超时）→ run 无终态，scheduler 重启后永久 `unknown`。等待/监控**不要轮询 runs 状态文本**（unknown 会挂死 `grep -qv running` 循环，2026-09-06 实证白等 100 分钟），盯 `$HERMES_HOME/cron/output/<job_id>/` 最新 .md 的新增/mtime。unknown 记录本身无害，无需清理。
