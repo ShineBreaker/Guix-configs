@@ -30,20 +30,25 @@
 #   * 冻结命令按「命令位置词序列」匹配：第一个词，或 ; & | ( ) ` 、
 #     ` -- ` 、换行之后的词。参数/字符串/heredoc 正文里的冻结词不再命中
 #     （误报主源：commit message、文档字符串）。词序列匹配前剥引号，
-#     堵 `reb''uild` 类拆分；再执行通道（sh -c / xargs / find -exec …）
-#     的段内子串兜底堵引号包裹的间接执行；`$(` `)` 视为命令边界，命令
-#     替换体内的冻结词照常命中。
+#     堵 `reb''uild` 类拆分；片段首词 basename 归一化，堵
+#     `/run/.../bin/sudo` 类完整路径绕过；再执行通道（sh -c / xargs /
+#     find -exec …）的段内子串兜底堵引号包裹的间接执行；`$(` `)` 视为
+#     命令边界，命令替换体内的冻结词照常命中。解释器 heredoc
+#     （bash <<EOF 等）的正文会被执行，保留进片段流参与匹配。
 #   * 明确放弃的极端 case：`$(printf %s su)do` 这类命令替换输出拼接
 #     成冻结词的形态（运行时才存在，静态可见即回全文子串=误报之源；
-#     系对抗性构造，非 agent 自然行为）。
-#   * --dry-run 豁免仅限 blue 前缀命令（`blue --dry-run rebuild` 放行）；
-#     `sudo ... --dry-run` 这类把 --dry-run 当免死金牌的不豁免。
+#     系对抗性构造，非 agent 自然行为）；解释器语言代码内部动态拼接
+#     冻结词（os.system("sudo …") 类）同理不追。
+#   * --dry-run 豁免是片段级的：仅剔除「blue 前缀且带 --dry-run」的
+#     片段，其余片段照常检查；`sudo ... --dry-run` 这类把 --dry-run
+#     当免死金牌的不豁免。
 #   * edit 走双路径：逻辑路径（不解析 symlink）做 meta-frozen / 部署位置
 #     检查——~/.config 下大量路径是 store 软链，物理解析会让这两类保护
 #     落空；物理路径（解析 symlink）做 frozen_paths / frozen_globs——防
 #     经 /tmp 等中转软链写入冻结目标。任一路径命中即拦。
 #   * 词法类检查（交互式 / git / rm / 白名单）只对原始命令做精确匹配，
-#     不做归一化——避免 `echo "vim tips"` 这类字符串内容被误拦。
+#     不做归一化——避免 `echo "vim tips"` 这类字符串内容被误拦（rm 的
+#     路径形态检测除外，已排除引号内形态）。
 
 set -uo pipefail
 # 不用 -e：单个检查工具异常（如 jq 输出非预期）不应中断后续检查
@@ -85,13 +90,17 @@ trim() {
 	printf '%s' "$s"
 }
 
-# 冻结命令匹配预处理：剔除 heredoc 正文（数据非命令），按命令边界
-# （; & | ( ) ` 、` -- ` 参数终结符及换行）切分为每行一个命令片段，
-# 片段内剥引号/反斜杠并压缩空白（堵 reb''uild 类拆分）。
+# 冻结命令匹配预处理：按命令边界（; & | ( ) ` 、` -- ` 参数终结符及
+# 换行）切分为每行一个命令片段，片段内剥引号/反斜杠并压缩空白（堵
+# reb''uild 类拆分）。heredoc 正文：消费者是解释器（bash <<EOF、
+# sh -s <<X 等，取 `<<` 前最后一个词判定）时正文会被执行，保留进
+# 片段流参与冻结匹配；数据型消费者（cat/tee 等）的正文仍是纯数据，
+# 剔除。
 _cmd_segments() {
 	awk '
     indelim != "" {
-      if ($0 ~ "^[[:space:]]*" indelim "[[:space:]]*$") indelim = ""
+      if ($0 ~ "^[[:space:]]*" indelim "[[:space:]]*$") { indelim = ""; hdrcmd = ""; next }
+      if (hdrcmd ~ /^(sh|bash|zsh|dash|ash|fish|python[0-9.]*|node[0-9.]*|deno|guile[0-9.]*|perl|ruby|tclsh)$/) print
       next
     }
     {
@@ -100,6 +109,20 @@ _cmd_segments() {
         sub(/^<<-?[[:space:]]*/, "", d)
         gsub(/^["\x27]|["\x27]$/, "", d)
         indelim = d
+        # 消费者 = `<<` 前的最后一个非标志词（`bash <<E`、`cmd | sh <<E`、
+        # `sh -s <<X`、`python3 - <<PY` 都取到解释器名）
+        hdrcmd = substr($0, 1, RSTART - 1)
+        sub(/[[:space:]]+$/, "", hdrcmd)
+        ntok = split(hdrcmd, toks, /[[:space:]]+/)
+        hdrcmd = ""
+        for (k = ntok; k >= 1; k--) {
+          if (toks[k] !~ /^-/) { hdrcmd = toks[k]; break }
+        }
+        sub(/.*\//, "", hdrcmd)
+        # `cat <<X | bash`：heredoc 输出经管道交解释器执行，正文同样保留
+        htail = substr($0, RSTART + RLENGTH)
+        if (htail ~ /^[[:space:]]*[|;&][[:space:]]*(sh|bash|zsh|dash|ash|fish|python[0-9.]*|node[0-9.]*|deno|guile[0-9.]*|perl|ruby|tclsh)([[:space:]]|$)/)
+          hdrcmd = "bash"
       }
       print
     }
@@ -110,9 +133,11 @@ _cmd_segments() {
 }
 
 # 在片段流中找冻结命令。主规则：片段行首词序列命中（冻结词必须出现在
-# 命令位置——第一个词，或 ; & | ( ) ` / -- / 换行之后的词）；兜底规则：
-# 片段行首是再执行通道（sh -c / xargs / find -exec 等，参数会被当作
-# 命令执行）时退回段内子串匹配，堵引号包裹的间接执行。
+# 命令位置——第一个词，或 ; & | ( ) ` / -- / 换行之后的词）；片段首词
+# 先做 basename 归一化（`/run/.../bin/sudo x`、`~/.../guix install` 与
+# 裸命令同判，堵完整路径绕过锚定）；兜底规则：片段首词是再执行通道
+# （sh -c / xargs / find -exec 等，参数会被当作命令执行）时退回段内
+# 子串匹配，堵引号包裹的间接执行。
 # 输出命中的 frozen 项，无命中输出空。
 _match_frozen_in_segments() { # $1=片段流 $2=frozen 列表(换行分隔)
 	printf '%s\n' "$1" | awk -v frozen="$2" '
@@ -122,17 +147,38 @@ _match_frozen_in_segments() { # $1=片段流 $2=frozen 列表(换行分隔)
         f = arr[i]
         if (f == "") continue
         orig[++m] = f
-        gsub(/[\\^$.|+()\[\]{}*?]/, "\\\\&", f)
-        pats[m] = "^" f "([[:space:]]|$)"
+        # 主模式：冻结词序列，词间允许插入任意完整词——`git push origin
+        # --force`、`git -C <path> push --force` 与 `git push --force` 同拦；
+        # 兜底模式：词边界子串（`sh -c reformat` 的 rm 不再误命中）
+        nw = split(f, fw, " ")
+        for (w = 1; w <= nw; w++) gsub(/[\\^$.|+()\[\]{}*?]/, "\\\\&", fw[w])
+        pats[m] = "^" fw[1]
+        subpat[m] = "(^|[^A-Za-z0-9_-])" fw[1]
+        for (w = 2; w <= nw; w++) {
+          gap = "([[:space:]]+[^[:space:]]+)*[[:space:]]+"
+          pats[m] = pats[m] gap fw[w]
+          subpat[m] = subpat[m] gap fw[w]
+        }
+        pats[m] = pats[m] "([[:space:]]|$)"
+        subpat[m] = subpat[m] "([^A-Za-z0-9_-]|$)"
       }
     }
-    /^(sh|bash|dash|ash|env|nohup|xargs|ssh|parallel|find|exec)([[:space:]]|$)/ { channel = 1 }
     {
-      for (j = 1; j <= m; j++) {
-        if ($0 ~ pats[j]) { print orig[j]; exit }
-        if (channel && index($0, orig[j]) > 0) { print orig[j]; exit }
+      norm = $0
+      # 剥 env 赋值前缀（FOO=/x sudo … → sudo …），循环剥多个赋值
+      while (match(norm, /^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+/))
+        sub(/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+/, "", norm)
+      w = norm; sub(/[[:space:]].*/, "", w)
+      if (index(w, "/") > 0) {
+        sub(/.*\//, "", w)
+        rest = norm; sub(/^[^[:space:]]*/, "", rest)
+        norm = w rest
       }
-      channel = 0
+      channel = (norm ~ /^(sh|bash|dash|ash|env|nohup|xargs|ssh|parallel|find|exec)([[:space:]]|$)/) ? 1 : 0
+      for (j = 1; j <= m; j++) {
+        if (norm ~ pats[j]) { print orig[j]; exit }
+        if (channel && norm ~ subpat[j]) { print orig[j]; exit }
+      }
     }
   '
 }
@@ -169,22 +215,29 @@ gate_bash() {
 	BASE="$(basename "${FIRST:-cmd}" 2>/dev/null || printf '%s' "${FIRST:-cmd}")"
 
 	# 1a 冻结命令（命令位置词序列匹配）+ guix system 宽匹配。
-	# --dry-run 豁免仅当命令首个词是 blue（blue 的验证通道）。
-	if [[ "$CMD" != *"--dry-run"* || "$BASE" != "blue" ]]; then
-		local frozen_list segments hit
-		frozen_list="$(jq -r '.frozen_commands[]?' <<<"$MERGED" 2>/dev/null)"
-		if [[ -n "${frozen_list//$'\n'/}" ]]; then
-			segments="$(printf '%s\n' "$CMD" | _cmd_segments)"
-			hit="$(_match_frozen_in_segments "$segments" "$frozen_list")"
-			if [[ -n "$hit" ]]; then
+	# --dry-run 豁免是片段级的：只剔除「blue 前缀且带 --dry-run」的片段，
+	# 其余片段照常检查——`blue --dry-run rebuild; sudo ...` 的 sudo 片段
+	# 不被连带豁免。
+	local frozen_list segments hit check_cmd
+	frozen_list="$(jq -r '.frozen_commands[]?' <<<"$MERGED" 2>/dev/null)"
+	segments="$(printf '%s\n' "$CMD" | _cmd_segments |
+		awk '{ split($0, w, " "); c = w[1]; sub(/.*\//, "", c)
+		       if (c == "blue" && $0 ~ /--dry-run/) next; print }')"
+	check_cmd="$(printf '%s\n' "$segments" | tr '\n' ' ')"
+	if [[ -n "${frozen_list//$'\n']/}" && -n "$segments" ]]; then
+		hit="$(_match_frozen_in_segments "$segments" "$frozen_list")"
+		if [[ -n "$hit" ]]; then
+			if [[ "$hit" == "rm" ]]; then
+				emit BLOCK "🚫 rm 已冻结：agent 一律不直接删除文件。请改用 trash-put <path> / gio trash <path>，或 mv <path> /tmp/ 保留可恢复副本；确需永久删除请提醒用户手动执行。"
+			else
 				emit BLOCK "🚫 冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
-				return 0
 			fi
-		fi
-		if [[ "$CMD" == *"guix"* ]] && printf '%s' "$CMD" | grep -qE '\bsystem[[:space:]]+(reconfigure|init)\b'; then
-			emit BLOCK "🚫 禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
 			return 0
 		fi
+	fi
+	if [[ "$check_cmd" == *guix* ]] && printf '%s' "$check_cmd" | grep -qE '\bsystem[[:space:]]+(reconfigure|init)\b'; then
+		emit BLOCK "🚫 禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
+		return 0
 	fi
 
 	# 1b 交互式命令（无 TTY 会挂起）——词法匹配原始命令，名单来自 anchors.json
@@ -223,26 +276,10 @@ gate_bash() {
 		return 0
 	fi
 
-	# 1d rm 破坏性删除防护
-	local RM_HINT=""
-	if printf '%s' "$CMD" | grep -qE "${PREFIX}rm\b"; then
-		local rm_args rm_recursive=0 rm_force=0 rm_danger=0
-		rm_args="${CMD#*rm}"
-		printf '%s' "$rm_args" | grep -qE '(^|[[:space:]])-[a-zA-Z]*[rR]|--recursive' && rm_recursive=1
-		printf '%s' "$rm_args" | grep -qE '(^|[[:space:]])-[a-zA-Z]*f|--force' && rm_force=1
-		[[ "$rm_args" == *'$HOME'* ]] && rm_danger=1
-		[[ "$rm_args" == *'*' ]] && rm_danger=1
-		[[ "$rm_args" == *'..'* ]] && rm_danger=1
-		printf '%s' "$rm_args" | grep -qE '(^|[[:space:]])(/|~)([[:space:]]|$)' && rm_danger=1
-		printf '%s' "$rm_args" | grep -qE '(^|[[:space:]])~/' && rm_danger=1
-		if { [[ $rm_recursive -eq 1 && $rm_force -eq 1 ]]; } || [[ $rm_danger -eq 1 ]]; then
-			emit BLOCK "🚫 禁止破坏性 rm（rm -rf，或针对根/家/\$HOME/通配符的删除，不可逆）。请改用 \`trash-put <path>\` / \`gio trash <path>\`，或先 \`mv <path> /tmp/\` 保留可恢复副本。"
-			return 0
-		fi
-		RM_HINT="💡 检测到 rm：建议改用 \`trash-put\`/\`gio trash\` 或 \`mv\` 到临时目录，避免误删重要文件后无法恢复。"
-	fi
-
-	# 2 只读命令白名单（位于全部硬拦截之后，不构成绕过）
+	# 2 只读命令白名单（位于全部硬拦截之后，不构成绕过）。
+	# 仅对无连接符（; & | ` $( ）的单条命令发 AUTO_ALLOW——`ls && curl … |
+	# sh` 这类搭车形态回落到默认确认流
+	if printf '%s' "$CMD" | grep -qE '[;&|`]|\$\('; then :; else
 	case "$BASE" in
 	cat | head | tail | bat | echo | printf | seq | date | uptime)
 		emit AUTO_ALLOW ""
@@ -303,6 +340,7 @@ gate_bash() {
 		}
 		;;
 	esac
+	fi
 
 	# 3 命令改写（builtin npm→pnpm / pip→uv pip + 项目层 rewrite map）
 	local REWRITTEN="$CMD" NOTES=""
@@ -334,7 +372,6 @@ gate_bash() {
 	[[ "$REWRITTEN" != "$CMD" ]] && emit REWRITTEN "$REWRITTEN"
 
 	# 4 非阻塞提示
-	[[ -n "$RM_HINT" ]] && emit RM_HINT "$RM_HINT"
 	[[ -n "$NOTES" ]] && emit NOTES "本机偏好命令替代：${NOTES}；如适用请改用后重新执行"
 	local pat msg REDIRECT_PAT="" REDIRECT_MSG=""
 	while IFS=$'\t' read -r pat msg; do
@@ -387,14 +424,14 @@ gate_edit() {
 		"~/"*)
 			exp="${HOME}${frozen:1}"
 			if [[ "$LOGICAL" == "$exp" || "$LOGICAL" == "$exp/"* ]] || [[ "$PHYSICAL" == "$exp" || "$PHYSICAL" == "$exp/"* ]]; then
-				emit BLOCK "🚫 冻结路径「${frozen}」禁止写入。请修改源文件后通过 blue home 生效。"
+				emit BLOCK "🚫 冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 blue home 生效。"
 				return 0
 			fi
 			;;
 		*)
 			if [[ $INSIDE -eq 1 && "$REL" == "$frozen"* ]] || [[ $INSP -eq 1 && "$RELP" == "$frozen"* ]] ||
 				[[ "$LOGICAL" == *"$frozen" ]] || [[ "$PHYSICAL" == *"$frozen" ]]; then
-				emit BLOCK "🚫 冻结路径「${frozen}」禁止写入。请修改源文件后通过 blue home 生效。"
+				emit BLOCK "🚫 冻结路径「${frozen}」禁止 agent 写入（构建产物/锁文件/gate 规则源）。确需修改请人工编辑源文件。"
 				return 0
 			fi
 			;;
