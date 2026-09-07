@@ -90,6 +90,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
              (guix channels)
              (guix download)
              (guix gexp)
+             (guix git-download)
              (guix modules)
              (guix packages)
              (ice-9 match)
@@ -1451,7 +1452,34 @@ tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台。tty1
                                                 (handle-hibernate-key 'ignore))))
 
         (list (service earlyoom-service-type)
-              (service fprintd-service-type)
+              ;; 指纹栈（定义见自定义包板块）：libfprint 1.94.100 经
+              ;; fprintd 依赖引入；守护进程 D-Bus 按需激活，非 shepherd 服务
+              (service fprintd-service-type
+                       (fprintd-configuration (fprintd fprintd-1.94)))
+              ;; 指纹认证接入 PAM：pam_fprintd sufficient 置于 pam_unix 前
+              ;; （对标 NixOS fprintAuth），指纹失败自动回落密码
+              (simple-service 'fingerprint-pam pam-root-service-type
+                              (list (pam-extension
+                                     (transformer
+                                      (lambda (pam)
+                                        (let ([fprint-entry
+                                               (pam-entry
+                                                (control "sufficient")
+                                                (module (file-append
+                                                         fprintd-1.94
+                                                         "/lib/security/pam_fprintd.so")))])
+                                          (if (member (pam-service-name pam)
+                                                      '("greetd" "login"
+                                                        "sudo" "su" "polkit-1"))
+                                              (pam-service
+                                               (inherit pam)
+                                               (auth (cons fprint-entry
+                                                           (pam-service-auth pam))))
+                                              pam)))))))
+              ;; libfprint 的 autosuspend hwdb（含 27c6:689a）挂系统 udev；
+              ;; goodixmoc 走 USB，root 守护进程直连 libusb，无 udev 权限规则需求
+              (simple-service 'fingerprint-udev udev-service-type
+                              (list libfprint-1.94))
               (service gamemode-service-type)
               (service gnome-keyring-service-type)
               (service gvfs-service-type)
@@ -1773,7 +1801,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "omnisharp"
    "prettier-bin"
    "python-black"
-   "python-jsbeautifier"
    "python-lsp-black"
    "python-lsp-server"
    "rust-analyzer"
@@ -1809,7 +1836,6 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    "cc-switch-bin"
    "crush-bin"
    "cua-driver-bin"
-   "github-copilot"
    "zcode"
 
    ;; 工具
@@ -1947,6 +1973,7 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 #+NAME: custom-package-defs
 #+begin_src scheme :noweb yes
 <<cachyos-lts-kernel>>
+<<fingerprint-packages>>
 #+end_src
 
 **** CachyOS LTS 内核
@@ -2076,9 +2103,102 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
      (version %cachyos-lts-version))))
 #+end_src
 
+**** 指纹识别栈
+
+本机指纹传感器为 Goodix =27c6:689a=（match-on-chip 型，出厂固件，无需额外固件文件）。上游 libfprint 的 =goodixmoc= 开源驱动自 v1.94.9 才认领该 PID，而 Guix 上游停在 1.94.5，设备枚举时无人认领 —— fprintd 报 "No devices available"，这就是 Guix 下指纹不可用的根因（NixOS 的 libfprint ≥1.94.9 故可用；网传 Goodix 闭源 TOD 驱动只覆盖 533C/539C/550a 等其他型号，与本机无关，勿装）。
+
+方案：libfprint 升至 1.94 维护线 =1.94.100=，fprintd 1.94.2 → 1.94.5（其构建要求 libfprint ≥1.94.9，两包必须同步升级）。相对上游包定义的全部变体点：
+
++ 1.94.7 起 URU4x00 驱动由 NSS 改用 OpenSSL ≥3：输入替换 =nss → openssl=，原为 lib/nss 设 rpath 的 configure flag 一并移除（OpenSSL 库位标准，ld-wrapper 自动补 RUNPATH）
++ eudev 的 pkg-config 故意报 systemd 兼容版本（251），libfprint 的 =udev_hwdb=auto= 逻辑误判"systemd ≥248 已内置 autosuspend hwdb"而跳过安装——Guix 上必须 =-Dudev_hwdb=enabled= 强制装（仅多一条无害 warning），否则 autosuspend 条目全系统缺失
++ fprintd 1.94.5 把 libsystemd provider 做成 meson 选项：=-Dlibsystemd=libelogind= 取代旧 =patch-systemd-dependencies= 补丁（新版 meson.build 写法变了，旧正则会匹配失败）
++ 1.94.5 的 pam_wrapper 降为 =required:false=、Python 测试依赖检查只发 warning：旧 =ignore-test-dependencies= 补丁整体删除
++ =patch-output-directories= 保留：相关行的 meson.build 写法未变，正则仍命中
+
+系统侧接线（desktop-services 板块）：=fprintd-service-type= 换新包（fprintd 守护进程经 D-Bus 按需激活，非 shepherd 常驻服务，=herd= 里看不到是正常的）；PAM transformer 把 =pam_fprintd.so= 以 sufficient 插到 pam_unix 之前（对标 NixOS fprintAuth 语义，指纹失败回落密码）；libfprint 的 autosuspend hwdb（含 =27c6:689a= 条目）挂 =udev-service-type=。升级仅改两个 version 与对应 hash（=guix hash -f nix-base32=）。
+
+#+NAME: fingerprint-packages
+#+begin_src scheme
+(define %libfprint-version "1.94.100")
+
+(define libfprint-1.94
+  (package
+    (inherit libfprint)
+    (version %libfprint-version)
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://gitlab.freedesktop.org/libfprint/libfprint")
+             (commit (string-append "v" %libfprint-version))))
+       ;; inherit 变体中 thunk 字段的兄弟字段引用只覆盖本表单显式设置的
+       ;; 字段，name 仅存在于父定义、引用必 unbound；origin 内用顶层变量+字面量
+       (file-name (git-file-name "libfprint" %libfprint-version))
+       ;; 单参字符串形式规避 sha256 字面量遮蔽（同 cachyos-lts 块）
+       (hash (content-hash
+              "1c5n1xl7b32hssfs6yl4ndn1dfs6aqa26igmpahpym53l19zq017"))))
+    (arguments
+     (list #:configure-flags
+           #~(list "-Dudev_hwdb=enabled"
+                   (string-append "-Dudev_hwdb_dir=" #$output
+                                  "/lib/udev/hwdb.d")
+                   (string-append "-Dudev_rules_dir=" #$output
+                                  "/lib/udev/rules.d"))))
+    (inputs
+     (modify-inputs (package-inputs libfprint)
+       (replace "nss" openssl)))))
+
+(define %fprintd-version "1.94.5")
+
+(define fprintd-1.94
+  (package
+    (inherit fprintd)
+    (version %fprintd-version)
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://gitlab.freedesktop.org/libfprint/fprintd")
+             (commit (string-append "v" %fprintd-version))))
+       (file-name (git-file-name "fprintd" %fprintd-version))
+       (hash (content-hash
+              "1rf80qzx4fx5y3x04n7wb58ywga34agjd42ymlvz3kdl8kkk6qk8"))))
+    (arguments
+     (list #:configure-flags
+           #~(list "-Dsystemd_system_unit_dir=/tmp"
+                   ;; 1.94.5 提供 libsystemd provider 选项，取代旧
+                   ;; patch-systemd-dependencies 的 substitute* 补丁
+                   "-Dlibsystemd=libelogind"
+                   (string-append "-Ddbus_service_dir=" #$output
+                                  "/share/dbus-1/system-services")
+                   (string-append "-Dpam_modules_dir=" #$output
+                                  "/lib/security"))
+           ;; pam_wrapper 已 required:false、python 测试依赖检查仅告警，
+           ;; 旧 ignore-test-dependencies 补丁不再需要
+           #:phases
+           #~(modify-phases %standard-phases
+               (add-before 'configure 'patch-output-directories
+                 (lambda* (#:key outputs #:allow-other-keys)
+                   (let ([out (assoc-ref outputs "out")])
+                     (substitute* "meson.build"
+                       (("(dbus_interfaces_dir = ).*" _ set)
+                        (string-append set "'" out "/share/dbus-1/interfaces'\n"))
+                       (("(polkit_policy_directory = ).*" _ set)
+                        (string-append set "'" out "/share/polkit-1/actions/'\n"))
+                       (("(dbus_data_dir = ).*" _ set)
+                        (string-append set "get_option('prefix')"
+                                       " / get_option('datadir')\n")))))))
+           #:tests? #f))
+    (inputs
+     (modify-inputs (package-inputs fprintd)
+       (replace "libfprint" libfprint-1.94)))))
+#+end_src
+
 #+NAME: custom-packages-list
 #+begin_src scheme
-(list)
+;; fprintd-1.94：登记/验证指纹的 CLI（fprintd-enroll 等）；守护进程与
+;; PAM 模块在系统侧（desktop-services 板块）
+(list fprintd-1.94)
 #+end_src
 
 ** Services
@@ -2214,9 +2334,7 @@ end
                              ;; 命令行工具
                              "agenote"
                              "direnv"
-                             "fish"
                              "git"
-                             "godot"
                              "ripgrep"
 
                              ;; Tree-sitter
