@@ -2355,7 +2355,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
 | =:modes=     | 生效的所有 major mode(传统 mode 在前,ts 在后) | =major-mode-remap-alist=、Apheleia mode-alist |
 | =:ts-mode=   | Tree-sitter 对应 mode(nil = 无 ts 版本)       | =major-mode-remap-alist=                      |
 | =:server=    | LSP server 启动命令(nil = 无 LSP)             | =eglot-server-programs=                       |
-| =:formatter= | Apheleia formatter 符号(nil = 不格式化)       | Apheleia mode-alist                       |
+| =:formatter= | Apheleia formatter 符号(nil = 显式禁用)     | Apheleia mode-alist                       |
 
 #+begin_src emacs-lisp
 (require 'json)
@@ -2369,6 +2369,15 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :ts-mode c++-ts-mode
             :server ("ccls")
             :formatter clang-format)
+    ;; prettier-bin 来自自建 channel 的包(profile 提供 prettier 命令,
+    ;; apheleia-npx 未命中 node_modules 时回退 PATH),覆盖整个
+    ;; prettier-* 家族:JS/TS/TSX/CSS/HTML。
+    (:modes (css-mode css-ts-mode)
+            :server nil
+            :formatter prettier-css)
+    (:modes (emacs-lisp-mode)
+            :server nil
+            :formatter lisp-indent)
     (:modes (gdscript-mode)
             :server nil                       ; gdscript LSP 由 godot 自带
             :formatter nil)
@@ -2376,10 +2385,15 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :ts-mode go-ts-mode
             :server ("gopls")
             :formatter gofmt)
+    ;; google-java-format 在 Guix 无包;clang-format 支持 Java 语法且已在
+    ;; profile,Android 项目够用。
     (:modes (java-mode java-ts-mode)
             :ts-mode java-ts-mode
             :server nil
-            :formatter nil)
+            :formatter clang-format)
+    (:modes (js-mode js-ts-mode)
+            :server nil
+            :formatter prettier-javascript)
     (:modes (json-mode json-ts-mode js-json-mode)
             :ts-mode json-ts-mode
             :server nil
@@ -2398,30 +2412,39 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :ts-mode rust-ts-mode
             :server ("rust-analyzer")
             :formatter rustfmt)
+    ;; lisp-indent 是 apheleia 内置纯 elisp formatter,复用 buffer 自身
+    ;; major-mode 的缩进函数;Guile 无外部 formatter,arei REPL 不涉格式化。
+    (:modes (scheme-mode)
+            :server nil
+            :formatter lisp-indent)
+    ;; prettier 原生理解 TS 语法;js-beautify 只按 JS 缩进,对 enum/
+    ;; namespace/decorator 会错乱,故 TS 家族统一走 prettier。
     (:modes (typescript-mode typescript-ts-mode)
             :ts-mode typescript-ts-mode
             :server ("typescript-language-server" "--stdio")
-            :formatter js-beautify)
+            :formatter prettier-typescript)
     ;; tsx-ts-mode 与 typescript-ts-mode 同文件定义,无传统 mode 需 remap,
-    ;; 仅注册 auto-mode-alist(见 [[#language-modes]]);formatter/LSP 与
-    ;; typescript 分开维护,js-beautify 不理解 JSX 语法。
+    ;; 仅注册 auto-mode-alist(见 [[#language-modes]]);LSP 与 typescript 分开
+    ;; 维护;prettier 原生理解 JSX/TSX。
     (:modes (tsx-ts-mode)
             :server ("typescript-language-server" "--stdio")
-            :formatter nil)
+            :formatter prettier-typescript)
     ;; mhtml-ts-mode(Emacs 31 内置)处理 HTML 与内嵌 JS/CSS,替代 web-mode。
     ;; html-mode 经 remap 走 TS 版;grammar 语言名与 mode 名不一致
     ;; (mode 前缀 mhtml,grammar 是 html),见 custom--treesit-lang-overrides。
     (:modes (html-mode mhtml-ts-mode)
             :ts-mode mhtml-ts-mode
             :server nil
-            :formatter nil)
+            :formatter prettier-html)
     (:modes (sh-mode)
             :server nil
             :formatter shfmt)
     (:modes (fish-mode)
             :server nil
             :formatter fish-indent)
-    (:modes (yaml-mode)
+    ;; yaml-ts-mode 派生自 text-mode 而非 yaml-mode,不显式列出则 yq 映射
+    ;; 不生效(残留包默认 prettier-yaml 因缺二进制静默失败)。
+    (:modes (yaml-mode yaml-ts-mode)
             :server nil
             :formatter yq-yaml)
     (:modes (zig-mode)
@@ -2437,7 +2460,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   :modes     生效的所有 major mode 列表(传统 mode 在前,ts-mode 在后)
   :ts-mode   Tree-sitter 对应 mode(nil 表示无 ts 版本)
   :server    LSP server 启动命令列表(nil 表示无 LSP)
-  :formatter Apheleia formatter 符号(nil 表示不格式化)")
+  :formatter Apheleia formatter 符号(nil 表示显式禁用)")
 
 (defconst custom:language-treesit-remaps
   (seq-filter #'cdr
@@ -2467,9 +2490,11 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   (seq-mapcat (lambda (entry)
                 (seq-map (lambda (mode) (cons mode (plist-get entry :formatter)))
                          (plist-get entry :modes)))
-              (seq-filter (lambda (entry) (plist-get entry :formatter))
-                          custom:language-capabilities))
-  "Apheleia major mode 对应关系(从 `custom:language-capabilities' 派生)。")
+              custom:language-capabilities)
+  "Apheleia major mode 对应关系(从 `custom:language-capabilities' 派生)。
+:formatter nil 的条目也写入,value 为 nil 显式禁用格式化——覆盖包默认
+mode-alist 的残留映射(如 gdscript→gdformat),缺二进制的 formatter 不会
+在保存时空跑。")
 #+end_src
 
 *** Tree-sitter grammar 加载
@@ -2548,15 +2573,15 @@ Eglot 是 =:defer t= + =:hook (prog-mode . eglot-ensure)=:
 
 *** Apheleia 与 Flymake
 
-Apheleia 用 =:hook (prog-mode . apheleia-mode)= 而非 =:defer t= 触发加载:后者没有可靠的首次加载入口,=apheleia-global-mode= 不会启用,保存时格式化在用户首次手动调 Apheleia 命令前都失效。进任何 prog buffer 就启用 global mode,保存时格式化立即生效。
+Apheleia 用 =:hook= 挂 major mode 而非 =:defer t= 触发加载:后者没有可靠的首次加载入口,=apheleia-global-mode= 不会启用,保存时格式化在用户首次手动调 Apheleia 命令前都失效。进任何 prog buffer 就启用 global mode,保存时格式化立即生效。=markdown-mode= 与 =yaml-ts-mode= 派生自 =text-mode= 而非 =prog-mode=,需单独列出,否则它们的 formatter 保存时从不自动运行。
 
-手动入口 =C-c c f= 直绑 =apheleia-format-buffer= (包 autoload 已注册)。Apheleia 没有把格式化委托给 LSP 的能力(无 eglot formatter 条目,上游 issue #62 长期未实现):eglot 管理的 buffer 与普通 buffer 一样走 mode-alist 里的外部 formatter,语言→formatter 对应关系见 [[#programming-tools]] 的能力表。个别无外部 formatter 而又有 LSP 的语言(如 tsx)需要 LSP 格式化时手动 =M-x eglot-format-buffer= 。
+手动入口 =C-c c f= 直绑 =apheleia-format-buffer= (包 autoload 已注册)。Apheleia 没有把格式化委托给 LSP 的能力(无 eglot formatter 条目,上游 issue #62 长期未实现):eglot 管理的 buffer 与普通 buffer 一样走 mode-alist 里的外部 formatter,语言→formatter 对应关系见 [[#programming-tools]] 的能力表。显式禁用(=:formatter nil=)或无映射的 mode 手动按下时会从全部 formatter 中补选;需要 LSP 格式化时手动 =M-x eglot-format-buffer= 。
 
 Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =flymake-mode-hook=;非 LSP buffer 由各 major mode 的 =syntax-table= 提供诊断。全局跳转与错误列表键 =M-g n/p/l= 在 [[#keybindings][前缀键体系]] 域统一绑定,不在此处 =:bind=,避免 flymake 未加载时键位悬空。
 
 #+begin_src emacs-lisp
 (use-package apheleia
-  :hook (prog-mode . apheleia-mode)
+  :hook ((prog-mode markdown-mode yaml-ts-mode) . apheleia-mode)
   :config
   (apheleia-global-mode 1)
   (dolist (formatter custom:language-apheleia-formatters)
