@@ -896,8 +896,33 @@
 
 ;;; ---------- 部署 ----------
 
+;; 世代修剪上限。limine 每次reconfigure都按当时全部 system 世代在 ESP 重建
+;; UKI（CURRENT.EFI + 每个旧世代一个 OLD-N.EFI，单个约 50M），世代无上限增长
+;; 会挤爆 ESP。reconfigure 成功后删掉老世代；ESP 里的多余 UKI 由下一次
+;; reconfigure 按剩余世代重建时收敛（delete-generations 顺带的
+;; reinstall-bootloader 对 limine 只写一个无人读取的 /boot/grub/grub.cfg）。
+(define %keep-system-generations 10)
+
+;; 删掉系统世代 1..N-上限，使剩余世代（含当前代）恰好 %keep-system-generations
+;; 个。delete-matching-generations 内部保证不删当前代。
+(define (%prune-system-generations)
+  ;; dry-run 下 reconfigure 未发生，代数失真，跳过（预演不演算）。
+  (unless (dry-build?)
+    (let* ([link (and=> (false-if-exception
+                         (readlink "/var/guix/profiles/system"))
+                        basename)]
+           [m (and=> link (cut string-match "^system-([0-9]+)-link$" <>))]
+           [number (and=> m (lambda (m)
+                              (string->number (match:substring m 1))))])
+      (when (and number (> number %keep-system-generations))
+        (format #t "修剪系统世代，保留最新 ~a 个~%" %keep-system-generations)
+        (%guix `("system" "delete-generations"
+                 ,(format #f "1..~a" (- number %keep-system-generations)))
+               #:sudo? #t)))))
+
 ;; blue rebuild —— 应用 Guix System 配置（需 sudo）。
-;; 流程：先清编译产物 → tangle+括号检查 → system reconfigure → guix locate --update。
+;; 流程：先清编译产物 → tangle+括号检查 → system reconfigure → 修剪系统世代
+;; （保 %keep-system-generations 个）→ guix locate --update。
 ;; dry-run：tangle+括号检查真跑，reconfigure 短路成 build --dry-run。
 ;; ⚠ Agent 不要自行运行此命令（需 sudo 会卡 CLI），只许 blue home 调试。
 (define-command (rebuild-command arguments)
@@ -908,7 +933,9 @@
   ((command-procedure clean-artifacts-command) '())
   (apply-config "system" "%system"
                 #:sudo? #t
-                #:after (lambda () (%guix '("locate" "--update")))))
+                #:after (lambda ()
+                          (%prune-system-generations)
+                          (%guix '("locate" "--update")))))
 
 ;; blue home —— 应用 Guix Home 配置（不需 sudo，首选调试方式）。
 (define-command (home-command arguments)
