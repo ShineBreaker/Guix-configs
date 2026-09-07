@@ -2503,9 +2503,11 @@ Grammar 的供给链完全由 Guix 处理,配置侧不需要参与:
 
 + =home-emacs-service= 的 wrapper(=emacs-wrapper=)启动 emacs 前用 =evaluate-search-paths= 把 profile 的 =lib/tree-sitter= 注入 =TREE_SITTER_GRAMMAR_PATH= 环境变量。
 + profile 的 =site-start.el= 加载 Guix 自带的 =guix-emacs.el=,后者在 =(with-eval-after-load 'treesit ...)= 里把该环境变量拆分加入 =treesit-extra-load-path=。Grammar 解析由此自动完成,无需本配置插手。
-+ =(setq treesit-enabled-modes t)= 和 =(setq treesit-auto-install-grammar nil)= 已是 Emacs 29+/31 的默认值,不重复设置;grammar 运行时下载由 manifest 禁,可复现性由 Guix 侧而非这里保证。
++ =(setq treesit-enabled-modes t)= 已是 Emacs 29+/31 的默认值,不重复设置;但 =treesit-auto-install-grammar= 的默认值在 31 起改为 ='ask=(如 =mhtml-ts-mode= 启动即询问可选的 jsdoc grammar),显式关闭保持 Guix 供给链:缺 grammar 直接降级,不弹询问不运行时下载,可复现性由 Guix 侧而非这里保证。
 
 #+begin_src emacs-lisp
+(setq treesit-auto-install-grammar nil)
+
 (defconst custom--treesit-lang-overrides
   '((c++-ts-mode . cpp) (csharp-ts-mode . c-sharp) (mhtml-ts-mode . html))
   "Tree-sitter 语言名与 `*-ts-mode' 命名不一致的覆盖表。")
