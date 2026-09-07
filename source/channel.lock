@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "3281477da463c6f86daf63595bf446c50107a5a0")
+       (commit "d5b0c1c2e3765191edb49257b66d5f99195a987b")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -12,7 +12,7 @@
        (name 'bluebox)
        (url "https://codeberg.org/lapislazuli/bluebox")
        (branch "main")
-       (commit "71628770c8612c041e06672f34c0c8e6fc67c13c")
+       (commit "f5c32b67e5abfa2ea8e9630c36dc0cfe3b29ebd4")
        (introduction
         (make-channel-introduction
          "63350484aaacc362aea28fb14236019fced4050f"
