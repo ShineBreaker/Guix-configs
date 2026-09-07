@@ -93,11 +93,9 @@ name = "json"
 scope = "source.json"
 file-types = ["json", "arb", "ipynb", "geojson", "gltf", "webmanifest", "jsonl", "avsc", "ldtk", "ldtkl", "sublime-build", "sublime-color-scheme", "sublime-commands", "sublime-completions", "sublime-keymap", "sublime-macro", "sublime-menu", "sublime-mousemap", "sublime-project", "sublime-settings", "sublime-theme", "sublime-workspace", "code-workspace", { glob = "flake.lock" }, { glob = ".babelrc" }, { glob = ".bowerrc" }, { glob = ".jscrc" }, { glob = ".jslintrc" }, { glob = ".vuerc" }, { glob = "composer.lock" }, { glob = ".watchmanconfig" }, { glob = ".swift-format" }, "js.map", "ts.map", "css.map", { glob = "devenv.lock" }, { glob = "devbox.lock" }, { glob = "manifest.lock" }, { glob = "deno.lock" }]
 auto-format = true
-formatter = { command = "js-beautify", args = [
-  "--stdin",
-  "--indent-size",
-  "2",
-  "-",
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
 ] }
 
 [[language]]
@@ -105,11 +103,9 @@ name = "jsonc"
 scope = "source.json"
 file-types = ["jsonc", { glob = "{t,j}sconfig.json" }, { glob = "bun.lock" }, { glob = ".devcontainer.json" }, { glob = "devcontainer.json" }, { glob = ".vscode/*.json" }]
 auto-format = true
-formatter = { command = "js-beautify", args = [
-  "--stdin",
-  "--indent-size",
-  "2",
-  "-",
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
 ] }
 
 [[language]]
@@ -154,6 +150,102 @@ file-types = ["zig", "zon"]
 auto-format = true
 formatter = { command = "zig", args = ["fmt", "--stdin", "-"] }
 language-servers = ["zls"]
+
+[[language]]
+name = "javascript"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "typescript"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "tsx"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "css"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "html"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "graphql"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "jsx"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "json5"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "less"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "markdown"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "scss"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
+
+[[language]]
+name = "vue"
+auto-format = true
+formatter = { command = "prettier", args = [
+  "--stdin-filepath",
+  "%{buffer_name}",
+] }
 
 [[language]]
 name = "scheme"
