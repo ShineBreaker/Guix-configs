@@ -32,7 +32,7 @@
     "model_parameters": [],
     "play_sound_when_agent_done": true,
     "tool_permissions": {
-      "default": "ask"
+      "default": "allow"
     }
   },
   "auto_install_extensions": {
