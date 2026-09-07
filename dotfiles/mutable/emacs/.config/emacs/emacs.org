@@ -2371,7 +2371,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
             :formatter clang-format)
     ;; prettier-bin 来自自建 channel 的包(profile 提供 prettier 命令,
     ;; apheleia-npx 未命中 node_modules 时回退 PATH),覆盖整个
-    ;; prettier-* 家族:JS/TS/TSX/CSS/HTML。
+    ;; prettier-* 家族:JS/TS/TSX/CSS/HTML/JSON/Markdown/LESS。
     (:modes (css-mode css-ts-mode)
             :server nil
             :formatter prettier-css)
@@ -2397,10 +2397,13 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
     (:modes (json-mode json-ts-mode js-json-mode)
             :ts-mode json-ts-mode
             :server nil
-            :formatter js-beautify)
+            :formatter prettier-json)
+    (:modes (less-css-mode)
+            :server nil
+            :formatter prettier)
     (:modes (markdown-mode)
             :server nil
-            :formatter pandoc-markdown)
+            :formatter prettier-markdown)
     (:modes (nix-mode)
             :server nil
             :formatter nixfmt)
@@ -2417,8 +2420,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
     (:modes (scheme-mode)
             :server nil
             :formatter lisp-indent)
-    ;; prettier 原生理解 TS 语法;js-beautify 只按 JS 缩进,对 enum/
-    ;; namespace/decorator 会错乱,故 TS 家族统一走 prettier。
+    ;; prettier 原生理解 TS 语法,故 TS 家族统一走 prettier。
     (:modes (typescript-mode typescript-ts-mode)
             :ts-mode typescript-ts-mode
             :server ("typescript-language-server" "--stdio")
@@ -2483,7 +2485,7 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生,按 server 命令去重)。")
 
 (defconst custom:language-apheleia-formatters
-  '((pandoc-markdown "pandoc" "-f" "gfm+yaml_metadata_block" "-t" "gfm" "--standalone" "--wrap=none"))
+  '()
   "Apheleia 自定义 formatter 命令定义(mode-alist 只引用符号)。")
 
 (defconst custom:language-apheleia-mode-alist
@@ -2755,7 +2757,7 @@ GDScript、Fish、JSON / kdl / Markdown / Nix / Rust / TypeScript(TSX / JSX) / m
 (use-package kdl-mode :mode "\\.kdl\\'" :defer t)
 ;; markdown-mode:传统 font-lock 实现。Guix 无 markdown-ts-mode 包,旧配置
 ;; 引用它从未加载成功(.md 打开即 void-function);markdown-ts 的 pandoc/eww
-;; 预览链路由 markdown-mode 的导出/预览命令与语言表的 pandoc-markdown
+;; 预览链路由 markdown-mode 的导出/预览命令与语言表的 prettier-markdown
 ;; formatter 承接。
 (use-package markdown-mode
   :mode ("\\.md\\'" "\\.markdown\\'")
