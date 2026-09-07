@@ -2,82 +2,76 @@
 #
 # SPDX-License-Identifier: MIT
 
-init:
-  &init {
-    type: http,
-    interval: 86400,
-    health-check:
-      {
-        enable: true,
-        url: https://www.gstatic.com/generate_204,
-        interval: 1800,
-      },
-  }
-use: &use { type: select, proxies: [DIRECT, AUTO], use: [one] }
-auto:
-  &auto {
-    type: url-test,
-    url: https://www.gstatic.com/generate_204,
-    interval: 900,
-    filter: "^(?:(?!.*(?:倍|x)).)*$",
-  }
-
+init: &init
+  type: http
+  interval: 86400
+  health-check:
+    enable: true
+    url: https://www.gstatic.com/generate_204
+    interval: 1800
+use: &use
+  type: select
+  proxies:
+    - DIRECT
+    - AUTO
+  use:
+    - one
+auto: &auto
+  type: url-test
+  url: https://www.gstatic.com/generate_204
+  interval: 900
+  filter: ^(?:(?!.*(?:倍|x)).)*$
 proxy-providers:
   one:
-    <<: *init
+    !!merge <<: *init
     url: ""
     path: proxies/one.yaml
-
   two:
-    <<: *init
+    !!merge <<: *init
     url: ""
     path: proxies/two.yaml
-
 mixed-port: 7890
 # redir-port: 7892
 # tproxy-port: 7893
 # allow-lan 若需让局域网/热点设备走本机代理再开 true（bind-address 相应收窄到
 # 具体接口 IP）；false 时仅本机可用，无开放代理暴露面
 allow-lan: false
-bind-address: "*"
+bind-address: '*'
 mode: rule
 ipv6: true
 udp: true
 log-level: error
-# 控制 API 只绑回环 + 必须设 secret（zashboard 登录时填同一 secret）。
-# 绝不可 0.0.0.0 + 空 secret：任何能连到本机 9090 的设备（含热点客户端）
-# 都能无认证改写代理配置、读取流量信息。
 external-controller: 127.0.0.1:9090
-secret: "change-me-openssl-rand-hex-16"
 external-ui: UI
-external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
-
+external-ui-url: https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip
 geodata-mode: true
 geox-url:
-  geosite: "https://testingcf.jsdelivr.net/gh/v2fly/domain-list-community@release/dlc.dat"
-  geoip: "https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip-lite.dat"
+  geosite: https://testingcf.jsdelivr.net/gh/v2fly/domain-list-community@release/dlc.dat
+  geoip: https://testingcf.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip-lite.dat
 geo-auto-update: true
 geo-update-interval: 168
-
 profile:
   store-selected: true
   store-fake-ip: true
-
 hosts:
-
 sniffer:
   enable: true
   sniff:
     HTTP:
-      ports: [80, 8080-8880]
+      ports:
+        - 80
+        - 8080-8880
       override-destination: true
     TLS:
-      ports: [443, 8443]
+      ports:
+        - 443
+        - 8443
     QUIC:
-      ports: [443, 8443]
+      ports:
+        - 443
+        - 8443
   skip-domain:
     - Mijia Cloud
-
 tun:
   enable: true
   # device: utun
@@ -91,7 +85,6 @@ tun:
   route-exclude-address:
     - 10.42.0.0/24
     - 100.64.0.0/10 # Tailscale CGNAT
-
 dns:
   enable: true
   prefer-h3: true
@@ -99,38 +92,48 @@ dns:
   ipv6: true
   enhanced-mode: fake-ip
   fake-ip-filter:
-    - "geosite:connectivity-check"
-    - "geosite:private"
+    - geosite:connectivity-check
+    - geosite:private
   default-nameserver:
     - 223.5.5.5
   nameserver:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
-
 proxy-groups:
-  - { name: PROXY, <<: *use }
-  - { name: GAME, <<: *use }
-  - { name: MATCH, <<: *use }
-  - { name: AUTO, <<: *auto, use: [one] }
-
+  - name: PROXY
+    !!merge <<: *use
+  - name: GAME
+    !!merge <<: *use
+  - name: MATCH
+    !!merge <<: *use
+  - name: AUTO
+    !!merge <<: *auto
+    use:
+      - one
 rule-anchor:
-  ip: &ip { type: http, interval: 604800, behavior: ipcidr, format: yaml }
-  domain:
-    &domain { type: http, interval: 604800, behavior: domain, format: yaml }
+  ip: &ip
+    type: http
+    interval: 604800
+    behavior: ipcidr
+    format: yaml
+  domain: &domain
+    type: http
+    interval: 604800
+    behavior: domain
+    format: yaml
 rule-providers:
   direct:
-    <<: *domain
-    url: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt"
+    !!merge <<: *domain
+    url: https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt
     path: rules/direct.yaml
   proxy:
-    <<: *domain
-    url: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt"
+    !!merge <<: *domain
+    url: https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/proxy.txt
     path: rules/proxy.yaml
   reject:
-    <<: *domain
-    url: "https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt"
+    !!merge <<: *domain
+    url: https://testingcf.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/reject.txt
     path: rules/reject.yaml
-
 rules:
   - GEOIP,lan,DIRECT,no-resolve
   - GEOSITE,private,DIRECT
