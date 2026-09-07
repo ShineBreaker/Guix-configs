@@ -2485,8 +2485,10 @@ Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式
   "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生,按 server 命令去重)。")
 
 (defconst custom:language-apheleia-formatters
-  '()
-  "Apheleia 自定义 formatter 命令定义(mode-alist 只引用符号)。")
+  '((org-src-blocks . custom--format-org-src-blocks))
+  "Apheleia 自定义 formatter 定义(mode-alist 只引用符号);
+dotted 条目为函数 formatter(value 是函数符号,协议同 apheleia-indent-lisp-buffer)。
+org-src-blocks 不进 mode-alist,仅由 C-c o f(custom/format-org-src-blocks)调用。")
 
 (defconst custom:language-apheleia-mode-alist
   (seq-mapcat (lambda (entry)
@@ -2584,6 +2586,58 @@ Apheleia 用 =:hook= 挂 major mode 而非 =:defer t= 触发加载:后者没有�
 Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =flymake-mode-hook=;非 LSP buffer 由各 major mode 的 =syntax-table= 提供诊断。全局跳转与错误列表键 =M-g n/p/l= 在 [[#keybindings][前缀键体系]] 域统一绑定,不在此处 =:bind=,避免 flymake 未加载时键位悬空。
 
 #+begin_src emacs-lisp
+;; org block 批量缩进(函数 formatter,协议同 apheleia-indent-lisp-buffer:
+;; 在 scratch 拷贝上变换后回调)。org 无安全的整文件 formatter——pandoc
+;; org round-trip 会破坏 tangle 转义(,*)与 drawer/keyword 顺序,正文缩进
+;; 改变列表层级语义——需要格式化的只有 src block 内的代码:对每个 block
+;; 取出内容,在临时 buffer 激活该语言的 major mode 缩进后写回。org 语言
+;; 数据块(capture 模板)内容是 org 文本而非代码,跳过。不进 mode-alist:
+;; C-c c f 保持「格式化当前代码文件」语义,入口为 C-c o f 的
+;; custom/format-org-src-blocks,经 apheleia 跑以复用 RCS diff 对
+;; point/滚动位置的保护。
+(cl-defun custom--format-org-src-blocks
+    (&key buffer scratch callback &allow-other-keys)
+  "按各语言的 major mode 缩进 org BUFFER 中全部 src block 代码。
+SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。"
+  (with-current-buffer scratch
+    (funcall (buffer-local-value 'major-mode buffer))
+    (let (regions)
+      (org-element-map (org-element-parse-buffer) 'src-block
+        (lambda (el)
+          (and-let* ((value (org-element-property :value el))
+                     (lang (org-element-property :language el))
+                     (mode (and (not (equal lang "org"))
+                                (org-src-get-lang-mode lang)))
+                     ((fboundp mode)))
+            ;; 31 起 org-element 不再提供 src-block 的
+            ;; :contents-begin/:contents-end,由 :post-affiliated
+            ;; (#+begin_src 行首,已跳过 #+name: 等前置行) + :value
+            ;; 长度定位内容区。
+            (push (list (org-element-property :post-affiliated el)
+                        (length value)
+                        mode)
+                  regions))))
+      ;; 从后往前替换,避免前面的写回使后续位置失效。
+      (pcase-dolist (`(,beg ,len ,mode) regions)
+        (goto-char beg)
+        (forward-line 1)
+        (let* ((cbeg (point))
+               (cend (+ cbeg len))
+               (content (buffer-substring-no-properties cbeg cend)))
+          (with-temp-buffer
+            (insert content)
+            (funcall mode)
+            (indent-region (point-min) (point-max))
+            (setq content (buffer-substring-no-properties (point-min) (point-max))))
+          (delete-region cbeg cend)
+          (insert content))))
+    (funcall callback)))
+
+(defun custom/format-org-src-blocks ()
+  "按各语言的 major mode 缩进当前 org buffer 的全部 src block 代码。"
+  (interactive)
+  (apheleia-format-buffer 'org-src-blocks))
+
 (use-package apheleia
   :hook ((prog-mode markdown-mode yaml-ts-mode) . apheleia-mode)
   :config
@@ -3407,6 +3461,9 @@ agenote CLI 集成的知识库 CRUD。
 
 #+begin_src emacs-lisp
 (custom/bind "C-c o a" #'org-agenda "议程视图" "Org 与知识库")
+;; src block 批量缩进,formatter 实现见 [[#programming-tools]];与
+;; C-c c f(当前代码文件的格式化)语义不同,org 正文不参与。
+(custom/bind "C-c o f" #'custom/format-org-src-blocks "格式化全部代码块" "Org 与知识库")
 (custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
 (custom/bind "C-c o o" #'olivetti-mode "专注写作" "Org 与知识库")
 (custom/declare-binding-group "C-c o r" "Org Roam (网状笔记)")
