@@ -12,7 +12,7 @@
        (name 'bluebox)
        (url "https://codeberg.org/lapislazuli/bluebox")
        (branch "main")
-       (commit "f5c32b67e5abfa2ea8e9630c36dc0cfe3b29ebd4")
+       (commit "71628770c8612c041e06672f34c0c8e6fc67c13c")
        (introduction
         (make-channel-introduction
          "63350484aaacc362aea28fb14236019fced4050f"
