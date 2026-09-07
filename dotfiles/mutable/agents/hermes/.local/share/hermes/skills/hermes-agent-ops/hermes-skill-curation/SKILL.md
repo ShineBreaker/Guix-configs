@@ -316,6 +316,8 @@ Q5: find-skills / pack-guix / 浏览器自动化 / 社交 CLI 等小项(逐项)
   - §4 用户咨询模板(Prune 决策)
   - §5 **分类重组**(Reorganize 用,新增)— §5.1 盘点脚本 `reorganize-survey.sh` + §5.2 执行脚本 `reorganize-execute.sh`(处理 git 未跟踪 + chmod + trash + 验证 0 disabled)+ §5.3 cross-check 必问表
 - `references/audit-patterns.md` — 写审计/检查脚本的具体技巧库(JSONC 解析、Traceback tail 提取、yaml/CHECKS key parity、文件截断陷阱、灾难性回溯陷阱)。跟 §3 「❌ 用 exclude 绕过真实问题」配套——读完之后知道怎么直接解决问题而不是 exclude。
+- `references/hub-third-party-install.md` — 第三方 skill 走 `hermes skills tap/install` 装进 hub 区的工作流 + skills-guard-v2 拦截后的裁决协议（审读内容→grep 规则正则→force 由用户拍板）+ hermes 生态调研要点（OMH 模型机制、awesome 索引等）。
+- `references/askill-third-party-skills.md` — `~/.config/agents/skills/` 锁内条目的 askill 声明式安装路线（与 hub 路线互斥，别混）。
 
 ## 7. Companion skills
 
