@@ -46,16 +46,16 @@ Tmux 终端布局：
 
 * 技术规格
 
-| 组件       | 选择                       |
-|------------+----------------------------|
-| 内核       | =Linux=（=nonguix=）       |
-| 引导器     | =Limine=（=rosenthal=）    |
-| 显示服务器 | Wayland                    |
-| 窗口合成器 | =Niri=                       |
-| 显示管理器 | =Greetd= + =tuigreet=          |
-| 终端       | #ERROR                     |
-| 终端复用器 | =Tmux=                       |
-| Shell      | =Fish=                       |
+| 组件       | 选择                          |
+|------------+-------------------------------|
+| 内核       | =linux-cachyos-lts=（自编译） |
+| 引导器     | =Limine=（=rosenthal=）       |
+| 显示服务器 | Wayland                       |
+| 窗口合成器 | =Niri=                        |
+| 显示管理器 | =Greetd= + =tuigreet=         |
+| 终端       | #ERROR                        |
+| 终端复用器 | =Tmux=                        |
+| Shell      | =Fish=                        |
 | 编辑器     | =Emacs= / =Lem= / =Zed= / =Helix=  |
 | 输入法     | =Fcitx5= + =Rime=              |
 | 字体       | =Sarasa Gothic= / =Maple Mono= |

@@ -27,14 +27,14 @@ Guix-configs///
 
 ## 任务路由
 
-| 任务 | 入口 |
-| -------------------- | ------------------------------------------------------------ |
-| System / Home 配置   | `source/config.org` 头部 *Agent 指引* 两节 + `source/AGENTS.md` |
-| 应用 dotfiles        | `dotfiles/immutable/<app>/`（各子目录有 AGENTS.md）；`dotfiles/mutable/`（Stow 直链，见其 AGENTS.md） |
-| Emacs                | `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`（必读）；新包须同步 `config.org` 的 `emacs-services` 块 manifest |
-| Agent 配置（omp/Crush/anchors） | `dotfiles/immutable/agents/AGENTS.md`；omp 扩展在 `dotfiles/mutable/agents/omp/` |
-| 静态模板 / 频道 / 全局变量 | `source/files/`、`source/channel.scm`、`source/information.scm`（见 `source/AGENTS.md`） |
-| 新机装机（官方 ISO） | `tools/bootstrap.sh` → `blue init`；流程见 `README.org`（自建 ISO 见 `docs/iso-build.md`） |
+| 任务                            | 入口                                                                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| System / Home 配置              | `source/config.org` 头部 _Agent 指引_ 两节 + `source/AGENTS.md`                                                   |
+| 应用 dotfiles                   | `dotfiles/immutable/<app>/`（各子目录有 AGENTS.md）；`dotfiles/mutable/`（Stow 直链，见其 AGENTS.md）             |
+| Emacs                           | `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`（必读）；新包须同步 `config.org` 的 `emacs-services` 块 manifest |
+| Agent 配置（omp/Crush/anchors） | `dotfiles/immutable/agents/AGENTS.md`；omp 扩展在 `dotfiles/mutable/agents/omp/`                                  |
+| 静态模板 / 频道 / 全局变量      | `source/files/`、`source/channel.scm`、`source/information.scm`（见 `source/AGENTS.md`）                          |
+| 新机装机（官方 ISO）            | `tools/bootstrap.sh` → `blue init`；流程见 `README.org`（自建 ISO 见 `docs/iso-build.md`）                        |
 
 ## 硬约束
 

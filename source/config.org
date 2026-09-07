@@ -6,7 +6,7 @@
 
 ** System
 
-职责： *operating-system* 层。引导器（Limine）、文件系统（LUKS+Btrfs+tmpfs）、内核（自编译 CachyOS LTS =linux-cachyos-lts= ，定义见自定义包板块）、八个按职责拆分的服务块、用户账户。
+职责： *operating-system* 层。引导器（Limine）、文件系统（LUKS+Btrfs+tmpfs）、内核（自编译 CachyOS LTS =linux-cachyos-lts= ，定义自包含于 =source/files/kernel/= ）、八个按职责拆分的服务块、用户账户。
 
 全局变量定义在 =source/information.scm= （username、%btrfs-subvolumes、%data-dirs、guix-channels）。
 
@@ -354,7 +354,7 @@ Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休�
 ** Kernel
 
 *** 内核相关参数设置
-固件仍取自 =nonguix= 频道；内核为自编译的 =linux-cachyos-lts= （CachyOS 6.18 LTS 源码，定义与取舍见 =custom-package-defs= 块）。自编译内核无替代物，升级点版本即本机全量编译。
+固件仍取自 =nonguix= 频道；内核为自编译的 =linux-cachyos-lts= （CachyOS 6.18 LTS 源码，定义与取舍自包含于 =source/files/kernel/= ）。自编译内核无替代物，升级点版本即本机全量编译。
 
 =threadirqs= 开启中断线程化：
 + SOF/HDA 中断处理成为可调度线程，可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun
@@ -1629,10 +1629,17 @@ polkit.addRule(function(action, subject) {
 #+end_src
 
 ** Users 与主机信息
+ password 行可以用于设置默认密码
 
-用户信息
+利用 (password (crypt "InitialPassword!" "$6$abc")))
 
-=password= 字段仅作为账户**首次创建**时的初始密码写入 =/etc/shadow=；账户已存在时 reconfigure 恒保留现有 shadow 条目（=passwd->shadow= 复用语义）。因此装机后应保持 =(password #f)= 并用 =passwd= 管理密码——密码 hash 一旦写进仓库（本仓库公开托管在 codeberg）即永久暴露给离线爆破，且 git 历史无法撤回。如需初始密码，装机时临时填入，进入系统后改回 =#f= 并提交。
+可以创建一个初始密码，其中crypt函数的第一个字符串为 明文的密码
+
+然后在进入系统之后重新注释，并自行设置密码，或者将 password
+
+后的函数设置为 Hash化后的密码
+
+利用
 
 #+begin_src bash
 echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
@@ -1656,9 +1663,8 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
               (user-account
                (name username)
                (group "users")
-               ;; 密码由 passwd 管理（见上方说明）：shadow 已有条目，
-               ;; #f 不影响现有登录，仅不再公开初始 hash
-               (password #f)
+               (password
+                "$6$C2H4Td9gJHEa4qFi$fN.tnh2XibU1aqHpwcq.zewxyMeHR83EyP0r8UROzjj6l88VijpOogCbVarmrlCnig8k967wT7ifcJAZunZ.l.")
                (supplementary-groups '("adbusers"
                                        "audio"
                                        "cgroup"
@@ -1752,6 +1758,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
    ;; 运行器
    "blue"
    "just"
+   "maak"
 
    ;; 终端复用器
    "herdr-bin"
@@ -1866,6 +1873,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 #+begin_src scheme
 (specifications->packages
  '(;; 浏览器 & 插件
+   "ungoogled-chromium-wayland"
    "zen-browser-bin"
 
    ;; 解码器
@@ -1978,129 +1986,33 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 
 **** CachyOS LTS 内核
 
-对标上游 linux-cachyos-lts 变体：CachyOS 官方预拼补丁的 6.18 LTS 源码 tarball（Cachy Sauce + EEVDF 调度器，无 BORE、无 LTO），nonguix =linux-6.18= 出构建配方，经 =customize-linux= 换源换配置。defconfig 取自 Testament 作者 hako 的 kernel-config 仓库 =defconfig_server= （钉 49c98a1，已在 6.18 线多机验证，钉在本仓 =source/files/kernel/defconfig-cachyos-lts= ），kconfig 片段把它调成桌面档并叠加本机需求。
+对标上游 linux-cachyos-lts 变体：CachyOS 官方预拼补丁的 6.18 LTS 源码 tarball（Cachy Sauce + EEVDF 调度器，无 BORE、无 LTO），nonguix =linux-6.18= 出构建配方，经 =customize-linux= 换源换配置。defconfig 取自 Testament 作者 hako 的 kernel-config 仓库 =defconfig_server= （钉 49c98a1，已在 6.18 线多机验证，钉在本仓 =source/files/kernel/defconfig-cachyos-lts= ），kconfig 片段把它调成桌面档并按设备裁剪。
 
-策略：其他软件编译要快、内核性能优先、LTS 降低重编频率。
+策略：其他软件编译要快、内核性能优先、LTS 降低重编频率；升级与换机零摩擦。
 
-+ 编译提速最大头：反选 debuginfo 全家（server 版 defconfig 默认 DWARF5+BTF+GDB 脚本，关掉省下大块构建时间与产物体积）
-+ 性能项：-O3、=-march=native= （=CONFIG_X86_NATIVE_CPU= ，本机即目标机）、Cachy Sauce、1000Hz、动态抢占默认 full、THP always、BBR 默认拥塞控制配 fq 队列（与内核模块服务块联动）
-+ =CONFIG_USER_NS=y= 必须保留：guix 构建沙箱依赖用户命名空间
-+ 片段经 =verify-config= 硬校验：被 defconfig 钉住又要反选的符号必须逐个列出（裸符号 = 反选），漏列即构建失败并点名符号
+内核配置自包含于 =source/files/kernel/= 目录，config.org 只 load 一行：
+
++ =linux-cachyos-lts.scm= —— 包定义自包含：版本与源（升级点）、defconfig 引用、通用桌面档（Cachy Sauce、-O3、1000Hz、preempt full、THP always、BBR、debuginfo 反选、Guix 沙箱与 initrd 必需符号、default-y 门控钉住）、机器拼合
++ =defconfig-cachyos-lts= —— pristine 的 hako defconfig，永不手改，只随上游 commit 更新
++ =machines/redmibook-pro-16-2024.scm= —— 本机硬件钉住（AX211/SOF-MTL/i915+xe/NPU/UVC/i2c-hid 触摸板/TBT4 等，防 defconfig 漂移）+ =machines/redmibook-trim.kconfig= 大类裁剪（1780 符号：非 Intel 无线/网卡/GPU/声卡、DVB 采集卡、SCSI 阵列、XEN/HYPERV/VMware 客体、CAN/NFC/ATM/ISDN、USB 串口、触摸屏/游戏杆、老平台驱动等，裸符号 = 反选，分组注释）
+
++ 换机：新建 =machines/<设备>.scm= （导出同名 =%machine-configs= ）与 =<设备>-trim.kconfig= ，改 =linux-cachyos-lts.scm= 里一行 load；本机裁剪依据（硬件清单）写在 machine scm 文件头
++ 升级点版本（如 6.18.49-1）：只改 =linux-cachyos-lts.scm= 的 =%cachyos-lts-version= 与 base32；hako defconfig 更新时重跑裁剪清单 diff 再核对
++ 裁剪符号若与 defconfig 漂移冲突，构建期 =verify-config= 会点名报错，按提示补列或删行即可收敛
++ =CONFIG_USER_NS=y= 必须保留：guix 构建沙箱依赖用户命名空间（在通用档）
 
 不启用 BORE：6.18 LTS 源码不含 BORE（CachyOS 官方 LTS 即 EEVDF + Cachy Sauce）；官方 kernel-patches 仓库的 6.18 BORE 补丁自 2026-03 起未更新，对 6.18.48 干跑 25 个 hunk 挂 1 个。想启用需手工修补丁并在片段加 ="CONFIG_SCHED_BORE=y"= 。
 
 不启用 ThinLTO/AutoFDO（CachyOS 主线默认是 Clang ThinLTO + AutoFDO/Propeller）：Phoronix/Google 数据显示 Clang+LTO 相对普通 GCC 约 +5%，但相对本配置的 GCC -O3 + native 基线增量约 1-3% 且负载相关（Gentoo wiki 明确可能持平或倒退）；clang-LTO 内核还要求外部模块同链 clang 工具链（v4l2loopback 会被波及）；AutoFDO 依赖 perf LBR 采样与 autofdo 工具链（guix 频道无此包）加两遍式 profile 基建。收益与复杂度不成比例，留作后续可选实验。
 
-升级点版本（如 6.18.49-1）：改 =%cachyos-lts-version= 与 base32（下载 tarball 后 =guix hash <tarball>= ），defconfig 与片段通常不动。tarball 的 Makefile 决定 =uname -r= （6.18.48），包版本号 6.18.48-2 只是元数据。
+下载 tarball 后 =guix hash <tarball>= 取 base32。tarball 的 Makefile 决定 =uname -r= （6.18.48），包版本号 6.18.48-2 只是元数据。
 
 #+NAME: cachyos-lts-kernel
 #+begin_src scheme
-;; CachyOS LTS 内核：官方 6.18 源码 + hako defconfig_server + 桌面化片段
-(define %cachyos-lts-version "6.18.48-2")
-
-(define linux-cachyos-lts
-  (let ([kernel
-         (customize-linux
-          #:name "linux-cachyos-lts"
-          #:linux linux-6.18
-          #:source (origin
-                    (method url-fetch)
-                    (uri (string-append
-                          "https://github.com/CachyOS/linux/releases/download/cachyos-"
-                          %cachyos-lts-version "/cachyos-" %cachyos-lts-version ".tar.gz"))
-                    ;; 不用 (sha256 …) 兼容写法也不用 (content-hash bv sha256)：
-                    ;; 两者都靠 syntax-case 的 sha256 字面量匹配，而本模块作用域
-                    ;; 里 (gcrypt hash) 的同名绑定会让匹配失效；字符串单参形式
-                    ;; 的默认算法经卫生展开引入 sha256，不受遮蔽影响
-                    (hash (content-hash
-                           "1ayb463hzqdfflvk4b3w2bqqnw9k7xl6rx6yx9hp2a9lhja8py4z")))
-          ;; hako kernel-config @49c98a1 的 defconfig_server，发行版级硬件覆盖
-          ;; （BTRFS=y、NLS、NTSYNC、IWLWIFI、I915+XE、SOF 音频、KVM、VIRTIO）
-          #:defconfig (local-file "../source/files/kernel/defconfig-cachyos-lts")
-          #:configs
-          (list
-           ;; 处理器：本机即目标机，-march=native（CachyOS 补丁符号）
-           "CONFIG_GENERIC_CPU"
-           "CONFIG_MZEN4"
-           "CONFIG_X86_NATIVE_CPU=y"
-           ;; 选 native 后基线 ISA 档位符号不可见
-           "CONFIG_X86_64_VERSION"
-           ;; Cachy Sauce（server defconfig 默认关，桌面档打开）
-           "CONFIG_CACHY=y"
-           ;; 1000Hz + idle dynticks（NO_HZ_FULL 对重编译型负载有上下文跟踪开销）
-           "CONFIG_HZ_300"
-           "CONFIG_HZ_1000=y"
-           "CONFIG_HZ=1000"
-           "CONFIG_HZ_PERIODIC"
-           "CONFIG_NO_HZ_FULL"
-           "CONFIG_NO_HZ_IDLE=y"
-           "CONFIG_NO_HZ=y"
-           "CONFIG_NO_HZ_COMMON=y"
-           ;; RCU_LAZY 依赖 RCU_NOCB_CPU（其默认仅在 NO_HZ_FULL 下为 y），
-           ;; 改 idle dynticks 后连带失效，显式反选
-           "CONFIG_RCU_LAZY"
-           "CONFIG_RCU_LAZY_DEFAULT_OFF"
-           ;; 动态抢占，默认 full（启动参数可切 none/voluntary/lazy）
-           "CONFIG_PREEMPT_DYNAMIC=y"
-           "CONFIG_PREEMPT=y"
-           "CONFIG_PREEMPT_VOLUNTARY"
-           "CONFIG_PREEMPT_LAZY"
-           "CONFIG_PREEMPT_NONE"
-           ;; -O3
-           "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE"
-           "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y"
-           ;; BBR 默认拥塞控制 + fq 队列（模块服务即为此加载）
-           "CONFIG_DEFAULT_CUBIC"
-           "CONFIG_DEFAULT_BBR=y"
-           "CONFIG_DEFAULT_TCP_CONG=\"bbr\""
-           ;; THP always
-           "CONFIG_TRANSPARENT_HUGEPAGE_MADVISE"
-           "CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=y"
-           ;; guix 构建沙箱依赖用户命名空间
-           "CONFIG_USER_NS=y"
-           ;; 编译提速：反选 debuginfo 全家（DWARF5/BTF/GDB 脚本）
-           "CONFIG_DEBUG_INFO"
-           "CONFIG_DEBUG_INFO_DWARF5"
-           "CONFIG_DEBUG_INFO_BTF"
-           "CONFIG_GDB_SCRIPTS"
-           ;; BTF 关闭的连带牺牲（均硬依赖 DEBUG_INFO_BTF）：
-           ;; sched_ext(e6) 调度器类与 BPF qdisc
-           "CONFIG_SCHED_CLASS_EXT"
-           "CONFIG_NET_SCH_BPF"
-           ;; initrd 必需符号（对应 %default-initrd-modules，自 Testament 移植）
-           "CONFIG_NLS_ISO8859_1=m"
-           "CONFIG_CRYPTO_SERPENT=m"
-           "CONFIG_CRYPTO_WP512=m"
-           "CONFIG_DM_CRYPT=m"
-           "CONFIG_BLK_DEV_NVME=m"
-           "CONFIG_MMC_BLOCK=m"
-           "CONFIG_SATA_AHCI=m"
-           "CONFIG_USB_STORAGE=m"
-           "CONFIG_USB_UAS=m"
-           "CONFIG_PATA_ACPI=m"
-           "CONFIG_PATA_ATIIXP=m"
-           "CONFIG_SCSI_ISCI=m"
-           "CONFIG_HW_RANDOM_VIRTIO=m"
-           "CONFIG_SCSI_VIRTIO=m"
-           "CONFIG_VIRTIO_BALLOON=m"
-           "CONFIG_VIRTIO_BLK=m"
-           "CONFIG_VIRTIO_CONSOLE=m"
-           "CONFIG_VIRTIO_MMIO=m"
-           "CONFIG_VIRTIO_NET=m"
-           "CONFIG_VIRTIO_PCI=m"
-           "CONFIG_HID_GENERIC=m"
-           "CONFIG_USB_HID=m"
-           "CONFIG_HID_APPLE=m"
-           ;; 本机模块服务清单钉住（防 defconfig 漂移）
-           "CONFIG_NTSYNC=m"
-           "CONFIG_INPUT_UINPUT=m"
-           "CONFIG_KVM_INTEL=m"
-           ;; CRYPTO_ZSTD 不钉：BTRFS=y 会把它 select 成 y，
-           ;; 钉 m 反而触发 verify-config 失败
-           ))])
-    (package
-     (inherit kernel)
-     (version %cachyos-lts-version))))
+;; CachyOS LTS 内核：定义自包含于 source/files/kernel/（版本与源、
+;; defconfig 引用、通用桌面档、机器拼合都在 linux-cachyos-lts.scm），
+;; 升级/换机/调优三条路径见该文件头注释
+(load "../source/files/kernel/linux-cachyos-lts.scm")
 #+end_src
 
 **** 指纹识别栈
