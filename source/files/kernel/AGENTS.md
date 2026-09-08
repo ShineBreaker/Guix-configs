@@ -2,12 +2,13 @@
 
 自包含的内核定义目录：config.org 的 `cachyos-lts-kernel` 块只一行 load `linux-cachyos-lts.scm`，版本、源、defconfig 引用、通用桌面档、设备拼合**全部在本目录内维护**（架构取舍见 config.org「CachyOS LTS 内核」节，本文只讲操作）。
 
-| 文件                               | 职责                                                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `linux-cachyos-lts.scm`            | 包定义（`%cachyos-lts-version` + origin，**升级点**）+ 通用桌面档 `%kernel-common-configs` + 组装；导出 `linux-cachyos-lts` |
-| `defconfig-cachyos-lts`            | pristine 的 hako defconfig（kernel-config @49c98a1），**永不手改**，只随上游 commit 整体替换                    |
-| `machines/<设备>.scm`              | 设备层：硬件钉住 + trim 读取，导出单一 `%machine-configs`；文件头是实机采集的硬件事实（裁剪依据）                |
-| `machines/<设备>-trim.kconfig`     | 大类裁剪清单（~2000 行）：**裸符号 = 反选**，`# —— 组名 ——` 分组注释，与 defconfig 同构、diff 友好               |
+| 文件                           | 职责                                                                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `linux-cachyos-lts.scm`        | 包定义（`%cachyos-lts-version` + origin，**升级点**）+ 通用桌面档 `%kernel-common-configs` + 组装；导出 `linux-cachyos-lts` |
+| `defconfig-cachyos-lts`        | pristine 的 hako defconfig（kernel-config @49c98a1），**永不手改**，只随上游 commit 整体替换                                |
+| `machines/<设备>.scm`          | 设备层：硬件钉住 + trim 读取，导出单一 `%machine-configs`；文件头是实机采集的硬件事实（裁剪依据）                           |
+| `machines/<设备>-trim.kconfig` | 大类裁剪清单（~2000 行）：**裸符号 = 反选**，`# —— 组名 ——` 分组注释，与 defconfig 同构、diff 友好                          |
+| `install.sh` / `rollback.sh`   | 用户手动执行（agent 禁跑 rebuild）：前者 dry-run→rebuild→验世代，后者原子回滚上世代；日志落 `/var/log/`                     |
 
 configs 拼合顺序：通用档 → 钉住 → 裁剪。modify-defconfig **同键后者胜**，钉住优先于反选；同一符号跨层重复出现会触发 "duplicate configurations" 构建错误。
 
@@ -34,17 +35,17 @@ guix hash <cachyos-新版本.tar.gz>          # 取 base32
 blue check                                            # 括号平衡
 blue --dry-run rebuild                                # tangle 验证（不加载 scheme 求值）
 # 真实构建（verify-config 硬校验在 configure 末尾，失败保留构建树）：
-cat > /var/tmp/kernel-probe.scm <<'EOF'
+cat > /tmp/kernel-probe.scm <<'EOF'
 (begin
   (chdir "/home/brokenshine/Projects/Config/Guix-configs/tmp")
   (set! %load-path (cons "." %load-path))
   (primitive-load "/home/brokenshine/Projects/Config/Guix-configs/tmp/config.scm")
   linux-cachyos-lts)
 EOF
-guix time-machine -C source/channel.lock -- build -f /var/tmp/kernel-probe.scm
+guix time-machine -C source/channel.lock -- build -f /tmp/kernel-probe.scm
 ```
 
-verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin 行迭代收敛（通常 2-3 轮）。失败树在 `/var/tmp/guix-build-linux-cachyos-lts-*.drv-0`，树内 `make ARCH=x86_64 guix_defconfig` 可分钟级复现 configure，无需整链重跑。probe 依赖 `tmp/config.scm` 先经 tangle 生成——probe 报「加载失败：没有那个文件或目录」多半是 `tmp/` 被清（先跑 `blue --dry-run rebuild` 重建）。最后提醒用户手动 `blue rebuild`（agent 禁跑）。
+verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin 行迭代收敛（通常 2-3 轮）。失败树在 `/tmp/guix-build-linux-cachyos-lts-*.drv-0`，树内 `make ARCH=x86_64 guix_defconfig` 可分钟级复现 configure，无需整链重跑。probe 依赖 `tmp/config.scm` 先经 tangle 生成——probe 报「加载失败：没有那个文件或目录」多半是 `tmp/` 被清（先跑 `blue --dry-run rebuild` 重建）。最后提醒用户手动 `blue rebuild`（agent 禁跑）。
 
 ## 裁剪方法论与坑
 
@@ -58,9 +59,9 @@ verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin �
 
 ## 消融实验（性能改动定去留的测量法）
 
-2026-09-08 定型的方法论，产物在 `/var/tmp/kopt/`（脚本可复用：`run-vm.sh`/`parse-log.sh`/`bench-variant.sh`/`compare.py`，数据 `results/*.tsv`）：
+2026-09-08 定型的方法论，产物在 `/tmp/kopt/`（脚本可复用：`run-vm.sh`/`parse-log.sh`/`bench-variant.sh`/`compare.py`，数据 `results/*.tsv`）：
 
-- **变体构建**：写 `/var/tmp/variant-<名>.scm`（load 仓库 kernel scm，configs 追加 %delta），`guix time-machine -C source/channel.lock -- build -K -f` 全量构建保证与基线工具链一致。**退出码别被 `| tail` 吃掉**（重定向到日志文件再取 exit）
+- **变体构建**：写 `/tmp/variant-<名>.scm`（load 仓库 kernel scm，configs 追加 %delta），`guix time-machine -C source/channel.lock -- build -K -f` 全量构建保证与基线工具链一致。**退出码别被 `| tail` 吃掉**（重定向到日志文件再取 exit）
 - **QEMU 测量**：`guix pack -RR busybox stress-ng` 做 initramfs，无盘直跑（无需 virtio）；`-cpu host -smp 12 -m 8G`。**QEMU 必须 `taskset -c 0-11` pin 到 P 核**——155H P/E 混合架构下 vCPU 线程漂移是最大噪声源（不 pin 时两轮偏差可达 7-18%，pin 后多数项 <4%）
 - **initramfs 两坑**：pack `-R` 的 `*R` 副本在 guest 里执行必崩（busybox run.c:692 断言）——重建 `bin/` 真目录直链**原始** store 项；guest init 的 shebang 用 pack 内 bash-static 绝对路径（busybox ash 作 PID1 读脚本会触发同款断言）
 - **判定规则**：每变体两轮 VM（各 3 次取中位），变化超出 CTRL 双轮噪声带才算信号；`--cpu` 项作负对照（应恒 ≈0%）；stress-ng 高噪声项（hrtimers/timer）解读放宽
@@ -69,7 +70,7 @@ verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin �
 
 ## 对拍复验（换 defconfig / 大改 / 重构后）
 
-基线与脚本存 `/var/tmp/kernel-baseline/`（跨重启保留，丢了可按下法重建）：
+基线与脚本存 `/tmp/kernel-baseline/`（跨重启保留，丢了可按下法重建）：
 
 - **配置层**：运行内核 `zcat /proc/config.gz` 对比新产物 `.config`，统计 y/m 三态差集
 - **运行层**：`lsmod` 对产物 `.ko` 清单（`find <产物>/lib/modules -name '*.ko*'`）——**模块文件名用连字符（snd-hda-intel.ko）而 lsmod 显示下划线，必须归一化再比**，否则误报百级假缺失
