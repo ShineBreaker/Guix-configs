@@ -2001,7 +2001,9 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 + 裁剪符号若与 defconfig 漂移冲突，构建期 =verify-config= 会点名报错，按提示补列或删行即可收敛
 + =CONFIG_USER_NS=y= 必须保留：guix 构建沙箱依赖用户命名空间（在通用档）
 
-不启用 BORE：6.18 LTS 源码不含 BORE（CachyOS 官方 LTS 即 EEVDF + Cachy Sauce）；官方 kernel-patches 仓库的 6.18 BORE 补丁自 2026-03 起未更新，对 6.18.48 干跑 25 个 hunk 挂 1 个。想启用需手工修补丁并在片段加 ="CONFIG_SCHED_BORE=y"= 。
+不启用 BORE（2026-09-08 消融复核）：firelzrd 已发布精确适配 6.18.48 的 BORE 6.8.0 补丁（对 CachyOS 源需手工融合 fair.c 一处 hunk，与 Cachy Sauce 的 base_slice 分支共存），QEMU 消融实测吞吐无增益且 pipe 场景 -7.7%（超出噪声带），与 Phoronix 对 CachyOS BORE 变体的评测一致（其 geomean 亦不及默认 EEVDF）；交互响应收益无客观测量支撑，且 CachyOS 官方 LTS 已切回 EEVDF。维持 EEVDF，想再试时按 =kernel/AGENTS.md= 的消融流程复测。
+
+消融落地（2026-09-08，按分层放置）：通用档关 SCHEDSTATS/SCHED_TRACER（桌面不用调度统计）并反选 hako defconfig 的 MAXSMP（发行档通用性遗留，把 NR_CPUS 钉死 8192 且连带 CPUMASK_OFFSTACK 堆分配位图，任何 ≤512 CPU 桌面机通用）；machine 层按本机拓扑关单节点 numa balancing（故障扫描纯开销）、NR_CPUS=64（22 线程）——消融 fork +1.7%、syscall +4.6%，组合终验 fork +2.3% 无倒退。另实测 =spectre_bhi=off= 无收益（MTL 的 BHI 缓解是 BHI_DIS_S 硬件位，近零开销），cmdline 无需动。
 
 不启用 ThinLTO/AutoFDO（CachyOS 主线默认是 Clang ThinLTO + AutoFDO/Propeller）：Phoronix/Google 数据显示 Clang+LTO 相对普通 GCC 约 +5%，但相对本配置的 GCC -O3 + native 基线增量约 1-3% 且负载相关（Gentoo wiki 明确可能持平或倒退）；clang-LTO 内核还要求外部模块同链 clang 工具链（v4l2loopback 会被波及）；AutoFDO 依赖 perf LBR 采样与 autofdo 工具链（guix 频道无此包）加两遍式 profile 基建。收益与复杂度不成比例，留作后续可选实验。
 

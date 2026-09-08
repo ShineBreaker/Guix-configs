@@ -49,11 +49,23 @@ verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin �
 ## 裁剪方法论与坑
 
 <critical>
-1. **default-y 门控翻 n**：hako defconfig 是 savedefconfig 风格最小化文件，default-y 的 menuconfig 门控（NETDEVICES/WLAN/ETHERNET/IIO/JUMP_LABEL/MPLS/NET_SWITCHDEV）不在其中；`conf --defconfig` 求值时会被翻 n 并**连锁屠掉整个子树**（IWLWIFI/TUN/MACVLAN 全消失）。门控钉住在通用档头部，**裁剪时不可删**。翻转取决于其余输入的组合（组合杀伤）：符号消失时单行二分无效，须逐组消元定位
-2. **符号三态**：用户可见符号才可裁；select 隐式符号裁不掉（无 prompt）；依赖不满足时写 n 只产生 warning "symbol value 'n' invalid"（int/bool 型如 X86_64_VERSION、IP_VS_TAB_BITS），无害可留
-3. **6.18 符号改名**：THUNDERBOLT 已并入 USB4（模块名仍叫 thunderbolt）；SND_SOC mach 符号在 `SND_SOC_INTEL_` 命名空间，漏 INTEL 前缀 = 不存在的符号
-4. **本机不可裁**：`CONFIG_MTD_SPI_NOR=m`（BIOS flash，/dev/mtd0-3 在用）；initrd 必需符号全套（通用档尾部，对应 `%default-initrd-modules`）
+1. **default-y 门控翻 n**：hako defconfig 是 savedefconfig 风格最小化文件，default-y 的 menuconfig 门控（NETDEVICES/WLAN/ETHERNET/IIO/JUMP_LABEL/MPLS/NET_SWITCHDEV）不在其中；conf --defconfig 求值时会被翻成 n 并**连锁屠掉整个子树**（IWLWIFI/TUN/MACVLAN 全消失）。门控钉住在通用档头部，**裁剪时不可删**。翻转取决于其余输入的组合（组合杀伤）：符号消失时单行二分无效，须逐组消元定位
+2. **符号三态**：用户可见符号才可裁；select 隐式符号裁不掉（无 prompt，如 SCHED_INFO——反选会被 verify-config 拦截，2026-09-08 实证）；依赖不满足时写 n 只产生 warning "symbol value 'n' invalid"（int/bool 型如 X86_64_VERSION、IP_VS_TAB_BITS），无害可留
+3. **6.18 符号改名**：THUNDERBOLT 已并入 USB4（模块名仍叫 thunderbolt）；SND_SOC mach 符号在 SND_SOC_INTEL_ 命名空间，漏 INTEL 前缀 = 不存在的符号
+4. **本机不可裁**：CONFIG_MTD_SPI_NOR=m（BIOS flash，/dev/mtd0-3 在用）；initrd 必需符号全套（通用档尾部，对应 %default-initrd-modules）
+5. **MAXSMP 锁死 NR_CPUS**：hako defconfig 带 `CONFIG_MAXSMP=y`（发行档通用性遗留），它 select CPUMASK_OFFSTACK，后者把 NR_CPUS range 压成 [8192,8192] 并隐藏 prompt——直接写 `CONFIG_NR_CPUS=64` 会被 conf 夹回 8192、verify-config 报 mismatch；必须先反选 MAXSMP 再设 NR_CPUS（通用档已做，连带收益：cpumask 回栈上位图、NODES_SHIFT 10→6）
 </critical>
+
+## 消融实验（性能改动定去留的测量法）
+
+2026-09-08 定型的方法论，产物在 `/var/tmp/kopt/`（脚本可复用：`run-vm.sh`/`parse-log.sh`/`bench-variant.sh`/`compare.py`，数据 `results/*.tsv`）：
+
+- **变体构建**：写 `/var/tmp/variant-<名>.scm`（load 仓库 kernel scm，configs 追加 %delta），`guix time-machine -C source/channel.lock -- build -K -f` 全量构建保证与基线工具链一致。**退出码别被 `| tail` 吃掉**（重定向到日志文件再取 exit）
+- **QEMU 测量**：`guix pack -RR busybox stress-ng` 做 initramfs，无盘直跑（无需 virtio）；`-cpu host -smp 12 -m 8G`。**QEMU 必须 `taskset -c 0-11` pin 到 P 核**——155H P/E 混合架构下 vCPU 线程漂移是最大噪声源（不 pin 时两轮偏差可达 7-18%，pin 后多数项 <4%）
+- **initramfs 两坑**：pack `-R` 的 `*R` 副本在 guest 里执行必崩（busybox run.c:692 断言）——重建 `bin/` 真目录直链**原始** store 项；guest init 的 shebang 用 pack 内 bash-static 绝对路径（busybox ash 作 PID1 读脚本会触发同款断言）
+- **判定规则**：每变体两轮 VM（各 3 次取中位），变化超出 CTRL 双轮噪声带才算信号；`--cpu` 项作负对照（应恒 ≈0%）；stress-ng 高噪声项（hrtimers/timer）解读放宽
+- **cmdline 类改动**（如 mitigations）：EXTRA_CMDLINE 环境变量注入 run-vm.sh，同 bzImage A/B；`/sys/devices/system/cpu/vulnerabilities/*` 输出验证生效
+- 已有结论（2026-09-08）：numa_balancing 关（无倒退）、schedstats/tracer 关（中性）、MAXSMP 反选+NR_CPUS=64（fork +1.7%/syscall +4.6%）已落地——**分层放置**：schedstats/tracer/MAXSMP 在通用档（设备无关偏好与发行档遗留修正），numa_balancing/NR_CPUS 在 machine 层（单节点拓扑与 22 线程是设备事实）；BORE 6.8.0 补丁 pipe -7.7% 不采纳；spectre_bhi=off 在 MTL（BHI_DIS_S 硬件缓解）无收益，cmdline 不动
 
 ## 对拍复验（换 defconfig / 大改 / 重构后）
 

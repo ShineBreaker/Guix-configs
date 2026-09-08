@@ -63,6 +63,19 @@
    ;; —— Cachy Sauce（server defconfig 默认关，桌面档打开）——
    "CONFIG_CACHY=y"
 
+   ;; —— 桌面档优化（2026-09-08 QEMU KVM 消融验证，方法见
+   ;; kernel/AGENTS.md「消融实验」节，数据 /var/tmp/kopt/results/）——
+   ;; 桌面不需要调度统计与调度 tracer；SCHED_INFO 是无 prompt 的
+   ;; 隐式符号（被 select 锁定），反选会被 verify-config 拦截，保持 y
+   "CONFIG_SCHEDSTATS"
+   "CONFIG_SCHED_TRACER"
+   ;; 反选 hako defconfig 的 MAXSMP（发行档通用性遗留）：它把 NR_CPUS
+   ;; range 钉死 [8192,8192]，连带 CPUMASK_OFFSTACK=y（堆分配位图）与
+   ;; NODES_SHIFT=10；反选后位图回栈上操作，调度热路径受益（消融 fork
+   ;; +1.7%/syscall +4.6%）。任何 ≤512 CPU 的桌面机通用；NR_CPUS 的
+   ;; 具体值与单节点 numa balancing 关默认属设备拓扑事实，在 machine 层
+   "CONFIG_MAXSMP"
+
    ;; —— 1000Hz + idle dynticks（NO_HZ_FULL 对重编译型负载有上下文跟踪开销）——
    "CONFIG_HZ_300"
    "CONFIG_HZ_1000=y"

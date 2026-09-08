@@ -5,7 +5,7 @@
 ;;; RedmiBook Pro 16 2024 内核配置（Intel Meteor Lake 平台）
 ;;;
 ;;; 硬件事实（2026-09 实机采集，裁剪依据）：
-;;;   CPU    Core Ultra 7 155H（Meteor Lake，16C22T）
+;;;   CPU    Core Ultra 7 155H（Meteor Lake，16C22T，单 NUMA 节点）
 ;;;   GPU    Arc 核显（i915 主用，xe 备）+ NPU（intel_vpu）
 ;;;   WiFi   AX211 CNVi（iwlwifi+iwlmvm）/ BT 8087:0033（btusb）
 ;;;   音频   SOF-MTL 拓扑 + Realtek ALC256 + DMIC（无独立功放）
@@ -34,6 +34,15 @@
    "CONFIG_MZEN4"
    "CONFIG_X86_NATIVE_CPU=y"
    "CONFIG_X86_64_VERSION"
+
+   ;; CPU 拓扑（16C22T 单 NUMA 节点；2026-09-08 消融验证见
+   ;; kernel/AGENTS.md）：单节点上 numa balancing 的周期性
+   ;; PROT_NONE 故障扫描是纯开销（v6.18 无单节点自动禁用逻辑），
+   ;; 关默认启用；NR_CPUS 按 22 线程收缩到 64（per-cpu 静态数据
+   ;; 与 cpumask 尺寸，消融 fork +1.7%/syscall +4.6%——MAXSMP 的
+   ;; 反选在通用档，不在此重复）
+   "CONFIG_NUMA_BALANCING_DEFAULT_ENABLED"
+   "CONFIG_NR_CPUS=64"
 
    ;; 无线/蓝牙（CNVi）
    "CONFIG_IWLWIFI=m"
