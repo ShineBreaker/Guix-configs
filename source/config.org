@@ -714,47 +714,42 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 
 + 热点 AP + WiFi 客户端并发
 
-硬件确认：Intel Meteor Lake CNVi 支持 =managed + AP= 并发（同信道）。
+硬件确认：Intel Meteor Lake CNVi 支持 =managed + AP= 并发（同信道）；=iw list= 组合规则为 =managed<=1, AP<=1, P2P-device<=1, 总数<=3=。
 
-系统服务用 =iw= 创建 =uap0= ，必须 =type managed= 而非 =__ap= ：NM 初始化 wifi 设备时让 wpa_supplicant 抓接口，AP 类型接口抓取失败后 NM 会 giving up，设备永久 =unavailable= ；managed 接口正常初始化，NM 激活 AP profile 时自行切换接口模式。NetworkManager 只管理该已存在的接口；profile 名称本身不会创建虚拟无线接口。两个接口共享同一 radio，AP 必须与客户端使用同一信道。服务启动时会幂等迁移已有的热点 profile（保留现有 SSID 和密钥），并在创建 =uap0= 之前关闭 NetworkManager 自动激活。NetworkManager 对新建 netdev 的感知是异步的， =wifi-ap-interface= 创建 =uap0= 后会轮询等待其出现在 nmcli 中（最多 20 秒）再交给后续服务拉起热点。
+早期方案让 NM/wpa_supplicant 管理 =uap0= ：实测 =wpa_supplicant= 初始化接口时强制 station 模式，与 =wlp0s20f3= 的 managed 身份撞 =managed<=1= 组合限制，接口 UP 永远 =EBUSY= ，设备永久 =unavailable= 。现架构改为 hostapd 直管：
 
-也可在部署前手动执行同一命令预检：
+- =wifi-ap-interface= 服务用 =iw= 创建 =uap0= （ =type __ap= ），NM 经 conf.d 显式声明不管理该接口（ =managed=0= ）
+- =hotspot-ap= 服务（daemon，不随机启动）由决策脚本控制启停：启动时按 STA 当前信道动态生成 =hostapd.conf= 到 =/run= （并发要求 AP 与客户端同信道；STA 未连接时用默认信道 36），从 age 密文解出 SSID/密码，配置 =uap0= 的 =192.168.77.1/24= 后 =exec hostapd= ；包装脚本自带类型纠正（=managed= → =__ap=），兼容旧接口残留
+- =hotspot-dnsmasq= 服务（daemon，随机启动）为热点子网提供 DHCP/DNS（ =--bind-dynamic= ，接口无热点时闲置）
+- NAT 由 nftables 的 =ip nat= 表接管（原 =ipv4.method shared= 的职责），热点网段 =192.168.77.0/24= 出向 masquerade
+- STA 事后漫游换信道时（决策脚本校验 =hostapd.conf= 信道与 STA 信道不一致），自动重启热点跟随
+
+SSID 与密码保存在 age 密文 =dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-hotspot.age= （两行：SSID、密码），生成命令：
+
 #+begin_src bash
-nmcli connection modify auto-hotspot \
-      connection.interface-name uap0 \
-      connection.autoconnect no \
-      connection.autoconnect-priority -100
+printf 'SSID\n密码\n' | age -r <age公钥> -o .../wifi-hotspot.age
 #+end_src
 
-若尚未创建 profile，再运行：
-#+begin_src bash
-nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
-      ssid <你的SSID> 802-11-wireless.mode ap \
-      ipv4.method shared wifi-sec.key-mgmt wpa-psk wifi-sec.psk <你的密码> \
-      connection.autoconnect no connection.autoconnect-priority -100 \
-      802-11-wireless.cloned-mac-address stable
-#+end_src
-
-关键参数：
-
-- =ifname uap0= —— 绑定由 Shepherd 创建的专用 AP 接口
-- =autoconnect no= —— 热点生命周期只由决策脚本 =hotspot-decide= 管理（shepherd / dispatcher / udev 三个入口），避免与 NM 自动激活竞态
-- =autoconnect-priority -100= —— 即使手动改回自动连接，也低于 WiFi 客户端
-- =ipv4.method shared= —— NM 自带 DHCP + NAT（与 nftables NAT 配合）
-- =hotspot-profile-safety= 迁移失败会阻断后续 AP 服务链，不会回退到物理客户端接口
+旧的 NM =auto-hotspot= profile 留在系统里不再被引用（NM 已不管 =uap0= ），可手动 =nmcli connection delete auto-hotspot= 清理。
 
 热点不是开机常开，由决策脚本 =hotspot-decide= 统一判定：AC 供电 且 =wlp0s20f3= 当前 profile 不在可信名单（含未连 WiFi、仅网线）时开启热点，其余情况（电池供电、已连可信 WiFi）关闭。三个触发入口收敛到同一脚本：=auto-hotspot= 服务（开机）、NM dispatcher 任意设备的 =up/down=（WiFi 切换与网线插拔）、udev =power_supply= 插拔（电源线变化）。脚本只读 =sysfs= 电源状态与 NM 当前连接，幂等，开关动作失败以非零退出。
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
 (let* ([nmcli-bin (file-append network-manager "/bin/nmcli")]
+       [iw-bin (file-append iw "/sbin/iw")]
        [trusted-wifi-connections
         (local-file
          "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age")]
+       [hotspot-creds-cipher
+        (local-file
+         "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-hotspot.age")]
        [dispatcher-template
         (local-file "nm-dispatcher-trusted-connection")]
        [hotspot-decide-template
         (local-file "hotspot-decide")]
+       [hotspot-ap-run-template
+        (local-file "hotspot-ap-run")]
        [hotspot-decide-script
         (computed-file
          "hotspot-decide"
@@ -772,9 +767,51 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                  (("@AGE_BIN@")
                                                   #$(file-append age "/bin/age"))
                                                  (("@GREP_BIN@")
-                                                  #$(file-append grep "/bin/grep")))
+                                                  #$(file-append grep "/bin/grep"))
+                                                 (("@IW_BIN@") #$iw-bin)
+                                                 (("@PGREP_BIN@")
+                                                  #$(file-append (spec->pkg "procps")
+                                                                 "/bin/pgrep"))
+                                                 (("@HERD_BIN@")
+                                                  #$(file-append (spec->pkg "shepherd")
+                                                                 "/bin/herd"))
+                                                 (("@IP_BIN@")
+                                                  #$(file-append (spec->pkg "iproute2")
+                                                                 "/sbin/ip"))
+                                                 (("@SED_BIN@")
+                                                  #$(file-append (spec->pkg "sed")
+                                                                 "/bin/sed")))
                                     ;; udev RUN / shepherd system* / dispatcher
                                     ;; 直接执行本产物，store 内必须带执行位。
+                                    (chmod #$output #o555))))]
+       [hotspot-ap-run-script
+        (computed-file
+         "hotspot-ap-run"
+         (with-imported-modules '((guix build utils))
+                                #~(begin
+                                    (use-modules (guix build utils))
+                                    (copy-file #$hotspot-ap-run-template #$output)
+                                    (substitute* #$output
+                                                 (("@IW_BIN@") #$iw-bin)
+                                                 (("@AGE_IDENTITY@")
+                                                  #$(string-append
+                                                     "/home/" username "/.local/share/keys/age"))
+                                                 (("@HOTSPOT_CREDS_CIPHER@")
+                                                  #$hotspot-creds-cipher)
+                                                 (("@AGE_BIN@")
+                                                  #$(file-append age "/bin/age"))
+                                                 (("@IP_BIN@")
+                                                  #$(file-append (spec->pkg "iproute2")
+                                                                 "/sbin/ip"))
+                                                 (("@SED_BIN@")
+                                                  #$(file-append (spec->pkg "sed")
+                                                                 "/bin/sed"))
+                                                 (("@MKDIR_BIN@")
+                                                  #$(file-append (spec->pkg "coreutils")
+                                                                 "/bin/mkdir"))
+                                                 (("@HOSTAPD_BIN@")
+                                                  #$(file-append (spec->pkg "hostapd")
+                                                                 "/sbin/hostapd")))
                                     (chmod #$output #o555))))]
        ;; NM 每次连接都把 WiFi 省电重置为默认开启，dispatcher 在 up 事件
        ;; 补救的方式实测不可靠（NM 默认启用省电覆盖了它）。改为 [connection]
@@ -865,54 +902,79 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                                 (auto-start? #t)
                                                 (respawn? #t))))
 
-        (simple-service 'hotspot-profile-safety shepherd-root-service-type
-                        (list (shepherd-service
-                               (documentation
-                                "Bind auto-hotspot to uap0 and disable NM autoconnect.")
-                               (provision '(hotspot-profile-safety))
-                               (requirement '(NetworkManager))
-                               (start #~(lambda _
-                                          (zero? (system* #$nmcli-bin
-                                                          "connection" "modify"
-                                                          "auto-hotspot"
-                                                          "connection.interface-name" "uap0"
-                                                          "connection.autoconnect" "no"
-                                                          "connection.autoconnect-priority" "-100"))))
-                               (stop #~(lambda _ #t))
-                               (one-shot? #t)
-                               (auto-start? #t)
-                               (respawn? #f))))
+        ;; NM 不管理 uap0：wpa_supplicant 初始化接口强制 station 模式，
+        ;; 与 wlp0s20f3 撞 managed<=1 组合限制（EBUSY），热点改由
+        ;; hostapd 直管（见 hotspot-ap 服务），NM 必须彻底放手。
+        (simple-service 'nm-uap0-unmanaged activation-service-type
+                        #~(let ([dest "/etc/NetworkManager/conf.d/20-uap0-unmanaged.conf"])
+                            (system* #$(file-append (spec->pkg "coreutils")
+                                                    "/bin/mkdir")
+                                     "-p" "/etc/NetworkManager/conf.d")
+                            (system* #$(file-append (spec->pkg "coreutils")
+                                                    "/bin/install")
+                                     "-m" "644"
+                                     #$(plain-file "uap0-unmanaged.conf"
+                                                   "[device-uap0]\ndevice.interface-name=uap0\nmanaged=0\n")
+                                     dest)))
 
         (simple-service 'wifi-ap-interface shepherd-root-service-type
                         (list (shepherd-service
                                (documentation
                                 "Create the uap0 virtual AP interface for concurrent WiFi.")
                                (provision '(wifi-ap-interface))
-                               (requirement '(hotspot-profile-safety iw-reg-cn))
+                               (requirement '(iw-reg-cn))
                                (start #~(lambda _
-                                          (and (or (zero? (system* #$(file-append iw "/sbin/iw")
-                                                                   "dev" "uap0" "info"))
-                                                   (zero? (system* #$(file-append iw "/sbin/iw")
-                                                                   "dev" "wlp0s20f3" "interface"
-                                                                   "add" "uap0" "type" "managed")))
-                                               (let loop ([attempts 20])
-                                                 (cond
-                                                  [(zero? (system* #$nmcli-bin
-                                                                   "-t" "-g"
-                                                                   "GENERAL.STATE" "device"
-                                                                   "show" "uap0")) #t]
-                                                  [(zero? attempts) #f]
-                                                  [else (sleep 1)
-                                                        (loop (1- attempts))])))))
+                                          (or (zero? (system* #$iw-bin
+                                                              "dev" "uap0" "info"))
+                                              (zero? (system* #$iw-bin
+                                                              "dev" "wlp0s20f3" "interface"
+                                                              "add" "uap0" "type" "__ap")))))
                                (stop #~(lambda _
-                                         (if (zero? (system* #$(file-append iw "/sbin/iw")
+                                         (if (zero? (system* #$iw-bin
                                                              "dev" "uap0" "info"))
-                                             (zero? (system* #$(file-append iw "/sbin/iw")
+                                             (zero? (system* #$iw-bin
                                                              "dev" "uap0" "del"))
                                              #t)))
                                (one-shot? #t)
                                (auto-start? #t)
                                (respawn? #f))))
+
+        ;; 热点本体：hostapd 直管 uap0（type __ap），不随机启动，由
+        ;; 决策脚本 herd start/stop。启动时动态生成配置（信道跟随 STA、
+        ;; age 密文解凭据）并配置 uap0 的 IP，详见 hotspot-ap-run 脚本。
+        (simple-service 'hotspot-ap-services shepherd-root-service-type
+                        (list (shepherd-service
+                               (documentation
+                                "Run hostapd AP on uap0, lifecycle owned by hotspot-decide.")
+                               (provision '(hotspot-ap))
+                               (requirement '(wifi-ap-interface))
+                               (start #~(make-forkexec-constructor
+                                         (list #$hotspot-ap-run-script)
+                                         #:log-file "/var/log/hotspot-ap.log"))
+                               (stop #~(make-kill-destructor))
+                               (auto-start? #f)
+                               (respawn? #t))))
+
+        ;; 热点子网 DHCP/DNS：bind-dynamic 绑 uap0，无热点时闲置。
+        (simple-service 'hotspot-dnsmasq shepherd-root-service-type
+                        (list (shepherd-service
+                               (documentation
+                                "DHCP/DNS service for the uap0 hotspot subnet.")
+                               (provision '(hotspot-dnsmasq))
+                               (requirement '(wifi-ap-interface))
+                               (start #~(make-forkexec-constructor
+                                         (list #$(file-append (spec->pkg "dnsmasq")
+                                                              "/sbin/dnsmasq")
+                                               "--keep-in-foreground"
+                                               "--interface=uap0"
+                                               "--bind-dynamic"
+                                               "--except-interface=lo"
+                                               "--dhcp-authoritative"
+                                               "--dhcp-range=192.168.77.10,192.168.77.250,255.255.255.0,12h")
+                                         #:log-file "/var/log/hotspot-dnsmasq.log"))
+                               (stop #~(make-kill-destructor))
+                               (auto-start? #t)
+                               (respawn? #t))))
 
         (simple-service 'auto-hotspot shepherd-root-service-type
                         (list (shepherd-service
@@ -921,14 +983,12 @@ nmcli connection add type wifi ifname uap0 con-name auto-hotspot \
                                (provision '(auto-hotspot))
                                (requirement '(wifi-ap-interface))
                                ;; 开机入口：热点去留由决策脚本按电源与可信
-                               ;; profile 判定，不再无条件常开。
+                               ;; profile 判定。stop 是 no-op——热点本体由
+                               ;; hotspot-ap 服务承载，手动关闭请直接
+                               ;; herd stop hotspot-ap。
                                (start #~(lambda _
                                           (zero? (system* #$hotspot-decide-script))))
-                               (stop #~(lambda _
-                                         (system* #$nmcli-bin
-                                                  "connection" "down"
-                                                  "auto-hotspot")
-                                         #t))
+                               (stop #~(lambda _ #t))
                                (one-shot? #t)
                                (auto-start? #t)
                                (respawn? #f))))
@@ -1027,19 +1087,26 @@ esac
 # 热点开关决策：AC 供电 且 物理无线口未连可信 profile 时开启热点，
 # 其余情况（电池供电、已连可信 WiFi）关闭。三个入口共用：shepherd
 # auto-hotspot（开机）、NM dispatcher（任意设备 up/down）、udev
-# power_supply 插拔。幂等：已处于目标态则不动作；开关动作失败以
-# nmcli 退出码退出，dispatcher / udev 调用侧自行容错。
-# 变量可用环境覆盖，便于离线真值表测试；udev 与 dispatcher 环境
-# 不含这些名字，默认值即部署值。只依赖 sh 内建与注入的绝对路径，
-# 在 udev 的贫瘠 PATH 下也能运行。
+# power_supply 插拔。幂等：已处于目标态则不动作；STA 事后换信道时
+# 重启热点跟随（AP 与 STA 并发必须同信道）。热点本体是 hostapd
+# （hotspot-ap 服务），开关即 herd start/stop。变量可用环境覆盖，
+# 便于离线真值表测试；udev 与 dispatcher 环境不含这些名字，默认值
+# 即部署值。只依赖 sh 内建与注入的绝对路径，在 udev 的贫瘠 PATH
+# 下也能运行。
 WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
 HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
-HOTSPOT_PROFILE="${HOTSPOT_PROFILE:-auto-hotspot}"
+HOTSPOT_SVC="${HOTSPOT_SVC:-hotspot-ap}"
+HOSTAPD_CONF="${HOSTAPD_CONF:-/run/auto-hotspot/hostapd.conf}"
 NMCLI_BIN="${NMCLI_BIN:-@NMCLI_BIN@}"
 AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
 TRUSTED_CONNECTIONS_CIPHER="${TRUSTED_CONNECTIONS_CIPHER:-@TRUSTED_CONNECTIONS_CIPHER@}"
 AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
 GREP_BIN="${GREP_BIN:-@GREP_BIN@}"
+IW_BIN="${IW_BIN:-@IW_BIN@}"
+PGREP_BIN="${PGREP_BIN:-@PGREP_BIN@}"
+HERD_BIN="${HERD_BIN:-@HERD_BIN@}"
+IP_BIN="${IP_BIN:-@IP_BIN@}"
+SED_BIN="${SED_BIN:-@SED_BIN@}"
 AC_ONLINE_GLOB="${AC_ONLINE_GLOB:-/sys/class/power_supply/*/online}"
 
 on_ac_power() {
@@ -1060,17 +1127,125 @@ wifi_trusted() {
 }
 
 hotspot_active() {
-    "$NMCLI_BIN" -t -g GENERAL.CONNECTION device show "$HOTSPOT_IFACE" 2>/dev/null |
-        "$GREP_BIN" -Fqx -- "$HOTSPOT_PROFILE"
+    "$PGREP_BIN" -x hostapd >/dev/null 2>&1
+}
+
+# iw link 输出只有 freq（MHz），按频段换算信道号：
+# 2.4G: ch=(freq-2407)/5，5G: ch=(freq-5000)/5
+sta_channel() {
+    freq=$("$IW_BIN" dev "$WIFI_IFACE" link 2>/dev/null |
+           "$SED_BIN" -n 's/^[[:space:]]*freq: \([0-9][0-9]*\)$/\1/p')
+    case "$freq" in
+        "") return 1 ;;
+        *) if [ "$freq" -ge 5000 ] 2>/dev/null; then
+               echo $(( (freq - 5000) / 5 ))
+           else
+               echo $(( (freq - 2407) / 5 ))
+           fi ;;
+    esac
+}
+
+ap_channel() {
+    "$SED_BIN" -n 's/^channel=\([0-9][0-9]*\)$/\1/p' "$HOSTAPD_CONF" 2>/dev/null
+}
+
+hotspot_channel_stale() {
+    sta_ch=$(sta_channel)
+    ap_ch=$(ap_channel)
+    [ -n "$sta_ch" ] && [ -n "$ap_ch" ] && [ "$sta_ch" != "$ap_ch" ]
+}
+
+stop_hotspot() {
+    "$HERD_BIN" stop "$HOTSPOT_SVC" 2>/dev/null
+    "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
+    return 0
 }
 
 if on_ac_power && ! wifi_trusted; then
-    hotspot_active && exit 0
-    exec "$NMCLI_BIN" connection up "$HOTSPOT_PROFILE" ifname "$HOTSPOT_IFACE"
+    if hotspot_active; then
+        hotspot_channel_stale || exit 0
+        # STA 换信道：重启热点跟随，避免双信道违反组合限制
+        stop_hotspot
+    fi
+    exec "$HERD_BIN" start "$HOTSPOT_SVC"
 fi
 
-hotspot_active && exec "$NMCLI_BIN" connection down "$HOTSPOT_PROFILE"
+hotspot_active && stop_hotspot
 exit 0
+#+end_src
+
+热点 AP 执行体
+#+name: hotspot-ap-run
+#+begin_src sh :tangle ../tmp/hotspot-ap-run
+#!/bin/sh
+# Auto-generated by Guix config.org.
+
+# hotspot-ap shepherd 服务的执行体：纠正接口类型（managed 残留 →
+# __ap，切换需先 down）、按 STA 当前信道生成 hostapd 配置到 /run
+# （并发要求同信道；STA 未连接时用默认信道）、从 age 密文解出
+# SSID/密码、配置 uap0 的热点子网地址，最后 exec hostapd 成为
+# shepherd 跟踪的主进程。凭据只经管道与 /run（tmpfs）过境，不落
+# 持久盘。变量可用环境覆盖，便于离线测试。
+HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
+WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
+DEFAULT_CHANNEL="${DEFAULT_CHANNEL:-36}"
+AP_ADDR="${AP_ADDR:-192.168.77.1/24}"
+CONF_DIR="${CONF_DIR:-/run/auto-hotspot}"
+AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
+HOTSPOT_CREDS_CIPHER="${HOTSPOT_CREDS_CIPHER:-@HOTSPOT_CREDS_CIPHER@}"
+AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
+IW_BIN="${IW_BIN:-@IW_BIN@}"
+IP_BIN="${IP_BIN:-@IP_BIN@}"
+SED_BIN="${SED_BIN:-@SED_BIN@}"
+MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
+HOSTAPD_BIN="${HOSTAPD_BIN:-@HOSTAPD_BIN@}"
+
+conf="$CONF_DIR/hostapd.conf"
+
+creds=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$HOTSPOT_CREDS_CIPHER" 2>/dev/null) || exit 1
+ssid=$(printf '%s\n' "$creds" | "$SED_BIN" -n '1p')
+psk=$(printf '%s\n' "$creds" | "$SED_BIN" -n '2p')
+[ -n "$ssid" ] && [ -n "$psk" ] || exit 1
+
+# 接口类型纠正：早期部署残留的 managed 类型会让 hostapd 起不来
+cur_type=$("$IW_BIN" dev "$HOTSPOT_IFACE" info 2>/dev/null |
+           "$SED_BIN" -n 's/^[[:space:]]*type \([a-z_]*\)$/\1/p')
+if [ "$cur_type" != "__ap" ]; then
+    "$IP_BIN" link set "$HOTSPOT_IFACE" down 2>/dev/null
+    "$IW_BIN" dev "$HOTSPOT_IFACE" set type __ap || exit 1
+fi
+
+# AP 信道跟随 STA（iw link 只报 freq，按频段换算信道号）；
+# STA 未连接时无并发约束，用默认信道
+freq=$("$IW_BIN" dev "$WIFI_IFACE" link 2>/dev/null |
+       "$SED_BIN" -n 's/^[[:space:]]*freq: \([0-9][0-9]*\)$/\1/p')
+if [ -n "$freq" ] && [ "$freq" -ge 5000 ] 2>/dev/null; then
+    ch=$(( (freq - 5000) / 5 ))
+elif [ -n "$freq" ]; then
+    ch=$(( (freq - 2407) / 5 ))
+else
+    ch="$DEFAULT_CHANNEL"
+fi
+
+"$MKDIR_BIN" -p "$CONF_DIR"
+umask 077
+{
+    echo "interface=$HOTSPOT_IFACE"
+    echo "driver=nl80211"
+    echo "ssid=$ssid"
+    echo "channel=$ch"
+    echo "wpa=2"
+    echo "wpa_passphrase=$psk"
+    echo "wpa_key_mgmt=WPA-PSK"
+    echo "rsn_pairwise=CCMP"
+    echo "auth_algs=1"
+    echo "macaddr_acl=0"
+} > "$conf"
+
+"$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
+"$IP_BIN" addr add "$AP_ADDR" dev "$HOTSPOT_IFACE" || exit 1
+"$IP_BIN" link set "$HOTSPOT_IFACE" up
+exec "$HOSTAPD_BIN" "$conf"
 #+end_src
 
 nftable 配置
