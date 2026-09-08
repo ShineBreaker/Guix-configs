@@ -4,7 +4,7 @@
 
 # For documentation, FAQ, additional configuration options and technical help, visit: https://github.com/dockur/windows
 
-name: "winapps" # Docker Compose Project Name.
+name: winapps # Docker Compose Project Name.
 volumes:
   # Create Volume 'data'.
   # Located @ '/var/lib/docker/volumes/winapps_data/_data' (Docker).
@@ -18,21 +18,19 @@ services:
       # Version of Windows to configure. For valid options, visit:
       # https://github.com/dockur/windows?tab=readme-ov-file#how-do-i-select-the-windows-version
       # https://github.com/dockur/windows?tab=readme-ov-file#how-do-i-install-a-custom-image
-      VERSION: "10e"
-      RAM_SIZE: "6G" # RAM allocated to the Windows VM.
+      VERSION: 10e
+      RAM_SIZE: 6G # RAM allocated to the Windows VM.
       CPU_CORES: "4" # CPU cores allocated to the Windows VM.
-      DISK_SIZE: "60G" # Size of the primary hard disk.
+      DISK_SIZE: 60G # Size of the primary hard disk.
       # DISK2_SIZE: "32G" # Uncomment to add an additional hard disk to the Windows VM. Ensure it is mounted as a volume below.
-      USERNAME: "BrokenShine" # Edit here to set a custom Windows username. The default is 'MyWindowsUser'.
-      # 密码经环境变量注入，不落仓库（compose 启动前必须 export WINAPPS_PASSWORD）。
-      PASSWORD: "${WINAPPS_PASSWORD:?export WINAPPS_PASSWORD=<强密码> 后再启动（本仓库公开，勿写回 compose）}"
-      HOME: "${HOME}" # Set path to Linux user home folder.
-      LANGUAGE: "Chinese"
+      USERNAME: BrokenShine # Edit here to set a custom Windows username. The default is 'MyWindowsUser'.
+      PASSWORD: "114514" # Edit here to set a password for the Windows user. The default is 'MyWindowsPassword'.
+      HOME: ${HOME} # Set path to Linux user home folder.
+      LANGUAGE: Chinese
     ports:
-      # 仅绑回环地址：VNC/RDP 只接受本机连接（仓库公开，绝不可绑 0.0.0.0 暴露到 LAN）
-      - 127.0.0.1:8006:8006 # Map '8006' on Linux host to '8006' on Windows VM --> For VNC Web Interface @ http://127.0.0.1:8006.
-      - 127.0.0.1:3389:3389/tcp # Map '3389' on Linux host to '3389' on Windows VM --> For Remote Desktop Protocol (RDP).
-      - 127.0.0.1:3389:3389/udp # Map '3389' on Linux host to '3389' on Windows VM --> For Remote Desktop Protocol (RDP).
+      - 8006:8006 # Map '8006' on Linux host to '8006' on Windows VM --> For VNC Web Interface @ http://127.0.0.1:8006.
+      - 3389:3389/tcp # Map '3389' on Linux host to '3389' on Windows VM --> For Remote Desktop Protocol (RDP).
+      - 3389:3389/udp # Map '3389' on Linux host to '3389' on Windows VM --> For Remote Desktop Protocol (RDP).
     cap_add:
       - NET_ADMIN # Add network permission
       - NET_RAW
@@ -56,4 +54,4 @@ services:
       # - /dev/disk/by-id/<id>:/disk2
     group_add:
       - keep-groups
-    cgroup_parent: "/"
+    cgroup_parent: /
