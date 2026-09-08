@@ -101,7 +101,9 @@
         [(program . args)
          (let ([status (popen program args)])
            (unless (zero? status)
-             (%subprocess-fail! status
+             ;; popen 返回原始 wait status（退出码在高位），须解包后再交
+             ;; primitive-exit，否则低 8 位截断后失败也报 0
+             (%subprocess-fail! (status:exit-val status)
                                 (format #f "命令执行失败 (~a): ~s" status command)))
            #t)])))
 
@@ -1318,13 +1320,16 @@
           "--configuration" "Guix"
           "--backup-extension" "backup")))
 
-;; blue nix-init —— 初始化 Nix channel 并安装 home-manager（首次用）。
+;; blue nix-init —— 引导备用 Nix home-manager 体系（首次或损坏后用）：
+;; 直接构建 source/nix flake 的 activationPackage 并激活，不依赖
+;; channel / nh / 现有 profile，版本由 flake.lock 锁定。
 (define-command (nix-init-command arguments)
   ((invoke "nix-init")
    (category 'nix)
-   (synopsis "初始化 Nix channel 并安装 home-manager"))
-  (%run '("nix-channel" "--update"))
-  (%run '("nix-shell" "<home-manager>" "-A" "install")))
+   (synopsis "构建并激活备用 Nix home-manager 配置"))
+  (%run `("nix" "build" ,(string-append %nix-dir "#homeConfigurations.Guix.activationPackage")
+          "--out-link" "/tmp/hm-activation"))
+  (%run '("/tmp/hm-activation/activate")))
 
 ;;; ---------- 校验 ----------
 
