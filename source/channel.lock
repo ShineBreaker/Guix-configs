@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "d5b0c1c2e3765191edb49257b66d5f99195a987b")
+       (commit "ab3cc11100a7eeff65b9a36d849d0fb96dda4eb9")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -12,7 +12,7 @@
        (name 'bluebox)
        (url "https://codeberg.org/lapislazuli/bluebox")
        (branch "main")
-       (commit "71628770c8612c041e06672f34c0c8e6fc67c13c")
+       (commit "f5c32b67e5abfa2ea8e9630c36dc0cfe3b29ebd4")
        (introduction
         (make-channel-introduction
          "63350484aaacc362aea28fb14236019fced4050f"
@@ -22,7 +22,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "8f093720106904fb21f8d43b65dc9a81a264f06d")
+       (commit "e31ed013229be55d358ef3a20427e42c0f6d462b")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
