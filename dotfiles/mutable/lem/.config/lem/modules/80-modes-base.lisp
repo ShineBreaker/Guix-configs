@@ -114,11 +114,34 @@ GET-LANGUAGE 已命中则跳过）。加载失败/依赖缺失告警返回 nil�
              (error () (vs-warn (list :ts-grammar lang path)))))))
       (t (vs-warn (list :tree-sitter "LOAD-LANGUAGE" "GET-LANGUAGE"))))))
 
-;; 前置 TREE-SITTER-AVAILABLE-P，缺失整段降级只告警一次。时机：load 期
-;; 即预注册（早于任何 find-file），上游 mode body 进 mode 时才消费注册表，
-;; 不需要 mode 已定义、也不需要挂 hook——见头注释时序分析。
+(defvar *vs-ts-preloaded* nil
+  "已预注册的 grammar 语言表（defvar：重载不丢，glob 只跑一次）。
+load 期不再 glob /gnu/store（冷启动 store 缓存冷时两次 directory 扫
+描昂贵）；首次进入对应 mode 时一次性注册——上游 mode body 进 mode
+时才查注册表，时序刚好（见头注释）。")
+
+(defun vs-ts-preload-json (&rest args)
+  (declare (ignore args))
+  (unless (member "json" *vs-ts-preloaded* :test #'string=)
+    (push "json" *vs-ts-preloaded*)
+    (vs-ts-register "json")))
+
+(defun vs-ts-preload-nix (&rest args)
+  (declare (ignore args))
+  (unless (member "nix" *vs-ts-preloaded* :test #'string=)
+    (push "nix" *vs-ts-preloaded*)
+    (vs-ts-register "nix")))
+
+;; 懒挂接：mode 未定义时 vs-mode-hook 回 nil 即跳过（镜像 mode 内建，
+;; load 期即有；json/nix 任一缺失只告警，不影响另一路）。
 (let ((avail (vs$ :lem-tree-sitter "TREE-SITTER-AVAILABLE-P")))
-  (if (and avail (funcall avail))
-      (let ((ok (remove nil (mapcar #'vs-ts-register '("json" "nix")))))
-        (format *error-output* "; [lem] tree-sitter grammar 预注册: ~{~A~^ ~}~%" ok))
+  (if (and avail (ignore-errors (funcall avail)))
+      (let ((jm (vs$ :lem-json-mode "JSON-MODE"))
+            (nm (vs$ :lem-nix-mode "NIX-MODE")))
+        (let ((jh (and jm (vs-mode-hook jm)))
+              (nh (and nm (vs-mode-hook nm))))
+          (when jh (vs-hook-add jh vs-ts-preload-json))
+          (when nh (vs-hook-add nh vs-ts-preload-nix))
+          (unless (or jh nh)
+            (vs-warn (list :ts-modes "JSON-MODE" "NIX-MODE")))))
       (vs-warn (list :lem-tree-sitter "TREE-SITTER-AVAILABLE-P"))))

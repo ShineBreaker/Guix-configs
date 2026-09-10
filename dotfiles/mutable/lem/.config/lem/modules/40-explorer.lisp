@@ -257,7 +257,17 @@ lem 退出时在途采集线程随进程回收——无 join 无持久状态，�
         (subseq s 0 (1- (length s)))
         s)))
 
-(defun vs-dir-children (dir)
+(defparameter *vs-dir-cache* (make-hash-table :test 'equal)
+  "目录 namestring → (mtime . children)。mtime 经 file-write-date 取
+（单次 stat 微秒级），条目增删即变、天然失效；折叠/展开的纯树操作
+复用缓存，省重复 readdir+sort（大目录主开销）。"
+  )
+(defparameter *vs-dir-cache-limit* 400
+  "单目录渲染上限：超截断（node_modules 等千文件目录整树
+insert-string+clickable 会卡死编辑线程，截断行提示余数）。"
+  )
+
+(defun vs-dir-children-uncached (dir)
   "子项列表：目录在前、各自大小写不敏感字典序；排除 .git。"
   (sort
    (remove-if (lambda (p)
@@ -270,6 +280,16 @@ lem 退出时在途采集线程随进程回收——无 join 无持久状态，�
              (da t)
              (db nil)
              (t (string-lessp (vs-item-name a) (vs-item-name b))))))))
+
+(defun vs-dir-children (dir)
+  (let* ((key (namestring dir))
+         (mtime (ignore-errors (file-write-date dir)))
+         (cell (gethash key *vs-dir-cache*)))
+    (if (and cell (eql (car cell) mtime))
+        (cdr cell)
+        (let ((kids (vs-dir-children-uncached dir)))
+          (setf (gethash key *vs-dir-cache*) (cons mtime kids))
+          kids))))
 
 ;; --- 渲染 ---
 (defun vs-pad-to-width (point)
@@ -397,13 +417,26 @@ Invalid number of arguments: 0），固定形参列表任一约定下都会炸�
            (vs-explorer-act-on-item item-path item-dir-p)))))))
 
 (defun vs-render-dir (point dir depth)
-  (dolist (child (vs-dir-children dir))
-    (let ((open (and (uiop:directory-pathname-p child)
-                     (gethash (namestring child) *vs-open-dirs*))))
-      (vs-insert-tree-line point child depth)
-      (insert-character point #\newline)
-      (when open
-        (vs-render-dir point child (1+ depth))))))
+  (let* ((all (vs-dir-children dir))
+         (total (length all))
+         (kids (if (> total *vs-dir-cache-limit*)
+                   (subseq all 0 *vs-dir-cache-limit*)
+                   all)))
+    (dolist (child kids)
+      (let ((open (and (uiop:directory-pathname-p child)
+                       (gethash (namestring child) *vs-open-dirs*))))
+        (vs-insert-tree-line point child depth)
+        (insert-character point #\newline)
+        (when open
+          (vs-render-dir point child (1+ depth)))))
+    (when (> total *vs-dir-cache-limit*)
+      (insert-string point (make-string (* 2 depth) :initial-element #\space)
+                     :attribute 'vs-sidebar-bg)
+      (insert-string point (format nil "... ~D more (r 刷新)"
+                                   (- total *vs-dir-cache-limit*))
+                     :attribute 'vs-explorer-titlebar)
+      (vs-pad-to-width point)
+      (insert-character point #\newline))))
 
 (defun vs-explorer-render-empty (point)
   "「无打开的文件夹」空状态正文（对齐 VSCode 欢迎页 Explorer）：

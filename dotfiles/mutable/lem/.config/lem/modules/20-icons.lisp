@@ -20,9 +20,16 @@
     (:branch . #xF418) (:error . #xEA87) (:warning . #xEA6C)
     (:sync . #xEA77) (:ellipsis . #xEA7C) (:refresh . #xEB37)))
 
+(defparameter *vs-icon-chars*
+  (let ((h (make-hash-table :size 32)))
+    (dolist (i *vs-icons* h)
+      (setf (gethash (car i) h) (code-char (cdr i)))))
+  "图标名 → 字符的预计算表：vs-icon 在树渲染/modeline 热路径每行多次
+调用，assoc 线性扫 17 项；hash 一次命中。defparameter 重建语义：
+*vs-icons* 改码点后重载本模块即同步，无陈旧。")
+
 (defun vs-icon (name)
-  (let ((code (cdr (assoc name *vs-icons*))))
-    (if code (code-char code) #\Space)))
+  (or (gethash name *vs-icon-chars*) #\Space))
 
 ;; 同步注册进 lem icon 系统（icon-string "vscode-folder" 等可查）
 (let ((reg (or (vs$ :lem "REGISTER-ICON")

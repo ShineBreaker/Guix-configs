@@ -50,27 +50,59 @@
   (vs-setglobal :lem-if "*BACKGROUND-COLOR-OF-DRAWING-WINDOW*" bg))
 
 ;; VSCode Status Bar 风格：左（ 分支）· 右（Ln,Col / 编码 / EOL / 语言）
-;; git 分支查询必须缓存：SBCL 大堆镜像上 fork+exec 一次 git 实测 ~84ms，
-;; 而 modeline 随每个命令重绘——不缓存等于每键付一次 fork 开销（按键
-;; 卡顿主因）。按目录缓存 + TTL 过期重查；切换分支后最多 TTL 秒陈旧。
+;; git 分支查询必须缓存 + 过期异步重查：SBCL 大堆镜像上 fork+exec 一次
+;; git 实测 ~84ms，而 modeline 随每个命令重绘——同步重查等于每 TTL 到期
+;; 卡编辑线程一次。过期时本帧先返旧值、后台线程重查后经 send-event 回
+;; 写落表（下次重绘即新值，最多一帧陈旧）；40-explorer 的 git 异步同款
+;; 范式。按目录单飞：在途集合防重复 spawn；查询幂等，回写无条件落表。
 (defparameter *vs-branch-cache* (make-hash-table :test 'equal)
   "目录 namestring → (分支名 . 查询时刻 universal-time)。")
-(defparameter *vs-branch-cache-ttl* 30 "秒内重绘免 fork，过期后首次重绘同步重查。")
+(defparameter *vs-branch-cache-ttl* 30 "秒内重绘免 fork，过期走异步重查。")
+(defparameter *vs-branch-refreshing* (make-hash-table :test 'equal)
+  "在途集合：目录 namestring → t（采集线程存活期间）。")
+(defparameter *vs-branch-deliver* nil
+  "投递槽：(目录key 分支名 时刻)，单目录单飞下同一时刻至多一个生产者。")
 
-(defun vs-git-branch (dir)
-  (let* ((key (namestring dir))
-         (cell (gethash key *vs-branch-cache*)))
-    (unless (and cell (<= (- (get-universal-time) (cdr cell))
-                          *vs-branch-cache-ttl*))
-      (setf cell (cons (string-trim
+(defun vs-branch-commit ()
+  "编辑线程回写：投递槽落缓存表。后台线程绝不直接碰编辑状态。"
+  (let ((cell *vs-branch-deliver*))
+    (setf *vs-branch-deliver* nil)
+    (when cell
+      (destructuring-bind (key branch stamp) cell
+        (remhash key *vs-branch-refreshing*)
+        (setf (gethash key *vs-branch-cache*) (cons branch stamp))))))
+
+(defun vs-branch-refresh-async (key)
+  "后台采集：同步跑 git（阻塞的是采集线程），解析后 send-event 回写。"
+  (setf (gethash key *vs-branch-refreshing*) t)
+  (sb-thread:make-thread
+   (lambda ()
+     (handler-case
+         (let ((branch (string-trim
                         '(#\Newline #\Space)
                         (uiop:run-program
                          (list "git" "-C" key "rev-parse" "--abbrev-ref" "HEAD")
                          :output '(:string :stripped t)
-                         :ignore-error-status t))
-                       (get-universal-time))
-            (gethash key *vs-branch-cache*) cell))
-    (car cell)))
+                         :ignore-error-status t))))
+           (setf *vs-branch-deliver* (list key branch (get-universal-time)))
+           (if (and (boundp '*vs-send-event*) *vs-send-event*)
+               (funcall *vs-send-event* #'vs-branch-commit)
+               (remhash key *vs-branch-refreshing*)))
+       (serious-condition (e)
+         (vs-trace "modeline git 采集线程异常: ~A" e)
+         (remhash key *vs-branch-refreshing*))))
+   :name "vs-modeline-git-branch"))
+
+(defun vs-git-branch (dir)
+  (let* ((key (namestring dir))
+         (cell (gethash key *vs-branch-cache*)))
+    (if (and cell (<= (- (get-universal-time) (cdr cell))
+                      *vs-branch-cache-ttl*))
+        (car cell)
+        (progn
+          (unless (gethash key *vs-branch-refreshing*)
+            (vs-branch-refresh-async key))
+          (and cell (car cell))))))
 
 (defun vscode-modeline-branch (window)
   (ignore-errors
@@ -191,13 +223,29 @@
                          (ignore-errors (funcall menu))))))
                (values-list res)))))))
 
-;; 悬停文档增强（VSCode 鼠标悬停语义）：around HANDLE-MOUSE-HOVER，
-;; 先 call-next-method 走上游默认悬浮，再尝试 LSP 文档覆盖——取当前点
-;; 调 LSP-HOVER（无 LSP 时返回 NIL 天然穿透），非空则经 hover overlay
-;; 显示。overlay 链：UPDATE-HOVER-OVERLAY 落位 → FIND-OVERLAY-THAT-
-;; CAN-HOVER 取 overlay → SET-HOVER-MESSAGE 写文本，全程 ignore-errors，
-;; 任一环节缺失即退回上游默认行为。LSP-HOVER 传 point（v48 实测无 LSP
-;; 时回 NIL；有 LSP 时行为由真机验证）。
+(defparameter *vs-hover-last-key* nil
+  "上次 LSP 文档查询的点位键（buffer . (行 . 列)），同点 300ms 内节流。")
+(defparameter *vs-hover-last-time* 0
+  "上次 LSP 文档查询的 internal-real-time。")
+(defparameter *vs-hover-throttle-ms* 300
+  "同点位 hover 节流窗口毫秒数。mouse-motion 高频触发，同步 LSP 请求
+往返数十 ms，同点重复查纯浪费；跨点移动不节流（语义即时）。")
+
+(defun vs-hover-throttled-p (point)
+  "同点位节流判定：点位键命中且窗口内 → t（调用方跳过 LSP 分支）。"
+  (let* ((b (ignore-errors (point-buffer point)))
+         (key (and b (list b (line-number-at-point point)
+                           (point-charpos point))))
+         (now (get-internal-real-time))
+         (elapsed (/ (* 1000.0 (- now *vs-hover-last-time*))
+                     internal-time-units-per-second)))
+    (if (and key (equal key *vs-hover-last-key*)
+             (< elapsed *vs-hover-throttle-ms*))
+        t
+        (progn (setf *vs-hover-last-key* key
+                     *vs-hover-last-time* now)
+               nil))))
+
 (defun vs-left-click-p (event btn-reader)
   "左键判定：BUTTON 槽按符号名比对（:LEFT / BUTTON-1 / BUTTON1）。vs-right-click-p 同款手法。"
   (let ((b (ignore-errors (funcall btn-reader event))))
@@ -206,48 +254,49 @@
            (or (string= n "LEFT") (string= n ":LEFT")
                (string= n "BUTTON-1") (string= n "BUTTON1"))))))
 
-;; 拖拽选中（VSCode 左键拖拽语义）：上游 motion 走 RECEIVE-MOUSE-MOTION
-;; （普通函数，无 around 挂接点），但 motion 下游必经 HANDLE-MOUSE-HOVER
-;; （同 MOUSE-EVENT 事件，带 BUTTON 状态），故在 hover 的 around 里补：
-;; 左键按下中且 mark 未激活 → 在当前点设 mark 起点，选区随光标延伸。
-;; mark 已激活则不动（拖拽延续）；单击（无 motion）由上游默认处理。
-;; 全程 ignore-errors，不影响 hover 文档链。
-(let ((gf-name (vs$ :lem-core "HANDLE-MOUSE-HOVER")))
-  (when gf-name
-    (vs-replace-method
-     :vs-hover-enhance
-     (eval `(defmethod ,gf-name :around (buffer event &key)
-             ;; primary 在合成事件/无 hover 上下文时可能抛错，先包住，
-             ;; 保证增强分支总有机会执行（右键 around 同理已包）。
-             (let ((res (ignore-errors
-                          (multiple-value-list (call-next-method)))))
-               (ignore-errors
-                 (let ((hover (vs$ :lem-lsp-mode "LSP-HOVER"))
-                       (update (vs$ :lem-core "UPDATE-HOVER-OVERLAY"))
-                       (find-ov (vs$ :lem-core "FIND-OVERLAY-THAT-CAN-HOVER"))
-                       (set-msg (vs$ :lem-core "SET-HOVER-MESSAGE"))
-                       (btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
-                       (setm (vs$ :lem-core "SET-CURSOR-MARK"))
-                       (bmp (vs$ :lem "BUFFER-MARK-P")))
-                   ;; 拖拽起点（先执行，保证 mark 在文档链之前就位；
-                   ;; 独立 ignore-errors，与文档链互不连累）
-                   (ignore-errors
-                     (when (and btn setm bmp
-                                (vs-left-click-p event btn)
-                                (not (ignore-errors (funcall bmp buffer))))
-                       (vs-trace "drag mark set")
-                       (funcall setm (current-point)
-                                (copy-point (current-point)))))
-                   ;; LSP 文档覆盖
-                   (when (and hover update find-ov set-msg)
-                     (let ((doc (funcall hover (current-point))))
-                       (when doc
-                         (vs-trace "hover doc fired")
-                         (funcall update (current-point))
-                         (let ((ov (funcall find-ov (current-point))))
-                           (when ov
-                             (funcall set-msg ov doc))))))))
-               (values-list res)))))))
+ (let ((gf-name (vs$ :lem-core "HANDLE-MOUSE-HOVER")))
+   (when gf-name
+     (vs-replace-method
+      :vs-hover-enhance
+      (eval `(defmethod ,gf-name :around (buffer event &key)
+              ;; primary 在合成事件/无 hover 上下文时可能抛错，先包住，
+              ;; 保证增强分支总有机会执行（右键 around 同理已包）。
+              (let ((res (ignore-errors
+                           (multiple-value-list (call-next-method)))))
+                (ignore-errors
+                 (let ((hover (or (vs$ :lem-lsp-mode "TEXT-DOCUMENT/HOVER")
+                                  (vs$ :lem-lsp-mode/lsp-mode
+                                       "TEXT-DOCUMENT/HOVER")))
+                        (update (vs$ :lem-core "UPDATE-HOVER-OVERLAY"))
+                        (find-ov (vs$ :lem-core "FIND-OVERLAY-THAT-CAN-HOVER"))
+                        (set-msg (vs$ :lem-core "SET-HOVER-MESSAGE"))
+                        (btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
+                        (setm (vs$ :lem-core "SET-CURSOR-MARK"))
+                        (bmp (vs$ :lem "BUFFER-MARK-P")))
+                    ;; 拖拽起点（先执行，保证 mark 在文档链之前就位；
+                    ;; 独立 ignore-errors，与文档链互不连累）
+                    (ignore-errors
+                      (when (and btn setm bmp
+                                 (vs-left-click-p event btn)
+                                 (not (ignore-errors (funcall bmp buffer))))
+                        (vs-trace "drag mark set")
+                        (funcall setm (current-point)
+                                 (copy-point (current-point)))))
+                   ;; LSP 文档覆盖（TEXT-DOCUMENT/HOVER 取 point 返
+                   ;; markdown-buffer；旧 LSP-HOVER 是零参交互命令，
+                   ;; 传参调每次抛错被吞、功能从未生效。同步 request
+                   ;; 往返数十 ms，同点节流；无 LSP 时回 NIL 穿透）
+                    (when (and hover update find-ov set-msg)
+                     (let ((pt (current-point)))
+                       (unless (vs-hover-throttled-p pt)
+                         (let ((doc (funcall hover pt)))
+                           (when doc
+                             (vs-trace "hover doc fired")
+                             (funcall update pt)
+                             (let ((ov (funcall find-ov pt)))
+                               (when ov
+                                 (funcall set-msg ov doc))))))))))
+                (values-list res)))))))
 
 ;; --- nightly 增益 ---
 
