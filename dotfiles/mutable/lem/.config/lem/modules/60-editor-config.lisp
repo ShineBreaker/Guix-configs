@@ -37,6 +37,33 @@
                (funcall orig))))
       (setf (get get-bufs 'vs-tabbar-orig) orig))))
 
+;; tabbar 推送去重（webview 前端）：上游 tabbar 的 update 挂在
+;; after-change-functions 上——**每次编辑**都置 need-update-p=nil，下一帧
+;; window-redraw 便重跑 generate-html（含 CSS/JS 的整份 HTML，数 KB）并经
+;; CHANGE-VIEW-TO-HTML 推向浏览器。而连续打字时 tab 的三态（标题/dirty/
+;; active）逐字不变 → 整份 HTML 逐字相同，推送、JSON 编码、浏览器 DOM
+;; 重建全是白做。这里按 window 缓存上次内容、等值即跳过；3 秒时限是兜底：
+;; 前端重载（WebSocket 重连重建 view）后即使内容未变也会重推一次，避免
+;; tab 条空白。只对 server 前端生效（ncurses 下 vs$ 解析为空）。
+;; 重载幂等：orig 只记首次的上游函数，cache 跨重载复用（内容比对本身安全）。
+(let ((cvt (vs$ :lem-server "CHANGE-VIEW-TO-HTML")))
+  (when (and cvt (fboundp cvt))
+    (let ((orig (or (get cvt 'vs-cvt-orig) (symbol-function cvt)))
+          (cache (or (get cvt 'vs-cvt-cache)
+                     (setf (get cvt 'vs-cvt-cache)
+                           (make-hash-table :test 'eq :weakness :key)))))
+      (setf (symbol-function cvt)
+            (lambda (window content)
+              (let* ((now (get-internal-real-time))
+                     (cell (gethash window cache))
+                     (skip (and cell (equal (car cell) content)
+                                (< (- now (cdr cell))
+                                   (* 3 internal-time-units-per-second)))))
+                (unless skip
+                  (setf (gethash window cache) (cons content now))
+                  (funcall orig window content)))))
+      (setf (get cvt 'vs-cvt-orig) orig))))
+
 ;; ATTRIBUTE-FOREGROUND 疯弹窗修复（上游 server 前端缺陷）：webview 渲染链
 ;; put() → ensure-attribute(attr nil)，attr=NIL（无 :attribute 的 insert-string
 ;; 普遍如此）时兜底条件 *background-color-of-drawing-window* 恒 NIL（server
@@ -223,28 +250,76 @@
                          (ignore-errors (funcall menu))))))
                (values-list res)))))))
 
-(defparameter *vs-hover-last-key* nil
-  "上次 LSP 文档查询的点位键（buffer . (行 . 列)），同点 300ms 内节流。")
-(defparameter *vs-hover-last-time* 0
-  "上次 LSP 文档查询的 internal-real-time。")
-(defparameter *vs-hover-throttle-ms* 300
-  "同点位 hover 节流窗口毫秒数。mouse-motion 高频触发，同步 LSP 请求
-往返数十 ms，同点重复查纯浪费；跨点移动不节流（语义即时）。")
+;; hover 文档异步化：mousemove 在 webview 前端约 60 事件/秒，而
+;; TEXT-DOCUMENT/HOVER 是**同步** LSP 请求（本地 server 数十 ms、索引中
+;; 可达百 ms）——逐事件同步查询会占满编辑线程，表现为鼠标划过代码即整体
+;; 卡顿。旧版按点位 300ms 节流只挡「同一点重复查」，跨点移动仍逐字符
+;; 发起请求（扫过一行 = 几十次阻塞往返），故重写。
+;; 新模型「投递 + 防抖 + 单例采集线程」：mousemove 只登记待查位置（零解析
+;; 零阻塞），后台线程在鼠标静止一个防抖窗后发一次查询，经 send-event 回
+;; 编辑线程显示——快速扫过时 pending 被连续覆盖、只在最后落点查一次。
+;; 与 modeline git 分支采集同款范式：后台线程绝不直接碰编辑状态。
+(defvar *vs-hover-pending* nil
+  "待查位置 (buffer . buffer 内绝对位置)。编辑线程写、采集线程读后清空。")
+(defvar *vs-hover-worker* nil
+  "单例采集线程（常驻；空闲时每防抖窗醒一次，开销可忽略）。")
+(defparameter *vs-hover-debounce* 0.12
+  "鼠标静止多久后发起查询（秒）。VSCode 的 hover 默认延迟 300ms，此值快于它。")
 
-(defun vs-hover-throttled-p (point)
-  "同点位节流判定：点位键命中且窗口内 → t（调用方跳过 LSP 分支）。"
-  (let* ((b (ignore-errors (point-buffer point)))
-         (key (and b (list b (line-number-at-point point)
-                           (point-charpos point))))
-         (now (get-internal-real-time))
-         (elapsed (/ (* 1000.0 (- now *vs-hover-last-time*))
-                     internal-time-units-per-second)))
-    (if (and key (equal key *vs-hover-last-key*)
-             (< elapsed *vs-hover-throttle-ms*))
-        t
-        (progn (setf *vs-hover-last-key* key
-                     *vs-hover-last-time* now)
-               nil))))
+(defun vs-hover-deliver (cell)
+  "编辑线程回写：定位到 CELL 并发起一次同步 LSP hover，显示文档 overlay。
+位置可能已失效（buffer 已关闭 / 文本已改），逐层校验后静默跳过。"
+  (ignore-errors
+    (destructuring-bind (buffer . position) cell
+      (when (and (bufferp buffer) (member buffer (buffer-list)))
+        (with-point ((pt (buffer-point buffer)))
+          (when (move-to-position pt position)
+            (let ((hover (or (vs$ :lem-lsp-mode "TEXT-DOCUMENT/HOVER")
+                             (vs$ :lem-lsp-mode/lsp-mode "TEXT-DOCUMENT/HOVER")))
+                  (update (vs$ :lem-core "UPDATE-HOVER-OVERLAY"))
+                  (find-ov (vs$ :lem-core "FIND-OVERLAY-THAT-CAN-HOVER"))
+                  (set-msg (vs$ :lem-core "SET-HOVER-MESSAGE")))
+              (when (and hover update find-ov set-msg)
+                (let ((doc (funcall hover pt)))
+                  (when doc
+                    (vs-trace "hover doc fired")
+                    (funcall update pt)
+                    (let ((ov (funcall find-ov pt)))
+                      (when ov (funcall set-msg ov doc)))))))))))))
+
+(defun vs-hover-worker-loop ()
+  (loop
+    (sleep *vs-hover-debounce*)
+    (let ((cell *vs-hover-pending*))
+      (when cell
+        (setf *vs-hover-pending* nil)
+        (let ((send (vs$ :lem "SEND-EVENT")))
+          (when (and send (fboundp send))
+            (ignore-errors
+              (funcall send (lambda () (vs-hover-deliver cell))))))))))
+
+(defun vs-hover-request (buffer position)
+  "编辑线程调用：登记待查位置，并按需拉起常驻采集线程。"
+  (setf *vs-hover-pending* (cons buffer position))
+  (unless (and *vs-hover-worker* (sb-thread:thread-alive-p *vs-hover-worker*))
+    (setf *vs-hover-worker*
+          (sb-thread:make-thread #'vs-hover-worker-loop
+                                 :name "vs-hover-doc"))))
+
+(defun vs-hover-mouse-position (window x y)
+  "鼠标窗口内坐标 → (buffer . buffer 内绝对位置)。
+上游 GET-POINT-FROM-WINDOW-WITH-COORDINATES 是无副作用的换算（返回临时
+point）；坐标不可得（合成事件 / window 为 nil）时回退当前光标位置。
+旧实现直接用 current-point，导致悬停查的始终是光标处文档、鼠标移到别处
+文档不变——hover 形同虚设。"
+  (let ((pt (and window x y
+                 (ignore-errors
+                   (funcall (vs$ :lem-core
+                                 "GET-POINT-FROM-WINDOW-WITH-COORDINATES")
+                            window x y)))))
+    (if pt
+        (cons (point-buffer pt) (position-at-point pt))
+        (cons (current-buffer) (position-at-point (current-point))))))
 
 (defun vs-left-click-p (event btn-reader)
   "左键判定：BUTTON 槽按符号名比对（:LEFT / BUTTON-1 / BUTTON1）。vs-right-click-p 同款手法。"
@@ -258,21 +333,15 @@
    (when gf-name
      (vs-replace-method
       :vs-hover-enhance
-      (eval `(defmethod ,gf-name :around (buffer event &key)
+      (eval `(defmethod ,gf-name :around (buffer event &key window x y)
               ;; primary 在合成事件/无 hover 上下文时可能抛错，先包住，
               ;; 保证增强分支总有机会执行（右键 around 同理已包）。
               (let ((res (ignore-errors
                            (multiple-value-list (call-next-method)))))
                 (ignore-errors
-                 (let ((hover (or (vs$ :lem-lsp-mode "TEXT-DOCUMENT/HOVER")
-                                  (vs$ :lem-lsp-mode/lsp-mode
-                                       "TEXT-DOCUMENT/HOVER")))
-                        (update (vs$ :lem-core "UPDATE-HOVER-OVERLAY"))
-                        (find-ov (vs$ :lem-core "FIND-OVERLAY-THAT-CAN-HOVER"))
-                        (set-msg (vs$ :lem-core "SET-HOVER-MESSAGE"))
-                        (btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
-                        (setm (vs$ :lem-core "SET-CURSOR-MARK"))
-                        (bmp (vs$ :lem "BUFFER-MARK-P")))
+                 (let ((btn (vs$ :lem-core "MOUSE-EVENT-BUTTON"))
+                       (setm (vs$ :lem-core "SET-CURSOR-MARK"))
+                       (bmp (vs$ :lem "BUFFER-MARK-P")))
                     ;; 拖拽起点（先执行，保证 mark 在文档链之前就位；
                     ;; 独立 ignore-errors，与文档链互不连累）
                     (ignore-errors
@@ -282,20 +351,14 @@
                         (vs-trace "drag mark set")
                         (funcall setm (current-point)
                                  (copy-point (current-point)))))
-                   ;; LSP 文档覆盖（TEXT-DOCUMENT/HOVER 取 point 返
-                   ;; markdown-buffer；旧 LSP-HOVER 是零参交互命令，
-                   ;; 传参调每次抛错被吞、功能从未生效。同步 request
-                   ;; 往返数十 ms，同点节流；无 LSP 时回 NIL 穿透）
-                    (when (and hover update find-ov set-msg)
-                     (let ((pt (current-point)))
-                       (unless (vs-hover-throttled-p pt)
-                         (let ((doc (funcall hover pt)))
-                           (when doc
-                             (vs-trace "hover doc fired")
-                             (funcall update pt)
-                             (let ((ov (funcall find-ov pt)))
-                               (when ov
-                                 (funcall set-msg ov doc))))))))))
+                   ;; LSP 文档：只投递位置——符号解析与同步请求都在
+                   ;; VS-HOVER-DELIVER 内做，热路径零解析零阻塞。
+                   ;; 位置取**鼠标坐标**换算（见 VS-HOVER-MOUSE-POSITION），
+                   ;; 而非 current-point：否则悬停查的是光标处文档、鼠标移到
+                   ;; 别处文档不变（旧实现即如此，hover 形同虚设）
+                   (destructuring-bind (hb . hp)
+                       (vs-hover-mouse-position window x y)
+                     (vs-hover-request hb hp))))
                 (values-list res)))))))
 
 ;; --- nightly 增益 ---
@@ -306,9 +369,13 @@
 ;; special variable（不走 variable-value plist），必须 vs-setglobal。
 ;; --vimgrep 输出 path:line:col:text，grep 结果行解析兼容；rg 尊重
 ;; .gitignore，非 git 目录也能用。
+;; --hidden 必须加：rg 默认跳过以 . 开头的隐藏目录/文件，而 Guix/Nix 与
+;; 大量工具链的配置都在 .config/ 下——不加则在这些目录里搜索恒为空
+;; （本仓库 dotfiles/mutable/lem/.config/ 即是一例，2026-09-11 实测）。
+;; VSCode 搜索默认包含隐藏文件（仅 files.exclude 掉 **/.git），此改动与之一致。
 (vs-setglobal :lem/grep "*GREP-COMMAND*" "rg")
-(vs-setglobal :lem/grep "*GREP-ARGS*" "--vimgrep")
-(vs-setglobal :lem/grep "*LAST-QUERY*" "rg --vimgrep ")
+(vs-setglobal :lem/grep "*GREP-ARGS*" "--vimgrep --hidden")
+(vs-setglobal :lem/grep "*LAST-QUERY*" "rg --vimgrep --hidden ")
 
 ;; 保存时格式化（nightly *auto-format*，format.lisp 直接引用该 special
 ;; variable）：special variable，走 vs-setglobal。触发点在上游
@@ -340,6 +407,14 @@
 ;;   目录对应语言文件加一行 vs-register-formatter 即可）；fish_indent 因
 ;;   lem 无 fish-mode 无处挂接，不注册。
 (vs-setglobal :lem "*AUTO-FORMAT*" t)
+
+;; 落盘清理（VSCode files.insertFinalNewline / files.trimTrailingWhitespace
+;; 的对应物）：两者都是 editor variable（定义在 :lem-core/commands/file，
+;; 前者导出、后者未导出——vs$ 走 find-symbol 均可解析）。save-buffer 内
+;; 以 :default + buffer 读取，buffer 无 local 值时回落全局值，故 vs-setvar
+;; 设 :global 即生效（2026-09-11 核对上游 src/common/var.lisp 读路径）。
+(vs-setvar :lem-core/commands/file "ADD-NEWLINE-AT-EOF-ON-WRITING-FILE" t)
+(vs-setvar :lem-core/commands/file "DELETE-TRAILING-WHITESPACE-ON-WRITING-FILE" t)
 
 ;; 自动保存（VSCodium files.autoSave=onFocusChange 的对应物）：
 ;; 上游 lem/auto-save 全局 minor mode：idle 定时 + 每 256 键 checkpoint

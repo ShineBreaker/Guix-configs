@@ -149,6 +149,91 @@
               (funcall make-cursor p)))
           (setf prev cursor))))))
 
+;; --- 自研命令：工作区符号搜索（VSCode Ctrl+T 对位物） ---
+;; 上游无 workspace/symbol：lsp-mode 未声明 workspace-symbol-provider
+;; （capability 在 extensions/language-server/controller/lifecycle.lisp
+;; 被注释掉），也没有 lsp-workspace-symbol 命令。故走 rg 兜底——按多语言
+;; 「定义行」模式匹配符号名，结果复用 grep 的 peek 管线（可跳转、可编辑
+;; 回写）。语义上比 project-grep 聚焦（只看定义行），比 LSP 弱（纯文本、
+;; 不理解作用域与重载）；模式覆盖 def/fn/class/struct/impl 等主流关键字，
+;; nix/shell 这类无关键字的赋值式定义会漏——项目 grep（C-F）仍是兜底。
+(define-command vs-workspace-symbol (name)
+    ((:string "工作区符号: "))
+  (let ((grep (vs$ :lem/grep "GREP"))
+        (root-fn (vs$ :lem-core/commands/project "FIND-ROOT"))
+        (dir-fn (vs$ :lem "BUFFER-DIRECTORY")))
+    (if (and grep (fboundp grep) dir-fn (fboundp dir-fn))
+        (let* ((cwd (ignore-errors (funcall dir-fn)))
+               (root (if (and cwd root-fn (fboundp root-fn))
+                         (or (ignore-errors (funcall root-fn cwd)) cwd)
+                         cwd))
+               ;; 单引号会截断 rg 的 -e 参数，剔除后再拼模式
+               (safe (remove #\' name))
+               ;; 定义行模式：Lisp 的 (defun 带左括号，故 \(? 可选。覆盖主流
+               ;; 语言的关键字式定义；C 系「返回类型 名字(」无关键字会漏，
+               ;; 靠下面的退化查询兜底。--hidden：rg 默认跳过 . 开头的隐藏
+               ;; 目录，而 .config/ 下的工程（本仓库 dotfiles 即是）会全空。
+               (def-query
+                 (format nil "rg --vimgrep --hidden -e '^\\s*\\(?(?:pub\\s+|export\\s+|public\\s+|private\\s+|protected\\s+|static\\s+|async\\s+|abstract\\s+|final\\s+|override\\s+)*(?:fn|func|function|def|defun|defn|defmacro|defmethod|class|struct|enum|trait|impl|interface|type|const|var|let)\\s+~A(?:\\b|\\s|$)'"
+                         safe))
+               ;; 退化查询：定义模式无命中时搜符号的全部出现（宁可多看，不漏）
+               (any-query (format nil "rg --vimgrep --hidden -e '\\b~A\\b'" safe)))
+          (if (and root (plusp (length safe)))
+              (let ((probe (ignore-errors
+                             (uiop:run-program def-query
+                                               :directory root
+                                               :output '(:string :stripped t)
+                                               :ignore-error-status t))))
+                (funcall grep (if (and probe (plusp (length probe)))
+                                  def-query
+                                  any-query)
+                         root))
+              (vs-warn :workspace-symbol-no-directory)))
+        (vs-warn :workspace-symbol-unavailable))))
+
+;; --- 自研命令：全选当前符号的所有出现（VSCode Ctrl+Shift+L 对位） ---
+;; 上游只有 isearch 活动期内的逐命中加光标（C-d），没有「一次全选」。取词
+;; 手法照抄上游 ISEARCH-FORWARD-SYMBOL-AT-POINT 的三步 skip（syntax-symbol-
+;; char-p 前后夹出光标处符号）；遍历用 buffer 内 SEARCH-FORWARD，命中即
+;; make-fake-cursor，跳过光标所在的那次（真光标已在那儿）。单字符或取词
+;; 失败不动作（否则满屏单字符都会被加光标）。符号全部动态解析，缺失即跳过。
+(define-command vs-select-all-occurrences () ()
+  (flet ((fb (pkg name)
+           "双包回退解析（:lem 未导出时试 :lem-core）。"
+           (or (vs$ pkg name) (vs$ :lem-core name))))
+    (let ((sym-p (fb :lem "SYNTAX-SYMBOL-CHAR-P"))
+          (skip-f (fb :lem "SKIP-CHARS-FORWARD"))
+          (skip-b (fb :lem "SKIP-CHARS-BACKWARD"))
+          (mk (fb :lem "MAKE-FAKE-CURSOR"))
+          (search-f (fb :lem "SEARCH-FORWARD"))
+          (pts (fb :lem "POINTS-TO-STRING"))
+          (bsp (fb :lem "BUFFER-START-POINT")))
+      (when (and sym-p (every #'fboundp (list sym-p skip-f skip-b mk
+                                              search-f pts bsp)))
+        (let ((not-sym (lambda (c) (not (funcall sym-p c))))
+              (info nil))
+          (ignore-errors
+            (with-point ((p (current-point)))
+              (funcall skip-f p sym-p)
+              (funcall skip-b p not-sym)
+              (funcall skip-b p sym-p)
+              (let ((start-pos (position-at-point p)))
+                (with-point ((e p))
+                  (funcall skip-f e sym-p)
+                  (setf info (cons (funcall pts p e) start-pos))))))
+          (when (and info (> (length (car info)) 1))
+            (let ((text (car info))
+                  (skip-pos (cdr info))
+                  (count 0))
+              (with-point ((q (funcall bsp (current-buffer))))
+                (loop
+                  (unless (funcall search-f q text) (return))
+                  ;; search-forward 停在匹配之后，匹配起点 = 当前位置 - 词长
+                  (unless (= (- (position-at-point q) (length text)) skip-pos)
+                    (ignore-errors (funcall mk (copy-point q)))
+                    (incf count))))
+              (message "已为 ~A 处出现加光标" count))))))))
+
 ;; --- 分组声明（F1 帮助页按此顺序渲染） ---
 (vs-declare-group "nav" "移动与查找")
 (vs-declare-group "editor" "编辑与文件")
@@ -169,6 +254,10 @@
 (vs-bind "C-E" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "切换侧栏（资源管理器，物理 Ctrl+Shift+E）")
 (vs-bind "C-G" :lem/legit "LEGIT-STATUS" "ui" "源代码管理（Git 状态，物理 Ctrl+Shift+G）")
 (vs-bind "C-F" :lem/grep "PROJECT-GREP" "nav" "跨文件搜索（项目 grep，物理 Ctrl+Shift+F）")
+;; C-t 覆盖上游 transpose-characters（VSCode Ctrl+T = 工作区符号，属本仓库
+;; 「VSCode 高频键覆盖 lem 同位键」策略；被覆盖者仍可 M-x 调用，见帮助页）。
+(vs-bind "C-t" :lem-user "VS-WORKSPACE-SYMBOL" "nav" "工作区符号搜索（VSCode Ctrl+T 同位）")
+(vs-bind "C-T" :lem-user "VS-WORKSPACE-SYMBOL" "nav" "工作区符号搜索（备用，物理 Ctrl+Shift+T）")
 (vs-bind "C-X" :lem-user "VSCODE-ACTIVITY-EXTENSIONS" "ui" "扩展管理（Quicklisp 包安装，物理 Ctrl+Shift+X）")
 ;; --- Tab 切换（VSCode C-Tab 循环编辑器 tab；不能直接用
 ;;     frame-multiplexer：它循环虚拟 frame，单 frame 下恒 no-op
@@ -224,6 +313,28 @@
 ;;     命令是 define-command 产物但未导出，vs$ find-symbol 可达，
 ;;     与下方 LSP-RENAME 同法） ---
 (vs-bind "C-O" :lem-lsp-mode "LSP-DOCUMENT-SYMBOL" "code" "转到文件内符号（大纲，物理 Ctrl+Shift+O）")
+;; --- LSP 导航与提示（VSCode 标准键位补齐） ---
+;; F12 跳转定义：FIND-DEFINITIONS 定义在 :lem/language-mode（**不是**
+;; :lem-lsp-mode——lsp 只是把 language-mode:find-definitions-function 挂到
+;; lsp-find-definitions，命令本体与 C-F12 同源，故包前缀同 C-F12）。
+(vs-bind "F12" :lem/language-mode "FIND-DEFINITIONS" "code"
+         "跳转定义（VSCode 标准 F12）")
+;; 其余三条为 :lem-lsp-mode 命令（均 define-command、未导出，vs$ find-symbol
+;; 可达）；物理键是 Shift+字母 组合，键串写 webview 到达的大写形式
+;; （C-I/C-L），Shift-C-Space 是命名键故写全拼——见文件头键语法注。
+(vs-bind "C-I" :lem-lsp-mode "LSP-IMPLEMENTATION" "code"
+         "跳转实现（物理 Ctrl+Shift+I，LSP）")
+;; C-L（物理 Ctrl+Shift+L）给「全选当前符号的所有出现」——这才是 VSCode 的
+;; Ctrl+Shift+L 语义（多光标批量编辑）；LSP-DOCUMENT-HIGHLIGHT（语义高亮，
+;; 只读展示）在 VSCode 无默认键，故让位并经帮助页以 M-x 调用。
+(vs-bind "C-L" :lem-user "VS-SELECT-ALL-OCCURRENCES" "editor"
+         "全选当前符号的所有出现（VSCode Ctrl+Shift+L 同位）")
+(vs-bind "Shift-C-Space" :lem-lsp-mode "LSP-SIGNATURE-HELP" "code"
+         "参数签名提示（Ctrl+Shift+Space，LSP）")
+;; M-O（物理 Alt+Shift+O）不绑 LSP-ORGANIZE-IMPORTS：上游
+;; src/commands/window.lisp 已把 "M-O" 绑为 previous-window（*global-keymap*），
+;; 覆盖会丢掉既有「上一窗口」导航，故不落键；组织 import 经 M-x 调用
+;; （帮助页已收编）。
 ;; --- 多光标（VSCode Ctrl+D 同位键：isearch 活动时逐个命中加光标，
 ;;     非搜索态安全 no-op；Delete 键仍承担删字符） ---
 (vs-bind "C-d" :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH" "editor"
@@ -313,7 +424,12 @@
 (vs-help-note "code" "M-?" "查找引用（language-mode 默认）")
 (vs-help-note "code" "M-," "返回跳转前位置")
 (vs-help-note "code" "C-M-i" "符号补全（LSP，弹窗）")
-(vs-help-note "editor" "Tab" "缩进并补全（language-mode buffer）")
+(vs-help-note "code" "M-x lsp-type-definition" "跳转类型定义（LSP）")
+(vs-help-note "code" "M-x lsp-organize-imports" "组织 import（LSP；Alt+Shift+O 上游已占 previous-window，未改绑）")
+;; Tab 默认是 fold-or-indent-or-complete（上游 src/ext/language-mode.lisp:99，
+;; enable-tab-fold 默认 t，:66）：defun 首行折叠/展开，否则缩进并补全。
+(vs-help-note "editor" "Tab" "折叠/展开当前 defun，否则缩进并补全（language-mode，enable-tab-fold 默认开）")
+(vs-help-note "editor" "M-x unfold-all" "展开当前 buffer 全部折叠（language-mode）")
 (vs-help-note "editor" "C-_" "重做（默认保留）")
 (vs-help-note "editor" "M-;" "注释/反注释（language-mode 默认）")
 (vs-help-note "editor" "C-x C-f" "打开文件")
@@ -326,6 +442,47 @@
 (vs-help-note "nav" "M-<" "buffer 开头")
 (vs-help-note "nav" "M->" "buffer 结尾")
 (vs-help-note "nav" "F3 / Shift-F3" "查找下一个 / 上一个（isearch 高亮）")
+;; isearch 符号搜索族（上游 *global-keymap* 已绑，未覆盖；收编供查阅）：
+;; M-s . 取光标处符号直接开搜，进入 isearch 后可用 C-d 逐个命中加光标
+(vs-help-note "nav" "M-s ." "搜索光标处符号（VSCode Ctrl+F3 对位）")
+(vs-help-note "nav" "M-s _ / M-s M-_" "符号搜索 前向 / 后向")
+(vs-help-note "nav" "M-s M-n" "跳转到 isearch 下一个高亮")
+;; 跨文件批量替换：grep 结果 buffer 的「内容列」可编辑，改动实时写回源文件
+;; （上游 grep 把 after-change-functions 挂在结果 buffer 上，wgrep 语义）
+(vs-help-note "editor" "grep 结果 buffer" "内容列可直接编辑，改动实时写回源文件（跨文件批量替换）")
+(vs-help-note "editor" "M-x transpose-characters" "交换两字符（原 C-t，已让位给工作区符号搜索）")
+(vs-help-note "code" "M-x lsp-document-highlight" "语义高亮当前符号全部出现点（无默认键，同 VSCode）")
+
+;; --- legit（C-G 源代码管理面板；legit-status buffer 是 legit-diff-mode，
+;;     以下为其局部 keymap 内键，上游 extensions/legit/legit.lisp:66-135。
+;;     局部键不落全局键，仅进帮助页） ---
+(vs-help-note "ui" "s" "暂存当前 hunk（legit 状态视图内）")
+(vs-help-note "ui" "u" "取消暂存当前 hunk（legit 状态视图内）")
+(vs-help-note "ui" "n / p" "下一个 / 上一个 hunk（legit）")
+(vs-help-note "ui" "c" "提交（legit）")
+(vs-help-note "ui" "b b / b c" "切换分支 / 新建分支（legit）")
+(vs-help-note "ui" "P p / F p" "推送 / 拉取（legit）")
+(vs-help-note "ui" "l l" "查看提交日志（legit）")
+(vs-help-note "ui" "Return" "跳转到当前 hunk（legit）")
+(vs-help-note "ui" "Tab" "在 hunk 窗口间切换（legit）")
+(vs-help-note "ui" "q / Escape" "关闭 legit 视图")
+(vs-help-note "ui" "g" "刷新 legit 视图（peek 视图内）")
+(vs-help-note "ui" "z z / z p" "stash push / pop（legit peek 视图内）")
+(vs-help-note "ui" "r i" "交互式 rebase（legit peek 视图内）")
+
+;; --- 窗口命令默认键（上游 src/commands/window.lisp:36-60；只进帮助页。
+;;     方向焦点 M-方向 与编辑器组 C-1/2/3 已在上面 vs-bind，不重复） ---
+(vs-help-note "window" "C-x o / M-o" "下一个窗口（默认）")
+(vs-help-note "window" "M-O" "上一个窗口（默认保留）")
+(vs-help-note "window" "C-x 1" "只保留当前窗口（关闭其他分屏）")
+(vs-help-note "window" "C-x 0 / M-q" "关闭当前窗口")
+(vs-help-note "window" "C-x 2 / C-x 3" "上下 / 左右分屏")
+(vs-help-note "window" "C-x ^ / C-x C-z" "增高 / 降低当前窗口")
+(vs-help-note "window" "C-x } / C-x {" "加宽 / 收窄当前窗口")
+(vs-help-note "window" "C-l" "当前行居中（recenter）")
+(vs-help-note "window" "C-x Left / C-x Right" "上一个 / 下一个 buffer")
+(vs-help-note "window" "C-Down / C-Up" "向下 / 向上滚动一屏")
+(vs-help-note "window" "C-x 4 f / C-x 4 b" "新窗口打开文件 / 切换 buffer")
 
 ;; --- nightly 内置默认键收编（上游 global keymap 已绑，只进帮助页） ---
 (vs-help-note "editor" "C-u" "数字参数前缀（C-u 3 → 三倍重复）")
