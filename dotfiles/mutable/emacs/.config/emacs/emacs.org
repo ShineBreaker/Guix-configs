@@ -1394,6 +1394,17 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (custom/bind "C-c g o" #'vc-root-diff-outgoing "预览待推送提交" "Git")
 (custom/bind "C-c g O" #'vc-root-diff-outgoing-and-edited "本地全部工作" "Git")
 
+;; diff-hl 行内改动导航(GUI 走 fringe / TTY 走 margin):n / p 在 hunk
+;; 间跳转,R 就地还原当前 hunk——比整文件 discard 细一档,是校验驱动的最小单位。
+;; 上游未给这三个交互命令 autoload cookie(位于 cookie 区之前),全局直绑
+;; 在 diff-hl 加载前按 C-c g n/p/R 会 void-function,显式声明触发按需加载。
+(autoload 'diff-hl-next-hunk "diff-hl")
+(autoload 'diff-hl-previous-hunk "diff-hl")
+(autoload 'diff-hl-revert-hunk "diff-hl")
+(custom/bind "C-c g n" #'diff-hl-next-hunk "下一个改动块" "Git")
+(custom/bind "C-c g p" #'diff-hl-previous-hunk "上一个改动块" "Git")
+(custom/bind "C-c g R" #'diff-hl-revert-hunk "还原当前改动块" "Git")
+
 ;; 只对 VCS-tracked 文件自动 revert(比 global-auto-revert-mode 省得多):
 ;; 切分支 / 拉取 / worktree 操作后 buffer 自动刷新,避免旧 buffer 静默
 ;; 覆盖新内容。revert 的内容刷新本身可感知,静默成串出现的
@@ -2176,6 +2187,10 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
              mc/mark-next-like-this mc/mark-previous-like-this
              mc/mark-all-like-this mc/mark-all-like-this-in-defun))
 
+(use-package expand-region
+  :defer t
+  :commands (er/expand-region er/contract-region))
+
 (use-package vundo
   :defer t
   :commands (vundo))
@@ -2240,6 +2255,71 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
 (custom/bind "C-c e C-w" #'unix-word-rubout "按词回杀" "编辑变换")
 (custom/bind "C-c e F" #'custom/fullwidth-dwim "转全角" "编辑变换")
 (custom/bind "C-c e f" #'custom/halfwidth-dwim "转半角" "编辑变换")
+;; 大小写 DWIM(Emacs 29+ 内置):有选区作用选区,无选区作用光标处词,
+;; 与全半角转换族同构,大写区分调换。
+(custom/bind "C-c e U" #'upcase-dwim "转大写" "编辑变换")
+(custom/bind "C-c e L" #'downcase-dwim "转小写" "编辑变换")
+(custom/bind "C-c e C" #'capitalize-dwim "首字母大写" "编辑变换")
+;; Ctrl+Shift+K (VSCode 删除整行) 在 TTY 会被吞,按总则配 C-c e k 镜像;
+;; x / X 为 expand-region 的渐进选区(与 mc 多光标互补:先扩选区再标记)。
+(custom/bind "C-c e k" #'kill-whole-line "删除整行" "编辑变换")
+(custom/bind "C-c e x" #'er/expand-region "扩展选区" "编辑变换")
+(custom/bind "C-c e X" #'er/contract-region "收缩选区" "编辑变换")
+#+end_src
+
+*** 插入
+
++=C-c i= 插入组:把当前文件信息或任意 Unicode 字符插入光标处,写提交信息、文档引用与笔记链接时不必手打路径。文件名与项目相对路径由同一个命令按前缀参数区分,不为两种取径各写一个只做字符串截取的包装命令;=insert-char= 走内置,可按字符名或码点检索。
+
+#+begin_src emacs-lisp
+(defun custom/insert-file-name (&optional arg)
+  "插入当前缓冲区的文件名。
+ARG 非空(前缀参数)时插入相对项目根的路径,无项目时插入绝对路径。"
+  (interactive "P")
+  (unless buffer-file-name
+    (user-error "当前缓冲区未访问文件"))
+  (let ((file buffer-file-name))
+    (insert (if arg
+                (if-let* ((proj (project-current nil (file-name-directory file)))
+                          (root (project-root proj)))
+                    (file-relative-name file root)
+                  file)
+              (file-name-nondirectory file)))))
+
+(custom/bind "C-c i f" #'custom/insert-file-name "插入文件名/路径" "插入")
+(custom/bind "C-c i u" #'insert-char "插入 Unicode 字符" "插入")
+#+end_src
+
+*** 关闭文件历史
+
+关闭文件不再不可逆:记录最近关闭的文件缓冲区,=C-S-t=(IDE 的 Reopen Closed Editor)与 =C-x T=(TTY 镜像)重新打开最近一个。只记录访问过真实路径的缓冲区,ring 有上限,长驻 daemon 不累积。
+
+#+begin_src emacs-lisp
+(defconst custom:closed-files-max 20
+  "关闭文件历史长度上限。")
+
+(defvar custom--closed-files nil
+  "最近关闭的文件名列表,最新在前。")
+
+(defun custom--on-kill-buffer ()
+  "把刚关闭的文件缓冲区记入关闭历史。"
+  (when-let* ((file (buffer-file-name)))
+    (setq custom--closed-files
+          (cons file (delete file custom--closed-files)))
+    (when (> (length custom--closed-files) custom:closed-files-max)
+      (setq custom--closed-files
+            (seq-take custom--closed-files custom:closed-files-max)))))
+
+(add-hook 'kill-buffer-hook #'custom--on-kill-buffer)
+
+(defun custom/reopen-closed-file ()
+  "重新打开最近关闭且仍存在的文件。"
+  (interactive)
+  (let ((file (seq-find #'file-exists-p custom--closed-files)))
+    (unless file
+      (user-error "没有可重新打开的文件"))
+    (setq custom--closed-files (delete file custom--closed-files))
+    (find-file file)))
 #+end_src
 
 *** 编辑辅助包
@@ -2247,6 +2327,7 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
 + =indent-bars= :基于 tree-sitter 的缩进竖线。只在 ts-mode 启用——非 ts-mode 缺乏可靠的缩进 AST,indent-bars 会画错。竖线不自己算颜色(=indent-bars-color nil=,follow 主题),按深度递减饱和度;pattern 用单字符 dot 列,关闭锯齿避免 ts 节点抖动。
 + =goto-chg= :undo-tree 风格的「按修改点跳转」,比 undo 逐次翻历史更精准。
 + =multiple-cursors= :在选中 region 内每个匹配字符串处插入 cursor,适合批量重命名/格式化。
++ =expand-region= :渐进式语义选区(=C-c e x= / =C-c e X=),按语法单元逐级扩大/收缩——比内置 =mark-word= / =mark-sexp= 更贴近 IDE 的「扩展选区」,与 mc 多光标互补(先框定再标记)。
 + =vundo= :undo 历史树可视化,在分支节点间移动回退到任意历史状态;=C-c e u= 进入,RET 确认、q 退出。
 + =tempel= :模板展开。模板名经 capf 参与 prog/text buffer 补全(链首,未命中才轮到 eglot),或 =C-c e t= 显式展开;模板库 =etc/templates/*.eld= 由用户自建,目录未建时为空。模板内字段跳转用 =tempel-map= 默认键(M-{ / M-} / M-RET),不再自定义。
 
@@ -2688,7 +2769,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。"
 ;; 可用内置适配器默认值;键位 C-c c G e 见项目域。
 (use-package dape
   :defer t
-  :commands (dape))
+  :commands (dape dape-breakpoint-toggle))
 #+end_src
 
 ** 代码操作辅助函数
@@ -2755,6 +2836,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。"
 (custom/bind "C-c c k" #'custom/flymake-list-errors-dwim "诊断列表" "代码")
 (custom/bind "C-c c s" #'xref-find-references "引用搜索" "代码")
 (custom/bind "C-c c b" #'bookmark-jump "书签跳转" "代码")
+(custom/bind "C-c c m" #'bookmark-set "设置书签" "代码")
 (custom/declare-binding-group "C-c c x" "更多代码跳转")
 (custom/bind "C-c c x d" #'eglot-find-declaration "跳转到声明" "代码")
 (custom/bind "C-c c x i" #'eglot-find-implementation "跳转到实现" "代码")
@@ -3599,6 +3681,28 @@ TTY 生存总则:终端模拟器吞掉三类键—— =C-S-= 组合(需 distinct
 (custom/bind "M-<right>" #'windmove-right "右切窗口" "基础移动与直达键")
 (custom/bind "M-<up>" #'windmove-up "上切窗口" "基础移动与直达键")
 (custom/bind "M-<down>" #'windmove-down "下切窗口" "基础移动与直达键")
+
+;; IDE 键位移植(对齐 VSCode Linux 默认键位):能直接照搬的直达键集中在此;
+;; 与 Emacs 原生冲突的(Ctrl+B 侧栏 / Ctrl+W 关闭 / Ctrl+\ 分屏 / Ctrl+Space
+;; 补全 / Ctrl+T 符号)不覆盖,改由功能域的 C-c 前缀接口承担,见
+;; [[#keybindings]] 的 C-c w 数字键与各域末尾。
+;; 功能键必须写 <f12> 尖括号形式:"F12" 会被 key-parse 拆成 F-1-2 三键序列,
+;; 且 keymap-global-set 对非 key-valid-p 的键直接 error——那会中断 main.el
+;; 后续全部加载,不是"键位不生效"这么简单。
+(custom/bind "<f12>" #'xref-find-definitions "跳转到定义" "基础移动与直达键")
+(custom/bind "S-<f12>" #'xref-find-references "查找引用" "基础移动与直达键")
+(custom/bind "C-." #'eglot-code-actions "快速修复" "基础移动与直达键")
+(custom/bind "C-d" #'mc/mark-next-like-this "选中下一个匹配" "基础移动与直达键")
+(custom/bind "C-S-l" #'mc/mark-all-like-this "选中所有匹配" "基础移动与直达键")
+(custom/bind "C-S-k" #'kill-whole-line "删除整行" "基础移动与直达键")
+(custom/bind "C-S-t" #'custom/reopen-closed-file "重开已关闭文件" "基础移动与直达键")
+(custom/bind "<f11>" #'toggle-frame-fullscreen "切换全屏" "基础移动与直达键")
+(custom/bind "<f5>" #'dape "开始调试" "基础移动与直达键")
+(custom/bind "<f9>" #'dape-breakpoint-toggle "切换断点" "基础移动与直达键")
+(custom/bind "C-," #'custom/open-config-source "打开设置 (emacs.org)" "基础移动与直达键")
+;; C-d 照搬 VSCode「选中下一个匹配」会挤掉全局 delete-char;minibuffer 里
+;; 单独恢复,否则输入路径/正则时无法用 C-d 删字符(isearch 等自有 keymap 不受影响)。
+(define-key minibuffer-local-map (kbd "C-d") #'delete-char)
 ;; M-<arrow> 在多数终端被吃掉(ESC 编码或被窗口管理器拦截):C-c w hjkl
 ;; 走可打印字符,终端/ssh/tmux 全可达,与 C-c w 方向键同语义。
 (custom/bind "C-c w h" #'windmove-left "左切窗口" "窗口与面板")
@@ -3616,7 +3720,8 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 
 + *前缀声明* :: =custom/declare-binding-group= 声明 Which-key 展示的前缀 KEY,必须集中。前缀下具体绑定随其功能域。
 + *=C-x*= / *=M-s*= / *=C-c h*= :: 引用的命令跨多个功能域(文件 / 缓冲区 / 搜索 / 帮助),无单一归属,集中在本块。
-+ *=C-c w*= :: 窗口与面板体系: =f= / =t= / =a= 复用各功能域的打开命令(左侧 Dired / 底部 ghostel / 右侧 agent-shell), =T= 为三面板布局总开关, =u= / =r= 兑现 winner 手动绑定(见 [[#which-key-runtime]] 的 =winner-dont-bind-my-keys= 说明);方向键 / =x= / =o= / =c= / =s= 为 Emacs 31 内置的布局变换与 frame 拆合命令族。
++ *=C-c t*= / *=C-c q*= :: 开关组与退出组。开关组是作用于当前 buffer 的内置 minor mode(行号 / 折行 / 列宽线 / 诊断 / 拼写),退出组是 Frame 级与 client 级退出;两者都无单一功能域归属,统一收在本块。
++ *=C-c w*= :: 窗口与面板体系: =f= / =t= / =a= 复用各功能域的打开命令(左侧 Dired / 底部 ghostel / 右侧 agent-shell), =T= 为三面板布局总开关, =u= / =r= 兑现 winner 手动绑定(见 [[#which-key-runtime]] 的 =winner-dont-bind-my-keys= 说明);数字键 =0= / =1= / =2= / =3= 镜像内置 =C-x 0/1/2/3=(关闭 / 独占 / 上下分屏 / 左右分屏), = = 平衡比例;方向键 / =x= / =o= / =c= / =s= 为 Emacs 31 内置的布局变换与 frame 拆合命令族。
 
 #+begin_src emacs-lisp
 (dolist (prefix
@@ -3631,7 +3736,9 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
            ("C-c e" . "编辑变换")
            ("C-c o" . "Org 与知识库")
            ("C-c h" . "帮助")
-           ("C-c w" . "窗口与面板")))
+           ("C-c w" . "窗口与面板")
+           ("C-c t" . "开关")
+           ("C-c q" . "退出与 Frame")))
   (custom/declare-binding-group (car prefix) (cdr prefix)))
 
 (custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
@@ -3641,12 +3748,14 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "C-x C-f" #'ffap "打开文件" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t n" #'custom/tabs-next "下一个标签" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x t p" #'custom/tabs-previous "上一个标签" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x T" #'custom/reopen-closed-file "重开已关闭文件" "文件 / 缓冲区 / 标签")
 
 ;; M-s 搜索前缀:缓冲区搜索(occur)与项目搜索(project-find-regexp)
 ;; 入口在 [[#completion]] 声明;此处保留跨域的 xref 符号搜索与
 ;; isearch 增量搜索后备入口。
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
 (custom/bind "M-s i" #'isearch-forward "增量搜索" "搜索")
+(custom/bind "M-s m" #'multi-occur "多缓冲区搜索" "搜索")
 
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
 ;; dashboard 无直达键则 TTY 用户只能 M-x:dashboard 常驻(:demand t),
@@ -3654,6 +3763,23 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "C-c h d" #'dashboard-open "打开仪表盘" "帮助")
 (custom/bind "S-<f10>" #'context-menu-open "打开右键菜单" "帮助")
 (custom/bind "<menu>" #'context-menu-open "打开右键菜单" "帮助")
+
+;; C-c t 开关组:内置 minor mode / 全局开关,作用于当前 buffer;
+;; 显示类默认值由 [[#theme-fonts]] 定基调,这里做临时覆盖。
+(custom/bind "C-c t l" #'display-line-numbers-mode "行号" "开关")
+(custom/bind "C-c t w" #'visual-line-mode "软折行" "开关")
+(custom/bind "C-c t c" #'display-fill-column-indicator-mode "列宽指示线" "开关")
+(custom/bind "C-c t f" #'flymake-mode "语法诊断" "开关")
+(custom/bind "C-c t s" #'flyspell-mode "拼写检查" "开关")
+(custom/bind "C-c t r" #'read-only-mode "只读" "开关")
+(custom/bind "C-c t v" #'visible-mode "显示不可见字符" "开关")
+(custom/bind "C-c t d" #'toggle-debug-on-error "错误调试" "开关")
+
+;; C-c q 退出组:Frame 级与 client 级退出,不触碰 daemon 本体
+;; (daemon 归 shepherd 管理,重启配置走 herd restart emacs-daemon)。
+(custom/bind "C-c q f" #'delete-frame "关闭当前 Frame" "退出与 Frame")
+(custom/bind "C-c q o" #'delete-other-frames "关闭其他 Frame" "退出与 Frame")
+(custom/bind "C-c q q" #'save-buffers-kill-terminal "保存并退出 Emacs" "退出与 Frame")
 
 ;; C-c w 面板体系:左 Dired([[#panel-dired]])/ 底终端([[#terminal]])/ 右 Agent
 ;; ([[#applications]])各自复用其功能域的打开命令,这里只承载跨域的布局总开关。
@@ -3714,6 +3840,19 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "C-c w C" #'uncombine-window "恢复窗口分组" "窗口与面板")
 (custom/bind "C-c w s" #'split-frame "拆分窗口到新 Frame" "窗口与面板")
 (custom/bind "C-c w S" #'merge-frames "合并 Frame 窗口" "窗口与面板")
+;; = 平均各窗口高度/宽度(内置),与上面的布局变换互补:变换改结构,= 只改比例。
+(custom/bind "C-c w =" #'balance-windows "平衡窗口大小" "窗口与面板")
+;; C-x 0/1/2/3 的体系内镜像(VSCode 的 Ctrl+\ 分屏、Ctrl+W 关闭同族):
+;; 数字槽位与内置 C-x 数字键一一对应,肌肉记忆可直接迁移。
+(custom/bind "C-c w 0" #'delete-window "关闭当前窗口" "窗口与面板")
+(custom/bind "C-c w 1" #'delete-other-windows "只保留当前窗口" "窗口与面板")
+(custom/bind "C-c w 2" #'split-window-below "上下分屏" "窗口与面板")
+(custom/bind "C-c w 3" #'split-window-right "左右分屏" "窗口与面板")
+
+(defun custom/open-config-source ()
+  "打开配置真理源 emacs.org(IDE「设置」的等价入口)。"
+  (interactive)
+  (find-file (expand-file-name "emacs.org" user-emacs-directory)))
 #+end_src
 
 ** Completion 框架
