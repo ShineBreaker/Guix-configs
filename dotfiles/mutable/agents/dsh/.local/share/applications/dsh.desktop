@@ -8,3 +8,4 @@ Icon=/home/brokenshine/.local/share/icons/dsh.png
 Terminal=false
 Categories=Utility;Development;
 StartupNotify=true
+StartupWMClass=chrome-127.0.0.1__-dsh

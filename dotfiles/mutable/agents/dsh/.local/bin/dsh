@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# dsh — DeepSeek Harness CLI wrapper。
+#
+# 本体经 pnpm 装在 $DSH_HOME/_cli（源只托管 package.json + pnpm-workspace.yaml，
+# node_modules/lock 是部署侧运行时产物；uv tool 的 PyPI wheel 因 SEA 闭包缺包
+# 两度翻车已弃）。niri 会话环境不经 fish conf.d，故 DSH_HOME 在此注入，语义同
+# conf.d 的 10-dsh.fish。
+#
+# CLI 缺失时不再只打印命令让人自己敲：交互式会问一句再装；非交互式（含 desktop
+# 入口经 dsh-web 拉起，那里 stdin 是 /dev/null）只提示 `dsh --install`，不静默联网装。
+set -euo pipefail
+
+: "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
+export DSH_HOME
+
+_cli_dir="$DSH_HOME/_cli"
+_cli_bin="$_cli_dir/node_modules/.bin/dsh"
+
+install_cli() {
+	if ! command -v pnpm >/dev/null 2>&1; then
+		printf 'dsh: 找不到 pnpm（本机在 nix profile），无法安装 CLI\n' >&2
+		return 1
+	fi
+	if [[ ! -f "$_cli_dir/package.json" ]]; then
+		printf 'dsh: %s/package.json 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$_cli_dir" >&2
+		return 1
+	fi
+	printf 'dsh: 正在安装 CLI（在 %s 里跑 pnpm install）\n' "$_cli_dir" >&2
+	(cd "$_cli_dir" && pnpm install)
+	if [[ ! -x "$_cli_bin" ]]; then
+		printf 'dsh: pnpm install 结束但仍没有 %s\n' "$_cli_bin" >&2
+		return 1
+	fi
+}
+
+if [[ "${1:-}" == "--install" ]]; then
+	install_cli
+	printf 'dsh: CLI 安装完成\n' >&2
+	exit 0
+fi
+
+if [[ ! -x "$_cli_bin" ]]; then
+	if [[ -t 0 ]]; then
+		read -r -p 'dsh: CLI 尚未安装，现在装？（pnpm install，需联网、可能几分钟）[y/N] ' _reply || _reply=
+		case "$_reply" in
+		[yY] | [yY][eE][sS]) ;;
+		*)
+			printf 'dsh: 已取消，CLI 仍未安装\n' >&2
+			exit 130
+			;;
+		esac
+		install_cli
+	else
+		printf 'dsh: CLI 尚未安装；非交互环境请先运行 dsh --install\n' >&2
+		exit 127
+	fi
+fi
+
+exec "$_cli_bin" "$@"

@@ -3,16 +3,133 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# dsh-web — DeepSeek Harness Web UI 启动 wrapper。
+# dsh-web — DeepSeek Harness Web UI 启动 wrapper（desktop 入口用）。
 #
-# 注入 DSH_HOME（wheel 版 dsh 拒绝隐式 ~/.dsh；niri 会话环境不经 fish
-# conf.d，desktop 入口拿不到 export，故 wrapper 自带，语义同 conf.d 的
-# 10-dsh.fish）。本体是 uv tool 装的 console script，位置固定。
-# 认证 token URL 由 dsh web 打印并自动开浏览器；已在运行的第二个实例会
-# 因端口 3080 被占而退出，属预期。
+# 复用 dsh wrapper 的 DSH_HOME 注入与 CLI 解析（niri 会话环境不经 fish
+# conf.d，desktop 入口拿不到 export）。窗口走 chromium 的 --app 模式：无标签
+# 栏/地址栏，只留内容区；不装 PWA——dsh 自带 manifest 声明 display=fullscreen，
+# 装出来是全屏而非窗口。
+#
+# 认证：launch token 按进程随机、且一个 token 只换一次 cookie，所以只有本
+# wrapper 亲自起的实例才拿得到它的 token URL；「已在监听但不是本 wrapper 起的」
+# 实例只能用 --reauth 重启换新 token。换到的 cookie 由 DSH_HOME 里持久化的密钥
+# 签名（30 天，跨重启有效），之后直接开干净 URL。
+#
+# 窗口 app_id 在 Wayland 下只由 profile 目录名决定（chrome-<host>__-<profile>）：实测
+# 协议层只发一次 set_app_id，值是 Chromium 自己算的 web-app id，--class 的值根本不出现，
+# 所以 app 窗口改不了 app_id（普通窗口读 --class）。定死 --profile-directory=dsh 得到
+# chrome-127.0.0.1__-dsh，与 dsh.desktop 的 StartupWMClass 成对绑定（改名要同时改两处）。
+# 该 profile 顺带把 dsh 的会话 cookie 与日常浏览的 Default profile 隔开。
+#
+# 环境覆盖：DSH_WEB_PORT（端口；改了 authority 也变，cookie 需重新握手）、
+# DSH_WEB_LOG（服务 stdout，含一次性 token URL）、DSH_BIN（测试用）。
 set -euo pipefail
 
-: "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
-export DSH_HOME
+: "${DSH_WEB_PORT:=3080}"
+: "${DSH_WEB_LOG:=${XDG_STATE_HOME:-$HOME/.local/state}/dsh/web.log}"
+: "${DSH_BIN:=$HOME/.local/bin/dsh}"
 
-exec "$HOME/.local/bin/dsh" web "$@"
+readonly CLEAN_URL="http://127.0.0.1:${DSH_WEB_PORT}/"
+readonly DSH_WEB_PROFILE=dsh
+
+server_up() { (exec 3<>"/dev/tcp/127.0.0.1/${DSH_WEB_PORT}") 2>/dev/null; }
+
+chromium_bin() {
+	if command -v chromium >/dev/null 2>&1; then
+		command -v chromium
+	elif [[ -x "$HOME/.guix-home/profile/bin/chromium" ]]; then
+		printf '%s\n' "$HOME/.guix-home/profile/bin/chromium"
+	else
+		return 1
+	fi
+}
+
+stop_server() {
+	local pid waited=0 cmdline=x
+	pid=$(ss -tlnpH "sport = :${DSH_WEB_PORT}" 2>/dev/null |
+		sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
+	if [[ -z "$pid" ]]; then
+		printf 'dsh-web: 端口 %s 上没有监听进程\n' "$DSH_WEB_PORT" >&2
+		return 1
+	fi
+	if [[ -r "/proc/${pid}/cmdline" ]]; then
+		cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline")
+	fi
+	if [[ "$cmdline" != *"@deepseek-ai/dsh"* ]]; then
+		printf 'dsh-web: pid=%s 不是 dsh CLI（%s），拒绝终止\n' "$pid" "$cmdline" >&2
+		return 1
+	fi
+	printf 'dsh-web: --reauth 终止 pid=%s\n' "$pid" >&2
+	kill "$pid"
+	while ((waited < 40)); do
+		server_up || return 0
+		sleep 0.25
+		waited=$((waited + 1))
+	done
+	printf 'dsh-web: pid=%s 在 10s 内没有退出\n' "$pid" >&2
+	return 1
+}
+
+# 服务起不来时 desktop 入口没有终端可看，靠桌面通知让失败可见
+report_start_failure() {
+	local detail
+	detail=$(tail -n 3 "$DSH_WEB_LOG" 2>/dev/null | tr '\n' ' ')
+	printf 'dsh-web: dsh web 未能起来，%s 末尾：\n' "$DSH_WEB_LOG" >&2
+	tail -n 20 "$DSH_WEB_LOG" >&2 || true
+	command -v notify-send >/dev/null 2>&1 || return 0
+	notify-send -a dsh-web -u critical 'dsh web 启动失败' "${detail:-详见 $DSH_WEB_LOG}" 2>/dev/null || true
+}
+
+start_server_url() {
+	local dir url="" waited=0 child
+	dir=$(dirname -- "$DSH_WEB_LOG")
+	mkdir -p -- "$dir"
+	(
+		umask 077
+		: >"$DSH_WEB_LOG"
+	)
+	# setsid -w 脱离 desktop 入口的会话，同时留一个与子进程同寿命的 pid，
+	# 让下面的 kill -0 能在服务刚起就失败时立刻收手，不必干等满超时
+	setsid -w "$DSH_BIN" web --no-open --port "$DSH_WEB_PORT" "$@" \
+		>"$DSH_WEB_LOG" 2>&1 </dev/null &
+	child=$!
+	while ((waited < 120)); do
+		url=$(sed -n 's/^dsh web: \([^ 	]\{1,\}\).*$/\1/p' "$DSH_WEB_LOG" | head -n 1)
+		if [[ -n "$url" ]]; then
+			printf '%s\n' "$url"
+			return 0
+		fi
+		if ! kill -0 "$child" 2>/dev/null; then
+			report_start_failure
+			return 1
+		fi
+		sleep 0.5
+		waited=$((waited + 1))
+	done
+	report_start_failure
+	return 1
+}
+
+reauth=false
+if [[ "${1:-}" == "--reauth" ]]; then
+	reauth=true
+	shift
+fi
+
+chromium=$(chromium_bin) || {
+	printf 'dsh-web: 找不到 chromium（ungoogled-chromium-wayland 未装或不在 PATH）\n' >&2
+	exit 127
+}
+
+if $reauth; then
+	stop_server
+fi
+
+if server_up; then
+	url="$CLEAN_URL"
+else
+	url=$(start_server_url "$@")
+fi
+
+exec "$chromium" --profile-directory="$DSH_WEB_PROFILE" \
+	--app="$url" --no-first-run --no-default-browser-check

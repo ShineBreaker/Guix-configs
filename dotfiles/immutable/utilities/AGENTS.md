@@ -19,10 +19,10 @@ utilities/
 │   ├── kanata/
 │   ├── pnpm/
 │   └── winapps/
-├── .local/
-│   ├── bin/
-│   └── share/
-└── .nix-channels
+└── .local/
+    ├── bin/
+    ├── share/
+    └── state/
 ```
 
 <!-- /structor -->

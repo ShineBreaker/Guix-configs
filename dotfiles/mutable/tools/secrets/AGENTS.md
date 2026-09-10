@@ -16,6 +16,7 @@ secrets/
 │       │   ├── .gitignore
 │       │   └── age.pub
 │       └── secrets-encrypted/
+│           ├── wifi-hotspot.age
 │           └── wifi-trust.age
 ├── .stow-local-ignore
 └── .stow-package
