@@ -19,22 +19,6 @@
       android-studio
       apostrophe
       graphite
-      (libreoffice.overrideAttrs {
-        variant = "fresh";
-        withHelp = false;
-        kdeIntegration = false;
-        withJava = false;
-
-        langs = [
-          "en-GB"
-          "en-US"
-          "zh-CN"
-        ];
-
-        noto-fonts = sarasa-gothic;
-        noto-fonts-lgc-plus = sarasa-gothic;
-        noto-fonts-cjk-sans = sarasa-gothic;
-      })
 
       ## Android
       android-tools
