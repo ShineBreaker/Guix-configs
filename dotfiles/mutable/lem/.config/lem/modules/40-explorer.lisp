@@ -779,6 +779,16 @@ pathname-parent-directory-pathname——它只看 pathname-directory 组件，
   (vs-explorer-set-root
    (vs-project-root (make-pathname :directory (pathname-directory file))))
   (vs-explorer-render t))
+(define-command vscode-open-folder () ()
+  "Open Folder：选目录为工作区根并确保侧栏可见（VSCode C-k C-o /
+欢迎页 Open Folder 同位；和弦不绑键：C-k 是 kill-line 不可让）。"
+  (let ((dir (vs-call :lem "PROMPT-FOR-DIRECTORY" "Open folder: ")))
+    (when dir
+      (vs-explorer-set-root
+       (uiop:ensure-directory-pathname (pathname dir)))
+      (unless (vs-explorer-window)
+        (vscode-toggle-sidebar))
+      (vs-explorer-render t))))
 
 (defun vs-explorer-on-find-file (buffer)
   "*find-file-hook*（lem/buffer/file）——所有 find-file 打开路径

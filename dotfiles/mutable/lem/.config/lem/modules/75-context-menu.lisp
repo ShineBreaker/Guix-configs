@@ -93,6 +93,7 @@ file-buffer 判定（失败开放）。"
      :when vs-ctx-language-buffer-p)
     ("重命名符号" :lem-lsp-mode "LSP-RENAME" :when vs-ctx-language-buffer-p)
     ("代码操作" :lem-lsp-mode "LSP-CODE-ACTION" :when vs-ctx-language-buffer-p)
+    ("参数提示" :lem-lsp-mode "LSP-SIGNATURE-HELP" :when vs-ctx-language-buffer-p)
     ("格式化文档" :lem "FORMAT-BUFFER")
     ("切换自动换行" :lem-user "VSCODE-TOGGLE-LINE-WRAP"))
   "右键菜单条目：(中文标签 定义包 命令名 [:when 谓词符号])。
@@ -130,3 +131,4 @@ funcall 本符号，且未来可绑键。"
 ;; webview 原生菜单遮蔽时的键盘退路）。放本模块：命令在此定义，
 ;; 70 加载时符号尚不存在。
 (vs-bind "Shift-F10" :lem-user "VSCODE-CONTEXT-MENU" "editor" "上下文菜单（右键同款）")
+(vs-help-note "code" "参数提示（右键菜单）" "函数签名浮窗（LSP；VSCode Ctrl+Shift+Space 同位，和弦不绑键）")

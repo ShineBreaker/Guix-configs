@@ -362,3 +362,30 @@
 ;; HOME 残留，warm-boot 后成常量），不可写、装包必炸，必须重设到用户目录。
 (vs-setglobal :lem-extension-manager "*PACKAGES-DIRECTORY*"
               (merge-pathnames ".config/lem/packages/" (user-homedir-pathname)))
+;; 制表宽 2（VSCodium editor.tabSize="2" 的对应物）：tab-width 是 tab 字符
+;; 显示宽度 + 列运算基准（ncurses 探针初值 8）；各 mode 缩进走自有逻辑
+;;（python-mode 源码内无 tab-width 引用），不受影响。
+(vs-setvar :lem "TAB-WIDTH" 2)
+
+;; 括号匹配高亮（VSCode bracket match 的对应物）：上游 show-paren 包在
+;; 60 加载期尚未就绪（ncurses 探针：load 期 vs$ 解析为空，全量加载后才
+;; 出现），故首命令时补挂钩子、随后自摘（90-startup 同款一次性
+;; post-command 模式）。show-paren 的 enable 缺省 t，但刷新走 idle
+;; timer——webview 前端 timer 不 fire，鼠标钩子只覆盖点击；补 post-command
+;; 钩子每命令刷新（单个 overlay，开销可忽略）。包缺失不挂钩（vs-call 的
+;; 缺失告警会每命令刷屏，故存在性 + member 双门控）。
+;; git-gutter 曾在此同批启用，真机验证回退：左缘是单槽位 dispatch
+;;（compute-left-display-area-content 按合成 mode 类单方法胜出），gutter
+;; 启用后行号被顶掉（ncurses 探针：line-numbers-mode 明明 active）。
+;; 行号是核心 chrome 保留，gutter 降级：文件级 git 染色（侧栏树/modeline
+;; 分支）不受影响。要行级 diff 看 legit（C-G）。
+(defun vs-show-paren-tick ()
+  (vs-call :lem/show-paren "UPDATE-SHOW-PAREN"))
+(defun vs-late-vscode-gains ()
+  (ignore-errors
+    (when (and (vs$ :lem/show-paren "UPDATE-SHOW-PAREN")
+               (not (member 'vs-show-paren-tick *post-command-hook*
+                            :test #'eq)))
+      (add-hook *post-command-hook* 'vs-show-paren-tick)))
+  (eval '(remove-hook *post-command-hook* 'vs-late-vscode-gains)))
+(add-hook *post-command-hook* 'vs-late-vscode-gains)

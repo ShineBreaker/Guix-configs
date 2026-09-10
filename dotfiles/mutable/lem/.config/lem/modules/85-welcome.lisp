@@ -13,8 +13,8 @@
 ;;; VSCode 欢迎页映射：标题 + Start 命令行（New File / Open File）+
 ;;; Recent 项目与文件 + Learn 链接。dashboard-command 的 Return 开条
 ;;; 目走 :dashboard-item 属性（键盘可用，不依赖 webview 点击分发）；
-;;; display-text 尾部 " (x)" 按上游惯例作按键提示后缀（只显示不点击）。
-;;; "Open Folder" 暂缺：上游无对应的交互式命令，不捏造（待补）。
+;;; "Open Folder"：prompt-for-directory 选目录 → vscode-open-folder
+;;;（40-explorer，置工作区根 + 确保侧栏可见）挂欢迎页与 d 键。
 ;;;
 ;;; 上游缺陷补丁（ATTRIBUTE-FOREGROUND 疯弹窗的根因）：lem-core 的
 ;;; internal-packages export 列表导出了 document-header1~6/link/blockquote
@@ -70,6 +70,20 @@ find-file 的绝对路径分支直达（已验证 uiop:absolute-pathname-p 吃�
   (let ((c (vs$ :lem-dashboard class)))
     (when c (apply #'make-instance c args))))
 
+;; --- 欢迎页链接属性（直连蓝线缺陷的修复）：上游 dashboard 按条目
+;;     attribute 渲染**整行居中串（含两侧 padding 空格）**；链接色自带
+;;     :underline t 会把 padding 也加下划线，连成横贯全宽的蓝线（真机
+;;     实证）。自研 vs-welcome-link：链接色、无下划线、不加粗（VSCode
+;;     欢迎页语义）；深浅由 vscode-toggle-theme 经本函数重 skin
+;;    （40-explorer/46-problems 同款 set-chrome 回调）。
+(defun vs-welcome-set-chrome (mode)
+  "按 MODE（:dark/:light）重设欢迎页链接属性。load 期以当前主题调用；
+主题切换时由 30-themes 回调。"
+  (let ((dark (eq mode :dark)))
+    (define-attribute vs-welcome-link
+        (t :foreground (if dark "#90BEE1" "#005FB8")))))
+(vs-welcome-set-chrome (if (boundp '*vs-theme-mode*) *vs-theme-mode* :dark))
+
 (defun vs-setup-welcome ()
   "覆盖上游默认布局为 VSCode 欢迎页；幂等，可重复调用。"
   (let ((items (remove
@@ -81,20 +95,25 @@ find-file 的绝对路径分支直达（已验证 uiop:absolute-pathname-p 吃�
                  (vs-dash "DASHBOARD-COMMAND"
                           :display-text "New File (n)"
                           :action-command 'vs-welcome-new-file
-                          :item-attribute 'document-link-attribute
+                          :item-attribute 'vs-welcome-link
                           :bottom-margin 1)
                  (vs-dash "DASHBOARD-COMMAND"
                           :display-text "Open File (o)"
                           :action-command 'vs-welcome-open-file
-                          :item-attribute 'document-link-attribute
+                          :item-attribute 'vs-welcome-link
+                          :bottom-margin 1)
+                 (vs-dash "DASHBOARD-COMMAND"
+                          :display-text "Open Folder (d)"
+                          :action-command 'vscode-open-folder
+                          :item-attribute 'vs-welcome-link
                           :bottom-margin 1)
                  (vs-dash "DASHBOARD-RECENT-PROJECTS"
                           :project-count 5
-                          :item-attribute 'document-link-attribute
+                          :item-attribute 'vs-welcome-link
                           :bottom-margin 1)
                  (vs-dash "DASHBOARD-RECENT-FILES"
                           :file-count 8
-                          :item-attribute 'document-link-attribute
+                          :item-attribute 'vs-welcome-link
                           :bottom-margin 1)
                  (vs-dash "DASHBOARD-URL"
                           :display-text "Documentation"
@@ -107,12 +126,14 @@ find-file 的绝对路径分支直达（已验证 uiop:absolute-pathname-p 吃�
                           :bottom-margin 2)))))
     (when items
       (vs-call :lem-dashboard "SET-DASHBOARD" items)))
-  ;; dashboard-mode 局部键：n/o 开条目（r/f 沿用上游最近区跳转）
+  ;; dashboard-mode 局部键：n/o/d 开条目（r 沿用上游最近区跳转；
+  ;; f 让位给 Open Folder，近期文件改 j/k 移动 + Return 进入）
   (let ((map (let ((s (vs$ :lem-dashboard "*DASHBOARD-MODE-KEYMAP*")))
                (and s (boundp s) (symbol-value s)))))
     (when map
       (vs-call :lem "DEFINE-KEY" map "n" 'vs-welcome-new-file)
-      (vs-call :lem "DEFINE-KEY" map "o" 'vs-welcome-open-file))))
+      (vs-call :lem "DEFINE-KEY" map "o" 'vs-welcome-open-file)
+      (vs-call :lem "DEFINE-KEY" map "d" 'vscode-open-folder))))
 
 ;; load 期覆盖：splash 首绘即欢迎页（90-startup 钩子再重申一次防覆盖）
 (vs-setup-welcome)

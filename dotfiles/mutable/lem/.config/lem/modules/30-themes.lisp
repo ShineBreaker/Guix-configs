@@ -181,6 +181,7 @@ toggle 的翻转基准才可信。启动恒为 :dark（历史行为不变）。"
                   "vscode-light-modern"))
   (vs-call :lem-user "VS-EXPLORER-SET-CHROME" *vs-theme-mode*)
   (vs-call :lem-user "VS-PROBLEMS-SET-CHROME" *vs-theme-mode*)
+  (vs-call :lem-user "VS-WELCOME-SET-CHROME" *vs-theme-mode*)
   (message "Color theme: ~A"
            (if (eq *vs-theme-mode* :dark)
                "VSCode Dark Modern"

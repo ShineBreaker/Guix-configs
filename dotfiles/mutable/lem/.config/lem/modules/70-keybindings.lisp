@@ -169,6 +169,7 @@
 (vs-bind "C-E" :lem-user "VSCODE-TOGGLE-SIDEBAR" "ui" "切换侧栏（资源管理器，物理 Ctrl+Shift+E）")
 (vs-bind "C-G" :lem/legit "LEGIT-STATUS" "ui" "源代码管理（Git 状态，物理 Ctrl+Shift+G）")
 (vs-bind "C-F" :lem/grep "PROJECT-GREP" "nav" "跨文件搜索（项目 grep，物理 Ctrl+Shift+F）")
+(vs-bind "C-X" :lem-user "VSCODE-ACTIVITY-EXTENSIONS" "ui" "扩展管理（Quicklisp 包安装，物理 Ctrl+Shift+X）")
 ;; --- Tab 切换（VSCode C-Tab 循环编辑器 tab；不能直接用
 ;;     frame-multiplexer：它循环虚拟 frame，单 frame 下恒 no-op
 ;;     （ncurses 实测连按三次不动），且会落到 tabbar 不显示的隐藏
