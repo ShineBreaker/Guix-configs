@@ -904,7 +904,7 @@
 ;; 为上限+1）；ESP 里的多余 UKI 由本次 reconfigure 按剩余世代重建时自然收敛
 ;; （delete-generations 顺带的 reinstall-bootloader 对 limine 只写一个无人
 ;; 读取的 /boot/grub/grub.cfg）。
-(define %keep-system-generations 10)
+(define %keep-system-generations 20)
 
 ;; 列出 /var/guix/profiles/ 下实际存在的 system 世代号（升序）。世代号单调
 ;; 递增、不因清理重新编号，低号段随时有空洞，不能按 1..N 连续范围假设。
