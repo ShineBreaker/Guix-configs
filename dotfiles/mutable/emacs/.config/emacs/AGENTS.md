@@ -89,10 +89,11 @@
 | `C-x p` 项目                                     | `projects` / `project-navigation`                           | project.el 函数所在域                    |
 | `C-c o` Org                                      | `org-knowledge` / `knowledge`                               | Org / Knowledge 函数所在域               |
 | `C-c a` 生活应用                                 | `system-tools` / `applications` 或应用 `use-package` 所在域 | 每个应用键紧跟其 `use-package` 声明      |
+| `C-c i` 插入                                     | `editing` / `插入`                                          | 文件名 / 路径 / 字符插入                 |
 | markdown 等局部键                                | 对应 major mode 的 `use-package` 所在域                     | mode-local 键在 mode 声明处直写         |
 | 无前缀 IDE 直达键（`C-` / `M-` / `F-`）          | `keys-completion` / `global-keys`                           | 跨多域基础操作，保留为基础键位域         |
-| `C-x` `M-s` `C-c w` `C-c h` 跨域键               | `keys-completion` / `keybindings`                           | 引用命令跨多个功能域，无单一归属         |
-| 11 个前缀声明（`custom/declare-binding-group`） | `keys-completion` / `keybindings`                           | Which-key 顶层前缀的唯一声明源，必须集中 |
+| `C-x` `M-s` `C-c w` `C-c h` `C-c t` `C-c q` 跨域键               | `keys-completion` / `keybindings`                           | 引用命令跨多个功能域，无单一归属         |
+| 14 个顶层前缀声明（`custom/declare-binding-group`） | `keys-completion` / `keybindings`                           | Which-key 顶层前缀的唯一声明源，必须集中 |
 
 ## 3. 标准修改流程
 
@@ -142,7 +143,7 @@
 - 共享实现放在 `helpers/...`，并在所有调用方之前组装；noweb 只负责组织与顺序，不模拟 `require`。
 - 命名：公开函数与变量使用 `custom/...`，路径与静态常量使用 `custom:...`，私有函数使用 `custom/...--...`；不添加顺序加载用的 `defvar nil` 注入点，同一符号不得重复 `defun`、`defvar` 或 `defconst`。
 - agenote 进程调用统一走 emacs-agenote 包的 `agenote-call-string`（同步）等包内 API，每次显式传 domain。
-- 全局键使用 `custom/bind`，前缀声明使用 `custom/declare-binding-group`，保持键位、Which-key 和帮助同源；mode-local 键极少，在对应 mode 声明处直写。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有 11 个前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
+- 全局键使用 `custom/bind`，前缀声明使用 `custom/declare-binding-group`，保持键位、Which-key 和帮助同源；mode-local 键极少，在对应 mode 声明处直写。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有顶层前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` / `C-c t` / `C-c q` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
 - `add-hook` / `run-with-idle-timer` / `run-at-time` 的回调必须用命名函数（`#'custom/...`），不得用匿名 lambda；需要忽略 hook 参数或适配参数元数时，定义专门的 `custom--...-on-<event>` 回调（如 `custom--tabs-on-project-switch`），定义放在所属功能域且必须在 hook 注册之前。display 初始化注册到 `custom/add-frame-created-hook`。
 - 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
 
@@ -235,7 +236,20 @@
 - Emacs 版本兜底集中在 `compatibility`；shim 用命名 noweb ref 展开到真实加载点，并在正文记录根因与移除条件。
 - 只有实际功能故障才添加兼容代码：Emacs 31 预发布的 `Missing 'lexical-binding' cookie` 警告不投入专门修复，也不添加 warning 抑制层；Arei/Yasnippet 从 `.el` 源加载是旧 Guix `.elc` 在 Emacs 31 下的实际行为故障，与上述警告不同，上游或 Guix 重编译后应删除 shim。
 - 新包必须加入根仓库 `source/config.org` 的 `emacs-services` 块 manifest；同步后由 agent 核对清单与配置引用一致（无 config 引用却未进清单的包）。
-- 本目录是 mutable Stow 源，普通配置修改不需要 `blue home`；运行中的 daemon 仍持有旧内存配置，验收完成后提醒用户执行 `herd restart emacs-daemon`。不运行 `blue rebuild`、`guix system reconfigure`，也不直接编辑 `main.el`。
+- 本目录是 mutable Stow 源，普通配置修改不需要 `blue home`；运行中的 daemon 仍持有旧内存配置，验收完成后需要重启。不运行 `blue rebuild`、`guix system reconfigure`，也不直接编辑 `main.el`。
+
+### 6.1 新增包与落地流程（已授权 agent 直接执行）
+
+只有包清单变化才走这一串；只改键位 / 函数走普通流程（tangle → 加载验证 → 重启 daemon）即可。
+
+1. **emacs.org 声明**：惰性包用 `use-package` 的 `:commands` / `:hook` / `:mode` 给真实触发入口（见 5.1），键位用 `custom/bind`。
+2. **同步 manifest**：加进根仓库 `source/config.org` 的 `emacs-services` 块（`specifications->manifest`），按「界面与外观 / 编辑与导航 / 开发工具」等既有分类就位；先 `guix package -A '^emacs-<name>$'` 确认包名存在。
+3. **dry-run**：`blue -n home` 必须通过（会 tangle `config.org` 并做括号与求值检查）。
+4. **应用**：`blue home` 把包装进 home profile。
+5. **重启 daemon**：`herd restart emacs-daemon`。daemon 启动时 `init.el` 会按需重新 tangle `emacs.org`，新键位与新包这时才生效；顺手核对 `~/.config/emacs/main.el` 的 mtime 已更新。
+6. **真机验收**：按 7.6 用 tmux 连运行中的 daemon 逐键实测。
+
+`guix install` / `nix profile install` 等持久安装与 `blue rebuild` 仍然禁止。
 
 ## 7. 验收标准
 
@@ -253,6 +267,8 @@ git status --short
 
 改动代码后，用隔离 runtime 加载产物、确认无 Lisp error（允许 Emacs 31/第三方 warning）。agent 自行构造 `/tmp` 临时 runtime：先 `scripts/configctl tangle` 拼合出最新 `main.el`，再在 `/tmp` 隔离目录里 batch-load `main.el`，检查是否有 error（非 warning）。
 
+**加载期 error 会静默吃掉后续配置**：`load` 遇到 error 就中止，`main.el` 该行之后的全部内容——后续域的键位、hook、命令定义——都不执行，而 daemon 照常启动、表面无异常。所以「命令存在 / 键位查得到」不是加载成功的证据；必须确认 batch-load 无 error，且 `custom:binding-spec` 条数与预期一致。典型触发点见 7.5 的 `key-valid-p`。
+
 ### 7.3 架构硬约束静态检查
 
 ```bash
@@ -268,6 +284,31 @@ test ! -e lisp
 - Dashboard 渲染出中文 section 与 navigator 按钮行（`M-x dashboard-open` 可强刷重排）。
 - `emacsclient FILE` 保持文件 buffer，不被 Dashboard 覆盖；GUI 与 TTY 分支按 frame 生效。
 - 测试前确认无残留 daemon 进程与 stale socket（`pgrep -x emacs`），否则旧实例的 socket 会吞掉连接造成假象；测试后 daemon、socket、process buffer 和临时文件全部清理。
+
+### 7.5 键位变更检查
+
+- **key 必须过 `key-valid-p`**：功能键写 `<f12>` 而不是 `"F12"`——后者被 `key-parse` 拆成 F-1-2 三字符序列，且 `keymap-global-set` 对非法 key 直接 error，会中断 `main.el` 后续加载（见 7.2）；`C-.` / `C-,` 等符号组合合法。
+- **绑定审计**：遍历 `custom:binding-spec`，用 `keymap-lookup (current-global-map)` 校验解析结果与声明一致（`key-binding` 会命中 mode-local 产生假阳性）；非 keymap 目标再查 `fboundp`。惰性包命令在 autoload 阶段 `commandp` 可能为 nil 属正常现象，用真实 `call-interactively` 复核。
+- **mode 覆盖**：在 `fundamental-mode` / `prog-mode` / `org-mode` / `text-mode` 下对比局部与全局绑定，新增键不应被常见 major mode 覆盖。
+- **TTY 生存**：`C-S-*`、`C-<tab>`、`M-<arrow>` 在终端退化或丢失（实测 `C-S-k` 退化为 `C-k`），必须有 `C-c` 前缀镜像。
+- **第三方惰性包命令**：无 autoload cookie 的交互命令（如 `diff-hl-next-hunk`）全局直绑前要显式 `(autoload ...)` 或写进 `use-package :commands`，否则按键 `void-function`。
+
+### 7.6 tmux 真机验收（涉及 daemon / 键位 / 包时执行）
+
+用户用电脑期间不开 GUI 窗口，一律 TTY 验证：
+
+```bash
+tmux new-session -d -s <uniq> -x 180 -y 45
+tmux send-keys -t <uniq> 'emacsclient -t' Enter   # 连运行中的 daemon
+sleep 12; tmux capture-pane -t <uniq> -p | tail   # 确认 Dashboard / 启动完成
+tmux send-keys -t <uniq> C-c t l                  # 逐键实测
+sleep 1; tmux capture-pane -t <uniq> -p | tail    # 看 echo area / mode-line
+tmux kill-session -t <uniq>                       # 收尾
+```
+
+- 回显一闪而过的命令（`user-error` 等）改用 `emacsclient -e 'last-command'` 确认命令确实执行。
+- `tmux kill-session -a` 与 `tmux kill-server` 是冻结命令，不要用。
+- 包与键位的最终判定以**运行中 daemon**（`emacsclient -e`）为准，batch 结果只作初筛。
 
 ### 7.5 包清单同步
 
