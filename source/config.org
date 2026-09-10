@@ -1230,7 +1230,8 @@ target_channel() {
             ch=${sline#"$name":}
             case "$ch" in
                 ''|*[!0-9]*) continue ;;
-                *) echo "$ch"; return 0 ;;
+                *) ap_channel_ok "$ch" || continue
+                   echo "$ch"; return 0 ;;
             esac
         done <<EONAMES
 $autoconns
@@ -1239,6 +1240,20 @@ EONAMES
 $scan
 EOSCAN
     return 1
+}
+
+# 信道允许 AP 主动辐射校验：本机 self-managed regdom（world）下 5G 全带
+# no IR，扫描分支（STA 未连）起在这些信道会被 hostapd 拒绝（NO-IR）。
+# 带 IR-CONCURRENT 的信道在 STA 关联后限制解除——跟随 STA 的分支不需要
+# 此过滤，只有扫描分支（发起时 STA 未连）必须选无 no IR 标志的信道。
+# iw phy 的 Frequencies 行格式：* 5785 MHz [157] (22.0 dBm) (no IR)
+ap_channel_ok() {
+    line=$("$IW_BIN" phy 2>/dev/null | "$GREP_BIN" -E "MHz \[$1\] ")
+    [ -n "$line" ] || return 1
+    case "$line" in
+        *"no IR"*) return 1 ;;
+        *) return 0 ;;
+    esac
 }
 
 stop_hotspot() {
@@ -1262,6 +1277,9 @@ if on_ac_power && ! wifi_trusted; then
     fi
     "$MKDIR_BIN" -p "${CHANNEL_FILE%/*}"
     printf '%s\n' "$ch" > "$CHANNEL_FILE"
+    # shepherd 把进程退出过的服务标记 disabled，herd start 会拒绝；
+    # enable 幂等（未禁用时无副作用）
+    "$HERD_BIN" enable "$HOTSPOT_SVC" 2>/dev/null
     exec "$HERD_BIN" start "$HOTSPOT_SVC"
 fi
 
