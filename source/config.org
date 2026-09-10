@@ -1,67 +1,7 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-
-* Agent 指引
-
-** System
-
-职责： *operating-system* 层。引导器（Limine）、文件系统（LUKS+Btrfs+tmpfs）、内核（自编译 CachyOS LTS =linux-cachyos-lts= ，定义自包含于 =source/files/kernel/= ）、八个按职责拆分的服务块、用户账户。
-
-全局变量定义在 =source/information.scm= （username、%btrfs-subvolumes、%data-dirs、guix-channels）。
-
-=source/files/= 存放需路径注入的静态模板（nftables.conf、qt/rounded.qss 与 qt/check-white.svg、qt/chevron-{up,down}.svg、zed.json、skel/），走 home-files-service-type。
-
-原则：系统层最小化，能用 Home 解决不上浮到 System。
-
-** Home
-
-职责： *home-environment* 层。4 个包列表（desktop/terminal/devtools/user）、dotfiles 部署（home-dotfiles-service-type，layout stow 从 dotfiles/immutable/<app>/ 软链接到 ~）、Home 服务、环境变量、字体。
-
-=source/files/= （home-files-service-type + 路径注入 $$bin/foo$$）与 =dotfiles/immutable/= （stow 软链接）为两套独立部署路径，不互通。
-
-新增应用流程：
-
-1. =dotfiles/immutable/<app>/= 建目录
-2. 加到包列表
-3. 加到 =dotfile-services packages= 列表。
-
-Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中声明。
-
-=~/.config/<app>/= 指向 */gnu/store 只读副本* ，改源后必须 ~ blue home~ 重建软链接才生效。
-
-** 核心概念
-
-+ *Org Noweb* ：#+NAME 命名块 → <<ref>> 引用 → tangle 为 tmp/config.scm。<<ref>> 是 Org Mode 语法，非 Scheme
-+ =config.org= 是唯一 Org 源， *不要新建第二个* ； *不要手动编辑 tmp/ 下的产物*
-
-** 工作方法
-
-*** 块级编辑（优先于读全文件）
-
-修改 config.org 中单个 #+NAME: 块时，用 =block-*= 任务避免读 2000 行：
-
-1. ~blue block-show <name>~ → 提取块 body 到 tmp/block-<name>.scm（并打印路径）
-2. ~tail -n +3 <文件>~ → 编辑 body（前两行是 lang= 和 noweb/plain 标记）
-3. ~blue block-replace <name> <body-file>~ → 原子写回 + 括号验证
-
-*注意* ：body 可能含 <<ref>> 占位，需自行追踪引用块。括号验证只对 scheme 块触发。
-
-高耦合大块（emacs-services 等）仍建议 read 整段。失败后手动 git checkout source/config.org 恢复。
-
-*** 验证流程
-
-+ ~blue check~ → 逐块括号平衡检查（最快，能定位到具体出错的块）
-+ ~blue --dry-run rebuild~ → 完整构建但不写入系统（tangle/括号检查真跑，reconfigure 短路）
-+ ~blue home~ → 仅 Home 层生效，不需 sudo（首选调试方式）
-+ Agent *禁止* 自行 ~blue rebuild~ / ~guix system reconfigure~ （需 sudo，卡住 CLI）
-
-*** 决策规则
-
-+ 优先改 =dotfiles/immutable/<app>/= ，只当需要 Guix 介入时才改 config.org
-+ 新增/重命名 dotfile 子目录后必须同步更新 =dotfile-services packages= 列表
-+ 能用 Home 解决就不用 System
-+ 修改后必走验证流程
+# Agent 指引见 source/AGENTS.md；本文件正文仅保留结构标签与一行式提示。
 
 * 模块导入
 
@@ -171,13 +111,7 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 
 * 配置文件骨架
 
-在这里，我利用了 =Org Mode= 的 =Noweb= 功能
-
-这个功能允许我将代码块命名，然后利用命名来进行引用，将所有引用都放到到下面这个代码块中再自动拼合并输出
-
-引用的语法为 *<<>>* , 所以你看到类似的东西时不要困惑，这不是 scheme 原生的功能，是 orgmode 的相关功能
-
-=skeletons= 字段会替换 =operating-system= 的默认值而非追加，所以先用 =default-skeletons= 保留 =.zprofile= 等默认登录环境，再合并自定义的 =files/skel= 目录
+Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Scheme）。=skeletons= 是替换语义而非追加，须先合并 =default-skeletons= 保留默认登录环境。
 
 #+NAME: main
 #+begin_src scheme :tangle ../tmp/config.scm :noweb yes
@@ -250,16 +184,11 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 
 * 系统配置
 
-------------
-
-此系统配置的关键在于 *让系统能够正常启动* ，所以会尽量精简软件包以及相关服务的数量
-
-待系统成功安装并进入系统之后，则可以直接手动应用用户配置
-
---------------
+职责是 *让系统能够正常启动* ，软件包与服务尽量精简；用户层配置装机后经 Home 应用。
 
 ** Bootloader
-在这里使用了由 =rosenthal= 频道提供的 *Limine*
+
+Limine（=rosenthal= 频道）。
 
 #+NAME: bootloader-configs
 #+begin_src scheme
@@ -269,11 +198,8 @@ Emacs 新包必须同时在 =emacs-services= 的 ~specifications->manifest~ 中�
 #+end_src
 
 ** FileSystems
-这里的配置文件需要根据自己的实际情况进行修改。
 
-我目前是使用了 =LUKS + Btrfs= 的架构，同时高强度地使用subvol功能，具体的subvol配置放置在 [[../information.scm][information.scm]] 中，方便我直接做相应地修改
-
-Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休眠二选一时保留了休眠，所以休眠镜像会把内存 *明文* 写到该分区。
+=LUKS + Btrfs= + subvol；子卷/数据目录清单在 [[../information.scm][information.scm]] 。取舍：保留休眠、放弃加密 swap 恢复（Guile initrd 不支持）——休眠镜像明文落盘 swap。
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -355,10 +281,8 @@ Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休�
 ** Kernel
 
 *** 内核相关参数设置
-固件仍取自 =nonguix= 频道；内核为自编译的 =linux-cachyos-lts= （CachyOS 6.18 LTS 源码，定义与取舍自包含于 =source/files/kernel/= ）。自编译内核无替代物，升级点版本即本机全量编译。
 
-=threadirqs= 开启中断线程化：
-+ SOF/HDA 中断处理成为可调度线程，可被 PipeWire 的 RT 线程按优先级抢占，减少 xrun
+固件取自 =nonguix= ；内核 =linux-cachyos-lts= 自编译（定义与操作规程见 =files/kernel/AGENTS.md= ）。=threadirqs= 中断线程化，配合 =@audio= RT 优先级压音频 xrun。
 
 #+NAME: kernel-configs
 #+begin_src scheme
@@ -383,7 +307,6 @@ Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休�
 #+end_src
 
 *** 内核相关服务设置
-包含了很多与内核相关的service，比如说内核模块的加载、内核参数的设置等等
 
 #+NAME: kernel-services
 #+begin_src scheme :noweb yes
@@ -394,9 +317,7 @@ Guix 的 Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休�
 #+end_src
 
 **** 内核模块加载
-~ip_tables/iptable_nat~ 是 iptables 兼容层，libvirt 与 podman 的网络后端依赖它，与 nftables 规则集共存
-
-zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modprobe，cmdline 的 ~zswap.compressor=zstd~ 必然回退 lzo；此处在模块加载后运行时切换（官方支持：旧页留原池，新页用新算法）。
+~ip_tables/iptable_nat~（iptables 兼容层，libvirt/podman 网络后端）；=zswap.compressor= 模块加载后运行时切 zstd（cmdline 写法必回退 lzo）。
 
 #+NAME: kernel-module-services
 #+begin_src scheme
@@ -431,9 +352,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** sysctl 调优
-- =vm.dirty_writeback_centisecs= —— 空闲时减少 SSD 唤醒（续航）；笔记本有电池，掉电风险可忽略
-- =net.core.default_qdisc=fq= —— BBR 的 pacing 依赖 fq 的 EDT 模型，fq_pie 会让 BBR 退化为内核软件 pacing（CPU 开销更高、突发延迟更差）
-- =net.ipv4.tcp_rmem= 与 =tcp_wmem= 三元组 —— 高 BDP（跨国代理链路）下放开自动调优上限；只设 =*_max= 不设三元组时 tcp_wmem 仍受默认 4M 限制
+取舍理由（BBR×fq、TCP 三元组、SSD 唤醒）见 source/AGENTS.md。
 
 #+NAME: sysctl-services
 #+begin_src scheme
@@ -471,7 +390,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** 音频实时优先级
-给 =@audio= 组开放 RT 调度与无限 memlock，配合 =threadirqs= 降低音频 xrun；全体进程的 nofile 上限同步放开
+=@audio= 开 RT + 无限 memlock，配合 =threadirqs= 压 xrun；nofile 上限同步放开。
 
 #+NAME: pam-limits-services
 #+begin_src scheme
@@ -573,8 +492,6 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 
 *** 文件系统相关服务
 
-在这里就是一些负责维护文件系统树的服务
-
 #+NAME: filesystem-services
 #+begin_src scheme :noweb yes
 (append
@@ -585,7 +502,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** 固定 machine-id
-*fixed-machine-id* 负责固定 =/etc/machine-id= 这个文件中的内容，具体的算法在 [[../information.scm][information.scm]] 中
+算法在 [[../information.scm][information.scm]] 。
 
 #+NAME: machine-id-service
 #+begin_src scheme
@@ -595,7 +512,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** 休眠 resume 设备
-每次启动时将 swap 分区写入 =/sys/power/resume= （休眠必需）
+每次启动将 swap 分区写入 =/sys/power/resume= （休眠必需）。
 
 #+NAME: resume-device-service
 #+begin_src scheme
@@ -624,9 +541,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** 开机清空 /tmp
-/tmp 已改为 btrfs 持久化挂载，用此服务替代原 tmpfs 的「重启自动清空」行为。
-+ 标志文件保证每个开机周期只有首次执行真正清空，其余全部跳过。清空时用 =find -mindepth 1 -delete= 保留目录本身，单条目删除失败不阻断启动；随后把粘滞位强制修正为 1777（btrfs 子卷挂载点默认权限可能非 1777）。
-+ *cleanup-/tmp-prereq* 把 =cleanup-/tmp= 注入 =user-processes= 的 requirement，使所有经 user-processes 启动的服务（dbus/桌面/ssh-agent 等）确定性地排在 /tmp 清空之后。复用 Guix 官方 file-systems→user-processes 注入机制（见 gnu/services/base.scm 的 file-system-service-type 同款手法）。
+替代原 tmpfs「重启自动清空」：标志文件保证每周期一次，注入 =user-processes= 排序（机理见 source/AGENTS.md）。
 
 #+NAME: cleanup-tmp-services
 #+begin_src scheme
@@ -657,8 +572,7 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 **** /data 权限与 XDG 目录
-+ *fix-data-perms* 负责修复 =/data= 目录权限（0755：目录条目的创建/删除都由 root 在 activation 完成，普通用户无需写 =/data= 根）
-+ *create-xdg-dirs* 负责在 =/data= 目录和 =/home/user= 目录中创建同名的文件夹，以用于bind-mount
+*fix-data-perms* 修复 =/data= 权限（0755）；*create-xdg-dirs* 在 =/data= 与 home 两侧建同名目录供 bind-mount。
 
 #+NAME: data-dirs-services
 #+begin_src scheme
@@ -704,33 +618,14 @@ zstd 是模块而 zswap 初始化（late_initcall）早于任何 userspace modpr
 #+end_src
 
 *** 网络相关配置
-使用一份静态 nftables 规则集，NetworkManager dispatcher 只原子更新 =inet filter= 表的 =trusted_ifaces= 集合。它绝不执行 =flush ruleset=，因而不会删除 libvirt 或其他服务在运行时安装的 nftables 规则。
 
-- =source/files/nftables.conf= —— 唯一由 =nftables-service-type= 加载的规则集
-- 可信 connection profile 列表只保存在 age 密文中，不在 Scheme 源码保留明文副本
-- dispatcher 在可信 profile 的 =up= 事件中加入 =wlp0s20f3= ；在非可信或 =down= 事件中删除它，失败时默认严格
-- =/etc/NetworkManager= 是 btrfs 持久化挂载点，etc-service-type 无法直接写入，dispatcher 脚本经 activation-service-type 在每次 reconfigure 时拷贝到位
-
-白名单使用 NetworkManager 的 ~CONNECTION_ID=（profile 名称）~ ，不是 SSID；它必须与 ~nmcli connection show~ 的名称一致。列表以 age 密文保存在 =dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age= 。dispatcher 只注入密文与 =age=、=nft=、=grep= 的 store 路径，事件触发时把解密结果直接通过管道交给 =grep= ，不产生持久化明文。私钥缺失或解密失败时仅撤销 WiFi 信任，NetworkManager 继续正常运行，因此不会阻断普通联网。
+静态 nftables 规则集 + NM dispatcher 只原子更新 =trusted_ifaces= 集合（绝不 flush ruleset）。可信名单是 NM profile 名（非 SSID），存 age 密文 =wifi-trust.age= ，解密走管道不落明文，私钥缺失仅撤销信任不阻断联网；dispatcher 经 activation 拷贝（=/etc/NetworkManager= 是持久挂载点）。完整设计要点见 source/AGENTS.md。
 
 + 热点 AP + WiFi 客户端并发（2026-09-09 事故复盘后重构）
 
-硬件事实（=iw phy= 组合规则）：=managed + AP= 并发合法，但 =#channels <= 1=——AP beacon 一开，整个 radio 锁死单一信道，STA 必须与 AP 同信道。事故五环因果链与本设计的对应防御：
+=managed + AP= 共享 radio 限单信道；决策脚本 =hotspot-decide= 统一判定（AC 供电且当前 profile 不在可信名单才开），四个触发入口（开机服务、NM dispatcher、udev 电源插拔、每分钟 recheck timer）收敛 + flock 串行 + 事件上下文后台化。应急开关 =touch /run/hotspot-disabled= （tmpfs，重启自愈）。五环防御与安全不变式见 source/AGENTS.md。
 
-1. *隔离用 udev，不用 conf.d*：NM 1.54 不认 =device.interface-name= 键（unknown key 警告），=managed=0= 从未生效；且 =/etc/NetworkManager= 是持久子卷，坏 conf 文件跨系统代、跨重启残留——回滚救不了，只能手动清。现改用 NM 官方 udev 机制 =ENV{NM_UNMANAGED}="1"=（规则文件随系统代原子切换），activation 顺带删除持久层里的历史残留 =20-uap0-unmanaged.conf=。
-2. *信道不确定绝不起热点*：AP 起在错误信道会把 radio 锁死，STA 从此连不上其他信道的网络（开机抢跑即断网事故）。热点信道只允许两个来源：STA 已连信道；扫描可见的 autoconnect WiFi profile 信道（这样 NM 稍后自动关联时天然同信道）。两者皆无时 =exit 0= 等下一个触发点重判——每分钟一次的 =hotspot-recheck= timer 保证收敛。
-3. *hostapd 配置必须带 =hw_mode=*：默认 =g= 只有信道 1-14，5G 信道号配 =g= 即 =Could not determine operating frequency=（事故中热点 8 连败的真凶）。执行体从 =/run/auto-hotspot/channel= 读决策脚本选定的信道，文件缺失即拒绝启动——respawn 或误启动不会用假信道起 AP。
-4. *=hotspot-ap= 不 respawn*：执行体失败即停，由决策脚本在下个触发点重拉。respawn 只会产生反复折腾接口的风暴（事故中 shepherd 日志被刷爆）。
-5. *事件上下文后台化 + flock*：udev RUN 与 NM dispatcher 里同步跑决策会拖慢事件处理（dispatcher 版本曾被 NM 退出的 SIGTERM 杀死）；检测到 =SUBSYSTEM= / =NM_DISPATCHER_ACTION= 环境时自重入后台执行，flock 保证多入口并发收敛为串行。
-
-应急开关：=touch /run/hotspot-disabled=（tmpfs，重启自愈）后决策只关不开，可在热点链出任何问题时立即止血。
-
-SSID 与密码保存在 age 密文 =dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-hotspot.age= （两行：SSID、密码），生成命令：
-#+begin_src bash
-printf 'SSID\n密码\n' | age -r <age公钥> -o .../wifi-hotspot.age
-#+end_src
-
-热点不是开机常开，由决策脚本 =hotspot-decide= 统一判定：AC 供电 且 =wlp0s20f3= 当前 profile 不在可信名单（含未连 WiFi、仅网线）时开启热点，其余情况（电池供电、已连可信 WiFi）关闭。四个触发入口收敛到同一脚本：=auto-hotspot= 服务（开机）、NM dispatcher 任意设备的 =up/down=（WiFi 切换与网线插拔）、udev =power_supply= 插拔（电源线变化）、=hotspot-recheck= timer（每分钟兜底，含信道跟随与自愈）。脚本只读 =sysfs= 电源状态与 NM 当前连接，幂等。
+SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生成命令见 source/AGENTS.md）。
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
@@ -1056,7 +951,6 @@ printf 'SSID\n密码\n' | age -r <age公钥> -o .../wifi-hotspot.age
                                (respawn? #f))))))
 #+end_src
 
-nm-dispatcher-trusted-connection
 #+name: nm-dispatcher-trusted-connection
 #+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
 #!/bin/sh
@@ -1368,7 +1262,7 @@ exec "$HOSTAPD_BIN" "$conf"
 
 nftable 配置
 
-规则集只在开机时由 =nftables-service-type= 整体加载一次，dispatcher 只原子更新 =trusted_ifaces= 集合，不会重载或清空整个 ruleset。物理 WiFi 接口默认不在可信集合中，未连接或不可信网络下保持受限。DHCP 与 ICMP 放行保证网络引导在 WiFi 不可信或密文无法解密时也能工作。
+开机整体加载一次，dispatcher 只动 =trusted_ifaces= ；DHCP/ICMP 始终放行，保证不可信态也能引导联网。
 
 #+begin_src conf :tangle ../tmp/nftables.conf
 flush ruleset
@@ -1460,7 +1354,7 @@ iifname "uap0" oifname != "uap0" masquerade
 
 *** UDEV规则
 
-动态生成的规则文件必须用 =file->udev-rule= 包装：它把单文件包装成含 =lib/udev/rules.d/= 结构的目录派生，裸 =computed-file= 会被 rules union 静默跳过。
+动态生成的规则文件必须 =file->udev-rule= 包装（裸 =computed-file= 被 rules union 静默跳过）。
 
 #+NAME: udev-services
 #+begin_src scheme :noweb yes
@@ -1501,9 +1395,7 @@ iifname "uap0" oifname != "uap0" masquerade
 #+end_src
 
 **** AC 电源状态联动
-插电 → PPD performance + WiFi 省电关；拔电 → power-saver + WiFi 省电开。由 udev 规则在 power_supply add/change 事件时以 root 调用。
-
-store 路径在宿主侧算好后经 =#\$= 注入 gexp——gexp 内不能裸调 =file-append= / =spec->pkg= （builder 无此绑定）。udev 冷插拔事件早于 PPD 启动，那次调用会因 PPD 未上线而静默失败， =ac-power-init= 在开机时按当前电源状态补跑一次。
+插电 → PPD performance + WiFi 省电关；拔电 → power-saver + 省电开（udev power_supply 事件 root 调用，=ac-power-init= 开机补跑冷插拔窗口）。
 
 #+NAME: ac-power-services
 #+begin_src scheme
@@ -1568,7 +1460,7 @@ store 路径在宿主侧算好后经 =#\$= 注入 gexp——gexp 内不能裸调
 #+end_src
 
 **** USB 电源权限
-USB 设备的 =power/control= 默认 root:root 0644，用户不可写。设备注册时放开为 0666，让熄屏守护 =usb-power-watch= 能以普通用户身份挂起/恢复 USB 设备。设备重新枚举时 add 事件自愈。
+=power/control= 放开 0666：熄屏守护 =usb-power-watch= 以普通用户挂起/恢复 USB 设备（add 事件自愈）。
 
 #+NAME: usb-power-services
 #+begin_src scheme
@@ -1601,7 +1493,7 @@ USB 设备的 =power/control= 默认 root:root 0644，用户不可写。设备�
 #+end_src
 
 **** KMS 控制台
-tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台。tty1 有意不设 getty：登录集中在 tty7 的 greetd，tty1 留作内核消息与应急切换。
+tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录集中 tty7 greetd。
 
 #+NAME: kmscon-services
 #+begin_src scheme
@@ -1615,9 +1507,7 @@ tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台。tty1
 
 **** root 服务与定时任务
 
-- =guix-gc= —— 每周日 18:00 删除 30 天前的旧世代、腾出 20G 空间
-- =flatpak-system-update= —— 每周六 18:00 自动更新 flatpak 系统安装的软件包，仅在使用外接电源时执行（避免电池下大下载）
-- =fstrim= —— 每周日 19:00 兜底 TRIM（Btrfs discard=async 之外的每周保障）；fstrim 不在系统 profile，必须从 util-linux 注入 store 路径
+周日 18:00 =guix-gc= （删 30 天前旧世代、腾 20G）、周六 18:00 =flatpak-system-update= （仅外接电源）、周日 19:00 =fstrim= （Btrfs discard=async 之外的兜底；从 util-linux 注入 store 路径）。
 
 #+NAME: root-services
 #+begin_src scheme
@@ -1718,9 +1608,7 @@ tty2 到 tty6 用 kmscon 提供 pango 渲染的大字号（24）控制台。tty1
 #+end_src
 
 *** 桌面服务
-使用 Guix 原生的 =%desktop-services= 作为基础，删除默认的显示管理器和 mingetty 替换为 greetd + tuigreet 登录管理器，并添加蓝牙、屏幕锁、背光控制等桌面服务。
-
-=modify-services= 仅保留 guix 配置的 modify（因为 guix-service 只能有一个实例），elogind 的挂起/休眠键一律忽略（插电源时不允许任何进程突然中断系统）； =hibernate-polkit= 允许本地活跃用户（elogind + polkit 判定）执行休眠/挂起/混合休眠。
+=%desktop-services= 基础上删除 GDM/mingetty，换 greetd + tuigreet（tty7）登录，加蓝牙/屏幕锁/背光等桌面服务。=modify-services= 只保留 guix 的 modify（guix-service 仅一个实例）；elogind 挂起/休眠键一律 ignore；=hibernate-polkit= 放行本地活跃用户休眠/挂起/混合休眠。
 
 #+NAME: desktop-services
 #+begin_src scheme :noweb yes
@@ -1928,23 +1816,7 @@ polkit.addRule(function(action, subject) {
 #+end_src
 
 ** Users 与主机信息
- password 行可以用于设置默认密码
-
-利用 (password (crypt "InitialPassword!" "$6$abc")))
-
-可以创建一个初始密码，其中crypt函数的第一个字符串为 明文的密码
-
-然后在进入系统之后重新注释，并自行设置密码，或者将 password
-
-后的函数设置为 Hash化后的密码
-
-利用
-
-#+begin_src bash
-echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
-#+end_src
-
-即可返回需要填入的值
+=password= 行设初始密码：=(password (crypt "明文" "$6$salt"))= ，或直接填哈希（=echo "明文" | guix shell openssl -- openssl passwd -6 -stdin= 生成）；装机后必改。
 
 #+NAME: information-configs
 #+begin_src scheme
@@ -1980,16 +1852,7 @@ echo "InitialPassword!" | guix shell openssl -- openssl passwd -6 -stdin
 
 * 用户配置
 
---------------
-
-我会尽量地把更多的配置放在这里，而 *系统配置* 章节
-
-只会放置一些保障系统正常使用所必须的配置，这样的好处在于:
-
-1. 在首次安装系统的时候，可以少安装很多很多的软件包，这样安装系统的时长不会说长的太过分，也可以尽量减少因为网络问题而造成的报错
-2. 系统和用户分开配置，这样在修改某一块的配置时不用将一整个系统都 reconfighration 一遍，方便多次迭代
-
---------------
+职责：尽量多的配置放这里，系统层只留装机必需——首装更快，且 Home 层迭代不碰系统 reconfiguration。
 
 ** Packages
 
@@ -2247,7 +2110,7 @@ hermes-desktop 的 FHS 容器运行时
 "gsettings-desktop-schemas"
 #+end_src
 
-进 ~home-packages~ ：被 home profile 当前 generation 引用 -> GC root，guix gc 不清理。
+进 ~home-packages~ 保 GC root（guix gc 不清理）。
 #+NAME: hermes-desktop-runtime-packages
 #+begin_src scheme :noweb yes
 (specifications->packages
@@ -2255,7 +2118,7 @@ hermes-desktop 的 FHS 容器运行时
   <<hermes-desktop-pkg-specs>>))
 #+end_src
 
-tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数据目录。cairo/dconf/glib/gtk+ 这几个会跟系统中软件包冲突的包只进此 manifest，不进 home profile。
+tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包（cairo/dconf/glib/gtk+）只进此 manifest 不进 home profile。
 
 #+NAME: hermes-desktop-manifest-file
 #+begin_src scheme :noweb yes :tangle ../tmp/hermes-desktop-manifest.scm
@@ -2267,15 +2130,7 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 
 *** 自定义包与补丁
 
-自建变体包与上游补丁的集中地。~custom-package-defs~ 放顶层
-~define~，经 noweb 拼进 ~main~ 顶层；~custom-packages-list~ 只放
-表达式 —— 它在 ~%home~ 的 ~(append ...)~ 引用点被内联，表达式位置
-写不了 ~define~。新增包：先在 defs 块定义，再登记进 list 块。
-
-*历史（workaround 已移除）*：gst-plugins-good（matroskademux off-by-one）
-与 libcamera-minimal（i686 x87 浮点精度）曾各挂一个变体 workaround，
-2026-09-06 上游同日修复（guix ~c2ddcf3613~、~b0934bb792~）后移除。
-板块与两块结构保留，备后续自建包与补丁。
+自建变体包与上游补丁的集中地；defs 块放顶层 ~define~（noweb 拼进 ~main~ 顶层），list 块只放表达式（在 ~%home~ 引用点内联，表达式位置写不了 ~define~）。新增包：先 defs 后 list。结构保留备后续自建包与补丁。
 
 #+NAME: custom-package-defs
 #+begin_src scheme :noweb yes
@@ -2285,28 +2140,7 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 
 **** CachyOS LTS 内核
 
-对标上游 linux-cachyos-lts 变体：CachyOS 官方预拼补丁的 6.18 LTS 源码 tarball（Cachy Sauce + EEVDF 调度器，无 BORE、无 LTO），nonguix =linux-6.18= 出构建配方，经 =customize-linux= 换源换配置。defconfig 取自 Testament 作者 hako 的 kernel-config 仓库 =defconfig_server= （钉 49c98a1，已在 6.18 线多机验证，钉在本仓 =source/files/kernel/defconfig-cachyos-lts= ），kconfig 片段把它调成桌面档并按设备裁剪。
-
-策略：其他软件编译要快、内核性能优先、LTS 降低重编频率；升级与换机零摩擦。
-
-内核配置自包含于 =source/files/kernel/= 目录，config.org 只 load 一行：
-
-+ =linux-cachyos-lts.scm= —— 包定义自包含：版本与源（升级点）、defconfig 引用、通用桌面档（Cachy Sauce、-O3、1000Hz、preempt full、THP always、BBR、debuginfo 反选、Guix 沙箱与 initrd 必需符号、default-y 门控钉住）、机器拼合
-+ =defconfig-cachyos-lts= —— pristine 的 hako defconfig，永不手改，只随上游 commit 更新
-+ =machines/redmibook-pro-16-2024.scm= —— 本机硬件钉住（AX211/SOF-MTL/i915+xe/NPU/UVC/i2c-hid 触摸板/TBT4 等，防 defconfig 漂移）+ =machines/redmibook-trim.kconfig= 大类裁剪（1780 符号：非 Intel 无线/网卡/GPU/声卡、DVB 采集卡、SCSI 阵列、XEN/HYPERV/VMware 客体、CAN/NFC/ATM/ISDN、USB 串口、触摸屏/游戏杆、老平台驱动等，裸符号 = 反选，分组注释）
-
-+ 换机：新建 =machines/<设备>.scm= （导出同名 =%machine-configs= ）与 =<设备>-trim.kconfig= ，改 =linux-cachyos-lts.scm= 里一行 load；本机裁剪依据（硬件清单）写在 machine scm 文件头
-+ 升级点版本（如 6.18.49-1）：只改 =linux-cachyos-lts.scm= 的 =%cachyos-lts-version= 与 base32；hako defconfig 更新时重跑裁剪清单 diff 再核对
-+ 裁剪符号若与 defconfig 漂移冲突，构建期 =verify-config= 会点名报错，按提示补列或删行即可收敛
-+ =CONFIG_USER_NS=y= 必须保留：guix 构建沙箱依赖用户命名空间（在通用档）
-
-不启用 BORE（2026-09-08 消融复核）：firelzrd 已发布精确适配 6.18.48 的 BORE 6.8.0 补丁（对 CachyOS 源需手工融合 fair.c 一处 hunk，与 Cachy Sauce 的 base_slice 分支共存），QEMU 消融实测吞吐无增益且 pipe 场景 -7.7%（超出噪声带），与 Phoronix 对 CachyOS BORE 变体的评测一致（其 geomean 亦不及默认 EEVDF）；交互响应收益无客观测量支撑，且 CachyOS 官方 LTS 已切回 EEVDF。维持 EEVDF，想再试时按 =kernel/AGENTS.md= 的消融流程复测。
-
-消融落地（2026-09-08，按分层放置）：通用档关 SCHEDSTATS/SCHED_TRACER（桌面不用调度统计）并反选 hako defconfig 的 MAXSMP（发行档通用性遗留，把 NR_CPUS 钉死 8192 且连带 CPUMASK_OFFSTACK 堆分配位图，任何 ≤512 CPU 桌面机通用）；machine 层按本机拓扑关单节点 numa balancing（故障扫描纯开销）、NR_CPUS=64（22 线程）——消融 fork +1.7%、syscall +4.6%，组合终验 fork +2.3% 无倒退。另实测 =spectre_bhi=off= 无收益（MTL 的 BHI 缓解是 BHI_DIS_S 硬件位，近零开销），cmdline 无需动。
-
-不启用 ThinLTO/AutoFDO（CachyOS 主线默认是 Clang ThinLTO + AutoFDO/Propeller）：Phoronix/Google 数据显示 Clang+LTO 相对普通 GCC 约 +5%，但相对本配置的 GCC -O3 + native 基线增量约 1-3% 且负载相关（Gentoo wiki 明确可能持平或倒退）；clang-LTO 内核还要求外部模块同链 clang 工具链（v4l2loopback 会被波及）；AutoFDO 依赖 perf LBR 采样与 autofdo 工具链（guix 频道无此包）加两遍式 profile 基建。收益与复杂度不成比例，留作后续可选实验。
-
-下载 tarball 后 =guix hash <tarball>= 取 base32。tarball 的 Makefile 决定 =uname -r= （6.18.48），包版本号 6.18.48-2 只是元数据。
+对标上游 =linux-cachyos-lts= 变体（Cachy Sauce + EEVDF，无 BORE 无 LTO），defconfig 取自 hako kernel-config（钉 49c98a1）调成桌面档并按设备裁剪。全部定义与操作规程（升级/换机/裁剪/消融/对拍）及取舍结论（BORE/ThinLTO/AutoFDO 不启用、消融分层放置）自包含于 =source/files/kernel/= ，见其 =AGENTS.md= ；config.org 只 load 一行。=CONFIG_USER_NS=y= 不可裁（Guix 构建沙箱）。
 
 #+NAME: cachyos-lts-kernel
 #+begin_src scheme
@@ -2318,17 +2152,7 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 
 **** 指纹识别栈
 
-本机指纹传感器为 Goodix =27c6:689a=（match-on-chip 型，出厂固件，无需额外固件文件）。上游 libfprint 的 =goodixmoc= 开源驱动自 v1.94.9 才认领该 PID，而 Guix 上游停在 1.94.5，设备枚举时无人认领 —— fprintd 报 "No devices available"，这就是 Guix 下指纹不可用的根因（NixOS 的 libfprint ≥1.94.9 故可用；网传 Goodix 闭源 TOD 驱动只覆盖 533C/539C/550a 等其他型号，与本机无关，勿装）。
-
-方案：libfprint 升至 1.94 维护线 =1.94.100=，fprintd 1.94.2 → 1.94.5（其构建要求 libfprint ≥1.94.9，两包必须同步升级）。相对上游包定义的全部变体点：
-
-+ 1.94.7 起 URU4x00 驱动由 NSS 改用 OpenSSL ≥3：输入替换 =nss → openssl=，原为 lib/nss 设 rpath 的 configure flag 一并移除（OpenSSL 库位标准，ld-wrapper 自动补 RUNPATH）
-+ eudev 的 pkg-config 故意报 systemd 兼容版本（251），libfprint 的 =udev_hwdb=auto= 逻辑误判"systemd ≥248 已内置 autosuspend hwdb"而跳过安装——Guix 上必须 =-Dudev_hwdb=enabled= 强制装（仅多一条无害 warning），否则 autosuspend 条目全系统缺失
-+ fprintd 1.94.5 把 libsystemd provider 做成 meson 选项：=-Dlibsystemd=libelogind= 取代旧 =patch-systemd-dependencies= 补丁（新版 meson.build 写法变了，旧正则会匹配失败）
-+ 1.94.5 的 pam_wrapper 降为 =required:false=、Python 测试依赖检查只发 warning：旧 =ignore-test-dependencies= 补丁整体删除
-+ =patch-output-directories= 保留：相关行的 meson.build 写法未变，正则仍命中
-
-系统侧接线（desktop-services 板块）：=fprintd-service-type= 换新包（fprintd 守护进程经 D-Bus 按需激活，非 shepherd 常驻服务，=herd= 里看不到是正常的）；PAM transformer 把 =pam_fprintd.so= 以 sufficient 插到 pam_unix 之前（对标 NixOS fprintAuth 语义，指纹失败回落密码）；libfprint 的 autosuspend hwdb（含 =27c6:689a= 条目）挂 =udev-service-type=。升级仅改两个 version 与对应 hash（=guix hash -f nix-base32=）。
+本机传感器 Goodix =27c6:689a= 需 libfprint ≥1.94.9（=goodixmoc= 才认领），Guix 上游 1.94.5 不认——故变体包：libfprint =1.94.100= + fprintd =1.94.5= 两包必须同步升级。变体点（nss→openssl、=udev_hwdb=enabled= 等）与系统侧接线见 source/AGENTS.md；升级仅改两个 version 与对应 hash（=guix hash -f nix-base32=）。
 
 #+NAME: fingerprint-packages
 #+begin_src scheme
@@ -2415,9 +2239,7 @@ tangle 成独立 manifest，经 =home-files-service-type= 部署到 hermes 数�
 #+end_src
 
 ** Services
-包列表统一使用 Guix 内置的 ~specifications->packages~ （经 =(gnu)= 复合模块可用，无需额外导入包模块）：
-+ 接受 ='("name@version:output" ...)= 规格列表，
-+ 返回 =(package "output")= 元组列表。
+包列表统一用内置 ~specifications->packages~ （经 =(gnu)= 可用）：接受 ='("name@version:output")= 规格列表，返回 =(package "output")= 元组。
 
 *** Fish 服务
 
@@ -2471,10 +2293,7 @@ end
 #+end_src
 
 *** Emacs 服务
-这个服务可以做到两件事：
-
-1. 利用 ~emacs --fg-daemon~ 来开启一个 emacs 服务
-2. 将这下面的所有包放到一个只有 emacs 能够访问的专属 profile 中
+~emacs --fg-daemon~ 常驻服务；包进 emacs 专属 profile。
 
 #+NAME: emacs-services
 #+begin_src scheme
@@ -2579,7 +2398,7 @@ end
 *** 桌面常用软件的相关服务
 
 **** 全局服务
-这里用了一个空的 ~dbus~ 服务为依赖其的服务提供服务，同时防止它与拉起 niri 所用的 ~dbus-run-session~ 中的会话冲突
+空 ~dbus~ 服务承接依赖，避免与拉起 niri 的 ~dbus-run-session~ 会话总线冲突。
 
 #+NAME: user-desktop-services
 #+begin_src scheme :noweb yes
@@ -2804,8 +2623,6 @@ end
 #+end_src
 
 **** 桌面常驻组件
-这里利用 *scheme* 的 =lambda= 函数来包装了一个列表;这样的操作在我的配置文件里面多次出现，这样可以不用重复写很大一段内容。
-这也正是 Guix 的优势所在: 可以利用 Scheme 强大的生态来进行各种操作。
 
 #+NAME: essential-desktop-services
 #+begin_src scheme
@@ -2911,7 +2728,7 @@ done
 #+end_src
 
 **** Hermes 后端与网关
-直接在开机的时候启动对应的 =dashboard= 和 =gateway= , 并且我们目前的 ~hermes-desktop~ 包装实际上也会直接将当前创建的这个服务作为需要连接到的网关，以获得最完整的运行环境。
+开机启动 =dashboard= / =gateway= ；~hermes-desktop~ 包装以此网关为连接目标。
 
 #+NAME: hermes-services
 #+begin_src scheme
@@ -2947,7 +2764,7 @@ done
 #+end_src
 
 **** cpu-dma-latency
-按需持有 =/dev/cpu_dma_latency= （audio 组可写），把允许的 C-state 保持在最浅档，消除深度睡眠唤醒抖动。代价是待机功耗上升，因此默认不自启；需要最低音频延迟时手动 ~herd start cpu-dma-latency~ ，用完 ~herd stop cpu-dma-latency~ 。
+按需持有 =/dev/cpu_dma_latency= （audio 组可写）压浅 C-state 消唤醒抖动；默认不自启（待机功耗代价），需要时 ~herd start/stop cpu-dma-latency~ 。
 
 #+NAME: cpu-dma-latency-service
 #+begin_src scheme
@@ -3009,8 +2826,7 @@ done
 *** dotfiles 管理相关服务
 
 **** dotfiles 管理服务
-这个服务可以直接将我们目前的 ~dotfiles/~ 文件夹整体移交给 =Guix Home= 管理。
-在这里，我使用了 ~stow~ 的 layout，这样可以把 dotfiles 分组进行管理
+把 ~dotfiles/~ 整体移交 =Guix Home= 管理（stow layout 分组）。
 
 #+NAME: dotfile-services
 #+begin_src scheme
@@ -3050,11 +2866,7 @@ done
 #+end_src
 
 **** 文件管理服务
-这个服务可以让你自行指定需要管理的文件，以及其目的地。
-
-有一些软件会需要在其配置文件内写入某个二进制的具体位置，此时就可以使用由 *rosenthal* 提供的 =computed-substitution-with-inputs= 函数，用法为：
-1. 在需要的配置文件内以 =$$bin/foo$$= 的形式来写你所需要写入的二进制路径
-2. 在 =specs->pkgs= 参数中写入能够提供这些二进制的软件包
+自行指定文件与目的地；需注入二进制路径时用 *rosenthal* =computed-substitution-with-inputs= （模板写 =$$bin/foo$$= + =specs->pkgs= 给包）。
 
 #+NAME: home-files-services
 #+begin_src scheme
@@ -3122,7 +2934,7 @@ done
 
 **** 软件相关的环境变量
 
-=NIX_USER_CONF_FILES= 让 nix 客户端在 =nix.conf= 之外额外加载 =gh-token.conf= ：GitHub API token 供 flake 解析认证（避免 403 限流），token 本体在 =~/.config/nix/gh-token.conf= （0600，不进 git）。
+=NIX_USER_CONF_FILES= 追加载入 =gh-token.conf= （GitHub token 防 flake 解析 403 限流；0600 不进 git）。
 
 #+NAME: extend-environment-variables
 #+begin_src scheme
@@ -3241,8 +3053,6 @@ done
 
 ** Font
 
-字体相关配置
-
 #+NAME: font-services
 #+begin_src scheme
 (list (simple-service 'extend-fontconfig home-fontconfig-service-type
@@ -3265,18 +3075,10 @@ done
 
 * Live ISO
 
-这里定义自研 Live ISO 的 =operating-system=, 与主机 =%system= 完全独立.
+自研 Live ISO 的 =operating-system= ，与主机 =%system= 完全独立；=blue build-iso= → tangle =tmp/live-iso.scm= → =tools/build-image.scm= 出 iso9660（label 内嵌构建日期，有意放弃逐字节可复现换直观辨识）。
 
-=blue build-iso= (见 blueprint.scm build-iso-command) 会 tangle 出 =tmp/live-iso.scm=, 再调 =tools/build-image.scm= 生成 iso9660 镜像. label 内嵌构建日期：有意放弃逐字节可复现，换取镜像版本的直观辨识.
-
-+ =desktop= (主要, XFCE 桌面环境 + lightdm 自动登录 live 用户, 默认 Wayland 会话 via labwc).
-+ =minimal= (辅助, 纯 CLI fallback).
-
-** 重要约束 (改本节必读)
-
-- tangle 目标 =../tmp/live-iso.scm= 绝对不能复用 =../tmp/config.scm=, 否则 =%live-installation-os= 会污染主机配置 (见 docs §9.4.5 陷阱 1).
-- =<<live-modules>>= 只在本节被 =live-installation-os= 引用, 绝不能塞进主 =<<modules>>= 块 (会污染 tmp/config.scm).
-- =blue check= 不做 cross-tangle 验证, 改完务必 =tail tmp/live-iso.scm= 确认末行是 =%live-installation-os= (裸值).
++ =desktop= （主用，XFCE + labwc Wayland，live 用户 autologin）
++ =minimal= （辅助，纯 CLI fallback）
 
 ** ISO 专用模块导入
 
@@ -3312,15 +3114,7 @@ done
 
 ** 系统主体
 
-基础 OS 继承 guix core 的 =make-installation-os=（默认 grub hybrid 引导；仅维护 x86_64 镜像，无 aarch64 计划）。
-
-Live 环境只用精简频道（guix + nonguix，参照 Testament minimal.scm 的 channels-with-nonguix）：ISO 不需要 bluebox/jeans/rosenthal 这些主机的建站频道，装机后由 =blue rebuild= 重建完整频道集。它经 modify-services 写进 guix-configuration 的 channels 字段，让 Live 环境的 =/etc/guix/channels.scm= 预置 nonguix， =guix pull= 直接拉到。与 =<<guix-substitutes>>= 的关系：substitutes 管「下载二进制」（4 套镜像），channels 管「拉源码频道」（pull 用），两者互补不冲突。
-
-=skeletons= 把 =source/files/livecd= 整个目录树平铺进 =/etc/skel= ：skeleton-directory 对每个条目执行 copy-recursively，target 为 ="."= 会把源目录内容（保留 .config/... 相对结构）平铺到 home 根，新增/删除文件只需改 livecd/ 目录、无需在此打表（local-file 的 =#:recursive? #t= 让整个目录作为一个 store 项导入）。必须保留 %live-base-os 的默认 skeleton（尤其 zsh 登录所需的 .zprofile）——skeletons 字段覆盖继承值，不会自动合并。
-
-包列表里 =labwc= 是 =startxfce4 --wayland= 的默认合成器依赖； =wlr-randr= 供 XFCE 4.20 Display 设置面板在 Wayland 下调缩放/分辨率（底层走 wlr-output-management 协议，需要它作为客户端工具）。
-
-services 侧：elogind 负责 PAM session 管理（创建 =/run/user/<uid>= 、提供 loginctl ），labwc 的 libseat logind 后端也通过它获取 seat。greetd 开机直接 autologin live 用户进 xfce-wayland 桌面：greetd 直接 execl 会话命令，不走 xinitrc/session-wrapper（lightdm 正是因此无法启动 wayland 会话）； =greetd-user-session= 编译成 Guile execl（不查 PATH），command 必须用 =file-append= 给出 store 绝对路径； =xdg-session-type "wayland"= 加 =xdg-env?= 让脚本设好 =XDG_SESSION_TYPE= 和 =XDG_RUNTIME_DIR= 后再 execl。autologin 退出后由 agreety 文本登录兜底。
+基础 OS 继承 =make-installation-os= （仅维护 x86_64）。机制要点（防呆约束与细节见 source/AGENTS.md）：精简频道（guix+nonguix）预置进 Live 的 =/etc/guix/channels.scm= ；=skeletons= 把 =source/files/livecd= 平铺进 =/etc/skel= （target ="."= ，须保留默认 skeleton 的 .zprofile）；greetd autologin 直 execl 会话（command 须 =file-append= store 绝对路径），退出后 agreety 兜底；=labwc= 是 =startxfce4 --wayland= 合成器依赖、=wlr-randr= 供 XFCE Wayland 调分辨率；elogind 供 PAM session 与 libseat seat。
 
 #+NAME: live-base-os
 #+begin_src scheme

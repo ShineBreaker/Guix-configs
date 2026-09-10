@@ -29,7 +29,7 @@ Guix-configs///
 
 | 任务                            | 入口                                                                                                              |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| System / Home 配置              | `source/config.org` 头部 _Agent 指引_ 两节 + `source/AGENTS.md`                                                   |
+| System / Home 配置              | `source/AGENTS.md`（config.org 正文已化简为结构标签，技术知识集中在该文件）                                       |
 | 应用 dotfiles                   | `dotfiles/immutable/<app>/`（各子目录有 AGENTS.md）；`dotfiles/mutable/`（Stow 直链，见其 AGENTS.md）             |
 | Emacs                           | `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`（必读）；新包须同步 `config.org` 的 `emacs-services` 块 manifest |
 | Agent 配置（omp/Crush/anchors） | `dotfiles/immutable/agents/AGENTS.md`；omp 扩展在 `dotfiles/mutable/agents/omp/`                                  |
