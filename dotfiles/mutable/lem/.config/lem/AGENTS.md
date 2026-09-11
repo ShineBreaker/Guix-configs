@@ -70,6 +70,7 @@
 
 - **rg 默认忽略隐藏目录（2026-09-11 实测）**：`ripgrep` 不搜索以 `.` 开头的目录/文件，而 Guix/Nix 与大量工具链的配置都在 `.config/` 下——在本仓库 `dotfiles/mutable/lem/.config/` 内做项目 grep（C-F）会**恒为空且不报错**。60-editor-config 的 `*GREP-ARGS*` 与 70-keybindings 的工作区符号搜索（`C-t`，`vs-workspace-symbol`）均已加 `--hidden`（对齐 VSCode 搜索默认含隐藏文件、只排除 `**/.git` 的语义）。**新增任何 rg 调用务必带 `--hidden`**。
 - **SBCL GC 参数的正确入口（2026-09-11 实证）**：nursery（0 代）阈值是 `SB-EXT:BYTES-CONSED-BETWEEN-GCS`（**函数**，setf 可写），**不是** `GENERATION-BYTES-CONSED-BETWEEN-GCS` 的 0 号槽（SBCL 文档明文 "meaningless for generation 0"；旧配置写的正是它——setf 后读回新值但 GC 行为零变化 = no-op）。1/2 号槽才是 gen1/gen2 老年代阈值（默认 30.7MB）。实测 minor GC 极快（320MB 分配周期 `*GC-RUN-TIME*` 仅 0.6ms），真正的停顿来自 major GC。详见 modules/10-performance.lisp 头注释。
+- **`prompt-for-directory` 的 `:directory` 必传（2026-09-11 实测修复）**：上游 `prompt-for-directory`（`src/prompt.lisp`）把 `&key directory` 原样透传给补全链（`prompt-file-completion` → `completion-file` → `expand-file-name`），**缺省值就是 NIL**；而 `expand-file-name` 的 `(directory (uiop:getcwd))` 是 `&optional` 默认值，**只在参数缺省时生效——显式 NIL 不兜底**，直接 `(pathname-directory NIL)` 抛类型错误进 debugger（该函数没有 `%prompt-for-file` 里那行 `(or directory (namestring (user-homedir-pathname)))`）。症状：prompt 打开后**一按 Tab 就砸**，与输入内容无关（空输入走 `"./"` 分支同样炸）。40-explorer 的 `vscode-open-folder` 曾漏传（已改为 explorer root / `(uiop:getcwd)` 兜底；`buffer-directory` 未导出不可用）。**新增任何 `prompt-for-directory` 调用必须带 `:directory`**，且该值同时是 prompt 的预填文本（上游把 `:directory` 直接当 `:initial-value`）。上游其它 4 个调用点（project / file / grep / filer）均已传。
 
 ## 5. 验证管线
 

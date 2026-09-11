@@ -34,7 +34,7 @@
 
 ## 2. 导航与加载顺序
 
-不要先阅读全文。先用动态索引定位（例：`scripts/configctl map` / `show dashboard` / `locate dashboard` / `locate appearance/tab-line-core`）：
+不要先阅读全文。先用动态索引定位（例：`scripts/configctl map` / `show dashboard` / `locate dashboard` / `locate emacs31/arei-compat`）：
 
 | 命令             | 用途                                                       |
 | ---------------- | ---------------------------------------------------------- |
@@ -56,7 +56,7 @@
 | 4    | `programming`     | Tree-sitter、Eglot、Flymake、格式化、语言模式 | `bootstrap`、`appearance`     |
 | 5    | `projects`        | project.el、目录与项目导航                    | `terminal`、`git-display`     |
 | 6    | `org-knowledge`   | Org、Roam、Knowledge、agenote                 | `bootstrap`                   |
-| 7    | `keys-completion` | 前缀声明、跨域基础键、vertico 补全栈          | 前述交互命令、frame 生命周期  |
+| 7    | `keys-completion` | 前缀声明、跨域基础键、内置补全栈            | 前述交互命令、frame 生命周期  |
 | 8    | `system-tools`    | daemon 预热、Dashboard、版本兼容              | 前述全部                      |
 
 常用功能路由：
@@ -73,7 +73,7 @@
 | 项目导航                  | `project-navigation`                                          | `terminal`, `git-display`            |
 | Org / Knowledge / agenote | `org-core`, `knowledge`                                       | `bootstrap`, emacs-agenote 包        |
 | 键位 / 补全               | 功能键随其功能域；跨域基础键 `keybindings`；补全 `completion` | 对应命令必须先定义                   |
-| 翻译数据                  | `data/which-key-zh.el`, `data/context-menu-zh.el`             | `appearance/i18n-data`               |
+| 翻译数据                  | `data/which-key-zh.el`, `data/context-menu-zh.el`             | `which-key-data`                     |
 | Dashboard                 | `dashboard`                                                   | 无强依赖（emacs-dashboard 插件自治） |
 | 版本兜底                  | `compatibility`                                               | noweb 展开到真实使用点               |
 
@@ -106,45 +106,27 @@
 
 ## 4. Noweb、命名与文档
 
-标题层级是代码组织的唯一轴：`**` 模块内，每个 `***` 方面子节通过 PROPERTIES drawer 声明一个 noweb ref，节内代码块裸头直写；模块末尾以 `*** 加载组装` 子节承载唯一组装块：
+代码块按文档顺序直接 tangle 进 `main.el`，不设组装间接层——标题层级是代码组织的唯一轴，`**` 模块内 `***` 方面子节的代码块裸头直写（不带 drawer ref）。noweb 只保留两类真实场景：
 
-```org
-*** 数据
-:PROPERTIES:
-:CUSTOM_ID: module-data
-:header-args:emacs-lisp: :noweb-ref module/data :tangle no :noweb-sep "\n\n"
-:END:
+1. **前向引用的兼容 shim**：定义集中在 `compatibility` 域文末，由靠前的使用点用列 0 的 `<<emacs31/...>>` 展开——这是唯一允许"定义在使用点之后"的形态：
 
-#+begin_src emacs-lisp
-...
-#+end_src
+   ```org
+   #+begin_src emacs-lisp :noweb-ref emacs31/example-compat :tangle no
+   ...
+   #+end_src
+   ```
 
-*** 加载组装
-:PROPERTIES:
-:CUSTOM_ID: module-assembly
-:END:
-
-组装顺序即求值顺序：数据 → 渲染 → hook。
-
-#+NAME: module-assembly-block
-#+begin_src emacs-lisp
-<<module/data>>
-<<module/render>>
-<<module/hooks>>
-#+end_src
-```
+2. **`#+name` 纯文本数据块**（capture 模板）：`org` 语言、`:tangle no`、紧跟唯一引用者。
 
 规则：
 
-- ref 使用英文 `module/section` 或既有 `module-section` 风格；drawer 声明必须用语言专属 `:header-args:emacs-lisp:`（普通 `:header-args:` 会被文件级语言设置覆盖，导致库块同时直接 tangle 又被组装展开，产物重复）。
-- 每个 ref 集中在一个方面子节内，可拆多块穿插 prose（拆块点必须在原有空行边界，配合 `noweb-sep "\n\n"` 保证产物零变化）；每个 ref 恰好被组装一次。
-- 组装块收在模块末尾的 `*** 加载组装` 子节内；`<<ref>>` 引用必须列 0（无缩进）——noweb 展开会把引用处行首到 `<<` 之间的前缀复制到被插入文本的每一行，分解 monolith 时的 org 重复缩进还会带来空白噪音 diff。
-- 纯文本数据（如 capture 模板）用 `#+name` 数据块：`org` 语言、`:tangle no`、紧跟唯一引用者；块内行首 `*` / `**` / `#+` 以逗号转义（`,*`）保字面（否则 org 视作标题截断代码块），含双引号的 elisp 表达式写 `\"`；字符串内引用时开引号留在上一行、ref 顶格、尾部按需补 `\n`。被引用的 name 块由 `configctl check` 强制 `:tangle no`。
-- 共享实现放在 `helpers/...`，并在所有调用方之前组装；noweb 只负责组织与顺序，不模拟 `require`。
+- `<<ref>>` 引用必须列 0（无缩进）——noweb 展开会把引用处行首到 `<<` 之间的前缀复制到被插入文本的每一行。
+- 纯文本数据块内：行首 `*` / `**` / `#+` 以逗号转义（`,*`）保字面（否则 org 视作标题截断代码块），含双引号的 elisp 表达式写 `\"`；字符串内引用时开引号留在上一行、ref 顶格、尾部按需补 `\n`。被引用的 name 块由 `configctl check` 强制 `:tangle no`。
+- noweb 只用于上述两类跨位置组织，不模拟 `require`，也不为"分解长模块"引入 ref——长模块用 `***` 子节 + prose 组织即可。
 - 命名：公开函数与变量使用 `custom/...`，路径与静态常量使用 `custom:...`，私有函数使用 `custom/...--...`；不添加顺序加载用的 `defvar nil` 注入点，同一符号不得重复 `defun`、`defvar` 或 `defconst`。
 - agenote 进程调用统一走 emacs-agenote 包的 `agenote-call-string`（同步）等包内 API，每次显式传 domain。
 - 全局键使用 `custom/bind`，前缀声明使用 `custom/declare-binding-group`，保持键位、Which-key 和帮助同源；mode-local 键极少，在对应 mode 声明处直写。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有顶层前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` / `C-c t` / `C-c q` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
-- `add-hook` / `run-with-idle-timer` / `run-at-time` 的回调必须用命名函数（`#'custom/...`），不得用匿名 lambda；需要忽略 hook 参数或适配参数元数时，定义专门的 `custom--...-on-<event>` 回调（如 `custom--tabs-on-project-switch`），定义放在所属功能域且必须在 hook 注册之前。display 初始化注册到 `custom/add-frame-created-hook`。
+- `add-hook` / `run-with-idle-timer` / `run-at-time` 的回调必须用命名函数（`#'custom/...`），不得用匿名 lambda；需要忽略 hook 参数或适配参数元数时，定义专门的 `custom--...-on-<event>` 回调（如 `custom--tabs-on-project-switch`），定义放在所属功能域且必须在 hook 注册之前。display 初始化注册到 `after-make-frame-functions`。
 - 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
 
 `emacs.org` 正文只记录靠近实现才有价值的功能语义、API 契约、兼容原因和设计取舍；Agent 工作流、索引、验收命令和通用性能规则只写在本文件。
@@ -159,9 +141,9 @@
 
 文件顶部 `* 配置域总览`（CUSTOM_ID: `overview`）是 8 域架构地图，列明每域职责与加载前提，也是新增功能的入口定位点——确认归属域后再改代码。该节只含 org prose 与表格、无源代码块，因此对 tangle 输出零影响。
 
-**2. 组装块用 `#+NAME:` 定址并收入组装子节**
+**2. 代码块直接 tangle，noweb 仅两类场景**
 
-每个 noweb 组装块（即包含 `<<ref>>` 的 `#+begin_src emacs-lisp` 块）以 `#+NAME:` 标记，提供 org 间跳转锚和 `configctl map` 定位入口；命名格式 `<domain>-assembly`（如 `#+NAME: appearance-tab-line-assembly`），全小写连字符，与 noweb-ref 的 `module/section` 风格区分以避免混淆。组装块收在所属模块末尾的 `*** 加载组装` 子节（CUSTOM_ID `<module>-assembly`）内，浏览代码时折叠组装子节即可。
+所有 `emacs-lisp` 块按文档顺序直接拼进 `main.el`，不设 `*** 加载组装` 子节与 `#+NAME:` 组装块。noweb 只保留定义在使用点之后的兼容 shim（`<<emacs31/*>>`）与 `#+name` 纯文本数据块（capture 模板），细则见第 4 节。
 
 **3. 节首 prose 声明契约**
 
@@ -169,7 +151,7 @@
 
 **4. 安全门：tangle 差异零容忍**
 
-编排修改只改 prose、headings 与 `#+NAME:`/CUSTOM_ID，不得改动 `#+begin_src emacs-lisp` 的 body（除非分解为 noweb 片段 + 组装块并以 diff 验证）。验证流程：
+编排修改只改 prose、headings 与 CUSTOM_ID，不得改动 `#+begin_src emacs-lisp` 的 body；结构调整（拆块、挪节）必须以 diff 验证产物等价。验证流程：
 
 1. 基线：`cp main.el /tmp/main.baseline.el && md5sum /tmp/main.baseline.el`
 2. 编辑 prose/结构

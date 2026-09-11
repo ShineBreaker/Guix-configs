@@ -231,8 +231,92 @@
                   ;; search-forward 停在匹配之后，匹配起点 = 当前位置 - 词长
                   (unless (= (- (position-at-point q) (length text)) skip-pos)
                     (ignore-errors (funcall mk (copy-point q)))
-                    (incf count))))
-              (message "已为 ~A 处出现加光标" count))))))))
+                    (incf count)))))))))))
+
+;; --- 自研命令：C-d 选下一个同词出现（VSCode Ctrl+D 同位） ---
+;; 无选区时先选中光标处 symbol（mark 起点 + point 终点）；有选区时
+;; 从 point 起 search-forward 选中文本的下一处出现，命中起点放
+;; fake-cursor（与上游 isearch-add-cursor-to-next-match 同手法）。
+;; Delete 键仍承担 delete-next-char，C-d 让位无损失。
+(defun vs-region-text ()
+  "选区激活（mark≠point）时返回选中文本，否则 nil。"
+  (let ((bmp (vs$ :lem "BUFFER-MARK-P"))
+        (bmk (vs$ :lem "BUFFER-MARK"))
+        (peq (vs$ :lem "POINT="))
+        (pts (vs$ :lem "POINTS-TO-STRING")))
+    (when (and bmp bmk peq pts)
+      (let ((b (current-buffer)))
+        (when (funcall bmp b)
+          (let ((mk (funcall bmk b)))
+            (when (and mk (not (funcall peq mk (current-point))))
+              (funcall pts mk (current-point)))))))))
+
+(define-command vs-add-next-occurrence () ()
+  "C-d：isearch 活动时=逐命中加光标（上游语义）；否则无选区选中当前
+symbol、有选区把下一处同文本出现加为多光标（VSCode Ctrl+D）。"
+  (let ((isearch-str (vs$ :lem/isearch "*ISEARCH-STRING*"))
+        (isearch-add (vs$ :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH")))
+    (if (and isearch-str (boundp isearch-str)
+             (symbol-value isearch-str)
+             isearch-add (fboundp isearch-add))
+        (funcall isearch-add)
+        (let ((text (vs-region-text)))
+          (if (null text)
+              ;; 选中当前 symbol：mark 钉词首，point 走词尾
+              (let ((sym-p (vs$ :lem "SYNTAX-SYMBOL-CHAR-P"))
+                    (skip-f (vs$ :lem "SKIP-CHARS-FORWARD"))
+                    (skip-b (vs$ :lem "SKIP-CHARS-BACKWARD"))
+                    (setm (vs$ :lem "SET-CURRENT-MARK")))
+                (when (and sym-p skip-f skip-b setm)
+                  (with-point ((p (current-point)))
+                    (funcall skip-b p sym-p)
+                    (funcall setm p))
+                  (funcall skip-f (current-point) sym-p)))
+              ;; 有选区：找下一处出现加 fake-cursor
+              (let ((search-f (vs$ :lem "SEARCH-FORWARD"))
+                    (mk (vs$ :lem "MAKE-FAKE-CURSOR")))
+                (when (and search-f mk (plusp (length text)))
+                  (with-point ((q (current-point)))
+                    (if (funcall search-f q text)
+                        (progn
+                          (character-offset q (- (length text)))
+                          (funcall mk q)
+                          (message "已加光标"))
+                        (message "无更多出现"))))))))))
+
+;; --- 自研命令：C-Enter / C-S-Enter 上/下插行（VSCode 同位） ---
+(define-command vs-insert-line-below () ()
+  "C-Enter：在当前行下方开新行并移过去（VSCode Ctrl+Enter）。"
+  (line-end (current-point))
+  (insert-character (current-point) #\newline))
+
+(define-command vs-insert-line-above () ()
+  "C-S-Enter：在当前行上方开新行并移过去（VSCode Ctrl+Shift+Enter）。"
+  (line-start (current-point))
+  (insert-character (current-point) #\newline)
+  (line-offset (current-point) -1)
+  (line-end (current-point)))
+
+;; --- 自研命令：智能 Home（VSCode 同位：先到首个非空白，再按到行首） ---
+(define-command vs-smart-home () ()
+  "Home：光标在缩进前→行首；否则→首个非空白字符（VSCode 语义）。"
+  (let ((p (current-point)))
+    (with-point ((q p))
+      (back-to-indentation q)
+      (if (point= p q)
+          (line-start p)
+          (move-point p q)))))
+
+;; --- 自研命令：C-0 聚焦侧栏（VSCode Ctrl+0 同位） ---
+(define-command vs-focus-sidebar () ()
+  "C-0：焦点移到 Explorer 侧栏；侧栏未开则先开（VSCode Ctrl+0）。"
+  (let ((w (vs-explorer-window)))
+    (if w
+        (setf (current-window) w)
+        (vscode-toggle-sidebar))))
+(vs-bind "C-0" :lem-user "VS-FOCUS-SIDEBAR" "ui" "聚焦侧栏（VSCode Ctrl+0）")
+
+
 
 ;; --- 分组声明（F1 帮助页按此顺序渲染） ---
 (vs-declare-group "nav" "移动与查找")
@@ -308,6 +392,21 @@
 (vs-bind "F2" :lem-lsp-mode "LSP-RENAME" "code" "重命名符号（LSP）")
 ;; --- Code Action（VSCode C-. 快速修复/重构菜单，LSP） ---
 (vs-bind "C-." :lem-lsp-mode "LSP-CODE-ACTION" "code" "代码操作（快速修复/重构，LSP）")
+;; --- VSCode 同位键补齐（2026-09-11 批次） ---
+(vs-bind "C-d" :lem-user "VS-ADD-NEXT-OCCURRENCE" "editor"
+         "选下一个同词出现（VSCode Ctrl+D；isearch 内=逐命中加光标）")
+(vs-bind "C-Return" :lem-user "VS-INSERT-LINE-BELOW" "editor" "下方插行（VSCode Ctrl+Enter）")
+(vs-bind "Shift-C-Return" :lem-user "VS-INSERT-LINE-ABOVE" "editor" "上方插行（VSCode Ctrl+Shift+Enter）")
+(vs-bind "M-n" :lem "NEXT-LINE" "nav" "光标下移（原 C-n 退位；C-n 绑新建文件见 85-welcome）")
+;; C-n 绑 VS-WELCOME-NEW-FILE（85-welcome 定义，70 加载时符号不存在，
+;; 绑定落在 85 内）。
+(vs-bind "C-o" :lem "FIND-FILE" "editor" "打开文件（VSCode Ctrl+O；原 open-line 退 M-x）")
+(vs-bind "C-H" :lem/isearch "QUERY-REPLACE" "editor" "查找替换（VSCode Ctrl+H 同位，物理 Ctrl+Shift+H）")
+(vs-bind "M-F" :lem "FORMAT-BUFFER" "editor" "格式化文档（VSCode Shift+Alt+F 同位，物理 Alt+Shift+F）")
+(vs-bind "C-F12" :lem-lsp-mode "LSP-IMPLEMENTATION" "code" "跳转实现（VSCode Ctrl+F12 同位）")
+(vs-bind "Shift-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用（VSCode Shift+F12 同位）")
+(vs-bind "Home" :lem-user "VS-SMART-HOME" "nav" "行首/首个非空白（VSCode Home 语义）")
+ ;; --- 多光标（VSCode Ctrl+D 同位键：isearch 活动时逐个命中加光标，
 ;; --- 转到符号（VSCode Ctrl+Shift+O 同位；LSP documentSymbol，
 ;;     结果渲染进 peek 内联视图，Enter 跳转 / Esc 或 q 退出；
 ;;     命令是 define-command 产物但未导出，vs$ find-symbol 可达，
@@ -335,10 +434,8 @@
 ;; src/commands/window.lisp 已把 "M-O" 绑为 previous-window（*global-keymap*），
 ;; 覆盖会丢掉既有「上一窗口」导航，故不落键；组织 import 经 M-x 调用
 ;; （帮助页已收编）。
-;; --- 多光标（VSCode Ctrl+D 同位键：isearch 活动时逐个命中加光标，
-;;     非搜索态安全 no-op；Delete 键仍承担删字符） ---
-(vs-bind "C-d" :lem/isearch "ISEARCH-ADD-CURSOR-TO-NEXT-MATCH" "editor"
-         "多光标：查找时逐个命中加光标")
+;; --- 多光标（VSCode Ctrl+D 同位键已绑 VS-ADD-NEXT-OCCURRENCE，见上；
+;;     isearch 活动时该命令内部转调 ISEARCH-ADD-CURSOR-TO-NEXT-MATCH） ---
 ;; --- 多光标上下加光标（VSCode Ctrl+Alt+Down/Up 同位；next-line 是
 ;;     上游命令（lem-core/commands/multiple-cursors 经 :lem reexport），
 ;;     previous-line 上游无对应，绑自研 wrapper（定义见自研命令区）。
@@ -408,8 +505,9 @@
 (vs-bind "C-W" :lem-user "VS-KILL-CURRENT-BUFFER" "editor" "关闭当前 buffer（不问名，物理 Ctrl+Shift+W）")
 (vs-bind "C-=" :lem "FONT-SIZE-INCREASE" "ui" "字号增大")
 (vs-bind "C--" :lem "FONT-SIZE-DECREASE" "ui" "字号减小")
-(vs-bind "C-F12" :lem/language-mode "FIND-DEFINITIONS" "code" "跳转定义")
-(vs-bind "Shift-C-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用（peek 内联视图）")
+;; C-F12 已改绑 LSP-IMPLEMENTATION（VSCode Ctrl+F12 同位，见上）；
+;; Shift-C-F12 保留为查找引用备用键（Shift-F12 是主键）。
+(vs-bind "Shift-C-F12" :lem/language-mode "FIND-REFERENCES" "code" "查找引用（备用，peek 内联视图）")
 ;; M-F12（VSCode Alt+F12 Peek 定义）不设：上游无独立 peek-definition
 ;; 命令，peek 内联视图即 FIND-DEFINITIONS 多结果时的展示路径
 ;; （language-mode:display-xref-locations：多结果 peek 窗口、单结果直接

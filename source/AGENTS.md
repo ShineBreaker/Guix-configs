@@ -31,7 +31,7 @@ source/
 
 ## 修改 config.org 前必读
 
-结构分区：模块导入 → 系统配置（Bootloader/FileSystems/Kernel/Packages/Services/Users）→ 用户配置（Packages/Services/Environment/Font）→ Live ISO。
+结构分区：导览/维护操作（可执行 babel 块）→ 模块导入 → 配置文件骨架（`main` 是唯一装配表，所有叶子块引用在此可见）→ 系统配置（Bootloader/FileSystems/Kernel/Packages/Services/Users）→ 用户配置（Packages/Services/Environment/Font）→ Live ISO。二级标题有 `CUSTOM_ID`，导览与正文用 `[[#id]]` 互链。
 
 **块级编辑**（改单个 `#+NAME:` 块，避免读全文件）：
 
@@ -61,7 +61,7 @@ blue check                 # 逐块括号平衡检查（定位到块名，最快
 
 被 `config.org` 头部 `(load "../source/information.scm")` 加载；变量清单直接读该文件。改前检查 `config.org` 各块引用是否需同步。
 
-文件系统模型：根目录 tmpfs（重启清空）；持久化靠 Btrfs 子卷挂 `/var/lib`、`/gnu`、`/boot` 等；用户数据 `/data` 分区 bind-mount 到 `~`。**持久化目录必须同时在 `%data-dirs` 与 `%btrfs-subvolumes` 中登记**。头部代码块（全局变量、文件系统、内核）同时影响 system 与 home；启动时序敏感的服务集中在 `filesystem-services` 块。
+文件系统模型：根目录 tmpfs（重启清空）；持久化靠 Btrfs 子卷挂 `/var/lib`、`/gnu`、`/boot` 等；用户数据 `/data` 分区 bind-mount 到 `~`。**持久化目录必须同时在 `%data-dirs` 与 `%btrfs-subvolumes` 中登记**。头部代码块（全局变量、文件系统、内核）同时影响 system 与 home；启动时序敏感的服务在「系统配置 → Services → 文件系统相关服务」小节（machine-id/resume/cleanup-tmp/data-dirs 四个叶子块）。
 
 - 休眠取舍：Guile initrd 不支持从加密 swap 恢复休眠镜像，加密与休眠二选一时保留了休眠——**休眠镜像把内存明文写入 swap 分区**。
 - `fixed-machine-id` 的固定算法在 `information.scm`。
@@ -104,7 +104,7 @@ blue check                 # 逐块括号平衡检查（定位到块名，最快
 
 ## custom-packages 结构规则
 
-`custom-package-defs` 放顶层 `define`（经 noweb 拼进 main 顶层）；`custom-packages-list` 只放表达式——它在 `%home` 的 `(append ...)` 引用点被内联，表达式位置写不了 `define`。新增包：先在 defs 块定义，再登记进 list 块。
+顶层 `define` 块（`cachyos-lts-kernel`、`fingerprint-packages`）直接经 noweb 拼进 `main` 顶层（「自定义包与补丁」小节）；`custom-packages-list` 只放表达式——它在 `%home` 的 `(append ...)` 引用点被内联，表达式位置写不了 `define`。新增包：先定义 defs 块，再登记进 list 块。
 
 ## CachyOS LTS 内核
 
@@ -123,7 +123,7 @@ blue check                 # 逐块括号平衡检查（定位到块名，最快
 
 <critical>
 - tangle 目标 `../tmp/live-iso.scm` **绝对不能复用** `../tmp/config.scm`，否则 `%live-installation-os` 污染主机配置
-- `<<live-modules>>` 只被 live-installation-os 引用，**绝不能塞进主 `<<modules>>` 块**（会污染 tmp/config.scm）
+- ISO 专用的 `use-modules` 内联在 `live-installation-os` 块内，**绝不能并入主 `<<modules>>` 块**（会污染 tmp/config.scm）
 - `blue check` 不做 cross-tangle 验证，改完 `tail tmp/live-iso.scm` 确认末行是 `%live-installation-os` 裸值
 </critical>
 

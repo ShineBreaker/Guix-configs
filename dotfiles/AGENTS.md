@@ -21,7 +21,8 @@ dotfiles/
 │   ├── noctalia-suite/
 │   ├── system/
 │   ├── terminal/
-│   └── utilities/
+│   ├── utilities/
+│   └── zen/
 └── mutable/
     ├── agenote/
     ├── agents/
@@ -41,4 +42,5 @@ dotfiles/
 | `immutable/noctalia-suite/` | ❌        | darkman、noctalia 适配                             |
 | `immutable/system/`         | ✅        | containers、pipewire、xdg user-dirs                |
 | `immutable/terminal/`       | ✅        | fish、tmux、foot、kitty、starship、btop、atuin     |
-| `immutable/utilities/`      | ✅        | fcitx5、git、helix、kanata、pnpm、winapps；Rime 子模块在 `.local/share/fcitx5/rime/`；gnupg 在 `.local/share/gnupg/` |
+| `immutable/utilities/`      | ✅        | fcitx5、git、helix、pnpm、winapps；Rime 子模块在 `.local/share/fcitx5/rime/`；gnupg 在 `.local/share/gnupg/` |
+| `immutable/zen/`            | ❌        | Zen 浏览器 profile user.js（内存瘦身 + 遥测关闭）          |

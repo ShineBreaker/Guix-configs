@@ -10,9 +10,23 @@
 
 (in-package :lem-user)
 
+(defvar *vs$-cache* (make-hash-table :test 'eq)
+  "vs$ 正向命中缓存：包 → (名字 → 符号)。只缓存命中——负结果不缓存
+（扩展后加载时符号可能补现，缓存负值会永久遮蔽）；包对象 eq 键，
+包被重建（重载模块）时旧条目随包对象 GC 自然失效。")
+
 (defun vs$ (pkg name)
-  "find-symbol 动态解析；包或符号不存在返回 nil。"
-  (ignore-errors (find-symbol name pkg)))
+  "find-symbol 动态解析；包或符号不存在返回 nil。正向命中走缓存
+（热路径每键多次调用，find-symbol 的包锁+哈希查找省掉）。"
+  (let ((by-name (gethash pkg *vs$-cache*)))
+    (or (and by-name (gethash name by-name))
+        (let ((sym (ignore-errors (find-symbol name pkg))))
+          (when sym
+            (setf (gethash name
+                           (or by-name
+                               (setf (gethash pkg *vs$-cache*)
+                                     (make-hash-table :test 'equal))))
+                  sym))))))
 
 (defun vs-warn (sym)
   (format *error-output* "~&; [lem] 符号缺失被跳过: ~S~%" sym)

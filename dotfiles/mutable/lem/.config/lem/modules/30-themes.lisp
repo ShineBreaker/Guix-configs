@@ -192,16 +192,28 @@ toggle 的翻转基准才可信。启动恒为 :dark（历史行为不变）。"
 ;; 未显式指定时跟随 darkman 系统配色（VSCodium window.autoDetectColorScheme
 ;; 的对应物），读不到/失败回落深色（历史默认）。40/46 load 期读
 ;; *vs-theme-mode* 而非写死 :dark，故与本块联动）。
+;; darkman 探测 fork+exec ~30-50ms，放后台线程与 spec 构造并行；
+;; 决策点 join 收结果。VS_THEME 显式指定时连线程都不起。
+(defvar *vs-darkman-thread* nil)
 (let ((startup (uiop:getenv "VS_THEME")))
   (cond ((and startup (string-equal startup "light"))
          (setf *vs-theme-mode* :light))
         ((null startup)
-         (ignore-errors
-           (when (string= (uiop:run-program '("darkman" "get")
-                                            :output '(:string :stripped t)
-                                            :ignore-error-status t)
-                          "light")
-             (setf *vs-theme-mode* :light))))))
+         (setf *vs-darkman-thread*
+               (sb-thread:make-thread
+                (lambda ()
+                  (ignore-errors
+                    (string= (uiop:run-program '("darkman" "get")
+                                               :output '(:string :stripped t)
+                                               :ignore-error-status t)
+                             "light")))
+                :name "vs-darkman-probe")))))
+
+(when (and *vs-darkman-thread*
+           (ignore-errors (sb-thread:join-thread *vs-darkman-thread*
+                                                 :timeout 2)))
+  (setf *vs-theme-mode* :light))
+
 (load-theme (if (eq *vs-theme-mode* :dark)
                 "vscode-dark-modern"
                 "vscode-light-modern"))

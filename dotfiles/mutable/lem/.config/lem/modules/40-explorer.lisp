@@ -108,9 +108,14 @@ load 期以 :dark 调用（与旧顶层定义等价）；主题切换时由 30-t
 (defparameter *vs-git-deliver-epoch* 0 "投递槽：采集发起时的代际。")
 (defparameter *vs-git-deliver-root* nil "投递槽：采集发起时的 root namestring。")
 (defparameter *vs-code-exts*
-  '("lisp" "lsp" "scm" "el" "py" "c" "h" "cc" "cpp" "rs" "go" "js" "ts"
-    "json" "yaml" "yml" "toml" "nix" "sh" "org" "md" "html" "css" "scss"
-    "rb" "xml" "sql" "lock" "sld" "rkt"))
+  (let ((h (make-hash-table :test 'equalp)))
+    (dolist (e '("lisp" "lsp" "scm" "el" "py" "c" "h" "cc" "cpp" "rs" "go"
+                 "js" "ts" "json" "yaml" "yml" "toml" "nix" "sh" "org" "md"
+                 "html" "css" "scss" "rb" "xml" "sql" "lock" "sld" "rkt")
+               h)
+      (setf (gethash e h) t)))
+  "代码文件扩展名集合（哈希表：树渲染每行一次 member 判定，equalp
+哈希 O(1) 替代线性扫 30 项）。")
 
 ;; --- 工作区根探测：向上走 .git（与 VSCode 默认 workspace 语义一致）；
 ;;     start 缺省取当前 buffer 目录，激活路径传打开文件所在目录 ---
@@ -169,7 +174,7 @@ rename「old -> new」取 new；C 引号路径剥外层引号。"
                         (when (or (null old)
                                   (< (vs-status-priority old)
                                      (vs-status-priority status)))
-                          (setf (gethash dir table) status))))))))))
+                          (setf (gethash dir table) status))))))))))))))
 
 (defun vs-git-collect-status (root)
   "后台线程侧：同步跑 git status（阻塞的是采集线程自身）并解析为
@@ -377,13 +382,9 @@ Invalid number of arguments: 0），固定形参列表任一约定下都会炸�
          (open (and dir-p (gethash (namestring path) *vs-open-dirs*)))
          (name (vs-item-name path))
          (status (gethash (vs-relative path) *vs-git-status*))
-         (name-attr (cond (status (vs-status-attribute status))
-                          (dir-p 'vs-tree-folder)
-                          (t 'vs-tree-file)))
          (glyph (cond ((and dir-p open) (vs-icon :folder-opened))
                       (dir-p (vs-icon :folder))
-                      ((member (pathname-type path) *vs-code-exts*
-                               :test #'equalp)
+                      ((gethash (pathname-type path) *vs-code-exts*)
                        (vs-icon :file-code))
                       (t (vs-icon :file)))))
     (insert-string point (make-string (* 2 depth) :initial-element #\space)
@@ -815,7 +816,19 @@ pathname-parent-directory-pathname——它只看 pathname-directory 组件，
 (define-command vscode-open-folder () ()
   "Open Folder：选目录为工作区根并确保侧栏可见（VSCode C-k C-o /
 欢迎页 Open Folder 同位；和弦不绑键：C-k 是 kill-line 不可让）。"
-  (let ((dir (vs-call :lem "PROMPT-FOR-DIRECTORY" "Open folder: ")))
+  ;; :directory 必传——上游 prompt-for-directory 把该值原样透传给补全链
+  ;; （prompt-file-completion → completion-file → expand-file-name），
+  ;; 缺省 NIL 时在 prompt 内按 Tab 即 (pathname-directory NIL) 崩进
+  ;; debugger：expand-file-name 的 (uiop:getcwd) 默认值只在参数缺省时
+  ;; 生效，显式 NIL 不兜底，而 prompt-for-directory 少了 %prompt-for-file
+  ;; 里那行 (or directory ...)。取值同时是 prompt 预填文本（上游把
+  ;; :directory 直接当 :initial-value）：已开工作区用工作区根，否则
+  ;; 进程 CWD——两者都是非 NIL 目录 namestring，且不依赖未导出的
+  ;; buffer-directory。
+  (let ((dir (vs-call :lem "PROMPT-FOR-DIRECTORY" "Open folder: "
+                      :directory (or (and *vs-explorer-root*
+                                          (namestring *vs-explorer-root*))
+                                     (namestring (uiop:getcwd))))))
     (when dir
       (vs-explorer-set-root
        (uiop:ensure-directory-pathname (pathname dir)))
@@ -891,3 +904,18 @@ post-command 链少一个常驻函数。整体 ignore-errors——post-command
         (ignore-errors (funcall fn))))
     (setf *vs-need-heal* nil
           *vs-healing* nil)))
+
+;; --- 保存后刷新 git 染色（VSCode 保存即更新 gutter/树染色的对应物） ---
+;; after-save-hook 是 editor variable（lem/buffer/file），全局默认值挂
+;; 一次即对所有 buffer 生效（buffer-local 值 cons 到全局值上，与
+;; lsp-mode add-buffer-hooks 同机制）。vs-refresh-git-status 本身是
+;; 单飞+合并去抖的异步采集，保存触发零阻塞。
+(defun vs-explorer-on-save (buffer)
+  (declare (ignore buffer))
+  (ignore-errors (vs-refresh-git-status)))
+
+(let ((hook-var (or (vs$ :lem "AFTER-SAVE-HOOK")
+                    (vs$ :lem/buffer/file "AFTER-SAVE-HOOK"))))
+  (when hook-var
+    (eval `(pushnew 'vs-explorer-on-save
+                    (variable-value ',hook-var :global t)))))

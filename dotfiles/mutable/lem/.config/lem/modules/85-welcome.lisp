@@ -133,7 +133,10 @@ find-file 的绝对路径分支直达（已验证 uiop:absolute-pathname-p 吃�
     (when map
       (vs-call :lem "DEFINE-KEY" map "n" 'vs-welcome-new-file)
       (vs-call :lem "DEFINE-KEY" map "o" 'vs-welcome-open-file)
-      (vs-call :lem "DEFINE-KEY" map "d" 'vscode-open-folder))))
+      (vs-call :lem "DEFINE-KEY" map "d" 'vscode-open-folder)))
+  ;; C-n = New File（VSCode 同位；命令在本模块定义，70 加载时符号不存在
+  ;; 故绑定落在这里）
+  (vs-bind "C-n" :lem-user "VS-WELCOME-NEW-FILE" "editor" "新建文件（VSCode Ctrl+N）"))
 
 ;; load 期覆盖：splash 首绘即欢迎页（90-startup 钩子再重申一次防覆盖）
 (vs-setup-welcome)

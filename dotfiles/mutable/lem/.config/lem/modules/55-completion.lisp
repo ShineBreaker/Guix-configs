@@ -90,3 +90,49 @@ push 收集须 nreverse 还原收集序，stable-sort 才有「同档保序」�
     (if (and run mk-spec)
         (funcall run (funcall mk-spec #'vs-dabbrev-candidates))
         (message "lem/completion-mode 不可用，dabbrev 跳过"))))
+
+;; --- 键入即弹补全（VSCode quickSuggestions 的对应物） ---
+;; 上游 LSP 已接 trigger 字符（. : 等）自动补全；本段补「普通词字符」
+;; 通道：self-insert-after-hook（edit.lisp 的 editor variable，全局默认
+;; 值挂一次即对所有 buffer 生效——buffer-local 值是 cons 到全局值上，
+;; 见 lsp-mode add-buffer-hooks 同款机制）。
+;; 触发条件：插入的是 symbol 字符 + buffer 可写 + 无补全弹窗在飞。
+;; 补全源：LSP buffer 用其 completion-spec（async，不阻塞编辑线程）；
+;; 非 LSP buffer 用 dabbrev 的 async 包装（async spec 恒走弹窗分支，
+;; 规避 sync spec 的「单候选直接插入」——自动补全绝不能擅自改文本）。
+;; 起补词 <3 字符不弹（vs-dabbrev-candidates 的 <2 门槛之外再收一档，
+;; 对齐 VSCode 的噪声控制）。
+(defparameter *vs-auto-suggest-min* 3
+  "自动补全的起补词最小长度。")
+
+(defun vs-auto-suggest-dabbrev (point then)
+  "dabbrev 的 async spec 适配器：同步收集后经 then 回调投递。"
+  (funcall then (vs-dabbrev-candidates point)))
+
+(defun vs-auto-suggest (char)
+  "self-insert-after-hook 回调：词字符键入后弹补全。
+热路径守卫全部廉价（symbol 判定 + 两个变量读），不满足即返回。"
+  (ignore-errors
+    (when (and (characterp char)
+               (syntax-symbol-char-p char)
+               (not (buffer-read-only-p (current-buffer))))
+      (let ((ctx (vs$ :lem/completion-mode "*COMPLETION-CONTEXT*")))
+        (unless (and ctx (boundp ctx) (symbol-value ctx))
+          (let* ((word (vs-word-before-point (current-point)))
+                 (spec-var (vs$ :lem/language-mode "COMPLETION-SPEC"))
+                 (spec (and spec-var
+                            (ignore-errors (variable-value spec-var))))
+                 (run (vs$ :lem/completion-mode "RUN-COMPLETION"))
+                 (mk-spec (vs$ :lem/completion-mode "MAKE-COMPLETION-SPEC")))
+            (when (and word (>= (length word) *vs-auto-suggest-min*)
+                       run mk-spec)
+              (if spec
+                  (funcall run spec)
+                  (funcall run (funcall mk-spec #'vs-auto-suggest-dabbrev
+                                        :async t))))))))))
+
+(let ((hook-var (or (vs$ :lem "SELF-INSERT-AFTER-HOOK")
+                    (vs$ :lem-core/commands/edit "SELF-INSERT-AFTER-HOOK"))))
+  (when hook-var
+    (eval `(add-hook (variable-value ',hook-var :global t)
+                     'vs-auto-suggest))))

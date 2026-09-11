@@ -66,7 +66,7 @@ verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin �
 - **initramfs 两坑**：pack `-R` 的 `*R` 副本在 guest 里执行必崩（busybox run.c:692 断言）——重建 `bin/` 真目录直链**原始** store 项；guest init 的 shebang 用 pack 内 bash-static 绝对路径（busybox ash 作 PID1 读脚本会触发同款断言）
 - **判定规则**：每变体两轮 VM（各 3 次取中位），变化超出 CTRL 双轮噪声带才算信号；`--cpu` 项作负对照（应恒 ≈0%）；stress-ng 高噪声项（hrtimers/timer）解读放宽
 - **cmdline 类改动**（如 mitigations）：EXTRA_CMDLINE 环境变量注入 run-vm.sh，同 bzImage A/B；`/sys/devices/system/cpu/vulnerabilities/*` 输出验证生效
-- 已有结论（2026-09-08）：numa_balancing 关（无倒退）、schedstats/tracer 关（中性）、MAXSMP 反选+NR_CPUS=64（fork +1.7%/syscall +4.6%）已落地——**分层放置**：schedstats/tracer/MAXSMP 在通用档（设备无关偏好与发行档遗留修正），numa_balancing/NR_CPUS 在 machine 层（单节点拓扑与 22 线程是设备事实）；BORE 6.8.0 补丁 pipe -7.7% 不采纳；spectre_bhi=off 在 MTL（BHI_DIS_S 硬件缓解）无收益，cmdline 不动。**ThinLTO/AutoFDO 不启用**：Clang+LTO 相对本 GCC -O3 + native 基线增量约 1-3% 且负载相关，还要求外部模块同链 clang 工具链（波及 v4l2loopback）；AutoFDO 依赖 perf LBR 采样与 guix 频道没有的工具链——收益与复杂度不成比例，留作可选实验
+- 已有结论（2026-09-08）：numa_balancing 关（无倒退）、schedstats/tracer 关（中性）、MAXSMP 反选+NR_CPUS=64（fork +1.7%/syscall +4.6%）已落地——**分层放置**：schedstats/tracer/MAXSMP 在通用档（设备无关偏好与发行档遗留修正），numa_balancing/NR_CPUS 在 machine 层（单节点拓扑与 22 线程是设备事实）；BORE 6.8.0 补丁 pipe -7.7% 不采纳；spectre_bhi=off 在 MTL（BHI_DIS_S 硬件缓解）无收益，cmdline 不动；init_on_alloc=0/init_on_free=0（2026-09-11 cmdline 消融，/var/tmp/kopt/results/）仅 mmap +2.25% 勉强出带，fork/malloc 在噪声带内、vm 略负——收益不足抵安全硬化损失，**不落地**。**ThinLTO/AutoFDO 不启用**：Clang+LTO 相对本 GCC -O3 + native 基线增量约 1-3% 且负载相关，还要求外部模块同链 clang 工具链（波及 v4l2loopback）；AutoFDO 依赖 perf LBR 采样与 guix 频道没有的工具链——收益与复杂度不成比例，留作可选实验
 
 ## 对拍复验（换 defconfig / 大改 / 重构后）
 

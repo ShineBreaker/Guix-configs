@@ -1,6 +1,6 @@
 # 开发工具配置
 
-通过 Guix Home 部署到 `~/.config/` 与 `~/.local/`。涵盖编辑器、键盘改键、包管理器、Windows 应用桥接、Rime 输入法、GnuPG 等。
+通过 Guix Home 部署到 `~/.config/` 与 `~/.local/`。涵盖编辑器、包管理器、Windows 应用桥接、Rime 输入法、GnuPG 等。
 
 > **修改入口**：`utilities/.config/<app>/` 下文件改完必须 `blue home`（不需 `blue rebuild`），再 grep `~/.config/<app>/` 确认软链到 store 副本。**禁止**直接编辑已部署位置（store 副本只读，下次 `blue home` 会覆盖）。
 
@@ -16,7 +16,6 @@ utilities/
 │   ├── fcitx5/
 │   ├── git/
 │   ├── helix/
-│   ├── kanata/
 │   ├── pnpm/
 │   └── winapps/
 └── .local/
@@ -44,10 +43,6 @@ utilities/
 ### Helix 编辑器
 
 - `languages.toml` 定义语言服务器与格式化器；`themes/transparent.toml` 提供透明背景主题
-
-### Kanata 键盘映射
-
-- `kanata.kbd` 定义键盘层映射（改键/宏）
 
 ### Nix 备份分支
 

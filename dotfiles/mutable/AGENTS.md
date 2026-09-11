@@ -30,8 +30,10 @@ mutable/
 │   └── .stow-package
 ├── agents/
 │   ├── dsh/
+│   ├── extensions/
 │   ├── hermes/
 │   ├── omp/
+│   ├── pi/
 │   ├── skills/
 │   └── zcode/
 ├── emacs/

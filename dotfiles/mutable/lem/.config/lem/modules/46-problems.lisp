@@ -286,7 +286,43 @@ nil 会打出字面 \"NIL\"。"
   (when add
     (funcall add 'vs-modeline-diagnostics)))
 
-;; --- 全局键位 + 帮助页收编 ---
-(vs-bind "C-M" :lem-user "VS-PROBLEMS-SHOW" "code" "问题面板（诊断列表，物理 Ctrl+Shift+M）")
-(vs-help-note "code" "Return / Space" "跳转到诊断位置（Problems 面板内）")
-(vs-help-note "code" "g / r" "重扫诊断列表（Problems 面板内）")
+;; --- F8/Shift-F8 诊断跳转（VSCode 同位键）：在 *vs-problems-entries*
+;;     里找当前 buffer 文件中光标之后的下一个/上一个诊断，跳过去。
+;;     无条目时先 collect 一次（面板未开也能用）。 ---
+(defun vs-problems-goto (dir)
+  "DIR=+1 下一个 / -1 上一个诊断（当前文件内，按行号排序循环）。"
+  (let ((entries (or *vs-problems-entries* (vs-problems-collect)))
+        (file (ignore-errors (buffer-filename (current-buffer))))
+        (line (line-number-at-point (current-point))))
+    (when (and entries file)
+      (let* ((here (remove-if-not
+                    (lambda (e) (equal (getf e :file) file))
+                    entries))
+             (sorted (sort (copy-list here) #'< :key (lambda (e) (getf e :line))))
+             (target (if (plusp dir)
+                         (or (find-if (lambda (e) (> (getf e :line) line)) sorted)
+                             (first sorted))
+                         (or (find-if (lambda (e) (< (getf e :line) line))
+                                      sorted :from-end t)
+                             (car (last sorted))))))
+        (if target
+            (progn
+              (move-to-line (current-point) (max 1 (getf target :line)))
+              (line-offset (current-point) 0 (max 0 (getf target :col)))
+              (message "~A" (getf target :message)))
+            (message "本文件无诊断"))))))
+
+(define-command vs-problems-next () ()
+  "F8：跳到当前文件下一个诊断（VSCode 同位）。"
+  (vs-problems-goto 1))
+
+(define-command vs-problems-prev () ()
+  "Shift-F8：跳到当前文件上一个诊断（VSCode 同位）。"
+  (vs-problems-goto -1))
+
+ ;; --- 全局键位 + 帮助页收编 ---
+ (vs-bind "C-M" :lem-user "VS-PROBLEMS-SHOW" "code" "问题面板（诊断列表，物理 Ctrl+Shift+M）")
+(vs-bind "F8" :lem-user "VS-PROBLEMS-NEXT" "code" "下一个诊断（VSCode F8）")
+(vs-bind "Shift-F8" :lem-user "VS-PROBLEMS-PREV" "code" "上一个诊断（VSCode Shift+F8）")
+ (vs-help-note "code" "Return / Space" "跳转到诊断位置（Problems 面板内）")
+ (vs-help-note "code" "g / r" "重扫诊断列表（Problems 面板内）")

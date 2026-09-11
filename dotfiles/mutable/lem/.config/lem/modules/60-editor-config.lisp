@@ -424,7 +424,33 @@ point）；坐标不可得（合成事件 / window 为 nil）时回退当前光�
 ;; 生 ~ 备份文件。2026-09-04 ncurses 探针：符号存在、启用无错。
 (let ((mode (vs$ :lem/auto-save "AUTO-SAVE-MODE")))
   (when (and mode (fboundp mode))
-    (ignore-errors (funcall mode t))))
+    (funcall mode t)))
+;; 切 buffer 自动保存（VSCode files.autoSave=onFocusChange 的对应物）：
+;; *switch-to-buffer-hook* 在切走后触发，参数是新 buffer；保存的是
+;; 「切走前」的 buffer——用 *vs-prev-buffer* 追踪（post-command 每命令
+;; 更新，开销可忽略）。只碰已存盘且被修改的 buffer（save-buffer 内部
+;; 已判 modified+filename，未存盘新 buffer 不写）。
+(defvar *vs-prev-buffer* nil)
+
+(defun vs-autosave-on-switch (new-buffer)
+  (declare (ignore new-buffer))
+  (ignore-errors
+    (when (and *vs-prev-buffer*
+               (bufferp *vs-prev-buffer*)
+               (member *vs-prev-buffer* (buffer-list))
+               (buffer-modified-p *vs-prev-buffer*)
+               (buffer-filename *vs-prev-buffer*))
+      (save-buffer *vs-prev-buffer*))))
+
+(defun vs-track-prev-buffer ()
+  (setf *vs-prev-buffer* (current-buffer)))
+
+(let ((hook (or (vs$ :lem "*SWITCH-TO-BUFFER-HOOK*")
+                (vs$ :lem-core "*SWITCH-TO-BUFFER-HOOK*")
+                (vs$ :lem-core/display "*SWITCH-TO-BUFFER-HOOK*"))))
+  (when (and hook (boundp hook))
+    (eval `(add-hook ,hook 'vs-autosave-on-switch))))
+(add-hook *post-command-hook* 'vs-track-prev-buffer)
 
 ;; formatter 注册器（modes/ 各语言文件调用；本模块先于 modes/ 加载）。
 ;; register-formatter 是 :lem-core 导出宏，不能 funcall，运行时注册走

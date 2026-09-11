@@ -53,6 +53,63 @@
                            path (if (consp form) (car form) form) e)))))
     path))
 
+;; --- 模块 FASL 缓存：read+eval 逐 form 加载会让 SBCL 对每 form 走编译
+;;     管线（~250ms/全配置）；编译产物缓存后 load fasl 只需毫秒级。
+;;     缓存键 = mtime+size（配置编辑场景足够；sb-md5 不在镜像内，勿用）。
+;;     fasl 存放在 XDG cache（不污染 LEM_HOME/仓库源）。编译或 load 失败
+;;     一律退化 vs-load-source——缓存只许加速，不许成为故障源。
+;;     VS_NO_FASL=1 可整体旁路（调试用）。 ---
+(defparameter *vs-fasl-dir*
+  (ignore-errors
+    (uiop:ensure-directory-pathname
+     (merge-pathnames "lem/fasl/" (uiop:xdg-cache-home))))
+  "fasl 缓存目录（~/.cache/lem/fasl/）。")
+
+(defun vs-fasl-path (src mtime size)
+  (merge-pathnames
+   (format nil "~A-~A-~A.fasl" (pathname-name src) mtime size)
+   *vs-fasl-dir*))
+
+(defun vs-load-module (path)
+  "fasl 命中直接 load；未命中 compile-file 到临时文件后 rename 进缓存
+（同文件系统原子替换，并发 lem 实例最坏重复编译不损坏）；任一步失败
+退化 vs-load-source。"
+  (if (or (uiop:getenv "VS_NO_FASL") (null *vs-fasl-dir*))
+      (vs-load-source path)
+      (let* ((mtime (ignore-errors (file-write-date path)))
+             (size (ignore-errors
+                     (with-open-file (in path) (file-length in))))
+             (fasl (and mtime size (vs-fasl-path path mtime size))))
+        (if (and fasl (probe-file fasl))
+            (or (ignore-errors (load fasl) t)
+                (progn (ignore-errors (delete-file fasl))
+                       (vs-load-source path)))
+            (progn
+              (ensure-directories-exist fasl)
+              (let ((tmp (ignore-errors
+                           (compile-file
+                            path
+                            :output-file
+                            (merge-pathnames
+                             (format nil "~A-tmp~A.fasl"
+                                     (pathname-name path)
+                                     (get-internal-real-time))
+                             *vs-fasl-dir*)))))
+              (if (and tmp (probe-file tmp))
+                  (progn
+                    (ensure-directories-exist fasl)
+                    (ignore-errors (rename-file tmp fasl))
+                    ;; 同模块旧键的 fasl 清掉，防缓存无限堆积
+                    (dolist (stale (directory
+                                    (merge-pathnames
+                                     (format nil "~A-*.fasl" (pathname-name path))
+                                     *vs-fasl-dir*)))
+                      (unless (equal stale fasl)
+                        (ignore-errors (delete-file stale))))
+                    (or (ignore-errors (load fasl) t)
+                        (vs-load-source path)))
+                  (vs-load-source path))))))))
+
 ;; 模块自动发现：modules/ 下全部 .lisp 按文件名字典序加载
 ;; （顺序由 NN- 前缀控制，见文件头注释）；各语言文件位于
 ;; modules/modes/ 下（字典序，同层互不依赖），插在 80-modes-base
@@ -63,6 +120,17 @@
   (let ((name (file-namestring path)))
     (and (>= (length name) 3)
          (string= (subseq name 0 3) "90-"))))
+(defparameter *vs-bench* (uiop:getenv "VS_BENCH")
+  "VS_BENCH=1 时把各模块加载耗时追加到 /tmp/lem-bench-modules.log。")
+
+(defun vs-bench-log (fmt &rest args)
+  (when *vs-bench*
+    (ignore-errors
+      (with-open-file (out "/tmp/lem-bench-modules.log"
+                           :direction :output :if-exists :append
+                           :if-does-not-exist :create)
+        (apply #'format out fmt args)))))
+
 (dolist (f (let ((mods (merge-pathnames "modules/" *vs-config-directory*)))
              (flet ((lisp-files (dir)
                       (sort (remove-if-not
@@ -76,7 +144,11 @@
                          (and (probe-file langdir)
                               (lisp-files langdir))
                          (remove-if-not #'vs-final-module-p top))))))
-  (handler-case
-      (vs-load-source f)
-    (error (e)
-      (format *error-output* "~&; [lem] 模块加载失败 ~A: ~A~%" f e))))
+  (let ((t0 (get-internal-real-time)))
+    (handler-case
+        (vs-load-module f)
+      (error (e)
+        (format *error-output* "~&; [lem] 模块加载失败 ~A: ~A~%" f e)))
+    (vs-bench-log "~A ~D ms~%" (file-namestring f)
+                  (round (* 1000 (- (get-internal-real-time) t0))
+                         internal-time-units-per-second))))
