@@ -29,7 +29,7 @@ providers:
   webSearchOrder:
     []
 modelRoles:
-  default: opencode-go/muse-spark-1.3-contributor:xhigh
+  default: devin/swe-2:max
   tiny: opencode-go/hy3:xhigh
   advisor: opencode-go/muse-spark-1.3-contributor
 composer:

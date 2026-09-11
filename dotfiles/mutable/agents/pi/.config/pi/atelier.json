@@ -1,0 +1,38 @@
+{
+  "pollIntervalMs": 2000,
+  "panePrefix": "sub:",
+  "keepResults": 24,
+  "timeoutMs": 1800000,
+  "maxTasks": 8,
+  "maxConcurrency": 4,
+  "defaultTier": "pro",
+  "tiers": {
+    "ultra": {
+      "model": "zai/GLM-5.2",
+      "fallback": ["deepseek/deepseek-v4-pro", "xiaomi/mimo-v2.5-pro"]
+    },
+    "pro": {
+      "model": "deepseek/deepseek-v4-pro",
+      "fallback": [
+        "deepseek/deepseek-v4-flash",
+        "xiaomi/mimo-v2.5-pro",
+        "zai/GLM-4.7"
+      ]
+    },
+    "quick": {
+      "model": "deepseek/deepseek-v4-flash",
+      "fallback": ["xiaomi/mimo-v2.5"]
+    },
+    "visual": {
+      "model": "xiaomi/mimo-v2.5"
+    }
+  },
+  "modelSchedules": {
+    "zai/GLM-5.2": {
+      "deny": ["Mon-Fri 14:00-18:00"]
+    },
+    "qwen/qwen3.8-max": {
+      "allow": ["22:00-08:00"]
+    }
+  }
+}

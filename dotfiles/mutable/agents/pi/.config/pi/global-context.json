@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "contextDir": "$XDG_CONFIG_HOME/agents/context",
+  "maxFiles": 8,
+  "maxBytesPerFile": 65536,
+  "maxTotalBytes": 196608
+}
