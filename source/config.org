@@ -3,6 +3,42 @@
 # SPDX-License-Identifier: MIT
 # Agent 指引见 source/AGENTS.md；本文件正文仅保留结构标签与一行式提示。
 
+#+TITLE: Guix 系统与 Home 配置
+#+STARTUP: overview
+
+* 导览
+
+单一 Org 源同时声明 =operating-system= 与 =home-environment= ：[[#main-skeleton][main 块]]是唯一装配表，各 =#+NAME:= 块经 =<<ref>>= 拼合后 tangle 成 =tmp/config.scm= ；注释掉的 =<<ref>>= 即停用该块。
+
+- 系统 :: [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users]]
+- 用户 :: [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]
+- 其他 :: [[#iso][Live ISO]] · [[#maintenance][维护操作]]
+
+* 维护操作
+:PROPERTIES:
+:CUSTOM_ID: maintenance
+:END:
+
+光标置于块内 =C-c C-c= 执行（执行前有确认提示），输出落入 =#+RESULTS:= 。reconfigure 需 sudo，不在此列，改完请手动 =blue rebuild= 。
+
+括号平衡检查（最快，定位到块名）：
+
+#+begin_src sh :dir .. :results output
+blue check
+#+end_src
+
+构建验证（tangle + =guix system build --dry-run= ，不写入系统）：
+
+#+begin_src sh :dir .. :results output
+blue --dry-run rebuild
+#+end_src
+
+仅 tangle（刷新 =tmp/= 产物）：
+
+#+begin_src sh :dir .. :results output
+blue build
+#+end_src
+
 * 模块导入
 
 #+NAME: modules
@@ -110,17 +146,26 @@
 #+end_src
 
 * 配置文件骨架
+:PROPERTIES:
+:CUSTOM_ID: main-skeleton
+:END:
 
 Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Scheme）。=skeletons= 是替换语义而非追加，须先合并 =default-skeletons= 保留默认登录环境。
+
+本块即唯一装配表：所有服务/包块的引用次序一目了然；分区注释会随 tangle 进入 =tmp/config.scm= ，生成的文件里也保留同样的分段标记。
 
 #+NAME: main
 #+begin_src scheme :tangle ../tmp/config.scm :noweb yes
 <<modules>>
 
+;; ══ 顶层定义 ══════════════════════════════════════════════════
+;; 文件系统布局（subvol/bind-mount/swap）
 <<filesystem-defines>>
+;; 自定义变体包（CachyOS 内核、指纹识别栈）
+<<cachyos-lts-kernel>>
+<<fingerprint-packages>>
 
-<<custom-package-defs>>
-
+;; ══ Home ══════════════════════════════════════════════════════
 (define %home
   (home-environment
    (packages (append
@@ -129,12 +174,14 @@ Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Sche
               <<devtools-packages-list>>
               <<user-packages-list>>
               <<custom-packages-list>>
-              <<hermes-desktop-runtime-packages>>
-              ))
+              <<hermes-desktop-runtime-packages>>))
 
    (services (append
               <<user-desktop-services>>
-              <<home-shepherd-services>>
+              ;; ── shepherd 自启动 ──
+              <<essential-desktop-services>>
+              <<hermes-services>>
+              <<cpu-dma-latency-service>>
               <<timer-services>>
               <<emacs-services>>
               <<fish-services>>
@@ -142,9 +189,9 @@ Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Sche
               <<home-files-services>>
               <<environment-variable-services>>
               <<font-services>>
-
               %base-home-services))))
 
+;; ══ System ════════════════════════════════════════════════════
 (define %system
   (operating-system
    <<kernel-configs>>
@@ -163,14 +210,29 @@ Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Sche
 
    (services
     (append
-     <<basic-services>>
+     ;; ── 基础：kmscon / root 定时任务 / nix-ld ──
+     <<kmscon-services>>
+     <<root-services>>
+     <<nix-ld-services>>
+     ;; ── Guix 下载源 ──
      <<guix-substitutes>>
-     <<udev-services>>
+     ;; ── udev：静态规则 / AC 电源联动 / USB 电源权限 ──
+     <<udev-static-rules>>
+     <<ac-power-services>>
+     <<usb-power-services>>
+     ;; ── 网络（nftables + 可信切换 + 热点 AP）──
      <<networking-services>>
      <<virtualization-services>>
-     <<kernel-services>>
+     ;; ── 内核：模块加载 / sysctl / pam-limits ──
+     <<kernel-module-services>>
+     <<sysctl-services>>
+     <<pam-limits-services>>
      <<nix-services>>
-     <<filesystem-services>>
+     ;; ── 文件系统配套：machine-id / resume / /tmp / /data ──
+     <<machine-id-service>>
+     <<resume-device-service>>
+     <<cleanup-tmp-services>>
+     <<data-dirs-services>>
      <<desktop-services>>
      (list (service guix-home-service-type
                     `((,username ,%home))))))
@@ -187,6 +249,9 @@ Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Sche
 职责是 *让系统能够正常启动* ，软件包与服务尽量精简；用户层配置装机后经 Home 应用。
 
 ** Bootloader
+:PROPERTIES:
+:CUSTOM_ID: sys-bootloader
+:END:
 
 Limine（=rosenthal= 频道）。
 
@@ -198,8 +263,11 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 ** FileSystems
+:PROPERTIES:
+:CUSTOM_ID: sys-filesystems
+:END:
 
-=LUKS + Btrfs= + subvol；子卷/数据目录清单在 [[../information.scm][information.scm]] 。取舍：保留休眠、放弃加密 swap 恢复（Guile initrd 不支持）——休眠镜像明文落盘 swap。
+=LUKS + Btrfs= + subvol；子卷/数据目录清单在 [[./information.scm][information.scm]] 。取舍：保留休眠、放弃加密 swap 恢复（Guile initrd 不支持）——休眠镜像明文落盘 swap。
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -279,6 +347,9 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 ** Kernel
+:PROPERTIES:
+:CUSTOM_ID: sys-kernel
+:END:
 
 *** 内核相关参数设置
 
@@ -295,6 +366,8 @@ Limine（=rosenthal= 频道）。
         "kernel.sysrq=1"
         "loglevel=0"
         "modprobe.blacklist=wacom,hid_uclogic"
+        "nowatchdog"
+        "preempt=full"
         "snd-intel-dspcfg.dsp_driver=3"
         "threadirqs"
         "quiet"
@@ -308,13 +381,7 @@ Limine（=rosenthal= 频道）。
 
 *** 内核相关服务设置
 
-#+NAME: kernel-services
-#+begin_src scheme :noweb yes
-(append
- <<kernel-module-services>>
- <<sysctl-services>>
- <<pam-limits-services>>)
-#+end_src
+下列三块按顺序装配进 [[#main-skeleton][main]] 的 services。
 
 **** 内核模块加载
 ~ip_tables/iptable_nat~（iptables 兼容层，libvirt/podman 网络后端）；=zswap.compressor= 模块加载后运行时切 zstd（cmdline 写法必回退 lzo）。
@@ -366,6 +433,8 @@ Limine（=rosenthal= 频道）。
                         ("vm.vfs_cache_pressure" . "50")
                         ("vm.page_lock_unfairness" . "1")
                         ("vm.stat_interval" . "120")
+                        ("vm.page-cluster" . "0")
+                        ("vm.watermark_scale_factor" . "125")
                         ("vm.dirty_writeback_centisecs" . "1500")
 
                         ("net.core.default_qdisc" . "fq")
@@ -408,6 +477,10 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 ** Packages
+:PROPERTIES:
+:CUSTOM_ID: sys-packages
+:END:
+
 一些需要用到的软件包， *非必要不修改*
 
 #+NAME: packages-list
@@ -489,20 +562,16 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 ** Services
+:PROPERTIES:
+:CUSTOM_ID: sys-services
+:END:
 
 *** 文件系统相关服务
 
-#+NAME: filesystem-services
-#+begin_src scheme :noweb yes
-(append
- <<machine-id-service>>
- <<resume-device-service>>
- <<cleanup-tmp-services>>
- <<data-dirs-services>>)
-#+end_src
+四个叶子块直接装配进 [[#main-skeleton][main]]（已无中间 append 层）。
 
 **** 固定 machine-id
-算法在 [[../information.scm][information.scm]] 。
+算法在 [[./information.scm][information.scm]] 。
 
 #+NAME: machine-id-service
 #+begin_src scheme
@@ -525,19 +594,21 @@ Limine（=rosenthal= 频道）。
                              ;; 设备号由内核枚举顺序决定，不能硬编码：
                              ;; 由 swap UUID 的符号链接反查块设备名，
                              ;; 再从 sysfs 读出 major:minor 写入 resume
-                             (start #~(lambda ()
-                                        (let ([dev (call-with-input-file
-                                                       (string-append
-                                                        "/sys/class/block/"
-                                                        (basename
-                                                         (readlink
-                                                          (string-append "/dev/disk/by-uuid/"
-                                                                         #$%swap-uuid)))
-                                                        "/dev")
-                                                     read-line)])
-                                          (call-with-output-file "/sys/power/resume"
-                                            (lambda (port)
-                                              (display dev port))))))))))
+                             (start
+                              #~(lambda ()
+                                  (let* ([dev-name (basename
+                                                    (readlink
+                                                     (string-append
+                                                      "/dev/disk/by-uuid/"
+                                                      #$%swap-uuid)))]
+                                         [dev (call-with-input-file
+                                                  (string-append
+                                                   "/sys/class/block/"
+                                                   dev-name "/dev")
+                                                read-line)])
+                                    (call-with-output-file "/sys/power/resume"
+                                      (lambda (port)
+                                        (display dev port))))))))))
 #+end_src
 
 **** 开机清空 /tmp
@@ -572,7 +643,7 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 **** /data 权限与 XDG 目录
-*fix-data-perms* 修复 =/data= 权限（0755）；*create-xdg-dirs* 在 =/data= 与 home 两侧建同名目录供 bind-mount。
+=fix-data-perms= 修复 =/data= 权限（0755）；=create-xdg-dirs= 在 =/data= 与 home 两侧建同名目录供 bind-mount。
 
 #+NAME: data-dirs-services
 #+begin_src scheme
@@ -583,135 +654,104 @@ Limine（=rosenthal= 频道）。
                           (chmod "/data" #o755)))
 
       (simple-service 'create-xdg-dirs activation-service-type
-                      (with-imported-modules (source-module-closure '((guix
-                                                                       build
-                                                                       utils)))
-                                             #~(begin
-                                                 (use-modules (guix build
-                                                                    utils))
-                                                 (let* ([pw (getpwnam #$username)]
-                                                        [uid (passwd:uid pw)]
-                                                        [gid (passwd:gid pw)]
-                                                        [home (string-append
-                                                               "/home/"
-                                                               #$username)])
-                                                   (for-each (lambda (dir)
-                                                               ;; /data 侧目录是 bind-mount 的源，缺它挂载会失败，
-                                                               ;; home 侧目录是挂载点，两侧都要建
-                                                               (let ([data-path (string-append
-                                                                                 "/data/"
-                                                                                 dir)])
-                                                                 (mkdir-p data-path)
-                                                                 (chown data-path
-                                                                        uid gid))
-                                                               (let ([path (string-append
-                                                                            home
-                                                                            "/"
-                                                                            dir)])
-                                                                 (mkdir-p
-                                                                  path)
-                                                                 (chown path
-                                                                        uid gid)
-                                                                 (chmod path
-                                                                        #o755)))
-                                                             '#$%data-dirs))))))
+                      (with-imported-modules
+                       (source-module-closure '((guix build utils)))
+                       #~(begin
+                           (use-modules (guix build utils))
+                           (let* ([pw (getpwnam #$username)]
+                                  [uid (passwd:uid pw)]
+                                  [gid (passwd:gid pw)]
+                                  [home (string-append "/home/" #$username)])
+                             (for-each
+                              (lambda (dir)
+                                ;; /data 侧目录是 bind-mount 的源，缺它挂载会失败；
+                                ;; home 侧目录是挂载点，两侧都要建
+                                (let ([data-path (string-append "/data/" dir)]
+                                      [home-path (string-append home "/" dir)])
+                                  (mkdir-p data-path)
+                                  (chown data-path uid gid)
+                                  (mkdir-p home-path)
+                                  (chown home-path uid gid)
+                                  (chmod home-path #o755)))
+                              '#$%data-dirs))))))
 #+end_src
 
 *** 网络相关配置
 
-静态 nftables 规则集 + NM dispatcher 只原子更新 =trusted_ifaces= 集合（绝不 flush ruleset）。可信名单是 NM profile 名（非 SSID），存 age 密文 =wifi-trust.age= ，解密走管道不落明文，私钥缺失仅撤销信任不阻断联网；dispatcher 经 activation 拷贝（=/etc/NetworkManager= 是持久挂载点）。完整设计要点见 source/AGENTS.md。
+静态 nftables 规则集开机加载一次，NM dispatcher 只原子更新 =trusted_ifaces= 集合（绝不 flush ruleset）。可信名单是 NM profile 名（非 SSID），存 age 密文 =wifi-trust.age= ，解密走管道不落明文，私钥缺失仅撤销信任不阻断联网；dispatcher 经 activation 拷贝（=/etc/NetworkManager= 是持久挂载点）。完整设计要点见 source/AGENTS.md。
 
-+ 热点 AP + WiFi 客户端并发（2026-09-09 事故复盘后重构）
-
-=managed + AP= 共享 radio 限单信道；决策脚本 =hotspot-decide= 统一判定（AC 供电且当前 profile 不在可信名单才开），四个触发入口（开机服务、NM dispatcher、udev 电源插拔、每分钟 recheck timer）收敛 + flock 串行 + 事件上下文后台化。应急开关 =touch /run/hotspot-disabled= （tmpfs，重启自愈）。五环防御与安全不变式见 source/AGENTS.md。
+热点 AP + WiFi 客户端并发（2026-09-09 事故复盘后重构）：=managed + AP= 共享 radio 限单信道；决策脚本 =hotspot-decide= 统一判定（AC 供电且当前 profile 不在可信名单才开），四个触发入口（开机服务、NM dispatcher、udev 电源插拔、每分钟 recheck timer）收敛 + flock 串行 + 事件上下文后台化。应急开关 =touch /run/hotspot-disabled= （tmpfs，重启自愈）。五环防御与安全不变式见 source/AGENTS.md。
 
 SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生成命令见 source/AGENTS.md）。
 
+**** 服务装配
+
+脚本模板见下文各自小节（tangle 到 =tmp/= 后由 =local-file= 引入）；=render-script= 统一做「拷贝模板 + 按 alist 注入 store 路径 + 置执行位」。
+
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
-(let* ([nmcli-bin (file-append network-manager "/bin/nmcli")]
-       [iw-bin (file-append iw "/sbin/iw")]
-       [trusted-wifi-connections
+(let* ([bin (lambda (pkg path)
+              (file-append (spec->pkg pkg) path))]
+       [age-key (string-append "/home/" username "/.local/share/keys/age")]
+       [wifi-trust-age
         (local-file
          "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age")]
-       [hotspot-creds-cipher
+       [hotspot-creds-age
         (local-file
          "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-hotspot.age")]
-       [dispatcher-template
-        (local-file "nm-dispatcher-trusted-connection")]
-       [hotspot-decide-template
-        (local-file "hotspot-decide")]
-       [hotspot-ap-run-template
-        (local-file "hotspot-ap-run")]
+       [iw-bin (file-append iw "/sbin/iw")]
+       [age-bin (file-append age "/bin/age")]
+       [grep-bin (file-append grep "/bin/grep")]
+       [ip-bin (bin "iproute2" "/sbin/ip")]
+       [sed-bin (bin "sed" "/bin/sed")]
+       [mkdir-bin (bin "coreutils" "/bin/mkdir")]
+
+       ;; 渲染一个脚本模板：拷贝 + 按 ("@占位符@" . file-like|字符串) alist
+       ;; 逐条 substitute* + 置执行位。udev RUN / shepherd system* /
+       ;; dispatcher 直接执行本产物，store 内必须带执行位。
+       [render-script
+        (lambda (name template pairs)
+          (computed-file
+           name
+           (with-imported-modules
+            '((guix build utils))
+            #~(begin
+                (use-modules (guix build utils))
+                (copy-file #$template #$output)
+                (substitute*
+                 #$output
+                 #$@(map (lambda (p) (list (list (car p)) (cdr p)))
+                         pairs))
+                (chmod #$output #o555)))))]
+
        [hotspot-decide-script
-        (computed-file
-         "hotspot-decide"
-         (with-imported-modules '((guix build utils))
-                                #~(begin
-                                    (use-modules (guix build utils))
-                                    (copy-file #$hotspot-decide-template #$output)
-                                    (substitute* #$output
-                                                 (("@NMCLI_BIN@") #$nmcli-bin)
-                                                 (("@AGE_IDENTITY@")
-                                                  #$(string-append
-                                                     "/home/" username "/.local/share/keys/age"))
-                                                 (("@TRUSTED_CONNECTIONS_CIPHER@")
-                                                  #$trusted-wifi-connections)
-                                                 (("@AGE_BIN@")
-                                                  #$(file-append age "/bin/age"))
-                                                 (("@GREP_BIN@")
-                                                  #$(file-append grep "/bin/grep"))
-                                                 (("@IW_BIN@") #$iw-bin)
-                                                 (("@PGREP_BIN@")
-                                                  #$(file-append (spec->pkg "procps")
-                                                                 "/bin/pgrep"))
-                                                 (("@HERD_BIN@")
-                                                  #$(file-append (spec->pkg "shepherd")
-                                                                 "/bin/herd"))
-                                                 (("@IP_BIN@")
-                                                  #$(file-append (spec->pkg "iproute2")
-                                                                 "/sbin/ip"))
-                                                 (("@SED_BIN@")
-                                                  #$(file-append (spec->pkg "sed")
-                                                                 "/bin/sed"))
-                                                 (("@FLOCK_BIN@")
-                                                  #$(file-append (spec->pkg "util-linux")
-                                                                 "/bin/flock"))
-                                                 (("@MKDIR_BIN@")
-                                                  #$(file-append (spec->pkg "coreutils")
-                                                                 "/bin/mkdir")))
-                                    ;; udev RUN / shepherd system* / dispatcher
-                                    ;; 直接执行本产物，store 内必须带执行位。
-                                    (chmod #$output #o555))))]
+        (render-script
+         "hotspot-decide" (local-file "hotspot-decide")
+         `(("@NMCLI_BIN@" . ,(file-append network-manager "/bin/nmcli"))
+           ("@AGE_IDENTITY@" . ,age-key)
+           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,wifi-trust-age)
+           ("@AGE_BIN@" . ,age-bin)
+           ("@GREP_BIN@" . ,grep-bin)
+           ("@IW_BIN@" . ,iw-bin)
+           ("@PGREP_BIN@" . ,(bin "procps" "/bin/pgrep"))
+           ("@HERD_BIN@" . ,(bin "shepherd" "/bin/herd"))
+           ("@IP_BIN@" . ,ip-bin)
+           ("@SED_BIN@" . ,sed-bin)
+           ("@FLOCK_BIN@" . ,(bin "util-linux" "/bin/flock"))
+           ("@MKDIR_BIN@" . ,mkdir-bin)))]
+
        [hotspot-ap-run-script
-        (computed-file
-         "hotspot-ap-run"
-         (with-imported-modules '((guix build utils))
-                                #~(begin
-                                    (use-modules (guix build utils))
-                                    (copy-file #$hotspot-ap-run-template #$output)
-                                    (substitute* #$output
-                                                 (("@IW_BIN@") #$iw-bin)
-                                                 (("@AGE_IDENTITY@")
-                                                  #$(string-append
-                                                     "/home/" username "/.local/share/keys/age"))
-                                                 (("@HOTSPOT_CREDS_CIPHER@")
-                                                  #$hotspot-creds-cipher)
-                                                 (("@AGE_BIN@")
-                                                  #$(file-append age "/bin/age"))
-                                                 (("@IP_BIN@")
-                                                  #$(file-append (spec->pkg "iproute2")
-                                                                 "/sbin/ip"))
-                                                 (("@SED_BIN@")
-                                                  #$(file-append (spec->pkg "sed")
-                                                                 "/bin/sed"))
-                                                 (("@MKDIR_BIN@")
-                                                  #$(file-append (spec->pkg "coreutils")
-                                                                 "/bin/mkdir"))
-                                                 (("@HOSTAPD_BIN@")
-                                                  #$(file-append (spec->pkg "hostapd")
-                                                                 "/sbin/hostapd")))
-                                    (chmod #$output #o555))))]
+        (render-script
+         "hotspot-ap-run" (local-file "hotspot-ap-run")
+         `(("@IW_BIN@" . ,iw-bin)
+           ("@AGE_IDENTITY@" . ,age-key)
+           ("@HOTSPOT_CREDS_CIPHER@" . ,hotspot-creds-age)
+           ("@AGE_BIN@" . ,age-bin)
+           ("@IP_BIN@" . ,ip-bin)
+           ("@SED_BIN@" . ,sed-bin)
+           ("@MKDIR_BIN@" . ,mkdir-bin)
+           ("@HOSTAPD_BIN@" . ,(bin "hostapd" "/sbin/hostapd"))))]
+
        ;; NM 每次连接都把 WiFi 省电重置为默认开启，dispatcher 在 up 事件
        ;; 补救的方式实测不可靠（NM 默认启用省电覆盖了它）。改为 [connection]
        ;; 段默认 wifi.powersave：连接时恒不省电（低延迟，远程操控优先）；
@@ -721,27 +761,17 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
        [nm-powersave-conf
         (plain-file "wifi-powersave.conf"
                     "[connection]\nwifi.powersave=2\n")]
+
        [dispatcher-script
-        (computed-file
+        (render-script
          "nm-dispatcher-trusted-connection"
-         (with-imported-modules '((guix build utils))
-                                #~(begin
-                                    (use-modules (guix build utils))
-                                    (copy-file #$dispatcher-template #$output)
-                                    (substitute* #$output
-                                                 (("@AGE_IDENTITY@")
-                                                  #$(string-append
-                                                     "/home/" username "/.local/share/keys/age"))
-                                                 (("@TRUSTED_CONNECTIONS_CIPHER@")
-                                                  #$trusted-wifi-connections)
-                                                 (("@AGE_BIN@")
-                                                  #$(file-append age "/bin/age"))
-                                                 (("@NFT_BIN@")
-                                                  #$(file-append nftables "/sbin/nft"))
-                                                 (("@GREP_BIN@")
-                                                  #$(file-append grep "/bin/grep"))
-                                                 (("@HOTSPOT_DECIDE_BIN@")
-                                                  #$hotspot-decide-script)))))])
+         (local-file "nm-dispatcher-trusted-connection")
+         `(("@AGE_IDENTITY@" . ,age-key)
+           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,wifi-trust-age)
+           ("@AGE_BIN@" . ,age-bin)
+           ("@NFT_BIN@" . ,(file-append nftables "/sbin/nft"))
+           ("@GREP_BIN@" . ,grep-bin)
+           ("@HOTSPOT_DECIDE_BIN@" . ,hotspot-decide-script)))])
 
   (list (service nftables-service-type
                  (nftables-configuration (ruleset (local-file
@@ -850,9 +880,8 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
 
         ;; 热点本体：hostapd 直管 uap0（type __ap），不随机启动，由
         ;; 决策脚本 herd start/stop。信道由决策脚本写入 /run 状态文件，
-                               ;; 执行体读不到合法信道号即拒绝启动。不 respawn：
-                               ;; 失败即停，由决策脚本在下个触发点重拉，
-                               ;; 避免反复折腾接口的风暴。
+        ;; 执行体读不到合法信道号即拒绝启动。不 respawn：失败即停，由
+        ;; 决策脚本在下个触发点重拉，避免反复折腾接口的风暴。
         (simple-service 'hotspot-ap-services shepherd-root-service-type
                         (list (shepherd-service
                                (documentation
@@ -927,15 +956,11 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
         (simple-service 'hotspot-ac-trigger udev-service-type
                         (list (file->udev-rule
                                "91-hotspot-ac.rules"
-                               (computed-file
+                               (mixed-text-file
                                 "91-hotspot-ac.rules"
-                                #~(call-with-output-file #$output
-                                    (lambda (port)
-                                      (display (string-append
-                                                "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
-                                                "TEST==\"online\", RUN+=\""
-                                                #$hotspot-decide-script "\"\n")
-                                               port)))))))
+                                "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
+                                "TEST==\"online\", RUN+=\""
+                                hotspot-decide-script "\"\n"))))
 
         (simple-service 'iw-reg-cn shepherd-root-service-type
                         (list (shepherd-service
@@ -951,7 +976,11 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
                                (respawn? #f))))))
 #+end_src
 
-#+name: nm-dispatcher-trusted-connection
+**** NM dispatcher 脚本
+
+可信连接切换 + 热点决策触发入口；tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位符，activation 拷贝到 =/etc/NetworkManager/dispatcher.d/= 。
+
+#+NAME: nm-dispatcher-trusted-connection
 #+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
 #!/bin/sh
 # Auto-generated by Guix config.org.
@@ -1004,9 +1033,9 @@ case "$ACTION" in
 esac
 #+end_src
 
-热点决策脚本
+**** 热点决策脚本
 
-#+name: hotspot-decide
+#+NAME: hotspot-decide
 #+begin_src sh :tangle ../tmp/hotspot-decide
 #!/bin/sh
 # Auto-generated by Guix config.org.
@@ -1053,7 +1082,7 @@ AC_ONLINE_GLOB="${AC_ONLINE_GLOB:-/sys/class/power_supply/*/online}"
 # 事件上下文（udev 的 SUBSYSTEM / dispatcher 的 NM_DISPATCHER_ACTION）
 # 后台化：自重入后立即返回，不阻塞 udev 事件队列或 dispatcher。
 if [ "${HOTSPOT_DIRECT:-}" != "1" ] \
-    && { [ -n "${SUBSYSTEM:-}" ] || [ -n "${NM_DISPATCHER_ACTION:-}" ]; }; then
+       && { [ -n "${SUBSYSTEM:-}" ] || [ -n "${NM_DISPATCHER_ACTION:-}" ]; }; then
     HOTSPOT_DIRECT=1 "$0" >/dev/null 2>&1 &
     exit 0
 fi
@@ -1087,7 +1116,7 @@ hotspot_active() {
 # 2.4G: ch=(freq-2407)/5，5G: ch=(freq-5000)/5
 sta_channel() {
     freq=$("$IW_BIN" dev "$WIFI_IFACE" link 2>/dev/null |
-           "$SED_BIN" -n 's/^[[:space:]]*freq: \([0-9][0-9]*\)$/\1/p')
+               "$SED_BIN" -n 's/^[[:space:]]*freq: \([0-9][0-9]*\)$/\1/p')
     case "$freq" in
         "") return 1 ;;
         *) if [ "$freq" -ge 5000 ] 2>/dev/null; then
@@ -1115,7 +1144,7 @@ target_channel() {
     scan=$("$NMCLI_BIN" -t -f SSID,CHAN device wifi list ifname "$WIFI_IFACE" 2>/dev/null) || return 1
     [ -n "$scan" ] || return 1
     autoconns=$("$NMCLI_BIN" -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null |
-                "$SED_BIN" -n 's/:802-11-wireless:yes$//p')
+                    "$SED_BIN" -n 's/:802-11-wireless:yes$//p')
     [ -n "$autoconns" ] || return 1
     while IFS= read -r sline; do
         [ -n "$sline" ] || continue
@@ -1124,66 +1153,66 @@ target_channel() {
             ch=${sline#"$name":}
             case "$ch" in
                 ''|*[!0-9]*) continue ;;
-                *) ap_channel_ok "$ch" || continue
-                   echo "$ch"; return 0 ;;
-            esac
-        done <<EONAMES
+*) ap_channel_ok "$ch" || continue
+   echo "$ch"; return 0 ;;
+esac
+done <<EONAMES
 $autoconns
 EONAMES
-    done <<EOSCAN
+done <<EOSCAN
 $scan
 EOSCAN
-    return 1
+return 1
 }
 
-# 信道允许 AP 主动辐射校验：本机 self-managed regdom（world）下 5G 全带
-# no IR，扫描分支（STA 未连）起在这些信道会被 hostapd 拒绝（NO-IR）。
-# 带 IR-CONCURRENT 的信道在 STA 关联后限制解除——跟随 STA 的分支不需要
-# 此过滤，只有扫描分支（发起时 STA 未连）必须选无 no IR 标志的信道。
-# iw phy 的 Frequencies 行格式：* 5785 MHz [157] (22.0 dBm) (no IR)
-ap_channel_ok() {
-    line=$("$IW_BIN" phy 2>/dev/null | "$GREP_BIN" -E "MHz \[$1\] ")
-    [ -n "$line" ] || return 1
-    case "$line" in
-        *"no IR"*) return 1 ;;
-        *) return 0 ;;
-    esac
-}
+ # 信道允许 AP 主动辐射校验：本机 self-managed regdom（world）下 5G 全带
+ # no IR，扫描分支（STA 未连）起在这些信道会被 hostapd 拒绝（NO-IR）。
+ # 带 IR-CONCURRENT 的信道在 STA 关联后限制解除——跟随 STA 的分支不需要
+ # 此过滤，只有扫描分支（发起时 STA 未连）必须选无 no IR 标志的信道。
+ # iw phy 的 Frequencies 行格式：* 5785 MHz [157] (22.0 dBm) (no IR)
+ ap_channel_ok() {
+     line=$("$IW_BIN" phy 2>/dev/null | "$GREP_BIN" -E "MHz \[$1\] ")
+     [ -n "$line" ] || return 1
+     case "$line" in
+         *"no IR"*) return 1 ;;
+         *) return 0 ;;
+     esac
+ }
 
-stop_hotspot() {
-    "$HERD_BIN" stop "$HOTSPOT_SVC" 2>/dev/null
-    "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
-    return 0
-}
+ stop_hotspot() {
+     "$HERD_BIN" stop "$HOTSPOT_SVC" 2>/dev/null
+     "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
+     return 0
+ }
 
-if [ -e "$DISABLE_SENTINEL" ]; then
-    hotspot_active && stop_hotspot
-    exit 0
-fi
+ if [ -e "$DISABLE_SENTINEL" ]; then
+     hotspot_active && stop_hotspot
+     exit 0
+ fi
 
-if on_ac_power && ! wifi_trusted; then
-    ch=$(target_channel) || exit 0
-    if hotspot_active; then
-        ap_ch=$(ap_channel)
-        [ -n "$ap_ch" ] && [ "$ap_ch" = "$ch" ] && exit 0
-        # 目标信道变化（STA 漫游 / 出现可关联网络）：重启热点跟随
-        stop_hotspot
-    fi
-    "$MKDIR_BIN" -p "${CHANNEL_FILE%/*}"
-    printf '%s\n' "$ch" > "$CHANNEL_FILE"
-    # shepherd 把进程退出过的服务标记 disabled，herd start 会拒绝；
-    # enable 幂等（未禁用时无副作用）
-    "$HERD_BIN" enable "$HOTSPOT_SVC" 2>/dev/null
-    exec "$HERD_BIN" start "$HOTSPOT_SVC"
-fi
+ if on_ac_power && ! wifi_trusted; then
+     ch=$(target_channel) || exit 0
+     if hotspot_active; then
+         ap_ch=$(ap_channel)
+         [ -n "$ap_ch" ] && [ "$ap_ch" = "$ch" ] && exit 0
+         # 目标信道变化（STA 漫游 / 出现可关联网络）：重启热点跟随
+         stop_hotspot
+     fi
+     "$MKDIR_BIN" -p "${CHANNEL_FILE%/*}"
+     printf '%s\n' "$ch" > "$CHANNEL_FILE"
+     # shepherd 把进程退出过的服务标记 disabled，herd start 会拒绝；
+     # enable 幂等（未禁用时无副作用）
+     "$HERD_BIN" enable "$HOTSPOT_SVC" 2>/dev/null
+     exec "$HERD_BIN" start "$HOTSPOT_SVC"
+ fi
 
-hotspot_active && stop_hotspot
-exit 0
+ hotspot_active && stop_hotspot
+ exit 0
 #+end_src
 
-热点 AP 执行体
+**** 热点 AP 执行体
 
-#+name: hotspot-ap-run
+#+NAME: hotspot-ap-run
 #+begin_src sh :tangle ../tmp/hotspot-ap-run
 #!/bin/sh
 # Auto-generated by Guix config.org.
@@ -1215,55 +1244,56 @@ conf="$CONF_DIR/hostapd.conf"
 ch=$(cat "$CHANNEL_FILE" 2>/dev/null)
 case "$ch" in
     ''|*[!0-9]*) exit 1 ;;
-esac
-# 信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）
-if [ "$ch" -le 14 ] 2>/dev/null; then
-    hw_mode=g
-else
-    hw_mode=a
-fi
+                 esac
+                 # 信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）
+                 if [ "$ch" -le 14 ] 2>/dev/null; then
+                     hw_mode=g
+                 else
+                     hw_mode=a
+                 fi
 
-creds=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$HOTSPOT_CREDS_CIPHER" 2>/dev/null) || exit 1
-ssid=$(printf '%s\n' "$creds" | "$SED_BIN" -n '1p')
-psk=$(printf '%s\n' "$creds" | "$SED_BIN" -n '2p')
-[ -n "$ssid" ] && [ -n "$psk" ] || exit 1
+                 creds=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$HOTSPOT_CREDS_CIPHER" 2>/dev/null) || exit 1
+                 ssid=$(printf '%s\n' "$creds" | "$SED_BIN" -n '1p')
+                 psk=$(printf '%s\n' "$creds" | "$SED_BIN" -n '2p')
+                 [ -n "$ssid" ] && [ -n "$psk" ] || exit 1
 
-# 接口类型纠正：早期部署残留的 managed 类型会让 hostapd 起不来
-cur_type=$("$IW_BIN" dev "$HOTSPOT_IFACE" info 2>/dev/null |
-           "$SED_BIN" -n 's/^[[:space:]]*type \([a-z_]*\)$/\1/p')
-if [ "$cur_type" != "__ap" ]; then
-    "$IP_BIN" link set "$HOTSPOT_IFACE" down 2>/dev/null
-    "$IW_BIN" dev "$HOTSPOT_IFACE" set type __ap || exit 1
-fi
+                 # 接口类型纠正：早期部署残留的 managed 类型会让 hostapd 起不来
+                 cur_type=$("$IW_BIN" dev "$HOTSPOT_IFACE" info 2>/dev/null |
+                                "$SED_BIN" -n 's/^[[:space:]]*type \([a-z_]*\)$/\1/p')
+                 if [ "$cur_type" != "__ap" ]; then
+                     "$IP_BIN" link set "$HOTSPOT_IFACE" down 2>/dev/null
+                     "$IW_BIN" dev "$HOTSPOT_IFACE" set type __ap || exit 1
+                 fi
 
-"$MKDIR_BIN" -p "$CONF_DIR"
-umask 077
-{
-    echo "interface=$HOTSPOT_IFACE"
-    echo "driver=nl80211"
-    echo "country_code=CN"
-    echo "ieee80211d=1"
-    echo "ssid=$ssid"
-    echo "hw_mode=$hw_mode"
-    echo "channel=$ch"
-    echo "wpa=2"
-    echo "wpa_passphrase=$psk"
-    echo "wpa_key_mgmt=WPA-PSK"
-    echo "rsn_pairwise=CCMP"
-    echo "auth_algs=1"
-    echo "macaddr_acl=0"
-} > "$conf"
+                 "$MKDIR_BIN" -p "$CONF_DIR"
+                 umask 077
+                 {
+                     echo "interface=$HOTSPOT_IFACE"
+                     echo "driver=nl80211"
+                     echo "country_code=CN"
+                     echo "ieee80211d=1"
+                     echo "ssid=$ssid"
+                     echo "hw_mode=$hw_mode"
+                     echo "channel=$ch"
+                     echo "wpa=2"
+                     echo "wpa_passphrase=$psk"
+                     echo "wpa_key_mgmt=WPA-PSK"
+                     echo "rsn_pairwise=CCMP"
+                     echo "auth_algs=1"
+                     echo "macaddr_acl=0"
+                 } > "$conf"
 
-"$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
-"$IP_BIN" addr add "$AP_ADDR" dev "$HOTSPOT_IFACE" || exit 1
-"$IP_BIN" link set "$HOTSPOT_IFACE" up
-exec "$HOSTAPD_BIN" "$conf"
+                 "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
+                 "$IP_BIN" addr add "$AP_ADDR" dev "$HOTSPOT_IFACE" || exit 1
+                 "$IP_BIN" link set "$HOTSPOT_IFACE" up
+                 exec "$HOSTAPD_BIN" "$conf"
 #+end_src
 
-nftable 配置
+**** nftables 规则集
 
 开机整体加载一次，dispatcher 只动 =trusted_ifaces= ；DHCP/ICMP 始终放行，保证不可信态也能引导联网。
 
+#+NAME: nftables-conf
 #+begin_src conf :tangle ../tmp/nftables.conf
 flush ruleset
 
@@ -1322,7 +1352,7 @@ iifname "uap0" oifname != "uap0" masquerade
 }
 #+end_src
 
-*** Nix包管理器相关配置
+*** Nix 包管理器
 
 #+NAME: nix-services
 #+begin_src scheme
@@ -1352,17 +1382,9 @@ iifname "uap0" oifname != "uap0" masquerade
                                               (one-shot? #t)))))
 #+end_src
 
-*** UDEV规则
+*** UDEV 规则
 
-动态生成的规则文件必须 =file->udev-rule= 包装（裸 =computed-file= 被 rules union 静默跳过）。
-
-#+NAME: udev-services
-#+begin_src scheme :noweb yes
-(append
- <<udev-static-rules>>
- <<ac-power-services>>
- <<usb-power-services>>)
-#+end_src
+动态生成且需注入 store 路径的规则用 =mixed-text-file= 生成文件、再经 =file->udev-rule= 包装（裸文件会被 rules union 静默跳过）；纯文本规则直接 =udev-rule= 。三块按序装配进 [[#main-skeleton][main]] 。
 
 **** 静态规则
 
@@ -1395,7 +1417,7 @@ iifname "uap0" oifname != "uap0" masquerade
 #+end_src
 
 **** AC 电源状态联动
-插电 → PPD performance + WiFi 省电关；拔电 → power-saver + 省电开（udev power_supply 事件 root 调用，=ac-power-init= 开机补跑冷插拔窗口）。
+插电 → 满血组（PPD performance + WiFi 省电关 + pstate/ASPM/KSM 等 sysfs 成组开关）；拔电 → 反向省电组（udev power_supply 事件 root 调用，=ac-power-init= 开机补跑冷插拔窗口）。单项 sysfs 写入失败静默降级，不阻塞整组；PCI runtime PM 只动白名单设备（iGPU/NVMe/WiFi），电池侧保留睿频（不动 no_turbo）。
 
 #+NAME: ac-power-services
 #+begin_src scheme
@@ -1412,30 +1434,63 @@ iifname "uap0" oifname != "uap0" masquerade
                  (ppdctl #$ppdctl)
                  (iw-bin #$iw-bin))
              (define (run . args) (apply system* args) #t)
-             (if (string=? mode "on")
-                 (begin (run ppdctl "set" "performance")
-                        (run iw-bin "dev" "wlp0s20f3" "set" "power_save" "off"))
-                 (begin (run ppdctl "set" "power-saver")
-                        (run iw-bin "dev" "wlp0s20f3" "set" "power_save" "on")))))]
+             ;; sysfs 单项写失败静默降级，缺失节点不阻塞整组
+             (define (set-sys path val)
+               (false-if-exception
+                (call-with-output-file path
+                  (lambda (port) (display val port)))))
+             (let ([ac? (string=? mode "on")])
+               ;; userspace 守护
+               (run ppdctl "set" (if ac? "performance" "power-saver"))
+               (run iw-bin "dev" "wlp0s20f3" "set" "power_save"
+                    (if ac? "off" "on"))
+               ;; intel_pstate：AC 抬最低频消升频延迟 + IO 等待自动抬 EPP
+               (set-sys "/sys/devices/system/cpu/intel_pstate/min_perf_pct"
+                        (if ac? "30" "8"))
+               (set-sys "/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost"
+                        (if ac? "1" "0"))
+               ;; workqueue 就近派发 / 定时器本地唤醒
+               (set-sys "/sys/module/workqueue/parameters/power_efficient"
+                        (if ac? "N" "Y"))
+               (set-sys "/proc/sys/kernel/timer_migration"
+                        (if ac? "0" "1"))
+               ;; PCIe 链路电源策略
+               (set-sys "/sys/module/pcie_aspm/parameters/policy"
+                        (if ac? "performance" "powersupersave"))
+               ;; PCI runtime PM 白名单：AC 常开不进 D3，电池恢复 auto
+               (for-each
+                (lambda (bdf)
+                  (set-sys (string-append "/sys/bus/pci/devices/" bdf
+                                          "/power/control")
+                           (if ac? "on" "auto")))
+                '("0000:00:02.0"   ; i915 iGPU
+                  "0000:01:00.0"   ; YMTC PC300 NVMe
+                  "0000:00:14.3")) ; iwlwifi wlp0s20f3
+               ;; 声卡：AC 零延迟；电池恢复默认 10s 省电
+               (set-sys "/sys/module/snd_hda_intel/parameters/power_save"
+                        (if ac? "0" "10"))
+               ;; KSM 同页合并：扫描 CPU 开销只在 AC 付
+               (when ac?
+                 (set-sys "/sys/kernel/mm/ksm/pages_to_scan" "200")
+                 (set-sys "/sys/kernel/mm/ksm/sleep_millisecs" "50"))
+               (set-sys "/sys/kernel/mm/ksm/run" (if ac? "1" "0"))
+               ;; 周期中断源常关（nowatchdog cmdline 之外的运行时兜底）
+               (set-sys "/proc/sys/kernel/nmi_watchdog" "0")
+               (set-sys "/proc/sys/kernel/soft_watchdog" "0"))))]
 
        [ac-power-rules
-        (computed-file
+        (file->udev-rule
          "90-ac-power-profile.rules"
-         #~(call-with-output-file #$output
-             (lambda (port)
-               (display
-                (string-append
-                 "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
-                 "ATTR{type}==\"Mains\", ATTR{online}==\"1\", "
-                 "RUN+=\"" #$ac-power-script " on\"\n"
-                 "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
-                 "ATTR{type}==\"Mains\", ATTR{online}==\"0\", "
-                 "RUN+=\"" #$ac-power-script " off\"\n")
-                port))))])
+         (mixed-text-file
+          "90-ac-power-profile.rules"
+          "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
+          "ATTR{type}==\"Mains\", ATTR{online}==\"1\", "
+          "RUN+=\"" ac-power-script " on\"\n"
+          "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
+          "ATTR{type}==\"Mains\", ATTR{online}==\"0\", "
+          "RUN+=\"" ac-power-script " off\"\n"))])
 
-  (list (udev-rules-service 'ac-power-profile
-                            (file->udev-rule "90-ac-power-profile.rules"
-                                             ac-power-rules))
+  (list (udev-rules-service 'ac-power-profile ac-power-rules)
 
         (simple-service 'ac-power-init shepherd-root-service-type
                         (list (shepherd-service
@@ -1464,33 +1519,20 @@ iifname "uap0" oifname != "uap0" masquerade
 
 #+NAME: usb-power-services
 #+begin_src scheme
-(let* ([chmod-bin (file-append (spec->pkg "coreutils") "/bin/chmod")]
-       [usb-power-perm-rules
-        (computed-file
+(list (udev-rules-service
+       'usb-power-perms
+       (file->udev-rule
+        "95-usb-power-control-perms.rules"
+        (mixed-text-file
          "95-usb-power-control-perms.rules"
-         #~(call-with-output-file #$output
-             (lambda (port)
-               (display
-                (string-append
-                 "ACTION==\"add\", SUBSYSTEM==\"usb\", TEST==\"power/control\", "
-                 "RUN+=\"" #$chmod-bin
-                 " 666 %S%p/power/control\"\n")
-                port))))])
-
-  (list (udev-rules-service 'usb-power-perms
-                            (file->udev-rule "95-usb-power-control-perms.rules"
-                                             usb-power-perm-rules))))
+         "ACTION==\"add\", SUBSYSTEM==\"usb\", TEST==\"power/control\", "
+         "RUN+=\"" (file-append (spec->pkg "coreutils") "/bin/chmod")
+         " 666 %S%p/power/control\"\n"))))
 #+end_src
 
 *** 基础服务
 
-#+NAME: basic-services
-#+begin_src scheme :noweb yes
-(append
- <<kmscon-services>>
- <<root-services>>
- <<nix-ld-services>>)
-#+end_src
+三块按序装配进 [[#main-skeleton][main]] 。
 
 **** KMS 控制台
 tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录集中 tty7 greetd。
@@ -1556,7 +1598,7 @@ tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录
                                                #:minutes '(0))
                                             #~(#$(file-append util-linux
                                                               "/sbin/fstrim")
-                                               "-av")
+                                                 "-av")
                                             #:requirement '(file-systems)))))
 #+end_src
 
@@ -1621,7 +1663,7 @@ tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录
                                             (guix-configuration (inherit config)
                                                                 (channels guix-channels)
                                                                 (guix (guix-for-channels guix-channels))
-                                                                (extra-options (list "--cores=20"
+                                                                (extra-options (list "--cores=22"
                                                                                      "--max-jobs=6"
                                                                                      "--gc-keep-outputs=yes"))
                                                                 (http-proxy "http://127.0.0.1:7890")
@@ -1638,84 +1680,95 @@ tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录
                                                 (handle-suspend-key 'ignore)
                                                 (handle-hibernate-key 'ignore))))
 
-        (list (service earlyoom-service-type)
-              ;; 指纹栈（定义见自定义包板块）：libfprint 1.94.100 经
-              ;; fprintd 依赖引入；守护进程 D-Bus 按需激活，非 shepherd 服务
-              (service fprintd-service-type
-                       (fprintd-configuration (fprintd fprintd-1.94)))
-              ;; 指纹认证接入 PAM：pam_fprintd sufficient 置于 pam_unix 前
-              ;; （对标 NixOS fprintAuth），指纹失败自动回落密码
-              (simple-service 'fingerprint-pam pam-root-service-type
-                              (list (pam-extension
-                                     (transformer
-                                      (lambda (pam)
-                                        (let ([fprint-entry
-                                               (pam-entry
-                                                (control "sufficient")
-                                                (module (file-append
-                                                         fprintd-1.94
-                                                         "/lib/security/pam_fprintd.so")))])
-                                          (if (member (pam-service-name pam)
-                                                      '("greetd" "login"
-                                                        "sudo" "su" "polkit-1"))
-                                              (pam-service
-                                               (inherit pam)
-                                               (auth (cons fprint-entry
-                                                           (pam-service-auth pam))))
-                                              pam)))))))
-              ;; libfprint 的 autosuspend hwdb（含 27c6:689a）挂系统 udev；
-              ;; goodixmoc 走 USB，root 守护进程直连 libusb，无 udev 权限规则需求
-              (simple-service 'fingerprint-udev udev-service-type
-                              (list libfprint-1.94))
-              (service gamemode-service-type)
-              (service gnome-keyring-service-type)
-              (service gvfs-service-type)
-              (service opentabletdriver-service-type)
-              ;; 注册 rtkit 的 D-Bus activation, PipeWire 请求 RT 时
-              ;; 自动拉起 rtkit-daemon 授予 SCHED_FIFO
-              (service rtkit-service-type)
-              (service power-profiles-daemon-service-type)
+        (list ;; PSI 驱动的 OOM 兜底：优先杀浏览器/IM 类大内存进程，
+         ;; 保护会话关键进程（shepherd/niri/合成栈/Emacs daemon）
+         (service earlyoom-service-type
+                  (earlyoom-configuration
+                   (prefer-regexp
+                    "(zen|firefox|chrom|Web Content|WebExtensions|Isolated|qq|wechat|electron)")
+                   (avoid-regexp
+                    "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom)")
+                   (run-with-higher-priority? #t)))
+         ;; 持续负载热管理：维持睿频、防热悬崖（adaptive 读
+         ;; INT340x 自适应表，MTL 已支持；ignore-cpuid-check 防
+         ;; 新型号被白名单静默拒跑）
+         (service thermald-service-type
+                  (thermald-configuration
+                   (adaptive? #t)
+                   (ignore-cpuid-check? #t)))
+         ;; 指纹栈（定义见自定义包板块）：libfprint 1.94.100 经
+         ;; fprintd 依赖引入；守护进程 D-Bus 按需激活，非 shepherd 服务
+         (service fprintd-service-type
+                  (fprintd-configuration (fprintd fprintd-1.94)))
+         ;; 指纹认证接入 PAM：pam_fprintd sufficient 置于 pam_unix 前
+         ;; （对标 NixOS fprintAuth），指纹失败自动回落密码
+         (simple-service 'fingerprint-pam pam-root-service-type
+                         (list (pam-extension
+                                (transformer
+                                 (lambda (pam)
+                                   (let ([fprint-entry
+                                          (pam-entry
+                                           (control "sufficient")
+                                           (module (file-append
+                                                    fprintd-1.94
+                                                    "/lib/security/pam_fprintd.so")))])
+                                     (if (member (pam-service-name pam)
+                                                 '("greetd" "login"
+                                                   "sudo" "su" "polkit-1"))
+                                         (pam-service
+                                          (inherit pam)
+                                          (auth (cons fprint-entry
+                                                      (pam-service-auth pam))))
+                                         pam)))))))
+         ;; libfprint 的 autosuspend hwdb（含 27c6:689a）挂系统 udev；
+         ;; goodixmoc 走 USB，root 守护进程直连 libusb，无 udev 权限规则需求
+         (simple-service 'fingerprint-udev udev-service-type
+                         (list libfprint-1.94))
+         (service gamemode-service-type)
+         (service gnome-keyring-service-type)
+         (service gvfs-service-type)
+         (service opentabletdriver-service-type)
+         ;; 注册 rtkit 的 D-Bus activation, PipeWire 请求 RT 时
+         ;; 自动拉起 rtkit-daemon 授予 SCHED_FIFO
+         (service rtkit-service-type)
+         (service power-profiles-daemon-service-type)
 
-              (simple-service 'hibernate-polkit polkit-service-type
-                              (list (computed-file
-                                     "polkit-hibernate-rules"
-                                     (let ([rules-file (local-file "50-hibernate.rules")])
-                                       #~(begin
-                                           (mkdir #$output)
-                                           (mkdir (string-append #$output "/share"))
-                                           (mkdir (string-append #$output "/share/polkit-1"))
-                                           (mkdir (string-append #$output "/share/polkit-1/rules.d"))
-                                           (copy-file #$rules-file
-                                                      (string-append #$output "/share/polkit-1/rules.d/50-hibernate.rules")))))))
+         (simple-service 'hibernate-polkit polkit-service-type
+                         (list (file-union
+                                "polkit-hibernate-rules"
+                                `(("share/polkit-1/rules.d/50-hibernate.rules"
+                                   ,(local-file "50-hibernate.rules"))))))
 
-              (service bluetooth-service-type
-                       (bluetooth-configuration (auto-enable? #t)))
+         (service bluetooth-service-type
+                  (bluetooth-configuration (auto-enable? #t)))
 
-              ;; swaylock 二进制当前不在任何 profile（锁屏走 noctalia），
-              ;; 此服务只为保留 /etc/pam.d/swaylock 条目：
-              ;; 将来切回 swaylock 时装上包即可用，无需再等 PAM 生效
-              (service screen-locker-service-type
-                       (screen-locker-configuration
-                        (name "swaylock")
-                        (program (plain-file "empty" ""))
-                        (using-setuid? #f)))
+         ;; swaylock 二进制当前不在任何 profile（锁屏走 noctalia），
+         ;; 此服务只为保留 /etc/pam.d/swaylock 条目：
+         ;; 将来切回 swaylock 时装上包即可用，无需再等 PAM 生效
+         (service screen-locker-service-type
+                  (screen-locker-configuration
+                   (name "swaylock")
+                   (program (plain-file "empty" ""))
+                   (using-setuid? #f)))
 
-              (service greetd-service-type
-                       (greetd-configuration
-                        (greeter-supplementary-groups '("video" "audio"))
-                        (terminals
-                         (list (greetd-terminal-configuration
-                                (terminal-vt "7")
-                                (terminal-switch #t)
-                                (default-session-command
-                                  (greetd-tuigreet-session))
-                                (initial-session-user username)
-                                (initial-session-command "dbus-run-session niri --session"))))))))
+         (service greetd-service-type
+                  (greetd-configuration
+                   (greeter-supplementary-groups '("video" "audio"))
+                   (terminals
+                    (list (greetd-terminal-configuration
+                           (terminal-vt "7")
+                           (terminal-switch #t)
+                           (default-session-command
+                             (greetd-tuigreet-session))
+                           (initial-session-user username)
+                           (initial-session-command "dbus-run-session niri --session"))))))))
 #+end_src
 
-50-hibernate.rules
+**** hibernate polkit 规则
 
-#+name: 50-hibernate.rules
+放行本地活跃用户的休眠/挂起/混合休眠；tangle 到 =tmp/= 后经上面的 =hibernate-polkit= 服务装进 =rules.d= 。
+
+#+NAME: 50-hibernate.rules
 #+begin_src js :tangle ../tmp/50-hibernate.rules
 polkit.addRule(function(action, subject) {
     if (subject.isLocal && subject.isActive &&
@@ -1816,7 +1869,14 @@ polkit.addRule(function(action, subject) {
 #+end_src
 
 ** Users 与主机信息
-=password= 行设初始密码：=(password (crypt "明文" "$6$salt"))= ，或直接填哈希（=echo "明文" | guix shell openssl -- openssl passwd -6 -stdin= 生成）；装机后必改。
+:PROPERTIES:
+:CUSTOM_ID: sys-users
+:END:
+
+=password= 行设初始密码：=(password (crypt "明文" "$6$salt"))= ，或直接填哈希（=echo "明文" | guix shell openssl -- openssl passwd -6 -stdin= 生成）。
+
+装机后人工项：
+- [ ] 修改下方 =password= 字段中的初始密码哈希
 
 #+NAME: information-configs
 #+begin_src scheme
@@ -1855,8 +1915,13 @@ polkit.addRule(function(action, subject) {
 职责：尽量多的配置放这里，系统层只留装机必需——首装更快，且 Home 层迭代不碰系统 reconfiguration。
 
 ** Packages
+:PROPERTIES:
+:CUSTOM_ID: home-packages
+:END:
 
-*** 桌面环境 相关软件包
+包列表统一用内置 ~specifications->packages~ （经 =(gnu)= 可用）：接受 ='("name@version:output")= 规格列表，返回 =(package "output")= 元组。
+
+*** 桌面环境相关软件包
 
 #+NAME: desktop-packages-list
 #+begin_src scheme :noweb yes
@@ -1905,7 +1970,7 @@ polkit.addRule(function(action, subject) {
    "qt6ct"))
 #+end_src
 
-*** 终端 相关软件包
+*** 终端相关软件包
 
 #+NAME: terminal-packages-list
 #+begin_src scheme
@@ -1940,7 +2005,7 @@ polkit.addRule(function(action, subject) {
    "zoxide"))
 #+end_src
 
-*** 开发环境 相关软件包
+*** 开发环境相关软件包
 
 #+NAME: devtools-packages-list
 #+begin_src scheme
@@ -2083,7 +2148,6 @@ polkit.addRule(function(action, subject) {
    ;; 命令行工具
    "age"
    "grim"
-   "kanata"
    "mesa-utils"
    "pinentry-qt"
    "slurp"
@@ -2130,13 +2194,7 @@ tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包�
 
 *** 自定义包与补丁
 
-自建变体包与上游补丁的集中地；defs 块放顶层 ~define~（noweb 拼进 ~main~ 顶层），list 块只放表达式（在 ~%home~ 引用点内联，表达式位置写不了 ~define~）。新增包：先 defs 后 list。结构保留备后续自建包与补丁。
-
-#+NAME: custom-package-defs
-#+begin_src scheme :noweb yes
-<<cachyos-lts-kernel>>
-<<fingerprint-packages>>
-#+end_src
+自建变体包与上游补丁的集中地；defs 块放顶层 ~define~（noweb 拼进 ~main~ 顶层），~custom-packages-list~ 只放表达式（在 ~%home~ 引用点内联，表达式位置写不了 ~define~）。新增包：先 defs 后 list。结构保留备后续自建包与补丁。
 
 **** CachyOS LTS 内核
 
@@ -2160,75 +2218,75 @@ tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包�
 
 (define libfprint-1.94
   (package
-    (inherit libfprint)
-    (version %libfprint-version)
-    (source
-     (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://gitlab.freedesktop.org/libfprint/libfprint")
-             (commit (string-append "v" %libfprint-version))))
-       ;; inherit 变体中 thunk 字段的兄弟字段引用只覆盖本表单显式设置的
-       ;; 字段，name 仅存在于父定义、引用必 unbound；origin 内用顶层变量+字面量
-       (file-name (git-file-name "libfprint" %libfprint-version))
-       ;; 单参字符串形式规避 sha256 字面量遮蔽（同 cachyos-lts 块）
-       (hash (content-hash
-              "1c5n1xl7b32hssfs6yl4ndn1dfs6aqa26igmpahpym53l19zq017"))))
-    (arguments
-     (list #:configure-flags
-           #~(list "-Dudev_hwdb=enabled"
-                   (string-append "-Dudev_hwdb_dir=" #$output
-                                  "/lib/udev/hwdb.d")
-                   (string-append "-Dudev_rules_dir=" #$output
-                                  "/lib/udev/rules.d"))))
-    (inputs
-     (modify-inputs (package-inputs libfprint)
-       (replace "nss" openssl)))))
+   (inherit libfprint)
+   (version %libfprint-version)
+   (source
+    (origin
+     (method git-fetch)
+     (uri (git-reference
+           (url "https://gitlab.freedesktop.org/libfprint/libfprint")
+           (commit (string-append "v" %libfprint-version))))
+     ;; inherit 变体中 thunk 字段的兄弟字段引用只覆盖本表单显式设置的
+     ;; 字段，name 仅存在于父定义、引用必 unbound；origin 内用顶层变量+字面量
+     (file-name (git-file-name "libfprint" %libfprint-version))
+     ;; 单参字符串形式规避 sha256 字面量遮蔽（同 cachyos-lts 块）
+     (hash (content-hash
+            "1c5n1xl7b32hssfs6yl4ndn1dfs6aqa26igmpahpym53l19zq017"))))
+   (arguments
+    (list #:configure-flags
+          #~(list "-Dudev_hwdb=enabled"
+                  (string-append "-Dudev_hwdb_dir=" #$output
+                                 "/lib/udev/hwdb.d")
+                  (string-append "-Dudev_rules_dir=" #$output
+                                 "/lib/udev/rules.d"))))
+   (inputs
+    (modify-inputs (package-inputs libfprint)
+                   (replace "nss" openssl)))))
 
 (define %fprintd-version "1.94.5")
 
 (define fprintd-1.94
   (package
-    (inherit fprintd)
-    (version %fprintd-version)
-    (source
-     (origin
-       (method git-fetch)
-       (uri (git-reference
-             (url "https://gitlab.freedesktop.org/libfprint/fprintd")
-             (commit (string-append "v" %fprintd-version))))
-       (file-name (git-file-name "fprintd" %fprintd-version))
-       (hash (content-hash
-              "1rf80qzx4fx5y3x04n7wb58ywga34agjd42ymlvz3kdl8kkk6qk8"))))
-    (arguments
-     (list #:configure-flags
-           #~(list "-Dsystemd_system_unit_dir=/tmp"
-                   ;; 1.94.5 提供 libsystemd provider 选项，取代旧
-                   ;; patch-systemd-dependencies 的 substitute* 补丁
-                   "-Dlibsystemd=libelogind"
-                   (string-append "-Ddbus_service_dir=" #$output
-                                  "/share/dbus-1/system-services")
-                   (string-append "-Dpam_modules_dir=" #$output
-                                  "/lib/security"))
-           ;; pam_wrapper 已 required:false、python 测试依赖检查仅告警，
-           ;; 旧 ignore-test-dependencies 补丁不再需要
-           #:phases
-           #~(modify-phases %standard-phases
-               (add-before 'configure 'patch-output-directories
-                 (lambda* (#:key outputs #:allow-other-keys)
-                   (let ([out (assoc-ref outputs "out")])
-                     (substitute* "meson.build"
-                       (("(dbus_interfaces_dir = ).*" _ set)
-                        (string-append set "'" out "/share/dbus-1/interfaces'\n"))
-                       (("(polkit_policy_directory = ).*" _ set)
-                        (string-append set "'" out "/share/polkit-1/actions/'\n"))
-                       (("(dbus_data_dir = ).*" _ set)
-                        (string-append set "get_option('prefix')"
-                                       " / get_option('datadir')\n")))))))
-           #:tests? #f))
-    (inputs
-     (modify-inputs (package-inputs fprintd)
-       (replace "libfprint" libfprint-1.94)))))
+   (inherit fprintd)
+   (version %fprintd-version)
+   (source
+    (origin
+     (method git-fetch)
+     (uri (git-reference
+           (url "https://gitlab.freedesktop.org/libfprint/fprintd")
+           (commit (string-append "v" %fprintd-version))))
+     (file-name (git-file-name "fprintd" %fprintd-version))
+     (hash (content-hash
+            "1rf80qzx4fx5y3x04n7wb58ywga34agjd42ymlvz3kdl8kkk6qk8"))))
+   (arguments
+    (list #:configure-flags
+          #~(list "-Dsystemd_system_unit_dir=/tmp"
+                  ;; 1.94.5 提供 libsystemd provider 选项，取代旧
+                  ;; patch-systemd-dependencies 的 substitute* 补丁
+                  "-Dlibsystemd=libelogind"
+                  (string-append "-Ddbus_service_dir=" #$output
+                                 "/share/dbus-1/system-services")
+                  (string-append "-Dpam_modules_dir=" #$output
+                                 "/lib/security"))
+          ;; pam_wrapper 已 required:false、python 测试依赖检查仅告警，
+          ;; 旧 ignore-test-dependencies 补丁不再需要
+          #:phases
+          #~(modify-phases %standard-phases
+                           (add-before 'configure 'patch-output-directories
+                                       (lambda* (#:key outputs #:allow-other-keys)
+                                         (let ([out (assoc-ref outputs "out")])
+                                           (substitute* "meson.build"
+                                                        (("(dbus_interfaces_dir = ).*" _ set)
+                                                         (string-append set "'" out "/share/dbus-1/interfaces'\n"))
+                                                        (("(polkit_policy_directory = ).*" _ set)
+                                                         (string-append set "'" out "/share/polkit-1/actions/'\n"))
+                                                        (("(dbus_data_dir = ).*" _ set)
+                                                         (string-append set "get_option('prefix')"
+                                                                        " / get_option('datadir')\n")))))))
+          #:tests? #f))
+   (inputs
+    (modify-inputs (package-inputs fprintd)
+                   (replace "libfprint" libfprint-1.94)))))
 #+end_src
 
 #+NAME: custom-packages-list
@@ -2239,7 +2297,9 @@ tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包�
 #+end_src
 
 ** Services
-包列表统一用内置 ~specifications->packages~ （经 =(gnu)= 可用）：接受 ='("name@version:output")= 规格列表，返回 =(package "output")= 元组。
+:PROPERTIES:
+:CUSTOM_ID: home-services
+:END:
 
 *** Fish 服务
 
@@ -2247,6 +2307,12 @@ tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包�
 #+begin_src scheme :noweb yes
 (list (simple-service 'fish-configs
                       home-xdg-configuration-files-service-type
+                      ;; noweb 在字符串字面量内同样展开：模板正文来自下方
+                      ;; fish-cfg 块；<<ref>> 必须独占一行顶格写（其前的行内
+                      ;; 文本会作为前缀拼进展开的每一行）。其中 $$bin/foo$$
+                      ;; 占位符由 specs->pkgs 的包列表替换为 store 路径
+                      ;; （此处需要纯包对象，内置 specifications->packages
+                      ;; 返回 (pkg "out") 元组不适用）
                       (list `("fish/conf.d/10-source.fish" ,(computed-substitution-with-inputs
                                                              "config.fish"
                                                              (plain-file
@@ -2254,10 +2320,6 @@ tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包�
                                                               "
 <<fish-cfg>>
 ")
-                                                             ;; specs->pkgs：此处需要纯包对象
-                                                             ;; 供 $$bin/...$$ 路径替换，
-                                                             ;; 内置 specifications->packages
-                                                             ;; 返回 (pkg "out") 元组不适用
                                                              (specs->pkgs
                                                               "atuin"
                                                               "direnv"
@@ -2302,8 +2364,7 @@ end
                 (emacs emacs-next-pgtk)
                 (shepherd-requirement '(graphical-session))
                 (packages (specifications->manifest
-                           '(;; Emacs 插件
-                             ;; Emacs 核心与基础
+                           '(;; Emacs 核心与基础
                              "emacs-gcmh"
                              "emacs-no-littering"
                              "emacs-next-pgtk:doc"
@@ -2430,7 +2491,7 @@ end
 
 **** 默认应用程序关联
 
-#+name: default-applications
+#+NAME: default-applications
 #+begin_src scheme
 (list (simple-service 'default-applications
                       home-xdg-mime-applications-service-type
@@ -2588,7 +2649,9 @@ end
                            ("x-scheme-handler/github-app" . "github-copilot.desktop"))))))
 #+end_src
 
-**** ~Waybar~ 体系桌面服务
+**** ~Waybar~ 体系桌面服务（停用中）
+
+当前桌面用 noctalia 体系；本组保留为切换档。启用方式：取消 =user-desktop-services= 块内的 ~;; <<waybar-desktop-services>>~ 与 =desktop-packages-list= 块内的 ~;; <<waybar-suite-applications>>~ 两行注释（注释掉的 noweb 引用展开后仍是注释，即停用）。
 
 #+NAME: waybar-desktop-services
 #+begin_src scheme
@@ -2615,55 +2678,60 @@ end
 
 *** 软件自启动
 
-#+NAME: home-shepherd-services
-#+begin_src scheme :noweb yes
-(append
- <<essential-desktop-services>>
- <<hermes-services>>
- <<cpu-dma-latency-service>>)
-#+end_src
+三块按序装配进 [[#main-skeleton][main]] 。
 
 **** 桌面常驻组件
 
 #+NAME: essential-desktop-services
 #+begin_src scheme
 (let* ([make-shepherd-service
-        (lambda* (pkg path requirement)
+        (lambda* (pkg path requirement #:key (auto-start? #t) (respawn? #t))
           (shepherd-service (provision (list (string->symbol (package-name pkg))))
                             (requirement requirement)
+                            ;; 注意：args 必须在 forkexec 调用括号内，
+                            ;; 否则构造器返回值被丢弃，运行值恒为 ()
+                            ;; （进程能拉起但 stop/respawn 全部失效）
                             (start #~(lambda args
                                        ((make-forkexec-constructor
                                          (list #$(file-append pkg path))
                                          #:environment-variables (environ)
                                          #:log-file (string-append (getenv "XDG_STATE_HOME") "/shepherd/"
-                                                                   #$(package-name pkg) ".log")))
-                                       args))
+                                                                   #$(package-name pkg) ".log"))
+                                        args)))
                             (stop #~(make-kill-destructor))
-                            (respawn? #t)))])
+                            (auto-start? auto-start?)
+                            (respawn? respawn?)))])
   (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list (make-shepherd-service kanata "/bin/kanata" '(graphical-session))
-                              (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator" '(graphical-session))
-                              (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+                        (list ;; kdeconnect 不常驻（~110M）：XDG autostart 已移除，
+                         ;; 需要时 `herd start kdeconnect` 拉起（indicator
+                         ;; 会连带 kdeconnectd）。按需服务不 respawn——
+                         ;; wayland 断开时干净退出，重启即手动再拉
+                         (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator"
+                                                '(graphical-session)
+                                                #:auto-start? #f #:respawn? #f)
+                         (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
 
-                              ;; 熄屏断电守护，脚本本体是紧随本块的独立
-                              ;; src block，断电端口依据与设计取舍见其头注释
-                              (shepherd-service
-                               (provision '(usb-power-watch))
-                               (start #~(lambda args
-                                          ((make-forkexec-constructor
-                                            (list "/bin/sh"
-                                                  #$(local-file "usb-power-watch"))
-                                            #:environment-variables (environ)
-                                            #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                                                      "/shepherd/usb-power-watch.log"))
-                                           args)))
-                               (stop #~(make-kill-destructor))
-                               (respawn? #t))))))
+                         ;; 熄屏断电守护，脚本本体是紧随本块的独立
+                         ;; src block，断电端口依据与设计取舍见其头注释
+                         (shepherd-service
+                          (provision '(usb-power-watch))
+                          (start #~(lambda args
+                                     ((make-forkexec-constructor
+                                       (list "/bin/sh"
+                                             #$(local-file "usb-power-watch"))
+                                       #:environment-variables (environ)
+                                       #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                                                 "/shepherd/usb-power-watch.log"))
+                                      args)))
+                          (stop #~(make-kill-destructor))
+                          (respawn? #t))))))
 #+end_src
 
-usb-power-watch
+***** usb-power-watch 脚本
 
-#+name: usb-power-watch
+熄屏断电守护，被上面的 =essential-desktop-services= 以普通用户拉起（shepherd 服务在块内引用 =tmp/usb-power-watch= ）。
+
+#+NAME: usb-power-watch
 #+begin_src sh :tangle ../tmp/usb-power-watch
 #!/bin/sh
 # Auto-generated by Guix config.org.
@@ -2694,38 +2762,38 @@ in_ports() {
     return 1
 }
 
- # 清单端口熄屏写 auto、亮屏写 on，不看设备当前值也不记挂了谁：
- # 写入幂等，熄屏期每轮都执行，新插设备下一轮即被覆盖。
- set_ports() {
-     for dev in /sys/bus/usb/devices/*-*; do
-         case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
- [ -f "$dev/power/control" ] || continue
- if in_ports "${dev##*/}"; then
-     echo "$1" > "$dev/power/control" 2>/dev/null
- fi
+# 清单端口熄屏写 auto、亮屏写 on，不看设备当前值也不记挂了谁：
+# 写入幂等，熄屏期每轮都执行，新插设备下一轮即被覆盖。
+set_ports() {
+    for dev in /sys/bus/usb/devices/*-*; do
+        case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
+[ -f "$dev/power/control" ] || continue
+if in_ports "${dev##*/}"; then
+    echo "$1" > "$dev/power/control" 2>/dev/null
+fi
 done
- }
+}
 
-  off_since=0
-  state=on
-  while :; do
-      lit=0; dark=0
-      for b in /sys/class/backlight/*/bl_power; do
-          [ -r "$b" ] || continue
-          if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
-      done
-      if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
-          now=$(date +%s)
-          [ "$off_since" = 0 ] && off_since=$now
-          if [ $((now - off_since)) -ge $THRESHOLD ]; then
-              set_ports auto; state=off
-          fi
-      else
-          off_since=0
-          if [ "$state" != on ]; then set_ports on; state=on; fi
-      fi
-      sleep $INTERVAL
-  done
+ off_since=0
+ state=on
+ while :; do
+     lit=0; dark=0
+     for b in /sys/class/backlight/*/bl_power; do
+         [ -r "$b" ] || continue
+         if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
+     done
+     if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
+         now=$(date +%s)
+         [ "$off_since" = 0 ] && off_since=$now
+         if [ $((now - off_since)) -ge $THRESHOLD ]; then
+             set_ports auto; state=off
+         fi
+     else
+         off_since=0
+         if [ "$state" != on ]; then set_ports on; state=on; fi
+     fi
+     sleep $INTERVAL
+ done
 #+end_src
 
 **** Hermes 后端与网关
@@ -2733,35 +2801,35 @@ done
 
 #+NAME: hermes-services
 #+begin_src scheme
+;; 表驱动：(服务名 requirement . hermes 子命令参数)
 (list (simple-service 'hermes-services home-shepherd-service-type
-                      (list (shepherd-service
-                             (provision '(hermes-backend))
-                             (requirement '(graphical-session))
-                             (start #~(lambda args
-                                        ((make-forkexec-constructor
-                                          (list (string-append (getenv "HOME") "/.local/bin/hermes")
-                                                "dashboard" "--no-open"
-                                                "--host" "127.0.0.1" "--port" "9119")
-                                          #:environment-variables (environ)
-                                          #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                                                    "/shepherd/hermes-backend.log"))
-                                         args)))
-                             (stop #~(make-kill-destructor))
-                             (respawn? #t))
-
-                            (shepherd-service
-                             (provision '(hermes-gateway))
-                             (requirement '(hermes-backend))
-                             (start #~(lambda args
-                                        ((make-forkexec-constructor
-                                          (list (string-append (getenv "HOME") "/.local/bin/hermes")
-                                                "gateway" "run")
-                                          #:environment-variables (environ)
-                                          #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                                                    "/shepherd/hermes-gateway.log"))
-                                         args)))
-                             (stop #~(make-kill-destructor))
-                             (respawn? #t)))))
+                      (map (match-lambda
+                             [(name requirement . argv)
+                              (shepherd-service
+                               (provision (list name))
+                               (requirement requirement)
+                               (start
+                                #~(lambda args
+                                    ((make-forkexec-constructor
+                                      (cons (string-append
+                                             (getenv "HOME")
+                                             "/.local/bin/hermes")
+                                            '#$argv)
+                                      #:environment-variables (environ)
+                                      #:log-file
+                                      (string-append
+                                       (getenv "XDG_STATE_HOME")
+                                       "/shepherd/"
+                                       #$(symbol->string name)
+                                       ".log"))
+                                     args)))
+                               (stop #~(make-kill-destructor))
+                               (respawn? #t))])
+                           '((hermes-backend (graphical-session)
+                                             "dashboard" "--no-open"
+                                             "--host" "127.0.0.1" "--port" "9119")
+                             (hermes-gateway (hermes-backend)
+                                             "gateway" "run")))))
 #+end_src
 
 **** cpu-dma-latency
@@ -2840,7 +2908,8 @@ done
                             "system"
                             "terminal"
                             "utilities"
-                            "noctalia-suite"))
+                            "noctalia-suite"
+                            "zen"))
                 (excluded '("\\.agents/workfile($|/.*)"
                             ".*\\.swp"
                             "\\.git"
@@ -2874,25 +2943,22 @@ done
 (list (service home-files-service-type
                `((".guile" ,%default-dotguile)
                  (".Xdefaults" ,%default-xdefaults)
-                 (".config/qt5ct/qss/rounded.qss" ,(local-file
-                                                    "../source/files/qt/rounded.qss"))
-                 (".config/qt6ct/qss/rounded.qss" ,(local-file
-                                                    "../source/files/qt/rounded.qss"))
 
-                 ;; 复选框选中态的白色对勾，QSS 内以绝对路径引用
-                 (".config/qt5ct/qss/check-white.svg" ,(local-file
-                                                        "../source/files/qt/check-white.svg"))
-                 (".config/qt6ct/qss/check-white.svg" ,(local-file
-                                                        "../source/files/qt/check-white.svg"))
-                 ;; SpinBox 上下按钮的 chevron 箭头，QSS 内以绝对路径引用
-                 (".config/qt5ct/qss/chevron-up.svg" ,(local-file
-                                                       "../source/files/qt/chevron-up.svg"))
-                 (".config/qt6ct/qss/chevron-up.svg" ,(local-file
-                                                       "../source/files/qt/chevron-up.svg"))
-                 (".config/qt5ct/qss/chevron-down.svg" ,(local-file
-                                                         "../source/files/qt/chevron-down.svg"))
-                 (".config/qt6ct/qss/chevron-down.svg" ,(local-file
-                                                         "../source/files/qt/chevron-down.svg"))
+                 ;; qt5ct/qt6ct 共用一套 QSS 资源；check-white.svg 是复选框
+                 ;; 选中态对勾、chevron-*.svg 是 SpinBox 上下箭头，QSS 内均
+                 ;; 以绝对路径引用
+                 ,@(append-map
+                    (lambda (ct)
+                      (map (lambda (f)
+                             (list (string-append ".config/" ct "/qss/" f)
+                                   ;; 非字面量路径须用 assume-source-relative-file-name
+                                   ;; 标记，否则 local-file 退化按 cwd 解析
+                                   (local-file
+                                    (assume-source-relative-file-name
+                                     (string-append "../source/files/qt/" f)))))
+                           '("rounded.qss" "check-white.svg"
+                             "chevron-up.svg" "chevron-down.svg")))
+                    '("qt5ct" "qt6ct"))
 
                  (".local/share/gnupg/gpg-agent.conf" ,(computed-substitution-with-inputs
                                                         "gpg-agent.conf"
@@ -2920,8 +2986,8 @@ done
 	                                               "node"
 	                                               "omnisharp"
                                                  "prettier-bin"
-                                               "python-black"
-                                               "python-lsp-black"
+                                                 "python-black"
+                                                 "python-lsp-black"
 	                                               "python-lsp-server"
 	                                               "rust"
 	                                               "rust-analyzer"
@@ -2932,6 +2998,9 @@ done
 #+end_src
 
 *** 环境变量
+:PROPERTIES:
+:CUSTOM_ID: home-env
+:END:
 
 **** 软件相关的环境变量
 
@@ -2965,7 +3034,7 @@ done
   ("NIX_USER_CONF_FILES" . "$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/nix.conf"))
 #+end_src
 
-**** 为了让软件尽量遵守XDG规范而提供的变量
+**** XDG 规范变量
 
 #+NAME: xdg-basedir-env-vars
 #+begin_src scheme
@@ -2998,10 +3067,9 @@ done
   ("NPM_CONFIG_USERCONFIG" . "$XDG_CONFIG_HOME/npm/npmrc")
   ;; nvidia-driver
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
-  ;; omp
-  ("PI_CODING_AGENT_DIR" . "$XDG_CONFIG_HOME/omp")
-  ("PI_CODING_AGENT_SESSION_DIR" . "$XDG_DATA_HOME/omp/sessions")
-  ("PI_CONFIG_DIR" . ".config/omp") ; omp 会以 $HOME 作为根
+  ;; omp / pi：配置目录与会话目录改由 nix wrapper 按 CLI 注入（见
+  ;; source/nix/configuration/programs/llm-agents.nix），不在此全局声明——
+  ;; PI_CODING_AGENT_DIR 等被两个 CLI 同名同义读取，全局一套会让它们撞车。
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
   ;; python
@@ -3018,7 +3086,7 @@ done
   ("WINEPREFIX" . "$XDG_DATA_HOME/wine"))
 #+end_src
 
-**** 引用以上的所有变量，并在这里放一些多行的环境变量
+**** 环境变量汇总（多行值）
 
 #+NAME: environment-variable-services
 #+begin_src scheme :noweb yes
@@ -3027,32 +3095,31 @@ done
                       (append
                        <<extend-environment-variables>>
                        <<xdg-basedir-env-vars>>
-                       `(("QT_PLUGIN_PATH" unquote
-                          (string-append
-                           "/run/current-system/profile/lib/qt5/plugins:"
-                           "/run/current-system/profile/lib/qt6/plugins:"
-                           "$HOME/.guix-home/profile/lib/qt5/plugins:"
-                           "$HOME/.guix-home/profile/lib/qt6/plugins"))
-                         ("CHROMIUM_FLAGS" unquote
-                          (string-append
-                           "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
-                           "--ozone-platform-hint=wayland "
-                           "--enable-wayland-ime "
-                           "--wayland-text-input-version=3"))
-                         ("_JAVA_OPTIONS" unquote
-                          (string-append
-                           "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
-                           "-Dawt.toolkit.name=WLToolkit"))
-                         ("XDG_DATA_DIRS" unquote
-                          (string-append
-                           "$XDG_DATA_HOME/flatpak/exports/share:"
-                           "/var/lib/flatpak/exports/share:"
-                           "$XDG_STATE_HOME/nix/profile/share:"
-                           "/nix/var/nix/profiles/default/share:"
-                           "$XDG_DATA_DIRS"))))))
+                       `(("QT_PLUGIN_PATH" . ,(string-append
+                                               "/run/current-system/profile/lib/qt5/plugins:"
+                                               "/run/current-system/profile/lib/qt6/plugins:"
+                                               "$HOME/.guix-home/profile/lib/qt5/plugins:"
+                                               "$HOME/.guix-home/profile/lib/qt6/plugins"))
+                         ("CHROMIUM_FLAGS" . ,(string-append
+                                               "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
+                                               "--ozone-platform-hint=wayland "
+                                               "--enable-wayland-ime "
+                                               "--wayland-text-input-version=3"))
+                         ("_JAVA_OPTIONS" . ,(string-append
+                                              "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
+                                              "-Dawt.toolkit.name=WLToolkit"))
+                         ("XDG_DATA_DIRS" . ,(string-append
+                                              "$XDG_DATA_HOME/flatpak/exports/share:"
+                                              "/var/lib/flatpak/exports/share:"
+                                              "$XDG_STATE_HOME/nix/profile/share:"
+                                              "/nix/var/nix/profiles/default/share:"
+                                              "$XDG_DATA_DIRS"))))))
 #+end_src
 
 ** Font
+:PROPERTIES:
+:CUSTOM_ID: home-font
+:END:
 
 #+NAME: font-services
 #+begin_src scheme
@@ -3075,16 +3142,21 @@ done
 #+end_src
 
 * Live ISO
+:PROPERTIES:
+:CUSTOM_ID: iso
+:END:
 
 自研 Live ISO 的 =operating-system= ，与主机 =%system= 完全独立；=blue build-iso= → tangle =tmp/live-iso.scm= → =tools/build-image.scm= 出 iso9660（label 内嵌构建日期，有意放弃逐字节可复现换直观辨识）。
 
-+ =desktop= （主用，XFCE + labwc Wayland，live 用户 autologin）
-+ =minimal= （辅助，纯 CLI fallback）
+- =desktop= （主用，XFCE + labwc Wayland，live 用户 autologin）
+- =minimal= （辅助，纯 CLI fallback）
 
-** ISO 专用模块导入
+基础 OS 继承 =make-installation-os= （仅维护 x86_64）。机制要点（防呆约束与细节见 source/AGENTS.md）：精简频道（guix+nonguix）预置进 Live 的 =/etc/guix/channels.scm= ；=skeletons= 把 =source/files/livecd= 平铺进 =/etc/skel= （target ="."= ，须保留默认 skeleton 的 .zprofile）；greetd autologin 直 execl 会话（command 须 =file-append= store 绝对路径），退出后 agreety 兜底；=labwc= 是 =startxfce4 --wayland= 合成器依赖、=wlr-randr= 供 XFCE Wayland 调分辨率；elogind 供 PAM session 与 libseat seat。
 
-#+NAME: live-modules
-#+begin_src scheme
+本块自包含：ISO 专用的 =use-modules= 只出现在这里（独立 tangle 目标 =tmp/live-iso.scm= ），绝不并入主 =<<modules>>= 。
+
+#+NAME: live-installation-os
+#+begin_src scheme :tangle ../tmp/live-iso.scm :noweb yes
 (use-modules (gnu)
              (gnu system)
              (gnu system install)
@@ -3111,20 +3183,11 @@ done
              (ice-9 match)
              (srfi srfi-1)
              (srfi srfi-19))
-#+end_src
 
-** 系统主体
-
-基础 OS 继承 =make-installation-os= （仅维护 x86_64）。机制要点（防呆约束与细节见 source/AGENTS.md）：精简频道（guix+nonguix）预置进 Live 的 =/etc/guix/channels.scm= ；=skeletons= 把 =source/files/livecd= 平铺进 =/etc/skel= （target ="."= ，须保留默认 skeleton 的 .zprofile）；greetd autologin 直 execl 会话（command 须 =file-append= store 绝对路径），退出后 agreety 兜底；=labwc= 是 =startxfce4 --wayland= 合成器依赖、=wlr-randr= 供 XFCE Wayland 调分辨率；elogind 供 PAM session 与 libseat seat。
-
-#+NAME: live-base-os
-#+begin_src scheme
 (define %live-base-os
   (make-installation-os))
-#+end_src
 
-#+NAME: live-channels
-#+begin_src scheme
+;; 精简频道（guix+nonguix）写进 Live 的 /etc/guix/channels.scm
 (define channels-with-nonguix
   (list (channel
          (inherit (car %default-channels))
@@ -3138,15 +3201,6 @@ done
            "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
            (openpgp-fingerprint
             "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))))
-#+end_src
-
-#+NAME: live-installation-os
-#+begin_src scheme :tangle ../tmp/live-iso.scm :noweb yes
-<<live-modules>>
-
-<<live-base-os>>
-
-<<live-channels>>
 
 (define %live-installation-os
   (operating-system
