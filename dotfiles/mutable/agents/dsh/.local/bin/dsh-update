@@ -1,0 +1,251 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# dsh-update — 把 dsh 本体与 web profile 的三个插件更新到上游最新，一键。
+#
+# 更新靠 pnpm 自己写文件，脚本不碰 package.json / pnpm-workspace.yaml。用
+# -E（--save-exact）保住「锁精确版本」的既定原则——pnpm 默认写 ^，而那正是
+# dsh-context 0.47 静默升到不兼容版本的成因；且显式 `pnpm add <pkg>@<ver>` 时
+# pnpm 会自动把仍在 24h 冷却期内的版本写进 workspace 的 minimumReleaseAgeExclude，
+# 所以连冷却豁免都不用手写。
+#
+# 选版不跟 npm 的 latest tag：dsh 全是 preview 版本，发布者把 latest 停在保守位
+# （0.1.5-rc.2 发布时 latest 仍是 rc.1）。改为按通道稳定性 latest -> next ->
+# beta -> alpha 取第一个高于当前的版本，来源通道打印出来供核对。
+#
+# 更新后须重启 dsh web 才生效（host 半边不热载）；--restart 会调 dsh-web --reauth。
+set -euo pipefail
+
+: "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
+export DSH_HOME
+
+readonly CLI_DIR="$DSH_HOME/_cli"
+readonly WEB_DIR="$DSH_HOME/profiles/web"
+readonly CLI_PKG='@deepseek-ai/dsh'
+readonly -a PLUGINS=(dsh-better-sidebar dsh-context dsh-dream-skin)
+readonly COOLDOWN_HOURS=24
+
+usage() {
+	cat <<'EOF'
+用法: dsh-update [选项]
+
+把 dsh 本体（$DSH_HOME/_cli）与 web profile 的三个插件更新到上游最新。
+
+选项:
+  --check     只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
+  -y, --yes   跳过确认
+  --restart   更新完成后自动重启 dsh web（dsh-web --reauth）
+  -h, --help  显示本帮助
+EOF
+}
+
+check_only=false
+assume_yes=false
+do_restart=false
+while (($#)); do
+	case "$1" in
+	--check) check_only=true ;;
+	-y | --yes) assume_yes=true ;;
+	--restart) do_restart=true ;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'dsh-update: 未知参数 %s（--help 看用法）\n' "$1" >&2
+		exit 2
+		;;
+	esac
+	shift
+done
+
+# 从 package.json 读当前版本，顺序：本体、PLUGINS...
+read_current_versions() {
+	python3 - "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$CLI_PKG" "${PLUGINS[@]}" <<'PY'
+import json, sys
+cli, web, cli_pkg, plugins = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
+print(json.load(open(cli))["dependencies"].get(cli_pkg, ""))
+deps = json.load(open(web))["dependencies"]
+for p in plugins:
+	print(deps.get(p, ""))
+PY
+}
+
+# $1: 当前版本 $2: `pnpm view <pkg> dist-tags time --json` 的输出。
+# 按通道稳定性取第一个高于当前的版本，打印 "tag|version|hours|cooling"，无更新则空。
+# JSON 走参数而非 stdin：python3 - 已经用 stdin 读 heredoc 里的程序，两者不能兼得。
+pick_version() {
+	python3 - "$1" "$COOLDOWN_HOURS" "$2" <<'PY'
+import datetime, json, sys
+
+cur, cooldown, raw = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+data = json.loads(raw) if raw.strip() else {}
+tags, times = data.get("dist-tags") or {}, data.get("time") or {}
+
+def key(v):
+	main, _, pre = v.partition("-")
+	parts = tuple(int(x) for x in main.split("."))
+	if not pre:
+		return (parts, 1, ())
+	return (parts, 0, tuple((0, int(p), "") if p.isdigit() else (1, 0, p)
+	                        for p in pre.split(".")))
+
+now = datetime.datetime.now(datetime.timezone.utc)
+for tag in ("latest", "next", "beta", "alpha"):
+	v = tags.get(tag)
+	if not v or key(v) <= key(cur):
+		continue
+	t = times.get(v)
+	if not t:
+		print("%s|%s|?|" % (tag, v))
+		break
+	hours = (now - datetime.datetime.fromisoformat(t.replace("Z", "+00:00"))).total_seconds() / 3600
+	print("%s|%s|%.1f|%s" % (tag, v, hours, "cool" if hours < cooldown else ""))
+	break
+PY
+}
+
+# $1: 目录 $2: 标签 $3...: 包（已含 @版本）。
+# -E 写精确版本；冷却期内的版本 pnpm 会自动写进 workspace 的 minimumReleaseAgeExclude。
+pnpm_add() {
+	local dir="$1" label="$2"
+	shift 2
+	local out
+	if out=$(cd "$dir" && pnpm add -E "$@" 2>&1); then
+		printf '%s\n' "$out"
+		return 0
+	fi
+	# 包已装好、只是 build script 未审批：pnpm 报 error 但产物可用，非致命
+	if grep -q ERR_PNPM_IGNORED_BUILDS <<<"$out"; then
+		grep -vE 'ERR_PNPM_IGNORED_BUILDS|approve-builds' <<<"$out"
+		printf 'dsh-update: %s的依赖里有未审批的 build script（非致命；需要时对具体包跑 pnpm approve-builds）\n' "$label" >&2
+		return 0
+	fi
+	printf '%s\n' "$out" >&2
+	printf 'dsh-update: %s pnpm add 失败——版本声明可能已改，用 git diff 核对后 git checkout 单文件回退\n' "$label" >&2
+	return 1
+}
+
+command -v pnpm >/dev/null 2>&1 || {
+	printf 'dsh-update: 找不到 pnpm（本机在 nix profile），无法更新\n' >&2
+	exit 127
+}
+for f in "$CLI_DIR/package.json" "$WEB_DIR/package.json"; do
+	[[ -f "$f" ]] || {
+		printf 'dsh-update: %s 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$f" >&2
+		exit 1
+	}
+done
+
+printf 'dsh-update: 查询上游（registry: %s）\n' "$(pnpm config get registry 2>/dev/null || printf '?')"
+
+mapfile -t cur < <(read_current_versions)
+names=("$CLI_PKG" "${PLUGINS[@]}")
+declare -a picked=()
+for i in "${!names[@]}"; do
+	if ! raw=$(pnpm view "${names[$i]}" dist-tags time --json 2>/dev/null); then
+		printf 'dsh-update: 查询 %s 失败（检查网络与 registry 配置）\n' "${names[$i]}" >&2
+		exit 2
+	fi
+	picked+=("$(pick_version "${cur[$i]}" "$raw")")
+done
+
+updates=0
+for i in "${!picked[@]}"; do
+	[[ -n "${picked[$i]}" ]] && updates=$((updates + 1))
+done
+
+if ((updates == 0)); then
+	printf '\ndsh-update: 已是最新（%s %s）\n' "$CLI_PKG" "${cur[0]}"
+	exit 0
+fi
+
+printf '\n'
+for i in "${!names[@]}"; do
+	line=${picked[$i]}
+	[[ -n "$line" ]] || continue
+	IFS='|' read -r tag ver hours cooling <<<"$line"
+	note=""
+	[[ "$cooling" == cool ]] && note='24h 冷却内'
+	printf '  %-21s %-11s -> %-12s [%-6s] %8sh  %s\n' \
+		"${names[$i]}" "${cur[$i]}" "$ver" "$tag" "$hours" "$note"
+	[[ $i -eq 0 ]] && printf '\n'
+done
+printf '\n  = 冷却内的版本由 pnpm 自动写入 minimumReleaseAgeExclude 豁免\n'
+
+# 插件的兼容声明：dsh.compatibility.dshReleases 是发布方列的「已验证 dsh 版本」白名单。
+# 多数插件根本没有这个字段，那不代表不兼容；只有「声明了却不含目标版本」才值得提醒。
+# 基准取更新后的本体版本——本体无更新时就是当前版本，否则只有插件更新会误报。
+cli_target="${cur[0]}"
+if [[ -n "${picked[0]}" ]]; then
+	IFS='|' read -r _ cli_target _ _ <<<"${picked[0]}"
+fi
+compat_notes=()
+for i in "${!PLUGINS[@]}"; do
+	line=${picked[$((i + 1))]}
+	[[ -n "$line" ]] || continue
+	IFS='|' read -r _ ver _ _ <<<"$line"
+	decl=$(pnpm view "${PLUGINS[$i]}@$ver" dsh.compatibility.dshReleases --json 2>/dev/null || true)
+	[[ -n "$decl" && "$decl" != "{}" && "$decl" != "null" ]] || continue
+	grep -qF "\"$cli_target\"" <<<"$decl" && continue
+	declared=$(grep -oE '"[^"]+":' <<<"$decl" | tr -d '":' | paste -sd, -)
+	compat_notes+=("${PLUGINS[$i]} $ver 的白名单未含 $cli_target（它声明的是 $declared）")
+done
+if ((${#compat_notes[@]})); then
+	printf '\n兼容性提醒（该字段是发布方声明、宿主侧不读，仅供参考）：\n'
+	for n in "${compat_notes[@]}"; do printf '  ! %s\n' "$n"; done
+	printf '  更新后若插件 UI 异常：先硬刷新页面；仍异常则用 pnpm add -E 装回旧版本\n'
+fi
+
+if $check_only; then
+	printf '\ndsh-update: --check 模式，未做任何修改\n'
+	exit 1
+fi
+
+if ! $assume_yes; then
+	if [[ ! -t 0 ]]; then
+		printf '\ndsh-update: 非交互环境，请加 --yes 确认更新\n' >&2
+		exit 130
+	fi
+	read -r -p 'dsh-update: 确认更新？[y/N] ' reply || reply=
+	case "$reply" in
+	[yY] | [yY][eE][sS]) ;;
+	*)
+		printf 'dsh-update: 已取消\n' >&2
+		exit 130
+		;;
+	esac
+fi
+
+if [[ -n "${picked[0]}" ]]; then
+	printf '\ndsh-update: 更新本体（%s）\n' "$CLI_DIR"
+	pnpm_add "$CLI_DIR" 本体 "${CLI_PKG}@${cli_target}" || exit 1
+fi
+
+declare -a plugin_args=()
+for i in "${!PLUGINS[@]}"; do
+	line=${picked[$((i + 1))]}
+	[[ -n "$line" ]] || continue
+	IFS='|' read -r _ ver _ _ <<<"$line"
+	plugin_args+=("${PLUGINS[$i]}@$ver")
+done
+if ((${#plugin_args[@]})); then
+	printf '\ndsh-update: 更新插件（%s）\n' "$WEB_DIR"
+	pnpm_add "$WEB_DIR" 插件 "${plugin_args[@]}" || exit 1
+fi
+
+printf '\ndsh-update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml 原地写），请 git diff 后提交。\n'
+printf 'dsh-update: 需重启 dsh web 才生效（host 半边不热载）。\n'
+
+if $do_restart; then
+	if command -v dsh-web >/dev/null 2>&1; then
+		printf 'dsh-update: 重启 dsh web（dsh-web --reauth，后台）\n'
+		setsid dsh-web --reauth >/dev/null 2>&1 &
+	else
+		printf 'dsh-update: 找不到 dsh-web，请手动重启 dsh web\n' >&2
+	fi
+else
+	printf 'dsh-update: 重启请运行 dsh-web --reauth（cookie 由持久化密钥签名，不会要求重新认证）\n'
+fi
