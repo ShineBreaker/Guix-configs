@@ -1,94 +1,104 @@
-# AGENTS.md — lem 配置工作规范
+# AGENTS.md — Lem 配置开发规范
 
-本文件是本目录内 AI Agent 的唯一操作手册。配置复刻 VSCode Dark Modern，经 GNU Stow 直链 `~/.config/lem/`：**改仓库源即改部署源**，禁止编辑 `~/.config/lem/` 下任何部署路径。**新增文件后必须 `blue stow --restow lem`**（no-folding 单文件软链，新文件不会自动出现）；修改既有文件即时生效。
+本文件是 Lem 编辑器配置（复刻 VSCode Dark Modern 主题与交互）的 AI Agent 操作手册与技术备忘。
 
-## 1. 架构契约
+配置通过 GNU Stow 直链到 `~/.config/lem/`：
+- **即时生效**：修改已有文件保存即生效，禁止直接修改 `~/.config/lem/` 下的部署软链。
+- **新增文件**：新增文件后必须运行 `blue stow --restow lem` 补建单文件软链（因采用 no-folding 模式）。
 
-| 文件 / 目录         | 角色                             | 修改规则                                                        |
-| ------------------- | -------------------------------- | --------------------------------------------------------------- |
-| `init.lisp`         | 薄引导                           | 不改：配置目录定位 + read+eval 加载器 + 模块遍历，已稳定        |
-| `modules/00-*`      | utils：vs$ 解析族、注册表、trace | 被全部模块依赖，必须最先加载                                    |
-| `modules/NN-*.lisp` | 功能模块（NN 数字前缀定序）      | 字典序即加载序，间隔 10 留插入位；新模块建文件即可，init 零登记 |
-| `modules/modes/*.lisp` | 各语言 mode（LSP / paredit 接线） | 字典序，同层互不依赖；由 init 插在 80 之后、90 之前加载 |
-| `modules/90-*`      | startup：钩子登记                | 必须最后加载                                                    |
+---
 
-加载序（数字前缀即依赖序）：`00-utils → 10-performance → 20-icons → 25-fonts → 30-themes → 40-explorer → 45-keyhelp → 46-problems → 50-terminal → 55-completion → 60-editor-config → 70-keybindings → 75-context-menu → 76-whichkey → 80-modes-base → modes/<lang> → 90-startup`。跨模块依赖写进各模块头注释；同层 modes/ 互不依赖。
+## 1. 架构契约与加载顺序
 
-硬约束（违反即加载失败或运行期炸死）：
+| 文件 / 目录 | 角色定位 | 维护规则 |
+| --- | --- | --- |
+| `init.lisp` | 薄引导层 | 配置目录定位、读取求值器与模块遍历器（稳定，不常改动） |
+| `modules/00-*` | 工具与基础层 | `vs$` 动态符号解析族、按键注册表、Trace 设施；被所有模块依赖，最先加载 |
+| `modules/NN-*.lisp` | 功能业务模块 | `NN` 数字前缀决定加载顺序，间隔 10 留插入位；新建模块直接放文件，无需在 init 登记 |
+| `modules/modes/*.lisp` | 语言 Mode 适配 | LSP 与 Paredit 接线；同层模块互不依赖，由 `init.lisp` 在 `80` 之后、`90` 之前统一载入 |
+| `modules/90-*` | 启动与钩子注册 | 统一挂载启动 Hook，必须最后加载 |
 
-- 每个模块必须以 `(in-package :lem-user)` 开头，否则编译期触发包锁崩溃。
-- **配置里静态书写「包前缀 + 不存在的符号」会在编译期炸死进程**，handler-case 无效。非 `:lem`/`:lem-user` 核心符号一律 `vs$` 动态解析，缺失只告警跳过。
-- **keymap 绑定的符号必须是 `define-command` 产物**：执行靠同名命令类分发，普通 `defun` 符号绑键后按键即炸。
-- nightly AppImage（lem-next-bin，用户自打包官方 `Lem-x86_64-nightly.AppImage`）**扩展全部内置编译进 core**（terminal/legit/process/shell-mode/patch-mode/dashboard/lsp-mode/completion-mode 等），且镜像**无源码树**（`asdf:system-source-directory` 返回构建容器路径，本机不存在）——此两条仅适用 AppImage 构建；当前 git 源码构建（lem-next-2.3.0-0.68e85e0）在 store 内**带完整上游源码树**（`/gnu/store/vqbd1hhl5yvyjhc3p1phgjwv5iiy61qr-lem-next-2.3.0-0.68e85e0/share/common-lisp/sbcl/lem-next/`），API 疑问可直接读源码验证。原 store 扩展补载机制（10-extensions / `vs-load-lem-source`）已废除，运行时只允许 `vs-load-source` 加载配置目录内文件。
+### 模块依赖顺序
+```
+00-utils → 10-performance → 20-icons → 25-fonts → 30-themes
+  → 40-explorer → 45-keyhelp → 46-problems → 50-terminal
+  → 55-completion → 60-editor-config → 70-keybindings
+  → 75-context-menu → 76-whichkey → 80-modes-base
+  → modes/<lang> → 90-startup
+```
 
-## 2. 符号速查（home 包陷阱）
+### 核心硬约束（违反即导致启动崩溃）
+1. **包锁声明**：每个模块开头必须声明 `(in-package :lem-user)`，防止编译期触发 SBCL 包锁崩溃。
+2. **动态符号解析**：禁止在代码中静态书写 `包前缀:不存在符号`（编译期会直接炸裂进程，`handler-case` 无法捕获）。非 `:lem` 与 `:lem-user` 的符号一律通过 `vs$` 动态解析，缺失时告警跳过。
+3. **命令对象绑定**：Keymap 绑定的符号必须由 `define-command` 生成。普通 `defun` 函数绑定后触发按键会引发异常。
+4. **源码树路径**：当前 Git 源码构建（`lem-next-2.3.0`）在 Store 内包含完整源码树，API 疑问可直接查看源码验证。废除外部扩展补载，运行时仅允许通过 `vs-load-source` 加载配置目录内部文件。
 
-动态解析时 `vs$` 第一个参数是 **定义包**，不是使用处包。踩过的坑：
+---
 
-| 符号                      | 定义包                        | 说明                                                            |
-| ------------------------- | ----------------------------- | --------------------------------------------------------------- |
-| `*FIND-FILE-HOOK*`        | `:lem/buffer/file`            | **未 reexport 进 :lem**，`vs$ :lem` 解析必空                    |
-| `RUN-COMPLETION` 等补全族 | `:lem/completion-mode`        | 同上；弹窗补全公开 API 即 `run-completion`                      |
-| `ISEARCH-FORWARD`         | `:lem/isearch`                | nightly 起不再从 :lem reexport；`UNMATCH-ISEARCH-ATTRIBUTE` 已删 |
-| `*TERMINAL-MODE-KEYMAP*`  | `:lem-terminal/terminal-mode` | 终端面板局部键                                                  |
-| `LEGIT-STATUS`            | `:lem/legit`                  | `PROJECT-GREP` 在 `:lem/grep`                                   |
-| `LSP-RENAME`              | `:lem-lsp-mode`               | language 泛型命令（find-definitions 等）在 `:lem/language-mode` |
+## 2. 符号速查与踩坑指南
 
-其他语义坑：
+动态解析时，`vs$` 的第一个参数是**符号定义的源包**，而非使用处的包：
 
-- `buffer-filename` 返回 **namestring**（字符串），不是 pathname。
-- 文件路径转目录用 `(make-pathname :directory (pathname-directory file))`；**不能**用 `uiop:pathname-parent-directory-pathname`——它只看 directory 组件再剥尾段，对文件路径返回的是祖父目录（explorer root 错位一层的根因）。
-- `frame-multiplexer` 的 `C-z` 是前缀 keymap：任何绑定到 `C-z` 的命令都会整体覆盖数字快切。
-- **`vs-setvar` 与 `vs-setglobal` 二分**：`vs-setvar` 走 lem 的 `variable-value` plist 机制；但上游大量变量是**直接引用的 special variable**（grep 的 `*grep-command*`/`*last-query*`、format 的 `*auto-format*`、line-numbers 的 `*relative-line*` 等），plist 改了运行时读到的仍是镜像默认值——这类必须 `vs-setglobal`（setf symbol-value）。判断法：上游源码里 `(when *auto-format* ...)` 这种裸引用就是 vs-setglobal。
-- **keymap 有两代模型，探针写法不同**：20260531 构建起是 PR #2100 的**前缀树**（`KEYMAP*` 类，槽 `PREFIXES/CHILDREN/PARENTS/FUNCTION-TABLE`，无 TABLE）——检查绑定走 `(lem-core:keymap-prefixes km)` 遍历 PREFIX 对象、比较 `(format nil "~A" (lem-core:prefix-key p))`，多键序列沿 suffix（子 keymap）逐层下钻；`define-key` 仍收字符串 keyspec + 命令符号，配置侧零改动。20250810 旧构建是哈希表模型（键为 key 结构体，`gethash` 新串必 NIL，须 maphash + 打印表示比较）。
+| 符号 | 定义所在包 | 说明 |
+| --- | --- | --- |
+| `*FIND-FILE-HOOK*` | `:lem/buffer/file` | **未 re-export 进 `:lem`**，通过 `:lem` 解析必然为 NIL |
+| `RUN-COMPLETION` 等补全族 | `:lem/completion-mode` | 弹窗补全的核心公开 API |
+| `ISEARCH-FORWARD` | `:lem/isearch` | 不再从 `:lem` 导出；`UNMATCH-ISEARCH-ATTRIBUTE` 已移除 |
+| `*TERMINAL-MODE-KEYMAP*` | `:lem-terminal/terminal-mode` | 终端面板局部按键映射 |
+| `LEGIT-STATUS` | `:lem/legit` | Git 面板入口；`PROJECT-GREP` 位于 `:lem/grep` |
+| `LSP-RENAME` | `:lem-lsp-mode` | 泛型语言命令（如 `find-definitions`）位于 `:lem/language-mode` |
 
-## 3. 键位与帮助体系
+### 常见语义与运行时陷阱
+- **路径类型**：`buffer-filename` 返回的是 Namestring（字符串），不是 Pathname 对象。
+- **目录提取**：文件路径转目录必须使用 `(make-pathname :directory (pathname-directory file))`；切勿使用 `uiop:pathname-parent-directory-pathname`（它处理文件路径会错误返回祖父目录）。
+- **`vs-setvar` 与 `vs-setglobal` 的区别**：
+  - `vs-setvar`：操作 Lem 的 `variable-value` 属性列表（plist 机制）。
+  - `vs-setglobal`：用于上游直接引用的 Special Variables（如 `*grep-command*`、`*auto-format*` 等），必须通过 `setf symbol-value` 全局赋值，否则运行时读到的仍是默认值。
+- **Keymap 前缀树模型**：当前版本采用前缀树（`KEYMAP*` 类）模型，遍历绑定需通过 `lem-core:keymap-prefixes`，沿 Suffix 子 Keymap 逐层解析。
 
-- 全局键一律 `vs-bind`（keyspec 包名 命令名 分组 中文描述），落键同时登记 `*vs-binding-registry*`——45-keyhelp 的 F1 菜单与 C-c h 静态帮助页的数据源，**不经 vs-bind 的绑定不进帮助页**（局部 keymap / 默认键用 `vs-help-note` 收编，`vs-declare-group` 声明分组顺序）。
-- `Shift` 必须写全拼 `"Shift-C-x"`（`S-` 是 super）。**例外：Shift 与字母组合键一律绑大写形式**——webview 前端 JS 对 Shift+字母派发大写 sym 且 `convert-keyevent` 对单字符键强制清 shift 标志，物理 Ctrl+Shift+F 的到达形式是 `{sym "F" ctrl}`；而 `parse-keyspec("Shift-C-f")` 存 `{sym "f" ctrl shift}`，lookup 精确匹配失败 → `Shift-C-<字母>`/`M-S-<字母>` 键串在 webview 全是**死键**（2026-09-04 lookup 探针实测 SELF-INSERT，已全量改绑修复）。正确写法：`"C-F"`（物理 Ctrl+Shift+F）、`"M-D"`（物理 Alt+Shift+D）；方向键/F 键/Tab 等命名键不受影响仍写全拼 `"Shift-C-Tab"`。ncurses 探针断言绑定要用到达形式（大写 sym）。
-- 已占用键：`C-p/C-f/C-s/C-b/C-j/C-\`/C-Tab/F2 等 VSCode 高频键覆盖 lem 同位键，被覆盖的移动退 Meta 系；`C-z`=undo、`C-/`=注释、`C-a`=全选（行首退 Home）、`C-=`/`C--`=字号为 Emacs/通用对齐键；`C-.`=Code Action（LSP）、`C-d`=多光标加光标（isearch 活动时逐个命中加光标，非搜索态 no-op）；`F1`=键位菜单、`C-c h`=静态帮助页、`M-/`=dabbrev、`C-X`=扩展管理（物理 Ctrl+Shift+X）；欢迎页 `d`=Open Folder（`f` 让位，上游近期文件跳转改 j/k+Return）。**`C-c h` 双语义**：全局是帮助页，但 lsp-mode 局部 keymap 把 `C-c h` 绑成了 hover（上游默认，未覆盖），LSP buffer 内会被遮蔽。lisp-mode 局部 `C-c C-d h`=CL Hyperspec。上游默认键（C-u 数字参数、C-x (/)/e 键盘宏、C-x SPC 矩形模式、Shift+方向选区、F3/Shift-F3 查找导航、isearch 内 C-M-n/p 多光标）不经 vs-bind，已用 vs-help-note 收编进帮助页。
-- **2026-09-11 新增/调整的键**（VSCode 对齐批次）：`C-t`=工作区符号搜索（VSCode Ctrl+T 同位，**覆盖上游 transpose-characters**，后者退 M-x；`C-T` 为同功能备用键）、`C-L`=全选当前符号的所有出现（VSCode Ctrl+Shift+L 语义，多光标；**原绑在这里的 LSP document-highlight 让位退 M-x**，VSCode 本无此默认键）、`C-I`=跳转实现、`Shift-C-Space`=参数签名提示、`F12`=跳转定义（此前只有 `C-F12`）。`M-s .` 等 isearch 符号搜索族是上游默认键，仅收编帮助页未改绑。
-- 弹窗补全站在 `lem/completion-mode:run-completion` 上（LSP 补全同管线）；候选必须是 `make-completion-item :label ...` 对象，字符串列表会在插入时炸。
+---
 
-## 4. 上游缺陷与规避（勿踩二遍）
+## 3. 键位映射与帮助体系
 
-- **nightly 图形前端是 webview（WebKitGTK + Canvas/JS），不是 SDL2**：`:sdl2-*` 系列 config 键已无读者；字体走运行时 API `set-font-name`（fontconfig 家族名，非 ttf 路径）+ `set-font-size`（**CSS 逻辑像素**，物理尺寸 = N×DPR；2x 屏 13 ≈ 旧 SDL2 26 物理像素观感）。webview **不持久化字号**，每次启动由 25-fonts 设置；ncurses 下这些调用报错，故包 ignore-errors。部署 config.lisp 里遗留 `:SDL2-*` 键属无害残留。
-- **lem-core 的 make-timer/start-timer 在 webview 前端不 fire**（缺 timer tick 调度点）：沙箱验证需要延迟执行时，用 `sb-thread:make-thread` + sleep 做只读探测，不要依赖 timer。
-- **`with-pop-up-typeout-window` 的 floating window 存活期间按移动键必炸**（MOVE-TO-VIRTUAL-LINE-COLUMN 收到 NIL column）——帮助类内容一律渲染进只读 buffer 再 `switch-to-buffer`。
-- **属性渲染的只读 buffer（explorer）上放行 next-line/previous-line 必炸**（virtual-column 为 NIL）：mode keymap 必须显式拦 `Up`/`Down`（40-explorer 尾部的纯点操作命令），任何新「渲染型 buffer」照抄该模式。
-- `M-` 系与 `F1` 等键序在本机 tmux 的 send-keys 下不可靠（Escape 前缀被拆），**自动化验证不走键注入**（见第 5 节）。
-- lem 的 `with-editor-stream` 吞 `*error-output*`（webview/ncurses 双无声）：诊断一律 `vs-trace` 直写 `/tmp/vs-trace.log`。
-- **20260531 构建「闪退」签名**：UI 起来后偶发 SBCL fatal `cannot suspend thread 0x…: 3 (ESRCH)`（webview/GTK 外部线程 vs GC 竞态，上游运行时 bug，间歇性——同构建有连跑数小时先例）。fatal 进 LDB 后：CLI 启动时 LDB 文本会落进 *Terminal* 面板（进程半死）；desktop 启动 stdin=EOF → LDB 退出带崩全进程 = 用户视角的「闪退」。处置：直接重启即可（勿当配置回归排查——2026-08-31 实测一轮：裸配置/沙箱全配置/真实配置交替「复现」，最终确认与配置无关）。**timeout 杀 wrapper 会留下 lem.real 孤儿**，多实例并存会加剧竞态，排查前先清场；**注意 git 构建的 lem 运行时把 cmdline 重写为裸 `lem`**（`pgrep -f '/bin/lem'` 匹配不到真进程、且会匹配到自己 bash 命令行造成误判/自杀）——一律 `pgrep -x lem`（2026-09-04 实测：多实例累积 + 注入打到旧实例 + 截图拍新窗口的组合假象即源于此）；`~/.config/lem/debug.log` 只记启动不记崩溃。
-- **插件通道三坑**（lem-extension-manager + 内置 Quicklisp）：① `*PACKAGES-DIRECTORY*` 在镜像构建期被固化成 `/root/.config/lem/packages/`（构建容器 HOME 残留），不可写，60-editor-config 已 `vs-setglobal` 重设到 `~/.config/lem/packages/`；② 镜像里 quicklisp **客户端在但 dist 为空**（`ql-systems=0`），首次装包前须 `(ql-dist:install-dist "https://beta.quicklisp.org/dist/quicklisp.txt" :replace nil :prompt nil)`（官方 dist 里**没有任何 lem 系统**——第三方 lem 扩展走 `lem-use-package :source '(:type :git ...)` 从 GitHub 直装，ql 通道只用于通用 CL 库）；③ `LEM-USE-PACKAGE` 是**宏**不是函数，程序化调用要 eval/macroexpand，不能 funcall。
-- **webview 前端下 `--eval` 探针不可用**（与多实例无关）：webview 前端初始化与 apply-args 的求值序不兼容，`--eval` 的 load 经常整段不执行（探针文件连 marker 都不落地）或直接挂起；剥离 display 跑则崩在 webview 初始化（fatal ERROR，stderr 被吞只留 `compilation unit aborted` 摘要）。**探针一律走 ncurses 通道**（见第 5 节第 2 条）。
-- **tabbar（webview 顶栏 buffer 列表条）双坑**：① 上游 `*enable-tabbar-on-startup*` 默认 t，显示**全部 buffer**（含 *terminal*/*dashboard* 等临时 buffer，无过滤点）；60-editor-config 已 wrap `lem/tabbar::get-tabbar-buffers` 过滤为只显示文件 buffer，tab 的点击切换/关闭/dirty 圆点为 webview 原生。② **ncurses 前端下 tabbar 渲染走 lem-server 的 HTML 管线、view 类型不匹配必崩**（redraw 即 fatal），60-editor-config 按前端分派：webview 开、其余关（探针通道能跑正是依赖此关闭）。③ **推送去重（2026-09-11）**：tabbar 的 `update` 挂在 `after-change-functions` 上，每次编辑都会触发整份 HTML（CSS+JS+tab 列表）重生成并 WebSocket 推送；而连续打字时 tab 三态（标题/dirty/active）不变、HTML 逐字相同。60-editor-config wrap `lem-server::change-view-to-html` 按 window 缓存内容、等值即跳过（3 秒时限兜底，防前端重载后 tab 条空白）。webview 实测 8 次请求中 6 次被跳过。
-- **`set-clickable` 回调签名前端不一致（2026-09-02 explorer 点击实测）**：`SET-CLICKABLE` 在 `:lem-core`（internal）。上游 main 源码与 ncurses 实测都是 `(window point)` 两参 funcall，但 **webview 前端实际分发收 0 参**——固定形参 lambda 点一下就 `Invalid number of arguments: 0` 炸进 SBCL debugger。配置侧 clickable 回调**一律 `(lambda (&rest args) ...)` + 渲染期闭包捕获条目数据**（40-explorer 的 vs-make-icon-click / vs-insert-tree-line 模式），不依赖回调参数、不在回调里读属性。
-- **终端双通道与 vterm 构建门槛（2026-09-03 git 构建实测收口）**：50-terminal 为双通道——vterm（`lem-terminal`，libvterm 真终端）+ fish（`sb-posix:setenv "SHELL"` 注入，上游 terminal-new 只读 `$SHELL`，无 Lisp 覆盖点），退化通道为 shell-mode + bash + `script(1)`。**20260531 AppImage 构建的 vterm 通道带上游 I/O 线程数据竞争（#2209/#2211 于 2026-06-03/05 修复）**：terminal 包与 terminal.so 均正常加载、fish 能 spawn，但 spawn 后主进程随机 SIGSEGV fatal（ncurses 实测复现）——旧结论「配置层不可修、弃用」在修复版构建上不再成立。构建自识别读 `sb-impl::*runtime-pathname*`（`uiop:argv0` / `sb-ext:runtime-pathname` / `*lem-version*` 均被镜像剥离为 NIL，/proc/self/exe 指向 ld-linux 拿不到）：AppImage 包名（`lem-next-bin-YYYYMMDD`）按 ≥20260605 门槛；**git 源码构建（`lem-next-<版本>-<hash>`，当前 lem-next-2.3.0-0.68e85e0 = 2026-08-31）默认信任**。**shell-mode 退化通道不能用 fish**：哑管道下 fish 0.13s 发出能力查询包（kitty `?u` / XTVERSION / OSC 11 / DECRQM）后阻塞等应答，~30s 才出提示符（pty 实测），bash 无查询即时出（0.02s）。vterm+fish 在 webview 下已终验（fastfetch 全彩 + starship 提示符 + 项目根 cwd + toggle 管线）。另：90-startup 的 workspace 钩子在面板已显示时跳过 split（用户启动即按 C-j 场景，否则叠加双终端窗）；webview 前端下 startup 同样需要首键触发。
-- **左缘单槽位互斥**：`compute-left-display-area-content` 按合成 mode 类单方法胜出，同时只能显示行号或 git-gutter 其一（2026-09-10 真机实测：开 gutter 即顶掉行号，关即回）。留行号（核心 chrome），gutter 不启用；文件级 git 染色（侧栏树/modeline）不受影响。
-- **悬停链调错符号（2026-09-10 源码核对+探针实证）**：`LSP-HOVER` 是零参交互命令（`define-command lsp-hover () ()`，内部 `display-message` 弹窗），传 point 调每次抛参错被 `ignore-errors` 吞掉——旧 hover 增强从未生效过。取文档调未导出的 `TEXT-DOCUMENT/HOVER`（1 参 point，返 markdown-buffer；`vs$` 双包回退 `:lem-lsp-mode` → `:lem-lsp-mode/lsp-mode`），经 `UPDATE-HOVER-OVERLAY` → `FIND-OVERLAY-THAT-CAN-HOVER` → `SET-HOVER-MESSAGE` 显示；它是同步 LSP 请求——**2026-09-11 起改为异步投递**：mouse-motion 只登记待查位置（`*vs-hover-pending*`），常驻单例线程防抖 0.12s 后经 `send-event` 回编辑线程执行查询（同步请求挂在 ~60 事件/秒的 mousemove 上会堵死编辑线程）；无 LSP 时静默穿透。**位置取鼠标坐标**（`vs-hover-mouse-position` 经 `GET-POINT-FROM-WINDOW-WITH-COORDINATES` 无副作用换算，坐标不可得才回退光标），不再用 `current-point`——旧实现悬停查的始终是光标处文档、鼠标移到别处文档不变，hover 形同虚设（2026-09-11 webview 注入实测：修正后查询位置随鼠标 x 坐标线性变化，修正前恒为 1）。
-- **webview + python LSP 自旋**：打开 python 文件（pylsp 接管）后主进程恒 100% CPU（2026-09-10 新/旧配置 × 有/无 LSP 四格对照：旧配置 + main.py 同样自旋，与配置无关；杀 pylsp 不回落）。python 文件暂时用 ncurses 或等上游修。
+- **集中登记**：全局按键统一使用 `vs-bind`（参数：keyspec、包名、命令名、分组、中文描述）。它在绑定按键的同时注册到 `*vs-binding-registry*`，供 F1 菜单和 `C-c h` 帮助页检索。
+- **Shift 组合键规范**：
+  - 命名键（方向键、F 键、Tab 等）写全拼，如 `"Shift-C-Tab"`。
+  - **Shift + 字母组合键必须绑定为大写形式**（如 `"C-F"` 代表 Ctrl+Shift+F，`"M-D"` 代表 Alt+Shift+D）。在 Webview 前端中，底层 JS 事件会将 Shift+字母派发为大写字符且清除 shift 标志，写 `"Shift-C-f"` 会导致按键无法匹配而失效。
+- **高频按键分布（VSCode 风格）**：
+  - `C-p`：文件速开；`C-f`：文件内搜索；`C-s`：保存；`C-b`：侧边栏切换；`C-j` / `C-\``：终端面板。
+  - `C-t`：工作区符号搜索（带 `--hidden`，支持 `.config/` 等隐藏路径）；`C-L`：多光标全选当前符号。
+  - `C-z`：Undo；`C-/`：行注释；`C-a`：全选；`C-.`：Code Action；`C-d`：多光标添加选区。
+  - `F1`：命令面板/键位菜单；`C-c h`：键位帮助页；`F12`：跳转到定义；`C-I`：跳转到实现。
 
-- **rg 默认忽略隐藏目录（2026-09-11 实测）**：`ripgrep` 不搜索以 `.` 开头的目录/文件，而 Guix/Nix 与大量工具链的配置都在 `.config/` 下——在本仓库 `dotfiles/mutable/lem/.config/` 内做项目 grep（C-F）会**恒为空且不报错**。60-editor-config 的 `*GREP-ARGS*` 与 70-keybindings 的工作区符号搜索（`C-t`，`vs-workspace-symbol`）均已加 `--hidden`（对齐 VSCode 搜索默认含隐藏文件、只排除 `**/.git` 的语义）。**新增任何 rg 调用务必带 `--hidden`**。
-- **SBCL GC 参数的正确入口（2026-09-11 实证）**：nursery（0 代）阈值是 `SB-EXT:BYTES-CONSED-BETWEEN-GCS`（**函数**，setf 可写），**不是** `GENERATION-BYTES-CONSED-BETWEEN-GCS` 的 0 号槽（SBCL 文档明文 "meaningless for generation 0"；旧配置写的正是它——setf 后读回新值但 GC 行为零变化 = no-op）。1/2 号槽才是 gen1/gen2 老年代阈值（默认 30.7MB）。实测 minor GC 极快（320MB 分配周期 `*GC-RUN-TIME*` 仅 0.6ms），真正的停顿来自 major GC。详见 modules/10-performance.lisp 头注释。
-- **`prompt-for-directory` 的 `:directory` 必传（2026-09-11 实测修复）**：上游 `prompt-for-directory`（`src/prompt.lisp`）把 `&key directory` 原样透传给补全链（`prompt-file-completion` → `completion-file` → `expand-file-name`），**缺省值就是 NIL**；而 `expand-file-name` 的 `(directory (uiop:getcwd))` 是 `&optional` 默认值，**只在参数缺省时生效——显式 NIL 不兜底**，直接 `(pathname-directory NIL)` 抛类型错误进 debugger（该函数没有 `%prompt-for-file` 里那行 `(or directory (namestring (user-homedir-pathname)))`）。症状：prompt 打开后**一按 Tab 就砸**，与输入内容无关（空输入走 `"./"` 分支同样炸）。40-explorer 的 `vscode-open-folder` 曾漏传（已改为 explorer root / `(uiop:getcwd)` 兜底；`buffer-directory` 未导出不可用）。**新增任何 `prompt-for-directory` 调用必须带 `:directory`**，且该值同时是 prompt 的预填文本（上游把 `:directory` 直接当 `:initial-value`）。上游其它 4 个调用点（project / file / grep / filer）均已传。
+---
 
-## 5. 验证管线
+## 4. 上游缺陷应对与规避策略
 
-1. **语法验证（每次修改后必跑）**：SBCL stub 包 read-only parse modules/ 下全部 .lisp（含 modes/ 子目录，递归）。stub 需满足 reader 解析：`:lem-user`/`:uiop`/`:lem`/`:asdf`/`:lem-core` 包存在，且配置里静态引用的各包符号须在 stub 中 **大写 export**（read 的 :upcase 语义）；运行用 `sbcl --noinform --load`（`--script` 静默丢输出）。
-2. **行为自检（ncurses `--eval` 通道；LEM_HOME 沙箱与 webview `--eval` 均不可用，见第 4 节）**：`tmux new-session -d -s lemprobe -x 220 -y 50 "env -u WAYLAND_DISPLAY -u DISPLAY lem -i ncurses --eval '(load \"/tmp/xxx.lisp\")'"`——`-i ncurses` 强制 ncurses 前端（tabbar 已被 60-editor-config 关闭，不会崩），load 在**用户配置加载完成之后**执行（after-init → apply-args 序），直接读 `*vs-binding-registry*` 条数、变量 symbol-value、keymap 绑定即为生效态。断言写 /tmp log、文件末尾 `(sb-ext:exit :code 0)` 自退出；**flet/labels 局部函数名勿用 `log` 等 CL 外部符号**（包锁违规 → load 编译期 fatal）。延迟执行用 `sb-thread:make-thread` + sleep（timer 不 fire，见第 4 节），**零按键、零焦点纠缠**。
-- hook 表元素是 `(callback . weight)` cons（`add-hook` 宏 `:key #'car` 去重）：探针断言钩子成员必须带 `:key #'car`，裸 `eq` 恒 NIL 误报（2026-09-10 gutter/paren 三轮误报实测）。60-editor-config 的 `vs-late-vscode-gains` 一次性 post-command 补启用即此教训的产物：扩展包在模块加载期尚未就绪，首命令时补挂再自摘。
-3. **--eval 的 reader 限制**：eval 表达式在启动 parse 期就被 read 进 cl-user（先写的 in-package 救不了，符号包已固化），所以必须经 load 文件、文件内 in-package 才生效。
-4. **tmux 观测**：capture-pane 看画面；字符注入只用 `set-buffer` + `paste-buffer`（`send-keys -l` 首字符后必丢）；启动后必须先发一键才触发 post-command 启动钩子（无按键只见 dashboard，不是加载失败）。
-5. **渲染类改动（侧栏/主题/字体）必须真机 capture 验证**，静态检查不算数。webview 前端在 xvfb 下恒黑屏（webkit 无 GPU 渲染问题，加 WEBKIT_DISABLE_* 环境变量也无效），渲染验证走**真机 wayland：沙箱 LEM_HOME 起实例 + grim 截屏 + 及时 kill**。webview 字号不持久化，字体改动重启即生效。注意：**桌面处于锁屏时 grim 只能截到锁屏层**（编辑器被虚化不可读）——夜间自动化遇到锁屏时，webview 视觉验证只能改期，可先用 ncurses 通道验证非前端相关的渲染逻辑（侧栏 buffer 内容与码点可 capture-pane 校验）。
-6. **探针执行模型三教训（2026-09-02 explorer 点击排查实测）**：① 外来线程（make-thread + sleep 轮询）会**无声死掉**（错误进被吞的 *error-output*，日志一行不留）——复杂探针改走 `(lem:send-event #'fn)` 在**编辑线程内**执行，观察步骤再 `send-event` 链式排队（FIFO 保序，不用 sleep）；② lem 编辑线程绑定 `*print-readably`=T，探针日志用 `~S` 打印 lem 对象（window/cursor/package）必抛 print-not-readable，**日志格式串一律 `~A` 并先 `(let ((*print-readably* nil)) ...)`**；③ 合成鼠标点击：`(lem:receive-mouse-button-down x y px py :button-1 1)` 传 frame 单元坐标——leftside 侧栏行 N 的 frame-y = `(window-y win) + N - (view-point 行号)`，写错一行就静默点空（上游无任何报错）。探针文件发布前先 python 括号平衡检查（本轮三份探针各炸一次）。
-7. **`--eval` load 期禁窗口操作（2026-09-02 终端重写实测）**：load 阶段（apply-args 序）直接 funcall 涉及 split-window/delete-window/switch-to-buffer 的命令（如 vscode-toggle-terminal）会让进程**当场死掉**（无 LDB 输出、tmux session 连带消失）——与 90-startup「after-init 期窗口操作 display 层拒绘」同根。探针里的窗口动作一律 `make-thread sleep → send-event` 延后到命令循环期执行。另：探针日志 `with-open-file` 勿用 `:if-exists :supersede`（每次调用截断覆盖，多行日志只剩最后一行），用 `:append`。
-8. **webview 行为级验证：lem-server WebSocket 直连注入（2026-09-04 which-key 实测）**：wtype 注入 ctrl 组合键到 webview 实测**不生效**（`-P Control_L -k x -p Control_L` 写法下修饰未建立，C-x 被 webview JS keyevent.js 当裸字符 'x' 走 input 事件通道；无修饰键如方向键正常到达；已验证的组合键写法 `-M ctrl -k x -m ctrl` 是否能过 webview 未对照，勿依赖）。可靠通道是直连 lem-server：webview 前端启动时在 127.0.0.1 随机端口起 WebSocket（`ss -tlnp` 按 lem pid 定位，127.0.0.1 高位随机监听即它），JSON-RPC 2.0 notify 注入按键：`{"jsonrpc":"2.0","method":"input","params":{"kind":"key","value":{"key":"x","ctrl":true,"meta":false,"super":false,"shift":false}}}`（`guix shell python python-websocket-client` + python-websocket；abort 用 `{"kind":"abort"}`）——等效 JS 客户端按键，绕开键盘与焦点，grim 截图判读。niri 聚焦窗口（截图前让 lem 在前台）：`NIRI_SOCKET=/run/user/$UID/niri.wayland-*.sock /run/current-system/profile/bin/niri msg action focus-window --id <id>`（窗口列表 `niri msg windows`）。另注意：C-x 前缀等待期内注入 C-g 会被解析为序列键 "C-x C-g"（Key not found 后序列终止、面板消失）而非独立 abort——退出面板效果等价。
+1. **图形前端机制（Webview）**：
+   - 当前采用 WebKitGTK + Canvas/JS 前端，不再使用 SDL2。
+   - 字体与字号通过运行时 API `set-font-name` 与 `set-font-size`（CSS 逻辑像素）动态设置。
+2. **定时器限制**：`make-timer` 在 Webview 前端由于缺少调度 Tick 不会触发；沙箱或延迟探测使用 `sb-thread:make-thread` 配合 sleep。
+3. **只读 Buffer 光标移动防护**：
+   - 属性渲染的只读 Buffer（如 Explorer）禁止响应原生 `next-line`/`previous-line`，须在 Mode Keymap 中拦截上下箭头，使用专用的点操作命令。
+   - `with-pop-up-typeout-window` 悬浮窗响应光标移动会导致异常，帮助内容统一渲染进只读 Buffer 后切换。
+4. **诊断与日志**：Lem 的 `with-editor-stream` 会静默吞掉 `*error-output*`，诊断输出统一使用 `vs-trace` 写入 `/tmp/vs-trace.log`。
+5. **Tabbar 标签栏优化**：
+   - 默认过滤临时 Buffer，仅展示文件 Buffer。
+   - 引入内容缓存机制，当标题与状态未变化时跳过重复的 HTML 生成与 WebSocket 推送，大幅降低打字时的 CPU 开销。
+6. **LSP 悬停提示（Hover）异步化**：
+   - 鼠标移动事件（~60次/秒）仅记录目标坐标，由常驻线程进行 0.12s 防抖后通过 `send-event` 异步发起 LSP 查询，防止阻塞主编辑线程。
+7. **Ripper / Grep 隐藏目录支持**：`ripgrep` 默认忽略点号开头的目录，在配置项目搜索时必须显式附加 `--hidden` 参数。
+8. **目录 Prompt 默认值**：调用 `prompt-for-directory` 时必须显式传递 `:directory` 参数，避免上游透传 NIL 导致 Tab 补全抛类型错误。
 
-9. **锁屏环境下 webview 行为级验证仍可进行（2026-09-11 实测，突破第 5 节「只能改期」的限制）**：WebSocket 注入绕开键盘与焦点，**不受锁屏影响**（锁屏只挡 grim 视觉验证；webview 下 `--eval` 本就不可用）。四要点：
-   - **必须先建立显示几何**：发 `{"jsonrpc":"2.0","method":"redraw","params":{"size":{"width":120,"height":40}}}`（内部走 `adjust-all-window-size`）。**不做这一步 frame 尺寸为 0，所有 mousemove 的 `focus-window-position` 返回 nil、事件被静默丢弃**（`receive-mouse-motion` 自身不报错，极难排查）。width/height 是**字符行列**（同 `lem:display-width`）。
-   - **观测端只能在配置里加临时 `vs-trace` 探针**（webview 无 eval 通道），统一用 `!VERIFY!` 前缀，事后 `grep -c '!VERIFY!' modules/*.lisp` 确认清除；改动前 `cp` 备份原文件，用 `diff` 核对"除预期改动外无残留"。
-   - **mousemove 字段** `{x,y,pixelX,pixelY,button}`：x/y 是 frame 字符行列（`within-window-p` 直接比较），`button:"none"` 走 hover 分支（`convert-button` 返 nil）。input 还支持 `key`/`mousedown`/`mouseup`/`wheel`/`abort`/`clipboard-paste`/`resize`。
-   - **改配置后必须重启进程**（配置只在启动时读）：`kill $(pgrep -x lem)` + `nohup lem > /tmp/lem-wv.log 2>&1 &`，端口用 `ss -tlnp | grep "pid=<lem pid>,"` 现取。
-   实测结论：228 个 mousemove 事件逐次触发 hover 查询（异步化生效），tabbar 重绘请求 8 次中 6 次被等值去重跳过（75%），进程 CPU 稳定 3~4%。
+---
 
-禁令沿用仓库根 AGENTS.md：不运行 `blue rebuild` / `guix system reconfigure`（提醒用户手动），不编辑 `channel.lock` 与 `tmp/`，不持久安装包。本目录为 mutable Stow 源，普通修改无需 `blue home`。
+## 5. 自动化测试与验证管线
+
+1. **语法静态解析（每次修改后必跑）**：
+   - 使用 SBCL Stub 脚本对 `modules/` 目录下所有 `.lisp` 文件进行只读解析，校验括号与宏展开。
+2. **行为自检（ncurses `--eval` 通道）**：
+   - 在 Tmux 隔离会话中拉起 `lem -i ncurses --eval '(load "/tmp/probe.lisp")'` 执行断言。
+   - 断言脚本在配置加载完成后执行，校验按键注册表与变量状态。
+3. **Webview 行为级验证（WebSocket 直连注入）**：
+   - 直连 `lem-server` 的本地 WebSocket 端口，通过 JSON-RPC 2.0 `input` 与 `redraw` 方法注入按键和鼠标事件。
+   - 绕过键盘焦点与桌面锁屏限制，配合临时 `vs-trace` 探针完成端到端行为验证。

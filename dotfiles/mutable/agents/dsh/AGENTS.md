@@ -1,86 +1,74 @@
-# agents/dsh — DeepSeek Harness 配置层
+# agents/dsh — DeepSeek Harness 配置与部署
 
-dsh（DeepSeek 的 everything-is-a-plugin agent harness，developer preview 迭代快）的 Guix 部署包。
-包根映射到 `$HOME`，故本文件与 `.stow-local-ignore` 自身不进部署位。
+本目录为 DeepSeek Harness（DSH，一切皆插件的 Agent Harness 框架）的 Guix 部署包。
+本包映射到 `$HOME`，通过 GNU Stow 逐文件软链到系统。
 
-## 布局
+## 目录与文件布局
 
-| 路径                                    | 说明                                                                                                              |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `~/.local/share/dsh/`                   | `$DSH_HOME`，真实目录，配置逐文件 stow 链回本包（不用 folding，对齐 hermes 实证形态）                             |
-| `_cli/`                                 | CLI 本体：源只托管 `package.json` + `pnpm-workspace.yaml`，`node_modules/` 与 `pnpm-lock.yaml` 是部署侧运行时产物 |
-| `profiles/web/`                         | web profile：源托管 `cordis.yml`、`cordis.patch.yml`、`package.json`、`pnpm-workspace.yaml`                       |
-| `.local/bin/dsh`                        | CLI wrapper：注入 `DSH_HOME`；CLI 缺失时询问后自动装，非交互场景走 `dsh --install`                                |
-| `.local/bin/dsh-web`                    | desktop 入口：确保服务在跑，再用 chromium app 窗口打开                                                            |
-| `.local/share/applications/dsh.desktop` | 桌面项，`StartupWMClass` 与窗口 app_id 成对绑定                                                                   |
-| `.local/share/icons/dsh.png`            | 图标（Papirus 风格）；同目录 `dsh.svg` 是矢量母版，`.desktop` 的 `Icon=` 指绝对路径                               |
+| 路径                                    | 说明                                                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `~/.local/share/dsh/`                   | `$DSH_HOME`，为真实目录，配置文件逐个软链回本包（采用 no-folding 模式）                              |
+| `_cli/`                                 | CLI 本体源：仅托管 `package.json` 与 `pnpm-workspace.yaml`；`node_modules/` 与 Lockfile 为运行时产物 |
+| `profiles/web/`                         | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json` 等配置                            |
+| `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装     |
+| `.local/bin/dsh-web`                    | Desktop 启动入口：启动后台服务并在独立的 Chromium App 窗口中打开                                     |
+| `.local/share/applications/dsh.desktop` | 桌面快捷方式，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                           |
+| `.local/share/icons/dsh.png`            | 图标文件（对齐 Papirus 风格，256×256 PNG）；同目录 `dsh.svg` 为矢量母版                              |
 
-部署侧另留、由 `.stow-local-ignore` 防御性排除：`.credentials.yaml`（API key）、`sessions/`、`storages/`、`node_modules/`、`pnpm-lock.yaml`、`.anonymous-user-id`。
+> **忽略规则**：`.credentials.yaml`（API 密钥）、`sessions/`、`storages/`、`node_modules/`、`pnpm-lock.yaml` 等运行时产物已被 `.stow-local-ignore` 防御性排除。
 
-## 通道
+## 安装通道与升级
 
-本体 0.1.5-rc.1 经 pnpm 装在 `_cli/`。升级 = 改源 `package.json` 版本 → `_cli/` 里 `pnpm install`。
-`_cli/pnpm-workspace.yaml` 声明 `minimumReleaseAge: 0`（preview 期逐包日更，默认 1440min 供应链冷却必拦自家闭包）与 `allowBuilds` 五件套（node-pty / koffi / dsh-subprocess-local / protobufjs / @google/genai）。
+- **安装机制**：DSH CLI 本体（当前为 0.1.5-rc.1）通过 pnpm 安装在 `_cli/` 目录中。
+- **升级步骤**：修改源码中 `_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。
+- **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。
 
-2026-09-10 自 uv tool 的 PyPI wheel 迁移：SEA 单文件闭包两度缺包（`session-title-llm` 崩启动、`client-modules` 报 "Failed to load plugins"）且 0.1.5-rc.1 未修，npm 通道依赖树完整、零 workaround。
+## 插件管理（Web Profile）
 
-## 插件层（web profile）
+添加插件推荐使用 `dsh plugin --profile web add <pkg>@<ver>` 命令。它会在 profile 目录运行 pnpm，并将依赖自动写入 `dsh.profile.bundles`。
 
-`dsh plugin --profile web add <pkg>@<ver>` 是 pnpm 薄转发器：在 profile 目录跑 pnpm，再把声明 `dsh.bundle` 的依赖自动并入 `dsh.profile.bundles`，profile 文件不用手改。依赖锁**精确版本**——插件迭代快，`^` 会在重装时静默升到与当前 DSH 不兼容的版本（实测 `dsh-context` 0.47 对 0.1.5-rc.1 会缺 UI）。
+> **重要规则**：必须锁定**精确版本**，避免依赖漂移导致插件与 DSH 核心版本不兼容。
 
-| 插件                 | 版本   | 说明                                                                                                                                |
-| -------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `dsh-better-sidebar` | 0.19.0 | ★3479 / MIT。侧边栏工作台：文件编辑器、内嵌真实终端（xterm + node-pty）、Git 差异、子代理与后台任务、侧边对话。要求 DSH ≥0.1.5-rc.1 |
-| `dsh-context`        | 0.49.0 | ★1314 / Apache-2.0。上下文面板（组合/趋势/事件/文件活动/agent 网络）。首个在 `dsh.compatibility` 声明兼容 0.1.5-rc.1 的版本         |
-| `dsh-dream-skin`     | 8.30.1 | ★153 / MIT。走官方 `ctx.theme.register` / `overrideTokens` 的原生 token 换肤，不注入 CSS                                            |
+| 插件                 | 当前版本 | 说明                                                                               |
+| -------------------- | -------- | ---------------------------------------------------------------------------------- |
+| `dsh-better-sidebar` | 0.19.0   | 侧边栏工作台：集成文件编辑、内置终端（xterm + node-pty）、Git 差异与后台任务管理   |
+| `dsh-context`        | 0.49.0   | 上下文监控面板：展示 Agent 组合、趋势分析、文件活动与 Agent 通信网络               |
+| `dsh-dream-skin`     | 8.30.1   | 原生主题换肤：通过官方 `ctx.theme.register` / `overrideTokens` 实现原生 Token 换肤 |
 
-装插件三坑：① pnpm 11 的 24h 供应链冷却会挡当日发布版本（pnpm 自动把 `minimumReleaseAgeExclude` 写进 profile workspace，本就该如此）；② native 依赖须 `pnpm approve-builds`（写的是 `allowBuilds`，不是旧文档的 `onlyBuiltDependencies`）；③ 装完须重启 `dsh web`，且首次页面可能因 host 扫描竞态漏插件条目（`__DSH_BOOT__.entries` 少 3 条），硬刷新即恢复。
+### 插件常见问题与注意点
 
-主题包只收颜色且存浏览器 localStorage，无法随仓库声明式分发。
+1. **供应链冷却**：pnpm 会自动将 `minimumReleaseAgeExclude` 写入 profile workspace，确保新发插件正常拉取。
+2. **原生模块编译**：涉及 native 依赖时需执行 `pnpm approve-builds`（配置项为 `allowBuilds`）。
+3. **服务重启**：安装新插件后须重启 `dsh web`。若首次加载时页面漏掉插件条目，对浏览器进行一次硬刷新（Ctrl+F5）即可恢复。
 
-## 图标
+## 图标与桌面集成
 
-`dsh.desktop` 的 `Icon=` 走**绝对路径**而非名字查找：用户级 `hicolor` 没有 `index.theme` 与 `icon-theme.cache`，按名查找不可靠（hermes 踩过）。
+- **图标查找**：`dsh.desktop` 中的 `Icon=` 使用绝对路径指定 `.png`，避免用户级图标主题缓存缺失导致图标不显示。
+- **SVG 母版与栅格化**：`dsh.svg` 保留在源码目录作为母版。若需重新生成 PNG 图标，执行以下命令：
+  ```bash
+  cd dotfiles/mutable/agents/dsh/.local/share/icons
+  rsvg-convert -w 256 -h 256 dsh.svg -o dsh.png
+  ```
+- **刷新 Dock 缓存**：修改图标后通知 Noctalia 刷新：`noctalia msg dock-reload`。
 
-`dsh.png`（256×256 RGBA）是部署产物，已由 stow 链出，改源即生效、无需 `blue home`。`dsh.svg` 是它的矢量母版，**留在仓库侧、不必部署**——`Icon=` 指绝对路径的 `.png`，没有任何按名查找会用到它。重跑栅格化：
+## 窗口管理与 Wayland 适配
 
-```bash
-cd dotfiles/mutable/agents/dsh/.local/share/icons
-rsvg-convert -w 256 -h 256 dsh.svg -o dsh.png
-```
+- `dsh-web` 使用 Chromium `--app=<url>` 模式拉起无浏览器边框的独立窗口，自动继承 Niri 的全局圆角与阴影特效。
+- **窗口 App ID**：通过 `--profile-directory=dsh` 将窗口 ID 固定为 `chrome-127.0.0.1__-dsh`，与 `dsh.desktop` 中的 `StartupWMClass` **严格成对绑定**。修改时两处须同时修改。
+- 独立 Profile 同时将 DSH 的会话 Cookie 与日常浏览器的默认配置隔离开。
 
-改完图标让 noctalia 重新读：`noctalia msg dock-reload`（dock 是 `smart_auto_hide`，不必重启面板）。
+## 认证与会话机制
 
-样式对齐 Papirus（实测：抽样彩色图标在 `Papirus` 与 `Papirus-Dark` 下逐字节相同，故透明底一套通吃亮/暗色；`128x128/apps` 8321 个图标里只有 38 个用渐变，故用平涂）：
+- **启动 Token**：进程启动时生成随机 Launch Token，仅供包装器脚本一次性换取 Session Cookie。
+- **持久化 Cookie**：换取的 Cookie 由 `$DSH_HOME/.credentials.yaml` 中的持久化密钥进行 HMAC-SHA256 签名，默认有效期为 30 天，**跨服务重启依然有效**。
+- **重新认证**：若需强制重置凭据，执行 `dsh-web --reauth` 即可安全终止旧实例并重新握手。
 
-- 64×64 网格，鲸鱼宽 56——即 Papirus 自己 56/64 圆形的占比——垂直居中。
-- 投影 = 本体 `translate(0,1)` 的 `#000` `opacity=".2"`：硬偏移、无模糊，与 Papirus 一致。
-- 顶缘高光 = 白 `opacity=".12"`，用 mask 取「本体 − 向下平移 1.2 的本体」，故只落在朝上的边缘。
-- 主体 `#4d6bfe` 保持旧图标的 DeepSeek 品牌蓝——Papirus 不改品牌色（spotify 仍是 `#1ed760`）。
-- **不做底缘暗带**：Papirus 的 glyph 型图标（vscode）只有投影 + 顶缘高光，加暗带会在光滑大色块上读成第二条描边。
+## 排障指南
 
-鲸鱼路径逐字节取自上游 `dsh-web-frontend/dist/favicon.svg`（单一 `<path>`，腹部与眼睛是镂空）。重绘时不要手改 `d`，从那里重新取。旧的白底方块版本见 commit `73ed2466`。
-
-## 窗口
-
-`dsh-web` 用 chromium `--app=<url>` 开无浏览器 chrome 的窗口（无标签栏/地址栏/工具栏，继承 niri 全局圆角与阴影）。**不装 PWA**：dsh 前端自带 `manifest.webmanifest`，但 `display: fullscreen`，装出来是全屏而非窗口。
-
-窗口 app_id 走 `--profile-directory=dsh` 定为 `chrome-127.0.0.1__-dsh`，与 `dsh.desktop` 的 `StartupWMClass` **成对绑定——改名须同时改两处**。该 profile 顺带把 dsh 的会话 cookie 与日常浏览的 Default profile 隔开。
-
-app_id 机制实测：端口不入 app_id；`WAYLAND_DEBUG=1` 显示 app 窗口只发一次 `set_app_id`（值即 Chromium 算的 web-app id），`--class` 的值根本不出现——`--class` 只有普通窗口才读，`--wm-class` 该版二进制不存在。要任意名字只能 `--ozone-platform=x11` 退回 XWayland（已否决：为装饰性名字放弃原生 Wayland 不划算）。
-
-## 认证
-
-launch token 按进程随机（`PROCESS_LAUNCH_TOKENS` WeakMap）且一个 token 只换一次 cookie，所以**只有 wrapper 亲起的实例才拿得到它的 token URL**；已在监听的实例须 `dsh-web --reauth` 换新 token（终止前校验目标 cmdline 含 `@deepseek-ai/dsh`，不误杀同端口上的其它进程）。
-
-换到的 cookie 由 `$DSH_HOME/.credentials.yaml` 里的持久化密钥 HMAC-SHA256 签名、`cookieMaxAgeDays` 默认 30 天、**跨重启有效**——别被「token 一次性消耗」的说法误导成每次重启都要重认证。cookie 名是 `dsh-auth-` + sha256(authority)，**authority 含端口**，故换端口要重新握手。
-
-`/` 与 API 需认证（无 cookie 返回 68 字节单行 401 提示），静态资源与 `/manifest.webmanifest` 免认证。
-
-## 排障
-
-- 服务起不来先查 3080 占用。进程 comm 是 `MainThread`，`pkill -f` 模式易自杀，用 `ss -tlnp` 取 pid 精确处理。
-- 服务 stdout 落在 `~/.local/state/dsh/web.log`（600），里面有一次性 token URL。
-- `dsh-web` 在服务起不来时会打印日志末尾并发桌面通知——desktop 入口没有终端可看，不这样就是静默失败。
-- 页面插件 UI 缺失先硬刷新；仍缺再查 `__DSH_BOOT__.entries` 条数。
-- wrapper 的环境覆盖：`DSH_WEB_PORT`（端口；改了 cookie 的 authority 也变，需重新握手）、`DSH_WEB_LOG`、`DSH_BIN`（测试用）、`DSH_HOME`。
+1. **端口冲突**：服务启动失败时优先检查 3080 端口占用。使用 `ss -tlnp` 精确查找对应 PID 并处理。
+2. **日志排查**：服务标准输出记录在 `~/.local/state/dsh/web.log`（权限 600），包含详细启动与 Token 信息。
+3. **UI 缺失**：页面插件未渲染时先进行浏览器硬刷新；若仍缺失，检查 `__DSH_BOOT__.entries` 加载条数。
+4. **环境变量覆盖**：
+   - `DSH_WEB_PORT`：自定义 Web 监听端口（更换端口会使 Cookie 重新握手）。
+   - `DSH_WEB_LOG`：自定义日志输出路径。
+   - `DSH_HOME`：覆盖默认 DSH 数据主目录。

@@ -1,297 +1,157 @@
-# AGENTS.md - custom-config 工作规范
+# AGENTS.md — Emacs 配置规范与工作手册
 
-本文件是本目录内 AI Agent 的唯一操作手册；`emacs.org` 只保存配置、功能语义和设计理由，不再重复 Agent 工作流、功能索引或验收规则。配置通过 GNU Stow 逐文件链接到 `~/.config/emacs/`，修改仓库源即修改部署源，不要编辑 `~/.config/emacs/` 中的部署路径。
+本文件是本目录下 AI Agent 的唯一操作规范。`emacs.org` 仅维护配置逻辑、功能语义与设计取舍，无需在其中重复 Agent 工作流或验收规则。
 
-## 1. 架构契约
+本配置通过 GNU Stow 逐文件软链到 `~/.config/emacs/`，**修改仓库源码即时更新部署源**，切勿直接编辑 `~/.config/emacs/` 中的部署文件。
 
-| 文件                | 角色                   | 修改规则                            |
-| ------------------- | ---------------------- | ----------------------------------- |
-| `emacs.org`         | 唯一配置真理源         | 日常功能修改只改这里                |
-| `init.el`           | 固定 bootstrap         | 不改变 tangle 签名和单产物模型      |
-| `early-init.el`     | 启动前优化             | 只放必须早于 `main.el` 的行为       |
-| `main.el`           | tangle 产物，gitignore | 禁止手改                            |
-| `data/*.el`         | 外置翻译数据           | 只允许注释和预定变量的字面量 `setq` |
-| `scripts/configctl` | 片段提取/拼合/定位     | 面向 agent 的片段操纵工具           |
+---
 
-启动链：`emacs -> init.el -> 按需 tangle emacs.org -> main.el -> load main.el`。
+## 1. 架构契约与文件角色
 
-以下契约不可改变：
+| 文件 / 脚本         | 角色定位                 | 维护规则                                                     |
+| ------------------- | ------------------------ | ------------------------------------------------------------ |
+| `emacs.org`         | 唯一配置真理源           | 日常功能配置一律在此修改                                     |
+| `init.el`           | 固定 Bootstrap 引导      | 保持 Tangle 逻辑与单产物模型稳定，不轻易改动                 |
+| `early-init.el`     | 启动前优化配置           | 仅放置必须早于 `main.el` 执行的底层设置（如 GC、Frame 参数） |
+| `main.el`           | Tangle 产物（gitignore） | **禁止手动编辑**，由 `emacs.org` 编译生成                    |
+| `data/*.el`         | 静态翻译与数据           | 仅允许字面量 `setq` 与注释                                   |
+| `scripts/configctl` | 代码块操纵工具           | 面向 Agent 的代码段提取、拼合与定位工具                      |
 
-```elisp
-(org-babel-tangle-file org-file main-file "emacs-lisp")
+### 启动调用链
+
+```
+emacs → init.el → (按需 tangle emacs.org) → main.el → (load main.el)
 ```
 
-```org
-#+PROPERTY: header-args:emacs-lisp :tangle main.el :lexical yes :mkdirp yes :noweb tangle
-```
+### 核心硬约束
 
-硬约束：
+- **单一生成产物**：仅生成唯一的 `main.el`，严禁 `:tangle lisp/...`；禁止引入 `lisp/` 目录到 `load-path`，禁止使用 `(require 'custom-...)` 或 `(provide 'custom-...)`。
+- **文件尾声明**：`main.el` 尾部仅保留 `(provide 'main)`。
+- **包清单同步**：引入新的 Emacs 插件包时，必须同步更新根仓库 `source/config.org` 中的 `emacs-services` manifest。
 
-- 只有一个生成物 `main.el`，禁止 `:tangle lisp/...`；禁止添加 `lisp/` load-path、`(require 'custom-...)` 或 `(provide 'custom-...)`。
-- 文件末尾只保留 `(provide 'main)`；不添加全局 `:comments link`，避免 noweb 注释膨胀。
-- 新 Emacs 包必须同步根仓库 `source/config.org` 的 `emacs-services` 块 manifest。
-- 不把本文件的 Agent 指引复制回 `emacs.org`。
+---
 
-## 2. 导航与加载顺序
+## 2. 导航与配置域加载顺序
 
-不要先阅读全文。先用动态索引定位（例：`scripts/configctl map` / `show dashboard` / `locate dashboard` / `locate emacs31/arei-compat`）：
+修改前无需阅读全文，优先使用 `configctl` 快速检索定位（如 `scripts/configctl map` / `show dashboard` / `locate dashboard`）：
 
-| 命令             | 用途                                                       |
-| ---------------- | ---------------------------------------------------------- |
-| `map`            | 列出 `CUSTOM_ID`、行号、代码量与 noweb ref                 |
-| `show ID`        | 提取一个功能子树全文；模糊匹配必须唯一                     |
-| `locate ID\|REF` | 定位块行号区间（CUSTOM_ID）或 noweb ref 的定义/组装位置    |
-| `tangle`         | 拼合 emacs.org → main.el                                   |
-| `check`          | 轻量原则检查：域顺序 / noweb 图 / 单产物 / 括号 / 重复定义 |
+| 工具命令           | 主要用途                                                 |
+| ------------------ | -------------------------------------------------------- |
+| `map`              | 列出所有 `CUSTOM_ID`、行号、代码量与 noweb ref 引用      |
+| `show <ID>`        | 提取指定功能子树全文（支持唯一模糊匹配）                 |
+| `locate <ID\|REF>` | 定位块行号区间或 noweb ref 的组装位置                    |
+| `tangle`           | 拼合生成 `emacs.org → main.el`                           |
+| `check`            | 执行静态轻量规则检查（域顺序、noweb 依赖图、括号平衡等） |
 
-深度验证（load 报错、ERT、包清单审计）**不在 configctl 内**——agent 直接跑 Emacs 命令（见第 7 节），不要让这个片段操纵工具膨胀成验收框架。
+### 8 大配置域加载顺序
 
-`emacs.org` 的文档顺序就是求值顺序，8 个配置域固定为：
+`emacs.org` 的文档编排顺序即为求值顺序，8 个配置域固定如下：
 
-| 顺序 | 配置域 / ID       | 主要职责                                      | 必须已就绪                    |
-| ---- | ----------------- | --------------------------------------------- | ----------------------------- |
-| 1    | `startup`         | 路径、进程、frame、键位原语、基础行为         | 无                            |
-| 2    | `appearance`      | 帮助、modeline、tab-line、Git、主题           | `startup` 的 frame 原语       |
-| 3    | `editing`         | 通用编辑、DWIM、终端                          | `git-display`                 |
-| 4    | `programming`     | Tree-sitter、Eglot、Flymake、格式化、语言模式 | `bootstrap`、`appearance`     |
-| 5    | `projects`        | project.el、目录与项目导航                    | `terminal`、`git-display`     |
-| 6    | `org-knowledge`   | Org、Roam、Knowledge、agenote                 | `bootstrap`                   |
-| 7    | `keys-completion` | 前缀声明、跨域基础键、内置补全栈            | 前述交互命令、frame 生命周期  |
-| 8    | `system-tools`    | daemon 预热、Dashboard、版本兼容              | 前述全部                      |
+| 序号 | 配置域 / ID       | 主要职责                                                   | 前置依赖                  |
+| ---- | ----------------- | ---------------------------------------------------------- | ------------------------- |
+| 1    | `startup`         | 路径、外部进程、Frame 行为、键位基础原语                   | 无                        |
+| 2    | `appearance`      | 帮助系统、Modeline、Tab-line、Git 状态、主题与字体         | `startup` 的 Frame 原语   |
+| 3    | `editing`         | 通用编辑增强、DWIM 变换、内置终端                          | `git-display`             |
+| 4    | `programming`     | Tree-sitter、Eglot (LSP)、Flymake、代码格式化与各语言 Mode | `bootstrap`、`appearance` |
+| 5    | `projects`        | Project.el、目录树与项目导航                               | `terminal`、`git-display` |
+| 6    | `org-knowledge`   | Org Mode、Roam 笔记、Agenote 知识库                        | `bootstrap`               |
+| 7    | `keys-completion` | 顶层前缀声明、跨域基础键、内置补全栈 (Vertico/Consult)     | 交互命令与 Frame 体系     |
+| 8    | `system-tools`    | Daemon 预热、Dashboard 欢迎屏、版本兼容兜底                | 前述全部模块              |
 
-常用功能路由：
+### 键位归属原则（功能内聚）
 
-| 修改目标                  | 首选 ID / 文件                                                | 直接依赖                             |
-| ------------------------- | ------------------------------------------------------------- | ------------------------------------ |
-| 路径与外部命令            | `bootstrap`                                                   | 无                                   |
-| 新 frame / client 行为    | `frame`                                                       | `bootstrap`                          |
-| 主题、字体、深浅色        | `theme-fonts`, `color-scheme`                                 | `frame`                              |
-| Modeline / Tab-line       | `modeline`, `tab-line`                                        | `theme-fonts`                        |
-| Git / display-buffer      | `git-display`, `window-layout`                                | `frame`                              |
-| 编辑命令 / 终端           | `editing-dwim`, `terminal`                                    | `git-display`                        |
-| LSP / 诊断 / 格式化       | `programming-tools`                                           | `bootstrap`, `appearance`            |
-| 项目导航                  | `project-navigation`                                          | `terminal`, `git-display`            |
-| Org / Knowledge / agenote | `org-core`, `knowledge`                                       | `bootstrap`, emacs-agenote 包        |
-| 键位 / 补全               | 功能键随其功能域；跨域基础键 `keybindings`；补全 `completion` | 对应命令必须先定义                   |
-| 翻译数据                  | `data/which-key-zh.el`, `data/context-menu-zh.el`             | `which-key-data`                     |
-| Dashboard                 | `dashboard`                                                   | 无强依赖（emacs-dashboard 插件自治） |
-| 版本兜底                  | `compatibility`                                               | noweb 展开到真实使用点               |
+- **功能相关按键跟随其实现所在的域**，不再集中塞入全局按键块。
+- `custom/bind` 内部通过 `custom--pending-wk-descs` 暂存 Which-key 描述，延迟到 Which-key 就绪后统一刷新。
+- 仅有 14 个顶层前缀声明（`custom/declare-binding-group`）、跨域基础键（`C-x` / `M-s` / `C-c w` 等）以及全局 IDE 直达键保留在 `keys-completion` 域。
 
-### 键位归属规则
+---
 
-键位默认跟随其功能实现所在的域（_功能内聚_ 原则），不再集中到 `keybindings` 块。`custom/bind` 内部通过 `custom--pending-wk-descs` 暂存 which-key 描述、延迟到 `with-eval-after-load 'which-key` flush；帮助分组由扫描 `custom:binding-spec` 生成——均与代码物理位置无关。
+## 3. 标准开发流程
 
-| 前缀 / 键类                                      | 归属域 / ID                                                 | 说明                                     |
-| ------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------- |
-| `C-c g` Git                                      | `appearance` / `git-display`                                | Git 函数所在域                           |
-| `C-c c` `M-g` 代码                                | `programming` / `programming-keys`                          | 含 code-commands 函数族与格式化 / 折叠   |
-| `C-c e` 编辑变换                                 | `editing` / `editing-dwim`                                  | DWIM 与 mc 函数所在域                    |
-| `C-x p` 项目                                     | `projects` / `project-navigation`                           | project.el 函数所在域                    |
-| `C-c o` Org                                      | `org-knowledge` / `knowledge`                               | Org / Knowledge 函数所在域               |
-| `C-c a` 生活应用                                 | `system-tools` / `applications` 或应用 `use-package` 所在域 | 每个应用键紧跟其 `use-package` 声明      |
-| `C-c i` 插入                                     | `editing` / `插入`                                          | 文件名 / 路径 / 字符插入                 |
-| markdown 等局部键                                | 对应 major mode 的 `use-package` 所在域                     | mode-local 键在 mode 声明处直写         |
-| 无前缀 IDE 直达键（`C-` / `M-` / `F-`）          | `keys-completion` / `global-keys`                           | 跨多域基础操作，保留为基础键位域         |
-| `C-x` `M-s` `C-c w` `C-c h` `C-c t` `C-c q` 跨域键               | `keys-completion` / `keybindings`                           | 引用命令跨多个功能域，无单一归属         |
-| 14 个顶层前缀声明（`custom/declare-binding-group`） | `keys-completion` / `keybindings`                           | Which-key 顶层前缀的唯一声明源，必须集中 |
+1. **定位与提取**：运行 `scripts/configctl map` 查询目标 ID，使用 `show <ID>` 提取对应子树，使用 `locate <ID>` 查看代码行号。
+2. **就地修改**：编辑对应功能子树；除非修改了跨域导出的公共 API，否则不影响其他域。
+3. **同步包清单**：若引入了新包，在 `source/config.org` 的 `emacs-services` 块中登记。
+4. **编译与验证**：执行 `scripts/configctl tangle` 并在隔离环境验证无 Lisp Error。
 
-## 3. 标准修改流程
+---
 
-1. `scripts/configctl map` 找稳定 ID；`show <ID>` 提取目标子树；`locate <ID|ref>` 定位块行号，跨域符号用 `rg -n 'symbol' emacs.org` 检查调用点。
-2. 修改一个功能子树；只有跨域 API 变化时才调整其他域。
-3. 新增包时同步 `source/config.org`；仅重排或精简现有代码不改包清单。
-4. 用第 7 节的 Emacs 命令直接验证。
+## 4. 编码规范与设计公约
 
-标题可以改，稳定 `CUSTOM_ID` 不可改；定义方必须在调用方之前。
+### Noweb 规则
 
-## 4. Noweb、命名与文档
+- 绝大多数代码块按文档顺序直接 tangle 进 `main.el`。
+- Noweb 仅用于两类特殊场景：
+  1. **版本兼容 Shim（前向引用）**：定义在 `compatibility` 域尾部，由靠前的使用点通过列 0（顶格）的 `<<emacs31/...>>` 展开。
+  2. **`#+name` 纯文本数据块**（如 Capture 模板）：声明 `:tangle no` 并紧跟引用者。
 
-代码块按文档顺序直接 tangle 进 `main.el`，不设组装间接层——标题层级是代码组织的唯一轴，`**` 模块内 `***` 方面子节的代码块裸头直写（不带 drawer ref）。noweb 只保留两类真实场景：
+### 精简与防御边界
 
-1. **前向引用的兼容 shim**：定义集中在 `compatibility` 域文末，由靠前的使用点用列 0 的 `<<emacs31/...>>` 展开——这是唯一允许"定义在使用点之后"的形态：
+- **消除冗余 Wrapper**：只用一次的辅助函数直接内联；禁止仅用于原样转发的包装函数。
+- **守卫边界（`fboundp` / `boundp`）**：仅用于**延迟加载的第三方包**与**跨构建变量**。同一 `main.el` 产物内部的函数互调不加守卫（加载顺序已保障可用）。
+- **进程与异步安全**：存活检查（`frame-live-p` / `buffer-live-p`）仅在异步回调（Timer、D-Bus、Process Sentinel）中保留；遍历 `frame-list` / `window-list` 时无需逐层检查。
+- **异常捕获**：`condition-case` 仅包裹文件 I/O、外部子进程或 D-Bus 调用；对于返回 nil 的查询型 API（如 `project-current`、`treesit-ready-p`）不加包裹。
 
-   ```org
-   #+begin_src emacs-lisp :noweb-ref emacs31/example-compat :tangle no
-   ...
-   #+end_src
-   ```
-
-2. **`#+name` 纯文本数据块**（capture 模板）：`org` 语言、`:tangle no`、紧跟唯一引用者。
-
-规则：
-
-- `<<ref>>` 引用必须列 0（无缩进）——noweb 展开会把引用处行首到 `<<` 之间的前缀复制到被插入文本的每一行。
-- 纯文本数据块内：行首 `*` / `**` / `#+` 以逗号转义（`,*`）保字面（否则 org 视作标题截断代码块），含双引号的 elisp 表达式写 `\"`；字符串内引用时开引号留在上一行、ref 顶格、尾部按需补 `\n`。被引用的 name 块由 `configctl check` 强制 `:tangle no`。
-- noweb 只用于上述两类跨位置组织，不模拟 `require`，也不为"分解长模块"引入 ref——长模块用 `***` 子节 + prose 组织即可。
-- 命名：公开函数与变量使用 `custom/...`，路径与静态常量使用 `custom:...`，私有函数使用 `custom/...--...`；不添加顺序加载用的 `defvar nil` 注入点，同一符号不得重复 `defun`、`defvar` 或 `defconst`。
-- agenote 进程调用统一走 emacs-agenote 包的 `agenote-call-string`（同步）等包内 API，每次显式传 domain。
-- 全局键使用 `custom/bind`，前缀声明使用 `custom/declare-binding-group`，保持键位、Which-key 和帮助同源；mode-local 键极少，在对应 mode 声明处直写。`custom/bind` 默认跟随其功能域（见第 2 节「键位归属规则」）；只有顶层前缀声明、`C-x` / `M-s` / `C-c w` / `C-c h` / `C-c t` / `C-c q` 跨域键和无前缀 IDE 直达键集中在 `keys-completion` 域。
-- `add-hook` / `run-with-idle-timer` / `run-at-time` 的回调必须用命名函数（`#'custom/...`），不得用匿名 lambda；需要忽略 hook 参数或适配参数元数时，定义专门的 `custom--...-on-<event>` 回调（如 `custom--tabs-on-project-switch`），定义放在所属功能域且必须在 hook 注册之前。display 初始化注册到 `after-make-frame-functions`。
-- 保留第三方包正常的 `require` / `use-package`；禁止的只有历史 `custom-*` feature。
-
-`emacs.org` 正文只记录靠近实现才有价值的功能语义、API 契约、兼容原因和设计取舍；Agent 工作流、索引、验收命令和通用性能规则只写在本文件。
-
-- docstring 只写参数、返回值和可调用行为，不写迁移历史或 commit 编号；inline `;;` 只用于局部且非显然的提醒，不复述下一行代码，不恢复整屏分隔线、模块标签或无信息量的说明。
-
-### 4.1 Org 章节编排约定
-
-`emacs.org` 的文档结构遵循以下编排约定，增强可读性与 AI 导航性：
-
-**1. 配置域总览头节**
-
-文件顶部 `* 配置域总览`（CUSTOM_ID: `overview`）是 8 域架构地图，列明每域职责与加载前提，也是新增功能的入口定位点——确认归属域后再改代码。该节只含 org prose 与表格、无源代码块，因此对 tangle 输出零影响。
-
-**2. 代码块直接 tangle，noweb 仅两类场景**
-
-所有 `emacs-lisp` 块按文档顺序直接拼进 `main.el`，不设 `*** 加载组装` 子节与 `#+NAME:` 组装块。noweb 只保留定义在使用点之后的兼容 shim（`<<emacs31/*>>`）与 `#+name` 纯文本数据块（capture 模板），细则见第 4 节。
-
-**3. 节首 prose 声明契约**
-
-每个 `*`/`**` 节开头的 prose 段落声明 section 的职责、必须已就绪的外部依赖与跨域设计的根因；`#+attr_org: :width 70` 的 org table 优先于自由文本表述结构关系（如 face 继承链、API 路由表）。
-
-**4. 安全门：tangle 差异零容忍**
-
-编排修改只改 prose、headings 与 CUSTOM_ID，不得改动 `#+begin_src emacs-lisp` 的 body；结构调整（拆块、挪节）必须以 diff 验证产物等价。验证流程：
-
-1. 基线：`cp main.el /tmp/main.baseline.el && md5sum /tmp/main.baseline.el`
-2. 编辑 prose/结构
-3. 重新 tangle：`emacs --batch -Q --eval '(progn (require (quote org)) (org-babel-tangle-file "emacs.org"))'`
-4. 验证：`diff /tmp/main.baseline.el main.el` 必须为空
-5. 结构：`scripts/configctl check` 必须通过
-
-### 4.2 精简公约
-
-- 只用一次的小函数直接内联到调用方；零转发 wrapper（函数体仅原样调用另一函数）禁止保留，调用方直接用被包装者。内置命令直接绑定，不包「`(interactive)` + `call-interactively`」转发层，跳转类键位直接绑 `xref-*` 等内置命令。
-- 同构命令用工厂宏统一生成（如 `custom/git--define-file-command` / `custom/git--define-repo-command`），不逐个手写，宏生成的命令名仍遵守 `custom/` 命名规范；同构渲染 / 数据逻辑提取参数化 helper 收敛（如 `custom/dashboard--nav-buttons` 统一 navigator 按钮构造），重复分支与重复计算合并。
-- 优先用内置 `seq` / `subr-x` / `cl-lib` 函数替代手写 lambda（如 `seq-some #'fn`）。
-- 删除符号时必须同步清理全部引用点：`data/*.el` 翻译数据、prose、docstring、`custom:pulse-commands` 等列表，不留失效引用。
-- 引用必须在加载时存在：全局绑定的命令必须已定义（或为 keymap），新增绑定前先确认命令存在，加载后缺失会报 `void-function`；惰性加载包的数据函数要显式 `(require '…)`（如 dashboard 渲染 agenda 前先 `require 'org-agenda`），不要用 `fboundp` 缺席降级到假数据（0h 0m）。
-- 模仿既有同类时先核对取值域：调用点全部使用固定前缀/固定状态时，分发逻辑不留「其他情况」兜底分支。
-
-### 4.3 守卫与防御公约
-
-守卫只放在真实边界上，同产物内部调用不防御：
-
-- `fboundp` / `boundp` / `featurep` 仅允许两类场景：**延迟加载的第三方包函数**（`diff-hl-margin-mode`、`eglot-managed-p`、with-editor 内部 API 等运行时可能未加载的符号）与**跨构建变量**（`x-gtk-resize-child-frames`）。同一 `main.el` 产物内的函数互调不加守卫——文档顺序（定义先于调用）或运行时顺序（hook/timer 触发时已全部定义）保证可用；拆除守卫后必须跑加载验证（7.2），守卫删除错误表现为 `void-function` / `void-variable`，一次 batch-load 即可定位。
-- 存活检查只保留在**异步回调持有引用**的场景（timer、D-Bus、sentinel、frame hook 中的 frame/window 参数）；`frame-list` / `window-list` / `window-buffer` 返回的对象恒存活，遍历时不再逐层 `frame-live-p` / `window-live-p` / `buffer-live-p`。
-- `condition-case` 只包裹真实会失败的操作：文件 IO、外部进程、D-Bus 调用、全量 face 改写；内置查询 API（`project-current`、`vc-backend`/`vc-state`、`treesit-ready-p`、`org-agenda-files`）约定返回 nil 而非抛错，不加包裹。
-- 仓库内静态资产（`data/*.el`）不写运行时格式校验，违反数据约定的错误由消费点或加载验证暴露。
+---
 
 ## 5. 性能硬约束
 
-性能优先级固定：1. `emacsclient` 首次打开和高频交互延迟；2. daemon 长时间运行时的稳定性、内存与持续响应；3. daemon 自身启动时间。daemon 启动慢可以接受，但不能把工作推迟到首个 client 或高频热路径。
+1. **优先级**：Client 首次打开与交互延迟 > Daemon 长时间运行稳定性与内存 > Daemon 启动时间。
+2. **热路径禁令**：禁止在 Mode-line、Tab-line、Redisplay、Post-command 等高频回调中执行文件 I/O、同步子进程或重复 `require`。
+3. **缓存与失效**：昂贵计算结果使用 Buffer-local 或 Frame-local 缓存，并在 Save、Revert、Major-mode 切换时精准失效。
+4. **异步 I/O**：UI 交互绝不同步等待外部 CLI，统一使用 `make-process` 异步刷新与展示。
 
-### 5.1 加载与预热
+---
 
-- 首个 client 必需的纯 Lisp feature、主题、D-Bus 注册和只读缓存，应在 daemon 对外服务前同步完成。
-- daemon 预热白名单只放经过冷 `require` 测量的高频交互 feature，不得启动 LSP、聊天、邮件、PDF、网络连接或长期子进程；不启用会把编译警告或 native compilation 成本转移到首个 client 的实验性方案。
-- 不使用 `:defer 0.5`、任意 idle timer 或「稍后再加载」掩盖首用成本；`:defer t` 必须有真实触发入口（`:commands`、`:mode`、`:hook` 或 autoload），client 高频功能若没有可靠触发入口则用 `:demand t` 或纳入 daemon 预热。
+## 6. 新增包与部署流程
 
-### 5.2 热路径
+当需要引入新的 Emacs 包时，执行以下标准流程：
 
-- mode-line、tab-line、redisplay、window-size、post-command、focus-change 等热路径中禁止文件 IO、同步子进程、递归目录扫描、完整 buffer 扫描或重复 `require`。
-- 昂贵结果使用 buffer-local 或 frame-local 缓存，并在 save、revert、major-mode、project、theme 等真实状态变化点失效；全局缓存必须有明确上限，长驻 daemon 不允许无界 hash table、buffer、timer 或 process 累积。
-- 大文件必须在扫描行数、fontification 或启用高成本显示功能之前走快速降级路径。
+1. **`emacs.org` 中声明**：使用 `use-package` 配合 `:commands` / `:hook` / `:mode` 配置懒加载，按键使用 `custom/bind`。
+2. **同步 Manifest**：在根仓库 `source/config.org` 的 `emacs-services` 块（`specifications->manifest`）添加对应包名（先用 `guix package -A '^emacs-<name>$'` 确认包存在）。
+3. **构建验证**：运行 `blue -n home`（dry-run）校验配置有效性。
+4. **应用部署**：运行 `blue home` 更新 profile。
+5. **重启 Daemon**：运行 `herd restart emacs-daemon`（Daemon 启动时自动按需重新 tangle 并加载最新配置）。
 
-### 5.3 外部 IO 与 Dashboard
+---
 
-- 交互 UI 不等待外部 CLI：使用 `make-process`、缓存和 stale-while-revalidate，旧数据立即展示、后台刷新完成后再增加 generation 并重绘；process 成功、失败、signal 和同步启动异常都必须清理 stdout/stderr buffer、timer 和全局 process 引用。
-- Dashboard 是全局单 `*dashboard*` buffer 的 emacs-dashboard 插件（1.8.0，接受多 frame 共享的已知取舍）；渲染入口收敛于 `initial-buffer-choice #'custom/dashboard-initial-buffer`——仅在 client 无文件参数时显示，天然不覆盖 `emacsclient FILE`，不要为它重建 per-frame 状态机或 placeholder 判定。
-- navigator/自定义 section 的数据形状必须以实装源码为准（`dashboard-item-generators`、navigator 外层是「行」内层是「按钮」），不凭 README 记忆写结构；改后必须真机渲染验证而不是只跑静态检查。
-- 连续 resize/theme/data 变化必须合并刷新，避免每个事件立即完整重渲染。
+## 7. 验收标准与测试方法
 
-### 5.4 正确性边界
-
-- 不为 daemon 启动速度清空 `file-name-handler-alist`、关闭 bidi，或破坏 TRAMP、压缩文件、RTL、GUI/TTY 混合 frame；性能优化不以删除现有信息密度、键位功能或多 frame 隔离为代价。
-- 外部命令只保存命令名，通过当前 `exec-path` / `executable-find` 解析，不缓存 `/gnu/store/...` 绝对路径，避免 daemon 跨 Guix generation 使用旧程序。
-- GC 启动期可提高阈值；启动完成后由 GCMH 接管，不额外写入相互竞争的 GC timer。
-- 自动保存只处理正常访问、可写、已修改的本地文件；不保存远程、间接、只读、内部或仅伪造 `buffer-file-name` 的临时 buffer。
-
-### 5.5 基准安全
-
-- 先记录基线，再修改，再使用相同 workload 复测，不提交没有测量依据的复杂优化；报告 GUI frame、冷 require、mode-line 等数据时说明环境，非同环境结果不得宣称为严格 A/B。
-- 基准临时 buffer 禁止绑定仓库真实路径：使用 `/tmp`、保持 `buffer-file-truename=nil` 或 stub `project-current` / 路径函数；禁止在加载用户配置的 benchmark 中把真实 `emacs.org` 赋给 `buffer-file-name`——失焦保存等全局 hook 可能把样本写回源文件。
-- daemon 基准使用唯一 socket 名，短请求、短迭代，并用 `unwind-protect` 或 shell `trap` 清理自建 daemon/client。
-
-## 6. 兼容性、包与部署
-
-- Emacs 版本兜底集中在 `compatibility`；shim 用命名 noweb ref 展开到真实加载点，并在正文记录根因与移除条件。
-- 只有实际功能故障才添加兼容代码：Emacs 31 预发布的 `Missing 'lexical-binding' cookie` 警告不投入专门修复，也不添加 warning 抑制层；Arei/Yasnippet 从 `.el` 源加载是旧 Guix `.elc` 在 Emacs 31 下的实际行为故障，与上述警告不同，上游或 Guix 重编译后应删除 shim。
-- 新包必须加入根仓库 `source/config.org` 的 `emacs-services` 块 manifest；同步后由 agent 核对清单与配置引用一致（无 config 引用却未进清单的包）。
-- 本目录是 mutable Stow 源，普通配置修改不需要 `blue home`；运行中的 daemon 仍持有旧内存配置，验收完成后需要重启。不运行 `blue rebuild`、`guix system reconfigure`，也不直接编辑 `main.el`。
-
-### 6.1 新增包与落地流程（已授权 agent 直接执行）
-
-只有包清单变化才走这一串；只改键位 / 函数走普通流程（tangle → 加载验证 → 重启 daemon）即可。
-
-1. **emacs.org 声明**：惰性包用 `use-package` 的 `:commands` / `:hook` / `:mode` 给真实触发入口（见 5.1），键位用 `custom/bind`。
-2. **同步 manifest**：加进根仓库 `source/config.org` 的 `emacs-services` 块（`specifications->manifest`），按「界面与外观 / 编辑与导航 / 开发工具」等既有分类就位；先 `guix package -A '^emacs-<name>$'` 确认包名存在。
-3. **dry-run**：`blue -n home` 必须通过（会 tangle `config.org` 并做括号与求值检查）。
-4. **应用**：`blue home` 把包装进 home profile。
-5. **重启 daemon**：`herd restart emacs-daemon`。daemon 启动时 `init.el` 会按需重新 tangle `emacs.org`，新键位与新包这时才生效；顺手核对 `~/.config/emacs/main.el` 的 mtime 已更新。
-6. **真机验收**：按 7.6 用 tmux 连运行中的 daemon 逐键实测。
-
-`guix install` / `nix profile install` 等持久安装与 `blue rebuild` 仍然禁止。
-
-## 7. 验收标准
-
-configctl 只做片段操纵与轻量检查；深度验证由 agent 直接跑 Emacs，不要把验证逻辑封回 configctl。
-
-### 7.1 轻量检查（每次修改都跑）
+### 7.1 轻量静态检查
 
 ```bash
-scripts/configctl check     # 域顺序 / noweb 图 / 单产物 / 括号 / 重复定义
+scripts/configctl check     # 校验域顺序、Noweb 图、括号平衡与重复定义
 git diff --check
-git status --short
 ```
 
-### 7.2 加载验证（agent 直接跑 Emacs）
+### 7.2 加载验证（隔离环境）
 
-改动代码后，用隔离 runtime 加载产物、确认无 Lisp error（允许 Emacs 31/第三方 warning）。agent 自行构造 `/tmp` 临时 runtime：先 `scripts/configctl tangle` 拼合出最新 `main.el`，再在 `/tmp` 隔离目录里 batch-load `main.el`，检查是否有 error（非 warning）。
-
-**加载期 error 会静默吃掉后续配置**：`load` 遇到 error 就中止，`main.el` 该行之后的全部内容——后续域的键位、hook、命令定义——都不执行，而 daemon 照常启动、表面无异常。所以「命令存在 / 键位查得到」不是加载成功的证据；必须确认 batch-load 无 error，且 `custom:binding-spec` 条数与预期一致。典型触发点见 7.5 的 `key-valid-p`。
-
-### 7.3 架构硬约束静态检查
+Tangle 生成最新 `main.el` 后，在隔离环境执行 batch-load 验证是否有 Lisp Error：
 
 ```bash
-rg -n "require 'custom-|provide 'custom-|:tangle +lisp/|add-to-list 'load-path" emacs.org
-test ! -e lisp
+scripts/configctl tangle
+emacs --batch -Q -l main.el
 ```
 
-### 7.4 daemon / frame / Dashboard / 主题 / client 启动验证
+> **注意**：`load` 遇到 Error 会直接中断后续配置执行。必须确认 batch-load 零 Error，且 `custom:binding-spec` 数量符合预期。
 
-涉及上述域时，用唯一命名 daemon 验证（agent 自行起 daemon + client，验证后清理）：
+### 7.3 按键有效性核对
 
-- 预热 feature、主题、D-Bus、缓存和兼容状态在 server ready 前已就绪。
-- Dashboard 渲染出中文 section 与 navigator 按钮行（`M-x dashboard-open` 可强刷重排）。
-- `emacsclient FILE` 保持文件 buffer，不被 Dashboard 覆盖；GUI 与 TTY 分支按 frame 生效。
-- 测试前确认无残留 daemon 进程与 stale socket（`pgrep -x emacs`），否则旧实例的 socket 会吞掉连接造成假象；测试后 daemon、socket、process buffer 和临时文件全部清理。
+- 功能键必须写为 `<f12>` 格式（而非 `"F12"`，避免被 `key-parse` 拆散）。
+- 终端兼容性：`C-S-*`、`C-<tab>` 在部分终端下会退化，高频操作建议提供 `C-c` 前缀的备用键。
 
-### 7.5 键位变更检查
+### 7.4 Tmux TTY 真机验收
 
-- **key 必须过 `key-valid-p`**：功能键写 `<f12>` 而不是 `"F12"`——后者被 `key-parse` 拆成 F-1-2 三字符序列，且 `keymap-global-set` 对非法 key 直接 error，会中断 `main.el` 后续加载（见 7.2）；`C-.` / `C-,` 等符号组合合法。
-- **绑定审计**：遍历 `custom:binding-spec`，用 `keymap-lookup (current-global-map)` 校验解析结果与声明一致（`key-binding` 会命中 mode-local 产生假阳性）；非 keymap 目标再查 `fboundp`。惰性包命令在 autoload 阶段 `commandp` 可能为 nil 属正常现象，用真实 `call-interactively` 复核。
-- **mode 覆盖**：在 `fundamental-mode` / `prog-mode` / `org-mode` / `text-mode` 下对比局部与全局绑定，新增键不应被常见 major mode 覆盖。
-- **TTY 生存**：`C-S-*`、`C-<tab>`、`M-<arrow>` 在终端退化或丢失（实测 `C-S-k` 退化为 `C-k`），必须有 `C-c` 前缀镜像。
-- **第三方惰性包命令**：无 autoload cookie 的交互命令（如 `diff-hl-next-hunk`）全局直绑前要显式 `(autoload ...)` 或写进 `use-package :commands`，否则按键 `void-function`。
-
-### 7.6 tmux 真机验收（涉及 daemon / 键位 / 包时执行）
-
-用户用电脑期间不开 GUI 窗口，一律 TTY 验证：
+针对 Daemon、按键或包改动，通过 Tmux 连接运行中的 Daemon 进行端到端实测：
 
 ```bash
-tmux new-session -d -s <uniq> -x 180 -y 45
-tmux send-keys -t <uniq> 'emacsclient -t' Enter   # 连运行中的 daemon
-sleep 12; tmux capture-pane -t <uniq> -p | tail   # 确认 Dashboard / 启动完成
-tmux send-keys -t <uniq> C-c t l                  # 逐键实测
-sleep 1; tmux capture-pane -t <uniq> -p | tail    # 看 echo area / mode-line
-tmux kill-session -t <uniq>                       # 收尾
+tmux new-session -d -s emacsprobe -x 180 -y 45
+tmux send-keys -t emacsprobe 'emacsclient -t' Enter
+sleep 3
+tmux capture-pane -t emacsprobe -p | tail
+tmux kill-session -t emacsprobe
 ```
 
-- 回显一闪而过的命令（`user-error` 等）改用 `emacsclient -e 'last-command'` 确认命令确实执行。
-- `tmux kill-session -a` 与 `tmux kill-server` 是冻结命令，不要用。
-- 包与键位的最终判定以**运行中 daemon**（`emacsclient -e`）为准，batch 结果只作初筛。
+### 7.5 包清单双向一致性核对
 
-### 7.5 包清单同步
-
-新包已同步根仓库 `source/config.org` 的 `emacs-services` 块 manifest 后，agent 核对：manifest 中的每个 `emacs-*` 包在 emacs.org 有对应引用（无死包），emacs.org 引用的每个第三方包在 manifest 有对应条目（无缺包）。
+- Manifest 中的每个 `emacs-*` 包在 `emacs.org` 均有实际引用（避免无用包）。
+- `emacs.org` 中引用的每个第三方包在 Manifest 中均有登记（避免依赖缺失）。

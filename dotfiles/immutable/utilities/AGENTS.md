@@ -1,8 +1,6 @@
-# 开发工具配置
+# 开发工具与实用程序配置
 
-通过 Guix Home 部署到 `~/.config/` 与 `~/.local/`。涵盖编辑器、包管理器、Windows 应用桥接、Rime 输入法、GnuPG 等。
-
-> **修改入口**：`utilities/.config/<app>/` 下文件改完必须 `blue home`（不需 `blue rebuild`），再 grep `~/.config/<app>/` 确认软链到 store 副本。**禁止**直接编辑已部署位置（store 副本只读，下次 `blue home` 会覆盖）。
+本目录通过 Guix Home 部署到 `~/.config/` 与 `~/.local/`，涵盖输入法（Fcitx5 / Rime）、轻量编辑器（Helix）、版本控制（Git）、包管理器（Pnpm）、Windows 应用桥接（WinApps）以及 GnuPG 等。
 
 ## 目录结构
 
@@ -26,32 +24,25 @@ utilities/
 
 <!-- /structor -->
 
-## 核心子系统
+## 核心子系统与约定
 
-> 运行时产物 `cached_layouts`、`crash.log` 已在 `excluded` 列表跳过。
+### Fcitx5 输入法框架与 Rime
 
-### fcitx5 输入法框架
-
-- 路径：`utilities/.config/fcitx5/`（顶层 `config` + `profile`，`conf/` 下 5 个 .conf），与 `.local/share/fcitx5/rime/`（Rime 子模块）分工：此处管 fcitx5 行为，彼处是 Rime 引擎资产，**不要混**
-- `classicui.conf` 的 `ForceWaylandDPI` 避免 XWayland 应用候选词被缩成 1.0x
-
-### Rime 输入法
-
-- 路径：`utilities/.local/share/fcitx5/rime/`，Git 子模块（`github.com/iDvel/rime-ice`），含双拼方案（flypy、mspy、sogou 等）、词典、Lua 扩展；**不要直接编辑子模块内容**（`custom_phrase.txt` 等用户自定义文件除外）
-- 更新：子模块内按上游流程 `git pull`，回主仓 commit
+- **Fcitx5 配置**（`utilities/.config/fcitx5/`）：负责输入法前端框架行为。`classicui.conf` 中开启 `ForceWaylandDPI`，防止 XWayland 应用中的输入法候选框缩放异常。
+- **Rime 方案与词库**（`utilities/.local/share/fcitx5/rime/`）：通过 Git 子模块引入 `rime-ice`，包含双拼方案、拼音词库与 Lua 扩展。
+  - 请勿直接在子模块内修改非自定义文件；词库与方案更新在子模块内 pull 并提交主仓引用。
 
 ### Helix 编辑器
 
-- `languages.toml` 定义语言服务器与格式化器；`themes/transparent.toml` 提供透明背景主题
+- `languages.toml`：配置各语言的 LSP Language Server 与 Code Formatter。
+- `themes/transparent.toml`：提供透明背景的编辑主题。
 
-### Nix 备份分支
+### Git 与辅助工具
 
-- `source/nix/` + `.nix-channels`：独立 Nix home-manager 配置，与 Guix **不互通**；操作：`blue nix`（经 `nh home switch`）/ `blue nix-init` / `blue update --nix`
+- **Git 提交模板**：`~/.config/git/gitmessage` 作为全局 commit message 规范模板。
+- **WinApps 桥接**：修改 WinApps 配置后需重新初始化对应 Windows 虚拟机。
 
-## 修改约束
+## 修改与生效流程
 
-- 改源后 `blue home` 生效（不需 `blue rebuild`）
-- Rime 子模块修改需在子模块内 commit/push 到上游
-- Git commit 模板：`~/.config/git/gitmessage`
-- winapps 改后需重建 VM
-- **新增脚本必须同步补全**：`.local/bin/` 新增可执行（如 `keepassxc-credential-setup`、`nixgpu-update`）时，须同步在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 新增鱼壳 Tab 补全（`complete -c <name>`）
+1. **部署生效**：修改源码后执行 `blue home` 即可部署（无需 `blue rebuild`）。
+2. **Tab 补全联动**：当在 `.local/bin/` 新增 CLI 脚本时，须同步在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 添加 Fish 补全。

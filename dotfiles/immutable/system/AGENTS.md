@@ -1,6 +1,6 @@
-# 系统级配置
+# 系统级用户态配置
 
-通过 Guix Home 部署到 `~/.config/`。本目录聚焦系统级用户态配置（容器、音频服务、XDG 用户目录），与桌面/主题无关。
+本目录通过 Guix Home 部署到 `~/.config/`，专注系统底层相关的用户态配置（容器策略、PipeWire 音频服务、XDG 用户目录等），与桌面视觉主题解耦。
 
 ## 目录结构
 
@@ -20,14 +20,14 @@ system/
 
 <!-- /structor -->
 
-## 关键约定
+## 关键约定与机制
 
-- pipewire 使用 `pipewire.conf.d/` 按字母顺序加载
-- containers `policy.json` 定义镜像拉取签名验证规则
-- `user-dirs.dirs` / `user-dirs.locale` 由 `xdg-user-dirs` 读取
+- **PipeWire / WirePlumber**：配置碎片统一放置于 `pipewire.conf.d/`，按字母字典序加载。
+- **Containers**：`policy.json` 声明容器镜像拉取时的签名验证策略与安全规则。
+- **XDG 用户目录**：`user-dirs.dirs` 与 `user-dirs.locale` 声明用户标准目录（下载、文档、音乐等），由 `xdg-user-dirs` 读取。
 
-## 修改约束
+## 修改与生效流程
 
-- 改源后 `blue home` 生效
-- pipewire 改后 `herd restart pipewire`（shepherd 是 Guix 的 init 系统）
-- user-dirs 变更后重新登录或 `xdg-user-dirs-update`
+1. 修改仓库源码后，运行 `blue home` 完成部署。
+2. **音频服务重启**：修改 PipeWire/WirePlumber 配置后，运行 `herd restart pipewire` 重启服务。
+3. **用户目录更新**：修改 `user-dirs` 变更后，运行 `xdg-user-dirs-update` 或重新登录会话。

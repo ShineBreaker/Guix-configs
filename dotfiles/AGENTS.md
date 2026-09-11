@@ -1,11 +1,11 @@
 # dotfiles 总览
 
-本目录是用户级配置源，分两套互补部署模型：
+本目录是用户级配置源，按变动频率和管理方式分为两套互补的部署模型：
 
-- **`immutable/`**：Guix Home `home-dotfiles-service-type`（`layout 'stow`）部署，入口声明在 `source/config.org` 的 `dotfile-services` 块（`directories`/`packages`/`excluded`）。构建时复制进 `/gnu/store` 只读副本再软链到 `$HOME` —— **改源 ≠ 生效，必须 `blue home`**。新增子目录或文件直接 `blue rebuild`；新文件若需排除（`.git`、`AGENTS.md`、`__pycache__`、`.venv` 等）更新 `excluded` 正则
-- **`mutable/`**：GNU Stow 直链仓库源，改源即生效，详见 [mutable/AGENTS.md](mutable/AGENTS.md)
+- **`immutable/`（只读固化）**：通过 Guix Home 的 `home-dotfiles-service-type`（`layout 'stow`）部署。构建时复制进 `/gnu/store` 只读副本并软链到 `$HOME`。**修改源码后必须运行 `blue home` 重建生效**。入口声明在 `source/config.org` 的 `dotfile-services` 块（`directories`/`packages`/`excluded`）。
+- **`mutable/`（即时直链）**：通过 GNU Stow 直接软链仓库源码，**修改源码即时生效**，适合高频变动的应用配置（如 Emacs、Lem、Hermes 等）。详见 [mutable/AGENTS.md](mutable/AGENTS.md)。
 
-子模块清单以 `.gitmodules` 为权威，**不要直接编辑子模块内容**。
+> **提示**：子模块清单以 `.gitmodules` 为准，请勿直接编辑子模块内部文件。
 
 ## 目录结构
 
@@ -21,7 +21,7 @@ dotfiles/
 │   ├── noctalia-suite/
 │   ├── system/
 │   ├── terminal/
-│   ├── utilities/
+│   └── utilities/
 │   └── zen/
 └── mutable/
     ├── agenote/
@@ -35,12 +35,13 @@ dotfiles/
 
 ## 子目录指引
 
-| 子目录                      | AGENTS.md | 主要职责                                           |
-| --------------------------- | --------- | -------------------------------------------------- |
-| `immutable/agents/`         | ✅        | Crush、共享 anchors 基础设施（omp 在 `mutable/agents/omp/`） |
-| `immutable/desktop/`        | ✅        | niri、autostart、xdg-portal、xfce4 helpers         |
-| `immutable/noctalia-suite/` | ❌        | darkman、noctalia 适配                             |
-| `immutable/system/`         | ✅        | containers、pipewire、xdg user-dirs                |
-| `immutable/terminal/`       | ✅        | fish、tmux、foot、kitty、starship、btop、atuin     |
-| `immutable/utilities/`      | ✅        | fcitx5、git、helix、pnpm、winapps；Rime 子模块在 `.local/share/fcitx5/rime/`；gnupg 在 `.local/share/gnupg/` |
-| `immutable/zen/`            | ❌        | Zen 浏览器 profile user.js（内存瘦身 + 遥测关闭）          |
+| 子目录                      | AGENTS.md | 主要职责                                                        |
+| --------------------------- | --------- | --------------------------------------------------------------- |
+| `immutable/agents/`         | ✅        | Crush 配置与跨 Agent 共享基础设施（context 注入、anchors 拦截） |
+| `immutable/desktop/`        | ✅        | 桌面环境：Niri 窗口管理器、autostart、xdg-portal、XFCE 辅助配置 |
+| `immutable/noctalia-suite/` | ❌        | 主题与外观适配（Darkman、Noctalia）                             |
+| `immutable/system/`         | ✅        | 系统级用户态配置：容器策略、PipeWire 音频、XDG 用户目录         |
+| `immutable/terminal/`       | ✅        | 终端工具链：Fish、Tmux、Foot、Kitty、Starship、Btop、Atuin 等   |
+| `immutable/utilities/`      | ✅        | 常用工具与开发环境：Fcitx5、Git、Helix、Pnpm、WinApps、GnuPG 等 |
+| `immutable/zen/`            | ❌        | Zen 浏览器 profile `user.js`（内存优化与遥测关闭）              |
+| `mutable/`                  | ✅        | 包含 Emacs、Lem、DSH、Hermes、Secrets 等可变配置包              |

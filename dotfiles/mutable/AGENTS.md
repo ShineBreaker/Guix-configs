@@ -1,19 +1,25 @@
-# dotfiles/mutable/ — GNU Stow 源目录
+# dotfiles/mutable/ — GNU Stow 可变配置包
 
-管理**频繁变动且需要版本备份**的配置，与 `dotfiles/immutable/`（Guix Home stow → store 只读副本，改源须 `blue home`）互补：GNU Stow 把**单文件**软链直接建到 `dotfiles/mutable/PKG/` 仓库源，**改源即生效**，无需任何命令。
+本目录用于管理**高频变动且需要 Git 版本备份**的应用配置。与 `immutable/`（Guix Home 构建 store 只读副本）互补，GNU Stow 将文件**直接软链接到仓库源目录**，实现**修改源码即时生效**，无需执行部署命令。
 
-| 维度       | `immutable/`               | `mutable/`                                     |
-| ---------- | -------------------------- | ---------------------------------------------- |
-| 部署       | Guix Home → store 只读副本 | `blue stow` → 直链仓库源                       |
-| 目标目录   | store 副本                 | **默认真实目录**（`--no-folding`，运行时可写） |
-| 改源后生效 | 必须 `blue home`           | 直接生效                                       |
-| 适合       | 稳定配置（niri、fish 等）  | 频繁手改、需 git 追踪（emacs、hermes 等）      |
+| 维度 | `immutable/`（不可变） | `mutable/`（可变） |
+| --- | --- | --- |
+| **部署方式** | Guix Home 复制进 store 只读副本 | `blue stow` 直接软链到仓库源 |
+| **目标目录形态** | 指向 store 的只读链接 | 真实目录（`--no-folding` 单文件软链） |
+| **生效机制** | 必须运行 `blue home` 重建 | 保存源码立即生效 |
+| **适用场景** | 稳定系统与桌面组件（Niri、Fish 等） | 高频调试与动态应用（Emacs、Lem、DSH 等） |
 
-## 部署模型
+## 部署模型与机制
 
-- **目标目录默认保持真实目录**，stow 只对单个文件建链——避免应用运行时产物（`logs/`、`state.db`、`sessions/`）经整目录软链写进仓库源。在 `<PKG>/` 放空标记 `.stow-folding` 可对该包 opt-in 整目录折叠
-- **包身份**由 `<PKG>/.stow-package` 空标记显式声明，是 `blue stow-all` 的唯一枚举依据：带标记的是包，无标记目录视为分组（如 `agents/`、`tools/`）并下钻一层收集子包。`blue stow PKG` 显式指定时只查目录存在；整包子模块（`tools/appimage-run`）的标记提交在其子模块仓库内。标记文件本身经 `--ignore=\.stow-(folding|package)$` 保证不部署
-- `.stow-local-ignore`：**Perl 正则逐行，匹配路径尾部**，`#` 注释允许；源里含编译产物/运行时目录的包用它排除，模板见 `emacs/.stow-local-ignore`
+1. **单文件链接（`--no-folding`）**：
+   - Stow 默认保持 `$HOME` 侧的各层级目录为真实目录，仅对具体配置文件建立软链。
+   - 这能防止应用运行期生成的日志、数据库和缓存（如 `logs/`、`state.db`、`sessions/`）意外写入 Git 仓库。
+   - 若某软件包确需整目录链接，可在其目录下放置 `.stow-folding` 空文件进行 opt-in。
+2. **包发现与身份标记（`.stow-package`）**：
+   - 包含 `.stow-package` 文件的目录被 `blue stow-all` 识别为独立包。
+   - 无该标记的目录（如 `agents/`、`tools/`）视为分组目录，Stow 会自动下钻扫描其子目录中的包。
+3. **忽略规则（`.stow-local-ignore`）**：
+   - 逐行写入 Perl 正则表达式（匹配路径结尾，支持 `#` 注释），用于排除包内的运行时产物、构建缓存或临时文件。
 
 ## 目录结构
 
@@ -52,43 +58,47 @@ mutable/
 
 <!-- /structor -->
 
-## 当前纳管的包
+## 纳管软件包列表
 
-| 包                   | 部署目标                                                 | 说明                                                                                                                                                         |
-| -------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes*`        | SOUL.md、config.yaml、memories/skills/plugins、启动脚本与 .desktop                                                                                           |
-| `agents/omp`         | `~/.config/omp` + `~/.config/agents/skills/`             | omp 配置 + extensions/；2026-08 自 pi 迁移（`PI_CONFIG_DIR=.config/omp`）                                                                                    |
-| `agents/skills`      | `~/.config/agents/skills/`                               | 第三方锁 skills-lock.json（askill 引擎装）+ 自建 skill（git 跟踪）；恢复后跑 `askill install`                                                                |
-| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh*`              | DeepSeek Harness 配置层 + 双 wrapper（`dsh` CLI / `dsh-web`）；本体经 pnpm 装在 `_cli/`，`$DSH_HOME` 由 conf.d 与 wrapper 双注入。细节规范见包内 `AGENTS.md` |
-| `emacs`              | `~/.config/emacs/`                                       | literal-config 本体，单 profile 无 chemacs2；规范见包内 `AGENTS.md`                                                                                          |
-| `lem`                | `~/.config/lem/`                                         | VSCode 风格配置（init.lisp + modules/），规范见包内 `AGENTS.md`                                                                                              |
-| `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` | 纯 submodule 容器（agenote-skills + pi-agenote）；CLI 本体由 `uv tool install` 独立装                                                                        |
-| `agents/zcode`       | `~/.zcode/`                                              | zcode 配置（cli/commands/hooks/agents/plugins）                                                                                                              |
-| `tools/appimage-run` | `~/.local/bin/appimage-run`                              | AppImage 运行器（**submodule**）                                                                                                                             |
-| `tools/secrets`      | `~/.local/share/keys/`                                   | age 密钥对 + 加解密脚本，规范见包内 `AGENTS.md`；密文目录被 stow 排除                                                                                        |
+| 软件包 | 部署目标 | 说明与手册 |
+| --- | --- | --- |
+| `emacs` | `~/.config/emacs/` | 单一 `emacs.org` 驱动的 Emacs 配置，详见 [emacs/.../AGENTS.md](emacs/.config/emacs/AGENTS.md) |
+| `lem` | `~/.config/lem/` | Common Lisp 编辑器配置，详见 [lem/.../AGENTS.md](lem/.config/lem/AGENTS.md) |
+| `agents/dsh` | `~/.local/share/dsh/` + `~/.local/bin/dsh*` | DeepSeek Harness 配置层与 CLI/Web 包装器，详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md) |
+| `agents/hermes` | `~/.local/share/hermes/` + `~/.local/bin/hermes*` | Hermes Agent 提示词、配置、插件与启动项 |
+| `agents/omp` | `~/.config/omp/` + `~/.config/agents/skills/` | OMP Agent 配置与扩展 |
+| `agents/skills` | `~/.config/agents/skills/` | 第三方技能锁（`skills-lock.json`）与自建技能 |
+| `agents/zcode` | `~/.zcode/` | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md) |
+| `agenote` | `~/.config/agents/skills/` + `~/.config/omp/extensions/` | 知识库技能与 Hook 容器（子模块） |
+| `tools/secrets` | `~/.local/share/keys/` | Age 密钥对与加解密脚本，详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md) |
+| `tools/appimage-run` | `~/.local/bin/appimage-run` | AppImage 运行器（子模块） |
 
-## 工作流
+## 工作流与操作指南
 
-改既有包内的文件：直接编辑源，保存即生效，git commit 备份。新文件进既有包：复制到源目录 → `blue stow --restow <pkg>` → `ls -la` 验证软链 → commit。
+### 1. 修改与新增文件
+- **修改已有文件**：直接编辑仓库源文件，保存即时生效，Git 提交留痕。
+- **向已有包添加新文件**：将文件放入源目录对应路径 → 运行 `blue stow --restow <pkg>` 建立新软链 → 检查软链是否就绪并提交。
 
-**添加新包**：
-
+### 2. 添加全新软件包
 ```bash
-# 1. 目录结构 + 包身份标记（stow-all 枚举依据）
-mkdir -p dotfiles/mutable/<new-pkg>/.config/<app>
-touch dotfiles/mutable/<new-pkg>/.stow-package
-# 2. 收编 ~ 下现有文件：复制进源，原文件移走（/tmp 备份）让 stow 建链
-# 3. 需要时写 .stow-local-ignore（排除编译产物/运行时目录）
-# 4. 部署 + 验证 + commit
-blue stow <new-pkg>
-ls -la ~/.config/<app>/<file>
-git add dotfiles/mutable/<new-pkg>/ && git commit -S -m "..."
-# 想整目录折叠：touch .stow-folding && blue stow --restow <new-pkg>
+# 1. 创建目录结构与包身份标记
+mkdir -p dotfiles/mutable/<pkg-name>/.config/<app>
+touch dotfiles/mutable/<pkg-name>/.stow-package
+
+# 2. 迁移文件：将 ~/.config/<app> 下的配置移入源目录
+# 3. 按需编写 .stow-local-ignore（排除日志/缓存）
+# 4. 部署并验证
+blue stow <pkg-name>
+ls -la ~/.config/<app>/
+git add dotfiles/mutable/<pkg-name>/ && git commit -S -m "feat(dotfiles): add mutable package <pkg-name>"
 ```
 
-**批量操作**：`blue stow-all [--restow|--delete|--adopt]`——按 `.stow-package` 标记枚举所有包逐个执行、遇错即停。单包回退 `blue stow --delete <pkg>`（~ 下变回实际文件，源不变），恢复再 `blue stow <pkg>`。误删源文件：`git checkout HEAD -- <pkg>/` 后 `--restow`。
+### 3. 批量维护与恢复
+- **全量重链接**：`blue stow-all --restow` 扫描所有包并刷新软链。
+- **单包卸载**：`blue stow --delete <pkg-name>`（移除 `$HOME` 侧软链，仓库源文件保持不变）。
+- **误删恢复**：若误删源文件，先 `git checkout HEAD -- <pkg>/` 检出，再执行 `blue stow --restow <pkg>`。
 
-## 约束
+## 约束与规范
 
-- `.local/bin/` 新增可执行必须在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 同步鱼壳补全（`complete -c <name>`）；`blue`/`denv` 例外
-- **不要**把本目录文件加入 `dotfiles/immutable/`（双重部署冲突）；`~` 下运行时产物（logs/、state.db 等）不属于包范围，stow 不会动它们
+1. **防重部署**：禁止将 `mutable/` 纳管的文件同时加入 `dotfiles/immutable/`，避免软链冲突。
+2. **Tab 补全同步**：若在 `.local/bin/` 新增了可执行命令，需同步在 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish` 添加补全。

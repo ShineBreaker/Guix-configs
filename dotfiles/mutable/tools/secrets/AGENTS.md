@@ -1,6 +1,6 @@
-# dotfiles/mutable/tools/secrets — Age 加密与 Stow 部署
+# dotfiles/mutable/tools/secrets — Age 密钥与机密数据管理
 
-用 [age](https://age-encryption.org/) 加密的密文与公开身份。所有密文都是「明文 → age → `.age` → git」单向管道，运行时由 `tools/secrets` 解密到 `$XDG_DATA_HOME/secrets-decrypted/` 供应用加载。给人类的完整介绍见 `docs/secrets.md`。
+本目录使用 [age](https://age-encryption.org/) 工具管理加密的敏感配置。密文遵循「明文 → age 加密 → `.age` 密文入库 Git」的单向管理流程，运行时由 `tools/secrets` 脚本解密到 `$XDG_DATA_HOME/secrets-decrypted/` 供各应用读取。详细机制参见 `docs/secrets.md`。
 
 ## 目录结构
 
@@ -24,44 +24,43 @@ secrets/
 
 <!-- /structor -->
 
-## 硬约束
+## 安全硬约束
 
-1. **私钥绝不进 git**。私钥只能位于 `.local/share/keys/age`（Stow 软链到 `~/.local/share/keys/age`）；同目录 `.gitignore` 只忽略精确文件名 `age`，**不要放宽或删除**。
-2. **公钥必须入库**（`.local/share/keys/age.pub`）；只有私钥丢失/泄漏才需轮换密钥并重加密现存 `.age`。
-3. **明文绝不进 git**：密文写 `.local/share/secrets-encrypted/`（`.stow-local-ignore` 排除，不部署）；解密明文只落 `~/.local/share/secrets-decrypted/`，不进任何 `.config/<app>/`。
-4. **不要**把本目录加入 Guix Home dotfile-services（双重部署冲突）。
-5. **不要**在文档中打印敏感明文的字段结构（等于给攻击者密文目录图）。
+1. **私钥绝对禁止入库**：私钥仅存放在 `.local/share/keys/age`（通过 Stow 软链到 `~/.local/share/keys/age`，权限 600）。同目录的 `.gitignore` 精确忽略 `age`，严禁放宽或删除该规则。
+2. **公钥必须入库**：公钥存放在 `.local/share/keys/age.pub`，随 Git 版本同步。
+3. **明文绝不入库**：加密文件统一放置在 `.local/share/secrets-encrypted/`；解密后的明文只写入 `~/.local/share/secrets-decrypted/`，严禁直接落盘到任何 `.config/` 源码目录。
+4. **禁止双重纳管**：本目录已通过 Mutable Stow 管理，切勿将其加入 Guix Home 的 `dotfile-services`。
+5. **隐私防泄露**：禁止在文档或对话中打印或外发敏感凭据明文及其内部结构。
 
-## 维护范式
+## 常用操作与维护范式
 
 ```bash
-# 新增密文：明文 → 加密 → 验证回圆 → 只 add 密文
+# 新增加密密文：输入明文 → age 加密 → 校验回解 → 将 .age 密文加入暂存区
 tools/secrets encrypt example < /tmp/example.toml
 tools/secrets decrypt example --stdout
 git add dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/example.age
 
-tools/secrets edit example     # 修改：解密 → $EDITOR → 重加密（mktemp 600 中转，不留明文）
-tools/secrets list             # 密文/私钥/明文状态
-tools/secrets --dry-run encrypt example < /tmp/example.toml   # 预演不落盘
+# 安全编辑已有密文（通过 600 权限临时文件解密编辑并自动重加密）
+tools/secrets edit example
+
+# 查看当前密文、私钥与明文状态
+tools/secrets list
+
+# 预演加密（不落盘）
+tools/secrets --dry-run encrypt example < /tmp/example.toml
 ```
 
-## 常见踩坑
+## 部署边界与形态
 
-1. **`init` 后 `age.pub` 为空**：脚本从私钥头注释行 `# public key:` 提取公钥；手动 `age-keygen` 生成的私钥注释格式可能不同。**不要**改脚本绕过，重新 `tools/secrets init`（覆盖前先 trash 旧私钥）。
-2. **`.pub` 进不了暂存区**：`git check-ignore -v <路径>` 诊断（静默 = 未 ignore）。
-3. **`re-encrypt` 轮换前必须备份旧私钥**：`cp .../keys/age /tmp/age.old`，确认 `re-encrypt --with /tmp/age.old` 成功后再删；先销毁旧私钥则旧 `.age` 永久丢失。
+| 资产路径 | 是否提交 Git | Stow 是否部署到 `$HOME` |
+| --- | --- | --- |
+| `.local/share/keys/age`（私钥） | 否（`.gitignore` 拦截） | 是（软链，权限 600） |
+| `.local/share/keys/age.pub`（公钥） | 是 | 是 |
+| `.local/share/secrets-encrypted/*.age` | 是 | 否（`.stow-local-ignore` 排除） |
+| `~/.local/share/secrets-decrypted/*` | 否 | 运行时动态生成，不属于仓库文件 |
 
-## 部署边界
+> **校验铁律**：`~/.local/share/secrets-encrypted/` 不应在用户主目录存在；若出现说明 Stow ignore 规则异常。
 
-| 内容 | Git | Stow 到 `$HOME` |
-| ---- | --- | --------------- |
-| `keys/age` 私钥 | 否 | 是，权限 600 |
-| `keys/age.pub` 公钥 | 是 | 是 |
-| `secrets-encrypted/*.age` | 是 | 否（stow ignore） |
-| `secrets-decrypted/*` 明文 | 否 | 运行时文件，不应来自仓库 |
+## 跨机迁移
 
-**铁律**：`~/.local/share/secrets-encrypted/` 不应存在；若出现说明 Stow ignore 失效。
-
-## 跨机部署
-
-新机 `blue stow secrets` 建私钥软链后解密即可用（公钥随 git 到位）；私钥须从旧机经安全信道（物理介质/加密隧道）手动迁移，权限 600。
+在新机器上执行 `blue stow secrets` 建立私钥软链（公钥已随仓库到位）；私钥文件需通过安全通道（如物理介质或加密传输）手动拷贝到目标机器，并确保权限为 `0600`。

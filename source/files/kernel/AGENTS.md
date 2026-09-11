@@ -1,40 +1,58 @@
-# kernel/ — CachyOS LTS 裁剪内核配置全集
+# kernel/ — CachyOS LTS 裁剪内核配置指南
 
-自包含的内核定义目录：config.org 的 `cachyos-lts-kernel` 块只一行 load `linux-cachyos-lts.scm`，版本、源、defconfig 引用、通用桌面档、设备拼合**全部在本目录内维护**（架构取舍、操作规程与消融结论均收录在本文，config.org 正文不再展开）。
+本目录是自包含的 Linux 内核定义与裁剪体系：`source/config.org` 的 `cachyos-lts-kernel` 代码块仅需一行代码载入 `linux-cachyos-lts.scm`。内核版本、源码来源、上游 Defconfig 引用、通用桌面优化以及针对具体设备的裁剪清单，**全部在本目录内集中维护**。
 
-| 文件                           | 职责                                                                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `linux-cachyos-lts.scm`        | 包定义（`%cachyos-lts-version` + origin，**升级点**）+ 通用桌面档 `%kernel-common-configs` + 组装；导出 `linux-cachyos-lts` |
-| `defconfig-cachyos-lts`        | pristine 的 hako defconfig（kernel-config @49c98a1），**永不手改**，只随上游 commit 整体替换                                |
-| `machines/<设备>.scm`          | 设备层：硬件钉住 + trim 读取，导出单一 `%machine-configs`；文件头是实机采集的硬件事实（裁剪依据）                           |
-| `machines/<设备>-trim.kconfig` | 大类裁剪清单（~2000 行）：**裸符号 = 反选**，`# —— 组名 ——` 分组注释，与 defconfig 同构、diff 友好                          |
-| `install.sh` / `rollback.sh`   | 用户手动执行（agent 禁跑 rebuild）：前者 dry-run→rebuild→验世代，后者原子回滚上世代；日志落 `/var/log/`                     |
+---
 
-configs 拼合顺序：通用档 → 钉住 → 裁剪。modify-defconfig **同键后者胜**，钉住优先于反选；同一符号跨层重复出现会触发 "duplicate configurations" 构建错误。
+## 1. 目录结构与文件职责
 
-## 维护路径
+| 文件 / 路径                    | 核心职责                                                                                            | 维护规则                                      |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `linux-cachyos-lts.scm`        | 内核包定义（`%cachyos-lts-version` + Origin）、通用桌面配置片段 `%kernel-common-configs` 与组装逻辑 | **版本升级入口**；导出 `linux-cachyos-lts` 包 |
+| `defconfig-cachyos-lts`        | 上游纯净 Defconfig 模板（来自 Hako kernel-config）                                                  | **禁止手动编辑**，仅随上游版本整体替换        |
+| `machines/<设备>.scm`          | 设备层配置：硬件特性钉住（Pin）与裁剪读取，导出 `%machine-configs`                                  | 文件头部记录实机硬件探针数据（裁剪依据）      |
+| `machines/<设备>-trim.kconfig` | 针对非本机硬件的大类反选清单（~2000 行，裸符号表示 `=n`）                                           | 与 Defconfig 结构对齐，按硬件大类注释分组     |
+| `install.sh` / `rollback.sh`   | 运维脚本：供用户手动执行内核构建部署与一键回滚                                                      | Agent 禁止直接运行，由用户手动触发            |
 
-**升级**（CachyOS 出新版，最常见）：
+### 配置片段拼合顺序
 
-```bash
-# 1. 改 linux-cachyos-lts.scm 的 %cachyos-lts-version 与 origin base32 两处
-guix hash <cachyos-新版本.tar.gz>          # 取 base32
-# 2. defconfig 与片段通常不动；跑下方验证流程即可
-# 3. 若 hako defconfig 也更新：整体替换 defconfig-cachyos-lts 后做对拍复验，diff 核对 trim 清单
+```
+通用桌面档 (%kernel-common-configs) → 设备硬件钉住 (Pin) → 大类裁剪 (Trim)
 ```
 
-注意 origin hash 必须用字符串单参 `(content-hash "...")` 形式——`(sha256 …)` 兼容写法在本模块作用域被 `(gcrypt hash)` 遮蔽失效。
+> **覆盖规则**：在 `modify-defconfig` 中**同键后者胜**（钉住优先于反选）；同一配置符号若在同层重复出现会触发构建校验错误。
 
-**换机**：采集硬件事实（`lspci -nnk`、`lsusb`、`lsmod`、`cat /proc/asound/cards`、`ls /dev/mtd*`）写进新 `machines/<设备>.scm` 文件头 → 钉住本机硬件（`=m`/`=y`）+ 生成 `<设备>-trim.kconfig`（从 defconfig 符号全集挑非本机大类反选；生成器脚本未入库，参考现有清单的分组结构）→ 改 `linux-cachyos-lts.scm` 的 load 行 → 验证流程。
+---
 
-**调优**：通用偏好改通用档，设备相关改 machine 层；`CONFIG_USER_NS=y`（Guix 构建沙箱）与下方 critical 各符号不可裁。
+## 2. 日常维护路径
 
-## 验证流程（改任何 kconfig 后必做）
+### 2.1 内核版本升级（最常见）
+
+1. 计算上游源码包的 Base32 Hash：
+   ```bash
+   guix hash <linux-cachyos-新版本.tar.gz>
+   ```
+2. 修改 `linux-cachyos-lts.scm` 中的 `%cachyos-lts-version` 与 `origin` 内的 `(content-hash "...")`（必须使用字符串单参数形式）。
+3. 执行下文的验证流程。
+
+### 2.2 迁移到新硬件平台
+
+1. **采集硬件事实**：在新设备上收集 `lspci -nnk`、`lsusb`、`lsmod`、`cat /proc/asound/cards` 等信息，写入新 `machines/<新设备>.scm` 头部。
+2. **生成裁剪清单**：钉住本机必需硬件驱动（`=m` 或 `=y`），并在 `<新设备>-trim.kconfig` 中反选非本机大类硬件（如各类 RAID 卡、冷门网卡等）。
+3. **切换引用**：在 `linux-cachyos-lts.scm` 中调整 load 的设备文件名，并执行构建验证。
+
+---
+
+## 3. 验证流程（修改 Kconfig 后必做）
 
 ```bash
-blue check                                            # 括号平衡
-blue --dry-run rebuild                                # tangle 验证（不加载 scheme 求值）
-# 真实构建（verify-config 硬校验在 configure 末尾，失败保留构建树）：
+# 1. 语法与括号检查
+blue check
+
+# 2. 生成 tmp/config.scm（无副作用）
+blue --dry-run rebuild
+
+# 3. 触发真实内核构建（校验 configure 阶段的 verify-config）
 cat > /tmp/kernel-probe.scm <<'EOF'
 (begin
   (chdir "/home/brokenshine/Projects/Config/Guix-configs/tmp")
@@ -42,37 +60,47 @@ cat > /tmp/kernel-probe.scm <<'EOF'
   (primitive-load "/home/brokenshine/Projects/Config/Guix-configs/tmp/config.scm")
   linux-cachyos-lts)
 EOF
+
 guix time-machine -C source/channel.lock -- build -f /tmp/kernel-probe.scm
 ```
 
-verify-config 失败会逐条点名 mismatch 符号，按提示补删 trim/pin 行迭代收敛（通常 2-3 轮）。失败树在 `/tmp/guix-build-linux-cachyos-lts-*.drv-0`，树内 `make ARCH=x86_64 guix_defconfig` 可分钟级复现 configure，无需整链重跑。probe 依赖 `tmp/config.scm` 先经 tangle 生成——probe 报「加载失败：没有那个文件或目录」多半是 `tmp/` 被清（先跑 `blue --dry-run rebuild` 重建）。最后提醒用户手动 `blue rebuild`（agent 禁跑）。
+> **构建失败排查**：`verify-config` 阶段会逐条打印 mismatch 的符号。可直接进入保留的失败构建目录 `/tmp/guix-build-linux-cachyos-lts-*.drv-0` 执行 `make ARCH=x86_64 guix_defconfig` 快速复现调试，根据提示调整 pin 或 trim 清单。
 
-## 裁剪方法论与坑
+---
+
+## 4. 裁剪方法论与关键陷阱
 
 <critical>
-1. **default-y 门控翻 n**：hako defconfig 是 savedefconfig 风格最小化文件，default-y 的 menuconfig 门控（NETDEVICES/WLAN/ETHERNET/IIO/JUMP_LABEL/MPLS/NET_SWITCHDEV）不在其中；conf --defconfig 求值时会被翻成 n 并**连锁屠掉整个子树**（IWLWIFI/TUN/MACVLAN 全消失）。门控钉住在通用档头部，**裁剪时不可删**。翻转取决于其余输入的组合（组合杀伤）：符号消失时单行二分无效，须逐组消元定位
-2. **符号三态**：用户可见符号才可裁；select 隐式符号裁不掉（无 prompt，如 SCHED_INFO——反选会被 verify-config 拦截，2026-09-08 实证）；依赖不满足时写 n 只产生 warning "symbol value 'n' invalid"（int/bool 型如 X86_64_VERSION、IP_VS_TAB_BITS），无害可留
-3. **6.18 符号改名**：THUNDERBOLT 已并入 USB4（模块名仍叫 thunderbolt）；SND_SOC mach 符号在 SND_SOC_INTEL_ 命名空间，漏 INTEL 前缀 = 不存在的符号
-4. **本机不可裁**：CONFIG_MTD_SPI_NOR=m（BIOS flash，/dev/mtd0-3 在用）；initrd 必需符号全套（通用档尾部，对应 %default-initrd-modules）
-5. **MAXSMP 锁死 NR_CPUS**：hako defconfig 带 `CONFIG_MAXSMP=y`（发行档通用性遗留），它 select CPUMASK_OFFSTACK，后者把 NR_CPUS range 压成 [8192,8192] 并隐藏 prompt——直接写 `CONFIG_NR_CPUS=64` 会被 conf 夹回 8192、verify-config 报 mismatch；必须先反选 MAXSMP 再设 NR_CPUS（通用档已做，连带收益：cpumask 回栈上位图、NODES_SHIFT 10→6）
+1. **Default-Y 菜单门控翻转**：上游 savedefconfig 风格的配置省略了部分 default-y 的总线门控（如 `NETDEVICES`、`WLAN`、`ETHERNET`、`IIO` 等）。若门控意外翻成 `n` 会导致整个子系统（如 WiFi、网卡）被连带剔除。这些门控已在通用档头部显式钉住，**严禁删除**。
+2. **符号三态与隐式依赖**：
+   - 仅有 Prompt 的用户可见符号可反选；由其他符号 `select` 的隐式符号无法通过写 `=n` 裁剪（会被 `verify-config` 拦截）。
+   - 依赖不满足时写 `n` 仅输出无害警告。
+3. **6.18+ 符号命名变更**：Thunderbolt 驱动已并入 USB4（Kconfig 命名空间变为 `USB4`，模块名仍叫 `thunderbolt`）；Intel 声卡 Mach 符号需带有 `SND_SOC_INTEL_` 前缀。
+4. **本机不可裁剪的特殊项**：
+   - `CONFIG_MTD_SPI_NOR=m`：本机 BIOS 闪存访问必需（对应 `/dev/mtd0-3`）。
+   - Initrd 模块依赖全套（在通用档尾部，对应 `%default-initrd-modules`）。
+5. **MAXSMP 约束**：上游 defconfig 包含 `CONFIG_MAXSMP=y`，它会强制锁定 `NR_CPUS=8192`。必须先显式反选 `CONFIG_MAXSMP=n`，才能将 `CONFIG_NR_CPUS` 设定为实际核心数（如 64），从而减少位图内存开销。
 </critical>
 
-## 消融实验（性能改动定去留的测量法）
+---
 
-2026-09-08 定型的方法论，产物在 `/tmp/kopt/`（脚本可复用：`run-vm.sh`/`parse-log.sh`/`bench-variant.sh`/`compare.py`，数据 `results/*.tsv`）：
+## 5. 消融实验与优化结论
 
-- **变体构建**：写 `/tmp/variant-<名>.scm`（load 仓库 kernel scm，configs 追加 %delta），`guix time-machine -C source/channel.lock -- build -K -f` 全量构建保证与基线工具链一致。**退出码别被 `| tail` 吃掉**（重定向到日志文件再取 exit）
-- **QEMU 测量**：`guix pack -RR busybox stress-ng` 做 initramfs，无盘直跑（无需 virtio）；`-cpu host -smp 12 -m 8G`。**QEMU 必须 `taskset -c 0-11` pin 到 P 核**——155H P/E 混合架构下 vCPU 线程漂移是最大噪声源（不 pin 时两轮偏差可达 7-18%，pin 后多数项 <4%）
-- **initramfs 两坑**：pack `-R` 的 `*R` 副本在 guest 里执行必崩（busybox run.c:692 断言）——重建 `bin/` 真目录直链**原始** store 项；guest init 的 shebang 用 pack 内 bash-static 绝对路径（busybox ash 作 PID1 读脚本会触发同款断言）
-- **判定规则**：每变体两轮 VM（各 3 次取中位），变化超出 CTRL 双轮噪声带才算信号；`--cpu` 项作负对照（应恒 ≈0%）；stress-ng 高噪声项（hrtimers/timer）解读放宽
-- **cmdline 类改动**（如 mitigations）：EXTRA_CMDLINE 环境变量注入 run-vm.sh，同 bzImage A/B；`/sys/devices/system/cpu/vulnerabilities/*` 输出验证生效
-- 已有结论（2026-09-08）：numa_balancing 关（无倒退）、schedstats/tracer 关（中性）、MAXSMP 反选+NR_CPUS=64（fork +1.7%/syscall +4.6%）已落地——**分层放置**：schedstats/tracer/MAXSMP 在通用档（设备无关偏好与发行档遗留修正），numa_balancing/NR_CPUS 在 machine 层（单节点拓扑与 22 线程是设备事实）；BORE 6.8.0 补丁 pipe -7.7% 不采纳；spectre_bhi=off 在 MTL（BHI_DIS_S 硬件缓解）无收益，cmdline 不动；init_on_alloc=0/init_on_free=0（2026-09-11 cmdline 消融，/var/tmp/kopt/results/）仅 mmap +2.25% 勉强出带，fork/malloc 在噪声带内、vm 略负——收益不足抵安全硬化损失，**不落地**。**ThinLTO/AutoFDO 不启用**：Clang+LTO 相对本 GCC -O3 + native 基线增量约 1-3% 且负载相关，还要求外部模块同链 clang 工具链（波及 v4l2loopback）；AutoFDO 依赖 perf LBR 采样与 guix 频道没有的工具链——收益与复杂度不成比例，留作可选实验
+所有内核调优均通过 QEMU 无盘基准压测与双轮噪声比对验证（数据位于 `/var/tmp/kopt/`）：
 
-## 对拍复验（换 defconfig / 大改 / 重构后）
+- **已落地的优化**：
+  - `CONFIG_MAXSMP=n` + `CONFIG_NR_CPUS=64`：使 CPU 位图回到栈上，系统调用吞吐提升 4.6%，Fork 性能提升 1.7%。
+  - 关闭 `NUMA_BALANCING`（单 Node 拓扑设备无性能倒退）。
+  - 关闭调试用的 `SCHEDSTATS` 与冗余 Tracer。
+- **未采纳的方案（收益不足以抵消代价）**：
+  - `spectre_bhi=off`：在 MTL 架构（具备 BHI_DIS_S 硬件缓解）上无明显收益，保持默认安全策略。
+  - `init_on_alloc=0` / `init_on_free=0`：微基准增益在噪声带边缘，不足以抵消内核内存安全硬化损失。
+  - Clang ThinLTO / AutoFDO：增量微弱（1~3%）但极大增加跨编译与外部模块（v4l2loopback 等）的复杂度。
 
-基线与脚本存 `/tmp/kernel-baseline/`（跨重启保留，丢了可按下法重建）：
+---
 
-- **配置层**：运行内核 `zcat /proc/config.gz` 对比新产物 `.config`，统计 y/m 三态差集
-- **运行层**：`lsmod` 对产物 `.ko` 清单（`find <产物>/lib/modules -name '*.ko*'`）——**模块文件名用连字符（snd-hda-intel.ko）而 lsmod 显示下划线，必须归一化再比**，否则误报百级假缺失
-- lsmod "Used by" 只显计数不列名时，`/sys/module/<m>/holders/` 是真依赖判据（空 = 自动加载残留，可裁）
-- **不动内容的重构**：记「合并后 guix_defconfig + 最终 .config」双 md5 基线，重构后复刻对比，逐字节一致 = 语义零变化
+## 6. 对拍复验（大改与重构后的校验方法）
+
+1. **配置层比对**：提取运行中内核的 `/proc/config.gz` 与新构建产物的 `.config` 进行 `y`/`m`/`n` 三态差异对比。
+2. **模块层比对**：将运行时的 `lsmod` 输出与新产物 `lib/modules/` 下的 `.ko` 列表进行比对（注意：内核模块文件名中的连字符 `-` 与 `lsmod` 中的下划线 `_` 需归一化后再比对）。
+3. **重构零变化校验**：记录重构前后的 `.config` MD5 哈希，确保重构过程未意外引入语义漂移。

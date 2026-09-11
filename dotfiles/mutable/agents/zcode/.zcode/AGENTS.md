@@ -1,30 +1,39 @@
+# ZCode 子智能体（Subagents）使用规范
+
+积极合理地调度子智能体处理并发、深研与排查任务。委派任务时必须提供完整上下文（目标、边界约束、验证标准），严禁仅简单转发用户指令。
+
+## 权限分层
+
+- **只读 + 工作文件写入（`scout` / `reviewer` / `oracle` / `visual`）**：
+  - 严禁修改项目源码。
+  - 分析与调研产物统一写入 `.agents/workfile/<role>/` 目录。
+- **强只读智能体（`explore`）**：
+  - 平台级强只读约束，无法写入任何文件（即使明确授权也不行）。
+  - 产出仅通过最终报告文本返回；若侦察结果需要落盘，改用 `scout`。
+- **源码修改智能体（`worker`）**：
+  - 唯一允许修改项目源码的子智能体。
+  - 委派任务时，必须在 Task 描述中**显式列出禁止修改的文件清单**。
+
+## 场景与角色分工
+
+- **大型重构 / 批量修改**：并行调度多个 `worker` 协同推进。
+- **多模态图像 / 视频理解**：当主模型无法直接处理时，调用 `visual` 子智能体（文本 OCR 除外）。
+- **疑难问题 / 深度交叉校验**：遇到复杂 Bug 或用户要求高精度校验时，调度 `oracle` 协助分析。
+
+## 委派纪律与 Git 变更隔离
+
 <critical>
-请务必积极地使用子智能体相关功能，以使其发挥最大价值。调用时注意遵守 `subagents` 相关规范
-委派时给完整上下文（目标、约束、验证标准），不要只转发指令。
+仓库可能存在人工编辑者或其他 Agent 并发修改，必须严格隔离子智能体的影响范围。
 </critical>
 
-子智能体权限分层：
-
-- scout / reviewer / oracle / visual 为 **只读 + workfile 写入**：不修改项目源码，工作产物写入 `.agents/workfile/<role>/`
-- **Explore 是平台级强只读智能体，不能写任何文件**（明确授权也不行，harness 系统级约束），产出只能通过最终报告带回；需要落盘的侦察任务改派 scout
-- worker 是唯一允许修改项目源码的子智能体；委派 task 时仍必须显式声明禁止改动的文件列表
-
-子智能体功能分层：
-
-- 进行大型任务或者重复性高的任务时：调度 `worker` 子智能体多并发进行
-- 需要阅读图像/视频，且 **自己没办法做到** 的时候，请直接调用 `visual` 子智能体，不要调用外部工具（ OCR 工作除外）
-- 遇到非常棘手的问题，或是用户强调 "仔细进行校验" 时，请调用 `oracle` 子智能体
-
-subagents 委派纪律：
-
-<rule name="subagents 委派硬约束">
-<critical>
-你不是单独在这个仓库里工作。可能还有其他 agent 或人工编辑者同时修改文件。
-</critical>
-- task 描述必须 **显式声明禁止改动的文件列表** ——不能只说"做什么"
-- 委派前 `git status --short > /tmp/baseline-<task>.txt` 记录 baseline
-- subagents 改完 `diff /tmp/baseline-<task>.txt <(git status --short)` 拿变更文件列表
-- 撤回**只对 task 范围外的文件**逐个 `git checkout HEAD -- <file>`，**禁止** `git checkout HEAD -- .` 一次性全回滚
-- 绝不 `rm -rf` / `git clean -fd` 删除 subagents 新建文件（可能误删用户其他未跟踪内容）
-- working tree 中 **未 `git add` 过的改动** git 不备份（无 dangling object 可恢复）；任务开始前的 M 状态文件不一定是 subagents 改的
-</rule>
+1. **显式声明边界**：任务描述必须写明允许修改的范围及**禁止修改的文件**，不能仅描述目标。
+2. **记录 Baseline**：委派前保存状态快照：
+   ```bash
+   git status --short > /tmp/baseline-<task>.txt
+   ```
+3. **核对变更集**：子任务完成后比对差异：
+   ```bash
+   diff /tmp/baseline-<task>.txt <(git status --short)
+   ```
+4. **精准单文件回滚**：若发生越界修改，**仅对越界文件**逐一执行 `git checkout HEAD -- <file>`。**严禁执行 `git checkout HEAD -- .` 全量回滚**。
+5. **禁止暴力清理**：严禁使用 `rm -rf` 或 `git clean -fd` 清理新生成的文件，避免误删工作区内其他未跟踪的文件。
