@@ -50,16 +50,15 @@ Tmux 终端布局：
 |------------+-------------------------------|
 | 内核       | =linux-cachyos-lts=（自编译） |
 | 引导器     | =Limine=（=rosenthal=）       |
-| 显示服务器 | Wayland                       |
+| 显示协议   | Wayland                       |
 | 窗口合成器 | =Niri=                        |
 | 显示管理器 | =Greetd= + =tuigreet=         |
-| 终端       | #ERROR                        |
+| 终端       | =Kitty= / =Foot=              |
 | 终端复用器 | =Tmux=                        |
 | Shell      | =Fish=                        |
-| 编辑器     | =Emacs= / =Lem= / =Zed= / =Helix=  |
-| 输入法     | =Fcitx5= + =Rime=              |
+| 编辑器     | =Emacs= / =Lem= / =Zed= / =Helix= |
+| 输入法     | =Fcitx5= + =Rime=             |
 | 字体       | =Sarasa Gothic= / =Maple Mono= |
-#+TBLFM: $2=Kitty=（含快速访问终端）
 
 * 快速开始
 
@@ -70,14 +69,13 @@ Tmux 终端布局：
 git clone https://codeberg.org/BrokenShine/Guix-configs
 cd Guix-configs
 
-# 用锁定的频道准备带 blue 的引导 shell（不分区、不做破坏性操作）
+# 使用锁定的频道准备包含 blue 的引导 shell（不分区、不做破坏性操作）
 ./tools/bootstrap.sh
 
-# 修改 source/information.scm 里的用户名等基本信息，然后初始化系统
+# 修改 source/information.scm 里的用户名、机器 ID 与挂载点等基础信息，然后初始化系统
 blue init
 
-# 配置不携带初始密码 hash（公开仓库不存凭据）：首次进入新系统后
-# 立即设置用户密码，否则账户无法登录
+# 配置不携带初始密码哈希（公开仓库不存凭据）：首次进入新系统后立即设置密码
 passwd
 #+end_src
 
@@ -86,100 +84,107 @@ passwd
 
 ** 日常使用（已装机）
 
-绝大多数操作只有两个命令：
+日常维护的核心命令：
 
-- =blue rebuild= —— tangle → 括号检查 → 单次 reconfigure 同时应用系统与 Home（需 sudo）
-- =blue home= —— 仅应用 Home 层，不需要 sudo，适合调试 dotfiles
+- =blue rebuild= ：tangle → 括号平衡检查 → 单次 reconfigure 同时应用系统与 Home（需要 sudo）。
+- =blue home= ：仅构建并应用 Home 层配置，更新 immutable dotfiles，无需 sudo。
+- =blue stow= / =blue stow-all= ：管理 GNU Stow mutable dotfiles（Emacs、Lem、Agent 配置等），改源即时生效。
+- =blue check= ：快速检查 Scheme 块括号平衡，精准定位出错块。
+- =blue update= ：刷新频道锁并签名提交； =blue pull= 执行 =guix pull= 。
 
-其他常用项： =blue update= 刷新频道锁并签名提交， =blue pull= 执行 =guix pull= 。完整命令清单直接运行 =blue help= 查看，描述与实现一一对应，此处不再重复维护。任何 blue 命令加 =--dry-run= 都只做构建验证、不写入系统。
+完整命令清单可直接运行 =blue help= 查看。任何 blue 构建命令追加 =--dry-run= 均只做干跑验证，不写入系统。
 
 * 仓库导读
 
-唯一声明源是 [[./source/config.org][source/config.org]]——系统与 Home 用一份 Org 写完，文档与代码同块共存，标题即目录，通读它就是通读整套配置。想找其他入口，按下面这张表：
+唯一声明源是 [[./source/config.org][source/config.org]]。系统与 Home 集中在同一份 Org 文件中，文档与代码共存，各模块与配置入口如下表所示：
 
-| 想理解 / 想修改                   | 入口                                    | 说明                                 |
-|-----------------------------------+-----------------------------------------+--------------------------------------|
-| 系统与 Home 的全部配置            | [[./source/config.org][source/config.org]]                       | 唯一 Org 源，按块分主题              |
-| 用户名、机器 ID、持久化目录、子卷 | [[./source/information.scm][source/information.scm]]                  | 装机必改，纯 define 自解释           |
-| 频道定义与版本锁定                | [[./source/channel.scm][source/channel.scm]]、[[./source/channel.lock][source/channel.lock]] | lock 由 =blue update= 生成，勿手改     |
-| 引导 shell 的包清单               | [[./source/manifest.scm][source/manifest.scm]]                     | 供 =tools/bootstrap.sh= 使用           |
-| 需路径注入的静态模板              | [[./source/files/][source/files/]]                           | nftables、Qt 主题、zed.json、skel 等 |
-| 备用 Nix home-manager             | [[./source/nix/][source/nix/]]                             | 独立 flake，不经 blue                |
-| blue 任务定义                     | [[./blueprint.scm][blueprint.scm]]                           | 现有命令即自定义任务的范本           |
-| 构建期进 store 的 dotfiles        | [[./dotfiles/immutable/][dotfiles/immutable/]]                     | 改源后须 =blue home= 重建才生效        |
-| Stow 直链的 dotfiles              | [[./dotfiles/mutable/][dotfiles/mutable/]]                       | 改源即生效                           |
-| 主题文档                          | [[./docs/][docs/]]                                   | 自建 ISO、加密机密管理               |
-| 引导与辅助脚本                    | [[./tools/][tools/]]                                  | =bootstrap.sh= 等                      |
+| 关注内容                           | 入口                                    | 说明                                 |
+|------------------------------------+-----------------------------------------+--------------------------------------|
+| 系统与 Home 全部配置               | [[./source/config.org][source/config.org]]                       | 唯一 Org 源，按代码块组织            |
+| 用户名、机器 ID、持久化目录与子卷  | [[./source/information.scm][source/information.scm]]                  | 装机必改，集中声明全局变量           |
+| 频道定义与版本锁定                 | [[./source/channel.scm][source/channel.scm]]、[[./source/channel.lock][source/channel.lock]] | lock 由 =blue update= 自动生成       |
+| 引导环境包清单                     | [[./source/manifest.scm][source/manifest.scm]]                     | 供 =tools/bootstrap.sh= 使用         |
+| 需路径注入的静态模板               | [[./source/files/][source/files/]]                           | nftables、Qt 主题、zed.json、skel 等 |
+| 备用 Nix home-manager              | [[./source/nix/][source/nix/]]                             | 独立 flake，不经 blue 构建           |
+| blue 任务定义                      | [[./blueprint.scm][blueprint.scm]]                           | 扩展与自定义 blue 子命令             |
+| 不可变 dotfiles（store 只读）      | [[./dotfiles/immutable/][dotfiles/immutable/]]                     | 改源后须执行 =blue home= 重建生效    |
+| 可变 dotfiles（Stow 直链）         | [[./dotfiles/mutable/][dotfiles/mutable/]]                       | 软链到源码，改源即时生效             |
+| 专题文档                           | [[./docs/][docs/]]                                   | 自建 ISO 与机密管理指南              |
+| 引导与辅助脚本                     | [[./tools/][tools/]]                                  | 包含 =bootstrap.sh= 与构建脚本       |
 
-各主要目录与应用子目录都带一份 =AGENTS.md= 分层导读，人类同样可读——这里没讲到的细节从那里进。
+各主要子目录均包含一份 =AGENTS.md= 分层导读，供人类开发者与 AI Agent 快速索引。
 
 * 核心概念
 
-在深入配置前，先理解几个 Guix 特有的概念：
+深入配置前，建议了解以下 Guix 核心机制：
 
 ** Channel（频道）
 
-Guix 的软件包定义分布在多个「频道」。本配置除官方 =guix= 外，还启用了 =nonguix=（Linux 内核、专有驱动）、=jeans=（个人频道）、=rosenthal=（=Limine= 引导器等增强组件）；完整定义见 [[./source/channel.scm][source/channel.scm]]。版本由 [[./source/channel.lock][source/channel.lock]] 锁定各频道的 commit，从而固定仓库状态。
+Guix 的软件包定义分布在多个频道中。本配置除官方 =guix= 频道外，还启用了 =nonguix=（提供 Linux 非自由内核与专有固件）、=jeans=（个人软件源）、=rosenthal=（提供 =Limine= 引导器等增强组件）。具体定义见 [[./source/channel.scm][source/channel.scm]]，各频道的确切 commit 由 [[./source/channel.lock][source/channel.lock]] 锁定。
 
-** System + Home（统一配置）
+** System + Home（统一声明）
 
-原则：能用 Home 解决就不用 System，保持系统层最小。Home 配置经 ~guix-home-service-type~ 并入系统配置， =blue rebuild= 单次 reconfigure 即同时应用两者；日常调试用 =blue home= 临时部署，确认无误后 =blue rebuild= 固化进新世代。系统每次开机默认进入最新世代，即使误操作弄坏了部分软件，重启即可恢复。
+系统遵循「能放在 Home 层就不上浮至 System 层」的原则，保持系统层轻量。Home 配置通过 ~guix-home-service-type~ 挂载到系统定义中：
+- =blue rebuild= ：单次操作同时构建并激活系统层与 Home 层，固化为新世代（generation）。
+- =blue home= ：日常调试时快速部署用户态环境。
+- 启动回滚：系统每次开机默认进入最新世代；若某次更改存在问题，可在引导菜单选择旧世代即刻恢复。
 
 ** Org 文学编程
 
-配置以 Org 代码块的形式写在 [[./source/config.org][source/config.org]] 里，构建时由 Emacs 的 ~org-babel-tangle~ 自动提取成 Scheme，文档与代码同源。导出与指令封装由 [[https://codeberg.org/lapislazuli/blue][blue]] 框架完成，完整指令见 =blue help= 。
+配置以 Org Mode 代码块的形式组织在 [[./source/config.org][source/config.org]] 中，由 Org Babel 自动提取为 Scheme 代码。代码块之间利用 Noweb 语法（如 =<<ref>>= ）完成装配，文档描述与实际配置代码紧密结合。
 
 ** 构建管线
 
 #+begin_example
 source/config.org
         │
-        │  blue rebuild → org-babel-tangle + 括号检查
+        │  blue rebuild (org-babel-tangle + 括号检查)
         ▼
 tmp/config.scm
         │
         │  guix time-machine --channels=source/channel.lock system reconfigure
-        │  （单次同时应用系统与 Home）
+        │  (单次同时应用系统与 Home 环境)
         ▼
-新世代（generation）
+新世代 (generation)
 #+end_example
 
 * 常见修改
 
 ** 用户名 / 持久化目录 / 频道
 
-三者都是「改一个文件 + 跑一条命令」：
-
-- 用户名、机器 ID、持久化目录 ~%data-dirs~ 、Btrfs 子卷 ~%btrfs-subvolumes~ ：编辑 [[./source/information.scm][source/information.scm]]（文件内注释自解释；新增子卷挂载时还需在 config.org 的 Btrfs 部分补对应的 bind-mount），然后 =blue rebuild=
-- 新增频道：编辑 [[./source/channel.scm][source/channel.scm]]，然后 =blue update=
+- *用户名、机器 ID、持久化目录与 Btrfs 子卷*：编辑 [[./source/information.scm][source/information.scm]]（声明 ~%data-dirs~ 与 ~%btrfs-subvolumes~ ），保存后运行 =blue rebuild= 。若新增了子卷挂载，需在 =config.org= 的文件系统部分补充对应的挂载项。
+- *新增或切换频道*：编辑 [[./source/channel.scm][source/channel.scm]]，然后运行 =blue update= 刷新锁文件。
 
 ** 自定义 blue 任务
 
-blue 子命令不是普通函数：须以 ~(define-command (NAME-command arguments) ...)~ 形式声明，并登记进 [[./blueprint.scm][blueprint.scm]] 末尾的命令列表。最快的路径是照抄文件里现成的命令改一改；完成后用 =blue <name>= 运行， =blue --dry-run <name>= 仅做构建验证。
+blue 命令由 [[./blueprint.scm][blueprint.scm]] 驱动。定义新任务时使用 ~(define-command (NAME-command arguments) ...)~ 形式，并在文件底部的命令列表中注册。测试时可先运行 =blue --dry-run <name>= 验证。
 
 * 故障排除
 
-** 改完之后先验证
+** 改动后验证步骤
 
-- =blue check= —— 最快：逐块括号平衡检查，能定位到具体的块名
-- =blue --dry-run rebuild= —— 完整构建验证，不写入系统
+1. =blue check= ：快速检查每个代码块的括号平衡，定位出错块名。
+2. =blue --dry-run rebuild= ：执行完整的 tangle 与系统构建验证，不写入实际系统。
 
-** 常见报错
+** 常见报错与排查
 
-- ~unbound variable~ —— 缺 import：用 https://search.guix.moe 查符号所属模块
-- ~invalid field specifier~ —— 括号错位（gexp 多或少一个闭合），用 Emacs 的括号高亮定位
-- 其余报错：先查拼写
+- ~unbound variable~ ：缺少模块导入。可通过 https://search.guix.moe 查询该符号所在的 Guix 模块路径并加入 `use-modules`。
+- ~invalid field specifier~ ：括号闭合不匹配（常见于 gexp 表达式）。可通过 Emacs 的括号高亮或 =blue check= 定位。
+- 语法或逻辑异常：优先检查最近修改代码块中的拼写与引用块名称。
 
-** 开机后数据丢失
+** 开机后用户目录数据丢失排查
 
-~/~ 挂载在 tmpfs 上，重启即清空。持久化目录由 [[./source/information.scm][source/information.scm]] 声明： ~%data-dirs~ 以 bind-mount 挂回 ~$HOME~ ， ~%btrfs-subvolumes~ 挂载各系统子卷。数据丢失先检查这两处配置与 ~/data~ 分区的挂载状态。
+根目录 =/= 挂载在 tmpfs（内存盘）上，每次关机重启自动重置。持久化数据由 [[./source/information.scm][source/information.scm]] 显式管理：
+- ~%data-dirs~ ：通过 bind-mount 挂回 ~$HOME~ 。
+- ~%btrfs-subvolumes~ ：挂载系统持久化子卷。
+若发现文件丢失，请检查 ~/data~ 分区的挂载状态以及 ~%data-dirs~ 是否已登记对应目录。
 
 * 致谢
 
-- [[https://t.me/guixcn][GNU Guix 中文社区]] —— 提供关键技术支持
-- =Grok= 、 =ChatGPT= 、 =Gemini= 、 =Kimi= 、 =Claude= 、 =GLM= 、 =Qwen= 、 =DeepSeek= 、 =MiniMax=  —— 协助开发（按时间先后排序；其中最好用的是 =GLM= 和 =ChatGPT= ，效果最差的是 =MiniMax= ，封号最快的是 =Claude= ）
+- [[https://t.me/guixcn][GNU Guix 中文社区]]：提供技术交流与指导。
+- 参与代码生成、重构与排错的各类大语言模型工具。
 
 #+begin_quote
 *日々私たちが過ごしている日常は、実は、奇跡の連続なのかもしれない。*
-------《日常》
+——《日常》
 #+end_quote

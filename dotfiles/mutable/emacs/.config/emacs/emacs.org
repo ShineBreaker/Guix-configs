@@ -10,42 +10,40 @@
 :CUSTOM_ID: overview
 :END:
 
-本文档 =emacs.org= 是 =custom-config= 的唯一配置真理源。8 个配置域按固定顺序加载（文档顺序 = 求值顺序），定义方必须在调用方之前。配置域的边界、职责与 CUSTOM_ID 一旦建立即稳定不变——新增功能合并到最匹配的现有域，不创建第 9 个。
+本文档 =emacs.org= 是 Emacs 配置的唯一真理源。8 个核心配置域按固定文档顺序求值加载（定义方始终位于调用方之前），各域职责与 =CUSTOM_ID= 保持稳定。
 
-| 顺序 | 配置域         | CUSTOM_ID        | 主要职责                                                      | 加载前提                  |
-|------+----------------+------------------+---------------------------------------------------------------+---------------------------|
-|    1 | 启动与基础设施 | [[#startup]]         | GC / 路径常量 / Frame 生命周期 / 键位原语 / 包管理 / 基础行为 | 无                        |
-|    2 | 界面与外观     | [[#appearance]]      | Mode-line / Tab-line / 主题字体 / 窗口布局 / Git / 颜色方案   | startup                   |
-|    3 | 编辑与文本     | [[#editing]]         | 缩进括号 / EditorConfig / DWIM / mc / 终端集成                | appearance 的窗口路由     |
-|    4 | 编程与开发     | [[#programming]]     | Eglot / Tree-sitter / Apheleia / Flymake / 语言注册表         | bootstrap, appearance     |
-|    5 | 项目与导航     | [[#projects]]        | project.el / 文件缓冲区导航                                   | terminal, git-display     |
-|    6 | Org 与知识库   | [[#org-knowledge]]   | Org 基础 / Capture / Roam / Knowledge 系统 / agenote 面板     | bootstrap                  |
-|    7 | 键位与补全     | [[#keys-completion]] | Which-key / 前缀声明 / 跨域键 / 内置补全栈                     | 前述全部域的命令          |
-|    8 | 系统工具       | [[#system-tools]]    | 应用 / Daemon 预热 / Dashboard / 兼容性 shim                  | 前述全部域                |
+| 顺序 | 配置域         | CUSTOM_ID            | 主要职责                                                       | 加载前提                  |
+|------+----------------+----------------------+----------------------------------------------------------------+---------------------------|
+|    1 | 启动与基础设施 | [[#startup]]         | GC 调优、路径常量、Frame 生命周期、键位原语、包管理与基础行为 | 无                        |
+|    2 | 界面与外观     | [[#appearance]]      | Mode-line、Tab-line、主题字体、窗口路由、Git 状态与配色方案    | startup                   |
+|    3 | 编辑与文本     | [[#editing]]         | 缩进括号、EditorConfig、DWIM 智能编辑、多光标与内置终端集成    | appearance 的窗口路由     |
+|    4 | 编程与开发     | [[#programming]]     | Eglot (LSP)、Tree-sitter、Apheleia 格式化、Flymake 与各语言 Mode| bootstrap, appearance     |
+|    5 | 项目与导航     | [[#projects]]        | project.el 项目管理、Dired 面板与文件缓冲区导航               | terminal, git-display     |
+|    6 | Org 与知识库   | [[#org-knowledge]]   | Org 基础、Capture 模板、Roam 笔记、Knowledge 系统与 Agenote   | bootstrap                  |
+|    7 | 键位与补全     | [[#keys-completion]] | Which-key、顶层前缀声明、跨域快捷键与内置补全栈 (Vertico/Corfu)| 前述全部域的命令          |
+|    8 | 系统工具       | [[#system-tools]]    | 实用应用、Daemon 预热、Dashboard 欢迎屏与版本兼容 Shim        | 前述全部域                |
 
-各域内部用 =CUSTOM_ID= 锚定子节，org 链接（如 [[#modeline]]）可在文档内交叉引用。代码块按文档顺序直接 tangle 进 =main.el=；仅两类内容保留 noweb：定义在使用点之后的兼容 shim（见 [[#compatibility]]）与 =#+name= 纯文本数据块（如 capture 模板）。新增功能合并到最匹配的现有域，不创建第 9 个；键位随功能实现所在的域（功能内聚），命名与 noweb 细则见 =AGENTS.md=。
+各域内部通过 =CUSTOM_ID= 锚定子节，支持在 Org 文档内交叉链接。所有代码块默认按文档顺序直接 tangle 进 =main.el= ；仅版本兼容 Shim（见 [[#compatibility]]）与纯文本模板数据块使用 Noweb 展开。新增功能按职责归入现有 8 个配置域中。
 
 * 启动与基础设施
 :PROPERTIES:
 :CUSTOM_ID: startup
 :END:
 
-Emacs 冷启动的第一阶段:GC / 路径常量 / 外部命令声明 / Frame 生命周期 / 键位辅助 / 包管理 / 基础行为。
+Emacs 冷启动的基础阶段：配置垃圾回收参数、路径常量、外部命令声明、Frame 生命周期管理、声明式键位辅助函数与基础运行时行为。
 
-本域代码必须最先执行——后续功能依赖这里定义的路径、进程、frame 与键位原语。
+本域代码优先执行，为后续各模块提供统一的路径解析、进程调用与键位注册原语。
 
 ** GC 与启动优化
 :PROPERTIES:
 :CUSTOM_ID: startup-gc
 :END:
 
-GC 启动期优化(启动完成后由 gcmh 重置)
-
-+ =gc-cons-threshold= 推到 =most-positive-fixnum= 、=gc-cons-percentage= 推到 0.6 以减少启动期 GC；与 early-init.el 的同设置重复是刻意的——绕过 early-init 直接 batch-load main.el(如 agent 手动加载验证)时入口仍需推高。
-+ =gc-cons-percentage= 启动完成后必须显式恢复 0.1:GCMH 只动态调整 =gc-cons-threshold= ,不碰 percentage,否则 GCMH 接管后 percentage 仍停留 0.6。
-+ =inhibit-compacting-font-caches= 阻止 GC 压缩 font cache,避免 daemon 长驻期字体渲染抖动。
-+ =auto-mode-case-fold nil= : =auto-mode-alist= 匹配不 fold case,减少每个 find-file 的匹配开销。
-+ 保留 Emacs 31 默认的 =file-name-handler-alist= 与 bidi 行为。daemon 冷启动不是目标，不能用未测量的优化破坏 TRAMP、压缩文件或 RTL 文本。
+启动期垃圾回收调优（启动完成后由 GCMH 接管）：
+- 启动时将 =gc-cons-threshold= 设置为 =most-positive-fixnum= ，并将 =gc-cons-percentage= 调至 0.6，大幅减少启动期间的 GC 频次。
+- 启动完成后通过 =emacs-startup-hook= 将 =gc-cons-percentage= 显式恢复至稳态值 0.1。
+- 开启 =inhibit-compacting-font-caches= ，防止长驻 Daemon 压缩字体缓存产生界面渲染抖动。
+- 设置 =auto-mode-case-fold nil= ，优化文件打开时的模式匹配开销。
 
 #+begin_src emacs-lisp
 ;;; main.el --- custom-config 主配置(由 emacs.org tangle 生成) -*- lexical-binding: t; -*-
@@ -72,11 +70,9 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 :CUSTOM_ID: bootstrap
 :END:
 
-集中定义所有路径常量(org 目录、Guix profile)与外部命令名。
-
-+ 只保存命令名，不缓存 Guix store 绝对路径；长驻 daemon 跨 generation 后仍由当前 =exec-path= 解析新命令。
-+ =GUIX_PROFILE/bin= 和 =~/.local/bin= 在本域开头加入 =exec-path= ,保证后续所有 =executable-find= 查询能解析。
-+ 后续所有功能域都引用这里的 =custom:org-directory= 、 =custom:executable-*=
+集中定义 Org 知识库目录常量及外部工具命令名：
+- 路径与命令解耦：外部命令仅保存命令名，由当前 =exec-path= 动态查找，保障长驻 Daemon 跨 Guix generation 升级后仍可正确调用新版本二进制。
+- 启动前将 =GUIX_PROFILE/bin= 与 =~/.local/bin= 注入 =exec-path= ，确保所有 =executable-find= 查询即时可用。
 
 *** 路径常量
 :PROPERTIES:
@@ -107,7 +103,7 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 :CUSTOM_ID: bootstrap-executables
 :END:
 
-外部命令只保存命令名。Guix 保证包存在，实际进程启动时由当前 PATH 解析。
+声明外部可执行文件名称。具体软件包由 Guix profile 保证安装。
 
 #+begin_src emacs-lisp
 ;; exec-path 前置:daemon 启动与 batch-load main.el 的包启用条件、agenote 调用
@@ -133,14 +129,14 @@ GC 启动期优化(启动完成后由 gcmh 重置)
 :CUSTOM_ID: frame
 :END:
 
-daemon/client 架构下的 frame 生命周期：display 初始化直接挂 =after-make-frame-functions= ；独立 Emacs 的首帧在注册点立即执行一次（daemon 启动时无 frame，由 hook 覆盖后续 frame）。initializer 自身幂等且自带 condition-case，无需额外记账。
+在 Daemon / Client 架构下管理 Frame 生命周期：视觉与渲染相关的初始化统一挂载至 =after-make-frame-functions= ；对于独立启动的 Emacs 实例，则在注册点执行一次首帧初始化。
 
 ** 键位声明
 :PROPERTIES:
 :CUSTOM_ID: key-helper
 :END:
 
-=custom:binding-spec= 是本地键位、Which-key 与帮助的唯一声明源。每条声明在绑定真实 keymap 的同时登记描述；第三方既有 keymap 的翻译继续留在 =data/which-key-zh.el= 。
+=custom:binding-spec= 是本地快捷键、Which-key 描述与帮助系统的统一定义源。=custom/bind= 在绑定快捷键的同时登记元数据，实现快捷键与文档描述的一体化维护。
 
 #+begin_src emacs-lisp
 (defvar custom:binding-spec nil
@@ -213,9 +209,7 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
 :CUSTOM_ID: package-loading
 :END:
 
-声明本配置依赖 Guix 提供的包, =EMACSLOADPATH= 已预设,无需手动安装。
-
-+ 所有包直接 =(require 'xxx)= 或 =(use-package xxx)= ,Guix 已在 =EMACSLOADPATH= 中放好
+本配置的软件包统一由 Guix profile 托管，=EMACSLOADPATH= 在环境准备期已完成注入，配置中直接通过 =use-package= 或 =require= 加载。
 
 #+begin_src emacs-lisp
 (require 'use-package)
@@ -243,25 +237,11 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
 :CUSTOM_ID: core-behavior
 :END:
 
-GC 策略、文件备份、历史记录、自动保存、custom-file 位置等基础设置。
-
-+ ~gcmh-mode~ :启动后接管 GC,空闲时自动 GC,编辑时不打断
-+ ~no-littering~ :把各种包生成的文件统一放到 =var/= 和 =etc/=
-+ ~savehist~ / =recentf= :minibuffer 历史与最近文件持久化
-+ ~desktop~ :会话恢复(daemon 默认关闭,避免恢复成本转移到启动)
-+ ~custom-file~ :指向 =etc/custom.el= ,避免 customize 污染 init.el
-+ 失去焦点后在空闲期保存正常访问的本地文件 buffer；不在焦点事件里同步写盘，也不保存内部/伪造临时 buffer
-
-GCMH + 智能垃圾回收管理 (启动后接管 GC)
-
-+ =gcmh-idle-delay 'auto'= 让 GCMH 自适应 idle 时间 (短空闲快 GC、长空闲等更空闲再 GC), 避免编辑过程中被打断。
-+ =gcmh-high-cons-threshold 32 MiB= 是 daemon 长运行环境的合理上限: 太小 (默认 16 MiB) → GC 频繁; 太大 (64+ MiB) → 单次 GC 卡顿长。32 MiB 在 8+ GiB 内存机器上不构成压力,与 gcmh-mode 维持的 low-cons-threshold (默认 1 MiB) 的差距让 GCMH 能区分"短暂峰值"和"持续压力"。
-+ 不再在 use-package 外手动 =setq gc-cons-threshold=: GCMH 接管后该变量由 GCMH 动态调整,手动 setq 会与 GCMH 打架。
-
-启动画面与基础体验
-
-+ daemon 长驻下 client 关闭 *不退出 Emacs*; kill-emacs 不等待子进程确认
-+ 所有未保存内容在 focus-loss 时已落盘, 见下方 =after-focus-change-function= 。
+系统基础运行时与编辑器行为配置：
+- 垃圾回收管理：由 =gcmh-mode= 动态调度，空闲时触发 GC，避免编辑卡顿。
+- 目录结构规范：通过 =no-littering= 将运行时数据与临时缓存隔离到 =var/= 与 =etc/= 目录。
+- 状态与历史持久化：启用 =savehist= 与 =recentf= 保存输入历史与最近访问文件列表。
+- 自动保存与安全落盘：失焦时在空闲周期自动保存已修改的本地文件 Buffer。
 
 #+begin_src emacs-lisp
 (use-package gcmh
@@ -433,19 +413,23 @@ server,必须等真实 client 就绪。"
 :CUSTOM_ID: appearance
 :END:
 
-所有 display-dependent 的视觉配置:主题、字体、窗口分割、面板布局、mode-line、tab-line、帮助系统、右键菜单与 which-key 中文化。
+管理所有显示相关的视觉与布局配置：主题配色、字体层级、窗口分割规则、Mode-line、Tab-line 标签栏、快捷键帮助、右键菜单与 Which-key 本地化。
 
-display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 frame 创建时触发(见 [[#theme-fonts][主题与字体]])。
+显示相关的初始化统一由 =custom/apply-frame-appearance= 驱动，在新 Frame 创建时自动应用（见 [[#theme-fonts][主题与字体]]）。
 
 ** Which-key 中文描述数据
 :PROPERTIES:
 :CUSTOM_ID: which-key-data
 :END:
 
-全局键、major mode 局部键与正则替换规则的数据源。行为注册位于 [[#which-key-ui][Which-key 菜单注册]]。
+全局快捷键、Major mode 局部键与正则替换规则的数据源。具体显示与行为注册定义于 [[#which-key-ui][Which-key 菜单注册]]。
 
-翻译表是独立的数据资产：[[file:data/which-key-zh.el][Which-key 中文描述]]、[[file:data/context-menu-zh.el][右键菜单中文描述]] 与 [[file:data/help-zh.el][快捷键帮助中文描述]]。
-修改数据文件后重启 Emacs 即可生效；其中只能写注释和预定变量的字面量 =setq=，不得定义函数、feature 或副作用。违反上述约定会在 tangle 后因变量未定义而报错，由 agent 加载验证。
+本地化数据独立维护在以下数据文件中：
+- [[file:data/which-key-zh.el][Which-key 中文描述]]
+- [[file:data/context-menu-zh.el][右键菜单中文描述]]
+- [[file:data/help-zh.el][快捷键帮助中文描述]]
+
+修改数据文件后重启 Emacs 即可生效。数据文件仅包含声明式 =setq= 表达式，不引入额外副作用。
 
 #+begin_src emacs-lisp
 (defconst custom:i18n-data-directory
@@ -572,7 +556,7 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 :CUSTOM_ID: help
 :END:
 
-维护完整快捷键参考。键位、Which-key 描述和帮助分组统一由 [[#key-helper][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 生成(函数 =custom/binding-help-sections=)。帮助页引言文字(=custom:help-introduction=)与非键位说明外置到 [[file:data/help-zh.el][data/help-zh.el]],经 =custom/load-i18n-data= 在本域开头加载;键位相关的描述不再外置。
+维护完整的全局快捷键参考速查表。键位定义、Which-key 说明与分组统一由 [[#key-helper][键位声明]] 中的 =custom/bind= 写入 =custom:binding-spec= 并生成分组视图。帮助页面引导说明维护在 [[file:data/help-zh.el][data/help-zh.el]] 中。
 
 #+begin_src emacs-lisp
 (defun custom/show-help ()
@@ -643,12 +627,10 @@ display-dependent 设置统一通过 =custom/apply-frame-appearance= 在新 fram
 :CUSTOM_ID: tab-line
 :END:
 
-基于内置 =tab-line= 的 per-frame 文件标签,隔离多个 emacsclient frame 的缓冲区序列。
-
-+ 禁用 frame 级 =tab-bar=,改用 window-local =tab-line= 作为文件标签栏——每个文件 buffer 的 window 一条标签栏,避免与 [[#frame][Frame 生命周期]] 的 per-frame 隔离冲突。
-+ 只有关联文件的 buffer 才出现在标签栏(=custom/tab-visible-p= 白名单),临时 buffer 与 minibuffer 自动排除。
-+ 标签栏本身也只在文件 buffer 的 window 渲染(=tab-line-exclude-functions= 复用同一白名单),终端模拟器、scratch、help、Dashboard 等 window 不显示标签栏。
-+ 自研复杂度红线:新增 tab 功能(拖拽、会话持久化等)一律拒绝,代码超过 400 行即评估剥离为独立包或换方案。
+基于 Emacs 内置 =tab-line= 构建轻量级的 Per-frame 文件标签栏，隔离多个 Client Frame 之间的缓冲区序列：
+- 仅针对关联实际文件的 Buffer 显示标签栏（由 =custom/tab-visible-p= 过滤），临时缓冲区与 Minibuffer 自动忽略。
+- 终端窗口、Scratch、帮助页与 Dashboard 窗口不渲染标签栏。
+- 标签序列采用 Append-only 顺序记录，切换心智模型稳定清晰。
 
 *** 常量与窗口定位
 :PROPERTIES:
@@ -1125,21 +1107,17 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
 :CUSTOM_ID: git-display
 :END:
 
-提供 Git 文件/仓库操作及 Magit、终端等复用的 display-buffer 路由。
+提供 Git 文件与仓库操作快捷函数，以及 Magit、终端与辅助窗口的 =display-buffer= 布局路由规则。
 
 *** Git 命令
 :PROPERTIES:
 :CUSTOM_ID: git-commands
 :END:
 
-Git 操作辅助函数（供 C-c g 前缀和右键菜单复用）。
-+ Magit 状态页路由到底部 ~side-window~ （40% 高度）
-+ COMMIT_EDITMSG 经 ~server-window~ 路由到上方主编辑窗口（保持「上编辑 + 下 magit」布局一致）
-+ *文件级操作* ：blame / log / diff / stage / discard
-+ *仓库级操作* ：stash push / stash pop
-+ 所有操作复用启动域声明的 =custom:executable-git= 。
-+ 仓库定位走 =vc-backend= / =vc-call-backend= 内置 API(worktree/submodule 安全,且有 vc 缓存),不手扫 =.git= 哨兵文件。
-+ 「确认前提后转发 Magit 交互命令」的同构命令由 =custom/git--define-file-command= 工厂宏生成,避免逐个手写。
+Git 核心交互操作函数（供 =C-c g= 前缀与右键菜单复用）：
+- 文件级操作：Blame 查看、文件历史、Diff 对比、暂存（Stage）与变更丢弃（Discard）。
+- 仓库级操作：Magit 状态页（底部 40% 窗口）、Stash 保存与恢复。
+- 仓库定位统一调用 Emacs 内置 =vc-backend= / =vc-call-backend= API，安全适配 Worktree 与 Submodule 结构。
 
 #+begin_src emacs-lisp
 (defun custom/git-repo-root (&optional file)
@@ -1965,24 +1943,19 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 :CUSTOM_ID: editing
 :END:
 
-通用编辑习惯、DWIM 智能编辑函数、ghostel 终端集成。
+通用编辑习惯、DWIM 智能编辑函数与 Ghostel 终端集成。
 
 ** 通用编辑习惯
 :PROPERTIES:
 :CUSTOM_ID: editing-defaults
 :END:
 
-缩进 / tab、括号匹配、EditorConfig、Git 差异高亮、内置自动配对、文档模式自动换行。
-
-+ ~indent-tabs-mode nil~ + ~tab-width 2~ :默认用空格缩进
-+ ~word-wrap-by-category~ :CJK 文本按字符类别折行(内置)
-+ ~show-paren-mode~ :高亮匹配括号
-+ ~save-place-mode~ / ~repeat-mode~ :内置体验增强
-+ ~editorconfig~ :遵循项目 =.editorconfig=
-+ ~electric-pair-mode~ :内置自动配对(替代 smartparens——配置从未绑定 sp-* 结构化命令,配对即全部用法)
-+ ~diff-hl~ :fringe 显示 Git 差异(终端用 margin)
-+ 文档模式(org/markdown/text)自动 =visual-line-mode=
-+ =global-so-long-mode= 自动降级超长行 buffer；大于阈值的文件关闭行号并跳过全 buffer 行数扫描
+配置基础排版、缩进规范与文本辅助功能：
+- 缩进与换行：默认使用 2 空格缩进（=indent-tabs-mode nil=），启用 CJK 字符类别智能折行（=word-wrap-by-category=）。
+- 括号与结构：启用 =show-paren-mode= 与内置 =electric-pair-mode= 自动配对。
+- 项目规范：启用 =editorconfig= 遵循项目统一代码规范。
+- 版本差异：通过 =diff-hl= 在 Fringe（GUI）或 Margin（TTY）实时显示 Git 增删改状态。
+- 文档模式：Org 与 Markdown 自动启用 =visual-line-mode= 与 =visual-wrap-prefix-mode= 对齐续行。
 
 #+begin_src emacs-lisp
 (setq-default indent-tabs-mode nil
@@ -2369,24 +2342,23 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 :CUSTOM_ID: programming
 :END:
 
-Eglot (LSP 客户端)、Tree-sitter、语言注册表、格式化、拼写检查、envrc、各语言 major mode。
+Eglot (LSP 客户端)、Tree-sitter 语法分析、语言能力注册表、Apheleia 格式化、Flymake 诊断与各语言 Major Mode 配置。
 
 ** LSP / Tree-sitter / 诊断 / 格式化
 :PROPERTIES:
 :CUSTOM_ID: programming-tools
 :END:
 
-Eglot (LSP 客户端)、Tree-sitter、语言注册表、Apheleia 保存时格式化、Flymake 诊断、envrc direnv 集成。
-
-+ ~eglot~ :Emacs 29+ 内置 LSP 客户端(31 已内置声明/实现/类型定义跳转与 hierarchy)
-+ LSP 服务器注册延迟到首次进入 prog-mode(避免启动期 spawn 进程)
-+ ~apheleia~ :保存时自动格式化(语言对应关系集中维护)
-+ ~flymake~ :代码诊断(Emacs 内置)。Eglot 默认通过 flymake 接收 LSP diagnostics
-+ ~envrc~ :direnv buffer-local 环境变量注入
+编程开发基础设施：
+- Eglot：Emacs 内置 LSP 客户端，支持智能补全、定义跳转、重命名与类型诊断。
+- Tree-sitter：基于增量语法树的高性能语法高亮与结构化解析。
+- Apheleia：异步保存自动格式化，保持光标与滚动位置不变。
+- Flymake：内置轻量诊断框架，接收 LSP 报错与告警。
+- envrc：Buffer 级别的 Direnv 环境变量自动注入。
 
 *** 语言能力表
 
-所有语言配置围绕单一真相源 =custom:language-capabilities= 组织,新增语言只改这一份。下表是每条目字段的含义和它的派生消费者:
+所有语言的 Major mode、Tree-sitter 映射、LSP 服务端与格式化工具均通过 =custom:language-capabilities= 集中声明。字段定义如下：
 
 #+attr_org: :width 70
 | 字段       | 含义                                          | 派生消费者                                |
@@ -2907,21 +2879,18 @@ GDScript、Fish、JSON / kdl / Markdown / Nix / Rust / TypeScript(TSX / JSX) / m
 :CUSTOM_ID: projects
 :END:
 
-项目管理(project.el 内置文件搜索与 grep)、文件与缓冲区导航。
+项目管理（基于内置 =project.el= ）、文件目录树面板与缓冲区快速导航。
 
 ** 项目管理 project.el
 :PROPERTIES:
 :CUSTOM_ID: project-navigation
 :END:
 
-配置内置 =project.el= 项目管理:自动识别项目根、文件搜索、xref 正则搜索。
-
-+ 使用 project.el 内置 API(=project-switch-project= / =project-known-project-roots= / =project-current=)
-+ 项目全文搜索主入口是 =project-find-regexp=(xref 集成,后端 ripgrep,结果走 *xref* / *grep* buffer,支持 Emacs 31 内置 `grep-edit`)
-+ =project-switch-commands= 带标签菜单(d/f/r/a):切换项目后弹菜单,=a= 入口对项目根执行任意全局命令(=project-any-command=,功能上覆盖整个 =C-x p= 键表;upstream 中带标签菜单与 =project-switch-use-entire-map= 的裸键提示互斥,故不启用后者)
-+ =project-prune-zombie-projects= alist:已删除的项目根在 prompt / 首次读取 / 写回三处自动从已知列表清除(daemon 长驻下列表自洁)
-+ 项目前缀 =C-x p= 在本域末尾绑定(功能内聚)
-+ 项目切换清空当前 frame 的 tab-line( advice =project-switch-project= :after,见 [[#tab-line][Tab-line]])
+配置 Emacs 内置 =project.el= 项目管理体系：
+- 项目识别与切换：自动识别 Git 等版本控制项目根目录，支持快速切换已知项目。
+- 项目全文搜索：基于 =project-find-regexp= （后端使用 Ripgrep）进行项目级关键字搜索。
+- 僵尸项目清理：=project-prune-zombie-projects= 自动清理已被删除的陈旧项目路径。
+- 标签栏联动：项目切换时自动清空当前 Frame 的 Tab-line 列表，保持工作区干净专注。
 
 #+begin_src emacs-lisp
 (defun custom/project-root-or-default ()
@@ -3010,7 +2979,10 @@ GDScript、Fish、JSON / kdl / Markdown / Nix / Rust / TypeScript(TSX / JSX) / m
 :CUSTOM_ID: panel-dired
 :END:
 
-仿 Zed project panel 的左侧文件面板:项目根 Dired 固定在左侧 side-window(宽度 0.2),默认隐藏文件详情以适配窄列。RET / mouse-2 / =^= 语义与 Zed 一致——文件在主编辑窗口打开且面板保留,目录(含 =..=)在面板内原地切换(显式 =set-window-buffer= 替换面板 buffer 并 kill 旧 buffer,不堆积;side-window 会拒绝 =find-alternate-file= 内部的 =switch-to-buffer=,故不可用它),面板定制由 =custom/dired--panel-setup= 在每次替换后重放。=C-c w= 前缀声明与总开关见 [[#keybindings][前缀键体系]]。
+左侧项目文件目录树面板（固定在左侧 Side-window，默认宽度 20%）：
+- 窄列视图：默认隐藏文件权限与大小详情，突出文件层级。
+- 窗口导航契约：在面板内回车或点击文件时，文件在主编辑窗口打开并保留面板；目录导航在面板内原地切换，避免缓冲区堆积。
+- 面板开关快捷键为 =C-c w 1= （见 [[#keybindings][前缀键体系]]）。
 
 #+begin_src emacs-lisp
 (defconst custom:dired-side-action
@@ -3099,14 +3071,10 @@ Org 基础设置、capture 模板、org-roam、Babel、org-modern UI、Olivetti 
 :CUSTOM_ID: org-core
 :END:
 
-Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear UI、org-roam 笔记网络、Olivetti / Deft。
-
-+ =org-directory= : =~/Documents/Org/=
-+ =org-startup-folded 'overview= : 打开时仅显示一级标题
-+ =org-capture-templates= : 经验卡片三种 ENTRY_TYPE(note / mistake / ascended)
-+ =org-roam= :笔记网络( =roam/= 子目录)
-+ =org-modern= + =org-appear= : UI 现代化
-+ 知识库 CRUD 键位见 [[#knowledge][Knowledge 系统]]
+Org 基础排版、Capture 采集模板、org-modern 现代渲染、org-appear 自动展开、Org-roam 双链笔记与知识检索：
+- 存储布局：根目录为 =~/Documents/Org/= ，包含 =agenda/= 、 =roam/= 与 =experiences/= 。
+- 界面增强：通过 =org-modern= 渲染美化标签与复选框，配合 =org-appear= 在光标进入时自动展示强调标记源码。
+- 知识库集成：与 Agenote 共享统一的经验卡片规范（包含 note、mistake、ascended 三类条目）。
 
 #+begin_src emacs-lisp
 (defun custom--ensure-org-directories ()
@@ -3166,7 +3134,7 @@ Org 目录确保、Org 基础设置、capture 模板、org-modern / org-appear U
 :CUSTOM_ID: capture-templates
 :END:
 
-=org= 用 =:defer t= 加载,capture 模板从 org 的 =:config= 移出到独立的 =with-eval-after-load 'org-capture=:这些辅助函数只依赖 bootstrap 常量(无 org 依赖),但 =org-capture-templates= 需 org-capture 加载后设置才有意义。模板设置延迟到首次 capture 时。=k= 前缀是经验/笔记子菜单,=ki/kd/ke/kr/kn/km/ka= 七条模板覆盖四类数据生命周期:
+=org= 采用懒加载模式（=:defer t=），Capture 模板在 =org-capture= 首次调用时延迟求值。通过 =k= 前缀提供笔记与知识采集入口：
 
 #+attr_org: :width 70
 | 键 | 名称            | 目标         | 生命周期语义                             |
@@ -3550,23 +3518,18 @@ agenote CLI 集成的知识库 CRUD。
 :CUSTOM_ID: keys-completion
 :END:
 
-前缀声明与跨域基础键(=C-x= / =M-s= / =C-c w= / =C-c h=)+ IDE 风格全局直达键 + which-key 本体加载 + 内置 describe-* 帮助 + winner 窗口布局撤销 + 内置补全栈(默认 *Completions* 与 completion-preview,见 [[#completion]])。功能相关的 =C-c x= 前缀键已分散到各功能域(见各域末尾)。
+顶层前缀声明、跨域基础键（=C-x= 、 =M-s= 、 =C-c w= 、 =C-c h= ）、IDE 风格全局直达键、Which-key 运行时与内置补全栈。
 
-所有快捷键遵循 *功能内聚* 原则:每个功能的 =use-package= 声明紧跟它的 =custom/bind= 键位,不再集中到键位块。
-
-+ =custom/bind= 内部通过 =custom--pending-wk-descs= 暂存 which-key 描述,延迟到 =with-eval-after-load 'which-key= 统一 flush;因此应用键位散落到此域(晚于 keys-completion)不影响描述注册。
+键位体系遵循 *功能内聚* 原则：功能专属快捷键跟随其实现所在的配置域绑定；仅顶层前缀声明与跨域公共快捷键集中在当前配置域。
 
 ** Which-key 本体与辅助包
 :PROPERTIES:
 :CUSTOM_ID: which-key-runtime
 :END:
 
-加载 which-key 本体并配置显示参数;内置 describe-* 帮助系统;winner 窗口布局撤销 / 重做。
-
-+ which-key 中文描述注册由 [[#which-key-ui][右键菜单与 Which-key 中文化]] 处理( =custom/which-key-apply-descriptions= + =custom/register-pending-wk-descs= )
-+ which-key 3.6.1 已内置 =string-width= 计算,中文描述列宽对齐无需额外补丁。
-+ =which-key-idle-delay 0.3= :延迟显示,避免干扰快速操作
-+ =winner-dont-bind-my-keys t= :避免 winner 抢占 =C-c ←= / =C-c →= (本配置在 =C-c w= 体系下手动绑定 winner-undo / redo)
+Which-key 运行时配置与窗口布局历史（Winner Mode）：
+- Which-key：按键未完成时在底部弹出候选按键提示面板（延迟 0.3 秒），中文描述与宽度自动对齐。
+- Winner Mode：通过 =C-c w u= / =C-c w r= 撤销与重做窗口分割和布局变动。
 
 #+begin_src emacs-lisp
 (use-package which-key
@@ -3599,15 +3562,7 @@ agenote CLI 集成的知识库 CRUD。
 :CUSTOM_ID: global-keys
 :END:
 
-IDE 风格直达键通过 =custom/bind= 写入 binding spec，不再单独维护帮助或 Which-key 数据。
-
-TTY 生存总则:终端模拟器吞掉三类键——
-
-+ =C-S-= 组合:需 distinct 序列,foot/xterm/tmux/ssh 默认不区分
-+ =C-<tab>= :退化成 TAB
-+ =M-<arrow>= :被解析成 ESC 序列或被窗口管理器拦截
-
-本节的高频键若属此三类,必须在功能域配 =C-c= 前缀镜像,已有镜像:=C-c c i/k/s/b=(内置导航族)、=C-c w hjkl=(窗口切换)、=C-c h d=(仪表盘)、=S-<f10>=/=menu=(右键菜单)。新增直达键前先查本总则。
+常用 IDE 风格全局直达键（复制、剪切、保存、查找、注释、窗口切换等），统一通过 =custom/bind= 注册。
 
 #+begin_src emacs-lisp
 (custom/bind "C-h" #'backward-char "左移" "基础移动与直达键")
@@ -3949,14 +3904,19 @@ ispell 仅作拼写检查后端( =aspell= );词表补全不启用——text-mode
 :CUSTOM_ID: system-tools
 :END:
 
-Guix 环境检测、daemon 预热、生活应用入口、Dashboard、Emacs 31 兼容性 hack、需要决策的配置。
+日常实用应用入口、Daemon 后台预热、Dashboard 欢迎屏定制与版本兼容 Shim。
 
 ** 实用应用
 :PROPERTIES:
 :CUSTOM_ID: applications
 :END:
 
-日常应用入口。=C-c a= 前缀声明见 [[#keybindings][前缀键体系]]。
+日常生活与效率应用集成（统一由 =C-c a= 前缀唤出）：
+- Agent Shell：AI Agent 交互面板（右侧 25% 窗口）。
+- Newsticker：内置 RSS / Atom 订阅阅读器。
+- Telega：Telegram 桌面聊天客户端。
+- Emacs-Guix：Guix 软件包与 Profile 世代管理界面。
+- 内置小游戏（俄罗斯方块、贪吃蛇、五子棋、Pong）。
 
 *** Agent Shell
 
@@ -4097,28 +4057,10 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 :CUSTOM_ID: dashboard
 :END:
 
-启动仪表盘,基于第三方 =dashboard= 包(1.8.0)的 doom 风格定制:待办(Agenda)、最近文件、项目三个高频区 + 一行 navigator 二级入口按钮(计时/书签/知识库/快捷键帮助)。
-
-加载模型依赖两个机制而非自建状态机:
-
-- =initial-buffer-choice= 指向 =custom/dashboard-initial-buffer= ——仅当 client 无文件参数时才渲染,=emacsclient FILE= 天然不被覆盖。
-- 全局单 =*dashboard*= buffer 由插件维护(多 frame 共享;GUI/TTY 宽窄差异混开时已知有错位取舍,接受)。窗口尺寸变化后用 =M-x dashboard-open= 重排。
-
-Agenda 区由插件的 =org-map-entries= 扫描 =org-agenda-files= 生成,按 scheduled/deadline 时间升序;org 为惰性加载,故包装函数先 =require 'org-agenda= 再渲染。无文件骨架、双列布局、TTL 缓存等自研复杂度均已随本迁移删除。
-
-项目区条目的点击经插件的 =dashboard-projects-switch-function= 定制点指向 =project-switch-project=:插件默认只设 =default-directory= 跑 =project-find-file=,会绕过 =C-x p p= 的完整链路——remember 进 recent 项目列表、弹 =project-switch-commands= 菜单、清 tab-line 的 :after advice;指向同一命令后 dashboard 点击与键位行为同源,无需复制任何切换副作用。
-
-全量渲染(item 生成 + agenda 扫描 + 装饰)单次上百毫秒,触发侧必须收敛:=dashboard-insert-section= 宏对 list 参数求值 4 次,agenda 的 =org-map-entries= 全量扫描随之重复 4 次,由渲染入口的请求级 advice 合并为 1 次(跨渲染不缓存);=server-after-make-frame-hook= 回调比较渲染宽度,相符(同宽新帧或正常路径)则跳过,只有首帧哑上下文宽度错误才重渲染自愈;resize 事件只挂 idle timer,拖拽的连续中间宽度不逐次全量渲染,静止 0.3s 后按最终宽度刷一次。版心不足 =custom:dashboard-min-content-width= 的窗口(拖拽经过的窄中间态)不做渲染,保留上一次可读内容。
-
-标题行装饰(=custom/dashboard--decorate-headings=)在每次渲染后运行,规则分五组:
-
-+ *版心* :宽度固定为窗口正文宽的 =custom:dashboard-content-ratio= 比例(两侧空列各占余下的一半,按 100/140/200 三档常用列宽调优);标题行与分割线都补齐到版心宽,分割线字符数按当前 frame 实测的 ─ 像素宽折算,GUI/TTY 与宽窄字体统一铺满。
-+ *行距* :板块内条目行与标题行统一加 =line-spacing=(像素,仅 GUI 生效),标题与首条目同距。
-+ *居中* :分两组——板块区(首板块标题行→末分割线行)统一 =align-to center - 版心/2= 前缀,整体居中、块内左对齐;其余行(banner、Welcome、navigator、init-info、footer)长短不一,逐行按自身行宽居中。两组都必须先 =remove-text-properties= 清掉插件自设的测量式前缀(=add-text-properties= 不覆盖已有属性)。行宽超过窗口宽的行不加前缀直接贴左:=align-to= 负值会把整行推出屏幕左缘,而 space spec 没有可用的 max 钳制(Emacs 31 下 max 求值静默回退 0),只能静态排除;窗口比渲染时更窄的瞬态破碎由 resize 合并刷新与已知取舍覆盖。
-+ *路径* :超版心的路径条目由 =dashboard-shorten-path= 的 override 降级:先压缩中间目录为首字母,仍超则 =...= 截断。
-+ *按钮* :navigator action 由 widget 以 =(widget event)= 两参调用,签名必须 =&rest= 兜底。
-
-装饰层(overlay 二次排版)与 emacs-dashboard 1.8.0 的内部渲染实现耦合,升级插件版本必须重新验证装饰效果(渲染回归见 AGENTS.md 7.4)。
+基于 =emacs-dashboard= 定制的欢迎屏界面：
+- 功能分区：提供待办日程（Agenda）、最近访问文件、项目列表以及一行导航入口按钮（计时、书签、知识库、快捷键帮助）。
+- 启动路由：通过 =initial-buffer-choice= 指向 =custom/dashboard-initial-buffer= ，仅在 Client 无文件参数启动时展示 Dashboard。
+- 视觉排版：包含版心自适应比例居中、优雅行距装饰、长路径自适应截断以及 Nerd Icons 图标支持。
 
 #+begin_src emacs-lisp
 (defvar custom/dashboard--rendered-width nil

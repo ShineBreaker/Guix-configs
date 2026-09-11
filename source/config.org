@@ -8,32 +8,32 @@
 
 * 导览
 
-单一 Org 源同时声明 =operating-system= 与 =home-environment= ：[[#main-skeleton][main 块]]是唯一装配表，各 =#+NAME:= 块经 =<<ref>>= 拼合后 tangle 成 =tmp/config.scm= ；注释掉的 =<<ref>>= 即停用该块。
+单一 Org 源同时声明 =operating-system= 与 =home-environment= 。[[#main-skeleton][main 块]]是唯一装配表，各 =#+NAME:= 块经 =<<ref>>= 拼合后 tangle 成 =tmp/config.scm= 。注释掉对应的 =<<ref>>= 即可在装配中停用该功能块。
 
-- 系统 :: [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users]]
-- 用户 :: [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]
-- 其他 :: [[#iso][Live ISO]] · [[#maintenance][维护操作]]
+- 系统配置 :: [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users]]
+- 用户配置 :: [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]
+- 独立产物与操作 :: [[#iso][Live ISO]] · [[#maintenance][维护操作]]
 
 * 维护操作
 :PROPERTIES:
 :CUSTOM_ID: maintenance
 :END:
 
-光标置于块内 =C-c C-c= 执行（执行前有确认提示），输出落入 =#+RESULTS:= 。reconfigure 需 sudo，不在此列，改完请手动 =blue rebuild= 。
+在 Emacs 中将光标置于代码块内按 =C-c C-c= 即可执行（执行前会有确认提示），执行结果将输出到 =#+RESULTS:= 。完整的系统 reconfigure 涉及 sudo 权限，不在 Babel 块中执行，修改后请在终端执行 =blue rebuild= 。
 
-括号平衡检查（最快，定位到块名）：
+括号平衡检查（快速定位出错的代码块）：
 
 #+begin_src sh :dir .. :results output
 blue check
 #+end_src
 
-构建验证（tangle + =guix system build --dry-run= ，不写入系统）：
+构建验证（tangle + =guix system build --dry-run= ，仅做语法与依赖验证，不写入系统）：
 
 #+begin_src sh :dir .. :results output
 blue --dry-run rebuild
 #+end_src
 
-仅 tangle（刷新 =tmp/= 产物）：
+仅执行 tangle（刷新 =tmp/= 下的全部代码生成物）：
 
 #+begin_src sh :dir .. :results output
 blue build
@@ -150,9 +150,9 @@ blue build
 :CUSTOM_ID: main-skeleton
 :END:
 
-Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Scheme）。=skeletons= 是替换语义而非追加，须先合并 =default-skeletons= 保留默认登录环境。
+Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。=skeletons= 字段具备替换语义而非默认追加，因此需合并 =(default-skeletons)= 以保留系统默认骨架文件。
 
-本块即唯一装配表：所有服务/包块的引用次序一目了然；分区注释会随 tangle 进入 =tmp/config.scm= ，生成的文件里也保留同样的分段标记。
+本代码块是整个系统的总装配表：按清晰的分区顺序组合顶层定义、Home 环境与 System 声明。
 
 #+NAME: main
 #+begin_src scheme :tangle ../tmp/config.scm :noweb yes
@@ -246,14 +246,14 @@ Noweb：=<<ref>>= 引用 =#+NAME:= 命名块拼合输出（Org 语法，非 Sche
 
 * 系统配置
 
-职责是 *让系统能够正常启动* ，软件包与服务尽量精简；用户层配置装机后经 Home 应用。
+系统层仅承载 *底层引导与核心硬件基础设施* ，保持最小化依赖。用户态应用与桌面工具统一由 Home 层管理。
 
 ** Bootloader
 :PROPERTIES:
 :CUSTOM_ID: sys-bootloader
 :END:
 
-Limine（=rosenthal= 频道）。
+使用 Limine 引导器（来自 =rosenthal= 频道），支持可移动 EFI 目标。
 
 #+NAME: bootloader-configs
 #+begin_src scheme
@@ -267,7 +267,10 @@ Limine（=rosenthal= 频道）。
 :CUSTOM_ID: sys-filesystems
 :END:
 
-=LUKS + Btrfs= + subvol；子卷/数据目录清单在 [[./information.scm][information.scm]] 。取舍：保留休眠、放弃加密 swap 恢复（Guile initrd 不支持）——休眠镜像明文落盘 swap。
+存储拓扑采用 =LUKS + Btrfs= 架构：
+- 根目录 =/= 挂载在 tmpfs，关机即清空。
+- 关键系统数据与用户目录持久化存储于 Btrfs 各子卷，子卷清单与挂载点定义于 [[./information.scm][information.scm]] 。
+- 支持休眠到独立 swap 分区（Guile initrd 限制下采用明文 swap 恢复）。
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -353,7 +356,7 @@ Limine（=rosenthal= 频道）。
 
 *** 内核相关参数设置
 
-固件取自 =nonguix= ；内核 =linux-cachyos-lts= 自编译（定义与操作规程见 =files/kernel/AGENTS.md= ）。=threadirqs= 中断线程化，配合 =@audio= RT 优先级压音频 xrun。
+固件包来自 =nonguix= 频道；内核使用本地定制编译的 =linux-cachyos-lts= （构建配置与操作说明见 =source/files/kernel/AGENTS.md= ）。启用 =threadirqs= 进行中断线程化，配合 =@audio= 实时优先级保障低延迟音频调度。
 
 #+NAME: kernel-configs
 #+begin_src scheme
@@ -381,10 +384,10 @@ Limine（=rosenthal= 频道）。
 
 *** 内核相关服务设置
 
-下列三块按顺序装配进 [[#main-skeleton][main]] 的 services。
+下列三个服务块按顺序装配进 [[#main-skeleton][main]] 的系统服务列表中。
 
 **** 内核模块加载
-~ip_tables/iptable_nat~（iptables 兼容层，libvirt/podman 网络后端）；=zswap.compressor= 模块加载后运行时切 zstd（cmdline 写法必回退 lzo）。
+加载 =ip_tables= 与 =iptable_nat= 作为兼容层（供 Libvirt 与 Podman 网络后端使用）；在系统启动完成且 zstd 模块就绪后，由 =zswap-zstd= 服务运行时将 zswap 压缩器无缝切换至 zstd。
 
 #+NAME: kernel-module-services
 #+begin_src scheme
@@ -419,7 +422,7 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 **** sysctl 调优
-取舍理由（BBR×fq、TCP 三元组、SSD 唤醒）见 source/AGENTS.md。
+网络栈（BBR 拥塞控制、fq 队列调度、TCP 缓冲三元组）、虚拟内存与文件监听上限调优。
 
 #+NAME: sysctl-services
 #+begin_src scheme
@@ -459,7 +462,7 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 **** 音频实时优先级
-=@audio= 开 RT + 无限 memlock，配合 =threadirqs= 压 xrun；nofile 上限同步放开。
+为 =@audio= 用户组授予 RT 实时优先级与无限制内存锁定（memlock），配合 =threadirqs= 消除音频 xrun 丢包；同时调高全局最大文件描述符上限。
 
 #+NAME: pam-limits-services
 #+begin_src scheme
@@ -481,7 +484,7 @@ Limine（=rosenthal= 频道）。
 :CUSTOM_ID: sys-packages
 :END:
 
-一些需要用到的软件包， *非必要不修改*
+系统级基础软件包（显示管理器、虚拟化依赖、系统维护与底层 CLI 工具）。用户态常用工具统一在 Home Packages 中配置。
 
 #+NAME: packages-list
 #+begin_src scheme
@@ -568,10 +571,10 @@ Limine（=rosenthal= 频道）。
 
 *** 文件系统相关服务
 
-四个叶子块直接装配进 [[#main-skeleton][main]]（已无中间 append 层）。
+文件系统基础配套服务，包含机器标识、休眠恢复设备、临时目录清理及数据分区挂载点准备。
 
 **** 固定 machine-id
-算法在 [[./information.scm][information.scm]] 。
+基于硬件特征生成固定的 machine-id，计算逻辑定义于 [[./information.scm][information.scm]] 。
 
 #+NAME: machine-id-service
 #+begin_src scheme
@@ -581,7 +584,7 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 **** 休眠 resume 设备
-每次启动将 swap 分区写入 =/sys/power/resume= （休眠必需）。
+每次开机通过 swap 分区 UUID 反查块设备号（major:minor）并写入 =/sys/power/resume= ，为系统休眠恢复提供底层支持。
 
 #+NAME: resume-device-service
 #+begin_src scheme
@@ -612,7 +615,7 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 **** 开机清空 /tmp
-替代原 tmpfs「重启自动清空」：标志文件保证每周期一次，注入 =user-processes= 排序（机理见 source/AGENTS.md）。
+持久化 Btrfs 子卷挂载的 =/tmp= 目录开机清理：通过 =/run/cleanup-tmp-done= 标记文件确保每次启动仅执行一次，并通过 =cleanup-/tmp-prereq= 前置注入到 =user-processes= 依赖链。
 
 #+NAME: cleanup-tmp-services
 #+begin_src scheme
@@ -643,7 +646,7 @@ Limine（=rosenthal= 频道）。
 #+end_src
 
 **** /data 权限与 XDG 目录
-=fix-data-perms= 修复 =/data= 权限（0755）；=create-xdg-dirs= 在 =/data= 与 home 两侧建同名目录供 bind-mount。
+确保 =/data= 目录权限正确（0755），并在 =/data= 与 =$HOME= 两侧同步创建待持久化目录，供系统 bind-mount 挂载。
 
 #+NAME: data-dirs-services
 #+begin_src scheme
@@ -1153,61 +1156,61 @@ target_channel() {
             ch=${sline#"$name":}
             case "$ch" in
                 ''|*[!0-9]*) continue ;;
-*) ap_channel_ok "$ch" || continue
-   echo "$ch"; return 0 ;;
-esac
-done <<EONAMES
+                *) ap_channel_ok "$ch" || continue
+                   echo "$ch"; return 0 ;;
+            esac
+        done <<EONAMES
 $autoconns
 EONAMES
-done <<EOSCAN
+    done <<EOSCAN
 $scan
 EOSCAN
-return 1
+    return 1
 }
 
- # 信道允许 AP 主动辐射校验：本机 self-managed regdom（world）下 5G 全带
- # no IR，扫描分支（STA 未连）起在这些信道会被 hostapd 拒绝（NO-IR）。
- # 带 IR-CONCURRENT 的信道在 STA 关联后限制解除——跟随 STA 的分支不需要
- # 此过滤，只有扫描分支（发起时 STA 未连）必须选无 no IR 标志的信道。
- # iw phy 的 Frequencies 行格式：* 5785 MHz [157] (22.0 dBm) (no IR)
- ap_channel_ok() {
-     line=$("$IW_BIN" phy 2>/dev/null | "$GREP_BIN" -E "MHz \[$1\] ")
-     [ -n "$line" ] || return 1
-     case "$line" in
-         *"no IR"*) return 1 ;;
-         *) return 0 ;;
-     esac
- }
+# 信道允许 AP 主动辐射校验：本机 self-managed regdom（world）下 5G 全带
+# no IR，扫描分支（STA 未连）起在这些信道会被 hostapd 拒绝（NO-IR）。
+# 带 IR-CONCURRENT 的信道在 STA 关联后限制解除——跟随 STA 的分支不需要
+# 此过滤，只有扫描分支（发起时 STA 未连）必须选无 no IR 标志的信道。
+# iw phy 的 Frequencies 行格式：* 5785 MHz [157] (22.0 dBm) (no IR)
+ap_channel_ok() {
+    line=$("$IW_BIN" phy 2>/dev/null | "$GREP_BIN" -E "MHz \[$1\] ")
+    [ -n "$line" ] || return 1
+    case "$line" in
+        *"no IR"*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
 
- stop_hotspot() {
-     "$HERD_BIN" stop "$HOTSPOT_SVC" 2>/dev/null
-     "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
-     return 0
- }
+stop_hotspot() {
+    "$HERD_BIN" stop "$HOTSPOT_SVC" 2>/dev/null
+    "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
+    return 0
+}
 
- if [ -e "$DISABLE_SENTINEL" ]; then
-     hotspot_active && stop_hotspot
-     exit 0
- fi
+if [ -e "$DISABLE_SENTINEL" ]; then
+    hotspot_active && stop_hotspot
+    exit 0
+fi
 
- if on_ac_power && ! wifi_trusted; then
-     ch=$(target_channel) || exit 0
-     if hotspot_active; then
-         ap_ch=$(ap_channel)
-         [ -n "$ap_ch" ] && [ "$ap_ch" = "$ch" ] && exit 0
-         # 目标信道变化（STA 漫游 / 出现可关联网络）：重启热点跟随
-         stop_hotspot
-     fi
-     "$MKDIR_BIN" -p "${CHANNEL_FILE%/*}"
-     printf '%s\n' "$ch" > "$CHANNEL_FILE"
-     # shepherd 把进程退出过的服务标记 disabled，herd start 会拒绝；
-     # enable 幂等（未禁用时无副作用）
-     "$HERD_BIN" enable "$HOTSPOT_SVC" 2>/dev/null
-     exec "$HERD_BIN" start "$HOTSPOT_SVC"
- fi
+if on_ac_power && ! wifi_trusted; then
+    ch=$(target_channel) || exit 0
+    if hotspot_active; then
+        ap_ch=$(ap_channel)
+        [ -n "$ap_ch" ] && [ "$ap_ch" = "$ch" ] && exit 0
+        # 目标信道变化（STA 漫游 / 出现可关联网络）：重启热点跟随
+        stop_hotspot
+    fi
+    "$MKDIR_BIN" -p "${CHANNEL_FILE%/*}"
+    printf '%s\n' "$ch" > "$CHANNEL_FILE"
+    # shepherd 把进程退出过的服务标记 disabled，herd start 会拒绝；
+    # enable 幂等（未禁用时无副作用）
+    "$HERD_BIN" enable "$HOTSPOT_SVC" 2>/dev/null
+    exec "$HERD_BIN" start "$HOTSPOT_SVC"
+fi
 
- hotspot_active && stop_hotspot
- exit 0
+hotspot_active && stop_hotspot
+exit 0
 #+end_src
 
 **** 热点 AP 执行体
@@ -1244,49 +1247,50 @@ conf="$CONF_DIR/hostapd.conf"
 ch=$(cat "$CHANNEL_FILE" 2>/dev/null)
 case "$ch" in
     ''|*[!0-9]*) exit 1 ;;
-                 esac
-                 # 信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）
-                 if [ "$ch" -le 14 ] 2>/dev/null; then
-                     hw_mode=g
-                 else
-                     hw_mode=a
-                 fi
+esac
 
-                 creds=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$HOTSPOT_CREDS_CIPHER" 2>/dev/null) || exit 1
-                 ssid=$(printf '%s\n' "$creds" | "$SED_BIN" -n '1p')
-                 psk=$(printf '%s\n' "$creds" | "$SED_BIN" -n '2p')
-                 [ -n "$ssid" ] && [ -n "$psk" ] || exit 1
+# 信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）
+if [ "$ch" -le 14 ] 2>/dev/null; then
+    hw_mode=g
+else
+    hw_mode=a
+fi
 
-                 # 接口类型纠正：早期部署残留的 managed 类型会让 hostapd 起不来
-                 cur_type=$("$IW_BIN" dev "$HOTSPOT_IFACE" info 2>/dev/null |
-                                "$SED_BIN" -n 's/^[[:space:]]*type \([a-z_]*\)$/\1/p')
-                 if [ "$cur_type" != "__ap" ]; then
-                     "$IP_BIN" link set "$HOTSPOT_IFACE" down 2>/dev/null
-                     "$IW_BIN" dev "$HOTSPOT_IFACE" set type __ap || exit 1
-                 fi
+creds=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$HOTSPOT_CREDS_CIPHER" 2>/dev/null) || exit 1
+ssid=$(printf '%s\n' "$creds" | "$SED_BIN" -n '1p')
+psk=$(printf '%s\n' "$creds" | "$SED_BIN" -n '2p')
+[ -n "$ssid" ] && [ -n "$psk" ] || exit 1
 
-                 "$MKDIR_BIN" -p "$CONF_DIR"
-                 umask 077
-                 {
-                     echo "interface=$HOTSPOT_IFACE"
-                     echo "driver=nl80211"
-                     echo "country_code=CN"
-                     echo "ieee80211d=1"
-                     echo "ssid=$ssid"
-                     echo "hw_mode=$hw_mode"
-                     echo "channel=$ch"
-                     echo "wpa=2"
-                     echo "wpa_passphrase=$psk"
-                     echo "wpa_key_mgmt=WPA-PSK"
-                     echo "rsn_pairwise=CCMP"
-                     echo "auth_algs=1"
-                     echo "macaddr_acl=0"
-                 } > "$conf"
+# 接口类型纠正：早期部署残留的 managed 类型会让 hostapd 起不来
+cur_type=$("$IW_BIN" dev "$HOTSPOT_IFACE" info 2>/dev/null |
+               "$SED_BIN" -n 's/^[[:space:]]*type \([a-z_]*\)$/\1/p')
+if [ "$cur_type" != "__ap" ]; then
+    "$IP_BIN" link set "$HOTSPOT_IFACE" down 2>/dev/null
+    "$IW_BIN" dev "$HOTSPOT_IFACE" set type __ap || exit 1
+fi
 
-                 "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
-                 "$IP_BIN" addr add "$AP_ADDR" dev "$HOTSPOT_IFACE" || exit 1
-                 "$IP_BIN" link set "$HOTSPOT_IFACE" up
-                 exec "$HOSTAPD_BIN" "$conf"
+"$MKDIR_BIN" -p "$CONF_DIR"
+umask 077
+{
+    echo "interface=$HOTSPOT_IFACE"
+    echo "driver=nl80211"
+    echo "country_code=CN"
+    echo "ieee80211d=1"
+    echo "ssid=$ssid"
+    echo "hw_mode=$hw_mode"
+    echo "channel=$ch"
+    echo "wpa=2"
+    echo "wpa_passphrase=$psk"
+    echo "wpa_key_mgmt=WPA-PSK"
+    echo "rsn_pairwise=CCMP"
+    echo "auth_algs=1"
+    echo "macaddr_acl=0"
+} > "$conf"
+
+"$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
+"$IP_BIN" addr add "$AP_ADDR" dev "$HOTSPOT_IFACE" || exit 1
+"$IP_BIN" link set "$HOTSPOT_IFACE" up
+exec "$HOSTAPD_BIN" "$conf"
 #+end_src
 
 **** nftables 规则集
@@ -1384,9 +1388,10 @@ iifname "uap0" oifname != "uap0" masquerade
 
 *** UDEV 规则
 
-动态生成且需注入 store 路径的规则用 =mixed-text-file= 生成文件、再经 =file->udev-rule= 包装（裸文件会被 rules union 静默跳过）；纯文本规则直接 =udev-rule= 。三块按序装配进 [[#main-skeleton][main]] 。
+硬件设备权限与电源事件监听规则：包含静态外设规则、AC 供电状态自适应联动规则以及 USB 挂起权限规则。
 
 **** 静态规则
+配置屏幕背光、Android 调试桥、游戏手柄、音频 DMA 低延迟接口、Intel NPU 及 Sunshine 虚拟输入设备权限。
 
 #+NAME: udev-static-rules
 #+begin_src scheme
@@ -1417,7 +1422,7 @@ iifname "uap0" oifname != "uap0" masquerade
 #+end_src
 
 **** AC 电源状态联动
-插电 → 满血组（PPD performance + WiFi 省电关 + pstate/ASPM/KSM 等 sysfs 成组开关）；拔电 → 反向省电组（udev power_supply 事件 root 调用，=ac-power-init= 开机补跑冷插拔窗口）。单项 sysfs 写入失败静默降级，不阻塞整组；PCI runtime PM 只动白名单设备（iGPU/NVMe/WiFi），电池侧保留睿频（不动 no_turbo）。
+插电时切换至高性能模式（PPD performance + 关闭 WiFi 省电 + 提升 CPU 最低主频 + 启用 ASPM 性能策略）；拔电时切换至节能策略。开机由 =ac-power-init= 初始化检测。
 
 #+NAME: ac-power-services
 #+begin_src scheme
@@ -1532,10 +1537,10 @@ iifname "uap0" oifname != "uap0" masquerade
 
 *** 基础服务
 
-三块按序装配进 [[#main-skeleton][main]] 。
+包含 KMS 虚拟终端控制台、root 周期性维护任务（垃圾回收与 SSD Trim）以及 nix-ld 兼容运行环境。
 
 **** KMS 控制台
-tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录集中 tty7 greetd。
+TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；TTY1 预留给内核启动消息，图形登录集中在 TTY7（greetd）。
 
 #+NAME: kmscon-services
 #+begin_src scheme
@@ -1548,8 +1553,10 @@ tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录
 #+end_src
 
 **** root 服务与定时任务
-
-周日 18:00 =guix-gc= （删 30 天前旧世代、腾 20G）、周六 18:00 =flatpak-system-update= （仅外接电源）、周日 19:00 =fstrim= （Btrfs discard=async 之外的兜底；从 util-linux 注入 store 路径）。
+包含系统定时任务：
+- 每周日 18:00 执行 =guix gc= 清理 30 天前的旧世代（保留至少 20G 空间）。
+- 每周六 18:00 在外接电源状态下执行 =flatpak update --system= 。
+- 每周日 19:00 执行 =fstrim -av= 进行全盘 TRIM 兜底。
 
 #+NAME: root-services
 #+begin_src scheme
@@ -1650,7 +1657,7 @@ tty2-6 走 kmscon（pango 24 号）；tty1 不设 getty 留内核消息，登录
 #+end_src
 
 *** 桌面服务
-=%desktop-services= 基础上删除 GDM/mingetty，换 greetd + tuigreet（tty7）登录，加蓝牙/屏幕锁/背光等桌面服务。=modify-services= 只保留 guix 的 modify（guix-service 仅一个实例）；elogind 挂起/休眠键一律 ignore；=hibernate-polkit= 放行本地活跃用户休眠/挂起/混合休眠。
+基于 =%desktop-services= 深度定制：替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先）、蓝牙与休眠 Polkit 提权规则。
 
 #+NAME: desktop-services
 #+begin_src scheme :noweb yes
@@ -1912,14 +1919,14 @@ polkit.addRule(function(action, subject) {
 
 * 用户配置
 
-职责：尽量多的配置放这里，系统层只留装机必需——首装更快，且 Home 层迭代不碰系统 reconfiguration。
+用户态环境定义，包含桌面应用、终端工具链、开发环境、Shepherd 守护服务、字体与环境变量。
 
 ** Packages
 :PROPERTIES:
 :CUSTOM_ID: home-packages
 :END:
 
-包列表统一用内置 ~specifications->packages~ （经 =(gnu)= 可用）：接受 ='("name@version:output")= 规格列表，返回 =(package "output")= 元组。
+使用内置 ~specifications->packages~ 函数声明软件包规格列表（支持 =name@version:output= 语法）。
 
 *** 桌面环境相关软件包
 
@@ -2767,33 +2774,33 @@ in_ports() {
 set_ports() {
     for dev in /sys/bus/usb/devices/*-*; do
         case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
-[ -f "$dev/power/control" ] || continue
-if in_ports "${dev##*/}"; then
-    echo "$1" > "$dev/power/control" 2>/dev/null
-fi
-done
+        [ -f "$dev/power/control" ] || continue
+        if in_ports "${dev##*/}"; then
+            echo "$1" > "$dev/power/control" 2>/dev/null
+        fi
+    done
 }
 
- off_since=0
- state=on
- while :; do
-     lit=0; dark=0
-     for b in /sys/class/backlight/*/bl_power; do
-         [ -r "$b" ] || continue
-         if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
-     done
-     if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
-         now=$(date +%s)
-         [ "$off_since" = 0 ] && off_since=$now
-         if [ $((now - off_since)) -ge $THRESHOLD ]; then
-             set_ports auto; state=off
-         fi
-     else
-         off_since=0
-         if [ "$state" != on ]; then set_ports on; state=on; fi
-     fi
-     sleep $INTERVAL
- done
+off_since=0
+state=on
+while :; do
+    lit=0; dark=0
+    for b in /sys/class/backlight/*/bl_power; do
+        [ -r "$b" ] || continue
+        if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
+    done
+    if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
+        now=$(date +%s)
+        [ "$off_since" = 0 ] && off_since=$now
+        if [ $((now - off_since)) -ge $THRESHOLD ]; then
+            set_ports auto; state=off
+        fi
+    else
+        off_since=0
+        if [ "$state" != on ]; then set_ports on; state=on; fi
+    fi
+    sleep $INTERVAL
+done
 #+end_src
 
 **** Hermes 后端与网关
@@ -2895,7 +2902,7 @@ done
 *** dotfiles 管理相关服务
 
 **** dotfiles 管理服务
-把 ~dotfiles/~ 整体移交 =Guix Home= 管理（stow layout 分组）。
+通过 Guix Home 的 =home-dotfiles-service-type= （Stow 布局模式）部署 =dotfiles/immutable/= 下的不可变配置文件到 Store 并软链至 =$HOME= 。
 
 #+NAME: dotfile-services
 #+begin_src scheme
@@ -3146,14 +3153,10 @@ done
 :CUSTOM_ID: iso
 :END:
 
-自研 Live ISO 的 =operating-system= ，与主机 =%system= 完全独立；=blue build-iso= → tangle =tmp/live-iso.scm= → =tools/build-image.scm= 出 iso9660（label 内嵌构建日期，有意放弃逐字节可复现换直观辨识）。
-
-- =desktop= （主用，XFCE + labwc Wayland，live 用户 autologin）
-- =minimal= （辅助，纯 CLI fallback）
-
-基础 OS 继承 =make-installation-os= （仅维护 x86_64）。机制要点（防呆约束与细节见 source/AGENTS.md）：精简频道（guix+nonguix）预置进 Live 的 =/etc/guix/channels.scm= ；=skeletons= 把 =source/files/livecd= 平铺进 =/etc/skel= （target ="."= ，须保留默认 skeleton 的 .zprofile）；greetd autologin 直 execl 会话（command 须 =file-append= store 绝对路径），退出后 agreety 兜底；=labwc= 是 =startxfce4 --wayland= 合成器依赖、=wlr-randr= 供 XFCE Wayland 调分辨率；elogind 供 PAM session 与 libseat seat。
-
-本块自包含：ISO 专用的 =use-modules= 只出现在这里（独立 tangle 目标 =tmp/live-iso.scm= ），绝不并入主 =<<modules>>= 。
+自建 Live 安装镜像的 =operating-system= 声明，与主机 =%system= 独立。
+- 构建命令：执行 =blue build-iso= 进行 tangle 并调用 =tools/build-image.scm= 生成 ISO 镜像文件。
+- 桌面环境：默认搭载 XFCE + labwc（Wayland），提供 live 用户免密自动登录，包含常用网络排障与系统装机工具链。
+- 自包含设计：ISO 镜像专用的模块引用直接内联在本块中，tangle 输出至独立的 =tmp/live-iso.scm= 。
 
 #+NAME: live-installation-os
 #+begin_src scheme :tangle ../tmp/live-iso.scm :noweb yes
