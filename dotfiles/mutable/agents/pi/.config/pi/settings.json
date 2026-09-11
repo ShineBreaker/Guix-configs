@@ -27,7 +27,9 @@
     "npm:@ff-labs/pi-fff",
     "npm:@juicesharp/rpiv-todo",
     "npm:@juicesharp/rpiv-ask-user-question",
-    "git:github.com/DietrichGebert/ponytail"
+    "git:github.com/DietrichGebert/ponytail",
+    "npm:pi-devin-local",
+    "git:github.com/NVlabs/SoL-Pi"
   ],
   "skills": [
     "~/.config/agents/skills/*"
@@ -45,7 +47,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.84.2",
+  "lastChangelogVersion": "0.85.1",
   "images": {
     "blockImages": false
   },
