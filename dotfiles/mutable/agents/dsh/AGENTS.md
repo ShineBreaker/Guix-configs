@@ -12,6 +12,7 @@
 | `profiles/web/`                         | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json` 等配置                            |
 | `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装     |
 | `.local/bin/dsh-web`                    | Desktop 启动入口：启动后台服务并在独立的 Chromium App 窗口中打开                                     |
+| `.local/bin/dsh-update`                 | 一键更新本体与三个插件（见「一键更新」）                                                             |
 | `.local/share/applications/dsh.desktop` | 桌面快捷方式，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                           |
 | `.local/share/icons/dsh.png`            | 图标文件（对齐 Papirus 风格，256×256 PNG）；同目录 `dsh.svg` 为矢量母版                              |
 
@@ -20,7 +21,7 @@
 ## 安装通道与升级
 
 - **安装机制**：DSH CLI 本体（当前为 0.1.5-rc.1）通过 pnpm 安装在 `_cli/` 目录中。
-- **升级步骤**：修改源码中 `_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。
+- **升级步骤**：修改源码中 `_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh-update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
 - **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。
 
 ## 插件管理（Web Profile）
@@ -40,6 +41,24 @@
 1. **供应链冷却**：pnpm 会自动将 `minimumReleaseAgeExclude` 写入 profile workspace，确保新发插件正常拉取。
 2. **原生模块编译**：涉及 native 依赖时需执行 `pnpm approve-builds`（配置项为 `allowBuilds`）。
 3. **服务重启**：安装新插件后须重启 `dsh web`。若首次加载时页面漏掉插件条目，对浏览器进行一次硬刷新（Ctrl+F5）即可恢复。
+
+## 一键更新（dsh-update）
+
+`dsh-update` 把本体与三个插件一起升到上游最新。两层强绑定，故不提供只升一层的开关。
+
+```bash
+dsh-update --check           # 只查差异；退出码 0=已最新，1=有更新
+dsh-update                   # 列出差异，确认后执行
+dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh web
+```
+
+- **选版不跟 npm 的 `latest` tag**：DSH 全是 preview 版本，发布者把 `latest` 停在保守位（`0.1.5-rc.2` 发布时 `latest` 仍是 rc.1）。脚本按通道稳定性 `latest → next → beta → alpha` 取第一个高于当前的版本，来源通道在输出里标出。
+- **版本锁精确**：用 `pnpm add -E`（`--save-exact`）。pnpm 默认写 `^`，那正是依赖静默升到不兼容版本的成因。
+- **不手写 YAML**：显式 `pnpm add <pkg>@<ver>` 时，pnpm 会自动把仍在 24h 供应链冷却期内的版本写进 workspace 的 `minimumReleaseAgeExclude`。脚本只提示、不自己改这两个配置文件。
+- **兼容性提醒**：读插件的 `dsh.compatibility.dshReleases`（发布方自列的已验证版本白名单）。多数插件没有这个字段，那不代表不兼容，故只在「声明了白名单却不含目标版本」时才提醒。
+- **生效**：更新后须重启 `dsh web`（host 半边不热载）。`--restart` 会调 `dsh-web --reauth`。
+
+> **改的是仓库源文件**：`package.json` 与 `pnpm-workspace.yaml` 由 pnpm 原地写入（两者都是回本包的软链），跑完 `git diff` 后提交。
 
 ## 图标与桌面集成
 

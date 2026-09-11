@@ -11,6 +11,9 @@
 node_modules$
 \.pnpm-store$
 
+# --- 包自身文档：维护者可见，不部署到 $HOME（否则会被链成 ~/AGENTS.md） ---
+AGENTS\.md$
+
 # --- additional runtime / cache artifacts ---
 # NOTE: npm/pnpm-lock.yaml 不排除——它随 stow 部署，让 pi-update 的
 # bootstrap_extensions_package 能从 lockfile 读取精确版本号生成 package.json。

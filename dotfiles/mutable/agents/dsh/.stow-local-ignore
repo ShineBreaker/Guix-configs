@@ -3,8 +3,8 @@
 #
 # 源里只托管：home 级 cordis.patch.yml、profiles/web 的四个配置文件、
 # _cli 的 package.json（npm 方案 CLI 清单，本体 node_modules 是部署侧
-# 运行时产物）、启动 wrapper（.local/bin/dsh 与 dsh-web）、desktop 条目
-# 与图标。
+# 运行时产物）、三个 wrapper（.local/bin/dsh 启动、dsh-web 桌面入口、
+# dsh-update 更新）、desktop 条目与图标。
 # 运行时产物（凭据/存储/模块缓存/node_modules/lock）生成在
 # ~/.local/share/dsh 部署侧真实目录，不在源；若误放进源，这些规则让
 # stow 不把它们软链出去。
@@ -12,6 +12,12 @@
 
 # --- 包自身的文档/元数据（不部署到 $HOME） ---
 AGENTS.md
+
+# --- Mimosa hook 状态（防御性忽略） ---
+# Mimosa 把 hook state 写在被编辑文件旁的 .mimosa/ 里，因此会落在本包内；
+# git 侧已由仓库根 .gitignore 覆盖，stow 侧靠这条剪枝，否则会被链成
+# ~/.local/bin/.mimosa。
+\.mimosa/$
 
 # --- DSH_HOME 运行时产物（防御性忽略） ---
 \.anonymous-user-id$
