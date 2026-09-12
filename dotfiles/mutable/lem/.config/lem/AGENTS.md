@@ -60,7 +60,12 @@
 
 ## 3. 键位映射与帮助体系
 
-- **集中登记**：全局按键统一使用 `vs-bind`（参数：keyspec、包名、命令名、分组、中文描述）。它在绑定按键的同时注册到 `*vs-binding-registry*`，供 F1 菜单和 `C-c h` 帮助页检索。
+- **集中登记**：全局按键统一使用 `vs-bind`（参数：keyspec、包名、命令名、分组、中文描述）。它在绑定按键的同时注册到 `*vs-binding-registry*`，供 F1 菜单、`C-c h` 帮助页与 76-whichkey 面板共用检索。
+- **which-key 面板（76，自研渲染）**：
+  - 挂点是**替换** `keymap-activate`（` :lem-core` 泛型）的 `(keymap keymap)` 同特化主方法（transient 扩展的原始定义被顶掉）——进入前缀子 keymap 与回根都会调用，天然覆盖语言 mode 自建的中间 keymap（keymap-find 子树 miss 后回退 global，命令层不受 mode 遮蔽影响，面板层直接收到激活对象）。
+  - 防抖走 `sb-thread:make-thread` + `*vs-wk-epoch*` 代际取消（快速完成序列不闪面板）；渲染回调经 `lem:send-event` 排回编辑线程。
+  - 面板文案来源：命令符号 → `*vs-binding-registry*` 反查中文描述；上游子前缀 keymap（`C-x 4` 等，`keymap-description` 未设）按完整键序列查 `*vs-wk-prefix-names*` 映射表，新前缀补条目即可。
+  - 布局对齐用显示宽度（`lem:string-width`，中文=2 列），列优先多列——**勿用 `length`**（中英混排必错位，同 Emacs which-key 3.6.0 的 pad-column bug）。
 - **Shift 组合键规范**：
   - 命名键（方向键、F 键、Tab 等）写全拼，如 `"Shift-C-Tab"`。
   - **Shift + 字母组合键必须绑定为大写形式**（如 `"C-F"` 代表 Ctrl+Shift+F，`"M-D"` 代表 Alt+Shift+D）。在 Webview 前端中，底层 JS 事件会将 Shift+字母派发为大写字符且清除 shift 标志，写 `"Shift-C-f"` 会导致按键无法匹配而失效。
@@ -77,7 +82,7 @@
 1. **图形前端机制（Webview）**：
    - 当前采用 WebKitGTK + Canvas/JS 前端，不再使用 SDL2。
    - 字体与字号通过运行时 API `set-font-name` 与 `set-font-size`（CSS 逻辑像素）动态设置。
-2. **定时器限制**：`make-timer` 在 Webview 前端由于缺少调度 Tick 不会触发；沙箱或延迟探测使用 `sb-thread:make-thread` 配合 sleep。
+2. **定时器限制**：`make-timer` 在 Webview 前端由于缺少调度 Tick 不会触发；沙箱或延迟探测使用 `sb-thread:make-thread` 配合 sleep。（例外：上游内部 `run-hooks` 型 autosave 有独立调度路径会触发。）
 3. **只读 Buffer 光标移动防护**：
    - 属性渲染的只读 Buffer（如 Explorer）禁止响应原生 `next-line`/`previous-line`，须在 Mode Keymap 中拦截上下箭头，使用专用的点操作命令。
    - `with-pop-up-typeout-window` 悬浮窗响应光标移动会导致异常，帮助内容统一渲染进只读 Buffer 后切换。
@@ -89,6 +94,10 @@
    - 鼠标移动事件（~60次/秒）仅记录目标坐标，由常驻线程进行 0.12s 防抖后通过 `send-event` 异步发起 LSP 查询，防止阻塞主编辑线程。
 7. **Ripper / Grep 隐藏目录支持**：`ripgrep` 默认忽略点号开头的目录，在配置项目搜索时必须显式附加 `--hidden` 参数。
 8. **目录 Prompt 默认值**：调用 `prompt-for-directory` 时必须显式传递 `:directory` 参数，避免上游透传 NIL 导致 Tab 补全抛类型错误。
+9. **invoke 未注册方法崩溃（00-utils `vs-invoke-guard-install` 防护）**：
+   - 上游 `lem-server` 的 `invoke` RPC 对 `*invoke-method-table*` 未命中的方法直接 `(funcall NIL)`，前端 JS 调用未注册方法（如旧版 tabbar 交互）会在 jsonrpc 线程抛 UNDEFINED-FUNCTION 并**整实例死亡**（实测连续三次即崩，debugger 无路恢复）。
+   - 配置侧 wrap：查表未命中 vs-trace 记录方法名后跳过。看到 trace 里反复出现某方法名 = 前后端能力缺口，需要在上游注册或前端规避。
+10. **add-hook 元素是 `(fn . weight)` cons**：上游 `run-hooks` 对每个元素 `(apply (car hook) args)`；`pushnew` 裸符号进 hook 表会让 `car` 对符号取值，autosave 定时器每次报 `not of type LIST`。挂钩一律用 `add-hook` 宏（自带去重与 merge 排序），勿手写 pushnew。
 
 ---
 
@@ -96,9 +105,26 @@
 
 1. **语法静态解析（每次修改后必跑）**：
    - 使用 SBCL Stub 脚本对 `modules/` 目录下所有 `.lisp` 文件进行只读解析，校验括号与宏展开。
+   - **注意**：stub 必须先 `(require :asdf)`，否则 `uiop:` 前缀触发 reader 报错误报为括号问题。
+   - **注意**：naive 括号计数器必须正确处理 `#\"` 等 char literal（`#\` 后消费一个字符或字符名），否则把 `"` 当字符串开头导致计数全错。
 2. **行为自检（ncurses `--eval` 通道）**：
-   - 在 Tmux 隔离会话中拉起 `lem -i ncurses --eval '(load "/tmp/probe.lisp")'` 执行断言。
-   - 断言脚本在配置加载完成后执行，校验按键注册表与变量状态。
+   - `lem -i ncurses -e '(form)'` 在 init 加载完成后执行；`format t` 被绑到 editor stream 终端不可见，断言结果一律写文件。
+   - `-e` 里的 `(load ...)` 静默失败（`lem-user` 包 shadow `cl:load`），探针代码必须内联进 `-e` 字符串。
+   - **`-e` 探针禁用镜像外包**：`closer-mop:` 等前缀在 reader 阶段直接炸掉整个 `-e` form，lem 落入交互模式挂起（ncurses 忽略 TERM，`timeout` 杀不掉会残留，须 `timeout -k`）。方法数检查用 `sb-mop:`（SBCL 自带）。
+   - 启动耗时基准：`time lem -i ncurses -e '(sb-ext:exit)'`（init 后立即退出，wall≈启动时间）；`VS_BENCH=1` 把各模块加载耗时写 `/tmp/lem-bench-modules.log`。
 3. **Webview 行为级验证（WebSocket 直连注入）**：
-   - 直连 `lem-server` 的本地 WebSocket 端口，通过 JSON-RPC 2.0 `input` 与 `redraw` 方法注入按键和鼠标事件。
-   - 绕过键盘焦点与桌面锁屏限制，配合临时 `vs-trace` 探针完成端到端行为验证。
+   - 直连 `lem-server` 的本地 WebSocket 端口（`ss -tlnp | grep lem`），JSON-RPC 2.0：`login`（响应含全部 views 几何）、`input`（kind `key`/`input-string`）、`redraw`；server 主动广播 `bulk`（含 `make-view`/`put` 等绘制流）。
+   - 工具：`.agents/tools/lem-ws-probe.py`（注入+收集）与 `lem-ws-screen.py`（从绘制流重建屏幕文本），依赖 `guix shell python python-websocket-client`。
+   - **键名规范**：回车必须发 `"Return"`（浏览器 key 名 `Enter` 不在 `*key-names*` 表，报 Key not found）。
+   - **login 的 size 是字符网格**（如 151×43），传像素会让 display-width 失真、面板列数计算翻倍。
+   - 按键序列跨连接残留：新一轮注入以 `C-g` 打头强制回根，否则上一轮的前缀等待会把后续键吃进序列（Key not found: <前缀><键>）。
+   - 该通道同样解释了多实例观察：同一 lem 进程可挂多个 client（原生 webview + 探针），broadcast 双发互不影响。
+4. **会话恢复污染**：webview 实例重启会恢复上次 buffer 集合（含测试残留如 lem-tutor），做 explorer/Open Folder 类验证前先确认当前 buffer 归属。
+
+## 6. 加载器故障模式（本次踩坑实录）
+
+- `vs-load-source` 的 `handler-case` 只包 `eval` 不包 `read`：**reader 错误（多余 `)`、不存在的 `pkg:sym`）会中断整个文件的加载循环**，该 form 之后的所有定义静默缺失。错误写 `/tmp/lem-loaderr.log`（init.lisp 已加文件日志）。
+- **eval 错误同样落文件**（EVAL-ERR 前缀）：read 日志只覆盖一半故障面——eval 失败只跳过单 form，症状同样是「文件后半符号缺失」。2026-09-12 实战：80-modes-base 的 `vs-hook-add` 漏 quote（unbound 求值）让 treesitter 预加载静默失效数日，靠该日志首次曝光。
+- 症状识别：某函数"明明在文件里却 undefined"→ 先查 `/tmp/lem-loaderr.log` 是否有该文件的 READ-ERR/EVAL-ERR，再查 FASL 缓存键（`~/.cache/lem/fasl/<name>-<mtime>-<size>.fasl`）是否与源文件当前 mtime/size 匹配。
+- FASL 缓存命中时 `compile-file` 完全跳过；源改动后键不匹配会重新编译，`compile-file` 失败自动退化 `vs-load-source`——两条路径的 reader 行为必须一致。
+- **顶层 eval / setf fdefinition 必须包在安装函数内**：`compile-file` 会在编译期执行顶层 form 且 FASL 产物不含其效果，FASL 命中加载的实例会**静默丢失运行时补丁**（defmethod 替换、fdefinition wrap 等一律函数化后在顶层调用）。

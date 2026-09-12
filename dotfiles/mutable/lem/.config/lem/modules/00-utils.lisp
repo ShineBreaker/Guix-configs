@@ -124,3 +124,31 @@ make-leftside-window → balance-windows，会把已有的上下 split 均分；
                          :direction :output :if-exists :append
                          :if-does-not-exist :create)
       (format out "~&~A~%" (apply #'format nil fmt args)))))
+
+;; --- invoke 防护：webview 前端 JS 调用未注册方法时保住进程 ---
+;; 上游 frontends/server/main.lisp 的 invoke 对表未命中的方法直接
+;; (funcall (gethash method *invoke-method-table*)) = funcall NIL →
+;; UNDEFINED-FUNCTION 在 jsonrpc 线程抛出、SBCL debugger 无路恢复，
+;; 实例死亡（实测 /tmp/lem-wv-stdout2.log：前端连续 invoke 三次即崩）。
+;; wrap：查表未命中 vs-trace 记录方法名后跳过——既兜住崩溃，也把
+;; 前端到底在调什么方法留痕，便于发现前后端能力缺口。
+;; 必须函数化安装：顶层 eval/setf 在 compile-file 期执行、FASL 产物
+;; 不含该效果，重启后防护会静默丢失（AGENTS.md FASL 双路径一致性）。
+(defun vs-invoke-guard-install ()
+  (let ((invoke-sym (vs$ :lem-server "INVOKE"))
+        (table-sym (vs$ :lem-server "*INVOKE-METHOD-TABLE*")))
+    (when (and invoke-sym (fboundp invoke-sym)
+               table-sym (boundp table-sym))
+      (let ((orig (fdefinition invoke-sym)))
+        (setf (fdefinition invoke-sym)
+              (lambda (params)
+                (let* ((method (and (hash-table-p params)
+                                    (gethash "method" params)))
+                       (fn (and method
+                                (gethash method (symbol-value table-sym)))))
+                  (if fn
+                      (funcall orig params)
+                      (vs-trace "invoke 防护: 前端调用未注册方法 ~S，已跳过"
+                                method)))))))))
+
+(vs-invoke-guard-install)
