@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=waywallen
+Exec=waywallen --no-ui
+Icon=
+Comment=
+Path=
+Terminal=false
+StartupNotify=false
