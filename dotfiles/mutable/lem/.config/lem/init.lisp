@@ -45,12 +45,30 @@
   (let ((*package* *package*)
         (*readtable* *readtable*))
     (with-open-file (in path)
-      (loop :for form := (read in nil nil)
+      (loop :for n :from 0
+            :for pos := (file-position in)
+            :for form := (handler-case (read in nil nil)
+                           (error (e)
+                             (with-open-file
+                                 (o "/tmp/lem-loaderr.log" :direction :output
+                                    :if-exists :append :if-does-not-exist :create)
+                               (format o "READ-ERR ~A form~D byte~D: ~A~%"
+                                       path n pos e))
+                             nil))
             :while form
             :do (handler-case (eval form)
-                 (error (e)
-                   (format *error-output* "~&; [lem] ~A: skip form ~S: ~A~%"
-                           path (if (consp form) (car form) form) e)))))
+                  (error (e)
+                    ;; eval 错误同样落文件：*error-output* 被 editor stream
+                    ;; 吞掉终端不可见，无文件日志时 form 失败只剩「后续
+                    ;; 符号静默缺失」这一个远端症状（read 日志同款出口）
+                    (with-open-file
+                        (o "/tmp/lem-loaderr.log" :direction :output
+                           :if-exists :append :if-does-not-exist :create)
+                      (format o "EVAL-ERR ~A form~D: ~A~%  form: ~S~%"
+                              path n e
+                              (if (and (consp form) (> (length form) 3))
+                                  (append (subseq form 0 3) '(&etc))
+                                  form)))))))
     path))
 
 ;; --- 模块 FASL 缓存：read+eval 逐 form 加载会让 SBCL 对每 form 走编译
@@ -95,20 +113,20 @@
                                      (pathname-name path)
                                      (get-internal-real-time))
                              *vs-fasl-dir*)))))
-              (if (and tmp (probe-file tmp))
-                  (progn
-                    (ensure-directories-exist fasl)
-                    (ignore-errors (rename-file tmp fasl))
-                    ;; 同模块旧键的 fasl 清掉，防缓存无限堆积
-                    (dolist (stale (directory
-                                    (merge-pathnames
-                                     (format nil "~A-*.fasl" (pathname-name path))
-                                     *vs-fasl-dir*)))
-                      (unless (equal stale fasl)
-                        (ignore-errors (delete-file stale))))
-                    (or (ignore-errors (load fasl) t)
-                        (vs-load-source path)))
-                  (vs-load-source path))))))))
+                (if (and tmp (probe-file tmp))
+                    (progn
+                      (ensure-directories-exist fasl)
+                      (ignore-errors (rename-file tmp fasl))
+                      ;; 同模块旧键的 fasl 清掉，防缓存无限堆积
+                      (dolist (stale (directory
+                                      (merge-pathnames
+                                       (format nil "~A-*.fasl" (pathname-name path))
+                                       *vs-fasl-dir*)))
+                        (unless (equal stale fasl)
+                          (ignore-errors (delete-file stale))))
+                      (or (ignore-errors (load fasl) t)
+                          (vs-load-source path)))
+                    (vs-load-source path))))))))
 
 ;; 模块自动发现：modules/ 下全部 .lisp 按文件名字典序加载
 ;; （顺序由 NN- 前缀控制，见文件头注释）；各语言文件位于

@@ -174,7 +174,7 @@ rename「old -> new」取 new；C 引号路径剥外层引号。"
                         (when (or (null old)
                                   (< (vs-status-priority old)
                                      (vs-status-priority status)))
-                          (setf (gethash dir table) status))))))))))))))
+                          (setf (gethash dir table) status))))))))))
 
 (defun vs-git-collect-status (root)
   "后台线程侧：同步跑 git status（阻塞的是采集线程自身）并解析为
@@ -386,7 +386,9 @@ Invalid number of arguments: 0），固定形参列表任一约定下都会炸�
                       (dir-p (vs-icon :folder))
                       ((gethash (pathname-type path) *vs-code-exts*)
                        (vs-icon :file-code))
-                      (t (vs-icon :file)))))
+                      (t (vs-icon :file))))
+         (name-attr (or (and status (vs-status-attribute status))
+                        (if dir-p 'vs-tree-folder 'vs-tree-file))))
     (insert-string point (make-string (* 2 depth) :initial-element #\space)
                    :attribute 'vs-sidebar-bg)
     (if dir-p
@@ -916,6 +918,9 @@ post-command 链少一个常驻函数。整体 ignore-errors——post-command
 
 (let ((hook-var (or (vs$ :lem "AFTER-SAVE-HOOK")
                     (vs$ :lem/buffer/file "AFTER-SAVE-HOOK"))))
+  ;; 必须用上游 add-hook（元素是 (fn . weight) cons，run-hooks 逐个
+  ;; (apply (car hook) args)）：pushnew 裸符号进表会让 car 对符号取值，
+  ;; autosave 定时器每次报 "not of type LIST" 刷屏
   (when hook-var
-    (eval `(pushnew 'vs-explorer-on-save
-                    (variable-value ',hook-var :global t)))))
+    (eval `(add-hook (variable-value ',hook-var :global t)
+                     'vs-explorer-on-save))))

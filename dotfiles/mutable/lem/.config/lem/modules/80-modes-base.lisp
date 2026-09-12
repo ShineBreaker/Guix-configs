@@ -140,8 +140,10 @@ load 期不再 glob /gnu/store（冷启动 store 缓存冷时两次 directory �
             (nm (vs$ :lem-nix-mode "NIX-MODE")))
         (let ((jh (and jm (vs-mode-hook jm)))
               (nh (and nm (vs-mode-hook nm))))
-          (when jh (vs-hook-add jh vs-ts-preload-json))
-          (when nh (vs-hook-add nh vs-ts-preload-nix))
+          ;; hook 传符号（运行时 funcall）——裸符号会按变量求值，
+          ;; unbound 即 EVAL-ERR，钩子静默丢失（90-startup 同款 quote 风格）
+          (when jh (vs-hook-add jh 'vs-ts-preload-json))
+          (when nh (vs-hook-add nh 'vs-ts-preload-nix))
           (unless (or jh nh)
             (vs-warn (list :ts-modes "JSON-MODE" "NIX-MODE")))))
       (vs-warn (list :lem-tree-sitter "TREE-SITTER-AVAILABLE-P"))))
