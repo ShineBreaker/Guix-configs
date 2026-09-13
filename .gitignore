@@ -34,3 +34,4 @@ uv.lock
 !.agents/anchors.json
 .mimosa/
 .video_agent/
+dotfiles/mutable/lem/.config/lem/.agents/workfile/
