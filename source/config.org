@@ -240,9 +240,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
      (list (service guix-home-service-type
                     `((,username ,%home))))))
 
-   (skeletons
-    (append (default-skeletons)
-            `(("." ,(local-file "../source/files/skel" #:recursive? #t)))))
+   (skeletons (default-skeletons))
 
    (name-service-switch %mdns-host-lookup-nss)))
 #+end_src
@@ -692,7 +690,7 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
 各服务要点：
 - =nm-powersave-conf=：NM 每次连接都把 WiFi 省电重置为默认开启，dispatcher 在 up 事件补救实测不可靠（NM 默认启用省电覆盖了它）；改为 =[connection]= 段默认 =wifi.powersave=2= ，连接时恒不省电（低延迟，远程操控优先），电池时由 udev ac-power 规则在插拔瞬间切 on。注意 =[connection]= 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
 - =openssh=：=permit-root-login 'prohibit-password= 显式声明——root 锁定密码仅允许密钥登录，防上游默认漂移。
-- =mihomo-daemon=：=-d= 指定数据目录（geodata/cache/UI/proxies）归位到 =/var/lib/mihomo= 随 @data 子卷持久化；此前 root 环境下 mihomo 默认写到 =/.config/mihomo= 。
+- =mihomo-daemon=：=-d= 指定数据目录（geodata/cache/UI/proxies）归位到 =/var/lib/mihomo= 随 @data 子卷持久化；此前 root 环境下 mihomo 默认写到 =/.config/mihomo= 。启动经 =mihomo-run= 包装：模板（dotfiles immutable 部署，订阅 URL 为 =$MIHOMO_SUB_*= 占位符，密文入库明文不入库）渲染到 =/var/lib/mihomo/config.yaml= 后 exec，订阅轮换只需改密文 + 重启服务。
 - =hotspot-uap0-udev=：NM 隔离 uap0 走 udev =NM_UNMANAGED= 官方机制（85-nm-unmanaged.rules 同款），规则文件随系统代原子切换；不走 conf.d =device.*= 段——NM 1.54 不认 =device.interface-name= 键（事故根因之一），且 =/etc/NetworkManager= 是持久子卷，坏文件跨代残留。顺带清掉 =ID_NET_NAME*= 防 udev 因共享 MAC 试图把 uap0 改名成 wlp0s20f3（每次开机都报 rename 冲突）；序号须 > 75（75-net-description 会无条件重设这些属性，reviewer 实证 eudev 3.2.14）。
 - =hotspot-stale-conf-cleanup=：一次性清理——事故版本把键名错误的 conf.d 文件写进了持久子卷，回滚系统代不清除，必须显式删。
 - =hotspot-ap=：热点本体，hostapd 直管 uap0（type __ap），不随机启动，由决策脚本 =herd start/stop= ；信道由决策脚本写入 =/run= 状态文件，执行体读不到合法信道号即拒绝启动。不 respawn：失败即停，由决策脚本在下个触发点重拉，避免反复折腾接口的风暴。
@@ -718,6 +716,12 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
        [ip-bin (bin "iproute2" "/sbin/ip")]
        [sed-bin (bin "sed" "/bin/sed")]
        [mkdir-bin (bin "coreutils" "/bin/mkdir")]
+       [envsubst-bin (bin "gettext" "/bin/envsubst")]
+       [mv-bin (bin "coreutils" "/bin/mv")]
+       [chmod-bin (bin "coreutils" "/bin/chmod")]
+       [mihomo-subs-age
+        (local-file
+         "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/mihomo-subscriptions.age")]
 
        [render-script
         (lambda (name template pairs)
@@ -775,7 +779,22 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
            ("@AGE_BIN@" . ,age-bin)
            ("@NFT_BIN@" . ,(file-append nftables "/sbin/nft"))
            ("@GREP_BIN@" . ,grep-bin)
-           ("@HOTSPOT_DECIDE_BIN@" . ,hotspot-decide-script)))])
+           ("@HOTSPOT_DECIDE_BIN@" . ,hotspot-decide-script)))]
+
+       [mihomo-run-script
+        (render-script
+         "mihomo-run" (local-file "mihomo-run")
+         `(("@AGE_IDENTITY@" . ,age-key)
+           ("@SUBS_CIPHER@" . ,mihomo-subs-age)
+           ("@AGE_BIN@" . ,age-bin)
+           ("@ENVSUBST_BIN@" . ,envsubst-bin)
+           ("@MV_BIN@" . ,mv-bin)
+           ("@CHMOD_BIN@" . ,chmod-bin)
+           ("@MKDIR_BIN@" . ,mkdir-bin)
+           ("@MIHOMO_BIN@" . ,(file-append mihomo "/bin/mihomo"))
+           ("@MIHOMO_TEMPLATE@"
+            . ,(string-append "/home/" username
+                              "/.config/mihomo/config.yaml"))))])
 
   (list (service nftables-service-type
                  (nftables-configuration (ruleset (local-file
@@ -814,15 +833,7 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
                                                 (provision '(mihomo-daemon))
                                                 (requirement '(user-processes))
                                                 (start #~(make-forkexec-constructor
-                                                          (list #$(file-append
-                                                                   mihomo
-                                                                   "/bin/mihomo")
-                                                                "-d" "/var/lib/mihomo"
-                                                                "-f"
-                                                                (string-append
-                                                                 "/home/"
-                                                                 #$username
-                                                                 "/.config/mihomo/config.yaml"))
+                                                          (list #$mihomo-run-script)
                                                           #:log-file
                                                           "/var/log/mihomo.log"))
                                                 (stop #~(make-kill-destructor))
@@ -942,6 +953,45 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
                                (one-shot? #t)
                                (auto-start? #t)
                                (respawn? #f))))))
+#+end_src
+
+**** mihomo 启动包装
+
+模板由 dotfiles immutable 部署到 =~/.config/mihomo/config.yaml= ，订阅 URL 以 =$MIHOMO_SUB_ONE/TWO= 占位；daemon 启动时解密 =mihomo-subscriptions.age=（私钥同 wifi-trust：=~/.local/share/keys/age=）经 envsubst 渲染到 =/var/lib/mihomo/config.yaml= 再 exec。解密失败降级为空订阅启动（直连仍可用），不触发 respawn 风暴；换订阅：=secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"=（或 =secrets edit=）后 =herd restart mihomo-daemon=。
+
+#+NAME: mihomo-run
+#+begin_src sh :tangle ../tmp/mihomo-run
+#!/bin/sh
+# Auto-generated by Guix config.org.
+
+AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
+SUBS_CIPHER="${SUBS_CIPHER:-@SUBS_CIPHER@}"
+AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
+ENVSUBST_BIN="${ENVSUBST_BIN:-@ENVSUBST_BIN@}"
+MV_BIN="${MV_BIN:-@MV_BIN@}"
+CHMOD_BIN="${CHMOD_BIN:-@CHMOD_BIN@}"
+MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
+MIHOMO_BIN="${MIHOMO_BIN:-@MIHOMO_BIN@}"
+MIHOMO_TEMPLATE="${MIHOMO_TEMPLATE:-@MIHOMO_TEMPLATE@}"
+
+DATA_DIR="/var/lib/mihomo"
+OUT="$DATA_DIR/config.yaml"
+
+"$MKDIR_BIN" -p "$DATA_DIR"
+
+if subs=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$SUBS_CIPHER" 2>/dev/null); then
+    set -a
+    eval "$subs"
+    set +a
+else
+    echo "mihomo-run: 订阅密文解密失败，以空订阅启动" >&2
+fi
+
+"$ENVSUBST_BIN" '$MIHOMO_SUB_ONE $MIHOMO_SUB_TWO' <"$MIHOMO_TEMPLATE" >"$OUT.tmp"
+"$CHMOD_BIN" 600 "$OUT.tmp"
+"$MV_BIN" "$OUT.tmp" "$OUT"
+
+exec "$MIHOMO_BIN" -d "$DATA_DIR" -f "$OUT"
 #+end_src
 
 **** NM dispatcher 脚本
@@ -1808,7 +1858,8 @@ polkit.addRule(function(action, subject) {
                    '("https://substitutes.guix.gofranz.com"))))
 
  ;; SJTUG Mirror
- (simple-service 'sjtug-substitutes guix-service-type
+ (simple-service 'sjtug-substitutes guix-service-
+                 type
                  (guix-extension
                   (substitute-urls
                    '("https://mirror.sjtu.edu.cn/guix"

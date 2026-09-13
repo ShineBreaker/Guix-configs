@@ -22,7 +22,6 @@ dotfiles/
 │   ├── system/
 │   ├── terminal/
 │   └── utilities/
-│   └── zen/
 └── mutable/
     ├── agenote/
     ├── agents/

@@ -70,7 +70,7 @@ mutable/
 | `agents/skills` | `~/.config/agents/skills/` | 第三方技能锁（`skills-lock.json`）与自建技能 |
 | `agents/zcode` | `~/.zcode/` | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md) |
 | `agenote` | `~/.config/agents/skills/` + `~/.config/omp/extensions/` | 知识库技能与 Hook 容器（子模块） |
-| `tools/secrets` | `~/.local/share/keys/` | Age 密钥对与加解密脚本，详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md) |
+| `tools/secrets` | `~/.local/share/keys/` + `~/.local/bin/secrets` | Age 密钥对与 `secrets` 命令（加密/解密/编辑/fzf 菜单/剪贴板），详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md) |
 | `tools/appimage-run` | `~/.local/bin/appimage-run` | AppImage 运行器（子模块） |
 
 ## 工作流与操作指南

@@ -2,6 +2,12 @@
 #
 # SPDX-License-Identifier: MIT
 
+# 本文件是模板：$MIHOMO_SUB_ONE / $MIHOMO_SUB_TWO 由 mihomo-run 启动包装
+# 在 daemon 启动时从 mihomo-subscriptions.age 解密注入，
+# 渲染产物为 /var/lib/mihomo/config.yaml（root:root 600，勿手改）。
+# 换订阅：secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"（或 secrets edit）
+#        && sudo herd restart mihomo-daemon
+
 init: &init
   type: http
   interval: 86400
@@ -20,27 +26,25 @@ auto: &auto
   type: url-test
   url: https://www.gstatic.com/generate_204
   interval: 900
-  filter: ^(?:(?!.*(?:倍|x)).)*$
+  filter: ^(?!.*[倍x]).*$
 proxy-providers:
   one:
     !!merge <<: *init
-    url: ""
+    url: "$MIHOMO_SUB_ONE"
     path: proxies/one.yaml
   two:
     !!merge <<: *init
-    url: ""
+    url: "$MIHOMO_SUB_TWO"
     path: proxies/two.yaml
 mixed-port: 7890
-# redir-port: 7892
-# tproxy-port: 7893
-# allow-lan 若需让局域网/热点设备走本机代理再开 true（bind-address 相应收窄到
-# 具体接口 IP）；false 时仅本机可用，无开放代理暴露面
+# allow-lan 若需让局域网/热点设备走本机代理再开 true；false 时仅本机可用，无开放代理暴露面
 allow-lan: false
-bind-address: '*'
 mode: rule
 ipv6: true
 udp: true
-log-level: error
+unified-delay: true
+tcp-concurrent: true
+log-level: warning
 external-controller: 127.0.0.1:9090
 external-ui: UI
 external-ui-url: https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip
@@ -53,7 +57,6 @@ geo-update-interval: 168
 profile:
   store-selected: true
   store-fake-ip: true
-hosts:
 sniffer:
   enable: true
   sniff:
@@ -71,10 +74,10 @@ sniffer:
         - 443
         - 8443
   skip-domain:
-    - Mijia Cloud
+    - +.mi.com
+    - +.mijia.com
 tun:
   enable: true
-  # device: utun
   stack: mixed
   dns-hijack:
     - any:53
@@ -96,9 +99,20 @@ dns:
     - geosite:private
   default-nameserver:
     - 223.5.5.5
+  proxy-server-nameserver:
+    - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+  respect-rules: true
   nameserver:
     - https://doh.pub/dns-query
     - https://dns.alidns.com/dns-query
+  nameserver-policy:
+    "geosite:cn,private":
+      - https://doh.pub/dns-query
+      - https://dns.alidns.com/dns-query
+    "geosite:geolocation-!cn":
+      - https://dns.google/dns-query
+      - https://cloudflare-dns.com/dns-query
 proxy-groups:
   - name: PROXY
     !!merge <<: *use
@@ -138,20 +152,18 @@ rules:
   - GEOIP,lan,DIRECT,no-resolve
   - GEOSITE,private,DIRECT
   - RULE-SET,reject,REJECT
-  - GEOSITE,category-ads-all,REJECT
   - RULE-SET,direct,DIRECT
   - GEOSITE,geolocation-!cn@cn,DIRECT
   - GEOSITE,cn,DIRECT
+  - GEOSITE,category-public-tracker,DIRECT
+  - GEOSITE,category-pt,DIRECT
   - GEOSITE,category-game-platforms-download,DIRECT
   - GEOSITE,category-games-cn,DIRECT
   - GEOSITE,category-games@cn,DIRECT
   - GEOSITE,category-games,GAME
   - RULE-SET,proxy,PROXY
   - GEOSITE,geolocation-!cn,PROXY
-  - GEOSITE,category-public-tracker,DIRECT
-  - GEOSITE,category-pt,DIRECT
   - GEOIP,cn,DIRECT,no-resolve
-  - GEOIP,jp,PROXY,no-resolve
   - GEOIP,telegram,PROXY,no-resolve
   - GEOIP,google,PROXY,no-resolve
   - GEOIP,twitter,PROXY,no-resolve
@@ -160,5 +172,3 @@ rules:
   - GEOIP,cloudflare,PROXY,no-resolve
   - GEOIP,cloudfront,PROXY,no-resolve
   - MATCH,MATCH
-  - DOMAIN-SUFFIX,ppy.sh,DIRECT
-  - DOMAIN-SUFFIX,osu.ppy.sh,DIRECT

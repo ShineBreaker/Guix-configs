@@ -12,7 +12,7 @@
 | 密文 | `dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/<name>.age`               | ✓       | ✗（Stow 排除） | 644  |
 | 公钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age.pub`                               | ✓       | ✓              | 644  |
 | 私钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age`(软链到 `~/.local/share/keys/age`) | ✗       | ✓              | 600  |
-| 明文 | `~/.local/share/secrets-decrypted/<name>`                                          | ✗       | ✓              | 600  |
+| 明文 | `$XDG_RUNTIME_DIR/secrets-decrypted/<name>`（tmpfs，重启即消）           | ✗       | ✗              | 600  |
 
 整个仓库 push 到 origin 的字节里,**没有**任何明文,也没有解密所需的私钥。
 
@@ -40,16 +40,18 @@ Guix-configs/
 │   │   └── age.pub                       # 公钥,进 git
 │   ├── .local/share/secrets-encrypted/
 │   │   └── <name>.age                    # 密文,进 git但不经 Stow 部署
-│   ├── .local/share/secrets-decrypted/   # 运行时明文,不进 git
+│   ├── .local/bin/secrets                # CLI 实体 → Stow 到 ~/.local/bin
+│   ├── .local/share/bash-completion/
 │   └── .stow-local-ignore
 ├── tools/
-│   └── secrets                           # 加密/解密/编辑 CLI
+│   └── secrets                           # 指向实体的兼容软链
 └── docs/
     └── secrets.md                        # 本文件(给人类)
 ```
 
-`~/.local/share/secrets-decrypted/` 是运行时解密落地,**不进 git**,应用自
-己从那里读。
+`$XDG_RUNTIME_DIR/secrets-decrypted/`（通常 `/run/user/$UID/`）是运行时解密落
+地,tmpfs 内存文件系统,**不进 git**、重启即消,应用自己从那里读;`secrets clean`
+可手动清空。
 
 ## 3. 快速开始
 
@@ -59,9 +61,9 @@ Guix-configs/
 
 ```bash
 cd ~/Projects/Config/Guix-configs
-./tools/secrets init                # 生成密钥对到 dotfiles/mutable/tools/secrets/.local/share/keys/age
-blue stow secrets                   # 建软链 ~/.local/share/keys/age
-./tools/secrets list                # 验证一切就绪
+secrets init                          # 生成密钥对到 dotfiles/mutable/tools/secrets/.local/share/keys/age
+blue stow tools/secrets               # 建软链 ~/.local/share/keys/age + ~/.local/bin/secrets
+secrets list                          # 验证一切就绪
 ```
 
 `init` 会:
@@ -69,14 +71,14 @@ blue stow secrets                   # 建软链 ~/.local/share/keys/age
 1. 调用 `age-keygen` 生成 X25519 密钥对
 2. 写私钥到 `dotfiles/mutable/tools/secrets/.local/share/keys/age`,权限 600
 3. 从私钥首行注释提取公钥,写到 `dotfiles/mutable/tools/secrets/.local/share/keys/age.pub`,权限 644
-4. 提示下一步:`blue stow secrets`
+4. 提示下一步:`blue stow tools/secrets`
 
 ### 3.2 添加新密文
 
 ```bash
 echo 'token = "..."' > /tmp/example.toml
-./tools/secrets encrypt example < /tmp/example.toml
-./tools/secrets decrypt example --stdout      # 回圆验证
+secrets encrypt example < /tmp/example.toml
+secrets decrypt example --stdout      # 回圆验证
 trash /tmp/example.toml
 
 git add dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/example.age
@@ -84,34 +86,37 @@ git commit -S -m "feat(secrets): add example.age"
 git push
 ```
 
-> 演练预览(不落盘):`./tools/secrets --dry-run encrypt example < /tmp/x.toml`
-> 只打印 `[dry-run] ...` 计划,不写 `.age`。
+> 演练预览(不落盘):`secrets --dry-run encrypt example < /tmp/x.toml`
+> 只打印 `[dry-run] ...` 计划,不写 `.age`。`secrets add example` 可直接开编辑器新建。
 
 ### 3.3 修改已有密文
 
 ```bash
 $EDITOR your-favorite
-./tools/secrets edit example       # 解密 → 编辑 → 重加密
+secrets edit example       # 解密(内存临时目录) → 编辑 → 重加密
 ```
 
-或一步走完:`./tools/secrets edit example` 内部完成解密、`$EDITOR`、回写。
+`KEY="value"` 型条目也可不开编辑器单字段改:`secrets set example KEY "value"`,
+取值 `secrets get example KEY`,导出环境变量 `eval "$(secrets env example)"`。
 
 ### 3.4 应用加载
 
 ```bash
-# 方式 1:脚本直接 source
-source <(./tools/secrets decrypt dotenv --stdout)
+# 方式 1:eval 输出 export 行(不落盘)
+eval "$(secrets env dotenv)"
 
-# 方式 2:文件加载
-./tools/secrets decrypt dotenv      # 落 ~/.local/share/secrets-decrypted/dotenv
-source ~/.local/share/secrets-decrypted/dotenv
+# 方式 2:文件加载(tmpfs)
+secrets decrypt dotenv      # 落 $XDG_RUNTIME_DIR/secrets-decrypted/dotenv
+source "$XDG_RUNTIME_DIR/secrets-decrypted/dotenv"
 ```
 
 `show` 子命令是 `decrypt --stdout` 的别名,等价于打印到 stdout。
 
 ## 4. 子命令与选项
 
-运行 `tools/secrets`（无参数）即可查看完整命令清单、环境变量和全局选项。
+运行 `secrets`（无参数）弹出 fzf 交互菜单;`secrets --help` 查看完整清单。
+除常规 encrypt/decrypt/edit 外,另有 `clip`（剪贴板 + 到时自清）、`get`/`set`/`env`
+（字段级操作）、`rename`/`remove`/`clean`（条目管理）。
 
 ## 5. 密钥轮换
 
@@ -125,17 +130,17 @@ chmod 600 /tmp/age.old
 
 # 2. trash 旧私钥,生成新密钥对(init 检测到旧 age 会拒绝,必须先 trash)
 trash dotfiles/mutable/tools/secrets/.local/share/keys/age
-./tools/secrets init                    # 生成新 age + 覆盖 age.pub
-blue stow --restow secrets              # 重建 ~/.local/share/keys/age 软链指向新私钥
+secrets init                        # 生成新 age + 覆盖 age.pub
+blue stow tools/secrets --restow    # 重建 ~/.local/share/keys/age 软链指向新私钥
 
 # 3. 用旧私钥解密所有旧密文 + 新公钥重加密
-./tools/secrets re-encrypt --with /tmp/age.old
+secrets re-encrypt --with /tmp/age.old
 
 # 4. 演练预览(可选):再跑一次 dry-run 确认无残留旧密文需要处理
-./tools/secrets --dry-run re-encrypt --with /tmp/age.old
+secrets --dry-run re-encrypt --with /tmp/age.old
 
 # 5. 验证 + 提交
-./tools/secrets list
+secrets list
 git add dotfiles/mutable/tools/secrets/.local/share/keys/age.pub dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/*.age
 git commit -S -m "ROTATE: (secrets) regenerated keypair + re-encrypted all .age"
 git push
@@ -154,9 +159,9 @@ trash /tmp/age.old
 
 ```bash
 cd ~/Projects/Config/Guix-configs
-blue stow secrets                   # 建 ~/.local/share/keys/age 软链
-./tools/secrets list                # 验证公钥已就位
-./tools/secrets decrypt example     # 应能解密回明文
+blue stow tools/secrets             # 建 ~/.local/share/keys/age 软链 + secrets 命令
+secrets list                        # 验证公钥已就位
+secrets decrypt example             # 应能解密回明文
 ```
 
 私钥需要**手动迁移**:
@@ -167,7 +172,7 @@ scp dotfiles/mutable/tools/secrets/.local/share/keys/age user@newhost:~/.local/s
 chmod 600 ~/.local/share/keys/age
 
 # 新机
-./tools/secrets list                # 应看到私钥已就位
+secrets list                        # 应看到私钥已就位
 ```
 
 或者用物理介质 / `gpg --symmetric` 中转,具体看威胁模型。
@@ -177,26 +182,27 @@ chmod 600 ~/.local/share/keys/age
 1. **密文 git 历史是可恢复的**。即使现在 push 出去的全是 `.age`,曾经
    commit 过明文的话,旧 commit 仍在历史里。需要的话用
    `git filter-repo --invert-paths --path <泄漏文件>` 重写历史。
-2. **`tools/secrets edit` 的临时文件**(已解决)。`cmd_edit` 现在用 `mktemp -d`
-   建隔离目录,明文放目录内,`trap 'rm -rf "$tmpdir"' RETURN INT TERM` 整体
+2. **`secrets edit` 的临时文件**。`cmd_edit` 在 `$XDG_RUNTIME_DIR`（tmpfs）下
+   `mktemp -d` 建隔离目录,明文放目录内,`trap 'rm -rf "$tmpdir"' RETURN INT TERM` 整体
    清理;emacs 的 backup `~` / autosave `#` 副产物也落在隔离目录内,随退出
-   一起删除。不再需要 `cd /tmp` 的 workaround。如需额外保险,可在 tmpfs 上
-   操作。
+   一起删除。明文全程不碰持久盘。
 3. **`.age` 文件名是公开信息**。不要把凭证类型放进文件名(如
    `aws-secret-key.age`),保持中性命名(`aws-prod.age`、`accounts.age`)。
-4. **明文落地的生命周期**。`~/.local/share/secrets-decrypted/` 下的文件
-   不会自动清理,过期凭证记得 `trash`。
+4. **明文落地的生命周期**。`$XDG_RUNTIME_DIR/secrets-decrypted/` 在 tmpfs 上,
+   重启自动消失;会话内手动清用 `secrets clean`。条目名限 `[A-Za-z0-9._-]`
+   防路径穿越;decrypt 先 mktemp(600) 再 mv,无权限窗口。
 
 ## 8. 故障排查
 
 | 症状                                     | 原因                                      | 解决                                                       |
 | ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------- |
-| `tools/secrets decrypt` 报找不到私钥     | stow 没部署或软链失效                     | `cd Guix-configs && blue stow --restow secrets`            |
-| `list` 报 `DECREPT_DIR: 未绑定的变量`    | 脚本 typo 触发 `set -euo pipefail`        | 修脚本;`bash -n` 不查变量绑定,必须真跑                     |
-| `age: error: no identity`                | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/tools/secrets/.local/share/keys/age` |
-| `init` 后 `.age.pub` 是空的              | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init,或手动 `awk` 提取                    |
-| `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录       | 修复 ignore 后 `blue stow --restow secrets`                |
-| `re-encrypt` 报 `failed to decrypt`      | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)                   |
+| `secrets decrypt` 报找不到私钥         | stow 没部署或软链失效                     | `cd Guix-configs && blue stow tools/secrets --restow`    |
+| `secrets` 命令未找到                 | stow 未部署 `.local/bin/secrets`       | `blue stow tools/secrets`                               |
+| `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail`     | 修脚本;`bash -n` 不查变量绑定,必须真跑                  |
+| `age: error: no identity`            | 私钥权限被改了                         | `chmod 600 dotfiles/mutable/tools/secrets/.local/share/keys/age` |
+| `init` 后 `.age.pub` 是空的          | 私钥不是用本脚本 init 生成             | trash 旧私钥重跑 init,或手动 `awk` 提取                 |
+| `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录 | 修复 ignore 后 `blue stow tools/secrets --restow`       |
+| `re-encrypt` 报 `failed to decrypt`  | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确(轮换前先 `cp` 备份)            |
 
 ## 9. 与同类方案的对比
 
@@ -215,6 +221,6 @@ sops。当前体量下 age 足够。
 ## 10. 参考
 
 - [age 官方文档](https://age-encryption.org/)
-- [`tools/secrets` 源码](../tools/secrets)
+- [`secrets` 源码](../dotfiles/mutable/tools/secrets/.local/bin/secrets)（`tools/secrets` 为兼容软链）
 - [`dotfiles/mutable/tools/secrets/AGENTS.md`](../dotfiles/mutable/tools/secrets/AGENTS.md) — 维护范式
 - [`keys/.gitignore`](../dotfiles/mutable/tools/secrets/.local/share/keys/.gitignore) — 私钥排除规则
