@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "opencode-go",
-  "defaultModel": "ox-alpha-free",
+  "defaultProvider": "devin",
+  "defaultModel": "swe-2",
   "npmCommand": [
     "pnpm"
   ],

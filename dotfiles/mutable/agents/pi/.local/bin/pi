@@ -14,6 +14,10 @@ export PI_CODING_AGENT_DIR="${PI_HOME}"
 export PI_CONFIG_DIR=".config/pi"
 export PI_CODING_AGENT_SESSION_DIR="${PI_DATA_DIR}/sessions"
 export PI_OFFLINE="${PI_OFFLINE:-1}"
+# pi-devin-local 插件按 KNOWN_BINS 硬编码路径找 devin，不含 nix profile 位置（与下
+# 方 bun 兜底同理，GUI 派生进程 PATH 也可能缺）；插件对 DEVIN_CLI 只做 existsSync，
+# 指错时静默回退原有查找，无副作用。外部 export 的 DEVIN_CLI 优先。
+export DEVIN_CLI="${DEVIN_CLI:-${HOME}/.local/state/nix/profile/bin/devin}"
 
 BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
 # npm 包的 node 入口（dist/bundle/cli.js）解析不了 bun: 内置模块，而扩展生态假定
