@@ -26,3 +26,6 @@
 [submodule "dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui"]
 	path = dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui
 	url = https://github.com/ShineBreaker/pi-ui.git
+[submodule "dotfiles/mutable/lem/.config/lem"]
+	path = dotfiles/mutable/lem/.config/lem
+	url = https://github.com/ShineBreaker/lem-configs.git

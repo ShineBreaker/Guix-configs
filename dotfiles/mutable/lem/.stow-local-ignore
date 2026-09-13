@@ -4,3 +4,8 @@
 ^/history
 ^/quicklisp
 ^/config\.lisp
+# 仓库/开发元数据不部署：.gitignore 与 .agents/（WS 验证工具与 agent 工作产物），
+# 均只在源树内有意义；~/.config/lem/.agents 侧是真实目录，非 stow 链接。
+^/\.gitignore
+^/\.agents
+^/debug\.log
