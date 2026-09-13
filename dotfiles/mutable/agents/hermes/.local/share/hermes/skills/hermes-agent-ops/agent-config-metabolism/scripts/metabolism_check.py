@@ -482,8 +482,17 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                     text = p.read_text(errors="ignore")
                 except OSError:
                     continue
+                # files untouched inside the window can only hold stale errors;
+                # logs without per-line timestamps (crash dumps, restart notes)
+                # would otherwise count forever
+                try:
+                    if _dt.datetime.fromtimestamp(p.stat().st_mtime) < cutoff:
+                        continue
+                except OSError:
+                    continue
                 cur_ts: _dt.datetime | None = None
                 in_tb = False  # currently inside a Traceback block
+                event_counted = False  # sig already attributed to this event
                 for raw in text.split("\n"):
                     line = raw.rstrip("\r")
                     if not line:
@@ -497,6 +506,8 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                         except ValueError:
                             cur_ts = None
                         rest = line[m.end():]
+                        in_tb = False
+                        event_counted = False  # a new event line begins
                     else:
                         rest = line
                     outside = cur_ts is not None and cur_ts < cutoff
@@ -512,9 +523,15 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                                 r"^([\w.]+(?:Error|Exception|Warning|Failure|Interrupt))",
                                 rest,
                             )
-                            sig = f"{p.name}::{em.group(1) if em else 'Exception'}"
-                            sig_count[sig] = sig_count.get(sig, 0) + 1
-                            err_count += 1
+                            core = em.group(1) if em else "Exception"
+                            # one event → one signature: the ERROR line (or the
+                            # outermost exception) claims it; chained inner
+                            # exceptions (httpx → httpcore → RuntimeError) and
+                            # re-raise blocks add nothing
+                            if not event_counted:
+                                sig_count[core] = sig_count.get(core, 0) + 1
+                                err_count += 1
+                                event_counted = True
                             in_tb = False
                         continue
                     if outside:
@@ -529,11 +546,15 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                             msg = m2.group(2) or ""
                             # normalize retry counters: (1/3)(2/3)(3/3) -> (n/3)
                             msg = re.sub(r"\(\d/(\d+)\)", r"(n/\1)", msg)
-                            sig = f"{p.name}::{mod}:{msg[:40]}"
+                            # no file prefix: gateway/errors/agent.log mirror the
+                            # same process events — file-scoped sigs triple-count
+                            # one problem as three
+                            sig = f"{mod}:{msg[:40]}"
                         else:
-                            sig = f"{p.name}::ERROR"
+                            sig = "ERROR"
                         sig_count[sig] = sig_count.get(sig, 0) + 1
                         err_count += 1
+                        event_counted = True  # following traceback belongs to it
     n_unique = len(sig_count)
     status = "GREEN" if n_unique <= max_per else "RED"
     top = sorted(sig_count.items(), key=lambda x: -x[1])[:3]
