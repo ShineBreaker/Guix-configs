@@ -148,6 +148,22 @@ sync_window_to_client() {
     done < <(tmux list-windows -a -F $'#{window_id}\t#{session_id}\t#{window_width}\t#{window_height}' 2>/dev/null || true)
 }
 
+debounced_follow() {
+    # 终端拖拽 resize 期间 client-resized 逐帧连发（几十次/秒）：若每次都
+    # 跑 sync + ensure_sidebar，resize-pane -x 32 会与 tmux 自身的逐帧挤压
+    # 互搏，表现为侧栏可见抽动。按窗口写时间戳，150ms 静默期后仅最后一次
+    # 调用真正执行；离散事件（选窗口/attach）仍走即时 follow。
+    local win stamp
+    win="$(tmux display-message -p '#{window_id}' 2>/dev/null)" || return 0
+    [[ -n "$win" ]] || return 0
+    stamp="$(date +%s%N)"
+    tmux set-option -wq -t "$win" @sidebar_resized_ts "$stamp" 2>/dev/null || true
+    sleep 0.15
+    [[ "$(tmux show-option -wqv -t "$win" @sidebar_resized_ts 2>/dev/null)" == "$stamp" ]] || return 0
+    sync_window_to_client
+    ensure_sidebar
+}
+
 ensure_sidebar() {
     # 关键：window\|@no_sidebar 之间用 | 分隔，避免空的 @no_sidebar 导致
     # IFS-tab 的空字段丢失、configured_width 错读为 window_width。
@@ -270,6 +286,12 @@ case "${1:-toggle}" in
             ensure_sidebar
         fi
         ;;
+    resized)
+        # 终端 resize 专用入口：防抖后执行与 follow 相同的工作。
+        if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
+            debounced_follow
+        fi
+        ;;
     layout-changed)
         signal_current
         ;;
@@ -285,7 +307,7 @@ case "${1:-toggle}" in
         [[ -n "$pane_id" ]] && send_event "$pane_id" "toggle-group" || true
         ;;
     *)
-        printf 'usage: sidebar-toggle [toggle|follow|signal|click|toggle-group|layout-changed]\n' >&2
+        printf 'usage: sidebar-toggle [toggle|follow|resized|signal|click|toggle-group|layout-changed]\n' >&2
         exit 2
         ;;
 esac
