@@ -534,15 +534,15 @@ server,必须等真实 client 就绪。"
 (unless (advice-member-p #'custom/context-menu-translate #'context-menu-map)
   (advice-add 'context-menu-map :filter-return #'custom/context-menu-translate))
 
-;; 菜单栏一次性翻译:启动时翻 `global-map' 的 [menu-bar] 一次;Geiser 的
-;; 菜单栏挂在其 minor-mode map 上,随包加载补翻一次。translate-keymap
-;; 查不到原样返回且原地幂等,故只翻已知包,未知 minor-mode 菜单栏保持英文。
+;; 菜单栏翻译:启动时将 `global-map' 的 [menu-bar] 原地翻一次(覆盖 GUI 菜单栏
+;; 的全局项);`menu-bar-keymap' 是 TTY 文本菜单与取用菜单栏的共同入口,再挂
+;; advice 每次取用时翻一遍,连带覆盖懒加载包(ispell、Geiser 等)与 minor-mode
+;; 菜单栏,无需逐包特判。translate-keymap 未命中原样返回且原地幂等。
 (custom/context-menu--translate-keymap
  (lookup-key global-map [menu-bar]))
 
-(with-eval-after-load 'geiser-mode
-  (custom/context-menu--translate-keymap
-   (lookup-key geiser-mode-map [menu-bar])))
+(unless (advice-member-p #'custom/context-menu-translate #'menu-bar-keymap)
+  (advice-add 'menu-bar-keymap :filter-return #'custom/context-menu-translate))
 
 (with-eval-after-load 'magit-section
   (unless (advice-member-p #'custom/context-menu--translate-string
