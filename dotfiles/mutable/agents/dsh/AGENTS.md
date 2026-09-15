@@ -8,21 +8,22 @@
 | 路径                                    | 说明                                                                                                 |
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `~/.local/share/dsh/`                   | `$DSH_HOME`，为真实目录，配置文件逐个软链回本包（采用 no-folding 模式）                              |
-| `_cli/`                                 | CLI 本体源：仅托管 `package.json` 与 `pnpm-workspace.yaml`；`node_modules/` 与 Lockfile 为运行时产物 |
-| `profiles/web/`                         | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json` 等配置                            |
+| `.local/share/dsh/cordis.patch.yml`     | `$DSH_HOME` 顶层的 cordis 补丁配置                                                                   |
+| `.local/share/dsh/_cli/`                | CLI 本体源：仅托管 `package.json` 与 `pnpm-workspace.yaml`；`node_modules/` 与 Lockfile 为运行时产物 |
+| `.local/share/dsh/profiles/web/`        | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json`、`pnpm-workspace.yaml` 等配置     |
 | `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装     |
 | `.local/bin/dsh-web`                    | Desktop 启动入口：启动后台服务并在独立的 Chromium App 窗口中打开                                     |
 | `.local/bin/dsh-update`                 | 一键更新本体与三个插件（见「一键更新」）                                                             |
 | `.local/share/applications/dsh.desktop` | 桌面快捷方式，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                           |
-| `.local/share/icons/dsh.png`            | 图标文件（对齐 Papirus 风格，256×256 PNG）；同目录 `dsh.svg` 为矢量母版                              |
+| `.local/share/icons/hicolor/`           | 图标：`48x48/apps/dsh.png` 为栅格图标，`scalable/apps/dsh.svg` 为矢量母版                            |
 
 > **忽略规则**：`.credentials.yaml`（API 密钥）、`sessions/`、`storages/`、`node_modules/`、`pnpm-lock.yaml` 等运行时产物已被 `.stow-local-ignore` 防御性排除。
 
 ## 安装通道与升级
 
 - **安装机制**：DSH CLI 本体（当前为 0.1.5-rc.1）通过 pnpm 安装在 `_cli/` 目录中。
-- **升级步骤**：修改源码中 `_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh-update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
-- **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。
+- **升级步骤**：修改源码中 `.local/share/dsh/_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh-update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
+- **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。插件侧 `profiles/web/pnpm-workspace.yaml` 同理。
 
 ## 插件管理（Web Profile）
 
@@ -62,11 +63,11 @@ dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 
 ## 图标与桌面集成
 
-- **图标查找**：`dsh.desktop` 中的 `Icon=` 使用绝对路径指定 `.png`，避免用户级图标主题缓存缺失导致图标不显示。
-- **SVG 母版与栅格化**：`dsh.svg` 保留在源码目录作为母版。若需重新生成 PNG 图标，执行以下命令：
+- **图标查找**：`dsh.desktop` 使用 `Icon=dsh` 主题名，图标按 hicolor 布局存放（`hicolor/48x48/apps/dsh.png` + `hicolor/scalable/apps/dsh.svg`）。
+- **SVG 母版与栅格化**：`scalable/apps/dsh.svg` 为矢量母版。若需重新生成 PNG 图标，执行以下命令：
   ```bash
-  cd dotfiles/mutable/agents/dsh/.local/share/icons
-  rsvg-convert -w 256 -h 256 dsh.svg -o dsh.png
+  cd dotfiles/mutable/agents/dsh/.local/share/icons/hicolor
+  rsvg-convert -w 48 -h 48 scalable/apps/dsh.svg -o 48x48/apps/dsh.png
   ```
 - **刷新 Dock 缓存**：修改图标后通知 Noctalia 刷新：`noctalia msg dock-reload`。
 

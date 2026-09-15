@@ -42,5 +42,4 @@ dotfiles/
 | `immutable/system/`         | ✅        | 系统级用户态配置：容器策略、PipeWire 音频、XDG 用户目录         |
 | `immutable/terminal/`       | ✅        | 终端工具链：Fish、Tmux、Foot、Kitty、Starship、Btop、Atuin 等   |
 | `immutable/utilities/`      | ✅        | 常用工具与开发环境：Fcitx5、Git、Helix、Pnpm、WinApps、GnuPG 等 |
-| `immutable/zen/`            | ❌        | Zen 浏览器 profile `user.js`（内存优化与遥测关闭）              |
-| `mutable/`                  | ✅        | 包含 Emacs、Lem、DSH、Hermes、Secrets 等可变配置包              |
+| `mutable/`                  | ✅        | 包含 Emacs、Lem、DSH、Hermes、Pi、Secrets、Toolbox 等可变配置包 |

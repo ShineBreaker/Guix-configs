@@ -23,10 +23,10 @@ system/
 
 ## 关键约定与机制
 
-- **PipeWire / WirePlumber**：配置碎片统一放置于 `pipewire.conf.d/`，按字母字典序加载。
-- **Containers**：`policy.json` 声明容器镜像拉取时的签名验证策略与安全规则。
+- **PipeWire / WirePlumber**：配置碎片分别放置于 `pipewire.conf.d/` 与 `wireplumber.conf.d/`（Lua 脚本在 `wireplumber/scripts/`），按字母字典序加载。
+- **Containers**：`containers/policy.json` 声明镜像拉取时的签名验证策略与安全规则。
 - **XDG 用户目录**：`user-dirs.dirs` 与 `user-dirs.locale` 声明用户标准目录（下载、文档、音乐等），由 `xdg-user-dirs` 读取。
-- **mihomo**：`config.yaml` 是模板而非生效配置——订阅 URL 为 `$MIHOMO_SUB_ONE/TWO` 占位符，由 `config.org` 的 `mihomo-run` 启动包装解密 `mihomo-subscriptions.age` 后 envsubst 渲染到 `/var/lib/mihomo/config.yaml`。修改模板需 `blue home` + `sudo herd restart mihomo-daemon`；换订阅只需 `secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"`（或 `secrets edit`）+ 重启服务。
+- **mihomo**：`config.yaml` 是模板而非生效配置。`mihomo-run` 启动包装（见 `config.org`）先解密 `mihomo-subscriptions.age`，再把 `$MIHOMO_SUB_ONE/TWO` 占位符经 envsubst 渲染到 `/var/lib/mihomo/config.yaml`。改模板：`blue home` + `sudo herd restart mihomo-daemon`；换订阅：`secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"`（或 `secrets edit`）+ 重启服务。
 
 ## 修改与生效流程
 

@@ -69,17 +69,15 @@ secrets list
 secrets --dry-run encrypt example < /tmp/example.toml
 ```
 
-兼容：仓库根 `tools/secrets` 是指向实体的相对软链，旧脚本调用仍可用。
-
 ## 部署边界与形态
 
-| 资产路径 | 是否提交 Git | Stow 是否部署到 `$HOME` |
-| --- | --- | --- |
-| `.local/share/keys/age`（私钥） | 否（`.gitignore` 拦截） | 是（软链，权限 600） |
-| `.local/share/keys/age.pub`（公钥） | 是 | 是 |
-| `.local/share/secrets-encrypted/*.age` | 是 | 否（`.stow-local-ignore` 排除） |
-| `$XDG_RUNTIME_DIR/secrets-decrypted/*` | 否 | 运行时动态生成（tmpfs），不属于仓库文件 |
-| `.local/bin/secrets`（命令实体） | 是 | 是（`~/.local/bin/secrets`） |
+| 资产路径                               | 是否提交 Git            | Stow 是否部署到 `$HOME`                 |
+| -------------------------------------- | ----------------------- | --------------------------------------- |
+| `.local/share/keys/age`（私钥）        | 否（`.gitignore` 拦截） | 是（软链，权限 600）                    |
+| `.local/share/keys/age.pub`（公钥）    | 是                      | 是                                      |
+| `.local/share/secrets-encrypted/*.age` | 是                      | 否（`.stow-local-ignore` 排除）         |
+| `$XDG_RUNTIME_DIR/secrets-decrypted/*` | 否                      | 运行时动态生成（tmpfs），不属于仓库文件 |
+| `.local/bin/secrets`（命令实体）       | 是                      | 是（`~/.local/bin/secrets`）            |
 
 > **校验铁律**：`~/.local/share/secrets-encrypted/` 不应在用户主目录存在；若出现说明 Stow ignore 规则异常。
 

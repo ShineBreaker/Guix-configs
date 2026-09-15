@@ -12,7 +12,6 @@
 | `defconfig-cachyos-lts`        | 上游纯净 Defconfig 模板（来自 Hako kernel-config）                                                  | **禁止手动编辑**，仅随上游版本整体替换        |
 | `machines/<设备>.scm`          | 设备层配置：硬件特性钉住（Pin）与裁剪读取，导出 `%machine-configs`                                  | 文件头部记录实机硬件探针数据（裁剪依据）      |
 | `machines/<设备>-trim.kconfig` | 针对非本机硬件的大类反选清单（~2000 行，裸符号表示 `=n`）                                           | 与 Defconfig 结构对齐，按硬件大类注释分组     |
-| `install.sh` / `rollback.sh`   | 运维脚本：供用户手动执行内核构建部署与一键回滚                                                      | Agent 禁止直接运行，由用户手动触发            |
 
 ### 配置片段拼合顺序
 

@@ -28,7 +28,7 @@ utilities/
 
 ### Fcitx5 输入法框架与 Rime
 
-- **Fcitx5 配置**（`utilities/.config/fcitx5/`）：负责输入法前端框架行为。`classicui.conf` 中开启 `ForceWaylandDPI`，防止 XWayland 应用中的输入法候选框缩放异常。
+- **Fcitx5 配置**（`utilities/.config/fcitx5/`）：负责输入法前端框架行为。`conf/classicui.conf` 管理候选窗外观（Material-Color-Teal 主题、暗色跟随、`PerScreenDPI=False`）。
 - **Rime 方案与词库**（`utilities/.local/share/fcitx5/rime/`）：通过 Git 子模块引入 `rime-ice`，包含双拼方案、拼音词库与 Lua 扩展。
   - 请勿直接在子模块内修改非自定义文件；词库与方案更新在子模块内 pull 并提交主仓引用。
 
