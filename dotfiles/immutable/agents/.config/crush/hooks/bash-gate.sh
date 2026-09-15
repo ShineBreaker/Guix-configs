@@ -17,10 +17,18 @@ set -uo pipefail
 
 CMD="${CRUSH_TOOL_INPUT_COMMAND:-}"
 CORE="$HOME/.config/agents/gate-core.sh"
+# 人工总开关（固定路径，见 gate-core.sh 文件头；须在核缺失保底之前检查）
+GATE_PAUSE_FILE="/run/agent-gate.off"
 
 deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 [ -n "$CMD" ] || exit 0
+
+# 人工总开关（最优先，覆盖核缺失保底）
+if [[ -f "$GATE_PAUSE_FILE" ]]; then
+  printf '{"context":"%s"}' "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  exit 0
+fi
 
 # 核未部署：sudo 保底 + stderr 提醒
 if [[ ! -f "$CORE" ]]; then

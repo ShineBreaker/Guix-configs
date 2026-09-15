@@ -19,12 +19,17 @@
 #   gate-core.sh edit <file>   # 写入判定；待检内容从 stdin 读（可为空）
 # 环境变量 GATE_CWD：anchors 层级定位起点（默认 $PWD）。
 #
+# 人工总开关 /run/agent-gate.off：存在即全部放行（bash/edit 均直接返回，
+# 仅附一条非阻塞提示）。/run 为 root 拥有的 tmpfs，创建/删除须 sudo，而
+# sudo 对 agent 恒冻——agent 自己打不开这个开关；重启自动清空，天然临时。
+#
 # 行类型：
 #   BLOCK      硬拦截（payload 为理由）
 #   SENSITIVE  敏感信息命中（crush 协议映射 exit 49）
 #   AUTO_ALLOW 只读白名单命中（适配器可输出 auto-approve；pi 忽略）
 #   REWRITTEN  改写后的命令（zcode 不支持改写，转提示）
 #   NOTES / RM_HINT / REDIRECT / HINT   非阻塞提示
+# 暂停态输出 NOTES（bash）/ HINT（edit）各一，适配器据此放行并提示。
 #
 # 安全不变量（历史绕过教训，改动前先读）：
 #   * 冻结命令按「命令位置词序列」匹配：第一个词，或 ; & | ( ) ` 、
@@ -39,6 +44,8 @@
 #     成冻结词的形态（运行时才存在，静态可见即回全文子串=误报之源；
 #     系对抗性构造，非 agent 自然行为）；解释器语言代码内部动态拼接
 #     冻结词（os.system("sudo …") 类）同理不追。
+#   * 人工总开关只认固定路径 /run/agent-gate.off（不认环境变量改道）：
+#     agent 可写的位置放同名文件一律无效；该文件只能人工 sudo 创建/删除。
 #   * --dry-run 豁免是片段级的：仅剔除「blue 前缀且带 --dry-run」的
 #     片段，其余片段照常检查；`sudo ... --dry-run` 这类把 --dry-run
 #     当免死金牌的不豁免。
@@ -72,6 +79,9 @@ if [[ -z "$ANCHORS_LIB" ]] || ! source "$ANCHORS_LIB" 2>/dev/null; then
 else
 	MERGED="$(load_merged_anchors "${GATE_CWD:-$PWD}" 2>/dev/null || printf '%s' "$DEFAULT_MERGED")"
 fi
+
+# 人工总开关（固定路径，不接受改道——见文件头安全不变量）
+GATE_PAUSE_FILE="/run/agent-gate.off"
 
 emit() {
 	local payload="${2//$'\n'/ }"
@@ -209,6 +219,11 @@ PREFIX='(^|[;&|()$]|&&|\|\|)[[:space:]]*'
 
 gate_bash() {
 	local CMD="$1"
+	# 0 人工总开关（最优先）：存在即放行，仅附提示
+	if [[ -f "$GATE_PAUSE_FILE" ]]; then
+		emit NOTES "PAUSED 护栏已手动暂停（${GATE_PAUSE_FILE} 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+		return 0
+	fi
 	local FIRST BASE
 	FIRST="$(trim "$CMD")"
 	FIRST="${FIRST%%[[:space:]]*}"
@@ -389,6 +404,11 @@ gate_bash() {
 
 gate_edit() {
 	local FILE="$1"
+	# 0 人工总开关（最优先）：存在即放行，仅附提示
+	if [[ -f "$GATE_PAUSE_FILE" ]]; then
+		emit HINT "PAUSED 护栏已手动暂停（${GATE_PAUSE_FILE} 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+		return 0
+	fi
 	local LOGICAL PHYSICAL BASENAME PROJ REL RELP INSIDE=0 INSP=0
 	LOGICAL="$(resolve_path "$FILE" logical)"
 	PHYSICAL="$(resolve_path "$FILE" physical)"

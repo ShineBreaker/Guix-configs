@@ -21,10 +21,18 @@ PROJ_INPUT="${CRUSH_PROJECT_DIR:-$PWD}"
 TOOL="${CRUSH_TOOL_NAME:-}"
 
 CORE="$HOME/.config/agents/gate-core.sh"
+# 人工总开关（固定路径，见 gate-core.sh 文件头；须在核缺失降级之前检查）
+GATE_PAUSE_FILE="/run/agent-gate.off"
 
 deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 [ -n "$FILE" ] || exit 0
+
+# 人工总开关（最优先）
+if [[ -f "$GATE_PAUSE_FILE" ]]; then
+  printf '{"context":"%s"}' "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  exit 0
+fi
 
 # 从 stdin JSON 提取待检内容（write/edit/multiedit 三形态）
 # python3 缺失或 JSON 非法 → fail-closed 拦截（crush 的输入恒为合法 JSON，
