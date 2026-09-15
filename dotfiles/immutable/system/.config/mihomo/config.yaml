@@ -86,7 +86,7 @@ tun:
   auto-redirect: true
   auto-detect-interface: true
   route-exclude-address:
-    - 10.42.0.0/24
+    - 192.168.77.0/24 # Hotspot subnet (uap0)
     - 100.64.0.0/10 # Tailscale CGNAT
 dns:
   enable: true
@@ -97,6 +97,11 @@ dns:
   fake-ip-filter:
     - geosite:connectivity-check
     - geosite:private
+    # tailscaled 给自己的出站打 fwmark 绕开 tun（防回环），fake-ip 对它永远不可达；
+    # 只有解析成真实 IP 才走得通（控制面/DERP 的 443 直连实测可达）
+    - "+.tailscale.com"
+    - "+.tailscale.io"
+    - "+.ts.net"
   default-nameserver:
     - 223.5.5.5
   proxy-server-nameserver:

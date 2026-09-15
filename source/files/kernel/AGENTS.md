@@ -53,15 +53,17 @@ blue check
 blue --dry-run rebuild
 
 # 3. 触发真实内核构建（校验 configure 阶段的 verify-config）
-cat > /tmp/kernel-probe.scm <<'EOF'
+# probe 文件放在仓库 tmp/ 内，通过 (current-filename) 自定位，
+# 无需写死仓库绝对路径（config.scm 内部本就是相对 load）。
+cat > tmp/kernel-probe.scm <<'EOF'
 (begin
-  (chdir "/home/brokenshine/Projects/Config/Guix-configs/tmp")
+  (chdir (dirname (current-filename)))
   (set! %load-path (cons "." %load-path))
-  (primitive-load "/home/brokenshine/Projects/Config/Guix-configs/tmp/config.scm")
+  (primitive-load "config.scm")
   linux-cachyos-lts)
 EOF
 
-guix time-machine -C source/channel.lock -- build -f /tmp/kernel-probe.scm
+guix time-machine -C source/channel.lock -- build -f tmp/kernel-probe.scm
 ```
 
 > **构建失败排查**：`verify-config` 阶段会逐条打印 mismatch 的符号。可直接进入保留的失败构建目录 `/tmp/guix-build-linux-cachyos-lts-*.drv-0` 执行 `make ARCH=x86_64 guix_defconfig` 快速复现调试，根据提示调整 pin 或 trim 清单。

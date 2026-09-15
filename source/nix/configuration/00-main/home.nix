@@ -1,5 +1,9 @@
 { ... }:
 
+let
+  user = "brokenshine";
+in
+
 {
   imports = [
     ../programs/00-main.nix
@@ -9,8 +13,8 @@
   targets.genericLinux.enable = true;
 
   home = {
-    username = "brokenshine";
-    homeDirectory = "/home/brokenshine";
+    username = user;
+    homeDirectory = "/home/${user}";
     stateVersion = "25.11";
 
     extraOutputsToInstall = [ "doc" ];
