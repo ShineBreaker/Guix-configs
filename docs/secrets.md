@@ -60,7 +60,7 @@ Guix-configs/
 首次 `init` 时:
 
 ```bash
-cd ~/Projects/Config/Guix-configs
+cd <仓库根目录>  # Guix-configs 位置任意，脚本经软链自定位
 secrets init                          # 生成密钥对到 dotfiles/mutable/tools/secrets/.local/share/keys/age
 blue stow tools/secrets               # 建软链 ~/.local/share/keys/age + ~/.local/bin/secrets
 secrets list                          # 验证一切就绪
@@ -158,7 +158,7 @@ trash /tmp/age.old
 新机拉取仓库后只需要:
 
 ```bash
-cd ~/Projects/Config/Guix-configs
+cd <仓库根目录>  # Guix-configs 位置任意，脚本经软链自定位
 blue stow tools/secrets             # 建 ~/.local/share/keys/age 软链 + secrets 命令
 secrets list                        # 验证公钥已就位
 secrets decrypt example             # 应能解密回明文
@@ -196,7 +196,7 @@ secrets list                        # 应看到私钥已就位
 
 | 症状                                     | 原因                                      | 解决                                                       |
 | ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------- |
-| `secrets decrypt` 报找不到私钥         | stow 没部署或软链失效                     | `cd Guix-configs && blue stow tools/secrets --restow`    |
+| `secrets decrypt` 报找不到私钥         | stow 没部署或软链失效                     | `cd <仓库根目录> && blue stow tools/secrets --restow`    |
 | `secrets` 命令未找到                 | stow 未部署 `.local/bin/secrets`       | `blue stow tools/secrets`                               |
 | `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail`     | 修脚本;`bash -n` 不查变量绑定,必须真跑                  |
 | `age: error: no identity`            | 私钥权限被改了                         | `chmod 600 dotfiles/mutable/tools/secrets/.local/share/keys/age` |

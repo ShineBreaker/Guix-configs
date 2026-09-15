@@ -3,21 +3,8 @@
 # SPDX-License-Identifier: MIT
 
 function __fish_secrets_names
-    set -l root (string join "/" -- (git rev-parse --show-toplevel 2>/dev/null) dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted)
-    if test -d $root
-        for f in $root/*.age
-            test -f "$f"; or continue
-            basename $f .age
-        end
-        return
-    end
-    set -l fallback $HOME/Projects/Config/Guix-configs/dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted
-    if test -d "$fallback"
-        for f in $fallback/*.age
-            test -f "$f"; or continue
-            basename $f .age
-        end
-    end
+    # 委托脚本自己解析仓库位置（readlink -f 软链），不依赖 cwd、不写死路径
+    secrets __names 2>/dev/null
 end
 
 # 带条目名参数的子命令（解密类/编辑类）

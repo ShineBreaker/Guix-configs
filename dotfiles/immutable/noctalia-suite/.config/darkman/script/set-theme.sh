@@ -41,12 +41,12 @@ if [[ ! -d "$template_dir" ]]; then
 fi
 
 map_lines="$(
-  jq -r --arg mode "$mode" '
+  jq -r --arg mode "$mode" --arg home "$HOME" '
     .[$mode] as $selected
     | if $selected == null then
         error("mode not found in config.json")
       else
-        ($selected + ($selected.colors // {}) + {mode: $mode})
+        ($selected + ($selected.colors // {}) + {mode: $mode, home: $home})
         | del(.colors)
         | to_entries[]
         | [.key, (.value|tostring)]

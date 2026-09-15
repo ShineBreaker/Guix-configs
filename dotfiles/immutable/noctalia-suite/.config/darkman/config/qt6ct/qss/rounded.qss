@@ -271,7 +271,7 @@ QCheckBox::indicator:checked:hover {
     background: palette(highlight);
     border: 1px solid palette(highlight);
     border-radius: 6px;
-    image: url(/home/brokenshine/.config/qt6ct/qss/check-white.svg);
+    image: url($$home$$/.config/qt6ct/qss/check-white.svg);
 }
 
 QCheckBox::indicator:disabled {
@@ -456,7 +456,7 @@ QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {
 QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
     subcontrol-origin: border;
     subcontrol-position: top right;
-    image: url(/home/brokenshine/.config/qt6ct/qss/chevron-up.svg);
+    image: url($$home$$/.config/qt6ct/qss/chevron-up.svg);
     width: 16px;
     height: 16px;
 }
@@ -464,7 +464,7 @@ QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
     subcontrol-origin: border;
     subcontrol-position: bottom right;
-    image: url(/home/brokenshine/.config/qt6ct/qss/chevron-down.svg);
+    image: url($$home$$/.config/qt6ct/qss/chevron-down.svg);
     width: 16px;
     height: 16px;
 }
