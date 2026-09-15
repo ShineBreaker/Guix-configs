@@ -31,6 +31,20 @@ from pathlib import Path
 from typing import Any
 
 GATE_CORE = Path.home() / ".config" / "agents" / "gate-core.sh"
+# 人工总开关（固定路径，见 gate-core.sh 文件头；创建/删除须 sudo，
+# agent 恒冻 sudo 故自己打不开；重启自动清空）。须在核缺失保底之前检查。
+GATE_PAUSE_FILE = Path("/run/agent-gate.off")
+PAUSE_NOTE = "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+
+
+def _gate_paused() -> bool:
+    """人工总开关是否生效（最优先，覆盖核缺失保底）。"""
+    try:
+        return GATE_PAUSE_FILE.is_file()
+    except OSError:
+        return False
+
+
 # 须低于 hermes hook 回调默认 30s 超时（超时侧框架 fail-closed）
 _CORE_TIMEOUT = 8
 
@@ -106,6 +120,9 @@ def _gate_bash(args: dict, cwd: str, tool_call_id: str) -> dict | None:
     cmd = str(args.get("command", ""))
     if not cmd:
         return None
+    if _gate_paused():
+        _PENDING_HINTS[tool_call_id] = [PAUSE_NOTE]
+        return None
     verdict = _run_core(["bash", cmd], cwd)
     if verdict is None:
         return _sudo_fallback("terminal", args)
@@ -134,6 +151,8 @@ def _edit_content(args: dict) -> str:
 def _gate_edit(args: dict, cwd: str) -> dict | None:
     path = str(args.get("path", ""))
     if not path:
+        return None
+    if _gate_paused():
         return None
     verdict = _run_core(["edit", path], cwd, _edit_content(args))
     if verdict is None:

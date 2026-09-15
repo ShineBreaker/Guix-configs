@@ -179,6 +179,61 @@ class GateUnitTests(unittest.TestCase):
         self.assertIn("diffs", "\n".join(self._log_lines()[3:]))
 
 
+class GatePauseTests(unittest.TestCase):
+    """人工总开关：存在即放行并附提示，且不调决策核。"""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        self.gate = _load_plugin()
+        core = self.tmp / "fake-core.sh"
+        core.write_text(_FAKE_CORE)
+        core.chmod(0o755)
+        self.gate.GATE_CORE = core
+        self.log = self.tmp / "core.log"
+        # 假核恒回 BLOCK：若暂停态仍调核，用例必然失败
+        self.env = {"FAKE_LOG": str(self.log), "FAKE_OUT": "BLOCK\t不应到达"}
+        self.pause = self.tmp / "gate.off"
+
+    def _pre(self, tool, args, tid):
+        with mock.patch.dict("os.environ", self.env):
+            return self.gate._pre_tool_call(tool_name=tool, args=args, tool_call_id=tid)
+
+    def test_paused_bash_skips_core_and_emits_hint(self):
+        self.pause.touch()
+        self.gate.GATE_PAUSE_FILE = self.pause
+        self.assertIsNone(self._pre("terminal", {"command": "su" "do -i"}, "p1"))
+        self.assertFalse(self.log.exists(), "暂停态不应调用决策核")
+        with mock.patch.dict("os.environ", self.env):
+            out = self.gate._transform_tool_result(
+                tool_name="terminal", tool_call_id="p1", result='{"output": "ok"}'
+            )
+        self.assertIn("暂停", out)
+        self.assertIn("ok", out)
+
+    def test_paused_edit_skips_core(self):
+        self.pause.touch()
+        self.gate.GATE_PAUSE_FILE = self.pause
+        self.assertIsNone(
+            self._pre("write_file", {"path": "/tmp/x", "content": "y"}, "p2")
+        )
+        self.assertFalse(self.log.exists(), "暂停态不应调用决策核")
+
+    def test_pause_absent_blocks_normally(self):
+        self.gate.GATE_PAUSE_FILE = self.tmp / "absent.off"
+        verdict = self._pre("terminal", {"command": "su" "do -i"}, "p3")
+        self.assertEqual(verdict["action"], "block")
+
+    def test_pause_file_is_a_directory_not_pause(self):
+        # is_file() 语义：同名目录不算暂停
+        d = self.tmp / "dir.off"
+        d.mkdir()
+        self.gate.GATE_PAUSE_FILE = d
+        verdict = self._pre("terminal", {"command": "su" "do -i"}, "p4")
+        self.assertEqual(verdict["action"], "block")
+
+
 class GateIntegrationTests(unittest.TestCase):
     """真实 PluginManager + 真实 gate-core.sh 冒烟（部署形态复验）。"""
 

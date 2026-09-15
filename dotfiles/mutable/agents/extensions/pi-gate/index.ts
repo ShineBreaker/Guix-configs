@@ -21,12 +21,27 @@
  *   - dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/__init__.py
  */
 
-import { appendFileSync } from "node:fs";
+import { appendFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const GATE_CORE = join(homedir(), ".config", "agents", "gate-core.sh");
+// 人工总开关（固定路径，见 gate-core.sh 文件头；创建/删除须 sudo，
+// agent 恒冻 sudo 故自己打不开；重启自动清空）。须在核缺失保底之前检查。
+const GATE_PAUSE_FILE = "/run/agent-gate.off";
+
+function gatePaused(): boolean {
+  try {
+    return statSync(GATE_PAUSE_FILE).isFile();
+  } catch {
+    return false;
+  }
+}
+
+const PAUSE_NOTE =
+  "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。";
+
 const LOG_FILE = join(
   homedir(),
   ".config",
@@ -124,6 +139,12 @@ function factoryBody(pi: ExtensionAPI) {
     const cmd = (event.input as { command?: string }).command ?? "";
     if (!cmd) return undefined;
 
+    // 人工总开关（最优先，覆盖核缺失保底）
+    if (gatePaused()) {
+      if (ctx.hasUI) ctx.ui.notify(PAUSE_NOTE, "info");
+      return undefined;
+    }
+
     const v = runCore(["bash", cmd], ctx.cwd);
     if (!v) {
       // 决策核异常：sudo 保底（agent 任何场景都不需要提权）
@@ -166,6 +187,12 @@ function factoryBody(pi: ExtensionAPI) {
     };
     const filePath = input.path ?? "";
     if (!filePath) return undefined;
+
+    // 人工总开关（最优先）
+    if (gatePaused()) {
+      if (ctx.hasUI) ctx.ui.notify(PAUSE_NOTE, "info");
+      return undefined;
+    }
 
     let content = "";
     if (event.toolName === "write") {
