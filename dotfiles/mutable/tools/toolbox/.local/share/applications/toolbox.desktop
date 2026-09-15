@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=工具箱
+GenericName=toolbox
+Comment=浏览并运行本仓库的自研工具
+Exec=kitty --class toolbox --override initial_window_width=110c --override initial_window_height=30c -e sh -c 'exec "$HOME/.local/bin/toolbox"'
+Icon=utilities-terminal
+Terminal=false
+Categories=Utility;System;
+StartupNotify=true
+StartupWMClass=toolbox

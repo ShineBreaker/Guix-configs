@@ -1,0 +1,122 @@
+# toolbox 工具目录清单 —— 本仓库自研 .local/bin 工具的单一数据源
+# 部署位 $HOME/.local/share/toolbox/tools.yaml 为 mutable 直链，改本文件即时生效。
+# 收录标准：自己写了实质逻辑的原创工具；纯透传 wrapper（hermes/pi/dsh 启动器等）不收。
+# 新增工具：加一条记录 + 跑 `toolbox check` 对账（登记是 opt-in，check 只对账清单自身）。
+# help_cmd 仅在确认该旗标只打印用法、不触发主逻辑时填写（白名单机制）。
+
+- name: toolbox
+  brief: 自研工具目录本身（浏览 / 帮助 / 补全传参运行）
+  category: tools
+  usage:
+    - "toolbox"
+    - "toolbox run secrets"
+    - "toolbox check"
+  args: "list check run"
+  help_cmd: "--help"
+  source: dotfiles/mutable/tools/toolbox/.local/bin/toolbox
+
+- name: dsh-update
+  brief: 一键更新 dsh 本体与 web profile 三插件
+  category: agents
+  usage:
+    - "dsh-update"
+    - "dsh-update --check"
+    - "dsh-update -y --restart"
+  args: "--check --restart --yes"
+  help_cmd: "--help"
+  source: dotfiles/mutable/agents/dsh/.local/bin/dsh-update
+
+- name: hermes-update
+  brief: 安装/升级 Hermes checkout 并重启常驻服务
+  category: agents
+  usage:
+    - "hermes-update"
+    - "hermes-update --check"
+    - "hermes-update --branch main"
+  args: "--check --branch --yes"
+  help_cmd: ""
+  source: dotfiles/mutable/agents/hermes/.local/bin/hermes-update
+
+- name: pi-update
+  brief: 按 settings.json 更新 Pi 核心与扩展
+  category: agents
+  usage:
+    - "pi-update"
+    - "pi-update --extensions-only"
+  args: "--extensions-only"
+  help_cmd: ""
+  source: dotfiles/mutable/agents/pi/.local/bin/pi-update
+
+- name: askill
+  brief: 声明式管理第三方 agent skills（lock 驱动）
+  category: agents
+  usage:
+    - "askill add owner/repo -s skill-a,skill-b"
+    - "askill list"
+    - "askill update"
+    - "askill install"
+  args: "add update install remove sync list"
+  help_cmd: "--help"
+  source: dotfiles/mutable/agents/skills/.local/bin/askill
+
+- name: appimage-run
+  brief: 基于 Guix FHS 容器的 AppImage 安装/运行管理器
+  category: tools
+  usage:
+    - "appimage-run try ~/Downloads/Cursor.AppImage"
+    - "appimage-run install ~/Downloads/Cursor.AppImage"
+    - "appimage-run run cursor"
+    - "appimage-run diagnose --repair cursor"
+  args: "install run try uninstall list diagnose diagnose-gpu check-updates --debug --yes"
+  help_cmd: "--help"
+  source: dotfiles/mutable/tools/appimage-run/.local/bin/appimage-run
+
+- name: secrets
+  brief: age 加密的本地密钥库（明文只落 tmpfs）
+  category: tools
+  usage:
+    - "secrets"
+    - "secrets show github"
+    - "secrets clip github"
+    - "secrets --dry-run edit github"
+  args: "init list add show clip edit rename remove re-encrypt menu --dry-run"
+  help_cmd: "--help"
+  source: dotfiles/mutable/tools/secrets/.local/bin/secrets
+
+- name: niri-app-switcher
+  brief: niri 按应用聚合的窗口切换器（rofi + 历史排序）
+  category: desktop
+  usage:
+    - "niri-app-switcher"
+  args: ""
+  help_cmd: ""
+  source: dotfiles/immutable/desktop/.local/bin/niri-app-switcher
+
+- name: niri-quake-toggle
+  brief: 呼出/收起 kitty quick-access 下拉面板
+  category: desktop
+  usage:
+    - "niri-quake-toggle"
+  args: ""
+  help_cmd: ""
+  source: dotfiles/immutable/desktop/.local/bin/niri-quake-toggle
+
+- name: keepassxc-credential-setup
+  brief: 维护 git-credential-keepassxc 的 callers 配置
+  category: utilities
+  usage:
+    - "keepassxc-credential-setup status"
+    - "keepassxc-credential-setup init"
+    - "keepassxc-credential-setup callers"
+  args: "status init update callers"
+  help_cmd: "--help"
+  source: dotfiles/immutable/utilities/.local/bin/keepassxc-credential-setup
+
+- name: nixgpu-update
+  brief: 重建 /var/lib/non-nixos-gpu 软链指向 nix GPU 资源（需 sudo）
+  category: utilities
+  usage:
+    - "sudo nixgpu-update"
+  args: ""
+  help_cmd: ""
+  source: dotfiles/immutable/utilities/.local/bin/nixgpu-update

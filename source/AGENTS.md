@@ -95,17 +95,14 @@ blue home                  # 仅构建并切换 Home 层（含 dotfiles），无
   - TTY 分配：TTY1 预留给内核消息，TTY2-6 使用 kmscon，TTY7 运行 Greetd 图形登录。
   - Elogind 默认忽略硬件休眠键，由 `50-hibernate.rules` 授权本地活跃用户。
 
-## 网络：nftables 与自动热点 AP
+## 网络：nftables 与热点 AP
 
-- **nftables 防火墙**：规则集开机时由 `nftables-service-type` 全局加载。NetworkManager dispatcher 仅动态更新 `trusted_ifaces` 集合，绝不执行 `flush ruleset`，确保不破坏容器与虚拟机的运行时规则；DHCP 与 ICMP 始终放行。
+- **nftables 防火墙（接口信任模型）**：规则集开机时由 `nftables-service-type` 全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`uap0` 热点、`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行。NetworkManager dispatcher 仅动态增删该集合元素（可信 WiFi 加入 `wlp0s20f3`），绝不执行 `flush ruleset`。
 - **WiFi 信任白名单**：以 NM Profile 名（`CONNECTION_ID`，非 SSID）为准，存储于加密文件 `wifi-trust.age` 中。Dispatcher 脚本在内存管道中解密比对，不落盘明文。
-- **自动热点 AP 核心策略**：
-  1. 接口隔离：通过 Udev `ENV{NM_UNMANAGED}="1"` 标记热点虚拟接口（规则序号须 >75），避免 NetworkManager 干扰。
-  2. 频段与信道：STA 与 AP 并发时受限于单一物理 radio，AP 必须绑定到 STA 当前已连信道或可见网络信道；若无明确可用信道则不拉起热点，由每分钟定时器重试。
-  3. hostapd 配置必须带 `hw_mode`，执行体读取 `/run/auto-hotspot/channel`，文件缺失则拒绝启动。
-  4. `hotspot-ap` 不设 respawn，失败由决策脚本在下一个触发点拉起。
-  5. 触发与并发控制：后台执行配合 flock 串行化多入口。
-  6. 开启决策：仅在外接 AC 电源且当前连接的 WiFi 不在信任白名单时自动开启。可通过创建 `/run/hotspot-disabled` 临时禁用。
+- **热点 AP（2026-09-13 起手动启停）**：hostapd 直管 `uap0`（type `__ap`，Udev `ENV{NM_UNMANAGED}="1"` 隔离，规则序号须 >75），开机不自启，由 fish 命令 `hotspot on/off/status`（内部 `sudo herd`）控制。安全不变式：
+  1. STA 与 AP 并发共享单一 radio（#channels<=1），AP beacon 会把 radio 锁死在其信道——执行体启动时内联探测：STA 已连接则跟随其信道，未连接用 2.4G ch6（self-managed world regdom 下 5G 全带 no IR，无 STA 关联起 5G 会被内核 START_AP 拒绝）。热点开启期间 STA 无法漫游到其他信道，需先 `hotspot off`。
+  2. hostapd 配置必须带 `hw_mode`，且与信道段配对（1-14 → g，其余 → a），否则报 "Could not determine operating frequency"。
+  3. `hotspot-ap` 不设 respawn，进程退出后 shepherd 标记 disabled；`hotspot on` 先 `herd enable` 再 `start`（幂等）。
   - 热点凭据：存放于 `wifi-hotspot.age` 密文中。生成和更新由用户手动执行，Agent 禁止读取或输出其明文。
 
 ## 用户层与自定义包要点

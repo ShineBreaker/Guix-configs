@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# toolbox — 自研工具目录：fzf 浏览 → 看帮助 → Tab 补全传参 → 直接运行
+#
+# 数据源：$HOME/.local/share/toolbox/tools.yaml（mutable 直链，改源即时生效）
+# 收录标准见清单头部注释：原创工具 opt-in 登记，纯透传 wrapper 不收。
+#
+# 用法：
+#   toolbox              交互浏览（fzf 列表 + 详情预览）
+#   toolbox run <name>   跳过列表，直接进入指定工具的运行页
+#   toolbox list         非交互列出全部工具
+#   toolbox check        对账：清单条目 vs 部署位 + 未登记的仓库脚本
+#   toolbox help         本帮助
+set -u
+# 捕获而非忽略 SIGINT：非交互 bash 默认会被 Ctrl-C 整体杀死；
+# 捕获后各场景自行处理（read 非零回列表 / fzf 130 退出浏览 / eval 中的
+# 工具正常收到信号被杀后落回返回提示）。子进程不继承"已捕获"，不受影响。
+trap ':' INT
+
+TOOLBOX_HOME="${TOOLBOX_HOME:-$HOME/.local/share/toolbox}"
+CATALOG="$TOOLBOX_HOME/tools.yaml"
+BIN_DIR="$HOME/.local/bin"
+PATH="$BIN_DIR:$PATH"
+SELF=$(readlink -f "$0")
+
+die() { printf 'toolbox: %s\n' "$*" >&2; exit 1; }
+[ -r "$CATALOG" ] || die "无法读取清单 $CATALOG（先跑 blue stow tools/toolbox）"
+
+# ---------------------------------------------------------------------------
+# Tab 补全（bind -x 挂入 readline，对 read -e 生效；complete -W 只对交互
+# 提示符生效，read -e 默认走文件名补全，故必须走这条 路）
+# TB_COMPLETE_WORDS 为当前工具的词表；命中词表则补词，否则回退文件名。
+# ---------------------------------------------------------------------------
+_tb_complete_word() {
+  local line=$READLINE_LINE pt=$READLINE_POINT
+  local left=${line:0:pt} right=${line:pt}
+  local cur=${left##* }
+  local pre=${left%"$cur"}
+  local -a cand=() words
+  read -r -a words <<< "${TB_COMPLETE_WORDS:-}"
+  local w
+  for w in "${words[@]}"; do [[ -n $w && $w == "$cur"* ]] && cand+=("$w"); done
+  [ ${#cand[@]} -eq 0 ] && while IFS= read -r w; do cand+=("$w"); done \
+      < <(compgen -f -- "$cur" 2>/dev/null)
+
+  local new=$cur
+  if [ ${#cand[@]} -eq 1 ]; then
+    new=${cand[0]}
+  elif [ ${#cand[@]} -gt 1 ]; then
+    local common=${cand[0]}
+    for w in "${cand[@]:1}"; do
+      while [[ $w != "$common"* && -n $common ]]; do common=${common%?}; done
+    done
+    new=$common
+  fi
+
+  if [ -n "$new" ] && [ "$new" != "$cur" ]; then
+    READLINE_LINE="$pre$new$right"
+    READLINE_POINT=$(( ${#pre} + ${#new} ))
+  elif [ ${#cand[@]} -gt 1 ]; then
+    printf '\n%s\n' "${cand[*]}" >&2
+  fi
+  return 0
+}
+
+# yq_field <name> <field> —— 单值字段；数组字段用 yq_usage。
+# 先把 select 结果收进数组取 [0]：直接 `select().f // ""` 会让不匹配条目各吐一个空行
+yq_field() { yq -r "[.[] | select(.name == \"$1\") | .$2][0] // \"\"" "$CATALOG"; }
+yq_usage()  { yq -r ".[] | select(.name == \"$1\").usage[]?" "$CATALOG"; }
+
+usage() {
+  sed -n '2,12p' "$SELF" | sed 's/^# \{0,1\}//'
+}
+
+# ---------------------------------------------------------------------------
+# 详情预览（fzf --preview 子进程调用）
+# ---------------------------------------------------------------------------
+preview() {
+  local name=$1
+  printf '\033[1m%s\033[0m — %s\n' "$name" "$(yq_field "$name" brief)"
+  printf '分类: %s\n' "$(yq_field "$name" category)"
+  printf '\n—— 用法示例 ——\n'
+  yq_usage "$name" | sed 's/^/  /'
+  local hc
+  hc=$(yq_field "$name" help_cmd)
+  if [ -n "$hc" ]; then
+    printf '\n—— %s %s ——\n' "$name" "$hc"
+    # help_cmd 是白名单机制：只有确认"只打印用法不触发主逻辑"的工具才登记
+    timeout 2 "$name" $hc 2>&1 | head -60 || printf '(help 抓取失败)\n'
+  else
+    printf '\n（该工具无安全的 --help，以上示例即全部用法）\n'
+  fi
+  printf '\n—— 源码 ——\n%s\n' "$(yq_field "$name" source)"
+}
+
+# ---------------------------------------------------------------------------
+# 运行页：展示帮助 → readline 编辑命令行（Tab 补全）→ 运行
+# ---------------------------------------------------------------------------
+run_entry() {
+  local name=$1
+  local brief args hc line first ans
+  brief=$(yq_field "$name" brief)
+  args=$(yq_field "$name" args)
+  hc=$(yq_field "$name" help_cmd)
+
+  while :; do
+    clear
+    printf '\033[1m%s\033[0m — %s\n\n' "$name" "$brief"
+    printf '—— 用法示例 ——\n'
+    yq_usage "$name" | sed 's/^/  /'
+    if [ -n "$hc" ]; then
+      printf '\n—— 帮助输出（%s %s）——\n' "$name" "$hc"
+      timeout 3 "$name" $hc 2>&1 | head -40 || true
+    fi
+    if [ -n "$args" ]; then
+      printf '\n—— Tab 补全: %s ——\n' "$args"
+      TB_COMPLETE_WORDS=$args
+      bind -x '"\t": _tb_complete_word' 2>/dev/null || true
+    fi
+    printf '\n'
+
+    # -e readline 编辑；-i 预填命令名；Tab 走 _tb_complete_word 词表/文件名补全
+    if ! read -e -i "$name " -p '输入参数回车=运行，直接回车=返回列表> ' line; then
+      return 0
+    fi
+    first=${line%% *}
+
+    # 空行（只剩预填的命令名）= 不运行，返回列表
+    [ "$first" = "$name" ] && [ "${#line}" -le $(( ${#name} + 1 )) ] && return 0
+    [ -z "${line// /}" ] && return 0
+
+    # 首词锁定为清单内工具名：目录只做"选中即运行"，不做任意命令执行器
+    if [ "$first" != "$name" ]; then
+      printf '首词必须是 %s\n' "$name" >&2
+      sleep 1
+      continue
+    fi
+
+    eval "$line"
+    printf '\n'
+    read -rp '回车=返回列表，r 回车=再次运行> ' ans || return 0
+    [ "$ans" = r ] || return 0
+  done
+}
+
+# ---------------------------------------------------------------------------
+# fzf 浏览主循环
+# ---------------------------------------------------------------------------
+browse() {
+  local sel name
+  while :; do
+    sel=$(yq -r '.[] | [.name, .category, .brief] | @tsv' "$CATALOG" \
+      | fzf --delimiter='\t' --with-nth=1,3 \
+          --header='Enter: 选中工具进入运行页  Esc: 退出' \
+          --preview-window='right:70%:wrap' \
+          --preview="'$SELF' _preview {1}") || return 0
+    name=${sel%%	*}
+    [ -n "$name" ] && run_entry "$name"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# 对账：清单条目健康性 + 未登记仓库脚本（信息级）
+# ---------------------------------------------------------------------------
+check() {
+  local fail=0 listed repo_root actual missing_stale
+
+  # 清单条目 → 部署位存在性（捕获工具改名/删除后的残留条目）
+  while IFS= read -r listed; do
+    if ! command -v "$listed" >/dev/null 2>&1; then
+      printf '✗ 清单条目 %s 在部署位找不到\n' "$listed"
+      fail=1
+    fi
+  done < <(yq -r '.[].name' "$CATALOG")
+  [ "$fail" -eq 0 ] && printf '✓ 清单 %d 条全部在部署位存在\n' "$(yq '. | length' "$CATALOG")"
+
+  # 仓库脚本 → 未登记项（opt-in 收录，仅提示不算错）
+  repo_root=$(cd "$(dirname "$SELF")/../../../../../" && pwd) || die '无法定位仓库 dotfiles/'
+  actual=$(find "$repo_root" -path '*/.local/bin/*' -type f ! -path '*/.git/*' -printf '%f\n' | sort -u)
+  missing_stale=$(comm -23 <(printf '%s\n' "$actual") <(yq -r '.[].name' "$CATALOG" | sort))
+  if [ -n "$missing_stale" ]; then
+    printf '… 仓库中未登记（wrapper 类预期不登记，新原创工具请补录）:\n'
+    printf '%s\n' "$missing_stale" | sed 's/^/    /'
+  fi
+  return "$fail"
+}
+
+# ---------------------------------------------------------------------------
+cmd_list() {
+  yq -r '.[] | [.category, .name, .brief] | @tsv' "$CATALOG" | sort | column -t -s "$(printf '\t')"
+}
+
+case "${1:-}" in
+  list)    cmd_list ;;
+  check)   check ;;
+  run)     [ $# -ge 2 ] && run_entry "$2" || die "用法: toolbox run <name>" ;;
+  _preview) preview "$2" ;;
+  help|--help|-h) usage ;;
+  *)       browse ;;
+esac

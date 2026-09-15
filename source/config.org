@@ -19,7 +19,7 @@
 :CUSTOM_ID: maintenance
 :END:
 
-在 Emacs 中将光标置于代码块内按 =C-c C-c= 即可执行（执行前会有确认提示），执行结果将输出到 =#+RESULTS:= 。完整的系统 reconfigure 涉及 sudo 权限，不在 Babel 块中执行，修改后请在终端执行 =blue rebuild= 。
+在 Emacs 中将光标置于代码块内, 按 =C-c C-c= 即可执行（执行前会有确认提示），执行结果将输出到 =#+RESULTS:= 。完整的系统 reconfigure 涉及 sudo 权限，不在 Babel 块中执行，修改后请在终端执行 =blue rebuild= 。
 
 括号平衡检查（快速定位出错的代码块）：
 
@@ -59,6 +59,8 @@ blue build
              (gnu home services sound)
              (gnu home services syncthing)
              (gnu home services xdg)
+             (gnu packages admin)
+             (gnu packages rust-apps)
              (gnu services)
              (gnu services shepherd)
              (gnu system accounts)
@@ -164,9 +166,10 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 ;; ══ 顶层定义 ══════════════════════════════════════════════════
 ;; 文件系统布局（subvol/bind-mount/swap）
 <<filesystem-defines>>
-;; 自定义变体包（CachyOS 内核、指纹识别栈）
+;; 自定义变体包（CachyOS 内核、指纹识别栈、hostapd 补丁）
 <<cachyos-lts-kernel>>
 <<fingerprint-packages>>
+<<hostapd-go-concurrent-pkg>>
 
 ;; ══ Home ══════════════════════════════════════════════════════
 (define %home
@@ -183,6 +186,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
               <<user-desktop-services>>
               ;; ── shepherd 自启动 ──
               <<essential-desktop-services>>
+              <<kanata-services>>
               <<hermes-services>>
               <<cpu-dma-latency-service>>
               <<timer-services>>
@@ -357,7 +361,8 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 *** 内核相关参数设置
 
-固件包来自 =nonguix= 频道；内核使用本地定制编译的 =linux-cachyos-lts= （构建配置与操作说明见 =source/files/kernel/AGENTS.md= ）。启用 =threadirqs= 进行中断线程化，配合 =@audio= 实时优先级保障低延迟音频调度。
+固件包来自 =nonguix= 频道；
+内核使用本地定制编译的 =linux-cachyos-lts= （构建配置与操作说明见 =source/files/kernel/AGENTS.md= ）。启用 =threadirqs= 进行中断线程化，配合 =@audio= 实时优先级保障低延迟音频调度。
 
 #+NAME: kernel-configs
 #+begin_src scheme
@@ -679,7 +684,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 静态 nftables 规则集开机加载一次，NM dispatcher 只原子更新 =trusted_ifaces= 集合（绝不 flush ruleset）。可信名单是 NM profile 名（非 SSID），存 age 密文 =wifi-trust.age= ，解密走管道不落明文，私钥缺失仅撤销信任不阻断联网；dispatcher 经 activation 拷贝（=/etc/NetworkManager= 是持久挂载点）。完整设计要点见 source/AGENTS.md。
 
-热点 AP + WiFi 客户端并发（2026-09-09 事故复盘后重构）：=managed + AP= 共享 radio 限单信道；决策脚本 =hotspot-decide= 统一判定（AC 供电且当前 profile 不在可信名单才开），四个触发入口（开机服务、NM dispatcher、udev 电源插拔、每分钟 recheck timer）收敛 + flock 串行 + 事件上下文后台化。应急开关 =touch /run/hotspot-disabled= （tmpfs，重启自愈）。五环防御与安全不变式见 source/AGENTS.md。
+热点 AP + WiFi 客户端并发（2026-09-09 事故复盘后重构，2026-09-13 撤除自动决策）：=managed + AP= 共享 radio 限单信道，热点不随机启动，由 fish 命令 =hotspot on/off= 手动启停（内部 =sudo herd=）；信道在执行体启动时内联探测——STA 已连接则跟随其信道，未连接用 2.4G ch6（self-managed regdom world 下 5G 全带 no IR，无 STA 关联起 5G 会被内核 START_AP 拒绝）。安全不变式见 source/AGENTS.md。
 
 SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生成命令见 source/AGENTS.md）。
 
@@ -693,11 +698,8 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
 - =mihomo-daemon=：=-d= 指定数据目录（geodata/cache/UI/proxies）归位到 =/var/lib/mihomo= 随 @data 子卷持久化；此前 root 环境下 mihomo 默认写到 =/.config/mihomo= 。启动经 =mihomo-run= 包装：模板（dotfiles immutable 部署，订阅 URL 为 =$MIHOMO_SUB_*= 占位符，密文入库明文不入库）渲染到 =/var/lib/mihomo/config.yaml= 后 exec，订阅轮换只需改密文 + 重启服务。
 - =hotspot-uap0-udev=：NM 隔离 uap0 走 udev =NM_UNMANAGED= 官方机制（85-nm-unmanaged.rules 同款），规则文件随系统代原子切换；不走 conf.d =device.*= 段——NM 1.54 不认 =device.interface-name= 键（事故根因之一），且 =/etc/NetworkManager= 是持久子卷，坏文件跨代残留。顺带清掉 =ID_NET_NAME*= 防 udev 因共享 MAC 试图把 uap0 改名成 wlp0s20f3（每次开机都报 rename 冲突）；序号须 > 75（75-net-description 会无条件重设这些属性，reviewer 实证 eudev 3.2.14）。
 - =hotspot-stale-conf-cleanup=：一次性清理——事故版本把键名错误的 conf.d 文件写进了持久子卷，回滚系统代不清除，必须显式删。
-- =hotspot-ap=：热点本体，hostapd 直管 uap0（type __ap），不随机启动，由决策脚本 =herd start/stop= ；信道由决策脚本写入 =/run= 状态文件，执行体读不到合法信道号即拒绝启动。不 respawn：失败即停，由决策脚本在下个触发点重拉，避免反复折腾接口的风暴。
+- =hotspot-ap=：热点本体，hostapd 直管 uap0（type __ap），不随机启动，由 fish 命令 =hotspot on/off= （=sudo herd=）手动启停；执行体启动时内联探测信道（STA 已连跟随其信道，未连用 2.4G ch6）。不 respawn：失败即停 =herd status= 可见，重新 =hotspot on= 前先 =enable= （respawn?#f 下进程退出后 shepherd 会把服务标 disabled，=start= 被拒）——=hotspot on= 已封装此顺序。
 - =hotspot-dnsmasq=：热点子网 DHCP/DNS，=--bind-dynamic= 绑 uap0，无热点时闲置；dnsmasq 不碰 radio，崩溃即拉起保住热点子网 DHCP。
-- =auto-hotspot=：开机入口，热点去留由决策脚本按电源与可信 profile 判定；stop 是 no-op——热点本体由 =hotspot-ap= 服务承载，手动关闭直接 =herd stop hotspot-ap= 。
-- =hotspot-recheck=：周期兜底每分钟重跑决策，覆盖 dispatcher / udev 事件覆盖不到的场景（热点开着时可信网络出现、STA 换信道、hostapd 死后重拉）；command gexp 必须是字面量表——shepherd-timer 内部 =#$@= 会把 =#~(list …)= 的 list 符号拼进命令，触发时 fork+exec 报错杀死 timer fiber（永久失效，reviewer 实证）。
-- =hotspot-ac-trigger=：电源插拔入口，=power_supply= 有 =online= 属性的源（Mains/USB-C，Battery 无此属性被 TEST 过滤）变化即重跑热点决策，脚本自读当前电源状态无需参数。
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
@@ -738,22 +740,6 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
                          pairs))
                 (chmod #$output #o555)))))]
 
-       [hotspot-decide-script
-        (render-script
-         "hotspot-decide" (local-file "hotspot-decide")
-         `(("@NMCLI_BIN@" . ,(file-append network-manager "/bin/nmcli"))
-           ("@AGE_IDENTITY@" . ,age-key)
-           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,wifi-trust-age)
-           ("@AGE_BIN@" . ,age-bin)
-           ("@GREP_BIN@" . ,grep-bin)
-           ("@IW_BIN@" . ,iw-bin)
-           ("@PGREP_BIN@" . ,(bin "procps" "/bin/pgrep"))
-           ("@HERD_BIN@" . ,(bin "shepherd" "/bin/herd"))
-           ("@IP_BIN@" . ,ip-bin)
-           ("@SED_BIN@" . ,sed-bin)
-           ("@FLOCK_BIN@" . ,(bin "util-linux" "/bin/flock"))
-           ("@MKDIR_BIN@" . ,mkdir-bin)))]
-
        [hotspot-ap-run-script
         (render-script
          "hotspot-ap-run" (local-file "hotspot-ap-run")
@@ -764,7 +750,8 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
            ("@IP_BIN@" . ,ip-bin)
            ("@SED_BIN@" . ,sed-bin)
            ("@MKDIR_BIN@" . ,mkdir-bin)
-           ("@HOSTAPD_BIN@" . ,(bin "hostapd" "/sbin/hostapd"))))]
+           ("@HOSTAPD_BIN@" . ,(file-append hostapd-go-concurrent
+                                            "/sbin/hostapd"))))]
 
        [nm-powersave-conf
         (plain-file "wifi-powersave.conf"
@@ -778,8 +765,7 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
            ("@TRUSTED_CONNECTIONS_CIPHER@" . ,wifi-trust-age)
            ("@AGE_BIN@" . ,age-bin)
            ("@NFT_BIN@" . ,(file-append nftables "/sbin/nft"))
-           ("@GREP_BIN@" . ,grep-bin)
-           ("@HOTSPOT_DECIDE_BIN@" . ,hotspot-decide-script)))]
+           ("@GREP_BIN@" . ,grep-bin)))]
 
        [mihomo-run-script
         (render-script
@@ -808,8 +794,7 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
 
         (service tailscale-service-type
                  (tailscale-configuration
-                  (verbosity 1)
-                  (extra-options '("--tun=userspace-networking"))))
+                  (verbosity 1)))
 
         (simple-service 'nm-dispatcher-trusted-ssid activation-service-type
                         #~(let ([dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"])
@@ -881,7 +866,7 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
         (simple-service 'hotspot-ap-services shepherd-root-service-type
                         (list (shepherd-service
                                (documentation
-                                "Run hostapd AP on uap0, lifecycle owned by hotspot-decide.")
+                                "Run hostapd AP on uap0, started manually via the hotspot fish command.")
                                (provision '(hotspot-ap))
                                (requirement '(wifi-ap-interface))
                                (start #~(make-forkexec-constructor
@@ -910,36 +895,6 @@ SSID 与密码存 age 密文 =wifi-hotspot.age= （两行：SSID、密码，生�
                                (stop #~(make-kill-destructor))
                                (auto-start? #t)
                                (respawn? #t))))
-
-        (simple-service 'auto-hotspot shepherd-root-service-type
-                        (list (shepherd-service
-                               (documentation
-                                "Start hotspot when on AC and WiFi not trusted.")
-                               (provision '(auto-hotspot))
-                               (requirement '(wifi-ap-interface))
-                               (start #~(lambda _
-                                          (zero? (system* #$hotspot-decide-script))))
-                               (stop #~(lambda _ #t))
-                               (one-shot? #t)
-                               (auto-start? #t)
-                               (respawn? #f))))
-
-        (simple-service 'hotspot-recheck shepherd-root-service-type
-                        (list (shepherd-timer '(hotspot-recheck)
-                                              "* * * * *"
-                                              #~(#$hotspot-decide-script)
-                                              #:requirement '(wifi-ap-interface)
-                                              #:documentation
-                                              "Re-evaluate hotspot decision every minute.")))
-
-        (simple-service 'hotspot-ac-trigger udev-service-type
-                        (list (file->udev-rule
-                               "91-hotspot-ac.rules"
-                               (mixed-text-file
-                                "91-hotspot-ac.rules"
-                                "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
-                                "TEST==\"online\", RUN+=\""
-                                hotspot-decide-script "\"\n"))))
 
         (simple-service 'iw-reg-cn shepherd-root-service-type
                         (list (shepherd-service
@@ -996,7 +951,7 @@ exec "$MIHOMO_BIN" -d "$DATA_DIR" -f "$OUT"
 
 **** NM dispatcher 脚本
 
-可信连接切换 + 热点决策触发入口；tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位符，activation 拷贝到 =/etc/NetworkManager/dispatcher.d/= 。热点判定输入包含任意设备的连接状态（网线插拔同样改变判定），故对所有设备的 up/down 重跑决策，失败不阻断 trusted-set。
+可信连接切换：WiFi 连上可信 profile 时把 =wlp0s20f3= 加入 nftables =trusted_ifaces= 集合（整接口放行本地服务），断开或不可信时移除；tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位符，activation 拷贝到 =/etc/NetworkManager/dispatcher.d/= 。
 
 #+NAME: nm-dispatcher-trusted-connection
 #+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
@@ -1009,14 +964,9 @@ TRUSTED_CONNECTIONS_CIPHER="@TRUSTED_CONNECTIONS_CIPHER@"
 AGE_BIN="@AGE_BIN@"
 NFT_BIN="@NFT_BIN@"
 GREP_BIN="@GREP_BIN@"
-HOTSPOT_DECIDE_BIN="@HOTSPOT_DECIDE_BIN@"
 
 ACTION="$2"
 CONNECTION_ID="${CONNECTION_ID:-}"
-
-case "$ACTION" in
-    up|down) "$HOTSPOT_DECIDE_BIN" || true ;;
-esac
 
 [ "$1" = "$WIFI_IFACE" ] || exit 0
 
@@ -1049,82 +999,34 @@ case "$ACTION" in
 esac
 #+end_src
 
-**** 热点决策脚本
+**** 热点 AP 执行体
 
-热点开关决策：AC 供电且物理无线口未连可信 profile 时开启热点，其余情况（电池供电、已连可信 WiFi）关闭。四个入口共用：shepherd =auto-hotspot= （开机）、NM dispatcher（任意设备 up/down）、udev =power_supply= 插拔、=hotspot-recheck= timer（每分钟兜底）。
+=hotspot-ap= shepherd 服务的执行体：内联探测信道（STA 已连接则跟随其信道——同 radio 并发共享单信道的物理约束，起错信道会把 STA 锁死；未连接用 2.4G ch6，self-managed world regdom 下 5G 全带 no IR，无 STA 关联起 5G 会被内核 START_AP 拒绝）、按信道段生成 hw_mode（hostapd 默认 g 只有信道 1-14，5G 信道号配 g 报 "Could not determine operating frequency"）、从 age 密文解出 SSID/密码、纠正接口类型（managed 残留 → __ap，切换需先 down）、配置 uap0 的热点子网地址，最后 exec hostapd 成为 shepherd 跟踪的主进程。凭据只经管道与 =/run= （tmpfs）过境，不落持久盘。变量可用环境覆盖，便于离线测试。
 
-2026-09-09 断网事故的安全不变式（改动前必读）：
-1. AP 与 STA 并发共享 radio（#channels<=1），AP beacon 会把 radio 锁死在其信道——起在错误信道 = STA 永远连不上别的信道。因此 =target_channel= 无法给出确定信道时绝不起热点，exit 0 等下个触发点。
-2. udev / dispatcher 上下文里同步执行会拖慢调用方的事件处理（dispatcher 版曾被 NM 退出的 SIGTERM 杀死），检测到事件环境即自重入后台执行。
-3. 多入口并发由 flock 串行化。
-4. 应急开关：=/run/hotspot-disabled= 存在时只关不开（tmpfs，重启自愈）。
-
-变量可用环境覆盖，便于离线真值表测试；udev 与 dispatcher 环境不含这些名字，默认值即部署值。只依赖 sh 内建与注入的绝对路径，在 udev 的贫瘠 PATH 下也能运行。
-
-#+NAME: hotspot-decide
-#+begin_src sh :tangle ../tmp/hotspot-decide
+#+NAME: hotspot-ap-run
+#+begin_src sh :tangle ../tmp/hotspot-ap-run
 #!/bin/sh
 # Auto-generated by Guix config.org.
 
-WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
 HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
-HOTSPOT_SVC="${HOTSPOT_SVC:-hotspot-ap}"
-HOSTAPD_CONF="${HOSTAPD_CONF:-/run/auto-hotspot/hostapd.conf}"
-CHANNEL_FILE="${CHANNEL_FILE:-/run/auto-hotspot/channel}"
-LOCK_FILE="${LOCK_FILE:-/run/hotspot-decide.lock}"
-DISABLE_SENTINEL="${DISABLE_SENTINEL:-/run/hotspot-disabled}"
-NMCLI_BIN="${NMCLI_BIN:-@NMCLI_BIN@}"
+WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
+AP_ADDR="${AP_ADDR:-192.168.77.1/24}"
+CONF_DIR="${CONF_DIR:-/run/auto-hotspot}"
 AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
-TRUSTED_CONNECTIONS_CIPHER="${TRUSTED_CONNECTIONS_CIPHER:-@TRUSTED_CONNECTIONS_CIPHER@}"
+HOTSPOT_CREDS_CIPHER="${HOTSPOT_CREDS_CIPHER:-@HOTSPOT_CREDS_CIPHER@}"
 AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
-GREP_BIN="${GREP_BIN:-@GREP_BIN@}"
 IW_BIN="${IW_BIN:-@IW_BIN@}"
-PGREP_BIN="${PGREP_BIN:-@PGREP_BIN@}"
-HERD_BIN="${HERD_BIN:-@HERD_BIN@}"
 IP_BIN="${IP_BIN:-@IP_BIN@}"
 SED_BIN="${SED_BIN:-@SED_BIN@}"
-FLOCK_BIN="${FLOCK_BIN:-@FLOCK_BIN@}"
 MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
-AC_ONLINE_GLOB="${AC_ONLINE_GLOB:-/sys/class/power_supply/*/online}"
+HOSTAPD_BIN="${HOSTAPD_BIN:-@HOSTAPD_BIN@}"
+
+conf="$CONF_DIR/hostapd.conf"
 #+end_src
 
-事件上下文（udev 的 =SUBSYSTEM= / dispatcher 的 =NM_DISPATCHER_ACTION= ）后台化：自重入后立即返回，不阻塞 udev 事件队列或 dispatcher。多入口并发收敛：拿不到锁说明另一实例正在跑，本次让路。
+信道探测：=iw link= 输出只有 freq（MHz），按频段换算信道号——2.4G: ch=(freq-2407)/5，5G: ch=(freq-5000)/5；未连接回落 ch6。信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）。
 
-#+begin_src sh :tangle ../tmp/hotspot-decide
-if [ "${HOTSPOT_DIRECT:-}" != "1" ] \
-       && { [ -n "${SUBSYSTEM:-}" ] || [ -n "${NM_DISPATCHER_ACTION:-}" ]; }; then
-    HOTSPOT_DIRECT=1 "$0" >/dev/null 2>&1 &
-    exit 0
-fi
-
-exec 9>"$LOCK_FILE" || exit 0
-"$FLOCK_BIN" -n 9 || exit 0
-
-on_ac_power() {
-    for f in $AC_ONLINE_GLOB; do
-        [ -r "$f" ] || continue
-        read -r val < "$f" 2>/dev/null || continue
-        [ "$val" = "1" ] && return 0
-    done
-    return 1
-}
-
-wifi_trusted() {
-    conn=$("$NMCLI_BIN" -t -g GENERAL.CONNECTION device show "$WIFI_IFACE" 2>/dev/null) || return 1
-    [ -n "$conn" ] || return 1
-    [ -r "$AGE_IDENTITY" ] || return 1
-    "$AGE_BIN" -d -i "$AGE_IDENTITY" "$TRUSTED_CONNECTIONS_CIPHER" 2>/dev/null |
-        "$GREP_BIN" -Fqx -- "$conn"
-}
-
-hotspot_active() {
-    "$PGREP_BIN" -x hostapd >/dev/null 2>&1
-}
-#+end_src
-
-=sta_channel= ：=iw link= 输出只有 freq（MHz），按频段换算信道号——2.4G: ch=(freq-2407)/5，5G: ch=(freq-5000)/5。
-
-#+begin_src sh :tangle ../tmp/hotspot-decide
+#+begin_src sh :tangle ../tmp/hotspot-ap-run
 sta_channel() {
     freq=$("$IW_BIN" dev "$WIFI_IFACE" link 2>/dev/null |
                "$SED_BIN" -n 's/^[[:space:]]*freq: \([0-9][0-9]*\)$/\1/p')
@@ -1138,122 +1040,7 @@ sta_channel() {
     esac
 }
 
-ap_channel() {
-    "$SED_BIN" -n 's/^channel=\([0-9][0-9]*\)$/\1/p' "$HOSTAPD_CONF" 2>/dev/null
-}
-#+end_src
-
-=target_channel= ——热点的唯一合法信道来源（安全闸）：
-1. STA 已连接：跟随 STA 信道；
-2. STA 未连接：扫描缓存里可见的 autoconnect WiFi profile 的信道（按信号序取首个命中），让 NM 稍后自动关联时天然同信道；
-3. 都没有：返回失败，调用方必须放弃本次动作。
-
-=nmcli -t= 会把值里的冒号转义为 =\:= ，前后两种输出的转义形式一致，故全程用转义形式匹配。不做子串 grep（"Office" 会误吞 "HomeOffice:"），改为对扫描行按信号序逐行做字面前缀剥离 + 纯数字校验。
-
-#+begin_src sh :tangle ../tmp/hotspot-decide
-target_channel() {
-    ch=$(sta_channel) && { echo "$ch"; return 0; }
-    scan=$("$NMCLI_BIN" -t -f SSID,CHAN device wifi list ifname "$WIFI_IFACE" 2>/dev/null) || return 1
-    [ -n "$scan" ] || return 1
-    autoconns=$("$NMCLI_BIN" -t -f NAME,TYPE,AUTOCONNECT connection show 2>/dev/null |
-                    "$SED_BIN" -n 's/:802-11-wireless:yes$//p')
-    [ -n "$autoconns" ] || return 1
-    while IFS= read -r sline; do
-        [ -n "$sline" ] || continue
-        while IFS= read -r name; do
-            [ -n "$name" ] || continue
-            ch=${sline#"$name":}
-            case "$ch" in
-                ''|*[!0-9]*) continue ;;
-*) ap_channel_ok "$ch" || continue
-   echo "$ch"; return 0 ;;
-esac
-done <<EONAMES
-$autoconns
-EONAMES
-done <<EOSCAN
-$scan
-EOSCAN
-return 1
-}
-#+end_src
-
-=ap_channel_ok= ——信道允许 AP 主动辐射校验：本机 self-managed regdom（world）下 5G 全带 no IR，扫描分支（STA 未连）起在这些信道会被 hostapd 拒绝（NO-IR）。带 IR-CONCURRENT 的信道在 STA 关联后限制解除——跟随 STA 的分支不需要此过滤，只有扫描分支（发起时 STA 未连）必须选无 no IR 标志的信道。=iw phy= 的 Frequencies 行格式：=* 5785 MHz [157] (22.0 dBm) (no IR)= 。
-
-#+begin_src sh :tangle ../tmp/hotspot-decide
-ap_channel_ok() {
-    line=$("$IW_BIN" phy 2>/dev/null | "$GREP_BIN" -E "MHz \[$1\] ")
-    [ -n "$line" ] || return 1
-    case "$line" in
-        *"no IR"*) return 1 ;;
-        *) return 0 ;;
-    esac
-}
-#+end_src
-
-主流程：目标信道变化（STA 漫游 / 出现可关联网络）时重启热点跟随；shepherd 把进程退出过的服务标记 disabled，=herd start= 会拒绝，故先 =enable= （幂等，未禁用时无副作用）。
-
-#+begin_src sh :tangle ../tmp/hotspot-decide
-stop_hotspot() {
-    "$HERD_BIN" stop "$HOTSPOT_SVC" 2>/dev/null
-    "$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
-    return 0
-}
-
-if [ -e "$DISABLE_SENTINEL" ]; then
-    hotspot_active && stop_hotspot
-    exit 0
-fi
-
-if on_ac_power && ! wifi_trusted; then
-    ch=$(target_channel) || exit 0
-    if hotspot_active; then
-        ap_ch=$(ap_channel)
-        [ -n "$ap_ch" ] && [ "$ap_ch" = "$ch" ] && exit 0
-        stop_hotspot
-    fi
-    "$MKDIR_BIN" -p "${CHANNEL_FILE%/*}"
-    printf '%s\n' "$ch" > "$CHANNEL_FILE"
-    "$HERD_BIN" enable "$HOTSPOT_SVC" 2>/dev/null
-    exec "$HERD_BIN" start "$HOTSPOT_SVC"
-fi
-
-hotspot_active && stop_hotspot
-exit 0
-#+end_src
-
-**** 热点 AP 执行体
-
-=hotspot-ap= shepherd 服务的执行体：从 =/run= 状态文件读决策脚本选定的信道（缺失或非法即拒绝启动——绝不用默认信道起 AP，2026-09-09 事故的教训之一）、按信道段生成 hw_mode（hostapd 默认 g 只有信道 1-14，5G 信道号配 g 报 "Could not determine operating frequency"，事故中热点 8 连败的真凶）、从 age 密文解出 SSID/密码、纠正接口类型（managed 残留 → __ap，切换需先 down）、配置 uap0 的热点子网地址，最后 exec hostapd 成为 shepherd 跟踪的主进程。凭据只经管道与 =/run= （tmpfs）过境，不落持久盘。变量可用环境覆盖，便于离线测试。
-
-#+NAME: hotspot-ap-run
-#+begin_src sh :tangle ../tmp/hotspot-ap-run
-#!/bin/sh
-# Auto-generated by Guix config.org.
-
-HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
-AP_ADDR="${AP_ADDR:-192.168.77.1/24}"
-CONF_DIR="${CONF_DIR:-/run/auto-hotspot}"
-CHANNEL_FILE="${CHANNEL_FILE:-/run/auto-hotspot/channel}"
-AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
-HOTSPOT_CREDS_CIPHER="${HOTSPOT_CREDS_CIPHER:-@HOTSPOT_CREDS_CIPHER@}"
-AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
-IW_BIN="${IW_BIN:-@IW_BIN@}"
-IP_BIN="${IP_BIN:-@IP_BIN@}"
-SED_BIN="${SED_BIN:-@SED_BIN@}"
-MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
-HOSTAPD_BIN="${HOSTAPD_BIN:-@HOSTAPD_BIN@}"
-
-conf="$CONF_DIR/hostapd.conf"
-#+end_src
-
-信道必须由决策脚本显式提供（安全闸在决策侧，此处是防御性校验）；信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）。
-
-#+begin_src sh :tangle ../tmp/hotspot-ap-run
-ch=$(cat "$CHANNEL_FILE" 2>/dev/null)
-case "$ch" in
-    ''|*[!0-9]*) exit 1 ;;
-                 esac
+ch=$(sta_channel) || ch=6
 
                  if [ "$ch" -le 14 ] 2>/dev/null; then
                      hw_mode=g
@@ -1309,7 +1096,7 @@ table inet filter {
 # The dispatcher temporarily adds wlp0s20f3 for trusted connection profiles.
 set trusted_ifaces {
 type ifname
-elements = { "uap0", "virbr0" }
+elements = { "uap0", "virbr0", "tailscale0" }
 }
 
 chain input {
@@ -1395,7 +1182,7 @@ iifname "uap0" oifname != "uap0" masquerade
 硬件设备权限与电源事件监听规则：包含静态外设规则、AC 供电状态自适应联动规则以及 USB 挂起权限规则。
 
 **** 静态规则
-配置屏幕背光、Android 调试桥、游戏手柄、音频 DMA 低延迟接口、Intel NPU 及 Sunshine 虚拟输入设备权限。
+配置屏幕背光、Android 调试桥、游戏手柄、音频 DMA 低延迟接口、Intel NPU、Sunshine 虚拟输入设备及 WinApps USB 直通所需的设备节点组权限（rootless 容器内 QEMU 以宿主用户身份运行，靠 compose 的 =group_add: keep-groups= 保留 wheel 组来打开 USB 节点；具体占用哪个设备由 compose 的 =ARGUMENTS= 决定，未列出的设备不受影响）。
 
 #+NAME: udev-static-rules
 #+begin_src scheme
@@ -1420,6 +1207,10 @@ iifname "uap0" oifname != "uap0" masquerade
       (udev-rules-service 'sayodevice
                           (udev-rule "60-sayodevice.rules"
                                      "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
+
+      (udev-rules-service 'winapps-usb
+                          (udev-rule "60-winapps-usb.rules"
+                                     "SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", GROUP=\"wheel\", MODE=\"0660\""))
       (udev-rules-service 'sunshine
                           (udev-rule "60-sunshine-uinput.rules"
                                      "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"")))
@@ -1858,8 +1649,7 @@ polkit.addRule(function(action, subject) {
                    '("https://substitutes.guix.gofranz.com"))))
 
  ;; SJTUG Mirror
- (simple-service 'sjtug-substitutes guix-service-
-                 type
+ (simple-service 'sjtug-substitutes guix-service-type
                  (guix-extension
                   (substitute-urls
                    '("https://mirror.sjtu.edu.cn/guix"
@@ -2201,6 +1991,24 @@ tangle 成独立 manifest 部署到 hermes 数据目录；与系统冲突的包�
 (load "../source/files/kernel/linux-cachyos-lts.scm")
 #+end_src
 
+**** hostapd GO-CONCURRENT 补丁
+
+本机热点 =AP+STA 同信道并发= 场景的死结：iwlwifi self-managed regdom（LAR 未定位国家，恒为 world）下 5G 高段（5735-5835，信道 149-165）全部 =no IR=，但其中 STA 已关联的信道带 =GO-CONCURRENT= 标志（内核语义：存在并发 STA 关联时允许主动辐射）。=iw reg set CN= 被 LAR 忽略、regulatory.db 也加载失败，regdom 路线走不通。而 hostapd 2.10 收到内核的 =GO_CONCURRENT= 标志却从不使用——=hw_features.c= 把一切 NO_IR 信道升级成 DISABLED，AP 在本地信道选择阶段即死（"not allowed for AP mode, flags: 0x20073 NO-IR"），根本没把 =START_AP= 发给内核（内核层才有 IR-CONCURRENT 动态放行判定）。变体包仅此一处豁免：带 GO-CONCURRENT 的 NO_IR 信道不再升级 DISABLED；DISABLED 硬禁仍生效，内核 START_AP 仍是最终守门员（STA 未关联时依旧拒绝）。
+
+#+NAME: hostapd-go-concurrent-pkg
+#+begin_src scheme
+(define hostapd-go-concurrent
+  (package
+   (inherit hostapd)
+   (source
+    (origin
+     (inherit (package-source hostapd))
+     (patches
+      (list (local-file
+             (assume-source-relative-file-name
+              "../source/files/patches/hostapd-go-concurrent.patch"))))))))
+#+end_src
+
 **** 指纹识别栈
 
 本机传感器 Goodix =27c6:689a= 需 libfprint ≥1.94.9（=goodixmoc= 才认领），Guix 上游 1.94.5 不认——故变体包：libfprint =1.94.100= + fprintd =1.94.5= 两包必须同步升级。变体点（nss→openssl、=udev_hwdb=enabled= 等）与系统侧接线见 source/AGENTS.md；升级仅改两个 version 与对应 hash（=guix hash -f nix-base32=）。
@@ -2337,6 +2145,82 @@ $$bin/starship$$ init fish | source
 enable_transience
 
 end
+#+end_src
+
+*** Kanata 键盘映射
+单个用户级 shepherd 服务 =kanata=，只接管内置键盘：QWERTY 行首 Tab→Esc、ASDF 行首 CapsLock→Tab、底部行 Ctrl/Alt 互换（模拟外接小键盘的列首手感），右 Alt 按住时激活 =fn= 层，复刻小键盘驱动定制后的 Fn 层（键位对应关系写在 =.kbd= 注释里）。外接小键盘不经 kanata——其硬件 Fn 层已覆盖全部输入，由驱动自理；kanata 单进程无法按设备区分映射，Ctrl/Alt 互换会波及外接键盘，故只留笔记本一实例。
+
+改映射后：=blue home= 重新部署，再 =herd restart kanata=。
+
+#+begin_src conf :tangle ../tmp/kanata-laptop.kbd
+;; 笔记本内置键盘（AT Translated Set 2 keyboard）映射。
+;;
+;; 目标：不插外接小键盘时，内置键盘也能给出一致的手感。小键盘
+;; （I-CHIP GamingKeyboard，4 列 × 13 行竖排）每一列对应标准键盘的一个行
+;; （列 4↔QWERTY、列 3↔ASDF、列 2↔ZXCV、列 1↔底部行），列首键依次是
+;; Esc / Tab / Shift / Alt，因此内置键盘 base 层：
+;;   QWERTY 行首（物理 Tab）→ Esc
+;;   ASDF 行首（物理 CapsLock）→ Tab（CapsLock 功能在 fn 层收回）
+;;   底部行前两个（物理 Ctrl / Alt）互换
+;; 右 Alt 按住时激活 fn 层，复刻小键盘驱动定制后的 Fn 层：
+;;   Q W E R T Y U I O P → 1 2 3 4 5 6 7 8 9 0     列 4 的 Fn 层是整条数字行
+;;   A S D F G          → F1 F2 F3 F4 F5           列 3 的 Fn 层接管 F1-F5
+;;   H J K L            → [ ] ; '                  驱动定制后的顺序
+;;   Z X C V B N M      → F6 F7 F8 F9 F10 F11 F12  列 2 的 Fn 层接管 F6-F12
+;;   原 Tab（base 出 Esc，即小键盘 Esc 键帽位）→ `  Fn 副印刷
+;;   Enter / Backspace  → \ / -
+;; 除以上键位外切层时一律透传；行尾的背光类功能键无标准键码，不映射。
+;;
+;; 外接小键盘不经 kanata（硬件 Fn 层已覆盖全部输入），由驱动自理；
+;; linux-dev-names-include 只接管内置键盘，不影响其他键盘。
+
+(defcfg
+  process-unmapped-keys yes
+  linux-dev-names-include ("AT Translated Set 2 keyboard"))
+
+(defsrc
+  esc  f1 f2 f3 f4 f5 f6 f7 f8 f9 f10 f11 f12
+  grv  1  2  3  4  5  6  7  8  9  0  -  =  bspc
+  tab  q  w  e  r  t  y  u  i  o  p  [  ]  \
+  caps a  s  d  f  g  h  j  k  l  ;  '  ret
+  lsft z  x  c  v  b  n  m  ,  .  /  rsft
+  lctl lmet lalt spc ralt rmet rctl menu)
+
+(deflayer base
+  _    _  _  _  _  _  _  _  _  _  _  _  _
+  _    _  _  _  _  _  _  _  _  _  _  _  _  _
+  esc  _  _  _  _  _  _  _  _  _  _  _  _  _
+  tab  _  _  _  _  _  _  _  _  _  _  _  _
+  _    _  _  _  _  _  _  _  _  _  _  _
+  lalt lmet lctl spc (layer-while-held fn) rmet rctl _)
+
+(deflayer fn
+  _    _  _  _  _  _  _  _  _  _  _  _  _
+  _    _  _  _  _  _  _  _  _  _  _  _  _  -
+  grv  1  2  3  4  5  6  7  8  9  0  _  _  _
+  _    f1 f2 f3 f4 f5 [  ]  ;  '  _  _  \
+  _    f6 f7 f8 f9 f10 f11 f12 _  _  _  _
+  _    _  _  _  _  _  _  _)
+#+end_src
+
+#+NAME: kanata-services
+#+begin_src scheme :noweb yes
+(list (simple-service 'kanata-keyboards
+                      home-shepherd-service-type
+                      (list
+                       (shepherd-service
+                        (provision '(kanata))
+                        (documentation "内置键盘映射：L_Alt/L_Ctrl 互换，右 Alt 按住切 fn 层")
+                        (start #~(lambda args
+                                   ((make-forkexec-constructor
+                                     (list #$(file-append kanata "/bin/kanata")
+                                           "--cfg" #$(local-file "kanata-laptop.kbd"))
+                                     #:environment-variables (environ)
+                                     #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                                               "/shepherd/kanata.log"))
+                                    args)))
+                        (stop #~(make-kill-destructor))
+                        (respawn? #t)))))
 #+end_src
 
 *** Emacs 服务
@@ -2653,8 +2537,7 @@ done
                             "system"
                             "terminal"
                             "utilities"
-                            "noctalia-suite"
-                            "zen"))
+                            "noctalia-suite"))
                 (excluded '("\\.agents/workfile($|/.*)"
                             ".*\\.swp"
                             "\\.git"
@@ -2681,7 +2564,7 @@ done
 #+end_src
 
 **** 文件管理服务
-自行指定文件与目的地；需注入二进制路径时用 *rosenthal* =computed-substitution-with-inputs= （模板写 =$$bin/foo$$= + =specs->pkgs= 给包）。qt5ct/qt6ct 共用一套 QSS 资源：=check-white.svg= 是复选框选中态对勾、=chevron-*.svg= 是 SpinBox 上下箭头，QSS 内均以绝对路径引用；非字面量路径须用 =assume-source-relative-file-name= 标记，否则 =local-file= 退化按 cwd 解析。
+自行指定文件与目的地；需注入二进制路径时用 *rosenthal* =computed-substitution-with-inputs= （模板写 =$$bin/foo$$= + =specs->pkgs= 给包）。qt5ct/qt6ct 共用一套 QSS 资源：=check-white.svg= 是复选框选中态对勾、=chevron-*.svg= 是 SpinBox 上下箭头；=rounded.qss= 因内含路径引用已移入 darkman 模板（=$$home$$= 占位，darkman/script/config/ 渲染后落到 =~/.config/qt6ct/qss/=）；非字面量路径须用 =assume-source-relative-file-name= 标记，否则 =local-file= 退化按 cwd 解析。
 
 #+NAME: home-files-services
 #+begin_src scheme
@@ -2696,8 +2579,8 @@ done
                                    (local-file
                                     (assume-source-relative-file-name
                                      (string-append "../source/files/qt/" f)))))
-                           '("rounded.qss" "check-white.svg"
-                             "chevron-up.svg" "chevron-down.svg")))
+                           '("check-white.svg" "chevron-up.svg"
+                             "chevron-down.svg")))
                     '("qt5ct" "qt6ct"))
 
                  (".local/share/gnupg/gpg-agent.conf" ,(computed-substitution-with-inputs

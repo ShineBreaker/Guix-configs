@@ -1,0 +1,13 @@
+--- a/src/ap/hw_features.c
++++ b/src/ap/hw_features.c
+@@ -123,7 +123,9 @@
+ 				    !(iface->drv_flags &
+ 				      WPA_DRIVER_FLAGS_DFS_OFFLOAD)) ||
+ 				   (feature->channels[j].flag &
+-				    HOSTAPD_CHAN_NO_IR)) {
++				    HOSTAPD_CHAN_NO_IR) &&
++				   !(feature->channels[j].flag &
++				     HOSTAPD_CHAN_GO_CONCURRENT)) {
+ 				feature->channels[j].flag |=
+ 					HOSTAPD_CHAN_DISABLED;
+ 			}
