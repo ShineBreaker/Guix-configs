@@ -1,6 +1,6 @@
 # Emacs 键位 / leader-key / which-key / UI / workspaces 范式研究
 
-> 研究范围: `/home/brokenshine/Projects/Emacs/{doomemacs,spacemacs}` 两个 starter kit
+> 研究范围: `~/Projects/Emacs/{doomemacs,spacemacs}` 两个 starter kit
 > 截止代码: doomemacs (HEAD), spacemacs (HEAD, 2025)
 > 关注点: 键位/leader-key/which-key/UI/workspaces 五位一体的统一与可扩展范式
 

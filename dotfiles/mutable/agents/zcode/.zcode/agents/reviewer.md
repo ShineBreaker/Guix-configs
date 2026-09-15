@@ -8,8 +8,6 @@ tools:
   - Grep
   - Glob
   - Bash
-  - WebFetch
-  - WebSearch
   - Write
 injectAgentsMd: true
 ---

@@ -2,12 +2,12 @@
 name: "visual"
 description: "视觉分析员——分析图片、截图、UI 界面等视觉内容，提取文字、描述布局、诊断问题"
 color: yellow
-model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3-Flash"
-thoughtLevel: high
+model: "custom:e77b2c06-8661-4a2c-8dd8-bcebbc2e7974:deepseek-flash"
 tools:
   - Read
   - Grep
   - Glob
+  - Write
 injectAgentsMd: true
 ---
 

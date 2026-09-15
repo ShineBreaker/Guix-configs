@@ -21,3 +21,11 @@ Qt QSS 调 Adwaita 迭代(2026-08-22 rounded.qss 实战)：①QSS 里 CSS 式 bo
 用户日常编辑器是 VSCodium（nix/home-manager 装），浅色主题且跟随系统配色（autoDetect），tabSize 2、fish 终端。
 §
 update-scanner 现状(2026-09-06 全部落地)：回溯 pin 策略已写入 job 1b95a323f97b prompt 并过 ticker 验证；weather 查 guix/rosenthal/nonguix（三者有缓存源），仅 bluebox 无缓存源直接刷；fact#95 已同步。pin 入口 `blue update --guix -c NAME -C COMMIT`。手动触发 cron run 必须 nohup 后台 + 监控盯 output 文件而非状态文本（fact_store #117）。下轮周三 23:30 首跑验证。
+§
+验证纪律(2026-09-06/13 两次实证)：agent 自测绿≠现场绿——校验对象必须落在真实交付产物与真实使用路径上（自校验脚本审源码参数、E2E 用替身端口都会假绿）。详见 agenote 20260914-120134-5。
+§
+跨平台回顾管道(2026-09-14 实证)：extract 产物 40~78% 是 harness 噪声（TodoWrite reminder / task-notification / system-reminder 模板），压缩只去 reasoning/tool 占位后可降到 48%；10×3.5MB 对话的可行解 = 压缩 + 按日切片外派 10 个只读子 agent 分片提炼。
+§
+agenote v0.1.9（2026-09-14 发布+push，jeans 包 bump 并 push，本地 blue build 通过）：修复 memscan 键名崩溃 / lint fingerprint 口径不一致 / search 裸多词；新增 extract 落盘前噪声过滤（重用 is_noise_fact）。部署最后一步 `blue home` 会重启 home shepherd（hermes-backend/gateway、graphical-session、pipewire）——agent 不自行执行，交用户。
+§
+本机 git commit 必须用 -m（hook 拦住 -F/heredoc 传消息）；commit trailer 按当前 agent 现填，格式 Co-authored-by: <agent 名> <邮箱>，旧 Assisted-by 已废弃。

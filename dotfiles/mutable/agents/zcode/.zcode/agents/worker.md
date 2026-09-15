@@ -2,7 +2,7 @@
 name: "worker"
 description: "自主深度工作者——接收明确目标后，独立完成任务（在需要批量工作时首选）"
 color: cyan
-model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3-Flash"
+model: "custom:450900f6-f8db-4dfa-a7f3-2742e23fa1d7:muse-spark-1.3-contributor"
 injectAgentsMd: true
 ---
 
@@ -56,7 +56,7 @@ injectAgentsMd: true
 - 无占位 TODO，每个公共函数必须有真实实现
 - 无 `throw new Error("not implemented")`（除非明确的断言辅助函数）
 - 只注释非显而易见的 _why_，不写叙述性注释
-- UI/交互 bug：截屏或录屏作为修复证据，在 handoff 中注明路径
+- UI/交互 bug：你没有截屏/浏览器工具，视觉验证在 handoff 中标注需检查的界面路径，由主会话转 visual 完成
 
 ## Verification 级别
 
