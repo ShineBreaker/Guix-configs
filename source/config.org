@@ -134,6 +134,7 @@ blue build
 
 (use-service-modules authentication
                      containers
+                     databases
                      dbus
                      desktop
                      dns
@@ -151,6 +152,228 @@ blue build
                      xorg)
 #+end_src
 
+* 全局 define
+这里放一些全局都会用到的 define
+
+#+NAME: custom-defines
+#+begin_src scheme :noweb yes
+;; 文件系统布局
+<<filesystem-defines>>
+
+;; shepherd 服务简写构造
+<<home-daemon-service-helpers>>
+<<root-daemon-service-helpers>>
+<<root-one-shot-service-helpers>>
+<<flatpak-service-helpers>>
+
+;; 自定义变体包
+<<cachyos-lts-kernel>>
+<<fingerprint-packages>>
+<<hostapd-go-concurrent-pkg>>
+#+end_src
+
+*** 服务构造函数
+对 shepherd 服务的三种高频形态进行封装，来方便配置文件全局进行调用。
+
+=command= 为「程序 + 参数」的 argv 列表：第一个元素是程序，其余每个元素是一个参数，逐段列出而非写成一整条命令字符串。元素可以是字符串，也可以是可 lower 对象——构建期统一展开为具体值后拼成真正的命令行：
+
+- 字符串： ="/bin/sh"= 、 ="--bind-dynamic"= -> 原样使用；
+- 可 lower 对象：
+   =(file-append kdeconnect "/bin/kdeconnect-indicator")= -> 展开为 =/gnu/store/…= 下的绝对路径
+   =(local-file "usb-power-watch")= -> 指向本地文件
+   gexp =#~(…)= -> 在构建期求值。
+因此无需手写 =/gnu/store= 路径，直接引用包对象即可。
+
++ =home-daemon-service= ：用户常驻进程，日志统一写入到 =$XDG_STATE_HOME/shepherd/<name>.log= 中。会自动继承调用时的用户环境。
+#+NAME: home-daemon-service-helpers
+#+begin_src scheme
+(define* (home-daemon-service name command
+                              #:key (requirement '())
+                              (auto-start? #t) (respawn? #t)
+                              (documentation "[No documentation.]"))
+  (shepherd-service
+   (provision (list name))
+   (requirement requirement)
+   (documentation documentation)
+   (start #~(lambda args
+              ((make-forkexec-constructor
+                (list #$@command)
+                #:environment-variables (environ)
+                #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                          "/shepherd/" #$(symbol->string name)
+                                          ".log"))
+               args)))
+   (stop #~(make-kill-destructor))
+   (auto-start? auto-start?)
+   (respawn? respawn?)))
+#+end_src
+
++ =root-daemon-service= ：系统常驻进程，支持 =#:log-file= 与 =#:one-shot?= 。
+#+NAME: root-daemon-service-helpers
+#+begin_src scheme
+(define* (root-daemon-service name command
+                              #:key (requirement '())
+                              (auto-start? #t) (respawn? #t)
+                              one-shot? log-file
+                              (documentation "[No documentation.]"))
+  (simple-service name shepherd-root-service-type
+                  (list (shepherd-service
+                         (provision (list name))
+                         (requirement requirement)
+                         (documentation documentation)
+                         (one-shot? one-shot?)
+                         (auto-start? auto-start?)
+                         (respawn? respawn?)
+                         (start #~(make-forkexec-constructor
+                                   (list #$@command)
+                                   #$@(if log-file (list #:log-file log-file) '())))
+                         (stop #~(make-kill-destructor))))))
+#+end_src
+
++ =root-one-shot-service= ：开机跑一次即退出（one-shot + 不 respawn）， =start= / =#:stop= 直接传 gexp。
+  respawn?/stop 默认值与 shepherd-service 记录一致（one-shot 服务两者均惰性，不写死 #f 以保持与手写定义零漂移）。
+#+NAME: root-one-shot-service-helpers
+#+begin_src scheme
+
+(define* (root-one-shot-service name requirement start
+                                #:key (stop #~(const #f))
+                                (respawn? #t)
+                                (documentation "[No documentation.]"))
+  (simple-service name shepherd-root-service-type
+                  (list (shepherd-service
+                         (provision (list name))
+                         (requirement requirement)
+                         (documentation documentation)
+                         (one-shot? #t)
+                         (auto-start? #t)
+                         (respawn? respawn?)
+                         (start start)
+                         (stop stop)))))
+#+end_src
+
++ 系统/用户两侧 flatpak 定时更新共用的启动脚本：仅在外接电源时执行。
+  scope 为 "system" 或 "user"。
+#+NAME: flatpak-service-helpers
+#+begin_src scheme
+
+(define (%flatpak-update-script scope)
+  (mixed-text-file
+   (string-append "flatpak-" scope "-update.sh")
+   grep "/bin/grep"
+   " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
+   " && exec " flatpak "/bin/flatpak"
+   " update --" scope " -y"))
+#+end_src
+
+*** 自定义包与补丁
+自建变体包与上游补丁的集中地；defs 块放顶层 ~define~ （noweb 拼进 ~main~ 顶层）， ~custom-packages-list~ 只放表达式
+新增包：先 defs 后 list。结构保留以备后续自建包与补丁。
+
+**** CachyOS LTS 内核
+对标上游 =linux-cachyos-lts= 变体（Cachy Sauce + EEVDF，无 BORE 无 LTO），defconfig 取自 hako 的 kernel-config ，将其调成桌面档并按当前设备裁剪。
+
+#+NAME: cachyos-lts-kernel
+#+begin_src scheme
+(load "../source/files/kernel/linux-cachyos-lts.scm")
+#+end_src
+
+**** hostapd GO-CONCURRENT 补丁
+让带 GO-CONCURRENT 的 NO_IR 信道不再升级 DISABLED；DISABLED 硬禁仍生效，内核 START_AP 仍是最终守门员。
+
+#+NAME: hostapd-go-concurrent-pkg
+#+begin_src scheme
+(define hostapd-go-concurrent
+  (package
+   (inherit hostapd)
+   (source
+    (origin
+     (inherit (package-source hostapd))
+     (patches
+      (list (local-file
+             (assume-source-relative-file-name
+              "../source/files/patches/hostapd-go-concurrent.patch"))))))))
+#+end_src
+
+**** 指纹识别栈
+本机传感器 Goodix =27c6:689a= 需要 libfprint ≥1.94.9 才能驱动，在这里写一个自定义的包来更新版本
+
+#+NAME: fingerprint-packages
+#+begin_src scheme
+(define %libfprint-version "1.94.100")
+
+(define libfprint-1.94
+  (package
+   (inherit libfprint)
+   (version %libfprint-version)
+   (source
+    (origin
+     (method git-fetch)
+     (uri (git-reference
+           (url "https://gitlab.freedesktop.org/libfprint/libfprint")
+           (commit (string-append "v" %libfprint-version))))
+     (file-name (git-file-name "libfprint" %libfprint-version))
+     (hash (content-hash
+            "1c5n1xl7b32hssfs6yl4ndn1dfs6aqa26igmpahpym53l19zq017"))))
+   (arguments
+    (list #:configure-flags
+          #~(list "-Dudev_hwdb=enabled"
+                  (string-append "-Dudev_hwdb_dir=" #$output
+                                 "/lib/udev/hwdb.d")
+                  (string-append "-Dudev_rules_dir=" #$output
+                                 "/lib/udev/rules.d"))))
+   (inputs
+    (modify-inputs (package-inputs libfprint)
+                   (replace "nss" openssl)))))
+
+(define %fprintd-version "1.94.5")
+
+(define fprintd-1.94
+  (package
+   (inherit fprintd)
+   (version %fprintd-version)
+   (source
+    (origin
+     (method git-fetch)
+     (uri (git-reference
+           (url "https://gitlab.freedesktop.org/libfprint/fprintd")
+           (commit (string-append "v" %fprintd-version))))
+     (file-name (git-file-name "fprintd" %fprintd-version))
+     (hash (content-hash
+            "1rf80qzx4fx5y3x04n7wb58ywga34agjd42ymlvz3kdl8kkk6qk8"))))
+   (arguments
+    (list #:configure-flags
+          #~(list "-Dsystemd_system_unit_dir=/tmp"
+                  "-Dlibsystemd=libelogind"
+                  (string-append "-Ddbus_service_dir=" #$output
+                                 "/share/dbus-1/system-services")
+                  (string-append "-Dpam_modules_dir=" #$output
+                                 "/lib/security"))
+          #:phases
+          #~(modify-phases %standard-phases
+                           (add-before 'configure 'patch-output-directories
+                                       (lambda* (#:key outputs #:allow-other-keys)
+                                         (let ([out (assoc-ref outputs "out")])
+                                           (substitute* "meson.build"
+                                                        (("(dbus_interfaces_dir = ).*" _ set)
+                                                         (string-append set "'" out "/share/dbus-1/interfaces'\n"))
+                                                        (("(polkit_policy_directory = ).*" _ set)
+                                                         (string-append set "'" out "/share/polkit-1/actions/'\n"))
+                                                        (("(dbus_data_dir = ).*" _ set)
+                                                         (string-append set "get_option('prefix')"
+                                                                        " / get_option('datadir')\n")))))))
+          #:tests? #f))
+   (inputs
+    (modify-inputs (package-inputs fprintd)
+                   (replace "libfprint" libfprint-1.94)))))
+#+end_src
+
+=fprintd-1.94= 是登记/验证指纹的 CLI（=fprintd-enroll= 等）；守护进程与 PAM 模块在系统侧（desktop-services 板块）。
+
+#+NAME: custom-packages-list
+#+begin_src scheme
+(list fprintd-1.94)
+#+end_src
+
 * 配置文件骨架
 :PROPERTIES:
 :CUSTOM_ID: main-skeleton
@@ -165,12 +388,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 <<modules>>
 
 ;; ══ 顶层定义 ══════════════════════════════════════════════════
-;; 文件系统布局（subvol/bind-mount/swap）
-<<filesystem-defines>>
-;; 自定义变体包（CachyOS 内核、指纹识别栈、hostapd 补丁）
-<<cachyos-lts-kernel>>
-<<fingerprint-packages>>
-<<hostapd-go-concurrent-pkg>>
+<<custom-defines>>
 
 ;; ══ Home ══════════════════════════════════════════════════════
 (define %home
@@ -218,7 +436,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
    (services
     (append
-     ;; ── 基础：kmscon / root 定时任务 / nix-ld ──
+     ;; ── 基础：kmscon / root 定时任务 / nix-ld / mysql ──
      <<kmscon-services>>
      <<root-services>>
      <<nix-ld-services>>
@@ -402,27 +620,24 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                       '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq"
                         "tcp_bbr" "uhid" "uinput" "v4l2loopback" "zstd"))
 
+      ;; 内核拒绝时（zstd 不可用）静默放行，不阻断 boot
+      (root-one-shot-service 'zswap-zstd '(kernel-module-loader)
+                             #~(lambda _
+                                 (system* "/bin/sh" "-c"
+                                          "grep -qw zstd /proc/crypto 2>/dev/null && echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null; exit 0")
+                                 #t)
+                             #:stop #~(lambda _ #t) #:respawn? #f
+                             #:documentation
+                             "zstd 模块加载后把 zswap 压缩器切到 zstd。")
 
-      (simple-service 'zswap-zstd shepherd-root-service-type
-                      (list (shepherd-service
-                             (documentation
-                              "zstd 模块加载后把 zswap 压缩器切到 zstd。")
-                             (provision '(zswap-zstd))
-                             (requirement '(kernel-module-loader))
-                             ;; 内核拒绝时（zstd 不可用）静默放行，不阻断 boot
-                             (start #~(lambda _
-                                        (system* "/bin/sh" "-c"
-                                                 "grep -qw zstd /proc/crypto 2>/dev/null && echo zstd > /sys/module/zswap/parameters/compressor 2>/dev/null; exit 0")
-                                        #t))
-                             (stop #~(lambda _ #t))
-                             (one-shot? #t)
-                             (auto-start? #t)
-                             (respawn? #f))))
-
-      (simple-service 'v4l2loopback-config etc-service-type
+      (simple-service 'modprobe-configs etc-service-type
                       (list `("modprobe.d/v4l2loopback.conf"
                               ,(plain-file "v4l2loopback.conf"
-                                           "options v4l2loopback devices=1 video_nr=1 card_label=\"OBS Cam\" exclusive_caps=1")))))
+                                           "options v4l2loopback devices=1 video_nr=1 card_label=\"OBS Cam\" exclusive_caps=1"))
+                            ;; kvm 嵌套虚拟化 + 虚拟机读写未知 MSR 时保持安静
+                            `("modprobe.d/kvm.conf"
+                              ,(plain-file "kvm.conf"
+                                           "options kvm_intel nested=1 emulate_invalid_guest_state=0\noptions kvm ignore_msrs=1 report_ignored_msrs=0\n")))))
 #+end_src
 
 **** sysctl 调优
@@ -564,6 +779,8 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
    "gzip"
    "libnotify"
    "ntfs-3g"
+   "smartmontools"
+   "solaar"
    "unzip"
    "zip"))
 #+end_src
@@ -591,27 +808,21 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 #+NAME: resume-device-service
 #+begin_src scheme
-(list (simple-service 'setup-resume-device
-                      shepherd-root-service-type
-                      (list (shepherd-service
-                             (provision '(resume-device))
-                             (requirement '(file-systems))
-                             (one-shot? #t)
-                             (start
-                              #~(lambda ()
-                                  (let* ([dev-name (basename
-                                                    (readlink
-                                                     (string-append
-                                                      "/dev/disk/by-uuid/"
-                                                      #$%swap-uuid)))]
-                                         [dev (call-with-input-file
-                                                  (string-append
-                                                   "/sys/class/block/"
-                                                   dev-name "/dev")
-                                                read-line)])
-                                    (call-with-output-file "/sys/power/resume"
-                                      (lambda (port)
-                                        (display dev port))))))))))
+(list (root-one-shot-service 'resume-device '(file-systems)
+                             #~(lambda ()
+                                 (let* ([dev-name (basename
+                                                   (readlink
+                                                    (string-append
+                                                     "/dev/disk/by-uuid/"
+                                                     #$%swap-uuid)))]
+                                        [dev (call-with-input-file
+                                                 (string-append
+                                                  "/sys/class/block/"
+                                                  dev-name "/dev")
+                                               read-line)])
+                                   (call-with-output-file "/sys/power/resume"
+                                     (lambda (port)
+                                       (display dev port)))))))
 #+end_src
 
 **** 开机清空 /tmp
@@ -621,27 +832,21 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 #+NAME: cleanup-tmp-services
 #+begin_src scheme
-(list (simple-service 'cleanup-/tmp
-                      shepherd-root-service-type
-                      (list (shepherd-service
-                             (documentation "Empty /tmp once per boot.")
-                             (provision '(cleanup-/tmp))
-                             (requirement '(file-systems))
-                             (one-shot? #t)
-                             (start
-                              (with-imported-modules (source-module-closure
-                                                      '((guix build utils)))
-                                                     #~(lambda ()
-                                                         (use-modules (guix build utils))
-                                                         (unless (file-exists? "/run/cleanup-tmp-done")
-                                                           (false-if-exception
-                                                            (invoke #$(file-append findutils "/bin/find")
-                                                                    "/tmp" "-mindepth" "1" "-delete"))
-                                                           (chmod "/tmp" #o1777)
-                                                           (call-with-output-file "/run/cleanup-tmp-done"
-                                                             (lambda (port)
-                                                               (display "done" port))))
-                                                         #t))))))
+(list (root-one-shot-service 'cleanup-/tmp '(file-systems)
+                             (with-imported-modules (source-module-closure
+                                                     '((guix build utils)))
+                                                    #~(lambda ()
+                                                        (use-modules (guix build utils))
+                                                        (unless (file-exists? "/run/cleanup-tmp-done")
+                                                          (false-if-exception
+                                                           (invoke #$(file-append findutils "/bin/find")
+                                                                   "/tmp" "-mindepth" "1" "-delete"))
+                                                          (chmod "/tmp" #o1777)
+                                                          (call-with-output-file "/run/cleanup-tmp-done"
+                                                            (lambda (port)
+                                                              (display "done" port))))
+                                                        #t))
+                             #:documentation "Empty /tmp once per boot.")
 
       (simple-service 'cleanup-/tmp-prereq user-processes-service-type
                       (list 'cleanup-/tmp)))
@@ -702,26 +907,20 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 #+begin_src scheme :noweb yes
 (let* ([bin (lambda (pkg path)
               (file-append (spec->pkg pkg) path))]
+       ;; 动态拼接的路径须用 assume-source-relative-file-name 标记，
+       ;; 否则 local-file 会退化成按 cwd 解析。
+       [secret (lambda (name)
+                 (local-file
+                  (assume-source-relative-file-name
+                   (string-append
+                    "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/"
+                    name ".age"))))]
        [age-key (string-append "/home/" username "/.local/share/keys/age")]
-       [wifi-trust-age
-        (local-file
-         "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age")]
-       [hotspot-creds-age
-        (local-file
-         "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-hotspot.age")]
        [iw-bin (file-append iw "/sbin/iw")]
        [age-bin (file-append age "/bin/age")]
-       [grep-bin (file-append grep "/bin/grep")]
-       [ip-bin (bin "iproute2" "/sbin/ip")]
-       [sed-bin (bin "sed" "/bin/sed")]
-       [mkdir-bin (bin "coreutils" "/bin/mkdir")]
-       [envsubst-bin (bin "gettext" "/bin/envsubst")]
-       [mv-bin (bin "coreutils" "/bin/mv")]
-       [chmod-bin (bin "coreutils" "/bin/chmod")]
-       [mihomo-subs-age
-        (local-file
-         "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/mihomo-subscriptions.age")]
 
+       ;; 渲染 tangle 出的脚本模板：复制后按 (正则 . 替换) alist 跑
+       ;; substitute* 注入 store 路径，再 chmod 555。
        [render-script
         (lambda (name template pairs)
           (computed-file
@@ -731,10 +930,11 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
             #~(begin
                 (use-modules (guix build utils))
                 (copy-file #$template #$output)
-                (substitute*
-                 #$output
-                 #$@(map (lambda (p) (list (list (car p)) (cdr p)))
-                         pairs))
+                (substitute* #$output
+                             #$@(map (match-lambda
+                                       [(pattern . replacement)
+                                        (list (list pattern) replacement)])
+                                     pairs))
                 (chmod #$output #o555)))))]
 
        [hotspot-ap-run-script
@@ -742,11 +942,11 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
          "hotspot-ap-run" (local-file "hotspot-ap-run")
          `(("@IW_BIN@" . ,iw-bin)
            ("@AGE_IDENTITY@" . ,age-key)
-           ("@HOTSPOT_CREDS_CIPHER@" . ,hotspot-creds-age)
+           ("@HOTSPOT_CREDS_CIPHER@" . ,(secret "wifi-hotspot"))
            ("@AGE_BIN@" . ,age-bin)
-           ("@IP_BIN@" . ,ip-bin)
-           ("@SED_BIN@" . ,sed-bin)
-           ("@MKDIR_BIN@" . ,mkdir-bin)
+           ("@IP_BIN@" . ,(bin "iproute2" "/sbin/ip"))
+           ("@SED_BIN@" . ,(bin "sed" "/bin/sed"))
+           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
            ("@HOSTAPD_BIN@" . ,(file-append hostapd-go-concurrent
                                             "/sbin/hostapd"))))]
 
@@ -759,21 +959,21 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
          "nm-dispatcher-trusted-connection"
          (local-file "nm-dispatcher-trusted-connection")
          `(("@AGE_IDENTITY@" . ,age-key)
-           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,wifi-trust-age)
+           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,(secret "wifi-trust"))
            ("@AGE_BIN@" . ,age-bin)
            ("@NFT_BIN@" . ,(file-append nftables "/sbin/nft"))
-           ("@GREP_BIN@" . ,grep-bin)))]
+           ("@GREP_BIN@" . ,(file-append grep "/bin/grep"))))]
 
        [mihomo-run-script
         (render-script
          "mihomo-run" (local-file "mihomo-run")
          `(("@AGE_IDENTITY@" . ,age-key)
-           ("@SUBS_CIPHER@" . ,mihomo-subs-age)
+           ("@SUBS_CIPHER@" . ,(secret "mihomo-subscriptions"))
            ("@AGE_BIN@" . ,age-bin)
-           ("@ENVSUBST_BIN@" . ,envsubst-bin)
-           ("@MV_BIN@" . ,mv-bin)
-           ("@CHMOD_BIN@" . ,chmod-bin)
-           ("@MKDIR_BIN@" . ,mkdir-bin)
+           ("@ENVSUBST_BIN@" . ,(bin "gettext" "/bin/envsubst"))
+           ("@MV_BIN@" . ,(bin "coreutils" "/bin/mv"))
+           ("@CHMOD_BIN@" . ,(bin "coreutils" "/bin/chmod"))
+           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
            ("@MIHOMO_BIN@" . ,(file-append mihomo "/bin/mihomo"))
            ("@MIHOMO_TEMPLATE@"
             . ,(string-append "/home/" username
@@ -809,18 +1009,10 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                             (system* "rm" "-f"
                                      "/etc/NetworkManager/dispatcher.d/20-wifi-powersave")))
 
-        (simple-service 'mihomo-services shepherd-root-service-type
-                        (list (shepherd-service (documentation
-                                                 "Run the mihomo daemon.")
-                                                (provision '(mihomo-daemon))
-                                                (requirement '(user-processes))
-                                                (start #~(make-forkexec-constructor
-                                                          (list #$mihomo-run-script)
-                                                          #:log-file
-                                                          "/var/log/mihomo.log"))
-                                                (stop #~(make-kill-destructor))
-                                                (auto-start? #t)
-                                                (respawn? #t))))
+        (root-daemon-service 'mihomo-daemon (list mihomo-run-script)
+                             #:requirement '(user-processes)
+                             #:log-file "/var/log/mihomo.log"
+                             #:documentation "Run the mihomo daemon.")
 
         (simple-service 'hotspot-uap0-udev udev-service-type
                         (list (udev-rule
@@ -838,73 +1030,49 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                         #~(system* "rm" "-f"
                                    "/etc/NetworkManager/conf.d/20-uap0-unmanaged.conf"))
 
-        (simple-service 'wifi-ap-interface shepherd-root-service-type
-                        (list (shepherd-service
-                               (documentation
-                                "Create the uap0 virtual AP interface for concurrent WiFi.")
-                               (provision '(wifi-ap-interface))
-                               (requirement '(iw-reg-cn))
-                               (start #~(lambda _
-                                          (or (zero? (system* #$iw-bin
+        (root-one-shot-service 'wifi-ap-interface '(iw-reg-cn)
+                               #~(lambda _
+                                   (or (zero? (system* #$iw-bin
+                                                       "dev" "uap0" "info"))
+                                       (zero? (system* #$iw-bin
+                                                       "dev" "wlp0s20f3" "interface"
+                                                       "add" "uap0" "type" "__ap"))))
+                               #:stop #~(lambda _
+                                          (if (zero? (system* #$iw-bin
                                                               "dev" "uap0" "info"))
                                               (zero? (system* #$iw-bin
-                                                              "dev" "wlp0s20f3" "interface"
-                                                              "add" "uap0" "type" "__ap")))))
-                               (stop #~(lambda _
-                                         (if (zero? (system* #$iw-bin
-                                                             "dev" "uap0" "info"))
-                                             (zero? (system* #$iw-bin
-                                                             "dev" "uap0" "del"))
-                                             #t)))
-                               (one-shot? #t)
-                               (auto-start? #t)
-                               (respawn? #f))))
+                                                              "dev" "uap0" "del"))
+                                              #t))
+                               #:respawn? #f
+                               #:documentation
+                               "Create the uap0 virtual AP interface for concurrent WiFi.")
 
-        (simple-service 'hotspot-ap-services shepherd-root-service-type
-                        (list (shepherd-service
-                               (documentation
-                                "Run hostapd AP on uap0, started manually via the hotspot fish command.")
-                               (provision '(hotspot-ap))
-                               (requirement '(wifi-ap-interface))
-                               (start #~(make-forkexec-constructor
-                                         (list #$hotspot-ap-run-script)
-                                         #:log-file "/var/log/hotspot-ap.log"))
-                               (stop #~(make-kill-destructor))
-                               (auto-start? #f)
-                               (respawn? #f))))
+        (root-daemon-service 'hotspot-ap (list hotspot-ap-run-script)
+                             #:requirement '(wifi-ap-interface)
+                             #:log-file "/var/log/hotspot-ap.log"
+                             #:auto-start? #f #:respawn? #f
+                             #:documentation
+                             "Run hostapd AP on uap0, started manually via the hotspot fish command.")
 
-        (simple-service 'hotspot-dnsmasq shepherd-root-service-type
-                        (list (shepherd-service
-                               (documentation
-                                "DHCP/DNS service for the uap0 hotspot subnet.")
-                               (provision '(hotspot-dnsmasq))
-                               (requirement '(wifi-ap-interface))
-                               (start #~(make-forkexec-constructor
-                                         (list #$(file-append (spec->pkg "dnsmasq")
-                                                              "/sbin/dnsmasq")
-                                               "--keep-in-foreground"
-                                               "--interface=uap0"
-                                               "--bind-dynamic"
-                                               "--except-interface=lo"
-                                               "--dhcp-authoritative"
-                                               "--dhcp-range=192.168.77.10,192.168.77.250,255.255.255.0,12h")
-                                         #:log-file "/var/log/hotspot-dnsmasq.log"))
-                               (stop #~(make-kill-destructor))
-                               (auto-start? #t)
-                               (respawn? #t))))
+        (root-daemon-service 'hotspot-dnsmasq
+                             (list (bin "dnsmasq" "/sbin/dnsmasq")
+                                   "--keep-in-foreground"
+                                   "--interface=uap0"
+                                   "--bind-dynamic"
+                                   "--except-interface=lo"
+                                   "--dhcp-authoritative"
+                                   "--dhcp-range=192.168.77.10,192.168.77.250,255.255.255.0,12h")
+                             #:requirement '(wifi-ap-interface)
+                             #:log-file "/var/log/hotspot-dnsmasq.log"
+                             #:documentation
+                             "DHCP/DNS service for the uap0 hotspot subnet.")
 
-        (simple-service 'iw-reg-cn shepherd-root-service-type
-                        (list (shepherd-service
-                               (documentation "Set wireless regulatory domain to CN.")
-                               (provision '(iw-reg-cn))
-                               (requirement '(user-processes))
-                               (start #~(lambda _
-                                          (zero? (system* #$(file-append iw "/sbin/iw")
-                                                          "reg" "set" "CN"))))
-                               (stop #~(lambda _ #t))
-                               (one-shot? #t)
-                               (auto-start? #t)
-                               (respawn? #f))))))
+        (root-one-shot-service 'iw-reg-cn '(user-processes)
+                               #~(lambda _
+                                   (zero? (system* #$iw-bin "reg" "set" "CN")))
+                               #:stop #~(lambda _ #t) #:respawn? #f
+                               #:documentation
+                               "Set wireless regulatory domain to CN.")))
 #+end_src
 
 **** mihomo 启动包装
@@ -1156,19 +1324,15 @@ iifname "uap0" oifname != "uap0" masquerade
                   "use-xdg-base-directories = true\n"
                   "substituters = https://mirror.sjtu.edu.cn/nix-channels/store https://cache.nixos.org\n"))))
 
-      (simple-service 'non-nixos-gpu shepherd-root-service-type
-                      (list (shepherd-service (documentation
-                                               "Install GPU drivers for running GPU accelerated programs from Nix.")
-                                              (provision '(non-nixos-gpu))
-                                              (requirement '(nix-daemon))
-                                              (start #~(make-forkexec-constructor
-                                                        (list #$(file-append coreutils "/bin/ln")
-                                                              "-nsf"
-                                                              "/var/lib/non-nixos-gpu"
-                                                              "/run/opengl-driver")))
-                                              (stop #~(make-kill-destructor))
-                                              (auto-start? #t)
-                                              (one-shot? #t)))))
+      (root-daemon-service 'non-nixos-gpu
+                           (list (file-append coreutils "/bin/ln")
+                                 "-nsf"
+                                 "/var/lib/non-nixos-gpu"
+                                 "/run/opengl-driver")
+                           #:requirement '(nix-daemon)
+                           #:one-shot? #t
+                           #:documentation
+                           "Install GPU drivers for running GPU accelerated programs from Nix."))
 #+end_src
 
 *** UDEV 规则
@@ -1199,6 +1363,8 @@ iifname "uap0" oifname != "uap0" masquerade
       (udev-rules-service 'sayodevice
                           (udev-rule "60-sayodevice.rules"
                                      "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
+
+      (udev-rules-service 'solaar (spec->pkg "solaar"))
 
       (udev-rules-service 'winapps-usb
                           (udev-rule "60-winapps-usb.rules"
@@ -1283,26 +1449,20 @@ iifname "uap0" oifname != "uap0" masquerade
 
   (list (udev-rules-service 'ac-power-profile ac-power-rules)
 
-        (simple-service 'ac-power-init shepherd-root-service-type
-                        (list (shepherd-service
-                               (provision '(ac-power-init))
-                               (documentation
-                                "按当前电源状态初始化 PPD profile 与 WiFi 省电。")
-                               (requirement '(power-profiles-daemon user-processes))
-                               (start #~(lambda _
-                                          (let* ((port (false-if-exception
-                                                        (open-input-file
-                                                         "/sys/class/power_supply/ADP1/online")))
-                                                 (val (and port (read port))))
-                                            (when port (close-port port))
-                                            (zero? (system* #$ac-power-script
-                                                            (if (eq? val 1)
-                                                                "on"
-                                                                "off"))))))
-                               (stop #~(lambda _ #t))
-                               (one-shot? #t)
-                               (auto-start? #t)
-                               (respawn? #f))))))
+        (root-one-shot-service 'ac-power-init '(power-profiles-daemon user-processes)
+                               #~(lambda _
+                                   (let* ((port (false-if-exception
+                                                 (open-input-file
+                                                  "/sys/class/power_supply/ADP1/online")))
+                                          (val (and port (read port))))
+                                     (when port (close-port port))
+                                     (zero? (system* #$ac-power-script
+                                                     (if (eq? val 1)
+                                                         "on"
+                                                         "off")))))
+                               #:stop #~(lambda _ #t) #:respawn? #f
+                               #:documentation
+                               "按当前电源状态初始化 PPD profile 与 WiFi 省电。")))
 #+end_src
 
 **** USB 电源权限
@@ -1323,8 +1483,6 @@ iifname "uap0" oifname != "uap0" masquerade
 
 *** 基础服务
 
-包含 KMS 虚拟终端控制台、root 周期性维护任务（垃圾回收与 SSD Trim）以及 nix-ld 兼容运行环境。
-
 **** KMS 控制台
 TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；TTY1 预留给内核启动消息，图形登录集中在 TTY7（greetd）。
 
@@ -1339,7 +1497,9 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 #+end_src
 
 **** root 服务与定时任务
-包含系统定时任务：
+包含系统常驻守护与定时任务：
+- =smartd= ：S.M.A.R.T. 磁盘健康监控，每日 02:00 短自检、每周六 03:00 长自检（磁盘休眠时跳过）。
+- =beesd= ：btrfs 去重守护，hash 表 128M、按负载 5.0 节流。首次运行需全量扫描，IO 开销较大属正常。
 - 每周日 18:00 执行 =guix gc= 清理 30 天前的旧世代（保留至少 20G 空间）。
 - 每周六 18:00 在外接电源状态下执行 =flatpak update --system= 。
 - 每周日 19:00 执行 =fstrim -av= 进行全盘 TRIM 兜底。
@@ -1348,6 +1508,27 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 #+begin_src scheme
 (list (simple-service 'home-channels home-channels-service-type
                       guix-channels)
+
+      (simple-service 'smartd-conf etc-service-type
+                      (list `("smartd.conf"
+                              ,(plain-file "smartd.conf"
+                                           "DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)\n"))))
+      (root-daemon-service 'smartd
+                           (list (file-append (spec->pkg "smartmontools") "/sbin/smartd") "-n")
+                           #:requirement '(file-systems)
+                           #:log-file "/var/log/smartd.log"
+                           #:documentation "S.M.A.R.T. 磁盘健康监控守护。")
+
+      (simple-service 'beesd-conf etc-service-type
+                      (list `("bees/2f6b6499-2a27-4583-847f-dd70b9fcb036.conf"
+                              ,(plain-file "bees.conf"
+                                           "DB_SIZE=$((128*1024*1024))\nOPTIONS=\"--loadavg-target 5.0 --thread-count 4\"\n"))))
+      (root-daemon-service 'beesd
+                           (list (file-append (spec->pkg "bees") "/sbin/beesd")
+                                 "2f6b6499-2a27-4583-847f-dd70b9fcb036")
+                           #:requirement '(file-systems user-processes)
+                           #:log-file "/var/log/beesd.log"
+                           #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
 
       (simple-service 'root-services shepherd-root-service-type
                       (list (shepherd-timer '(guix-gc)
@@ -1367,13 +1548,7 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                                                #:hours '(18)
                                                #:minutes '(0))
                                             #~("/bin/sh"
-                                               #$(mixed-text-file
-                                                  "flatpak-system-update.sh"
-                                                  grep "/bin/grep"
-                                                  " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
-                                                  " && exec "
-                                                  flatpak "/bin/flatpak"
-                                                  " update --system -y"))
+                                               #$(%flatpak-update-script "system"))
                                             #:requirement '(user-processes
                                                             NetworkManager))
                             (shepherd-timer '(fstrim)
@@ -1434,123 +1609,7 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                    webkitgtk-with-libsoup2))))))
 #+end_src
 
-*** 桌面服务
-替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先）、蓝牙与休眠 Polkit 提权规则。
-
-#+NAME: desktop-services
-#+begin_src scheme :noweb yes
-(append (modify-services %desktop-services
-                         (delete console-font-service-type)
-                         (delete mingetty-service-type)
-                         (delete gdm-service-type)
-                         (delete screen-locker-service-type)
-                         (guix-service-type config =>
-                                            (guix-configuration (inherit config)
-                                                                (channels guix-channels)
-                                                                (guix (guix-for-channels guix-channels))
-                                                                (extra-options (list "--cores=22"
-                                                                                     "--max-jobs=6"
-                                                                                     "--gc-keep-outputs=yes"))
-                                                                (http-proxy "http://127.0.0.1:7890")
-                                                                (discover? #f)
-                                                                (tmpdir "/var/tmp")))
-
-                         (elogind-service-type config =>
-                                               (elogind-configuration
-                                                (inherit config)
-                                                (hibernate-mode '(shutdown))
-                                                (handle-lid-switch-external-power 'lock)
-                                                (handle-suspend-key 'ignore)
-                                                (handle-hibernate-key 'ignore))))
-
-        (list
-         (service earlyoom-service-type
-                  (earlyoom-configuration
-                   (prefer-regexp
-                    "(zen|firefox|chrom|Web Content|WebExtensions|Isolated|qq|wechat|electron)")
-                   (avoid-regexp
-                    "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom)")
-                   (run-with-higher-priority? #t)))
-         (service thermald-service-type
-                  (thermald-configuration
-                   (adaptive? #t)
-                   (ignore-cpuid-check? #t)))
-         (service fprintd-service-type
-                  (fprintd-configuration (fprintd fprintd-1.94)))
-         (simple-service 'fingerprint-pam pam-root-service-type
-                         (list (pam-extension
-                                (transformer
-                                 (lambda (pam)
-                                   (let ([fprint-entry
-                                          (pam-entry
-                                           (control "sufficient")
-                                           (module (file-append
-                                                    fprintd-1.94
-                                                    "/lib/security/pam_fprintd.so")))])
-                                     (if (member (pam-service-name pam)
-                                                 '("greetd" "login"
-                                                   "sudo" "su" "polkit-1"))
-                                         (pam-service
-                                          (inherit pam)
-                                          (auth (cons fprint-entry
-                                                      (pam-service-auth pam))))
-                                         pam)))))))
-         (simple-service 'fingerprint-udev udev-service-type
-                         (list libfprint-1.94))
-         (service gamemode-service-type)
-         (service gnome-keyring-service-type)
-         (service gvfs-service-type)
-         (service opentabletdriver-service-type)
-         (service rtkit-service-type)
-         (service power-profiles-daemon-service-type)
-
-         (simple-service 'hibernate-polkit polkit-service-type
-                         (list (file-union
-                                "polkit-hibernate-rules"
-                                `(("share/polkit-1/rules.d/50-hibernate.rules"
-                                   ,(local-file "50-hibernate.rules"))))))
-
-         (service bluetooth-service-type
-                  (bluetooth-configuration (auto-enable? #t)))
-
-         (service screen-locker-service-type
-                  (screen-locker-configuration
-                   (name "swaylock")
-                   (program (plain-file "empty" ""))
-                   (using-setuid? #f)))
-
-         (service greetd-service-type
-                  (greetd-configuration
-                   (greeter-supplementary-groups '("video" "audio"))
-                   (terminals
-                    (list (greetd-terminal-configuration
-                           (terminal-vt "7")
-                           (terminal-switch #t)
-                           (default-session-command
-                             (greetd-tuigreet-session))
-                           (initial-session-user username)
-                           (initial-session-command "dbus-run-session niri --session"))))))))
-#+end_src
-
-**** hibernate polkit 规则
-放行本地活跃用户的休眠/挂起/混合休眠。
-
-#+NAME: 50-hibernate.rules
-#+begin_src js :tangle ../tmp/50-hibernate.rules
-polkit.addRule(function(action, subject) {
-    if (subject.isLocal && subject.isActive &&
-        (action.id == "org.freedesktop.login1.hibernate" ||
-         action.id == "org.freedesktop.login1.hibernate-multiple-sessions" ||
-         action.id == "org.freedesktop.login1.suspend" ||
-         action.id == "org.freedesktop.login1.suspend-multiple-sessions" ||
-         action.id == "org.freedesktop.login1.hybrid-sleep" ||
-         action.id == "org.freedesktop.login1.hybrid-sleep-multiple-sessions")) {
-        return polkit.Result.YES;
-    }
-});
-#+end_src
-
-*** 虚拟化服务
+**** 虚拟化服务
 
 #+NAME: virtualization-services
 #+begin_src scheme
@@ -1593,46 +1652,183 @@ polkit.addRule(function(action, subject) {
       (service virtlog-service-type))
 #+end_src
 
+*** 桌面服务
+替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先，仅 greetd/login/polkit，sudo/su 走纯密码）、蓝牙与休眠 Polkit 提权规则；NTP 改用国内授时源（cn.pool/aliyun/ntsc），udisks2 补 ntfs3 挂载选项，/etc/hosts 屏蔽 QQ 更新域名。
+
+#+NAME: desktop-services
+#+begin_src scheme :noweb yes
+(append (modify-services %desktop-services
+                         (delete console-font-service-type)
+                         (delete mingetty-service-type)
+                         (delete gdm-service-type)
+                         (delete screen-locker-service-type)
+                         (guix-service-type config =>
+                                            (guix-configuration (inherit config)
+                                                                (channels guix-channels)
+                                                                (guix (guix-for-channels guix-channels))
+                                                                (extra-options (list "--cores=22"
+                                                                                     "--max-jobs=6"
+                                                                                     "--gc-keep-outputs=yes"))
+                                                                (http-proxy "http://127.0.0.1:7890")
+                                                                (discover? #f)
+                                                                (tmpdir "/var/tmp")))
+
+                         (elogind-service-type config =>
+                                               (elogind-configuration
+                                                (inherit config)
+                                                (hibernate-mode '(shutdown))
+                                                (handle-lid-switch-external-power 'lock)
+                                                (handle-lid-switch-docked 'ignore)
+                                                ;; 电源键单击锁屏；长按关机由固件处理，
+                                                ;; elogind 不暴露 long-press 字段。
+                                                (handle-power-key 'lock)
+                                                (handle-suspend-key 'ignore)
+                                                (handle-hibernate-key 'ignore)))
+
+                         (ntp-service-type config =>
+                                           (ntp-configuration
+                                            (inherit config)
+                                            (servers
+                                             (list (ntp-server (type 'pool)
+                                                               (address "cn.pool.ntp.org")
+                                                               (options '("iburst")))
+                                                   (ntp-server (type 'server)
+                                                               (address "ntp.aliyun.com")
+                                                               (options '("iburst")))
+                                                   (ntp-server (type 'server)
+                                                               (address "ntp.ntsc.ac.cn")
+                                                               (options '("iburst"))))))))
+
+        (list
+         (service earlyoom-service-type
+                  (earlyoom-configuration
+                   (prefer-regexp
+                    "(zen|firefox|chrom|Web Content|WebExtensions|Isolated|qq|wechat|electron)")
+                   (avoid-regexp
+                    "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom)")
+                   (run-with-higher-priority? #t)))
+
+         (service thermald-service-type
+                  (thermald-configuration
+                   (adaptive? #t)
+                   (ignore-cpuid-check? #t)))
+
+         (service fprintd-service-type
+                  (fprintd-configuration (fprintd fprintd-1.94)))
+
+         (simple-service 'fingerprint-pam pam-root-service-type
+                         (list (pam-extension
+                                (transformer
+                                 (lambda (pam)
+                                   (let ([fprint-entry
+                                          (pam-entry
+                                           (control "sufficient")
+                                           (module (file-append
+                                                    fprintd-1.94
+                                                    "/lib/security/pam_fprintd.so")))])
+                                     (if (member (pam-service-name pam)
+                                                 ;; sudo/su 不用指纹：避免终端输密码与
+                                                 ;; 指纹扫描互相抢占（刷满设备重试次数）。
+                                                 '("greetd" "login" "polkit-1"))
+                                         (pam-service
+                                          (inherit pam)
+                                          (auth (cons fprint-entry
+                                                      (pam-service-auth pam))))
+                                         pam)))))))
+
+         (simple-service 'fingerprint-udev udev-service-type
+                         (list libfprint-1.94))
+
+         (service mysql-service-type)
+         (service gamemode-service-type)
+         (service gnome-keyring-service-type)
+         (service gvfs-service-type)
+         (service opentabletdriver-service-type)
+         (service rtkit-service-type)
+         (service power-profiles-daemon-service-type)
+
+         (simple-service 'hibernate-polkit polkit-service-type
+                         (list (file-union
+                                "polkit-hibernate-rules"
+                                `(("share/polkit-1/rules.d/50-hibernate.rules"
+                                   ,(local-file "50-hibernate.rules"))))))
+
+         (service bluetooth-service-type
+                  (bluetooth-configuration (auto-enable? #t)
+                                           (fast-connectable? #t)
+                                           (experimental #t)))
+
+         (simple-service 'udisks-ntfs3 etc-service-type
+                         (list `("udisks2/mount_options.conf"
+                                 ,(plain-file
+                                   "mount_options.conf"
+                                   "[defaults]\nntfs:ntfs3_defaults=uid=$UID,gid=$GID\nntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard,sparse,nosparse,hidden,nohidden,sys_immutable,showmeta,noshowmeta,prealloc,noprealloc,hide_dot_files,nohide_dot_files,windows_names,nocase,case\n"))))
+
+         (simple-service 'block-qq-update hosts-service-type
+                         (list (host "127.0.0.1" "qqpatch.gtimg.cn")))
+
+         (service screen-locker-service-type
+                  (screen-locker-configuration
+                   (name "swaylock")
+                   (program (plain-file "empty" ""))
+                   (using-setuid? #f)))
+
+         (service greetd-service-type
+                  (greetd-configuration
+                   (greeter-supplementary-groups '("video" "audio"))
+                   (terminals
+                    (list (greetd-terminal-configuration
+                           (terminal-vt "7")
+                           (terminal-switch #t)
+                           (default-session-command
+                             (greetd-tuigreet-session))
+                           (initial-session-user username)
+                           (initial-session-command "dbus-run-session niri --session"))))))))
+#+end_src
+
+**** hibernate polkit 规则
+放行本地活跃用户的休眠/挂起/混合休眠。
+
+#+NAME: 50-hibernate.rules
+#+begin_src js :tangle ../tmp/50-hibernate.rules
+polkit.addRule(function(action, subject) {
+    if (subject.isLocal && subject.isActive &&
+        (action.id == "org.freedesktop.login1.hibernate" ||
+         action.id == "org.freedesktop.login1.hibernate-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.suspend" ||
+         action.id == "org.freedesktop.login1.suspend-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.hybrid-sleep" ||
+         action.id == "org.freedesktop.login1.hybrid-sleep-multiple-sessions")) {
+        return polkit.Result.YES;
+    }
+});
+#+end_src
+
 *** Guix 下载源
 
 #+NAME: guix-substitutes
 #+begin_src scheme
-(list ;; Nonguix channel
- (simple-service 'nonguix-substitutes guix-service-type
-                 (guix-extension
-                  (authorized-keys
-                   (list (plain-file
-                          "nonguix.pub"
-                          "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))
-                  (substitute-urls
-                   '("https://nonguix-proxy.ditigal.xyz"))))
-
- ;; Guix-moe channel
- (simple-service 'guix-moe-substitutes guix-service-type
-                 (guix-extension
-                  (authorized-keys
-                   (list (plain-file
-                          "guix-moe.pub"
-                          "(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))")))
-                  (substitute-urls
-                   '("https://cache-cdn.guix.moe"))))
-
- ;; Panther channel
- (simple-service 'panther-substitutes guix-service-type
-                 (guix-extension
-                  (authorized-keys
-                   (list (plain-file
-                          "panther.pub"
-                          "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))
-                  (substitute-urls
-                   '("https://substitutes.guix.gofranz.com"))))
-
- ;; SJTUG Mirror
- (simple-service 'sjtug-substitutes guix-service-type
-                 (guix-extension
-                  (substitute-urls
-                   '("https://mirror.sjtu.edu.cn/guix"
-                     "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux")))))
+;; 表驱动：(频道名 substitute-urls authorized-keys)
+(map (match-lambda
+       [(name urls keys)
+        (simple-service (symbol-append name '-substitutes) guix-service-type
+                        (guix-extension
+                         (substitute-urls urls)
+                         (authorized-keys
+                          (map (lambda (key)
+                                 (plain-file (string-append
+                                              (symbol->string name) ".pub")
+                                             key))
+                               keys))))])
+     '((nonguix ("https://nonguix-proxy.ditigal.xyz")
+                ("(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
+       (guix-moe ("https://cache-cdn.guix.moe")
+                 ("(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))"))
+       (panther ("https://substitutes.guix.gofranz.com")
+                ("(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
+       (sjtug ("https://mirror.sjtu.edu.cn/guix"
+               "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux")
+              ())))
 #+end_src
 
 ** Users 与主机信息
@@ -1755,6 +1951,7 @@ polkit.addRule(function(action, subject) {
    "bat"
    "binutils"
    "du-dust"
+   "eza"
    "fd"
    "file"
    "ripgrep"
@@ -1949,115 +2146,6 @@ tangle 成独立 manifest ，再部署到 hermes 数据目录（启动 desktop �
   <<hermes-desktop-pkg-specs>>))
 #+end_src
 
-*** 自定义包与补丁
-自建变体包与上游补丁的集中地；defs 块放顶层 ~define~ （noweb 拼进 ~main~ 顶层）， ~custom-packages-list~ 只放表达式
-新增包：先 defs 后 list。结构保留以备后续自建包与补丁。
-
-**** CachyOS LTS 内核
-对标上游 =linux-cachyos-lts= 变体（Cachy Sauce + EEVDF，无 BORE 无 LTO），defconfig 取自 hako 的 kernel-config ，将其调成桌面档并按当前设备裁剪。
-
-#+NAME: cachyos-lts-kernel
-#+begin_src scheme
-(load "../source/files/kernel/linux-cachyos-lts.scm")
-#+end_src
-
-**** hostapd GO-CONCURRENT 补丁
-让带 GO-CONCURRENT 的 NO_IR 信道不再升级 DISABLED；DISABLED 硬禁仍生效，内核 START_AP 仍是最终守门员。
-
-#+NAME: hostapd-go-concurrent-pkg
-#+begin_src scheme
-(define hostapd-go-concurrent
-  (package
-   (inherit hostapd)
-   (source
-    (origin
-     (inherit (package-source hostapd))
-     (patches
-      (list (local-file
-             (assume-source-relative-file-name
-              "../source/files/patches/hostapd-go-concurrent.patch"))))))))
-#+end_src
-
-**** 指纹识别栈
-本机传感器 Goodix =27c6:689a= 需要 libfprint ≥1.94.9 才能驱动，在这里写一个自定义的包来更新版本
-
-#+NAME: fingerprint-packages
-#+begin_src scheme
-(define %libfprint-version "1.94.100")
-
-(define libfprint-1.94
-  (package
-   (inherit libfprint)
-   (version %libfprint-version)
-   (source
-    (origin
-     (method git-fetch)
-     (uri (git-reference
-           (url "https://gitlab.freedesktop.org/libfprint/libfprint")
-           (commit (string-append "v" %libfprint-version))))
-     (file-name (git-file-name "libfprint" %libfprint-version))
-     (hash (content-hash
-            "1c5n1xl7b32hssfs6yl4ndn1dfs6aqa26igmpahpym53l19zq017"))))
-   (arguments
-    (list #:configure-flags
-          #~(list "-Dudev_hwdb=enabled"
-                  (string-append "-Dudev_hwdb_dir=" #$output
-                                 "/lib/udev/hwdb.d")
-                  (string-append "-Dudev_rules_dir=" #$output
-                                 "/lib/udev/rules.d"))))
-   (inputs
-    (modify-inputs (package-inputs libfprint)
-                   (replace "nss" openssl)))))
-
-(define %fprintd-version "1.94.5")
-
-(define fprintd-1.94
-  (package
-   (inherit fprintd)
-   (version %fprintd-version)
-   (source
-    (origin
-     (method git-fetch)
-     (uri (git-reference
-           (url "https://gitlab.freedesktop.org/libfprint/fprintd")
-           (commit (string-append "v" %fprintd-version))))
-     (file-name (git-file-name "fprintd" %fprintd-version))
-     (hash (content-hash
-            "1rf80qzx4fx5y3x04n7wb58ywga34agjd42ymlvz3kdl8kkk6qk8"))))
-   (arguments
-    (list #:configure-flags
-          #~(list "-Dsystemd_system_unit_dir=/tmp"
-                  "-Dlibsystemd=libelogind"
-                  (string-append "-Ddbus_service_dir=" #$output
-                                 "/share/dbus-1/system-services")
-                  (string-append "-Dpam_modules_dir=" #$output
-                                 "/lib/security"))
-          #:phases
-          #~(modify-phases %standard-phases
-                           (add-before 'configure 'patch-output-directories
-                                       (lambda* (#:key outputs #:allow-other-keys)
-                                         (let ([out (assoc-ref outputs "out")])
-                                           (substitute* "meson.build"
-                                                        (("(dbus_interfaces_dir = ).*" _ set)
-                                                         (string-append set "'" out "/share/dbus-1/interfaces'\n"))
-                                                        (("(polkit_policy_directory = ).*" _ set)
-                                                         (string-append set "'" out "/share/polkit-1/actions/'\n"))
-                                                        (("(dbus_data_dir = ).*" _ set)
-                                                         (string-append set "get_option('prefix')"
-                                                                        " / get_option('datadir')\n")))))))
-          #:tests? #f))
-   (inputs
-    (modify-inputs (package-inputs fprintd)
-                   (replace "libfprint" libfprint-1.94)))))
-#+end_src
-
-=fprintd-1.94= 是登记/验证指纹的 CLI（=fprintd-enroll= 等）；守护进程与 PAM 模块在系统侧（desktop-services 板块）。
-
-#+NAME: custom-packages-list
-#+begin_src scheme
-(list fprintd-1.94)
-#+end_src
-
 ** Services
 :PROPERTIES:
 :CUSTOM_ID: home-services
@@ -2161,21 +2249,11 @@ _    _  _  _  _  _  _  _)
 
 #+NAME: kanata-services
 #+begin_src scheme :noweb yes
-(list (simple-service 'kanata-keyboards
-                      home-shepherd-service-type
-                      (list
-                       (shepherd-service
-                        (provision '(kanata))
-                        (start #~(lambda args
-                                   ((make-forkexec-constructor
-                                     (list #$(file-append kanata "/bin/kanata")
-                                           "--cfg" #$(local-file "kanata-laptop.kbd"))
-                                     #:environment-variables (environ)
-                                     #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                                               "/shepherd/kanata.log"))
-                                    args)))
-                        (stop #~(make-kill-destructor))
-                        (respawn? #t)))))
+(list (simple-service 'kanata-keyboards home-shepherd-service-type
+                      (list (home-daemon-service
+                             'kanata
+                             (list (file-append kanata "/bin/kanata")
+                                   "--cfg" (local-file "kanata-laptop.kbd"))))))
 #+end_src
 
 *** Emacs 服务
@@ -2292,39 +2370,25 @@ _    _  _  _  _  _  _  _)
 **** 桌面常驻组件
 #+NAME: essential-desktop-services
 #+begin_src scheme
-(let* ([make-shepherd-service
-        (lambda* (pkg path requirement #:key (auto-start? #t) (respawn? #t))
-          (shepherd-service (provision (list (string->symbol (package-name pkg))))
-                            (requirement requirement)
-                            (start #~(lambda args
-                                       ((make-forkexec-constructor
-                                         (list #$(file-append pkg path))
-                                         #:environment-variables (environ)
-                                         #:log-file (string-append (getenv "XDG_STATE_HOME") "/shepherd/"
-                                                                   #$(package-name pkg) ".log"))
-                                        args)))
-                            (stop #~(make-kill-destructor))
-                            (auto-start? auto-start?)
-                            (respawn? respawn?)))])
-  (list (simple-service 'essential-desktop-services home-shepherd-service-type
-                        (list
-                         (make-shepherd-service kdeconnect "/bin/kdeconnect-indicator"
-                                                '(graphical-session)
-                                                #:auto-start? #f #:respawn? #f)
-                         (make-shepherd-service poweralertd "/bin/poweralertd" '(graphical-session))
+(list (simple-service 'essential-desktop-services home-shepherd-service-type
+                      (list
+                       (home-daemon-service 'kdeconnect
+                                            (list (file-append kdeconnect
+                                                               "/bin/kdeconnect-indicator"))
+                                            #:requirement '(graphical-session)
+                                            #:auto-start? #f #:respawn? #f)
+                       (home-daemon-service 'poweralertd
+                                            (list (file-append poweralertd
+                                                               "/bin/poweralertd"))
+                                            #:requirement '(graphical-session))
 
-                         (shepherd-service
-                          (provision '(usb-power-watch))
-                          (start #~(lambda args
-                                     ((make-forkexec-constructor
-                                       (list "/bin/sh"
-                                             #$(local-file "usb-power-watch"))
-                                       #:environment-variables (environ)
-                                       #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                                                 "/shepherd/usb-power-watch.log"))
-                                      args)))
-                          (stop #~(make-kill-destructor))
-                          (respawn? #t))))))
+                       (home-daemon-service 'mpris-proxy
+                                            (list (file-append bluez
+                                                               "/bin/mpris-proxy"))
+                                            #:requirement '(graphical-session))
+                       (home-daemon-service 'usb-power-watch
+                                            (list "/bin/sh"
+                                                  (local-file "usb-power-watch"))))))
 #+end_src
 
 **** usb-power-watch 脚本
@@ -2382,30 +2446,15 @@ done
 
 #+NAME: hermes-services
 #+begin_src scheme
-;; 表驱动：(服务名 requirement . hermes 子命令参数)
 (list (simple-service 'hermes-services home-shepherd-service-type
                       (map (match-lambda
                              [(name requirement . argv)
-                              (shepherd-service
-                               (provision (list name))
-                               (requirement requirement)
-                               (start
-                                #~(lambda args
-                                    ((make-forkexec-constructor
-                                      (cons (string-append
-                                             (getenv "HOME")
-                                             "/.local/bin/hermes")
-                                            '#$argv)
-                                      #:environment-variables (environ)
-                                      #:log-file
-                                      (string-append
-                                       (getenv "XDG_STATE_HOME")
-                                       "/shepherd/"
-                                       #$(symbol->string name)
-                                       ".log"))
-                                     args)))
-                               (stop #~(make-kill-destructor))
-                               (respawn? #t))])
+                              (home-daemon-service
+                               name
+                               (cons #~(string-append (getenv "HOME")
+                                                      "/.local/bin/hermes")
+                                     argv)
+                               #:requirement requirement)])
                            '((hermes-backend (graphical-session)
                                              "dashboard" "--no-open"
                                              "--host" "127.0.0.1" "--port" "9119")
@@ -2419,22 +2468,13 @@ done
 #+NAME: cpu-dma-latency-service
 #+begin_src scheme
 (list (simple-service 'cpu-dma-latency-service home-shepherd-service-type
-                      (list (shepherd-service
-                             (provision '(cpu-dma-latency))
-                             (documentation
-                              "Hold /dev/cpu_dma_latency=0 to keep C-states shallow.")
-                             (requirement '())
-                             (start #~(lambda args
-                                        ((make-forkexec-constructor
-                                          (list "/bin/sh" "-c"
-                                                "exec 3>/dev/cpu_dma_latency && printf '\\000\\000\\000\\000' >&3 && exec sleep infinity")
-                                          #:environment-variables (environ)
-                                          #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                                                    "/shepherd/cpu-dma-latency.log"))
-                                         args)))
-                             (stop #~(make-kill-destructor))
-                             (auto-start? #f)
-                             (respawn? #f)))))
+                      (list (home-daemon-service
+                             'cpu-dma-latency
+                             (list "/bin/sh" "-c"
+                                   "exec 3>/dev/cpu_dma_latency && printf '\\000\\000\\000\\000' >&3 && exec sleep infinity")
+                             #:auto-start? #f #:respawn? #f
+                             #:documentation
+                             "Hold /dev/cpu_dma_latency=0 to keep C-states shallow."))))
 #+end_src
 
 *** 计时器服务
@@ -2451,13 +2491,7 @@ done
                                                          #:hours '(18)
                                                          #:minutes '(0))
                                        #~("/bin/sh"
-                                          #$(mixed-text-file
-                                             "flatpak-user-update.sh"
-                                             grep "/bin/grep"
-                                             " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
-                                             " && exec "
-                                             flatpak "/bin/flatpak"
-                                             " update --user -y"))
+                                          #$(%flatpak-update-script "user"))
                                        #:requirement '(dbus))
 
                        (shepherd-timer '(nix-gc)
@@ -2498,7 +2532,6 @@ done
                             "\\.venv($|/.*)"
                             "\\.mypy_cache($|/.*)"
                             "__pycache__($|/.*)"
-                            ;; fcitx5 运行时生成，跳过避免反复触发重建
                             "fcitx5/conf/cached_layouts"
                             "fcitx5/crash\\.log"))))
 
@@ -2720,160 +2753,102 @@ done
 
 #+NAME: default-applications
 #+begin_src scheme
+;; 表驱动：每行 (desktop文件 mime类型...)
 (list (simple-service 'default-applications
                       home-xdg-mime-applications-service-type
                       (home-xdg-mime-applications-configuration
                        (default
-                         '(;; 浏览器
-                           ("x-scheme-handler/http" . "zen.desktop")
-                           ("x-scheme-handler/https" . "zen.desktop")
-                           ("x-scheme-handler/about" . "zen.desktop")
-                           ("x-scheme-handler/chrome" . "zen.desktop")
-                           ("x-scheme-handler/unknown" . "zen.desktop")
-                           ("text/html" . "zen.desktop")
-                           ("application/xhtml+xml" . "zen.desktop")
-                           ;; 文件管理器
-                           ("inode/directory" . "thunar.desktop")
-                           ;; 图片查看
-                           ("image/png" . "org.nomacs.ImageLounge.desktop")
-                           ("image/jpeg" . "org.nomacs.ImageLounge.desktop")
-                           ("image/gif" . "org.nomacs.ImageLounge.desktop")
-                           ("image/webp" . "org.nomacs.ImageLounge.desktop")
-                           ("image/bmp" . "org.nomacs.ImageLounge.desktop")
-                           ("image/tiff" . "org.nomacs.ImageLounge.desktop")
-                           ("image/svg+xml" . "org.nomacs.ImageLounge.desktop")
-                           ("image/avif" . "org.nomacs.ImageLounge.desktop")
-                           ("image/heif" . "org.nomacs.ImageLounge.desktop")
-                           ("image/jxl" . "org.nomacs.ImageLounge.desktop")
-                           ("image/vnd.microsoft.icon" . "org.nomacs.ImageLounge.desktop")
-                           ("image/x-eps" . "org.nomacs.ImageLounge.desktop")
-                           ("image/x-portable-bitmap" . "org.nomacs.ImageLounge.desktop")
-                           ("image/x-portable-graymap" . "org.nomacs.ImageLounge.desktop")
-                           ("image/x-portable-pixmap" . "org.nomacs.ImageLounge.desktop")
-                           ;; 图片编辑
-                           ("image/x-xcf" . "gimp.desktop")
-                           ("image/vnd.adobe.photoshop" . "gimp.desktop")
-                           ;; 音视频
-                           ("video/mp4" . "mpv.desktop")
-                           ("video/webm" . "mpv.desktop")
-                           ("video/mpeg" . "mpv.desktop")
-                           ("video/x-matroska" . "mpv.desktop")
-                           ("application/x-matroska" . "mpv.desktop")
-                           ("audio/x-matroska" . "mpv.desktop")
-                           ("video/vnd.avi" . "mpv.desktop")
-                           ("video/x-flv" . "mpv.desktop")
-                           ("video/quicktime" . "mpv.desktop")
-                           ("video/x-ms-wmv" . "mpv.desktop")
-                           ("application/vnd.ms-asf" . "mpv.desktop")
-                           ("video/mp2t" . "mpv.desktop")
-                           ("video/3gpp" . "mpv.desktop")
-                           ("audio/mpeg" . "mpv.desktop")
-                           ("audio/ogg" . "mpv.desktop")
-                           ("application/ogg" . "mpv.desktop")
-                           ("audio/x-vorbis+ogg" . "mpv.desktop")
-                           ("audio/x-opus+ogg" . "mpv.desktop")
-                           ("audio/opus" . "mpv.desktop")
-                           ("audio/flac" . "mpv.desktop")
-                           ("audio/vnd.wave" . "mpv.desktop")
-                           ("audio/x-wav" . "mpv.desktop")
-                           ("audio/aac" . "mpv.desktop")
-                           ("audio/x-m4a" . "mpv.desktop")
-                           ("audio/x-mpegurl" . "mpv.desktop")
-                           ("application/vnd.apple.mpegurl" . "mpv.desktop")
-                           ;; 文本/代码编辑
-                           ("text/plain" . "emacsclient.desktop")
-                           ("text/org" . "emacsclient.desktop")
-                           ("text/markdown" . "emacsclient.desktop")
-                           ("text/javascript" . "emacsclient.desktop")
-                           ("application/javascript" . "emacsclient.desktop")
-                           ("text/x-scheme" . "emacsclient.desktop")
-                           ("text/x-emacs-lisp" . "emacsclient.desktop")
-                           ("text/csv" . "emacsclient.desktop")
-                           ("text/css" . "emacsclient.desktop")
-                           ("text/x-nix" . "emacsclient.desktop")
-                           ("text/x-zig" . "emacsclient.desktop")
-                           ("text/x-lua" . "emacsclient.desktop")
-                           ("application/x-gdscript" . "emacsclient.desktop")
-                           ("application/x-fishscript" . "emacsclient.desktop")
-                           ("text/x-go" . "emacsclient.desktop")
-                           ("text/x-cmake" . "emacsclient.desktop")
-                           ("text/x-patch" . "emacsclient.desktop")
-                           ("application/x-ipynb+json" . "emacsclient.desktop")
-                           ("application/json" . "emacsclient.desktop")
-                           ("application/xml" . "emacsclient.desktop")
-                           ("application/yaml" . "emacsclient.desktop")
-                           ("application/toml" . "emacsclient.desktop")
-                           ;; 开发相关
-                           ("application/x-shellscript" . "emacsclient.desktop")
-                           ("application/x-desktop" . "emacsclient.desktop")
-                           ("text/x-csrc" . "emacsclient.desktop")
-                           ("text/x-chdr" . "emacsclient.desktop")
-                           ("text/x-c++src" . "emacsclient.desktop")
-                           ("text/x-c++hdr" . "emacsclient.desktop")
-                           ("text/x-java" . "emacsclient.desktop")
-                           ("text/x-python" . "emacsclient.desktop")
-                           ("text/rust" . "emacsclient.desktop")
-                           ;; PDF
-                           ("application/pdf" . "emacsclient.desktop")
-                           ;; KeePassXC 密码库
-                           ("application/x-keepass2" . "org.keepassxc.KeePassXC.desktop")
-                           ;; 压缩包
-                           ("application/zip" . "org.gnome.FileRoller.desktop")
-                           ("application/x-tar" . "org.gnome.FileRoller.desktop")
-                           ("application/gzip" . "org.gnome.FileRoller.desktop")
-                           ("application/x-compressed-tar" . "org.gnome.FileRoller.desktop")
-                           ("application/x-xz" . "org.gnome.FileRoller.desktop")
-                           ("application/x-xz-compressed-tar" . "org.gnome.FileRoller.desktop")
-                           ("application/x-bzip" . "org.gnome.FileRoller.desktop")
-                           ("application/x-bzip2-compressed-tar" . "org.gnome.FileRoller.desktop")
-                           ("application/zstd" . "org.gnome.FileRoller.desktop")
-                           ("application/x-zstd-compressed-tar" . "org.gnome.FileRoller.desktop")
-                           ("application/x-7z-compressed" . "org.gnome.FileRoller.desktop")
-                           ("application/vnd.rar" . "org.gnome.FileRoller.desktop")
-                           ("application/x-java-archive" . "org.gnome.FileRoller.desktop")
-                           ;; 邮件
-                           ("x-scheme-handler/mailto" . "emacsclient-mail.desktop")
-                           ;; Emacs org-protocol
-                           ("x-scheme-handler/org-protocol" . "emacsclient.desktop")
-                           ;; 即时通讯
-                           ("x-scheme-handler/tg" . "org.telegram.desktop.desktop")
-                           ("x-scheme-handler/tonsite" . "org.telegram.desktop.desktop")
-                           ;; 桌面互联（KDE Connect）
-                           ("x-scheme-handler/tel" . "org.kde.kdeconnect.handler.desktop")
-                           ("x-scheme-handler/sms" . "org.kde.kdeconnect.handler.desktop")
-                           ;; 下载器
-                           ("x-scheme-handler/magnet" . "MotrixNext.desktop")
-                           ("application/x-bittorrent" . "MotrixNext.desktop")
-                           ("x-scheme-handler/thunder" . "MotrixNext.desktop")
-                           ("x-scheme-handler/ed2k" . "amule.desktop")
-                           ;; Windows 程序（Wine）
-                           ("application/x-ms-dos-executable" . "wine.desktop")
-                           ("application/x-msi" . "wine.desktop")
-                           ("application/x-bat" . "wine.desktop")
-                           ("application/x-ms-shortcut" . "wine.desktop")
-                           ("application/x-mswinurl" . "wine.desktop")
-                           ;; 游戏平台
-                           ("x-scheme-handler/steam" . "steam.desktop")
-                           ("x-scheme-handler/steamlink" . "steam.desktop")
-                           ("x-scheme-handler/curseforge" . "org.prismlauncher.PrismLauncher.desktop")
-                           ("x-scheme-handler/prismlauncher" . "org.prismlauncher.PrismLauncher.desktop")
-                           ("application/x-modrinth-modpack+zip" . "org.prismlauncher.PrismLauncher.desktop")
-                           ("x-scheme-handler/osu" . "osu!.desktop")
-                           ("application/x-osu-beatmap" . "osu!.desktop")
-                           ("application/x-osu-beatmap-archive" . "osu!.desktop")
-                           ("application/x-osu-skin-archive" . "osu!.desktop")
-                           ("application/x-osu-replay" . "osu!.desktop")
-                           ("application/x-godot-project" . "godot.desktop")
-                           ("application/x-godot-scene" . "godot.desktop")
-                           ;; 密钥管理
-                           ("application/pgp-keys" . "org.gnome.seahorse.Application.desktop")
-                           ("application/x-pem-file" . "org.gnome.seahorse.Application.desktop")
-                           ("application/x-x509-ca-cert" . "org.gnome.seahorse.Application.desktop")
-                           ;; AI 工具
-                           ("x-scheme-handler/zcode" . "zcode.desktop")
-                           ("x-scheme-handler/ccswitch" . "CC Switch.desktop")
-                           ("x-scheme-handler/gh" . "github-copilot.desktop")
-                           ("x-scheme-handler/github-app" . "github-copilot.desktop"))))))
+                         (append-map
+                          (match-lambda
+                            [(desktop . mimes)
+                             (map (lambda (mime) (cons mime desktop)) mimes)])
+                          '(("zen.desktop"
+                             "x-scheme-handler/http" "x-scheme-handler/https"
+                             "x-scheme-handler/about" "x-scheme-handler/chrome"
+                             "x-scheme-handler/unknown"
+                             "text/html" "application/xhtml+xml")
+                            ("thunar.desktop"
+                             "inode/directory")
+                            ("org.nomacs.ImageLounge.desktop"
+                             "image/png" "image/jpeg" "image/gif" "image/webp"
+                             "image/bmp" "image/tiff" "image/svg+xml" "image/avif"
+                             "image/heif" "image/jxl" "image/vnd.microsoft.icon"
+                             "image/x-eps" "image/x-portable-bitmap"
+                             "image/x-portable-graymap" "image/x-portable-pixmap")
+                            ("gimp.desktop"
+                             "image/x-xcf" "image/vnd.adobe.photoshop")
+                            ("mpv.desktop"
+                             "video/mp4" "video/webm" "video/mpeg" "video/x-matroska"
+                             "application/x-matroska" "audio/x-matroska"
+                             "video/vnd.avi" "video/x-flv" "video/quicktime"
+                             "video/x-ms-wmv" "application/vnd.ms-asf" "video/mp2t"
+                             "video/3gpp" "audio/mpeg" "audio/ogg"
+                             "application/ogg" "audio/x-vorbis+ogg"
+                             "audio/x-opus+ogg" "audio/opus" "audio/flac"
+                             "audio/vnd.wave" "audio/x-wav" "audio/aac"
+                             "audio/x-m4a" "audio/x-mpegurl"
+                             "application/vnd.apple.mpegurl")
+                            ("emacsclient.desktop"
+                             "text/plain" "text/org" "text/markdown"
+                             "text/javascript" "application/javascript"
+                             "text/x-scheme" "text/x-emacs-lisp" "text/csv"
+                             "text/css" "text/x-nix" "text/x-zig" "text/x-lua"
+                             "application/x-gdscript" "application/x-fishscript"
+                             "text/x-go" "text/x-cmake" "text/x-patch"
+                             "application/x-ipynb+json" "application/json"
+                             "application/xml" "application/yaml" "application/toml"
+                             "application/x-shellscript" "application/x-desktop"
+                             "text/x-csrc" "text/x-chdr" "text/x-c++src"
+                             "text/x-c++hdr" "text/x-java" "text/x-python"
+                             "text/rust" "application/pdf"
+                             "x-scheme-handler/org-protocol")
+                            ("org.keepassxc.KeePassXC.desktop"
+                             "application/x-keepass2")
+                            ("org.gnome.FileRoller.desktop"
+                             "application/zip" "application/x-tar"
+                             "application/gzip" "application/x-compressed-tar"
+                             "application/x-xz" "application/x-xz-compressed-tar"
+                             "application/x-bzip" "application/x-bzip2-compressed-tar"
+                             "application/zstd" "application/x-zstd-compressed-tar"
+                             "application/x-7z-compressed" "application/vnd.rar"
+                             "application/x-java-archive")
+                            ("emacsclient-mail.desktop"
+                             "x-scheme-handler/mailto")
+                            ("org.telegram.desktop.desktop"
+                             "x-scheme-handler/tg" "x-scheme-handler/tonsite")
+                            ("org.kde.kdeconnect.handler.desktop"
+                             "x-scheme-handler/tel" "x-scheme-handler/sms")
+                            ("MotrixNext.desktop"
+                             "x-scheme-handler/magnet" "application/x-bittorrent"
+                             "x-scheme-handler/thunder")
+                            ("amule.desktop"
+                             "x-scheme-handler/ed2k")
+                            ("wine.desktop"
+                             "application/x-ms-dos-executable" "application/x-msi"
+                             "application/x-bat" "application/x-ms-shortcut"
+                             "application/x-mswinurl")
+                            ("steam.desktop"
+                             "x-scheme-handler/steam" "x-scheme-handler/steamlink")
+                            ("org.prismlauncher.PrismLauncher.desktop"
+                             "x-scheme-handler/curseforge"
+                             "x-scheme-handler/prismlauncher"
+                             "application/x-modrinth-modpack+zip")
+                            ("osu!.desktop"
+                             "x-scheme-handler/osu" "application/x-osu-beatmap"
+                             "application/x-osu-beatmap-archive"
+                             "application/x-osu-skin-archive"
+                             "application/x-osu-replay")
+                            ("godot.desktop"
+                             "application/x-godot-project" "application/x-godot-scene")
+                            ("org.gnome.seahorse.Application.desktop"
+                             "application/pgp-keys" "application/x-pem-file"
+                             "application/x-x509-ca-cert")
+                            ("zcode.desktop"
+                             "x-scheme-handler/zcode")
+                            ("CC Switch.desktop"
+                             "x-scheme-handler/ccswitch")
+                            ("github-copilot.desktop"
+                             "x-scheme-handler/gh" "x-scheme-handler/github-app")))))))
 #+end_src
 
 ** Font

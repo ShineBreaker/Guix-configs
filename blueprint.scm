@@ -53,6 +53,7 @@
              (ice-9 regex)              ; string-match / make-regexp
              (ice-9 textual-ports)      ; get-string-all（读整个文件）
              (srfi srfi-1)              ; first / filter-map / any / every / concatenate
+             (srfi srfi-13)             ; string-rindex（%stow-split-pkg 用）
              (srfi srfi-19)             ; date->string（ISO 文件名）
              (srfi srfi-26))            ; cut（简写 lambda）
 
@@ -809,12 +810,10 @@
 ;; 把 "group/pkg" 形式的包名拆成 (实际 stow-dir . 一级包名)。分组前缀并入
 ;; --dir，stow 本身永远只收一级包名（GNU Stow 不保证接受带斜杠的包名）。
 (define (%stow-split-pkg pkg)
-  (let loop ([i (- (string-length pkg) 1)])
-    (cond [(< i 0) (cons %stow-dir pkg)]
-          [(char=? (string-ref pkg i) #\/)
-           (cons (string-append %stow-dir "/" (substring pkg 0 i))
-                 (substring pkg (+ i 1) (string-length pkg)))]
-          [else (loop (- i 1))])))
+  (match (string-rindex pkg #\/)
+    [#f (cons %stow-dir pkg)]
+    [i (cons (string-append %stow-dir "/" (substring pkg 0 i))
+             (substring pkg (+ i 1) (string-length pkg)))]))
 
 ;; 对单个包执行 stow。--ignore=\.stow-(folding|package)$ 始终带上，确保
 ;; 标记文件本身永不部署到 $HOME（多个包的同名标记会冲突）。

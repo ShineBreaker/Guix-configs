@@ -15,6 +15,7 @@ alias find fd
 alias grep rg
 alias htop btop
 alias ll "ls -la"
+alias ls eza
 alias rm "rm -i"
 
 abbr --add cm 'git commit'

@@ -59,6 +59,7 @@ blue block-replace <name> <body-file>  # 原子写回并进行 Scheme 括号校�
 - 代码块命名：`#+NAME: <block-name>`
 - 引用其他块：`<<block-name>>`（此为 Org 模板展开功能，非 Scheme 语法）
 - 功能开关：注释掉 `<<ref>>` 引用即可在装配中停用该功能块。
+- shepherd 服务请复用 `service-helpers` 块的简写构造（`home-daemon-service` 常驻用户进程 / `root-daemon-service` 常驻系统进程 / `root-one-shot-service` 开机一次），它们统一了日志落点与环境约定；`%flatpak-update-script` 供 system/user 两侧 flatpak 定时更新共用。
 
 ## 验证流程（修改后必做）
 
