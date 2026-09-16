@@ -594,12 +594,12 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
         "modprobe.blacklist=wacom,hid_uclogic"
         "nowatchdog"
         "preempt=full"
+        "quiet"
         "snd-intel-dspcfg.dsp_driver=3"
         "threadirqs"
-        "quiet"
+        "zswap.compressor=zstd"
         "zswap.enabled=1"
         "zswap.max_pool_percent=35"
-        "zswap.compressor=zstd"
         %default-kernel-arguments))
 
 (kernel-loadable-modules (list v4l2loopback-linux-module))
@@ -620,6 +620,15 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                       '("ip_tables" "iptable_nat" "kvm_intel" "ntsync" "sch_fq"
                         "tcp_bbr" "uhid" "uinput" "v4l2loopback" "zstd"))
 
+      (simple-service 'modprobe-configs etc-service-type
+                      (list `("modprobe.d/v4l2loopback.conf"
+                              ,(plain-file "v4l2loopback.conf"
+                                           "options v4l2loopback devices=1 video_nr=1 card_label=\"OBS Cam\" exclusive_caps=1"))
+                            ;; kvm 嵌套虚拟化 + 虚拟机读写未知 MSR 时保持安静
+                            `("modprobe.d/kvm.conf"
+                              ,(plain-file "kvm.conf"
+                                           "options kvm_intel nested=1 emulate_invalid_guest_state=0\noptions kvm ignore_msrs=1 report_ignored_msrs=0\n"))))
+
       ;; 内核拒绝时（zstd 不可用）静默放行，不阻断 boot
       (root-one-shot-service 'zswap-zstd '(kernel-module-loader)
                              #~(lambda _
@@ -628,16 +637,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                                  #t)
                              #:stop #~(lambda _ #t) #:respawn? #f
                              #:documentation
-                             "zstd 模块加载后把 zswap 压缩器切到 zstd。")
-
-      (simple-service 'modprobe-configs etc-service-type
-                      (list `("modprobe.d/v4l2loopback.conf"
-                              ,(plain-file "v4l2loopback.conf"
-                                           "options v4l2loopback devices=1 video_nr=1 card_label=\"OBS Cam\" exclusive_caps=1"))
-                            ;; kvm 嵌套虚拟化 + 虚拟机读写未知 MSR 时保持安静
-                            `("modprobe.d/kvm.conf"
-                              ,(plain-file "kvm.conf"
-                                           "options kvm_intel nested=1 emulate_invalid_guest_state=0\noptions kvm ignore_msrs=1 report_ignored_msrs=0\n")))))
+                             "zstd 模块加载后把 zswap 压缩器切到 zstd。"))
 #+end_src
 
 **** sysctl 调优
@@ -650,29 +650,29 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                         ("fs.file-max" . "2097152")
                         ("fs.nr_open" . "2097152")
 
-                        ("vm.max_map_count" . "2147483642")
                         ("vm.compaction_proactiveness" . "0")
-                        ("vm.vfs_cache_pressure" . "50")
+                        ("vm.dirty_writeback_centisecs" . "1500")
+                        ("vm.max_map_count" . "2147483642")
+                        ("vm.page-cluster" . "0")
                         ("vm.page_lock_unfairness" . "1")
                         ("vm.stat_interval" . "120")
-                        ("vm.page-cluster" . "0")
+                        ("vm.vfs_cache_pressure" . "50")
                         ("vm.watermark_scale_factor" . "125")
-                        ("vm.dirty_writeback_centisecs" . "1500")
 
                         ("net.core.default_qdisc" . "fq")
-                        ("net.core.rmem_max" . "16777216")
-                        ("net.core.wmem_max" . "16777216")
-                        ("net.core.rmem_default" . "524288")
-                        ("net.core.wmem_default" . "524288")
                         ("net.core.netdev_max_backlog" . "5000")
+                        ("net.core.rmem_default" . "524288")
+                        ("net.core.rmem_max" . "16777216")
+                        ("net.core.wmem_default" . "524288")
+                        ("net.core.wmem_max" . "16777216")
                         ("net.ipv4.ip_forward" . "1")
                         ("net.ipv4.tcp_congestion_control" . "bbr")
-                        ("net.ipv4.tcp_rmem" . "4096 131072 16777216")
-                        ("net.ipv4.tcp_wmem" . "4096 65536 16777216")
+                        ("net.ipv4.tcp_ecn" . "2")
                         ("net.ipv4.tcp_fastopen" . "3")
                         ("net.ipv4.tcp_mtu_probing" . "1")
                         ("net.ipv4.tcp_notsent_lowat" . "16384")
-                        ("net.ipv4.tcp_ecn" . "2")
+                        ("net.ipv4.tcp_rmem" . "4096 131072 16777216")
+                        ("net.ipv4.tcp_wmem" . "4096 65536 16777216")
                         ("net.ipv6.conf.all.forwarding" . "1")
 
                         ("kernel.numa_balancing" . "0")
@@ -858,13 +858,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 #+NAME: data-dirs-services
 #+begin_src scheme
-(list (simple-service 'fix-data-perms activation-service-type
-                      #~(begin
-                          (use-modules (guix build utils))
-                          (mkdir-p "/data")
-                          (chmod "/data" #o755)))
-
-      (simple-service 'create-xdg-dirs activation-service-type
+(list (simple-service 'create-xdg-dirs activation-service-type
                       (with-imported-modules
                        (source-module-closure '((guix build utils)))
                        #~(begin
@@ -882,7 +876,13 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                                   (mkdir-p home-path)
                                   (chown home-path uid gid)
                                   (chmod home-path #o755)))
-                              '#$%data-dirs))))))
+                              '#$%data-dirs)))))
+
+      (simple-service 'fix-data-perms activation-service-type
+                      #~(begin
+                          (use-modules (guix build utils))
+                          (mkdir-p "/data")
+                          (chmod "/data" #o755))))
 #+end_src
 
 *** 网络相关配置
@@ -940,15 +940,15 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
        [hotspot-ap-run-script
         (render-script
          "hotspot-ap-run" (local-file "hotspot-ap-run")
-         `(("@IW_BIN@" . ,iw-bin)
+         `(("@AGE_BIN@" . ,age-bin)
            ("@AGE_IDENTITY@" . ,age-key)
-           ("@HOTSPOT_CREDS_CIPHER@" . ,(secret "wifi-hotspot"))
-           ("@AGE_BIN@" . ,age-bin)
-           ("@IP_BIN@" . ,(bin "iproute2" "/sbin/ip"))
-           ("@SED_BIN@" . ,(bin "sed" "/bin/sed"))
-           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
            ("@HOSTAPD_BIN@" . ,(file-append hostapd-go-concurrent
-                                            "/sbin/hostapd"))))]
+                                            "/sbin/hostapd"))
+           ("@HOTSPOT_CREDS_CIPHER@" . ,(secret "wifi-hotspot"))
+           ("@IP_BIN@" . ,(bin "iproute2" "/sbin/ip"))
+           ("@IW_BIN@" . ,iw-bin)
+           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
+           ("@SED_BIN@" . ,(bin "sed" "/bin/sed"))))]
 
        [nm-powersave-conf
         (plain-file "wifi-powersave.conf"
@@ -958,40 +958,78 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
         (render-script
          "nm-dispatcher-trusted-connection"
          (local-file "nm-dispatcher-trusted-connection")
-         `(("@AGE_IDENTITY@" . ,age-key)
-           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,(secret "wifi-trust"))
-           ("@AGE_BIN@" . ,age-bin)
+         `(("@AGE_BIN@" . ,age-bin)
+           ("@AGE_IDENTITY@" . ,age-key)
+           ("@GREP_BIN@" . ,(file-append grep "/bin/grep"))
            ("@NFT_BIN@" . ,(file-append nftables "/sbin/nft"))
-           ("@GREP_BIN@" . ,(file-append grep "/bin/grep"))))]
+           ("@TRUSTED_CONNECTIONS_CIPHER@" . ,(secret "wifi-trust"))))]
 
        [mihomo-run-script
         (render-script
          "mihomo-run" (local-file "mihomo-run")
-         `(("@AGE_IDENTITY@" . ,age-key)
-           ("@SUBS_CIPHER@" . ,(secret "mihomo-subscriptions"))
-           ("@AGE_BIN@" . ,age-bin)
-           ("@ENVSUBST_BIN@" . ,(bin "gettext" "/bin/envsubst"))
-           ("@MV_BIN@" . ,(bin "coreutils" "/bin/mv"))
+         `(("@AGE_BIN@" . ,age-bin)
+           ("@AGE_IDENTITY@" . ,age-key)
            ("@CHMOD_BIN@" . ,(bin "coreutils" "/bin/chmod"))
-           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
+           ("@ENVSUBST_BIN@" . ,(bin "gettext" "/bin/envsubst"))
            ("@MIHOMO_BIN@" . ,(file-append mihomo "/bin/mihomo"))
            ("@MIHOMO_TEMPLATE@"
             . ,(string-append "/home/" username
-                              "/.config/mihomo/config.yaml"))))])
+                              "/.config/mihomo/config.yaml"))
+           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
+           ("@MV_BIN@" . ,(bin "coreutils" "/bin/mv"))
+           ("@SUBS_CIPHER@" . ,(secret "mihomo-subscriptions"))))])
 
-  (list (service nftables-service-type
+  (list (root-daemon-service 'hotspot-ap (list hotspot-ap-run-script)
+                             #:requirement '(wifi-ap-interface)
+                             #:log-file "/var/log/hotspot-ap.log"
+                             #:auto-start? #f #:respawn? #f
+                             #:documentation
+                             "Run hostapd AP on uap0, started manually via the hotspot fish command.")
+
+        (root-daemon-service 'hotspot-dnsmasq
+                             (list (bin "dnsmasq" "/sbin/dnsmasq")
+                                   "--bind-dynamic"
+                                   "--dhcp-authoritative"
+                                   "--dhcp-range=192.168.77.10,192.168.77.250,255.255.255.0,12h"
+                                   "--except-interface=lo"
+                                   "--interface=uap0"
+                                   "--keep-in-foreground")
+                             #:requirement '(wifi-ap-interface)
+                             #:log-file "/var/log/hotspot-dnsmasq.log"
+                             #:documentation
+                             "DHCP/DNS service for the uap0 hotspot subnet.")
+
+        (simple-service 'hotspot-stale-conf-cleanup activation-service-type
+                        #~(system* "rm" "-f"
+                                   "/etc/NetworkManager/conf.d/20-uap0-unmanaged.conf"))
+
+        (simple-service 'hotspot-uap0-udev udev-service-type
+                        (list (udev-rule
+                               "78-hotspot-uap0.rules"
+                               (string-append
+                                "SUBSYSTEM==\"net\", KERNEL==\"uap0\", "
+                                "ENV{NM_UNMANAGED}=\"1\", "
+                                "ENV{ID_NET_NAME}=\"\", "
+                                "ENV{ID_NET_NAME_ONBOARD}=\"\", "
+                                "ENV{ID_NET_NAME_SLOT}=\"\", "
+                                "ENV{ID_NET_NAME_PATH}=\"\", "
+                                "ENV{ID_NET_NAME_MAC}=\"\"\n"))))
+
+        (root-one-shot-service 'iw-reg-cn '(user-processes)
+                               #~(lambda _
+                                   (zero? (system* #$iw-bin "reg" "set" "CN")))
+                               #:stop #~(lambda _ #t) #:respawn? #f
+                               #:documentation
+                               "Set wireless regulatory domain to CN.")
+
+        (root-daemon-service 'mihomo-daemon (list mihomo-run-script)
+                             #:requirement '(user-processes)
+                             #:log-file "/var/log/mihomo.log"
+                             #:documentation "Run the mihomo daemon.")
+
+        (service nftables-service-type
                  (nftables-configuration (ruleset (local-file
                                                    "./nftables.conf"))))
-
-        (service openssh-service-type
-                 (openssh-configuration
-                  (password-authentication? #f)
-                  (permit-root-login 'prohibit-password)
-                  (x11-forwarding? #f)))
-
-        (service tailscale-service-type
-                 (tailscale-configuration
-                  (verbosity 1)))
 
         (simple-service 'nm-dispatcher-trusted-ssid activation-service-type
                         #~(let ([dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"])
@@ -1009,26 +1047,15 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                             (system* "rm" "-f"
                                      "/etc/NetworkManager/dispatcher.d/20-wifi-powersave")))
 
-        (root-daemon-service 'mihomo-daemon (list mihomo-run-script)
-                             #:requirement '(user-processes)
-                             #:log-file "/var/log/mihomo.log"
-                             #:documentation "Run the mihomo daemon.")
+        (service openssh-service-type
+                 (openssh-configuration
+                  (password-authentication? #f)
+                  (permit-root-login 'prohibit-password)
+                  (x11-forwarding? #f)))
 
-        (simple-service 'hotspot-uap0-udev udev-service-type
-                        (list (udev-rule
-                               "78-hotspot-uap0.rules"
-                               (string-append
-                                "SUBSYSTEM==\"net\", KERNEL==\"uap0\", "
-                                "ENV{NM_UNMANAGED}=\"1\", "
-                                "ENV{ID_NET_NAME}=\"\", "
-                                "ENV{ID_NET_NAME_ONBOARD}=\"\", "
-                                "ENV{ID_NET_NAME_SLOT}=\"\", "
-                                "ENV{ID_NET_NAME_PATH}=\"\", "
-                                "ENV{ID_NET_NAME_MAC}=\"\"\n"))))
-
-        (simple-service 'hotspot-stale-conf-cleanup activation-service-type
-                        #~(system* "rm" "-f"
-                                   "/etc/NetworkManager/conf.d/20-uap0-unmanaged.conf"))
+        (service tailscale-service-type
+                 (tailscale-configuration
+                  (verbosity 1)))
 
         (root-one-shot-service 'wifi-ap-interface '(iw-reg-cn)
                                #~(lambda _
@@ -1045,34 +1072,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                                               #t))
                                #:respawn? #f
                                #:documentation
-                               "Create the uap0 virtual AP interface for concurrent WiFi.")
-
-        (root-daemon-service 'hotspot-ap (list hotspot-ap-run-script)
-                             #:requirement '(wifi-ap-interface)
-                             #:log-file "/var/log/hotspot-ap.log"
-                             #:auto-start? #f #:respawn? #f
-                             #:documentation
-                             "Run hostapd AP on uap0, started manually via the hotspot fish command.")
-
-        (root-daemon-service 'hotspot-dnsmasq
-                             (list (bin "dnsmasq" "/sbin/dnsmasq")
-                                   "--keep-in-foreground"
-                                   "--interface=uap0"
-                                   "--bind-dynamic"
-                                   "--except-interface=lo"
-                                   "--dhcp-authoritative"
-                                   "--dhcp-range=192.168.77.10,192.168.77.250,255.255.255.0,12h")
-                             #:requirement '(wifi-ap-interface)
-                             #:log-file "/var/log/hotspot-dnsmasq.log"
-                             #:documentation
-                             "DHCP/DNS service for the uap0 hotspot subnet.")
-
-        (root-one-shot-service 'iw-reg-cn '(user-processes)
-                               #~(lambda _
-                                   (zero? (system* #$iw-bin "reg" "set" "CN")))
-                               #:stop #~(lambda _ #t) #:respawn? #f
-                               #:documentation
-                               "Set wireless regulatory domain to CN.")))
+                               "Create the uap0 virtual AP interface for concurrent WiFi.")))
 #+end_src
 
 **** mihomo 启动包装
@@ -1084,15 +1084,15 @@ daemon 启动时会解密 =mihomo-subscriptions.age= （使用全局统一的私
 #+begin_src sh :tangle ../tmp/mihomo-run
 #!/bin/sh
 
-AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
-SUBS_CIPHER="${SUBS_CIPHER:-@SUBS_CIPHER@}"
 AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
-ENVSUBST_BIN="${ENVSUBST_BIN:-@ENVSUBST_BIN@}"
-MV_BIN="${MV_BIN:-@MV_BIN@}"
+AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
 CHMOD_BIN="${CHMOD_BIN:-@CHMOD_BIN@}"
-MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
+ENVSUBST_BIN="${ENVSUBST_BIN:-@ENVSUBST_BIN@}"
 MIHOMO_BIN="${MIHOMO_BIN:-@MIHOMO_BIN@}"
 MIHOMO_TEMPLATE="${MIHOMO_TEMPLATE:-@MIHOMO_TEMPLATE@}"
+MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
+MV_BIN="${MV_BIN:-@MV_BIN@}"
+SUBS_CIPHER="${SUBS_CIPHER:-@SUBS_CIPHER@}"
 
 DATA_DIR="/var/lib/mihomo"
 OUT="$DATA_DIR/config.yaml"
@@ -1122,12 +1122,12 @@ tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位�
 #+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
 #!/bin/sh
 
-WIFI_IFACE="wlp0s20f3"
-AGE_IDENTITY="@AGE_IDENTITY@"
-TRUSTED_CONNECTIONS_CIPHER="@TRUSTED_CONNECTIONS_CIPHER@"
 AGE_BIN="@AGE_BIN@"
-NFT_BIN="@NFT_BIN@"
+AGE_IDENTITY="@AGE_IDENTITY@"
 GREP_BIN="@GREP_BIN@"
+NFT_BIN="@NFT_BIN@"
+TRUSTED_CONNECTIONS_CIPHER="@TRUSTED_CONNECTIONS_CIPHER@"
+WIFI_IFACE="wlp0s20f3"
 
 ACTION="$2"
 CONNECTION_ID="${CONNECTION_ID:-}"
@@ -1170,18 +1170,18 @@ esac
 #+begin_src sh :tangle ../tmp/hotspot-ap-run
 #!/bin/sh
 
-HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
-WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
+AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
+AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
 AP_ADDR="${AP_ADDR:-192.168.77.1/24}"
 CONF_DIR="${CONF_DIR:-/run/auto-hotspot}"
-AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
-HOTSPOT_CREDS_CIPHER="${HOTSPOT_CREDS_CIPHER:-@HOTSPOT_CREDS_CIPHER@}"
-AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
-IW_BIN="${IW_BIN:-@IW_BIN@}"
-IP_BIN="${IP_BIN:-@IP_BIN@}"
-SED_BIN="${SED_BIN:-@SED_BIN@}"
-MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
 HOSTAPD_BIN="${HOSTAPD_BIN:-@HOSTAPD_BIN@}"
+HOTSPOT_CREDS_CIPHER="${HOTSPOT_CREDS_CIPHER:-@HOTSPOT_CREDS_CIPHER@}"
+HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
+IP_BIN="${IP_BIN:-@IP_BIN@}"
+IW_BIN="${IW_BIN:-@IW_BIN@}"
+MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
+SED_BIN="${SED_BIN:-@SED_BIN@}"
+WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
 
 conf="$CONF_DIR/hostapd.conf"
 #+end_src
@@ -1342,16 +1342,15 @@ iifname "uap0" oifname != "uap0" masquerade
 
 #+NAME: udev-static-rules
 #+begin_src scheme
-(list (simple-service 'backlight udev-service-type (list ddcutil light))
-
-      (udev-rules-service 'android android-udev-rules
+(list (udev-rules-service 'android android-udev-rules
                           #:groups '("adbusers"))
 
-      (udev-rules-service 'steam-devices steam-devices-udev-rules)
+      (simple-service 'backlight udev-service-type (list ddcutil light))
 
       (udev-rules-service 'controller
                           (udev-rule "60-controller-permission.rules"
                                      "KERNEL==\"event*\", ATTRS{idVendor}==\"045e\", ATTRS{idProduct}==\"028e\", MODE=\"0660\", GROUP=\"users\""))
+
       (udev-rules-service 'cpu-dma
                           (udev-rule "99-cpu-dma-latency.rules"
                                      "DEVPATH==\"/devices/virtual/misc/cpu_dma_latency\", OWNER=\"root\", GROUP=\"audio\", MODE=\"0660\""))
@@ -1366,12 +1365,15 @@ iifname "uap0" oifname != "uap0" masquerade
 
       (udev-rules-service 'solaar (spec->pkg "solaar"))
 
-      (udev-rules-service 'winapps-usb
-                          (udev-rule "60-winapps-usb.rules"
-                                     "SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", GROUP=\"wheel\", MODE=\"0660\""))
+      (udev-rules-service 'steam-devices steam-devices-udev-rules)
+
       (udev-rules-service 'sunshine
                           (udev-rule "60-sunshine-uinput.rules"
-                                     "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\"")))
+                                     "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\""))
+
+      (udev-rules-service 'winapps-usb
+                          (udev-rule "60-winapps-usb.rules"
+                                     "SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", GROUP=\"wheel\", MODE=\"0660\"")))
 #+end_src
 
 **** AC 电源状态联动
@@ -1447,9 +1449,7 @@ iifname "uap0" oifname != "uap0" masquerade
           "ATTR{type}==\"Mains\", ATTR{online}==\"0\", "
           "RUN+=\"" ac-power-script " off\"\n"))])
 
-  (list (udev-rules-service 'ac-power-profile ac-power-rules)
-
-        (root-one-shot-service 'ac-power-init '(power-profiles-daemon user-processes)
+  (list (root-one-shot-service 'ac-power-init '(power-profiles-daemon user-processes)
                                #~(lambda _
                                    (let* ((port (false-if-exception
                                                  (open-input-file
@@ -1462,7 +1462,9 @@ iifname "uap0" oifname != "uap0" masquerade
                                                          "off")))))
                                #:stop #~(lambda _ #t) #:respawn? #f
                                #:documentation
-                               "按当前电源状态初始化 PPD profile 与 WiFi 省电。")))
+                               "按当前电源状态初始化 PPD profile 与 WiFi 省电。")
+
+        (udev-rules-service 'ac-power-profile ac-power-rules)))
 #+end_src
 
 **** USB 电源权限
@@ -1506,32 +1508,43 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 
 #+NAME: root-services
 #+begin_src scheme
-(list (simple-service 'home-channels home-channels-service-type
-                      guix-channels)
-
-      (simple-service 'smartd-conf etc-service-type
-                      (list `("smartd.conf"
-                              ,(plain-file "smartd.conf"
-                                           "DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)\n"))))
-      (root-daemon-service 'smartd
-                           (list (file-append (spec->pkg "smartmontools") "/sbin/smartd") "-n")
-                           #:requirement '(file-systems)
-                           #:log-file "/var/log/smartd.log"
-                           #:documentation "S.M.A.R.T. 磁盘健康监控守护。")
-
-      (simple-service 'beesd-conf etc-service-type
-                      (list `("bees/2f6b6499-2a27-4583-847f-dd70b9fcb036.conf"
-                              ,(plain-file "bees.conf"
-                                           "DB_SIZE=$((128*1024*1024))\nOPTIONS=\"--loadavg-target 5.0 --thread-count 4\"\n"))))
-      (root-daemon-service 'beesd
+(list (root-daemon-service 'beesd
                            (list (file-append (spec->pkg "bees") "/sbin/beesd")
                                  "2f6b6499-2a27-4583-847f-dd70b9fcb036")
                            #:requirement '(file-systems user-processes)
                            #:log-file "/var/log/beesd.log"
                            #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
 
+      (simple-service 'beesd-conf etc-service-type
+                      (list `("bees/2f6b6499-2a27-4583-847f-dd70b9fcb036.conf"
+                              ,(plain-file "bees.conf"
+                                           "DB_SIZE=$((128*1024*1024))\nOPTIONS=\"--loadavg-target 5.0 --thread-count 4\"\n"))))
+
+      (simple-service 'home-channels home-channels-service-type
+                      guix-channels)
+
       (simple-service 'root-services shepherd-root-service-type
-                      (list (shepherd-timer '(guix-gc)
+                      (list (shepherd-timer '(flatpak-system-update)
+                                            #~(calendar-event
+                                               #:days-of-week '(saturday)
+                                               #:hours '(18)
+                                               #:minutes '(0))
+                                            #~("/bin/sh"
+                                               #$(%flatpak-update-script "system"))
+                                            #:requirement '(user-processes
+                                                            NetworkManager))
+
+                            (shepherd-timer '(fstrim)
+                                            #~(calendar-event
+                                               #:days-of-week '(sunday)
+                                               #:hours '(19)
+                                               #:minutes '(0))
+                                            #~(#$(file-append util-linux
+                                                              "/sbin/fstrim")
+                                                 "-av")
+                                            #:requirement '(file-systems))
+
+                            (shepherd-timer '(guix-gc)
                                             #~(calendar-event
                                                #:days-of-week '(sunday)
                                                #:hours '(18)
@@ -1541,25 +1554,18 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                                                "-d" "30d"
                                                "-F" "20G")
                                             #:requirement '(user-processes
-                                                            guix-daemon))
-                            (shepherd-timer '(flatpak-system-update)
-                                            #~(calendar-event
-                                               #:days-of-week '(saturday)
-                                               #:hours '(18)
-                                               #:minutes '(0))
-                                            #~("/bin/sh"
-                                               #$(%flatpak-update-script "system"))
-                                            #:requirement '(user-processes
-                                                            NetworkManager))
-                            (shepherd-timer '(fstrim)
-                                            #~(calendar-event
-                                               #:days-of-week '(sunday)
-                                               #:hours '(19)
-                                               #:minutes '(0))
-                                            #~(#$(file-append util-linux
-                                                              "/sbin/fstrim")
-                                                 "-av")
-                                            #:requirement '(file-systems)))))
+                                                            guix-daemon))))
+
+      (root-daemon-service 'smartd
+                           (list (file-append (spec->pkg "smartmontools") "/sbin/smartd") "-n")
+                           #:requirement '(file-systems)
+                           #:log-file "/var/log/smartd.log"
+                           #:documentation "S.M.A.R.T. 磁盘健康监控守护。")
+
+      (simple-service 'smartd-conf etc-service-type
+                      (list `("smartd.conf"
+                              ,(plain-file "smartd.conf"
+                                           "DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)\n")))))
 #+end_src
 
 **** nix-ld 运行时库
@@ -1616,10 +1622,13 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 (list (service dnsmasq-service-type
                (dnsmasq-configuration (shepherd-provision '(dnsmasq-virbr0))
                                       (extra-options (list
-                                                      "--except-interface=lo"
-                                                      "--interface=virbr0"
                                                       "--bind-dynamic"
-                                                      "--dhcp-range=192.168.10.2,192.168.10.254"))))
+                                                      "--dhcp-range=192.168.10.2,192.168.10.254"
+                                                      "--except-interface=lo"
+                                                      "--interface=virbr0"))))
+
+      (service libvirt-service-type
+               (libvirt-configuration (unix-sock-group "libvirt")))
 
       (service rootless-podman-service-type
                (rootless-podman-configuration (pam-limits '())
@@ -1647,8 +1656,6 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                                                                           (value
                                                                            "192.168.10.1/24")))))))
 
-      (service libvirt-service-type
-               (libvirt-configuration (unix-sock-group "libvirt")))
       (service virtlog-service-type))
 #+end_src
 
@@ -1659,20 +1666,6 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 #+begin_src scheme :noweb yes
 (append (modify-services %desktop-services
                          (delete console-font-service-type)
-                         (delete mingetty-service-type)
-                         (delete gdm-service-type)
-                         (delete screen-locker-service-type)
-                         (guix-service-type config =>
-                                            (guix-configuration (inherit config)
-                                                                (channels guix-channels)
-                                                                (guix (guix-for-channels guix-channels))
-                                                                (extra-options (list "--cores=22"
-                                                                                     "--max-jobs=6"
-                                                                                     "--gc-keep-outputs=yes"))
-                                                                (http-proxy "http://127.0.0.1:7890")
-                                                                (discover? #f)
-                                                                (tmpdir "/var/tmp")))
-
                          (elogind-service-type config =>
                                                (elogind-configuration
                                                 (inherit config)
@@ -1684,7 +1677,18 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                                                 (handle-power-key 'lock)
                                                 (handle-suspend-key 'ignore)
                                                 (handle-hibernate-key 'ignore)))
-
+                         (delete gdm-service-type)
+                         (guix-service-type config =>
+                                            (guix-configuration (inherit config)
+                                                                (channels guix-channels)
+                                                                (guix (guix-for-channels guix-channels))
+                                                                (extra-options (list "--cores=22"
+                                                                                     "--max-jobs=6"
+                                                                                     "--gc-keep-outputs=yes"))
+                                                                (http-proxy "http://127.0.0.1:7890")
+                                                                (discover? #f)
+                                                                (tmpdir "/var/tmp")))
+                         (delete mingetty-service-type)
                          (ntp-service-type config =>
                                            (ntp-configuration
                                             (inherit config)
@@ -1697,9 +1701,18 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                                                                (options '("iburst")))
                                                    (ntp-server (type 'server)
                                                                (address "ntp.ntsc.ac.cn")
-                                                               (options '("iburst"))))))))
+                                                               (options '("iburst")))))))
+                         (delete screen-locker-service-type))
 
         (list
+         (simple-service 'block-qq-update hosts-service-type
+                         (list (host "127.0.0.1" "qqpatch.gtimg.cn")))
+
+         (service bluetooth-service-type
+                  (bluetooth-configuration (auto-enable? #t)
+                                           (fast-connectable? #t)
+                                           (experimental #t)))
+
          (service earlyoom-service-type
                   (earlyoom-configuration
                    (prefer-regexp
@@ -1707,14 +1720,6 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                    (avoid-regexp
                     "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom)")
                    (run-with-higher-priority? #t)))
-
-         (service thermald-service-type
-                  (thermald-configuration
-                   (adaptive? #t)
-                   (ignore-cpuid-check? #t)))
-
-         (service fprintd-service-type
-                  (fprintd-configuration (fprintd fprintd-1.94)))
 
          (simple-service 'fingerprint-pam pam-root-service-type
                          (list (pam-extension
@@ -1739,39 +1744,12 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
          (simple-service 'fingerprint-udev udev-service-type
                          (list libfprint-1.94))
 
-         (service mysql-service-type)
+         (service fprintd-service-type
+                  (fprintd-configuration (fprintd fprintd-1.94)))
+
          (service gamemode-service-type)
+
          (service gnome-keyring-service-type)
-         (service gvfs-service-type)
-         (service opentabletdriver-service-type)
-         (service rtkit-service-type)
-         (service power-profiles-daemon-service-type)
-
-         (simple-service 'hibernate-polkit polkit-service-type
-                         (list (file-union
-                                "polkit-hibernate-rules"
-                                `(("share/polkit-1/rules.d/50-hibernate.rules"
-                                   ,(local-file "50-hibernate.rules"))))))
-
-         (service bluetooth-service-type
-                  (bluetooth-configuration (auto-enable? #t)
-                                           (fast-connectable? #t)
-                                           (experimental #t)))
-
-         (simple-service 'udisks-ntfs3 etc-service-type
-                         (list `("udisks2/mount_options.conf"
-                                 ,(plain-file
-                                   "mount_options.conf"
-                                   "[defaults]\nntfs:ntfs3_defaults=uid=$UID,gid=$GID\nntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard,sparse,nosparse,hidden,nohidden,sys_immutable,showmeta,noshowmeta,prealloc,noprealloc,hide_dot_files,nohide_dot_files,windows_names,nocase,case\n"))))
-
-         (simple-service 'block-qq-update hosts-service-type
-                         (list (host "127.0.0.1" "qqpatch.gtimg.cn")))
-
-         (service screen-locker-service-type
-                  (screen-locker-configuration
-                   (name "swaylock")
-                   (program (plain-file "empty" ""))
-                   (using-setuid? #f)))
 
          (service greetd-service-type
                   (greetd-configuration
@@ -1783,7 +1761,40 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
                            (default-session-command
                              (greetd-tuigreet-session))
                            (initial-session-user username)
-                           (initial-session-command "dbus-run-session niri --session"))))))))
+                           (initial-session-command "dbus-run-session niri --session"))))))
+
+         (service gvfs-service-type)
+
+         (simple-service 'hibernate-polkit polkit-service-type
+                         (list (file-union
+                                "polkit-hibernate-rules"
+                                `(("share/polkit-1/rules.d/50-hibernate.rules"
+                                   ,(local-file "50-hibernate.rules"))))))
+
+         (service mysql-service-type)
+
+         (service opentabletdriver-service-type)
+
+         (service power-profiles-daemon-service-type)
+
+         (service rtkit-service-type)
+
+         (service screen-locker-service-type
+                  (screen-locker-configuration
+                   (name "swaylock")
+                   (program (plain-file "empty" ""))
+                   (using-setuid? #f)))
+
+         (service thermald-service-type
+                  (thermald-configuration
+                   (adaptive? #t)
+                   (ignore-cpuid-check? #t)))
+
+         (simple-service 'udisks-ntfs3 etc-service-type
+                         (list `("udisks2/mount_options.conf"
+                                 ,(plain-file
+                                   "mount_options.conf"
+                                   "[defaults]\nntfs:ntfs3_defaults=uid=$UID,gid=$GID\nntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard,sparse,nosparse,hidden,nohidden,sys_immutable,showmeta,noshowmeta,prealloc,noprealloc,hide_dot_files,nohide_dot_files,windows_names,nocase,case\n"))))))
 #+end_src
 
 **** hibernate polkit 规则
@@ -1795,10 +1806,10 @@ polkit.addRule(function(action, subject) {
     if (subject.isLocal && subject.isActive &&
         (action.id == "org.freedesktop.login1.hibernate" ||
          action.id == "org.freedesktop.login1.hibernate-multiple-sessions" ||
-         action.id == "org.freedesktop.login1.suspend" ||
-         action.id == "org.freedesktop.login1.suspend-multiple-sessions" ||
          action.id == "org.freedesktop.login1.hybrid-sleep" ||
-         action.id == "org.freedesktop.login1.hybrid-sleep-multiple-sessions")) {
+         action.id == "org.freedesktop.login1.hybrid-sleep-multiple-sessions" ||
+         action.id == "org.freedesktop.login1.suspend" ||
+         action.id == "org.freedesktop.login1.suspend-multiple-sessions")) {
         return polkit.Result.YES;
     }
 });
@@ -1820,12 +1831,15 @@ polkit.addRule(function(action, subject) {
                                               (symbol->string name) ".pub")
                                              key))
                                keys))))])
-     '((nonguix ("https://nonguix-proxy.ditigal.xyz")
-                ("(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
-       (guix-moe ("https://cache-cdn.guix.moe")
+     '((guix-moe ("https://cache-cdn.guix.moe")
                  ("(public-key (ecc (curve Ed25519) (q #552F670D5005D7EB6ACF05284A1066E52156B51D75DE3EBD3030CD046675D543#)))"))
+
+       (nonguix ("https://nonguix-proxy.ditigal.xyz")
+                ("(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))"))
+
        (panther ("https://substitutes.guix.gofranz.com")
                 ("(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))"))
+
        (sjtug ("https://mirror.sjtu.edu.cn/guix"
                "https://mirrors.sjtug.sjtu.edu.cn/guix-bordeaux")
               ())))
@@ -2377,15 +2391,17 @@ _    _  _  _  _  _  _  _)
                                                                "/bin/kdeconnect-indicator"))
                                             #:requirement '(graphical-session)
                                             #:auto-start? #f #:respawn? #f)
-                       (home-daemon-service 'poweralertd
-                                            (list (file-append poweralertd
-                                                               "/bin/poweralertd"))
-                                            #:requirement '(graphical-session))
 
                        (home-daemon-service 'mpris-proxy
                                             (list (file-append bluez
                                                                "/bin/mpris-proxy"))
                                             #:requirement '(graphical-session))
+
+                       (home-daemon-service 'poweralertd
+                                            (list (file-append poweralertd
+                                                               "/bin/poweralertd"))
+                                            #:requirement '(graphical-session))
+
                        (home-daemon-service 'usb-power-watch
                                             (list "/bin/sh"
                                                   (local-file "usb-power-watch"))))))
@@ -2398,8 +2414,8 @@ _    _  _  _  _  _  _  _)
 #+begin_src sh :tangle ../tmp/usb-power-watch
 #!/bin/sh
 
-THRESHOLD=120
 INTERVAL=30
+THRESHOLD=120
 
 PORTS="3-2 3-5 3-6 4-5 4-6"
 in_ports() {
@@ -2515,25 +2531,25 @@ done
                 (layout 'stow)
                 (packages '("agents"
                             "desktop"
+                            "noctalia-suite"
                             "system"
                             "terminal"
-                            "utilities"
-                            "noctalia-suite"))
-                (excluded '("\\.agents/workfile($|/.*)"
-                            ".*\\.swp"
-                            "\\.git"
-                            "\\.gitignore"
-                            "\\.github"
-                            "LICENSE"
+                            "utilities"))
+                (excluded '(".*\\.swp"
                             "AGENTS\\.md"
+                            "LICENSE"
                             "README\\.md"
-                            "bun\\.lock"
-                            "uv\\.lock"
-                            "\\.venv($|/.*)"
+                            "\\.agents/workfile($|/.*)"
+                            "\\.git"
+                            "\\.github"
+                            "\\.gitignore"
                             "\\.mypy_cache($|/.*)"
+                            "\\.venv($|/.*)"
                             "__pycache__($|/.*)"
+                            "bun\\.lock"
                             "fcitx5/conf/cached_layouts"
-                            "fcitx5/crash\\.log"))))
+                            "fcitx5/crash\\.log"
+                            "uv\\.lock"))))
 
       (simple-service 'prism-jdks home-files-service-type
                       (map (lambda (jdk)
@@ -2698,23 +2714,23 @@ done
                        <<extend-environment-variables>>
                        <<xdg-basedir-env-vars>>
                        `(("QT_PLUGIN_PATH" . ,(string-append
-                                               "/run/current-system/profile/lib/qt5/plugins:"
-                                               "/run/current-system/profile/lib/qt6/plugins:"
                                                "$HOME/.guix-home/profile/lib/qt5/plugins:"
-                                               "$HOME/.guix-home/profile/lib/qt6/plugins"))
+                                               "$HOME/.guix-home/profile/lib/qt6/plugins:"
+                                               "/run/current-system/profile/lib/qt5/plugins:"
+                                               "/run/current-system/profile/lib/qt6/plugins"))
                          ("CHROMIUM_FLAGS" . ,(string-append
                                                "--enable-features=UseOzonePlatform,WaylandWindowDecorations "
-                                               "--ozone-platform-hint=wayland "
                                                "--enable-wayland-ime "
+                                               "--ozone-platform-hint=wayland "
                                                "--wayland-text-input-version=3"))
                          ("_JAVA_OPTIONS" . ,(string-append
                                               "-Djava.util.prefs.userRoot=$XDG_CONFIG_HOME/java "
                                               "-Dawt.toolkit.name=WLToolkit"))
                          ("XDG_DATA_DIRS" . ,(string-append
                                               "$XDG_DATA_HOME/flatpak/exports/share:"
-                                              "/var/lib/flatpak/exports/share:"
                                               "$XDG_STATE_HOME/nix/profile/share:"
                                               "/nix/var/nix/profiles/default/share:"
+                                              "/var/lib/flatpak/exports/share:"
                                               "$XDG_DATA_DIRS"))))))
 #+end_src
 
@@ -2727,26 +2743,29 @@ done
 #+begin_src scheme :noweb yes
 ;; <<waybar-desktop-services>>
 <<default-applications>>
-(list (service home-noctalia-service-type)
-      (service home-opentabletdriver-service-type)
-      (service home-pipewire-service-type)
-      (service home-syncthing-service-type)
-
-      (simple-service 'dbus home-shepherd-service-type
+(list (simple-service 'dbus home-shepherd-service-type
                       (list (shepherd-service
                              (provision '(dbus))
                              (start #~(const #t))
                              (stop #~(const #f)))))
+
+      (service home-fcitx5-service-type
+               (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
+                                          (input-method-editors (list fcitx5-rime))
+                                          (utilities (list fcitx5-configtool fcitx5-lua))))
 
       (service home-graphical-session-service-type
 	             (home-graphical-session-configuration
 	              (wayland? #t)
 	              (x11? #t)))
 
-      (service home-fcitx5-service-type
-               (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
-                                          (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua)))))
+      (service home-noctalia-service-type)
+
+      (service home-opentabletdriver-service-type)
+
+      (service home-pipewire-service-type)
+
+      (service home-syncthing-service-type))
 #+end_src
 
 **** 默认应用程序关联
