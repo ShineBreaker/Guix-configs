@@ -129,10 +129,10 @@ Tangle 生成最新 `main.el` 后，在隔离环境执行 batch-load 验证是�
 
 ```bash
 scripts/configctl tangle
-emacs --batch -Q -l main.el
+emacs --batch -q -l main.el
 ```
 
-> **注意**：`load` 遇到 Error 会直接中断后续配置执行。必须确认 batch-load 零 Error，且 `custom:binding-spec` 数量符合预期。
+> **注意**：用 `-q` 而非 `-Q`——`-Q` 跳过 `site-start`，Guix profile 的 `guix-emacs.el` autoloads（如 `telega-prefix-map`）不会注册，`custom/bind` 会报 void-variable 假阳性。`load` 遇到 Error 会直接中断后续配置执行。必须确认 batch-load 零 Error，且 `custom:binding-spec` 数量符合预期。
 
 ### 7.3 按键有效性核对
 

@@ -470,11 +470,46 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
                   (nreverse clashes) "")))
     (length table)))
 
+(defun custom-configctl--check-data-keys ()
+  "data/*.el 数据卫生:每个 setq 字面量表的字符串键必须唯一。
+这些表由 `assoc' 首命中取用,重复键的后续条目是永不生效的死条目;
+且文件按上游菜单分节注释,翻译分叉时同键异译不会报错,而是首条
+吃掉全部菜单——dup 必须显式拦截。返回检查的表个数。"
+  (let ((checked 0))
+    (dolist (file (directory-files
+                   (expand-file-name "data" custom-configctl-root)
+                   t "\\.el\\'"))
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (condition-case err
+            (while t
+              (pcase (read (current-buffer))
+                (`(setq ,var (quote ,table))
+                 (when (listp table)
+                   (let ((seen (make-hash-table :test #'equal)))
+                     (dolist (entry table)
+                       (when (and (consp entry) (stringp (car entry)))
+                         (when (gethash (car entry) seen)
+                           (custom-configctl--fail
+                            "%s: %s 的键 %S 重复(assoc 首命中,后续为死条目)"
+                            (file-relative-name file custom-configctl-root)
+                            var (car entry)))
+                         (puthash (car entry) t seen)))
+                     (cl-incf checked))))))
+          (end-of-file nil)
+          (error
+           (custom-configctl--fail "cannot read %s: %s"
+                                   (file-relative-name file custom-configctl-root)
+                                   (error-message-string err))))))
+    checked))
+
 (defun custom-configctl-check ()
-  "结构检查 + 双源键门禁 + 隔离 tangle + 括号/重复定义检查，不写真实 main.el。"
+  "结构检查 + 双源键门禁 + data 键唯一性 + 隔离 tangle + 括号/重复定义检查，不写真实 main.el。"
   (let ((org-confirm-babel-evaluate nil))
     (pcase-let* ((`(,blocks ,refs) (custom-configctl--check-structure))
                  (wk-keys (custom-configctl--check-dual-source))
+                 (data-tables (custom-configctl--check-data-keys))
                  (runtime (make-temp-file "custom-configctl-check-" t))
                  (org-copy (expand-file-name "emacs.org" runtime))
                  (target (expand-file-name "main.el" runtime)))
@@ -484,8 +519,9 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
             (org-babel-tangle-file org-copy target "emacs-lisp")
             (pcase-let* ((`(,forms ,definitions)
                           (custom-configctl--audit-elisp target)))
-              (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions, %d which-key desc keys\n"
-                             blocks refs forms definitions wk-keys))))
+              (princ (format "OK: %d source blocks, %d noweb refs, %d forms, %d definitions, %d which-key desc keys, %d data tables\n"
+                             blocks refs forms definitions wk-keys
+                             data-tables))))
         (delete-directory runtime t)))))
 
 (defun custom-configctl-usage ()
@@ -494,7 +530,7 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
   (princ "  show ID        提取一个功能子树全文\n")
   (princ "  locate ID|REF  定位块行号区间（CUSTOM_ID）或 noweb ref 定义/组装位置\n")
   (princ "  tangle         拼合 emacs.org -> main.el\n")
-  (princ "  check          轻量原则检查（域顺序/noweb/单产物/括号/重复定义/双源键）\n"))
+  (princ "  check          轻量原则检查（域顺序/noweb/单产物/括号/重复定义/双源键/data 键唯一性）\n"))
 
 (let ((status 0))
   (condition-case err

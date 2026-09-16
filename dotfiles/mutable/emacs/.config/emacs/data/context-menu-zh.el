@@ -4,6 +4,10 @@
 ;; SPDX-License-Identifier: MIT
 ;; This file contains data assignments only.  It is loaded by emacs.org.
 
+;; 键必须全局唯一:取用走 `assoc' 首命中,重复键的后续条目是死代码
+;; (configctl check 会拦截)。下方按上游菜单的分节注释仅作来源标注,
+;; 不形成作用域——同一英文标签在不同菜单共用同一译文。
+
 (setq custom:context-menu-label-translations
       '(("Context Menu" . "右键菜单")
     ("Undo" . "撤销")
@@ -503,9 +507,7 @@
     ("Reply to message" . "回复消息")
     ("Forward" . "转发")
     ("Forward from..." . "从...转发")
-    ("Edit" . "编辑")
     ("Edit message" . "编辑消息")
-    ("Delete" . "删除")
     ("Delete message" . "删除消息")
     ("Pin" . "置顶")
     ("Unpin" . "取消置顶")
@@ -533,7 +535,6 @@
     ("Open Profile" . "打开个人资料")
     ("Refresh" . "刷新")
     ("Reload" . "重新加载")
-    ("Search" . "搜索")
     ("Filter" . "筛选")
     ("Quit" . "退出")
     ("Settings" . "设置")
@@ -551,7 +552,6 @@
 
     ;; Dired(上游 dired.el dired-context-menu 实测提取)。
     ("Operate" . "操作")
-    ("Delete" . "删除")
     ("Rename to..." . "重命名为...")
     ("Copy to..." . "复制到...")
     ("Symlink to..." . "创建符号链接到...")
@@ -582,7 +582,6 @@
     ("Isearch Regexp in File Names..." . "在文件名中正则渐进搜索...")
     ("Compare Directories..." . "比较目录...")
     ("Compare with Backup" . "与备份比较")
-    ("Diff..." . "比较差异...")
     ("View This File" . "查看此文件")
     ("Display in Other Window" . "在其他窗口显示")
     ("Create Directory..." . "新建目录...")
@@ -622,7 +621,6 @@
     ("Insert This Subdir" . "插入此子目录")
     ("Subdir" . "子目录")
     ("Immediate" . "直接操作")
-    ("Refresh" . "刷新")
     ("Display Externally" . "用外部程序打开")
     ("Decrypt..." . "解密...")
     ("Verify" . "验证签名")
@@ -646,7 +644,6 @@
     ("Evaluate Last S-expression" . "求值上一表达式")
     ("Interactive Expression Evaluation" . "交互式表达式求值")
     ("Comment Out Region" . "注释选区")
-    ("Indent Region" . "缩进选区")
     ("Indent Line" . "缩进行")
     ("Byte-compile This File" . "字节编译此文件")
     ("Byte-compile and Load" . "字节编译并加载")
@@ -737,7 +734,6 @@
     ("Show Session Info" . "显示会话信息")
     ("Start" . "启动")
     ("Restart" . "重启")
-    ("Quit" . "退出")
     ("Link with Buffer" . "与缓冲区关联")
     ("Link with Directory" . "与目录关联")
     ("Link with Project" . "与项目关联")
@@ -745,9 +741,6 @@
 
     ;; Scheme 基础菜单。
     ("Scheme" . "Scheme")
-    ("Indent Line" . "缩进行")
-    ("Indent Region" . "缩进选区")
-    ("Comment Out Region" . "注释选区")
     ("Uncomment Out Region" . "取消注释选区")
     ("Run Inferior Scheme" . "运行下级 Scheme")
 
@@ -785,8 +778,6 @@
     ("Hide/Show" . "折叠/展开")
     ("Hide Block" . "折叠当前块")
     ("Show Block" . "展开当前块")
-    ("Hide All" . "全部折叠")
-    ("Show All" . "全部展开")
     ("Hide Level" . "按层级折叠")
     ("Toggle Hiding Current Block" . "切换当前块折叠")
     ("Toggle Hiding All Blocks" . "切换全部块折叠")
@@ -804,7 +795,6 @@
     ("Show hidden code blocks when isearch matches inside them" . "搜索命中时展开隐藏代码块")
     ("Show hidden comment blocks when isearch matches inside them" . "搜索命中时展开隐藏注释块")
     ("Reveal on isearch" . "搜索时揭示")
-    ("None" . "无")
 
     ;; Org(上游 org.el 实测提取)。
     ("Plot" . "绘图")

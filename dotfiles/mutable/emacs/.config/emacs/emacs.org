@@ -527,7 +527,7 @@ server,必须等真实 client 就绪。"
   keymap)
 
 (defun custom/context-menu-translate (menu)
-  "翻译 `context-menu-map' 返回的 MENU。"
+  "翻译菜单 KEYMAP 形态的 MENU（`context-menu-map' 与 `menu-bar-keymap' 共用）。"
   (custom/context-menu--translate-keymap menu))
 
 ;; context-menu-map 为 Emacs 28+ 内置,直接挂翻译 advice。
@@ -543,6 +543,19 @@ server,必须等真实 client 就绪。"
 
 (unless (advice-member-p #'custom/context-menu-translate #'menu-bar-keymap)
   (advice-add 'menu-bar-keymap :filter-return #'custom/context-menu-translate))
+
+;; GUI 菜单栏由 C 侧 `accelerate-menu' 在点击时直接读 keymap,不经
+;; `menu-bar-keymap' advice:启动期一次性翻译之后才注册的懒加载条目
+;; (envrc、so-long 等)在纯 GUI 会话里会保持英文。`activate-menubar-hook'
+;; 在菜单栏每次实际展开前运行,把 [menu-bar] 子树再原地翻一遍,未命中
+;; 原样返回,成本仅为一次 keymap 遍历。
+(defun custom/context-menu--translate-menubar-on-activate ()
+  "菜单栏展开前重翻 `global-map' 的 [menu-bar] 子树,兜住懒加载条目。"
+  (custom/context-menu--translate-keymap
+   (lookup-key global-map [menu-bar])))
+
+(add-hook 'activate-menubar-hook
+          #'custom/context-menu--translate-menubar-on-activate)
 
 (with-eval-after-load 'magit-section
   (unless (advice-member-p #'custom/context-menu--translate-string
@@ -969,13 +982,15 @@ current/inactive 用内置 face,自动跟随主题。"
 
 #+begin_src emacs-lisp
 (defun custom--tabs-switch-to-buffer (buffer &optional window)
-  "在 WINDOW 中切换到 BUFFER,并刷新标签显示。"
-  (when (buffer-live-p buffer)
-    (let ((target-window (custom--tabs-target-window window))
-          (switch-to-buffer-obey-display-actions nil))
-      (with-selected-window target-window
-        (switch-to-buffer buffer)
-        (tab-line-force-update t)))))
+  "在 WINDOW 中切换到 BUFFER,并刷新标签显示。
+调用方保证 BUFFER 存活:tabs-next/prev 的实参来自 kill-buffer-hook
+即时清理的 frame 列表,close-buffer 的实参经 `custom--tabs-visible-other-p'
+(内含 `custom/tab-visible-p' 的存活检查)过滤。"
+  (let ((target-window (custom--tabs-target-window window))
+        (switch-to-buffer-obey-display-actions nil))
+    (with-selected-window target-window
+      (switch-to-buffer buffer)
+      (tab-line-force-update t))))
 
 (defun custom/tabs-next (&optional arg)
   "切换到当前标签列表中的下一个标签。ARG 为步数。"
@@ -2233,13 +2248,22 @@ ARG 非空(前缀参数)时插入相对项目根的路径,无项目时插入绝�
   "最近关闭的文件名列表,最新在前。")
 
 (defun custom--on-kill-buffer ()
-  "把刚关闭的文件缓冲区记入关闭历史。"
+  "把刚关闭的文件缓冲区记入关闭历史。
+排除内部 I/O 路径:库代码常以 `find-file-noselect' + `kill-buffer'
+静默读写文件(如 `customize-dirlocals' 读 .dir-locals.el),只判
+`buffer-file-name' 会把它们收进历史。过滤规则:隐藏名(\" \"前缀)
+buffer、no-littering var/ 数据目录(recentf/custom.el 等落点)与
+备份/自动保存文件(#...#、~ 结尾)一律不记。"
   (when-let* ((file (buffer-file-name)))
-    (setq custom--closed-files
-          (cons file (delete file custom--closed-files)))
-    (when (> (length custom--closed-files) custom:closed-files-max)
+    (unless (or (string-prefix-p " " (buffer-name))
+                (file-in-directory-p
+                 file (expand-file-name "var" user-emacs-directory))
+                (string-match-p "\\`\\.?#\\|~\\'" (file-name-nondirectory file)))
       (setq custom--closed-files
-            (seq-take custom--closed-files custom:closed-files-max)))))
+            (cons file (delete file custom--closed-files)))
+      (when (> (length custom--closed-files) custom:closed-files-max)
+        (setq custom--closed-files
+              (seq-take custom--closed-files custom:closed-files-max))))))
 
 (add-hook 'kill-buffer-hook #'custom--on-kill-buffer)
 
@@ -2332,8 +2356,9 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
                      (lambda (b)
                        (with-current-buffer b (derived-mode-p 'ghostel-mode)))
                      (cl-set-difference (buffer-list) before))))))
-    (when (buffer-live-p buf)
-      (custom/display-or-focus buf custom:terminal-side-action t))))
+    ;; buf 可能为 nil(现存检查与 spawn diff 均无命中):`display-or-focus'
+    ;; 内部的 buffer-live-p 检查已兜住,此处不重复守卫。
+    (custom/display-or-focus buf custom:terminal-side-action t)))
 
 #+end_src
 
@@ -2518,10 +2543,25 @@ Grammar 的供给链完全由 Guix 处理,配置侧不需要参与:
 
 + =home-emacs-service= 的 wrapper(=emacs-wrapper=)启动 emacs 前用 =evaluate-search-paths= 把 profile 的 =lib/tree-sitter= 注入 =TREE_SITTER_GRAMMAR_PATH= 环境变量。
 + profile 的 =site-start.el= 加载 Guix 自带的 =guix-emacs.el=,后者在 =(with-eval-after-load 'treesit ...)= 里把该环境变量拆分加入 =treesit-extra-load-path=。Grammar 解析由此自动完成,无需本配置插手。
-+ =(setq treesit-enabled-modes t)= 已是 Emacs 29+/31 的默认值,不重复设置;但 =treesit-auto-install-grammar= 的默认值在 31 起改为 ='ask=(如 =mhtml-ts-mode= 启动即询问可选的 jsdoc grammar),显式关闭保持 Guix 供给链:缺 grammar 直接降级,不弹询问不运行时下载,可复现性由 Guix 侧而非这里保证。
++ =treesit-enabled-modes= 在 Emacs 31 默认为 =nil=:其 =:set= 会按选项值重写
+  =major-mode-remap-alist= 条目,与本配置自建的 =custom:language-treesit-remaps=
+  驱动 remap 冲突,故显式不设置它。=treesit-auto-install-grammar= 的默认值在
+  31 起改为 ='ask=(如 =mhtml-ts-mode= 启动即询问可选的 jsdoc grammar),显式
+  关闭保持 Guix 供给链:缺 grammar 直接降级,不弹询问不运行时下载,可复现性
+  由 Guix 侧而非这里保证。
++ Guix 打包的个别 grammar 库名与 Emacs 推断名不一致:Guix 输出
+  =libtree-sitter-c_sharp.so=(下划线),Emacs 按 =(symbol-name lang)= 找
+  =libtree-sitter-c-sharp.so=(连字符),~treesit-language-available-p~ 返回
+  nil,且 =auto-mode-alist= 已把 =.cs= 直绑 =csharp-ts-mode= → 打开即报
+  "Tree-sitter for C# isn't available"。=treesit-load-name-override-list=
+  是官方库名覆盖入口,登记后 =treesit-ready-p= 与 mode remap 同时恢复。
 
 #+begin_src emacs-lisp
 (setq treesit-auto-install-grammar nil)
+
+;; Guix 库名(libtree-sitter-c_sharp.so)→ Emacs 语言名(c-sharp)覆盖。
+(add-to-list 'treesit-load-name-override-list
+             '(c-sharp "libtree-sitter-c_sharp" "tree_sitter_c_sharp"))
 
 (defconst custom--treesit-lang-overrides
   '((c++-ts-mode . cpp) (csharp-ts-mode . c-sharp) (mhtml-ts-mode . html))
@@ -2611,7 +2651,10 @@ Flymake 不需要 global 化——Eglot 在它管理的 buffer 内自动启用 =
 (cl-defun custom--format-org-src-blocks
     (&key buffer scratch callback &allow-other-keys)
   "按各语言的 major mode 缩进 org BUFFER 中全部 src block 代码。
-SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。"
+SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
+块在 org 列表/大纲里的缩进由 #+begin_src 行的缩进决定:写回前
+先整体 dedent 再按 mode 缩进,最后按 base 缩进平移回去,保证
+列表内代码块的 org 层级语义不变。"
   (with-current-buffer scratch
     (funcall (buffer-local-value 'major-mode buffer))
     (let (regions)
@@ -2623,27 +2666,48 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。"
                                 (org-src-get-lang-mode lang)))
                      ((fboundp mode)))
             ;; 31 起 org-element 不再提供 src-block 的
-            ;; :contents-begin/:contents-end,由 :post-affiliated
-            ;; (#+begin_src 行首,已跳过 #+name: 等前置行) + :value
-            ;; 长度定位内容区。
+            ;; :contents-begin/:contents-end;:value 长度对含
+            ;; 转义行(,* 与 ,#+)的块会少算,故只记 :post-affiliated
+            ;; (#+begin_src 行首,已跳过 #+name: 等前置行)与元素 :end,
+            ;; 内容区终点在替换时向前搜 #+end_src 行首取得。
             (push (list (org-element-property :post-affiliated el)
-                        (length value)
+                        (org-element-property :end el)
                         mode)
                   regions))))
       ;; 从后往前替换,避免前面的写回使后续位置失效。
-      (pcase-dolist (`(,beg ,len ,mode) regions)
+      (pcase-dolist (`(,beg ,el-end ,mode) regions)
         (goto-char beg)
-        (forward-line 1)
-        (let* ((cbeg (point))
-               (cend (+ cbeg len))
-               (content (buffer-substring-no-properties cbeg cend)))
-          (with-temp-buffer
-            (insert content)
-            (funcall mode)
-            (indent-region (point-min) (point-max))
-            (setq content (buffer-substring-no-properties (point-min) (point-max))))
-          (delete-region cbeg cend)
-          (insert content))))
+        (let ((base-indent (current-indentation)))
+          (forward-line 1)
+          (let* ((cbeg (point))
+                 ;; src block 体内的 #+end_src 字面量按 org 规则必须写成
+                 ;; ,#+end_src(带逗号转义),首个顶格匹配即真正的块尾;
+                 ;; 搜索上界取元素 :end,残缺块不会吞掉后文。
+                 ;; save-excursion 保住 cbeg:search 会把 point 留在 match
+                 ;; 末尾,后续 delete/insert 必须回到内容区起点。
+                 (cend (save-excursion
+                         (re-search-forward "^[ \t]*#\\+end_src" el-end t)
+                         (line-beginning-position)))
+                 (content (buffer-substring-no-properties cbeg cend)))
+            (with-temp-buffer
+              (insert content)
+              ;; 先把 org 层缩进整体 dedent 到第 0 列,再按语言 mode
+              ;; 从 0 基准重排;否则 org 缩进会作为初始缩进残留进结果。
+              (when (> base-indent 0)
+                (indent-rigidly (point-min) (point-max) (- base-indent)))
+              (funcall mode)
+              (indent-region (point-min) (point-max))
+              (when (> base-indent 0)
+                (let ((pad (make-string base-indent ?\s)))
+                  (goto-char (point-min))
+                  (while (not (eobp))
+                    ;; 空行不补 pad,避免写回行尾空白。
+                    (unless (looking-at-p "[ \t]*$")
+                      (insert pad))
+                    (forward-line 1))))
+              (setq content (buffer-substring-no-properties (point-min) (point-max))))
+            (delete-region cbeg cend)
+            (insert content)))))
     (funcall callback)))
 
 (defun custom/format-org-src-blocks ()
@@ -2745,6 +2809,10 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。"
 代码前缀 =C-c c=(导航 / 操作 / 格式化 / 折叠)与 =M-g= 跳转家族,绑定引用 [[#code-commands][代码操作辅助函数]] 和 Eglot / Flymake 命令。引用查找走 =M-g r=,不在此重复。
 
 #+begin_src emacs-lisp
+;; flymake-goto-* 无上游 autoload cookie:M-g n/p 与 <f8>/S-<f8> 在
+;; flymake 尚未加载(未进过 prog buffer)时按键会 void-function,显式补齐。
+(autoload 'flymake-goto-next-error "flymake")
+(autoload 'flymake-goto-prev-error "flymake")
 (custom/bind "M-g n" #'flymake-goto-next-error "下一个错误" "跳转与错误")
 (custom/bind "M-g p" #'flymake-goto-prev-error "上一个错误" "跳转与错误")
 (custom/bind "M-g l" #'custom/flymake-list-errors-dwim "错误列表" "跳转与错误")
@@ -3620,17 +3688,37 @@ Which-key 运行时配置与窗口布局历史（Winner Mode）：
 (custom/bind "<f12>" #'xref-find-definitions "跳转到定义" "基础移动与直达键")
 (custom/bind "S-<f12>" #'xref-find-references "查找引用" "基础移动与直达键")
 (custom/bind "C-." #'eglot-code-actions "快速修复" "基础移动与直达键")
-(custom/bind "C-d" #'mc/mark-next-like-this "选中下一个匹配" "基础移动与直达键")
+;; C-d = VSCode「选中下一个匹配」:`mc/mark-next-like-this-word' 有选区时
+;; 标记下一个相同选区,无选区时选中当前词再标记;旧绑定的
+;; `mc/mark-next-like-this' 无选区时走 mark-lines(在下一行加光标),
+;; 语义不符。代价:eshell/dired/org 等无局部 C-d 的 mode 里全局
+;; delete-char 被遮蔽——IDE 语义下前向删除用 <delete>,可接受。
+(custom/bind "C-d" #'mc/mark-next-like-this-word "选中下一个匹配" "基础移动与直达键")
 (custom/bind "C-S-l" #'mc/mark-all-like-this "选中所有匹配" "基础移动与直达键")
 (custom/bind "C-S-k" #'kill-whole-line "删除整行" "基础移动与直达键")
 (custom/bind "C-S-t" #'custom/reopen-closed-file "重开已关闭文件" "基础移动与直达键")
 (custom/bind "<f11>" #'toggle-frame-fullscreen "切换全屏" "基础移动与直达键")
 (custom/bind "<f5>" #'dape "开始调试" "基础移动与直达键")
 (custom/bind "<f9>" #'dape-breakpoint-toggle "切换断点" "基础移动与直达键")
+;; VSCode F8 = 下一个问题;M-g n/p 为内置 TTY 镜像。
+(custom/bind "<f8>" #'flymake-goto-next-error "下一个错误" "基础移动与直达键")
+(custom/bind "S-<f8>" #'flymake-goto-prev-error "上一个错误" "基础移动与直达键")
+;; VSCode Alt+Shift+F = 格式化文档;C-c c f 为 TTY 镜像。
+(custom/bind "M-S-f" #'apheleia-format-buffer "格式化缓冲区" "基础移动与直达键")
+;; VSCode Ctrl+Shift+E = Explorer;C-c w f 为 TTY 镜像。
+(custom/bind "C-S-e" #'custom/panel-dired "文件面板" "基础移动与直达键")
+;; VSCode Ctrl+Shift+B = Run Build Task;C-x p c 为 TTY 镜像。
+(custom/bind "C-S-b" #'project-compile "项目构建" "基础移动与直达键")
+;; VSCode Ctrl+Shift+N = New Window;C-x 5 2 为 TTY 镜像。
+(custom/bind "C-S-n" #'make-frame-command "新建窗口 (frame)" "基础移动与直达键")
+;; C-, = VSCode 打开设置;org-mode-map 里 C-, 被 org-cycle-agenda-files
+;; 遮蔽,且 C-, 在终端不可发,C-c h c 作兜底镜像。
 (custom/bind "C-," #'custom/open-config-source "打开设置 (emacs.org)" "基础移动与直达键")
-;; C-d 照搬 VSCode「选中下一个匹配」会挤掉全局 delete-char;minibuffer 里
-;; 单独恢复,否则输入路径/正则时无法用 C-d 删字符(isearch 等自有 keymap 不受影响)。
+;; C-d 的全局 mc 语义会漏进 isearch-mode-map(上游只绑 M-C-d),单独
+;; 恢复成搜索串删字符;minibuffer 同样恢复 delete-char。
 (define-key minibuffer-local-map (kbd "C-d") #'delete-char)
+(with-eval-after-load 'isearch
+  (keymap-set isearch-mode-map "C-d" #'isearch-del-char))
 ;; M-<arrow> 在多数终端被吃掉(ESC 编码或被窗口管理器拦截):C-c w hjkl
 ;; 走可打印字符,终端/ssh/tmux 全可达,与 C-c w 方向键同语义。
 (custom/bind "C-c w h" #'windmove-left "左切窗口" "窗口与面板")
@@ -3689,6 +3777,9 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 ;; dashboard 无直达键则 TTY 用户只能 M-x:dashboard 常驻(:demand t),
 ;; 直接绑定;S-<f10>/<menu> 在无鼠标终端上是打开右键菜单的键盘路径。
 (custom/bind "C-c h d" #'dashboard-open "打开仪表盘" "帮助")
+;; C-, 的 TTY 兜底镜像:C-, 在终端不可发,且在 org-mode-map 被
+;; org-cycle-agenda-files 遮蔽;C-c h c 在任意 mode 可达。
+(custom/bind "C-c h c" #'custom/open-config-source "打开设置 (emacs.org)" "帮助")
 (custom/bind "S-<f10>" #'context-menu-open "打开右键菜单" "帮助")
 (custom/bind "<menu>" #'context-menu-open "打开右键菜单" "帮助")
 
@@ -3700,7 +3791,7 @@ Which-key 顶层前缀与中间分组的统一声明源 + 真正跨多个功能�
 (custom/bind "C-c t f" #'flymake-mode "语法诊断" "开关")
 (custom/bind "C-c t s" #'flyspell-mode "拼写检查" "开关")
 (custom/bind "C-c t r" #'read-only-mode "只读" "开关")
-(custom/bind "C-c t v" #'visible-mode "显示不可见字符" "开关")
+(custom/bind "C-c t v" #'visible-mode "显示不可见文本" "开关")
 (custom/bind "C-c t d" #'toggle-debug-on-error "错误调试" "开关")
 
 ;; C-c q 退出组:Frame 级与 client 级退出,不触碰 daemon 本体
@@ -4027,7 +4118,7 @@ Guix 环境检测、shepherd daemon 集成、外部工具加速范式。
 + 外部命令只缓存命令名，调用时通过当前 =exec-path= 解析，避免长驻 daemon 固定到旧 Guix generation
 + daemon 由 shepherd 的 =emacs-daemon= 服务管理( =emacs --fg-daemon= ),init.el 不重复启用 =server-mode= (仅 standalone 时启用)
 + *预热策略*:daemon 启动时间不敏感，按冷 =require= 基准白名单预载常用交互 feature。不会启动 LSP、聊天或 PDF 子进程；应用型包仍按需加载。
-+ 当前白名单消除的本机冷首用成本约为:Magit 0.37s、Org-roam 0.18s、TRAMP 0.17s、Apheleia 0.05s。
++ 当前白名单消除的本机冷首用成本约为(batch -q 冷 require 实测):Magit 0.37s、Org-agenda 0.23s、Org-roam 0.18s、TRAMP 0.17s、Org-capture 0.16s、Apheleia 0.05s。
 
 #+begin_src emacs-lisp
 (defconst custom:daemon-warmup-features
@@ -4458,6 +4549,8 @@ let 绑定请求级缓存变量,渲染结束自动丢弃,下次渲染重新扫�
 
 *** 实验性
 本节集中放置生效中的版本兜底 shim(Arei .elc 兼容)。它们都是「待上游修复」的 workaround,而非待完成的本地功能——代码已生效,移除条件在上游。
+
+核对移除条件时必须查**实装 profile** 的产物(=~/.guix-home/profile/share/emacs/site-lisp/= 下对应包的 =.elc=/ =.el= 版本与编译器),不能信 =guix show= 的 channel 元数据——实测二者有偏差(channel 声明 with-editor 3.5.0 / ghostel 0.39.0,实装 profile 是 3.5.2 / 0.51.0)。
 
 以下 noweb 片段(均为 =:tangle no= )定义 Emacs 31 兼容性 shim,由使用方在文档更靠前的位置前向引用(=<<emacs31/...>>= )展开到 main.el。tangle 后代码插入到使用点,加载顺序不变;定义集中在此处是为了可发现性与未来上游修复后统一清理。
 
