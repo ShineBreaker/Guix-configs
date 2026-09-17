@@ -362,6 +362,11 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
           (run-with-idle-timer custom:focus-save-idle-delay nil
                                #'custom/save-user-file-buffers))))
 
+;; `add-function' 与 `add-hook' 的区别:hook 是「某事件发生时依次运行的
+;; 函数列表」,而 `after-focus-change-function' 这类「函数变量」只装得下
+;; 一个函数;`add-function' 给它的当前值套一层组合(:after = 原函数跑完
+;; 再跑),不会把别人装进去的函数顶掉。
+;; C-h v after-focus-change-function 可查看它当前装的是什么。
 (add-function :after after-focus-change-function #'custom/schedule-focus-save)
 
 ;; 陈旧 auto-save 文件(#file# 比源文件新,多为 daemon 异常退出残留)会让
@@ -393,6 +398,11 @@ auto-save 文件比源文件新时把 sit-for 局部绑成 no-op 并记入
       (unless custom--stale-auto-save-timer
         (setq custom--stale-auto-save-timer
               (run-at-time 2 nil #'custom--review-stale-auto-saves))))
+    ;; `cl-letf' 在 let 作用域内临时替换某个函数的定义,退出后自动恢复:
+    ;; 这里把 `sit-for' 换成 no-op,让 `after-find-file' 内部那 1 秒停顿
+    ;; 「消失」,而它发出的警告消息照旧显示。本函数是 `after-find-file'
+    ;; 的 :around advice(给原函数套一层壳,ORIG 即原函数);
+    ;; C-h f custom--defer-auto-save-warning、C-h f cl-letf 可查。
     (cl-letf (((symbol-function 'sit-for)
                (if stale #'ignore (symbol-function 'sit-for))))
       (apply orig args))))
@@ -405,12 +415,33 @@ auto-save 文件比源文件新时把 sit-for 局部绑成 no-op 并记入
               (with-temp-buffer (insert-file-contents-literally file2)
                                 (buffer-string)))))
 
+(defun custom--review-one-stale-auto-save (auto-save source)
+  "审查单个陈旧 auto-save 文件 AUTO-SAVE,其源文件为 SOURCE。
+内容与源文件相同则移入回收站;不同则询问是否删除(可能含未保存修改,
+拒绝时保留并提示 recover-this-file)。AUTO-SAVE 已不存在时什么也不做。"
+  (when (file-exists-p auto-save)
+    (condition-case err
+        (cond
+         ((custom--files-content-equal-p auto-save source)
+          (move-file-to-trash auto-save)
+          (message "[auto-save] 已清理与源文件相同的陈旧文件: %s"
+                   (file-name-nondirectory source)))
+         ((y-or-n-p
+           (format "%s 的陈旧 auto-save 与源文件不同(可能含未保存修改),删除? "
+                   (file-name-nondirectory source)))
+          (move-file-to-trash auto-save))
+         (t
+          (message "[auto-save] 已保留 %s,需要时 M-x recover-this-file"
+                   auto-save)))
+      (error
+       (message "[auto-save] 处理 %s 失败: %s"
+                auto-save (error-message-string err))))))
+
 (defun custom--review-stale-auto-saves ()
   "空闲时处理 `custom--stale-auto-saves' 中的陈旧 auto-save 文件。
-内容与源文件相同的直接移入回收站;不同的询问是否删除(可能含未保存
-修改,拒绝时保留并提示 recover-this-file)。无 client frame 或
-minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提示会阻塞
-server,必须等真实 client 就绪。"
+每个条目交 `custom--review-one-stale-auto-save' 逐个审查。无 client
+frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提示
+会阻塞 server,必须等真实 client 就绪。"
   (let ((client-frame (seq-find (lambda (f) (frame-parameter f 'client))
                                 (frame-list))))
     (if (or (not client-frame) (active-minibuffer-window))
@@ -418,26 +449,10 @@ server,必须等真实 client 就绪。"
               (run-at-time 2 nil #'custom--review-stale-auto-saves))
       (setq custom--stale-auto-save-timer nil)
       (with-selected-frame client-frame
-        (dolist (entry (prog1 custom--stale-auto-saves
-                         (setq custom--stale-auto-saves nil)))
-          (pcase-let ((`(,auto-save . ,source) entry))
-            (when (file-exists-p auto-save)
-              (condition-case err
-                  (cond
-                   ((custom--files-content-equal-p auto-save source)
-                    (move-file-to-trash auto-save)
-                    (message "[auto-save] 已清理与源文件相同的陈旧文件: %s"
-                             (file-name-nondirectory source)))
-                   ((y-or-n-p
-                     (format "%s 的陈旧 auto-save 与源文件不同(可能含未保存修改),删除? "
-                             (file-name-nondirectory source)))
-                    (move-file-to-trash auto-save))
-                   (t
-                    (message "[auto-save] 已保留 %s,需要时 M-x recover-this-file"
-                             auto-save)))
-                (error
-                 (message "[auto-save] 处理 %s 失败: %s"
-                          auto-save (error-message-string err)))))))))))
+        (let ((pending custom--stale-auto-saves))
+          (setq custom--stale-auto-saves nil)
+          (dolist (entry pending)
+            (custom--review-one-stale-auto-save (car entry) (cdr entry))))))))
 
 (advice-add 'after-find-file :around #'custom--defer-auto-save-warning)
 
@@ -530,6 +545,10 @@ server,必须等真实 client 就绪。"
 (defun custom/context-menu--translate-menu-item (item)
   "翻译菜单项 ITEM 的标题和子菜单。"
   (when (and (consp item) (eq (car item) 'menu-item))
+    ;; menu-item 形态: (menu-item LABEL BINDING . PROPS)
+    ;;   LABEL  显示文字(字符串)   BINDING 键或子 keymap
+    ;;   PROPS  :help 等属性 plist
+    ;; 详见 (info "(elisp) Extended Menu Items")
     (let ((label-cell (cdr item))
           (binding (nth 2 item))
           (properties (nthcdr 3 item)))
@@ -545,6 +564,21 @@ server,必须等真实 client 就绪。"
                   (custom/context-menu--translate-object (cadr properties))))
         (setq properties (cddr properties))))))
 
+(defun custom/context-menu--translate-binding (_event binding)
+  "翻译 keymap 中的一个条目 BINDING(EVENT 是 `map-keymap' 回调位,未使用)。"
+  (cond
+   ((and (consp binding) (eq (car binding) 'menu-item))
+    (custom/context-menu--translate-menu-item binding))
+   ;; (标题 . 子keymap) 形态:Geiser 的 (cons "Run" keymap) 子菜单即此形,
+   ;; 标题在 car,递归子表。
+   ((and (consp binding) (stringp (car binding))
+         (keymapp (cdr binding)))
+    (setcar binding
+            (custom/context-menu--translate-string (car binding)))
+    (custom/context-menu--translate-keymap (cdr binding)))
+   ((keymapp binding)
+    (custom/context-menu--translate-keymap binding))))
+
 (defun custom/context-menu--translate-keymap (keymap)
   "递归翻译 KEYMAP 内的菜单标题。"
   (when (keymapp keymap)
@@ -555,21 +589,7 @@ server,必须等真实 client 就绪。"
                (stringp (cadr keymap)))
       (setcar (cdr keymap)
               (custom/context-menu--translate-string (cadr keymap))))
-    (map-keymap
-     (lambda (_event binding)
-       (cond
-        ((and (consp binding) (eq (car binding) 'menu-item))
-         (custom/context-menu--translate-menu-item binding))
-        ;; (标题 . 子keymap) 形态:Geiser 的 (cons "Run" keymap) 子菜单即此形,
-        ;; 标题在 car,递归子表。
-        ((and (consp binding) (stringp (car binding))
-              (keymapp (cdr binding)))
-         (setcar binding
-                 (custom/context-menu--translate-string (car binding)))
-         (custom/context-menu--translate-keymap (cdr binding)))
-        ((keymapp binding)
-         (custom/context-menu--translate-keymap binding))))
-     keymap))
+    (map-keymap #'custom/context-menu--translate-binding keymap))
   keymap)
 
 (defun custom/context-menu-translate (menu)
@@ -902,6 +922,31 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
           (setq custom/tab-line--name-cache (cons key label))
           label)))))
 
+(defun custom--tab-line-render-face (face)
+  "把 FACE 归一成 `propertize' 直接可用的 face 列表,并统一关掉 box。
+FACE 为单个 face 名或以关键字开头的属性 plist 时,包成
+((:box nil) FACE);为 face 名列表时,在头部补上 (:box nil)。"
+  (if (and (listp face) (not (keywordp (car-safe face))))
+      (cons '(:box nil) face)
+    (list '(:box nil) face)))
+
+(defun custom--tab-line-make-label (name selected-p)
+  "由 NAME 拼出标签正文,并按选中态附上鼠标提示属性。
+返回 \" name \"(前后留空格、% 已转义)且带 `help-echo' 与 `mouse-face'
+(仅非选中标签高亮)属性的字符串;face 与 keymap 由调用方另行补上。"
+  (propertize (concat " " (string-replace "%" "%%" name) " ")
+              'mouse-face (unless selected-p 'tab-line-highlight)
+              'help-echo (concat (if selected-p "当前标签:" "左键切换标签,")
+                                 "鼠标中键关闭,右键打开菜单")))
+
+(defun custom--tab-line-close-button (render-face)
+  "返回按 RENDER-FACE 上色的关闭按钮文本。
+`tab-line-close-button-show' 固定为 'selected(见 tab-line-hooks 子节),
+只有选中标签显示关闭按钮,由调用方按选中态决定是否调用本函数。"
+  (let ((close (copy-sequence tab-line-close-button)))
+    (add-face-text-property 0 (length close) render-face t close)
+    close))
+
 (defun custom/tab-line-tab-name-format (tab tabs)
   "以接近 IDE 的样式格式化 TAB。
 face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
@@ -909,40 +954,30 @@ current/inactive 用内置 face,自动跟随主题。"
   (let* ((selected-p (eq tab (window-buffer)))
          (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
-         (label (concat " " (string-replace "%" "%%" name) " "))
-         (help-echo (concat (if selected-p "当前标签:" "左键切换标签,")
-                            "鼠标中键关闭,右键打开菜单"))
-         ;; `tab-line-close-button-show' 全库唯一写点 pin 为 'selected
-         ;; (见 tab-line-hooks 子节),故谓词坍缩为 selected-p。发散矩阵:
-         ;; show=t/selected/non-selected/nil × 选中态下,旧通用分发与新
-         ;; (and selected-p …) 逐字一致,见 batch 等效验证。
-         (close (and selected-p
-                     (copy-sequence tab-line-close-button))))
-    ;; 唯一生产者 `custom/tab-line-tabs' 只产出 buffer,alist 防御分支
-    ;; 无生产者:删 buffer-p 分发,face hook 的 BUFFER-P 实参恒为 t。
+         (label (custom--tab-line-make-label name selected-p)))
+    ;; 两个前提:唯一生产者 `custom/tab-line-tabs' 只产出 buffer,故传给
+    ;; face hook 的 BUFFER-P 实参恒为 t;hook 列表与各函数签名可用
+    ;; C-h v tab-line-tab-face-functions 查看。
     (dolist (fn tab-line-tab-face-functions)
       (setq face (funcall fn tab tabs face t selected-p)))
-    (let* ((render-face
-            (if (and (listp face) (not (keywordp (car-safe face))))
-                (cons '(:box nil) face)
-              (list '(:box nil) face)))
+    (let* ((render-face (custom--tab-line-render-face face))
            (spacer
             (propertize " "
                         'face render-face
                         'display custom:tab-line-height-display))
+           ;; `tab-line-close-button-show' 全库唯一写点 pin 为 'selected
+           ;; (见 tab-line-hooks 子节):关闭按钮只在选中标签显示,改该值
+           ;; 时此处分发须同步。
+           (close (when selected-p
+                    (custom--tab-line-close-button render-face)))
            (rendered
             (concat
              spacer
              (propertize label
                          'face render-face
                          'keymap tab-line-tab-map
-                         'mouse-face (unless selected-p 'tab-line-highlight)
-                         'help-echo help-echo
                          'follow-link 'ignore)
-             (when close
-               (add-face-text-property
-                0 (length close) render-face t close)
-               close))))
+             close)))
       (add-text-properties
        0 (length rendered)
        `(tab ,tab ,@(and selected-p '(selected t)))
@@ -1351,6 +1386,17 @@ SIZE  : 0~1 浮点比例
                  (window-height . ,size))
                t))
 
+(defun custom--window-above-p (a b)
+  "窗口 A 是否在 B 的上方(y 相同则比 x,左在前)。"
+  ;; `window-edges' 返回 (LEFT TOP RIGHT BOTTOM):第 2 项是上边缘的行坐标
+  ;; (Y 越小越靠上),第 1 项是左边缘;三个可选参数的含义见
+  ;; C-h f window-edges。
+  (let ((ea (window-edges a nil t t))
+        (eb (window-edges b nil t t)))
+    (or (< (nth 1 ea) (nth 1 eb))
+        (and (= (nth 1 ea) (nth 1 eb))
+             (< (nth 0 ea) (nth 0 eb))))))
+
 (defun custom/display-buffer-in-main-window (buffer &optional _alist)
   "把 BUFFER 显示在「主编辑窗口」并选中。
 主编辑窗口 = 当前 frame 内最靠上（y 坐标最小）的非 side-window 窗口。
@@ -1363,16 +1409,10 @@ SIZE  : 0~1 浮点比例
 `server-window' 的值（server.el 调用时只传 buffer 一个参数）。"
   (let* ((frame (selected-frame))
          (candidates
-          (cl-remove-if
+          (seq-remove
            (lambda (w) (window-parameter w 'window-side))
            (window-list frame 'no-minibuf (frame-first-window frame))))
-         (target (car (sort candidates
-                            (lambda (a b)
-                              (let ((ea (window-edges a nil t t))
-                                    (eb (window-edges b nil t t)))
-                                (or (< (nth 1 ea) (nth 1 eb))
-                                    (and (= (nth 1 ea) (nth 1 eb))
-                                         (< (nth 0 ea) (nth 0 eb))))))))))
+         (target (car (sort candidates #'custom--window-above-p))))
     (cond ((window-live-p target)
            (set-window-buffer target buffer)
            (select-window target)
@@ -1857,11 +1897,10 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
     (bg-prose-block-delimiter bg-main))
   "四个 Modus 变体共用的 palette 覆盖(单一事实源,理由见上方注释)。")
 
-(dolist (var '(modus-operandi-palette-overrides
-               modus-operandi-tinted-palette-overrides
-               modus-vivendi-palette-overrides
-               modus-vivendi-tinted-palette-overrides))
-  (set var custom:modus-palette-overrides))
+(setq modus-operandi-palette-overrides custom:modus-palette-overrides
+      modus-operandi-tinted-palette-overrides custom:modus-palette-overrides
+      modus-vivendi-palette-overrides custom:modus-palette-overrides
+      modus-vivendi-tinted-palette-overrides custom:modus-palette-overrides)
 
 ;; D-Bus 接口常量(service 与 interface 同名,内联到两处调用点)
 
