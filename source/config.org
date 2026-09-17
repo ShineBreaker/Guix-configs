@@ -169,7 +169,6 @@ blue build
 ;; 自定义变体包
 <<cachyos-lts-kernel>>
 <<fingerprint-packages>>
-<<hostapd-go-concurrent-pkg>>
 #+end_src
 
 *** 服务构造函数
@@ -275,23 +274,6 @@ blue build
 #+NAME: cachyos-lts-kernel
 #+begin_src scheme
 (load "../source/files/kernel/linux-cachyos-lts.scm")
-#+end_src
-
-**** hostapd GO-CONCURRENT 补丁
-让带 GO-CONCURRENT 的 NO_IR 信道不再升级 DISABLED；DISABLED 硬禁仍生效，内核 START_AP 仍是最终守门员。
-
-#+NAME: hostapd-go-concurrent-pkg
-#+begin_src scheme
-(define hostapd-go-concurrent
-  (package
-   (inherit hostapd)
-   (source
-    (origin
-     (inherit (package-source hostapd))
-     (patches
-      (list (local-file
-             (assume-source-relative-file-name
-              "../source/files/patches/hostapd-go-concurrent.patch"))))))))
 #+end_src
 
 **** 指纹识别栈
@@ -590,6 +572,15 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 (kernel-arguments
  (cons* (string-append "resume=UUID=" %swap-uuid)
         "kernel.sysrq=1"
+        ;; kvm：嵌套虚拟化 + 虚拟机读写未知 MSR 时保持安静。
+        ;; 必须走 cmdline 而非 /etc/modprobe.d——kvm_intel 由 udev
+        ;; coldplug 经 libkmod 抢先加载（不读 /etc/modprobe.d），
+        ;; kernel-module-loader 再 modprobe 时模块已在，参数不会重放；
+        ;; 只有 cmdline 的 mod.param=val 对所有加载路径都生效。
+        "kvm_intel.nested=1"
+        "kvm_intel.emulate_invalid_guest_state=0"
+        "kvm.ignore_msrs=1"
+        "kvm.report_ignored_msrs=0"
         "loglevel=0"
         "modprobe.blacklist=wacom,hid_uclogic"
         "nowatchdog"
@@ -612,6 +603,13 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 加载 =ip_tables= 与 =iptable_nat= 作为兼容层，供 Libvirt 与 Podman 网络后端使用；
 在系统启动完成且 zstd 模块就绪后，由 =zswap-zstd= 服务运行时将 zswap 压缩器无缝切换至 zstd。
 
+v4l2loopback 模块参数（/etc/modprobe.d 仅对经 =/proc/sys/kernel/modprobe= 包装器的加载路径生效，kvm 参数因 udev 抢先加载已移至 kernel-arguments）:
+
+#+NAME: v4l2loopback-conf
+#+begin_src conf :tangle ../tmp/v4l2loopback.conf
+options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
+#+end_src
+
 #+NAME: kernel-module-services
 #+begin_src scheme
 (list (simple-service 'extend-kernel-module-loader
@@ -622,12 +620,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
       (simple-service 'modprobe-configs etc-service-type
                       (list `("modprobe.d/v4l2loopback.conf"
-                              ,(plain-file "v4l2loopback.conf"
-                                           "options v4l2loopback devices=1 video_nr=1 card_label=\"OBS Cam\" exclusive_caps=1"))
-                            ;; kvm 嵌套虚拟化 + 虚拟机读写未知 MSR 时保持安静
-                            `("modprobe.d/kvm.conf"
-                              ,(plain-file "kvm.conf"
-                                           "options kvm_intel nested=1 emulate_invalid_guest_state=0\noptions kvm ignore_msrs=1 report_ignored_msrs=0\n"))))
+                              ,(local-file "./v4l2loopback.conf"))))
 
       ;; 内核拒绝时（zstd 不可用）静默放行，不阻断 boot
       (root-one-shot-service 'zswap-zstd '(kernel-module-loader)
@@ -719,7 +712,6 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
    "adb"
    "bluez"
    "curl"
-   "dnsmasq"
    "mihomo"
    "netcat-openbsd"
    "wget"
@@ -888,20 +880,14 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 *** 网络相关配置
 防火墙采用接口信任模型：
 + nftables 规则集 *开机加载一次* ，之后就只会由 NM dispatcher 来原子增删 =trusted_ifaces= 成员
-+ *可信 WiFi 名单* 与 *热点凭据* 分别存于  =wifi-trust.age= / =wifi-hotspot.age= 两个加密文件中。
-
-热点本体由 fish 命令 =hotspot on/off/status= 来手动开关。热点 AP 与 WiFi 客户端共用同一 radio（因为网卡同一时刻只能工作在一个信道上）
++ *可信 WiFi 名单* 存于 =wifi-trust.age= 加密文件中。
 
 **** 服务装配
 脚本模板见下文的小节，他们会直接 tangle 到 =tmp/= 目录下，然后由 =local-file= 来引入到系统中；模板会被 =render-script= 进行处理，对其进行统一注入 store 路径和 chmod 的操作，产物被 udev / shepherd / dispatcher 直接执行。
 
-- =nm-powersave-conf= ：电池供电时由 ~ac-power~ 这条 udev 规则来进行切换，电源未连接的时候关闭热点，以此达到省电的效果。
+- =nm-powersave-conf= ：电池供电时由 ~ac-power~ 这条 udev 规则来进行切换，电源未连接的时候启用 WiFi 省电，以此达到省电的效果。
 - =openssh= ：root 仅允许通过密钥登录。
 - =mihomo-daemon= ：数据目录放到 =/var/lib/mihomo= ；利用 =mihomo-run= 来将配置文件的模板加入真正地订阅链接。
-- =hotspot-uap0-udev= ：用 =NM_UNMANAGED= 这条 udev 规则来把 uap0 隔离出 NM。
-- =hotspot-stale-conf-cleanup= ：清理事故残留的 conf.d 文件。
-- =hotspot-ap= ：热点本体（hostapd 直接管理 uap0）。
-- =hotspot-dnsmasq= ：热点子网的 DHCP/DNS。
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
@@ -916,7 +902,6 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                     "../dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/"
                     name ".age"))))]
        [age-key (string-append "/home/" username "/.local/share/keys/age")]
-       [iw-bin (file-append iw "/sbin/iw")]
        [age-bin (file-append age "/bin/age")]
 
        ;; 渲染 tangle 出的脚本模板：复制后按 (正则 . 替换) alist 跑
@@ -936,19 +921,6 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
                                         (list (list pattern) replacement)])
                                      pairs))
                 (chmod #$output #o555)))))]
-
-       [hotspot-ap-run-script
-        (render-script
-         "hotspot-ap-run" (local-file "hotspot-ap-run")
-         `(("@AGE_BIN@" . ,age-bin)
-           ("@AGE_IDENTITY@" . ,age-key)
-           ("@HOSTAPD_BIN@" . ,(file-append hostapd-go-concurrent
-                                            "/sbin/hostapd"))
-           ("@HOTSPOT_CREDS_CIPHER@" . ,(secret "wifi-hotspot"))
-           ("@IP_BIN@" . ,(bin "iproute2" "/sbin/ip"))
-           ("@IW_BIN@" . ,iw-bin)
-           ("@MKDIR_BIN@" . ,(bin "coreutils" "/bin/mkdir"))
-           ("@SED_BIN@" . ,(bin "sed" "/bin/sed"))))]
 
        [nm-powersave-conf
         (plain-file "wifi-powersave.conf"
@@ -979,50 +951,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
            ("@MV_BIN@" . ,(bin "coreutils" "/bin/mv"))
            ("@SUBS_CIPHER@" . ,(secret "mihomo-subscriptions"))))])
 
-  (list (root-daemon-service 'hotspot-ap (list hotspot-ap-run-script)
-                             #:requirement '(wifi-ap-interface)
-                             #:log-file "/var/log/hotspot-ap.log"
-                             #:auto-start? #f #:respawn? #f
-                             #:documentation
-                             "Run hostapd AP on uap0, started manually via the hotspot fish command.")
-
-        (root-daemon-service 'hotspot-dnsmasq
-                             (list (bin "dnsmasq" "/sbin/dnsmasq")
-                                   "--bind-dynamic"
-                                   "--dhcp-authoritative"
-                                   "--dhcp-range=192.168.77.10,192.168.77.250,255.255.255.0,12h"
-                                   "--except-interface=lo"
-                                   "--interface=uap0"
-                                   "--keep-in-foreground")
-                             #:requirement '(wifi-ap-interface)
-                             #:log-file "/var/log/hotspot-dnsmasq.log"
-                             #:documentation
-                             "DHCP/DNS service for the uap0 hotspot subnet.")
-
-        (simple-service 'hotspot-stale-conf-cleanup activation-service-type
-                        #~(system* "rm" "-f"
-                                   "/etc/NetworkManager/conf.d/20-uap0-unmanaged.conf"))
-
-        (simple-service 'hotspot-uap0-udev udev-service-type
-                        (list (udev-rule
-                               "78-hotspot-uap0.rules"
-                               (string-append
-                                "SUBSYSTEM==\"net\", KERNEL==\"uap0\", "
-                                "ENV{NM_UNMANAGED}=\"1\", "
-                                "ENV{ID_NET_NAME}=\"\", "
-                                "ENV{ID_NET_NAME_ONBOARD}=\"\", "
-                                "ENV{ID_NET_NAME_SLOT}=\"\", "
-                                "ENV{ID_NET_NAME_PATH}=\"\", "
-                                "ENV{ID_NET_NAME_MAC}=\"\"\n"))))
-
-        (root-one-shot-service 'iw-reg-cn '(user-processes)
-                               #~(lambda _
-                                   (zero? (system* #$iw-bin "reg" "set" "CN")))
-                               #:stop #~(lambda _ #t) #:respawn? #f
-                               #:documentation
-                               "Set wireless regulatory domain to CN.")
-
-        (root-daemon-service 'mihomo-daemon (list mihomo-run-script)
+  (list (root-daemon-service 'mihomo-daemon (list mihomo-run-script)
                              #:requirement '(user-processes)
                              #:log-file "/var/log/mihomo.log"
                              #:documentation "Run the mihomo daemon.")
@@ -1055,24 +984,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
         (service tailscale-service-type
                  (tailscale-configuration
-                  (verbosity 1)))
-
-        (root-one-shot-service 'wifi-ap-interface '(iw-reg-cn)
-                               #~(lambda _
-                                   (or (zero? (system* #$iw-bin
-                                                       "dev" "uap0" "info"))
-                                       (zero? (system* #$iw-bin
-                                                       "dev" "wlp0s20f3" "interface"
-                                                       "add" "uap0" "type" "__ap"))))
-                               #:stop #~(lambda _
-                                          (if (zero? (system* #$iw-bin
-                                                              "dev" "uap0" "info"))
-                                              (zero? (system* #$iw-bin
-                                                              "dev" "uap0" "del"))
-                                              #t))
-                               #:respawn? #f
-                               #:documentation
-                               "Create the uap0 virtual AP interface for concurrent WiFi.")))
+                  (verbosity 1)))))
 #+end_src
 
 **** mihomo 启动包装
@@ -1094,22 +1006,28 @@ MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
 MV_BIN="${MV_BIN:-@MV_BIN@}"
 SUBS_CIPHER="${SUBS_CIPHER:-@SUBS_CIPHER@}"
 
-DATA_DIR="/var/lib/mihomo"
+log() { echo "mihomo-run: $*" >&2; }
+die() { echo "mihomo-run: 失败: $*" >&2; exit 1; }
+
+# DATA_DIR 可环境覆盖，便于离线 mock 测试
+DATA_DIR="${DATA_DIR:-/var/lib/mihomo}"
 OUT="$DATA_DIR/config.yaml"
 
 "$MKDIR_BIN" -p "$DATA_DIR"
+[ -f "$MIHOMO_TEMPLATE" ] || die "模板不存在: $MIHOMO_TEMPLATE (immutable 部署, 需 blue home)"
 
 if subs=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$SUBS_CIPHER" 2>/dev/null); then
     set -a
     eval "$subs"
     set +a
 else
-    echo "mihomo-run: 订阅密文解密失败，以空订阅启动" >&2
+    log "警告: 订阅解密失败 (age exit=$?), 以空订阅启动; 密文=$SUBS_CIPHER 私钥=$AGE_IDENTITY"
 fi
 
 "$ENVSUBST_BIN" '$MIHOMO_SUB_ONE $MIHOMO_SUB_TWO' <"$MIHOMO_TEMPLATE" >"$OUT.tmp"
 "$CHMOD_BIN" 600 "$OUT.tmp"
 "$MV_BIN" "$OUT.tmp" "$OUT"
+log "配置已渲染: $OUT (sub1=$([ -n "${MIHOMO_SUB_ONE:-}" ] && echo 已注入 || echo 空), sub2=$([ -n "${MIHOMO_SUB_TWO:-}" ] && echo 已注入 || echo 空))"
 
 exec "$MIHOMO_BIN" -d "$DATA_DIR" -f "$OUT"
 #+end_src
@@ -1134,8 +1052,14 @@ CONNECTION_ID="${CONNECTION_ID:-}"
 
 [ "$1" = "$WIFI_IFACE" ] || exit 0
 
+# 输出由 NetworkManager 收进自身日志（syslog → /var/log/messages）
+log() { echo "trusted-ssid: $*" >&2; }
+
 is_trusted_connection() {
-    [ -r "$AGE_IDENTITY" ] || return 1
+    if [ ! -r "$AGE_IDENTITY" ]; then
+        log "私钥不可读: $AGE_IDENTITY, 按不可信处理"
+        return 1
+    fi
     "$AGE_BIN" -d -i "$AGE_IDENTITY" "$TRUSTED_CONNECTIONS_CIPHER" 2>/dev/null |
         "$GREP_BIN" -Fqx -- "$1"
 }
@@ -1149,102 +1073,29 @@ add_wifi_to_trusted_set() {
     "$NFT_BIN" add element inet filter trusted_ifaces { "$WIFI_IFACE" }
 }
 
+log "action=$ACTION iface=$1 conn='${CONNECTION_ID:-}'"
+
 case "$ACTION" in
     up)
-        if is_trusted_connection "$CONNECTION_ID"; then
-            add_wifi_to_trusted_set
+        if [ -z "$CONNECTION_ID" ]; then
+            remove_wifi_from_trusted_set
+            log "CONNECTION_ID 为空, 无法比对可信名单, 按不可信处理"
+        elif is_trusted_connection "$CONNECTION_ID"; then
+            if add_wifi_to_trusted_set; then
+                log "可信连接 '$CONNECTION_ID': $WIFI_IFACE 已加入 trusted_ifaces"
+            else
+                log "nft 添加失败 (exit=$?), trusted_ifaces 可能未更新"
+            fi
         else
             remove_wifi_from_trusted_set
+            log "不在可信名单: $WIFI_IFACE 已确保移出 trusted_ifaces"
         fi
         ;;
     down)
         remove_wifi_from_trusted_set
+        log "断开: $WIFI_IFACE 已移出 trusted_ifaces"
         ;;
 esac
-#+end_src
-
-**** 开启热点 AP
-探测信道、从 age 密文解出 SSID/密码、纠正接口类型、配置 uap0 的热点子网地址，最后 exec hostapd 成为 shepherd 跟踪的主进程。凭据只经管道与 =/run= （tmpfs）过境，不持久落盘。变量可用环境覆盖，便于离线测试。
-
-#+NAME: hotspot-ap-run
-#+begin_src sh :tangle ../tmp/hotspot-ap-run
-#!/bin/sh
-
-AGE_BIN="${AGE_BIN:-@AGE_BIN@}"
-AGE_IDENTITY="${AGE_IDENTITY:-@AGE_IDENTITY@}"
-AP_ADDR="${AP_ADDR:-192.168.77.1/24}"
-CONF_DIR="${CONF_DIR:-/run/auto-hotspot}"
-HOSTAPD_BIN="${HOSTAPD_BIN:-@HOSTAPD_BIN@}"
-HOTSPOT_CREDS_CIPHER="${HOTSPOT_CREDS_CIPHER:-@HOTSPOT_CREDS_CIPHER@}"
-HOTSPOT_IFACE="${HOTSPOT_IFACE:-uap0}"
-IP_BIN="${IP_BIN:-@IP_BIN@}"
-IW_BIN="${IW_BIN:-@IW_BIN@}"
-MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
-SED_BIN="${SED_BIN:-@SED_BIN@}"
-WIFI_IFACE="${WIFI_IFACE:-wlp0s20f3}"
-
-conf="$CONF_DIR/hostapd.conf"
-#+end_src
-
-信道探测： =iw link= 输出只有 freq（MHz），按频段换算信道号——2.4G: ch=(freq-2407)/5，5G: ch=(freq-5000)/5；未连接回落 ch6。
-信道号决定频段与 hw_mode：1-14 是 2.4G（g），其余 5G（a）。
-
-#+begin_src sh :tangle ../tmp/hotspot-ap-run
-sta_channel() {
-    freq=$("$IW_BIN" dev "$WIFI_IFACE" link 2>/dev/null |
-               "$SED_BIN" -n 's/^[[:space:]]*freq: \([0-9][0-9]*\)$/\1/p')
-    case "$freq" in
-        "") return 1 ;;
-        *) if [ "$freq" -ge 5000 ] 2>/dev/null; then
-               echo $(( (freq - 5000) / 5 ))
-           else
-               echo $(( (freq - 2407) / 5 ))
-           fi ;;
-    esac
-}
-
-ch=$(sta_channel) || ch=6
-
-if [ "$ch" -le 14 ] 2>/dev/null; then
-    hw_mode=g
-else
-    hw_mode=a
-fi
-
-creds=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$HOTSPOT_CREDS_CIPHER" 2>/dev/null) || exit 1
-ssid=$(printf '%s\n' "$creds" | "$SED_BIN" -n '1p')
-psk=$(printf '%s\n' "$creds" | "$SED_BIN" -n '2p')
-[ -n "$ssid" ] && [ -n "$psk" ] || exit 1
-
-cur_type=$("$IW_BIN" dev "$HOTSPOT_IFACE" info 2>/dev/null |
-               "$SED_BIN" -n 's/^[[:space:]]*type \([a-z_]*\)$/\1/p')
-if [ "$cur_type" != "__ap" ]; then
-    "$IP_BIN" link set "$HOTSPOT_IFACE" down 2>/dev/null
-    "$IW_BIN" dev "$HOTSPOT_IFACE" set type __ap || exit 1
-fi
-
-"$MKDIR_BIN" -p "$CONF_DIR"
-umask 077
-{
-    echo "interface=$HOTSPOT_IFACE"
-    echo "driver=nl80211"
-    echo "country_code=CN"
-    echo "ieee80211d=1"
-    echo "ssid=$ssid"
-    echo "hw_mode=$hw_mode"
-    echo "channel=$ch"
-    echo "wpa=2"
-    echo "wpa_passphrase=$psk"
-    echo "wpa_key_mgmt=WPA-PSK"
-    echo "rsn_pairwise=CCMP"
-    echo "auth_algs=1"
-    echo "macaddr_acl=0"
-} > "$conf"
-
-"$IP_BIN" addr flush dev "$HOTSPOT_IFACE" 2>/dev/null
-"$IP_BIN" addr add "$AP_ADDR" dev "$HOTSPOT_IFACE" || exit 1
-"$IP_BIN" link set "$HOTSPOT_IFACE" up
-exec "$HOSTAPD_BIN" "$conf"
 #+end_src
 
 **** nftables 规则集
@@ -1258,7 +1109,7 @@ table inet filter {
 # The dispatcher temporarily adds wlp0s20f3 for trusted connection profiles.
 set trusted_ifaces {
 type ifname
-elements = { "uap0", "virbr0", "tailscale0" }
+elements = { "virbr0", "tailscale0" }
 }
 
 chain input {
@@ -1276,7 +1127,7 @@ parameter-problem
 } accept
 ip6 nexthdr ipv6-icmp accept
 
-# Hotspot, VMs, and trusted WiFi may access local services.
+# VMs and trusted WiFi may access local services.
 iifname @trusted_ifaces accept
 
 # Tailscale WireGuard direct endpoint.
@@ -1304,7 +1155,6 @@ type nat hook postrouting priority srcnat; policy accept;
 # Do not masquerade multicast/broadcast traffic from VMs.
 iifname "virbr0" ip daddr { 224.0.0.0/4, 255.255.255.255/32 } return
 iifname "virbr0" oifname != "virbr0" masquerade
-iifname "uap0" oifname != "uap0" masquerade
 }
 }
 #+end_src
@@ -1501,24 +1351,51 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 **** root 服务与定时任务
 包含系统常驻守护与定时任务：
 - =smartd= ：S.M.A.R.T. 磁盘健康监控，每日 02:00 短自检、每周六 03:00 长自检（磁盘休眠时跳过）。
-- =beesd= ：btrfs 去重守护，hash 表 128M、按负载 5.0 节流。首次运行需全量扫描，IO 开销较大属正常。
+- =beesd= ：btrfs 去重守护，hash 表 128M、按负载 5.0 节流。首次运行需全量扫描，IO 开销较大属正常。启动经 =beesd-run= 包装：补 =/dev/disk/by-uuid= 软链（dm 设备无 by-uuid）并注入 =blkid= 的 PATH。
 - 每周日 18:00 执行 =guix gc= 清理 30 天前的旧世代（保留至少 20G 空间）。
 - 每周六 18:00 在外接电源状态下执行 =flatpak update --system= 。
 - 每周日 19:00 执行 =fstrim -av= 进行全盘 TRIM 兜底。
 
+beesd 与 smartd 的配置文件拆为独立块（=bees.conf= 必须含 =UUID= 行——beesd 不按文件名找配置，靠 grep 定位）:
+
+#+NAME: bees-conf
+#+begin_src conf :tangle ../tmp/bees.conf
+UUID="2f6b6499-2a27-4583-847f-dd70b9fcb036"
+DB_SIZE=$((128*1024*1024))
+OPTIONS="--loadavg-target 5.0 --thread-count 4"
+#+end_src
+
+#+NAME: smartd-conf
+#+begin_src conf :tangle ../tmp/smartd.conf
+DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
+#+end_src
+
 #+NAME: root-services
 #+begin_src scheme
 (list (root-daemon-service 'beesd
-                           (list (file-append (spec->pkg "bees") "/sbin/beesd")
-                                 "2f6b6499-2a27-4583-847f-dd70b9fcb036")
+                           (list (program-file
+                                  "beesd-run"
+                                  (with-imported-modules '((guix build utils))
+                                    #~(begin
+                                        (use-modules (guix build utils))
+                                        (let ([uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036"]
+                                              [link (string-append
+                                                     "/dev/disk/by-uuid/"
+                                                     "2f6b6499-2a27-4583-847f-dd70b9fcb036")])
+                                          (mkdir-p "/dev/disk/by-uuid")
+                                          (false-if-exception (delete-file link))
+                                          (symlink "/dev/mapper/root" link)
+                                          (setenv "PATH"
+                                                  #$(file-append util-linux "/sbin"))
+                                          (execl #$(file-append (spec->pkg "bees") "/sbin/beesd")
+                                                 "beesd" uuid))))))
                            #:requirement '(file-systems user-processes)
                            #:log-file "/var/log/beesd.log"
                            #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
 
       (simple-service 'beesd-conf etc-service-type
                       (list `("bees/2f6b6499-2a27-4583-847f-dd70b9fcb036.conf"
-                              ,(plain-file "bees.conf"
-                                           "DB_SIZE=$((128*1024*1024))\nOPTIONS=\"--loadavg-target 5.0 --thread-count 4\"\n"))))
+                              ,(local-file "./bees.conf"))))
 
       (simple-service 'home-channels home-channels-service-type
                       guix-channels)
@@ -1564,8 +1441,7 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 
       (simple-service 'smartd-conf etc-service-type
                       (list `("smartd.conf"
-                              ,(plain-file "smartd.conf"
-                                           "DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)\n")))))
+                              ,(local-file "./smartd.conf")))))
 #+end_src
 
 **** nix-ld 运行时库
@@ -1661,6 +1537,15 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 
 *** 桌面服务
 替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先，仅 greetd/login/polkit，sudo/su 走纯密码）、蓝牙与休眠 Polkit 提权规则；NTP 改用国内授时源（cn.pool/aliyun/ntsc），udisks2 补 ntfs3 挂载选项，/etc/hosts 屏蔽 QQ 更新域名。
+
+udisks2 挂载选项（补 =ntfs3_allow= 白名单，否则 udisks 拒绝大量挂载参数）:
+
+#+NAME: udisks-mount-options-conf
+#+begin_src conf :tangle ../tmp/mount_options.conf
+[defaults]
+ntfs:ntfs3_defaults=uid=$UID,gid=$GID
+ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard,sparse,nosparse,hidden,nohidden,sys_immutable,showmeta,noshowmeta,prealloc,noprealloc,hide_dot_files,nohide_dot_files,windows_names,nocase,case
+#+end_src
 
 #+NAME: desktop-services
 #+begin_src scheme :noweb yes
@@ -1792,9 +1677,7 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 
          (simple-service 'udisks-ntfs3 etc-service-type
                          (list `("udisks2/mount_options.conf"
-                                 ,(plain-file
-                                   "mount_options.conf"
-                                   "[defaults]\nntfs:ntfs3_defaults=uid=$UID,gid=$GID\nntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard,sparse,nosparse,hidden,nohidden,sys_immutable,showmeta,noshowmeta,prealloc,noprealloc,hide_dot_files,nohide_dot_files,windows_names,nocase,case\n"))))))
+                                 ,(local-file "./mount_options.conf"))))))
 #+end_src
 
 **** hibernate polkit 规则

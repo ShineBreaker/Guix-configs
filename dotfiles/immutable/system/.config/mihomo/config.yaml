@@ -86,7 +86,6 @@ tun:
   auto-redirect: true
   auto-detect-interface: true
   route-exclude-address:
-    - 192.168.77.0/24 # Hotspot subnet (uap0)
     - 100.64.0.0/10 # Tailscale CGNAT
 dns:
   enable: true

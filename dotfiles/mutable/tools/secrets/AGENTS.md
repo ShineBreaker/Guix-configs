@@ -21,7 +21,6 @@ secrets/
 │       │   └── age.pub
 │       └── secrets-encrypted/
 │           ├── mihomo-subscriptions.age
-│           ├── wifi-hotspot.age
 │           └── wifi-trust.age
 ├── .stow-local-ignore
 └── .stow-package

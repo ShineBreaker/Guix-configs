@@ -98,24 +98,13 @@ blue home                  # 仅构建并切换 Home 层（含 dotfiles），无
   - TTY 分配：TTY1 预留给内核消息，TTY2-6 使用 kmscon，TTY7 运行 Greetd 图形登录。
   - Elogind 默认忽略硬件休眠键，由 `50-hibernate.rules` 授权本地活跃用户。
 
-## 网络：nftables 与热点 AP
+## 网络与防火墙
 
-- **nftables 防火墙（接口信任模型）**：规则集开机时由 `nftables-service-type` 全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`uap0` 热点、`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行。NetworkManager dispatcher 仅动态增删该集合元素（可信 WiFi 加入 `wlp0s20f3`），绝不执行 `flush ruleset`。
+- **nftables 防火墙（接口信任模型）**：规则集开机时由 `nftables-service-type` 全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行。NetworkManager dispatcher 仅动态增删该集合元素（可信 WiFi 加入 `wlp0s20f3`），绝不执行 `flush ruleset`。
 - **WiFi 信任白名单**：以 NM Profile 名（`CONNECTION_ID`，非 SSID）为准，存储于加密文件 `wifi-trust.age` 中。Dispatcher 脚本在内存管道中解密比对，不落盘明文；私钥缺失时仅按不可信处理，不阻断联网。脚本经 activation 拷入 `/etc/NetworkManager/dispatcher.d/`（该目录是持久挂载点，规则文件随系统代原子切换）。
 - **WiFi 省电策略（`nm-powersave-conf`）**：目标是连接时恒不省电（低延迟、远程操控优先）。NM 每次连接都把省电重置为开启，曾尝试用 dispatcher 在 up 事件补救但被 NM 默认行为覆盖、不可靠，故改为在 NM `[connection]` 段写默认 `wifi.powersave=2`；拔电时由 udev ac-power 规则切回省电。注意 `[connection]` 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
 - **OpenSSH**：显式声明 `permit-root-login 'prohibit-password`——root 锁定密码、仅允许密钥登录，防上游默认漂移。
 - **mihomo-daemon**：`-d` 把数据目录（geodata/cache/UI/proxies）归位到 `/var/lib/mihomo`，随 @data 子卷持久化（此前 root 环境下默认写 `/.config/mihomo`）。启动经 `mihomo-run` 包装：解密 `mihomo-subscriptions.age` 后用 envsubst 渲染模板到 `/var/lib/mihomo/config.yaml` 再 exec；解密失败降级为空订阅启动（直连仍可用），不触发 respawn 风暴。模板侧与换订阅操作见 `dotfiles/immutable/system/AGENTS.md`。
-- **热点 AP（2026-09-09 事故复盘后重构，2026-09-13 撤除自动决策改为手动启停）**：hostapd 直管 `uap0`（type `__ap`），开机不自启，由 fish 命令 `hotspot on/off/status`（内部 `sudo herd`）控制。凭据存于 `wifi-hotspot.age` 密文（两行：SSID、密码），生成与更新由用户手动执行，Agent 禁止读取或输出明文。
-
-  安全不变式：
-  1. STA 与 AP 并发共享单一 radio（#channels<=1），AP beacon 会把 radio 锁死在其信道。执行体启动时内联探测：STA 已连接则跟随其信道，未连接用 2.4G ch6（self-managed world regdom 下 5G 全带 no IR，无 STA 关联起 5G 会被内核 START_AP 拒绝）。热点开启期间 STA 无法漫游到其他信道，需先 `hotspot off`。
-  2. hostapd 配置必须带 `hw_mode`，且与信道段配对（1-14 → g，其余 → a），否则报 "Could not determine operating frequency"。
-  3. `hotspot-ap` 不设 respawn：进程退出后 shepherd 把服务标为 disabled，`start` 会被拒，故 `hotspot on` 封装了「先 `herd enable` 再 `start`」的顺序（幂等）。
-
-  配套机制：
-  - `hotspot-uap0-udev`：用 udev `ENV{NM_UNMANAGED}="1"` 官方机制把 uap0 隔离出 NM（与 85-nm-unmanaged.rules 同款），规则文件随系统代原子切换。不走 conf.d `device.*` 段：NM 1.54 不认 `device.interface-name` 键（事故根因之一），且 `/etc/NetworkManager` 是持久子卷、坏文件跨代残留。规则序号须 >75（75-net-description 会无条件重设这些属性，实证于 eudev 3.2.14）；并清掉 `ID_NET_NAME*`，防 udev 因共享 MAC 把 uap0 改名成 wlp0s20f3（事故期间每次开机都报 rename 冲突）。
-  - `hotspot-stale-conf-cleanup`：一次性清理事故版本写入持久子卷的错误 conf.d 文件——回滚系统代清不掉，必须显式删。
-  - `hotspot-dnsmasq`：热点子网 DHCP/DNS，`--bind-dynamic` 绑 uap0，无热点时闲置；不碰 radio，可安全 respawn，崩溃即拉起保住热点子网 DHCP。
 
 ## 用户层与自定义包要点
 

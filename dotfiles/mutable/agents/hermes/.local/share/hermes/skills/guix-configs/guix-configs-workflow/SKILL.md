@@ -212,7 +212,6 @@ pkexec grep "<service-keyword>" /var/log/messages
 - **shepherd cached PID 不可信**:`make-forkexec-constructor` 不 wait 子进程,子进程死后 shepherd 仍缓存 PID。真相只在 `/var/log/messages` + `/proc/<pid>`。
 - **home-shepherd fork 不继承 WAYLAND_DISPLAY**: 调 wayland 客户端(`noctalia msg` / `makoctl`)需在 hook 脚本顶部动态探测 `$XDG_RUNTIME_DIR/wayland-*` 设 `WAYLAND_DISPLAY`。KB 20260619-195519 + F028。
 - **shepherd service command 禁止带 `--replace`**: 任何 `make-forkexec-constructor` 命令里的 `--replace`(典型来源:hermes gateway CLI 的 self-replace flag)会触发**自踢循环**——新进程启动 → 给前任发 SIGTERM → 前任退出码非 0 → shepherd `respawn? #t` 视为失败 → 再重启 → 又踢自己。日志特征是 `Received SIGTERM as a planned --replace takeover — exiting cleanly` 与 `Another gateway instance is already running (PID XXXX)` 交替出现。修复:从 service 定义里删 `--replace`,详情见 §4.5 + `references/hermes-gateway-shepherd-service.md`。
-- **NetworkManager 共享热点 DHCP 失败（dnsmasq 端口冲突）**: 手机连上热点但卡在"获取 IP 地址"——日志显示 `dnsmasq: failed to create listening socket for 10.42.0.1: Address already in use`。根因是 mihomo（或其他 DNS 代理）的 `dns.listen: 0.0.0.0:53` 占用了所有接口的 53 端口，NM 启动的 dnsmasq 无法绑定热点接口 DNS 端口而退出（exit code 2），DHCP 服务随之缺失。修复:把 DNS 代理的 listen 改为 `127.0.0.1:53`（劫持规则不受影响），重启代理 + 重新激活热点。完整诊断 + 修复流程见 `references/nm-hotspot-dnsmasq-port-conflict.md`。
 
 ### 4.4 改 shepherd 服务定义后的完整重启流程(blue home 不够)
 
