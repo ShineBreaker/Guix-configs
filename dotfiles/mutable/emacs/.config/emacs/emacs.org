@@ -170,6 +170,13 @@ Emacs 支持两种运行方式：普通独立窗口运行，以及守护进程�
 1. *一处绑定，多处生效* ：绑定按键的同时，自动为 Which-key 注册中文提示，并把按键加入快捷键帮助手册。
 2. *防重复声明* ：如果同一个按键在不同地方被不小心重复绑定，会自动报错中断，避免按键冲突。
 3. *调用格式* ：=(custom/bind "快捷键" #'命令 "中文说明" "分组名称")= 。
+
+*自助查询与定制*
+- *查某个键现在做什么* ：按 =C-h k= 再按那个键（=describe-key=）。
+- *查命令与键位总表* ：=C-h f custom/bind= 看声明格式；=C-h v custom:binding-spec= 列出全部已声明键位。
+- *改键* ：在对应功能模块找到 =(custom/bind "..." ...)= 行，改键串或换命令；键串语法见 =C-h f key-valid-p= ，功能键须写为 =<f12>= 而非 ="F12"= 。
+- *只分组不绑键* ：=custom/declare-binding-group= 是 =custom/bind= 的特例（=:prefix t=），只注册 Which-key 分组名、不绑定命令。
+- *命名约定* ：=custom:= 前缀为配置变量，=custom/= 为命令与函数，=custom--= （含 =custom/模块--名称= ）为内部实现细节——双分隔符开头表示不建议直接调用，本配置内部符号统一用 =--= 。
 #+end_tip
 
 #+begin_src emacs-lisp
@@ -2477,7 +2484,12 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
               default-directory                     ; 前缀参数:当前文件目录
             (or project-root default-directory)))   ; 项目根目录,否则当前目录
          (buf (or (custom--terminal-existing-buffer)
-                  ;; 无现存普通 ghostel:用 save-window-excursion 隔离窗口副作用
+                  ;; 无现存普通 ghostel:用 save-window-excursion 隔离窗口副作用。
+                  ;; `ghostel' 命令不返回新建的 buffer,只能先记录调用前的
+                  ;; buffer-list,再用「前后差集」把新 buffer 找出来;
+                  ;; save-window-excursion 保证这个探测过程不在屏幕上留下窗口变化。
+                  ;; 自文档:入口命令见 `C-h f ghostel',可调项见
+                  ;; `M-x customize-group RET ghostel'。
                   (let ((before (buffer-list)))
                     (save-window-excursion (ghostel))
                     (cl-find-if
@@ -2822,6 +2834,8 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
     (let (regions)
       (org-element-map (org-element-parse-buffer) 'src-block
         (lambda (el)
+          ;; `and-let*' = 逐个求值、任一为 nil 即整体返回 nil 的短路绑定串
+          ;; (等价于嵌套 when-let);末尾 ((fboundp mode)) 是只判断不绑变量的条件。
           (and-let* ((value (org-element-property :value el))
                      (lang (org-element-property :language el))
                      (mode (and (not (equal lang "org"))
@@ -2881,6 +2895,9 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   :hook ((prog-mode markdown-mode yaml-ts-mode) . apheleia-mode)
   :config
   (apheleia-global-mode 1)
+  ;; (setf (alist-get KEY LIST) VAL) 是「有则改、无则加」的通用写法
+  ;; (generalized variable),比 assq + setcdr 直白;此处把语言表派生的
+  ;; formatter/mode 映射逐条覆盖进 apheleia 的两个 alist。
   (dolist (formatter custom:language-apheleia-formatters)
     (setf (alist-get (car formatter) apheleia-formatters)
           (cdr formatter)))
@@ -2981,6 +2998,9 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 #+begin_src emacs-lisp
 ;; flymake-goto-* 无上游 autoload cookie:M-g n/p 与 <f8>/S-<f8> 在
 ;; flymake 尚未加载(未进过 prog buffer)时按键会 void-function,显式补齐。
+;; 通用模式(eglot/hideshow/diff-hl 处同理):上游未给命令 autoload cookie 时,
+;; 全局直绑须先 (autoload 命令 "包名") 登记按需加载点;想了解这条微引擎,
+;; `C-h f autoload' 会说明它如何让符号在包加载前就有定义。
 (autoload 'flymake-goto-next-error "flymake")
 (autoload 'flymake-goto-prev-error "flymake")
 (custom/bind "M-g n" #'flymake-goto-next-error "下一个错误" "跳转与错误")
@@ -3491,6 +3511,8 @@ SCHEDULED: %^t
 =kr= Roam 长期笔记:文件级条目,标题取自交互输入,ID 由 =org-id-new= 生成,落入 roam 目录。模板值不以换行结尾,故引用行不补 =\n=。
 
 #+begin_src emacs-lisp
+;; 模板体原文在紧跟本块的 #+name: org-capture-tpl-roam 文本块(:tangle no),
+;; tangle 时以 <<org-capture-tpl-roam>> 顶格引用拼入此处。
 (defconst custom:org-capture-tpl-roam
   '("kr" "Roam 长期笔记" plain
     (file custom/org-capture--roam-file)
@@ -3523,6 +3545,7 @@ SCHEDULED: %^t
 #+end_src
 
 #+begin_src emacs-lisp
+;; 模板体原文见 #+name: org-capture-tpl-note 文本块(:tangle no)。
 (defconst custom:org-capture-tpl-note
   '("kn" "经验-笔记 (note)" plain
     (file custom/org-capture--experience-file)
@@ -3530,6 +3553,7 @@ SCHEDULED: %^t
 <<org-capture-tpl-note>>\n")
   "note 条目:工作流经验。")
 
+;; 模板体原文见 #+name: org-capture-tpl-mistake 文本块(:tangle no)。
 (defconst custom:org-capture-tpl-mistake
   '("km" "经验-踩坑 (mistake)" plain
     (file custom/org-capture--experience-file)
@@ -3537,6 +3561,7 @@ SCHEDULED: %^t
 <<org-capture-tpl-mistake>>\n")
   "mistake 条目:踩坑记录。")
 
+;; 模板体原文见 #+name: org-capture-tpl-ascended 文本块(:tangle no)。
 (defconst custom:org-capture-tpl-ascended
   '("ka" "经验-试错后最优 (ascended)" plain
     (file custom/org-capture--experience-file)
