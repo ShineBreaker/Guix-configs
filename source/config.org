@@ -2179,6 +2179,7 @@ _    _  _  _  _  _  _  _)
              ;; 界面与外观
              "emacs-dashboard"
              "emacs-doom-modeline"
+             "emacs-minibuffer-frame"
              "emacs-nerd-icons"
              "emacs-rainbow-delimiters"
 

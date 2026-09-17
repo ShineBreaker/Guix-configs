@@ -4042,6 +4042,21 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
               #'completion-preview-insert-sexp))
 #+end_src
 
+*** Minibuffer 浮动窗口（按需）
+:PROPERTIES:
+:CUSTOM_ID: completion-frame
+:END:
+
+=minibuffer-frame= 提供居中的 minibuffer child frame，保留内置补全后端。
+通过 =M-x minibuffer-frame-mode= 切换，仅建议在独立的图形 Emacs 实例中使用。
+上游模式为全局开关，未区分 GUI/TTY，且复用单个父窗口的 child frame；
+本配置的混合 daemon 不默认启用，避免终端 minibuffer 与多窗口焦点受到影响。
+
+#+begin_src emacs-lisp
+(use-package minibuffer-frame
+  :commands minibuffer-frame-mode)
+#+end_src
+
 *** 搜索导航增强
 :PROPERTIES:
 :CUSTOM_ID: completion-consult
