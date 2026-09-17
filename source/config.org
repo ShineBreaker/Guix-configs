@@ -2195,6 +2195,7 @@ _    _  _  _  _  _  _  _)
 
              ;; 开发工具
              "emacs-agent-shell"
+             "emacs-dsh"
              "emacs-apheleia"
              "emacs-envrc"
              "emacs-ghostel"

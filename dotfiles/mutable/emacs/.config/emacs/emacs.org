@@ -4150,6 +4150,22 @@ AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
 (custom/bind "C-c a a t" #'agent-shell-toggle "切换 Agent Shell" "生活应用")
 #+end_src
 
+*** DeepSeek Harness
+
+=dsh-emacs= 复用本机 =dsh= CLI 与已有的 provider/model 配置，首次打开会话列表时
+按需连接或启动服务，不在 Emacs 启动时连接。凭据由 dsh 管理，不写入此配置。
+=C-c a d d= 打开会话列表，列表内 =c= 新建会话，聊天内 =C-c C-c= 发送消息。
+
+#+begin_src emacs-lisp
+(use-package dsh-emacs
+  :commands (dsh-emacs dsh-emacs-new-session dsh-emacs-open-web))
+
+(custom/declare-binding-group "C-c a d" "DeepSeek Harness")
+(custom/bind "C-c a d d" #'dsh-emacs "DSH 会话列表" "生活应用")
+(custom/bind "C-c a d n" #'dsh-emacs-new-session "新建 DSH 会话" "生活应用")
+(custom/bind "C-c a d w" #'dsh-emacs-open-web "DSH 网页设置" "生活应用")
+#+end_src
+
 *** RSS 阅读 (Newsticker)
 
 内置 ~newsticker~ :树形视图( =newsticker-treeview= )左侧 feed 列表、右侧条目,
