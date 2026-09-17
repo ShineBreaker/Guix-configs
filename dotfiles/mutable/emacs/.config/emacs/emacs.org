@@ -1269,7 +1269,7 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
 (defun custom/git-stash-pop ()
   "恢复最近一次 stash。"
   (interactive)
-  (custom/git--repo)
+  (custom/git--ensure-repo)
   (when (y-or-n-p "恢复最近一次 stash？")
     (custom/git--run "stash" "pop")
     (message "已恢复最近一次 stash")))
