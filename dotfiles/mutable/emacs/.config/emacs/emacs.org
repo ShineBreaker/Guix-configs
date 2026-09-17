@@ -223,19 +223,22 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
   (setq custom--pending-wk-descs nil))
 
 (defun custom/binding-help-sections ()
-  "从 binding spec 生成帮助分组。"
-  (let (order table)
-    (dolist (entry custom:binding-spec)
-      (when-let* ((group (plist-get entry :group)))
-        (unless (member group order)
-          (setq order (append order (list group))))
-        (push (cons (plist-get entry :key)
-                    (plist-get entry :description))
-              (alist-get group table nil nil #'equal))))
-    (seq-map
+  "从 `custom:binding-spec' 生成帮助分组。
+返回 ((GROUP . ((KEY . DESCRIPTION) ...)) ...):分组按首次出现顺序,
+组内条目按声明顺序;前缀声明条目(:group 为 nil)不分组。"
+  (let* ((declared-groups (mapcar (lambda (entry) (plist-get entry :group))
+                                  custom:binding-spec))
+         (groups (delete-dups (remq nil declared-groups))))
+    (mapcar
      (lambda (group)
-       (cons group (nreverse (alist-get group table nil nil #'equal))))
-     order)))
+       (cons group
+             (mapcar (lambda (entry)
+                       (cons (plist-get entry :key)
+                             (plist-get entry :description)))
+                     (seq-filter (lambda (entry)
+                                   (equal (plist-get entry :group) group))
+                                 custom:binding-spec))))
+     groups)))
 #+end_src
 
 ** 包管理与加载策略
@@ -1212,28 +1215,31 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
         output))))
 #+end_src
 
-定义快捷命令包装宏，并提供打开 Magit 与查看历史的核心命令。
+打开 Magit 状态页，并对当前文件执行 blame、查看历史与 diff。
 
 #+begin_src emacs-lisp
-(defmacro custom/git--define-file-command (name doc magit-command)
-  "定义命令 NAME:确认当前 buffer 关联文件后,转发 MAGIT-COMMAND。"
-  `(defun ,name ()
-     ,doc
-     (interactive)
-     (custom/git-buffer-file)
-     (call-interactively #',magit-command)))
-
 (defun custom/git-status-dwim ()
   "打开当前仓库的 Magit 状态页。"
   (interactive)
   (magit-status-setup-buffer (custom/git--ensure-repo)))
 
-(custom/git--define-file-command custom/git-blame-current-file
-                                 "对当前文件执行 blame。" magit-blame-addition)
-(custom/git--define-file-command custom/git-log-current-file
-                                 "查看当前文件历史。" magit-log-buffer-file)
-(custom/git--define-file-command custom/git-diff-current-file
-                                 "查看当前文件 diff。" magit-diff-buffer-file)
+(defun custom/git-blame-current-file ()
+  "对当前文件执行 blame。"
+  (interactive)
+  (custom/git-buffer-file)
+  (call-interactively #'magit-blame-addition))
+
+(defun custom/git-log-current-file ()
+  "查看当前文件历史。"
+  (interactive)
+  (custom/git-buffer-file)
+  (call-interactively #'magit-log-buffer-file))
+
+(defun custom/git-diff-current-file ()
+  "查看当前文件 diff。"
+  (interactive)
+  (custom/git-buffer-file)
+  (call-interactively #'magit-diff-buffer-file))
 #+end_src
 
 包含用户交互确认与副作用的文件暂存、丢弃与 Stash 命令。
@@ -2256,21 +2262,21 @@ depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
 ;; q 与 M-q 填充对偶(unfill);r/R 正则替换先出 diff 预览再按 patch 应用
 ;; (R 为多文件全局入口,Dired 内另有标记文件版 dired-do-replace-regexp-as-diff);
 ;; C-w 按空白分词回杀(终端 readline 风格),与 kill-region-dwim 互补。
-;; CJK 全半角 DWIM(Emacs 31 内置 fullwidth/halfwidth 命令):有选区转
-;; 选区,无选区转光标处词,中英混排内容统一字母/数字/标点宽度。
-(defmacro custom/cjk-width--define-dwim (name doc width)
-  "定义命令 NAME:有选区转选区,无选区转光标处词,按 WIDTH 全/半角转换。"
-  `(defun ,name ()
-     ,doc
-     (interactive)
-     (if (use-region-p)
-         (call-interactively #',(intern (format "%s-region" width)))
-       (call-interactively #',(intern (format "%s-word" width))))))
+;; CJK 全半角 DWIM(Emacs 31 内置 fullwidth/halfwidth 命令):中英混排内容
+;; 统一字母/数字/标点宽度。
+(defun custom/fullwidth-dwim ()
+  "有选区时把选区转全角,无选区时转光标处词。"
+  (interactive)
+  (if (use-region-p)
+      (call-interactively #'fullwidth-region)
+    (call-interactively #'fullwidth-word)))
 
-(custom/cjk-width--define-dwim custom/fullwidth-dwim
-                               "有选区时把选区转全角,无选区时转光标处词。" fullwidth)
-(custom/cjk-width--define-dwim custom/halfwidth-dwim
-                               "有选区时把选区转半角,无选区时转光标处词。" halfwidth)
+(defun custom/halfwidth-dwim ()
+  "有选区时把选区转半角,无选区时转光标处词。"
+  (interactive)
+  (if (use-region-p)
+      (call-interactively #'halfwidth-region)
+    (call-interactively #'halfwidth-word)))
 
 (custom/bind "C-c e q" #'unfill-paragraph "取消段落填充" "编辑变换")
 (custom/bind "C-c e r" #'replace-regexp-as-diff "正则替换预览" "编辑变换")
@@ -2504,12 +2510,15 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
     ;; apheleia-npx 未命中 node_modules 时回退 PATH),覆盖整个
     ;; prettier-* 家族:JS/TS/TSX/CSS/HTML/JSON/Markdown/LESS。
     (:modes (css-mode css-ts-mode)
+            :ts-mode nil
             :server nil
             :formatter prettier-css)
     (:modes (emacs-lisp-mode)
+            :ts-mode nil
             :server nil
             :formatter lisp-indent)
     (:modes (gdscript-mode)
+            :ts-mode nil
             :server nil                       ; gdscript LSP 由 godot 自带
             :formatter nil)
     (:modes (go-mode go-ts-mode)
@@ -2523,6 +2532,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
             :server nil
             :formatter clang-format)
     (:modes (js-mode js-ts-mode)
+            :ts-mode nil
             :server nil
             :formatter prettier-javascript)
     (:modes (json-mode json-ts-mode js-json-mode)
@@ -2530,12 +2540,15 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
             :server nil
             :formatter prettier-json)
     (:modes (less-css-mode)
+            :ts-mode nil
             :server nil
             :formatter prettier)
     (:modes (markdown-mode)
+            :ts-mode nil
             :server nil
             :formatter prettier-markdown)
     (:modes (nix-mode)
+            :ts-mode nil
             :server nil
             :formatter nixfmt)
     (:modes (python-mode python-ts-mode)
@@ -2549,6 +2562,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
     ;; lisp-indent 是 apheleia 内置纯 elisp formatter,复用 buffer 自身
     ;; major-mode 的缩进函数;Guile 无外部 formatter,arei REPL 不涉格式化。
     (:modes (scheme-mode)
+            :ts-mode nil
             :server nil
             :formatter lisp-indent)
     ;; prettier 原生理解 TS 语法,故 TS 家族统一走 prettier。
@@ -2560,6 +2574,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
     ;; 仅注册 auto-mode-alist(见 [[#language-modes]]);LSP 与 typescript 分开
     ;; 维护;prettier 原生理解 JSX/TSX。
     (:modes (tsx-ts-mode)
+            :ts-mode nil
             :server ("typescript-language-server" "--stdio")
             :formatter prettier-typescript)
     ;; mhtml-ts-mode(Emacs 31 内置)处理 HTML 与内嵌 JS/CSS,替代 web-mode。
@@ -2570,17 +2585,21 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
             :server nil
             :formatter prettier-html)
     (:modes (sh-mode)
+            :ts-mode nil
             :server nil
             :formatter shfmt)
     (:modes (fish-mode)
+            :ts-mode nil
             :server nil
             :formatter fish-indent)
     ;; yaml-ts-mode 派生自 text-mode 而非 yaml-mode,不显式列出则 yq 映射
     ;; 不生效(残留包默认 prettier-yaml 因缺二进制静默失败)。
     (:modes (yaml-mode yaml-ts-mode)
+            :ts-mode nil
             :server nil
             :formatter yq-yaml)
     (:modes (zig-mode)
+            :ts-mode nil
             :server ("zls")
             :formatter zig-fmt)
     ;; C# 仅 ts-mode(内置 csharp-ts-mode,grammar 由 Guix 提供);
@@ -2596,24 +2615,39 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
   :formatter Apheleia formatter 符号(nil 表示显式禁用)")
 
 (defconst custom:language-treesit-remaps
-  (seq-filter #'cdr
-              (seq-map (lambda (entry)
-                         (let ((orig-mode (car (plist-get entry :modes)))
-                               (ts-mode (plist-get entry :ts-mode)))
-                           (when (and orig-mode ts-mode)
-                             (cons orig-mode ts-mode))))
-                       custom:language-capabilities))
-  "Tree-sitter major mode remap 列表(从 `custom:language-capabilities' 派生)。")
+  (let (remaps)
+    (dolist (entry custom:language-capabilities)
+      (let ((orig-mode (car (plist-get entry :modes)))
+            (ts-mode (plist-get entry :ts-mode)))
+        (when (and orig-mode ts-mode)
+          (push (cons orig-mode ts-mode) remaps))))
+    (nreverse remaps))
+  "Tree-sitter major mode remap 列表(从 `custom:language-capabilities' 派生)。
+只收录同时给出传统 mode 与 ts-mode 的条目,例:
+((c-mode . c-ts-mode) (c++-mode . c++-ts-mode) ...),顺序同能力表。")
+
+(defun custom/language--derive-eglot-programs ()
+  "把 `custom:language-capabilities' 按 :server 展平为 eglot 条目。
+同一 server 的多语言合并为 (MODE... . SERVER-CMD) 一条(:server 是命令行
+列表,同命令的不同写法按 `equal' 视为同一 server);返回的 mode 列表是
+新 cons,不与能力表共享结构。"
+  (let (groups)
+    (dolist (entry custom:language-capabilities)
+      (let ((server (plist-get entry :server)))
+        (when server
+          (let ((existing (assoc server groups)))
+            (if existing
+                (setcdr existing
+                        (append (cdr existing) (plist-get entry :modes)))
+              (push (cons server (copy-tree (plist-get entry :modes)))
+                    groups))))))
+    (mapcar (lambda (group) (cons (cdr group) (car group)))
+            (nreverse groups))))
 
 (defconst custom:language-eglot-server-programs
-  (mapcar (lambda (group)
-            (cons (seq-mapcat (lambda (entry) (plist-get entry :modes))
-                              (cdr group))
-                  (car group)))
-          (seq-group-by (lambda (entry) (plist-get entry :server))
-                        (seq-filter (lambda (entry) (plist-get entry :server))
-                                    custom:language-capabilities)))
-  "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生,按 server 命令去重)。")
+  (custom/language--derive-eglot-programs)
+  "附加到 `eglot-server-programs' 的语言服务器配置(从能力表派生,按 server 命令去重)。
+例:((c-mode c++-mode) . (\"ccls\")) —— 同一 server 的语言合并为一条。")
 
 (defconst custom:language-apheleia-formatters
   '((org-src-blocks . custom--format-org-src-blocks))
@@ -2622,11 +2656,15 @@ dotted 条目为函数 formatter(value 是函数符号,协议同 apheleia-indent
 org-src-blocks 不进 mode-alist,仅由 C-c o f(custom/format-org-src-blocks)调用。")
 
 (defconst custom:language-apheleia-mode-alist
-  (seq-mapcat (lambda (entry)
-                (seq-map (lambda (mode) (cons mode (plist-get entry :formatter)))
-                         (plist-get entry :modes)))
-              custom:language-capabilities)
+  (let (alist)
+    (dolist (entry custom:language-capabilities)
+      (let ((formatter (plist-get entry :formatter)))
+        (dolist (mode (plist-get entry :modes))
+          (push (cons mode formatter) alist))))
+    (nreverse alist))
   "Apheleia major mode 对应关系(从 `custom:language-capabilities' 派生)。
+每个 mode 一条,例:((c-mode . clang-format) (css-mode . prettier-css) ...),
+顺序同能力表。
 :formatter nil 的条目也写入,value 为 nil 显式禁用格式化——覆盖包默认
 mode-alist 的残留映射(如 gdscript→gdformat),缺二进制的 formatter 不会
 在保存时空跑。")
@@ -3354,18 +3392,25 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
         custom/org-capture--roam-title nil))
 #+end_src
 
-每条模板拆成两部分:=defconst= 块持有键、类型与目标文件,以列 0 的 noweb 引用拼入模板体;紧跟其后的 =#+name= 文本块(=org= 语言,=:tangle no=)即模板原文。
+每条模板拆成两部分:emacs-lisp 块持有键、类型与目标文件,以列 0 的 noweb 引用拼入模板体;紧跟其后的 =#+name= 文本块(=org= 语言,=:tangle no=)即模板原文。
 
 文本块书写约束:
 
 + 行首 =*= / =#+= 以逗号转义(=,*=)保字面,含双引号的 elisp 表达式写 =\"=
 + 引用行的开引号留在上一行、ref 顶格——noweb 展开会把引用处行首前缀复制到文本每一行
 
-目标文件三类求值时机:常量路径在定义时展开(反引号 =,=);agenda 三条在 org-capture 加载时求值一次;需要交互选择的(经验卡路径、Roam 标题)传入函数,由 org-capture 在 capture 时调用。
+目标文件三类求值时机:常量路径在定义时展开(反引号 =,=);agenda 两条在 org-capture 加载时求值一次;需要交互选择的(经验卡路径、Roam 标题)传入函数,由 org-capture 在 capture 时调用。
+
+#+begin_note
+*改模板前先看这里* ：经验卡模板体读取 =custom/org-capture--last-category= 、Roam 模板体读取 =custom/org-capture--roam-title= 。这两个变量由文件目标函数（=custom/org-capture--experience-file= 等）在 capture 开始时写入，模板展开时读走，=custom/org-capture--clear-state= 在 finalize 后清空。
+改模板时勿删这些引用，否则属性会退化为默认值（=general= / =未命名笔记=）。
+#+end_note
 
 =ki= Inbox 草稿:最小阻力收集,一句话 TODO + CREATED 时间戳,留待 inbox 分流。
 
 #+begin_src emacs-lisp
+;; 模板体原文在紧跟本块的 #+name: org-capture-tpl-inbox 文本块(:tangle no),
+;; tangle 时以 <<org-capture-tpl-inbox>> 顶格引用拼入此处。
 (defconst custom:org-capture-tpl-inbox
   `("ki" "Inbox 草稿" entry
     (file ,custom:org-inbox-file)
@@ -3383,13 +3428,7 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
 %i
 #+end_src
 
-=kd= / =ke= agenda 两条:带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。两条由 =custom/org-capture--agenda-tpl= 在 org-capture 加载时以同一目标文件生成;=kd= / =ke= 仅日期行与首行关键字差异(普通无日期任务被 =kd= 覆盖:SCHEDULED 行可留空跳过)。
-
-#+begin_src emacs-lisp
-(defun custom/org-capture--agenda-tpl (key desc file body)
-  "生成 agenda capture 模板:KEY/DESC/目标 FILE 加 BODY 模板体。"
-  (list key desc 'entry (list 'file file) body))
-#+end_src
+=kd= / =ke= agenda 两条:带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。两条在 org-capture 加载时以同一 agenda 目标文件写成模板字面量;=kd= / =ke= 仅日期行与首行关键字差异(普通无日期任务被 =kd= 覆盖:SCHEDULED 行可留空跳过)。
 
 #+name: org-capture-tpl-task-date
 #+begin_src org :tangle no
@@ -3529,9 +3568,15 @@ SCHEDULED: %^t
   (let ((agenda-file (car (org-agenda-files))))
     (setq org-capture-templates
           (list custom:org-capture-tpl-inbox
-                (custom/org-capture--agenda-tpl "kd" "带日期任务 (agenda)" agenda-file "
+                ;; kd / ke 无独立 defconst:模板体在本小节上方 #+name:
+                ;; org-capture-tpl-task-date / org-capture-tpl-event 文本块。
+                `("kd" "带日期任务 (agenda)" entry
+                  (file ,agenda-file)
+                  "
 <<org-capture-tpl-task-date>>\n")
-                (custom/org-capture--agenda-tpl "ke" "日程事件 (agenda)" agenda-file "
+                `("ke" "日程事件 (agenda)" entry
+                  (file ,agenda-file)
+                  "
 <<org-capture-tpl-event>>\n")
                 custom:org-capture-tpl-roam
                 custom:org-capture-tpl-note
