@@ -3970,32 +3970,37 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 ;; C-c w 面板体系:左 Dired([[#panel-dired]])/ 底终端([[#terminal]])/ 右 Agent
 ;; ([[#applications]])各自复用其功能域的打开命令,这里只承载跨域的布局总开关。
+(defun custom/dired-buffer-in-root (root)
+  "返回显示 ROOT 目录的 Dired buffer(按 dired-noselect 复用规则),无则 nil。"
+  (seq-find (lambda (buf)
+              (with-current-buffer buf
+                (and (stringp dired-directory)
+                     (equal (expand-file-name dired-directory) root))))
+            (custom--buffers-in-mode 'dired-mode)))
+
+(defun custom/visible-panel-buffers ()
+  "收集三面板(左 Dired/底终端/右 Agent)当前已存在的 buffer 列表。
+显隐判断只用已存在 buffer:dired 按 dired-noselect 的复用规则查找
+(dired-mode + dired-directory 匹配项目根),隐藏路径不为此创建 buffer。"
+  (let* ((root (expand-file-name (custom/project-root-or-default)))
+         (dired-buf (custom/dired-buffer-in-root root)))
+    (append (remq nil (list dired-buf (custom--terminal-existing-buffer)))
+            (custom--buffers-in-mode 'agent-shell-mode))))
+
 (defun custom/panels-toggle ()
   "一键开关三面板布局(左 Dired / 底终端 / 右 Agent)。
 任一面板已显示则全部隐藏(缓冲区保留,终端与 agent 会话不中断);
 全部隐藏时重新打开。开关后焦点均回到主编辑窗口(Zed dock 行为)。"
   (interactive)
-  ;; 显隐判断只用已存在 buffer:dired 按 dired-noselect 的复用规则查找
-  ;; (dired-mode + dired-directory 匹配项目根),隐藏路径不为此创建 buffer。
-  (let* ((root (expand-file-name (custom/project-root-or-default)))
-         (dired-buf (seq-find
-                     (lambda (buf)
-                       (with-current-buffer buf
-                         (and (stringp dired-directory)
-                              (equal (expand-file-name dired-directory) root))))
-                     (custom--buffers-in-mode 'dired-mode)))
-         (buffers (append
-                   (remq nil (list dired-buf
-                                   (custom--terminal-existing-buffer)))
-                   (custom--buffers-in-mode 'agent-shell-mode))))
-    (if (cl-some #'get-buffer-window buffers)
+  (let ((buffers (custom/visible-panel-buffers)))
+    (if (seq-some #'get-buffer-window buffers)
         (dolist (buf buffers)
           (when-let* ((win (get-buffer-window buf)))
             (delete-window win)))
       (custom/panel-dired)
       (custom/open-terminal)
       (agent-shell)))
-  (when-let* ((main (cl-find-if
+  (when-let* ((main (seq-find
                      (lambda (w) (not (window-parameter w 'window-side)))
                      (window-list (selected-frame)))))
     (select-window main)))
@@ -4343,6 +4348,44 @@ Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =us
 - *四大核心内容* ：今日待办日程（Agenda）、最近访问的文件（Recent Files）、已知项目列表（Projects）以及顶部的四个快捷按钮（任务计时、书签跳转、知识库总览、快捷键帮助）。
 - *视觉排版* ：版心比例自动居中、自适应窗口宽度，并支持 Nerd Font 图标美化。
 
+*** 渲染管线总览
+
+一次 dashboard 渲染的调用链如下（各函数都在紧随其后的 src block 中定义）：
+
+#+attr_org: :width 90
+| 环节   | 函数                                          | 职责                                                                           |
+|--------+-----------------------------------------------+--------------------------------------------------------------------------------|
+| 入口   | =custom/dashboard-initial-buffer=             | 客户端无文件参数启动时的 =initial-buffer-choice=：渲染一次并记录当时的窗口宽度 |
+| 渲染   | =dashboard-open=                              | 插件原生全量渲染：banner、导航按钮与各板块条目                                 |
+| 定位   | =custom/dashboard--dashboard-window=          | 找到显示 dashboard 的 client 窗口（过滤 daemon 的哑 frame）                    |
+| 刷新   | =custom/dashboard--refresh-in-window=         | 在该窗口上下文里强制重渲染并装饰，resize 与 frame 就绪回调共用                 |
+| 装饰   | =custom/dashboard--decorate-headings=         | 收集板块标题 overlay，倒序逐个装饰，最后整体居中                               |
+| 步骤 1 | =custom/dashboard--replace-section-separator= | 板块尾第一段空行换分割线，并给板块内行加行间距                                 |
+| 步骤 2 | =custom/dashboard--indent-heading=            | 标题行缩进 4 列，并把标题 overlay 拨回原位                                     |
+| 步骤 3 | =custom/dashboard--suffix-heading-key=        | 快捷键右贴到标题行行尾，补齐到版心宽                                           |
+| 收尾   | =custom/dashboard--center-groups=             | 板块区按版心统一前缀（块内左对齐），其余行按自身行宽各自居中                   |
+| 跳过   | =custom/dashboard--refresh-if-stale=          | 窗口宽度与上次渲染一致时跳过一次全量重渲染                                     |
+
+=dashboard-open= 渲染出来的只是普通文本，行首图标、缩进、分割线与居中全靠
+渲染后的“装饰”补上，而装饰必须知道目标窗口的宽度，所以总在显示 dashboard
+的窗口上下文里执行。三步的先后不能换：先量标题宽度，再缩进并挪 overlay，
+最后才按版心宽把快捷键贴到行尾。
+
+*** 按钮与图标
+
+顶部四个按钮由数据表 =custom/dashboard--nav-buttons= 描述，每条是
+=（ICON TITLE HELP COMMAND）= 四元组；图标统一经 =custom/dashboard-button-icon=
+取 nerd-icons octicon。四个 =COMMAND= 都是具名 interactive 命令，可以单独
+=M-x= 调用调试；而 widget 的 =:action= 回调以 =(widget event)= 两参调用，
+所以这些命令用 =&rest= 兜底。增删按钮只改这张数据表。
+
+*** 宽度自适应与防抖
+
+- 版心宽 = =custom:dashboard-content-ratio= × 窗口正文宽（=custom/dashboard--content-width= ）；低于 =custom:dashboard-min-content-width= 的窗口不做全量渲染，保留上一次的可读内容。
+- 拖拽 resize 时每个中间宽度都会触发 =window-size-change-functions= ，逐次全量渲染会卡住主循环；=custom/dashboard--on-resize= 只挂一个 0.3s 的 idle timer，静止后合并刷新一次。
+- =custom/dashboard--rendered-width= 记住上次渲染宽度，宽度相符的事件（含同宽新 frame）零成本跳过；GUI daemon 首帧可能按哑 frame 的宽度渲染，=custom/dashboard--on-frame-make= 在 frame 就绪后比较宽度自愈。
+- 自己试：改完比例 =M-x dashboard-open= 看效果；=C-h v custom:dashboard-content-ratio= 、=C-h v custom:dashboard-min-content-width= 查当前值与文档。
+
 #+begin_src emacs-lisp
 (defvar custom/dashboard--rendered-width nil
   "上次渲染 dashboard 时的窗口正文宽度。
@@ -4356,28 +4399,56 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。渲染
 重渲染,首帧只渲染一次;GUI daemon 首帧可能仍在哑 frame 上下文渲染
 (宽度错),回调比较不符才重渲染自愈。"
   (require 'org-agenda)
-  (prog1 (dashboard-open)
+  (let ((buffer (dashboard-open)))
     (custom/dashboard--decorate-headings)
-    (setq custom/dashboard--rendered-width (window-body-width))))
+    (setq custom/dashboard--rendered-width (window-body-width))
+    buffer))
+
+(defun custom/dashboard-button-icon (name)
+  "取 dashboard 按钮用的 nerd-icons octicon 图标串。"
+  (nerd-icons-octicon name :height 1.2 :v-adjust -0.05))
+
+;; 四个按钮动作。widget 的 :action 以 (widget event) 两参调用回调,故各命令
+;; 用 &rest 兜底;命令体是原命令的薄包装,与原 lambda 体一致。
+(defun custom/dashboard-goto-clock-or-agenda (&rest _)
+  "Dashboard 按钮:有计时的任务则跳转,否则打开今日议程。"
+  (interactive)
+  (require 'org-clock)
+  (call-interactively
+   (if (org-clocking-p) #'org-clock-goto #'org-agenda-list)))
+
+(defun custom/dashboard-jump-bookmark (&rest _)
+  "Dashboard 按钮:交互式跳转书签。"
+  (interactive)
+  (call-interactively #'bookmark-jump))
+
+(defun custom/dashboard-browse-knowledge (&rest _)
+  "Dashboard 按钮:打开知识库总览。"
+  (interactive)
+  (call-interactively #'agenote-knowledge-browse))
+
+(defun custom/dashboard-show-shortcuts (&rest _)
+  "Dashboard 按钮:打开快捷键帮助。"
+  (interactive)
+  (call-interactively #'custom/show-help))
 
 (defun custom/dashboard--nav-buttons ()
-  "Dashboard navigator 一行四个二级入口(icon title help action)。
-action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
-  (cl-flet ((ic (name)
-              (nerd-icons-octicon name :height 1.2 :v-adjust -0.05)))
-    (list
-     (list (ic "nf-oct-clock") "计时"
-           "计时的任务: 跳转;否则打开今日议程(按 I 计时)"
-           (lambda (&rest _)
-             (require 'org-clock)
-             (call-interactively
-              (if (org-clocking-p) #'org-clock-goto #'org-agenda-list))))
-     (list (ic "nf-oct-bookmark") "书签" "跳转书签 (C-x r b)"
-           (lambda (&rest _) (call-interactively #'bookmark-jump)))
-     (list (ic "nf-oct-book") "知识库" "知识库总览 (RET 打开卡片)"
-           (lambda (&rest _) (call-interactively #'agenote-knowledge-browse)))
-     (list (ic "nf-oct-question") "快捷键" "快捷键帮助 (F1 ?)"
-           (lambda (&rest _) (call-interactively #'custom/show-help))))))
+  "Dashboard navigator 一行四个二级入口。
+每条目为 (ICON TITLE HELP COMMAND) 四元组;COMMAND 是命令符号,widget
+以 (widget event) 两参调用它,故这些命令均以 &rest 兜底。"
+  (list
+   (list (custom/dashboard-button-icon "nf-oct-clock") "计时"
+         "计时的任务: 跳转;否则打开今日议程(按 I 计时)"
+         #'custom/dashboard-goto-clock-or-agenda)
+   (list (custom/dashboard-button-icon "nf-oct-bookmark") "书签"
+         "跳转书签 (C-x r b)"
+         #'custom/dashboard-jump-bookmark)
+   (list (custom/dashboard-button-icon "nf-oct-book") "知识库"
+         "知识库总览 (RET 打开卡片)"
+         #'custom/dashboard-browse-knowledge)
+   (list (custom/dashboard-button-icon "nf-oct-question") "快捷键"
+         "快捷键帮助 (F1 ?)"
+         #'custom/dashboard-show-shortcuts)))
 
 ;; 旧自研 dashboard 的 figlet 字符画;box-drawing 字符均为单宽,
 ;; 'ascii banner 直接 insert 字符串,GUI/TTY 渲染一致。
@@ -4392,6 +4463,7 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
 
 ;; 标题行右缘的快捷键提示,按 dashboard-items 声明顺序位置映射
 ;; (GUI 下行首 icon 字符无法用文本匹配可靠定位,位置映射最稳)。
+;; 修改任一处须同步另一处(dashboard-items 的 setq 处有对应注释)。
 (defconst custom:dashboard-heading-keys
   '("C-c o a" "C-x C-r" "C-x p p")
   "各标题行右缘显示的快捷键,顺序与 `dashboard-items' 一致。")
@@ -4412,43 +4484,73 @@ action 由 widget 以 (widget event) 两参调用,必须用 &rest 兜底。"
 text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
   :type 'integer)
 
+(defconst custom:dashboard-heading-indent 4
+  "标题行缩进列数(行首插入的空格数)。
+装饰时按此值把 overlay 拨回原位,快捷键右贴宽度也按此折算。")
+
 (defun custom/dashboard--content-width (&optional window)
   "WINDOW(默认 selected)下的 dashboard 版心宽度(列)。"
   (floor (* custom:dashboard-content-ratio
             (window-body-width window))))
 
+(defun custom/dashboard--compress-middle-dirs (abbrev)
+  "把 ABBREV 的中间目录压为首字母,返回压缩后的完整路径。
+首段(根或卷标)与末段(文件名)不压缩;隐藏目录(.x)保留点号取
+第二个字符,空目录项原样保留。"
+  (let* ((parts (split-string abbrev "/" t))
+         (len (length parts))
+         (head (car parts))
+         (file (car (last parts)))
+         (middle (cl-subseq parts 1 (1- len)))
+         (compressed
+          (seq-map
+           (lambda (dir)
+             (cond ((string-empty-p dir) dir)
+                   ((string-prefix-p "." dir)
+                    (if (> (length dir) 1)
+                        (concat "." (substring dir 1 2))
+                      dir))
+                   (t (substring dir 0 1))))
+           middle)))
+    (concat head "/"
+            (mapconcat #'identity compressed "/")
+            "/" file)))
+
+(defun custom/dashboard--truncate-to-width (path width)
+  "PATH 超出 WIDTH 列时头部截断补 ...,WIDTH 不足 3 列则只留 ...。
+截断按显示宽度计(CJK 字符占 2 列),取显示宽度不超过 WIDTH-3 的
+最长前缀,保证结果连同 ... 不超宽;直接用 substring 按字符数截
+会在 CJK 长文件名上 args-out-of-range,中断整个 dashboard 渲染。
+未超宽时原样返回 PATH。"
+  (if (<= (string-width path) width)
+      path
+    (if (<= width 3)
+        "..."
+      (let ((limit (- width 3))
+            (chars 0)
+            (cols 0))
+        (catch 'exceed
+          (dolist (ch (string-to-list path))
+            (let ((w (char-width ch)))
+              (when (> (+ cols w) limit)
+                (throw 'exceed t))
+              (setq cols (+ cols w)
+                    chars (1+ chars)))))
+        (concat (substring path 0 chars) "...")))))
+
 (defun custom/dashboard--shorten-path (path _type)
   "dashboard-shorten-path 的替代:超版心的路径两级降级。
 先压缩中间目录为首字母(隐藏目录以 . 开头,取其第二个字符),仍超
 则头部 ... 截断。显示文本与真实路径经 plugin 的 path-alist 解耦,
-缩短不影响点击跳转。"
+缩短不影响点击跳转。_TYPE 是 dashboard 传入的展示类型,本实现不用
+(下划线前缀表示占位)。"
   (let* ((abbrev (abbreviate-file-name path))
          (width (custom/dashboard--content-width))
          (parts (split-string abbrev "/" t))
-         (len (length parts))
-         (p (if (<= len 3)
+         (p (if (<= (length parts) 3)
                 abbrev
-              (let* ((head (car parts))
-                     (file (car (last parts)))
-                     (middle (cl-subseq parts 1 (1- len)))
-                     (compressed
-                      (seq-map
-                       (lambda (dir)
-                         (cond ((string-empty-p dir) dir)
-                               ((string-prefix-p "." dir)
-                                (if (> (length dir) 1)
-                                    (concat "." (substring dir 1 2))
-                                  dir))
-                               (t (substring dir 0 1))))
-                       middle)))
-                (concat head "/"
-                        (mapconcat #'identity compressed "/")
-                        "/" file)))))
-    (if (<= (string-width p) width)
-        p
-      (if (<= width 3)
-          "..."
-        (concat (substring p 0 (- width 3)) "...")))))
+              (custom/dashboard--compress-middle-dirs abbrev))))
+    (custom/dashboard--truncate-to-width p width)))
 
 (defun custom/dashboard--dashboard-window ()
   "返回 client frame 中显示 dashboard 的窗口,无则 nil。
@@ -4477,66 +4579,83 @@ get-buffer-window 查询。渲染与装饰都必须以该窗口为 selected:版�
   "收集 dashboard buffer 内有效的标题 overlay,按位置排序。
 重渲染后旧 overlay 塌缩成空壳仍残留,按起止位置剔除。"
   (sort
-   (cl-remove-if-not
+   (seq-filter
     (lambda (ov)
       (and (eq (overlay-get ov 'face) 'dashboard-heading)
            (> (overlay-end ov) (overlay-start ov))))
     (overlays-in (point-min) (point-max)))
    (lambda (a b) (< (overlay-start a) (overlay-start b)))))
 
+(defun custom/dashboard--replace-section-separator (ov separator)
+  "把板块尾第一段空行换成 SEPARATOR,并为板块内行加行间距。
+OV 是板块标题 overlay。板块边界 = 标题行后第一个空行:从标题行起
+一遍扫描,顺手收集行范围;扫到空行即边界,走到 point-max 仍无
+空行则整体跳过(末板块无分割线)。"
+  (save-excursion
+    (goto-char (overlay-start ov))
+    (let ((lines '())
+          blank)
+      (while (and (not blank) (< (point) (point-max)))
+        (let ((beg (line-beginning-position))
+              (end (line-end-position)))
+          (if (= end beg)
+              (setq blank t)
+            (push (cons beg end) lines)
+            (forward-line 1))))
+      (when blank
+        ;; 板块内标题与条目行统一行间距:不插空行,靠 GUI 行距
+        ;; 拉开;标题行也在内,与首条目保持同一间距
+        (dolist (line lines)
+          (put-text-property (car line) (cdr line)
+                             'line-spacing custom:dashboard-line-spacing))
+        (delete-region (line-beginning-position) (line-end-position))
+        (insert separator)))))
+
+(defun custom/dashboard--indent-heading (ov)
+  "标题行缩进 `custom:dashboard-heading-indent' 列,并把 OV 拨回原位。
+heading overlay 是 front-advance:TTY 无 icon 时其起点恰在行首,行首
+插入的缩进会被吞进 overlay(display 替换后消失)。记住原文本范围,
+插入后把 overlay 拨回。缩进继承行首的 line-prefix,否则标题行脱离
+板块整体缩进。"
+  (goto-char (overlay-start ov))
+  (let ((line-start (line-beginning-position))
+        (off-s (- (overlay-start ov) (line-beginning-position)))
+        (off-e (- (overlay-end ov) (line-beginning-position))))
+    (goto-char line-start)
+    (let ((prefix (get-text-property line-start 'line-prefix)))
+      ;; 缩进是 display 行首字符,line-spacing 由它决定,须带上
+      (insert (propertize
+               (make-string custom:dashboard-heading-indent ?\s)
+               'line-prefix prefix
+               'line-spacing custom:dashboard-line-spacing))
+      (move-overlay ov
+                    (+ line-start custom:dashboard-heading-indent off-s)
+                    (+ line-start custom:dashboard-heading-indent off-e)))))
+
+(defun custom/dashboard--suffix-heading-key (ov key width icon-w)
+  "把 KEY 右贴到标题行行尾,补齐到 WIDTH 版心宽(先扣掉 ICON-W 图标宽)。
+OV 提供标题显示文本,用于折算已占用宽度;须在
+`custom/dashboard--indent-heading' 之后调用,point 此时落在标题行。"
+  (let* ((name (or (overlay-get ov 'display)
+                   (buffer-substring-no-properties
+                    (overlay-start ov) (overlay-end ov))))
+         (used (+ custom:dashboard-heading-indent icon-w
+                  (string-width name))))
+    (goto-char (line-end-position))
+    (insert (concat
+             (make-string
+              (max 1 (- width used (string-width key))) ?\s)
+             (propertize key 'face 'font-lock-comment-face)))))
+
 (defun custom/dashboard--decorate-section (ov key width icon-w separator)
   "装饰单个板块:OV 标题 overlay,KEY 右贴快捷键,WIDTH 版心宽。
 SEPARATOR 是调用方按版心折算好的 propertized 分割线串。
 含三步:板块尾空行换分割线、板块内行加行间距、标题行缩进+快捷键右贴。
 倒序调用,前面的 insert 不影响后面 heading 的位置。"
-  (let* ((name (or (overlay-get ov 'display)
-                   (buffer-substring-no-properties
-                    (overlay-start ov) (overlay-end ov))))
-         (used (+ 4 icon-w (string-width name))))
-    (save-excursion
-      ;; 分割线替换板块尾第一段空行(板块边界 = 标题行后第一个空行)。
-      ;; 从标题行起一遍扫描,顺手收集行范围;扫到空行即边界,
-      ;; 走到 point-max 仍无空行则整体跳过(末板块无分割线)
-      (goto-char (overlay-start ov))
-      (let ((lines '())
-            blank)
-        (while (and (not blank) (< (point) (point-max)))
-          (let ((beg (line-beginning-position))
-                (end (line-end-position)))
-            (if (= end beg)
-                (setq blank t)
-              (push (cons beg end) lines)
-              (forward-line 1))))
-        (when blank
-          ;; 板块内标题与条目行统一行间距:不插空行,靠 GUI 行距
-          ;; 拉开;标题行也在内,与首条目保持同一间距
-          (dolist (line lines)
-            (put-text-property (car line) (cdr line)
-                               'line-spacing custom:dashboard-line-spacing))
-          (delete-region (line-beginning-position) (line-end-position))
-          (insert separator))))
-    ;; 标题行缩进 + 快捷键右贴到版心宽
-    (goto-char (overlay-start ov))
-    (let ((line-start (line-beginning-position))
-          (off-s (- (overlay-start ov) (line-beginning-position)))
-          (off-e (- (overlay-end ov) (line-beginning-position))))
-      (goto-char line-start)
-      ;; heading overlay 是 front-advance:TTY 无 icon 时其起点恰在
-      ;; 行首,行首插入的缩进会被吞进 overlay(display 替换后消失)。
-      ;; 记住原文本范围,插入后把 overlay 拨回。缩进继承行首的
-      ;; line-prefix,否则标题行脱离板块整体缩进。
-      (let ((prefix (get-text-property line-start 'line-prefix)))
-        ;; 缩进是 display 行首字符,line-spacing 由它决定,须带上
-        (insert (propertize "    " 'line-prefix prefix
-                            'line-spacing
-                            custom:dashboard-line-spacing))
-        (move-overlay ov (+ line-start 4 off-s)
-                      (+ line-start 4 off-e)))
-      (goto-char (line-end-position))
-      (insert (concat
-               (make-string
-                (max 1 (- width used (string-width key))) ?\s)
-               (propertize key 'face 'font-lock-comment-face))))))
+  (custom/dashboard--replace-section-separator ov separator)
+  ;; 标题行缩进 + 快捷键右贴到版心宽
+  (custom/dashboard--indent-heading ov)
+  (custom/dashboard--suffix-heading-key ov key width icon-w))
 
 (defun custom/dashboard--center-line (body-width)
   "把当前行按自身行宽居中(行首加 align-to 前缀)。
@@ -4619,11 +4738,12 @@ page-separator 替换会使后者的绝对位置漂移。只从
            (ovs (custom/dashboard--heading-overlays))
            (inhibit-read-only t))
       ;; 倒序插入,前面的 insert 不影响后面 heading 的位置
-      (cl-loop
-       for (ov . key) in (reverse (cl-mapcar #'cons ovs
-                                             custom:dashboard-heading-keys))
-       when key
-       do (custom/dashboard--decorate-section ov key width icon-w separator))
+      (let ((pairs (reverse (cl-mapcar #'cons ovs
+                                       custom:dashboard-heading-keys))))
+        (dolist (pair pairs)
+          (when (cdr pair)
+            (custom/dashboard--decorate-section
+             (car pair) (cdr pair) width icon-w separator))))
       (custom/dashboard--center-groups ovs width window))))
 
 (defun custom/dashboard--refresh-if-stale ()
@@ -4669,6 +4789,15 @@ initial-buffer-choice 阶段 selected window 可能仍是 daemon 旧 frame,
             (run-with-idle-timer
              0.3 nil #'custom/dashboard--on-resize-idle)))))
 
+;; 下面给 dashboard-get-agenda 套缓存,先认识 advice:
+;; advice-add 是"给已有函数套一层包装"的机制,原函数与调用方都不用改;
+;; C-h f dashboard-get-agenda 会显示 "This function is advised",点开看包装体。
+;; 需要它的原因:dashboard-insert-section 宏对 list 参数求值 4 次,
+;; agenda 的 org-map-entries 全量扫描因此被重复 4 次,是渲染耗时大头。
+;; 想实验对比,移除包装后重开 dashboard,渲染会明显变慢:
+;;   M-: (advice-remove 'dashboard-get-agenda
+;;                      #'custom/dashboard--agenda-scan-once)
+;; 重启 daemon 即恢复(配置每次加载都会重新 advice-add)。
 (defvar custom/dashboard--agenda-once nil
   "单次渲染内的 agenda 结果请求级缓存。
 仅渲染入口的 let 绑定内有效;跨渲染不缓存,数据新鲜度与插件原生
@@ -4708,6 +4837,8 @@ let 绑定请求级缓存变量,渲染结束自动丢弃,下次渲染重新扫�
         dashboard-set-heading-icons t
         dashboard-set-navigator t
         dashboard-show-shortcuts nil
+        ;; 标题行右缘键与 custom:dashboard-heading-keys 按位置一一对应,
+        ;; 修改任一处须同步另一处(该 defconst 处有对应注释)
         dashboard-items '((agenda . 5) (recents . 6) (projects . 6))
         dashboard-projects-backend 'project-el
         ;; 插件默认点击只跑 project-find-file,指回 project-switch-project
