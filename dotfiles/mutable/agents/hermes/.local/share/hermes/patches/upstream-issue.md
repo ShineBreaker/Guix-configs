@@ -10,7 +10,7 @@ feat(memory): include fact_id in prefetch injection lines for feedback-loop clos
 
 ## Body
 
-The holographic memory provider's `prefetch()` (plugins/memory/holographic/__init__.py, line ~214) injects a per-turn context block formatted as:
+The holographic memory provider's `prefetch()` (plugins/memory/holographic/__init__.py, line ~161) injects a per-turn context block formatted as:
 
 ```
 - [trust] content
@@ -25,7 +25,7 @@ Related finding (same investigation): `retrieval_count` only increments in `stor
 Include the fact id in the injection line:
 
 ```python
-lines.append(f"- [{trust:.1f}] (#{r.get('fact_id', '?')}) {r.get('content', '')}")
+lines = [f"- [{r.get('trust_score', r.get('trust', 0)):.1f}] (#{r.get('fact_id', '?')}) {r.get('content', '')}" for r in results]
 ```
 
 One-line diff, attached below. Locally verified: after the patch, trust drift works end-to-end (rated a stale fact unhelpful, 0.5 → 0.4) and the feedback loop fires on passive recall too.
@@ -36,13 +36,18 @@ One-line diff, attached below. Locally verified: after the patch, trust drift wo
 diff --git a/plugins/memory/holographic/__init__.py b/plugins/memory/holographic/__init__.py
 --- a/plugins/memory/holographic/__init__.py
 +++ b/plugins/memory/holographic/__init__.py
-@@ -211,7 +211,7 @@ class HolographicMemoryProvider(MemoryProvider):
-             lines = []
-             for r in results:
-                 trust = r.get("trust_score", r.get("trust", 0))
--                lines.append(f"- [{trust:.1f}] {r.get('content', '')}")
-+                lines.append(f"- [{trust:.1f}] (#{r.get('fact_id', '?')}) {r.get('content', '')}")
-             return "## Holographic Memory\n" + "\n".join(lines)
+@@ -158,7 +158,7 @@
+             return ""
+         try:
+             results = self._retriever.search(query, min_trust=self._min_trust, limit=5)
+-            lines = [f"- [{r.get('trust_score', r.get('trust', 0)):.1f}] {r.get('content', '')}" for r in results]
++            lines = [f"- [{r.get('trust_score', r.get('trust', 0)):.1f}] (#{r.get('fact_id', '?')}) {r.get('content', '')}" for r in results]
+             return "## Holographic Memory\n" + "\n".join(lines) if results else ""
          except Exception as e:
              logger.debug("Holographic prefetch failed: %s", e)
 ```
+
+## 本地维护记录
+
+- 2026-08-29 建档（patch 基于当时的循环写法，`lines.append(...)`）。
+- 2026-09-17 上游把 prefetch 的循环重写成列表推导式，旧 patch apply 失败并与 autostash 撞成合并冲突。patch 已按新写法重新生成（`prefetch-fact-id.patch`），`replay.sh` 的冲突提示行号同步更新为 ~line 156-165。

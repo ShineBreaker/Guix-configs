@@ -35,3 +35,4 @@ uv.lock
 .mimosa/
 .video_agent/
 dotfiles/mutable/lem/.config/lem/.agents/workfile/
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.locks/

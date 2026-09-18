@@ -13,7 +13,8 @@
 #   1. 首次安装（官方 update 在 checkout 不存在时报 "Not a git repository" 退出）
 #   2. 更新前停旧 gateway（官方不管；旧进程持失效模块路径，MCP 全挂）
 #   3. uv 隔离（防官方在 $HERMES_HOME/bin 装独立 managed uv，偏离 Guix 系统 uv）
-#   4. 更新后 herd restart hermes 服务（让常驻进程加载新代码）
+#   4. 更新后恢复 herd 管理的常驻服务（停服务 → 清官方野实例 → enable+start）
+#   5. 更新后重放本地补丁（官方 update 把工作树改动 stash 走，不重放则定制静默失效）
 #
 # == uv 隔离 ==
 # 官方 `ensure_uv()`（managed_uv.py:43-51）只查 `$HERMES_HOME/bin/uv` 是否存在，
@@ -84,20 +85,54 @@ _write_bootstrap_marker() {
 EOF
 }
 
-# --- herd restart 收尾（让常驻服务加载新代码）---
-# gateway 依赖 backend，先 backend 后 gateway；respawn? #t 的服务 herd 会按依赖
-# 图处理，但显式两条更直观。--check 时官方 update 不改任何文件，跳过重启。
+# --- 恢复 herd 管理的常驻服务（让它们加载新代码）---
+# 官方 update（≥0.21.3）会自己去重启「运行中的」gateway（其 docstring：systemd /
+# launchd / manual 都管；shepherd 不在其列，于是我们的实例被当作 manual）：先
+# drain 掉，再以 `gateway run --replace` 拉起一个脱离 shepherd 管理的野实例，
+# dashboard 同样被 stop+restart。此时再由 shepherd respawn/restart，两侧实例会抢
+# 端口与 singleton lock，shepherd 侧瞬间退出并触发 respawn 循环，连续失败后
+# shepherd 还会把服务标记为禁用（2026-09-17 实案：gateway 五连退码 1 后被禁用）。
+# 故收尾不能是简单 restart，而是：停服务（止住 respawn）→ 清野实例 → enable + start。
 _restart_herd_services() {
   if ! command -v herd >/dev/null 2>&1; then
     echo "  ⚠ herd 未找到，跳过常驻服务重启（手动: herd restart ${HERMES_HERD_SERVICES[*]}）"
     return 0
   fi
-  echo "→ 重启 herd 管理的 hermes 服务（加载新代码）..."
+  echo "→ 恢复 herd 管理的 hermes 服务（加载新代码）..."
+  # 先停：respawn? #t 的服务不 stop 就会一边被官方接管一边被 shepherd 拉起
   for _svc in "${HERMES_HERD_SERVICES[@]}"; do
-    herd restart "${_svc}" >/dev/null 2>&1 \
-      && echo "  ✓ ${_svc} 已重启" \
-      || echo "  ⚠ ${_svc} 重启失败（手动: herd restart ${_svc}）"
+    herd stop "${_svc}" >/dev/null 2>&1 || true
   done
+  sleep 1
+  # 清野实例。gateway 按 argv 可辨（官方走 `python -m hermes_cli.main`，shepherd 走
+  # venv/bin/hermes）；dashboard 两侧 argv 相同，但此刻 shepherd 侧已停，剩下的必是野实例。
+  pkill -f 'hermes_cli\.main gateway run' >/dev/null 2>&1 || true
+  pkill -f 'hermes dashboard --no-open' >/dev/null 2>&1 || true
+  sleep 2
+  for _svc in "${HERMES_HERD_SERVICES[@]}"; do
+    # crash-loop 过的话服务可能已被 shepherd 自动禁用，enable 一次保证 start 能生效
+    herd enable "${_svc}" >/dev/null 2>&1 || true
+    herd start "${_svc}" >/dev/null 2>&1 \
+      && echo "  ✓ ${_svc} 已重启" \
+      || echo "  ⚠ ${_svc} 重启失败（手动: herd start ${_svc}）"
+  done
+}
+
+# --- 重放本地补丁（官方 update 会 stash 走工作树改动）---
+# 官方 update 把 checkout 的工作树改动 stash 起来，pull 后询问是否恢复；非交互
+# 场景下要么恢复（可能撞冲突）要么 reset 到干净。两条路都意味着补丁状态不可信，
+# 故更新后无条件重放一次。replay.sh 幂等：上游已合并或补丁已在位时直接报 OK。
+# 重放失败（上游改了同一区域）只告警不中断——服务仍需重启加载新代码。
+_replay_local_patches() {
+  local _replay="${HERMES_HOME}/patches/replay.sh" _out
+  [[ -f "${_replay}" ]] || return 0
+  echo "→ 重放本地补丁（patches/replay.sh）..."
+  if _out="$(bash "${_replay}" 2>&1)"; then
+    echo "  ${_out}"
+  else
+    echo "  ⚠ 补丁未重放：${_out}" >&2
+    echo "    上游可能改了同一区域，需人工合并后重跑：bash ${_replay}" >&2
+  fi
 }
 
 # --- 确保 Hermes-managed Node 树存在（dashboard 启动依赖它）---
@@ -284,23 +319,37 @@ _install_hicolor_icon
 # 官方接管：pre-update backup → fetch → stash → pull（syntax guard + rollback）
 # → 依赖重装 → config 迁移 → skills sync（已被 .no-bundled-skills opt-out 跳过）
 # → desktop build（desktop-build-stamp.json hash 不变则秒过）→ 完成。
-# 不用 exec：需在成功后跑 herd restart 收尾。保留官方 update 的退出码。
+# 不用 exec：需在成功后跑本地收尾（补丁重放 + herd restart）；是否收尾以 HEAD
+# 是否变化为准，而非官方退出码（updater 收尾崩了但代码已更新的情况见下方判定）。
+_head_before="$(git -C "${CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
 _update_rc=0
 "${VENV}/bin/hermes" update "$@" || _update_rc=$?
+_head_after="$(git -C "${CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
 
-# --check / 失败时不做收尾（官方 update 退出码非 0 或参数含 --check）
 _is_check=0
 for _a in "$@"; do [[ "$_a" == "--check" ]] && _is_check=1; done
 
+# 收尾判据是「代码是否真的变了」，不是官方 update 的退出码：updater 自身在 pull
+# 之后的收尾步骤（清理持旧代码的 dashboard 进程等）要 import 新模块，而它进程里
+# 的 sys.modules 还是 pull 前的旧模块，会崩在 ImportError 上——此时代码已经更新，
+# 退出码却是非 0（2026-09-17 实案：utils.file_signature ImportError）。
+# HEAD 未变才是真失败（fetch 失败 / syntax guard 回滚）。
 if [[ "${_update_rc}" -ne 0 ]]; then
-  echo "✗ 官方 update 失败（退出码 ${_update_rc}），未重启服务" >&2
-  exit "${_update_rc}"
+  if [[ "${_head_before}" == "${_head_after}" ]]; then
+    echo "✗ 官方 update 失败（退出码 ${_update_rc}），代码未变化，未重启服务" >&2
+    exit "${_update_rc}"
+  fi
+  echo "⚠ 官方 update 非零退出（${_update_rc}），但代码已更新（${_head_before:0:7} → ${_head_after:0:7}）" >&2
+  echo "  多为 updater 自身收尾步骤失败，继续执行本地收尾..." >&2
 fi
 
 if [[ "${_is_check}" -eq 1 ]]; then
   # --check 只读探测，不改文件，无需重启
   exit 0
 fi
+
+# --- B.3.5 重放本地补丁（官方 update 已把工作树改动 stash 走）---
+_replay_local_patches
 
 # --- B.4 herd restart 收尾（让常驻服务加载新代码）---
 _restart_herd_services

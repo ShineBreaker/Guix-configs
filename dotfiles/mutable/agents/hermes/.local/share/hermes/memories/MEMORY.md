@@ -31,3 +31,5 @@ agenote v0.1.9（2026-09-14 发布+push，jeans 包 bump 并 push，本地 blue 
 本机 git commit 必须用 -m（hook 拦住 -F/heredoc 传消息）；commit trailer 按当前 agent 现填，格式 Co-authored-by: <agent 名> <邮箱>，旧 Assisted-by 已废弃。
 §
 browser_exec 本机姿势(2026-09-16 实测)：需先手动起浏览器——`/gnu/store/*ungoogled-chromium*/bin/chromium --headless=new --no-sandbox --remote-debugging-port=9222 --user-data-dir=/tmp/...`（store hash 每次变，用通配符 ls 定位）；daemon 卡住先 `browser-harness --reload`（二进制在 uv 缓存 archive-v0/*/bin/）再重试。数据回传用 Blob 下载（Page.setDownloadBehavior 指路径），本地 HTTP 回传会被 Chrome PNA 拦。
+§
+config.org 维护(2026-09-16)：服务块已全库字母排序（21 块，blue check 过）；**包清单块（packages-list 等）是用户手工维护的，整理类任务勿动**；排序口径/重建四坑/验证三件套（详见本次 review 建议）待并入 guix-configs-workflow——curator 写被拒（user-owned），需 adopt 或前台落盘。

@@ -22,7 +22,7 @@ fi
 
 # 3. 冲突 → 上游改了同一区域, 提示人工 review
 echo "CONFLICT: 补丁无法干净应用 (上游可能已修改 prefetch 格式)"
-echo "  查看: $TARGET 的 prefetch() 方法 (~line 204-218)"
+echo "  查看: $TARGET 的 prefetch() 方法 (~line 156-165)"
 echo "  补丁: $PATCH"
 echo "  手动合并后重跑本脚本验证。"
 exit 1

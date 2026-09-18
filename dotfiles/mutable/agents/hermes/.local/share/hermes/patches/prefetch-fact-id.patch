@@ -1,13 +1,12 @@
 diff --git a/plugins/memory/holographic/__init__.py b/plugins/memory/holographic/__init__.py
-index 2e5f86a8c..733966acf 100644
 --- a/plugins/memory/holographic/__init__.py
 +++ b/plugins/memory/holographic/__init__.py
-@@ -211,7 +211,7 @@ class HolographicMemoryProvider(MemoryProvider):
-             lines = []
-             for r in results:
-                 trust = r.get("trust_score", r.get("trust", 0))
--                lines.append(f"- [{trust:.1f}] {r.get('content', '')}")
-+                lines.append(f"- [{trust:.1f}] (#{r.get('fact_id', '?')}) {r.get('content', '')}")
-             return "## Holographic Memory\n" + "\n".join(lines)
+@@ -158,7 +158,7 @@
+             return ""
+         try:
+             results = self._retriever.search(query, min_trust=self._min_trust, limit=5)
+-            lines = [f"- [{r.get('trust_score', r.get('trust', 0)):.1f}] {r.get('content', '')}" for r in results]
++            lines = [f"- [{r.get('trust_score', r.get('trust', 0)):.1f}] (#{r.get('fact_id', '?')}) {r.get('content', '')}" for r in results]
+             return "## Holographic Memory\n" + "\n".join(lines) if results else ""
          except Exception as e:
              logger.debug("Holographic prefetch failed: %s", e)
