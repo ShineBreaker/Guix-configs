@@ -4597,6 +4597,44 @@ Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =us
     (null failed)))
 #+end_src
 
+启动期还有一条只影响观感的噪声：Guix 的 =site-start.el= 末尾要 =require= 一个 store 里
+生成、没有 =lexical-binding= cookie 的 =guix-emacs-c-source.el= ，每次 daemon 启动都会
+记下一条「Missing ‘lexical-binding’ cookie」警告。而 daemon 下 =display-warning= 恰好会
+把启动期的警告挂到 =after-make-frame-functions= 上、留到**第一个 client frame** 才弹
+（=warnings.el= 的 =(daemonp)= 分支），于是每次重启第一眼看到的就是从窗口底部冒出来的
+=*Warnings*= 。该文件在 =site-start= 阶段加载（早于 =early-init.el= ，配置层无从阻止加载），
+只能在展示环节按内容拦截：缓冲区里只有这类噪声时不弹窗，日志照旧留在 =*Warnings*= ，
+真出现别的警告时照常弹出。
+
+#+begin_src emacs-lisp
+(defun custom--warnings-benign-only-p (buffer)
+  "BUFFER 中是否只含可忽略的 lexical-binding cookie 警告。
+逐条数警告头行与其中匹配 cookie 噪声的行数:两者相等才算「全无害」。
+判据读文本而非按钮属性,且只在计数完全对上时才返回 t——上游若改了措辞,
+计数对不上即照常弹窗,不会静默吞掉真警告。"
+  (with-current-buffer buffer
+    (let ((total 0) (benign 0))
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward
+                "^\s*\\(?:[^ \t\n]+[ \t]+\\)?\\(?:Warning\\|Error\\|Emergency\\|Debug\\) ([^)]*): "
+                nil t)
+          (setq total (1+ total))
+          ;; 头行里 "Warning (类型): " 已被上一条正则吃掉,这里只剩正文。
+          (when (looking-at-p "Missing [‘`']lexical-binding[’'] cookie in ")
+            (setq benign (1+ benign)))))
+      (and (> total 0) (= total benign)))))
+
+(defun custom--skip-benign-warning-display (orig buffer)
+  "只含无害噪声时跳过弹出 BUFFER(=*Warnings*=)，否则交给 ORIG。"
+  (unless (custom--warnings-benign-only-p buffer)
+    (funcall orig buffer)))
+
+;; `warning--display-buffer' 是两条展示路径(daemon 启动期推迟展示、交互期即时展示)
+;; 的唯一出口,故只此一处拦截即可覆盖全部场景。
+(advice-add 'warning--display-buffer :around #'custom--skip-benign-warning-display)
+#+end_src
+
 ** Dashboard
 :PROPERTIES:
 :CUSTOM_ID: dashboard
