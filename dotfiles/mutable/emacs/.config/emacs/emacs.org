@@ -2363,6 +2363,13 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
                  (diff-hl-update)))))))))
   (add-hook 'diff-hl-mode-on-hook #'custom/diff-hl-schedule-update)
   (add-hook 'after-revert-hook #'custom/diff-hl-schedule-update)
+  ;; commit/stage 只改 VC 状态不动磁盘文件,Magit 不会 revert file buffer,
+  ;; buffer 内的 magit-revert-buffer-hook 不会触发,diff-hl 无从得知。
+  ;; 上游 diff-hl-magit-post-refresh 在 magit refresh 后用 diff-tree 找出
+  ;; 本次提交触碰的文件,vc-state-refresh 并逐 buffer diff-hl-update;
+  ;; diff-hl-magit-pre-refresh 自 1.11.0 起已废弃为 ignore,无需再挂。
+  (with-eval-after-load 'magit-mode
+    (add-hook 'magit-post-refresh-hook #'diff-hl-magit-post-refresh))
   (global-diff-hl-mode 1))
 
 ;; 自动配对用内置 electric-pair-mode 替代 smartparens:本配置从未绑定
