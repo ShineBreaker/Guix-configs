@@ -91,6 +91,17 @@ emacs → init.el → (按需 tangle emacs.org) → main.el → (load main.el)
 - **进程与异步安全**：存活检查（`frame-live-p` / `buffer-live-p`）仅在异步回调（Timer、D-Bus、Process Sentinel）中保留；遍历 `frame-list` / `window-list` 时无需逐层检查。
 - **异常捕获**：`condition-case` 仅包裹文件 I/O、外部子进程或 D-Bus 调用；对于返回 nil 的查询型 API（如 `project-current`、`treesit-ready-p`）不加包裹。
 
+### 可读性与抽象边界（目标读者：Emacs Lisp 入门者）
+
+代码的第一属性是**可读、可学、可改**——写给认识 `defun`/`setq`/`let`/`dolist`/`use-package`、刚接触反引号的读者。省几行的高阶写法若提高阅读门槛，一律不用：
+
+- **不为少量重复引入宏**：2~3 处同构命令直接平铺为 `defun`（可 `C-h f` 跳转、错误栈有名字）；禁止 `intern`/`format` 动态拼函数名或变量名。
+- **数据表可留，派生链要平铺**：plist/alist 单一事实源（如 `custom:language-capabilities`）保留；派生逻辑用 `dolist` + 具名函数 + `push`/`nreverse`，禁止多层 `seq-*`/lambda 嵌套写成单个表达式。
+- **高阶解构降级**：`cl-loop` 解构、`pcase-let` 反引号解构、`cl-flet` 局部函数、`cl-remove-if-not` 等混用方言，一律降级为 `dolist` + 具名函数 + `car`/`cdr`；集合操作统一 `seq-*`。
+- **必要技巧必须就地解释**：`cl-letf`、`advice-add`、buffer 差集、`setf (alist-get ...)` 等无法平铺的技巧保留时，就近补 3~8 行"为什么需要它"与取舍说明。
+- **教读者自助查询**：涉及新机制时在 org 文字里给出 `C-h k` / `C-h f` / `C-h v` / `M-x customize-group` / `(info ...)` 路径；文字克制，不写长篇教程。
+- **命名约定**：`custom:` = 配置变量，`custom/` = 命令与函数，`custom--` 前缀与 `custom/模块--名称` = 内部实现细节。
+
 ---
 
 ## 5. 性能硬约束
@@ -155,3 +166,11 @@ tmux kill-session -t emacsprobe
 
 - Manifest 中的每个 `emacs-*` 包在 `emacs.org` 均有实际引用（避免无用包）。
 - `emacs.org` 中引用的每个第三方包在 Manifest 中均有登记（避免依赖缺失）。
+
+### 7.6 重构等价性验证（纯可读性改动）
+
+平铺、拆分、抽象降级等重构不改变行为，必须给出**等价性证据**，禁止"看起来一样"式判断：
+
+- 从 `git show HEAD:./emacs.org` 与改动后版本各提取真实函数体，在 batch Emacs 中对典型输入（含边界值）对比返回值与副作用输出；渲染类函数还需对比文本属性、overlay 位置与 point。
+- 重构仅改写法时，`(custom/bind ` 真实调用数与 `custom:binding-spec` 条目数必须与改动前一致（`emacs --batch -q -l main.el --eval '(message "%d" (length custom:binding-spec))'`）。
+- 多表达式验证脚本写成 `.el` 文件用 `-l` 加载：`--eval` 只读取第一个完整 sexp，其余被静默忽略（rc=0 的假通过）。
