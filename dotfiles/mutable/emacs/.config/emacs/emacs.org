@@ -1691,7 +1691,7 @@ TTY 背景透明由 =custom/apply-terminal-faces= 实现。daemon 中 TTY 会继
 + *选择性恢复* ：=hl-line= 恢复主题 palette 的 =bg-dim= 背景；=org-block= 族恢复 =bg-inactive= 中性面板（终端无 fringe，靠这块底色给代码块成组）；选区、搜索、补全等状态仍用粗体和下划线区分。
 + *半透明配合* ：Foot 的 =alpha-mode=all= 让这块独立 RGB 背景同样应用终端 =alpha=0.88=，当前行是半透明色块而非实色或横线。
 + *自动重施* ：主题启用和 Lisp 文件加载后自动重刷，主题修改的 frame 参数与后出现的 face 都遵守透明策略；=early-init.el= 与 =window-system-default-frame-alist= 在 main.el 之前注入初始终端参数，避免启动闪屏。
-+ *生效边界* ：只在真实 TTY 会话（非 batch、≥8 色）下生效，batch/GUI 为 no-op。
++ *生效边界* ：只在真实终端 frame（非 batch、非图形）下生效，batch/GUI 为 no-op。无色能力的终端（daemon 初始帧 `display-color-cells` 为 0）也一并处理——那里留着主题的彩色 face 会在 redisplay 时实现失败，日志被打上 `Invalid face reference`。
 
 行号设置函数 =custom/setup-file-line-numbers= 故意不调 =(set-window-fringes ... 0)= ——=diff-hl= 和 =flymake= 的 fringe 指示器(=flymake-fringe-indicator-position= 设为 =left-fringe=)依赖 fringe 宽度,清零会让它们全部消失。
 
@@ -1834,11 +1834,12 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 面板，并用
 `custom:terminal-face-emphasis' 补充其余非颜色交互语义；所有前景色继续由
 当前主题提供。Foot 需使用 alpha-mode=all 才能让 hl-line 背景半透明。
-仅在真实 TTY（非 batch、至少 8 色）下生效；GUI 为 no-op。"
+仅在真实终端 frame（非 batch、非图形）下生效；GUI 为 no-op。无色能力的终端
+（daemon 的初始帧就是，display-color-cells 为 0）同样要处理：主题的彩色 face 在
+那里无法实现，redisplay 会报「Invalid face reference」。"
   (condition-case err
       (when (and (not noninteractive)
-                 (not (display-graphic-p frame))
-                 (>= (display-color-cells frame) 8))
+                 (not (display-graphic-p frame)))
         (let ((tty (or frame (selected-frame)))
               (hl-line-background (custom/terminal-theme-color 'bg-dim)))
           (with-selected-frame tty
@@ -1889,6 +1890,21 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
 (add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
+
+(defun custom--drop-statusline-face-log (orig fmt &rest args)
+  "丢弃状态行 face 在显示期解析不出来时由 C 层打出的日志。
+显示一段 `face' 属性指向未定义（或当前 frame 实现不了）的文本时，`xfaces.c' 的
+`add_to_log' 会经 `message' 打 \"Invalid face reference: %s\"。状态行的
+minibuffer-line 文本正好是最容易碰上的一处：daemon 启动期首个 frame 上、包刚加载
+或 face 还没实现时都可能出现，配置侧的非彩色终端归一化已把成因收窄。
+`inhibit-message-regexps' 只静音回显（消息照样写进 *Messages*），所以只能按
+「格式串 + 参数」双重匹配在这里丢弃。只认这一个 face 名，其它
+Invalid face reference 照常记录——那些是真问题。"
+  (unless (and (equal fmt "Invalid face reference: %s")
+               (eq (car args) 'minibuffer-line))
+    (apply orig fmt args)))
+
+(advice-add 'message :around #'custom--drop-statusline-face-log)
 
 (defun custom/apply-frame-appearance (&optional frame)
   "为 FRAME 应用所有 display-dependent 外观设置。
