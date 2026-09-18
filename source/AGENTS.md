@@ -2,7 +2,7 @@
 
 `source/config.org` 是唯一的 Org 配置源（请勿新建第二个），通过 Org Babel tangle 生成 `tmp/config.scm`。执行 `blue rebuild` 可完成 tangle、括号平衡检查与系统 reconfigure，单次操作即可同时应用 `operating-system` 与内嵌的 `guix-home-service`。
 
-`config.org` 正文仅保留结构标签与简短提示，**完整的技术细节与架构决策记录在此文档中**（内核定制另见 `files/kernel/AGENTS.md`）。
+`config.org` 正文承载**面向入门读者的就近解释**（块旁说明语法、数据形态与陷阱，2026-09-18 起明确此分工），**架构决策与运维知识集中在本文件**（内核定制另见 `files/kernel/AGENTS.md`）。
 
 <!-- structor:begin depth=1 -->
 
@@ -58,8 +58,36 @@ blue block-replace <name> <body-file>  # 原子写回并进行 Scheme 括号校�
 
 - 代码块命名：`#+NAME: <block-name>`
 - 引用其他块：`<<block-name>>`（此为 Org 模板展开功能，非 Scheme 语法）
-- 功能开关：注释掉 `<<ref>>` 引用即可在装配中停用该功能块。
+- 功能开关：注释掉 `<<ref>>` 引用即可在装配中停用该功能块（因此被注释的 `<<ref>>` 是刻意保留的开关，勿当死代码清理）。
 - shepherd 服务请复用 `service-helpers` 块的简写构造（`home-daemon-service` 常驻用户进程 / `root-daemon-service` 常驻系统进程 / `root-one-shot-service` 开机一次），它们统一了日志落点与环境约定；`%flatpak-update-script` 供 system/user 两侧 flatpak 定时更新共用。
+
+### 代码风格与可读性原则
+
+目标读者是**刚入门 Guile/Guix/org 的用户**，可读性优先于简洁或「聪明」的写法。
+
+抽象判定：
+
+- 只有 **≥3 个调用点且确实消除重复**的包装才值得保留（如服务构造三件套、`computed-substitution-with-inputs` 的占位符注入）；单用途包装（1–2 个调用点）直接内联平凡写法，不为「将来可能复用」提前抽象。
+- 程序化生成（`map` / `append-map` + 数据表）只用于消除真实重复或反转数据方向；若只是展开几条固定数据，平铺字面量。
+
+平凡写法优先：
+
+- 拼接少量已知值用普通 `list` / `string-append`，不用 quasiquote（`` `((,a ,b)) `` 这类结构写 `(list (list a b))`）。
+- 数字比较用 `=`（必要时先判 `number?`），不用 `eq?`。
+- 不引入点参数 + `apply`、双层闭包等技巧表达一次性简单逻辑；常量字符串不拆成多段再拼接；同一字面量（如 UUID）多处出现时收敛为单一绑定。
+
+惯用法与陷阱（勿「顺手简化」，均有实证）：
+
+- etc / 配置扩展的反引号点对 `` `("路径" ,文件) `` 是 Guix 生态通用格式，保留写法不换 `cons`，缺解释时在块旁补文档。
+- gexp 内 `'#$list` 的外层 `'` **不可去**：quote 让列表序列化为脚本里的字面量数据，去掉会把列表当函数调用（第一个元素成为运算符）而构建失败。
+- `#~(string-append (getenv "HOME") …)` 的 `#~` **不可去**：去掉会在配置求值期（root 执行重建时）取到 `/root` 并烘焙进服务闭包。
+- shepherd one-shot 服务**不需要**传 `#:stop` / `#:respawn?`：两者对 one-shot 均惰性，且 stop 回调返回 `#f` 才表示「已停止」（返回 `#t` 语义反向，`herd stop` 会报停止失败）。
+
+Org 文档写法：
+
+- 面向入门者的解释写在块旁 org 正文（不进 tangle 产物）；代码块内只留短分类标签与关键警示（会进产物）。
+- 等宽标记 `=code=` 两侧必须是 ASCII 空白或 ASCII 标点——紧贴中文标点/汉字会**静默失效**并引发相邻标记误配对，写作时「标记外加空格」。
+- 解释只写可确证的行为（可从代码、数据表或上游源码验证），不臆测历史原因；正文全角标点、代码用 `=...=` 标记。
 
 ## 验证流程（修改后必做）
 
@@ -68,6 +96,8 @@ blue --dry-run rebuild     # 运行完整构建验证（真执行 tangle 与语�
 blue check                 # 快速逐块检查括号平衡，直接定位到出错块名
 blue home                  # 仅构建并切换 Home 层（含 dotfiles），无需 sudo 权限，供 agent 调试
 ```
+
+> **语义改动的补充验证**：`--dry-run` 会把 system build 验证也短路。涉及结构改写、变量替换等语义变化时，另跑 `guix time-machine --channels=source/channel.lock -- system build tmp/config.scm --dry-run` 做实际求值；并可把 `git show HEAD:source/config.org` tangle 到隔离目录，与新产物逐块 diff 核对每处差异均为预期改动。
 
 ## 全局变量与文件系统（`information.scm`）
 
