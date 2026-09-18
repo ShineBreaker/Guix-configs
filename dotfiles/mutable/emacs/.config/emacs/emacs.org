@@ -1057,8 +1057,10 @@ current/inactive 用内置 face,自动跟随主题。"
 :END:
 
 标签栏各个状态的外观完全基于 Emacs 预置语义 Face 继承：
-- *当前标签* ：继承自 =mode-line= 的前景色与半粗体，带下划线，形成鲜明对照。
+- *当前标签* ：继承自 =mode-line= 的前景色与半粗体，形成鲜明对照。
 - *非当前标签* ：继承自 =shadow= ，作为弱化的背景标签。
+- *分隔线* ：整条标签栏（标签与空白填充）共用一条主题边框色细线，位置取文本下缘，
+  既是标签栏与正文的分界，也取代了原先只压在选中标签下、颜色纯黑且悬在栏内的横线。
 - *关闭按钮与滚动按钮* ：鼠标悬停时分别继承 =error= （警示红色）与 =mode-line-highlight= 。
 - *终端适配* ：在终端（TTY）环境下，通过透明策略统一移除背景底色，避免破坏终端的半透明效果。
 
@@ -1093,13 +1095,13 @@ current/inactive 用内置 face,自动跟随主题。"
 (set-face-attribute 'tab-line-tab-current nil
                     :inherit 'mode-line
                     :weight 'semibold
-                    :box nil
-                    :underline t)
+                    :box nil)
 (set-face-attribute 'tab-line-tab-inactive nil
                     :inherit 'shadow
                     :box nil)
 (set-face-attribute 'tab-line-highlight nil
-                    :inherit 'mode-line-highlight)
+                    :inherit 'mode-line-highlight
+                    :box nil)
 (set-face-attribute 'tab-line-close-highlight nil
                     :inherit 'error
                     :background 'unspecified
@@ -1113,6 +1115,26 @@ current/inactive 用内置 face,自动跟随主题。"
                     :inherit '(tab-line shadow))
 (set-face-attribute 'tab-line-active nil
                     :inherit 'tab-line)
+#+end_src
+
+分隔线的颜色必须跟随主题，而本域早于 [[#color-scheme]] 的 =load-theme= 求值，
+故属性统一交给下面的函数在主题加载/切换时重算（=enable-theme-functions=）。
+取色走 Modus palette 的 =border=（与 =window-divider= 同源），不硬编码 RGB。
+
+#+begin_src emacs-lisp
+(defun custom/apply-tab-line-divider (&rest _)
+  "给整条标签栏画一条贴文本下缘的主题边框色分隔线。
+下划线落在标签与空白填充两类 face 上,故整行连续,不需要盒模型(盒线无法只画单边);
+`enable-theme-functions' 上重算,明暗主题切换后颜色随之更新。
+palette 取不到色时保留既有属性:TTY 侧另有例外表 pin 下划线语义(见
+[[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]),不依赖本函数。"
+  (when-let* ((color (custom/terminal-theme-color 'border)))
+    (dolist (face '(tab-line tab-line-tab-current tab-line-tab-inactive
+                    tab-line-highlight tab-line-close-highlight))
+      (set-face-attribute face nil
+                          :underline (list :color color :position t)))))
+
+(add-hook 'enable-theme-functions #'custom/apply-tab-line-divider)
 #+end_src
 
 *** 标签操作
