@@ -4326,7 +4326,10 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 #+begin_src emacs-lisp
 (setq dabbrev-check-all-buffers nil
       inhibit-message-regexps
-      '("Scanning for dabbrevs" "Expansion found in"))
+      '("Scanning for dabbrevs" "Expansion found in"
+        ;; C-n/C-p 触底时每次按键都重复的边界提示:光标不动本身已是反馈,
+        ;; 让它反复顶掉状态行左半的行号信息得不偿失。
+        "Beginning of buffer" "End of buffer"))
 
 (add-to-list 'set-message-functions #'inhibit-message)
 #+end_src
