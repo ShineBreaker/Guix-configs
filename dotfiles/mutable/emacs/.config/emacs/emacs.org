@@ -2411,16 +2411,23 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
                     yaml-ts-mode) .
                     custom--maybe-enable-indent-bars)
   :custom
-  (indent-bars-color nil)
-  (indent-bars-color-by-depth '(:homogeneity 0.5))
+  ;; 这两项对齐的是 indent-bars 1.0.0(Guix 包版本)的实际行为,改动前先核对上游:
+  ;; `indent-bars-color-by-depth' 没有 :homogeneity 这个键,只认
+  ;; :regexp/:palette/:face-bg/:blend;传未知键会算出空 palette 向量,画线时
+  ;; `(aref [] (mod 0 0))' 直接 arith-error。置 nil 即所有深度共用主色,符合本
+  ;; 配置「淡色对齐竖线」的意图。
+  ;; `indent-bars-color' 同理不能用 nil:nil 主色会走到
+  ;; `(string-prefix-p "unspecified-" nil)' 报 wrong-type-argument,停在库默认
+  ;; 值 '(highlight :face-bg t :blend 0.325)(跟随主题的淡色)即可。
+  (indent-bars-color-by-depth nil)
   (indent-bars-pattern ".")
   (indent-bars-width-frac 0.15)
   (indent-bars-zigzag nil))
 
 (defun custom--maybe-enable-indent-bars ()
   "ts-mode hook 回调:仅图形 frame 开 `indent-bars-mode'。
-depth-palette 的 homogeneity 颜色计算在 batch/无真彩 frame 下除零
-(`indent-bars--get-color' arith-error),TTY 下竖线亦无像素可画,故跳过。"
+竖线由 stipple(XBM 位图)绘制,终端 frame 没有位图可画;颜色也取自当前 frame
+的主题背景,batch/哑终端 frame 上取不到值,只会退化成无效 face spec。"
   (when (display-graphic-p)
     (indent-bars-mode 1)))
 
