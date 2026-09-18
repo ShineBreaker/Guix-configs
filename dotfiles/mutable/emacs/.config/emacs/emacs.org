@@ -1679,6 +1679,11 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 | Modus 主题       | =(display-graphic-p)= 永远 nil | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题       |
 | TTY 配色         | 无 alpha 通道                  | 主题前景 + 全 face 透明      | 清背景与反色，不覆盖主题前景                      |
 | Nerd Font 图标   | =(display-graphic-p)= 永远 nil | 字形以文字渲染               | 守卫用 =custom:nerd-icons-available=,不查 display |
+| buffer 分隔线    | =window-divider-mode= 是全局的 | 分隔线为图形终端特性         | 宽度写 per-frame 的 =right/bottom-divider-width=  |
+
+=window-divider-mode= 那一行的陷阱值单独说明：它是全局 mode，启用时经 =window-divider-mode-apply= 用 =modify-all-frames-parameters= 把同一个宽度写进**所有** frame。旧配置因此在 TTY 分支调 =window-divider-mode -1= 兜底，结果是任何一个 =emacsclient -t= 连上来都顺手把 GUI frame 的分隔线一起清零，GUI 侧从此再也见不到分隔线。现在宽度直接按 =custom/apply-frame-appearance= 的 GUI/TTY 分支写进 frame 参数（GUI 1px，TTY 0），两个显示类型互不干扰。
+
+分隔线本身是**buffer（窗口面板）之间**的那条细线。左右并排的面板原本靠 Emacs 默认的 1px =vertical-border= 分开，上下叠放的却什么都没有；改用分隔线后两个方向统一成同一条线（=vertical-border= 只在 TTY 侧继续生效）。宽度取 1px，颜色取主题 =border= 向正文底色按 0.65 插值（比标签栏下缘的 0.5 深一档，抵消抗锯齿的冲淡），渲染后与标签栏那条横线同一档浅色。
 
 TTY 背景透明由 =custom/apply-terminal-faces= 实现。daemon 中 TTY 会继承全局主题，延迟加载的包也会继续定义带背景的 face，故不能维护有限清单，只能全量改写：
 
@@ -1885,8 +1890,8 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 
 (defun custom/apply-frame-appearance (&optional frame)
   "为 FRAME 应用所有 display-dependent 外观设置。
-+ GUI: 字体高度、透明度、window-divider、tab-line face 重算
-+ TTY: 背景透明（清遮挡终端背景的 face 背景）。
++ GUI: 字体高度、透明度、buffer 之间分隔线的宽度
++ TTY: 背景透明（清遮挡终端背景的 face 背景）、分隔线宽度清零。
   真彩 TTY 的前景色继续使用当前主题 palette。"
   (condition-case err
       (with-selected-frame (or frame (selected-frame))
@@ -1894,9 +1899,15 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
           (set-frame-parameter nil 'cursor-type (if graphic-p 'bar 'box))
           (cond (graphic-p
                  (set-face-attribute 'default nil :height custom:default-font-height)
-                 (set-frame-parameter nil 'alpha-background custom:frame-background-opacity))
+                 (set-frame-parameter nil 'alpha-background custom:frame-background-opacity)
+                 (set-frame-parameter nil 'right-divider-width 1)
+                 (set-frame-parameter nil 'bottom-divider-width 1))
                 (t
-                 (window-divider-mode -1)
+                 ;; 分隔线只在图形终端绘制。TTY 侧显式置 0,让 frame 参数与显示类型保持
+                 ;; 一致(实测:TTY 上 0 与 1 渲染完全相同,窗口列数与 `vertical-border'
+                 ;; 都不受宽度影响,清零不是为了修渲染)。
+                 (set-frame-parameter nil 'right-divider-width 0)
+                 (set-frame-parameter nil 'bottom-divider-width 0)
                  (custom/apply-terminal-faces)
                  ;; TTY 鼠标事件接收:GUI 下 xterm-mouse 是 no-op,收进 per-frame
                  ;; 分支与周边 TTY 逻辑约定一致,而非启动期全局裸调用。
@@ -1908,6 +1919,38 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 (add-hook 'after-make-frame-functions #'custom/apply-frame-appearance)
 (unless (daemonp)
   (funcall #'custom/apply-frame-appearance (selected-frame)))
+
+;; buffer（窗口面板）之间的分隔线。
+;;
+;; 左右并排的面板本来就有 1px 的 `vertical-border' 竖线,但上下叠放的两块面板之间
+;; 什么都没有,两块底色直接相接 —— 这是「buffer 之间缺一条分隔线」缺的那一半。
+;;
+;; 宽度写进 per-frame 参数而非 `window-divider-mode':后者是全局 mode,
+;; `window-divider-mode-apply' 用 `modify-all-frames-parameters' 给所有 frame 写同一
+;; 个宽度,于是任何一个 TTY client 连上来都会把 GUI frame 的分隔线一起清零。宽度按
+;; 显示类型分流到 frame 参数后,GUI 与 TTY 互不干扰（分流点在
+;; `custom/apply-frame-appearance'）。
+;;
+;; 宽度 1px(Emacs frame 像素)。本机 frame 像素≈0.87 逻辑像素,1px 渲染成约 1.75
+;; 设备像素的细线:看得见,又不至于在面板边界上拉出一条抢眼的粗线。
+(setopt window-divider-default-places t
+        window-divider-default-right-width 1
+        window-divider-default-bottom-width 1)
+
+(defun custom/apply-window-divider (&rest _)
+  "按当前主题重算 buffer 之间分隔线的颜色。
+颜色取主题 `border' 向正文底色插值,而不用纯 `border':纯色与正文的明度差太大,
+一条横贯窗口的深色线会很扎眼。
+插值权重 0.65(标签栏下缘那条横线是 0.5):1px 的宽度在分数缩放下会被抗锯齿摊
+到约 1.75 设备像素、平均覆盖度约八成,颜色相应被冲淡两成;预先加深一点,渲染
+后两者才落在同一档浅色上,不会一个重一个轻。
+`enable-theme-functions' 上重算,明暗主题切换后随之更新。"
+  (when-let* ((border (custom/terminal-theme-color 'border))
+              (bg (custom/terminal-theme-color 'bg-main)))
+    (set-face-attribute 'window-divider nil
+                        :foreground (custom--mix-color border bg 0.65))))
+
+(add-hook 'enable-theme-functions #'custom/apply-window-divider)
 
 ;; Emacs 31 内置像素级精确滚动 + 动能惯性,替代 ultra-scroll:
 ;; `pixel-scroll-precision-use-momentum' 为 31 新增,触控板松手后惯性滚动;
