@@ -695,10 +695,14 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
 - *刷新* ：上游 timer 默认 60 秒才刷新一次，行号与修改标志会严重滞后，故实时性由
   =post-command-hook= 驱动，另用 idle timer 兜底异步变化（Flymake 报告、VC 状态），
   渲染结果与 buffer 内容一致时不重写，避免 echo area 反复重绘。
+- *短消息* ：Eglot 连接、保存、缓冲区边界等短消息由 =set-message-functions= 末位接管，
+  并入左半后右半的项目、VC、时间与电量保持可见；超过 echo area 一半宽度的消息与
+  minibuffer 活动期交回 Emacs 默认显示（占满整行）。撤销时机与 echo area 一致
+  （下一个输入事件），并额外在 4 秒空闲后撤下，避免状态行长期只剩消息。
 - *信息源* ：VC、Flymake、Eglot、which-func 与时间电量分别由 =vc-mode= 、
   =flymake-mode-line-counters= 、=mode-line-misc-info= 等既有组件提供，状态行只做渲染。
-- *固有取舍* ：echo area 被消息或 minibuffer 输入占用时状态行不可见；daemon 下多个
-  client 共享同一份内容（= *Minibuf-0*= 是全局 buffer）。
+- *固有取舍* ：整行消息与 minibuffer 输入期间状态行不可见；daemon 下多个 client 共享
+  同一份内容（= *Minibuf-0*= 是全局 buffer）。
 
 #+begin_src emacs-lisp
 (setq-default mode-line-format nil)
@@ -724,26 +728,37 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
     (vc-mode vc-mode) " "
     (:eval (format-mode-line mode-line-misc-info))))
 
+(defvar custom/modeline--message nil
+  "当前并入状态行左半的短消息;nil 表示左半显示常规信息。")
+
+(defvar custom/modeline--rendering nil
+  "状态行渲染期标志;渲染途中求值的组件若发消息,退化为整行显示以避免递归。")
+
 (defun custom/modeline--render ()
   "渲染状态行:左段在前,右段贴窗口右缘。
+左段在有待显示的短消息时由消息顶替(见 `custom/modeline--handle-message'),右段不变。
 图标在格式串之外拼接:format-mode-line 会把首个带 face 的元素的 face 当成
 整行基础 face,图标字体的 (:family \"Symbols Nerd Font Mono\") 一旦进入格式串,
 GUI 下整行都用图标字体渲染,ASCII 全成 tofu 方块;去属性后由默认字体渲染,
 而默认字体本身带 Nerd Font 图标字形。"
   (let* ((width (window-total-width (minibuffer-window)))
-         (icon (when custom:nerd-icons-available
-                 (concat (substring-no-properties (nerd-icons-icon-for-buffer)) " ")))
-         (left (concat icon
-                       (format-mode-line custom/modeline--left-format nil (selected-window))))
+         (left (or custom/modeline--message
+                   (concat
+                    (when custom:nerd-icons-available
+                      (concat (substring-no-properties (nerd-icons-icon-for-buffer)) " "))
+                    (format-mode-line custom/modeline--left-format nil (selected-window)))))
          (right (format-mode-line custom/modeline--right-format nil (selected-window)))
          (pad (max 1 (- width (string-width left) (string-width right)))))
     (concat left (make-string pad ?\s) right)))
 
 (defun custom/modeline-refresh ()
   "把状态行写入 \" *Minibuf-0*\";内容不变则跳过,避免 echo area 反复重绘。
-echo area 被消息或 minibuffer 输入占用时跳过,结束后由 post-command 恢复。"
+echo area 被消息或 minibuffer 输入占用时跳过,结束后由 post-command 恢复。
+渲染期内置 `custom/modeline--rendering',使 VC/Eglot 等组件在求值途中发出的
+消息退化为整行显示,不至于递归回本模块。"
   (unless (active-minibuffer-window)
-    (let ((text (format-mode-line minibuffer-line-format 'minibuffer-line (selected-window))))
+    (let ((custom/modeline--rendering t)
+          (text (format-mode-line minibuffer-line-format 'minibuffer-line (selected-window))))
       (with-current-buffer " *Minibuf-0*"
         (unless (equal (buffer-string) text)
           (erase-buffer)
@@ -760,6 +775,34 @@ echo area 被消息或 minibuffer 输入占用时跳过,结束后由 post-comman
   (minibuffer-line-mode 1)
   (add-hook 'post-command-hook #'custom/modeline-refresh)
   (run-with-idle-timer 1 t #'custom/modeline-refresh))
+
+;; 短消息并入状态行左半:Eglot 连接、保存、缓冲区边界等提示不再占满整行,
+;; 右半的项目/VC/时间保持不变。注册在 `set-message-functions' 末位——首位必须
+;; 留给 `inhibit-message'(`inhibit-message-regexps' 生效依赖它排在最前),而
+;; `set-minibuffer-message' 在没有活动 minibuffer 时返回 nil,末位仍会被调用。
+(defun custom/modeline--handle-message (text)
+  "把短消息 TEXT 并入状态行左半,返回 t 表示已接管。
+多行消息、超过 echo area 一半宽度的消息、minibuffer 活动期与渲染期返回 nil,
+交回 Emacs 默认的整行显示。"
+  (when (and (not custom/modeline--rendering)
+             (not (active-minibuffer-window))
+             (not (string-search "\n" text))
+             (<= (string-width text) (/ (window-total-width (minibuffer-window)) 2)))
+    (setq custom/modeline--message text)
+    (custom/modeline-refresh)
+    t))
+
+(defun custom/modeline--clear-message ()
+  "撤下左半的短消息。
+两个触发点: `pre-command-hook' 对齐 echo area 的清除时机(下一个输入事件),
+空闲定时器兜住长时间无输入的情况。"
+  (when custom/modeline--message
+    (setq custom/modeline--message nil)
+    (custom/modeline-refresh)))
+
+(add-to-list 'set-message-functions #'custom/modeline--handle-message t)
+(add-hook 'pre-command-hook #'custom/modeline--clear-message)
+(run-with-idle-timer 4 t #'custom/modeline--clear-message)
 
 ;; 状态行右段显示项目名;project.el 按需加载,加载后开启其 mode-line 支持。
 (with-eval-after-load 'project
