@@ -687,9 +687,11 @@ frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提
 状态信息改由屏幕底部的一行承载：=minibuffer-line= 把 =format-mode-line= 的结果写入
 Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即 echo area 的显示。
 
-- *渲染* ：格式串与 =mode-line-format= 同构，=format-mode-line= 以选中窗口的 buffer 求值，
-  =mode-line-position= 等构造可直接使用；右对齐需在 =:eval= 中手工补空格，
-  =mode-line-format-right-align= 在 echo area 中无效。
+- *渲染* ：格式串与 =mode-line-format= 同构，=format-mode-line= 以选中窗口的 buffer 求值；
+  右对齐需在 =:eval= 中手工补空格，=mode-line-format-right-align= 在 echo area 中无效。
+  两条实测约束：格式串里首个带 face 的元素会把该 face 立为整行基础 face，故图标在格式串
+  之外拼接并去掉属性；=mode-line-modified= 与 =mode-line-position= 的值带 Emacs 31 的
+  =mode-line-elt-no= 属性，直接渲染得到 =*invalid*=，左段改用 =%l=/=%c= 字面量构造。
 - *刷新* ：上游 timer 默认 60 秒才刷新一次，行号与修改标志会严重滞后，故实时性由
   =post-command-hook= 驱动，另用 idle timer 兜底异步变化（Flymake 报告、VC 状态），
   渲染结果与 buffer 内容一致时不重写，避免 echo area 反复重绘。
@@ -708,13 +710,12 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
   "nerd-icons 包是否已加载;图标渲染的统一守卫变量。")
 
 (defconst custom/modeline--left-format
-  '((:eval (when custom:nerd-icons-available
-             (concat (nerd-icons-icon-for-buffer) " ")))
-    mode-line-modified " "
+  '((:eval (if (buffer-modified-p) "**" "--"))
+    " "
     (:eval (if buffer-file-name
                (file-name-nondirectory buffer-file-name)
              (buffer-name)))
-    " " mode-line-position " "
+    " L%l:%c "
     (:eval (when (bound-and-true-p flymake-mode)
              (format-mode-line flymake-mode-line-counters)))))
 
@@ -724,9 +725,16 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
     (:eval (format-mode-line mode-line-misc-info))))
 
 (defun custom/modeline--render ()
-  "渲染状态行:左段在前,右段贴窗口右缘。"
+  "渲染状态行:左段在前,右段贴窗口右缘。
+图标在格式串之外拼接:format-mode-line 会把首个带 face 的元素的 face 当成
+整行基础 face,图标字体的 (:family \"Symbols Nerd Font Mono\") 一旦进入格式串,
+GUI 下整行都用图标字体渲染,ASCII 全成 tofu 方块;去属性后由默认字体渲染,
+而默认字体本身带 Nerd Font 图标字形。"
   (let* ((width (window-total-width (minibuffer-window)))
-         (left (format-mode-line custom/modeline--left-format nil (selected-window)))
+         (icon (when custom:nerd-icons-available
+                 (concat (substring-no-properties (nerd-icons-icon-for-buffer)) " ")))
+         (left (concat icon
+                       (format-mode-line custom/modeline--left-format nil (selected-window))))
          (right (format-mode-line custom/modeline--right-format nil (selected-window)))
          (pad (max 1 (- width (string-width left) (string-width right)))))
     (concat left (make-string pad ?\s) right)))
@@ -745,6 +753,9 @@ echo area 被消息或 minibuffer 输入占用时跳过,结束后由 post-comman
   ;; 上游 timer 每 60 秒才刷新,只作兜底;实时刷新由下方 hook 驱动。
   :custom (minibuffer-line-refresh-interval 30)
   :config
+  ;; 该 face 继承 mode-line-inactive;本配置清 box 的 face 表只覆盖 TTY 路径,
+  ;; GUI 下 box 仍有值,不清理则整行每个字符各画一个边框。
+  (set-face-attribute 'minibuffer-line nil :box nil)
   (setq minibuffer-line-format '((:eval (custom/modeline--render))))
   (minibuffer-line-mode 1)
   (add-hook 'post-command-hook #'custom/modeline-refresh)
