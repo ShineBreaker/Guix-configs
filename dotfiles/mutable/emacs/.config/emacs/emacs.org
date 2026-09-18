@@ -1059,7 +1059,11 @@ FACE 为单个 face 名或以关键字开头的属性 plist 时,包成
 (defun custom/tab-line-tab-name-format (tab tabs)
   "以接近 IDE 的样式格式化 TAB。
 face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
-current/inactive 用内置 face,自动跟随主题。"
+current/inactive 用内置 face,自动跟随主题。
+除首个标签外,每个标签前插一个 `custom:tab-line-divider-glyph':它落在标签
+底色块之外,故相邻两个 buffer 之间是一条细竖线,而不是两块底色直接贴上
+(内置的 `tab-line-separator' 只作用于整条标签栏首尾与每个标签之前,无法
+表达「只在两者之间」)。"
   (let* ((selected-p (eq tab (window-buffer)))
          (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
@@ -1070,6 +1074,11 @@ current/inactive 用内置 face,自动跟随主题。"
     (dolist (fn tab-line-tab-face-functions)
       (setq face (funcall fn tab tabs face t selected-p)))
     (let* ((render-face (custom--tab-line-render-face face))
+           (divider
+            (unless (eq tab (car tabs))
+              (propertize custom:tab-line-divider-glyph
+                          'face custom:tab-line-divider-face
+                          'mouse-face (unless selected-p 'tab-line-highlight))))
            (spacer
             (propertize " "
                         'face render-face
@@ -1081,6 +1090,7 @@ current/inactive 用内置 face,自动跟随主题。"
                     (custom--tab-line-close-button render-face)))
            (rendered
             (concat
+             divider
              spacer
              (propertize label
                          'face render-face
@@ -1102,8 +1112,12 @@ current/inactive 用内置 face,自动跟随主题。"
 标签栏各个状态的外观完全基于 Emacs 预置语义 Face 继承：
 - *当前标签* ：继承自 =mode-line= 的前景色与半粗体，形成鲜明对照。
 - *非当前标签* ：继承自 =shadow= ，作为弱化的背景标签。
-- *分隔线* ：整条标签栏（标签与空白填充）共用一条主题边框色细线，位置取文本下缘，
-  既是标签栏与正文的分界，也取代了原先只压在选中标签下、颜色纯黑且悬在栏内的横线。
+- *buffer 之间的竖线* ：除首个标签外，每个标签前插一个 =|= 字形（=custom:tab-line-divider-glyph= ），
+  落在标签底色块之外的空隙里，于是相邻两个 buffer 之间恰好有一条细竖线。
+  颜色取主题 =border= ，深浅两种标签底色上都能看见，又不至于抢眼。
+- *标签栏下缘的横线* ：整条标签栏（标签、间隙与滚动按钮）共用一条细线，位置取文本下缘，
+  即标签栏与正文的分界。颜色由主题 =border= 向正文底色插值（=custom--mix-color= ），
+  比纯 =border= 更淡，避免再次出现「一条黑线横在那里」的突兀感。
 - *关闭按钮与滚动按钮* ：鼠标悬停时分别继承 =error= （警示红色）与 =mode-line-highlight= 。
 - *终端适配* ：在终端（TTY）环境下，通过透明策略统一移除背景底色，避免破坏终端的半透明效果。
 
@@ -1162,20 +1176,51 @@ current/inactive 用内置 face,自动跟随主题。"
 
 分隔线的颜色必须跟随主题，而本域早于 [[#color-scheme]] 的 =load-theme= 求值，
 故属性统一交给下面的函数在主题加载/切换时重算（=enable-theme-functions=）。
-取色走 Modus palette 的 =border=（与 =window-divider= 同源），不硬编码 RGB。
+取色走 Modus palette，不硬编码 RGB。
 
 #+begin_src emacs-lisp
+(defconst custom:tab-line-divider-glyph "|"
+  "标签之间的竖直分隔符字面量。
+取 ASCII 竖线而非 U+2502(BOX DRAWINGS LIGHT VERTICAL):后者在本机 CJK
+字体下 `char-width' 为 2,会把标签间距撑成两格。")
+
+(defvar custom:tab-line-divider-face '(:inherit shadow)
+  "标签之间竖直分隔符的 face,主题加载/切换时由 `custom/apply-tab-line-divider' 重算。")
+
+(defun custom--mix-color (front back weight)
+  "把颜色 FRONT 按 WEIGHT 混入 BACK(0=纯 BACK)后返回 #RRGGBB。
+只在 palette 的 #RRGGBB 字面量上按通道插值:不用 `color-values',后者的
+取值依赖显示帧,而本函数在 daemon 启动期(尚无帧)就会被调用。"
+  (cl-flet ((channel (hex start)
+              (string-to-number (substring hex start (+ start 2)) 16)))
+    (apply #'color-rgb-to-hex
+           (append (cl-loop for start in '(1 3 5)
+                            collect (/ (+ (* (channel front start) weight)
+                                          (* (channel back start) (- 1 weight)))
+                                       255.0))
+                   '(2)))))
+
 (defun custom/apply-tab-line-divider (&rest _)
-  "给整条标签栏画一条贴文本下缘的主题边框色分隔线。
-下划线落在标签与空白填充两类 face 上,故整行连续,不需要盒模型(盒线无法只画单边);
-`enable-theme-functions' 上重算,明暗主题切换后颜色随之更新。
-palette 取不到色时保留既有属性:TTY 侧另有例外表 pin 下划线语义(见
+  "按当前主题重算标签栏的两类分隔线。
+横线:整条标签栏(标签、间隙与滚动按钮)共用一条贴文本下缘的细线,即标签栏与
+正文的分界。下划线落在标签与填充空白两类 face 上故整行连续,不需要盒模型
+(盒线无法只画单边);颜色在主题 `border' 与正文底色之间插值,比纯 `border'
+更淡,避免横线重新变得抢眼。
+竖线:`custom:tab-line-divider-glyph' 的 face,取纯 `border' 色——它只有一字
+宽,与深浅两种标签底色都要拉开差距才看得见;`:height 1.25' 把一字高的 `|'
+拉长到约占标签栏高度的三分之二(GUI 实测:24px→29px 笔画,栏高 46px,
+且未撑高标签栏),短于栏高才不抢眼。
+`enable-theme-functions' 上重算,明暗主题切换后颜色随之更新。palette 取不到
+色时保留既有属性:TTY 侧另有例外表 pin 下划线语义(见
 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]),不依赖本函数。"
-  (when-let* ((color (custom/terminal-theme-color 'border)))
+  (when-let* ((border (custom/terminal-theme-color 'border))
+              (bg (custom/terminal-theme-color 'bg-main)))
     (dolist (face '(tab-line tab-line-tab-current tab-line-tab-inactive
                     tab-line-highlight tab-line-close-highlight))
       (set-face-attribute face nil
-                          :underline (list :color color :position t)))))
+                          :underline (list :color (custom--mix-color border bg 0.5)
+                                           :position t)))
+    (setq custom:tab-line-divider-face (list :foreground border :height 1.25))))
 
 (add-hook 'enable-theme-functions #'custom/apply-tab-line-divider)
 #+end_src
@@ -1308,6 +1353,9 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
       tab-line-close-button-show 'selected
       tab-line-new-button-show nil
       tab-line-switch-cycling t
+      ;; 标签之间的竖线由 `custom/tab-line-tab-name-format' 自绘,内置分隔符
+      ;; 因此固定为空串:置 nil 会退回内置默认(GUI 空格 / TTY "|"),既与
+      ;; 自绘竖线重复,TTY 那条还是未上色的亮色竖线。
       tab-line-separator "")
 
 (custom/apply-tab-line-button-preset)
