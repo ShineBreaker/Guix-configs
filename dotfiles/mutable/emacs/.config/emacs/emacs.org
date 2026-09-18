@@ -473,7 +473,7 @@ frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提
 :END:
 
 本域统一管理所有与界面视觉、排版和窗口交互相关的配置：
-- 状态栏与标签栏：基于 =doom-modeline= 的底部状态栏，以及多窗口隔离的文件标签栏（Tab-line）。
+- 状态栏与标签栏：隐藏每个窗口底部的 mode-line，状态信息集中在屏幕底部一行（[[#modeline]]），以及多窗口隔离的文件标签栏（Tab-line）。
 - 界面中文化：包括 Which-key 快捷键提示、鼠标右键上下文菜单与顶部菜单栏的中文翻译。
 - 窗口分屏与路由：Magit 版本控制、内置终端与辅助面板的弹出位置规则。
 - 主题与字体：基于 Modus 主题的自动深浅色切换、窗口半透明以及终端透明背景适配。
@@ -683,30 +683,84 @@ frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提
 :CUSTOM_ID: modeline
 :END:
 
-底部状态栏采用社区成熟的 =doom-modeline= 方案，具备完善的段缓存与像素测量优化，性能表现非常稳定。
+不渲染每个窗口底部的 mode-line（=mode-line-format= 置 nil，每个窗口因此多出一行），
+状态信息改由屏幕底部的一行承载：=minibuffer-line= 把 =format-mode-line= 的结果写入
+Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即 echo area 的显示。
 
-配置重点：
-- *路径显示* ：使用 =truncate-upto-project= 模式，保留项目名称和当前文件名，只对中间过长的父级目录进行智能缩写，避免路径占满状态栏。
-- *全局信息合并* ：通过 =display-time-mode= 与 =display-battery-mode= 显示 24 小时制时间与电池电量，由 doom-modeline 接管渲染。
-- *高度与图标* ：设置状态栏高度为 25 像素，并显式开启 Nerd Font 图标支持。
+- *渲染* ：格式串与 =mode-line-format= 同构，=format-mode-line= 以选中窗口的 buffer 求值，
+  =mode-line-position= 等构造可直接使用；右对齐需在 =:eval= 中手工补空格，
+  =mode-line-format-right-align= 在 echo area 中无效。
+- *刷新* ：上游 timer 默认 60 秒才刷新一次，行号与修改标志会严重滞后，故实时性由
+  =post-command-hook= 驱动，另用 idle timer 兜底异步变化（Flymake 报告、VC 状态），
+  渲染结果与 buffer 内容一致时不重写，避免 echo area 反复重绘。
+- *信息源* ：VC、Flymake、Eglot、which-func 与时间电量分别由 =vc-mode= 、
+  =flymake-mode-line-counters= 、=mode-line-misc-info= 等既有组件提供，状态行只做渲染。
+- *固有取舍* ：echo area 被消息或 minibuffer 输入占用时状态行不可见；daemon 下多个
+  client 共享同一份内容（= *Minibuf-0*= 是全局 buffer）。
 
 #+begin_src emacs-lisp
-(use-package doom-modeline
-  :demand t
+(setq-default mode-line-format nil)
+
+;; nerd-icons 可用性只看包是否加载,不查 display 类型:TTY 终端已安装
+;; Nerd Font,字形以普通文字渲染(见 GUI/TTY 混合 daemon 约束)。
+(defvar custom:nerd-icons-available
+  (require 'nerd-icons nil t)
+  "nerd-icons 包是否已加载;图标渲染的统一守卫变量。")
+
+(defconst custom/modeline--left-format
+  '((:eval (when custom:nerd-icons-available
+             (concat (nerd-icons-icon-for-buffer) " ")))
+    mode-line-modified " "
+    (:eval (if buffer-file-name
+               (file-name-nondirectory buffer-file-name)
+             (buffer-name)))
+    " " mode-line-position " "
+    (:eval (when (bound-and-true-p flymake-mode)
+             (format-mode-line flymake-mode-line-counters)))))
+
+(defconst custom/modeline--right-format
+  '((project-mode-line project-mode-line-format) " "
+    (vc-mode vc-mode) " "
+    (:eval (format-mode-line mode-line-misc-info))))
+
+(defun custom/modeline--render ()
+  "渲染状态行:左段在前,右段贴窗口右缘。"
+  (let* ((width (window-total-width (minibuffer-window)))
+         (left (format-mode-line custom/modeline--left-format nil (selected-window)))
+         (right (format-mode-line custom/modeline--right-format nil (selected-window)))
+         (pad (max 1 (- width (string-width left) (string-width right)))))
+    (concat left (make-string pad ?\s) right)))
+
+(defun custom/modeline-refresh ()
+  "把状态行写入 \" *Minibuf-0*\";内容不变则跳过,避免 echo area 反复重绘。
+echo area 被消息或 minibuffer 输入占用时跳过,结束后由 post-command 恢复。"
+  (unless (active-minibuffer-window)
+    (let ((text (format-mode-line minibuffer-line-format 'minibuffer-line (selected-window))))
+      (with-current-buffer " *Minibuf-0*"
+        (unless (equal (buffer-string) text)
+          (erase-buffer)
+          (insert text))))))
+
+(use-package minibuffer-line
+  ;; 上游 timer 每 60 秒才刷新,只作兜底;实时刷新由下方 hook 驱动。
+  :custom (minibuffer-line-refresh-interval 30)
   :config
-  (setq doom-modeline-height 25
-        doom-modeline-icon t
-        doom-modeline-buffer-file-name-style 'truncate-upto-project
-        doom-modeline-project-detection 'project
-        doom-modeline-vcs-max-length 24
-        doom-modeline-time-live-icon nil)
-  ;; 时间与电量数据源:display-time-mode / display-battery-mode 维护
-  ;; display-time-string / battery-mode-line-string,doom-modeline 接管其
-  ;; global-mode-string 投放,由自家 segment 独占渲染。
-  (setq display-time-format "%H:%M")
-  (display-time-mode 1)
-  (display-battery-mode 1)
-  (doom-modeline-mode 1))
+  (setq minibuffer-line-format '((:eval (custom/modeline--render))))
+  (minibuffer-line-mode 1)
+  (add-hook 'post-command-hook #'custom/modeline-refresh)
+  (run-with-idle-timer 1 t #'custom/modeline-refresh))
+
+;; 状态行右段显示项目名;project.el 按需加载,加载后开启其 mode-line 支持。
+(with-eval-after-load 'project
+  (setopt project-mode-line t))
+
+;; 时间与电量数据源:display-time / display-battery 维护 display-time-string 与
+;; battery-mode-line-string,经 global-mode-string 汇入 mode-line-misc-info,
+;; 由状态行右段统一渲染;负载均值与时间同段会挤在一起,不显示。
+(setq display-time-format "%H:%M"
+      display-time-default-load-average nil)
+(display-time-mode 1)
+(display-battery-mode 1)
 #+end_src
 
 ** Tab-line
@@ -737,12 +791,6 @@ Emacs 原生 tab-line 会把当前窗口模式下的所有缓冲区（包括 Scr
 (require 'tab-line)
 (require 'project)
 (tab-bar-mode -1)
-
-;; nerd-icons 可用性只看包是否加载,不查 display 类型:TTY 终端已安装
-;; Nerd Font,字形以普通文字渲染(见 GUI/TTY 混合 daemon 约束)。
-(defvar custom:nerd-icons-available
-  (require 'nerd-icons nil t)
-  "nerd-icons 包是否已加载;图标渲染的统一守卫变量。")
 
 (defconst custom:tabs-name-max-width 36
   "单个标签名最大宽度。")
@@ -2172,8 +2220,8 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
       dired-movement-style 'cycle
       grep-use-headings t)
 
-;; 当前函数名显示(面包屑替代):which-function-mode 把光标所在 defun 名
-;; 写入 header-line / mode-line,doom-modeline 直接透传,无需 breadcrumb 包。
+;; 当前函数名显示(面包屑替代):which-function-mode 注册在 mode-line-misc-info,
+;; 状态行渲染该组件时即带上函数名,无需 breadcrumb 包。
 (which-function-mode 1)
 #+end_src
 
@@ -4154,21 +4202,6 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
               #'completion-preview-insert-word)
   (define-key completion-preview-active-mode-map [remap forward-sexp]
               #'completion-preview-insert-sexp))
-#+end_src
-
-*** Minibuffer 浮动窗口（按需）
-:PROPERTIES:
-:CUSTOM_ID: completion-frame
-:END:
-
-=minibuffer-frame= 提供居中的 minibuffer child frame，保留内置补全后端。
-通过 =M-x minibuffer-frame-mode= 切换，仅建议在独立的图形 Emacs 实例中使用。
-上游模式为全局开关，未区分 GUI/TTY，且复用单个父窗口的 child frame；
-本配置的混合 daemon 不默认启用，避免终端 minibuffer 与多窗口焦点受到影响。
-
-#+begin_src emacs-lisp
-(use-package minibuffer-frame
-  :commands minibuffer-frame-mode)
 #+end_src
 
 *** 搜索导航增强
