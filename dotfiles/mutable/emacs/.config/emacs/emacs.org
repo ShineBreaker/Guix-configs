@@ -1800,9 +1800,11 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
     ;; "Invalid face box :color unspecified :line-width (-1 . -1)"。清除之;
     ;; TTY 提示游标靠 cursor-type 本身即可辨识。
     (ghostel-fake-cursor :box nil)
-    ;; 同类问题:org-modern 的 label/habit face 以 "unspecified-bg" 作 box 色,
-    ;; TTY 下打开 org buffer 时 redisplay 报同款 Invalid face box。清 box 后
-    ;; 标签语义由前背景色承载,不受影响。
+    ;; 同类问题:org-modern 的 label/habit face 边框色取自当前 frame 的 default
+    ;; 背景(`org-modern--update-faces'),TTY 透明策略把背景清成 unspecified 后
+    ;; 该 box 非法——注意它每次启用 org-modern-mode 都会重算,清 :box 拦不住,
+    ;; 真正的拦截在 org-modern 域的同名 advice(见 org-modern 配置节)。这里清 :box
+    ;; 只是让 TTY 的 label 语义落回前背景色。
     (org-modern-label :box nil)
     (org-modern-habit :box nil))
   "TTY 透明背景下补充的非颜色交互语义。")
@@ -3900,6 +3902,28 @@ SCHEDULED: %^t
   (and (not noninteractive)
        (not (display-graphic-p))
        (>= (display-color-cells) 8)))
+
+(defun custom/org-modern--box-color-usable-p ()
+  "当前 frame 的 `default' 背景能否直接当 `:box' 的颜色用。
+`xfaces.c' 只接受 nil 或非空字符串作 `:color',而 TTY 透明策略把背景清成符号
+`unspecified',该规格会被判为非法。org-modern 恰好吃这个返回值:
+`org-modern--update-faces' 用 `(face-attribute 'default :background nil t)' 当
+label/habit 的边框色。"
+  (let ((bg (face-attribute 'default :background nil t)))
+    (or (null bg) (stringp bg))))
+
+(defun custom--skip-uncolorable-org-modern-border (orig &rest args)
+  "背景色不可用时跳过 org-modern 的 label 边框重算，否则交给 ORIG。
+保留这种 box 的代价不小:`org-modern-mode' 由 `org-mode-hook' 启用(含 dashboard
+的 agenda 扫描会顺路打开 org 文件),重算抛出的 \"Invalid face box\" 会打断模式
+初始化并被上层报成 \"File mode specification error\"——不只是日志噪音;而 box 在
+终端本就不绘制(见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]])。"
+  (when (custom/org-modern--box-color-usable-p)
+    (apply orig args)))
+
+(with-eval-after-load 'org-modern
+  (advice-add 'org-modern--update-faces :around
+              #'custom--skip-uncolorable-org-modern-border))
 
 (defun custom/org-modern--apply-display ()
   "按当前 frame 类型降级 `org-modern' 的星号与表格渲染。
