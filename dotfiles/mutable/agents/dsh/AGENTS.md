@@ -31,21 +31,26 @@
 
 > **重要规则**：必须锁定**精确版本**，避免依赖漂移导致插件与 DSH 核心版本不兼容。
 
-| 插件                 | 当前版本 | 说明                                                                               |
-| -------------------- | -------- | ---------------------------------------------------------------------------------- |
-| `dsh-better-sidebar` | 0.19.0   | 侧边栏工作台：集成文件编辑、内置终端（xterm + node-pty）、Git 差异与后台任务管理   |
-| `dsh-context`        | 0.49.0   | 上下文监控面板：展示 Agent 组合、趋势分析、文件活动与 Agent 通信网络               |
-| `dsh-dream-skin`     | 8.30.1   | 原生主题换肤：通过官方 `ctx.theme.register` / `overrideTokens` 实现原生 Token 换肤 |
+| 插件                                 | 当前版本       | 说明                                                                               |
+| ------------------------------------ | -------------- | ---------------------------------------------------------------------------------- |
+| `dsh-better-sidebar`                 | 0.19.1         | 侧边栏工作台：集成文件编辑、内置终端（xterm + node-pty）、Git 差异与后台任务管理   |
+| `dsh-context`                        | 0.53.3         | 上下文监控面板：展示 Agent 组合、趋势分析、文件活动与 Agent 通信网络               |
+| `dsh-dream-skin`                     | 9.16.0         | 原生主题换肤：通过官方 `ctx.theme.register` / `overrideTokens` 实现原生 Token 换肤 |
+| `@opencode2dsh/dsh-plugin`           | 0.3.2          | OpenCode Zen 免费通道：原生 LLM adapter，无凭据零配置                              |
+| `dsh-opencode-go`                    | 0.1.4          | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                  |
+| `@mars-sea/dsh-commandcode-provider` | 0.11.5         | Command Code 接入：全套餐、浏览器内 OAuth 登录、多账户轮换                         |
+| `dsh-devin-cli`                      | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（git 锁 commit，不参与自动更新）                  |
 
 ### 插件常见问题与注意点
 
 1. **供应链冷却**：pnpm 会自动将 `minimumReleaseAgeExclude` 写入 profile workspace，确保新发插件正常拉取。
 2. **原生模块编译**：涉及 native 依赖时需执行 `pnpm approve-builds`（配置项为 `allowBuilds`）。
 3. **服务重启**：安装新插件后须重启 `dsh web`。若首次加载时页面漏掉插件条目，对浏览器进行一次硬刷新（Ctrl+F5）即可恢复。
+4. **软链断链**：`dsh plugin add/remove` 写 `dsh.profile.bundles` 走原子替换（临时文件 + rename），会把 `profiles/web/package.json` 的 stow 软链换成独立文件——dependencies 更新进仓库源、bundles 却只落在部署侧。跑完 `ls -la` 验证；断了就把部署侧内容写回源文件，再 `ln -sfn` 重建软链（pnpm 自身的写入不会断链，只有 dsh 的 bundles 写入会）。
 
 ## 一键更新（dsh-update）
 
-`dsh-update` 把本体与三个插件一起升到上游最新。两层强绑定，故不提供只升一层的开关。
+`dsh-update` 把本体与 web profile 的全部插件一起升到上游最新（插件清单从 `package.json` 的 dependencies 动态读取）。两层强绑定，故不提供只升一层的开关。
 
 ```bash
 dsh-update --check           # 只查差异；退出码 0=已最新，1=有更新
@@ -57,6 +62,7 @@ dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 - **版本锁精确**：用 `pnpm add -E`（`--save-exact`）。pnpm 默认写 `^`，那正是依赖静默升到不兼容版本的成因。
 - **不手写 YAML**：显式 `pnpm add <pkg>@<ver>` 时，pnpm 会自动把仍在 24h 供应链冷却期内的版本写进 workspace 的 `minimumReleaseAgeExclude`。脚本只提示、不自己改这两个配置文件。
 - **兼容性提醒**：读插件的 `dsh.compatibility.dshReleases`（发布方自列的已验证版本白名单）。多数插件没有这个字段，那不代表不兼容，故只在「声明了白名单却不含目标版本」时才提醒。
+- **源码锁定的依赖不自动更新**：`github:` / `git+` / `file:` / `link:` 这类依赖没有可比较的 registry 版本，脚本只列出提示。升级要手动换 commit——注意 git 插件的 `allowBuilds` 放行 key 绑定在 commit 上，换 commit 须同步替换（pnpm 报 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 时会打印新 key）。
 - **生效**：更新后须重启 `dsh web`（host 半边不热载）。`--restart` 会调 `dsh-web --reauth`。
 
 > **改的是仓库源文件**：`package.json` 与 `pnpm-workspace.yaml` 由 pnpm 原地写入（两者都是回本包的软链），跑完 `git diff` 后提交。

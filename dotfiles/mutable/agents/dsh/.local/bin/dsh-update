@@ -3,7 +3,13 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# dsh-update — 把 dsh 本体与 web profile 的三个插件更新到上游最新，一键。
+# dsh-update — 把 dsh 本体与 web profile 的插件更新到上游最新，一键。
+#
+# 插件清单从 web profile 的 package.json 动态读取（dependencies 全量，保序）。
+# 其中 git/link/file 等「锁定源码」的依赖没有 registry 版本可比，不参与自动
+# 更新，只列出来提醒：git 插件升级要换 commit，而 allowBuilds 的放行 key
+# 绑定在 commit 上（换 commit 就得同步换 key），天然需要人工过手，所以不
+# 做「自动跟分支 HEAD」那种更新。
 #
 # 更新靠 pnpm 自己写文件，脚本不碰 package.json / pnpm-workspace.yaml。用
 # -E（--save-exact）保住「锁精确版本」的既定原则——pnpm 默认写 ^，而那正是
@@ -24,14 +30,14 @@ export DSH_HOME
 readonly CLI_DIR="$DSH_HOME/_cli"
 readonly WEB_DIR="$DSH_HOME/profiles/web"
 readonly CLI_PKG='@deepseek-ai/dsh'
-readonly -a PLUGINS=(dsh-better-sidebar dsh-context dsh-dream-skin)
 readonly COOLDOWN_HOURS=24
 
 usage() {
 	cat <<'EOF'
 用法: dsh-update [选项]
 
-把 dsh 本体（$DSH_HOME/_cli）与 web profile 的三个插件更新到上游最新。
+把 dsh 本体（$DSH_HOME/_cli）与 web profile 的插件更新到上游最新。
+插件清单读自 profile 的 package.json；锁定源码（git/link）的依赖只提示不更新。
 
 选项:
   --check     只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
@@ -61,16 +67,31 @@ while (($#)); do
 	shift
 done
 
-# 从 package.json 读当前版本，顺序：本体、PLUGINS...
-read_current_versions() {
-	python3 - "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$CLI_PKG" "${PLUGINS[@]}" <<'PY'
-import json, sys
-cli, web, cli_pkg, plugins = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
-print(json.load(open(cli))["dependencies"].get(cli_pkg, ""))
-deps = json.load(open(web))["dependencies"]
-for p in plugins:
-	print(deps.get(p, ""))
+# 从 package.json 读更新目标，每行 TSV：kind(升级方式) scope(归属) name spec。
+# 顺序为本体、web dependencies 原序。spec 对 npm 依赖就是当前版本（-E 锁的精确值）。
+read_targets() {
+	python3 - "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$CLI_PKG" <<'PY'
+import json, re, sys
+
+cli, web, cli_pkg = sys.argv[1], sys.argv[2], sys.argv[3]
+# 锁定源码的 spec：git+ / github: / git@ / file: / link: / 任意 URL 协议
+SOURCE_LOCKED = re.compile(r'^(git\+|github:|git@|file:|link:|[a-z][a-z0-9+.-]*://)')
+
+print("npm\tcli\t%s\t%s" % (cli_pkg, json.load(open(cli))["dependencies"].get(cli_pkg, "")))
+for name, spec in json.load(open(web))["dependencies"].items():
+	kind = "git" if SOURCE_LOCKED.match(spec) else "npm"
+	print("%s\tweb\t%s\t%s" % (kind, name, spec))
 PY
+}
+
+# 锁定源码依赖的提示段：没有可比较的 registry 版本，只能人工升级。
+print_source_locked() {
+	((${#source_locked[@]})) || return 0
+	local item
+	printf '\n以下依赖锁定源码（git/link/file），不参与自动更新：\n'
+	for item in "${source_locked[@]}"; do printf '  %s\n' "$item"; done
+	printf '  升级：确认目标 commit 后跑 pnpm -C %s add -E github:<owner>/<repo>#<commit>\n' "$WEB_DIR"
+	printf '  （若安装报 prepare 未放行，把 pnpm 打印的 allowBuilds key 同步进 pnpm-workspace.yaml）\n'
 }
 
 # $1: 当前版本 $2: `pnpm view <pkg> dist-tags time --json` 的输出。
@@ -141,12 +162,26 @@ done
 
 printf 'dsh-update: 查询上游（registry: %s）\n' "$(pnpm config get registry 2>/dev/null || printf '?')"
 
-mapfile -t cur < <(read_current_versions)
-names=("$CLI_PKG" "${PLUGINS[@]}")
+mapfile -t target_rows < <(read_targets)
+declare -a kind=() scope=() name=() cur=()
+for row in "${target_rows[@]}"; do
+	IFS=$'\t' read -r k sc n c <<<"$row"
+	kind+=("$k"); scope+=("$sc"); name+=("$n"); cur+=("$c")
+done
+
+declare -a source_locked=()
+for i in "${!name[@]}"; do
+	[[ "${kind[$i]}" == git ]] && source_locked+=("${name[$i]}  ${cur[$i]}")
+done
+
 declare -a picked=()
-for i in "${!names[@]}"; do
-	if ! raw=$(pnpm view "${names[$i]}" dist-tags time --json 2>/dev/null); then
-		printf 'dsh-update: 查询 %s 失败（检查网络与 registry 配置）\n' "${names[$i]}" >&2
+for i in "${!name[@]}"; do
+	if [[ "${kind[$i]}" == git ]]; then
+		picked+=("")
+		continue
+	fi
+	if ! raw=$(pnpm view "${name[$i]}" dist-tags time --json 2>/dev/null); then
+		printf 'dsh-update: 查询 %s 失败（检查网络与 registry 配置）\n' "${name[$i]}" >&2
 		exit 2
 	fi
 	picked+=("$(pick_version "${cur[$i]}" "$raw")")
@@ -159,21 +194,28 @@ done
 
 if ((updates == 0)); then
 	printf '\ndsh-update: 已是最新（%s %s）\n' "$CLI_PKG" "${cur[0]}"
+	print_source_locked
 	exit 0
 fi
 
+width=21
+for n in "${name[@]}"; do
+	((${#n} > width)) && width=${#n}
+done
+
 printf '\n'
-for i in "${!names[@]}"; do
+for i in "${!name[@]}"; do
 	line=${picked[$i]}
 	[[ -n "$line" ]] || continue
 	IFS='|' read -r tag ver hours cooling <<<"$line"
 	note=""
 	[[ "$cooling" == cool ]] && note='24h 冷却内'
-	printf '  %-21s %-11s -> %-12s [%-6s] %8sh  %s\n' \
-		"${names[$i]}" "${cur[$i]}" "$ver" "$tag" "$hours" "$note"
+	printf '  %-*s %-11s -> %-12s [%-6s] %8sh  %s\n' \
+		"$width" "${name[$i]}" "${cur[$i]}" "$ver" "$tag" "$hours" "$note"
 	[[ $i -eq 0 ]] && printf '\n'
 done
 printf '\n  = 冷却内的版本由 pnpm 自动写入 minimumReleaseAgeExclude 豁免\n'
+print_source_locked
 
 # 插件的兼容声明：dsh.compatibility.dshReleases 是发布方列的「已验证 dsh 版本」白名单。
 # 多数插件根本没有这个字段，那不代表不兼容；只有「声明了却不含目标版本」才值得提醒。
@@ -183,15 +225,16 @@ if [[ -n "${picked[0]}" ]]; then
 	IFS='|' read -r _ cli_target _ _ <<<"${picked[0]}"
 fi
 compat_notes=()
-for i in "${!PLUGINS[@]}"; do
-	line=${picked[$((i + 1))]}
+for i in "${!name[@]}"; do
+	[[ "${kind[$i]}" == npm && "${scope[$i]}" == web ]] || continue
+	line=${picked[$i]}
 	[[ -n "$line" ]] || continue
 	IFS='|' read -r _ ver _ _ <<<"$line"
-	decl=$(pnpm view "${PLUGINS[$i]}@$ver" dsh.compatibility.dshReleases --json 2>/dev/null || true)
+	decl=$(pnpm view "${name[$i]}@$ver" dsh.compatibility.dshReleases --json 2>/dev/null || true)
 	[[ -n "$decl" && "$decl" != "{}" && "$decl" != "null" ]] || continue
 	grep -qF "\"$cli_target\"" <<<"$decl" && continue
 	declared=$(grep -oE '"[^"]+":' <<<"$decl" | tr -d '":' | paste -sd, -)
-	compat_notes+=("${PLUGINS[$i]} $ver 的白名单未含 $cli_target（它声明的是 $declared）")
+	compat_notes+=("${name[$i]} $ver 的白名单未含 $cli_target（它声明的是 $declared）")
 done
 if ((${#compat_notes[@]})); then
 	printf '\n兼容性提醒（该字段是发布方声明、宿主侧不读，仅供参考）：\n'
@@ -225,11 +268,12 @@ if [[ -n "${picked[0]}" ]]; then
 fi
 
 declare -a plugin_args=()
-for i in "${!PLUGINS[@]}"; do
-	line=${picked[$((i + 1))]}
+for i in "${!name[@]}"; do
+	[[ "${scope[$i]}" == web ]] || continue
+	line=${picked[$i]}
 	[[ -n "$line" ]] || continue
 	IFS='|' read -r _ ver _ _ <<<"$line"
-	plugin_args+=("${PLUGINS[$i]}@$ver")
+	plugin_args+=("${name[$i]}@$ver")
 done
 if ((${#plugin_args[@]})); then
 	printf '\ndsh-update: 更新插件（%s）\n' "$WEB_DIR"
