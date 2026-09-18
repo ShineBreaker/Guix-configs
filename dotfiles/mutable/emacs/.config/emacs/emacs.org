@@ -972,8 +972,12 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
       (message "已清空当前 frame 的标签列表"))))
 
 (defun custom--tabs-on-frame-deletion (frame)
-  "FRAME 删除时清理标签状态。"
-  (custom--tabs-set-frame-buffer-list nil frame))
+  "FRAME 删除时清理标签状态。
+TTY client 断开时 tty frame 可能已被先行删除,钩子拿到的是 dead frame 对象
+(`set-frame-parameter' 会报 wrong-type-argument frame-live-p,被 Emacs 的
+safe_call 静音);dead frame 的参数随之销毁,无需再清,故先判存活。"
+  (when (frame-live-p frame)
+    (custom--tabs-set-frame-buffer-list nil frame)))
 
 (defun custom--tabs-on-project-switch (&rest _)
   "`project-switch-project' 的 :after advice 回调：清空当前 frame 标签列表。
