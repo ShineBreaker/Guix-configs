@@ -1064,10 +1064,9 @@ FACE 为单个 face 名或以关键字开头的属性 plist 时,包成
   "以接近 IDE 的样式格式化 TAB。
 face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
 current/inactive 用内置 face,自动跟随主题。
-除首个标签外,每个标签前插一个 `custom:tab-line-divider-glyph':它落在标签
-底色块之外,故相邻两个 buffer 之间是一条细竖线,而不是两块底色直接贴上
-(内置的 `tab-line-separator' 只作用于整条标签栏首尾与每个标签之前,无法
-表达「只在两者之间」)。"
+标签之间不加分隔符:选中与非选中标签各自的底色块已经足够区分,再插竖线是
+chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window divider 负责,
+见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]。"
   (let* ((selected-p (eq tab (window-buffer)))
          (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
@@ -1078,11 +1077,6 @@ current/inactive 用内置 face,自动跟随主题。
     (dolist (fn tab-line-tab-face-functions)
       (setq face (funcall fn tab tabs face t selected-p)))
     (let* ((render-face (custom--tab-line-render-face face))
-           (divider
-            (unless (eq tab (car tabs))
-              (propertize custom:tab-line-divider-glyph
-                          'face custom:tab-line-divider-face
-                          'mouse-face (unless selected-p 'tab-line-highlight))))
            (spacer
             (propertize " "
                         'face render-face
@@ -1094,7 +1088,6 @@ current/inactive 用内置 face,自动跟随主题。
                     (custom--tab-line-close-button render-face)))
            (rendered
             (concat
-             divider
              spacer
              (propertize label
                          'face render-face
@@ -1116,9 +1109,10 @@ current/inactive 用内置 face,自动跟随主题。
 标签栏各个状态的外观完全基于 Emacs 预置语义 Face 继承：
 - *当前标签* ：继承自 =mode-line= 的前景色与半粗体，形成鲜明对照。
 - *非当前标签* ：继承自 =shadow= ，作为弱化的背景标签。
-- *buffer 之间的竖线* ：除首个标签外，每个标签前插一个 =|= 字形（=custom:tab-line-divider-glyph= ），
-  落在标签底色块之外的空隙里，于是相邻两个 buffer 之间恰好有一条细竖线。
-  颜色取主题 =border= ，深浅两种标签底色上都能看见，又不至于抢眼。
+- *标签之间* ：不加任何分隔符。两块底色（=mode-line= 系与 =shadow= 系）本身已经把
+  选中态与非选中态分开，再插竖线只会往 chrome 里堆多余元素。
+  需要分隔线的是 *buffer（窗口面板）之间* ，那是 window divider 的职责，见
+  [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]。
 - *标签栏下缘的横线* ：整条标签栏（标签、间隙与滚动按钮）共用一条细线，位置取文本下缘，
   即标签栏与正文的分界。颜色由主题 =border= 向正文底色插值（=custom--mix-color= ），
   比纯 =border= 更淡，避免再次出现「一条黑线横在那里」的突兀感。
@@ -1183,14 +1177,6 @@ current/inactive 用内置 face,自动跟随主题。
 取色走 Modus palette，不硬编码 RGB。
 
 #+begin_src emacs-lisp
-(defconst custom:tab-line-divider-glyph "|"
-  "标签之间的竖直分隔符字面量。
-取 ASCII 竖线而非 U+2502(BOX DRAWINGS LIGHT VERTICAL):后者在本机 CJK
-字体下 `char-width' 为 2,会把标签间距撑成两格。")
-
-(defvar custom:tab-line-divider-face '(:inherit shadow)
-  "标签之间竖直分隔符的 face,主题加载/切换时由 `custom/apply-tab-line-divider' 重算。")
-
 (defun custom--mix-color (front back weight)
   "把颜色 FRONT 按 WEIGHT 混入 BACK(0=纯 BACK)后返回 #RRGGBB。
 只在 palette 的 #RRGGBB 字面量上按通道插值:不用 `color-values',后者的
@@ -1205,15 +1191,11 @@ current/inactive 用内置 face,自动跟随主题。
                    '(2)))))
 
 (defun custom/apply-tab-line-divider (&rest _)
-  "按当前主题重算标签栏的两类分隔线。
-横线:整条标签栏(标签、间隙与滚动按钮)共用一条贴文本下缘的细线,即标签栏与
-正文的分界。下划线落在标签与填充空白两类 face 上故整行连续,不需要盒模型
-(盒线无法只画单边);颜色在主题 `border' 与正文底色之间插值,比纯 `border'
-更淡,避免横线重新变得抢眼。
-竖线:`custom:tab-line-divider-glyph' 的 face,取纯 `border' 色——它只有一字
-宽,与深浅两种标签底色都要拉开差距才看得见;`:height 1.25' 把一字高的 `|'
-拉长到约占标签栏高度的三分之二(GUI 实测:24px→29px 笔画,栏高 46px,
-且未撑高标签栏),短于栏高才不抢眼。
+  "按当前主题重算标签栏下缘的横线。
+整条标签栏(标签、间隙与滚动按钮)共用一条贴文本下缘的细线,即标签栏与正文的
+分界。下划线落在标签与填充空白两类 face 上故整行连续,不需要盒模型(盒线无法
+只画单边);颜色在主题 `border' 与正文底色之间插值,比纯 `border' 更淡,避免
+横线重新变得抢眼。
 `enable-theme-functions' 上重算,明暗主题切换后颜色随之更新。palette 取不到
 色时保留既有属性:TTY 侧另有例外表 pin 下划线语义(见
 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]),不依赖本函数。"
@@ -1223,8 +1205,7 @@ current/inactive 用内置 face,自动跟随主题。
                     tab-line-highlight tab-line-close-highlight))
       (set-face-attribute face nil
                           :underline (list :color (custom--mix-color border bg 0.5)
-                                           :position t)))
-    (setq custom:tab-line-divider-face (list :foreground border :height 1.25))))
+                                           :position t)))))
 
 (add-hook 'enable-theme-functions #'custom/apply-tab-line-divider)
 #+end_src
