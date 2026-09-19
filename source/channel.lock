@@ -12,7 +12,7 @@
        (name 'bluebox)
        (url "https://codeberg.org/lapislazuli/bluebox")
        (branch "main")
-       (commit "f5c32b67e5abfa2ea8e9630c36dc0cfe3b29ebd4")
+       (commit "a5b2168123bcc236f79cbb4f1c5d4cf5412ee31d")
        (introduction
         (make-channel-introduction
          "63350484aaacc362aea28fb14236019fced4050f"
@@ -22,7 +22,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "c3f0ff39b77ece13bfa9bce79131720c412c353f")
+       (commit "99a8957091d22f5ba0e3bd4db087ba53fb283682")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -32,7 +32,7 @@
        (name 'nonguix)
        (url "https://gitlab.com/nonguix/nonguix")
        (branch "master")
-       (commit "70818366e6145ff406664f3931041243ae5779a1")
+       (commit "f9171dd0d0a58d63c0811d61e51493a3fa4ae4f3")
        (introduction
         (make-channel-introduction
          "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
@@ -42,7 +42,7 @@
        (name 'rosenthal)
        (url "https://codeberg.org/hako/rosenthal.git")
        (branch "trunk")
-       (commit "8f0677e5e34c587657fb7212115a69081669ddf6")
+       (commit "8bebafaacdd9ea7b0bc7159857206b1959a0df2d")
        (introduction
         (make-channel-introduction
          "7677db76330121a901604dfbad19077893865f35"
