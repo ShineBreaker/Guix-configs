@@ -53,6 +53,7 @@ mutable/
 │   └── .stow-package
 └── tools/
     ├── appimage-run/
+    ├── blue/
     ├── secrets/
     └── toolbox/
 ```
@@ -74,6 +75,7 @@ mutable/
 | `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` + `~/.zcode/plugins/` | 知识库技能与各端 Hook/插件（内含子模块）                                                                         |
 | `tools/secrets`      | `~/.local/share/keys/` + `~/.local/bin/secrets`                                | Age 密钥对与 `secrets` 命令（加密/解密/编辑/fzf 菜单/剪贴板），详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md) |
 | `tools/appimage-run` | `~/.local/bin/appimage-run`                                                    | AppImage 运行器（子模块）                                                                                        |
+| `tools/blue`         | `~/.local/bin/blue`                                                            | blue 启动 wrapper（借系统 guile 3.0.11 直跑，绕过 bluebox 字节码错配；上游修复 guile 输入后删包）               |
 | `tools/toolbox`      | `~/.local/bin/toolbox` + `~/.local/share/toolbox/`                             | 自研工具统一入口（fzf 清单），详见 [toolbox/AGENTS.md](tools/toolbox/AGENTS.md)                                  |
 
 > `agents/extensions/` 无 `.stow-package` 标记，不单独部署：它是 omp/pi 共享自建扩展的源码存放点，两侧 `extensions/<name>/` 经软链引用（见 [pi/AGENTS.md](agents/pi/AGENTS.md)）。
