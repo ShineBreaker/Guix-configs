@@ -9,10 +9,10 @@
         "dsh-context",
         "dsh-dream-skin",
         "dsh-better-sidebar",
-        "@opencode2dsh/dsh-plugin",
-        "dsh-opencode-go",
         "@mars-sea/dsh-commandcode-provider",
-        "dsh-devin-cli"
+        "dsh-devin-cli",
+        "dsh-agent-extensions",
+        "dsh-agenote"
       ],
       "patchReload": "live"
     }
@@ -21,6 +21,8 @@
     "@mars-sea/dsh-commandcode-provider": "0.11.5",
     "@opencode2dsh/dsh-plugin": "0.3.2",
     "dsh-better-sidebar": "0.19.1",
+    "dsh-agenote": "link:/home/brokenshine/Projects/agenote/dsh-agenote",
+    "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-context": "0.53.3",
     "dsh-devin-cli": "github:leewf/dsh-devin-cli#06a9c61de653d86e6e634a3cc4f12f6035623788",
     "dsh-dream-skin": "9.16.0",

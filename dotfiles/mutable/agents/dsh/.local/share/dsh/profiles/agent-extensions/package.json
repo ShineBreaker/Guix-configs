@@ -1,0 +1,30 @@
+{
+  "name": "dsh-agent-extensions",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local DSH ports of the shared pi/omp agent extensions: gate (command/file policy), global-context (system-prompt injection) and a Shift+Tab plan-mode toggle for the web client.",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./gate": "./gate.js",
+    "./global-context": "./global-context.js",
+    "./lifecycle": "./lifecycle.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller"
+      ]
+    }
+  }
+}

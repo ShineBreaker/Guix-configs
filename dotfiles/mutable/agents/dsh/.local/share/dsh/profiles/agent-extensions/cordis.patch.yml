@@ -1,0 +1,24 @@
+# dsh-agent-extensions bundle patch layer.
+#
+# ONE host row, mounted by the bare package name. Both halves are keyed off that
+# name: the row's specifier must be an exact package specifier for the browser
+# half to be discovered at all. dsh's client-modules scanner resolves the row's
+# module location and keeps only bare specifiers (`exactPackageSpecifier`
+# rejects any non-scoped name containing "/"), so a subpath row such as
+# `dsh-agent-extensions/gate` makes `locatePkgJson` bail out and the
+# `dsh.client` declaration is silently skipped — the host half still loads,
+# the browser half never does. Keep this row bare.
+#
+# index.js applies gate + global-context together; subsection config comes from
+# this row's config:
+#
+#   - id: agent-extensions
+#     config:
+#       gate: { enabled: false }
+#       globalContext: { maxFiles: 8 }
+#
+# The browser half (Shift+Tab → /plan toggle) is declared by `dsh.client` in
+# package.json and needs no row of its own.
+- insert:
+    - id: agent-extensions
+      name: 'dsh-agent-extensions'
