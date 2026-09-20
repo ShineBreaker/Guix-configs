@@ -686,26 +686,63 @@ frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提
 不渲染每个窗口底部的 mode-line（=mode-line-format= 置 nil，每个窗口因此多出一行），
 状态信息改由屏幕底部的一行承载：=minibuffer-line= 把 =format-mode-line= 的结果写入
 Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即 echo area 的显示。
+段式布局复刻旧版自研 Starship 风格 modeline 的完整体验。
 
-- *渲染* ：格式串与 =mode-line-format= 同构，=format-mode-line= 以选中窗口的 buffer 求值；
-  右对齐需在 =:eval= 中手工补空格，=mode-line-format-right-align= 在 echo area 中无效。
-  两条实测约束：格式串里首个带 face 的元素会把该 face 立为整行基础 face，故图标在格式串
-  之外拼接并去掉属性；=mode-line-modified= 与 =mode-line-position= 的值带 Emacs 31 的
-  =mode-line-elt-no= 属性，直接渲染得到 =*invalid*=，左段改用 =%l=/=%c= 字面量构造。
-- *刷新* ：上游 timer 默认 60 秒才刷新一次，行号与修改标志会严重滞后，故实时性由
-  =post-command-hook= 驱动，另用 idle timer 兜底异步变化（Flymake 报告、VC 状态），
-  渲染结果与 buffer 内容一致时不重写，避免 echo area 反复重绘。
-- *短消息* ：Eglot 连接、保存、缓冲区边界等短消息由 =set-message-functions= 末位接管，
-  并入左半后右半的项目、VC、时间与电量保持可见；超过 echo area 一半宽度的消息与
-  minibuffer 活动期交回 Emacs 默认显示（占满整行）。撤销时机与 echo area 一致
-  （下一个输入事件），并额外在 4 秒空闲后撤下，避免状态行长期只剩消息。
-- *信息源* ：VC、Flymake、Eglot、which-func 与时间电量分别由 =vc-mode= 、
-  =flymake-mode-line-counters= 、=mode-line-misc-info= 等既有组件提供，状态行只做渲染。
-- *固有取舍* ：整行消息与 minibuffer 输入期间状态行不可见；daemon 下多个 client 共享
-  同一份内容（= *Minibuf-0*= 是全局 buffer）。
+- *响应式档位* ：状态行横跨整个 frame，档位按 frame 宽度划分——wide（≥160）、
+  medium（≥120）、narrow（≥80）、compact（<80），决定各段的显隐与密度。
+- *段清单* ：左段 = 路径缩写·文件名·Git 分支·VC 状态·编码·位置百分比·行列
+  （compact 档仅 major-mode）；右段 = Flymake 诊断·Eglot·全局状态串·major-mode·
+  电量·时间。各段带 nerd-icons 图标与语义 face，段间以 =" · "= 连接；VC 状态
+  复刻旧版十态映射（clean/edited/unsaved/added/removed/missing/conflict/merge/
+  update/ignored/untracked），各有独立图标与着色。
+- *渲染* ：段内容在目标窗口的 buffer 中求值（=vc-mode= 、flymake/eglot/project
+  缓存均为 buffer-local）。状态行**不经 =format-mode-line= 输出**——=:eval=
+  结果含 =%= 时会触发重扫，而重扫会剥掉 display spec 之后文本的 face（实测），
+  故 refresh 直接写入 render 结果，并用 =add-face-text-property= 给无 face
+  区域补 =minibuffer-line= 基 face（等价于 FACE 参数的合并语义）。图标一律
+  去属性——图标 face 的 family 进入 echo area 文本会把整行渲染成图标字体的
+  tofu 方块，去属性后由默认字体渲染（其本身带图标字形），着色交给段 face。
+  右缘用带 =(space :align-to)= 的空格：该 spec 在每次显示时按当前窗口宽重新
+  伸缩，被所有 frame 共享的 = *Minibuf-0*= 右段因此始终贴各 frame 自己的右缘。
+- *留白* ：=custom:modeline-padding= 控制左右两侧留白列数（默认 1，两侧一致）；
+  右缘末列是强制保留位（写满触发溢出/截断标记），故留白下限为 1。
+  左右放不下时省略号截断左段，右段永远完整。
+- *minibuffer 适配* ：minibuffer 激活期间状态行让位给输入；同时在输入行右缘
+  以 overlay 渲染精简状态（诊断·项目·时间）——仅当 minibuffer 单行且右缘
+  空隙足够时显示，=minibuffer-message= 提示（如 [No match]）在场时自动让位
+  （提示由 timer 异步插入/删除，经 advice 即时重算），退出即删除 overlay
+  并恢复状态行。
+- *刷新* ：实时性由 =post-command-hook= 驱动，每秒普通 timer 兜底异步变化
+  （Flymake 报告、VC 状态、时钟），=window-size-change-functions= 负责 resize
+  后重算右缘，=window-state-change-hook= 与 =minibuffer-setup-hook= 负责
+  minibuffer 开合时的即时切换。不用 repeat 型 idle timer：它每个空闲周期只
+  触发一次（=timer.el= 重调度后置 =timer--triggered=，要等下次输入事件才
+  复位），无输入的 daemon 上等同失效。所有 hook 内函数包 =condition-case=
+  ——抛错的 hook 函数会被 Emacs 自动移出，刷新将静默停摆（曾致状态行
+  「莫名其妙消失」）。上游 30 秒 update 无守卫无去重，已用 advice 收口到本模块。
+- *短消息* ：Eglot 连接、保存、缓冲区边界等短消息由 =set-message-functions= 末位
+  接管，并入左半后右半保持可见；超过 echo area 一半宽度的消息交回 Emacs 默认
+  整行显示。撤销时机与 echo area 一致（下一个输入事件），并额外在并入满 4 秒后
+  由每秒 tick 撤下（按并入时刻计时：长时间空闲时按空闲时长判定会把刚并入的
+  消息立即撤掉）。
+- *信息源* ：VC、Flymake、Eglot、project 状态由各自公开接口在专用 hook 中刷新进
+  buffer-local 缓存，渲染路径零 I/O；时间由 =format-time-string= 直接计算，
+  电量由 =display-battery-mode= 维护的 =battery-mode-line-string= 提供。
+- *固有取舍* ：整行消息期间状态行不可见，按键回显（=C-x= 等前缀）与 isearch
+  期间 echo area 被占用同理；daemon 下多个 client 共享同一份内容
+  （= *Minibuf-0*= 是全局 buffer），宽度以最近一次渲染的 frame 为准，比它窄的
+  frame 会静默裁掉右缘超出的部分（截断箭头已由 display-table 与 fringe 清零
+  双重压住），切换 frame 后由 hook 与每秒 tick 自愈。
 
 #+begin_src emacs-lisp
 (setq-default mode-line-format nil)
+
+(require 'battery)
+(require 'project)
+
+(declare-function nerd-icons-icon-for-file "nerd-icons")
+(declare-function nerd-icons-faicon "nerd-icons")
+(declare-function nerd-icons-mdicon "nerd-icons")
 
 ;; nerd-icons 可用性只看包是否加载,不查 display 类型:TTY 终端已安装
 ;; Nerd Font,字形以普通文字渲染(见 GUI/TTY 混合 daemon 约束)。
@@ -713,107 +750,760 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
   (require 'nerd-icons nil t)
   "nerd-icons 包是否已加载;图标渲染的统一守卫变量。")
 
-(defconst custom/modeline--left-format
-  '((:eval (if (buffer-modified-p) "**" "--"))
-    " "
-    (:eval (if buffer-file-name
-               (file-name-nondirectory buffer-file-name)
-             (buffer-name)))
-    " L%l:%c "
-    (:eval (when (bound-and-true-p flymake-mode)
-             (format-mode-line flymake-mode-line-counters)))))
+(defcustom custom:modeline-padding 1
+  "状态行左右两侧的留白列数,两侧一致。
+下限为 1:右缘末列是强制保留位(写满会触发溢出/截断标记,见
+`custom/modeline--usable-width'),无法再压缩。"
+  :type 'integer)
 
-(defconst custom/modeline--right-format
-  '((project-mode-line project-mode-line-format) " "
-    (vc-mode vc-mode) " "
-    (:eval (format-mode-line mode-line-misc-info))))
+(defcustom custom:modeline-show-time t
+  "是否在状态行右段显示时间。"
+  :type 'boolean)
+
+(defcustom custom:modeline-show-vcs t
+  "是否在状态行显示 VC 分支与状态。"
+  :type 'boolean)
+
+(defcustom custom:modeline-path-max-width 40
+  "路径段最大显示宽度。"
+  :type 'integer)
+
+(defvar custom/modeline--icon-cache (make-hash-table :test #'equal)
+  "状态行静态图标缓存。")
+
+(defconst custom/modeline--icon-cache-limit 256
+  "图标缓存的最大条目数。")
+
+(defvar-local custom/modeline--flymake-counts '(0 0))
+(defvar-local custom/modeline--eglot-info nil)
+(defvar-local custom/modeline--project-cache :unknown)
+(defvar-local custom/modeline--vc-state-cache :unknown)
+(defvar-local custom/modeline--path-cache nil)
+(defvar-local custom/modeline--name-cache nil)
+
+(defun custom/modeline-tier (window)
+  "按 WINDOW 所在 frame 的宽度返回 wide、medium、narrow 或 compact。
+状态行横跨整个 frame,档位按 frame 宽而非窗口宽划分(旧版按窗口宽)。"
+  (let ((width (window-total-width
+                (minibuffer-window (window-frame window)))))
+    (cond
+     ((>= width 160) 'wide)
+     ((>= width 120) 'medium)
+     ((>= width 80) 'narrow)
+     (t 'compact))))
+
+(defun custom/modeline--icon (name &optional file)
+  "返回去属性的 Nerd Font 图标 NAME;FILE 非 nil 时按文件类型取图标。
+NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
+其余交给 nerd-icons-mdicon。出错时返回空串。
+图标必须去属性:图标 face 的 family 进入 echo area 文本后,GUI 下会把
+整行渲染成图标字体的 tofu 方块;去属性后由默认字体渲染(其本身带图标
+字形),着色交给各段的语义 face。"
+  (if custom:nerd-icons-available
+      (let* ((key (if (and file (stringp file))
+                      (list name (file-name-nondirectory file))
+                    name))
+             (cached (gethash key custom/modeline--icon-cache :missing)))
+        (if (not (eq cached :missing))
+            cached
+          (let ((icon
+                 (substring-no-properties
+                  (or (ignore-errors
+                        (cond
+                         ((and file (stringp file))
+                          (nerd-icons-icon-for-file file))
+                         ((string-prefix-p "nf-fa-" name)
+                          (nerd-icons-faicon name))
+                         (t
+                          (nerd-icons-mdicon name))))
+                      ""))))
+            (when (>= (hash-table-count custom/modeline--icon-cache)
+                      custom/modeline--icon-cache-limit)
+              (clrhash custom/modeline--icon-cache))
+            (puthash key icon custom/modeline--icon-cache)
+            icon)))
+    ""))
+
+(defun custom/modeline--with-icon (icon text)
+  "组合 ICON 与 TEXT。"
+  (cond
+   ((string-empty-p icon) (or text ""))
+   ((string-empty-p text) icon)
+   (t (concat icon " " text))))
+
+(defun custom/modeline--segment (text face)
+  "用 FACE 呈现非空 TEXT。"
+  (if (string-empty-p text)
+      ""
+    (propertize text 'face face)))
+
+(defun custom/modeline--join (&rest segments)
+  "以 Starship 风格分隔符连接非空 SEGMENTS。"
+  (string-join (seq-filter
+                (lambda (segment)
+                  (and (stringp segment) (not (string-empty-p segment))))
+                segments)
+               " · "))
+
+(defun custom/modeline--path-initials (path)
+  "把 PATH 的目录部分缩成首字母;单独的 .= 目录保留为 .=,避免隐藏
+目录缩写产生空字符串。"
+  (let* ((remote (or (file-remote-p path) ""))
+         (local (or (file-remote-p path 'localname) path))
+         (parts (split-string
+                 (string-remove-prefix
+                  "~/" (abbreviate-file-name (directory-file-name local)))
+                 "/" t))
+         (short
+          (mapcar
+           (lambda (part)
+             (if (string-prefix-p "." part)
+                 (let ((rest (string-remove-prefix "." part)))
+                   (if (string-empty-p rest)
+                       "."
+                     (concat "." (substring rest 0 1))))
+               (substring part 0 1)))
+           parts)))
+    (concat remote (string-join short "/"))))
+
+(defun custom/modeline--project-info ()
+  "返回当前 buffer 的 (ROOT NAME) project 缓存。"
+  (when (eq custom/modeline--project-cache :unknown)
+    (setq custom/modeline--project-cache
+          (when-let* ((project (project-current nil))
+                      (root (project-root project)))
+            (list root
+                  (file-name-nondirectory (directory-file-name root))))))
+  custom/modeline--project-cache)
+
+(defun custom/modeline--reset-project-cache (&rest _)
+  "失效当前 buffer 的 project 缓存。"
+  (setq custom/modeline--project-cache :unknown
+        custom/modeline--path-cache nil))
+
+(defun custom/modeline--refresh-vc-state (&rest _)
+  "通过 VC 公开接口刷新当前 buffer 的状态缓存。"
+  (setq custom/modeline--vc-state-cache
+        (when-let* ((backend (and buffer-file-name
+                                  (vc-backend buffer-file-name))))
+          (vc-state buffer-file-name backend))))
+
+(defun custom/modeline--refresh-flymake-counts (&rest _)
+  "通过 Flymake 公开接口刷新错误与警告计数。"
+  (setq custom/modeline--flymake-counts
+        (if (bound-and-true-p flymake-mode)
+            (let ((errors 0)
+                  (warnings 0))
+              (dolist (diagnostic (flymake-diagnostics))
+                (let* ((type (flymake-diagnostic-type diagnostic))
+                       (severity
+                        (alist-get 'severity
+                                   (alist-get type flymake-diagnostic-types))))
+                  (cond
+                   ((and severity (>= severity 2)) (cl-incf errors))
+                   ((and severity (>= severity 1)) (cl-incf warnings)))))
+              (list errors warnings))
+          '(0 0))))
+
+(defun custom/modeline--refresh-eglot-info (&rest _)
+  "通过 Eglot 公开接口刷新连接状态缓存(仅记录是否已连接)。"
+  (setq custom/modeline--eglot-info
+        (and (ignore-errors (eglot-current-server)) t)))
+
+(defun custom/modeline--path-segment (tier)
+  "返回 TIER 对应的路径段(目录缩写 + 文件夹图标)。"
+  (if (or (eq tier 'compact) (not buffer-file-name))
+      ""
+    (let* ((project (custom/modeline--project-info))
+           (key (list buffer-file-name project custom:modeline-path-max-width)))
+      (if (equal key (car-safe custom/modeline--path-cache))
+          (cdr custom/modeline--path-cache)
+        (let* ((root (car-safe project))
+               (directory (file-name-directory buffer-file-name))
+               (path (if (and root (file-in-directory-p buffer-file-name root))
+                         (file-relative-name directory root)
+                       directory))
+               (display (custom/modeline--path-initials path))
+               (segment
+                (if (string-empty-p (or display ""))
+                    ""
+                  (custom/modeline--segment
+                   (custom/modeline--with-icon
+                    (custom/modeline--icon "nf-md-folder_open")
+                    (truncate-string-to-width
+                     display custom:modeline-path-max-width 0 nil t))
+                   'shadow))))
+          (setq custom/modeline--path-cache (cons key segment))
+          segment)))))
+
+(defun custom/modeline--name-segment (tier)
+  "返回 TIER 对应的 buffer 名。compact 档由 major 段独占左段,
+此处返回空串避免重复。"
+  (if (eq tier 'compact)
+      ""
+    (let ((key (list tier buffer-file-name (buffer-name))))
+      (if (equal key (car-safe custom/modeline--name-cache))
+          (cdr custom/modeline--name-cache)
+        (let* ((name (if buffer-file-name
+                         (file-name-nondirectory buffer-file-name)
+                       (buffer-name)))
+               (width (pcase tier ('wide 32) ('medium 24) (_ 18)))
+               (segment
+                (custom/modeline--segment
+                 (custom/modeline--with-icon
+                  (custom/modeline--icon "nf-fa-file_o" buffer-file-name)
+                  (truncate-string-to-width name width 0 nil t))
+                 'font-lock-function-name-face)))
+          (setq custom/modeline--name-cache (cons key segment))
+          segment)))))
+
+(defun custom/modeline--branch-segment (tier)
+  "返回 TIER 对应的 VCS 分支。"
+  (if (or (eq tier 'compact) (not custom:modeline-show-vcs))
+      ""
+    (let ((branch
+           (when (and (stringp vc-mode)
+                      (string-match
+                       "\\(?:Git\\|Hg\\|SVN\\)[-:]\\([^() ]+\\)" vc-mode))
+             (string-trim (match-string 1 vc-mode)))))
+      (if branch
+          (custom/modeline--segment
+           (custom/modeline--with-icon
+            (custom/modeline--icon "nf-md-source_branch") branch)
+           'font-lock-type-face)
+        ""))))
+
+(defun custom/modeline--vc-segment (tier)
+  "返回 TIER 对应的修改与 VC 状态(含状态 icon)。
+复刻旧版十态映射:每种状态各自带语义化 nerd-icons icon + face。"
+  (if (or (eq tier 'compact) (not buffer-file-name))
+      ""
+    (when (eq custom/modeline--vc-state-cache :unknown)
+      (custom/modeline--refresh-vc-state))
+    (let* ((state (if (buffer-modified-p)
+                      'buffer-modified
+                    custom/modeline--vc-state-cache))
+           (spec (pcase state
+                   ('up-to-date       (list "clean"     "nf-md-check_circle"       'success))
+                   ('edited           (list "edited"    "nf-md-pencil"             'warning))
+                   ('buffer-modified  (list "unsaved"   "nf-md-content_save_alert" 'warning))
+                   ('added            (list "added"     "nf-md-plus_circle"        'success))
+                   ('removed          (list "removed"   "nf-md-minus_circle"       'error))
+                   ('missing          (list "missing"   "nf-md-alert_circle"       'error))
+                   ('conflict         (list "conflict"  "nf-md-alert_octagon"      'error))
+                   ('needs-merge      (list "merge"     "nf-md-source_merge"       'warning))
+                   ('needs-update     (list "update"    "nf-md-cloud_download"     'warning))
+                   ('ignored          (list "ignored"   "nf-md-eye_off"            'shadow))
+                   ('unregistered     (list "untracked" "nf-md-help_circle"        'warning))
+                   (_ nil))))
+      (if spec
+          (pcase-let ((`(,text ,icon-name ,face) spec))
+            (custom/modeline--segment
+             (custom/modeline--with-icon
+              (custom/modeline--icon icon-name) text)
+             face))
+        ""))))
+
+(defun custom/modeline--coding-segment (tier)
+  "返回 TIER 对应的编码(wide/medium 显示)。"
+  (if (memq tier '(wide medium))
+      (custom/modeline--segment
+       (custom/modeline--with-icon
+        (custom/modeline--icon "nf-md-lock")
+        (upcase
+         (symbol-name
+          (or (coding-system-base buffer-file-coding-system) 'undecided))))
+       'font-lock-string-face)
+    ""))
+
+(defun custom/modeline--position-segment (tier)
+  "返回 TIER 对应的位置百分比与 buffer 大小(wide 显示大小)。
+段内 % 按字面产出:整行输出最后统一过 `custom/modeline--escape',
+预转义会被二次转义成字面 %%。"
+  (if (memq tier '(wide medium))
+      (let* ((range (max 1 (- (point-max) (point-min))))
+             (percent
+              (round (* 100.0
+                        (/ (float (- (point) (point-min))) range))))
+             (base (custom/modeline--with-icon
+                    (custom/modeline--icon "nf-md-flag_checkered")
+                    (format "%d%%" percent)))
+             (text (if (eq tier 'wide)
+                       (format "%s %s" base
+                               (custom/modeline--with-icon
+                                (custom/modeline--icon "nf-md-format_list_bulleted")
+                                (file-size-human-readable (buffer-size))))
+                     base)))
+        (custom/modeline--segment text 'font-lock-doc-face))
+    ""))
+
+(defun custom/modeline--location-segment (tier)
+  "返回 TIER 对应的行列坐标 (%l,%c)。compact 档不显示。
+%l/%c 按 `custom/modeline--target-window' 的 point 求值——本函数在
+`with-current-buffer' 里运行,不传窗口会拿到选中窗口在该 buffer 的
+point,多窗口同 buffer 时行列号会错。"
+  (if (eq tier 'compact)
+      ""
+    (custom/modeline--segment
+     (custom/modeline--with-icon
+      (custom/modeline--icon "nf-md-map_marker")
+      (format "(%s)" (format-mode-line
+                      "%l,%c" nil custom/modeline--target-window)))
+     'shadow)))
+
+(defun custom/modeline--diagnostics-segment (tier)
+  "返回 TIER 对应的 Flymake 诊断计数(wide/medium 显示)。"
+  (if (and (memq tier '(wide medium))
+           (bound-and-true-p flymake-mode))
+      (pcase-let ((`(,errors ,warnings) custom/modeline--flymake-counts))
+        (let* ((total (+ errors warnings))
+               (icon-name (cond
+                           ((> errors 0)   "nf-md-times_circle")
+                           ((> warnings 0) "nf-md-alert")
+                           (t              "nf-md-check_circle")))
+               (text (pcase tier
+                       ('wide    (format "E:%d W:%d" errors warnings))
+                       ('medium  (format "%d:%d" errors warnings))
+                       (_        (number-to-string total))))
+               (face (cond
+                      ((> errors 0)   'error)
+                      ((> warnings 0) 'warning)
+                      (t              'success))))
+          (custom/modeline--segment
+           (custom/modeline--with-icon (custom/modeline--icon icon-name) text)
+           face)))
+    ""))
+
+(defun custom/modeline--eglot-segment (tier)
+  "返回 TIER 对应的 Eglot 连接状态(wide 档附加名称,wide/medium 显示)。"
+  (if (and (memq tier '(wide medium)) custom/modeline--eglot-info)
+      (custom/modeline--segment
+       (custom/modeline--with-icon
+        (custom/modeline--icon "nf-md-server_network")
+        (if (eq tier 'wide) "eglot ●" "●"))
+       'success)
+    ""))
+
+(defun custom/modeline--global-segment (tier)
+  "返回 TIER 对应的全局状态字符串。compact 档不显示。
+过滤 `battery-mode-line-string' 和 `display-time-string',
+避免与自定义 battery/time 段重复。"
+  (if (eq tier 'compact)
+      ""
+    (let* ((items (if (listp global-mode-string)
+                      global-mode-string
+                    (list global-mode-string)))
+           (filtered (seq-remove
+                      (lambda (item)
+                        (memq item '(battery-mode-line-string
+                                     display-time-string)))
+                      items))
+           (text (string-trim (format-mode-line filtered))))
+      (if (string-empty-p text) "" text))))
+
+(defun custom/modeline--major-segment ()
+  "major mode 段(带 icon)。compact 档放左段,其余档放右段。"
+  (custom/modeline--segment
+   (custom/modeline--with-icon
+    (custom/modeline--icon "nf-md-code_tags")
+    (symbol-name major-mode))
+   'font-lock-keyword-face))
+
+(defun custom/modeline--battery-segment (tier)
+  "返回 wide 档电池状态(按电量百分比着色)。
+需要 `display-battery-mode' 启用才会填充 `battery-mode-line-string'。"
+  (if (eq tier 'wide)
+      (let* ((raw (and (stringp battery-mode-line-string)
+                       (string-trim battery-mode-line-string)))
+             (percent (and raw
+                           (string-match "\\([0-9]+\\)%" raw)
+                           (string-to-number (match-string 1 raw))))
+             (face (cond
+                    ((not percent) 'font-lock-doc-face)
+                    ((>= percent 50) 'success)
+                    ((>= percent 20) 'warning)
+                    (t 'error))))
+        (if (and raw (not (string-empty-p raw)))
+            (custom/modeline--segment
+             (custom/modeline--with-icon
+              (custom/modeline--icon "nf-md-battery")
+              raw)
+             face)
+          ""))
+    ""))
+
+(defun custom/modeline--time-segment (tier)
+  "返回非 compact 档时间(wide 显示秒)。"
+  (if (and custom:modeline-show-time (not (eq tier 'compact)))
+      (let* ((wide (eq tier 'wide))
+             (time (format-time-string (if wide "%H:%M:%S" "%H:%M"))))
+        (custom/modeline--segment
+         (custom/modeline--with-icon
+          (custom/modeline--icon "nf-md-clock")
+          time)
+         'font-lock-string-face))
+    ""))
+
+;; 状态行不经 format-mode-line 输出::eval 结果含 % 时会触发重扫,而重扫
+;; 会剥掉 display spec 之后文本的 face(实测),且 format-mode-line 的
+;; FACE 合并可用 add-face-text-property 等价实现——refresh 直接写 render
+;; 输出,见 `custom/modeline--apply-base-face'。
+
+(defconst custom/modeline--minibuffer " *Minibuf-0*"
+  "状态行的承载 buffer;minibuffer 空闲时其内容即 echo area 的显示。")
+
+;; TTY 下 minibuffer window 的末列是截断/续行标记保留位:共享 buffer 的内容
+;; 一旦宽于正在显示的 frame(渲染与显示分属不同 frame 的短暂窗口期,或
+;; 终端缩窄后尚未重渲染),末列会被画上截断箭头(prettify-special-glyphs
+;; 把它从 $ 美化成了 →)。状态行右段本就贴右缘,溢出时静默裁剪与正常渲染
+;; 视觉几乎一致,把该 buffer 的截断标记改成一个空格。
+(defconst custom/modeline--display-table
+  (let ((dt (make-display-table)))
+    (set-display-table-slot dt 'truncation ?\s)
+    dt)
+  "` *Minibuf-0*' 的 display table:截断标记改为空格,溢出静默裁剪。")
 
 (defvar custom/modeline--message nil
   "当前并入状态行左半的短消息;nil 表示左半显示常规信息。")
 
+(defvar custom/modeline--message-time nil
+  "短消息并入左半的时刻;`custom/modeline--tick' 据此在 4 秒后撤下。
+不能用空闲时长判定:daemon 长时间空闲时,`current-idle-time' 早已超过
+阈值,刚并入的消息会被立即撤掉,用户根本看不到。")
+
 (defvar custom/modeline--rendering nil
   "状态行渲染期标志;渲染途中求值的组件若发消息,退化为整行显示以避免递归。")
 
-(defun custom/modeline--render ()
-  "渲染状态行:左段在前,右段贴窗口右缘。
-左段在有待显示的短消息时由消息顶替(见 `custom/modeline--handle-message'),右段不变。
-图标在格式串之外拼接:format-mode-line 会把首个带 face 的元素的 face 当成
-整行基础 face,图标字体的 (:family \"Symbols Nerd Font Mono\") 一旦进入格式串,
-GUI 下整行都用图标字体渲染,ASCII 全成 tofu 方块;去属性后由默认字体渲染,
-而默认字体本身带 Nerd Font 图标字形。"
-  (let* ((width (window-total-width (minibuffer-window)))
-         (left (or custom/modeline--message
-                   (concat
-                    (when custom:nerd-icons-available
-                      (concat (substring-no-properties (nerd-icons-icon-for-buffer)) " "))
-                    (format-mode-line custom/modeline--left-format nil (selected-window)))))
-         (right (format-mode-line custom/modeline--right-format nil (selected-window)))
-         (pad (max 1 (- width (string-width left) (string-width right)))))
-    (concat left (make-string pad ?\s) right)))
+(defvar custom/modeline--target-window nil
+  "本次渲染的目标窗口;nil 表示用选中窗口。
+refresh 按 frame 刷新时把该 frame 的选中窗口绑到这里,使段求值与
+%l/%c 的窗口上下文一致。")
 
-(defun custom/modeline-refresh ()
-  "把状态行写入 \" *Minibuf-0*\";内容不变则跳过,避免 echo area 反复重绘。
-echo area 被消息或 minibuffer 输入占用时跳过,结束后由 post-command 恢复。
-渲染期内置 `custom/modeline--rendering',使 VC/Eglot 等组件在求值途中发出的
-消息退化为整行显示,不至于递归回本模块。"
-  (unless (active-minibuffer-window)
-    (let ((custom/modeline--rendering t)
-          (text (format-mode-line minibuffer-line-format 'minibuffer-line (selected-window))))
-      (with-current-buffer " *Minibuf-0*"
-        (unless (equal (buffer-string) text)
-          (erase-buffer)
-          (insert text))))))
+(defvar custom/modeline--minibuf-overlay nil
+  "活动 minibuffer 输入行右缘状态的 overlay;任一时刻只属于一个
+minibuffer buffer,归属不符时由 `custom/modeline--update-minibuf-overlay'
+重建(递归 minibuffer 各自独立)。")
+
+(defun custom/modeline--usable-width (frame)
+  "FRAME 的 echo area 可用列数。
+GUI 与 TTY 统一减一:内容一旦恰好写满窗口宽,行尾位置(EOL/ZV)就会溢出——
+GUI 在右 fringe 画 → 位图(`overflow-newline-into-fringe'),TTY 在末列画
+截断符号(`$'/美化后的 →);状态行右段永远贴右缘,必中这个箭头,留出一列
+即可根治。TTY 末列本身也是续行标记保留位(160 列写满 160 字符时末位被
+标记顶掉)。"
+  (1- (window-total-width (minibuffer-window frame))))
+
+(defun custom/modeline--render (&optional window)
+  "渲染状态行:左段文件信息在前,右段系统状态贴右缘;放不下时截断左段。
+段内容在 WINDOW 的 buffer 中求值(buffer-local 的 vc-mode、flymake 缓存、
+project 缓存都依赖该上下文);左段有待显示的短消息时由消息顶替(见
+`custom/modeline--handle-message')。两侧留白由 `custom:modeline-padding'
+控制,左右一致(右缘保留位已计入该值)。"
+  (let* ((window (or window custom/modeline--target-window (selected-window)))
+         (custom/modeline--target-window window)
+         (width (custom/modeline--usable-width (window-frame window)))
+         (pad (max 1 custom:modeline-padding)))
+    (with-current-buffer (window-buffer window)
+      (let* ((tier (custom/modeline-tier window))
+             (left (concat (make-string pad ?\s)
+                           (or custom/modeline--message
+                               (custom/modeline--join
+                                (custom/modeline--path-segment tier)
+                                (custom/modeline--name-segment tier)
+                                (custom/modeline--branch-segment tier)
+                                (custom/modeline--vc-segment tier)
+                                (custom/modeline--coding-segment tier)
+                                (custom/modeline--position-segment tier)
+                                (custom/modeline--location-segment tier)
+                                (when (eq tier 'compact)
+                                  (custom/modeline--major-segment))))))
+             (right (custom/modeline--join
+                     (custom/modeline--diagnostics-segment tier)
+                     (custom/modeline--eglot-segment tier)
+                     (custom/modeline--global-segment tier)
+                     (unless (eq tier 'compact)
+                       (custom/modeline--major-segment))
+                     (custom/modeline--battery-segment tier)
+                     (custom/modeline--time-segment tier)))
+             (left-max (- width pad (string-width right))))
+        (when (> (string-width left) left-max)
+          ;; 左段让位:路径/文件名/短消息可省略号截断,右段永远完整。
+          (setq left (truncate-string-to-width
+                      left (max 1 left-max) nil nil t)))
+        ;; pad 用一个带 (space :align-to) display spec 的空格而非定长空格串:
+        ;; ` *Minibuf-0*' 被所有 frame 的 mini window 共享,定长 pad 只对渲染
+        ;; 时的 frame 宽度正确,显示到更宽的 frame 上右段会悬空;space spec
+        ;; 在每次显示时按当前窗口宽重新伸缩,右段始终贴各 frame 自己的右缘。
+        ;; 比 left+right 更窄的 frame 上 stretch 坍缩为 0,行尾照常裁剪。
+        (concat left
+                (propertize " " 'display
+                            (list 'space :align-to
+                                  (list '- 'right
+                                        (+ pad (string-width right)))))
+                right)))))
+
+
+(defun custom/modeline--apply-base-face (text)
+  "给 TEXT 中无 face 的区域补上 minibuffer-line 基 face。
+等价于 format-mode-line 的 FACE 参数合并语义:已有 face 的段文本保持
+不变,无 face 文本(留白、分隔符、图标)继承 minibuffer-line。"
+  (let ((pos 0)
+        (len (length text)))
+    (while (< pos len)
+      (let ((next (next-single-property-change pos 'face text len)))
+        (unless (get-text-property pos 'face text)
+          (add-face-text-property pos next 'minibuffer-line nil text))
+        (setq pos next))))
+  text)
+(defun custom/modeline--minibuf-status ()
+  "活动 minibuffer 右缘的精简状态:诊断·项目名·时间。
+在发起 minibuffer 的窗口 buffer 中求值;无源窗口时退化为仅时间。
+段内 % 不转义——overlay 文本按字面显示,不经 % 重扫。"
+  (let ((source (minibuffer-selected-window)))
+    (if (window-live-p source)
+        (with-current-buffer (window-buffer source)
+          (custom/modeline--join
+           (custom/modeline--diagnostics-segment 'medium)
+           (when-let* ((project (custom/modeline--project-info))
+                       (name (cadr project)))
+             (custom/modeline--segment name 'font-lock-type-face))
+           (custom/modeline--time-segment 'narrow)))
+      (custom/modeline--time-segment 'narrow))))
+
+(defun custom/modeline--update-minibuf-overlay (mini-window)
+  "在 MINI-WINDOW 的输入行右缘渲染精简状态(诊断·项目·时间)。
+仅当右缘空隙足够时显示——输入过长时自动隐藏;`minibuffer-message'
+的提示 overlay(如 [No match])在场时让位。退出由
+`custom/modeline--on-minibuffer-exit' 清理。
+不检查窗口高度:`resize-mini-windows' 为 grow-only 时窗口高度会残留
+大于内容行数,而补全候选走独立的 *Completions* 窗口,不与本 overlay
+争用输入行。"
+  (with-current-buffer (window-buffer mini-window)
+    (let* ((width (window-total-width mini-window))
+           (text (custom/modeline--minibuf-status))
+           (eol (save-excursion (goto-char (point-max)) (current-column)))
+           ;; 光标在 point-max 占一格,after-string 从光标后开始——少算这
+           ;; 一列会把状态末字符挤到下一行(GUI 实测)。
+           (gap (- width eol (string-width text) custom:modeline-padding 1))
+           (show (and (>= gap 1)
+                      ;; 两类提示 overlay 都让位:minibuffer--message-overlay
+                      ;; 是 minibuffer-message 的临时提示,minibuffer-message-
+                      ;; overlay 是 set-minibuffer-message 的 echo 消息。
+                      (not (seq-some
+                            (lambda (var)
+                              (and (boundp var)
+                                   (overlayp (symbol-value var))
+                                   (eq (overlay-buffer (symbol-value var))
+                                       (current-buffer))
+                                   (overlay-get (symbol-value var)
+                                                'after-string)))
+                            '(minibuffer--message-overlay
+                              minibuffer-message-overlay))))))
+      (unless (and (overlayp custom/modeline--minibuf-overlay)
+                   (eq (overlay-buffer custom/modeline--minibuf-overlay)
+                       (current-buffer)))
+        (when (overlayp custom/modeline--minibuf-overlay)
+          (delete-overlay custom/modeline--minibuf-overlay))
+        (setq custom/modeline--minibuf-overlay
+              (make-overlay 1 1 nil t nil)))
+      (move-overlay custom/modeline--minibuf-overlay (point-max) (point-max))
+      (overlay-put custom/modeline--minibuf-overlay 'after-string
+                   (when show (concat (make-string gap ?\s) text))))))
+
+(defun custom/modeline--on-minibuffer-setup ()
+  "minibuffer 激活时立即渲染右缘精简状态,不等首次按键的 post-command。
+setup-hook 运行时 minibuffer window 可能尚未被 `active-minibuffer-window'
+认领,故同时接受选中窗口本身是 minibuffer 的情形。"
+  (when (bound-and-true-p minibuffer-line-mode)
+    (condition-case nil
+        (when-let* ((mini (or (active-minibuffer-window)
+                              (and (window-minibuffer-p (selected-window))
+                                   (selected-window)))))
+          (custom/modeline--update-minibuf-overlay mini))
+      (error nil))))
+
+(defun custom/modeline--on-minibuffer-exit ()
+  "minibuffer 退出时删除右缘状态 overlay;状态行由 post-command 与
+每秒 tick 恢复。"
+  (when (overlayp custom/modeline--minibuf-overlay)
+    (delete-overlay custom/modeline--minibuf-overlay)))
+
+(defun custom/modeline--on-minibuffer-message (&rest _)
+  "minibuffer-message 提示出现或消失后重算右缘状态 overlay。
+提示由 timer 异步插入/删除,不经 post-command,不 advice 则 overlay
+不会及时让位/恢复,提示文本还会把状态文本挤折行(实测)。"
+  (when (bound-and-true-p minibuffer-line-mode)
+    (condition-case nil
+        (when-let* ((mini (active-minibuffer-window)))
+          (custom/modeline--update-minibuf-overlay mini))
+      (error nil))))
+
+(defun custom/modeline-refresh (&optional frame)
+  "把状态行写入 `custom/modeline--minibuffer';字符内容不变则跳过。
+FRAME 缺省为选中 frame;挂在 `window-size-change-functions' 上时会传入
+尺寸变化的 frame,使 TTY resize、分屏后的右缘对齐立即重算。
+minibuffer 激活时改为刷新其输入行右缘的精简状态 overlay(见
+`custom/modeline--update-minibuf-overlay'),状态行本身退出后恢复。
+整段包 condition-case:挂在 hook 上的函数一旦抛错会被 Emacs 自动移出
+hook,刷新从此静默停摆——这是状态行「莫名其妙消失」的一条真实路径。"
+  (when (bound-and-true-p minibuffer-line-mode)
+    (condition-case nil
+        (if-let* ((mini (active-minibuffer-window)))
+            (custom/modeline--update-minibuf-overlay mini)
+          (let* ((frame (or frame (selected-frame)))
+                 (mw (minibuffer-window frame))
+                 (custom/modeline--target-window
+                  (frame-selected-window frame))
+                 (custom/modeline--rendering t)
+                 ;; 直接渲染,不经 format-mode-line::eval 结果含 % 时的
+                 ;; 重扫会剥掉 display spec 之后文本的 face(实测),且
+                 ;; 段内 % 按字面产出、无需转义。
+                 (text (custom/modeline--apply-base-face
+                        (custom/modeline--render))))
+            ;; GUI 下 mini window 的 fringe 会被截断/行尾溢出位图利用
+            ;; (共享 buffer 的内容宽于正在显示的 frame 时右缘画 →),
+            ;; echo area 不需要任何 fringe 指示,直接清零;TTY 无 fringe
+            ;; 不受影响。
+            (when (and (display-graphic-p frame)
+                       (> (nth 1 (window-fringes mw)) 0))
+              (set-window-fringes mw 0 0))
+            (with-current-buffer
+                (get-buffer-create custom/modeline--minibuffer)
+              ;; buffer 被 kill 重建会丢 display-table,顺手补回。
+              (unless (eq buffer-display-table
+                          custom/modeline--display-table)
+                (setq buffer-display-table custom/modeline--display-table))
+              (unless (equal (buffer-string) text)
+                (erase-buffer)
+                (insert text)))
+            ;; 迷你窗口显示状态归一:共享 buffer 可能被某个 frame 的
+            ;; mini window 以残留状态显示(grow-only 只在 echo 清空时才
+            ;; 缩高,残留的额外行数、hscroll/vscroll 偏移会让底栏空一块),
+            ;; 见到 ` *Minibuf-0*' 时一律归零并把高度收回单行;只在显示
+            ;; 本 buffer 时动手,不碰活动 minibuffer 与 echo 消息窗口。
+            (when (eq (window-buffer mw)
+                      (get-buffer custom/modeline--minibuffer))
+              (when (> (window-total-height mw) 1)
+                (window-resize mw (- 1 (window-total-height mw))))
+              (unless (zerop (window-hscroll mw))
+                (set-window-hscroll mw 0))
+              (unless (zerop (window-vscroll mw))
+                (set-window-vscroll mw 0)))))
+      (error nil))))
+
+(defun custom/modeline--tick ()
+  "每秒兜底:重渲染状态行,短消息并入满 4 秒后撤下左半。
+刻意用普通 timer 而非 repeat 型 idle timer:后者每个空闲周期只触发一次
+(timer.el 重调度后置 `timer--triggered',要等下次输入事件才复位),
+daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效——与
+`custom--stale-auto-save-timer' 放弃 idle timer 的理由相同。"
+  (custom/modeline-refresh)
+  (when (and custom/modeline--message
+             (or (null custom/modeline--message-time)
+                 (>= (float-time
+                      (time-subtract nil custom/modeline--message-time))
+                     4)))
+    (setq custom/modeline--message nil
+          custom/modeline--message-time nil)
+    (custom/modeline-refresh)))
+
 
 (use-package minibuffer-line
-  ;; 上游 timer 每 60 秒才刷新,只作兜底;实时刷新由下方 hook 驱动。
+  ;; 上游 timer 只作兜底;实时刷新由下方 hook 驱动。
   :custom (minibuffer-line-refresh-interval 30)
   :config
   ;; 该 face 继承 mode-line-inactive;本配置清 box 的 face 表只覆盖 TTY 路径,
   ;; GUI 下 box 仍有值,不清理则整行每个字符各画一个边框。
   (set-face-attribute 'minibuffer-line nil :box nil)
-  (setq minibuffer-line-format '((:eval (custom/modeline--render))))
+  ;; 状态行文本由 refresh 直接写入(不经 format-mode-line,见
+  ;; `custom/modeline--render' 注释),minibuffer-line-format 保持上游默认、
+  ;; 仅作上游 update 的兜底格式。
   (minibuffer-line-mode 1)
+  ;; 上游 update 无守卫且无条件擦写,统一收口到本模块的 refresh。
+  (advice-add 'minibuffer-line--update :override #'custom/modeline-refresh)
   (add-hook 'post-command-hook #'custom/modeline-refresh)
-  (run-with-idle-timer 1 t #'custom/modeline-refresh))
+  ;; 尺寸变化(TTY resize、分屏、字号调整)后重算右缘;函数签名与 hook 参数吻合。
+  (add-hook 'window-size-change-functions #'custom/modeline-refresh)
+  ;; 窗口选中状态变化(含跨 frame 切换与 minibuffer 开合)时按当前 frame
+  ;; 重渲染,让共享的 Minibuf-0 尽快对齐到正在使用的 frame 宽度。
+  (add-hook 'window-state-change-hook #'custom/modeline-refresh)
+  ;; minibuffer 激活立即渲染右缘精简状态,退出删除 overlay。
+  (add-hook 'minibuffer-setup-hook #'custom/modeline--on-minibuffer-setup)
+  (add-hook 'minibuffer-exit-hook #'custom/modeline--on-minibuffer-exit)
+  ;; minibuffer-message 提示([No match] 等)由 timer 异步插入/删除,
+  ;; 不经 post-command;advice 让 overlay 即时让位与恢复。提示出现走
+  ;; minibuffer-message,消失走 minibuffer--delete-message-overlay;
+  ;; echo 消息对(set-minibuffer-message/clear-minibuffer-message)同理。
+  (advice-add 'minibuffer-message :after
+              #'custom/modeline--on-minibuffer-message)
+  (advice-add 'minibuffer--delete-message-overlay :after
+              #'custom/modeline--on-minibuffer-message)
+  (advice-add 'set-minibuffer-message :after
+              #'custom/modeline--on-minibuffer-message)
+  (advice-add 'clear-minibuffer-message :after
+              #'custom/modeline--on-minibuffer-message)
+  ;; 重载 main.el 时避免叠加重复 tick timer。
+  (cancel-function-timers #'custom/modeline--tick)
+  (run-with-timer 1 1 #'custom/modeline--tick))
 
 ;; 短消息并入状态行左半:Eglot 连接、保存、缓冲区边界等提示不再占满整行,
-;; 右半的项目/VC/时间保持不变。注册在 `set-message-functions' 末位——首位必须
-;; 留给 `inhibit-message'(`inhibit-message-regexps' 生效依赖它排在最前),而
+;; 右半保持不变。注册在 `set-message-functions' 末位——首位必须留给
+;; `inhibit-message'(`inhibit-message-regexps' 生效依赖它排在最前),而
 ;; `set-minibuffer-message' 在没有活动 minibuffer 时返回 nil,末位仍会被调用。
 (defun custom/modeline--handle-message (text)
   "把短消息 TEXT 并入状态行左半,返回 t 表示已接管。
-多行消息、超过 echo area 一半宽度的消息、minibuffer 活动期与渲染期返回 nil,
-交回 Emacs 默认的整行显示。"
-  (when (and (not custom/modeline--rendering)
-             (not (active-minibuffer-window))
-             (not (string-search "\n" text))
-             (<= (string-width text) (/ (window-total-width (minibuffer-window)) 2)))
-    (setq custom/modeline--message text)
-    (custom/modeline-refresh)
-    t))
+非字符串/空串/多行/超半宽的消息、minibuffer 活动期与渲染期返回 nil,
+交回 Emacs 默认的整行显示。整体包 condition-case:本函数在 `message'
+调用路径上,抛错会波及发消息的业务代码,还会被移出 set-message-functions。"
+  (condition-case nil
+      (when (and (bound-and-true-p minibuffer-line-mode)
+                 (stringp text)
+                 (> (string-width text) 0)
+                 (not custom/modeline--rendering)
+                 (not (active-minibuffer-window))
+                 (not (string-search "\n" text))
+                 (<= (string-width text)
+                     (/ (window-total-width (minibuffer-window)) 2)))
+        (setq custom/modeline--message text
+              custom/modeline--message-time (current-time))
+        (custom/modeline-refresh)
+        t)
+    (error nil)))
 
 (defun custom/modeline--clear-message ()
   "撤下左半的短消息。
-两个触发点: `pre-command-hook' 对齐 echo area 的清除时机(下一个输入事件),
-空闲定时器兜住长时间无输入的情况。"
+两个触发点:`pre-command-hook' 对齐 echo area 的清除时机(下一个输入
+事件);`custom/modeline--tick' 兜住长时间无输入的情况(并入满 4 秒)。"
   (when custom/modeline--message
-    (setq custom/modeline--message nil)
+    (setq custom/modeline--message nil
+          custom/modeline--message-time nil)
     (custom/modeline-refresh)))
 
 (add-to-list 'set-message-functions #'custom/modeline--handle-message t)
 (add-hook 'pre-command-hook #'custom/modeline--clear-message)
-(run-with-idle-timer 4 t #'custom/modeline--clear-message)
 
-;; 状态行右段显示项目名;project.el 按需加载,加载后开启其 mode-line 支持。
-(with-eval-after-load 'project
-  (setopt project-mode-line t))
+;; 段缓存的数据源刷新:各 hook 在对应 buffer 内运行,直接写 buffer-local
+;; 缓存,渲染路径零 I/O。
+(with-eval-after-load 'flymake
+  (add-hook 'flymake-after-diagnostics-hook
+            #'custom/modeline--refresh-flymake-counts)
+  (add-hook 'flymake-mode-hook
+            #'custom/modeline--refresh-flymake-counts))
 
-;; 时间与电量数据源:display-time / display-battery 维护 display-time-string 与
-;; battery-mode-line-string,经 global-mode-string 汇入 mode-line-misc-info,
-;; 由状态行右段统一渲染;负载均值与时间同段会挤在一起,不显示。
-(setq display-time-format "%H:%M"
-      display-time-default-load-average nil)
-(display-time-mode 1)
+(with-eval-after-load 'eglot
+  (add-hook 'eglot-managed-mode-hook #'custom/modeline--refresh-eglot-info)
+  (add-hook 'eglot-server-initialized-hook
+            #'custom/modeline--refresh-eglot-info))
+
+(add-hook 'find-file-hook #'custom/modeline--refresh-vc-state)
+(add-hook 'after-save-hook #'custom/modeline--refresh-vc-state)
+(add-hook 'after-revert-hook #'custom/modeline--refresh-vc-state)
+(add-hook 'after-save-hook #'custom/modeline--reset-project-cache)
+(add-hook 'after-change-major-mode-hook #'custom/modeline--reset-project-cache)
+
+;; 数据源 minor mode:display-battery-mode 维护 `battery-mode-line-string'
+;; (电量段数据源);时间由 time-segment 内 `format-time-string' 直接计算,
+;; 不启用 display-time-mode(避免其写入 global-mode-string 导致时间重复)。
 (display-battery-mode 1)
 #+end_src
 
@@ -3145,7 +3835,8 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   :custom
   (flymake-fringe-indicator-position 'left-fringe)
   ;; Emacs 31:诊断摘要在受影响行下方以 unicode 图形排版(fancy)。
-  (flymake-show-diagnostics-at-end-of-line 'fancy)
+  (flymake-show-diagnostics-at-end
+   -of-line 'fancy)
   (flymake-no-changes-timeout 0.5))
 
 (defun custom/flymake-list-errors-dwim ()
@@ -4453,13 +5144,18 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 当使用 =M-/= 自动补全单词时，Emacs 默认会扫描所有后台缓冲区并打印进度通知。这里将扫描范围限制在相同模式的缓冲区内，并过滤掉多余的扫描通知，保持回显区安静。
 
+除此之外，本列表同时充当 echo area 的通用降噪表：只静音回显、消息仍写进 =*Messages*=。当前条目覆盖三类高频噪音——新开 client frame 时 server 的提示语、recentf 周期清理（=recentf-show-messages= 管不到它，消息是裸 =message= 调用）、以及 C-n/C-p 触底时每次按键都重复的边界提示（光标不动本身已是反馈，反复顶掉状态行左半的行号信息得不偿失）。
+
 #+begin_src emacs-lisp
 (setq dabbrev-check-all-buffers nil
       inhibit-message-regexps
       '("Scanning for dabbrevs" "Expansion found in"
-        ;; C-n/C-p 触底时每次按键都重复的边界提示:光标不动本身已是反馈,
-        ;; 让它反复顶掉状态行左半的行号信息得不偿失。
-        "Beginning of buffer" "End of buffer"))
+        "Beginning of buffer" "End of buffer"
+        ;; server-visit-files / server-buffer-done 在每个新 client frame 与
+        ;; 每次完成 buffer 编辑时各打一遍。
+        "When done with this frame" "When done with a buffer"
+        ;; recentf-cleanup 的裸 message 不受 recentf-show-messages 控制。
+        "Cleaning up the recentf list" "removed from the recentf list"))
 
 (add-to-list 'set-message-functions #'inhibit-message)
 #+end_src
