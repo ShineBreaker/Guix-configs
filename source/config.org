@@ -449,11 +449,12 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
      <<sysctl-services>>
      <<pam-limits-services>>
      <<nix-services>>
-     ;; ── 文件系统配套：machine-id / resume / /tmp / /data ──
+     ;; ── 文件系统配套：machine-id / resume / /tmp / /data / 回收站 ──
      <<machine-id-service>>
      <<resume-device-service>>
      <<cleanup-tmp-services>>
      <<data-dirs-services>>
+     <<trash-utab-services>>
      <<desktop-services>>
      (list (service guix-home-service-type
                     (list (list username %home))))))
@@ -909,6 +910,58 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
                           (use-modules (guix build utils))
                           (mkdir-p "/data")
                           (chmod "/data" #o755))))
+#+end_src
+
+**** 回收站放行（utab 注入）
+本机用户数据都住在 btrfs 子卷 / bind-mount 上，GLib（GVfs、Thunar 等绝大多数 GUI 应用）把这类挂载一律判为 =system internal= 而拒绝回收站操作（报「不支持在系统内部挂载上的丢弃到回收站操作」）。逃逸开关是挂载选项 =x-gvfs-trash= ，但它是纯用户态选项，内核不认、不能写进挂载参数；用户态的读取方（libmount）会从 =/run/mount/utab= 把用户选项按挂载 ID 合并进挂载表。Guix 直接 =syscall mount= 不经过 =mount(8)= ，从不写这个文件，所以这里开机补写：
++ 服务在 =file-systems= 就绪后运行一次，扫描 =/proc/self/mountinfo= ，给 =/data= 与 =$HOME= 下所有数据挂载点生成 =ID= SRC= TARGET= ROOT= OPTS=x-gvfs-trash= 行（=SRC= / =ROOT= 为 libmount 合并的必填字段，缺了整行被丢弃）；
++ 写到 =/run/mount/utab= （tmpfs，重开机自然清空，挂载 ID 也随重启变化，所以必须每次开机重算）；
++ 目录 =/run/mount= 需事先存在且普通用户可读（GLib 在用户进程里解析该文件）。
+
+#+NAME: trash-utab-services
+#+begin_src scheme
+(list (root-one-shot-service 'trash-utab '(file-systems)
+        (with-imported-modules (source-module-closure '((guix build utils)))
+          #~(lambda ()
+              (use-modules (ice-9 regex))
+              (let ([home-prefix (string-append "/home/" #$username)]
+                    [entries '()])
+                (call-with-input-file "/proc/self/mountinfo"
+                  (lambda (port)
+                    (let loop ()
+                      (let ([line (read-line port)])
+                        (unless (eof-object? line)
+                          ;; mountinfo 行格式: ID parent major:minor root 挂载点 挂载选项 … - fstype source super-options
+                          ;; 捕获组: 1=ID 2=root 3=挂载点 4=source（在 " - " 分隔符之后）
+                          (let ([m (string-match
+                                    "^([0-9]+) [0-9]+ [0-9]+:[0-9]+ (\\S+) (\\S+) \\S+.* - \\S+ (\\S+)"
+                                    line)])
+                            (when m
+                              (let ([id (match:substring m 1)]
+                                    [root (match:substring m 2)]
+                                    [target (match:substring m 3)]
+                                    [source (match:substring m 4)])
+                                ;; root != "/" 即子卷/bind 挂载；只放行用户数据区，
+                                ;; 系统子卷(/gnu, /var/lib...)保持拒绝回收站
+                                (when (and (not (string=? root "/"))
+                                           (or (string=? target "/data")
+                                               (string-prefix? home-prefix target)))
+                                  (set! entries
+                                        (cons (string-append
+                                               "ID=" id " SRC=" source
+                                               " TARGET=" target
+                                               " ROOT=" root
+                                               " OPTS=x-gvfs-trash")
+                                              entries))))))
+                          (loop))))))
+                (mkdir-p "/run/mount")
+                (call-with-output-file "/run/mount/utab"
+                  (lambda (port)
+                    (display (string-join (reverse entries) "\n") port)
+                    (newline port)))
+                (chmod "/run/mount/utab" #o644)
+                #t)))
+        #:documentation "Inject x-gvfs-trash into /run/mount/utab for user data mounts."))
 #+end_src
 
 *** 网络相关配置
@@ -1524,7 +1577,7 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                                                #:minutes '(0))
                                             #~("/run/current-system/profile/bin/guix"
                                                "gc"
-                                               "-d" "30d"
+                                               "-d" "14d"
                                                "-F" "20G")
                                             #:requirement '(user-processes
                                                             guix-daemon))))
@@ -2027,7 +2080,9 @@ polkit.addRule(function(action, subject) {
    "cc-switch-bin"
    "crush-bin"
    "cua-driver-bin"
+   "paseo-bin"
    "zcode"
+   "zcode-proxy-bin"
 
    ;; 工具
    "guile-json"
@@ -2709,7 +2764,9 @@ done
   ;; tmuxifier
   ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts")
   ;; wine
-  ("WINEPREFIX" . "$XDG_DATA_HOME/wine"))
+  ("WINEPREFIX" . "$XDG_DATA_HOME/wine")
+  ;; zcode-proxy
+  ("ZCODE_PROXY_CONFIG" . "$XDG_CONFIG_HOME/zcode-proxy/config.yaml"))
 #+end_src
 
 **** 环境变量汇总
