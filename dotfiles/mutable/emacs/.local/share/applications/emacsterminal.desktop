@@ -9,7 +9,6 @@ Type=Application
 Terminal=false
 Categories=Development;TextEditor;Utility;
 StartupNotify=true
-StartupWMClass=kitty
 Keywords=emacsterminal;
 Actions=new-window;new-instance;
 
