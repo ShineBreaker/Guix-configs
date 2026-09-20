@@ -709,9 +709,8 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
   左右放不下时省略号截断左段，右段永远完整。
 - *minibuffer 适配* ：minibuffer 激活期间状态行让位给输入；同时在输入行右缘
   以 overlay 渲染精简状态（诊断·项目·时间）——仅当 minibuffer 单行且右缘
-  空隙足够时显示，=minibuffer-message= 提示（如 [No match]）在场时自动让位
-  （提示由 timer 异步插入/删除，经 advice 即时重算），退出即删除 overlay
-  并恢复状态行。
+  空隙足够时显示，=minibuffer-message= 提示（如 [No match]）在场时自动让位，
+  退出即删除 overlay 并恢复状态行。
 - *刷新* ：实时性由 =post-command-hook= 驱动，每秒普通 timer 兜底异步变化
   （Flymake 报告、VC 状态、时钟），=window-size-change-functions= 负责 resize
   后重算右缘，=window-state-change-hook= 与 =minibuffer-setup-hook= 负责
@@ -720,16 +719,27 @@ Emacs 内部 buffer = *Minibuf-0*=，minibuffer 空闲时该 buffer 的内容即
   复位），无输入的 daemon 上等同失效。所有 hook 内函数包 =condition-case=
   ——抛错的 hook 函数会被 Emacs 自动移出，刷新将静默停摆（曾致状态行
   「莫名其妙消失」）。上游 30 秒 update 无守卫无去重，已用 advice 收口到本模块。
+  写入 =*Minibuf-0*= 无条件重写（=with-silent-modifications= 抑 undo/hooks）：
+  内容相同就跳过会让 buffer 的 =text->redisplay= 不置位，而 echo area 清屏
+  （=message ""/nil=）已把 mini window 显示矩阵换成空 echo buffer——
+  all-windows redisplay 路径的 =needs_no_redisplay= 会因 buffer 未变跳过
+  重画，空白残留到下个输入事件（鼠标点击后底栏消失的根因之一）。
 - *短消息* ：Eglot 连接、保存、缓冲区边界等短消息由 =set-message-functions= 末位
   接管，并入左半后右半保持可见；超过 echo area 一半宽度的消息交回 Emacs 默认
   整行显示。撤销时机与 echo area 一致（下一个输入事件），并额外在并入满 4 秒后
   由每秒 tick 撤下（按并入时刻计时：长时间空闲时按空闲时长判定会把刚并入的
-  消息立即撤掉）。
+  消息立即撤掉）。eldoc 文档经 =eldoc-message-function= 源头接管——空闲期
+  点在符号上即出文档、CJK 文档宽度常超半宽，不接管则状态行被顶掉直到下一个
+  输入事件；文档并入左半不限宽（放不下由渲染截断）、不经 4 秒超时，仅随
+  下一个输入事件撤下，与 eldoc 自身的清除语义一致。鼠标点击/滚轮后
+  「底栏消失较久」另有根因：help-echo 处理链上的 =tooltip-hide= 在 TTY
+  无条件 =(message "")= 清屏，已由 advice 在无消息时跳过（见下方代码）。
 - *信息源* ：VC、Flymake、Eglot、project 状态由各自公开接口在专用 hook 中刷新进
   buffer-local 缓存，渲染路径零 I/O；时间由 =format-time-string= 直接计算，
   电量由 =display-battery-mode= 维护的 =battery-mode-line-string= 提供。
 - *固有取舍* ：整行消息期间状态行不可见，按键回显（=C-x= 等前缀）与 isearch
-  期间 echo area 被占用同理；daemon 下多个 client 共享同一份内容
+  期间 echo area 被占用同理（eldoc 已由 =eldoc-message-function= 接管，不在
+  此列）；daemon 下多个 client 共享同一份内容
   （= *Minibuf-0*= 是全局 buffer），宽度以最近一次渲染的 frame 为准，比它窄的
   frame 会静默裁掉右缘超出的部分（截断箭头已由 display-table 与 fringe 清零
   双重压住），切换 frame 后由 hook 与每秒 tick 自愈。
@@ -1171,6 +1181,11 @@ point,多窗口同 buffer 时行列号会错。"
 不能用空闲时长判定:daemon 长时间空闲时,`current-idle-time' 早已超过
 阈值,刚并入的消息会被立即撤掉,用户根本看不到。")
 
+(defvar custom/modeline--message-persistent nil
+  "当前左半消息是否持续显示(eldoc 文档)。
+持续消息不经 4 秒超时撤下——eldoc 的语义是 point 不动就持续在场,
+撤下只随下一个输入事件或 eldoc 的清除回调。")
+
 (defvar custom/modeline--rendering nil
   "状态行渲染期标志;渲染途中求值的组件若发消息,退化为整行显示以避免递归。")
 
@@ -1286,19 +1301,13 @@ project 缓存都依赖该上下文);左段有待显示的短消息时由消息�
            ;; 一列会把状态末字符挤到下一行(GUI 实测)。
            (gap (- width eol (string-width text) custom:modeline-padding 1))
            (show (and (>= gap 1)
-                      ;; 两类提示 overlay 都让位:minibuffer--message-overlay
-                      ;; 是 minibuffer-message 的临时提示,minibuffer-message-
-                      ;; overlay 是 set-minibuffer-message 的 echo 消息。
-                      (not (seq-some
-                            (lambda (var)
-                              (and (boundp var)
-                                   (overlayp (symbol-value var))
-                                   (eq (overlay-buffer (symbol-value var))
-                                       (current-buffer))
-                                   (overlay-get (symbol-value var)
-                                                'after-string)))
-                            '(minibuffer--message-overlay
-                              minibuffer-message-overlay))))))
+                      (not (and (boundp 'minibuffer-message-overlay)
+                                (overlayp minibuffer-message-overlay)
+                                (eq (overlay-buffer
+                                     minibuffer-message-overlay)
+                                    (current-buffer))
+                                (overlay-get minibuffer-message-overlay
+                                             'after-string))))))
       (unless (and (overlayp custom/modeline--minibuf-overlay)
                    (eq (overlay-buffer custom/modeline--minibuf-overlay)
                        (current-buffer)))
@@ -1328,18 +1337,8 @@ setup-hook 运行时 minibuffer window 可能尚未被 `active-minibuffer-window
   (when (overlayp custom/modeline--minibuf-overlay)
     (delete-overlay custom/modeline--minibuf-overlay)))
 
-(defun custom/modeline--on-minibuffer-message (&rest _)
-  "minibuffer-message 提示出现或消失后重算右缘状态 overlay。
-提示由 timer 异步插入/删除,不经 post-command,不 advice 则 overlay
-不会及时让位/恢复,提示文本还会把状态文本挤折行(实测)。"
-  (when (bound-and-true-p minibuffer-line-mode)
-    (condition-case nil
-        (when-let* ((mini (active-minibuffer-window)))
-          (custom/modeline--update-minibuf-overlay mini))
-      (error nil))))
-
 (defun custom/modeline-refresh (&optional frame)
-  "把状态行写入 `custom/modeline--minibuffer';字符内容不变则跳过。
+  "把状态行写入 `custom/modeline--minibuffer';无条件重写以置位 redisplay 标志。
 FRAME 缺省为选中 frame;挂在 `window-size-change-functions' 上时会传入
 尺寸变化的 frame,使 TTY resize、分屏后的右缘对齐立即重算。
 minibuffer 激活时改为刷新其输入行右缘的精简状态 overlay(见
@@ -1373,7 +1372,15 @@ hook,刷新从此静默停摆——这是状态行「莫名其妙消失」的一
               (unless (eq buffer-display-table
                           custom/modeline--display-table)
                 (setq buffer-display-table custom/modeline--display-table))
-              (unless (equal (buffer-string) text)
+              ;; 无条件重写,不做内容相同就跳过的优化:跳过意味着 buffer
+              ;; 的 text->redisplay 不置位,而 echo area 清屏(message ""/nil,
+              ;; 如 TTY 下 tooltip-hide 的行为)已把 mini window 的显示矩阵
+              ;; 换成空 echo buffer——all-windows redisplay 路径上
+              ;; needs_no_redisplay 会因 buffer 未变跳过重画,底栏空白残留
+              ;; 到下个输入事件。重写置位 redisplay 标志,强制重画自愈。
+              ;; with-silent-modifications 抑制 undo 记录与 change hooks,
+              ;; 但 bset_redisplay 在其检查之前执行,不受影响。
+              (with-silent-modifications
                 (erase-buffer)
                 (insert text)))
             ;; 迷你窗口显示状态归一:共享 buffer 可能被某个 frame 的
@@ -1392,13 +1399,14 @@ hook,刷新从此静默停摆——这是状态行「莫名其妙消失」的一
       (error nil))))
 
 (defun custom/modeline--tick ()
-  "每秒兜底:重渲染状态行,短消息并入满 4 秒后撤下左半。
+  "每秒兜底:重渲染状态行,短消息并入满 4 秒后撤下左半(持续消息除外)。
 刻意用普通 timer 而非 repeat 型 idle timer:后者每个空闲周期只触发一次
 (timer.el 重调度后置 `timer--triggered',要等下次输入事件才复位),
 daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效——与
 `custom--stale-auto-save-timer' 放弃 idle timer 的理由相同。"
   (custom/modeline-refresh)
   (when (and custom/modeline--message
+             (not custom/modeline--message-persistent)
              (or (null custom/modeline--message-time)
                  (>= (float-time
                       (time-subtract nil custom/modeline--message-time))
@@ -1412,9 +1420,13 @@ daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效—�
   ;; 上游 timer 只作兜底;实时刷新由下方 hook 驱动。
   :custom (minibuffer-line-refresh-interval 30)
   :config
-  ;; 该 face 继承 mode-line-inactive;本配置清 box 的 face 表只覆盖 TTY 路径,
-  ;; GUI 下 box 仍有值,不清理则整行每个字符各画一个边框。
-  (set-face-attribute 'minibuffer-line nil :box nil)
+  ;; 该 face 继承 mode-line-inactive:本配置清 box 的 face 表只覆盖 TTY 路径,
+  ;; GUI 下 box 仍有值,不清理则整行每个字符各画一个边框。背景同理继承自
+  ;; mode-line-inactive,会让整行(含无 face 的留白与分隔符)带上与 default
+  ;; 不同的底色;:background 'unspecified 无法切断继承(unspecified 即
+  ;; 「未指定,继续走继承链」),必须把 :inherit 置 nil 让 face 回落到
+  ;; default,状态行才融入 echo area。
+  (set-face-attribute 'minibuffer-line nil :inherit nil :box nil)
   ;; 状态行文本由 refresh 直接写入(不经 format-mode-line,见
   ;; `custom/modeline--render' 注释),minibuffer-line-format 保持上游默认、
   ;; 仅作上游 update 的兜底格式。
@@ -1430,29 +1442,42 @@ daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效—�
   ;; minibuffer 激活立即渲染右缘精简状态,退出删除 overlay。
   (add-hook 'minibuffer-setup-hook #'custom/modeline--on-minibuffer-setup)
   (add-hook 'minibuffer-exit-hook #'custom/modeline--on-minibuffer-exit)
-  ;; minibuffer-message 提示([No match] 等)由 timer 异步插入/删除,
-  ;; 不经 post-command;advice 让 overlay 即时让位与恢复。提示出现走
-  ;; minibuffer-message,消失走 minibuffer--delete-message-overlay;
-  ;; echo 消息对(set-minibuffer-message/clear-minibuffer-message)同理。
-  (advice-add 'minibuffer-message :after
-              #'custom/modeline--on-minibuffer-message)
-  (advice-add 'minibuffer--delete-message-overlay :after
-              #'custom/modeline--on-minibuffer-message)
-  (advice-add 'set-minibuffer-message :after
-              #'custom/modeline--on-minibuffer-message)
-  (advice-add 'clear-minibuffer-message :after
-              #'custom/modeline--on-minibuffer-message)
   ;; 重载 main.el 时避免叠加重复 tick timer。
   (cancel-function-timers #'custom/modeline--tick)
   (run-with-timer 1 1 #'custom/modeline--tick))
+
+;; TTY 下 tooltip-hide 无条件 (message "") 清 echo area:clear_message +
+;; echo_area_display 把 mini window 的显示矩阵换成空 echo buffer 并立即上屏,
+;; 底栏被空白顶替。鼠标事件(点击、滚轮)路径上 help-echo 处理会调
+;; tooltip-show-help → tooltip-hide,即使没有 tooltip 在显示也照样清屏——
+;; 这是「鼠标点击后底栏消失、按键才恢复」的根因(键盘事件不触发
+;; help-echo 处理)。无消息可清时跳过这次清屏;有消息时照原样执行,
+;; 恢复由 refresh 的无条件重写兜底。
+(defun custom/modeline--tooltip-hide (orig &rest args)
+  "TTY 下 tooltip-hide 的 (message \"\") 在无消息可清时跳过。
+GUI 分支、有消息可清、或 minibuffer 活动时照原样执行。"
+  (if (or (display-graphic-p)
+          (current-message)
+          (active-minibuffer-window))
+      (apply orig args)
+    ;; 等价于原函数 TTY 分支去掉 (message \"\"):仍需取消延迟 tooltip
+    ;; 计时器;无消息时 tooltip-hide-time 无需更新(原函数也只在有
+    ;; 消息时才设置它)。
+    (tooltip-cancel-delayed-tip)
+    t))
+
+(advice-add 'tooltip-hide :around #'custom/modeline--tooltip-hide)
 
 ;; 短消息并入状态行左半:Eglot 连接、保存、缓冲区边界等提示不再占满整行,
 ;; 右半保持不变。注册在 `set-message-functions' 末位——首位必须留给
 ;; `inhibit-message'(`inhibit-message-regexps' 生效依赖它排在最前),而
 ;; `set-minibuffer-message' 在没有活动 minibuffer 时返回 nil,末位仍会被调用。
-(defun custom/modeline--handle-message (text)
+(defun custom/modeline--handle-message (text &optional persistent)
   "把短消息 TEXT 并入状态行左半,返回 t 表示已接管。
-非字符串/空串/多行/超半宽的消息、minibuffer 活动期与渲染期返回 nil,
+PERSISTENT 非 nil 时视为持续消息(eldoc 文档):不限半宽——放不下时
+由 `custom/modeline--render' 以省略号截断左段,右段永远完整;也不经
+4 秒超时撤下,仅随下一个输入事件或 eldoc 清除回调撤下。
+非字符串/空串/多行消息、minibuffer 活动期与渲染期返回 nil,
 交回 Emacs 默认的整行显示。整体包 condition-case:本函数在 `message'
 调用路径上,抛错会波及发消息的业务代码,还会被移出 set-message-functions。"
   (condition-case nil
@@ -1462,10 +1487,12 @@ daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效—�
                  (not custom/modeline--rendering)
                  (not (active-minibuffer-window))
                  (not (string-search "\n" text))
-                 (<= (string-width text)
-                     (/ (window-total-width (minibuffer-window)) 2)))
+                 (or persistent
+                     (<= (string-width text)
+                         (/ (window-total-width (minibuffer-window)) 2))))
         (setq custom/modeline--message text
-              custom/modeline--message-time (current-time))
+              custom/modeline--message-time (current-time)
+              custom/modeline--message-persistent persistent)
         (custom/modeline-refresh)
         t)
     (error nil)))
@@ -1473,14 +1500,37 @@ daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效—�
 (defun custom/modeline--clear-message ()
   "撤下左半的短消息。
 两个触发点:`pre-command-hook' 对齐 echo area 的清除时机(下一个输入
-事件);`custom/modeline--tick' 兜住长时间无输入的情况(并入满 4 秒)。"
+事件);`custom/modeline--tick' 兜住长时间无输入的情况(并入满 4 秒,
+持续消息除外)。"
   (when custom/modeline--message
     (setq custom/modeline--message nil
-          custom/modeline--message-time nil)
+          custom/modeline--message-time nil
+          custom/modeline--message-persistent nil)
     (custom/modeline-refresh)))
 
 (add-to-list 'set-message-functions #'custom/modeline--handle-message t)
 (add-hook 'pre-command-hook #'custom/modeline--clear-message)
+
+;; eldoc 是空闲期 echo area 的最大占用源(点在符号上即出文档,CJK 文档
+;; 宽度常超半宽),不接管则状态行被顶掉直到下一个输入事件。经官方定制点
+;; `eldoc-message-function' 源头接管:文档并入状态行左半(render 以省略号
+;; 截断,右半永远完整),不再经 `message' 走 echo area。接不住的场景
+;; (minibuffer 活动期等)转回上游默认行为。
+(defun custom/modeline--eldoc-message (format-string &rest args)
+  "eldoc 文档并入状态行左半;接不住时退回 `eldoc-minibuffer-message'。
+`eldoc--message' 以 (\"%s\" string) 方式调用本函数——format 后的完整
+文本即第一个 arg;args 为空表示清除文档,撤下左半并入的旧文档。"
+  (if-let* ((text (and format-string args
+                       (apply #'format-message format-string args)))
+            (taken (custom/modeline--handle-message text t)))
+      t
+    ;; 清除调用(args 空)或接管失败:撤下本模块并入的 eldoc 文档再转交上游,
+    ;; 避免旧文档在状态行左半残留。
+    (when custom/modeline--message-persistent
+      (custom/modeline--clear-message))
+    (apply #'eldoc-minibuffer-message format-string args)))
+
+(setq eldoc-message-function #'custom/modeline--eldoc-message)
 
 ;; 段缓存的数据源刷新:各 hook 在对应 buffer 内运行,直接写 buffer-local
 ;; 缓存,渲染路径零 I/O。
