@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# blue-gc — 一键磁盘清理（wrapper 在 `blue gc` 时分发进入）。
+#
+# 风格对齐 tools/rescue-chroot.sh：默认 dry-run 只打印计划，--go 才执行。
+# 汇集历次手动清理动作：zcode checkpoint 解锁、guix gc（与系统每周日
+# 18:00 guix-gc timer 同参数）、home 旧代修剪、nh clean all、flatpak 卸载
+# 未用运行时。单步失败仅告警并继续，最后统一汇总成功/失败与 /gnu 已用
+# 空间前后对比（/gnu 与 /data 同属一块 Btrfs，看 /gnu 即可代表整体）。
+#
+# 用法（经 wrapper）:
+#   blue gc          打印清理计划（除只读 df 外无任何副作用）
+#   blue gc --go     真实执行
+# 手册: docs/emergency-blue.md §9
+
+set -euo pipefail
+
+EXECUTE=0 # run/step 据此决定回显还是执行
+GO=0      # --go
+
+ZCODE_UNLOCK="$HOME/.zcode/workspace/default/zcode-checkpoints-lock.sh"
+
+log()  { printf '[blue-gc] %s\n' "$*"; }
+warn() { printf '[blue-gc][!] %s\n' "$*" >&2; }
+die()  { warn "$*"; exit 1; }
+
+OK=()
+FAILED=()
+SKIPPED=()
+
+# 回显一条命令；EXECUTE=1 时真正执行（同 rescue-chroot.sh 的 run）
+run_echo() {
+  printf '        '
+  printf '%q ' "$@"
+  printf '\n'
+}
+
+# 统一步骤入口: do_step <sudo|user> <描述> <命令...>
+# dry-run 只回显；执行模式按结果记账，失败告警并继续（由调用方汇总）
+do_step() {
+  local tag=$1 desc=$2
+  shift 2
+  printf '  [%s] %s\n' "$tag" "$desc"
+  run_echo "$@"
+  if [ "$EXECUTE" -eq 0 ]; then
+    return 0
+  fi
+  if "$@"; then
+    OK+=("$desc")
+  else
+    FAILED+=("$desc")
+    warn "步骤失败（已继续后续步骤）: $desc"
+  fi
+}
+
+# 条件不满足的步骤：两种模式都打印 skip 说明；执行模式额外记账
+skip_step() {
+  printf '  [-] %s —— 跳过\n' "$1"
+  if [ "$EXECUTE" -eq 1 ]; then
+    SKIPPED+=("$1")
+  fi
+}
+
+# POSIX 口径取已用空间（KB）；df 失败时输出为空，由对比处兜底
+used_kb() {
+  df -Pk "$1" 2>/dev/null | awk 'NR == 2 { print $3 }'
+}
+
+gc_plan() {
+  log "步骤（[sudo]=需 root，[user]=当前用户）:"
+
+  # 1. 历次手动清理的固定前置动作：解锁 zcode checkpoint
+  if [ -f "$ZCODE_UNLOCK" ]; then
+    do_step sudo "解锁 zcode checkpoint" sudo bash "$ZCODE_UNLOCK" --unlock
+  else
+    skip_step "解锁 zcode checkpoint（$ZCODE_UNLOCK 不存在）"
+  fi
+
+  # 2. 与系统每周日 18:00 guix-gc timer 完全同参数
+  do_step sudo "guix gc -d 14d -F 20G（删两周前可回收项，整体保留 20G）" \
+    sudo guix gc -d 14d -F 20G
+
+  # 3. 用户级，无需 sudo
+  do_step user "guix home delete-generations 14d（修剪两周前的 home 世代）" \
+    guix home delete-generations 14d
+
+  # 4/5. 可选工具，装了才纳入
+  if command -v nh >/dev/null 2>&1; then
+    do_step user "nh clean all（nix + guix 缓存清理）" nh clean all
+  else
+    skip_step "nh clean all（未安装 nh）"
+  fi
+  if command -v flatpak >/dev/null 2>&1; then
+    do_step user "flatpak uninstall --unused（卸载未使用的 flatpak 运行时）" \
+      flatpak uninstall --unused --noninteractive
+  else
+    skip_step "flatpak uninstall --unused（未安装 flatpak）"
+  fi
+}
+
+summary() {
+  log "== 汇总 =="
+  if [ "$EXECUTE" -eq 0 ]; then
+    log "(dry-run) 以上为将执行的计划，未做任何改动；确认后追加 --go 执行。"
+    return 0
+  fi
+  local name
+  for name in "${OK[@]}"; do printf '[blue-gc]   成功: %s\n' "$name"; done
+  for name in "${SKIPPED[@]}"; do printf '[blue-gc]   跳过: %s\n' "$name"; done
+  for name in "${FAILED[@]}"; do printf '[blue-gc][!] 失败: %s\n' "$name" >&2; done
+
+  # /gnu 与 /data 同分区（同一块 Btrfs），用量看 /gnu 即可
+  if [ -n "$BEFORE_USED" ] && [ -n "$AFTER_USED" ]; then
+    awk -v b="$BEFORE_USED" -v a="$AFTER_USED" 'BEGIN {
+      d = a - b
+      printf "[blue-gc]   /gnu 已用: %.1f GiB → %.1f GiB（%s %.1f GiB）\n", \
+             b / 1048576, a / 1048576, (d >= 0 ? "增加" : "释放"), (d < 0 ? -d : d) / 1048576
+    }'
+  else
+    warn "缺前置/后置用量数据，跳过对比。"
+  fi
+  [ "${#FAILED[@]}" -eq 0 ] || exit 1
+}
+
+usage() {
+  cat <<'EOF'
+用法: blue gc [--go]      （或直接: blue-gc [--go]）
+
+  默认 dry-run：只打印将执行的清理计划，不改动系统。
+  --go          真实执行；单步失败告警并继续，最后统一汇总。
+
+步骤:
+  [sudo] 解锁 zcode checkpoint            （锁定脚本存在时）
+  [sudo] guix gc -d 14d -F 20G            （与每周日 18:00 guix-gc timer 同参数）
+  [user] guix home delete-generations 14d
+  [user] nh clean all                     （安装了 nh 时）
+  [user] flatpak uninstall --unused --noninteractive （安装了 flatpak 时）
+
+手册: docs/emergency-blue.md §9
+EOF
+}
+
+main() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      --go) GO=1 ;;
+      -h | --help | help)
+        usage
+        exit 0
+        ;;
+      *) die "未知参数: $arg（用法: blue gc [--go]，见 help）" ;;
+    esac
+  done
+
+  # 前置快照只读，两种模式都跑（dry-run 也想看当前用量）
+  log "== 前置磁盘快照（/gnu 与 /data 同分区）=="
+  df -h /gnu /data || warn "df -h /gnu /data 失败（缺挂载点？），前后对比可能缺失。"
+  BEFORE_USED="$(used_kb /gnu || true)"
+
+  if [ "$GO" -eq 1 ]; then
+    EXECUTE=1
+    log "== 执行（单步失败会告警并继续）=="
+  else
+    EXECUTE=0
+    log "== 清理计划（dry-run）=="
+  fi
+  gc_plan
+
+  log "== 后置磁盘快照 =="
+  df -h /gnu || warn "后置 df 失败。"
+  AFTER_USED="$(used_kb /gnu || true)"
+
+  summary
+}
+
+main "$@"

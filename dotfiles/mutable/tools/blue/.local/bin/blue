@@ -10,6 +10,21 @@
 # 直接执行报 "incompatible bytecode version"。这里借系统 profile 的
 # guile 3.0.11 直接以 -s 运行脚本主体（shebang 被当作注释跳过）。
 # bluebox 升级 blue 的 guile 输入后可整体删除本包。
+#
+# 分发：首参恰为 update/gc 且同目录存在对应增强脚本（blue-update /
+# blue-gc，机制见 docs/emergency-blue.md §8-9）时交给它处理；
+# 脚本缺失/不可执行则落回下方直通逻辑（blue 原生行为），wrapper 永不
+# 因增强脚本缺位而坏。其余参数一律原样直通。
+
+_blue_self="$(readlink -f "$0")"
+_blue_dir="$(dirname "$_blue_self")"
+case "${1:-}" in
+  update | gc)
+    if [ -x "$_blue_dir/blue-$1" ]; then
+      exec "$_blue_dir/blue-$1" "${@:2}"
+    fi
+    ;;
+esac
 
 exec /run/current-system/profile/bin/guile --no-auto-compile \
      -e main -s "$HOME/.guix-home/profile/bin/blue" "$@"

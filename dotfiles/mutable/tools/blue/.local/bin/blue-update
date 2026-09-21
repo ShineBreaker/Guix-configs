@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# blue-update — blue update 的防呆外壳（wrapper 在 `blue update` 时分发进入）。
+#
+# 背景：2026-08-29 与 2026-09-20 两次事故，`blue update` 刷新
+# source/channel.lock 后 `blue rebuild` 在 derivation 计算阶段崩溃（guix 与
+# 新频道快照不兼容），当时都是人工回滚 channel.lock + `blue --dry-run
+# rebuild` 验证救回。本脚本把这套人工流程自动化：
+#
+#   1. 备份 source/channel.lock → tmp/channel.lock.bak.<时间戳>（tmp/ 已
+#      gitignore；多次运行会留下多份备份，可自行清理）
+#   2. 以 wrapper 同款 guile 命令行**直调 blue 本体**执行 update（绝不经
+#      wrapper，防 `blue update` 递归回本脚本）；参数原样透传（--guix、
+#      --channel jeans 等）。update 本身失败 → 还原备份、退出非零
+#   3. 门禁：`blue --dry-run rebuild`（tangle tmp/config.scm + 括号检查 +
+#      构建验证，不写系统；tmp/ 是生成物目录，tangle 无害），以退出码判断
+#      新 lock 是否可用
+#   4. 失败归因启发式：门禁失败时先跑 `blue check`（纯括号平衡检查，不碰
+#      频道与构建）区分责任——
+#        - blue check 也失败 → 大概率是 source/config.org 有未完成 WIP
+#          （与 lock 无关）：不还原 lock，说明后退出非零；
+#        - blue check 通过而门禁失败 → 判定 lock 兼容性问题：还原备份的
+#          channel.lock，说明后退出非零。
+#
+# 用法（经 wrapper）: blue update [blue update 的原参数...]
+#
+# 局限：归因只认「括号平衡」这一种 config 侧信号。构建失败若既非括号问题
+# 也非 lock 问题（source/files/ 缺模板、磁盘满、substituter 不可达等），会
+# 被误判为 lock 问题而还原；此时 tmp/ 备份仍是 update 后的新 lock，可
+# `git diff source/channel.lock` 对照后手动找回。详见 docs/emergency-blue.md §8。
+
+set -euo pipefail
+
+GUILE="/run/current-system/profile/bin/guile"
+BLUE_BODY="$HOME/.guix-home/profile/bin/blue"
+
+log()  { printf '[blue-update] %s\n' "$*"; }
+warn() { printf '[blue-update][!] %s\n' "$*" >&2; }
+die()  { warn "$*"; exit 1; }
+
+# 脚本实体在 dotfiles/mutable/tools/blue/.local/bin/blue-update，
+# 经 stow 软链到 ~/.local/bin/blue-update。
+# 以真实路径反推仓库根；脱离仓库结构时回退 git 探测（手法同 secrets）。
+_self="$(readlink -f "${BASH_SOURCE[0]}")"
+case "$_self" in
+  */dotfiles/mutable/tools/blue/.local/bin/blue-update)
+    REPO_ROOT="${_self%/dotfiles/mutable/tools/blue/.local/bin/blue-update}"
+    ;;
+  *)
+    REPO_ROOT="$(git -C "$(dirname "$_self")" rev-parse --show-toplevel 2>/dev/null || true)"
+    ;;
+esac
+[ -n "$REPO_ROOT" ] || die "无法定位仓库根（脚本应位于 dotfiles/mutable/tools/blue/.local/bin/）"
+cd "$REPO_ROOT" # blue 按当前目录解析仓库，以下所有相对路径以仓库根为准
+
+# wrapper 同目录副本（本脚本多半由它分发而来）；走它跑门禁与归因时首参为
+# --dry-run/check，wrapper 直通，无递归风险。
+BLUE_CLI="$(dirname "$_self")/blue"
+if [ ! -x "$BLUE_CLI" ]; then
+  BLUE_CLI="$(command -v blue 2>/dev/null || true)"
+fi
+[ -n "$BLUE_CLI" ] || die "找不到可用的 blue 命令（同目录 wrapper 与 PATH 均无）"
+
+[ -x "$GUILE" ] || die "缺 $GUILE（系统 profile 异常？见 docs/emergency-blue.md §2）"
+[ -f "$BLUE_BODY" ] || die "缺 blue 本体 $BLUE_BODY（Home 层未部署？恢复见 docs/emergency-blue.md §6）"
+
+LOCK="source/channel.lock"
+[ -f "$LOCK" ] || die "缺 $LOCK —— 无从备份，拒绝执行 update"
+
+# 与 wrapper 末行同款命令：绕开 wrapper 的分发层直调 blue 本体（防递归）
+blue_native() {
+  "$GUILE" --no-auto-compile -e main -s "$BLUE_BODY" "$@"
+}
+
+log "1/4 备份 channel.lock"
+BACKUP="tmp/channel.lock.bak.$(date +%Y%m%d%H%M%S)"
+mkdir -p tmp
+cp "$LOCK" "$BACKUP"
+
+log "2/4 blue update $*（guile 直调 blue 本体，参数全透传）"
+if ! blue_native update "$@"; then
+  warn "blue update 本身失败。"
+  if cp "$BACKUP" "$LOCK"; then
+    warn "已还原 channel.lock 至 update 前（备份保留在 $BACKUP）。"
+  else
+    die "还原 channel.lock 失败！请手动执行: cp $BACKUP $LOCK"
+  fi
+  exit 1
+fi
+
+log "3/4 门禁：blue --dry-run rebuild（tangle + 括号检查 + 构建验证，不写系统）"
+gate_ok=0
+if "$BLUE_CLI" --dry-run rebuild; then
+  gate_ok=1
+fi
+
+if [ "$gate_ok" -eq 1 ]; then
+  log "4/4 完成：channel.lock 已更新且通过 dry-run 门禁。"
+  log "    确认后请手动运行 blue rebuild 固化（本脚本不代跑 reconfigure）。"
+  exit 0
+fi
+
+# ---- 失败归因启发式 ----
+# 门禁失败未必是 lock 的锅：config.org 有未完成 WIP（括号失配）时门禁同样
+# 会挂。blue check 只做逐块括号平衡检查、不碰频道与构建，用它区分责任：
+#   check 失败 → config 侧问题，还原 lock 反而掩盖真相 → 不还原；
+#   check 通过 → 大概率 lock 与新 guix/频道不兼容（两次事故即此型）→ 还原。
+log "门禁失败，运行 blue check 归因（纯括号平衡，与 lock 无关）"
+if "$BLUE_CLI" check; then
+  warn "blue check 通过而 dry-run rebuild 失败 → 判定为 channel.lock 兼容性问题。"
+  if cp "$BACKUP" "$LOCK"; then
+    warn "已还原 channel.lock 至 update 前，可重试或手动排查（备份仍在: $BACKUP）。"
+  else
+    die "还原 channel.lock 失败！请手动执行: cp $BACKUP $LOCK"
+  fi
+  exit 1
+else
+  warn "blue check 也失败 → 大概率是 source/config.org 有未完成的 WIP（与 lock 无关）。"
+  warn "不还原 channel.lock（保留 update 结果）；修好 config.org 后再 blue --dry-run rebuild 复核。"
+  exit 1
+fi

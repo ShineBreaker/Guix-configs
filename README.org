@@ -109,7 +109,7 @@ passwd
 | blue 任务定义                      | [[./blueprint.scm][blueprint.scm]]                           | 扩展与自定义 blue 子命令             |
 | 不可变 dotfiles（store 只读）      | [[./dotfiles/immutable/][dotfiles/immutable/]]                     | 改源后须执行 =blue home= 重建生效    |
 | 可变 dotfiles（Stow 直链）         | [[./dotfiles/mutable/][dotfiles/mutable/]]                       | 软链到源码，改源即时生效             |
-| 专题文档                           | [[./docs/][docs/]]                                   | 自建 ISO、机密管理、应急恢复指南    |
+| 专题文档                           | [[./docs/][docs/]]                                   | 自建 ISO、机密管理、应急恢复与日常维护指南    |
 | 引导与辅助脚本                     | [[./tools/][tools/]]                                  | 包含 =bootstrap.sh= 与构建脚本       |
 
 各主要子目录均包含一份 =AGENTS.md= 分层导读，供人类开发者与 AI Agent 快速索引。
