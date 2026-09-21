@@ -35,12 +35,57 @@ install_cli() {
 		printf 'dsh: pnpm install 结束但仍没有 %s\n' "$_cli_bin" >&2
 		return 1
 	fi
+	_sync_cli_lockfile
+}
+
+# 部署侧 lockfile 拷回仓库源（源侧路径从 pnpm-workspace.yaml 软链推导）。
+# pnpm 的 Rust 端拒绝写软链 lockfile，故 _cli 的 lockfile 在部署侧是真实文件，
+# git 里的副本靠这里保持同步。
+_sync_cli_lockfile() {
+	local dir="$_cli_dir" src_link src_dir
+	src_link=$(readlink "$dir/pnpm-workspace.yaml" 2>/dev/null) || return 0
+	src_dir="$dir/$(dirname "$src_link")"
+	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] || return 0
+	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
+		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+		printf 'dsh: _cli 的 pnpm-lock.yaml 已同步回仓库源\n' >&2
+	fi
 }
 
 if [[ "${1:-}" == "--install" ]]; then
 	install_cli
 	printf 'dsh: CLI 安装完成\n' >&2
 	exit 0
+fi
+
+# dsh plugin 的 bundles 写入走原子替换（临时文件 + rename），会把 profile 的
+# package.json 从 stow 软链换成独立文件——dependencies 进了仓库源、bundles 只落
+# 部署侧。跑完 plugin 子命令后调用：断链则内容归源并重建软链；lockfile 则反向
+# 同步（部署侧必须是真实文件——pnpm 的 Rust 端拒绝写软链 lockfile）。源目录从
+# 同目录幸存的 pnpm-workspace.yaml 软链推导（stow 布局内自洽，无硬编码路径）。
+_relink_profile() {
+	local dir="$DSH_HOME/profiles/web" src_link src_dir
+	src_link=$(readlink "$dir/pnpm-workspace.yaml" 2>/dev/null) || return 0
+	src_dir="$dir/$(dirname "$src_link")"
+	if [[ -f "$dir/package.json" && ! -L "$dir/package.json" ]]; then
+		cp "$dir/package.json" "$src_dir/package.json"
+		ln -sfn "$(dirname "$src_link")/package.json" "$dir/package.json"
+		printf 'dsh: package.json 断链已写回仓库源并重建软链\n' >&2
+	fi
+	if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] &&
+		! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
+		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+		printf 'dsh: pnpm-lock.yaml 已同步回仓库源\n' >&2
+	fi
+}
+
+if [[ "${1:-}" == "plugin" ]]; then
+	set +e
+	"$_cli_bin" "$@"
+	rc=$?
+	set -e
+	_relink_profile
+	exit "$rc"
 fi
 
 if [[ ! -x "$_cli_bin" ]]; then

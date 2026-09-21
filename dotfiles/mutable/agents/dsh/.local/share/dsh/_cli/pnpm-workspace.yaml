@@ -1,5 +1,6 @@
 packages:
   - .
+saveExact: true
 allowBuilds:
   '@deepseek-ai/dsh-subprocess-local': true
   '@google/genai': true

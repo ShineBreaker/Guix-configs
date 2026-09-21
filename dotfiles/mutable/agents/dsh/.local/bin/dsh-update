@@ -6,16 +6,19 @@
 # dsh-update — 把 dsh 本体与 web profile 的插件更新到上游最新，一键。
 #
 # 插件清单从 web profile 的 package.json 动态读取（dependencies 全量，保序）。
-# 其中 git/link/file 等「锁定源码」的依赖没有 registry 版本可比，不参与自动
-# 更新，只列出来提醒：git 插件升级要换 commit，而 allowBuilds 的放行 key
-# 绑定在 commit 上（换 commit 就得同步换 key），天然需要人工过手，所以不
-# 做「自动跟分支 HEAD」那种更新。
+# github:<owner>/<repo>#<sha> 锁 commit 的依赖自动跟上游 HEAD（git ls-remote 查询，
+# 换 commit 前先把 pnpm-workspace.yaml 里 allowBuilds 的旧 key 迁到新 commit——
+# key 绑定 commit，不迁则 prepare 不放行）。git+/git@/file:/link: 等其余锁定
+# 源码的依赖仍只列出提醒：没有可查的上游位标，人工确认后升级。
 #
-# 更新靠 pnpm 自己写文件，脚本不碰 package.json / pnpm-workspace.yaml。用
-# -E（--save-exact）保住「锁精确版本」的既定原则——pnpm 默认写 ^，而那正是
-# dsh-context 0.47 静默升到不兼容版本的成因；且显式 `pnpm add <pkg>@<ver>` 时
-# pnpm 会自动把仍在 24h 冷却期内的版本写进 workspace 的 minimumReleaseAgeExclude，
-# 所以连冷却豁免都不用手写。
+# 更新靠 pnpm 自己写文件，脚本不碰 package.json 的依赖声明。精确版本由两侧
+# pnpm-workspace.yaml 的 saveExact: true 兜底（作用于一切 pnpm add 通道），
+# 命令行仍带 -E 双保险——pnpm 默认写 ^，而那正是 dsh-context 0.47 静默升到
+# 不兼容版本的成因；且显式 `pnpm add <pkg>@<ver>` 时 pnpm 会自动把仍在 24h
+# 冷却期内的版本写进 workspace 的 minimumReleaseAgeExclude，冷却豁免不用手写。
+#
+# lockfile 部署侧是真实文件（pnpm 的 Rust 端拒绝写软链 lockfile），仓库源里的
+# 副本由脚本在每次 pnpm 跑完后自动拷回同步，保证 git 里始终是可复现的锁。
 #
 # 选版不跟 npm 的 latest tag：dsh 全是 preview 版本，发布者把 latest 停在保守位
 # （0.1.5-rc.2 发布时 latest 仍是 rc.1）。改为按通道稳定性 latest -> next ->
@@ -37,7 +40,8 @@ usage() {
 用法: dsh-update [选项]
 
 把 dsh 本体（$DSH_HOME/_cli）与 web profile 的插件更新到上游最新。
-插件清单读自 profile 的 package.json；锁定源码（git/link）的依赖只提示不更新。
+插件清单读自 profile 的 package.json；github:#<sha> 锁 commit 的依赖跟上游
+HEAD，其余锁定源码（git+/git@/file:/link:）的依赖只提示不更新。
 
 选项:
   --check     只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
@@ -68,7 +72,10 @@ while (($#)); do
 done
 
 # 从 package.json 读更新目标，每行 TSV：kind(升级方式) scope(归属) name spec。
-# 顺序为本体、web dependencies 原序。spec 对 npm 依赖就是当前版本（-E 锁的精确值）。
+# kind: npm（registry 版本可比）/ ghrepo（github:#<sha> 锁 commit，跟上游 HEAD）/
+# git（其余锁定源码，只提示）。npm 依赖的 spec 剥掉范围前缀后作当前版本：
+# 正常应是 saveExact/-E 锁的精确值，但历史数据可能残留 ^ 之类范围。
+# 顺序为本体、web dependencies 原序。
 read_targets() {
 	python3 - "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$CLI_PKG" <<'PY'
 import json, re, sys
@@ -76,22 +83,62 @@ import json, re, sys
 cli, web, cli_pkg = sys.argv[1], sys.argv[2], sys.argv[3]
 # 锁定源码的 spec：git+ / github: / git@ / file: / link: / 任意 URL 协议
 SOURCE_LOCKED = re.compile(r'^(git\+|github:|git@|file:|link:|[a-z][a-z0-9+.-]*://)')
+GITHUB_SHA = re.compile(r'^github:([^#]+)#([0-9a-f]{7,40})$')
+# pnpm 默认写入的范围前缀（^ ~ >= < 等），剥掉取下界当当前版本
+RANGE_PREFIX = re.compile(r'^[\^~>=<\s]+')
 
-print("npm\tcli\t%s\t%s" % (cli_pkg, json.load(open(cli))["dependencies"].get(cli_pkg, "")))
+def kind_of(spec):
+	m = GITHUB_SHA.match(spec)
+	if m:
+		return "ghrepo", "%s %s" % m.groups()
+	if SOURCE_LOCKED.match(spec):
+		return "git", spec
+	return "npm", RANGE_PREFIX.sub("", spec)
+
+cur = RANGE_PREFIX.sub("", json.load(open(cli))["dependencies"].get(cli_pkg, ""))
+print("npm\tcli\t%s\t%s" % (cli_pkg, cur))
 for name, spec in json.load(open(web))["dependencies"].items():
-	kind = "git" if SOURCE_LOCKED.match(spec) else "npm"
-	print("%s\tweb\t%s\t%s" % (kind, name, spec))
+	kind, out = kind_of(spec)
+	print("%s\tweb\t%s\t%s" % (kind, name, out))
 PY
 }
 
-# 锁定源码依赖的提示段：没有可比较的 registry 版本，只能人工升级。
+# 其余锁定源码依赖（非 github#sha 形态）的提示段：没有可比较的上游位标。
 print_source_locked() {
 	((${#source_locked[@]})) || return 0
 	local item
-	printf '\n以下依赖锁定源码（git/link/file），不参与自动更新：\n'
+	printf '\n以下依赖锁定源码（非 github#sha 形态），不参与自动更新：\n'
 	for item in "${source_locked[@]}"; do printf '  %s\n' "$item"; done
-	printf '  升级：确认目标 commit 后跑 pnpm -C %s add -E github:<owner>/<repo>#<commit>\n' "$WEB_DIR"
-	printf '  （若安装报 prepare 未放行，把 pnpm 打印的 allowBuilds key 同步进 pnpm-workspace.yaml）\n'
+	printf '  升级：确认目标后手动改 package.json 的 spec 并 pnpm install\n'
+}
+
+# $1: 目录 $2: 包名 $3: 旧 commit $4: 新 commit。
+# pnpm 的 allowBuilds key 绑定 tarball URL（含 commit），换 commit 后旧 key 失配、
+# prepare 不放行。key 格式从 lockfile 现存的 devin-cli 行归纳：<pkg>@https://codeload.github.com/<repo>/tar.gz/<commit>。
+migrate_allow_builds() {
+	local dir="$1" pkg="$2" old_sha="$3" new_sha="$4"
+	local ws="$dir/pnpm-workspace.yaml"
+	[[ -f "$ws" ]] || return 0
+	local old_pat="${pkg}@https://codeload\.github\.com/[^/]+/[^/]+/tar\.gz/${old_sha}"
+	local new_key
+	new_key=$(grep -oE "$old_pat" "$ws" | head -1)
+	[[ -n "$new_key" ]] || return 0
+	sed -i "s|${new_key}|${new_key%/*}/${new_sha}|" "$ws"
+	printf 'dsh-update: allowBuilds key 已随 commit 迁移（%s）\n' "$pkg"
+}
+
+# $1: 目录。把部署侧 lockfile 拷回仓库源（源侧路径从 pnpm-workspace.yaml 软链推导），
+# 保证 git 里的 lockfile 副本与实际部署一致。部署侧必须是真实文件——pnpm 的
+# Rust 端拒绝写软链 lockfile（Refusing to write symlinked lockfile）。
+sync_lockfile() {
+	local dir="$1" src_link src_dir
+	src_link=$(readlink "$dir/pnpm-workspace.yaml" 2>/dev/null) || return 0
+	src_dir="$dir/$(dirname "$src_link")"
+	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] || return 0
+	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
+		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+		printf 'dsh-update: %s 的 lockfile 已同步回仓库源\n' "$dir"
+	fi
 }
 
 # $1: 当前版本 $2: `pnpm view <pkg> dist-tags time --json` 的输出。
@@ -129,19 +176,22 @@ PY
 }
 
 # $1: 目录 $2: 标签 $3...: 包（已含 @版本）。
-# -E 写精确版本；冷却期内的版本 pnpm 会自动写进 workspace 的 minimumReleaseAgeExclude。
+# -E 写精确版本（workspace 的 saveExact: true 是常规兜底，这里双保险）；
+# 冷却期内的版本 pnpm 会自动写进 workspace 的 minimumReleaseAgeExclude。
 pnpm_add() {
 	local dir="$1" label="$2"
 	shift 2
 	local out
 	if out=$(cd "$dir" && pnpm add -E "$@" 2>&1); then
 		printf '%s\n' "$out"
+		sync_lockfile "$dir"
 		return 0
 	fi
 	# 包已装好、只是 build script 未审批：pnpm 报 error 但产物可用，非致命
 	if grep -q ERR_PNPM_IGNORED_BUILDS <<<"$out"; then
 		grep -vE 'ERR_PNPM_IGNORED_BUILDS|approve-builds' <<<"$out"
 		printf 'dsh-update: %s的依赖里有未审批的 build script（非致命；需要时对具体包跑 pnpm approve-builds）\n' "$label" >&2
+		sync_lockfile "$dir"
 		return 0
 	fi
 	printf '%s\n' "$out" >&2
@@ -169,14 +219,24 @@ for row in "${target_rows[@]}"; do
 	kind+=("$k"); scope+=("$sc"); name+=("$n"); cur+=("$c")
 done
 
-declare -a source_locked=()
+declare -a source_locked=() gh_repo=() gh_old_sha=() gh_new_sha=()
 for i in "${!name[@]}"; do
-	[[ "${kind[$i]}" == git ]] && source_locked+=("${name[$i]}  ${cur[$i]}")
+	if [[ "${kind[$i]}" == git ]]; then
+		source_locked+=("${name[$i]}  ${cur[$i]}")
+	elif [[ "${kind[$i]}" == ghrepo ]]; then
+		IFS=' ' read -r repo old_sha <<<"${cur[$i]}"
+		gh_repo+=("$repo"); gh_old_sha+=("$old_sha")
+		if ! new_sha=$(git ls-remote "https://github.com/${repo}.git" HEAD 2>/dev/null | cut -f1); then
+			printf 'dsh-update: 查询 %s 上游 HEAD 失败（检查网络）\n' "$repo" >&2
+			exit 2
+		fi
+		gh_new_sha+=("${new_sha:-$old_sha}")
+	fi
 done
 
 declare -a picked=()
 for i in "${!name[@]}"; do
-	if [[ "${kind[$i]}" == git ]]; then
+	if [[ "${kind[$i]}" != npm ]]; then
 		picked+=("")
 		continue
 	fi
@@ -190,6 +250,9 @@ done
 updates=0
 for i in "${!picked[@]}"; do
 	[[ -n "${picked[$i]}" ]] && updates=$((updates + 1))
+done
+for j in "${!gh_repo[@]}"; do
+	[[ "${gh_new_sha[$j]}" != "${gh_old_sha[$j]}" ]] && updates=$((updates + 1))
 done
 
 if ((updates == 0)); then
@@ -213,6 +276,11 @@ for i in "${!name[@]}"; do
 	printf '  %-*s %-11s -> %-12s [%-6s] %8sh  %s\n' \
 		"$width" "${name[$i]}" "${cur[$i]}" "$ver" "$tag" "$hours" "$note"
 	[[ $i -eq 0 ]] && printf '\n'
+done
+for j in "${!gh_repo[@]}"; do
+	[[ "${gh_new_sha[$j]}" != "${gh_old_sha[$j]}" ]] || continue
+	printf '  %-*s %s -> %s [github]\n' \
+		"$width" "${gh_repo[j]##*/}" "${gh_old_sha[$j]:0:7}" "${gh_new_sha[$j]:0:7}"
 done
 printf '\n  = 冷却内的版本由 pnpm 自动写入 minimumReleaseAgeExclude 豁免\n'
 print_source_locked
@@ -280,7 +348,21 @@ if ((${#plugin_args[@]})); then
 	pnpm_add "$WEB_DIR" 插件 "${plugin_args[@]}" || exit 1
 fi
 
-printf '\ndsh-update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml 原地写），请 git diff 后提交。\n'
+for j in "${!gh_repo[@]}"; do
+	repo="${gh_repo[$j]}" old_sha="${gh_old_sha[$j]}" new_sha="${gh_new_sha[$j]}"
+	[[ "$new_sha" != "$old_sha" ]] || continue
+	printf '\ndsh-update: 更新 github 插件 %s#%s\n' "$repo" "${new_sha:0:7}"
+	# spec 里只有 repo（无包名映射），包名从 package.json 找：github spec 的键
+	gpkg=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["dependencies"]; print(next((k for k,v in d.items() if v.startswith("github:"+sys.argv[2]+"#")), ""))' "$WEB_DIR/package.json" "$repo")
+	if [[ -z "$gpkg" ]]; then
+		printf 'dsh-update: 在 package.json 里找不到 repo %s 的依赖键，跳过\n' "$repo" >&2
+		continue
+	fi
+	migrate_allow_builds "$WEB_DIR" "$gpkg" "$old_sha" "$new_sha"
+	pnpm_add "$WEB_DIR" 插件 "github:${repo}#${new_sha}" || exit 1
+done
+
+printf '\ndsh-update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml / pnpm-lock.yaml），请 git diff 后提交。\n'
 printf 'dsh-update: 需重启 dsh web 才生效（host 半边不热载）。\n'
 
 if $do_restart; then

@@ -1,4 +1,9 @@
 # Your patch layer for this dsh profile, applied after every bundle layer:
 # a top-level YAML array of loader patch entries (id-targeted config
 # overrides, disables, and insert lists; `!!js` expressions allowed).
-[]
+# dsh-remote-web-gateway 调 ctx.connection.rpc.handle()，其内部在 connection
+# 插件自己的 scope 里解析 webServer（cordis shadow 语义），而 bundle 行只
+# inject 了 webRuntime → "cannot get property webServer without inject"。
+# 这里给 connection 行补上 webServer（inject 是整表替换，webRuntime 须复述）。
+- id: connection
+  inject: [webRuntime, webServer]

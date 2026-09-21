@@ -5,7 +5,11 @@
 # _cli 的 package.json（npm 方案 CLI 清单，本体 node_modules 是部署侧
 # 运行时产物）、三个 wrapper（.local/bin/dsh 启动、dsh-web 桌面入口、
 # dsh-update 更新）、desktop 条目与图标。
-# 运行时产物（凭据/存储/模块缓存/node_modules/lock）生成在
+# pnpm-lock.yaml 虽在源里（进 git 保证部署可复现），但 pnpm 的 Rust 端
+# 拒绝写软链 lockfile（Refusing to write symlinked lockfile），部署侧必须
+# 是真实文件，故这里仍剪枝；两侧同步由 dsh-update 在 pnpm 跑完后自动
+# 拷回仓库源完成。
+# 运行时产物（凭据/存储/模块缓存/node_modules）生成在
 # ~/.local/share/dsh 部署侧真实目录，不在源；若误放进源，这些规则让
 # stow 不把它们软链出去。
 # .credentials.yaml 含 API key，绝不入 git、绝不被 stow 链出。
