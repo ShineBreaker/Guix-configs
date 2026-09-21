@@ -1,7 +1,7 @@
 model:
-  default: glm-5.3-flash
-  provider: zai
-  base_url: https://open.bigmodel.cn/api/coding/paas/v4
+  default: step-5-preview
+  provider: stepfun
+  base_url: https://api.stepfun.com/step_plan/v1
 providers:
   minimax-cn:
     models:
@@ -78,6 +78,7 @@ browser:
   engine: auto
   auto_local_for_private_urls: true
   cdp_url: ''
+  use_real_profile: true
   dialog_policy: must_respond
   dialog_timeout_s: 300
   camofox:
@@ -88,7 +89,6 @@ browser:
     rewrite_loopback_urls: false
     loopback_host_alias: host.docker.internal
   cloud_provider: browser-use
-  use_real_profile: true
 checkpoints:
   enabled: true
   max_snapshots: 20
@@ -148,10 +148,6 @@ auxiliary:
     model: ''
     timeout: 60
     download_timeout: 30
-  web_extract:
-    provider: auto
-    model: ''
-    timeout: 60
   compression:
     provider: auto
     model: ''
@@ -200,6 +196,10 @@ auxiliary:
     model: ''
     base_url: ''
     api_key: ''
+    timeout: 60
+  web_extract:
+    provider: auto
+    model: ''
     timeout: 60
   session_search:
     model: ''
@@ -463,6 +463,19 @@ approvals:
   mcp_reload_confirm: true
   destructive_slash_confirm: false
 command_allowlist: []
+plugins:
+  hermes-memory-store:
+    auto_extract: 'true'
+    db_path: ~/.local/share/hermes/memory_store.db
+    default_trust: '0.5'
+    hrr_dim: '1024'
+  enabled:
+    - herdr-agent-state
+    - ponytail
+    - agenote
+    - gate
+    - global-context
+  disabled: []
 hooks_auto_accept: false
 security:
   allow_private_urls: true
@@ -588,19 +601,6 @@ platform_toolsets:
     - todo
     - vision
     - web
-plugins:
-  hermes-memory-store:
-    auto_extract: 'true'
-    db_path: ~/.local/share/hermes/memory_store.db
-    default_trust: '0.5'
-    hrr_dim: '1024'
-  enabled:
-    - herdr-agent-state
-    - ponytail
-    - agenote
-    - gate
-    - global-context
-  disabled: []
 session_reset:
   at_hour: 4
   idle_minutes: 1440
