@@ -37,7 +37,7 @@ process.stdout.write(
     hookSpecificOutput: {
       hookEventName: eventName,
       additionalContext:
-        "💡 commit message 需以 Co-authored-by trailer 结尾：Co-authored-by: ZCode (<你的模型名>) <noreply@z.ai>，请在 -m 信息末尾附加；格式详见 ~/.config/git/gitmessage",
+        "[commit 规范提示] commit message 需附带 Co-authored-by trailer：Co-authored-by: ZCode (<你的模型名>) <noreply@z.ai>，请在 -m 信息末尾附加；格式详见 ~/.config/git/gitmessage",
     },
   }),
 );

@@ -47,19 +47,19 @@ else
   SUMMARY="[anchors 防护规则已加载（源：~/.config/agents/anchors.json${PROJ_NAME}）]"
 fi
 
-FC="$(jq -r '.frozen_commands | if length>0 then "🚫 冻结命令（禁止执行，需提醒用户手动）：\n  " + (join("， ")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
+FC="$(jq -r '.frozen_commands | if length>0 then "[冻结命令] 禁止执行，需提示用户手动操作：\n  " + (join("， ")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$FC" ]] && SUMMARY+=$'\n\n'"$FC"
 
-FP="$(jq -r '.frozen_paths | if length>0 then "🚫 冻结路径（禁止写入，改 dotfiles 源后 blue home）：\n  " + ([.[] | if type == "string" then . else (.path + "〔cwd 在 " + (.unless_inside // "?") + " 内豁免〕") end] | join("， ")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
+FP="$(jq -r '.frozen_paths | if length>0 then "[冻结路径] 禁止写入，修改需改源码后执行 blue home：\n  " + ([.[] | if type == "string" then . else (.path + "〔cwd 在 " + (.unless_inside // "?") + " 内豁免〕") end] | join("， ")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$FP" ]] && SUMMARY+=$'\n\n'"$FP"
 
-RC="$(jq -r '.redirect_conventions | if length>0 then "💡 重定向建议：\n" + ([to_entries[] | "  " + .key + " → " + .value] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
+RC="$(jq -r '.redirect_conventions | if length>0 then "[重定向建议]\n" + ([to_entries[] | "  " + .key + " → " + .value] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$RC" ]] && SUMMARY+=$'\n\n'"$RC"
 
-PH="$(jq -r '.path_hints | if length>0 then "📝 路径提示（改后需对应操作）：\n" + ([to_entries[] | "  " + .key + " → " + .value] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
+PH="$(jq -r '.path_hints | if length>0 then "[路径提示] 修改后需执行联动操作：\n" + ([to_entries[] | "  " + .key + " → " + .value] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$PH" ]] && SUMMARY+=$'\n\n'"$PH"
 
-HO="$(jq -r '.human_only_actions | if length>0 then "👤 仅人工操作（agent 不可执行）：\n" + ([.[] | "  " + .] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
+HO="$(jq -r '.human_only_actions | if length>0 then "[仅人工操作] agent 不得执行：\n" + ([.[] | "  " + .] | join("\n")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$HO" ]] && SUMMARY+=$'\n\n'"$HO"
 
 # ─── 全局上下文（context-select.sh 决策注入）────────────────────────────────

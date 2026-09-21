@@ -1,12 +1,17 @@
 <context-index version="1">
 
-<!-- 领域上下文路由表：只回答「什么时候读哪个文件」，域内容以各文件为准，不在此重复。
-     识别到匹配任务时主动 Read 对应 file 全文；未匹配任何条目的会话只用 00-core 通用原则。 -->
+<!-- 领域上下文路由表：按任务场景按需读取对应文件，未匹配条目仅遵循 00-core 通用原则。 -->
 
 <domain name="coding" file="domains/coding.md">
-	<when>git 仓库内的编码、重构、调试、提交任务。zcode / omp / hermes 端由
-	context-select.sh 自动注入，无需手动拉取；crush 端无注入机制，识别到
-	编码任务时手动 Read 本文件。</when>
+	<when>Git 仓库内的编码、重构、调试与提交任务。zcode/omp/hermes/pi 端由 context-select.sh 自动注入；无自动注入机制的端手动读取本文件。</when>
+</domain>
+
+<domain name="verify" file="domains/verify.md">
+	<when>任务验证、交付与完工汇报。判定校验对象是否为真实交付物与真实使用路径。</when>
+</domain>
+
+<domain name="agent-ops" file="domains/agent-ops.md">
+	<when>不可逆操作、删除、凭据与跨会话状态变更。全平台恒定注入。</when>
 </domain>
 
 </context-index>

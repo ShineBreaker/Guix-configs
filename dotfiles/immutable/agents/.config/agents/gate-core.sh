@@ -261,22 +261,22 @@ gate_bash() {
 		hit="$(_match_frozen_in_segments "$segments" "$frozen_list")"
 		if [[ -n "$hit" ]]; then
 			if [[ "$hit" == "rm" ]]; then
-				emit BLOCK "🚫 rm 已冻结：agent 一律不直接删除文件。请改用 trash-put <path> / gio trash <path>，或 mv <path> /tmp/ 保留可恢复副本；确需永久删除请提醒用户手动执行。"
+				emit BLOCK "rm 已冻结：agent 一律不直接删除文件。请改用 trash-put <path> / gio trash <path>，或 mv <path> /tmp/ 保留可恢复副本；确需永久删除请提醒用户手动执行。"
 			else
 				# redirect_conventions 里声明了该冻结词的替代方案时附上（如 git apply → Edit 工具）
 				local ALT
 				ALT="$(jq -r --arg k "$hit" '.redirect_conventions[$k] // empty' <<<"$MERGED" 2>/dev/null)"
 				if [[ -n "$ALT" ]]; then
-					emit BLOCK "🚫 ${ALT}"
+					emit BLOCK "${ALT}"
 				else
-					emit BLOCK "🚫 冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
+					emit BLOCK "冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
 				fi
 			fi
 			return 0
 		fi
 	fi
 	if [[ "$check_cmd" == *guix* ]] && printf '%s' "$check_cmd" | grep -qE '\bsystem[[:space:]]+(reconfigure|init)\b'; then
-		emit BLOCK "🚫 禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
+		emit BLOCK "禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
 		return 0
 	fi
 
@@ -286,7 +286,7 @@ gate_bash() {
 		[[ -z "$name" ]] && continue
 		esc="$(sed_escape_re "$name")"
 		if printf '%s' "$CMD" | grep -qE "${PREFIX}${esc}\b"; then
-			emit BLOCK "🚫 禁止交互式命令 ${name}（无 TTY 会挂起），请使用对应工具"
+			emit BLOCK "禁止交互式命令 ${name}（无 TTY 会挂起），请使用对应工具"
 			return 0
 		fi
 	done < <(jq -r '.interactive_commands[]?' <<<"$MERGED" 2>/dev/null)
@@ -295,7 +295,7 @@ gate_bash() {
 		[[ -z "$name" ]] && continue
 		esc="$(sed_escape_re "$name")"
 		if printf '%s' "$CMD" | grep -qE "${PREFIX}${esc}[[:space:]]*$"; then
-			emit BLOCK "🚫 禁止裸 REPL ${name}，请使用 ${name} -c '...' 或脚本"
+			emit BLOCK "禁止裸 REPL ${name}，请使用 ${name} -c '...' 或脚本"
 			return 0
 		fi
 	done < <(jq -r '.bare_repl_commands[]?' <<<"$MERGED" 2>/dev/null)
@@ -303,16 +303,16 @@ gate_bash() {
 	# 1c Git 限制
 	if printf '%s' "$CMD" | grep -qE "${PREFIX}git[[:space:]]+commit\b"; then
 		if ! printf '%s' "$CMD" | grep -qE '([[:space:]]-m[[:space:]]|[[:space:]]--message[[:space:]])'; then
-			emit BLOCK "🚫 git commit 必须使用 -m 指定提交信息"
+			emit BLOCK "git commit 必须使用 -m 指定提交信息"
 			return 0
 		fi
 	fi
 	if printf '%s' "$CMD" | grep -qE "${PREFIX}git[[:space:]]+add[[:space:]].*-p\b"; then
-		emit BLOCK "🚫 禁止 git add -p（交互式）"
+		emit BLOCK "禁止 git add -p（交互式）"
 		return 0
 	fi
 	if printf '%s' "$CMD" | grep -qE "${PREFIX}git[[:space:]]+rebase[[:space:]].*-i\b"; then
-		emit BLOCK "🚫 禁止 git rebase -i（交互式）"
+		emit BLOCK "禁止 git rebase -i（交互式）"
 		return 0
 	fi
 
@@ -418,7 +418,7 @@ gate_bash() {
 		[[ -z "$pat" ]] && continue
 		if [[ "$CMD" == *"$pat"* ]] && [[ ${#pat} -gt ${#REDIRECT_PAT} ]]; then
 			REDIRECT_PAT="$pat"
-			REDIRECT_MSG="💡 ${msg}"
+			REDIRECT_MSG="${msg}"
 		fi
 	done < <(jq -r '.redirect_conventions | to_entries[] | "\(.key)\t\(.value)"' <<<"$MERGED" 2>/dev/null)
 	[[ -n "$REDIRECT_MSG" ]] && emit REDIRECT "$REDIRECT_MSG"
@@ -452,20 +452,20 @@ gate_edit() {
 		local GA_RESOLVED
 		GA_RESOLVED="$(resolve_path "$HOME/.config/agents/anchors.json" logical)"
 		if [[ "$LOGICAL" == "$GA_RESOLVED" ]]; then
-			emit BLOCK "🚫 全局 anchors.json 是冻结规则源（meta-frozen），禁止 agent 修改。如需调整全局冻结规则请人工编辑。"
+			emit BLOCK "全局 anchors.json 是冻结规则源（meta-frozen），禁止 agent 修改。如需调整全局冻结规则请人工编辑。"
 			return 0
 		fi
 		if [[ -f "$LOGICAL" ]]; then
 			local MF_KIND MF_SCOPE
 			MF_KIND="$(jq -r '._meta_frozen | type' "$LOGICAL" 2>/dev/null || printf 'null')"
 			if [[ "$MF_KIND" == "boolean" ]] && jq -e '._meta_frozen == true' "$LOGICAL" >/dev/null 2>&1; then
-				emit BLOCK "🚫 该 anchors.json 声明了 _meta_frozen，禁止 agent 修改（人工锁定的项目 gate）。如需调整请人工编辑。"
+				emit BLOCK "该 anchors.json 声明了 _meta_frozen，禁止 agent 修改（人工锁定的项目 gate）。如需调整请人工编辑。"
 				return 0
 			fi
 			if [[ "$MF_KIND" == "object" ]]; then
 				MF_SCOPE="$(jq -r '._meta_frozen.unless_inside // empty' "$LOGICAL" 2>/dev/null)"
 				if [[ -n "$MF_SCOPE" ]] && ! cwd_under "$MF_SCOPE"; then
-					emit BLOCK "🚫 该 anchors.json 声明了 _meta_frozen（cwd 不在 ${MF_SCOPE} 内），禁止 agent 修改。如需调整请人工编辑。"
+					emit BLOCK "该 anchors.json 声明了 _meta_frozen（cwd 不在 ${MF_SCOPE} 内），禁止 agent 修改。如需调整请人工编辑。"
 					return 0
 				fi
 			fi
@@ -492,14 +492,14 @@ gate_edit() {
 			# 条目常带尾斜杠；不剥掉会让 "$exp/"* 变双斜杠模式永不匹配
 			exp="${exp%/}"
 			if [[ "$LOGICAL" == "$exp" || "$LOGICAL" == "$exp/"* ]] || [[ "$PHYSICAL" == "$exp" || "$PHYSICAL" == "$exp/"* ]]; then
-				emit BLOCK "🚫 冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 blue home 生效。"
+				emit BLOCK "冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 blue home 生效。"
 				return 0
 			fi
 			;;
 		*)
 			if [[ $INSIDE -eq 1 && "$REL" == "$frozen"* ]] || [[ $INSP -eq 1 && "$RELP" == "$frozen"* ]] ||
 				[[ "$LOGICAL" == *"$frozen" ]] || [[ "$PHYSICAL" == *"$frozen" ]]; then
-				emit BLOCK "🚫 冻结路径「${frozen}」禁止 agent 写入（构建产物/锁文件/gate 规则源）。确需修改请人工编辑源文件。"
+				emit BLOCK "冻结路径「${frozen}」禁止 agent 写入（构建产物/锁文件/gate 规则源）。确需修改请人工编辑源文件。"
 				return 0
 			fi
 			;;
@@ -514,11 +514,11 @@ gate_edit() {
 			ere="$(glob_to_ere "$glob")"
 			if [[ "$glob" == */* ]]; then
 				if printf '%s\n' "$RELP" | grep -qE "$ere"; then
-					emit BLOCK "🚫 冻结 glob「${glob}」禁止写入（项目级 gate）。"
+					emit BLOCK "冻结 glob「${glob}」禁止写入（项目级 gate）。"
 					return 0
 				fi
 			elif printf '%s' "$BASENAME" | grep -qE "$ere"; then
-				emit BLOCK "🚫 冻结 glob「${glob}」禁止写入（项目级 gate）。"
+				emit BLOCK "冻结 glob「${glob}」禁止写入（项目级 gate）。"
 				return 0
 			fi
 		done < <(jq -r '.frozen_globs[]?' <<<"$MERGED" 2>/dev/null)
@@ -527,7 +527,7 @@ gate_edit() {
 	# 1d 部署位置保护（机器级）：~/.config/、~/.local/ 直改禁止，项目内豁免。
 	# 用逻辑路径——这些位置的 symlink 指向 store 是部署设计，不是攻击面。
 	if [[ "$LOGICAL" == "$HOME/.config/"* || "$LOGICAL" == "$HOME/.local/"* ]] && [[ $INSIDE -eq 0 ]]; then
-		emit BLOCK "🚫 禁止直接修改已部署位置（~/.config/ 或 ~/.local/）。请修改 dotfiles/ 源文件后运行 blue home。"
+		emit BLOCK "禁止直接修改已部署位置（~/.config/ 或 ~/.local/）。请修改 dotfiles/ 源文件后运行 blue home。"
 		return 0
 	fi
 

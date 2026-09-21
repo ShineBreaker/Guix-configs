@@ -22,7 +22,7 @@ deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 # ─── Phase 0: 读 stdin，fail-closed 解析 ─────────────────────────────────────
 # python3 缺失时无法解析输入，fail-closed 拦截（而非静默跳过路径/敏感检查）
-command -v python3 >/dev/null 2>&1 || deny "🚫 edit-gate：python3 不可用，无法解析输入（fail-closed 拦截）。"
+command -v python3 >/dev/null 2>&1 || deny "edit-gate：python3 不可用，无法解析输入（fail-closed 拦截）。"
 INPUT="$(cat 2>/dev/null || true)"
 
 eval "$(printf '%s' "$INPUT" | python3 -c "
@@ -43,7 +43,7 @@ print('CWD=' + shlex.quote(d.get('cwd') or ''))
 
 # JSON 非空但解析失败 → fail-closed
 if [[ "${PARSE_FAIL:-}" == "1" && -n "$INPUT" ]]; then
-  deny "🚫 edit-gate：stdin JSON 解析失败（fail-closed 拦截）。请重试或检查 hook 输入。"
+  deny "edit-gate：stdin JSON 解析失败（fail-closed 拦截）。请重试或检查 hook 输入。"
 fi
 
 FILE="${FILE:-}"
@@ -53,13 +53,13 @@ CWD="${CWD:-$PWD}"
 
 # ─── Phase 0.5: 人工总开关（最优先）────────────────────────────────────
 if [[ -f "$GATE_PAUSE_FILE" ]]; then
-  printf '{"additionalContext":"%s"}' "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  printf '{"additionalContext":"%s"}' "护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
   exit 0
 fi
 
 # ─── Phase 1: 调决策核（待检内容经 stdin 传入）──────────────────────────────
 if [[ ! -f "$CORE" ]]; then
-  printf '⚠ gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），路径与敏感信息检查降级跳过\n' >&2
+  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），路径与敏感信息检查降级跳过\n' >&2
   exit 0
 fi
 
@@ -70,7 +70,7 @@ HINTS=()
 while IFS=$'\t' read -r type payload; do
   case "$type" in
     BLOCK|SENSITIVE)
-      deny "🚫 $payload"
+      deny "$payload"
       ;;
     HINT)
       HINTS+=("$payload")

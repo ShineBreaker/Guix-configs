@@ -26,14 +26,14 @@ deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 # 人工总开关（最优先，覆盖核缺失保底）
 if [[ -f "$GATE_PAUSE_FILE" ]]; then
-  printf '{"context":"%s"}' "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  printf '{"context":"%s"}' "护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
   exit 0
 fi
 
 # 核未部署：sudo 保底 + stderr 提醒
 if [[ ! -f "$CORE" ]]; then
-  case "$CMD" in *sudo*) deny "🚫 冻结命令「sudo」禁止执行（gate-core 未部署，保底拦截）。" ;; esac
-  printf '⚠ gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），gate 仅保底 sudo 检查\n' >&2
+  case "$CMD" in *sudo*) deny "冻结命令「sudo」禁止执行（gate-core 未部署，保底拦截）。" ;; esac
+  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），gate 仅保底 sudo 检查\n' >&2
   exit 0
 fi
 

@@ -42,6 +42,8 @@ INJECT_MAP=(
 	"00-core.md|always"
 	"INDEX.md|always"
 	"domains/coding.md|git"
+	"domains/verify.md|git"
+	"domains/agent-ops.md|always"
 )
 
 in_git_repo() { # $1=起点目录

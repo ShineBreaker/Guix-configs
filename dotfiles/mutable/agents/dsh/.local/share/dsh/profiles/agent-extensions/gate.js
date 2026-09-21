@@ -157,7 +157,7 @@ export function apply(ctx, config = {}) {
 			const v = runCore(["bash", command], cwdOf(exec));
 			if (!v) {
 				if (SUDO_PATTERN.test(command)) {
-					return { kind: "deny", reason: "🚫 冻结命令「sudo」禁止执行（gate-core 异常，保底拦截）。" };
+					return { kind: "deny", reason: "冻结命令「sudo」禁止执行（gate-core 异常，保底拦截）。" };
 				}
 				return next();
 			}

@@ -23,7 +23,7 @@ deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 # ─── Phase 0: 读 stdin，fail-closed 解析 ─────────────────────────────────────
 # python3 缺失时无法解析输入，fail-closed 拦截（而非静默放行整条命令）
-command -v python3 >/dev/null 2>&1 || deny "🚫 bash-gate：python3 不可用，无法解析输入（fail-closed 拦截）。"
+command -v python3 >/dev/null 2>&1 || deny "bash-gate：python3 不可用，无法解析输入（fail-closed 拦截）。"
 INPUT="$(cat 2>/dev/null || true)"
 
 eval "$(printf '%s' "$INPUT" | python3 -c "
@@ -43,7 +43,7 @@ print('CWD=' + shlex.quote(d.get('cwd') or ''))
 
 # JSON 非空但解析失败 → fail-closed（此前 fail-open 是已知绕过面）
 if [[ "${PARSE_FAIL:-}" == "1" && -n "$INPUT" ]]; then
-  deny "🚫 bash-gate：stdin JSON 解析失败（fail-closed 拦截）。请重试或检查 hook 输入。"
+  deny "bash-gate：stdin JSON 解析失败（fail-closed 拦截）。请重试或检查 hook 输入。"
 fi
 
 CMD="${CMD:-}"
@@ -52,15 +52,15 @@ CWD="${CWD:-$PWD}"
 
 # ─── Phase 0.5: 人工总开关（最优先，覆盖核缺失保底）────────────────────
 if [[ -f "$GATE_PAUSE_FILE" ]]; then
-  printf '{"additionalContext":"%s"}' "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  printf '{"additionalContext":"%s"}' "护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
   exit 0
 fi
 
 # ─── Phase 1: 调决策核 ───────────────────────────────────────────────────────
 # 核未部署（blue home 未跑）：sudo 保底 + stderr 提醒，其余放行
 if [[ ! -f "$CORE" ]]; then
-  case "$CMD" in *sudo*) deny "🚫 冻结命令「sudo」禁止执行（gate-core 未部署，保底拦截）。" ;; esac
-  printf '⚠ gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），gate 仅保底 sudo 检查\n' >&2
+  case "$CMD" in *sudo*) deny "冻结命令「sudo」禁止执行（gate-core 未部署，保底拦截）。" ;; esac
+  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），gate 仅保底 sudo 检查\n' >&2
   exit 0
 fi
 

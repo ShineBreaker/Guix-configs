@@ -46,10 +46,10 @@ injectAgentsMd: true
 
 **Anti-patterns**：
 
-- ❌ 测私有方法 / mock 内部协作者
-- ❌ 断言用代码重算期望值（`expect(add(a,b)).toBe(a+b)`）
-- ❌ 先写全部测试再写实现（horizontal slicing）
-- ✅ 一个 test → 一个实现 → 重复（vertical slice）
+- 禁止测私有方法或 mock 内部协作者
+- 禁止断言用代码重算期望值（`expect(add(a,b)).toBe(a+b)`）
+- 禁止先写全部测试再写实现（横向切片）
+- 遵循单一测试推动单一实现后重复循环（纵向切片）
 
 ## Quality Floor
 

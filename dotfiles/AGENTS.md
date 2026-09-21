@@ -35,10 +35,10 @@ dotfiles/
 
 | 子目录                      | AGENTS.md | 主要职责                                                        |
 | --------------------------- | --------- | --------------------------------------------------------------- |
-| `immutable/agents/`         | ✅        | Crush 配置与跨 Agent 共享基础设施（context 注入、anchors 拦截） |
-| `immutable/desktop/`        | ✅        | 桌面环境：Niri 窗口管理器、autostart、xdg-portal、XFCE 辅助配置 |
-| `immutable/noctalia-suite/` | ❌        | 主题与外观适配（Darkman、Noctalia）                             |
-| `immutable/system/`         | ✅        | 系统级用户态配置：容器策略、PipeWire 音频、XDG 用户目录         |
-| `immutable/terminal/`       | ✅        | 终端工具链：Fish、Tmux、Foot、Kitty、Starship、Btop、Atuin 等   |
-| `immutable/utilities/`      | ✅        | 常用工具与开发环境：Fcitx5、Git、Helix、Pnpm、WinApps、GnuPG 等 |
-| `mutable/`                  | ✅        | 包含 Emacs、Agenote、DSH、Hermes、Pi、Secrets、Toolbox 等可变配置包 |
+| `immutable/agents/`         | 有        | Crush 配置与跨 Agent 共享基础设施（context 注入、anchors 拦截） |
+| `immutable/desktop/`        | 有        | 桌面环境：Niri 窗口管理器、autostart、xdg-portal、XFCE 辅助配置 |
+| `immutable/noctalia-suite/` | 无        | 主题与外观适配（Darkman、Noctalia）                             |
+| `immutable/system/`         | 有        | 系统级用户态配置：容器策略、PipeWire 音频、XDG 用户目录         |
+| `immutable/terminal/`       | 有        | 终端工具链：Fish、Tmux、Foot、Kitty、Starship、Btop、Atuin 等   |
+| `immutable/utilities/`      | 有        | 常用工具与开发环境：Fcitx5、Git、Helix、Pnpm、WinApps、GnuPG 等 |
+| `mutable/`                  | 有        | 包含 Emacs、Agenote、DSH、Hermes、Pi、Secrets、Toolbox 等可变配置包 |

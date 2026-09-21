@@ -30,14 +30,14 @@ deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 # 人工总开关（最优先）
 if [[ -f "$GATE_PAUSE_FILE" ]]; then
-  printf '{"context":"%s"}' "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  printf '{"context":"%s"}' "护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
   exit 0
 fi
 
 # 从 stdin JSON 提取待检内容（write/edit/multiedit 三形态）
 # python3 缺失或 JSON 非法 → fail-closed 拦截（crush 的输入恒为合法 JSON，
 # 异常态宁可误拦不可跳过敏感信息检查）
-command -v python3 >/dev/null 2>&1 || deny "🚫 edit-gate：python3 不可用（fail-closed 拦截）。"
+command -v python3 >/dev/null 2>&1 || deny "edit-gate：python3 不可用（fail-closed 拦截）。"
 INPUT="$(cat 2>/dev/null || true)"
 CONTENT="$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
@@ -55,11 +55,11 @@ elif 'edits' in ti:
 else:
     c = ''
 print(c if isinstance(c, str) else '', end='')
-" 2>/dev/null)" || deny "🚫 edit-gate：stdin JSON 解析失败（fail-closed 拦截）。"
+" 2>/dev/null)" || deny "edit-gate：stdin JSON 解析失败（fail-closed 拦截）。"
 
 # 核未部署：降级提醒（不再像旧版那样静默跳过路径保护）
 if [[ ! -f "$CORE" ]]; then
-  printf '⚠ gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），路径与敏感信息检查降级跳过\n' >&2
+  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），路径与敏感信息检查降级跳过\n' >&2
   exit 0
 fi
 
