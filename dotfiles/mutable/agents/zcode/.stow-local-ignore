@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# Zcode 包的忽略清单（Perl 正则，Stow 语法要点见 emacs/.stow-local-ignore 头注）。
+# 防止包内已出现或部署侧回流的运行态路径被逐文件软链进包源 / 部署到 $HOME。
+
+# 子模块 gitlink（文件，非目录）——绝不能软链到 ~；basename 精确为 .git
+\.git$
+
+# Zcode 运行态计划目录 plans/（对照根 .gitignore 的 plans/ 与 .zcode/plans）
+plans
+
+# assisted-by-zcode 插件的运行态目录（hook 状态 / 事件 / 报告），包内已实际出现
+\.mimosa$

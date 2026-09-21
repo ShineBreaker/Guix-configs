@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # Secrets — 加密入仓配置管理
 
 > 把个人凭证、API token、SSH 私钥等敏感信息**加密后**随仓库版本控制分发,
@@ -43,8 +47,6 @@ Guix-configs/
 │   ├── .local/bin/secrets                # CLI 实体 → Stow 到 ~/.local/bin
 │   ├── .local/share/bash-completion/
 │   └── .stow-local-ignore
-├── tools/
-│   └── secrets                           # 指向实体的兼容软链
 └── docs/
     └── secrets.md                        # 本文件(给人类)
 ```
@@ -213,7 +215,7 @@ secrets list                        # 应看到私钥已就位
 | 加密粒度   | 整文件                      | YAML/JSON 键级           | 整文件                      |
 | 跨机分发   | git pull + 私钥迁移         | git pull + 密钥服务/文件 | git pull + gpg key 同步     |
 | 适合场景   | 任意格式凭证                | 结构化配置(主要是 YAML)  | 密码管理器                  |
-| 已集成工具 | `tools/secrets`(本仓库自带) | sops CLI                 | pass CLI / 各种 UI          |
+| 已集成工具 | `secrets` CLI(本仓库自带) | sops CLI                 | pass CLI / 各种 UI          |
 
 如果将来需要键级加密(比如 terraform state 里只加密特定字段),再考虑迁移到
 sops。当前体量下 age 足够。
@@ -221,6 +223,6 @@ sops。当前体量下 age 足够。
 ## 10. 参考
 
 - [age 官方文档](https://age-encryption.org/)
-- [`secrets` 源码](../dotfiles/mutable/tools/secrets/.local/bin/secrets)（`tools/secrets` 为兼容软链）
+- [`secrets` 源码](../dotfiles/mutable/tools/secrets/.local/bin/secrets)
 - [`dotfiles/mutable/tools/secrets/AGENTS.md`](../dotfiles/mutable/tools/secrets/AGENTS.md) — 维护范式
 - [`keys/.gitignore`](../dotfiles/mutable/tools/secrets/.local/share/keys/.gitignore) — 私钥排除规则

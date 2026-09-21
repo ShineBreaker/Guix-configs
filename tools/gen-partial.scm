@@ -1,3 +1,7 @@
+;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+;;;
+;;; SPDX-License-Identifier: MIT
+
 ;;; gen-partial.scm — via `guix repl gen-partial.scm TARGET OUT-FILE [COMMIT]`
 ;;; 在 guix 的 Guile 环境里生成单频道刷新的临时 channels 文件，避免 blue 的
 ;;; Guile 环境缺少 (guix openpgp)/(gcrypt hash) 等模块导致宏展开失败。

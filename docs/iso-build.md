@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
 # ISO 自主打包机制
 
 > 一条 `blue build-iso` 命令,基于本仓库 `source/config.org` 打出 Live ISO 镜像, 产物落到 `dist/jeans-<variant>-<date>.<arch>.iso`。
