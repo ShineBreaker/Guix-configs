@@ -56,6 +56,10 @@
 #   * 词法类检查（交互式 / git / rm / 白名单）只对原始命令做精确匹配，
 #     不做归一化——避免 `echo "vim tips"` 这类字符串内容被误拦（rm 的
 #     路径形态检测除外，已排除引号内形态）。
+#   * frozen_paths / _meta_frozen 支持条件豁免 unless_inside：cwd 位于指定
+#     目录内时该条目不拦（决策核仓库内的会话可维护自己的规则源）。
+#     逐条目判定——近层加无条件条目即可恢复拦截（ratchet 只加不减不变）；
+#     豁免只能由人工维护的规则源声明，且 cwd 之外的会话仍被同一条目拦住。
 
 set -uo pipefail
 # 不用 -e：单个检查工具异常（如 jq 输出非预期）不应中断后续检查
@@ -213,6 +217,20 @@ resolve_path() {
 	fi
 }
 
+# cwd_under <dir>：GATE_CWD（缺省 $PWD）是否位于 dir 或其子树内。
+# ~/ 前缀按家目录展开；物理解析——防 cwd 经软链指向目标目录的形态误判。
+cwd_under() {
+	local base cwd
+	case "$1" in
+	"~") base="$HOME" ;;
+	"~/"*) base="${HOME}${1:1}" ;;
+	*) base="$1" ;;
+	esac
+	base="$(resolve_path "$base" physical)"
+	cwd="$(resolve_path "${GATE_CWD:-$PWD}" physical)"
+	[[ -n "$base" && ("$cwd" == "$base" || "$cwd" == "$base/"*) ]]
+}
+
 PREFIX='(^|[;&|()$]|&&|\|\|)[[:space:]]*'
 
 # ─── bash 命令判定 ───────────────────────────────────────────────────────────
@@ -245,7 +263,14 @@ gate_bash() {
 			if [[ "$hit" == "rm" ]]; then
 				emit BLOCK "🚫 rm 已冻结：agent 一律不直接删除文件。请改用 trash-put <path> / gio trash <path>，或 mv <path> /tmp/ 保留可恢复副本；确需永久删除请提醒用户手动执行。"
 			else
-				emit BLOCK "🚫 冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
+				# redirect_conventions 里声明了该冻结词的替代方案时附上（如 git apply → Edit 工具）
+				local ALT
+				ALT="$(jq -r --arg k "$hit" '.redirect_conventions[$k] // empty' <<<"$MERGED" 2>/dev/null)"
+				if [[ -n "$ALT" ]]; then
+					emit BLOCK "🚫 ${ALT}"
+				else
+					emit BLOCK "🚫 冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
+				fi
 			fi
 			return 0
 		fi
@@ -300,7 +325,7 @@ gate_bash() {
 		emit AUTO_ALLOW ""
 		return 0
 		;;
-	wc | sort | uniq | tr | cut | column | rev | tac | paste | comm | diff | patch)
+	wc | sort | uniq | tr | cut | column | rev | tac | paste | comm | diff)
 		emit AUTO_ALLOW ""
 		return 0
 		;;
@@ -343,7 +368,7 @@ gate_bash() {
 		local git_only_read=1 word
 		for word in $CMD; do
 			case "$word" in
-			commit | push | merge | rebase | reset | checkout | switch | cherry-pick | bisect | am | clean | format-patch)
+			commit | push | merge | rebase | reset | checkout | switch | cherry-pick | bisect | am | apply | clean | format-patch)
 				git_only_read=0
 				break
 				;;
@@ -421,6 +446,8 @@ gate_edit() {
 
 	# 1a meta-frozen：全局 anchors.json 或显式 _meta_frozen 的 anchors.json 禁改。
 	# 用逻辑路径比对——物理路径会解析到 /gnu/store，basename 与等值判断双双失效。
+	# _meta_frozen 支持 {"unless_inside": "<dir>"}：cwd 位于 dir 内时豁免
+	# （该仓库内的会话可维护自己的 anchors 规则源）。
 	if [[ "$BASENAME" == "anchors.json" ]]; then
 		local GA_RESOLVED
 		GA_RESOLVED="$(resolve_path "$HOME/.config/agents/anchors.json" logical)"
@@ -428,21 +455,42 @@ gate_edit() {
 			emit BLOCK "🚫 全局 anchors.json 是冻结规则源（meta-frozen），禁止 agent 修改。如需调整全局冻结规则请人工编辑。"
 			return 0
 		fi
-		if [[ -f "$LOGICAL" ]] && jq -e '._meta_frozen == true' "$LOGICAL" >/dev/null 2>&1; then
-			emit BLOCK "🚫 该 anchors.json 声明了 _meta_frozen，禁止 agent 修改（人工锁定的项目 gate）。如需调整请人工编辑。"
-			return 0
+		if [[ -f "$LOGICAL" ]]; then
+			local MF_KIND MF_SCOPE
+			MF_KIND="$(jq -r '._meta_frozen | type' "$LOGICAL" 2>/dev/null || printf 'null')"
+			if [[ "$MF_KIND" == "boolean" ]] && jq -e '._meta_frozen == true' "$LOGICAL" >/dev/null 2>&1; then
+				emit BLOCK "🚫 该 anchors.json 声明了 _meta_frozen，禁止 agent 修改（人工锁定的项目 gate）。如需调整请人工编辑。"
+				return 0
+			fi
+			if [[ "$MF_KIND" == "object" ]]; then
+				MF_SCOPE="$(jq -r '._meta_frozen.unless_inside // empty' "$LOGICAL" 2>/dev/null)"
+				if [[ -n "$MF_SCOPE" ]] && ! cwd_under "$MF_SCOPE"; then
+					emit BLOCK "🚫 该 anchors.json 声明了 _meta_frozen（cwd 不在 ${MF_SCOPE} 内），禁止 agent 修改。如需调整请人工编辑。"
+					return 0
+				fi
+			fi
 		fi
 	fi
 
 	# 1b frozen_paths：~/ 前缀按家目录展开；相对路径按 git root 前缀 + 任意
 	# 路径后缀（basename 等值，如 channel.lock）。逻辑/物理双查——物理路径
 	# 防「/tmp/软链 → 仓库冻结目录」中转写入。
-	local frozen exp
-	while IFS= read -r frozen; do
+	# 条目支持对象形式 {"path": ..., "unless_inside": "<dir>"}：cwd 位于 dir
+	# 内时该条不拦（逐条目判定，近层加无条件条目即可恢复拦截——ratchet 保持）。
+	local frozen unless exp entry
+	while IFS= read -r entry; do
+		[[ -z "$entry" ]] && continue
+		frozen="$(jq -r 'if type == "string" then . else (.path // empty) end' <<<"$entry" 2>/dev/null)"
 		[[ -z "$frozen" ]] && continue
+		unless="$(jq -r 'if type == "object" then (.unless_inside // empty) else empty end' <<<"$entry" 2>/dev/null)"
+		if [[ -n "$unless" ]] && cwd_under "$unless"; then
+			continue
+		fi
 		case "$frozen" in
 		"~/"*)
 			exp="${HOME}${frozen:1}"
+			# 条目常带尾斜杠；不剥掉会让 "$exp/"* 变双斜杠模式永不匹配
+			exp="${exp%/}"
 			if [[ "$LOGICAL" == "$exp" || "$LOGICAL" == "$exp/"* ]] || [[ "$PHYSICAL" == "$exp" || "$PHYSICAL" == "$exp/"* ]]; then
 				emit BLOCK "🚫 冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 blue home 生效。"
 				return 0
@@ -456,7 +504,7 @@ gate_edit() {
 			fi
 			;;
 		esac
-	done < <(jq -r '.frozen_paths[]?' <<<"$MERGED" 2>/dev/null)
+	done < <(jq -c '.frozen_paths[]?' <<<"$MERGED" 2>/dev/null)
 
 	# 1c frozen_globs：含 / 的对相对路径匹配，不含 / 的对 basename 匹配
 	if [[ $INSP -eq 1 ]]; then

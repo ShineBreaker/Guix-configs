@@ -1,6 +1,6 @@
 {
-  "_comment": "项目级 gate（Guix-configs 专属）。由 pi-gate 从 ctx.cwd 向上遍历加载，相对路径按本仓库根目录解析。ratchet 模型：只能在全局规则之上加码，无法移除全局/代码底层（sudo 等）。_meta_frozen：本文件与全局 anchors 一样禁止 agent 修改，调整须人工编辑（防止被诱导削弱冻结清单后生效）。",
-  "_meta_frozen": true,
+  "_comment": "项目级 gate（Guix-configs 专属）。由 pi-gate 从 ctx.cwd 向上遍历加载，相对路径按本仓库根目录解析。ratchet 模型：只能在全局规则之上加码，无法移除全局/代码底层（sudo 等）。_meta_frozen 支持 {\"unless_inside\": \"<dir>\"}：cwd 位于该目录内时 agent 可维护本文件（本仓库是决策核源仓库，仓库内会话即人工在场场景）；仓库外的会话仍禁止修改。决策核路径（dotfiles 下 gate/hooks/pi-gate 目录）的冻结职责已移交全局 anchors.json 的 unless_inside 条目：仅在本仓库外拦截。",
+  "_meta_frozen": {"unless_inside": "~/Projects/Config/Guix-configs"},
   "frozen_commands": [
     "blue rebuild",
     "blue init",
@@ -10,11 +10,7 @@
   ],
   "frozen_paths": [
     "tmp/",
-    "channel.lock",
-    "dotfiles/immutable/agents/.config/agents/",
-    "dotfiles/mutable/agents/zcode/.zcode/hooks/",
-    "dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/",
-    "dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/"
+    "channel.lock"
   ],
   "frozen_globs": [],
   "redirect_conventions": {

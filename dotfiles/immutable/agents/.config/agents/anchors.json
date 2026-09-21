@@ -1,5 +1,5 @@
 {
-  "_comment": "全局 agent 防护规则（跨所有 workspace 的通用约束，与仓库无关）。仓库专属规则（blue/guix/channel.lock/tmp/dotfiles/source 等）在各 <root>/.agents/anchors.json。代码底层（sudo 恒冻、git 写操作限制、~/.config·~/.local 部署位置保护）在各 hook 脚本硬编、恒定生效；rm 冻结在此声明（agent 一律走 trash-put / mv /tmp，不给直接删除能力）。本文件承载可配置的数据驱动规则，meta-frozen：agent 禁止通过 write/edit 修改它，调整须人工编辑源文件后 blue home。",
+  "_comment": "全局 agent 防护规则（跨所有 workspace 的通用约束，与仓库无关）。仓库专属规则（blue/guix/channel.lock/tmp/dotfiles/source 等）在各 <root>/.agents/anchors.json。代码底层（sudo 恒冻、git 写操作限制、~/.config·~/.local 部署位置保护）在各 hook 脚本硬编、恒定生效；rm 冻结在此声明（agent 一律走 trash-put / mv /tmp，不给直接删除能力）。本文件承载可配置的数据驱动规则，meta-frozen：agent 禁止通过 write/edit 修改它，调整须人工编辑源文件后 blue home。frozen_paths 条目支持对象形式 {\"path\", \"unless_inside\"}：cwd 位于 unless_inside 目录内时该条豁免（下方决策核路径仅在 Guix-configs 仓库外冻结——该仓库内的会话可维护决策核源码；仓库外的会话仍被拦截）。",
   "frozen_commands": [
     "sudo",
     "guix install",
@@ -39,13 +39,16 @@
     "git push --force",
     "git push -f",
     "git reset --hard",
-    "git clean"
+    "git clean",
+    "git apply",
+    "git am",
+    "patch"
   ],
   "frozen_paths": [
-    "~/Projects/Config/Guix-configs/dotfiles/immutable/agents/.config/agents/",
-    "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/hooks/",
-    "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/",
-    "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/"
+    {"path": "~/Projects/Config/Guix-configs/dotfiles/immutable/agents/.config/agents/", "unless_inside": "~/Projects/Config/Guix-configs"},
+    {"path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/hooks/", "unless_inside": "~/Projects/Config/Guix-configs"},
+    {"path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/", "unless_inside": "~/Projects/Config/Guix-configs"},
+    {"path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/", "unless_inside": "~/Projects/Config/Guix-configs"}
   ],
   "frozen_globs": [],
   "interactive_commands": [
@@ -86,7 +89,11 @@
       "label": "疑似 GitHub token"
     }
   ],
-  "redirect_conventions": {},
+  "redirect_conventions": {
+    "git apply": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定",
+    "git am": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定",
+    "patch": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定"
+  },
   "rewrite": {},
   "path_hints": {},
   "builtin_rewrite": true,
