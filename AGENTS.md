@@ -17,6 +17,7 @@ Guix-configs///
 ├── .gitattributes
 ├── .gitignore
 ├── .gitmodules
+├── .zcodeignore
 ├── CLAUDE.md
 ├── LICENSE
 ├── README.org
