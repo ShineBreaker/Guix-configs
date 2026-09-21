@@ -171,6 +171,9 @@ blue build
 <<root-one-shot-service-helpers>>
 <<flatpak-service-helpers>>
 
+;; 定时备份脚本
+<<kb-backup-script>>
+
 ;; 自定义变体包
 <<cachyos-lts-kernel>>
 <<fingerprint-packages>>
@@ -272,6 +275,36 @@ blue build
    " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
    " && exec " flatpak "/bin/flatpak"
    " update --" scope " -y"))
+#+end_src
+
++ 每日备份脚本（ =kb-backup= timer 专用）：对 Guix-configs 的 hermes 包与 =~/Documents/Org= 知识库各自 =git add= 后，无变更即静默跳过、有变更则按既有风格 =git commit= ；任一步 git 命令失败（如 index.lock 冲突、gpg 签名失败）只向 =~/.cache/kb-backup.log= 追加一条带时间戳的 warning 并继续下一步，整体退出码恒为 0。
+  git 与 gpg 通过脚本内 PATH 前缀（home profile + system profile）定位，不依赖 shepherd 运行环境；提交签名沿用用户 gitconfig（ =commit.gpgsign= ）。
+#+NAME: kb-backup-script
+#+begin_src scheme
+
+(define (%kb-backup-script)
+  (mixed-text-file
+   "kb-backup.sh"
+   "#!/bin/sh\n"
+   "# kb-backup: hermes + Org 知识库每日自动 commit, 日志追加 ~/.cache/kb-backup.log\n"
+   "PATH=\"$HOME/.guix-home/profile/bin:/run/current-system/profile/bin:$PATH\"\n"
+   "log=\"$HOME/.cache/kb-backup.log\"\n"
+   "mkdir -p \"$(dirname \"$log\")\"\n"
+   "warn() { echo \"[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1\" >>\"$log\"; }\n"
+   "\n"
+   ;; hermes 包: 仅 add 该子目录, 避免吞并用户未提交的 WIP
+   "(\n"
+   "  cd /data/Projects/Config/Guix-configs || exit 1\n"
+   "  git add dotfiles/mutable/agents/hermes || exit 1\n"
+   "  git diff --cached --quiet || git commit -m \"chore(hermes): backup $(date)\" || exit 1\n"
+   ") >>\"$log\" 2>&1 || warn \"hermes 备份失败, 详见上方 git 输出\"\n"
+   "\n"
+   ;; Org 知识库: agenote 卡片仓库, 本地无 remote, add -A 安全
+   "(\n"
+   "  cd /home/brokenshine/Documents/Org || exit 1\n"
+   "  git add -A || exit 1\n"
+   "  git diff --cached --quiet || git commit -m \"chore(backup): auto $(date '+%Y-%m-%d %H:%M:%S')\" || exit 1\n"
+   ") >>\"$log\" 2>&1 || warn \"Org 知识库备份失败, 详见上方 git 输出\"\n"))
 #+end_src
 
 *** 自定义包与补丁
@@ -404,6 +437,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
               <<hermes-services>>
               <<cpu-dma-latency-service>>
               <<timer-services>>
+              <<kb-backup-services>>
               <<emacs-services>>
               <<fish-services>>
               <<dotfile-services>>
@@ -2550,6 +2584,7 @@ done
 目前的计时器任务如下：
 + 每周六 18:00 自动更新 flatpak 用户安装的软件包，仅在使用外接电源时执行。
 + 每周日 19:30 清理 Nix 用户 profiles 中 14 天前的旧 generation 并回收 store（在 18:00 的 guix-gc 之后错峰执行）。
++ 每晚 22:00 自动 commit hermes 包与 Org 知识库（agenote 卡片）变更（ =kb-backup= ，脚本与日志见下），落在周六 18:00 flatpak 更新、周日 19:30 nix-gc 的维护窗口之外，与其余 timer 错峰。
 
 #+NAME: timer-services
 #+begin_src scheme
@@ -2569,6 +2604,17 @@ done
                                                          #:minutes '(30))
                                        #~("/run/current-system/profile/bin/nix-collect-garbage"
                                           "--delete-older-than" "14d")))))
+#+end_src
+
+kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services= 平级，经下方 =%home= 的 services append 生效，运行效果等同于并入上方 list 成为第三个元素）：每晚 22:00 执行 =kb-backup-script= ；无变更时静默跳过，任一步 git 失败仅记 warning，不中断后续步骤。
+
+#+NAME: kb-backup-services
+#+begin_src scheme
+(list (simple-service 'kb-backup home-shepherd-service-type
+                      (list (shepherd-timer '(kb-backup)
+                                            #~(calendar-event #:hours '(22)
+                                                              #:minutes '(0))
+                                            #~("/bin/sh" #$(%kb-backup-script))))))
 #+end_src
 
 *** dotfiles 管理相关服务
