@@ -43,7 +43,7 @@ Guix-configs///
 1. **就近原则**：更近目录的 `AGENTS.md` 优先生效；文档若与仓库实际结构冲突，以源码为准。
 2. **只改源码**：禁止直接修改 `~/.config/`、`~/.local/` 等已部署位置，一律修改仓库中的配置源文件。
 3. **immutable 部署**（`dotfiles/immutable/`）：构建时复制进 `/gnu/store` 只读副本再软链到 `$HOME`。**改源后不会自动生效**，必须运行 `blue home` 重建；验证可用 `md5sum` 对比源码与部署文件。
-4. **mutable 部署**（`dotfiles/mutable/`：`agents/`、`emacs`、`lem`、`tools/` 下的各包）：GNU Stow 直链仓库源码，改源即时生效，无需运行 `blue home`。
+4. **mutable 部署**（`dotfiles/mutable/`：`agents/`、`agenote/`、`emacs`、`tools/` 下的各包）：GNU Stow 直链仓库源码，改源即时生效，无需运行 `blue home`。
 5. **权限限制**：禁止 agent 自行执行 `blue rebuild` 或 `guix system reconfigure`（需要 sudo 权限）；调试仅允许运行 `blue home`，确认无误后提醒用户手动 rebuild 固化。切勿绕过 `blue` 直接调用 `guix`（确保频道锁定）。
 6. **文件操作禁区**：禁止手动编辑 `tmp/` 下的任何生成物和 `source/channel.lock`（由 `blue update` 自动生成）；禁止直接编辑子模块内容；禁止将 mutable 文件放入 immutable 目录（避免双重部署冲突）。
 7. 命令清单以 `blue list` 为准，单命令详情见 `blue help <命令>`。

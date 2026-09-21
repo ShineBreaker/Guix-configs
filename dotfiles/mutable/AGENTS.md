@@ -7,7 +7,7 @@
 | **部署方式**     | Guix Home 复制进 store 只读副本     | `blue stow` 直接软链到仓库源             |
 | **目标目录形态** | 指向 store 的只读链接               | 真实目录（`--no-folding` 单文件软链）    |
 | **生效机制**     | 必须运行 `blue home` 重建           | 保存源码立即生效                         |
-| **适用场景**     | 稳定系统与桌面组件（Niri、Fish 等） | 高频调试与动态应用（Emacs、Lem、DSH 等） |
+| **适用场景**     | 稳定系统与桌面组件（Niri、Fish 等） | 高频调试与动态应用（Emacs、DSH 等）      |
 
 ## 部署模型与机制
 
@@ -47,10 +47,6 @@ mutable/
 │   ├── .local/
 │   ├── .stow-local-ignore
 │   └── .stow-package
-├── lem/
-│   ├── .config/
-│   ├── .stow-local-ignore
-│   └── .stow-package
 └── tools/
     ├── appimage-run/
     ├── blue/
@@ -65,7 +61,6 @@ mutable/
 | 软件包               | 部署目标                                                                       | 说明与手册                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `emacs`              | `~/.config/emacs/`                                                             | 单一 `emacs.org` 驱动的 Emacs 配置，详见 [emacs/.../AGENTS.md](emacs/.config/emacs/AGENTS.md)                    |
-| `lem`                | `~/.config/lem/`                                                               | Common Lisp 编辑器配置，详见 [lem/.../AGENTS.md](lem/.config/lem/AGENTS.md)                                      |
 | `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh*` + 图标/desktop 项                  | DeepSeek Harness 配置层与 CLI/Web 包装器，详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)                             |
 | `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes*`                              | Hermes Agent 提示词、配置、插件与启动项                                                                          |
 | `agents/omp`         | `~/.config/omp/`                                                               | OMP Agent 配置与扩展                                                                                             |

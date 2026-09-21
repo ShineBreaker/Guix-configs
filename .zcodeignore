@@ -34,8 +34,10 @@ uv.lock
 !.agents/anchors.json
 .mimosa/
 .video_agent/
-dotfiles/mutable/lem/.config/lem/.agents/workfile/
 dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.locks/
+
+# rope（Emacs rope 插件）本地运行残留
+.ropeproject
 
 # ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
 .git/

@@ -34,5 +34,7 @@ uv.lock
 !.agents/anchors.json
 .mimosa/
 .video_agent/
-dotfiles/mutable/lem/.config/lem/.agents/workfile/
 dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.locks/
+
+# rope（Emacs rope 插件）本地运行残留
+.ropeproject

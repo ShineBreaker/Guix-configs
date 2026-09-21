@@ -56,7 +56,7 @@ Tmux 终端布局：
 | 终端       | =Kitty= / =Foot=              |
 | 终端复用器 | =Tmux=                        |
 | Shell      | =Fish=                        |
-| 编辑器     | =Emacs= / =Lem= / =Zed= / =Helix= |
+| 编辑器     | =Emacs= / =Zed= / =Helix= |
 | 输入法     | =Fcitx5= + =Rime=             |
 | 字体       | =Sarasa Gothic= / =Maple Mono= |
 
@@ -88,11 +88,11 @@ passwd
 
 - =blue rebuild= ：tangle → 括号平衡检查 → 单次 reconfigure 同时应用系统与 Home（需要 sudo）。
 - =blue home= ：仅构建并应用 Home 层配置，更新 immutable dotfiles，无需 sudo。
-- =blue stow= / =blue stow-all= ：管理 GNU Stow mutable dotfiles（Emacs、Lem、Agent 配置等），改源即时生效。
+- =blue stow= / =blue stow-all= ：管理 GNU Stow mutable dotfiles（Emacs、Agent 配置等），改源即时生效。
 - =blue check= ：快速检查 Scheme 块括号平衡，精准定位出错块。
 - =blue update= ：刷新频道锁并签名提交； =blue pull= 执行 =guix pull= 。
 
-完整命令清单可直接运行 =blue help= 查看。任何 blue 构建命令追加 =--dry-run= 均只做干跑验证，不写入系统。
+完整命令清单可直接运行 =blue list= 查看。任何 blue 构建命令追加 =--dry-run= 均只做干跑验证，不写入系统。
 
 * 仓库导读
 
@@ -104,12 +104,12 @@ passwd
 | 用户名、机器 ID、持久化目录与子卷  | [[./source/information.scm][source/information.scm]]                  | 装机必改，集中声明全局变量           |
 | 频道定义与版本锁定                 | [[./source/channel.scm][source/channel.scm]]、[[./source/channel.lock][source/channel.lock]] | lock 由 =blue update= 自动生成       |
 | 引导环境包清单                     | [[./source/manifest.scm][source/manifest.scm]]                     | 供 =tools/bootstrap.sh= 使用         |
-| 需路径注入的静态模板               | [[./source/files/][source/files/]]                           | nftables、Qt 主题、zed.json、skel 等 |
+| 需路径注入的静态模板               | [[./source/files/][source/files/]]                           | gpg-agent.conf、zed.json、Qt 图标、kernel/、livecd/ 等 |
 | 备用 Nix home-manager              | [[./source/nix/][source/nix/]]                             | 独立 flake，不经 blue 构建           |
 | blue 任务定义                      | [[./blueprint.scm][blueprint.scm]]                           | 扩展与自定义 blue 子命令             |
 | 不可变 dotfiles（store 只读）      | [[./dotfiles/immutable/][dotfiles/immutable/]]                     | 改源后须执行 =blue home= 重建生效    |
 | 可变 dotfiles（Stow 直链）         | [[./dotfiles/mutable/][dotfiles/mutable/]]                       | 软链到源码，改源即时生效             |
-| 专题文档                           | [[./docs/][docs/]]                                   | 自建 ISO 与机密管理指南              |
+| 专题文档                           | [[./docs/][docs/]]                                   | 自建 ISO、机密管理、应急恢复指南    |
 | 引导与辅助脚本                     | [[./tools/][tools/]]                                  | 包含 =bootstrap.sh= 与构建脚本       |
 
 各主要子目录均包含一份 =AGENTS.md= 分层导读，供人类开发者与 AI Agent 快速索引。
