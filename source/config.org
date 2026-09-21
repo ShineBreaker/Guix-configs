@@ -2055,7 +2055,6 @@ polkit.addRule(function(action, subject) {
    ;; 编辑器
    "fresh-editor-bin"
    "helix-steel"
-   "lem-next"
    "zedg-bin"
    "zedg-bin:shim"
 
@@ -2344,7 +2343,6 @@ _    _  _  _  _  _  _  _)
            '(;; Emacs 核心与基础
              "emacs-gcmh"
              "emacs-no-littering"
-             "emacs-next-pgtk:doc"
 
              ;; 界面与外观
              "emacs-dashboard"
