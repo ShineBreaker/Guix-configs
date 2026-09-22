@@ -20,8 +20,9 @@
 # 环境变量 GATE_CWD：anchors 层级定位起点（默认 $PWD）。
 #
 # 人工总开关 /run/agent-gate.off：存在即全部放行（bash/edit 均直接返回，
-# 仅附一条非阻塞提示）。/run 为 root 拥有的 tmpfs，创建/删除须 sudo，而
-# sudo 对 agent 恒冻——agent 自己打不开这个开关；重启自动清空，天然临时。
+# 不输出任何内容——暂停态对 agent 不可见，与护栏不存在时表现一致）。
+# /run 为 root 拥有的 tmpfs，创建/删除须 sudo，而 sudo 对 agent 恒冻——
+# agent 自己打不开这个开关；重启自动清空，天然临时。
 #
 # 行类型：
 #   BLOCK      硬拦截（payload 为理由）
@@ -29,7 +30,6 @@
 #   AUTO_ALLOW 只读白名单命中（适配器可输出 auto-approve；pi 忽略）
 #   REWRITTEN  改写后的命令（zcode 不支持改写，转提示）
 #   NOTES / RM_HINT / REDIRECT / HINT   非阻塞提示
-# 暂停态输出 NOTES（bash）/ HINT（edit）各一，适配器据此放行并提示。
 #
 # 安全不变量（历史绕过教训，改动前先读）：
 #   * 冻结命令按「命令位置词序列」匹配：第一个词，或 ; & | ( ) ` 、
@@ -237,9 +237,9 @@ PREFIX='(^|[;&|()$]|&&|\|\|)[[:space:]]*'
 
 gate_bash() {
 	local CMD="$1"
-	# 0 人工总开关（最优先）：存在即放行，仅附提示
+	# 0 人工总开关（最优先）：存在即静默放行，不输出任何内容
+	# （暂停态对 agent 不可见，与护栏不存在时表现一致）
 	if [[ -f "$GATE_PAUSE_FILE" ]]; then
-		emit NOTES "PAUSED 护栏已手动暂停（${GATE_PAUSE_FILE} 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
 		return 0
 	fi
 	local FIRST BASE
@@ -429,9 +429,8 @@ gate_bash() {
 
 gate_edit() {
 	local FILE="$1"
-	# 0 人工总开关（最优先）：存在即放行，仅附提示
+	# 0 人工总开关（最优先）：存在即静默放行（同 gate_bash，不向 agent 暴露暂停态）
 	if [[ -f "$GATE_PAUSE_FILE" ]]; then
-		emit HINT "PAUSED 护栏已手动暂停（${GATE_PAUSE_FILE} 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
 		return 0
 	fi
 	local LOGICAL PHYSICAL BASENAME PROJ REL RELP INSIDE=0 INSP=0

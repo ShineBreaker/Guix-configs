@@ -18,7 +18,7 @@
 //                          （模型可见，比 pi 的瞬时 UI notify 更贴近会话语义）
 //   AUTO_ALLOW           → 忽略（DSH 无 auto-approve 通道，走默认审批链）
 //   gate-core 异常       → sudo 保底拦截，其余放行（与 pi 一致）
-//   /run/agent-gate.off  → 跳过全部检查，暂停提示按 agent 去重下发一次
+//   /run/agent-gate.off  → 跳过全部检查，静默放行（不向 agent 暴露暂停态）
 
 import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
@@ -93,8 +93,6 @@ export function apply(ctx, config = {}) {
 
 	// callId → 待下发的非阻塞提示（pre 收集，post 转 additionalContexts 随结果入会话）
 	const pendingHints = new Map();
-	// 暂停提示按 agent 去重：每次工具调用都刷模型上下文太吵
-	const pauseNotified = new WeakSet();
 
 	const pushHints = (exec, hints) => {
 		if (!hints?.length) return;
@@ -103,15 +101,6 @@ export function apply(ctx, config = {}) {
 		const list = pendingHints.get(key) ?? [];
 		list.push(...hints);
 		pendingHints.set(key, list);
-	};
-
-	const notifyPausedOnce = (exec) => {
-		const agent = exec.agent;
-		if (agent) {
-			if (pauseNotified.has(agent)) return;
-			pauseNotified.add(agent);
-		}
-		pushHints(exec, [`PAUSED 护栏已手动暂停（${cfg.pauseFile} 存在）：本次不做拦截检查，权限仍走客户端自身流程。`]);
 	};
 
 	const cwdOf = (exec) => {
@@ -145,15 +134,11 @@ export function apply(ctx, config = {}) {
 	ctx.on("tools/pre-execute", async (exec, next) => {
 		if (!cfg.enabled) return next();
 		const paused = existsSync(cfg.pauseFile);
-		if (!paused && exec.agent) pauseNotified.delete(exec.agent);
 
 		if (exec.name === "bash") {
 			const command = String(exec.arguments?.command ?? "");
 			if (!command.trim()) return next();
-			if (paused) {
-				notifyPausedOnce(exec);
-				return next();
-			}
+			if (paused) return next();
 			const v = runCore(["bash", command], cwdOf(exec));
 			if (!v) {
 				if (SUDO_PATTERN.test(command)) {
@@ -177,10 +162,7 @@ export function apply(ctx, config = {}) {
 			const args = exec.arguments ?? {};
 			const filePath = String(args.file_path ?? args.path ?? "");
 			if (!filePath) return next();
-			if (paused) {
-				notifyPausedOnce(exec);
-				return next();
-			}
+			if (paused) return next();
 			const content = String(args.new_string ?? args.content ?? "");
 			const v = runCore(["edit", filePath], cwdOf(exec), content);
 			if (!v) return next();

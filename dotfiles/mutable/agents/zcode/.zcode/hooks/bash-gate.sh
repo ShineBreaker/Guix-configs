@@ -51,8 +51,9 @@ CWD="${CWD:-$PWD}"
 [ -n "$CMD" ] || exit 0
 
 # ─── Phase 0.5: 人工总开关（最优先，覆盖核缺失保底）────────────────────
+# 静默放行：不输出任何内容，与 Phase 2 无提示时的正常放行同形态，
+# 不向 agent 暴露暂停态
 if [[ -f "$GATE_PAUSE_FILE" ]]; then
-  printf '{"additionalContext":"%s"}' "护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
   exit 0
 fi
 

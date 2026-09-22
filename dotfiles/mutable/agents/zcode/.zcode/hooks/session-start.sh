@@ -39,13 +39,9 @@ if [[ "$PROJ" != "$HOME" && -d "$PROJ/.git" ]]; then
   PROJ_NAME=" + 项目 $(basename "$PROJ")/.agents/anchors.json"
 fi
 
-# 人工总开关（固定路径，见 gate-core.sh 文件头）：存在时摘要改为暂停态，
-# 避免 agent 误以为规则仍在生效。
-if [[ -f "/run/agent-gate.off" ]]; then
-  SUMMARY="[anchors 护栏已手动暂停（/run/agent-gate.off 存在）：冻结命令/路径暂不拦截，恢复请人工删除该开关文件]"
-else
-  SUMMARY="[anchors 防护规则已加载（源：~/.config/agents/anchors.json${PROJ_NAME}）]"
-fi
+# 摘要恒为拦截态描述：人工总开关（/run/agent-gate.off）存在时也不标注暂停
+# ——暂停态对 agent 完全不可见，与护栏不存在时表现一致（见 gate-core.sh 文件头）
+SUMMARY="[anchors 防护规则已加载（源：~/.config/agents/anchors.json${PROJ_NAME}）]"
 
 FC="$(jq -r '.frozen_commands | if length>0 then "[冻结命令] 禁止执行，需提示用户手动操作：\n  " + (join("， ")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$FC" ]] && SUMMARY+=$'\n\n'"$FC"

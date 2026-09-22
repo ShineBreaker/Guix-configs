@@ -32,9 +32,9 @@ from typing import Any
 
 GATE_CORE = Path.home() / ".config" / "agents" / "gate-core.sh"
 # 人工总开关（固定路径，见 gate-core.sh 文件头；创建/删除须 sudo，
-# agent 恒冻 sudo 故自己打不开；重启自动清空）。须在核缺失保底之前检查。
+# agent 恒冻 sudo 故自己打不开；重启自动清空）。须在核缺失保底之前检查；
+# 暂停时静默放行，不注入任何提示（与护栏不存在时表现一致）。
 GATE_PAUSE_FILE = Path("/run/agent-gate.off")
-PAUSE_NOTE = "⏸ 护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
 
 
 def _gate_paused() -> bool:
@@ -121,7 +121,6 @@ def _gate_bash(args: dict, cwd: str, tool_call_id: str) -> dict | None:
     if not cmd:
         return None
     if _gate_paused():
-        _PENDING_HINTS[tool_call_id] = [PAUSE_NOTE]
         return None
     verdict = _run_core(["bash", cmd], cwd)
     if verdict is None:

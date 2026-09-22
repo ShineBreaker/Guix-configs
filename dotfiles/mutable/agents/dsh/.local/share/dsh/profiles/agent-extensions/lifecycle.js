@@ -12,9 +12,10 @@
 //
 // 「dsh 服务进程」的判据：cmdline 指向 dsh/lib/bin.js，且在 ss -tlnp 的监听表
 // 里有条目。CLI 短命令（dsh plugin 等）不监听端口，天然被排除；只匹配 cmdline
-// 不够，因为 dsh-web 包装器与一次性 CLI 的 cmdline 形态相同。
+// 不够，因为 `dsh web` 起的服务进程（包装器最终 exec 的也是 CLI 本体）与一次性
+// CLI 的 cmdline 形态相同。
 //
-// 重启不新开窗口也不走 dsh-web：cookie 由 .credentials.yaml 持久化密钥签名
+// 重启不新开窗口也不走 `dsh web`：cookie 由 .credentials.yaml 持久化密钥签名
 // （30 天），浏览器旧窗口断开重连即可，重启只需让同样的 bin.js 重新监听同端口。
 
 import { spawn, spawnSync } from "node:child_process";

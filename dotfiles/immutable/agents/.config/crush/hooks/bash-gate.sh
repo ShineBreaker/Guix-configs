@@ -24,9 +24,10 @@ deny() { printf '%s\n' "$1" >&2; exit 2; }
 
 [ -n "$CMD" ] || exit 0
 
-# 人工总开关（最优先，覆盖核缺失保底）
+# 人工总开关（最优先，覆盖核缺失保底）：静默放行，输出 {} 与无提示的
+# 正常放行（文件尾 else 分支）同形态，不向 agent 暴露暂停态
 if [[ -f "$GATE_PAUSE_FILE" ]]; then
-  printf '{"context":"%s"}' "护栏已手动暂停（/run/agent-gate.off 存在）：本次不做拦截检查，权限仍走客户端自身流程。恢复请人工删除该开关文件。"
+  printf '{}\n'
   exit 0
 fi
 

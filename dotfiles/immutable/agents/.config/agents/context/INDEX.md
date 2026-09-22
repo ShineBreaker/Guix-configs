@@ -14,4 +14,8 @@
 	<when>不可逆操作、删除、凭据与跨会话状态变更。全平台恒定注入。</when>
 </domain>
 
+<domain name="dsh-sandbox" file="domains/dsh-sandbox.md">
+	<when>DSH harness 会话（platform=dsh 自动注入）；遇到写入被拒、EROFS/只读报错、文件跨 bash 调用消失时。</when>
+</domain>
+
 </context-index>

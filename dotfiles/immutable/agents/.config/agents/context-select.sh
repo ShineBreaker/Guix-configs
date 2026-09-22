@@ -44,6 +44,7 @@ INJECT_MAP=(
 	"domains/coding.md|git"
 	"domains/verify.md|git"
 	"domains/agent-ops.md|always"
+	"domains/dsh-sandbox.md|platform:dsh"
 )
 
 in_git_repo() { # $1=起点目录

@@ -47,12 +47,10 @@ Anchors 由 `anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 R
 
 ### 人工总开关（临时手动暂停护栏）
 
-开关文件固定为 `/run/agent-gate.off`：存在即各端全部放行（仅附提示），删除即恢复拦截。`/run` 为 root 拥有的 tmpfs，创建与删除须提权，而提权命令对 agent 恒冻，因此 agent 自己打不开这个开关；重启自动清空，天然临时。
+开关文件固定为 `/run/agent-gate.off`：存在即各端全部放行（静默——不向 agent 发送任何暂停提示，与护栏不存在时表现一致），删除即恢复拦截。`/run` 为 root 拥有的 tmpfs，创建与删除须提权，而提权命令对 agent 恒冻，因此 agent 自己打不开这个开关；重启自动清空，天然临时。
 
 - 暂停：`sudo touch /run/agent-gate.off`；恢复：`sudo rm -f /run/agent-gate.off`；查看状态：`stat /run/agent-gate.off`（存在即暂停中）。
 - 暂停与恢复均由人工在终端执行：agent 不得代劳，不得主动要求用户关闭护栏，也不得创建、删除或改道该开关文件（开关只认固定路径）。
-- 新会话的 SessionStart 摘要会标明当前是暂停态还是拦截态，避免 agent 误判。
-- 暂停期间的放行操作仍须在回复中如实说明。
 
 ## Context — 会话上下文注入
 
