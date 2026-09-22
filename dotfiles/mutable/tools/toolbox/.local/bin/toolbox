@@ -8,7 +8,7 @@
 #   toolbox              交互浏览（fzf 列表 + 详情预览）
 #   toolbox run <name>   跳过列表，直接进入指定工具的运行页
 #   toolbox list         非交互列出全部工具
-#   toolbox check        对账：清单条目 vs 部署位 + 未登记的仓库脚本
+#   toolbox check        对账：清单条目 vs 部署位 + 未登记仓库脚本 + 一包一入口准入
 #   toolbox help         本帮助
 set -u
 # 捕获而非忽略 SIGINT：非交互 bash 默认会被 Ctrl-C 整体杀死；
@@ -159,7 +159,7 @@ browse() {
 }
 
 # ---------------------------------------------------------------------------
-# 对账：清单条目健康性 + 未登记仓库脚本（信息级）
+# 对账：清单条目健康性 + 未登记仓库脚本（信息级）+ 一包一入口准入（阻断级）
 # ---------------------------------------------------------------------------
 check() {
   local fail=0 listed repo_root actual missing_stale
@@ -181,6 +181,76 @@ check() {
     printf '… 仓库中未登记（wrapper 类预期不登记，新原创工具请补录）:\n'
     printf '%s\n' "$missing_stale" | sed 's/^/    /'
   fi
+
+  # —— 一包一入口准入（阻断级）——
+  # 每个 mutable stow 包（.stow-package 标记定界，与 blue stow 的包判据一致；
+  # immutable 走 config.org 声明模型，不在此扫）的 .local/bin 只允许 1 个入口，
+  # 增强实现挪包内 .local/libexec/、主入口 case 分发子命令，防 bin/ 膨胀回潮
+  # （blue/hermes/dsh/pi 已于 2026-09 从 21 个入口收敛到 15 个）。
+  local bin_ok=1 n_pkgs=0 marker pkg_dir pkg_name allow_file entry entries line raw reason hit
+  local -a allow_names bad_lines kept
+  while IFS= read -r marker; do
+    pkg_dir=$(dirname "$marker")
+    pkg_name=${marker#"$repo_root/mutable/"}; pkg_name=${pkg_name%/.stow-package}
+    [ -d "$pkg_dir/.local/bin" ] || continue
+    # stow 链入 ~/.local/bin 的是 bin/ 直下的常规可执行文件（子目录会整目录链接，不算入口）
+    entries=$(find "$pkg_dir/.local/bin" -maxdepth 1 -type f -perm -u+x -printf '%f\n' | sort)
+    [ -n "$entries" ] || continue
+    n_pkgs=$(( n_pkgs + 1 ))
+
+    # 包级豁免 .bin-entries-allow：每行「入口名 # 理由」。理由必须非空——豁免
+    # 是给人看的决策记录，缺理由视为无效豁免（下方报错阻断），不悄悄放行。
+    allow_names=(); bad_lines=(); kept=()
+    allow_file=$pkg_dir/.bin-entries-allow
+    if [ -f "$allow_file" ]; then
+      while IFS= read -r line || [ -n "$line" ]; do
+        [[ $line =~ ^[[:space:]]*$ || $line =~ ^[[:space:]]*# ]] && continue  # 空行 / 整行注释
+        if [[ $line != *'#'* ]]; then
+          bad_lines+=("$line")            # 连 # 都没有 = 无理由
+          continue
+        fi
+        raw=${line%%'#'*} reason=${line#*'#'}
+        # 纯 bash 去首尾空白（不借 xargs，避免对内容二次解释）
+        raw=${raw#"${raw%%[![:space:]]*}"}; raw=${raw%"${raw##*[![:space:]]}"}
+        reason=${reason#"${reason%%[![:space:]]*}"}; reason=${reason%"${reason##*[![:space:]]}"}
+        if [ -n "$reason" ]; then allow_names+=("$raw"); else bad_lines+=("$raw"); fi
+      done < "$allow_file"
+    fi
+
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      case $entry in
+        # ACP 协议入口：外部 ACP host 按命令名寻址 agent，无法子命令化，自动豁免
+        *-acp)
+          printf '… %s: %s 按 *-acp 协议入口自动豁免\n' "$pkg_name" "$entry"
+          continue ;;
+      esac
+      hit=''
+      for raw in "${allow_names[@]}"; do
+        [ "$entry" = "$raw" ] && { hit=$raw; break; }
+      done
+      if [ -n "$hit" ]; then
+        printf '… %s: %s 豁免生效（理由见包根 .bin-entries-allow）\n' "$pkg_name" "$entry"
+      else
+        kept+=("$entry")
+      fi
+    done <<< "$entries"
+
+    if [ ${#bad_lines[@]} -gt 0 ]; then
+      bin_ok=0 fail=1
+      printf '✗ %s 的 .bin-entries-allow 存在缺理由的豁免行：\n' "$pkg_name"
+      printf '    %s\n' "${bad_lines[@]}"
+      printf '  修复：豁免行须为「入口名 # 理由」，理由不可省略\n'
+    fi
+    if [ ${#kept[@]} -gt 1 ]; then
+      bin_ok=0 fail=1
+      printf '✗ 一包一入口违规：%s 的 .local/bin 有 %d 个入口：\n' "$pkg_name" "${#kept[@]}"
+      printf '    %s\n' "${kept[@]}"
+      printf '  修复：实现挪包内 .local/libexec/、主入口分发子命令；确属例外在包根 .bin-entries-allow 声明理由\n'
+    fi
+  done < <(find "$repo_root/mutable" -name .stow-package -type f | sort)
+  [ "$bin_ok" -eq 1 ] && printf '✓ 一包一入口：%d 个含入口的 mutable 包全部合规\n' "$n_pkgs"
+
   return "$fail"
 }
 

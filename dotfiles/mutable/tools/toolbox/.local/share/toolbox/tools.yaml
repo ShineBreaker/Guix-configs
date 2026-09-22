@@ -1,6 +1,8 @@
 # toolbox 工具目录清单 —— 本仓库自研 .local/bin 工具的单一数据源
 # 部署位 $HOME/.local/share/toolbox/tools.yaml 为 mutable 直链，改本文件即时生效。
 # 收录标准：自己写了实质逻辑的原创工具；纯透传 wrapper（hermes/pi/dsh 启动器等）不收。
+# 子命令化工具（update/web 等增强逻辑并入主命令）的条目挂主命令名下（usage 写子命令形态），
+# 收录标准为「命令（含子命令）有自研实质逻辑」。
 # 新增工具：加一条记录 + 跑 `toolbox check` 对账（登记是 opt-in，check 只对账清单自身）。
 # help_cmd 仅在确认该旗标只打印用法、不触发主逻辑时填写（白名单机制）。
 
@@ -15,27 +17,27 @@
   help_cmd: "--help"
   source: dotfiles/mutable/tools/toolbox/.local/bin/toolbox
 
-- name: dsh-update
-  brief: 一键更新 dsh 本体与 web profile 三插件
+- name: dsh
+  brief: DeepSeek Harness CLI（update/web 子命令为 Guix 增强版：一键更新本体与插件 / 起 Web UI 并开 App 窗口）
   category: agents
   usage:
-    - "dsh-update"
-    - "dsh-update --check"
-    - "dsh-update -y --restart"
-  args: "--check --restart --yes"
-  help_cmd: "--help"
-  source: dotfiles/mutable/agents/dsh/.local/bin/dsh-update
-
-- name: hermes-update
-  brief: 安装/升级 Hermes checkout 并重启常驻服务
-  category: agents
-  usage:
-    - "hermes-update"
-    - "hermes-update --check"
-    - "hermes-update --branch main"
-  args: "--check --branch --yes"
+    - "dsh update --check"
+    - "dsh update -y --restart"
+    - "dsh web --reauth"
+  args: "update web --check --restart --yes --reauth --remote-url --lan-off"
   help_cmd: ""
-  source: dotfiles/mutable/agents/hermes/.local/bin/hermes-update
+  source: dotfiles/mutable/agents/dsh/.local/bin/dsh
+
+- name: hermes
+  brief: Hermes 入口（update/desktop 子命令为 Guix 增强版：升级 checkout 并重启常驻服务 / FHS 容器启动桌面端）
+  category: agents
+  usage:
+    - "hermes update --branch main"
+    - "hermes update --check"
+    - "hermes desktop"
+  args: "update desktop --check --branch --yes"
+  help_cmd: ""
+  source: dotfiles/mutable/agents/hermes/.local/bin/hermes
 
 - name: pi-update
   brief: 按 settings.json 更新 Pi 核心与扩展
