@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# replay.sh — hermes-update 后重放 prefetch fact_id 补丁
+# replay.sh — `hermes update` 后重放 prefetch fact_id 补丁
 # 用法: bash $HERMES_HOME/patches/replay.sh
 # 幂等: 上游已含补丁(输出行带 (#id))时直接报 OK 退出
 set -u

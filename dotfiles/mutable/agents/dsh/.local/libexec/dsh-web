@@ -3,22 +3,22 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# dsh-web — DeepSeek Harness Web UI 启动 wrapper（desktop 入口用）。
+# dsh web — DeepSeek Harness Web UI 启动实体（bin/dsh 的 web 子命令与 desktop
+# 入口共用；一包一入口布局见 bin/dsh）。
 #
-# 复用 dsh wrapper 的 DSH_HOME 注入与 CLI 解析（niri 会话环境不经 fish
-# conf.d，desktop 入口拿不到 export）。窗口走 chromium 的 --app 模式：无标签
-# 栏/地址栏，只留内容区；不装 PWA——dsh 自带 manifest 声明 display=fullscreen，
-# 装出来是全屏而非窗口。
+# DSH_HOME 在此自行注入（niri 会话环境不经 fish conf.d，desktop 入口拿不到
+# export）。窗口走 chromium 的 --app 模式：无标签栏/地址栏，只留内容区；不装
+# PWA——dsh 自带 manifest 声明 display=fullscreen，装出来是全屏而非窗口。
 #
 # 认证：launch token 按进程随机、且一个 token 只换一次 cookie，所以只有本
-# wrapper 亲自起的实例才拿得到它的 token URL；「已在监听但不是本 wrapper 起的」
+# 脚本亲自起的实例才拿得到它的 token URL；「已在监听但不是本脚本起的」
 # 实例只能用 --reauth 重启换新 token。换到的 cookie 由 DSH_HOME 里持久化的密钥
 # 签名（30 天，跨重启有效），之后直接开干净 URL。
 #
 # 远程（默认开启）：实例永远带 --trusted-host <尾网主机名> 启动，配合
 # tailscale serve 反代（https://<主机名> → 127.0.0.1:$DSH_WEB_PORT），手机等
 # 尾网设备可远程操控同一实例（会话数据共享；cookie 按 authority 分离互不干扰）。
-# dsh --remote-url 打印手机首次握手用的 token URL。DSH_TS_HOST= 空串可关闭。
+# dsh web --remote-url 打印手机首次握手用的 token URL。DSH_TS_HOST= 空串可关闭。
 #
 # 窗口 app_id 在 Wayland 下只由 profile 目录名决定（chrome-<host>__-<profile>）：实测
 # 协议层只发一次 set_app_id，值是 Chromium 自己算的 web-app id，--class 的值根本不出现，
@@ -27,21 +27,26 @@
 # 该 profile 顺带把 dsh 的会话 cookie 与日常浏览的 Default profile 隔开。
 #
 # 环境覆盖：DSH_WEB_PORT（端口；改了 authority 也变，cookie 需重新握手）、
-# DSH_WEB_LOG（服务 stdout，含一次性 token URL）、DSH_BIN（测试用）、
+# DSH_WEB_LOG（服务 stdout，含一次性 token URL）、DSH_BIN（测试用：默认直调
+# CLI 本体起服务，覆盖成 dsh 公共入口会经其 web 分发回到本脚本造成递归）、
 # DSH_TS_HOST（尾网主机名，默认 brokenshine-laptop.tail3889e8.ts.net）。
 set -euo pipefail
 
+: "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
+export DSH_HOME
 : "${DSH_WEB_PORT:=3080}"
 : "${DSH_WEB_LOG:=${XDG_STATE_HOME:-$HOME/.local/state}/dsh/web.log}"
-: "${DSH_BIN:=$HOME/.local/bin/dsh}"
+# 起服务直调 CLI 本体：web --no-open 是上游子命令，不经 dsh 公共入口（后者
+# 会把 web 分发回本脚本造成递归）；DSH_BIN 覆盖测试时同理须指向 CLI 本体。
+: "${DSH_BIN:=${DSH_HOME}/_cli/node_modules/.bin/dsh}"
 : "${DSH_TS_HOST:=brokenshine-laptop.tail3889e8.ts.net}"
 
 readonly CLEAN_URL="http://127.0.0.1:${DSH_WEB_PORT}/"
 readonly DSH_WEB_PROFILE=dsh
 
 usage() {
-	sed -n 's/^# dsh-web — //p' "$0" | head -1 >&2
-	echo "用法: dsh-web [--reauth] [--remote-url] [--lan-off]" >&2
+	sed -n 's/^# dsh web — //p' "$0" | head -1 >&2
+	echo "用法: dsh web [--reauth] [--remote-url] [--lan-off]" >&2
 	echo "  (无参数)     起服务（默认带远程信任）并开本机窗口" >&2
 	echo "  --reauth     强制重启服务换新 token（cookie 失效时用）" >&2
 	echo "  --remote-url 只打印手机首次握手的 https://<尾网主机名>/?token=... URL" >&2
@@ -82,24 +87,24 @@ stop_server() {
 	pid=$(ss -tlnpH "sport = :${DSH_WEB_PORT}" 2>/dev/null |
 		sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
 	if [[ -z "$pid" ]]; then
-		printf 'dsh-web: 端口 %s 上没有监听进程\n' "$DSH_WEB_PORT" >&2
+		printf 'dsh web: 端口 %s 上没有监听进程\n' "$DSH_WEB_PORT" >&2
 		return 1
 	fi
 	if [[ -r "/proc/${pid}/cmdline" ]]; then
 		cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline")
 	fi
 	if [[ "$cmdline" != *"@deepseek-ai/dsh"* ]]; then
-		printf 'dsh-web: pid=%s 不是 dsh CLI（%s），拒绝终止\n' "$pid" "$cmdline" >&2
+		printf 'dsh web: pid=%s 不是 dsh CLI（%s），拒绝终止\n' "$pid" "$cmdline" >&2
 		return 1
 	fi
-	printf 'dsh-web: --reauth 终止 pid=%s\n' "$pid" >&2
+	printf 'dsh web: --reauth 终止 pid=%s\n' "$pid" >&2
 	kill "$pid"
 	while ((waited < 40)); do
 		server_up || return 0
 		sleep 0.25
 		waited=$((waited + 1))
 	done
-	printf 'dsh-web: pid=%s 在 10s 内没有退出\n' "$pid" >&2
+	printf 'dsh web: pid=%s 在 10s 内没有退出\n' "$pid" >&2
 	return 1
 }
 
@@ -107,10 +112,10 @@ stop_server() {
 report_start_failure() {
 	local detail
 	detail=$(tail -n 3 "$DSH_WEB_LOG" 2>/dev/null | tr '\n' ' ')
-	printf 'dsh-web: dsh web 未能起来，%s 末尾：\n' "$DSH_WEB_LOG" >&2
+	printf 'dsh web: dsh web 未能起来，%s 末尾：\n' "$DSH_WEB_LOG" >&2
 	tail -n 20 "$DSH_WEB_LOG" >&2 || true
 	command -v notify-send >/dev/null 2>&1 || return 0
-	notify-send -a dsh-web -u critical 'dsh web 启动失败' "${detail:-详见 $DSH_WEB_LOG}" 2>/dev/null || true
+	notify-send -a dsh web -u critical 'dsh web 启动失败' "${detail:-详见 $DSH_WEB_LOG}" 2>/dev/null || true
 }
 
 start_server_url() {
@@ -167,21 +172,21 @@ done
 # --remote-url：不弹窗，只保证实例 trusted 并打印握手 URL（手机入口辅助）
 if $remote_url; then
 	if [[ -z "$DSH_TS_HOST" ]]; then
-		echo "dsh-web: --remote-url 需要尾网主机名（DSH_TS_HOST 为空）" >&2
+		echo "dsh web: --remote-url 需要尾网主机名（DSH_TS_HOST 为空）" >&2
 		exit 2
 	fi
 	if server_up && server_trusted; then
 		: # 已就绪
 	elif server_up; then
-		printf 'dsh-web: 现有实例未带 --trusted-host，重启中……\n' >&2
+		printf 'dsh web: 现有实例未带 --trusted-host，重启中……\n' >&2
 		stop_server
 		start_server_url "${ts_args[@]}" >/dev/null || {
-			echo "dsh-web: 服务启动失败" >&2
+			echo "dsh web: 服务启动失败" >&2
 			exit 1
 		}
 	else
 		start_server_url "${ts_args[@]}" >/dev/null || {
-			echo "dsh-web: 服务启动失败" >&2
+			echo "dsh web: 服务启动失败" >&2
 			exit 1
 		}
 	fi
@@ -195,7 +200,7 @@ if $remote_url; then
 	if [[ -n "$token" ]]; then
 		echo "首次握手（30 天有效）: https://${DSH_TS_HOST}/?token=${token}"
 	else
-		echo "dsh-web: 未在日志找到 token；稍候重跑或 --reauth 换新" >&2
+		echo "dsh web: 未在日志找到 token；稍候重跑或 --reauth 换新" >&2
 	fi
 	exit 0
 fi
@@ -203,7 +208,7 @@ fi
 # 常规路径：需要远程但实例未 trusted 时自动重启（从应用菜单打开即自动生效，
 # 无需手动步骤；仅在远程被关闭时跳过）
 if [[ -n "$DSH_TS_HOST" ]] && server_up && ! server_trusted; then
-	printf 'dsh-web: 实例未带 --trusted-host，自动重启以启用远程入口……\n' >&2
+	printf 'dsh web: 实例未带 --trusted-host，自动重启以启用远程入口……\n' >&2
 	stop_server
 fi
 if $reauth; then
@@ -217,7 +222,7 @@ else
 fi
 
 chromium=$(chromium_bin) || {
-	printf 'dsh-web: 找不到 chromium（ungoogled-chromium-wayland 未装或不在 PATH）\n' >&2
+	printf 'dsh web: 找不到 chromium（ungoogled-chromium-wayland 未装或不在 PATH）\n' >&2
 	exit 127
 }
 

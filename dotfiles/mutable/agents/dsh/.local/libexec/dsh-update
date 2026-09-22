@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# dsh-update — 把 dsh 本体与 web profile 的插件更新到上游最新，一键。
+# dsh update — 把 dsh 本体与 web profile 的插件更新到上游最新，一键。
 #
 # 插件清单从 web profile 的 package.json 动态读取（dependencies 全量，保序）。
 # github:<owner>/<repo>#<sha> 锁 commit 的依赖自动跟上游 HEAD（git ls-remote 查询，
@@ -24,7 +24,7 @@
 # （0.1.5-rc.2 发布时 latest 仍是 rc.1）。改为按通道稳定性 latest -> next ->
 # beta -> alpha 取第一个高于当前的版本，来源通道打印出来供核对。
 #
-# 更新后须重启 dsh web 才生效（host 半边不热载）；--restart 会调 dsh-web --reauth。
+# 更新后须重启 dsh web 才生效（host 半边不热载）；--restart 会调 `dsh web --reauth`。
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
@@ -37,7 +37,7 @@ readonly COOLDOWN_HOURS=24
 
 usage() {
 	cat <<'EOF'
-用法: dsh-update [选项]
+用法: dsh update [选项]
 
 把 dsh 本体（$DSH_HOME/_cli）与 web profile 的插件更新到上游最新。
 插件清单读自 profile 的 package.json；github:#<sha> 锁 commit 的依赖跟上游
@@ -46,7 +46,7 @@ HEAD，其余锁定源码（git+/git@/file:/link:）的依赖只提示不更新�
 选项:
   --check     只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
   -y, --yes   跳过确认
-  --restart   更新完成后自动重启 dsh web（dsh-web --reauth）
+  --restart   更新完成后自动重启 dsh web（dsh web --reauth）
   -h, --help  显示本帮助
 EOF
 }
@@ -64,7 +64,7 @@ while (($#)); do
 		exit 0
 		;;
 	*)
-		printf 'dsh-update: 未知参数 %s（--help 看用法）\n' "$1" >&2
+		printf 'dsh update: 未知参数 %s（--help 看用法）\n' "$1" >&2
 		exit 2
 		;;
 	esac
@@ -124,7 +124,7 @@ migrate_allow_builds() {
 	new_key=$(grep -oE "$old_pat" "$ws" | head -1)
 	[[ -n "$new_key" ]] || return 0
 	sed -i "s|${new_key}|${new_key%/*}/${new_sha}|" "$ws"
-	printf 'dsh-update: allowBuilds key 已随 commit 迁移（%s）\n' "$pkg"
+	printf 'dsh update: allowBuilds key 已随 commit 迁移（%s）\n' "$pkg"
 }
 
 # $1: 目录。把部署侧 lockfile 拷回仓库源（源侧路径从 pnpm-workspace.yaml 软链推导），
@@ -137,7 +137,7 @@ sync_lockfile() {
 	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] || return 0
 	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
 		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
-		printf 'dsh-update: %s 的 lockfile 已同步回仓库源\n' "$dir"
+		printf 'dsh update: %s 的 lockfile 已同步回仓库源\n' "$dir"
 	fi
 }
 
@@ -190,27 +190,27 @@ pnpm_add() {
 	# 包已装好、只是 build script 未审批：pnpm 报 error 但产物可用，非致命
 	if grep -q ERR_PNPM_IGNORED_BUILDS <<<"$out"; then
 		grep -vE 'ERR_PNPM_IGNORED_BUILDS|approve-builds' <<<"$out"
-		printf 'dsh-update: %s的依赖里有未审批的 build script（非致命；需要时对具体包跑 pnpm approve-builds）\n' "$label" >&2
+		printf 'dsh update: %s的依赖里有未审批的 build script（非致命；需要时对具体包跑 pnpm approve-builds）\n' "$label" >&2
 		sync_lockfile "$dir"
 		return 0
 	fi
 	printf '%s\n' "$out" >&2
-	printf 'dsh-update: %s pnpm add 失败——版本声明可能已改，用 git diff 核对后 git checkout 单文件回退\n' "$label" >&2
+	printf 'dsh update: %s pnpm add 失败——版本声明可能已改，用 git diff 核对后 git checkout 单文件回退\n' "$label" >&2
 	return 1
 }
 
 command -v pnpm >/dev/null 2>&1 || {
-	printf 'dsh-update: 找不到 pnpm（本机在 nix profile），无法更新\n' >&2
+	printf 'dsh update: 找不到 pnpm（本机在 nix profile），无法更新\n' >&2
 	exit 127
 }
 for f in "$CLI_DIR/package.json" "$WEB_DIR/package.json"; do
 	[[ -f "$f" ]] || {
-		printf 'dsh-update: %s 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$f" >&2
+		printf 'dsh update: %s 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$f" >&2
 		exit 1
 	}
 done
 
-printf 'dsh-update: 查询上游（registry: %s）\n' "$(pnpm config get registry 2>/dev/null || printf '?')"
+printf 'dsh update: 查询上游（registry: %s）\n' "$(pnpm config get registry 2>/dev/null || printf '?')"
 
 mapfile -t target_rows < <(read_targets)
 declare -a kind=() scope=() name=() cur=()
@@ -227,7 +227,7 @@ for i in "${!name[@]}"; do
 		IFS=' ' read -r repo old_sha <<<"${cur[$i]}"
 		gh_repo+=("$repo"); gh_old_sha+=("$old_sha")
 		if ! new_sha=$(git ls-remote "https://github.com/${repo}.git" HEAD 2>/dev/null | cut -f1); then
-			printf 'dsh-update: 查询 %s 上游 HEAD 失败（检查网络）\n' "$repo" >&2
+			printf 'dsh update: 查询 %s 上游 HEAD 失败（检查网络）\n' "$repo" >&2
 			exit 2
 		fi
 		gh_new_sha+=("${new_sha:-$old_sha}")
@@ -241,7 +241,7 @@ for i in "${!name[@]}"; do
 		continue
 	fi
 	if ! raw=$(pnpm view "${name[$i]}" dist-tags time --json 2>/dev/null); then
-		printf 'dsh-update: 查询 %s 失败（检查网络与 registry 配置）\n' "${name[$i]}" >&2
+		printf 'dsh update: 查询 %s 失败（检查网络与 registry 配置）\n' "${name[$i]}" >&2
 		exit 2
 	fi
 	picked+=("$(pick_version "${cur[$i]}" "$raw")")
@@ -256,7 +256,7 @@ for j in "${!gh_repo[@]}"; do
 done
 
 if ((updates == 0)); then
-	printf '\ndsh-update: 已是最新（%s %s）\n' "$CLI_PKG" "${cur[0]}"
+	printf '\ndsh update: 已是最新（%s %s）\n' "$CLI_PKG" "${cur[0]}"
 	print_source_locked
 	exit 0
 fi
@@ -311,27 +311,27 @@ if ((${#compat_notes[@]})); then
 fi
 
 if $check_only; then
-	printf '\ndsh-update: --check 模式，未做任何修改\n'
+	printf '\ndsh update: --check 模式，未做任何修改\n'
 	exit 1
 fi
 
 if ! $assume_yes; then
 	if [[ ! -t 0 ]]; then
-		printf '\ndsh-update: 非交互环境，请加 --yes 确认更新\n' >&2
+		printf '\ndsh update: 非交互环境，请加 --yes 确认更新\n' >&2
 		exit 130
 	fi
-	read -r -p 'dsh-update: 确认更新？[y/N] ' reply || reply=
+	read -r -p 'dsh update: 确认更新？[y/N] ' reply || reply=
 	case "$reply" in
 	[yY] | [yY][eE][sS]) ;;
 	*)
-		printf 'dsh-update: 已取消\n' >&2
+		printf 'dsh update: 已取消\n' >&2
 		exit 130
 		;;
 	esac
 fi
 
 if [[ -n "${picked[0]}" ]]; then
-	printf '\ndsh-update: 更新本体（%s）\n' "$CLI_DIR"
+	printf '\ndsh update: 更新本体（%s）\n' "$CLI_DIR"
 	pnpm_add "$CLI_DIR" 本体 "${CLI_PKG}@${cli_target}" || exit 1
 fi
 
@@ -344,34 +344,36 @@ for i in "${!name[@]}"; do
 	plugin_args+=("${name[$i]}@$ver")
 done
 if ((${#plugin_args[@]})); then
-	printf '\ndsh-update: 更新插件（%s）\n' "$WEB_DIR"
+	printf '\ndsh update: 更新插件（%s）\n' "$WEB_DIR"
 	pnpm_add "$WEB_DIR" 插件 "${plugin_args[@]}" || exit 1
 fi
 
 for j in "${!gh_repo[@]}"; do
 	repo="${gh_repo[$j]}" old_sha="${gh_old_sha[$j]}" new_sha="${gh_new_sha[$j]}"
 	[[ "$new_sha" != "$old_sha" ]] || continue
-	printf '\ndsh-update: 更新 github 插件 %s#%s\n' "$repo" "${new_sha:0:7}"
+	printf '\ndsh update: 更新 github 插件 %s#%s\n' "$repo" "${new_sha:0:7}"
 	# spec 里只有 repo（无包名映射），包名从 package.json 找：github spec 的键
 	gpkg=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["dependencies"]; print(next((k for k,v in d.items() if v.startswith("github:"+sys.argv[2]+"#")), ""))' "$WEB_DIR/package.json" "$repo")
 	if [[ -z "$gpkg" ]]; then
-		printf 'dsh-update: 在 package.json 里找不到 repo %s 的依赖键，跳过\n' "$repo" >&2
+		printf 'dsh update: 在 package.json 里找不到 repo %s 的依赖键，跳过\n' "$repo" >&2
 		continue
 	fi
 	migrate_allow_builds "$WEB_DIR" "$gpkg" "$old_sha" "$new_sha"
 	pnpm_add "$WEB_DIR" 插件 "github:${repo}#${new_sha}" || exit 1
 done
 
-printf '\ndsh-update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml / pnpm-lock.yaml），请 git diff 后提交。\n'
-printf 'dsh-update: 需重启 dsh web 才生效（host 半边不热载）。\n'
+printf '\ndsh update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml / pnpm-lock.yaml），请 git diff 后提交。\n'
+printf 'dsh update: 需重启 dsh web 才生效（host 半边不热载）。\n'
 
 if $do_restart; then
-	if command -v dsh-web >/dev/null 2>&1; then
-		printf 'dsh-update: 重启 dsh web（dsh-web --reauth，后台）\n'
-		setsid dsh-web --reauth >/dev/null 2>&1 &
+	# 经公共入口 `dsh web --reauth` 重启（dsh-web 已并入 bin/dsh 的 web 分发；
+	# setsid 脱离会话后台跑，不阻塞本脚本收尾）
+	if command -v dsh >/dev/null 2>&1; then
+		printf 'dsh update: 重启 dsh web（dsh web --reauth，后台）\n'
+		setsid dsh web --reauth >/dev/null 2>&1 &
 	else
-		printf 'dsh-update: 找不到 dsh-web，请手动重启 dsh web\n' >&2
+		printf 'dsh update: 找不到 dsh，请手动重启 dsh web\n' >&2
 	fi
 else
-	printf 'dsh-update: 重启请运行 dsh-web --reauth（cookie 由持久化密钥签名，不会要求重新认证）\n'
+	printf 'dsh update: 重启请运行 dsh web --reauth（cookie 由持久化密钥签名，不会要求重新认证）\n'
 fi

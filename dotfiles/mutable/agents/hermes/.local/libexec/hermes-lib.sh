@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# hermes-lib.sh — hermes / hermes-desktop / hermes-update 三个 wrapper 的共享库。
+# hermes-lib.sh — hermes 入口 wrapper（bin/hermes，含 update/desktop 子命令
+# 分发）与 libexec/hermes-{update,desktop} 两个子命令实体的共享库。
 #
 # 收敛历史上三份拷贝、且已互相漂移的逻辑（单一真理源）：
 #   1. 布局常量：HERMES_HOME 解析 + hermes-agent checkout / venv / CLI /
@@ -43,7 +44,7 @@ HERMES_MANIFEST="${HERMES_HOME}/manifest.scm"
 HERMES_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 HERMES_HICOLOR_ROOT="${HERMES_DATA_HOME}/icons/hicolor"
 
-# 安装 1024px 原图到 hicolor（hermes-desktop 启动用；覆盖写天然幂等）。
+# 安装 1024px 原图到 hicolor（hermes desktop 启动用；覆盖写天然幂等）。
 # 目标目录缺失时先 mkdir -p（此前直接 cp，hicolor/1024x1024/apps 不存在即崩）。
 hermes_install_icon_1024() {
   local _src="${1:?hermes_install_icon_1024: 缺少图标源路径参数}"
@@ -53,7 +54,7 @@ hermes_install_icon_1024() {
 }
 
 # ── 3. 宿主 GUI 环境解析 + FHS 容器边界（preserve/share/exec 语义对齐
-#       appimage-run container.scm；原为 hermes-desktop 内联段） ─────────────
+#       appimage-run container.scm；原为 hermes desktop 实体的内联段） ─────────────
 
 # 会话基础变量：RT_DIR（wayland/dbus socket 所在）+ 真实 WAYLAND_DISPLAY。
 # 不硬编码 wayland-0（否则 expose 不存在的 socket，Electron 连不上 compositor

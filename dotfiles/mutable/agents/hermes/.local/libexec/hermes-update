@@ -3,7 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# hermes-update — Hermes Agent 安装 / 升级 wrapper（对齐官方 `hermes update`）。
+# hermes-update — `hermes update` 子命令实体（由 bin/hermes 分发进入，也可
+# 被脚本按 libexec 绝对路径直调）：Hermes Agent 安装 / 升级（对齐官方 `hermes update`）。
 #
 # 设计：放弃 pin-tag，改跟 main。把「已安装 checkout」的更新整套委托给官方
 # `hermes update`（fetch → stash → pull + syntax guard/rollback → 依赖重装 →
@@ -27,7 +28,7 @@
 # == 跟 main / 放弃 pin ==
 # 首次 clone 用 `--branch main`；已装走 `hermes update "$@"`，透传所有官方
 # 参数（--check / --branch NAME / --backup / --no-backup / --yes 等）。用户想跟
-# 别的分支：`hermes-update --branch NAME`。
+# 别的分支：`hermes update --branch NAME`。
 #
 # == 不用 exec 委托 ==
 # 官方 update 完成后还需 herd restart 收尾（让常驻 backend/gateway 加载新代码），
@@ -46,8 +47,8 @@ REPO_URL="https://github.com/NousResearch/hermes-agent.git"
 PYTHON_VERSION="3.11"   # 与上游 install.sh 的 PYTHON_VERSION 一致
 
 _bin_dir="$(dirname "$(readlink -f "$0")")"
-# shellcheck disable=SC1091  # lib 移出 PATH（bin 的兄弟层 libexec/），按 stow 直链的源头 source
-source "$(dirname "${_bin_dir}")/libexec/hermes-lib.sh"
+# shellcheck disable=SC1091  # 本脚本已与 lib 同居 libexec/，按 stow 直链的源头 source
+source "${_bin_dir}/hermes-lib.sh"
 
 # 本脚本历史命名兼容别名（常量真身在 hermes-lib.sh；布局约定见头注释）
 CHECKOUT="${HERMES_CHECKOUT}"
@@ -273,7 +274,7 @@ if [[ ! -d "${CHECKOUT}/.git" ]]; then
   echo "首次安装完成。"
   echo "  Web UI:  hermes serve / hermes dashboard"
   echo "  TUI:     直接运行 hermes"
-  echo "  Desktop: hermes-desktop（Electron）"
+  echo "  Desktop: hermes desktop（Electron）"
   exit 0
 fi
 

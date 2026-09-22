@@ -10,8 +10,11 @@
 # 两度翻车已弃）。niri 会话环境不经 fish conf.d，故 DSH_HOME 在此注入，语义同
 # conf.d 的 10-dsh.fish。
 #
+# 一包一入口：update / web 子命令分发到同包 ../libexec/ 实体（dsh-update、
+# dsh-web），bin/ 只留 dsh。
+#
 # CLI 缺失时不再只打印命令让人自己敲：交互式会问一句再装；非交互式（含 desktop
-# 入口经 dsh-web 拉起，那里 stdin 是 /dev/null）只提示 `dsh --install`，不静默联网装。
+# 入口经 `dsh web` 拉起，那里 stdin 是 /dev/null）只提示 `dsh --install`，不静默联网装。
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
@@ -19,6 +22,8 @@ export DSH_HOME
 
 _cli_dir="$DSH_HOME/_cli"
 _cli_bin="$_cli_dir/node_modules/.bin/dsh"
+# 同包 libexec 实体目录（$0 经 stow 直链解析回仓库源，stow 布局内自洽）
+_libexec_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/libexec"
 
 install_cli() {
 	if ! command -v pnpm >/dev/null 2>&1; then
@@ -87,6 +92,18 @@ if [[ "${1:-}" == "plugin" ]]; then
 	_relink_profile
 	exit "$rc"
 fi
+
+# ── Guix 增强子命令分发（须在下方 CLI 缺失检查之前：dsh-update 自身能装 CLI，
+# dsh-web 的缺 CLI 报错也更友好） ─────────────────────────────────────────────
+# 拦截即覆写：`dsh update` / `dsh web` 上游原生也有同名子命令，此分发把这两个
+# 名字遮蔽为 Guix 增强版（libexec/dsh-update 的通道选版 / lockfile 回源 /
+# allowBuilds 迁移，libexec/dsh-web 的 chromium App 窗口 / tailscale 远程信任）。
+# 原生行为须经 CLI 本体直调触达：$_cli_bin update|web——libexec/dsh-web 内部起
+# 服务本就直调 $_cli_bin 的 `web --no-open`，不经本 wrapper，无递归。
+case "${1:-}" in
+update) exec "$_libexec_dir/dsh-update" "${@:2}" ;;
+web) exec "$_libexec_dir/dsh-web" "${@:2}" ;;
+esac
 
 if [[ ! -x "$_cli_bin" ]]; then
 	if [[ -t 0 ]]; then

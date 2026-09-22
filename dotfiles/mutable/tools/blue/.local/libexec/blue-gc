@@ -127,7 +127,7 @@ summary() {
 
 usage() {
   cat <<'EOF'
-用法: blue gc [--go]      （或直接: blue-gc [--go]）
+用法: blue gc [--go]      （应急直调: ~/.local/libexec/blue-gc [--go]）
 
   默认 dry-run：只打印将执行的清理计划，不改动系统。
   --go          真实执行；单步失败告警并继续，最后统一汇总。

@@ -41,28 +41,30 @@ log()  { printf '[blue-update] %s\n' "$*"; }
 warn() { printf '[blue-update][!] %s\n' "$*" >&2; }
 die()  { warn "$*"; exit 1; }
 
-# 脚本实体在 dotfiles/mutable/tools/blue/.local/bin/blue-update，
-# 经 stow 软链到 ~/.local/bin/blue-update。
+# 脚本实体在 dotfiles/mutable/tools/blue/.local/libexec/blue-update，
+# 经 stow 软链到 ~/.local/libexec/blue-update（不在 PATH，由
+# ~/.local/bin/blue wrapper 分发调用）。
 # 以真实路径反推仓库根；脱离仓库结构时回退 git 探测（手法同 secrets）。
 _self="$(readlink -f "${BASH_SOURCE[0]}")"
 case "$_self" in
-  */dotfiles/mutable/tools/blue/.local/bin/blue-update)
-    REPO_ROOT="${_self%/dotfiles/mutable/tools/blue/.local/bin/blue-update}"
+  */dotfiles/mutable/tools/blue/.local/libexec/blue-update)
+    REPO_ROOT="${_self%/dotfiles/mutable/tools/blue/.local/libexec/blue-update}"
     ;;
   *)
     REPO_ROOT="$(git -C "$(dirname "$_self")" rev-parse --show-toplevel 2>/dev/null || true)"
     ;;
 esac
-[ -n "$REPO_ROOT" ] || die "无法定位仓库根（脚本应位于 dotfiles/mutable/tools/blue/.local/bin/）"
+[ -n "$REPO_ROOT" ] || die "无法定位仓库根（脚本应位于 dotfiles/mutable/tools/blue/.local/libexec/）"
 cd "$REPO_ROOT" # blue 按当前目录解析仓库，以下所有相对路径以仓库根为准
 
-# wrapper 同目录副本（本脚本多半由它分发而来）；走它跑门禁与归因时首参为
-# --dry-run/check，wrapper 直通，无递归风险。
-BLUE_CLI="$(dirname "$_self")/blue"
+# 包内 bin/ 的 wrapper（libexec/ 与 bin/ 同属包内 .local，互为兄弟目录；
+# 本脚本多半由它分发而来）；走它跑门禁与归因时首参为 --dry-run/check，
+# wrapper 直通，无递归风险。
+BLUE_CLI="$(dirname "$(dirname "$_self")")/bin/blue"
 if [ ! -x "$BLUE_CLI" ]; then
   BLUE_CLI="$(command -v blue 2>/dev/null || true)"
 fi
-[ -n "$BLUE_CLI" ] || die "找不到可用的 blue 命令（同目录 wrapper 与 PATH 均无）"
+[ -n "$BLUE_CLI" ] || die "找不到可用的 blue 命令（包内 wrapper 与 PATH 均无）"
 
 [ -x "$GUILE" ] || die "缺 $GUILE（系统 profile 异常？见 docs/emergency-blue.md §2）"
 [ -f "$BLUE_BODY" ] || die "缺 blue 本体 $BLUE_BODY（Home 层未部署？恢复见 docs/emergency-blue.md §6）"

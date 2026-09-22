@@ -3,7 +3,9 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# hermes-desktop — 在 Guix 的 FHS 容器里启动 Hermes Electron 桌面应用。
+# hermes-desktop — `hermes desktop` 子命令实体（由 bin/hermes 分发进入，
+# 也可被脚本按 libexec 绝对路径直调），在 Guix 的 FHS 容器里启动 Hermes
+# Electron 桌面应用。
 #
 # 背景：A 方案（Pi 式 editable-checkout）下，纯 checkout + uv 安装不含
 # build 过的 Electron 二进制。需先 `hermes desktop --build-only` 用仓库内
@@ -14,18 +16,19 @@
 # 与 Pi 的 pi / hermes wrapper 同构：runtime 在 $HERMES_HOME/hermes-agent。
 # checkout 直接落在 hermes-agent 顶层（desktop 壳要求的源码根，isHermesSourceRoot
 # 检查 hermes_cli/main.py 在 ACTIVE_HERMES_ROOT 直接下级）。
-# 布局常量、宿主 GUI 环境解析、容器 preserve/share 配置见兄弟层 ../libexec/hermes-lib.sh。
+# 布局常量、宿主 GUI 环境解析、容器 preserve/share 配置见同目录 hermes-lib.sh。
 set -euo pipefail
 
 _bin_dir="$(dirname "$(readlink -f "$0")")"
-# shellcheck disable=SC1091  # lib 移出 PATH（bin 的兄弟层 libexec/），按 stow 直链的源头 source
-source "$(dirname "${_bin_dir}")/libexec/hermes-lib.sh"
+# shellcheck disable=SC1091  # 本脚本已与 lib 同居 libexec/，按 stow 直链的源头 source
+source "${_bin_dir}/hermes-lib.sh"
 
 # 1. 确保已 build（首跑需 npm install 1299 包 + electron-builder，几分钟；
 #    之后 node_modules 留在 checkout 内，重 build 很快）
 if [[ ! -x "${HERMES_DESKTOP_BIN}" ]]; then
   echo "Hermes Desktop 尚未 build，执行 build（首次需几分钟）..." >&2
-  hermes desktop --build-only
+  # 直调 venv 的原生子命令，不走 bin/hermes（分发回来还是本脚本 → 死循环）
+  "${HERMES_CLI_BIN}" desktop --build-only
 fi
 
 # 2. 将桌面图标复制到 icons 文件夹中
@@ -48,7 +51,7 @@ hermes_build_share_flags
 #   LIBGL_ALWAYS_SOFTWARE，也不用 --enable-unsafe-swiftshader 软件渲染——那会让
 #   应用内动画全失效。--ignore-gpu-blocklist：容器内 GPU 信息探测不全，Chromium
 #   可能把显卡列入黑名单回退软件渲染，此标志强制启用硬件路径。
-#   （若某机器硬件路径确实崩，可临时 `LIBGL_ALWAYS_SOFTWARE=1 hermes-desktop`
+#   （若某机器硬件路径确实崩，可临时 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop`
 #   回退软件渲染——该变量已在 PRESERVE 正则里透传。）
 # - --no-sandbox / --disable-gpu-sandbox：嵌套 guix shell 容器里 Chromium 沙箱
 #   起不来（渲染进程 exitCode=5 crash loop），关掉沙箱让窗口正常出（必需）
@@ -90,12 +93,12 @@ if curl -sf -m 2 -o /dev/null "${REMOTE_BASE}/api/status"; then
   if [[ -n "${_session_token}" ]]; then
     export HERMES_DESKTOP_REMOTE_URL="${REMOTE_BASE}"
     export HERMES_DESKTOP_REMOTE_TOKEN="${_session_token}"
-    echo "hermes-desktop: Remote gateway → ${REMOTE_BASE}（agent 跑在宿主完整环境）" >&2
+    echo "hermes desktop: Remote gateway → ${REMOTE_BASE}（agent 跑在宿主完整环境）" >&2
   else
-    echo "hermes-desktop: 警告：${REMOTE_BASE} 在线但抓不到 session token，回退容器内 serve（环境残缺）" >&2
+    echo "hermes desktop: 警告：${REMOTE_BASE} 在线但抓不到 session token，回退容器内 serve（环境残缺）" >&2
   fi
 else
-  echo "hermes-desktop: 警告：${REMOTE_BASE} 不可达（hermes-backend 未启动？），回退容器内 serve（环境残缺）" >&2
+  echo "hermes desktop: 警告：${REMOTE_BASE} 不可达（hermes-backend 未启动？），回退容器内 serve（环境残缺）" >&2
 fi
 
 exec guix shell --container --emulate-fhs --network \

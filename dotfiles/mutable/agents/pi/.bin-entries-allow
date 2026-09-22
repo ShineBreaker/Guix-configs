@@ -1,0 +1,2 @@
+# 一包一入口机制的包级豁免（toolbox check 校验）：每行「入口名 # 理由」，理由不可省略
+pi-update  # 上游原生 pi update 语义不同（pi-update 为 pnpm 布局独立实现），不可遮蔽，保持独立入口
