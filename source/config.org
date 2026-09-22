@@ -244,12 +244,14 @@ blue build
 
 + =root-one-shot-service= ：开机跑一次即退出（one-shot + 不 respawn）， =start= / =#:stop= 直接传 gexp。
   =stop= 默认 =(const #f)= ——向 shepherd 返回「已停止」的正确值； =respawn?= 默认 #t。对 one-shot 服务这两者均惰性（start 成功即视为 stopped、进程退出也不 respawn），调用处无需再传这两个参数。
+  =#:modules= 默认 =%default-modules= （ =shepherd service= + =guix build utils= + =guix build syscalls= ）。shepherd 服务的 =start= gexp 会被序列化成独立 .scm 再编译成 .go，编译环境只有这些模块——**gexp 内层写的 =(use-modules …)= 不参与编译期绑定**，运行到未绑定变量才报错。需要额外模块（如 =(ice-9 rdelim)= 提供 =read-line= ）时，必须经此参数追加进顶层 use-modules。
 #+NAME: root-one-shot-service-helpers
 #+begin_src scheme
 
 (define* (root-one-shot-service name requirement start
                                 #:key (stop #~(const #f))
                                 (respawn? #t)
+                                (modules %default-modules)
                                 (documentation "[No documentation.]"))
   (simple-service name shepherd-root-service-type
                   (list (shepherd-service
@@ -259,6 +261,7 @@ blue build
                          (one-shot? #t)
                          (auto-start? #t)
                          (respawn? respawn?)
+                         (modules modules)
                          (start start)
                          (stop stop)))))
 #+end_src
@@ -293,15 +296,24 @@ blue build
    "warn() { echo \"[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1\" >>\"$log\"; }\n"
    "\n"
    ;; hermes 包: 仅 add 该子目录, 避免吞并用户未提交的 WIP
+   ;; 仓库根经 HERMES_HOME 锚点反推（stow 链回仓库的文件），不写死路径
    "(\n"
-   "  cd /data/Projects/Config/Guix-configs || exit 1\n"
-   "  git add dotfiles/mutable/agents/hermes || exit 1\n"
-   "  git diff --cached --quiet || git commit -m \"chore(hermes): backup $(date)\" || exit 1\n"
+   "  hermes_home=\"${HERMES_HOME:-$HOME/.local/share/hermes}\"\n"
+   "  repo=\"\"\n"
+   "  for anchor in \"$hermes_home/config.yaml\" \"$hermes_home/SOUL.md\"; do\n"
+   "    [ -L \"$anchor\" ] || continue\n"
+   "    target=$(readlink -f \"$anchor\") || continue\n"
+   "    repo=$(git -C \"$(dirname \"$target\")\" rev-parse --show-toplevel 2>/dev/null) || continue\n"
+   "    break\n"
+   "  done\n"
+   "  [ -n \"$repo\" ] || { echo \"找不到链回仓库的 hermes 锚点文件 ($hermes_home)\"; exit 1; }\n"
+   "  git -C \"$repo\" add dotfiles/mutable/agents/hermes || exit 1\n"
+   "  git -C \"$repo\" diff --cached --quiet || git -C \"$repo\" commit -m \"chore(hermes): backup $(date)\" || exit 1\n"
    ") >>\"$log\" 2>&1 || warn \"hermes 备份失败, 详见上方 git 输出\"\n"
    "\n"
    ;; Org 知识库: agenote 卡片仓库, 本地无 remote, add -A 安全
    "(\n"
-   "  cd /home/brokenshine/Documents/Org || exit 1\n"
+   "  cd \"$HOME/Documents/Org\" || exit 1\n"
    "  git add -A || exit 1\n"
    "  git diff --cached --quiet || git commit -m \"chore(backup): auto $(date '+%Y-%m-%d %H:%M:%S')\" || exit 1\n"
    ") >>\"$log\" 2>&1 || warn \"Org 知识库备份失败, 详见上方 git 输出\"\n"))
@@ -954,48 +966,59 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 #+NAME: trash-utab-services
 #+begin_src scheme
-(list (root-one-shot-service 'trash-utab '(file-systems)
-        (with-imported-modules (source-module-closure '((guix build utils)))
-          #~(lambda ()
-              (use-modules (ice-9 regex))
-              (let ([home-prefix (string-append "/home/" #$username)]
-                    [entries '()])
-                (call-with-input-file "/proc/self/mountinfo"
-                  (lambda (port)
-                    (let loop ()
-                      (let ([line (read-line port)])
-                        (unless (eof-object? line)
-                          ;; mountinfo 行格式: ID parent major:minor root 挂载点 挂载选项 … - fstype source super-options
-                          ;; 捕获组: 1=ID 2=root 3=挂载点 4=source（在 " - " 分隔符之后）
-                          (let ([m (string-match
-                                    "^([0-9]+) [0-9]+ [0-9]+:[0-9]+ (\\S+) (\\S+) \\S+.* - \\S+ (\\S+)"
-                                    line)])
-                            (when m
-                              (let ([id (match:substring m 1)]
-                                    [root (match:substring m 2)]
-                                    [target (match:substring m 3)]
-                                    [source (match:substring m 4)])
-                                ;; root != "/" 即子卷/bind 挂载；只放行用户数据区，
-                                ;; 系统子卷(/gnu, /var/lib...)保持拒绝回收站
-                                (when (and (not (string=? root "/"))
-                                           (or (string=? target "/data")
-                                               (string-prefix? home-prefix target)))
-                                  (set! entries
-                                        (cons (string-append
-                                               "ID=" id " SRC=" source
-                                               " TARGET=" target
-                                               " ROOT=" root
-                                               " OPTS=x-gvfs-trash")
-                                              entries))))))
-                          (loop))))))
-                (mkdir-p "/run/mount")
-                (call-with-output-file "/run/mount/utab"
-                  (lambda (port)
-                    (display (string-join (reverse entries) "\n") port)
-                    (newline port)))
-                (chmod "/run/mount/utab" #o644)
-                #t)))
-        #:documentation "Inject x-gvfs-trash into /run/mount/utab for user data mounts."))
+(list (root-one-shot-service
+       'trash-utab '(file-systems)
+       (with-imported-modules (source-module-closure '((guix build utils)))
+                              #~(lambda ()
+                                  (let ([home-prefix (string-append "/home/" #$username)]
+                                        [entries '()])
+                                    ;; mountinfo 每行: ID 父ID 主:次 root 挂载点 挂载选项 [可选字段...] - fstype 源 超级选项
+                                    ;; 按空格分词后: [0]=ID [3]=root [4]=挂载点; 源在独立 "-" 分词后第 2 个字段
+                                    (define (source-of fields)
+                                      (let loop ([fs (cdr fields)] [idx 1])
+                                        (cond [(null? fs) #f]
+                                              [(string=? (car fs) "-")
+                                               (and (>= (length fields) (+ idx 3))
+                                                    (list-ref fields (+ idx 2)))]
+                                              [else (loop (cdr fs) (1+ idx))])))
+                                    (call-with-input-file "/proc/self/mountinfo"
+                                      (lambda (port)
+                                        (let loop ()
+                                          (let ([line (read-line port)])
+                                            (unless (eof-object? line)
+                                              (let ([fields (string-tokenize line)])
+                                                (when (>= (length fields) 10)
+                                                  (let ([id (list-ref fields 0)]
+                                                        [root (list-ref fields 3)]
+                                                        [target (list-ref fields 4)]
+                                                        [source (source-of fields)])
+                                                    ;; root != "/" 即子卷/bind 挂载；只放行用户数据区，
+                                                    ;; 系统子卷(/gnu, /var/lib...)保持拒绝回收站
+                                                    (when (and source
+                                                               (not (string=? root "/"))
+                                                               (or (string=? target "/data")
+                                                                   (string-prefix? home-prefix target)))
+                                                      (set! entries
+                                                            (cons (string-append
+                                                                   "ID=" id " SRC=" source
+                                                                   " TARGET=" target
+                                                                   " ROOT=" root
+                                                                   " OPTS=x-gvfs-trash")
+                                                                  entries))))))
+                                              (loop))))))
+                                    (mkdir-p "/run/mount")
+                                    (call-with-output-file "/run/mount/utab"
+                                      (lambda (port)
+                                        (for-each (lambda (entry)
+                                                    (display entry port)
+                                                    (newline port))
+                                                  (reverse entries))))
+                                    (chmod "/run/mount/utab" #o644)
+                                    #t)))
+       ;; read-line 来自 (ice-9 rdelim), 必须经 #:modules 进 .scm 顶层 use-modules
+       ;; (gexp 内层 use-modules 不参与 shepherd 服务的 .go 编译期绑定)
+       #:modules (cons '(ice-9 rdelim) %default-modules)
+       #:documentation "Inject x-gvfs-trash into /run/mount/utab for user data mounts."))
 #+end_src
 
 *** 网络相关配置
@@ -1194,7 +1217,7 @@ exec "$MIHOMO_BIN" -d "$DATA_DIR" -f "$OUT"
 #+end_src
 
 **** NM dispatcher 脚本
-WiFi 连上可信 profile 时把 =wlp0s20f3= 加入 nftables 中的 =trusted_ifaces= 集合，断开或不可信时移除；
+WiFi 连上可信 profile 时把发起连接的无线接口加入 nftables 中的 =trusted_ifaces= 集合，断开或不可信时移除；
 tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位符，利用 activation 拷贝到 =/etc/NetworkManager/dispatcher.d/= 。
 
 #+NAME: nm-dispatcher-trusted-connection
@@ -1206,12 +1229,12 @@ AGE_IDENTITY="@AGE_IDENTITY@"
 GREP_BIN="@GREP_BIN@"
 NFT_BIN="@NFT_BIN@"
 TRUSTED_CONNECTIONS_CIPHER="@TRUSTED_CONNECTIONS_CIPHER@"
-WIFI_IFACE="wlp0s20f3"
-
+IFACE="$1"
 ACTION="$2"
 CONNECTION_ID="${CONNECTION_ID:-}"
 
-[ "$1" = "$WIFI_IFACE" ] || exit 0
+# 只处理无线接口：有线/虚拟接口的 up/down 不进可信集合
+[ -d "/sys/class/net/$IFACE/wireless" ] || exit 0
 
 # 输出由 NetworkManager 收进自身日志（syslog → /var/log/messages）
 log() { echo "trusted-ssid: $*" >&2; }
@@ -1226,15 +1249,15 @@ is_trusted_connection() {
 }
 
 remove_wifi_from_trusted_set() {
-    "$NFT_BIN" delete element inet filter trusted_ifaces { "$WIFI_IFACE" } 2>/dev/null || true
+    "$NFT_BIN" delete element inet filter trusted_ifaces { "$IFACE" } 2>/dev/null || true
 }
 
 add_wifi_to_trusted_set() {
     remove_wifi_from_trusted_set
-    "$NFT_BIN" add element inet filter trusted_ifaces { "$WIFI_IFACE" }
+    "$NFT_BIN" add element inet filter trusted_ifaces { "$IFACE" }
 }
 
-log "action=$ACTION iface=$1 conn='${CONNECTION_ID:-}'"
+log "action=$ACTION iface=$IFACE conn='${CONNECTION_ID:-}'"
 
 case "$ACTION" in
     up)
@@ -1243,18 +1266,18 @@ case "$ACTION" in
             log "CONNECTION_ID 为空, 无法比对可信名单, 按不可信处理"
         elif is_trusted_connection "$CONNECTION_ID"; then
             if add_wifi_to_trusted_set; then
-                log "可信连接 '$CONNECTION_ID': $WIFI_IFACE 已加入 trusted_ifaces"
+                log "可信连接 '$CONNECTION_ID': $IFACE 已加入 trusted_ifaces"
             else
                 log "nft 添加失败 (exit=$?), trusted_ifaces 可能未更新"
             fi
         else
             remove_wifi_from_trusted_set
-            log "不在可信名单: $WIFI_IFACE 已确保移出 trusted_ifaces"
+            log "不在可信名单: $IFACE 已确保移出 trusted_ifaces"
         fi
         ;;
     down)
         remove_wifi_from_trusted_set
-        log "断开: $WIFI_IFACE 已移出 trusted_ifaces"
+        log "断开: $IFACE 已移出 trusted_ifaces"
         ;;
 esac
 #+end_src
@@ -1267,7 +1290,7 @@ esac
 flush ruleset
 
 table inet filter {
-# The dispatcher temporarily adds wlp0s20f3 for trusted connection profiles.
+# The dispatcher temporarily adds the WiFi interface for trusted connection profiles.
 set trusted_ifaces {
 type ifname
 elements = { "virbr0", "tailscale0" }
@@ -1422,11 +1445,28 @@ iifname "virbr0" oifname != "virbr0" masquerade
                (false-if-exception
                 (call-with-output-file path
                   (lambda (port) (display val port)))))
+             ;; 无线接口名运行时探测（/sys/class/net/*/wireless），不写死
+             ;; 仅用 Guile 核心绑定，不新增模块依赖
+             (define (wireless-interfaces)
+               (let ([dir (false-if-exception (opendir "/sys/class/net"))])
+                 (if (not dir)
+                     '()
+                     (let loop ([acc '()])
+                       (let ([entry (readdir dir)])
+                         (cond [(or (not entry) (eof-object? entry))
+                                (closedir dir)
+                                (reverse acc)]
+                               [(file-exists? (string-append "/sys/class/net/"
+                                                             entry "/wireless"))
+                                (loop (cons entry acc))]
+                               [else (loop acc)]))))))
              (let ([ac? (string=? mode "on")])
                ;; userspace 守护；system* 的返回值无人消费，忽略子进程退出码
                (system* ppdctl "set" (if ac? "performance" "power-saver"))
-               (system* iw-bin "dev" "wlp0s20f3" "set" "power_save"
-                        (if ac? "off" "on"))
+               (for-each (lambda (dev)
+                           (system* iw-bin "dev" dev "set" "power_save"
+                                    (if ac? "off" "on")))
+                         (wireless-interfaces))
                ;; intel_pstate：AC 抬最低频消升频延迟 + IO 等待自动抬 EPP
                (set-sys "/sys/devices/system/cpu/intel_pstate/min_perf_pct"
                         (if ac? "30" "8"))
@@ -1479,8 +1519,8 @@ iifname "virbr0" oifname != "virbr0" masquerade
                                    ;; false-if-exception 兜住机器上缺该 sysfs 节点的情况
                                    (let ([val (false-if-exception
                                                (call-with-input-file
-                                                "/sys/class/power_supply/ADP1/online"
-                                                read))])
+                                                   "/sys/class/power_supply/ADP1/online"
+                                                 read))])
                                      (zero? (system* #$ac-power-script
                                                      (if (and (number? val) (= val 1))
                                                          "on"
@@ -1556,18 +1596,18 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                            (list (program-file
                                   "beesd-run"
                                   (with-imported-modules '((guix build utils))
-                                    #~(begin
-                                        (use-modules (guix build utils))
-                                        (let* ([uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036"]
-                                               [link (string-append
-                                                      "/dev/disk/by-uuid/" uuid)])
-                                          (mkdir-p "/dev/disk/by-uuid")
-                                          (false-if-exception (delete-file link))
-                                          (symlink "/dev/mapper/root" link)
-                                          (setenv "PATH"
-                                                  #$(file-append util-linux "/sbin"))
-                                          (execl #$(file-append (spec->pkg "bees") "/sbin/beesd")
-                                                 "beesd" uuid))))))
+                                                         #~(begin
+                                                             (use-modules (guix build utils))
+                                                             (let* ([uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036"]
+                                                                    [link (string-append
+                                                                           "/dev/disk/by-uuid/" uuid)])
+                                                               (mkdir-p "/dev/disk/by-uuid")
+                                                               (false-if-exception (delete-file link))
+                                                               (symlink "/dev/mapper/root" link)
+                                                               (setenv "PATH"
+                                                                       #$(file-append util-linux "/sbin"))
+                                                               (execl #$(file-append (spec->pkg "bees") "/sbin/beesd")
+                                                                      "beesd" uuid))))))
                            #:requirement '(file-systems user-processes)
                            #:log-file "/var/log/beesd.log"
                            #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
@@ -3015,40 +3055,18 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
 :CUSTOM_ID: iso
 :END:
 
-自建 Live 安装镜像的 =operating-system= 声明，与主机 =%system= 独立。
+自建 Live 安装镜像的 =operating-system= 声明，与主机 =%system= 独立。定位是**救砖 + 装机**双用途救援盘。
 - 构建命令：执行 =blue build-iso= 进行 tangle 并调用 =tools/build-image.scm= 生成 ISO 镜像文件。
-- 桌面环境：默认搭载 XFCE + labwc（Wayland），提供 live 用户免密自动登录，包含常用网络排障与系统装机工具链。
-- 自包含设计：ISO 镜像专用的模块引用（ =use-modules= ）直接内联在本块中，tangle 输出至独立的 =tmp/live-iso.scm= ；唯一的跨区共享是 =<<guix-substitutes>>= 服务（定义于 System 区「Guix 下载源」小节），宿主与 ISO 有意共用同一组 substitute 源。
-- 精简频道（guix+nonguix）写进 Live 的 =/etc/guix/channels.scm= ； =(gnu packages xfce)= 提供 xfce4-session 包（startxfce4 的 store 路径）；sshd 调试用随系统启动（base OS 默认 =%auto-start? #f= ）。
+- 变体： =desktop= （XFCE + labwc，greetd 免密自动登录 live 用户，登出后自动回桌面）与 =minimal= （保留 tty1 TUI 安装器，tty3-6 root 免密 shell），分别 tangle 到 =tmp/live-iso-desktop.scm= / =tmp/live-iso-minimal.scm= 。
+- 救砖装机载荷： =rescue-chroot.sh= / =emergency-blue.sh= 经 =live-rescue-tools= 包装进系统 PATH；本仓库快照（剔除 =.git= / =dist= / =tmp= ）放进各用户 =~/Guix-configs= ，配合内嵌的 =emacs-minimal= 让 =emergency-blue.sh init= 开箱可跑。
+- 自包含设计：ISO 镜像专用的模块引用（ =use-modules= ）直接内联在本块中；唯一的跨区共享是 =<<guix-substitutes>>= 服务（定义于 System 区「Guix 下载源」小节），宿主与 ISO 有意共用同一组 substitute 源。
+- 精简频道（guix+nonguix）写进 Live 的 =/etc/guix/channels.scm= ；sshd 随系统启动，root 与 live 密码均为 =live= （救援盘场景可接受）； =modprobe.blacklist=radeon,amdgpu= 已删——黑名单会让 AMD 显卡失去 KMS，Wayland 桌面直接起不来。
+- 网络栈：desktop 变体删掉安装器基底默认的 connman，统一走 =xfce-desktop-service-type= 自带的 NetworkManager + nm-applet（ =nmtui= 亦可）；minimal 变体保留 connman（TUI 安装器的网络步骤依赖它）。
 
-#+NAME: live-installation-os
-#+begin_src scheme :tangle ../tmp/live-iso.scm :noweb yes
-(use-modules (gnu)
-             (gnu system)
-             (gnu system install)
-             (gnu services)
-             (gnu services base)
-             (gnu services desktop)
-             (gnu services xorg)
-             (gnu services dbus)
-             (gnu packages shells)
-             (gnu packages package-management)
-             (gnu packages base)
-             (gnu packages linux)
-             (gnu packages xfce)
-             (gnu services ssh)
-             (gnu packages guile)
-             (gnu packages texinfo)
-             (gnu packages networking)
-             (nongnu packages linux)
-             (gnu packages gnuzilla)
-             (nongnu system linux-initrd)
-             (guix channels)
-             (guix gexp)
-             (guix packages)
-             (ice-9 match)
-             (srfi srfi-1)
-             (srfi srfi-19))
+#+NAME: live-common
+#+begin_src scheme
+;; 两个变体共享的部分：基底、频道、用户、骨架、软件包、服务改写。
+;; 本块只是 noweb 片段，不独立 tangle；由 <<live-common>> 引用展开。
 
 (define %live-base-os
   (make-installation-os))
@@ -3067,61 +3085,197 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
            (openpgp-fingerprint
             "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))))
 
-(define %live-installation-os
+;; 救援脚本包：rescue-chroot.sh / emergency-blue.sh 装进系统 profile 的 /bin。
+;; builder 只用核心 Guile 过程（mkdir/copy-file/chmod），不 import
+;; (guix build utils)，否则要再包一层 with-imported-modules。
+(define live-rescue-tools
+  (package
+   (name "live-rescue-tools")
+   (version "0")
+   (source (local-file "../tools" "rescue-tools" #:recursive? #t))
+   (build-system trivial-build-system)
+   (arguments
+    (list #:builder
+          #~(let ([bin (string-append #$output "/bin")])
+              (mkdir #$output)
+              (mkdir bin)
+              (for-each
+               (lambda (name)
+                 (let ([dst (string-append bin "/" name)])
+                   (copy-file (string-append #$source "/" name) dst)
+                   (chmod dst #o555)))
+               '("rescue-chroot.sh" "emergency-blue.sh")))))
+   (synopsis "Rescue scripts for the live ISO")
+   (description "rescue-chroot.sh and emergency-blue.sh on PATH.")
+   (home-page "")
+   (license expat)))
+
+;; 仓库快照过滤：剔除 .git / dist / tmp（dist 里有旧 ISO，绝不能进镜像）。
+(define (%live-repo-select? file stat)
+  (define (excluded? name)
+    (or (string-suffix? (string-append "/" name) file)
+        (string-contains file (string-append "/" name "/"))))
+  (not (or (excluded? ".git") (excluded? "dist") (excluded? "tmp"))))
+
+;; live 与 root 都用 fish（骨架里带 fish 配置与速查 greeting）；
+;; 密码都是 live——救援盘需要确定性的 sudo/ssh 口令。
+(define %live-users
+  (cons* (user-account
+          (name "live")
+          (group "users")
+          (password (crypt "live" "$6$abc"))
+          (supplementary-groups '("wheel" "audio" "video" "netdev"))
+          (shell (file-append fish "/bin/fish")))
+         (user-account
+          (inherit %root-account)
+          (password (crypt "live" "$6$abc"))
+          (shell (file-append fish "/bin/fish")))
+         %base-user-accounts))
+
+;; 骨架 = livecd dotfiles + 仓库快照（~/Guix-configs）。
+;; 注意：骨架拷贝保留 store 只读权限，用仓库前先 cp -r 一份可写副本。
+(define %live-skeletons
+  (append (operating-system-skeletons %live-base-os)
+          `(("." ,(local-file "../source/files/livecd" #:recursive? #t))
+            ("Guix-configs"
+             ,(local-file "../." "guix-configs"
+                          #:recursive? #t
+                          #:select? %live-repo-select?)))))
+
+;; 命令行软件包（两变体共享）：救援/排障/装机工具链。
+;; emacs-minimal 是 emergency-blue tangle 的硬依赖，必须内嵌。
+(define %live-cli-packages
+  (append (specifications->packages
+           '(;; 救援与硬件排障
+             "smartmontools"
+             "nvme-cli"
+             "testdisk"
+             "hdparm"
+             "efibootmgr"
+             "dmidecode"
+             "lsof"
+             "strace"
+             "tmux"
+
+             ;; CLI 工具
+             "curl"
+             "file"
+             "fish"
+             "git"
+             "gnupg"
+             "mosh"
+             "ncurses"
+             "rsync"
+             "unzip"
+
+             ;; TUI 安装器依赖
+             "guile-newt"
+             "guile-parted"
+
+             ;; 网络
+             "mihomo"
+             "network-manager"
+             "bind:utils"
+
+             ;; tangle 依赖（emergency-blue 跑 org-babel）
+             "emacs-minimal"
+
+             ;; 中文字体（GUI 下读中文 README/网页）
+             "font-sarasa-gothic"))
+          (list live-rescue-tools)
+          (operating-system-packages %live-base-os)))
+
+;; 服务改写（两变体共享）：sshd 自启 + 密码登录；guix 频道换精简版；
+;; 补 /usr/bin/env（基底只给 /bin/sh，rescue 脚本的 env shebang 需要它）。
+(define %live-base-services
+  (modify-services (operating-system-user-services %live-base-os)
+                   (openssh-service-type
+                    config => (openssh-configuration
+                               (inherit config)
+                               (%auto-start? #t)
+                               (permit-root-login #t)
+                               (password-authentication? #t)))
+                   (guix-service-type
+                    config => (guix-configuration (inherit config)
+                                                  (channels channels-with-nonguix)))
+                   (special-files-service-type
+                    files => (append files
+                                     `(("/usr/bin/env"
+                                        ,(file-append coreutils
+                                                      "/bin/env")))))))
+#+end_src
+
+#+NAME: live-iso-desktop
+#+begin_src scheme :tangle ../tmp/live-iso-desktop.scm :noweb yes
+(use-modules (gnu)
+             (gnu system)
+             (gnu system install)
+             (gnu services)
+             (gnu services base)
+             (gnu services desktop)
+             (gnu services networking)
+             (gnu services xorg)
+             (gnu services dbus)
+             (gnu packages shells)
+             (gnu packages package-management)
+             (gnu packages base)
+             (gnu packages linux)
+             (gnu packages xfce)
+             (gnu services ssh)
+             (gnu packages guile)
+             (gnu packages texinfo)
+             (gnu packages networking)
+             (nongnu packages linux)
+             (gnu packages gnuzilla)
+             (nongnu system linux-initrd)
+             (guix channels)
+             (guix gexp)
+             (guix packages)
+             (guix licenses)
+             (guix build-system trivial)
+             (ice-9 match)
+             (srfi srfi-1)
+             (srfi srfi-13)
+             (srfi srfi-19))
+
+<<live-common>>
+
+;; greetd 会话：initial 与 default 都指向它——开机自动进桌面，
+;; 登出后 greetd 拉起 default session 又回到桌面（live 盘语义）。
+(define %xfce-session
+  (greetd-user-session
+   (command (file-append xfce4-session "/bin/startxfce4"))
+   (command-args '("--wayland"))
+   (xdg-session-type "wayland")
+   (xdg-env? #t)))
+
+(define %live-desktop-os
   (operating-system
    (inherit %live-base-os)
-   (timezone "Asia/Shanghai" )
-   (locale "en_GB.utf8" )
+   (timezone "Asia/Shanghai")
+   (locale "en_GB.utf8")
    (host-name "live-system")
-   (label (format #f "Guix Desktop (~a build)"
+   (label (format #f "Guix Rescue (~a build)"
                   (date->string (current-date) "~Y-~m-~d")))
    (kernel linux)
    (firmware (cons* linux-firmware
                     (operating-system-firmware %live-base-os)))
-
-   (users
-    (cons* (user-account
-            (name "live")
-            (group "users")
-            (password (crypt "live" "$6$abc"))
-            (supplementary-groups '("wheel" "audio" "video" "netdev"))
-            (shell (file-append zsh "/bin/zsh")))
-           (user-account
-            (inherit %root-account)
-            (shell (file-append zsh "/bin/zsh")))
-           %base-user-accounts))
-
-   (skeletons
-    (append (operating-system-skeletons %live-base-os)
-            `(("." ,(local-file "../source/files/livecd" #:recursive? #t)))))
+   ;; 只留 quiet：删掉基底的 radeon/amdgpu 黑名单，否则 AMD 显卡无 KMS。
+   (kernel-arguments '("quiet"))
+   (users %live-users)
+   (skeletons %live-skeletons)
+   ;; 基底把 privileged-programs 砍到只剩 passwd——sudo/su/mount 全没
+   ;; setuid,救援盘直接废。换回标准集合(sudo/su/mount/umount/ping/…)。
+   (privileged-programs %default-privileged-programs)
 
    (packages
     (append (specifications->packages
-             '(;; CLI 工具
-               "curl"
-               "file"
-               "fish"
-               "git"
-               "gnupg"
-               "mosh"
-               "ncurses"
-               "rsync"
-               "unzip"
-
-               ;; installer 依赖
-               "guile-newt"
-               "guile-parted"
-
-               ;; 网络工具
-               "mihomo"
-               "network-manager"
-
-               ;; 中文字体
-               "font-sarasa-gothic"
-
-               ;; 浏览器
+             '(;; 浏览器
                "icecat"
                "icecat-l10n"
+
+               ;; WiFi 托盘图标
+               "network-manager-applet"
 
                ;; XFCE 套件
                "xfce4-terminal"
@@ -3137,52 +3291,104 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
 
                ;; Wayland 合成器
                "labwc"
-
                "wlr-randr"
-
-               ;; AI Agent
-               "crush-bin"
 
                ;; 主题
                "adw-gtk3-theme"
                "bibata-cursor-theme"
                "papirus-icon-theme"))
-
-            (operating-system-packages %live-base-os)))
+            %live-cli-packages))
 
    (services
     (append
      <<guix-substitutes>>
      (list (service elogind-service-type)
            (service xfce-desktop-service-type)
+           ;; xfce-desktop-service-type 只是 polkit/pam/profile 小扩展，
+           ;; 不含 %desktop-services——NetworkManager 要显式加。
+           (service network-manager-service-type)
+           (service modem-manager-service-type)
            (service greetd-service-type
                     (greetd-configuration
-                     (greeter-supplementary-groups '("input" "video"))
                      (terminals
                       (list (greetd-terminal-configuration
                              (terminal-vt "7")
                              (terminal-switch #t)
                              (initial-session-user "live")
-                             (initial-session-command
-                              (greetd-user-session
-                               (command (file-append xfce4-session "/bin/startxfce4"))
-                               (command-args '("--wayland"))
-                               (xdg-session-type "wayland")
-                               (xdg-env? #t)))
-                             (default-session-command
-                               (greetd-agreety-session))))))))
-     (modify-services (operating-system-user-services %live-base-os)
+                             (initial-session-command %xfce-session)
+                             (default-session-user "live")
+                             (default-session-command %xfce-session)))))))
+     (modify-services %live-base-services
+                      ;; 删 tty1 的 kmscon 安装器（直接进桌面）；
+                      ;; console-font 依赖 term-tty1，必须配对删。
                       (delete kmscon-service-type)
                       (delete console-font-service-type)
-                      (openssh-service-type
-                       config => (openssh-configuration
-                                  (inherit config)
-                                  (%auto-start? #t)
-                                  (permit-root-login #t)
-                                  (password-authentication? #t)))
-                      (guix-service-type
-                       config => (guix-configuration (inherit config)
-                                                     (channels channels-with-nonguix))))))))
+                      ;; 网络统一走 NetworkManager，删掉基底的 connman。
+                      (delete connman-service-type))))))
 
-%live-installation-os
+%live-desktop-os
+#+end_src
+
+#+NAME: live-iso-minimal
+#+begin_src scheme :tangle ../tmp/live-iso-minimal.scm :noweb yes
+(use-modules (gnu)
+             (gnu system)
+             (gnu system install)
+             (gnu services)
+             (gnu services base)
+             (gnu services networking)
+             (gnu packages shells)
+             (gnu packages package-management)
+             (gnu packages base)
+             (gnu packages linux)
+             (gnu services ssh)
+             (gnu packages guile)
+             (gnu packages texinfo)
+             (gnu packages networking)
+             (nongnu packages linux)
+             (nongnu system linux-initrd)
+             (guix channels)
+             (guix gexp)
+             (guix packages)
+             (guix licenses)
+             (guix build-system trivial)
+             (ice-9 match)
+             (srfi srfi-1)
+             (srfi srfi-13)
+             (srfi srfi-19))
+
+<<live-common>>
+
+(define %live-minimal-os
+  (operating-system
+   (inherit %live-base-os)
+   (timezone "Asia/Shanghai")
+   (locale "en_GB.utf8")
+   (host-name "live-system")
+   (label (format #f "Guix Rescue Minimal (~a build)"
+                  (date->string (current-date) "~Y-~m-~d")))
+   (kernel linux)
+   (firmware (cons* linux-firmware
+                    (operating-system-firmware %live-base-os)))
+   (kernel-arguments '("quiet"))
+
+   (users %live-users)
+   (skeletons %live-skeletons)
+   (privileged-programs %default-privileged-programs)
+   (packages %live-cli-packages)
+
+   ;; tty1 保留 TUI 安装器（kmscon），tty2 手册，tty3-6 root 免密。
+   ;; issue 换成救援盘速查（tty 登录前可见）。
+   (issue "
+\x1b[1;37mGuix Rescue/Install Live\x1b[0m  live/live · root/live
+tty1 installer · tty2 manual · tty3-6 root shell
+network: \x1b[1mnmtui\x1b[0m · rescue: \x1b[1mrescue-chroot.sh\x1b[0m · repo: ~/Guix-configs
+")
+
+   (services
+    (append
+     <<guix-substitutes>>
+     %live-base-services))))
+
+%live-minimal-os
 #+end_src

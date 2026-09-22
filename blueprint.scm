@@ -974,8 +974,8 @@
 ;; ---- Live ISO 辅助（build-iso-command 用） -----------------------------
 ;;
 ;; 仿 Testament blueprint.scm 的 %images / images-from-arguments，前缀为
-;; 本仓库自有名 "jeans"。minimal 目前共用 desktop 的 live-installation-os
-;; （config.org 只定义了 desktop 版本）；要做 minimal 得加独立 OS 块。
+;; 本仓库自有名 "jeans"。每个变体对应 config.org 里独立 tangle 目标
+;; tmp/live-iso-<variant>.scm（desktop=XFCE 救援桌面，minimal=TUI 安装器）。
 
 ;; ISO 变体列表（顺序即构建顺序：先 desktop 主目标，再 minimal fallback）。
 (define %images '("desktop" "minimal"))
@@ -994,8 +994,8 @@
           (%current-system)))
 
 ;; blue build-iso [VARIANT] ... —— 构建 Guix System Live ISO。
-;; 先 tangle（让 :tangle ../tmp/live-iso.scm 的块出产物），再对每个变体
-;; 调 tools/build-image.scm（跑在 guix repl 环境，见文件头）。不带参数
+;; 先 tangle（让 :tangle ../tmp/live-iso-<variant>.scm 的块出产物），再对每个
+;; 变体调 tools/build-image.scm（跑在 guix repl 环境，见文件头）。不带参数
 ;; 构建全部变体。构建耗时 30+ 分钟，见 docs/iso-build.md。
 (define-command (build-iso-command arguments)
   ((invoke "build-iso")
@@ -1006,18 +1006,18 @@
 不带参数则构建 %images 列出的所有变体；带参数只构建匹配 VARIANT 的。"))
   (tangle-config)
   (mkdir-p (string-append %repo-root "/dist"))
-  (let ([scm (string-append %tmp-dir "/live-iso.scm")])
-    (every
-     (cut eq? #t <>)
-     (map
-      (lambda (variant)
-        (let* ([iso-name (%live-iso-filename variant)]
-               [iso-path (string-append %repo-root "/dist/" iso-name)])
-          (format #t "\tBUILD ISO\t~a~%" iso-name)
-          (%guix `("repl" "--"
-                   ,(string-append %tools-dir "/build-image.scm")
-                   ,iso-path ,scm "--image-type=iso9660"))))
-      (images-from-arguments arguments)))))
+  (every
+   (cut eq? #t <>)
+   (map
+    (lambda (variant)
+      (let* ([iso-name (%live-iso-filename variant)]
+             [iso-path (string-append %repo-root "/dist/" iso-name)]
+             [scm (string-append %tmp-dir "/live-iso-" variant ".scm")])
+        (format #t "\tBUILD ISO\t~a~%" iso-name)
+        (%guix `("repl" "--"
+                 ,(string-append %tools-dir "/build-image.scm")
+                 ,iso-path ,scm "--image-type=iso9660"))))
+    (images-from-arguments arguments))))
 
 ;;; ---------- 编辑 ----------
 
