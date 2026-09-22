@@ -33,7 +33,7 @@ CUA_DRIVER_RS_ENABLE_WAYLAND=1 WAYLAND_DISPLAY=wayland-1 XDG_RUNTIME_DIR=/run/us
 
 Verify: `cua-driver call get_screen_size '{}'` → width/height JSON; `cua-driver call list_windows '{}'` → real toplevels; `get_desktop_state` returns `screenshot_png_b64` (base64-decode → PNG).
 
-Fixing the tool channel requires the var in the gateway env → gateway restart (disruptive, user does it): `CUA_DRIVER_RS_ENABLE_WAYLAND=1 hermes-desktop`. After restart, re-run tool `capture` to confirm before relying on it.
+Fixing the tool channel requires the var in the gateway env → gateway restart (disruptive, user does it): `CUA_DRIVER_RS_ENABLE_WAYLAND=1 hermes desktop`. After restart, re-run tool `capture` to confirm before relying on it.
 
 ## 4. Limits
 

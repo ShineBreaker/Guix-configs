@@ -23,7 +23,8 @@ hermes desktop --build-only
 release/linux-unpacked/Hermes: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file
 ```
 
-## 2. wrapper:`~/.local/bin/hermes-desktop`(随 hermes 包 stow 部署)
+## 2. desktop 实体:`~/.local/libexec/hermes-desktop`(随 hermes 包 stow 部署,
+##    经 `hermes desktop` 子命令分发进入)
 
 ```bash
 #!/usr/bin/env bash
@@ -31,12 +32,13 @@ set -euo pipefail
 : "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
 RELEASE_DIR="${HERMES_HOME}/hermes-agent/apps/desktop/release/linux-unpacked"
 HERMES_BIN="${RELEASE_DIR}/Hermes"
-MANIFEST="$(dirname "$(readlink -f "$0")")/hermes-desktop-manifest.scm"
+MANIFEST="${HERMES_HOME}/manifest.scm"   # config.org tangle 产物(原 hermes-desktop-manifest.scm)
 
-# 懒检测: 产物缺失 → 先 build
+# 懒检测: 产物缺失 → 先 build(直调 venv 的原生子命令,不走 bin/hermes——
+# 分发回本实体会死循环)
 if [[ ! -x "${HERMES_BIN}" ]]; then
   echo "Hermes Desktop 尚未 build，执行 build（首次需几分钟）..." >&2
-  hermes desktop --build-only
+  "${HERMES_HOME}/hermes-agent/venv/bin/hermes" desktop --build-only
 fi
 
 RT_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -80,7 +82,8 @@ exec guix shell --container --emulate-fhs --network \
   -- bash -c "${EXEC_STRING}" bash "$@"
 ```
 
-## 3. manifest:`hermes-desktop-manifest.scm`(与 appimage-run electron 类型一致)
+## 3. manifest:config.org tangle 的 `$HERMES_HOME/manifest.scm`(原
+##    `hermes-desktop-manifest.scm`,与 appimage-run electron 类型一致)
 
 ```scheme
 (specifications->manifest
@@ -99,7 +102,7 @@ exec guix shell --container --emulate-fhs --network \
 ## 4. 验证(核心判据)
 
 ```bash
-HERMES_DESKTOP=1 timeout 70 /home/brokenshine/.local/bin/hermes-desktop 2>&1 | head -40
+HERMES_DESKTOP=1 timeout 70 ~/.local/bin/hermes desktop 2>&1 | head -40
 ```
 判据:Hermes 二进制**不再报 `libglib-2.0.so.0: cannot open shared object file`**,直接进
 Chromium 启动阶段。有 Wayland 桌面会话时正常弹窗。
@@ -153,15 +156,15 @@ wrapper,**照抄别省**):
      **删掉** `LIBGL_ALWAYS_SOFTWARE=1` 与 `--enable-unsafe-swiftshader`(强制软件渲染)
    - 实测:容器内 `glxinfo` = `Mesa Intel(R) Arc(tm) Graphics (MTL)` / OpenGL 4.6;
      Electron GPU 进程稳定运行 44s,唯一一次退出是外部 SIGTERM(`exit_code=15`,非 SIGILL)
-   - 应急回退:`LIBGL_ALWAYS_SOFTWARE=1 hermes-desktop`(变量已在 PRESERVE 正则透传)
+   - 应急回退:`LIBGL_ALWAYS_SOFTWARE=1 hermes desktop`(变量已在 PRESERVE 正则透传)
 5. **`--no-sandbox --disable-gpu-sandbox`** —— 嵌套 guix shell 容器里 Chromium 沙箱
    起不来(渲染进程 exitCode=5 crash loop),关掉沙箱窗口才能正常出。
 
 其他坑:
 - **nix-ld 不够**:Electron 硬链 `/usr/lib` 的预编译二进制,nix-ld 只能缓解一小块,
   `libglib-2.0.so.0` 仍会缺。必须用 `--emulate-fhs` 容器(注入整套 glib/gtk+/nss)。
-- **后台 shell 跑 `hermes-desktop` 会 command not found**:非登录 shell 的 PATH 无
-  `~/.local/bin`,用绝对路径 `/home/brokenshine/.local/bin/hermes-desktop` 或显式
+- **后台 shell 跑 `hermes desktop` 会 command not found**:非登录 shell 的 PATH 无
+  `~/.local/bin`,用绝对路径 `~/.local/bin/hermes desktop` 或显式
   `export PATH=$HOME/.local/bin:$PATH`。(注意:写含 `sleep`/`timeout` 的长验证脚本易触发
   agent 的 command 审批拦截,改用 `terminal(background=true)` + `process(log)` 轮询。)
 - **升级后首跑会卡几分钟**:`git pull` 更新 checkout 不动 `apps/desktop/release/`;

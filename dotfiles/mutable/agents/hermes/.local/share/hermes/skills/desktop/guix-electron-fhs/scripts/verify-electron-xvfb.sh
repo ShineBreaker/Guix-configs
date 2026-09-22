@@ -7,13 +7,16 @@
 # It CANNOT prove a window is visible — Xvfb is a virtual framebuffer.
 # Always tell the user the real-desktop window still needs their eye.
 set -u
-LAUNCHER="${1:-/home/brokenshine/.local/bin/hermes-desktop}"   # pass your launcher as $1
+# 默认走 Guix 增强子命令形态（bin/hermes 分发到 libexec/hermes-desktop 实体）；
+# $1 可传任意 launcher 命令（含参数，按空白切分为 argv）
+LAUNCHER_STR="${1:-hermes desktop}"   # pass your launcher as $1
+read -r -a LAUNCHER <<< "$LAUNCHER_STR"
 LOG="$(mktemp /tmp/hermes-verify-desktop-xvfb-XXXXXX.log)"
 trap 'rm -f "$LOG"' EXIT
 
 echo "=== Xvfb(:99) + launcher, 35s ==="
 HERMES_DESKTOP=1 xvfb-run -a -s "-screen 0 1280x720x24" \
-  timeout 35 "$LAUNCHER" >"$LOG" 2>&1 &
+  timeout 35 "${LAUNCHER[@]}" >"$LOG" 2>&1 &
 PID=$!
 sleep 25
 if kill -0 $PID 2>/dev/null; then

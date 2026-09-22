@@ -2,6 +2,7 @@ model:
   default: step-5-preview
   provider: stepfun
   base_url: https://api.stepfun.com/step_plan/v1
+  api_mode: chat_completions
 providers:
   minimax-cn:
     models:
@@ -18,8 +19,8 @@ providers:
     request_timeout_seconds: 600
     stale_timeout_seconds: 600
 fallback_providers:
-  - provider: xiaomi
-    model: mimo-v2.5
+  - provider: zai
+    model: glm-5.3-flash
 toolsets:
   - hermes-cli
 agent:
@@ -634,6 +635,15 @@ known_builtin_toolsets:
     - web
     - x_search
     - yuanbao
+
+# ── Guix 侧：desktop 启动器防覆写 ─────────────────────────────────────
+# 部署位 ~/.local/share/applications/hermes.desktop 是 stow 软链（指向仓库
+# 源文件），上游 hermes 每次启动都会把 Exec 重写为直调 venv python，写穿
+# 软链污染仓库并丢失容器包装器路径与 MimeType。false = 已存在的条目不再
+# 被重写（缺失时上游仍会创建），语义见上游 hermes_cli/linux_desktop_entry.py
+# 的 _launcher_entry_management_enabled()。
+desktop:
+  manage_launcher_entry: false
 
 # ── Fallback Model ────────────────────────────────────────────────────
 # Automatic provider failover when primary is unavailable.

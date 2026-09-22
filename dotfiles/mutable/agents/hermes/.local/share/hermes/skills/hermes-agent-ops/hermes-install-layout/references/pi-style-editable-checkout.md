@@ -16,27 +16,30 @@
 - editable install 下,`skills/ plugins/ locales/ web_dist` 从 **checkout 目录**
   自动解析,**不需设 `HERMES_BUNDLED_*`** 环境变量(那是 nix sealed-store 路径
   才需要的复杂物)。
-- **Electron desktop 已救活**:`hermes-desktop` wrapper 用 `guix shell
-  --emulate-fhs` 容器跑 build 出的 Electron 二进制(含 GPU 硬件渲染),
+- **Electron desktop 已救活**:`hermes desktop` 子命令(实体 libexec/hermes-desktop)
+  用 `guix shell --emulate-fhs` 容器跑 build 出的 Electron 二进制(含 GPU 硬件渲染),
   详见 `desktop-fhs-rescue.md`。TUI(`hermes`)与 desktop 并存。
-- 升级: 直接跑 `hermes-update`(委托官方 `hermes update`,跟 main;透传参数如
-  `--branch NAME` / `--check` / `--backup` 等)。**放弃 pin-tag 模型**(不再有
-  `hermes-version` 文件)。更新后 herd 管理的 `hermes-backend` / `hermes-gateway`
-  会被 `hermes-update` 自动 restart 加载新代码,但**已开的 TUI 会话/desktop 窗口
-  持旧代码路径,需手动重开**——常驻 gateway 进程内存里持有旧模块路径(checkout
-  一动,`mcp_tool.__file__` 推导的 watchdog 路径即失效,MCP server 全报 "can't
-  open file ... No such file or directory")。
+- 升级: 直接跑 `hermes update`(分发到 libexec/hermes-update,委托官方
+  `hermes update`,跟 main;透传参数如 `--branch NAME` / `--check` / `--backup` 等)。
+  **放弃 pin-tag 模型**(不再有 `hermes-version` 文件)。更新后 herd 管理的
+  `hermes-backend` / `hermes-gateway` 会被 `hermes update` 自动 restart 加载新代码,
+  但**已开的 TUI 会话/desktop 窗口持旧代码路径,需手动重开**——常驻 gateway 进程
+  内存里持有旧模块路径(checkout 一动,`mcp_tool.__file__` 推导的 watchdog 路径即失效,
+  MCP server 全报 "can't open file ... No such file or directory")。
 
 ## 目录结构
-- 启动脚本: `dotfiles/mutable/agents/hermes/.local/bin/{hermes, hermes-update, hermes-desktop, hermes-desktop-manifest.scm}`
-  - 由 `blue stow hermes` 部署到 `~/.local/bin/`(GNU Stow 直链,改源即生效)
+- 入口: `dotfiles/mutable/agents/hermes/.local/bin/{hermes, hermes-acp}`
+  - 由 `blue stow agents/hermes` 部署到 `~/.local/bin/`(GNU Stow 直链,改源即生效)
+- 子命令实体(与用户直接交互走 `hermes update` / `hermes desktop` 子命令形态):
+  `dotfiles/mutable/agents/hermes/.local/libexec/{hermes-update, hermes-desktop, hermes-lib.sh}`
+  - 部署到 `~/.local/libexec/`;desktop 容器 manifest 由 config.org tangle 提供
 - runtime(不进仓库, gitignore): `$HERMES_HOME/hermes-agent/`(checkout 直接在
   **顶层**,无 `checkout/` 子层——desktop 壳 `isHermesSourceRoot()` 要求
   `hermes_cli/main.py` 在 `ACTIVE_HERMES_ROOT` 直接下级)+ `venv/` 内嵌
 - `HERMES_HOME`: 直接读系统变量(用户已在系统设置 = `$XDG_DATA_HOME/hermes`),
   fallback 仅保险
 
-## `hermes`(wrapper)
+## `hermes`(入口 wrapper;update/desktop 子命令分发到 ../libexec/,此处为最小骨架)
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -45,7 +48,7 @@ export HERMES_HOME
 HERMES_RUNTIME="${HERMES_HOME}/hermes-agent"
 HERMES_BIN="${HERMES_RUNTIME}/venv/bin/hermes"
 if [[ ! -x "${HERMES_BIN}" ]]; then
-  _up="$(dirname "$(readlink -f "$0")")/hermes-update"
+  _up="$(dirname "$(readlink -f "$0")")/../libexec/hermes-update"
   if [[ -x "${_up}" ]]; then
     echo "Hermes 未安装,执行首次安装..." >&2
     "${_up}" || { echo "安装失败" >&2; exit 1; }
@@ -58,8 +61,10 @@ unset PYTHONPATH
 unset PYTHONHOME
 exec "${HERMES_BIN}" "$@"
 ```
+(真实 wrapper 另含 update/desktop 子命令分发——case 首参 exec `../libexec/hermes-{update,desktop}`,
+注意该分发会遮蔽上游原生同名子命令——以及 hermes-lib.sh 的布局常量,见仓库源文件。)
 
-## `hermes-update`(安装/升级,委托官方 `hermes update`,跟 main)
+## `hermes update`(实体 libexec/hermes-update;安装/升级,委托官方 `hermes update`,跟 main)
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
@@ -109,7 +114,7 @@ _uv_managed="${HERMES_HOME}/bin/uv"
 for _svc in "${HERMES_HERD_SERVICES[@]}"; do herd restart "${_svc}"; done
 ```
 (完整版含退出码处理 / --check 跳过重启 / 首装 bootstrap 标记写入,见仓库
-`dotfiles/mutable/agents/hermes/.local/bin/hermes-update`。)
+`dotfiles/mutable/agents/hermes/.local/libexec/hermes-update`。)
 
 > **为什么委托官方 update**: 官方 update 在 editable 安装下能正确定位 checkout
 > (`PROJECT_ROOT = Path(__file__).parent.parent` 直指 checkout 源码),判为 `git`
@@ -118,7 +123,7 @@ for _svc in "${HERMES_HERD_SERVICES[@]}"; do herd restart "${_svc}"; done
 > 迁移、cron jobs 安全网。我们只补它做不了的: 首次安装 + 停旧 gateway + uv 隔离
 > + herd restart。
 
-## 验证 `hermes-update` 是否真的跑过(取证指纹)
+## 验证 `hermes update` 是否真的跑过(取证指纹)
 
 > **2026-08-04 模型变更**: 委托官方 `hermes update` 后,`.hermes-bootstrap-complete`
 > 只在**首次安装**时由本脚本写一次(官方 update 不碰它)。它不再能证明"最近一次
@@ -145,14 +150,14 @@ herd status hermes-backend                                    # 重启时间应�
 |---|---|---|
 | `HEAD` ↔ `origin/main` | `git rev-parse HEAD` == `git rev-parse origin/main` | 本地已追平远端 |
 | `venv/bin/python` ↔ `~/.local/share/uv/python/...` | `readlink -f` 指向 uv 自管 python | venv 是 uv 自管而非 Guix |
-| herd 服务重启时间 ↔ HEAD commit 时间 | 服务 `启动于` 晚于 commit 时间 | hermes-update 的 B.4 herd restart 跑过了 |
+| herd 服务重启时间 ↔ HEAD commit 时间 | 服务 `启动于` 晚于 commit 时间 | `hermes update` 的 B.4 herd restart 跑过了 |
 
 `desktop.json` / `desktop-build-stamp.json` 是 **electron 壳独立构建**的 timestamp,
 官方 update 在 `apps/desktop/` 源变了时会触发 `desktop --build-only`(content-hash
 stamp 不匹配),源没变则秒过。`builtAt` 比 HEAD commit 早是正常情况(用户先 update
 源码,desktop build 由 stamp 决定是否重跑);反向才是 **desktop 没重 build 就在跑**
 的征兆——源码最新但壳仍持旧模块路径,典型症状 electron UI 找不到某个新版 hermes
-CLI 暴露的命令。要修:`hermes desktop --build-only`,然后重开 `hermes-desktop` 进程。
+CLI 暴露的命令。要修:`hermes desktop --build-only`,然后重开 `hermes desktop` 进程。
 
 ## 写 Hermes config 的两条规则(踩坑 2026-07-21)
 
@@ -209,13 +214,14 @@ grep -n "^  <candidate_key_short>:" ~/.local/share/hermes/config.yaml
 - **更新后旧进程持 stale 模块路径**:TUI 是 client + 常驻 gateway 架构,
   `mcp_tool.py` 用 `__file__` 推导 MCP watchdog 脚本路径;checkout 布局变动后
   旧 gateway 仍指向旧路径 → MCP 全挂(日志 `can't open file .../checkout/tools/
-  mcp_stdio_watchdog.py`)。hermes-update 先 `hermes gateway stop`,用户再重开
+  mcp_stdio_watchdog.py`)。`hermes update` 先 `hermes gateway stop`,用户再重开
   TUI/desktop。新进程路径推导自动正确。
 - `write_file` 不赋 +x → 源文件 `-rw-------`,stow 后软链不可执行。必须 `chmod +x` 源。
 - hermes 包带 `.stow-folding` 时,stow 会把整个 `.local/bin` 折叠成软链指向源,
   与其他包(agenote/pi/appimage-run)的单文件软链冲突 → **删 `.stow-folding`** 走默认 no-folding。
 - `blue stow hermes` 报 `cannot stow ... over existing target ... since neither a link nor a directory`
   → 目标 `~/.local/bin/hermes` 是旧手动普通文件,先 `rm -f` 再 stow。
-- 后台进程非登录 shell,`~/.local/bin` 不在 PATH → 后台用绝对路径调用 `hermes-update`。
+- 后台进程非登录 shell,`~/.local/bin` 不在 PATH → 后台用绝对路径调用
+  `hermes`(如 `~/.local/bin/hermes update`)。
 - 删 `flake.nix` 的 hermes-agent input 后,手动用 python `json` 手术清 `flake.lock`
   孤立节点 + 反向引用(否则下次 nix 命令去 fetch 已删 input 报错)。

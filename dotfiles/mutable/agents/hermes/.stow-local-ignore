@@ -2,7 +2,7 @@
 # the tail of the relative path within the package. See GNU Stow manual.
 #
 # 源里只托管：配置（.local/share/hermes/{SOUL.md,config.yaml,memories/,skills/}）
-# 与启动脚本（.local/bin/{hermes,hermes-update,hermes-version}）。
+# 与启动脚本（.local/bin/{hermes,hermes-acp} + .local/libexec/ 子命令实体）。
 # 运行时产物（logs/sessions/cache/cron/...）生成在 ~/.local/share/hermes，不在源；
 # 若某天误放进源，下面这些规则让 stow 不把它们软链出去。
 

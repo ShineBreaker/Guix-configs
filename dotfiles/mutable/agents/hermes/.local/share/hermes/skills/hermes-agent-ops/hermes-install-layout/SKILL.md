@@ -1,6 +1,6 @@
 ---
 name: hermes-install-layout
-description: "Hermes Agent 在 Guix 上的安装布局 + CLI 二进制解析 + cron script 路径约束。**触发信号**:用户说\"hermes 命令找不到\"、\"hermes wrapper 写错了\"、\"cron 跑脚本失败 / script not found\"、\"hermes 是怎么装的\"、\"hermes 升级了怎么更新\"。2026-07-20 起 Hermes 已从 Nix 迁移到 **Pi 式 editable-checkout**(git clone 到 $HERMES_HOME/hermes-agent 顶层 + uv 自管 Python 3.11 + uv sync --extra all --locked),二进制在 `$HERMES_HOME/hermes-agent/venv/bin/hermes`,不是 nix store 路径。cron script 路径硬约束(`relative_to(scripts_dir_resolved)`)的绕过模式仍普适。本 skill 给出:Pi 式 wrapper/hermes-update 模板、cron 约束绕过、以及 Nix 路径作为 legacy 参考。"
+description: "Hermes Agent 在 Guix 上的安装布局 + CLI 二进制解析 + cron script 路径约束。**触发信号**:用户说\"hermes 命令找不到\"、\"hermes wrapper 写错了\"、\"cron 跑脚本失败 / script not found\"、\"hermes 是怎么装的\"、\"hermes 升级了怎么更新\"。2026-07-20 起 Hermes 已从 Nix 迁移到 **Pi 式 editable-checkout**(git clone 到 $HERMES_HOME/hermes-agent 顶层 + uv 自管 Python 3.11 + uv sync --extra all --locked),二进制在 `$HERMES_HOME/hermes-agent/venv/bin/hermes`,不是 nix store 路径。cron script 路径硬约束(`relative_to(scripts_dir_resolved)`)的绕过模式仍普适。本 skill 给出:Pi 式 wrapper/hermes update 子命令模板、cron 约束绕过、以及 Nix 路径作为 legacy 参考。"
 version: 0.1.0
 author: Hermes
 license: MIT
@@ -14,7 +14,7 @@ metadata:
 
 Hermes Agent 在本用户环境下**通过 Pi 式 editable-checkout 部署**(2026-07-20 从 Nix 迁出):`git clone` 整仓到 `$HERMES_HOME/hermes-agent` **顶层**(无 checkout/ 子层),uv 自管 Python(`uv python install 3.11`)+ `uv venv` + `uv sync --extra all --locked`(对齐上游 install.sh),二进制在 `$HERMES_HOME/hermes-agent/venv/bin/hermes`。**不再是** `/nix/store/*-hermes-agent-env` 路径(那条路径已随 `source/nix/configuration/programs/hermes.nix` 删除而失效)。
 
-完整的 Pi 式部署结构、两个脚本(`hermes` / `hermes-update`)、踩坑与升级流程见 `references/pi-style-editable-checkout.md` —— 直接 copy-modify 即可。本节只讲 CLI 二进制解析的两种形态 + cron 约束。
+完整的 Pi 式部署结构、入口与子命令实体(`hermes` 入口 + libexec/hermes-update 等)、踩坑与升级流程见 `references/pi-style-editable-checkout.md` —— 直接 copy-modify 即可。本节只讲 CLI 二进制解析的两种形态 + cron 约束。
 
 本 skill 是 Hermes 安装/运维层面的"踩坑知识库",三个核心主题:
 
@@ -158,11 +158,12 @@ Hermes: error while loading shared libraries: libglib-2.0.so.0: cannot open shar
 这正是 nix-ld 也只能缓解一小块、当初 nix 版要 makeWrapper 注入库才勉强跑的原因。
 
 ### 5.2 运行(复用 appimage-run 的 electron 库集)
-新增 `hermes-desktop` wrapper(随 hermes 包 stow 到 `~/.local/bin/`)。完整脚本见
+新增 `hermes desktop` 子命令实体(随 hermes 包 stow 到 `~/.local/libexec/`,经 `hermes` 入口分发)。完整脚本见
 `references/desktop-fhs-rescue.md` §2(**照抄,四个修复缺一不可**)。核心逻辑骨架:
 ```bash
-# 懒检测: 产物缺失/版本戳不符 → 先 build
-[ -x "$RELEASE_DIR/Hermes" ] || hermes desktop --build-only
+# 懒检测: 产物缺失/版本戳不符 → 先 build(直调 venv 的原生子命令,
+# 不走 bin/hermes——分发回本脚本会死循环)
+[ -x "$RELEASE_DIR/Hermes" ] || "${HERMES_CLI_BIN}" desktop --build-only
 # 进 FHS 容器跑(manifest 复用 appimage-run electron 类型库集)
 exec guix shell --container --emulate-fhs --network \
   --manifest="$MANIFEST" \
@@ -178,7 +179,7 @@ exec guix shell --container --emulate-fhs --network \
 4. **GPU 硬件渲染三件套**:`--share=/dev/dri`(**读写** bind;只读 `--expose` 会让 GPU 进程写 ioctl 失败 SIGILL exitCode 4)+ `--expose=/sys`(mesa `drmGetDevice()` 读 sysfs 解析 PCI 设备,缺它静默回退 llvmpipe)+ `--expose=/gnu/store`(Guix mesa 的 DRI 驱动路径硬编码 store 绝对路径)。Electron 参数配 `--ignore-gpu-blocklist`,**不要**设 `LIBGL_ALWAYS_SOFTWARE=1` / `--enable-unsafe-swiftshader`(软件渲染会让应用内动画全失效)。实测容器内 `glxinfo` = `Mesa Intel(R) Arc(tm) Graphics (MTL)`,GPU 进程稳定运行。
 5. `--no-sandbox --disable-gpu-sandbox` —— 嵌套 guix shell 容器里 Chromium 沙箱起不来(渲染进程 exitCode=5 crash loop),必须关。
 
-`hermes-desktop-manifest.scm` 包清单(与 `dotfiles/mutable/tools/appimage-run` 的 electron 类型完全一致,**不要显式加 glibc**——`--emulate-fhs` 自动注入 glibc-for-fhs 并读 `/etc/ld.so.cache`):
+desktop 容器包清单(原独立文件 `hermes-desktop-manifest.scm` 已并入 config.org,tangle 为 `$HERMES_HOME/manifest.scm`;与 `dotfiles/mutable/tools/appimage-run` 的 electron 类型完全一致,**不要显式加 glibc**——`--emulate-fhs` 自动注入 glibc-for-fhs 并读 `/etc/ld.so.cache`):
 ```
 coreutils bash zlib mesa libglvnd alsa-lib fontconfig freetype nss-certs gcc-toolchain font-wqy-zenhei
 ffmpeg nss at-spi2-core cups libdrm p11-kit glib gtk+ pango cairo libx11 libxext libxfixes
@@ -212,10 +213,10 @@ Hermes 二进制**不再报 `libglib-2.0.so.0` 缺失**,直接进 Chromium 启�
 - **`cronjob` 错误信息与实际行为不一致** — `cronjob(action='update', script='/abs/path')` 拒绝绝对路径时报 "Script path must be relative to ~/.hermes/scripts/",但本用户环境中 `~/.hermes/` **目录不存在**。实际运行时 Hermes 把裸 script 名解析为 `$HERMES_HOME/scripts/<name>`(本用户 `$HERMES_HOME=~/.local/share/hermes`)。这个矛盾是 Hermes 文档/实现偏差,不要误以为要把脚本放到 `~/.hermes/scripts/`。
 - **脚本 exit(1) 不是 cron 失败,是"有 RED"的正常退出** — `metabolism_check.py` 在发现任何 RED 检查项时 exit(1),全部 GREEN 才 exit(0)。Hermes cron 把非零退出码标记为 `last_status: "error"`,但这恰恰是脚本工作正常的标志——它的职责就是暴露问题。诊断 cron error 时,先看脚本输出:如果 14 项检查都正常打印了,说明脚本跑成功了;只有 `[ERROR]` 标签或脚本崩溃才是真正的故障。
 - **`_parse_json_lenient` 不处理 `/* */` 块注释** — `agent-config-metabolism` 的 JSONC 解析器只处理 `//` 行注释和尾逗号,不处理 `/* */` 块注释。TypeScript 的 `tsconfig.json` 大量使用块注释,所以 check #6 会永久性地把这些合法 JSONC 文件标记为 broken。修解析器(加块注释剥离),不要 exclude 这些文件。
-- **`hermes desktop` 不在 PATH 的后台/非登录 shell 跑会 "command not found"** — 后台进程(PATH 无 `~/.local/bin`)要用绝对路径 `~/.local/bin/hermes-desktop` 或显式 `export PATH=$HOME/.local/bin:$PATH`。
-- **desktop 升级后别忘 rebuild** — `git pull` 更新 checkout 不会动 `apps/desktop/release/`;`hermes-desktop` 懒检测会在产物缺失时自动 build,但首次会卡几分钟,属预期。
-- **别发早期的 `hermes-desktop` 版本** — 首版只 expose 单个 wayland socket、缺 `LD_LIBRARY_PATH`/`dbus-launch`,且把 `/dev/dri` **只读** expose 导致 GPU 进程 SIGILL,误判为"只能软件渲染"(`LIBGL_ALWAYS_SOFTWARE=1`)→ 应用内动画全失效。正确做法是 GPU 硬件渲染三件套(`--share=/dev/dri` 读写 + `--expose=/sys` + `--expose=/gnu/store`)。五个修复见 §5.2 / `references/desktop-fhs-rescue.md` §5,**照抄别省**。
-- **desktop 的 ad-hoc 验证别写含长 `sleep`/`timeout` 的 `hermes-verify-*.sh`** — 会触发 agent 的 command 审批硬拦截(BLOCKED)。改用 `terminal(background=true)` 跑 `hermes-desktop` + `process(action='log')` 轮询;且窗口弹出只能在真实 Wayland 桌面会话验证,无头终端只能确认「不 early-crash + 库注入」。
+- **`hermes desktop` 不在 PATH 的后台/非登录 shell 跑会 "command not found"** — 后台进程(PATH 无 `~/.local/bin`)要用绝对路径 `~/.local/bin/hermes desktop` 或显式 `export PATH=$HOME/.local/bin:$PATH`。
+- **desktop 升级后别忘 rebuild** — `git pull` 更新 checkout 不会动 `apps/desktop/release/`;`hermes desktop` 懒检测会在产物缺失时自动 build,但首次会卡几分钟,属预期。
+- **别发早期的 `hermes desktop` 实体版本** — 首版只 expose 单个 wayland socket、缺 `LD_LIBRARY_PATH`/`dbus-launch`,且把 `/dev/dri` **只读** expose 导致 GPU 进程 SIGILL,误判为"只能软件渲染"(`LIBGL_ALWAYS_SOFTWARE=1`)→ 应用内动画全失效。正确做法是 GPU 硬件渲染三件套(`--share=/dev/dri` 读写 + `--expose=/sys` + `--expose=/gnu/store`)。五个修复见 §5.2 / `references/desktop-fhs-rescue.md` §5,**照抄别省**。
+- **desktop 的 ad-hoc 验证别写含长 `sleep`/`timeout` 的 `hermes-verify-*.sh`** — 会触发 agent 的 command 审批硬拦截(BLOCKED)。改用 `terminal(background=true)` 跑 `hermes desktop` + `process(action='log')` 轮询;且窗口弹出只能在真实 Wayland 桌面会话验证,无头终端只能确认「不 early-crash + 库注入」。
 
 ## Verification
 
@@ -233,7 +234,7 @@ chmod +x ~/.local/share/hermes/skills/hermes-agent-ops/hermes-install-layout/scr
 ## References
 
 - `references/nix-install-layout.md` — Nix store 路径校验、版本兼容矩阵、hermes-agent-env 结构、`nix-store --query` 查路径正确性(legacy,本机 Nix 已移除)
-- `references/pi-style-editable-checkout.md` — Pi 式 editable-checkout 完整部署结构、三个脚本、踩坑、升级流程(本机当前形态)
+- `references/pi-style-editable-checkout.md` — Pi 式 editable-checkout 完整部署结构、入口与 libexec 实体、踩坑、升级流程(本机当前形态)
 - `references/desktop-fhs-rescue.md` — Electron desktop 在 Guix 上的 `guix shell --emulate-fhs` 救活方案:build 步骤、wrapper 全文、manifest 清单、验证判据(§5 的展开)
 - `references/cron-exit-codes-and-jsonc-parser.md` — cron error ≠ 脚本失败(exit 1 是"有 RED"的正常退出)、JSONC 解析器 `/* */` 块注释盲区、`cronjob` 路径约束文档/实现偏差
 

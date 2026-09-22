@@ -44,7 +44,7 @@ desktop 不再启动本地 serve。auth 模式由 `/api/status` 的 `auth_requir
   Origin 检查互斥。修复 PR #40408 "bypass Host/Origin guard for authenticated
   WS connections" 已合入 v0.19.0，本方案（loopback bind + token）不受影响。
 
-## 启动脚本实现（hermes-desktop launcher，dotfiles/mutable）
+## 启动脚本实现（`hermes desktop` 子命令实体 libexec/hermes-desktop，dotfiles/mutable）
 
 ```bash
 REMOTE_BASE="http://127.0.0.1:9119"

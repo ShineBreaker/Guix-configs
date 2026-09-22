@@ -17,8 +17,8 @@ pattern 时，建议用户把它写进 anchors，别只靠 agent 记住。
 
 ## 护栏暂停期间
 
-`/run/agent-gate.off` 存在时各端全部放行，仅附提示。此时 agent 照旧执行软 gate：
-暂停的是机器拦截，不是用户授权。放行了 protected action 仍在回复中说明清楚。
+`/run/agent-gate.off` 存在时各端全部静默放行——不发送任何提示，与护栏不存在时
+表现一致。此时 agent 照旧执行软 gate：暂停的是机器拦截，不是用户授权。
 
 agent 不得代用户创建或删除该开关，不得主动要求用户关闭护栏。
 

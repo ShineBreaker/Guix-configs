@@ -92,7 +92,7 @@ startup path is alive using **Xvfb**:
 
 ## Hermes Desktop: 容器内 agent 环境残缺 → Remote gateway 模式
 
-容器跑起来的 Electron 壳（hermes-desktop）会**在容器内** spawn 自己的后端
+容器跑起来的 Electron 壳（`hermes desktop`）会**在容器内** spawn 自己的后端
 （argv 形如 `python -m hermes_cli.main serve --host 127.0.0.1 --port 0`）。容器
 manifest 只为 GUI 准备（libglib/gtk/nss…），不含 guix/git/blue 等工具，于是
 desktop 里 agent 的 terminal/文件工具全部落在残缺容器环境。**先查宿主是否已有
@@ -132,9 +132,10 @@ verification 脚本模板）：`references/hermes-desktop-remote-backend.md`
   the ENTIRE `.local/bin` dir into a symlink to the source, clobbering other packages'
   single-file symlinks (agenote/pi/appimage-run). Use `--no-folding` (or drop
   `.stow-folding`) for any package that adds `.local/bin/*`.
-- **Background (non-login) shell lacks `~/.local/bin` in PATH.** When spawning a wrapper
-  that lives in `~/.local/bin` via `terminal(background=true)`, call it by ABSOLUTE path,
-  not by name — `hermes-update: command not found` otherwise.
+- **Background (non-login) shell lacks `~/.local/bin` in PATH.** When spawning the
+  `hermes` entry via `terminal(background=true)`, call it by ABSOLUTE path
+  (`~/.local/bin/hermes update` / `~/.local/bin/hermes desktop`), not by name —
+  `hermes: command not found` otherwise.
 - **`guix shell --container` rebuilds profile when the manifest changes** (adds a package
   like `xdg-utils`); first launch after a manifest edit is slower.
 - **Editable source install (pip install -e) puts bundled assets in the checkout, not
