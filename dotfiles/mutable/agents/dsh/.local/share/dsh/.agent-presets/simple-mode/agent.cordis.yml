@@ -1,0 +1,123 @@
+# The `simple-mode` agent preset: the `minimal-guix` composition (itself the
+# shipped `minimal` adapted to Guix System's non-FHS layout) plus the four
+# context injections of a full session — workspace AGENTS.md files, the skill
+# catalog, the assembled system prompt, and the dsh-agenote health summary.
+# The tool catalog stays Minimal-exact: one persistent shell, nothing else.
+#
+# Why a copy rather than editing `minimal-guix`: the user asked for a renamed
+# mode, and both presets stay selectable. All user-root presets live in this
+# stow package; the deployment side `$DSH_HOME/.agent-presets/` symlinks back
+# here, so editing the source takes effect immediately and `dsh update` never
+# touches them (it only manages `_cli` and profile bundles).
+#
+# Re-sync after a DSH upgrade: diff the shell block below against the shipped
+# `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` and re-apply
+# `shellPath`; compare the three injection rows against the shipped `standard`
+# preset.
+#
+# How the injections come back: `minimal` made the persona the COMPLETE system
+# prompt (`complete: true`), which makes `SystemPrompt.assemble()` drop every
+# other section — that single flag is what silenced AGENTS.md, the skill
+# catalog, and the agenote health summary below. This preset keeps the same
+# persona text and runtime-context suppression but NOT `complete`, so the
+# Web-app prompt sections and every bundle's registered sections now survive
+# assembly:
+#
+#   - AGENTS.md        → `dsh-agent-instructions` (preset row; the Web app
+#                        disables its host-plane twin for preset sessions)
+#   - skill catalog    → `dsh-tool-skill` (the catalog reminder rides the same
+#                        row as the `skill` loader tool; taking the catalog
+#                        means taking the tool — accepted trade-off)
+#   - system prompt    → host `dsh-system-prompt` + `dsh-web-app` rows, which
+#                        the persona no longer overrides away
+#   - agenote summary  → the profile's `dsh-agenote` bundle registers its
+#                        section on the host plane; with `complete` gone it
+#                        reaches this session with zero rows here
+#
+# `includeRuntimeContext: false` stays: the runtime-context snapshot (cwd,
+# permission mode, file policy) stays suppressed exactly as in Minimal.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    prefix: You are a helpful software engineer assistant.
+    includeRuntimeContext: false
+
+# Workspace instruction files (AGENTS.md / CLAUDE.md): project root down to
+# cwd, plus the user-global ~/.agents/AGENTS.md baseline. Same row and config
+# as the shipped `standard` preset.
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# The skill registry stays on the host plane and is layered per scope:
+# `skill-filesystem` registers local-root discovery (project .agents/skills,
+# $DSH_HOME/skills, ~/.agents/skills) into THIS preset's layer, and
+# `tool-skill` gives the agent the catalog reminder plus the `skill` loader.
+# The merged catalog also carries whatever the deployment registered globally.
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── persistent shell (unchanged from minimal-guix) ──────────────────────────
+#
+# The PTY registry is an agent-owned service, so it lives in an entry-local
+# realm. The backend still consumes the host sandbox policy and subprocess
+# implementation, while the tool registers into this agent's scoped catalog.
+# Exactly one shell stack mounts per host: the bash stack gates off win32 and
+# its pwsh twin gates off POSIX, mirroring the one-shot shell rows.
+- id: persistent-shell
+  name: cordis:group
+  group: true
+  isolate:
+    terminals: true
+  config:
+    - id: pty
+      name: '@deepseek-ai/dsh-terminal'
+
+    - id: terminal-bash
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+        # Guix has no /bin/bash (the backend's hardcoded default), so name the
+        # shell explicitly. This is the system generation's stable entry point.
+        shellPath: /run/current-system/profile/bin/bash
+
+    - id: persistent-bash
+      name: '@deepseek-ai/dsh-tool-bash-persistent'
+      disabled: !!js process.platform === 'win32'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a bash shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * Network access depends on the task environment. Prefer configured mirrors/proxies when they are available.
+          * State is persistent across command calls and discussions with the user.
+          * To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.
+
+    - id: terminal-pwsh
+      name: '@deepseek-ai/dsh-terminal-bash'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        shellDialect: pwsh
+        timeoutMs: 300000
+
+    - id: persistent-pwsh
+      name: '@deepseek-ai/dsh-tool-pwsh-persistent'
+      disabled: !!js process.platform !== 'win32'
+      config:
+        timeoutMs: 300000
+        description: |-
+          Run commands in a PowerShell shell
+          * When invoking this tool, the contents of the "command" parameter does NOT need to be XML-escaped.
+          * You don't have access to the internet via this tool.
+          * State is persistent across command calls and discussions with the user.
+          * Use native Windows paths (C:\...) and $env:NAME variables; this is PowerShell, not bash.
+          * Please avoid commands that may produce a very large amount of output.
+          * Please run long lived commands in the background, e.g. 'Start-Job' or start a server with Start-Process.

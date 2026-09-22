@@ -9,21 +9,22 @@
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `~/.local/share/dsh/`                   | `$DSH_HOME`，为真实目录，配置文件逐个软链回本包（采用 no-folding 模式）                              |
 | `.local/share/dsh/cordis.patch.yml`     | `$DSH_HOME` 顶层的 cordis 补丁配置                                                                   |
+| `.local/share/dsh/.agent-presets/`      | 用户自有 agent preset 根：`minimal-guix`（极简模式）、`simple-mode`（简单模式）、`liangshen`（梁神模式），部署侧逐文件软链回本包 |
 | `.local/share/dsh/_cli/`                | CLI 本体源：托管 `package.json`、`pnpm-workspace.yaml` 与 `pnpm-lock.yaml` 副本；`node_modules/` 为运行时产物。部署侧 lockfile 是真实文件（pnpm 拒写软链 lockfile），由 `dsh --install` 自动拷回源 |
 | `.local/share/dsh/profiles/web/`        | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json`、`pnpm-workspace.yaml` 等配置     |
 | `.local/share/dsh/profiles/agent-extensions/` | 自建插件包（pi/omp 共享扩展的 DSH 移植，见「自建插件」）；profile 以 `link:../agent-extensions` 引用 |
-| `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装     |
-| `.local/bin/dsh-web`                    | Desktop 启动入口：启动后台服务并开 Chromium App 窗口；默认带远程信任（`--remote-url`/`--reauth`/`--lan-off`，见「远程访问」） |
-| `.local/bin/dsh-update`                 | 一键更新本体与三个插件（见「一键更新」）                                                             |
+| `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装；`update`/`web` 子命令分发到同包 `.local/libexec/` 实体（一包一入口，上游原生的同名子命令被遮蔽为 Guix 增强版） |
+| `.local/libexec/dsh-web`                | Web UI 启动实体（`dsh web`）：启动后台服务并开 Chromium App 窗口；默认带远程信任（`--remote-url`/`--reauth`/`--lan-off`，见「远程访问」） |
+| `.local/libexec/dsh-update`             | 一键更新本体与三个插件（`dsh update`，见「一键更新」）                                                             |
 | `.local/share/applications/dsh.desktop` | 桌面快捷方式，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                           |
 | `.local/share/icons/hicolor/`           | 图标：`48x48/apps/dsh.png` 为栅格图标，`scalable/apps/dsh.svg` 为矢量母版                            |
 
-> **忽略规则**：`.credentials.yaml`（API 密钥）、`sessions/`、`storages/`、`node_modules/` 等运行时产物已被 `.stow-local-ignore` 防御性排除。`pnpm-lock.yaml` 也在 stow 忽略之列（pnpm 的 Rust 端拒绝写软链 lockfile，部署侧必须是真实文件），但**仓库源里有其副本**（进 git 保证部署可复现），由 `dsh`/`dsh-update` 在 pnpm 跑完后自动拷回同步。
+> **忽略规则**：`.credentials.yaml`（API 密钥）、`sessions/`、`storages/`、`node_modules/` 等运行时产物已被 `.stow-local-ignore` 防御性排除。`pnpm-lock.yaml` 也在 stow 忽略之列（pnpm 的 Rust 端拒绝写软链 lockfile，部署侧必须是真实文件），但**仓库源里有其副本**（进 git 保证部署可复现），由 `dsh`/`dsh update` 在 pnpm 跑完后自动拷回同步。
 
 ## 安装通道与升级
 
 - **安装机制**：DSH CLI 本体（当前为 0.1.6-alpha.2）通过 pnpm 安装在 `_cli/` 目录中。
-- **升级步骤**：修改源码中 `.local/share/dsh/_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh-update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
+- **升级步骤**：修改源码中 `.local/share/dsh/_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
 - **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）、`saveExact: true`（一切 pnpm add 通道——含 `dsh plugin add`——都写精确版本，根治 `^` 范围漂移）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。插件侧 `profiles/web/pnpm-workspace.yaml` 同理。
 
 ## 插件管理（Web Profile）
@@ -39,7 +40,7 @@
 | `@opencode2dsh/dsh-plugin`           | 0.3.2          | OpenCode Zen 免费通道：原生 LLM adapter，无凭据零配置                              |
 | `dsh-opencode-go`                    | 0.1.4          | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                  |
 | `@mars-sea/dsh-commandcode-provider` | 0.11.5         | Command Code 接入：全套餐、浏览器内 OAuth 登录、多账户轮换                         |
-| `dsh-devin-cli`                      | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，dsh-update 自动跟 HEAD）        |
+| `dsh-devin-cli`                      | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，dsh update 自动跟 HEAD）        |
 | `dsh-agent-extensions`               | `link:` 本地  | 自建插件：pi/omp 共享扩展的 DSH 移植，见「自建插件」                                |
 | `dsh-agenote`                        | `link:` 本地  | 自建插件：agenote 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在 `~/Projects/agenote/dsh-agenote` |
 
@@ -83,7 +84,7 @@
   list 槽）：重启前先 `history.replaceState` 剥掉 `?token=`（旧 launch token 已失效，
   带死 token 重载会 401），再轮询 `HEAD /` 等新 host 复活后 `location.reload()`。
 - **坑：本插件自己的改动也需要重启才生效**——首次部署 lifecycle 后若按钮/命令不在，
-  用 `kill <host-pid>` + `dsh-web` 手动拉起一次，之后就有按钮了（鸡生蛋问题）。
+  用 `kill <host-pid>` + `dsh web` 手动拉起一次，之后就有按钮了（鸡生蛋问题）。
 - **坑：host 半边 import 断链会让整个 bundle 静默消失**——新增 `lifecycle.js` 后没
   restow，部署侧缺文件 → `index.js` 的 `import "./lifecycle.js"` 失败 → gate、
   global-context、lifecycle **三个特性一起没挂载**，且启动日志无显式报错。改完必须
@@ -112,14 +113,14 @@
 - **验证方式**：host 半边可用桩 `ctx` 直接驱动模块（`node --input-type=module` 导入
   `gate.js`，喂假 exec 走 `tools/pre-execute`），无需启动服务即可确认拦截/注入语义。
 
-## 一键更新（dsh-update）
+## 一键更新（dsh update）
 
-`dsh-update` 把本体与 web profile 的全部插件一起升到上游最新（插件清单从 `package.json` 的 dependencies 动态读取）。两层强绑定，故不提供只升一层的开关。
+`dsh update` 把本体与 web profile 的全部插件一起升到上游最新（插件清单从 `package.json` 的 dependencies 动态读取）。两层强绑定，故不提供只升一层的开关。
 
 ```bash
-dsh-update --check           # 只查差异；退出码 0=已最新，1=有更新
-dsh-update                   # 列出差异，确认后执行
-dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh web
+dsh update --check           # 只查差异；退出码 0=已最新，1=有更新
+dsh update                   # 列出差异，确认后执行
+dsh update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh web
 ```
 
 - **选版不跟 npm 的 `latest` tag**：DSH 全是 preview 版本，发布者把 `latest` 停在保守位（`0.1.5-rc.2 发布时 latest` 仍是 rc.1）。脚本按通道稳定性 `latest → next → beta → alpha` 取第一个高于当前的版本，来源通道在输出里标出。
@@ -128,7 +129,7 @@ dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 - **不手写冷却豁免**：显式 `pnpm add <pkg>@<ver>` 时，pnpm 会自动把仍在 24h 供应链冷却期内的版本写进 workspace 的 `minimumReleaseAgeExclude`。
 - **兼容性提醒**：读插件的 `dsh.compatibility.dshReleases`（发布方自列的已验证版本白名单）。多数插件没有这个字段，那不代表不兼容，故只在「声明了白名单却不含目标版本」时才提醒。
 - **lockfile 自动回源**：每次 pnpm 跑完后，脚本把部署侧 lockfile 拷回仓库源副本（见「忽略规则」），git 里始终是可复现的锁。
-- **生效**：更新后须重启 `dsh web`（host 半边不热载）。`--restart` 会调 `dsh-web --reauth`。
+- **生效**：更新后须重启 `dsh web`（host 半边不热载）。`--restart` 会调 `dsh web --reauth`。
 
 > **改的是仓库源文件**：`package.json` 与 `pnpm-workspace.yaml` 由 pnpm 原地写入（两者都是回本包的软链），`pnpm-lock.yaml` 由脚本拷回源副本，跑完 `git diff` 后提交。
 
@@ -144,7 +145,7 @@ dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 
 ## 窗口管理与 Wayland 适配
 
-- `dsh-web` 使用 Chromium `--app=<url>` 模式拉起无浏览器边框的独立窗口，自动继承 Niri 的全局圆角与阴影特效。
+- `dsh web` 使用 Chromium `--app=<url>` 模式拉起无浏览器边框的独立窗口，自动继承 Niri 的全局圆角与阴影特效。
 - **窗口 App ID**：通过 `--profile-directory=dsh` 将窗口 ID 固定为 `chrome-127.0.0.1__-dsh`，与 `dsh.desktop` 中的 `StartupWMClass` **严格成对绑定**。修改时两处须同时修改。
 - 独立 Profile 同时将 DSH 的会话 Cookie 与日常浏览器的默认配置隔离开。
 
@@ -152,8 +153,8 @@ dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 
 - **启动 Token**：进程启动时生成随机 Launch Token，仅供包装器脚本一次性换取 Session Cookie。
 - **持久化 Cookie**：换取的 Cookie 由 `$DSH_HOME/.credentials.yaml` 中的持久化密钥进行 HMAC-SHA256 签名，默认有效期为 30 天，**跨服务重启依然有效**。
-- **重新认证**：若需强制重置凭据，执行 `dsh-web --reauth` 即可安全终止旧实例并重新握手。
-- **`.credentials.yaml` 被重写 → 全部 Cookie 作废**：密钥一换，所有已签发 Cookie 验签失败，`dsh-web` 走「端口已监听 + 干净 URL」路径时页面停在 `dsh web authentication required`（401），服务日志却一切正常。判定：`stat ~/.local/share/dsh/.credentials.yaml` 的 mtime 晚于上次握手；或查 chromium `dsh` profile 的 Cookies 库里 `127.0.0.1` cookie 的签发时间。修法就是 `dsh-web --reauth`。
+- **重新认证**：若需强制重置凭据，执行 `dsh web --reauth` 即可安全终止旧实例并重新握手。
+- **`.credentials.yaml` 被重写 → 全部 Cookie 作废**：密钥一换，所有已签发 Cookie 验签失败，`dsh web` 走「端口已监听 + 干净 URL」路径时页面停在 `dsh web authentication required`（401），服务日志却一切正常。判定：`stat ~/.local/share/dsh/.credentials.yaml` 的 mtime 晚于上次握手；或查 chromium `dsh` profile 的 Cookies 库里 `127.0.0.1` cookie 的签发时间。修法就是 `dsh web --reauth`。
 
 ## 远程访问（tailscale serve → 手机/平板操控）
 
@@ -172,18 +173,18 @@ dsh-update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
 ```
 
-**日常使用**：远程默认开启——`dsh-web` 无参数启动即带 `--trusted-host`（菜单打开电脑即支持远程，无需手动步骤）。手机首次握手跑 `dsh-web --remote-url` 拿 token URL，之后直接开 `https://<尾网主机名>/`。
+**日常使用**：远程默认开启——`dsh web` 无参数启动即带 `--trusted-host`（菜单打开电脑即支持远程，无需手动步骤）。手机首次握手跑 `dsh web --remote-url` 拿 token URL，之后直接开 `https://<尾网主机名>/`。
 
 | 用法 | 作用 |
 | --- | --- |
-| `dsh-web` | 常规启动：实例未带 `--trusted-host` 时**自动重启**为 trusted（检测 `/proc/<pid>/cmdline`），再开本机窗口 |
-| `dsh-web --remote-url` | 不弹窗：确保实例 trusted，打印手机首次握手 token URL |
-| `dsh-web --reauth` | 强制重启换新 token（cookie 失效时用） |
-| `dsh-web --lan-off` | 本次不带远程信任启动（`DSH_TS_HOST=` 空串等价；主机名默认 `brokenshine-laptop.tail3889e8.ts.net`，环境变量可覆盖） |
+| `dsh web` | 常规启动：实例未带 `--trusted-host` 时**自动重启**为 trusted（检测 `/proc/<pid>/cmdline`），再开本机窗口 |
+| `dsh web --remote-url` | 不弹窗：确保实例 trusted，打印手机首次握手 token URL |
+| `dsh web --reauth` | 强制重启换新 token（cookie 失效时用） |
+| `dsh web --lan-off` | 本次不带远程信任启动（`DSH_TS_HOST=` 空串等价；主机名默认 `brokenshine-laptop.tail3889e8.ts.net`，环境变量可覆盖） |
 
 - **token 一次性**：token 只能换一次 cookie。`--remote-url` 拿到旧 token（已消耗）时手机端 401——`--reauth` 重启换新。
-- **本机窗口照旧**：`dsh-web` 检测到端口已监听且 trusted 就直接开 `127.0.0.1` 干净 URL，不重启不弹第二窗。
-- **fence 拦截判定**：远程开页 401 = cookie 问题（重新握手）；403 = 实例没带 `--trusted-host`（跑 `dsh-web` 一次自动修）。症状实例：手机页面能开但会话列表空 + `directoryPicker/list HTTP 403`——都是 `/api` 被 fence 拦，页面壳（静态文件）不受影响所致，**不是开了新 profile**（服务端会话只有一份）。
+- **本机窗口照旧**：`dsh web` 检测到端口已监听且 trusted 就直接开 `127.0.0.1` 干净 URL，不重启不弹第二窗。
+- **fence 拦截判定**：远程开页 401 = cookie 问题（重新握手）；403 = 实例没带 `--trusted-host`（跑 `dsh web` 一次自动修）。症状实例：手机页面能开但会话列表空 + `directoryPicker/list HTTP 403`——都是 `/api` 被 fence 拦，页面壳（静态文件）不受影响所致，**不是开了新 profile**（服务端会话只有一份）。
 - **目录选择器**：本机无 zenity/kdialog 时 boot 即解析为 `browse` 后端（应用内逐级浏览，天生支持远程）；`native` 后端（OS 弹窗）只在 loopback+本机显示会话+选择器齐备时挂载，远程浏览器够不到 OS 对话框是其设计边界（`resolveDirectoryPickerBackend` 注释明言）。装 `zenity` 后下次重启实例会自动切 native，本机窗口体验更好，远程仍走 browse。
 
 ## 排障指南
@@ -196,7 +197,7 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
    - `DSH_WEB_LOG`：自定义日志输出路径。
    - `DSH_HOME`：覆盖默认 DSH 数据主目录。
 5. **极简模式报 `PTY shell exited during startup`**：Guix 没有 `/bin/bash`（`/bin` 下只有 `sh`），而 `@deepseek-ai/dsh-terminal-bash` 把 bash 方言的默认 shell 硬编码成这个路径 → spawn `ENOENT` → PTY 子进程当场退出 → 报出这条**误导性**错误（真正失败在 exec 阶段，不是就绪超时；姐妹分支是 `PTY shell did not reach readiness before startup timeout`）。只有极简模式中招，因为四档 preset 里只有它挂持久 shell。
-   - **修法**：用户根 `$DSH_HOME/.agent-presets/minimal-guix/` 是内置 `minimal` 的副本 + `shellPath: /run/current-system/profile/bin/bash`。该目录在**本仓库之外**，随 user root 自动发现，**不进 Git**，故 `dsh-update` 不会碰它。
+   - **修法**：用户根 `$DSH_HOME/.agent-presets/minimal-guix/` 是内置 `minimal` 的副本 + `shellPath: /run/current-system/profile/bin/bash`。该目录已纳管本包（源在 `dotfiles/mutable/agents/dsh/.local/share/dsh/.agent-presets/`，部署侧逐文件软链回源、进 Git），改源即时生效；`dsh update` 只管 `_cli` 与 profile bundles，不会碰它。
    - **为什么不能覆盖内置 `minimal`**：preset 根顺序是「shipped → 自定义 roots → user root」，且同 id **靠前者胜**，shipped 根永远排第一 → 同名 user preset 会被静默遮蔽。只能换个 id。
    - **为什么改仓库的 `cordis.patch.yml` 也不行**：`shellPath` 是 preset 组合文件里的**行配置**，不在 `agent-presets` 这一行的 config 里；顶层 patch 够不到它。
    - **升级后要重同步**：上游若改了 `minimal` 组合，副本会陈旧。diff 内置 `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` 后重新套用 `shellPath`。

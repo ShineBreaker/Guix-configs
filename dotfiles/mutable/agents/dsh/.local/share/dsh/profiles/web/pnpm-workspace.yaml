@@ -4,9 +4,9 @@ nodeLinker: hoisted
 autoInstallPeers: false
 saveExact: true
 minimumReleaseAgeExclude:
-  - dsh-context@0.49.0 || 0.53.3
+  - dsh-context@0.49.0 || 0.53.3 || 0.54.2
   - '@opencode2dsh/dsh-plugin@0.3.2'
-  - dsh-opencode-go@0.1.4
+  - dsh-opencode-go@0.1.4 || 0.1.5
   - '@mars-sea/dsh-commandcode-provider@0.11.5'
 allowBuilds:
   '@google/genai': false
