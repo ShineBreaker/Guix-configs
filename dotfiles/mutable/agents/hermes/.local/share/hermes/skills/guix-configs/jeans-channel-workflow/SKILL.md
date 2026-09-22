@@ -404,6 +404,14 @@ git commit -m "docs(packages.md): regen via 'blue gen-docs' to include <新包�
 - ❌ 手写 patch 修 docs 漂移——`blue gen-docs` 是 deterministic 的,直接重生成更稳
 - ❌ `M doc` 长期留在 working tree——会让后续 CI bot 推 commit 时撞非空 working tree
 
+**`blue` 不可用时直接调用（load-path 是生死线）**：`blue` 自身可能在 `guix pull` 后报 `load-thunk-from-memory: incompatible bytecode version`（BLUE 的字节码与当前 guix 不匹配，需重编译 BLUE 才能修好 wrapper 本身）。**任何 `blue <task>` 都可能中招**（build / upgrade / gen-docs 一视同仁），旁路就是 §5 速查表里那条等价的 `guix ... -L modules` 命令。旁路直接跑底层命令时，**必须带 `--load-path=./modules`**：
+
+```bash
+guix repl --load-path=./modules scripts/gen-docs.scm > docs/packages.md
+```
+
+漏掉 `--load-path` 时脚本会从 guix pull 的陈旧 channel 快照解析 `(jeans packages ...)`，生成基于旧包集合的 docs——`git diff` 表现为几十行与本次改动无关的包增删漂移。生成后核对 diff 只含预期行（加包时就是新包那一行）；出现大面积漂移 = load-path 没带对，丢弃输出重跑，不要逐行审。
+
 ## 2. Adding/upgrading a package
 
 Standard flow lives in `AGENTS.md` (see `blue build`, `blue upgrade`, `blue import-crate`). Recurring pitfalls:
@@ -411,6 +419,15 @@ Standard flow lives in `AGENTS.md` (see `blue build`, `blue upgrade`, `blue impo
 - **`rust-crates.scm` is auto-managed.** Never edit by hand. `guix import crate -f ./Cargo.lock` rewrites it whole. Manual edits cause `cargo build --offline` failures later.
 - **`-bin` suffix packages use one of three templates** depending on artifact shape (AppImage / archive / bare ELF). Pattern details + the "bare ELF still links libgcc_s via dlopen'd .node addon" trap are in AGENTS.md "预编译二进制包" — re-read that section before touching a -bin package.
 - **Rust packages with `option_env!()` compile-time config** (e.g. nix-ld's `DEFAULT_NIX_LD`) bake NixOS paths into the binary if the env var isn't set at build time, causing runtime `Posix(2)`/ENOENT panics. Diagnosis recipe + fix pattern + cargo-build-system input-label mechanics (`"glibc"` vs `"libc"` dual-label gotcha) + two-step verification when guix build is network-blocked: `references/rust-packaging-patterns.md`.
+- **Electron 预编译 `.deb`（data.tar.zst 形态）四个坑**：
+  (a) 新上游 deb 的 data 压缩是 zstd 不是 xz——native-inputs 加 `zstd`，unpack 用 `tar xf data.tar.zst`；
+  (b) Guix 的 patchelf 0.18 **没有 `--prepend-rpath`**，且 native addon（sharp 等 `.node`）自带指向 bundle 内依赖的 `$ORIGIN` 相对 RPATH，直接 `--set-rpath` 会毁掉它——先 `patchelf --print-rpath` 读旧值，拼 `ours:old` 再 `--set-rpath`；
+  (c) deb 内混有跨平台预编译产物（node-pty `prebuilds/darwin-*` 是 Mach-O），patchelf 前按 ELF magic（`\x7fELF`，`call-with-input-file` + `get-bytevector-n`）过滤，否则 patchelf 报 `not an ELF executable` 中断构建；
+  (d) 构建 rpath 列表用 `(append (list lib) (map ...) (list ...))`——`(cons* lib (map ...))` 会把 map 结果嵌成单个元素，构建期 `string-append` 报 wrong-type。
+- **版本 bump 引入新 hard NEEDED 库 → RPATH 没跟上，构建绿但运行时"打不开"**：上游新版 .deb 可能在 readelf NEEDED 里新增硬条目（neomacs 0.0.19 起链上 `libdbus-1.so.3`，来自 GStreamer 的 GLib 事件循环）。`guix build` 只验证构建阶段能跑完，不验证二进制启动时能否解析全部 NEEDED；`-bin` 包普遍还设了 `#:validate-runpath? #f`，连仅有的 runpath 自查也关了——缺口一路漏到用户手上。症状固定为 `<profile>/bin/<exe>: error while loading shared libraries: libX.so.N: cannot open shared object file`。
+  诊断三步：① `readelf -d <store>/bin/<exe> | grep NEEDED` 列出全部硬依赖；② `guix shell patchelf -- patchelf --print-rpath <exe>` 读现有 RPATH 逐条比对，找出未覆盖项；③ 对上一个版本的 store item 做同一比对，diff 出来的就是本次新增——那正是要补的 input。
+  修复三处：`inputs` 按字母序加 `("dbus" ,dbus)`、RPATH 列表插 `(string-append (assoc-ref inputs "dbus") "/lib")`、文件头的 readelf NEEDED 注释同步。缺第三处会让下次诊断重新读一遍二进制。
+  验证必须 exec **新 store 产物本身**（`<new-store>/bin/<exe> --version`，每个入口都试），或用临时 profile 走一遍软链层：`guix build -L modules --manifest=<(echo '(specifications->manifest (list "<pkg>"))')`。`ldd` 和用户当前 profile 都不算数——它们反映的是修复前的状态。修完还要提醒用户 `blue home` 部署，store 里构建成功 ≠ 用户机器上生效。
 
 ## 2.1 Wrapping an existing Guix package to add resources (langpack / theme / extension)
 
@@ -448,6 +465,8 @@ If you `git diff` or byte-count `(` vs `)` on a `.scm` file and get a non-zero d
 3. `guix lint -n -L modules <pkg>` — for the specific class of warning you changed.
 
 All three green = real verification. The byte-delta alone is meaningless.
+
+反过来，当 REPL 报 `Syntax error` 或 `package: missing field initializers (synopsis description license home-page)` 时，那是**真的**括号错了——后者特指多了一个 `)` 提前闭合 `package` 表单，往 `inputs` / `rpath` 列表插行时数错尾部括号就会触发（列表收尾的 `)` 和表单收尾的 `)` 是两个）。此时 `guix build -L modules <pkg>` 只会报 `未绑定变量` / `未知软件包`（模块加载失败 → 符号找不到），所以**报"未知软件包"时先跑一次 `guix repl -L modules` 拿真实错误**，别照着 §5.1 的 re-export 缺失去改 `%public-modules`。
 
 ### 3.3 Common lint-fix recipes (proven recipes)
 
@@ -558,7 +577,26 @@ git diff HEAD --stat   # 期望: 空
 - ❌ `git commit --allow-empty` → 后接 `git reset --hard` → 丢掉 staged 改动
 - ❌ 用 `git checkout HEAD -- <path>` "撤回"自己刚加的改动——其实是覆盖 working tree，不是撤销 add
 - ❌ `rm -rf .git/refs/stash` 或 `git stash clear` 想"清掉 stash"——丢失 stash 内容
-- ❌ `git reflog expire --all --expire=now` 想"清 reflog"——丢失所有 dangling commit 引用
+- ❌ `git reflog expire --all --expire=now` 想"清掉 reflog"——丢失所有 dangling commit 引用
+
+**pull 撞未提交 WIP 时的安全路径：** AGENTS.md 要求"任何操作前先 `git pull`"，但这个仓库的工作区长期有别人的未提交改动（新包 WIP、docs 漂移），`git pull` 会以"本地修改将被合并覆盖"拒绝。**不要**为通过 pull 去 commit 别人的 WIP，也**不要** `git checkout HEAD -- <file>` 覆盖它。先看清远端改了什么再决定：
+
+```bash
+git fetch origin
+git log --oneline HEAD..origin/main      # 远端到底改了什么
+git diff --stat HEAD origin/main         # 远端改动落在哪些文件
+```
+
+若远端只动既有包的版本号/hash 行、本地 WIP 是新增块（两者区域不重叠），可 stash 单文件后快进再弹回：
+
+```bash
+git stash push -m "<wip 说明>" -- <冲突文件>   # 必须带 -- <路径> 限定到冲突文件
+git merge --ff-only origin/main
+git stash pop
+git status --short                       # 确认 WIP 与远端改动都在
+```
+
+stash 不带 `-- <路径>` 会把整个工作区（含你自己刚做的修复）一起 stash，`pop` 撞冲突时更难收场。若远端 diff 与本地 WIP 改同一区域，停手报告用户。
 
 ### 4.3 GPG 签 commit 在 cron 环境下的死结（2026-07-18 实测，2026-07-30 补充 fallback）
 
@@ -740,7 +778,8 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 | lint `description` 末尾应有点号(trailing parenthetical 触发的)           | §3.3 / `references/lint-recipes.md` §Recipe 2:补 `.` 或追加一句 English sentence 收尾。                                                                                                                                                                                                                                                                                                                                                    |
 | byte-level paren delta ≠ 真实 s-exp 不平衡                                    | §3.2 / `references/lint-recipes.md` §Recipe 5:URL/字符串/正则里 `(`,`)` 多算;以 `guix repl -L modules` + `(use-modules (jeans))` + `guix build -L modules -e ...` + `guix lint` 三件套为准。                                                                                                                                                                                                                                                                                                                   |
 | `blue upgrade` 全 0/41 检出,100% 包都报 `403 rate limit exceeded`           | §1.8:无 `GITHUB_TOKEN` 时撞 60/h 上限。修法:`export GITHUB_TOKEN=$(gh auth token)` 给 cron;或 `is_retryable_http_error` 扩到 403+`Retry-After`;或无 token 时 fail-fast。不要反复"诊断逻辑 bug"。                                                                                                                                                                                                                                                                                                         |
-| `M docs/packages.md` 长期漂移(典型 ±1 行,新包同名段重复出现)             | §1.9:`blue gen-docs` 是 deterministic,直接重生成 + 审视 diff + commit,不要手改。                                                                                                                                                                                                                                                                                                                                                          |
+| `M docs/packages.md` 长期漂移(典型 ±1 行,新包同名段重复出现)             | §1.9:`blue gen-docs` 是 deterministic,直接重生成 + 审视 diff + commit,不要手改。
+| `blue <task>`（build / gen-docs / upgrade 任一）报 `load-thunk-from-memory: incompatible bytecode version`，或重生成后 docs 出现大面积无关漂移 | §1.9：BLUE 字节码与当前 guix 不匹配时整个 runner 不可用，旁路跑 §5 速查表里的等价 `guix ... -L modules` 命令；漏 load-path 会从陈旧 channel 快照解析包集合，diff 大面积漂移即中招，丢弃重跑。 |                                                                                                                                                                                                                                                                                                                                                          |
 | cron 自动修复会话里"不知道能做什么/不能做什么"                            | §3.5:docs 可改 + commit + 单文件;包定义/`rust-crates.scm`/workflow 文件全部不碰;`git push` 永远留给用户。                                                                                                                                                                                                                                                                                                                                  |
 | `blue upgrade` 9+ min 超时但 `python3 update_versions.py` 7 min 跑完         | §1.8.1:`guix shell --manifest` 重新拉 substitute 是瓶颈;旁路直接调脚本即可（前提 PATH 有 `python3 + requests`）                                                                                                                                                                                                                                                                                                                              |
 | 扫仓库 base32 找"占位 hash" 时把"以 0 开头"全当占位                         | §1.8.1:base32 字母表首位是 0;真正占位是 `0{52}` 整串;`update_versions.py:25` 有 `NEW_BASE32` 常量定义占位值                                                                                                                                                                                                                                                                                                                                  |
@@ -755,6 +794,7 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 | runner 沙箱拒绝 exec 构建树内新文件（AppImage 自解压 / `./configure` execvp 127/EACCES） | 三种已验证修法按场景选：① AppImage → 用 store 的 7z 静态解包（waywallen-bin 72ccb4f）；② 手写 configure 脚本 → `(which "sh") "./configure"` 由解释器当数据读入，配套 `(add-before 'configure 'disable-exec-sanity-check)` 把 configure 自身的 chmod+x/exec sanity check 短路成 `if false`，再加 `--enable-cross-compile --arch=... --target-os=linux` 让探针跳过运行时执行（ffmpeg-7 实战验证）；③ 纯数据文件不受影响。daemon TMPDIR 迁移到 /var/tmp 对此无效（runner 的 /tmp 本身不 noexec）。 |
 | `.scm` 里给 `substitute*` 写含 `$` 的正则，多层字符串转义反复踩坑 | Scheme 字符串吃一层 `\`、regex 引擎再吃一层，肉眼极难数对；直接改用 `.` 通配符匹配 `$`/`\`（如 `"if ! .TMPSH >> .logfile"`），零转义且唯一命中。先用同引擎预检：`guix repl` 里 `string-match` 测试模式，别等构建跑到 phase 才发现静默未匹配（`substitute*` 未命中是静默通过的！后续 phase 报错才暴露）。 |
 | 私有 `define`（无 `-bin` 后缀依赖包 / 内部包）不能 `blue build <名字>` | `blue build` 只认 export 的公开名。验证其效果直接构建下游公开包（依赖会把它拉进构建图）；不要用 `guix build -e '(@ ...)'` 硬引用——`@` 在带 gexp 参数的包上可能解析到不同加载路径，误导诊断。 |
+| `guix build -L modules` 报 `未绑定变量` / `未知软件包`，但同模块 `guix repl -L modules` 能加载 | §3.2：模块有语法错误，`package: missing field initializers` = 多一个 `)` 提前闭合 `package` 表单；不是包名写错，也不是 re-export 缺失。 |
 
 ## 4.4 Merged from `guix/jeans-channel-ops` (2026-08) — CI 补充要点
 - cron 实际 05:12-05:29 UTC 触发（非 02:00），06:00 前勿判调度失效；运行号按 workflow 分开计数；`gh` 绝对路径 `~/.local/state/nix/profile/bin/gh`，403 回退 `x-access-token` Bearer。
@@ -762,7 +802,7 @@ upstream posix 路径检查行为，**不是包定义错误**，可以在审阅�
 - `guix refresh` 列表含 1 个 unknown package 即整批 exit 1 零更新；字母版本号（如 1.21b vs 1.21.10b）需核 `gh api .../releases`；`/releases/latest 404` 仅意味全为 prerelease。
 - 回填验证：`NONGUIX_DIR` 扫 `~/.cache/guix/checkouts` + `GUIX_EXTRA_LOAD_PATH` + `guix build -L modules -L $NONGUIX_DIR`；-bin 包验 store 内 bin/.desktop/ELF 内容。
 ## Appendix — packaging pitfalls (agenote 202608, merged)
-- neomacs: wrap-program → .neomacs-real 无限循环; 用 libexec + exec -a 手写 wrapper (20260818-201651).
+- neomacs: wrap-program → .neomacs-real 无限循环; 用 libexec + exec -a 手写 wrapper (20260818-201651). home-neomacs-service-type 的 wrapper 只是个 guile program：设好 search paths 后 exec profile/bin/<argv[0] basename>，RPATH 在 ELF 自己身上——所以 RPATH 类修复只需重打 neomacs-bin，再由用户跑 blue home 部署（wrapper 与 profile 会跟着重建），不要动 home 服务定义。
 - bun --compile: patchelf/ld-linux wrapper 破坏 .bun section / /proc/self/exe; 用 nix-ld + NIX_LD_LIBRARY_PATH (20260818-201643).
 - ffmpeg: Guix 无 7.x 需私有 helper pin 7.1.5 (20260818-201800); waywallen Qt6 需 libglvnd + 4 Quick 模块已知缺失; wine64 11.0 stub/regedit/wineserver 缺陷链见 agenote 20260818-201633.
 

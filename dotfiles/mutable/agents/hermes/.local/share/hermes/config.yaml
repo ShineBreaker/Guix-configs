@@ -1,3 +1,39 @@
+moa:
+  presets:
+    default:
+      reference_models:
+        - provider: opencode-go
+          model: mimo-v2.6-flash
+          enabled: true
+        - provider: opencode-go
+          model: muse-spark-1.3-contributor
+          enabled: true
+        - provider: opencode-go
+          model: deepseek-v4.1-flash
+          enabled: true
+      aggregator:
+        provider: stepfun
+        model: step-5-preview
+      enabled: false
+      degraded_reference_policy: loud
+      fanout: per_iteration
+  reference_models:
+    - provider: opencode-go
+      model: mimo-v2.6-flash
+      enabled: true
+    - provider: opencode-go
+      model: muse-spark-1.3-contributor
+      enabled: true
+    - provider: opencode-go
+      model: deepseek-v4.1-flash
+      enabled: true
+  aggregator:
+    provider: stepfun
+    model: step-5-preview
+  max_tokens: 4096
+  fanout: per_iteration
+  enabled: false
+  degraded_reference_policy: loud
 model:
   default: step-5-preview
   provider: stepfun
@@ -21,6 +57,10 @@ providers:
 fallback_providers:
   - provider: zai
     model: glm-5.3-flash
+  - provider: opencode-go
+    model: deepseek-v4.1-flash
+  - provider: opencode-go
+    model: muse-spark-1.3-contributor
 toolsets:
   - hermes-cli
 agent:
@@ -361,36 +401,6 @@ delegation:
 prefill_messages_file: ''
 goals:
   max_turns: 20
-moa:
-  presets:
-    default:
-      reference_models:
-        - provider: minimax-cn
-          model: MiniMax-M3
-          enabled: true
-        - provider: deepseek
-          model: deepseek-v4-pro
-          enabled: true
-      aggregator:
-        provider: zai
-        model: glm-5.2
-      enabled: false
-      degraded_reference_policy: loud
-      fanout: per_iteration
-  reference_models:
-    - provider: minimax-cn
-      model: MiniMax-M3
-      enabled: true
-    - provider: deepseek
-      model: deepseek-v4-pro
-      enabled: true
-  aggregator:
-    provider: zai
-    model: glm-5.2
-  max_tokens: 4096
-  fanout: per_iteration
-  enabled: false
-  degraded_reference_policy: loud
 skills:
   external_dirs:
     - ~/.agents/skills
@@ -635,13 +645,6 @@ known_builtin_toolsets:
     - web
     - x_search
     - yuanbao
-
-# ── Guix 侧：desktop 启动器防覆写 ─────────────────────────────────────
-# 部署位 ~/.local/share/applications/hermes.desktop 是 stow 软链（指向仓库
-# 源文件），上游 hermes 每次启动都会把 Exec 重写为直调 venv python，写穿
-# 软链污染仓库并丢失容器包装器路径与 MimeType。false = 已存在的条目不再
-# 被重写（缺失时上游仍会创建），语义见上游 hermes_cli/linux_desktop_entry.py
-# 的 _launcher_entry_management_enabled()。
 desktop:
   manage_launcher_entry: false
 
