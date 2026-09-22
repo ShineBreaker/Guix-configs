@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, username, ... }:
 
 {
   nixpkgs.config = {
@@ -14,7 +14,7 @@
       auto-optimise-store = true;
       trusted-users = [
         "root"
-        "brokenshine"
+        username
       ];
       experimental-features = [
         "nix-command"

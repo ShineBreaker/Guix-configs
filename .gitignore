@@ -36,5 +36,8 @@ uv.lock
 .video_agent/
 dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.locks/
 
+# dsh TUI 写进 preset 目录的管理标记（运行时可变状态，部署侧保持真实文件）
+**/.agent-presets/*/.dsh-tui-managed.json
+
 # rope（Emacs rope 插件）本地运行残留
 .ropeproject

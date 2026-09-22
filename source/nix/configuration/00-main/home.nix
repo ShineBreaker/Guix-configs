@@ -1,8 +1,4 @@
-{ ... }:
-
-let
-  user = "brokenshine";
-in
+{ username, ... }:
 
 {
   imports = [
@@ -13,8 +9,8 @@ in
   targets.genericLinux.enable = true;
 
   home = {
-    username = user;
-    homeDirectory = "/home/${user}";
+    inherit username;
+    homeDirectory = "/home/${username}";
     stateVersion = "25.11";
 
     extraOutputsToInstall = [ "doc" ];

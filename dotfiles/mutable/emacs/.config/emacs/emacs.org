@@ -4638,7 +4638,7 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 对齐现代编辑器习惯的全局单键与组合键：
 
-- *文件与工程* ： =C-s= 保存文件、 =C-p= 项目查找文件、 =C-S-f= 全局文本搜索、 =C-S-p= 命令面板（M-x）、 =C-S-t= 重新打开关闭的文件、 =C-,= 打开配置真理源 =emacs.org= 。
+- *文件与工程* ： =C-s= 保存文件、 =C-p= 项目查找文件、 =C-S-f= 文件内查找（项目级全文搜索走 =C-x p g=）、 =C-S-p= 命令面板（M-x）、 =C-S-t= 重新打开关闭的文件、 =C-,= 打开配置真理源 =emacs.org= 。
 - *文本编辑* ： =C-a= 全选、 =C-/= 行注释、 =C-S-c= 智能复制、 =C-S-v= 粘贴、 =C-S-k= 删除整行、 =C-S-d= 复制整行、 =C-d= 选中下一个匹配（类似 VS Code 的多光标选词）。
 - *代码导航与调试* ： =<f12>= 跳转到定义（须写为尖括号形式）、 =S-<f12>= 查找引用、 =<f2>= 符号重命名、 =C-.= 快速修复、 =<f8>= / =S-<f8>= 错误跳转、 =<f5>= 开始调试、 =<f9>= 切换断点。
 - *标签与窗口* ： =C-<tab>= 与 =C-S-<tab>= 切换标签； =M-方向键= 在分屏窗口间切换，并在终端下提供 =C-c w h/j/k/l= 字符镜像防止按键拦截。
@@ -4653,7 +4653,7 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 (custom/bind "C-S-z" #'undo-redo "重做" "基础移动与直达键")
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
-(custom/bind "C-S-f" #'project-find-regexp "项目全文搜索" "基础移动与直达键")
+(custom/bind "C-S-f" #'isearch-forward "文件内查找" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
 (custom/bind "C-S-p" #'execute-extended-command "命令面板" "基础移动与直达键")
 (custom/bind "C-<tab>" #'custom/tabs-next "下一个标签" "基础移动与直达键")

@@ -42,7 +42,7 @@
             )
           ];
 
-          extraSpecialArgs = { inherit inputs; };
+          extraSpecialArgs = { inherit inputs username; };
         };
 
         # Aliases for home-manager compatibility
