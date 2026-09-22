@@ -36,6 +36,7 @@ Guix-configs///
 | Agent 配置（anchors/context） | 共享体系见 `dotfiles/immutable/agents/AGENTS.md`；各 agent 包在 `dotfiles/mutable/agents/`（omp/pi/dsh 等）           |
 | 静态模板 / 频道 / 全局变量    | `source/files/`、`source/channel.scm`、`source/information.scm`（见 `source/AGENTS.md`）                              |
 | 新机装机（官方 ISO）          | `tools/bootstrap.sh` 准备 blue 环境，随后人工执行 `blue init`；流程见 `README.org`（自建 ISO 见 `docs/iso-build.md`） |
+| 新增 `~/.local/bin` 入口      | 准入规则见 `dotfiles/mutable/AGENTS.md`（一包一入口；`toolbox check` 阻断级执法）                                     |
 
 ## 硬约束
 

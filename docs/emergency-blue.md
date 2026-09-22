@@ -200,9 +200,10 @@ sudo guix time-machine --channels=source/channel.lock -- \
 > 与新频道快照不兼容），两次都是人工回滚 channel.lock +
 > `blue --dry-run rebuild` 验证救回。`blue-update` 把这套人工流程自动化。
 
-**机制**（实现在 `dotfiles/mutable/tools/blue/.local/bin/blue-update`；
-wrapper `~/.local/bin/blue` 在首参恰为 `update`/`gc` 且同目录存在对应脚本
-时分发进入，脚本缺位则回退 blue 原生行为）：
+**机制**（实现在
+`dotfiles/mutable/tools/blue/.local/libexec/blue-update`；
+wrapper `~/.local/bin/blue` 在首参恰为 `update`/`gc` 且包内 `libexec/`
+存在对应脚本时分发进入，脚本缺位则回退 blue 原生行为）：
 
 1. **备份**：`source/channel.lock` → `tmp/channel.lock.bak.<时间戳>`（`tmp/`
    已 gitignore；多次运行留下多份备份，可自行清理）；
@@ -241,7 +242,7 @@ lock——先修 config.org 再重跑 `blue update` 即可。
 ## 9. 一键清理（blue gc）
 
 `blue gc` 是历次手动磁盘清理的统一入口
-（`dotfiles/mutable/tools/blue/.local/bin/blue-gc`，wrapper 在 `blue gc`
+（`dotfiles/mutable/tools/blue/.local/libexec/blue-gc`，wrapper 在 `blue gc`
 时分发进入）。风格同 `tools/rescue-chroot.sh`：**默认 dry-run 只打印计划，
 `--go` 才执行**；每步标注 [sudo]/[user]，单步失败告警并继续，最后统一汇总
 成功/失败与 /gnu 已用空间前后对比（/gnu 与 /data 同属一块 Btrfs，看 /gnu

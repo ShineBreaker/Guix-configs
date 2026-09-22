@@ -56,19 +56,19 @@ blue build-iso [VARIANT] ...
 
 ```
 dist/
-├── jeans-desktop-20260714.x86_64-linux.iso        # 主目标,XFCE 桌面 + lightdm 自动登录
-└── jeans-minimal-20260714.x86_64-linux.iso        # 纯 CLI fallback
+├── jeans-desktop-20260922.x86_64-linux.iso        # 主目标,XFCE+labwc 桌面,greetd 自动登录 live
+└── jeans-minimal-20260922.x86_64-linux.iso        # 纯 CLI,TUI 安装器 + root tty
 ```
 
-镜像内部:
-
-- **live user**:`live` / `live`(密码故意弱,装机完成即销毁)
-- **root shell**:`fish`
-- **桌面**(desktop 变体):`xfce-desktop-service-type` + `lightdm`(X11)自动登录 live → xfce 会话
-- **tty1 回退**:`make-installation-os` 自带 kmscon(可手动启用)
-- **nonguix kernel**:`linux` + `linux-firmware`(支持非自由 wifi/显卡)
+- **live user**:`live` / `live`;**root**:`root` / `live`(救援盘需要确定性口令)
+- **shell**:live 与 root 均为 `fish`(骨架带速查 greeting)
+- **桌面**(desktop 变体):`xfce-desktop-service-type` + `labwc`(Wayland)+ `greetd` vt7 自动登录 live;登出后 default-session 自动回桌面
+- **tty 回退**:tty3-6 是 root 免密 mingetty;minimal 变体 tty1 保留 TUI 安装器
+- **nonguix kernel**:`linux` + `linux-firmware`(支持非自由 wifi/显卡);已删 `modprobe.blacklist=radeon,amdgpu`(否则 AMD 无 KMS 进不了桌面)
 - **4 套 substitute 镜像**: nonguix / guix-moe / panther / sjtug
-- **预置 nonguix channel**:Live 环境的 `/etc/guix/channels.scm` 已含 guix + nonguix,`guix pull` 直接拉到(参照 Testament minimal.scm)
+- **预置 nonguix channel**:Live 环境的 `/etc/guix/channels.scm` 已含 guix + nonguix
+- **救砖装机载荷**:`rescue-chroot.sh` / `emergency-blue.sh` 在 PATH;仓库快照在 `~/Guix-configs`(只读,用前 `cp -r`);`emacs-minimal` 内嵌供 tangle
+- **网络**:desktop 用 NetworkManager(nm-applet 托盘 / `nmtui`);minimal 保留 connman(TUI 安装器依赖)
 
 ### 1.3 烧盘与验证
 
@@ -126,13 +126,16 @@ ISO 装机时 `guix pull` / nonguix kernel 拉 substitute 需要公钥, **少一
 
 | 决策   | 内容                                              | 理由                                                                     |
 | ------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
-| **D1** | 首选变体 = XFCE Desktop(desktop)                  | 用户要桌面辅助装机，`xfce-desktop-service-type` + `lightdm`(X11)是标准件 |
+| **D1** | 首选变体 = XFCE Desktop(desktop)                  | 用户要桌面辅助装机,`xfce-desktop-service-type` + `greetd`(labwc/Wayland)自动登录 |
 | **D2** | ISO OS 目标 = "提供装机用环境",不干预装好后       | 装好后用户自己 `blue rebuild` 重建                                       |
 | **D3** | 4 套 substitute 镜像全复刻(§2.5)                  | 装机时 `guix pull` 要用公钥                                              |
 | **D4** | 只装 mihomo 包,不引 service / config / tun        | ISO 内手动启;装好后由 `blue rebuild` 重建                                |
-| **D5** | live user = `live` / `live`                       | lightdm auto-login 后 sudo 需要明确密码                                  |
-| **D6** | 显式删 kmscon(由 `make-installation-os` 默认提供) | 直接进 XFCE 桌面,不走 TUI 安装器;需同步删 console-font                   |
+| **D5** | live = `live`/`live`,root = `root`/`live`         | 救援盘需要确定性 sudo/ssh 口令                                           |
+| **D6** | desktop 删 kmscon+console-font;minimal 保留       | desktop 直进桌面;minimal 留 TUI 安装器兜底                               |
 | **D7** | 本文档**进**仓库                                  | 给接手 agent 留契约 —— 见 §6.2 维护纪律                                  |
+| **D8** | 仓库快照进 `~/Guix-configs`(剔 .git/dist/tmp)     | 装机/救砖开箱即用;快照只读,用前 `cp -r`                                  |
+| **D9** | 浏览器用 netsurf 顶替 icecat                      | 省约 500MB;复杂网页打不开属预期                                          |
+| **D10**| desktop 删 connman 换 NetworkManager              | 双栈打架;nm-applet 托盘 + nmtui 更顺手(§3.8)                             |
 
 ## §3 已知陷阱(接手维护必看)
 
@@ -140,9 +143,9 @@ ISO 装机时 `guix pull` / nonguix kernel 拉 substitute 需要公钥, **少一
 
 ### §3.1 tangle 目标绝对不能复用 `tmp/config.scm`
 
-若 `:tangle ../tmp/config.scm` 误用,`%live-installation-os` 会污染主机配置,`blue rebuild` 报 `unbound variable: %system` 或 `multiple definition`。
+两个变体各自 tangle 到 `tmp/live-iso-<variant>.scm`。若 `:tangle ../tmp/config.scm` 误用,ISO 定义会污染主机配置,`blue rebuild` 报 `unbound variable: %system` 或 `multiple definition`。
 
-**验证**:`tail tmp/live-iso.scm` 末行应是 `%live-installation-os` (裸值,非 `(define ...)`);`grep -c '%live-installation-os' tmp/config.scm` 应为 0。
+**验证**:`tail tmp/live-iso-desktop.scm` 末行应是 `%live-desktop-os`(裸值);`grep -c 'live-desktop-os' tmp/config.scm` 应为 0。
 
 ### §3.2 `<<live-modules>>` 不能被主 main 块引用
 
@@ -172,7 +175,7 @@ trivial-build-system 的 builder 默认**不**导入 `(guix build utils)`, 直�
 
 ### §3.7 `delete kmscon` 后必须同时 `delete console-font`(否则进不了桌面)
 
-ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器。安装器是 `make-installation-os` 在 tty1 上跑的 kmscon:
+desktop 变体要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器。安装器是 `make-installation-os` 在 tty1 上跑的 kmscon:
 
 ```scheme
 ;; gnu/system/install.scm:466-470 —— kmscon 在 tty1 且 login-program = 安装器
@@ -190,12 +193,26 @@ ISO 要直接进 XFCE 桌面(而非 TUI 安装器),得删掉 tty1 的安装器�
 **修复**(参照 Testament `graphical-system.scm:64` + 主机 `desktop-services` 块):
 
 ```scheme
-(modify-services (operating-system-user-services %live-base-os)
+(modify-services %live-base-services
   (delete kmscon-service-type)            ;; 删 tty1 安装器
   (delete console-font-service-type))     ;; 删依赖 term-tty1 的 console-font
 ```
 
-console-font 只设 TTY 字体,Live 桌面(lightdm/XFCE)用不到,删了无副作用。`blue check` 不查 shepherd 依赖图,这类"服务依赖缺提供者"错只能靠真跑 `guix` 构建暴露 —— 见 §4。
+console-font 只设 TTY 字体,Live 桌面用不到,删了无副作用。`blue check` 不查 shepherd 依赖图,这类"服务依赖缺提供者"错只能靠真跑 `guix` 构建暴露 —— 见 §4。
+
+### §3.8 删 connman 必须同步补 NetworkManager(否则 sshd 起不来)
+
+`make-installation-os` 默认网络栈是 connman,它提供 shepherd 的 `networking` 服务。`openssh-service-type` 的 `ssh-daemon` 依赖 `networking`——只删 connman 会报:
+
+```
+服务 'ssh-daemon' 需要 'networking',但没有任何服务提供该服务
+```
+
+**修复**:desktop 变体在 `(delete connman-service-type)` 的同时显式加 `(service network-manager-service-type)`。注意 `xfce-desktop-service-type` **只是** polkit/pam/profile 小扩展,**不**含 `%desktop-services`,NM 不会自动来。
+
+### §3.9 live/root shell 必须指向已安装的包
+
+曾把 live/root shell 设成 zsh,但 zsh 不在 ISO 包列表里——登录即失败。现在统一 fish(骨架有 fish 配置)。改 shell 前先确认包在 `packages` 列表里。
 
 ## §4 出错怎么办(快速索引)
 

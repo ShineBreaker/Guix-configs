@@ -61,8 +61,8 @@ mutable/
 | 软件包               | 部署目标                                                                       | 说明与手册                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `emacs`              | `~/.config/emacs/`                                                             | 单一 `emacs.org` 驱动的 Emacs 配置，详见 [emacs/.../AGENTS.md](emacs/.config/emacs/AGENTS.md)                    |
-| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh*` + 图标/desktop 项                  | DeepSeek Harness 配置层与 CLI/Web 包装器，详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)                             |
-| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes*`                              | Hermes Agent 提示词、配置、插件与启动项                                                                          |
+| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh` + 图标/desktop 项                   | DeepSeek Harness 配置层与 CLI（update/web 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)       |
+| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）                                 |
 | `agents/omp`         | `~/.config/omp/`                                                               | OMP Agent 配置与扩展                                                                                             |
 | `agents/pi`          | `~/.config/pi/` + `~/.local/bin/pi*` + `~/.local/share/pi/`                    | Pi 编码 Agent 的 wrapper 与配置（pnpm 自管理），详见 [pi/AGENTS.md](agents/pi/AGENTS.md)                         |
 | `agents/skills`      | `~/.config/agents/skills/` + `~/.local/bin/askill`                             | 第三方技能锁（`skills-lock.json`）、自建技能与 `askill` 管理器                                                   |
@@ -70,10 +70,32 @@ mutable/
 | `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` + `~/.zcode/plugins/` | 知识库技能与各端 Hook/插件（内含子模块）                                                                         |
 | `tools/secrets`      | `~/.local/share/keys/` + `~/.local/bin/secrets`                                | Age 密钥对与 `secrets` 命令（加密/解密/编辑/fzf 菜单/剪贴板），详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md) |
 | `tools/appimage-run` | `~/.local/bin/appimage-run`                                                    | AppImage 运行器（子模块）                                                                                        |
-| `tools/blue`         | `~/.local/bin/blue` + `blue-update` + `blue-gc`                                | blue 启动 wrapper（借系统 guile 3.0.11 直跑，绕过 bluebox 字节码错配；上游修复 guile 输入后删包）及 update 防呆/gc 清理分发（docs/emergency-blue.md §8-9） |
+| `tools/blue`         | `~/.local/bin/blue`（增强脚本在包内 `.local/libexec/`）                        | blue 启动 wrapper（借系统 guile 直跑，绕过字节码错配；上游修复后删包），update 防呆/gc 清理分发至包内 `.local/libexec/`（docs/emergency-blue.md §8-9）     |
 | `tools/toolbox`      | `~/.local/bin/toolbox` + `~/.local/share/toolbox/`                             | 自研工具统一入口（fzf 清单），详见 [toolbox/AGENTS.md](tools/toolbox/AGENTS.md)                                  |
 
 > `agents/extensions/` 无 `.stow-package` 标记，不单独部署：它是 omp/pi 共享自建扩展的源码存放点，两侧 `extensions/<name>/` 经软链引用（见 [pi/AGENTS.md](agents/pi/AGENTS.md)）。
+
+## .local/bin 入口准入规则
+
+mutable 包的 `~/.local/bin` 入口遵循**一包一入口**（2026-09 已将 blue/hermes/dsh/pi 四族
+从 21 个入口收敛到 15 个，规则成文防回潮），由 `toolbox check` 执法：
+
+1. **一包一入口**：每个 stow 包默认只在 `.local/bin/` 放一个入口文件；其余实现放包内
+   `.local/libexec/`，由主入口 case 分发子命令（范本：
+   [agents/hermes](agents/hermes/.local/bin/hermes) 与 [tools/blue](tools/blue/.local/bin/blue) 的 wrapper）。
+2. **先论证挂靠**：新增入口前必须先论证无法作为现有工具的子命令挂靠；直接新建独立入口视为违规。
+3. **禁止新增 `*-update` 入口文件**：更新逻辑一律实现为 `tool update` 子命令。
+4. **`*-acp` 协议入口豁免**：外部 ACP host（Zed 等）按命令名寻址 agent，无法子命令化，允许
+   作为包内第二入口；头注释须说明约束来源（范本：[hermes-acp](agents/hermes/.local/bin/hermes-acp)）。
+   `toolbox check` 对其自动豁免。
+5. **拦截即遮蔽须写明**：主入口分发与上游 CLI 已有同名子命令撞名时（如 `hermes update`），
+   分发处头注释必须写明「拦截即覆写」及原生行为的直调触达路径（范本：hermes wrapper 头注释）。
+6. **例外声明**：确无法子命令化的入口（如上游子命令语义撞车、不可遮蔽）在包根
+   `.bin-entries-allow` 声明，每行「入口名 # 理由」，理由不可省略（范本：agents/pi 的 `pi-update`）。
+7. **登记对账**：原创工具新入口须同步登记 tools.yaml（`toolbox check` 对账）；子命令化工具
+   条目挂主命令名下，usage 写子命令形态。
+8. **执法**：`toolbox check` 的一包一入口检测为阻断级——包内入口计入数 > 1 或豁免缺理由即
+   非零退出（`*-acp` 自动豁免不计入；immutable 包不在检测范围）。
 
 ## 工作流与操作指南
 

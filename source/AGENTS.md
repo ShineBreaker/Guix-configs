@@ -130,7 +130,7 @@ blue home                  # 仅构建并切换 Home 层（含 dotfiles），无
 
 ## 网络与防火墙
 
-- **nftables 防火墙（接口信任模型）**：规则集开机时由 `nftables-service-type` 全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行。NetworkManager dispatcher 仅动态增删该集合元素（可信 WiFi 加入 `wlp0s20f3`），绝不执行 `flush ruleset`。
+- **nftables 防火墙（接口信任模型）**：规则集开机时由 `nftables-service-type` 全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行。NetworkManager dispatcher 仅动态增删该集合元素（可信 WiFi 加入发起连接的无线接口），绝不执行 `flush ruleset`。
 - **WiFi 信任白名单**：以 NM Profile 名（`CONNECTION_ID`，非 SSID）为准，存储于加密文件 `wifi-trust.age` 中。Dispatcher 脚本在内存管道中解密比对，不落盘明文；私钥缺失时仅按不可信处理，不阻断联网。脚本经 activation 拷入 `/etc/NetworkManager/dispatcher.d/`（该目录是持久挂载点，规则文件随系统代原子切换）。
 - **WiFi 省电策略（`nm-powersave-conf`）**：目标是连接时恒不省电（低延迟、远程操控优先）。NM 每次连接都把省电重置为开启，曾尝试用 dispatcher 在 up 事件补救但被 NM 默认行为覆盖、不可靠，故改为在 NM `[connection]` 段写默认 `wifi.powersave=2`；拔电时由 udev ac-power 规则切回省电。注意 `[connection]` 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
 - **OpenSSH**：显式声明 `permit-root-login 'prohibit-password`——root 锁定密码、仅允许密钥登录，防上游默认漂移。
@@ -148,8 +148,8 @@ blue home                  # 仅构建并切换 Home 层（含 dotfiles），无
 
 ## Live ISO 镜像构建
 
-- 通过 `blue build-iso` 生成 `tmp/live-iso.scm`，再由 `tools/build-image.scm` 构建 ISO 镜像。
-- **隔离要求**：ISO 的 tangle 目标必须是独立的 `tmp/live-iso.scm`，绝对不能复用 `tmp/config.scm`；ISO 专用的模块引用必须内联在 `live-installation-os` 块内部，切勿并入主模块列表。
+- 通过 `blue build-iso` 生成 `tmp/live-iso-<variant>.scm`（desktop / minimal 两个变体），再由 `tools/build-image.scm` 构建 ISO 镜像。
+- **隔离要求**：ISO 的 tangle 目标必须是独立的 `tmp/live-iso-<variant>.scm`，绝对不能复用 `tmp/config.scm`；ISO 专用的模块引用内联在各变体块内部，共享部分走 `<<live-common>>` noweb 片段（不独立 tangle）。
 
 ## 频道管理
 
