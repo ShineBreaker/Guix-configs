@@ -43,16 +43,15 @@ install_cli() {
 	_sync_cli_lockfile
 }
 
-# 部署侧 lockfile 拷回仓库源（源侧路径从 pnpm-workspace.yaml 软链推导）。
+# 部署侧 lockfile 拷回仓库源（源侧路径从包内 libexec 的位置反推，stow 布局内自洽）。
 # pnpm 的 Rust 端拒绝写软链 lockfile，故 _cli 的 lockfile 在部署侧是真实文件，
 # git 里的副本靠这里保持同步。
 _sync_cli_lockfile() {
-	local dir="$_cli_dir" src_link src_dir
-	src_link=$(readlink "$dir/pnpm-workspace.yaml" 2>/dev/null) || return 0
-	src_dir="$dir/$(dirname "$src_link")"
-	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] || return 0
-	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
-		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+	local dir="$_cli_dir" src_file
+	src_file="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/_cli/pnpm-lock.yaml"
+	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_file" ]] || return 0
+	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_file"; then
+		cp "$dir/pnpm-lock.yaml" "$src_file"
 		printf 'dsh: _cli 的 pnpm-lock.yaml 已同步回仓库源\n' >&2
 	fi
 }
@@ -67,16 +66,24 @@ fi
 # package.json 从 stow 软链换成独立文件——dependencies 进了仓库源、bundles 只落
 # 部署侧。跑完 plugin 子命令后调用：断链则内容归源并重建软链；lockfile 则反向
 # 同步（部署侧必须是真实文件——pnpm 的 Rust 端拒绝写软链 lockfile）。源目录从
-# 同目录幸存的 pnpm-workspace.yaml 软链推导（stow 布局内自洽，无硬编码路径）。
+# 包内 bin 的位置反推（stow 布局内自洽，无硬编码路径；不能再从部署侧软链推导：
+# pnpm 会把 package.json / pnpm-workspace.yaml 原地写成实体文件，链接随时不在）。
+# 0.1.7 起 UI 设置编辑也原子写 cordis.patch.yml（settings 已并入 profile
+# patch），断链源不止 plugin 子命令——故尾部统一兜底：每次 CLI 调用结束都
+# 检测一遍（三个文件的 stat，开销可忽略）；dsh web 路径 exec 到 libexec，
+# 由 dsh-web 在起服务前自行检测。
 _relink_profile() {
-	local dir="$DSH_HOME/profiles/web" src_link src_dir
-	src_link=$(readlink "$dir/pnpm-workspace.yaml" 2>/dev/null) || return 0
-	src_dir="$dir/$(dirname "$src_link")"
-	if [[ -f "$dir/package.json" && ! -L "$dir/package.json" ]]; then
-		cp "$dir/package.json" "$src_dir/package.json"
-		ln -sfn "$(dirname "$src_link")/package.json" "$dir/package.json"
-		printf 'dsh: package.json 断链已写回仓库源并重建软链\n' >&2
-	fi
+	local dir="$DSH_HOME/profiles/web" src_dir name
+	src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
+	[[ -d "$src_dir" ]] || return 0
+	for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
+		[[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
+		if [[ ! -L "$dir/$name" ]]; then
+			cp "$dir/$name" "$src_dir/$name"
+			ln -sfn "$src_dir/$name" "$dir/$name"
+			printf 'dsh: %s 断链已写回仓库源并重建软链\n' "$name" >&2
+		fi
+	done
 	if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] &&
 		! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
 		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
@@ -122,4 +129,11 @@ if [[ ! -x "$_cli_bin" ]]; then
 	fi
 fi
 
-exec "$_cli_bin" "$@"
+# 统一兜底：CLI 跑完检测 profile 配置断链（UI 设置编辑/pnpm 原子写的自愈）。
+# plugin 分支上方已提前 exit；update/web 分发走 exec 由 libexec 实体负责。
+set +e
+"$_cli_bin" "$@"
+rc=$?
+set -e
+_relink_profile
+exit "$rc"

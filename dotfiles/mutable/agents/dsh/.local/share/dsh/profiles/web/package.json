@@ -13,7 +13,6 @@
         "dsh-agent-extensions",
         "dsh-agenote",
         "@deepseek-ai/dsh-experimental-agent-team-profile",
-        "@deepseek-ai/dsh-experimental-agent-team-web-profile",
         "dsh-remote-web-gateway",
         "dsh-opencode-go"
       ],
@@ -21,13 +20,13 @@
     }
   },
   "dependencies": {
-    "@opencode2dsh/dsh-plugin": "0.3.3",
+    "@opencode2dsh/dsh-plugin": "0.2.7",
     "dsh-agenote": "link:/home/brokenshine/Projects/agenote/dsh-agenote",
     "dsh-agent-extensions": "link:../agent-extensions",
-    "dsh-context": "0.54.2",
+    "dsh-context": "0.54.4",
     "dsh-devin-cli": "github:leewf/dsh-devin-cli#06a9c61de653d86e6e634a3cc4f12f6035623788",
     "dsh-dream-skin": "9.16.0",
-    "dsh-opencode-go": "0.1.5",
+    "dsh-opencode-go": "0.1.7",
     "dsh-remote-web-gateway": "0.2.2"
   }
 }

@@ -4,10 +4,12 @@ nodeLinker: hoisted
 autoInstallPeers: false
 saveExact: true
 minimumReleaseAgeExclude:
-  - dsh-context@0.49.0 || 0.53.3 || 0.54.2
+  - dsh-context@0.49.0 || 0.53.3 || 0.54.2 || 0.54.4
   - '@opencode2dsh/dsh-plugin@0.3.2'
-  - dsh-opencode-go@0.1.4 || 0.1.5
+  - dsh-opencode-go@0.1.4 || 0.1.5 || 0.1.7
   - '@mars-sea/dsh-commandcode-provider@0.11.5'
+  - '@deepseek-ai/cosmokit@1.8.4'
+  - '@deepseek-ai/schemastery@3.18.3'
 allowBuilds:
   '@google/genai': false
   dsh-devin-cli@https://codeload.github.com/leewf/dsh-devin-cli/tar.gz/06a9c61de653d86e6e634a3cc4f12f6035623788: true

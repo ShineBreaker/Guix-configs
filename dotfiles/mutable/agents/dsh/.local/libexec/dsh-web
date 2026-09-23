@@ -118,8 +118,32 @@ report_start_failure() {
 	notify-send -a dsh web -u critical 'dsh web 启动失败' "${detail:-详见 $DSH_WEB_LOG}" 2>/dev/null || true
 }
 
+# profile 配置断链自愈：0.1.7 的 UI 设置编辑以原子替换写 profiles/web/
+# cordis.patch.yml，会把 stow 软链换成实体文件（dsh web 是长驻服务，用户在
+# UI 改完设置后下次重启才经过这里，故起服务前统一检测）。与 bin/dsh 的
+# _relink_profile 同款：断链则内容归源并重建软链；lockfile 反向同步。
+_relink_profile() {
+	local dir="$DSH_HOME/profiles/web" src_dir name
+	src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
+	[[ -d "$src_dir" ]] || return 0
+	for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
+		[[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
+		if [[ ! -L "$dir/$name" ]]; then
+			cp "$dir/$name" "$src_dir/$name"
+			ln -sfn "$src_dir/$name" "$dir/$name"
+			printf 'dsh web: %s 断链已写回仓库源并重建软链\n' "$name" >&2
+		fi
+	done
+	if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] &&
+		! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
+		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+		printf 'dsh web: pnpm-lock.yaml 已同步回仓库源\n' >&2
+	fi
+}
+
 start_server_url() {
 	local dir url="" waited=0 child
+	_relink_profile
 	dir=$(dirname -- "$DSH_WEB_LOG")
 	mkdir -p -- "$dir"
 	(

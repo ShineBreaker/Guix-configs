@@ -29,7 +29,9 @@ import { createUserMessage } from "./lib.js";
 export const name = "agent-gate";
 export const inject = ["tools"];
 
-const SOURCE = { kind: "plugin", plugin: "agent-gate" };
+// 会话格式 v4 要求 producer-owned source kind：`kind: "plugin"` 包装已退役，
+// 第三方生产者按迁移器规则（producerKind）直接写 `plugin:<名>`。
+const SOURCE = { kind: "plugin:agent-gate" };
 const SUDO_PATTERN = /\bsudo\b/;
 // 写文件类工具：写盘内容送 gate-core edit 子命令做敏感信息/保护路径判定
 const WRITE_TOOLS = new Set(["write", "edit", "str_replace_editor"]);

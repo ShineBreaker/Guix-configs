@@ -127,19 +127,39 @@ migrate_allow_builds() {
 	printf 'dsh update: allowBuilds key 已随 commit 迁移（%s）\n' "$pkg"
 }
 
-# $1: 目录。把部署侧 lockfile 拷回仓库源（源侧路径从 pnpm-workspace.yaml 软链推导），
-# 保证 git 里的 lockfile 副本与实际部署一致。部署侧必须是真实文件——pnpm 的
-# Rust 端拒绝写软链 lockfile（Refusing to write symlinked lockfile）。
-sync_lockfile() {
-	local dir="$1" src_link src_dir
-	src_link=$(readlink "$dir/pnpm-workspace.yaml" 2>/dev/null) || return 0
-	src_dir="$dir/$(dirname "$src_link")"
-	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] || return 0
-	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
-		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
-		printf 'dsh update: %s 的 lockfile 已同步回仓库源\n' "$dir"
-	fi
+# 仓库源目录（stow 包内 .local/share/dsh/ 对应部署侧 $DSH_HOME）。
+# 不从部署侧软链推导：pnpm 会把 package.json / pnpm-workspace.yaml 原地写成
+# 真实文件，曾依赖的 workspace 软链随时可能不存在，推导失败就静默跳过回源
+# （2026-09-22 web 侧四文件全部只落部署侧的根因）。改为从包内 libexec 的
+# 位置反推：$0 经 stow 软链解析回仓库源，源布局与部署布局同构。
+readonly SRC_DSH_HOME="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")/share/dsh"
+
+# $1: 目录（部署侧，_cli 或 profiles/web）。把该目录下 pnpm 会写的文件
+# （lockfile / package.json / pnpm-workspace.yaml / cordis.patch.yml）同步回
+# 仓库源同名路径，保证 git 里始终是可复现的锁与配置。部署侧 lockfile 必须是
+# 真实文件——pnpm 的 Rust 端拒绝写软链 lockfile（Refusing to write symlinked
+# lockfile）；package.json / pnpm-workspace.yaml 的 stow 软链被 pnpm 覆写、
+# cordis.patch.yml 被 config editor 覆写同理，内容回源后随即重建软链，否则
+# 下次写入又只落部署侧（2026-09-23 plugin add 后源与部署侧分叉的根因）。
+sync_dir() {
+	local dir="$1" rel src_file name
+	rel="${dir#"$DSH_HOME"/}"
+	[[ "$rel" == "$dir" ]] && return 0 # 不在 $DSH_HOME 下，无从回源
+	for name in pnpm-lock.yaml package.json pnpm-workspace.yaml cordis.patch.yml; do
+		src_file="$SRC_DSH_HOME/$rel/$name"
+		[[ -f "$dir/$name" && -f "$src_file" ]] || continue
+		if ! cmp -s "$dir/$name" "$src_file"; then
+			cp "$dir/$name" "$src_file"
+			printf 'dsh update: %s/%s 已同步回仓库源\n' "$rel" "$name"
+		fi
+		if [[ "$name" != pnpm-lock.yaml && ! -L "$dir/$name" ]]; then
+			ln -sfn "$src_file" "$dir/$name"
+			printf 'dsh update: %s/%s 软链已重建\n' "$rel" "$name"
+		fi
+	done
 }
+
+sync_lockfile() { sync_dir "$1"; }
 
 # $1: 当前版本 $2: `pnpm view <pkg> dist-tags time --json` 的输出。
 # 按通道稳定性取第一个高于当前的版本，打印 "tag|version|hours|cooling"，无更新则空。
@@ -363,6 +383,11 @@ for j in "${!gh_repo[@]}"; do
 done
 
 printf '\ndsh update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml / pnpm-lock.yaml），请 git diff 后提交。\n'
+# 收尾全量同步：dsh web 运行中会把 cordis.patch.yml 原地写成真实文件（config
+# editor 的 setPreference/模型配置都走这条路径），pnpm_add 只覆盖 pnpm 写过的
+# 文件，这里兜底把两侧拉平。
+sync_dir "$CLI_DIR"
+sync_dir "$WEB_DIR"
 printf 'dsh update: 需重启 dsh web 才生效（host 半边不热载）。\n'
 
 if $do_restart; then

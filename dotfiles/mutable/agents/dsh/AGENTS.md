@@ -9,7 +9,8 @@
 | --------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `~/.local/share/dsh/`                   | `$DSH_HOME`，为真实目录，配置文件逐个软链回本包（采用 no-folding 模式）                              |
 | `.local/share/dsh/cordis.patch.yml`     | `$DSH_HOME` 顶层的 cordis 补丁配置                                                                   |
-| `.local/share/dsh/.agent-presets/`      | 用户自有 agent preset 根：`minimal-guix`（极简模式）、`simple-mode`（简单模式）、`liangshen`（梁神模式），部署侧逐文件软链回本包 |
+| `.local/share/dsh/profiles/web/cordis.patch.yml` | Web Profile 用户 patch 层：覆盖行（connection inject、LLM providers、默认模型、UI 设置）+ **三个自定义 agent preset 的行声明**（0.1.7 机制，见「自定义 Agent Presets」） |
+| `.local/share/dsh/profiles/web/preset-plugins/` | 自定义 preset 专用 `.mjs` 模块（梁神模式的 tool-bootstrap 等 6 个）；组合行以 `./preset-plugins/xxx.mjs` 相对 profile 目录引用 |
 | `.local/share/dsh/_cli/`                | CLI 本体源：托管 `package.json`、`pnpm-workspace.yaml` 与 `pnpm-lock.yaml` 副本；`node_modules/` 为运行时产物。部署侧 lockfile 是真实文件（pnpm 拒写软链 lockfile），由 `dsh --install` 自动拷回源 |
 | `.local/share/dsh/profiles/web/`        | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json`、`pnpm-workspace.yaml` 等配置     |
 | `.local/share/dsh/profiles/agent-extensions/` | 自建插件包（pi/omp 共享扩展的 DSH 移植，见「自建插件」）；profile 以 `link:../agent-extensions` 引用 |
@@ -23,7 +24,7 @@
 
 ## 安装通道与升级
 
-- **安装机制**：DSH CLI 本体（当前为 0.1.6-alpha.2）通过 pnpm 安装在 `_cli/` 目录中。
+- **安装机制**：DSH CLI 本体（当前为 0.1.7-alpha.1）通过 pnpm 安装在 `_cli/` 目录中。
 - **升级步骤**：修改源码中 `.local/share/dsh/_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
 - **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）、`saveExact: true`（一切 pnpm add 通道——含 `dsh plugin add`——都写精确版本，根治 `^` 范围漂移）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。插件侧 `profiles/web/pnpm-workspace.yaml` 同理。
 
@@ -37,7 +38,7 @@
 | ------------------------------------ | -------------- | ---------------------------------------------------------------------------------- |
 | `dsh-context`                        | 0.53.3         | 上下文监控面板：展示 Agent 组合、趋势分析、文件活动与 Agent 通信网络               |
 | `dsh-dream-skin`                     | 9.16.0         | 原生主题换肤：通过官方 `ctx.theme.register` / `overrideTokens` 实现原生 Token 换肤 |
-| `@opencode2dsh/dsh-plugin`           | 0.3.2          | OpenCode Zen 免费通道：原生 LLM adapter，无凭据零配置                              |
+| `@opencode2dsh/dsh-plugin`           | 0.2.7          | OpenCode Zen 免费通道：原生 LLM adapter，无凭据零配置（**0.1.7 起从 0.3.x 降级**，见下） |
 | `dsh-opencode-go`                    | 0.1.4          | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                  |
 | `@mars-sea/dsh-commandcode-provider` | 0.11.5         | Command Code 接入：全套餐、浏览器内 OAuth 登录、多账户轮换                         |
 | `dsh-devin-cli`                      | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，dsh update 自动跟 HEAD）        |
@@ -46,12 +47,14 @@
 
 > **已移除：`dsh-better-sidebar`（0.19.1，2026-09-19）**——侧边栏工作台（文件编辑、内置终端、Git 差异）。其 peer 锁 `@deepseek-ai/dsh-agent: ^0.1.5-rc.1`，semver 预发布区间够不到核心 `0.1.6-alpha.2`：`conversation.chat.turnTail` 槽位在 0.1.6 由 `chain` 改为 `list`（注册要求 `options.id`），旧插件按 chain API 注册 → 整页 `web boot` 失败。上游发布适配 0.1.6 的版本后可 `dsh plugin --profile web add dsh-better-sidebar@<ver>` 装回。
 
+> **已降级：`@opencode2dsh/dsh-plugin`（0.3.3 → 0.2.7，2026-09-23）**——0.3.x 的 client 半边 inject `settingsScope`，而 0.1.7 核心把 settings 域从 `super(ctx, "settingsScope")`（0.1.6 `dsh-client-ui-settings/lib/client.js` 实码）重构为 describe mirror 架构，该服务已不存在 → 页面停在 `Failed to load plugins` / `web boot: 1 entry did not activate` / `@opencode2dsh/dsh-plugin: pending (waiting for service: settingsScope)`。0.3.0–0.3.3 全部中招（IP 池设置卡均走该 API），npm 最新即 0.3.3、无适配版。0.2.7 是最后**只有 host 半边**的版本（inject `llm`/`credentials`/`settings`，0.1.7 仍提供），Zen 通道本身不受影响，代价是失去 0.3.x 的 IP 池 UI 卡片。上游适配 0.1.7 后可升回。
+
 ### 插件常见问题与注意点
 
 1. **供应链冷却**：pnpm 会自动将 `minimumReleaseAgeExclude` 写入 profile workspace，确保新发插件正常拉取。
 2. **原生模块编译**：涉及 native 依赖时需执行 `pnpm approve-builds`（配置项为 `allowBuilds`）。
 3. **服务重启**：安装新插件后须重启 `dsh web`。若首次加载时页面漏掉插件条目，对浏览器进行一次硬刷新（Ctrl+F5）即可恢复。
-4. **软链断链**：`dsh plugin add/remove` 写 `dsh.profile.bundles` 走原子替换（临时文件 + rename），会把 `profiles/web/package.json` 的 stow 软链换成独立文件——dependencies 更新进仓库源、bundles 却只落在部署侧。**wrapper 已自动自愈**：`dsh` 包装器在每次 `plugin` 子命令结束后检测断链，从同目录幸存的 `pnpm-workspace.yaml` 软链推导仓库源目录（无硬编码路径），把内容写回源并重建软链，同时把部署侧 lockfile 拷回源。仍建议跑完 `ls -la` 抽查（pnpm 自身的写入不会断链，只有 dsh 的 bundles 写入会）。
+4. **软链断链**：`dsh plugin add/remove` 写 `dsh.profile.bundles` 走原子替换（临时文件 + rename），会把 `profiles/web/package.json` 的 stow 软链换成独立文件——dependencies 更新进仓库源、bundles 却只落在部署侧。pnpm 自身也会把 `package.json` / `pnpm-workspace.yaml` 原地写成实体文件；0.1.7 起 **UI 的设置编辑（Models 页/主题/默认模型）也把覆盖行原子写进 `cordis.patch.yml`**（settings.yaml 机制已并入 profile patch），同样断链。**双层自动自愈**（2026-09-23 扩展，源目录一律从包内 `bin/dsh`/`libexec/dsh-update`/`libexec/dsh-web` 的 `$0` 反推，不再从部署侧软链推导——pnpm 把链接写掉后推导会静默失败）：`dsh` 包装器**每次 CLI 调用结束**与 `dsh web` **起服务前**检测断链，内容写回源并重建软链（lockfile 例外，pnpm 拒写软链 lockfile）。仍建议跑完 `ls -la ~/.local/share/dsh/profiles/web/` 抽查链接形态。
 5. **插件不得把核心包写成 dependency**：`@deepseek-ai/dsh-*` 在插件里应声明为 **peer**，运行时由 dsh 统一解析到 `_cli` 的核心版本（profile 顶层解析不到时才回退）。若某插件把它们写成 dependency 且版本范围够不到当前核心（如 `^0.1.0-rc.6`——semver 下预发布区间只匹配同 `0.1.0` 元组，永远升不到 `0.1.6-alpha.2`），pnpm 会解析出一份**旧核心**，又因 `nodeLinker: hoisted` 把它平铺到 profile 顶层，**劫持所有插件的解析** → 启动时成批报 `does not provide an export named <符号>`（各插件缺的符号不同，看着像一批插件同时损坏，实为同一个旧副本）。
    - **判定**：`ls profiles/web/node_modules/@deepseek-ai/`，正常只应有 `cordis`、`cosmokit`、`schemastery`、`dsh-brand`；出现 `dsh-llm` / `dsh-session` 等即中招。
    - **修法**：移除该插件（`dependencies`、`bundles`、workspace 的 `minimumReleaseAgeExclude` 三处同清）后 `pnpm install`，顶层旧副本随之消失。
@@ -113,6 +116,50 @@
 - **验证方式**：host 半边可用桩 `ctx` 直接驱动模块（`node --input-type=module` 导入
   `gate.js`，喂假 exec 走 `tools/pre-execute`），无需启动服务即可确认拦截/注入语义。
 
+## 自定义 Agent Presets（0.1.7 行声明机制）
+
+**0.1.7 废除了 `.agent-presets/` 目录发现机制**（`dsh-agent-presets` 包整体移除，
+shipped 四档改由 `dsh-web-app` 包的 `presets/*.patch.yml` 以行声明注册）。用户
+preset 一律在 `profiles/web/cordis.patch.yml` 里以 `- insert:` 块声明一行
+`@deepseek-ai/dsh-agent-preset`：
+
+```yaml
+- insert:
+    - id: preset-minimal-guix        # 行 id（patch 内寻址用）
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: minimal-guix             # preset id（会话引用、registry 去重键）
+        name: 极简模式（Guix）        # 显示名
+        description: ...             # 选择器里的一行说明
+        order: 3.5                   # 官方四档 standard=1 ptc=2 minimal=3 cordis=4
+        plugins: [ ...组合行列表... ]  # 即旧 agent.cordis.yml 的内容
+```
+
+- **顶层 `- id:` 是覆盖语义**（按 id 定位已有行改 config），注册新行必须走
+  `- insert:` 块——写成顶层行会报 `patch: entry "..." not found` 且被静默跳过。
+- **相对路径行按 profile 目录解析**：preset 专用 `.mjs` 模块放
+  `profiles/web/preset-plugins/`，行名写 `./preset-plugins/xxx.mjs`
+  （Loader 的 baseUrl 锚定在 profile 目录，见 `profile-boot` 的注释）。
+- 组合内的 `!!js` 表达式照常可用（官方 preset patch 同款）。
+- **升级重同步**：diff 官方 `<dsh-web-app>/presets/minimal.patch.yml`，把差异
+  套回 patch 里的 preset 块（重点是 `terminal-bash` 行的 `shellPath`——Guix 无
+  `/bin/bash`；`shellPath` 是单字符串，不含空格切分，见排障指南第 5 条）。
+- **验证**：`dsh --profile web --dump-config 2>&1 | grep '^- id: preset-'` 应
+  列出七行（官方四档 + 自定义三档）；`--dump-config` 不 mount，实际挂载错误
+  （如 .mjs 解析失败）在 boot 时以 `agent preset <id>: <原因>` warn 进
+  `~/.local/state/dsh/web.log`，选择器里该档会带 `broken` 标注。
+- 默认 preset 的选择持久化在 settings（`agent-presets` 命名空间，UI 的
+  General 设置页写入）；`$DSH_HOME/settings.yaml.imported` 是 0.1.7 首启从旧
+  全局 settings.yaml 导入后的改名备份，仅作参考，不参与运行。
+
+当前三档（原 `.agent-presets/` 目录迁移而来，2026-09-23）：
+
+| preset id      | order | 说明                                                                 |
+| -------------- | ----- | -------------------------------------------------------------------- |
+| `minimal-guix` | 3.5   | 内置 minimal 副本 + `shellPath` 适配 Guix（无 /bin/bash）            |
+| `simple-mode`  | 3.6   | minimal-guix 工具面 + 完整上下文注入（AGENTS.md/技能目录/系统提示词/agenote） |
+| `liangshen`    | 5     | 首轮 Minimal 双工具锚定，首工具调用后开放完整目录，压缩后重新锚定（V4 轨迹评估用，6 个 .mjs 在 preset-plugins/） |
+
 ## 一键更新（dsh update）
 
 `dsh update` 把本体与 web profile 的全部插件一起升到上游最新（插件清单从 `package.json` 的 dependencies 动态读取）。两层强绑定，故不提供只升一层的开关。
@@ -155,6 +202,7 @@ dsh update --yes --restart   # 一键：跳过确认，并在更新后重启 dsh
 - **持久化 Cookie**：换取的 Cookie 由 `$DSH_HOME/.credentials.yaml` 中的持久化密钥进行 HMAC-SHA256 签名，默认有效期为 30 天，**跨服务重启依然有效**。
 - **重新认证**：若需强制重置凭据，执行 `dsh web --reauth` 即可安全终止旧实例并重新握手。
 - **`.credentials.yaml` 被重写 → 全部 Cookie 作废**：密钥一换，所有已签发 Cookie 验签失败，`dsh web` 走「端口已监听 + 干净 URL」路径时页面停在 `dsh web authentication required`（401），服务日志却一切正常。判定：`stat ~/.local/share/dsh/.credentials.yaml` 的 mtime 晚于上次握手；或查 chromium `dsh` profile 的 Cookies 库里 `127.0.0.1` cookie 的签发时间。修法就是 `dsh web --reauth`。
+- **核心大版本升级（0.1.6→0.1.7）后旧 Cookie 同样验签失败**：升级重启服务即换新密钥树，chromium profile 里的旧 cookie 变废纸，`dsh web` 检测端口已监听直接开干净 URL → 401（2026-09-23 实例）。`--reauth` 重启换 token 重新握手即可；若此前用 curl 等手滑消耗过 token，再跑一次 `--reauth` 换新的（0.1.7 的 token 端点实测可重复签发，非严格一次性）。
 
 ## 远程访问（tailscale serve → 手机/平板操控）
 
@@ -197,10 +245,10 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
    - `DSH_WEB_LOG`：自定义日志输出路径。
    - `DSH_HOME`：覆盖默认 DSH 数据主目录。
 5. **极简模式报 `PTY shell exited during startup`**：Guix 没有 `/bin/bash`（`/bin` 下只有 `sh`），而 `@deepseek-ai/dsh-terminal-bash` 把 bash 方言的默认 shell 硬编码成这个路径 → spawn `ENOENT` → PTY 子进程当场退出 → 报出这条**误导性**错误（真正失败在 exec 阶段，不是就绪超时；姐妹分支是 `PTY shell did not reach readiness before startup timeout`）。只有极简模式中招，因为四档 preset 里只有它挂持久 shell。
-   - **修法**：用户根 `$DSH_HOME/.agent-presets/minimal-guix/` 是内置 `minimal` 的副本 + `shellPath: /run/current-system/profile/bin/bash`。该目录已纳管本包（源在 `dotfiles/mutable/agents/dsh/.local/share/dsh/.agent-presets/`，部署侧逐文件软链回源、进 Git），改源即时生效；`dsh update` 只管 `_cli` 与 profile bundles，不会碰它。
-   - **为什么不能覆盖内置 `minimal`**：preset 根顺序是「shipped → 自定义 roots → user root」，且同 id **靠前者胜**，shipped 根永远排第一 → 同名 user preset 会被静默遮蔽。只能换个 id。
-   - **为什么改仓库的 `cordis.patch.yml` 也不行**：`shellPath` 是 preset 组合文件里的**行配置**，不在 `agent-presets` 这一行的 config 里；顶层 patch 够不到它。
-   - **升级后要重同步**：上游若改了 `minimal` 组合，副本会陈旧。diff 内置 `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` 后重新套用 `shellPath`。
+   - **修法（0.1.7）**：`profiles/web/cordis.patch.yml` 里 `preset-minimal-guix` 声明块是内置 `minimal` 的副本 + `terminal-bash` 行的 `shellPath: /run/current-system/profile/bin/bash`（该块经 stow 软链部署，改源即时生效；`dsh update` 只管 `_cli` 与 profile bundles，不会碰 patch 里的 preset 块）。机制细节见「自定义 Agent Presets」。
+   - **为什么不能覆盖内置 `minimal`**：registry 按 `config.id` 注册去重（`Duplicate agent preset`），官方四档先注册，同 id 的自定义块会直接抛错——只能换 id（`minimal-guix` 即由此而来）。
+   - **升级后要重同步**：上游若改了 `minimal` 组合，副本块会陈旧。diff 官方 `<dsh-web-app>/presets/minimal.patch.yml` 后把差异套回 `preset-minimal-guix` 块并保留 `shellPath`。
    - **连带坑**：`shellPath` 是**单个字符串**（schemastery `z.string()`），loader 不按空格切分，`confine()` 直接把它当 `argv[0]`。写 `/usr/bin/env bash` 会被当成一个文件名 → 同样 `ENOENT`。要 env 语义只能 `shellPath: /usr/bin/env` + `shellArgs: [bash, --noprofile, --norc, -i]`。
 6. **第三方插件报 `cannot get property "webServer" without inject`（boot 崩溃）**：`ctx.connection.rpc.handle()` 内部在 **connection 插件自己的 scope** 解析 `webServer`（cordis shadow 语义，`this.ctx` 经 `createShadow` 指向服务方 context），而 bundle 的 `connection` 行只 inject 了 `webRuntime` → 任何调 `rpc.handle` 的插件（如 `dsh-remote-web-gateway`）都会炸掉整个 boot；`rpc.intercept`/`fetch.register` 不受影响。修法：profile `cordis.patch.yml` 给 `connection` 行补 `inject: [webRuntime, webServer]`（inject 是整表替换，原值须复述）。
-7. **plugin-manager 装包会覆写 stow 软链**：UI/`dsh plugin` 安装插件时 pnpm 原地写 `profiles/web/package.json`，把回本仓库的软链替换成实体文件 → 源与部署侧静默分叉。**`dsh` wrapper 的 plugin 拦截已自动修复**（内容归源 + 重建软链 + lockfile 回源，见插件注意点 4）；若绕过 wrapper 直接跑了内部 CLI，手动把部署侧内容写回仓库源后 `ln -sfn` 恢复软链。
+7. **plugin-manager 装包会覆写 stow 软链**：UI/`dsh plugin` 安装插件时 pnpm 原地写 `profiles/web/package.json`，把回本仓库的软链替换成实体文件 → 源与部署侧静默分叉。**断链自愈已双层覆盖**（源目录一律从包内 `bin/dsh`/`libexec` 实体的 `$0` 反推，不再从部署侧软链推导——pnpm 把链接写掉后推导会静默失败）：`dsh` 包装器**每次 CLI 调用结束**与 `dsh web` **起服务前**都会检测断链，内容写回源并重建软链（lockfile 例外，pnpm 拒写软链 lockfile，只反向拷回源副本）。触发窗口（UI 编辑后、下次 dsh 命令前）内源是旧的，自愈会以部署侧最新内容归源。仍建议跑完 `ls -la ~/.local/share/dsh/profiles/web/` 抽查链接形态。
+8. **会话报 `本轮运行失败 format v4 message requires a producer-owned source kind`**：0.1.7 会话格式 v4 拒绝旧式消息源 `{kind: "plugin", plugin: "<名>"}`（`kind: "plugin"` 包装已退役）。**插件创建 user/developer 消息必须直接写 producer-owned kind**：第三方插件按 v3→v4 迁移器规则写 `{kind: "plugin:<名>"}`（如 `plugin:agent-gate`），与旧日志重放的迁移结果保持一致；读取侧识别自注入消息要同时兼容 v3（`kind === "plugin"` + `plugin` 字段）与 v4（`kind` 以 `plugin:` 开头）两种形态。本包 `gate.js` 与外部 `dsh-agenote` 均已于 2026-09-23 修复，新增注入消息的插件照此规范写。

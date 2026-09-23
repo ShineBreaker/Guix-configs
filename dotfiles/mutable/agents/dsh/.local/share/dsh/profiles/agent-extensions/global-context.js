@@ -94,9 +94,19 @@ function sessionCwd(agent) {
 }
 
 // 会话事件 → markdown 片段（导出用，尽力而为）
+// source 形态：v3 旧日志 {kind:"plugin", plugin:"名"}；v4 {kind:"plugin:名"}
+function pluginLabel(source) {
+	if (source?.kind === "plugin") return source.plugin ?? "plugin";
+	if (typeof source?.kind === "string" && source.kind.startsWith("plugin:"))
+		return source.kind.slice("plugin:".length) || source.kind;
+	return undefined;
+}
 function messageSection(ev) {
 	const data = ev.data;
-	if (ev.type === "user/message") return { role: data.source?.kind === "plugin" ? `user(${data.source.plugin ?? "plugin"})` : "user", message: data };
+	if (ev.type === "user/message") {
+		const label = pluginLabel(data.source);
+		return { role: label ? `user(${label})` : "user", message: data };
+	}
 	if (ev.type === "assistant/message") return { role: "assistant", message: data.message };
 	if (ev.type === "tool/result") return { role: "tool", message: data.message };
 	if (ev.type === "system/message") return { role: "system", message: data.message };

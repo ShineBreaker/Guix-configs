@@ -31,6 +31,3 @@ sessions/$
 \.dsh-module-fallback/$
 node_modules/$
 pnpm-lock\.yaml$
-
-# --- TUI 写入 preset 目录的管理标记（运行时可变状态，部署侧保持真实文件） ---
-\.dsh-tui-managed\.json$

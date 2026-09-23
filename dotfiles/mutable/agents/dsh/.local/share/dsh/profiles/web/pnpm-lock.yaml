@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@opencode2dsh/dsh-plugin':
-        specifier: 0.3.3
-        version: 0.3.3(ws@8.21.3)(zod@4.6.5)
+        specifier: 0.2.7
+        version: 0.2.7(ws@8.21.3)(zod@4.6.5)
       dsh-agenote:
         specifier: link:/home/brokenshine/Projects/agenote/dsh-agenote
         version: link:../../../../../Projects/agenote/dsh-agenote
@@ -18,17 +18,17 @@ importers:
         specifier: link:../agent-extensions
         version: link:../agent-extensions
       dsh-context:
-        specifier: 0.54.2
-        version: 0.54.2(@deepseek-ai/schemastery@3.18.2)
+        specifier: 0.54.4
+        version: 0.54.4(@deepseek-ai/schemastery@3.18.3)
       dsh-devin-cli:
         specifier: github:leewf/dsh-devin-cli#06a9c61de653d86e6e634a3cc4f12f6035623788
-        version: https://codeload.github.com/leewf/dsh-devin-cli/tar.gz/06a9c61de653d86e6e634a3cc4f12f6035623788(@deepseek-ai/schemastery@3.18.2)
+        version: https://codeload.github.com/leewf/dsh-devin-cli/tar.gz/06a9c61de653d86e6e634a3cc4f12f6035623788(@deepseek-ai/schemastery@3.18.3)
       dsh-dream-skin:
         specifier: 9.16.0
         version: 9.16.0
       dsh-opencode-go:
-        specifier: 0.1.5
-        version: 0.1.5(ws@8.21.3)(zod@4.6.5)
+        specifier: 0.1.7
+        version: 0.1.7(ws@8.21.3)(zod@4.6.5)
       dsh-remote-web-gateway:
         specifier: 0.2.2
         version: 0.2.2
@@ -154,16 +154,16 @@ packages:
     resolution: {integrity: sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==}
     engines: {node: '>=6.9.0'}
 
-  '@deepseek-ai/cosmokit@1.8.3':
-    resolution: {integrity: sha512-qBo+ronVM6Eu2WNVJXi8JcMiqZ19T9BRIpV+5qJUFPXjGH/Z0QKcQMC/IZJ7L394YTOtJgcovbk9qP0w2GsBXQ==}
+  '@deepseek-ai/cosmokit@1.8.4':
+    resolution: {integrity: sha512-zOX7hFKtUQNY6GlZi1OCGY+bp6swWDf8aFNbCSAonVKEpEb5Tc2m3moUtNZscT7ksflIcVn+qgqYZo9QKUF+fQ==}
 
   '@deepseek-ai/dsh-brand@0.1.6-alpha.1':
     resolution: {integrity: sha512-bS2ud+5KsNukiZYPCbAoNz8FOP7NSaa8ibYf/dKPmG9lLPw/GaReD+APGJs1mmqT96AhlzbxDmrQx4hlNo8fZA==}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.2
 
-  '@deepseek-ai/schemastery@3.18.2':
-    resolution: {integrity: sha512-njDtZsznjYxok7KLLlHOPyuv2efdWVbSflAHgztSfbMsg+CVraEoRe2DjOCgClYv3ZCSm7WXoaUkbB/+RY7tWQ==}
+  '@deepseek-ai/schemastery@3.18.3':
+    resolution: {integrity: sha512-plZIZADuGLT/3PoYmUaEDZd0vG1rVahU89MevnxXsyQhFEi2D6DUuTJel7FUb3cUM9aCzqGMN99sHJe1RIushA==}
 
   '@earendil-works/pi-ai@0.82.1':
     resolution: {integrity: sha512-3WFYRhEp3lQB3444EhPMBcM7zSaEUE3eJgHOR7s4081NLqbw/FsWilIKWXSua0Gv3sRr7m9xMidR3pPDE7jI/A==}
@@ -196,8 +196,8 @@ packages:
       '@opentelemetry/api':
         optional: true
 
-  '@opencode2dsh/dsh-plugin@0.3.3':
-    resolution: {integrity: sha512-ZKZ/kHgilfKvTyREWcOjtLr3kEkvor3ez8OPZHQGFo/3lV39TD/4EeqtYGZGnKO0D93fddPqBZD67FVrsGFRiQ==}
+  '@opencode2dsh/dsh-plugin@0.2.7':
+    resolution: {integrity: sha512-Q495ISXK0qUskUh8+56n+M9tOw47rN6Jqsm6VxPgc0Ul95ZoqSblXsPwMhZ/c0IXxRIngHASxM07AFL4kM89Gw==}
     engines: {node: '>=20'}
 
   '@opentelemetry/api@1.9.0':
@@ -316,8 +316,8 @@ packages:
       supports-color:
         optional: true
 
-  dsh-context@0.54.2:
-    resolution: {integrity: sha512-BxHNc+gbYKYMtBkJOXhmGBLAF8Vs9raF+XcOolpqDxSfEye1xOi14sMoBZ2OvYtDBPBWE5uKaFYjOaBUBs19bQ==}
+  dsh-context@0.54.4:
+    resolution: {integrity: sha512-pljLODLiK41N1BiOQPNa/6BwtWtit1WjXTXie67GeWdpRzO67yVFQx4JIyNpGPhKqELeegOBr9M0gvKjUC+b6w==}
     engines: {node: ^22.19.0 || >=24.0.0}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.2
@@ -372,30 +372,30 @@ packages:
       react:
         optional: true
 
-  dsh-opencode-go@0.1.5:
-    resolution: {integrity: sha512-FtNvXgs99nI/W5blI6nIX1fA++NI1P1/xqEAen9k/nz7zKjxkkmCCDLHsUTUNlWjg2SBIciRH4AiBzHBje+T3A==}
-    engines: {dsh: '>=0.1.5-rc.1 <0.1.6-0 || 0.1.6-alpha.1', node: ^22.19.0 || >=24.0.0}
+  dsh-opencode-go@0.1.7:
+    resolution: {integrity: sha512-nvtPAWzd+Wzs6c1RsAfRHfG4plfaxzIR/mn6VIcOf5qgcbM8Pp8y0S97K4nb60fdDXQWCiMWIhbvzK9tMuix5w==}
+    engines: {dsh: '>=0.1.5-rc.1 <0.1.6-0 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1', node: ^22.19.0 || >=24.0.0}
     peerDependencies:
-      '@deepseek-ai/cordis': 4.0.2
-      '@deepseek-ai/dsh-api-gateway': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-api-remotes': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-api-settings-controller': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-attachment': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-locale': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-store': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-ui-conversation': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-ui-model-selection': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-ui-renderer': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-ui-settings': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-client-ui-slots': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-credentials': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-fs': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-launch-environment': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-llm': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-settings': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-timeout': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-typert-protocol': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
-      '@deepseek-ai/dsh-typert-registry': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1'
+      '@deepseek-ai/cordis': 4.0.2 || 4.0.3
+      '@deepseek-ai/dsh-api-gateway': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-api-remotes': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-api-settings-controller': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-attachment': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-locale': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-store': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-ui-conversation': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-ui-model-selection': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-ui-renderer': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-ui-settings': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-client-ui-slots': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-credentials': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-fs': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-launch-environment': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-llm': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-settings': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-timeout': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-typert-protocol': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
+      '@deepseek-ai/dsh-typert-registry': '>=0.1.5-rc.1 <0.1.6 || 0.1.6-alpha.1 || 0.1.6-alpha.2 || 0.1.7-alpha.1'
     peerDependenciesMeta:
       '@deepseek-ai/dsh-api-gateway':
         optional: true
@@ -582,10 +582,6 @@ packages:
     resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
     engines: {node: '>=18.17'}
 
-  undici@8.10.2:
-    resolution: {integrity: sha512-/y4/bH9YNU5hi9NIrpOuvGXFcxrj3CMrV+/AYpowAYTpHn8gX/XPFjNy766FPoYY0miQhdW977JFWKGNhBdwyQ==}
-    engines: {node: '>=22.19.0'}
-
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
@@ -601,11 +597,6 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
-
-  yaml@2.9.1:
-    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
-    engines: {node: '>= 14.6'}
-    hasBin: true
 
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
@@ -846,13 +837,13 @@ snapshots:
 
   '@babel/runtime@7.29.7': {}
 
-  '@deepseek-ai/cosmokit@1.8.3': {}
+  '@deepseek-ai/cosmokit@1.8.4': {}
 
   '@deepseek-ai/dsh-brand@0.1.6-alpha.1': {}
 
-  '@deepseek-ai/schemastery@3.18.2':
+  '@deepseek-ai/schemastery@3.18.3':
     dependencies:
-      '@deepseek-ai/cosmokit': 1.8.3
+      '@deepseek-ai/cosmokit': 1.8.4
       '@standard-schema/spec': 1.1.0
 
   '@earendil-works/pi-ai@0.82.1(ws@8.21.3)(zod@4.6.5)':
@@ -921,12 +912,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@opencode2dsh/dsh-plugin@0.3.3(ws@8.21.3)(zod@4.6.5)':
+  '@opencode2dsh/dsh-plugin@0.2.7(ws@8.21.3)(zod@4.6.5)':
     dependencies:
-      '@deepseek-ai/schemastery': 3.18.2
       '@earendil-works/pi-ai': 0.82.1(ws@8.21.3)(zod@4.6.5)
-      undici: 8.10.2
-      yaml: 2.9.1
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - bufferutil
@@ -1038,21 +1026,21 @@ snapshots:
     dependencies:
       ms: 2.1.3
 
-  dsh-context@0.54.2(@deepseek-ai/schemastery@3.18.2):
+  dsh-context@0.54.4(@deepseek-ai/schemastery@3.18.3):
     dependencies:
-      '@deepseek-ai/schemastery': 3.18.2
+      '@deepseek-ai/schemastery': 3.18.3
       zod: 4.6.5
 
-  dsh-devin-cli@https://codeload.github.com/leewf/dsh-devin-cli/tar.gz/06a9c61de653d86e6e634a3cc4f12f6035623788(@deepseek-ai/schemastery@3.18.2):
+  dsh-devin-cli@https://codeload.github.com/leewf/dsh-devin-cli/tar.gz/06a9c61de653d86e6e634a3cc4f12f6035623788(@deepseek-ai/schemastery@3.18.3):
     dependencies:
-      '@deepseek-ai/schemastery': 3.18.2
+      '@deepseek-ai/schemastery': 3.18.3
 
   dsh-dream-skin@9.16.0: {}
 
-  dsh-opencode-go@0.1.5(ws@8.21.3)(zod@4.6.5):
+  dsh-opencode-go@0.1.7(ws@8.21.3)(zod@4.6.5):
     dependencies:
       '@deepseek-ai/dsh-brand': 0.1.6-alpha.1
-      '@deepseek-ai/schemastery': 3.18.2
+      '@deepseek-ai/schemastery': 3.18.3
       '@earendil-works/pi-ai': 0.85.1(ws@8.21.3)(zod@4.6.5)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -1227,13 +1215,9 @@ snapshots:
 
   undici@6.28.1: {}
 
-  undici@8.10.2: {}
-
   web-streams-polyfill@3.3.3: {}
 
   ws@8.21.3: {}
-
-  yaml@2.9.1: {}
 
   zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
