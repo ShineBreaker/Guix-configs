@@ -1,3 +1,0 @@
-name: 简单模式
-description: 极简模式的单持久 shell 工具面，加上完整上下文注入（AGENTS.md、技能目录、系统提示词、agenote 知识库摘要）。
-order: 3.6

@@ -50,6 +50,14 @@ QID_USER_BY_SCREEN_NAME = "4S2ihIKfF3xhp-ENxvUAfQ"
 QID_USER_TWEETS = "jeAA-59Y9FL7FmjgBNIVPw"      # 2026-09-22 从登录态 bundle 抓取
 QID_FOLLOWING = "-Mn4uN7C-vxXBwUKtSwS6A"        # 同上
 
+# 整户排除的账号。判据是"批量产出同质低质内容"，不是主题不合口味：
+# Polymarket 用 "JUST IN:" 前缀刷政治社会快讯，2026-09-23 实测 217 条里
+# 它一家占了 13 条、9 条过筛，jev 逐条判断挡不住这种规模灌水。
+# 加新条目时写清理由，避免以后说不清为什么 mute。
+MUTED_HANDLES = {
+    "polymarket": "JUST IN: 快讯号，同质政治社会新闻批量灌水",
+}
+
 FEATURES = {
     "rweb_tipjar_consumption_enabled": True,
     "responsive_web_graphql_exclude_directive_enabled": True,
@@ -77,6 +85,30 @@ FEATURES = {
 }
 
 SEEN_CAP = 20000
+
+
+def _extract_media(leg: dict) -> list[dict]:
+    """从 legacy 里抽媒体：图片取 media_url_https，视频只取封面图。
+
+    只保留日报渲染需要的字段，不把整个 entities 塞进 state。
+    """
+    media = ((leg.get("extended_entities") or leg.get("entities") or {})
+             .get("media") or [])
+    out: list[dict] = []
+    for m in media:
+        url = m.get("media_url_https")
+        if not url:
+            continue
+        # 尺寸取 large，没有就跳过缩放信息
+        sizes = m.get("sizes") or {}
+        large = sizes.get("large") or sizes.get("medium") or {}
+        out.append({
+            "type": m.get("type") or "photo",
+            "url": url,
+            "w": large.get("w"),
+            "h": large.get("h"),
+        })
+    return out
 
 
 class XError(RuntimeError):
@@ -228,6 +260,8 @@ class GuestClient:
                     "likes": leg.get("favorite_count", 0),
                     "retweets": leg.get("retweet_count", 0),
                     "replies": leg.get("reply_count", 0),
+                    # 媒体：图片日报需要；视频只留封面图，不抓视频流
+                    "media": _extract_media(leg),
                     # 登录态 RT：legacy 带 retweeted_status_result 而不带
                     # retweeted_status_id_str；正文前缀仅作最后兜底
                     "is_retweet": ("retweeted_status_result" in leg
@@ -354,7 +388,10 @@ SELF_HANDLE = "breaker_shine"
 
 
 def load_following(state: Path) -> list[str]:
-    """读 following.json；文件不存在时退回脚本顶部 FOLLOWING 常量。"""
+    """读 following.json；文件不存在时退回脚本顶部 FOLLOWING 常量。
+
+    mute 过滤不在这里做，见 cmd_fetch 里的唯一入口。
+    """
     f = state / "following.json"
     if f.exists():
         names = [h.strip().lstrip("@") for h in json.loads(f.read_text()) if h.strip()]
@@ -380,6 +417,11 @@ def cmd_fetch(args) -> int:
 
     handles = ([h.strip().lstrip("@") for h in args.handles.split(",") if h.strip()]
                if args.handles else load_following(state))
+    # mute 在唯一入口统一生效：--handles 显式传入也拦得住
+    muted = [h for h in handles if h.lower() in MUTED_HANDLES]
+    if muted:
+        handles = [h for h in handles if h.lower() not in MUTED_HANDLES]
+        print(f"[mute] 跳过 {len(muted)} 个账号: {', '.join(muted)}")
     if not handles:
         print("[error] 关注清单为空：先跑 sync-following 或用 --handles 指定",
               file=sys.stderr)

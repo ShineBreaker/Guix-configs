@@ -32,6 +32,15 @@ def build_md(picked: list[dict], date: str, top: int) -> str:
              f"共 {total} 条通过筛选，以下为前 {len(shown)} 条的原始素材。"
              f"请按 prompt 规则加工成中文日报，不要照抄原文。", ""]
 
+    # 图片编号按 picked 顺序分配，URL 去重；渲染器用同一规则重算，
+    # 所以 LLM 只需要在条目里写 ![imgN]
+    media_index: dict[str, int] = {}
+    for t in shown:
+        for m in (t.get("media") or []):
+            u = m.get("url")
+            if u and u not in media_index:
+                media_index[u] = len(media_index) + 1
+
     for i, t in enumerate(shown, 1):
         rt = "（转发）" if t.get("is_retweet") else ""
         reply = "（回复）" if t.get("is_reply") else ""
@@ -39,6 +48,10 @@ def build_md(picked: list[dict], date: str, top: int) -> str:
         lines.append(t["text"])
         # 只留热度量级供判断重要性，不带符号噪音
         lines.append(f"[likes={t.get('likes', 0)} retweets={t.get('retweets', 0)}]")
+        # 图片索引：渲染器按编号下载，LLM 在条目里用 ![imgN] 引用
+        for m in (t.get("media") or []):
+            n = media_index[m["url"]]
+            lines.append(f"[img{n} {m.get('type', 'photo')} {m.get('w')}x{m.get('h')}]")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
