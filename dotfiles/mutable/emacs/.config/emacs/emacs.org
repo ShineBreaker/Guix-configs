@@ -483,6 +483,29 @@ frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提
 (unless (or (daemonp) noninteractive)
   (server-mode 1))
 #+end_src
+
+*** 外部变更自动同步 (auto-revert)
+:PROPERTIES:
+:CUSTOM_ID: core-auto-revert
+:END:
+
+VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改（例如同时用 Zed 打开同一文件、=git checkout= 切分支、代码生成工具回写）时，缓冲区内容会静默跟随磁盘。Emacs 默认不做这件事——缓冲区会一直保持旧内容，直到保存时才抛出「文件已在磁盘上被修改」的冲突警告。
+
+开启 =global-auto-revert-mode= 后，**未本地修改**的文件缓冲区会自动 revert 到磁盘版本，与 IDE 行为对齐；已经编辑过的缓冲区不会被覆盖，仍走原有的保存冲突确认，不会丢失本地改动。
+
+- *通知 + 短周期检查* ： =auto-revert-use-notify= 安装 inotify 监视（ =auto-revert-verbose= 已在 Git 一节置 nil，静默刷新不回显）。实测 inotify 事件到达后 handler 只把缓冲区标记为 stale，真正的 revert 由检查定时器按 =auto-revert-interval= 驱动——默认 5s 延迟可感知，这里降到 1s（每秒对每个缓冲区一次 stat，成本可忽略）。 =auto-revert-avoid-polling= 保持文件通知可用时不做额外轮询。
+- *面板跟随* ： =global-auto-revert-non-file-buffers= 让左侧 Dired 面板也跟随目录内容变化自动刷新，对齐 Explorer 文件树的实时更新。
+- *远程豁免* ：TRAMP 远程文件默认不自动 revert（ =auto-revert-remote-files= 保持 nil），与 [[#core-focus-save][失焦自动保存]] 的远程豁免策略一致。
+
+#+begin_src emacs-lisp
+(setq auto-revert-use-notify t
+      auto-revert-avoid-polling t
+      auto-revert-interval 1
+      global-auto-revert-non-file-buffers t)
+
+(global-auto-revert-mode 1)
+#+end_src
+
 * 界面与外观
 :PROPERTIES:
 :CUSTOM_ID: appearance
@@ -1536,7 +1559,7 @@ PERSISTENT 非 nil 时视为持续消息(eldoc 文档):不限半宽——放不�
 Emacs 原生 tab-line 会把当前窗口模式下的所有缓冲区（包括 Scratch、内部日志、补全列表、终端等）全部摆在标签栏里，不仅视觉杂乱，在多窗口分屏时还会互相干扰。
 这里的定制方案实现了一套类似现代化 IDE 的标签栏逻辑：
 
-1. *只对文件生效* ：通过白名单过滤，只给真正关联本地文件的缓冲区显示标签。终端、帮助、Scratch 与 Dashboard 等窗口不绘制标签栏。
+1. *只对文件与目录生效* ：通过白名单过滤，只给真正关联本地文件的缓冲区与普通 Dired 目录缓冲区显示标签。终端、帮助、Scratch、Dashboard 与左侧文件面板等窗口不绘制标签栏。
 2. *多客户端独立隔离* ：在 Emacs 守护进程架构下，每个连接进来的窗口（Frame）独立维护一份打开的文件标签序列，互不干扰。
 3. *清晰的追加顺序* ：新打开的文件按顺序追加在右侧末尾。支持鼠标点击关闭、快捷键（=C-<tab>= / =C-S-<tab>=）循环切换，以及按键连续重排。
 #+end_note
@@ -1546,8 +1569,10 @@ Emacs 原生 tab-line 会把当前窗口模式下的所有缓冲区（包括 Scr
 :CUSTOM_ID: tab-line-core
 :END:
 
-定义标签栏的排版尺寸常量、Nerd Icons 图标检测以及文件过滤谓词。
-核心谓词 =custom/tab-visible-p= 确保只有关联了具体本地文件的正常缓冲区才会被纳入标签管理。
+定义标签栏的排版尺寸常量、Nerd Icons 图标检测以及标签可见性谓词。
+核心谓词 =custom/tab-visible-p= 决定哪些缓冲区纳入标签管理：关联本地文件的缓冲区与普通
+Dired 目录缓冲区都是合法标签；左侧文件面板的 Dired（带 =custom--dired-panel-p= 标记）
+属于导航面板而非内容标签，被排除在外。
 
 #+begin_src emacs-lisp
 (require 'tab-line)
@@ -1564,18 +1589,25 @@ Emacs 原生 tab-line 会把当前窗口模式下的所有缓冲区（包括 Scr
 (defvar-local custom/tab-line--name-cache nil
   "当前 buffer 的 tab-line 标签名缓存。")
 
+(defvar-local custom--dired-panel-p nil
+  "非 nil 表示本 Dired buffer 是左侧文件面板,不占标签位。
+由 projects 域的 `custom/dired--panel-setup' 设置。")
+
 (defun custom/tab-visible-p (buffer)
   "判断 BUFFER 是否应该显示在标签栏中。
-白名单机制:只有关联文件的 buffer 才显示。"
+白名单机制:关联文件的 buffer 与普通 Dired buffer 是合法标签;
+面板 Dired 与终端、帮助等非内容 buffer 除外。"
   (and (buffer-live-p buffer)
-       (buffer-file-name buffer)))
+       (not (buffer-local-value 'custom--dired-panel-p buffer))
+       (or (buffer-file-name buffer)
+           (with-current-buffer buffer (derived-mode-p 'dired-mode)))))
 
-(defun custom--tab-line-exclude-non-file-buffer (&optional buffer)
-  "非文件 BUFFER 不启用 tab-line,返回非 nil 表示排除。
+(defun custom--tab-line-exclude-non-tab-buffer (&optional buffer)
+  "不占标签位的 BUFFER 所在窗口不启用 tab-line,返回非 nil 表示排除。
 作为 `tab-line-exclude-buffers' 的 `buffer-match-p' 谓词条件
 (Emacs 31 机制,接收 buffer 名或 buffer 对象),使标签栏只渲染在
 `custom/tab-visible-p' 为真的 buffer 所在 window;终端模拟器、
-scratch、help、Dashboard 等 window 因此不显示标签栏。"
+scratch、help、Dashboard 与左侧文件面板等 window 因此不显示标签栏。"
   (not (custom/tab-visible-p (get-buffer (or buffer (current-buffer))))))
 
 (defun custom--tabs-target-window (&optional window)
@@ -1594,10 +1626,10 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
 
 生命周期流转说明：
 
-- *打开并显示文件* ：由 =window-buffer-change-functions= 统一捕获，首次显示时追加到该窗口标签列表尾部并去重。
-- *关闭文件缓冲区* ：当缓冲区被彻底杀死（kill）时，从所有 Frame 的标签列表中统一移除。
+- *打开并显示文件或目录* ：由 =window-buffer-change-functions= 统一捕获，首次显示时追加到该 Frame 标签列表尾部并去重。所有打开入口（=find-file=、=project-find-file=、Dired、面板跳转等）一律追加为新标签，绝不顶替既有标签。
+- *关闭缓冲区* ：当缓冲区被彻底杀死（kill）时，从所有 Frame 的标签列表中统一移除。
 - *关闭窗口* ：Frame 被销毁时自动丢弃该 Frame 关联的标签列表。
-- *切换项目* ：切换工程时清空当前窗口的标签列表，避免上一工程的遗留文件干扰视线。
+- *切换项目* ：不清空标签——切换工程只是打开新文件或目录，既有标签原样保留；需要手动清场时可执行 =M-x custom/tabs-clear-for-frame= 。
 
 #+begin_src emacs-lisp
 (defun custom--tabs-get-frame-buffer-list (&optional frame)
@@ -1613,7 +1645,7 @@ scratch、help、Dashboard 等 window 因此不显示标签栏。"
 
 #+begin_src emacs-lisp
 (defun custom--tabs-should-track-p (buffer)
-  "BUFFER 是否应进入标签列表:关联文件、存活、非 minibuffer。
+  "BUFFER 是否应进入标签列表:是合法标签(文件或普通 Dired)、存活、非 minibuffer。
 `custom/tab-visible-p' 已含存活检查,此处只补 minibuffer 排除。"
   (and (custom/tab-visible-p buffer)
        (not (minibufferp buffer))))
@@ -1659,7 +1691,7 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
         (custom--tabs-register-buffer buffer frame))))))
 #+end_src
 
-清理逻辑：涵盖缓冲区被杀死、窗口被删除以及项目切换三种场景。
+清理逻辑：涵盖缓冲区被杀死与 Frame 被删除两种场景。
 
 #+begin_src emacs-lisp
 (defun custom--tabs-on-kill-buffer ()
@@ -1668,7 +1700,7 @@ FRAME-OR-WINDOW 可以是 frame(全局 hook)或 window(buffer-local hook)。
     (custom--tabs-unregister-buffer (current-buffer) frame)))
 
 (defun custom/tabs-clear-for-frame (&optional frame)
-  "清空 FRAME 的标签缓冲区列表(项目切换时调用)。
+  "清空 FRAME 的标签缓冲区列表(手动清场命令,M-x 调用)。
 只清 frame parameter,不重建;后续 window-buffer-change 自然填充。"
   (interactive)
   (let ((target-frame (or frame (selected-frame))))
@@ -1687,12 +1719,6 @@ TTY client 断开时 tty frame 可能已被先行删除,钩子拿到的是 dead 
 safe_call 静音);dead frame 的参数随之销毁,无需再清,故先判存活。"
   (when (frame-live-p frame)
     (custom--tabs-set-frame-buffer-list nil frame)))
-
-(defun custom--tabs-on-project-switch (&rest _)
-  "`project-switch-project' 的 :after advice 回调：清空当前 frame 标签列表。
-忽略传入的项目参数（与 `custom/tabs-clear-for-frame' 的 `&optional frame' 元数不同，
-故需独立适配回调）。"
-  (custom/tabs-clear-for-frame))
 #+end_src
 
 标签栏查询入口：按白名单筛选当前 Frame 关联的有效文件。
@@ -2026,7 +2052,7 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
 将上面定义的核心渲染函数、格式化规则与事件回调连接到 Emacs 内置的 Tab-line 框架，并全局启用 =global-tab-line-mode= ：
 
 - *内置分隔符置空* ：标签间的间隔由自绘样式控制，因此将 =tab-line-separator= 设为空字符串 =""= ，防止在终端下出现杂乱竖线。
-- *排除非文件窗口的时序* ：使用 Emacs 31 的 =tab-line-exclude-buffers= 机制在启用全局模式前先行配置，确保终端、帮助与 Dashboard 窗口不会被错误启用标签栏。
+- *排除非标签窗口的时序* ：使用 Emacs 31 的 =tab-line-exclude-buffers= 机制在启用全局模式前先行配置，确保终端、帮助、Dashboard 与左侧文件面板窗口不会被错误启用标签栏。
 
 #+begin_src emacs-lisp
 (setq tab-line-tabs-function #'custom/tab-line-tabs
@@ -2041,7 +2067,7 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
 (custom/apply-tab-line-button-preset)
 
 (setq tab-line-exclude-buffers
-      #'custom--tab-line-exclude-non-file-buffer)
+      #'custom--tab-line-exclude-non-tab-buffer)
 
 (global-tab-line-mode 1)
 
@@ -2427,6 +2453,36 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
 
 (context-menu-mode 1)
 (global-hl-line-mode 1)
+#+end_src
+
+**** TTY 修饰方向键解码
+:PROPERTIES:
+:CUSTOM_ID: tty-modified-arrows
+:END:
+
+终端模拟器按 xterm 惯例把修饰方向键编码为 =\e[1;<mod><dir>= 形式的 CSI 序列
+（ =<mod>= = 1 + Shift(1) + Alt(2) + Ctrl(4) ，方向码 A/B/C/D = 上下右左）。
+Emacs 只在 TERM 被识别为 xterm 系时才预装这些解码项；tmux/screen 等 TERM 下
+序列会以 =M-[ 1 ; 3 D= 这样的原始字节流到达——M-方向键（切窗口）、
+C-M-方向键（多光标）等所有修饰方向键绑定全部落空。
+
+=input-decode-map= 是按终端隔离的，daemon 下挂到 =tty-setup-hook= 上，
+保证每个新建 TTY client 都拿到解码表；已识别的 xterm 系终端重复定义无害。
+
+#+begin_src emacs-lisp
+(defun custom/tty-decode-modified-arrows ()
+  "给当前 TTY 终端补全 xterm 风格修饰方向键解码(input-decode-map)。
+覆盖修饰位 Shift/Alt/Ctrl 的全部组合与四个方向。"
+  (let ((mods '((2 . "S") (3 . "M") (4 . "M-S") (5 . "C")
+                (6 . "C-S") (7 . "C-M") (8 . "C-M-S")))
+        (dirs '((?A . "up") (?B . "down") (?C . "right") (?D . "left"))))
+    (dolist (dir dirs)
+      (dolist (mod mods)
+        (define-key input-decode-map
+                    (format "\e[1;%d%c" (car mod) (car dir))
+                    (kbd (format "%s-<%s>" (cdr mod) (cdr dir))))))))
+
+(add-hook 'tty-setup-hook #'custom/tty-decode-modified-arrows)
 #+end_src
 
 **** 终端透明与 Face 样式清洗
@@ -3002,7 +3058,9 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 
 - *括号匹配与自动配对* ：启用 =electric-pair-mode= 自动补全括号，并在选中选区时输入括号直接包裹选区。
 - *文档自动对齐* ：在 Org Mode 与 Markdown 下启用 =visual-line-mode= 与 =visual-wrap-prefix-mode= 续行对齐。
-- *光标与编辑 DWIM* ：=C-w= 在无选区时按词回删；入剪贴环多行文本自动去除公共缩进；启用 =which-function-mode= 在状态栏展示当前函数名。
+- *光标与编辑 DWIM* ：=C-w= 在无选区时删除整行（ =kill-region-dwim= ）；入剪贴环多行文本自动去除公共缩进；启用 =which-function-mode= 在状态栏展示当前函数名。
+- *触底语义* ： =scroll-error-top-bottom= 让翻页命令触底时把光标推到文件首/尾行而非报错，对齐 VSCode 持续滚动的手感。
+- *鼠标交互* ： =mouse-drag-and-drop-region= 允许按住左键直接拖拽移动选中的文字； =select-enable-primary= 启用 X11/Wayland 主选区，鼠标中键随处粘贴（对齐 Linux 编辑器惯例）。
 
 #+begin_src emacs-lisp
 (electric-pair-mode 1)
@@ -3014,6 +3072,10 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (setq kill-region-dwim t)
 (kill-ring-deindent-mode 1)
 (setopt electric-indent-actions '(yank))
+
+(setq scroll-error-top-bottom t
+      mouse-drag-and-drop-region t
+      select-enable-primary t)
 
 (setq dired-filename-display-length 'window
       dired-movement-style 'cycle
@@ -3089,6 +3151,7 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 - *multiple-cursors* ：多光标编辑。支持多行光标以及标记所有同名匹配项。
 - *expand-region* ：语义选区扩展，按词、引号内容、括号表达式逐步扩大或收缩选区。
 - *vundo* ：可视化撤销树，以图形分支方式展现全部编辑撤销历史，按回车直接跳回目标历史状态。
+- *idle-highlight* ：光标停驻 0.35s 后自动高亮当前符号在文件内的所有出现处（对齐 VSCode 的 occurrencesHighlight），帮助快速判断变量使用范围。
 - *tempel* ：轻量代码模板展开，模板文件统一放在 =etc/templates/*.eld= ，前置到补全函数链首优先匹配。
 
 #+begin_src emacs-lisp
@@ -3119,7 +3182,9 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   :defer t
   :commands (mc/edit-lines
              mc/mark-next-like-this mc/mark-previous-like-this
-             mc/mark-all-like-this mc/mark-all-like-this-in-defun))
+             mc/mark-all-like-this mc/mark-all-like-this-in-defun
+             mc/mark-next-lines mc/mark-previous-lines
+             mc/skip-to-next-like-this mc/create-fake-cursor-at-point))
 
 (use-package expand-region
   :defer t
@@ -3128,6 +3193,12 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (use-package vundo
   :defer t
   :commands (vundo))
+
+(use-package idle-highlight-mode
+  :defer t
+  :if (locate-library "idle-highlight-mode")
+  :hook (prog-mode . idle-highlight-mode)
+  :custom (idle-highlight-idle-time 0.35))
 
 (use-package tempel
   :defer t
@@ -3152,10 +3223,11 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 
 集中绑定文本变换、多光标与选区快捷键：
 
-- 多光标： =C-c e l= （每行一个光标）、 =C-c e n= / =p= （标记下一个/上一个匹配）、 =C-c e a= （标记全部匹配）。
+- 多光标： =C-c e l= （每行一个光标）、 =C-c e n= / =p= （标记下一个/上一个匹配）、 =C-c e a= （标记全部匹配）、 =C-c e s= （跳过下一个匹配，对齐 VSCode 的 Ctrl+K Ctrl+D）； =C-M-<down>= / =C-M-<up>= 在下方/上方行追加光标（VSCode Ctrl+Alt+↓/↑，终端下用 =C-c e <down>= / =<up>= 代替）； =M-<down-mouse-1>= 点击处加光标（VSCode Alt+Click，GUI 专属）。
+- 语义选区：除 =C-c e x= / =X= 外，GUI 下可用 =M-S-<right>= / =M-S-<left>= 扩展/收缩选区（VSCode Shift+Alt+→/←）。
 - 撤销与位置： =C-c e .= / =,= （上一个/下一个修改点）、 =C-c e u= （打开 Vundo 撤销树）。
 - 格式变换： =C-c e q= （取消段落填充）、 =C-c e r= / =R= （单文件/多文件正则替换预览）、 =C-c e F= / =f= （全半角转换）、 =C-c e U= / =L= / =C= （大小写变换）。
-- 选区与行操作： =C-c e k= （删除整行）、 =C-c e x= / =X= （扩展/收缩语义选区）。
+- 选区与行操作： =C-c e k= （删除整行）、 =C-c e x= / =X= （扩展/收缩语义选区）、 =<backtab>= （反向缩进，对齐 VSCode Shift+Tab）。
 
 #+begin_src emacs-lisp
 (custom/bind "C-c e l" #'mc/edit-lines "每行一个多光标" "编辑变换")
@@ -3194,6 +3266,55 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (custom/bind "C-c e k" #'kill-whole-line "删除整行" "编辑变换")
 (custom/bind "C-c e x" #'er/expand-region "扩展选区" "编辑变换")
 (custom/bind "C-c e X" #'er/contract-region "收缩选区" "编辑变换")
+(custom/bind "M-S-<right>" #'er/expand-region "扩展选区" "编辑变换")
+(custom/bind "M-S-<left>" #'er/contract-region "收缩选区" "编辑变换")
+(custom/bind "C-c e s" #'mc/skip-to-next-like-this "跳过下一个匹配" "编辑变换")
+(custom/bind "C-M-<down>" #'mc/mark-next-lines "下方行加光标" "编辑变换")
+(custom/bind "C-M-<up>" #'mc/mark-previous-lines "上方行加光标" "编辑变换")
+(custom/bind "C-c e <down>" #'mc/mark-next-lines "下方行加光标" "编辑变换")
+(custom/bind "C-c e <up>" #'mc/mark-previous-lines "上方行加光标" "编辑变换")
+
+(defun custom/mc-add-cursor-on-click (event)
+  "在 EVENT 点击处追加一个 fake cursor(对齐 VSCode Alt+Click)。
+`mc/create-fake-cursor-at-point' 只创建 overlay,下一条命令才随真实光标
+同步执行,因此可连续多次点击铺多个光标。"
+  (interactive "e")
+  (require 'multiple-cursors)
+  (mouse-set-point event)
+  (mc/create-fake-cursor-at-point))
+
+(custom/bind "M-<down-mouse-1>" #'custom/mc-add-cursor-on-click "点击加光标" "编辑变换")
+
+(defun custom/outdent-dwim ()
+  "向左回缩一个缩进层级:有选区回缩选区,否则回缩当前行(VSCode Shift+Tab)。
+选区走 `indent-rigidly-left-to-tab-stop' 逐行退到上一制表位;单行按
+`tab-width' 退一级,indent-line-to 会把点一并带回行首缩进位。"
+  (interactive)
+  (if (use-region-p)
+      (indent-rigidly-left-to-tab-stop)
+    (indent-line-to (max 0 (- (current-indentation) tab-width)))))
+
+(defun custom/home-dwim ()
+  "智能 Home 键:在行首非空白字符与绝对行首之间循环(VSCode Home 行为)。
+interactive 的 \"^\" 码保持 Shift+Home 的选区扩张语义。"
+  (interactive "^")
+  (let ((pos (point)))
+    (back-to-indentation)
+    (when (= pos (point))
+      (move-beginning-of-line 1))))
+
+(defun custom/open-line-below ()
+  "在当前行下方开新行并移入(VSCode Ctrl+Enter)。"
+  (interactive)
+  (move-end-of-line 1)
+  (newline-and-indent))
+
+(defun custom/open-line-above ()
+  "在当前行上方开新行并移入(VSCode Ctrl+Shift+Enter)。"
+  (interactive)
+  (move-beginning-of-line 1)
+  (open-line 1)
+  (indent-for-tab-command))
 #+end_src
 
 *** 快速插入 (C-c i)
@@ -3284,6 +3405,7 @@ buffer、no-littering var/ 数据目录(recentf/custom.el 等落点)与
 
 - *Git 提交深度集成* ：在终端中运行 =git commit= 时，会自动唤起 =emacsclient= 在上方主编辑窗口打开提交日志输入界面，写完后按 =C-x #= 提交并让终端里的 Git 继续执行。
 - *按键修正* ：重绑 =C-h= 发送原生退格信号，避免被全局 =backward-char= 抢占。
+- *方向键放行* ：Ghostel 默认把 =M-方向键= 透传给 PTY（shell 里用于按词跳转）。把它们加入 =ghostel-keymap-exceptions= 后按键回落到 Emacs 全局绑定，终端面板聚焦时 =M-方向键= 依然能切换窗口；shell 内的按词移动仍可用 =M-b= / =M-f= 。修改后需调用 =ghostel--rebuild-semi-char-keymap= 就地重建共享键表（改动对已存在的终端缓冲区即时生效）。
 
 #+begin_src emacs-lisp
 (defvar custom--agent-ghostel-p nil)
@@ -3302,7 +3424,11 @@ setenv 修改的是全局 `process-environment',pre-spawn 之后 spawn 的子进
 
 (with-eval-after-load 'ghostel
   (add-hook 'ghostel-pre-spawn-hook #'custom/ghostel-export-git-editor)
-  (define-key ghostel-mode-map (kbd "C-h") #'custom/ghostel-send-ctrl-h))
+  (define-key ghostel-mode-map (kbd "C-h") #'custom/ghostel-send-ctrl-h)
+  (setq ghostel-keymap-exceptions
+        (append '("M-<left>" "M-<right>" "M-<up>" "M-<down>")
+                ghostel-keymap-exceptions))
+  (ghostel--rebuild-semi-char-keymap))
 #+end_src
 
 *** 窗口路由与打开终端
@@ -3785,6 +3911,24 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 
 (defun custom/code-move-line-up () (interactive) (custom/code-move-line -1))
 (defun custom/code-move-line-down () (interactive) (custom/code-move-line 1))
+
+(defun custom/workspace-symbol ()
+  "列出并跳转到工作区符号(VSCode Ctrl+T)。
+等价于 `C-u M-.':前缀参数让 `xref-find-definitions' 走 completing-read
+弹出全部 workspace 符号,由 Eglot 后端供数;无 LSP 时退化为提示输入标识符。"
+  (interactive)
+  (let ((current-prefix-arg '(4)))
+    (call-interactively #'xref-find-definitions)))
+
+(defun custom/goto-matching-bracket ()
+  "跳到与点相邻括号的配对处(VSCode Go to Bracket)。
+点在开括号上跳闭括号、闭括号后跳开括号;在符号内部时退到外层
+结构起点,便于连续按 `C-M-u'/`C-M-f' 在结构间穿梭。"
+  (interactive)
+  (cond
+   ((eq (char-syntax (char-after)) ?\() (forward-sexp))
+   ((eq (char-syntax (char-before)) ?\)) (backward-sexp))
+   (t (backward-up-list))))
 #+end_src
 
 ** 代码与导航键
@@ -3798,8 +3942,10 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   - =M-g n= / =M-g p= ：上一个 / 下一个诊断报错（Flymake）。
   - =M-g l= ：打开或关闭诊断错误列表。
   - =M-g r= ：查找当前符号的全部引用（References）。
-  - =M-g b= / =M-g f= ：跳回上一个位置或前进到下一个位置。
+  - =M-g b= / =M-g f= ：跳回上一个位置或前进到下一个位置；鼠标侧键 =<mouse-8>= / =<mouse-9>= 同义（GUI）。
+  - =M-g g= ：跳转到指定行（VSCode Ctrl+G 的等价位）。
   - =M-g j= ：Avy 屏幕内字符快速跳转。
+  - =C-t= ：列出并跳转工作区符号（VSCode Ctrl+T）。
 
 - *代码重构与常用操作 (C-c c 前缀)* ：
   - =C-c c d= ：跳转到定义（Definition）。
@@ -3807,7 +3953,8 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   - =C-c c n= ：变量或函数全局重命名（Rename）。
   - =C-c c f= ：格式化当前代码文件（Apheleia）。
   - =C-c c i= ：文件内符号大纲（Imenu）。
-  - =C-c c z ...= ：代码块折叠与展开（Hideshow）。
+  - =C-c c j= ：跳转到匹配括号（Go to Bracket）。
+  - =C-c c z ...= ：代码块折叠与展开（Hideshow）；GUI 下也可用 =C-S-[= / =C-S-]= 直接折叠/展开（VSCode Ctrl+Shift+[/]）。
 
 #+begin_src emacs-lisp
 (autoload 'flymake-goto-next-error "flymake")
@@ -3818,8 +3965,13 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 (custom/bind "M-g r" #'xref-find-references "查找引用" "跳转与错误")
 (custom/bind "M-g b" #'xref-go-back "后退" "跳转与错误")
 (custom/bind "M-g f" #'xref-go-forward "前进" "跳转与错误")
+(custom/bind "<mouse-8>" #'xref-go-back "后退(鼠标侧键)" "跳转与错误")
+(custom/bind "<mouse-9>" #'xref-go-forward "前进(鼠标侧键)" "跳转与错误")
+(custom/bind "M-g g" #'goto-line "跳转到行" "跳转与错误")
 (custom/bind "M-g j" #'avy-goto-char-timer "屏幕内跳转" "跳转与错误")
 (custom/bind "M-g h" #'eldoc-doc-buffer "文档缓冲区" "跳转与错误")
+(custom/bind "C-t" #'custom/workspace-symbol "工作区符号" "跳转与错误")
+(custom/bind "C-c c j" #'custom/goto-matching-bracket "匹配括号" "代码")
 
 (custom/bind "C-c c d" #'xref-find-definitions "跳转到定义" "代码")
 (dolist (cmd '(eglot-code-actions eglot-rename eglot-find-declaration
@@ -3855,7 +4007,9 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 (custom/bind "C-c c z m" #'hs-hide-all "全部折叠" "代码")
 (custom/bind "C-c c z r" #'hs-show-all "全部展开" "代码")
 (custom/bind "C-c c z s" #'hs-toggle-all "开关全部折叠" "代码")
-(custom/bind "<backtab>" #'hs-cycle "循环当前折叠" "代码")
+(custom/bind "C-S-[" #'hs-hide-block "折叠代码块" "代码")
+(custom/bind "C-S-]" #'hs-show-block "展开代码块" "代码")
+(custom/bind "<backtab>" #'custom/outdent-dwim "反向缩进" "编辑变换")
 #+end_src
 
 ** 各语言 major mode
@@ -3933,9 +4087,9 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 
 - *工程识别与切换* ：自动将 Git 仓库根目录识别为工程边界，按 =C-x p p= 弹出带标签的切换菜单（=d= 打开目录、=f= 寻找文件、=r= 搜索关键字、=a= 执行任意命令）。
 - *全局文件与代码检索* ：=C-x p f= 快速查找工程内的文件；=C-x p s= 结合 Ripgrep（=xref-search-program 'ripgrep=）执行高性能的全文关键词搜索。
-- *目录导航与缓冲区复用* ：开启 =dired-kill-when-opening-new-dired-buffer= ，在 Dired 中进入子目录时原地切换，避免在后台堆积大量同目录缓冲区。
+- *目录导航即新标签* ：显式关闭 =dired-kill-when-opening-new-dired-buffer= ，在 Dired 中进入子目录时新建目录缓冲区并追加为新标签，不顶替当前标签；同目录缓冲区由 =dired-noselect= 天然复用，回访已访问目录不产生重复标签。
 - *失效路径自动清理* ：配置 =project-prune-zombie-projects= 的 alist 规则，当某个项目目录在磁盘上被删除或移动后，自动从已知项目列表中剔除。
-- *工作区标签联动* ：切换工程时通过 advice 自动清空当前窗口的 Tab-line 标签栏，让工作区始终专注在当前工程中。
+- *切换项目不清标签* ：=C-x p p= 打开的文件或目录一律追加为新标签，不再清空既有标签栏。
 - *编译与调试 (C-c c G)* ：=C-c c G c= 快速在工程根目录下执行编译，=C-c c G d= / =e= 分别启动 GDB 或 Dape 调试器。
 
 #+begin_src emacs-lisp
@@ -3969,13 +4123,9 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 
 (setq xref-search-program 'ripgrep)
 
-(setq dired-kill-when-opening-new-dired-buffer t)
+(setq dired-kill-when-opening-new-dired-buffer nil)
 (with-eval-after-load 'dired
   (define-key dired-mode-map [mouse-2] #'dired-mouse-find-file))
-
-(with-eval-after-load 'project
-  (advice-add #'project-switch-project :after
-              #'custom--tabs-on-project-switch))
 #+end_src
 
 项目前缀 =C-x p= 与 =project.el= 同源,在下方 src-block 直接绑定。
@@ -4010,6 +4160,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 :END:
 
 - *精简视图* ：默认自动隐藏文件权限与大小细节，只突出目录与文件名层级。
+- *不占标签位* ：面板是导航工具而非内容标签，通过 =custom--dired-panel-p= 标记从标签白名单中豁免；同时防御 =dired-noselect= 复用到已在标签栏登记的同目录普通 Dired buffer（直接注销其标签）。
 - *私有键表隔离* ：Dired 默认共享全局键表，这里为面板复制私有 keymap 并重映射回车与鼠标点击，避免污染普通 Dired 窗口。
 
 #+begin_src emacs-lisp
@@ -4019,17 +4170,24 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   "左侧 Dired 面板的 display-buffer action:宽度 0.2(Zed project panel 比例)。")
 
 (defun custom/dired--panel-setup (buffer)
-  "对 BUFFER 应用面板定制:窄视图、header 路径与面板访问键。
+  "对 BUFFER 应用面板定制:窄视图、header 路径、面板标记与访问键。
 所有 Dired buffer 共享 `dired-mode-map',面板 remap 必须落在 buffer
-私有的 keymap copy 上,否则会污染其他 Dired buffer。"
+私有的 keymap copy 上,否则会污染其他 Dired buffer。
+`dired-noselect' 可能复用到已登记为标签的同目录普通 Dired buffer,
+打上面板标记后须从所有 frame 标签列表注销,保证面板永不占标签位。"
   (with-current-buffer buffer
     (dired-hide-details-mode 1)
     (setq-local header-line-format 'default-directory)
+    (setq-local custom--dired-panel-p t)
+    (dolist (frame (frame-list))
+      (custom--tabs-unregister-buffer buffer frame))
     (use-local-map (copy-keymap dired-mode-map))
     (define-key (current-local-map) [remap dired-find-file]
                 #'custom/dired-find-file-in-main)
     (define-key (current-local-map) [remap dired-up-directory]
                 #'custom/dired-up-in-panel)
+    (define-key (current-local-map) [mouse-1]
+                #'custom/dired-mouse-find-file-in-main)
     (define-key (current-local-map) [mouse-2]
                 #'custom/dired-mouse-find-file-in-main)))
 #+end_src
@@ -4039,9 +4197,10 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 :CUSTOM_ID: panel-dired-nav
 :END:
 
-- *打开文件不抢占* ：在面板内回车或点击文件时，文件会自动在右侧主编辑窗口打开并聚焦，左侧面板保持展开。
+- *打开文件不抢占* ：在面板内回车或点击文件时，文件会自动在右侧主编辑窗口打开并聚焦，左侧面板保持展开。鼠标左键单击即可打开文件（对齐 VSCode Explorer 的单击预览语义）；点在空白处仅聚焦面板。
 - *目录原地切换* ：在面板内进入子目录或返回上级目录时原地刷新，避免在后台堆积大量无用的 Dired 缓冲区。
-- *快捷键开关* ：按下 =C-c w 1= 即可随时展开或折叠左侧面板。
+- *快捷键开关* ：=C-b=（VSCode 侧栏键）、=C-S-e= 或 =C-c w f= 随时展开或折叠左侧面板； =C-c w d= 让面板定位到当前文件（Explorer 的 Reveal 语义）。
+- *自动跟随* ：面板显示期间切换到同目录的其他文件时，面板光标自动落到对应文件行；文件不在面板当前目录时不动，避免频繁重建面板视图。
 
 #+begin_src emacs-lisp
 (defun custom/dired--panel-visit (filename)
@@ -4077,8 +4236,10 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
    (file-name-directory (directory-file-name (dired-current-directory)))))
 
 (defun custom/dired-mouse-find-file-in-main (event)
-  "面板版 mouse-2:与 `custom/dired-find-file-in-main' 同语义。
-内置 <mouse-2> 的 other-window 变体会把文件开进面板或新窗口,不走它。"
+  "面板版 mouse-1/2:与 `custom/dired-find-file-in-main' 同语义。
+单击打开对齐 VSCode Explorer;`dired-get-file-for-visit' 在非文件行
+(空行/目录头/点线)会报错,先用 `dired-get-filename' 无报错探测,
+让点在空白处的点击退化为「只聚焦面板」。"
   (interactive "e")
   (let ((window (posn-window (event-end event)))
         (pos (posn-point (event-end event))))
@@ -4086,7 +4247,8 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
     (select-window window)
     (save-excursion
       (goto-char pos)
-      (custom/dired--panel-visit (dired-get-file-for-visit)))))
+      (when (dired-get-filename nil t)
+        (custom/dired--panel-visit (dired-get-file-for-visit))))))
 
 (defun custom/panel-dired ()
   "打开项目根(不在项目则当前目录)的左侧 Dired 面板。
@@ -4096,6 +4258,59 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
   (let ((buf (dired-noselect (custom/project-root-or-default))))
     (custom/dired--panel-setup buf)
     (custom/display-or-focus buf custom:dired-side-action t)))
+
+(defun custom--panel-dired-windows ()
+  "返回当前 frame 上显示 Dired 面板的窗口列表。
+面板识别靠 `custom--dired-panel-p' 标记而非 side 参数:用户可能把
+面板窗口拖出 side 位,标记才是语义来源。"
+  (seq-filter
+   (lambda (w)
+     (with-current-buffer (window-buffer w)
+       (and (derived-mode-p 'dired-mode)
+            (bound-and-true-p custom--dired-panel-p))))
+   (window-list)))
+
+(defun custom/panel-dired-toggle ()
+  "开关左侧文件面板(VSCode Ctrl+B):已显示则收起窗口(buffer 保留),否则打开。"
+  (interactive)
+  (if-let* ((wins (custom--panel-dired-windows)))
+      (dolist (w wins) (delete-window w))
+    (custom/panel-dired)))
+
+(defun custom/panel-dired-reveal ()
+  "把左侧文件面板切到当前文件所在目录并选中该文件(VSCode Explorer Reveal)。
+面板 buffer 由 `dired-noselect' 复用/新建后按面板规则重设,再经
+`dired-goto-file' 把点定位到文件行。文件名必须在切入面板 buffer 前
+捕获——Dired buffer 的 `buffer-file-name' 是 nil。"
+  (interactive)
+  (unless buffer-file-name
+    (user-error "当前缓冲区未访问文件"))
+  (let* ((file buffer-file-name)
+         (buf (dired-noselect (file-name-directory file))))
+    (custom/dired--panel-setup buf)
+    (custom/display-or-focus buf custom:dired-side-action t)
+    (with-current-buffer buf
+      (dired-goto-file file))))
+
+(defun custom/panel-dired--auto-reveal (frame)
+  "FRAME 内窗口 buffer 变化后,让 Dired 面板跟随当前文件。
+仅在文件落在面板当前显示的目录内时移动面板光标(纯 marker 定位,
+零 I/O);文件在其他目录时保持面板现状,避免每次切 buffer 都重建
+面板视图——Dired 面板只显示单层目录,无法像 Explorer 树那样原地展开。"
+  (dolist (window (window-list frame))
+    (with-current-buffer (window-buffer window)
+      (when (and (derived-mode-p 'dired-mode)
+                 (bound-and-true-p custom--dired-panel-p))
+        (let ((file (buffer-file-name
+                     (window-buffer (frame-selected-window frame)))))
+          (when (and file
+                     (stringp dired-directory)
+                     (equal (file-name-as-directory
+                             (expand-file-name dired-directory))
+                            (file-name-directory file)))
+            (ignore-errors (dired-goto-file file))))))))
+
+(add-hook 'window-buffer-change-functions #'custom/panel-dired--auto-reveal)
 #+end_src
 * Org 与知识库
 :PROPERTIES:
@@ -4638,10 +4853,11 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 对齐现代编辑器习惯的全局单键与组合键：
 
-- *文件与工程* ： =C-s= 保存文件、 =C-p= 项目查找文件、 =C-S-f= 文件内查找（项目级全文搜索走 =C-x p g=）、 =C-S-p= 命令面板（M-x）、 =C-S-t= 重新打开关闭的文件、 =C-,= 打开配置真理源 =emacs.org= 。
-- *文本编辑* ： =C-a= 全选、 =C-/= 行注释、 =C-S-c= 智能复制、 =C-S-v= 粘贴、 =C-S-k= 删除整行、 =C-S-d= 复制整行、 =C-d= 选中下一个匹配（类似 VS Code 的多光标选词）。
+- *文件与工程* ： =C-s= 保存文件、 =C-p= 项目查找文件、 =C-o= 打开任意文件、 =C-S-f= 文件内查找（项目级全文搜索走 =C-x p s= / =M-s p= ，项目级替换走 =C-S-h= ）、 =C-S-p= 命令面板（M-x）、 =C-S-t= 重新打开关闭的文件、 =C-S-r= 最近文件、 =C-,= 打开配置真理源 =emacs.org= 。
+- *文本编辑* ： =C-a= 全选、 =C-/= 行注释、 =C-S-c= 智能复制、 =C-S-v= 粘贴、 =C-S-k= 删除整行、 =C-S-d= 复制整行、 =C-d= 选中下一个匹配（类似 VS Code 的多光标选词）、 =C-RET= / =C-S-RET= 在下/上方开行、 =<home>= 智能行首、 =<backtab>= 反向缩进。
 - *代码导航与调试* ： =<f12>= 跳转到定义（须写为尖括号形式）、 =S-<f12>= 查找引用、 =<f2>= 符号重命名、 =C-.= 快速修复、 =<f8>= / =S-<f8>= 错误跳转、 =<f5>= 开始调试、 =<f9>= 切换断点。
-- *标签与窗口* ： =C-<tab>= 与 =C-S-<tab>= 切换标签； =M-方向键= 在分屏窗口间切换，并在终端下提供 =C-c w h/j/k/l= 字符镜像防止按键拦截。
+- *面板直达* ： =C-b= 文件侧栏开关、 =C-S-e= 聚焦文件面板、 =C-S-g= Git 状态面板、 =C-S-m= 诊断面板、 =C-S-u= 消息输出面板（对齐 VSCode 的 Explorer / SCM / Problems / Output 槽位）。
+- *标签与窗口* ： =C-<tab>= 与 =C-S-<tab>= 切换标签（ =C-<prior>= / =C-<next>= 同义）、 =C-\= 向右分屏； =M-方向键= 在分屏窗口间切换，并在终端下提供 =C-c w h/j/k/l= 字符镜像防止按键拦截。
 
 #+begin_src emacs-lisp
 (custom/bind "C-h" #'backward-char "左移" "基础移动与直达键")
@@ -4653,12 +4869,17 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 (custom/bind "C-S-z" #'undo-redo "重做" "基础移动与直达键")
 (custom/bind "C-s" #'save-buffer "保存" "基础移动与直达键")
 (custom/bind "C-p" #'project-find-file "项目内查找文件" "基础移动与直达键")
-(custom/bind "C-S-f" #'isearch-forward "文件内查找" "基础移动与直达键")
+(custom/bind "C-o" #'find-file "打开文件" "基础移动与直达键")
+(custom/bind "C-S-f" #'custom/isearch-forward-dwim "文件内查找" "基础移动与直达键")
+(custom/bind "C-S-h" #'project-query-replace-regexp "项目级替换" "基础移动与直达键")
+(custom/bind "C-S-r" #'recentf-open "最近文件" "基础移动与直达键")
 (custom/bind "C-S-o" #'imenu "符号大纲" "基础移动与直达键")
 (custom/bind "C-S-p" #'execute-extended-command "命令面板" "基础移动与直达键")
 (custom/bind "C-<tab>" #'custom/tabs-next "下一个标签" "基础移动与直达键")
 (custom/bind "C-<iso-lefttab>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
 (custom/bind "C-S-<tab>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
+(custom/bind "C-<prior>" #'custom/tabs-previous "上一个标签" "基础移动与直达键")
+(custom/bind "C-<next>" #'custom/tabs-next "下一个标签" "基础移动与直达键")
 (custom/bind "C-x M-<right>" #'custom/tabs-move "标签后移" "基础移动与直达键")
 (custom/bind "C-x M-<left>" #'custom/tabs-move-backward "标签前移" "基础移动与直达键")
 (custom/bind "C-a" #'mark-whole-buffer "全选" "基础移动与直达键")
@@ -4672,6 +4893,9 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 (custom/bind "C-S-d" #'duplicate-dwim "复制当前行" "基础移动与直达键")
 (custom/bind "C-S-<up>" #'custom/code-move-line-up "上移当前行" "基础移动与直达键")
 (custom/bind "C-S-<down>" #'custom/code-move-line-down "下移当前行" "基础移动与直达键")
+(custom/bind "C-<return>" #'custom/open-line-below "下方开行" "基础移动与直达键")
+(custom/bind "C-S-<return>" #'custom/open-line-above "上方开行" "基础移动与直达键")
+(custom/bind "<home>" #'custom/home-dwim "智能行首" "基础移动与直达键")
 (custom/bind "C-S-/" #'comment-box "块注释" "基础移动与直达键")
 (custom/bind "C-S-s" #'write-file "另存为" "基础移动与直达键")
 (custom/bind "C-S-a" #'project-find-file "项目文件搜索" "基础移动与直达键")
@@ -4701,6 +4925,10 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 (custom/bind "S-<f8>" #'flymake-goto-prev-error "上一个错误" "基础移动与直达键")
 (custom/bind "M-S-f" #'apheleia-format-buffer "格式化缓冲区" "基础移动与直达键")
 (custom/bind "C-S-e" #'custom/panel-dired "文件面板" "基础移动与直达键")
+(custom/bind "C-b" #'custom/panel-dired-toggle "文件面板开关" "基础移动与直达键")
+(custom/bind "C-S-g" #'custom/git-status-dwim "Git 状态面板" "基础移动与直达键")
+(custom/bind "C-S-m" #'custom/flymake-list-errors-dwim "诊断面板" "基础移动与直达键")
+(custom/bind "C-S-u" #'view-echo-area-messages "消息输出面板" "基础移动与直达键")
 (custom/bind "C-S-b" #'project-compile "项目构建" "基础移动与直达键")
 (custom/bind "C-S-n" #'make-frame-command "新建窗口 (frame)" "基础移动与直达键")
 (custom/bind "C-," #'custom/open-config-source "打开设置 (emacs.org)" "基础移动与直达键")
@@ -4746,7 +4974,8 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
            ("C-c q" . "退出与 Frame")))
   (custom/declare-binding-group (car prefix) (cdr prefix)))
 
-(custom/bind "C-x C-r" #'recentf-open-files "最近文件" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x C-r" #'recentf-open "最近文件" "文件 / 缓冲区 / 标签")
+(custom/bind "C-x C-b" #'ibuffer "缓冲区列表 (ibuffer)" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x B" #'ibuffer "缓冲区列表 (ibuffer)" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x k" #'kill-buffer-and-window "关闭当前缓冲区" "文件 / 缓冲区 / 标签")
 (custom/bind "C-x K" #'kill-buffer "关闭指定缓冲区" "文件 / 缓冲区 / 标签")
@@ -4756,7 +4985,7 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 (custom/bind "C-x T" #'custom/reopen-closed-file "重开已关闭文件" "文件 / 缓冲区 / 标签")
 
 (custom/bind "M-s e" #'xref-find-apropos "符号搜索" "搜索")
-(custom/bind "M-s i" #'isearch-forward "增量搜索" "搜索")
+(custom/bind "M-s i" #'custom/isearch-forward-dwim "增量搜索" "搜索")
 (custom/bind "M-s m" #'multi-occur "多缓冲区搜索" "搜索")
 
 (custom/bind "<f1> ?" #'custom/show-help "快捷键帮助" "帮助")
@@ -4795,7 +5024,8 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 :END:
 
 - *三面板一键总开关 (C-c w T)* ：类似现代编辑器的侧边栏停靠管理，一键展开或折叠左侧文件树、底部终端与右侧 Agent 面板，焦点自动保持在主编辑区。
-- *布局重构与分屏 (Emacs 31)* ：支持窗口树顺时针/逆时针旋转、镜像翻转、横竖转置、窗口内容轮转、窗口临时合并与多 Frame 分屏移动；数字键 =C-c w 0/1/2/3= 与内置 =C-x 0/1/2/3= 对偶。
+- *布局重构与分屏 (Emacs 31)* ：支持窗口树顺时针/逆时针旋转、镜像翻转、横竖转置、窗口内容轮转、窗口临时合并与多 Frame 分屏移动；数字键 =C-c w 0/1/2/3= 与内置 =C-x 0/1/2/3= 对偶。 =C-\= 一键向右分屏并聚焦新窗口（VSCode Ctrl+\）。
+- *面板定位* ： =C-c w d= 让左侧文件面板切到当前文件所在目录并选中文件行（Explorer 的 Reveal in Explorer 等价物）。
 
 #+begin_src emacs-lisp
 (defun custom/dired-buffer-in-root (root)
@@ -4833,7 +5063,15 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
                      (window-list (selected-frame)))))
     (select-window main)))
 
+(defun custom/split-window-right-follow ()
+  "向右分屏并把焦点移到新窗口(VSCode Ctrl+\\)。"
+  (interactive)
+  (split-window-right)
+  (other-window 1))
+
+(custom/bind "C-\\" #'custom/split-window-right-follow "右侧分屏" "窗口与面板")
 (custom/bind "C-c w f" #'custom/panel-dired "文件面板" "窗口与面板")
+(custom/bind "C-c w d" #'custom/panel-dired-reveal "面板定位当前文件" "窗口与面板")
 (custom/bind "C-c w t" #'custom/open-terminal "终端面板" "窗口与面板")
 (custom/bind "C-c w a" #'agent-shell "Agent 面板" "窗口与面板")
 (custom/bind "C-c w T" #'custom/panels-toggle "三面板总开关" "窗口与面板")
@@ -4917,6 +5155,42 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 (with-eval-after-load 'grep
   (setq grep-use-headings t))
+#+end_src
+
+*** isearch 的 IDE 化交互
+:PROPERTIES:
+:CUSTOM_ID: isearch-vscode-semantics
+:END:
+
+原生 isearch 是一个「模式」而非「组件」： =RET= 退出搜索、 =C-s= / =C-r= 前后循环、选区文本不会自动带入搜索串——与 VSCode/Zed 的 Find Widget（Enter 跳下一个、Esc 关闭、选中即搜索词）语义相反。这里把键位语义对齐到 widget 模型：
+
+- *回车循环* ：isearch 内 =RET= 跳到下一个匹配、 =S-RET= 上一个；触底立即回绕且不闪屏（ =isearch-wrap-pause 'no-ding= ）。
+- *退出保持位置* ： =ESC=（GUI / 支持 kitty 协议的终端）或终端下的 =ESC ESC= 停在当前匹配并关闭搜索框，等价 VSCode 的 Esc； =C-g= 仍是「取消并回到起点」。原 isearch 内 =M-c= 等 Meta 键不受影响（ =<escape>= 与终端 \e 前缀是不同事件）。
+- *选区取词* ： =C-S-f= / =M-s i= 启动搜索时，若有活跃选区则自动把选中文本填入搜索串（VSCode 选中后 Ctrl+F 的行为）。
+
+#+begin_src emacs-lisp
+(setq isearch-wrap-pause 'no-ding)
+
+(defun custom/isearch-forward-dwim ()
+  "启动增量搜索;有活跃选区时把选区文本填入搜索串(VSCode 选中后 Ctrl+F)。
+`isearch-forward' 的 no-recursive-edit 参数让启动调用立即返回(搜索经
+overriding keymap 继续读键),`isearch-yank-string' 才能在其仍处于活跃
+状态时把种子写进搜索串;直接调 `(isearch-forward)' 会进入递归编辑,
+等它返回时搜索已退出,yank 落空。"
+  (interactive)
+  (let ((seed (when (use-region-p)
+                (buffer-substring-no-properties
+                 (region-beginning) (region-end)))))
+    (deactivate-mark)
+    (isearch-forward nil t)
+    (when seed
+      (isearch-yank-string seed))))
+
+(with-eval-after-load 'isearch
+  (keymap-set isearch-mode-map "RET" #'isearch-repeat-forward)
+  (keymap-set isearch-mode-map "S-<return>" #'isearch-repeat-backward)
+  (keymap-set isearch-mode-map "<escape>" #'isearch-exit)
+  (define-key isearch-mode-map "\e\e" #'isearch-exit))
 #+end_src
 
 *** In-region 补全

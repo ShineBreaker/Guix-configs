@@ -2153,7 +2153,6 @@ polkit.addRule(function(action, subject) {
    "cc-switch-bin"
    "crush-bin"
    "cua-driver-bin"
-   "paseo-bin"
    "zcode"
    "zcode-proxy-bin"
 
@@ -2428,6 +2427,7 @@ _    _  _  _  _  _  _  _)
              "emacs-avy"
              "emacs-diff-hl"
              "emacs-expand-region"
+             "emacs-idle-highlight"
              "emacs-indent-bars"
              "emacs-multiple-cursors"
              "emacs-with-editor"
