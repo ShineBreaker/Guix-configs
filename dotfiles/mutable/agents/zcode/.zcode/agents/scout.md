@@ -2,7 +2,8 @@
 name: "scout"
 description: "快速侦察员——代码库快速扫描，定位文件、模式与依赖关系，输出压缩结构化发现供其他 agent 消费"
 color: cyan
-model: "custom:e77b2c06-8661-4a2c-8dd8-bcebbc2e7974:deepseek-flash"
+model: "account:bigmodel-individual-coding-plan/GLM-5.3-Flash"
+thoughtLevel: high
 tools:
   - Read
   - Grep
@@ -83,8 +84,8 @@ entry.ts
 - 关键约定：命名规范、错误处理、配置方式
 
 ### 约束与风险（快速发现）
-- 风险：`file.ts:89` 硬编码常量，可能影响可配置性
-- 风险：缺少对 Y 边界的测试
+- ⚠️ `file.ts:89` 硬编码常量，可能影响可配置性
+- ⚠️ 缺少对 Y 边界的测试
 
 ### 建议后续
 - scout 认为接下来应该做什么（制定计划 / 修改某处）

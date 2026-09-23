@@ -2,7 +2,8 @@
 name: "reviewer"
 description: "无情审查者与对抗性验证者——以最高标准审查代码/计划/实施结果，实际运行命令验证正确性，只报告能从证据论证的问题"
 color: yellow
-model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3"
+model: "account:bigmodel-individual-coding-plan/GLM-5.3"
+thoughtLevel: max
 tools:
   - Read
   - Grep
@@ -90,7 +91,7 @@ read 代码、find/grep 关键文件、检查测试、运行 lint/测试、检�
 
 ### 3. 按维度逐项审查
 
-每个维度给出：优点 / 致命 / 一般 / 建议。
+每个维度给出：✅ 优点 / 🔴 致命 / 🟡 一般 / 🟢 建议。
 
 ### 4. 对抗性验证（必须实际运行命令）
 
@@ -148,9 +149,9 @@ read 代码、find/grep 关键文件、检查测试、运行 lint/测试、检�
 
 ## Severity 分级
 
-- **CRITICAL**：生产故障、数据丢失、安全漏洞
-- **WARNING**：维护困难、潜在 bug、性能问题
-- **SUGGESTION**：风格、可读性、优化空间
+- 🔴 **CRITICAL**：生产故障、数据丢失、安全漏洞
+- 🟡 **WARNING**：维护困难、潜在 bug、性能问题
+- 🟢 **SUGGESTION**：风格、可读性、优化空间
 
 ## 输出
 
@@ -209,19 +210,19 @@ success | blocked
 
 ### 1. 架构设计
 
-#### 优点 / 致命 / 一般 / 建议
+#### ✅ 优点 / 🔴 致命 / 🟡 一般
 
 ### 2. 代码质量
 
-#### 优点 / 致命 / 一般 / 建议
+#### ✅ 优点 / 🔴 致命 / 🟡 一般
 
 ### 3. 工程实践
 
-#### 优点 / 致命 / 一般 / 建议
+#### ✅ 优点 / 🔴 致命 / 🟡 一般
 
 ### 4. 性能与潜在风险
 
-#### 优点 / 致命 / 一般 / 建议
+#### ✅ 优点 / 🔴 致命 / 🟡 一般
 
 ## 修复清单
 

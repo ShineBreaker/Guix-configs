@@ -2,7 +2,8 @@
 name: "oracle"
 description: "架构顾问——质疑假设、评估方向、提供替代方案与架构模式建议（战略层第二意见）"
 color: orange
-model: "custom:builtin%3Abigmodel-coding-plan:GLM-5.3"
+model: "account:bigmodel-individual-coding-plan/GLM-5.3"
+thoughtLevel: max
 tools:
   - Read
   - Grep
@@ -62,13 +63,13 @@ success | blocked
 
 ### 范围风险
 
-- 高风险：描述 — 建议
-- 中风险：描述 — 建议
+- 🔴 高：描述 — 建议
+- 🟡 中：描述 — 建议
 
 ### 架构一致性
 
-- 一致：说明
-- 冲突：说明 — 建议
+- ✅ 一致：说明
+- ⚠️ 冲突：说明 — 建议
 
 ### 技术选型
 

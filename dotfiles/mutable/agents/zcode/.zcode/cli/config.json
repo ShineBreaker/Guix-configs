@@ -7,7 +7,6 @@
     "enabledPlugins": {
       "superpowers@zcode-plugins-official": false,
       "mimosa@zcode-plugins-official": false,
-      "example-plugin@zcode-plugins-official": true,
       "restore-legacy-sessions@zcode-plugins-official": true,
       "context7@claude-plugins-official": true,
       "feature-dev@claude-plugins-official": true,
@@ -15,7 +14,8 @@
       "github@zcode-plugins-official": true,
       "code-review@claude-plugins-official": true,
       "video-agent-kit@zcode-plugins-official": false,
-      "computer-use@zcode-plugins-official": true
+      "computer-use@zcode-plugins-official": true,
+      "example-plugin@zcode-plugins-official": false
     }
   },
   "mcp": {
