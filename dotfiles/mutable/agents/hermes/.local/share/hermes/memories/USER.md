@@ -2,14 +2,13 @@
 §
 新建 skill 必须进现有 11 分类之一(<category>/<skill-name>/)，装不下才新建且需确认；不动 ~/.config/agents/skills/(Guix Home immutable)。决策树见 skill-authoring §9。
 §
-commit 边界(2026-08-29 精化)：git add -- <精确路径>；diff --cached 核对必须是**独立调用**、确认文件数=预期后才 commit（核对与 commit 串同一管道会拦不住 index 遗留混入）；commit 后 git show --stat HEAD 复查文件数；无 GPG 时 --no-gpg-sign。
+commit 遵循 Conventional Commits；精确 staging，独立核对；无 GPG 时使用 --no-gpg-sign。
 §
 大型迁移/批量先拿中等样本端到端验证再放量。
 §
 需 CLI/库时先 guix search，列给用户 guix install 装；不默认 pip。环境变量(HERMES_HOME 等)直接读，读不到才 fallback。
 §
-commit 遵循 Conventional Commits：<type>[scope]: <description> (祈使句/小写/无句号)，Body 讲 what/why，Footer 放 BREAKING CHANGE/Refs。vision 优先直用、Electron desktop 必留、Org→Markdown 拒绝、博客 Hexo 资产等见 fact_store。
-§
+
 §
 计划审批流程偏好(2026-08-29)：大型计划走「v1→外派审查→复核裁决→v2→二审→v3→grilling 批量提问(一次问全,不逐题)→终稿落盘→用户过目同意→零提问实施到底」。实施期内任何问题提前在 grilling 阶段问完；期内小缺陷当场修并标注、需拍板的跳过进待裁决清单、绝不扩范围。重要配置/补丁/脚本资产一律入 Guix-configs 仓库 stow 源(用户:"所有重要配置都存入到仓库中")。审查报告(含外派 harness 的)的新主张逐条实证后才并入——审查权不豁免举证责任。
 §
@@ -17,10 +16,14 @@ commit 遵循 Conventional Commits：<type>[scope]: <description> (祈使句/小
 §
 验证要求：不接受「看起来做完了」——UI/鼠标/行为类任务要求真机反复操作验证，并会追问「你确定一下」「你再确认一下呢」；关键结论要独立复核（点名派 reviewer/oracle）。
 §
-反过度设计：当自动化/决策链被判断为过度设计时，倾向整体删除只保留最小能力（2026-09-13 可信 WiFi 热点链全删，只留一键启停 + 端口可达），不用继续修补。
+反过度设计：自动化/决策链过度复杂时优先删减，只保留最小可用能力。
 §
-模型渠道硬约束：只用 z-ai 与 opencode-go 供应的模型，禁 openrouter（价格扛不住）；调模型组合要方便。
+模型渠道只用 z-ai/opencode-go，不用 openrouter。
 §
-文档信息架构：信息只在一处、各文件职责分明不重复、可信源统一；README 定位成「导读」（链接引导到权威文档，不重写一遍）；易腐的技术结论写进带日期的卡片，AGENTS.md 只留稳定约束 + 指针。
+文档信息单一权威；README 只导读；易腐结论放带日期卡片。
 §
 任务模式分野(2026-09-16)：探索性/数据采集类任务（用户说"尽量爬取、自主完成、需要决策的留到最后"）——不套 grilling 审批流，边干边记待决策项、收尾批量提出即可；v1→审查→grilling 链只用于架构级/不可逆的大型计划。
+§
+用户偏好：低频但关键—用户说「自主完成所有任务」「你去休息」时，转为自主模式，不再 confirm 或提问，按 skill 流程推到 commit + 报告。
+§
+skill prose 不强制 80 列；SKILL.md 少于 500 行。

@@ -124,7 +124,7 @@ memory(
 
 - 用户偏好 → `target=user`
 - 环境事实 / 工具约定 → `target=memory`
-- 项目专属 → `fact_store` (按需检索，不入 markdown)
+- 项目专属 → `agenote` (按需检索，不入 markdown)
 
 ### Step 5.5: KB→skill 晋升评估（≥3 次复发的 mistake 卡触发）
 

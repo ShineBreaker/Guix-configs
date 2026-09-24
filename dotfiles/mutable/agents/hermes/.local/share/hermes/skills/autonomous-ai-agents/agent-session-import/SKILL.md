@@ -488,4 +488,4 @@ you'll hit them too:
 - **zcode** (`~/.zcode/cli/db/db.sqlite`): SQLite `session/message/part` 三表，`data` 列为 JSON TEXT；`time_created` 为毫秒、`part.data.callID` 为 tool-call 关联键、`synthetic:true` 的 user part 需折为 `[system-reminder]` 一行。
 - **crush** (`<project>/.crush/crush.db` per-project): `messages.parts` 为 JSON 数组；`created_at` 实际为秒（schema 注释写 ms 是错的，需 `datetime(v,'unixepoch')` 验证）；`messages.id` 非全局唯一，`$$` 后缀为 subagent 调用。
 - **codex** (`~/.config/codex/sessions/YYYY/MM/DD/rollout-*.jsonl`): 行式 JSONL，类型 `session_meta/turn_context/response_item/compacted`；`custom_tool_call` 为 JS shim 需抽 JSON；`reasoning encrypted_content` 无明文直接丢弃、长工具输出 800/4000 分级截断（见 `transcript-density-policy.md`）。
-- **history** (`references/import-external-memory.md`): 将 zcode 等外部 markdown memories 导入 Hermes 三通道（`fact_store`/`agenote`/`memory`），按 `entity` 分组批量 `agenote add --type`，`memory` 文件超 86% 时先合并去重再写入。
+- **history**: 外部记忆迁移已退役；项目事实与可复用经验写入 `agenote`，跨会话用户偏好写入内置 `memory`。

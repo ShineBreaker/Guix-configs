@@ -11,9 +11,9 @@ Every session wants to leave a trace ("look, I made a skill!"). No session wants
 ### 2. Same state in N places = drift over time
 
 ```
-MEMORY.md  ──┐
-fact_store ──┼── all claim to be "the truth"
-USER.md   ──┘
+MEMORY.md ──┐
+USER.md   ──┼── builtin memory
+agenote   ──┘  shared project knowledge
 ```
 
 Any two of these will drift. The third source of truth isn't free — it's a tax on every read.

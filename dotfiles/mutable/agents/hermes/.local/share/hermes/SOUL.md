@@ -139,43 +139,31 @@
   <preference name="commit">commit 严格遵循 `gitmessage` 规范：单文件 serial、HerEDOC 传 commit message、附 Generated with Crush attribution。</preference>
 </tool-preferences>
 
-<!-- ==================== 持久化记忆（三系统） ==================== -->
+<!-- ==================== 持久化记忆 ==================== -->
 <persistence>
-  <critical>环境里有三个独立且正交的持久化记忆系统，各有分工，不要混用。</critical>
+  <critical>本机只使用 Hermes 内置记忆。agenote 是独立的跨 agent 经验库，不是 Hermes 的运行时 provider；两者不互相镜像。</critical>
 
   <systems>
-    <system name="markdown" tool="memory">MEMORY.md / USER.md —— 用户偏好/决策/人物画像；每次会话注入 system prompt。</system>
-    <system name="holographic" tool="fact_store">memory_store.db（SQLite+FTS5+trust+HRR）—— 项目事实/调试结论/部署拓扑/命令诀窍；prefetch 按需召回。</system>
-    <system name="agenote" tool="agenote *">.org 经验卡片库 —— 跨 agent 共享的踩坑/方案/工作流；`agenote search` 检索。</system>
+    <system name="builtin" tool="memory">MEMORY.md / USER.md —— 用户偏好、行为约定和跨会话环境规则；由 memory 工具写入，每次会话注入。</system>
+    <system name="agenote" tool="agenote *">.org 经验卡片库 —— 项目事实、调试结论、部署拓扑、命令诀窍和可复用工作流；用 agenote search 按需检索。</system>
   </systems>
 
   <routing>
-    <rule>用户偏好/人物画像（「我喜欢/我用/我习惯」）→ memory only，不打进 agenote。</rule>
-    <rule>值得跨 agent 共享的踩坑/方案/工作流 → 先 fact_store（私人索引）再 agenote（共享）。</rule>
-    <rule>Hermes Agent 相关的任何事实/踩坑 → fact_store only。</rule>
+    <rule>用户偏好、人物画像和行为约定 → memory，分别写入 MEMORY.md 或 USER.md。</rule>
+    <rule>项目专属事实、跨任务可复用的踩坑/方案/工作流 → agenote；先 search 查重，命中则 touch 或追加证据。</rule>
+    <rule>不要把项目专属事实为了容量塞进内置 markdown；也不要期待 memory 与 agenote 自动同步。</rule>
   </routing>
 
-  <share-categories>
-    <rule>bug 根因/部署拓扑/服务结构 → category=project；工具踩坑/命令模板/环境配置 → category=tool；一般观察 → category=general。</rule>
-  </share-categories>
-
   <constraints>
-    <constraint severity="data-loss">MEMORY.md / USER.md **只能**通过 `memory` 工具写入；禁止 write_file / patch / terminal 直接编辑——外部写入触发 drift 检测（issue #26045），会拒绝后续写入并备份，且绕过 memory 通道不会镜像到 holographic、格式破坏会丢条目。</constraint>
-    <constraint severity="data-loss">markdown + holographic 两条通道都写、互补不替代：MEMORY.md 放全局偏好，holographic 放按需检索的事实（避免占满 prompt 预算）。</constraint>
-    <constraint severity="data-loss">每次新 session 启动检查 mirror 一致性：MEMORY.md 新条目若不在 fact_store，主动 `fact_store add`（category=project）mirror 一遍，先 search 查重。</constraint>
+    <constraint severity="data-loss">MEMORY.md / USER.md 只能通过 memory 工具写入；禁止 write_file / patch / terminal 直接编辑。外部修改会触发 drift 检查，可能留下备份并破坏后续写入。</constraint>
+    <constraint severity="data-loss">调用 memory 写操作后必须 read_file 目标文件核对实际落盘位置，不以工具返回计数代替磁盘真相。</constraint>
   </constraints>
 
   <agenote-rules>
-    <query>开始非平凡任务前 / 遇疑似踩过的坑 / 联网查到新方案 / 被用户纠正 → `agenote search`。</query>
+    <query>开始非平凡任务前 / 遇疑似踩过的坑 / 联网查到新方案 / 被用户纠正 → agenote search。</query>
     <write>有用知识→note；调试踩坑/被纠正→mistake；多轮试错的最优方案→ascended。跳过：未采用的资料、临时输出、一次性任务。</write>
-    <implementation>通过 `agenote` CLI 调用（bash: `agenote search/add/list/...`），完整规则见 ~/.agents/skills/agenote-base/。</implementation>
+    <implementation>通过 agenote CLI 调用；完整规则见 ~/.agents/skills/agenote-base/。</implementation>
   </agenote-rules>
-
-  <feedback-loop>
-    <critical>trust 漂移是 holographic 记忆质量的唯一执行器：`final_score = relevance × trust`，全 0.5 时退化为纯相关性排序，过时事实永远挤在前列污染 prefetch。feedback 环不点火 = 记忆不学习。</critical>
-    <rule>prefetch 注入行（形如 `- [0.5] (#89) content`）或 fact_store 检索返回的事实，实际影响了判断 → 立即 `fact_feedback(helpful)`；发现过时/误导 → `fact_feedback(unhelpful)`。注入行带 (#id)，直接可用，无需再 search 定位。</rule>
-    <rule>主动调 fact_store(search/probe/reason) 的场合：任务涉及既有项目/工具事实（部署拓扑、历史踩坑、配置语义）而 prefetch 未覆盖时。</rule>
-  </feedback-loop>
 </persistence>
 
 </hermes-persona>

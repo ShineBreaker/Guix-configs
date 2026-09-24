@@ -620,11 +620,10 @@ def check_backup_tmp_pile(cfg: dict) -> tuple[str, str]:
 
 
 def check_memory_cache_size(cfg: dict) -> tuple[str, str]:
-    """13. cache/ + memory_store.db + audio_cache/ total size."""
+    """13. cache/ + audio_cache/ total size."""
     max_mb = cfg.get("max_mb", 200)
     targets = [
         HERMES_HOME / "cache",
-        HERMES_HOME / "memory_store.db",
         HERMES_HOME / "audio_cache",
     ]
     total = 0

@@ -15,7 +15,6 @@
 #   2. 更新前停旧 gateway（官方不管；旧进程持失效模块路径，MCP 全挂）
 #   3. uv 隔离（防官方在 $HERMES_HOME/bin 装独立 managed uv，偏离 Guix 系统 uv）
 #   4. 更新后恢复 herd 管理的常驻服务（停服务 → 清官方野实例 → enable+start）
-#   5. 更新后重放本地补丁（官方 update 把工作树改动 stash 走，不重放则定制静默失效）
 #
 # == uv 隔离 ==
 # 官方 `ensure_uv()`（managed_uv.py:43-51）只查 `$HERMES_HOME/bin/uv` 是否存在，
@@ -117,23 +116,6 @@ _restart_herd_services() {
       && echo "  ✓ ${_svc} 已重启" \
       || echo "  ⚠ ${_svc} 重启失败（手动: herd start ${_svc}）"
   done
-}
-
-# --- 重放本地补丁（官方 update 会 stash 走工作树改动）---
-# 官方 update 把 checkout 的工作树改动 stash 起来，pull 后询问是否恢复；非交互
-# 场景下要么恢复（可能撞冲突）要么 reset 到干净。两条路都意味着补丁状态不可信，
-# 故更新后无条件重放一次。replay.sh 幂等：上游已合并或补丁已在位时直接报 OK。
-# 重放失败（上游改了同一区域）只告警不中断——服务仍需重启加载新代码。
-_replay_local_patches() {
-  local _replay="${HERMES_HOME}/patches/replay.sh" _out
-  [[ -f "${_replay}" ]] || return 0
-  echo "→ 重放本地补丁（patches/replay.sh）..."
-  if _out="$(bash "${_replay}" 2>&1)"; then
-    echo "  ${_out}"
-  else
-    echo "  ⚠ 补丁未重放：${_out}" >&2
-    echo "    上游可能改了同一区域，需人工合并后重跑：bash ${_replay}" >&2
-  fi
 }
 
 # --- 确保 Hermes-managed Node 树存在（dashboard 启动依赖它）---
@@ -320,7 +302,7 @@ _install_hicolor_icon
 # 官方接管：pre-update backup → fetch → stash → pull（syntax guard + rollback）
 # → 依赖重装 → config 迁移 → skills sync（已被 .no-bundled-skills opt-out 跳过）
 # → desktop build（desktop-build-stamp.json hash 不变则秒过）→ 完成。
-# 不用 exec：需在成功后跑本地收尾（补丁重放 + herd restart）；是否收尾以 HEAD
+# 不用 exec：需在成功后跑本地收尾（服务重启）；是否收尾以 HEAD
 # 是否变化为准，而非官方退出码（updater 收尾崩了但代码已更新的情况见下方判定）。
 _head_before="$(git -C "${CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
 _update_rc=0
@@ -348,9 +330,6 @@ if [[ "${_is_check}" -eq 1 ]]; then
   # --check 只读探测，不改文件，无需重启
   exit 0
 fi
-
-# --- B.3.5 重放本地补丁（官方 update 已把工作树改动 stash 走）---
-_replay_local_patches
 
 # --- B.4 herd restart 收尾（让常驻服务加载新代码）---
 _restart_herd_services

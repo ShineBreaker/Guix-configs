@@ -1032,7 +1032,7 @@ Follow the [Conventional Commits](https://www.conventionalcommits.org/) specific
 
 **Examples:**
 ```
-feat: add holographic memory provider integration
+feat: add memory provider integration
 
 fix: resolve session_search timeout on large databases
 

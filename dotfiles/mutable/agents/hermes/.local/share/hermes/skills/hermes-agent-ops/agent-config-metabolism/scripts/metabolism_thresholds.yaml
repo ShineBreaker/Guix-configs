@@ -76,7 +76,7 @@ backup_tmp_pile:
 
 memory_cache_size:
   enabled: true
-  max_mb: 200               # cache/ + memory_store.db + audio_cache/
+  max_mb: 200               # cache/ + audio_cache/
 
 plaintext_secrets:
   enabled: true

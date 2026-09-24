@@ -152,7 +152,7 @@ python3 ~/.local/share/hermes/skills/hermes-agent-ops/agent-config-metabolism/sc
 | 10. Log line cap | < 100k lines | each log file |
 | 11. Task ledger parity | identical | kanban vs todo-store |
 | 12. Backup/tmp pile | < 50 | `*.bak.*` + tmpfiles |
-| 13. Memory cache size | ≤ budget | `cache/` + `memory_store.db` |
+| 13. Memory cache size | ≤ budget | `cache/` |
 | 14. Plaintext secrets | 0 | grep `aws_\|sk-\|ghp_\|xoxb-` |
 
 ## Procedure

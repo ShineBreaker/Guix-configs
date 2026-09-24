@@ -88,7 +88,6 @@ nix-store --query --referrers "$HERMES_BIN"
 | `~/.local/share/hermes/config.yaml` | 主配置 | NO |
 | `~/.local/share/hermes/.env` | API keys / secrets | NO(权限 0600) |
 | `~/.local/share/hermes/state.db` | SQLite session store | NO |
-| `~/.local/share/hermes/memory_store.db` | holographic memory provider | NO |
 | `~/.local/share/hermes/auth.json` | OAuth tokens / credential pools | NO(权限 0600) |
 | `~/.local/share/hermes/cron/jobs.json` | cron 任务持久化 | NO |
 | `~/.local/share/hermes/logs/*.log` | 日志(ConcurrentRotatingFileHandler,默认轮转) | NO |

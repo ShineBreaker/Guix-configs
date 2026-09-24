@@ -15,5 +15,5 @@
 
 ## 关联
 
-- 规范本体见 memory / fact_store「提交规范」与各仓库 AGENTS.md。
+- 规范本体见 memory / agenote「提交规范」与各仓库 AGENTS.md。
 - 模型 pin 等其他 cron 运维见本 skill 主文档。

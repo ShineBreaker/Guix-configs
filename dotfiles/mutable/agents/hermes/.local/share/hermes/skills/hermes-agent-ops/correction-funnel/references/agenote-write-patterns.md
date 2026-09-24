@@ -185,13 +185,13 @@ KB 是**技术经验**。用户偏好走 `memory` tool：
 
 - "用户喜欢 X" → memory target=user
 - "环境里 X 命令不存在" → memory target=memory
-- "项目 Y 的部署拓扑是 Z" → fact_store (按需检索)
+- "项目 Y 的部署拓扑是 Z" → agenote (按需检索)
 - "X 模式下应该用 Y pattern" → KB (agenote_add)
 
 跨域一致性约束来自 MEMORY.md：
 
 - markdown MEMORY.md / USER.md 只写跨所有仓库通用的规范与偏好
-- 项目专属事实（部署拓扑、踩坑、环境细节、命令诀窍）一律 fact_store
+- 项目专属事实（部署拓扑、踩坑、环境细节、命令诀窍）一律 agenote
 
 ## 真实案例样本
 
