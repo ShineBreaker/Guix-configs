@@ -26,11 +26,13 @@ import { basename, dirname, join } from "node:path";
 /** 单次预算（字符）：简报 8000 / recall 4000，设计 C4 每宿主预算表 */
 export const BRIEF_BUDGET = Number(process.env.AGENOTE_INJECTION_BRIEF_BUDGET || 8000);
 export const RECALL_BUDGET = Number(process.env.AGENOTE_INJECTION_RECALL_BUDGET || 4000);
-/** 单会话累计预算（与 SCHEMA 同名 env 同口径；SessionStart/compact 重置） */
+/** 单会话累计预算（与 SCHEMA 同名 env 同口径；SessionStart/compact 重置）。
+ * 镜像仅 env 口径：改 config.toml 中 [injection] 同名键不会同步注入器侧，
+ * 需用 env 覆盖或接受 CLI/注入器判定分叉。 */
 export const CUMULATIVE_BUDGET = Number(
   process.env.AGENOTE_INJECTION_SESSION_CUMULATIVE_BUDGET || 24000,
 );
-/** recall 有效 query 最短字符（镜像 SCHEMA recall_min_query=6） */
+/** recall 有效 query 最短字符（镜像 SCHEMA recall_min_query=6；同上仅 env 口径） */
 export const MIN_QUERY = Number(process.env.AGENOTE_INJECTION_MIN_QUERY || 6);
 /** recall query 取 prompt 前 N 字符（设计 C4 规定值） */
 export const QUERY_MAX_CHARS = 200;
@@ -87,12 +89,16 @@ export function kbDomainRoot() {
       );
       let section = "";
       for (const line of readFileSync(cfgPath, "utf-8").split("\n")) {
-        const sec = line.match(/^\s*\[([^\]]+)\]\s*$/);
+        // 值先吃掉引号串再匹配行尾 # 注释：# 在引号内不被误剥（TOML 双引号
+        // 基本串与单引号字面量两种形态都认；不引 TOML 库的手写近似）
+        const sec = line.match(/^\s*\[([^\]]+)\]\s*(?:#.*)?$/);
         if (sec) {
           section = sec[1];
           continue;
         }
-        const kv = line.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/);
+        const kv =
+          line.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*(?:#.*)?$/) ||
+          line.match(/^\s*([A-Za-z0-9_-]+)\s*=\s*'([^']*)'\s*(?:#.*)?$/);
         if (kv && section === "paths") {
           if (kv[1] === "kb_root") kb = kv[2];
           if (kv[1] === "agenote_dir") agenoteDir = kv[2] || "agenote";
