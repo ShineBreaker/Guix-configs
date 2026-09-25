@@ -10,11 +10,16 @@
 // 信号清单、写入流程、卡片格式由 agenote-{base,curator,review} skill 提供，
 // 本 hook 只做"规则常驻提醒"，避免与 skill 重复维护。
 //
+// 记忆简报段（设计 C4）：追加 `agenote context --mode session --budget 8000`
+// 的会话简报（text 空则不追加）；同时承担追加型三件套的会话重置语义
+// （累计清零 + recall 解禁，resume/clear/compact 重触发同样生效），见 lib.mjs。
+//
 // 手动冒烟测试：
 //   printf '%s\n' '{"hook_event_name":"SessionStart","session_id":"manual","source":"startup"}' \
 //     | node hooks/session-start.mjs
 
 import { spawnSync } from "node:child_process";
+import { sessionBrief } from "./lib.mjs";
 
 let raw = "";
 process.stdin.setEncoding("utf8");
@@ -29,6 +34,8 @@ try {
 }
 
 const eventName = input.hook_event_name || input.hookEventName || "SessionStart";
+const sessionId = input.session_id ?? input.sessionId ?? "";
+const cwd = input.cwd || process.cwd();
 
 // 健康度摘要：只保留关键行（对齐 pi getAgenoteStatusSummary 的筛选规则）。
 // 命令失败时静默——hook 不应因记事本缺失而阻塞会话启动。
@@ -65,7 +72,10 @@ const rules = [
   "• 踩坑/被纠正/找到更优方案时按 agenote-base skill 记录（agenote add / agenote memory --add）",
 ].join("\n");
 
-const context = rules + healthSummary();
+// 记忆简报（事实层）：context 输出空（disabled/empty）时不追加任何东西
+const brief = sessionBrief(sessionId, cwd);
+
+const context = rules + healthSummary() + (brief ? `\n\n${brief}` : "");
 
 process.stdout.write(
   JSON.stringify({

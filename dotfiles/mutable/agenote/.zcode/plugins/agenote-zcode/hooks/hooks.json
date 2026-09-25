@@ -8,8 +8,8 @@
             "type": "process",
             "command": "node",
             "args": ["${ZCODE_PLUGIN_ROOT}/hooks/session-start.mjs"],
-            "timeoutMs": 5000,
-            "statusMessage": "agenote-zcode: 读取记事本状态…"
+            "timeoutMs": 12000,
+            "statusMessage": "agenote-zcode: 读取记事本状态与记忆简报…"
           }
         ]
       }
@@ -24,6 +24,17 @@
             "args": ["${ZCODE_PLUGIN_ROOT}/hooks/prompt-submit.mjs"],
             "timeoutMs": 3000,
             "statusMessage": "agenote-zcode: 检测到完成信号…"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "process",
+            "command": "node",
+            "args": ["${ZCODE_PLUGIN_ROOT}/hooks/prompt-inject.mjs"],
+            "timeoutMs": 8000,
+            "statusMessage": "agenote-zcode: 记忆召回注入…"
           }
         ]
       }
