@@ -25,7 +25,8 @@
 - pre_llm_call 钩子：检测任务完成信号，注入 agenote-review 评估提示
 - /agenote-summarize：手动触发经验总结
 - /agenote-health：显示 KB 健康度
-- /agenote-curate：执行策展（健康+去重+归档+权重重分配）
+- /agenote-curate：注入策展任务提示（agent 按 agenote-curator skill 主导执行，
+  与 pi f8ccec3 同款——CLI 无 `curate` 子命令，流程编排由 agent 完成）
 
 信号清单与写入流程由 agenote-{base,curator,review} skill 提供，本插件只做
 事件触发 + 注入通道 + 命令快捷入口，避免与 skill 重复维护。
@@ -72,6 +73,9 @@ DEBOUNCE_MS = 5 * 60 * 1000  # 5 分钟冷却
 _last_trigger_ms: float = 0.0
 
 # ── 注入参数（设计 C4 每宿主预算表；env 覆盖，语义开关在 agenote SCHEMA）──
+# 注意：此处累计预算/门槛仅为 env 口径的镜像——改 config.toml 中 [injection]
+# 同名键不会同步注入器侧（注入器不读 config 数值键），需用 env 覆盖，否则
+# CLI 与注入器的触顶/门槛判定分叉。
 _BRIEF_BUDGET = int(os.environ.get("AGENOTE_INJECTION_BRIEF_BUDGET") or 3800)
 _RECALL_BUDGET = int(os.environ.get("AGENOTE_INJECTION_RECALL_BUDGET") or 2000)
 _CUMULATIVE_BUDGET = int(
@@ -242,6 +246,12 @@ def build_query(user_text: str, cwd: str = "") -> str | None:
     """prompt 折叠空白取前 200 字符 + cwd basename 伪词；短门槛不过返回 None。
 
     门槛按 prompt 部分长度判（伪词不计入），与 lib.sh 同语义。
+    局限：pre_llm_call 钩子入参不携带 cwd（hermes v0.21.3
+    turn_context._collect_pre_llm_call_context 只给 session_id/task_id/turn_id/
+    user_message/conversation_history/is_first_turn/model/platform/
+    parent_session_id/sender_id），调用处也无从取得——os.getcwd() 是 hermes
+    进程目录而非用户项目目录，recall 项目信号弱于 zcode/claude 实现，
+    待上游钩子提供 cwd 后接入。
     """
     q_text = " ".join((user_text or "").split())[:_QUERY_MAX_CHARS]
     if len(q_text.strip()) < _MIN_QUERY:
@@ -282,8 +292,10 @@ def _render_brief(session_info: dict[str, str]) -> str:
     """会话级简报节（register_system_prompt_section 渲染回调）。
 
     指纹未变零 spawn 重放；compact 重建时 hermes 重新调 render，从缓存返回
-    而非空串——否则重建后的提示词会丢简报。disabled/empty 的空 content 同样
-    入缓存（避免每轮 render 反复 spawn），KB 指纹变化时自然失效。
+    而非空串——否则重建后的提示词会丢简报。空 content（disabled/empty）刻意
+    不入缓存（对齐 lib.sh 注入器策略）：开关从 disabled 转开后立即生效，不必
+    等指纹变化；代价是 disabled 期间每次 render 都 spawn 一次 CLI——hermes 的
+    render 只发生在会话建立与 compact 重建，频率可接受。
     """
     if session_info.get("platform") in _SKIP_PLATFORMS:
         return ""
@@ -293,6 +305,8 @@ def _render_brief(session_info: dict[str, str]) -> str:
     if _BRIEF_CACHE.get("fp") == fp:
         return _BRIEF_CACHE.get("content", "")
     content = _context_content("session", _BRIEF_BUDGET)
+    if not content:
+        return ""  # 空不入缓存：开关 disabled→enabled 即时生效（P2-4，同 lib.sh）
     _BRIEF_CACHE["fp"] = fp
     _BRIEF_CACHE["content"] = content
     return content
@@ -389,12 +403,36 @@ def _handle_health(raw_args: str) -> str:
     return _run_agenote("health", timeout=30)
 
 
-def _handle_curate(raw_args: str) -> str:
-    # 重操作，给 120s，与 pi-agenote 对齐
-    out = _run_agenote("curate", timeout=120)
-    # curate 后追加 health 摘要便于确认
-    health = _run_agenote("health", timeout=15)
-    return f"{out}\n\n---\n{health}"
+def _build_curate_prompt(reason: str) -> str:
+    """策展任务提示（对齐 pi f8ccec3：CLI 无 `curate` 子命令——原实现调
+    `agenote curate` 必然 invalid choice 返回失败；策展流程由 agent 按
+    agenote-curator skill 主导，编排原子命令并逐项审查）。"""
+    return "\n".join(
+        [
+            f"<agenote-hook>{reason}，请按 agenote-curator skill 流程对知识库执行策展：",
+            "（CLI 只提供检测报告与原子命令，流程编排与去留决策由你执行；先看候选清单，核实后再写盘）",
+            "1. 诊断：agenote health --quality --duplicates / stats / gaps",
+            "2. 状态重整：list --unused-days 找降级候选、archive --stale 找归档候选，逐项审查后显式 update/archive",
+            "3. 去重合并 / type 聚拢 / 矛盾调和 / memory 维护（规则见 skill）",
+            "4. 可选：reconcile + dream 综合（值得沉淀的候选用 agenote add 写入）",
+            "5. 收尾：reindex + lint --fix + agenote commit（策展产物），输出策展报告</agenote-hook>",
+        ]
+    )
+
+
+def _make_curate_handler(ctx: Any):
+    def handler(raw_args: str) -> str:
+        prompt = _build_curate_prompt("用户手动触发策展")
+        injected = False
+        try:
+            injected = bool(ctx.inject_message(prompt))
+        except Exception:
+            injected = False
+        if injected:
+            return "已注入 agenote-curator 策展任务提示到下一轮对话。"
+        return prompt
+
+    return handler
 
 
 def register(ctx: Any) -> None:
@@ -418,7 +456,7 @@ def register(ctx: Any) -> None:
     )
     ctx.register_command(
         "agenote-curate",
-        _handle_curate,
-        description="执行 agenote 策展（健康+去重+归档+权重重分配）",
+        _make_curate_handler(ctx),
+        description="在当前会话触发 KB 策展（agent 按 agenote-curator skill 执行）",
         args_hint="",
     )
