@@ -129,6 +129,17 @@ metadata:
 - **复用**：`code-reviewer` skill 的**格式**（四维审查 / severity / PASS-FAIL 门控），但**改 framing**
 - **复用**：`worker-handoff` 的 handoff 模板（从哪里读完成声明）
 
+## 产物基线门控（防止异步 reviewer 审旧快照）
+
+长任务中 reviewer 可能在主会话修订报告或代码后才返回。finding 绑定的是**它实际读取的产物版本**，不是名字相同的当前文件。
+
+1. 派发 reviewer 时给出目标路径，并要求记录 `sha256`、行数、bytes（代码则给 commit + dirty diff hash）。
+2. reviewer 返回时先比较其基线与当前产物；不一致则只把 finding 当线索，重新读取当前版本并重新定位。
+3. 主会话任何写入都会使既有 reviewer 结论失效。修订后若还需要独立审查，派发新 reviewer 或明确要求其重读新基线。
+4. 最终汇报只引用与当前 artifact hash 对齐的 reviewer 结论；旧行号、旧措辞和旧统计不得直接写回。
+
+这套门控只防止证据版本漂移，不替代对 finding 的源码实证。
+
 ## 独立性硬约束（防"独立 reviewer 是同 blind spot 的另一个 reviewer"）
 
 ### 当前 hermes delegate_task 的限制
