@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# hermes 插件运行时字节码（装载点与源目录都可能生成）
+__pycache__/
+*.pyc

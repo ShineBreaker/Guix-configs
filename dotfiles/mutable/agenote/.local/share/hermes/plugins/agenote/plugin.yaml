@@ -1,0 +1,10 @@
+name: agenote
+version: 0.2.0
+description: "agenote 集成：记忆注入（会话简报节 + 每回合 recall，追加型三件套）+ 任务完成检测 + /agenote-* 斜杠命令。"
+author: BrokenShine
+provides_hooks:
+  - pre_llm_call
+provides_commands:
+  - agenote-summarize
+  - agenote-curate
+  - agenote-health
