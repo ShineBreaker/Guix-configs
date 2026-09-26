@@ -13,7 +13,7 @@ Gating: deletion test ("concentrates vs moves"), "two adapters = real seam", YAG
 ## Per-Candidate Recipe
 
 - **Read flow end-to-end** (trace imports/usages, git hotspots via `git log --oneline`), then climb ponytail ladder.
-- **One candidate per commit** — `git add -- <exact paths>` + `git diff --cached --name-only` check + Conventional Commits + `Generated with Crush` footer; `--no-gpg-sign` fallback.
+- **One candidate per commit** — `git add -- <exact paths>` + `git diff --cached --name-only` check + Conventional Commits + `Co-authored-by: <agent> (<model>) <noreply@…>` trailer naming the actual agent/model; `--no-gpg-sign` fallback.
 - **Verify `tsc ×5 / eslint / prettier` all green** before commit (use `node node_modules/.../tsc.js` etc — direct bin blocked by gateway).
 - **One minimal runnable check** per non-trivial branch: e.g. `tests/slide-window.test.ts` 8 cases (sentinel / window open/close / `slideFinalJudgment` linkage) for `tryJudgeSegmentWindow` (7 position params, Sonolus compiler constraint).
 

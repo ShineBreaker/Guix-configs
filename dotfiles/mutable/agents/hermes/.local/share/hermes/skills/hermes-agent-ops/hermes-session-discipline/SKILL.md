@@ -21,7 +21,7 @@ Class-level discipline for sessions where the user expects batched grilling and 
 
 1. Before any commit: `git status --short` + `git diff --stat` to confirm which hunks are complete.
 2. Stage only completed paths: `git add -- <exact paths>` then verify `git diff --cached --name-only` and `git diff --cached --stat`.
-3. Message format: `<type>[optional scope]: <description>` — imperative, lowercase, no period. Body explains what/why not how. Use `~/.config/git/gitmessage` template. `Generated with Crush` footer when applicable.
+3. Message format: `<type>[optional scope]: <description>` — imperative, lowercase, no period. Body explains what/why not how. Use `~/.config/git/gitmessage` template. AI-assisted commits carry a `Co-authored-by: <agent> (<model>) <noreply@…>` trailer naming the **actual** agent and model — never another agent's name (e.g. a Hermes session must not write `Generated with Crush`; Crush is a different agent on this host).
 4. Commit incrementally per candidate/step — one commit per deepening, not one mega-commit. Push immediately when user expects it (`--no-gpg-sign` fallback).
 
 ## Gateway Harness Workarounds

@@ -43,4 +43,4 @@ git diff --cached --name-only   # after git add -- <exact paths>
 
 Template at `~/.config/git/gitmessage` — Conventional Commits:
 `<type>[optional scope]: <description>` — imperative, lowercase, no period.
-Body explains what/why not how. Footer: `BREAKING CHANGE:` or `Refs #123` or `Generated with Crush`.
+Body explains what/why not how. Footer: `BREAKING CHANGE:` or `Refs #123` or a `Co-authored-by: <agent> (<model>) <noreply@…>` trailer naming the **actual** agent and model — never another agent's name.

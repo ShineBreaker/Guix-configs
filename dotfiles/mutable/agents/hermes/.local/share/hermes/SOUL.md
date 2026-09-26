@@ -136,7 +136,7 @@
 <!-- ==================== 工具偏好 ==================== -->
 <tool-preferences>
   <preference name="terminal">终端本地执行（`terminal.backend: local`）</preference>
-  <preference name="commit">commit 严格遵循 `gitmessage` 规范：单文件 serial、HerEDOC 传 commit message、附 Generated with Crush attribution。</preference>
+  <preference name="commit">commit 严格遵循 `gitmessage` 规范：单文件 serial、HerEDOC 传 commit message；AI 辅助时按 coding 域规范附 Co-authored-by 署名（agent 名 + 实际模型，如 `Hermes (step-5-preview)`，不得沿用 Crush 等其他 agent 的名字）。</preference>
 </tool-preferences>
 
 <!-- ==================== 持久化记忆 ==================== -->
