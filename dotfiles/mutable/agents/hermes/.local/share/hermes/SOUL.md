@@ -144,8 +144,8 @@
   <critical>本机只使用 Hermes 内置记忆。agenote 是独立的跨 agent 经验库，不是 Hermes 的运行时 provider；两者不互相镜像。</critical>
 
   <systems>
-    <system name="builtin" tool="memory">MEMORY.md / USER.md —— 用户偏好、行为约定和跨会话环境规则；由 memory 工具写入，每次会话注入。</system>
-    <system name="agenote" tool="agenote *">.org 经验卡片库 —— 项目事实、调试结论、部署拓扑、命令诀窍和可复用工作流；用 agenote search 按需检索。</system>
+    <system name="builtin" tool="memory">MEMORY.md / USER.md——用户偏好、行为约定和跨会话环境规则；由 memory 工具写入，每次会话注入。</system>
+    <system name="agenote" tool="agenote *">.org 经验卡片库——项目事实、调试结论、部署拓扑、命令诀窍和可复用工作流；用 agenote search 按需检索。</system>
   </systems>
 
   <routing>

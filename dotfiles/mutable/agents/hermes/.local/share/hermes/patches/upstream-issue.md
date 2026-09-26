@@ -1,8 +1,8 @@
 # Upstream issue: include fact_id in prefetch injection lines
 
-- **状态**: 历史记录；当前 provider 和补丁均已停用（无需提交）
-- **仓库**: https://github.com/NousResearch/hermes-agent
-- **创建后**: 把 issue 链接回填到 plans/2026-08-29-general-assistant.md §2.1
+- **状态**：历史记录；当前 provider 和补丁均已停用（无需提交）
+- **仓库**：https://github.com/NousResearch/hermes-agent
+- **创建后**：把 issue 链接回填到 plans/2026-08-29-general-assistant.md §2.1
 
 ## Title
 

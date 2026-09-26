@@ -9,7 +9,7 @@ hermes cron notepad FETCH_JOB_ID get last_image
 hermes cron notepad FETCH_JOB_ID get last_date
 ```
 
-2. 校验：图片路径非空，且文件真实存在、大小合理（`ls -l` 看字节数，小于 10KB 视为渲染失败）。
+2. 校验：图片路径非空，且文件真实存在、大小合理（`ls -l` 看字节数，小于 10 KB 视为渲染失败）。
 
 3. 校验通过就把图片作为最终回复发出，格式严格为一行：
 
