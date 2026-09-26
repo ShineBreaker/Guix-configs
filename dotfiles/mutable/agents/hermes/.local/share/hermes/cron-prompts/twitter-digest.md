@@ -4,10 +4,11 @@
 
 - 状态目录：`$HOME/.local/share/hermes/state/twitter-digest`
 - 脚本目录：`$HOME/.local/share/hermes/scripts/twitter-digest`
-  1. `twitter_fetch.py`   抓取推文（fetch / sync-following 两个子命令）
+  1. `twitter_fetch.py`   抓取推文（feed / explore 子命令，见下）
   2. `jev_score.py`       jev 价值判定（score 子命令）
   3. `digest_build.py`    组装 markdown 日报（build 子命令）
-  4. `twitter_batch.sh`   cron 专用的分批抓取包装
+  4. `digest_render.py`   渲染长图（md 子命令）
+  5. `test_feed_parse.py` 解析逻辑自检（改了解析代码就跑一次）
 - 登录凭据：age 密文在 Guix-configs 仓库，**每次运行前必须解密**（tmpfs 重启即消）
 - jev 密钥：`TYPESAFE_API_KEY`，在 `$HERMES_HOME/.env`
 
@@ -22,15 +23,28 @@ set -a; . "$HERMES_HOME/.env"; set +a   # 载入 TYPESAFE_API_KEY
 
 解密失败就明确报告"凭据缺失，跳过本次"，不要用 guest 模式糊盖（guest 拿不到最新推文，日报会是空的）。
 
-### 第 1 步：抓取推文
+### 第 1 步：抓取推文（三个源，依次跑）
 
 ```bash
-bash "$HOME/.local/share/hermes/scripts/twitter-digest/twitter_batch.sh"
+python3 "$HOME/.local/share/hermes/scripts/twitter-digest/twitter_fetch.py" feed \
+  --state-dir "$HOME/.local/share/hermes/state/twitter-digest" --source following --count 100
+python3 "$HOME/.local/share/hermes/scripts/twitter-digest/twitter_fetch.py" feed \
+  --state-dir "$HOME/.local/share/hermes/state/twitter-digest" --source for-you --count 40
+python3 "$HOME/.local/share/hermes/scripts/twitter-digest/twitter_fetch.py" explore \
+  --state-dir "$HOME/.local/share/hermes/state/twitter-digest"
 ```
 
-该脚本每次只抓一批账号（默认 25 个），靠 `progress.json` 跨次续跑；一轮抓完自动清断点。
-**单次运行只跑这一个批次**，不要试图自己循环把 224 个账号一次抓完。cron 有 3 分钟硬上限，且 X 侧限流不可预测。
-如果输出 `SKIP` 或 `一轮已抓完`，如实说明。
+三个源各一次调用，总共约 1 分钟：
+
+- `following`：关注账号的最新时间线，一次拿全。比原先逐账号分批抓更完整（224 个账号
+  分批跑 9 天才一轮，实测每天只覆盖 11 到 14 个账号；这条时间线一次就覆盖全部活跃账号）。
+- `for-you`：X 的个性化推荐流，**含关注列表之外的账号**。这是扩充内容的主要来源，
+  实测 48 条抓取中 34 条来自非关注账号。
+- `explore`：探索页的趋势、AI 生成的 Today's News 标题、高热推文。趋势单独存
+  `trends/YYYY-MM-DD.json`，不是推文、喂不进 jev，只作要闻的线索参考。
+
+三个源共享 `seen_ids.json` 去重，重复跑不会产生重复条目。任一源失败就在日报末尾附一行
+说明哪个源失败、失败原因（放在正文之后，不干扰阅读），其余源照常处理。
 
 ### 第 2 步：jev 价值判定（仅当第 1 步产出了新推文）
 
@@ -46,7 +60,7 @@ python3 "$HOME/.local/share/hermes/scripts/twitter-digest/jev_score.py" score \
 
 ```bash
 python3 "$HOME/.local/share/hermes/scripts/twitter-digest/digest_build.py" build \
-  --state-dir "$HOME/.local/share/hermes/state/twitter-digest" --top 40
+  --state-dir "$HOME/.local/share/hermes/state/twitter-digest" --top 60
 ```
 
 第 3 步的 stdout 是**原始素材**（英文原文 + 互动数 + 图片索引），不是最终交付物。你要基于它加工成中文日报，渲染成一张长图，再把图片作为最终回复输出。
@@ -95,7 +109,7 @@ mkdir -p /tmp/digest-render
 python3 "$HOME/.local/share/hermes/scripts/twitter-digest/digest_render.py" md \
   /tmp/digest-render/daily.md --variant D --title 日报 \
   --state-dir "$HOME/.local/share/hermes/state/twitter-digest" \
-  --date "$(date +%F)" --top 40
+  --date "$(date +%F)" --top 60
 ```
 
 命令的 stdout 是成品 PNG 的绝对路径（形如 `/tmp/digest-render/digest-md-D.png 1080xNNNN`）。**把这个路径作为最终回复发出**，格式严格为：
@@ -122,6 +136,8 @@ hermes cron notepad <JOB_ID> set last_date "$(date +%F)"
 3. **不要自行调整阈值**（is_news 0.5 / is_release 0.5 / worth 0.3 / signal 1.0）。要改先在回复里提出，由用户拍板。
 4. **不要碰 cookies.json 裸文件**，凭据一律走 `secrets decrypt`。
 5. **不要跑 sync-following**（关注列表每周由单独任务同步，本任务只抓推文）。
-6. 时间不够时优先保证第 1 步与第 3 步：抓到多少算多少，日报如实反映实际数据。宁可少几条，不许为凑数注水。
-7. **最终回复就是那一行 `MEDIA:<路径>`**，不要加"以下是今日日报"之类的前缀，不要汇报执行过程，不要附调试信息。执行过程只在出问题时另起一条文字消息说明。投递机制会把你的最后一条回复原样送到手机，多一个字都是噪音。
-8. **渲染失败就退回纯文字**：如果第 4 步报错，把第 3 步的 markdown 原文作为最终回复输出，不要交白卷。
+6. **不要跑 `fetch` 子命令**（逐账号分批抓取已被 `feed --source following` 取代：
+   224 个账号分批跑 9 天才一轮，实测每天只覆盖 11 到 14 个账号）。
+7. 时间不够时优先保证第 1 步与第 3 步：抓到多少算多少，日报如实反映实际数据。宁可少几条，不许为凑数注水。
+8. **最终回复就是那一行 `MEDIA:<路径>`**，不要加"以下是今日日报"之类的前缀，不要汇报执行过程，不要附调试信息。执行过程只在出问题时另起一条文字消息说明。投递机制会把你的最后一条回复原样送到手机，多一个字都是噪音。
+9. **渲染失败就退回纯文字**：如果第 4 步报错，把第 3 步的 markdown 原文作为最终回复输出，不要交白卷。

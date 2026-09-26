@@ -9,7 +9,6 @@ Following 在 guest 态均 404），故由脚本顶部 FOLLOWING 常量手动维
 `sync-following` 子命令把它导出成 JSON 供人核对。
 
 用法:
-    twitter_fetch.py fetch --state-dir DIR [--handles a,b] [--since-days 2] [--count 40]
     twitter_fetch.py feed --state-dir DIR [--source for-you|following] [--count 40]
     twitter_fetch.py explore --state-dir DIR
     twitter_fetch.py sync-following --state-dir DIR
@@ -22,15 +21,18 @@ Following 在 guest 态均 404），故由脚本顶部 FOLLOWING 常量手动维
     <state>/errors/YYYY-MM-DD.log 抓取失败明细（stdout 只有汇总）
 
 信息源:
-    fetch    逐个关注账号的时间线（224 账号分批跑，慢但可断点续跑）
     feed     HomeTimeline 一次拿整条时间线：for-you 是个性化推荐流
              （含非关注账号，X 的算法决定你能看到什么），following 是关注
              账号的最新推文。快但只有一页，不能续跑。
     explore  探索页：趋势 + AI 生成的 Today's News + 高热推文。
              趋势本身不是推文，单独存 trends/，喂不进 jev。
 
-登录态必需的只有 feed / explore / sync-following；fetch 在 guest 态只能
-拿到账号「精选/pinned」面板（高赞老帖），日报必须走登录态。
+原先的逐账号 `fetch` 子命令（224 账号 × 2s 间隔 + progress.json 断点续跑）
+已删除：实测分批跑 9 天才覆盖一轮，每天只覆盖 11 到 14 个账号，而
+`feed --source following` 一次调用就拿到全部活跃账号的最新推文。
+
+除 sync-following 外都**必须登录态**：先 `secrets decrypt twitter-x`。
+guest 态只能拿到账号「精选/pinned」面板（高赞老帖），日报必须走登录态。
 """
 from __future__ import annotations
 
@@ -54,15 +56,15 @@ API = "https://api.twitter.com"
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
 
-# 手动维护的关注清单（screen_name，不带 @）
+# 手动维护的关注清单（screen_name，不带 @）。仅 sync-following 的兜底说明用，
+# 抓推文已改用 feed 子命令的 HomeTimeline，不再遍历此清单。
 FOLLOWING = [
     "naval",
     "karpathy",
 ]
 
 QID_USER_BY_SCREEN_NAME = "4S2ihIKfF3xhp-ENxvUAfQ"
-QID_USER_TWEETS = "jeAA-59Y9FL7FmjgBNIVPw"      # 2026-09-22 从登录态 bundle 抓取
-QID_FOLLOWING = "-Mn4uN7C-vxXBwUKtSwS6A"        # 同上
+QID_FOLLOWING = "-Mn4uN7C-vxXBwUKtSwS6A"        # sync-following 用
 QID_HOME_TIMELINE = "og4a4SdSF3WiQkkwaPCdPg"    # For You 个性化推荐流（含非关注账号）
 QID_HOME_LATEST = "OQPHTgwczzp9RMAPt6BH9A"      # Following 时间线（关注账号，一次拿全）
 QID_EXPLORE_PAGE = "7JBlImZfRkZIptknshoqCA"     # 探索页：趋势 + Today's News + 高热推文
@@ -407,34 +409,6 @@ class GuestClient:
             "url": f"https://x.com/{handle}/status/{tid}",
         }
 
-    def user_tweets(self, screen_name: str, count: int = 40) -> list[dict]:
-        uid = self.rest_id(screen_name)
-        q = urllib.parse.urlencode({
-            "variables": json.dumps({
-                "userId": uid, "count": count,
-                "includePromotedContent": False,
-                "withQuickPromoteEligibilityTweetFields": True,
-                "withVoice": True}, separators=(",", ":")),
-            "features": json.dumps(FEATURES),
-            "fieldToggles": json.dumps({"withArticlePlainText": False}),
-        })
-        d = self.get(f"{API}/graphql/{QID_USER_TWEETS}/UserTweets?{q}")
-        result = _user_result(d, screen_name)
-        timeline = result.get("timeline") or {}
-        out: list[dict] = []
-        for ins in timeline.get("timeline", {}).get("instructions", []):
-            if ins.get("type") != "TimelineAddEntries":
-                continue
-            for entry in ins.get("entries", []):
-                item = entry.get("content", {}).get("itemContent") or {}
-                if item.get("__typename") != "TimelineTweet":
-                    continue
-                t = self._tweet_from_result(
-                    item.get("tweet_results", {}).get("result", {}), screen_name)
-                if t:
-                    out.append(t)
-        return out
-
 
 class LoggedInClient(GuestClient):
     """登录态客户端：用浏览器导出的 auth_token + ct0 cookie 打同一套 GraphQL。
@@ -550,19 +524,6 @@ def parse_created_at(s: str | None) -> datetime | None:
 SELF_HANDLE = "breaker_shine"
 
 
-def load_following(state: Path) -> list[str]:
-    """读 following.json；文件不存在时退回脚本顶部 FOLLOWING 常量。
-
-    mute 过滤不在这里做，见 cmd_fetch 里的唯一入口。
-    """
-    f = state / "following.json"
-    if f.exists():
-        names = [h.strip().lstrip("@") for h in json.loads(f.read_text()) if h.strip()]
-        if names:
-            return names
-    return list(FOLLOWING)
-
-
 def cookie_available(state: Path) -> bool:
     """secrets 解密产物或裸 cookie 文件任一存在即可。"""
     secrets_plain = Path(os.environ.get("XDG_RUNTIME_DIR", "/run/user/1000")) \
@@ -599,120 +560,6 @@ def _persist(state: Path, collected: list[dict], seen: set[str]) -> int:
         by_id.setdefault(t["id"], t)
     new_path.write_text(json.dumps(list(by_id.values()), ensure_ascii=False, indent=2))
     return len(fresh)
-
-
-def cmd_fetch(args) -> int:
-    state = Path(args.state_dir)
-    for sub in ("raw", "new", "errors"):
-        (state / sub).mkdir(parents=True, exist_ok=True)
-
-    seen_path = state / "seen_ids.json"
-    seen: set[str] = set(json.loads(seen_path.read_text())) if seen_path.exists() else set()
-
-    handles = ([h.strip().lstrip("@") for h in args.handles.split(",") if h.strip()]
-               if args.handles else load_following(state))
-    # mute 在唯一入口统一生效：--handles 显式传入也拦得住
-    muted = [h for h in handles if h.lower() in MUTED_HANDLES]
-    if muted:
-        handles = [h for h in handles if h.lower() not in MUTED_HANDLES]
-        print(f"[mute] 跳过 {len(muted)} 个账号: {', '.join(muted)}")
-    if not handles:
-        print("[error] 关注清单为空：先跑 sync-following 或用 --handles 指定",
-              file=sys.stderr)
-        return 1
-
-    cutoff = datetime.now(timezone.utc) - timedelta(days=args.since_days)
-    resumed = 0
-
-    # 增量抓取：只碰 last_seen_handle 之后的账号，让限流中断后能从断点续跑
-    progress = state / "progress.json"
-    done: list[str] = []
-    if args.resume and progress.exists():
-        done = json.loads(progress.read_text()).get("done", [])
-        if done:
-            handles = [h for h in handles if h not in set(done)]
-            resumed = len(done)
-            print(f"[resume] 跳过已完成 {resumed} 个账号，剩 {len(handles)}")
-    if not handles:
-        print("所有账号均已抓取过（--resume）")
-        return 0
-
-    # 有 cookie 走登录态（真实时间线 + 关注列表），否则退回 guest（仅精选面板）
-    cookie_file = Path(args.state_dir) / "cookies.json"
-    if args.logged_in and cookie_available(state):
-        client: GuestClient = LoggedInClient(Path(args.state_dir) / "cookies.json")
-        mode = "logged-in"
-    else:
-        client = GuestClient()
-        mode = "guest(仅精选面板，缺最新推文)" if args.logged_in else "guest"
-    if args.logged_in and mode.startswith("guest"):
-        print("[warn] --logged-in 已请求但缺少有效 cookies.json，退回 guest 模式",
-              file=sys.stderr)
-
-    collected: list[dict] = []
-    err_path = state / "errors" / f"{datetime.now(timezone.utc).astimezone().strftime('%Y-%m-%d')}.log"
-
-    def log_error(msg: str) -> None:
-        """即时追加落盘：进程若在写盘前被杀，失败记录不随之消失。
-        限流静默丢账号会让日报'正常地'缺内容，且无迹可查。"""
-        stamp = datetime.now(timezone.utc).astimezone().strftime("%H:%M:%S")
-        with err_path.open("a") as f:
-            f.write(f"{stamp} {msg}\n")
-
-    def save_progress(names: list[str]) -> None:
-        if args.resume:
-            progress.write_text(json.dumps({"done": names}, ensure_ascii=False))
-
-    for handle in handles:
-        try:
-            tweets = client.user_tweets(handle, count=args.count)
-        except XRateLimited as e:
-            # 限流：睡到 X 给的重置时刻，再重试同一账号一次
-            wait = (e.reset_at - time.time() + 5) if e.reset_at else 120
-            if wait <= 0 or wait > args.max_wait:
-                log_error(f"{handle}: 限流且重置时间超限 ({wait:.0f}s)")
-                print(f"[warn] {handle}: 限流，等待 {wait:.0f}s 超过上限，跳过",
-                      file=sys.stderr)
-                done.append(handle)
-                save_progress(done)
-                continue
-            print(f"[ratelimit] 睡 {wait:.0f}s 后重试 {handle}", file=sys.stderr)
-            time.sleep(wait)
-            try:
-                tweets = client.user_tweets(handle, count=args.count)
-            except XError as e2:
-                log_error(f"{handle}: {e2}")
-                print(f"[warn] {handle}: {e2}", file=sys.stderr)
-                done.append(handle)
-                save_progress(done)
-                continue
-        except XError as e:
-            log_error(f"{handle}: {e}")
-            print(f"[warn] {handle}: {e}", file=sys.stderr)
-            done.append(handle)
-            save_progress(done)
-            continue
-        for t in tweets:
-            dt = parse_created_at(t["created_at"])
-            if dt is None or dt < cutoff:
-                continue
-            t["fetched_at"] = datetime.now(timezone.utc).isoformat()
-            collected.append(t)
-        done.append(handle)
-        save_progress(done)
-        time.sleep(args.interval)  # 账号间隔，224 个 × 2s ≈ 7.5 分钟
-
-    # ponytail: 抓完即清断点；中断时保留，靠 --resume 续跑
-    if args.resume and progress.exists() and len(done) == resumed + len(handles):
-        progress.unlink()
-
-    n_fresh = _persist(state, collected, seen)
-
-    n_err = len(err_path.read_text().splitlines()) if err_path.exists() else 0
-    print(f"mode={mode} handles={len(handles)} fetched={len(collected)} "
-          f"new={n_fresh} errlog_lines={n_err} state={state}")
-    # 抓取阶段恒为 0：单账号失败不等于任务失败，缺数据由日报阶段呈现
-    return 0
 
 
 def _logged_in_client(state: Path) -> LoggedInClient:
@@ -847,23 +694,6 @@ def main(argv=None) -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
-
-    f = sub.add_parser("fetch", help="抓取关注账号的时间窗内新推文")
-    f.add_argument("--state-dir", required=True)
-    f.add_argument("--handles", default="",
-                   help="逗号分隔 handle；缺省用脚本顶部 FOLLOWING")
-    f.add_argument("--since-days", type=int, default=2,
-                   help="只保留最近 N 天的推文（默认 2，容忍一次漏跑）")
-    f.add_argument("--count", type=int, default=40, help="每账号最多抓取条数")
-    f.add_argument("--logged-in", action="store_true",
-                   help="有 cookies.json 时走登录态（真实时间线）；缺省 guest")
-    f.add_argument("--resume", action="store_true",
-                   help="断点续跑：跳过 progress.json 里已抓完的账号")
-    f.add_argument("--interval", type=float, default=2.0,
-                   help="账号间隔秒数，默认 2（224 账号约 7.5 分钟）")
-    f.add_argument("--max-wait", type=float, default=960.0,
-                   help="单次限流最长等待秒数，超过则跳过该账号，默认 960")
-    f.set_defaults(func=cmd_fetch)
 
     s = sub.add_parser("sync-following", help="导出当前关注清单 JSON")
     s.add_argument("--state-dir", required=True)
