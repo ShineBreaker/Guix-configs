@@ -108,4 +108,5 @@ description: Use when scraping sites/SPA APIs/archives（抓取/爬取/存档）
 
 - `references/tripadvisor-archive.md` — Wayback 存档抓评论的完整配方（时间点导航 + 双锚点解析）
 - `references/spa-api-discovery.md` — 政府开放数据平台 SPA 的端点逆向实例
+- `references/webpack-chunk-manifest.md` — webpack chunk manifest 型 SPA 的端点逆向（双表定位 manifest、`a.js` 后缀坑、`.e()` 爬 chunk 依赖、qid 失效判定）
 - `references/geodata-apis.md` — Wikidata / OSM（Overpass・Nominatim）/ 旅游平台 POI 页的地理字段取数配方与限流礼仪

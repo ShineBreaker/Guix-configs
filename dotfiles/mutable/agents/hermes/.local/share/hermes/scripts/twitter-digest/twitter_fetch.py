@@ -10,13 +10,27 @@ Following 在 guest 态均 404），故由脚本顶部 FOLLOWING 常量手动维
 
 用法:
     twitter_fetch.py fetch --state-dir DIR [--handles a,b] [--since-days 2] [--count 40]
+    twitter_fetch.py feed --state-dir DIR [--source for-you|following] [--count 40]
+    twitter_fetch.py explore --state-dir DIR
     twitter_fetch.py sync-following --state-dir DIR
 
 产出:
     <state>/raw/YYYY-MM-DD.json   当日抓到的原始推文（时间窗内全量）
     <state>/seen_ids.json         已处理推文 id 集合（跨日去重，保留最近 2 万条）
     <state>/new/YYYY-MM-DD.json   去重后的新推文 —— 喂给 jev 的输入
+    <state>/trends/YYYY-MM-DD.json  探索页趋势与 Today's News 标题（explore）
     <state>/errors/YYYY-MM-DD.log 抓取失败明细（stdout 只有汇总）
+
+信息源:
+    fetch    逐个关注账号的时间线（224 账号分批跑，慢但可断点续跑）
+    feed     HomeTimeline 一次拿整条时间线：for-you 是个性化推荐流
+             （含非关注账号，X 的算法决定你能看到什么），following 是关注
+             账号的最新推文。快但只有一页，不能续跑。
+    explore  探索页：趋势 + AI 生成的 Today's News + 高热推文。
+             趋势本身不是推文，单独存 trends/，喂不进 jev。
+
+登录态必需的只有 feed / explore / sync-following；fetch 在 guest 态只能
+拿到账号「精选/pinned」面板（高赞老帖），日报必须走登录态。
 """
 from __future__ import annotations
 
@@ -49,6 +63,15 @@ FOLLOWING = [
 QID_USER_BY_SCREEN_NAME = "4S2ihIKfF3xhp-ENxvUAfQ"
 QID_USER_TWEETS = "jeAA-59Y9FL7FmjgBNIVPw"      # 2026-09-22 从登录态 bundle 抓取
 QID_FOLLOWING = "-Mn4uN7C-vxXBwUKtSwS6A"        # 同上
+QID_HOME_TIMELINE = "og4a4SdSF3WiQkkwaPCdPg"    # For You 个性化推荐流（含非关注账号）
+QID_HOME_LATEST = "OQPHTgwczzp9RMAPt6BH9A"      # Following 时间线（关注账号，一次拿全）
+QID_EXPLORE_PAGE = "7JBlImZfRkZIptknshoqCA"     # 探索页：趋势 + Today's News + 高热推文
+
+# queryId 随 X 前端发布滚动失效，失效时报 404 且 body 为空。
+# 更新办法：浏览器登录 x.com 抓 /home 的 HTML，从内联 webpack manifest 里
+# 找 "id":"bundle.HomeTimeline" 这类条目 → 下载对应 chunk 搜 operationName。
+# 参考 2026-09-26 实测：sha 取 __META_DATA__.sha，URL 形如
+#   https://abs.twimg.com/responsive-web/client-web/<name>.<hash>a.js
 
 # 整户排除的账号。判据是"批量产出同质低质内容"，不是主题不合口味：
 # Polymarket 用 "JUST IN:" 前缀刷政治社会快讯，2026-09-23 实测 217 条里
@@ -217,6 +240,173 @@ class GuestClient:
         user = _user_result(d, screen_name)
         return base64.b64decode(user["id"]).decode().rsplit(":", 1)[-1]
 
+    def _timeline_tweets(self, d: dict, what: str) -> list[dict]:
+        """从时间线响应里抽推文。
+
+        HomeTimeline / HomeLatestTimeline 的结构是
+        data.home.home_timeline_urt.instructions[].entries[]，
+        entryId 前缀即类型：tweet- 是推文、promoted- 是广告、
+        home-conversation- / who-to-follow- 是模块（模块内也嵌 tweet item，
+        与顶层不重复，一并收下）。
+        """
+        out: list[dict] = []
+        instructions = (d.get("data", {}).get("home", {})
+                        .get("home_timeline_urt", {})
+                        .get("instructions", []))
+        for ins in instructions:
+            if ins.get("type") != "TimelineAddEntries":
+                continue
+            for entry in ins.get("entries", []):
+                content = entry.get("content") or {}
+                # 广告也是 TimelineTweet，只能靠 entryId 前缀挡
+                if entry.get("entryId", "").startswith("promoted"):
+                    continue
+                items = [entry]
+                if content.get("__typename") == "TimelineTimelineModule":
+                    items = content.get("items") or []
+                for item in items:
+                    ic = content.get("itemContent") if item is entry \
+                        else (item.get("item") or {}).get("itemContent")
+                    if (ic or {}).get("__typename") != "TimelineTweet":
+                        continue
+                    t = self._tweet_from_result(
+                        ((ic or {}).get("tweet_results") or {}).get("result", {}))
+                    if t:
+                        out.append(t)
+        return out
+
+    def home_timeline(self, count: int = 40) -> list[dict]:
+        """For You 个性化推荐流（含非关注账号）。"""
+        q = urllib.parse.urlencode({
+            "variables": json.dumps({
+                "count": count, "includePromotedContent": False,
+                "withQuickPromoteEligibilityTweetFields": True,
+            }, separators=(",", ":")),
+            "features": json.dumps(FEATURES),
+        })
+        d = self.get(f"{API}/graphql/{QID_HOME_TIMELINE}/HomeTimeline?{q}")
+        return self._timeline_tweets(d, "HomeTimeline")
+
+    def home_latest(self, count: int = 40) -> list[dict]:
+        """Following 时间线：关注账号的最新推文，一次调用拿全。"""
+        q = urllib.parse.urlencode({
+            "variables": json.dumps({
+                "count": count, "includePromotedContent": False,
+                "withQuickPromoteEligibilityTweetFields": True,
+            }, separators=(",", ":")),
+            "features": json.dumps(FEATURES),
+        })
+        d = self.get(f"{API}/graphql/{QID_HOME_LATEST}/HomeLatestTimeline?{q}")
+        return self._timeline_tweets(d, "HomeLatestTimeline")
+
+    def explore_page(self) -> dict:
+        """探索页：趋势 + Today's News + 高热推文。
+
+        返回 {"trends": [...], "news": [...], "tweets": [...]}。
+        """
+        q = urllib.parse.urlencode({
+            "variables": json.dumps({}, separators=(",", ":")),
+            "features": json.dumps(FEATURES),
+        })
+        d = self.get(f"{API}/graphql/{QID_EXPLORE_PAGE}/ExplorePage?{q}")
+        entries = (d.get("data", {}).get("explore_page", {})
+                   .get("body", {}).get("initialTimeline", {})
+                   .get("timeline", {}).get("timeline", {})
+                   .get("instructions", []))
+        trends: list[dict] = []
+        news: list[dict] = []
+        tweets: list[dict] = []
+        for ins in entries:
+            if ins.get("type") != "TimelineAddEntries":
+                continue
+            for entry in ins.get("entries", []):
+                content = entry.get("content") or {}
+                eid = entry.get("entryId", "")
+                if eid.startswith("trend-"):
+                    ic = content.get("itemContent") or {}
+                    if ic.get("__typename") != "TimelineTrend":
+                        continue
+                    trends.append({
+                        "name": ic.get("name", ""),
+                        "domain": (ic.get("trend_metadata") or {}).get("domain_context", ""),
+                        "is_ai_trend": bool(ic.get("is_ai_trend")),
+                    })
+                elif eid.startswith("stories-"):
+                    for it in content.get("items") or []:
+                        ic = (it.get("item") or {}).get("itemContent") or {}
+                        if ic.get("__typename") != "TimelineTrend":
+                            continue
+                        news.append({
+                            "name": ic.get("name", ""),
+                            "is_ai_trend": bool(ic.get("is_ai_trend")),
+                        })
+                else:
+                    # 其余 entry 里嵌的推文（高热内容）
+                    def _walk(o):
+                        if isinstance(o, dict):
+                            if o.get("__typename") == "TimelineTweet":
+                                t = self._tweet_from_result(
+                                    (o.get("tweet_results") or {}).get("result", {}))
+                                if t:
+                                    tweets.append(t)
+                            for v in o.values():
+                                _walk(v)
+                        elif isinstance(o, list):
+                            for v in o:
+                                _walk(v)
+                    _walk(content)
+        # 同一推文可能在多个 entry 出现，按 id 去重保序
+        seen: set[str] = set()
+        uniq = []
+        for t in tweets:
+            if t["id"] in seen:
+                continue
+            seen.add(t["id"])
+            uniq.append(t)
+        return {"trends": trends, "news": news, "tweets": uniq}
+
+    def _tweet_from_result(self, res: dict, fallback_handle: str = "") -> dict | None:
+        """GraphQL tweet_results.result → 日报用的扁平结构。
+
+        UserTweets 的时间线里 screen_name 在 user.legacy，而
+        HomeTimeline 的新版结构里在 user.core —— 两处都读，core 优先。
+        """
+        if res.get("__typename") not in ("Tweet", "TweetWithVisibilityResults"):
+            return None
+        leg = res.get("legacy") or {}
+        user = (res.get("core") or {}).get("user_results", {}).get("result") or {}
+        ucore = user.get("core") or {}
+        uleg = user.get("legacy") or {}
+        text = leg.get("full_text") or ""
+        tid = leg.get("id_str") or res.get("rest_id")
+        if not text.strip() or not tid:
+            return None
+        handle = ucore.get("screen_name") or uleg.get("screen_name") or fallback_handle
+        # 浏览量：新版结构里 likes/retweets 之外多一个 views.count
+        views = (res.get("views") or {}).get("count")
+        views_n = int(views) if isinstance(views, str) and views.isdigit() else None
+        return {
+            "id": tid,
+            "handle": handle,
+            "name": ucore.get("name") or uleg.get("name") or handle,
+            "text": text,
+            "created_at": leg.get("created_at"),
+            "lang": leg.get("lang"),
+            "likes": leg.get("favorite_count", 0),
+            "retweets": leg.get("retweet_count", 0),
+            "replies": leg.get("reply_count", 0),
+            "views": views_n,
+            # 媒体：图片日报需要；视频只留封面图，不抓视频流
+            "media": _extract_media(leg),
+            # 登录态 RT：legacy 带 retweeted_status_result 而不带
+            # retweeted_status_id_str；正文前缀仅作最后兜底
+            "is_retweet": ("retweeted_status_result" in leg
+                           or bool(leg.get("retweeted_status_id_str"))
+                           or text.startswith("RT @")),
+            "is_reply": bool(leg.get("in_reply_to_status_id_str")),
+            "url": f"https://x.com/{handle}/status/{tid}",
+        }
+
     def user_tweets(self, screen_name: str, count: int = 40) -> list[dict]:
         uid = self.rest_id(screen_name)
         q = urllib.parse.urlencode({
@@ -239,37 +429,10 @@ class GuestClient:
                 item = entry.get("content", {}).get("itemContent") or {}
                 if item.get("__typename") != "TimelineTweet":
                     continue
-                res = item.get("tweet_results", {}).get("result", {})
-                if res.get("__typename") not in ("Tweet", "TweetWithVisibilityResults"):
-                    continue
-                leg = res.get("legacy", {})
-                user = res.get("core", {}).get("user_results", {}).get("result", {})
-                uleg = user.get("legacy", {})
-                text = leg.get("full_text") or ""
-                tid = leg.get("id_str") or res.get("rest_id")
-                if not text.strip() or not tid:
-                    continue
-                handle = uleg.get("screen_name") or screen_name
-                out.append({
-                    "id": tid,
-                    "handle": handle,
-                    "name": uleg.get("name") or handle,
-                    "text": text,
-                    "created_at": leg.get("created_at"),
-                    "lang": leg.get("lang"),
-                    "likes": leg.get("favorite_count", 0),
-                    "retweets": leg.get("retweet_count", 0),
-                    "replies": leg.get("reply_count", 0),
-                    # 媒体：图片日报需要；视频只留封面图，不抓视频流
-                    "media": _extract_media(leg),
-                    # 登录态 RT：legacy 带 retweeted_status_result 而不带
-                    # retweeted_status_id_str；正文前缀仅作最后兜底
-                    "is_retweet": ("retweeted_status_result" in leg
-                                   or bool(leg.get("retweeted_status_id_str"))
-                                   or text.startswith("RT @")),
-                    "is_reply": bool(leg.get("in_reply_to_status_id_str")),
-                    "url": f"https://x.com/{handle}/status/{tid}",
-                })
+                t = self._tweet_from_result(
+                    item.get("tweet_results", {}).get("result", {}), screen_name)
+                if t:
+                    out.append(t)
         return out
 
 
@@ -407,6 +570,37 @@ def cookie_available(state: Path) -> bool:
     return secrets_plain.exists() or (state / "cookies.json").exists()
 
 
+def _persist(state: Path, collected: list[dict], seen: set[str]) -> int:
+    """把抓到的推文并进 raw/new，跨批去重。返回新增条数。
+
+    跨夜/分批跑必须追加而非覆盖，否则后一批会把前一批的 raw/new 冲掉。
+    同一 (id) 只保留首次出现的那份。
+    """
+    seen_path = state / "seen_ids.json"
+    today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+    raw_path = state / "raw" / f"{today}.json"
+    prev_raw = json.loads(raw_path.read_text()) if raw_path.exists() else []
+    merged: dict[str, dict] = {}
+    for t in prev_raw + collected:
+        merged.setdefault(t["id"], t)
+    raw_all = sorted(merged.values(), key=lambda t: t["id"])
+    raw_path.write_text(json.dumps(raw_all, ensure_ascii=False, indent=2))
+
+    fresh = [t for t in raw_all if t["id"] not in seen]
+    seen.update(t["id"] for t in raw_all)
+    if len(seen) > SEEN_CAP:
+        seen = set(sorted(seen)[-SEEN_CAP // 2:])
+    seen_path.write_text(json.dumps(sorted(seen)))
+
+    new_path = state / "new" / f"{today}.json"
+    prev_new = json.loads(new_path.read_text()) if new_path.exists() else []
+    by_id = {t["id"]: t for t in prev_new}
+    for t in fresh:
+        by_id.setdefault(t["id"], t)
+    new_path.write_text(json.dumps(list(by_id.values()), ensure_ascii=False, indent=2))
+    return len(fresh)
+
+
 def cmd_fetch(args) -> int:
     state = Path(args.state_dir)
     for sub in ("raw", "new", "errors"):
@@ -512,34 +706,111 @@ def cmd_fetch(args) -> int:
     if args.resume and progress.exists() and len(done) == resumed + len(handles):
         progress.unlink()
 
-    # 跨夜/分批跑必须追加而非覆盖，否则后一批会把前一批的 raw/new 冲掉。
-    # 同一 (id) 只保留首次出现的那份。
-    today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
-    raw_path = state / "raw" / f"{today}.json"
-    prev_raw = json.loads(raw_path.read_text()) if raw_path.exists() else []
-    merged: dict[str, dict] = {}
-    for t in prev_raw + collected:
-        merged.setdefault(t["id"], t)
-    raw_all = sorted(merged.values(), key=lambda t: t["id"])
-    raw_path.write_text(json.dumps(raw_all, ensure_ascii=False, indent=2))
-
-    fresh = [t for t in raw_all if t["id"] not in seen]
-    seen.update(t["id"] for t in raw_all)
-    if len(seen) > SEEN_CAP:
-        seen = set(sorted(seen)[-SEEN_CAP // 2:])
-    seen_path.write_text(json.dumps(sorted(seen)))
-
-    new_path = state / "new" / f"{today}.json"
-    prev_new = json.loads(new_path.read_text()) if new_path.exists() else []
-    by_id = {t["id"]: t for t in prev_new}
-    for t in fresh:
-        by_id.setdefault(t["id"], t)
-    new_path.write_text(json.dumps(list(by_id.values()), ensure_ascii=False, indent=2))
+    n_fresh = _persist(state, collected, seen)
 
     n_err = len(err_path.read_text().splitlines()) if err_path.exists() else 0
     print(f"mode={mode} handles={len(handles)} fetched={len(collected)} "
-          f"new={len(fresh)} errlog_lines={n_err} state={state}")
+          f"new={n_fresh} errlog_lines={n_err} state={state}")
     # 抓取阶段恒为 0：单账号失败不等于任务失败，缺数据由日报阶段呈现
+    return 0
+
+
+def _logged_in_client(state: Path) -> LoggedInClient:
+    return LoggedInClient(state / "cookies.json")
+
+
+def _filter_muted(tweets: list[dict]) -> list[dict]:
+    """按账号 mute。推荐流会带来大量非关注账号，mute 必须在入库前生效。"""
+    out = []
+    for t in tweets:
+        h = (t.get("handle") or "").lower()
+        if h in MUTED_HANDLES:
+            continue
+        out.append(t)
+    return out
+
+
+def cmd_feed(args) -> int:
+    """抓 HomeTimeline（For You 推荐）/ HomeLatestTimeline（Following 时间线）。
+
+    与 fetch 的区别：不需要遍历关注清单，一次调用拿整条时间线；
+    缺点是无法断点续跑，限流中断就得整体重来（时间线只有一页游标）。
+    """
+    state = Path(args.state_dir)
+    for sub in ("raw", "new", "errors"):
+        (state / sub).mkdir(parents=True, exist_ok=True)
+    seen_path = state / "seen_ids.json"
+    seen: set[str] = set(json.loads(seen_path.read_text())) if seen_path.exists() else set()
+    if not cookie_available(state):
+        print("[error] 缺少登录凭据：先 `secrets decrypt twitter-x`", file=sys.stderr)
+        return 1
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=args.since_days)
+    client = _logged_in_client(state)
+    try:
+        if args.source == "for-you":
+            tweets = client.home_timeline(count=args.count)
+        else:
+            tweets = client.home_latest(count=args.count)
+    except XError as e:
+        err = state / "errors" / f"{datetime.now(timezone.utc).astimezone().strftime('%Y-%m-%d')}.log"
+        err.write_text(err.read_text() + f"{args.source}: {e}\n" if err.exists()
+                       else f"{args.source}: {e}\n")
+        print(f"[error] {args.source} 抓取失败: {e}", file=sys.stderr)
+        return 1
+
+    collected = []
+    for t in tweets:
+        dt = parse_created_at(t["created_at"])
+        if dt is None or dt < cutoff:
+            continue
+        t["fetched_at"] = datetime.now(timezone.utc).isoformat()
+        collected.append(t)
+    muted = len(collected) - len(_filter_muted(collected))
+    collected = _filter_muted(collected)
+    n_fresh = _persist(state, collected, seen)
+    print(f"source={args.source} fetched={len(collected)} muted={muted} new={n_fresh}")
+    return 0
+
+
+def cmd_explore(args) -> int:
+    """抓探索页：趋势 + Today's News + 高热推文。
+
+    趋势与新闻标题单独存 trends/YYYY-MM-DD.json（不是推文，喂不进 jev），
+    高热推文走与 feed 相同的入库路径。
+    """
+    state = Path(args.state_dir)
+    for sub in ("raw", "new", "errors", "trends"):
+        (state / sub).mkdir(parents=True, exist_ok=True)
+    seen_path = state / "seen_ids.json"
+    seen: set[str] = set(json.loads(seen_path.read_text())) if seen_path.exists() else set()
+    if not cookie_available(state):
+        print("[error] 缺少登录凭据：先 `secrets decrypt twitter-x`", file=sys.stderr)
+        return 1
+
+    try:
+        data = _logged_in_client(state).explore_page()
+    except XError as e:
+        print(f"[error] explore 抓取失败: {e}", file=sys.stderr)
+        return 1
+
+    today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+    (state / "trends" / f"{today}.json").write_text(json.dumps(
+        {"trends": data["trends"], "news": data["news"]},
+        ensure_ascii=False, indent=2))
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=args.since_days)
+    collected = []
+    for t in data["tweets"]:
+        dt = parse_created_at(t["created_at"])
+        if dt is None or dt < cutoff:
+            continue
+        t["fetched_at"] = datetime.now(timezone.utc).isoformat()
+        collected.append(t)
+    collected = _filter_muted(collected)
+    n_fresh = _persist(state, collected, seen)
+    print(f"source=explore trends={len(data['trends'])} news={len(data['news'])} "
+          f"tweets={len(collected)} new={n_fresh}")
     return 0
 
 
@@ -597,6 +868,19 @@ def main(argv=None) -> int:
     s = sub.add_parser("sync-following", help="导出当前关注清单 JSON")
     s.add_argument("--state-dir", required=True)
     s.set_defaults(func=cmd_sync_following)
+
+    fd = sub.add_parser("feed", help="抓 HomeTimeline 时间线（For You 推荐 / Following）")
+    fd.add_argument("--state-dir", required=True)
+    fd.add_argument("--source", choices=["for-you", "following"],
+                    default="for-you", help="for-you=个性化推荐流；following=关注账号时间线")
+    fd.add_argument("--since-days", type=int, default=2, help="只保留最近 N 天的推文")
+    fd.add_argument("--count", type=int, default=40, help="最多抓取条数")
+    fd.set_defaults(func=cmd_feed)
+
+    ex = sub.add_parser("explore", help="抓探索页：趋势 + Today's News + 高热推文")
+    ex.add_argument("--state-dir", required=True)
+    ex.add_argument("--since-days", type=int, default=2, help="推文只保留最近 N 天")
+    ex.set_defaults(func=cmd_explore)
 
     args = p.parse_args(argv)
     return args.func(args)
