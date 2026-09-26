@@ -13,10 +13,12 @@
 | `.local/share/dsh/profiles/web/preset-plugins/` | 自定义 preset 专用 `.mjs` 模块（梁神模式的 tool-bootstrap 等 6 个）；组合行以 `./preset-plugins/xxx.mjs` 相对 profile 目录引用 |
 | `.local/share/dsh/_cli/`                | CLI 本体源：托管 `package.json`、`pnpm-workspace.yaml` 与 `pnpm-lock.yaml` 副本；`node_modules/` 为运行时产物。部署侧 lockfile 是真实文件（pnpm 拒写软链 lockfile），由 `dsh --install` 自动拷回源 |
 | `.local/share/dsh/profiles/web/`        | Web Profile：托管 `cordis.yml`、`cordis.patch.yml`、`package.json`、`pnpm-workspace.yaml` 等配置     |
+| `.local/share/dsh/profiles/dsh-tui/`     | dsh-TUI Profile（终端 TUI 插件，见「dsh-TUI Profile」）：托管 `package.json`、`cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`、`compatibility.json` 与 `pnpm-lock.yaml` 副本 |
 | `.local/share/dsh/profiles/agent-extensions/` | 自建插件包（pi/omp 共享扩展的 DSH 移植，见「自建插件」）；profile 以 `link:../agent-extensions` 引用 |
-| `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装；`update`/`web` 子命令分发到同包 `.local/libexec/` 实体（一包一入口，上游原生的同名子命令被遮蔽为 Guix 增强版） |
+| `.local/bin/dsh`                        | CLI 启动包装器：注入 `DSH_HOME`；CLI 缺失时可交互式自动安装，或通过 `dsh --install` 无人值守安装；`update`/`web`/`tui` 子命令分发到同包 `.local/libexec/` 实体（一包一入口，上游原生的同名子命令被遮蔽为 Guix 增强版） |
 | `.local/libexec/dsh-web`                | Web UI 启动实体（`dsh web`）：启动后台服务并开 Chromium App 窗口；默认带远程信任（`--remote-url`/`--reauth`/`--lan-off`，见「远程访问」） |
 | `.local/libexec/dsh-update`             | 一键更新本体与三个插件（`dsh update`，见「一键更新」）                                                             |
+| `.local/libexec/dsh-tui`                | dsh-TUI 启动实体（`dsh tui`）：执行 TUI profile 内的 launcher 副本，透传 `version`/`doctor`/`safe`/`update`/`--resume`（见「dsh-TUI Profile」） |
 | `.local/share/applications/dsh.desktop` | 桌面快捷方式，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                           |
 | `.local/share/icons/hicolor/`           | 图标：`48x48/apps/dsh.png` 为栅格图标，`scalable/apps/dsh.svg` 为矢量母版                            |
 
@@ -234,6 +236,25 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
 - **本机窗口照旧**：`dsh web` 检测到端口已监听且 trusted 就直接开 `127.0.0.1` 干净 URL，不重启不弹第二窗。
 - **fence 拦截判定**：远程开页 401 = cookie 问题（重新握手）；403 = 实例没带 `--trusted-host`（跑 `dsh web` 一次自动修）。症状实例：手机页面能开但会话列表空 + `directoryPicker/list HTTP 403`——都是 `/api` 被 fence 拦，页面壳（静态文件）不受影响所致，**不是开了新 profile**（服务端会话只有一份）。
 - **目录选择器**：本机无 zenity/kdialog 时 boot 即解析为 `browse` 后端（应用内逐级浏览，天生支持远程）；`native` 后端（OS 弹窗）只在 loopback+本机显示会话+选择器齐备时挂载，远程浏览器够不到 OS 对话框是其设计边界（`resolveDirectoryPickerBackend` 注释明言）。装 `zenity` 后下次重启实例会自动切 native，本机窗口体验更好，远程仍走 browse。
+
+## dsh-TUI Profile（终端 TUI 插件）
+
+dsh-TUI（上游 `ccch1mneyyy/dsh-TUI`，npm `@deepseek-harness-tui/dsh-tui`）是官方收录的 TUI 补位插件：鲸鱼顶栏 / 实时状态 / 流式思考 / 双击 Esc 回滚 / 上下文进度 + TPS。它与 web profile **平级但独立**——插件自带 agent preset，与 web 的三套自定义 preset、chrome App 窗口那套链路互不干扰。
+
+- **安装位置**：独立 profile `profiles/dsh-tui/`（`~/.local/share/dsh/profiles/dsh-tui`），与 dsh 本体 `_cli/`、`web/` 平级。上游一键脚本 `install.sh` 就是这么建的（`dsh plugin --profile dsh-tui add`），所以沿用官方形态，**不**并进 web profile：并进去会把 TUI 的 preset 行注册进 web 的组合，而两边的预设、shell 方言、渲染方式都不同。
+- **安装命令**（新机/重装）：
+
+  ```bash
+  dsh plugin --profile dsh-tui allow-version @deepseek-harness-tui/dsh-tui@<版本> --dsh-version <dsh 版本> --accept-risk
+  dsh plugin --profile dsh-tui add -w @deepseek-harness-tui/dsh-tui@<版本>
+  ```
+
+  装完 profile 目录出现 `package.json`（`dependencies` + `dsh.profile.bundles`）、`cordis.yml`、`cordis.patch.yml`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`compatibility.json`；`node_modules` 是运行时产物。
+- **入口：`dsh tui`**。上游 launcher 是双态设计——住在 profile 内 `node_modules/@deepseek-harness-tui/dsh-tui/bin/dsh-tui.js` 的那份承载完整逻辑，全局 npm 安装的那份只是找到 profile 副本后委托的瘦壳。本机不往 `~/.local/bin` 添新入口（一包一入口规则，上游的 `dsh-tui`/`dst` 两个 bin 都不引），改为 `.local/libexec/dsh-tui` 直接 exec profile 内副本，`bin/dsh` 加 `tui)` 一行分发。`dsh tui` 透传全部子命令：`version` / `doctor` / `safe` / `update` / `--resume`。
+- **compat 门与 `compatibility.json`**：boot 时 loader 比对 bundle 声明的 peer 范围与本体版本，不匹配就**静默跳过整个 bundle**。授权记录落在 `profiles/dsh-tui/compatibility.json`（`{"@deepseek-harness-tui/dsh-tui@0.11.0": ["0.1.7-rc.2"]}`），**删掉它 TUI 就整条消失**（dump-config 条目 111 → 93，且不报错）。判定是否中招：`dsh --profile dsh-tui --dump-config | grep -c '^- id:'` 或 `dsh tui doctor` 的 `config: .../cordis.patch.yml` 行。
+- **版本线**：TUI 0.11.0 的主验证线即 0.1.7-rc.2（上游 #1000，rc.1→rc.2 为加性变更，TUI 源码零改动通过全量编译），故**未降级**。降级判据照 web 侧先例：peer 锁的核心版本区间够不到本体（semver 预发布区间只匹配同元组），或启动即 `pending (waiting for service: ...)`。
+- **shellPath 坑不波及 TUI**：见排障 5，`/bin/bash` 硬编码只影响挂 PTY 持久 shell 的 preset。TUI 默认 `standard` preset 挂 `tool-bash`（subprocess 非 PTY），不吃这个坑；只有切到 `minimal`/`liangshen` 时才需在 `profiles/dsh-tui/cordis.patch.yml` 按排障 5 的手法补 `shellPath`。profile 层 patch 无法给 preset 行打补丁——目标 id 要等 preset 挂载后才存在，提前写只会每次 boot 报 `patch: entry "terminal-bash" not found`。
+- **断链自愈对 dsh-tui 同样生效**：`dsh tui` 不经 `bin/dsh` 的 CLI 分发点（直走 libexec），所以它的自愈时机是每次 `dsh` CLI 调用与 `dsh tui doctor`/`update` 内的 pnpm 跑完后；跑完照样 `ls -la ~/.local/share/dsh/profiles/dsh-tui/` 抽查链接形态。
 
 ## 排障指南
 
