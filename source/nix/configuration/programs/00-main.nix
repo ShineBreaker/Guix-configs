@@ -9,11 +9,9 @@
   home.packages =
     (with pkgs; [
       ## Tools
-      broot
+      beekeeper-studio
       localsend
       gh
-      pods
-      python314Packages.jieba
 
       ## Editor
       android-studio
@@ -23,8 +21,6 @@
       ## Android
       android-tools
       pmbootstrap
-      qtscrcpy
-      scrcpy
 
       ## Gaming Tools
       gamescope

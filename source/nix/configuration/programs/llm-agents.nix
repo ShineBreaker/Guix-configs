@@ -6,13 +6,15 @@ let
   # settings.json 改名成 .bak）。omp 由 nix 提供，这里包一层 wrapper 注入它
   # 自己的配置/会话目录并清掉继承值；pi 走 ~/.local/bin 下的自管理 wrapper
   # （dotfiles/mutable/agents/pi/.local/bin/pi，随 pnpm 自更新）。
-  mkOmp = pkg: pkgs.writeShellScriptBin "omp" ''
-    unset PI_CONFIG_DIR PI_CODING_AGENT_DIR PI_CODING_AGENT_SESSION_DIR
-    export PI_CONFIG_DIR=".config/omp"
-    export PI_CODING_AGENT_DIR="$HOME/.config/omp"
-    export PI_CODING_AGENT_SESSION_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/omp/sessions"
-    exec ${pkg}/bin/omp "$@"
-  '';
+  mkOmp =
+    pkg:
+    pkgs.writeShellScriptBin "omp" ''
+      unset PI_CONFIG_DIR PI_CODING_AGENT_DIR PI_CODING_AGENT_SESSION_DIR
+      export PI_CONFIG_DIR=".config/omp"
+      export PI_CODING_AGENT_DIR="$HOME/.config/omp"
+      export PI_CODING_AGENT_SESSION_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/omp/sessions"
+      exec ${pkg}/bin/omp "$@"
+    '';
 in
 {
   home.packages =
@@ -24,7 +26,10 @@ in
       codex-acp
 
       freebuff
+      jcode
+      omo-ai
       opencode2
+      opencode2-desktop
       skills
     ])
     ++ (with pkgs; [
