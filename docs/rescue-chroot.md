@@ -2,7 +2,7 @@
 
 > 面向「未来的恐慌中的自己」。拓扑数据核对自 `source/information.scm`（2026-09-22，与本机 `/proc/mounts` 逐项比对一致）。
 > 配套脚本：`tools/rescue-chroot.sh`（默认 dry-run，只打印将执行的命令）。
-> **改了 `information.scm` 的拓扑，就要同步本文档和脚本顶部的变量块** ——两处 + 源码，共三份真源。
+> **改了 `information.scm` 的拓扑，就要同步本文档和脚本顶部的变量块**——两处 + 源码，共三份真源。
 
 ---
 
@@ -71,7 +71,7 @@
 本机实测证据（2026-09-22）：
 
 - `/etc/passwd`、`/etc/group`、`/etc/shadow` 的 mtime = 本次开机时刻（与 `/run/current-system` 符号链同时刻）；
-- etc 模板 `/var/guix/profiles/system/etc/` 里**没有** passwd/shadow/group/mtab ——它们是 activation 运行时生成的，不在模板里。
+- etc 模板 `/var/guix/profiles/system/etc/` 里**没有** passwd/shadow/group/mtab——它们是 activation 运行时生成的，不在模板里。
 
 所以磁盘上根本不存在一份现成的 /etc 等着你挂载——必须**在 chroot 前自己重建**（§3.4），这正是本手册与通用教程的核心差异。
 

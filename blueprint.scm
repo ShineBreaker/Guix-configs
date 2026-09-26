@@ -1300,6 +1300,30 @@
           "--year" ,(strftime "%Y" (localtime (time-second (current-time))))
           ".")))
 
+;; blue format [FILE...] —— 按 zh-tech-doc-style-guide 规范化仓库文档标点。
+;; 委派 tools/doc-punct.py：半角标点转全角、中英文间距、省略号/破折号排版、
+;; 全角数字转半角、数值与单位间距。代码块、行内代码、URL、org 等宽、表格行
+;; 一律原样保留。不带参数时处理 git 可见的全部 .md/.org（排除 vendored 与
+;; agent skills）。--dry-run 下同样只预演不写盘（脚本有 --check 模式）。
+(define-command (format-command arguments)
+  ((invoke "format")
+   (category 'maintenance)
+   (synopsis "规范化仓库文档的中文标点与排版")
+   (help "[FILE...]
+按中文技术文档写作规范（zh-tech-doc-style-guide）机械修正文档标点与排版：
+半角标点转全角、中英文之间补空格、省略号与破折号排版、全角数字转半角、
+数值与单位之间补空格。
+
+不带 FILE 时递归处理 git 可见的所有 .md / .org（排除 vendored 子模块与
+agent skills）。代码块、行内代码、URL、org 链接与等宽、表格行一律原样保留。
+
+  blue format                处理全部文档
+  blue format source/README  只处理指定文件
+  blue --dry-run format      只报告不写入（等价脚本 --check）"))
+  (%run `("python3" ,(string-append %tools-dir "/doc-punct.py")
+          ,@(if (dry-build?) '("--check") '())
+          ,@arguments)))
+
 ;; blue structor [TARGET] ... —— 刷新 AGENTS.md 的自动目录树。
 ;; 深度优先级：标记内 depth=N > ORG_STRUCTOR_DEPTH > 默认 4。
 ;; 环境变量：ORG_STRUCTOR_DEPTH=N 全局回退深度；ORG_STRUCTOR_DRY=1 预览。
@@ -1453,7 +1477,7 @@ folding 控制:
     ("编辑 (editing)" ,block-show-command ,block-replace-command)
     ("Guix 频道 (guix)" ,pull-command ,update-command)
     ("维护 (maintenance)" ,clean-artifacts-command
-     ,gc-command ,reuse-command ,structor-command)
+     ,format-command ,gc-command ,reuse-command ,structor-command)
     ("Nix 备用 (nix)" ,nix-command ,nix-init-command)
     ("Stow (stow)" ,stow-command ,stow-all-command)
     ("验证 (validation)" ,secret-scan-command)

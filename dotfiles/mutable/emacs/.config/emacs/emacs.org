@@ -57,7 +57,7 @@
 :CUSTOM_ID: startup-gc
 :END:
 
-Emacs 在启动阶段需要加载并求值大量代码。如果保持默认的较小 GC 阈值（800KB），加载过程中会反复暂停回收垃圾，拖慢启动速度。优化策略如下：
+Emacs 在启动阶段需要加载并求值大量代码。如果保持默认的较小 GC 阈值（800 KB），加载过程中会反复暂停回收垃圾，拖慢启动速度。优化策略如下：
 
 - *启动前调大阈值* ：启动时将 =gc-cons-threshold= 设为最大整数，并把 =gc-cons-percentage= 提高到 0.6，避免在读取配置期间触发垃圾回收。
 - *启动后平稳复原* ：通过 =emacs-startup-hook= 钩子，在启动完成后把 =gc-cons-percentage= 调回稳态值 0.1，后续日常编辑交由 GCMH 空闲回收。
@@ -2370,12 +2370,12 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 | 设置/包        | daemon 启动期陷阱             | TTY 行为                     | 处理方式                                           |
 |----------------+-------------------------------+------------------------------+----------------------------------------------------|
 | 光标类型       | =setq-default= 是全局副作用     | 后创 TTY frame 污染 GUI      | 用 =set-frame-parameter 'cursor-type=                |
-| pixel-scroll   | 同上                          | 退化为行级滚动               | 无条件启用(GUI client 需要)                        |
-| diff-hl(TTY)   | 无 fringe,fringe 指示器不可见 | 改用 margin                  | 上游 fallback 按 overlay 分流;勿启全局 margin mode |
-| fringe 宽度    | 行号函数若清零 fringe         | —                            | 禁止在行号函数清零 fringe(详见下表)                |
+| pixel-scroll   | 同上                          | 退化为行级滚动               | 无条件启用（GUI client 需要）                        |
+| diff-hl(TTY)   | 无 fringe,fringe 指示器不可见 | 改用 margin                  | 上游 fallback 按 overlay 分流；勿启全局 margin mode |
+| fringe 宽度    | 行号函数若清零 fringe         | —                            | 禁止在行号函数清零 fringe（详见下表）                |
 | Modus 主题     | =(display-graphic-p)= 永远 nil  | daemon/真彩 TTY 共用 palette | daemon 预载；standalone 真彩 TTY 也加载主题        |
 | TTY 配色       | 无 alpha 通道                 | 主题前景 + 全 face 透明      | 清背景与反色，不覆盖主题前景                       |
-| Nerd Font 图标 | =(display-graphic-p)= 永远 nil  | 字形以文字渲染               | 守卫用 =custom:nerd-icons-available=,不查 display    |
+| Nerd Font 图标 | =(display-graphic-p)= 永远 nil  | 字形以文字渲染               | 守卫用 =custom:nerd-icons-available=，不查 display    |
 | buffer 分隔线  | =window-divider-mode= 是全局的  | 分隔线为图形终端特性         | 宽度写 per-frame 的 =right/bottom-divider-width=     |
 
 **** 基础尺寸与行号策略
@@ -2387,7 +2387,7 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 
 - GUI 窗口应用 =custom:frame-background-opacity= 的透明度与字号；在 =default-frame-alist= 中彻底关闭菜单栏、工具栏和滚动条。
 - 终端光标同步：启用 =xterm-update-cursor= ，使终端光标形状（bar / box）通过转义序列与 GUI 设置同步；长行截断符号通过 =prettify-special-glyphs-mode= 统一美化。
-- 自适应行号与大文件保护：默认启用相对行号，宽度自适应；超过 2MB 的大文件（ =custom:large-file-size-threshold= ）自动关闭行号，Org 与终端等阅读模式默认隐藏行号。
+- 自适应行号与大文件保护：默认启用相对行号，宽度自适应；超过 2 MB 的大文件（ =custom:large-file-size-threshold= ）自动关闭行号，Org 与终端等阅读模式默认隐藏行号。
 
 #+begin_src emacs-lisp
 (defcustom custom:frame-background-opacity 88
@@ -2622,7 +2622,7 @@ Invalid face reference 照常记录——那些是真问题。"
 
 管理分屏窗口之间的物理细线：
 
-- 面板分隔线（Window Divider）：上下叠放的编辑窗口之间由 1px 细线分隔。
+- 面板分隔线（Window Divider）：上下叠放的编辑窗口之间由 1 px 细线分隔。
 - 避免全局参数污染：宽度直接按显示类型写入 per-frame 参数，避免使用全局 =window-divider-mode= 导致 TTY 连接时误清空 GUI 分隔线。
 - 颜色插值平滑：颜色取主题 =border= 与背景色按 0.65 比例插值重算，与标签栏下缘保持一致。
 
@@ -2770,7 +2770,7 @@ Invalid face reference 照常记录——那些是真问题。"
     (custom/which-key--apply-keymap-spec 'arei-mode-map)))
 #+end_src
 
-** 颜色方案(Modus 主题)
+** 颜色方案（Modus 主题）
 :PROPERTIES:
 :CUSTOM_ID: color-scheme
 :END:
@@ -2788,7 +2788,7 @@ Invalid face reference 照常记录——那些是真问题。"
 
 Modus 主题调色板覆盖（Palette Overrides）：
 
-- *边缘与行号底色融入* ：原生 Modus 将 fringe 与未激活行号底色映射为 =bg-dim= 。在 GUI 半透明与背景模糊下，这 8px 宽度会被放大成两侧可见的灰带。这里将 =fringe= 与 =bg-line-number-inactive= 统一改映射为 =bg-main= ，与正文融为一体。
+- *边缘与行号底色融入* ：原生 Modus 将 fringe 与未激活行号底色映射为 =bg-dim= 。在 GUI 半透明与背景模糊下，这 8 px 宽度会被放大成两侧可见的灰带。这里将 =fringe= 与 =bg-line-number-inactive= 统一改映射为 =bg-main= ，与正文融为一体。
 - *代码块底色降噪* ：=bg-prose-block-contents= 与 =bg-prose-block-delimiter= 同样映射到 =bg-main= 。GUI 侧的代码块分组已由缩进竖线与边框清晰表达，去除多余底色可消除半透明下的噪点；TTY 侧不受影响，由终端透明策略独立处理。
 - *D-Bus 动态同步* ：读取 Darkman 暴露在 D-Bus 上的 =Mode= 属性，并在系统模式变动时按需切换。
 
@@ -2919,7 +2919,7 @@ MODE 为 'light 或 'dark。
 :CUSTOM_ID: color-scheme-init
 :END:
 
-主题初始化时机按运行模式分流:
+主题初始化时机按运行模式分流：
 
 #+attr_org: :width 50
 | 运行模式   | 触发时机        | 原因                                              |
@@ -2962,7 +2962,7 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   (funcall #'custom/color-scheme-apply-for-frame (selected-frame)))
 #+end_src
 
-主题切换后的级联刷新由 =enable-theme-functions= 驱动(见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]] 的 TTY face 刷新)。
+主题切换后的级联刷新由 =enable-theme-functions= 驱动（见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]] 的 TTY face 刷新）。
 * 编辑与文本
 :PROPERTIES:
 :CUSTOM_ID: editing
@@ -3525,10 +3525,10 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 #+attr_org: :width 70
 | 字段       | 含义                                          | 派生消费者                                    |
 |------------+-----------------------------------------------+-----------------------------------------------|
-| =:modes=     | 生效的所有 major mode(传统 mode 在前,ts 在后) | =major-mode-remap-alist=、Apheleia mode-alist |
-| =:ts-mode=   | Tree-sitter 对应 mode(nil = 无 ts 版本)       | =major-mode-remap-alist=                        |
-| =:server=    | LSP server 启动命令(nil = 无 LSP)             | =eglot-server-programs=                         |
-| =:formatter= | Apheleia formatter 符号(nil = 显式禁用)       | Apheleia mode-alist                           |
+| =:modes=     | 生效的所有 major mode（传统 mode 在前，ts 在后） | =major-mode-remap-alist=、Apheleia mode-alist |
+| =:ts-mode=   | Tree-sitter 对应 mode（nil = 无 ts 版本）       | =major-mode-remap-alist=                        |
+| =:server=    | LSP server 启动命令（nil = 无 LSP）             | =eglot-server-programs=                         |
+| =:formatter= | Apheleia formatter 符号（nil = 显式禁用）       | Apheleia mode-alist                           |
 
 #+begin_src emacs-lisp
 (require 'json)
@@ -3726,7 +3726,7 @@ mode-alist 的残留映射(如 gdscript→gdformat),缺二进制的 formatter �
 Eglot 采用按需懒加载策略：
 - 进入任意代码模式（=prog-mode=）时触发加载。
 - 自动开启行内类型提示（Inlay Hints）。
-- *大文件保护* ：当文件体积超过 2MB 时，自动跳过 LSP 索引与代码折叠解析，防止打开大型数据文件或生成代码时编辑器卡顿。若确实需要 LSP，可通过 =M-x eglot= 手动启动。
+- *大文件保护* ：当文件体积超过 2 MB 时，自动跳过 LSP 索引与代码折叠解析，防止打开大型数据文件或生成代码时编辑器卡顿。若确实需要 LSP，可通过 =M-x eglot= 手动启动。
 
 #+begin_src emacs-lisp
 (defun custom--eglot-enable-inlay-hints ()
@@ -3938,7 +3938,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 
 集中绑定日常编程与跳转导航快捷键：
 
-- *跳转与错误穿梭 (M-g 前缀)* ：
+- *跳转与错误穿梭（M-g 前缀）* ：
   - =M-g n= / =M-g p= ：上一个 / 下一个诊断报错（Flymake）。
   - =M-g l= ：打开或关闭诊断错误列表。
   - =M-g r= ：查找当前符号的全部引用（References）。
@@ -3947,7 +3947,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   - =M-g j= ：Avy 屏幕内字符快速跳转。
   - =C-t= ：列出并跳转工作区符号（VSCode Ctrl+T）。
 
-- *代码重构与常用操作 (C-c c 前缀)* ：
+- *代码重构与常用操作（C-c c 前缀）* ：
   - =C-c c d= ：跳转到定义（Definition）。
   - =C-c c a= ：呼出 LSP 代码修复动作（Code Actions）。
   - =C-c c n= ：变量或函数全局重命名（Rename）。
@@ -4128,7 +4128,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   (define-key dired-mode-map [mouse-2] #'dired-mouse-find-file))
 #+end_src
 
-项目前缀 =C-x p= 与 =project.el= 同源,在下方 src-block 直接绑定。
+项目前缀 =C-x p= 与 =project.el= 同源，在下方 src-block 直接绑定。
 
 #+begin_src emacs-lisp
 (custom/bind "C-x p p" #'project-switch-project "切换项目" "项目")
@@ -4443,21 +4443,21 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
         custom/org-capture--roam-title nil))
 #+end_src
 
-每条模板拆成两部分:emacs-lisp 块持有键、类型与目标文件,以列 0 的 noweb 引用拼入模板体;紧跟其后的 =#+name= 文本块(=org= 语言,=:tangle no=)即模板原文。
+每条模板拆成两部分:emacs-lisp 块持有键、类型与目标文件，以列 0 的 noweb 引用拼入模板体；紧跟其后的 =#+name= 文本块（=org= 语言，=:tangle no=）即模板原文。
 
-文本块书写约束:
+文本块书写约束：
 
-+ 行首 =*= / =#+= 以逗号转义(=,*=)保字面,含双引号的 elisp 表达式写 =\"=
++ 行首 =*= / =#+= 以逗号转义(=,*=)保字面，含双引号的 elisp 表达式写 =\"=
 + 引用行的开引号留在上一行、ref 顶格——noweb 展开会把引用处行首前缀复制到文本每一行
 
-目标文件三类求值时机:常量路径在定义时展开(反引号 =,=);agenda 两条在 org-capture 加载时求值一次;需要交互选择的(经验卡路径、Roam 标题)传入函数,由 org-capture 在 capture 时调用。
+目标文件三类求值时机:常量路径在定义时展开（反引号 =,=）;agenda 两条在 org-capture 加载时求值一次；需要交互选择的（经验卡路径、Roam 标题）传入函数，由 org-capture 在 capture 时调用。
 
 #+begin_note
 *改模板前先看这里* ：经验卡模板体读取 =custom/org-capture--last-category= 、Roam 模板体读取 =custom/org-capture--roam-title= 。这两个变量由文件目标函数（=custom/org-capture--experience-file= 等）在 capture 开始时写入，模板展开时读走，=custom/org-capture--clear-state= 在 finalize 后清空。
 改模板时勿删这些引用，否则属性会退化为默认值（=general= / =未命名笔记=）。
 #+end_note
 
-=ki= Inbox 草稿:最小阻力收集,一句话 TODO + CREATED 时间戳,留待 inbox 分流。
+=ki= Inbox 草稿:最小阻力收集，一句话 TODO + CREATED 时间戳，留待 inbox 分流。
 
 #+begin_src emacs-lisp
 (defconst custom:org-capture-tpl-inbox
@@ -4477,7 +4477,7 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
 %i
 #+end_src
 
-=kd= / =ke= agenda 两条:带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。两条在 org-capture 加载时以同一 agenda 目标文件写成模板字面量;=kd= / =ke= 仅日期行与首行关键字差异(普通无日期任务被 =kd= 覆盖:SCHEDULED 行可留空跳过)。
+=kd= / =ke= agenda 两条:带 SCHEDULED 日期的任务、无 TODO 关键字的日程事件。两条在 org-capture 加载时以同一 agenda 目标文件写成模板字面量；=kd= / =ke= 仅日期行与首行关键字差异（普通无日期任务被 =kd= 覆盖:SCHEDULED 行可留空跳过）。
 
 #+name: org-capture-tpl-task-date
 #+begin_src org :tangle no
@@ -4498,7 +4498,7 @@ SCHEDULED: %^t
 %i
 #+end_src
 
-=kr= Roam 长期笔记:文件级条目,标题取自交互输入,ID 由 =org-id-new= 生成,落入 roam 目录。模板值不以换行结尾,故引用行不补 =\n=。
+=kr= Roam 长期笔记:文件级条目，标题取自交互输入，ID 由 =org-id-new= 生成，落入 roam 目录。模板值不以换行结尾，故引用行不补 =\n=。
 
 #+begin_src emacs-lisp
 (defconst custom:org-capture-tpl-roam
@@ -4520,7 +4520,7 @@ SCHEDULED: %^t
 %?
 #+end_src
 
-经验三卡(note / mistake / ascended)对齐 =agenote-base= 的 entry-types:属性 drawer 记录 =ENTRY_TYPE= 与 =CATEGORY=,模板体预置各卡的复盘章节骨架——每章标题即复盘时需要回答的问题。三卡模板结构同源,公共表头抽为下方 =#+name= 块,各卡以列 0 引用拼入,仅 =TYPE= / =ENTRY_TYPE= 与章节骨架保留在卡内;数据块自带 =:noweb yes= 才会在 tangle 上下文递归展开嵌套引用。
+经验三卡(note / mistake / ascended)对齐 =agenote-base= 的 entry-types:属性 drawer 记录 =ENTRY_TYPE= 与 =CATEGORY=，模板体预置各卡的复盘章节骨架——每章标题即复盘时需要回答的问题。三卡模板结构同源，公共表头抽为下方 =#+name= 块，各卡以列 0 引用拼入，仅 =TYPE= / =ENTRY_TYPE= 与章节骨架保留在卡内；数据块自带 =:noweb yes= 才会在 tangle 上下文递归展开嵌套引用。
 
 #+name: org-capture-tpl-experience-head
 #+begin_src org :tangle no :noweb yes
@@ -5232,7 +5232,7 @@ overriding keymap 继续读键),`isearch-yank-string' 才能在其仍处于活�
 (add-to-list 'set-message-functions #'inhibit-message)
 #+end_src
 
-补全期的文档与符号检索均为内置:eldoc 在 Eglot 补全时于 echo area 显示文档;Emacs 31 起 =C-u M-.= (~xref-find-apropos~) 列出并补全当前 workspace 符号,经 =*Completions*= 呈现。
+补全期的文档与符号检索均为内置:eldoc 在 Eglot 补全时于 echo area 显示文档；Emacs 31 起 =C-u M-.= (~xref-find-apropos~) 列出并补全当前 workspace 符号，经 =*Completions*= 呈现。
 
 #+begin_src emacs-lisp
 (custom/bind "C-x b" #'switch-to-buffer "切换缓冲区" "文件 / 缓冲区 / 标签")
@@ -5263,7 +5263,7 @@ overriding keymap 继续读键),`isearch-yank-string' 才能在其仍处于活�
 - *RSS 阅读器 (C-c a f f)* ：内置 Newsticker 订阅器，方便快速阅读博客与新闻。
 - *Telegram (C-c a t)* ：桌面端即时聊天客户端（Telega）。
 - *Guix 系统管理 (C-c a x x)* ：调用 =guix.el= 图形化管理软件包、世代回滚与系统服务。
-- *经典小游戏 (C-c a g ...)* ：包含俄罗斯方块、贪吃蛇、五子棋与乒乓。
+- *经典小游戏 (C-c a g ……)* ：包含俄罗斯方块、贪吃蛇、五子棋与乒乓。
 
 *** Agent Shell
 AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
@@ -5304,9 +5304,9 @@ AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
 
 *** RSS 阅读 (Newsticker)
 
-内置 ~newsticker~ :树形视图( =newsticker-treeview= )左侧 feed 列表、右侧条目,
+内置 ~newsticker~ ：树形视图( =newsticker-treeview= )左侧 feed 列表、右侧条目，
 界面内 =g= 刷新、 =n/p= 上下条目、 =SPC= 浏览摘要、 =RET= 用 =browse-url= 打开原文。
-订阅源默认为 Emacs 官方 feed( =newsticker-url-list= 可自行追加)。
+订阅源默认为 Emacs 官方 feed（ =newsticker-url-list= 可自行追加）。
 
 #+begin_src emacs-lisp
 (use-package newsticker
@@ -5332,7 +5332,7 @@ AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
 
 *** 内置游戏
 
-Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =use-package= 。
+Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用，无需 =use-package= 。
 
 #+begin_src emacs-lisp
 (custom/declare-binding-group "C-c a g" "内置游戏")
@@ -5344,13 +5344,13 @@ Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用, 无需 =us
 
 *** Guix 包管理 (Emacs-Guix)
 
-[[https://git.savannah.gnu.org/cgit/guix/emacs-guix.git/][Emacs-Guix]] ( =guix.el= ) 是 GNU Guix 包管理器的 Emacs 接口。 =M-x guix= 提供 Magit-like popup 入口,可管理 profile、generations、包和服务。本配置启用三项功能:
+[[https://git.savannah.gnu.org/cgit/guix/emacs-guix.git/][Emacs-Guix]] ( =guix.el= ) 是 GNU Guix 包管理器的 Emacs 接口。 =M-x guix= 提供 Magit-like popup 入口，可管理 profile、generations、包和服务。本配置启用三项功能：
 
 + *管理界面* :: =M-x guix= 的 popup 与 list/info 接口
-+ *guix-devel-mode* :: scheme-mode 辅助 minor mode,处理 Guix =.scm= 包定义。手动启用,不挂全局 =scheme-mode-hook=,避免影响非 Guix 的 scheme 文件。
++ *guix-devel-mode* :: scheme-mode 辅助 minor mode，处理 Guix =.scm= 包定义。手动启用，不挂全局 =scheme-mode-hook=，避免影响非 Guix 的 scheme 文件。
 + *guix-prettify-mode* :: 把 =/gnu/store/<hash>-name= 的 hash 部分显示为 =…=
 
-性能策略: 不纳入 daemon 预热白名单 (低频管理工具),用 =:defer t= 按需加载。 =global-guix-prettify-mode= 启用 store 路径美化。
+性能策略：不纳入 daemon 预热白名单（低频管理工具），用 =:defer t= 按需加载。 =global-guix-prettify-mode= 启用 store 路径美化。
 
 #+begin_src emacs-lisp
 (use-package guix
@@ -5478,7 +5478,7 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。渲染
 :CUSTOM_ID: dash-buttons-banner
 :END:
 
-- *导航按钮* ：顶部四个按钮（计时、书签、知识库、帮助）通过 =custom/dashboard--nav-buttons= 数据表声明，每个按钮对应独立具名命令，方便 单独调试。
+- *导航按钮* ：顶部四个按钮（计时、书签、知识库、帮助）通过 =custom/dashboard--nav-buttons= 数据表声明，每个按钮对应独立具名命令，方便单独调试。
 - *字符画 Banner* ：顶部 Banner 采用单宽字符画 ASCII 艺术字，确保在 GUI 与 TTY 终端下渲染完全一致。
 - *快捷键提示* ：各板块标题行右缘展示对应的快捷键提示（=custom:dashboard-heading-keys=）。
 
@@ -5979,7 +5979,7 @@ let 绑定请求级缓存变量,渲染结束自动丢弃,下次渲染重新扫�
 | Shim                       | 根因                                 | 受影响功能                     | 移除条件                             |
 |----------------------------+--------------------------------------+--------------------------------+--------------------------------------|
 | =emacs31/source-load-compat= | Guix .elc 与 Emacs 31 宏展开不兼容   | Arei                           | 所有相关包改由 Emacs 31 重编译       |
-| =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色([[#language-modes][各语言 major mode]]) | 升级 arei 或 Guix 用 Emacs 31 重编译 |
+| =emacs31/arei-compat=        | arei 0.9.7 .elc 与 Emacs 31 宏不兼容 | Scheme 染色（[[#language-modes][各语言 major mode]]） | 升级 arei 或 Guix 用 Emacs 31 重编译 |
 
 **** arei .elc 与 buffer-local-set-state 不兼容(bug#80812)
 arei 0.9.7 的 =.elc= 字节码在旧版本 Emacs 下编译，与 Emacs 31 的 =buffer-local-set-state= 宏不兼容，会在 =scheme-mode-hook= 中抛出异常并导致 Scheme 代码语法高亮失效。

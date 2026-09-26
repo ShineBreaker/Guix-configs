@@ -15,9 +15,9 @@
 
 有意未从 pi 移植的部分：
 
-- **空闲兜底** —— zcode 无 `agent_end`；`Stop` hook 的续命请求会干扰正常会话结束。
-- **MCP server** —— agenote 主路径是 CLI，skill 直接指示 bash 调用。
-- **subagent 守卫** —— `UserPromptSubmit` 只在主会话用户输入时触发。
+- **空闲兜底**——zcode 无 `agent_end`；`Stop` hook 的续命请求会干扰正常会话结束。
+- **MCP server**——agenote 主路径是 CLI，skill 直接指示 bash 调用。
+- **subagent 守卫**——`UserPromptSubmit` 只在主会话用户输入时触发。
 
 提交规范保障（`Assisted-by`）是独立关注点，单独成插件：见 `../assisted-by-zcode/`。
 

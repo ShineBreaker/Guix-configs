@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com> -->
 <!-- SPDX-License-Identifier: MIT -->
 
-# 应急操作手册 —— blue 不可用时怎么办
+# 应急操作手册——blue 不可用时怎么办
 
 > 本仓库的部署能力不应该被单点绑死在 `blue` 上：整条管线只是
 > 「tangle → 括号检查 → guix reconfigure」三层，用 bash + guix 就能原样重建。
@@ -12,10 +12,10 @@
 
 出现以下任一症状，说明 `blue` 已不可用，可转入本文档流程：
 
-- `blue: command not found` —— 包装脚本（`~/.local/bin/blue`）丢失或不在 PATH；
-- `incompatible bytecode version` —— guile 版本漂移（见 §2，最常见的坏法）；
-- wrapper 报 `/run/current-system/profile/bin/guile` 不存在 —— 系统 profile 异常；
-- 报 `~/.guix-home/profile/bin/blue` 不存在 —— Home 层未部署或已损坏；
+- `blue: command not found`——包装脚本（`~/.local/bin/blue`）丢失或不在 PATH；
+- `incompatible bytecode version`——guile 版本漂移（见 §2，最常见的坏法）；
+- wrapper 报 `/run/current-system/profile/bin/guile` 不存在——系统 profile 异常；
+- 报 `~/.guix-home/profile/bin/blue` 不存在——Home 层未部署或已损坏；
 - bluebox 频道不可达导致 blue 本体无法构建。
 
 判断标准很简单：只要 `guix` 本身还能跑、仓库里 `source/channel.lock` 还在，
@@ -40,7 +40,7 @@
   脚本主体绕开（shebang 被当作注释跳过）。
 - **引导环境**：`tools/bootstrap.sh` 用
   `guix time-machine -C source/channel.lock -- shell -m source/manifest.scm`
-  开一个带 blue 的临时 profile shell —— 这意味着 blue 的恢复不依赖 blue 自己。
+  开一个带 blue 的临时 profile shell——这意味着 blue 的恢复不依赖 blue 自己。
 
 坏法归结起来就是：系统重装/升级后 guile 路径变化、Home 层损坏导致 blue 本体
 丢失、或 guile 版本漂移。共同点：**blueprint.scm 里定义的管线本身没有任何

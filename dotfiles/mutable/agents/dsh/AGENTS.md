@@ -106,7 +106,7 @@
   - **判定**：页面报 `web boot: N entries did not activate`，点名的是核心 entry（如 `@deepseek-ai/dsh-client-ui-plan: failed`）；用 CDP 监听 console 可见根因异常（`single slot "..." already has a registration`）。
   - **二分定位**：临时把 `dsh.profile.bundles` 砍到 `[dsh-base, dsh-web-app]` 重启验证纯净组合，再逐半加回。
 - **`cordis.patch.yml` 的 row 必须用裸包名**：客户端半边只有在 loader row 是**精确包说明符**
-  时才被扫描到 —— `dsh-client-modules` 的 `exactPackageSpecifier` 会拒绝任何含 `/` 的非 scoped
+  时才被扫描到——`dsh-client-modules` 的 `exactPackageSpecifier` 会拒绝任何含 `/` 的非 scoped
   名（`dsh-agent-extensions/gate` → `undefined`），`locatePkgJson` 随即放弃，`dsh.client`
   声明被**静默跳过**：host 半边照常加载，浏览器半边永远不出现，且无任何报错。
   故本包只挂一行 `name: 'dsh-agent-extensions'`（`index.js` 内部再分派 gate 与

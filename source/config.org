@@ -20,7 +20,7 @@
 :CUSTOM_ID: maintenance
 :END:
 
-在 Emacs 中将光标置于代码块内, 按 =C-c C-c= 即可执行相关的代码（执行前会有确认提示），执行结果将输出到 =#+RESULTS:= 。
+在 Emacs 中将光标置于代码块内，按 =C-c C-c= 即可执行相关的代码（执行前会有确认提示），执行结果将输出到 =#+RESULTS:= 。
 
 括号平衡检查（快速定位出错的代码块）：
 
@@ -243,7 +243,7 @@ blue build
 #+end_src
 
 + =root-one-shot-service= ：开机跑一次即退出（one-shot + 不 respawn）， =start= / =#:stop= 直接传 gexp。
-  =stop= 默认 =(const #f)= ——向 shepherd 返回「已停止」的正确值； =respawn?= 默认 #t。对 one-shot 服务这两者均惰性（start 成功即视为 stopped、进程退出也不 respawn），调用处无需再传这两个参数。
+  =stop= 默认 =(const #f)=——向 shepherd 返回「已停止」的正确值； =respawn?= 默认 #t。对 one-shot 服务这两者均惰性（start 成功即视为 stopped、进程退出也不 respawn），调用处无需再传这两个参数。
   =#:modules= 默认 =%default-modules= （ =shepherd service= + =guix build utils= + =guix build syscalls= ）。shepherd 服务的 =start= gexp 会被序列化成独立 .scm 再编译成 .go，编译环境只有这些模块——**gexp 内层写的 =(use-modules …)= 不参与编译期绑定**，运行到未绑定变量才报错。需要额外模块（如 =(ice-9 rdelim)= 提供 =read-line= ）时，必须经此参数追加进顶层 use-modules。
 #+NAME: root-one-shot-service-helpers
 #+begin_src scheme
@@ -680,10 +680,10 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 加载 =ip_tables= 与 =iptable_nat= 作为兼容层，供 Libvirt 与 Podman 网络后端使用；
 在系统启动完成且 zstd 模块就绪后，由 =zswap-zstd= 服务运行时将 zswap 压缩器无缝切换至 zstd。
 
-=zswap-zstd= 的 start 是一条 =/bin/sh -c= 命令： =grep= 探测 =/proc/crypto= 里是否已有 zstd，命中才用重定向把它写进 =/sys/module/zswap/parameters/compressor= —— =&&= 串联与 =>= 重定向写成一条 shell 命令最直接，两处 =2>/dev/null= 丢弃探测或写入失败时的报错；末尾 =exit 0= 与 lambda 末尾的 =#t= 让这条服务的 start 始终成功返回，内核里没有 zstd 时就保持 zswap 的默认压缩器，不会把服务标记为失败、也不阻断 boot。
+=zswap-zstd= 的 start 是一条 =/bin/sh -c= 命令： =grep= 探测 =/proc/crypto= 里是否已有 zstd，命中才用重定向把它写进 =/sys/module/zswap/parameters/compressor=——=&&= 串联与 =>= 重定向写成一条 shell 命令最直接，两处 =2>/dev/null= 丢弃探测或写入失败时的报错；末尾 =exit 0= 与 lambda 末尾的 =#t= 让这条服务的 start 始终成功返回，内核里没有 zstd 时就保持 zswap 的默认压缩器，不会把服务标记为失败、也不阻断 boot。
 该服务是 one-shot（start 返回后 shepherd 即把它置为 stopped）， =#:stop= 与 =#:respawn?= 都用不上，因此不显式传。
 
-v4l2loopback 模块参数（/etc/modprobe.d 仅对经 =/proc/sys/kernel/modprobe= 包装器的加载路径生效，kvm 参数因 udev 抢先加载已移至 kernel-arguments）:
+v4l2loopback 模块参数（/etc/modprobe.d 仅对经 =/proc/sys/kernel/modprobe= 包装器的加载路径生效，kvm 参数因 udev 抢先加载已移至 kernel-arguments）：
 
 #+NAME: v4l2loopback-conf
 #+begin_src conf :tangle ../tmp/v4l2loopback.conf
@@ -1067,7 +1067,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 | =@NFT_BIN@= | =nftables= 包的 =/sbin/nft= |
 | =@TRUSTED_CONNECTIONS_CIPHER@= | =dotfiles/mutable/tools/secrets= 下的 =wifi-trust.age= 密文 |
 
-=spec->pkg= 与 =pkg-bin= 是上面 =let*= 里的两个小工具： =spec->pkg= 来自 rosenthal 频道的 =rosenthal utils packages= ，就是 =(gnu packages)= 的 =specification->package= —— 按字符串包名查包、返回包对象，适合「只用到某个包里一两个程序」的场合（不必为它写 =use-package-modules= 导入）； =pkg-bin= 在此基础上拼出程序路径： =(pkg-bin "coreutils" "/bin/mv")= 展开为 =/gnu/store/…-coreutils-…/bin/mv= 。这些绝对路径在构建期就固定，脚本运行时不需要 PATH。
+=spec->pkg= 与 =pkg-bin= 是上面 =let*= 里的两个小工具： =spec->pkg= 来自 rosenthal 频道的 =rosenthal utils packages= ，就是 =(gnu packages)= 的 =specification->package=——按字符串包名查包、返回包对象，适合「只用到某个包里一两个程序」的场合（不必为它写 =use-package-modules= 导入）； =pkg-bin= 在此基础上拼出程序路径： =(pkg-bin "coreutils" "/bin/mv")= 展开为 =/gnu/store/…-coreutils-…/bin/mv= 。这些绝对路径在构建期就固定，脚本运行时不需要 PATH。
 
 =secret= 同理： =(secret "wifi-trust")= 指向仓库里 =dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age= 这份密文（路径由 =string-append= 拼出，所以外面套了 =assume-source-relative-file-name= ）。
 
@@ -1172,7 +1172,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 **** mihomo 启动包装
 模板由 dotfiles immutable 部署到 =~/.config/mihomo/config.yaml= ，订阅 URL 以 =$MIHOMO_SUB_ONE/TWO= 占位；
 daemon 启动时会解密 =mihomo-subscriptions.age= （使用全局统一的私钥），通过 ~envsubst~ 来将订阅链接写入到 =/var/lib/mihomo/config.yaml= 之后再启动。解密失败则降级为空订阅状态启动（直连仍可用），防止反复 respawn；
-换订阅： =secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"= （或 =secrets edit= ） 后 =herd restart mihomo-daemon= 。
+换订阅： =secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"= （或 =secrets edit= ）后 =herd restart mihomo-daemon= 。
 
 脚本开头 9 行采用 =${VAR:-@VAR@}= 形式：构建期由「服务装配」的替换表把 =@VAR@= 填成 store 路径，运行期同名环境变量可以覆盖它（ =DATA_DIR= 那行是同一模式、默认值为字面量，注释里写明了用途）。占位符名与替换表必须一致，写错不会有构建报错，只会把 =@VAR@= 原样留在脚本里。
 
@@ -1418,12 +1418,12 @@ iifname "virbr0" oifname != "virbr0" masquerade
 
 本小节用到四种「文件类」构造器，分工如下：
 
-| 构造器            | 作用                             |
-|-------------------+----------------------------------|
-| =plain-file=      | 纯文本内容的文件                 |
-| =mixed-text-file= | 由字符串与包路径拼出的文本文件   |
-| =program-file=    | 可执行的 Scheme 脚本             |
-| =file->udev-rule= | 把规则文本包装成 udev 规则对象   |
+| 构造器          | 作用                           |
+|-----------------+--------------------------------|
+| =plain-file=      | 纯文本内容的文件               |
+| =mixed-text-file= | 由字符串与包路径拼出的文本文件 |
+| =program-file=    | 可执行的 Scheme 脚本           |
+| =file->udev-rule= | 把规则文本包装成 udev 规则对象 |
 
 =udev-rules-service= 只接受规则对象（或自带规则的包），所以 =mixed-text-file= 的产物还要经 =file->udev-rule= 包一层；=(plain-file "empty" "")= 则是「需要一个 file-like、但内容用不上」时的空占位（ =screen-locker-configuration= 的 =program= 字段在 =using-setuid? #f= 下不会被使用）。
 
@@ -1612,7 +1612,6 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                            #:log-file "/var/log/beesd.log"
                            #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
 
-      ;; ./bees.conf 由上方 #+NAME: bees-conf 块 tangle 生成
       (simple-service 'beesd-conf etc-service-type
                       (list `("bees/2f6b6499-2a27-4583-847f-dd70b9fcb036.conf"
                               ,(local-file "./bees.conf"))))
@@ -1621,17 +1620,7 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                       guix-channels)
 
       (simple-service 'root-services shepherd-root-service-type
-                      (list (shepherd-timer '(flatpak-system-update)
-                                            #~(calendar-event
-                                               #:days-of-week '(saturday)
-                                               #:hours '(18)
-                                               #:minutes '(0))
-                                            #~("/bin/sh"
-                                               #$(%flatpak-update-script "system"))
-                                            #:requirement '(user-processes
-                                                            NetworkManager))
-
-                            (shepherd-timer '(fstrim)
+                      (list (shepherd-timer '(fstrim)
                                             #~(calendar-event
                                                #:days-of-week '(sunday)
                                                #:hours '(19)
@@ -1641,9 +1630,6 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                                                  "-av")
                                             #:requirement '(file-systems))
 
-                            ;; 用运行时路径而非 file-append：file-append 会把某个具体 guix 包
-                            ;; 钉进服务闭包，而该路径始终指向当前系统代的 guix。fstrim 用
-                            ;; file-append 是因为 util-linux 工具没有「跟随当前系统代」这层考虑。
                             (shepherd-timer '(guix-gc)
                                             #~(calendar-event
                                                #:days-of-week '(sunday)
@@ -1662,7 +1648,6 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                            #:log-file "/var/log/smartd.log"
                            #:documentation "S.M.A.R.T. 磁盘健康监控守护。")
 
-      ;; ./smartd.conf 由上方 #+NAME: smartd-conf 块 tangle 生成
       (simple-service 'smartd-conf etc-service-type
                       (list `("smartd.conf"
                               ,(local-file "./smartd.conf")))))
@@ -1762,7 +1747,7 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 *** 桌面服务
 替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先，仅 greetd/login/polkit，sudo/su 走纯密码）、蓝牙与休眠 Polkit 提权规则；NTP 改用国内授时源（cn.pool/aliyun/ntsc），udisks2 补 ntfs3 挂载选项，/etc/hosts 屏蔽 QQ 更新域名。
 
-udisks2 挂载选项（补 =ntfs3_allow= 白名单，否则 udisks 拒绝大量挂载参数）:
+udisks2 挂载选项（补 =ntfs3_allow= 白名单，否则 udisks 拒绝大量挂载参数）：
 
 #+NAME: udisks-mount-options-conf
 #+begin_src conf :tangle ../tmp/mount_options.conf
@@ -1874,9 +1859,6 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
 
          (service gvfs-service-type)
 
-         ;; file-union 不能换成裸 local-file：polkit 扩展要求传入的 file-like
-         ;; 内部路径以 share/polkit-1/ 开头；规则文件由下方 #+NAME: 50-hibernate.rules
-         ;; 块 tangle 生成（tmp/50-hibernate.rules）
          (simple-service 'hibernate-polkit polkit-service-type
                          (list (file-union
                                 "polkit-hibernate-rules"
@@ -1902,7 +1884,6 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
                    (adaptive? #t)
                    (ignore-cpuid-check? #t)))
 
-         ;; ./mount_options.conf 由上方 #+NAME: udisks-mount-options-conf 块 tangle 生成
          (simple-service 'udisks-ntfs3 etc-service-type
                          (list `("udisks2/mount_options.conf"
                                  ,(local-file "./mount_options.conf"))))))
@@ -2211,7 +2192,7 @@ polkit.addRule(function(action, subject) {
    "filezilla"
    "keepassxc"
    "kdeconnect"
-   "motrix-next-bin"
+   "rayburst-bin"
    "seahorse"
    "wine64-staging"
 
