@@ -30,7 +30,7 @@ window-rule {
   Noctalia publishes blur regions automatically when ext-background-effects is available.
 */
 layer-rule {
-  match namespace="^noctalia-(bar-default|notification|dock|attached-panel|panel|osd)$"
+  match namespace="^noctalia-(notification|dock|attached-panel|panel|osd)$"
   background-effect {
     xray false
     // blur false
@@ -38,7 +38,7 @@ layer-rule {
 }
 
 layer-rule {
-  match namespace="^noctalia-bar-topbar"
+  match namespace="^noctalia-bar-*"
   background-effect {
     blur false
   }
