@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# dsh tui — dsh-TUI 插件启动器（bin/dsh 的 tui 子命令与桌面入口共用；
+# 一包一入口布局见 bin/dsh）。
+#
+# 上游设计：`dsh-tui` 的 bin 是「双态启动器」——住在 $DSH_HOME/profiles/
+# dsh-tui/node_modules/.../bin/ 内的一份是完整逻辑，全局 npm 安装的那份只是
+# 找到 profile 副本后委托的瘦壳。本脚本跳过瘦壳，直接执行 profile 内的完整
+# 副本（$DSH_TUI_BIN 可覆盖，测试用），等价于上游的一键安装结果。
+#
+# 为什么值得一个子命令：launcher 独有的子命令（version / doctor / safe /
+# update / --resume）都只在这一层，`dsh --profile dsh-tui` 触达不了；而
+# 一包一入口规则下不能再往 ~/.local/bin 添 dsh-tui / dst 两个新入口，
+# 挂靠成 dsh 的子命令是唯一合规形态。
+#
+# 环境：TUI 自身读 DSH_HOME（缺省 ~/.dsh）与 DEEPSEEK_API_KEY；交互要求
+# 真实 TTY（agent 会话里跑会在 ink 的 setRawMode 上 EIO，属预期）。
+set -euo pipefail
+
+: "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
+export DSH_HOME
+
+_tui_bin="${DSH_TUI_BIN:-$DSH_HOME/profiles/dsh-tui/node_modules/@deepseek-harness-tui/dsh-tui/bin/dsh-tui.js}"
+
+if [[ ! -r "$_tui_bin" ]]; then
+	printf 'dsh tui: 找不到 %s\n' "$_tui_bin" >&2
+	printf 'dsh tui: 先安装插件：dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>\n' >&2
+	exit 127
+fi
+
+# 透传全部参数（version / doctor / safe / update / --resume ...）。
+exec node "$_tui_bin" "$@"

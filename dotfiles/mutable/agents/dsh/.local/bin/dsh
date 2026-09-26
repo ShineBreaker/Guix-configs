@@ -107,9 +107,12 @@ fi
 # allowBuilds 迁移，libexec/dsh-web 的 chromium App 窗口 / tailscale 远程信任）。
 # 原生行为须经 CLI 本体直调触达：$_cli_bin update|web——libexec/dsh-web 内部起
 # 服务本就直调 $_cli_bin 的 `web --no-open`，不经本 wrapper，无递归。
+# `dsh tui` 同理遮蔽为 dsh-tui 插件的启动器（profile 内 bin 副本，见
+# libexec/dsh-tui 头注释）：上游 CLI 没有 tui 子命令，故不存在覆写问题。
 case "${1:-}" in
 update) exec "$_libexec_dir/dsh-update" "${@:2}" ;;
 web) exec "$_libexec_dir/dsh-web" "${@:2}" ;;
+tui) exec "$_libexec_dir/dsh-tui" "${@:2}" ;;
 esac
 
 if [[ ! -x "$_cli_bin" ]]; then
