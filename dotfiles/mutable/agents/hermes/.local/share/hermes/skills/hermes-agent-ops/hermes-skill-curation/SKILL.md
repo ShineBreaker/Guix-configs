@@ -59,6 +59,54 @@ metadata:
    ```
    **正确顺序**:`git add <untracked_dir>` 先把目录纳入索引,**再** `git mv <src> <dest>`。或者改用纯 `mv` + 后续 `git add <dest>` + `git rm` 已跟踪文件(适用于混合状态)。**搬迁前必须跑 `git status` 看基线**,把 `??` 未跟踪列出来单独处理。`mv` + 后续 `git rm -r <deleted_src>` 也能工作,但 git history 会断成"先 add 后 rm"两段而非 rename。
 
+## 1.9 skills 目录折叠(folding)成整条软链后的两件事
+
+> 适用场景:`~/.local/share/hermes/skills` 不再是 stow 逐文件软链的形态,而是**整条软链**指向仓库源(`ln -s <repo>/dotfiles/mutable/agents/hermes/.local/share/hermes/skills`)。用户可能主动改成这个形态(备份更方便、一次覆盖全部 skill)。
+
+### 1.9.1 折叠后 `_serve_skill_file` 的 containment 检查自然成立
+
+折叠前(no-folding:目录真、文件软链)会让 `skill_view` 读软链 skill 的支持文件报 `Path escapes allowed directory`——`validate_within_dir` 解析两侧,target 落到仓库源而 `skill_dir` 还在部署位。**折叠后 root 与文件同源,这个 bug 自动消失**,不需要给上游打补丁。所以在动手改 hermes 源码「修」这类问题前,先确认当前部署形态——补丁可能在形态变更后已经无意义。
+
+### 1.9.2 折叠后 stow 的 `.stow-local-ignore` 失效,运行时产物靠 `.gitignore` 挡
+
+no-folding 时代 `.stow-local-ignore` 能挡住运行时产物不进 stow 树;**整条软链整个绕过了 stow**,那些产物会直接写进仓库源。必须逐类加进仓库根的 `.gitignore`,否则 `git status` 永远显脏:
+
+- skills 下:`.archive/`、`.hub/`、`.usage.json`、`.curator_state`、`.curator_ledger.jsonl`、`.bundled_manifest`、`.curator_backups/`(curator 快照,单份可达数 MB)
+- 顶层(HERMES_HOME 已整体受影响时):`logs/`、`backups/`、`cache/`、`audio_cache/`、`image_cache/`、`sessions/`、`pairing/`、`state/`、`Trash/`、`*.db*`、`*.pid`、`processes.json`、`spawn-ledger.json`
+
+**glob 陷阱**:gitignore 的 `*` 不跨扩展名,`*.db` 匹配不到 `kanban.db.probe` / `kanban.db-shm`。用 `*.db*` 一并覆盖同族文件。
+
+**验证 ignore 真生效**(不要只看 `git status` 干净就信):造探针文件再查可见性。
+
+```python
+import subprocess, pathlib
+base = pathlib.Path('<仓库内 hermes 源路径>')
+bad = []
+for name in ['logs/probe.log', 'kanban.db-shm', 'state.db-wal', 'gateway.pid']:
+    p = base / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text('x\n')
+    if subprocess.run(['git', 'status', '-s', str(p)], capture_output=True, text=True).stdout.strip():
+        bad.append(name)
+    p.unlink()
+print(f'{len(bad)} 个仍可见' if bad else '全部被 ignore')
+```
+
+### 1.9.3 折叠后 checkout 里会出现到仓库的重复视图
+
+`~/.local/share/hermes/skills -> <repo>/dotfiles/.../skills` 后,hermes-agent checkout 内可能出现一个 `dotfiles/` 实体目录(某些代码按相对路径回溯到仓库根时留下的残留)。它会让 checkout 的 `git status` 永远显示 `?? dotfiles/`,干扰后续所有 diff 检查。**陈旧残留直接 trash,别留着「也许有用」**——它的内容在仓库源里都有。
+
+### 1.9.4 该进仓库源的、该留在部署位的
+
+| 内容 | 去处 | 理由 |
+| --- | --- | --- |
+| `cron/jobs.json` | 折叠进仓库源(单文件软链即可) | 6+ 个 job 的完整定义,丢了要重写 |
+| `hooks/<name>/{HOOK.yaml,handler.py}` | 整目录折叠 | 自建 hook,体积极小 |
+| `cron/output/`、`cron/executions.db`、`cron/notepad.db` | 留部署位 + gitignore | 每次执行都在写 |
+| `skills/.hub/`、`skills/.curator_backups/` | 留部署位 + gitignore | hub 安装缓存 / curator 快照 |
+
+**单文件软链优先于整目录**:cron 目录里 `jobs.json` 该备份但 `output/` 有 17 项运行时产物,只链 `jobs.json`,不要链整个 `cron/`。
+
 ## 2. 标准精简协议(7 步)
 
 ### Step 1: 拍板前必须交叉验证

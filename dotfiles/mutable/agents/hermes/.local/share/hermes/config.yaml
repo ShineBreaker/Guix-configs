@@ -229,9 +229,9 @@ auxiliary:
     model: ''
     timeout: 60
   curator:
-    provider: auto
-    model: ''
-    timeout: 600
+    provider: opencode-go
+    model: 'glm-5.3'
+    timeout: 1800
   monitor:
     provider: auto
     model: ''

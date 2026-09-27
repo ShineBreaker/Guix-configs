@@ -296,6 +296,52 @@ gpgconf --check-programs
 
 ---
 
+### 4.7 `home-daemon-service` 注入环境变量(nix-ld 兜底范式)
+
+> 适用场景:shepherd 起的 daemon 需要一组「通常由父环境继承、但丢失就跑不动」的变量。典型:`hermes-gateway` / `hermes-backend` 需要 `NIX_LD` + `NIX_LD_LIBRARY_PATH`(venv 原生扩展的 libgcc 依赖,根因与诊断见 `hermes-install-layout` §5.5)。
+
+**`home-daemon-service` 默认 `#:environment-variables (environ)`**——纯继承 shepherd 自己的环境。要显式补变量,先给助手加一个形参:
+
+```scheme
+(define* (home-daemon-service name command
+                              #:key (requirement '())
+                              (auto-start? #t) (respawn? #t)
+                              (environment-variables (environ))
+                              (documentation "[No documentation.]"))
+  (shepherd-service
+   (provision (list name))
+   (requirement requirement)
+   (documentation documentation)
+   (start #~(make-forkexec-constructor
+             (list #$@command)
+             #:environment-variables #$environment-variables   ; ← (environ) 改成 #$<形参>
+             #:log-file (string-append (getenv "XDG_STATE_HOME")
+                                       "/shepherd/" #$(symbol->string name)
+                                       ".log")))
+   (stop #~(make-kill-destructor))
+   (auto-start? auto-start?)
+   (respawn? respawn?)))
+```
+
+调用处把 gexp 传进去(两个服务各一份,不要用共享的 `define` 变量):
+
+```scheme
+#:environment-variables
+#~(append (environ)
+          (let ((ld (getenv "NIX_LD"))
+                (p (getenv "NIX_LD_LIBRARY_PATH")))
+            (append (if ld `(("NIX_LD" . ,ld)) '())
+                    (if p `(("NIX_LD_LIBRARY_PATH" . ,p)) '()))))
+```
+
+**三个必须守住的点**:
+
+1. **取值必须在 gexp 内,不能提到配置期**。写成 `(define %env (append (environ) ...))` 会在**配置求值时**跑 `(getenv)`——那时可能以 root 执行重建,取到的是 root 的环境(没有这些变量),值被烘焙进服务闭包后就永远是错的。这正是 `config.org` 里 `#~(string-append (getenv "HOME") ...)` 反复强调的同一条陷阱。
+2. **以 `(environ)` 为基底再 `append`,不要从头构建列表**。丢掉 PATH / HOME 会让服务直接起不来(与 §7.10 反模式同源)。
+3. **`(if x '(... ) '())` 做条件追加**,取不到就不加,行为退回纯继承——避免在缺该变量的机器上把空值写进 env。
+
+**改动后必须 `herd restart <svc>`**:`blue home` 不重启已在跑的 shepherd 守护进程(§4.4)。
+
 ## 5. AGENTS.md 翻新(blue structor 范式)
 
 **用户偏好(2026-06-21)**: "路径不应该是手写的,应该全部依靠工具生成"。AGENTS.md 里的目录树段**必须**用 `blue structor` 自动维护,**禁止**手写。

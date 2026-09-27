@@ -1,7 +1,7 @@
 ---
 name: skill-authoring
 description: "How to author a Hermes Agent skill the right way. Covers the two non-negotiable structural principles — **self-contained** (all runnable artifacts ship inside the skill directory; backup = usable) and **progressive disclosure** (SKILL.md is a thin router; details live under `references/`, `templates/`, `scripts/`) — the directory layout, file-type rules, decision trees, **which of the 12 existing categories a new skill belongs to (never top-level `<skill-name>/`)**, and a pre-publish checklist. Triggers: writing a new skill, refactoring an existing one's structure, wondering 'should this go in SKILL.md vs references()' / 'which category fits', preparing for backup/share, noticing a self-contained or progressive-disclosure violation, the user complaining 'too verbose' / 'in the wrong place', or **discovering a real use case the skill doesn't cover** — patch the skill (§6 last row) instead of inventing a workaround."
-version: 1.13.0
+version: 1.14.0
 license: MIT
 metadata:
   hermes:
@@ -297,6 +297,52 @@ content is correct.
       the field-change size). See §6 (file-edit safety row) for
       why.
 
+### 5.1 Publishing into a dotfiles-managed skills tree
+
+On a Guix-stow setup, `skill_manage(create)` writes the skill to
+the **deploy path** (`~/.local/share/hermes/skills/<cat>/<name>/`)
+as **real files** — the dotfiles repo receives nothing. Every
+stow-managed sibling instead has its files as **symlinks into the
+repo source**, so a skill left at the deploy path silently sits
+outside version control and outside the user's backup.
+
+Publish it before calling the task done:
+
+1. **Learn the link shape from a working sibling; never assume
+   it.** stow runs `--no-folding`: the skill's *directories* are
+   real on the `$HOME` side, and only the *files* inside them are
+   symlinks (`SKILL.md`, `references/*.md`, `scripts/*.py` →
+   `.../dotfiles/mutable/.../<same relative path>`). A skill whose
+   `SKILL.md` is a real file is unpublished, not deployed.
+2. **Copy the source into the repo first, then link.** `cp -r`
+   the skill directory into the repo path, `trash-put` each
+   deploy-side real file, and `ln -s <repo path> <deploy path>`.
+   Linking before the repo copy exists leaves a dangling skill.
+3. **Verify the shape, not the file count**: every file under the
+   skill dir is a symlink whose target exists,
+   `find <skills root> -xtype l` is empty, and the script still
+   runs when invoked through the symlink path.
+4. **Prefer `blue stow <pkg>` over hand-made links**, but read its
+   failure mode: it refuses to overwrite a real directory that
+   already exists at the target entry, and it **aborts the whole
+   package on the first conflict** — one pre-existing real file
+   anywhere in the tree (a log, a cache, another package's file)
+   fails every entry, not just that one. When it aborts, sort the
+   conflict list: paths under `logs/` or `cache/` are runtime
+   state and expected; anything under `skills/` is an unpublished
+   skill directory — exactly the case `skill_manage(create)`
+   produces.
+
+Two traps when `blue` itself will not start:
+
+- `incompatible bytecode version` while loading `blueprint.scm`
+  means `.blue-store/local-compile/*.go` was compiled by a
+  different guile than the wrapper runs. Remove the stale `.go`
+  cache and retry — the script recompiles on the next run.
+- A skill directory created by `skill_manage` is precisely the
+  "already a real directory" case above, which is why
+  hand-linking (step 2) is the fallback when `blue stow` aborts.
+
 ## 6. Common violations (audit signals)
 
 When auditing or refactoring existing skills, look for these —
@@ -318,6 +364,7 @@ each one is a fix-on-sight.
 | Skill hardcodes one author's repo path / machine / channel set as if it were general truth (e.g. "run `cd ~/Projects/Config/X && blue home`" presented as the only way) | The skill only works for that one person's environment; every other reader must mentally translate it, and it rots the moment their layout changes. | Teach the universal pattern (task runner wraps `guix`; dotfiles deploy via symlink; channels lock for reproducibility) and present the author's setup as *one framed example* in `references/<repo>-example.md`. |
 | SKILL.md's `References:` block cites a `references/<topic>.md` that does not exist on disk | The pointer looks authoritative but loads nothing — the reader believes the depth exists and stops looking. A skill's own verify script often reports it as `optional, skipped if missing`, so the dangling link never fails anything. | When a SKILL.md reference list names a file, confirm the file exists before shipping; if the cited content is genuinely missing, write it (topic-named, not date-named) or delete the citation. Run the skill's verify script and read which checks were SKIPPED rather than only the PASS tally. |
 | Assuming the working tree's `M` entries are yours | A registry file may already carry uncommitted edits from a prior session or the user; a whole-file rewrite or a broad `git add` silently absorbs them into your change and your commit message cannot explain them. | Scope every diff to your own files with `git diff <path>` before staging, and stage with explicit paths (`git add -- <path>`), never `git add -A` or `git add .`. Report pre-existing uncommitted changes to the user instead of absorbing them. |
+| `skill_manage(create)` output left as real files under `~/.local/share/hermes/skills/` | The dotfiles repo never received the skill; `git status` and the user's backup both miss it, and the next `blue stow` aborts on it | Copy into the repo source, replace deploy files with symlinks, verify with `find -xtype l` and a run through the symlink path (see §5.1) |
 
 ## 7. clarify() options belong in `choices[]`, NEVER inside `question`
 

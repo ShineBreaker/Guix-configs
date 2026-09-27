@@ -196,6 +196,39 @@ Hermes 二进制**不再报 `libglib-2.0.so.0` 缺失**,直接进 Chromium 启�
 
 完整文件见 `references/desktop-fhs-rescue.md`。
 
+### 5.5 venv 原生扩展的 libgcc 依赖(nix-ld 兜底)
+
+Hermes venv 里的 `pydantic_core`(Rust 编译的 `.so`)等原生扩展依赖 `libgcc_s.so.1`。纯 Guix 系统**没有系统级 libgcc**,靠 nix-ld 兼容层提供——`NIX_LD`(指向 glibc 的 `ld-linux-x86-64.so.2`)+ `NIX_LD_LIBRARY_PATH`(含各 `/gnu/store/*-gcc-*/lib`)。
+
+**症状极具误导性**:Python 把底层 `.so` 的依赖失败包装成模块缺失,cron / 后台进程报的是
+
+```
+RuntimeError: Failed to initialize OpenAI client: No module named 'pydantic_core._pydantic_core'
+```
+
+文件其实一直在(`pip check` 无问题、dist-info 与 `.so` 的 mtime 都是装机那天)。**不要重装 venv、不要 `pip install --force-reinstall`**——那是拿一小时去修一个环境变量问题。
+
+**诊断(30 秒定生死)**:干净环境复现,再补变量二分。
+
+```bash
+P=$HERMES_HOME/hermes-agent/venv/bin/python
+$P -c "import pydantic_core"        # 交互 shell:OK(带了 nix-ld 变量)
+env -i HOME=$HOME PATH=/usr/bin:/bin $P -c "import pydantic_core"
+# → ImportError: libgcc_s.so.1: cannot open shared object file   ← 真实根因
+env -i HOME=$HOME PATH=/usr/bin:/bin \
+  NIX_LD="$NIX_LD" NIX_LD_LIBRARY_PATH="$NIX_LD_LIBRARY_PATH" \
+  $P -c "import pydantic_core, openai; from openai import OpenAI; OpenAI(api_key='x', base_url='http://127.0.0.1:1/v1')"
+# → 全通过 = 根因就是这两个变量
+```
+
+**两个变量要一起给**:只给 `NIX_LD_LIBRARY_PATH` 不够(nix-ld 要靠 `NIX_LD` 指向的 `ld-linux` 才会去读它)。`NIX_LD` 的值形如 `/gnu/store/*-glibc-*/lib/ld-linux-x86-64.so.2`。
+
+**变量从哪来**:图形会话 → home shepherd → gateway,一路继承。所以某个 gateway / cron 实例带不带这两个变量,取决于**启动它的那个上下文**;在缺失该上下文的环境里启动就会丢(诊断时对比 `env -i` 复现失败、再与 `/proc/<pid>/environ` 逐项 diff)。
+
+**修复**:在 `source/config.org` 的 `hermes-services` 块给 gateway / dashboard 显式补上,取值必须留在 gexp 内。范式见 `guix-configs-workflow` §4.7。
+
+> 这条与 §5 的 Electron FHS 救活是同一类问题的两个面:预编译产物在纯 Guix 上缺共享库。Electron 那条用 `guix shell --emulate-fhs` 补,venv 原生扩展这条靠 nix-ld 变量——**别混用**,`--emulate-fhs` 救不了 venv 里的 `.so`,nix-ld 也救不了硬链 `/usr/lib` 的 Electron。
+
 ## 6. 何时不适用
 
 - **非 Nix 部署的用户**(pip/uv 装的 hermes,二进制在 `~/.local/share/hermes/hermes-agent/venv/bin/hermes` 或 `/usr/local/bin/hermes`):本 skill 的 wrapper 模板会探测失败,但"trap"段仍然适用 — Nix 是本用户的硬约束,但 cron script 约束是 hermes 普适行为
@@ -203,6 +236,8 @@ Hermes 二进制**不再报 `libglib-2.0.so.0` 缺失**,直接进 Chromium 启�
 
 ## Pitfalls(踩过的)
 
+- **交给用户 apply 的补丁必须由 `git diff` 生成,不要手写 `@@` 头** — 手写行号和上下文行对不上,`git apply` 直接报「补丁损坏」。正确做法:改一份副本 → `cp` 回原位 → `git diff > fix.patch` → 还原工作区。git 自己算的行号绝不会错。
+- **补丁在交付前必须验证它真的改变了失败行为** — 一份根因推理错误的补丁照样「看起来合理」。判据是同一组用例在打补丁前后从 FAIL 变 PASS;只论证「这行应该能修」不算验证。推理连续两次被推翻时,停下来读真实代码路径,不要再出第三版猜测补丁。
 - **不要写死 `/nix/store/<hash>-hermes-agent-env/bin/hermes`** — `nix profile update` 后 hash 会变,wrapper 立即失效。要动态探测(见 §1)
 - **不要用 `find /nix/store -name hermes -type f` 全盘搜** — store 里有 19 个 hermes 二进制(0.17.0、0.18.0、source 镜像等),`find` 全盘遍历慢且容易误选老版本。用 `ls -t .../hermes-agent-env/bin/hermes` 精准定位
 - **不要把 wrapper 放在 `/usr/local/bin/hermes`** — 用户环境是 Nix+Guix,`/usr/local/` 是 system-managed(ro),用户偏好 ~/.local/bin

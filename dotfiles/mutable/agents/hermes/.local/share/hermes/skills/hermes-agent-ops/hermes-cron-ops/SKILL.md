@@ -122,9 +122,22 @@ hermes cron edit <job_id> --model <model> --provider <provider>
 
 ```bash
 hermes cron list                     # 所有任务 + last_status / last_delivery_error
-hermes cron runs <id> --limit 5      # 执行历史（executions.db，含具体错误）
+hermes cron runs <id> --limit 5      # 执行历史（executions.db，含具体错误）nhermes cron doctor                   # 跨 job 健康扫描：一次列出所有失败 job 的 last_error
+hermes cron notepad <id> get <key>   # 读 job 的 KV 记事本
 ls $HERMES_HOME/cron/output/         # 本地投递的输出文件
 hermes gateway status                # gateway 是否在跑（不显示各平台连接详情）
+```
+
+**`hermes cron doctor` 是排查「一批 job 同时挂」的第一站**，比逐个 `runs` 快：它会把每个失败 job 的 `last_error` 归好类。多个 job 报**同一个**底层错误时(如三个 job 全是 `No module named 'pydantic_core._pydantic_core'`)，先假设是共享环境问题而不是三个 job 各自写错——共同上游是 gateway 进程本身。根因与修法见 `hermes-install-layout` §5.5。
+
+**读 executions.db 时先对齐时间线**。`failed` / `completed` / `unknown` 的分布能直接指出环境切换的边界(例:一批 job 在某个时刻之后集体失败、另一个同类 job 在更晚的时刻已恢复 → 是当时那个 gateway 实例的问题,不是 job 定义的问题):
+
+```bash
+python3 -c "
+import sqlite3
+con = sqlite3.connect('$HERMES_HOME/cron/executions.db')
+for r in con.execute('select job_id, started_at, finished_at, status from executions order by rowid desc limit 12'):
+    print(f'{r[1][:19]} -> {(r[2] or \"?\")[:19]:19s} {r[3]:10s} {r[0]}')"
 ```
 
 ## Pitfalls

@@ -1,0 +1,12 @@
+name: qq-connect-is-reconnect
+description: >-
+  Monkey-patch QQAdapter.connect() to accept the is_reconnect kwarg that
+  gateway/run.py::_connect_adapter_with_timeout() forwards. Hermes 0.17.0
+  upstream merged the kwarg into the run-time connect call but forgot to
+  update gateway/platforms/qqbot/adapter.py::QQAdapter.connect() — every
+  reconnect attempt fails with "got an unexpected keyword argument
+  'is_reconnect'". This hook wraps the bound method on the live adapter
+  instance so the watcher can keep cycling reconnects without manual
+  intervention. Remove once upstream lands the matching adapter signature.
+events:
+  - gateway:startup
