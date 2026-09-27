@@ -1,7 +1,7 @@
 ---
 name: agent-config-metabolism
 description: "Weekly 14-check red/green audit of agent config bloat. Diagnoses inject size, zombie skills, state drift, monitor honesty, log bloat, secret leaks."
-version: 0.3.0
+version: 0.3.1
 author: Hermes
 license: MIT
 platforms: [linux, macos]
@@ -324,6 +324,36 @@ To change delivery later: `cronjob(action='update', job_id='<id>', deliver='loca
   root cause before treating it as a network-level interception: read the
   gateway PID's real environ, probe the endpoints with openssl, check the
   error timeline against the process start time.
+- **Check 9 signature regex must (a) tolerate a `[session_id] ` prefix and
+  (b) be level-aware.** Fixed 2026-09-27: (a) `ERROR [cron_xxx] module: msg`
+  lines (cron/agent logs embed a session tag) all failed the module match
+  and collapsed into one "ERROR" fallback bucket — 87 events of many root
+  causes looked like one signature; (b) the old `"ERROR" in rest` substring
+  test also swallowed WARNING lines whose embedded tool output (chromium
+  stderr, pytest headers) printed the word ERROR — captured tool output is
+  not a runtime error event. Correct form: `rest.startswith("ERROR")` +
+  `re.search(r"ERROR\\s+(?:\\[[^\\]]*\\]\\s+)?([\\w.]+):?\\s*(.*)", rest)`.
+- **Check 14 bare-PEM markers in library sources and transcripts.** 14 files
+  hit `-----BEGIN ... PRIVATE KEY-----` with zero real keys: google-auth /
+  cryptography library code carries the marker as a string constant, node
+  compile-cache embeds doc examples with XXXX bodies, delegation task logs
+  echo a scanner tool's own output. A bare BEGIN marker is not a leaked key —
+  require a complete block (BEGIN + ≥100 chars of `[A-Za-z0-9+/\s]` + END)
+  before flagging; the placeholder-degeneracy check (2026-08-28) still
+  applies to non-PEM patterns.
+- **Check 3 runtime-debris excludes are legitimate; excluding real signal is
+  not.** `.Trash-1000/**` (deleted files awaiting purge — counting them
+  double-reports a done cleanup) and Chromium `Singleton*` sockets under
+  `cache/browser-use/` (stale by design after browser exit) are noise by
+  nature. Contrast: 77 broken `hermes-agent/node_modules/**` shims from an
+  incomplete npm workspace install were NOT excluded — real signal (desktop
+  build tooling broken), stays in the report.
+- **Editing the script under this deployment: repo copy and live copy are
+  the same file** (stow-deployed skills live under Guix-configs
+  `dotfiles/mutable/agents/hermes/.../skills/`; the edit-gate blocks direct
+  writes to `~/.local/`, so patch the repo-side path — the deployed path
+  sees the same bytes). After editing: rerun the script and check yaml
+  top-level keys vs CHECKS keys parity (`output:` is a legit yaml-only key).
 
 ## Verification
 
