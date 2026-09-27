@@ -20,6 +20,11 @@
    - 无该标记的目录（如 `agents/`、`tools/`）视为分组目录，Stow 会自动下钻扫描其子目录中的包。
 3. **忽略规则（`.stow-local-ignore`）**：
    - 逐行写入 Perl 正则表达式（匹配路径结尾，支持 `#` 注释），用于排除包内的运行时产物、构建缓存或临时文件。
+4. **目录折叠（`.stow-folding`）是按包 opt-in，且一个 `$HOME` 目录只能被一个包折叠**：
+   - 有标记 → tree folding，目标目录整条变成指向源的软链（如 `tools/appimage-run`，`~/.local/libexec/appimage-run_lib` 是单条链）。
+   - 无标记 → `--no-folding`，目标目录保持真实目录、stow 只对单个文件建软链（**默认形态**）。
+   - 两个包若都想折叠同一目录（如 `agents/hermes` 与 `tools/appimage-run` 都落在 `~/.local/` 下），**先部署者赢得该目录**，后到者只能「下探」进真实目录逐文件放链，形态退化为 no-folding。因此 `agents/hermes` 曾带的 `.stow-folding` 是**无效标记**（2026-09-27 已移除）——它同时有海量运行时产物（`logs/`、`state.db`、`sessions/`），no-folding 是唯一安全形态，靠 `.stow-local-ignore` 那一串规则防污染。
+   - 加标记前先确认目标目录没有被别的包占窝，否则标记静默失效。
 
 ## 目录结构
 

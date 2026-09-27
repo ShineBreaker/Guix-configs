@@ -49,6 +49,12 @@
 #   * --dry-run 豁免是片段级的：仅剔除「blue 前缀且带 --dry-run」的
 #     片段，其余片段照常检查；`sudo ... --dry-run` 这类把 --dry-run
 #     当免死金牌的不豁免。
+#   * GATE_NO_WRITE_TOOLS=1（无写工具会话标记，由 DSH gate.js 按当前
+#     agent 作用域检测后设置）只做输出降级，不制造任何放行：BLOCK 不附
+#     redirect_conventions 的 ALT（其引导的「改用 Edit 工具」在该模式
+#     不存在，模型会反复调用不存在的工具）、interactive 去掉「请使用
+#     对应工具」尾巴、NOTES/REDIRECT 软提示整条抑制；硬拦截、AUTO_ALLOW、
+#     REWRITTEN 一概不变。其他端不设该变量，行为零变化。
 #   * edit 走双路径：逻辑路径（不解析 symlink）做 meta-frozen / 部署位置
 #     检查——~/.config 下大量路径是 store 软链，物理解析会让这两类保护
 #     落空；物理路径（解析 symlink）做 frozen_paths / frozen_globs——防
@@ -86,6 +92,13 @@ fi
 
 # 人工总开关（固定路径，不接受改道——见文件头安全不变量）
 GATE_PAUSE_FILE="/run/agent-gate.off"
+
+# 无写工具会话标记：DSH gate.js 在 pre-execute 检测到当前 agent 作用域
+# 无 write/edit 工具时置 1（simple-mode 一类 preset 只有持久 bash）。
+# 此时 redirect_conventions 的替代提示（引导「改用 Edit 工具」）不可执行，
+# 故降级输出：BLOCK 不附 ALT 回落通用理由、interactive 去掉「请使用对应
+# 工具」尾巴、NOTES/REDIRECT 抑制；硬拦截与 REWRITTEN 不变（见文件头）。
+NO_WRITE_TOOLS="${GATE_NO_WRITE_TOOLS:-0}"
 
 emit() {
 	local payload="${2//$'\n'/ }"
@@ -263,10 +276,11 @@ gate_bash() {
 			if [[ "$hit" == "rm" ]]; then
 				emit BLOCK "rm 已冻结：agent 一律不直接删除文件。请改用 trash-put <path> / gio trash <path>，或 mv <path> /tmp/ 保留可恢复副本；确需永久删除请提醒用户手动执行。"
 			else
-				# redirect_conventions 里声明了该冻结词的替代方案时附上（如 git apply → Edit 工具）
+				# redirect_conventions 里声明了该冻结词的替代方案时附上（如 git apply → Edit 工具）；
+				# 无写工具会话不附（其引导的编辑工具在该模式不存在），回落通用冻结理由
 				local ALT
 				ALT="$(jq -r --arg k "$hit" '.redirect_conventions[$k] // empty' <<<"$MERGED" 2>/dev/null)"
-				if [[ -n "$ALT" ]]; then
+				if [[ -n "$ALT" && "$NO_WRITE_TOOLS" != "1" ]]; then
 					emit BLOCK "${ALT}"
 				else
 					emit BLOCK "冻结命令「${hit}」禁止由 agent 执行。如确需执行请提醒用户手动运行。"
@@ -286,7 +300,12 @@ gate_bash() {
 		[[ -z "$name" ]] && continue
 		esc="$(sed_escape_re "$name")"
 		if printf '%s' "$CMD" | grep -qE "${PREFIX}${esc}\b"; then
-			emit BLOCK "禁止交互式命令 ${name}（无 TTY 会挂起），请使用对应工具"
+			# 无写工具会话不引导「请使用对应工具」——该模式通常没有对应工具可调
+			if [[ "$NO_WRITE_TOOLS" == "1" ]]; then
+				emit BLOCK "禁止交互式命令 ${name}（无 TTY 会挂起）"
+			else
+				emit BLOCK "禁止交互式命令 ${name}（无 TTY 会挂起），请使用对应工具"
+			fi
 			return 0
 		fi
 	done < <(jq -r '.interactive_commands[]?' <<<"$MERGED" 2>/dev/null)
@@ -411,8 +430,8 @@ gate_bash() {
 	done < <(jq -r '.rewrite | to_entries[] | "\(.key)\t\(.value)"' <<<"$MERGED" 2>/dev/null)
 	[[ "$REWRITTEN" != "$CMD" ]] && emit REWRITTEN "$REWRITTEN"
 
-	# 4 非阻塞提示
-	[[ -n "$NOTES" ]] && emit NOTES "本机偏好命令替代：${NOTES}；如适用请改用后重新执行"
+	# 4 非阻塞提示（无写工具会话整条抑制——见文件头安全不变量）
+	[[ -n "$NOTES" && "$NO_WRITE_TOOLS" != "1" ]] && emit NOTES "本机偏好命令替代：${NOTES}；如适用请改用后重新执行"
 	local pat msg REDIRECT_PAT="" REDIRECT_MSG=""
 	while IFS=$'\t' read -r pat msg; do
 		[[ -z "$pat" ]] && continue
@@ -421,7 +440,7 @@ gate_bash() {
 			REDIRECT_MSG="${msg}"
 		fi
 	done < <(jq -r '.redirect_conventions | to_entries[] | "\(.key)\t\(.value)"' <<<"$MERGED" 2>/dev/null)
-	[[ -n "$REDIRECT_MSG" ]] && emit REDIRECT "$REDIRECT_MSG"
+	[[ -n "$REDIRECT_MSG" && "$NO_WRITE_TOOLS" != "1" ]] && emit REDIRECT "$REDIRECT_MSG"
 	return 0
 }
 

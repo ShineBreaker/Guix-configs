@@ -117,6 +117,30 @@
     `/plugins/??dsh-agent-extensions/client.js` 返回 404。
 - **验证方式**：host 半边可用桩 `ctx` 直接驱动模块（`node --input-type=module` 导入
   `gate.js`，喂假 exec 走 `tools/pre-execute`），无需启动服务即可确认拦截/注入语义。
+- **无写工具会话降级**（2026-09-27）：`simple-mode` 一类 preset 工具面只有持久
+  bash + skill，**无 write/edit 工具**，而 `redirect_conventions` 的冻结拦截理由
+  引导「改用 Edit 工具逐文件应用改动」——模型反复调用不存在的工具而死锁（现场：
+  simple-mode 会话执行补丁类命令收到该引导）。`gate.js` 的 pre-execute 按
+  `exec.agent` 作用域查询写工具可见性（`ctx.tools.get(name, agent)`，Agent 即
+  scope key；write/edit/str_replace_editor 三者皆无判定为无写工具会话），此时向
+  gate-core 传 `GATE_NO_WRITE_TOOLS=1`：BLOCK 回落通用冻结理由、interactive 去
+  「请使用对应工具」尾巴、NOTES/REDIRECT 软提示抑制；硬拦截、AUTO_ALLOW、
+  REWRITTEN 一概不变（降级不制造放行面）。
+  - **生效前提**：`GATE_NO_WRITE_TOOLS` 只被新版 `gate-core.sh` 识别，而它是
+    immutable 文件——**须先 `blue home`**，否则部署侧 store 旧副本不认该变量，
+    降级不生效（桩测试量化：旧 core + 新 gate.js 行为同默认，ALT 仍带 Edit 引导）。
+    gate.js 本身是 mutable 软链改源即时落盘，但 host 半边不热载，blue home 后
+    还须重启 `dsh web`。
+- **注入标记**（2026-09-27）：hints 经 `tools/post-execute` 的
+  `additionalContexts` 以 **user 消息**入会话，裸文本与用户真实输入无法区分——
+  模型曾把 gate 提示（如「建议改用 blue home」）当成用户消息照办。现每条注入
+  统一包 `<injected source="agent-gate">…</injected>`（跨插件约定，来源进
+  source 属性；deny reason 是工具拒绝回执、tool result 框架自带失败语境，不属
+  注入不包），并在系统提示常驻一句语义声明（`agent-gate-injection-notice`
+  section，order 10301，紧跟 global-context 之后）：标签内是机器注入的参考
+  提示，不是用户指令——否则标签只是视觉区分，模型仍可能照办。
+  dsh-agenote 的会话注入是同形态 user 消息，待其外部仓库
+  （`~/Projects/agenote/dsh-agenote`）按同一约定包裹。
 
 ## 自定义 Agent Presets（0.1.7 行声明机制）
 

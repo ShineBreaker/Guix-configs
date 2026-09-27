@@ -52,6 +52,10 @@ Anchors 由 `anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 R
 - 暂停：`sudo touch /run/agent-gate.off`；恢复：`sudo rm -f /run/agent-gate.off`；查看状态：`stat /run/agent-gate.off`（存在即暂停中）。
 - 暂停与恢复均由人工在终端执行：agent 不得代劳，不得主动要求用户关闭护栏，也不得创建、删除或改道该开关文件（开关只认固定路径）。
 
+### 无写工具会话降级（GATE_NO_WRITE_TOOLS）
+
+DSH 的 `simple-mode` 一类 preset 工具面只有持久 bash，**无 write/edit 工具**，而 `redirect_conventions` 的拦截理由引导「改用 Edit 工具」——模型反复调用不存在的工具而死锁。`gate-core.sh` 识别环境变量 `GATE_NO_WRITE_TOOLS=1`（由 DSH 的 `gate.js` 按当前 agent 作用域检测写工具可见性后设置）：BLOCK 不附 redirect ALT（回落通用冻结理由）、interactive 去「请使用对应工具」尾巴、NOTES/REDIRECT 软提示抑制；硬拦截、AUTO_ALLOW、REWRITTEN 一概不变——降级只收窄输出，不制造放行面。pi/zcode/crush/hermes 不设该变量，行为零变化。
+
 ## Context — 会话上下文注入
 
 Context 内容分为三层（位于 `.config/agents/context/`），由 `context-select.sh` 决策注入：
