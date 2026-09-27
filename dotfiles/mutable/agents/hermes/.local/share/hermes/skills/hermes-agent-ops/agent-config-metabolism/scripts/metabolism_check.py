@@ -539,8 +539,19 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                     if rest.startswith("Traceback"):
                         in_tb = True
                         continue
-                    if "ERROR" in rest:
-                        m2 = re.search(r"ERROR\s+([\w.]+):?\s*(.*)", rest)
+                    if rest.startswith("ERROR"):
+                        # level-aware: only lines whose level field is ERROR.
+                        # A bare `"ERROR" in rest` also swallowed WARNING lines
+                        # whose *embedded tool output* (chromium/pytest) prints
+                        # the word ERROR — one session's captured stderr is
+                        # not a runtime error event.
+                        # allow a `[session_id] ` prefix between ERROR and the
+                        # module (cron/agent logs): without it every prefixed
+                        # line fails the module match and collapses into the
+                        # single "ERROR" bucket, masking distinct root causes
+                        m2 = re.search(
+                            r"ERROR\s+(?:\[[^\]]*\]\s+)?([\w.]+):?\s*(.*)", rest
+                        )
                         if m2:
                             mod = m2.group(1)
                             msg = m2.group(2) or ""
@@ -646,6 +657,14 @@ def check_plaintext_secrets(cfg: dict) -> tuple[str, str]:
     patterns = cfg.get("grep_patterns", [])
     exclude = cfg.get("exclude_paths", [".env"])
     hits: list[str] = []
+    # a *real* embedded PEM block has 100+ chars of base64 between BEGIN/END
+    # markers; library sources and tool-output transcripts carry bare BEGIN
+    # markers / XXXX placeholders that would otherwise false-positive
+    pem_block_re = re.compile(
+        r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----"
+        r"[A-Za-z0-9+/\s]{100,}"
+        r"-----END (RSA |EC |OPENSSH )?PRIVATE KEY-----"
+    )
     if HERMES_HOME.exists():
         for p in HERMES_HOME.rglob("*"):
             if not p.is_file() or p.stat().st_size > 1_000_000:
@@ -660,6 +679,11 @@ def check_plaintext_secrets(cfg: dict) -> tuple[str, str]:
             for pat in patterns:
                 ms = list(re.finditer(pat, text))
                 if not ms:
+                    continue
+                # PEM marker pattern: require a complete BEGIN..base64..END
+                # block; bare markers in library code / transcript echo are
+                # not leaked keys
+                if "PRIVATE KEY" in pat and not pem_block_re.search(text):
                     continue
                 # degenerate placeholder (e.g. sk- + 20 x's in doc examples) is not a real key
                 real = [
