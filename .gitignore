@@ -7,7 +7,7 @@ __pycache__
 tmp
 node_modules
 
-# Live ISO 构建产物（blue build-iso 的输出落到 dist/）
+# Live ISO 构建产物（just build-iso 的输出落到 dist/）
 dist
 
 .codex
@@ -35,6 +35,49 @@ uv.lock
 .mimosa/
 .video_agent/
 dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.locks/
+
+# hermes skills 运行时产物。该目录已整条软链进仓库源（folding），
+# stow 的 .stow-local-ignore 管不到，只能在这里挡。
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.archive/
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.hub/
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.usage.json
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.curator_state
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.curator_ledger.jsonl
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.bundled_manifest
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.gitignore
+# curator 快照：写进 skills/，而 skills 已折叠成软链，快照会直接落进源树
+dotfiles/mutable/agents/hermes/.local/share/hermes/skills/.curator_backups/
+
+# hermes 顶层运行时产物。HERMES_HOME 已整目录折叠进仓库源，
+# Hermes 会把日志/缓存/session/锁直接写进源树，逐类挡掉。
+dotfiles/mutable/agents/hermes/.local/share/hermes/logs/
+dotfiles/mutable/agents/hermes/.local/share/hermes/backups/
+dotfiles/mutable/agents/hermes/.local/share/hermes/cache/
+dotfiles/mutable/agents/hermes/.local/share/hermes/audio_cache/
+dotfiles/mutable/agents/hermes/.local/share/hermes/image_cache/
+dotfiles/mutable/agents/hermes/.local/share/hermes/sessions/
+dotfiles/mutable/agents/hermes/.local/share/hermes/pairing/
+dotfiles/mutable/agents/hermes/.local/share/hermes/audit/
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/executions.db
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/.fire-*.lock
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/notepad.db*
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/output/
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/usage_audit.jsonl
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/ticker_*
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/catch_up_occurrences
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/.tick.lock
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/.jobs.lock
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/*.bak-*
+# hooks 运行时的 pycache（hook 目录已折叠进仓库源）
+**/hooks/**/__pycache__/
+dotfiles/mutable/agents/hermes/.local/share/hermes/state/
+dotfiles/mutable/agents/hermes/.local/share/hermes/Trash/
+dotfiles/mutable/agents/hermes/.local/share/hermes/*.db*
+dotfiles/mutable/agents/hermes/.local/share/hermes/processes.json
+dotfiles/mutable/agents/hermes/.local/share/hermes/spawn-ledger.json
+dotfiles/mutable/agents/hermes/.local/share/hermes/gateway.pid
+dotfiles/mutable/agents/hermes/.local/share/hermes/gateway.lock
+dotfiles/mutable/agents/hermes/.local/share/hermes/*.pid
 
 # dsh TUI 写进 preset 目录的管理标记（运行时可变状态，部署侧保持真实文件）
 **/.agent-presets/*/.dsh-tui-managed.json

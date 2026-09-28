@@ -44,7 +44,7 @@ blue build
 
 除下方 Guix 标准模块外，配置还会 =load= 两个仓库内文件；=load= 的相对路径以 tangle 时的 =source/= 目录为基准（Emacs 中 =C-c C-c= 执行时同样如此）：
 
-- =source/information.scm= （81 行的小文件） :: 主机名、用户名、文件系统子卷表等全局数据，下文多个配置块的值都取自这里；
+- =source/information.scm= （小文件） :: 主机名、用户名、磁盘拓扑（分区 UUID 等）、文件系统子卷表等全局数据，下文多个配置块的值都取自这里；
 - =source/files/kernel/linux-cachyos-lts.scm= :: 自定义内核包，文件自身带有说明。
 
 #+NAME: modules
@@ -171,9 +171,6 @@ blue build
 <<root-one-shot-service-helpers>>
 <<flatpak-service-helpers>>
 
-;; 定时备份脚本
-<<kb-backup-script>>
-
 ;; 自定义变体包
 <<cachyos-lts-kernel>>
 <<fingerprint-packages>>
@@ -204,6 +201,7 @@ blue build
 (define* (home-daemon-service name command
                               #:key (requirement '())
                               (auto-start? #t) (respawn? #t)
+                              (environment-variables #~(environ))
                               (documentation "[No documentation.]"))
   (shepherd-service
    (provision (list name))
@@ -211,7 +209,7 @@ blue build
    (documentation documentation)
    (start #~(make-forkexec-constructor
              (list #$@command)
-             #:environment-variables (environ)
+             #:environment-variables #$environment-variables
              #:log-file (string-append (getenv "XDG_STATE_HOME")
                                        "/shepherd/" #$(symbol->string name)
                                        ".log")))
@@ -278,45 +276,6 @@ blue build
    " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
    " && exec " flatpak "/bin/flatpak"
    " update --" scope " -y"))
-#+end_src
-
-+ 每日备份脚本（ =kb-backup= timer 专用）：对 Guix-configs 的 hermes 包与 =~/Documents/Org= 知识库各自 =git add= 后，无变更即静默跳过、有变更则按既有风格 =git commit= ；任一步 git 命令失败（如 index.lock 冲突、gpg 签名失败）只向 =~/.cache/kb-backup.log= 追加一条带时间戳的 warning 并继续下一步，整体退出码恒为 0。
-  git 与 gpg 通过脚本内 PATH 前缀（home profile + system profile）定位，不依赖 shepherd 运行环境；提交签名沿用用户 gitconfig（ =commit.gpgsign= ）。
-#+NAME: kb-backup-script
-#+begin_src scheme
-
-(define (%kb-backup-script)
-  (mixed-text-file
-   "kb-backup.sh"
-   "#!/bin/sh\n"
-   "# kb-backup: hermes + Org 知识库每日自动 commit, 日志追加 ~/.cache/kb-backup.log\n"
-   "PATH=\"$HOME/.guix-home/profile/bin:/run/current-system/profile/bin:$PATH\"\n"
-   "log=\"$HOME/.cache/kb-backup.log\"\n"
-   "mkdir -p \"$(dirname \"$log\")\"\n"
-   "warn() { echo \"[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1\" >>\"$log\"; }\n"
-   "\n"
-   ;; hermes 包: 仅 add 该子目录, 避免吞并用户未提交的 WIP
-   ;; 仓库根经 HERMES_HOME 锚点反推（stow 链回仓库的文件），不写死路径
-   "(\n"
-   "  hermes_home=\"${HERMES_HOME:-$HOME/.local/share/hermes}\"\n"
-   "  repo=\"\"\n"
-   "  for anchor in \"$hermes_home/config.yaml\" \"$hermes_home/SOUL.md\"; do\n"
-   "    [ -L \"$anchor\" ] || continue\n"
-   "    target=$(readlink -f \"$anchor\") || continue\n"
-   "    repo=$(git -C \"$(dirname \"$target\")\" rev-parse --show-toplevel 2>/dev/null) || continue\n"
-   "    break\n"
-   "  done\n"
-   "  [ -n \"$repo\" ] || { echo \"找不到链回仓库的 hermes 锚点文件 ($hermes_home)\"; exit 1; }\n"
-   "  git -C \"$repo\" add dotfiles/mutable/agents/hermes || exit 1\n"
-   "  git -C \"$repo\" diff --cached --quiet || git -C \"$repo\" commit -m \"chore(hermes): backup $(date)\" || exit 1\n"
-   ") >>\"$log\" 2>&1 || warn \"hermes 备份失败, 详见上方 git 输出\"\n"
-   "\n"
-   ;; Org 知识库: agenote 卡片仓库, 本地无 remote, add -A 安全
-   "(\n"
-   "  cd \"$HOME/Documents/Org\" || exit 1\n"
-   "  git add -A || exit 1\n"
-   "  git diff --cached --quiet || git commit -m \"chore(backup): auto $(date '+%Y-%m-%d %H:%M:%S')\" || exit 1\n"
-   ") >>\"$log\" 2>&1 || warn \"Org 知识库备份失败, 详见上方 git 输出\"\n"))
 #+end_src
 
 *** 自定义包与补丁
@@ -548,16 +507,14 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 - =/tmp= 不设 =needed-for-boot?= （不需要在 initrd 阶段挂载，开机后再挂；它的开机清理由 =cleanup-/tmp= 服务负责），其他挂载点都是 =#t= ；
 - =/gnu= 是唯一把 =check?= 设为 =#t= 的挂载点，即挂载前先做一次文件系统检查，其余记录都是 =#f= 。
 
-另外 =%swap-uuid= 有意定义在本段：它是 swap 分区 UUID 的单一真源，Kernel 段的 resume=UUID= 内核参数（该字符串自带等号，加等宽标记会破坏 org 配对，故用普通文本）与 =resume-device= 服务都引用它。
+另外，本段用到的分区标识（LUKS / ESP / swap 的 UUID、解锁名、Btrfs 卷标与挂载选项）统一取自 [[./information.scm][information.scm]] 的「磁盘拓扑」段——那里是全仓库分区标识的单一真源， =tools/rescue-chroot.sh= 也直接解析它。Kernel 段的 resume=UUID= 内核参数（该字符串自带等号，加等宽标记会破坏 org 配对，故用普通文本）与 =resume-device= 服务同样引用 =%swap-uuid= 。
 
 #+NAME: filesystem-defines
 #+begin_src scheme
-(define %swap-uuid "169557cc-00a4-448c-9bb6-7bd80fc2b023")
-
 (define %mapped-devices-config
   (list (mapped-device
-         (source (uuid "327f2e02-1e4f-48b2-87f0-797c481850c9"))
-         (target "root")
+         (source (uuid %luks-uuid))
+         (target %luks-mapper)
          (type luks-device-mapping))))
 
 (define %tmpfs
@@ -583,22 +540,22 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
   (map (match-lambda
          ((subvol mount-point)
           (file-system
-           (device (file-system-label "Linux"))
+           (device (file-system-label %btrfs-label))
            (mount-point mount-point)
            (type "btrfs")
            (dependencies %mapped-devices-config)
-           (options (string-append "subvol=" subvol ",compress=zstd:3"))
+           (options (string-append "subvol=" subvol "," %btrfs-mount-opts))
            (create-mount-point? #t)
            (needed-for-boot? (not (string=? mount-point "/tmp")))
            (check? (string=? mount-point "/gnu"))))) %btrfs-subvolumes))
 
 (define %data-filesystem
   (file-system
-   (device (file-system-label "Linux"))
+   (device (file-system-label %btrfs-label))
    (mount-point "/data")
    (type "btrfs")
    (dependencies %mapped-devices-config)
-   (options (string-append "subvol=" %btrfs-subvol-data ",compress=zstd:3"))
+   (options (string-append "subvol=" %btrfs-subvol-data "," %btrfs-mount-opts))
    (create-mount-point? #t)))
 
 (define %bind-mounts
@@ -616,7 +573,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 ;; （形如 1234-ABCD），与下面的 (type "vfat") 无关——后者用于挂载。
 (define %efi-filesystem
   (file-system
-   (device (uuid "9699-52A2" 'fat))
+   (device (uuid %esp-uuid 'fat))
    (mount-point "/efi")
    (type "vfat")
    (create-mount-point? #t)))
@@ -1198,7 +1155,7 @@ DATA_DIR="${DATA_DIR:-/var/lib/mihomo}"
 OUT="$DATA_DIR/config.yaml"
 
 "$MKDIR_BIN" -p "$DATA_DIR"
-[ -f "$MIHOMO_TEMPLATE" ] || die "模板不存在: $MIHOMO_TEMPLATE (immutable 部署, 需 blue home)"
+[ -f "$MIHOMO_TEMPLATE" ] || die "模板不存在: $MIHOMO_TEMPLATE (immutable 部署, 需 just home)"
 
 if subs=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$SUBS_CIPHER" 2>/dev/null); then
     set -a
@@ -1574,7 +1531,7 @@ beesd 与 smartd 的配置文件拆为独立块（ =bees.conf= 必须含 =UUID= 
 
 =beesd-run= 是 =program-file= 生成的脚本（生成不等于执行：它只是放进 command 列表，由 shepherd 启动时执行）。脚本的运行环境默认不含 Guile 模块，=with-imported-modules= 声明它可用 =(guix build utils)=（ =mkdir-p= 来自这里）；=#~= 是构建期模板，=#$xxx= 在构建时替换成具体值（此处为包路径）；脚本最后用 =execl= 让 =beesd= 直接替换当前 Guile 进程；=setenv PATH= 指向 util-linux 是为了让脚本能调用 =blkid= 。
 
-=2f6b6499-2a27-4583-847f-dd70b9fcb036= 这个 UUID 同时出现在 =bees.conf= 块（tangle → =tmp/bees.conf= ）与 etc 条目路径 =bees/<uuid>.conf= 中，改 UUID 时两处必须同步；=beesd-run= 脚本里也有一份 =uuid= 绑定，但它只在脚本自身的作用域里可见。
+=2f6b6499-2a27-4583-847f-dd70b9fcb036= 这个 UUID 在 =root-services= 里收敛为单一 =bees-uuid= 绑定：=beesd-run= 脚本与 etc 条目路径 =bees/<uuid>.conf= 都由它展开；=bees.conf= 块（tangle → =tmp/bees.conf= ，纯文本无法引用绑定）里还有一份字面量，改 UUID 时两处必须同步。
 
 =etc-service-type= 的条目形如 ~`("路径" ,文件对象)~：反引号点对中路径是字面量、=,= 后面的文件对象在求值时展开——这是 Guix =etc= 条目与各类配置扩展共用的写法。
 
@@ -1592,29 +1549,31 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
 #+NAME: root-services
 #+begin_src scheme
-(list (root-daemon-service 'beesd
-                           (list (program-file
-                                  "beesd-run"
-                                  (with-imported-modules '((guix build utils))
-                                                         #~(begin
-                                                             (use-modules (guix build utils))
-                                                             (let* ([uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036"]
-                                                                    [link (string-append
-                                                                           "/dev/disk/by-uuid/" uuid)])
-                                                               (mkdir-p "/dev/disk/by-uuid")
-                                                               (false-if-exception (delete-file link))
-                                                               (symlink "/dev/mapper/root" link)
-                                                               (setenv "PATH"
-                                                                       #$(file-append util-linux "/sbin"))
-                                                               (execl #$(file-append (spec->pkg "bees") "/sbin/beesd")
-                                                                      "beesd" uuid))))))
-                           #:requirement '(file-systems user-processes)
-                           #:log-file "/var/log/beesd.log"
-                           #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
+;; bees 池 UUID 单一绑定：启动脚本与 etc 配置路径共用。bees.conf 块里还有一份
+;; 字面量（tangle 产物是纯文本，无法引用此绑定），改 UUID 时两边同步。
+(let ([bees-uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036"])
+  (list (root-daemon-service 'beesd
+                             (list (program-file
+                                    "beesd-run"
+                                    (with-imported-modules '((guix build utils))
+                                                           #~(begin
+                                                               (use-modules (guix build utils))
+                                                               (let ([link (string-append
+                                                                            "/dev/disk/by-uuid/" #$bees-uuid)])
+                                                                 (mkdir-p "/dev/disk/by-uuid")
+                                                                 (false-if-exception (delete-file link))
+                                                                 (symlink "/dev/mapper/root" link)
+                                                                 (setenv "PATH"
+                                                                         #$(file-append util-linux "/sbin"))
+                                                                 (execl #$(file-append (spec->pkg "bees") "/sbin/beesd")
+                                                                        "beesd" #$bees-uuid))))))
+                             #:requirement '(file-systems user-processes)
+                             #:log-file "/var/log/beesd.log"
+                             #:documentation "btrfs 去重守护，低频扫描并按负载节流。")
 
-      (simple-service 'beesd-conf etc-service-type
-                      (list `("bees/2f6b6499-2a27-4583-847f-dd70b9fcb036.conf"
-                              ,(local-file "./bees.conf"))))
+        (simple-service 'beesd-conf etc-service-type
+                        (list `(,(string-append "bees/" bees-uuid ".conf")
+                                ,(local-file "./bees.conf"))))
 
       (simple-service 'home-channels home-channels-service-type
                       guix-channels)
@@ -1650,7 +1609,7 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
       (simple-service 'smartd-conf etc-service-type
                       (list `("smartd.conf"
-                              ,(local-file "./smartd.conf")))))
+                              ,(local-file "./smartd.conf"))))))
 #+end_src
 
 **** nix-ld 运行时库
@@ -2177,7 +2136,6 @@ polkit.addRule(function(action, subject) {
 
    ;; 影音
    "gimp"
-   "helvum"
    "mpv"
    "nomacs"
    "obs"
@@ -2187,11 +2145,10 @@ polkit.addRule(function(action, subject) {
    "telegram-desktop"
 
    ;; 生产力工具
-   "agenote"
-   "amule"
    "filezilla"
    "keepassxc"
    "kdeconnect"
+   "libreoffice"
    "rayburst-bin"
    "seahorse"
    "wine64-staging"
@@ -2212,6 +2169,7 @@ polkit.addRule(function(action, subject) {
 
    ;; 命令行工具
    "age"
+   "agenote"
    "grim"
    "mesa-utils"
    "pinentry-qt"
@@ -2520,11 +2478,13 @@ _    _  _  _  _  _  _  _)
 #+NAME: usb-power-watch
 #+begin_src sh :tangle ../tmp/usb-power-watch
 #!/bin/sh
+# usb-power-watch — 熄屏后把清单内物理 USB 口挂起省电，亮屏即恢复供电。
 
-INTERVAL=30
-THRESHOLD=120
+INTERVAL=30    # 轮询周期（秒）
+THRESHOLD=120  # 熄屏持续满该秒数才挂起，避免一闪而过的熄屏抖断电
+PORTS="3-2 3-5 3-6 4-5 4-6"  # 受管物理口（/sys/bus/usb/devices/ 下的根设备名）
 
-PORTS="3-2 3-5 3-6 4-5 4-6"
+# 名字命中 PORTS（含 3-2.x 这类子设备前缀）即受管
 in_ports() {
     for p in $PORTS; do
         case "$1" in "$p"|"$p."*) return 0 ;; esac
@@ -2532,9 +2492,10 @@ in_ports() {
     return 1
 }
 
+# 给所有受管口的 power/control 写同一个值（on=供电 / auto=允许挂起）
 set_ports() {
     for dev in /sys/bus/usb/devices/*-*; do
-        case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录
+        case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录（3-2:1.0 这类）
         [ -f "$dev/power/control" ] || continue
         if in_ports "${dev##*/}"; then
             echo "$1" > "$dev/power/control" 2>/dev/null
@@ -2542,9 +2503,11 @@ set_ports() {
     done
 }
 
-off_since=0
-state=on
+off_since=0  # 连续熄屏的起始时间戳；0 = 当前不在熄屏状态
+state=on     # 端口当前供电状态；用来保证亮屏只写一次 on（add 事件会自愈兜底）
 while :; do
+    # 背光判读：bl_power=0 是点亮。多块屏任一在亮（lit）→ 视为亮屏；
+    # 全部熄灭（dark）且无一在亮 → 视为熄屏。
     lit=0; dark=0
     for b in /sys/class/backlight/*/bl_power; do
         [ -r "$b" ] || continue
@@ -2570,20 +2533,36 @@ done
 #+NAME: hermes-services
 #+begin_src scheme
 ;; 注意：`#~` 让 HOME 在服务启动时（用户会话）求值；去掉 `#~` 会在配置求值时（可能以 root 重建）取到 /root 并烘焙进服务闭包。
-(list (simple-service 'hermes-services home-shepherd-service-type
-                      (list (home-daemon-service
-                             'hermes-backend
-                             (list #~(string-append (getenv "HOME")
-                                                    "/.local/bin/hermes")
-                                   "dashboard" "--no-open"
-                                   "--host" "127.0.0.1" "--port" "9119")
-                             #:requirement '(graphical-session))
-                            (home-daemon-service
-                             'hermes-gateway
-                             (list #~(string-append (getenv "HOME")
-                                                    "/.local/bin/hermes")
-                                   "gateway" "run")
-                             #:requirement '(hermes-backend)))))
+;;
+;; nix-ld 兜底：venv 的 pydantic_core 等 Rust 扩展依赖 libgcc_s.so.1，纯 Guix 系统没有系统级
+;; libgcc，靠 NIX_LD + NIX_LD_LIBRARY_PATH 兼容层提供。这两个变量通常由图形会话经 shepherd
+;; 继承下来，但若 gateway 在缺失上下文里被重启（如从干净终端手动 herd restart），venv 的
+;; .so 会 ImportError，报错被包装成"No module named 'pydantic_core._pydantic_core'"而失真。
+;; 取值必须留在 gexp 内（服务启动时、用户会话上下文中求值）；提前到配置期会取到 root 的环境。
+;; environment-variables 要的是 "K=V" 字符串列表（make-forkexec-constructor 直接塞环境），
+;; 不是 ("K" . v) 点对。
+(let ([hermes-env
+       #~(append (environ)
+                 (let ([ld (getenv "NIX_LD")]
+                       [p (getenv "NIX_LD_LIBRARY_PATH")])
+                   (append (if ld (list (string-append "NIX_LD=" ld)) '())
+                           (if p (list (string-append "NIX_LD_LIBRARY_PATH=" p)) '()))))])
+  (list (simple-service 'hermes-services home-shepherd-service-type
+                        (list (home-daemon-service
+                               'hermes-backend
+                               (list #~(string-append (getenv "HOME")
+                                                      "/.local/bin/hermes")
+                                     "dashboard" "--no-open"
+                                     "--host" "127.0.0.1" "--port" "9119")
+                               #:requirement '(graphical-session)
+                               #:environment-variables hermes-env)
+                              (home-daemon-service
+                               'hermes-gateway
+                               (list #~(string-append (getenv "HOME")
+                                                      "/.local/bin/hermes")
+                                     "gateway" "run")
+                               #:requirement '(hermes-backend)
+                               #:environment-variables hermes-env)))))
 #+end_src
 
 **** cpu-dma-latency
@@ -2627,7 +2606,7 @@ done
                                           "--delete-older-than" "14d")))))
 #+end_src
 
-kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services= 平级，经下方 =%home= 的 services append 生效，运行效果等同于并入上方 list 成为第三个元素）：每晚 22:00 执行 =kb-backup-script= ；无变更时静默跳过，任一步 git 失败仅记 warning，不中断后续步骤。
+kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services= 平级，经下方 =%home= 的 services append 生效，运行效果等同于并入上方 list 成为第三个元素）：每晚 22:00 执行下方 tangle 到 =tmp/kb-backup= 的备份脚本；无变更时静默跳过，任一步 git 失败仅记 warning，不中断后续步骤。
 
 #+NAME: kb-backup-services
 #+begin_src scheme
@@ -2635,7 +2614,48 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
                       (list (shepherd-timer '(kb-backup)
                                             #~(calendar-event #:hours '(22)
                                                               #:minutes '(0))
-                                            #~("/bin/sh" #$(%kb-backup-script))))))
+                                            #~("/bin/sh" #$(local-file "kb-backup"))))))
+#+end_src
+
+**** kb-backup 备份脚本
+对 Guix-configs 的 hermes 包与 =~/Documents/Org= 知识库各自 =git add= 后，无变更即静默跳过、有变更则按既有风格 =git commit= ；任一步 git 命令失败（如 index.lock 冲突、gpg 签名失败）只向 =~/.cache/kb-backup.log= 追加一条带时间戳的 warning 并继续下一步，整体退出码恒为 0。
+git 与 gpg 通过脚本内 PATH 前缀（home profile + system profile）定位，不依赖 shepherd 运行环境；提交签名沿用用户 gitconfig（ =commit.gpgsign= ）。
+
+#+NAME: kb-backup-script
+#+begin_src sh :tangle ../tmp/kb-backup
+#!/bin/sh
+# kb-backup: hermes + Org 知识库每日自动 commit，日志追加 ~/.cache/kb-backup.log。
+# 两步各自容错：任一步 git 失败（index.lock 冲突、签名失败等）只记一条
+# warning 并继续下一步；整体退出码恒为 0（timer 语境下失败不该冒泡）。
+
+# git/gpg 走 home+system profile 的 PATH 前缀，不依赖 shepherd 运行环境
+PATH="$HOME/.guix-home/profile/bin:/run/current-system/profile/bin:$PATH"
+log="$HOME/.cache/kb-backup.log"
+mkdir -p "$(dirname "$log")"
+warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
+
+# hermes 包: 仅 add 该子目录，避免吞并用户未提交的 WIP。
+# 仓库根经 HERMES_HOME 锚点反推（stow 链回仓库的文件），不写死路径。
+(
+  hermes_home="${HERMES_HOME:-$HOME/.local/share/hermes}"
+  repo=""
+  for anchor in "$hermes_home/config.yaml" "$hermes_home/SOUL.md"; do
+    [ -L "$anchor" ] || continue
+    target=$(readlink -f "$anchor") || continue
+    repo=$(git -C "$(dirname "$target")" rev-parse --show-toplevel 2>/dev/null) || continue
+    break
+  done
+  [ -n "$repo" ] || { echo "找不到链回仓库的 hermes 锚点文件 ($hermes_home)"; exit 1; }
+  git -C "$repo" add dotfiles/mutable/agents/hermes || exit 1
+  git -C "$repo" diff --cached --quiet || git -C "$repo" commit -m "chore(hermes): backup $(date)" || exit 1
+) >>"$log" 2>&1 || warn "hermes 备份失败, 详见上方 git 输出"
+
+# Org 知识库: agenote 卡片仓库，本地无 remote，add -A 安全
+(
+  cd "$HOME/Documents/Org" || exit 1
+  git add -A || exit 1
+  git diff --cached --quiet || git commit -m "chore(backup): auto $(date '+%Y-%m-%d %H:%M:%S')" || exit 1
+) >>"$log" 2>&1 || warn "Org 知识库备份失败, 详见上方 git 输出"
 #+end_src
 
 *** dotfiles 管理相关服务
@@ -2793,6 +2813,10 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
   ("CLAUDE_CONFIG_DIR" . "$XDG_CONFIG_HOME/claude")
   ;; codex
   ("CODEX_HOME" . "$XDG_CONFIG_HOME/codex")
+  ;; context-mode（pi 扩展：会话与内容存储根）
+  ("CONTEXT_MODE_DIR" . "$XDG_STATE_HOME/pi/context-mode")
+  ;; cua-driver
+  ("CUA_DRIVER_RS_HOME" . "$XDG_CONFIG_HOME/cua-driver")
   ;; docker
   ("DOCKER_CONFIG" . "$XDG_CONFIG_HOME/docker")
   ;; dsh
@@ -2813,9 +2837,14 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
   ;; luanti
   ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
   ;; node
+  ;; NPM_CONFIG_USERCONFIG 只改 .npmrc 位置，缓存仍落 ~/.npm；
+  ;; 实测大写变量不会下传成 npm_config_cache（prebuild-install 依赖小写名），
+  ;; 故缓存另由 ~/.config/npm/npmrc 的 cache= 一行承担。
   ("NPM_CONFIG_USERCONFIG" . "$XDG_CONFIG_HOME/npm/npmrc")
   ;; nvidia-driver
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
+  ;; paseo（models/local-speech 近 1G，由 PASEO_HOME 一并带走）
+  ("PASEO_HOME" . "$XDG_DATA_HOME/paseo")
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
   ;; python
@@ -2831,7 +2860,11 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
   ;; wine
   ("WINEPREFIX" . "$XDG_DATA_HOME/wine")
   ;; zcode-proxy
-  ("ZCODE_PROXY_CONFIG" . "$XDG_CONFIG_HOME/zcode-proxy/config.yaml"))
+  ("ZCODE_PROXY_CONFIG" . "$XDG_CONFIG_HOME/zcode-proxy/config.yaml")
+  ;; zcode 不在此列：ZCODE_HOME / ZCODE_DATA_BASE_DIR 只覆盖桌面段（v2、崩溃上报）；
+  ;; cli/ 子树（41G 里占 40G）在 app.asar 里硬编码 homedir 拼接，绕过所有环境变量。
+  ;; 设了变量反而分裂成两处数据，故 ~/.zcode 保持原位。
+  )
 #+end_src
 
 **** 环境变量汇总

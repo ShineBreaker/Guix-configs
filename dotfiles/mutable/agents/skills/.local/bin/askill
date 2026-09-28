@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
 # askill — 声明式管理第三方 agent skills（lock 驱动，内容不进 git）
 #
 # 模型（对齐 source/channel.lock 哲学）：

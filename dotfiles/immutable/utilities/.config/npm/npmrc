@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+prefix=/home/brokenshine/.npm-global
+# 缓存迁到 XDG。npmrc 会展开 ${XDG_CACHE_HOME}，且 npm 会把 cache 下传成
+# npm_config_cache 供 lifecycle 脚本（prebuild-install 等）读取——用环境变量
+# 设 NPM_CONFIG_CACHE 反而不行：实测大写名不下传小写名，_prebuilds 仍落 ~/.npm。
+cache=${XDG_CACHE_HOME}/npm

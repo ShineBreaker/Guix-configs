@@ -157,6 +157,43 @@ native-mcp.md` is NOT excluded, so doc placeholders (`sk-xxx`) keep showing up
 as secret hits. Any pattern that must match at any depth needs a leading `**/`:
 `**/references/**`, `**/node_modules/**`.
 
+### 4. Shell Safety Checks That Never Fire (Silent False GREEN in bash)
+
+Same disease as the YAML drift above, in bash — and `set -euo pipefail` makes
+it systematic, because a **failing predicate silently becomes "condition not
+met"** rather than an error.
+
+**`find | grep -q` under `pipefail` inverts the answer.** `grep -q` exits on
+first match, `find` gets SIGPIPE (rc 141), `pipefail` propagates it, so the whole
+pipeline reads as false even when matches exist:
+
+```bash
+# ❌ always false — active dirs read as "no recent writes"
+if [ -d "$d" ] && find "$d" -type f -mtime -7 2>/dev/null | grep -q .; then
+  echo "active"
+fi
+
+# ✅ no pipe, find stops itself
+active_recent() { [ -d "$1" ] && [ -n "$(find "$1" -type f -mtime -7 -print -quit 2>/dev/null)" ]; }
+```
+
+The damage is worst in deletion/cleanup scripts: the check is the *only* thing
+standing between a bug and deleted live data.
+
+**`find -newermt "-7 days"` means "older than 7 days"** — the opposite of what
+you want for an activity test. Use `-mtime -7`.
+
+**Directory mtime ≠ activity.** `stat -c %y <dir>` only reflects child
+add/remove, never in-place rewrites. A dir written daily can show a mtime weeks
+old. Only `find <dir> -type f -mtime -N` answers "is this still in use".
+
+**Rule: a destructive script's guard must be exercised, not just written.** A
+safety check that has never printed its "blocked" branch is unverified. Run the
+predicate standalone against a directory you KNOW is active and confirm it
+returns true — `bash -c '...'` with the exact function, not a read-through.
+Repeat the run 2-3× to rule out a race; a check that only sometimes fires is
+also broken. `scripts/verify-active-recent.sh` is that probe.
+
 ## Cross-Validation Pattern
 
 Before trusting any number from a monitoring script, ask the same question with an independent shell pipeline:
@@ -196,8 +233,11 @@ If script vs cross-check differs by more than ±10%, the script has a bug — **
 - **Config loaders are the first suspect on mass TypeErrors.** Seven checks crashing with the same `'<=' not supported between instances of X and str'` is ONE loader bug (values came through as strings), not seven check bugs. Probe the loader output (`python3 -c "import importlib.util; ...; print(cfg)"`) before touching any check logic.
 - **Synthetic fixtures must mirror the real data format.** A regression probe that gives traceback lines a timestamp — when real logs have none — fails with a "bug" that is actually a test-fixture bug. Tracebacks inherit the previous line's timestamp. Build fixtures from a real log sample, not from what the code "should" look like; a fixture that passes against real logs but fails synthetic ones is a fixture bug.
 - **Regression probes belong in the skill.** After fixing parser/counter bugs, save the probe as `scripts/verify_*.py` under the skill (tempfile-isolated HOME + synthetic data, exit 0 = pass) so the next session re-runs it instead of re-deriving it. A verification script that was hand-typed once and deleted is a lesson that evaporates.
+- **Destructive guards get verified against a known-positive input, not an empty one.** A cleanup script tested only on "everything is clean" passes while its guard is inverted. Always run the predicate against a fixture that MUST trip it.
+- **A script that deletes is a script that must default to not running.** Ship dry-run-by-default with an explicit opt-in flag, and route deletion through a recoverable sink (`trash-put`, not `rm`). The plan is the artifact the user reviews; the flag is the decision point.
 
 ## References
 
 - `references/parser-bugs-2026-07-26.md` — real bugs found during agent-config-metabolism audit
 - `references/parser-bugs-2026-08-02.md` — fallback-YAML dialect bugs, fnmatch anchoring, rolling-window fix, fixture-format lesson (agent-config-metabolism audit)
+- `scripts/verify-active-recent.sh` — regression probe for the bash activity guard (`find -mtime` vs `find | grep -q` under pipefail); run before trusting any cleanup/migration script's exclusion logic

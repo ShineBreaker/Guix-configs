@@ -75,18 +75,18 @@
       "schedule_display": "0 23 * * 0",
       "repeat": {
         "times": null,
-        "completed": 17
+        "completed": 18
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-07-06T17:51:49.427764+08:00",
-      "next_run_at": "2026-09-27T23:00:00+08:00",
-      "last_run_at": "2026-09-20T23:10:38.589871+08:00",
+      "next_run_at": "2026-10-04T23:00:00+08:00",
+      "last_run_at": "2026-09-27T23:53:10.726926+08:00",
       "last_status": "delivery_failed",
       "last_error": null,
-      "last_delivery_error": "live adapter send failed: iLink sendmessage rate limited; cooldown active for 30.0s; live adapter delivery to weixin:o9cq806xPshmSZ9fv32OGaQsedps@im.wechat failed: iLink sendmessage rate limited; cooldown active for 30.0s; delivery error: Weixin send failed: iLink sendmessage rate limited; cooldown active for 30.0s (target weixin:o9cq806xPshmSZ9fv32OGaQsedps@im.wechat)",
+      "last_delivery_error": "live adapter send failed: iLink sendmessage session not ready: ret=-2 errcode=None errmsg=prepare failed — the user must send the bot a message first (or re-pair); live adapter delivery to weixin:o9cq806xPshmSZ9fv32OGaQsedps@im.wechat failed: iLink sendmessage session not ready: ret=-2 errcode=None errmsg=prepare failed — the user must send the bot a message first (or re-pair); delivery error: Weixin send failed: iLink sendmessage session not ready: ret=-2 errcode=None errmsg=prepare failed — the user must send the bot a message first (or re-pair) (target weixin:o9cq806xPshmSZ9fv32OGaQsedps@im.wechat)",
       "deliver": "origin",
       "origin": null,
       "enabled_toolsets": null,
@@ -96,9 +96,9 @@
       "model_snapshot": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-09-20T23:00:00+08:00",
-        "dispatched_at": "2026-09-20T23:00:52.339149+08:00",
-        "lateness_seconds": 52.3,
+        "scheduled_at": "2026-09-27T23:00:00+08:00",
+        "dispatched_at": "2026-09-27T23:00:01.859642+08:00",
+        "lateness_seconds": 1.9,
         "kind": "on_time"
       }
     },
@@ -183,22 +183,22 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T15:40:30.541829+08:00",
-      "next_run_at": "2026-09-28T03:00:00+08:00",
-      "last_run_at": "2026-09-27T03:00:28.096909+08:00",
-      "last_status": "error",
-      "last_error": "RuntimeError: Failed to initialize OpenAI client: No module named 'pydantic_core._pydantic_core'",
+      "next_run_at": "2026-09-29T03:00:00+08:00",
+      "last_run_at": "2026-09-28T03:07:16.879556+08:00",
+      "last_status": "ok",
+      "last_error": null,
       "last_delivery_error": null,
       "last_delivery_unverified": null,
-      "failure_streak": 1,
+      "failure_streak": 0,
       "deliver": "local",
       "origin": null,
       "enabled_toolsets": null,
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-09-27T03:00:00+08:00",
-        "dispatched_at": "2026-09-27T03:00:27.939458+08:00",
-        "lateness_seconds": 27.9,
+        "scheduled_at": "2026-09-28T03:00:00+08:00",
+        "dispatched_at": "2026-09-28T03:00:01.859853+08:00",
+        "lateness_seconds": 1.9,
         "kind": "on_time"
       }
     },
@@ -229,9 +229,9 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T16:09:07.713931+08:00",
-      "next_run_at": "2026-09-28T03:00:00+08:00",
-      "last_run_at": null,
-      "last_status": null,
+      "next_run_at": "2026-10-05T03:00:00+08:00",
+      "last_run_at": "2026-09-28T03:01:32.165511+08:00",
+      "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
       "last_delivery_unverified": null,
@@ -239,7 +239,14 @@
       "deliver": "qqbot",
       "origin": null,
       "enabled_toolsets": null,
-      "workdir": null
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-09-28T03:00:00+08:00",
+        "dispatched_at": "2026-09-28T03:00:01.859853+08:00",
+        "lateness_seconds": 1.9,
+        "kind": "on_time"
+      },
+      "fire_claim": null
     },
     {
       "id": "ca3e7166fbe3",
@@ -264,15 +271,15 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 4
+        "completed": 5
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-09-28T08:00:00+08:00",
-      "last_run_at": "2026-09-27T08:00:48.313208+08:00",
+      "next_run_at": "2026-09-29T08:00:00+08:00",
+      "last_run_at": "2026-09-28T08:00:13.403679+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -290,13 +297,13 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-09-27T08:00:00+08:00",
-        "dispatched_at": "2026-09-27T08:00:37.123626+08:00",
-        "lateness_seconds": 37.1,
+        "scheduled_at": "2026-09-28T08:00:00+08:00",
+        "dispatched_at": "2026-09-28T08:00:01.859824+08:00",
+        "lateness_seconds": 1.9,
         "kind": "on_time"
       },
       "fire_claim": null
     }
   ],
-  "updated_at": "2026-09-27T20:55:41.925073+08:00"
+  "updated_at": "2026-09-28T08:00:13.404243+08:00"
 }

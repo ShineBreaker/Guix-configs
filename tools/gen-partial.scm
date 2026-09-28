@@ -3,8 +3,9 @@
 ;;; SPDX-License-Identifier: MIT
 
 ;;; gen-partial.scm — via `guix repl gen-partial.scm TARGET OUT-FILE [COMMIT]`
-;;; 在 guix 的 Guile 环境里生成单频道刷新的临时 channels 文件，避免 blue 的
-;;; Guile 环境缺少 (guix openpgp)/(gcrypt hash) 等模块导致宏展开失败。
+;;; 在 guix 的 Guile 环境里生成单频道刷新的临时 channels 文件，避免调用方
+;;; （tools/update-locks.py / legacy blue）的 Guile 环境缺少
+;;; (guix openpgp)/(gcrypt hash) 等模块导致宏展开失败。
 ;;; 可选 COMMIT：目标频道 pin 到该 commit（(inherit ...) 函数式覆盖 commit
 ;;; 字段）；不传则目标保持 channel.scm 的可变定义，跟随 branch 最新。
 (use-modules (guix channels) (guix build utils) (ice-9 match) (ice-9 pretty-print) (srfi srfi-1))
@@ -34,25 +35,20 @@
        [lock-by (map (lambda (c) (cons (channel-name c) c)) (%load-channels channel-lock))]
        [names (delete-duplicates (map channel-name scm-ch))]
        [t (string->symbol target)]
-       [pin-target (lambda (c)
-                     (if (and pin-commit (eq? (channel-name c) t))
-                         (channel (inherit c) (commit pin-commit))
-                         c))])
+       [by-name (lambda (n) (find (lambda (c) (eq? (channel-name c) n)) scm-ch))])
   (unless (memq t names)
     (format (current-error-port) "update: 未知频道 ~a（可用：~a）\n" target (string-join (map symbol->string names) " "))
     (exit 1))
+  ;; 按 channel.scm 的频道顺序合并：目标频道用 channel.scm 定义（给了 COMMIT
+  ;; 就 pin 到该 commit）；其余频道用 channel.lock 的锁定版本，lock 里缺席的
+  ;; 回退到 channel.scm 定义。
   (let ([merged
-         (let loop ([rest scm-ch] [seen '()] [out '()])
-           (match rest
-             [() (reverse out)]
-             [(c . r)
-              (let ([n (channel-name c)])
-                (if (memq n seen)
-                    (loop r seen out)
-                    (loop r (cons n seen)
-                          (cons (pin-target
-                                 (if (eq? n t) c (or (assq-ref lock-by n) c)))
-                                out))))]))])
+         (map (lambda (n)
+                (let ([c (if (eq? n t) (by-name n) (or (assq-ref lock-by n) (by-name n)))])
+                  (if (and pin-commit (eq? n t))
+                      (channel (inherit c) (commit pin-commit))
+                      c)))
+              names)])
     (mkdir-p (dirname out-file))
     (call-with-output-file out-file
       (lambda (p) (pretty-print `(list ,@(map channel->code merged)) p)))

@@ -55,6 +55,19 @@
     "Templates"
     "Videos"))
 
+;; --- 磁盘拓扑（分区 UUID / 解锁名 / 挂载参数）---
+;; 本段是全仓库分区标识的单一真源：config.org 引用这些变量，
+;; tools/rescue-chroot.sh 在 live 环境用 sed/grep 做受限文本解析（那里
+;; 没有 guile），因此保持一行一个 (define %var "...") 的顶格格式。换机
+;; 时只改本段。
+(define %luks-uuid "327f2e02-1e4f-48b2-87f0-797c481850c9") ; LUKS2 分区（本机: /dev/nvme0n1p2）
+(define %luks-mapper "root") ; 解锁名，解锁后 Btrfs 位于 /dev/mapper/<解锁名>
+(define %esp-uuid "9699-52A2") ; ESP vfat 短 UUID（本机: /dev/nvme0n1p1）
+(define %swap-uuid "169557cc-00a4-448c-9bb6-7bd80fc2b023") ; 明文 swap，休眠镜像所在（禁 mkswap/格式化）
+(define %btrfs-label "Linux") ; LUKS 内 Btrfs 卷标
+(define %btrfs-mount-opts "compress=zstd:3") ; 与系统日常挂载一致的 Btrfs 选项
+(define %repo-in-data "/data/Projects/Config/Guix-configs") ; 配置仓库物理路径（Projects 在 %data-dirs）
+
 (define %btrfs-subvol-data "DATA/Share")
 
 (define %btrfs-subvolumes

@@ -7,7 +7,7 @@ __pycache__
 tmp
 node_modules
 
-# Live ISO 构建产物（blue build-iso 的输出落到 dist/）
+# Live ISO 构建产物（just build-iso 的输出落到 dist/）
 dist
 
 .codex

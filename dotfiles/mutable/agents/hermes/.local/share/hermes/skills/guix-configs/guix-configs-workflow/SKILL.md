@@ -842,6 +842,68 @@ shepherd 定时器/脚本在 gexp 里运行时，用 `setenv` 设置运行时变
 - ❌ **在 `home-environment-variables-service-type` 里写 `~`-relative 路径** — 依赖 `$HOME$ 解析，对 daemon 不稳；daemon 配置走 §4.6
 - ❌ **只改 portals.conf 不改 packages 和 shepherd** — portal 后端不被调用或没自启动
 
+### 7.11 迁 `~` 下的点目录到 XDG（完整协议见 references/xdg-dot-dir-migration.md）
+
+用户要求"把 `~` 里堆的点目录迁走"这类任务时，**先查证、再搬数据、最后落变量**——顺序不能反。
+
+**铁律：只写环境变量、不搬数据，等于什么都没迁，还制造坏状态。** 新路径不存在 → 程序首次运行从头建空目录 → 旧数据原地变孤儿。所以「写完配置就收工」是这类任务的失败模式：用户会直接质问"你有把原本文件夹的文件迁移过去吗"。
+
+**第二条铁律：subagent 的「已废弃/残留」结论必须自己复核，判据是 `find <dir> -type f -mtime -7`。** 目录 mtime 只反映增删子项、不反映子文件改写，看着停在几周前的目录可能每天都在写 db。派研究任务时得到的"该目录已停更"直接照做，会删掉正在用的数据；本会话 `.omp`/`.hyperframes`/`.cc-switch` 等六个目录全被误判。回收站只能救回已删的，**动手前多跑一条 `find` 比事后捞文件便宜得多**。
+
+落点固定是 `xdg-basedir-env-vars` 块；**数据搬迁与数据完整性校验**（含"变量只覆盖部分子树导致数据分裂""`mv` 回滚套娃""`fuser -m` 不可用于判占用"三个实际丢过数据的坑）见 `references/xdg-dot-dir-migration.md`。
+
+**书写约定**（照现有块的风格走，一行一个工具、大致按字母序）：
+
+```scheme
+  ;; <工具名>（一句说明为什么需要这个变量 / 值有什么坑）
+  ("VAR_NAME" . "$XDG_DATA_HOME/xxx")
+```
+
+**关键坑：env var 对工具本身生效 ≠ 对它的子进程生效。** 只在父进程里设大写变量、lifecycle/build 脚本读不到小写别名时，缓存仍会写回 `~`（npm 的 `NPM_CONFIG_CACHE` → `npm_config_cache` 就是这类型，必须改走 npmrc 的 `cache=` 一行）。**迁完必须用"父进程 + 子进程两侧都看得到"的方式实测**，不能只 `npm config get cache` 就收工。
+
+**第三个反向防线：变量只覆盖部分子树时，搬完会分裂成两处。** 一个工具常有多个 home 类变量各管各的子树（zcode 的 `ZCODE_HOME` / `ZCODE_DATA_BASE_DIR` 都只管桌面段，占 40G 的 `cli/` 子树在 app.asar 里硬编码 `homedir`）。**这类工具不设变量比设了更好**——设了必然分裂。在 `xdg-basedir-env-vars` 块里留注释写明原因，防止下一个人再踩。
+
+**验证路线（`blue home` 不可用时照样能验）**：`tmp/config.scm` 末尾是 `(define %system ...)`，**不返回 OS 也不返回 home env**，所以 `guix home build tmp/config.scm` / `guix system build tmp/config.scm` 都会报"未返回家环境/操作系统"。正确姿势是起 repl 直接求值内嵌的 `%home`：
+
+```bash
+cat > /tmp/check-env.scm <<'EOF'
+(use-modules (gnu home) (gnu services base) (srfi srfi-1))
+(load "/home/brokenshine/Projects/Config/Guix-configs/tmp/config.scm")
+(define h (eval '%home (current-module)))
+;; 注意：不能按 service-type 找 env 服务——(gnu services base) 里的
+;; home-environment-variables-service-type 命中的是另一个空服务。
+;; 按 value 形状筛：alist 长度大、首元素是 (string . string) 对。
+(define (pick ss)
+  (cond ((null? ss) #f)
+        (else (let ((v (service-value (car ss))))
+                (if (and (pair? v) (> (length v) 30) (string? (car (car v))))
+                    v (pick (cdr ss)))))))
+(define alist (pick (home-environment-services h)))
+(format #t "total env vars: ~a~%" (length alist))
+(for-each (lambda (k)
+            (define hit (find (lambda (p) (equal? (car p) k)) alist))
+            (format #t "  ~a => ~a~%" k (if hit (format #t "FOUND ~s" (cdr hit)) "MISSING")))
+          '("VAR_A" "VAR_B"))
+EOF
+cd ~/Projects/Config/Guix-configs && guix time-machine --channels=source/channel.lock -- repl /tmp/check-env.scm
+```
+
+`service?` / `service-kind` / `service-value` 都可用，但 **`(service-type s)` 不是访问器**——它会跟 `(gnu services base)` 的 `service` 宏撞名，报 `invalid field specifier`；`(guix services)` 模块不存在，别试。
+
+**org 改动的 intent 核对**（同样绕开 blue）：把 HEAD 版本 tangle 到独立目录再与新产物 diff，确认差异只有自己加的那几行——工作区常有他人未提交改动，diff 不过滤会误判成自己改的：
+
+```bash
+mkdir -p /tmp/basework/source /tmp/basework/tmp
+git show HEAD:source/config.org > /tmp/basework/source/config.org
+emacs --batch -Q --eval '(progn (require (quote org)) (find-file "/tmp/basework/source/config.org") (org-babel-tangle))'
+emacs --batch -Q --eval '(progn (require (quote org)) (find-file "source/config.org") (org-babel-tangle))'
+diff /tmp/basework/tmp/config.scm tmp/config.scm
+```
+
+`tmp/` 被 `.gitignore` 忽略且未必存在，tangle 前先 `mkdir -p tmp`（它是 blue 的产物目录，建目录不违反禁区，禁区是**编辑**里面已有的生成物）。
+
+逐目录的可迁/不可迁判定表、npm 缓存那条坑、flatpak / Electron / NSS 的"看似有变量实则迁不动"证据、判活跃度只能用 `find -mtime`（目录 mtime 不可信）、以及 `set -o pipefail` + `find | grep -q` 的 SIGPIPE 误判，见 `references/xdg-dot-dir-migration.md`。
+
 ---
 
 ## 8. GNU Stow 二轨 dotfile 部署（stow/ + blue stow）

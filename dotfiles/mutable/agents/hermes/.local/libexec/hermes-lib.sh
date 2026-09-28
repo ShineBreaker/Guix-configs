@@ -6,7 +6,7 @@
 # hermes-lib.sh — hermes 入口 wrapper（bin/hermes，含 update/desktop 子命令
 # 分发）与 libexec/hermes-{update,desktop} 两个子命令实体的共享库。
 #
-# 收敛历史上三份拷贝、且已互相漂移的逻辑（单一真理源）：
+# 单一真理源，覆盖三类共享逻辑：
 #   1. 布局常量：HERMES_HOME 解析 + hermes-agent checkout / venv / CLI /
 #      desktop release / manifest 的路径约定（desktop 壳 main.cjs 硬编码的
 #      布局，详见 hermes-update 头注释）
@@ -23,10 +23,9 @@
 
 # ── 1. 布局常量 ──────────────────────────────────────────────────────────────
 # 直接读系统设置的 HERMES_HOME；读不到才 fallback 到 XDG data 下的默认位置。
-# 统一 export（漂移裁决：取 hermes wrapper 的导出版）。desktop 的 PRESERVE
-# 正则要把 HERMES_HOME 透传进容器（desktop 壳 main.cjs 靠它推导
-# ACTIVE_HERMES_ROOT，抓不到会 fallback 到默认 ~/.hermes 而找不到安装）；
-# desktop/update 此前不导出属漂移遗漏而非设计，导出对 git/uv 等子进程无副作用。
+# 统一 export：desktop 的 PRESERVE 正则要把 HERMES_HOME 透传进容器（desktop 壳
+# main.cjs 靠它推导 ACTIVE_HERMES_ROOT，抓不到会 fallback 到默认 ~/.hermes 而
+# 找不到安装）；对 git/uv 等子进程无副作用。
 : "${HERMES_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/hermes}"
 export HERMES_HOME
 
@@ -39,13 +38,12 @@ HERMES_DESKTOP_BIN="${HERMES_DESKTOP_RELEASE_DIR}/Hermes"
 HERMES_MANIFEST="${HERMES_HOME}/manifest.scm"
 
 # ── 2. XDG data home / hicolor 图标路径 ─────────────────────────────────────
-# 两个 bin 曾各自解析 XDG_DATA_HOME 且已漂移（desktop 版无默认值 → set -u 下
-# 未导出直接崩）。统一为：带默认、只读解析（不回写 XDG_DATA_HOME 全局）。
+# 带默认、只读解析（不回写 XDG_DATA_HOME 全局）——调用方在 set -u 下也安全。
 HERMES_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 HERMES_HICOLOR_ROOT="${HERMES_DATA_HOME}/icons/hicolor"
 
 # 安装 1024px 原图到 hicolor（hermes desktop 启动用；覆盖写天然幂等）。
-# 目标目录缺失时先 mkdir -p（此前直接 cp，hicolor/1024x1024/apps 不存在即崩）。
+# 目标目录按尺寸分层、未必存在，先 mkdir -p。
 hermes_install_icon_1024() {
   local _src="${1:?hermes_install_icon_1024: 缺少图标源路径参数}"
   local _dst_dir="${HERMES_HICOLOR_ROOT}/1024x1024/apps"
@@ -105,20 +103,42 @@ hermes_gui_env_resolve() {
   export GDK_BACKEND="${GDK_BACKEND:-$_ozone}"
 }
 
-# --preserve 正则（与 appimage-run 一致：GUI/Wayland/音频/dbus 变量透传）
-# 额外含 HERMES_HOME：desktop 壳(main.cjs) 靠它推导 ACTIVE_HERMES_ROOT=
-# HERMES_HOME/hermes-agent，不 preserve 会 fallback 到默认 ~/.hermes 而找不到安装
-# 额外含 FONTCONFIG_FILE/PATH：让容器复用宿主 fontconfig 配置，否则回退难看字体
-# 额外含 XDG_DATA_DIRS/XDG_CONFIG_HOME：让容器内 GTK 复用宿主主题/图标/光标搜索路径
-# 额外含 IME 变量（GTK_IM_MODULE/QT_IM_MODULE/XMODIFIERS）：fcitx5 输入法透传
-# 额外含 XCURSOR_PATH/XCURSOR_THEME：光标主题搜索路径
-# 额外含 HERMES_DESKTOP_REMOTE_URL/TOKEN：Remote gateway 模式（连宿主
-# hermes-backend 9119）时透传给 desktop 壳，避免它在容器内 spawn 残缺 serve
-# 额外含 CUA_DRIVER_RS_ENABLE_WAYLAND：cua-driver 原生 Wayland 抓屏开关
-# （无它则 spawn 出的 cua-driver 走 X11，Wayland 会话上抓屏必炸）。宿主侧
-# spawn 靠声明式环境变量（config.org extend-environment-variables）；
-# 此处保证回退容器内 serve 时 computer-use 的子进程仍能继承到
-HERMES_PRESERVE_RE='^(DISPLAY|WAYLAND_DISPLAY|XDG_RUNTIME_DIR|XDG_SESSION_TYPE|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|QT_QPA_PLATFORM|ELECTRON_OZONE_PLATFORM_HINT|PULSE_SERVER|PULSE_COOKIE|LANG|LC_[A-Z]+|LD_LIBRARY_PATH|NODE_OPTIONS|LIBGL_ALWAYS_SOFTWARE|HERMES_HOME|HERMES_DESKTOP_REMOTE_URL|HERMES_DESKTOP_REMOTE_TOKEN|CUA_DRIVER_RS_ENABLE_WAYLAND|FONTCONFIG_FILE|FONTCONFIG_PATH|FONTCONFIG_CACHE_DIR|XDG_DATA_DIRS|XDG_CONFIG_HOME|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS|XCURSOR_PATH|XCURSOR_THEME|GTK_THEME|GTK_IM_MODULE_DIR|GDK_BACKEND)$'
+# --preserve 透传白名单，按语义分组（每行注释即该组透传理由）。
+# 拼接顺序即正则 alternation 顺序，新增变量加在对应组末尾即可。
+_HERMES_PRESERVE_VARS=(
+	# 会话/显示基础：X11 与 Wayland socket、会话类型、X 认证、dbus 地址
+	# （与 appimage-run 一致的 GUI/Wayland/音频/dbus 透传集）
+	DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR XDG_SESSION_TYPE XAUTHORITY DBUS_SESSION_BUS_ADDRESS
+	# Qt / Electron 平台后端选择（Ozone hint）
+	QT_QPA_PLATFORM ELECTRON_OZONE_PLATFORM_HINT
+	# PulseAudio
+	PULSE_SERVER PULSE_COOKIE
+	# 语言环境（LC_* 是正则前缀模式）
+	LANG 'LC_[A-Z]+'
+	# 动态库 / Node 运行时调整
+	LD_LIBRARY_PATH NODE_OPTIONS LIBGL_ALWAYS_SOFTWARE
+	# desktop 壳 main.cjs 靠它推导 ACTIVE_HERMES_ROOT=HERMES_HOME/hermes-agent；
+	# 不 preserve 会 fallback 到默认 ~/.hermes 而找不到安装
+	HERMES_HOME
+	# Remote gateway 模式（连宿主 hermes-backend 9119）透传给 desktop 壳，
+	# 避免它在容器内 spawn 残缺 serve
+	HERMES_DESKTOP_REMOTE_URL HERMES_DESKTOP_REMOTE_TOKEN
+	# cua-driver 原生 Wayland 抓屏开关：无它容器内 serve 的 computer-use 子进程
+	# 走 X11，Wayland 会话上抓屏必炸。宿主侧 spawn 靠 config.org 的
+	# extend-environment-variables 声明；此处保证回退容器内 serve 仍继承到
+	CUA_DRIVER_RS_ENABLE_WAYLAND
+	# 让容器复用宿主 fontconfig 配置，否则回退难看字体
+	FONTCONFIG_FILE FONTCONFIG_PATH FONTCONFIG_CACHE_DIR
+	# 让容器内 GTK 复用宿主主题/图标/光标搜索路径
+	XDG_DATA_DIRS XDG_CONFIG_HOME
+	# fcitx5 输入法透传
+	GTK_IM_MODULE QT_IM_MODULE XMODIFIERS
+	# 光标主题搜索路径
+	XCURSOR_PATH XCURSOR_THEME
+	# GTK 主题、immodules 目录、GDK 后端
+	GTK_THEME GTK_IM_MODULE_DIR GDK_BACKEND
+)
+HERMES_PRESERVE_RE="^($(IFS='|'; printf '%s' "${_HERMES_PRESERVE_VARS[*]}"))$"
 
 # 构建 FHS 容器的 --share/--expose 旗标 → 全局数组 HERMES_SHARE_FLAGS。
 # 前置：须先调 hermes_session_env_init（依赖 RT_DIR / WAYLAND_DISPLAY）。

@@ -46,9 +46,10 @@
 #     冻结词（os.system("sudo …") 类）同理不追。
 #   * 人工总开关只认固定路径 /run/agent-gate.off（不认环境变量改道）：
 #     agent 可写的位置放同名文件一律无效；该文件只能人工 sudo 创建/删除。
-#   * --dry-run 豁免是片段级的：仅剔除「blue 前缀且带 --dry-run」的
-#     片段，其余片段照常检查；`sudo ... --dry-run` 这类把 --dry-run
-#     当免死金牌的不豁免。
+#   * 预演豁免是片段级的：仅剔除「blue 前缀且带 --dry-run」或
+#     「just 前缀且带非空 dry= 参数」的片段，其余片段照常检查；
+#     `sudo ... --dry-run` 这类把 --dry-run 当免死金牌的不豁免，
+#     `just dry= rebuild`（空值）同样不豁免。
 #   * GATE_NO_WRITE_TOOLS=1（无写工具会话标记，由 DSH gate.js 按当前
 #     agent 作用域检测后设置）只做输出降级，不制造任何放行：BLOCK 不附
 #     redirect_conventions 的 ALT（其引导的「改用 Edit 工具」在该模式
@@ -247,28 +248,24 @@ cwd_under() {
 PREFIX='(^|[;&|()$]|&&|\|\|)[[:space:]]*'
 
 # ─── bash 命令判定 ───────────────────────────────────────────────────────────
+#
+# gate_bash 按固定顺序跑各检查阶段；每个阶段函数的约定：
+#   命中并 emit 裁决 → return 0（主流程到此为止）
+#   未命中           → return 1（继续下一阶段）
+# 顺序与早退语义不可变——安全判定逻辑见文件头「安全不变量」。
 
-gate_bash() {
-	local CMD="$1"
-	# 0 人工总开关（最优先）：存在即静默放行，不输出任何内容
-	# （暂停态对 agent 不可见，与护栏不存在时表现一致）
-	if [[ -f "$GATE_PAUSE_FILE" ]]; then
-		return 0
-	fi
-	local FIRST BASE
-	FIRST="$(trim "$CMD")"
-	FIRST="${FIRST%%[[:space:]]*}"
-	BASE="$(basename "${FIRST:-cmd}" 2>/dev/null || printf '%s' "${FIRST:-cmd}")"
-
-	# 1a 冻结命令（命令位置词序列匹配）+ guix system 宽匹配。
-	# --dry-run 豁免是片段级的：只剔除「blue 前缀且带 --dry-run」的片段，
-	# 其余片段照常检查——`blue --dry-run rebuild; sudo ...` 的 sudo 片段
-	# 不被连带豁免。
+# 1a 冻结命令（命令位置词序列匹配）+ guix system 宽匹配。
+# 预演豁免是片段级的：只剔除「blue 前缀且带 --dry-run」或「just 前缀
+# 且带非空 dry= 参数」的片段，其余片段照常检查——
+# `just dry=1 rebuild; sudo ...` 的 sudo 片段不被连带豁免，
+# `just dry= rebuild`（dry= 空值）也不豁免。
+check_frozen_commands() {
 	local frozen_list segments hit check_cmd
 	frozen_list="$(jq -r '.frozen_commands[]?' <<<"$MERGED" 2>/dev/null)"
 	segments="$(printf '%s\n' "$CMD" | _cmd_segments |
 		awk '{ split($0, w, " "); c = w[1]; sub(/.*\//, "", c)
-		       if (c == "blue" && $0 ~ /--dry-run/) next; print }')"
+		       if ((c == "blue" && $0 ~ /--dry-run/) ||
+		           (c == "just" && $0 ~ /(^|[[:space:]])dry=[^[:space:]]/)) next; print }')"
 	check_cmd="$(printf '%s\n' "$segments" | tr '\n' ' ')"
 	if [[ -n "${frozen_list//$'\n']/}" && -n "$segments" ]]; then
 		hit="$(_match_frozen_in_segments "$segments" "$frozen_list")"
@@ -290,11 +287,14 @@ gate_bash() {
 		fi
 	fi
 	if [[ "$check_cmd" == *guix* ]] && printf '%s' "$check_cmd" | grep -qE '\bsystem[[:space:]]+(reconfigure|init)\b'; then
-		emit BLOCK "禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`blue --dry-run rebuild\`；固化请提醒用户手动运行。"
+		emit BLOCK "禁止 guix system reconfigure/init（含 time-machine 包装，需 sudo）。验证请用 \`just dry=1 rebuild\`；固化请提醒用户手动运行。"
 		return 0
 	fi
+	return 1
+}
 
-	# 1b 交互式命令（无 TTY 会挂起）——词法匹配原始命令，名单来自 anchors.json
+# 1b 交互式命令（无 TTY 会挂起）——词法匹配原始命令，名单来自 anchors.json
+check_interactive_commands() {
 	local name esc
 	while IFS= read -r name; do
 		[[ -z "$name" ]] && continue
@@ -318,8 +318,11 @@ gate_bash() {
 			return 0
 		fi
 	done < <(jq -r '.bare_repl_commands[]?' <<<"$MERGED" 2>/dev/null)
+	return 1
+}
 
-	# 1c Git 限制
+# 1c Git 限制
+check_git_rules() {
 	if printf '%s' "$CMD" | grep -qE "${PREFIX}git[[:space:]]+commit\b"; then
 		if ! printf '%s' "$CMD" | grep -qE '([[:space:]]-m[[:space:]]|[[:space:]]--message[[:space:]])'; then
 			emit BLOCK "git commit 必须使用 -m 指定提交信息"
@@ -334,10 +337,13 @@ gate_bash() {
 		emit BLOCK "禁止 git rebase -i（交互式）"
 		return 0
 	fi
+	return 1
+}
 
-	# 2 只读命令白名单（位于全部硬拦截之后，不构成绕过）。
-	# 仅对无连接符（; & | ` $( ）的单条命令发 AUTO_ALLOW——`ls && curl … |
-	# sh` 这类搭车形态回落到默认确认流
+# 2 只读命令白名单（位于全部硬拦截之后，不构成绕过）。
+# 仅对无连接符（; & | ` $( ）的单条命令发 AUTO_ALLOW——`ls && curl … |
+# sh` 这类搭车形态回落到默认确认流
+check_readonly_whitelist() {
 	if printf '%s' "$CMD" | grep -qE '[;&|`]|\$\('; then :; else
 	case "$BASE" in
 	cat | head | tail | bat | echo | printf | seq | date | uptime)
@@ -400,8 +406,11 @@ gate_bash() {
 		;;
 	esac
 	fi
+	return 1
+}
 
-	# 3 命令改写（builtin npm→pnpm / pip→uv pip + 项目层 rewrite map）
+# 3 命令改写 + 4 非阻塞提示（本阶段无「拦截」语义，恒 return 0）
+apply_rewrites_and_hints() {
 	local REWRITTEN="$CMD" NOTES=""
 	local builtin_rw has_npm has_pip
 	builtin_rw="$(jq -r '.builtin_rewrite' <<<"$MERGED" 2>/dev/null || printf 'true')"
@@ -430,7 +439,7 @@ gate_bash() {
 	done < <(jq -r '.rewrite | to_entries[] | "\(.key)\t\(.value)"' <<<"$MERGED" 2>/dev/null)
 	[[ "$REWRITTEN" != "$CMD" ]] && emit REWRITTEN "$REWRITTEN"
 
-	# 4 非阻塞提示（无写工具会话整条抑制——见文件头安全不变量）
+	# 非阻塞提示（无写工具会话整条抑制——见文件头安全不变量）
 	[[ -n "$NOTES" && "$NO_WRITE_TOOLS" != "1" ]] && emit NOTES "本机偏好命令替代：${NOTES}；如适用请改用后重新执行"
 	local pat msg REDIRECT_PAT="" REDIRECT_MSG=""
 	while IFS=$'\t' read -r pat msg; do
@@ -444,28 +453,36 @@ gate_bash() {
 	return 0
 }
 
-# ─── 文件写入判定 ─────────────────────────────────────────────────────────────
-
-gate_edit() {
-	local FILE="$1"
-	# 0 人工总开关（最优先）：存在即静默放行（同 gate_bash，不向 agent 暴露暂停态）
+gate_bash() {
+	local CMD="$1"
+	# 0 人工总开关（最优先）：存在即静默放行，不输出任何内容
+	# （暂停态对 agent 不可见，与护栏不存在时表现一致）
 	if [[ -f "$GATE_PAUSE_FILE" ]]; then
 		return 0
 	fi
-	local LOGICAL PHYSICAL BASENAME PROJ REL RELP INSIDE=0 INSP=0
-	LOGICAL="$(resolve_path "$FILE" logical)"
-	PHYSICAL="$(resolve_path "$FILE" physical)"
-	BASENAME="${LOGICAL##*/}"
-	PROJ="$(find_git_root "${GATE_CWD:-$PWD}")"
-	REL="${LOGICAL#"$PROJ"/}"
-	RELP="${PHYSICAL#"$PROJ"/}"
-	{ [[ "$LOGICAL" == "$PROJ" || "$LOGICAL" == "$PROJ/"* ]] && INSIDE=1; } || true
-	{ [[ "$PHYSICAL" == "$PROJ" || "$PHYSICAL" == "$PROJ/"* ]] && INSP=1; } || true
+	local FIRST BASE
+	FIRST="$(trim "$CMD")"
+	FIRST="${FIRST%%[[:space:]]*}"
+	BASE="$(basename "${FIRST:-cmd}" 2>/dev/null || printf '%s' "${FIRST:-cmd}")"
 
-	# 1a meta-frozen：全局 anchors.json 或显式 _meta_frozen 的 anchors.json 禁改。
-	# 用逻辑路径比对——物理路径会解析到 /gnu/store，basename 与等值判断双双失效。
-	# _meta_frozen 支持 {"unless_inside": "<dir>"}：cwd 位于 dir 内时豁免
-	# （该仓库内的会话可维护自己的 anchors 规则源）。
+	if check_frozen_commands; then return 0; fi
+	if check_interactive_commands; then return 0; fi
+	if check_git_rules; then return 0; fi
+	if check_readonly_whitelist; then return 0; fi
+	apply_rewrites_and_hints
+	return 0
+}
+
+# ─── 文件写入判定 ─────────────────────────────────────────────────────────────
+
+# gate_edit 与 gate_bash 共用同一约定：阶段命中并 emit → return 0
+# （终止主流程），未命中 → return 1（继续下一阶段）。
+
+# 1a meta-frozen：全局 anchors.json 或显式 _meta_frozen 的 anchors.json 禁改。
+# 用逻辑路径比对——物理路径会解析到 /gnu/store，basename 与等值判断双双失效。
+# _meta_frozen 支持 {"unless_inside": "<dir>"}：cwd 位于 dir 内时豁免
+# （该仓库内的会话可维护自己的 anchors 规则源）。
+check_meta_frozen() {
 	if [[ "$BASENAME" == "anchors.json" ]]; then
 		local GA_RESOLVED
 		GA_RESOLVED="$(resolve_path "$HOME/.config/agents/anchors.json" logical)"
@@ -489,12 +506,15 @@ gate_edit() {
 			fi
 		fi
 	fi
+	return 1
+}
 
-	# 1b frozen_paths：~/ 前缀按家目录展开；相对路径按 git root 前缀 + 任意
-	# 路径后缀（basename 等值，如 channel.lock）。逻辑/物理双查——物理路径
-	# 防「/tmp/软链 → 仓库冻结目录」中转写入。
-	# 条目支持对象形式 {"path": ..., "unless_inside": "<dir>"}：cwd 位于 dir
-	# 内时该条不拦（逐条目判定，近层加无条件条目即可恢复拦截——ratchet 保持）。
+# 1b frozen_paths：~/ 前缀按家目录展开；相对路径按 git root 前缀 + 任意
+# 路径后缀（basename 等值，如 channel.lock）。逻辑/物理双查——物理路径
+# 防「/tmp/软链 → 仓库冻结目录」中转写入。
+# 条目支持对象形式 {"path": ..., "unless_inside": "<dir>"}：cwd 位于 dir
+# 内时该条不拦（逐条目判定，近层加无条件条目即可恢复拦截——ratchet 保持）。
+check_frozen_paths() {
 	local frozen unless exp entry
 	while IFS= read -r entry; do
 		[[ -z "$entry" ]] && continue
@@ -510,7 +530,7 @@ gate_edit() {
 			# 条目常带尾斜杠；不剥掉会让 "$exp/"* 变双斜杠模式永不匹配
 			exp="${exp%/}"
 			if [[ "$LOGICAL" == "$exp" || "$LOGICAL" == "$exp/"* ]] || [[ "$PHYSICAL" == "$exp" || "$PHYSICAL" == "$exp/"* ]]; then
-				emit BLOCK "冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 blue home 生效。"
+				emit BLOCK "冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 just home 生效。"
 				return 0
 			fi
 			;;
@@ -523,8 +543,11 @@ gate_edit() {
 			;;
 		esac
 	done < <(jq -c '.frozen_paths[]?' <<<"$MERGED" 2>/dev/null)
+	return 1
+}
 
-	# 1c frozen_globs：含 / 的对相对路径匹配，不含 / 的对 basename 匹配
+# 1c frozen_globs：含 / 的对相对路径匹配，不含 / 的对 basename 匹配
+check_frozen_globs() {
 	if [[ $INSP -eq 1 ]]; then
 		local glob ere
 		while IFS= read -r glob; do
@@ -541,16 +564,23 @@ gate_edit() {
 			fi
 		done < <(jq -r '.frozen_globs[]?' <<<"$MERGED" 2>/dev/null)
 	fi
+	return 1
+}
 
-	# 1d 部署位置保护（机器级）：~/.config/、~/.local/ 直改禁止，项目内豁免。
-	# 用逻辑路径——这些位置的 symlink 指向 store 是部署设计，不是攻击面。
+# 1d 部署位置保护（机器级）：~/.config/、~/.local/ 直改禁止，项目内豁免。
+# 用逻辑路径——这些位置的 symlink 指向 store 是部署设计，不是攻击面。
+check_deployed_locations() {
 	if [[ "$LOGICAL" == "$HOME/.config/"* || "$LOGICAL" == "$HOME/.local/"* ]] && [[ $INSIDE -eq 0 ]]; then
-		emit BLOCK "禁止直接修改已部署位置（~/.config/ 或 ~/.local/）。请修改 dotfiles/ 源文件后运行 blue home。"
+		emit BLOCK "禁止直接修改已部署位置（~/.config/ 或 ~/.local/）。请修改 dotfiles/ 源文件后运行 just home。"
 		return 0
 	fi
+	return 1
+}
 
-	# 2 敏感信息检测（stdin 为待检内容，可为空）
-	local INPUT CONTENT
+# 2 敏感信息检测（stdin 为待检内容，可为空）+ 3 path_hints（软提示）
+# 本阶段恒 return 0（敏感命中 emit SENSITIVE 后亦已裁决，但主流程随即结束）。
+check_sensitive_and_hints() {
+	local INPUT
 	INPUT="$(cat 2>/dev/null || true)"
 	if [[ -n "$INPUT" ]]; then
 		local TMPFILE FOUND="" pattern label flags gflag
@@ -571,7 +601,7 @@ gate_edit() {
 		fi
 	fi
 
-	# 3 path_hints（软提示）
+	# path_hints（软提示）
 	if [[ $INSIDE -eq 1 ]]; then
 		local prefix msg p
 		while IFS=$'\t' read -r prefix msg; do
@@ -582,6 +612,30 @@ gate_edit() {
 			fi
 		done < <(jq -r '.path_hints | to_entries[] | "\(.key)\t\(.value)"' <<<"$MERGED" 2>/dev/null)
 	fi
+	return 0
+}
+
+gate_edit() {
+	local FILE="$1"
+	# 0 人工总开关（最优先）：存在即静默放行（同 gate_bash，不向 agent 暴露暂停态）
+	if [[ -f "$GATE_PAUSE_FILE" ]]; then
+		return 0
+	fi
+	local LOGICAL PHYSICAL BASENAME PROJ REL RELP INSIDE=0 INSP=0
+	LOGICAL="$(resolve_path "$FILE" logical)"
+	PHYSICAL="$(resolve_path "$FILE" physical)"
+	BASENAME="${LOGICAL##*/}"
+	PROJ="$(find_git_root "${GATE_CWD:-$PWD}")"
+	REL="${LOGICAL#"$PROJ"/}"
+	RELP="${PHYSICAL#"$PROJ"/}"
+	{ [[ "$LOGICAL" == "$PROJ" || "$LOGICAL" == "$PROJ/"* ]] && INSIDE=1; } || true
+	{ [[ "$PHYSICAL" == "$PROJ" || "$PHYSICAL" == "$PROJ/"* ]] && INSP=1; } || true
+
+	if check_meta_frozen; then return 0; fi
+	if check_frozen_paths; then return 0; fi
+	if check_frozen_globs; then return 0; fi
+	if check_deployed_locations; then return 0; fi
+	check_sensitive_and_hints
 	return 0
 }
 

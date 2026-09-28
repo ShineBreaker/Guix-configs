@@ -161,10 +161,15 @@ browse() {
 # ---------------------------------------------------------------------------
 # 对账：清单条目健康性 + 未登记仓库脚本（信息级）+ 一包一入口准入（阻断级）
 # ---------------------------------------------------------------------------
-check() {
-  local fail=0 listed repo_root actual missing_stale
 
-  # 清单条目 → 部署位存在性（捕获工具改名/删除后的残留条目）
+# SELF 实体在 dotfiles/mutable/tools/toolbox/.local/bin/toolbox，上溯 5 层到 dotfiles/
+dotfiles_dir() {
+  cd "$(dirname "$SELF")/../../../../../" && pwd
+}
+
+# 清单条目 → 部署位存在性（捕获工具改名/删除后的残留条目）。有缺失返回 1。
+check_catalog() {
+  local fail=0 listed
   while IFS= read -r listed; do
     if ! command -v "$listed" >/dev/null 2>&1; then
       printf '✗ 清单条目 %s 在部署位找不到\n' "$listed"
@@ -172,15 +177,27 @@ check() {
     fi
   done < <(yq -r '.[].name' "$CATALOG")
   [ "$fail" -eq 0 ] && printf '✓ 清单 %d 条全部在部署位存在\n' "$(yq '. | length' "$CATALOG")"
+  return "$fail"
+}
 
-  # 仓库脚本 → 未登记项（opt-in 收录，仅提示不算错）
-  repo_root=$(cd "$(dirname "$SELF")/../../../../../" && pwd) || die '无法定位仓库 dotfiles/'
-  actual=$(find "$repo_root" -path '*/.local/bin/*' -type f ! -path '*/.git/*' -printf '%f\n' | sort -u)
+# 仓库脚本 → 未登记项（opt-in 收录，仅提示不算错）。信息级，恒返回 0。
+check_unregistered() {
+  local root actual missing_stale
+  root=$(dotfiles_dir) || die '无法定位仓库 dotfiles/'
+  actual=$(find "$root" -path '*/.local/bin/*' -type f ! -path '*/.git/*' -printf '%f\n' | sort -u)
   missing_stale=$(comm -23 <(printf '%s\n' "$actual") <(yq -r '.[].name' "$CATALOG" | sort))
   if [ -n "$missing_stale" ]; then
     printf '… 仓库中未登记（wrapper 类预期不登记，新原创工具请补录）:\n'
     printf '%s\n' "$missing_stale" | sed 's/^/    /'
   fi
+}
+
+# 一包一入口准入（阻断级）。违规返回 1。
+check_one_entry_per_package() {
+  local root
+  root=$(dotfiles_dir) || die '无法定位仓库 dotfiles/'
+  local bin_ok=1 n_pkgs=0 marker pkg_dir pkg_name allow_file entry entries line raw reason hit
+  local -a allow_names bad_lines kept
 
   # —— 一包一入口准入（阻断级）——
   # 每个 mutable stow 包（.stow-package 标记定界，与 blue stow 的包判据一致；
@@ -191,7 +208,7 @@ check() {
   local -a allow_names bad_lines kept
   while IFS= read -r marker; do
     pkg_dir=$(dirname "$marker")
-    pkg_name=${marker#"$repo_root/mutable/"}; pkg_name=${pkg_name%/.stow-package}
+    pkg_name=${marker#"$root/mutable/"}; pkg_name=${pkg_name%/.stow-package}
     [ -d "$pkg_dir/.local/bin" ] || continue
     # stow 链入 ~/.local/bin 的是 bin/ 直下的常规可执行文件（子目录会整目录链接，不算入口）
     entries=$(find "$pkg_dir/.local/bin" -maxdepth 1 -type f -perm -u+x -printf '%f\n' | sort)
@@ -237,20 +254,28 @@ check() {
     done <<< "$entries"
 
     if [ ${#bad_lines[@]} -gt 0 ]; then
-      bin_ok=0 fail=1
+      bin_ok=0
       printf '✗ %s 的 .bin-entries-allow 存在缺理由的豁免行：\n' "$pkg_name"
       printf '    %s\n' "${bad_lines[@]}"
       printf '  修复：豁免行须为「入口名 # 理由」，理由不可省略\n'
     fi
     if [ ${#kept[@]} -gt 1 ]; then
-      bin_ok=0 fail=1
+      bin_ok=0
       printf '✗ 一包一入口违规：%s 的 .local/bin 有 %d 个入口：\n' "$pkg_name" "${#kept[@]}"
       printf '    %s\n' "${kept[@]}"
       printf '  修复：实现挪包内 .local/libexec/、主入口分发子命令；确属例外在包根 .bin-entries-allow 声明理由\n'
     fi
-  done < <(find "$repo_root/mutable" -name .stow-package -type f | sort)
+  done < <(find "$root/mutable" -name .stow-package -type f | sort)
   [ "$bin_ok" -eq 1 ] && printf '✓ 一包一入口：%d 个含入口的 mutable 包全部合规\n' "$n_pkgs"
 
+  return "$((1 - bin_ok))"
+}
+
+check() {
+  local fail=0
+  check_catalog || fail=1
+  check_unregistered
+  check_one_entry_per_package || fail=1
   return "$fail"
 }
 
