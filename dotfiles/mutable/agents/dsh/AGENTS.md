@@ -3,6 +3,8 @@
 本目录为 DeepSeek Harness（DSH，一切皆插件的 Agent Harness 框架）的 Guix 部署包。
 本包映射到 `$HOME`，通过 GNU Stow 逐文件软链到系统。
 
+入口脚本的面向人类手册：`docs/scripts/` 下 `dsh.md`（wrapper + tui）、`dsh-web.md`、`dsh-update.md`。
+
 ## 目录与文件布局
 
 | 路径                                    | 说明                                                                                                 |

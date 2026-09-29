@@ -3,20 +3,9 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# hermes-desktop — `hermes desktop` 子命令实体（由 bin/hermes 分发进入，
-# 也可被脚本按 libexec 绝对路径直调），在 Guix 的 FHS 容器里启动 Hermes
-# Electron 桌面应用。
-#
-# 背景：A 方案（Pi 式 editable-checkout）下，纯 checkout + uv 安装不含
-# build 过的 Electron 二进制。需先 `hermes desktop --build-only` 用仓库内
-# npm + vite + electron-builder 打出 release/linux-unpacked/Hermes，再在本
-# 脚本里用 `guix shell --container --emulate-fhs`（复用 appimage-run 的
-# electron 库集）把它跑起来——弥补 Guix 缺 FHS 系统库（libglib-2.0 等）。
-#
-# 与 Pi 的 pi / hermes wrapper 同构：runtime 在 $HERMES_HOME/hermes-agent。
-# checkout 直接落在 hermes-agent 顶层（desktop 壳要求的源码根，isHermesSourceRoot
-# 检查 hermes_cli/main.py 在 ACTIVE_HERMES_ROOT 直接下级）。
-# 布局常量、宿主 GUI 环境解析、容器 preserve/share 配置见同目录 hermes-lib.sh。
+# hermes-desktop — `hermes desktop` 子命令实体（bin/hermes 分发进入，也可
+# 按 libexec 路径直调）：在 guix shell --emulate-fhs 容器里启动 Hermes
+# Electron 桌面端。文档：docs/scripts/hermes-desktop.md
 set -euo pipefail
 
 _bin_dir="$(dirname "$(readlink -f "$0")")"
@@ -26,43 +15,22 @@ source "${_bin_dir}/hermes-lib.sh"
 # 1. 确保已 build（首跑需 npm install 1299 包 + electron-builder，几分钟；
 #    之后 node_modules 留在 checkout 内，重 build 很快）
 if [[ ! -x "${HERMES_DESKTOP_BIN}" ]]; then
-	echo "Hermes Desktop 尚未 build，执行 build（首次需几分钟）..." >&2
-	# 直调 venv 的原生子命令，不走 bin/hermes（分发回来还是本脚本 → 死循环）
-	"${HERMES_CLI_BIN}" desktop --build-only
+  echo "Hermes Desktop 尚未 build，执行 build（首次需几分钟）..." >&2
+  # 直调 venv 的原生子命令，不走 bin/hermes（分发回来还是本脚本 → 死循环）
+  "${HERMES_CLI_BIN}" desktop --build-only
 fi
 
-# 2. 将桌面图标复制到 icons 文件夹中
-#    （lib 的 hermes_install_icon_1024 带 XDG_DATA_HOME 默认值解析 + mkdir -p）
 hermes_install_icon_1024 "${HERMES_RUNTIME}/apps/desktop/assets/icon.png"
 
-# 3. 宿主环境解析 + 容器边界配置（实现在 lib；执行顺序不可换：
-#    session init 提供 WAYLAND_DISPLAY 默认值 → GUI 解析依赖它定 Ozone →
-#    share 旗标依赖 RT_DIR / WAYLAND_DISPLAY）
+# 顺序不可换：session init 提供 WAYLAND_DISPLAY → GUI 解析定 Ozone →
+# share 旗标依赖 RT_DIR/WAYLAND_DISPLAY
 hermes_session_env_init
 hermes_gui_env_resolve
 hermes_build_share_flags
 
-# 容器内执行：
-# - 走 Wayland 原生协议（niri compositor；WAYLAND_DISPLAY + RT_DIR socket 已
-#   expose 进容器，Electron 直连 compositor，不经 XWayland 中转）
-# - 硬件 GPU：/dev/dri 已读写挂入（见 lib 内 share 旗标注释），不再设
-#   LIBGL_ALWAYS_SOFTWARE，也不用 --enable-unsafe-swiftshader 软件渲染——那会让
-#   应用内动画全失效。--ignore-gpu-blocklist：容器内 GPU 信息探测不全，Chromium
-#   可能把显卡列入黑名单回退软件渲染，此标志强制启用硬件路径。
-#   （若某机器硬件路径确实崩，可临时 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop`
-#   回退软件渲染——该变量已在 PRESERVE 正则里透传。）
-# - --no-sandbox / --disable-gpu-sandbox：嵌套 guix shell 容器里 Chromium 沙箱
-#   起不来（渲染进程 exitCode=5 crash loop），关掉沙箱让窗口正常出（必需）
-# - --enable-wayland-ime：启用 Wayland text-input 协议，fcitx5 的
-#   libwaylandim.so 通过此协议与 Chromium 通信（X11 下走 XIM/GTK IM，
-#   Wayland 下必须显式开启此标志）
-# - --gtk-version=3：让 Chromium 初始化 GTK3（原生文件对话框 + 主题集成）
-# - dbus：优先复用宿主 session bus（DBUS_SESSION_BUS_ADDRESS 已 preserve +
-#   RT_DIR 已 expose → 宿主 bus socket 可达）；仅在宿主 bus 不可达时才
-#   dbus-launch 起新 bus。这样 dconf/GSettings（暗色偏好）和 fcitx5
-#   D-Bus frontend 都能从容器内访问。
-# - GTK 主题/图标/光标/输入法/Ozone 平台等全部由 lib 的动态解析段 export，
-#   经 PRESERVE 透传进容器，EXEC_STRING 内不再硬编码任何宿主特定值。
+# EXEC_STRING 各旗标的理由（--no-sandbox/--ignore-gpu-blocklist/--enable-wayland-ime
+# 等）见 docs/scripts/hermes-desktop.md §容器内执行；dbus 优先复用宿主
+# session bus，不可达才 dbus-launch 起新的。
 # shellcheck disable=SC2016  # 单引号内 ${...} 故意留给容器内 bash -c 展开
 EXEC_STRING='cd /appimage-root && \
 export APPDIR=/appimage-root && \
@@ -72,36 +40,28 @@ if [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && command -v dbus-launch >/dev/null 2
 fi && \
 exec /appimage-root/Hermes --no-sandbox --disable-gpu-sandbox --ozone-platform="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}" --enable-wayland-ime --gtk-version=3 --ignore-gpu-blocklist --disable-dev-shm-usage "$@"'
 
-# ── Remote gateway 模式：连宿主 hermes-backend(9119)，不在容器内跑 serve ──
-# 背景：容器只是为 Electron GUI 准备的（manifest 只含运行时库），若让
-# desktop 在容器内 spawn 自己的 `hermes serve`，agent 的工具环境就是残缺的
-# （没有 guix/git/blue 等）。宿主 shepherd 服务 hermes-backend 跑在完整
-# 环境里，desktop 以 Remote gateway 模式连它（127.0.0.1:9119，容器与宿主
-# 共享网络栈，直连即可）。desktop 壳读取 HERMES_DESKTOP_REMOTE_URL +
-# HERMES_DESKTOP_REMOTE_TOKEN（main.ts env override 路径）后不再启动本地
-# serve，所有 agent 操作都落到宿主的完整环境。
-#
-# token 每次 backend 重启都会重新生成（web_server.py 里 secrets.token_urlsafe
-# 32，除非显式设 HERMES_DASHBOARD_SESSION_TOKEN），所以这里启动时动态抓取，
-# 不写死任何 secret。9119 不可达时回退到默认的容器内本地 serve（保持可用，
-# 但环境残缺——应优先确保 hermes-backend 已启动）。
+# Remote gateway：容器只为 Electron GUI 服务；desktop 连宿主 hermes-backend
+# （9119，共享网络栈）让 agent 跑在完整环境。token 每次重启重生成，故启动时
+# 动态抓取不写死；不可达时回退容器内残缺 serve。详见 docs/scripts/hermes-desktop.md
 REMOTE_BASE="http://127.0.0.1:9119"
 if curl -sf -m 2 -o /dev/null "${REMOTE_BASE}/api/status"; then
-	_session_token="$(curl -sf -m 2 "${REMOTE_BASE}/" | grep -oE '__HERMES_SESSION_TOKEN__="[^"]+"' | head -1 | sed -E 's/.*="([^"]+)"/\1/')"
-	if [[ -n "${_session_token}" ]]; then
-		export HERMES_DESKTOP_REMOTE_URL="${REMOTE_BASE}"
-		export HERMES_DESKTOP_REMOTE_TOKEN="${_session_token}"
-		echo "hermes desktop: Remote gateway → ${REMOTE_BASE}（agent 跑在宿主完整环境）" >&2
-	else
-		echo "hermes desktop: 警告：${REMOTE_BASE} 在线但抓不到 session token，回退容器内 serve（环境残缺）" >&2
-	fi
+  # || true 必需：grep 无匹配 → pipefail → 赋值失败 → set -e 中止，
+  # 下面 [[ -z ]] 的告警回退分支永远到不了
+  _session_token="$(curl -sf -m 2 "${REMOTE_BASE}/" | grep -oE '__HERMES_SESSION_TOKEN__="[^"]+"' | head -1 | sed -E 's/.*="([^"]+)"/\1/' || true)"
+  if [[ -n "${_session_token}" ]]; then
+    export HERMES_DESKTOP_REMOTE_URL="${REMOTE_BASE}"
+    export HERMES_DESKTOP_REMOTE_TOKEN="${_session_token}"
+    echo "hermes desktop: Remote gateway → ${REMOTE_BASE}（agent 跑在宿主完整环境）" >&2
+  else
+    echo "hermes desktop: 警告：${REMOTE_BASE} 在线但抓不到 session token，回退容器内 serve（环境残缺）" >&2
+  fi
 else
-	echo "hermes desktop: 警告：${REMOTE_BASE} 不可达（hermes-backend 未启动？），回退容器内 serve（环境残缺）" >&2
+  echo "hermes desktop: 警告：${REMOTE_BASE} 不可达（hermes-backend 未启动？），回退容器内 serve（环境残缺）" >&2
 fi
 
 exec guix shell --container --emulate-fhs --network \
-	--manifest="${HERMES_MANIFEST}" \
-	--preserve="${HERMES_PRESERVE_RE}" \
-	"${HERMES_SHARE_FLAGS[@]}" \
-	--share="${HERMES_DESKTOP_RELEASE_DIR}=/appimage-root" \
-	-- bash -c "${EXEC_STRING}" bash "$@"
+  --manifest="${HERMES_MANIFEST}" \
+  --preserve="${HERMES_PRESERVE_RE}" \
+  "${HERMES_SHARE_FLAGS[@]}" \
+  --share="${HERMES_DESKTOP_RELEASE_DIR}=/appimage-root" \
+  -- bash -c "${EXEC_STRING}" bash "$@"

@@ -4,84 +4,82 @@
 #
 # SPDX-License-Identifier: MIT
 
-# anchors-lib.sh — 四方 gate 共享的 anchors.json 加载 / 合并库
+# anchors-lib.sh — 四方 gate 共享的 anchors.json 分层加载与 ratchet 合并库。
+# 只做「读 + 合并」，判定语义全部在 gate-core.sh（单一真相源分工）。
+# 分层模型、merge 语义、失败回退约定见 docs/scripts/anchors-lib.md。
 #
-# 被同目录 gate-core.sh（决策核）source；gate-core 再被四方适配器调用：
-#   - zcode   dotfiles/mutable/agents/zcode/.zcode/hooks/{bash,edit}-gate.sh
-#   - crush   dotfiles/immutable/agents/.config/crush/hooks/{bash,edit}-gate.sh
-#   - pi      dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/index.ts
-#   - hermes  dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/__init__.py
-# 分层 ratchet 模型：
-#   - 全局 ~/.config/agents/anchors.json（meta-frozen，人工维护，承载 sudo 等不可削弱项）
-#   - 项目级 <root>/.agents/anchors.json（从起点向上遍历到 git 根，收集每一层）
-#   - 合并顺序：全局（底）→ 项目根 → … → 项目近；数组 unique 并集、映射近层覆盖远层
-#   - 代码底层 DEFAULT：frozen_commands 恒含 "sudo"（agent 任何场景都不需要提权）
+# 被同目录 gate-core.sh source；消费链路：
+#   zcode/crush hooks → gate-core.sh → 本库
+#   pi（pi-gate/index.ts）、hermes（plugins/gate/__init__.py）、DSH gate.js
 #
-# 设计原则：本库只做「读 + 合并」，判定语义全部在 gate-core.sh——规则源与
-# 决策核各自单一，避免四方适配器复制演化。
-
+# 契约：本库是被 source 的库文件——不得 set -e/-u/-o pipefail、不得 exit、
+# 不得依赖未被调用方设置的变量以外的环境状态。
+# shellcheck disable=SC2317 # 库文件：函数由调用方经 source 使用
 # 允许重复 source（幂等）
 if [[ -n "${_ANCHORS_LIB_LOADED:-}" ]]; then return 0 2>/dev/null || true; fi
 _ANCHORS_LIB_LOADED=1
 
-# ─── 加载错误日志（对齐 pi-gate logLoadError：omp/crush 默认静默吞错误，显式留痕）──
+# ─── 加载错误日志（对齐 pi-gate logLoadError，显式留痕防静默吞错）──
 log_gate_error() {
-	local ext="$1" where="$2" msg="$3"
-	local log_file="$HOME/.config/omp/extensions/.load-errors.log"
-	mkdir -p "$(dirname "$log_file")" 2>/dev/null || true
-	printf '[%s] [%s] %s: %s\n' \
-		"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ext" "$where" "$msg" \
-		>>"$log_file" 2>/dev/null || true
+  local ext="$1" where="$2" msg="$3"
+  local log_file="$HOME/.config/omp/extensions/.load-errors.log"
+  mkdir -p "$(dirname "$log_file")" 2>/dev/null || true
+  printf '[%s] [%s] %s: %s\n' \
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ext" "$where" "$msg" \
+    >>"$log_file" 2>/dev/null || true
 }
 
 # ─── 路径工具 ────────────────────────────────────────────────────────────────
 
-# 展开 ~/ 前缀为 $HOME
+# ~/ 前缀展开
+# shellcheck disable=SC2317 # 库文件：函数由调用方使用
 expand_tilde() {
-	local p="$1"
-	case "$p" in
-	"~") printf '%s\n' "$HOME" ;;
-	"~/"*) printf '%s\n' "${HOME}${p:1}" ;;
-	*) printf '%s\n' "$p" ;;
-	esac
+  local p="$1"
+  # shellcheck disable=SC2088 # 匹配 anchors.json 里的字面 ~/ 前缀
+  case "$p" in
+    "~") printf '%s\n' "$HOME" ;;
+    "~/"*) printf '%s\n' "${HOME}${p:1}" ;;
+    *) printf '%s\n' "$p" ;;
+  esac
 }
 
-# 从 dir 向上遍历找到第一个含 .git 的目录（git 根）；找不到则返回 dir 本身
+# 向上找含 .git 的目录；找不到返回 dir 本身
 find_git_root() {
-	local d parent i
-	d="$(readlink -f "$1" 2>/dev/null || printf '%s' "$1")"
-	for ((i = 0; i < 64; i++)); do
-		if [[ -d "$d/.git" ]]; then
-			printf '%s\n' "$d"
-			return 0
-		fi
-		parent="$(dirname "$d")"
-		if [[ "$parent" == "$d" ]]; then break; fi
-		d="$parent"
-	done
-	printf '%s\n' "$1"
+  local d parent i
+  d="$(readlink -f "$1" 2>/dev/null || printf '%s' "$1")"
+  for ((i = 0; i < 64; i++)); do
+    if [[ -d "$d/.git" ]]; then
+      printf '%s\n' "$d"
+      return 0
+    fi
+    parent="$(dirname "$d")"
+    if [[ "$parent" == "$d" ]]; then break; fi
+    d="$parent"
+  done
+  printf '%s\n' "$1"
 }
 
 # ─── anchors.json 分层收集与合并 ─────────────────────────────────────────────
 
-# 收集项目级 anchors.json（近→根顺序），每行一个路径。含 git 根后停止。
+# 收集项目级（近→根），含 git 根后停止。
 _find_anchors_files_near_to_root() {
-	local d parent i
-	d="$(readlink -f "$1" 2>/dev/null || printf '%s' "$1")"
-	for ((i = 0; i < 64; i++)); do
-		if [[ -f "$d/.agents/anchors.json" ]]; then
-			printf '%s\n' "$d/.agents/anchors.json"
-		fi
-		if [[ -d "$d/.git" ]]; then break; fi
-		parent="$(dirname "$d")"
-		if [[ "$parent" == "$d" ]]; then break; fi
-		d="$parent"
-	done
+  local d parent i
+  d="$(readlink -f "$1" 2>/dev/null || printf '%s' "$1")"
+  for ((i = 0; i < 64; i++)); do
+    if [[ -f "$d/.agents/anchors.json" ]]; then
+      printf '%s\n' "$d/.agents/anchors.json"
+    fi
+    if [[ -d "$d/.git" ]]; then break; fi
+    parent="$(dirname "$d")"
+    if [[ "$parent" == "$d" ]]; then break; fi
+    d="$parent"
+  done
 }
 
-# ratchet 合并 jq 程序（输入 [全局raw, 项目根raw, ..., 项目近raw]）
-# 数组字段 unique 并集；映射字段近层覆盖远层（对象 * 合并，一层 string 值等价浅合并）；
-# builtin_rewrite 布尔由给出层覆盖；初始 = 代码底层 DEFAULT（sudo 恒在）。
+# ratchet 合并（输入 [全局, 项目根, ..., 项目近]）：数组 unique 并集、映射
+# 近层覆盖远层、builtin_rewrite 布尔由给出层覆盖；初始=DEFAULT（sudo 恒在，
+# 语义细则见 anchors-lib.md）。
+# shellcheck disable=SC2016 # jq 程序文本，非 shell 待展开串
 _ANCHORS_MERGE_JQ='
 reduce .[] as $raw (
   { "frozen_commands": ["sudo"], "frozen_paths": [], "frozen_globs": [],
@@ -102,62 +100,62 @@ reduce .[] as $raw (
   | .anchor_measurements  = ((.anchor_measurements + ($raw.anchor_measurements // [])) | unique)
 )'
 
-# 加载并合并所有层 anchors.json，输出合并 JSON 到 stdout。
-# 顺序：全局（底）→ 项目根 → … → 项目近（近层覆盖远层）。
-# 失败时回退到 DEFAULT（仅 sudo）并记日志，保证 hook 不因配置损坏而整体失效。
+# load_merged_anchors [start_dir]：全局（底）→ 项目根 → … → 项目近，
+# 输出合并 JSON 到 stdout；任何层损坏 → 回退 DEFAULT（仅 sudo）并记日志，
+# 保证 hook 不因配置损坏整体失效。
 load_merged_anchors() {
-	local start_dir="${1:-$PWD}"
-	local global="$HOME/.config/agents/anchors.json"
-	local default_json='{"frozen_commands":["sudo"],"frozen_paths":[],"frozen_globs":[],"interactive_commands":[],"bare_repl_commands":[],"sensitive_patterns":[],"redirect_conventions":{},"rewrite":{},"path_hints":{},"builtin_rewrite":true,"human_only_actions":[],"anchor_measurements":[]}'
+  local start_dir="${1:-$PWD}"
+  local global="$HOME/.config/agents/anchors.json"
+  # shellcheck disable=SC2016 # JSON 字面量
+  local default_json='{"frozen_commands":["sudo"],"frozen_paths":[],"frozen_globs":[],"interactive_commands":[],"bare_repl_commands":[],"sensitive_patterns":[],"redirect_conventions":{},"rewrite":{},"path_hints":{},"builtin_rewrite":true,"human_only_actions":[],"anchor_measurements":[]}'
 
-	# 收集项目层（近→根），再反转为根→近
-	# 用进程替换而非管道——管道右侧在子 shell 执行，mapfile 赋值会丢失
-	local proj_files=()
-	mapfile -t proj_files < <(_find_anchors_files_near_to_root "$start_dir")
+  # 进程替换而非管道——管道右侧在子 shell，mapfile 赋值会丢失
+  local proj_files=()
+  mapfile -t proj_files < <(_find_anchors_files_near_to_root "$start_dir")
 
-	local all_files=()
-	[[ -f "$global" ]] && all_files+=("$global")
-	local idx
-	for ((idx = ${#proj_files[@]} - 1; idx >= 0; idx--)); do
-		all_files+=("${proj_files[$idx]}")
-	done
+  local all_files=()
+  [[ -f "$global" ]] && all_files+=("$global")
+  local idx
+  for ((idx = ${#proj_files[@]} - 1; idx >= 0; idx--)); do
+    all_files+=("${proj_files[$idx]}")
+  done
 
-	# 无任何 anchors.json：返回纯 DEFAULT（仅 sudo）
-	if [[ ${#all_files[@]} -eq 0 ]]; then
-		printf '%s\n' "$default_json"
-		return 0
-	fi
+  # 无 anchors.json → 纯 DEFAULT（仅 sudo）
+  if [[ ${#all_files[@]} -eq 0 ]]; then
+    printf '%s\n' "$default_json"
+    return 0
+  fi
 
-	if ! jq -s "$_ANCHORS_MERGE_JQ" "${all_files[@]}" 2>/dev/null; then
-		log_gate_error "crush-gate" "load_merged_anchors" \
-			"jq 合并失败，回退到 DEFAULT（仅 sudo）。文件: ${all_files[*]}"
-		printf '%s\n' "$default_json"
-		return 0
-	fi
+  if ! jq -s "$_ANCHORS_MERGE_JQ" "${all_files[@]}" 2>/dev/null; then
+    log_gate_error "crush-gate" "load_merged_anchors" \
+      "jq 合并失败，回退到 DEFAULT（仅 sudo）。文件: ${all_files[*]}"
+    printf '%s\n' "$default_json"
+    return 0
+  fi
 }
 
 # ─── frozen_globs 匹配 ───────────────────────────────────────────────────────
-# glob → 锚定 ERE：`**` → .*（并吞 **/ 的斜杠），`*` → [^/]*，`?` → [^/]。
-# 语义对齐 pi-gate 旧实现的 globToRegex；由 gate-core.sh 在 frozen_globs
-# 匹配时调用（含 / 的对相对路径匹配，不含 / 的对 basename 匹配）。
+# glob_to_ere <glob> → 锚定 ERE：`**`→.*（吞 **/ 斜杠）、`*`→[^/]*、`?`→[^/]。
+# 语义对齐 pi-gate globToRegex（anchors-lib.md §glob 语义）。
+# shellcheck disable=SC2016 # 内部 sed 程序文本含 $，须单引号防展开
 glob_to_ere() {
-	local g="$1" out="" i=0 c
-	while ((i < ${#g})); do
-		c="${g:$i:1}"
-		case "$c" in
-		'*')
-			if [[ "${g:$((i + 1)):1}" == '*' ]]; then
-				out+='.*'
-				((i++))
-				[[ "${g:$((i + 1)):1}" == '/' ]] && ((i++))
-			else
-				out+='[^/]*'
-			fi
-			;;
-		'?') out+='[^/]' ;;
-		*) out+="$(printf '%s' "$c" | sed 's/[.[\*^$()+?{|\\]/\\&/g')" ;;
-		esac
-		((i++))
-	done
-	printf '%s' "^${out}$"
+  local g="$1" out="" i=0 c
+  while ((i < ${#g})); do
+    c="${g:$i:1}"
+    case "$c" in
+      '*')
+        if [[ "${g:$((i + 1)):1}" == '*' ]]; then
+          out+='.*'
+          ((i++))
+          [[ "${g:$((i + 1)):1}" == '/' ]] && ((i++))
+        else
+          out+='[^/]*'
+        fi
+        ;;
+      '?') out+='[^/]' ;;
+      *) out+="$(printf '%s' "$c" | sed 's/[.[\*^$()+?{|\\]/\\&/g')" ;;
+    esac
+    ((i++))
+  done
+  printf '%s' "^${out}$"
 }

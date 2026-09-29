@@ -2,13 +2,15 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
+;; 子系统设计见 docs/scripts/tmux-sidebar.md
+
 ;; sidebar/input.scm — 键盘光标导航、按键解析（cbreak）与 FIFO 事件
 ;; 循环。依赖主文件的渲染状态机（handle-action/render-current! 等），
 ;; 均为运行期调用，load 顺序无要求。
 
 (use-modules (ice-9 match) (ice-9 ftw) (srfi srfi-1))
 
-;; === Keyboard navigation ===
+;; --- Keyboard navigation ---
 
 ;; 光标只在侧栏 pane 聚焦（pane_active=1）时显示；失焦时位置保留，
 ;; 再次聚焦回到原条目。侧栏 pane 自身的 active 存于 context 第 8 项。
@@ -149,7 +151,7 @@
           (handle-key key)
           (loop))))))
 
-;; === FIFO daemon ===
+;; --- FIFO daemon ---
 
 (define (fifo-path)
   ;; FIFO 位于 XDG_RUNTIME_DIR（per-user 运行时目录，替代世界可读写的

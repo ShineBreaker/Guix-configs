@@ -24,18 +24,21 @@
 
 括号平衡检查（快速定位出错的代码块）：
 
+#+NAME: maint-check
 #+begin_src sh :dir .. :results output
 blue check
 #+end_src
 
 构建验证（tangle + =guix system build --dry-run= ，仅做语法与依赖验证）：
 
+#+NAME: maint-dry-rebuild
 #+begin_src sh :dir .. :results output
 blue --dry-run rebuild
 #+end_src
 
 仅执行 tangle（刷新 =tmp/= 下的全部代码生成物）：
 
+#+NAME: maint-build
 #+begin_src sh :dir .. :results output
 blue build
 #+end_src
@@ -264,8 +267,7 @@ blue build
                          (stop stop)))))
 #+end_src
 
-+ 系统/用户两侧 flatpak 定时更新共用的启动脚本：仅在外接电源时执行。
-  scope 为 "system" 或 "user"。
++ 系统/用户两侧 flatpak 定时更新共用的启动脚本（当前仅下方 =flatpak-user-update= timer 以 "user" 调用；scope 取值 "system" 或 "user" ）：生成的 store 脚本是一行 =grep -q 1 /sys/class/power_supply/A*/online && exec flatpak update --<scope> -y= ，由 shepherd timer 经 =/bin/sh= 执行。不接外接电源时 grep 失败、脚本非零退出，timer 语义下静默跳过本次，不留副作用；接电则 =exec= 直接把进程替换成 flatpak。
 #+NAME: flatpak-service-helpers
 #+begin_src scheme
 
@@ -1133,7 +1135,10 @@ daemon 启动时会解密 =mihomo-subscriptions.age= （使用全局统一的私
 
 脚本开头 9 行采用 =${VAR:-@VAR@}= 形式：构建期由「服务装配」的替换表把 =@VAR@= 填成 store 路径，运行期同名环境变量可以覆盖它（ =DATA_DIR= 那行是同一模式、默认值为字面量，注释里写明了用途）。占位符名与替换表必须一致，写错不会有构建报错，只会把 =@VAR@= 原样留在脚本里。
 
+失败语义：脚本刻意不设 =set -e=——解密经 =if= 单独降级为空订阅；渲染链（ =envsubst= / =chmod= / =mv= ）任一步失败时也不退出，仍 =exec= 交由 mihomo 自己对配置报错，避免 shepherd 反复 respawn。模板缺失是唯一 =die= 的硬错误（退出码 1），因为此时注定无法渲染出有效配置。
+
 #+NAME: mihomo-run
+#+CAPTION: 解密订阅 → envsubst 渲染模板 → exec mihomo；构建期注入 @VAR@，运行期同名环境变量可覆盖
 #+begin_src sh :tangle ../tmp/mihomo-run
 #!/bin/sh
 
@@ -1177,7 +1182,10 @@ exec "$MIHOMO_BIN" -d "$DATA_DIR" -f "$OUT"
 WiFi 连上可信 profile 时把发起连接的无线接口加入 nftables 中的 =trusted_ifaces= 集合，断开或不可信时移除；
 tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位符，利用 activation 拷贝到 =/etc/NetworkManager/dispatcher.d/= 。
 
+调用契约：NetworkManager 在连接状态变化时以 =<接口名> <action>= （root 身份）依次执行 dispatcher.d 下每个脚本，profile 名经环境变量 =CONNECTION_ID= 传入；本脚本只响应 =up= / =down= ，其余 action 落到空 case 直接退出。日志约定：stderr 由 NM 收进自身日志（syslog → =/var/log/messages= ），以 =trusted-ssid:= 前缀检索。私钥/密文任何一步不可用都按「不可信」处理（移出集合），不阻断联网。
+
 #+NAME: nm-dispatcher-trusted-connection
+#+CAPTION: NM dispatcher：按加密的可信名单把无线接口加进/移出 nftables trusted_ifaces
 #+begin_src sh :tangle ../tmp/nm-dispatcher-trusted-connection
 #!/bin/sh
 
@@ -1193,7 +1201,6 @@ CONNECTION_ID="${CONNECTION_ID:-}"
 # 只处理无线接口：有线/虚拟接口的 up/down 不进可信集合
 [ -d "/sys/class/net/$IFACE/wireless" ] || exit 0
 
-# 输出由 NetworkManager 收进自身日志（syslog → /var/log/messages）
 log() { echo "trusted-ssid: $*" >&2; }
 
 is_trusted_connection() {
@@ -1373,6 +1380,17 @@ iifname "virbr0" oifname != "virbr0" masquerade
 
 =ac-power-init= 读 =/sys/class/power_supply/ADP1/online= 判断是否接电：=read= 是 Scheme 读取器，把文件里的 =1= 读成数字；=false-if-exception= 兜住该 sysfs 节点在部分机器上缺失的情况（读不到按 off 处理）。它通过 =root-one-shot-service= 注册，该 helper 已内置「一次性执行」与「停止回调默认返回 #f（即已停止）」的语义，所以不必再传 =#:stop= 或 =#:respawn?= 。
 
+=ac-power-profile= 是 =program-file= 生成的脚本，udev 规则（电源 add/change 事件）与 =ac-power-init= 都以 =on= / =off= 参数调用它。所有 sysfs 写入经 =set-sys= 用 =false-if-exception= 兜底——节点在部分机器上不存在时静默跳过，不影响其余项；脚本只用 Guile 核心绑定，不新增模块依赖。 =on= ↔ =off= 成对写入的项：
+
+- PPD profile =performance= ↔ =power-saver= ；WiFi 逐接口 =power_save= 关 ↔ 开（接口名运行时从 =/sys/class/net/*/wireless= 探测，不写死）；
+- =intel_pstate= ： =min_perf_pct= 30 ↔ 8（AC 抬最低频消升频延迟）、 =hwp_dynamic_boost= 1 ↔ 0（IO 等待时自动抬 EPP）；
+- 调度省电： =workqueue power_efficient= N ↔ Y（就近派发）、 =timer_migration= 0 ↔ 1（定时器本地唤醒）；
+- PCIe ASPM =policy= ： =performance= ↔ =powersupersave= ；
+- PCI runtime PM 白名单（三个写死的 BDF：i915 iGPU、YMTC PC300 NVMe、iwlwifi）： =on= ↔ =auto=——AC 常开不进 D3，电池恢复内核自动管理；
+- 声卡 =snd_hda_intel power_save= ：0 ↔ 10（AC 零延迟，电池回 10s 省电档）；
+- KSM 同页合并： =run= 1 ↔ 0，且仅 AC 时写 =pages_to_scan= 200 / =sleep_millisecs= 50——扫描的 CPU 开销只在接电时付；
+- =nmi_watchdog= / =soft_watchdog= 恒写 0： =nowatchdog= 内核参数之外的运行时兜底。
+
 本小节用到四种「文件类」构造器，分工如下：
 
 | 构造器          | 作用                           |
@@ -1402,8 +1420,7 @@ iifname "virbr0" oifname != "virbr0" masquerade
                (false-if-exception
                 (call-with-output-file path
                   (lambda (port) (display val port)))))
-             ;; 无线接口名运行时探测（/sys/class/net/*/wireless），不写死
-             ;; 仅用 Guile 核心绑定，不新增模块依赖
+             ;; 无线接口名运行时探测，不写死
              (define (wireless-interfaces)
                (let ([dir (false-if-exception (opendir "/sys/class/net"))])
                  (if (not dir)
@@ -1418,26 +1435,23 @@ iifname "virbr0" oifname != "virbr0" masquerade
                                 (loop (cons entry acc))]
                                [else (loop acc)]))))))
              (let ([ac? (string=? mode "on")])
-               ;; userspace 守护；system* 的返回值无人消费，忽略子进程退出码
+               ;; userspace 调用，忽略子进程退出码
                (system* ppdctl "set" (if ac? "performance" "power-saver"))
                (for-each (lambda (dev)
                            (system* iw-bin "dev" dev "set" "power_save"
                                     (if ac? "off" "on")))
                          (wireless-interfaces))
-               ;; intel_pstate：AC 抬最低频消升频延迟 + IO 等待自动抬 EPP
                (set-sys "/sys/devices/system/cpu/intel_pstate/min_perf_pct"
                         (if ac? "30" "8"))
                (set-sys "/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost"
                         (if ac? "1" "0"))
-               ;; workqueue 就近派发 / 定时器本地唤醒
                (set-sys "/sys/module/workqueue/parameters/power_efficient"
                         (if ac? "N" "Y"))
                (set-sys "/proc/sys/kernel/timer_migration"
                         (if ac? "0" "1"))
-               ;; PCIe 链路电源策略
                (set-sys "/sys/module/pcie_aspm/parameters/policy"
                         (if ac? "performance" "powersupersave"))
-               ;; PCI runtime PM 白名单：AC 常开不进 D3，电池恢复 auto
+               ;; PCI runtime PM 白名单
                (for-each
                 (lambda (bdf)
                   (set-sys (string-append "/sys/bus/pci/devices/" bdf
@@ -1446,15 +1460,13 @@ iifname "virbr0" oifname != "virbr0" masquerade
                 '("0000:00:02.0"   ; i915 iGPU
                   "0000:01:00.0"   ; YMTC PC300 NVMe
                   "0000:00:14.3")) ; iwlwifi wlp0s20f3
-               ;; 声卡：AC 零延迟；电池恢复默认 10s 省电
                (set-sys "/sys/module/snd_hda_intel/parameters/power_save"
                         (if ac? "0" "10"))
-               ;; KSM 同页合并：扫描 CPU 开销只在 AC 付
+               ;; KSM 扫描参数仅 AC 写
                (when ac?
                  (set-sys "/sys/kernel/mm/ksm/pages_to_scan" "200")
                  (set-sys "/sys/kernel/mm/ksm/sleep_millisecs" "50"))
                (set-sys "/sys/kernel/mm/ksm/run" (if ac? "1" "0"))
-               ;; 周期中断源常关（nowatchdog cmdline 之外的运行时兜底）
                (set-sys "/proc/sys/kernel/nmi_watchdog" "0")
                (set-sys "/proc/sys/kernel/soft_watchdog" "0"))))]
 
@@ -1472,8 +1484,6 @@ iifname "virbr0" oifname != "virbr0" masquerade
 
   (list (root-one-shot-service 'ac-power-init '(power-profiles-daemon user-processes)
                                #~(lambda _
-                                   ;; read 是 Scheme 读取器：把文件内容 1 读成数字；
-                                   ;; false-if-exception 兜住机器上缺该 sysfs 节点的情况
                                    (let ([val (false-if-exception
                                                (call-with-input-file
                                                    "/sys/class/power_supply/ADP1/online"
@@ -1489,7 +1499,7 @@ iifname "virbr0" oifname != "virbr0" masquerade
 #+end_src
 
 **** USB 电源权限
-=power/control= 放开 0666：熄屏守护 =usb-power-watch= 以普通用户挂起/恢复 USB 设备（add 事件自愈）。
+=power/control= 放开 0666：熄屏守护 =usb-power-watch= 以普通用户身份写它挂起/恢复 USB 设备。规则只在 =add= 事件（设备插入或枚举出 =power/control= 属性时）触发一次 =chmod 666= ；新插设备因此自动获得同样权限，无需守护进程提权。
 
 #+NAME: usb-power-services
 #+begin_src scheme
@@ -1849,9 +1859,10 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
 #+end_src
 
 **** hibernate polkit 规则
-放行本地活跃用户的休眠/挂起/混合休眠。
+放行本地活跃用户的休眠/挂起/混合休眠。这是 polkit 的 =.rules= 文件（由 polkitd 求值的 JavaScript， =js= 语言标记仅用于语法高亮），tangle 到 =tmp/= 后由上方 =hibernate-polkit= 服务装进 =share/polkit-1/rules.d/= ；返回 =polkit.Result.YES= 即授权，不匹配的规则返回 =undefined= 交给后续规则继续判定。
 
 #+NAME: 50-hibernate.rules
+#+CAPTION: polkit 规则：本地活跃用户放行 login1 休眠/挂起相关 action
 #+begin_src js :tangle ../tmp/50-hibernate.rules
 polkit.addRule(function(action, subject) {
     if (subject.isLocal && subject.isActive &&
@@ -2256,6 +2267,8 @@ tangle 成独立 manifest，再由「文件管理服务」用 =local-file= 部�
                                                            "/share/fish/functions/fenv.fish")))))
 #+end_src
 
+模板正文（ =10-source.fish= ）： =status is-interactive= 守卫保证只在交互 shell 执行，非交互场景（脚本、 =fish -c= 调用）零开销零副作用；逐行 source 各工具的 shell 集成（atuin 历史、direnv、herdr/niri 补全、fzf 键位、zoxide、starship 提示符），末尾 =enable_transience= 是 starship 的 transient prompt 开关（由上一行 =starship init= 提供）。新增工具需同时在上方 =specs->pkgs= 列表登记包名，否则构建期报 =file 'bin/foo' not found= 。
+
 #+NAME: fish-cfg
 #+begin_src fish
 status is-interactive
@@ -2365,6 +2378,7 @@ _    _  _  _  _  _  _  _)
              ;; 编辑与导航
              "emacs-avy"
              "emacs-diff-hl"
+             "emacs-editorconfig"
              "emacs-expand-region"
              "emacs-idle-highlight"
              "emacs-indent-bars"
@@ -2411,7 +2425,6 @@ _    _  _  _  _  _  _  _)
              ;; 拼写检查
              "aspell"
              "aspell-dict-en"
-             "miscfiles"
 
              ;; 命令行工具
              "agenote"
@@ -2419,30 +2432,21 @@ _    _  _  _  _  _  _  _)
              "git"
              "ripgrep"
 
-             ;; Tree-sitter
+             ;; Tree-sitter（仅保留语言能力表实际启用的 grammar）
              "tree-sitter"
-             "tree-sitter-bash"
              "tree-sitter-c"
              "tree-sitter-cpp"
              "tree-sitter-css"
-             "tree-sitter-dockerfile"
-             "tree-sitter-gdscript"
              "tree-sitter-go"
              "tree-sitter-html"
              "tree-sitter-java"
-             "tree-sitter-java-properties"
              "tree-sitter-javascript"
-             "tree-sitter-jsdoc"
              "tree-sitter-json"
-             "tree-sitter-markdown"
-             "tree-sitter-kdl"
-             "tree-sitter-nix"
              "tree-sitter-c-sharp"
              "tree-sitter-python"
              "tree-sitter-rust"
              "tree-sitter-typescript"
-             "tree-sitter-yaml"
-             "tree-sitter-zig")))
+             "tree-sitter-yaml")))
 #+end_src
 
 *** 软件自启动
@@ -2473,18 +2477,22 @@ _    _  _  _  _  _  _  _)
 #+end_src
 
 **** usb-power-watch 脚本
-熄屏断电守护，挂在物理 USB 口上的设备无论是什么都一律挂起，清单外的端口不碰，清单内的端口熄屏写 auto、亮屏写 on 。
+熄屏断电守护，挂在物理 USB 口上的设备无论是什么都一律挂起，清单外的端口不碰，清单内的端口熄屏写 =auto= 、亮屏写 =on= 。由上方 =essential-desktop-services= 作为 home shepherd 常驻服务经 =/bin/sh= 拉起，轮询式实现（无事件依赖），写 =power/control= 的权限来自上一小节的 udev 0666 规则。
+
+判读与状态机：每 =INTERVAL= 秒扫一遍 =/sys/class/backlight/*/bl_power= （ =0= 为点亮）——任一读到的背光在亮即视为亮屏；全部熄灭且至少一块可判为熄才进入熄屏计时；一块都读不到时（lit=dark=0）落在亮屏分支，属安全默认。连续熄屏满 =THRESHOLD= 秒才对受管口写 =auto= （避免一闪而过的熄屏抖断电）；亮屏时仅当当前处于 off 态才写一次 =on=——新插设备的 =power/control= 内核默认值即 =on= ，无需重复写。
+
+=PORTS= 是 =/sys/bus/usb/devices/= 下的根端口名（ =3-2= 这类 =总线-端口= ）；匹配含 =3-2.x= 形式的子设备名前缀，带冒号的接口目录（ =3-2:1.0= ）被跳过。所有写操作 =2>/dev/null= 忽略失败（节点消失/权限抖动不致命，下一轮会重试）。
 
 #+NAME: usb-power-watch
+#+CAPTION: 熄屏守护：连续熄屏 120s 后挂起清单内 USB 物理口，亮屏恢复
 #+begin_src sh :tangle ../tmp/usb-power-watch
 #!/bin/sh
 # usb-power-watch — 熄屏后把清单内物理 USB 口挂起省电，亮屏即恢复供电。
 
-INTERVAL=30    # 轮询周期（秒）
-THRESHOLD=120  # 熄屏持续满该秒数才挂起，避免一闪而过的熄屏抖断电
-PORTS="3-2 3-5 3-6 4-5 4-6"  # 受管物理口（/sys/bus/usb/devices/ 下的根设备名）
+INTERVAL=30
+THRESHOLD=120
+PORTS="3-2 3-5 3-6 4-5 4-6"
 
-# 名字命中 PORTS（含 3-2.x 这类子设备前缀）即受管
 in_ports() {
     for p in $PORTS; do
         case "$1" in "$p"|"$p."*) return 0 ;; esac
@@ -2492,10 +2500,9 @@ in_ports() {
     return 1
 }
 
-# 给所有受管口的 power/control 写同一个值（on=供电 / auto=允许挂起）
 set_ports() {
     for dev in /sys/bus/usb/devices/*-*; do
-        case "${dev##*/}" in *:*) continue ;; esac   # 跳过接口目录（3-2:1.0 这类）
+        case "${dev##*/}" in *:*) continue ;; esac
         [ -f "$dev/power/control" ] || continue
         if in_ports "${dev##*/}"; then
             echo "$1" > "$dev/power/control" 2>/dev/null
@@ -2503,11 +2510,9 @@ set_ports() {
     done
 }
 
-off_since=0  # 连续熄屏的起始时间戳；0 = 当前不在熄屏状态
-state=on     # 端口当前供电状态；用来保证亮屏只写一次 on（add 事件会自愈兜底）
+off_since=0
+state=on
 while :; do
-    # 背光判读：bl_power=0 是点亮。多块屏任一在亮（lit）→ 视为亮屏；
-    # 全部熄灭（dark）且无一在亮 → 视为熄屏。
     lit=0; dark=0
     for b in /sys/class/backlight/*/bl_power; do
         [ -r "$b" ] || continue
@@ -2622,13 +2627,11 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
 git 与 gpg 通过脚本内 PATH 前缀（home profile + system profile）定位，不依赖 shepherd 运行环境；提交签名沿用用户 gitconfig（ =commit.gpgsign= ）。
 
 #+NAME: kb-backup-script
+#+CAPTION: 每日自动 commit hermes 包与 Org 知识库；两步独立容错，退出码恒 0
 #+begin_src sh :tangle ../tmp/kb-backup
 #!/bin/sh
 # kb-backup: hermes + Org 知识库每日自动 commit，日志追加 ~/.cache/kb-backup.log。
-# 两步各自容错：任一步 git 失败（index.lock 冲突、签名失败等）只记一条
-# warning 并继续下一步；整体退出码恒为 0（timer 语境下失败不该冒泡）。
 
-# git/gpg 走 home+system profile 的 PATH 前缀，不依赖 shepherd 运行环境
 PATH="$HOME/.guix-home/profile/bin:/run/current-system/profile/bin:$PATH"
 log="$HOME/.cache/kb-backup.log"
 mkdir -p "$(dirname "$log")"

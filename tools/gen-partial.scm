@@ -2,12 +2,12 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-;;; gen-partial.scm — via `guix repl gen-partial.scm TARGET OUT-FILE [COMMIT]`
-;;; 在 guix 的 Guile 环境里生成单频道刷新的临时 channels 文件，避免调用方
-;;; （tools/update-locks.py / legacy blue）的 Guile 环境缺少
-;;; (guix openpgp)/(gcrypt hash) 等模块导致宏展开失败。
-;;; 可选 COMMIT：目标频道 pin 到该 commit（(inherit ...) 函数式覆盖 commit
-;;; 字段）；不传则目标保持 channel.scm 的可变定义，跟随 branch 最新。
+;; gen-partial.scm — 生成单频道刷新的临时 channels 文件
+;; 必须经 `guix repl` 子进程跑：调用方（blueprint.scm 的 %partial-channels-file）
+;; 的 Guile 环境缺 (guix openpgp)/(gcrypt hash)，openpgp-fingerprint 宏展开会
+;; 报 unbound variable；guix 的 Guile 环境自带这些模块。
+;; 文档：docs/scripts/gen-partial.md
+
 (use-modules (guix channels) (guix build utils) (ice-9 match) (ice-9 pretty-print) (srfi srfi-1))
 
 (define args (cdr (command-line)))

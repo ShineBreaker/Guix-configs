@@ -3,20 +3,9 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# askill — 声明式管理第三方 agent skills（lock 驱动，内容不进 git）
-#
-# 模型（对齐 source/channel.lock 哲学）：
-#   仓库只声明（skills-lock.json + 本脚本）；skill 内容按需从上游安装到
-#   ~/.config/agents/skills/，由 lock 的 computedHash 提供完整性基线。
-#
-# 布局（immutable 脚本 + mutable 锁直链，运行不依赖仓库路径）：
-#   ~/.config/agents/skills/                  工作区 = 部署位置（真实 skill 目录，自建 skill 共存）
-#   ~/.config/agents/skills/skills-lock.json  锁真身在 dotfiles/mutable/agents/skills/（Stow 单文件
-#                                             直链，改锁即改仓库源，git diff 直接可见）
-#   ~/.config/agents/skills/.agents/skills/   npx project-scope 落盘暂存区（部署位真目录内）
-#
-# 引擎：npx skills (vercel-labs)，project scope + universal agent + --copy。
-# 版本冻结：ref 跟踪上游最新（无 commit pin），锁语义由 git 提交 skills-lock.json 承担。
+# askill — 声明式管理第三方 agent skills：仓库只跟踪 skills-lock.json +
+# 本脚本，内容按需装到 ~/.config/agents/skills/（引擎 npx skills project
+# scope）。文档：docs/scripts/askill.md
 set -euo pipefail
 
 WORK="$HOME/.config/agents/skills"
@@ -27,41 +16,53 @@ export DISABLE_TELEMETRY=1
 export SKILLS_CLONE_TIMEOUT_MS="${SKILLS_CLONE_TIMEOUT_MS:-600000}"
 SKILLS_VER="skills@1.5.23"
 
-die() { echo "askill: $*" >&2; exit 1; }
+die() {
+  echo "askill: $*" >&2
+  exit 1
+}
 
 npx_skills() { (cd "$WORK" && npx -y "$SKILLS_VER" "$@"); }
 
-# 按锁清单逐 skill 同步暂存区 → 部署位置。
-# 逐条操作且只处理锁内名字：部署位置的自建 skill（lock 外）绝不触碰。
-# cp -aL 展开软链（update 重装走 symlink 模式时也摊平成真实文件）。
+# 只处理锁内名字（自建 skill 绝不触碰）。cp -aL 摊平软链。
 sync_from_staging() {
   [ -e "$LOCK" ] || die "找不到 $LOCK（先 askill add 生成锁）"
   local names name tmp
   names=$(jq -r '.skills | keys[]' "$LOCK")
-  [ -n "$names" ] || { echo "锁为空，无可同步"; return 0; }
+  [ -n "$names" ] || {
+    echo "锁为空，无可同步"
+    return 0
+  }
   while IFS= read -r name; do
-    [ -d "$STAGING/$name" ] || { echo "  跳过（暂存区无）: $name"; continue; }
+    [ -d "$STAGING/$name" ] || {
+      echo "  跳过（暂存区无）: $name"
+      continue
+    }
     tmp="$WORK/.$name.incoming"
     rm -rf "$tmp"
     cp -aL "$STAGING/$name" "$tmp"
-    rm -rf "${WORK:?}/$name"     # 无斜杠：对旧 stow 软链只删链本身
+    rm -rf "${WORK:?}/$name" # 无斜杠：对旧 stow 软链只删链本身
     mv "$tmp" "$WORK/$name"
     echo "  已同步: $name"
-  done <<< "$names"
+  done <<<"$names"
 }
 
 case "${1:-help}" in
   add)
     [ $# -ge 2 ] || die "用法: askill add <owner/repo> [-s <skill>[,<skill>...]] [-l 只列出不安装]"
     shift
-    # npx skills 的 -s 不支持逗号多值（会报 No matching skills found），展开为重复 -s
+    # npx -s 不支持逗号多值（报 No matching skills found），展开为重复 -s
     args=()
     while [ $# -gt 0 ]; do
       case "$1" in
-        -s) IFS=',' read -ra _names <<< "$2"
-            for _n in "${_names[@]}"; do args+=(-s "$_n"); done
-            shift 2 ;;
-        *)  args+=("$1"); shift ;;
+        -s)
+          IFS=',' read -ra _names <<<"$2"
+          for _n in "${_names[@]}"; do args+=(-s "$_n"); done
+          shift 2
+          ;;
+        *)
+          args+=("$1")
+          shift
+          ;;
       esac
     done
     npx_skills add "${args[@]}" -a universal --copy -y
@@ -75,10 +76,8 @@ case "${1:-help}" in
     echo "完成。锁已更新（mutable 直链），git diff 审查后提交以冻结新版本。"
     ;;
   install)
-    # 新机/暂存区丢失时从锁恢复（锁经 blue stow agents/skills 已直链到位）：
-    # experimental_install 重装到暂存区 → 同步部署位置。
-    # 注意 ref 无 commit pin，恢复的是上游当前最新；与锁内 computedHash 的偏差
-    # 会体现在随后 npx update 的检测里。
+    # ref 无 commit pin：恢复的是上游当前最新，与锁内 computedHash 的偏差
+    # 由随后 npx update 的检测体现
     [ -e "$LOCK" ] || die "找不到 $LOCK（先 blue stow agents/skills 部署锁）"
     npx_skills experimental_install
     sync_from_staging
@@ -87,7 +86,7 @@ case "${1:-help}" in
     [ $# -ge 2 ] || die "用法: askill remove <skill> [<skill>...]"
     shift
     for name in "$@"; do
-      case "$name" in */*|.*|'') die "非法 skill 名: $name" ;; esac
+      case "$name" in */* | .* | '') die "非法 skill 名: $name" ;; esac
     done
     npx_skills remove "$@" -y
     for name in "$@"; do
@@ -97,9 +96,11 @@ case "${1:-help}" in
     echo "完成。锁已更新（mutable 直链），git diff 审查后提交。"
     ;;
   sync)
-    sync_from_staging ;;
+    sync_from_staging
+    ;;
   list)
-    npx_skills list -p ;;
+    npx_skills list -p
+    ;;
   *)
     cat <<'EOF'
 askill — 声明式管理第三方 agent skills（引擎: npx skills project scope）

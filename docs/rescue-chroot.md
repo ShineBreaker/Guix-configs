@@ -2,7 +2,7 @@
 
 > 面向「未来的恐慌中的自己」。拓扑数据核对自 `source/information.scm`（2026-09-22，与本机 `/proc/mounts` 逐项比对一致）。
 > 配套脚本：`tools/rescue-chroot.sh`（默认 dry-run，只打印将执行的命令）。
-> **改了 `information.scm` 的拓扑，就要同步本文档和脚本顶部的变量块**——两处 + 源码，共三份真源。
+> **拓扑的单一真源是 `information.scm`**：脚本在运行时解析它（顶部变量块由 `load_topology` 填充，不另存副本），本手册 §2 是人工核对过的同步副本——改了 `information.scm` 的拓扑要同步本手册；解析器对书写格式的要求见 §6。
 
 ---
 
@@ -332,4 +332,12 @@ sudo tools/rescue-chroot.sh chroot /mnt       # 进入（默认 dry-run 打印�
 sudo tools/rescue-chroot.sh umount /mnt --go  # 逆序卸载并关 LUKS
 ```
 
-脚本在检测到「当前就在运行中的 Guix 主机上」时会拒绝 mount/chroot（防止手滑把自己挂穿），拓扑常量硬编码在脚本顶部并标注了与 `source/information.scm` 的同步义务。
+脚本在检测到「当前就在运行中的 Guix 主机上」时会拒绝 mount/chroot（防止手滑把自己挂穿），`--force` 可越过（危险）。
+
+**拓扑解析契约**（改 `information.scm` 布局时必看）：live 环境没有 guile，脚本用 sed/grep 做受限文本解析，要求 `information.scm` 的磁盘拓扑段保持「一行一个 `(define %var "...")` 顶格」、`%btrfs-subvolumes` 的首条目与 `'(` 同行、条目形如 `("子卷" "挂载点")` 二元组。解析失败即中止——宁可拒绝运行也不用陈旧拓扑动磁盘。`information.scm` 定位顺序：`INFO_SCM` 环境变量 > 脚本同目录（U 盘救援时两文件拷在一起即可）> 脚本所在 `tools/` 的 `../source/`。`/home` 子卷被有意排除（家目录持久化靠运行时 bind-mount，救援 chroot 用不到）；`/data` 单独必挂（配置仓库所在）。
+
+---
+
+## 7. 变更记录
+
+- 2026-09-29：**修复 mount 的 /etc 方式选择恒失效的 bug**。`choose_etc_mode` 用 `printf` 把菜单写到 stdout，而调用处是 `etc_mode=$(choose_etc_mode)`——菜单文本被命令替换吃掉（交互时用户根本看不到菜单），返回值因此带整段菜单文本，`mount_plan` 的 `case` 恒落到 `*` 分支，无论选什么都等于「跳过」。修复：菜单与提示改打 stderr，stdout 只回 `1/2/s`。副作用：dry-run 输出中 `5/6 重建 /etc` 现在真正按所选方案回显（默认回车=方案一），与修复前的恒「跳过」不同——这是修复的预期变化。同时重构注释并并入本手册（脚本内只留关键不变量），行为不变。

@@ -97,8 +97,11 @@ source/config.org ──tangle──▶ tmp/config.scm ──追加尾表达式�
 
 - 全局选项：`--dry-run`（reconfigure/init 降级为 build --dry-run）、
   `-y`（跳过 sudo 确认）。
+- sudo 命令执行前先打印原样命令再要求确认；stdin 不可读（如管道调用）
+  一律视为取消，绝不默认放行。
 - tangle 复用判据：`tmp/config.scm` 的 mtime 新于 `source/config.org` 与
-  `source/information.scm`。想强制重编，删掉 `tmp/` 再跑即可。
+  `source/information.scm`（后者经 noweb 进入产物，必须一并比较）。想强制
+  重编，删掉 `tmp/` 再跑即可。
 - `init` 假设分区/加密/挂载已完成（与 blue 相同，前置步骤见 README.org
   装机节，不在脚本范围）；挂载点为显式参数，blue 则硬编码 `/mnt`。
 
@@ -179,7 +182,7 @@ sudo guix time-machine --channels=source/channel.lock -- \
 | tangle | 同款 emacs-minimal batch 命令，完全一致 | 一致 |
 | 频道锁定 | `guix time-machine --channels=source/channel.lock` | 一致 |
 | 尾表达式追加 | tangle 后追加 `%home` / `%system` | 一致（脚本会先剥掉上次追加的旧尾表达式再追加，避免换目标时累积） |
-| 括号检查 | `blue check` 逐块检查、**定位到块名**；reconfigure 前对整文件兜底 | 只有整文件兜底（awk 移植同一算法），无逐块定位；字符串未闭合会额外报错 |
+| 括号检查 | `blue check` 逐块检查、**定位到块名**；reconfigure 前对整文件兜底 | 只有整文件兜底（awk 移植同一算法），无逐块定位；字符串未闭合会额外报错；与 blue 同样不支持 `#\| \|#` 块注释与 `#;` datum 注释 |
 | 产物复用 | blue 框架按 build manifest 增量构建 | 简化为 mtime 比较（config.scm vs config.org 与 information.scm）；伴生产物缺失时需删 `tmp/` 强制重编 |
 | clean-artifacts | rebuild/home 前清理仓库编译产物 | 省略（纯卫生步骤，不影响正确性） |
 | 世代修剪 | rebuild 前保留最近 20 个 system 世代 | 省略（维护步骤；长期用应急脚本需手动 `sudo guix system delete-generations`） |

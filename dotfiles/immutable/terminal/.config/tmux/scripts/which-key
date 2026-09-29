@@ -4,6 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
+# which-key — 快捷键速查 popup（纯静态文案）；见 docs/scripts/which-key.md
 tmux display-popup -E -w 70% -h 64% -b rounded \
   "printf '\n' && \
    printf '  ╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗\n' && \

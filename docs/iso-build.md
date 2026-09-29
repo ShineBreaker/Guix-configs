@@ -6,7 +6,7 @@
 
 > 一条 `blue build-iso` 命令，基于本仓库 `source/config.org` 打出 Live ISO 镜像，产物落到 `dist/jeans-<variant>-<date>.<arch>.iso`。
 
-> 详细代码 / 决策 / 调试见 `source/config.org` 的 `* Live ISO` 章节、`blueprint.scm` §8.5 注释、`tools/build-image.scm` 文件头。本文档**只**说明功能模型、使用方式、关键设计权衡。
+> 详细代码 / 决策 / 调试见 `source/config.org` 的 `* Live ISO` 章节、`blueprint.scm` §8.5 注释、`docs/scripts/build-image.md`。本文档**只**说明功能模型、使用方式、关键设计权衡。
 
 ## §0 一句话模型
 
@@ -294,5 +294,5 @@ console-font 只设 TTY 字体，Live 桌面用不到，删了无副作用。`bl
 
 - `source/config.org` `* Live ISO` 章节——实施细节 / 全部 use-modules / 块代码
 - `blueprint.scm` §8.5——`%images` / `images-from-arguments` / `build-iso-command`
-- `tools/build-image.scm`——guix-system image 产物落地助手（~30 行）
+- `tools/build-image.scm`——guix-system image 产物落地助手（契约见 `docs/scripts/build-image.md`）
 - `docs/secrets.md`——同期构建的年龄加密入仓参考

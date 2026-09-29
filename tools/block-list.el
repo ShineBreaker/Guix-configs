@@ -1,18 +1,9 @@
-;;; block-list.el —— 一次性枚举 Org 文件中所有 #+NAME 代码块
+;;; block-list.el --- 一次性枚举 Org 文件中所有 #+NAME 代码块 -*- lexical-binding: t -*-
 ;;;
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;; SPDX-License-Identifier: MIT
 ;;;
-;;; 由 blueprint.scm 的 blue check（%extract-all-blocks）经 %run-elisp 调用：
-;;;   emacs-minimal --script block-list.el FILE
-;;; 一次遍历导出全部命名块（避免每块起一个 emacs 进程），输出记录格式用
-;;; >>> / <<< 作分隔，避免与 body 内任意文本冲突：
-;;;   >>>name=<n>\tlang=<l>\tnoweb=plain|noweb
-;;;   <body 第 1 行>
-;;;   ...
-;;;   <<<
-;;; body 已 trim 首尾换行。与 block-extract.el / block-replace.el 共用同一套
-;;; 正则风格，可对照阅读。
+;;; 用法与输出协议：docs/scripts/org-block-tools.md（协议面向 blueprint.scm，勿改）
 
 (let* ((file (nth 0 command-line-args-left))
        (name-re "^#[+]NAME:[[:space:]]+\\([^[:space:]\n]+\\)")

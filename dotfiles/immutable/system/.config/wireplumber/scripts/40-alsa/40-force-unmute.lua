@@ -1,16 +1,10 @@
--- WirePlumber — force-unmute ALSA output routes
---
+-- WirePlumber — ALSA Sink 就绪时强制取消输出 route 静音（兜底）
 -- SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
---
 -- SPDX-License-Identifier: MIT
 --
--- 背景：即便禁用了 device/automute-* setting，路由状态恢复、profile
--- 切换、蓝牙事件等其他场景仍可能让某个 ALSA 输出 route（特别是内置
--- Speaker）保持 muted。这个脚本是兜底：每当有 ALSA Sink 节点就绪时，
--- 强制把它对应的 route 取消静音。
---
--- 加载顺序：目录名 "40-alsa" 决定了它在同 prefix 下的相对优先级，
--- 这里比系统自带的 "50-alsa" 早一步注册 hook。
+-- 不变量：save=false —— 只改运行时状态，不写回路由持久化；
+-- 目录名 "40-alsa" 保证先于系统 "50-alsa" 注册 hook。
+-- 背景与排障见 docs/scripts/wireplumber-force-unmute.md
 
 cutils = require ("common-utils")
 log = Log.open_topic ("s-force-unmute")

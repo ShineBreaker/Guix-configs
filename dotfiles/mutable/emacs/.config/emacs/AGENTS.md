@@ -15,7 +15,7 @@
 | `early-init.el`     | 启动前优化配置           | 仅放置必须早于 `main.el` 执行的底层设置（如 GC、Frame 参数） |
 | `main.el`           | Tangle 产物（gitignore） | **禁止手动编辑**，由 `emacs.org` 编译生成                    |
 | `data/*.el`         | 静态翻译与数据           | 仅允许字面量 `setq` 与注释                                   |
-| `scripts/configctl` | 代码块操纵工具           | 面向 Agent 的代码段提取、拼合与定位工具                      |
+| `scripts/configctl` | 代码块操纵工具           | 面向 Agent 的代码段提取、拼合与定位工具（手册 `docs/scripts/emacs-configctl.md`） |
 
 ### 启动调用链
 

@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+# java_tools — jdk/jbuild/jrun；见 docs/scripts/java-tools.md
+
 function jdk -d "Manage JDK versions"
     if test (count $argv) -eq 0
         echo "用法："
@@ -37,7 +39,7 @@ function jbuild --description 'Compile Java source file from src/ to bin/'
 
     set filename $argv[1]
     set src_file "src/$filename.java"
-    set bin_dir "bin"
+    set bin_dir bin
 
     if not test -f "$src_file"
         echo "Error: Source file '$src_file' not found"
@@ -63,7 +65,7 @@ function jrun --description 'Run compiled Java class from bin/'
     end
 
     set filename $argv[1]
-    set bin_dir "bin"
+    set bin_dir bin
 
     if not test -d "$bin_dir"
         echo "Error: bin/ directory not found. Compile first with jbuild"

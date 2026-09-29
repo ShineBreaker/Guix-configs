@@ -8,6 +8,7 @@
 ;;   check   — 轻量原则检查（域顺序 / noweb 图 / 单产物 / 括号 / 重复定义 / 双源键）
 ;;
 ;; 深度验证（load 是否报错、ERT、包清单审计）不在本工具内，由 agent 直接跑 emacs 命令。
+;; 详见 docs/scripts/emacs-configctl.md
 
 (require 'cl-lib)
 (require 'org)
@@ -291,7 +292,7 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
                            (1+ (gethash (match-string 1 body) uses 0)) uses)
                   (setq start (match-end 0))))))))
       (maphash (lambda (ref entry)
-                 (pcase-let ((`(,owner ,kind ,tangle) entry))
+                 (pcase-let ((`(,_owner ,kind ,tangle) entry))
                    (cond
                     ((eq kind 'noweb-ref)
                      (unless (equal tangle "no")
@@ -349,7 +350,7 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
 
 (defun custom-configctl--collect-dolist-declared-keys (form keys)
   "顶层前缀声明形态的键收集。
-(dolist (VAR '(ALIST)) BODY) 且 BODY 调用 custom/declare-binding-group
+(dolist (VAR \='(ALIST)) BODY) 且 BODY 调用 custom/declare-binding-group
 （键经 (car VAR) 传入）时，ALIST 的字符串 car 均为声明键。"
   (let* ((spec (cadr form))
          (list-expr (and (consp spec) (cadr spec)))
@@ -414,7 +415,7 @@ BEGIN/END 为 buffer 绝对位置，REF 为生效 noweb-ref（块头或子树 dr
 
 (defun custom-configctl--which-key-global-entries ()
   "静态读取数据文件的全局描述表，返回 (KEY . DESC) 点对列表。
-只解析 (setq custom:which-key-description-spec '(…)) 字面量，不加载
+只解析 (setq custom:which-key-description-spec \='(…)) 字面量，不加载
 文件；表缺失或值非 quoted 字面量时报错，避免门禁静默失效。"
   (with-temp-buffer
     (insert-file-contents custom-configctl-which-key-data-file)

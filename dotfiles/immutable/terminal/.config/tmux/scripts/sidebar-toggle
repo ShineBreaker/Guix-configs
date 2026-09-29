@@ -6,308 +6,268 @@
 set -euo pipefail
 
 # sidebar-toggle — tmux 侧边栏 pane 生命周期与事件适配器
-#
-# Bash 只处理 tmux pane 生命周期。渲染、点击和折叠状态由长驻 Guile
-# 进程负责；两者通过每个 sidebar pane 独有的 FIFO 通信。
+# Bash 只管 pane 生命周期；渲染/点击/折叠在长驻 Guile daemon，经每 pane
+# 独有 FIFO 通信。完整设计见 docs/scripts/sidebar-toggle.md 与 tmux-sidebar.md
 
 scripts_dir="${HOME}/.config/tmux/scripts"
 sidebar_title="tmux-sidebar"
 sidebar_command="sidebar-render.scm daemon"
 
 is_sidebar() {
-    local title="$1" start="$2"
-    [[ "$title" == "$sidebar_title" || "$start" == *"$sidebar_command"* ]]
+  local title="$1" start="$2"
+  [[ "$title" == "$sidebar_title" || "$start" == *"$sidebar_command"* ]]
 }
 
 fifo_path() {
-    local pane_id="${1#%}"
-    # FIFO 放 XDG_RUNTIME_DIR（per-user 运行时目录），避免世界可读写的
-    # /tmp 带来的竞态与占位面；变量缺省时回退 /tmp 保持旧行为。
-    # 文件名模式必须与 sidebar-render.scm 的 fifo-path 保持一致。
-    printf '%s/tmux-sidebar-%s-%s.fifo' "${XDG_RUNTIME_DIR:-/tmp}" "$UID" "$pane_id"
+  local pane_id="${1#%}"
+  # 文件名必须与 sidebar-render.scm 的 fifo-path 一致（见 docs/scripts/tmux-sidebar.md）
+  printf '%s/tmux-sidebar-%s-%s.fifo' "${XDG_RUNTIME_DIR:-/tmp}" "$UID" "$pane_id"
 }
 
 send_event() {
-    local pane_id="$1" event="$2" fifo fd
-    fifo="$(fifo_path "$pane_id")"
-    [[ -p "$fifo" ]] || return 0
+  local pane_id="$1" event="$2" fifo fd
+  fifo="$(fifo_path "$pane_id")"
+  [[ -p "$fifo" ]] || return 0
 
-    # O_RDWR 打开 FIFO，即使 daemon 正在退出也不会阻塞 hook。
-    exec {fd}<>"$fifo" || return 0
-    printf '%s\n' "$event" >&"$fd" || true
-    exec {fd}>&-
+  # O_RDWR 打开避免 daemon 已退出时 hook 阻塞在 FIFO open
+  exec {fd}<>"$fifo" || return 0
+  printf '%s\n' "$event" >&"$fd" || true
+  exec {fd}>&-
 }
 
 kill_sidebar_pane() {
-    local pane_id="$1" pane_pid
-    pane_pid="$(tmux display-message -p -t "$pane_id" '#{pane_pid}' 2>/dev/null || true)"
-    if [[ "$pane_pid" =~ ^[0-9]+$ ]]; then
-        # tmux may remove the pane without reaping an exec'd daemon.
-        kill -TERM "$pane_pid" 2>/dev/null || true
-    fi
-    rm -f -- "$(fifo_path "$pane_id")"
-    tmux kill-pane -t "$pane_id" 2>/dev/null || true
+  local pane_id="$1" pane_pid
+  pane_pid="$(tmux display-message -p -t "$pane_id" '#{pane_pid}' 2>/dev/null || true)"
+  if [[ "$pane_pid" =~ ^[0-9]+$ ]]; then
+    # pane 消失不等于 exec 出的 daemon 已死，须显式 TERM
+    kill -TERM "$pane_pid" 2>/dev/null || true
+  fi
+  rm -f -- "$(fifo_path "$pane_id")"
+  tmux kill-pane -t "$pane_id" 2>/dev/null || true
 }
 
 current_sidebar() {
-    local pane_id title start
-    # | 分隔 + start_command 放末字段：非空白 IFS 下末变量吞掉余下分隔符，
-    # start_command 内含 | 也不错位；pane_id 恒为首字段（永非空的命令目标）。
-    while IFS='|' read -r pane_id title start; do
-        if is_sidebar "$title" "$start"; then
-            printf '%s\n' "$pane_id"
-            return 0
-        fi
-    done < <(tmux list-panes -F '#{pane_id}|#{pane_title}|#{pane_start_command}' 2>/dev/null || true)
-    return 1
+  local pane_id title start
+  # start_command 恒为末字段：其内容可能含 |，末变量吞余下分隔符不错位
+  while IFS='|' read -r pane_id title start; do
+    if is_sidebar "$title" "$start"; then
+      printf '%s\n' "$pane_id"
+      return 0
+    fi
+  done < <(tmux list-panes -F '#{pane_id}|#{pane_title}|#{pane_start_command}' 2>/dev/null || true)
+  return 1
 }
 
 signal_current() {
-    local pane_id
-    pane_id="$(current_sidebar || true)"
-    # 末尾 || true：没有侧栏 pane 是正常的 no-op（例如 follow 尚未建好侧栏时的
-    # 竞态），不应让脚本在 set -e 下以非零退出，否则 tmux run-shell 会在状态栏
-    # 显示 "'...sidebar-toggle signal' returned 1"。
-    [[ -n "$pane_id" ]] && send_event "$pane_id" "refresh" || true
+  local pane_id
+  pane_id="$(current_sidebar || true)"
+  # 无侧栏是正常 no-op；非零退出会让 tmux run-shell 在状态栏报错
+  [[ -n "$pane_id" ]] && send_event "$pane_id" "refresh" || true
 }
 
 kill_all_sidebars() {
-    # 关闭范围收敛到当前 session（list-panes -s 全窗口）：toggle 开关本就落
-    # session 级（@sidebar_visible），不应越权关掉其他 session 的侧栏。
-    local pane_id title start
-    while IFS='|' read -r pane_id title start; do
-        if is_sidebar "$title" "$start"; then
-            kill_sidebar_pane "$pane_id"
-        fi
-    done < <(tmux list-panes -s -F '#{pane_id}|#{pane_title}|#{pane_start_command}' 2>/dev/null || true)
+  # 只清本 session（-s）：@sidebar_visible 是 session 级，不能越权关别人的
+  local pane_id title start
+  while IFS='|' read -r pane_id title start; do
+    if is_sidebar "$title" "$start"; then
+      kill_sidebar_pane "$pane_id"
+    fi
+  done < <(tmux list-panes -s -F '#{pane_id}|#{pane_title}|#{pane_start_command}' 2>/dev/null || true)
 }
 
-# === 宽度管理：@sidebar_width 是 tmux.conf 拥有的固定初始宽度 ===
-#
-# 策略：
-# - 脚本只读不写 @sidebar_width。旧实现把“检测到的宽度偏离”当手动拖拽
-#   持久化回该选项（persist_sidebar_width_if_dragged），布局竞态/挤压
-#   产生的假偏离会污染全局初始宽度——实测曾被写成 62，所有新侧栏初始
-#   宽度随之漂移。拖拽不再持久化，新建侧栏恒为配置宽度。
-# - window 未变且侧栏宽度偏离配置 → 视为手动拖拽：该 pane 保持现状；
-#   仅 12–80 范围内采纳，更小的偏离是窗口缩窄的挤压残留，拉回配置值。
-# - window 已变（终端 resize / client 切换）→ 绝不采纳现状，拉回配置宽度。
-# - @sidebar_last_window_width 由 ensure_sidebar 统一更新；layout-changed
-#   不参与宽度决策，只通知 daemon 重绘（绝不能在此建/删 pane，否则手动
-#   kill 侧栏会被立即重建）。
-#
-# sync_window_to_client（follow 前置）：
-# - client attach/resize 后若 window 落后于 client，需先让 window 跟
-#   client 同步到 client 大小（宽高都要），再固定侧栏，否则放大后会留虚点
-#   空白（window 尺寸是大小决定因素之一，未跟上 client 时 window 仍旧是手机
-#   压出来的小尺寸）。
-# - 同步只放大不缩小：手机小屏按 window-size latest 压小 window 是 tmux 自行
-#   管理的合法方向；小屏离开后 tmux 不会把后台 window 放大回来，这里补这个
-#   缺口。缩小方向 server 不抢。
-# - 同步扫全 server 所有 window（不只当前 window）：切到后台 window 时才
-#   follow 已经晚了——直接全拉回，切过去即用。无 client 的 session（agent
-#   纯净会话、已 detach）直接跳过。
-# - client 宽高各取最大值而非同一 client 整行：手机 detach 残留的小 client 行
-#   不能拖累桌面 client 的放大方向。
+# --- 宽度管理（详见 docs/scripts/sidebar-toggle.md §宽度策略） ---
+# 关键不变量：
+# - @sidebar_width 只读不写（tmux.conf 拥有初始宽度；曾把竞态假偏离持久化
+#   回去污染全局）。
+# - window 未变且侧栏宽度在 12–80 偏离配置 → 视为手动拖拽，保持现状；
+#   window 变了 → 拉回配置宽度。
+# - sync_window_to_client 只放大不缩小，扫全 server 所有 window（切到后台
+#   window 再 follow 已晚）；client 宽高各取 max（手机 detach 残留小行不能
+#   拖累桌面）。
 
 sync_window_to_client() {
-    local win_id ses_id win_w win_h client_w client_h resize_flags
-    # client 尺寸循环前一次拉全：原实现每窗口 2 条 list-clients|sort|tail
-    # 管线（6 spawn/窗口）太重。仍按行内 session_id 聚合——裸调用回落到
-    # 「最近活跃 client」的风险已排除（key 是行内 session_id，只取本 session 行）。
-    local -A max_w=() max_h=()
-    local c_ses c_w c_h prev_w prev_h
-    while IFS=$'\t' read -r c_ses c_w c_h; do
-        [[ "$c_w" =~ ^[0-9]+$ && "$c_h" =~ ^[0-9]+$ ]] || continue
-        # 宽高各自独立取 max：手机 detach 残留的小 client 行不能拖累桌面 client。
-        prev_w="${max_w[$c_ses]:-}"
-        [[ -z "$prev_w" || "$c_w" -gt "$prev_w" ]] && max_w[$c_ses]="$c_w"
-        prev_h="${max_h[$c_ses]:-}"
-        [[ -z "$prev_h" || "$c_h" -gt "$prev_h" ]] && max_h[$c_ses]="$c_h"
-    done < <(tmux list-clients -a -F $'#{session_id}\t#{client_width}\t#{client_height}' 2>/dev/null || true)
+  local win_id ses_id win_w win_h client_w client_h resize_flags
+  # 一次 list-clients 按行内 session_id 聚合取 max（不能回落「最近活跃
+  # client」，后台 session 会拿错尺寸）
+  local -A max_w=() max_h=()
+  local c_ses c_w c_h prev_w prev_h
+  while IFS=$'\t' read -r c_ses c_w c_h; do
+    [[ "$c_w" =~ ^[0-9]+$ && "$c_h" =~ ^[0-9]+$ ]] || continue
+    prev_w="${max_w[$c_ses]:-}"
+    [[ -z "$prev_w" || "$c_w" -gt "$prev_w" ]] && max_w[$c_ses]="$c_w"
+    prev_h="${max_h[$c_ses]:-}"
+    [[ -z "$prev_h" || "$c_h" -gt "$prev_h" ]] && max_h[$c_ses]="$c_h"
+  done < <(tmux list-clients -a -F $'#{session_id}\t#{client_width}\t#{client_height}' 2>/dev/null || true)
 
-    while IFS=$'\t' read -r win_id ses_id win_w win_h; do
-        [[ -n "$win_id" && -n "$ses_id" ]] || continue
-        # set -u 下关联数组空 key 访问用 :- 防御。
-        client_w="${max_w[$ses_id]:-}"
-        client_h="${max_h[$ses_id]:-}"
-        # 无 client 的 session（agent 纯净会话、已 detach）直接跳过。
-        [[ -n "$client_w" && -n "$client_h" ]] || continue
-        [[ "$win_w" =~ ^[0-9]+$ && "$client_w" =~ ^[0-9]+$ ]] || continue
-        [[ "$win_h" =~ ^[0-9]+$ && "$client_h" =~ ^[0-9]+$ ]] || continue
-        resize_flags=()
-        if (( win_w < client_w )); then
-            resize_flags+=(-x "$client_w")
-        fi
-        if (( win_h < client_h )); then
-            resize_flags+=(-y "$client_h")
-        fi
-        if ((${#resize_flags[@]} > 0)); then
-            tmux resize-window -t "$win_id" "${resize_flags[@]}" 2>/dev/null || true
-        fi
-    done < <(tmux list-windows -a -F $'#{window_id}\t#{session_id}\t#{window_width}\t#{window_height}' 2>/dev/null || true)
+  while IFS=$'\t' read -r win_id ses_id win_w win_h; do
+    [[ -n "$win_id" && -n "$ses_id" ]] || continue
+    client_w="${max_w[$ses_id]:-}"
+    client_h="${max_h[$ses_id]:-}"
+    # 无 client 的 session 直接跳过
+    [[ -n "$client_w" && -n "$client_h" ]] || continue
+    [[ "$win_w" =~ ^[0-9]+$ && "$client_w" =~ ^[0-9]+$ ]] || continue
+    [[ "$win_h" =~ ^[0-9]+$ && "$client_h" =~ ^[0-9]+$ ]] || continue
+    resize_flags=()
+    if ((win_w < client_w)); then
+      resize_flags+=(-x "$client_w")
+    fi
+    if ((win_h < client_h)); then
+      resize_flags+=(-y "$client_h")
+    fi
+    if ((${#resize_flags[@]} > 0)); then
+      tmux resize-window -t "$win_id" "${resize_flags[@]}" 2>/dev/null || true
+    fi
+  done < <(tmux list-windows -a -F $'#{window_id}\t#{session_id}\t#{window_width}\t#{window_height}' 2>/dev/null || true)
 }
 
 debounced_follow() {
-    # 终端拖拽 resize 期间 client-resized 逐帧连发（几十次/秒）：若每次都
-    # 跑 sync + ensure_sidebar，resize-pane -x 32 会与 tmux 自身的逐帧挤压
-    # 互搏，表现为侧栏可见抽动。按窗口写时间戳，150ms 静默期后仅最后一次
-    # 调用真正执行；离散事件（选窗口/attach）仍走即时 follow。
-    local win stamp
-    win="$(tmux display-message -p '#{window_id}' 2>/dev/null)" || return 0
-    [[ -n "$win" ]] || return 0
-    stamp="$(date +%s%N)"
-    tmux set-option -wq -t "$win" @sidebar_resized_ts "$stamp" 2>/dev/null || true
-    sleep 0.15
-    [[ "$(tmux show-option -wqv -t "$win" @sidebar_resized_ts 2>/dev/null)" == "$stamp" ]] || return 0
-    sync_window_to_client
-    ensure_sidebar
+  # client-resized 逐帧连发：按窗口写时间戳防抖，150ms 静默期后只执行
+  # 最后一次，避免 resize-pane 与 tmux 自身挤压互搏出可见抽动
+  local win stamp
+  win="$(tmux display-message -p '#{window_id}' 2>/dev/null)" || return 0
+  [[ -n "$win" ]] || return 0
+  stamp="$(date +%s%N)"
+  tmux set-option -wq -t "$win" @sidebar_resized_ts "$stamp" 2>/dev/null || true
+  sleep 0.15
+  [[ "$(tmux show-option -wqv -t "$win" @sidebar_resized_ts 2>/dev/null)" == "$stamp" ]] || return 0
+  sync_window_to_client
+  ensure_sidebar
 }
 
 ensure_sidebar() {
-    # 关键：window\|@no_sidebar 之间用 | 分隔，避免空的 @no_sidebar 导致
-    # IFS-tab 的空字段丢失、configured_width 错读为 window_width。
-    local context window_id no_sidebar configured_width width socket_key lock_file
-    context="$(tmux display-message -p $'#{window_id}|#{@no_sidebar}|#{@sidebar_width}|#{window_width}|#{@sidebar_last_window_width}' 2>/dev/null)" || return 0
-    IFS='|' read -r window_id no_sidebar configured_width current_window_width last_window_width <<<"$context"
-    [[ -n "$window_id" ]] || return 0
+  # 用 | 而非空白分隔：空的 @no_sidebar 在 IFS-tab 下会丢字段错位
+  local context window_id no_sidebar configured_width width socket_key lock_file
+  context="$(tmux display-message -p $'#{window_id}|#{@no_sidebar}|#{@sidebar_width}|#{window_width}|#{@sidebar_last_window_width}' 2>/dev/null)" || return 0
+  IFS='|' read -r window_id no_sidebar configured_width current_window_width last_window_width <<<"$context"
+  [[ -n "$window_id" ]] || return 0
 
-    if [[ -z "$last_window_width" && -n "$current_window_width" ]]; then
-        tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
-        last_window_width="$current_window_width"
+  if [[ -z "$last_window_width" && -n "$current_window_width" ]]; then
+    tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+    last_window_width="$current_window_width"
+  fi
+
+  # 无 TMUX 的裸调用也连 default socket：unset 按 default 处理，既防
+  # set -u，又与 attached 调用方共享同一锁键保证 flock 串行一致
+  socket_key="default"
+  [[ -n "${TMUX:-}" ]] && socket_key="${TMUX%%,*}"
+  socket_key="${socket_key##*/}-${window_id#@}"
+  lock_file="${XDG_RUNTIME_DIR:-/tmp}/tmux-sidebar-${UID}-${socket_key}.lock"
+  exec 9>"$lock_file"
+  flock -n 9 || return 0
+
+  local pane_id active title start
+  local sidebar_id="" target_id="" fallback_id=""
+  local sidebar_width=""
+  local -a duplicate_ids=()
+
+  while IFS='|' read -r pane_id active width_val title start; do
+    if is_sidebar "$title" "$start"; then
+      if [[ -z "$sidebar_id" ]]; then
+        sidebar_id="$pane_id"
+        sidebar_width="$width_val"
+      else
+        duplicate_ids+=("$pane_id")
+      fi
+      continue
     fi
 
-    # 无 TMUX env 的裸调用（selector / quick-access 的 sh -c）连的也是 default
-    # socket；unset 时按 default 处理既避免 set -u 击杀脚本，也与 attached
-    # caller 共享同一锁键，保证 flock 串行对所有调用方一致生效。
-    socket_key="default"
-    [[ -n "${TMUX:-}" ]] && socket_key="${TMUX%%,*}"
-    socket_key="${socket_key##*/}-${window_id#@}"
-    # 锁文件与 FIFO 同住 XDG_RUNTIME_DIR；缺省回退 /tmp 保持旧行为。
-    lock_file="${XDG_RUNTIME_DIR:-/tmp}/tmux-sidebar-${UID}-${socket_key}.lock"
-    exec 9>"$lock_file"
-    flock -n 9 || return 0
-
-    local pane_id active title start
-    local sidebar_id="" target_id="" fallback_id=""
-    local sidebar_width=""
-    local -a duplicate_ids=()
-
-    # 5 字段重排：start_command 居末字段吞余下分隔符（内含 | 也安全），
-    # pane_id 恒为首字段，width 提前、title/start 靠后供 is_sidebar 判定。
-    while IFS='|' read -r pane_id active width_val title start; do
-        if is_sidebar "$title" "$start"; then
-            if [[ -z "$sidebar_id" ]]; then
-                sidebar_id="$pane_id"
-                sidebar_width="$width_val"
-            else
-                duplicate_ids+=("$pane_id")
-            fi
-            continue
-        fi
-
-        [[ -n "$fallback_id" ]] || fallback_id="$pane_id"
-        if [[ "$active" == "1" ]]; then
-            target_id="$pane_id"
-        fi
-    done < <(tmux list-panes -t "$window_id" -F '#{pane_id}|#{pane_active}|#{pane_width}|#{pane_title}|#{pane_start_command}' 2>/dev/null || true)
-
-    for pane_id in "${duplicate_ids[@]}"; do
-        kill_sidebar_pane "$pane_id"
-    done
-
-    if [[ "$no_sidebar" == "1" ]]; then
-        [[ -n "$sidebar_id" ]] && kill_sidebar_pane "$sidebar_id"
-        return 0
+    [[ -n "$fallback_id" ]] || fallback_id="$pane_id"
+    if [[ "$active" == "1" ]]; then
+      target_id="$pane_id"
     fi
+  done < <(tmux list-panes -t "$window_id" -F '#{pane_id}|#{pane_active}|#{pane_width}|#{pane_title}|#{pane_start_command}' 2>/dev/null || true)
 
-    width="$configured_width"
-    [[ "$width" =~ ^[0-9]+$ ]] || width=32
+  for pane_id in "${duplicate_ids[@]}"; do
+    kill_sidebar_pane "$pane_id"
+  done
 
-    if [[ -n "$sidebar_id" ]]; then
-        # window 未变时的宽度偏离视为手动拖拽：该 pane 保持拖拽宽度，
-        # 但不回写 @sidebar_width（固定初始宽度归 tmux.conf 所有）。
-        if [[ -n "$sidebar_width" && -n "$current_window_width" && "$current_window_width" == "$last_window_width" ]]; then
-            if [[ "$sidebar_width" != "$width" ]] && (( sidebar_width >= 12 && sidebar_width <= 80 )); then
-                width="$sidebar_width"
-            fi
-        fi
-        local actual_before
-        actual_before="${sidebar_width:-$(tmux display-message -p -t "$sidebar_id" '#{pane_width}' 2>/dev/null || echo "")}"
-        if [[ "$actual_before" != "$width" ]]; then
-            tmux resize-pane -t "$sidebar_id" -x "$width" 2>/dev/null || true
-        fi
-        send_event "$sidebar_id" "refresh"
-        if [[ -n "$current_window_width" && "$current_window_width" =~ ^[0-9]+$ ]]; then
-            tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
-        fi
-        return 0
+  if [[ "$no_sidebar" == "1" ]]; then
+    [[ -n "$sidebar_id" ]] && kill_sidebar_pane "$sidebar_id"
+    return 0
+  fi
+
+  width="$configured_width"
+  [[ "$width" =~ ^[0-9]+$ ]] || width=32
+
+  if [[ -n "$sidebar_id" ]]; then
+    # window 未变时的偏离视为手动拖拽：保持现状但不回写 @sidebar_width
+    if [[ -n "$sidebar_width" && -n "$current_window_width" && "$current_window_width" == "$last_window_width" ]]; then
+      if [[ "$sidebar_width" != "$width" ]] && ((sidebar_width >= 12 && sidebar_width <= 80)); then
+        width="$sidebar_width"
+      fi
     fi
-
-    target_id="${target_id:-$fallback_id}"
-    if [[ -z "$target_id" ]]; then
-        tmux display-message "侧边栏创建失败：当前窗口没有普通窗格"
-        # 回滚必须 session 级（与 toggle 分支置 1 同 scope）：全局清零清不掉
-        # session 级残留的 1，会让后续 follow hook 无限重试 split 并刷屏。
-        tmux set-option @sidebar_visible 0 2>/dev/null || true
-        return 1
+    local actual_before
+    actual_before="${sidebar_width:-$(tmux display-message -p -t "$sidebar_id" '#{pane_width}' 2>/dev/null || echo "")}"
+    if [[ "$actual_before" != "$width" ]]; then
+      tmux resize-pane -t "$sidebar_id" -x "$width" 2>/dev/null || true
     fi
-
-    local new_id
-    new_id="$(tmux split-window -d -t "$target_id" -h -b -f -l "$width" -P -F '#{pane_id}' \
-        "exec guile --no-auto-compile -q -s ${scripts_dir}/sidebar-render.scm daemon" 2>/dev/null)" || {
-        tmux display-message "侧边栏创建失败（需要 tmux 3.3a+）"
-        # 去 -g：置 1 是 session 级写入（toggle 分支无 -g），回滚同 scope 才能
-        # 真正清掉残留，否则 session 级 1 会让 follow hook 无限重试 split。
-        tmux set-option @sidebar_visible 0
-        return 1
-    }
-    tmux select-pane -t "$new_id" -T "$sidebar_title" 2>/dev/null || true
+    send_event "$sidebar_id" "refresh"
     if [[ -n "$current_window_width" && "$current_window_width" =~ ^[0-9]+$ ]]; then
-        tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+      tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
     fi
+    return 0
+  fi
+
+  target_id="${target_id:-$fallback_id}"
+  if [[ -z "$target_id" ]]; then
+    tmux display-message "侧边栏创建失败：当前窗口没有普通窗格"
+    # 回滚必须 session 级（无 -g，与置 1 同 scope），否则残留的 1 会让
+    # follow hook 无限重试 split 刷屏
+    tmux set-option @sidebar_visible 0 2>/dev/null || true
+    return 1
+  fi
+
+  local new_id
+  new_id="$(tmux split-window -d -t "$target_id" -h -b -f -l "$width" -P -F '#{pane_id}' \
+    "exec guile --no-auto-compile -q -s ${scripts_dir}/sidebar-render.scm daemon" 2>/dev/null)" || {
+    tmux display-message "侧边栏创建失败（需要 tmux 3.3a+）"
+    tmux set-option @sidebar_visible 0
+    return 1
+  }
+  tmux select-pane -t "$new_id" -T "$sidebar_title" 2>/dev/null || true
+  if [[ -n "$current_window_width" && "$current_window_width" =~ ^[0-9]+$ ]]; then
+    tmux set-option -g @sidebar_last_window_width "$current_window_width" 2>/dev/null || true
+  fi
 }
 
 case "${1:-toggle}" in
-    toggle)
-        # 读取走 session 级优先（-qv）：session 级未设时回退全局默认（0=纯净）。
-        # 写也落在 session 级，让每个 session 独立决定侧栏开关，互不干扰。
-        if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
-            kill_all_sidebars
-            tmux set-option @sidebar_visible 0
-        else
-            tmux set-option @sidebar_visible 1
-            ensure_sidebar
-        fi
-        ;;
-    follow)
-        if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
-            sync_window_to_client
-            ensure_sidebar
-        fi
-        ;;
-    resized)
-        # 终端 resize 专用入口：防抖后执行与 follow 相同的工作。
-        if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
-            debounced_follow
-        fi
-        ;;
-    layout-changed)
-        signal_current
-        ;;
-    signal)
-        signal_current
-        ;;
-    click)
-        [[ $# -ge 5 ]] || exit 2
-        send_event "$4" $'click\t'"$2"$'\t'"$3"$'\t'"$5"
-        ;;
-    toggle-group)
-        pane_id="$(current_sidebar || true)"
-        [[ -n "$pane_id" ]] && send_event "$pane_id" "toggle-group" || true
-        ;;
-    *)
-        printf 'usage: sidebar-toggle [toggle|follow|resized|signal|click|toggle-group|layout-changed]\n' >&2
-        exit 2
-        ;;
+  toggle)
+    # session 级读写：各 session 独立开关；未设时回退全局默认 0（纯净）
+    if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
+      kill_all_sidebars
+      tmux set-option @sidebar_visible 0
+    else
+      tmux set-option @sidebar_visible 1
+      ensure_sidebar
+    fi
+    ;;
+  follow)
+    if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
+      sync_window_to_client
+      ensure_sidebar
+    fi
+    ;;
+  resized)
+    if [[ "$(tmux show-option -qv @sidebar_visible 2>/dev/null)" == "1" ]]; then
+      debounced_follow
+    fi
+    ;;
+  layout-changed)
+    signal_current
+    ;;
+  signal)
+    signal_current
+    ;;
+  click)
+    [[ $# -ge 5 ]] || exit 2
+    send_event "$4" $'click\t'"$2"$'\t'"$3"$'\t'"$5"
+    ;;
+  toggle-group)
+    pane_id="$(current_sidebar || true)"
+    [[ -n "$pane_id" ]] && send_event "$pane_id" "toggle-group" || true
+    ;;
+  *)
+    printf 'usage: sidebar-toggle [toggle|follow|resized|signal|click|toggle-group|layout-changed]\n' >&2
+    exit 2
+    ;;
 esac

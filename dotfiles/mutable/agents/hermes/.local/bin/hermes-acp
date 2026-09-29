@@ -3,11 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-# Hermes Agent — ACP launcher.
-# ACP hosts (Zed, JetBrains, Buzz) resolve the agent by this
-# command name on the login-shell PATH.
-#
-# 历史上由 `hermes update` 写入 ~/.local/bin/（硬编码绝对路径）；现已收编
-# 进本仓库随 stow 部署。若 update 流程将来重写此文件，请在 restow 后核对
-# 软链未被真身覆盖。
+# Hermes Agent — ACP launcher。ACP hosts（Zed 等）按命令名在 PATH 寻址
+# agent，无法子命令化，故允许包内第二入口（约束来源：AGENTS.md 准入规则 4）。
+# 历史上由 `hermes update` 写入 ~/.local/bin/；若 update 流程重写此文件，
+# 请在 restow 后核对软链未被真身覆盖。
 exec "$(dirname "$(readlink -f "$0")")/hermes" acp "$@"

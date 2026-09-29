@@ -37,6 +37,8 @@ agents/
 
 Anchors 由 `anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 Ratchet 合并库）和 `gate-core.sh`（决策核心）构成。各端适配器（Pi-Gate TS、Crush bash hooks、ZCode bash hooks、Hermes gate 插件）仅负责协议转换，决策逻辑在 `gate-core.sh` 集中判定。
 
+> **参考文档**：判定语义、行协议与全部安全不变量见 `docs/scripts/gate-core.md`；分层合并语义见 `docs/scripts/anchors-lib.md`；注入决策见 `docs/scripts/context-select.md`；crush/zcode hook 协议见 `docs/scripts/crush-bash-gate.md`、`crush-edit-gate.md`、`zcode-bash-gate.md`、`zcode-edit-gate.md`、`zcode-session-start.md`。
+
 ### 规则分层
 
 1. **全局配置**（`~/.config/agents/anchors.json`）：跨工作区通用约束，如 `sudo`、交互式命令限制、敏感信息模式等。
@@ -44,6 +46,8 @@ Anchors 由 `anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 R
 3. **内核硬编规则**（`gate-core.sh`）：`rm` 破坏性防护、Git 写操作防护、`~/.config`/`~/.local` 部署目录只读保护。
 
 **修改指引**：修改通用约束改全局 `anchors.json`；修改项目规则改项目级 `anchors.json`；修改判定语义改 `gate-core.sh`。
+
+**改 `gate-core.sh` / `anchors-lib.sh` 的约束**：它们是五端适配器共用的安全边界。CLI、环境变量、`/run/agent-gate.off` 路径和 stdout 行协议保持不变。改判定逻辑前，先建一套用例语料，覆盖 `docs/scripts/gate-core.md` 里的每一条不变量，命中和未命中都要有。新旧版本在临时 `HOME` 下（确保加载源码版 lib）逐条输出一致才算完成，方法见 `docs/scripts/CONVENTIONS.md` §7。
 
 ### 人工总开关（临时手动暂停护栏）
 

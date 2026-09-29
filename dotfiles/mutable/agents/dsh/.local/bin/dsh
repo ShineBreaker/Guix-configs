@@ -3,18 +3,9 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# dsh — DeepSeek Harness CLI wrapper。
-#
-# 本体经 pnpm 装在 $DSH_HOME/_cli（源只托管 package.json + pnpm-workspace.yaml，
-# node_modules/lock 是部署侧运行时产物；uv tool 的 PyPI wheel 因 SEA 闭包缺包
-# 两度翻车已弃）。niri 会话环境不经 fish conf.d，故 DSH_HOME 在此注入，语义同
-# conf.d 的 10-dsh.fish。
-#
-# 一包一入口：update / web 子命令分发到同包 ../libexec/ 实体（dsh-update、
-# dsh-web），bin/ 只留 dsh。
-#
-# CLI 缺失时不再只打印命令让人自己敲：交互式会问一句再装；非交互式（含 desktop
-# 入口经 `dsh web` 拉起，那里 stdin 是 /dev/null）只提示 `dsh --install`，不静默联网装。
+# dsh — DeepSeek Harness CLI wrapper：注入 DSH_HOME（niri 会话不经 fish
+# conf.d），分发 update/web/tui 到同包 libexec 实体（一包一入口），CLI 本体在
+# $DSH_HOME/_cli 经 pnpm 安装。文档：docs/scripts/dsh.md
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
@@ -22,118 +13,104 @@ export DSH_HOME
 
 _cli_dir="$DSH_HOME/_cli"
 _cli_bin="$_cli_dir/node_modules/.bin/dsh"
-# 同包 libexec 实体目录（$0 经 stow 直链解析回仓库源，stow 布局内自洽）
+# $0 经 stow 直链解析回仓库源，与同包 libexec/ 自洽
 _libexec_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/libexec"
 
 install_cli() {
-	if ! command -v pnpm >/dev/null 2>&1; then
-		printf 'dsh: 找不到 pnpm（本机在 nix profile），无法安装 CLI\n' >&2
-		return 1
-	fi
-	if [[ ! -f "$_cli_dir/package.json" ]]; then
-		printf 'dsh: %s/package.json 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$_cli_dir" >&2
-		return 1
-	fi
-	printf 'dsh: 正在安装 CLI（在 %s 里跑 pnpm install）\n' "$_cli_dir" >&2
-	(cd "$_cli_dir" && pnpm install)
-	if [[ ! -x "$_cli_bin" ]]; then
-		printf 'dsh: pnpm install 结束但仍没有 %s\n' "$_cli_bin" >&2
-		return 1
-	fi
-	_sync_cli_lockfile
+  if ! command -v pnpm >/dev/null 2>&1; then
+    printf 'dsh: 找不到 pnpm（本机在 nix profile），无法安装 CLI\n' >&2
+    return 1
+  fi
+  if [[ ! -f "$_cli_dir/package.json" ]]; then
+    printf 'dsh: %s/package.json 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$_cli_dir" >&2
+    return 1
+  fi
+  printf 'dsh: 正在安装 CLI（在 %s 里跑 pnpm install）\n' "$_cli_dir" >&2
+  (cd "$_cli_dir" && pnpm install)
+  if [[ ! -x "$_cli_bin" ]]; then
+    printf 'dsh: pnpm install 结束但仍没有 %s\n' "$_cli_bin" >&2
+    return 1
+  fi
+  _sync_cli_lockfile
 }
 
-# 部署侧 lockfile 拷回仓库源（源侧路径从包内 libexec 的位置反推，stow 布局内自洽）。
-# pnpm 的 Rust 端拒绝写软链 lockfile，故 _cli 的 lockfile 在部署侧是真实文件，
-# git 里的副本靠这里保持同步。
+# 部署侧 lockfile 拷回仓库源：pnpm 拒绝写软链 lockfile，部署侧只能是真实文件
 _sync_cli_lockfile() {
-	local dir="$_cli_dir" src_file
-	src_file="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/_cli/pnpm-lock.yaml"
-	[[ -f "$dir/pnpm-lock.yaml" && -f "$src_file" ]] || return 0
-	if ! cmp -s "$dir/pnpm-lock.yaml" "$src_file"; then
-		cp "$dir/pnpm-lock.yaml" "$src_file"
-		printf 'dsh: _cli 的 pnpm-lock.yaml 已同步回仓库源\n' >&2
-	fi
+  local dir="$_cli_dir" src_file
+  src_file="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/_cli/pnpm-lock.yaml"
+  [[ -f "$dir/pnpm-lock.yaml" && -f "$src_file" ]] || return 0
+  if ! cmp -s "$dir/pnpm-lock.yaml" "$src_file"; then
+    cp "$dir/pnpm-lock.yaml" "$src_file"
+    printf 'dsh: _cli 的 pnpm-lock.yaml 已同步回仓库源\n' >&2
+  fi
 }
 
 if [[ "${1:-}" == "--install" ]]; then
-	install_cli
-	printf 'dsh: CLI 安装完成\n' >&2
-	exit 0
+  install_cli
+  printf 'dsh: CLI 安装完成\n' >&2
+  exit 0
 fi
 
-# dsh plugin 的 bundles 写入走原子替换（临时文件 + rename），会把 profile 的
-# package.json 从 stow 软链换成独立文件——dependencies 进了仓库源、bundles 只落
-# 部署侧。跑完 plugin 子命令后调用：断链则内容归源并重建软链；lockfile 则反向
-# 同步（部署侧必须是真实文件——pnpm 的 Rust 端拒绝写软链 lockfile）。源目录从
-# 包内 bin 的位置反推（stow 布局内自洽，无硬编码路径；不能再从部署侧软链推导：
-# pnpm 会把 package.json / pnpm-workspace.yaml 原地写成实体文件，链接随时不在）。
-# 0.1.7 起 UI 设置编辑也原子写 cordis.patch.yml（settings 已并入 profile
-# patch），断链源不止 plugin 子命令——故尾部统一兜底：每次 CLI 调用结束都
-# 检测一遍（三个文件的 stat，开销可忽略）；dsh web 路径 exec 到 libexec，
-# 由 dsh-web 在起服务前自行检测。
+# 断链自愈：dsh 的原子写（临时文件 + rename；plugin bundles、UI 设置编辑
+# cordis.patch.yml）会把 stow 软链换成独立文件——内容先归源再重建软链；
+# lockfile 反向只回拷内容。源目录从 $0 解析回包内（不能从部署侧软链推导：
+# pnpm 覆写后链接随时不在）。每次 CLI 调用尾部统一检测，开销可忽略。
 _relink_profile() {
-	local dir="$DSH_HOME/profiles/web" src_dir name
-	src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
-	[[ -d "$src_dir" ]] || return 0
-	for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
-		[[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
-		if [[ ! -L "$dir/$name" ]]; then
-			cp "$dir/$name" "$src_dir/$name"
-			ln -sfn "$src_dir/$name" "$dir/$name"
-			printf 'dsh: %s 断链已写回仓库源并重建软链\n' "$name" >&2
-		fi
-	done
-	if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] &&
-		! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
-		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
-		printf 'dsh: pnpm-lock.yaml 已同步回仓库源\n' >&2
-	fi
+  local dir="$DSH_HOME/profiles/web" src_dir name
+  src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
+  [[ -d "$src_dir" ]] || return 0
+  for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
+    [[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
+    if [[ ! -L "$dir/$name" ]]; then
+      cp "$dir/$name" "$src_dir/$name"
+      ln -sfn "$src_dir/$name" "$dir/$name"
+      printf 'dsh: %s 断链已写回仓库源并重建软链\n' "$name" >&2
+    fi
+  done
+  if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] \
+    && ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
+    cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+    printf 'dsh: pnpm-lock.yaml 已同步回仓库源\n' >&2
+  fi
 }
 
 if [[ "${1:-}" == "plugin" ]]; then
-	set +e
-	"$_cli_bin" "$@"
-	rc=$?
-	set -e
-	_relink_profile
-	exit "$rc"
+  set +e
+  "$_cli_bin" "$@"
+  rc=$?
+  set -e
+  _relink_profile
+  exit "$rc"
 fi
 
-# ── Guix 增强子命令分发（须在下方 CLI 缺失检查之前：dsh-update 自身能装 CLI，
-# dsh-web 的缺 CLI 报错也更友好） ─────────────────────────────────────────────
-# 拦截即覆写：`dsh update` / `dsh web` 上游原生也有同名子命令，此分发把这两个
-# 名字遮蔽为 Guix 增强版（libexec/dsh-update 的通道选版 / lockfile 回源 /
-# allowBuilds 迁移，libexec/dsh-web 的 chromium App 窗口 / tailscale 远程信任）。
-# 原生行为须经 CLI 本体直调触达：$_cli_bin update|web——libexec/dsh-web 内部起
-# 服务本就直调 $_cli_bin 的 `web --no-open`，不经本 wrapper，无递归。
-# `dsh tui` 同理遮蔽为 dsh-tui 插件的启动器（profile 内 bin 副本，见
-# libexec/dsh-tui 头注释）：上游 CLI 没有 tui 子命令，故不存在覆写问题。
+# 拦截即覆写：`dsh update` / `dsh web` 遮蔽上游同名子命令为 Guix 增强版；
+# 原生行为须直调 CLI 本体触达：$_cli_bin update|web。分发须在下方 CLI 缺失
+# 检查之前（dsh-update 自身能装 CLI，dsh-web 的报错也更友好）。
+# `dsh tui` 遮蔽为 dsh-tui 启动器——上游没有 tui 子命令，不涉及覆写。
 case "${1:-}" in
-update) exec "$_libexec_dir/dsh-update" "${@:2}" ;;
-web) exec "$_libexec_dir/dsh-web" "${@:2}" ;;
-tui) exec "$_libexec_dir/dsh-tui" "${@:2}" ;;
+  update) exec "$_libexec_dir/dsh-update" "${@:2}" ;;
+  web) exec "$_libexec_dir/dsh-web" "${@:2}" ;;
+  tui) exec "$_libexec_dir/dsh-tui" "${@:2}" ;;
 esac
 
 if [[ ! -x "$_cli_bin" ]]; then
-	if [[ -t 0 ]]; then
-		read -r -p 'dsh: CLI 尚未安装，现在装？（pnpm install，需联网、可能几分钟）[y/N] ' _reply || _reply=
-		case "$_reply" in
-		[yY] | [yY][eE][sS]) ;;
-		*)
-			printf 'dsh: 已取消，CLI 仍未安装\n' >&2
-			exit 130
-			;;
-		esac
-		install_cli
-	else
-		printf 'dsh: CLI 尚未安装；非交互环境请先运行 dsh --install\n' >&2
-		exit 127
-	fi
+  if [[ -t 0 ]]; then
+    read -r -p 'dsh: CLI 尚未安装，现在装？（pnpm install，需联网、可能几分钟）[y/N] ' _reply || _reply=
+    case "$_reply" in
+      [yY] | [yY][eE][sS]) ;;
+      *)
+        printf 'dsh: 已取消，CLI 仍未安装\n' >&2
+        exit 130
+        ;;
+    esac
+    install_cli
+  else
+    printf 'dsh: CLI 尚未安装；非交互环境请先运行 dsh --install\n' >&2
+    exit 127
+  fi
 fi
 
-# 统一兜底：CLI 跑完检测 profile 配置断链（UI 设置编辑/pnpm 原子写的自愈）。
-# plugin 分支上方已提前 exit；update/web 分发走 exec 由 libexec 实体负责。
+# 统一兜底：plugin 分支已提前 exit；update/web/tui 走 exec 由 libexec 负责
 set +e
 "$_cli_bin" "$@"
 rc=$?

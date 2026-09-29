@@ -2,6 +2,8 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
+;; 子系统设计见 docs/scripts/tmux-sidebar.md
+
 ;; sidebar/info.scm — 外部状态采集：git HEAD/分支探测（带时间戳缓存）
 ;; 与 /proc 子进程 argv 解析（带缓存）。依赖 text.scm 的路径/文本工具。
 

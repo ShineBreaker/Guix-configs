@@ -2,6 +2,8 @@
 
 本包映射到 `$HOME`，经 GNU Stow 逐文件软链（`--no-folding`）。与 `omp` 不同，Pi **不由 nix 提供**：核心与扩展由 pnpm 自管理安装到 `~/.local/share/pi`，本包只托管入口 wrapper 与配置。
 
+入口脚本的面向人类手册：`docs/scripts/` 下 `pi.md`（wrapper + pi-acp）、`pi-update.md`。
+
 ## 布局
 
 | 路径                              | 说明                                                                       |

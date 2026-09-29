@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
-# nixgpu-update — 在非 NixOS 主机上建立 /var/lib/non-nixos-gpu 链接
-#
-# 用途:把 nix store 里的 GPU 资源链接到 /var/lib 这个持久化目录
-# 配合 shepherd service 'non-nixos-gpu' 使用:
-#   - /run/opengl-driver 位于 tmpfs,重启清空,所以 service 启动时建链 /run/opengl-driver -> /var/lib/non-nixos-gpu
-#   - /var/lib/non-nixos-gpu 是持久化目标,本脚本负责把它建好
-#
-# 调用时机:
-#   - 首次安装后跑一次
-#   - nix 重新部署后(store hash 变化)再跑一次刷新链接
-#
-# 需要 root 权限(写 /etc/ 和 /var/lib/)
+# nixgpu-update — 非 NixOS 主机上刷新 /var/lib/non-nixos-gpu → nix store GPU
+# 资源链接（首装与 nix 重部署后各跑一次；需 root）。文档：docs/scripts/nixgpu-update.md
 set -euo pipefail
 
 GPU_DIR="/var/lib/non-nixos-gpu"
@@ -18,36 +8,30 @@ TMPFILES_CONF="/etc/tmpfiles.d/non-nixos-gpu.conf"
 
 # root 前置检查：写 /etc/ 与 /var/lib/，非 root 会在中途留下半成品
 if [[ $EUID -ne 0 ]]; then
-	echo "error: must run as root (writes /etc and /var/lib)" >&2
-	exit 1
+  echo "error: must run as root (writes /etc and /var/lib)" >&2
+  exit 1
 fi
 
-# 1) 调 non-nixos-gpu-setup 装好 /etc/tmpfiles.d/non-nixos-gpu.conf
-#    新版 setup 行为:删旧 /etc/systemd/system/non-nixos-gpu.service
-#                    软链 /etc/tmpfiles.d/non-nixos-gpu.conf 到 store
-#                    尝试 systemd-tmpfiles --create 立即生效
-#    Guix 主机上 /etc/tmpfiles.d/ 默认不存在(Guix 用 shepherd 而非 systemd),
-#    setup 步骤 2 软链时 ln -sf 因父目录缺失失败;先 mkdir -p 兜底
-#    最后一步 systemd-tmpfiles --create 在 Guix 上无该命令,|| true 容错
+# Guix 上 /etc/tmpfiles.d/ 默认不存在，setup 的 ln -sf 会因父目录缺失失败——
+# 先 mkdir -p；setup 末步 systemd-tmpfiles --create 在 Guix 无此命令，|| true 容错
 mkdir -p /etc/tmpfiles.d
 non-nixos-gpu-setup || true
 
-# 2) 从 tmpfiles.d conf 读出 target 路径
-#    conf 格式: L+ /run/opengl-driver - - - - /nix/store/<hash>-non-nixos-gpu
+# conf 格式: L+ /run/opengl-driver - - - - /nix/store/<hash>-non-nixos-gpu
 if [[ ! -f "$TMPFILES_CONF" ]]; then
-	echo "error: $TMPFILES_CONF not found after non-nixos-gpu-setup" >&2
-	exit 1
+  echo "error: $TMPFILES_CONF not found after non-nixos-gpu-setup" >&2
+  exit 1
 fi
 
 target=$(awk '/^L\+ \/run\/opengl-driver/ { print $NF }' "$TMPFILES_CONF")
 if [[ -z "$target" ]]; then
-	echo "error: failed to parse target from $TMPFILES_CONF" >&2
-	exit 1
+  echo "error: failed to parse target from $TMPFILES_CONF" >&2
+  exit 1
 fi
 # target 来自 conf 末字段，建链前强制校验前缀，防止异常 conf 把链接指到任意路径
 if [[ "$target" != /nix/store/* ]]; then
-	echo "error: target is not under /nix/store: $target" >&2
-	exit 1
+  echo "error: target is not under /nix/store: $target" >&2
+  exit 1
 fi
 
 # 3) 建 /var/lib/non-nixos-gpu 链接

@@ -29,11 +29,11 @@ terminal/
 ## 关键约定
 
 - **Fish Shell**：
-  - `conf.d/` 碎片按字母顺序加载，数字前缀仅用于控制执行顺序。
-  - 自定义函数放置于 `functions/<name>.fish`。
+  - `conf.d/` 碎片按字母顺序加载，数字前缀仅用于控制执行顺序（逐文件契约见 `docs/scripts/fish-conf-d.md`）。
+  - 自定义函数放置于 `functions/<name>.fish`（各函数手册见 `docs/scripts/` 的 denv / fish-prompt / git-resign / java-tools / retry / run / screen-off 各篇）。
 - **Tmux 架构**：
-  - Tmux 状态侧栏渲染由常驻 Guile 进程负责，Bash 仅处理 Pane 生命周期与 FIFO 事件。
-  - `termide` 会话布局维护在 `tmuxifier/layouts/termide.session.sh`。
+  - Tmux 状态侧栏渲染由常驻 Guile 进程负责，Bash 仅处理 Pane 生命周期与 FIFO 事件（设计见 `docs/scripts/tmux-sidebar.md` 与 `docs/scripts/sidebar-toggle.md`；入口脚本见 attach-entry / session-selector / window-jump / which-key 各篇）。
+  - `termide` 会话布局维护在 `tmuxifier/layouts/termide.session.sh`（见 `docs/scripts/termide-layout.md`）。
 - **终端类型（TERM）**：Foot 保持 `TERM=foot`，Tmux Pane 保持 `TERM=tmux-256color`，切勿强制覆写为 `xterm-*`。
 
 ## 修改与生效流程

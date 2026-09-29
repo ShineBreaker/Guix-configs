@@ -2,13 +2,15 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
+;; 子系统设计见 docs/scripts/tmux-sidebar.md
+
 ;; sidebar/layout.scm — 折叠键派生、pane→window→group→session 聚合、
 ;; 布局行构造与带样式输出。纯计算（仅写 current-output-port），
 ;; 运行时状态机在主文件，输入处理在 input.scm。
 
 (use-modules (ice-9 match))
 
-;; === Keys ===
+;; --- Keys ---
 
 (define (session-key session)
   (string-append "s:" (number->string (string-hash session) 16)))
@@ -177,7 +179,7 @@
   (append (filter (lambda (block) (string=? (car block) current-session)) blocks)
           (filter (lambda (block) (not (string=? (car block) current-session))) blocks)))
 
-;; === Layout ===
+;; --- Layout ---
 
 (define (make-row text action . style)
   (let ([color (if (null? style) #f (car style))]

@@ -2,13 +2,15 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
+;; 子系统设计见 docs/scripts/tmux-sidebar.md
+
 ;; sidebar/text.scm — 侧栏渲染基础工具：ANSI 常量、pane 字段访问、
 ;; 文本宽度/截断/填充/居中、路径处理。由 sidebar-render.scm load 进
 ;; 同一命名空间，仅依赖 Guile 核心。加载顺序：text → info → layout → input。
 
 (use-modules (srfi srfi-1))
 
-;; === ANSI ===
+;; --- ANSI ---
 
 (define ansi-erase-line "\x1b[K")
 (define ansi-reset "\x1b[0m")
@@ -21,7 +23,7 @@
 (define ansi-desc "\x1b[37m")
 (define ansi-session-active "\x1b[92m")
 
-;; === Width ===
+;; --- Width ---
 
 (define (string->positive-integer s fallback)
   (let ([n (and s (string->number s))])
@@ -39,7 +41,7 @@
 
 (define (sidebar-width) %sidebar-width-value)
 
-;; === Text ===
+;; --- Text ---
 
 (define (field fields index fallback)
   (if (> (length fields) index)

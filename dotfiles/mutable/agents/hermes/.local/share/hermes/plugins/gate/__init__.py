@@ -31,9 +31,9 @@ from pathlib import Path
 from typing import Any
 
 GATE_CORE = Path.home() / ".config" / "agents" / "gate-core.sh"
-# 人工总开关（固定路径，见 gate-core.sh 文件头；创建/删除须 sudo，
-# agent 恒冻 sudo 故自己打不开；重启自动清空）。须在核缺失保底之前检查；
-# 暂停时静默放行，不注入任何提示（与护栏不存在时表现一致）。
+# 人工总开关（固定路径，见 docs/scripts/gate-core.md §设计决策与不变量；
+# 创建/删除须 sudo，agent 恒冻 sudo 故自己打不开；重启自动清空）。须在
+# 核缺失保底之前检查；暂停时静默放行，不注入任何提示（与护栏不存在时表现一致）。
 GATE_PAUSE_FILE = Path("/run/agent-gate.off")
 
 

@@ -72,19 +72,19 @@ while IFS=$'\t' read -r key value; do
   kv["$key"]="$value"
   key_pattern="$(printf '%s' "$key" | sed -e 's/[][(){}.^$*+?|\\-]/\\&/g')"
   value_repl="$(printf '%s' "$value" | sed -e 's/[|&\\]/\\&/g')"
-  printf 's|\\$\\$%s\\$\\$|%s|g\n' "$key_pattern" "$value_repl" >> "$sed_script"
-done <<< "$map_lines"
+  printf 's|\\$\\$%s\\$\\$|%s|g\n' "$key_pattern" "$value_repl" >>"$sed_script"
+done <<<"$map_lines"
 
 while IFS= read -r -d '' src; do
-  rel="${src#${template_dir}/}"
+  rel="${src#"${template_dir}"/}"
   dst="${target_root}/${rel}"
 
-  # 解析后目标必须仍落在 $HOME 内：模板文件名可携带 .. 或符号链接，
-  # 写入前做 realpath 前缀校验，防止越界写到 $HOME 之外
+  # 解析后目标必须仍落在 $HOME 内——防模板符号链接越界写
   resolved_dst="$(realpath -m -- "$dst")"
   case "$resolved_dst" in
     "$HOME"/*) ;;
     *)
+      # shellcheck disable=SC2016 # 报错文案需字面 $HOME
       printf 'Error: destination escapes $HOME, aborting: %s -> %s\n' "$src" "$resolved_dst" >&2
       exit 1
       ;;
@@ -93,7 +93,7 @@ while IFS= read -r -d '' src; do
   dst_dir="$(dirname -- "$dst")"
   mkdir -p -- "$dst_dir"
 
-  # Remove existing file (symlink or read-only) before writing
+  # 先删后写（目标可能是 store 软链或只读副本）
   rm -f -- "$dst"
 
   while IFS= read -r placeholder; do
@@ -106,7 +106,6 @@ while IFS= read -r -d '' src; do
     fi
   done < <(grep -oE '\$\$[A-Za-z0-9_-]+\$\$' "$src" | sort -u || true)
 
-  # Write the processed template to destination
-  sed -f "$sed_script" "$src" > "$dst"
+  sed -f "$sed_script" "$src" >"$dst"
   chmod --reference="$src" "$dst" 2>/dev/null || true
 done < <(find "$template_dir" \( -type f -o -type l \) -print0)

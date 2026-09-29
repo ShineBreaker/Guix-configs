@@ -3,17 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# niri-app-switcher — niri 的统一窗口切换器（rofi -dmenu 界面）。
-#
-# 把正在运行的窗口按「规范应用名」归组：app_id 命中配置里某个应用的
-# match_app_ids → 用该配置键名；否则取 app_id 末段小写（org.mozilla.firefox
-# → firefox）。菜单按历史使用排序、严格前缀匹配；选中后聚焦该应用最近
-# 聚焦的窗口，并写入历史。
-#
-# 环境变量（默认值即正常使用路径，测试时可改指别处）：
-#   NIRI_APP_SWITCHER_CONFIG        归组配置（默认 ~/.config/niri/app-switcher.json）
-#   NIRI_APP_SWITCHER_HISTORY       使用历史（默认 ~/.cache/niri-app-switcher-history.json）
-#   NIRI_APP_SWITCHER_ROFI_CONFIG   rofi 主题（默认 ~/.config/rofi/config.rasi）
+# niri-app-switcher — niri 统一窗口切换器（rofi -dmenu）：运行中窗口按规范
+# 应用名归组，菜单按历史使用排序；环境变量覆盖见 docs/scripts/niri-app-switcher.md
 set -euo pipefail
 
 CONFIG="${NIRI_APP_SWITCHER_CONFIG:-$HOME/.config/niri/app-switcher.json}"
@@ -22,48 +13,43 @@ ROFI_CONFIG="${NIRI_APP_SWITCHER_ROFI_CONFIG:-$HOME/.config/rofi/config.rasi}"
 mkdir -p "$(dirname "$HISTORY")"
 [ -f "$HISTORY" ] || printf '%s\n' '{}' >"$HISTORY"
 
-# ---- helpers ----------------------------------------------------------------
-
 # 读 JSON；缺失/损坏/空文件一律回落 {}
 read_json() {
-	local out
-	out=$(jq -c '.' "$1" 2>/dev/null)
-	[ -n "$out" ] && printf '%s\n' "$out" || printf '%s\n' '{}'
+  local out
+  out=$(jq -c '.' "$1" 2>/dev/null)
+  [ -n "$out" ] && printf '%s\n' "$out" || printf '%s\n' '{}'
 }
 
-# 历史原子更新：tmp + mv
+# tmp + mv 原子更新历史
 update_history() {
-	local name="$1" new_h tmp
-	new_h=$(jq --arg n "$name" --argjson t "$(date +%s)" '.[$n] = $t' "$HISTORY" \
-		2>/dev/null || printf '%s\n' '{}')
-	tmp=$(mktemp "${HISTORY}.XXXXXX")
-	printf '%s\n' "$new_h" >"$tmp"
-	mv -f "$tmp" "$HISTORY"
+  local name="$1" new_h tmp
+  new_h=$(jq --arg n "$name" --argjson t "$(date +%s)" '.[$n] = $t' "$HISTORY" \
+    2>/dev/null || printf '%s\n' '{}')
+  tmp=$(mktemp "${HISTORY}.XXXXXX")
+  printf '%s\n' "$new_h" >"$tmp"
+  mv -f "$tmp" "$HISTORY"
 }
 
-# 聚焦该应用最近聚焦的窗口，并记历史
+# 聚焦该应用最近聚焦的窗口并记历史
 dispatch_app() {
-	local app_name="$1" windows win_count wid
-	[ -z "$app_name" ] && exit 0
+  local app_name="$1" windows win_count wid
+  [ -z "$app_name" ] && exit 0
 
-	windows=$(jq -c --arg n "$app_name" '.[$n].windows // []' <<<"$apps_state")
-	win_count=$(jq 'length // 0' <<<"$windows")
-	[ "$win_count" -eq 0 ] && exit 0
+  windows=$(jq -c --arg n "$app_name" '.[$n].windows // []' <<<"$apps_state")
+  win_count=$(jq 'length // 0' <<<"$windows")
+  [ "$win_count" -eq 0 ] && exit 0
 
-	# focus_timestamp 是 {secs, nanos} 对象；直接比较对象会先比 nanos，须拆成数组
-	wid=$(jq -r 'max_by(.focus_timestamp // {} | [.secs // 0, .nanos // 0]).id' <<<"$windows")
-	niri msg action focus-window --id "$wid" >/dev/null
-	update_history "$app_name"
+  # focus_timestamp 是 {secs, nanos} 对象；须拆成数组比较（直接比会先比 nanos）
+  wid=$(jq -r 'max_by(.focus_timestamp // {} | [.secs // 0, .nanos // 0]).id' <<<"$windows")
+  niri msg action focus-window --id "$wid" >/dev/null
+  update_history "$app_name"
 }
-
-# ---- 1. 读配置与历史（损坏/缺失都回落 {}）-----------------------------------
 
 config=$(read_json "$CONFIG")
 history=$(read_json "$HISTORY")
 
-# ---- 2. app 归组定义（碰撞检查与窗口归组共用同一份）-------------------------
 # 每条 = {key: 配置键名, ids: 认领的 app_id 列表}；
-# match_app_ids 缺省或为空数组时回退为 [key]。
+# match_app_ids 缺省或为空数组时回退为 [key]
 defs=$(jq -c '
   [(.apps // {}) | to_entries[]
    | {key: .key,
@@ -71,7 +57,7 @@ defs=$(jq -c '
             | if length == 0 then [.key] else . end)}]
 ' <<<"$config" 2>/dev/null) || defs='[]'
 
-# 配置健康检查：同一 app_id 被多个 key 认领 → 告警但不中止
+# 同一 app_id 被多个 key 认领 → 告警但不中止
 jq -r '
   map(.ids[] as $id | {id: $id, key: .key})
   | group_by(.id)
@@ -82,8 +68,6 @@ jq -r '
     end
 ' <<<"$defs" >&2
 
-# ---- 3. 取 niri 窗口并按 exclude_titles 过滤 ---------------------------------
-
 filtered_windows=$(niri msg --json windows | jq -c --argjson cfg "$config" '
   [ .[] | select(
       (.title // "") as $t
@@ -91,8 +75,6 @@ filtered_windows=$(niri msg --json windows | jq -c --argjson cfg "$config" '
       | $bad | map(. as $e | $t | contains($e)) | any | not
   ) ]
 ')
-
-# ---- 4. 按规范名归组 ---------------------------------------------------------
 
 apps_state=$(jq -cn --argjson w "$filtered_windows" --argjson defs "$defs" '
   def short_id:
@@ -106,8 +88,6 @@ apps_state=$(jq -cn --argjson w "$filtered_windows" --argjson defs "$defs" '
                                 focus_timestamp: $win.focus_timestamp } ] )
 ')
 
-# ---- 5. 菜单项 = 各规范名按历史上次使用时间倒序 ------------------------------
-
 menu_lines=$(jq -rn --argjson h "$history" --argjson s "$apps_state" '
   $s | to_entries
   | sort_by( $h[.key] // 0 | tonumber? // 0 )   # 旧版历史把时间戳存成字符串
@@ -116,21 +96,18 @@ menu_lines=$(jq -rn --argjson h "$history" --argjson s "$apps_state" '
   | .key
 ')
 
-# 过滤后没有窗口 → 静默退出
-[ -z "$menu_lines" ] && exit 0
+[ -z "$menu_lines" ] && exit 0 # 过滤后没有窗口 → 静默退出
 
-# ---- 6. rofi 选择与派发 ------------------------------------------------------
-
-selected=$(printf '%s\n' "$menu_lines" |
-	rofi -dmenu \
-		-config "$ROFI_CONFIG" \
-		-p 'App> ' \
-		-matching prefix \
-		-no-custom \
-		-auto-select \
-		-hover-select \
-		-me-select-entry '' \
-		-me-accept-entry MousePrimary) || exit 0
+selected=$(printf '%s\n' "$menu_lines" \
+  | rofi -dmenu \
+    -config "$ROFI_CONFIG" \
+    -p 'App> ' \
+    -matching prefix \
+    -no-custom \
+    -auto-select \
+    -hover-select \
+    -me-select-entry '' \
+    -me-accept-entry MousePrimary) || exit 0
 app_name="$selected"
 [ -z "$app_name" ] && exit 0
 dispatch_app "$app_name"

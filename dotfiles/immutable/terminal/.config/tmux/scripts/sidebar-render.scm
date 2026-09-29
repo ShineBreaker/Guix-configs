@@ -5,16 +5,14 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-;; sidebar-render.scm — tmux 侧边栏长驻渲染进程
+;; sidebar-render.scm — tmux 侧边栏长驻渲染进程；完整设计见
+;; docs/scripts/tmux-sidebar.md
 ;;
-;; 外部接口只有两个：
-;;   daemon  长驻侧栏 pane，通过 FIFO 接收 refresh/click/toggle-group 事件；
-;;           聚焦本 pane 时还监听 stdin 键盘输入（hjkl/方向键移动光标，
-;;           Enter 激活，h/l 折叠展开节点，q/Esc 返回主 pane）
-;;   render  单次渲染到 stdout，供检查与基准测试使用
+;; 接口：daemon（长驻 pane，FIFO 收 refresh/click/toggle-group，聚焦时读
+;; stdin 键盘）| render（单次渲染到 stdout）| --as-library（仅 load 定义）
 ;;
-;; daemon 每次刷新只执行一次 tmux list-panes。当前上下文、侧栏宽度、
-;; 折叠状态和全部 pane 数据都从这份快照取得，避免跨进程缓存和重复查询。
+;; 契约：每次刷新只跑一次 tmux list-panes，上下文/宽度/折叠状态全从该
+;; 快照取，不跨进程缓存、不重复查询。
 
 (use-modules (ice-9 match)
              (ice-9 popen)
@@ -23,18 +21,11 @@
              (srfi srfi-1)
              (srfi srfi-34))
 
-;; 模块布局：实现按职责拆分到同目录 sidebar/ 下，load 进同一命名空间，
-;; 函数集合与输出格式和单文件版本完全一致。
-;;   text.scm   文本/路径/宽度基础工具
-;;   info.scm   git 状态与 /proc 进程信息采集
-;;   layout.scm 分组聚合与布局行渲染
-;;   input.scm  键盘输入解析与 FIFO 事件循环
-;; 脚本由 tmux run-shell 调用，工作目录不可靠。current-filename 经软链
-;; canonicalize：immutable 部署下本文件是独立 store 单文件项，dirname 落在
-;; /gnu/store，同目录没有 sidebar/。因此先试部署位置
-;; $HOME/.config/tmux/scripts/sidebar/，仓库源树（current-filename 同目录）
-;; 回退；%sidebar-module-dir 统一指模块所在目录，都找不到时保留 %script-dir
-;; 让 load 报出可定位的路径。
+;; 模块按职责拆在同目录 sidebar/（text → info → layout → input），load 进
+;; 同一命名空间。陷阱：immutable 部署下本文件是独立 store 单文件项，
+;; current-filename 的 dirname 落在 /gnu/store（同目录没有 sidebar/），
+;; 故先查部署位置 $HOME/.config/tmux/scripts/sidebar/，再回退源树同目录；
+;; 都找不到时保留 %script-dir 让 load 报出可定位的路径。
 (define %script-dir (dirname (current-filename)))
 
 (define %sidebar-module-dir
@@ -50,7 +41,7 @@
 (load (string-append %sidebar-module-dir "/layout.scm"))
 (load (string-append %sidebar-module-dir "/input.scm"))
 
-;; === tmux snapshot ===
+;; --- tmux snapshot ---
 
 (define sidebar-title "tmux-sidebar")
 (define sidebar-command "sidebar-render.scm daemon")
@@ -66,8 +57,6 @@
   (or (string=? title sidebar-title)
       (and start-command (string-contains start-command sidebar-command))))
 
-;; 普通 pane 字段：session, window index/id/name, path, command, active,
-;; title, pid, pane index, AI/custom title, custom description, locked title.
 (define (collect-state)
   "用一次 list-panes 返回 (context pane-fields...)。
 CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
@@ -131,7 +120,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                           (delete key values)
                           (cons key values)))))
 
-;; === Render and Click ===
+;; --- Render and Click ---
 
 (define %current-context #f)
 (define %current-panes '())
@@ -194,11 +183,9 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
   (refresh-state!)
   (let* ([rows (current-rows)]
          [actions (rows-actions rows)]
-         ;; 光标只在 daemon 模式且侧栏 pane 聚焦时显示；位置失效时回落到
-         ;; 当前 window 行（找不到则首个条目行）。
          [cursor (and cursor-control? (resolve-cursor actions))])
     (set! %current-actions actions)
-    ;; 失焦/无条目时 cursor 为 #f，但 %cursor-row 保留旧位置，供再聚焦恢复
+    ;; 失焦时 %cursor-row 保留旧位置，供再聚焦恢复
     (set! %cursor-row (or cursor %cursor-row))
     (let ([screen (rows->screen rows cursor)])
       (when (or (not cursor-control?)
@@ -277,7 +264,7 @@ CONTEXT 为 session/window/折叠状态/宽度/当前 Git branch。"
                                      (group-collapse-key session group-key))])
               (loop (cdr panes))))))))
 
-;; === Entry ===
+;; --- Entry ---
 
 (guard (ex [#t
             (format (current-error-port) "sidebar-render error: ~a~%" ex)

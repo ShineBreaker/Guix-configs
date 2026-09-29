@@ -1,12 +1,9 @@
-;;; block-extract.el —— 从 Org 文件抽取单个 #+NAME 代码块
+;;; block-extract.el --- 从 Org 文件抽取单个 #+NAME 代码块 -*- lexical-binding: t -*-
 ;;;
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;; SPDX-License-Identifier: MIT
 ;;;
-;;; 由 blueprint.scm 的 blue block-show 经 %run-elisp 调用：
-;;;   emacs-minimal --script block-extract.el FILE NAME
-;;; stdout 输出三段："lang\nnoweb|plain\n<body>"（body 已 trim 首尾换行），
-;;; 未找到块时打 [ERROR] 并以退出码 1 结束。
+;;; 用法与输出协议：docs/scripts/org-block-tools.md（协议面向 blueprint.scm，勿改）
 
 (let* ((file (nth 0 command-line-args-left))
        (name (nth 1 command-line-args-left))

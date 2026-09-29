@@ -226,3 +226,9 @@ sops。当前体量下 age 足够。
 - [`secrets` 源码](../dotfiles/mutable/tools/secrets/.local/bin/secrets)
 - [`dotfiles/mutable/tools/secrets/AGENTS.md`](../dotfiles/mutable/tools/secrets/AGENTS.md) — 维护范式
 - [`keys/.gitignore`](../dotfiles/mutable/tools/secrets/.local/share/keys/.gitignore) — 私钥排除规则
+
+## 11. 变更记录
+
+- 2026-09-29（修复）：`secrets recipients` 曾在存在 `.pub` 文件时以退出码 1 结束
+  （末尾的 `[[ $found -eq 0 ]] && echo …` 在有收件人时测试为假、在 `set -e` 下
+  让整命令非零退出）；改为显式 `if`，打印收件人后正常返回 0。

@@ -5,154 +5,130 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-# session-selector — 统一会话选择器（单层全摊平）
+# session-selector — 统一会话选择器；设计与契约细节见 docs/scripts/session-selector.md
 #
-# 启动时弹出一个合并 fzf 列表：所有 tmux 会话 + 所有 herdr 会话 + Shell，
-# 一屏选完。tmux 与 herdr 完全对称，各自有：
-#   ├── 默认会话（tmux=main / herdr=default）
-#   └── 其他会话（命名 session，带运行状态）
-#       └── 新建会话（fish 侧 prompt 输入语义名）
-#
-# main / default 不再被跳过——它们就是列表里的普通项，选它们 = 进默认会话。
-#
-# 输出契约（stdout 单行，fish 侧 switch 处理）：
-#   tmux|default    进入 tmux 默认会话 main（不存在则创建）
-#   tmux|new        新建 tmux 会话（fish 侧 prompt 输入名字）
-#   tmux|<name>     attach 该 tmux 命名会话
-#   herdr|default   进入 herdr 默认会话（裸 herdr）
-#   herdr|new       新建 herdr 会话（fish 侧 prompt 输入名字）
-#   herdr|<name>    attach 该 herdr 命名会话
-#   shell           留普通 shell
-#   __header__      误选了分组标题行（非功能行）→ fish 侧重弹列表
-#   (空)            ESC/取消 → fish 侧留普通 shell
+# 输出契约（stdout 单行，消费方为 conf.d/99-selector.fish）：
+#   tmux|default|new|<name>   herdr|default|new|<name>   shell   __header__
+#   空输出 = ESC/取消 → 留普通 shell。kind 段允许含 |（分隔符即协议符）。
 
-# 终端着色（非 tty 退化为空，便于管道测试）
+# 非 tty 时颜色退化为空，便于管道测试
 if [[ -t 1 ]]; then
-    C_DIM=$'\033[2m'
-    C_RST=$'\033[0m'
+  C_DIM=$'\033[2m'
+  C_RST=$'\033[0m'
 else
-    C_DIM=''
-    C_RST=''
+  C_DIM=''
+  C_RST=''
 fi
 
 lines=()
 has_mux=0
 add() { lines+=("$1"$'\t'"$2"); }
 
-# ---------- tmux 段 ----------
+# --- tmux 段 ---
 if command -v tmux >/dev/null 2>&1; then
-    has_mux=1
-    add "__header__" "${C_DIM}Tmux 会话${C_RST}"
+  has_mux=1
+  add "__header__" "${C_DIM}Tmux 会话${C_RST}"
 
-    # 一次列出，分流 main / 其他（避免重复调 list-sessions）
-    main_status=""
-    others=()
-    while IFS='|' read -r name attached; do
-        [[ -z "$name" ]] && continue
-        # 契约约束：| 是输出 key 的字段分隔符（tmux|<name>）。tmux 只禁 . 和
-        # :，名含 | 时 IFS 切分即错位（残片落进 attached），两侧都查才滤得净。
-        [[ "$name" == *"|"* || "$attached" == *"|"* ]] && continue
-        if [[ "$name" == "main" ]]; then
-            [[ "${attached:-0}" -gt 0 ]] && main_status="[运行中]"
-        else
-            others+=("$name|${attached:-0}")
-        fi
-    done < <(tmux list-sessions -F '#{session_name}|#{session_attached}' 2>/dev/null || true)
+  main_status=""
+  others=()
+  while IFS='|' read -r name attached; do
+    [[ -z "$name" ]] && continue
+    # 契约：| 是输出分隔符；tmux 不禁止 | 命名，名含 | 必须过滤否则协议错位
+    [[ "$name" == *"|"* || "$attached" == *"|"* ]] && continue
+    if [[ "$name" == "main" ]]; then
+      [[ "${attached:-0}" -gt 0 ]] && main_status="[运行中]"
+    else
+      others+=("$name|${attached:-0}")
+    fi
+  done < <(tmux list-sessions -F '#{session_name}|#{session_attached}' 2>/dev/null || true)
 
-    msfx=""
-    [[ -n "$main_status" ]] && msfx="  ${C_DIM}${main_status}${C_RST}"
-    add "tmux|default" "├── 默认会话 (main)${msfx}"
+  msfx=""
+  [[ -n "$main_status" ]] && msfx="  ${C_DIM}${main_status}${C_RST}"
+  add "tmux|default" "├── 默认会话 (main)${msfx}"
 
-    add "__header__" "${C_DIM}└── 其他会话${C_RST}"
+  add "__header__" "${C_DIM}└── 其他会话${C_RST}"
 
-    # 命名 session（每个 ├──，因为末尾恒有「新建会话」占 └──）
-    for entry in "${others[@]+"${others[@]}"}"; do
-        name="${entry%%|*}"
-        attached="${entry##*|}"
-        st=""
-        [[ "${attached:-0}" -gt 0 ]] && st="  ${C_DIM}[运行中]${C_RST}"
-        add "tmux|$name" "    ├── $name${st}"
-    done
+  for entry in "${others[@]+"${others[@]}"}"; do
+    name="${entry%%|*}"
+    attached="${entry##*|}"
+    st=""
+    [[ "${attached:-0}" -gt 0 ]] && st="  ${C_DIM}[运行中]${C_RST}"
+    add "tmux|$name" "    ├── $name${st}"
+  done
 
-    add "tmux|new" "    └── 新建会话"
+  add "tmux|new" "    └── 新建会话"
 fi
 
-# ---------- herdr 段 ----------
+# --- herdr 段 ---
 if command -v herdr >/dev/null 2>&1; then
-    has_mux=1
-    add "__header__" "${C_DIM}Herdr 会话${C_RST}"
+  has_mux=1
+  add "__header__" "${C_DIM}Herdr 会话${C_RST}"
 
-    herdr_json="$(herdr session list --json 2>/dev/null || true)"
+  herdr_json="$(herdr session list --json 2>/dev/null || true)"
 
-    # 默认会话（由 .default==true 标记）
-    dname="default"
-    dstatus=""
-    if [[ -n "$herdr_json" ]] && command -v jq >/dev/null 2>&1; then
-        dinfo="$(jq -r '.sessions[] | select(.default == true) | "\(.name)\t\(.running)"' \
-            <<<"$herdr_json" 2>/dev/null | head -n1 || true)"
-        if [[ -n "$dinfo" ]]; then
-            dname="${dinfo%%$'\t'*}"
-            drun="${dinfo#*$'\t'}"
-            if [[ "$drun" == "true" ]]; then
-                dstatus="[运行中]"
-            else
-                dstatus="[已停止·可重连]"
-            fi
-        fi
+  dname="default"
+  dstatus=""
+  if [[ -n "$herdr_json" ]] && command -v jq >/dev/null 2>&1; then
+    dinfo="$(jq -r '.sessions[] | select(.default == true) | "\(.name)\t\(.running)"' \
+      <<<"$herdr_json" 2>/dev/null | head -n1 || true)"
+    if [[ -n "$dinfo" ]]; then
+      dname="${dinfo%%$'\t'*}"
+      drun="${dinfo#*$'\t'}"
+      if [[ "$drun" == "true" ]]; then
+        dstatus="[运行中]"
+      else
+        dstatus="[已停止·可重连]"
+      fi
     fi
-    dsfx="  ${C_DIM}${dstatus}${C_RST}"
-    add "herdr|default" "├── 默认会话 (${dname})${dsfx}"
+  fi
+  dsfx="  ${C_DIM}${dstatus}${C_RST}"
+  add "herdr|default" "├── 默认会话 (${dname})${dsfx}"
 
-    add "__header__" "${C_DIM}└── 其他会话${C_RST}"
+  add "__header__" "${C_DIM}└── 其他会话${C_RST}"
 
-    # 命名 session（跳过 .default==true）
-    if [[ -n "$herdr_json" ]] && command -v jq >/dev/null 2>&1; then
-        while IFS=$'\t' read -r name running; do
-            [[ -z "$name" ]] && continue
-            # 同 tmux 段：会话名含契约分隔符 | 时防御性跳过（此处 IFS 是
-            # tab，$name 检查即可精确命中）。
-            [[ "$name" == *"|"* ]] && continue
-            if [[ "$running" == "true" ]]; then
-                st="  ${C_DIM}[运行中]${C_RST}"
-            else
-                st="  ${C_DIM}[已停止·可重连]${C_RST}"
-            fi
-            add "herdr|$name" "    ├── $name${st}"
-        done < <(jq -r '.sessions[] | select(.default | not) | "\(.name)\t\(.running)"' \
-            <<<"$herdr_json" 2>/dev/null || true)
-    fi
+  if [[ -n "$herdr_json" ]] && command -v jq >/dev/null 2>&1; then
+    while IFS=$'\t' read -r name running; do
+      [[ -z "$name" ]] && continue
+      # 同 tmux 段：名含 | 会破坏输出协议，过滤
+      [[ "$name" == *"|"* ]] && continue
+      if [[ "$running" == "true" ]]; then
+        st="  ${C_DIM}[运行中]${C_RST}"
+      else
+        st="  ${C_DIM}[已停止·可重连]${C_RST}"
+      fi
+      add "herdr|$name" "    ├── $name${st}"
+    done < <(jq -r '.sessions[] | select(.default | not) | "\(.name)\t\(.running)"' \
+      <<<"$herdr_json" 2>/dev/null || true)
+  fi
 
-    add "herdr|new" "    └── 新建会话"
+  add "herdr|new" "    └── 新建会话"
 fi
 
-# ---------- Shell 段 ----------
+# --- Shell 段 ---
 add "shell" "Shell (无终端复用器)"
 
-# 无任何复用器 → 直接 Shell（不弹单选项菜单）
+# 无任何复用器时直接给 shell，不弹只有一项的菜单
 if [[ $has_mux -eq 0 ]]; then
-    echo "shell"
-    exit 0
+  echo "shell"
+  exit 0
 fi
 
-# fzf 缺失时等同 ESC 取消：stderr 提示 + 空 stdout，fish 侧留普通 shell。
+# fzf 缺失按取消处理：stderr 提示 + 空 stdout（消费方留普通 shell）
 if ! command -v fzf >/dev/null 2>&1; then
-    echo "session-selector: fzf 未安装，无法弹出选择列表" >&2
-    exit 0
+  echo "session-selector: fzf 未安装，无法弹出选择列表" >&2
+  exit 0
 fi
 
-# fzf：列1 机器 key 隐藏（--with-nth=2..），只显示树形列；--ansi 解释配色
 result="$(printf '%s\n' "${lines[@]}" \
-    | fzf --reverse --no-multi \
-          --header="选择会话环境" \
-          --height=~60% \
-          --delimiter=$'\t' \
-          --with-nth=2.. \
-          --ansi \
-    || true)"
+  | fzf --reverse --no-multi \
+    --header="选择会话环境" \
+    --height=~60% \
+    --delimiter=$'\t' \
+    --with-nth=2.. \
+    --ansi \
+  || true)"
 
-# ESC / 取消 → 空 → fish 侧留普通 shell
 [[ -z "$result" ]] && exit 0
 
-# 输出列1 机器 key
 key="${result%%$'\t'*}"
 echo "$key"

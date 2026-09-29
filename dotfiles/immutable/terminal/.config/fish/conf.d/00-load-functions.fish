@@ -2,7 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-# 确定 functions 目录路径
+# 提前 source functions/：fish 惰性 autoload，但 conf.d 之间会互调函数内部实现
+# （如 05-java 的 __set_jdk），等 autoload 会错过初始化时机。
 set -l functions_dir
 
 if set -q XDG_CONFIG_HOME
@@ -11,9 +12,7 @@ else
     set functions_dir $HOME/.config/fish/functions
 end
 
-# 如果 functions 目录存在，加载其中的所有 .fish 文件
 if test -d $functions_dir
-    # 按字母顺序加载所有 .fish 文件
     for func_file in $functions_dir/*.fish
         if test -f $func_file
             source $func_file

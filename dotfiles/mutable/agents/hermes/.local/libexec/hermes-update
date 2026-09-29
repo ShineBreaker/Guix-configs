@@ -3,43 +3,11 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# hermes-update — `hermes update` 子命令实体（由 bin/hermes 分发进入，也可
-# 被脚本按 libexec 绝对路径直调）：Hermes Agent 安装 / 升级（对齐官方 `hermes update`）。
-#
-# 设计：放弃 pin-tag，改跟 main。把「已安装 checkout」的更新整套委托给官方
-# `hermes update`（fetch → stash → pull + syntax guard/rollback → 依赖重装 →
-# config 迁移 → skills sync → desktop build），我们只补官方做不了的、与本机
-# Guix 布局强相关的四件事：
-#
-#   1. 首次安装（官方 update 在 checkout 不存在时报 "Not a git repository" 退出）
-#   2. 更新前停旧 gateway（官方不管；旧进程持失效模块路径，MCP 全挂）
-#   3. uv 隔离（防官方在 $HERMES_HOME/bin 装独立 managed uv，偏离 Guix 系统 uv）
-#   4. 更新后恢复 herd 管理的常驻服务（停服务 → 清官方野实例 → enable+start）
-#
-# == uv 隔离 ==
-# 官方 `ensure_uv()` 只查 `$HERMES_HOME/bin/uv` 是否存在，
-# 不存在就从 astral.sh 下载一个独立 uv，完全无视 Guix 装的系统 uv。最干净的反制：
-# 在 `$HERMES_HOME/bin/uv` 预置一个指向系统 uv profile 路径的 symlink →
-# `resolve_uv()` 的 `p.is_file()` 会 follow symlink 返回 True → 官方直接用系统 uv。
-# （`update_managed_uv` 跑的 `uv self update` 对 Guix store 只读路径会失败，但
-#  那是 logger.debug 级别、非致命。）
-#
-# == 跟 main / 放弃 pin ==
-# 首次 clone 用 `--branch main`；已装走 `hermes update "$@"`，透传所有官方
-# 参数（--check / --branch NAME / --backup / --no-backup / --yes 等）。用户想跟
-# 别的分支：`hermes update --branch NAME`。
-#
-# == 不用 exec 委托 ==
-# 官方 update 完成后还需 herd restart 收尾（让常驻 backend/gateway 加载新代码），
-# 故委托用普通调用而非 exec，保留退出码并在成功后跑收尾。
-#
-# 布局约定（desktop 壳 main.cjs 硬编码）：
-#   ACTIVE_HERMES_ROOT = HERMES_HOME/hermes-agent
-#   VENV_ROOT           = ACTIVE_HERMES_ROOT/venv
-#   isHermesSourceRoot() 要求 ACTIVE_HERMES_ROOT 本身就是源码根（直接含 hermes_cli/main.py）
-#   isBootstrapComplete() 要求 .hermes-bootstrap-complete 是合法 JSON（schemaVersion=1 + pinnedCommit）
-# 故 checkout 直接落在 HERMES_HOME/hermes-agent 顶层（不嵌套 checkout/ 子层），
-# 首次安装由本脚本写 bootstrap 标记。XDG 合规、零软链。
+# hermes-update — `hermes update` 子命令实体（bin/hermes 分发进入，也可按
+# libexec 路径直调）：首次安装 + 已装更新。已装路径委托官方 `hermes update`，
+# 本脚本只补官方做不了的 Guix 侧四件事：首装、停旧 gateway、uv 隔离、herd 收尾。
+# 委托用普通调用而非 exec——成功后还要跑 herd 收尾。
+# 文档：docs/scripts/hermes-update.md（uv 隔离/managed node/布局约定细节）
 set -euo pipefail
 
 REPO_URL="https://github.com/NousResearch/hermes-agent.git"
@@ -49,29 +17,28 @@ _bin_dir="$(dirname "$(readlink -f "$0")")"
 # shellcheck disable=SC1091  # 本脚本已与 lib 同居 libexec/，按 stow 直链的源头 source
 source "${_bin_dir}/hermes-lib.sh"
 
-# herd 管理的 hermes 常驻服务（gateway 依赖 backend，故重启顺序 backend → gateway）
+# 重启顺序 backend → gateway（gateway 依赖 backend）
 HERMES_HERD_SERVICES=(hermes-backend hermes-gateway)
 
 check_deps() {
-	command -v uv >/dev/null 2>&1 || {
-		echo "uv 未安装（Guix: guix install uv 或走 nix profile）" >&2
-		exit 1
-	}
-	command -v git >/dev/null 2>&1 || {
-		echo "git 未安装（Guix: guix install git）" >&2
-		exit 1
-	}
+  command -v uv >/dev/null 2>&1 || {
+    echo "uv 未安装（Guix: guix install uv 或走 nix profile）" >&2
+    exit 1
+  }
+  command -v git >/dev/null 2>&1 || {
+    echo "git 未安装（Guix: guix install git）" >&2
+    exit 1
+  }
 }
 
-# --- 写 bootstrap-complete 标记（首次安装用；让 desktop 壳跳过 GitHub bootstrap）---
-# 合法 JSON：schemaVersion=1 + pinnedCommit（取当前 HEAD 前 7 位）。
-# 官方 update 不碰此文件，仅首装时由本脚本写一次。
+# bootstrap 标记是 desktop 壳 isBootstrapComplete() 的检查目标：必须是
+# schemaVersion=1 + pinnedCommit 的合法 JSON，否则壳回退跑官方 install.sh
 _write_bootstrap_marker() {
-	local pinned branch
-	pinned="$(git -C "${HERMES_CHECKOUT}" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
-	# 首装都是 main（--branch main），pinnedBranch 记录实际分支名
-	branch="$(git -C "${HERMES_CHECKOUT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
-	cat >"${HERMES_RUNTIME}/.hermes-bootstrap-complete" <<EOF
+  local pinned branch
+  pinned="$(git -C "${HERMES_CHECKOUT}" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+  # 首装都是 main（--branch main），pinnedBranch 记录实际分支名
+  branch="$(git -C "${HERMES_CHECKOUT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+  cat >"${HERMES_RUNTIME}/.hermes-bootstrap-complete" <<EOF
 {
   "schemaVersion": 1,
   "pinnedCommit": "${pinned}",
@@ -82,104 +49,79 @@ _write_bootstrap_marker() {
 EOF
 }
 
-# --- 恢复 herd 管理的常驻服务（让它们加载新代码）---
-# 官方 update（≥0.21.3）会自己去重启「运行中的」gateway（其 docstring：systemd /
-# launchd / manual 都管；shepherd 不在其列，于是我们的实例被当作 manual）：先
-# drain 掉，再以 `gateway run --replace` 拉起一个脱离 shepherd 管理的野实例，
-# dashboard 同样被 stop+restart。此时再由 shepherd respawn/restart，两侧实例会抢
-# 端口与 singleton lock，shepherd 侧瞬间退出并触发 respawn 循环，连续失败后
-# shepherd 还会把服务标记为禁用（2026-09-17 实案：gateway 五连退码 1 后被禁用）。
-# 故收尾不能是简单 restart，而是：停服务（止住 respawn）→ 清野实例 → enable + start。
+# 收尾必须是 停→清野实例→enable+start，不是简单 restart：官方 update 会
+# 自己拉起脱离 shepherd 的野实例，两侧抢端口+singleton lock 触发 respawn
+# 循环直至服务被 shepherd 禁用。事故细节见 docs/scripts/hermes-update.md。
 _restart_herd_services() {
-	if ! command -v herd >/dev/null 2>&1; then
-		echo "  ⚠ herd 未找到，跳过常驻服务重启（手动: herd restart ${HERMES_HERD_SERVICES[*]}）"
-		return 0
-	fi
-	echo "→ 恢复 herd 管理的 hermes 服务（加载新代码）..."
-	# 先停：respawn? #t 的服务不 stop 就会一边被官方接管一边被 shepherd 拉起
-	for _svc in "${HERMES_HERD_SERVICES[@]}"; do
-		herd stop "${_svc}" >/dev/null 2>&1 || true
-	done
-	sleep 1
-	# 清野实例。gateway 按 argv 可辨（官方走 `python -m hermes_cli.main`，shepherd 走
-	# venv/bin/hermes）；dashboard 两侧 argv 相同，但此刻 shepherd 侧已停，剩下的必是野实例。
-	pkill -f 'hermes_cli\.main gateway run' >/dev/null 2>&1 || true
-	pkill -f 'hermes dashboard --no-open' >/dev/null 2>&1 || true
-	sleep 2
-	for _svc in "${HERMES_HERD_SERVICES[@]}"; do
-		# crash-loop 过的话服务可能已被 shepherd 自动禁用，enable 一次保证 start 能生效
-		herd enable "${_svc}" >/dev/null 2>&1 || true
-		herd start "${_svc}" >/dev/null 2>&1 &&
-			echo "  ✓ ${_svc} 已重启" ||
-			echo "  ⚠ ${_svc} 重启失败（手动: herd start ${_svc}）"
-	done
+  if ! command -v herd >/dev/null 2>&1; then
+    echo "  ⚠ herd 未找到，跳过常驻服务重启（手动: herd restart ${HERMES_HERD_SERVICES[*]}）"
+    return 0
+  fi
+  echo "→ 恢复 herd 管理的 hermes 服务（加载新代码）..."
+  # 先停：respawn? #t 的服务不 stop 就会一边被官方接管一边被 shepherd 拉起
+  for _svc in "${HERMES_HERD_SERVICES[@]}"; do
+    herd stop "${_svc}" >/dev/null 2>&1 || true
+  done
+  sleep 1
+  # gateway 按 argv 可辨（官方走 python -m hermes_cli.main，shepherd 走 venv/bin/hermes）；
+  # dashboard 两侧 argv 相同但此时 shepherd 侧已停，剩下的必是野实例
+  pkill -f 'hermes_cli\.main gateway run' >/dev/null 2>&1 || true
+  pkill -f 'hermes dashboard --no-open' >/dev/null 2>&1 || true
+  sleep 2
+  for _svc in "${HERMES_HERD_SERVICES[@]}"; do
+    # crash-loop 过的话服务可能已被 shepherd 自动禁用，enable 一次保证 start 能生效
+    herd enable "${_svc}" >/dev/null 2>&1 || true
+    herd start "${_svc}" >/dev/null 2>&1 \
+      && echo "  ✓ ${_svc} 已重启" \
+      || echo "  ⚠ ${_svc} 重启失败（手动: herd start ${_svc}）"
+  done
 }
 
-# --- 确保 Hermes-managed Node 树存在（dashboard 启动依赖它）---
-# 背景：hermes-backend (dashboard) 启动时跑 `npm install --workspace web` 构建
-# 前端。root package.json 的 engines.npm 约束很窄（如 "<11.10.0 || >=11.17.0"），
-# Guix profile 的 npm 可能正好卡在禁止区间（本次故障：npm 11.16.0）→ EBADENGINE
-# → web build 失败 → backend crash-loop（端口 9119 起不来）。Hermes 官方的解法是
-# 在 $HERMES_HOME/node 维护一棵私有 Node 树（含满足约束的 npm），所有 npm 调用
-# 优先用它（find_node_executable 在 managed 树存在时不 fallback 到 PATH）。
-#
-# 为什么不能依赖官方 ensure_node：它在 PATH 有 modern node 时（Guix node v24
-# 满足 engines.node）直接返回，**只查 node 版本不查 npm 版本** —— 而本次故障的
-# 约束恰恰卡在 npm 上。故这里绕过 ensure_node，直接调底层 _nb_install_bundled_node。
-#
-# HERMES_NODE_SKIP_LINKS=1：不把 managed node/npm/npx 软链到 ~/.local/bin，避免
-# shadow Guix toolchain（与 B.2 的 uv 隔离同精神 —— 各管各的，互不污染）。
-#
-# 预编译 Node 二进制的动态库加载由 nix-ld 兜底（config.org nix-ld-service 的
-# gcc-toolchain 提供 libstdc++.so，nix-ld 能 follow symlink 解析，已验证可用）。
-#
-# 幂等性：底层 _nb_install_bundled_node 会 rm -rf + 重下，故本函数先查存在性，
-# 已有则秒过（首装/升级时才可能缺失）。
+# managed Node 树（$HERMES_HOME/node）：root package.json 的 engines.npm 约束
+# 很窄，Guix npm 可能卡禁止区间 → backend web build EBADENGINE → crash-loop。
+# 不能依赖官方 ensure_node——它只查 node 版本不查 npm 版本（本次故障正卡在 npm）。
+# HERMES_NODE_SKIP_LINKS=1：不软链到 ~/.local/bin，避免 shadow Guix toolchain。
+# 背景见 docs/scripts/hermes-update.md §managed-node。
 _ensure_managed_node() {
-	local _node_bin="${HERMES_HOME}/node/bin/node"
-	if [[ -x "${_node_bin}" ]]; then
-		return 0
-	fi
-	echo "→ Provisioning Hermes-managed Node 树到 ${HERMES_HOME}/node ..."
-	local _bootstrap="${HERMES_RUNTIME}/scripts/lib/node-bootstrap.sh"
-	if [[ ! -f "${_bootstrap}" ]]; then
-		echo "  ⚠ node-bootstrap.sh 未找到（${_bootstrap}），跳过 managed node provision" >&2
-		echo "    backend 若 crash-loop，手动跑: source ${_bootstrap} && HERMES_NODE_SKIP_LINKS=1 _nb_install_bundled_node" >&2
-		return 0
-	fi
-	# shellcheck disable=SC1090  # checkout 内脚本，按源头源
-	if HERMES_NODE_SKIP_LINKS=1 bash -c "source '${_bootstrap}' && _nb_install_bundled_node"; then
-		echo "  ✓ managed node 已 provision（$("${_node_bin}" --version 2>/dev/null || echo '版本未知')）"
-	else
-		echo "  ⚠ managed node provision 失败，backend web build 可能失败" >&2
-	fi
+  local _node_bin="${HERMES_HOME}/node/bin/node"
+  if [[ -x "${_node_bin}" ]]; then
+    return 0
+  fi
+  echo "→ Provisioning Hermes-managed Node 树到 ${HERMES_HOME}/node ..."
+  local _bootstrap="${HERMES_RUNTIME}/scripts/lib/node-bootstrap.sh"
+  if [[ ! -f "${_bootstrap}" ]]; then
+    echo "  ⚠ node-bootstrap.sh 未找到（${_bootstrap}），跳过 managed node provision" >&2
+    echo "    backend 若 crash-loop，手动跑: source ${_bootstrap} && HERMES_NODE_SKIP_LINKS=1 _nb_install_bundled_node" >&2
+    return 0
+  fi
+  # shellcheck disable=SC1090  # checkout 内脚本，按源头源
+  if HERMES_NODE_SKIP_LINKS=1 bash -c "source '${_bootstrap}' && _nb_install_bundled_node"; then
+    echo "  ✓ managed node 已 provision（$("${_node_bin}" --version 2>/dev/null || echo '版本未知')）"
+  else
+    echo "  ⚠ managed node provision 失败，backend web build 可能失败" >&2
+  fi
 }
 
-# --- 生成 hicolor 桌面图标（幂等；已部署则跳过）---
-# hermes.desktop 用 `Icon=hermes` 按名引用，靠 XDG 图标主题在 hicolor 下解析。
-# hermes 仓库只给单张 1024px 源图（apps/desktop/assets/icon.png），面板/任务栏
-# 请求的是 16~48 小尺寸，GTK 在指定尺寸目录找不到就解析失败 → 图标空白。
-# 故从源图批量生成 hicolor 标准尺寸。幂等：sentinel 尺寸存在即视为已部署，
-# hermes 升级不会重做（想强刷 logo：删 hicolor/*/apps/hermes.png 后重跑）。
+# hicolor 图标：仓库只给 1024px 源图，面板请求小尺寸解析失败 → 批量生成。
+# 幂等：sentinel 尺寸存在即跳过（强刷：删 hicolor/*/apps/hermes.png 重跑）。
 _install_hicolor_icon() {
-	local _icon_src="${HERMES_CHECKOUT}/apps/desktop/assets/icon.png"
-	local _hicolor="${HERMES_HICOLOR_ROOT}" # XDG_DATA_HOME 默认值解析收敛在 lib
-	local _sentinel="${_hicolor}/48x48/apps/hermes.png"
+  local _icon_src="${HERMES_CHECKOUT}/apps/desktop/assets/icon.png"
+  local _hicolor="${HERMES_HICOLOR_ROOT}" # XDG_DATA_HOME 默认值解析收敛在 lib
+  local _sentinel="${_hicolor}/48x48/apps/hermes.png"
 
-	# sentinel 在即跳过（图标名 hermes 唯一，不会与其它软件冲突）
-	[[ -f "${_sentinel}" ]] && return 0
+  [[ -f "${_sentinel}" ]] && return 0
 
-	if [[ ! -f "${_icon_src}" ]]; then
-		echo "  ⚠ 图标源缺失（${_icon_src}），跳过图标生成" >&2
-		return 0
-	fi
-	if ! python3 -c 'import PIL' >/dev/null 2>&1; then
-		echo "  ⚠ Pillow 不可用，跳过图标生成（python3 -m pip install Pillow）" >&2
-		return 0
-	fi
+  if [[ ! -f "${_icon_src}" ]]; then
+    echo "  ⚠ 图标源缺失（${_icon_src}），跳过图标生成" >&2
+    return 0
+  fi
+  if ! python3 -c 'import PIL' >/dev/null 2>&1; then
+    echo "  ⚠ Pillow 不可用，跳过图标生成（python3 -m pip install Pillow）" >&2
+    return 0
+  fi
 
-	echo "→ 生成 hicolor 桌面图标（源: ${_icon_src##*/}）..."
-	if python3 - "${_icon_src}" "${_hicolor}" <<'PYEOF'; then
+  echo "→ 生成 hicolor 桌面图标（源: ${_icon_src##*/}）..."
+  if python3 - "${_icon_src}" "${_hicolor}" <<'PYEOF'; then
 import sys, os
 from PIL import Image
 try:
@@ -193,156 +135,121 @@ for s in (16, 32, 48, 128, 256, 512):
     os.makedirs(d, exist_ok=True)
     img.resize((s, s), resample).save(os.path.join(d, "hermes.png"))
 PYEOF
-		echo "  ✓ hicolor 图标已生成（16/32/48/128/256/512）"
-	else
-		echo "  ⚠ 图标生成失败" >&2
-	fi
+    echo "  ✓ hicolor 图标已生成（16/32/48/128/256/512）"
+  else
+    echo "  ⚠ 图标生成失败" >&2
+  fi
 }
 
-# ============================================================
-# 路径 A：首次安装（checkout 不存在）
-# ============================================================
-# 官方 `hermes update` 在 PROJECT_ROOT/.git 不存在且非 pip 时直接报
-# "Not a git repository" 退出，无法引导首次安装，
-# 故首装由本脚本完成：clone + uv 自管 python + 分层装依赖 + 写 bootstrap 标记。
+# --- 路径 A：首次安装（官方 update 在 checkout 不存在时直接报错退出，故自办） ---
 first_install() {
-	echo "首次安装 Hermes Agent（clone main + uv 自管 Python ${PYTHON_VERSION}）..."
-	mkdir -p "${HERMES_RUNTIME}"
-	git clone --depth 1 --branch main "${REPO_URL}" "${HERMES_CHECKOUT}"
+  echo "首次安装 Hermes Agent（clone main + uv 自管 Python ${PYTHON_VERSION}）..."
+  mkdir -p "${HERMES_RUNTIME}"
+  git clone --depth 1 --branch main "${REPO_URL}" "${HERMES_CHECKOUT}"
 
-	# uv 自管 Python（幂等；已装秒过）。Guix python 在 ~/.guix-home/profile 下，
-	# just home 升级或 guix gc 换掉 store 路径 → venv python 软链失效 → 整库 module
-	# 找不到。uv 自管 python 落在 ~/.local/share/uv/python/<版本>/，路径稳定不被 gc。
-	echo "确保 uv 自管 Python ${PYTHON_VERSION}..."
-	uv python install "${PYTHON_VERSION}"
+  # 必须用 uv 自管 Python：Guix profile python 的 store 路径会被升级/gc 换掉，
+  # venv 软链随之失效；uv 自管树路径稳定不被 gc
+  echo "确保 uv 自管 Python ${PYTHON_VERSION}..."
+  uv python install "${PYTHON_VERSION}"
 
-	echo "创建 venv (uv 自管 Python ${PYTHON_VERSION})..."
-	uv venv "${HERMES_VENV}" --python "${PYTHON_VERSION}"
+  echo "创建 venv (uv 自管 Python ${PYTHON_VERSION})..."
+  uv venv "${HERMES_VENV}" --python "${PYTHON_VERSION}"
 
-	# 钉死 UV_PYTHON 到本 venv（防继承的 UV_PYTHON 让 uv 把 venv 悄悄重建到别的
-	# python 版本；上游 setup_venv 的同款防护）
-	export UV_PYTHON="${HERMES_VENV}/bin/python"
-	export VIRTUAL_ENV="${HERMES_VENV}"
+  # 钉死 UV_PYTHON 到本 venv：防继承的 UV_PYTHON 让 uv 把 venv 重建到别的 python 版本
+  export UV_PYTHON="${HERMES_VENV}/bin/python"
+  export VIRTUAL_ENV="${HERMES_VENV}"
 
-	# 分层安装（对齐上游 install.sh）：
-	# Tier 0: uv sync --locked —— 走 uv.lock 的 SHA256 哈希校验（上游首选，防供应链投毒）
-	# Tier 1: uv pip install -e '.[all]' —— lock 失配时重新解析 PyPI
-	# Tier 2: 基础安装 —— 兜底，至少保证核心 CLI 能起
-	cd "${HERMES_CHECKOUT}"
-	if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${HERMES_VENV}" uv sync --extra all --locked; then
-		echo "依赖安装完成（hash-verified via uv.lock）"
-	else
-		[[ -f uv.lock ]] && echo "  uv.lock sync 失败，降级到 PyPI 解析..." >&2
-		if ! uv pip install -e "${HERMES_CHECKOUT}[all]"; then
-			echo "  [all] 安装失败，降级到基础安装..." >&2
-			uv pip install -e "${HERMES_CHECKOUT}"
-		fi
-	fi
+  # 分层安装（对齐上游 install.sh）：uv.lock 哈希校验 → PyPI 重解析 → 基础安装兜底
+  cd "${HERMES_CHECKOUT}"
+  if [[ -f uv.lock ]] && UV_PROJECT_ENVIRONMENT="${HERMES_VENV}" uv sync --extra all --locked; then
+    echo "依赖安装完成（hash-verified via uv.lock）"
+  else
+    [[ -f uv.lock ]] && echo "  uv.lock sync 失败，降级到 PyPI 解析..." >&2
+    if ! uv pip install -e "${HERMES_CHECKOUT}[all]"; then
+      echo "  [all] 安装失败，降级到基础安装..." >&2
+      uv pip install -e "${HERMES_CHECKOUT}"
+    fi
+  fi
 
-	_write_bootstrap_marker
+  _write_bootstrap_marker
 
-	# 首装即 provision managed Node（Guix profile 的 npm 版本可能不满足 root
-	# package.json 的 engines.npm 约束 → backend dashboard 启动即 EBADENGINE）。
-	_ensure_managed_node
+  _ensure_managed_node
 
-	_install_hicolor_icon
+  _install_hicolor_icon
 
-	"${HERMES_VENV}/bin/hermes" --version
-	echo ""
-	echo "首次安装完成。"
-	echo "  Web UI:  hermes serve / hermes dashboard"
-	echo "  TUI:     直接运行 hermes"
-	echo "  Desktop: hermes desktop（Electron）"
-	return 0
+  "${HERMES_VENV}/bin/hermes" --version
+  echo ""
+  echo "首次安装完成。"
+  echo "  Web UI:  hermes serve / hermes dashboard"
+  echo "  TUI:     直接运行 hermes"
+  echo "  Desktop: hermes desktop（Electron）"
+  return 0
 }
 
-# ============================================================
-# 路径 B：已安装 → 委托官方 `hermes update`
-# ============================================================
+# --- 路径 B：已安装 → 委托官方 `hermes update` ---
 update_existing() {
-	echo "已安装，委托官方 \`hermes update\` 更新（透传参数: $*）..."
+  echo "已安装，委托官方 \`hermes update\` 更新（透传参数: $*）..."
 
-	# --- B.1 停旧 gateway（官方 update 不做）---
-	# TUI 是 client + 常驻 gateway 架构：gateway 进程内存里的 mcp_tool.__file__
-	# 指向更新前的路径，checkout 一动它就找不到 watchdog 脚本。graceful stop，
-	# 失败（没在跑 / venv 已坏）都忽略。herd 管理的 hermes-gateway 有 respawn? #t，
-	# 这里 gateway stop 后会被 shepherd 拉起持旧代码——更新后的统一重启在 B.6 处理；
-	# 此处只是先让运行中的旧 gateway 干净退出，避免 pull 时持锁。
-	if [[ -x "${HERMES_VENV}/bin/hermes" ]]; then
-		"${HERMES_VENV}/bin/hermes" gateway stop >/dev/null 2>&1 || true
-	fi
+  # 停旧 gateway：其进程内模块路径指向更新前 checkout，pull 后必失效；
+  # 失败忽略（没在跑/venv 已坏）。shepherd respawn 出的新实例由收尾统一处理。
+  if [[ -x "${HERMES_VENV}/bin/hermes" ]]; then
+    "${HERMES_VENV}/bin/hermes" gateway stop >/dev/null 2>&1 || true
+  fi
 
-	# --- B.2 uv 隔离（防官方在 $HERMES_HOME/bin 装独立 managed uv）---
-	# 预置指向系统 uv 的 symlink。command -v uv 返回 profile 路径
-	# （~/.guix-home/profile/bin/uv），比 store hash 稳定（just home 升级只换 store
-	# hash，profile 软链不变）。
-	_uv_managed="${HERMES_HOME}/bin/uv"
-	_uv_system="$(command -v uv)"
-	if [[ -n "${_uv_system}" ]] && [[ ! -e "${_uv_managed}" ]]; then
-		mkdir -p "${HERMES_HOME}/bin"
-		ln -s "${_uv_system}" "${_uv_managed}"
-		echo "  uv 隔离: ${_uv_managed} -> ${_uv_system}（阻止官方下载独立 managed uv）"
-	fi
+  # uv 隔离：官方 ensure_uv 只看 $HERMES_HOME/bin/uv 是否存在，缺了就从
+  # astral.sh 下载独立 uv 无视系统 uv。预置指向系统 uv 的 symlink（is_file
+  # follow symlink → 官方直接用），profile 路径比 store hash 稳定。
+  _uv_managed="${HERMES_HOME}/bin/uv"
+  _uv_system="$(command -v uv)"
+  if [[ -n "${_uv_system}" ]] && [[ ! -e "${_uv_managed}" ]]; then
+    mkdir -p "${HERMES_HOME}/bin"
+    ln -s "${_uv_system}" "${_uv_managed}"
+    echo "  uv 隔离: ${_uv_managed} -> ${_uv_system}（阻止官方下载独立 managed uv）"
+  fi
 
-	# --- B.3 确保 managed Node 树（官方 update 会修 managed uv/python 但漏 node）---
-	# 官方 update 重装依赖时不碰 $HERMES_HOME/node，但 checkout 的 package.json
-	# engines.npm 约束可能变动，旧 managed tree（若有）的 npm 可能不再满足；更常见
-	# 的是首装后从未 provision（本次故障根因）。provision 后 backend restart 才能正常
-	# 构建 web UI。--check 只读探测时也查一下（无害，秒过当存在），让 --check 能发现
-	# managed node 缺失的诊断信号。
-	_ensure_managed_node
+  _ensure_managed_node
 
-	# --- B.4 补桌面图标（官方 update 不碰 hicolor）---
-	_install_hicolor_icon
+  _install_hicolor_icon
 
-	# --- B.5 委托官方 update（透传所有参数）---
-	# 官方接管：pre-update backup → fetch → stash → pull（syntax guard + rollback）
-	# → 依赖重装 → config 迁移 → skills sync（已被 .no-bundled-skills opt-out 跳过）
-	# → desktop build（desktop-build-stamp.json hash 不变则秒过）→ 完成。
-	# 不用 exec：需在成功后跑本地收尾（服务重启）；是否收尾以 HEAD
-	# 是否变化为准，而非官方退出码（updater 收尾崩了但代码已更新的情况见下方判定）。
-	_head_before="$(git -C "${HERMES_CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
-	_update_rc=0
-	"${HERMES_VENV}/bin/hermes" update "$@" || _update_rc=$?
-	_head_after="$(git -C "${HERMES_CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
+  _head_before="$(git -C "${HERMES_CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
+  _update_rc=0
+  "${HERMES_VENV}/bin/hermes" update "$@" || _update_rc=$?
+  _head_after="$(git -C "${HERMES_CHECKOUT}" rev-parse HEAD 2>/dev/null || true)"
 
-	_is_check=0
-	for _a in "$@"; do [[ "$_a" == "--check" ]] && _is_check=1; done
+  _is_check=0
+  for _a in "$@"; do [[ "$_a" == "--check" ]] && _is_check=1; done
 
-	# 收尾判据是「代码是否真的变了」，不是官方 update 的退出码：updater 自身在 pull
-	# 之后的收尾步骤（清理持旧代码的 dashboard 进程等）要 import 新模块，而它进程里
-	# 的 sys.modules 还是 pull 前的旧模块，会崩在 ImportError 上——此时代码已经更新，
-	# 退出码却是非 0（2026-09-17 实案：utils.file_signature ImportError）。
-	# HEAD 未变才是真失败（fetch 失败 / syntax guard 回滚）。
-	if [[ "${_update_rc}" -ne 0 ]]; then
-		if [[ "${_head_before}" == "${_head_after}" ]]; then
-			echo "✗ 官方 update 失败（退出码 ${_update_rc}），代码未变化，未重启服务" >&2
-			exit "${_update_rc}"
-		fi
-		echo "⚠ 官方 update 非零退出（${_update_rc}），但代码已更新（${_head_before:0:7} → ${_head_after:0:7}）" >&2
-		echo "  多为 updater 自身收尾步骤失败，继续执行本地收尾..." >&2
-	fi
+  # 收尾判据是「HEAD 是否变了」而非官方退出码：updater 收尾步骤自己可能
+  # ImportError 崩（进程内 sys.modules 还是旧代码），此时退出码非 0 但代码
+  # 已更新——继续收尾；HEAD 未变才是真失败。详见 docs/scripts/hermes-update.md。
+  if [[ "${_update_rc}" -ne 0 ]]; then
+    if [[ "${_head_before}" == "${_head_after}" ]]; then
+      echo "✗ 官方 update 失败（退出码 ${_update_rc}），代码未变化，未重启服务" >&2
+      exit "${_update_rc}"
+    fi
+    echo "⚠ 官方 update 非零退出（${_update_rc}），但代码已更新（${_head_before:0:7} → ${_head_after:0:7}）" >&2
+    echo "  多为 updater 自身收尾步骤失败，继续执行本地收尾..." >&2
+  fi
 
-	if [[ "${_is_check}" -eq 1 ]]; then
-		# --check 只读探测，不改文件，无需重启
-		exit 0
-	fi
+  if [[ "${_is_check}" -eq 1 ]]; then
+    # --check 只读探测，不改文件，无需重启
+    exit 0
+  fi
 
-	# --- B.6 herd restart 收尾（让常驻服务加载新代码）---
-	_restart_herd_services
+  _restart_herd_services
 
-	echo ""
-	echo "✓ 更新完成，常驻服务已重启加载新代码。"
-	echo "  ⚠ 已开的 TUI 会话 / desktop 窗口持旧代码，需手动重开。"
+  echo ""
+  echo "✓ 更新完成，常驻服务已重启加载新代码。"
+  echo "  ⚠ 已开的 TUI 会话 / desktop 窗口持旧代码，需手动重开。"
 }
 
 main() {
-	check_deps
-	if [[ ! -d "${HERMES_CHECKOUT}/.git" ]]; then
-		first_install
-	else
-		update_existing "$@"
-	fi
+  check_deps
+  if [[ ! -d "${HERMES_CHECKOUT}/.git" ]]; then
+    first_install
+  else
+    update_existing "$@"
+  fi
 }
 
 main "$@"

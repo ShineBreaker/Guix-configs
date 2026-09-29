@@ -2,30 +2,15 @@
 #
 # SPDX-License-Identifier: MIT
 
-# 终端会话选择器 — 在 foot/kitty 窗口启动时弹出一个合并 fzf 列表：
-# 所有 tmux 会话 + 所有 herdr 会话 + Shell，一屏选完。
+# 终端会话选择器：foot/kitty 启动时弹 tmux+herdr+shell 合并 fzf 列表。
+# 完整设计与容错语义见 docs/scripts/fish-conf-d.md 与 docs/scripts/session-selector.md。
 #
-# 设计：tmux 与 herdr 完全对称，各自有：
-#   ├── 默认会话（tmux=main / herdr=default）
-#   └── 其他会话（命名 session，带运行状态）
-#       └── 新建会话（fish 侧 prompt 输入语义名）
-#
-# main / default 不再被特殊跳过——它们就是列表里的普通项。
-#
-# 容错：mux 命令（tmux/herdr）执行后若异常退出（退出码 ≠ 0，如版本/协议
-# 不兼容、session 损坏、socket 异常），不闪退到裸 shell，而是回到选择
-# 界面让用户重选。正常退出（退出码 0，含用户主动退出 TUI）则结束选择。
-
-# ===== tmux 辅助函数（须先定义后调用）=====
-# 统一 tmux 的 attach/create 模式，三步链收敛进 attach-entry 脚本：
-# detached 创建（若需/--create）→ set 侧栏选项 → follow 建侧栏 → 纯
-# attach-session（脚本内 attach 恒为最后一条独立命令，绝不串联 \;，
-# 避免命令链竞态闪退；退出码经 exec attach 原样传播）。
-# 侧栏 opt-in：tmux 默认纯净（@sidebar_visible 全局 = 0），用户入口在此
-# 用 session 级覆盖为 1。agent 程序化创建的 session 不经此入口 → 纯净。
-#
-# 不用 exec：attach 失败时（如 session 被并发杀掉）退出码 ≠ 0，由外层
-# 循环捕获并回选择界面。attach 正常 detach 退出码 0 → 结束。
+# 关键契约：
+# - selector 输出协议为单行 <mux>|<kind> | shell | __header__，kind 本身可含 |。
+# - mux 异常退出（≠0）回选择界面重选；0（含用户主动退出 TUI）结束。
+# - tmux 侧一律经 attach-entry：detached 创建 → @sidebar_visible 置 1 →
+#   follow 建侧栏 → exec attach（退出码透传）。agent 创建的 session 不经此
+#   入口，保持 @sidebar_visible 默认 0。
 function __selector_tmux_attach_or_create
     set -l ses_name $argv[1]
     set -l win_name $argv[2]
@@ -33,8 +18,7 @@ function __selector_tmux_attach_or_create
     ~/.config/tmux/scripts/attach-entry "$ses_name" --create -n "$win_name" -c "$cwd"
 end
 
-# attach 已有 tmux session（opt-in + follow + 纯 attach 同经 attach-entry；
-# 无 --create，session 缺失时脚本即刻非零退出 → 外层错误回环）
+# 已有 session 走同一入口（无 --create，缺失时 attach-entry 非零退出 → 外层回环）
 function __selector_tmux_attach
     set -l ses_name $argv[1]
     ~/.config/tmux/scripts/attach-entry "$ses_name"
@@ -45,15 +29,14 @@ function __selector_make_session_name
     set -l raw $argv[1]
     set -l cwd $argv[2]
     if test -z "$raw"
-        # 空 → fallback 到 cwd basename
         set raw (path basename "$cwd")
     end
     set -l name (string replace -ra '[^a-zA-Z0-9_-]' '_' -- "$raw" | string sub -l 20)
     if test -z "$name"
         set name default
     end
-    # 纯数字名加前缀（tmux 拒绝纯数字 session 名）
-    # 注意：fish 里 $ 在正则末尾需双引号 + \$ 转义（单引号会报错）
+    # tmux 拒绝纯数字 session 名 → 加前缀。注意 fish 陷阱：正则末尾 $ 须
+    # 写双引号 + \$（单引号里 '\$' 不是锚点）
     if string match -qr "^[0-9]+\$" -- "$name"
         set name "s_$name"
     end
@@ -69,8 +52,6 @@ function __selector_run_mux
 
     switch "$kind"
         case new
-            # 新建命名会话：prompt 输入语义名（解决"改名模型烂"——
-            # 不再掉到 term_<pid>，用户可起 work/dev/debug 等语义名）。
             read -l -P "新 $mux 会话名 (回车=用 cwd): " raw_name
             set -l ses_name (__selector_make_session_name "$raw_name" "$cwd")
 
@@ -81,7 +62,6 @@ function __selector_run_mux
             end
 
         case default
-            # 进入默认/共享会话：tmux=main, herdr=default
             if test "$mux" = tmux
                 __selector_tmux_attach_or_create main "$window_name" "$cwd"
             else
@@ -89,7 +69,6 @@ function __selector_run_mux
             end
 
         case '*'
-            # attach 已有命名会话
             if test "$mux" = tmux
                 __selector_tmux_attach "$kind"
             else
@@ -100,42 +79,37 @@ function __selector_run_mux
 end
 
 if status is-interactive
-    # 仅 foot/kitty 终端弹选择器；已有 tmux/herdr/容器 pane 跳过
+    # 仅 foot/kitty 顶层终端弹选择器；tmux/herdr/容器会话内跳过
     if contains -- "$TERM" foot xterm-kitty; and not set -q TMUX; and not test "$HERDR_ENV" = 1; and not set -q CONTAINER_ID
         set -l cwd (pwd)
         set -l window_name (__selector_make_session_name "" "$cwd")
 
         set -l selector ~/.config/tmux/scripts/session-selector
 
-        # selector 未部署 → fallback：直接进 tmux main（带侧栏），无菜单
+        # selector 缺失（如 blue home 未跑）→ 直接进 tmux main，不闪退裸 shell
         if not test -x "$selector"
             __selector_tmux_attach_or_create main "$window_name" "$cwd"
             return
         end
 
-        # ===== 主循环：选择 → 执行；异常退出回选择界面，正常退出结束 =====
         while true
-            # 单层选择：弹合并列表
             set -l key ("$selector")
 
-            # 空输出（ESC/取消/异常）→ 留普通 shell
+            # ESC/取消/异常 → 空输出，留普通 shell
             if test -z "$key"
                 return
             end
 
-            # key 格式：<mux>|<kind>  或  shell  或  __header__（误选标题行）
-            # kind 含 | 时保留完整：按首个 | 切分，剩余整体作为会话名
-            # （存在与否由 tmux/herdr 决定，不存在走下方现有错误回环）。
             if test "$key" = shell
                 return
             end
 
-            # 误选了分组标题行 → 回循环重弹（等同取消本次选择）
+            # 误选分组标题行 → 重弹
             if test "$key" = __header__
                 continue
             end
 
-            # 解析 mux|kind（-m 1 = 最多切 1 刀：mux 取第一段，kind 剩余 join）
+            # -m 1 只切第一刀：kind 段本身允许含 |（会话名分隔符即协议符）
             set -l parts (string split -m 1 '|' -- "$key")
             set -l mux $parts[1]
             set -l kind ""
@@ -146,13 +120,10 @@ if status is-interactive
             __selector_run_mux "$mux" "$kind" "$window_name" "$cwd"
             set -l rc $status
 
-            # 退出码 0（含用户主动退出 TUI）→ 结束选择
-            # 退出码 ≠ 0（报错/异常）→ 回循环重弹选择界面
             if test $rc -eq 0
                 return
             end
 
-            # 异常：提示后回循环（用户能看到错误信息，再选一次）
             echo
             echo ">>> $mux 启动失败（退出码 $rc），请重选"
             echo

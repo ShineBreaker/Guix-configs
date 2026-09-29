@@ -4,27 +4,8 @@
 #
 # SPDX-License-Identifier: MIT
 
-# termide - A VSCode-like tmuxifier session layout
-#
-# 布局结构：
-# ┌─────────────┬──────────────────────────┐
-# │             │         编辑器           │
-# │   侧边栏    │          (hx)            │
-# │  (broot)    │                          │
-# │             ├──────────────────────────┤
-# │             │         终端             │
-# │             │                          │
-# └─────────────┴──────────────────────────┘
-#
-# 环境变量：
-#   TERMIDE_SESSION_NAME     - 会话名称覆盖（默认：布局名称）
-#   TERMINAL_IDE_ROOT        - 工作目录（默认：$PWD）
-#   TERMIDE_SIDEBAR_WIDTH    - 侧边栏宽度："25%" 或 "30"（默认：24）
-#   TERMIDE_TERMINAL_HEIGHT  - 终端高度："20%" 或 "10"（默认：12）
-#   TERMIDE_EDITOR           - 编辑器命令（默认：hx）
-#   TERMIDE_FILE_MANAGER     - 文件管理器命令（默认：broot）
-#   TERMIDE_SHELL            - 终端面板的 Shell（默认：$SHELL）
-#   TERMIDE_DEBUG            - 如果设置，打印调试信息
+# termide — VSCode 风格 tmuxifier 会话布局（Explorer | Editor / Terminal）
+# 布局图与 TERMIDE_* 环境变量见 docs/scripts/termide-layout.md
 
 set -eo pipefail
 
@@ -54,7 +35,7 @@ sanitize_size() {
   local name="$3"
 
   if [[ "$value" =~ ^([0-9]+)%$ ]]; then
-    if (( BASH_REMATCH[1] >= 1 && BASH_REMATCH[1] <= 99 )); then
+    if ((BASH_REMATCH[1] >= 1 && BASH_REMATCH[1] <= 99)); then
       printf '%s' "$value"
       return
     fi
@@ -63,7 +44,7 @@ sanitize_size() {
     return
   fi
 
-  if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 1 )); then
+  if [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1)); then
     printf '%s' "$value"
     return
   fi
@@ -110,10 +91,8 @@ log_debug "root=$root sidebar=$sidebar_size terminal=$terminal_size"
 session_root "$root"
 
 if initialize_session "$termide_session"; then
-  # 绕过 tmuxifier 的 new_window bug：
-  # new_window() 内部执行 set-option -t "$1" 时缺少 session 前缀，
-  # 当当前 client 不在目标 session 中时会报 "no such window" 错误。
-  # 改用 tmux 原生命令并始终带 session: 前缀。
+  # 绕过 tmuxifier new_window 的 bug：其内部 set-option -t 缺 session 前缀，
+  # client 不在目标 session 时报 "no such window" —— 原生命令须带 session:
   tmux new-window -t "$session:" -n "$window" -c "$root" \; set-window-option -t "$session:$window" @no_sidebar 1 >/dev/null
   tmux set-option -t "$session:$window" allow-rename off >/dev/null
   window="$(tmux list-windows -t "$session:" -F '#{window_active}:#{window_index}' | grep '^1:' | cut -d: -f2)"

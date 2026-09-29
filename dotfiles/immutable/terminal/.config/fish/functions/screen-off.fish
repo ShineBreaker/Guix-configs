@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+# screen-off — 倒计时熄屏（niri）；见 docs/scripts/screen-off.md
+
 function screen-off -d "倒计时后关闭显示器（niri）"
     if test (count $argv) -gt 1
         echo "用法: screen-off [秒数]（默认 5）" >&2

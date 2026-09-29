@@ -3,6 +3,8 @@
 浏览 / 运行本仓库自研 `.local/bin` 工具的统一入口：fzf 列表 + 详情预览，
 运行页展示帮助并支持 Tab 补全传参。GUI 侧由 `.desktop` 拉起专用 kitty 窗口。
 
+面向人类的使用手册：`docs/scripts/toolbox.md`。
+
 ## 文件
 
 | 文件 | 作用 |

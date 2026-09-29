@@ -4,25 +4,27 @@
 #
 # SPDX-License-Identifier: MIT
 
-# bash-gate — zcode PreToolUse hook for the Bash tool（协议适配器）
-#
-# 判定语义全部在 ~/.config/agents/gate-core.sh（决策核，规则源为两级
-# anchors.json 的 ratchet 合并）；本脚本只做 zcode hook 协议转换：
-#   - stdin JSON: { tool_name, tool_input: { command }, cwd, ... }
-#   - stdout JSON: {"decision":"allow"} | {"additionalContext":"..."} | 空
-#   - exit 0 通过；exit 2 = block（deny）
-#   - zcode 不支持 updated_input（不能重写命令）→ REWRITTEN 降级为提醒
+# bash-gate.sh — zcode PreToolUse hook for Bash（协议适配器；判定语义在
+# ~/.config/agents/gate-core.sh，本脚本只做协议转换）。
+#   stdin  - {"tool_name","tool_input":{"command"},"cwd"}
+#   stdout - {"decision":"allow"} | {"additionalContext":"..."} | 空
+#   exit   - 0 放行；2 + stderr = block
+#   zcode 不支持 updated_input → REWRITTEN 降级为提示（见
+#   docs/scripts/zcode-bash-gate.md）。
 
 set -uo pipefail
 
 CORE="$HOME/.config/agents/gate-core.sh"
-# 人工总开关（固定路径，见 gate-core.sh 文件头；须在核缺失保底之前检查）
+# 人工总开关固定路径（须在核缺失保底之前检查——gate-core.md）
 GATE_PAUSE_FILE="/run/agent-gate.off"
 
-deny() { printf '%s\n' "$1" >&2; exit 2; }
+deny() {
+  printf '%s\n' "$1" >&2
+  exit 2
+}
 
 # ─── Phase 0: 读 stdin，fail-closed 解析 ─────────────────────────────────────
-# python3 缺失时无法解析输入，fail-closed 拦截（而非静默放行整条命令）
+# python3 缺失 → fail-closed（不静默放行）
 command -v python3 >/dev/null 2>&1 || deny "bash-gate：python3 不可用，无法解析输入（fail-closed 拦截）。"
 INPUT="$(cat 2>/dev/null || true)"
 
@@ -81,14 +83,17 @@ while IFS=$'\t' read -r type payload; do
     REWRITTEN)
       PARTS+=("本机命令改写建议：${payload}（zcode 无法自动改写，如适用请手动改用）")
       ;;
-    RM_HINT|NOTES|REDIRECT)
+    RM_HINT | NOTES | REDIRECT)
       PARTS+=("$payload")
       ;;
   esac
 done <<<"$VERDICT"
 
 if [[ ${#PARTS[@]} -gt 0 ]]; then
-  ctx="$(IFS='; '; echo "${PARTS[*]}")"
+  ctx="$(
+    IFS='; '
+    echo "${PARTS[*]}"
+  )"
   printf '{"additionalContext":%s}\n' "$(printf '%s' "$ctx" | jq -Rs .)"
 fi
 exit 0

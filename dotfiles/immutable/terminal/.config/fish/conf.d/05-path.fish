@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-## Nix
+## Nix（hm-session-vars 由 home-manager 生成，fenv 继承）
 fenv . $XDG_STATE_HOME/nix/profile/etc/profile.d/hm-session-vars.sh
 fish_add_path -g -a $XDG_STATE_HOME/nix/profile/bin
 

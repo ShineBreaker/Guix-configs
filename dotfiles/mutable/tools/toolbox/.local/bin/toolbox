@@ -1,19 +1,9 @@
 #!/usr/bin/env bash
 # toolbox — 自研工具目录：fzf 浏览 → 看帮助 → Tab 补全传参 → 直接运行
-#
-# 数据源：$HOME/.local/share/toolbox/tools.yaml（mutable 直链，改源即时生效）
-# 收录标准见清单头部注释：原创工具 opt-in 登记，纯透传 wrapper 不收。
-#
-# 用法：
-#   toolbox              交互浏览（fzf 列表 + 详情预览）
-#   toolbox run <name>   跳过列表，直接进入指定工具的运行页
-#   toolbox list         非交互列出全部工具
-#   toolbox check        对账：清单条目 vs 部署位 + 未登记仓库脚本 + 一包一入口准入
-#   toolbox help         本帮助
+# 文档：docs/scripts/toolbox.md
 set -u
-# 捕获而非忽略 SIGINT：非交互 bash 默认会被 Ctrl-C 整体杀死；
-# 捕获后各场景自行处理（read 非零回列表 / fzf 130 退出浏览 / eval 中的
-# 工具正常收到信号被杀后落回返回提示）。子进程不继承"已捕获"，不受影响。
+# 捕获而非忽略 SIGINT：read/fzf/被 eval 的工具各自收到信号后落回返回提示，
+# 而不是非交互 bash 默认的整体杀死；子进程不继承"已捕获"，不受影响。
 trap ':' INT
 
 TOOLBOX_HOME="${TOOLBOX_HOME:-$HOME/.local/share/toolbox}"
@@ -22,25 +12,26 @@ BIN_DIR="$HOME/.local/bin"
 PATH="$BIN_DIR:$PATH"
 SELF=$(readlink -f "$0")
 
-die() { printf 'toolbox: %s\n' "$*" >&2; exit 1; }
+die() {
+  printf 'toolbox: %s\n' "$*" >&2
+  exit 1
+}
 [ -r "$CATALOG" ] || die "无法读取清单 $CATALOG（先跑 blue stow tools/toolbox）"
 
-# ---------------------------------------------------------------------------
-# Tab 补全（bind -x 挂入 readline，对 read -e 生效；complete -W 只对交互
-# 提示符生效，read -e 默认走文件名补全，故必须走这条 路）
-# TB_COMPLETE_WORDS 为当前工具的词表；命中词表则补词，否则回退文件名。
-# ---------------------------------------------------------------------------
+# --- Tab 补全 ---
+# bind -x 挂入 readline 才能对 read -e 生效（complete -W 只覆盖交互提示符，
+# read -e 默认走文件名补全）。TB_COMPLETE_WORDS 是当前工具的词表。
 _tb_complete_word() {
   local line=$READLINE_LINE pt=$READLINE_POINT
   local left=${line:0:pt} right=${line:pt}
   local cur=${left##* }
   local pre=${left%"$cur"}
   local -a cand=() words
-  read -r -a words <<< "${TB_COMPLETE_WORDS:-}"
+  read -r -a words <<<"${TB_COMPLETE_WORDS:-}"
   local w
   for w in "${words[@]}"; do [[ -n $w && $w == "$cur"* ]] && cand+=("$w"); done
   [ ${#cand[@]} -eq 0 ] && while IFS= read -r w; do cand+=("$w"); done \
-      < <(compgen -f -- "$cur" 2>/dev/null)
+    < <(compgen -f -- "$cur" 2>/dev/null)
 
   local new=$cur
   if [ ${#cand[@]} -eq 1 ]; then
@@ -55,25 +46,34 @@ _tb_complete_word() {
 
   if [ -n "$new" ] && [ "$new" != "$cur" ]; then
     READLINE_LINE="$pre$new$right"
-    READLINE_POINT=$(( ${#pre} + ${#new} ))
+    READLINE_POINT=$((${#pre} + ${#new}))
   elif [ ${#cand[@]} -gt 1 ]; then
     printf '\n%s\n' "${cand[*]}" >&2
   fi
   return 0
 }
 
-# yq_field <name> <field> —— 单值字段；数组字段用 yq_usage。
-# 先把 select 结果收进数组取 [0]：直接 `select().f // ""` 会让不匹配条目各吐一个空行
+# select 收进数组取 [0]：直接 `select().f // ""` 会让不匹配条目各吐一个空行
 yq_field() { yq -r "[.[] | select(.name == \"$1\") | .$2][0] // \"\"" "$CATALOG"; }
-yq_usage()  { yq -r ".[] | select(.name == \"$1\").usage[]?" "$CATALOG"; }
+yq_usage() { yq -r ".[] | select(.name == \"$1\").usage[]?" "$CATALOG"; }
 
 usage() {
-  sed -n '2,12p' "$SELF" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+toolbox — 自研工具目录：fzf 浏览 → 看帮助 → Tab 补全传参 → 直接运行
+
+数据源：$HOME/.local/share/toolbox/tools.yaml（mutable 直链，改源即时生效）
+收录标准见清单头部注释：原创工具 opt-in 登记，纯透传 wrapper 不收。
+
+用法：
+  toolbox              交互浏览（fzf 列表 + 详情预览）
+  toolbox run <name>   跳过列表，直接进入指定工具的运行页
+  toolbox list         非交互列出全部工具
+  toolbox check        对账：清单条目 vs 部署位 + 未登记仓库脚本 + 一包一入口准入
+  toolbox help         本帮助
+EOF
 }
 
-# ---------------------------------------------------------------------------
-# 详情预览（fzf --preview 子进程调用）
-# ---------------------------------------------------------------------------
+# --- 详情预览（fzf --preview 子进程调用） ---
 preview() {
   local name=$1
   printf '\033[1m%s\033[0m — %s\n' "$name" "$(yq_field "$name" brief)"
@@ -84,7 +84,8 @@ preview() {
   hc=$(yq_field "$name" help_cmd)
   if [ -n "$hc" ]; then
     printf '\n—— %s %s ——\n' "$name" "$hc"
-    # help_cmd 是白名单机制：只有确认"只打印用法不触发主逻辑"的工具才登记
+    # help_cmd 是白名单：只登记确认"只打印用法不触发主逻辑"的工具
+    # shellcheck disable=SC2086  # help_cmd 可含多个参数，须词分割
     timeout 2 "$name" $hc 2>&1 | head -60 || printf '(help 抓取失败)\n'
   else
     printf '\n（该工具无安全的 --help，以上示例即全部用法）\n'
@@ -92,9 +93,7 @@ preview() {
   printf '\n—— 源码 ——\n%s\n' "$(yq_field "$name" source)"
 }
 
-# ---------------------------------------------------------------------------
-# 运行页：展示帮助 → readline 编辑命令行（Tab 补全）→ 运行
-# ---------------------------------------------------------------------------
+# --- 运行页：展示帮助 → readline 编辑命令行（Tab 补全）→ 运行 ---
 run_entry() {
   local name=$1
   local brief args hc line first ans
@@ -109,6 +108,7 @@ run_entry() {
     yq_usage "$name" | sed 's/^/  /'
     if [ -n "$hc" ]; then
       printf '\n—— 帮助输出（%s %s）——\n' "$name" "$hc"
+      # shellcheck disable=SC2086  # help_cmd 是白名单参数字符串，须词分割
       timeout 3 "$name" $hc 2>&1 | head -40 || true
     fi
     if [ -n "$args" ]; then
@@ -118,14 +118,13 @@ run_entry() {
     fi
     printf '\n'
 
-    # -e readline 编辑；-i 预填命令名；Tab 走 _tb_complete_word 词表/文件名补全
+    # shellcheck disable=SC2162  # 无 -r 与既有行为一致：用户输入经 eval 走 shell 词法
     if ! read -e -i "$name " -p '输入参数回车=运行，直接回车=返回列表> ' line; then
       return 0
     fi
     first=${line%% *}
 
-    # 空行（只剩预填的命令名）= 不运行，返回列表
-    [ "$first" = "$name" ] && [ "${#line}" -le $(( ${#name} + 1 )) ] && return 0
+    [ "$first" = "$name" ] && [ "${#line}" -le $((${#name} + 1)) ] && return 0
     [ -z "${line// /}" ] && return 0
 
     # 首词锁定为清单内工具名：目录只做"选中即运行"，不做任意命令执行器
@@ -135,6 +134,8 @@ run_entry() {
       continue
     fi
 
+    # 用户输入的是带 shell 引用的命令行，必须经 eval 走 shell 词法解析；
+    # 首词已锁定为工具名，注入面仅限参数部分
     eval "$line"
     printf '\n'
     read -rp '回车=返回列表，r 回车=再次运行> ' ans || return 0
@@ -142,25 +143,21 @@ run_entry() {
   done
 }
 
-# ---------------------------------------------------------------------------
-# fzf 浏览主循环
-# ---------------------------------------------------------------------------
+# --- fzf 浏览主循环 ---
 browse() {
   local sel name
   while :; do
     sel=$(yq -r '.[] | [.name, .category, .brief] | @tsv' "$CATALOG" \
       | fzf --delimiter='\t' --with-nth=1,3 \
-          --header='Enter: 选中工具进入运行页  Esc: 退出' \
-          --preview-window='right:70%:wrap' \
-          --preview="'$SELF' _preview {1}") || return 0
+        --header='Enter: 选中工具进入运行页  Esc: 退出' \
+        --preview-window='right:70%:wrap' \
+        --preview="'$SELF' _preview {1}") || return 0
     name=${sel%%	*}
     [ -n "$name" ] && run_entry "$name"
   done
 }
 
-# ---------------------------------------------------------------------------
-# 对账：清单条目健康性 + 未登记仓库脚本（信息级）+ 一包一入口准入（阻断级）
-# ---------------------------------------------------------------------------
+# --- 对账：清单条目健康性 + 未登记仓库脚本（信息级）+ 一包一入口准入（阻断级） ---
 
 # SELF 实体在 dotfiles/mutable/tools/toolbox/.local/bin/toolbox，上溯 5 层到 dotfiles/
 dotfiles_dir() {
@@ -192,46 +189,44 @@ check_unregistered() {
   fi
 }
 
-# 一包一入口准入（阻断级）。违规返回 1。
+# 一包一入口准入（阻断级）：每个 mutable stow 包（.stow-package 定界，与 blue
+# stow 判据一致）的 .local/bin 只允许 1 个入口；规则全文见
+# dotfiles/mutable/AGENTS.md 与 docs/scripts/toolbox.md。
 check_one_entry_per_package() {
   local root
   root=$(dotfiles_dir) || die '无法定位仓库 dotfiles/'
   local bin_ok=1 n_pkgs=0 marker pkg_dir pkg_name allow_file entry entries line raw reason hit
   local -a allow_names bad_lines kept
-
-  # —— 一包一入口准入（阻断级）——
-  # 每个 mutable stow 包（.stow-package 标记定界，与 blue stow 的包判据一致；
-  # immutable 走 config.org 声明模型，不在此扫）的 .local/bin 只允许 1 个入口，
-  # 增强实现挪包内 .local/libexec/、主入口 case 分发子命令，防 bin/ 膨胀回潮
-  # （blue/hermes/dsh/pi 已于 2026-09 从 21 个入口收敛到 15 个）。
-  local bin_ok=1 n_pkgs=0 marker pkg_dir pkg_name allow_file entry entries line raw reason hit
-  local -a allow_names bad_lines kept
   while IFS= read -r marker; do
     pkg_dir=$(dirname "$marker")
-    pkg_name=${marker#"$root/mutable/"}; pkg_name=${pkg_name%/.stow-package}
+    pkg_name=${marker#"$root/mutable/"}
+    pkg_name=${pkg_name%/.stow-package}
     [ -d "$pkg_dir/.local/bin" ] || continue
     # stow 链入 ~/.local/bin 的是 bin/ 直下的常规可执行文件（子目录会整目录链接，不算入口）
     entries=$(find "$pkg_dir/.local/bin" -maxdepth 1 -type f -perm -u+x -printf '%f\n' | sort)
     [ -n "$entries" ] || continue
-    n_pkgs=$(( n_pkgs + 1 ))
+    n_pkgs=$((n_pkgs + 1))
 
-    # 包级豁免 .bin-entries-allow：每行「入口名 # 理由」。理由必须非空——豁免
-    # 是给人看的决策记录，缺理由视为无效豁免（下方报错阻断），不悄悄放行。
-    allow_names=(); bad_lines=(); kept=()
+    # .bin-entries-allow 每行「入口名 # 理由」；理由不可省略（豁免是给人看的决策记录）
+    allow_names=()
+    bad_lines=()
+    kept=()
     allow_file=$pkg_dir/.bin-entries-allow
     if [ -f "$allow_file" ]; then
       while IFS= read -r line || [ -n "$line" ]; do
-        [[ $line =~ ^[[:space:]]*$ || $line =~ ^[[:space:]]*# ]] && continue  # 空行 / 整行注释
+        [[ $line =~ ^[[:space:]]*$ || $line =~ ^[[:space:]]*# ]] && continue
         if [[ $line != *'#'* ]]; then
-          bad_lines+=("$line")            # 连 # 都没有 = 无理由
+          bad_lines+=("$line")
           continue
         fi
         raw=${line%%'#'*} reason=${line#*'#'}
         # 纯 bash 去首尾空白（不借 xargs，避免对内容二次解释）
-        raw=${raw#"${raw%%[![:space:]]*}"}; raw=${raw%"${raw##*[![:space:]]}"}
-        reason=${reason#"${reason%%[![:space:]]*}"}; reason=${reason%"${reason##*[![:space:]]}"}
+        raw=${raw#"${raw%%[![:space:]]*}"}
+        raw=${raw%"${raw##*[![:space:]]}"}
+        reason=${reason#"${reason%%[![:space:]]*}"}
+        reason=${reason%"${reason##*[![:space:]]}"}
         if [ -n "$reason" ]; then allow_names+=("$raw"); else bad_lines+=("$raw"); fi
-      done < "$allow_file"
+      done <"$allow_file"
     fi
 
     while IFS= read -r entry; do
@@ -240,18 +235,22 @@ check_one_entry_per_package() {
         # ACP 协议入口：外部 ACP host 按命令名寻址 agent，无法子命令化，自动豁免
         *-acp)
           printf '… %s: %s 按 *-acp 协议入口自动豁免\n' "$pkg_name" "$entry"
-          continue ;;
+          continue
+          ;;
       esac
       hit=''
       for raw in "${allow_names[@]}"; do
-        [ "$entry" = "$raw" ] && { hit=$raw; break; }
+        [ "$entry" = "$raw" ] && {
+          hit=$raw
+          break
+        }
       done
       if [ -n "$hit" ]; then
         printf '… %s: %s 豁免生效（理由见包根 .bin-entries-allow）\n' "$pkg_name" "$entry"
       else
         kept+=("$entry")
       fi
-    done <<< "$entries"
+    done <<<"$entries"
 
     if [ ${#bad_lines[@]} -gt 0 ]; then
       bin_ok=0
@@ -279,16 +278,18 @@ check() {
   return "$fail"
 }
 
-# ---------------------------------------------------------------------------
 cmd_list() {
   yq -r '.[] | [.category, .name, .brief] | @tsv' "$CATALOG" | sort | column -t -s "$(printf '\t')"
 }
 
 case "${1:-}" in
-  list)    cmd_list ;;
-  check)   check ;;
-  run)     [ $# -ge 2 ] && run_entry "$2" || die "用法: toolbox run <name>" ;;
+  list) cmd_list ;;
+  check) check ;;
+  run)
+    # 不用 && || 链：run_entry 若非零会让 die 误报用法错（SC2015）
+    if [ $# -ge 2 ]; then run_entry "$2"; else die "用法: toolbox run <name>"; fi
+    ;;
   _preview) preview "$2" ;;
-  help|--help|-h) usage ;;
-  *)       browse ;;
+  help | --help | -h) usage ;;
+  *) browse ;;
 esac

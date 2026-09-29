@@ -2,17 +2,10 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-;; build-image.scm —— guix system image 产物落地助手
-;;
-;; 用法:guix repl -- tools/build-image.scm DST [OS-DEFINITION-OR-ARGS]...
-;;
-;; 做三件事(等价 Testament/tools/build-image.scm,只是加 SPDX 头):
-;;   1. 调 (guix-system "image" args...) 程序化地生成 ISO
-;;   2. 从 stdout 抓 store path(/gnu/store/...-iso9660-image)
-;;   3. 复制到 DST(dist/<name>.iso)并 chmod u+w 让后续可签名/读
-;;
-;; 由 blueprint.scm 的 build-iso-command 通过 %guix 调用(自动套 time-machine
-;; 锁定频道)。本身不锁定频道、不需要 sudo。
+;; build-image.scm — guix system image 产物落地助手
+;; 调用方（blueprint.scm 的 build-iso-command）已套 guix time-machine 锁频道；
+;; 本脚本自身不锁频道、不需要 sudo。
+;; 文档：docs/scripts/build-image.md
 
 (use-modules (ice-9 match)
              (guix build utils)
@@ -28,4 +21,7 @@
      (when (file-exists? src)
        (mkdir-p (dirname dst))
        (copy-file src dst)
-       (make-file-writable dst)))])
+       (make-file-writable dst)))]
+  [_ (format (current-error-port)
+             "usage: guix repl -- build-image.scm DST [IMAGE-ARGS]...\n")
+     (exit 1)])

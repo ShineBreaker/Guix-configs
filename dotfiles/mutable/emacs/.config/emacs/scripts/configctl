@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# configctl — emacs.org 操纵工具 wrapper（flock 串行 + emacs batch + 状态透传）
+# 用法与审计规则见 docs/scripts/emacs-configctl.md
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -15,6 +17,6 @@ status="$(<"$status_file")"
 rm -f "$status_file"
 
 if [[ "$status" =~ ^[0-9]+$ ]]; then
-    exit "$status"
+  exit "$status"
 fi
 exit "$emacs_status"

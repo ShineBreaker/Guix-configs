@@ -1,32 +1,7 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""中文技术文档标点规范化（zh-tech-doc-style-guide 硬规则）。
+"""doc-punct.py — 中文技术文档标点规范化（blue format 的后端）。
 
-只做保守的机械变换，逐行处理、逐处报告：
-  1)  中文语境里的半角逗号/分号/冒号/问号/叹号/括号 → 全角
-  1b) 全角标点两旁不留半角空格
-  2)  英文省略号 → 中文省略号（……，两个字符）
-  3)  破折号「——」前后不空格
-  4)  汉字与 ASCII 字母/数字之间补半角空格
-  5)  汉字/中文标点之间的空格（含全角空格）→ 删除
-  6)  全角数字/字母 → 半角；数值与单位符号之间补半角空格
-
-代码块、行内代码、URL、org 链接、md 链接/图片、表格行一律原样保留。
-
-用法：
-    python3 tools/doc-punct.py --check          # 全仓库只报告不改
-    python3 tools/doc-punct.py FILE...          # 写入指定文件
-    python3 tools/doc-punct.py --check FILE...  # 只报告不改
-    python3 tools/doc-punct.py --self-test      # 跑自检后退出
-
-不带 FILE 时扫描 git 可见的仓库自有文档（排除 vendored、agent skills）。
-每处改动都打印上下文，便于人工复核。
-
-实现要点：每条规则是一个模块级函数 `rule_*(line) -> (新行, 说明列表)`，
-按 PIPELINE 的顺序套用。规则内部自己在【它收到的行上】重算 protected
-spans——会改变行长度的规则（删空格、补空格、省略号整体替换）若复用旧
-坐标，保护区间会错位，把 org 等宽/行内代码边界吃掉（`=(路径 挂载点)=`
-里的空格就是这么被误删过的）。
+用法、规则清单与设计理由：docs/scripts/doc-punct.md
 """
 
 from __future__ import annotations
@@ -42,14 +17,12 @@ HAN = r"一-鿿"  # 只含汉字：全角标点不该触发补空格规则
 PUNCT_CJK = r"　-〿＀-￯"  # 全角标点与符号
 FULLWIDTH_ALNUM = r"０-９Ａ-Ｚａ-ｚ"  # 全角字母数字段
 
-# 汉字之间 / 汉字与中文标点之间：不允许空格
 CJK_PUNCT = "，。：；？！、）】」』"
 OPEN_BRACKET = "（【「『"
 
-# 中文语境里要转全角的半角标点（不含句点：句点转全角风险高，留人工）
+# 中文语境里要转全角的半角标点；不含句点（风险高，留人工）
 HALF_TO_FULL = {",": "，", ";": "；", ":": "：", "?": "？", "!": "！"}
 
-# 单位符号：数值与单位之间补空格（zh-style-guide：7 kg、8 MB）
 UNIT_RE = re.compile(
     r"(?<=[0-9])((?:B|KB|MB|GB|TB|PB|ms|us|ns|min|Hz|kHz|MHz|GHz|rpm|"
     r"px|pt|dpi|W|kW|V|mV|kV|A|mA|ohm|km|cm|mm|kg|mg|fps|bps|Kbps|Mbps|Gbps))"
@@ -97,15 +70,14 @@ def _free(spans: list[tuple[int, int]], n: int, i: int) -> bool:
 
 
 # ─── 规则（每条签名：line -> (新行, 说明列表)）───────────────────────────────
+#
+# 关键实现约束：每条规则在自己收到的行上重算 protected spans——会改变行长度
+# 的规则（删空格、补空格、省略号整体替换）若复用旧坐标，保护区间会错位，把
+# org 等宽/行内代码边界吃掉（曾真实误删）。细节见 docs/scripts/doc-punct.md。
 
 
 def rule_halfwidth_to_fullwidth(line: str) -> tuple[str, list[str]]:
-    """中文语境里的半角逗号/分号/冒号/问号/叹号，以及包住中文的半角括号 → 全角。
-
-    判定依据是「这一行讲的是中文」，不是「标点旁边有没有汉字」：中文句子常夹
-    整段英文代码片段（`` - **桌面**(变体):`xfce` ``），靠邻接汉字判断会漏掉这类。
-    全部是一字符换一字符的原位替换，不改变行长。
-    """
+    """中文语境的半角标点转全角；判据是行属中文语境而非邻接汉字。"""
     notes: list[str] = []
     spans = protected_spans(line)
     n = len(line)
@@ -122,8 +94,7 @@ def rule_halfwidth_to_fullwidth(line: str) -> tuple[str, list[str]]:
             and re.match(f"[A-Za-z{HAN}]", nxt)
         ):
             continue
-        # 括号：zh-style-guide 规定「内含任何中文用全角，内全英文用半角」。
-        # 按内容判，不按整行判——中文句子里的 (c,d)、(最常见坏法) 都是英文。
+        # 括号按内容判：内含中文才转全角，内全英文留半角
         if ch in "()":
             close = line.find(")", i) if ch == "(" else -1
             if ch == ")":
@@ -136,9 +107,7 @@ def rule_halfwidth_to_fullwidth(line: str) -> tuple[str, list[str]]:
             out[i] = "（" if ch == "(" else "）"
             notes.append(f"半角 {ch!r} → 全角｜{line.strip()[:56]}")
             continue
-        # 逗号/分号：中文句子常夹整段英文（`…([url](x)),无配置`），
-        # 标点两侧未必挨着汉字。判据是「这个逗号分隔的是中文」——
-        # 一侧是汉字就转，两侧都是英文（`(c,d)`、`a,b,c`）就留半角。
+        # 逗号/分号：一侧是汉字就转，两侧都是英文留半角
         if ch in ",;":
             if re.match(f"[{HAN}]", prev) or re.match(f"[{HAN}]", nxt):
                 out[i] = "，" if ch == "," else "；"
@@ -153,12 +122,7 @@ def rule_halfwidth_to_fullwidth(line: str) -> tuple[str, list[str]]:
 
 
 def rule_strip_after_cjk_punct(line: str) -> tuple[str, list[str]]:
-    """全角标点之后的半角空格删掉：`（ X ）` → `（X）`、`**标签**: X` → `**标签**：X`。
-
-    例外：空格之后紧跟 org 等宽/行内代码/粗体起始标记（`=x=` / `` `x` `` /
-    `*x*` / `_x_`）时保留——`： =C-c g s= （状态）` 是 org 文档通行的排版
-    惯例，删掉会让全角冒号紧贴标记，可读性更差。
-    """
+    """全角标点后的半角空格删除；org 等宽/代码/粗体等标记前的空格保留。"""
     buf: list[str] = []
     i = 0
     while i < len(line):
@@ -175,7 +139,7 @@ def rule_strip_after_cjk_punct(line: str) -> tuple[str, list[str]]:
 
 
 def rule_ellipsis(line: str) -> tuple[str, list[str]]:
-    """`...` → `……`（两个字符）。前后是字母数字视为版本号/省略范围，不动。"""
+    """`...` → `……`；前后是字母数字视为版本号/省略范围，不动。"""
     spans = protected_spans(line)
     n = len(line)
     buf: list[str] = []
@@ -196,7 +160,7 @@ def rule_ellipsis(line: str) -> tuple[str, list[str]]:
 
 
 def rule_fullwidth_alnum(line: str) -> tuple[str, list[str]]:
-    """全角数字/字母 → 半角。保护区间（行内代码、org 等宽）内不动。"""
+    """全角数字/字母 → 半角。"""
     spans = protected_spans(line)
     n = len(line)
     buf: list[str] = []
@@ -209,7 +173,7 @@ def rule_fullwidth_alnum(line: str) -> tuple[str, list[str]]:
 
 
 def rule_unit_space(line: str) -> tuple[str, list[str]]:
-    """数值与单位符号之间补空格：`8MB` → `8 MB`。保护区间内不动。"""
+    """数值与单位符号之间补半角空格。"""
     spans = protected_spans(line)
     n = len(line)
     out: list[str] = []
@@ -225,7 +189,7 @@ def rule_unit_space(line: str) -> tuple[str, list[str]]:
 
 
 def rule_dash_unspace(line: str) -> tuple[str, list[str]]:
-    """破折号「——」前后去空格。单个一字线「—」是连接号，空格是正确排版。"""
+    """「——」前后去空格；单个「—」是连接号，空格是正确排版，不动。"""
     buf: list[str] = []
     i = 0
     while i < len(line):
@@ -244,7 +208,7 @@ def rule_dash_unspace(line: str) -> tuple[str, list[str]]:
 
 
 def rule_han_ascii_spacing(line: str) -> tuple[str, list[str]]:
-    """汉字与 ASCII 字母/数字之间补半角空格；汉字/中文标点之间的空格（含全角）删除。"""
+    """汉字与 ASCII 字母/数字间补半角空格；汉字/中文标点间的空格删除。"""
     notes: list[str] = []
     spans = protected_spans(line)
     n = len(line)
@@ -255,10 +219,13 @@ def rule_han_ascii_spacing(line: str) -> tuple[str, list[str]]:
         c = line[i]
         prev = buf[-1] if buf else ""
         nxt = line[i + 1] if i + 1 < m else ""
-        # 全角空格或汉字/中文标点之间的半角空格 → 删。
-        # 保护区间（org 等宽、行内代码）内的空格是内容本身，不能删。
-        if c in "　 " and prev and nxt and _free(spans, n, i):
-            if (
+        # 全角空格或汉字/中文标点之间的半角空格 → 删
+        if (
+            c in "　 "
+            and prev
+            and nxt
+            and _free(spans, n, i)
+            and (
                 (re.match(f"[{HAN}]", prev) and re.match(f"[{HAN}]", nxt))
                 or (re.match(f"[{HAN}]", prev) and re.match(f"[{CJK_PUNCT}]", nxt))
                 or (re.match(f"[{CJK_PUNCT}]", prev) and re.match(f"[{HAN}]", nxt))
@@ -266,38 +233,34 @@ def rule_han_ascii_spacing(line: str) -> tuple[str, list[str]]:
                     re.match(f"[{HAN}{CJK_PUNCT}]", prev)
                     and re.match(f"[{OPEN_BRACKET}]", nxt)
                 )
-            ):
-                notes.append("汉字间空格 → 删除")
-                i += 1
-                continue
-        # 中英之间补空格
+            )
+        ):
+            notes.append("汉字间空格 → 删除")
+            i += 1
+            continue
+        # 中英之间补空格；配置项名（[connection] 后接汉字）、枚举值
+        # （0=NM默认 / 2=disable省电）不加
         if (
             re.match(f"[{HAN}]", c)
             and re.match(r"[A-Za-z0-9]", nxt)
             and _free(spans, n, i)
             and _free(spans, n, i + 1)
+            and not re.match(r"[\s)\]）】」』|，,。；：、？！…]", line[i + 2 :])
+            and not re.search(r"\[[\w.\-]+\]$", "".join(buf))
+            and not re.search(r"=\s*[A-Za-z0-9._-]+$", "".join(buf))
         ):
-            tail = line[i + 2 :]
-            if not re.match(r"[\s)\]）】」』|，,。；：、？！…]", tail):
-                # 配置项名（[connection] 后接汉字）、枚举值
-                # （0=NM默认 / 2=disable省电）不加
-                if not re.search(r"\[[\w.\-]+\]$", "".join(buf)) and not re.search(
-                    r"=\s*[A-Za-z0-9._-]+$", "".join(buf)
-                ):
-                    buf.append(c)
-                    buf.append(" ")
-                    notes.append(f"中英补空格｜{c}{nxt!r}")
-                    i += 1
-                    continue
+            buf.append(c)
+            buf.append(" ")
+            notes.append(f"中英补空格｜{c}{nxt!r}")
+            i += 1
+            continue
         buf.append(c)
         i += 1
     return "".join(buf), notes
 
 
 # 变换流水线，按序套用：(规则函数, 固定说明, 表格行是否适用)。
-# - 固定说明非 None：行内容变化时记一条该说明；
-# - 固定说明为 None：说明由规则自己按命中位置逐条产出。
-# 表格行的空格由对齐与标记语法决定，只有「原地替换」与「破折号去空格」适用。
+# 表格行的空格由对齐与标记语法决定，只有「原地替换」类规则适用。
 PIPELINE: list[tuple[Callable[[str], tuple[str, list[str]]], str | None, bool]] = [
     (rule_halfwidth_to_fullwidth, None, True),
     (rule_strip_after_cjk_punct, "全角标点后去空格", False),
@@ -339,7 +302,7 @@ def scan(text: str, org: bool) -> tuple[str, list[str]]:
                 fence = None
             continue
         low = s.lower()
-        if s.startswith("```") or s.startswith("~~~"):
+        if s.startswith(("```", "~~~")):
             fence = s[:3]
         elif org and low.startswith("#+begin_"):
             fence = "#+end_"
@@ -356,7 +319,7 @@ def own_files(root: str) -> list[str]:
     """git 可见的仓库自有文档。
 
     用 git ls-files 而不是 glob：glob 的 `**` 不穿透 `.config` / `.zcode`
-    等隐藏目录，会漏掉 agents 上下文、emacs.org、zcode 插件文档等一大批。
+    等隐藏目录，会漏掉一大批文档。
     """
     try:
         raw = subprocess.run(
@@ -510,7 +473,8 @@ def main() -> int:
         if not os.path.exists(path):
             print(f"跳过（不存在）：{path}", file=sys.stderr)
             continue
-        raw = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as fp:
+            raw = fp.read()
         new, notes = scan(raw, path.endswith(".org"))
         if new == raw:
             continue
@@ -519,7 +483,8 @@ def main() -> int:
         for x in dict.fromkeys(notes):
             print(f"  {x}")
         if not args.check:
-            open(path, "w", encoding="utf-8").write(new)
+            with open(path, "w", encoding="utf-8") as fp:
+                fp.write(new)
     print(
         f"\n合计 {total} 处{'（未写入，--check 模式）' if args.check else '，已写入'}"
     )
