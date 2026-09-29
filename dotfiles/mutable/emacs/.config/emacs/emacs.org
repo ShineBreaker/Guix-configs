@@ -7,18 +7,25 @@
 
 * 如何读这份配置
 :PROPERTIES:
-:CUSTOM_ID: reading-guide
+:CUSTOM_ID: overview
 :END:
 
-这份配置用「文学编程」方式维护：你正在读的 =emacs.org= 既是文档也是唯一源码——按文档顺序收录的代码块经 =scripts/configctl tangle= 拼合成 =main.el= ，Emacs 启动时加载它。所以阅读本文档就是在阅读配置本身；每个代码块上方都有一段解释它的文字，顺着章节往下读即可。
+这份配置用「文学编程」方式维护：你正在读的 =emacs.org= 既是文档也是唯一源码——按文档顺序收录的代码块经 =scripts/configctl tangle= 拼合成 =main.el= ，Emacs 启动时加载它。所以阅读本文档就是在阅读配置本身；每个代码块上方都有一段解释它的文字，顺着章节往下读即可。注意 =main.el= 是生成产物，手改会被下次 tangle 覆盖；改配置先 =configctl map= / =show <ID>= 定位小节（也可按 =C-,= 直达本文件），在 =emacs.org= 里就地修改。
 
-本章是整份文档的「读法说明书」：先备好三个工具，认识命名规律与键位机制，再挑一条阅读路线。之后每一域的开头都有一节「域导读」，把本章的方法落到该域的具体代码上。
+** 8 大核心配置域一览
 
-** 三个必备工具
+全部配置划分为 8 个域，按文档从上到下的顺序依次执行——前面的域定义变量与函数，后面的域才能调用，顺序即依赖。
 
-- *configctl（在仓库里找东西）* ： =./scripts/configctl map= 列出全部章节的 CUSTOM_ID、行号与代码量； =./scripts/configctl show <ID>= 提取某节全文（支持唯一模糊匹配，如 =show modeline= ）； =./scripts/configctl locate <ID>= 给出该节行号区间。改配置前先 =map= 再 =show= 定位，不要整文件翻找。
-- *C-h 自助查询（在 Emacs 里问东西）* ： =C-h k= 再按一个键，看这个键绑定什么命令； =C-h f= 查函数（如 =C-h f custom/bind= 看它的参数格式）； =C-h v= 查变量（如 =C-h v custom:binding-spec= 列出全部已声明键位）； =M-x customize-group= 浏览某个包的全部可定制项。
-- *C-,（直达源码）* ：任何时刻按 =C-,= 直接打开 =emacs.org= （命令 =custom/open-config-source= ）。注意 =C-h f= 点进去的位置是 =main.el= ——那是生成产物，手改会被下次 tangle 覆盖；要改动先用 =configctl locate= 按 ID 找回 =emacs.org= 里的对应章节。
+| 顺序 | 配置域         | CUSTOM_ID        | 主要职责                                                         | 加载前提              |
+|------+----------------+------------------+------------------------------------------------------------------+-----------------------|
+|    1 | 启动与基础设施 | [[#startup]]         | 启动加速、目录与外部命令声明、快捷键注册工具 custom/bind         | 无                    |
+|    2 | 界面与外观     | [[#appearance]]      | Modeline 状态栏、Tab-line 标签栏、主题字体、窗口分屏、界面中文化 | startup               |
+|    3 | 编辑与文本     | [[#editing]]         | 缩进与括号排版、智能编辑 DWIM、格式化、撤销树、内置终端集成      | appearance 的窗口路由 |
+|    4 | 编程与开发     | [[#programming]]     | Eglot (LSP)、Tree-sitter 语法树、Apheleia 格式化、多语言环境     | bootstrap, appearance |
+|    5 | 项目与导航     | [[#projects]]        | project.el 项目管理、左侧 Dired 文件树面板、缓冲区切换           | terminal, git-display |
+|    6 | Org 与知识库   | [[#org-knowledge]]   | Org Mode 写作环境、Capture 采集模板、Roam 双链笔记、知识库       | bootstrap             |
+|    7 | 键位与补全     | [[#keys-completion]] | Which-key 提示、14 个顶层前缀快捷键、内置补全栈                  | 前述全部域的命令      |
+|    8 | 系统工具       | [[#system-tools]]    | 实用小工具、Daemon 后台预热、Dashboard 欢迎屏、版本兼容兜底      | 前述全部域            |
 
 ** 命名体系：custom/ 家族
 
@@ -39,51 +46,14 @@
 
 只注册分组提示、不绑定命令的变体是 ~(custom/declare-binding-group "C-c g" "Git")~ ：按下 =C-c g= 停顿时，Which-key 会在这组键位上方显示「Git」标题。14 个顶层前缀（ =C-c c= 代码、 =C-c g= Git、 =C-c o= 笔记……）集中在[[#kb-prefixes-basics][前缀声明与通用基础键]]统一声明；功能专属键位则跟随其功能所在域就近绑定（键位内聚原则）。
 
-** 读代码前认得的五个机制
+** 读代码前认得的几个机制
 
+- *C-h 自助查询* ：在 Emacs 里 =C-h k= 再按一个键看绑定什么命令， =C-h f= 查函数（如 =C-h f custom/bind= 看参数格式）， =C-h v= 查变量（如 =C-h v custom:binding-spec= 列出全部已声明键位）， =M-x customize-group RET custom-config RET= 浏览本配置全部可定制项。注意 =C-h f= 点进去的源码位置是 =main.el= ——那是生成产物，要改动须回到 =emacs.org= 。
 - *use-package 骨架* ：第三方包统一用 =(use-package 包名 ...)= 声明。 =:defer t= / =:commands= / =:hook= 决定懒加载时机， =:custom= 设置变量， =:config= 在包加载后执行一次。包本体由 Guix profile 提供，不需要 =:ensure= 。
 - *反引号与逗号* ： ~`(:key ,val)~ 中，反引号表示「整体按字面引用，但逗号标记的位置要求值」。凡是「结构固定、个别槽位要填入当前值」的场合（Capture 模板、备份路径表等）都用它。
 - *plist（属性列表）* ： =:key= 与值成对出现的序列， ~(plist-get list :key)~ 取值。 =custom:binding-spec= 与[[#programming-tools][语言能力表]]都是 plist 数据表。
 - *派生三步* ：从主数据表生成 alist 时，本配置统一写成 =(let (acc) (dolist (条目 主表) ...) (nreverse acc))= ——循环里收集进临时表，最后倒转恢复原顺序。见到这个形状，就知道它在做「单一数据源 → 派生映射」，改数据只须动主表。
 - *noweb 引用* ：顶格的 ~<<块名>>~ 在 tangle 时被替换成同名块的内容。本配置只有两类：Capture 模板体（ =#+name= 文本块紧跟使用处）与版本兼容 Shim（集中定义在文末[[#compatibility][实验性与待确认]]，靠前章节展开引用）。
-
-** 推荐阅读路线
-
-- *路线一（先手感后原理）* ：[[#global-keys][全局直达键]]清单 → [[#editing][编辑与文本]]的 DWIM 函数 → [[#programming][编程与开发]]的语言能力表。半天即可理解日常按键背后的代码。
-- *路线二（自顶向下通读）* ：按文档顺序从[[#startup][启动与基础设施]]读到[[#system-tools][系统工具与实验性]]。前面的域定义变量与函数，后面的域才能调用——顺序即依赖。
-- *路线三（按需定位）* ：想改什么，先查[[#overview][配置域总览]]的修改入口速查，用 =configctl show= 提取该节，读完域导读再动手。
-
-** 动手前的自查
-
-改完任意代码块后运行 =./scripts/configctl check= 做静态检查（域顺序、noweb 依赖、括号平衡）；新增第三方包须同步根仓库 =source/config.org= 的 manifest。完整的验证流程（tangle、隔离加载、Tmux 实测）见工作区 =AGENTS.md= 。
-
-* 配置域总览
-:PROPERTIES:
-:CUSTOM_ID: overview
-:END:
-
-本文档 =emacs.org= 是整个 Emacs 配置的唯一修改源。所有配置代码通过 =scripts/configctl tangle= 拼合生成最终的 =main.el= ，供 Emacs 启动时加载。
-
-#+begin_note
-*给接手维护者的快速指引*
-
-- *只修改本文件* ：不要直接改动 =main.el= 。手动写进 =main.el= 的内容会在下次执行 tangle 时被直接覆盖。
-- *严格按顺序加载* ：全部配置划分为 8 个核心域，按文档从上到下的顺序依次执行。前面的模块定义基础变量与辅助函数，后面的模块才能正常调用。
-- *日常验证流程* ：修改文档后，先在终端执行 =scripts/configctl check= 检查语法与依赖结构，再运行 =scripts/configctl tangle= 生成配置。
-#+end_note
-
-** 8 大核心配置域一览
-
-| 顺序 | 配置域         | CUSTOM_ID        | 主要职责                                                         | 加载前提              |
-|------+----------------+------------------+------------------------------------------------------------------+-----------------------|
-|    1 | 启动与基础设施 | [[#startup]]         | 启动加速、目录与外部命令声明、快捷键注册工具 custom/bind         | 无                    |
-|    2 | 界面与外观     | [[#appearance]]      | Modeline 状态栏、Tab-line 标签栏、主题字体、窗口分屏、界面中文化 | startup               |
-|    3 | 编辑与文本     | [[#editing]]         | 缩进与括号排版、智能编辑 DWIM、格式化、撤销树、内置终端集成      | appearance 的窗口路由 |
-|    4 | 编程与开发     | [[#programming]]     | Eglot (LSP)、Tree-sitter 语法树、Apheleia 格式化、多语言环境     | bootstrap, appearance |
-|    5 | 项目与导航     | [[#projects]]        | project.el 项目管理、左侧 Dired 文件树面板、缓冲区切换           | terminal, git-display |
-|    6 | Org 与知识库   | [[#org-knowledge]]   | Org Mode 写作环境、Capture 采集模板、Roam 双链笔记、知识库       | bootstrap             |
-|    7 | 键位与补全     | [[#keys-completion]] | Which-key 提示、14 个顶层前缀快捷键、内置补全栈                  | 前述全部域的命令      |
-|    8 | 系统工具       | [[#system-tools]]    | 实用小工具、Daemon 后台预热、Dashboard 欢迎屏、版本兼容兜底      | 前述全部域            |
 
 ** 常用修改入口速查
 
@@ -91,6 +61,12 @@
 - 增加或修改快捷键：属于具体功能的按键直接在其所在模块用 =custom/bind= 注册；通用全局键前往 [[#keys-completion][键位与补全]] 。
 - 添加或调整编程语言：前往 [[#programming-tools][语言能力表]] ，在 =custom:language-capabilities= 表格中修改或添加。
 - 调整 Org 笔记路径：前往 [[#bootstrap-paths][路径常量]] ，修改 =custom:org-directory= 。
+
+** 阅读路线与验证
+
+想先建立手感：[[#global-keys][全局直达键]]清单 → [[#editing][编辑与文本]]的 DWIM 函数 → [[#programming][编程与开发]]的语言能力表；想通读：按文档顺序从[[#startup][启动与基础设施]]读到[[#system-tools][系统工具与实验性]]。每个域开头有一段导言，说明该域先读什么与关键机制。
+
+改完代码块先跑 =./scripts/configctl check= 与 =tangle= ；完整验证流程（隔离加载、字节编译、Tmux 实测）见工作区 =AGENTS.md= 。
 
 * 启动与基础设施
 :PROPERTIES:
@@ -103,11 +79,6 @@
 - 定义笔记目录与外部命令，把 Guix 工具链路径加入环境变量。
 - 提供统一的快捷键注册函数 =custom/bind= ，自动同步 Which-key 提示与帮助文档。
 - 规范文件存放位置，实现失焦自动保存与历史持久化。
-
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: startup-guide
-:END:
 
 这一域是全配置的地基，值得按顺序通读一遍；其中[[#key-helper][键位声明]]是后面所有域反复调用的公共机制，务必先读懂。
 
@@ -500,11 +471,6 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
 - 主题与字体：基于 Modus 主题的自动深浅色切换、窗口半透明以及终端透明背景适配。
 
 所有依赖显示设备的初始化设置，统一由 =custom/apply-frame-appearance= 函数在新窗口创建时自动应用。
-
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: appearance-guide
-:END:
 
 这一域占了全配置约一半的代码量，重头是两个「自绘」组件：[[#modeline][Modeline]]（屏幕底部状态栏）与[[#tab-line][Tab-line]]（窗口标签栏）。它们都不用 Emacs 内置的对应设施，而是自己拼字符串渲染，读代码时抓住「数据 → 格式化 → 渲染 → 刷新」四段管线即可：
 
@@ -911,22 +877,19 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
 :CUSTOM_ID: modeline-helpers
 :END:
 
-定义状态段组装的通用辅助函数与数据源缓存机制：
+定义状态段组装的通用辅助函数与数据源缓存机制。
 
-- *图标去属性保护* ：所有从 Nerd Font 提取的图标均通过 =substring-no-properties= 剥离字体属性，避免外部图标字体的 family 进入 echo area 导致整行被渲染成豆腐块方块（tofu），着色交由各段语义 Face 独立控制。
-- *路径缩写规则* ： =custom/modeline--path-initials= 保证父目录缩写而当前工程名与当前文件名完整。
-- *零 I/O 状态缓存* ：Flymake、Eglot、VC 状态与项目名称分别在对应事件的 hook 中直接更新为 buffer-local 变量，状态行刷新时直接读取内存，渲染路径零外部阻塞。
-- *诊断严重度查询* ：计数按类型的 severity 分级。Flymake 公开 API 没有「按类型取严重度」的函数，这里用私有函数 =flymake--severity= ——Flymake 自己的 mode-line 计数也走它，是本功能的唯一权威口径。旧写法读取的 =flymake-diagnostic-types= 变量在当前 Emacs 32 中并不存在（类型属性以符号属性存储），引用它会抛 =void-variable= ，计数因此从未生效过。
+**** 图标提取与文本拼装
+
+所有从 Nerd Font 提取的图标均通过 =substring-no-properties= 剥离字体属性：图标 face 的 family 一旦进入 echo area 文本，GUI 下会把整行渲染成图标字体的豆腐块方块（tofu），故去属性后由默认字体渲染（其本身带图标字形），着色交给各段的语义 Face。图标有缓存（ hash 表满 =custom:modeline--icon-cache-limit= 时整体清空）， =custom/modeline--with-icon= 、 =custom/modeline--segment= 、 =custom/modeline--join= 是段的三个基础拼装件。
 
 #+begin_src emacs-lisp
 (declare-function flymake--severity "flymake")
+
 (defun custom/modeline--icon (name &optional file)
   "返回去属性的 Nerd Font 图标 NAME;FILE 非 nil 时按文件类型取图标。
 NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
-其余交给 nerd-icons-mdicon。出错时返回空串。
-图标必须去属性:图标 face 的 family 进入 echo area 文本后,GUI 下会把
-整行渲染成图标字体的 tofu 方块;去属性后由默认字体渲染(其本身带图标
-字形),着色交给各段的语义 face。"
+其余交给 nerd-icons-mdicon。出错时返回空串。"
   (if custom:nerd-icons-available
       (let* ((key (if (and file (stringp file))
                       (list name (file-name-nondirectory file))
@@ -972,7 +935,13 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
                   (and (stringp segment) (not (string-empty-p segment))))
                 segments)
                " · "))
+#+end_src
 
+**** 路径缩写
+
+=custom/modeline--path-initials= 把路径的目录部分缩成首字母：父目录缩写而当前工程名与文件名完整；单独的 =.= 目录保留为 =.= ，避免隐藏目录缩写产生空字符串；TRAMP 远程前缀原样保留。
+
+#+begin_src emacs-lisp
 (defun custom/modeline--path-initials (path)
   "把 PATH 的目录部分缩成首字母;单独的 .= 目录保留为 .=,避免隐藏
 目录缩写产生空字符串。"
@@ -993,7 +962,15 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
                (substring part 0 1)))
            parts)))
     (concat remote (string-join short "/"))))
+#+end_src
 
+**** 状态缓存刷新
+
+Flymake、Eglot、VC 状态与项目名称分别在对应事件的 hook 中直接更新为 buffer-local 变量，状态行刷新时直接读取内存，渲染路径零外部阻塞。
+
+诊断计数按类型的 severity 分级：Flymake 公开 API 没有「按类型取严重度」的函数，这里用私有函数 =flymake--severity= ——Flymake 自己的 mode-line 计数也走它，是本功能的唯一权威口径。旧写法读取的 =flymake-diagnostic-types= 变量在当前 Emacs 32 中并不存在（类型属性以符号属性存储），引用它会抛 =void-variable= ，计数因此从未生效过。
+
+#+begin_src emacs-lisp
 (defun custom/modeline--project-info ()
   "返回当前 buffer 的 (ROOT NAME) project 缓存。"
   (when (eq custom/modeline--project-cache :unknown)
@@ -1116,7 +1093,11 @@ ERRORS,warning 级入 WARNINGS,note/debug 级不计。"
             (custom/modeline--icon "nf-md-source_branch") branch)
            'font-lock-type-face)
         ""))))
+#+end_src
 
+下面三段是状态类：VC 收敛为三态（编辑/干净/未跟踪），编码段与行列号段只在非 compact 档占位。 =custom/modeline--location-segment= 的 =%l/%c= 按 =custom/modeline--target-window= 的 point 求值——本函数在 =with-current-buffer= 里运行，不传窗口会拿到选中窗口在该 buffer 的 point，多窗口同 buffer 时行列号会错。
+
+#+begin_src emacs-lisp
 (defun custom/modeline--vc-segment (tier)
   "返回 TIER 对应的 VC 状态(含状态 icon),收敛为三态。
 有未保存改动或 VC 状态为编辑类 → edited(warning);up-to-date →
@@ -1160,10 +1141,7 @@ clean(success);unregistered → untracked(warning);其余(含 ignored、
     ""))
 
 (defun custom/modeline--location-segment (tier)
-  "返回 TIER 对应的行列坐标 (%l,%c)。compact 档不显示。
-%l/%c 按 `custom/modeline--target-window' 的 point 求值——本函数在
-`with-current-buffer' 里运行,不传窗口会拿到选中窗口在该 buffer 的
-point,多窗口同 buffer 时行列号会错。"
+  "返回 TIER 对应的行列坐标 (%l,%c)。compact 档不显示。"
   (if (eq tier 'compact)
       ""
     (custom/modeline--segment
@@ -1237,10 +1215,13 @@ point,多窗口同 buffer 时行列号会错。"
     (custom/modeline--icon "nf-md-code_tags")
     (symbol-name major-mode))
    'font-lock-keyword-face))
+#+end_src
 
+下面两段是系统信息：电池电量按百分比分档着色（依赖 =display-battery-mode= 填充 =battery-mode-line-string= ），时间档内 wide 显示到秒。
+
+#+begin_src emacs-lisp
 (defun custom/modeline--battery-segment (tier)
-  "返回 wide 档电池状态(按电量百分比着色)。
-需要 `display-battery-mode' 启用才会填充 `battery-mode-line-string'。"
+  "返回 wide 档电池状态(按电量百分比着色)。"
   (if (eq tier 'wide)
       (let* ((raw (and (stringp battery-mode-line-string)
                        (string-trim battery-mode-line-string)))
@@ -1285,6 +1266,8 @@ point,多窗口同 buffer 时行列号会错。"
 - *动态右对齐与左段截断* ：左右段之间使用带 =(space :align-to)= 的特殊空格填充。在多客户端共享后台守护进程时，能自动适应各个 Frame 自身的实际宽度并贴齐右缘；当左右段宽度超出屏幕时，优先用省略号截断左段，保证右段状态始终完整。
 - *静默裁剪与消除 Fringe* ：将 =*Minibuf-0*= 的 display table 截断符号重设为空格，在超窄窗口下静默裁剪而不显示杂乱的截断箭头；在图形界面下将 Minibuffer 窗口的边缘（fringe）清零。
 
+承载 buffer、display table 与渲染期共享的状态变量：
+
 #+begin_src emacs-lisp
 (defconst custom/modeline--minibuffer " *Minibuf-0*"
   "状态行的承载 buffer;minibuffer 空闲时其内容即 echo area 的显示。")
@@ -1299,9 +1282,7 @@ point,多窗口同 buffer 时行列号会错。"
   "当前并入状态行左半的短消息;nil 表示左半显示常规信息。")
 
 (defvar custom/modeline--message-time nil
-  "短消息并入左半的时刻;`custom/modeline--tick' 据此在 4 秒后撤下。
-不能用空闲时长判定:daemon 长时间空闲时,`current-idle-time' 早已超过
-阈值,刚并入的消息会被立即撤掉,用户根本看不到。")
+  "短消息并入左半的时刻;`custom/modeline--tick' 据此在 4 秒后撤下。")
 
 (defvar custom/modeline--rendering nil
   "状态行渲染期标志;渲染途中求值的组件若发消息,退化为整行显示以避免递归。")
@@ -1310,14 +1291,15 @@ point,多窗口同 buffer 时行列号会错。"
   "本次渲染的目标窗口;nil 表示用选中窗口。
 refresh 按 frame 刷新时把该 frame 的选中窗口绑到这里,使段求值与
 %l/%c 的窗口上下文一致。")
+#+end_src
 
+=custom/modeline--message-time= 记录的是时刻而非空闲时长：daemon 长时间空闲时 =current-idle-time= 早已超过阈值，刚并入的消息会被立即撤掉，用户根本看不到。
+
+渲染入口与对齐计算。 =custom/modeline--usable-width= 对 GUI 与 TTY 统一减一列：内容一旦恰好写满窗口宽，行尾位置就会溢出——GUI 在右 fringe 画 → 位图（ =overflow-newline-into-fringe= ），TTY 在末列画截断符号；状态行右段永远贴右缘必中这个标记，留出一列即可根治。
+
+#+begin_src emacs-lisp
 (defun custom/modeline--usable-width (frame)
-  "FRAME 的 echo area 可用列数。
-GUI 与 TTY 统一减一:内容一旦恰好写满窗口宽,行尾位置(EOL/ZV)就会溢出——
-GUI 在右 fringe 画 → 位图(`overflow-newline-into-fringe'),TTY 在末列画
-截断符号(`$'/美化后的 →);状态行右段永远贴右缘,必中这个箭头,留出一列
-即可根治。TTY 末列本身也是续行标记保留位(160 列写满 160 字符时末位被
-标记顶掉)。"
+  "FRAME 的 echo area 可用列数(右缘留出一列防行尾溢出,见节首说明)。"
   (1- (window-total-width (minibuffer-window frame))))
 
 (defun custom/modeline--render (&optional window)
@@ -1386,17 +1368,13 @@ project 缓存都依赖该上下文);左段有待显示的短消息时由消息�
 - *变化守卫跳过空转写入* ：写入 =*Minibuf-0*= 前先与 buffer 实际内容比较（ =equal= 连文本属性一起比），相同则跳过 erase/insert——空闲期每秒 tick 里最常见的「内容一字未变」不再白做一次 buffer 修改与 redisplay 置位（GUI 大窗的时间段带秒时文本每秒不同，比较自动失配、照常写入）。防空白底栏的能力不受影响：守卫读的是 buffer 实际内容而非缓存的上次渲染，回显区机制若把内容清空，比较立刻失配、恢复写入照旧触发。真正落盘的写入仍配合 =with-silent-modifications= 抑制 undo。
 - *定时器兜底* ：采用 1 秒普通定时器（ =custom/modeline--tick= ）兜底异步状态变化，不使用 repeat 类型的 idle timer，避免守护进程在无输入时空闲周期无法重置的问题；自动在短消息显示 4 秒后撤下。
 - *底栏背景无缝融合* ：将 =minibuffer-line= 样式的 =:inherit= 设为 nil，彻底切断对 =mode-line-inactive= 底色的继承，使其完全融入 echo area 背景，消除字符边框与底色色差。
-- *异常安全防护* ：所有挂载到钩子上的函数均使用 =condition-case= 包裹，防止局部异常导致钩子被 Emacs 自动卸载。
+- *异常安全防护* ：所有挂载到钩子上的函数均使用 =condition-case= 包裹，防止局部异常导致钩子被 Emacs 自动卸载——刷新函数一旦被移出 hook，状态行会静默停摆，这是「底栏莫名消失」的真实路径。minibuffer 激活期间不刷新：底栏此时是输入区，退出后由 post-command 与每秒 tick 恢复显示。
 
 #+begin_src emacs-lisp
 (defun custom/modeline-refresh (&optional frame)
   "把状态行写入 `custom/modeline--minibuffer';内容有变化才重写并置位 redisplay。
 FRAME 缺省为选中 frame;挂在 `window-size-change-functions' 上时会传入
-尺寸变化的 frame,使 TTY resize、分屏后的右缘对齐立即重算。
-minibuffer 激活期间不刷新——底栏此时是输入区,退出后由 post-command
-与每秒 tick 恢复显示。
-整段包 condition-case:挂在 hook 上的函数一旦抛错会被 Emacs 自动移出
-hook,刷新从此静默停摆——这是状态行「莫名其妙消失」的一条真实路径。"
+尺寸变化的 frame,使 TTY resize、分屏后的右缘对齐立即重算。"
   (when (bound-and-true-p minibuffer-line-mode)
     (condition-case nil
         (unless (active-minibuffer-window)
@@ -1558,11 +1536,7 @@ Emacs 原生 tab-line 会把当前窗口模式下的所有缓冲区（包括 Scr
 
 定义标签栏的排版尺寸常量、Nerd Icons 图标检测以及标签可见性谓词。
 
-核心谓词 =custom/tab-visible-p= 决定哪些缓冲区纳入标签管理：关联本地文件的缓冲区与普通
-
-Dired 目录缓冲区都是合法标签；左侧文件面板的 Dired（带 =custom--dired-panel-p= 标记）
-
-属于导航面板而非内容标签，被排除在外。
+核心谓词 =custom/tab-visible-p= 决定哪些缓冲区纳入标签管理：关联本地文件的缓冲区与普通 Dired 目录缓冲区都是合法标签；左侧文件面板的 Dired（带 =custom--dired-panel-p= 标记）属于导航面板而非内容标签，被排除在外。
 
 #+begin_src emacs-lisp
 (require 'tab-line)
@@ -1739,7 +1713,11 @@ safe_call 静音);dead frame 的参数随之销毁,无需再清,故先判存活�
   "返回当前窗口标签栏要展示的 buffer 列表。"
   (or (custom--tabs-frame-buffers (selected-window))
       (list (current-buffer))))
+#+end_src
 
+=custom/tab-line-tab-name-format= 的设计取舍：face 选择交给内置 =tab-line-tab-face-functions= 而不手动构造 RGB plist，current/inactive 用内置 face 自动跟随主题；标签之间不加分隔符——选中与非选中各自的底色块已足够区分，buffer 间分隔线由 window divider 负责（见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]）。标签正文是 =" name "= （前后留空格、=%= 转义防 =format-mode-line= 吃掉），带 =mouse-face= （仅非选中标签）与 =help-echo= ；渲染 face 统一归一成 =(:box nil . ...)= 列表抹掉盒线后再上色。关闭按钮仅选中标签渲染（ =tab-line-close-button-show= 为 ='selected= ）；模板串是全局共享的，先复制再盖 face。
+
+#+begin_src emacs-lisp
 (defun custom/tab-line-tab-name (buffer &optional _buffers)
   "生成 BUFFER 的标签名(图标 + 名称 + 修改标记)。"
   (with-current-buffer buffer
@@ -1762,17 +1740,7 @@ safe_call 静音);dead frame 的参数随之销毁,无需再清,故先判存活�
           label)))))
 
 (defun custom/tab-line-tab-name-format (tab tabs)
-  "以接近 IDE 的样式格式化 TAB。
-face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
-current/inactive 用内置 face,自动跟随主题。
-标签之间不加分隔符:选中与非选中标签各自的底色块已经足够区分,再插竖线是
-chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window divider 负责,
-见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]。
-标签正文是 \" name \"(前后留空格、% 转义防 `format-mode-line' 吃掉),
-带 `mouse-face'(仅非选中标签)与 `help-echo';渲染用 face 统一归一成
-(:box nil . ...) 列表抹掉盒线,再经 `propertize' 上色。
-关闭按钮仅选中标签渲染(`tab-line-close-button-show' 为 'selected,
-见 tab-line-hooks 子节);模板串是全局共享的,先复制再盖 face。"
+  "以接近 IDE 的样式格式化 TAB(设计取舍见上方 org 说明)。"
   (let* ((selected-p (eq tab (window-buffer)))
          (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
@@ -1876,11 +1844,7 @@ chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window div
                     :inherit 'tab-line)
 #+end_src
 
-分隔线的颜色必须跟随主题，而本域早于 [[#color-scheme]] 的 =load-theme= 求值，
-
-故属性统一交给下面的函数在主题加载/切换时重算（ =enable-theme-functions= ）。
-
-取色走 Modus palette，不硬编码 RGB。
+分隔线的颜色必须跟随主题，而本域早于 [[#color-scheme]] 的 =load-theme= 求值，故属性统一交给下面的函数在主题加载/切换时重算（ =enable-theme-functions= ）。取色走 Modus palette，不硬编码 RGB。分隔线用的是贴在文本下缘的细下划线而非盒模型（盒线无法只画单边），落在标签与填充空白两类 face 上故整行连续；颜色在主题 =border= 与正文底色之间按通道插值，比纯 =border= 更淡。插值不用 =color-values= ——其取值依赖显示帧，而本函数在 daemon 启动期（尚无帧）就会被调用。palette 取不到色时保留既有属性：TTY 侧另有例外表 pin 下划线语义（见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]），不依赖本函数。
 
 #+begin_src emacs-lisp
 (defun custom--hex-channel (hex start)
@@ -1888,9 +1852,7 @@ chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window div
   (string-to-number (substring hex start (+ start 2)) 16))
 
 (defun custom--mix-color (front back weight)
-  "把颜色 FRONT 按 WEIGHT 混入 BACK(0=纯 BACK)后返回 #RRGGBB。
-只在 palette 的 #RRGGBB 字面量上按通道插值:不用 `color-values',后者的
-取值依赖显示帧,而本函数在 daemon 启动期(尚无帧)就会被调用。"
+  "把颜色 FRONT 按 WEIGHT 混入 BACK(0=纯 BACK)后返回 #RRGGBB。"
   (let (channels)
     (dolist (start '(1 3 5))
       (push (/ (+ (* (custom--hex-channel front start) weight)
@@ -1900,14 +1862,8 @@ chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window div
     (apply #'color-rgb-to-hex (append (nreverse channels) '(2)))))
 
 (defun custom/apply-tab-line-divider (&rest _)
-  "按当前主题重算标签栏下缘的横线。
-整条标签栏(标签、间隙与滚动按钮)共用一条贴文本下缘的细线,即标签栏与正文的
-分界。下划线落在标签与填充空白两类 face 上故整行连续,不需要盒模型(盒线无法
-只画单边);颜色在主题 `border' 与正文底色之间插值,比纯 `border' 更淡,避免
-横线重新变得抢眼。
-`enable-theme-functions' 上重算,明暗主题切换后颜色随之更新。palette 取不到
-色时保留既有属性:TTY 侧另有例外表 pin 下划线语义(见
-[[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]),不依赖本函数。"
+  "按当前主题重算标签栏下缘的横线(挂在 `enable-theme-functions' 上)。
+palette 取不到色时保留既有属性,不改 face。"
   (when-let* ((border (custom/terminal-theme-color 'border))
               (bg (custom/terminal-theme-color 'bg-main)))
     (dolist (face '(tab-line tab-line-tab-current tab-line-tab-inactive
@@ -1930,12 +1886,11 @@ chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window div
 - *快捷键切换* ： =custom/tabs-next= 与 =custom/tabs-previous= 负责在当前 Frame 的标签序列中循环跳转。
 - *稳定重排与按键连按* ：官方的 =tab-line-move-tab-forward= 命令仅对内置固定窗口生效，对多 Frame 驱动的标签体系为静默 no-op。这里直接操作 Frame 列表实现位置调整，并接入 =custom/tabs-repeat-map= （需启用 =repeat-mode= ），按下快捷键后连按 =n= / =p= / =m= 即可持续切换或移动。
 
+切换命令及其公共入口。 =custom--tabs-switch-to-buffer= 自身不做存活检查：tabs-next/prev 的实参来自 =kill-buffer-hook= 即时清理的 frame 列表，close-buffer 的实参经 =custom--tabs-visible-other-p= （内含 =custom/tab-visible-p= 的存活检查）过滤。
+
 #+begin_src emacs-lisp
 (defun custom--tabs-switch-to-buffer (buffer &optional window)
-  "在 WINDOW 中切换到 BUFFER,并刷新标签显示。
-调用方保证 BUFFER 存活:tabs-next/prev 的实参来自 kill-buffer-hook
-即时清理的 frame 列表,close-buffer 的实参经 `custom--tabs-visible-other-p'
-(内含 `custom/tab-visible-p' 的存活检查)过滤。"
+  "在 WINDOW 中切换到 BUFFER,并刷新标签显示。调用方保证 BUFFER 存活(见节首说明)。"
   (let ((target-window (custom--tabs-target-window window))
         (switch-to-buffer-obey-display-actions nil))
     (with-selected-window target-window
@@ -1959,10 +1914,13 @@ chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window div
   "切换到当前标签列表中的上一个标签。ARG 为步数。"
   (interactive "p")
   (custom/tabs-next (- (or arg 1))))
+#+end_src
 
+关闭路径：=custom/tabs-close-buffer= 的显式 BUFFER 实参只来自鼠标回调（已先行存活检查），窗口当前 buffer 恒存活，故内部不再重复守卫； =custom/tab-line-close-tab= 是鼠标关闭按钮入口，与键盘路径语义对称。
+
+#+begin_src emacs-lisp
 (defun custom--tabs-visible-other-p (candidate target-buffer)
-  "CANDIDATE 是否可作 TARGET-BUFFER 关闭后的接替标签:存活且可见且非自身。
-`custom/tab-visible-p' 已含存活检查。"
+  "CANDIDATE 是否可作 TARGET-BUFFER 关闭后的接替标签:存活且可见且非自身。"
   (and (custom/tab-visible-p candidate)
        (not (eq candidate target-buffer))))
 
@@ -1997,7 +1955,11 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
   (let ((buffer (if (bufferp tab) tab (current-buffer))))
     (when (buffer-live-p buffer)
       (custom/tabs-close-buffer (custom--tabs-target-window) buffer))))
+#+end_src
 
+重排与连按：=custom/tabs-move= 直接改写 frame 的 buffer 列表实现标签移动； =custom/tabs-repeat-map= 让 =n= / =p= / =m= 在一次快捷键后可连按。
+
+#+begin_src emacs-lisp
 (defun custom/tabs-move (&optional arg)
   "把当前标签在 frame 标签列表中移动 ARG 位(正向后移,负值前移)。"
   (interactive "p")
@@ -2149,19 +2111,15 @@ ROOT 是仓库根:在其下刷新 Magit 状态页,底部状态页若在显示即
         (magit-refresh)))))
 #+end_src
 
-目录感知的整目录暂存。Magit 状态页里按 =s= 弹出的补全只列单个文件（目录条目不在候选中），逐个挑深层目录的文件非常繁琐； =custom/git-stage-here= 反向操作——按光标上下文解析出一个完整路径，直接传给 =magit-stage-files= ：Dired（含左侧面板）光标在目录行上就暂存整个目录、在文件行上就暂存该文件，普通文件 buffer 则暂存当前文件所在目录。 =magit-stage-files= 收到路径列表后走 Magit 自己的异步 git 进程并自动刷新状态页，无须再过一遍 =custom/git--run= 。
+目录感知的整目录暂存。Magit 状态页里按 =s= 弹出的补全只列单个文件（目录条目不在候选中），逐个挑深层目录的文件非常繁琐； =custom/git-stage-here= 反向操作——按光标上下文解析出一个完整路径，直接传给 =magit-stage-files= ：Dired（含左侧面板）光标在目录行上就暂存整个目录、在文件行上就暂存该文件，普通文件 buffer 则暂存当前文件所在目录。Dired 的 =..= / =.= 行指向上级目录，展开后等于暂存整个仓库，超出「此目录」意图，故显式拒绝。 =magit-stage-files= 收到路径列表后走 Magit 自己的异步 git 进程并自动刷新状态页，无须再过一遍 =custom/git--run= 。
 
 包含用户交互确认与副作用的暂存、丢弃与贮藏命令，全部经 =custom/git--run= 异步执行，成功回调里完成界面刷新与回执提示。
 
 #+begin_src emacs-lisp
 (defun custom/git-stage-here ()
   "按光标上下文暂存目录或文件(等价 git add,目录递归生效)。
-Dired 光标在目录行上:暂存整个目录;在文件行上:暂存该文件。
-普通文件 buffer:暂存当前文件所在目录的全部改动。
-Dired 的 `..'/`.` 行指向上级目录,展开后等于暂存整个仓库,
-超出「此目录」意图,显式拒绝并提示。
-直接以完整路径调 `magit-stage-files':绕过其交互补全(补全候选只含
-单个文件,无法整目录),复用 Magit 的异步执行与状态页刷新。"
+Dired 目录行暂存整目录、文件行暂存该文件;文件 buffer 暂存所在目录;
+Dired 的 `..'/`.` 行显式拒绝(等价暂存整个仓库,超出意图)。"
   (interactive)
   (let ((target (cond ((derived-mode-p 'dired-mode)
                        (let ((name (dired-get-filename nil t)))
@@ -2271,18 +2229,15 @@ Dired 的 `..'/`.` 行指向上级目录,展开后等于暂存整个仓库,
 定义窗口弹出与路由的基础辅助函数：
 
 - =custom/register-side-window= ：把匹配正则表达式的窗口固定挂载到底部、左侧或右侧侧边栏。
-- =custom/display-buffer-in-main-window= ：通过 =custom--window-above-p= 比较窗口几何坐标（ =window-edges= 的 Y 轴边缘），定位当前窗口树中最上方的主编辑窗口并展示内容（用于编辑提交日志等）。
+- =custom/display-buffer-in-main-window= ：通过 =custom--window-above-p= 比较窗口几何坐标（ =window-edges= 的 Y 轴边缘），定位当前窗口树中最上方的主编辑窗口并展示内容——保证无论光标当前在哪个窗口（如底部 Magit 状态页），COMMIT_EDITMSG 都稳定落到上方编辑窗口，与「上编辑 + 下 Magit」布局一致。
 - =custom/display-or-focus= ：目标缓冲区若已在某个窗口中显示则直接聚焦，否则新建窗口，防止无休止地产生新的分屏。
 
 #+begin_src emacs-lisp
 (defun custom/register-side-window (regex side size)
   "把 REGEX 匹配的 buffer 路由到 SIDE 边的 side-window，占用 SIZE 比例。
-
-REGEX : buffer-name 匹配字符串正则
-SIDE  : bottom / right / left / top（符号）
-SIZE  : 0~1 浮点比例，左右侧边栏解释为宽度比，上下解释为高度比
-
-规则追加到 `display-buffer-alist' 末尾。顺序敏感：更具体的规则应先注册。"
+SIDE 为 bottom/right/left/top;SIZE 是 0~1 比例,左右解释为宽度比、
+上下解释为高度比。规则追加到 `display-buffer-alist' 末尾,顺序敏感:
+更具体的规则应先注册。"
   (add-to-list 'display-buffer-alist
                `(,regex
                  (display-buffer-in-side-window)
@@ -2302,14 +2257,10 @@ SIZE  : 0~1 浮点比例，左右侧边栏解释为宽度比，上下解释为�
 
 (defun custom/display-buffer-in-main-window (buffer &optional _alist)
   "把 BUFFER 显示在「主编辑窗口」并选中。
-主编辑窗口 = 当前 frame 内最靠上（y 坐标最小）的非 side-window 窗口。
-保证无论光标当前在哪个窗口（如底部 magit），COMMIT_EDITMSG
-都稳定落到上方编辑窗口，与「上编辑 + 下 magit」布局一致。
-
-若无候选（如 frame 只剩 side-window），退化为 `display-buffer-pop-up-window'。
-
-同时用作 `display-buffer-alist' 的 action 函数（参数 ALIST 被忽略）和
-`server-window' 的值（server.el 调用时只传 buffer 一个参数）。"
+主编辑窗口 = 当前 frame 内最靠上(y 坐标最小)的非 side-window 窗口;
+无候选时退化为 `display-buffer-pop-up-window'。同时用作
+`display-buffer-alist' 的 action 函数(ALIST 被忽略)与 `server-window'
+的值(server.el 只传 buffer 一个参数)。"
   (let* ((frame (selected-frame))
          (candidates
           (seq-remove
@@ -2496,19 +2447,9 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
 :CUSTOM_ID: tty-modified-arrows
 :END:
 
-终端模拟器按 xterm 惯例把修饰方向键编码为 =\e[1;<mod><dir>= 形式的 CSI 序列
+终端模拟器按 xterm 惯例把修饰方向键编码为 =\e[1;<mod><dir>= 形式的 CSI 序列（ =<mod>= = 1 + Shift(1) + Alt(2) + Ctrl(4) ，方向码 A/B/C/D = 上下右左）。Emacs 只在 TERM 被识别为 xterm 系时才预装这些解码项；tmux/screen 等 TERM 下序列会以 =M-[ 1 ; 3 D= 这样的原始字节流到达——M-方向键（切窗口）、C-M-方向键（多光标）等所有修饰方向键绑定全部落空。
 
-（ =<mod>= = 1 + Shift(1) + Alt(2) + Ctrl(4) ，方向码 A/B/C/D = 上下右左）。
-
-Emacs 只在 TERM 被识别为 xterm 系时才预装这些解码项；tmux/screen 等 TERM 下
-
-序列会以 =M-[ 1 ; 3 D= 这样的原始字节流到达——M-方向键（切窗口）、
-
-C-M-方向键（多光标）等所有修饰方向键绑定全部落空。
-
-=input-decode-map= 是按终端隔离的，daemon 下挂到 =tty-setup-hook= 上，
-
-保证每个新建 TTY client 都拿到解码表；已识别的 xterm 系终端重复定义无害。
+=input-decode-map= 是按终端隔离的，daemon 下挂到 =tty-setup-hook= 上，保证每个新建 TTY client 都拿到解码表；已识别的 xterm 系终端重复定义无害。
 
 #+begin_src emacs-lisp
 (defun custom/tty-decode-modified-arrows ()
@@ -2537,6 +2478,8 @@ C-M-方向键（多光标）等所有修饰方向键绑定全部落空。
 - 负宽边框异常防御：在透明背景下清除 =ghostel-fake-cursor= 与 =org-modern-label= 的 =:box= 边框，防止底层重绘时因背景色非法引发报错。
 - 状态行日志清洗：过滤 C 语言层在非彩色终端下由于样式未就绪打出的瞬态无效警告。
 
+样式表与调色查询。 =custom:terminal-block-faces= 给 Org 代码块恢复底色：Modus 主题与 Org 9.8 都不给 =org-block= 族设背景，GUI 靠 org-modern 的 fringe 边框区分代码块；TTY 无 fringe，故用 palette 的 =bg-inactive= 给整块一个中性面板， =org-quote= / =org-verse= 继承 =org-block= 自动随之着色。 =custom/terminal-theme-color= 读当前 Modus palette（ =modus-themes-get-color-value= 对未知键返回 =unspecified= 而非抛错，故只需判 nil/unspecified）；其 =fboundp= 守卫覆盖 standalone 启动窗口期—— =custom/apply-frame-appearance= 注册时即对首帧派发，而主题库要等到 [[#color-scheme]] 的 =load-theme= 才加载。
+
 #+begin_src emacs-lisp
 (defconst custom:terminal-face-emphasis
   '((highlight :underline t)
@@ -2563,32 +2506,21 @@ C-M-方向键（多光标）等所有修饰方向键绑定全部落空。
 
 (defconst custom:terminal-block-faces
   '(org-block org-block-begin-line org-block-end-line)
-  "TTY 上恢复主题底色的代码块 face。
-Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern 的 fringe
-边框区分代码块;TTY 无 fringe,故用 palette 的 `bg-inactive' 给整块一个中性面板,让
-=#+begin_src= 块在终端仍可辨识。`org-quote'/`org-verse' 继承 `org-block',自动随之着色。")
+  "TTY 上恢复主题底色的代码块 face。")
 
 (defun custom/terminal-theme-color (key)
-  "返回当前 Modus 主题 palette 中 KEY 对应的颜色,失败时返回 nil。
-`modus-themes-get-color-value' 对未知键返回 `unspecified' 而非抛错,故
-只需判 nil/unspecified。`fboundp' 守卫覆盖 standalone 启动窗口期:
-`custom/apply-frame-appearance' 注册时即对首帧派发,而主题库要等到
-[[#color-scheme]] 的 `load-theme' 才加载,此守卫符合守卫公约
-(运行时可能未加载的符号)。"
+  "返回当前 Modus 主题 palette 中 KEY 对应的颜色,失败时返回 nil。"
   (when (fboundp 'modus-themes-get-color-value)
     (let ((color (modus-themes-get-color-value key)))
       (unless (memq color '(nil unspecified))
         color))))
+#+end_src
 
+应用入口 =custom/apply-terminal-faces= ：清背景与反色后，为 =hl-line= 恢复主题柔和背景、为代码块恢复 =bg-inactive= 面板、按 =custom:terminal-face-emphasis= 补非颜色语义，前景色继续由主题提供（Foot 需 alpha-mode=all 才能让 hl-line 背景半透明）。仅在真实终端 frame 下生效，GUI 为 no-op；无色能力的终端（daemon 初始帧， =display-color-cells= 为 0）同样要处理，否则主题彩色 face 无法实现、redisplay 会报「Invalid face reference」。
+
+#+begin_src emacs-lisp
 (defun custom/apply-terminal-faces (&optional frame)
-  "让 TTY FRAME 的所有命名 face 使用终端透明背景。
-清除背景与反色后，为 `hl-line' 恢复主题的柔和背景，为代码块恢复 `bg-inactive'
-面板，并用
-`custom:terminal-face-emphasis' 补充其余非颜色交互语义；所有前景色继续由
-当前主题提供。Foot 需使用 alpha-mode=all 才能让 hl-line 背景半透明。
-仅在真实终端 frame（非 batch、非图形）下生效；GUI 为 no-op。无色能力的终端
-（daemon 的初始帧就是，display-color-cells 为 0）同样要处理：主题的彩色 face 在
-那里无法实现，redisplay 会报「Invalid face reference」。"
+  "让 TTY FRAME 的所有命名 face 使用终端透明背景(仅真实终端生效,GUI 为 no-op)。"
   (condition-case err
       (when (and (not noninteractive)
                  (not (display-graphic-p frame)))
@@ -2620,7 +2552,11 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
                                       :extend t)))))))
     (error
      (message "custom/apply-terminal-faces: %s" (error-message-string err)))))
+#+end_src
 
+两个刷新入口按 hook 语义分开： =enable-theme-functions= 走无条件全量重刷， =after-load-functions= 走 face 计数门禁——多数 =load= / =require= 不定义 face，计数不变就跳过。两者不能合并：把主题切换也关进门禁会导致换主题后不重刷。
+
+#+begin_src emacs-lisp
 (defvar custom--tty-face-count 0
   "上次 TTY 刷新时的 face 总数;只有加载了定义新 face 的文件后才需要重刷。")
 
@@ -2640,16 +2576,13 @@ Modus 主题与 Org 9.8 都不给 `org-block' 族设背景,GUI 靠 org-modern �
 
 (add-hook 'enable-theme-functions #'custom/refresh-terminal-faces)
 (add-hook 'after-load-functions #'custom/refresh-terminal-faces-after-load)
+#+end_src
 
+最后是状态行日志清洗。显示一段 =face= 属性指向未定义（或当前 frame 实现不了）的文本时， =xfaces.c= 的 =add_to_log= 会经 =message= 打 "Invalid face reference: %s"；状态行的 minibuffer-line 文本正是最容易碰上的一处（daemon 启动首帧、包刚加载或 face 未实现时），配置侧的非彩色终端归一化已把成因收窄。 =inhibit-message-regexps= 只静音回显、消息照样写进 =*Messages*= ，所以这里按「格式串 + 参数」双重匹配丢弃；只认 minibuffer-line 这一个 face 名，其它 Invalid face reference 照常记录。
+
+#+begin_src emacs-lisp
 (defun custom--drop-statusline-face-log (orig fmt &rest args)
-  "丢弃状态行 face 在显示期解析不出来时由 C 层打出的日志。
-显示一段 `face' 属性指向未定义（或当前 frame 实现不了）的文本时，`xfaces.c' 的
-`add_to_log' 会经 `message' 打 \"Invalid face reference: %s\"。状态行的
-minibuffer-line 文本正好是最容易碰上的一处：daemon 启动期首个 frame 上、包刚加载
-或 face 还没实现时都可能出现，配置侧的非彩色终端归一化已把成因收窄。
-`inhibit-message-regexps' 只静音回显（消息照样写进 *Messages*），所以只能按
-「格式串 + 参数」双重匹配在这里丢弃。只认这一个 face 名，其它
-Invalid face reference 照常记录——那些是真问题。"
+  "丢弃状态行 face 显示期解析不出来时由 C 层打出的日志(只认 minibuffer-line)。"
   (unless (and (equal fmt "Invalid face reference: %s")
                (eq (car args) 'minibuffer-line))
     (apply orig fmt args)))
@@ -2666,7 +2599,7 @@ Invalid face reference 照常记录——那些是真问题。"
 
 - *面板分隔线* ：GUI 下上下、左右相邻的编辑窗口之间由 1 px 细线分隔。
 - *避免全局参数污染* ：宽度直接按显示类型写入 per-frame 参数，避免使用全局 =window-divider-mode= 导致 TTY 连接时误清空 GUI 分隔线。
-- *颜色插值平滑* ：颜色取主题 =border= 与背景色按 0.65 比例插值重算，与标签栏下缘的横线落在同一档浅色上。
+- *颜色插值平滑* ：颜色取主题 =border= 与背景色按 0.65 比例插值重算，与标签栏下缘的横线（0.5）落在同一档浅色上。纯色 =border= 与正文明度差太大、横贯窗口会很扎眼；之所以预先加深到 0.65，是因为 1 px 宽度在分数缩放下会被抗锯齿摊到约 1.75 设备像素、平均覆盖度约八成，颜色相应被冲淡两成。重算挂在 =enable-theme-functions= 上，明暗主题切换后随之更新。
 - *终端调窗* ：终端下分隔线宽为 0，调整窗口大小走右键菜单的「窗口」子菜单（见 [[#context-menu-actions]]）。
 
 #+begin_src emacs-lisp
@@ -2702,13 +2635,8 @@ Invalid face reference 照常记录——那些是真问题。"
         window-divider-default-bottom-width 1)
 
 (defun custom/apply-window-divider (&rest _)
-  "按当前主题重算 buffer 之间分隔线的颜色。
-颜色取主题 `border' 向正文底色插值,而不用纯 `border':纯色与正文的明度差太大,
-一条横贯窗口的深色线会很扎眼。
-插值权重 0.65(标签栏下缘那条横线是 0.5):1px 的宽度在分数缩放下会被抗锯齿摊
-到约 1.75 设备像素、平均覆盖度约八成,颜色相应被冲淡两成;预先加深一点,渲染
-后两者才落在同一档浅色上,不会一个重一个轻。
-`enable-theme-functions' 上重算,明暗主题切换后随之更新。"
+  "按当前主题重算 buffer 之间分隔线的颜色(挂在 `enable-theme-functions' 上)。
+palette 取不到色时保留既有属性,不改 face。"
   (when-let* ((border (custom/terminal-theme-color 'border))
               (bg (custom/terminal-theme-color 'bg-main)))
     (set-face-attribute 'window-divider nil
@@ -2841,8 +2769,9 @@ Modus 主题调色板覆盖（Palette Overrides）：
 - *代码块底色降噪* ： =bg-prose-block-contents= 与 =bg-prose-block-delimiter= 同样映射到 =bg-main= 。GUI 侧的代码块分组已由缩进竖线与边框清晰表达，去除多余底色可消除半透明下的噪点；TTY 侧不受影响，由终端透明策略独立处理。
 - *D-Bus 动态同步* ：读取 Darkman 暴露在 D-Bus 上的 =Mode= 属性，并在系统模式变动时按需切换。
 
-#+begin_src emacs-lisp
+状态变量、调色板覆盖表与 Darkman 的 D-Bus 路径：
 
+#+begin_src emacs-lisp
 (require 'dbus)
 
 (defcustom custom:color-scheme-light-theme 'modus-operandi-tinted
@@ -2875,7 +2804,11 @@ Modus 主题调色板覆盖（Palette Overrides）：
 
 (defconst custom:color-scheme-dbus-path "/nl/whynothugo/darkman"
   "Darkman D-Bus 对象路径。")
+#+end_src
 
+模式解析与主题应用。 =custom/color-scheme-apply-theme= 加载前先同步 =frame-background-mode= 并刷新现有 frame——face 的 light/dark 变体选择由它驱动，必须赶在 =load-theme= 求值 face spec 之前；刷新只在确实要加载主题时做，模式变化会重算 face，随后的 =load-theme= 经 =enable-theme-functions= 重新套用终端透明等 per-frame 样式。
+
+#+begin_src emacs-lisp
 (defun custom/color-scheme--parse-mode (string)
   "把 Darkman 的 \"light\"/\"dark\" 字符串映射为 'light/'dark 符号,其余返回 nil。"
   (pcase string
@@ -2914,13 +2847,8 @@ Modus 主题调色板覆盖（Palette Overrides）：
     (message "[color-scheme] 已同步主题: %s" theme)))
 
 (defun custom/color-scheme-apply-theme (mode)
-  "根据 MODE 加载对应的主题。
-MODE 为 'light 或 'dark。
-独立实例在 GUI 或至少 256 色的 TTY frame 中加载；daemon 无 frame 时也预载主题。
-加载前先同步 `frame-background-mode' 并刷新现有 frame:face 的 light/dark
-变体选择由它驱动,必须赶在 load-theme 求值 face spec 之前。刷新只在确实要
-加载主题时做:模式变化会重算 face,随后的 load-theme 经
-`enable-theme-functions' 重新套用终端透明等 per-frame 样式。"
+  "根据 MODE('light 或 'dark)加载对应的主题。
+独立实例在 GUI 或至少 256 色的 TTY frame 中加载;daemon 无 frame 时也预载。"
   (setq custom/color-scheme--current-mode mode
         frame-background-mode mode)
   (when (or (daemonp) (custom/display-supports-themes-p))
@@ -3029,11 +2957,6 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 - DWIM 智能操作：按意图自适应的复制、剪切与重命名，以及多光标和语法选区扩展。
 - 历史与撤销：可视化撤销树（Vundo）与误关文件快速重开（类似浏览器的 Ctrl+Shift+T）。
 - 终端集成：基于 Ghostel（libghostty-vt）的高性能内置终端，自动定位项目根目录并与 Git 联动。
-
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: editing-guide
-:END:
 
 这一域代码最好读：多数是「一组 =setq= 调习惯 + 几个具名 DWIM 函数」，适合作为通读全配置的起点。
 
@@ -3321,7 +3244,11 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   (if (use-region-p)
       (call-interactively #'halfwidth-region)
     (call-interactively #'halfwidth-word)))
+#+end_src
 
+第二组绑定：格式变换、选区扩展与多光标（含 =C-M-<down>= / =C-M-<up>= 的 GUI 键与 =C-c e= 前缀的终端备用键）。 =custom/mc-add-cursor-on-click= 里 =mc/create-fake-cursor-at-point= 只创建 overlay，下一条命令才随真实光标同步执行，因此可连续多次点击铺多个光标。
+
+#+begin_src emacs-lisp
 (custom/bind "C-c e q" #'unfill-paragraph "取消段落填充" "编辑变换")
 (custom/bind "C-c e r" #'replace-regexp-as-diff "正则替换预览" "编辑变换")
 (custom/bind "C-c e R" #'multi-file-replace-regexp-as-diff "多文件正则替换预览" "编辑变换")
@@ -3344,28 +3271,28 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (custom/bind "C-c e <up>" #'mc/mark-previous-lines "上方行加光标" "编辑变换")
 
 (defun custom/mc-add-cursor-on-click (event)
-  "在 EVENT 点击处追加一个 fake cursor(对齐 VSCode Alt+Click)。
-`mc/create-fake-cursor-at-point' 只创建 overlay,下一条命令才随真实光标
-同步执行,因此可连续多次点击铺多个光标。"
+  "在 EVENT 点击处追加一个 fake cursor(对齐 VSCode Alt+Click)。"
   (interactive "e")
   (require 'multiple-cursors)
   (mouse-set-point event)
   (mc/create-fake-cursor-at-point))
 
 (custom/bind "M-<down-mouse-1>" #'custom/mc-add-cursor-on-click "点击加光标" "编辑变换")
+#+end_src
 
+最后是四个行级 DWIM 命令。 =custom/outdent-dwim= 的选区分支走 =indent-rigidly-left-to-tab-stop= 逐行退到上一制表位，单行按 =tab-width= 退一级（ =indent-line-to= 会把点一并带回行首缩进位）；选区分支显式置 =deactivate-mark= 为 nil，回缩后保留选区，可连按 Shift+Tab 逐层回缩（VSCode 行为）。 =<backtab>= 绑定紧跟定义放在本域，不再归入 programming 的键位块。
+
+#+begin_src emacs-lisp
 (defun custom/outdent-dwim ()
-  "向左回缩一个缩进层级:有选区回缩选区,否则回缩当前行(VSCode Shift+Tab)。
-选区走 `indent-rigidly-left-to-tab-stop' 逐行退到上一制表位;单行按
-`tab-width' 退一级,indent-line-to 会把点一并带回行首缩进位。
-选区分支显式置 `deactivate-mark' 为 nil,回缩后保留选区,可连按
-Shift+Tab 逐层回缩(VSCode 行为)。"
+  "向左回缩一个缩进层级:有选区回缩选区,否则回缩当前行(VSCode Shift+Tab)。"
   (interactive)
   (if (use-region-p)
       (progn
         (indent-rigidly-left-to-tab-stop (region-beginning) (region-end))
         (setq deactivate-mark nil))
     (indent-line-to (max 0 (- (current-indentation) tab-width)))))
+
+(custom/bind "<backtab>" #'custom/outdent-dwim "反向缩进" "编辑变换")
 
 (defun custom/home-dwim ()
   "智能 Home 键:在行首非空白字符与绝对行首之间循环(VSCode Home 行为)。
@@ -3573,15 +3500,10 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 - Flymake：内置轻量诊断框架，接收 LSP 报错并在行边高亮。
 - 多语言模式：TypeScript/TSX、Rust、C/C++、Scheme、Nix 等语言的具体环境。
 
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: programming-guide
-:END:
-
 这一域的结构是一个经典的「单一事实源 + 派生」架构，读懂[[#programming-tools][语言能力表]]这一节，整个域就通了：
 
 - *主表* ： =custom:language-capabilities= 是全部语言能力的唯一登记处，每条是一个 plist（ =:modes= / =:ts-mode= / =:server= / =:formatter= ）。添加语言、换 LSP 服务端、改格式化工具，都只改这张表，不在别处另设钩子。
-- *三条派生链、四个 defconst* ：主表下方有四个 =defconst= ，其中三个从主表派生。 =custom:language-treesit-remaps= （Tree-sitter remap 表）与 =custom:language-apheleia-mode-alist= （格式化映射）是标准派生形状 =(let (acc) (dolist (entry 主表) ...) (nreverse acc))= ——循环收集再倒转（见[[#reading-guide][如何读这份配置]]）。 =custom:language-eglot-server-programs= 则把构造抽成具名函数 =custom/language--derive-eglot-programs= ：它要按 server 命令把多门语言归并成一条（ =assoc= 找到已有组就 =setcdr= 追加 mode），比纯收集多一步分组，所以升级为具名函数——读完前两个再看它，正好见识「需要归并时该怎么做」。第四个 =custom:language-apheleia-formatters= 是手写字面量、不从主表派生：它登记 Apheleia 的自定义 formatter 定义（如 Org 代码块格式化函数），与 mode 映射是两回事，别按名字与 mode-alist 混淆。
+- *三条派生链、四个 defconst* ：主表下方有四个 =defconst= ，其中三个从主表派生。 =custom:language-treesit-remaps= （Tree-sitter remap 表）与 =custom:language-apheleia-mode-alist= （格式化映射）是标准派生形状 =(let (acc) (dolist (entry 主表) ...) (nreverse acc))= ——循环收集再倒转（见[[#overview][如何读这份配置]]）。 =custom:language-eglot-server-programs= 则把构造抽成具名函数 =custom/language--derive-eglot-programs= ：它要按 server 命令把多门语言归并成一条（ =assoc= 找到已有组就 =setcdr= 追加 mode），比纯收集多一步分组，所以升级为具名函数——读完前两个再看它，正好见识「需要归并时该怎么做」。第四个 =custom:language-apheleia-formatters= 是手写字面量、不从主表派生：它登记 Apheleia 的自定义 formatter 定义（如 Org 代码块格式化函数），与 mode 映射是两回事，别按名字与 mode-alist 混淆。
 - *nil 是显式语义* ：表里 =:server nil= 表示「该语言不启用 LSP」， =:formatter nil= 表示「显式禁用格式化」——后者会写入派生映射覆盖包自带的默认值，避免缺二进制的 formatter 在保存时空跑。读到 nil 不要当成「还没填」。
 - *查询型 API 不设防* ： =(project-current nil)= 、 =(treesit-ready-p ...)= 这类函数用返回 nil 表达「不适用」，本配置直接 =or= / =when-let*= 处理，不包 =condition-case= 。异常捕获只留给文件 I/O 与子进程，这是全仓库统一的防御边界。
 
@@ -4119,7 +4041,6 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 (custom/bind "C-c c z s" #'hs-toggle-all "开关全部折叠" "代码")
 (custom/bind "C-S-[" #'hs-hide-block "折叠代码块" "代码")
 (custom/bind "C-S-]" #'hs-show-block "展开代码块" "代码")
-(custom/bind "<backtab>" #'custom/outdent-dwim "反向缩进" "编辑变换")
 #+end_src
 
 ** 各语言 major mode
@@ -4188,11 +4109,6 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 
 - 项目管理：基于 Emacs 内置的 =project.el= 体系，自动识别 Git 工程根目录，支持工程级文件与代码搜索。
 - 左侧目录树面板：基于 Dired 定制的轻量侧边文件树，支持快速浏览与主窗口分屏联动。
-
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: projects-guide
-:END:
 
 这一域体量小，多数配置建立在 Emacs 内置的 =project.el= 与 Dired 之上，主要读三个点：
 
@@ -4327,14 +4243,12 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 - *快捷键开关* ： =C-b= （VSCode 侧栏键）、 =C-S-e= 或 =C-c w f= 随时展开或折叠左侧面板； =C-c w d= 让面板定位到当前文件（Explorer 的 Reveal 语义）。
 - *自动跟随* ：面板显示期间切换到同目录的其他文件时，面板光标自动落到对应文件行；文件不在面板当前目录时不动，避免频繁重建面板视图。
 
+面板访问语义集中在 =custom/dired--panel-visit= ：FILENAME 须为绝对路径（ =dired-get-file-for-visit= 对 =..= 返回相对名，调用前展开）；目录不能走 =find-alternate-file= ——其内部 =switch-to-buffer= 会被 side-window 拒绝而把新 Dired 投到其他窗口，故显式 =set-window-buffer= 替换面板窗口并 kill 旧面板 buffer； =dired-noselect= 天然复用已存在的同目录 Dired buffer，不堆积。取行文件名必须用 =dired-get-file-for-visit= ：裸 =dired-get-filename= 对 =.= / =..= 行会抛 "Cannot operate on '.' or '..'"；鼠标入口先用 =dired-get-filename= 无报错探测，让点在空白处（空行/目录头/点线）的点击退化为「只聚焦面板」。
+
 #+begin_src emacs-lisp
 (defun custom/dired--panel-visit (filename)
   "面板访问语义:目录原地替换面板 buffer,文件进主编辑窗口。
-FILENAME 须为绝对路径(`dired-get-file-for-visit' 对 =..= 返回
-相对名,调用前展开)。目录不能走 `find-alternate-file':其内部
-`switch-to-buffer' 会被 side-window 拒绝而把新 Dired 投到其他窗口,
-故显式 `set-window-buffer' 替换面板窗口并 kill 旧面板 buffer;
-`dired-noselect' 天然复用已存在的同目录 Dired buffer,不堆积。"
+FILENAME 须为绝对路径。"
   (setq filename (expand-file-name filename))
   (if (not (file-directory-p filename))
       (custom/display-buffer-in-main-window (find-file-noselect filename))
@@ -4348,9 +4262,7 @@ FILENAME 须为绝对路径(`dired-get-file-for-visit' 对 =..= 返回
 
 (defun custom/dired-find-file-in-main ()
   "面板版 RET:目录原地替换面板 buffer,文件进主编辑窗口。
-side-window 内直接 RET 会把文件开进面板,故走本命令改写目标窗口。
-取行文件名必须用 `dired-get-file-for-visit':裸 `dired-get-filename'
-对 =.= / =..= 行会抛 \"Cannot operate on '.' or '..'\"。"
+side-window 内直接 RET 会把文件开进面板,故走本命令改写目标窗口。"
   (interactive)
   (custom/dired--panel-visit (dired-get-file-for-visit)))
 
@@ -4362,9 +4274,7 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
 
 (defun custom/dired-mouse-find-file-in-main (event)
   "面板版 mouse-1/2:与 `custom/dired-find-file-in-main' 同语义。
-单击打开对齐 VSCode Explorer;`dired-get-file-for-visit' 在非文件行
-(空行/目录头/点线)会报错,先用 `dired-get-filename' 无报错探测,
-让点在空白处的点击退化为「只聚焦面板」。"
+单击打开对齐 VSCode Explorer;点在非文件行退化为「只聚焦面板」。"
   (interactive "e")
   (let ((window (posn-window (event-end event)))
         (pos (posn-point (event-end event))))
@@ -4374,7 +4284,11 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
       (goto-char pos)
       (when (dired-get-filename nil t)
         (custom/dired--panel-visit (dired-get-file-for-visit))))))
+#+end_src
 
+面板开关与定位。面板识别靠 =custom--dired-panel-p= 标记而非 side 参数：用户可能把面板窗口拖出 side 位，标记才是语义来源。 =custom/panel-dired-reveal= 的文件名必须在切入面板 buffer 前捕获——Dired buffer 的 =buffer-file-name= 是 nil。
+
+#+begin_src emacs-lisp
 (defun custom/panel-dired ()
   "打开项目根(不在项目则当前目录)的左侧 Dired 面板。
 有已显示的面板窗口则聚焦;buffer 存在则重新显示;无则新建。
@@ -4385,9 +4299,7 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
     (custom/display-or-focus buf custom:dired-side-action t)))
 
 (defun custom/panel-dired-toggle ()
-  "开关左侧文件面板(VSCode Ctrl+B):已显示则收起窗口(buffer 保留),否则打开。
-面板识别靠 `custom--dired-panel-p' 标记而非 side 参数:用户可能把
-面板窗口拖出 side 位,标记才是语义来源。"
+  "开关左侧文件面板(VSCode Ctrl+B):已显示则收起窗口(buffer 保留),否则打开。"
   (interactive)
   (if-let* ((wins (seq-filter
                    (lambda (w)
@@ -4401,8 +4313,7 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
 (defun custom/panel-dired-reveal ()
   "把左侧文件面板切到当前文件所在目录并选中该文件(VSCode Explorer Reveal)。
 面板 buffer 由 `dired-noselect' 复用/新建后按面板规则重设,再经
-`dired-goto-file' 把点定位到文件行。文件名必须在切入面板 buffer 前
-捕获——Dired buffer 的 `buffer-file-name' 是 nil。"
+`dired-goto-file' 把点定位到文件行。"
   (interactive)
   (unless buffer-file-name
     (user-error "当前缓冲区未访问文件"))
@@ -4412,12 +4323,13 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
     (custom/display-or-focus buf custom:dired-side-action t)
     (with-current-buffer buf
       (dired-goto-file file))))
+#+end_src
 
+自动跟随：仅在文件落在面板当前显示的目录内时移动面板光标（纯 marker 定位，零 I/O）；文件在其他目录时保持面板现状，避免每次切 buffer 都重建面板视图——Dired 面板只显示单层目录，无法像 Explorer 树那样原地展开。
+
+#+begin_src emacs-lisp
 (defun custom/panel-dired--auto-reveal (frame)
-  "FRAME 内窗口 buffer 变化后,让 Dired 面板跟随当前文件。
-仅在文件落在面板当前显示的目录内时移动面板光标(纯 marker 定位,
-零 I/O);文件在其他目录时保持面板现状,避免每次切 buffer 都重建
-面板视图——Dired 面板只显示单层目录,无法像 Explorer 树那样原地展开。"
+  "FRAME 内窗口 buffer 变化后,让 Dired 面板跟随当前文件。"
   (dolist (window (window-list frame))
     (with-current-buffer (window-buffer window)
       (when (and (derived-mode-p 'dired-mode)
@@ -4445,11 +4357,6 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
 - 快速采集模板（Capture）：统一收集闪念灵感（Inbox）、带日期任务、日程与知识库经验卡。
 - 网状双链笔记（Org-roam）：基于卡片盒原理的长久知识链接。
 - Agenote 经验库：与本地 Agenote 工具深度集成，沉淀踩坑记录与最佳实践。
-
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: org-knowledge-guide
-:END:
 
 这一域大部分是直观的 =use-package= 定制，唯一需要专门学习的是[[#capture-templates][Org Capture 模板]]的「双块」写法——它用到了 noweb 引用，是全配置两类 noweb 场景之一：
 
@@ -4823,16 +4730,16 @@ SCHEDULED: %^t
   (org-modern-tag t)
   (org-modern-block-name t)
   (org-modern-block-fringe 4))
+#+end_src
 
+两处 TTY 适配放在单独一块：
+
+- =custom--skip-uncolorable-org-modern-border= （包在 =org-modern--update-faces= 外的 advice）：背景色不可用时跳过 label 边框重算。 =org-modern-mode= 由 =org-mode-hook= 启用（dashboard 的 agenda 扫描也会顺路打开 org 文件），重算抛出的 "Invalid face box" 会打断模式初始化并被上层报成 "File mode specification error"——不只是日志噪音；而 box 在终端本就不绘制。可用性以 =default= 背景值直接判定： =xfaces.c= 只接受 nil 或非空字符串作 =:box= 的 =:color= ，而 TTY 透明策略把背景清成符号 =unspecified= 会被判为非法； =org-modern--update-faces= 正用这个返回值当 label/habit 边框色。
+- =custom/org-modern--apply-display= （挂在 =org-mode-hook= 深度 -90，先于 =org-modern-mode= 运行，使按 buffer 构建的星号缓存取自正确取值）：org-modern 用内联 =:inverse-video= 画表格竖线、用 Nerd 字形替换星号，二者都是 font-lock 阶段写入的内联 display/face 规格，晚于 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]] 的命名 face 透明化，透明 TTY 上会变成实心/反色块。故 TTY 退回纯 ASCII 表格与 Unicode 子弹，前导星号交给 =org-indent-mode= 隐藏；GUI 保留像素级细线与 Nerd 子弹。跨 GUI/TTY 共享的 buffer 保留首次启用该 mode 的 frame 设置——org-modern 的缓存为 buffer-local，无法 per-frame。
+
+#+begin_src emacs-lisp
 (defun custom--skip-uncolorable-org-modern-border (orig &rest args)
-  "背景色不可用时跳过 org-modern 的 label 边框重算，否则交给 ORIG。
-保留这种 box 的代价不小:`org-modern-mode' 由 `org-mode-hook' 启用(含 dashboard
-的 agenda 扫描会顺路打开 org 文件),重算抛出的 \"Invalid face box\" 会打断模式
-初始化并被上层报成 \"File mode specification error\"——不只是日志噪音;而 box 在
-终端本就不绘制(见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]])。
-可用性以 `default' 背景值直接判定:`xfaces.c' 只接受 nil 或非空字符串作
-`:box' 的 `:color',而 TTY 透明策略把背景清成符号 `unspecified',该规格会
-被判为非法;`org-modern--update-faces' 正用这个返回值当 label/habit 边框色。"
+  "背景色不可用时跳过 org-modern 的 label 边框重算,否则交给 ORIG。"
   (let ((bg (face-attribute 'default :background nil t)))
     (when (or (null bg) (stringp bg))
       (apply orig args))))
@@ -4843,13 +4750,7 @@ SCHEDULED: %^t
 
 (defun custom/org-modern--apply-display ()
   "按当前 frame 类型降级 `org-modern' 的星号与表格渲染。
-`org-modern' 用内联 `:inverse-video' 画表格竖线、用 Nerd 字形替换星号;二者都是
-font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-constraints][=custom/apply-terminal-faces=]]
-的命名 face 透明化,故透明 TTY 上会变成实心/反色块(表格竖条与星号白底)。TTY 下
-因此退回纯 ASCII 表格与 Unicode 子弹,前导星号交给 `org-indent-mode' 隐藏;GUI 保留
-像素级细线与 Nerd 子弹。本函数深度 -90,先于 `org-modern-mode' 运行,使按 buffer 构建
-的星号缓存取自正确取值。跨 GUI/TTY 共享的 buffer 保留首次启用该 mode 的 frame 设置
-(`org-modern' 缓存为 buffer-local,无法 per-frame,见 mixed-gui-tty-constraints)。"
+TTY 退回 ASCII 表格与 Unicode 子弹;GUI 保留像素细线与 Nerd 子弹。"
   (when (and (not noninteractive)
              (not (display-graphic-p))
              (>= (display-color-cells) 8))
@@ -4965,11 +4866,6 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 
 - *键位内聚原则* ：专属于某一模块的快捷键（如 Git 相关的 =C-c g= 、Org 相关的 =C-c o= ）均随其模块就近绑定；本域仅声明 14 个顶层前缀与真正跨域的公共快捷键。
 - *内置补全架构* ：Minibuffer 采用 Emacs 31 原生 =*Completions*= 即显与模糊过滤，代码编辑采用 Emacs 30+ 原生 =completion-preview= 幽灵文本（ghost-text）行内补全，零第三方框架依赖。
-
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: keys-completion-guide
-:END:
 
 先明确这一域「不收什么」：功能专属键位一律跟随其功能所在域就近绑定，这里只收两类——14 个顶层前缀声明，与真正跨域的公共键（ =C-x= / =M-s= 系列与[[#global-keys][全局直达键]]）。所以查找某个具体功能的键位，第一步去那个功能的域，最后才来这里。
 
@@ -5440,11 +5336,6 @@ isearch 是一个「按键即达」的会话：输入搜索串的任意时刻都
 - Dashboard 欢迎屏：提供待办日程、最近文件、工程切换与快捷导航的一站式首页。
 - 兼容性 Shim：针对特定依赖包在上游未修复 Bug 的明确隔离兜底与清理条件。
 
-** 域导读：先看什么
-:PROPERTIES:
-:CUSTOM_ID: system-tools-guide
-:END:
-
 这一域是「收纳层」：各类应用集成、后台预热与欢迎屏都堆在这里，读的时候按兴趣跳节即可，唯有两个机制值得专门看一眼：
 
 - *daemon 预热* ： =custom/daemon-warmup= 在文件最末的「主配置收尾」块里被 =(when (daemonp) ...)= 调用——守护进程后台启动时顺手预加载常用包，之后的客户端连接就不再等首次加载。这是「Daemon 启动时间让位于 Client 首开延迟」这一优先级排序的直接产物。
@@ -5490,9 +5381,7 @@ AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
 
 *** DeepSeek Harness
 
-=dsh-emacs= 复用本机 =dsh= CLI 与已有的 provider/model 配置，首次打开会话列表时
-
-按需连接或启动服务，不在 Emacs 启动时连接。凭据由 dsh 管理，不写入此配置。
+=dsh-emacs= 复用本机 =dsh= CLI 与已有的 provider/model 配置，首次打开会话列表时按需连接或启动服务，不在 Emacs 启动时连接。凭据由 dsh 管理，不写入此配置。
 
 =C-c a d d= 打开会话列表，列表内 =c= 新建会话，聊天内 =C-c C-c= 发送消息。
 
@@ -5508,9 +5397,7 @@ AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
 
 *** RSS 阅读 (Newsticker)
 
-内置 ~newsticker~ ：树形视图( =newsticker-treeview= )左侧 feed 列表、右侧条目，
-
-界面内 =g= 刷新、 =n/p= 上下条目、 =SPC= 浏览摘要、 =RET= 用 =browse-url= 打开原文。
+内置 ~newsticker~ ：树形视图( =newsticker-treeview= )左侧 feed 列表、右侧条目，界面内 =g= 刷新、 =n/p= 上下条目、 =SPC= 浏览摘要、 =RET= 用 =browse-url= 打开原文。
 
 订阅源默认为 Emacs 官方 feed（ =newsticker-url-list= 可自行追加）。
 
@@ -5982,16 +5869,11 @@ OV 提供标题显示文本,用于折算已占用宽度;须在
 - 一遍扫描收集所有板块标题 overlay，倒序逐个执行分割线替换、缩进与快捷键右贴。
 - 版块区按版心计算统一的行首前缀（块内左对齐），Banner 与欢迎语按自身行宽各自居中。
 
+行宽用插件的 =dashboard-str-len= 像素折算测量： =string-width= 会把 ─ ═ 等 ambiguous 字符按双列计、GUI 实际渲染单列，居中会偏。行宽超过窗口时不加前缀： =align-to= 负值会把整行推出屏幕左缘（只剩行尾残片），贴左至少完整可读； =align-to= 表达式没有可用的 max 钳制（Emacs 31 静默回退 0），只能在装饰时静态排除。
+
 #+begin_src emacs-lisp
 (defun custom/dashboard--center-line (body-width)
-  "把当前行按自身行宽居中(行首加 align-to 前缀)。
-行宽用插件的像素折算测量:string-width 会把 ─ ═ 等
-ambiguous 字符按双列计,GUI 实际渲染单列,居中会偏;
-dashboard-str-len 与插件原生 footer 居中同款公式。
-行宽超过窗口时不加前缀:align-to 负值会把整行推出
-屏幕左缘(内容只剩行尾残片),贴左至少完整可读;
-align-to 表达式没有可用的 max 钳制(Emacs 31 静默
-回退 0),只能在装饰时静态排除。"
+  "把当前行按自身行宽居中(行首加 align-to 前缀);超过 BODY-WIDTH 不加。"
   (let* ((beg (line-beginning-position))
          (end (line-end-position))
          (w (dashboard-str-len (buffer-substring-no-properties beg end))))
@@ -6001,14 +5883,13 @@ align-to 表达式没有可用的 max 钳制(Emacs 31 静默
                 `(space . (:align-to (- center ,(/ w 2)))))))
         (add-text-properties beg end
                              (list 'line-prefix p 'indent-prefix p))))))
+#+end_src
 
+分组居中分两步：先 =remove-text-properties= 再改写—— =add-text-properties= 不覆盖已有属性，banner/Welcome/navigator/footer 都带插件自设的测量式前缀。板块区（首板块标题行→末分割线行）统一版心前缀、整体居中块内左对齐；其余行长短不一，逐行按自身行宽各自居中（整块左对齐会全贴版心左缘）。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--center-groups (ovs width window)
-  "分组居中:先 remove 再改写——add-text-properties 不覆盖已有
-属性,banner/Welcome/navigator/footer 都带插件自设的测量式
-前缀。板块区(首板块标题行→末分割线行)统一版心前缀,整体
-居中、块内左对齐;其余行(banner/Welcome/navigator/init-info/
-footer)长短不一,逐行按自身行宽各自居中,整块左对齐会全贴
-版心左缘。"
+  "分组居中:板块区统一版心前缀,其余行逐行自身居中(先 remove 再改写,见上文)。"
   (remove-text-properties (point-min) (point-max)
                           '(line-prefix nil indent-prefix nil))
   (let* ((sec-beg (save-excursion
@@ -6034,22 +5915,14 @@ footer)长短不一,逐行按自身行宽各自居中,整块左对齐会全贴
       (while (and (< (point) (point-max))
                   (progn (forward-line 1) t))
         (custom/dashboard--center-line body-width)))))
+#+end_src
 
+总入口 =custom/dashboard--decorate-headings= ：标题行与分割线都补齐到版心宽（ =custom/dashboard--content-width= ），板块内统一加行间距（ =custom:dashboard-line-spacing= ），分割线替换板块尾第一段空行。定位走 heading overlay（ =dashboard-heading= face）而非 =dashboard--section-starts= ——渲染末尾的 page-separator 替换会使后者的绝对位置漂移。流程：收集 overlay、与 =custom:dashboard-heading-keys= 逐个配对（多余一方截断）、倒序装饰（前面的 insert 不影响后面 heading 的位置），最后分组居中。只从 =custom/dashboard--refresh-in-window= 调用，保证运行在正确窗口上下文。
+
+#+begin_src emacs-lisp
 (defun custom/dashboard--decorate-headings (&optional window)
-  "渲染后装饰标题行、右贴快捷键、行间距与板块分割线。
-标题行与分割线都补齐到版心宽(=custom/dashboard--content-width= ),
-板块内标题与条目行统一加 `custom:dashboard-line-spacing' 行间距,
-分割线替换板块尾第一段空行。完成后分组居中:板块区按版心左缘统一
-前缀,其余行逐行自身居中,理由见节首 prose;不先 remove 则插件/banner
-自设的前缀不会被 add-text-properties 覆盖。定位走 heading overlay
-(`dashboard-heading' face)而非 `dashboard--section-starts':渲染末尾的
-page-separator 替换会使后者的绝对位置漂移。只从
-`custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。
-步骤:`custom/dashboard--heading-overlays' 收集 overlay,与
-`custom:dashboard-heading-keys' 逐个配对(多余的一方截断)后倒序
-装饰——每个板块做分割线替换、标题缩进、快捷键右贴,倒序保证
-前面的 insert 不影响后面 heading 的位置;最后
-`custom/dashboard--center-groups' 分组居中。"
+  "渲染后装饰标题行、右贴快捷键、行间距与板块分割线,最后分组居中。
+标题行与分割线补齐到版心宽;只从 `custom/dashboard--refresh-in-window' 调用。"
   (with-current-buffer (get-buffer dashboard-buffer-name)
     (let* ((width (custom/dashboard--content-width window))
            (icon-w (if (and (dashboard-display-icons-p)
