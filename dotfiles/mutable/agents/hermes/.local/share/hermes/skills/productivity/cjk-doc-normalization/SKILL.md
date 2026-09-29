@@ -154,7 +154,7 @@ converting them corrupts meaning. The judgement per construct:
 | ` / ` | 顿号 for **natural-language** parallel items only. Slash-separated **identifier lists** are the industry norm. | Turning `electron / qt5 / gtk` into `electron、qt5 和 gtk` |
 | 粗体标签 `**X**：` | **Keep.** See §3. | Deleting every bold lead-in |
 | `![图](x.png)` 的 `!` | Never convert. The half-width `!` is markdown image syntax, not prose punctuation. | `![` → `！[` breaks every image in the file |
-| `： =cmd=` / `： *粗体*` 的空格 | **Keep.** Spacing after full-width punctuation before an inline-markup opener (`=`, `` ` ``, `*`, `_`, `~`) is typesetting convention; gluing punctuation to markup reads worse. | A blanket "no space beside full-width punctuation" rule mangles every org gloss `： =C-c g s=` |
+| `： =cmd=` / `： *粗体*` 的空格 | **Keep.** Spacing after full-width punctuation before an inline-markup opener (`=`, `` ` ``, `*`, `_`, `~`) is **required for rendering**: Org does not recognize an emphasis opener glued directly to a full-width/CJK character — `：=foo=` renders as literal text, so gluing breaks the emphasis, not merely the readability. | A blanket "no space beside full-width punctuation" rule mangles every org gloss `： =C-c g s=`; the full breakage rule table + repair/verify workflow live in the `org-markup-rendering` skill. |
 
 ## 3. Do not port English rules to Chinese unchanged
 
@@ -292,7 +292,7 @@ complies with a defensible subset.
 嵌进宿主后的固定动作，按序：
 
 1. 读宿主「按块状态迭代行」的那个函数，确认它已同时识别两种格式的块（org
-   `#+begin_*` 与 ``` fence）。规则写一次，`.md` / `.org` 共用。
+   `#+begin_*` 与 ``` fence）。规则写一次，`.md` / `.org` 共用。**并确认它没有把所有 `#+begin_*` 都当代码块**——note / tip / quote / verse 等富文本块的内容是正文档，必须照常套规则；按块类型一刀切的实现会整段静默漏改，且单行测试全绿、只有整文件跑才暴露（判定与修复规则见 `org-markup-rendering`）。
 - 把只改行内容的阶段插在**表格对齐之前**——列宽按改后文本算。
 2b. **同一行内的每条长度变化规则都要重算保护区间。** 全角标点转换、删空格、
     `...`→`……` 都改变行长，先前算好的「行内代码 / org 等宽 / 粗体」span 下标

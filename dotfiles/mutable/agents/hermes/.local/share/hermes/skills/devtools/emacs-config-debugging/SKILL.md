@@ -297,3 +297,4 @@ emacsclient --eval 'display-line-numbers-width'
 
 - 用户 Emasc 配置的具体修改流程（哪些文件、改完怎么 reload）由各 emacs 配置仓库的 AGENTS.md 规定——这个 skill 只管"怎么定位问题"和"修复该写在哪里"，不重复仓内维护协议。
 - 测试用的 `emacsclient --eval` 表达式模板见 `references/probes.md`。
+- org 文档里行内标记不渲染（`= foo =`、`：=cmd=`、双星混写）不是配置或 face 问题，而是文档语法问题——修复与 tmux 真机验收流程见 `org-markup-rendering`。

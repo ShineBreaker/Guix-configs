@@ -16,7 +16,7 @@ description: Use when the user works inside ~/Projects/Config/Guix-configs and m
 
 3. **AI 禁跑** `blue rebuild` / `guix system reconfigure` / `guix home reconfigure` (sudo 卡死 CLI)。改源后只能 `blue home` 暂用,固化等用户操作。**例外**:`blue structor` 只重写 AGENTS.md 标记对内容,AI 可以跑(见 §5.3)。
 4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。
-5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。
+5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息用 `-m` 传**——本环境 hook 拦截 `-F -`/heredoc 形式(报「必须使用 -m」、整条命令不执行，重试前先 `git status --short` 复核暂存)；AI 参与时 `Co-authored-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。
 6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
 7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
 
@@ -1496,7 +1496,6 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 - hermes-desktop 启动失败诊断见 `references/hermes-desktop-diagnostics.md`(日志优先级、版本探测超时、cron 模块导入竞态、Nix flake lock 追溯、GC 检测)。
 - hermes-gateway 作为 shepherd service 的 self-kick loop 诊断见 `references/hermes-gateway-shepherd-service.md`(日志模式识别、`--replace` 触发机制、清理多个并存 home-shepherd、orphan gateway 进程)。
 - Electron Wayland IME 完整调试流程(QQ 案例、flag 对照表、Electron 版本速查、Nix 修复范式)见 `references/electron-wayland-ime-debug.md`。
-- GNU Stow 二轨 dotfile 部署策略(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
 - **XDG 与环境变量注入全家桶**（Testament 范式：7 层注入机制分层、`home-environment-variables-service-type` XDG 全家桶、`home-graphical-session-service-type` Wayland session 标记、`xdg-desktop-portal/portals.conf` 三处同步、`#:environment-variables` 系统服务注入、`setenv` in gexp 定时器运行时注入、选择指南 + 反模式）见 §7。
 - **GNU Stow 二轨 dotfile 部署策略**(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
 - **改 `source/config.org` system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判、lightdm autologin 三件套 `autologin-user` + `user-session` + `allow-empty-passwords?`)见 §9 + `references/config-org-modify-safely.md`。
@@ -1508,6 +1507,7 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 - **ISO `blue build-iso` 运行范式 + 四个真实构建错误序列**(不需 sudo / agent 可直跑 / `%guix` 吞报错需手动复现 / `append` 拍平 noweb-list / `with-imported-modules` 修 trivial-build-system 模块缺失 / `operating-system-services` 双倍注册 essential 导致 `多余一个类为'X'的目标服务`)见 §11.7 + `references/iso-build-debug.md`。
 - **ISO KDE Plasma 装配**(XFCE→KDE 差异 / SDDM 字段带 `.desktop` 后缀 / elogind 必须显式加 / 完整错误序列 1-4 / 已构建成功的 `jeans-desktop-*.iso` 验证)见 §11.8 + `references/iso-kde-plasma-assembly.md`。
 - **gpg-agent / pinentry 范式**(daemon conf 必须用绝对 store 路径 / `$$bin/...$$` 路径注入 / `gpgconf --check-programs` 诊断信号 / home-shepherd 起的 daemon `$HOME` 不可靠 / blue home 后必走 `gpgconf --reload` / 推广到 mako / swaync / river 等同类场景)见 §4.6 + `references/gpg-agent-pinentry-absolute-store-path.md`。
+- **org 文档行内标记渲染修复**（`= foo =`、`：=cmd=`、`**X* *` 双星混写、全角标点紧贴的标记失效；tmux 真机渲染验收法、agenote orgfmt 修复器要点）→ `org-markup-rendering` skill；emacs.org 属 mutable 包(改源即生效)。
 ## Appendix — agenote 20260629/20260716 (merged)
 - blue check 局部括号错位但总数平衡 → guix invalid field specifier; 用 guile reader 逐文件验真平衡而非总数 (agenote 20260629).
 - 源码包 hash 漂移须用实际源码重算 hash (agenote 20260716).
