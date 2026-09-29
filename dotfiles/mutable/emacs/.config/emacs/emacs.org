@@ -916,8 +916,10 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
 - *图标去属性保护* ：所有从 Nerd Font 提取的图标均通过 =substring-no-properties= 剥离字体属性，避免外部图标字体的 family 进入 echo area 导致整行被渲染成豆腐块方块（tofu），着色交由各段语义 Face 独立控制。
 - *路径缩写规则* ： =custom/modeline--path-initials= 保证父目录缩写而当前工程名与当前文件名完整。
 - *零 I/O 状态缓存* ：Flymake、Eglot、VC 状态与项目名称分别在对应事件的 hook 中直接更新为 buffer-local 变量，状态行刷新时直接读取内存，渲染路径零外部阻塞。
+- *诊断严重度查询* ：计数按类型的 severity 分级。Flymake 公开 API 没有「按类型取严重度」的函数，这里用私有函数 =flymake--severity= ——Flymake 自己的 mode-line 计数也走它，是本功能的唯一权威口径。旧写法读取的 =flymake-diagnostic-types= 变量在当前 Emacs 32 中并不存在（类型属性以符号属性存储），引用它会抛 =void-variable= ，计数因此从未生效过。
 
 #+begin_src emacs-lisp
+(declare-function flymake--severity "flymake")
 (defun custom/modeline--icon (name &optional file)
   "返回去属性的 Nerd Font 图标 NAME;FILE 非 nil 时按文件类型取图标。
 NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
@@ -1015,19 +1017,22 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
           (vc-state buffer-file-name backend))))
 
 (defun custom/modeline--refresh-flymake-counts (&rest _)
-  "通过 Flymake 公开接口刷新错误与警告计数。"
+  "刷新错误与警告计数。
+严重度经 `flymake--severity' 按类型查询(见节首说明):error 级入
+ERRORS,warning 级入 WARNINGS,note/debug 级不计。"
   (setq custom/modeline--flymake-counts
         (if (bound-and-true-p flymake-mode)
             (let ((errors 0)
                   (warnings 0))
               (dolist (diagnostic (flymake-diagnostics))
-                (let* ((type (flymake-diagnostic-type diagnostic))
-                       (severity
-                        (alist-get 'severity
-                                   (alist-get type flymake-diagnostic-types))))
+                (let ((severity
+                       (flymake--severity
+                        (flymake-diagnostic-type diagnostic))))
                   (cond
-                   ((and severity (>= severity 2)) (setq errors (1+ errors)))
-                   ((and severity (>= severity 1)) (setq warnings (1+ warnings))))))
+                   ((>= severity (warning-numeric-level :error))
+                    (setq errors (1+ errors)))
+                   ((>= severity (warning-numeric-level :warning))
+                    (setq warnings (1+ warnings))))))
               (list errors warnings))
           '(0 0))))
 
