@@ -54,7 +54,9 @@ blue build
 #+begin_src scheme :noweb yes
 (load "../source/information.scm")
 
-(use-modules (gnu)
+(use-modules (bluebox packages blue)
+
+             (gnu)
              (gnu home)
              (gnu home services)
              (gnu home services desktop)
@@ -69,28 +71,34 @@ blue build
              (gnu home services syncthing)
              (gnu home services xdg)
              (gnu packages admin)
+             (gnu packages guile)
              (gnu packages rust-apps)
              (gnu services)
              (gnu services shepherd)
              (gnu system accounts)
              (gnu system nss)
              (gnu system pam)
+
              (guix channels)
              (guix download)
              (guix gexp)
              (guix git-download)
              (guix modules)
              (guix packages)
+
              (ice-9 match)
+
              (jeans home services emacs-xyz)
              (jeans home services hardware)
              (jeans home services tools)
              (jeans packages desktop)
              (jeans services hardware)
              (jeans services nix-ld)
+
              (nongnu packages firmware)
              (nongnu packages linux)
              (nongnu system linux-initrd)
+
              (rosenthal bootloader limine)
              (rosenthal home services desktop)
              (rosenthal home services emacs)
@@ -105,6 +113,7 @@ blue build
              (rosenthal utils file)
              (rosenthal utils nix)
              (rosenthal utils packages)
+
              (srfi srfi-1))
 
 (use-package-modules android
@@ -177,6 +186,7 @@ blue build
 ;; 自定义变体包
 <<cachyos-lts-kernel>>
 <<fingerprint-packages>>
+<<other-def-packages>>
 #+end_src
 
 *** 服务构造函数
@@ -281,10 +291,10 @@ blue build
 #+end_src
 
 *** 自定义包与补丁
-自建变体包与上游补丁的集中地；defs 块放顶层 ~define~ （noweb 拼进 ~main~ 顶层）， ~custom-packages-list~ 只放表达式
-新增包：先 defs 后 list。结构保留以备后续自建包与补丁。
+自建变体包与上游补丁的集中地； =包定义= 处放 ~define~ ， =包列表= 处需要引用之前的定义
 
-**** CachyOS LTS 内核
+**** 包定义
+***** CachyOS LTS 内核
 对标上游 =linux-cachyos-lts= 变体（Cachy Sauce + EEVDF，无 BORE 无 LTO），defconfig 取自 hako 的 kernel-config ，将其调成桌面档并按当前设备裁剪。
 
 #+NAME: cachyos-lts-kernel
@@ -294,8 +304,9 @@ blue build
 
 内核包的实际定义（版本、补丁、按机型裁剪）都在被 =load= 的文件内，见其文件头注释。
 
-**** 指纹识别栈
+***** 指纹识别栈
 本机传感器 Goodix =27c6:689a= 需要 libfprint ≥1.94.9 才能驱动，在这里写一个自定义的包来更新版本
+=fprintd-1.94= 是登记/验证指纹的 CLI（ =fprintd-enroll= 等）；守护进程与 PAM 模块在系统侧（desktop-services 板块）。
 
 #+NAME: fingerprint-packages
 #+begin_src scheme
@@ -367,11 +378,26 @@ blue build
                    (replace "libfprint" libfprint-1.94)))))
 #+end_src
 
-=fprintd-1.94= 是登记/验证指纹的 CLI（ =fprintd-enroll= 等）；守护进程与 PAM 模块在系统侧（desktop-services 板块）。
+***** 其他自定义包
 
+#+NAME: other-def-packages
+#+begin_src scheme
+(define blue-fix
+  (package
+    (inherit blue)
+    (inputs
+     (modify-inputs inputs
+       (replace "guile" guile-3.0-latest)))
+    (arguments
+     (substitute-keyword-arguments arguments
+       ((#:tests? orig #t) #f)))))
+#+end_src
+
+**** 包列表
 #+NAME: custom-packages-list
 #+begin_src scheme
-(list fprintd-1.94)
+(list blue-fix
+      fprintd-1.94)
 #+end_src
 
 * 配置文件骨架
@@ -2017,9 +2043,7 @@ polkit.addRule(function(action, subject) {
    "tree"
 
    ;; 运行器
-   "blue"
    "just"
-   "maak"
 
    ;; 终端复用器
    "herdr-bin"
