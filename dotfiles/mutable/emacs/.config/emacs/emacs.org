@@ -171,6 +171,10 @@ Emacs 在启动阶段需要加载并求值大量代码。如果保持默认的�
 定义 Org 笔记与知识库文件的根目录。如果需要迁移笔记位置，修改这里的常量即可全局生效。
 
 #+begin_src emacs-lisp
+(defgroup custom-config nil
+  "本配置的可定制项。用 M-x customize-group RET custom-config 浏览。"
+  :group 'convenience)
+
 (defconst custom:org-directory
   (expand-file-name "~/Documents/Org/")
   "Org 文件根目录。")
@@ -970,19 +974,23 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
   "状态行左右两侧的留白列数,两侧一致。
 下限为 1:右缘末列是强制保留位(写满会触发溢出/截断标记,见
 `custom/modeline--usable-width'),无法再压缩。"
-  :type 'integer)
+  :type 'integer
+  :group 'custom-config)
 
 (defcustom custom:modeline-show-time t
   "是否在状态行右段显示时间。"
-  :type 'boolean)
+  :type 'boolean
+  :group 'custom-config)
 
 (defcustom custom:modeline-show-vcs t
   "是否在状态行显示 VC 分支与状态。"
-  :type 'boolean)
+  :type 'boolean
+  :group 'custom-config)
 
 (defcustom custom:modeline-path-max-width 40
   "路径段最大显示宽度。"
-  :type 'integer)
+  :type 'integer
+  :group 'custom-config)
 
 (defvar custom/modeline--icon-cache (make-hash-table :test #'equal)
   "状态行静态图标缓存。")
@@ -2365,16 +2373,19 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
   "在仓库 ROOT 中异步执行 Git ARGS，成功(退出码 0)后调用 ON-SUCCESS。
 ON-SUCCESS 不接收参数。命令取 `custom:executable-git',由当前 `exec-path'
 在调用时解析。失败时只向 echo area 报 git 输出,不触发回调。"
-  (let ((buffer (generate-new-buffer " *custom-git*")))
+  (let ((buffer (generate-new-buffer " *custom-git*"))
+        (default-directory root))
     (make-process
      :name (format "git-%s" (car args))
      :buffer buffer
      :command (cons custom:executable-git args)
      :sentinel
      (lambda (proc _event)
-       (let ((output (string-trim
-                      (with-current-buffer (process-buffer proc)
-                        (buffer-string)))))
+       (let ((output (if (buffer-live-p (process-buffer proc))
+                         (string-trim
+                          (with-current-buffer (process-buffer proc)
+                            (buffer-string)))
+                       "")))
          (when (buffer-live-p (process-buffer proc))
            (kill-buffer (process-buffer proc)))
          (if (and (eq (process-status proc) 'exit)
@@ -2556,14 +2567,16 @@ Dired 的 `..'/`.` 行指向上级目录,展开后等于暂存整个仓库,
 
 REGEX : buffer-name 匹配字符串正则
 SIDE  : bottom / right / left / top（符号）
-SIZE  : 0~1 浮点比例
+SIZE  : 0~1 浮点比例，左右侧边栏解释为宽度比，上下解释为高度比
 
 规则追加到 `display-buffer-alist' 末尾。顺序敏感：更具体的规则应先注册。"
   (add-to-list 'display-buffer-alist
                `(,regex
                  (display-buffer-in-side-window)
                  (side . ,side)
-                 (window-height . ,size))
+                 ,(if (memq side '(left right))
+                      `(window-width . ,size)
+                    `(window-height . ,size)))
                t))
 
 (defun custom--window-above-p (a b)
@@ -2703,12 +2716,12 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 (defcustom custom:frame-background-opacity 88
   "GUI frame 背景透明度(0~100,100 = 不透明)。"
   :type 'integer
-  :group 'faces)
+  :group 'custom-config)
 
 (defcustom custom:default-font-height 110
   "默认字体大小(1/10 pt)。"
   :type 'integer
-  :group 'faces)
+  :group 'custom-config)
 
 (defconst custom:terminal-frame-parameters
   '((background-color . "unspecified-bg")
@@ -2741,7 +2754,7 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
 (defcustom custom:large-file-size-threshold (* 2 1024 1024)
   "关闭高成本显示功能的文件大小阈值（字节）。"
   :type 'integer
-  :group 'literal)
+  :group 'custom-config)
 
 (defun custom/setup-file-line-numbers ()
   "大型文件直接关闭行号，避免扫描完整 buffer。
@@ -3117,17 +3130,17 @@ Modus 主题调色板覆盖（Palette Overrides）：
 
 (require 'dbus)
 
-(defcustom custom/color-scheme-light-theme 'modus-operandi-tinted
+(defcustom custom:color-scheme-light-theme 'modus-operandi-tinted
   "浅色模式下加载的主题。"
   :type 'symbol
-  :group 'appearance)
+  :group 'custom-config)
 
-(defcustom custom/color-scheme-dark-theme 'modus-vivendi-tinted
+(defcustom custom:color-scheme-dark-theme 'modus-vivendi-tinted
   "深色模式下加载的主题。"
   :type 'symbol
-  :group 'appearance)
+  :group 'custom-config)
 
-(defvar custom/color-scheme-current-mode nil
+(defvar custom/color-scheme--current-mode nil
   "当前颜色方案模式（'light 或 'dark）。")
 
 (defvar custom/color-scheme--initialized nil
@@ -3145,7 +3158,7 @@ Modus 主题调色板覆盖（Palette Overrides）：
       modus-vivendi-palette-overrides custom:modus-palette-overrides
       modus-vivendi-tinted-palette-overrides custom:modus-palette-overrides)
 
-(defconst custom/color-scheme-dbus-path "/nl/whynothugo/darkman"
+(defconst custom:color-scheme-dbus-path "/nl/whynothugo/darkman"
   "Darkman D-Bus 对象路径。")
 
 (defun custom/color-scheme--parse-mode (string)
@@ -3162,7 +3175,7 @@ Modus 主题调色板覆盖（Palette Overrides）：
        (dbus-get-property
         :session
         "nl.whynothugo.darkman"
-        custom/color-scheme-dbus-path
+        custom:color-scheme-dbus-path
         "nl.whynothugo.darkman"
         "Mode"))
     (error
@@ -3172,8 +3185,8 @@ Modus 主题调色板覆盖（Palette Overrides）：
 (defun custom/color-scheme--theme-for-mode (mode)
   "返回 MODE('light 或 'dark)对应的主题符号,未知 MODE 返回 nil。"
   (pcase mode
-    ('dark custom/color-scheme-dark-theme)
-    ('light custom/color-scheme-light-theme)
+    ('dark custom:color-scheme-dark-theme)
+    ('light custom:color-scheme-light-theme)
     (_ nil)))
 
 (defun custom/color-scheme--load-theme-if-needed (theme)
@@ -3188,9 +3201,15 @@ Modus 主题调色板覆盖（Palette Overrides）：
 (defun custom/color-scheme-apply-theme (mode)
   "根据 MODE 加载对应的主题。
 MODE 为 'light 或 'dark。
-独立实例在 GUI 或至少 256 色的 TTY frame 中加载；daemon 无 frame 时也预载主题。"
-  (setq custom/color-scheme-current-mode mode)
+独立实例在 GUI 或至少 256 色的 TTY frame 中加载；daemon 无 frame 时也预载主题。
+加载前先同步 `frame-background-mode' 并刷新现有 frame:face 的 light/dark
+变体选择由它驱动,必须赶在 load-theme 求值 face spec 之前。刷新只在确实要
+加载主题时做:模式变化会重算 face,随后的 load-theme 经
+`enable-theme-functions' 重新套用终端透明等 per-frame 样式。"
+  (setq custom/color-scheme--current-mode mode
+        frame-background-mode mode)
   (when (or (daemonp) (custom/display-supports-themes-p))
+    (mapc #'frame-set-background-mode (frame-list))
     (custom/color-scheme--load-theme-if-needed
      (custom/color-scheme--theme-for-mode mode))))
 
@@ -3203,26 +3222,26 @@ MODE 为 'light 或 'dark。
 
 #+begin_src emacs-lisp
 
-(defvar custom/color-scheme-dbus-handler nil
+(defvar custom/color-scheme--dbus-handler nil
   "D-Bus 信号监听器的注册 ID。")
 
 (defun custom/color-scheme--on-darkman-mode-change (mode)
   "Darkman `ModeChanged' 信号回调：MODE 变化时应用对应主题。"
   (let ((new-mode (custom/color-scheme--parse-mode mode)))
     (when (and new-mode
-               (not (eq new-mode custom/color-scheme-current-mode)))
+               (not (eq new-mode custom/color-scheme--current-mode)))
       (message "[color-scheme] Darkman 模式变化: %s" mode)
       (custom/color-scheme-apply-theme new-mode))))
 
 (defun custom/color-scheme-register-listener ()
   "注册 D-Bus 信号监听器，响应 Darkman 模式变化。"
   (condition-case err
-      (unless custom/color-scheme-dbus-handler
-        (setq custom/color-scheme-dbus-handler
+      (unless custom/color-scheme--dbus-handler
+        (setq custom/color-scheme--dbus-handler
               (dbus-register-signal
                :session
                "nl.whynothugo.darkman"
-               custom/color-scheme-dbus-path
+               custom:color-scheme-dbus-path
                "nl.whynothugo.darkman"
                "ModeChanged"
                #'custom/color-scheme--on-darkman-mode-change))
@@ -3274,7 +3293,7 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
           (custom/color-scheme-init)
         (custom/color-scheme--load-theme-if-needed
          (custom/color-scheme--theme-for-mode
-          custom/color-scheme-current-mode))))))
+          custom/color-scheme--current-mode))))))
 
 (custom/color-scheme-init)
 (add-hook 'after-make-frame-functions #'custom/color-scheme-apply-for-frame)
@@ -3487,6 +3506,15 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 - *tempel* ：轻量代码模板展开，模板文件统一放在 =etc/templates/*.eld= ，前置到补全函数链首优先匹配。
 
 #+begin_src emacs-lisp
+(defun custom--maybe-enable-indent-bars ()
+  "ts-mode hook 回调:仅图形 frame 开 `indent-bars-mode'。
+竖线由 stipple(XBM 位图)绘制,终端 frame 没有位图可画;颜色也取自当前 frame
+的主题背景,batch/哑终端 frame 上取不到值,只会退化成无效 face spec。
+须先于下方 use-package 定义:`:hook' 展开时若目标非 fboundp,use-package
+会生成一个指向包内文件的 autoload 占位,顺序颠倒会留下重复定义警告。"
+  (when (display-graphic-p)
+    (indent-bars-mode 1)))
+
 (use-package indent-bars
   :defer t
   :hook ((c-ts-mode c++-ts-mode go-ts-mode java-ts-mode json-ts-mode
@@ -3498,13 +3526,6 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
   (indent-bars-pattern ".")
   (indent-bars-width-frac 0.15)
   (indent-bars-zigzag nil))
-
-(defun custom--maybe-enable-indent-bars ()
-  "ts-mode hook 回调:仅图形 frame 开 `indent-bars-mode'。
-竖线由 stipple(XBM 位图)绘制,终端 frame 没有位图可画;颜色也取自当前 frame
-的主题背景,batch/哑终端 frame 上取不到值,只会退化成无效 face spec。"
-  (when (display-graphic-p)
-    (indent-bars-mode 1)))
 
 (use-package goto-chg
   :defer t
@@ -3621,10 +3642,14 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 (defun custom/outdent-dwim ()
   "向左回缩一个缩进层级:有选区回缩选区,否则回缩当前行(VSCode Shift+Tab)。
 选区走 `indent-rigidly-left-to-tab-stop' 逐行退到上一制表位;单行按
-`tab-width' 退一级,indent-line-to 会把点一并带回行首缩进位。"
+`tab-width' 退一级,indent-line-to 会把点一并带回行首缩进位。
+选区分支显式置 `deactivate-mark' 为 nil,回缩后保留选区,可连按
+Shift+Tab 逐层回缩(VSCode 行为)。"
   (interactive)
   (if (use-region-p)
-      (indent-rigidly-left-to-tab-stop)
+      (progn
+        (indent-rigidly-left-to-tab-stop (region-beginning) (region-end))
+        (setq deactivate-mark nil))
     (indent-line-to (max 0 (- (current-indentation) tab-width)))))
 
 (defun custom/home-dwim ()
@@ -3702,14 +3727,14 @@ ARG 非空(前缀参数)时插入相对项目根的路径,无项目时插入绝�
   "把刚关闭的文件缓冲区记入关闭历史。
 排除内部 I/O 路径:库代码常以 `find-file-noselect' + `kill-buffer'
 静默读写文件(如 `customize-dirlocals' 读 .dir-locals.el),只判
-`buffer-file-name' 会把它们收进历史。过滤规则:隐藏名(" "前缀)
-buffer、no-littering var/ 数据目录(recentf/custom.el 等落点)与
-备份/自动保存文件(#...#、~ 结尾)一律不记。"
+`buffer-file-name' 会把它们收进历史。过滤规则:隐藏 buffer(名字
+以空格开头)、no-littering var/ 数据目录(recentf/custom.el 等落点)
+与备份/自动保存文件(#...#、~ 结尾)一律不记。"
   (when-let* ((file (buffer-file-name)))
     (unless (or (string-prefix-p " " (buffer-name))
                 (file-in-directory-p
                  file (expand-file-name "var" user-emacs-directory))
-                (string-match-p "\`\.?#\|~\'" (file-name-nondirectory file)))
+                (string-match-p "\\`\\.?#\\|~\\'" (file-name-nondirectory file)))
       (setq custom--closed-files
             (cons file (delete file custom--closed-files)))
       (when (> (length custom--closed-files) custom:closed-files-max)
@@ -4010,7 +4035,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 
 **** 派生二：Eglot server 配置（按命令归并）
 
-比纯收集多一步分组：同一 server 命令的多门语言要合并成一条 =(MODE... . SERVER-CMD)= ，所以构造抽成具名函数—— =assoc= 找到已有组就 =setcdr= 追加 mode，否则新建。 =custom:binding-help-sections= 的分组归并用的也是这个形状。
+比纯收集多一步分组：同一 server 命令的多门语言要合并成一条 =(MODE... . SERVER-CMD)= ，所以构造抽成具名函数—— =assoc= 找到已有组就 =setcdr= 追加 mode，否则新建。 =custom/binding-help-sections= 的分组归并用的也是这个形状。
 
 #+begin_src emacs-lisp
 (defun custom/language--derive-eglot-programs ()
@@ -4238,8 +4263,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
   :defer t
   :custom
   (flymake-fringe-indicator-position 'left-fringe)
-  (flymake-show-diagnostics-at-end
-   -of-line 'fancy)
+  (flymake-show-diagnostics-at-end-of-line 'fancy)
   (flymake-no-changes-timeout 0.5))
 
 (defun custom/flymake-list-errors-dwim ()
@@ -4785,7 +4809,6 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
   (org-src-window-setup 'current-window)
   (org-edit-src-content-indentation 0)
   (org-image-actual-width '(300))
-  (org-image-max-width t)
   :config
   (defun custom--org-toggle-link-previews ()
     (setq-local org-startup-with-link-previews (display-graphic-p)))
@@ -5198,6 +5221,13 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
   - =C-c o k V= ：在外部浏览器中开启可视化图谱。
 
 #+begin_src emacs-lisp
+;; 这几个 Org 命令上游没有 autoload 标记,此处全局绑定需要手工声明,
+;; 否则在 Org 尚未加载的会话里按键会报 commandp 错误。
+(autoload 'org-insert-structure-template "org" nil t)
+(autoload 'org-clock-in "org-clock" nil t)
+(autoload 'org-clock-out "org-clock" nil t)
+(autoload 'org-clock-goto "org-clock" nil t)
+
 (custom/bind "C-c o a" #'org-agenda "议程视图" "Org 与知识库")
 (custom/bind "C-c o f" #'custom/format-org-src-blocks "格式化全部代码块" "Org 与知识库")
 (custom/bind "C-c o i" #'org-insert-structure-template "插入代码块" "Org 与知识库")
@@ -5810,7 +5840,7 @@ AI Agent 的 Emacs 客户端交互面板，与常规终端独立运行。
 (use-package telega
   :defer t
   :commands (telega telega-kill)
-  :init
+  :config
   (keymap-set telega-prefix-map "k" #'telega-kill))
 
 (custom/bind "C-c a t" telega-prefix-map "Telegram (电报)" "生活应用")
@@ -5906,7 +5936,7 @@ Emacs 自带 =tetris= / =snake= / =gomoku= / =pong=, autoload 即用，无需 =u
       (save-excursion
         (goto-char (point-min))
         (while (re-search-forward
-                "^\s*\\(?:[^ \t\n]+[ \t]+\\)?\\(?:Warning\\|Error\\|Emergency\\|Debug\\) ([^)]*): "
+                "^[ \t]*\\(?:[^ \t\n]+[ \t]+\\)?\\(?:Warning\\|Error\\|Emergency\\|Debug\\) ([^)]*): "
                 nil t)
           (setq total (1+ total))
           (when (looking-at-p "Missing [‘`']lexical-binding[’'] cookie in ")
@@ -6039,18 +6069,21 @@ agenda 渲染走 \`org-map-entries',先确保惰性加载的 org 就绪。渲染
 (defcustom custom:dashboard-content-ratio 0.8
   "Dashboard 版心占窗口正文宽度的比例,两侧空列各占 (1-ratio)/2。
 按 100/140/200 三档常用列宽调优,不做逐列自适应。"
-  :type 'number)
+  :type 'number
+  :group 'custom-config)
 
 (defcustom custom:dashboard-min-content-width 40
   "触发渲染的最小版心宽度(列)。版心低于此值的窗口(含 resize
 拖拽经过的窄中间态)不做全量渲染,保留上一次可读内容,避免破碎
 显示;align-to 前缀的 max 0 钳制负责这类场景的显示兜底。"
-  :type 'integer)
+  :type 'integer
+  :group 'custom-config)
 
 (defcustom custom:dashboard-line-spacing 6
   "板块内行间距(像素),标题与条目统一生效。
 text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
-  :type 'integer)
+  :type 'integer
+  :group 'custom-config)
 #+end_src
 
 *** 板块边界与行距排版

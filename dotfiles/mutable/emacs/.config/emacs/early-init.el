@@ -16,7 +16,6 @@
 ;;    frame 几何行为必须在此设置
 ;; 4. TTY frame 初始参数 - 注入 window-system-default-frame-alist 的 t 条目，
 ;;    避免启动阶段显示 Emacs 默认有色 face
-;; 5. frame-background-mode 引导 - 让 daemon 启动期选对 face 变体（dark/light）
 
 ;;; Code:
 
@@ -49,28 +48,6 @@
       (dolist (parameter tty-parameters)
         (setf (alist-get (car parameter) (cdr entry)) (cdr parameter)))
     (push (cons t tty-parameters) window-system-default-frame-alist)))
-
-;; ═════════════════════════════════════════════════════════════════════════════
-;; frame-background-mode 引导（从颜色方案状态文件读取当前模式）
-;; ═════════════════════════════════════════════════════════════════════════════
-;;
-;; Emacs 以 `emacs --fg-daemon' 启动，frame 由 client 按需创建（瞬时），
-;; 无 standalone 冷启动的 1 秒空白期，故无需防闪屏颜色注入。这里只设置
-;; `frame-background-mode'：它指导 daemon 启动期的 face 变体选择（dark/light），
-;; 避免在首个 GUI frame 创建前 ef-themes 还未加载时，Emacs 误选 light 变体
-;; 导致短暂闪烁。状态文件由颜色方案模块在主题切换时写入。
-(let ((state-file (expand-file-name "var/color-scheme-state.el" user-emacs-directory))
-      (mode 'dark))
-  (when (file-exists-p state-file)
-    (condition-case nil
-        (with-temp-buffer
-          (insert-file-contents state-file)
-          (when (string-match-p "light" (buffer-string))
-            (setq mode 'light)))
-      (error nil)))
-  (setq frame-background-mode mode)
-  (add-to-list 'default-frame-alist `(background-mode . ,mode))
-  (add-to-list 'initial-frame-alist `(background-mode . ,mode)))
 
 (provide 'early-init)
 ;;; early-init.el ends here
