@@ -297,21 +297,6 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
   "声明 Which-key 展示的中间分组 KEY。"
   (custom/bind key nil description nil :prefix t))
 
-(defun custom/register-pending-wk-descs ()
-  "把暂存的全局键位描述注册到 Which-key。"
-  (dolist (entry (nreverse custom--pending-wk-descs))
-    (which-key-add-key-based-replacements (car entry) (cdr entry)))
-  (setq custom--pending-wk-descs nil))
-
-(defun custom/binding--group-name (entry)
-  "返回 ENTRY 声明的分组名;前缀声明(:group 为 nil)返回 nil。"
-  (plist-get entry :group))
-
-(defun custom/binding--help-line (entry)
-  "把 ENTRY 折成帮助手册里的一行 (KEY . DESCRIPTION)。"
-  (cons (plist-get entry :key)
-        (plist-get entry :description)))
-
 (defun custom/binding-help-sections ()
   "从 `custom:binding-spec' 生成帮助分组。
 返回 ((GROUP . ((KEY . DESCRIPTION) ...)) ...):分组按首次出现顺序,
@@ -321,15 +306,14 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
 `custom/language--derive-eglot-programs' 的归并形状。"
   (let (groups)
     (dolist (entry custom:binding-spec)
-      (let ((group (custom/binding--group-name entry)))
+      (let ((group (plist-get entry :group))
+            (line (cons (plist-get entry :key)
+                        (plist-get entry :description))))
         (when group
           (let ((existing (assoc group groups)))
             (if existing
-                (setcdr existing
-                        (append (cdr existing)
-                                (list (custom/binding--help-line entry))))
-              (push (list group (custom/binding--help-line entry))
-                    groups))))))
+                (setcdr existing (append (cdr existing) (list line)))
+              (push (list group line) groups))))))
     (nreverse groups)))
 #+end_src
 
@@ -566,15 +550,11 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
 (defvar custom:help-magit-keys nil
   "Magit 状态页速查卡键位行((键 . 中文说明) 列表)。")
 
-(defun custom/load-i18n-data ()
-  "加载本地化纯数据文件。"
-  (dolist (name custom:i18n-data-files)
-    (let ((file (expand-file-name name custom:i18n-data-directory)))
-      (unless (file-readable-p file)
-        (error "本地化数据文件不可读: %s" file))
-      (load file nil 'nomessage))))
-
-(custom/load-i18n-data)
+(dolist (name custom:i18n-data-files)
+  (let ((file (expand-file-name name custom:i18n-data-directory)))
+    (unless (file-readable-p file)
+      (error "本地化数据文件不可读: %s" file))
+    (load file nil 'nomessage)))
 #+end_src
 
 ** 右键菜单本地化
@@ -658,17 +638,15 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
     (map-keymap #'custom/context-menu--translate-binding keymap))
   keymap)
 
-(defun custom/context-menu-translate (menu)
-  "翻译菜单 KEYMAP 形态的 MENU（`context-menu-map' 与 `menu-bar-keymap' 共用）。"
-  (custom/context-menu--translate-keymap menu))
-
 ;; advice-add 对同一 advice 函数重复添加不会叠加执行,无需 member-p 前置
-(advice-add 'context-menu-map :filter-return #'custom/context-menu-translate)
+(advice-add 'context-menu-map :filter-return
+            #'custom/context-menu--translate-keymap)
 
 (custom/context-menu--translate-keymap
  (lookup-key global-map [menu-bar]))
 
-(advice-add 'menu-bar-keymap :filter-return #'custom/context-menu-translate)
+(advice-add 'menu-bar-keymap :filter-return
+            #'custom/context-menu--translate-keymap)
 
 (defun custom/context-menu--translate-menubar-on-activate ()
   "菜单栏展开前重翻 `global-map' 的 [menu-bar] 子树,兜住懒加载条目。"
@@ -1048,8 +1026,8 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
                         (alist-get 'severity
                                    (alist-get type flymake-diagnostic-types))))
                   (cond
-                   ((and severity (>= severity 2)) (cl-incf errors))
-                   ((and severity (>= severity 1)) (cl-incf warnings)))))
+                   ((and severity (>= severity 2)) (setq errors (1+ errors)))
+                   ((and severity (>= severity 1)) (setq warnings (1+ warnings))))))
               (list errors warnings))
           '(0 0))))
 
@@ -1778,51 +1756,41 @@ safe_call 静音);dead frame 的参数随之销毁,无需再清,故先判存活�
           (setq custom/tab-line--name-cache (cons key label))
           label)))))
 
-(defun custom--tab-line-render-face (face)
-  "把 FACE 归一成 `propertize' 直接可用的 face 列表,并统一关掉 box。
-FACE 为单个 face 名或以关键字开头的属性 plist 时,包成
-((:box nil) FACE);为 face 名列表时,在头部补上 (:box nil)。"
-  (if (and (listp face) (not (keywordp (car-safe face))))
-      (cons '(:box nil) face)
-    (list '(:box nil) face)))
-
-(defun custom--tab-line-make-label (name selected-p)
-  "由 NAME 拼出标签正文,并按选中态附上鼠标提示属性。
-返回 \" name \"(前后留空格、% 已转义)且带 `help-echo' 与 `mouse-face'
-(仅非选中标签高亮)属性的字符串;face 与 keymap 由调用方另行补上。"
-  (propertize (concat " " (string-replace "%" "%%" name) " ")
-              'mouse-face (unless selected-p 'tab-line-highlight)
-              'help-echo (concat (if selected-p "当前标签:" "左键切换标签,")
-                                 "鼠标中键关闭,右键打开菜单")))
-
-(defun custom--tab-line-close-button (render-face)
-  "返回按 RENDER-FACE 上色的关闭按钮文本。
-`tab-line-close-button-show' 固定为 'selected(见 tab-line-hooks 子节),
-只有选中标签显示关闭按钮,由调用方按选中态决定是否调用本函数。"
-  (let ((close (copy-sequence tab-line-close-button)))
-    (add-face-text-property 0 (length close) render-face t close)
-    close))
-
 (defun custom/tab-line-tab-name-format (tab tabs)
   "以接近 IDE 的样式格式化 TAB。
 face 选择交给内置 `tab-line-tab-face-functions',不手动构造 RGB plist;
 current/inactive 用内置 face,自动跟随主题。
 标签之间不加分隔符:选中与非选中标签各自的底色块已经足够区分,再插竖线是
 chrome 上的多余元素。buffer(窗口面板)之间的分隔线由 window divider 负责,
-见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]。"
+见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]。
+标签正文是 \" name \"(前后留空格、% 转义防 `format-mode-line' 吃掉),
+带 `mouse-face'(仅非选中标签)与 `help-echo';渲染用 face 统一归一成
+(:box nil . ...) 列表抹掉盒线,再经 `propertize' 上色。
+关闭按钮仅选中标签渲染(`tab-line-close-button-show' 为 'selected,
+见 tab-line-hooks 子节);模板串是全局共享的,先复制再盖 face。"
   (let* ((selected-p (eq tab (window-buffer)))
          (name (funcall tab-line-tab-name-function tab tabs))
          (face (if selected-p 'tab-line-tab-current 'tab-line-tab-inactive))
-         (label (custom--tab-line-make-label name selected-p)))
+         (label
+          (propertize (concat " " (string-replace "%" "%%" name) " ")
+                      'mouse-face (unless selected-p 'tab-line-highlight)
+                      'help-echo (concat (if selected-p "当前标签:" "左键切换标签,")
+                                         "鼠标中键关闭,右键打开菜单"))))
     (dolist (fn tab-line-tab-face-functions)
       (setq face (funcall fn tab tabs face t selected-p)))
-    (let* ((render-face (custom--tab-line-render-face face))
+    (let* ((render-face
+            (if (and (listp face) (not (keywordp (car-safe face))))
+                (cons '(:box nil) face)
+              (list '(:box nil) face)))
            (spacer
             (propertize " "
                         'face render-face
                         'display custom:tab-line-height-display))
            (close (when selected-p
-                    (custom--tab-line-close-button render-face)))
+                    (let ((button (copy-sequence tab-line-close-button)))
+                      (add-face-text-property
+                       0 (length button) render-face t button)
+                      button)))
            (rendered
             (concat
              spacer
@@ -2122,21 +2090,18 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
 - 回调统一经过 =custom/git--after-success= ：revert 发起命令时的文件 buffer（丢弃改动等场景文件内容已变），并在仓库根上刷新 Magit 状态页。异步回调执行时用户可能已关闭该 buffer，必须先做存活检查； =magit-refresh= 不是 autoload 函数，Magit 从未加载过（状态页从未打开）时它不存在，用 =fboundp= 守卫跳过。
 
 #+begin_src emacs-lisp
-(defun custom/git-repo-root (&optional file)
-  "返回 FILE 所在 Git 仓库根目录(vc 内置 rev-parse,worktree/submodule 安全)。
-不能改用 `vc-backend' 做类型判定:它只回答「对象是否被注册」,对目录恒 nil,
-而本函数的入参常是 `default-directory'。非 Git 目录安全返回 nil。"
-  (when-let* ((target (or file (buffer-file-name) default-directory)))
-    (vc-call-backend 'Git 'root target)))
-
 (defun custom/git-buffer-file ()
   "返回当前 buffer 对应的文件，不存在时抛出用户错误。"
   (or (buffer-file-name)
       (user-error "当前缓冲区没有关联文件")))
 
 (defun custom/git--ensure-repo (&optional file)
-  "确保 FILE 或当前 buffer 位于 Git 仓库中，并返回仓库根目录。"
-  (or (custom/git-repo-root file)
+  "确保 FILE 或当前 buffer 位于 Git 仓库中，并返回仓库根目录。
+仓库根定位走 `vc-call-backend' 的 rev-parse,worktree/submodule 安全。
+不能改用 `vc-backend' 做类型判定:它只回答「对象是否被注册」,对目录恒 nil,
+而入参常是 `default-directory'。非 Git 目录拿到 nil 后统一报错。"
+  (or (when-let* ((target (or file (buffer-file-name) default-directory)))
+        (vc-call-backend 'Git 'root target))
       (user-error "当前不在 Git 仓库中")))
 
 (defun custom/git--run (root args on-success)
@@ -2833,7 +2798,9 @@ Invalid face reference 照常记录——那些是真问题。"
       (car entry) (cadr entry) (cddr entry))))
 
 (with-eval-after-load 'which-key
-  (custom/register-pending-wk-descs)
+  (dolist (entry (nreverse custom--pending-wk-descs))
+    (which-key-add-key-based-replacements (car entry) (cdr entry)))
+  (setq custom--pending-wk-descs nil)
   (custom/which-key-apply-descriptions))
 
 (with-eval-after-load 'isearch
@@ -3580,10 +3547,10 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
          (buf (or (custom--terminal-existing-buffer)
                   (let ((before (buffer-list)))
                     (save-window-excursion (ghostel))
-                    (cl-find-if
+                    (seq-find
                      (lambda (b)
                        (with-current-buffer b (derived-mode-p 'ghostel-mode)))
-                     (cl-set-difference (buffer-list) before))))))
+                     (seq-difference (buffer-list) before))))))
     (custom/display-or-focus buf custom:terminal-side-action t)))
 #+end_src
 
@@ -3844,19 +3811,16 @@ mode-alist 的残留映射(如 gdscript→gdformat),缺二进制的 formatter �
   '((c++-ts-mode . cpp) (csharp-ts-mode . c-sharp) (mhtml-ts-mode . html))
   "Tree-sitter 语言名与 `*-ts-mode' 命名不一致的覆盖表。")
 
-(defun custom--treesit-mode-ready-p (ts-mode)
-  "TS-MODE 的 grammar 是否就绪。"
-  (let* ((name (symbol-name ts-mode))
-         (override (cdr (assq ts-mode custom--treesit-lang-overrides)))
-         (lang (or override
-                   (intern (string-remove-suffix "-ts-mode" name)))))
-    (treesit-ready-p lang t)))
-
 (require 'treesit)
 (dolist (mapping custom:language-treesit-remaps)
-  (when (and (fboundp (cdr mapping))
-             (custom--treesit-mode-ready-p (cdr mapping)))
-    (add-to-list 'major-mode-remap-alist mapping)))
+  (let ((ts-mode (cdr mapping)))
+    (when (fboundp ts-mode)
+      (let* ((name (symbol-name ts-mode))
+             (override (cdr (assq ts-mode custom--treesit-lang-overrides)))
+             (lang (or override
+                       (intern (string-remove-suffix "-ts-mode" name)))))
+        (when (treesit-ready-p lang t)
+          (add-to-list 'major-mode-remap-alist mapping))))))
 #+end_src
 
 *** Eglot 激活序列
@@ -4415,21 +4379,17 @@ side-window 内直接 RET 会把文件开进面板,故走本命令改写目标�
     (custom/dired--panel-setup buf)
     (custom/display-or-focus buf custom:dired-side-action t)))
 
-(defun custom--panel-dired-windows ()
-  "返回当前 frame 上显示 Dired 面板的窗口列表。
+(defun custom/panel-dired-toggle ()
+  "开关左侧文件面板(VSCode Ctrl+B):已显示则收起窗口(buffer 保留),否则打开。
 面板识别靠 `custom--dired-panel-p' 标记而非 side 参数:用户可能把
 面板窗口拖出 side 位,标记才是语义来源。"
-  (seq-filter
-   (lambda (w)
-     (with-current-buffer (window-buffer w)
-       (and (derived-mode-p 'dired-mode)
-            (bound-and-true-p custom--dired-panel-p))))
-   (window-list)))
-
-(defun custom/panel-dired-toggle ()
-  "开关左侧文件面板(VSCode Ctrl+B):已显示则收起窗口(buffer 保留),否则打开。"
   (interactive)
-  (if-let* ((wins (custom--panel-dired-windows)))
+  (if-let* ((wins (seq-filter
+                   (lambda (w)
+                     (with-current-buffer (window-buffer w)
+                       (and (derived-mode-p 'dired-mode)
+                            (bound-and-true-p custom--dired-panel-p))))
+                   (window-list))))
       (dolist (w wins) (delete-window w))
     (custom/panel-dired)))
 
@@ -4859,29 +4819,18 @@ SCHEDULED: %^t
   (org-modern-block-name t)
   (org-modern-block-fringe 4))
 
-(defun custom/org-modern--tty-safe-p ()
-  "当前 frame 是真实彩色 TTY 时返回非 nil。"
-  (and (not noninteractive)
-       (not (display-graphic-p))
-       (>= (display-color-cells) 8)))
-
-(defun custom/org-modern--box-color-usable-p ()
-  "当前 frame 的 `default' 背景能否直接当 `:box' 的颜色用。
-`xfaces.c' 只接受 nil 或非空字符串作 `:color',而 TTY 透明策略把背景清成符号
-`unspecified',该规格会被判为非法。org-modern 恰好吃这个返回值:
-`org-modern--update-faces' 用 `(face-attribute 'default :background nil t)' 当
-label/habit 的边框色。"
-  (let ((bg (face-attribute 'default :background nil t)))
-    (or (null bg) (stringp bg))))
-
 (defun custom--skip-uncolorable-org-modern-border (orig &rest args)
   "背景色不可用时跳过 org-modern 的 label 边框重算，否则交给 ORIG。
 保留这种 box 的代价不小:`org-modern-mode' 由 `org-mode-hook' 启用(含 dashboard
 的 agenda 扫描会顺路打开 org 文件),重算抛出的 \"Invalid face box\" 会打断模式
 初始化并被上层报成 \"File mode specification error\"——不只是日志噪音;而 box 在
-终端本就不绘制(见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]])。"
-  (when (custom/org-modern--box-color-usable-p)
-    (apply orig args)))
+终端本就不绘制(见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]])。
+可用性以 `default' 背景值直接判定:`xfaces.c' 只接受 nil 或非空字符串作
+`:box' 的 `:color',而 TTY 透明策略把背景清成符号 `unspecified',该规格会
+被判为非法;`org-modern--update-faces' 正用这个返回值当 label/habit 边框色。"
+  (let ((bg (face-attribute 'default :background nil t)))
+    (when (or (null bg) (stringp bg))
+      (apply orig args))))
 
 (with-eval-after-load 'org-modern
   (advice-add 'org-modern--update-faces :around
@@ -4896,7 +4845,9 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 像素级细线与 Nerd 子弹。本函数深度 -90,先于 `org-modern-mode' 运行,使按 buffer 构建
 的星号缓存取自正确取值。跨 GUI/TTY 共享的 buffer 保留首次启用该 mode 的 frame 设置
 (`org-modern' 缓存为 buffer-local,无法 per-frame,见 mixed-gui-tty-constraints)。"
-  (when (custom/org-modern--tty-safe-p)
+  (when (and (not noninteractive)
+             (not (display-graphic-p))
+             (>= (display-color-cells) 8))
     (setq-local org-modern-table nil
                 org-modern-table-vertical nil
                 org-modern-table-horizontal nil
@@ -5242,29 +5193,25 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 - *面板定位* ： =C-c w d= 让左侧文件面板切到当前文件所在目录并选中文件行（Explorer 的 Reveal in Explorer 等价物）。
 
 #+begin_src emacs-lisp
-(defun custom/dired-buffer-in-root (root)
-  "返回显示 ROOT 目录的 Dired buffer(按 dired-noselect 复用规则),无则 nil。"
-  (seq-find (lambda (buf)
-              (with-current-buffer buf
-                (and (stringp dired-directory)
-                     (equal (expand-file-name dired-directory) root))))
-            (custom--buffers-in-mode 'dired-mode)))
-
-(defun custom/visible-panel-buffers ()
-  "收集三面板(左 Dired/底终端/右 Agent)当前已存在的 buffer 列表。
-显隐判断只用已存在 buffer:dired 按 dired-noselect 的复用规则查找
-(dired-mode + dired-directory 匹配项目根),隐藏路径不为此创建 buffer。"
-  (let* ((root (expand-file-name (custom/project-root-or-default)))
-         (dired-buf (custom/dired-buffer-in-root root)))
-    (append (remq nil (list dired-buf (custom--terminal-existing-buffer)))
-            (custom--buffers-in-mode 'agent-shell-mode))))
-
 (defun custom/panels-toggle ()
   "一键开关三面板布局(左 Dired / 底终端 / 右 Agent)。
 任一面板已显示则全部隐藏(缓冲区保留,终端与 agent 会话不中断);
-全部隐藏时重新打开。开关后焦点均回到主编辑窗口(Zed dock 行为)。"
+全部隐藏时重新打开。开关后焦点均回到主编辑窗口(Zed dock 行为)。
+显隐判断只用已存在 buffer:dired 按 dired-noselect 的复用规则查找
+(dired-mode + dired-directory 匹配项目根),不为判断新建 buffer。"
   (interactive)
-  (let ((buffers (custom/visible-panel-buffers)))
+  (let* ((root (expand-file-name (custom/project-root-or-default)))
+         (dired-buf (seq-find
+                     (lambda (buf)
+                       (with-current-buffer buf
+                         (and (stringp dired-directory)
+                              (equal (expand-file-name dired-directory)
+                                     root))))
+                     (custom--buffers-in-mode 'dired-mode)))
+         (buffers (append
+                   (remq nil (list dired-buf
+                                   (custom--terminal-existing-buffer)))
+                   (custom--buffers-in-mode 'agent-shell-mode))))
     (if (seq-some #'get-buffer-window buffers)
         (dolist (buf buffers)
           (when-let* ((win (get-buffer-window buf)))
@@ -5853,26 +5800,29 @@ text property line-spacing 仅 GUI frame 生效,TTY 行高固定会忽略。"
 #+begin_src emacs-lisp
 (defun custom/dashboard--compress-middle-dirs (abbrev)
   "把 ABBREV 的中间目录压为首字母,返回压缩后的完整路径。
-首段(根或卷标)与末段(文件名)不压缩;隐藏目录(.x)保留点号取
-第二个字符,空目录项原样保留。"
+首段(根或卷标)与末段(文件名)不压缩,中间段逐段交给
+`custom/dashboard--dir-initial'。"
   (let* ((parts (split-string abbrev "/" t))
          (len (length parts))
          (head (car parts))
          (file (car (last parts)))
-         (middle (cl-subseq parts 1 (1- len)))
-         (compressed
-          (seq-map
-           (lambda (dir)
-             (cond ((string-empty-p dir) dir)
-                   ((string-prefix-p "." dir)
-                    (if (> (length dir) 1)
-                        (concat "." (substring dir 1 2))
-                      dir))
-                   (t (substring dir 0 1))))
-           middle)))
+         (middle (seq-subseq parts 1 (1- len)))
+         (compressed '()))
+    (dolist (dir middle)
+      (push (custom/dashboard--dir-initial dir) compressed))
     (concat head "/"
-            (mapconcat #'identity compressed "/")
+            (mapconcat #'identity (nreverse compressed) "/")
             "/" file)))
+
+(defun custom/dashboard--dir-initial (dir)
+  "返回目录 DIR 压缩成的首字母项。
+隐藏目录(.x)保留点号取第二个字符,空目录项原样返回。"
+  (cond ((string-empty-p dir) dir)
+        ((string-prefix-p "." dir)
+         (if (> (length dir) 1)
+             (concat "." (substring dir 1 2))
+           dir))
+        (t (substring dir 0 1))))
 
 (defun custom/dashboard--truncate-to-width (path width)
   "PATH 超出 WIDTH 列时头部截断补 ...,WIDTH 不足 3 列则只留 ...。
@@ -6028,15 +5978,6 @@ OV 提供标题显示文本,用于折算已占用宽度;须在
 - 版块区按版心计算统一的行首前缀（块内左对齐），Banner 与欢迎语按自身行宽各自居中。
 
 #+begin_src emacs-lisp
-(defun custom/dashboard--decorate-section (ov key width icon-w separator)
-  "装饰单个板块:OV 标题 overlay,KEY 右贴快捷键,WIDTH 版心宽。
-SEPARATOR 是调用方按版心折算好的 propertized 分割线串。
-含三步:板块尾空行换分割线、板块内行加行间距、标题行缩进+快捷键右贴。
-倒序调用,前面的 insert 不影响后面 heading 的位置。"
-  (custom/dashboard--replace-section-separator ov separator)
-  (custom/dashboard--indent-heading ov)
-  (custom/dashboard--suffix-heading-key ov key width icon-w))
-
 (defun custom/dashboard--center-line (body-width)
   "把当前行按自身行宽居中(行首加 align-to 前缀)。
 行宽用插件的像素折算测量:string-width 会把 ─ ═ 等
@@ -6099,8 +6040,10 @@ footer)长短不一,逐行按自身行宽各自居中,整块左对齐会全贴
 (`dashboard-heading' face)而非 `dashboard--section-starts':渲染末尾的
 page-separator 替换会使后者的绝对位置漂移。只从
 `custom/dashboard--refresh-in-window' 调用,保证运行在正确窗口上下文。
-三步拆分:`custom/dashboard--heading-overlays' 收集、
-`custom/dashboard--decorate-section' 单板块装饰、
+步骤:`custom/dashboard--heading-overlays' 收集 overlay,与
+`custom:dashboard-heading-keys' 逐个配对(多余的一方截断)后倒序
+装饰——每个板块做分割线替换、标题缩进、快捷键右贴,倒序保证
+前面的 insert 不影响后面 heading 的位置;最后
 `custom/dashboard--center-groups' 分组居中。"
   (with-current-buffer (get-buffer dashboard-buffer-name)
     (let* ((width (custom/dashboard--content-width window))
@@ -6113,13 +6056,18 @@ page-separator 替换会使后者的绝对位置漂移。只从
                                   (max 1 (string-pixel-width "─")))) ?─)
                        'face 'shadow))
            (ovs (custom/dashboard--heading-overlays))
+           (keys custom:dashboard-heading-keys)
+           (pairs '())
            (inhibit-read-only t))
-      (let ((pairs (reverse (cl-mapcar #'cons ovs
-                                       custom:dashboard-heading-keys))))
-        (dolist (pair pairs)
-          (when (cdr pair)
-            (custom/dashboard--decorate-section
-             (car pair) (cdr pair) width icon-w separator))))
+      (dolist (ov ovs)
+        (when keys
+          (push (cons ov (pop keys)) pairs)))
+      (dolist (pair pairs)
+        (when (cdr pair)
+          (custom/dashboard--replace-section-separator (car pair) separator)
+          (custom/dashboard--indent-heading (car pair))
+          (custom/dashboard--suffix-heading-key
+           (car pair) (cdr pair) width icon-w)))
       (custom/dashboard--center-groups ovs width window))))
 #+end_src
 
