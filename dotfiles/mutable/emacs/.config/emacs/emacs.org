@@ -115,7 +115,7 @@
 - *延迟注册* ： =custom/binding--register-which-key= 在 Which-key 尚未加载时，把描述暂存进 =custom--pending-wk-descs= ，待包就绪后再统一刷新。这是「守卫只用于延迟加载的第三方包」这一约定的活例子。
 - *为什么命令不写绝对路径* ：Guix 每次升级都会改变 =/gnu/store/= 哈希路径，配置里只存命令名（如 ="git"= ），由 =exec-path= 在运行时解析。所有外部工具依赖都遵循这一约定。
 - *daemon 与 Frame 的关系* ：守护进程启动时没有屏幕，一切与显示相关的设置挂到 =after-make-frame-functions= ，等客户端连接创建窗口时才执行。后面 appearance 域的全部初始化都建立在这个前提上。
-- *异步代码的形状* ：[[#core-focus-save][失焦自动保存]]与[[#core-stale-autosave][陈旧自动保存异步审查]]用 idle timer 推迟执行，回调里会出现 =buffer-live-p= 存活检查——因为 timer 触发时缓冲区可能已被关闭。同步路径里的函数不需要这种检查，见到它就说明「这是异步回调」。
+- *异步代码的形状* ：[[#core-focus-save][失焦自动保存]]用 idle timer 推迟执行，回调里会出现 =buffer-live-p= 存活检查——因为 timer 触发时缓冲区可能已被关闭。同步路径里的函数不需要这种检查，见到它就说明「这是异步回调」。
 
 ** GC 与启动优化
 :PROPERTIES:
@@ -476,95 +476,6 @@ DESCRIPTION、GROUP 与 PROPERTIES 同时供 Which-key 和帮助使用。"
                                #'custom/save-user-file-buffers))))
 
 (add-function :after after-focus-change-function #'custom/schedule-focus-save)
-#+end_src
-
-*** 陈旧自动保存异步审查
-:PROPERTIES:
-:CUSTOM_ID: core-stale-autosave
-:END:
-
-如果 Emacs 异常退出留下了比源文件更新的 =#file#= 自动保存文件，打开原文件时 Emacs 默认会在 =after-find-file= 中执行 =sit-for= 强行停顿 1 秒警告。
-
-这里通过为 =after-find-file= 添加 =:around= 类型的 advice，利用 =cl-letf= 临时将 =sit-for= 替换为空操作，消除 1 秒无意义停顿，同时将待审查的文件记入 =custom--stale-auto-saves= 列表。
-
-空闲时由定时器逐个处理：内容完全相同的文件直接安全移入回收站；内容不同的则提示用户按需恢复。这里使用绝对时间定时器 =run-at-time= 而非 idle timer，避免守护进程在无输入时 idle 恒真引发调度过载。
-
-#+begin_src emacs-lisp
-(defvar custom--stale-auto-saves nil
-  "after-find-file 检测到的陈旧 auto-save 待审列表,(auto-save . source) 对。")
-
-(defvar custom--stale-auto-save-timer nil
-  "处理待审 auto-save 文件的 pending timer。")
-
-(defun custom--defer-auto-save-warning (orig &rest args)
-  "after-find-file 的 :around advice:auto-save 警告不阻塞,改为延迟处理。
-auto-save 文件比源文件新时把 sit-for 局部绑成 no-op 并记入
-`custom--stale-auto-saves' 由定时器处理;其余情况原样透传。
-不用 idle timer:daemon 无输入时 idle 恒真,reschedule 会 tight-loop
-饿死 server;run-at-time 是绝对时间,不受 idle 状态影响。"
-  (let* ((auto-save (and (not noninteractive)
-                         buffer-file-name
-                         (or buffer-auto-save-file-name
-                             (make-auto-save-file-name))))
-         (stale (and auto-save
-                     (file-newer-than-file-p auto-save buffer-file-name))))
-    (when stale
-      (push (cons auto-save buffer-file-name) custom--stale-auto-saves)
-      (unless custom--stale-auto-save-timer
-        (setq custom--stale-auto-save-timer
-              (run-at-time 2 nil #'custom--review-stale-auto-saves))))
-    (cl-letf (((symbol-function 'sit-for)
-               (if stale #'ignore (symbol-function 'sit-for))))
-      (apply orig args))))
-
-(defun custom--files-content-equal-p (file1 file2)
-  "FILE1 与 FILE2 内容是否逐字节相同。"
-  (and (file-exists-p file1) (file-exists-p file2)
-       (equal (with-temp-buffer (insert-file-contents-literally file1)
-                                (buffer-string))
-              (with-temp-buffer (insert-file-contents-literally file2)
-                                (buffer-string)))))
-
-(defun custom--review-one-stale-auto-save (auto-save source)
-  "审查单个陈旧 auto-save 文件 AUTO-SAVE,其源文件为 SOURCE。
-内容与源文件相同则移入回收站;不同则询问是否删除(可能含未保存修改,
-拒绝时保留并提示 recover-this-file)。AUTO-SAVE 已不存在时什么也不做。"
-  (when (file-exists-p auto-save)
-    (condition-case err
-        (cond
-         ((custom--files-content-equal-p auto-save source)
-          (move-file-to-trash auto-save)
-          (message "[auto-save] 已清理与源文件相同的陈旧文件: %s"
-                   (file-name-nondirectory source)))
-         ((y-or-n-p
-           (format "%s 的陈旧 auto-save 与源文件不同(可能含未保存修改),删除? "
-                   (file-name-nondirectory source)))
-          (move-file-to-trash auto-save))
-         (t
-          (message "[auto-save] 已保留 %s,需要时 M-x recover-this-file"
-                   auto-save)))
-      (error
-       (message "[auto-save] 处理 %s 失败: %s"
-                auto-save (error-message-string err))))))
-
-(defun custom--review-stale-auto-saves ()
-  "空闲时处理 `custom--stale-auto-saves' 中的陈旧 auto-save 文件。
-每个条目交 `custom--review-one-stale-auto-save' 逐个审查。无 client
-frame 或 minibuffer 占用时顺延——daemon 哑 frame 上的 minibuffer 提示
-会阻塞 server,必须等真实 client 就绪。"
-  (let ((client-frame (seq-find (lambda (f) (frame-parameter f 'client))
-                                (frame-list))))
-    (if (or (not client-frame) (active-minibuffer-window))
-        (setq custom--stale-auto-save-timer
-              (run-at-time 2 nil #'custom--review-stale-auto-saves))
-      (setq custom--stale-auto-save-timer nil)
-      (with-selected-frame client-frame
-        (let ((pending custom--stale-auto-saves))
-          (setq custom--stale-auto-saves nil)
-          (dolist (entry pending)
-            (custom--review-one-stale-auto-save (car entry) (cdr entry))))))))
-
-(advice-add 'after-find-file :around #'custom--defer-auto-save-warning)
 
 (unless (or (daemonp) noninteractive)
   (server-mode 1))
@@ -953,7 +864,7 @@ VSCode/Zed 把编辑器视为文件系统的实时视图：文件被外部修改
   - =wide= （≥160 列）：展示全部详细信息。
   - =medium= （≥120 列）：适当收敛辅助指示。
   - =narrow= （≥80 列）：隐藏次要状态段。
-  - =compact= （<80 列）：左段精简为仅显示当前模式名，右段保留时间与电量。
+  - =compact= （<80 列）：仅显示当前模式名，其余段全部隐藏。
 - *留白与终端防溢出* ： =custom:modeline-padding= 控制左右两侧的留白列数（默认 1）。右缘末列为终端续行与截断保留位，留白设置为 1 可避免在终端右边缘出现多余的截断箭头。
 
 #+begin_src emacs-lisp
@@ -1157,7 +1068,7 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
 
 **** 左段：文件信息
 
-从左到右依次是：工程相对路径、文件名、Git 分支、VC 状态、文件编码、位置百分比与行列号。前三项带缓存（key 命中直接返回，见 [[#modeline-helpers][图标与缓存辅助]]）；VC 状态复刻旧版十态映射，每种状态各自带语义化图标与颜色。
+从左到右依次是：工程相对路径、文件名、Git 分支、VC 状态、文件编码与行列号。前三项带缓存（key 命中直接返回，见 [[#modeline-helpers][图标与缓存辅助]]）；VC 状态收敛为三态（编辑/干净/未跟踪），各有语义化图标与颜色。
 
 #+begin_src emacs-lisp
 (defun custom/modeline--path-segment (tier)
@@ -1224,37 +1135,34 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
         ""))))
 
 (defun custom/modeline--vc-segment (tier)
-  "返回 TIER 对应的修改与 VC 状态(含状态 icon)。
-复刻旧版十态映射:每种状态各自带语义化 nerd-icons icon + face。"
+  "返回 TIER 对应的 VC 状态(含状态 icon),收敛为三态。
+有未保存改动或 VC 状态为编辑类 → edited(warning);up-to-date →
+clean(success);unregistered → untracked(warning);其余(含 ignored、
+未受版本控制)不显示。"
   (if (or (eq tier 'compact) (not buffer-file-name))
       ""
     (when (eq custom/modeline--vc-state-cache :unknown)
       (custom/modeline--refresh-vc-state))
-    (let* ((state (if (buffer-modified-p)
-                      'buffer-modified
-                    custom/modeline--vc-state-cache))
-           (spec (pcase state
-                   ('up-to-date       (list "clean"     "nf-md-check_circle"       'success))
-                   ('edited           (list "edited"    "nf-md-pencil"             'warning))
-                   ('buffer-modified  (list "unsaved"   "nf-md-content_save_alert" 'warning))
-                   ('added            (list "added"     "nf-md-plus_circle"        'success))
-                   ('removed          (list "removed"   "nf-md-minus_circle"       'error))
-                   ('missing          (list "missing"   "nf-md-alert_circle"       'error))
-                   ('conflict         (list "conflict"  "nf-md-alert_octagon"      'error))
-                   ('needs-merge      (list "merge"     "nf-md-source_merge"       'warning))
-                   ('needs-update     (list "update"    "nf-md-cloud_download"     'warning))
-                   ('ignored          (list "ignored"   "nf-md-eye_off"            'shadow))
-                   ('unregistered     (list "untracked" "nf-md-help_circle"        'warning))
-                   (_ nil))))
-      (if spec
-          (let ((text (car spec))
-                (icon-name (cadr spec))
-                (face (caddr spec)))
-            (custom/modeline--segment
-             (custom/modeline--with-icon
-              (custom/modeline--icon icon-name) text)
-             face))
-        ""))))
+    (cond
+     ((or (buffer-modified-p)
+          (memq custom/modeline--vc-state-cache
+                '(edited added removed missing conflict
+                         needs-merge needs-update)))
+      (custom/modeline--segment
+       (custom/modeline--with-icon
+        (custom/modeline--icon "nf-md-pencil") "edited")
+       'warning))
+     ((eq custom/modeline--vc-state-cache 'up-to-date)
+      (custom/modeline--segment
+       (custom/modeline--with-icon
+        (custom/modeline--icon "nf-md-check_circle") "clean")
+       'success))
+     ((eq custom/modeline--vc-state-cache 'unregistered)
+      (custom/modeline--segment
+       (custom/modeline--with-icon
+        (custom/modeline--icon "nf-md-help_circle") "untracked")
+       'warning))
+     (t ""))))
 
 (defun custom/modeline--coding-segment (tier)
   "返回 TIER 对应的编码(wide/medium 显示)。"
@@ -1266,27 +1174,6 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
          (symbol-name
           (or (coding-system-base buffer-file-coding-system) 'undecided))))
        'font-lock-string-face)
-    ""))
-
-(defun custom/modeline--position-segment (tier)
-  "返回 TIER 对应的位置百分比与 buffer 大小(wide 显示大小)。
-段内 % 按字面产出:整行输出最后统一过 `custom/modeline--escape',
-预转义会被二次转义成字面 %%。"
-  (if (memq tier '(wide medium))
-      (let* ((range (max 1 (- (point-max) (point-min))))
-             (percent
-              (round (* 100.0
-                        (/ (float (- (point) (point-min))) range))))
-             (base (custom/modeline--with-icon
-                    (custom/modeline--icon "nf-md-flag_checkered")
-                    (format "%d%%" percent)))
-             (text (if (eq tier 'wide)
-                       (format "%s %s" base
-                               (custom/modeline--with-icon
-                                (custom/modeline--icon "nf-md-format_list_bulleted")
-                                (file-size-human-readable (buffer-size))))
-                     base)))
-        (custom/modeline--segment text 'font-lock-doc-face))
     ""))
 
 (defun custom/modeline--location-segment (tier)
@@ -1433,11 +1320,6 @@ point,多窗口同 buffer 时行列号会错。"
 不能用空闲时长判定:daemon 长时间空闲时,`current-idle-time' 早已超过
 阈值,刚并入的消息会被立即撤掉,用户根本看不到。")
 
-(defvar custom/modeline--message-persistent nil
-  "当前左半消息是否持续显示(eldoc 文档)。
-持续消息不经 4 秒超时撤下——eldoc 的语义是 point 不动就持续在场,
-撤下只随下一个输入事件或 eldoc 的清除回调。")
-
 (defvar custom/modeline--rendering nil
   "状态行渲染期标志;渲染途中求值的组件若发消息,退化为整行显示以避免递归。")
 
@@ -1445,11 +1327,6 @@ point,多窗口同 buffer 时行列号会错。"
   "本次渲染的目标窗口;nil 表示用选中窗口。
 refresh 按 frame 刷新时把该 frame 的选中窗口绑到这里,使段求值与
 %l/%c 的窗口上下文一致。")
-
-(defvar custom/modeline--minibuf-overlay nil
-  "活动 minibuffer 输入行右缘状态的 overlay;任一时刻只属于一个
-minibuffer buffer,归属不符时由 `custom/modeline--update-minibuf-overlay'
-重建(递归 minibuffer 各自独立)。")
 
 (defun custom/modeline--usable-width (frame)
   "FRAME 的 echo area 可用列数。
@@ -1480,7 +1357,6 @@ project 缓存都依赖该上下文);左段有待显示的短消息时由消息�
                                 (custom/modeline--branch-segment tier)
                                 (custom/modeline--vc-segment tier)
                                 (custom/modeline--coding-segment tier)
-                                (custom/modeline--position-segment tier)
                                 (custom/modeline--location-segment tier)
                                 (when (eq tier 'compact)
                                   (custom/modeline--major-segment))))))
@@ -1517,84 +1393,6 @@ project 缓存都依赖该上下文);左段有待显示的短消息时由消息�
   text)
 #+end_src
 
-*** 活动 Minibuffer 状态
-:PROPERTIES:
-:CUSTOM_ID: modeline-minibuffer
-:END:
-
-处理 Minibuffer 激活时的状态展示与让位逻辑：
-
-- *状态行避让* ：当用户在 Minibuffer 输入命令时，状态行自动让位给输入框。
-- *输入行右缘精简状态* ：通过单行 overlay 在输入行最右侧显示诊断、项目与时间的精简状态（ =custom/modeline--minibuf-status= ）；当输入过长或出现提示（如 =[No match]= ）时自动避让；退出 Minibuffer 时立即销毁 overlay。
-
-#+begin_src emacs-lisp
-(defun custom/modeline--minibuf-status ()
-  "活动 minibuffer 右缘的精简状态:诊断·项目名·时间。
-在发起 minibuffer 的窗口 buffer 中求值;无源窗口时退化为仅时间。
-段内 % 不转义——overlay 文本按字面显示,不经 % 重扫。"
-  (let ((source (minibuffer-selected-window)))
-    (if (window-live-p source)
-        (with-current-buffer (window-buffer source)
-          (custom/modeline--join
-           (custom/modeline--diagnostics-segment 'medium)
-           (when-let* ((project (custom/modeline--project-info))
-                       (name (cadr project)))
-             (custom/modeline--segment name 'font-lock-type-face))
-           (custom/modeline--time-segment 'narrow)))
-      (custom/modeline--time-segment 'narrow))))
-
-(defun custom/modeline--update-minibuf-overlay (mini-window)
-  "在 MINI-WINDOW 的输入行右缘渲染精简状态(诊断·项目·时间)。
-仅当右缘空隙足够时显示——输入过长时自动隐藏;`minibuffer-message'
-的提示 overlay(如 [No match])在场时让位。退出由
-`custom/modeline--on-minibuffer-exit' 清理。
-不检查窗口高度:`resize-mini-windows' 为 grow-only 时窗口高度会残留
-大于内容行数,而补全候选走独立的 *Completions* 窗口,不与本 overlay
-争用输入行。"
-  (with-current-buffer (window-buffer mini-window)
-    (let* ((width (window-total-width mini-window))
-           (text (custom/modeline--minibuf-status))
-           (eol (save-excursion (goto-char (point-max)) (current-column)))
-           (gap (- width eol (string-width text) custom:modeline-padding 1))
-           (show (and (>= gap 1)
-                      ;; minibuffer-message-overlay 是 C 内建变量(恒已定义),
-                      ;; 只需检查它此刻是否真有提示在场
-                      (not (and (overlayp minibuffer-message-overlay)
-                                (eq (overlay-buffer
-                                     minibuffer-message-overlay)
-                                    (current-buffer))
-                                (overlay-get minibuffer-message-overlay
-                                             'after-string))))))
-      (unless (and (overlayp custom/modeline--minibuf-overlay)
-                   (eq (overlay-buffer custom/modeline--minibuf-overlay)
-                       (current-buffer)))
-        (when (overlayp custom/modeline--minibuf-overlay)
-          (delete-overlay custom/modeline--minibuf-overlay))
-        (setq custom/modeline--minibuf-overlay
-              (make-overlay 1 1 nil t nil)))
-      (move-overlay custom/modeline--minibuf-overlay (point-max) (point-max))
-      (overlay-put custom/modeline--minibuf-overlay 'after-string
-                   (when show (concat (make-string gap ?\s) text))))))
-
-(defun custom/modeline--on-minibuffer-setup ()
-  "minibuffer 激活时立即渲染右缘精简状态,不等首次按键的 post-command。
-setup-hook 运行时 minibuffer window 可能尚未被 `active-minibuffer-window'
-认领,故同时接受选中窗口本身是 minibuffer 的情形。"
-  (when (bound-and-true-p minibuffer-line-mode)
-    (condition-case nil
-        (when-let* ((mini (or (active-minibuffer-window)
-                              (and (window-minibuffer-p (selected-window))
-                                   (selected-window)))))
-          (custom/modeline--update-minibuf-overlay mini))
-      (error nil))))
-
-(defun custom/modeline--on-minibuffer-exit ()
-  "minibuffer 退出时删除右缘状态 overlay;状态行由 post-command 与
-每秒 tick 恢复。"
-  (when (overlayp custom/modeline--minibuf-overlay)
-    (delete-overlay custom/modeline--minibuf-overlay)))
-#+end_src
-
 *** 刷新调度与底栏集成
 :PROPERTIES:
 :CUSTOM_ID: modeline-refresh
@@ -1612,14 +1410,13 @@ setup-hook 运行时 minibuffer window 可能尚未被 `active-minibuffer-window
   "把状态行写入 `custom/modeline--minibuffer';内容有变化才重写并置位 redisplay。
 FRAME 缺省为选中 frame;挂在 `window-size-change-functions' 上时会传入
 尺寸变化的 frame,使 TTY resize、分屏后的右缘对齐立即重算。
-minibuffer 激活时改为刷新其输入行右缘的精简状态 overlay(见
-`custom/modeline--update-minibuf-overlay'),状态行本身退出后恢复。
+minibuffer 激活期间不刷新——底栏此时是输入区,退出后由 post-command
+与每秒 tick 恢复显示。
 整段包 condition-case:挂在 hook 上的函数一旦抛错会被 Emacs 自动移出
 hook,刷新从此静默停摆——这是状态行「莫名其妙消失」的一条真实路径。"
   (when (bound-and-true-p minibuffer-line-mode)
     (condition-case nil
-        (if-let* ((mini (active-minibuffer-window)))
-            (custom/modeline--update-minibuf-overlay mini)
+        (unless (active-minibuffer-window)
           (let* ((frame (or frame (selected-frame)))
                  (mw (minibuffer-window frame))
                  (custom/modeline--target-window
@@ -1650,14 +1447,12 @@ hook,刷新从此静默停摆——这是状态行「莫名其妙消失」的一
       (error nil))))
 
 (defun custom/modeline--tick ()
-  "每秒兜底:重渲染状态行,短消息并入满 4 秒后撤下左半(持续消息除外)。
+  "每秒兜底:重渲染状态行,短消息并入满 4 秒后撤下左半。
 刻意用普通 timer 而非 repeat 型 idle timer:后者每个空闲周期只触发一次
 (timer.el 重调度后置 `timer--triggered',要等下次输入事件才复位),
-daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效——与
-`custom--stale-auto-save-timer' 放弃 idle timer 的理由相同。"
+daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效。"
   (custom/modeline-refresh)
   (when (and custom/modeline--message
-             (not custom/modeline--message-persistent)
              (or (null custom/modeline--message-time)
                  (>= (float-time
                       (time-subtract nil custom/modeline--message-time))
@@ -1675,8 +1470,6 @@ daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效—�
   (add-hook 'post-command-hook #'custom/modeline-refresh)
   (add-hook 'window-size-change-functions #'custom/modeline-refresh)
   (add-hook 'window-state-change-hook #'custom/modeline-refresh)
-  (add-hook 'minibuffer-setup-hook #'custom/modeline--on-minibuffer-setup)
-  (add-hook 'minibuffer-exit-hook #'custom/modeline--on-minibuffer-exit)
   (cancel-function-timers #'custom/modeline--tick)
   (run-with-timer 1 1 #'custom/modeline--tick))
 #+end_src
@@ -1689,8 +1482,7 @@ daemon 无键盘输入时空闲周期无限长,idle timer 实际等同失效—�
 解决回显消息、文档提示与鼠标事件对状态行的干扰：
 
 - *TTY 鼠标事件防闪烁* ：通过 advice 拦截并优化 =tooltip-hide= ，在终端无消息提示时跳过清屏调用，消除鼠标点击或滚轮滑动导致的底栏短暂消失。
-- *短消息并入左半段* ：Eglot 连接、文件保存、光标边界等单行短提示，通过 =set-message-functions= 自动并入状态行左半段展示，右侧系统状态保持可见；超过半宽的消息自动退回 Emacs 默认整行展示。短消息在下一次键盘输入或 4 秒后自动撤下。
-- *Eldoc 文档源头接管* ：通过 =eldoc-message-function= 直接接管函数参数与符号文档，光标停留在符号上时文档直接并入左半段展示，长文档自动由省略号截断，避免频繁顶掉底栏。
+- *短消息并入左半段* ：Eglot 连接、文件保存、光标边界等单行短提示，通过 =set-message-functions= 自动并入状态行左半段展示，右侧系统状态保持可见；超过半宽的消息自动退回 Emacs 默认整行展示。短消息在下一次键盘输入或 4 秒后自动撤下。Eldoc 文档保持原生路径（ =eldoc-minibuffer-message= 最终也调 =message= ，单行文档同样走并入）。
 - *数据源挂钩与电量模式* ：在 Flymake、Eglot、文件保存与切分支等 hook 中更新 buffer-local 缓存，渲染路径零 I/O 阻塞；启用 =display-battery-mode= 维护电量数据。
 
 #+begin_src emacs-lisp
@@ -1706,12 +1498,9 @@ GUI 分支、有消息可清、或 minibuffer 活动时照原样执行。"
 
 (advice-add 'tooltip-hide :around #'custom/modeline--tooltip-hide)
 
-(defun custom/modeline--handle-message (text &optional persistent)
+(defun custom/modeline--handle-message (text)
   "把短消息 TEXT 并入状态行左半,返回 t 表示已接管。
-PERSISTENT 非 nil 时视为持续消息(eldoc 文档):不限半宽——放不下时
-由 `custom/modeline--render' 以省略号截断左段,右段永远完整;也不经
-4 秒超时撤下,仅随下一个输入事件或 eldoc 清除回调撤下。
-非字符串/空串/多行消息、minibuffer 活动期与渲染期返回 nil,
+超过半宽、非字符串/空串/多行消息、minibuffer 活动期与渲染期返回 nil,
 交回 Emacs 默认的整行显示。整体包 condition-case:本函数在 `message'
 调用路径上,抛错会波及发消息的业务代码,还会被移出 set-message-functions。"
   (condition-case nil
@@ -1721,12 +1510,10 @@ PERSISTENT 非 nil 时视为持续消息(eldoc 文档):不限半宽——放不�
                  (not custom/modeline--rendering)
                  (not (active-minibuffer-window))
                  (not (string-search "\n" text))
-                 (or persistent
-                     (<= (string-width text)
-                         (/ (window-total-width (minibuffer-window)) 2))))
+                 (<= (string-width text)
+                     (/ (window-total-width (minibuffer-window)) 2)))
         (setq custom/modeline--message text
-              custom/modeline--message-time (current-time)
-              custom/modeline--message-persistent persistent)
+              custom/modeline--message-time (current-time))
         (custom/modeline-refresh)
         t)
     (error nil)))
@@ -1734,30 +1521,14 @@ PERSISTENT 非 nil 时视为持续消息(eldoc 文档):不限半宽——放不�
 (defun custom/modeline--clear-message ()
   "撤下左半的短消息。
 两个触发点:`pre-command-hook' 对齐 echo area 的清除时机(下一个输入
-事件);`custom/modeline--tick' 兜住长时间无输入的情况(并入满 4 秒,
-持续消息除外)。"
+事件);`custom/modeline--tick' 兜住长时间无输入的情况(并入满 4 秒)。"
   (when custom/modeline--message
     (setq custom/modeline--message nil
-          custom/modeline--message-time nil
-          custom/modeline--message-persistent nil)
+          custom/modeline--message-time nil)
     (custom/modeline-refresh)))
 
 (add-to-list 'set-message-functions #'custom/modeline--handle-message t)
 (add-hook 'pre-command-hook #'custom/modeline--clear-message)
-
-(defun custom/modeline--eldoc-message (format-string &rest args)
-  "eldoc 文档并入状态行左半;接不住时退回 `eldoc-minibuffer-message'。
-`eldoc--message' 以 (\"%s\" string) 方式调用本函数——format 后的完整
-文本即第一个 arg;args 为空表示清除文档,撤下左半并入的旧文档。"
-  (if-let* ((text (and format-string args
-                       (apply #'format-message format-string args)))
-            (taken (custom/modeline--handle-message text t)))
-      t
-    (when custom/modeline--message-persistent
-      (custom/modeline--clear-message))
-    (apply #'eldoc-minibuffer-message format-string args)))
-
-(setq eldoc-message-function #'custom/modeline--eldoc-message)
 
 (with-eval-after-load 'flymake
   (add-hook 'flymake-after-diagnostics-hook
@@ -1812,7 +1583,6 @@ Dired 目录缓冲区都是合法标签；左侧文件面板的 Dired（带 =cus
 
 #+begin_src emacs-lisp
 (require 'tab-line)
-(require 'project)
 (tab-bar-mode -1)
 
 (defconst custom:tabs-name-max-width 36
@@ -2339,7 +2109,7 @@ BUFFER 的唯一调用方 mouse 回调已先行存活检查,不再重复守卫�
   - 暂存当前文件（ =C-c g S= ），或按光标上下文整目录暂存（ =C-c g a= ，Dired 面板内另有 =C-c s= 直达键）。
   - 丢弃未提交修改（Discard，安全带二次确认）。
 - *仓库级操作* ：
-  - 在屏幕下方打开 Magit 状态面板（ =custom/git-status-dwim= ），面板内的核心键见快捷键帮助底部的「Magit 状态页速查」。
+  - 在屏幕下方打开 Magit 状态面板（ =magit-status= ），面板内的核心键见快捷键帮助底部的「Magit 状态页速查」。
   - 贮藏工作区修改（ =C-c g #= ）与弹出恢复（ =C-c g @= ）。
 - *底层安全机制* ：
   - 仓库根目录定位走 Emacs 原生 =vc-call-backend= ，自动兼容 Git Worktree 与 Submodule 结构，不依赖脆弱的正则猜路径。
@@ -2407,33 +2177,6 @@ ROOT 是仓库根:在其下刷新 Magit 状态页,底部状态页若在显示即
     (let ((default-directory root))
       (when (fboundp 'magit-refresh)
         (magit-refresh)))))
-#+end_src
-
-打开 Magit 状态页，并对当前文件执行 blame、查看历史与 diff。
-
-#+begin_src emacs-lisp
-(defun custom/git-status-dwim ()
-  "打开当前仓库的 Magit 状态页。"
-  (interactive)
-  (magit-status-setup-buffer (custom/git--ensure-repo)))
-
-(defun custom/git-blame-current-file ()
-  "对当前文件执行 blame。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'magit-blame-addition))
-
-(defun custom/git-log-current-file ()
-  "查看当前文件历史。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'magit-log-buffer-file))
-
-(defun custom/git-diff-current-file ()
-  "查看当前文件 diff。"
-  (interactive)
-  (custom/git-buffer-file)
-  (call-interactively #'magit-diff-buffer-file))
 #+end_src
 
 目录感知的整目录暂存。Magit 状态页里按 =s= 弹出的补全只列单个文件（目录条目不在候选中），逐个挑深层目录的文件非常繁琐； =custom/git-stage-here= 反向操作——按光标上下文解析出一个完整路径，直接传给 =magit-stage-files= ：Dired（含左侧面板）光标在目录行上就暂存整个目录、在文件行上就暂存该文件，普通文件 buffer 则暂存当前文件所在目录。 =magit-stage-files= 收到路径列表后走 Magit 自己的异步 git 进程并自动刷新状态页，无须再过一遍 =custom/git--run= 。
@@ -2630,10 +2373,10 @@ BUFFER 已在某窗口显示时，聚焦该窗口（SELECT 非 nil）；否则�
 - 自动刷新与 Forge：启用 =vc-auto-revert-mode= 在分支切换后静默刷新文件； =forge= 随 Magit 一同加载，在状态页提供 Issue 与 PR 关联。
 
 #+begin_src emacs-lisp
-(custom/bind "C-c g s" #'custom/git-status-dwim "版本控制状态" "Git")
-(custom/bind "C-c g b" #'custom/git-blame-current-file "当前文件追责" "Git")
-(custom/bind "C-c g l" #'custom/git-log-current-file "当前文件日志" "Git")
-(custom/bind "C-c g d" #'custom/git-diff-current-file "当前文件差异" "Git")
+(custom/bind "C-c g s" #'magit-status "版本控制状态" "Git")
+(custom/bind "C-c g b" #'magit-blame-addition "当前文件追责" "Git")
+(custom/bind "C-c g l" #'magit-log-buffer-file "当前文件日志" "Git")
+(custom/bind "C-c g d" #'magit-diff-buffer-file "当前文件差异" "Git")
 (custom/bind "C-c g S" #'custom/git-stage-current-file "暂存当前文件" "Git")
 (custom/bind "C-c g a" #'custom/git-stage-here "暂存当前目录/条目" "Git")
 (custom/bind "C-c g D" #'custom/git-discard-current-file "丢弃当前文件修改" "Git")
@@ -3770,8 +3513,6 @@ ARG 非空(前缀参数)时插入相对项目根的路径,无项目时插入绝�
 - *方向键放行* ：Ghostel 默认把 =M-方向键= 透传给 PTY（shell 里用于按词跳转）。把它们加入 =ghostel-keymap-exceptions= 后按键回落到 Emacs 全局绑定，终端面板聚焦时 =M-方向键= 依然能切换窗口；shell 内的按词移动仍可用 =M-b= / =M-f= 。修改后需调用 =ghostel--rebuild-semi-char-keymap= 就地重建共享键表（改动对已存在的终端缓冲区即时生效）。
 
 #+begin_src emacs-lisp
-(defvar custom--agent-ghostel-p nil)
-
 (defun custom/ghostel-export-git-editor ()
   "在 Ghostel 创建进程前把 GIT_EDITOR 设为 emacsclient。
 setenv 修改的是全局 `process-environment',pre-spawn 之后 spawn 的子进程
@@ -3819,11 +3560,8 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
               (buffer-list)))
 
 (defun custom--terminal-existing-buffer ()
-  "返回当前已存在的普通 ghostel buffer(非 agent 后端),无则 nil。"
-  (seq-find
-   (lambda (buf)
-     (not (buffer-local-value 'custom--agent-ghostel-p buf)))
-   (custom--buffers-in-mode 'ghostel-mode)))
+  "返回当前已存在的 ghostel buffer,无则 nil。"
+  (car (custom--buffers-in-mode 'ghostel-mode)))
 
 (defun custom/open-terminal (&optional arg)
   "打开 ghostel 终端(底部 side-window,高度 1/3),自动切换到项目根目录。
@@ -5398,7 +5136,7 @@ font-lock 阶段写入的内联 display/face 规格,晚于 [[#mixed-gui-tty-cons
 (custom/bind "M-S-f" #'apheleia-format-buffer "格式化缓冲区" "基础移动与直达键")
 (custom/bind "C-S-e" #'custom/panel-dired "文件面板" "基础移动与直达键")
 (custom/bind "C-b" #'custom/panel-dired-toggle "文件面板开关" "基础移动与直达键")
-(custom/bind "C-S-g" #'custom/git-status-dwim "Git 状态面板" "基础移动与直达键")
+(custom/bind "C-S-g" #'magit-status "Git 状态面板" "基础移动与直达键")
 (custom/bind "C-S-m" #'custom/flymake-list-errors-dwim "诊断面板" "基础移动与直达键")
 (custom/bind "C-S-u" #'view-echo-area-messages "消息输出面板" "基础移动与直达键")
 (custom/bind "C-S-b" #'project-compile "项目构建" "基础移动与直达键")
