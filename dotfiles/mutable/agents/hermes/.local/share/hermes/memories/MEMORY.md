@@ -13,3 +13,5 @@ Qt QSS 调 Adwaita 迭代（2026-08-22 rounded.qss 实战）：①QSS 里 CSS �
 验证需真机或真实路径，并做独立复核；部署未执行时写“源码已落地、待部署”，不能把源代码当运行态。
 §
 本机缺 CLI 工具（如 zsh）时用 `guix shell <pkg> -- <cmd>` 临时提供再验证，不得因缺工具直接标 UNVERIFIED。zsh 补全可非交互验证：`zsh -f -i` 内 zmodload zsh/zpty，写 `命令 + \t` 后抓候选列表（`_arguments` 值列表必须写 `:消息:(a b c)`，`:{a,b,c}` 会被当 shell 代码执行而静默失效）。
+§
+Hermes 有写入 hook 拦截 ~/.config/ 与 ~/.local/ 下的写操作（报错提示「禁止直接修改已部署位置，请修改 dotfiles/ 源文件后运行 just home」）；一次性脚本与产出落 ~/Projects/ 或 /tmp，别写 hermes scratch 目录（也在 ~/.local 下，同样被拦）。

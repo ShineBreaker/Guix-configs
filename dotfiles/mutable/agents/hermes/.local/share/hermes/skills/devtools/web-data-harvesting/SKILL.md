@@ -49,6 +49,25 @@ description: Use when scraping sites/SPA APIs/archives（抓取/爬取/存档）
 3. **curl 直连返回空 ≠ 接口不可用**：很多站要浏览器会话（cookie/referer/指纹）。
    这种情况在浏览器上下文里循环 fetch；响应里数据为 null 常见原因是参数超限
    （服务端偷偷限 pageSize），先试小值。
+4. **无凭据探测端点是否存在**：未登录请求若返回「账号未登录」这类**业务错误码**（JSON），
+   说明端点真实存在、只差登录态；若返回 HTML 404/错误页，说明路径根本不存在。
+   先这样批量扫一遍候选路径，再决定是否值得去要凭据。
+5. **参数形状从请求封装函数读**：站点整包进单个 bundle 时，grep 出 API wrapper
+   （形如 `url:"/x/xxx/${e}"` 的模板串）即可看到公共参数；游标参数名去前端组件的
+   `data:()=>({offset:{...}})` 初值里找。同时留意 bundle 里的 `baseURL` 覆盖——
+   同站功能可能分布在多个域名下，别默认全在主域。
+
+### 2.1 游标翻页与时间窗口（列表接口没有时间参数时）
+
+大量列表接口只给游标（`offset`/`cursor`）、不给时间参数，「取某时间段」只能翻到底再本地过滤：
+
+- **空页 ≠ 到底**：风控会让接口随机返回 `items: []` + `has_more: false`（实测可达三成概率）。
+  见到空页先退避重试（`0.5*(i+1)s`、约 6 次）再判定无数据；把一次空页当结束会静默丢整段数据。
+- **早停看「整页最早一条」**，不要「遇到一条早于窗口就 break」——页内并非严格按时间有序，
+  逐条 break 会漏掉同页后半的目标记录。整页最小值早于窗口起点时才停。
+- **晚于截止日的条目要继续翻**（置顶、比抓取时刻新的动态），跳过但不停。- **正文位置不唯一**：同一列表里纯文字、长文、媒体卡、转发原文常落在不同键（甚至内层同构结构）。
+  按候选键逐级回退提取，只认一条路径必漏一类内容。
+- 游标翻页要设 `seen` 去重：空页重试与接口抖动会让同一页重复返回。
 
 ## 3. 存档挖掘（web.archive.org）
 
@@ -110,3 +129,5 @@ description: Use when scraping sites/SPA APIs/archives（抓取/爬取/存档）
 - `references/spa-api-discovery.md` — 政府开放数据平台 SPA 的端点逆向实例
 - `references/webpack-chunk-manifest.md` — webpack chunk manifest 型 SPA 的端点逆向（双表定位 manifest、`a.js` 后缀坑、`.e()` 爬 chunk 依赖、qid 失效判定）
 - `references/geodata-apis.md` — Wikidata / OSM（Overpass・Nominatim）/ 旅游平台 POI 页的地理字段取数配方与限流礼仪
+- `references/bilibili-space-dynamics.md` — B 站用户空间动态采集配方（BACNext 文档源、desktop 端点 412 陷阱、空页重试、时间窗口过滤、多键正文提取、评论区 `/x/v2/reply` 链路与「无按 mid 查评论接口」的结构性限制）
+- `references/bilibili-message-center.md` — B 站消息中心采集配方（回复/赞/@ 通知接口、bundle 逆向手法、点赞通知的两级翻页、登录态与保留期边界）
