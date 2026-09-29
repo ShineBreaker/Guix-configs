@@ -241,6 +241,7 @@
         ("C-x C-<right>" . "下一个缓冲区")
         ("M-." . "跳转到定义")
         ("M-," . "返回上一位置")
+        ("M-s o" . "搜索结果列表 (occur)")
         ("C-c @" . "折叠 (hideshow)")
         ("C-c ^" . "保留前缀 (上游占位)")))
 
@@ -248,6 +249,8 @@
 ;; KEY-SEQUENCE 相对 mode 局部键位(不含 mode 前缀),同样按条目顺序注册。
 (setq custom:which-key-major-mode-description-spec
       '(
+        ;; dired-mode
+        (dired-mode "C-c s" . "暂存此目录/条目")
         ;; markdown-mode
         (markdown-mode "C-c" . "Markdown")
         (markdown-mode "C-c <timeout>" . "复制选区")
@@ -663,8 +666,24 @@
 ;; Minor-mode keymap 级描述:Geiser/Arei 的 C-c 子树挂在 minor-mode map,
 ;; major-mode 注册覆盖不到,用 keymap 直接绑定。每项 (KEYMAP-SYM KEY DESC):
 ;; DESC 为字符串表示叶子,为 (GROUP . nil) 表示子前缀组名。
+;; isearch-mode-map 同走此通道:isearch 会话内按 M-s 等前缀停顿,which-key
+;; 弹窗合并展示 isearch 键表,词条让过程键以中文露出。M-s e / M-s i 不列:
+;; 全局 M-s 词条(符号搜索/增量搜索)按完整键序列匹配,会覆盖 keymap 词条,
+;; 这两键在 isearch 弹窗内沿全局词条显示,属 which-key 替换链的已知限制。
 (setq custom:which-key-keymap-description-spec
-      '((geiser-mode-map
+      '((isearch-mode-map
+         ("M-%" . "转为逐处替换")
+         ("C-w" . "取词入搜索串")
+         ("M-s SPC" . "宽松空白开关")
+         ("M-s r" . "正则模式开关")
+         ("M-s c" . "忽略大小写开关")
+         ("M-s w" . "整词匹配开关")
+         ("M-s _" . "符号匹配开关")
+         ("M-s C-e" . "整行取入搜索串")
+         ("M-s h" . "高亮匹配")
+         ("M-s h r" . "高亮正则")
+         ("M-s h l" . "整行高亮正则"))
+        (geiser-mode-map
          ("C-c" . "Geiser 求值")
          ("C-c C-c" . "求值定义")
          ("C-c C-r" . "求值选区")
