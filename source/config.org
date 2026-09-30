@@ -85,6 +85,7 @@ blue build
              (guix git-download)
              (guix modules)
              (guix packages)
+             (guix utils)
 
              (ice-9 match)
 
@@ -386,11 +387,11 @@ blue build
   (package
     (inherit blue)
     (inputs
-     (modify-inputs inputs
+     (modify-inputs (package-inputs blue)
        (replace "guile" guile-3.0-latest)))
     (arguments
-     (substitute-keyword-arguments arguments
-       ((#:tests? orig #t) #f)))))
+     (substitute-keyword-arguments (package-arguments blue)
+       [(#:tests? orig #t) #f]))))
 #+end_src
 
 **** 包列表
@@ -2102,8 +2103,8 @@ polkit.addRule(function(action, subject) {
    "zig-zls"
 
    ;; 编辑器
-   "fresh-editor-bin"
    "helix-steel"
+   "qemacs"
    "zedg-bin"
    "zedg-bin:shim"
 
@@ -2402,7 +2403,6 @@ _    _  _  _  _  _  _  _)
              ;; 编辑与导航
              "emacs-avy"
              "emacs-diff-hl"
-             "emacs-editorconfig"
              "emacs-expand-region"
              "emacs-idle-highlight"
              "emacs-indent-bars"
