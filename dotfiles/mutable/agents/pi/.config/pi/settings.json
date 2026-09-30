@@ -47,7 +47,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.86.0",
+  "lastChangelogVersion": "0.99.1",
   "images": {
     "blockImages": false
   },

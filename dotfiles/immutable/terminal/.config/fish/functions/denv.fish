@@ -9,7 +9,7 @@
 
 function __denv_config_base_dirs -d 每个项目都创建的目录
     echo src
-    echo doc
+    echo docs
 end
 
 function __denv_config_base_gitignore -d "每个项目都写入 .gitignore 的基础内容"

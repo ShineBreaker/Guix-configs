@@ -56,8 +56,9 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: step-plan
-    model: step-5-preview
+    provider: devin
+    model: swe-2
+    reasoningEffort: max
 
 # ══ 用户自定义 agent presets（0.1.7 行声明机制）════════════════════════
 # ── preset: minimal-guix ──────────────────────────────────────────

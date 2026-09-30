@@ -25,11 +25,8 @@ statusLine:
   compactThinkingLevel: true
 setupVersion: 2
 symbolPreset: nerd
-providers:
-  webSearchOrder:
-    []
 modelRoles:
-  default: devin/swe-2:max
+  default: opencode-go/muse-spark-1.3-contributor:xhigh
   tiny: opencode-go/hy3:xhigh
   advisor: opencode-go/muse-spark-1.3-contributor
 composer:
