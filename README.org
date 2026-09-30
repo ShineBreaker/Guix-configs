@@ -91,7 +91,7 @@ passwd
 | =blue home= | 只应用用户态那一层，更新 immutable dotfiles，不需要 sudo |
 | =blue stow= / =blue stow-all= | 管 GNU Stow 那批可变 dotfiles（Emacs、Agent 配置等），改源即时生效 |
 | =blue check= | 只查代码块括号平衡，秒级出结果并指出是哪一块 |
-| =blue update= | 刷新频道锁；有门禁校验，失败会自己回滚 |
+| =blue update= | 刷新频道锁并提交 |
 | =blue pull= | 执行 =guix pull= ，拉频道最新 |
 
 完整清单跑 =blue list= 看。任何 blue 构建命令加 =--dry-run= 都只干跑不写系统。

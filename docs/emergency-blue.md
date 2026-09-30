@@ -12,9 +12,8 @@
 
 出现以下任一症状，说明 `blue` 已不可用，可转入本文档流程：
 
-- `blue: command not found`——包装脚本（`~/.local/bin/blue`）丢失或不在 PATH；
+- `blue: command not found`——blue 本体（`~/.guix-home/profile/bin/blue`）不在 PATH；
 - `incompatible bytecode version`——guile 版本漂移（见 §2，最常见的坏法）；
-- wrapper 报 `/run/current-system/profile/bin/guile` 不存在——系统 profile 异常；
 - 报 `~/.guix-home/profile/bin/blue` 不存在——Home 层未部署或已损坏；
 - bluebox 频道不可达导致 blue 本体无法构建。
 
@@ -23,21 +22,21 @@
 
 ## 2. blue 是什么、怎么坏的
 
-调用链（三层，任何一层断都会导致 blue 不可用）：
+调用链（两层，任何一层断都会导致 blue 不可用）：
 
 ```
-~/.local/bin/blue          ← bash 包装脚本（含 guile 变通）
-  └─ exec /run/current-system/profile/bin/guile -e main -s
-         ~/.guix-home/profile/bin/blue   ← bluebox 频道提供的 blue 本体
-           └─ 加载仓库根 blueprint.scm，执行 blue <命令>
+~/.guix-home/profile/bin/blue   ← bluebox 频道提供的 blue 本体（自产包，已重 pin guile）
+  └─ 加载仓库根 blueprint.scm，执行 blue <命令>
 ```
 
 - **blue 本体**来自 *bluebox* 频道（经 `source/channel.lock` 锁定 commit），
   部署进 Guix Home profile；`source/manifest.scm` 只有一行 `("blue")`。
-- **包装脚本的存在原因**：bluebox 把 blue 的 guile 输入 pin 在 3.0.9，而系统
-  profile 的 guix 模块已是 3.0.11 编译的字节码，直接执行报 incompatible
-  bytecode version。wrapper 借系统 profile 的 guile 3.0.11 以 `-s` 方式运行
-  脚本主体绕开（shebang 被当作注释跳过）。
+- **guile 版本问题的解法**是包，不是 wrapper：bluebox 把 blue 的 guile 输入 pin 在
+  3.0.9，与系统 profile 的 guix 模块（3.0.11 编译的字节码）不兼容，直接执行报
+  incompatible bytecode version。`source/config.org` 的 `blue-fix` 变体把 guile 输入
+  换成 `guile-3.0-latest`、关掉测试，产出的包 shebang 与系统 guile 一致，**直接运行
+  即可，不需要任何 wrapper**。注意：加了这个变体后必须 `blue rebuild`（或 `blue home`）
+  重新部署，否则 profile 里仍是 pin 着 guile 3.0.9 的旧包。
 - **引导环境**：`tools/bootstrap.sh` 用
   `guix time-machine -C source/channel.lock -- shell -m source/manifest.scm`
   开一个带 blue 的临时 profile shell——这意味着 blue 的恢复不依赖 blue 自己。
@@ -157,23 +156,10 @@ sudo guix time-machine --channels=source/channel.lock -- \
 1. **首选**：在仓库根运行 `./tools/bootstrap.sh`。它会用锁定的频道开一个
    带 blue 的临时 profile shell（首次较慢，需克隆并构建频道）。在该 shell 里
    `blue home` 重新部署 Home 层，blue 本体即回到 `~/.guix-home/profile/bin/blue`。
-2. **仅 wrapper 损坏**（`~/.guix-home/profile/bin/blue` 还在）时，最小重建
-   `~/.local/bin/blue`（内容与现行 wrapper 一致，省略注释）：
-
-   ```bash
-   cat > ~/.local/bin/blue <<'EOF'
-   #!/usr/bin/env bash
-   # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-   #
-   # SPDX-License-Identifier: MIT
-   exec /run/current-system/profile/bin/guile --no-auto-compile \
-        -e main -s "$HOME/.guix-home/profile/bin/blue" "$@"
-   EOF
-   chmod +x ~/.local/bin/blue
-   ```
-
-3. 恢复后跑一次 `blue list` 确认命令集完整；wrapper 的 guile 变通随 bluebox
-   升级其 guile 输入后可整体移除（见 wrapper 内注释）。
+2. **`incompatible bytecode version` 但 store 里有可用包**时，多半是这一代 profile
+   还没吃到新的 `blue-fix` 变体（源码已改、profile 未重新部署）。用 store 里的
+   正确产物临时顶上，或直接跑一次 `blue home` 重新部署。
+3. 恢复后跑一次 `blue list` 确认命令集完整。
 
 ## 7. 与正式 blue 的差异清单
 
@@ -191,83 +177,27 @@ sudo guix time-machine --channels=source/channel.lock -- \
 | `$$bin/foo$$` 替换 | 构建期自动（rosenthal `computed-substitution-with-inputs`） | 同样自动，无需处理 |
 | `init` 挂载点 | 硬编码 `/mnt` | 显式参数，并尝试用 `mountpoint` 校验 |
 | sudo 交互 | 直接执行（前置修剪以延长 sudo 宽限期） | 执行前打印命令并要求确认（`-y` 跳过） |
-| 其余命令（update/pull/gc/stow/…） | 有 | 无（不在应急范围；channel.lock 属于生成物，勿手改） |
+| 其余命令（update/pull/stow/…） | 有 | 无（不在应急范围；channel.lock 属于生成物，勿手改） |
 
 > 提醒：应急流程跑通后，请尽快按 §6 恢复 blue，并运行 `blue --dry-run rebuild`
 > 复核（两者的 tangle/检查结果应一致）。
 
-## 8. update 防呆（blue-update）
+## 8. 频道锁的兼容性回滚
 
-> 起因：2026-08-29 与 2026-09-20 两次事故，`blue update` 刷新
-> `source/channel.lock` 后 `blue rebuild` 在 derivation 计算阶段崩溃（guix
-> 与新频道快照不兼容），两次都是人工回滚 channel.lock +
-> `blue --dry-run rebuild` 验证救回。`blue-update` 把这套人工流程自动化。
-
-**机制**（实现在
-`dotfiles/mutable/tools/blue/.local/libexec/blue-update`；
-wrapper `~/.local/bin/blue` 在首参恰为 `update`/`gc` 且包内 `libexec/`
-存在对应脚本时分发进入，脚本缺位则回退 blue 原生行为）：
-
-1. **备份**：`source/channel.lock` → `tmp/channel.lock.bak.<时间戳>`（`tmp/`
-   已 gitignore；多次运行留下多份备份，可自行清理）；
-2. **更新**：不经 wrapper，直接以 wrapper 同款 guile 命令行调 blue 本体执行
-   `update`（杜绝 `blue update` 递归回本脚本），参数原样透传；update 本身
-   失败 → 立即还原备份、退出非零；
-3. **门禁**：跑 `blue --dry-run rebuild`（tangle + 括号检查 + 构建验证，不
-   写入系统；tangle 产物在生成物目录 `tmp/`，无害），以退出码判断新 lock
-   是否可用；
-4. **失败归因启发式**：门禁失败时先跑 `blue check`（纯括号平衡检查，不碰
-   频道与构建）区分责任：
-   - `blue check` 也失败 → 大概率是 `source/config.org` 有未完成 WIP（与
-     lock 无关）——**不还原** lock（还原反而掩盖 config 问题），打印说明后
-     退出非零；
-   - `blue check` 通过而门禁失败 → 判定为 lock 兼容性问题——**还原**备份的
-     channel.lock，打印「已还原 channel.lock 至 update 前，可重试或手动
-     排查」后退出非零。
-
-**用法**（参数全部透传给 blue 本体的 update 子命令）：
+`blue update` 刷新 `source/channel.lock` 后，`blue rebuild` 可能在 derivation
+计算阶段崩溃（guix 与新频道快照不兼容）——2026-08-29、2026-09-20 两次事故都是
+人工回滚救回。`blue update` 本身不带门禁（历史上的防呆脚本已删除），需要门禁
+时手动走：
 
 ```bash
-blue update                  # 常规更新（等价 blue update 无附加参数）
-blue update --guix           # 透传 --guix（示例）
-blue update --channel jeans  # 只更新 jeans 频道（示例）
+cp source/channel.lock tmp/channel.lock.bak      # 1. 备份
+blue update                                      # 2. 刷新锁文件（自带 git commit）
+blue --dry-run rebuild                           # 3. 门禁：tangle + 检查 + 构建验证
+# 通过 → 手动 blue rebuild 固化；失败 → cp tmp/channel.lock.bak source/channel.lock 回滚
 ```
 
-**归因的局限**：启发式只认「括号平衡」这一种 config 侧信号。若构建失败既
-非括号问题也非 lock 问题（`source/files/` 缺模板、磁盘满、substituter 不可
-达等），会被误判为 lock 问题而还原 lock——此时 `tmp/` 里的备份仍是 update
-后的新 lock，可 `git diff source/channel.lock` 对照后手动找回。反之，若
-config.org 恰有括号问题而 lock 也有问题，会被归因为 config 问题而不还原
-lock——先修 config.org 再重跑 `blue update` 即可。
+归因提示：跑一次 `blue check` 区分责任——`check` 也失败说明是
+`source/config.org` 的 WIP，与锁文件无关，别回滚（回滚只会掩盖真问题）。
 
-成功后请手动 `blue rebuild` 固化（脚本与 agent 均不代跑 reconfigure）。
-
-## 9. 一键清理（blue gc）
-
-`blue gc` 是历次手动磁盘清理的统一入口
-（`dotfiles/mutable/tools/blue/.local/libexec/blue-gc`，wrapper 在 `blue gc`
-时分发进入）。风格同 `tools/rescue-chroot.sh`：**默认 dry-run 只打印计划，
-`--go` 才执行**；每步标注 [sudo]/[user]，单步失败告警并继续，最后统一汇总
-成功/失败与 /gnu 已用空间前后对比（/gnu 与 /data 同属一块 Btrfs，看 /gnu
-即代表整体）。
-
-```bash
-blue gc          # 打印清理计划（除只读 df 外无任何副作用）
-blue gc --go     # 真实执行
-```
-
-计划内容：
-
-| 步骤 | 权限 | 说明 |
-| --- | --- | --- |
-| 解锁 zcode checkpoint | sudo | 历次手动清理的固定前置动作（`zcode-checkpoints-lock.sh --unlock`）；仅当该脚本存在，否则跳过 |
-| `guix gc -d 14d -F 20G` | sudo | 删两周前可回收项、整体保留 20G——与系统每周日 18:00 guix-gc timer 完全同参数 |
-| `guix home delete-generations 14d` | user | 修剪两周前的 home 世代（用户级，无需 sudo） |
-| `nh clean all` | user | 仅当安装了 nh（nix + guix 缓存清理） |
-| `flatpak uninstall --unused --noninteractive` | user | 仅当安装了 flatpak |
-
-**与既有定时任务的关系**：系统已有每周日 18:00 的 guix-gc timer（`guix gc
--d 14d -F 20G`）与 19:30 的 nix-gc timer。`blue gc` 是**手动即时版**：guix
-gc 参数与 timer 保持一致，另加 checkpoint 解锁、home 世代修剪与 flatpak
-清理。日常以 timer 兜底；磁盘吃紧或大版本更新后想立即回收时用 `blue gc`
-（先看计划，再 `--go`）。
+磁盘清理走系统自带 timer（每周日 18:00 `guix gc`、19:30 nix-gc）或 `blue gc`
+（删旧世代 + `guix gc` + 清 `OLD-*.EFI`，见 [blueprint.md](scripts/blueprint.md)）。

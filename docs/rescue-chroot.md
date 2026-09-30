@@ -226,7 +226,7 @@ export PATH=/var/guix/profiles/per-user/root/current-guix/bin:$PATH   # guix 命
 #### 拿到配置仓库
 
 - 首选（无需网络）：仓库物理上住在 `/data`——`/data/Projects/Config/Guix-configs`（`Projects` 在 `%data-dirs` 里，源码即 `DATA/Share` 子卷上的实体）。§3.2 挂好 `/data` 后直接用。
-- blue 入口：`/home/brokenshine/.local/bin/blue`（wrapper，实际落在 `/home/brokenshine/.guix-home/profile/bin/blue`，依赖都在 store 里）。仓库根目录下 `blue --dry-run rebuild` 验证，然后 `blue rebuild`（救援 chroot 里你已经是 root）。
+- blue 入口：`/home/brokenshine/.guix-home/profile/bin/blue`（blue 本体，依赖都在 store 里）。仓库根目录下 `blue --dry-run rebuild` 验证，然后 `blue rebuild`（救援 chroot 里你已经是 root）。
 - 仓库丢了再走网络 clone 到 `/data/Projects/` 下同路径。
 - **store 里的 `configuration.scm` 只能当参考**：本机验证过它开头是 `(load "../source/information.scm")` 这类相对路径引用，脱离仓库布局无法求值；但它完整记录了该代的最终源码，对照排查极有用。
 

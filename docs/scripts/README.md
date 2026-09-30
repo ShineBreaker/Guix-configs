@@ -24,8 +24,6 @@
 | --- | --- | --- | --- |
 | secrets | `dotfiles/mutable/tools/secrets/.local/bin/` | mutable → `~/.local/bin/`（改源即时生效） | [`docs/secrets.md`](../secrets.md) |
 | toolbox（+ tools.yaml） | `dotfiles/mutable/tools/toolbox/.local/` | mutable | [toolbox.md](toolbox.md) |
-| blue（wrapper） | `dotfiles/mutable/tools/blue/.local/bin/` | mutable | [blue-wrapper.md](blue-wrapper.md) |
-| blue-update / blue-gc | `dotfiles/mutable/tools/blue/.local/libexec/` | mutable（经 `blue update`/`gc` 分发） | [`docs/emergency-blue.md` §8–9](../emergency-blue.md) |
 | hermes / hermes-acp / hermes-lib.sh | `dotfiles/mutable/agents/hermes/.local/` | mutable | [hermes.md](hermes.md) |
 | hermes-update | `dotfiles/mutable/agents/hermes/.local/libexec/` | mutable（经 `hermes update` 分发） | [hermes-update.md](hermes-update.md) |
 | hermes-desktop | 同上 | mutable（经 `hermes desktop` 分发） | [hermes-desktop.md](hermes-desktop.md) |

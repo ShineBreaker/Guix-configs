@@ -36,6 +36,7 @@
 mutable/
 ├── agenote/
 │   ├── .config/
+│   ├── .local/
 │   ├── .zcode/
 │   ├── .stow-local-ignore
 │   └── .stow-package
@@ -54,7 +55,6 @@ mutable/
 │   └── .stow-package
 └── tools/
     ├── appimage-run/
-    ├── blue/
     ├── secrets/
     └── toolbox/
 ```
@@ -81,12 +81,12 @@ mutable/
 
 ## .local/bin 入口准入规则
 
-mutable 包的 `~/.local/bin` 入口遵循**一包一入口**（2026-09 已将 blue/hermes/dsh/pi 四族
-从 21 个入口收敛到 15 个，规则成文防回潮），由 `toolbox check` 执法：
+mutable 包的 `~/.local/bin` 入口遵循**一包一入口**（2026-09 已将 hermes/dsh/pi 族
+从多入口收敛到每包一个，规则成文防回潮），由 `toolbox check` 执法：
 
 1. **一包一入口**：每个 stow 包默认只在 `.local/bin/` 放一个入口文件；其余实现放包内
    `.local/libexec/`，由主入口 case 分发子命令（范本：
-   [agents/hermes](agents/hermes/.local/bin/hermes) 与 [tools/blue](tools/blue/.local/bin/blue) 的 wrapper）。
+   [agents/hermes](agents/hermes/.local/bin/hermes) 的 wrapper）。
 2. **先论证挂靠**：新增入口前必须先论证无法作为现有工具的子命令挂靠；直接新建独立入口视为违规。
 3. **禁止新增 `*-update` 入口文件**：更新逻辑一律实现为 `tool update` 子命令。
 4. **`*-acp` 协议入口豁免**：外部 ACP host（Zed 等）按命令名寻址 agent，无法子命令化，允许

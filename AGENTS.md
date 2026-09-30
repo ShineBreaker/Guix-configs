@@ -59,7 +59,7 @@ Guix-configs///
 1. **注释只留关键**：文件头写一行用途和一行文档指针；正文注释只写不写就容易改出 bug 的「为什么」（安全不变量、反直觉变通、调用方契约）。用法、原理、历史写进 `docs/scripts/<name>.md` 并在 `docs/scripts/README.md` 登记；`config.org` 内嵌脚本的解释写在块旁 org 正文。改了行为就在同一次改动里更新对应文档与「变更记录」。
 2. **先存基线再动手**：修改前把 HEAD 版本保存到 `/tmp`，改完用同一组输入对比新旧版本的 stdout、stderr、退出码与外部命令 argv。所有差异都能逐条解释为预期改动，才算完成。
 3. **只在沙箱里跑**：外部命令一律用 PATH 桩（记录 argv 的假可执行文件）加临时 `HOME` 模拟；tmux 用独立 socket（`tmux -L <name>`），Emacs 用独立 server。真实更新/安装、密钥、剪贴板、`/etc/fstab`、distrobox，以及用户正在用的 tmux / Emacs 会话一律不碰。
-4. **在线文件先在副本上验证**：mutable 包、`blue` wrapper、`blueprint.scm`（blue 从 cwd 加载它）都是即时生效的。先在 `/tmp` 的副本里验证（`blueprint.scm` 放在仓库副本里跑 blue），通过后再一次性替换回来。
+4. **在线文件先在副本上验证**：mutable 包、`blueprint.scm`（blue 从 cwd 加载它）都是即时生效的。先在 `/tmp` 的副本里验证（`blueprint.scm` 放在仓库副本里跑 blue），通过后再一次性替换回来。
 5. **dry-run 必须真的无副作用**：`blueprint.scm` 里的每个副作用都要经过 `%run`，或者显式判断 `(dry-build?)`；`%pipe->*` 不受 dry-run 保护。
 6. **跨语言契约不动**：`gate-core.sh` 的 CLI / 行协议、`context-select.sh` 的输出、`tools/*.el` 与 `blueprint.scm` 之间的输出协议、各 agent 宿主规定的钩子协议保持不变；其他接口变更按 CONVENTIONS §6 同步调用方、fish 补全、`tools.yaml` 与文档。
 

@@ -85,7 +85,7 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 ### 维护
 
 - **clean-artifacts**：文件型目标走 `%run` 的 `find -delete`（dry-run 自动短路）；目录型目标（`__pycache__`、stow 包内 emacs 的 `etc`/`var` 缓存）由 Scheme 直接删，必须显式守 `dry-build?`。rebuild / home 前自动先跑本命令。
-- **gc**：删旧 system/home 世代 → `guix gc` → 删 ESP 上 `OLD-*.EFI`。`%run` 经 popen 直 exec、无 shell 展开，所以 `OLD-*` 要在 Guile 侧 `scandir` 收集后逐个 `sudo rm`。ESP 挂载点是 `/efi`（limine-efi-removable-bootloader 的 targets），旧注释里的 `/boot/EFI/Guix` 在这台机器上并不存在。注意：用户 PATH 里的 `blue` wrapper 会把首参 `gc`/`update` 转给 `dotfiles/mutable/tools/blue` 的 libexec 增强脚本，本文件的 gc/update 只在原生路径（如 `blue --dry-run gc`）下到达。
+- **gc**：删旧 system/home 世代 → `guix gc` → 删 ESP 上 `OLD-*.EFI`。`%run` 经 popen 直 exec、无 shell 展开，所以 `OLD-*` 要在 Guile 侧 `scandir` 收集后逐个 `sudo rm`。ESP 挂载点是 `/efi`（limine-efi-removable-bootloader 的 targets），旧注释里的 `/boot/EFI/Guix` 在这台机器上并不存在。
 - **format**：委派 `tools/doc-punct.py`（规则见 [doc-punct.md](doc-punct.md)）；`--dry-run` 透传 `--check` 只报告不写盘。
 - **structor**：见下节。
 - **reuse**：`reuse annotate` 批量补 SPDX 头，走 `%run`。
