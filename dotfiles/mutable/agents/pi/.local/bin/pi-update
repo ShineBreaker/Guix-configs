@@ -5,6 +5,9 @@
 #
 # pi-update — 更新 Pi 核心 + 扩展。settings.json 的 packages 数组是扩展清单的
 # 唯一真源，package.json 是派生产物；用 pnpm update --latest 跨 semver 范围升级。
+# pnpm 12 的供应链策略（minimumReleaseAge 24h 冷却、allowBuilds 审批）由
+# pnpm_workspace_policy 统一落到各目录的 pnpm-workspace.yaml，否则更新会静默
+# 不生效（新版本被冷却期排除）或 native 产物缺失（build scripts 未审批）。
 # 文档：docs/scripts/pi-update.md
 set -euo pipefail
 
@@ -42,22 +45,18 @@ read_pi_version() {
 ensure_pnpm_workspace() {
   local dir="$1" ext_only="$2"
   local wsfile="$dir/pnpm-workspace.yaml"
-  if [[ -f "$wsfile" ]]; then
-    # 旧版脚本创建的文件可能缺此行，补齐
-    if [[ "$ext_only" == "yes" ]] && ! grep -q 'nodeLinker' "$wsfile"; then
-      echo "nodeLinker: hoisted" | cat - "$wsfile" >"$wsfile.tmp" && mv "$wsfile.tmp" "$wsfile"
+  if [[ ! -f "$wsfile" ]]; then
+    if [[ "$ext_only" == "yes" ]]; then
+      printf 'nodeLinker: hoisted\n' >"$wsfile"
+    else
+      # 核心目录：pnpm 11 需要此文件管理 allowBuilds
+      : >"$wsfile"
     fi
-    return 0
+  elif [[ "$ext_only" == "yes" ]] && ! grep -q 'nodeLinker' "$wsfile"; then
+    # 旧版脚本创建的文件可能缺此行，补齐
+    echo "nodeLinker: hoisted" | cat - "$wsfile" >"$wsfile.tmp" && mv "$wsfile.tmp" "$wsfile"
   fi
-
-  if [[ "$ext_only" == "yes" ]]; then
-    cat >"$wsfile" <<'EOF'
-nodeLinker: hoisted
-EOF
-  else
-    # 核心目录：pnpm 11 需要此文件管理 allowBuilds
-    : >"$wsfile"
-  fi
+  pnpm_workspace_policy "$wsfile" "" '{"minimumReleaseAge":0}'
 }
 
 # package.json 的 pnpm 字段已废弃且每次运行报 WARN，顺手清掉
@@ -75,6 +74,85 @@ strip_deprecated_pnpm_field() {
 	' "$pkgfile" || true
 }
 
+# pnpm-workspace.yaml 是 pnpm 10+ 唯一的项目级配置位置（package.json 的 pnpm
+# 字段已废弃）。这里只做两件事，未知顶层键（pnpm 自己写入的
+# minimumReleaseAgeExclude 等）原样保留：
+#   1. scalars：写入/改写指定顶层标量键（minimumReleaseAge: 0——关闭 pnpm 12
+#      默认的 24h 供应链冷却。pi/插件是日更 preview 版本，冷却期内发布的新版本
+#      会被静默排除出解析，表现就是「更新成功但版本没动」）
+#   2. builds：从 pnpm 的 ERR_PNPM_IGNORED_BUILDS 报告里解析被忽略 build
+#      scripts 的包名，批准（true）后供调用方重试
+# 用法：pnpm_workspace_policy <pnpm-workspace.yaml> <pnpm输出或空串> <scalarsJSON>
+pnpm_workspace_policy() {
+  node -e '
+    const fs = require("fs");
+    const [file, report, scalarsJson] = process.argv.slice(1);
+    const scalars = scalarsJson ? JSON.parse(scalarsJson) : {};
+
+    // ERR_PNPM_IGNORED_BUILDS 报告行："Ignored build scripts: a@1, b@2, ..."
+    // 抓包名：去 ANSI 色、去 peer 后缀 (…)、去行尾 @version
+    const builds = [];
+    for (const m of (report || "").matchAll(/Ignored build scripts: ([^\n]+)/g)) {
+      for (let name of m[1].split(",")) {
+        name = name.replace(/\u001b\[[0-9;]*m/g, "").replace(/\(.*\)/, "").replace(/@[^@]*$/, "").trim();
+        if (name && builds.indexOf(name) < 0) builds.push(name);
+      }
+    }
+
+    const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+    const eol = text.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
+    const lines = text ? text.split(/\r?\n/) : [];
+    if (lines.length && lines[lines.length - 1] === "") lines.pop();
+
+    // 扁平结构解析：无缩进行是顶层 key（section），allowBuilds 下的缩进行是
+    // 其子项；其余行原样保留
+    const TOP = /^([A-Za-z0-9_.-]+):(.*)$/;
+    const SUB = /^[ \t]+([^:]+):(.*)$/;
+    const out = [];
+    let section = "";
+    let allowAt = -1;
+    const approved = new Map();
+
+    for (const line of lines) {
+      if (TOP.test(line) && !/^\s/.test(line)) {
+        section = TOP.exec(line)[1];
+        if (section === "allowBuilds") {
+          allowAt = out.length;
+          out.push(null); // 占位，稍后整段按排序结果重换
+          continue;
+        }
+        out.push(line);
+        continue;
+      }
+      if (section === "allowBuilds") {
+        const m = SUB.exec(line);
+        if (m) {
+          approved.set(m[1].trim().replace(/^[\u0027\u0022]|[\u0027\u0022]$/g, ""), m[2].trim());
+          continue;
+        }
+      }
+      out.push(line);
+    }
+    for (const name of builds) approved.set(name, "true");
+    for (const [k, v] of Object.entries(scalars)) {
+      const re = new RegExp("^" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ":");
+      const i = out.findIndex((l) => l !== null && re.test(l));
+      if (i >= 0) out[i] = k + ": " + v;
+      else out.push(k + ": " + v);
+    }
+    if (approved.size) {
+      const q = (k) => (/^[A-Za-z0-9_][A-Za-z0-9_-]*$/.test(k) ? k : "\u0027" + k + "\u0027");
+      const block = ["allowBuilds:"];
+      for (const k of [...approved.keys()].sort()) block.push("  " + q(k) + ": " + approved.get(k));
+      if (allowAt >= 0) out.splice(allowAt, 1, ...block);
+      else out.push(...block);
+    } else if (allowAt >= 0) {
+      out.splice(allowAt, 1);
+    }
+    fs.writeFileSync(file, out.filter((l) => l !== null).join(eol) + eol);
+  ' "$1" "$2" "$3"
+}
+
 update_latest() {
   local dir="$1" label="$2" is_ext="$3"
   ensure_pnpm_workspace "$dir" "$is_ext"
@@ -86,12 +164,15 @@ update_latest() {
     return 0
   fi
 
-  # ERR_PNPM_IGNORED_BUILDS: 包已正常安装，只是 build scripts 未审批 — 非致命
+  # ERR_PNPM_IGNORED_BUILDS: 包装上了但 build scripts 没跑（esbuild 等 native
+  # 产物缺失），按报告里的包名批准后重试一次——不是可以忽略的噪声
   if echo "$out" | grep -q 'ERR_PNPM_IGNORED_BUILDS'; then
-    # || true：输出若只剩被过滤行，grep -v 无行可出 → pipefail 中止
-    echo "$out" | grep -v 'ERR_PNPM_IGNORED_BUILDS' | grep -v 'approve-builds' || true
-    echo "  [${label}] 部分依赖需审批 build scripts（非致命）"
-    return 0
+    echo "  [${label}] 有依赖未审批 build scripts，自动批准并重试..." >&2
+    pnpm_workspace_policy "$dir/pnpm-workspace.yaml" "$out" '{}'
+    if out=$(cd "$dir" && pnpm update --latest 2>&1); then
+      echo "$out"
+      return 0
+    fi
   fi
 
   # 其他错误（store 冲突、lockfile 损坏等）：删 lockfile 重装
