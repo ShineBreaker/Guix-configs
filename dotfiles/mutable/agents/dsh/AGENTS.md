@@ -28,7 +28,7 @@
 
 ## 安装通道与升级
 
-- **安装机制**：DSH CLI 本体（当前为 0.1.7-alpha.1）通过 pnpm 安装在 `_cli/` 目录中。
+- **安装机制**：DSH CLI 本体（当前为 0.2.0-rc.2）通过 pnpm 安装在 `_cli/` 目录中。
 - **升级步骤**：修改源码中 `.local/share/dsh/_cli/package.json` 的版本号 → 在 `_cli/` 目录中执行 `pnpm install`。插件同理改 `profiles/web/package.json`。日常更新直接跑 `dsh update`（见「一键更新」），它会同时处理本体与插件，并在插件的兼容声明不含目标本体版本时给出提醒。
 - **Workspace 配置**：`_cli/pnpm-workspace.yaml` 设置了 `minimumReleaseAge: 0`（适配预览期的日更版本，避免 24h 供应链冷却拦截）、`saveExact: true`（一切 pnpm add 通道——含 `dsh plugin add`——都写精确版本，根治 `^` 范围漂移）以及 `allowBuilds`（批准 node-pty、koffi、protobufjs 等原生编译依赖）。插件侧 `profiles/web/pnpm-workspace.yaml` 同理。
 
@@ -40,18 +40,21 @@
 
 | 插件                                 | 当前版本       | 说明                                                                               |
 | ------------------------------------ | -------------- | ---------------------------------------------------------------------------------- |
-| `dsh-context`                        | 0.53.3         | 上下文监控面板：展示 Agent 组合、趋势分析、文件活动与 Agent 通信网络               |
-| `dsh-dream-skin`                     | 9.16.0         | 原生主题换肤：通过官方 `ctx.theme.register` / `overrideTokens` 实现原生 Token 换肤 |
-| `@opencode2dsh/dsh-plugin`           | 0.2.7          | OpenCode Zen 免费通道：原生 LLM adapter，无凭据零配置（**0.1.7 起从 0.3.x 降级**，见下） |
-| `dsh-opencode-go`                    | 0.1.4          | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                  |
-| `@mars-sea/dsh-commandcode-provider` | 0.11.5         | Command Code 接入：全套餐、浏览器内 OAuth 登录、多账户轮换                         |
+| `dsh-context`                        | 0.61.0         | 上下文监控面板：展示 Agent 组合、趋势分析、文件活动与 Agent 通信网络               |
+| `dsh-dream-skin`                     | 9.29.0         | 原生主题换肤：通过官方 `ctx.theme.register` / `overrideTokens` 实现原生 Token 换肤 |
+| `dsh-opencode-go`                    | 0.1.16         | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                  |
+| `dshmarket`                          | 1.66.4         | 插件市场：浏览、安装与更新社区插件                                                 |
 | `dsh-devin-cli`                      | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，dsh update 自动跟 HEAD）        |
+| `dsh-find-plugin`                    | 0.4.0          | 文件/内容查找插件；peer 止步 0.1.7 线，0.2.0 下被 compat 门自动 skip（见下）        |
+| `dsh-remote-web-gateway`             | 0.2.2          | 远程网关；2026-08-28 后停更，0.2.0 下被 compat 门自动 skip（见下）                  |
 | `dsh-agent-extensions`               | `link:` 本地  | 自建插件：pi/omp 共享扩展的 DSH 移植，见「自建插件」                                |
 | `dsh-agenote`                        | `link:` 本地  | 自建插件：agenote 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在 `~/Projects/agenote/dsh-agenote` |
 
 > **已移除：`dsh-better-sidebar`（0.19.1，2026-09-19）**——侧边栏工作台（文件编辑、内置终端、Git 差异）。其 peer 锁 `@deepseek-ai/dsh-agent: ^0.1.5-rc.1`，semver 预发布区间够不到核心 `0.1.6-alpha.2`：`conversation.chat.turnTail` 槽位在 0.1.6 由 `chain` 改为 `list`（注册要求 `options.id`），旧插件按 chain API 注册 → 整页 `web boot` 失败。上游发布适配 0.1.6 的版本后可 `dsh plugin --profile web add dsh-better-sidebar@<ver>` 装回。
 
-> **已降级：`@opencode2dsh/dsh-plugin`（0.3.3 → 0.2.7，2026-09-23）**——0.3.x 的 client 半边 inject `settingsScope`，而 0.1.7 核心把 settings 域从 `super(ctx, "settingsScope")`（0.1.6 `dsh-client-ui-settings/lib/client.js` 实码）重构为 describe mirror 架构，该服务已不存在 → 页面停在 `Failed to load plugins` / `web boot: 1 entry did not activate` / `@opencode2dsh/dsh-plugin: pending (waiting for service: settingsScope)`。0.3.0–0.3.3 全部中招（IP 池设置卡均走该 API），npm 最新即 0.3.3、无适配版。0.2.7 是最后**只有 host 半边**的版本（inject `llm`/`credentials`/`settings`，0.1.7 仍提供），Zen 通道本身不受影响，代价是失去 0.3.x 的 IP 池 UI 卡片。上游适配 0.1.7 后可升回。
+> **已降级：`@opencode2dsh/dsh-plugin`（0.3.3 → 0.2.7，2026-09-23；后整包移除）**——0.3.x 的 client 半边 inject `settingsScope`，而 0.1.7 核心把 settings 域从 `super(ctx, "settingsScope")`（0.1.6 `dsh-client-ui-settings/lib/client.js` 实码）重构为 describe mirror 架构，该服务已不存在 → 页面停在 `Failed to load plugins` / `web boot: 1 entry did not activate` / `@opencode2dsh/dsh-plugin: pending (waiting for service: settingsScope)`。0.3.0–0.3.3 全部中招（IP 池设置卡均走该 API），npm 最新即 0.3.3、无适配版。0.2.7 是最后**只有 host 半边**的版本；该降级版后来也从 dependencies 移除（2026-09 末），Zen 通道未在用。
+
+> **0.2.0 下被 compat 门自动 skip 的两个插件（保留观望，2026-10-01）**：`dsh-find-plugin@0.4.0`（peer 止步 `^0.1.7-alpha.1`，0.2.0-rc.1 后未发新版）与 `dsh-remote-web-gateway@0.2.2`（peer 全 0.1.x，2026-08-28 后停更）。0.1.7-rc.1 起 `dsh-app-boot` 的 `evaluatePluginCompatibility` 按插件 manifest 的 `@deepseek-ai/dsh*` peer 范围做启动时强制校验（`includePrerelease: true`，不读 `peerDependenciesMeta.optional`），不满足即整 bundle skip 并在 `web.log` 记 `skipping profile bundle`——boot 不受影响。上游发适配版后 `dsh plugin --profile web add <pkg>@<ver>` 升回；确认不再需要时走 `dsh plugin rm` 并验证三处清理（见排障 5 的实例）。
 
 ### 插件常见问题与注意点
 
@@ -277,8 +280,8 @@ dsh-TUI（上游 `ccch1mneyyy/dsh-TUI`，npm `@deepseek-harness-tui/dsh-tui`）�
 
   装完 profile 目录出现 `package.json`（`dependencies` + `dsh.profile.bundles`）、`cordis.yml`、`cordis.patch.yml`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`compatibility.json`；`node_modules` 是运行时产物。
 - **入口：`dsh tui`**。上游 launcher 是双态设计——住在 profile 内 `node_modules/@deepseek-harness-tui/dsh-tui/bin/dsh-tui.js` 的那份承载完整逻辑，全局 npm 安装的那份只是找到 profile 副本后委托的瘦壳。本机不往 `~/.local/bin` 添新入口（一包一入口规则，上游的 `dsh-tui`/`dst` 两个 bin 都不引），改为 `.local/libexec/dsh-tui` 直接 exec profile 内副本，`bin/dsh` 加 `tui)` 一行分发。`dsh tui` 透传全部子命令：`version` / `doctor` / `safe` / `update` / `--resume`。
-- **compat 门与 `compatibility.json`**：boot 时 loader 比对 bundle 声明的 peer 范围与本体版本，不匹配就**静默跳过整个 bundle**。授权记录落在 `profiles/dsh-tui/compatibility.json`（`{"@deepseek-harness-tui/dsh-tui@0.11.0": ["0.1.7-rc.2"]}`），**删掉它 TUI 就整条消失**（dump-config 条目 111 → 93，且不报错）。判定是否中招：`dsh --profile dsh-tui --dump-config | grep -c '^- id:'` 或 `dsh tui doctor` 的 `config: .../cordis.patch.yml` 行。
-- **版本线**：TUI 0.11.0 的主验证线即 0.1.7-rc.2（上游 #1000，rc.1→rc.2 为加性变更，TUI 源码零改动通过全量编译），故**未降级**。降级判据照 web 侧先例：peer 锁的核心版本区间够不到本体（semver 预发布区间只匹配同元组），或启动即 `pending (waiting for service: ...)`。
+- **compat 门与 `compatibility.json`**：boot 时 loader 比对 bundle 声明的 peer 范围与本体版本，不匹配就**静默跳过整个 bundle**。授权记录落在 `profiles/dsh-tui/compatibility.json`（历史示例 `{"@deepseek-harness-tui/dsh-tui@0.11.0": ["0.1.7-rc.2"]}`；0.12.0 的 peer 逐项列出 0.2.0-rc.2，无需授权即通过），**删掉它 TUI 就整条消失**（dump-config 条目 111 → 93，且不报错）。判定是否中招：`dsh --profile dsh-tui --dump-config | grep -c '^- id:'` 或 `dsh tui doctor` 的 `config: .../cordis.patch.yml` 行。
+- **版本线**：TUI 0.12.0（2026-09-30）的 peer 逐项列出 `0.2.0-rc.1 || 0.2.0-rc.2`，是首个适配 0.2.0 的版本；0.11.0 的主验证线是 0.1.7-rc.2。降级判据照 web 侧先例：peer 锁的核心版本区间够不到本体（semver 预发布区间只匹配同元组），或启动即 `pending (waiting for service: ...)`。
 - **shellPath 坑不波及 TUI**：见排障 5，`/bin/bash` 硬编码只影响挂 PTY 持久 shell 的 preset。TUI 默认 `standard` preset 挂 `tool-bash`（subprocess 非 PTY），不吃这个坑；只有切到 `minimal`/`liangshen` 时才需在 `profiles/dsh-tui/cordis.patch.yml` 按排障 5 的手法补 `shellPath`。profile 层 patch 无法给 preset 行打补丁——目标 id 要等 preset 挂载后才存在，提前写只会每次 boot 报 `patch: entry "terminal-bash" not found`。
 - **断链自愈对 dsh-tui 同样生效**：`dsh tui` 不经 `bin/dsh` 的 CLI 分发点（直走 libexec），所以它的自愈时机是每次 `dsh` CLI 调用与 `dsh tui doctor`/`update` 内的 pnpm 跑完后；跑完照样 `ls -la ~/.local/share/dsh/profiles/dsh-tui/` 抽查链接形态。
 

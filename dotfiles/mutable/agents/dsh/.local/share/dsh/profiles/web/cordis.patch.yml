@@ -56,9 +56,8 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: devin
-    model: swe-2
-    reasoningEffort: max
+    provider: step-plan
+    model: step-5-preview
 
 # ══ 用户自定义 agent presets（0.1.7 行声明机制）════════════════════════
 # ── preset: minimal-guix ──────────────────────────────────────────
@@ -86,7 +85,7 @@
           # sorts first. Hence a differently-named copy carrying an explicit `shellPath`.
           #
           # Re-sync after a DSH upgrade: diff this file against the shipped
-          # `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` and re-apply `shellPath`.
+          # `<dsh-web-app>/presets/minimal.patch.yml` and re-apply `shellPath`.
           #
           # Deployment: this stow package owns the user preset root; the deployment side
           # `$DSH_HOME/.agent-presets/minimal-guix/` symlinks back here (see the dsh
@@ -190,7 +189,7 @@
           # touches them (it only manages `_cli` and profile bundles).
           #
           # Re-sync after a DSH upgrade: diff the shell block below against the shipped
-          # `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` and re-apply
+          # `<dsh-web-app>/presets/minimal.patch.yml` and re-apply
           # `shellPath`; compare the three injection rows against the shipped `standard`
           # preset.
           #
@@ -693,8 +692,10 @@
                   enableRunInBackground: false
                   maxDepth: provider-managed
 
-              - id: workflow-worker-thread
-                name: '@deepseek-ai/dsh-workflow-worker-thread'
+              # 0.2.0 起 workflow 引擎后端由 dsh-workflow-ptc 提供（worker-thread 包已移除），
+              # provider: spawn 语义不变（对齐官方 standard preset 的 delegation 组）。
+              - id: workflow-ptc
+                name: '@deepseek-ai/dsh-workflow-ptc'
                 config:
                   provider: spawn
 
