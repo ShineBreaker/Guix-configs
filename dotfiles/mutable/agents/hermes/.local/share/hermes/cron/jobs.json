@@ -20,17 +20,17 @@
       "schedule_display": "0 23 * * 2,4,6",
       "repeat": {
         "times": null,
-        "completed": 45
+        "completed": 46
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-21T17:40:06.173351+08:00",
-      "next_run_at": "2026-09-29T23:00:00+08:00",
-      "last_run_at": "2026-09-26T23:00:28.708487+08:00",
-      "last_status": "error",
-      "last_error": "RuntimeError: Failed to initialize OpenAI client: No module named 'pydantic_core._pydantic_core'",
+      "next_run_at": "2026-10-01T23:00:00+08:00",
+      "last_run_at": "2026-09-29T23:23:31.013139+08:00",
+      "last_status": "ok",
+      "last_error": null,
       "last_delivery_error": null,
       "deliver": "origin",
       "origin": {
@@ -44,11 +44,11 @@
       "fire_claim": null,
       "provider_snapshot": null,
       "model_snapshot": null,
-      "failure_streak": 1,
+      "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-09-26T23:00:00+08:00",
-        "dispatched_at": "2026-09-26T23:00:27.940489+08:00",
-        "lateness_seconds": 27.9,
+        "scheduled_at": "2026-09-29T23:00:00+08:00",
+        "dispatched_at": "2026-09-29T23:00:59.912835+08:00",
+        "lateness_seconds": 59.9,
         "kind": "on_time"
       }
     },
@@ -183,8 +183,8 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T15:40:30.541829+08:00",
-      "next_run_at": "2026-09-30T03:00:00+08:00",
-      "last_run_at": "2026-09-29T03:07:14.176261+08:00",
+      "next_run_at": "2026-10-01T03:00:00+08:00",
+      "last_run_at": "2026-09-30T03:08:16.729545+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -196,8 +196,8 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-09-29T03:00:00+08:00",
-        "dispatched_at": "2026-09-29T03:00:59.913307+08:00",
+        "scheduled_at": "2026-09-30T03:00:00+08:00",
+        "dispatched_at": "2026-09-30T03:00:59.914497+08:00",
         "lateness_seconds": 59.9,
         "kind": "on_time"
       }
@@ -271,15 +271,15 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 6
+        "completed": 7
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-09-30T08:00:00+08:00",
-      "last_run_at": "2026-09-29T08:01:10.970615+08:00",
+      "next_run_at": "2026-10-01T08:00:00+08:00",
+      "last_run_at": "2026-09-30T08:01:11.706274+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -297,13 +297,13 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-09-29T08:00:00+08:00",
-        "dispatched_at": "2026-09-29T08:00:59.913591+08:00",
+        "scheduled_at": "2026-09-30T08:00:00+08:00",
+        "dispatched_at": "2026-09-30T08:00:59.912856+08:00",
         "lateness_seconds": 59.9,
         "kind": "on_time"
       },
       "fire_claim": null
     }
   ],
-  "updated_at": "2026-09-29T08:01:10.971177+08:00"
+  "updated_at": "2026-09-30T08:01:11.706862+08:00"
 }
