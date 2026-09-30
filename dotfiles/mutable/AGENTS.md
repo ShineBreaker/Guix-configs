@@ -2,12 +2,12 @@
 
 本目录用于管理**高频变动且需要 Git 版本备份**的应用配置。与 `immutable/`（Guix Home 构建 store 只读副本）互补，GNU Stow 将文件**直接软链接到仓库源目录**，实现**修改源码即时生效**，无需执行部署命令。
 
-| 维度             | `immutable/`（不可变）              | `mutable/`（可变）                       |
-| ---------------- | ----------------------------------- | ---------------------------------------- |
-| **部署方式**     | Guix Home 复制进 store 只读副本     | `blue stow` 直接软链到仓库源             |
-| **目标目录形态** | 指向 store 的只读链接               | 真实目录（`--no-folding` 单文件软链）    |
-| **生效机制**     | 必须运行 `blue home` 重建           | 保存源码立即生效                         |
-| **适用场景**     | 稳定系统与桌面组件（Niri、Fish 等） | 高频调试与动态应用（Emacs、DSH 等）      |
+| 维度             | `immutable/`（不可变）              | `mutable/`（可变）                    |
+| ---------------- | ----------------------------------- | ------------------------------------- |
+| **部署方式**     | Guix Home 复制进 store 只读副本     | `blue stow` 直接软链到仓库源          |
+| **目标目录形态** | 指向 store 的只读链接               | 真实目录（`--no-folding` 单文件软链） |
+| **生效机制**     | 必须运行 `blue home` 重建           | 保存源码立即生效                      |
+| **适用场景**     | 稳定系统与桌面组件（Niri、Fish 等） | 高频调试与动态应用（Emacs、DSH 等）   |
 
 ## 部署模型与机制
 
@@ -63,20 +63,19 @@ mutable/
 
 ## 纳管软件包列表
 
-| 软件包               | 部署目标                                                                       | 说明与手册                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `emacs`              | `~/.config/emacs/`                                                             | 单一 `emacs.org` 驱动的 Emacs 配置，详见 [emacs/.../AGENTS.md](emacs/.config/emacs/AGENTS.md)                    |
-| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh` + 图标/desktop 项                   | DeepSeek Harness 配置层与 CLI（update/web 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)       |
-| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）                                 |
-| `agents/omp`         | `~/.config/omp/`                                                               | OMP Agent 配置与扩展                                                                                             |
-| `agents/pi`          | `~/.config/pi/` + `~/.local/bin/pi*` + `~/.local/share/pi/`                    | Pi 编码 Agent 的 wrapper 与配置（pnpm 自管理），详见 [pi/AGENTS.md](agents/pi/AGENTS.md)                         |
-| `agents/skills`      | `~/.config/agents/skills/` + `~/.local/bin/askill`                             | 第三方技能锁（`skills-lock.json`）、自建技能与 `askill` 管理器                                                   |
-| `agents/zcode`       | `~/.zcode/`                                                                    | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md)                              |
-| `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` + `~/.zcode/plugins/` | 知识库技能与各端 Hook/插件（内含子模块）                                                                         |
-| `tools/secrets`      | `~/.local/share/keys/` + `~/.local/bin/secrets`                                | Age 密钥对与 `secrets` 命令（加密/解密/编辑/fzf 菜单/剪贴板），详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md) |
-| `tools/appimage-run` | `~/.local/bin/appimage-run`                                                    | AppImage 运行器（子模块）                                                                                        |
-| `tools/blue`         | `~/.local/bin/blue`（增强脚本在包内 `.local/libexec/`）                        | blue 启动 wrapper（借系统 guile 直跑，绕过字节码错配；上游修复后删包），update 防呆/gc 清理分发至包内 `.local/libexec/`（docs/emergency-blue.md §8-9）     |
-| `tools/toolbox`      | `~/.local/bin/toolbox` + `~/.local/share/toolbox/`                             | 自研工具统一入口（fzf 清单），详见 [toolbox/AGENTS.md](tools/toolbox/AGENTS.md)                                  |
+| 软件包               | 部署目标                                                                       | 说明与手册                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `emacs`              | `~/.config/emacs/`                                                             | 单一 `emacs.org` 驱动的 Emacs 配置，详见 [emacs/.../AGENTS.md](emacs/.config/emacs/AGENTS.md)                                                  |
+| `agents/dsh`         | `~/.local/share/dsh/` + `~/.local/bin/dsh` + 图标/desktop 项                   | DeepSeek Harness 配置层与 CLI（update/web 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)；入口手册 `docs/scripts/` 的 dsh 族 |
+| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）；入口手册 `docs/scripts/` 的 hermes 族                        |
+| `agents/omp`         | `~/.config/omp/`                                                               | OMP Agent 配置与扩展                                                                                                                           |
+| `agents/pi`          | `~/.config/pi/` + `~/.local/bin/pi*` + `~/.local/share/pi/`                    | Pi 编码 Agent 的 wrapper 与配置（pnpm 自管理），详见 [pi/AGENTS.md](agents/pi/AGENTS.md)；入口手册 `docs/scripts/` 的 pi 族                    |
+| `agents/skills`      | `~/.config/agents/skills/` + `~/.local/bin/askill`                             | 第三方技能锁（`skills-lock.json`）、自建技能与 `askill` 管理器（手册 `docs/scripts/askill.md`）                                                |
+| `agents/zcode`       | `~/.zcode/`                                                                    | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md)                                                            |
+| `agenote`            | `~/.config/agents/skills/` + `~/.config/omp/extensions/` + `~/.zcode/plugins/` | 知识库技能与各端 Hook/插件（内含子模块）                                                                                                       |
+| `tools/secrets`      | `~/.local/share/keys/` + `~/.local/bin/secrets`                                | Age 密钥对与 `secrets` 命令（加密/解密/编辑/fzf 菜单/剪贴板），详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md)                               |
+| `tools/appimage-run` | `~/.local/bin/appimage-run`                                                    | AppImage 运行器（子模块）                                                                                                                      |
+| `tools/toolbox`      | `~/.local/bin/toolbox` + `~/.local/share/toolbox/`                             | 自研工具统一入口（fzf 清单），详见 [toolbox/AGENTS.md](tools/toolbox/AGENTS.md)；手册 `docs/scripts/toolbox.md`                                |
 
 > `agents/extensions/` 无 `.stow-package` 标记，不单独部署：它是 omp/pi 共享自建扩展的源码存放点，两侧 `extensions/<name>/` 经软链引用（见 [pi/AGENTS.md](agents/pi/AGENTS.md)）。
 
