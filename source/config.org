@@ -482,7 +482,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
      <<kernel-module-services>>
      <<sysctl-services>>
      <<pam-limits-services>>
-     <<nix-services>>
+     ;; <<nix-services>>
      ;; ── 文件系统配套：machine-id / resume / /tmp / /data / 回收站 ──
      <<machine-id-service>>
      <<resume-device-service>>
@@ -830,7 +830,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
    ;; 包管理器
    "flatpak"
    "flatpak-xdg-utils"
-   "nix"
+   ;; "nix"
 
    ;; 工具
    "gzip"
@@ -1905,10 +1905,10 @@ polkit.addRule(function(action, subject) {
 #+end_src
 
 *** Guix 下载源
+每个下载源一段：先列 substitute-urls，再把对应公钥利用 plain-file 包成授权所需要的 .pub 文件
 
 #+NAME: guix-substitutes
 #+begin_src scheme
-;; 每个下载源一段：先列 substitute-urls，再把对应公钥包成 plain-file 授权的 .pub 文件
 (list (simple-service 'guix-moe-substitutes guix-service-type
                       (guix-extension
                        (substitute-urls '("https://cache-cdn.guix.moe"))
@@ -2004,6 +2004,7 @@ polkit.addRule(function(action, subject) {
 
    ;; 工具
    "cliphist"
+   "clipnotify"
    "dconf-editor"
    "dex"
    "file-roller"
@@ -2013,6 +2014,7 @@ polkit.addRule(function(action, subject) {
    "rofi"
    "waywallen-bin"
    "wl-clipboard"
+   "xclip"
    "xprop"
    "xvfb-run"
 
@@ -2113,7 +2115,9 @@ polkit.addRule(function(action, subject) {
 
    ;; 环境管理
    "bubblewrap"
+   "bun"
    "direnv"
+   "pnpm"
    "sdkmanager"
    "uv"
 
@@ -2127,15 +2131,19 @@ polkit.addRule(function(action, subject) {
    ;; AI Agent
    "ai-usagebar-bin"
    "cc-switch-bin"
-   "crush-bin"
+   "claude-code"
+   "codex"
    "cua-driver-bin"
    "zcode"
    "zcode-proxy-bin"
 
    ;; 工具
+   "biome"
+   "gh"
    "guile-json"
    "jq"
    "pandoc"
+   "prettier-bin"
    "reuse"
    "squashfs-tools"
    "strace"
@@ -2189,8 +2197,9 @@ polkit.addRule(function(action, subject) {
    "seahorse"
    "wine64-staging"
 
-   ;; 虚拟机
+   ;; 容器与虚拟机
    "freerdp@3"
+   "pods"
    "virt-manager"
    "winapps"
 
@@ -2497,7 +2506,15 @@ _    _  _  _  _  _  _  _)
 
                        (home-daemon-service 'usb-power-watch
                                             (list "/bin/sh"
-                                                  (local-file "usb-power-watch"))))))
+                                                  (local-file "usb-power-watch")))
+
+                       (home-daemon-service 'clipsync
+                                            (list (file-append guile-3.0 "/bin/guile")
+                                                  "--no-auto-compile"
+                                                  (local-file "clipsync.scm"))
+                                            #:requirement '(graphical-session)
+                                            #:documentation
+                                            "X11 与 Wayland CLIPBOARD 双向同步（niri + xwayland-satellite 无自动转发）"))))
 #+end_src
 
 **** usb-power-watch 脚本
@@ -2554,6 +2571,259 @@ while :; do
     fi
     sleep $INTERVAL
 done
+#+end_src
+
+**** clipsync 剪切板桥接
+niri + =xwayland-satellite= 组合下 X11 与 Wayland 的 =CLIPBOARD= 两个方向都**不会自动转发**（本机实测： =xclip= 写入后 =wl-paste= 读不到，反向同样），两套剪切板完全隔离；叠加 LinuxQQ 的剪切板实现（ =wrapper.node= 内只调用 Xlib ）只读写 X11 一侧，XWayland 应用（ flatpak 版 QQ / WeChat / DingTalk 等）与 Wayland 原生应用之间互相粘贴不可用。本守护进程维护 =CLIPBOARD= 选择的双向同步，由上方 =essential-desktop-services= 作为 home shepherd 服务 =clipsync= 启动：依赖 =graphical-session= （继承会话的 =DISPLAY= / =WAYLAND_DISPLAY= ，不内置探测），日志落 =~/.local/state/shepherd/clipsync.log= 。
+
+架构与 [[https://github.com/SHORiN-KiWATA/linuxqq-clipsync][linuxqq-clipsync]]（Rust 版，已归档）等价：事件源 =clipnotify= （ X11 所有权变化即退出，退出即事件）与 =wl-paste --watch echo= （ Wayland 侧每次变化输出一行），读写由 =xclip= / =wl-copy= / =wl-paste= 完成；依赖包已在桌面软件包列表（ =clipnotify= / =xclip= / =wl-clipboard= ），读子进程额外依赖系统 profile 中的 coreutils =timeout= 。
+
+不变量（改代码前先读完，均有实测依据）：
+
+1. **防环靠归一化内容比对，不是方向时间窗**：文本去空白与 =NUL= 、uri-list 剥 =file://= 前缀并丢弃 =copy=/=cut= 行后比较，回声一趟内容相等即跳过。删掉比对只留时间窗必然回环。
+2. **对向 =1s= 抑制必须「推迟处理」而非跳过**：本机无自动转发回声，跳过会把窗口内的真实复制永久吞掉（ Rust 版的隐性依赖，见 agenote 20261002-083559 ）。
+3. **写目标剪切板之前登记状态**：否则对向线程在写入进行中回读大图，会命中 =xclip= 的 INCR 并发缺陷（丢弃并发的粘贴请求）。
+4. **所有子进程包 =timeout=**：对端进程死亡时 =xclip= 的 INCR 传输会挂死，不设超时会拖死整个线程。
+5. **事件后 =30ms= 去抖再读**：所有权生效与数据可读之间存在时序差。
+
+Guile 陷阱： =sleep= 只收精确整数（用 =usleep= ）；标准库 =gettimeofday= 返回点对 =(sec . usec)= ，不能 =cadr= 。与 cliphist 天然兼容： QQ 的复制经桥接进入 Wayland 剪切板后，由 niri 启动项 =wl-paste --watch cliphist store= 收进历史。
+
+#+NAME: clipsync
+#+CAPTION: X11 与 Wayland CLIPBOARD 双向同步守护
+#+begin_src scheme :tangle ../tmp/clipsync.scm
+;; clipsync — X11 与 Wayland CLIPBOARD 双向同步守护
+;; 文档：source/config.org「软件自启动 · clipsync 剪切板桥接」节（含五条不变量）
+
+(use-modules (ice-9 popen)
+             (ice-9 rdelim)
+             (ice-9 threads)
+             (ice-9 format)
+             (rnrs bytevectors)
+             (rnrs io ports)
+             (srfi srfi-13))
+
+;; ---------- MIME 协商表（移植自 linuxqq-clipsync 的映射表） ----------
+
+(define (pick-x11 types)
+  ;; 返回 (源MIME 目标MIME 模式) 或 #f
+  (cond [(string-contains types "x-special/gnome-copied-files")
+         (list "x-special/gnome-copied-files" "text/uri-list" 'uri)]
+        [(or (string-contains types "application/x-qt-image")
+             (string-contains types "text/uri-list"))
+         (list "text/uri-list" "text/uri-list" 'uri)]
+        [(string-contains types "image/png") (list "image/png" "image/png" 'raw)]
+        [(string-contains types "image/jpeg") (list "image/jpeg" "image/jpeg" 'raw)]
+        [(string-contains types "text/plain;charset=utf-8")
+         (list "text/plain;charset=utf-8" "text/plain" 'text)]
+        [(string-contains types "UTF8_STRING") (list "UTF8_STRING" "text/plain" 'text)]
+        [(string-contains types "text/plain") (list "text/plain" "text/plain" 'text)]
+        [(string-contains types "text/html") (list "text/html" "text/html" 'raw)]
+        [else #f]))
+
+(define (pick-wayland types)
+  ;; 返回 (源MIME 模式) 或 #f
+  (cond [(or (string-contains types "application/x-qt-image")
+             (string-contains types "text/uri-list"))
+         (list "text/uri-list" 'uri)]
+        [(string-contains types "image/png") (list "image/png" 'raw)]
+        [(string-contains types "image/jpeg") (list "image/jpeg" 'raw)]
+        [(string-contains types "text/plain;charset=utf-8")
+         (list "text/plain;charset=utf-8" 'text)]
+        [(string-contains types "text/plain") (list "text/plain" 'text)]
+        [(string-contains types "text/html") (list "text/html" 'raw)]
+        [else #f]))
+
+;; ---------- 共享状态 ----------
+
+(define %lock (make-mutex))
+(define %last-dir "")        ; 最近一次同步方向 "X2W" | "W2X"
+(define %last-time 0)        ; 完成时刻（微秒）
+(define %last-norm #f)       ; 最近同步内容的归一化字节串（防环比较基准）
+
+;; ---------- 工具函数 ----------
+
+(define (now-us)
+  ;; gettimeofday 返回点对 (sec . usec)，个别实现返回双元素表，两种都要兼容
+  (let* ([t (gettimeofday)] [rest (cdr t)])
+    (+ (* (car t) 1000000) (if (pair? rest) (car rest) rest))))
+
+(define (logline tag fmt . args)
+  (format #t "[~a ~a] ~?\n"
+          (strftime "%H:%M:%S" (localtime (current-time))) tag fmt args)
+  (force-output))
+
+(define (clip-read . args)
+  ;; 子进程必须包 timeout：对端死亡时 xclip 的 INCR 传输挂死，会拖死线程
+  ;; 返回 bytevector 或 #f（无内容 / 超时 / 子进程失败）
+  (let* ([p (apply open-pipe* OPEN_READ "timeout" "10" args)]
+         [bv (get-bytevector-all p)]
+         [status (close-pipe p)])
+    (and (not (eof-object? bv)) (zero? status)
+         (> (bytevector-length bv) 0) bv)))
+
+(define (clip-write bv . args)
+  (catch #t
+    (lambda ()
+      (let ([p (apply open-pipe* OPEN_WRITE "timeout" "10" args)])
+        (put-bytevector p bv)
+        (force-output p)
+        (zero? (close-pipe p))))
+    (lambda args #f)))
+
+;; ---------- 内容归一化（防环比较的基准，见不变量 1） ----------
+
+(define (norm-text bv)
+  ;; 去空白与 NUL 后比较：容忍 xclip / wl-copy 之间的尾部换行差异
+  (string->utf8
+   (string-filter (lambda (c) (not (memv c '(#\nul #\newline #\return #\space #\tab))))
+                  (utf8->string bv))))
+
+(define (norm-uri bv)
+  (define (strip-file-uri s)
+    (if (string-prefix? "file://" s) (substring s 7) s))
+  (let loop ([lines (string-split (utf8->string bv) #\newline)]
+             [acc '()])
+    (cond [(null? lines)
+           (string->utf8 (apply string-append (reverse acc)))]
+          [else
+           (let ([t (string-trim-both (car lines))])
+             (cond [(or (member t '("copy" "cut")) (string=? t ""))
+                    (loop (cdr lines) acc)]
+                   [else (loop (cdr lines) (cons (strip-file-uri t) acc))]))])))
+
+(define (normalize bv mode)
+  (catch #t
+    (lambda ()
+      (let ([r (case mode
+                 [(text) (norm-text bv)]
+                 [(uri) (norm-uri bv)]
+                 [else bv])])
+        (and (> (bytevector-length r) 0) r)))
+    (lambda args #f)))
+
+(define (sanitize-uri-list bv)
+  ;; 写入前净化：丢 copy/cut 操作行，裸路径补 file://，使两端格式一致
+  (let loop ([lines (string-split (utf8->string bv) #\newline)]
+             [acc '()])
+    (if (null? lines)
+        (string->utf8 (string-join (reverse acc) "\n"))
+        (let ([t (string-trim-both (car lines))])
+          (cond [(or (member t '("copy" "cut")) (string=? t ""))
+                 (loop (cdr lines) acc)]
+                [(string-prefix? "/" t)
+                 (loop (cdr lines) (cons (string-append "file://" t) acc))]
+                [else (loop (cdr lines) (cons t acc))])))))
+
+;; ---------- 同步核心 ----------
+
+(define (wait-out-suppression! opposite-dir)
+  ;; 对向写入 1s 内的事件不丢弃，推迟到窗口结束再处理（不变量 2：
+  ;; 无自动转发回声的环境下，直接跳过会吞掉窗口内的真实复制）
+  (let loop ()
+    (lock-mutex %lock)
+    (let ([sup (and (string=? %last-dir opposite-dir)
+                    (< (- (now-us) %last-time) 1000000))])
+      (unlock-mutex %lock)
+      (when sup (usleep 100000) (loop)))))
+
+(define (same-as-last? norm)
+  (lock-mutex %lock)
+  (let ([r (and %last-norm norm (bytevector=? %last-norm norm))])
+    (unlock-mutex %lock)
+    r))
+
+(define (record! dir norm)
+  ;; 必须在写入目标剪切板之前登记，防对向线程在写入中回读大图（不变量 3）
+  (lock-mutex %lock)
+  (set! %last-dir dir)
+  (set! %last-time (now-us))
+  (set! %last-norm norm)
+  (unlock-mutex %lock))
+
+(define (handle-x11->wayland)
+  (let* ([types-bv (clip-read "xclip" "-selection" "clipboard" "-t" "TARGETS" "-o")]
+         [types (and types-bv (catch #t (lambda () (utf8->string types-bv))
+                                     (lambda args #f)))])
+    (when types
+      (let ([pick (pick-x11 types)])
+        (when pick
+          (let* ([src (car pick)] [dst (cadr pick)] [mode (caddr pick)])
+            (let ([data (clip-read "xclip" "-selection" "clipboard" "-o" "-t" src)])
+              (when data
+                (let ([norm (normalize data mode)])
+                  (when (and norm (not (same-as-last? norm)))
+                    (logline "X2W" "同步 ~a (~a 字节)" dst (bytevector-length data))
+                    (let ([out (if (eq? mode 'uri) (sanitize-uri-list data) data)])
+                      (record! "X2W" norm)
+                      (clip-write out "wl-copy" "-t" dst))))))))))))
+
+(define (handle-wayland->x11)
+  (let* ([types-bv (clip-read "wl-paste" "--list-types")]
+         [types (and types-bv (catch #t (lambda () (utf8->string types-bv))
+                                     (lambda args #f)))])
+    (when types
+      (let ([pick (pick-wayland types)])
+        (when pick
+          (let* ([src (car pick)] [mode (cadr pick)])
+            (let ([data (clip-read "wl-paste" "-n" "-t" src)])
+              (when data
+                (let ([norm (normalize data mode)])
+                  (when (and norm (not (same-as-last? norm)))
+                    (let* ([out (if (eq? mode 'uri) (sanitize-uri-list data) data)]
+                           [target (if (or (string=? src "text/plain")
+                                           (string=? src "text/plain;charset=utf-8"))
+                                       "UTF8_STRING" src)])
+                      (logline "W2X" "同步 ~a (~a 字节)" target (bytevector-length data))
+                      (record! "W2X" norm)
+                      (clip-write out "xclip" "-selection" "clipboard" "-i" "-t"
+                                  target))))))))))))
+
+;; ---------- 事件线程 ----------
+
+(define (x11-watcher)
+  (logline "SYS" "X11 监视线程启动")
+  (let loop ([fast-exits 0])
+    (let ([t0 (now-us)])
+      (system* "timeout" "3600" "clipnotify")
+      (let ([elapsed (- (now-us) t0)])
+        (cond [(< elapsed 100000)
+               ;; clipnotify 秒退说明 X 连接异常：退避重试，连续 5 次放弃（交 shepherd respawn）
+               (if (>= fast-exits 4)
+                   (begin (logline "ERR" "clipnotify 持续秒退，X11 事件源失效，守护退出")
+                          (primitive-exit 1))
+                   (begin (sleep 1) (loop (1+ fast-exits))))]
+              [else
+               ;; 30ms 去抖：所有权生效与数据可读之间有时序差（不变量 5）
+               (usleep 30000)
+               (wait-out-suppression! "W2X")
+               (handle-x11->wayland)
+               (loop 0)])))))
+
+(define (wayland-watcher)
+  (logline "SYS" "Wayland 监视启动")
+  (let ([p (open-pipe* OPEN_READ "wl-paste" "--watch" "echo")])
+    ;; echo 的输出内容无意义，只把「每次剪切板变化」变成一行事件信号
+    (let loop ()
+      (let ([line (read-line p)])
+        (if (eof-object? line)
+            (begin (logline "ERR" "wl-paste --watch 退出，守护退出") (primitive-exit 1))
+            (begin (usleep 30000)
+                   (wait-out-suppression! "X2W")
+                   (handle-wayland->x11)
+                   (loop)))))))
+
+;; ---------- 入口 ----------
+
+(define (main)
+  (unless (and (getenv "DISPLAY") (getenv "WAYLAND_DISPLAY"))
+    (logline "ERR" "缺少 DISPLAY / WAYLAND_DISPLAY，退出")
+    (primitive-exit 1))
+  (logline "SYS" "clipsync 启动: DISPLAY=~a WAYLAND_DISPLAY=~a"
+           (getenv "DISPLAY") (getenv "WAYLAND_DISPLAY"))
+  (make-thread x11-watcher)
+  (wayland-watcher))
+
+(main)
 #+end_src
 
 **** Hermes 后端与网关
@@ -2840,8 +3110,6 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
   ("CLAUDE_CONFIG_DIR" . "$XDG_CONFIG_HOME/claude")
   ;; codex
   ("CODEX_HOME" . "$XDG_CONFIG_HOME/codex")
-  ;; context-mode（pi 扩展：会话与内容存储根）
-  ("CONTEXT_MODE_DIR" . "$XDG_STATE_HOME/pi/context-mode")
   ;; cua-driver
   ("CUA_DRIVER_RS_HOME" . "$XDG_CONFIG_HOME/cua-driver")
   ;; docker
@@ -2864,13 +3132,10 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
   ;; luanti
   ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
   ;; node
-  ;; NPM_CONFIG_USERCONFIG 只改 .npmrc 位置，缓存仍落 ~/.npm；
-  ;; 实测大写变量不会下传成 npm_config_cache（prebuild-install 依赖小写名），
-  ;; 故缓存另由 ~/.config/npm/npmrc 的 cache= 一行承担。
   ("NPM_CONFIG_USERCONFIG" . "$XDG_CONFIG_HOME/npm/npmrc")
   ;; nvidia-driver
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")
-  ;; paseo（models/local-speech 近 1G，由 PASEO_HOME 一并带走）
+  ;; paseo
   ("PASEO_HOME" . "$XDG_DATA_HOME/paseo")
   ;; password-store
   ("PASSWORD_STORE_DIR" . "$XDG_DATA_HOME/pass")
@@ -2887,11 +3152,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
   ;; wine
   ("WINEPREFIX" . "$XDG_DATA_HOME/wine")
   ;; zcode-proxy
-  ("ZCODE_PROXY_CONFIG" . "$XDG_CONFIG_HOME/zcode-proxy/config.yaml")
-  ;; zcode 不在此列：ZCODE_HOME / ZCODE_DATA_BASE_DIR 只覆盖桌面段（v2、崩溃上报）；
-  ;; cli/ 子树（41G 里占 40G）在 app.asar 里硬编码 homedir 拼接，绕过所有环境变量。
-  ;; 设了变量反而分裂成两处数据，故 ~/.zcode 保持原位。
-  )
+  ("ZCODE_PROXY_CONFIG" . "$XDG_CONFIG_HOME/zcode-proxy/config.yaml"))
 #+end_src
 
 **** 环境变量汇总
