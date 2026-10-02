@@ -17,14 +17,14 @@
 
 管线自写代码不超过 50 行，其余都是 Guix core 与 BLUE build system 的标准件：
 
-| 层 | 由谁负责 | 本仓库做的事 |
-| --- | --- | --- |
-| iso9660 / EFI / MBR | Guix core 的 `--image-type=iso9660` | 不碰 |
-| installation-os 基底 | Guix core `(gnu system install)` 的 `make-installation-os` | 继承并定制 |
-| 非自由内核 / 固件 | nonguix 的 `linux` + `linux-firmware` | 接入 |
-| OS 定义 | 本仓库 | `source/config.org` 的 Live ISO 章节 |
-| 构建编排 | BLUE build system | `build-iso` 命令（`blueprint.scm`） |
-| 产物落地 | 本仓库 | `tools/build-image.scm` |
+| 层                   | 由谁负责                                                   | 本仓库做的事                         |
+| -------------------- | ---------------------------------------------------------- | ------------------------------------ |
+| iso9660 / EFI / MBR  | Guix core 的 `--image-type=iso9660`                        | 不碰                                 |
+| installation-os 基底 | Guix core `(gnu system install)` 的 `make-installation-os` | 继承并定制                           |
+| 非自由内核 / 固件    | nonguix 的 `linux` + `linux-firmware`                      | 接入                                 |
+| OS 定义              | 本仓库                                                     | `source/config.org` 的 Live ISO 章节 |
+| 构建编排             | BLUE build system                                          | `build-iso` 命令（`blueprint.scm`）  |
+| 产物落地             | 本仓库                                                     | `tools/build-image.scm`              |
 
 ### 2. 构建
 
@@ -75,18 +75,18 @@ sha256sum dist/jeans-desktop-*.iso
 
 ## 排障
 
-| 症状 | 原因 / 处理 |
-| --- | --- |
-| `blue build-iso` 报 `%system` 未定义或多处重复定义 | tangle 目标误用 `tmp/config.scm`，见「关键约束」第一条 |
-| `services` 字段类型不对 | `<<guix-substitutes>>` 被当 `cons*` 元素，改用 `append` 拍平 |
-| `no code for module (guix build utils)`（drv 编译失败） | builder 缺 `with-imported-modules` |
-| 服务依赖 `term-tty1` 无提供者 | 删 kmscon 时漏删 console-font |
-| 服务依赖 `networking` 无提供者 | 删 connman 时没显式加 NetworkManager |
-| `no code for module (gnu packages X)` | 删该 use-modules，改走 `specifications->packages` |
-| 字段名或值类型报错 | 查 Guix 手册对应 service |
-| `blue check` 报多余括号 | `blue block-show <块名>` 定位块名，`git diff` 找行 |
-| `guix time-machine: failed to authenticate` | `source/channel.lock` 频道公钥过期，跑 `blue update` 重生 |
-| QEMU 启动但 X 起不来 | 进 tty 查日志，X 日志在 `~/.local/share/xorg/` |
+| 症状                                                    | 原因 / 处理                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `blue build-iso` 报 `%system` 未定义或多处重复定义      | tangle 目标误用 `tmp/config.scm`，见「关键约束」第一条       |
+| `services` 字段类型不对                                 | `<<guix-substitutes>>` 被当 `cons*` 元素，改用 `append` 拍平 |
+| `no code for module (guix build utils)`（drv 编译失败） | builder 缺 `with-imported-modules`                           |
+| 服务依赖 `term-tty1` 无提供者                           | 删 kmscon 时漏删 console-font                                |
+| 服务依赖 `networking` 无提供者                          | 删 connman 时没显式加 NetworkManager                         |
+| `no code for module (gnu packages X)`                   | 删该 use-modules，改走 `specifications->packages`            |
+| 字段名或值类型报错                                      | 查 Guix 手册对应 service                                     |
+| `blue check` 报多余括号                                 | `blue block-show <块名>` 定位块名，`git diff` 找行           |
+| `guix time-machine: failed to authenticate`             | `source/channel.lock` 频道公钥过期，跑 `blue update` 重生    |
+| QEMU 启动但 X 起不来                                    | 进 tty 查日志，X 日志在 `~/.local/share/xorg/`               |
 
 接手时真撞错的顺序：先 grep `source/config.org` 的 Live ISO 章节顶部注释与该节块代码，再查 Guix 手册对应 service / package 文档，最后才看上游 issue。
 

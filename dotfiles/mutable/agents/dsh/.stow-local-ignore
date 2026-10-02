@@ -1,17 +1,18 @@
 # stow-local-ignore for stow/dsh — Perl regex, one per line, matched against
 # the tail of the relative path within the package. See GNU Stow manual.
 #
-# 源里只托管：home 级 cordis.patch.yml、profiles/web 的四个配置文件、
-# _cli 的 package.json（npm 方案 CLI 清单，本体 node_modules 是部署侧
-# 运行时产物）、一包一入口的脚本（.local/bin/dsh 分发 update/web 子命令
-# 到 .local/libexec/ 实体）、desktop 条目与图标。
+# 源里只托管：home 级 cordis.patch.yml、profiles/ 各 profile 的配置文件、
+# agents/dsh 的 package.json（npm 方案 CLI 清单，本体 node_modules 是部署侧
+# 运行时产物，部署位置为安装聚合根 ~/.local/share/agents/dsh）、一包一入口的
+# 脚本（.local/bin/dsh 分发 update/web 子命令到 .local/libexec/ 实体）、desktop
+# 条目与图标。
 # pnpm-lock.yaml 虽在源里（进 git 保证部署可复现），但 pnpm 的 Rust 端
 # 拒绝写软链 lockfile（Refusing to write symlinked lockfile），部署侧必须
 # 是真实文件，故这里仍剪枝；两侧同步由 dsh update 在 pnpm 跑完后自动
 # 拷回仓库源完成。
-# 运行时产物（凭据/存储/模块缓存/node_modules）生成在
-# ~/.local/share/dsh 部署侧真实目录，不在源；若误放进源，这些规则让
-# stow 不把它们软链出去。
+# 运行时产物（凭据/存储/模块缓存/node_modules）生成在部署侧真实目录
+# （~/.local/share/dsh 与 ~/.local/share/agents/dsh），不在源；若误放进源，
+# 这些规则让 stow 不把它们软链出去。
 # .credentials.yaml 含 API key，绝不入 git、绝不被 stow 链出。
 
 # --- 包自身的文档/元数据（不部署到 $HOME） ---

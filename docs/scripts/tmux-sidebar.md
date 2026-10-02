@@ -17,12 +17,12 @@ sidebar-render.scm --as-library  # 仅 load 定义不运行（供其他脚本引
 
 ## 模块分工
 
-| 文件         | 层  | 职责                                                     |
-| ------------ | --- | -------------------------------------------------------- |
+| 文件         | 层  | 职责                                                        |
+| ------------ | --- | ----------------------------------------------------------- |
 | `text.scm`   | 叶  | ANSI 常量、pane 字段访问、文本宽度/截断/填充/居中、路径处理 |
-| `info.scm`   | 中  | git HEAD/分支探测与 `/proc` 子进程 argv 解析（均带缓存） |
-| `layout.scm` | 中  | 折叠键派生、pane→window→group→session 聚合、布局行与样式 |
-| `input.scm`  | 顶  | 键盘光标导航、按键解析（cbreak）、FIFO 事件循环          |
+| `info.scm`   | 中  | git HEAD/分支探测与 `/proc` 子进程 argv 解析（均带缓存）    |
+| `layout.scm` | 中  | 折叠键派生、pane→window→group→session 聚合、布局行与样式    |
+| `input.scm`  | 顶  | 键盘光标导航、按键解析（cbreak）、FIFO 事件循环             |
 
 **分层是契约**：`text` 不依赖兄弟模块；`info` / `layout` 只依赖 `text`；`input` 反向依赖主文件的状态机（`handle-action` / `render-current!` 等）。`sidebar-render.scm` 是 owner，定义渲染状态机与 `run-daemon`，再 `load` 四个模块——加模块时维持此 DAG。
 

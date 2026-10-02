@@ -9,12 +9,12 @@
 
 ## 布局
 
-| 路径 | 说明 |
-| --- | --- |
+| 路径                                                 | 说明                                                                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$AGENTS_ROOT/pi`（默认 `~/.local/share/agents/pi`） | 安装根：核心包 pnpm 项目。`package.json`、`pnpm-lock.yaml` 是部署侧产物，由 `pi-update` 回源到 `dotfiles/mutable/agents/pi/.local/share/agents/pi/` |
-| `~/.local/share/pi` | 数据根，只留 `sessions/` 等运行时数据，由 `PI_LOCAL_ROOT` 管 |
-| `~/.config/pi/` | 配置根：`settings.json`（扩展清单真源）、`extensions/`（自建扩展软链）、`npm/`（扩展 pnpm 项目） |
-| `$PI_DATA_DIR/node_modules/.bin/pi-acp` | `pi-acp` 的 CLI 解析路径仍按数据根推导（`pi-acp:23`），与 `pi` 的安装根不同 |
+| `~/.local/share/pi`                                  | 数据根，只留 `sessions/` 等运行时数据，由 `PI_LOCAL_ROOT` 管                                                                                        |
+| `~/.config/pi/`                                      | 配置根：`settings.json`（扩展清单真源）、`extensions/`（自建扩展软链）、`npm/`（扩展 pnpm 项目）                                                    |
+| `$PI_DATA_DIR/node_modules/.bin/pi-acp`              | `pi-acp` 的 CLI 解析路径仍按数据根推导（`pi-acp:23`），与 `pi` 的安装根不同                                                                         |
 
 数据侧产物（`sessions/`、`atelier-registry.db`）不入源、不入 git。
 
@@ -57,15 +57,15 @@ pi-update --extensions-only  # 只装扩展（pi 首跑调用路径），跳过�
 
 ## 排障
 
-| 现象 | 原因 | 处理 |
-| --- | --- | --- |
-| 扩展加载失败（`Cannot find module 'bun:sqlite'`） | 实际走了 node 入口 | 装 bun，或确认 `dist/bun/cli.js` 存在 |
-| pi 读到 omp 的配置 | 调用方环境残留 `PI_*` 导出 | 检查上游进程的导出（本脚本已显式覆盖） |
-| 更新跑完但版本没变 | pnpm 12 的 24h 冷却静默排除新版本 | 确认 `pnpm-workspace.yaml` 有 `minimumReleaseAge: 0` |
-| 报 `ERR_PNPM_IGNORED_BUILDS` | 依赖 build scripts 未审批，native 产物缺失 | 脚本自动批准并重试；手工等价物是 `pnpm approve-builds` |
-| `pnpm update` 反复失败 | lockfile 损坏或 store 冲突 | 脚本自动删 lockfile 重装；仍败则手工删安装树的 `node_modules` |
-| `pi-acp` 报 CLI 缺失 | 它按数据根解析，与安装根不一致 | 核对 `$PI_DATA_DIR/node_modules/.bin/pi-acp` 是否存在 |
-| `pi --help` 挂起 | pi 没有纯帮助路径，会进入交互 | 属预期；`tools.yaml` 的 `help_cmd` 白名单不得为它登记 |
+| 现象                                              | 原因                                       | 处理                                                          |
+| ------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| 扩展加载失败（`Cannot find module 'bun:sqlite'`） | 实际走了 node 入口                         | 装 bun，或确认 `dist/bun/cli.js` 存在                         |
+| pi 读到 omp 的配置                                | 调用方环境残留 `PI_*` 导出                 | 检查上游进程的导出（本脚本已显式覆盖）                        |
+| 更新跑完但版本没变                                | pnpm 12 的 24h 冷却静默排除新版本          | 确认 `pnpm-workspace.yaml` 有 `minimumReleaseAge: 0`          |
+| 报 `ERR_PNPM_IGNORED_BUILDS`                      | 依赖 build scripts 未审批，native 产物缺失 | 脚本自动批准并重试；手工等价物是 `pnpm approve-builds`        |
+| `pnpm update` 反复失败                            | lockfile 损坏或 store 冲突                 | 脚本自动删 lockfile 重装；仍败则手工删安装树的 `node_modules` |
+| `pi-acp` 报 CLI 缺失                              | 它按数据根解析，与安装根不一致             | 核对 `$PI_DATA_DIR/node_modules/.bin/pi-acp` 是否存在         |
+| `pi --help` 挂起                                  | pi 没有纯帮助路径，会进入交互              | 属预期；`tools.yaml` 的 `help_cmd` 白名单不得为它登记         |
 
 ## 变更
 

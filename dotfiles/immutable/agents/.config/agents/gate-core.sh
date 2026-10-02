@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# gate-core.sh — zcode / crush / pi / hermes / DSH 五端共享的 gate 决策核
+# gate-core.sh — zcode / pi / hermes / DSH 四端共享的 gate 决策核
 # （单一真相源，适配器只做协议转换）。CLI、行协议、环境变量与安全不变量
 # 全部定义于 docs/scripts/gate-core.md；修改匹配逻辑前必读其
 # §设计决策与不变量——头部逐条不变量对应实现处均有一行指引注释。
@@ -12,7 +12,7 @@
 # 速览（细节见文档）：
 #   gate-core.sh bash <cmd>    Bash 命令判定
 #   gate-core.sh edit <file>   写入判定（待检内容读 stdin）
-#   stdout: TYPE<TAB>payload（BLOCK/SENSITIVE/AUTO_ALLOW/REWRITTEN/NOTES/RM_HINT/REDIRECT/HINT）
+#   stdout: TYPE<TAB>payload（BLOCK/SENSITIVE/AUTO_ALLOW/REWRITTEN/NOTES/REDIRECT/HINT；核不发 RM_HINT）
 #   决策退出码恒 0；GATE_CWD 定位 anchors 层级（默认 $PWD）；
 #   GATE_NO_WRITE_TOOLS=1 无写工具会话输出降级；人工总开关
 #   /run/agent-gate.off 存在即静默放行（固定路径，不认改道）。

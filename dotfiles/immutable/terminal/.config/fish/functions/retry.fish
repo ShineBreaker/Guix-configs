@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# retry — 失败自动重试 + sudo 保活；见 docs/scripts/retry.md
+# retry — 失败自动重试 + sudo 保活；见 docs/scripts/fish-functions.md §retry
 
 function retry -d 命令失败时自动重试
     set -l max_retries 5

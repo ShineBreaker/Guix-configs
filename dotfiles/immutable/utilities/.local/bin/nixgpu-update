@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # nixgpu-update — 非 NixOS 主机上刷新 /var/lib/non-nixos-gpu → nix store GPU
-# 资源链接（首装与 nix 重部署后各跑一次；需 root）。文档：docs/scripts/nixgpu-update.md
+# 资源链接（首装与 nix 重部署后各跑一次；需 root）。文档：docs/scripts/misc-scripts.md §nixgpu-update
 set -euo pipefail
 
 GPU_DIR="/var/lib/non-nixos-gpu"

@@ -1,9 +1,6 @@
-# Agent 资产配置（Crush + 跨 Agent 共享基础设施）
+# Agent 共享基础设施
 
-本目录通过 Guix Home（stow 布局）部署到 `~/.config/`：
-
-- `crush/`：Crush Agent 的配置、hooks 与脚本。
-- `agents/`：跨 Agent 共享基础设施（Context 注入体系、Anchors 工具调用拦截体系）。
+本目录部署到 `~/.config/agents/`，是 Pi / ZCode / Hermes / DSH 四端 Agent 运行时共用两套正交系统的源码：会话启动时注入的 **Context** 与工具调用时机器硬拦截的 **Anchors**。
 
 ## 目录结构
 
@@ -14,71 +11,50 @@
 ```
 agents/
 ├── .config/
-│   ├── agents/
-│   └── crush/
+│   └── agents/
 └── .gitignore
 ```
 
 <!-- /structor -->
 
-## 三套共享系统：分工与生效时机
+## 关键约定
 
-各 Agent 运行时（ZCode / OMP / Crush / Hermes / Pi）共享三套正交系统。为避免规则重复维护，遵循以下归位判据：
+### 三套系统的归位判据
 
-| 系统        | 介入时机       | 负责范围                                | 内容源                                          | 改后生效方式              |
-| ----------- | -------------- | --------------------------------------- | ----------------------------------------------- | ------------------------- |
-| **Context** | 会话启动时注入 | 通用与领域工作原则（靠 Agent 自律）     | `.config/agents/context/` + `context-select.sh` | Immutable：须 `blue home` |
-| **Anchors** | 工具调用时拦截 | 冻结命令/路径、改写、提示（机器硬拦截） | `anchors.json`（两级）+ `gate-core.sh`          | Immutable：须 `blue home` |
-| **Skills**  | 会话中按需加载 | 具体操作手册与工作流（查阅执行）        | Mutable `agents/skills/`（askill 管理）         | Stow 直链：改源即时生效   |
+Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
-> **分工判据示例**：「禁止执行 rebuild」——机器拦截条件放入 Anchors（`frozen_commands`），背景与操作说明放入对应 Skill 或仓库 `AGENTS.md`，无需冗余复制到 Context。
+| 系统        | 介入时机       | 负责范围                                | 内容源                                                      | 改后生效                |
+| ----------- | -------------- | --------------------------------------- | ----------------------------------------------------------- | ----------------------- |
+| **Context** | 会话启动时注入 | 通用与领域工作原则（靠 agent 自律）     | `.config/agents/context/` + `context-select.sh`             | `blue home`             |
+| **Anchors** | 工具调用时拦截 | 冻结命令/路径、改写、提示（机器硬拦截） | `anchors.json`（两级）+ `gate-core.sh`                      | `blue home`             |
+| **Skills**  | 会话中按需加载 | 操作手册与工作流（查阅执行）            | mutable 包 `dotfiles/mutable/agents/skills/`（askill 管理） | Stow 直链，改源即时生效 |
 
-## Anchors — 运行时工具调用拦截
+判据示例：「禁止执行 rebuild」——机器拦截条件进 Anchors 的 `frozen_commands`，背景与操作说明进对应 Skill 或仓库 `AGENTS.md`，两者都不复制进 Context。
 
-Anchors 由 `anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 Ratchet 合并库）和 `gate-core.sh`（决策核心）构成。各端适配器（Pi-Gate TS、Crush bash hooks、ZCode bash hooks、Hermes gate 插件）仅负责协议转换，决策逻辑在 `gate-core.sh` 集中判定。
+### Anchors — 运行时工具调用拦截
 
-> **参考文档**：判定语义、行协议与全部安全不变量见 `docs/scripts/gate-core.md`；分层合并语义见 `docs/scripts/anchors-lib.md`；注入决策见 `docs/scripts/context-select.md`；crush/zcode hook 协议见 `docs/scripts/crush-bash-gate.md`、`crush-edit-gate.md`、`zcode-bash-gate.md`、`zcode-edit-gate.md`、`zcode-session-start.md`。
+`anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 Ratchet 合并）、`gate-core.sh`（决策核心）构成拦截内核；四端适配器（pi-gate TS、zcode bash hooks、hermes gate 插件、DSH `gate.js`）只做协议转换，决策一律集中在 `gate-core.sh`，不得在适配器里复刻判定。
 
-### 规则分层
+规则分三层，改哪层就动哪个文件：全局 `~/.config/agents/anchors.json` 放跨工作区通用约束（sudo、交互式命令限制、敏感信息模式）；项目级 `<root>/.agents/anchors.json` 放仓库专属规则（`frozen_commands`、`frozen_paths`、`redirect_conventions`、`path_hints`）；内核硬编规则在 `gate-core.sh`（`rm` 破坏性防护、Git 写操作防护、`~/.config`/`~/.local` 部署目录只读保护）。
 
-1. **全局配置**（`~/.config/agents/anchors.json`）：跨工作区通用约束，如 `sudo`、交互式命令限制、敏感信息模式等。
-2. **项目级配置**（`<root>/.agents/anchors.json`）：仓库专属规则，如 `frozen_commands`、`frozen_paths`、`redirect_conventions`、`path_hints` 等。
-3. **内核硬编规则**（`gate-core.sh`）：`rm` 破坏性防护、Git 写操作防护、`~/.config`/`~/.local` 部署目录只读保护。
+**改内核的约束**：`gate-core.sh` 与 `anchors-lib.sh` 是四端共用的安全边界，CLI、环境变量、`/run/agent-gate.off` 路径与 stdout 行协议一律不变。改判定逻辑前先建用例语料覆盖 `docs/scripts/gate-core.md` 的每一条不变量（命中与未命中都要有），新旧版本在临时 `HOME` 下逐条对比输出一致才算完成，方法见 `docs/scripts/CONVENTIONS.md` §7。
 
-**修改指引**：修改通用约束改全局 `anchors.json`；修改项目规则改项目级 `anchors.json`；修改判定语义改 `gate-core.sh`。
+**人工总开关**：`/run/agent-gate.off` 存在即四端全部放行（静默，不向 agent 发任何暂停提示，与护栏不存在时表现一致），删除即恢复拦截。`/run` 是 root 拥有的 tmpfs，创建与删除都需提权，而提权命令对 agent 恒冻，所以 agent 自己打不开这个开关；重启自动清空，天然临时。暂停 `sudo touch /run/agent-gate.off`，恢复 `sudo rm -f /run/agent-gate.off`，查状态 `stat /run/agent-gate.off`。开关只认固定路径且必须由人工在终端执行：agent 不得代劳、不得主动要求用户关闭护栏、不得创建、删除或改道该文件。
 
-**改 `gate-core.sh` / `anchors-lib.sh` 的约束**：它们是五端适配器共用的安全边界。CLI、环境变量、`/run/agent-gate.off` 路径和 stdout 行协议保持不变。改判定逻辑前，先建一套用例语料，覆盖 `docs/scripts/gate-core.md` 里的每一条不变量，命中和未命中都要有。新旧版本在临时 `HOME` 下（确保加载源码版 lib）逐条输出一致才算完成，方法见 `docs/scripts/CONVENTIONS.md` §7。
+**无写工具会话降级**：DSH 的 `simple-mode` 一类 preset 工具面只有持久 bash、没有 write/edit 工具，而 `redirect_conventions` 的拦截理由引导「改用 Edit 工具」，会让模型反复调用不存在的工具而死锁。`gate-core.sh` 识别环境变量 `GATE_NO_WRITE_TOOLS=1`（由 DSH 的 `gate.js` 按当前 agent 作用域检测写工具可见性后设置）：BLOCK 不附 redirect ALT（回落通用冻结理由）、interactive 去掉「请使用对应工具」尾巴、NOTES/REDIRECT 软提示抑制；硬拦截、AUTO_ALLOW、REWRITTEN 一概不变——降级只收窄输出，不制造放行面。Pi/ZCode/Hermes 不设该变量，行为零变化。
 
-### 人工总开关（临时手动暂停护栏）
+参考文档：判定语义、行协议、全部安全不变量与 anchors 分层合并语义见 `docs/scripts/gate-core.md`；注入决策见 `docs/scripts/context-select.md`；zcode hook 协议见 `docs/scripts/zcode-hooks.md`。
 
-开关文件固定为 `/run/agent-gate.off`：存在即各端全部放行（静默——不向 agent 发送任何暂停提示，与护栏不存在时表现一致），删除即恢复拦截。`/run` 为 root 拥有的 tmpfs，创建与删除须提权，而提权命令对 agent 恒冻，因此 agent 自己打不开这个开关；重启自动清空，天然临时。
+### Context — 会话上下文注入
 
-- 暂停：`sudo touch /run/agent-gate.off`；恢复：`sudo rm -f /run/agent-gate.off`；查看状态：`stat /run/agent-gate.off`（存在即暂停中）。
-- 暂停与恢复均由人工在终端执行：agent 不得代劳，不得主动要求用户关闭护栏，也不得创建、删除或改道该开关文件（开关只认固定路径）。
+`context-select.sh` 决策注入 `.config/agents/context/` 下三层：`00-core.md` 为跨领域通用原则（各端恒定注入）、`INDEX.md` 为领域路由表（指引 agent 何时读哪个领域文件）、`domains/<name>.md` 为领域专属原则（按门控条件按需注入，如 `coding` 仅在 Git 仓库内注入）。
 
-### 无写工具会话降级（GATE_NO_WRITE_TOOLS）
+维护操作：改通用原则编辑 `00-core.md`（`core` 与 `INDEX` 合计须 ≤5500 字符，超限即精简）；新增领域文件则依次在 `domains/<name>.md` 建文件、在 `context-select.sh` 映射表加门控规则、在 `INDEX.md` 加 `<domain>` 路由条目；一致性自检跑 `context-select.sh --check`（检测文件引用完整性与 INDEX 和 `domains/` 的一致性）；本地调试设 `CONTEXT_DIR` 与 `CONTEXT_SELECT_BIN` 指向仓库源码，可在 `blue home` 部署前跑通全链路。
 
-DSH 的 `simple-mode` 一类 preset 工具面只有持久 bash，**无 write/edit 工具**，而 `redirect_conventions` 的拦截理由引导「改用 Edit 工具」——模型反复调用不存在的工具而死锁。`gate-core.sh` 识别环境变量 `GATE_NO_WRITE_TOOLS=1`（由 DSH 的 `gate.js` 按当前 agent 作用域检测写工具可见性后设置）：BLOCK 不附 redirect ALT（回落通用冻结理由）、interactive 去「请使用对应工具」尾巴、NOTES/REDIRECT 软提示抑制；硬拦截、AUTO_ALLOW、REWRITTEN 一概不变——降级只收窄输出，不制造放行面。pi/zcode/crush/hermes 不设该变量，行为零变化。
+### Skills — 声明式技能管理（askill）
 
-## Context — 会话上下文注入
+`askill` CLI（`~/.local/bin/askill`）与第三方 Skill 的版本锁 `skills-lock.json` 都由 mutable 包 `dotfiles/mutable/agents/skills/` 直链部署，改源即时生效；工作区 `~/.config/agents/skills/` 的版本冻结由 Git 提交保证。常用命令 `askill add <repo> -s <name>` / `update` / `install` / `remove` / `list`；自建技能直接在 `~/.config/agents/skills/` 下维护，不经 `askill` 锁管理。
 
-Context 内容分为三层（位于 `.config/agents/context/`），由 `context-select.sh` 决策注入：
+## 修改与生效
 
-- `00-core.md`：跨领域通用原则，各端恒定注入。
-- `INDEX.md`：领域路由表（XML 格式），指引 Agent 何时读取哪个领域文件。
-- `domains/<name>.md`：领域专属原则，按门控条件按需注入（如 `coding` 仅在 Git 仓库内注入）。
-
-### 日常维护操作
-
-- **修改通用原则**：编辑 `00-core.md`（注意字符限制：`core` + `INDEX` 合计需 ≤5500 字符，超限须精简）。
-- **新增领域文件**：在 `domains/<name>.md` 创建文件 → 在 `context-select.sh` 映射表中添加门控规则 → 在 `INDEX.md` 添加 `<domain>` 路由条目。
-- **一致性自检**：运行 `context-select.sh --check`，自动检测文件引用完整性及 INDEX 与 domains/ 目录的一致性。
-- **本地调试**：设置环境变量 `CONTEXT_DIR` 与 `CONTEXT_SELECT_BIN` 指向仓库源码目录，可在 `blue home` 部署前完成全链路验证。
-
-## Skills — 声明式技能管理（askill）
-
-`askill` CLI 脚本由 `dotfiles/mutable/agents/skills/` 包部署（`.local/bin/askill`），第三方 Skill 的版本锁 `skills-lock.json` 也直链自该包：
-
-- **常用命令**：`askill add <repo> -s <name>` / `update` / `install` / `remove` / `list`。
-- **工作区路径**：位于 `~/.config/agents/skills/`，版本冻结由 Git 提交保证。
-- **自建技能**：直接在 `~/.config/agents/skills/` 下维护，不经 `askill` 锁管理。
+- **Context 与 Anchors 的源在本目录（immutable）**：改后必须 `blue home` 重建（部署进 Store 只读副本），四端才会用上新版本。适配器本身（pi-gate TS、zcode hooks、hermes 插件、DSH 扩展）在 mutable 包里，改源即时生效，但它们运行时加载的是 `~/.config/agents/` 下的已部署版本。

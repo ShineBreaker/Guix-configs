@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # bootstrap.sh — 在干净 Guix 环境里开一个带 blue 的临时 shell（不分区、不动盘）
-# 文档：docs/scripts/bootstrap.md
+# 文档：docs/scripts/blue-helpers.md §bootstrap.sh
 
 set -euo pipefail
 

@@ -8,15 +8,21 @@
 # pnpm 12 的供应链策略（minimumReleaseAge 24h 冷却、allowBuilds 审批）由
 # pnpm_workspace_policy 统一落到各目录的 pnpm-workspace.yaml，否则更新会静默
 # 不生效（新版本被冷却期排除）或 native 产物缺失（build scripts 未审批）。
-# 文档：docs/scripts/pi-update.md
+# 文档：docs/scripts/pi.md
 set -euo pipefail
 
 # === 路径 ===
-PI_DATA_DIR="${PI_LOCAL_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/pi}"
+# 安装树在 agent 聚合根（~/.local/share/agents/pi）；~/.local/share/pi 只留
+# sessions 等运行时数据，本脚本不碰它
+PI_PROJ_DIR="${AGENTS_ROOT:-${XDG_DATA_HOME:-${HOME}/.local/share}/agents}/pi"
+# 仓库源目录：从本脚本经 stow 软链解析回包内 .local/share/agents/pi/
+# （readlink -f 解部署侧软链；不从部署侧链接推导——pnpm 覆写后链接随时不在）
+PI_SRC_DIR="$(dirname "$(dirname "$(readlink -f "$0")")")/share/agents/pi"
+readonly PI_SRC_DIR
 PI_CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/pi"
 EXT_DIR="${PI_CONFIG_DIR}/npm"
 SETTINGS_FILE="${PI_CONFIG_DIR}/settings.json"
-PI_BIN="${PI_DATA_DIR}/node_modules/.bin/pi"
+PI_BIN="${PI_PROJ_DIR}/node_modules/.bin/pi"
 
 # 需要本地编译产物的 native 包（prebuilt 平台包如 koffi 无需 rebuild）
 NATIVE_PKGS=(better-sqlite3)
@@ -36,7 +42,7 @@ fi
 # === 工具函数 ===
 
 read_pi_version() {
-  node -p "require('${PI_DATA_DIR}/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null || echo '未知'
+  node -p "require('${PI_PROJ_DIR}/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null || echo '未知'
 }
 
 # nodeLinker=hoisted 必需：jiti 从 symlink 路径解析模块时找不到扩展的
@@ -151,6 +157,25 @@ pnpm_workspace_policy() {
     }
     fs.writeFileSync(file, out.filter((l) => l !== null).join(eol) + eol);
   ' "$1" "$2" "$3"
+}
+
+# 回源：package.json 是 pi-update 的派生产物（pnpm update --latest 就地覆写
+# 它），只在部署侧改、不回源就是版本漂移——仓库副本曾停在初装的 0.85.1 而部署
+# 侧早已 0.99.1。package.json 内容拷回仓库源并重建 stow 软链（原子写会把链接
+# 换成真实文件）；lockfile 只回拷内容（pnpm Rust 端拒写软链 lockfile，部署侧
+# 必须真实文件；仓库副本经 .stow-local-ignore 防误链）。cmp 有差才动。
+sync_core_to_source() {
+  local name
+  for name in package.json pnpm-lock.yaml; do
+    [[ -f "$PI_PROJ_DIR/$name" && -f "$PI_SRC_DIR/$name" ]] || continue
+    cmp -s "$PI_PROJ_DIR/$name" "$PI_SRC_DIR/$name" && continue
+    cp "$PI_PROJ_DIR/$name" "$PI_SRC_DIR/$name"
+    printf '  %s 已同步回仓库源\n' "$name" >&2
+  done
+  if [[ -f "$PI_SRC_DIR/package.json" && ! -L "$PI_PROJ_DIR/package.json" ]]; then
+    ln -sfn "$PI_SRC_DIR/package.json" "$PI_PROJ_DIR/package.json"
+    printf '  package.json 软链已重建\n' >&2
+  fi
 }
 
 update_latest() {
@@ -277,14 +302,14 @@ fi
 
 if [[ ! -x "$PI_BIN" ]]; then
   echo "Pi 核心未安装，执行首次安装..." >&2
-  (cd "$PI_DATA_DIR" && CI=true pnpm install --no-frozen-lockfile)
+  (cd "$PI_PROJ_DIR" && CI=true pnpm install --no-frozen-lockfile)
 fi
 
 echo "当前版本: $(read_pi_version)"
 
 if [[ $EXTENSIONS_ONLY -eq 0 ]]; then
   echo "更新 Pi 核心..."
-  update_latest "$PI_DATA_DIR" "Pi 核心" "no"
+  update_latest "$PI_PROJ_DIR" "Pi 核心" "no"
 fi
 
 echo "同步扩展包（依据 settings.json）..."
@@ -297,10 +322,15 @@ if [[ $EXTENSIONS_ONLY -eq 0 ]]; then
   rebuild_native_bindings
 fi
 
+# 核心包项目回源（EXTENSIONS_ONLY 也跑：wrapper 首装的 pnpm install 改动
+# 同样要落仓库）。位置在 FAILED 汇总之前——native rebuild 失败也照常回源，
+# 版本声明已变，漂移照记
+sync_core_to_source
+
 echo ""
 echo "更新后: $(read_pi_version)"
 # wrapper 用 bun 跑 dist/bun/cli.js；上游若改 dist 布局，在此告警防扩展静默失效
-PI_BUN_ENTRY="${PI_DATA_DIR}/node_modules/@earendil-works/pi-coding-agent/dist/bun/cli.js"
+PI_BUN_ENTRY="${PI_PROJ_DIR}/node_modules/@earendil-works/pi-coding-agent/dist/bun/cli.js"
 if [[ -f "$PI_BUN_ENTRY" ]]; then
   echo "Bun 入口: OK"
 else

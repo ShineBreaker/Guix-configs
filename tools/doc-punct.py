@@ -458,7 +458,8 @@ def _self_check() -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="*")
-    ap.add_argument("--check", action="store_true", help="只报告不改")
+    ap.add_argument("--check", action="store_true", help="只报告不改，有待处理处退出 1")
+    ap.add_argument("--list", action="store_true", help="只输出仓库自有文档清单后退出")
     ap.add_argument("--self-test", action="store_true", help="跑自检后退出")
     args = ap.parse_args()
     if args.self_test:
@@ -467,6 +468,11 @@ def main() -> int:
 
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     files = args.files or own_files(root)
+
+    if args.list:
+        for path in files:
+            print(path)
+        return 0
 
     total = 0
     for path in files:
@@ -488,7 +494,8 @@ def main() -> int:
     print(
         f"\n合计 {total} 处{'（未写入，--check 模式）' if args.check else '，已写入'}"
     )
-    return 0
+    # --check 的意义在于给 CI/脚本一个判定：有待处理处即非零。
+    return 1 if (args.check and total) else 0
 
 
 if __name__ == "__main__":

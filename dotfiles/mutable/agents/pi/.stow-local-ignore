@@ -5,7 +5,7 @@
 # Source-of-truth rationale: pi/.gitignore (kept verbatim below) already
 # excludes node_modules / .pnpm-store. We add a few more runtime/derived
 # artifacts so `--no-folding` never symlinks them into ~/.config/pi or
-# ~/.local/share/pi.
+# ~/.local/share/agents/pi（安装聚合根；~/.local/share/pi 只留 sessions 数据）。
 
 # --- from upstream pi/.gitignore ---
 node_modules$
@@ -15,8 +15,11 @@ node_modules$
 AGENTS\.md$
 
 # --- additional runtime / cache artifacts ---
-# NOTE: npm/pnpm-lock.yaml 不排除——它随 stow 部署，让 pi-update 的
-# bootstrap_extensions_package 能从 lockfile 读取精确版本号生成 package.json。
+# NOTE: 核心安装树（~/.local/share/agents/pi）的 pnpm-lock.yaml 不排除于源外，
+# 但也不能链出去：pnpm Rust 端拒写软链 lockfile，部署侧必须是真实文件。仓库
+# 里的副本只作 git 留痕 + pi-update 的 sync_core_to_source 回源目标，stow
+# 侧剪枝防误链。
+pnpm-lock\.yaml$
 # sessions / db files written by the pi runtime under ~/.config/pi
 # (uncomment if you want to also skip them; currently we keep the dir empty
 #  and let pi recreate it on first run)

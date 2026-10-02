@@ -17,8 +17,7 @@ anchors.json 的 ratchet 合并）。本插件只做 hermes 协议转换：
     仅 stderr 留痕
 
 工具映射：terminal→bash 模式（command）；write_file/patch→edit 模式
-（path + 内容走 stdin）。姊妹适配器见 zcode/.zcode/hooks 与
-immutable agents/.config/crush/hooks。
+（path + 内容走 stdin）。姊妹适配器见 zcode/.zcode/hooks、pi-gate 与 DSH gate.js。
 """
 
 from __future__ import annotations

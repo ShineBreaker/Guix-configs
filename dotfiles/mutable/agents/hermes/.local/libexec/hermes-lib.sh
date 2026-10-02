@@ -82,7 +82,7 @@ hermes_gui_env_resolve() {
   export GDK_BACKEND="${GDK_BACKEND:-$_ozone}"
 }
 
-# --preserve 透传白名单，按语义分组；各组透传理由见 docs/scripts/hermes.md。
+# --preserve 透传白名单，按语义分组；各组理由见 docs/scripts/hermes.md §--preserve 透传理由。
 # 拼接顺序即正则 alternation 顺序，新增变量加在对应组末尾即可。
 _HERMES_PRESERVE_VARS=(
   # 会话/显示基础

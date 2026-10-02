@@ -90,8 +90,8 @@ ensure_config() {
 
 # --- 括号平衡检查 -----------------------------------------------------------
 
-# blueprint.scm §3 词法扫描的 awk 移植（整文件兜底版）。与 blue 的边界差异
-# 见 docs/emergency-blue.md §7。
+# blueprint.scm 的词法扫描的 awk 移植（整文件兜底版）。与 blue 的边界差异
+# 见 docs/emergency-blue.md §关键约束。
 paren_check() {
   local file="$1"
   [[ -f "$file" ]] || die "括号检查目标不存在: $file"

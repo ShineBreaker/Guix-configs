@@ -48,11 +48,11 @@
 
 ** 读代码前认得的几个机制
 
-- *C-h 自助查询* ：在 Emacs 里 =C-h k= 再按一个键看绑定什么命令， =C-h f= 查函数（如 =C-h f custom/bind= 看参数格式）， =C-h v= 查变量（如 =C-h v custom:binding-spec= 列出全部已声明键位）， =M-x customize-group RET custom-config RET= 浏览本配置全部可定制项。注意 =C-h f= 点进去的源码位置是 =main.el= ——那是生成产物，要改动须回到 =emacs.org= 。
+- *C-h 自助查询* ：在 Emacs 里 =C-h k= 再按一个键看绑定什么命令， =C-h f= 查函数（如 =C-h f custom/bind= 看参数格式）， =C-h v= 查变量（如 =C-h v custom:binding-spec= 列出全部已声明键位）， =M-x customize-group RET custom-config RET= 浏览本配置全部可定制项。注意 =C-h f= 点进去的源码位置是 =main.el=——那是生成产物，要改动须回到 =emacs.org= 。
 - *use-package 骨架* ：第三方包统一用 =(use-package 包名 ...)= 声明。 =:defer t= / =:commands= / =:hook= 决定懒加载时机， =:custom= 设置变量， =:config= 在包加载后执行一次。包本体由 Guix profile 提供，不需要 =:ensure= 。
 - *反引号与逗号* ： ~`(:key ,val)~ 中，反引号表示「整体按字面引用，但逗号标记的位置要求值」。凡是「结构固定、个别槽位要填入当前值」的场合（Capture 模板、备份路径表等）都用它。
 - *plist（属性列表）* ： =:key= 与值成对出现的序列， ~(plist-get list :key)~ 取值。 =custom:binding-spec= 与[[#programming-tools][语言能力表]]都是 plist 数据表。
-- *派生三步* ：从主数据表生成 alist 时，本配置统一写成 =(let (acc) (dolist (条目 主表) ...) (nreverse acc))= ——循环里收集进临时表，最后倒转恢复原顺序。见到这个形状，就知道它在做「单一数据源 → 派生映射」，改数据只须动主表。
+- *派生三步* ：从主数据表生成 alist 时，本配置统一写成 =(let (acc) (dolist (条目 主表) ...) (nreverse acc))=——循环里收集进临时表，最后倒转恢复原顺序。见到这个形状，就知道它在做「单一数据源 → 派生映射」，改数据只须动主表。
 - *noweb 引用* ：顶格的 ~<<块名>>~ 在 tangle 时被替换成同名块的内容。本配置只有两类：Capture 模板体（ =#+name= 文本块紧跟使用处）与版本兼容 Shim（集中定义在文末[[#compatibility][实验性与待确认]]，靠前章节展开引用）。
 
 ** 常用修改入口速查
@@ -968,7 +968,7 @@ NAME 是 nerd-icons 图标名:\"nf-fa-*\" 前缀分发到 nerd-icons-faicon,
 
 Flymake、Eglot、VC 状态与项目名称分别在对应事件的 hook 中直接更新为 buffer-local 变量，状态行刷新时直接读取内存，渲染路径零外部阻塞。
 
-诊断计数按类型的 severity 分级：Flymake 公开 API 没有「按类型取严重度」的函数，这里用私有函数 =flymake--severity= ——Flymake 自己的 mode-line 计数也走它，是本功能的唯一权威口径。旧写法读取的 =flymake-diagnostic-types= 变量在当前 Emacs 32 中并不存在（类型属性以符号属性存储），引用它会抛 =void-variable= ，计数因此从未生效过。
+诊断计数按类型的 severity 分级：Flymake 公开 API 没有「按类型取严重度」的函数，这里用私有函数 =flymake--severity=——Flymake 自己的 mode-line 计数也走它，是本功能的唯一权威口径。旧写法读取的 =flymake-diagnostic-types= 变量在当前 Emacs 32 中并不存在（类型属性以符号属性存储），引用它会抛 =void-variable= ，计数因此从未生效过。
 
 #+begin_src emacs-lisp
 (defun custom/modeline--project-info ()
@@ -1844,7 +1844,7 @@ safe_call 静音);dead frame 的参数随之销毁,无需再清,故先判存活�
                     :inherit 'tab-line)
 #+end_src
 
-分隔线的颜色必须跟随主题，而本域早于 [[#color-scheme]] 的 =load-theme= 求值，故属性统一交给下面的函数在主题加载/切换时重算（ =enable-theme-functions= ）。取色走 Modus palette，不硬编码 RGB。分隔线用的是贴在文本下缘的细下划线而非盒模型（盒线无法只画单边），落在标签与填充空白两类 face 上故整行连续；颜色在主题 =border= 与正文底色之间按通道插值，比纯 =border= 更淡。插值不用 =color-values= ——其取值依赖显示帧，而本函数在 daemon 启动期（尚无帧）就会被调用。palette 取不到色时保留既有属性：TTY 侧另有例外表 pin 下划线语义（见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]），不依赖本函数。
+分隔线的颜色必须跟随主题，而本域早于 [[#color-scheme]] 的 =load-theme= 求值，故属性统一交给下面的函数在主题加载/切换时重算（ =enable-theme-functions= ）。取色走 Modus palette，不硬编码 RGB。分隔线用的是贴在文本下缘的细下划线而非盒模型（盒线无法只画单边），落在标签与填充空白两类 face 上故整行连续；颜色在主题 =border= 与正文底色之间按通道插值，比纯 =border= 更淡。插值不用 =color-values=——其取值依赖显示帧，而本函数在 daemon 启动期（尚无帧）就会被调用。palette 取不到色时保留既有属性：TTY 侧另有例外表 pin 下划线语义（见 [[#mixed-gui-tty-constraints][GUI/TTY 混合 daemon 约束]]），不依赖本函数。
 
 #+begin_src emacs-lisp
 (defun custom--hex-channel (hex start)
@@ -2478,7 +2478,7 @@ main.el 之前完成(standalone 首帧也要生效);此处仅供 `custom/apply-t
 - 负宽边框异常防御：在透明背景下清除 =ghostel-fake-cursor= 与 =org-modern-label= 的 =:box= 边框，防止底层重绘时因背景色非法引发报错。
 - 状态行日志清洗：过滤 C 语言层在非彩色终端下由于样式未就绪打出的瞬态无效警告。
 
-样式表与调色查询。 =custom:terminal-block-faces= 给 Org 代码块恢复底色：Modus 主题与 Org 9.8 都不给 =org-block= 族设背景，GUI 靠 org-modern 的 fringe 边框区分代码块；TTY 无 fringe，故用 palette 的 =bg-inactive= 给整块一个中性面板， =org-quote= / =org-verse= 继承 =org-block= 自动随之着色。 =custom/terminal-theme-color= 读当前 Modus palette（ =modus-themes-get-color-value= 对未知键返回 =unspecified= 而非抛错，故只需判 nil/unspecified）；其 =fboundp= 守卫覆盖 standalone 启动窗口期—— =custom/apply-frame-appearance= 注册时即对首帧派发，而主题库要等到 [[#color-scheme]] 的 =load-theme= 才加载。
+样式表与调色查询。 =custom:terminal-block-faces= 给 Org 代码块恢复底色：Modus 主题与 Org 9.8 都不给 =org-block= 族设背景，GUI 靠 org-modern 的 fringe 边框区分代码块；TTY 无 fringe，故用 palette 的 =bg-inactive= 给整块一个中性面板， =org-quote= / =org-verse= 继承 =org-block= 自动随之着色。 =custom/terminal-theme-color= 读当前 Modus palette（ =modus-themes-get-color-value= 对未知键返回 =unspecified= 而非抛错，故只需判 nil/unspecified）；其 =fboundp= 守卫覆盖 standalone 启动窗口期——=custom/apply-frame-appearance= 注册时即对首帧派发，而主题库要等到 [[#color-scheme]] 的 =load-theme= 才加载。
 
 #+begin_src emacs-lisp
 (defconst custom:terminal-face-emphasis
@@ -2960,7 +2960,7 @@ D-Bus 不可用时回退 'dark;后续 Darkman 模式变化经信号自动同步�
 
 这一域代码最好读：多数是「一组 =setq= 调习惯 + 几个具名 DWIM 函数」，适合作为通读全配置的起点。
 
-- *DWIM 函数的两种形状* ： =custom/copy-dwim= 与 =custom/cut-dwim= 是同一骨架—— =(interactive)= 声明可交互调用， =(cond ((use-region-p) 有选区的分支) (t 无选区的兜底))= 按上下文分流，读懂一个就能写下一个。 =custom/rename-dwim= 同样是 =cond= 分流，但条件换成了「是否在 Eglot 管辖下」（ =eglot-managed-p= / =buffer-file-name= ）——骨架可复用，分流条件随意图而变。 =custom/home-dwim= 则是另一形状： =let= 记住起点， =back-to-indentation= 跳到行首非空白字符，若光标本来就在那儿则退到绝对行首——「按一次换一个目标」的循环跳转，不需要选区判断。
+- *DWIM 函数的两种形状* ： =custom/copy-dwim= 与 =custom/cut-dwim= 是同一骨架——=(interactive)= 声明可交互调用， =(cond ((use-region-p) 有选区的分支) (t 无选区的兜底))= 按上下文分流，读懂一个就能写下一个。 =custom/rename-dwim= 同样是 =cond= 分流，但条件换成了「是否在 Eglot 管辖下」（ =eglot-managed-p= / =buffer-file-name= ）——骨架可复用，分流条件随意图而变。 =custom/home-dwim= 则是另一形状： =let= 记住起点， =back-to-indentation= 跳到行首非空白字符，若光标本来就在那儿则退到绝对行首——「按一次换一个目标」的循环跳转，不需要选区判断。
 - *=setq-default= 与 =setq= 的分工* ：[[#editing-layout][基础缩进与排版规范]]用 =setq-default= 设置 =tab-width= 这类「缓冲区局部变量」的默认值——之后某个 major mode 仍可局部覆盖，互不破坏。全局唯一的变量（如 =scroll-error-top-bottom= ）则直接 =setq= 。
 - *辅助包声明即文档* ：[[#editing-helpers][编辑辅助包]]里每个 =(use-package ... :commands (...))= 列出的命令就是懒加载触发点——你在键位表里看到哪个命令，它被按到的那一刻包才会加载。想知道某插件提供什么入口，先看它的 =:commands= 列表。
 - *文本变换都是具名函数* ：[[#editing-transforms][文本变换与快捷键 (C-c e)]]下每个变换（大小写、注释、重新缩进……）都是独立 =defun= ，可以 =C-h f= 逐个查看再绑定。本配置刻意不用宏批量生成，为的就是每个命令都有名字、可跳转、错误栈可读。
@@ -3503,7 +3503,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 这一域的结构是一个经典的「单一事实源 + 派生」架构，读懂[[#programming-tools][语言能力表]]这一节，整个域就通了：
 
 - *主表* ： =custom:language-capabilities= 是全部语言能力的唯一登记处，每条是一个 plist（ =:modes= / =:ts-mode= / =:server= / =:formatter= ）。添加语言、换 LSP 服务端、改格式化工具，都只改这张表，不在别处另设钩子。
-- *三条派生链、四个 defconst* ：主表下方有四个 =defconst= ，其中三个从主表派生。 =custom:language-treesit-remaps= （Tree-sitter remap 表）与 =custom:language-apheleia-mode-alist= （格式化映射）是标准派生形状 =(let (acc) (dolist (entry 主表) ...) (nreverse acc))= ——循环收集再倒转（见[[#overview][如何读这份配置]]）。 =custom:language-eglot-server-programs= 则把构造抽成具名函数 =custom/language--derive-eglot-programs= ：它要按 server 命令把多门语言归并成一条（ =assoc= 找到已有组就 =setcdr= 追加 mode），比纯收集多一步分组，所以升级为具名函数——读完前两个再看它，正好见识「需要归并时该怎么做」。第四个 =custom:language-apheleia-formatters= 是手写字面量、不从主表派生：它登记 Apheleia 的自定义 formatter 定义（如 Org 代码块格式化函数），与 mode 映射是两回事，别按名字与 mode-alist 混淆。
+- *三条派生链、四个 defconst* ：主表下方有四个 =defconst= ，其中三个从主表派生。 =custom:language-treesit-remaps= （Tree-sitter remap 表）与 =custom:language-apheleia-mode-alist= （格式化映射）是标准派生形状 =(let (acc) (dolist (entry 主表) ...) (nreverse acc))=——循环收集再倒转（见[[#overview][如何读这份配置]]）。 =custom:language-eglot-server-programs= 则把构造抽成具名函数 =custom/language--derive-eglot-programs= ：它要按 server 命令把多门语言归并成一条（ =assoc= 找到已有组就 =setcdr= 追加 mode），比纯收集多一步分组，所以升级为具名函数——读完前两个再看它，正好见识「需要归并时该怎么做」。第四个 =custom:language-apheleia-formatters= 是手写字面量、不从主表派生：它登记 Apheleia 的自定义 formatter 定义（如 Org 代码块格式化函数），与 mode 映射是两回事，别按名字与 mode-alist 混淆。
 - *nil 是显式语义* ：表里 =:server nil= 表示「该语言不启用 LSP」， =:formatter nil= 表示「显式禁用格式化」——后者会写入派生映射覆盖包自带的默认值，避免缺二进制的 formatter 在保存时空跑。读到 nil 不要当成「还没填」。
 - *查询型 API 不设防* ： =(project-current nil)= 、 =(treesit-ready-p ...)= 这类函数用返回 nil 表达「不适用」，本配置直接 =or= / =when-let*= 处理，不包 =condition-case= 。异常捕获只留给文件 I/O 与子进程，这是全仓库统一的防御边界。
 
@@ -3649,7 +3649,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 
 **** 派生一：Tree-sitter remap 表
 
-标准派生形状 =(let (acc) (dolist (entry 主表) ...) (nreverse acc))= ——循环收集再倒转。只收录同时给出传统 mode 与 ts-mode 的条目，交给 [[#programming-tools][Tree-sitter grammar 加载]] 按 grammar 就绪情况装进 =major-mode-remap-alist= 。
+标准派生形状 =(let (acc) (dolist (entry 主表) ...) (nreverse acc))=——循环收集再倒转。只收录同时给出传统 mode 与 ts-mode 的条目，交给 [[#programming-tools][Tree-sitter grammar 加载]] 按 grammar 就绪情况装进 =major-mode-remap-alist= 。
 
 #+begin_src emacs-lisp
 (defconst custom:language-treesit-remaps
@@ -3667,7 +3667,7 @@ action 参数须为 (FUNCTION . ALIST) 裸 cons;包一层列表会把 side/size
 
 **** 派生二：Eglot server 配置（按命令归并）
 
-比纯收集多一步分组：同一 server 命令的多门语言要合并成一条 =(MODE... . SERVER-CMD)= ，所以构造抽成具名函数—— =assoc= 找到已有组就 =setcdr= 追加 mode，否则新建。 =custom/binding-help-sections= 的分组归并用的也是这个形状。
+比纯收集多一步分组：同一 server 命令的多门语言要合并成一条 =(MODE... . SERVER-CMD)= ，所以构造抽成具名函数——=assoc= 找到已有组就 =setcdr= 追加 mode，否则新建。 =custom/binding-help-sections= 的分组归并用的也是这个形状。
 
 #+begin_src emacs-lisp
 (defun custom/language--derive-eglot-programs ()
@@ -4112,7 +4112,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 
 这一域体量小，多数配置建立在 Emacs 内置的 =project.el= 与 Dired 之上，主要读三个点：
 
-- *=let* 圈定临时上下文 * ： =custom/open-project-folder= 把 =default-directory= 临时指向目标目录再探测项目—— =default-directory= 只在 =let*= 括号内改变值，出了括号自动复原，这种「划定作用域边界」的写法在 Lisp 里代替了「先保存、再恢复」的命令式套路。注意这里用 =let*= （带星号）是必须的：它允许后面的绑定引用同括号内更早的绑定—— =dir= 先定下来， =default-directory= 才能指向它；普通 =let= 的各绑定互相看不见，只能用括号外已有的值。
+- *=let* 圈定临时上下文 * ： =custom/open-project-folder= 把 =default-directory= 临时指向目标目录再探测项目——=default-directory= 只在 =let*= 括号内改变值，出了括号自动复原，这种「划定作用域边界」的写法在 Lisp 里代替了「先保存、再恢复」的命令式套路。注意这里用 =let*= （带星号）是必须的：它允许后面的绑定引用同括号内更早的绑定——=dir= 先定下来， =default-directory= 才能指向它；普通 =let= 的各绑定互相看不见，只能用括号外已有的值。
 - *面板就是带参数的窗口* ：[[#panel-dired][左侧 Dired 面板]]没有引入文件树插件，而是把 Dired 缓冲区放进 =(display-buffer-in-side-window (side . left) ...)= 产生的侧边窗口，再用 buffer-local 变量 =custom--dired-panel-p= 打上面板标记——据此从标签栏豁免、并把回车重定向到主窗口打开。理解「Emacs 里一切窗口行为都由 =display-buffer= 规则决定」后，appearance 域的路由表也就顺带读懂了。
 - *键位内聚的活例子* ： =C-x p= 系列键位就绑在本域代码块末尾，而不是集中放到键位域——功能按键跟随功能实现，是全配置的编排原则（见[[#keys-completion][键位与补全]]的说明）。
 
@@ -4243,7 +4243,7 @@ SCRATCH 为承载变换的临时 buffer,CALLBACK 在变换完成后调用。
 - *快捷键开关* ： =C-b= （VSCode 侧栏键）、 =C-S-e= 或 =C-c w f= 随时展开或折叠左侧面板； =C-c w d= 让面板定位到当前文件（Explorer 的 Reveal 语义）。
 - *自动跟随* ：面板显示期间切换到同目录的其他文件时，面板光标自动落到对应文件行；文件不在面板当前目录时不动，避免频繁重建面板视图。
 
-面板访问语义集中在 =custom/dired--panel-visit= ：FILENAME 须为绝对路径（ =dired-get-file-for-visit= 对 =..= 返回相对名，调用前展开）；目录不能走 =find-alternate-file= ——其内部 =switch-to-buffer= 会被 side-window 拒绝而把新 Dired 投到其他窗口，故显式 =set-window-buffer= 替换面板窗口并 kill 旧面板 buffer； =dired-noselect= 天然复用已存在的同目录 Dired buffer，不堆积。取行文件名必须用 =dired-get-file-for-visit= ：裸 =dired-get-filename= 对 =.= / =..= 行会抛 "Cannot operate on '.' or '..'"；鼠标入口先用 =dired-get-filename= 无报错探测，让点在空白处（空行/目录头/点线）的点击退化为「只聚焦面板」。
+面板访问语义集中在 =custom/dired--panel-visit= ：FILENAME 须为绝对路径（ =dired-get-file-for-visit= 对 =..= 返回相对名，调用前展开）；目录不能走 =find-alternate-file=——其内部 =switch-to-buffer= 会被 side-window 拒绝而把新 Dired 投到其他窗口，故显式 =set-window-buffer= 替换面板窗口并 kill 旧面板 buffer； =dired-noselect= 天然复用已存在的同目录 Dired buffer，不堆积。取行文件名必须用 =dired-get-file-for-visit= ：裸 =dired-get-filename= 对 =.= / =..= 行会抛 "Cannot operate on '.' or '..'"；鼠标入口先用 =dired-get-filename= 无报错探测，让点在空白处（空行/目录头/点线）的点击退化为「只聚焦面板」。
 
 #+begin_src emacs-lisp
 (defun custom/dired--panel-visit (filename)
@@ -5339,9 +5339,9 @@ isearch 是一个「按键即达」的会话：输入搜索串的任意时刻都
 这一域是「收纳层」：各类应用集成、后台预热与欢迎屏都堆在这里，读的时候按兴趣跳节即可，唯有两个机制值得专门看一眼：
 
 - *daemon 预热* ： =custom/daemon-warmup= 在文件最末的「主配置收尾」块里被 =(when (daemonp) ...)= 调用——守护进程后台启动时顺手预加载常用包，之后的客户端连接就不再等首次加载。这是「Daemon 启动时间让位于 Client 首开延迟」这一优先级排序的直接产物。
-- *Dashboard 是包上自绘* ：[[#dashboard][Dashboard]]基于 =dashboard.el= 包提供板块骨架，但外观全部自管——版心计算、ASCII 横幅、板块边界与装饰由自己的渲染层拼装（[[#dash-section-layout][板块边界与行距排版]]等节）。读它时记住两个性能开关:[[#dash-cache-config][日程扫描单次缓存]]把上游宏在一次渲染里重复 4 次的 Agenda 扫描合并成一次（跨渲染不缓存，保证数据新鲜），[[#dash-resize-debounce][尺寸防抖与重绘自愈]]用 0.3 秒空闲定时器合并拖拽缩放触发的连续重绘——这类自绘界面不拖慢交互靠的就是这两手。
+- *Dashboard 是包上自绘* ：[[#dashboard][Dashboard]]基于 =dashboard.el= 包提供板块骨架，但外观全部自管——版心计算、ASCII 横幅、板块边界与装饰由自己的渲染层拼装（[[#dash-section-layout][板块边界与行距排版]]等节）。读它时记住两个性能开关：[[#dash-cache-config][日程扫描单次缓存]]把上游宏在一次渲染里重复 4 次的 Agenda 扫描合并成一次（跨渲染不缓存，保证数据新鲜），[[#dash-resize-debounce][尺寸防抖与重绘自愈]]用 0.3 秒空闲定时器合并拖拽缩放触发的连续重绘——这类自绘界面不拖慢交互靠的就是这两手。
 - *Shim 的前向引用* ：[[#compatibility][实验性与待确认]]里的 noweb 片段（ =:tangle no= + =:noweb-ref emacs31/...= ）定义在文件尾部，却被靠前章节以顶格 =~<<emacs31/...>>~= 展开——这是本配置第二类 noweb 场景：版本兼容兜底集中存放、便于上游修复后统一清理，表格里写明了每个 Shim 的移除条件。
-- *应用集成的标准姿势* ：本域每个应用都是同一形状—— =use-package= 声明懒加载、 =(custom/declare-binding-group ...)= 注册前缀、 =(custom/bind ...)= 绑 =C-c a= 子键。照抄这个三连即可接入新应用。
+- *应用集成的标准姿势* ：本域每个应用都是同一形状——=use-package= 声明懒加载、 =(custom/declare-binding-group ...)= 注册前缀、 =(custom/bind ...)= 绑 =C-c a= 子键。照抄这个三连即可接入新应用。
 
 ** 实用应用
 :PROPERTIES:
@@ -5885,7 +5885,7 @@ OV 提供标题显示文本,用于折算已占用宽度;须在
                              (list 'line-prefix p 'indent-prefix p))))))
 #+end_src
 
-分组居中分两步：先 =remove-text-properties= 再改写—— =add-text-properties= 不覆盖已有属性，banner/Welcome/navigator/footer 都带插件自设的测量式前缀。板块区（首板块标题行→末分割线行）统一版心前缀、整体居中块内左对齐；其余行长短不一，逐行按自身行宽各自居中（整块左对齐会全贴版心左缘）。
+分组居中分两步：先 =remove-text-properties= 再改写——=add-text-properties= 不覆盖已有属性，banner/Welcome/navigator/footer 都带插件自设的测量式前缀。板块区（首板块标题行→末分割线行）统一版心前缀、整体居中块内左对齐；其余行长短不一，逐行按自身行宽各自居中（整块左对齐会全贴版心左缘）。
 
 #+begin_src emacs-lisp
 (defun custom/dashboard--center-groups (ovs width window)
@@ -5917,7 +5917,7 @@ OV 提供标题显示文本,用于折算已占用宽度;须在
         (custom/dashboard--center-line body-width)))))
 #+end_src
 
-总入口 =custom/dashboard--decorate-headings= ：标题行与分割线都补齐到版心宽（ =custom/dashboard--content-width= ），板块内统一加行间距（ =custom:dashboard-line-spacing= ），分割线替换板块尾第一段空行。定位走 heading overlay（ =dashboard-heading= face）而非 =dashboard--section-starts= ——渲染末尾的 page-separator 替换会使后者的绝对位置漂移。流程：收集 overlay、与 =custom:dashboard-heading-keys= 逐个配对（多余一方截断）、倒序装饰（前面的 insert 不影响后面 heading 的位置），最后分组居中。只从 =custom/dashboard--refresh-in-window= 调用，保证运行在正确窗口上下文。
+总入口 =custom/dashboard--decorate-headings= ：标题行与分割线都补齐到版心宽（ =custom/dashboard--content-width= ），板块内统一加行间距（ =custom:dashboard-line-spacing= ），分割线替换板块尾第一段空行。定位走 heading overlay（ =dashboard-heading= face）而非 =dashboard--section-starts=——渲染末尾的 page-separator 替换会使后者的绝对位置漂移。流程：收集 overlay、与 =custom:dashboard-heading-keys= 逐个配对（多余一方截断）、倒序装饰（前面的 insert 不影响后面 heading 的位置），最后分组居中。只从 =custom/dashboard--refresh-in-window= 调用，保证运行在正确窗口上下文。
 
 #+begin_src emacs-lisp
 (defun custom/dashboard--decorate-headings (&optional window)

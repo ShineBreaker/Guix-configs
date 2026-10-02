@@ -14,30 +14,30 @@ gate-core.sh bash <cmd>    # Bash 命令判定；全部参数以 "$*" 合并成�
 gate-core.sh edit <file>   # 写入判定；只取首参为路径，待检内容从 stdin 读（可为空）
 ```
 
-| 场景                     | 退出码 | 输出                            |
-| ------------------------ | ------ | ------------------------------- |
-| 判定跑完（无论是否拦截） | 0      | stdout 行协议                   |
-| 无子命令或未知子命令     | 64     | usage 到 stderr，无 stdout      |
+| 场景                     | 退出码 | 输出                       |
+| ------------------------ | ------ | -------------------------- |
+| 判定跑完（无论是否拦截） | 0      | stdout 行协议              |
+| 无子命令或未知子命令     | 64     | usage 到 stderr，无 stdout |
 
 **判定退出码恒 0**：拦截与否只体现在 stdout 的行类型里，不体现在退出码上（进程级失败属异常，由各适配器自己的 fail-closed 策略兜底）。
 
 stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit` 压成空格，保证一行一裁决。核实际发出的类型只有以下七种：
 
-| TYPE        | 语义                                             | 发出位置                       |
-| ----------- | ------------------------------------------------ | ------------------------------ |
-| `BLOCK`     | 硬拦截，payload 为理由                           | frozen 命令 / git / 路径 / glob |
-| `SENSITIVE` | 待检内容命中 `sensitive_patterns`，payload 汇总 label | edit 敏感检测            |
-| `AUTO_ALLOW`| 只读白名单命中，无 payload                       | bash 白名单阶段                |
-| `REWRITTEN` | 改写后的命令全文，payload 是新命令               | bash 改写阶段                  |
-| `NOTES`     | 命令替代偏好提示                                 | bash 改写阶段                  |
-| `REDIRECT`  | 重定向建议                                       | bash 改写阶段                  |
-| `HINT`      | 路径联动提示，可多条                              | edit `path_hints`              |
+| TYPE         | 语义                                                  | 发出位置                        |
+| ------------ | ----------------------------------------------------- | ------------------------------- |
+| `BLOCK`      | 硬拦截，payload 为理由                                | frozen 命令 / git / 路径 / glob |
+| `SENSITIVE`  | 待检内容命中 `sensitive_patterns`，payload 汇总 label | edit 敏感检测                   |
+| `AUTO_ALLOW` | 只读白名单命中，无 payload                            | bash 白名单阶段                 |
+| `REWRITTEN`  | 改写后的命令全文，payload 是新命令                    | bash 改写阶段                   |
+| `NOTES`      | 命令替代偏好提示                                      | bash 改写阶段                   |
+| `REDIRECT`   | 重定向建议                                            | bash 改写阶段                   |
+| `HINT`       | 路径联动提示，可多条                                  | edit `path_hints`               |
 
 核**不发** `RM_HINT`：`rm` 的提示语是 `BLOCK` 的 payload（命中词恰为 `rm` 时走专用文案）。`RM_HINT` 只出现在各适配器解析行协议的兼容分支里，是历史协议残留。
 
-| 环境变量              | 语义                                                                                                       |
-| --------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `GATE_CWD`            | anchors 层级定位起点与 edit 的项目根判定基准，默认 `$PWD`；由适配器从宿主传入的 cwd 设置                  |
+| 环境变量              | 语义                                                                                                              |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GATE_CWD`            | anchors 层级定位起点与 edit 的项目根判定基准，默认 `$PWD`；由适配器从宿主传入的 cwd 设置                          |
 | `GATE_NO_WRITE_TOOLS` | `1` = 无写工具会话（DSH `gate.js` 按当前 agent 作用域检测后置位），只收窄输出，永不制造放行，见 §设计决策与不变量 |
 
 依赖 `bash`、`jq`、`awk`、`sed`、`grep`、`realpath`（无 `realpath` 时两种路径模式都退化为 `readlink -f`）。刻意用 `set -uo pipefail` 而不带 `-e`：单个检查工具异常（如 `jq` 输出非预期）不应中断后续检查。
@@ -50,25 +50,25 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 `bash` 链（`gate_bash`）：
 
-| # | 阶段                      | 命中即                                              |
-| - | ------------------------- | --------------------------------------------------- |
-| 0 | 人工总开关                | 存在即零输出返回                                    |
-| 1 | `check_frozen_commands`   | 冻结命令命中发 `BLOCK`；另有 `guix system` 宽匹配   |
-| 2 | `check_interactive_commands` | 交互式命令 / 裸 REPL 发 `BLOCK`                 |
-| 3 | `check_git_rules`         | 无 `-m` 的 commit、`add -p`、`rebase -i` 发 `BLOCK` |
-| 4 | `check_readonly_whitelist`| 白名单命中发 `AUTO_ALLOW`                           |
-| 5 | `apply_rewrites_and_hints`| 发 `REWRITTEN` / `NOTES` / `REDIRECT`，无拦截语义   |
+| #   | 阶段                         | 命中即                                              |
+| --- | ---------------------------- | --------------------------------------------------- |
+| 0   | 人工总开关                   | 存在即零输出返回                                    |
+| 1   | `check_frozen_commands`      | 冻结命令命中发 `BLOCK`；另有 `guix system` 宽匹配   |
+| 2   | `check_interactive_commands` | 交互式命令 / 裸 REPL 发 `BLOCK`                     |
+| 3   | `check_git_rules`            | 无 `-m` 的 commit、`add -p`、`rebase -i` 发 `BLOCK` |
+| 4   | `check_readonly_whitelist`   | 白名单命中发 `AUTO_ALLOW`                           |
+| 5   | `apply_rewrites_and_hints`   | 发 `REWRITTEN` / `NOTES` / `REDIRECT`，无拦截语义   |
 
 `edit` 链（`gate_edit`）：
 
-| # | 阶段                       | 命中即                                                        |
-| - | -------------------------- | ------------------------------------------------------------- |
-| 0 | 人工总开关                 | 存在即零输出返回                                              |
-| 1 | `check_meta_frozen`        | 全局 `anchors.json` 或 `_meta_frozen` 项目规则源发 `BLOCK`     |
-| 2 | `check_frozen_paths`       | 逻辑/物理任一路径命中冻结条目发 `BLOCK`                       |
-| 3 | `check_frozen_globs`       | 目标在项目内且命中 glob 发 `BLOCK`                            |
-| 4 | `check_deployed_locations` | 直改 `~/.config/` 或 `~/.local/` 发 `BLOCK`                   |
-| 5 | `check_sensitive_and_hints`| stdin 命中敏感模式发 `SENSITIVE`；`path_hints` 发 `HINT`       |
+| #   | 阶段                        | 命中即                                                     |
+| --- | --------------------------- | ---------------------------------------------------------- |
+| 0   | 人工总开关                  | 存在即零输出返回                                           |
+| 1   | `check_meta_frozen`         | 全局 `anchors.json` 或 `_meta_frozen` 项目规则源发 `BLOCK` |
+| 2   | `check_frozen_paths`        | 逻辑/物理任一路径命中冻结条目发 `BLOCK`                    |
+| 3   | `check_frozen_globs`        | 目标在项目内且命中 glob 发 `BLOCK`                         |
+| 4   | `check_deployed_locations`  | 直改 `~/.config/` 或 `~/.local/` 发 `BLOCK`                |
+| 5   | `check_sensitive_and_hints` | stdin 命中敏感模式发 `SENSITIVE`；`path_hints` 发 `HINT`   |
 
 `edit` 的项目根基准由 `GATE_CWD` 经 `find_git_root` 求得（`anchors-lib.sh` 提供），据此算出两个布尔量：逻辑路径落在 `PROJ` 内为 `INSIDE`（物理路径则为 `INSP`），后续多项检查按它们启停。`find_git_root` 只认 `.git` **目录**，找不到时返回入参本身——于是非仓库 cwd 下 `PROJ` 就是 cwd 自己，其下的一切都算「项目内」，`frozen_globs` 与 `path_hints` 照常生效，但要求 `INSIDE=0` 的 `~/.config` 直改保护不会触发。
 
@@ -76,7 +76,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 以下每条不变量在实现处都有一行注释指回本节，是历史绕过教训的清单——改动前先读。
 
-**1. 冻结命令按命令位置的词序列匹配。** `_cmd_segments` 先按命令边界（`;` `&` `|` `(` `)` 反引号、` -- `、换行）切片并剥掉引号与反斜杠，再由 `_match_frozen_in_segments` 匹配片段的首词序列（词间允许插入任意完整词）。参数、字符串、heredoc 正文里的冻结词因此不再命中——误报主源是 commit message 与文档字符串。剥引号是代价也是堵点：`git commit -m "a; sudo x"` 里引号内的 `;` 同样成为边界，这是可接受的保守方向（字符串宁可误拦不可漏拦）。
+**1. 冻结命令按命令位置的词序列匹配。** `_cmd_segments` 先按命令边界（`;` `&` `|` `(` `)` 反引号、`--`、换行）切片并剥掉引号与反斜杠，再由 `_match_frozen_in_segments` 匹配片段的首词序列（词间允许插入任意完整词）。参数、字符串、heredoc 正文里的冻结词因此不再命中——误报主源是 commit message 与文档字符串。剥引号是代价也是堵点：`git commit -m "a; sudo x"` 里引号内的 `;` 同样成为边界，这是可接受的保守方向（字符串宁可误拦不可漏拦）。
 
 **2. 两项归一化堵完整路径与 env 前缀绕过。** 片段首词取 basename 后再判，`/run/current-system/profile/bin/sudo` 与 `~/bin/sudo` 同判；`FOO=/x sudo …` 的 env 赋值前缀循环剥离后再判首词。
 
@@ -92,7 +92,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 **8. 白名单在全部硬拦截之后，且只对单条命令生效。** `check_readonly_whitelist` 位于链尾，不构成绕过；命令文本含 `;`、`&`、`|`、反引号或 `$(` 时整个白名单跳过（搭车形态回落默认确认流），因此多行命令 `ls` + 换行 + `cat x` 只要首词在白名单里仍会拿到 `AUTO_ALLOW`——是否拦截取决于前三级冻结检查。白名单按首词 basename 匹配，`git` 仅在命令里不含写操作子命令时放行，`guix` 仅放行 `describe`/`show`/`search`/`hash`/`lint`/`size`/`graph`/`weather`。
 
-**9. 词法类检查只匹配原始命令文本，不做归一化。** 交互式命令、裸 REPL、git 规则、只读白名单都对 `$CMD` 原文跑 ERE，命令边界前缀固定为 `(^|[;&|()$]|&&|\|\|)[[:space:]]*`。不归一化是为了避免 `echo "vim tips"` 这类字符串内容被误拦——`vim` 前是引号，不在边界字符集里。注意白名单的连接符门控用的是另一条正则 `[;&|`]|\$\(`，两者字符集不同（`$` 只在词法前缀里，反引号只在白名单门控里）。`git add -p`、`git rebase -i` 的 `-p`/`-i` 是词边界短选项匹配，`--patch`/`--interactive` 长选项不命中，属已知行为。
+**9. 词法类检查只匹配原始命令文本，不做归一化。** 交互式命令、裸 REPL、git 规则、只读白名单都对 `$CMD` 原文跑 ERE，命令边界前缀固定为 `(^|[;&|()$]|&&|\|\|)[[:space:]]*`。不归一化是为了避免 `echo "vim tips"` 这类字符串内容被误拦——`vim` 前是引号，不在边界字符集里。注意白名单的连接符门控用的是另一条正则 `[;&|`]|\$\(`，两者字符集不同（`$` 只在词法前缀里，反引号只在白名单门控里）。`git add -p`、`git rebase -i`的`-p`/`-i` 是词边界短选项匹配，`--patch`/`--interactive` 长选项不命中，属已知行为。
 
 **10. 人工总开关只认固定路径。** `/run/agent-gate.off` 存在即静默放行且不输出任何内容——暂停态对 agent 不可见，与护栏不存在时表现一致。agent 可写的位置放同名文件一律无效，该文件只能人工 sudo 创建或删除。各适配器同样硬编此路径。
 
@@ -120,21 +120,21 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 2. **全局** `~/.config/agents/anchors.json`：跨工作区通用约束（冻结命令、交互式命令、敏感模式等），meta-frozen 人工维护。
 3. **项目级** `<root>/.agents/anchors.json`：从起点向上逐层收集，**含 git 根后停止**（`_find_anchors_files_near_to_root` 最多上溯 64 层，到根目录也停）。
 
-| 字段类型                              | 合并规则                                                                 |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| 数组（`frozen_commands` 等 7 个）     | `unique` 并集                                                             |
-| `sensitive_patterns`                  | 按 `.pattern` 做 `unique_by` 并集，同 pattern 重复时**远层条目保留**     |
-| 映射（`redirect_conventions`/`rewrite`/`path_hints`） | jq `*` 浅合并，近层覆盖远层                          |
-| `builtin_rewrite`                     | 布尔值由显式给出该字段的层覆盖，未给出的层不影响                       |
+| 字段类型                                              | 合并规则                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------- |
+| 数组（`frozen_commands` 等 7 个）                     | `unique` 并集                                                        |
+| `sensitive_patterns`                                  | 按 `.pattern` 做 `unique_by` 并集，同 pattern 重复时**远层条目保留** |
+| 映射（`redirect_conventions`/`rewrite`/`path_hints`） | jq `*` 浅合并，近层覆盖远层                                          |
+| `builtin_rewrite`                                     | 布尔值由显式给出该字段的层覆盖，未给出的层不影响                     |
 
 **只加不减**：项目层无法移除全局或代码底层的条目，近层要削弱某条只能加 `unless_inside` 条件豁免。任一层损坏或 jq 合并失败 → 回退 DEFAULT 并向 `~/.config/omp/extensions/.load-errors.log` 追加一行（`log_gate_error`，时间戳 + 扩展标签 + 位置 + 原因，标签沿用历史值 `crush-gate`），防静默吞错。
 
-| 函数                                 | 语义                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------- |
-| `load_merged_anchors [start_dir]`    | 合并全部层，stdout 输出合并 JSON；默认起点 `$PWD`                     |
-| `find_git_root <dir>`                | 向上找含 `.git` **目录**的目录，最多 64 层；找不到返回入参本身        |
-| `glob_to_ere <glob>`                 | glob → 锚定 ERE，见 §glob 语义                                        |
-| `log_gate_error <ext> <where> <msg>` | 追加一行错误日志                                                      |
+| 函数                                 | 语义                                                                          |
+| ------------------------------------ | ----------------------------------------------------------------------------- |
+| `load_merged_anchors [start_dir]`    | 合并全部层，stdout 输出合并 JSON；默认起点 `$PWD`                             |
+| `find_git_root <dir>`                | 向上找含 `.git` **目录**的目录，最多 64 层；找不到返回入参本身                |
+| `glob_to_ere <glob>`                 | glob → 锚定 ERE，见 §glob 语义                                                |
+| `log_gate_error <ext> <where> <msg>` | 追加一行错误日志                                                              |
 | `expand_tilde <path>`                | `~/` 前缀按 `$HOME` 展开（`gate-core.sh` 自己做等价展开，此函数当前无调用方） |
 
 **库契约**：本文件是被 `source` 的库，不设 `-e`/`-u`/`pipefail`、不 `exit`、不依赖调用方未声明的环境状态；函数名前缀 `_` 表示内部实现；`_ANCHORS_LIB_LOADED` 幂等哨兵允许重复 source。`load_merged_anchors` 收集项目层用**进程替换**而非管道——管道右侧在子 shell 执行，`mapfile` 的赋值会丢失。

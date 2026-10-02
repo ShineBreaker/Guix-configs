@@ -5,7 +5,7 @@
 #
 # hermes-desktop — `hermes desktop` 子命令实体（bin/hermes 分发进入，也可
 # 按 libexec 路径直调）：在 guix shell --emulate-fhs 容器里启动 Hermes
-# Electron 桌面端。文档：docs/scripts/hermes-desktop.md
+# Electron 桌面端。文档：docs/scripts/hermes.md §hermes desktop
 set -euo pipefail
 
 _bin_dir="$(dirname "$(readlink -f "$0")")"
@@ -29,7 +29,7 @@ hermes_gui_env_resolve
 hermes_build_share_flags
 
 # EXEC_STRING 各旗标的理由（--no-sandbox/--ignore-gpu-blocklist/--enable-wayland-ime
-# 等）见 docs/scripts/hermes-desktop.md §容器内执行；dbus 优先复用宿主
+# 等）见 docs/scripts/hermes.md §容器内执行；dbus 优先复用宿主
 # session bus，不可达才 dbus-launch 起新的。
 # shellcheck disable=SC2016  # 单引号内 ${...} 故意留给容器内 bash -c 展开
 EXEC_STRING='cd /appimage-root && \
@@ -42,7 +42,7 @@ exec /appimage-root/Hermes --no-sandbox --disable-gpu-sandbox --ozone-platform="
 
 # Remote gateway：容器只为 Electron GUI 服务；desktop 连宿主 hermes-backend
 # （9119，共享网络栈）让 agent 跑在完整环境。token 每次重启重生成，故启动时
-# 动态抓取不写死；不可达时回退容器内残缺 serve。详见 docs/scripts/hermes-desktop.md
+# 动态抓取不写死；不可达时回退容器内残缺 serve。详见 docs/scripts/hermes.md §hermes desktop
 REMOTE_BASE="http://127.0.0.1:9119"
 if curl -sf -m 2 -o /dev/null "${REMOTE_BASE}/api/status"; then
   # || true 必需：grep 无匹配 → pipefail → 赋值失败 → set -e 中止，

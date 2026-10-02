@@ -32,6 +32,7 @@ configctl help | -h | --help
   ```
 
   六个数依次为：纳入索引的 src 块数、noweb ref 定义数、对**隔离 tangle 产物**读出的顶层 form 数与 `def*` 定义名数（`defun` / `defmacro` / `defsubst` / `defvar` / `defvar-local` / `defconst` / `defcustom` / `defface`，重名即报错）、`data/which-key-zh.el` 全局描述表的键数、`data/*.el` 中 `setq` 字面量表的个数。数量变动即结构漂移，应评估影响而非改数字。
+
 - **`check` 全程不写真实 `main.el`**：把 `emacs.org` 复制到临时目录再 tangle，`unwind-protect` 里删掉临时目录——纯只读校验，仓库有未提交改动时也能安全跑。
 - **`check` 的结构门禁**：全局 `#+PROPERTY: header-args` 契约行必须原样存在；8 个配置域的 `CUSTOM_ID` 顺序固定且无重复；不得出现 `(require 'custom-…` / `(provide 'custom-…` / `:tangle lisp/` 这类多产物架构残留；noweb ref 必须 `:tangle no`、**恰好被组装一次**、不跨域重复定义、不得有未定义引用；被引用的 `#+name` 数据块也必须 `:tangle no`。
 - **which-key 描述表必须是字面量 `setq`**：只静态解析 `(setq custom:which-key-description-spec '(…))`，不加载文件；表缺失或值不是 quoted 字面量时直接报错，避免门禁静默失效。**自有键与数据表双源注册会让 which-key 替换链与帮助分组各自漂移**，双源键门禁要求 `custom/bind` 声明键与数据表键的交集为空——自有键的描述只写在声明处，数据表只承担内置/第三方键。`data/*.el` 各表由 `assoc` 首命中取用，同键重复的后续条目是永不生效的死条目，故按表拦重复键。
@@ -40,10 +41,10 @@ configctl help | -h | --help
 
 报错一律以 `ERROR: <message>` 打到 stderr 并以退出码 1 结束 wrapper。常见门禁消息与含义：
 
-| 消息 | 含义 |
-| --- | --- |
-| `duplicate CUSTOM_ID: <id>` / `domain order changed: [...]` | 8 大配置域的 ID 重复或顺序被改 |
-| `noweb ref <r> must be assembled exactly once (found <n>)` / `undefined noweb ref: <r>` | noweb 组装点数量不对，或引用了未定义 ref |
-| `which-key 全局描述表存在 <n> 个双源键` | 描述在 `custom/bind` 与数据表各写了一遍，必须选边 |
-| `<file>: <var> 的键 <k> 重复` | `data/*.el` 同表内重复键 |
-| `global emacs-lisp header contract changed` | emacs.org 头部 `#+PROPERTY: header-args` 行被改 |
+| 消息                                                                                    | 含义                                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `duplicate CUSTOM_ID: <id>` / `domain order changed: [...]`                             | 8 大配置域的 ID 重复或顺序被改                    |
+| `noweb ref <r> must be assembled exactly once (found <n>)` / `undefined noweb ref: <r>` | noweb 组装点数量不对，或引用了未定义 ref          |
+| `which-key 全局描述表存在 <n> 个双源键`                                                 | 描述在 `custom/bind` 与数据表各写了一遍，必须选边 |
+| `<file>: <var> 的键 <k> 重复`                                                           | `data/*.el` 同表内重复键                          |
+| `global emacs-lisp header contract changed`                                             | emacs.org 头部 `#+PROPERTY: header-args` 行被改   |

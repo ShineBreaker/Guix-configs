@@ -5,7 +5,7 @@
 ;; build-image.scm — guix system image 产物落地助手
 ;; 调用方（blueprint.scm 的 build-iso-command）已套 guix time-machine 锁频道；
 ;; 本脚本自身不锁频道、不需要 sudo。
-;; 文档：docs/scripts/build-image.md
+;; 文档：docs/scripts/blue-helpers.md §build-image.scm
 
 (use-modules (ice-9 match)
              (guix build utils)

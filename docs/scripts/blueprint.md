@@ -11,17 +11,17 @@
 
 文件按「从底层到上层」分节，源码中有对应单行节标（`;;; --- §N ---`）：
 
-| 节  | 内容                                                            |
-| --- | --------------------------------------------------------------- |
-| §0  | 路径常量（`%repo-root` 及其派生绝对路径，集中于此方便整体迁移） |
-| §1  | 子进程执行：`%run` 及 guix / emacs 包装（唯一直接子进程出口）     |
-| §2  | 文件与管道 I/O：原子写、shell 拼接、管道读取                      |
-| §3  | 括号平衡检查：手写词法扫描 + 统一报告                           |
-| §4  | 配置管线与 Org 块解析：config.org → config.scm → reconfigure      |
-| §5  | 密钥扫描：`secret-scan` 的实现                                    |
-| §6  | 目录树生成器：`structor` 的实现                                   |
-| §7  | GNU Stow 包装：`stow` / `stow-all` 的实现                         |
-| §8  | 命令定义：每条 `blue <指令>` 的实际逻辑                           |
+| 节  | 内容                                                               |
+| --- | ------------------------------------------------------------------ |
+| §0  | 路径常量（`%repo-root` 及其派生绝对路径，集中于此方便整体迁移）    |
+| §1  | 子进程执行：`%run` 及 guix / emacs 包装（唯一直接子进程出口）      |
+| §2  | 文件与管道 I/O：原子写、shell 拼接、管道读取                       |
+| §3  | 括号平衡检查：手写词法扫描 + 统一报告                              |
+| §4  | 配置管线与 Org 块解析：config.org → config.scm → reconfigure       |
+| §5  | 密钥扫描：`secret-scan` 的实现                                     |
+| §6  | 目录树生成器：`structor` 的实现                                    |
+| §7  | GNU Stow 包装：`stow` / `stow-all` 的实现                          |
+| §8  | 命令定义：每条 `blue <指令>` 的实际逻辑                            |
 | §9  | 入口点：`(blueprint ...)` 把 buildable / testable / 命令注册给框架 |
 
 ## 与 blue 框架的接口
@@ -85,7 +85,7 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 
 - **clean-artifacts**：文件型目标（`__pycache__`、`*.elc`、`*.o`、`*.a`、`*.so`、`main.el`、`org-roam.db`）走 `%run` 的 `find -delete`（dry-run 自动短路）；目录型目标（stow 包内 emacs 的 `etc` / `var` 缓存）由 Scheme 直接删，必须显式守 `dry-build?`。rebuild / home 前自动先跑本命令。
 - **gc**：删旧 system/home 世代 → `guix gc` → 删 ESP 上 `OLD-*.EFI`。`%run` 经 popen 直 exec、无 shell 展开，所以 `OLD-*` 要在 Guile 侧 `scandir` 收集后逐个 `sudo rm`。ESP 挂载点是 `/efi`（limine-efi-removable-bootloader 的 targets），旧命令里的 `/boot/EFI/Guix` 在这台机器上并不存在——`blue help gc` 的 synopsis 仍写旧路径，以实现为准。
-- **format**：委派 `tools/doc-punct.py`（规则见 [doc-punct.md](doc-punct.md)）。注意 `format-command` 自己走 `%run`，`blue --dry-run format` 只打印 `[预演] … --check` 而**不执行脚本**；只报告不写盘要用 `blue format --check`。
+- **format**：委派 `tools/doc-format.sh`，两级编排（标点 → Markdown 结构，见 [doc-format.md](doc-format.md)）。注意 `format-command` 自己走 `%run`，`blue --dry-run format` 只打印 `[预演] bash …/doc-format.sh` 而**不执行脚本**；只报告不写盘要用 `blue format --check`，它有待处理项即退出 1。
 - **structor**：见下节。
 - **reuse**：`reuse annotate` 批量补 SPDX 头，走 `%run`。
 

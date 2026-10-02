@@ -1,6 +1,6 @@
 # 桌面环境配置
 
-本目录通过 Guix Home 的 `home-dotfiles-service-type`（stow 布局）部署到 `~/.config/` 与 `~/.local/`。涉及的软件包清单定义于 `source/config.org` 的 `desktop-packages-list` 与相关 service 块中。
+本目录部署到 `~/.config/` 与 `~/.local/`，覆盖 Niri、autostart、xdg-desktop-portal、PCManFM 与 Rofi；软件包清单见 `source/config.org` 的 `desktop-packages-list` 与相关 service 块。
 
 ## 目录结构
 
@@ -23,14 +23,14 @@ desktop/
 
 <!-- /structor -->
 
-## 关键约定与分工
+## 关键约定
 
-- **Niri 窗口管理器**：主配置文件拆分为顶层配置与 `settings/` 子目录，通过 `include` 语法引入各个子模块。
-- **自启动项（Autostart）**：遵循 XDG 标准，使用 `.desktop` 文件管理自启应用。
-- **Portal 与辅助服务**：`xdg-desktop-portal` 声明使用 GNOME/GTK 后端；XFCE `helpers.rc` 提供系统级默认应用关联。
+- **Niri 分层**：`config.kdl` 只做顶层装配，`settings/` 下每个子模块单独一个文件并用 `include` 引入，`optional=true` 的条目允许缺省。
+- **Portal 后端**：`portals.conf` 默认 `default=gnome;gtk;`，其中 `Secret` 走 gnome-keyring、`Settings` 走 darkman。
+- **Autostart**：新增 `.desktop` 前先确认目标程序已在 `config.org` 的用户包清单声明，否则条目存在但拉不起二进制。
 
-## 修改与生效流程
+## 修改与生效
 
-1. **改源后生效**：修改仓库源码后，运行 `blue home` 重新链接到 Store 只读副本（请勿直接编辑 `~/.config/` 下的部署文件）。
-2. **Niri 热重载**：Niri 配置文件支持免重启热加载，执行 `niri msg action reload-config` 即可。
-3. **依赖校验**：新增自启动项（`.desktop`）前，需确认对应程序已在 `config.org` 的用户包清单中声明。
+- **通用**：改源后须 `blue home` 重建（部署进 Store 只读副本）。
+- **Niri 支持热重载**：`niri msg action reload-config`，改完即时验证，无需重启会话。
+- **其余走重启**：portal、autostart、PCManFM 偏好在进程启动时读取，改动随 `blue home` 部署，重启对应组件或重新登录才生效。

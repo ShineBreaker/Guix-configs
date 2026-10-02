@@ -1,19 +1,27 @@
 {
+  "language_models": {
+    "opencode": {
+      "show_zen_models": false
+    }
+  },
   "proxy": "",
   "ui_font_family": "Sarasa UI SC",
   "buffer_font_family": "Maple Mono NF CN",
   "cli_default_open_behavior": "existing_window",
   "agent_servers": {
+    "pi-acp": {
+      "type": "registry"
+    },
     "opencode": {
       "type": "registry"
     },
     "codex-acp": {
       "type": "registry"
     },
-    "glm-acp-agent": {
-      "type": "registry"
-    },
     "claude-acp": {
+      "default_config_options": {
+        "model": "fable"
+      },
       "type": "registry"
     }
   },
@@ -30,7 +38,7 @@
     "dock": "right",
     "sidebar_side": "right",
     "model_parameters": [],
-    "play_sound_when_agent_done": true,
+    "play_sound_when_agent_done": "when_hidden",
     "tool_permissions": {
       "default": "allow"
     }

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# livecd fish_prompt — Live ISO 提示符；见 docs/scripts/livecd-fish.md
+# livecd fish_prompt — Live ISO 提示符；见 docs/scripts/misc-scripts.md §livecd fish 函数
 
 function fish_prompt --description 写出提示
     set -l last_status $status

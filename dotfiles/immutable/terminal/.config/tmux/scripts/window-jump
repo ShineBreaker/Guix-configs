@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-# window-jump — fzf 跨 session 窗口跳转（prefix+f）；见 docs/scripts/window-jump.md
+# window-jump — fzf 跨 session 窗口跳转（prefix+f）；见 docs/scripts/tmux-scripts.md §window-jump
 
 current_session=$(tmux display -p "#{session_name}")
 

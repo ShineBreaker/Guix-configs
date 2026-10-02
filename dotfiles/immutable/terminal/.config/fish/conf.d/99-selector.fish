@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # 终端会话选择器：foot/kitty 启动时弹 tmux+herdr+shell 合并 fzf 列表。
-# 完整设计与容错语义见 docs/scripts/fish-conf-d.md 与 docs/scripts/session-selector.md。
+# 完整设计与容错语义见 docs/scripts/fish-conf-d.md 与 tmux-scripts.md §session-selector。
 #
 # 关键契约：
 # - selector 输出协议为单行 <mux>|<kind> | shell | __header__，kind 本身可含 |。

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# run — 按目录构建文件派发；见 docs/scripts/run.md
+# run — 按目录构建文件派发；见 docs/scripts/fish-functions.md §run
 
 function run -d "按当前目录构建文件派发: maak.scm→maak, blueprint.scm→blue, justfile→just"
     if test -f maak.scm

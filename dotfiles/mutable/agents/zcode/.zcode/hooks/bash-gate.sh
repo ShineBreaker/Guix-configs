@@ -10,7 +10,7 @@
 #   stdout - {"decision":"allow"} | {"additionalContext":"..."} | 空
 #   exit   - 0 放行；2 + stderr = block
 #   zcode 不支持 updated_input → REWRITTEN 降级为提示（见
-#   docs/scripts/zcode-bash-gate.md）。
+#   docs/scripts/zcode-hooks.md）。
 
 set -uo pipefail
 

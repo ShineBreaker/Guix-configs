@@ -9,7 +9,7 @@
 #   stdin  - {"tool_name","tool_input":{"file_path","content|new_string"},"cwd"}
 #   stdout - {"additionalContext":"..."} | 空
 #   exit   - 0 放行；2 = block（路径与敏感拦截统一 exit 2，见
-#   docs/scripts/zcode-edit-gate.md）。
+#   docs/scripts/zcode-hooks.md）。
 
 set -uo pipefail
 

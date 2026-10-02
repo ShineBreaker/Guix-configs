@@ -18,14 +18,8 @@
     }
   },
   "packages": [
-    "npm:context-mode",
-    "npm:pi-mcp-adapter",
-    "npm:pi-web-access",
     "npm:@plannotator/pi-extension",
     "npm:pi-hashline-edit",
-    "npm:@narumitw/pi-lsp",
-    "npm:@ff-labs/pi-fff",
-    "npm:@juicesharp/rpiv-todo",
     "npm:@juicesharp/rpiv-ask-user-question",
     "git:github.com/DietrichGebert/ponytail",
     "npm:pi-devin-local",
@@ -47,7 +41,7 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "0.99.1",
+  "lastChangelogVersion": "1.0.0",
   "images": {
     "blockImages": false
   },

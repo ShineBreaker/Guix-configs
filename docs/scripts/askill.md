@@ -29,9 +29,9 @@ askill list      # 列出锁内 skills
 
 ## 排障
 
-| 现象 | 原因 | 处理 |
-| --- | --- | --- |
-| 找不到 `skills-lock.json` | 尚未生成锁（`update`/`install`/`sync` 都会报） | `askill add <owner/repo>` 生成 |
-| npx clone 超时 | 网络慢或仓库大 | `SKILLS_CLONE_TIMEOUT_MS=1200000 askill add ...` |
-| 自建 skill 被覆盖 | 名字与锁内 skill 冲突 | 改名；脚本只同步锁内名字，但同名仍会被换入覆盖 |
-| 暂存区有内容但部署位没更新 | `sync_from_staging` 跳过（锁内无该名字） | 用 `askill add`/`update` 重新落盘，或核对锁 |
+| 现象                       | 原因                                           | 处理                                             |
+| -------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| 找不到 `skills-lock.json`  | 尚未生成锁（`update`/`install`/`sync` 都会报） | `askill add <owner/repo>` 生成                   |
+| npx clone 超时             | 网络慢或仓库大                                 | `SKILLS_CLONE_TIMEOUT_MS=1200000 askill add ...` |
+| 自建 skill 被覆盖          | 名字与锁内 skill 冲突                          | 改名；脚本只同步锁内名字，但同名仍会被换入覆盖   |
+| 暂存区有内容但部署位没更新 | `sync_from_staging` 跳过（锁内无该名字）       | 用 `askill add`/`update` 重新落盘，或核对锁      |

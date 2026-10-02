@@ -6,7 +6,7 @@
 
 # theme-common.sh — darkman dark/light 两个 mode.d hook 的共享实现
 #（0-apply-theme.sh 薄 shim exec 本脚本并传模式；模式差异集中在下方
-# case）。用法、部署形态与失败降级见 docs/scripts/theme-common.md。
+# case）。用法、部署形态与失败降级见 docs/scripts/darkman-theme.md。
 
 set -eu
 

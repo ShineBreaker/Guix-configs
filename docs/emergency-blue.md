@@ -118,17 +118,17 @@ blue --dry-run rebuild                           # 3. 门禁：tangle + 检查 +
 
 ## 排障
 
-| 症状 | 原因 | 处理 |
-| --- | --- | --- |
-| `blue: command not found` | blue 本体不在 PATH | 在仓库根跑 `./tools/bootstrap.sh`，在它开的 shell 里 `blue home` |
-| `incompatible bytecode version` | blue 的 guile 输入与系统 guile 编译的字节码版本不兼容 | `source/config.org` 的 `blue-fix` 变体已把 guile 输入换成 `guile-3.0-latest` 并关掉测试；跑一次 `blue home`（或 `blue rebuild`）让新包进 profile，否则 profile 里仍是旧的 pin 版本 |
-| 系统重装/升级后 blue 不可用 | guile 路径变化、Home 层损坏导致 blue 本体丢失 | 同上：`bootstrap.sh` + `blue home` |
-| `blue rebuild` 崩在 derivation 计算阶段 | guix 与刚刷新的频道快照不兼容 | 走「频道锁的兼容性回滚」；先用 `blue check` 区分是不是 `config.org` 的问题 |
+| 症状                                    | 原因                                                  | 处理                                                                                                                                                                               |
+| --------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `blue: command not found`               | blue 本体不在 PATH                                    | 在仓库根跑 `./tools/bootstrap.sh`，在它开的 shell 里 `blue home`                                                                                                                   |
+| `incompatible bytecode version`         | blue 的 guile 输入与系统 guile 编译的字节码版本不兼容 | `source/config.org` 的 `blue-fix` 变体已把 guile 输入换成 `guile-3.0-latest` 并关掉测试；跑一次 `blue home`（或 `blue rebuild`）让新包进 profile，否则 profile 里仍是旧的 pin 版本 |
+| 系统重装/升级后 blue 不可用             | guile 路径变化、Home 层损坏导致 blue 本体丢失         | 同上：`bootstrap.sh` + `blue home`                                                                                                                                                 |
+| `blue rebuild` 崩在 derivation 计算阶段 | guix 与刚刷新的频道快照不兼容                         | 走「频道锁的兼容性回滚」；先用 `blue check` 区分是不是 `config.org` 的问题                                                                                                         |
 
 磁盘清理走系统自带 timer（每周日 18:00 `guix gc`、19:30 nix-gc）或 `blue gc`（删旧世代 + `guix gc` + 清 `/efi/EFI/Guix/OLD-*.EFI`，见 [scripts/blueprint.md](scripts/blueprint.md)）。
 
 ## 相关
 
 - `tools/emergency-blue.sh`——应急脚本本体
-- [scripts/bootstrap.md](scripts/bootstrap.md)——恢复 blue 的引导 shell
+- [scripts/blue-helpers.md](scripts/blue-helpers.md) §bootstrap.sh——恢复 blue 的引导 shell
 - [scripts/blueprint.md](scripts/blueprint.md)——blue 完整管线、维护命令与世代修剪

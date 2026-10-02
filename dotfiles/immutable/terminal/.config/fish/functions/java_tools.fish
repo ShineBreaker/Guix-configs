@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# java_tools — jdk/jbuild/jrun；见 docs/scripts/java-tools.md
+# java_tools — jdk/jbuild/jrun；见 docs/scripts/fish-functions.md §Java 学习工具
 
 function jdk -d "Manage JDK versions"
     if test (count $argv) -eq 0

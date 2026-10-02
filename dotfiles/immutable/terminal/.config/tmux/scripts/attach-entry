@@ -7,7 +7,7 @@ set -euo pipefail
 
 # attach-entry — tmux 会话统一入口（attach-or-create 三步收敛）
 # 用法: attach-entry <session> [-n win] [-c dir] [--create]
-# 设计语义与调用链见 docs/scripts/attach-entry.md
+# 设计语义与调用链见 docs/scripts/tmux-scripts.md §attach-entry
 #
 # 纪律：绝不串联 tmux 命令链（分号串联有竞态闪退）；attach 恒为最后一条
 # 独立命令，退出码经 exec 透传（0 = 正常 detach；≠0 = 调用方回退/重选）。

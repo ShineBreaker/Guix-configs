@@ -11,12 +11,12 @@
 
 四层资产的边界：
 
-| 层 | 路径 | 进 git | 出现在 `~` | 权限 |
-| --- | --- | --- | --- | --- |
-| 密文 | `dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/<name>.age` | ✓ | ✗（Stow 排除） | 644 |
-| 公钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age.pub` | ✓ | ✓ | 644 |
-| 私钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age`（软链到 `~/.local/share/keys/age`） | ✗ | ✓ | 600 |
-| 明文 | `$XDG_RUNTIME_DIR/secrets-decrypted/<name>`（tmpfs，重启即消） | ✗ | ✗ | 600 |
+| 层   | 路径                                                                                       | 进 git | 出现在 `~`     | 权限 |
+| ---- | ------------------------------------------------------------------------------------------ | ------ | -------------- | ---- |
+| 密文 | `dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/<name>.age`                 | ✓      | ✗（Stow 排除） | 644  |
+| 公钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age.pub`                                 | ✓      | ✓              | 644  |
+| 私钥 | `dotfiles/mutable/tools/secrets/.local/share/keys/age`（软链到 `~/.local/share/keys/age`） | ✗      | ✓              | 600  |
+| 明文 | `$XDG_RUNTIME_DIR/secrets-decrypted/<name>`（tmpfs，重启即消）                             | ✗      | ✗              | 600  |
 
 整个仓库 push 到 origin 的字节里，**没有**任何明文，也没有解密所需的私钥。
 
@@ -143,17 +143,17 @@ trash /tmp/age.old
 
 ## 排障
 
-| 症状 | 原因 | 处理 |
-| --- | --- | --- |
-| `secrets decrypt` 报找不到私钥 | stow 没部署或软链失效 | `cd <仓库根目录> && blue stow tools/secrets --restow` |
-| `secrets` 命令未找到 | stow 未部署 `.local/bin/secrets` | `blue stow tools/secrets` |
-| `age: error: no identity` | 私钥权限被改了 | `chmod 600 dotfiles/mutable/tools/secrets/.local/share/keys/age` |
-| `init` 拒绝生成密钥 | `keys/age` 不在 git 忽略范围内 | 先在 `.gitignore` 加规则，或确认 `keys/.gitignore` 未被删改 |
-| `init` 报「已存在」 | 旧私钥还在 | 按轮换流程先 `trash` 旧私钥 |
-| `init` 后 `.age.pub` 是空的 | 私钥不是用本脚本 init 生成 | trash 旧私钥重跑 init，或手动从私钥首行注释 `awk` 提取 |
-| `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录 | 修复 ignore 后 `blue stow tools/secrets --restow` |
-| `re-encrypt` 报 `failed to decrypt` | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确（轮换前先 `cp` 备份） |
-| `list` 报 `DECREPT_DIR: 未绑定的变量` | 脚本 typo 触发 `set -euo pipefail` | 修脚本；`bash -n` 不查变量绑定，必须真跑 |
+| 症状                                     | 原因                                      | 处理                                                             |
+| ---------------------------------------- | ----------------------------------------- | ---------------------------------------------------------------- |
+| `secrets decrypt` 报找不到私钥           | stow 没部署或软链失效                     | `cd <仓库根目录> && blue stow tools/secrets --restow`            |
+| `secrets` 命令未找到                     | stow 未部署 `.local/bin/secrets`          | `blue stow tools/secrets`                                        |
+| `age: error: no identity`                | 私钥权限被改了                            | `chmod 600 dotfiles/mutable/tools/secrets/.local/share/keys/age` |
+| `init` 拒绝生成密钥                      | `keys/age` 不在 git 忽略范围内            | 先在 `.gitignore` 加规则，或确认 `keys/.gitignore` 未被删改      |
+| `init` 报「已存在」                      | 旧私钥还在                                | 按轮换流程先 `trash` 旧私钥                                      |
+| `init` 后 `.age.pub` 是空的              | 私钥不是用本脚本 init 生成                | trash 旧私钥重跑 init，或手动从私钥首行注释 `awk` 提取           |
+| `~/.local/share/secrets-encrypted/` 出现 | `.stow-local-ignore` 未排除密文目录       | 修复 ignore 后 `blue stow tools/secrets --restow`                |
+| `re-encrypt` 报 `failed to decrypt`      | `--with` 指定的私钥不是加密这些密文的那个 | 确认备份的旧私钥正确（轮换前先 `cp` 备份）                       |
+| `list` 报 `DECREPT_DIR: 未绑定的变量`    | 脚本 typo 触发 `set -euo pipefail`        | 修脚本；`bash -n` 不查变量绑定，必须真跑                         |
 
 ## 相关
 

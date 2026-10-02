@@ -15,37 +15,37 @@ sidebar-toggle [toggle|follow|resized|signal|click|toggle-group|layout-changed]
 
 无参默认 `toggle`；非法动作打 usage + `exit 2`。
 
-| 动作             | 语义                                           | 前置条件                       |
-| ---------------- | ---------------------------------------------- | ------------------------------ |
-| `toggle`         | 按 `@sidebar_visible` 开 / 关当前 session 侧栏 | —                              |
-| `follow`         | session 变化后按需建立 / 更新侧栏 pane         | `@sidebar_visible` 为 1        |
-| `resized`        | 客户端尺寸变化后防抖并校正宽度                 | `@sidebar_visible` 为 1        |
-| `signal`         | 事件 → FIFO 轻量通知，催 daemon 重渲染         | —                              |
-| `click`          | 鼠标事件转发 FIFO（y / 坐标 / pane / client）  | 恰好 5 个参数，否则 `exit 2`   |
-| `toggle-group`   | 折叠 / 展开当前分组                            | —                              |
-| `layout-changed` | 窗口布局变化后的侧栏对齐                       | —                              |
+| 动作             | 语义                                           | 前置条件                     |
+| ---------------- | ---------------------------------------------- | ---------------------------- |
+| `toggle`         | 按 `@sidebar_visible` 开 / 关当前 session 侧栏 | —                            |
+| `follow`         | session 变化后按需建立 / 更新侧栏 pane         | `@sidebar_visible` 为 1      |
+| `resized`        | 客户端尺寸变化后防抖并校正宽度                 | `@sidebar_visible` 为 1      |
+| `signal`         | 事件 → FIFO 轻量通知，催 daemon 重渲染         | —                            |
+| `click`          | 鼠标事件转发 FIFO（y / 坐标 / pane / client）  | 恰好 5 个参数，否则 `exit 2` |
+| `toggle-group`   | 折叠 / 展开当前分组                            | —                            |
+| `layout-changed` | 窗口布局变化后的侧栏对齐                       | —                            |
 
 hook 里的调用都走 `run-shell -b`，静默无输出。
 
 ## 调用方
 
-| 调用方                            | 动作                                            |
-| --------------------------------- | ----------------------------------------------- |
-| `bind B`                          | 无参 → `toggle`                                 |
-| `bind G`                          | `toggle-group`                                  |
-| `bind T` / `bind D`               | 写 `@sidebar_window_title` / `_desc` 后 `signal` |
-| `MouseDown1Pane`                  | `click`，随后 `signal`                          |
-| `attach-entry`                    | `follow`                                        |
+| 调用方              | 动作                                             |
+| ------------------- | ------------------------------------------------ |
+| `bind B`            | 无参 → `toggle`                                  |
+| `bind G`            | `toggle-group`                                   |
+| `bind T` / `bind D` | 写 `@sidebar_window_title` / `_desc` 后 `signal` |
+| `MouseDown1Pane`    | `click`，随后 `signal`                           |
+| `attach-entry`      | `follow`                                         |
 
 13 个 `set-hook`：
 
-| hook                                                          | 动作             |
-| ------------------------------------------------------------- | ---------------- |
-| `after-select-pane`、`window-renamed`、`session-renamed`、`window-unlinked` | `signal`   |
-| `after-new-window`、`after-new-session`、`client-session-changed`           | `follow`   |
-| `after-select-window`、`client-attached`、`client-detached`、`client-active` | `follow`   |
-| `window-layout-changed`                                         | `layout-changed` |
-| `client-resized`                                                | `resized`        |
+| hook                                                                         | 动作             |
+| ---------------------------------------------------------------------------- | ---------------- |
+| `after-select-pane`、`window-renamed`、`session-renamed`、`window-unlinked`  | `signal`         |
+| `after-new-window`、`after-new-session`、`client-session-changed`            | `follow`         |
+| `after-select-window`、`client-attached`、`client-detached`、`client-active` | `follow`         |
+| `window-layout-changed`                                                      | `layout-changed` |
+| `client-resized`                                                             | `resized`        |
 
 ## 宽度策略
 

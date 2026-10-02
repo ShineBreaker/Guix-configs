@@ -5,13 +5,18 @@
 #
 # dsh — DeepSeek Harness CLI wrapper：注入 DSH_HOME（niri 会话不经 fish
 # conf.d），分发 update/web/tui 到同包 libexec 实体（一包一入口），CLI 本体在
-# $DSH_HOME/_cli 经 pnpm 安装。文档：docs/scripts/dsh.md
+# $AGENTS_ROOT/dsh 经 pnpm 安装。文档：docs/scripts/dsh.md
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
 export DSH_HOME
 
-_cli_dir="$DSH_HOME/_cli"
+# 各 agent 的 pnpm 安装树聚合根：CLI 本体项目（package.json + node_modules）落
+# 在这里，DSH_HOME 只留配置与运行时状态（profiles/sessions/凭据）
+: "${AGENTS_ROOT:=${XDG_DATA_HOME:-$HOME/.local/share}/agents}"
+export AGENTS_ROOT
+
+_cli_dir="$AGENTS_ROOT/dsh"
 _cli_bin="$_cli_dir/node_modules/.bin/dsh"
 # $0 经 stow 直链解析回仓库源，与同包 libexec/ 自洽
 _libexec_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/libexec"
@@ -37,7 +42,7 @@ install_cli() {
 # 部署侧 lockfile 拷回仓库源：pnpm 拒绝写软链 lockfile，部署侧只能是真实文件
 _sync_cli_lockfile() {
   local dir="$_cli_dir" src_file
-  src_file="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/_cli/pnpm-lock.yaml"
+  src_file="$(dirname "$(dirname "$(readlink -f "$0")")")/share/agents/dsh/pnpm-lock.yaml"
   [[ -f "$dir/pnpm-lock.yaml" && -f "$src_file" ]] || return 0
   if ! cmp -s "$dir/pnpm-lock.yaml" "$src_file"; then
     cp "$dir/pnpm-lock.yaml" "$src_file"
@@ -52,26 +57,37 @@ if [[ "${1:-}" == "--install" ]]; then
 fi
 
 # 断链自愈：dsh 的原子写（临时文件 + rename；plugin bundles、UI 设置编辑
-# cordis.patch.yml）会把 stow 软链换成独立文件——内容先归源再重建软链；
-# lockfile 反向只回拷内容。源目录从 $0 解析回包内（不能从部署侧软链推导：
-# pnpm 覆写后链接随时不在）。每次 CLI 调用尾部统一检测，开销可忽略。
-_relink_profile() {
-  local dir="$DSH_HOME/profiles/web" src_dir name
-  src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
+# cordis.patch.yml、pnpm 覆写 package.json）会把 stow 软链换成独立文件——内容
+# 先归源再重建软链；lockfile 反向只回拷内容（pnpm 拒写软链 lockfile，部署侧
+# 必须真实文件）。覆盖两处 pnpm 项目：CLI 安装树（$AGENTS_ROOT/dsh）与 web
+# profile。安装树是手动升级路径的回源盲区——改 package.json 后裸跑 pnpm
+# install 不过 dsh update 的 sync，曾致仓库 lockfile 落后一个 minor（0.1.7 vs
+# 部署侧 0.2.0），2026-10-02 在此补齐。源目录从 $0 解析回包内（stow 布局内
+# 自洽，不从部署侧软链推导：pnpm 会把文件原地写成实体文件，链接随时不在）。
+# 每次 CLI 调用尾部统一检测，开销可忽略（一次 cmp）。
+_relink_dir() {
+  local label="$1" dir="$2" src_dir="$3" name
   [[ -d "$src_dir" ]] || return 0
   for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
     [[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
     if [[ ! -L "$dir/$name" ]]; then
       cp "$dir/$name" "$src_dir/$name"
       ln -sfn "$src_dir/$name" "$dir/$name"
-      printf 'dsh: %s 断链已写回仓库源并重建软链\n' "$name" >&2
+      printf 'dsh: [%s] %s 断链已写回仓库源并重建软链\n' "$label" "$name" >&2
     fi
   done
   if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] \
     && ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
     cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
-    printf 'dsh: pnpm-lock.yaml 已同步回仓库源\n' >&2
+    printf 'dsh: [%s] pnpm-lock.yaml 已同步回仓库源\n' "$label" >&2
   fi
+}
+
+_relink_profile() {
+  local pkg_local
+  pkg_local="$(dirname "$(dirname "$(readlink -f "$0")")")"
+  _relink_dir 安装树 "$AGENTS_ROOT/dsh" "$pkg_local/share/agents/dsh"
+  _relink_dir web "$DSH_HOME/profiles/web" "$pkg_local/share/dsh/profiles/web"
 }
 
 if [[ "${1:-}" == "plugin" ]]; then

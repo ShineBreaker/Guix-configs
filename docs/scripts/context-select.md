@@ -15,11 +15,11 @@ context-select.sh --list-all                                # 映射表全集，
 context-select.sh --check                                   # 一致性自检
 ```
 
-| 面       | 形态                                                                       |
-| -------- | -------------------------------------------------------------------------- |
-| stdout    | 一行一个绝对路径；`--explain` 与 `--check` 的全部输出也走 stdout          |
-| stderr    | 只有 usage（参数错误时）                                                  |
-| 退出码    | 默认与 `--list-all` 恒 0；`--check` 有 fail 项为 1；参数错误 64            |
+| 面     | 形态                                                             |
+| ------ | ---------------------------------------------------------------- |
+| stdout | 一行一个绝对路径；`--explain` 与 `--check` 的全部输出也走 stdout |
+| stderr | 只有 usage（参数错误时）                                         |
+| 退出码 | 默认与 `--list-all` 恒 0；`--check` 有 fail 项为 1；参数错误 64  |
 
 `--platform` 缺省 `generic`，只命中 `always` 与 `git` 门控。`--explain` 把逐项判定写成 `✓ <文件>（<门控>）` / `－ <文件>（<门控> 未满足）`，只作用于默认模式，`--list-all` 不看该标志。
 
@@ -27,10 +27,10 @@ context-select.sh --check                                   # 一致性自检
 
 `--list-all` 输出 `INJECT_MAP` 的全集且不做门控判定：消费者先用它注册 section 集，渲染时再按默认模式的门控结果裁剪。
 
-| 环境变量      | 语义                                                                 |
-| ------------- | -------------------------------------------------------------------- |
-| `CONTEXT_DIR` | 覆盖 context 根，默认 `${XDG_CONFIG_HOME:-$HOME/.config}/agents/context` |
-| `XDG_CONFIG_HOME` | 覆盖配置根，参与 `--check` 里 crush 与 omp 配置的定位          |
+| 环境变量          | 语义                                                                     |
+| ----------------- | ------------------------------------------------------------------------ |
+| `CONTEXT_DIR`     | 覆盖 context 根，默认 `${XDG_CONFIG_HOME:-$HOME/.config}/agents/context` |
+| `XDG_CONFIG_HOME` | 覆盖配置根，参与 `--check` 里 crush 与 omp 配置的定位                    |
 
 `CONTEXT_DIR` 与各端的 selector 路径变量（zcode 与 DSH 都认 `CONTEXT_SELECT_BIN`）配合，可在 `blue home` 部署前用仓库源码跑通全链路。
 
@@ -38,11 +38,11 @@ context-select.sh --check                                   # 一致性自检
 
 `INJECT_MAP` 每行是 `<相对路径>|<门控>`，恒注入在前、域文件在后；多条件用 `+` 叠加，全部满足才注入；`INJECT_MAP` 里没出现过的门控词一律判为不满足（永不注入）。
 
-| 门控                 | 语义                                                                    |
-| -------------------- | ----------------------------------------------------------------------- |
-| `always`             | 全平台恒注入                                                            |
-| `git`                | `--cwd` 在 git 仓库内：向上最多 8 层找 `.git`                           |
-| `platform:p1,p2,...` | 仅列出的平台注入                                                       |
+| 门控                 | 语义                                          |
+| -------------------- | --------------------------------------------- |
+| `always`             | 全平台恒注入                                  |
+| `git`                | `--cwd` 在 git 仓库内：向上最多 8 层找 `.git` |
+| `platform:p1,p2,...` | 仅列出的平台注入                              |
 
 `git` 门控用 `[[ -e "$d/.git" ]]` 判存在而非 `[[ -d ]]`，这样 `git worktree` 的 `.git` **文件**形态同样算仓库内。
 
@@ -67,17 +67,17 @@ domains/dsh-sandbox.md|platform:dsh
 
 输出走 stdout，`✗` 行置 `fail=1` 并最终 exit 1，`－` 行只是提示不阻断，全过时打印 `✓` 并 exit 0。
 
-| 检查项                            | 不一致时                            |
-| --------------------------------- | ----------------------------------- |
-| 映射表引用的文件存在              | fail                                |
-| `domains/` 磁盘集合 == 映射集合    | fail（双向，含未登记与已登记缺失）  |
-| `INDEX.md` 条目集合 == `domains/`  | fail（双向）                        |
-| `INDEX.md` 条目带 `file=` 声明     | fail（逐条比对 name 与 file 同名）  |
-| crush `context_paths` 指向的文件存在、且覆盖 `00-core.md` 与 `INDEX.md` | fail        |
-| omp `global-context.json` 存在    | fail                                |
-| crush `crush.json` 可读           | 仅提示「跳过 crush 校验」           |
-| omp `enabled == true`             | 仅提示「已禁用」                    |
-| hermes 插件已部署                 | 仅提示「未部署，跳过」              |
+| 检查项                                                                  | 不一致时                           |
+| ----------------------------------------------------------------------- | ---------------------------------- |
+| 映射表引用的文件存在                                                    | fail                               |
+| `domains/` 磁盘集合 == 映射集合                                         | fail（双向，含未登记与已登记缺失） |
+| `INDEX.md` 条目集合 == `domains/`                                       | fail（双向）                       |
+| `INDEX.md` 条目带 `file=` 声明                                          | fail（逐条比对 name 与 file 同名） |
+| crush `context_paths` 指向的文件存在、且覆盖 `00-core.md` 与 `INDEX.md` | fail                               |
+| omp `global-context.json` 存在                                          | fail                               |
+| crush `crush.json` 可读                                                 | 仅提示「跳过 crush 校验」          |
+| omp `enabled == true`                                                   | 仅提示「已禁用」                   |
+| hermes 插件已部署                                                       | 仅提示「未部署，跳过」             |
 
 crush 已整体移出本仓库，其 `crush.json` 不再存在，因此上表的 crush 两行在当前机器上恒为「跳过」提示——`--check` 仍会照常执行这一探测。hermes 插件是可选部署，未部署时同样只提示。
 

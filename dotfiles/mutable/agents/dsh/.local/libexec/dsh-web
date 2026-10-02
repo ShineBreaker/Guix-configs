@@ -5,16 +5,18 @@
 #
 # dsh web — DeepSeek Harness Web UI 启动实体（bin/dsh 的 web 子命令与
 # desktop 入口共用）：chromium --app 窗口 + 尾网远程信任 + launch token 认证。
-# 文档：docs/scripts/dsh-web.md（token/cookie/app_id/远程机制与全部环境变量）
+# 文档：docs/scripts/dsh.md §dsh web（token/cookie/app_id/远程机制与全部环境变量）
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
 export DSH_HOME
+: "${AGENTS_ROOT:=${XDG_DATA_HOME:-$HOME/.local/share}/agents}"
+export AGENTS_ROOT
 : "${DSH_WEB_PORT:=3080}"
 : "${DSH_WEB_LOG:=${XDG_STATE_HOME:-$HOME/.local/state}/dsh/web.log}"
 # 起服务必须直调 CLI 本体：dsh 公共入口会把 web 分发回本脚本造成递归；
 # DSH_BIN 覆盖测试时同理须指向 CLI 本体
-: "${DSH_BIN:=${DSH_HOME}/_cli/node_modules/.bin/dsh}"
+: "${DSH_BIN:=${AGENTS_ROOT}/dsh/node_modules/.bin/dsh}"
 : "${DSH_TS_HOST:=brokenshine-laptop.tail3889e8.ts.net}"
 
 readonly CLEAN_URL="http://127.0.0.1:${DSH_WEB_PORT}/"

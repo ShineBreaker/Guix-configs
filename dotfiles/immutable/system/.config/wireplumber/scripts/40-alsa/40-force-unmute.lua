@@ -4,7 +4,7 @@
 --
 -- 不变量：save=false —— 只改运行时状态，不写回路由持久化；
 -- 目录名 "40-alsa" 保证先于系统 "50-alsa" 注册 hook。
--- 背景与排障见 docs/scripts/wireplumber-force-unmute.md
+-- 背景与排障见 docs/scripts/misc-scripts.md §40-force-unmute
 
 cutils = require ("common-utils")
 log = Log.open_topic ("s-force-unmute")

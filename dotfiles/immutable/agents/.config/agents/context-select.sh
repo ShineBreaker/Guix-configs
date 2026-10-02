@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# context-select.sh — zcode / omp / crush / hermes 四方共享的上下文注入决策核。
+# context-select.sh — zcode / omp / pi / hermes / DSH 共享的上下文注入决策核。
 # 分层（00-core.md / INDEX.md / domains/*.md）、门控语义、CLI 与消费链路
 # 见 docs/scripts/context-select.md。
 set -uo pipefail

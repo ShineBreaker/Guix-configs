@@ -2,14 +2,14 @@
 
 [English](./README.md)
 
-ZCode 会话的 Assisted-by 提交规范保障，实现 `~/.config/git/gitmessage` 定义的 trailer 格式：`Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [TOOL1] [TOOL2]`。
+ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际强制的 trailer 是 `Co-authored-by`，其格式（`Co-authored-by: <AGENT> (<MODEL>) <EMAIL>`）来自 `~/.config/agents/context/domains/coding.md` 的 commit 规范——`~/.config/git/gitmessage` 只定义提交类型清单。
 
 两层机制，与任何知识库/agent 集成刻意无关：
 
-| 层 | 机制 | 保障 |
-| --- | --- | --- |
-| 提醒层 | `PreToolUse(Bash)` hook——`git commit` 时注入提醒，让模型写完整 trailer（含模型名与版本号） | 归因完整，但依赖模型遵守 |
-| 兜底层 | `git-hooks/prepare-commit-msg` 装为全局 git hook——消息缺 trailer 时才补 `Assisted-by: zcode` | 模型遗漏时也有 agent 名 |
+| 层     | 机制                                                                                        | 保障                     |
+| ------ | ------------------------------------------------------------------------------------------- | ------------------------ |
+| 提醒层 | `PreToolUse(Bash)` hook——`git commit` 时注入提醒，让模型写带模型名与版本号的完整 trailer    | 归因完整，但依赖模型遵守 |
+| 兜底层 | `git-hooks/prepare-commit-msg` 装为全局 git hook——补 `Co-authored-by: ZCode <noreply@z.ai>` | 模型遗漏时也有 agent 名  |
 
 ## 插件安装
 
@@ -18,10 +18,7 @@ ZCode 会话的 Assisted-by 提交规范保障，实现 `~/.config/git/gitmessag
 ```json
 {
   "plugins": {
-    "dirs": [
-      "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/agenote-zcode",
-      "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/assisted-by-zcode"
-    ]
+    "dirs": ["/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/agenote-zcode", "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/plugins/assisted-by-zcode"]
   }
 }
 ```
@@ -47,8 +44,8 @@ git config --global core.hooksPath ~/.config/git/hooks
 
 - 仅当 `ZCODE_APP_VERSION` 已设置（即 zcode Bash 会话内）才生效；手动终端不受影响。
 - 只覆盖常规提交路径（`$2` 为空 / `message` / `template`）；merge、squash、amend 不动。
-- 仅当消息无 `^Assisted-by:` 行时追加 `Assisted-by: zcode`——模型按提醒写的完整 trailer 原样保留。
+- 仅当消息里已有署名 zcode 的 `Co-authored-by:` 行时才跳过，模型写下的完整 trailer 原样保留；其他 agent 的 trailer 不算，会与它们并存追加本会话的署名。
 
 ## 边界说明
 
-兜底层目前仅通过 `ZCODE_APP_VERSION` 识别 zcode 会话。要让其他 AI agent（pi、crush 等）也享受兜底，需泛化 env 检测并把资产从本 zcode 插件迁到 dotfiles 的 git 配置区——这是有意的后续步骤，此处不做。
+兜底层目前仅通过 `ZCODE_APP_VERSION` 识别 zcode 会话。由于 `Co-authored-by` 是所有 agent 共用的规范，要让 pi、crush 等也享受兜底，需泛化 env 检测并把资产从本 zcode 插件迁到 dotfiles 的 git 配置区——这是有意的后续步骤，此处不做。

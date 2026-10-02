@@ -17,11 +17,11 @@ set-theme.sh <light|dark>
 
 ## 输入输出
 
-| 角色         | 位置                                                                              |
-| ------------ | --------------------------------------------------------------------------------- |
-| 变量组       | `$script_dir/config.json` 的 `.dark` / `.light`（`.colors` 子表会展平进顶层后删除） |
-| 模板树       | `~/.config/darkman/config/` 下的所有文件与符号链接（`find -type f -o -type l`）      |
-| 输出         | `~/.config/<rel>`                                                                  |
+| 角色   | 位置                                                                                |
+| ------ | ----------------------------------------------------------------------------------- |
+| 变量组 | `$script_dir/config.json` 的 `.dark` / `.light`（`.colors` 子表会展平进顶层后删除） |
+| 模板树 | `~/.config/darkman/config/` 下的所有文件与符号链接（`find -type f -o -type l`）     |
+| 输出   | `~/.config/<rel>`                                                                   |
 
 - 固定注入两个变量：`mode`（当前模式）与 `home`（`$HOME`），模板可直接写 `$$mode$$` / `$$home$$`。
 - 输出**先 `rm -f` 再写**（目标可能是 store 软链或只读副本），随后 `chmod --reference="$src"` 保权限。

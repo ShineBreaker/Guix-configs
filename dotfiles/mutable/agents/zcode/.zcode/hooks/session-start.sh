@@ -7,7 +7,7 @@
 # session-start.sh — zcode SessionStart hook：会话启动时注入 anchors 防护
 # 规则摘要 + 全局上下文到 additionalContext（注入哪些文件由
 # context-select.sh 统一决策，本脚本只做协议转换与预算控制）。
-# 摘要格式、预算与回退行为见 docs/scripts/zcode-session-start.md。
+# 摘要格式、预算与回退行为见 docs/scripts/zcode-hooks.md。
 
 set -euo pipefail
 

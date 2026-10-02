@@ -1,7 +1,8 @@
 # CachyOS LTS defconfig — verbatim from https://codeberg.org/hako/kernel-config
 # defconfig_server @ 49c98a1ee831a527193d9a8c3b56293c5fc6e7d7 (proven on 6.18.x by Testament hosts).
-# Desktop deltas are applied via kconfig fragments in source/config.org
-# (linux-cachyos-lts); keep this file a pristine copy, do not hand-edit.
+# Desktop deltas are applied via kconfig fragments in this directory
+# (linux-cachyos-lts.scm + machines/*.kconfig); keep this file a pristine
+# copy, do not hand-edit.
 # CONFIG_CACHY is not set
 CONFIG_KERNEL_ZSTD=y
 CONFIG_DEFAULT_HOSTNAME="cachyos"

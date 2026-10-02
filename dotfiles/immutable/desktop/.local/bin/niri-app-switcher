@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 #
 # niri-app-switcher — niri 统一窗口切换器（rofi -dmenu）：运行中窗口按规范
-# 应用名归组，菜单按历史使用排序；环境变量覆盖见 docs/scripts/niri-app-switcher.md
+# 应用名归组，菜单按历史使用排序；环境变量覆盖见 docs/scripts/misc-scripts.md §niri-app-switcher
 set -euo pipefail
 
 CONFIG="${NIRI_APP_SWITCHER_CONFIG:-$HOME/.config/niri/app-switcher.json}"

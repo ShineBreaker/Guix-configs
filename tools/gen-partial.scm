@@ -6,7 +6,7 @@
 ;; 必须经 `guix repl` 子进程跑：调用方（blueprint.scm 的 %partial-channels-file）
 ;; 的 Guile 环境缺 (guix openpgp)/(gcrypt hash)，openpgp-fingerprint 宏展开会
 ;; 报 unbound variable；guix 的 Guile 环境自带这些模块。
-;; 文档：docs/scripts/gen-partial.md
+;; 文档：docs/scripts/blue-helpers.md §gen-partial.scm
 
 (use-modules (guix channels) (guix build utils) (ice-9 match) (ice-9 pretty-print) (srfi srfi-1))
 

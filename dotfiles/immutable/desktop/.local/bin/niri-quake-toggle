@@ -7,7 +7,7 @@
 # Mod+grave 入口：呼出/收起 quick-access 下拉面板。
 # 呼出瞬间以会话身份对面板做一次 load-config：darkman 后代身份的 RC 写被
 # kitty 忽略（hidden 态重载还延迟），面板主题刷新只能靠这里；无 socket 即未运行。
-# 文档：docs/scripts/niri-quake-toggle.md
+# 文档：docs/scripts/misc-scripts.md §niri-quake-toggle
 sock="$(awk '$NF ~ /quick-access-/ {print $NF; exit}' /proc/net/unix 2>/dev/null)"
 if [ -n "$sock" ] && command -v kitten >/dev/null 2>&1; then
   kitten @ --to "unix:$sock" load-config >/dev/null 2>&1 || true

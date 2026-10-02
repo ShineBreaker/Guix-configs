@@ -48,7 +48,7 @@ function getOmpConfigDir(): string {
  * 使用 before_agent_start hook 将上下文文件注入系统提示词。
  * 注入文件列表由决策核 ~/.config/agents/context-select.sh 统一裁决
  * （--platform omp + 当前会话 cwd 门控），本扩展只做协议适配与预算控制，
- * 与 zcode / crush / hermes 端共享同一注入映射表。selector 缺失或执行
+ * 与 zcode / pi / hermes / DSH 端共享同一注入映射表。selector 缺失或执行
  * 失败时降级为扫描默认 context 目录全量注入（部署是渐进的，扩展可能
  * 先于 selector 的 blue home 上线）。
  *

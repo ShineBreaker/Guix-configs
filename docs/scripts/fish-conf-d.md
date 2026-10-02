@@ -7,17 +7,17 @@
 
 **数字前缀是唯一的排序契约**——fish 本身只按文件名字母序加载，前缀是人为约定的执行顺序，改名即改序。
 
-| 文件                        | 作用                                                       |
-| --------------------------- | ---------------------------------------------------------- |
+| 文件                        | 作用                                                        |
+| --------------------------- | ----------------------------------------------------------- |
 | `00-load-functions.fish`    | 提前 source `functions/*.fish`（**必须存在**，见下）        |
 | `01-guix.fish`              | 登录 shell 经 `fenv` 继承 `~/.profile`（guix profile 环境） |
-| `05-java.fish`              | JDK 切换器 `__set_jdk` 与启动回放，细节见 fish-functions.md  |
+| `05-java.fish`              | JDK 切换器 `__set_jdk` 与启动回放，细节见 fish-functions.md |
 | `05-path.fish`              | Nix profile + `PNPM_HOME` + `~/.local/bin` 路径注册         |
 | `10-github-token.fish`      | `gh auth token` 动态导出 `GITHUB_TOKEN` / `GH_TOKEN`        |
 | `10-settings.fish`          | alias / abbr 集中登记（纯表，无逻辑）                       |
 | `20-greeting.fish`          | 首个 prompt 前跑 fastfetch + lolcat 格言                    |
 | `99-command-not-found.fish` | `fish_command_not_found` → `guix locate` → `guix shell`     |
-| `99-selector.fish`          | foot/kitty 顶层终端弹会话选择器                            |
+| `99-selector.fish`          | foot/kitty 顶层终端弹会话选择器                             |
 
 ## 00-load-functions.fish
 

@@ -4,12 +4,12 @@
 #
 # SPDX-License-Identifier: MIT
 
-# anchors-lib.sh — 四方 gate 共享的 anchors.json 分层加载与 ratchet 合并库。
+# anchors-lib.sh — zcode / pi / hermes / DSH 四端 gate 共享的 anchors.json 分层加载与 ratchet 合并库。
 # 只做「读 + 合并」，判定语义全部在 gate-core.sh（单一真相源分工）。
-# 分层模型、merge 语义、失败回退约定见 docs/scripts/anchors-lib.md。
+# 分层模型、merge 语义、失败回退约定见 docs/scripts/gate-core.md §规则源。
 #
 # 被同目录 gate-core.sh source；消费链路：
-#   zcode/crush hooks → gate-core.sh → 本库
+#   zcode hooks → gate-core.sh → 本库
 #   pi（pi-gate/index.ts）、hermes（plugins/gate/__init__.py）、DSH gate.js
 #
 # 契约：本库是被 source 的库文件——不得 set -e/-u/-o pipefail、不得 exit、
@@ -78,7 +78,7 @@ _find_anchors_files_near_to_root() {
 
 # ratchet 合并（输入 [全局, 项目根, ..., 项目近]）：数组 unique 并集、映射
 # 近层覆盖远层、builtin_rewrite 布尔由给出层覆盖；初始=DEFAULT（sudo 恒在，
-# 语义细则见 anchors-lib.md）。
+# 语义细则见 docs/scripts/gate-core.md）。
 # shellcheck disable=SC2016 # jq 程序文本，非 shell 待展开串
 _ANCHORS_MERGE_JQ='
 reduce .[] as $raw (
@@ -136,7 +136,7 @@ load_merged_anchors() {
 
 # ─── frozen_globs 匹配 ───────────────────────────────────────────────────────
 # glob_to_ere <glob> → 锚定 ERE：`**`→.*（吞 **/ 斜杠）、`*`→[^/]*、`?`→[^/]。
-# 语义对齐 pi-gate globToRegex（anchors-lib.md §glob 语义）。
+# 语义对齐 pi-gate globToRegex（docs/scripts/gate-core.md §glob 语义）。
 # shellcheck disable=SC2016 # 内部 sed 程序文本含 $，须单引号防展开
 glob_to_ere() {
   local g="$1" out="" i=0 c

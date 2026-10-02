@@ -16,7 +16,7 @@
 - id: ui-settings-general
   name: "@deepseek-ai/dsh-client-ui-settings-general"
   config:
-    welcomeNoticeVersion: 2026-08-13.1
+    welcomeNoticeVersion: 2026-09-28.1
 - id: ui-theme
   name: "@deepseek-ai/dsh-client-ui-theme"
   config:
@@ -85,7 +85,7 @@
           # sorts first. Hence a differently-named copy carrying an explicit `shellPath`.
           #
           # Re-sync after a DSH upgrade: diff this file against the shipped
-          # `<dsh-web-app>/presets/minimal.patch.yml` and re-apply `shellPath`.
+          # `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` and re-apply `shellPath`.
           #
           # Deployment: this stow package owns the user preset root; the deployment side
           # `$DSH_HOME/.agent-presets/minimal-guix/` symlinks back here (see the dsh
@@ -189,7 +189,7 @@
           # touches them (it only manages `_cli` and profile bundles).
           #
           # Re-sync after a DSH upgrade: diff the shell block below against the shipped
-          # `<dsh-web-app>/presets/minimal.patch.yml` and re-apply
+          # `<dsh-agent-presets>/presets/minimal/agent.cordis.yml` and re-apply
           # `shellPath`; compare the three injection rows against the shipped `standard`
           # preset.
           #

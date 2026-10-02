@@ -7,7 +7,7 @@
 # libexec 路径直调）：首次安装 + 已装更新。已装路径委托官方 `hermes update`，
 # 本脚本只补官方做不了的 Guix 侧四件事：首装、停旧 gateway、uv 隔离、herd 收尾。
 # 委托用普通调用而非 exec——成功后还要跑 herd 收尾。
-# 文档：docs/scripts/hermes-update.md（uv 隔离/managed node/布局约定细节）
+# 文档：docs/scripts/hermes.md（uv 隔离与布局约定见 §hermes update 与 §managed-node）
 set -euo pipefail
 
 REPO_URL="https://github.com/NousResearch/hermes-agent.git"
@@ -51,7 +51,7 @@ EOF
 
 # 收尾必须是 停→清野实例→enable+start，不是简单 restart：官方 update 会
 # 自己拉起脱离 shepherd 的野实例，两侧抢端口+singleton lock 触发 respawn
-# 循环直至服务被 shepherd 禁用。事故细节见 docs/scripts/hermes-update.md。
+# 循环直至服务被 shepherd 禁用。事故细节见 docs/scripts/hermes.md §hermes update。
 _restart_herd_services() {
   if ! command -v herd >/dev/null 2>&1; then
     echo "  ⚠ herd 未找到，跳过常驻服务重启（手动: herd restart ${HERMES_HERD_SERVICES[*]}）"
@@ -81,7 +81,7 @@ _restart_herd_services() {
 # 很窄，Guix npm 可能卡禁止区间 → backend web build EBADENGINE → crash-loop。
 # 不能依赖官方 ensure_node——它只查 node 版本不查 npm 版本（本次故障正卡在 npm）。
 # HERMES_NODE_SKIP_LINKS=1：不软链到 ~/.local/bin，避免 shadow Guix toolchain。
-# 背景见 docs/scripts/hermes-update.md §managed-node。
+# 背景见 docs/scripts/hermes.md §managed-node。
 _ensure_managed_node() {
   local _node_bin="${HERMES_HOME}/node/bin/node"
   if [[ -x "${_node_bin}" ]]; then
@@ -221,7 +221,7 @@ update_existing() {
 
   # 收尾判据是「HEAD 是否变了」而非官方退出码：updater 收尾步骤自己可能
   # ImportError 崩（进程内 sys.modules 还是旧代码），此时退出码非 0 但代码
-  # 已更新——继续收尾；HEAD 未变才是真失败。详见 docs/scripts/hermes-update.md。
+  # 已更新——继续收尾；HEAD 未变才是真失败。详见 docs/scripts/hermes.md §实现与约束。
   if [[ "${_update_rc}" -ne 0 ]]; then
     if [[ "${_head_before}" == "${_head_after}" ]]; then
       echo "✗ 官方 update 失败（退出码 ${_update_rc}），代码未变化，未重启服务" >&2

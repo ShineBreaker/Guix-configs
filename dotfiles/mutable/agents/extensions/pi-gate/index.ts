@@ -13,12 +13,12 @@
  *   - RM_HINT / NOTES / REDIRECT / HINT → notify info（非阻塞）
  *
  * 决策核缺失或执行异常时：sudo 子串保底拦截 + logLoadError 留痕，其余放行
- * （与 zcode / crush 适配器的降级策略一致）。
+ * （与 zcode / hermes / DSH 适配器的降级策略一致）。
  *
  * 姊妹适配器：
  *   - dotfiles/mutable/agents/zcode/.zcode/hooks/{bash,edit}-gate.sh
- *   - dotfiles/immutable/agents/.config/crush/hooks/{bash,edit}-gate.sh
  *   - dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/__init__.py
+ *   - dotfiles/mutable/agents/dsh/.local/share/dsh/profiles/agent-extensions/gate.js
  */
 
 import { appendFileSync, statSync } from "node:fs";

@@ -21,11 +21,11 @@ emacs --quick --batch --script tools/block-replace.el FILE NAME BODY-FILE OUT-FI
 
 协议面向 `blueprint.scm` 消费，**勿改**；改协议必须同步 `%block-header-re` 与 `%extract-all-blocks`（字段间是字面 TAB，分隔符 `>>>` / `<<<` 避开 body 内任意文本）。三件成功时退出码 0；未找到块时 stdout 打 `[ERROR] 未找到代码块 <name>` 并以退出码 1 结束。
 
-| 工具 | stdout |
-| --- | --- |
-| `block-extract FILE NAME` | `lang\nnoweb\|plain\n<body>`（body 已 trim 首尾换行） |
-| `block-list FILE` | 逐块三段记录：`>>>name=<n>\tlang=<l>\tnoweb=plain\|noweb` / body 各行 / `<<<` |
-| `block-replace FILE NAME BODY-FILE OUT-FILE` | `lang=<lang>` |
+| 工具                                         | stdout                                                                        |
+| -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `block-extract FILE NAME`                    | `lang\nnoweb\|plain\n<body>`（body 已 trim 首尾换行）                         |
+| `block-list FILE`                            | 逐块三段记录：`>>>name=<n>\tlang=<l>\tnoweb=plain\|noweb` / body 各行 / `<<<` |
+| `block-replace FILE NAME BODY-FILE OUT-FILE` | `lang=<lang>`                                                                 |
 
 `block-replace` **不回写输入文件**，只写 `OUT-FILE`；`source/config.org` 的落盘由 blueprint 侧 `%write-file-atomically` 原子完成。外层据 `lang=scheme` 决定是否追加 tangle + 括号验证。
 

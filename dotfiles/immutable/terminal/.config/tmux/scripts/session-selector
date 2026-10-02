@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: MIT
 set -euo pipefail
 
-# session-selector — 统一会话选择器；设计与契约细节见 docs/scripts/session-selector.md
+# session-selector — 统一会话选择器；设计与契约细节见 docs/scripts/tmux-scripts.md §session-selector
 #
 # 输出契约（stdout 单行，消费方为 conf.d/99-selector.fish）：
 #   tmux|default|new|<name>   herdr|default|new|<name>   shell   __header__

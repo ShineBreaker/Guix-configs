@@ -4,10 +4,10 @@
 
 - 状态目录：`$HOME/.local/share/hermes/state/twitter-digest`
 - 脚本目录：`$HOME/.local/share/hermes/scripts/twitter-digest`
-  1. `twitter_fetch.py`   抓取推文（feed / explore 子命令，见下）
-  2. `jev_score.py`       jev 价值判定（score 子命令）
-  3. `digest_build.py`    组装 markdown 日报（build 子命令）
-  4. `digest_render.py`   渲染长图（md 子命令）
+  1. `twitter_fetch.py` 抓取推文（feed / explore 子命令，见下）
+  2. `jev_score.py` jev 价值判定（score 子命令）
+  3. `digest_build.py` 组装 markdown 日报（build 子命令）
+  4. `digest_render.py` 渲染长图（md 子命令）
   5. `test_feed_parse.py` 解析逻辑自检（改了解析代码就跑一次）
 - 登录凭据：age 密文在 Guix-configs 仓库，**每次运行前必须解密**（tmpfs 重启即消）
 - jev 密钥：`TYPESAFE_API_KEY`，在 `$HERMES_HOME/.env`
@@ -43,8 +43,7 @@ python3 "$HOME/.local/share/hermes/scripts/twitter-digest/twitter_fetch.py" expl
 - `explore`：探索页的趋势、AI 生成的 Today's News 标题、高热推文。趋势单独存
   `trends/YYYY-MM-DD.json`，不是推文、喂不进 jev，只作要闻的线索参考。
 
-三个源共享 `seen_ids.json` 去重，重复跑不会产生重复条目。任一源失败就在日报末尾附一行
-说明哪个源失败、失败原因（放在正文之后，不干扰阅读），其余源照常处理。
+三个源共享 `seen_ids.json` 去重，重复跑不会产生重复条目。任一源失败就在日报末尾附一行说明哪个源失败、失败原因（放在正文之后，不干扰阅读），其余源照常处理。
 
 ### 第 2 步：jev 价值判定（仅当第 1 步产出了新推文）
 
@@ -72,9 +71,11 @@ python3 "$HOME/.local/share/hermes/scripts/twitter-digest/digest_build.py" build
 3. **不要互动数、不要作者前缀、不要原帖链接**。只保留具体信息：产品名、版本号、参数、价格、日期、跑分、许可变化。参考格式见下。
 
    正例（来自用户认可的 AI 早报）：
+
    > 小米 MiMo 正式发布并开源 MiMo-V2.6，包括 Pro 和 Flash 两个原生全模态模型，Pro 为 1.02T 总参、42 B 激活，Flash 为 309 B 总参、15 B 激活，均支持 1M Token 上下文。官方称 Flash 和 Pro 在不到 6 天内分别投入约 85 万美元和 262 万美元完成 30 步 RL 训练，任务平均通过率分别提升约 25% 和 12%。API 价格沿用 V2.5，旧版 mimo-v2.5 将于 2026 年 10 月 21 日下线。
 
    注意这段的写法：一条连续的事实陈述，数字全部保留，没有"值得关注"这类评价，没有 ♥ 和 🔁。
+
 4. **聚合同类项，同一事件只出一条**。同一条新闻被多个账号转发或跟进时，合并为一条，正文取信息最全的那版，可注明"另有 @A、@B 跟进"。转发（🔁 标记）若无新增信息，直接并入原帖。
 5. **同一事件的不同侧面也要合并**。官宣、官方说明、评测、实测、体验、吐槽说的如果是同一件事，合成一条：先写事件本身（什么、何时、关键参数），再补各方提供的新增信息（实测数据、官方口径、用户反馈），标注信息来自谁。反面例子：Opus 5.5 发布日如果出现"官宣上线""官方称来自用户反馈""某人每日使用体验"三条，必须是**一条**带三个侧面的条目，不是三条。判断标准是"读者是否会觉得在读同一条新闻的重复"。
 6. **开头加「要闻」**：一行一条，只写发生了什么，带编号。这是给读者 30 秒看完用的。合并后的大事件排在要闻最前面。

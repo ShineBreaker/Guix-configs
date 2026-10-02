@@ -1,6 +1,6 @@
 # 系统级用户态配置
 
-本目录通过 Guix Home 部署到 `~/.config/`，专注系统底层相关的用户态配置（容器策略、PipeWire 音频服务、XDG 用户目录等），与桌面视觉主题解耦。
+本目录部署到 `~/.config/`，覆盖容器策略、mihomo 代理、PipeWire/WirePlumber 音频与 XDG 用户目录。
 
 ## 目录结构
 
@@ -21,16 +21,17 @@ system/
 
 <!-- /structor -->
 
-## 关键约定与机制
+## 关键约定
 
-- **PipeWire / WirePlumber**：配置碎片分别放置于 `pipewire.conf.d/` 与 `wireplumber.conf.d/`（Lua 脚本在 `wireplumber/scripts/`），按字母字典序加载。
-- **Containers**：`containers/policy.json` 声明镜像拉取时的签名验证策略与安全规则。
-- **XDG 用户目录**：`user-dirs.dirs` 与 `user-dirs.locale` 声明用户标准目录（下载、文档、音乐等），由 `xdg-user-dirs` 读取。
-- **mihomo**：`config.yaml` 是模板而非生效配置。`mihomo-run` 启动包装（见 `config.org`）先解密 `mihomo-subscriptions.age`，再把 `$MIHOMO_SUB_ONE/TWO` 占位符经 envsubst 渲染到 `/var/lib/mihomo/config.yaml`。改模板：`blue home` + `sudo herd restart mihomo-daemon`；换订阅：`secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"`（或 `secrets edit`）+ 重启服务。
+- **碎片按文件名排序加载**：PipeWire 与 WirePlumber 分别用 `pipewire.conf.d/`、`wireplumber.conf.d/`（Lua 脚本在 `wireplumber/scripts/`），文件名即加载顺序。
+- **Containers**：`containers/policy.json` 决定镜像拉取的签名验证策略。
+- **mihomo 模板链**：`config.yaml` 是模板不是生效配置。`mihomo-run`（`source/config.org` 内嵌脚本）被 shepherd 的 `mihomo-daemon` 调用，先解密 `mihomo-subscriptions.age`，再把 `$MIHOMO_SUB_ONE` / `$MIHOMO_SUB_TWO` 经 envsubst 渲染到 `/var/lib/mihomo/config.yaml` 才 exec mihomo（解密失败降级为空订阅直连，不会反复 respawn）。因此直接改 `/var/lib/mihomo/config.yaml` 会被下次渲染覆盖，换订阅只走 `secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"`（或 `secrets edit`）。
+- **XDG 用户目录**：`user-dirs.dirs` 与 `user-dirs.locale` 由 `xdg-user-dirs` 读取。
 
-## 修改与生效流程
+## 修改与生效
 
-1. 修改仓库源码后，运行 `blue home` 完成部署。
-2. **音频服务重启**：修改 PipeWire/WirePlumber 配置后，运行 `herd restart pipewire` 重启服务。
-3. **用户目录更新**：修改 `user-dirs` 变更后，运行 `xdg-user-dirs-update` 或重新登录会话。
-4. **mihomo 生效**：模板改动在 `herd restart mihomo-daemon`（重新渲染）后才生效。
+- **通用**：改源后须 `blue home` 重建（部署进 Store 只读副本）。
+- **音频**：改 `pipewire.conf.d/` 或 `wireplumber.conf.d/` 后 `herd restart pipewire`。
+- **mihomo**：模板改动须 `blue home` 部署后 `sudo herd restart mihomo-daemon` 才会重新渲染；只换订阅则重启 daemon 即可。
+- **用户目录**：改 `user-dirs.dirs` 后跑 `xdg-user-dirs-update` 或重新登录会话。
+- **containers**：`policy.json` 只作用于后续镜像拉取，随部署生效，不必重启容器。

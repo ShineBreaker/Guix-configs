@@ -144,7 +144,7 @@
 ;;; --- §3 括号平衡检查 ---
 ;; 手写词法扫描而非 guix read：config.org 的块含读取器宏（unquote 等），
 ;; read 报错定位差。已知限制：字符串未闭合不会单独报错（emergency-blue
-;; 的 awk 移植版额外覆盖，见 docs/emergency-blue.md §7）。
+;; 的 awk 移植版额外覆盖，见 docs/emergency-blue.md §关键约束）。
 
 ;; 返回 #(paren-open paren-close bracket-open bracket-close mismatch?)；
 ;; 栈记录开括号类型，闭括号须与栈顶同类（[ 配 ) 算错）。
@@ -947,7 +947,7 @@
 ;; （commit 非 #f 时 pin 到该 commit），其余用 channel.lock 的锁定版本。
 ;; 必须走 guix repl 子进程：blue 的 Guile 环境缺 (guix openpgp) 等模块，
 ;; 展开 openpgp-fingerprint 宏会报 unbound variable（契约见
-;; docs/scripts/gen-partial.md）。
+;; docs/scripts/blue-helpers.md §gen-partial.scm）。
 (define (%partial-channels-file target commit)
   (let ([out (string-append %tmp-dir "/update-channels.scm")])
     (if (dry-build?)
@@ -1104,7 +1104,7 @@
   ((invoke "gc")
    (category 'maintenance)
    (synopsis "删除旧世代、执行 Guix GC 并清理旧 Guix EFI 文件")
-   (help "依次删除旧 system/home 世代、执行 guix gc 并删除 /boot/EFI/Guix/OLD-*.EFI。删除 system 世代与 EFI 文件需要 sudo。"))
+   (help "依次删除旧 system/home 世代、执行 guix gc 并删除 /efi/EFI/Guix/OLD-*.EFI。删除 system 世代与 EFI 文件需要 sudo。"))
   (%clean-generations)
   (%run '("guix" "gc"))
   ;; %run 经 popen 直 exec、无 shell 展开，OLD-*.EFI 须在 Guile 侧收集后
@@ -1130,26 +1130,28 @@
           "--year" ,(strftime "%Y" (localtime (time-second (current-time))))
           ".")))
 
-;; 委派 tools/doc-punct.py（规则见 docs/scripts/doc-punct.md）；
-;; --dry-run 透传 --check 只报告不写盘。
+;; 委派 tools/doc-format.sh（编排规则见 docs/scripts/doc-format.md）：
+;; 先 doc-punct.py 规范标点，再 prettier 统一 Markdown 结构。
 (define-command (format-command arguments)
   ((invoke "format")
    (category 'maintenance)
-   (synopsis "规范化仓库文档的中文标点与排版")
-   (help "[FILE...]
-按中文技术文档写作规范（zh-tech-doc-style-guide）机械修正文档标点与排版：
-半角标点转全角、中英文之间补空格、省略号与破折号排版、全角数字转半角、
-数值与单位之间补空格。
+   (synopsis "规范化仓库文档的中文标点与 Markdown 排版")
+   (help "按仓库文档规范跑两级格式化：
 
-不带 FILE 时递归处理 git 可见的所有 .md / .org（排除 vendored 子模块与
-agent skills）。代码块、行内代码、URL、org 链接与等宽、表格行一律原样保留。
+1. doc-punct.py 规范中文标点与中英间距（规则见 docs/scripts/doc-punct.md）；
+2. prettier 统一 Markdown 结构——表格列宽、列表缩进、末尾换行。
+
+正文不做折行：仓库规范禁止把段落按固定列宽切断，.prettierrc.json 的
+proseWrap=preserve 即为此设；文档内嵌的代码块也不重排，示例的写法归作者。
+
+不带 FILE 时经 doc-punct.py --list 取仓库自有文档清单（排除 vendored
+子模块与 agent skills）。.org 只跑标点一级，prettier 不认 org。
 
   blue format                处理全部文档
   blue format source/README  只处理指定文件
-  blue --dry-run format      只报告不写入（等价脚本 --check）"))
-  (%run `("python3" ,(string-append %tools-dir "/doc-punct.py")
-          ,@(if (dry-build?) '("--check") '())
-          ,@arguments)))
+  blue --dry-run format      仅预演打印，不执行脚本
+  blue format --check        只报告待处理项，有改动退出 1"))
+  (%run `("bash" ,(string-append %tools-dir "/doc-format.sh") ,@arguments)))
 
 ;; 深度优先级：标记内 `depth=N' > ORG_STRUCTOR_DEPTH > 默认 4；
 ;; ORG_STRUCTOR_DRY=1 预览。

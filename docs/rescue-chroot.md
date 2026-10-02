@@ -18,11 +18,11 @@
 
 依赖工具（先把网络配好，后面 reconfigure 下载 substitutes 要用）：
 
-| 工具 | Arch | Debian / Ubuntu |
-| --- | --- | --- |
-| `cryptsetup` | `pacman -S cryptsetup` | `apt install cryptsetup` |
-| `mount.btrfs` | `pacman -S btrfs-progs` | `apt install btrfs-progs` |
-| `findmnt` / `mount` / `umount` | util-linux（自带） | util-linux（自带） |
+| 工具                           | Arch                    | Debian / Ubuntu           |
+| ------------------------------ | ----------------------- | ------------------------- |
+| `cryptsetup`                   | `pacman -S cryptsetup`  | `apt install cryptsetup`  |
+| `mount.btrfs`                  | `pacman -S btrfs-progs` | `apt install btrfs-progs` |
+| `findmnt` / `mount` / `umount` | util-linux（自带）      | util-linux（自带）        |
 
 ## 操作
 
@@ -32,35 +32,35 @@
 
 分区层（本机实测）：
 
-| 分区 | UUID | 内容 |
-| --- | --- | --- |
-| `/dev/nvme0n1p1` | `9699-52A2`（vfat 短 UUID，label `SYSTEM`） | ESP。Limine 本体 + 全部 UKI 启动项 |
-| `/dev/nvme0n1p2` | `327f2e02-1e4f-48b2-87f0-797c481850c9` | LUKS2，解锁后叫 `/dev/mapper/root`，内含整个 Btrfs（label `Linux`） |
-| `/dev/nvme0n1p3` | `169557cc-00a4-448c-9bb6-7bd80fc2b023` | 明文 swap（休眠镜像住这，内核参数 `resume=UUID=169557cc-…`） |
+| 分区             | UUID                                        | 内容                                                                |
+| ---------------- | ------------------------------------------- | ------------------------------------------------------------------- |
+| `/dev/nvme0n1p1` | `9699-52A2`（vfat 短 UUID，label `SYSTEM`） | ESP。Limine 本体 + 全部 UKI 启动项                                  |
+| `/dev/nvme0n1p2` | `327f2e02-1e4f-48b2-87f0-797c481850c9`      | LUKS2，解锁后叫 `/dev/mapper/root`，内含整个 Btrfs（label `Linux`） |
+| `/dev/nvme0n1p3` | `169557cc-00a4-448c-9bb6-7bd80fc2b023`      | 明文 swap（休眠镜像住这，内核参数 `resume=UUID=169557cc-…`）        |
 
 Btrfs 子卷 → 挂载点（label `Linux`；表内 18 条系统挂载 + 独立的 `/data`）：
 
-| 子卷 | 挂载点 | 救援时 |
-| --- | --- | --- |
-| `SYSTEM/Guix/@gnu` | `/gnu` | **必挂**（store，一切的前提） |
-| `SYSTEM/Guix/@persist/guix` | `/var/guix` | **必挂**（system 代链、daemon 数据库都在这） |
-| `SYSTEM/Guix/@boot` | `/boot` | **必挂**（reconfigure 重装引导用；ESP 独立在外面） |
-| `SYSTEM/Guix/@data` | `/var/lib` | 建议（machines / services 状态） |
-| `DATA/Share` | `/data` | **必挂**（配置仓库在 `/data/Projects/Config/Guix-configs`） |
-| `DATA/Home/Guix` | `/home` | 建议（blue 入口在 `~/.local/bin`、`.guix-home`）；脚本有意不挂它 |
-| `SYSTEM/Guix/@persist/log` | `/var/log` | 建议（救日志时需要） |
-| `SYSTEM/Guix/@etc/guix` | `/etc/guix` | 建议（guix ACL / 配置持久层） |
-| `SYSTEM/Guix/@etc/NetworkManager` | `/etc/NetworkManager` | 建议（WiFi 配置住这） |
-| `SYSTEM/Guix/@etc/ssh` | `/etc/ssh` | 建议（host key 住这） |
-| `DATA/Flatpak` | `/var/lib/flatpak` | 可选 |
-| `DATA/LibVirt` | `/var/lib/libvirt` | 可选 |
-| `SYSTEM/Guix/@etc/libvirt` | `/etc/libvirt` | 可选 |
-| `SYSTEM/Guix/@persist/cache/root` | `/root/.cache` | 可选 |
-| `SYSTEM/Guix/@persist/cache/var` | `/var/cache` | 可选 |
-| `SYSTEM/Guix/@persist/db` | `/var/db` | 可选 |
-| `SYSTEM/Guix/@persist/tmp` | `/var/tmp` | 可选 |
-| `SYSTEM/Guix/@tmp` | `/tmp` | 可选（系统配置里它才是唯一非开机挂载） |
-| `SYSTEM/Guix/@nix` | `/nix` | 可选；已在 `information.scm` 里注释掉，脚本不会挂 |
+| 子卷                              | 挂载点                | 救援时                                                           |
+| --------------------------------- | --------------------- | ---------------------------------------------------------------- |
+| `SYSTEM/Guix/@gnu`                | `/gnu`                | **必挂**（store，一切的前提）                                    |
+| `SYSTEM/Guix/@persist/guix`       | `/var/guix`           | **必挂**（system 代链、daemon 数据库都在这）                     |
+| `SYSTEM/Guix/@boot`               | `/boot`               | **必挂**（reconfigure 重装引导用；ESP 独立在外面）               |
+| `SYSTEM/Guix/@data`               | `/var/lib`            | 建议（machines / services 状态）                                 |
+| `DATA/Share`                      | `/data`               | **必挂**（配置仓库在 `/data/Projects/Config/Guix-configs`）      |
+| `DATA/Home/Guix`                  | `/home`               | 建议（blue 入口在 `~/.local/bin`、`.guix-home`）；脚本有意不挂它 |
+| `SYSTEM/Guix/@persist/log`        | `/var/log`            | 建议（救日志时需要）                                             |
+| `SYSTEM/Guix/@etc/guix`           | `/etc/guix`           | 建议（guix ACL / 配置持久层）                                    |
+| `SYSTEM/Guix/@etc/NetworkManager` | `/etc/NetworkManager` | 建议（WiFi 配置住这）                                            |
+| `SYSTEM/Guix/@etc/ssh`            | `/etc/ssh`            | 建议（host key 住这）                                            |
+| `DATA/Flatpak`                    | `/var/lib/flatpak`    | 可选                                                             |
+| `DATA/LibVirt`                    | `/var/lib/libvirt`    | 可选                                                             |
+| `SYSTEM/Guix/@etc/libvirt`        | `/etc/libvirt`        | 可选                                                             |
+| `SYSTEM/Guix/@persist/cache/root` | `/root/.cache`        | 可选                                                             |
+| `SYSTEM/Guix/@persist/cache/var`  | `/var/cache`          | 可选                                                             |
+| `SYSTEM/Guix/@persist/db`         | `/var/db`             | 可选                                                             |
+| `SYSTEM/Guix/@persist/tmp`        | `/var/tmp`            | 可选                                                             |
+| `SYSTEM/Guix/@tmp`                | `/tmp`                | 可选（系统配置里它才是唯一非开机挂载）                           |
+| `SYSTEM/Guix/@nix`                | `/nix`                | 可选；已在 `information.scm` 里注释掉，脚本不会挂                |
 
 其他运行时挂载（救援时**不需要**复刻）：`/` 与 `/var/lock` 是 tmpfs；`/gnu/store` 以只读 bind 叠在 `/gnu` 上；`/home/<user>/<目录>` 是从 `/data/<目录>` 来的一堆 bind（`%data-dirs`）。
 
@@ -239,14 +239,14 @@ sudo tools/rescue-chroot.sh umount /mnt --go  # 逆序卸载并关 LUKS
 
 ## 排障
 
-| 场景 | 处理 |
-| --- | --- |
-| 配置改崩起不来 | 走完第 2-6 步进 chroot → 进 `/data/Projects/Config/Guix-configs` → `git diff` 看上次改动 → `blue rebuild` 或临时 `git revert`。来不及改：Limine 菜单选旧代先进系统，回系统里再修 |
-| Limine / UKI 坏 | 三板斧：手编 `limine.conf` → 从 store 拷回 `BOOTX64.EFI` → reconfigure 全量重写 |
-| `/gnu` 损坏（最后一招） | 先试无损手段：live 环境 `btrfs scrub start -B /dev/mapper/root`（单设备无冗余，scrub 只能**发现**坏块不能修复）；`/var/guix` 坏了可对照 `ls /var/guix/profiles/` 重建符号链。真到 store 大面积损坏：官方 Guix ISO（或本仓库 `blue build-iso` 的自建 ISO，见 [iso-build.md](iso-build.md)）启动 → 解密挂载同上 → `guix system init /data/Projects/Config/Guix-configs/tmp/config.scm /mnt` 重建系统（存量 store 条目会复用）→ 全新安装路线见 `tools/bootstrap.sh` 与 `README.org` |
-| umount 报 target busy | `fuser -vm $MNT` 或 `lsof +D $MNT`，多半是有 shell 还在 chroot 里 |
-| `mount: /mnt/xxx: wrong fs type` | live 环境缺 `mount.btrfs`（装 btrfs-progs） |
-| 脚本拒绝执行 | 检测到当前就是运行中的 Guix 主机；确认要冒险再 `--force` |
+| 场景                             | 处理                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 配置改崩起不来                   | 走完第 2-6 步进 chroot → 进 `/data/Projects/Config/Guix-configs` → `git diff` 看上次改动 → `blue rebuild` 或临时 `git revert`。来不及改：Limine 菜单选旧代先进系统，回系统里再修                                                                                                                                                                                                                                                                                                 |
+| Limine / UKI 坏                  | 三板斧：手编 `limine.conf` → 从 store 拷回 `BOOTX64.EFI` → reconfigure 全量重写                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `/gnu` 损坏（最后一招）          | 先试无损手段：live 环境 `btrfs scrub start -B /dev/mapper/root`（单设备无冗余，scrub 只能**发现**坏块不能修复）；`/var/guix` 坏了可对照 `ls /var/guix/profiles/` 重建符号链。真到 store 大面积损坏：官方 Guix ISO（或本仓库 `blue build-iso` 的自建 ISO，见 [iso-build.md](iso-build.md)）启动 → 解密挂载同上 → `guix system init /data/Projects/Config/Guix-configs/tmp/config.scm /mnt` 重建系统（存量 store 条目会复用）→ 全新安装路线见 `tools/bootstrap.sh` 与 `README.org` |
+| umount 报 target busy            | `fuser -vm $MNT` 或 `lsof +D $MNT`，多半是有 shell 还在 chroot 里                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `mount: /mnt/xxx: wrong fs type` | live 环境缺 `mount.btrfs`（装 btrfs-progs）                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 脚本拒绝执行                     | 检测到当前就是运行中的 Guix 主机；确认要冒险再 `--force`                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 **LUKS header 损坏**（预防 + 抢救）：header 坏 = 整盘数据不可见。预防**现在就该做**——在正常系统里把 header 备份到 /data 之外的离线介质（如 U 盘）：
 

@@ -2,14 +2,14 @@
 
 [中文文档](./README_CN.md)
 
-Assisted-by commit trailer enforcement for ZCode sessions, implementing the trailer format defined in `~/.config/git/gitmessage`: `Assisted-by: <AGENT_NAME>:<MODEL_VERSION> [TOOL1] [TOOL2]`.
+AI-attributed commit trailer enforcement for ZCode sessions. The plugin name is historical: the trailer it actually enforces is `Co-authored-by`, whose format (`Co-authored-by: <AGENT> (<MODEL>) <EMAIL>`) comes from the commit conventions in `~/.config/agents/context/domains/coding.md` — `~/.config/git/gitmessage` only defines the commit-type list.
 
 Two layers, deliberately independent of any knowledge-base/agent integration:
 
-| Layer | Mechanism | Guarantee |
-| --- | --- | --- |
-| Reminder | `PreToolUse(Bash)` hook — on `git commit`, injects a reminder to append a full trailer with the model's name and version | Full attribution, but relies on model compliance |
-| Fallback | `git-hooks/prepare-commit-msg` installed as a global git hook — appends `Assisted-by: zcode` only when the message lacks a trailer | Agent name even when the model forgets |
+| Layer    | Mechanism                                                                                                                    | Guarantee                                        |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Reminder | `PreToolUse(Bash)` hook — on `git commit`, injects a reminder to append a full trailer carrying the model's name and version | Full attribution, but relies on model compliance |
+| Fallback | `git-hooks/prepare-commit-msg` installed as a global git hook — appends `Co-authored-by: ZCode <noreply@z.ai>`               | Agent name even when the model forgets           |
 
 ## Plugin install
 
@@ -18,10 +18,7 @@ Point `plugins.dirs` in `~/.zcode/cli/config.json` at this plugin root (each ent
 ```json
 {
   "plugins": {
-    "dirs": [
-      "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/agenote-zcode",
-      "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/assisted-by-zcode"
-    ]
+    "dirs": ["/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/agenote-zcode", "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/plugins/assisted-by-zcode"]
   }
 }
 ```
@@ -47,8 +44,8 @@ The forwarder executes `<repo>/.git/hooks/<same-name>` when it exists and is exe
 
 - Runs only when `ZCODE_APP_VERSION` is set (i.e. inside a ZCode Bash session); manual terminals are untouched.
 - Covers plain commit paths only (`$2` empty / `message` / `template`); merge, squash and amend are left alone.
-- Appends `Assisted-by: zcode` only when no `^Assisted-by:` line exists — the full trailer written by the model is preserved.
+- Skips only when the message already carries a `Co-authored-by:` line naming zcode, so the full trailer the model wrote is preserved. Other agents' trailers do not count — this session's line is appended alongside them.
 
 ## Scope note
 
-The fallback detects ZCode sessions via `ZCODE_APP_VERSION` only. Making it cover other AI agents (pi, crush, …) means generalizing the env detection and moving the asset out of this ZCode plugin into the dotfiles git configuration area — a deliberate future step, not done here.
+The fallback detects ZCode sessions via `ZCODE_APP_VERSION` only. Since `Co-authored-by` is the shared convention for every agent, making the fallback cover pi, crush, … means generalizing the env detection and moving the asset out of this ZCode plugin into the dotfiles git configuration area — a deliberate future step, not done here.

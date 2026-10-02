@@ -27,10 +27,10 @@ CLI 缺失时交互终端先问一句（`[y/N]`，拒绝则退出码 130），�
 
 ## 排障
 
-| 现象 | 原因 | 处理 |
-| --- | --- | --- |
-| 安装输出 `Ignored build scripts: ...` | pnpm 12 默认拦 build scripts | 名单抄进 `pnpm-workspace.yaml` 的 `allowBuilds` 后 `mcode --install` |
-| 开会话报 SQLite binding 缺失 | 绑定没建成（build 被拦或 ABI 不匹配） | `mcode --install` 重装；postinstall 会给 ABI/glibc 诊断 |
-| postinstall 报 Unsupported Node.js | node 不在 `>=22.19 <23 \|\| >=24 <27` | 换 node |
-| 仓库 manifest / lockfile 不回源 | 只在部署侧裸跑过 pnpm | 跑 `mcode --install` 或任意 `mcode` 命令触发回源 |
-| `mcode update` 后行为异常 | 上游自更新不过本 wrapper | 以仓库源为真源：手动改 `package.json` + `--install`，核对 `mcode --version` |
+| 现象                                  | 原因                                  | 处理                                                                        |
+| ------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
+| 安装输出 `Ignored build scripts: ...` | pnpm 12 默认拦 build scripts          | 名单抄进 `pnpm-workspace.yaml` 的 `allowBuilds` 后 `mcode --install`        |
+| 开会话报 SQLite binding 缺失          | 绑定没建成（build 被拦或 ABI 不匹配） | `mcode --install` 重装；postinstall 会给 ABI/glibc 诊断                     |
+| postinstall 报 Unsupported Node.js    | node 不在 `>=22.19 <23 \|\| >=24 <27` | 换 node                                                                     |
+| 仓库 manifest / lockfile 不回源       | 只在部署侧裸跑过 pnpm                 | 跑 `mcode --install` 或任意 `mcode` 命令触发回源                            |
+| `mcode update` 后行为异常             | 上游自更新不过本 wrapper              | 以仓库源为真源：手动改 `package.json` + `--install`，核对 `mcode --version` |

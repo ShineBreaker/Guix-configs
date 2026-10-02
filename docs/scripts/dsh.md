@@ -9,11 +9,11 @@ wrapper 只做三件事：注入 `DSH_HOME`/`AGENTS_ROOT`、按首参分发三�
 
 ## 布局
 
-| 路径 | 说明 |
-| --- | --- |
+| 路径                                                   | 说明                                                                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | `$AGENTS_ROOT/dsh`（默认 `~/.local/share/agents/dsh`） | CLI 本体安装树，源托管 `package.json`、`pnpm-workspace.yaml` 与 lockfile 副本，`node_modules` 是部署侧运行时产物 |
-| `$DSH_HOME`（默认 `~/.local/share/dsh`） | 配置与运行时状态：`profiles/`（web、dsh-tui）、`sessions/`、`.credentials.yaml` |
-| `libexec/dsh-web`、`dsh-update`、`dsh-tui` | 三个增强子命令实体，`exec` 分发不残留在进程树上 |
+| `$DSH_HOME`（默认 `~/.local/share/dsh`）               | 配置与运行时状态：`profiles/`（web、dsh-tui）、`sessions/`、`.credentials.yaml`                                  |
+| `libexec/dsh-web`、`dsh-update`、`dsh-tui`             | 三个增强子命令实体，`exec` 分发不残留在进程树上                                                                  |
 
 `DSH_HOME` 与 `AGENTS_ROOT` 由 wrapper 注入——niri 会话不经 fish `conf.d`，桌面入口拿不到 export。安装根与配置根分层：`DSH_HOME` 不放 CLI 本体。
 
@@ -41,13 +41,13 @@ dsh web --remote-url   # 只打印手机首次握手的 https://<尾网主机名
 dsh web --lan-off      # 本次不带 --trusted-host（`DSH_TS_HOST=` 的显式等价）
 ```
 
-| 环境变量 | 默认 | 说明 |
-| --- | --- | --- |
-| `DSH_WEB_PORT` | `3080` | 监听端口，cookie 的 authority 随之变 |
-| `DSH_WEB_LOG` | `$XDG_STATE_HOME/dsh/web.log` | 服务 stdout，含一次性 token URL 与 launch token 行 |
-| `DSH_BIN` | `$AGENTS_ROOT/dsh/node_modules/.bin/dsh` | 起服务的 CLI 本体，**必须指本体** |
-| `DSH_TS_HOST` | 尾网主机名 | 空串关闭远程信任 |
-| `DSH_HOME` | `~/.local/share/dsh` | 同 wrapper |
+| 环境变量       | 默认                                     | 说明                                               |
+| -------------- | ---------------------------------------- | -------------------------------------------------- |
+| `DSH_WEB_PORT` | `3080`                                   | 监听端口，cookie 的 authority 随之变               |
+| `DSH_WEB_LOG`  | `$XDG_STATE_HOME/dsh/web.log`            | 服务 stdout，含一次性 token URL 与 launch token 行 |
+| `DSH_BIN`      | `$AGENTS_ROOT/dsh/node_modules/.bin/dsh` | 起服务的 CLI 本体，**必须指本体**                  |
+| `DSH_TS_HOST`  | 尾网主机名                               | 空串关闭远程信任                                   |
+| `DSH_HOME`     | `~/.local/share/dsh`                     | 同 wrapper                                         |
 
 - **`DSH_BIN` 默认必须指 CLI 本体**：公共入口会把 `web` 分发回本脚本，指公共入口即递归；测试覆盖时同理。
 - **实例永远带 `--trusted-host` 启动**：远程流量经 tailscale serve 反代进 loopback，Host 头是尾网主机名，非 loopback 请求必须命中该白名单；`DSH_TS_HOST=` 空串即关闭。已在监听但不带该参数的实例会被自动重启（判据是 `/proc/<pid>/cmdline` 里含 `--trusted-host <host>`）。
@@ -93,14 +93,14 @@ dsh tui [args...]   # 直 exec profile 内的完整 launcher
 
 ## 排障
 
-| 现象 | 原因 | 处理 |
-| --- | --- | --- |
-| 窗口打开要求重新登录 | token 已被消耗或换了设备 | `dsh web --reauth` |
-| 手机连上但 API 报 403 | 实例没带 `--trusted-host` | 跑一次 `dsh web` 自动重启修复；查 `DSH_TS_HOST` |
-| 窗口 app_id 与桌面图标不匹配 | profile 目录名与 `StartupWMClass` 不成对 | 保持 `--profile-directory=dsh` 与 desktop 文件两处同步 |
-| 改完 `package.json` 部署侧不生效 | stow 软链被原子写断 | 下次 `dsh` 调用自动归源重建；或 `ls -la ~/.local/share/dsh/profiles/web/` 抽查 |
-| `dsh tui` 报 127 | profile 内 launcher 副本缺失 | `dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>` |
-| TUI 整条消失（dump-config 条目骤减） | `compatibility.json` 被删 | 恢复该文件（见 `agents/dsh/AGENTS.md`） |
+| 现象                                 | 原因                                     | 处理                                                                           |
+| ------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| 窗口打开要求重新登录                 | token 已被消耗或换了设备                 | `dsh web --reauth`                                                             |
+| 手机连上但 API 报 403                | 实例没带 `--trusted-host`                | 跑一次 `dsh web` 自动重启修复；查 `DSH_TS_HOST`                                |
+| 窗口 app_id 与桌面图标不匹配         | profile 目录名与 `StartupWMClass` 不成对 | 保持 `--profile-directory=dsh` 与 desktop 文件两处同步                         |
+| 改完 `package.json` 部署侧不生效     | stow 软链被原子写断                      | 下次 `dsh` 调用自动归源重建；或 `ls -la ~/.local/share/dsh/profiles/web/` 抽查 |
+| `dsh tui` 报 127                     | profile 内 launcher 副本缺失             | `dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>`        |
+| TUI 整条消失（dump-config 条目骤减） | `compatibility.json` 被删                | 恢复该文件（见 `agents/dsh/AGENTS.md`）                                        |
 
 ## 变更
 

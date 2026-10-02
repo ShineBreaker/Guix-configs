@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# git-resign — 重签名 base..HEAD 全部提交；见 docs/scripts/git-resign.md
+# git-resign — 重签名 base..HEAD 全部提交；见 docs/scripts/fish-functions.md §git-resign
 
 function git-resign -d "重签名 <base-ref>..HEAD 的所有提交"
     if test (count $argv) -ne 1

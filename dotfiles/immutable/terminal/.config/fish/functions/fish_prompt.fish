@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# fish_prompt — 提示符；设计见 docs/scripts/fish-prompt.md
+# fish_prompt — 提示符；设计见 docs/scripts/fish-functions.md §提示符
 
 function fish_prompt --description 'Informative prompt'
     set -l last_pipestatus $pipestatus

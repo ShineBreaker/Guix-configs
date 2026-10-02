@@ -435,6 +435,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
               <<essential-desktop-services>>
               <<kanata-services>>
               <<hermes-services>>
+              <<quicktui-services>>
               <<cpu-dma-latency-service>>
               <<timer-services>>
               <<kb-backup-services>>
@@ -442,6 +443,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
               <<fish-services>>
               <<dotfile-services>>
               <<home-files-services>>
+              <<gnupg-home-services>>
               <<environment-variable-services>>
               <<font-services>>
               %base-home-services))))
@@ -2586,7 +2588,7 @@ niri + =xwayland-satellite= 组合下 X11 与 Wayland 的 =CLIPBOARD= 两个方�
 4. **所有子进程包 =timeout=**：对端进程死亡时 =xclip= 的 INCR 传输会挂死，不设超时会拖死整个线程。
 5. **事件后 =30ms= 去抖再读**：所有权生效与数据可读之间存在时序差。
 
-Guile 陷阱： =sleep= 只收精确整数（用 =usleep= ）；标准库 =gettimeofday= 返回点对 =(sec . usec)= ，不能 =cadr= 。与 cliphist 天然兼容： QQ 的复制经桥接进入 Wayland 剪切板后，由 niri 启动项 =wl-paste --watch cliphist store= 收进历史。
+Guile 陷阱： =sleep= 只收精确整数（用 =usleep= ）；标准库 =gettimeofday= 返回点对 =(sec . usec)= ，不能 =cadr= 。与 cliphist 天然兼容：QQ 的复制经桥接进入 Wayland 剪切板后，由 niri 启动项 =wl-paste --watch cliphist store= 收进历史。
 
 #+NAME: clipsync
 #+CAPTION: X11 与 Wayland CLIPBOARD 双向同步守护
@@ -2864,6 +2866,25 @@ Guile 陷阱： =sleep= 只收精确整数（用 =usleep= ）；标准库 =getti
                                #:environment-variables hermes-env)))))
 #+end_src
 
+**** QuickTUI 远程终端
+QuickTUI 是手机/网页远程接入本机 tmux 会话的终端服务：~quicktui-server~ 起 HTTP + WebSocket（默认监听 =0.0.0.0:8022= ），设备配对后即可 attach 本机 tmux 默认 socket 上的会话；AgentBridge2 另把 claude / codex / opencode / pi 等 agent 宿主的事件转发到同一入口。二进制是上游 Rust 单文件发行，手动下载到 =~/.local/bin/quicktui-server= 并做 sha256 + minisign 双验签（步骤与升级见 [quicktui.md]）；它刻意不进 Guix profile——要 attach 的是本机 tmux 默认 socket（=/tmp/tmux-1000/default=）与 =~/.config/quicktui-server-v2/= 下的配置，store 只读副本拿不到这些运行时状态。
+
+上游安装器在本机不可用：它只注册 systemd 用户服务（=systemctl --user= ），而本机是 Shepherd 初始系统，没有 systemd。因此按 hermes 同一范式由 =~home-daemon-service~ 常驻，日志落 =$XDG_STATE_HOME/shepherd/quicktui.log= 。=~serve~ 子命令不带 =--no-service= ，把进程形态完全交给 shepherd。
+
+#+NAME: quicktui-services
+#+begin_src scheme
+;; 注意：`#~` 让 HOME 在服务启动时（用户会话）求值；去掉 `#~` 会在配置求值时（可能以 root 重建）取到 /root 并烘焙进服务闭包。
+(list (simple-service 'quicktui-services home-shepherd-service-type
+                      (list (home-daemon-service
+                             'quicktui
+                             (list #~(string-append (getenv "HOME")
+                                                    "/.local/bin/quicktui-server")
+                                   "serve")
+                             #:requirement '(graphical-session)
+                             #:documentation
+                             "QuickTUI remote terminal (tmux over WebSocket, device pairing)."))))
+#+end_src
+
 **** cpu-dma-latency
 按需持有 =/dev/cpu_dma_latency= （audio 组可写）压浅 C-state 消唤醒抖动；默认不自启（待机功耗代价），需要时 ~herd start/stop cpu-dma-latency~ 。
 
@@ -3062,6 +3083,55 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
                                                  "yq"
                                                  "zig"
                                                  "zig-zls"))))))
+#+end_src
+
+**** GNUPG homedir 权限与残留锁
+GnuPG 要求 GNUPGHOME（=~/.local/share/gnupg= ）权限为 700，但本机这个目录是由 Guix Home 的 symlink-manager 用 *不带模式参数* 的 =mkdir= 建出来的（=(mkdir target)= ，受 umask 支配，默认 755），gpg 每次运行都只能警告「家目录权限位不安全」——它自己补建 700 的分支永远走不到。
+
+更要命的是 dotlock 锁残留。GnuPG 的 =common/dotlock.c= 把锁文件正文写成「pid + =uname().nodename=」，而判定 stale 的前提（=read_lockfile= 里的 =same_node=）是 *锁里记录的主机名与当前主机一致*。因此换机、改主机名、把家目录迁移到新装系统之后，旧主机留下的 =public-keys.d/pubring.db.lock= 会被 GnuPG 当作「仍被外节点持有」，=gpg --list-keys= 与 git 签名全部先等满 10 秒再报连接超时——这类锁在本机没有任何进程持有（本机进程写的都是当前主机名），GnuPG 自己永远不收，只能由人或下面的脚本删。
+
+下面这块服务在每次 home activation 时做两件事，幂等且与执行顺序无关：
++ 家目录不存在就自建、存在就收敛到 700；自己先 =mkdir -p= + =chmod= ，这样即使排在 symlink-manager 之前也不会漏（symlink-manager 遇 EEXIST 会保留既有模式）；
++ 删除「锁文件第二行记录的主机名 ≠ =uname -n= 」的 dotlock 残留（=*.lock= 与 =.#lk*= 临时锁名），内容不是该格式的一律不碰。
+
++ 前提：家目录不跨主机共享（NFS / 同时挂到两台机器）。本机 =/home= 在根文件系统上、单用户使用，故按主机名判定是安全的；真要在多主机间共享同一个 GNUPGHOME，这段清理必须关掉。
++ 手动排障：=blue build= 后执行 =sh tmp/gnupg-home-fixup= （默认作用于当前 =$GNUPGHOME= ，可用 =GNUPGHOME=<路径>= 覆盖）。
+
+#+NAME: gnupg-home-fixup-script
+#+CAPTION: home activation 时收敛 GNUPGHOME 权限并清除外主机遗留的 dotlock 锁
+#+begin_src sh :tangle ../tmp/gnupg-home-fixup
+#!/bin/sh
+# gnupg-home-fixup: GNUPGHOME 收敛到 700，并清除外主机遗留的 dotlock 锁残留。
+# 判据与背景见 source/config.org「GNUPG homedir 权限与残留锁」；手动排障可直接执行。
+
+set -eu
+
+gnupg_home="${GNUPGHOME:-${HOME:?HOME not set}/.local/share/gnupg}"
+host=$(uname -n)
+
+[ -d "$gnupg_home" ] || mkdir -p "$gnupg_home"
+chmod 700 "$gnupg_home"
+
+# dotlock 锁文件正文 = "%10d\n<nodename>\n"（common/dotlock.c: dotlock_create_unix）。
+# read_lockfile 只在 nodename 与当前主机一致时才置 same_node，GnuPG 因此认定外主机
+# 的锁仍被持有、永不回收——这类锁在本机没有任何进程持有（本机进程写的都是当前
+# 主机名），只能由人（或本脚本）删；前提是家目录不跨主机共享（见 config.org 正文）。
+find "$gnupg_home" -type f \( -name '*.lock' -o -name '.#lk*' \) |
+  while IFS= read -r lock; do
+    lock_host=$(sed -n '2p' "$lock")
+    if [ -z "$lock_host" ]; then
+      continue                        # 内容不是 dotlock 格式，不猜
+    fi
+    if [ "$lock_host" != "$host" ]; then
+      rm -f "$lock"
+    fi
+  done
+#+end_src
+
+#+NAME: gnupg-home-services
+#+begin_src scheme
+(list (simple-service 'gnupg-home-fixup home-activation-service-type
+                      #~(system* "/bin/sh" #$(local-file "gnupg-home-fixup"))))
 #+end_src
 
 *** 环境变量

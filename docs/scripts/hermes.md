@@ -9,14 +9,14 @@ wrapper 只做注入与分发：布局常量全部来自 `hermes-lib.sh`（`HERM
 
 ## 布局
 
-| 常量 | 值 | 说明 |
-| --- | --- | --- |
-| `HERMES_HOME` | `$HERMES_HOME/hermes-agent` 之外即 `${XDG_DATA_HOME:-$HOME/.local/share}/hermes` | **统一 export**，desktop 壳靠它推导 `ACTIVE_HERMES_ROOT` |
-| `HERMES_RUNTIME` / `HERMES_CHECKOUT` | `$HERMES_HOME/hermes-agent` | checkout 直接落顶层不嵌套，是 desktop 壳 `isHermesSourceRoot` 要求的源码根 |
-| `HERMES_VENV` / `HERMES_CLI_BIN` | `$HERMES_RUNTIME/venv`、`…/venv/bin/hermes` | venv 由 `hermes-update` 生成，不进仓库 |
-| `HERMES_DESKTOP_RELEASE_DIR` / `HERMES_DESKTOP_BIN` | `$HERMES_CHECKOUT/apps/desktop/release/linux-unpacked` 及其下的 `Hermes` | electron-builder 产物 |
-| `HERMES_MANIFEST` | `$HERMES_HOME/manifest.scm` | 容器 `--manifest` |
-| `HERMES_DATA_HOME` / `HERMES_HICOLOR_ROOT` | `$XDG_DATA_HOME` 默认值、`…/icons/hicolor` | 图标路径解析收在 lib |
+| 常量                                                | 值                                                                               | 说明                                                                       |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `HERMES_HOME`                                       | `$HERMES_HOME/hermes-agent` 之外即 `${XDG_DATA_HOME:-$HOME/.local/share}/hermes` | **统一 export**，desktop 壳靠它推导 `ACTIVE_HERMES_ROOT`                   |
+| `HERMES_RUNTIME` / `HERMES_CHECKOUT`                | `$HERMES_HOME/hermes-agent`                                                      | checkout 直接落顶层不嵌套，是 desktop 壳 `isHermesSourceRoot` 要求的源码根 |
+| `HERMES_VENV` / `HERMES_CLI_BIN`                    | `$HERMES_RUNTIME/venv`、`…/venv/bin/hermes`                                      | venv 由 `hermes-update` 生成，不进仓库                                     |
+| `HERMES_DESKTOP_RELEASE_DIR` / `HERMES_DESKTOP_BIN` | `$HERMES_CHECKOUT/apps/desktop/release/linux-unpacked` 及其下的 `Hermes`         | electron-builder 产物                                                      |
+| `HERMES_MANIFEST`                                   | `$HERMES_HOME/manifest.scm`                                                      | 容器 `--manifest`                                                          |
+| `HERMES_DATA_HOME` / `HERMES_HICOLOR_ROOT`          | `$XDG_DATA_HOME` 默认值、`…/icons/hicolor`                                       | 图标路径解析收在 lib                                                       |
 
 `HERMES_HOME` 必须 export：desktop 的 PRESERVE 正则要把它透传进容器，壳的 `main.cjs` 抓不到就 fallback 到默认 `~/.hermes`，容器内便找不到安装。
 
@@ -81,14 +81,14 @@ Pi 式 editable-checkout 下纯 checkout + uv 安装不含 build 过的 Electron
 
 `EXEC_STRING` 内先设 `APPDIR` 与 `LD_LIBRARY_PATH`，再 `exec /appimage-root/Hermes`。各旗标的存在理由：
 
-| 旗标 | 理由 |
-| --- | --- |
-| `--no-sandbox --disable-gpu-sandbox` | 嵌套在 guix shell 容器里，Chromium 沙箱起不来（渲染进程 crash loop），必需 |
-| `--ozone-platform="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}"` | 与宿主解析出的 Ozone 后端一致 |
-| `--enable-wayland-ime` | Wayland text-input 协议，fcitx5 的 `libwaylandim.so` 靠它与 Chromium 通信，Wayland 下必须显式开 |
-| `--gtk-version=3` | GTK3 初始化（原生文件对话框与主题集成） |
-| `--ignore-gpu-blocklist` | 容器内 GPU 探测不全，Chromium 可能回退软件渲染；崩时可 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop` 临时回退（该变量已在 PRESERVE 正则里透传） |
-| `--disable-dev-shm-usage` | 容器内 `/dev/shm` 太小，Chromium 默认会因此崩 |
+| 旗标                                                          | 理由                                                                                                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--no-sandbox --disable-gpu-sandbox`                          | 嵌套在 guix shell 容器里，Chromium 沙箱起不来（渲染进程 crash loop），必需                                                                 |
+| `--ozone-platform="${ELECTRON_OZONE_PLATFORM_HINT:-wayland}"` | 与宿主解析出的 Ozone 后端一致                                                                                                              |
+| `--enable-wayland-ime`                                        | Wayland text-input 协议，fcitx5 的 `libwaylandim.so` 靠它与 Chromium 通信，Wayland 下必须显式开                                            |
+| `--gtk-version=3`                                             | GTK3 初始化（原生文件对话框与主题集成）                                                                                                    |
+| `--ignore-gpu-blocklist`                                      | 容器内 GPU 探测不全，Chromium 可能回退软件渲染；崩时可 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop` 临时回退（该变量已在 PRESERVE 正则里透传） |
+| `--disable-dev-shm-usage`                                     | 容器内 `/dev/shm` 太小，Chromium 默认会因此崩                                                                                              |
 
 d-Bus 优先复用宿主 session bus（`DBUS_SESSION_BUS_ADDRESS` 已 preserve + RT_DIR 已 expose），不可达才 `dbus-launch` 起新的——dconf/GSettings 暗色偏好与 fcitx5 D-Bus frontend 依赖它。
 
@@ -96,38 +96,38 @@ d-Bus 优先复用宿主 session bus（`DBUS_SESSION_BUS_ADDRESS` 已 preserve +
 
 白名单按语义分组在 `hermes-lib.sh` 的 `_HERMES_PRESERVE_VARS`，拼成正则 `^(...)$`；拼接顺序即 alternation 顺序，新增变量加在对应组末尾。
 
-| 组 | 变量 | 理由 |
-| --- | --- | --- |
-| 会话/显示基础 | `DISPLAY` `WAYLAND_DISPLAY` `XDG_RUNTIME_DIR` `XDG_SESSION_TYPE` `XAUTHORITY` `DBUS_SESSION_BUS_ADDRESS` | 容器内连得上显示服务与 session bus |
-| 平台后端选择 | `QT_QPA_PLATFORM` `ELECTRON_OZONE_PLATFORM_HINT` | 与宿主 GUI 环境解析结果一致 |
-| PulseAudio | `PULSE_SERVER` `PULSE_COOKIE` | 音频经宿主 PulseAudio |
-| 语言环境 | `LANG` `LC_[A-Z]+` | 正则前缀模式，一并透传全部 locale |
-| 动态库 / Node / 软渲染 | `LD_LIBRARY_PATH` `NODE_OPTIONS` `LIBGL_ALWAYS_SOFTWARE` | 软件渲染回退靠 `LIBGL_ALWAYS_SOFTWARE` 进容器 |
-| Agent 根 | `HERMES_HOME` | desktop 壳靠它推导 `ACTIVE_HERMES_ROOT`，不透传会 fallback 到 `~/.hermes` |
-| Remote gateway | `HERMES_DESKTOP_REMOTE_URL` `HERMES_DESKTOP_REMOTE_TOKEN` | 连宿主 hermes-backend（9119） |
-| cua-driver | `CUA_DRIVER_RS_ENABLE_WAYLAND` | 原生 Wayland 抓屏开关，无它 Wayland 会话抓屏必炸 |
-| fontconfig | `FONTCONFIG_FILE` `FONTCONFIG_PATH` `FONTCONFIG_CACHE_DIR` | 容器复用宿主 fontconfig 配置 |
-| 宿主搜索路径 | `XDG_DATA_DIRS` `XDG_CONFIG_HOME` | 容器内 GTK 复用宿主主题/图标/光标搜索路径 |
-| 输入法 | `GTK_IM_MODULE` `QT_IM_MODULE` `XMODIFIERS` | fcitx5 透传 |
-| 光标 | `XCURSOR_PATH` `XCURSOR_THEME` | 光标主题搜索路径 |
-| GTK | `GTK_THEME` `GTK_IM_MODULE_DIR` `GDK_BACKEND` | 主题、immodules 目录、GDK 后端 |
+| 组                     | 变量                                                                                                     | 理由                                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 会话/显示基础          | `DISPLAY` `WAYLAND_DISPLAY` `XDG_RUNTIME_DIR` `XDG_SESSION_TYPE` `XAUTHORITY` `DBUS_SESSION_BUS_ADDRESS` | 容器内连得上显示服务与 session bus                                        |
+| 平台后端选择           | `QT_QPA_PLATFORM` `ELECTRON_OZONE_PLATFORM_HINT`                                                         | 与宿主 GUI 环境解析结果一致                                               |
+| PulseAudio             | `PULSE_SERVER` `PULSE_COOKIE`                                                                            | 音频经宿主 PulseAudio                                                     |
+| 语言环境               | `LANG` `LC_[A-Z]+`                                                                                       | 正则前缀模式，一并透传全部 locale                                         |
+| 动态库 / Node / 软渲染 | `LD_LIBRARY_PATH` `NODE_OPTIONS` `LIBGL_ALWAYS_SOFTWARE`                                                 | 软件渲染回退靠 `LIBGL_ALWAYS_SOFTWARE` 进容器                             |
+| Agent 根               | `HERMES_HOME`                                                                                            | desktop 壳靠它推导 `ACTIVE_HERMES_ROOT`，不透传会 fallback 到 `~/.hermes` |
+| Remote gateway         | `HERMES_DESKTOP_REMOTE_URL` `HERMES_DESKTOP_REMOTE_TOKEN`                                                | 连宿主 hermes-backend（9119）                                             |
+| cua-driver             | `CUA_DRIVER_RS_ENABLE_WAYLAND`                                                                           | 原生 Wayland 抓屏开关，无它 Wayland 会话抓屏必炸                          |
+| fontconfig             | `FONTCONFIG_FILE` `FONTCONFIG_PATH` `FONTCONFIG_CACHE_DIR`                                               | 容器复用宿主 fontconfig 配置                                              |
+| 宿主搜索路径           | `XDG_DATA_DIRS` `XDG_CONFIG_HOME`                                                                        | 容器内 GTK 复用宿主主题/图标/光标搜索路径                                 |
+| 输入法                 | `GTK_IM_MODULE` `QT_IM_MODULE` `XMODIFIERS`                                                              | fcitx5 透传                                                               |
+| 光标                   | `XCURSOR_PATH` `XCURSOR_THEME`                                                                           | 光标主题搜索路径                                                          |
+| GTK                    | `GTK_THEME` `GTK_IM_MODULE_DIR` `GDK_BACKEND`                                                            | 主题、immodules 目录、GDK 后端                                            |
 
 ## 容器边界
 
 `hermes_build_share_flags` 生成的 `--share`/`--expose` 旗标按存在性条件追加，错了都是「窗口起不来 / 字体怪 / 软渲染」级别的坑。
 
-| 旗标 | 条件 | 理由 |
-| --- | --- | --- |
-| `--share=/tmp`、`--share=$HOME` | 无条件 | 临时目录与家目录 |
-| `--expose=$RT_DIR`、`--expose=$RT_DIR/$WAYLAND_DISPLAY` | 无条件 | Wayland 与 dbus socket 目录、真实 compositor socket |
-| `--expose=$RT_DIR/pulse/native` | 该 socket 存在 | PulseAudio |
-| `--expose=/run/current-system/profile/share/fonts` | 存在 | 字体 |
-| `--share=/dev/dri` | 存在 | **必须读写**：GPU 进程要对 `renderD128` 发 ioctl，只读 bind 会 SIGILL |
-| `--expose=/sys` | 存在 | 只读：mesa `drmGetDevice` 要读 PCI 信息，缺了回退 llvmpipe 软渲染 |
-| `--expose=/gnu/store` | 存在 | 只读：venv python 软链指向 store，不挂则运行时解析失败 |
-| `--expose=/etc/machine-id` | 存在 | FHS 容器内 `/etc` 只读，`dbus-uuidgen` 写不进，直接 expose 宿主的 |
-| `--share=/tmp/.X11-unix` | `DISPLAY` 非空 | X11 fallback |
-| `--expose=/run/current-system/profile/share` | 存在 | XDG data 目录本体 |
+| 旗标                                                    | 条件           | 理由                                                                  |
+| ------------------------------------------------------- | -------------- | --------------------------------------------------------------------- |
+| `--share=/tmp`、`--share=$HOME`                         | 无条件         | 临时目录与家目录                                                      |
+| `--expose=$RT_DIR`、`--expose=$RT_DIR/$WAYLAND_DISPLAY` | 无条件         | Wayland 与 dbus socket 目录、真实 compositor socket                   |
+| `--expose=$RT_DIR/pulse/native`                         | 该 socket 存在 | PulseAudio                                                            |
+| `--expose=/run/current-system/profile/share/fonts`      | 存在           | 字体                                                                  |
+| `--share=/dev/dri`                                      | 存在           | **必须读写**：GPU 进程要对 `renderD128` 发 ioctl，只读 bind 会 SIGILL |
+| `--expose=/sys`                                         | 存在           | 只读：mesa `drmGetDevice` 要读 PCI 信息，缺了回退 llvmpipe 软渲染     |
+| `--expose=/gnu/store`                                   | 存在           | 只读：venv python 软链指向 store，不挂则运行时解析失败                |
+| `--expose=/etc/machine-id`                              | 存在           | FHS 容器内 `/etc` 只读，`dbus-uuidgen` 写不进，直接 expose 宿主的     |
+| `--share=/tmp/.X11-unix`                                | `DISPLAY` 非空 | X11 fallback                                                          |
+| `--expose=/run/current-system/profile/share`            | 存在           | XDG data 目录本体                                                     |
 
 函数末尾显式 `return 0`：最后一条 `[[ -d ]]` 为假时函数会带 1 返回，`set -e` 下调用方误退。
 
@@ -141,13 +141,13 @@ d-Bus 优先复用宿主 session bus（`DBUS_SESSION_BUS_ADDRESS` 已 preserve +
 
 ## 排障
 
-| 现象 | 原因 | 处理 |
-| --- | --- | --- |
-| 容器内找不到安装（回退 `~/.hermes`） | `HERMES_HOME` 未 export 透传 | 确认 lib 的 export 生效，不要手动覆盖 |
-| ACP 宿主报 agent 找不到 | `hermes-acp` 软链被上游 update 真身覆盖 | restow 后核对软链（`stow -R agents/hermes`） |
-| backend crash-loop、`EBADENGINE` | managed node 未 provision，Guix npm 落进禁止区间 | 见「managed-node」，手动跑 node-bootstrap |
-| 更新后 MCP 全挂 | 旧 gateway 进程持失效模块路径 | `herd restart hermes-gateway`，或再跑一次 `hermes update` 触发收尾 |
-| `$HERMES_HOME/bin/uv` 变成真二进制 | 预置 symlink 被官方替换 | 重跑 `hermes update` 恢复 symlink |
-| 窗口起不来、渲染 crash | 容器沙箱或 GPU 探测 | 确认 `--no-sandbox` 等旗标在；试 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop` |
-| 中文输入无效 | 缺 `--enable-wayland-ime` | 检查 `EXEC_STRING` |
-| 远程模式退回本地 | token 提取失败 | 查 backend 是否可达、页面是否含 session token |
+| 现象                                 | 原因                                             | 处理                                                                      |
+| ------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------- |
+| 容器内找不到安装（回退 `~/.hermes`） | `HERMES_HOME` 未 export 透传                     | 确认 lib 的 export 生效，不要手动覆盖                                     |
+| ACP 宿主报 agent 找不到              | `hermes-acp` 软链被上游 update 真身覆盖          | restow 后核对软链（`stow -R agents/hermes`）                              |
+| backend crash-loop、`EBADENGINE`     | managed node 未 provision，Guix npm 落进禁止区间 | 见「managed-node」，手动跑 node-bootstrap                                 |
+| 更新后 MCP 全挂                      | 旧 gateway 进程持失效模块路径                    | `herd restart hermes-gateway`，或再跑一次 `hermes update` 触发收尾        |
+| `$HERMES_HOME/bin/uv` 变成真二进制   | 预置 symlink 被官方替换                          | 重跑 `hermes update` 恢复 symlink                                         |
+| 窗口起不来、渲染 crash               | 容器沙箱或 GPU 探测                              | 确认 `--no-sandbox` 等旗标在；试 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop` |
+| 中文输入无效                         | 缺 `--enable-wayland-ime`                        | 检查 `EXEC_STRING`                                                        |
+| 远程模式退回本地                     | token 提取失败                                   | 查 backend 是否可达、页面是否含 session token                             |
