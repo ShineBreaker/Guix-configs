@@ -1,80 +1,54 @@
-# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-#
-# SPDX-License-Identifier: MIT
+<!-- SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com> -->
+<!-- SPDX-License-Identifier: MIT -->
 
-# ISO 自主打包机制
+# ISO 自主打包 — 一条命令打出 Live 救援镜像
 
-> 一条 `blue build-iso` 命令，基于本仓库 `source/config.org` 打出 Live ISO 镜像，产物落到 `dist/jeans-<variant>-<date>.<arch>.iso`。
+`blue build-iso` 基于 `source/config.org` 的 `* Live ISO` 章节打出 Live ISO，产物落到 `dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso`，定位是救砖 + 装机双用途的救援盘。本文档只讲功能模型与用法；实施细节（全部 use-modules、块代码、修正记录）都在 `source/config.org` 同章节的头部注释里。
 
-> 详细代码 / 决策 / 调试见 `source/config.org` 的 `* Live ISO` 章节、`blueprint.scm` §8.5 注释、`docs/scripts/build-image.md`。本文档**只**说明功能模型、使用方式、关键设计权衡。
+## 前置
 
-## §0 一句话模型
+在仓库根运行 `blue build-iso`；构建耗时 30+ 分钟（实测）。改 OS 定义前先读 `source/config.org` 的 Live ISO 章节顶部注释——详细错误码表与决策矩阵都在那里。
 
-```
-source/config.org  (Live ISO 章节)
-        │
-        ▼  blue build-iso 跑 ob-tangle
-tmp/live-iso.scm
-        │
-        ▼  guix repl -- tools/build-image.scm
-        │     (在 guix time-machine -C source/channel.lock 内)
-        │
-guix system image --image-type=iso9660
-        │  → Guix core 走 iso9660 → grub-hybrid → xorriso
-        ▼
-dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso
-```
+## 操作
 
-整条管线 ≤ 50 行自写代码，其余都是 Guix core + BLUE build system 的标准件。
+### 1. 管线模型
 
-| 层                   | 由谁负责                                                   | 本仓库做的事                           |
-| -------------------- | ---------------------------------------------------------- | -------------------------------------- |
-| iso9660 / EFI / MBR  | Guix core 的 `--image-type=iso9660`                        | 不碰                                   |
-| installation-os 基底 | Guix core `(gnu system install)` 的 `make-installation-os` | 继承并定制                             |
-| 非自由内核 / 固件    | nonguix 的 `linux` + `linux-firmware`                      | 接入                                   |
-| OS 定义              | 本仓库                                                     | `source/config.org` `* Live ISO` 章节  |
-| 构建编排             | BLUE build system                                          | `build-iso` 命令(`blueprint.scm` §8.5) |
-| 产物落地             | 本仓库                                                     | `tools/build-image.scm`（~30 行）        |
+`source/config.org`（Live ISO 章节）→ tangle → `tmp/live-iso-<variant>.scm` → `guix repl -- tools/build-image.scm`（经 `guix time-machine` 锁 `source/channel.lock`）→ `guix system image --image-type=iso9660` → `dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso`。
 
-## §1 用法
+管线自写代码不超过 50 行，其余都是 Guix core 与 BLUE build system 的标准件：
 
-### 1.1 命令语法
+| 层 | 由谁负责 | 本仓库做的事 |
+| --- | --- | --- |
+| iso9660 / EFI / MBR | Guix core 的 `--image-type=iso9660` | 不碰 |
+| installation-os 基底 | Guix core `(gnu system install)` 的 `make-installation-os` | 继承并定制 |
+| 非自由内核 / 固件 | nonguix 的 `linux` + `linux-firmware` | 接入 |
+| OS 定义 | 本仓库 | `source/config.org` 的 Live ISO 章节 |
+| 构建编排 | BLUE build system | `build-iso` 命令（`blueprint.scm`） |
+| 产物落地 | 本仓库 | `tools/build-image.scm` |
+
+### 2. 构建
 
 ```bash
-blue build-iso [VARIANT] ...
+blue build-iso              # 构建 %images 列出的全部变体
+blue build-iso desktop      # 只构建 XFCE 镜像（主目标）
+blue build-iso minimal      # 只构建 minimal 镜像（纯 CLI fallback）
 ```
 
-| 调用                     | 行为                                 |
-| ------------------------ | ------------------------------------ |
-| `blue build-iso`         | 构建 `%images` 列出的全部变体        |
-| `blue build-iso desktop` | 只构建 XFCE 镜像（主目标）             |
-| `blue build-iso minimal` | 只构建 minimal 镜像（纯 CLI fallback） |
+变体表是 `blueprint.scm` 的 `%images`（`("desktop" "minimal")`，顺序即构建顺序：主目标在前、fallback 在后），文件名前缀 `jeans` 也是 `blueprint.scm` 里定的。带参只构建匹配的变体，不带参构建全部。
 
-变体清单定义在 `blueprint.scm` §8.5 的 `%images` 常量。文件名前缀在 `%live-iso-prefix`（`"jeans"`，本仓库自有名）。
+### 3. 产物内容
 
-### 1.2 产物
+两个变体共用：live/live 与 root/live 固定口令（救援盘需要确定性的 sudo/ssh 口令），shell 均为 fish；nonguix `linux` + `linux-firmware` 内核（基底默认的 `modprobe.blacklist=radeon,amdgpu` 已删，否则 AMD 显卡无 KMS、Wayland 桌面起不来）；4 套 substitute 镜像（guix-moe、nonguix、panther、sjtug，公钥内嵌为 plain-file，不依赖运行时联网拉公钥）；`/etc/guix/channels.scm` 预置 guix + nonguix；`rescue-chroot.sh` 与 `emergency-blue.sh` 经 `live-rescue-tools` 包装进 PATH；`emacs-minimal` 内嵌供 tangle；仓库快照在 `~/Guix-configs`（剔除 `.git`/`dist`/`tmp`，只读，用前 `cp -r` 一份可写副本）。
 
-```
-dist/
-├── jeans-desktop-20260922.x86_64-linux.iso        # 主目标,XFCE+labwc 桌面,greetd 自动登录 live
-└── jeans-minimal-20260922.x86_64-linux.iso        # 纯 CLI,TUI 安装器 + root tty
-```
+- **desktop**：`xfce-desktop-service-type` + `labwc`（Wayland）+ `greetd`（vt7 自动登录 live，登出后 default-session 自动回桌面）；删掉 tty1 的 kmscon 安装器直进桌面；网络走 NetworkManager（nm-applet 托盘、`nmtui` 亦可）。
+- **minimal**：保留 tty1 的 TUI 安装器（kmscon）与 connman（TUI 安装器的网络步骤依赖它）；`issue` 印救援盘速查。
+- **基底默认 tty**：tty2 是文档服务，tty3-6 是 root 自动登录的 mingetty。
 
-- **live user**：`live` / `live`;**root**：`root` / `live`（救援盘需要确定性口令）
-- **shell**：live 与 root 均为 `fish`（骨架带速查 greeting）
-- **桌面**（desktop 变体）：`xfce-desktop-service-type` + `labwc`(Wayland)+ `greetd` vt7 自动登录 live；登出后 default-session 自动回桌面
-- **tty 回退**：tty3-6 是 root 免密 mingetty;minimal 变体 tty1 保留 TUI 安装器
-- **nonguix kernel**：`linux` + `linux-firmware`（支持非自由 wifi/显卡）；已删 `modprobe.blacklist=radeon,amdgpu`（否则 AMD 无 KMS 进不了桌面）
-- **4 套 substitute 镜像**：nonguix、guix-moe、panther、sjtug
-- **预置 nonguix channel**：Live 环境的 `/etc/guix/channels.scm` 已含 guix + nonguix
-- **救砖装机载荷**：`rescue-chroot.sh` / `emergency-blue.sh` 在 PATH；仓库快照在 `~/Guix-configs`（只读，用前 `cp -r`）；`emacs-minimal` 内嵌供 tangle
-- **网络**：desktop 用 NetworkManager（nm-applet 托盘 / `nmtui`）；minimal 保留 connman（TUI 安装器依赖）
-
-### 1.3 烧盘与验证
+### 4. 烧盘与验证
 
 ```bash
 # 烧 U 盘
-dd if=dist/jeans-desktop-20260714.x86_64-linux.iso of=/dev/sdX bs=4M status=progress conv=fsync
+dd if=dist/jeans-desktop-<YYYYMMDD>.x86_64-linux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 
 # QEMU 验证
 qemu-system-x86_64 -m 4G -enable-kvm -cdrom dist/jeans-desktop-*.iso
@@ -83,216 +57,42 @@ qemu-system-x86_64 -m 4G -enable-kvm -cdrom dist/jeans-desktop-*.iso
 sha256sum dist/jeans-desktop-*.iso
 ```
 
-## §2 关键设计决策（为什么这样做）
-
-### §2.1 OS 定义写进 `source/config.org`，不另起 `config/live/*.scm`
-
-Testament 把 ISO 配置独立成 `config/live/<variant>.scm`，理由是"不走 tangle，出错面小"。本仓库选择**写进主 config.org**：
-
-- 配置统一:主机 + ISO 同一份源，改公钥/镜像一次改两边
-- Noweb 拼合已是熟练工具，分两个文件反而引入新概念
-- 代价：`source/config.org` 多一个 tangle 目标(`tmp/live-iso.scm`)，必须**绝对不能**与 `tmp/config.scm` 混——见 §3.1 陷阱 1
-
-### §2.2 变体列表用 BLUE 常量，不走文件枚举
-
-Testament 用 `find` 扫 `config/live/*.scm` 推断变体。本仓库用 `blueprint.scm` §8.5 的 `%images` 常量，显式列举：
-
-```scheme
-(define %images '("desktop" "minimal"))
-```
-
-- 顺序 = 构建顺序（主目标先，fallback 后）
-- 加新变体只改一处
-- 配合 `images-from-arguments` 实现"无参全量，带参过滤"语义
-
-### §2.3 `make-installation-os` 来自 guix core，不是 rosenthal
-
-早期误以为它来自 `rosenthal services file-systems`，实测该模块**不**导出 `make-installation-os`，只导出 `btrbk-service-type` / `dumb-runtime-dir-service-type` / `zfs-service-type`。
-
-真实位置：`(gnu system install)`,`gnu/system/install.scm:693`(guix `9e068cc`)。live-modules 块**必须** `(use-modules (gnu system install))`。
-
-### §2.4 不复用 channel lock
-
-Testament 有独立 `config/live/channels.lock`（3 个频道，精简）。本仓库决定**复用 `source/channel.lock`**：
-
-- 本仓库只有一份主机配置，ISO 用的频道是它的子集，重复 lock 是过度工程
-- 代价:ISO 镜像 closure 包含 bluebox / sops-guix 等主机专用频道的依赖（实测未导致问题，若将来想精简，加 `source/live-channels.lock` 即可）
-
-### §2.5 substitute 镜像全复刻（4 套，不只是 nonguix）
-
-ISO 装机时 `guix pull` / nonguix kernel 拉 substitute 需要公钥，**少一个就拉不动**。本仓库配置 `source/config.org` 主机环境用 4 套镜像(nonguix / guix-moe / panther / sjtug)，ISO 完整复刻——而不是只配 nonguix。
-
-### §2.6 显式声明的决策
-
-| 决策   | 内容                                              | 理由                                                                     |
-| ------ | ------------------------------------------------- | ------------------------------------------------------------------------ |
-| **D1** | 首选变体 = XFCE Desktop(desktop)                  | 用户要桌面辅助装机，`xfce-desktop-service-type` + `greetd`(labwc/Wayland)自动登录 |
-| **D2** | ISO OS 目标 = "提供装机用环境"，不干预装好后       | 装好后用户自己 `blue rebuild` 重建                                       |
-| **D3** | 4 套 substitute 镜像全复刻(§2.5)                  | 装机时 `guix pull` 要用公钥                                              |
-| **D4** | 只装 mihomo 包，不引 service / config / tun        | ISO 内手动启；装好后由 `blue rebuild` 重建                                |
-| **D5** | live = `live`/`live`,root = `root`/`live`         | 救援盘需要确定性 sudo/ssh 口令                                           |
-| **D6** | desktop 删 kmscon+console-font;minimal 保留       | desktop 直进桌面；minimal 留 TUI 安装器兜底                               |
-| **D7** | 本文档**进**仓库                                  | 给接手 agent 留契约——见 §6.2 维护纪律                                  |
-| **D8** | 仓库快照进 `~/Guix-configs`（剔 .git/dist/tmp）     | 装机/救砖开箱即用；快照只读，用前 `cp -r`                                  |
-| **D9** | 浏览器用 netsurf 顶替 icecat                      | 省约 500MB；复杂网页打不开属预期                                          |
-| **D10**| desktop 删 connman 换 NetworkManager              | 双栈打架；nm-applet 托盘 + nmtui 更顺手(§3.8)                             |
-
-## §3 已知陷阱（接手维护必看）
-
-详细错误码表 / 决策矩阵见 `source/config.org` `* Live ISO` 章节头部注释。本节只列**最致命的 4 条**，改前请 grep 整个项目确认影响范围。
-
-### §3.1 tangle 目标绝对不能复用 `tmp/config.scm`
-
-两个变体各自 tangle 到 `tmp/live-iso-<variant>.scm`。若 `:tangle ../tmp/config.scm` 误用，ISO 定义会污染主机配置，`blue rebuild` 报 `unbound variable: %system` 或 `multiple definition`。
-
-**验证**：`tail tmp/live-iso-desktop.scm` 末行应是 `%live-desktop-os`（裸值）；`grep -c 'live-desktop-os' tmp/config.scm` 应为 0。
-
-### §3.2 `<<live-modules>>` 不能被主 main 块引用
-
-`blue check` 不做 cross-tangle 验证——它只看每个 `#\+NAME:` 块自身的括号。如果 main 块误引用 `<<live-modules>>`,`tmp/config.scm` 里会出现 ISO 块内容，直接撞死 `blue rebuild`。
-
-**验证**：`grep -E 'live-(modules|installation)' tmp/config.scm` 应为空。
-
-### §3.3 `blue --dry-run build-iso` 仍会真跑 tangle
-
-`--dry-run` 短路的是 `%run`（guix reconfigure / ISO 镜像构建等），但 `org-babel-tangle-file` 必须真跑(`#:real? #t`)，否则 dry-run 验证拿不到 `tmp/live-iso.scm` 产物。
-
-### §3.4 `make-installation-os` 来自 `(gnu system install)`
-
-（同 §2.3）实施前更正记录里有 5 条相关修正，`source/config.org` `* Live ISO` 章节顶部注释里有完整留路标。**不要凭印象改 use-modules 列表**。
-
-### §3.5 `services` 字段里 `<<guix-substitutes>>` 不能当 `cons*` 元素
-
-`<<guix-substitutes>>` 块展开后本身是一个 `(list 4个simple-service ...)`。若写成 `(cons* (service xfce-desktop-service-type) <<guix-substitutes>> (service lightdm-service-type ...) ...)`，会把整个 list 当单个 service 元素嵌进 services 列表，报 `'services' field must contain a list of services`。
-
-**修复**：用 `append` 拍平——`(services (append <<guix-substitutes>> (list (service xfce-desktop-service-type) (service lightdm-service-type ...) ...)))`。`blue check` 只看块内括号平衡，**不会**抓到这类 "list-in-list" 类型错，只能靠 guix 真跑报 `must contain a list of services` 才发现。
-
-### §3.6 builder 里 `(use-modules (guix build utils))` 必须 `with-imported-modules`
-
-trivial-build-system 的 builder 默认**不**导入 `(guix build utils)`, 直接在 `#~(begin ...)` 里 `(use-modules (guix build utils))` 会报 `no code for module (guix build utils)`（drv 编译阶段失败）。
-
-**修复**：用 `(with-imported-modules '((guix build utils)) #~(begin ...))` 包裹 gexp，把模块编译进构建环境。注意 `with-imported-modules` 多包一层，结尾需补一个右括号，否则 `blue check` 报对应块多 1 个左括号。
-
-### §3.7 `delete kmscon` 后必须同时 `delete console-font`（否则进不了桌面）
-
-desktop 变体要直接进 XFCE 桌面（而非 TUI 安装器），得删掉 tty1 的安装器。安装器是 `make-installation-os` 在 tty1 上跑的 kmscon:
-
-```scheme
-;; gnu/system/install.scm:466-470 —— kmscon 在 tty1 且 login-program = 安装器
-(service kmscon-service-type
-         (kmscon-configuration (virtual-terminal "tty1")
-                               (login-program installer)))
-```
-
-但 kmscon 同时是 tty1 上 `term-tty1` 的**唯一提供者**，而 `console-font-service-type` (base.scm:920)对每个 tty 都 `requirement (term-<tty>)`。只删 kmscon 会导致：
-
-```
-服务 'console-font-tty1' 需要 'term-tty1',但没有任何服务提供该服务
-```
-
-**修复**（参照 Testament `graphical-system.scm:64` + 主机 `desktop-services` 块）：
-
-```scheme
-(modify-services %live-base-services
-  (delete kmscon-service-type)            ;; 删 tty1 安装器
-  (delete console-font-service-type))     ;; 删依赖 term-tty1 的 console-font
-```
-
-console-font 只设 TTY 字体，Live 桌面用不到，删了无副作用。`blue check` 不查 shepherd 依赖图，这类"服务依赖缺提供者"错只能靠真跑 `guix` 构建暴露——见 §4。
-
-### §3.8 删 connman 必须同步补 NetworkManager（否则 sshd 起不来）
-
-`make-installation-os` 默认网络栈是 connman，它提供 shepherd 的 `networking` 服务。`openssh-service-type` 的 `ssh-daemon` 依赖 `networking`——只删 connman 会报：
-
-```
-服务 'ssh-daemon' 需要 'networking',但没有任何服务提供该服务
-```
-
-**修复**：desktop 变体在 `(delete connman-service-type)` 的同时显式加 `(service network-manager-service-type)`。注意 `xfce-desktop-service-type` **只是** polkit/pam/profile 小扩展，**不**含 `%desktop-services`,NM 不会自动来。
-
-### §3.9 live/root shell 必须指向已安装的包
-
-曾把 live/root shell 设成 zsh，但 zsh 不在 ISO 包列表里——登录即失败。现在统一 fish（骨架有 fish 配置）。改 shell 前先确认包在 `packages` 列表里。
-
-## §4 出错怎么办（快速索引）
-
-| 症状                                                  | 看哪                                                  |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| `blue build-iso` 报 `unbound variable`                | `source/config.org` `* Live ISO` 章节顶部注释 + §3.4  |
-| `'services' field must contain a list of services`    | `<<guix-substitutes>>` 被当 cons* 元素，§3.5 改 append |
-| `no code for module (guix build utils)`（drv 编译失败） | builder 缺 `with-imported-modules`,§3.6               |
-| `服务 'console-font-tty1' 需要 'term-tty1'`           | 删 kmscon 时漏删 console-font,§3.7 配对 delete        |
-| `no code for module (gnu packages X)`                 | 删该 use-modules，改走 `specifications->packages`      |
-| `extraneous field initializer (X)`                    | 字段名/值类型错，查 Guix 手册对应 service              |
-| `Wrong type to apply: #<<service-type>>`              | service 括号错位，§3.1 排查                            |
-| `blue check` 报多余括号                               | `blue block-show` 定位块名，git diff 找行              |
-| `guix time-machine: failed to authenticate`           | `source/channel.lock` 频道公钥过期，`blue update` 重生 |
-| `error: connection refused`                           | 网络/防火墙，见 §5 网络镜像配置                        |
-| `permission denied (store path)`                      | `/gnu/store` 权限，见 §5                               |
-| QEMU 启动但 X 启动失败                                | tty1 进 kmscon 调试，X 日志在 `~/.local/share/xorg/`   |
-
-接手 agent 真撞错时:先 grep `tmp/build-*.log`（若 `blue build-iso --keep-failed` 启用），再查 Guix 手册对应 service / package 文档，最后才看上游 issue （codeberg `guix/guix#7373` 跟踪 installer 阻塞）。
-
-## §5 网络与镜像
-
-装机时 substitute 拉取走 `source/config.org` 主机配置里 `simple-service` 块定义的 4 套镜像(nonguix / guix-moe / panther / sjtug)，ISO `live-installation-os` 完整复刻。公钥内嵌为 `plain-file`,**不**依赖 ISO 运行时联网拉公钥。
-
-- 默认从 bordeaux 拉，nonguix 内核通常较快
-- 若某镜像宕，guix 自动 fallback——不会因单点失败整体死
-- 中国大陆环境：`sjtug` 镜像常比 bordeaux 快 5-10 倍
-
-## §6 维护文档
-
-### §6.1 何时改本文档
-
-| 触发                        | 改哪                                         |
-| --------------------------- | -------------------------------------------- |
-| 加新桌面变体（走 §7.1 流程）  | §1.1 变体表 + §2.6 D1 行                     |
-| 升 channel.lock 后 API 改名 | §3.4 引用 → `source/config.org` 注释同步     |
-| 撞到 §3/§4 没列的错误       | §3 / §4 各加一行，给下个接手 agent 留路标     |
-| 修了 §2 设计决策            | §2.x 加修订记录，**不**改原段落（保留决策原貌） |
-
-### §6.2 维护纪律
-
-1. **本文档是"功能说明"，不是"实施史"**——详细代码 / 调试留到 `config.org` 注释
-2. **章节编号不变**（`§X` 是交叉引用锚点）
-3. **新增内容加进对应章节**，不开新文件
-4. **改完跑** `git diff docs/iso-build.md` 自查:行数应 ≤ 600
-
-## §7 扩展矩阵（用户拍板，非 to-do）
-
-### §7.1 桌面变体
-
-| 变体      | service-type                        | DM      | 工作量  | 触发条件                           |
-| --------- | ----------------------------------- | ------- | ------- | ---------------------------------- |
-| `desktop` | `xfce-desktop-service-type`         | lightdm | ✅ 已做 | 本任务（XFCE,lightdm 自动登录 live） |
-| `minimal` | （用 make-installation-os 默认）      | kmscon  | ✅ 已做 | desktop 跑不动的 fallback          |
-| `gnome`   | `gnome-desktop-service-type`        | gdm     | 2-3h    | nvidia 显卡 / Wayland              |
-| `niri`    | `home-niri-service-type`(rosenthal) | greetd  | 4-5h    | 对齐 Testament niri 体验           |
-
-### §7.2 平台
-
-| 平台          | 状态                       | 工作量 |
-| ------------- | -------------------------- | ------ |
-| x86_64-linux  | ✅ 已支持                  | 0      |
-| aarch64-linux | 隐式（`#:efi-only?` 自动切） | 0      |
-| i686-linux    | ❌                         | 半天   |
-
-### §7.3 工程优化
-
-| 扩展                                      | 工作量 | 触发条件                   |
-| ----------------------------------------- | ------ | -------------------------- |
-| `source/live-channels.lock` 独立 ISO lock | 1h     | 追求 Testament 级密封性    |
-| `tools/sign` GPG detach-sign              | 1h     | ISO 公开发布前             |
-| ISO 内嵌 `examples/` 配置模板             | 半天   | 装机引导想"开箱即用本仓库" |
-| `blue build-iso --keep-failed`            | 15min  | 调试阻塞时                 |
-| `blue build-iso --substitute-urls=...`    | 30min  | 测试专用 mirror            |
-
----
-
-**相关阅读**：
-
-- `source/config.org` `* Live ISO` 章节——实施细节 / 全部 use-modules / 块代码
-- `blueprint.scm` §8.5——`%images` / `images-from-arguments` / `build-iso-command`
-- `tools/build-image.scm`——guix-system image 产物落地助手（契约见 `docs/scripts/build-image.md`）
-- `docs/secrets.md`——同期构建的年龄加密入仓参考
+## 关键约束
+
+下列几条是最致命的，`blue check` 全都抓不到，只能靠真跑构建暴露。
+
+- **tangle 目标绝对不能复用 `tmp/config.scm`**：每个变体各自 tangle 到 `tmp/live-iso-<variant>.scm`。误用会让 ISO 定义污染主机配置，`blue rebuild` 随即崩在 `%system` 未定义或多处重复定义上。验证：`tail tmp/live-iso-desktop.scm` 末行应是 `%live-desktop-os`（裸值），`grep -c 'live-desktop-os' tmp/config.scm` 应为 0。
+- **`<<live-common>>` 只在 live 变体块内展开**：它是 noweb 片段、不独立 tangle；被主 `main` 块引用会把 ISO 内容混进 `tmp/config.scm`。验证：`grep -E 'live-(common|installation)' tmp/config.scm` 应为空。
+- **`<<guix-substitutes>>` 展开后本身就是一个 service 列表**：在 `services` 里必须用 `append` 拍平，不能当 `cons*` 的单个元素——否则整个列表被当成一个 service 嵌进去，guix 报 `services` 字段类型不对。`blue check` 只看块内括号平衡，抓不到这类 list-in-list 类型错。
+- **builder 里要用 `(guix build utils)` 必须 `with-imported-modules`**：trivial-build-system 的 builder 默认不导入该模块，直接在 `#~(begin ...)` 里 `use-modules` 会在 drv 编译阶段报 `no code for module (guix build utils)`；`with-imported-modules` 多包一层，结尾要补一个右括号。
+- **删 kmscon 必须配对删 console-font**：`make-installation-os` 的 kmscon 在 tty1 且 `login-program` 是安装器，而 kmscon 是 `term-tty1` 的唯一提供者；`console-font-service-type` 对每个 tty 都有 `term-<tty>` 依赖。只删 kmscon 会让 `console-font-tty1` 找不到提供者。console-font 只设 TTY 字体，删了无副作用。
+- **删 connman 必须同时显式加 NetworkManager**：`make-installation-os` 默认网络栈是 connman，它提供 shepherd 的 `networking`，而 `openssh` 的 `ssh-daemon` 依赖 `networking`——只删不补会让 ssh-daemon 起不来。`xfce-desktop-service-type` 只是 polkit/pam/profile 的小扩展，不含 `%desktop-services`，NetworkManager 不会自动来。
+- **live / root 的 shell 必须指向 ISO 包列表里已安装的包**（现为 fish）。改成列表里没有的包会导致登录即失败。
+- **`blue --dry-run build-iso` 仍会真跑 tangle**：`--dry-run` 短路的是 `%run`（镜像构建等子进程），但 `org-babel-tangle-file` 必须真跑，否则 dry-run 拿不到 `tmp/live-iso-<variant>.scm` 产物。
+- **`make-installation-os` 来自 `(gnu system install)`**（guix `9e068cc` 的 `gnu/system/install.scm:693`），不是 rosenthal；live 变体块必须 `(use-modules (gnu system install))`。别凭印象改 use-modules 列表。
+- **只装 mihomo 包，不引 service / config / tun**：ISO 内手动启，装好后由 `blue rebuild` 重建。
+- **ISO 复用 `source/channel.lock`**：本仓库只有一份主机配置，ISO 用的是它的子集。代价是镜像 closure 含 bluebox / sops-guix 等主机专用频道的依赖（实测未导致问题）。
+
+## 排障
+
+| 症状 | 原因 / 处理 |
+| --- | --- |
+| `blue build-iso` 报 `%system` 未定义或多处重复定义 | tangle 目标误用 `tmp/config.scm`，见「关键约束」第一条 |
+| `services` 字段类型不对 | `<<guix-substitutes>>` 被当 `cons*` 元素，改用 `append` 拍平 |
+| `no code for module (guix build utils)`（drv 编译失败） | builder 缺 `with-imported-modules` |
+| 服务依赖 `term-tty1` 无提供者 | 删 kmscon 时漏删 console-font |
+| 服务依赖 `networking` 无提供者 | 删 connman 时没显式加 NetworkManager |
+| `no code for module (gnu packages X)` | 删该 use-modules，改走 `specifications->packages` |
+| 字段名或值类型报错 | 查 Guix 手册对应 service |
+| `blue check` 报多余括号 | `blue block-show <块名>` 定位块名，`git diff` 找行 |
+| `guix time-machine: failed to authenticate` | `source/channel.lock` 频道公钥过期，跑 `blue update` 重生 |
+| QEMU 启动但 X 起不来 | 进 tty 查日志，X 日志在 `~/.local/share/xorg/` |
+
+接手时真撞错的顺序：先 grep `source/config.org` 的 Live ISO 章节顶部注释与该节块代码，再查 Guix 手册对应 service / package 文档，最后才看上游 issue。
+
+## 相关
+
+- `source/config.org` 的 `* Live ISO` 章节——实施细节、全部 use-modules、块代码
+- `blueprint.scm` 的 `build-iso` 命令——`%images`、变体过滤、文件名拼合
+- [scripts/blue-helpers.md](scripts/blue-helpers.md) §build-image.scm——`tools/build-image.scm` 的调用契约
+- [rescue-chroot.md](rescue-chroot.md) / [emergency-blue.md](emergency-blue.md)——ISO 里预装的两个救援脚本

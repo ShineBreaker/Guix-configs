@@ -1,0 +1,15 @@
+# agenote.lock — dotfiles 侧钉住的组件版本与产物校验和。
+#
+# 格式：<包>:<版本>:<sha256>，每行一个。改版本 = 改这一行，纯文本 diff 友好，
+# 天然原子且不可能漏推——这正是取代 submodule 指针的地方（ADR 0005）。
+#
+# sha256 取自 monorepo 发布时的 dist/<包>/SHA256SUMS；sync-agenote.sh 逐个校验，
+# 校验和不符即拒铺（Release 资产可被手动替换，校验和是唯一的验证手段）。
+#
+# 新增/升级组件：monorepo 打 <包>-v<版本> tag 并推上去（tag 漏推 = 没有资产），
+# 拿到 SHA256SUMS 里的值，替换本文件对应行，然后跑 sync-agenote.sh --dry-run。
+
+agenote-skills:0.1.0:9121cb29e4ea81cc0103a07482cbb6b1f1491e8d2722ed26e65e90f4b11eb16c
+agenote-pi:0.1.0:610587bc0c3802d777e40d7514a24755c3b6a3883c7ba27ade501bf0950a952f
+agenote-zcode:0.1.0:a45adba47d66358be80425107ab8dfc0d8471268795d0fe283d0ee959f641ebe
+agenote-hermes:0.1.0:ae7f8550163831b83d4e50e94ce8fe6753d9c80c1eeb245013c283e0b08b1b22

@@ -3,46 +3,34 @@
 
 # mcode — MiniMax Code CLI 入口
 
-- 源码：`dotfiles/mutable/agents/minimax-code/.local/bin/mcode`
-- 部署：`~/.local/bin/mcode`（mutable，改源即时生效）
-- 调用方：终端直接调用；`mcode tools` 分发上游第二 bin（见下）
+源码 `dotfiles/mutable/agents/minimax-code/.local/bin/mcode` · 部署 `~/.local/bin/mcode`（mutable，改源即时生效） · 调用方：终端直接调用
+
+只做四件事：注入 `AGENTS_ROOT`、首跑或 `--install` 时 `pnpm install`、把 `tools` 分发到上游第二 bin、把 manifest 与 lockfile 回源。依赖 `pnpm` 与 `node`（上游硬性要求 `>=22.19 <23 || >=24 <27`）。本包不托管配置层，上游登录态与 sessions 由其 CLI 按 XDG 惯例自管。
 
 ## 用法
 
 ```bash
-mcode [args...]        # 透传 @minimax-ai/code（init/exec/acp/login/plugin/update 等）
-mcode --install        # 安装 CLI（$AGENTS_ROOT/minimax-code 里 pnpm install）
+mcode [args...]        # 透传 @minimax-ai/code
+mcode --install        # 无人值守安装 CLI 并回源
 mcode tools [args...]  # 上游第二 bin mcode-tools（host-managed Connector tools）
 ```
 
-## 依赖
+CLI 缺失时交互终端先问一句（`[y/N]`，拒绝则退出码 130），非交互直接装；缺 pnpm 或缺 `package.json` 报错退出。安装树在 `$AGENTS_ROOT/minimax-code`（默认 `~/.local/share/agents/minimax-code`），`node_modules` 是部署侧产物；`pnpm-workspace.yaml` 承载 pnpm 12 策略，`package.json` 与 `pnpm-lock.yaml` 在仓库留副本，lockfile 被 `.stow-local-ignore` 剪枝（pnpm 拒写软链 lockfile），由 wrapper 回源。
 
-`pnpm`（安装）、`node`（上游硬性要求 `>=22.19 <23 || >=24 <27`，本机 v24.18.0）。CLI 本体经 pnpm 装在 `$AGENTS_ROOT/minimax-code/node_modules/.bin/mcode`（`AGENTS_ROOT` 默认 `~/.local/share/agents`，各 agent 安装树聚合根）。
+## 实现与约束
 
-## 工作原理
+- **两个 pnpm 12 策略坑的处置**：`pnpm-workspace.yaml` 里 `minimumReleaseAge: 0` 与 `allowBuilds`（`@minimax-ai/code`、`better-sqlite3`）都要在位，缺一个就装得上但跑不起来（成因见 `dotfiles/mutable/agents/minimax-code/AGENTS.md`）。上游新增原生依赖时，把 pnpm 输出的 `Ignored build scripts:` 名单照抄进 `allowBuilds` 再 `mcode --install`。
+- **`sync_to_source` 回源**：`package.json`、`pnpm-workspace.yaml` 被 pnpm 原子写换成实体文件时，内容归源并重建软链；`pnpm-lock.yaml` 只回拷内容、仓库副本缺失时新建。`--install` 后与每次调用尾部各跑一次，`cmp` 有差才动。通用配方与不变量见 `dotfiles/mutable/AGENTS.md`「新增 pnpm 系 agent 的完整配方」，本篇不复述。
+- **上游第二 bin 非遮蔽**：`mcode-tools` 与主 CLI 同包发布，按一包一入口不单独占 `~/.local/bin`，经 `mcode tools` 分发直调。
+- **升级走仓库源，不走上游自更新**：改仓库 `package.json` → `mcode --install` → 验证 → 提交（lockfile 自动回源）。上游 `update` 不回源 manifest，不要用它（成因见包内 AGENTS.md）。
+- **无 fish 补全**：上游未提供 completion 生成命令，不虚构补全文件。本篇只留「做什么」，「为什么」单向指回 `dotfiles/mutable/agents/minimax-code/AGENTS.md`，两处不各写一遍论证。
 
-- **安装树与配置分层**：CLI 本体项目在聚合根 `~/.local/share/agents/minimax-code/`；上游自身的配置（登录态、sessions）由其 CLI 按 XDG 惯例自管，本包不托管配置层。
-- **stow 形态**：源里 `package.json` 与 `pnpm-workspace.yaml` 经 stow 软链到部署侧；`pnpm-lock.yaml` 仓库留副本但被 `.stow-local-ignore` 剪枝（pnpm 拒写软链 lockfile，部署侧必须真实文件），由 wrapper 回源同步。
-- **回源**（`sync_to_source`）：`package.json`/`pnpm-workspace.yaml` 被 pnpm 原子写（临时文件 + rename）换成实体文件后，内容归源并重建软链；`pnpm-lock.yaml` 只回拷内容、仓库副本缺失时新建（首装即此路径生成）。`--install` 后与每次调用尾部各跑一次，cmp 有差才动。
-- **上游第二 bin**：`mcode-tools` 与主 CLI 同包发布，按一包一入口不单独占 `~/.local/bin`，经 `mcode tools` 分发直调（上游原生 bin，非遮蔽）。
-
-## 设计决策与不变量
-
-- **`minimumReleaseAge: 0`**：0.6.2 发布当天即装，pnpm 12 默认 24h 供应链冷却会把发布不满一天的新版本**静默**排除出解析（表现为装不上或装成旧版）。
-- **`allowBuilds`**：`better-sqlite3` 的原生绑定下载 + `@minimax-ai/code` 的 postinstall 原生校验（`verify-native-install.mjs`：校验 node 版本范围、glibc/ABI 兼容，并对 better-sqlite3 做 `:memory:` 冒烟）。不批 = 装得上但一开会话就 SQLite 绑定缺失。Node 24 = ABI 137 → glibc >= 2.29（Guix 满足）。
-- **尾部回源**：CLI 的 `plugin`/`update` 子命令可能自举改写 manifest/lockfile，下次调用即归源；cmp 短路，无漂移时零开销。
-- **无 fish 补全**：上游未提供 completion 生成命令（与 dsh/pi 一致），不虚构补全文件。
-
-## 故障排查
+## 排障
 
 | 现象 | 原因 | 处理 |
 | --- | --- | --- |
-| 安装输出 `Ignored build scripts: ... better-sqlite3` | pnpm 12 默认拦 build scripts | 名单已固化在 `pnpm-workspace.yaml` 的 `allowBuilds`；若上游新增原生依赖，照抄名单后 `mcode --install` |
-| 开会话报 SQLite binding 缺失 / `better_sqlite3.node` 找不到 | 绑定没建成（build 被拦或 ABI 不匹配） | `mcode --install` 重装；postinstall 校验会给出 ABI/glibc 诊断 |
-| 仓库 lockfile/package.json 不回源 | 只在部署侧裸跑过 pnpm | 跑 `mcode --install` 或任意 `mcode` 命令触发回源 |
-| postinstall 报 Unsupported Node.js | node 不在 22.19+/24-26 | 上游硬性范围，换 node（guix profile 现为 v24.18.0） |
-| `mcode update` 升级后行为异常 | 上游自更新不过本 wrapper | 自更新只换 node_modules；manifest 仍以仓库源为真源，`mcode --version` 与仓库 `package.json` 不一致时以手动改源 + `--install` 为准 |
-
-## 变更记录
-
-- 2026-10-02：首次安装 0.6.2（发布当日，`minimumReleaseAge: 0` 与 `allowBuilds` 两个 pnpm 12 策略坑同场踩平；lockfile 首装即回源生成）。
+| 安装输出 `Ignored build scripts: ...` | pnpm 12 默认拦 build scripts | 名单抄进 `pnpm-workspace.yaml` 的 `allowBuilds` 后 `mcode --install` |
+| 开会话报 SQLite binding 缺失 | 绑定没建成（build 被拦或 ABI 不匹配） | `mcode --install` 重装；postinstall 会给 ABI/glibc 诊断 |
+| postinstall 报 Unsupported Node.js | node 不在 `>=22.19 <23 \|\| >=24 <27` | 换 node |
+| 仓库 manifest / lockfile 不回源 | 只在部署侧裸跑过 pnpm | 跑 `mcode --install` 或任意 `mcode` 命令触发回源 |
+| `mcode update` 后行为异常 | 上游自更新不过本 wrapper | 以仓库源为真源：手动改 `package.json` + `--install`，核对 `mcode --version` |
