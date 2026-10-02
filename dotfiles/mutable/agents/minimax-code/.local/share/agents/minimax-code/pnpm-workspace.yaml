@@ -1,0 +1,11 @@
+# 0.6.2 发布当天即装：pnpm 12 默认 minimumReleaseAge=1440（24h）会把发布不满
+# 一天的新版本静默排除出解析，表现为「装不上/装成旧版」
+minimumReleaseAge: 0
+# 一切 pnpm add 通道写精确版本，根治 ^ 范围漂移
+saveExact: true
+# 原生 SQLite 绑定：better-sqlite3 的 prebuild 下载 + @minimax-ai/code 的
+# postinstall 原生校验（verify-native-install.mjs，冒烟 better-sqlite3）。
+# 不批 = 装得上但跑不了会话（绑定缺失）
+allowBuilds:
+  '@minimax-ai/code': true
+  better-sqlite3: true

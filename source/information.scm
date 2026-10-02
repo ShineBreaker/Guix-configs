@@ -22,28 +22,7 @@
 (define fixed-machine-id (generate-machine-id username))
 
 (define %data-dirs
-  '(;; --- dotfile 持久化（tmpfs /home 启动后自动 bind-mount）---
-    ".local/share/containers"
-    ".local/share/gnupg"
-    ".local/share/keyrings"
-    ".local/share/fish"
-    ".local/share/atuin"
-    ".local/share/direnv"
-    ".local/share/hermes"
-    ".local/share/nix"
-    ".local/share/flatpak"
-    ".local/share/osu"
-    ".local/share/PrismLauncher"
-    ".local/share/Sandbox"
-
-    ".local/state"
-    ".ssh"
-    ".config/dconf"
-    ".config/Element"
-    ".config/QQ"
-
-    ;; --- XDG 目录 ---
-    "Desktop"
+  '("Desktop"
     "Documents"
     "Downloads"
     "Games"
@@ -56,10 +35,6 @@
     "Videos"))
 
 ;; --- 磁盘拓扑（分区 UUID / 解锁名 / 挂载参数）---
-;; 本段是全仓库分区标识的单一真源：config.org 引用这些变量，
-;; tools/rescue-chroot.sh 在 live 环境用 sed/grep 做受限文本解析（那里
-;; 没有 guile），因此保持一行一个 (define %var "...") 的顶格格式。换机
-;; 时只改本段。
 (define %luks-uuid "327f2e02-1e4f-48b2-87f0-797c481850c9") ; LUKS2 分区（本机: /dev/nvme0n1p2）
 (define %luks-mapper "root") ; 解锁名，解锁后 Btrfs 位于 /dev/mapper/<解锁名>
 (define %esp-uuid "9699-52A2") ; ESP vfat 短 UUID（本机: /dev/nvme0n1p1）
@@ -74,7 +49,7 @@
   '(("SYSTEM/Guix/@boot"                   "/boot")
     ("SYSTEM/Guix/@data"                   "/var/lib")
     ("SYSTEM/Guix/@gnu"                    "/gnu")
-    ("SYSTEM/Guix/@nix"                    "/nix")
+    ;; ("SYSTEM/Guix/@nix"                    "/nix")
 
     ("SYSTEM/Guix/@persist/cache/root"     "/root/.cache")
     ("SYSTEM/Guix/@persist/cache/var"      "/var/cache")

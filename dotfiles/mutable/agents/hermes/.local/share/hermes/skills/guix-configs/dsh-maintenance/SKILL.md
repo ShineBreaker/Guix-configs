@@ -5,7 +5,7 @@ description: Use when installing, updating, or removing dsh (DeepSeek Harness) p
 
 # dsh-maintenance — dsh 更新、验证与源同步
 
-dsh 经 pnpm 装在 `$DSH_HOME/_cli`（本体）与 `$DSH_HOME/profiles/web`（插件），配置源在
+dsh 经 pnpm 装在 `~/.local/share/agents/dsh`（本体，安装聚合根 `$AGENTS_ROOT/dsh`；2026-10-02 从 `$DSH_HOME/_cli` 迁来）与 `$DSH_HOME/profiles/web`（插件），配置源在
 Guix-configs 仓库 `dotfiles/mutable/agents/dsh/`，GNU Stow no-folding 逐文件软链。插件语义、
 版本锁定、远程访问、排障细节以仓库内 `dotfiles/mutable/agents/dsh/AGENTS.md` 为权威，本
 skill 不重复，只覆盖「更新 → 验证 → 源同步」工作流及其静默失败点。
@@ -73,7 +73,8 @@ llm-pi-ai 是 dormant 挂载（settings 供 provider 前零路由），无 clien
 for f in package.json pnpm-lock.yaml pnpm-workspace.yaml cordis.patch.yml; do
   cmp -s <仓库源>/profiles/web/$f ~/.local/share/dsh/profiles/web/$f || echo "DIFF $f"
 done
-# _cli 侧同理核对 package.json / pnpm-lock.yaml / pnpm-workspace.yaml
+# 本体侧同理核对 ~/.local/share/agents/dsh/ 的 package.json / pnpm-lock.yaml / pnpm-workspace.yaml
+# （仓库源在 dotfiles/mutable/agents/dsh/.local/share/agents/dsh/）
 ```
 
 任一项 DIFF = 部署链路断了，见 §3。只查 lockfile 会漏掉配置分叉。
@@ -88,11 +89,15 @@ done
   配置可能只存在于部署侧**，仓库源是旧的。
 - **回源路径不得从部署侧软链推导**：`readlink <dir>/pnpm-workspace.yaml` 在该文件已被
   覆写成真实文件时失败；若脚本在此处静默 return，后面全部回源一起被跳过。从 stow 包内
-  脚本自身位置反推（`readlink -f "${BASH_SOURCE[0]}"` → 包根 → `share/dsh`），源布局与
-  部署布局同构，不依赖任何软链存活。
-- **wrapper 自愈面有限**：`bin/dsh` 的 `_relink_profile` 只在 `plugin` 子命令后自愈
-  `package.json`，`cordis.patch.yml` 不在其列；全量回源只发生在 `dsh update`
-  （lockfile / package.json / pnpm-workspace.yaml / cordis.patch.yml 四件套）。
+  脚本自身位置反推（`readlink -f "${BASH_SOURCE[0]}"` → 包根 → `share/dsh`（profile 侧）/
+  `share/agents/dsh`（本体侧）），源布局与部署布局同构，不依赖任何软链存活。
+- **wrapper 自愈（2026-10-02 起全覆盖）**：`bin/dsh` 每次调用尾部跑
+  `_relink_profile` → `_relink_dir`，对 CLI 安装树（`$AGENTS_ROOT/dsh`）与 web
+  profile 两处做同一套自愈：三个配置文件（`package.json`/`pnpm-workspace.yaml`/
+  `cordis.patch.yml`）断链则内容归源 + 重建软链，lockfile 反向只回拷内容。
+  安装树是手动升级路径的回源盲区——改 `package.json` 后裸跑 `pnpm install` 不过
+  `dsh update` 的 sync（曾致仓库 lockfile 落后一个 minor），靠这个兜底；全量
+  回源（四件套）仍只发生在 `dsh update`。
 - **发现分叉时以部署侧为基线拷回源**——用户在 UI 改过的配置是事实源；回源后按 §2
   重启验证，别反过来把旧源覆盖上去。
 - **`_relink_profile` 自愈建的绝对软链会被 stow 拒绝接管**：它用 `ln -sfn <绝对路径>`
@@ -118,7 +123,7 @@ done
 ## 4. 新插件装入新 profile（安装 → 验证 → 源同步）
 
 自带 agent preset / 独立 launcher 的插件（TUI 类、终端类）**装独立 profile**，与
-`_cli`、`web` 平级——并进 web profile 会把它的 preset 行注册进 web 的组合，两边的
+`agents/dsh`（本体安装树）、`web` 平级——并进 web profile 会把它的 preset 行注册进 web 的组合，两边的
 预设、shell 方言、渲染方式都不同。完整操作配方见
 `references/dsh-plugin-profile-install.md`，本节只列判据。
 

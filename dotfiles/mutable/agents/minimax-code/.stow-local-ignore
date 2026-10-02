@@ -1,0 +1,23 @@
+# stow-local-ignore for stow/minimax-code — Perl regex, one per line, matched
+# against the tail of the relative path within the package. See GNU Stow manual,
+# "Ignore Lists" section. Blank lines and `#` comments are allowed.
+#
+# 源里只托管：安装聚合根下的 package.json + pnpm-workspace.yaml（stow 软链）、
+# pnpm-lock.yaml 副本（回源记录，剪枝不链出——pnpm 拒写软链 lockfile，部署侧
+# 必须真实文件）、一包一入口的 .local/bin/mcode。
+
+# --- 包自身的文档/元数据（不部署到 $HOME，否则会被链成 ~/AGENTS.md） ---
+AGENTS\.md$
+
+# --- node_modules / pnpm store 缓存 ---
+node_modules$
+\.pnpm-store$
+
+# --- 部署侧 lockfile：仓库源里的副本仅供 git 留痕 + 回源目标 ---
+pnpm-lock\.yaml$
+
+# --- Mimosa hook 状态（防御性忽略） ---
+\.mimosa/$
+
+# --- 上游自带文档/变更日志（若依赖里误带） ---
+CHANGELOG\.md$

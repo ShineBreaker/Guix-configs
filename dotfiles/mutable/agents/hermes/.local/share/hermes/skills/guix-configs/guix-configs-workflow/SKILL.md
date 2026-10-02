@@ -931,6 +931,8 @@ blue stow --delete hermes        # 撤销链(~ 下变回实际文件)
 - 不要用 `rm` 删 ~ 下原文件 —— Hermes 硬保护。安全范式：`cp` 到源 → `mv` 原文件到 `/tmp/hermes-mv-backup/` → `blue stow hermes` → `rm -rf /tmp/hermes-mv-backup/`
 - 不要让 `dotfiles/mutable/` 与 `dotfiles/immutable/` 部署同一文件(双链冲突)
 - `blue structor` 扫 `dotfiles/mutable/AGENTS.md` 默认 depth=4 会截断到 `hermes/`;用 `ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=dotfiles/mutable/AGENTS.md blue structor`
+- **`depth=N` 是环境变量,不是命令行参数**:`blue structor depth=2` 会把 `depth=2` 当成**目标文件路径**静默跳过(无输出、无报错)。正确姿势 `ORG_STRUCTOR_DRY=1 ORG_STRUCTOR_DEPTH=2 blue structor`。覆盖单个文件用位置参数:`blue structor dotfiles/mutable/AGENTS.md`
+- **structor 会顺手改与本任务无关的陈旧树**:它按 git 可见文件重算全部目标,别的包里长期没刷新的树也会被更新。跑完必须 `git diff` 逐个核对,把与本任务无关的 `git checkout -- <file>` 还原——但**同一次运行里属于本任务的树变更要留下**(如包被删后目录树里对应条目消失)。判据:该 diff 行是否由本次任务的文件增删引起。
 
 完整协议(备份策略、md5 三方验证、实时生效测试、commit 规范、反模式清单、故障排查表)见 `references/gnu-stow-two-tier-dotfiles.md`。
 
@@ -1482,6 +1484,72 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 > 这条意味着 §10.8 的"KDE 装配"那部分是**历史路径记录**，不是当前主目标。
 > 接手 agent 若打开仓库发现 ISO 是 XFCE：① 别慌，代码与 §10.8 描述本来就是分开演进的两条路 ② gril 决策表 D1 那行（Plasma）保留不动 + 决策章节里应该有实施超越决策的修订注可读 ③ 不要"为了对齐 §10.8 把代码改回 KDE"——那是反向覆盖，把现状推到一段已没人维护的旧版本。
 > 详细 ISO lightdm autologin + seat configuration 字段 + `allow-empty-passwords?` 必备项见 `references/iso-lightdm-labwc-wayland.md`（§1）。
+
+---
+
+## 12. 删除 / 替换一个入口后的完整收尾(blue wrapper 案例)
+
+> 适用场景:某个 `~/.local/bin/` 入口、stow 包、或一层 shell wrapper 被删除/被上游方案取代(例如 guile 版本问题改用自定义包变体解决,不再需要 bash wrapper 绕字节码)。**删文件 ≠ 删干净**——部署侧悬空软链、文档索引、手册正文里的机制描述会各自继续活着。
+
+### 12.1 四层消费者清单(按此顺序扫,每层都要确认为空)
+
+```bash
+# 1) 仓库源:确认源真的没了(git 还跟踪就是没删干净)
+git ls-files <pkg-path>            # 期望空
+find <pkg-path>                    # 期望 no such file
+
+# 2) 部署侧悬空软链:stow 只建链不监视源,源删后链还在跑自己
+find ~/.local/bin ~/.local/libexec ~/.config -xtype l 2>/dev/null
+# 有残留 → blue stow --delete <pkg>(或 trash-put 链本身)
+
+# 3) 全仓引用(排除 .git / .agents/workfile 历史稿)
+grep -rn "<pkg-path>\|<entry-name>\|libexec/<name>" --exclude-dir=.git --exclude-dir=tmp --exclude-dir=.agents .
+
+# 4) 间接描述:不提路径但描述了机制的地方(最难找,必读)
+grep -rn "wrapper\|包装脚本\|拦截即覆写\|分发进入" --include=*.md --include=*.org .
+```
+
+**第 4 层是主要工作量**。典型漏点:脚本索引表(`docs/scripts/README.md`)、主题手册的机制章节、`README.org` 的功能表(「有门禁校验,失败会自己回滚」这类**行为描述**会随脚本一起过期)、各包 `AGENTS.md` 里把它当范本的引用。
+
+### 12.2 判断「脚本为什么存在」的根因,再决定删除是否合理
+
+被删的 wrapper 常常是在补一个上游缺陷。删之前先确认**缺陷本身是否已被别的方案解决**——如果没解决,删掉只是把 bug 露出来。本例:bluebox 把 blue 的 guile 输入 pin 在 3.0.9,与系统 guile 字节码错配,wrapper 借系统 guile `-s` 跑脚本主体绕过;后来在 `source/config.org` 加了包变体(重 pin guile 输入),wrapper 的存在理由随之消失。
+
+**如果缺陷没被解决,正确做法是把机制搬进上游配置,不是保留一层 bash**。本例里被删的 `blue-update` / `blue-gc` 是用 bash 重实现了一遍 `blueprint.scm` 里已有的 update/gc 逻辑,还额外制造了「脚本调自己」的递归(必须专门写「不经 wrapper 直调本体」来防)——这类壳层应当在源头修,而不是包一层。
+
+### 12.3 blue 入口损坏的诊断序(不要凭报错猜)
+
+`blue` 报 `incompatible bytecode version` 时,按序做这三步,**每步都能证伪一个假设**:
+
+```bash
+# 1) 部署的是哪个包、它的 shebang 指向哪个 guile
+readlink -f ~/.guix-home/profile/bin/blue
+head -1 "$(readlink -f ~/.guix-home/profile/bin/blue)"    # 期望 guile 版本 = 系统 profile 的 guile
+
+# 2) 系统 profile 的 guile 版本
+/run/current-system/profile/bin/guile --version | head -1
+
+# 3) 变体是否已部署:源码里有自定义包变体 ≠ profile 已吃到
+grep -n "inherit blue\|blue-fix" source/config.org
+```
+
+**第 3 步是最高频的误判点**:变体源码写进 `config.org` 但没跑过 `blue home`/`rebuild`,profile 里仍是 pin 着旧 guile 的包。**报 incompatible bytecode version 时先怀疑「部署层没吃到源码改动」,不要先怀疑仓库里的编译缓存/临时目录**——删缓存不解决问题(本会话真按删缓存试过,报错原样复现),而它看起来又很像一个合理的归因,极易把人带偏。
+
+### 12.4 用 store 里的可执行产物顶掉坏入口做只读诊断
+
+profile 里的入口坏掉时,store 里往往已存在**正确的**另一个产物(旧世代残留、或本机曾构建过的变体)。直接跑它,能在不部署、不改任何文件的前提下拿到真实行为:
+
+```bash
+for f in /gnu/store/*-blue-*/bin/blue; do echo "== $f"; head -1 "$f"; done
+# 挑 shebang 与系统 guile 一致的那个,直接跑只读子命令
+/gnu/store/<hash>-blue-<ver>/bin/blue list
+```
+
+这一招解锁了本会话全部验证(structor 预览、命令清单确认),而 `blue format` / `blue check` 这些需要 blue 正常工作的校验当时全部不可用。**遇到部署层坏掉但只读验证仍需要时,先找 store 产物,再考虑任何修复动作。**
+
+### 12.5 AGENTS.md 写入需要用户授权
+
+`AGENTS.md`(仓库各级)被工具层列为受保护文件,`patch` 会直接 BLOCKED 并提示授权超时——**沉默不等于同意,不要换 terminal/execute_code 绕**。改这类文件前先向用户说明要改哪几处、取得授权后再写。文档类文件(README/手册/索引)无此限制,可直接改。
 
 ---
 

@@ -1,0 +1,7 @@
+{
+  "name": "minimax-code",
+  "private": true,
+  "dependencies": {
+    "@minimax-ai/code": "0.6.2"
+  }
+}

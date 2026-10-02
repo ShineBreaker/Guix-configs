@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# mcode — MiniMax Code CLI 入口（npm 包 @minimax-ai/code）：CLI 本体经 pnpm
+# 装在 agent 安装聚合根 $AGENTS_ROOT/minimax-code，首跑/--install 自动安装，
+# manifest 与 lockfile 回源。上游有两个 bin（mcode / mcode-tools），后者经
+# `mcode tools` 分发触达（一包一入口）。文档：docs/scripts/minimax-code.md
+set -euo pipefail
+
+: "${AGENTS_ROOT:=${XDG_DATA_HOME:-$HOME/.local/share}/agents}"
+export AGENTS_ROOT
+_proj="$AGENTS_ROOT/minimax-code"
+_bin="$_proj/node_modules/.bin/mcode"
+
+install_cli() {
+  if ! command -v pnpm >/dev/null 2>&1; then
+    printf 'mcode: 找不到 pnpm（本机在 guix profile），无法安装 CLI\n' >&2
+    return 1
+  fi
+  if [[ ! -f "$_proj/package.json" ]]; then
+    printf 'mcode: %s/package.json 不存在（应由 blue stow 从 dotfiles/mutable/agents/minimax-code 链出）\n' "$_proj" >&2
+    return 1
+  fi
+  printf 'mcode: 正在安装 CLI（在 %s 里跑 pnpm install）\n' "$_proj" >&2
+  (cd "$_proj" && pnpm install)
+}
+
+# 断链自愈 + 回源：package.json / pnpm-workspace.yaml 被 pnpm 原子写（临时文件
+# + rename）换成实体文件后，内容归源并重建 stow 软链；lockfile 只回拷内容且
+# 允许仓库副本缺失时新建（pnpm 拒写软链 lockfile，仓库副本经
+# .stow-local-ignore 剪枝防误链）。源目录从 $0 的 stow 软链反推，不从部署侧
+# 链接推导——pnpm 覆写后链接随时不在。cmp 有差才动。
+sync_to_source() {
+  local src f
+  src="$(dirname "$(dirname "$(readlink -f "$0")")")/share/agents/minimax-code"
+  [[ -d "$src" ]] || return 0
+  for f in package.json pnpm-workspace.yaml pnpm-lock.yaml; do
+    [[ -f "$_proj/$f" ]] || continue
+    if [[ -f "$src/$f" ]] && cmp -s "$_proj/$f" "$src/$f"; then continue; fi
+    cp "$_proj/$f" "$src/$f"
+    printf 'mcode: %s 已同步回仓库源\n' "$f" >&2
+  done
+  for f in package.json pnpm-workspace.yaml; do
+    [[ -f "$src/$f" && ! -L "$_proj/$f" ]] || continue
+    ln -sfn "$src/$f" "$_proj/$f"
+    printf 'mcode: %s 软链已重建\n' "$f" >&2
+  done
+}
+
+# 上游第二 bin：mcode-tools 与主 CLI 同包发布，按一包一入口不单独占
+# ~/.local/bin，经本壳分发直调（上游原生 bin，非遮蔽）。位置在安装检查之后：
+# 未安装时走统一的安装引导，不直接 127
+if [[ "${1:-}" == "--install" ]]; then
+  install_cli && sync_to_source
+  printf 'mcode: CLI 安装完成\n' >&2
+  exit 0
+fi
+
+if [[ ! -x "$_bin" ]]; then
+  if [[ -t 0 ]]; then
+    read -r -p 'mcode: CLI 尚未安装，现在装？（pnpm install，需联网、可能几分钟）[y/N] ' _reply || _reply=
+    case "$_reply" in
+      [yY] | [yY][eE][sS]) ;;
+      *)
+        printf 'mcode: 已取消，CLI 仍未安装\n' >&2
+        exit 130
+        ;;
+    esac
+  fi
+  install_cli || exit 1
+fi
+
+if [[ "${1:-}" == "tools" ]]; then
+  shift
+  exec "$_proj/node_modules/.bin/mcode-tools" "$@"
+fi
+
+# 尾部统一回源：CLI 运行期若自举改写 manifest/lockfile（插件安装、自更新），
+# 下次调用即归源；cmp 短路，无漂移时零开销
+set +e
+"$_bin" "$@"
+rc=$?
+set -e
+sync_to_source
+exit "$rc"

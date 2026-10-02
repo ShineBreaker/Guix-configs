@@ -252,6 +252,7 @@ See `skill-authoring` §8 for the verification-evidence contract.
 
 ## 8. Pitfalls (real-session anti-patterns)
 
+- **Write the diagnosis into the doc before a change proves it.** A plausible root cause is not a verified one — fix the doc the moment you *first* guess, and the guess becomes permanent false documentation. Sequence: hypothesize → apply the cheap test → if the symptom is unchanged, the hypothesis is dead → *then* rewrite the passage. Deleting a plausible-but-unrelated cache and seeing the same error is a cheap, fast experiment; doing it first is what produces "the docs confidently blame the wrong thing". Corollary: if you already wrote it, revert that passage rather than burying it under a correction note.
 - **Trust doc-copy verbatim.** When the user pastes another agent's doc
   into a session and says "扩写这个", the source is just a starting point —
   it may already be wrong. Run §3 first, then rewrite.
@@ -325,6 +326,17 @@ find <config-dir> -name "<name>.*"
 | 描述是对 `source/config.org` 代码块的口头复述 | 替换为指向该代码块的指针 |
 
 保留：任务路由表、`<critical>` 硬约束、`<!-- structor:begin -->...<!-- /structor -->` 标记对、指向他处文档的指针。删除：重复 `source/config.org` 的完整 scheme 块、有独立 AGENTS.md 的系统的详细描述、指向已不存在文件/包的死引用、与兄弟文档重叠的重复段落。替换示例：完整 `(service home-dotfiles-service-type ...)` 块 → 一句 `详细配置见 dotfiles/AGENTS.md`。
+
+**死引用有第二种形态：路径仍存在，但描述的行为已不成立。** grep 路径搜不到它们（因为链接是有效的），只有把描述的行为与代码对账才能发现。清理某组件时必扫的四类**行为声明**：
+
+| 位置 | 典型死写法 |
+| --- | --- |
+| 功能表 / 命令清单表 | 「`blue update` \| 刷新频道锁；有门禁校验，失败会自己回滚」——门禁脚本已删，描述还在 |
+| 架构图 / 调用链 | 三层调用链里有一层已删，仍按三层画 |
+| 故障排查表 / 恢复步骤 | 教用户重建一个已不存在的 wrapper |
+| 机制说明段落 | 解释某个已删拦截层的分发规则（“首参为 X 时转给 Y”） |
+
+所以删除扫描不能只 grep 路径/名字，必须再 grep 机制词：`wrapper` / `包装脚本` / `拦截即覆写` / `分发进入` / 该组件独有的动作名。
 
 ### 9.4 80-column hard wrap 清理
 
