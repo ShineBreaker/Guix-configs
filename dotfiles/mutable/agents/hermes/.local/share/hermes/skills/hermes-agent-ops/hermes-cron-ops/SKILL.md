@@ -34,8 +34,12 @@ Hermes cron 定时任务的创建、诊断与投递配置。覆盖：把用户�
 2. **prompt 必须自包含**：cron 在全新 session 运行，无对话上下文。把用户给的完整计划（环境路径、API、步骤、约束、容错规则）原样打包进 prompt，不要精简到看不懂。
 3. **workdir**：设到仓库根（如 `/home/brokenshine/Projects/Config/Guix-configs`），该目录的 AGENTS.md / CLAUDE.md 会自动注入 system prompt，agent 能拿到仓库约定。
 4. **enabled_toolsets**：按任务实际需要收窄工具集（如 `["web", "terminal", "file"]`），省 token 开销。**不要**给 cron 加 `messaging`（投递由框架做）、`cronjob`（cron 内禁止递归建 cron）、`clarify`（无人可问）。
-5. **3 分钟硬中断限制**：复杂任务（guix refresh、批量 API 抓取）可能跑不完。prompt 里要设计优先级兜底：「时间紧张时优先保证核心步骤（如频道活动+上游版本），changelog 抓多少算多少」。
+5. **超时预算按实测，不按口号**。旧口径「3 分钟硬中断」早就不适用：单 tick 有更长预算，预热 + 多阶段任务跑十几分钟是常态。真正该做的是**先实测再定兜底**——跑一轮量出各阶段耗时与 token 用量，据此在 prompt 里写明分批顺序与断点续跑方式（长判定/抓取批加 `--resume`），并给出「时间不够时按什么顺序砍、哪几步必须做完」。凭口号写「3 分钟」会让 prompt 里出现错误的裁剪优先级。具体分段与断点配方见下方「抓取型 cron：分批断点」。
+6. **时间不够时的裁剪优先级要分级写**：把步骤分成「必须做完」（诊断、核心写操作、收尾 commit）和「可砍」（补充巡检、第二轮判定），prompt 明说哪一级可省、省了要在报告里写哪一侧未完成。跨 tick 依赖进度时用断点文件续跑，别让每次 tick 从头重来。
 6. **格式适配**：投递到 IM 平台（QQ/微信）时 **markdown 完全不被渲染**——表格、加粗、代码块全部以纯文本裸露。报告必须先渲染成图片再随回复发出（正文写 `MEDIA:/绝对路径.png`），图内只放消息内容本身，执行说明另发一条文字消息或干脆不发。完整管线见 `references/image-report-rendering.md`。
+7. **同 tick 已有重活时错峰排程**。新 job 与既有的长任务 job（周检、夜间抓取）排在同一时刻会互相抢资源、拉长单 tick。排期前先 `hermes cron list` 看现有 schedule，错开半小时量级。
+8. **cron 用的脚本只能走绝对路径 + 已验证存在的位置**。`~/.local/bin` 在 cron 会话 PATH 里未必有；`HERMES_HOME` 下新建文件不一定已部署（见下方 stow 软链坑）。最稳的做法是 prompt 里写绝对路径，并在任务开头用 `search_files(target='files')` 确认目标存在，缺了就按 skill 口径现写而不是静默跳过。
+9. **prompt 里的阈值与判据要按实测写，不按想象写**。若某维度在真实语料上从未越过设想阈值（如 Jev duplicated 全库上限 0.5，而 prompt 写「≥0.60 合并」），那条触发条件就是死代码——把它改成「与确定性候选取交集 + 读卡确认」，并附上该维度实测上限，避免后来者当成有效门槛。
 
 ## 更新巡检类任务：weather 口径与就近回溯
 
@@ -142,7 +146,9 @@ for r in con.execute('select job_id, started_at, finished_at, status from execut
 
 ## Pitfalls
 
-- 用户改全局默认模型后，**所有未 pin 的 cron 任务都会静默罢工**——不只新建的那个。巡检现有任务时先看有没有 `model: null`。
+- **用户改全局默认模型后，**所有未 pin 的 cron 任务都会静默罢工**——不只新建的那个。巡检现有任务时先看有没有 `model: null`。
+- **cronjob 工具改不了已建任务**：`cronjob_manage` 的 `update` 只能改 prompt / schedule / skills / deliver 等运行参数，**不能补 pin 模型**（model pin 是 user-owned）。发现自己漏了 pin 只能提示用户跑 `hermes cron edit <id> --model <m> --provider <p>`，别在工具调用里反复试。
+- **cron 会话的 PATH 与前台不同**：`~/.local/bin` 可能不在其中，`hermes` 之外的 CLI（`gh`、`agenote`）按绝对路径或 `~/.guix-home/profile/bin/<cmd>` 写。
 - `last_delivery_error` 里的 rate limit / 连接错误 ≠ 任务失败：看 `last_status` 区分（ok + delivery error = 报告生成了但没送到；error = 没跑）。
 - cron 报告里要求「可追溯、不臆造」（版本号/hash 必须有来源，抓不到标未获取）——复杂巡检类任务的通用约束，直接写进 prompt。
 - 手动触发 `hermes cron run` 必须 nohup 后台（`nohup hermes cron run <id> >/dev/null 2>&1 &`）：run 的 owner=当前会话进程，会话被杀（daily reset / 前台超时）→ run 无终态，scheduler 重启后永久 `unknown`。等待/监控**不要轮询 runs 状态文本**（unknown 会挂死 `grep -qv running` 循环，2026-09-06 实证白等 100 分钟），盯 `$HERMES_HOME/cron/output/<job_id>/` 最新 .md 的新增/mtime。unknown 记录本身无害，无需清理。

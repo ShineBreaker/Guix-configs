@@ -136,6 +136,22 @@ walkthrough is the deliverable, not the diff itself.
    prose — the model already did, and the user wants the call-to-action
    ("review lines X-Y first").
 
+7. **Verify state, not just text — for non-git artifacts.** When the
+   change is a database, an index, a config consumed by a running
+   process, or any state store, the diff is not the deliverable. Query
+   the consuming layer for the new value (read the index row, the loaded
+   config, the live registry) and confirm it matches what the command
+   claimed. A tool printing "updated" proves the file landed, nothing
+   more — never relay that return as proof the state took effect, and
+   never report "written" as "effective" when the runtime may still hold
+   the old value.
+
+   Same for tool-run side effects: a repo-wide `lint --fix` / `format`
+   can rewrite hundreds of files beyond the task's own edits. Snapshot
+   `git status --short` *before* running it, and say so in the report —
+   otherwise the diff scale silently outgrows what the commit message
+   describes.
+
 ## Pitfalls
 
 - **The walkthrough becomes a victory lap.** If the answer reads like a
@@ -160,6 +176,15 @@ walkthrough is the deliverable, not the diff itself.
 - **Anchored Reading drift.** If the model cites `file.py:42` and that
   line isn't in the diff, it's hallucinating an answer to look thorough.
   Always cross-check with `git diff` or `read_file`.
+- **Relaying a tool's return string as proof.** "Updated" / "synced" /
+  "done" from a CLI says the write path completed — for state stores it
+  says nothing about whether the consumer now sees the new value. Query
+  the consumer; if you cannot, say "written, effect unverified" instead
+  of implying it took effect.
+- **Letting a repo-wide tool run blind.** Kicking off `lint --fix` /
+  `format` / a codegen sweep without first snapshotting `git status`
+  makes its collateral edits indistinguishable from yours, and the
+  commit message ends up describing a fraction of the real diff.
 
 ## Verification
 
@@ -174,6 +199,15 @@ Then check, by hand or with a short script: every file in that count
 must appear in the model's walkthrough answer by exact path. If any
 file is missing, the walkthrough failed — re-run with the Six Questions,
 do not declare done.
+
+For state-store changes, verify the value in the store itself before
+declaring done:
+
+```bash
+git show HEAD:<path/state.json> | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['<key>']['<field>'])"
+```
+
+Read the stored value back — do not trust the command's return string.
 
 Ad-hoc verify scope, not a test suite: this is a self-review protocol
 the agent runs in-process; the bar is "the user can trust the

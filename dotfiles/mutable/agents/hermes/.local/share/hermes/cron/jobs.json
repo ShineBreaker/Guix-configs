@@ -274,15 +274,15 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 9
+        "completed": 10
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-10-03T08:00:00+08:00",
-      "last_run_at": "2026-10-02T08:14:50.434483+08:00",
+      "next_run_at": "2026-10-04T08:00:00+08:00",
+      "last_run_at": "2026-10-03T08:00:20.400898+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -300,13 +300,68 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-02T08:00:00+08:00",
-        "dispatched_at": "2026-10-02T08:13:11.461226+08:00",
-        "lateness_seconds": 791.5,
-        "kind": "late"
+        "scheduled_at": "2026-10-03T08:00:00+08:00",
+        "dispatched_at": "2026-10-03T08:00:02.659144+08:00",
+        "lateness_seconds": 2.7,
+        "kind": "on_time"
       },
       "fire_claim": null
+    },
+    {
+      "id": "710940d9883f",
+      "name": "agenote-curator-weekly",
+      "prompt": "你是 Hermes Agent 的自主周度 agenote 策展助手。工作目录 ~/Documents/Org，agenote CLI 在 ~/.guix-home/profile/bin/agenote。\n\n## 定位\n\n每周一次对 agenote 知识库（~/Documents/Org/agenote/，约 470 张活跃卡片）跑**常规 curator 流水线**，跑完再用 Jev 判定 API 做**全量语义质量复核**，两份结果汇成一份周报。全程自主，不向用户提问，不确定的进待拍板清单。\n\n## 硬约束\n\n- 不可逆操作先想清楚：`agenote merge` 会让 secondary 归档（可恢复），`--prune-orphans` 会清条目——只做有 CLI 支撑的动作，不手删文件。删除一律 trash-cli，不用 rm。\n- 单轮新增卡片 最多 10 张，超出即暂停并在报告里列为 Andon，不继续导入。\n- commit 用 `agenote commit --no-gpg-sign -m \"策展: <50字内总结>\"`；只提交策展产物，收尾 `git show --stat` 核对实际文件集。\n- 报告是最终回复本身，直接输出；不要调用发消息工具，不要写文件交付。\n\n## 超时预算（实测口径）\n\nJev 全量判定 471 张卡片约 20 分钟、约 610K input tokens；skill 侧 74 个约 15 分钟、213K tokens。**单 tick 跑不完两条链**，所以本 job 拆两个动作，各自独立完成、独立汇报：\n\n1. 本 tick 先跑常规 curator 流水线（A 节），Jev 复核放 B 节。\n2. B 节的 Jev 判定**必须分批+断点续跑**：`jev_audit.py` 先跑卡片侧（约 20 分钟），跑完再跑 skill 侧；任一超时，下一行加 `--resume` 接着跑，不要从头重来。报告里明确写哪一侧未完成。\n3. 时间不够时按这个顺序砍：常规流水线的 Step 5/6/8 > Jev skill 侧 > Jev 卡片侧已有结果的重判。**Step 1 诊断、去重合并、reindex/lint/commit 和 Jev 卡片侧判定必须做完**。\n4. Jev 脚本的路径写成绝对路径，别依赖 cron 会话的 PATH：`/home/brokenshine/Projects/curation-2026-10-03/jev_audit.py`（nohup 后台默认不含 ~/.local/bin，agenote 在同一路径下、确认可用即可）。\n\n## 执行流程\n\n### A. 常规 curator 流水线\n\n按 agenote-curator skill 的 Step 顺序执行，重点是：\n\n1. `agenote health --quality --duplicates` + `agenote stats` + `agenote gaps --stale-days 60`——诊断\n2. `agenote list --unused-days 30 --all` 出降级候选，**逐张 `agenote get <id>` 读内容判断**，不看天数批量降级\n3. Step 3 / 3.5 的 type 与 tech 聚拢：先 `agenote fields --tech --json` 看分布，格式变体（大小写/分隔符/非技术栈噪音/单例长尾）逐张归主域\n4. Step 4 去重：`agenote deduplicate` + 已知的确定性候选（见下节确定性候选），逐对 `agenote get` 核实后 `agenote merge <primary> <secondary> --desc \"合并原因\"`\n5. Step 7 reconcile + dream（仅当过审后确认为空缺才写卡）\n6. Step 9 `agenote reindex` + `agenote lint --fix` + `agenote commit --no-gpg-sign -m \"策展: ...\"`\n\n**确定性合并候选**由 `~/Projects/curation-2026-10-03/merge_candidates.py` 现算（按标题相似度 + 共享实词 + 同 tech 域预筛，每次跑可能不同）；上轮（2026-10-03）生成的 15 个簇在 `~/Projects/curation-2026-10-03/MERGE-CANDIDATES.md`。**候选不是合并令**：仍需逐对 `agenote get` 判真伪——主题是否同一、信息是否互补，读卡结论为准。\n\n**Jev 重复判定只作弱旁证，不作合并触发条件**：本轮实测 471 张卡片的 duplicated 最高 0.50，无一达 0.60——它连「修复前后同一 bug 的新旧两版」都判不出完全覆盖（人是能看出来的）。合并判断永远以读卡结论为准，阈值只用于排序。若未来 duplicated 出现 ≥0.60 的条目，仍需读卡确认再决定。\n\n### B. Jev 全量语义质量复核（本轮核心）\n\n**脚本不在 HERMES_HOME 下**（那是 Guix Home 部署位，新建文件不生效）：本轮落盘脚本在 `~/Projects/curation-2026-10-03/jev_audit.py`，cron 会话先读它并复制到自己的临时目录再跑（先 `ls` 确认存在，不存在就直接用 jev_skill_audit.py 的口径现写，口径见下）。\n\n```bash\n# 卡片侧：约 20 分钟 / 610K tokens，471 张\npython3 jev_audit.py --root ~/Documents/Org/agenote --out jev-cards.jsonl [--resume]\n# skill 侧：约 15 分钟 / 213K tokens，74 个\npython3 $HERMES_HOME/skills/productivity/jev-skill-quality-audit/scripts/jev_skill_audit.py \\\n    --root $HERMES_HOME/skills --all --out jev-skills.md\n```\n\n判定口径（写在报告里）：Jev（TypeSafe SystemOne `evaluateJev`）返回 0~1 概率，主训练语言英文，CJK 绝对精度受限，**只信相对排序与交叉验证**。三个问题：\n\n- no_value：无任何可迁移教训（纯流水账/空模板节/一次性细节）→ ≥0.75 进无用候选清单，**人工读后再处置**，不自动归档\n- duplicated：核心教训已被同库其他卡完全覆盖 → 与确定性候选对取交集优先合。**注意：本轮实测最高 0.50，无一达阈值**——Jev 在重复判定上偏保守，别指望它替代读卡\n- stale_risk：版本号/API 行为绑定，可能已被新事实取代 → ≥0.70 进待复核清单\n\n**本轮 Jev 实测基线（写进报告做对照，别被未来的分数吓到）**：471 张卡片的 no_value 最高 0.11、duplicated 最高 0.50、stale_risk 最高 0.97（163 张 ≥0.70）；skill 侧 74 个 trigger_class 中位数约 0.5、30 个 <0.80，stale_facts 27 个 >0.70，13 个两者同时命中。阈值只是排序不是边界，**先读卡再处置**。\n\n**处置纪律**：\n\n- Jev 判定不是事实。任一候选进处置前，`agenote get <id>` 读原卡确认。\n- no_value 高的卡：先看是不是空模板节型（缺执行过程/发现）——这类应该补写而非删除；真无价值才降 status/归档。本轮实测没有高 no_value 卡，若出现先怀疑是不是提取漏了正文。\n- 只在读卡确认后才动 `agenote update --status` / `agenote archive` / `agenote merge`。\n- skill 侧同理：trigger_class < 0.80 进 description 待重写清单，只读不改（改动需用户拍板）；stale_facts 高不等于内容错，只是提示人工复核版本绑定句。\n\n### C. 周报格式\n\n最终回复按这个结构输出（markdown，投递到 QQ 前不渲染，保持纯文本可读）：\n\n```\n=== agenote 周度策展报告 YYYY-MM-DD ===\n【常规流水线】\n诊断：N 张活跃 / 孤立率 X% / 过时率 Y%\n状态重整：X 张（降级 a / 转 stable b）\ntech 聚拢：X 张（旧值 → 主域）\n去重合并：X 对（列出：主卡ID + secondaryID + 合并原因）\n新增卡片：X 张（仅真正空缺时）\ncommit：<sha>（git show --stat 已核对）\n\n【Jev 语义复核】\n判定范围：卡片 N 张（其中归档 M 张跳过）/ skill K 个\ntoken 用量：约 Nk\n无用候选（no_value 前 10，含分数）：列标题 + 读卡结论（补写 or 归档）。本轮实测最高仅 0.11，无一达 0.75，如实写「未发现无用卡片」\n重复候选（duplicated 前 10，含分数）：与确定性候选对取交集，其余列为待人工\n版本绑定风险（stale_risk 前 10，含分数）：列标题，标注 usage_count\nskill 侧：description 待重写（trigger_class < 0.80，共 N 个）+ 版本绑定风险（stale_facts > 0.70，共 N 个）+ 两者同时命中（优先处理）\n\n【待你拍板】\n1. ... 选项 A/B/C + 建议方向\n```\n\n## 边界\n\n- 不跑 `blue rebuild` / `guix system reconfigure` 等需 sudo 的系统操作。\n- 不改 HERMES_HOME/skills 下的 skill 文件（Jev 结果只进清单）。\n- 不碰 ~/.config/agents/skills/（Guix Home immutable 部署位）。\n- cron 内禁止递归创建 cron job。",
+      "skills": [
+        "agenote-curator",
+        "corpus-quality-audit"
+      ],
+      "skill": "agenote-curator",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "30 23 * * 0",
+        "display": "30 23 * * 0"
+      },
+      "schedule_display": "30 23 * * 0",
+      "repeat": {
+        "times": null,
+        "completed": 0
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-10-03T11:17:24.326619+08:00",
+      "next_run_at": "2026-10-04T23:30:00+08:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "qqbot",
+      "origin": {
+        "platform": "qqbot",
+        "chat_id": "52DAD9E6A36A3DEC33E37F47CF09673F",
+        "chat_name": null,
+        "thread_id": null,
+        "user_id": "52DAD9E6A36A3DEC33E37F47CF09673F",
+        "scope_id": null
+      },
+      "enabled_toolsets": [
+        "terminal",
+        "file"
+      ],
+      "workdir": "/home/brokenshine/Documents/Org"
     }
   ],
-  "updated_at": "2026-10-03T07:44:27.720769+08:00"
+  "updated_at": "2026-10-03T11:18:02.080985+08:00"
 }

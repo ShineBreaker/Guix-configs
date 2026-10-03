@@ -477,7 +477,8 @@ approvals:
   cron_mode: deny
   mcp_reload_confirm: true
   destructive_slash_confirm: false
-command_allowlist: []
+command_allowlist:
+  - execute_code
 plugins:
   enabled:
     - herdr-agent-state
