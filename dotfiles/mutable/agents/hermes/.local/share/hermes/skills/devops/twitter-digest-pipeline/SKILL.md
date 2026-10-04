@@ -130,7 +130,7 @@ python3 $HERMES_HOME/scripts/twitter-digest/digest_render.py md daily.md \
 ## Pitfalls
 
 - **先看排期再看内容**。排查「为什么发了三次」这类问题时，`hermes cron list` 的 schedule 是第一现场：排期是 `0 1,3,5,7,9,11 * * *` 就会一天发六次，四份产出 md5 不同是四轮独立抓取，不是重复投递。调试期为多轮验证临时放宽的排期，调试结束要缩回去；改 job 名字为 nightly 就要核对排期是否真的一天一次。
-- 后台 / nohup 起的进程 PATH 可能不含 `~/.local/bin`，`hermes` 命令要用绝对路径 `$HERMES_HOME/hermes-agent/venv/bin/hermes`。
+- **渲染成品写 `/tmp/digest-render` 会被开机清理吞掉**：本机 `/tmp` 虽是持久 Btrfs 子卷，Guix 的 `cleanup-/tmp` root-one-shot-service 每次开机都 `find /tmp -mindepth 1 -delete`（用 `/run/cleanup-tmp-done` 保证单次开机只清一次）。凌晨 3 点渲染完的成品、`fonts-serif.conf`、fontconfig cache 全部随开机消失，早上 8 点的投递 job 拿到 notepad 路径却找不到文件（2026-10-04 实测：机器 10:17 重启，03:10 写入的 `last_image` 失效）。修法是让渲染输出落到持久目录（如 `$HERMES_HOME/state/twitter-digest/render/`），并同步 cron prompt 里的 `daily.md` 路径与 `MEDIA:` 说明；落在 /tmp 的其它管道同样中招。
 - **仓库里 `git commit -F <file>` 可能被 hook 链拦死**：`core.hooksPath` 指向的 `prepare-commit-msg` 等软链若目标缺失，`-F` 会被判成「必须使用 -m」而提交失败，报错与 message 内容无关。直接用多条 `-m` 分段提交绕开失效 hook。
 - `hermes cron run` 报 "already being fired by the scheduler"：先 `hermes cron history <id>` 看有没有 running 实例。父 shell 退出后实例可能变成孤儿继续跑，也可能被 terminal 进程清理连带杀死、执行记录永久卡 `running` 且无产出。调度器状态不可靠时直接手动跑四步更稳。
 - 新建脚本在部署位不会自动建软链（stow 只认已有文件），手工补链后提醒用户跑 `blue home` 让 stow 认领。

@@ -20,15 +20,15 @@
       "schedule_display": "0 23 * * 2,4,6",
       "repeat": {
         "times": null,
-        "completed": 47
+        "completed": 48
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-21T17:40:06.173351+08:00",
-      "next_run_at": "2026-10-03T23:00:00+08:00",
-      "last_run_at": "2026-10-02T08:14:06.248138+08:00",
+      "next_run_at": "2026-10-06T23:00:00+08:00",
+      "last_run_at": "2026-10-03T23:03:09.913582+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -46,10 +46,10 @@
       "model_snapshot": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-01T23:00:00+08:00",
-        "dispatched_at": "2026-10-02T08:13:11.461226+08:00",
-        "lateness_seconds": 33191.5,
-        "kind": "catch_up"
+        "scheduled_at": "2026-10-03T23:00:00+08:00",
+        "dispatched_at": "2026-10-03T23:00:57.457548+08:00",
+        "lateness_seconds": 57.5,
+        "kind": "on_time"
       }
     },
     {
@@ -127,17 +127,17 @@
       "schedule_display": "30 23 * * 3,6",
       "repeat": {
         "times": null,
-        "completed": 17
+        "completed": 18
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-12T22:32:44.043191+08:00",
-      "next_run_at": "2026-10-03T23:30:00+08:00",
-      "last_run_at": "2026-09-26T23:30:28.876397+08:00",
-      "last_status": "error",
-      "last_error": "RuntimeError: Failed to initialize OpenAI client: No module named 'pydantic_core._pydantic_core'",
+      "next_run_at": "2026-10-07T23:30:00+08:00",
+      "last_run_at": "2026-10-04T00:16:07.864294+08:00",
+      "last_status": "ok",
+      "last_error": null,
       "last_delivery_error": null,
       "deliver": "qqbot",
       "origin": null,
@@ -147,15 +147,12 @@
         "file"
       ],
       "workdir": "/home/brokenshine/Projects/Config/Guix-configs",
-      "fire_claim": {
-        "at": "2026-09-30T23:49:00.157255+08:00",
-        "by": "BrokenShine-Laptop:2729:fb00cb0024f04dea964a2dd1ee6b01ec"
-      },
-      "failure_streak": 1,
+      "fire_claim": null,
+      "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-09-30T23:30:00+08:00",
-        "dispatched_at": "2026-09-30T23:30:59.915292+08:00",
-        "lateness_seconds": 59.9,
+        "scheduled_at": "2026-10-03T23:30:00+08:00",
+        "dispatched_at": "2026-10-03T23:30:57.610656+08:00",
+        "lateness_seconds": 57.6,
         "kind": "on_time"
       }
     },
@@ -186,8 +183,8 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T15:40:30.541829+08:00",
-      "next_run_at": "2026-10-04T03:00:00+08:00",
-      "last_run_at": "2026-10-03T07:44:27.718618+08:00",
+      "next_run_at": "2026-10-05T03:00:00+08:00",
+      "last_run_at": "2026-10-04T03:11:09.089094+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -197,12 +194,15 @@
       "origin": null,
       "enabled_toolsets": null,
       "workdir": null,
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-10-04T10:20:49.596090+08:00",
+        "by": "BrokenShine-Laptop:5523:6e122725857540b6875dc99819c7e98b"
+      },
       "last_dispatch": {
-        "scheduled_at": "2026-10-03T03:00:00+08:00",
-        "dispatched_at": "2026-10-03T07:34:02.664767+08:00",
-        "lateness_seconds": 16442.7,
-        "kind": "catch_up"
+        "scheduled_at": "2026-10-04T03:00:00+08:00",
+        "dispatched_at": "2026-10-04T03:00:57.455958+08:00",
+        "lateness_seconds": 57.5,
+        "kind": "on_time"
       }
     },
     {
@@ -274,15 +274,15 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 10
+        "completed": 11
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-10-04T08:00:00+08:00",
-      "last_run_at": "2026-10-03T08:00:20.400898+08:00",
+      "next_run_at": "2026-10-05T08:00:00+08:00",
+      "last_run_at": "2026-10-04T10:35:22.150505+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -300,10 +300,10 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-03T08:00:00+08:00",
-        "dispatched_at": "2026-10-03T08:00:02.659144+08:00",
-        "lateness_seconds": 2.7,
-        "kind": "on_time"
+        "scheduled_at": "2026-10-04T08:00:00+08:00",
+        "dispatched_at": "2026-10-04T10:18:06.034951+08:00",
+        "lateness_seconds": 8286.0,
+        "kind": "catch_up"
       },
       "fire_claim": null
     },
@@ -363,5 +363,5 @@
       "workdir": "/home/brokenshine/Documents/Org"
     }
   ],
-  "updated_at": "2026-10-03T11:18:02.080985+08:00"
+  "updated_at": "2026-10-04T10:35:22.151983+08:00"
 }
