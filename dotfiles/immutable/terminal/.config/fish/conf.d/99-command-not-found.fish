@@ -2,12 +2,17 @@
 #
 # SPDX-License-Identifier: MIT
 
+# not-found 路径上的铁律：严禁裸写会 alias 化的命令名（10-settings.fish 的
+# grep→rg、cat→bat、ls→eza）。handler 自己就活在 command-not-found 事件里，
+# 裸 grep 被 alias 换成 rg 后 rg 缺失又触发 handler——无限递归，栈耗尽前会
+# 刷出数十层 backtrace（实测 fish 4.7）。只认 command <name> 的外部命令。
+
 function fish_command_not_found
     set -l cmd $argv[1]
 
     echo "fish: '$cmd' not found. Searching in Guix..." >&2
 
-    set -l pkg (guix locate "$cmd" 2>/dev/null | grep /bin/ | head -1 | cut -d@ -f1)
+    set -l pkg (guix locate "$cmd" 2>/dev/null | command grep /bin/ | head -1 | cut -d@ -f1)
 
     if test -z "$pkg"
         __fish_default_command_not_found_handler $cmd
@@ -27,7 +32,7 @@ end
 
 function try
     set -l cmd $argv[1]
-    set -l pkg (guix locate "$cmd" 2>/dev/null | grep /bin/ | head -1 | cut -d@ -f1)
+    set -l pkg (guix locate "$cmd" 2>/dev/null | command grep /bin/ | head -1 | cut -d@ -f1)
 
     if test -n "$pkg"
         echo "Running via guix shell $pkg..." >&2

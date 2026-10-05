@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: MIT
 
+# 裸命令名一律 command <name>：本文件在登录路径加载，__set_jdk 亦可在交互态
+# （alias 已生效）被调用；缺 rg/bat 的机器上裸 grep/cat 会踩 command-not-found
+# 递归刷屏。契约细节见 docs/scripts/fish-conf-d.md 与 fish-functions.md。
+
 set -g JDK_VERSION_FILE $XDG_CONFIG_HOME/fish/.jdk_version
 set -g JDK_PATH_FILE $XDG_CONFIG_HOME/fish/.jdk_path
 set -g JDK_DEFAULT_VERSION 25
@@ -15,7 +19,7 @@ function __set_jdk -d "Set JDK environment"
         return 1
     end
 
-    set -l jdk_path $(guix build openjdk@$ver | grep '\-jdk$')
+    set -l jdk_path $(guix build openjdk@$ver | command grep '\-jdk$')
 
     if test -z "$jdk_path"
         echo "错误：找不到 openjdk@$ver" >&2
@@ -34,10 +38,10 @@ end
 
 # 启动回放优先级：缓存路径 > 记录版本重建 > 默认版本
 if test -f $JDK_PATH_FILE
-    set -gx JAVA_HOME (cat $JDK_PATH_FILE)
+    set -gx JAVA_HOME (command cat $JDK_PATH_FILE)
     fish_add_path -gP $JAVA_HOME/bin
 else if test -f $JDK_VERSION_FILE
-    set -l ver (cat $JDK_VERSION_FILE)
+    set -l ver (command cat $JDK_VERSION_FILE)
     __set_jdk $ver >/dev/null 2>&1
 else if test -n "$JDK_DEFAULT_VERSION"
     __set_jdk $JDK_DEFAULT_VERSION >/dev/null 2>&1
