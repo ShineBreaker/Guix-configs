@@ -35,6 +35,7 @@ mutable/
 │   ├── agenote.lock
 │   └── sync-agenote.sh
 ├── agents/
+│   ├── devin/
 │   ├── dsh/
 │   ├── extensions/
 │   ├── hermes/
@@ -61,6 +62,7 @@ mutable/
 | 软件包                | 部署目标                                                                                                             | 说明与手册                                                                                                                                                                                                                |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `emacs`               | `~/.config/emacs/`                                                                                                   | 单一 `emacs.org` 驱动的 Emacs 配置，详见 [emacs/.../AGENTS.md](emacs/.config/emacs/AGENTS.md)                                                                                                                             |
+| `agents/devin`        | `~/.local/share/agents/devin/`（安装树）+ `~/.local/bin/devin`                                                       | Devin CLI（上游 binary bundle；`--install`/`update` 为 manifest 直装增强），入口手册 [devin.md](../../docs/scripts/devin.md)                                                                                              |
 | `agents/dsh`          | `~/.local/share/dsh/`（配置/状态）+ `~/.local/share/agents/dsh/`（CLI 安装树）+ `~/.local/bin/dsh` + 图标/desktop 项 | DeepSeek Harness 配置层与 CLI（update/web/tui 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)；入口手册 [dsh.md](../../docs/scripts/dsh.md)                                                              |
 | `agents/hermes`       | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                                                      | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）；入口手册 [hermes.md](../../docs/scripts/hermes.md)                                                                                      |
 | `agents/minimax-code` | `~/.local/share/agents/minimax-code/`（安装树）+ `~/.local/bin/mcode`                                                | MiniMax Code CLI（npm 包 `@minimax-ai/code`；`mcode tools` 分发上游第二 bin `mcode-tools`），详见 [minimax-code/AGENTS.md](agents/minimax-code/AGENTS.md)；入口手册 [minimax-code.md](../../docs/scripts/minimax-code.md) |

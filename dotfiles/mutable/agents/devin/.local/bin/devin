@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# devin — Devin CLI 入口：安装树在 $AGENTS_ROOT/devin（<版本>/ + current 软链），
+# --install / update 按官方 manifest 下载并校验 sha256；数据与凭据留在
+# $XDG_DATA_HOME/devin（agent home 自持，不搬家）。文档：docs/scripts/devin.md
+set -euo pipefail
+
+: "${AGENTS_ROOT:=${XDG_DATA_HOME:-$HOME/.local/share}/agents}"
+
+_root="$AGENTS_ROOT/devin"
+_bin="$_root/current/bin/devin"
+_manifest_url="https://static.devin.ai/cli/current/manifest.json"
+
+die() {
+  printf 'devin: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+用法: devin [上游参数...]
+      devin --install
+      devin update [--force]
+
+  devin <上游参数...>   透传给安装树内的上游二进制（未安装时先引导安装）
+  devin --install       安装 / 更新到官方 latest（幂等）
+  devin update [--force]
+                        同 --install；--force 连当前版本一起重装
+                        上游交互式自更新被本入口遮蔽，原生行为直调
+                        $AGENTS_ROOT/devin/current/bin/devin update
+  上游子命令帮助: devin help <子命令>
+
+安装树: ~/.local/share/agents/devin   文档: docs/scripts/devin.md
+EOF
+}
+
+# uname -m → 上游 manifest 的 target 键
+target_key() {
+  case "$(uname -m)" in
+    x86_64) printf 'x86_64-unknown-linux' ;;
+    aarch64) printf 'aarch64-unknown-linux' ;;
+    *) die "不支持的架构：$(uname -m)" ;;
+  esac
+}
+
+# man 页软链（对齐官方 install.sh）：<root>/current/share/man/man1/*.1 →
+# $XDG_DATA_HOME/man/man1/。ln -sfn 原地改指，换版后旧链自动跟随 current。
+link_man() {
+  local src_dir dst_dir manpage
+  src_dir="$_root/current/share/man/man1"
+  dst_dir="${XDG_DATA_HOME:-$HOME/.local/share}/man/man1"
+  if [[ ! -d "$src_dir" ]]; then
+    return 0
+  fi
+  mkdir -p "$dst_dir"
+  while IFS= read -r manpage; do
+    ln -sfn "$manpage" "$dst_dir/$(basename "$manpage")"
+  done < <(find "$src_dir" -maxdepth 1 -type f -name '*.1')
+}
+
+# 安装 / 更新：目录形态对齐官方 install.sh（<root>/<版本>/{bin,share,distribution}
+# 与 <root>/current），根从 $XDG_DATA_HOME/devin/cli/_versions 换到 $AGENTS_ROOT/devin。
+# 先整包落 staging 再 mv 就位：下载或校验失败都不碰现有安装树。
+install_cli() {
+  local arg force=0 target manifest version url want_sha got_sha tarball staging
+  for arg in "$@"; do
+    if [[ "$arg" == '--force' ]]; then
+      force=1
+    fi
+  done
+
+  command -v curl >/dev/null 2>&1 || die 'curl 未安装'
+  command -v jq >/dev/null 2>&1 || die 'jq 未安装（Guix: guix install jq）'
+  command -v sha256sum >/dev/null 2>&1 || die 'sha256sum 未安装（coreutils）'
+
+  target="$(target_key)"
+  manifest="$(curl -fsSL "$_manifest_url")" || die "拉取 manifest 失败：$_manifest_url"
+  version="$(jq -r '.version // empty' <<<"$manifest")"
+  url="$(jq -r --arg t "$target" '.platforms[$t].url // empty' <<<"$manifest")"
+  want_sha="$(jq -r --arg t "$target" '.platforms[$t].sha256 // empty' <<<"$manifest")"
+  if [[ -z "$version" || -z "$url" || -z "$want_sha" ]]; then
+    die "manifest 缺 $target 的 version/url/sha256"
+  fi
+
+  mkdir -p "$_root"
+  if [[ "$force" -eq 0 && -x "$_root/$version/bin/devin" ]]; then
+    printf 'devin: 已是 latest（%s）\n' "$version" >&2
+  else
+    tarball="$(mktemp "${TMPDIR:-/tmp}/devin-bundle.XXXXXX.tar.gz")"
+    staging="$_root/.staging.$$"
+    # shellcheck disable=SC2064  # 路径须在定义时展开：EXIT 时函数局部变量已出作用域
+    trap "rm -rf '$staging' '$tarball'" EXIT
+    printf 'devin: 下载 %s（%s）...\n' "$version" "$url" >&2
+    curl -fL --progress-bar "$url" -o "$tarball" || die "下载失败：$url"
+    got_sha="$(sha256sum "$tarball" | cut -d' ' -f1)"
+    if [[ "$got_sha" != "$want_sha" ]]; then
+      die "sha256 校验失败：期望 $want_sha，实际 $got_sha"
+    fi
+    mkdir -p "$staging"
+    tar xzf "$tarball" -C "$staging"
+    [[ -x "$staging/bin/devin" ]] || die 'bundle 结构异常：缺 bin/devin'
+    printf 'curl-bash\n' >"$staging/distribution" # 官方 install.sh 同款分发标记
+    rm -rf "${_root:?}/$version"                  # 仅 --force 命中；新包已落 staging
+    mv "$staging" "$_root/$version"
+    printf 'devin: 已安装 %s → %s\n' "$version" "$_root/$version" >&2
+    if [[ ! -f "${XDG_DATA_HOME:-$HOME/.local/share}/devin/credentials.toml" ]]; then
+      printf 'devin: 首次使用请运行 devin setup 完成登录\n' >&2
+    fi
+  fi
+
+  ln -sfn "$version" "$_root/current"
+  link_man
+}
+
+# 拦截即覆写：上游 `devin update` 按官方安装布局（distribution 标记 +
+# $XDG_DATA_HOME/devin/cli/_versions）推导安装根与入口软链，与本包的
+# $AGENTS_ROOT/devin + stow 入口不一致，故遮蔽为 manifest 直装；原生行为
+# 直调安装树内二进制触达（见本文件 usage 与 docs/scripts/devin.md）
+case "${1:-}" in
+  --install | update)
+    for arg in "${@:2}"; do
+      if [[ "$arg" == '-h' || "$arg" == '--help' ]]; then
+        usage
+        exit 0
+      fi
+    done
+    install_cli "$@"
+    exit 0
+    ;;
+esac
+
+if [[ ! -x "$_bin" ]]; then
+  printf 'devin: 安装树缺失（%s）\n' "$_root" >&2
+  if [[ -t 0 ]]; then
+    read -r -p 'devin: 现在从官方 manifest 安装？（需联网）[y/N] ' _reply || _reply=
+    case "$_reply" in
+      [yY] | [yY][eE][sS]) ;;
+      *)
+        printf 'devin: 已取消，CLI 仍未安装\n' >&2
+        exit 130
+        ;;
+    esac
+  fi
+  install_cli
+fi
+
+exec "$_bin" "$@"

@@ -10,115 +10,114 @@
   brief: 自研工具目录本身（浏览 / 帮助 / 补全传参运行）
   category: tools
   usage:
-    - "toolbox"
-    - "toolbox run secrets"
-    - "toolbox check"
-  args: "list check run"
-  help_cmd: "--help"
+    - toolbox
+    - toolbox run secrets
+    - toolbox check
+  args: list check run
+  help_cmd: --help
   source: dotfiles/mutable/tools/toolbox/.local/bin/toolbox
-
 - name: dsh
-  brief: DeepSeek Harness CLI（update/web 子命令为 Guix 增强版：一键更新本体与插件 / 起 Web UI 并开 App 窗口）
+  brief: DeepSeek Harness CLI
   category: agents
   usage:
-    - "dsh update --check"
-    - "dsh update -y --restart"
-    - "dsh web --reauth"
-  args: "update web --check --restart --yes --reauth --remote-url --lan-off"
+    - dsh update --check
+    - dsh update -y --restart
+    - dsh web --reauth
+  args: update web --check --restart --yes --reauth --remote-url --lan-off
   help_cmd: ""
   source: dotfiles/mutable/agents/dsh/.local/bin/dsh
-
 - name: hermes
-  brief: Hermes 入口（update/desktop 子命令为 Guix 增强版：升级 checkout 并重启常驻服务 / FHS 容器启动桌面端）
+  brief: Hermes 入口
   category: agents
   usage:
-    - "hermes update --branch main"
-    - "hermes update --check"
-    - "hermes desktop"
-  args: "update desktop --check --branch --yes"
+    - hermes update --branch main
+    - hermes update --check
+    - hermes desktop
+  args: update desktop --check --branch --yes
   help_cmd: ""
   source: dotfiles/mutable/agents/hermes/.local/bin/hermes
-
+- name: devin
+  brief: Devin CLI 入口
+  category: agents
+  usage:
+    - devin --install
+    - devin update --force
+  args: --install --force
+  help_cmd: ""
+  source: dotfiles/mutable/agents/devin/.local/bin/devin
 - name: pi-update
   brief: 按 settings.json 更新 Pi 核心与扩展
   category: agents
   usage:
-    - "pi-update"
-    - "pi-update --extensions-only"
-  args: "--extensions-only"
+    - pi-update
+    - pi-update --extensions-only
+  args: --extensions-only
   help_cmd: ""
   source: dotfiles/mutable/agents/pi/.local/bin/pi-update
-
 - name: askill
   brief: 声明式管理第三方 agent skills（lock 驱动）
   category: agents
   usage:
-    - "askill add owner/repo -s skill-a,skill-b"
-    - "askill list"
-    - "askill update"
-    - "askill install"
-  args: "add update install remove sync list"
-  help_cmd: "--help"
+    - askill add owner/repo -s skill-a,skill-b
+    - askill list
+    - askill update
+    - askill install
+  args: add update install remove sync list
+  help_cmd: --help
   source: dotfiles/mutable/agents/skills/.local/bin/askill
-
 - name: appimage-run
   brief: 基于 Guix FHS 容器的 AppImage 安装/运行管理器
   category: tools
   usage:
-    - "appimage-run try ~/Downloads/Cursor.AppImage"
-    - "appimage-run install ~/Downloads/Cursor.AppImage"
-    - "appimage-run run cursor"
-    - "appimage-run diagnose --repair cursor"
-  args: "install run try uninstall list diagnose diagnose-gpu check-updates --debug --yes"
-  help_cmd: "--help"
+    - appimage-run try ~/Downloads/Cursor.AppImage
+    - appimage-run install ~/Downloads/Cursor.AppImage
+    - appimage-run run cursor
+    - appimage-run diagnose --repair cursor
+  args: install run try uninstall list diagnose diagnose-gpu check-updates --debug --yes
+  help_cmd: --help
   source: dotfiles/mutable/tools/appimage-run/.local/bin/appimage-run
-
 - name: secrets
   brief: age 加密的本地密钥库（明文只落 tmpfs）
   category: tools
   usage:
-    - "secrets"
-    - "secrets show github"
-    - "secrets clip github"
-    - "secrets --dry-run edit github"
-  args: "init list add show clip edit rename remove re-encrypt menu --dry-run"
-  help_cmd: "--help"
+    - secrets
+    - secrets show github
+    - secrets clip github
+    - secrets --dry-run edit github
+  args: init list add show clip edit rename remove re-encrypt menu --dry-run
+  help_cmd: --help
   source: dotfiles/mutable/tools/secrets/.local/bin/secrets
-
 - name: niri-app-switcher
   brief: niri 按应用聚合的窗口切换器（rofi + 历史排序）
   category: desktop
   usage:
-    - "niri-app-switcher"
+    - niri-app-switcher
   args: ""
   help_cmd: ""
   source: dotfiles/immutable/desktop/.local/bin/niri-app-switcher
-
 - name: niri-quake-toggle
   brief: 呼出/收起 kitty quick-access 下拉面板
   category: desktop
   usage:
-    - "niri-quake-toggle"
+    - niri-quake-toggle
   args: ""
   help_cmd: ""
   source: dotfiles/immutable/desktop/.local/bin/niri-quake-toggle
-
 - name: keepassxc-credential-setup
   brief: 维护 git-credential-keepassxc 的 callers 配置
   category: utilities
   usage:
-    - "keepassxc-credential-setup status"
-    - "keepassxc-credential-setup init"
-    - "keepassxc-credential-setup callers"
-  args: "status init update callers"
-  help_cmd: "--help"
+    - keepassxc-credential-setup status
+    - keepassxc-credential-setup init
+    - keepassxc-credential-setup callers
+  args: status init update callers
+  help_cmd: --help
   source: dotfiles/immutable/utilities/.local/bin/keepassxc-credential-setup
-
 - name: nixgpu-update
   brief: 重建 /var/lib/non-nixos-gpu 软链指向 nix GPU 资源（需 sudo）
   category: utilities
   usage:
-    - "sudo nixgpu-update"
+    - sudo nixgpu-update
   args: ""
   help_cmd: ""
   source: dotfiles/immutable/utilities/.local/bin/nixgpu-update
