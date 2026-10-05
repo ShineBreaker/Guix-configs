@@ -13,7 +13,7 @@
 | `01-guix.fish`              | 登录 shell 经 `fenv` 继承 `~/.profile`（guix profile 环境） |
 | `05-java.fish`              | JDK 切换器 `__set_jdk` 与启动回放，细节见 fish-functions.md |
 | `05-path.fish`              | Nix profile + `PNPM_HOME` + `~/.local/bin` 路径注册         |
-| `10-github-token.fish`      | `gh auth token` 动态导出 `GITHUB_TOKEN` / `GH_TOKEN`        |
+| `10-github-token.fish`      | `type -q gh` 守卫后动态导出 `GITHUB_TOKEN` / `GH_TOKEN`     |
 | `10-settings.fish`          | alias / abbr 集中登记（纯表，无逻辑）                       |
 | `20-greeting.fish`          | 首个 prompt 前跑 fastfetch + lolcat 格言                    |
 | `99-command-not-found.fish` | `fish_command_not_found` → `guix locate` → `guix shell`     |
@@ -35,11 +35,19 @@
 
 `set -q GUIX_ENVIRONMENT; or set -q CONTAINER_ID; and return` 是刻意的 `or` / `and` 链：guix shell 内（`GUIX_ENVIRONMENT`）或 distrobox 内（`CONTAINER_ID`）任一成立即跳过欢迎输出。
 
+## 10-github-token.fish
+
+单一事实源是 gh 凭据，`gh auth token` 动态读取、不落盘；`type -q gh` 守卫后导出 `GITHUB_TOKEN` / `GH_TOKEN`。
+
+**守卫不可省**：gh 缺失时 `command gh` 走 fish 的 command-not-found 路径，其诊断输出走 shell 自身 stderr、**绕过硬重定向 `2>/dev/null`**（实测 fish 4.7），没装 gh 的机器每次启动都刷一条错。`type -q gh` 让查找根本不发生，是唯一有效的静默手段。
+
 ## 99-command-not-found.fish
 
 `fish_command_not_found`：`guix locate <cmd>` 取首个含 `/bin/` 的包 → 执行 `guix shell <pkg> -- <cmd>…`。找不到包时回落 fish 自带的 `__fish_default_command_not_found_handler`。
 
 **`$history[1]` 是关键 hack，也是已知限制**：fish 的 not-found handler 拿不到用户输入的原始参数，只能从 `$history[1]` 取回整条命令行再按空格重拆——**复杂引号参数会被二次拆分**。参数需要原样保留时用脚本里的另一个函数 `try <cmd> [args...]`，它是显式入口，`$argv` 完整透传，无此限制；找不到包时返回 `127`。
+
+**`command <name>` 前缀是 not-found 路径的铁律**：handler 与 `try` 的 `guix locate` 管道只认 `command grep` 这类外部命令直调，**严禁裸写会 alias 化的命令名**。`10-settings.fish` 的 `alias grep rg` / `alias cat bat` / `alias ls eza` 在 fish 4.7 是**运行时展开**（函数先定义、alias 后登记，调用时照样替换）——handler 自己就活在 command-not-found 事件里：裸 `grep` 被换成 `rg`，rg 缺失又触发 handler 找 `rg`，形成无限递归，栈耗尽前刷出数十层 backtrace（实测 64 轮 / 740+ 行）。`05-java.fish` 的 `__set_jdk` 管道与回放同理：登录态加载时 alias 尚未登记（`05-` 先于 `10-settings`）不会触发，但交互态 `jdk set <ver>` 时 alias 已生效，裸 `grep` / `cat` 一样递归，故同加 `command` 前缀。
 
 ## 99-selector.fish
 
@@ -56,3 +64,7 @@
 会话名清洗（`__selector_make_session_name`）：空输入回落到 cwd 的 basename；非法字符 `[^a-zA-Z0-9_-]` 一律换成 `_`；截断到 20 字符；结果为空时用 `default`。
 
 **fish 陷阱**：正则行末锚 `$` 在单引号字符串里是**字面量**，判断纯数字必须写双引号 `"^[0-9]+\$"`——tmux 拒绝纯数字 session 名，所以要给它们加 `s_` 前缀。
+
+## 变更记录
+
+- 2026-10-03：修复无 gh/rg/eza/bat 的机器（笔记本）SSH 登录刷屏。`10-github-token.fish` 加 `type -q gh` 守卫；`99-command-not-found.fish` 的 handler 与 `try` 两处 `grep` 改 `command grep`，斩断「alias grep→rg 缺失 → 再触发 handler」的无限递归；`05-java.fish` 的 `__set_jdk` 管道与回放的 `grep`/`cat` 同步加 `command` 前缀（登录态 alias 未登记不触发，交互态 `jdk set` 才触发）。验证：沙箱四变体（head/new × 有/无 gh+rg）对比 stdout、stderr、退出码与桩 argv 日志——工具齐全时 head 与修复版完全一致（零回归）；工具缺失时刷屏从 743 行 / 64 轮递归降为 0 行，`try`/`jdk set` 成功路径恢复。遗留同类暴露（按需调用函数、不在登录路径，未改）：`functions/denv.fish` 的 `cat`/`find`/`ls`、`functions/java_tools.fish:21` 的 `cat`，需要时同法加 `command` 前缀。

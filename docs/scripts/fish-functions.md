@@ -81,7 +81,7 @@ jbuild <Class>      # javac -d bin src/<Class>.java（自动建 bin/）
 jrun <Class>        # java -cp bin <Class>（要求 bin/<Class>.class 存在）
 ```
 
-`jdk` 的持久化在 `conf.d/05-java.fish`：`__set_jdk` 校验纯数字版本号，经 `guix build openjdk@<ver>` 取 `-jdk` 结尾的 store 路径，设 `JAVA_HOME` + `fish_add_path` 后写两个记录文件。启动回放优先级固定为**缓存路径 > 记录版本 > 默认版本**：
+`jdk` 的持久化在 `conf.d/05-java.fish`：`__set_jdk` 校验纯数字版本号，经 `guix build openjdk@<ver>` 取 `-jdk` 结尾的 store 路径（管道内 `command grep` 直调外部命令，不写会被 `alias grep rg` 替换的裸命令名，见 [fish-conf-d.md](fish-conf-d.md) §99-command-not-found），设 `JAVA_HOME` + `fish_add_path` 后写两个记录文件。启动回放优先级固定为**缓存路径 > 记录版本 > 默认版本**：
 
 | 变量                  | 默认 | 回放行为                     |
 | --------------------- | ---- | ---------------------------- |

@@ -28,6 +28,7 @@
 | dsh / dsh-web / dsh-update / dsh-tui                 | `dotfiles/mutable/agents/dsh/.local/`              | mutable | [dsh.md](dsh.md)                   |
 | hermes / hermes-acp / hermes-update / hermes-desktop | `dotfiles/mutable/agents/hermes/.local/`           | mutable | [hermes.md](hermes.md)             |
 | mcode                                                | `dotfiles/mutable/agents/minimax-code/.local/bin/` | mutable | [minimax-code.md](minimax-code.md) |
+| devin                                                | `dotfiles/mutable/agents/devin/.local/bin/`        | mutable | [devin.md](devin.md)               |
 | askill                                               | `dotfiles/mutable/agents/skills/.local/bin/`       | mutable | [askill.md](askill.md)             |
 
 ## 第三方二进制（`~/.local/bin`）
@@ -53,7 +54,7 @@
 | 自定义函数（run/retry/screen-off/git-resign/jdk·jbuild·jrun/fish_prompt） | `dotfiles/immutable/terminal/.config/fish/functions/`   | immutable（须 `blue home`）     | [fish-functions.md](fish-functions.md)       |
 | denv                                                                      | 同上                                                    | 同上                            | [denv.md](denv.md)                           |
 | conf.d/*.fish（9 个启动碎片）                                             | `dotfiles/immutable/terminal/.config/fish/conf.d/`      | 同上                            | [fish-conf-d.md](fish-conf-d.md)             |
-| completions/*.fish（17 个补全）                                           | `dotfiles/immutable/terminal/.config/fish/completions/` | 同上                            | [fish-completions.md](fish-completions.md)   |
+| completions/*.fish（18 个补全）                                           | `dotfiles/immutable/terminal/.config/fish/completions/` | 同上                            | [fish-completions.md](fish-completions.md)   |
 | livecd fish_greeting / fish_prompt                                        | `source/files/livecd/.config/fish/functions/`           | Live ISO 内经 `local-file` 引用 | [misc-scripts.md](misc-scripts.md) §Live ISO |
 
 ## 终端：tmux
