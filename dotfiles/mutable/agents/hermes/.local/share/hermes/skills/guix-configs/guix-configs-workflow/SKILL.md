@@ -1,6 +1,6 @@
 ---
 name: guix-configs-workflow
-description: Use when the user works inside ~/Projects/Config/Guix-configs and mentions '改 dotfiles', 'blue home', 'guix system reconfigure', 'shepherd service', 'stow 死链', 'blue stow', 'AGENTS.md 翻新', 'fcitx', 'IME 没输入法', 'Electron 没输入法', 'wireplumber', '二轨 dotfiles', '恢复被删除的 dotfiles', 'gpg-agent 不走 pinentry', 'pinentry 弹 tty', 'gpg 密码输入框', or related. Eleven sub-protocols — dotfiles deploy verification, worker delegation, multi-line edit safety, Guix service debugging (含 gpg-agent/pinentry 绝对 store 路径范式), GNU Stow mutable config, restoring deleted dotfiles, ISO 移植, 需求澄清, 模块归属陷阱.
+description: Use when working in Guix-configs, esp. dotfiles deploy, home-shepherd services, system-layer config.org edits (incl. udev/hidraw device permissions), or stow. Ten-plus sub-protocols — dotfiles deploy verification, Guix service debugging, GNU Stow mutable config, config.org edit safety (block-replace header trap), ISO porting, requirement clarification, module ownership.
 ---
 # guix-configs-workflow — Guix-configs 仓库高频工作流
 
@@ -1083,6 +1083,12 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 
 正确做法：**先 stash 验证 baseline 是不是真有错**,如果 baseline 也有——是另一个独立 issue,跟当前任务**完全无关**,**不要让当前任务的部署卡在 pre-existing 问题上**。可以把 baseline 错误作为"另外发现的 issue"汇报给用户,但不要为此拖住当前任务进度。
 
+#### 坑 6：`blue block-replace` 回写的 body 文件不能带 `block-show` 的头两行
+
+`blue block-show <name>` 产出的文件**前两行是语言与 noweb 标记(`scheme` / `plain`),第 3 行起才是代码内容**。把这个文件原样喂给 `blue block-replace <name> <body>`,头两行会被当成 Scheme 代码写回 `config.org`——`git diff` 里凭空多出 `+scheme` / `+plain`,`blue check` 随后报括号不平衡,而真正要改的那几行反而被噪声盖住。
+
+**防护**: 手写 replacement body 时**从代码第一行开始**,不要包含语言标记;由 `block-show` 产物改造时先 `tail -n +3 <file> > <newfile>`。写错后 `git checkout source/config.org` 重做,不要在坏文件上再叠 patch。
+
 ### 9.3 字段引用小抄
 
 | 想用                            | 来自                           | 已 use-modules?                 |
@@ -1103,7 +1109,8 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 | `列宽不一致 / 缩进跳格`                            | §9.2 坑 4                         | 看 baseline 周围列宽,补足到一致           |
 | `blue check cascade (括号 / wrong-number-of-args)` | §9.2 坑 5                         | git stash 验证 baseline;别动 channel.lock |
 | `unbound variable: <name>`                         | use-modules 没引                  | 加对应模块                                |
-| `Symbol's value as variable is void: replaced`     | `blue block-replace` 工具自身 bug | 不用 block-replace,直接 patch            |
+| `Symbol's value as variable is void: replaced` | `blue block-replace` 工具自身 bug | 先剥掉 body 头两行；仍报错则改用 patch |
+| `git diff` 出现多余的 `+scheme` / `+plain` 行 | §9.2 坑 6：body 带了 `block-show` 头两行 | `tail -n +3` 剥掉后重写 block-replace |
 
 完整错误 transcript 和字段引用小抄见 `references/config-org-modify-safely.md`。
 
@@ -1567,6 +1574,8 @@ for f in /gnu/store/*-blue-*/bin/blue; do echo "== $f"; head -1 "$f"; done
 - **XDG 与环境变量注入全家桶**（Testament 范式：7 层注入机制分层、`home-environment-variables-service-type` XDG 全家桶、`home-graphical-session-service-type` Wayland session 标记、`xdg-desktop-portal/portals.conf` 三处同步、`#:environment-variables` 系统服务注入、`setenv` in gexp 定时器运行时注入、选择指南 + 反模式）见 §7。
 - **GNU Stow 二轨 dotfile 部署策略**(`stow/` + `blue stow` 命令的完整使用、`mv`-not-`rm` 安全模式、与 Guix stow 的边界、`blue structor` depth 调整、git commit 规范)见 `references/gnu-stow-two-tier-dotfiles.md`。
 - **改 `source/config.org` system 层 service 修改安全协议**(五类坑位:patch 括号 fuzz、字段名捏造、append 链错位、列宽对齐破坏、错误 cascade 误判、lightdm autologin 三件套 `autologin-user` + `user-session` + `allow-empty-passwords?`)见 §9 + `references/config-org-modify-safely.md`。
+
+- **udev / hidraw 设备权限（WebHID、用户态驱动）**——`TAG+="uaccess"` vs `MODE="0666"` 语义、一条规则覆盖设备全部接口、五步诊断（含对照工作设备 + 直接打开探测）、`/etc` 临时规则验证法、为新设备复用旧设备规则的路径，见 `references/udev-hidraw-webhid-permissions.md`。
 - **user-level daemon 兜底配置范式**(wireplumber 类、配置层 + 行为层双管齐下、加载顺序、blue home 部署失败兜底防线)见 §10。
 - **需求澄清顺序**(以工具可能性当目标的反模式、模块归属陷阱、文档交接习惯、**gril 决策表与代码漂移时的修订纪律实战**——决策表原行不动 + 加修订注 vs 事实章节直接修的判断树)见 §11 + §11.4.bis + §11.4.ter。
 - **ISO 移植完整方案 + 接手协议**(XFCE 首选 / 1200 行方案文档 / 失败诊断树 / 验收清单 / 接手 agent 必读路径)见 §11.5 + `references/iso-build-handoff.md`。
