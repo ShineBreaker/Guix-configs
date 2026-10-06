@@ -297,9 +297,9 @@ def fontconfig_for_serif() -> dict | None:
     if not extra:
         return None
     dirs = "".join(f"  <dir>{d}</dir>\n" for d in extra)
-    conf = Path("/tmp/digest-render/fonts-serif.conf")
+    conf = Path.home() / ".cache/twitter-digest-render/fonts-serif.conf"  # 同 work，别放 /tmp
     conf.parent.mkdir(parents=True, exist_ok=True)
-    cache = Path("/tmp/fontconfig-serif")
+    cache = Path.home() / ".cache/fontconfig-serif"
     cache.mkdir(parents=True, exist_ok=True)
     conf.write_text(
         '<?xml version="1.0"?>\n'
@@ -372,7 +372,10 @@ def cmd_render(args) -> int:
 
 def emit(args, html_text: str, stem: str) -> int:
     """写 HTML → 截图 → 裁底，打印成品路径。"""
-    work = Path("/tmp/digest-render")
+    # Guix 的 cleanup-/tmp 服务每次开机执行 `find /tmp -mindepth 1 -delete`，
+    # 凌晨渲染的成品会在早上投递前被吞掉（2026-10-04 实测）。改用 ~/.cache 下的
+    # 持久目录，它不在清理范围内。
+    work = Path.home() / ".cache/twitter-digest-render"
     work.mkdir(parents=True, exist_ok=True)
     html_path = work / f"{stem}.html"
     html_path.write_text(html_text, encoding="utf-8")

@@ -15,3 +15,9 @@ Qt QSS 调 Adwaita 迭代（2026-08-22 rounded.qss 实战）：①QSS 里 CSS �
 本机缺 CLI 工具（如 zsh）时用 `guix shell <pkg> -- <cmd>` 临时提供再验证，不得因缺工具直接标 UNVERIFIED。zsh 补全可非交互验证：`zsh -f -i` 内 zmodload zsh/zpty，写 `命令 + \t` 后抓候选列表（`_arguments` 值列表必须写 `:消息:(a b c)`，`:{a,b,c}` 会被当 shell 代码执行而静默失效）。
 §
 Hermes 有写入 hook 拦截 ~/.config/ 与 ~/.local/ 下的写操作（报错提示「禁止直接修改已部署位置，请修改 dotfiles/ 源文件后运行 just home」）；一次性脚本与产出落 ~/Projects/ 或 /tmp，别写 hermes scratch 目录（也在 ~/.local 下，同样被拦）。
+§
+无头 Wayland 下启动 quickshell 打包产出验证：必须显式 export WAYLAND_DISPLAY（取 $XDG_RUNTIME_DIR/wayland-* 的 basename）+ QT_QPA_PLATFORM=wayland，否则 Qt 回落 xcb 报 failed to create display；截图前轮询 swaymsg -t get_tree 出现 layer_shell/quickshell 再 grim，固定 sleep 会因首跑初始化慢截到黑屏。
+§
+pgrep -f 自匹配陷阱：terminal 工具下 bash -c 命令行本身含有匹配串，`pgrep -f <pattern>` 恒命中自己，存活检查恒报 ALIVE。查进程必须排除自身（如用 `[q]s` bracket 写法或二次过滤），下存活结论前先看日志与崩溃报告。quickshell 崩溃现场固定在 ~/.cache/quickshell/crashes/<id>/：report.txt 看 Signal 与 C++ 栈，log.qslog.log（二进制混杂，用 python 去控制字符后 grep）看死前最后的 QML 警告。
+§
+Agent 终端调 noctalia msg 等桌面 IPC 前，须从 `pgrep -x noctalia` 对应 /proc/<pid>/environ 读出 DBUS_SESSION_BUS_ADDRESS + WAYLAND_DISPLAY 并 export；本机会话总线在 /tmp/dbus-*（无 /run/user/<uid>/bus）。CLI 报「noctalia is not running」仅指通道不通，不是守护进程死了。

@@ -23,9 +23,6 @@ export PI_CODING_AGENT_DIR="${PI_HOME}"
 export PI_CONFIG_DIR=".config/pi"
 export PI_CODING_AGENT_SESSION_DIR="${PI_DATA_DIR}/sessions"
 export PI_OFFLINE="${PI_OFFLINE:-1}"
-# 指错无害：pi-devin-local 对 DEVIN_CLI 只做 existsSync，失败静默回退原查找；
-# 外部 export 优先（默认补 GUI 派生进程缺失的 nix profile 位置）
-export DEVIN_CLI="${DEVIN_CLI:-${HOME}/.local/state/nix/profile/bin/devin}"
 
 BIN="${PI_PROJ_DIR}/node_modules/.bin/pi"
 # 必须用 dist/bun/cli.js 而非 node 入口：扩展生态假定 Bun 运行时（bun:sqlite

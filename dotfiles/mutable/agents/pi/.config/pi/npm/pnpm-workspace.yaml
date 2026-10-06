@@ -8,6 +8,4 @@ allowBuilds:
   koffi: true
   node-pty: true
   protobufjs: true
-minimumReleaseAgeExclude:
-  - pi-devin-local@0.2.2
 minimumReleaseAge: 0

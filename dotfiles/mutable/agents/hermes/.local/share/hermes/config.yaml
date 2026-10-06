@@ -305,6 +305,8 @@ display:
     slug: dimo-stand
     scale: 0.6
   tool_progress: all
+  in_app_tips: false
+  in_app_tours: false
 dashboard:
   theme: mono
   show_token_analytics: false

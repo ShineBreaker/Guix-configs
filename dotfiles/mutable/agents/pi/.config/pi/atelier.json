@@ -8,22 +8,16 @@
   "defaultTier": "pro",
   "tiers": {
     "ultra": {
-      "model": "devin/SWE-2",
-      "fallback": [
-        "opencode-go/muse-spark-1.3-contributor"
-      ]
+      "model": "opencode-go/muse-spark-1.3-contributor",
+      "fallback": ["zai-coding-cn/glm-5.3-flash"]
     },
     "pro": {
       "model": "opencode-go/muse-spark-1.3-contributor",
-      "fallback": [
-        "zai-coding-cn/glm-5.3-flash"
-      ]
+      "fallback": ["zai-coding-cn/glm-5.3-flash"]
     },
     "quick": {
-      "model": "opencode-go/omen-alpha",
-      "fallback": [
-        "zai-coding-cn/glm-5.3-flash"
-      ]
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "fallback": ["opencode-go/mimo-v2.6-flash", "zai-coding-cn/glm-5.3-flash"]
     },
     "visual": {
       "model": "opencode-go/mimo-v2.5",
@@ -32,9 +26,7 @@
   },
   "modelSchedules": {
     "zai-coding-cn/glm-5.3": {
-      "deny": [
-        "Mon-Fri 14:00-18:00"
-      ]
+      "deny": ["Mon-Fri 14:00-18:00"]
     }
   }
 }

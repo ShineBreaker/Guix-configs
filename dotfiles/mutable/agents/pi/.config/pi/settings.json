@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "devin",
-  "defaultModel": "swe-2",
+  "defaultProvider": "opencode-go",
+  "defaultModel": "muse-spark-1.3-contributor",
   "npmCommand": [
     "pnpm"
   ],
@@ -22,7 +22,6 @@
     "npm:pi-hashline-edit",
     "npm:@juicesharp/rpiv-ask-user-question",
     "git:github.com/DietrichGebert/ponytail",
-    "npm:pi-devin-local",
     "git:github.com/NVlabs/SoL-Pi"
   ],
   "skills": [

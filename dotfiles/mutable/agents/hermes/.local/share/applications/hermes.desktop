@@ -9,4 +9,3 @@ Terminal=false
 Categories=Utility;
 StartupNotify=true
 StartupWMClass=com.nousresearch.hermes
-NoDisplay=true

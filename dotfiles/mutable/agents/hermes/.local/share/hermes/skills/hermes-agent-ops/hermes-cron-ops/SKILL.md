@@ -86,11 +86,17 @@ QQ/微信不渲染 markdown，cron 最终回复若是 markdown，用户看到的
 
 **图内只放消息内容，执行说明走另一条文字消息。** 抓取多少条、哪一步失败、阈值是多少，属于过程信息，不进图。这是用户的硬偏好，不是可选项。
 
+**渲染落点必须跨重启存活**：报告图不要写 `/tmp`（见下方 Pitfalls 的 `cleanup-/tmp` 条目），落到 `~/.cache/<job>/render/` 之类持久目录，再以 `MEDIA:<字面绝对路径>` 发出。若同一张图由前一个 tick 生成、当前 tick 才投递，路径还要与写 notepad 的那次完全一致。
+
 **解析 cron 输出文件时，正文在 `## Response` 之后、独立 `---` 行之前。** `$HERMES_HOME/cron/output/<job_id>/*.md` 头部是 job prompt 与执行约束，尾部是执行说明。按全文解析会把整份 prompt 指令渲染进图里。先定位 `^## Response$` 截断，再遇到独立 `---` 行停止；`## Response` 与 `# 标题` 之间的过渡句按「无组名条目」过滤。
 
 **模板占位符不得与配色键撞名。** `@KEY@` 模板若把配色 dict 的键（`bg`/`card`/`title`/`body`/`muted`/…）注册成大写放进同一个替换表，`title` 的色值会覆盖页面标题、`body` 的色值会让整块正文消失，而且不报错。结构键用 `@PAGETITLE@`/`@CONTENT@`/`@LEDE@` 这类不会撞的名字；替换完 `grep -o '@[A-Z_]*@' out.html` 必须为空。
 
 **Guix 上 headless chromium 看不到 store 里的字体。** fontconfig 只扫 `/etc/fonts/fonts.conf` 列出的目录，`/gnu/store/*-font-*/share/fonts` 与 `~/.guix-home/profile/share/fonts` 都不在内，衬线静默回退黑体、emoji 变豆腐块。运行时生成一份 fonts.conf 把这两个目录 include 进去，用 `FONTCONFIG_FILE` 传给 chromium 子进程，配方见 `references/image-report-rendering.md`。
+
+**跨 tick 消费的产物一律不写 `/tmp`。** 本机开机时 shepherd 的 `cleanup-/tmp` 一次性服务会执行 `find /tmp -mindepth 1 -delete`（靠 `/run/cleanup-tmp-done` 保证单次开机只清一次）。凌晨渲染的图、生成的 fonts.conf、fontconfig cache 全在重启时蒸发，早上投递 job 拿着 notepad 路径找不到文件——报错是「渲染成品文件不存在」而管道本身没坏。抓取 job 与投递 job 拆成两个 tick 时尤其致命。产出落到 `~/.cache/<job>/` 或 `$HERMES_HOME/state/<job>/`，这两个位置都不在清理范围内。想确认某目录是否持久，读 `/gnu/store/*shepherd-cleanup--tmp.scm` 的服务定义，或在目录里留一个旧文件看它是否跨重启存活。
+
+**prompt 里写 `MEDIA:` 与 notepad 路径时用字面绝对路径。** 这两行是留给 agent 原样使用的字符串，不经 shell 展开；写成 `$HOME/...` 会让下游拿到字面量 `$HOME`，路径校验直接失败。shell 命令段（`mkdir -p`、渲染调用）里反而可以用 `$HOME`。
 
 **渲染前先确认素材里真有要渲染的字段。** picked/scored JSON 是上游脚本某次运行的产物，字段由当时那版代码写入；上游加了新字段后历史文件里没有，直接渲染得到「无图卡片」，看起来像渲染器坏了。拿一份新抓的数据端到端验证，再回头渲染历史文件。
 

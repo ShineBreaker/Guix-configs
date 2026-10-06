@@ -103,28 +103,30 @@ python3 "$HOME/.local/share/hermes/scripts/twitter-digest/digest_build.py" build
 
 ### 第 4 步：把日报渲染成一张长图
 
-把第 3 步写好的日报 markdown 存成临时文件（例如 `/tmp/digest-render/daily.md`），然后：
+把第 3 步写好的日报 markdown 存成临时文件（例如 `$HOME/.cache/twitter-digest-render/daily.md`），然后：
 
 ```bash
-mkdir -p /tmp/digest-render
+mkdir -p "$HOME/.cache/twitter-digest-render"
 python3 "$HOME/.local/share/hermes/scripts/twitter-digest/digest_render.py" md \
-  /tmp/digest-render/daily.md --variant D --title 日报 \
+  "$HOME/.cache/twitter-digest-render/daily.md" --variant D --title 日报 \
   --state-dir "$HOME/.local/share/hermes/state/twitter-digest" \
   --date "$(date +%F)" --top 60
 ```
 
-命令的 stdout 是成品 PNG 的绝对路径（形如 `/tmp/digest-render/digest-md-D.png 1080xNNNN`）。**把这个路径作为最终回复发出**，格式严格为：
+命令的 stdout 是成品 PNG 的绝对路径（形如 `$HOME/.cache/twitter-digest-render/digest-md-D.png 1080xNNNN`）。**把这个路径作为最终回复发出**，格式严格为：
 
 ```
-MEDIA:/tmp/digest-render/digest-md-D.png
+MEDIA:/home/brokenshine/.cache/twitter-digest-render/digest-md-D.png
 ```
 
 `MEDIA:` 后面必须是同一个路径，不要改文件名、不要复制到别处、不要用相对路径。图内只放日报内容本身，执行说明不要写进图里。
+（渲染输出落在 `~/.cache/twitter-digest-render/`：本机每次开机会 `find /tmp -mindepth 1 -delete`，
+凌晨 3 点的成品撑不到早上 8 点投递。`~/.cache` 不在清理范围内。）
 
 **渲染完成后，把成品路径写进本 job 的 notepad**，供早上 8 点的投递 job 读取：
 
 ```bash
-hermes cron notepad <JOB_ID> set last_image /tmp/digest-render/digest-md-D.png
+hermes cron notepad <JOB_ID> set last_image /home/brokenshine/.cache/twitter-digest-render/digest-md-D.png
 hermes cron notepad <JOB_ID> set last_date "$(date +%F)"
 ```
 
