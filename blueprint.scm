@@ -1034,16 +1034,29 @@
 
 ;; nix 侧更新：'all 先刷 nix channel 再全量刷新 flake.lock；给 flake 名则
 ;; 只更新该 input（nix 2.19+ 语法）。nix 命令全走 %run，dry-run 自动短路。
+;; nix 未安装时整侧跳过并走 stderr 提示：Nix 只是本仓库的备用配置
+;; （source/nix），缺它不该让 blue update 整条命令失败；显式 --nix 时
+;; 用户同样能看到提示，不会误以为 flake.lock 已更新。
 (define (%update-nix target)
-  (when (eq? target 'all)
-    (%run '("nix-channel" "--update")))
-  (%run `("nix" "flake" "update"
-          ,@(if (string? target) (list target) '())
-          "--flake" ,%nix-dir))
-  (%commit-lock (string-append %nix-dir "/flake.lock")
-                (if (string? target)
-                    (format #f "build(flake.lock): bump ~a" target)
-                    "build(flake.lock): bump flake inputs")))
+  (let ([missing (filter (negate which)
+                         (if (eq? target 'all)
+                             '("nix-channel" "nix")
+                             '("nix")))])
+    (cond
+     [(pair? missing)
+      (format (current-error-port)
+              "[跳过] PATH 中未找到 ~a，Nix 未安装，跳过 Nix 侧更新~%"
+              (string-join missing "、"))]
+     [else
+      (when (eq? target 'all)
+        (%run '("nix-channel" "--update")))
+      (%run `("nix" "flake" "update"
+              ,@(if (string? target) (list target) '())
+              "--flake" ,%nix-dir))
+      (%commit-lock (string-append %nix-dir "/flake.lock")
+                    (if (string? target)
+                        (format #f "build(flake.lock): bump ~a" target)
+                        "build(flake.lock): bump flake inputs"))])))
 
 (define-command (update-command arguments)
   ((invoke "update")
@@ -1053,7 +1066,8 @@
 不带参数：guix 频道与 Nix 全部刷新。
 --guix：只刷新 guix 频道；-c/--channel NAME 只刷新该频道，其余保持 channel.lock 锁定的 commit。
 -C/--commit COMMIT：搭配 -c 使用，目标频道 pin 到指定 commit 而非刷新到最新。
---nix：只更新 Nix；--flake NAME 只更新该 flake input（不刷 nix channel）。"))
+--nix：只更新 Nix；--flake NAME 只更新该 flake input（不刷 nix channel）。
+Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
   (match (match (%update-scope arguments)
            ;; 无任何参数 → 两侧全量
            [(#f #f) '(all all)]
