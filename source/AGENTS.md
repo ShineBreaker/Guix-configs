@@ -62,7 +62,7 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 
 ## 代码风格
 
-目标读者是刚入门 Guile/Guix/org 的用户，可读性优先于「聪明」的写法。
+目标读者是刚入门 Guile/Guix/org 的用户，可读性优先于「聪明」的写法。方括号的合法语法位置遵循 [`docs/scripts/CONVENTIONS.md`](../docs/scripts/CONVENTIONS.md) §4「Guile Scheme」，本节只写惯用法与陷阱。
 
 - **抽象判定**：只有 ≥3 个调用点且确实消除重复的包装才值得保留；单用途包装直接内联平凡写法。程序化生成（`map` / `append-map` + 数据表）只用于消除真实重复或反转数据方向，否则平铺字面量。
 - **平凡写法**：拼接少量已知值用普通 `list` / `string-append`，不用 quasiquote（`` `((,a ,b)) `` 写 `(list (list a b))`）；数字比较用 `=`（必要时先判 `number?`）不用 `eq?`；不用点参数 + `apply`、双层闭包表达一次性逻辑；同一字面量（如 UUID）多处出现时收敛为单一绑定。

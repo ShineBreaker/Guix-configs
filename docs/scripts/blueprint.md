@@ -79,7 +79,7 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 - `%partial-channels-file` 生成「目标频道可变定义 + 其余按 lock pin」的临时 channels 文件（`guix repl` 跑 `tools/gen-partial.scm`，契约见 [blue-helpers.md](blue-helpers.md) §gen-partial.scm）；随后 `guix time-machine --channels=<临时文件> -- describe --format=channels` 的输出原子写回 `channel.lock`。**dry-run 分支不生成临时文件、直接返回 `%channel-scm` 原件**，只打一行 `[预演]`——让后续 dry-run 分支有可用的 channels 参数可传。
 - **`%update-guix` 里的 describe 是捕获 stdout 的管道命令，不走 `%run` 短路**——dry-run 分支在此手动 `%print-preview`，是「管道不短路」不变量的典型用例。
 - `%commit-lock` 只在 `git status --porcelain` 显示锁文件有变化时才 `git commit -S`：单频道/单 flake 刷新常无新版本，空提交的非零退出会让 `%run` 误报失败；dry-run 下直接视作有变化以保留 commit 预演输出。
-- `%update-nix`：全量时先 `nix-channel --update` 再 `nix flake update`；单 input 用 nix 2.19+ 的参数语法。全部走 `%run`，dry-run 自动短路。
+- `%update-nix`：全量时先 `nix-channel --update` 再 `nix flake update`；单 input 用 nix 2.19+ 的参数语法。全部走 `%run`，dry-run 自动短路。**入口先按 `which` 探测所需命令**（全量要 `nix-channel` + `nix`，单 input 只要 `nix`），任一缺失即整侧跳过：Nix 只是本仓库的备用配置，缺它不该让 `blue update` 整条命令失败；提示走 stderr，显式 `--nix` 的用户也能看到、不会误以为 flake.lock 已更新。
 
 ### 维护
 
@@ -127,4 +127,5 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 
 ## 变更
 
+- 2026-10-06 `%update-nix` 入口按 `which` 探测所需命令（全量 `nix-channel` + `nix`、单 input `nix`），任一缺失即整侧跳过并打 stderr 提示：本机未安装 Nix，此前 `blue update` 会因 `nix-channel` 不存在（popen exec 失败）整条命令不可用。
 - 2026-09-29 两处行为级修复：`clean-artifacts` 的目录型目标原本直接 `delete-file-recursively`，不走 `%run`，故 `blue --dry-run clean-artifacts`（连带 `--dry-run rebuild` / `home`）会真删这些目录，现改为 dry-run 下打 `[预演] 移除`；`%pipe->string` 在子进程非零退出时把已捕获 stdout 转发到 stderr，`blue block-show` / `block-list` / `describe` 等失败现在能看到脚本自己的 `[ERROR]` 诊断。

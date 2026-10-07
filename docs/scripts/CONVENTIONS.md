@@ -109,7 +109,7 @@
 
 ### Guile Scheme
 
-- 遵循仓库根 `AGENTS.md` 的方括号规范。
+- 方括号与圆括号语法等价，但**只用于「否则会出现两个连续左括号」的语法位置**（[R6RS 附录 C](https://r6rs.org/final/html/r6rs-app/r6rs-app-Z-H-5.html#node_chap_C)）：`cond` / `case` / `guard` 子句；`let` 体系与 `do` 的变量绑定；`case-lambda` / `syntax-rules` / `syntax-case` 子句；Guile 扩展 `match` / `match-lambda` 子句。示例：`(cond [(eof-object? c) #f] [else ...])`、`(let ([x 1]) ...)`。普通函数调用、lambda 参数表、quote 数据等位置一律用圆括号。`source/config.org` 内嵌块与 `blueprint.scm` 同此规范。
 - 顶层定义按「常量 → 工具函数 → 业务逻辑 → 入口」排列。
 
 ### Emacs Lisp
@@ -141,7 +141,7 @@
 - toolbox 清单 `dotfiles/mutable/tools/toolbox/.local/share/toolbox/tools.yaml`（`usage` / `args` / `help_cmd`）；
 - 相关 `AGENTS.md` 与文档的「变更记录」。
 
-跨语言协议保持稳定：`gate-core.sh` 的 CLI 与 stdout 行协议、`context-select.sh` 的输出格式、各 agent 宿主规定的钩子协议。
+跨语言协议保持稳定：`gate-core.sh` 的 CLI 与 stdout 行协议、`context-select.sh` 的输出格式、`tools/*.el` 与 `blueprint.scm` 之间的输出协议、各 agent 宿主规定的钩子协议。这些协议横跨本次改动不会一起重读的调用方，破坏它们的代价远大于顺手重构的收益。
 
 ## 7. 验证方法
 
@@ -158,3 +158,18 @@
 7. **部署位置陷阱**：
    - `gate-core.sh` 优先加载已部署的 `~/.config/agents/anchors-lib.sh`：测试源码版本时用临时 `HOME`。
    - `blueprint.scm` 以 cwd 为 `%repo-root`：放在仓库副本里测试。
+8. **即时生效的文件**：`dotfiles/mutable/` 下的包由 Stow 直链仓库源码，`blueprint.scm` 由 `blue` 从 cwd 加载——两者改源即生效，用户的下一次调用就用上了未验证的新版本。先在 `/tmp` 副本上跑完本节的基线、用例、沙箱与比较，通过后再一次性换回，别把半验证状态留给用户。
+
+## 8. `blueprint.scm`（blue 本体）
+
+`blue` 从 cwd 加载仓库根的 `blueprint.scm`，改动立刻对用户的下一次调用生效，因此本节的每次改动都按 §7.8 在副本上先验证。
+
+dry-run 必须真的无副作用——否则 `blue --dry-run rebuild` 承诺的「不写入系统」就是假的：
+
+- 新增副作用一律走 `%run`：它是唯一允许直接启动子进程的地方（[blueprint.md](blueprint.md) §1），`blue --dry-run` 下只打印 argv 不执行，不要绕过它自行 `popen` / `system`。
+- 确需在 dry-run 下真跑（tangle、括号检查这类纯读操作）才传 `#:real? #t`，并写明理由。
+- 管道读取 `%pipe->lines` / `%pipe->string` **不经** `%run`，dry-run 下也真跑：只读用途（`git status` / `git ls-files` / `grep` / elisp 块导出）可直接用；有副作用的必须像 `%update-guix` 那样手动判断 `dry-build?` 并改走 `%print-preview`。
+- Scheme 侧的直接副作用（如 `delete-file-recursively`）必须显式守 `dry-build?`：`clean-artifacts` 的目录型目标曾因此在 dry-run 下真删目录。
+- 所有 `guix` 调用走 `%guix`，它内部包一层 `guix time-machine --channels=`（默认 `source/channel.lock`）；直接调 `guix` 会用未锁定频道构建。
+
+旗标语义与每条命令的 dry-run 行为见 [blueprint.md](blueprint.md)。
