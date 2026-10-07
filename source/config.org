@@ -1447,6 +1447,10 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
 **** 静态规则
 
+=KERNEL==\"hidraw*\"= + =ATTRS{idVendor}= 的写法按 USB 设备的厂商 ID 授权 /dev/hidraw 节点：ATTRS 沿 sysfs 父链上溯到 usb_device 层匹配，同一键盘的多个接口（键盘 / 鼠标 / 厂商集合）会一次性拿到权限。
+
+浏览器网页驱动（WebHID）只认 =uaccess= tag——Chrome 的 udev 权限检查要求活动会话用户能打开节点，纯 =MODE= 不够（elogind 的 =elogind-uaccess-command= 靠这个 tag 把 ACL 授给当前登录用户）。=TAG+=\"udev-acl\"= 让 ACL 真正落盘，否则 hidraw 节点不会出现 =+= 附加属性。所以既有规则 =60-sayodevice.rules=（旧键盘，SayoDevice VID 8089）也从 =MODE=\"0666\"= 改为双 tag：=0666= 是全局可读写，等于把该 hidraw 暴露给本机所有用户，只为一个浏览器需求付出这个代价不值。
+
 #+NAME: udev-static-rules
 #+begin_src scheme
 (list (udev-rules-service 'android android-udev-rules
@@ -1468,7 +1472,11 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
       (udev-rules-service 'sayodevice
                           (udev-rule "60-sayodevice.rules"
-                                     "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", MODE=\"0666\""))
+                                     "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"8089\", TAG+=\"uaccess\", TAG+=\"udev-acl\""))
+
+      (udev-rules-service 'ichip-keyboard
+                          (udev-rule "60-ichip-keyboard.rules"
+                                     "KERNEL==\"hidraw*\", ATTRS{idVendor}==\"28e9\", ATTRS{idProduct}==\"31ff\", TAG+=\"uaccess\", TAG+=\"udev-acl\""))
 
       (udev-rules-service 'solaar (spec->pkg "solaar"))
 
@@ -1831,6 +1839,8 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
 替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先，仅 greetd/login/polkit，sudo/su 走纯密码）、蓝牙与休眠 Polkit 提权规则；NTP 改用国内授时源（cn.pool/aliyun/ntsc），udisks2 补 ntfs3 挂载选项，/etc/hosts 屏蔽 QQ 更新域名。
 
+guix-daemon 的 =gc-keep-derivations= 与 =gc-keep-outputs= 均显式设为 =no= ：~guix gc~ 只回收 GC root 不可达的路径，不再保留「活派生物的输出」与「活输出对应的 .drv」。
+
 udisks2 挂载选项（补 =ntfs3_allow= 白名单，否则 udisks 拒绝大量挂载参数）：
 
 #+NAME: udisks-mount-options-conf
@@ -1862,7 +1872,8 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
                                                                 (guix (guix-for-channels guix-channels))
                                                                 (extra-options (list "--cores=22"
                                                                                      "--max-jobs=6"
-                                                                                     "--gc-keep-outputs=yes"))
+                                                                                     "--gc-keep-derivations=no"
+                                                                                     "--gc-keep-outputs=no"))
                                                                 (http-proxy "http://127.0.0.1:7890")
                                                                 (discover? #f)
                                                                 (tmpdir "/var/tmp")))
