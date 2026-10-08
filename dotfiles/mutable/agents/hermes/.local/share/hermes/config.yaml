@@ -35,9 +35,9 @@ moa:
   enabled: false
   degraded_reference_policy: loud
 model:
-  default: step-5-preview
-  provider: stepfun
-  base_url: https://api.stepfun.com/step_plan/v1
+  default: deepseek-v4.1-flash
+  provider: opencode-go
+  base_url: https://opencode.ai/zen/go/v1
   api_mode: chat_completions
 providers:
   minimax-cn:
@@ -92,11 +92,7 @@ terminal:
   home_mode: auto
   shell_init_files: []
   auto_source_bashrc: true
-  docker_image: nikolaik/python-nodejs:python3.11-nodejs20
   docker_forward_env: []
-  singularity_image: docker://nikolaik/python-nodejs:python3.11-nodejs20
-  modal_image: nikolaik/python-nodejs:python3.11-nodejs20
-  daytona_image: nikolaik/python-nodejs:python3.11-nodejs20
   container_cpu: 1
   container_memory: 5120
   container_disk: 51200
@@ -198,16 +194,16 @@ auxiliary:
     model: ''
     timeout: 30
   approval:
-    provider: opencode-go
-    model: 'deepseek-v4.1-flash'
+    provider: auto
+    model: ''
     timeout: 30
   mcp:
     provider: auto
     model: ''
     timeout: 30
   title_generation:
-    provider: opencode-go
-    model: 'deepseek-v4.1-flash'
+    provider: auto
+    model: ''
     timeout: 60
     language: ''
   tts_audio_tags:
@@ -217,22 +213,21 @@ auxiliary:
     api_key: ''
     timeout: 30
   triage_specifier:
-    provider: opencode-go
-    model: 'deepseek-v4.1-flash'
+    provider: auto
+    model: ''
     timeout: 120
   kanban_decomposer:
-    provider: opencode-go
-    model: 'deepseek-v4.1-flash'
+    provider: auto
+    model: ''
     timeout: 180
   profile_describer:
-    provider: opencode-go
-    model: 'deepseek-v4.1-flash'
+    provider: auto
+    model: ''
     timeout: 60
   curator:
-    provider: opencode-go
-    model: 'deepseek-v4.1-flash'
+    provider: auto
+    model: ''
     timeout: 1800
-    reasoning_effort: ultra
   monitor:
     provider: auto
     model: ''
@@ -247,8 +242,9 @@ auxiliary:
     model: ''
     provider: auto
   review:
-    provider: zai
-    model: glm-5.3
+    provider: stepfun
+    model: 'step-5-preview'
+    reasoning_effort: ultra
 display:
   compact: true
   personality: concise
@@ -493,10 +489,6 @@ hooks_auto_accept: false
 security:
   allow_private_urls: true
   redact_secrets: true
-  tirith_enabled: true
-  tirith_path: tirith
-  tirith_timeout: 5
-  tirith_fail_open: true
   website_blocklist:
     enabled: false
     domains: []
@@ -590,7 +582,7 @@ secrets:
 paste_collapse_threshold: 5
 paste_collapse_threshold_fallback: 5
 paste_collapse_char_threshold: 2000
-_config_version: 46
+_config_version: 50
 known_plugin_toolsets:
   cli:
     - a2a
@@ -671,3 +663,8 @@ desktop:
 # fallback_model:
 #   provider: openrouter
 #   model: anthropic/claude-sonnet-4
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
+    offer_version: 2

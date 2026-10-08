@@ -14,6 +14,7 @@ metadata:
 
 ## 触发条件
 - flatpak 安装的 GUI 应用打不开、启动即退、闪退
+- 更新/安装/修复报错（`No such metadata object`、对象缺失、prune 失败）不归本 skill，走 flatpak-update-repair
 - 报错涉及 Qt/QML 模块缺失、运行时问题
 - 桌面点击图标无反应或闪一下消失
 

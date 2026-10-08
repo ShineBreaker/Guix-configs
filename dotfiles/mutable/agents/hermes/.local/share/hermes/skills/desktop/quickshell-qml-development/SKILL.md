@@ -1,7 +1,7 @@
 ---
 name: quickshell-qml-development
 author: Hermes Agent
-description: "Author, debug, and operate Quickshell QML shells headlessly and over shell IPC (noctalia msg)."
+description: "Author, debug, and operate Quickshell QML shells headlessly and over shell IPC (noctalia msg), including visual acceptance of settings/panel surfaces."
 version: 1.1.0
 license: MIT
 metadata:
@@ -85,6 +85,49 @@ which is why they survive a whole debugging session.
     is missing**, not that translation is broken. `I18n.tr` renders the raw key
     on a miss, so grep the translation JSON for the exact dotted path before
     assuming anything else.
+11. **`opacity` is not a disabled state on a surface of a different luminance.**
+    `opacity: enabled ? 1.0 : 0.6` on a dark field composited over a lighter
+    row *brightens* the control — `82×0.6 + 56×0.4 ≈ 70` reads as lit, not
+    greyed, so a genuinely-unusable control looks like the highlighted one.
+    Disable by changing colors explicitly (content text to the theme's
+    disabled text color, field background to the theme's idle/overlay tone)
+    and keep the control opaque. Prove the direction with pixel arithmetic on
+    both states before shipping; the composite is almost never what intuition
+    predicts across a luminance boundary.
+12. **A disabled state must be ONE factor, not two.** Anything that dims a
+    subtree and also dims its own text multiplies: a control that reads
+    explicitly `×0.6` inside a parent already at `×0.6` lands at `×0.36` and
+    looks dead next to its 0.6 siblings. Decide where the dim lives — the
+    leaf reads its own `enabled`, or the parent dims and leaves the leaf
+    opaque — never both. Level the disabled look by measuring,
+    not by eyeing: per-row brightest-pixel ratios cluster at one value when
+    the dim is single, and split into two clusters when stacked (§4.4).
+13. **A slot sized by `fillWidth` + `preferredWidth: 1` cannot hold a CJK
+    placeholder.** Two half-width slots sharing a row give each ~40 px of text
+    while a 7-character zh-CN label needs ~70 px at `fontSizeS`, so any
+    `elide: Text.ElideRight` on that `NText` truncates it to `添...` and the
+    sibling empty slot shows only its icon. Compute the CJK width
+    (pointSize × full-width chars) against the slot's share of the row before
+    shipping a placeholder, or shorten the placeholder to what the slot fits.
+14. **A `Behavior` animation can silently not run while the final state stays
+    pixel-correct** — which is why it survives review, logs and static shots.
+    Check these two shapes before touching animation parameters:
+    (a) **two assignments to the same property in one JS tick**
+    (`offset = from; offset = to;`): the second write reads the not-yet-advanced
+    current value, so the Behavior animates current→same and the motion never
+    happens. Split the writes across an event-loop turn (`Qt.callLater`, or a
+    small Timer — the pattern a working sibling uses) or drive an explicit
+    `PropertyAnimation`. Same-tick double writes produce NO motion at all;
+    writes separated by an event-loop turn animate from the advanced value
+    (partial travel, not the full offset).
+    (b) **an `enabled:` guard on the Behavior** (`enabled: !Color.isTransitioning`)
+    can be false at trigger time and kill the motion while a sibling Behavior
+    without a guard (usually `opacity`) animates fine. When one of two parallel
+    Behaviors moves and the other does not, diff their guards before anything
+    else — a disabled Behavior is indistinguishable from "no animation intended"
+    in the source until you compare it against its ungated sibling.
+    Verify with recorded frames, not static shots — see
+    `references/headless-verification.md` §4.8.
 
 ## 2. Authoring order for a new shell component
 
@@ -131,11 +174,21 @@ screenshots, log grep, vision check) is in
 `dbus-run-session` + headless sway, drive it over IPC, `grim` after each step,
 seed fixture inputs so the view is non-empty, and **actually look at the PNG** -
 a "saved" line only proves grim ran. Settings-matrix runs (`--settings` seeds,
-light/dark, dock modes) and report-grade log triage live in §4.1 of that file.
+light/dark, dock modes) and report-grade log triage live in §4.1–§4.2 of that file.
 Widgets that render chrome but never their running-application entries, and
-icon fallbacks that look like successes, are §4.3.
+icon fallbacks that look like successes, are §4.5. Layouts that look clean in
+every terminal-state shot but thrash across the load boundary are §4.4 — those
+are probe findings, not pixel findings.
 Booting the packaged store output instead of the repo has its own traps
-(display export, surface-gated shots, wrapper PATH) — see §6 of that file.
+(display export, surface-gated shots, wrapper PATH) — see §4.3 of that file.
+When acceptance depends on real compositor behaviour (open timing, layer
+stacking, input paths no X11 bridge delivers) rather than on headless-renderable
+state, §4.6–§4.7 cover reactive-i18n verification and the nested-niri harness
+(`scripts/nested-niri-verify.sh`) that runs the shell on a real niri with the
+live session untouched.
+
+Judging a *restyled* settings/notification surface against a design doc — is the
+row style uniform, is the 15 px group rhythm exact, is text elided — is §8.
 
 ## 7. Operating the running shell from an agent terminal (noctalia msg)
 
@@ -185,6 +238,54 @@ noctilia msg notification-dnd-status
   that the daemon died. Confirm with `pgrep -x noctilia` + `/proc/<pid>/environ`
   before restarting the shepherd service — a restart disrupts the live desktop.
 
+## 8. Visual acceptance of a restyled settings/panel surface
+
+A restyle pass ("convert these pages to DDE rows", "unify the list styling") is
+judged on pixels, not on the diff. The procedure below is the cheap order that
+finds every class of restyle defect:
+
+1. **Drive it, then measure it. Take one screenshot per tab and sub-tab, then
+   check the PNGs are distinct** (`md5sum`) before looking at any of them — a
+   scene whose shot is byte-identical to its neighbour means the panel never
+   opened, and every later judgement is of the wrong frame. Confirm with one
+   `vision_analyze` per shot that the subject is actually in-frame.
+2. **Locate the panel in pixels before sampling anything.** A 1920×1080 frame
+   with a desktop wallpaper puts a warm-toned backdrop beside a dark panel, and
+   a naive coordinate lands on the wallpaper and reports a plausible color.
+   Scan a row/column for the luminance jump, then crop the panel to its own
+   file and sample only inside it.
+3. **Judge "opaque black cards" by block geometry, not by a brightness
+   threshold.** Real translucent rows over a bright wallpaper read as *warm*
+   dark values (~`91,72,60`), so a cutoff like `r<25` that only catches
+   `0,0,0` both misses the defect and flags legitimate controls. Group the
+   sub-threshold pixels into contiguous bands first: a card is a wide
+   low-height band, a slider is a narrow band that repeats at fixed intervals
+   with its label, and a *preview* surface that legitimately shows solid color
+   is one whose sampled pixels differ per item. Report the band, never a
+   percentage.
+4. **Verify spacing by measuring transitions, not by trusting the design
+   number.** Walk a vertical pixel column and record the run-length of every
+   constant-value segment; the inter-group gap is a clean run of the panel
+   background between two bands of the row color. Compare the measured run to
+   the token's value (`Style.settingsGroupSpacing` and the ui-scale version of
+   it) — a hair off is a finding, an exact match is a pass.
+5. **Read list-item selected states as a *marker*, not a color.** A selection
+   implemented as accent text plus a checkmark at the row's trailing edge is
+   the spec; one implemented as a filled background is not. Verify on an item
+   that is actually selected (connected Wi-Fi, clicked template) rather than
+   inferring from the component.
+6. **Confirm placeholder text is legible, not merely present.** Zoom 8× into
+   the control and read the glyphs; elide (`…`/`...`) is the report's finding
+   and belongs to whoever owns the label's width (see trap 13). An empty slot
+   showing only its icon is the same defect with the text clipped to nothing.
+7. **Read the i18n key before calling a label a rendering bug.** A truncated
+   label is a width problem whose fix lives in the string or the slot, and the
+   string's real length is only known from `Assets/Translations/<locale>.json`.
+8. **Report the walkthrough with its scope.** A nested-niri run touches the
+   live session's compositor but not its config or services, and each claim
+   should name which harness produced it; a brief's premise (a tab that
+   "exists") is not evidence that the tab's groups are the ones specified.
+
 ## References
 
 - `references/panel-window-and-layers.md` — PanelWindow sizing, layer shell
@@ -193,3 +294,9 @@ noctilia msg notification-dnd-status
   array shape, selection/currentIndex, provider result objects.
 - `references/headless-verification.md` — isolated XDG verification harness,
   fixture seeding, scene script patterns, screenshot acceptance.
+- `scripts/nested-niri-verify.sh` — boot a nested niri under an isolated
+  HOME/XDG/dbus and grab/burst screenshots from it, for runs that need a real
+  compositor (see §4.7 of the reference).
+- `scripts/anim-capture.sh` — record a live-session region with wf-recorder
+  while a trigger runs, then extract timestamped frames (see §4.8 of the
+  reference).

@@ -177,7 +177,44 @@ echo "test" | gpg --clearsign
 
 ---
 
+## 变体 2：pinentry 弹窗**弹不出来**——gpg-agent 进程环境缺显示变量（verified 2026-10-08）
+
+> 与变体 1 的区别：变体 1 是 conf 路径没传到（弹的变成 TTY 提示）；本变体 conf 完全正确（pinentry-program 是绝对 store 路径），但 **gpg-agent 进程自身没有图形环境变量**，pinentry-qt 无法连接显示服务器，窗口根本不出现。
+
+**症状**：`git commit`（commit.gpgsign=true）等待后报「gpg: 签名时失败： 超时」；assuan 日志可见 `PINENTRY_LAUNCHED qt`（pinentry 确实被拉起），但桌面没有任何窗口，无法输入密码。
+
+**关键诊断（一行定生死）**：
+
+```bash
+tr '\0' '\n' < /proc/$(pgrep -x gpg-agent)/environ \
+  | grep -E '^(WAYLAND_DISPLAY|DISPLAY|XDG_SESSION_TYPE|XDG_RUNTIME_DIR)='
+# 命中特征：只有 XDG_SESSION_TYPE=tty，无 WAYLAND_DISPLAY / DISPLAY
+```
+
+对照真图形会话进程（noctalia 等）的同类变量，应有 `WAYLAND_DISPLAY=wayland-1`、`XDG_RUNTIME_DIR=/run/user/1000`。
+
+**根因**：gpg-agent 由「最近一次触发它的客户端」按需拉起（fork 后 daemonize，PPID 归 init/shepherd），之后所有客户端复用该实例；**进程环境启动后不可变**。若最后触发者来自 tty 环境（kmscon、agent 的 tty 会话等），agent 永久背着无显示变量的环境，pinentry-qt 无从弹窗。与 key 身份、conf 内容无关。
+
+**修复**（运行时重启，无需改配置、无需 blue home）：
+
+```bash
+gpgconf --kill gpg-agent
+# 从图形环境启动（当前 shell 需带 WAYLAND_DISPLAY / XDG_RUNTIME_DIR）：
+gpgconf --launch gpg-agent
+# 验证新实例：
+tr '\0' '\n' < /proc/$(pgrep -x gpg-agent)/environ | grep WAYLAND_DISPLAY  # 应有值
+pgrep -x gpg-agent | xargs ps -o pid,ppid,lstart,cmd -p                     # PPID=1 常驻
+gpg-connect-agent 'GETINFO version' /bye                                    # 应返回 OK
+```
+
+**无人值守场景**：没有人能输密码时，弹窗必然超时——不要干等，改用 `git commit --no-gpg-sign` 完成提交，事后（人在时）用 `git commit --amend --no-edit -S` 补签。
+
+**判定口诀**：签名超时先查 gpg-agent 进程的**显示变量**（/proc environ），第二条才查 key/conf。
+
+---
+
 ## 一句话总结
 
 > **daemon 跑的 conf,路径必须绝对 store 路径,不依赖 `$HOME` 解析。**
 > **改 conf 后 `blue home` + `gpgconf --reload gpg-agent` 两个都要。**
+> **变体 2(弹窗完全不出现):先查 gpg-agent 进程的显示变量,kill 后从图形环境重启;无人输密码时改用 `--no-gpg-sign` 提交、事后 amend 补签。**

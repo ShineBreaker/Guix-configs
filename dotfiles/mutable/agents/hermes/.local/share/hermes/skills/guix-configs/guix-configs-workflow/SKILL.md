@@ -16,7 +16,7 @@ description: Use when working in Guix-configs, esp. dotfiles deploy, home-shephe
 
 3. **AI 禁跑** `blue rebuild` / `guix system reconfigure` / `guix home reconfigure` (sudo 卡死 CLI)。改源后只能 `blue home` 暂用,固化等用户操作。**例外**:`blue structor` 只重写 AGENTS.md 标记对内容,AI 可以跑(见 §5.3)。
 4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。
-5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息用 `-m` 传**——本环境 hook 拦截 `-F -`/heredoc 形式(报「必须使用 -m」、整条命令不执行，重试前先 `git status --short` 复核暂存)；AI 参与时 `Co-authored-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。
+5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息用 `-m` 传**——本环境 gate 按命令文本判定：文本(含 heredoc 内联内容)出现「git commit」字样而未带 `-m` 时，整条命令在执行前被拒(报「必须使用 -m」，**无副作用、无部分执行**；重试前先 `git status --short` 复核暂存)。含该字样的长文本不要内联进命令——先写临时文件再重定向传入(如 `--stdin < file`，实测可过)；多段 body 用多个 `-m` 按序拼；AI 参与时 `Co-authored-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。
 6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
 7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
 
@@ -266,6 +266,8 @@ herd restart <service-name>
 
 **症状**: `gpg` / `pass` / `keepassxc` / `git commit -S` 等需要 passphrase 时,弹出来的是 **TTY** 提示(直接在终端里读密码),不是预期的 pinentry-qt 窗口。
 
+**变体(2026-10)**: pinentry 窗口**完全不出现**、等待后报「gpg: 签名时失败： 超时」——conf 路径没问题，是 gpg-agent **进程环境缺显示变量**；诊断与修复见同一参考文件的「变体 2」。
+
 **根因(一句话)**: gpg-agent 是 home-shepherd 起的 daemon,它的 `$HOME` 在启动时未必是 `/home/brokenshine`,所以 conf 里写的 `pinentry-program ~/.guix-home/profile/bin/pinentry-qt` 路径展开失败 → 走 gnupg 包 build-time fallback(`~/.guix-profile/bin/pinentry`,也不存在) → 再 fallback 到 **TTY**。
 
 **关键诊断命令**(一行定生死):
@@ -479,12 +481,63 @@ spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY 
 | Proxy   | `http_proxy` / `https_proxy` / `HTTP_PROXY` / `HTTPS_PROXY`                          | Electron / Qt 应用不走终端的 proxy                         |
 | 字体    | `XCURSOR_PATH` / `FONTCONFIG_PATH` / `QT_QPA_FONTDIR`                                | 自定义字体 / cursor 主题找不到                             |
 
+### 6.9 光标 / 图标主题莫名 fallback 到默认主题：`XCURSOR_PATH` 的覆盖语义
+
+**症状**：此前一直正常，某次 `blue home` 或系统更新后光标突然变默认主题，而主题文件在 `~/.guix-home/profile/share/icons/<theme>/` 里完好、软链也没断。
+
+**根因（易误判的一点）**：`XCURSOR_PATH` 被赋值时**整体替换** xcursor 的内置搜索路径，不是像 XDG 规范那样追加。`config.org` 的 `extend-environment-variables` 块若写成 `("XCURSOR_PATH" . "$XDG_DATA_HOME/icons")`，搜索范围就只剩这一个目录，而 Guix 包提供的主题装在 `~/.guix-home/profile/share/icons/`（`guix-home` profile，**不是** `~/.guix-profile`），必然找不到。
+
+**正确写法**（保留父环境已有路径，本机惯例）：
+
+```scheme
+("XCURSOR_PATH" . "$XCURSOR_PATH:$XDG_DATA_HOME/icons")
+```
+
+`$XDG_DATA_HOME/icons` 那段是给 `noctalia-suite` 包部署的 `default/index.theme` 用的——它的 `Inherits=<主题名>` 继承链要求继承目标本身也在搜索路径内，否则整条链断掉照样 fallback。
+
+**诊断探针**（不要靠猜，编译一次即可复用；先建探针项目再写，避免 scratch 目录被写保护拦）：
+
+```c
+/* xc-path.c */
+#include <X11/Xcursor/Xcursor.h>
+#include <stdio.h>
+#include <stdlib.h>
+int main(void){
+  printf("XCURSOR_PATH env = %s\n", getenv("XCURSOR_PATH") ? getenv("XCURSOR_PATH") : "(unset)");
+  printf("XcursorLibraryPath = %s\n", XcursorLibraryPath());
+  return 0;
+}
+```
+
+```bash
+guix shell libx11 libxcursor gcc -- gcc xc-path.c -lXcursor -o xc-path
+# 对照：“设了变量” vs “不设变量”
+env XCURSOR_PATH=$HOME/.local/share/icons ./xc-path
+env -u XCURSOR_PATH ./xc-path
+```
+
+判读：设了变量时 `XcursorLibraryPath` **恰好等于**你赋的值（确认是覆盖）；不设时是库的内置默认列表。然后逐目录验证主题是否真的在那儿，判据与 xcursor 的查找逻辑一致：
+
+```bash
+for d in $(./xc-path | sed -n 's/^XcursorLibraryPath = //p' | tr ':' ' '); do
+  [ -f "$d/<主题名>/cursors/default" ] && echo "HIT $d" || echo "miss $d"
+done
+```
+
+**验证时的两个固定检查**（否则会把好消息误判成坏消息）：
+
+1. `ls -la ~/.guix-home/profile/share/icons/` 看主题软链是否完整——软链断 = 部署问题；软链在但路径不在搜索列表 = 环境变量问题。
+2. `find /nix/var/nix/profiles /nix/store -maxdepth 3 -iname '*<主题名>*'` 确认主题不是装在 nix profile（nix 装的默认搜索路径里没有，需要显式补进 `XCURSOR_PATH`）。
+
+### 6.10 反模式（追加时最容易写错的 GUI 变量）
+
 ### 6.4 反模式(自己踩过的坑)
 
 - ❌ **改各个 .desktop 文件的 `Exec=` 前缀加 `env`** —— 治标;每装一个新应用都要改;而且 nix-profile 装的 .desktop 是从 `/nix/store` 软链来的,改 `~/.local/share/applications/<x>.desktop` 也只对当前用户临时生效,home-manager / nix profile rebuild 会被覆盖。**例外**: §6.7 的 Electron 版本差异场景(三件套已生效、缺 cmdline flag),`.desktop` 覆盖是正确解法
 - ❌ **在 `~/.config/environment.d/` 加 `.conf`** —— Guix 不用 systemd,这条不起作用(在 NixOS / Ubuntu 上有用,在 Guix 上没用)
 - ❌ **`systemctl --user import-environment` 在 niri 启动时跑** —— 假设 systemd --user 在跑;但在 Guix 默认配置下,systemd --user 不一定起,要看 `pgrep -af 'systemd --user'`。不要假设它一定在
 - ❌ **改 `~/.profile` 加 export** —— 只影响 shell 进程,GUI launcher 看不到
+- ❌ **`XCURSOR_PATH` 写成不含 `$XCURSOR_PATH:` 前缀的单目录** —— 不是追加而是覆盖,会把 Guix profile 里装着主题的目录挤出搜索范围(见 §6.9)
 - ❌ **`home-manager` 那条独立链的 `i18n.inputModule`** —— `source/nix/` 与 Guix 不互通;改了 home-manager 配置但你用 `blue home` 部署,不会生效
 
 ### 6.5 与本节相关的诊断命令
@@ -1088,6 +1141,18 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 `blue block-show <name>` 产出的文件**前两行是语言与 noweb 标记(`scheme` / `plain`),第 3 行起才是代码内容**。把这个文件原样喂给 `blue block-replace <name> <body>`,头两行会被当成 Scheme 代码写回 `config.org`——`git diff` 里凭空多出 `+scheme` / `+plain`,`blue check` 随后报括号不平衡,而真正要改的那几行反而被噪声盖住。
 
 **防护**: 手写 replacement body 时**从代码第一行开始**,不要包含语言标记;由 `block-show` 产物改造时先 `tail -n +3 <file> > <newfile>`。写错后 `git checkout source/config.org` 重做,不要在坏文件上再叠 patch。
+
+### 9.3 字段引用小抄
+
+### 9.2 补遗：功能回退不要信 commit message 的分类，直接读 diff
+
+用户说"更新后就坏了"时,**`docs: update.` / `chore:` 这类标题的提交也可能连带改了功能变量**——整理正文时顺手删注释、合并分组、改 env 值都会发生,而 message 只字不提。定位这种回退按序做:
+
+1. `git log --format='%h %ci %s' -S '<出问题的变量或符号>' -- source/config.org` —— `-S` 直接给出该符号**每次增删**的提交,比翻时间线快。
+2. 对标题与内容明显不符的提交, `git show <hash> -- source/config.org | grep -n -B4 -A4 '<关键词>'` 看它到底动了什么,不要停在 `--stat`。
+3. 确认修复时保留同组里**与部署位一致**的取值(例:`XCURSOR_SIZE` 与 niri `config.kdl` 的 `xcursor-size` 对齐的那个值就是对的),只回退真正引发问题的那一项,别整组回退。
+
+删掉某条 env var 前先确认它是真的废弃还是被误删——同一 diff 里相邻变量的成对消失往往是分组整理,不是清理。
 
 ### 9.3 字段引用小抄
 
