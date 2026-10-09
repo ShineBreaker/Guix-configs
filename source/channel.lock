@@ -22,7 +22,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "a4fe2130a5df57b23449653be93774feab20e95f")
+       (commit "7fd93a37255e3c371f71bf60f0f00a7c5aba6f2a")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
