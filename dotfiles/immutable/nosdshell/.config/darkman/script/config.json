@@ -1,0 +1,12 @@
+{
+  "dark": {
+    "theme": "adw-gtk3-dark",
+    "icon": "Papirus-Dark",
+    "prefer-dark": "1"
+  },
+  "light": {
+    "theme": "adw-gtk3",
+    "icon": "Papirus",
+    "prefer-dark": "0"
+  }
+}

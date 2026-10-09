@@ -1,0 +1,47 @@
+// Place the regular wallpaper on the backdrop.
+layer-rule {
+  match namespace="^nosdshell-wallpaper"
+  place-within-backdrop true
+}
+
+// Set transparent workspace background color so the backdrop is visible at all times.
+layout {
+  background-color "transparent"
+}
+
+// Optionally, disable workspace shadows in the overview.
+overview {
+  workspace-shadow {
+    off
+  }
+}
+
+/* Apps: blur them all without xray so it looks more realistic. */
+window-rule {
+  background-effect {
+    blur true
+    xray false
+  }
+}
+
+/*
+  nosdshell
+  Disable xray on all our surfaces so it looks more realistic.
+  nosdshell publishes blur regions automatically when ext-background-effects is available.
+*/
+layer-rule {
+  match namespace="^nosdshell-(notification|dock|attached-panel|panel|osd)$"
+  match namespace="^nosd-launcher-*"
+  background-effect {
+    blur true
+    xray false
+    
+  }
+}
+
+layer-rule {
+  match namespace="^nosdshell-bar-*"
+  background-effect {
+    blur false
+  }
+}
