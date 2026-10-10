@@ -21,7 +21,8 @@
 | `cdn.simpleicons.org/<slug>` | 403（非浏览器 Referer） | 走 jsdelivr npm 路径 |
 | jsdelivr gh 大包 assets | 403 `Package size exceeded the configured limit of 50 MB` | `gh api` 资产树 |
 | 未认证 GitHub REST API | 403 `API rate limit exceeded` | 本机 `gh` CLI |
-| `git.savannah.gnu.org/cgit/...?h=master` | 301 后 404（GNU Guix 系） | Wikimedia `Guix logo.svg` |
+| `git.savannah.gnu.org/cgit/...?h=master` | 301 后 404（GNU Guix 系） | Guix 系走官方 artwork 仓库：`git clone --depth 1 https://codeberg.org/guix/artwork.git`，`logo/` 与 `backgrounds/` |
+| guix checkout 里的 `misc/logo` | 那份是 **Godot Engine Logo**（见同目录 LICENSE.txt），不是 Guix 标志 | codeberg.org/guix/artwork |
 | 官网 `/logo.svg` 未部署 | 整站 200 + HTML（Next.js fallback 页） | 扒 HTML 里的真实资产 URL |
 | codeberg raw 未传 SVG | 404 | GitHub 镜像或 Wikimedia |
 

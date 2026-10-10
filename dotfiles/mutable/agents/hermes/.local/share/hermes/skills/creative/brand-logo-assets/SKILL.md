@@ -94,3 +94,8 @@ metadata:
 - `references/logo-sources.md` — 各类工具的可靠源与探测结论（含失效路径）
 - `scripts/build_logo_library.py` — 抓取 + 上色 + 归一化 + 验证一体脚本（读 manifest JSON）
 - `templates/manifest.example.json` — manifest 形状示例
+- badge-sticker-design — 把单个官方 logo 嵌进参考设计做贴纸/徽章（含裁切窗算法）
+
+## 源码树里的假 logo
+
+在包源码 / checkout / `misc/logo` 一类目录翻到的 SVG，**先看同目录 LICENSE.txt 再当官方标志用**：上游仓库里嵌的常是别的项目的图（Guix checkout 的 `misc/logo` 实际是 Godot Engine Logo）。
