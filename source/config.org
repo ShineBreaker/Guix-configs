@@ -447,6 +447,7 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
               <<user-desktop-services>>
               ;; ── shepherd 自启动 ──
               <<essential-desktop-services>>
+              <<sunshine-services>>
               <<kanata-services>>
               <<hermes-services>>
               <<cpu-dma-latency-service>>
@@ -2114,6 +2115,7 @@ polkit.addRule(function(action, subject) {
    "open-wallpaper-engine-bin"
    "pavucontrol"
    "rofi"
+   "sunshine"
    "waywallen-bin"
    "wl-clipboard"
    "xclip"
@@ -2208,7 +2210,6 @@ polkit.addRule(function(action, subject) {
 
    ;; 编辑器
    "helix-steel"
-   "qemacs"
    "zedg-bin"
    "zedg-bin:shim"
 
@@ -2220,7 +2221,6 @@ polkit.addRule(function(action, subject) {
    "bun"
    "direnv"
    "pnpm"
-   "sdkmanager"
    "uv"
 
    ;; 构造工具
@@ -2231,13 +2231,11 @@ polkit.addRule(function(action, subject) {
    "pkg-config"
 
    ;; AI Agent
-   "ai-usagebar-bin"
    "cc-switch-bin"
    "claude-code"
-   "codex"
    "cua-driver-bin"
+   "omo-bin"
    "zcode"
-   "zcode-proxy-bin"
 
    ;; 工具
    "biome"
@@ -2634,6 +2632,22 @@ _    _  _  _  _  _  _  _)
                                             #:requirement '(graphical-session)
                                             #:documentation
                                             "X11 与 Wayland CLIPBOARD 双向同步（niri + xwayland-satellite 无自动转发）"))))
+#+end_src
+
+**** Moonlight 串流被控端
+
+=Sunshine= 是 Moonlight 协议的服务端，用于远程操控本机桌面（画面 + 键鼠 + 音频回传）。
+网络面：只经 Tailscale 访问。UPnP 在 Sunshine 中默认关闭，不会向公网打洞。
+
+#+NAME: sunshine-services
+#+begin_src scheme
+(list (simple-service 'sunshine-services home-shepherd-service-type
+                      (list
+                       (home-daemon-service 'sunshine
+                                            (list (file-append sunshine "/bin/sunshine"))
+                                            #:requirement '(graphical-session)
+                                            #:documentation
+                                            "Moonlight 串流被控端))))
 #+end_src
 
 **** usb-power-watch 脚本
