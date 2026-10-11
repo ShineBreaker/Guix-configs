@@ -1,3 +1,5 @@
+spawn-sh-at-startup "herd restart noctalia"
+
 // Place the regular wallpaper on the backdrop.
 layer-rule {
   match namespace="^noctalia-wallpaper"

@@ -1,3 +1,5 @@
+spawn-sh-at-startup "herd restart nosdshell"
+
 // Place the regular wallpaper on the backdrop.
 layer-rule {
   match namespace="^nosdshell-wallpaper"
@@ -35,7 +37,7 @@ layer-rule {
   background-effect {
     blur true
     xray false
-    
+
   }
 }
 

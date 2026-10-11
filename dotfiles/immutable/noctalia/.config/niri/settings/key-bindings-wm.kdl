@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 binds {
-  Mod+Alt+L   hotkey-overlay-title="锁屏"      repeat=false    { spawn-sh "noctalia msg panel-toggle launcher"; }
+  Mod+Alt+L   hotkey-overlay-title="锁屏"      repeat=false    { spawn-sh "noctalia msg session lock"; }
   Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"                  { spawn-sh "noctalia msg wallpaper-random"; }
 
   Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "noctalia msg panel-toggle clipboard"; }
@@ -19,5 +19,5 @@ binds {
   Alt+XF86AudioRaiseVolume  allow-when-locked=true { spawn-sh "noctalia msg volume-up"; }
   Alt+XF86AudioLowerVolume  allow-when-locked=true { spawn-sh "noctalia msg volume-down"; }
 
-  Mod+Shift+E     hotkey-overlay-title="重启noctalia-shell" { spawn "herd" "restart" "noctalia-shell"; }
+  Mod+Shift+E     hotkey-overlay-title="重启 noctalia" { spawn "herd" "restart" "noctalia"; }
 }

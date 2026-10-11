@@ -9,6 +9,7 @@ include optional=true "settings/animations.kdl"
 include optional=true "settings/key-bindings-wm.kdl"
 include optional=true "settings/special.kdl"
 include optional=true "noctalia.kdl"
+include optional=true "nosdshell.kdl"
 
 prefer-no-csd
 
@@ -16,11 +17,17 @@ spawn-sh-at-startup "herd set-environment graphical-session XDG_CURRENT_DESKTOP=
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 spawn-sh-at-startup "fish -c 'dex -a'"
 
-// 虽然这个看起来很奇怪，但是跑这么一下hermes desktop才可以正常使用
-spawn-sh-at-startup "fish -c 'hermes --version'"
-
-// 重启noctalia，以便其继承正确的环境变量
-spawn-sh-at-startup "herd restart noctalia"
+// 登录后解锁钥匙环
+spawn-sh-at-startup r##"
+o=$(dbus-send --session --print-reply --dest=org.freedesktop.secrets \
+  /org/freedesktop/secrets org.freedesktop.Secret.Service.Unlock \
+  array:objpath:/org/freedesktop/secrets/collection/Default 2>/dev/null)
+p=$(printf '%s\n' "$o" | sed -n 's#^ *object path "\(/org/freedesktop/secrets/prompt/[^"]*\)"$#\1#p' | tail -1)
+if [ -n "$p" ]; then
+  dbus-send --session --dest=org.freedesktop.secrets "$p" \
+    org.freedesktop.Secret.Prompt.Prompt string:""
+fi
+"##
 
 blur {
   passes 4
