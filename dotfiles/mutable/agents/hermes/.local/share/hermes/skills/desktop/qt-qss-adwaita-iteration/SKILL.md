@@ -1,6 +1,6 @@
 ---
 name: qt-qss-adwaita-iteration
-description: Use when iterating a Qt QSS stylesheet to match Adwaita.
+description: "迭代 Qt QSS 样式表对齐 Adwaita 视觉（圆角 / 控件箭头 / 加载路径与验收法）。触发：调 QSS 对齐 GNOME 风格 / QSS 改动不生效或渲染异常 / 控件（箭头、指示器、按钮盒）细节与 Adwaita 不符 / 需要验证样式改动——任一出现即调用。"
 ---
 
 # Qt QSS Adwaita 贴合迭代（rounded.qss 实战）

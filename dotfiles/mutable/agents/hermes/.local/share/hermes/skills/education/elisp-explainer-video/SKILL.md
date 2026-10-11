@@ -1,6 +1,6 @@
 ---
 name: elisp-explainer-video
-description: 用 HyperFrames 制作 Emacs Lisp 教学视频的完整工作流——从文档提取概念→设计可视化(画数据结构+算法流程)→编写 HTML/SVG/GSAP 时间线→渲染 MP4。
+description: "用 HyperFrames 制作 Emacs Lisp 教学视频的完整工作流（概念提取→可视化设计→HTML/SVG/GSAP 时间线→渲染 MP4）。触发：要做 Emacs Lisp 讲解视频 / 技术概念动画视频 / 更新既有教学视频的素材与时间线——任一出现即调用。"
 category: video
 ---
 

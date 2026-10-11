@@ -1,6 +1,6 @@
 ---
 name: monorepo-release
-description: "修本机 monorepo 上游 bug 并发布新版本。"
+description: "修本机 monorepo 上游 bug 并发布新版本（补丁、变更日志、打 tag 与验证）。触发：上游项目出 bug 要修并出包 / 走发版流程 / 更新版本号与校验——任一出现即调用。"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

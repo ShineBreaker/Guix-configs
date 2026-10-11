@@ -1,6 +1,6 @@
 ---
 name: corpus-harvest-fanout
-description: Use when distilling a large corpus with parallel subagents.
+description: "用并行子代理蒸馏大语料（fanout 抽取、回顾、策展）。触发：批量分析大量文档、卡或会话 / 分派多个 subagent 各管一块 / 语料总结与复核——任一出现即调用。"
 version: 1.0.0
 license: MIT
 metadata:

@@ -1,6 +1,6 @@
 ---
 name: dsh-maintenance
-description: Use when installing, updating, or removing dsh (DeepSeek Harness) plugins and profiles.
+description: "维护 dsh（DeepSeek Harness）：安装 / 更新 / 移除插件与 profiles。触发：dsh 装插件或改配置 / dsh 升级或加固修复 / profiles 管理 / dsh 排障——任一出现即调用。"
 ---
 
 # dsh-maintenance — dsh 更新、验证与源同步

@@ -1,7 +1,7 @@
 ---
 name: hermes-attestation-guardian
 version: 0.1.7
-description: Hermes-only runtime security attestation and drift detection skill for operator-managed Hermes infrastructure.
+description: "Hermes 运行时安全认证与漂移检测（operator 托管的 Hermes 基础设施）。触发：校验 hermes 运行时完整性 / 检测配置或二进制漂移 / 安全审计 attestation 链路 / 排查网关安全状态——任一出现即调用。"
 homepage: https://clawsec.prompt.security
 hermes:
   emoji: "🛡️"

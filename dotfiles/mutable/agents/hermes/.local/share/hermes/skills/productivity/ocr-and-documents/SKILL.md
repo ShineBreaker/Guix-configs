@@ -1,6 +1,6 @@
 ---
 name: ocr-and-documents
-description: "Extract text from PDFs/scans (pymupdf, marker-pdf)."
+description: "从 PDF / 扫描件提取文本（pymupdf、marker-pdf 等工具链）。触发：解析 PDF 或扫描件正文 / OCR 提字 / 文档转 markdown 或结构化 / 排版复杂（表格、多栏）提取——任一出现即调用。"
 version: 2.3.0
 author: Hermes Agent
 license: MIT

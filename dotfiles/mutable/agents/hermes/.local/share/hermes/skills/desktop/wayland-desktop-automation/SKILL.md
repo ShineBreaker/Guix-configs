@@ -1,6 +1,6 @@
 ---
 name: wayland-desktop-automation
-description: Use when driving the Wayland desktop via cua-driver.
+description: "用 cua-driver 驱动 Wayland 桌面（移动 / 点击 / 截图等真实输入自动化）。触发：真机桌面自动化操作 / 验证 GUI 行为 / 鼠标键盘注入 / 与 niri 等合成器交互——任一出现即调用。"
 ---
 # Wayland desktop automation (cua-driver)
 

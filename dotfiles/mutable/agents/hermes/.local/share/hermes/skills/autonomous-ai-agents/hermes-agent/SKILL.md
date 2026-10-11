@@ -1,6 +1,6 @@
 ---
 name: hermes-agent
-description: "Configure, extend, or contribute to Hermes Agent."
+description: "配置、扩展或开发 Hermes Agent（安装 / 网关 / cron / 多代理 / CLI / 贡献指南）。触发：装或升级 hermes / 配 gateway 与 delivery / 写插件或报 bug / 查 hermes 命令与配置键 / 改 hermes-agent 仓库——任一出现即调用。"
 version: 2.1.0
 author: Hermes Agent + Teknium
 license: MIT

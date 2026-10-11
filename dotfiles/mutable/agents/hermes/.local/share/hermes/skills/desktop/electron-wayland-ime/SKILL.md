@@ -1,6 +1,6 @@
 ---
 name: electron-wayland-ime
-description: "Diagnose and fix input method (fcitx5) issues in Electron/Chromium apps running under Wayland compositors (niri, sway, Hyprland). Covers XDG desktop override pattern, Electron flag differences across versions, and fcitx5 diagnostic workflow."
+description: "诊断与修复 Wayland 合成器（niri/sway/Hyprland）下 Electron/Chromium 应用的输入法（fcitx5）问题：XDG desktop 覆写、Electron 版本间 flag 差异、fcitx5 诊断流。触发：Electron 应用打不出中文 / 输入法候选框不跟随 / Chromium 系 IME 失效——任一出现即调用。"
 version: 1.0.0
 platforms: [linux]
 metadata:
