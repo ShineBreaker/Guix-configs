@@ -50,14 +50,16 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 `bash` 链（`gate_bash`）：
 
-| #   | 阶段                         | 命中即                                              |
-| --- | ---------------------------- | --------------------------------------------------- |
-| 0   | 人工总开关                   | 存在即零输出返回                                    |
-| 1   | `check_frozen_commands`      | 冻结命令命中发 `BLOCK`；另有 `guix system` 宽匹配   |
-| 2   | `check_interactive_commands` | 交互式命令 / 裸 REPL 发 `BLOCK`                     |
-| 3   | `check_git_rules`            | 无 `-m` 的 commit、`add -p`、`rebase -i` 发 `BLOCK` |
-| 4   | `check_readonly_whitelist`   | 白名单命中发 `AUTO_ALLOW`                           |
-| 5   | `apply_rewrites_and_hints`   | 发 `REWRITTEN` / `NOTES` / `REDIRECT`，无拦截语义   |
+| #   | 阶段                         | 命中即                                                  |
+| --- | ---------------------------- | ------------------------------------------------------- |
+| 0   | 人工总开关                   | 存在即零输出返回                                        |
+| 1   | `check_frozen_commands`      | 冻结命令命中发 `BLOCK`；另有 `guix system` 宽匹配       |
+| 2   | `check_interactive_commands` | 交互式命令 / 裸 REPL 发 `BLOCK`                         |
+| 3   | `check_git_rules`            | `add -p`、`rebase -i` 发 `BLOCK`（commit 无限制，见下） |
+| 4   | `check_readonly_whitelist`   | 白名单命中发 `AUTO_ALLOW`                               |
+| 5   | `apply_rewrites_and_hints`   | 发 `REWRITTEN` / `NOTES` / `REDIRECT`，无拦截语义       |
+
+`git commit` 不再要求 `-m`：2026-10 前的硬拦「无 `-m` 的 commit 发 BLOCK」误伤了 `git commit -F <file>` 这类合法消息文件用法，已按用户决定整条移除；裸 commit 拉起交互式编辑器的挂起风险交由会话层自行承担。`add -p` / `rebase -i` 的拦截不变。
 
 `edit` 链（`gate_edit`）：
 

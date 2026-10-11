@@ -46,7 +46,7 @@ pi-update --extensions-only  # 只装扩展（pi 首跑调用路径），跳过�
 - **`minimumReleaseAge: 0` 关闭 pnpm 12 的 24h 供应链冷却**：pi 与插件是日更 preview 版本，冷却期内发布的版本被**静默**排除出解析，表现就是「更新跑完版本不动」。核心目录与扩展目录两个 `pnpm-workspace.yaml` 都写这一项。
 - **`ERR_PNPM_IGNORED_BUILDS` 自动批准后重试一次**：从 pnpm 输出的 `Ignored build scripts:` 行解析包名写入 `allowBuilds: true`，再重跑一次 `pnpm update --latest`；仍失败才走 lockfile 兜底（删 `pnpm-lock.yaml` 后 `CI=true pnpm install --no-frozen-lockfile`）。
 - **`sync_core_to_source` 回源**：`package.json` 与 `pnpm-lock.yaml` 是部署侧产物（`pnpm update --latest` 就地覆写，还会把 stow 软链原子写成实体文件），收尾把两者同步回仓库源——`package.json` 拷内容并重建软链，lockfile 只回拷内容（pnpm 拒写软链 lockfile，仓库副本经 `.stow-local-ignore` 防误链），`cmp` 有差才动。位置在 FAILED 汇总之前（native rebuild 失败也照常回源），`--extensions-only` 也跑（覆盖 wrapper 首装的 `pnpm install`）。通用配方见 `dotfiles/mutable/AGENTS.md`「新增 pnpm 系 agent 的完整配方」。
-- **native 与保护名单**：`NATIVE_PKGS`（`better-sqlite3`）逐一 `pnpm rebuild` 并检查 `.node` 产物，通配同时覆盖 hoisted 与 `.pnpm/` isolated 布局；prebuilt 平台包（如 koffi）无需 rebuild。
+- **`native` 与保护名单**：`NATIVE_PKGS`（当前为空；`better-sqlite3` 在 2026-10-11 确认核心/扩展两树零依赖后移除，旧名单会误报 `FAILED`）逐一 `pnpm rebuild` 并检查 `.node` 产物，通配同时覆盖 hoisted 与 `.pnpm/` isolated 布局；prebuilt 平台包（如 koffi）无需 rebuild。缺 `node-gyp` 时脚本用 npm 自带副本垫片（本轮有效，不持久安装）。
 
 ## 实现与约束
 
@@ -66,6 +66,7 @@ pi-update --extensions-only  # 只装扩展（pi 首跑调用路径），跳过�
 | `pnpm update` 反复失败                            | lockfile 损坏或 store 冲突                 | 脚本自动删 lockfile 重装；仍败则手工删安装树的 `node_modules` |
 | `pi-acp` 报 CLI 缺失                              | 它按数据根解析，与安装根不一致             | 核对 `$PI_DATA_DIR/node_modules/.bin/pi-acp` 是否存在         |
 | `pi --help` 挂起                                  | pi 没有纯帮助路径，会进入交互              | 属预期；`tools.yaml` 的 `help_cmd` 白名单不得为它登记         |
+| 扩展重装报 `node-gyp` 缺失（`node-pty` 编译失败） | 本机 PATH 无 `node-gyp`，且重装丢掉了旧编译产物 | 脚本自动用 npm 自带 `node-gyp` 垫片后重试 |
 
 ## 变更
 
