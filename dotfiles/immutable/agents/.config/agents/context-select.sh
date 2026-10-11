@@ -16,208 +16,208 @@ CTX_DIR="${CONTEXT_DIR:-$CTX_BASE/context}"
 # 新增领域三步联动：domains/ 加文件 + 本表加行 + INDEX.md 加 <domain> 条目
 #（--check 校验三者一致）。
 INJECT_MAP=(
-  "00-core.md|always"
-  "INDEX.md|always"
-  "domains/coding.md|git"
-  "domains/verify.md|git"
-  "domains/agent-ops.md|always"
-  "domains/dsh-sandbox.md|platform:dsh"
+	"00-core.md|always"
+	"INDEX.md|always"
+	"domains/coding.md|git"
+	"domains/verify.md|git"
+	"domains/agent-ops.md|always"
+	"domains/dsh-sandbox.md|platform:dsh"
 )
 
 in_git_repo() { # $1=起点目录
-  local d="${1:-$PWD}"
-  d="$(realpath -ms "$d" 2>/dev/null || printf '%s' "$d")"
-  for _ in 1 2 3 4 5 6 7 8; do
-    [[ -e "$d/.git" ]] && return 0
-    [[ "$d" == "/" || -z "$d" ]] && return 1
-    d="$(dirname "$d")"
-  done
-  return 1
+	local d="${1:-$PWD}"
+	d="$(realpath -ms "$d" 2>/dev/null || printf '%s' "$d")"
+	for _ in 1 2 3 4 5 6 7 8; do
+		[[ -e "$d/.git" ]] && return 0
+		[[ "$d" == "/" || -z "$d" ]] && return 1
+		d="$(dirname "$d")"
+	done
+	return 1
 }
 
 passes() { # $1=gate $2=platform $3=cwd
-  local part
-  for part in ${1//+/ }; do
-    case "$part" in
-      always) ;;
-      git) in_git_repo "$3" || return 1 ;;
-      platform:*) [[ ",${part#platform:}," == *",$2,"* ]] || return 1 ;;
-      *) return 1 ;;
-    esac
-  done
-  return 0
+	local part
+	for part in ${1//+/ }; do
+		case "$part" in
+		always) ;;
+		git) in_git_repo "$3" || return 1 ;;
+		platform:*) [[ ",${part#platform:}," == *",$2,"* ]] || return 1 ;;
+		*) return 1 ;;
+		esac
+	done
+	return 0
 }
 
 explain() { printf '  %s %s（%s）\n' "$1" "$2" "$3" >&2; }
 
 select_files() { # $1=platform $2=cwd $3=explain(0/1)
-  local entry file gate
-  for entry in "${INJECT_MAP[@]}"; do
-    file="${entry%%|*}" gate="${entry#*|}"
-    if passes "$gate" "$1" "$2"; then
-      printf '%s\n' "$CTX_DIR/$file"
-      if [[ "$3" == 1 ]]; then explain '✓' "$file" "$gate"; fi
-    else
-      if [[ "$3" == 1 ]]; then explain '－' "$file" "$gate 未满足"; fi
-    fi
-  done
-  return 0
+	local entry file gate
+	for entry in "${INJECT_MAP[@]}"; do
+		file="${entry%%|*}" gate="${entry#*|}"
+		if passes "$gate" "$1" "$2"; then
+			printf '%s\n' "$CTX_DIR/$file"
+			if [[ "$3" == 1 ]]; then explain '✓' "$file" "$gate"; fi
+		else
+			if [[ "$3" == 1 ]]; then explain '－' "$file" "$gate 未满足"; fi
+		fi
+	done
+	return 0
 }
 
 list_all() { # 全集不做门控；消费者注册 section 集后再以 select 门控
-  local entry
-  for entry in "${INJECT_MAP[@]}"; do
-    printf '%s\n' "$CTX_DIR/${entry%%|*}"
-  done
+	local entry
+	for entry in "${INJECT_MAP[@]}"; do
+		printf '%s\n' "$CTX_DIR/${entry%%|*}"
+	done
 }
 
 # ─── 一致性自检（防引用断链与漏登记）─────────────────────────────────────────
 
 index_domains() { # INDEX.md 的 <domain name="..."> 条目集合
-  grep -o '<domain name="[a-z0-9-]*"' "$CTX_DIR/INDEX.md" 2>/dev/null \
-    | sed 's/^<domain name="//;s/"$//'
+	grep -o '<domain name="[a-z0-9-]*"' "$CTX_DIR/INDEX.md" 2>/dev/null |
+		sed 's/^<domain name="//;s/"$//'
 }
 
 check() {
-  local fail=0 entry file name
-  local -A seen=()
+	local fail=0 entry file name
+	local -A seen=()
 
-  # 1. 映射表引用的文件存在
-  for entry in "${INJECT_MAP[@]}"; do
-    file="${entry%%|*}"
-    if [[ ! -f "$CTX_DIR/$file" ]]; then
-      echo "✗ 映射表引用的文件不存在：$CTX_DIR/$file"
-      fail=1
-    fi
-    [[ "$file" == domains/* ]] && seen["$(basename "$file" .md)"]=1
-  done
+	# 1. 映射表引用的文件存在
+	for entry in "${INJECT_MAP[@]}"; do
+		file="${entry%%|*}"
+		if [[ ! -f "$CTX_DIR/$file" ]]; then
+			echo "✗ 映射表引用的文件不存在：$CTX_DIR/$file"
+			fail=1
+		fi
+		[[ "$file" == domains/* ]] && seen["$(basename "$file" .md)"]=1
+	done
 
-  # 2. domains/ 磁盘文件 == 映射表登记集合
-  local -A disk=()
-  for file in "$CTX_DIR"/domains/*.md; do
-    [[ -f "$file" ]] || continue
-    name="$(basename "$file" .md)"
-    disk["$name"]=1
-    if [[ -z "${seen[$name]:-}" ]]; then
-      echo "✗ domains/$name.md 未登记进 context-select.sh 映射表（永不注入）；登记或删除"
-      fail=1
-    fi
-  done
-  for name in "${!seen[@]}"; do
-    if [[ -z "${disk[$name]:-}" ]]; then
-      echo "✗ 映射表登记的 domains/$name.md 在目录中不存在"
-      fail=1
-    fi
-  done
+	# 2. domains/ 磁盘文件 == 映射表登记集合
+	local -A disk=()
+	for file in "$CTX_DIR"/domains/*.md; do
+		[[ -f "$file" ]] || continue
+		name="$(basename "$file" .md)"
+		disk["$name"]=1
+		if [[ -z "${seen[$name]:-}" ]]; then
+			echo "✗ domains/$name.md 未登记进 context-select.sh 映射表（永不注入）；登记或删除"
+			fail=1
+		fi
+	done
+	for name in "${!seen[@]}"; do
+		if [[ -z "${disk[$name]:-}" ]]; then
+			echo "✗ 映射表登记的 domains/$name.md 在目录中不存在"
+			fail=1
+		fi
+	done
 
-  # 3. INDEX.md 条目集合 == domains/ 文件集合，且条目 file 属性与 name 同名
-  if [[ -f "$CTX_DIR/INDEX.md" ]]; then
-    local -A idx=()
-    while IFS= read -r name; do
-      [[ -n "$name" ]] || continue
-      idx["$name"]=1
-      if ! grep -q "<domain name=\"$name\" file=\"domains/$name\.md\">" "$CTX_DIR/INDEX.md"; then
-        echo "✗ INDEX.md 条目「$name」缺 file=\"domains/$name.md\" 声明"
-        fail=1
-      fi
-    done < <(index_domains)
-    for name in "${!disk[@]}"; do
-      [[ -z "${idx[$name]:-}" ]] && {
-        echo "✗ domains/$name.md 未收录进 INDEX.md"
-        fail=1
-      }
-    done
-    for name in "${!idx[@]}"; do
-      [[ -z "${disk[$name]:-}" ]] && {
-        echo "✗ INDEX.md 条目「$name」无对应 domains/$name.md"
-        fail=1
-      }
-    done
-  else
-    echo "✗ $CTX_DIR/INDEX.md 不存在"
-    fail=1
-  fi
+	# 3. INDEX.md 条目集合 == domains/ 文件集合，且条目 file 属性与 name 同名
+	if [[ -f "$CTX_DIR/INDEX.md" ]]; then
+		local -A idx=()
+		while IFS= read -r name; do
+			[[ -n "$name" ]] || continue
+			idx["$name"]=1
+			if ! grep -q "<domain name=\"$name\" file=\"domains/$name\.md\">" "$CTX_DIR/INDEX.md"; then
+				echo "✗ INDEX.md 条目「$name」缺 file=\"domains/$name.md\" 声明"
+				fail=1
+			fi
+		done < <(index_domains)
+		for name in "${!disk[@]}"; do
+			[[ -z "${idx[$name]:-}" ]] && {
+				echo "✗ domains/$name.md 未收录进 INDEX.md"
+				fail=1
+			}
+		done
+		for name in "${!idx[@]}"; do
+			[[ -z "${disk[$name]:-}" ]] && {
+				echo "✗ INDEX.md 条目「$name」无对应 domains/$name.md"
+				fail=1
+			}
+		done
+	else
+		echo "✗ $CTX_DIR/INDEX.md 不存在"
+		fail=1
+	fi
 
-  # 4. crush：context_paths 引用存在且覆盖恒注入集
-  local crush_json="${XDG_CONFIG_HOME:-$HOME/.config}/crush/crush.json"
-  if [[ -f "$crush_json" ]]; then
-    local p target found_core=0 found_index=0
-    while IFS= read -r p; do
-      [[ -z "$p" ]] && continue
-      target="${p/#\~/$HOME}"
-      [[ -f "$target" ]] || {
-        echo "✗ crush context_paths 指向不存在的文件：$p"
-        fail=1
-      }
-      case "$(basename "$target")" in
-        00-core.md) found_core=1 ;;
-        INDEX.md) found_index=1 ;;
-      esac
-    done < <(jq -r '.options.context_paths[]?' "$crush_json" 2>/dev/null)
-    [[ $found_core -eq 1 && $found_index -eq 1 ]] || {
-      echo "✗ crush context_paths 未覆盖恒注入集（00-core.md / INDEX.md）"
-      fail=1
-    }
-  else
-    echo "－ crush 配置不可读（$crush_json），跳过 crush 校验"
-  fi
+	# 4. crush：context_paths 引用存在且覆盖恒注入集
+	local crush_json="${XDG_CONFIG_HOME:-$HOME/.config}/crush/crush.json"
+	if [[ -f "$crush_json" ]]; then
+		local p target found_core=0 found_index=0
+		while IFS= read -r p; do
+			[[ -z "$p" ]] && continue
+			target="${p/#\~/$HOME}"
+			[[ -f "$target" ]] || {
+				echo "✗ crush context_paths 指向不存在的文件：$p"
+				fail=1
+			}
+			case "$(basename "$target")" in
+			00-core.md) found_core=1 ;;
+			INDEX.md) found_index=1 ;;
+			esac
+		done < <(jq -r '.options.context_paths[]?' "$crush_json" 2>/dev/null)
+		[[ $found_core -eq 1 && $found_index -eq 1 ]] || {
+			echo "✗ crush context_paths 未覆盖恒注入集（00-core.md / INDEX.md）"
+			fail=1
+		}
+	else
+		echo "－ crush 配置不可读（$crush_json），跳过 crush 校验"
+	fi
 
-  # 5. omp：配置存在于扩展查找路径（配置根）且启用
-  local omp_json="${XDG_CONFIG_HOME:-$HOME/.config}/omp/global-context.json"
-  if [[ -f "$omp_json" ]]; then
-    [[ "$(jq -r '.enabled' "$omp_json" 2>/dev/null)" == "true" ]] \
-      || echo "－ omp global-context 已禁用（enabled != true）"
-  else
-    echo "✗ omp 配置不在扩展查找路径：$omp_json"
-    fail=1
-  fi
+	# 5. omp：配置存在于扩展查找路径（配置根）且启用
+	local omp_json="${XDG_CONFIG_HOME:-$HOME/.config}/omp/global-context.json"
+	if [[ -f "$omp_json" ]]; then
+		[[ "$(jq -r '.enabled' "$omp_json" 2>/dev/null)" == "true" ]] ||
+			echo "－ omp global-context 已禁用（enabled != true）"
+	else
+		echo "✗ omp 配置不在扩展查找路径：$omp_json"
+		fail=1
+	fi
 
-  # 6. hermes：插件存在
-  local hermes_plugin="${HERMES_HOME:-$HOME/.local/share/hermes}/plugins/global-context/__init__.py"
-  [[ -f "$hermes_plugin" ]] || echo "－ hermes global-context 插件未部署，跳过"
+	# 6. hermes：插件存在
+	local hermes_plugin="${HERMES_HOME:-$HOME/.local/share/hermes}/plugins/global-context/__init__.py"
+	[[ -f "$hermes_plugin" ]] || echo "－ hermes global-context 插件未部署，跳过"
 
-  [[ $fail -eq 0 ]] && echo "✓ context 注入体系一致性检查通过（$CTX_DIR）"
-  return $fail
+	[[ $fail -eq 0 ]] && echo "✓ context 注入体系一致性检查通过（$CTX_DIR）"
+	return $fail
 }
 
 # ─── 入口 ─────────────────────────────────────────────────────────────────────
 
 PLATFORM="generic" CWD="$PWD" EXPLAIN=0 MODE="select"
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --platform | --cwd)
-      # 缺参数时必须报错——shift 2 失败会留参死循环
-      if [[ $# -lt 2 ]]; then
-        printf 'usage: %s [--platform P] [--cwd DIR] [--explain] | --list-all | --check\n' "$0" >&2
-        exit 64
-      fi
-      case "$1" in
-        --platform) PLATFORM="$2" ;;
-        --cwd) CWD="$2" ;;
-      esac
-      shift 2
-      ;;
-    --explain)
-      EXPLAIN=1
-      shift
-      ;;
-    --list-all)
-      MODE="list-all"
-      shift
-      ;;
-    --check)
-      MODE="check"
-      shift
-      ;;
-    *)
-      printf 'usage: %s [--platform P] [--cwd DIR] [--explain] | --list-all | --check\n' "$0" >&2
-      exit 64
-      ;;
-  esac
+	case "$1" in
+	--platform | --cwd)
+		# 缺参数时必须报错——shift 2 失败会留参死循环
+		if [[ $# -lt 2 ]]; then
+			printf 'usage: %s [--platform P] [--cwd DIR] [--explain] | --list-all | --check\n' "$0" >&2
+			exit 64
+		fi
+		case "$1" in
+		--platform) PLATFORM="$2" ;;
+		--cwd) CWD="$2" ;;
+		esac
+		shift 2
+		;;
+	--explain)
+		EXPLAIN=1
+		shift
+		;;
+	--list-all)
+		MODE="list-all"
+		shift
+		;;
+	--check)
+		MODE="check"
+		shift
+		;;
+	*)
+		printf 'usage: %s [--platform P] [--cwd DIR] [--explain] | --list-all | --check\n' "$0" >&2
+		exit 64
+		;;
+	esac
 done
 
 case "$MODE" in
-  check) check ;;
-  list-all) list_all ;;
-  *) select_files "$PLATFORM" "$CWD" "$EXPLAIN" ;;
+check) check ;;
+list-all) list_all ;;
+*) select_files "$PLATFORM" "$CWD" "$EXPLAIN" ;;
 esac
