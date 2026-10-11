@@ -1,7 +1,7 @@
 ---
 name: jev-skill-quality-audit
 description: "Audit Hermes skill descriptions with Jev. Read-only."
-version: 1.0.0
+version: 1.0.1
 author: Hermes Agent
 license: MIT
 metadata:

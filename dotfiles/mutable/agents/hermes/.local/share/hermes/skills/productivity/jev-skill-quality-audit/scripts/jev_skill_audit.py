@@ -174,7 +174,7 @@ def discover(root: Path, names, use_all: bool, usage_path: Path):
     if names:
         found = []
         for n in names:
-            hits = sorted(root.rglob(f"*/{n}/SKILL.md")) or sorted(root.rglob(f"{n}/SKILL.md"))
+            hits = sorted(p for p in root.rglob(f"*/{n}/SKILL.md") if ".archive" not in p.parts) or sorted(p for p in root.rglob(f"{n}/SKILL.md") if ".archive" not in p.parts)
             if hits:
                 found.append(hits[0])
             else:
