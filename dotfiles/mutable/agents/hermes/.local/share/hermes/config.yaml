@@ -378,8 +378,8 @@ human_delay:
 context:
   engine: compressor
 memory:
-  memory_enabled: true
-  user_profile_enabled: true
+  memory_enabled: false
+  user_profile_enabled: false
   write_approval: false
   memory_char_limit: 4000
   user_char_limit: 2000
