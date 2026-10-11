@@ -22,9 +22,5 @@
   "pylsp": {
     "command": ["pylsp"],
     "extensions": [".py", ".pyi"]
-  },
-  "ruff": {
-    "command": ["ruff", "server"],
-    "extensions": [".py", ".pyi"]
   }
 }

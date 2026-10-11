@@ -4,6 +4,9 @@
   "npmCommand": [
     "pnpm"
   ],
+  "defaultTools": [
+    "+codemode"
+  ],
   "compaction": {
     "enabled": true,
     "reserveTokens": 16384,
@@ -40,11 +43,11 @@
     "maxBytesPerFile": 65536,
     "maxTotalBytes": 196608
   },
-  "lastChangelogVersion": "1.0.0",
+  "lastChangelogVersion": "1.1.0",
   "images": {
     "blockImages": false
   },
-  "theme": "dark",
+  "theme": "system",
   "showHardwareCursor": false,
   "transport": "auto",
   "collapseChangelog": true,

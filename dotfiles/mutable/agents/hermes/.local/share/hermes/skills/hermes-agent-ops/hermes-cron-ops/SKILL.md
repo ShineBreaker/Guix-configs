@@ -30,16 +30,16 @@ Hermes cron 定时任务的创建、诊断与投递配置。覆盖：把用户�
 
 ## 创建 cron job 的最佳实践
 
-1. **deliver 机制**：cron 的 agent 最终回复会被自动投递到 `deliver` 目标——agent **不需要**调用任何发消息工具，也不要把报告写文件（除非用户明确要双写）。prompt 里写清楚「报告作为最终回复输出即可」。
+1. **deliver 机制**：cron 的 agent 最终回复会被自动投递到 `deliver` 目标——agent **不需要**调用任何发消息工具，也不要把报告写文件（除非用户明确要双写）。prompt 里写清楚「报告作为最终回复输出即可」。**`deliver` 必须显式写平台名（本机统一 `qqbot`），不要写 `origin`**——CLI 建的 job `origin` 恒为 None，fallback 会按字典序撞到排在前面的平台，静默投错地方（机制与诊断见「投递平台确认」）。
 2. **prompt 必须自包含**：cron 在全新 session 运行，无对话上下文。把用户给的完整计划（环境路径、API、步骤、约束、容错规则）原样打包进 prompt，不要精简到看不懂。
 3. **workdir**：设到仓库根（如 `/home/brokenshine/Projects/Config/Guix-configs`），该目录的 AGENTS.md / CLAUDE.md 会自动注入 system prompt，agent 能拿到仓库约定。
 4. **enabled_toolsets**：按任务实际需要收窄工具集（如 `["web", "terminal", "file"]`），省 token 开销。**不要**给 cron 加 `messaging`（投递由框架做）、`cronjob`（cron 内禁止递归建 cron）、`clarify`（无人可问）。
 5. **超时预算按实测，不按口号**。旧口径「3 分钟硬中断」早就不适用：单 tick 有更长预算，预热 + 多阶段任务跑十几分钟是常态。真正该做的是**先实测再定兜底**——跑一轮量出各阶段耗时与 token 用量，据此在 prompt 里写明分批顺序与断点续跑方式（长判定/抓取批加 `--resume`），并给出「时间不够时按什么顺序砍、哪几步必须做完」。凭口号写「3 分钟」会让 prompt 里出现错误的裁剪优先级。具体分段与断点配方见下方「抓取型 cron：分批断点」。
 6. **时间不够时的裁剪优先级要分级写**：把步骤分成「必须做完」（诊断、核心写操作、收尾 commit）和「可砍」（补充巡检、第二轮判定），prompt 明说哪一级可省、省了要在报告里写哪一侧未完成。跨 tick 依赖进度时用断点文件续跑，别让每次 tick 从头重来。
-6. **格式适配**：投递到 IM 平台（QQ/微信）时 **markdown 完全不被渲染**——表格、加粗、代码块全部以纯文本裸露。报告必须先渲染成图片再随回复发出（正文写 `MEDIA:/绝对路径.png`），图内只放消息内容本身，执行说明另发一条文字消息或干脆不发。完整管线见 `references/image-report-rendering.md`。
-7. **同 tick 已有重活时错峰排程**。新 job 与既有的长任务 job（周检、夜间抓取）排在同一时刻会互相抢资源、拉长单 tick。排期前先 `hermes cron list` 看现有 schedule，错开半小时量级。
-8. **cron 用的脚本只能走绝对路径 + 已验证存在的位置**。`~/.local/bin` 在 cron 会话 PATH 里未必有；`HERMES_HOME` 下新建文件不一定已部署（见下方 stow 软链坑）。最稳的做法是 prompt 里写绝对路径，并在任务开头用 `search_files(target='files')` 确认目标存在，缺了就按 skill 口径现写而不是静默跳过。
-9. **prompt 里的阈值与判据要按实测写，不按想象写**。若某维度在真实语料上从未越过设想阈值（如 Jev duplicated 全库上限 0.5，而 prompt 写「≥0.60 合并」），那条触发条件就是死代码——把它改成「与确定性候选取交集 + 读卡确认」，并附上该维度实测上限，避免后来者当成有效门槛。
+7. **格式适配**：投递到 IM 平台（QQ/微信）时 **markdown 完全不被渲染**——表格、加粗、代码块全部以纯文本裸露。报告必须先渲染成图片再随回复发出（正文写 `MEDIA:/绝对路径.png`），图内只放消息内容本身，执行说明另发一条文字消息或干脆不发。完整管线见 `references/image-report-rendering.md`。
+8. **同 tick 已有重活时错峰排程**。新 job 与既有的长任务 job（周检、夜间抓取）排在同一时刻会互相抢资源、拉长单 tick。排期前先 `hermes cron list` 看现有 schedule，错开半小时量级。
+9. **cron 用的脚本只能走绝对路径 + 已验证存在的位置**。`~/.local/bin` 在 cron 会话 PATH 里未必有；`HERMES_HOME` 下新建文件不一定已部署（见下方 stow 软链坑）。最稳的做法是 prompt 里写绝对路径，并在任务开头用 `search_files(target='files')` 确认目标存在，缺了就按 skill 口径现写而不是静默跳过。
+10. **prompt 里的阈值与判据要按实测写，不按想象写**。若某维度在真实语料上从未越过设想阈值（如 Jev duplicated 全库上限 0.5，而 prompt 写「≥0.60 合并」），那条触发条件就是死代码——把它改成「与确定性候选取交集 + 读卡确认」，并附上该维度实测上限，避免后来者当成有效门槛。
 
 ## 更新巡检类任务：weather 口径与就近回溯
 
@@ -128,11 +128,20 @@ hermes cron edit <job_id> --model <model> --provider <provider>
 - **微信**：`.env` 里有 `WEIXIN_BASE_URL` 等 → 配置存在。已知坑：iLink 发消息有 rate limit，cooldown 期间 delivery 报 `rate limited; cooldown active for 30.0s`（不致命，下次 tick 重试）。
 - 日志位置：`$HERMES_HOME/logs/gateway.log`（不要硬编码 `~/.hermes/`，HERMES_HOME 可能已重定向）。
 
+### deliver 目标解析：显式写平台，别用 origin
+
+`deliver=origin` 只对**捕获过 origin**（`{platform, chat_id}`）的 job 可靠——CLI / 脚本建的 job `origin` 恒为 None。解析不到 origin 时，代码按 `_HOME_TARGET_ENV_VARS` 的字典序取**第一个配了 home channel 的平台**顶上，而 `weixin` 排第 12、`qqbot` 排第 14：本机两个平台都配了 home channel 时，无 origin 的 job 会静默投到微信，报告生成了却送不到用户手上。
+
+**铁律：建 job 一律显式写 `deliver=qqbot`，不要写 `origin`。** 用户口径是 cron 报告全部投 QQ，微信端不作为 cron 投递目标。
+
+排查「某个 job 投到了没想到的平台」：读 `jobs.json` 的 `deliver` 与 `origin` 两个字段，再用解析函数复现它选中的目标（完整链路、迭代顺序、复现脚本与结构性改法见 `references/delivery-target-resolution.md`）。
+
 ## 诊断命令速查
 
 ```bash
 hermes cron list                     # 所有任务 + last_status / last_delivery_error
-hermes cron runs <id> --limit 5      # 执行历史（executions.db，含具体错误）nhermes cron doctor                   # 跨 job 健康扫描：一次列出所有失败 job 的 last_error
+hermes cron runs <id> --limit 5      # 执行历史（executions.db，含具体错误）
+hermes cron doctor                   # 跨 job 健康扫描：一次列出所有失败 job 的 last_error
 hermes cron notepad <id> get <key>   # 读 job 的 KV 记事本
 ls $HERMES_HOME/cron/output/         # 本地投递的输出文件
 hermes gateway status                # gateway 是否在跑（不显示各平台连接详情）

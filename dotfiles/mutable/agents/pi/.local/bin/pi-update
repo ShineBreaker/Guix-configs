@@ -24,8 +24,10 @@ EXT_DIR="${PI_CONFIG_DIR}/npm"
 SETTINGS_FILE="${PI_CONFIG_DIR}/settings.json"
 PI_BIN="${PI_PROJ_DIR}/node_modules/.bin/pi"
 
-# 需要本地编译产物的 native 包（prebuilt 平台包如 koffi 无需 rebuild）
-NATIVE_PKGS=(better-sqlite3)
+# 需要本地编译产物的 native 包（prebuilt 平台包如 koffi 无需 rebuild）。
+# 2026-10-11 起为空：better-sqlite3 已无任何依赖方（核心/扩展两树均无引用，
+# lockfile 零命中），旧名单会误报 FAILED。列表留空保留机制，供未来 native 依赖复用。
+NATIVE_PKGS=()
 
 # settings.json 未列出时也保留的核心/框架包
 PROTECTED_PKGS=(pi-subagents)
@@ -40,6 +42,33 @@ if [[ "${1:-}" == "--extensions-only" ]]; then
 fi
 
 # === 工具函数 ===
+
+# node-gyp 兜底：node-pty 等包无预编译产物时回退源码编译，本机 PATH 常无
+# node-gyp（2026-10-11 扩展全量重装因此中断）。npm 自带一份 node-gyp，按 npm
+# 位置推导、用 wrapper 垫进 PATH；只本轮有效，不持久安装。
+ensure_node_gyp() {
+  if command -v node-gyp &>/dev/null; then
+    return 0
+  fi
+  local npm_bin node_gyp_js shim_dir
+  npm_bin="$(readlink -f "$(command -v npm 2>/dev/null || true)")"
+  if [[ -z "$npm_bin" ]]; then
+    return 0
+  fi
+  node_gyp_js="$(dirname "$npm_bin")/../lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js"
+  if [[ ! -f "$node_gyp_js" ]]; then
+    echo "  提示: 未找到 node-gyp，含原生编译的依赖若失败需手工处理" >&2
+    return 0
+  fi
+  shim_dir="$(mktemp -d)"
+  printf '#!/bin/sh\nexec node "%s" "$@"\n' "$node_gyp_js" >"$shim_dir/node-gyp"
+  chmod +x "$shim_dir/node-gyp"
+  export PATH="$shim_dir:$PATH"
+  # 双引号即时展开路径：单引号 trap 在 EXIT 触发时局部变量已出作用域，
+  # set -u 下报未绑定变量（2026-10-11 实测 exit 1）。
+  trap "rm -rf \"$shim_dir\"" EXIT
+  echo "  node-gyp: 已用 npm 自带副本垫片（本轮有效）" >&2
+}
 
 read_pi_version() {
   node -p "require('${PI_PROJ_DIR}/node_modules/@earendil-works/pi-coding-agent/package.json').version" 2>/dev/null || echo '未知'
@@ -299,6 +328,8 @@ if ! command -v pnpm &>/dev/null; then
   echo "pnpm is not installed." >&2
   exit 1
 fi
+
+ensure_node_gyp
 
 if [[ ! -x "$PI_BIN" ]]; then
   echo "Pi 核心未安装，执行首次安装..." >&2

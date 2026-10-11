@@ -61,7 +61,7 @@ Keep a Changelog 格式新增 `## [X.Y.Z] - 日期` 段；`### Fixed` 写清**�
 
 ### 6. commit
 
-- **用多个 `-m` 传 message，不要用 `-F` / heredoc**。仓里可能有自定义 `prepare-commit-msg` hook（软链到别的插件），它拒绝 `-F <file>` 并报「git commit 必须使用 -m 指定提交信息」——第一次 `<cmd> -F /tmp/msg.txt` 失败就是这个原因，换 `-m "标题" -m "body..."` 即可。
+- **`-m` / `-F <file>` 均可传 message**（2026-10 前 agent gate 硬拦「无 `-m` 的 commit」、误伤 `-F`，已整条移除；与 git hook 无关）。多行 body 用多个 `-m` 或 `-F` 消息文件。
 - 无 GPG 时 `--no-gpg-sign`。多个 `-m` 时 body 里的换行直接写在参数内。
 - LLM 参与按**实际宿主与模型**写 `Co-authored-by`，别照抄仓里示例的字面量（那条 trailer 属于别的宿主）。
 
