@@ -458,21 +458,28 @@ def check_pipeline_fresh(cfg: dict) -> tuple[str, str]:
 def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
     """9. Error count in scanned logs, within a rolling window.
 
-    Groups errors by (file:module:exception) signature so N repeating
-    lines read as one problem. Only lines inside the last `window_days`
+    Groups errors by (module:exception) signature so N repeating lines
+    read as one problem. Only lines inside the last `window_days`
     (default 7) are counted — a root cause that gets fixed stops counting
-    as soon as it ages out of the window. The metabolic signal is "how
-    many independent problems are active NOW", not "how many error lines
-    ever existed". Retry counters like `poll error (1/3)` are normalized
-    to `(n/3)`: three retries of one connection failure are one problem.
+    as soon as it ages out of the window. Retry counters like
+    `poll error (1/3)` are normalized to `(n/3)`: three retries of one
+    connection failure are one problem.
+
+    A signature counts as an active *problem* only when it recurs across
+    >= 2 distinct hour buckets inside the window. A single burst (one
+    minute, one incident — update-time restart hiccups, one-shot 503s) is
+    a *transient*: still printed for transparency, but not judged, because
+    "active NOW" means recurring, and a one-off ages out of relevance
+    exactly like a fixed bug does. A genuinely recurring failure (a
+    flapping network link, a crash loop) stays RED.
     """
     max_per = cfg.get("max_per_day", 5)
     window_days = float(cfg.get("window_days", 7))
     log_globs = cfg.get("log_globs", [])
     cutoff = _dt.datetime.now() - _dt.timedelta(days=window_days)
-    ts_re = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+    ts_re = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:[,.]\d+)?\s*")
     err_count = 0
-    sig_count: dict[str, int] = {}
+    sig_events: dict[str, list[_dt.datetime]] = {}
     if HERMES_HOME.exists():
         for pat in log_globs:
             for p in HERMES_HOME.glob(pat):
@@ -486,7 +493,8 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                 # logs without per-line timestamps (crash dumps, restart notes)
                 # would otherwise count forever
                 try:
-                    if _dt.datetime.fromtimestamp(p.stat().st_mtime) < cutoff:
+                    file_mtime = _dt.datetime.fromtimestamp(p.stat().st_mtime)
+                    if file_mtime < cutoff:
                         continue
                 except OSError:
                     continue
@@ -520,7 +528,7 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                         if rest and not rest[0].isspace():
                             # column-0 line ends the traceback: exception type
                             em = re.match(
-                                r"^([\w.]+(?:Error|Exception|Warning|Failure|Interrupt))",
+                                r"^([\w.]+(?:Error|Exception|Warning|Failure|Interrupt|Timeout\w*))",
                                 rest,
                             )
                             core = em.group(1) if em else "Exception"
@@ -529,7 +537,11 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                             # exceptions (httpx → httpcore → RuntimeError) and
                             # re-raise blocks add nothing
                             if not event_counted:
-                                sig_count[core] = sig_count.get(core, 0) + 1
+                                # timestamps feed the recurrence test; bare
+                                # lines fall back to the file mtime
+                                sig_events.setdefault(core, []).append(
+                                    cur_ts or file_mtime
+                                )
                                 err_count += 1
                                 event_counted = True
                             in_tb = False
@@ -556,23 +568,37 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                             mod = m2.group(1)
                             msg = m2.group(2) or ""
                             # normalize retry counters: (1/3)(2/3)(3/3) -> (n/3)
-                            msg = re.sub(r"\(\d/(\d+)\)", r"(n/\1)", msg)
+                            # (group 2 is the denominator; \1 fragmented one
+                            # problem into one sig per retry ordinal)
+                            msg = re.sub(r"\((\d)/(\d+)\)", r"(n/\2)", msg)
                             # no file prefix: gateway/errors/agent.log mirror the
                             # same process events — file-scoped sigs triple-count
                             # one problem as three
                             sig = f"{mod}:{msg[:40]}"
                         else:
                             sig = "ERROR"
-                        sig_count[sig] = sig_count.get(sig, 0) + 1
+                        sig_events.setdefault(sig, []).append(cur_ts or file_mtime)
                         err_count += 1
                         event_counted = True  # following traceback belongs to it
-    n_unique = len(sig_count)
+    # active problem = recurs across >= 2 distinct hour buckets within the
+    # window; single bursts are transients (listed, not judged — see docstring)
+    def _buckets(times: list[_dt.datetime]) -> set[tuple[int, int, int, int]]:
+        return {(t.year, t.month, t.day, t.hour) for t in times}
+
+    problems = {k: v for k, v in sig_events.items() if len(_buckets(v)) >= 2}
+    transients = {k: v for k, v in sig_events.items() if len(_buckets(v)) < 2}
+    n_unique = len(problems)
     status = "GREEN" if n_unique <= max_per else "RED"
-    top = sorted(sig_count.items(), key=lambda x: -x[1])[:3]
-    top_str = "; ".join(f"{k}×{v}" for k, v in top) if top else ""
+    top = sorted(problems.items(), key=lambda x: -len(x[1]))[:3]
+    top_str = "; ".join(f"{k}×{len(v)}" for k, v in top) if top else "none"
+    tr_str = ""
+    if transients:
+        ttop = sorted(transients.items(), key=lambda x: -len(x[1]))[:3]
+        tr_str = " | transient: " + ", ".join(f"{k}×{len(v)}" for k, v in ttop)
     return (
         status,
-        f"errors {n_unique} unique sigs ({window_days:.0f}d window, total {err_count}): {top_str}",
+        f"errors {n_unique} active problems ({window_days:.0f}d window, "
+        f"total {err_count} events): {top_str}{tr_str}",
     )
 
 
@@ -631,8 +657,22 @@ def check_backup_tmp_pile(cfg: dict) -> tuple[str, str]:
 
 
 def check_memory_cache_size(cfg: dict) -> tuple[str, str]:
-    """13. cache/ + audio_cache/ total size."""
+    """13. cache/ + audio_cache/ total size, less hermes-managed seed caches.
+
+    `cache/uv` is hermes' own uv package cache (pm/packages.py:uv_cache_dir):
+    the update flow's near-free `uv sync --offline` rebuild depends on it
+    ("the blow-away-on-update contract depends on it"), so clearing it
+    trades disk for slower updates — a designed component, not agent-cache
+    bloat. It is reported separately under its own (looser) roof instead of
+    counting against the agent-data threshold; real runaway growth still
+    trips the exempt cap.
+    """
     max_mb = cfg.get("max_mb", 200)
+    exempt_paths = [
+        str(x).rstrip("/") + "/" for x in (cfg.get("exempt_paths") or [])
+    ]
+    exempt_max_mb = float(cfg.get("exempt_max_mb", 1024))
+    exempt_bytes = 0
     targets = [
         HERMES_HOME / "cache",
         HERMES_HOME / "audio_cache",
@@ -644,10 +684,21 @@ def check_memory_cache_size(cfg: dict) -> tuple[str, str]:
         elif t.is_dir():
             for p in t.rglob("*"):
                 if p.is_file():
-                    total += p.stat().st_size
+                    rel = p.relative_to(HERMES_HOME).as_posix()
+                    if any(rel.startswith(k) for k in exempt_paths):
+                        exempt_bytes += p.stat().st_size
+                    else:
+                        total += p.stat().st_size
     total_mb = total / (1024 * 1024)
-    status = "GREEN" if total_mb <= max_mb else "RED"
-    return status, f"cache {total_mb:.1f}MB / {max_mb}MB"
+    detail = f"cache {total_mb:.1f}MB / {max_mb}MB"
+    over = total_mb > max_mb
+    if exempt_paths and exempt_bytes:
+        exempt_mb = exempt_bytes / (1024 * 1024)
+        detail += f" (+exempt {exempt_mb:.0f}MB / {exempt_max_mb:.0f}MB cap)"
+        if exempt_mb > exempt_max_mb:
+            over = True
+    status = "RED" if over else "GREEN"
+    return status, detail
 
 
 def check_plaintext_secrets(cfg: dict) -> tuple[str, str]:

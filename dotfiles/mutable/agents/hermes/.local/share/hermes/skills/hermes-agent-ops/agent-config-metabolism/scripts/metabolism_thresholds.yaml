@@ -80,7 +80,14 @@ backup_tmp_pile:
 
 memory_cache_size:
   enabled: true
-  max_mb: 200               # cache/ + audio_cache/
+  max_mb: 200               # cache/ + audio_cache/ (agent-data caches)
+  # exempt_paths: hermes 自管的 seed 缓存，不计入 agent 阈值、单列报告。
+  # cache/uv = pm 的 uv 包缓存（pm/packages.py:uv_cache_dir()）——update 流程的
+  # `uv sync --offline` 近零成本重建依赖它（docstring: "the blow-away-on-update
+  # contract depends on it"），清它是拿磁盘换 update 变慢，不是清垃圾。
+  # 独立上限防真膨胀：超 1024MB 仍判 RED。
+  exempt_paths: ["cache/uv"]
+  exempt_max_mb: 1024
 
 plaintext_secrets:
   enabled: true

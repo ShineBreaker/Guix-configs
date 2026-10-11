@@ -148,11 +148,11 @@ python3 ~/.local/share/hermes/skills/hermes-agent-ops/agent-config-metabolism/sc
 | 6. JSON parseable | all | `*.json` under `$HERMES_HOME` (with excludes) |
 | 7. Cron alive | timestamp < 7d | `cron/jobs.json` + tick log |
 | 8. Data pipeline fresh | < 24h | last session_ts vs now |
-| 9. Cross-window errors | < 5/day | `logs/*.log` grouped by signature |
+| 9. Cross-window errors | ≤ 5 active problems / 7d | `logs/*.log` — signature + recurrence (≥2 hour buckets) |
 | 10. Log line cap | < 100k lines | each log file |
 | 11. Task ledger parity | identical | kanban vs todo-store |
 | 12. Backup/tmp pile | < 50 | `*.bak.*` + tmpfiles |
-| 13. Memory cache size | ≤ budget | `cache/` |
+| 13. Memory cache size | ≤ 200MB (uv cache exempt, own 1024MB cap) | `cache/` + `audio_cache/` |
 | 14. Plaintext secrets | 0 | grep `aws_\|sk-\|ghp_\|xoxb-` |
 
 ## Procedure
@@ -187,7 +187,7 @@ Each red is a concrete signal. In **interactive mode**, the script does NOT auto
 | 3 (broken symlinks) | dotfile source moved | `guix-configs-workflow` | Escalate — broken symlinks need manual review |
 | 6 (JSON parseable) | JSONC block comments or trailing commas | this skill | **Fix parser** (patch `_parse_json_lenient`) |
 | 7 (cron not alive) | daemon died | `hermes-agent` §Durable | Escalate — cron daemon issues need investigation |
-| 9 (errors) | gateway poll errors, MCP failures | `hermes-agent` | Cross-validate; if same signature repeating ×N, it's one root cause — check if upstream fixable |
+| 9 (errors) | gateway poll errors, MCP failures, network flaps | `hermes-agent` | Cross-validate each sig: recurring external/network ones → probe proxy/link, don't blame config; agent-side ones (e.g. git index-lock leaks) are the fixable kind; transients self-age out |
 | 14 (plaintext secret) | session dumps, test fixtures | this skill | Cross-validate; if session dump Bearer or test fixture, add exclude_paths |
 
 ### Step 4: Cross-validate the script's claims against ground truth
@@ -348,6 +348,34 @@ To change delivery later: `cronjob(action='update', job_id='<id>', deliver='loca
   nature. Contrast: 77 broken `hermes-agent/node_modules/**` shims from an
   incomplete npm workspace install were NOT excluded — real signal (desktop
   build tooling broken), stays in the report.
+- **Check 9 was half-blind 2026-09-27 → 2026-10-11 (fixed): the
+  `rest.startswith("ERROR")` level test never matched a timestamped line
+  because `rest` still carried the `",mmm "` millisecond suffix.** Only
+  bare lines (dashboard dumps) and Traceback blocks were counted; every
+  plain `TS ERROR module: msg` line was silently skipped. The fix widens
+  `ts_re` to `(?:[,.]\d+)?\s*` so `rest` starts at the level field. Find
+  this class of bug by A/B-testing old vs new parser on synthetic lines in
+  the *real* log format (millisecond separator included) — after the fix
+  the same week read `total 836` events where it used to read `total 80`
+  (weixin poll×559 and checkpoint git-index-lock×178 had been invisible
+  for weeks). Lesson: validate parsers against actual formats, never
+  idealized ones.
+- **Retry-counter normalization must keep the denominator.** The re.sub
+  used `(n/\1)` (numerator) so `(1/3)(2/3)(3/3)` fragmented into three
+  sigs instead of one; `(n/\2)` joins them (also fixed 2026-10-11).
+- **A signature counts as an active *problem* only when it recurs across
+  ≥2 distinct hour buckets in the window (2026-10-11).** A single burst
+  (update-time restart hiccups, one-shot 503s, a one-minute crash loop
+  that self-heals) prints under `transient:` and is not judged — "active
+  NOW" means recurring, and a one-off ages out of relevance exactly like
+  a fixed bug does. This is a semantics fix, not threshold-tuning:
+  recurring failures (flapping network link, crash loops) still drive RED.
+- **Check 13 exempts hermes' own uv seed cache (2026-10-11).** `cache/uv`
+  is pm's package cache (`pm/packages.py:uv_cache_dir()`; docstring: "the
+  blow-away-on-update contract depends on it") — clearing it trades disk
+  for slower updates, so it is reported separately (`+exempt N MB /
+  1024MB cap`) and only trips RED past its own cap. Agent data caches
+  still count against the 200MB threshold.
 - **Editing the script under this deployment: repo copy and live copy are
   the same file** (stow-deployed skills live under Guix-configs
   `dotfiles/mutable/agents/hermes/.../skills/`; the edit-gate blocks direct
