@@ -1,13 +1,9 @@
-; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
-;
-; SPDX-License-Identifier: MIT
-
 [init]
   defaultBranch = "main"
 [user]
-	name = "BrokenShine"
-	email = "brokenshine@noreply.codeberg.org"
-	signingkey = "62711D5E9CCDEC6907CADBF88637132222571907"
+	name = "ShineBreaker"
+	email = "102544159+ShineBreaker@users.noreply.github.com"
+	signingkey = "8637132222571907"
 [commit]
 	gpgsign = true
 	template = "~/.config/git/gitmessage"
