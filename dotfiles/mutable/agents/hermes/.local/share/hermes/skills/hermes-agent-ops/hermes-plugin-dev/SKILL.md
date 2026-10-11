@@ -1,7 +1,7 @@
 ---
 name: hermes-plugin-dev
-description: "Use when writing Hermes plugins or porting pi extensions."
-version: 0.1.0
+description: "开发、修改或排障 Hermes 插件（hooks / slash commands / agenote 插件族），并把 pi/omp 的 TypeScript 扩展移植到 hermes。触发：写新插件 / 插件不生效、注册或加载失败 / port pi extension / 改 plugin.yaml 或 register(ctx) / hook 排障——任一出现即调用。"
+version: 0.1.1
 license: MIT
 metadata:
   hermes:

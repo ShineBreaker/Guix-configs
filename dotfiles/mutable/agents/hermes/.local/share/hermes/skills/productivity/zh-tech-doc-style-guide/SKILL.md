@@ -1,7 +1,7 @@
 ---
 name: zh-tech-doc-style-guide
-description: "中文技术文档写作风格与标点规范查询手册。"
-version: 0.1.0
+description: "中文技术文档写作风格与标点规范查询手册（规则强度分级 + 分章 references）。触发：写、改、校中文文档 / 标点与中英混排存疑 / 文档风格不统一或去 AI 味 / 审校争议裁决 / 机械规则修复后的语义复核——任一出现即调用。"
+version: 0.1.1
 author: Hermes
 metadata:
   hermes:
@@ -44,7 +44,7 @@ metadata:
 - 无外部依赖。纯规范查询。
 - 上游源（用于核对最新版）：https://zh-style-guide.readthedocs.io/zh-cn/latest/ ，仓库 github.com/yikeke/zh-style-guide。
 - 若本地持有该 PDF：注意 PDF 由 LaTeX 生成、可能为扫描件（50 页），优先用在线 HTML 版取正文，避免 OCR。
-- **机械规则已有工具落地**：`orgfmt`（agenote 包，`~/Projects/agenote/agenote/src/agenote/orgfmt.py` 的 `_zh_style` 阶段）自动修复 8 项——全角空格、全角标点旁空格、中英文间距、破折号、英文省略号、连续感叹号、序数词顿号、数值与单位间距；语义级规则（的/地/得、顿号误用、繁体用语、不规范缩略语）只报不改。`orgfmt --check <file>` 的退出码即问题数，可当 lint 门禁；Markdown 与 Org 两种格式共用同一份规则。语义级项仍靠本 skill 人工裁决。
+- **机械规则已有工具落地**：`orgfmt`（agenote monorepo `packages/agenote`，命令在 PATH）的 `_zh_style` 阶段自动修复 8 项——全角空格、全角标点旁空格、中英文间距、破折号、英文省略号、连续感叹号、序数词顿号、数值与单位间距；语义级规则（的/地/得、顿号误用、繁体用语、不规范缩略语）只报不改。`orgfmt --check <file>` 的退出码即问题数，可当 lint 门禁；Markdown 与 Org 两种格式共用同一份规则。语义级项仍靠本 skill 人工裁决。
 
 ## How to Run
 
