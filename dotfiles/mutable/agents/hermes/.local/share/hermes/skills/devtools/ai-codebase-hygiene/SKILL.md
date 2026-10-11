@@ -1,6 +1,6 @@
 ---
 name: ai-codebase-hygiene
-description: Keep AI-generated codebases maintainable and non-decaying.
+description: "保持 AI 生成的代码库可维护、不腐化（清理 AI 痕迹、收敛设计、防退化）。触发：整理 AI 写的代码 / 代码库腐化治理 / 审查生成代码的长期质量——任一出现即调用。"
 version: 0.1.0
 license: MIT
 author: Hermes

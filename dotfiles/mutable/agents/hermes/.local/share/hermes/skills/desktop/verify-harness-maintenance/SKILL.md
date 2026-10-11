@@ -1,6 +1,6 @@
 ---
 name: verify-harness-maintenance
-description: "Use when fixing or judging a headless verify harness."
+description: "修复或评估无头验证 harness（质量判定、场景运行、加固）。触发：verify 套件坏了或结果可疑 / 搭无头验证环境 / 判断 harness 是否可信——任一出现即调用。"
 version: 1.0.0
 metadata:
   hermes:

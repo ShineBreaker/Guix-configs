@@ -1,6 +1,6 @@
 ---
 name: diff-explain-self-review
-description: "Force a post-edit walkthrough of every file changed, line by line."
+description: "改完后强制逐文件、逐行走查全部改动（自审）。触发：交付前自查 diff / 要求详解每处改动 / 防止盲改盲交——任一出现即调用。"
 version: 0.1.0
 author: Hermes
 metadata:

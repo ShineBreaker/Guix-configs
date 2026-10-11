@@ -618,7 +618,7 @@ stash 不带 `-- <路径>` 会把整个工作区（含你自己刚做的修复�
 
 - **不要把 GPG 签失败当成 cron 卡点**——如果 GPG 死结，准备好"无签 commit 也接受"的 fallback（用户后续可手工 rebase 时重签）
 - **不要为了 GPG 签反复尝试 wrapper 注入**——浪费时间且容易把 working tree 搞乱（参见 §4.2 reset 陷阱）
-- **最干净的解法**是用户侧一次性解决：(a) 把本地 GPG 私钥换成无 passphrase 的测试 key（仅用于本地 cron 签），或 (b) 在 `~/.gnupg/gpg-agent.conf` 里 preset passphrase 后 cron 重启 gpg-agent
+- **最干净的解法**是用户侧一次性解决：(a) 把本地 GPG 私钥换成无 passphrase 的测试 key（仅用于本地 cron 签），或 (b) 在 `gpg-agent.conf`（本机路径 `~/.local/share/gnupg/gpg-agent.conf`，Guix Home 部署）里 preset passphrase 后 cron 重启 gpg-agent
 - **本会话实际 fallback**：`git commit --no-gpg-sign` 绕过签名，commit 成功但无 GPG 签名。用户后续可 `git rebase --exec 'git commit --amend --no-edit --gpg-sign'` 批量重签。
 
 **反模式（已在本会话踩过）：**

@@ -1,6 +1,6 @@
 ---
 name: technical-explainer-video
-description: Use for custom technical explainer videos.
+description: "制作自定义技术讲解视频（HyperFrames 工作流）。触发：把技术概念或系统做成讲解视频 / 定制动画演示 / 工程向宣传视频——任一出现即调用。"
 ---
 
 # 技术解释视频

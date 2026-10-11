@@ -1,6 +1,6 @@
 ---
 name: monitoring-script-debugging
-description: "Debug monitoring scripts that produce false RED/GREEN signals. Covers parser bugs, counting pitfalls, and cross-validation patterns for audit/healthcheck scripts."
+description: "调试误报 RED/GREEN 的监控脚本（解析器 bug、计数陷阱、交叉验证）。触发：监控或审计脚本误报漏报 / 红绿灯结果不可信 / healthcheck 要交叉验证——任一出现即调用。"
 version: 0.1.0
 author: Hermes
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: geo-coordinate-systems
-description: Use when 判定/转换中国地理坐标（BD-09/GCJ-02/WGS-84）。
+description: "判定与转换中国地理坐标（BD-09 / GCJ-02 / WGS-84，含偏移与纠偏）。触发：坐标偏差排查 / 百度高德标准坐标互转 / 距离计算前确认坐标系——任一出现即调用。"
 ---
 
 # 中国地理坐标系：判定、转换、落地口径

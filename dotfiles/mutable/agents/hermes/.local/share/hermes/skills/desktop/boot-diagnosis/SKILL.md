@@ -1,6 +1,6 @@
 ---
 name: boot-diagnosis
-description: "Use when diagnosing unbootable Linux distros offline."
+description: "离线诊断无法启动的 Linux 系统（chroot、引导链、日志取证）。触发：系统开不了机要排查 / 引导或 init 故障 / 救援模式取证——任一出现即调用。"
 version: 1
 author: hermes
 license: MIT

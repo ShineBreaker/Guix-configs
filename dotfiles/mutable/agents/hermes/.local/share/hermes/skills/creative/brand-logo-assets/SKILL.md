@@ -1,6 +1,6 @@
 ---
 name: brand-logo-assets
-description: "Use when collecting official brand logos for stickers."
+description: "为贴纸或设计收集官方品牌 logo 素材（来源、授权、规格与内嵌）。触发：找官方 logo / 收集品牌素材 / 贴纸设计需要 logo——任一出现即调用。"
 version: 1.0.0
 license: MIT
 author: BrokenShine

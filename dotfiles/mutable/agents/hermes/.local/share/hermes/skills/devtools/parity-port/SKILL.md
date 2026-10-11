@@ -3,7 +3,7 @@ name: parity-port
 version: 1.0.0
 author: Hermes Agent
 license: MIT
-description: Port helpers across languages with byte-identical behavior.
+description: "跨语言移植 helper 并保证字节级一致行为（对拍验证）。触发：把工具函数移植到另一语言 / 要求两实现输出逐字节一致 / 写对拍测试——任一出现即调用。"
 metadata:
   hermes:
     tags: [porting, parity-testing, rust, shell]

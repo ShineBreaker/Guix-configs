@@ -1,6 +1,6 @@
 ---
 name: web-data-harvesting
-description: Use when scraping sites/SPA APIs/archives（抓取/爬取/存档）。
+description: "网站 / SPA API / 存档的抓取与爬取（抓包、分页、断点续跑、端点重挖）。触发：抓网页或 API 数据 / 爬取历史存档 / 挖 webpack chunk 找端点 / 批量抓取任务——任一出现即调用。"
 ---
 
 # 网页数据采集工程

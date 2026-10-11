@@ -1,6 +1,6 @@
 ---
 name: cjk-doc-normalization
-description: "Normalize punctuation across a Chinese doc set. 去 AI 味。"
+description: "中文文档集标点与格式归一（去 AI 味）。触发：批量规范中文标点 / 文档去 AI 味 / 统一全角半角与空格风格——任一出现即调用。"
 version: 0.1.0
 license: MIT
 metadata:

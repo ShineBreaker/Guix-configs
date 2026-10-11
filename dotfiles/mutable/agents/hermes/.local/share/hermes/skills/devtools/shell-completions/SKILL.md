@@ -1,6 +1,6 @@
 ---
 name: shell-completions
-description: Author, regenerate, or debug bash/zsh/fish completions.
+description: "编写、再生成或调试 bash/zsh/fish 补全（含非交互验证法）。触发：给 CLI 写补全 / 补全不生效或候选错 / fish 与 zsh 补全调试——任一出现即调用。"
 ---
 
 # shell-completions

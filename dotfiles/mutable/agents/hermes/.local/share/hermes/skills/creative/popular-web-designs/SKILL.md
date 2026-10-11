@@ -1,6 +1,6 @@
 ---
 name: popular-web-designs
-description: 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS.
+description: "54 个真实设计系统（Stripe、Linear、Vercel 等）的 HTML/CSS 参考库。触发：做网页要参考成熟设计系统 / 复刻某种视觉风格 / 找配色与组件范式——任一出现即调用。"
 version: 1.0.0
 author: Hermes Agent + Teknium (design systems sourced from VoltAgent/awesome-design-md)
 license: MIT

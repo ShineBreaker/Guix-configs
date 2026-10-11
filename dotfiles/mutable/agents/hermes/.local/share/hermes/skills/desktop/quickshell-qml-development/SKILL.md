@@ -1,7 +1,7 @@
 ---
 name: quickshell-qml-development
 author: Hermes Agent
-description: "Author, debug, and operate Quickshell QML shells headlessly and over shell IPC (noctalia msg), including visual acceptance of settings/panel surfaces."
+description: "开发、调试与操作 Quickshell QML shell：无头运行、shell IPC（noctalia msg）、设置与面板界面的视觉验收。触发：写改 Quickshell QML / 无头跑 shell 排查 / 面板与设置页验收 / IPC 交互——任一出现即调用。"
 version: 1.1.0
 license: MIT
 metadata:

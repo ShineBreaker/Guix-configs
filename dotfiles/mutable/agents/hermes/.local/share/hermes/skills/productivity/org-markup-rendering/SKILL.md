@@ -107,7 +107,7 @@ tmux -L orgver capture-pane -t v -p -e | sed -n '23p' | cat -v   # 带转义
 4. **落盘**：`sha256sum` 复核源文件未被并发修改（哈希一致才 `cp /tmp/产物 源文件`）。
 5. **重扫**（§3）：候选收敛、残余逐条解释。
 
-修复器实现（`orgfmt`，agenote 项目 `~/Projects/agenote/agenote/` 的 `src/agenote/orgfmt.py`）的设计要点：外侧补空仅中文邻接；内侧去空仅 `=` 且单一 token；双星规则加前视 `(?<![=~*])` 保护 verbatim 内字面星号、首字符排除空白/星号以保护 `** ` 标题；§1 的错配签名内置为拒绝条件。用 `--check` 只读报告；**只应用标记类变更**（其它规则是别的口径，见 `cjk-doc-normalization`）。
+修复器实现（`orgfmt`，agenote monorepo `packages/agenote` 的 `src/agenote/orgfmt.py`）的设计要点：外侧补空仅中文邻接；内侧去空仅 `=` 且单一 token；双星规则加前视 `(?<![=~*])` 保护 verbatim 内字面星号、首字符排除空白/星号以保护 `** ` 标题；§1 的错配签名内置为拒绝条件。用 `--check` 只读报告；**只应用标记类变更**（其它规则是别的口径，见 `cjk-doc-normalization`）。
 
 **教训（真实踩过）**：修复函数「单行测试通过」≠「全文档生效」——块状态误判会让整个 note/tip 段静默漏修（函数单跑正确、跑全文件没改）。**验收必须跑整个真实文件并对比输出**，单测只算一半。
 

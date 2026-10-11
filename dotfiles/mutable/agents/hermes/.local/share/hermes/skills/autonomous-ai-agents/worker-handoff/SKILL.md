@@ -1,6 +1,6 @@
 ---
 name: worker-handoff
-description: 子任务派发规范 —— 定义 hermes 主会话如何把任务拆给 delegate_task 子 agent,以及子 agent 应如何产出标准化的 handoff 报告。适合在需要把大任务并行化、或需要独立验证的子任务时加载使用。
+description: "子任务派发规范：主会话如何把任务拆给 delegate_task 子 agent、子 agent 如何产出标准化 handoff 报告。触发：大任务要并行化 / 派发子代理干活 / 需要独立验证的子任务 / 写 handoff 报告——任一出现即调用。"
 version: 1.0.0
 license: MIT
 metadata:

@@ -1,6 +1,6 @@
 ---
 name: nosdshell-dev
-description: Use when porting nosDshell modules to DDE 15.
+description: "把 nosDshell 模块移植到 DDE 15（Noctalia 层的 DDE 化与令牌收敛）。触发：port 一个 Noctalia 模块 / DDE 15 样式与布局对齐 / nosDshell 仓库开发——任一出现即调用。"
 version: 1.0.0
 metadata:
   hermes:

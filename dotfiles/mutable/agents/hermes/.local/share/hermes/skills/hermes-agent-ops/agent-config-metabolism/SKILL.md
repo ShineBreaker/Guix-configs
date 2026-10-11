@@ -1,6 +1,6 @@
 ---
 name: agent-config-metabolism
-description: "Weekly 14-check red/green audit of agent config bloat. Diagnoses inject size, zombie skills, state drift, monitor honesty, log bloat, secret leaks."
+description: "agent 配置膨胀的 14 项红绿定期审计（注入体积、僵尸 skill、状态漂移、监控诚实性、日志膨胀、密钥泄漏）。触发：跑配置体检 / 排查 agent 变慢或配置腐化 / 周度代谢审计——任一出现即调用。"
 version: 0.3.1
 author: Hermes
 license: MIT

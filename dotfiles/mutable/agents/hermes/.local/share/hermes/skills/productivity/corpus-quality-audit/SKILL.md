@@ -1,6 +1,6 @@
 ---
 name: corpus-quality-audit
-description: "用 Jev 判定 API 对大规模本地语料做质量审核与处置。"
+description: "用 Jev 判定 API 对大规模本地语料做质量审核与处置（抽样、判定、处置清单）。触发：语料或文档批量质量审核 / 找无用重复内容 / 走 Jev 判定流程——任一出现即调用。"
 version: 1.0.0
 author: curator
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: interactive-web-verification
-description: Verify interactive HTML and Canvas claims in a browser.
+description: "在浏览器里验证交互式 HTML 与 Canvas 的行为断言（真实点击与渲染核对）。触发：验证网页交互 / Canvas 渲染断言 / HTML 工件浏览器实测 / 交付前网页端到端检查——任一出现即调用。"
 version: 1.0.0
 metadata:
   hermes:

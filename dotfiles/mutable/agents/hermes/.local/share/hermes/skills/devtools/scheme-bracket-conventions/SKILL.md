@@ -1,6 +1,6 @@
 ---
 name: scheme-bracket-conventions
-description: "Use for R6RS Appendix C square-bracket placement and refactor conversion in Scheme."
+description: "R6RS 附录 C 方括号放置规范与重构转换实践（Scheme）。触发：写改 Scheme 方括号布局 / refactor 括号风格转换 / 审查 R6RS 代码格式——任一出现即调用。"
 version: 0.1.0
 author: Hermes
 metadata.hermes.tags: [Scheme, R6RS, StyleGuide, Syntax]
