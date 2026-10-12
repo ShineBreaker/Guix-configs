@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: MIT
+#
+# home-health — 只读体检：一页看清 HOME 规模、会长胖的目录、仓库同步债、
+# 可回收空间。不删任何东西；所有"可回收"项仅报告，真清走 trash-put 保持可逆。
+# 文档：docs/scripts/misc-scripts.md §home-health
+
+set -u
+
+hr() { printf '\n=== %s ===\n' "$1"; }
+
+# du 对超大目录可能超时或权限拒绝；失败时留空而不中断整份报告
+sz_of() { timeout 180 du -sh "$1" 2>/dev/null | cut -f1; }
+
+hr "磁盘"
+df -h /home /gnu 2>/dev/null | awk 'NR==1 || /\/(home|gnu)$/'
+
+hr "HOME 顶层（top 15）"
+# 并行 du 再汇总；单点失败由 sz_of 内部吞掉
+scan() {
+  local d="$1" sz
+  [ -d "$d" ] || return 0
+  sz=$(timeout 180 du -sh "$d" 2>/dev/null | cut -f1)
+  [ -n "${sz:-}" ] && printf '%s\t%s\n' "$sz" "${d/#$HOME\//~/}"
+}
+export -f scan
+{
+  for d in "$HOME"/*/ "$HOME"/.[!.]*/; do
+    [ -d "$d" ] && printf '%s\0' "$d"
+  done
+} | xargs -0 -P 4 -I{} bash -c 'scan "$@"' _ {} | sort -rh | head -15
+
+hr "会长胖的目录（只报大小，不判定该不该清）"
+for d in "$HOME/.cache" "$HOME/.local/share/Sandbox" "$HOME/.var/app" "$HOME/.local/share/Trash" \
+         "$HOME/.local/share/containers" "$HOME/.local/share/flatpak/repo" \
+         "$HOME/.zcode" "$HOME/.local/share/osu" "$HOME/.local/share/hermes" \
+         /gnu/store; do
+  [ -e "$d" ] || continue
+  printf '%-10s %s\n' "$(sz_of "$d")" "${d/#$HOME\//~/}"
+done
+
+hr "仓库同步债（只列有问题的）"
+printf '%-46s %-6s %-9s %s\n' 仓库 dirty unpushed behind
+find "$HOME/Projects" -maxdepth 3 -type d -name .git 2>/dev/null \
+  | sed 's|/.git$||' | sort | while read -r r; do
+  cd "$r" 2>/dev/null || continue
+  dirty=$(git status --porcelain 2>/dev/null | wc -l)
+  unpushed=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo NOUP)
+  behind=$(git rev-list --count HEAD..@{u} 2>/dev/null || echo '?')
+  if [ "$dirty" != "0" ] || [ "$unpushed" != "0" ] || [ "$unpushed" = "NOUP" ]; then
+    printf '%-46s %-6s %-9s %s\n' "${r/#$HOME\//~/}" "$dirty" "$unpushed" "$behind"
+  fi
+done
+
+hr "可回收空间预估（全部可逆，确认后再清）"
+trash_n=$(ls "$HOME/.local/share/Trash/files" 2>/dev/null | wc -l)
+printf '%-16s %-8s %s\n' Trash "$(sz_of "$HOME/.local/share/Trash")" "(${trash_n} 项，逐项确认后 trash-put 清空)"
+printf '%-16s %-8s %s\n' flatpak-repo "$(sz_of "$HOME/.local/share/flatpak/repo")" \
+  "(已装 app 共 $(sz_of "$HOME/.local/share/flatpak/app")，差额是历史版本)"
+printf '%-16s %-8s %s\n' rustup-残留 \
+  "$(du -shc "$HOME/.rustup/tmp" "$HOME/.rustup/downloads" 2>/dev/null | tail -1 | cut -f1)" \
+  "(tmp/ + downloads/，toolchains 不动)"
+
+# 包管理器缓存：删除只损失"重新下载"的时间，不损失任何不可再生数据。
+# 单独列一节，因为它是唯一一类「清了绝对安全、且会立刻再长回来」的空间——
+# 清的收益是短期的，真正的收益是让人看见它在长。
+hr "包管理器缓存（可再生，清了只损失重下时间）"
+for c in uv npm pnpm pip cargo guix nix rattler thumbnails; do
+  d="$HOME/.cache/$c"
+  [ -e "$d" ] || continue
+  printf '%-12s %s\n' "$c" "$(sz_of "$d")"
+done
+printf '%-12s %s\n' 合计 "$(sz_of "$HOME/.cache")"
+
+hr "生成时间"
+date '+%F %T'

@@ -108,6 +108,20 @@ keepassxc-credential-setup callers   # 仅重新注册 callers（不影响 datab
 
 典型症状：git 拉取时 KeePassXC 不弹授权——先 `status` 确认，再 `update` 刷新路径。
 
+## 家目录体检
+
+### home-health
+
+只读体检 `$HOME`，一页输出五段：磁盘占用、HOME 顶层 top 15、会长胖的目录、仓库同步债、可回收空间与包管理器缓存。**不删任何东西**，所有"可回收"项只是报告，真清走 `trash-put` 保持可逆。
+
+```bash
+home-health
+```
+
+设计取向：**报告而非治理**。它不判定任何目录"该不该清"——哪些该留只有用户知道（Steam 沙箱数据、某个还在用的 agent 家目录），脚本越权判定就会重演"看起来很对的误判"。它只保证两件事：**让人一眼看清全部**（可见性），以及**让持续增长变得可观测**（包管理器缓存单列一节，因为那是唯一一类清了绝对安全、且会立刻再长回来的空间）。
+
+仓库同步债一节扫 `~/Projects` 下所有 git 仓库，只列 dirty / unpushed / behind 非零的。它的优先级高于一切空间清理——本地未推送的 commit 等于没有备份。
+
 ## Live ISO
 
 ### livecd fish 函数

@@ -121,3 +121,11 @@
   args: ""
   help_cmd: ""
   source: dotfiles/immutable/utilities/.local/bin/nixgpu-update
+- name: home-health
+  brief: 只读体检 HOME：规模 / 会长胖目录 / 仓库同步债 / 可回收空间（一页输出）
+  category: utilities
+  usage:
+    - home-health
+  args: ""
+  help_cmd: ""
+  source: dotfiles/immutable/utilities/.local/bin/home-health

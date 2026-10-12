@@ -75,7 +75,7 @@
 
 ## 桌面与系统零散脚本
 
-niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解静音兜底、Live ISO 的 fish 载荷合成一篇：[misc-scripts.md](misc-scripts.md)。全部在 `dotfiles/immutable/`，改源后须 `blue home`。
+niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解静音兜底、只读家目录体检、Live ISO 的 fish 载荷合成一篇：[misc-scripts.md](misc-scripts.md)。全部在 `dotfiles/immutable/`，改源后须 `blue home`。
 
 ## emacs
 
