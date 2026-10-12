@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# hook 具名 stub：以本文件名为 hook 名转发仓库自身 hook。
+# 逻辑唯一副本在同目录 forward-to-repo-hook；本文件名即 hook 名，勿改。
+
+set -u
+fwd="${XDG_CONFIG_HOME:-$HOME/.config}/git/hooks/forward-to-repo-hook"
+[ -x "$fwd" ] || exit 0
+exec "$fwd" "$(basename "$0")" "$@"

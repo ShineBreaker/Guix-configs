@@ -11,6 +11,10 @@ set -euo pipefail
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
 export DSH_HOME
 
+# 宿主标识：dsh 不向工具子进程注入会话 env，git commit trailer 兜底
+# （~/.config/git/hooks/prepare-commit-msg）靠它识别本会话宿主
+export DSH_AGENT=1
+
 # 各 agent 的 pnpm 安装树聚合根：CLI 本体项目（package.json + node_modules）落
 # 在这里，DSH_HOME 只留配置与运行时状态（profiles/sessions/凭据）
 : "${AGENTS_ROOT:=${XDG_DATA_HOME:-$HOME/.local/share}/agents}"

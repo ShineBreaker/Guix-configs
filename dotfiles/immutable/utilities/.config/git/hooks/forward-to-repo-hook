@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# git hook 通用转发器（canonical 版本，git 不直接调用本文件）。
+#
+# 背景：core.hooksPath 指向全局目录后，git 不再查找仓库自身的 .git/hooks/，
+# 仓库级 hook（本仓库的 git-lfs post-checkout/post-commit/post-merge/
+# pre-push 等）会全部失效。同目录的四个具名 stub（post-checkout、
+# post-commit、post-merge、pre-push）各以 hook 名为首参调本文件，转发
+# 回仓库自身 hook。新增需转发的 hook 名 = 复制一个同名 stub。
+#
+# 转发语义与 git 原生行为一致：仓库 hook 存在且可执行才执行，参数与
+# stdin 透传；仓库 hook 缺失或执行失败不阻断 git 操作（与 hook 不存在
+# 时同义，仅诊断信息丢失，可接受）。
+
+set -u
+
+hook="${1:-}"
+[ -n "$hook" ] || exit 0
+shift
+
+git_dir="$(git rev-parse --git-dir 2>/dev/null)" || exit 0
+repo_hook="${git_dir}/hooks/${hook}"
+
+[ -x "$repo_hook" ] || exit 0
+exec "$repo_hook" "$@"

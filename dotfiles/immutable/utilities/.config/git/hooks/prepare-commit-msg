@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# Co-authored-by 兜底层（多宿主版）：AI 会话中的 git commit 缺 trailer 时，
+# 按会话环境变量识别宿主并补该宿主的占位 trailer（不带模型名——shell 拿
+# 不到，完整署名由提醒层负责，如 zcode 插件 assisted-by-zcode）。
+#
+# 部署位：~/.config/git/hooks/prepare-commit-msg（本仓库
+# dotfiles/immutable/utilities 经 blue home 部署；core.hooksPath 见
+# ~/.config/git/config）。宿主→trailer 映射即下方 trailer_for 表：
+# 登记新宿主 = 加检测分支 + 加映射行。检测不到宿主视为人工终端，静默
+# 放行；检测到宿主但映射缺失时写入显式占位 trailer 并退出非零，提示
+# 人工补全——宁可中断也不猜错（F068 教训）。
+
+set -u
+
+# 只处理常规提交路径：$2 为空（编辑器）、message（-m/-F）、template（模板）。
+# merge/squash/amend($2=commit) 不动。
+case "${2:-}" in
+  "" | message | template) ;;
+  *) exit 0
+esac
+
+msg="$1"
+
+# ── 宿主识别 ─────────────────────────────────────────────────────────
+# 判定序按「作用域最内优先」：wrapper/会话注入的私有变量先于会被继承
+# 穿透到嵌套会话的全局变量（ZCODE_APP_VERSION、AI_AGENT）。
+host=""
+case "${PI_CODING_AGENT_DIR:-}:${PI_CONFIG_DIR:-}" in
+  *".config/omp"*) host="omp" ;;
+  *".config/pi"*)  host="pi" ;;
+esac
+[ -n "$host" ] || [ -z "${DSH_AGENT:-}" ] || host="dsh"
+[ -n "$host" ] || [ -z "${HERMES_AGENT:-}" ] || host="hermes"
+[ -n "$host" ] || { [ -z "${CLAUDECODE:-}" ] && [ -z "${CLAUDE_CODE_ENTRYPOINT:-}" ]; } || host="claude"
+[ -n "$host" ] || [ -z "${ZCODE_APP_VERSION:-}" ] || host="zcode"
+[ -n "$host" ] || [ -z "${AI_AGENT:-}" ] || {
+  case "$AI_AGENT" in
+    devin*)  host="devin" ;;
+    hermes*) host="hermes" ;;
+    *)       host="ai:$AI_AGENT" ;;   # 有归因变量但宿主未登记
+  esac
+}
+[ -n "$host" ] || exit 0   # 无任何 agent 标识 = 人工终端，不动
+
+# 模型已按提醒写了本宿主署名的 Co-authored-by 则不覆盖；
+# 他人/其他宿主 的 trailer 不算，仍需补本会话署名
+token="${host#ai:}"
+[ "$host" = "dsh" ] && token="deepseek"
+grep -qi "^Co-authored-by:.*${token}" "$msg" && exit 0
+
+trailer=""
+case "$host" in
+  zcode)  trailer="Co-authored-by: ZCode <noreply@z.ai>" ;;
+  hermes) trailer="Co-authored-by: Hermes <noreply@nousresearch.com>" ;;
+  devin)  trailer="Co-authored-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>" ;;
+  pi)     trailer="Co-authored-by: Pi <noreply@pi.dev>" ;;
+  dsh)    trailer="Co-authored-by: DeepSeek Harness <noreply@deepseek.com>" ;;
+  claude) trailer="Co-authored-by: Claude <noreply@anthropic.com>" ;;
+  crush)  trailer="Co-authored-by: Crush <crush@charm.land>" ;;
+esac
+
+if [ -z "$trailer" ]; then
+  printf '\nCo-authored-by: %s <FIXME-email>\n' "$token" >>"$msg"
+  printf 'prepare-commit-msg: 宿主 %s 未在映射表登记，已写入占位 trailer；补全署名或登记映射后重试\n' "$host" >&2
+  exit 1
+fi
+
+printf '\n%s\n' "$trailer" >>"$msg"
+exit 0

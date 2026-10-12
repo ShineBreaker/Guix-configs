@@ -6,10 +6,12 @@ ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际�
 
 两层机制，与任何知识库/agent 集成刻意无关：
 
-| 层     | 机制                                                                                        | 保障                     |
-| ------ | ------------------------------------------------------------------------------------------- | ------------------------ |
-| 提醒层 | `PreToolUse(Bash)` hook——`git commit` 时注入提醒，让模型写带模型名与版本号的完整 trailer    | 归因完整，但依赖模型遵守 |
-| 兜底层 | `git-hooks/prepare-commit-msg` 装为全局 git hook——补 `Co-authored-by: ZCode <noreply@z.ai>` | 模型遗漏时也有 agent 名  |
+| 层     | 机制                                                                                                          | 保障                     |
+| ------ | ------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 提醒层 | `PreToolUse(Bash)` hook——`git commit` 时注入提醒，让模型写带模型名与版本号的完整 trailer                        | 归因完整，但依赖模型遵守 |
+| 兜底层 | `~/.config/git/hooks/prepare-commit-msg` 全局 git hook——模型遗漏时补宿主占位 trailer（多宿主映射，zcode 为一行） | 模型遗漏时也有 agent 名  |
+
+兜底层已迁出本插件、入 git 配置区受管：源在 `dotfiles/immutable/utilities/.config/git/hooks/`（`prepare-commit-msg` + `forward-to-repo-hook` + 四个具名 stub），`core.hooksPath` 在 `~/.config/git/config`，随 `blue home` 部署生效，勿在本插件内再维护副本。
 
 ## 插件安装
 
@@ -25,27 +27,10 @@ ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际�
 
 然后开新会话——插件 hooks 在会话启动时快照。
 
-## 兜底 git hook 安装
+## 兜底 hook 行为（受管版）
 
-由于 `core.hooksPath` 会完全取代仓库级 hook 查找，同目录附带通用转发器，让仓库自身的 hook 继续生效：
-
-```bash
-mkdir -p ~/.config/git/hooks
-ln -sf <插件根>/git-hooks/prepare-commit-msg ~/.config/git/hooks/
-for h in post-checkout post-commit post-merge pre-push; do
-  ln -sf <插件根>/git-hooks/forward-to-repo-hook ~/.config/git/hooks/$h
-done
-git config --global core.hooksPath ~/.config/git/hooks
-```
-
-转发器在仓库 `<repo>/.git/hooks/<同名>` 存在且可执行时执行之，参数与 stdin 透传。仓库实际用到哪些 hook 名就 symlink 哪些。
-
-`prepare-commit-msg` 行为：
-
-- 仅当 `ZCODE_APP_VERSION` 已设置（即 zcode Bash 会话内）才生效；手动终端不受影响。
+- 按会话 env 识别宿主：`ZCODE_APP_VERSION`（zcode）、`HERMES_AGENT`（hermes）、`DSH_AGENT`（dsh wrapper 注入）、`PI_CODING_AGENT_DIR`/`PI_CONFIG_DIR`（pi/omp）、`CLAUDECODE`（claude）、`AI_AGENT`（devin 等通用归因变量）兜底；无任何标识的人工终端静默放行。
 - 只覆盖常规提交路径（`$2` 为空 / `message` / `template`）；merge、squash、amend 不动。
-- 仅当消息里已有署名 zcode 的 `Co-authored-by:` 行时才跳过，模型写下的完整 trailer 原样保留；其他 agent 的 trailer 不算，会与它们并存追加本会话的署名。
-
-## 边界说明
-
-兜底层目前仅通过 `ZCODE_APP_VERSION` 识别 zcode 会话。由于 `Co-authored-by` 是所有 agent 共用的规范，要让 pi、crush 等也享受兜底，需泛化 env 检测并把资产从本 zcode 插件迁到 dotfiles 的 git 配置区——这是有意的后续步骤，此处不做。
+- 仅当消息里已有本宿主署名的 `Co-authored-by:` 行时才跳过，模型写下的完整 trailer 原样保留；其他 agent 的 trailer 不算，会与它们并存追加本会话的署名。
+- 识别到宿主但映射表未登记时写入显式占位 trailer 并退出非零，提示人工补全。
+- 仓库自身 hook（如本仓库的 git-lfs 钩子）由同目录 `forward-to-repo-hook` 经具名 stub 转发，不被 `core.hooksPath` 吃掉。

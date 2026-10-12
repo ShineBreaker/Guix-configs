@@ -1,5 +1,7 @@
 [init]
   defaultBranch = "main"
+[core]
+	hooksPath = "~/.config/git/hooks"
 [user]
 	name = "ShineBreaker"
 	email = "102544159+ShineBreaker@users.noreply.github.com"

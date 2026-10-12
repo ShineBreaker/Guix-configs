@@ -1,9 +1,9 @@
 {
   "name": "assisted-by-zcode",
-  "description": "Assisted-by commit trailer enforcement for ZCode: PreToolUse reminder layer plus an opt-in global prepare-commit-msg fallback hook.",
+  "description": "Assisted-by commit trailer enforcement for ZCode: PreToolUse reminder layer; the global prepare-commit-msg fallback lives in the managed git hooks dir.",
   "description_i18n": {
-    "en": "Assisted-by commit trailer enforcement for ZCode: PreToolUse reminder layer plus an opt-in global prepare-commit-msg fallback hook.",
-    "zh-CN": "ZCode 会话的 Assisted-by 提交规范保障：PreToolUse 提醒层 + 可选安装的全局 prepare-commit-msg 兜底 hook。"
+    "en": "Assisted-by commit trailer enforcement for ZCode: PreToolUse reminder layer; the global prepare-commit-msg fallback lives in the managed git hooks dir.",
+    "zh-CN": "ZCode 会话的 Assisted-by 提交规范保障：PreToolUse 提醒层；全局 prepare-commit-msg 兜底 hook 已迁入受管 git hooks 目录。"
   },
   "version": "0.1.0",
   "author": {
