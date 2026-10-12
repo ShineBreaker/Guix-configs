@@ -1,6 +1,6 @@
 ---
 name: jev-skill-quality-audit
-description: "Audit Hermes skill descriptions with Jev. Read-only."
+description: "用 Jev 审计 Hermes skill 质量（trigger_class / stale_facts，只读出报告）。触发：skill 描述质量审计 / 复核 description 重写效果 / 发布前 skill 体检——任一出现即调用。"
 version: 1.0.1
 author: Hermes Agent
 license: MIT
@@ -56,6 +56,13 @@ python3 $HERMES_HOME/skills/productivity/jev-skill-quality-audit/scripts/jev_ski
 - 输出 stdout 表格 + `--out` 落一份 markdown 报告
 
 密钥从环境变量 `TYPESAFE_API_KEY` 读；缺失时脚本早失败并提示从 `$HERMES_HOME/.env` 取。
+
+## 改后复核（description 重写工作流）
+
+重写 description 后用 `--names <skill>` 单跑复核、对比 `trigger=` 前后值（实测有效改写典型 0.1~0.2 → 0.9+）。两条预期管理：
+
+- description 改写**只影响 `trigger_class`**；`stale_facts` 由正文里的版本绑定句决定、不会随描述变化——别用它判断改写是否生效。
+- 复核结果里 `stale_facts` 仍 >0.70 的 skill，需要的是一次**正文抽查**（核对版本号/接口/路径引用是否仍成立、过期的直接修），不是再改描述。
 
 ## 交叉验证（放量前必做）
 

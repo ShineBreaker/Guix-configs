@@ -96,7 +96,15 @@ print(f'{len(bad)} 个仍可见' if bad else '全部被 ignore')
 
 `~/.local/share/hermes/skills -> <repo>/dotfiles/.../skills` 后,hermes-agent checkout 内可能出现一个 `dotfiles/` 实体目录(某些代码按相对路径回溯到仓库根时留下的残留)。它会让 checkout 的 `git status` 永远显示 `?? dotfiles/`,干扰后续所有 diff 检查。**陈旧残留直接 trash,别留着「也许有用」**——它的内容在仓库源里都有。
 
-### 1.9.4 该进仓库源的、该留在部署位的
+### 1.9.4 折叠后 `.archive/` 相对自链接全部断链
+
+折叠前建立的归档指针（`.archive/<name>/SKILL.md -> ../../../../../../Projects/...`，按“skills 为普通目录”的逻辑视图算的 6 层相对路径）在整目录折叠**后全部失效**——内核按**物理路径**解析软链，而 skills 层现为指向仓库的软链，物理深度变化后 `..` 数量不再匹配。
+
+- **检查**：`find -L ~/.local/share/hermes/skills/.archive -maxdepth 2 -xtype l` —— 列表即全部断链（实测整区全断）。
+- **影响**：按**目录存在性**判断“归档还在”会被骗过；读归档区的脚本会撞 `FileNotFoundError`（遍历 `rglob` 扫 skill 的脚本应对 `.archive` parts 做过滤）。
+- **处置**：要保留归档指针就按当前物理形态重建相对路径（或改绝对路径）；批量清壳、只留活跃树是不动上游工具的简单选择。**不要在断链上再叠新链接**。
+
+### 1.9.5 该进仓库源的、该留在部署位的
 
 | 内容 | 去处 | 理由 |
 | --- | --- | --- |

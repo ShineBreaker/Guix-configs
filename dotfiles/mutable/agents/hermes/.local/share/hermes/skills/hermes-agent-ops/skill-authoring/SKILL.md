@@ -221,6 +221,25 @@ metadata:
 - ❌ "Use this skill for any agent-related task." — that
   description matches every skill and none.
 
+**Proven Chinese trigger pattern (Jev-validated).** The house style that
+scores 0.9+ on the Jev `trigger_class` probe — extend the existing
+description with a trigger tail instead of inventing new prose:
+
+> `<已完成功能一句话>。触发：<信号词 A> / <信号词 B> / <信号词 C>——任一出现即调用。`
+
+Signal words are phrases the *user* would actually say (symptoms, task
+names, subsystem names), not category labels. After a rewrite, verify with
+a single-skill Jev re-run and compare the `trigger=` value before/after:
+
+```bash
+python3 "$HERMES_HOME/skills/productivity/jev-skill-quality-audit/scripts/jev_skill_audit.py" --names <skill>
+```
+
+Note: a description rewrite moves `trigger_class` only — the body-based
+`stale_facts` probe does NOT move with it, that needs a separate content
+pass over the body's version-bound claims. Description rewrites are
+`patch`-level version bumps (e.g. 0.1.0 → 0.1.1).
+
 **Versioning:**
 
 - Bump `patch` when you add a one-line pitfall or fix a typo.

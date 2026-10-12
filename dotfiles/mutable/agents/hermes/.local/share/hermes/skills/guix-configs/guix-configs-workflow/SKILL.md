@@ -1,6 +1,6 @@
 ---
 name: guix-configs-workflow
-description: Use when working in Guix-configs, esp. dotfiles deploy, home-shepherd services, system-layer config.org edits (incl. udev/hidraw device permissions), or stow. Ten-plus sub-protocols — dotfiles deploy verification, Guix service debugging, GNU Stow mutable config, config.org edit safety (block-replace header trap), ISO porting, requirement clarification, module ownership.
+description: "Guix-configs 仓库工作流：dotfiles 部署（stow/blue）、home-shepherd 服务、system 层 config.org 编辑（含 udev/hidraw 权限）、ISO 移植、模块归属等十余项子协议。触发：改 Guix-configs / dotfiles 部署与回源 / blue 命令排障 / shepherd 服务调试 / config.org 改动 / 需求澄清——任一出现即调用。"
 ---
 # guix-configs-workflow — Guix-configs 仓库高频工作流
 
@@ -985,7 +985,9 @@ blue stow --delete hermes        # 撤销链(~ 下变回实际文件)
 - 不要让 `dotfiles/mutable/` 与 `dotfiles/immutable/` 部署同一文件(双链冲突)
 - `blue structor` 扫 `dotfiles/mutable/AGENTS.md` 默认 depth=4 会截断到 `hermes/`;用 `ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=dotfiles/mutable/AGENTS.md blue structor`
 - **`depth=N` 是环境变量,不是命令行参数**:`blue structor depth=2` 会把 `depth=2` 当成**目标文件路径**静默跳过(无输出、无报错)。正确姿势 `ORG_STRUCTOR_DRY=1 ORG_STRUCTOR_DEPTH=2 blue structor`。覆盖单个文件用位置参数:`blue structor dotfiles/mutable/AGENTS.md`
-- **structor 会顺手改与本任务无关的陈旧树**:它按 git 可见文件重算全部目标,别的包里长期没刷新的树也会被更新。跑完必须 `git diff` 逐个核对,把与本任务无关的 `git checkout -- <file>` 还原——但**同一次运行里属于本任务的树变更要留下**(如包被删后目录树里对应条目消失)。判据:该 diff 行是否由本次任务的文件增删引起。
+- **structor 会顺手改与本任务无关的陈旧树**：它按 git 可见文件重算全部目标,别的包里长期没刷新的树也会被更新。跑完必须 `git diff` 逐个核对,把与本任务无关的 `git checkout -- <file>` 还原——但**同一次运行里属于本任务的树变更要留下**(如包被删后目录树里对应条目消失)。判据:该 diff 行是否由本次任务的文件增删引起。
+- **`blue stow` 遇任一冲突即全包中止**：一个部署位实体文件（非链接）就能让整包不部署（`All operations aborted`），被中止时**已处理的文件不会回补**。对任何“历史遗留、非全链接”的包，实跑前先 `blue -n stow <pkg>` 预览（`-n` 是 blue 全局 dry-run），或先做包形态体检：逐文件检查部署位是 LINK／REAL（实体→冲突源）／MISSING（缺链），把全部 REAL 处理完再实跑。**不要先 `trash-put` 部署实体再指望 stow 收尾**——两步之间再撞冲突时，目标文件会停在“实体已删、链接未建”的悬空态。
+- **REAL 文件先核对新旧再动手**：应用运行时会把自己的配置文件原子覆写成实体（典型：zcode 的 `cli/config.json` 与 subagent 定义、pnpm 系 agent 的 manifest），使仓库源与部署位互有超前。`md5sum`/`diff` 比对后以较新者为准：仓库新 → 先快照、再 `trash-put` 实体后重建链；部署新 → 先把内容回源进仓库、再重建链。单文件应急可用 `ln -s` 手工补链，但相对路径层数要与 stow 同款（拿同类已链文件 `readlink` 核对）。
 
 完整协议(备份策略、md5 三方验证、实时生效测试、commit 规范、反模式清单、故障排查表)见 `references/gnu-stow-two-tier-dotfiles.md`。
 

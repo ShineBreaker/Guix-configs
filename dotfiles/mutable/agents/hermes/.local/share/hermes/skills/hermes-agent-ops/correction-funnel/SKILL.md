@@ -95,6 +95,8 @@ agenote add --title "<lesson 标题>" \
 EOF
 ```
 
+**归因前缀（写完就核）**：任何 agent 会话跑 agenote 写入命令时带宿主前缀——hermes 端为 `AGENOTE_AGENT=hermes agenote add ...`。该变量只打标签、不做写入隔离，但缺省时卡片 `SOURCE_AGENT` 落默认的 `omp`，事后按 agent 追溯来源全错。写完用 `agenote get <id>` 核对 `SOURCE_AGENT` 字段。
+
 **entry 选择**：
 
 - `note`：观察到的事实/模式
