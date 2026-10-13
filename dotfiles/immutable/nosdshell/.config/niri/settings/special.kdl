@@ -27,22 +27,34 @@ window-rule {
 }
 
 /*
-  nosdshell
-  Disable xray on all our surfaces so it looks more realistic.
-  nosdshell publishes blur regions automatically when ext-background-effects is available.
+  nosdshell surfaces that should be blurred (xray off so only the
+  wallpaper shows through).
+  Every layer-shell namespace ends in "-<output>" — patterns must allow
+  the suffix; a "$" right after the stem matches nothing at all.
+
+  nosdshell publishes ext-background-effect blur regions for
+  "nosdshell-background" (bar + open panels), the dock and the launchers;
+  everything else gets whole-surface blur from this rule.
+  Canonical copy: nosDshell repo, Scripts/docs/nosdshell-layer-rules.kdl
+  (check-layer-namespaces.py keeps it in sync with emitted namespaces).
 */
 layer-rule {
-  match namespace="^nosdshell-(notification|dock|attached-panel|panel|osd)$"
-  match namespace="^nosd-launcher-*"
+  match namespace="^nosdshell-(background|popupmenu|notifications|dock|osd|session-menu|toast|setup-wizard|desktop-widgets)-.*$"
+  match namespace="^nosd-launcher-(full|mini)-.*$"
   background-effect {
     blur true
     xray false
-
   }
 }
 
+/*
+  Surfaces that must not blur: the wallpaper is the blur source; the
+  overview does its own GPU blur; the bar windows reveal the backdrop
+  already blurred by nosdshell-background — a second pass would double
+  it; the rest are invisible helpers.
+*/
 layer-rule {
-  match namespace="^nosdshell-bar-*"
+  match namespace="^nosdshell-(wallpaper|overview|bar-content|bar-exclusion|bar-trigger|screen-detector|image-cache-renderer|fade-overlay)(-.*)?$"
   background-effect {
     blur false
   }
