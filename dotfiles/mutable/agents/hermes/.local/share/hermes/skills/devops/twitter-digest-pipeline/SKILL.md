@@ -96,7 +96,7 @@ python3 $HERMES_HOME/scripts/twitter-digest/digest_render.py md daily.md \
 - 渲染细节（HTML 模板、chromium headless 截图、Guix 字体、HTML 实体双重转义）见 `hermes-cron-ops` 的 `references/image-report-rendering.md`，此处不重复。
 - **成品长图必须逐段 vision 验收后才发**：竖长图动辄 7000+ px，整图丢给 vision 会被降采样，小字和图内截图全糊。用 PIL 切成 2~3 段（每段 ≤2400 px 高）分别检查：文字截断/溢出、分组标题、`![imgN]` 是否嵌对位置、有无缺字形方块。验收通过才发 `MEDIA:`。
 - **临时预览不要污染 notepad**：手动渲染一张给用户看效果时，别把 `last_image` 指向它，否则次日 08:00 的投递 job 会重发这张预览图。
-- **选图前先算 cover 裁切**：md 渲染的图统一 `object-fit:cover` 定高（横图 300px、方图 320px、竖图 380px），竖长图（ratio<0.85，如报告整页截图）只露出中段约四分之一，关键数字常被裁掉、只剩无数字的文字条。写完日报可先用 `digest_render.py` 的 `img_style`/`fetch_image` 单独复现每张图的显示效果核验。验收发现这种"配了等于没配"的图，直接去掉该 `![imgN]` 引用（图少不扣分）。
+- **选图前先算 cover 裁切**：md 渲染的图统一 `object-fit:cover` 定高（横图 300px、方图 320px、竖图 380px），竖长图（ratio<0.85，如报告整页截图）只露出中段约四分之一，关键数字常被裁掉、只剩无数字的文字条。写完日报可先用 `digest_render.py` 的 `img_style`/`fetch_image` 单独复现每张图的显示效果核验。验收发现这种"配了等于没配"的图，直接去掉该 `![imgN]` 引用（图少不扣分）。横图同样有裁切：宽图（ratio>1.25）定高 300px 后上下各切约三成，表格/榜单类截图的顶部表头常被切掉，列名与模型对不上，数字可见也应去掉引用。
 - **成品长图要逐段 vision 验收再发**：竖长图动辄 7000+ px，整图丢给 vision 会被降采样，
   小字和图内截图全糊。用 PIL 切成 2~3 段（每段 ≤2400 px 高）分别看：文字截断/溢出、
   分组标题、`![imgN]` 是否嵌对位置、有无缺字形方块。验收通过才发 `MEDIA:`。
@@ -130,6 +130,7 @@ python3 $HERMES_HOME/scripts/twitter-digest/digest_render.py md daily.md \
 
 ## Pitfalls
 
+- **RT 条目的原文拿不到**：state 里 `is_retweet` 条目的 `full_text` 只有 `RT @handle: …` 截断版（约 280 字符），转推原文不可得。加工日报时只写可见部分，补不全就写半句或放弃该条，勿脑补。
 - **先看排期再看内容**。排查「为什么发了三次」这类问题时，`hermes cron list` 的 schedule 是第一现场：排期是 `0 1,3,5,7,9,11 * * *` 就会一天发六次，四份产出 md5 不同是四轮独立抓取，不是重复投递。调试期为多轮验证临时放宽的排期，调试结束要缩回去；改 job 名字为 nightly 就要核对排期是否真的一天一次。
 - **渲染成品写 `/tmp` 会被开机清理吞掉**（2026-10-04 已修，输出改 `~/.cache/twitter-digest-render/`）：本机 `/tmp` 虽是持久 Btrfs 子卷，Guix 的 `cleanup-/tmp` root-one-shot-service 每次开机都 `find /tmp -mindepth 1 -delete`（用 `/run/cleanup-tmp-done` 保证单次开机只清一次）。凌晨 3 点渲染完的成品、`fonts-serif.conf`、fontconfig cache 全部随开机消失，早上 8 点的投递 job 拿到 notepad 路径却找不到文件（2026-10-04 实测：机器 10:17 重启，03:10 写入的 `last_image` 失效）。修法是让渲染输出落到 `~/.cache/twitter-digest-render/`（`digest_render.py` 的 `emit()` 与 `fontconfig_for_serif()` 均指向该目录，fontconfig cache 同迁 `~/.cache/fontconfig-serif`），同步 cron prompt 里的 `daily.md` 路径、`MEDIA:` 行与 notepad 路径，改完必须 `hermes cron edit <id> --prompt "$(cat <prompt 源>)"`（job 存内联快照）。`MEDIA:` 与 notepad 必须写字面绝对路径，`$HOME` 不经 shell 展开。落在 /tmp 的其它管道同样中招。
 - `hermes cron run` 报 "already being fired by the scheduler"：先 `hermes cron history <id>` 看有没有 running 实例。父 shell 退出后实例可能变成孤儿继续跑，也可能被 terminal 进程清理连带杀死、执行记录永久卡 `running` 且无产出。调度器状态不可靠时直接手动跑四步更稳。

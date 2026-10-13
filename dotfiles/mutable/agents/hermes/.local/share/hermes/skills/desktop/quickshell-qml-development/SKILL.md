@@ -129,6 +129,29 @@ which is why they survive a whole debugging session.
     Verify with recorded frames, not static shots — see
     `references/headless-verification.md` §4.8.
 
+15. **An element anchored to a sibling must be declared as that sibling's
+    sibling, not inside its closure.** `anchors.top: cardSurface.bottom`
+    written inside the `cardSurface { ... }` block anchors a child to its own
+    parent's bottom edge — it resolves to a position you did not intend (or
+    nothing at all), with no warning. The same mistake hides hover buttons and
+    stacked edges that "are in the code and logged as visible" yet never
+    paint. Rule: anything positioned *outside* a rectangle's bounds lives at
+    the rectangle's own level, next to it.
+16. **A `Repeater`'s height never feeds the `Column`/`Row` it lives in.**
+    `Column { Repeater { model: 2; delegate: Rectangle { height: 4 } } }`
+    instantiates both children (`children.length` proves it) while the Column's
+    `height` stays at one child's worth — the positioner does not wait for
+    Repeater incubation, so a repeated stack silently collapses to its first
+    item. For a fixed, known count, write the items out literally; for a
+    dynamic count, give the positioner an explicit `height`.
+17. **`qmllint`'s "Syntax error" line is downstream of the missing brace.**
+    The parser only fails when it reaches a construct that cannot start where
+    it is, so the reported line is typically the *next top-level object* after
+    the unclosed block, dozens of lines below the defect. When the error line
+    looks fine, count brace depth per line and find where the running depth
+    returns to 0 early — that is the real gap. Do not edit at the reported
+    line.
+
 ## 2. Authoring order for a new shell component
 
 1. Read the design doc, then read one **working sibling** in the same repo (OSD,
@@ -160,9 +183,19 @@ Work top-down; each step is cheap and eliminates a whole class:
 2. Add one `Logger.i` at the top of the suspect component's
    `Component.onCompleted`. No line = the component was never created (wrapper
    problem, traps 1–2). Line present but no content = sizing problem (trap 1).
+   **When the question is "did this element actually render, and where", log
+   its geometry from the running shell** (`Logger.i("Mod", "h", x.height,
+   "w", x.width, "vis", x.visible)`) instead of guessing pixel rows in a
+   screenshot — a guessed y-range that misses the element produces a confident
+   "it is not there" that costs several rounds to disprove. Log first, then
+   scan exactly that range.
 3. Never infer from `echo`/IPC exit codes alone: an IPC call returning
    `{"success": true}` only proves the handler was entered.
-4. Remove the logs and restore project-conventional logging once green. Keep
+4. A `Failed to load configuration` chain ending in a `.qml:line` names the
+   file that broke — the whole component is blank from that point down, so
+   fix it before reading any screenshot (trap 17 explains why the named line
+   is not where the brace is missing).
+5. Remove the logs and restore project-conventional logging once green. Keep
    the functional fixes the debugging exposed (callbacks, guards); only the
    instrumentation goes.
 
@@ -249,7 +282,16 @@ finds every class of restyle defect:
    scene whose shot is byte-identical to its neighbour means the panel never
    opened, and every later judgement is of the wrong frame. Confirm with one
    `vision_analyze` per shot that the subject is actually in-frame.
-2. **Locate the panel in pixels before sampling anything.** A 1920×1080 frame
+2. **A screenshot loaded into context is evidence you already have — look at
+   it.** Do not re-invoke `vision_analyze` on the same file to answer a
+   follow-up, and do not run exhaustive pixel scans to settle a question the
+   image answers at a glance. Reserve pixel arithmetic for the two things it
+   is genuinely for: confirming an exact geometry value ("is this band 4 px or
+   6 px") and proving a composited color equals a token. Deciding whether an
+   element is *visible* is a looking task; a scan that returns "no pixels
+   above threshold" at a guessed coordinate is not a finding, it is a wrong
+   coordinate.
+3. **Locate the panel in pixels before sampling anything.** A 1920×1080 frame
    with a desktop wallpaper puts a warm-toned backdrop beside a dark panel, and
    a naive coordinate lands on the wallpaper and reports a plausible color.
    Scan a row/column for the luminance jump, then crop the panel to its own

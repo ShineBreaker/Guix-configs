@@ -153,7 +153,7 @@ python3 ~/.local/share/hermes/skills/hermes-agent-ops/agent-config-metabolism/sc
 | 11. Task ledger parity | identical | kanban vs todo-store |
 | 12. Backup/tmp pile | < 50 | `*.bak.*` + tmpfiles |
 | 13. Memory cache size | ≤ 200MB (uv cache exempt, own 1024MB cap) | `cache/` + `audio_cache/` |
-| 14. Plaintext secrets | 0 | grep `aws_\|sk-\|ghp_\|xoxb-` |
+| 14. Plaintext secrets | 0 | grep `aws_\|sk-\|ghp_\|xoxb-` + `~/Projects/**/.git/config` 内嵌 token |
 
 ## Procedure
 
@@ -292,6 +292,15 @@ To change delivery later: `cronjob(action='update', job_id='<id>', deliver='loca
 - **Thresholds are personal.** The script reads thresholds from a config file (`scripts/metabolism_thresholds.yaml`); adjust to your setup. 25KB inject / 160 skills are starting points, not universal truths.
 - **Check 11 (task ledger parity) requires kanban enabled.** If you don't use kanban, skip that check (set `enabled: false` in thresholds).
 - **Check 14 (plaintext secrets) is heuristic.** It greps for `sk-`, `aws_`, `ghp_`, `xoxb-`, `Bearer ` — these can false-positive on test fixtures. Review before rotating.
+- **Secret-scan scope must include git remote URLs, not just `$HERMES_HOME`.** A repo's `.git/config` can carry `https://x-access-token:<token>@github.com/...` — same blast radius as a leaked key file, but outside every config-audit path, and it travels with `git remote -v`, clones, and log screenshots. Scan it:
+
+  ```bash
+  find ~/Projects -maxdepth 3 -name .git -type d 2>/dev/null | while read g; do
+    git --git-dir="$g" remote get-url origin 2>/dev/null | grep -qE '://[^/]+@' && echo "${g%/.git}"
+  done
+  ```
+
+  Remediation is usually trivial: fingerprint the embedded token against `gh auth token` (sha256 both, never print either) — if they match, `git remote set-url origin <clean-url>` and the existing credential helper chain supplies the token, so no new secret store is needed. Then verify **headlessly** (`env -u DBUS_SESSION_BUS_ADDRESS -u DISPLAY git push --dry-run`) before calling it fixed. A `<user>@github.com` URL with no token is the same class: it makes git prompt for a password, which is exactly what breaks unattended work.
 - **Cron sessions pass `skip_memory=True`.** Results don't pollute your main memory.
 - **Self-update blindness.** If you set thresholds too loose, you'll see all-green while bloat grows. Tighten thresholds quarterly.
 - **YAML key names MUST match the CHECKS list keys.** The script dispatches via `thresholds.get(key, {})` where `key` comes from the CHECKS tuple. If your yaml section is named `backup_tmp_pile` but CHECKS says `"backup_tmp"`, the check runs on **empty cfg** and silently falls back to function defaults — you'll see GREEN when the real threshold isn't loaded. Always grep CHECKS keys against yaml top-level keys after editing either side (see `references/yaml-checks-key-parity.md`).

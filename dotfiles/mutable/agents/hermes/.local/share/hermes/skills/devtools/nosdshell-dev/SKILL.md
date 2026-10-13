@@ -51,6 +51,32 @@ Derived-component rules (load-time and runtime failures, not style nits):
 
 Probes: `Logger.d` is off unless the shell runs in debug mode, so use `Logger.i` for always-visible probes — and delete them before finishing.
 
+## Restoring upstream behaviour from the fork point
+
+Most "restore what upstream did" work is a diff read, not a rewrite. Read the
+upstream file at the fork commit (`git show <fork>:<path>`) and lift only the
+behaviour — the delegate's interaction handlers, its thresholds, its
+fallback order — while re-expressing the visuals through this repo's tokens.
+
+- Lift upstream's *constants* verbatim (swipe start/dismiss thresholds,
+  action-button sizes). They are tuned values; re-deriving them from the new
+  geometry changes the feel.
+- The delegate's press/move/release sequence is the part worth copying
+  whole. Reordering it (e.g. checking the link before the swipe) changes which
+  gesture wins.
+- A restored interaction must keep this repo's `Behavior` set. Removing a
+  `Behavior on color` because the element moved to a new parent leaves the
+  control snapping; the motion token and its `enabled:` guard belong with the
+  element, not with the old location.
+
+## Report what a scene could not reach
+
+Headless scenes drive IPC and timers only — they cannot click, drag, or
+keyboard-inject. When the spec you implemented includes pointer gestures
+(swipe-to-dismiss, hover reveal) or expanded states that need a click, the
+scene proves only the default state. Say which states are unproven and what
+input they need, rather than implying the feature is verified.
+
 ## Verify harness
 
 - Invocation: `Scripts/dev/verify.sh <run-name> --scenes <comma-list>`; screenshots under `$WORK/shots/<run>/`, logs under `$WORK/logs/<run>.log`.
