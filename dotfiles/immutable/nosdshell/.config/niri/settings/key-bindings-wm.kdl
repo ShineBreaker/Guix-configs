@@ -7,7 +7,7 @@ binds {
   Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"                  { spawn-sh "nosdshell ipc call wallpaper random"; }
 
   Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "nosdshell ipc call launcher clipboard"; }
-  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn-sh "nosdshell ipc call launcher toggle"; }
+  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn-sh "rofi -show drun -theme launcher"; }
 
 
   XF86AudioRaiseVolume  allow-when-locked=true { spawn-sh "nosdshell ipc call volume increase"; }

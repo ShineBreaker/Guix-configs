@@ -11,7 +11,6 @@
 ```
 desktop/
 ├── .config/
-│   ├── autostart/
 │   ├── niri/
 │   ├── pcmanfm-qt/
 │   ├── rofi/

@@ -1,0 +1,33 @@
+/* SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/* drun 启动器：在 config.rasi（窗口切换器主题）基础上覆盖为单列图标列表 */
+@import "config.rasi"
+
+configuration {
+    show-icons: true;
+
+    drun {
+        display-name: "Apps";
+    }
+}
+
+entry {
+    placeholder: "Search apps…";
+}
+
+listview {
+    columns: 1;
+    lines:   8;
+}
+
+element {
+    children: [ element-icon, element-text ];
+}
+
+element-icon {
+    size:   26px;
+    margin: 0 8px 0 0;
+}
