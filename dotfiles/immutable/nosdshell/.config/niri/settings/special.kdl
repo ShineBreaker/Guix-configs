@@ -27,34 +27,57 @@ window-rule {
 }
 
 /*
-  nosdshell surfaces that should be blurred (xray off so only the
-  wallpaper shows through).
-  Every layer-shell namespace ends in "-<output>" — patterns must allow
-  the suffix; a "$" right after the stem matches nothing at all.
+  nosDshell layer rules for niri ≥ 26.04 — three tiers, cheapest first:
 
-  nosdshell publishes ext-background-effect blur regions for
-  "nosdshell-background" (bar + open panels), the dock and the launchers;
-  everything else gets whole-surface blur from this rule.
+    Tier 0  no blur     — surfaces never translucent over meaningful
+                          content, or drawing their own backdrop already.
+    Tier 1  xray blur   — wallpaper-sampled blur (niri's layer default).
+                          Right for static fullscreen surfaces whose
+                          backdrop should look like blurred wallpaper.
+    Tier 2  real blur   — `xray false` on region publishers that float
+                          over arbitrary windows; translucency shows the
+                          real window stack, not just the wallpaper.
+
+  nosdshell publishes its own blur regions via ext-background-effect —
+  niri honors them with NO `blur` flag at all. NEVER set `blur true` on a
+  nosdshell surface rule: it blurs the surface's whole extent (transparent
+  parts included), and most nosdshell surfaces are fullscreen planes —
+  that is the giant-blur bug. `blur true` is only safe inside `popups {}`
+  where the surface is always sized to its card.
+
   Canonical copy: nosDshell repo, Scripts/docs/nosdshell-layer-rules.kdl
   (check-layer-namespaces.py keeps it in sync with emitted namespaces).
 */
 layer-rule {
-  match namespace="^nosdshell-(background|popupmenu|notifications|dock|osd|session-menu|toast|setup-wizard|desktop-widgets)-.*$"
-  match namespace="^nosd-launcher-(full|mini)-.*$"
+  match namespace="^nosdshell-(background|dock)-.*$"
+  match namespace="^nosd-launcher-mini-.*$"
   background-effect {
-    blur true
     xray false
   }
 }
 
-/*
-  Surfaces that must not blur: the wallpaper is the blur source; the
-  overview does its own GPU blur; the bar windows reveal the backdrop
-  already blurred by nosdshell-background — a second pass would double
-  it; the rest are invisible helpers.
-*/
 layer-rule {
-  match namespace="^nosdshell-(wallpaper|overview|bar-content|bar-exclusion|bar-trigger|screen-detector|image-cache-renderer|fade-overlay)(-.*)?$"
+  match namespace="^nosd-launcher-full-.*$"
+  background-effect {
+    xray true
+  }
+}
+
+// Menus and tooltips are xdg_popups of these layer surfaces — popup
+// surfaces are content-sized, so blur true there is the card's exact shape.
+layer-rule {
+  match namespace="^nosdshell-"
+  match namespace="^nosd-launcher-"
+  popups {
+    background-effect {
+      blur true
+      xray false
+    }
+  }
+}
+
+layer-rule {
+  match namespace="^nosdshell-(wallpaper|overview|bar-content|bar-exclusion|bar-trigger|screen-detector|image-cache-renderer|fade-overlay|popupmenu|notifications|toast|osd|session-menu|setup-wizard|desktop-widgets)(-.*)?$"
   background-effect {
     blur false
   }
