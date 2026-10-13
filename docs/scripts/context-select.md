@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com> -->
 <!-- SPDX-License-Identifier: MIT -->
 
-# context-select.sh — Pi / OMP / ZCode / Hermes / DSH 共用的会话上下文注入决策核
+# context-select.sh — Pi / ZCode / Hermes / DSH 共用的会话上下文注入决策核
 
-`dotfiles/immutable/agents/.config/agents/context-select.sh` · immutable → `~/.config/agents/context-select.sh`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/session-start.sh`（`--platform zcode`）、omp `dotfiles/mutable/agents/extensions/global-context/index.ts`（`--platform omp`）、hermes `plugins/global-context/__init__.py`（`--platform hermes`）、DSH `profiles/agent-extensions/global-context.js`（`--platform dsh`，路径可由 `CONTEXT_SELECT_BIN` 覆盖）。`--check` 另会探测 omp 与 crush 的配置文件，但两者都不调本脚本（crush 已整体移出本仓库，探测恒为「跳过」提示）
+`dotfiles/immutable/agents/.config/agents/context-select.sh` · immutable → `~/.config/agents/context-select.sh`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/session-start.sh`（`--platform zcode`）、pi `dotfiles/mutable/agents/extensions/global-context/index.ts`（`--platform omp`，平台名沿用 omp 历史值）、hermes `plugins/global-context/__init__.py`（`--platform hermes`）、DSH `profiles/agent-extensions/global-context.js`（`--platform dsh`，路径可由 `CONTEXT_SELECT_BIN` 覆盖）
 
 内容分层在 `~/.config/agents/context/`：`00-core.md` 是跨领域通用原则、`INDEX.md` 是领域路由表（XML `<domain name=… file=…>` 条目）、`domains/<name>.md` 是领域专属原则。本脚本只回答「这个会话该注入哪些文件」，不读内容；注入清单单一真相源在此，各端适配器不各自维护文件列表。
 
@@ -30,7 +30,7 @@ context-select.sh --check                                   # 一致性自检
 | 环境变量          | 语义                                                                     |
 | ----------------- | ------------------------------------------------------------------------ |
 | `CONTEXT_DIR`     | 覆盖 context 根，默认 `${XDG_CONFIG_HOME:-$HOME/.config}/agents/context` |
-| `XDG_CONFIG_HOME` | 覆盖配置根，参与 `--check` 里 crush 与 omp 配置的定位                    |
+| `XDG_CONFIG_HOME` | 覆盖配置根，参与 context 根定位                                |
 
 `CONTEXT_DIR` 与各端的 selector 路径变量（zcode 与 DSH 都认 `CONTEXT_SELECT_BIN`）配合，可在 `blue home` 部署前用仓库源码跑通全链路。
 
@@ -73,12 +73,8 @@ domains/dsh-sandbox.md|platform:dsh
 | `domains/` 磁盘集合 == 映射集合                                         | fail（双向，含未登记与已登记缺失） |
 | `INDEX.md` 条目集合 == `domains/`                                       | fail（双向）                       |
 | `INDEX.md` 条目带 `file=` 声明                                          | fail（逐条比对 name 与 file 同名） |
-| crush `context_paths` 指向的文件存在、且覆盖 `00-core.md` 与 `INDEX.md` | fail                               |
-| omp `global-context.json` 存在                                          | fail                               |
-| crush `crush.json` 可读                                                 | 仅提示「跳过 crush 校验」          |
-| omp `enabled == true`                                                   | 仅提示「已禁用」                   |
 | hermes 插件已部署                                                       | 仅提示「未部署，跳过」             |
 
-crush 已整体移出本仓库，其 `crush.json` 不再存在，因此上表的 crush 两行在当前机器上恒为「跳过」提示——`--check` 仍会照常执行这一探测。hermes 插件是可选部署，未部署时同样只提示。
+hermes 插件是可选部署，未部署时只提示。
 
-依赖 `bash`、`realpath`、`grep`、`sed`、`jq`（读 crush 与 omp 的 JSON 配置）。`set -uo pipefail` 不用 `-e`：单项检查失败不应中断后续校验项。
+依赖 `bash`、`realpath`、`grep`、`sed`。`set -uo pipefail` 不用 `-e`：单项检查失败不应中断后续校验项。

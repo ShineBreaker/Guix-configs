@@ -15,7 +15,8 @@ dotfiles/
 ├── immutable/
 │   ├── agents/
 │   ├── desktop/
-│   ├── noctalia-suite/
+│   ├── noctalia/
+│   ├── nosdshell/
 │   ├── system/
 │   ├── terminal/
 │   └── utilities/

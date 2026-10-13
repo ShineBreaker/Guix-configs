@@ -54,10 +54,6 @@
       "unless_inside": "~/Projects/Config/Guix-configs"
     },
     {
-      "path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/omp/.config/omp/extensions/pi-gate/",
-      "unless_inside": "~/Projects/Config/Guix-configs"
-    },
-    {
       "path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/",
       "unless_inside": "~/Projects/Config/Guix-configs"
     }

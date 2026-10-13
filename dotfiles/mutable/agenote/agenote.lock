@@ -10,6 +10,5 @@
 # 拿到 SHA256SUMS 里的值，替换本文件对应行，然后跑 sync-agenote.sh --dry-run。
 
 agenote-skills:0.2.0:7d876a8f0d50957fb361d65d319da472fbc07dca3fcdbccdc154d2780fd33731
-agenote-pi:0.1.0:958f598c526678d1e6aeb19ea79470c71e35a89672adcd4c60b767c0af735f62
 agenote-zcode:0.1.0:4605d72d7dfbe09c0847621737bb038b5df386af5f38e6b4d9b3b2b7869153b3
 agenote-hermes:0.1.0:7c174c654f38110dcf398ecf8a9f57a22f1e2a8b7c91aae50085e1851c1c79e1

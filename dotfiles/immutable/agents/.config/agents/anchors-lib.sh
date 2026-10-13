@@ -20,9 +20,12 @@ if [[ -n "${_ANCHORS_LIB_LOADED:-}" ]]; then return 0 2>/dev/null || true; fi
 _ANCHORS_LIB_LOADED=1
 
 # ─── 加载错误日志（对齐 pi-gate logLoadError，显式留痕防静默吞错）──
+# 日志落 ~/.config/agents/（anchors 系统自身目录，确定存在）——历史上落在
+# ~/.config/omp/extensions/ 下，omp 平台已删，沿用旧路径会让 mkdir -p 复活
+# 已清理的目录。
 log_gate_error() {
 	local ext="$1" where="$2" msg="$3"
-	local log_file="$HOME/.config/omp/extensions/.load-errors.log"
+	local log_file="$HOME/.config/agents/.load-errors.log"
 	mkdir -p "$(dirname "$log_file")" 2>/dev/null || true
 	printf '[%s] [%s] %s: %s\n' \
 		"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ext" "$where" "$msg" \

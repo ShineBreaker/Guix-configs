@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# context-select.sh — zcode / omp / pi / hermes / DSH 共享的上下文注入决策核。
+# context-select.sh — zcode / pi / hermes / DSH 共享的上下文注入决策核。
 # 分层（00-core.md / INDEX.md / domains/*.md）、门控语义、CLI 与消费链路
 # 见 docs/scripts/context-select.md。
 set -uo pipefail
@@ -138,41 +138,7 @@ check() {
 		fail=1
 	fi
 
-	# 4. crush：context_paths 引用存在且覆盖恒注入集
-	local crush_json="${XDG_CONFIG_HOME:-$HOME/.config}/crush/crush.json"
-	if [[ -f "$crush_json" ]]; then
-		local p target found_core=0 found_index=0
-		while IFS= read -r p; do
-			[[ -z "$p" ]] && continue
-			target="${p/#\~/$HOME}"
-			[[ -f "$target" ]] || {
-				echo "✗ crush context_paths 指向不存在的文件：$p"
-				fail=1
-			}
-			case "$(basename "$target")" in
-			00-core.md) found_core=1 ;;
-			INDEX.md) found_index=1 ;;
-			esac
-		done < <(jq -r '.options.context_paths[]?' "$crush_json" 2>/dev/null)
-		[[ $found_core -eq 1 && $found_index -eq 1 ]] || {
-			echo "✗ crush context_paths 未覆盖恒注入集（00-core.md / INDEX.md）"
-			fail=1
-		}
-	else
-		echo "－ crush 配置不可读（$crush_json），跳过 crush 校验"
-	fi
-
-	# 5. omp：配置存在于扩展查找路径（配置根）且启用
-	local omp_json="${XDG_CONFIG_HOME:-$HOME/.config}/omp/global-context.json"
-	if [[ -f "$omp_json" ]]; then
-		[[ "$(jq -r '.enabled' "$omp_json" 2>/dev/null)" == "true" ]] ||
-			echo "－ omp global-context 已禁用（enabled != true）"
-	else
-		echo "✗ omp 配置不在扩展查找路径：$omp_json"
-		fail=1
-	fi
-
-	# 6. hermes：插件存在
+	# 5. hermes：插件存在
 	local hermes_plugin="${HERMES_HOME:-$HOME/.local/share/hermes}/plugins/global-context/__init__.py"
 	[[ -f "$hermes_plugin" ]] || echo "－ hermes global-context 插件未部署，跳过"
 

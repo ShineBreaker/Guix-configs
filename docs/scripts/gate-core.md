@@ -129,7 +129,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 | 映射（`redirect_conventions`/`rewrite`/`path_hints`） | jq `*` 浅合并，近层覆盖远层                                          |
 | `builtin_rewrite`                                     | 布尔值由显式给出该字段的层覆盖，未给出的层不影响                     |
 
-**只加不减**：项目层无法移除全局或代码底层的条目，近层要削弱某条只能加 `unless_inside` 条件豁免。任一层损坏或 jq 合并失败 → 回退 DEFAULT 并向 `~/.config/omp/extensions/.load-errors.log` 追加一行（`log_gate_error`，时间戳 + 扩展标签 + 位置 + 原因，标签沿用历史值 `crush-gate`），防静默吞错。
+**只加不减**：项目层无法移除全局或代码底层的条目，近层要削弱某条只能加 `unless_inside` 条件豁免。任一层损坏或 jq 合并失败 → 回退 DEFAULT 并向 `~/.config/agents/.load-errors.log` 追加一行（`log_gate_error`，时间戳 + 扩展标签 + 位置 + 原因，标签沿用历史值 `crush-gate`），防静默吞错。
 
 | 函数                                 | 语义                                                                          |
 | ------------------------------------ | ----------------------------------------------------------------------------- |
@@ -158,7 +158,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 ## 排障
 
-- 看合并结果：`bash -c 'source ~/.config/agents/anchors-lib.sh && load_merged_anchors <dir>'`；加载失败会向 `~/.config/omp/extensions/.load-errors.log` 追加日志。
+- 看合并结果：`bash -c 'source ~/.config/agents/anchors-lib.sh && load_merged_anchors <dir>'`；加载失败会向 `~/.config/agents/.load-errors.log` 追加日志。
 - 单条判定：`GATE_CWD=<dir> bash ~/.config/agents/gate-core.sh bash '<cmd>'`，直接看行协议输出；写入判定把待检内容接在 stdin 上跑 `edit <file>`。
 - 「命令在禁用列表里却没被拦」：先确认是不是 §设计决策与不变量第 6 条列出的明确放弃形态，再确认冻结词是否落在命令位置。
 - 「命令被误拦」：冻结匹配走的是剥引号后的片段流，引号内的 `;`、反斜杠都会变成边界；用上面的单条判定命令对比改前改后输出。

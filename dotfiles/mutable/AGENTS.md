@@ -35,12 +35,11 @@ mutable/
 │   ├── agenote.lock
 │   └── sync-agenote.sh
 ├── agents/
+│   ├── claude/
 │   ├── devin/
 │   ├── dsh/
 │   ├── extensions/
 │   ├── hermes/
-│   ├── minimax-code/
-│   ├── omp/
 │   ├── pi/
 │   ├── skills/
 │   └── zcode/
@@ -65,17 +64,15 @@ mutable/
 | `agents/devin`        | `~/.local/share/agents/devin/`（安装树）+ `~/.local/bin/devin`                                                       | Devin CLI（上游 binary bundle；`--install`/`update` 为 manifest 直装增强），入口手册 [devin.md](../../docs/scripts/devin.md)                                                                                              |
 | `agents/dsh`          | `~/.local/share/dsh/`（配置/状态）+ `~/.local/share/agents/dsh/`（CLI 安装树）+ `~/.local/bin/dsh` + 图标/desktop 项 | DeepSeek Harness 配置层与 CLI（update/web/tui 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)；入口手册 [dsh.md](../../docs/scripts/dsh.md)                                                              |
 | `agents/hermes`       | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                                                      | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）；入口手册 [hermes.md](../../docs/scripts/hermes.md)                                                                                      |
-| `agents/minimax-code` | `~/.local/share/agents/minimax-code/`（安装树）+ `~/.local/bin/mcode`                                                | MiniMax Code CLI（npm 包 `@minimax-ai/code`；`mcode tools` 分发上游第二 bin `mcode-tools`），详见 [minimax-code/AGENTS.md](agents/minimax-code/AGENTS.md)；入口手册 [minimax-code.md](../../docs/scripts/minimax-code.md) |
-| `agents/omp`          | `~/.config/omp/`                                                                                                     | OMP Agent 配置与扩展                                                                                                                                                                                                      |
 | `agents/pi`           | `~/.config/pi/` + `~/.local/bin/pi*` + `~/.local/share/agents/pi/`（安装树）+ `~/.local/share/pi/`（sessions 数据）  | Pi 编码 Agent 的 wrapper 与配置（pnpm 自管理），详见 [pi/AGENTS.md](agents/pi/AGENTS.md)；入口手册 [pi.md](../../docs/scripts/pi.md)                                                                                      |
 | `agents/skills`       | `~/.config/agents/skills/` + `~/.local/bin/askill`                                                                   | 第三方技能锁（`skills-lock.json`）、自建技能与 `askill` 管理器（手册 [askill.md](../../docs/scripts/askill.md)）                                                                                                          |
 | `agents/zcode`        | `~/.zcode/`                                                                                                          | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md)                                                                                                                                       |
-| `agenote`             | `~/.config/agents/skills/` + `~/.config/omp/extensions/` + `~/.zcode/plugins/`                                       | 知识库技能与各端 Hook/插件（内含子模块）                                                                                                                                                                                  |
+| `agenote`             | `~/.config/agents/skills/` + `~/.zcode/plugins/`                                                                    | 知识库技能与各端 Hook/插件（内含子模块）                                                                                                                                                                                    |
 | `tools/secrets`       | `~/.local/share/keys/` + `~/.local/bin/secrets`                                                                      | Age 密钥对与 `secrets` 命令（加密/解密/编辑/fzf 菜单/剪贴板），详见 [secrets/AGENTS.md](tools/secrets/AGENTS.md)；机制见 [secrets.md](../../docs/secrets.md)                                                              |
 | `tools/appimage-run`  | `~/.local/bin/appimage-run`                                                                                          | AppImage 运行器（子模块）                                                                                                                                                                                                 |
 | `tools/toolbox`       | `~/.local/bin/toolbox` + `~/.local/share/toolbox/`                                                                   | 自研工具统一入口（fzf 清单），详见 [toolbox/AGENTS.md](tools/toolbox/AGENTS.md)；手册 [toolbox.md](../../docs/scripts/toolbox.md)                                                                                         |
 
-> `agents/extensions/` 无 `.stow-package` 标记，不单独部署：它是 omp/pi 共享自建扩展的源码存放点，两侧 `extensions/<name>/` 经软链引用（见 [pi/AGENTS.md](agents/pi/AGENTS.md)）。
+> `agents/extensions/` 无 `.stow-package` 标记，不单独部署：它是 pi 自建扩展的源码存放点，`extensions/<name>/` 经软链被 pi 引用（见 [pi/AGENTS.md](agents/pi/AGENTS.md)）。
 
 ## Agent 运行时安装根（`~/.local/share/agents/`）
 
@@ -104,9 +101,9 @@ touch dotfiles/mutable/agents/$PKG/.stow-package
 cp dotfiles/mutable/agents/pi/.stow-local-ignore dotfiles/mutable/agents/$PKG/
 ```
 
-在 `.local/share/agents/$PKG/package.json` 写死首个目标版本（精确值不用 `^`）。同目录按需配 `pnpm-workspace.yaml`（stow 软链，两个高频坑必读）：`minimumReleaseAge: 0`——pnpm 12 默认 24h 供应链冷却，**发布不满一天的新版本会被静默排除出解析**；`allowBuilds: {<pkg>: true}`——依赖原生模块（better-sqlite3 等）时不批 build scripts 会装得上但跑不了，pnpm 安装输出的 `Ignored build scripts:` 名单照抄进即可（范本见 dsh 与 minimax-code）。**lockfile 不手写**，首装后由回源机制生成进仓库。
+在 `.local/share/agents/$PKG/package.json` 写死首个目标版本（精确值不用 `^`）。同目录按需配 `pnpm-workspace.yaml`（stow 软链，两个高频坑必读）：`minimumReleaseAge: 0`——pnpm 12 默认 24h 供应链冷却，**发布不满一天的新版本会被静默排除出解析**；`allowBuilds: {<pkg>: true}`——依赖原生模块（better-sqlite3 等）时不批 build scripts 会装得上但跑不了，pnpm 安装输出的 `Ignored build scripts:` 名单照抄进即可（范本见 dsh）。**lockfile 不手写**，首装后由回源机制生成进仓库。
 
-**2. 入口 wrapper**（一包一入口；更新逻辑先做 `<pkg> --install`，复杂化再学 dsh 分发到 libexec；上游有多个 bin 时学 minimax-code 在主入口 case 分发，不占第二个 `~/.local/bin` 文件）
+**2. 入口 wrapper**（一包一入口；更新逻辑先做 `<pkg> --install`，复杂化再学 dsh 分发到 libexec；上游有多个 bin 时在主入口 case 分发，不占第二个 `~/.local/bin` 文件）
 
 ```bash
 #!/usr/bin/env bash
@@ -159,7 +156,7 @@ sync_to_source
 exit "$rc"
 ```
 
-三条不变量（dsh/pi/minimax-code 踩坑换来的）：部署路径只从 `AGENTS_ROOT` 推导、仓库源路径从 `$0`（stow 软链）`readlink -f` 反推，都不依赖部署侧软链存活（pnpm 原子写会随时把它覆写成实体文件）；`package.json`/`pnpm-workspace.yaml` 回源 = 拷内容 + 重建软链，`pnpm-lock.yaml` 只回拷内容、仓库副本缺失时新建并加进 `.stow-local-ignore`（否则 stow 链出去，pnpm 立刻拒写）；回源要**每次调用/每次更新都做**（cmp 有差才动），只挂 update 脚本会漏掉手动安装路径——dsh 曾因此仓库 lockfile 落后一个 minor。
+三条不变量（dsh/pi 踩坑换来的）：部署路径只从 `AGENTS_ROOT` 推导、仓库源路径从 `$0`（stow 软链）`readlink -f` 反推，都不依赖部署侧软链存活（pnpm 原子写会随时把它覆写成实体文件）；`package.json`/`pnpm-workspace.yaml` 回源 = 拷内容 + 重建软链，`pnpm-lock.yaml` 只回拷内容、仓库副本缺失时新建并加进 `.stow-local-ignore`（否则 stow 链出去，pnpm 立刻拒写）；回源要**每次调用/每次更新都做**（cmp 有差才动），只挂 update 脚本会漏掉手动安装路径——dsh 曾因此仓库 lockfile 落后一个 minor。
 
 **3. 部署与首装**
 

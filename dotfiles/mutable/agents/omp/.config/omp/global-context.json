@@ -1,6 +1,0 @@
-{
-  "enabled": true,
-  "maxFiles": 8,
-  "maxBytesPerFile": 65536,
-  "maxTotalBytes": 196608
-}

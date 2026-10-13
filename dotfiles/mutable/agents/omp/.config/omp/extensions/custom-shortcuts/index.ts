@@ -1,1 +1,0 @@
-../../../../../extensions/custom-shortcuts/index.ts
