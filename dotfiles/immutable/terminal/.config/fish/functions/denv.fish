@@ -677,9 +677,9 @@ function __denv_provider_llm_init -d "创建 AGENTS.md / .agents/skills / 软链
 
     if not test -e AGENTS.md
         if test "$use_full" = true
-            printf '# AGENTS.md\n\n> 项目协作约定（由 denv --LLM 生成，--full 完整模板）\n\n## 概述\n\n一句话描述本项目。\n\n## 工作准则\n\n- 先想清楚再动手：动手前写假设，没把握就提问。\n- 简单至上：能删代码就删，不做未被要求的功能。\n- 外科手术式修改：只动必须改的，沿用现有风格。\n- 目标驱动：先定义成功标准，循环验证。\n\n## 结构\n\n```\nproject/\n├── src/\n├── doc/\n├── tests/\n└── AGENTS.md\n```\n\n## 构建与验证\n\n```bash\ndirenv allow\n# 按语言补充构建命令\n```\n\n## 提交规范\n\n- Conventional Commits: `type(scope): desc`\n- type: feat / fix / refactor / docs / chore / build\n\n## 风险点\n\n- 改源后需重建环境（如 guix shell / direnv reload）\n' >AGENTS.md
+            printf '# AGENTS.md 模板\n\n> 请先根据实际情况对该文件进行填充和扩张，以便于后续工作的进行 \n\n## 概述\n\n一句话描述本项目。\n\n## 工作准则\n\n- 先想清楚再动手：动手前写假设，没把握就提问。\n- 简单至上：能删代码就删，不做未被要求的功能。\n- 外科手术式修改：只动必须改的，沿用现有风格。\n- 目标驱动：先定义成功标准，循环验证。\n- 必须使用 direnv 套件来进行环境管理，若 manifest.scm 存在时则优先利用它来管理环境。\n\n## 结构\n\n```\nproject/\n├── src/\n├── doc/\n├── tests/\n└── AGENTS.md\n```\n\n## 构建与验证\n\n```bash\ndirenv allow\n# 按语言补充构建命令\n```\n\n## 提交规范\n\n- Conventional Commits: `type(scope): desc`\n- type: feat / fix / refactor / docs / chore / build\n\n## 风险点\n\n- 改源后需重建环境（如 guix shell / direnv reload）\n' >AGENTS.md
         else
-            printf '# AGENTS.md\n\n> 由 denv --LLM 生成的最小协作约定\n\n## 概述\n\n一句话描述本项目。\n\n## 协作约定\n\n- 修改前先读本文件与 README。\n- 保持改动最小化，沿用现有风格。\n\n## 技能索引\n\n- `.agents/skills/` — 项目技能与工作流\n' >AGENTS.md
+            printf '# AGENTS.md 模板\n\n> 请先对该文件进行补充，以便后续工作\n\n## 概述\n\n一句话描述本项目。\n\n## 协作约定\n\n- 修改前先读本文件与 README。\n- 保持改动最小化，沿用现有风格。\n- 必须使用 direnv 套件来进行环境管理，若 manifest.scm 存在时则优先利用它来管理环境。\n\n## 技能索引\n\n- `.agents/skills/` — 项目技能与工作流\n' >AGENTS.md
         end
         echo "✔ 已创建 AGENTS.md"
     else
