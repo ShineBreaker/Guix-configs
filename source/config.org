@@ -1,43 +1,47 @@
 # SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 #
 # SPDX-License-Identifier: MIT
-# Agent 指引见 source/AGENTS.md；本文件正文仅保留结构标签与一行式提示。
 
 #+TITLE: Guix 系统与 Home 配置
 #+STARTUP: overview
 
 * 导览
 
-利用 Org 文件来声明 =operating-system= 与 =home-environment=。[[#main-skeleton][main 块]]用于将我这里写的所有配置组装在一起，各 =#+NAME:= 块经 =<<ref>>= 拼合后 tangle 成 =tmp/config.scm=。注释掉对应的 =<<ref>>= 即可在装配中停用该功能块。
+本文件以文学编程（Literate Programming）方式统一声明整台机器的 =operating-system= （系统层）与 =home-environment= （用户态）。所有分散的 =#+NAME:= 代码块在 [[#main-skeleton][配置文件骨架（main）]] 中通过 Org Noweb 语法（ ~<<block-name>>~ ）按层次拼装，最终 tangle 生成 =tmp/config.scm= 并一次部署生效。
 
-目前的配置文件由以下部分组成：
+#+begin_quote
+*阅读与裁剪提示* ：在 =main= 块中注释掉任意一行 ~<<ref>>~ ，即可在构建时停用对应的功能模块；下文已被注释的 ~<<ref>>~ 均为按需启停的开关。架构约定与排障背景可配合查阅同目录的 [[./AGENTS.md][source/AGENTS.md]]。
+#+end_quote
 
-- 系统配置 :: [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users]]
-- 用户配置 :: [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]
-- 独立产物与操作 :: [[#iso][Live ISO]] · [[#maintenance][维护操作]]
+| 层级与模块     | 章节索引                                                                                                                                                                                     |
+|----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| *前置与骨架*   | [[#maintenance][维护操作]] · [[#main-skeleton][配置文件骨架（main）]]                                                                                                                        |
+| *系统层配置*   | [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users 与主机信息]] |
+| *用户态配置*   | [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]                                                                                 |
+| *救援与安装盘* | [[#iso][Live ISO]]                                                                                                                                                                           |
 
 * 维护操作
 :PROPERTIES:
 :CUSTOM_ID: maintenance
 :END:
 
-在 Emacs 中将光标置于代码块内，按 =C-c C-c= 即可执行相关的代码（执行前会有确认提示），执行结果将输出到 =#+RESULTS:=。
+在 Emacs 中将光标移至下方任一代码块内，按 =C-c C-c= 即可直接在仓库根目录执行对应维护命令，输出结果将回显至块下方的 =#+RESULTS:= 区域。
 
-括号平衡检查（快速定位出错的代码块）：
+- *括号平衡快检* （秒级扫描全部代码块并定位语法失衡位置）：
 
 #+NAME: maint-check
 #+begin_src sh :dir .. :results output
 blue check
 #+end_src
 
-构建验证（tangle + =guix system build --dry-run=，仅做语法与依赖验证）：
+- *构建干跑验证* （完整执行 tangle 与 ~guix system build --dry-run~ ，校验依赖与语法而不写入系统）：
 
 #+NAME: maint-dry-rebuild
 #+begin_src sh :dir .. :results output
 blue --dry-run rebuild
 #+end_src
 
-仅执行 tangle（刷新 =tmp/= 下的全部代码生成物）：
+- *仅抽离代码* （将本文件全部源码块 tangle 至 =tmp/= 目录）：
 
 #+NAME: maint-build
 #+begin_src sh :dir .. :results output
@@ -46,10 +50,10 @@ blue build
 
 * 模块导入
 
-除下方 Guix 标准模块外，配置还会 =load= 两个仓库内文件；=load= 的相对路径以 tangle 时的 =source/= 目录为基准（Emacs 中 =C-c C-c= 执行时同样如此）：
+除集中导入 Guix 官方与第三方频道（ =nongnu= 、 =rosenthal= 、 =jeans= 、 =px= ）的模块外，文件头部还通过 ~load~ 引入两份本地定义（相对路径均以 =source/= 目录为基准）：
 
-- =source/information.scm=（小文件）:: 主机名、用户名、磁盘拓扑（分区 UUID 等）、文件系统子卷表等全局数据，下文多个配置块的值都取自这里；
-- =source/files/kernel/linux-cachyos-lts.scm= :: 自定义内核包，文件自身带有说明。
+- =source/information.scm= :: 机器身份（主机名、用户名）、磁盘分区 UUID 及 Btrfs 子卷与持久化目录清单，作为全仓共享的单一数据源。
+- =source/files/kernel/linux-cachyos-lts.scm= :: 本地定制编译的 CachyOS LTS 内核包定义（详见下文的 [[#sys-kernel][Kernel]] 章节）。
 
 #+NAME: modules
 #+begin_src scheme :noweb yes
@@ -75,6 +79,7 @@ blue build
              (gnu packages guile)
              (gnu packages rust-apps)
              (gnu services)
+             (gnu services networking)
              (gnu services shepherd)
              (gnu system accounts)
              (gnu system nss)
@@ -97,10 +102,13 @@ blue build
              (jeans packages desktop)
              (jeans services hardware)
              (jeans services nix-ld)
+             (jeans services tools)
 
              (nongnu packages firmware)
              (nongnu packages linux)
              (nongnu system linux-initrd)
+
+             (px packages video)
 
              (rosenthal bootloader limine)
              (rosenthal home services desktop)
@@ -111,10 +119,8 @@ blue build
              (rosenthal services desktop)
              (rosenthal services games)
              (rosenthal services networking)
-             ;; (rosenthal services nix)
              (rosenthal services shellutils)
              (rosenthal utils file)
-             ;; (rosenthal utils nix)
              (rosenthal utils packages)
 
              (srfi srfi-1))
@@ -160,8 +166,6 @@ blue build
                      dns
                      guix
                      linux
-                     networking
-                     ;; nix                    ; Nix 包管理器；切换注释见「Nix 包管理器」节
                      pam-mount
                      pm
                      shepherd
@@ -174,7 +178,7 @@ blue build
 
 * 全局 define
 
-这里放一些全局都会用到的 define
+本节集中声明跨模块复用的顶层绑定，包括文件系统挂载表、Shepherd 服务构造器与自定义变体包，经 ~<<custom-defines>>~ 统一注入主配置顶部。
 
 #+NAME: custom-defines
 #+begin_src scheme :noweb yes
@@ -195,25 +199,15 @@ blue build
 
 *** 服务构造函数
 
-对 shepherd 服务的三种高频形态进行封装，来方便配置文件全局进行调用。
+为了消除重复的样板代码，这里将 Shepherd 服务最常见的三种形态封装为辅助函数。其中 =command= 参数接收「可执行程序 + 参数」的列表，列表元素既可以是普通字符串，也可以是 Guix 的可 lower 对象（构建期自动展开为 =/gnu/store/……= 下的真实路径，无需手写绝对路径）：
 
-=command= 为「程序 + 参数」的 argv 列表：第一个元素是程序，其余每个元素是一个参数，逐段列出而非写成一整条命令字符串。元素可以是字符串，也可以是可 lower 对象——构建期统一展开为具体值后拼成真正的命令行：
-
-- 字符串：="/bin/sh"=、="--bind-dynamic"= -> 原样使用；
-- 可 lower 对象：
-   =(file-append kdeconnect "/bin/kdeconnect-indicator")= -> 展开为 =/gnu/store/……= 下的绝对路径
-   =(local-file "usb-power-watch")= -> 指向本地文件
-   gexp =#~(……)= -> 在构建期求值。
-
-因此无需手写 =/gnu/store= 路径，直接引用包对象即可。
-
-上面这些写法能成立，靠的是 Guix 的 gexp（构建期模板）机制。本节三个封装只用到下面这几个语法点，先在此集中说明：
-
-- =define*= 与 =#:key= :: 定义带关键字可选参数的函数：形如 =#:requirement= 的形参调用时可以不传，不传就取定义处写好的默认值；
-- =#~(……)= :: 构建期模板，括号内的代码不在读取配置时求值，而是留到构建阶段再求值；
-- =#$expr= :: 在模板中插入一个构建期已知的值（包对象、=string-append= 的结果等），包与文件对象在此处展开为其绝对路径；
-- =#$@lst= :: 与 =#$= 类似，但要求 =lst= 是列表：把其中每个元素依次拼接到当前位置。
-+ =home-daemon-service=：用户常驻进程，日志统一写入到 =$XDG_STATE_HOME/shepherd/<name>.log= 中。会自动继承调用时的用户环境。
+- *普通字符串* :: 如 ~"/bin/sh"~ 、 ~"--bind-dynamic"~ ，按原样拼入命令行。
+- *包内路径与本地文件* :: 如 ~(file-append kdeconnect "/bin/kdeconnect-indicator")~ 或 ~(local-file "usb-power-watch")~ ，构建时自动解析为对应 store 路径。
+- *G-expression（gexp，构建期模板）* ::
+  - ~define*~ 与 ~#:key~ ：定义带可选关键字参数的函数，调用时未显式传入的参数自动取默认值。
+  - =#~(……)= ：声明构建期模板，内部代码不在读取配置时立即执行，而是延后至构建或服务运行期求值。
+  - ~#$expr~ 与 ~#$@lst~ ：在模板内插入外部值（包或文件对象在此展开为绝对路径）； ~#$@~ 则会将列表元素逐个摊平拼接到当前位置。
+- =home-daemon-service= :: 构造用户态常驻守护进程，自动继承启动时的用户环境变量，并将日志统一落盘至 =$XDG_STATE_HOME/shepherd/<name>.log= 。
 
 #+NAME: home-daemon-service-helpers
 #+begin_src scheme
@@ -237,7 +231,7 @@ blue build
    (respawn? respawn?)))
 #+end_src
 
-+ =root-daemon-service=：系统常驻进程，支持 =#:log-file= 与 =#:one-shot?=。
+- =root-daemon-service= :: 构造系统级常驻守护进程，支持通过 ~#:log-file~ 指定日志路径，或通过 ~#:one-shot?~ 切换为单次任务。
 
 #+NAME: root-daemon-service-helpers
 #+begin_src scheme
@@ -260,9 +254,13 @@ blue build
                          (stop #~(make-kill-destructor))))))
 #+end_src
 
-+ =root-one-shot-service=：开机跑一次即退出（one-shot + 不 respawn），=start= / =#:stop= 直接传 gexp。
-  =stop= 默认 =(const #f)=——向 shepherd 返回「已停止」的正确值；=respawn?= 默认 #t。对 one-shot 服务这两者均惰性（start 成功即视为 stopped、进程退出也不 respawn），调用处无需再传这两个参数。
-  =#:modules= 默认 =%default-modules=（=shepherd service= + =guix build utils= + =guix build syscalls=）。shepherd 服务的 =start= gexp 会被序列化成独立 .scm 再编译成 .go，编译环境只有这些模块——**gexp 内层写的 =(use-modules……)= 不参与编译期绑定* ，运行到未绑定变量才报错。需要额外模块（如 =(ice-9 rdelim)= 提供 =read-line=）时，必须经此参数追加进顶层 use-modules。
+- =root-one-shot-service= :: 构造开机仅执行一次的系统初始化任务（ ~one-shot? #t~ ）， ~start~ 直接传入 gexp 过程。
+
+#+begin_quote
+*Shepherd 单次服务的两个细节* ：
+1. ~stop~ 默认设为 =#~(const #f)= （向 Shepherd 表示「已停止」），对 one-shot 服务而言 ~stop~ 与 ~respawn?~ 均为惰性，调用处无需重复传参。
+2. Shepherd 会把 ~start~ 的 gexp 单独序列化并编译为 =.go= 字节码，编译期仅可见 ~#:modules~ 声明的模块（默认为 ~%default-modules~ ）。 *写在 gexp 内部的 ~(use-modules ...)~ 不会参与编译期绑定* ，若用到额外模块（如提供 ~read-line~ 的 ~(ice-9 rdelim)~ ），必须通过 ~#:modules~ 显式追加。
+#+end_quote
 
 #+NAME: root-one-shot-service-helpers
 #+begin_src scheme
@@ -285,7 +283,7 @@ blue build
                          (stop stop)))))
 #+end_src
 
-+ 系统/用户两侧 flatpak 定时更新共用的启动脚本（当前仅下方 =flatpak-user-update= timer 以 "user" 调用；scope 取值 "system" 或 "user"）：生成的 store 脚本是一行 =grep -q 1 /sys/class/power_supply/A*/online && exec flatpak update --<scope> -y=，由 shepherd timer 经 =/bin/sh= 执行。不接外接电源时 grep 失败、脚本非零退出，timer 语义下静默跳过本次，不留副作用；接电则 =exec= 直接把进程替换成 flatpak。
+- =%flatpak-update-script= :: 生成供系统层或用户态定时器复用的 Flatpak 自动更新脚本（ =scope= 取 ~"system"~ 或 ~"user"~ ）。脚本先用 =grep= 检查外接电源状态（ =/sys/class/power_supply/A*/online= ），电池供电时直接退出并跳过更新，插电时通过 ~exec~ 替换为 =flatpak update= 进程。
 
 #+NAME: flatpak-service-helpers
 #+begin_src scheme
@@ -301,26 +299,22 @@ blue build
 
 *** 自定义包与补丁
 
-自建变体包与上游补丁的集中地；=包定义= 处放 ~define~，=包列表= 处需要引用之前的定义
+当上游包版本滞后或需要针对本机硬件打补丁时，在此处派生自定义包：先在「包定义」小节声明顶层 ~define~ ，再于「包列表」小节汇总注入用户环境。
 
 **** 包定义
 
 ***** CachyOS LTS 内核
 
-对标上游 =linux-cachyos-lts= 变体（Cachy Sauce + EEVDF，无 BORE 无 LTO），defconfig 取自 hako 的 kernel-config，将其调成桌面档并按当前设备裁剪。
+对标上游 =linux-cachyos-lts= 变体（集成 Cachy Sauce 与 EEVDF 调度补丁，关闭 BORE 与 LTO），基于 hako 的 =kernel-config= 调整为桌面低延迟档并按本机硬件裁剪冗余驱动。完整定义与模块裁剪说明位于 [[./files/kernel/linux-cachyos-lts.scm][source/files/kernel/linux-cachyos-lts.scm]]。
 
 #+NAME: cachyos-lts-kernel
 #+begin_src scheme
 (load "../source/files/kernel/linux-cachyos-lts.scm")
 #+end_src
 
-内核包的实际定义（版本、补丁、按机型裁剪）都在被 =load= 的文件内，见其文件头注释。
-
 ***** 指纹识别栈
 
-本机传感器 Goodix =27c6:689a= 需要 libfprint ≥1.94.9 才能驱动，在这里写一个自定义的包来更新版本
-
-=fprintd-1.94= 是登记/验证指纹的 CLI（=fprintd-enroll= 等）；守护进程与 PAM 模块在系统侧（desktop-services 板块）。
+本机搭载的 Goodix 指纹传感器（ =27c6:689a= ）需要 =libfprint= ≥ 1.94.9 的 =goodixmoc= 驱动支持，因此在此派生新版本 =libfprint-1.94= 与配套的 =fprintd-1.94= 。用户态 CLI（如 =fprintd-enroll= ）随下方的包列表安装，系统守护进程与 PAM 认证规则则在系统层的「桌面服务」中挂载。
 
 #+NAME: fingerprint-packages
 #+begin_src scheme
@@ -394,20 +388,24 @@ blue build
 
 ***** 其他自定义包
 
+将 =blue= 任务运行器的 Guile 运行时替换为 =guile-3.0-latest= ，以保持与系统字节码版本一致。
+
 #+NAME: other-def-packages
 #+begin_src scheme
 (define blue-fix
   (package
-    (inherit blue)
-    (inputs
-     (modify-inputs (package-inputs blue)
-       (replace "guile" guile-3.0-latest)))
-    (arguments
-     (substitute-keyword-arguments (package-arguments blue)
-       [(#:tests? orig #t) #f]))))
+   (inherit blue)
+   (inputs
+    (modify-inputs (package-inputs blue)
+                   (replace "guile" guile-3.0-latest)))
+   (arguments
+    (substitute-keyword-arguments (package-arguments blue)
+                                  [(#:tests? orig #t) #f]))))
 #+end_src
 
 **** 包列表
+
+汇总上述自定义包，供主骨架中的 =%home= 包清单拼接引用。
 
 #+NAME: custom-packages-list
 #+begin_src scheme
@@ -420,9 +418,10 @@ blue build
 :CUSTOM_ID: main-skeleton
 :END:
 
-Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。=skeletons= 字段具备替换语义而非默认追加，因此需合并 =(default-skeletons)= 以保留系统默认骨架文件。
+=main= 代码块是整份配置的 *总装配表* ，按「模块导入 → 顶层定义 → Home 环境（ =%home= ）→ 系统声明（ =%system= ）」的顺序展开所有 ~<<ref>>~ 引用，并最终 tangle 输出到 =tmp/config.scm= 。
 
-本代码块是整个系统的总装配表：按清晰的分区顺序组合顶层定义、Home 环境与 System 声明。
+- *Home 内嵌部署* :: =%home= 通过 ~guix-home-service-type~ 直接挂载为 =%system= 的一项系统服务，使得 =blue rebuild= 能一次完成系统与用户态的同步构建。
+- *骨架文件保留* :: ~operating-system~ 的 =skeletons= 字段具有覆盖语义（而非追加），因此显式传入 ~(default-skeletons)~ 以保留系统默认的新用户骨架文件。
 
 #+NAME: main
 #+begin_src scheme :tangle ../tmp/config.scm :noweb yes
@@ -447,7 +446,6 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
               <<user-desktop-services>>
               ;; ── shepherd 自启动 ──
               <<essential-desktop-services>>
-              <<sunshine-services>>
               <<kanata-services>>
               <<hermes-services>>
               <<cpu-dma-latency-service>>
@@ -515,14 +513,14 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 * 系统配置
 
-系统层仅承载 *底层引导与核心硬件基础设施* ，保持最小化依赖。用户态应用与桌面工具统一由 Home 层管理。
+系统层遵循 *最小化原则* ，仅承载底层引导、内核与硬件基础设施；桌面应用与个人开发工具统一交由 [[#home-packages][用户配置（Home 层）]] 管理。
 
 ** Bootloader
 :PROPERTIES:
 :CUSTOM_ID: sys-bootloader
 :END:
 
-使用来自 =rosenthal= 频道的 Limine 引导器方案，它会利用 ~systemd-stub~ 来生成可直接启动的 efi 文件，Limine 在此实际上只是作为一个展示它的列表使用，这样的好处在于 LUKS 环境下的启动速度比 GRUB 快了非常多。
+采用 =rosenthal= 频道提供的 =Limine= 引导方案：构建时通过 =systemd-stub= 将内核与 initrd 打包为可直接由 UEFI 固件拉起的 UKI（Unified Kernel Image）， =Limine= 仅负责展示世代菜单。相比传统 GRUB 在引导阶段用软件解密 LUKS，该方案把解密交给内核 initrd，大幅缩短了全盘加密环境下的冷启动耗时。
 
 #+NAME: bootloader-configs
 #+begin_src scheme
@@ -536,26 +534,20 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 :CUSTOM_ID: sys-filesystems
 :END:
 
-存储采用 =tmpfs on rootfs= 作为基础，利用 =LUKS 加密的 Btrfs Subvolume= 来持久化需要的数据：
+存储架构采用 *Tmpfs on Root* （无状态内存根）配合 *LUKS 全盘加密 + Btrfs 子卷* ：根目录 =/= 每次关机自动清空，只有显式声明的系统子卷与用户目录才会落盘保存。所有磁盘 UUID、卷标与子卷映射表均集中定义在 [[./information.scm][source/information.scm]] 中（救援脚本 =tools/rescue-chroot.sh= 同样直接解析该文件）。
 
-- 根目录 =/= 挂载在 tmpfs，关机即清空。
-- 关键系统数据与用户目录持久化存储于 Btrfs 子卷中，直接挂载到对应目录，子卷清单与挂载点定义于 [[./information.scm][information.scm]]。
-- 休眠到独立 swap 分区（由于 Guile initrd 有限制，所以只能采用没有加密的 swap 恢复）。
+最终传给系统的 =%file-systems-config= 由以下五层挂载按序拼接而成：
 
-最终生效的 =file-systems= 由下列部分按顺序 =append= 而成（=main= 里只写 =(file-systems %file-systems-config)=）：
+| 挂载分组                               | 数据来源与作用                                                                                     |
+|----------------------------------------+----------------------------------------------------------------------------------------------------|
+| =%bind-mounts=                         | 遍历 =%data-dirs= 清单，将持久化分区下的 =/data/<目录>= 逐一 =bind-mount= 到 =$HOME/<目录>=        |
+| =%persist-filesystem=                  | 用 ~match-lambda~ 解构 =%btrfs-subvolumes= 的 ~(子卷 挂载点)~ 二元组，批量生成 18 条系统级子卷挂载 |
+| =%tmpfs=                               | 承载根目录 =/= （10% 内存上限）与 =/var/lock= 的内存文件系统                                       |
+| =%data-filesystem= / =%efi-filesystem= | 挂载用户数据主子卷 =/data= 与 EFI 引导分区 =/efi=                                                  |
+| =%base-file-systems=                   | Guix 内置基础挂载（ =/dev/pts= 、 =/dev/shm= 、 =efivars= 及只读的 =/gnu/store= 等）               |
 
-1. =%bind-mounts=：=%data-dirs= 里每个目录（清单同样在 [[./information.scm][information.scm]]）对应一条 bind-mount，把 =/data/<目录>= 挂到 =$HOME/<目录>=；
-2. =%persist-filesystem=：由 =%btrfs-subvolumes= 数据表逐条生成 18 条 Btrfs 子卷挂载；
-3. =%tmpfs=：根 =/= 与 =/var/lock= 两条 tmpfs 记录（整棵根文件系统就是 tmpfs，所以取这个名字）；
-4. =%data-filesystem= 与 =%efi-filesystem=：=/data= 子卷与 EFI 分区各一条；
-5. =%base-file-systems=：Guix 预置的基础挂载（=/dev/pts=、=/sys/kernel/debug=、=/dev/shm=、=/sys/firmware/efi/efivars=，以及只读的 =/gnu/store= bind-mount）。
-
-=%persist-filesystem= 读作「把 =%btrfs-subvolumes= 的每条记录变成一条 =file-system=」：该表是 =(子卷路径 挂载点)= 二元组列表，=match-lambda= 的 =(subvol mount-point)= 子句逐条解构这两项，再填进 =device= / =mount-point= / =options= 等字段；表内顺序即生成顺序，每条都通过 =(dependencies %mapped-devices-config)= 依赖 LUKS 解锁先于挂载。18 条挂载里有两处特判，其余记录取值相同：
-
-- =/tmp= 不设 =needed-for-boot?=（不需要在 initrd 阶段挂载，开机后再挂；它的开机清理由 =cleanup-/tmp= 服务负责），其他挂载点都是 =#t=；
-- =/gnu= 是唯一把 =check?= 设为 =#t= 的挂载点，即挂载前先做一次文件系统检查，其余记录都是 =#f=。
-
-另外，本段用到的分区标识（LUKS / ESP / swap 的 UUID、解锁名、Btrfs 卷标与挂载选项）统一取自 [[./information.scm][information.scm]] 的「磁盘拓扑」段——那里是全仓库分区标识的单一真源，=tools/rescue-chroot.sh= 也直接解析它。Kernel 段的 resume=UUID= 内核参数（该字符串自带等号，加等宽标记会破坏 org 配对，故用普通文本）与 =resume-device= 服务同样引用 =%swap-uuid=。
+- *子卷挂载的两处特判* :: 在 =%persist-filesystem= 的 18 条记录中，仅 =/tmp= 将 ~needed-for-boot?~ 设为 ~#f~ （无需在 initrd 阶段挂载，开机后由 =cleanup-/tmp= 服务清理），且仅 =/gnu= 将 ~check?~ 设为 ~#t~ （挂载前执行文件系统自检）。
+- *休眠与独立 Swap* :: 由于 Guile initrd 暂不支持从加密 swap 恢复休眠镜像，此处使用未加密的独立 swap 分区（ =%swap-devices= ），配合内核参数 ~resume=UUID= ……~ 与下文的 =resume-device= 服务实现休眠唤醒。
 
 #+NAME: filesystem-defines
 #+begin_src scheme
@@ -617,8 +609,6 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
           (dependencies (list %data-filesystem))
           (create-mount-point? #t))) %data-dirs))
 
-;; EFI 分区：uuid 的第二参数 'fat 表示这里写的是 FAT 卷的短 UUID
-;; （形如 1234-ABCD），与下面的 (type "vfat") 无关——后者用于挂载。
 (define %efi-filesystem
   (file-system
    (device (uuid %esp-uuid 'fat))
@@ -643,9 +633,12 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 *** 内核相关参数设置
 
-固件包来自 =nonguix= 频道；
+内核采用本地定制编译的 =linux-cachyos-lts= （详见 [[./files/kernel/AGENTS.md][source/files/kernel/AGENTS.md]]），配套微码与无线/声卡固件取自 =nonguix= 频道。主要内核启动参数的设计意图如下：
 
-内核使用本地定制编译的 =linux-cachyos-lts=（构建配置与操作说明见 =source/files/kernel/AGENTS.md=）。启用 =threadirqs= 进行中断线程化，配合 =@audio= 实时优先级保障低延迟音频调度。
+- ~preempt=full~ + ~threadirqs~ :: 开启完全抢占与中断线程化，配合下文的 =@audio= 实时优先级消除低延迟音频 XRUN。
+- ~zswap.enabled=1~ + ~zswap.compressor=zstd~ :: 启用内存压缩缓存池（上限 35%），降低突发高负载下的磁盘 swap 写入。
+- ~kvm_intel.nested=1~ 等 KVM 参数 :: 开启嵌套虚拟化并静默未知 MSR 读写日志（因 =kvm_intel= 会被 udev 抢先加载，此类参数必须写在内核命令行而非 =/etc/modprobe.d= ）。
+- ~modprobe.blacklist=wacom,hid_uclogic~ :: 屏蔽内核自带数位板驱动，交由用户态的 =OpenTabletDriver= 接管。
 
 #+NAME: kernel-configs
 #+begin_src scheme
@@ -656,11 +649,6 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 (kernel-arguments
  (cons* (string-append "resume=UUID=" %swap-uuid)
         "kernel.sysrq=1"
-        ;; kvm：嵌套虚拟化 + 虚拟机读写未知 MSR 时保持安静。
-        ;; 必须走 cmdline 而非 /etc/modprobe.d——kvm_intel 由 udev
-        ;; coldplug 经 libkmod 抢先加载（不读 /etc/modprobe.d），
-        ;; kernel-module-loader 再 modprobe 时模块已在，参数不会重放；
-        ;; 只有 cmdline 的 mod.param=val 对所有加载路径都生效。
         "kvm_intel.nested=1"
         "kvm_intel.emulate_invalid_guest_state=0"
         "kvm.ignore_msrs=1"
@@ -682,19 +670,12 @@ Org Noweb 语法通过 =<<ref>>= 引用各 =#+NAME:= 代码块并组装输出。
 
 *** 内核相关服务设置
 
-下列三个代码块按顺序装配进 [[#main-skeleton][main]] 的系统服务列表中。
+以下三组服务围绕内核模块、协议栈参数与资源限制展开，依次挂入 [[#main-skeleton][main]] 的系统服务列表。
 
 **** 内核模块加载
 
-加载 =ip_tables= 与 =iptable_nat= 作为兼容层，供 Libvirt 与 Podman 网络后端使用；
-
-在系统启动完成且 zstd 模块就绪后，由 =zswap-zstd= 服务运行时将 zswap 压缩器无缝切换至 zstd。
-
-=zswap-zstd= 的 start 是一条 =/bin/sh -c= 命令：=grep= 探测 =/proc/crypto= 里是否已有 zstd，命中才用重定向把它写进 =/sys/module/zswap/parameters/compressor=——=&&= 串联与 =>= 重定向写成一条 shell 命令最直接，两处 =2>/dev/null= 丢弃探测或写入失败时的报错；末尾 =exit 0= 与 lambda 末尾的 =#t= 让这条服务的 start 始终成功返回，内核里没有 zstd 时就保持 zswap 的默认压缩器，不会把服务标记为失败、也不阻断 boot。
-
-该服务是 one-shot（start 返回后 shepherd 即把它置为 stopped），=#:stop= 与 =#:respawn?= 都用不上，因此不显式传。
-
-v4l2loopback 模块参数（/etc/modprobe.d 仅对经 =/proc/sys/kernel/modprobe= 包装器的加载路径生效，kvm 参数因 udev 抢先加载已移至 kernel-arguments）：
+- *网络与外设模块* :: 开机自动加载 =ip_tables= / =iptable_nat= （供 Libvirt 与 Podman 容器网络兼容）、 =ntsync= （Wine/Proton 同步原语）、 =v4l2loopback= （OBS 虚拟摄像头）等内核模块。
+- *=zswap-zstd= 运行时切换* :: 内核命令行解析阶段早于 =zstd= 模块加载，因此启动初期 zswap 会先回退到内置压缩器；待 =kernel-module-loader= 就绪后，由单次服务 =zswap-zstd= 探测 =/proc/crypto= 并将压缩器平滑切换至 =zstd= （探测失败亦以 ~exit 0~ 放行，绝不阻断启动）。
 
 #+NAME: v4l2loopback-conf
 #+begin_src conf :tangle ../tmp/v4l2loopback.conf
@@ -725,7 +706,11 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** sysctl 调优
 
-对 *网络栈*（BBR 拥塞控制、fq 队列调度、TCP 缓冲三元组）、*虚拟内存* 与 *文件监听上限* 进行调优。
+针对桌面高并发与低延迟场景调优内核参数：
+
+- *文件系统（ =fs.*= ）* :: 大幅放宽 =inotify= 监听数与全局文件句柄上限，防止大型代码库编译或 IDE 索引时耗尽句柄。
+- *虚拟内存（ =vm.*= ）* :: 将 =page-cluster= 设为 0（契合 zswap 随机单页读写）、拉长脏页回写周期（ ~dirty_writeback_centisecs=1500~ ）以减少空闲 SSD 唤醒，并调高 =max_map_count= 满足现代游戏（Wine/Proton）需求。
+- *网络协议栈（ =net.*= ）* :: 启用 =BBR= 拥塞控制与 =fq= 队列调度，放大 TCP 读写缓冲上限以跑满高带宽延迟积（BDP）链路，并开启 IPv4/IPv6 转发供容器与虚拟机使用。
 
 #+NAME: sysctl-services
 #+begin_src scheme
@@ -766,7 +751,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** 音频实时优先级
 
-为 =@audio= 用户组授予 *RT 实时优先级* 与 *无限制内存锁定（memlock）*，配合 =threadirqs= 消除音频 xrun 丢包；同时调高全局最大文件描述符上限。
+为 =@audio= 组成员授予高达 90 的 *RT 实时调度优先级（ =rtprio= ） * 与 * 无限制内存锁定（ =memlock= ）* ，供 PipeWire 及音游/DAW 锁定音频缓冲；同时将所有用户的单进程文件描述符上限（ =nofile= ）提升至 =1048576= 。
 
 #+NAME: pam-limits-services
 #+begin_src scheme
@@ -788,7 +773,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 :CUSTOM_ID: sys-packages
 :END:
 
-系统级基础软件包。*用户态常用工具统一在 Home Packages 中配置*。
+系统全局 profile 仅安装图形会话底座（ =niri= 、 =xwayland-satellite= ）、文件管理器（ =thunar= ）、虚拟化底座（ =qemu= 、 =libvirt= 、 =podman= ）及系统级 CLI 必备工具；其余日常软件一律下沉至 [[#home-packages][Home Packages]]。
 
 #+NAME: packages-list
 #+begin_src scheme
@@ -876,11 +861,11 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 *** 文件系统相关服务
 
-文件系统基础配套服务，服务于 =tmpfs on rootfs= 方案。
+围绕 *Tmpfs on Root* 与 Btrfs 子卷持久化方案配套的五项底层启动服务：
 
 **** 固定 machine-id
 
-基于硬件特征生成固定的 machine-id，计算逻辑定义于 [[./information.scm][information.scm]]。
+因根目录 =/= 在每次重启后清空，这里将 [[./information.scm][source/information.scm]] 中按主机名派生的固定 =fixed-machine-id= 写入 =/etc/machine-id= ，防止日志系统或桌面组件在重启后将本机误判为全新设备。
 
 #+NAME: machine-id-service
 #+begin_src scheme
@@ -892,7 +877,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** 休眠 resume 设备
 
-每次开机通过 swap 分区 UUID 反查块设备号（major:minor）并写入 =/sys/power/resume=，为系统休眠恢复提供底层支持；设备号由内核枚举顺序决定，所以不能硬编码，故通过 UUID 符号链接来反查块设备名、再从 sysfs 读出。
+内核枚举块设备的次序可能随外设插拔而改变，不能把主次设备号硬编码进配置。本服务在每次开机挂载文件系统后，通过 =/dev/disk/by-uuid/= 软链动态反查 swap 分区对应的块设备名，并从 =/sys/class/block/<dev>/dev= 读取真实的 =major:minor= 写入 =/sys/power/resume= ，打通休眠镜像写入与唤醒链路。
 
 #+NAME: resume-device-service
 #+begin_src scheme
@@ -915,10 +900,10 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** 开机清空 /tmp
 
-对 Btrfs 子卷挂载的 =/tmp= 目录执行开机清理操作：
+=/tmp= 挂载在持久化的 Btrfs 子卷上（避免超大临时文件撑爆内存 tmpfs），因此需要在每次开机时主动清空历史残留：
 
-+ 通过 =/run/cleanup-tmp-done= 标记文件，来确保每次启动仅执行一次；
-+ 通过 =cleanup-/tmp-prereq= 服务来将其注入到 =user-processes= 依赖链。
+- *单次幂等锁* :: 清理完成后在内存盘写入 =/run/cleanup-tmp-done= 标记文件，防止运行期执行 =guix system reconfigure= 时误删正在使用的临时文件。
+- *前置依赖保障* :: 通过 =cleanup-/tmp-prereq= 将本服务注入 =user-processes= 的依赖链，确保任何用户服务启动前 =/tmp= 均已清理完毕并设好 =1777= 粘滞位权限。
 
 #+NAME: cleanup-tmp-services
 #+begin_src scheme
@@ -944,10 +929,11 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** /data 权限与 XDG 目录
 
-确保 =/data= 目录的权限正确（0755），并且在 =/data= 与 =$HOME= 两侧同步创建目录，供系统利用 ~bind-mount~ 挂载；
+在系统激活阶段修正 =/data= 分区权限（ =0755= ），并根据 =%data-dirs= 清单在 =/data/<dir>= （源目录）与 =$HOME/<dir>= （挂载点）两侧同步创建目录、归正用户属主，防止 ~bind-mount~ 因源或目标目录缺失而挂载失败。
 
-+ =/data= 侧目录是用于 bind-mount 的源头文件夹，缺失会导致挂载失败，=$HOME= 侧是挂载点，所以两侧都要同步准备好。
-+ 代码中的 ='#$%data-dirs= 外层 ='= 不可省：它让插入的目录列表在生成的脚本里成为 *字面量数据*，若去掉 ='=，列表会被当作函数调用（把第一个目录名当函数执行）而报错。
+#+begin_quote
+*语法陷阱* ：下方 ~'#$%data-dirs~ 最外层的单引号 ~'~ 绝不可省。 ~#$%data-dirs~ 在构建期展开为括号列表，若缺少外层 quote，Guile 会将该列表当作函数调用（把第一个目录名当成运算符）并在激活阶段报错。
+#+end_quote
 
 #+NAME: data-dirs-services
 #+begin_src scheme
@@ -980,11 +966,10 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** 回收站放行（utab 注入）
 
-本机用户数据都住在 btrfs 子卷 / bind-mount 上，GLib（GVfs、Thunar 等绝大多数 GUI 应用）把这类挂载一律判为 =system internal= 而拒绝回收站操作（报「不支持在系统内部挂载上的丢弃到回收站操作」）。逃逸开关是挂载选项 =x-gvfs-trash=，但它是纯用户态选项，内核不认、不能写进挂载参数；用户态的读取方（libmount）会从 =/run/mount/utab= 把用户选项按挂载 ID 合并进挂载表。Guix 直接 =syscall mount= 不经过 =mount(8)=，从不写这个文件，所以这里开机补写：
+由于用户目录全部通过 Btrfs 子卷或 =bind-mount= 挂载，GLib（GVfs、Thunar 等 GUI 组件）默认会将此类挂载判定为「系统内部挂载（ =system internal= ）」并拒绝移入回收站。解除该限制需要用户态挂载选项 =x-gvfs-trash= ，但内核 ~mount(2)~ 并不认识该选项，而 Guix 挂载文件系统时直接走系统调用、不经过 ~mount(8)~ 写入 =/run/mount/utab= 。因此本服务在开机挂载完成后自动补齐这张表：
 
-+ 服务在 =file-systems= 就绪后运行一次，扫描 =/proc/self/mountinfo=，给 =/data= 与 =$HOME= 下所有数据挂载点生成 =ID= SRC= TARGET= ROOT= OPTS=x-gvfs-trash= 行（=SRC= / =ROOT= 为 libmount 合并的必填字段，缺了整行被丢弃）；
-+ 写到 =/run/mount/utab=（tmpfs，重开机自然清空，挂载 ID 也随重启变化，所以必须每次开机重算）；
-+ 目录 =/run/mount= 需事先存在且普通用户可读（GLib 在用户进程里解析该文件）。
+- *扫描与过滤* :: 解析 =/proc/self/mountinfo= ，仅挑出 =/data= 与 =$HOME= 下的子卷及 bind 挂载点（系统子卷如 =/gnu= 、 =/var/lib= 保持拒绝回收站）。
+- *生成 utab 记录* :: 按 =libmount= 规范向 =/run/mount/utab= 写入完整字段（ ~ID=~ 、 ~SRC=~ 、 ~TARGET=~ 、 ~ROOT=~ 与 ~OPTS=x-gvfs-trash~ ），并将权限设为全局可读（ =0644= ）供用户态进程解析。
 
 #+NAME: trash-utab-services
 #+begin_src scheme
@@ -1045,57 +1030,49 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 *** 网络相关配置
 
-防火墙采用接口信任模型：
+网络栈围绕 *nftables 接口信任模型* 与 *Age 机密动态注入* 构建：
 
-+ nftables 规则集 *开机加载一次*，之后就只会由 NM dispatcher 来原子增删 =trusted_ifaces= 成员
-+ *可信 WiFi 名单* 存于 =wifi-trust.age= 加密文件中。
+- *防火墙模型* :: =nftables= 规则集在开机时一次性全局加载，入站流量默认丢弃（ ~policy drop~ ）；虚拟网桥 =virbr0= 与 =tailscale0= 默认位于 =trusted_ifaces= 白名单集合中，而无线网卡仅在连上可信 WiFi Profile（存于加密文件 =wifi-trust.age= ）时由 NetworkManager dispatcher 动态加入该集合。
+- *核心网络服务* :: 同时装配 =mihomo-daemon= （透明代理内核，数据目录位于 =/var/lib/mihomo= ）、 =openssh= （禁止密码登录，root 仅允许密钥认证）、 =tailscale= 以及 WiFi 默认关闭省电策略（ =wifi-powersave.conf= ）。
 
 **** 服务装配
 
-本块装配的服务：
+=mihomo-run= 与 =nm-dispatcher-trusted-connection= 两份脚本需要注入 =/gnu/store= 下的绝对路径及机密文件路径，它们遵循同一套四步构建流水线：
 
-- =nm-powersave-conf=：电池供电时由 ~ac-power~ 这条 udev 规则来进行切换，电源未连接的时候启用 WiFi 省电，以此达到省电的效果。
-- =openssh=：root 仅允许通过密钥登录。
-- =mihomo-daemon=：数据目录放到 =/var/lib/mihomo=；利用 =mihomo-run= 来将配置文件的模板填入真正的订阅链接。
+1. *抽离模板* :: 下方脚本块通过 ~:tangle ../tmp/<文件名>~ 输出至 =tmp/= 目录（与 =tmp/config.scm= 同级）。
+2. *引入构建输入* :: 用 ~(local-file "./<文件名>")~ 将模板纳入 store 构建输入；若路径由 ~string-append~ 动态拼成（如下方的 =secret= 辅助函数），则外包一层 ~assume-source-relative-file-name~ ，避免退化为按当前工作目录解析。
+3. *构建期渲染（ =render-script= ）* :: 通过 ~computed-file~ 将模板拷入输出路径，再用 ~substitute*~ 将形如 =@VAR@= 的占位符批量替换为真实 store 路径并赋予 =0555= 可执行权限。
+4. *系统激活落盘* :: =mihomo-run= 直接交由 Shepherd 执行；dispatcher 脚本与 WiFi 省电配置则由 activation 服务安装至 =/etc/NetworkManager/= 对应目录。
 
-其中 =mihomo-run= 与 =nm-dispatcher-trusted-connection= 两个模板脚本（见下文的小节）不是被直接引用的，而是经同一条流水线变成可执行文件：
+#+begin_quote
+*辅助函数与占位符契约* ：
+- =spec->pkg= （来自 =rosenthal utils packages= ）按包名字符串查找包对象，省去在顶部为个别工具单独添加 ~use-package-modules~ ； =pkg-bin= 在此基础上拼出包内二进制路径。
+- 占位符替换按字面名字匹配， *构建期不对拼写错误的占位符报错* （写错会原样残留），增改时请核对下方两张映射表。
+#+end_quote
 
-1. 各自的脚本块用 =:tangle ../tmp/<文件名>= 把脚本原文写进仓库根目录的 =tmp/=（=main= 块自己也 tangle 成 =tmp/config.scm=，所以 =tmp/= 是「源码与产物同目录」的约定）；
-2. =(local-file "./<文件名>")= 把这份 tangle 产物作为构建输入引入。=local-file= 对字符串字面量的相对路径按「相对当前 Scheme 源文件所在目录」解析，而当前源文件就是 =tmp/config.scm=，因此 ="./nftables.conf"= 就是 =tmp/nftables.conf=；用 =string-append= 拼出来的路径享受不到这条规则（会退化成相对 cwd），要额外包一层 =assume-source-relative-file-name=（=secret= 就是为此）；
-3. =render-script= 用 =computed-file= 在构建期把模板复制进 store 输出，跑 =substitute*= 把 =@XXX@= 占位符换成真实 store 路径，再 =chmod= 555；
-4. 最后：=mihomo-run= 的产物由 shepherd 当命令直接执行；dispatcher 脚本文本由 activation 服务 =install= 到 =/etc/NetworkManager/dispatcher.d/10-trusted-ssid=；=nm-powersave-conf= 作为 =plain-file= 由 activation 服务写到 =/etc/NetworkManager/conf.d/wifi-powersave.conf=；nftables 规则集交给 =nftables-service-type=。activation 代码运行在目标系统上（不是构建期），所以里面直接用裸命令 =mkdir= / =install= / =rm=，按 =PATH= 解析。
+- *=mihomo-run= 占位符映射表* ：
 
-=render-script= 的第三个参数是一张 =(占位符 . 替换值)= alist，=map= + =match-lambda= 把它逐条拍成 =substitute *= 的子句：=(list (list pattern) replacement)= 生成的就是 =(("正则") 替换文本)=。=substitute* = 的子句形态是 =((正则 捕获变量……) 替换表达式……)=，这里不捕获任何变量，替换表达式就是要注入的 store 路径字符串；=pattern= 按 POSIX 扩展正则解释（=substitute*= 内部以 =make-regexp= 的 =regexp/extended= 语法编译），而 =@XXX@= 里没有正则元字符，所以是按字面量匹配。
+| 占位符              | 构建期注入值                                                                |
+|---------------------+-----------------------------------------------------------------------------|
+| =@AGE_BIN@=         | =age= 包的 =/bin/age=                                                       |
+| =@AGE_IDENTITY@=    | =/home/brokenshine/.local/share/keys/age= （运行期私钥路径）                |
+| =@CHMOD_BIN@=       | =coreutils= 包的 =/bin/chmod=                                               |
+| =@ENVSUBST_BIN@=    | =gettext= 包的 =/bin/envsubst=                                              |
+| =@MIHOMO_BIN@=      | =mihomo= 包（ =rosenthal= 频道）的 =/bin/mihomo=                            |
+| =@MIHOMO_TEMPLATE@= | =/home/brokenshine/.config/mihomo/config.yaml= （由不可变层 dotfiles 部署） |
+| =@MKDIR_BIN@=       | =coreutils= 包的 =/bin/mkdir=                                               |
+| =@MV_BIN@=          | =coreutils= 包的 =/bin/mv=                                                  |
+| =@SUBS_CIPHER@=     | =dotfiles/mutable/tools/secrets= 下的 =mihomo-subscriptions.age= 密文       |
 
-占位符与替换值靠 *名字*  对应，且没有构建期检查：模板里写错一个 =@XXX@= 不会报错，只会把这个名字原样留在脚本里。两张对照表（照下面的代码）：
+- *=nm-dispatcher-trusted-connection= 占位符映射表* ：
 
-=mihomo-run=：
-
-| 占位符              | 注入值                                                                  |
-|---------------------+-------------------------------------------------------------------------|
-| =@AGE_BIN@=         | =age= 包的 =/bin/age=                                                   |
-| =@AGE_IDENTITY@=    | =/home/brokenshine/.local/share/keys/age= （运行时路径，非 store 路径） |
-| =@CHMOD_BIN@=       | =coreutils= 包的 =/bin/chmod=                                           |
-| =@ENVSUBST_BIN@=    | =gettext= 包的 =/bin/envsubst=                                          |
-| =@MIHOMO_BIN@=      | =mihomo= 包（rosenthal 频道）的 =/bin/mihomo=                           |
-| =@MIHOMO_TEMPLATE@= | =/home/brokenshine/.config/mihomo/config.yaml= （由 dotfiles 部署）     |
-| =@MKDIR_BIN@=       | =coreutils= 包的 =/bin/mkdir=                                           |
-| =@MV_BIN@=          | =coreutils= 包的 =/bin/mv=                                              |
-| =@SUBS_CIPHER@=     | =dotfiles/mutable/tools/secrets= 下的 =mihomo-subscriptions.age= 密文   |
-
-=nm-dispatcher-trusted-connection=：
-
-| 占位符                         | 注入值                                                      |
+| 占位符                         | 构建期注入值                                                |
 |--------------------------------+-------------------------------------------------------------|
 | =@AGE_BIN@=                    | =age= 包的 =/bin/age=                                       |
 | =@AGE_IDENTITY@=               | =/home/brokenshine/.local/share/keys/age=                   |
 | =@GREP_BIN@=                   | =grep= 包的 =/bin/grep=                                     |
 | =@NFT_BIN@=                    | =nftables= 包的 =/sbin/nft=                                 |
 | =@TRUSTED_CONNECTIONS_CIPHER@= | =dotfiles/mutable/tools/secrets= 下的 =wifi-trust.age= 密文 |
-
-=spec->pkg= 与 =pkg-bin= 是上面 =let*= 里的两个小工具：=spec->pkg= 来自 rosenthal 频道的 =rosenthal utils packages=，就是 =(gnu packages)= 的 =specification->package=——按字符串包名查包、返回包对象，适合「只用到某个包里一两个程序」的场合（不必为它写 =use-package-modules= 导入）；=pkg-bin= 在此基础上拼出程序路径：=(pkg-bin "coreutils" "/bin/mv")= 展开为 =/gnu/store/……-coreutils-……/bin/mv=。这些绝对路径在构建期就固定，脚本运行时不需要 PATH。
-
-=secret= 同理：=(secret "wifi-trust")= 指向仓库里 =dotfiles/mutable/tools/secrets/.local/share/secrets-encrypted/wifi-trust.age= 这份密文（路径由 =string-append= 拼出，所以外面套了 =assume-source-relative-file-name=）。
 
 #+NAME: networking-services
 #+begin_src scheme :noweb yes
@@ -1197,15 +1174,11 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 **** mihomo 启动包装
 
-模板由 dotfiles immutable 部署到 =~/.config/mihomo/config.yaml=，订阅 URL 以 =$MIHOMO_SUB_ONE/TWO= 占位；
+=mihomo= 的配置模板由不可变层 dotfiles 部署至 =~/.config/mihomo/config.yaml= ，其中订阅链接以 =$MIHOMO_SUB_ONE= / =$MIHOMO_SUB_TWO= 环境变量占位。本启动包装脚本负责在运行期补齐真实订阅并拉起守护进程：
 
-daemon 启动时会解密 =mihomo-subscriptions.age=（使用全局统一的私钥），通过 ~envsubst~ 来将订阅链接写入到 =/var/lib/mihomo/config.yaml= 之后再启动。解密失败则降级为空订阅状态启动（直连仍可用），防止反复 respawn；
-
-换订阅：=secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"=（或 =secrets edit=）后 =herd restart mihomo-daemon=。
-
-脚本开头 9 行采用 =${VAR:-@VAR@}= 形式：构建期由「服务装配」的替换表把 =@VAR@= 填成 store 路径，运行期同名环境变量可以覆盖它（=DATA_DIR= 那行是同一模式、默认值为字面量，注释里写明了用途）。占位符名与替换表必须一致，写错不会有构建报错，只会把 =@VAR@= 原样留在脚本里。
-
-失败语义：脚本刻意不设 =set -e=——解密经 =if= 单独降级为空订阅；渲染链（=envsubst= / =chmod= / =mv=）任一步失败时也不退出，仍 =exec= 交由 mihomo 自己对配置报错，避免 shepherd 反复 respawn。模板缺失是唯一 =die= 的硬错误（退出码 1），因为此时注定无法渲染出有效配置。
+- *渲染与启动流* :: 解密 =mihomo-subscriptions.age= 密文并导出环境变量 → 调用 =envsubst= 将订阅注入 =/var/lib/mihomo/config.yaml= （权限收敛为 =0600= ）→ ~exec~ 启动 =mihomo= 。
+- *降级容错设计* :: 脚本刻意不启用 ~set -e~ ：除了配置模板本身缺失会以退出码 1 终止外，若私钥缺失或解密失败，脚本会自动降级为空订阅启动（保证基础直连网络可用），避免触发 Shepherd 无限重启风暴。
+- *更换订阅命令* :: 执行 ~secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"~ （或 ~secrets edit~ ）后，运行 ~sudo herd restart mihomo-daemon~ 即可生效。
 
 #+NAME: mihomo-run
 #+CAPTION: 解密订阅 → envsubst 渲染模板 → exec mihomo；构建期注入 @VAR@，运行期同名环境变量可覆盖
@@ -1250,11 +1223,10 @@ exec "$MIHOMO_BIN" -d "$DATA_DIR" -f "$OUT"
 
 **** NM dispatcher 脚本
 
-WiFi 连上可信 profile 时把发起连接的无线接口加入 nftables 中的 =trusted_ifaces= 集合，断开或不可信时移除；
+当无线网卡连接状态变化时，NetworkManager 会以 root 身份调用 =/etc/NetworkManager/dispatcher.d/10-trusted-ssid= ，并通过参数传入 =<接口名> <action>= 、通过环境变量传入 =CONNECTION_ID= （NM Profile 名称）：
 
-tangle 到 =tmp/= 后由 [[#main-skeleton][服务装配]] 注入 =@VAR@= 占位符，利用 activation 拷贝到 =/etc/NetworkManager/dispatcher.d/=。
-
-调用契约：NetworkManager 在连接状态变化时以 =<接口名> <action>=（root 身份）依次执行 dispatcher.d 下每个脚本，profile 名经环境变量 =CONNECTION_ID= 传入；本脚本只响应 =up= / =down=，其余 action 落到空 case 直接退出。日志约定：stderr 由 NM 收进自身日志（syslog → =/var/log/messages=），以 =trusted-ssid:= 前缀检索。私钥/密文任何一步不可用都按「不可信」处理（移出集合），不阻断联网。
+- *动态集合切换* :: 仅处理无线接口（存在 =/sys/class/net/$IFACE/wireless= ）。在 ~up~ 事件下，脚本在内存管道中解密 =wifi-trust.age= 并精确匹配 =CONNECTION_ID= ，命中则将无线接口加入 nftables 的 =trusted_ifaces= 集合；未命中或触发 ~down~ 事件时立即从集合中移除。
+- *安全降级与日志* :: 私钥或密文不可读时一律按「不可信网络」处理（移出集合），绝不阻断正常联网；运行日志输出至 stderr，可按 =trusted-ssid:= 前缀在 =/var/log/messages= 中检索。
 
 #+NAME: nm-dispatcher-trusted-connection
 #+CAPTION: NM dispatcher：按加密的可信名单把无线接口加进/移出 nftables trusted_ifaces
@@ -1320,7 +1292,10 @@ esac
 
 **** nftables 规则集
 
-开机整体加载一次，dispatcher 只动 =trusted_ifaces=；DHCP/ICMP 始终放行，保证不可信状态也能引导联网。本块 tangle 到 =tmp/nftables.conf=，在「网络相关配置 → 服务装配」里以 =(local-file "./nftables.conf")= 引入。
+防火墙基础规则集在开机时整体加载一次，运行期仅由上方 dispatcher 脚本原子增删 =trusted_ifaces= 集合成员（绝不在运行期执行 ~flush ruleset~ ）：
+
+- *入站与转发控制* :: 默认丢弃所有未匹配入站包，但始终放行已建立连接、本地回环、DHCP/ICMP 基础协议以及 Tailscale WireGuard 直连端口（UDP =41641= ），确保不可信网络下也能正常获取地址与打洞。
+- *虚拟机 NAT* :: 为 =virbr0= 网桥配置出站 masquerade 伪装（排除组播与广播地址），供 Libvirt 虚拟机访问外网。
 
 #+NAME: nftables-conf
 #+begin_src conf :tangle ../tmp/nftables.conf
@@ -1382,15 +1357,19 @@ iifname "virbr0" oifname != "virbr0" masquerade
 
 *** Nix 包管理器
 
-Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统装有 nix 时启用**。没有 nix 时，保持下列引用点全部处于注释态即为停用；要恢复 nix 时逐行取消注释。各引用点旁都标注了指向本节的指针：
+Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-files= 三个代码块）当前处于 *按需停用态* ，代码块保留在本节备查。若需重新启用 Nix，只需将以下五处开关同步取消注释（停用时反之）：
 
-+ =operating-system= services 列表：=;; <<nix-services>>=
-+ 计时器 timer list：=; <<nix-gc-timer>>=
-+ 「环境变量汇总」append：=; <<nix-user-conf-files>>= （gh-token 注入 nix）
-+ 系统包列表：=;; "nix"=
-+ 顶部 =use-modules=：=(rosenthal services nix)= 与 =(rosenthal utils nix)= 两行；=use-service-modules= 的 =nix= 一行
+| 联动位置                    | 对应代码或引用                                                      |
+|-----------------------------+---------------------------------------------------------------------|
+| 顶部 ~use-modules~          | 补回 ~(rosenthal services nix)~ 、 ~(rosenthal utils nix)~ 与 ~nix~ |
+| 系统包列表 =packages-list=  | 取消 ~;; "nix"~ 的注释                                              |
+| 系统服务列表 =%system=      | 取消 ~;; <<nix-services>>~ 的注释                                   |
+| 用户定时器 =timer-services= | 取消 ~;; <<nix-gc-timer>>~ 的注释                                   |
+| 环境变量汇总                | 取消 ~;; <<nix-user-conf-files>>~ 的注释                            |
 
-=<<nix-services>>= 与 =nix-gc-timer= 块本体常驻本节，不随切换删除。注意：=nix-ld= （ =<<nix-ld-services>>= 与 hermes 服务的 =NIX_LD= 透传）仅发源于 nix 社区、与 nix 包管理器无依赖关系，**不在切换范围内**。
+#+begin_quote
+*注意* ：下文的 =nix-ld= 服务（ ~<<nix-ld-services>>~ ）虽源于 Nix 社区，但仅用于为第三方预编译二进制提供动态链接器兼容层，与 Nix 包管理器本身无依赖关系，始终保持启用。
+#+end_quote
 
 #+NAME: nix-services
 #+begin_src scheme
@@ -1443,13 +1422,14 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
 *** UDEV 规则
 
-硬件设备权限与电源事件监听规则：包含静态外设规则、AC 供电状态自适应联动规则以及 USB 挂起权限规则。
+集中管理硬件外设节点权限、AC 电源热插拔调优以及 USB 端口熄屏挂起授权。
 
 **** 静态规则
 
-=KERNEL==\"hidraw*\"= + =ATTRS{idVendor}= 的写法按 USB 设备的厂商 ID 授权 /dev/hidraw 节点：ATTRS 沿 sysfs 父链上溯到 usb_device 层匹配，同一键盘的多个接口（键盘 / 鼠标 / 厂商集合）会一次性拿到权限。
+为手柄、背光控制、CPU DMA 延迟节点、Intel VPU、罗技接收器（Solaar）及自定义客制化键盘配置设备访问权限：
 
-浏览器网页驱动（WebHID）只认 =uaccess= tag——Chrome 的 udev 权限检查要求活动会话用户能打开节点，纯 =MODE= 不够（elogind 的 =elogind-uaccess-command= 靠这个 tag 把 ACL 授给当前登录用户）。=TAG+=\"udev-acl\"= 让 ACL 真正落盘，否则 hidraw 节点不会出现 =+= 附加属性。所以既有规则 =60-sayodevice.rules=（旧键盘，SayoDevice VID 8089）也从 =MODE=\"0666\"= 改为双 tag：=0666= 是全局可读写，等于把该 hidraw 暴露给本机所有用户，只为一个浏览器需求付出这个代价不值。
+- *客制化键盘 WebHID 授权* :: 通过 ~KERNEL=="hidraw*"~ 配合 ~ATTRS{idVendor}~ 沿 sysfs 父链匹配 USB 厂商 ID，一次性覆盖键盘下的全部分支接口。
+- *双 Tag 最小权限原则* :: 浏览器 WebHID 要求当前活跃会话用户对 =/dev/hidraw*= 拥有访问权。这里采用 ~TAG+="uaccess", TAG+="udev-acl"~ 交由 elogind 为当前登录用户动态下发 ACL，替代粗暴的 ~MODE="0666"~ 全局暴露。
 
 #+NAME: udev-static-rules
 #+begin_src scheme
@@ -1482,10 +1462,6 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
       (udev-rules-service 'steam-devices steam-devices-udev-rules)
 
-      (udev-rules-service 'sunshine
-                          (udev-rule "60-sunshine-uinput.rules"
-                                     "KERNEL==\"uinput\", SUBSYSTEM==\"misc\", GROUP=\"input\", MODE=\"0660\", OPTIONS+=\"static_node=uinput\""))
-
       (udev-rules-service 'winapps-usb
                           (udev-rule "60-winapps-usb.rules"
                                      "SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", GROUP=\"wheel\", MODE=\"0660\"")))
@@ -1493,31 +1469,26 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
 **** AC 电源状态联动
 
-插电时切换至高性能模式（PPD performance + 关闭 WiFi 省电 + 提升 CPU 最低主频 + 启用 ASPM 性能策略）；拔电时切换至节能策略。开机由 =ac-power-init= 初始化检测。
+监听电源适配器插拔事件（ ~SUBSYSTEM=="power_supply"~ ）以及开机初始状态（ =ac-power-init= 服务读取 =/sys/class/power_supply/ADP1/online= ），自动调用 =ac-power-profile= 脚本在高性能档（ =on= ）与长续航档（ =off= ）之间切换：
 
-=ac-power-init= 读 =/sys/class/power_supply/ADP1/online= 判断是否接电：=read= 是 Scheme 读取器，把文件里的 =1= 读成数字；=false-if-exception= 兜住该 sysfs 节点在部分机器上缺失的情况（读不到按 off 处理）。它通过 =root-one-shot-service= 注册，该 helper 已内置「一次性执行」与「停止回调默认返回 #f（即已停止）」的语义，所以不必再传 =#:stop= 或 =#:respawn?=。
+| 调优维度                        | 插电模式（ =on= ）                       | 电池模式（ =off= ）    |
+|---------------------------------+------------------------------------------+------------------------|
+| *PPD 电源档位*                  | =performance=                            | =power-saver=          |
+| *WiFi 省电（动态探测无线口）*   | ~power_save off~ （低延迟优先）          | ~power_save on~        |
+| *Intel P-State 频率下限与加速*  | ~min_perf_pct=30~ / ~dynamic_boost=1~    | ~min_perf_pct=8~ / =0= |
+| *调度器与定时器迁移*            | ~power_efficient=N~ / ~migration=0~      | ~Y~ / =1= （聚拢唤醒） |
+| *PCIe ASPM 策略*                | =performance=                            | =powersupersave=       |
+| *核心 PCI 设备 Runtime PM*      | =on= （核显、NVMe、网卡常开不进 D3）     | =auto=                 |
+| *声卡省电（ =snd_hda_intel= ）* | =0= （零延迟，消除爆音）                 | =10= （10 秒空闲挂起） |
+| *KSM 同页内存合并*              | 开启（ ~run=1~ ，每次扫 200 页 / 50 ms） | 关闭（ ~run=0~ ）      |
 
-=ac-power-profile= 是 =program-file= 生成的脚本，udev 规则（电源 add/change 事件）与 =ac-power-init= 都以 =on= / =off= 参数调用它。所有 sysfs 写入经 =set-sys= 用 =false-if-exception= 兜底——节点在部分机器上不存在时静默跳过，不影响其余项；脚本只用 Guile 核心绑定，不新增模块依赖。=on= ↔ =off= 成对写入的项：
-
-- PPD profile =performance= ↔ =power-saver=；WiFi 逐接口 =power_save= 关 ↔ 开（接口名运行时从 =/sys/class/net/*/wireless= 探测，不写死）；
-- =intel_pstate=：=min_perf_pct= 30 ↔ 8（AC 抬最低频消升频延迟）、=hwp_dynamic_boost= 1 ↔ 0（IO 等待时自动抬 EPP）；
-- 调度省电：=workqueue power_efficient= N ↔ Y（就近派发）、=timer_migration= 0 ↔ 1（定时器本地唤醒）；
-- PCIe ASPM =policy=：=performance= ↔ =powersupersave=；
-- PCI runtime PM 白名单（三个写死的 BDF：i915 iGPU、YMTC PC300 NVMe、iwlwifi）：=on= ↔ =auto=——AC 常开不进 D3，电池恢复内核自动管理；
-- 声卡 =snd_hda_intel power_save=：0 ↔ 10（AC 零延迟，电池回 10 s 省电档）；
-- KSM 同页合并：=run= 1 ↔ 0，且仅 AC 时写 =pages_to_scan= 200 / =sleep_millisecs= 50——扫描的 CPU 开销只在接电时付；
-- =nmi_watchdog= / =soft_watchdog= 恒写 0：=nowatchdog= 内核参数之外的运行时兜底。
-
-本小节用到四种「文件类」构造器，分工如下：
-
-| 构造器            | 作用                           |
-|-------------------+--------------------------------|
-| =plain-file=      | 纯文本内容的文件               |
-| =mixed-text-file= | 由字符串与包路径拼出的文本文件 |
-| =program-file=    | 可执行的 Scheme 脚本           |
-| =file->udev-rule= | 把规则文本包装成 udev 规则对象 |
-
-=udev-rules-service= 只接受规则对象（或自带规则的包），所以 =mixed-text-file= 的产物还要经 =file->udev-rule= 包一层；=(plain-file "empty" "")= 则是「需要一个 file-like、但内容用不上」时的空占位（=screen-locker-configuration= 的 =program= 字段在 =using-setuid? #f= 下不会被使用）。
+#+begin_quote
+*Guix 文件构造器速查* ：本节及周边服务使用了四种常见的「类文件对象（file-like objects）」，按用途区分如下：
+- =plain-file= :: 纯静态字符串构成的文本文件（若某字段必填文件对象但实际不使用，可传 ~(plain-file "empty" "")~ 占位）。
+- =mixed-text-file= :: 将字符串与 Guix 包路径交织拼接而成的配置文件。
+- =program-file= :: 由 gexp 生成并自动带上 Guile shebang 的可执行脚本。
+- =file->udev-rule= :: 将普通文本文件包装为 ~udev-rules-service~ 要求的规则目录结构。
+#+end_quote
 
 #+NAME: ac-power-services
 #+begin_src scheme
@@ -1617,7 +1588,7 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
 **** USB 电源权限
 
-=power/control= 放开 0666：熄屏守护 =usb-power-watch= 以普通用户身份写它挂起/恢复 USB 设备。规则只在 =add= 事件（设备插入或枚举出 =power/control= 属性时）触发一次 =chmod 666=；新插设备因此自动获得同样权限，无需守护进程提权。
+当 USB 设备插入或枚举出 =power/control= 属性时，自动将其权限放宽为 =0666= ，使得用户态的熄屏省电守护进程（见下文的 =usb-power-watch= ）无需 root 提权即可挂起或唤醒外设。
 
 #+NAME: usb-power-services
 #+begin_src scheme
@@ -1636,7 +1607,7 @@ Nix 本体（ =nix-services= 与 =nix-gc-timer= 两个命名块）**仅在系统
 
 **** KMS 控制台
 
-TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；TTY1 预留给内核启动消息，图形登录集中在 TTY7（greetd）。
+将虚拟终端划分为三个功能区： =TTY1= 预留给内核启动日志， =TTY2= – =TTY6= 运行支持中日韩字体渲染的 =kmscon= 终端（Pango 引擎，24 号字）， =TTY7= 则交由 =greetd= 承载图形会话。
 
 #+NAME: kmscon-services
 #+begin_src scheme
@@ -1650,21 +1621,18 @@ TTY2-6 运行 kmscon 终端模拟器（使用 Pango 引擎与 24 号字体）；
 
 **** root 服务与定时任务
 
-包含系统常驻守护与定时任务：
+集中装配需要 root 权限的系统级存储维护守护进程与周期任务：
 
-- =smartd=：S.M.A.R.T. 磁盘健康监控，每日 02:00 短自检、每周六 03:00 长自检（磁盘休眠时跳过）。
-- =beesd=：btrfs 去重守护，hash 表 128M、按负载 5.0 节流。首次运行需全量扫描，IO 开销较大属正常。启动经 =beesd-run= 包装：补 =/dev/disk/by-uuid= 软链（dm 设备无 by-uuid）并注入 =blkid= 的 PATH。
-- 每周日 18:00 执行 =guix gc= 清理 30 天前的旧世代（保留至少 20G 空间）。
-- 每周六 18:00 在外接电源状态下执行 =flatpak update --system=。
-- 每周日 19:00 执行 =fstrim -av= 进行全盘 TRIM 兜底。
+| 服务 / 定时器 | 运行机制与职责                                                                                                                      |
+|---------------+-------------------------------------------------------------------------------------------------------------------------------------|
+| =beesd=       | Btrfs 在线数据块去重守护（128 MB 哈希表，按负载 =5.0= 节流）；启动包装 =beesd-run= 自动补齐 =/dev/disk/by-uuid/= 软链并注入 =blkid= |
+| =smartd=      | S.M.A.R.T. 磁盘健康监控，每日 02:00 执行短自检、每周六 03:00 执行长自检（磁盘休眠时自动跳过）                                       |
+| =guix-gc=     | 每周日 18:00 自动清理 14 天前的旧世代并回收 store，确保至少留出 20 GB 空闲空间                                                      |
+| =fstrim=      | 每周日 19:00 对所有已挂载 SSD 执行 ~fstrim -av~ 全盘 TRIM                                                                           |
 
-beesd 与 smartd 的配置文件拆为独立块（=bees.conf= 必须含 =UUID= 行——beesd 不按文件名找配置，靠 grep 定位）；两块的 tangle 目标是 =tmp/bees.conf= 与 =tmp/smartd.conf=，在 =root-services= 里分别以 =./bees.conf=、=./smartd.conf= 回引。
-
-=beesd-run= 是 =program-file= 生成的脚本（生成不等于执行：它只是放进 command 列表，由 shepherd 启动时执行）。脚本的运行环境默认不含 Guile 模块，=with-imported-modules= 声明它可用 =(guix build utils)=（=mkdir-p= 来自这里）；=#~= 是构建期模板，=#$xxx= 在构建时替换成具体值（此处为包路径）；脚本最后用 =execl= 让 =beesd= 直接替换当前 Guile 进程；=setenv PATH= 指向 util-linux 是为了让脚本能调用 =blkid=。
-
-=2f6b6499-2a27-4583-847f-dd70b9fcb036= 这个 UUID 在 =root-services= 里收敛为单一 =bees-uuid= 绑定：=beesd-run= 脚本与 etc 条目路径 =bees/<uuid>.conf= 都由它展开；=bees.conf= 块（tangle → =tmp/bees.conf=，纯文本无法引用绑定）里还有一份字面量，改 UUID 时两处必须同步。
-
-=etc-service-type= 的条目形如 ~`("路径" ,文件对象)~：反引号点对中路径是字面量、=,= 后面的文件对象在求值时展开——这是 Guix =etc= 条目与各类配置扩展共用的写法。
+#+begin_quote
+*配置维护提示* ： =beesd= 依据配置文件内的 ~UUID=~ 行定位目标文件系统。若更换 Btrfs 池 UUID，需同步更新下方 =bees-conf= 代码块与 =root-services= 中的 =bees-uuid= 绑定。此外， ~etc-service-type~ 采用的 ~`("目标路径" ,文件对象)~ 反引号点对是 Guix 扩展 =/etc= 的通用写法。
+#+end_quote
 
 #+NAME: bees-conf
 #+begin_src conf :tangle ../tmp/bees.conf
@@ -1706,46 +1674,46 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                         (list `(,(string-append "bees/" bees-uuid ".conf")
                                 ,(local-file "./bees.conf"))))
 
-      (simple-service 'home-channels home-channels-service-type
-                      guix-channels)
+        (simple-service 'home-channels home-channels-service-type
+                        guix-channels)
 
-      (simple-service 'root-services shepherd-root-service-type
-                      (list (shepherd-timer '(fstrim)
-                                            #~(calendar-event
-                                               #:days-of-week '(sunday)
-                                               #:hours '(19)
-                                               #:minutes '(0))
-                                            #~(#$(file-append util-linux
-                                                              "/sbin/fstrim")
-                                                 "-av")
-                                            #:requirement '(file-systems))
+        (simple-service 'root-services shepherd-root-service-type
+                        (list (shepherd-timer '(fstrim)
+                                              #~(calendar-event
+                                                 #:days-of-week '(sunday)
+                                                 #:hours '(19)
+                                                 #:minutes '(0))
+                                              #~(#$(file-append util-linux
+                                                                "/sbin/fstrim")
+                                                   "-av")
+                                              #:requirement '(file-systems))
 
-                            (shepherd-timer '(guix-gc)
-                                            #~(calendar-event
-                                               #:days-of-week '(sunday)
-                                               #:hours '(18)
-                                               #:minutes '(0))
-                                            #~("/run/current-system/profile/bin/guix"
-                                               "gc"
-                                               "-d" "14d"
-                                               "-F" "20G")
-                                            #:requirement '(user-processes
-                                                            guix-daemon))))
+                              (shepherd-timer '(guix-gc)
+                                              #~(calendar-event
+                                                 #:days-of-week '(sunday)
+                                                 #:hours '(18)
+                                                 #:minutes '(0))
+                                              #~("/run/current-system/profile/bin/guix"
+                                                 "gc"
+                                                 "-d" "14d"
+                                                 "-F" "20G")
+                                              #:requirement '(user-processes
+                                                              guix-daemon))))
 
-      (root-daemon-service 'smartd
-                           (list (file-append (spec->pkg "smartmontools") "/sbin/smartd") "-n")
-                           #:requirement '(file-systems)
-                           #:log-file "/var/log/smartd.log"
-                           #:documentation "S.M.A.R.T. 磁盘健康监控守护。")
+        (root-daemon-service 'smartd
+                             (list (file-append (spec->pkg "smartmontools") "/sbin/smartd") "-n")
+                             #:requirement '(file-systems)
+                             #:log-file "/var/log/smartd.log"
+                             #:documentation "S.M.A.R.T. 磁盘健康监控守护。")
 
-      (simple-service 'smartd-conf etc-service-type
-                      (list `("smartd.conf"
-                              ,(local-file "./smartd.conf"))))))
+        (simple-service 'smartd-conf etc-service-type
+                        (list `("smartd.conf"
+                                ,(local-file "./smartd.conf"))))))
 #+end_src
 
 **** nix-ld 运行时库
 
-为其他渠道来的预编译二进制补齐常用动态库，分类见代码内标签
+Guix 采用非 FHS 的 =/gnu/store= 路径布局，直接下载的第三方预编译二进制（如部分闭源 CLI、AppImage 或 Python 二进制轮子）往往因找不到动态链接器与基础共享库而无法启动。此处通过 =nix-ld= 暴露统一的系统级动态库集合（涵盖工具链、图形多媒体、加密安全与 WebKitGTK 等）。
 
 #+NAME: nix-ld-services
 #+begin_src scheme
@@ -1793,6 +1761,11 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
 **** 虚拟化服务
 
+装配完整的容器与虚拟机基础设施：
+
+- *Libvirt + QEMU/KVM* :: 启用 =libvirtd= 与 =virtlogd= ，建立 =virbr0= 虚拟网桥（ =192.168.10.1/24= ），并由专属的 =dnsmasq= 实例为虚拟机分配 DHCP 地址池。
+- *Rootless Podman* :: 为当前用户分配 =100000= 起的 65536 个从属 UID/GID（ =subuids= / =subgids= ），支持免 root 运行容器。
+
 #+NAME: virtualization-services
 #+begin_src scheme
 (list (service dnsmasq-service-type
@@ -1837,11 +1810,13 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
 *** 桌面服务
 
-替换显示管理器为 greetd + tuigreet（在 TTY7 启动 Niri 会话），配置 EarlyOOM 内存保护、Thermald 散热守护、Goodix 指纹识别栈（PAM 认证优先，仅 greetd/login/polkit，sudo/su 走纯密码）、蓝牙与休眠 Polkit 提权规则；NTP 改用国内授时源（cn.pool/aliyun/ntsc），udisks2 补 ntfs3 挂载选项，/etc/hosts 屏蔽 QQ 更新域名。
+基于 Guix 官方的 =%desktop-services= 进行裁剪与扩展，构建围绕 =Niri= 的现代化桌面底座：
 
-guix-daemon 的 =gc-keep-derivations= 与 =gc-keep-outputs= 均显式设为 =no= ：~guix gc~ 只回收 GC root 不可达的路径，不再保留「活派生物的输出」与「活输出对应的 .drv」。
-
-udisks2 挂载选项（补 =ntfs3_allow= 白名单，否则 udisks 拒绝大量挂载参数）：
+- *会话与登录（Greetd）* :: 移除默认的 GDM 与 mingetty，改由 =greetd= 在 =TTY7= 自动拉起 ~dbus-run-session niri --session~ ，登出后回落至 =tuigreet= 终端登录界面。
+- *Guix 守护进程调优* :: 绑定本地代理（ =127.0.0.1:7890= ）加速源码与 substitute 拉取，并将 ~--gc-keep-derivations~ 与 ~--gc-keep-outputs~ 均设为 =no= ，让 =guix gc= 彻底回收无主构建产物。
+- *生物识别认证（Goodix 指纹）* :: 将自定义编译的 =fprintd-1.94= 的 =pam_fprintd.so= 以 ~sufficient~ 策略插入 =greetd= 、 =login= 与 =polkit-1= 的 PAM 认证链首位（指纹通过即放行，失败回退密码； =sudo= / =su= 保持纯密码认证，避免终端输入密码时与指纹扫描器互相抢占）。
+- *内存与温控保护* :: 启用 =earlyoom= （优先回收浏览器、Electron 与社交软件进程，保护合成器、音频栈与 Emacs 守护进程）以及 =thermald= 自适应散热管理。
+- *外设与挂载细节* :: 补充 =udisks2= 的 =ntfs3= 内核驱动挂载参数白名单，并在 =/etc/hosts= 中屏蔽 LinuxQQ 的自动更新检测域名。
 
 #+NAME: udisks-mount-options-conf
 #+begin_src conf :tangle ../tmp/mount_options.conf
@@ -1974,6 +1949,8 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
                    (program (plain-file "empty" ""))
                    (using-setuid? #f)))
 
+         (service sunshine-service-type)
+
          (service thermald-service-type
                   (thermald-configuration
                    (adaptive? #t)
@@ -1986,7 +1963,7 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
 
 **** hibernate polkit 规则
 
-放行本地活跃用户的休眠/挂起/混合休眠。这是 polkit 的 =.rules= 文件（由 polkitd 求值的 JavaScript，=js= 语言标记仅用于语法高亮），tangle 到 =tmp/= 后由上方 =hibernate-polkit= 服务装进 =share/polkit-1/rules.d/=；返回 =polkit.Result.YES= 即授权，不匹配的规则返回 =undefined= 交给后续规则继续判定。
+由于上方将 =elogind= 的硬件电源与休眠按键设为 =ignore= ，桌面环境触发的挂起与休眠请求需经 Polkit 鉴权。本规则（JavaScript 语法，由 =polkitd= 求值）允许当前本地活跃会话的用户免密执行挂起、休眠与混合睡眠操作。
 
 #+NAME: 50-hibernate.rules
 #+CAPTION: polkit 规则：本地活跃用户放行 login1 休眠/挂起相关 action
@@ -2006,7 +1983,7 @@ polkit.addRule(function(action, subject) {
 
 *** Guix 下载源
 
-每个下载源一段：先列 substitute-urls，再把对应公钥利用 plain-file 包成授权所需要的 .pub 文件
+为 =guix-daemon= 扩展预编译二进制缓存源（Substitute Servers）并授信对应的 Ed25519 公钥。此代码块同时被底部的 [[#iso][Live ISO]] 复用（注：上海交大镜像源 =sjtug= 仅作为官方源的国内反代，复用官方签名公钥，故 ~authorized-keys~ 传空表即可）。
 
 #+NAME: guix-substitutes
 #+begin_src scheme
@@ -2044,10 +2021,9 @@ polkit.addRule(function(action, subject) {
 :CUSTOM_ID: sys-users
 :END:
 
-=password= 行用于设置初始密码，这里有两种设置方式：
+声明主机名、时区、语言环境以及系统账户（ =root= 与主力用户 =username= 默认均使用 =fish= 作为登录 Shell）：
 
-+ =(password (crypt "Password" "$6$salt"))=
-+ 或直接填 hash 值（=echo "Password" | guix shell openssl -- openssl passwd -6 -stdin= 生成）。
+- *初始密码配置* :: 账户的 =password= 字段既可传入 ~(crypt "明文密码" "$6$salt")~ ，也可直接填入由 ~echo "Password" | guix shell openssl -- openssl passwd -6 -stdin~ 生成的 SHA-512 哈希串（ =root= 账户设为 ~#f~ 即锁定密码登录）。
 
 #+NAME: information-configs
 #+begin_src scheme
@@ -2083,14 +2059,18 @@ polkit.addRule(function(action, subject) {
 
 * 用户配置
 
-用户环境的相关定义，包含桌面应用、终端工具链、开发环境、Shepherd 守护服务、字体与环境变量。
+用户态（Guix Home）集中管理所有个人软件包、常驻守护服务、键盘映射、字体渲染与双轨 dotfiles，可通过 =blue home= 独立构建并即时切换（无需 sudo）。
 
 ** Packages
 :PROPERTIES:
 :CUSTOM_ID: home-packages
 :END:
 
+用户态软件包按职责拆分为四张清单（桌面、终端、开发、日常应用）及一组 FHS 容器运行时依赖，最终在 [[#main-skeleton][main]] 的 =%home= 中合并安装。
+
 *** 桌面环境相关软件包
+
+图形界面配套组件，涵盖字体、 =Fcitx5= 输入法、剪切板与壁纸工具、XDG Portal 及 GTK/Qt 主题外观。
 
 #+NAME: desktop-packages-list
 #+begin_src scheme :noweb yes
@@ -2115,7 +2095,7 @@ polkit.addRule(function(action, subject) {
    "open-wallpaper-engine-bin"
    "pavucontrol"
    "rofi"
-   "sunshine"
+   "sunshine-bin"
    "waywallen-bin"
    "wl-clipboard"
    "xclip"
@@ -2139,6 +2119,8 @@ polkit.addRule(function(action, subject) {
 #+end_src
 
 *** 终端相关软件包
+
+现代化命令行效率工具链，包含 =Tmux= / =herdr= 终端复用、 =Atuin= 历史记录、 =Starship= 提示符以及 =ripgrep= / =fd= / =eza= / =fzf= / =zoxide= 等高频检索导航工具。
 
 #+NAME: terminal-packages-list
 #+begin_src scheme
@@ -2172,6 +2154,8 @@ polkit.addRule(function(action, subject) {
 #+end_src
 
 *** 开发环境相关软件包
+
+多语言编译器与运行时、LSP 语言服务器、代码格式化器、主力编辑器（ =Zed= / =Helix= ）、AI 编程 Agent 及版本控制辅助工具。
 
 #+NAME: devtools-packages-list
 #+begin_src scheme
@@ -2264,6 +2248,8 @@ polkit.addRule(function(action, subject) {
 
 *** 其他软件包
 
+日常生产力、浏览器、影音创作、虚拟机/容器前端与游戏娱乐软件。
+
 #+NAME: user-packages-list
 #+begin_src scheme
 (specifications->packages
@@ -2324,7 +2310,11 @@ polkit.addRule(function(action, subject) {
    "python-openpyxl"))
 #+end_src
 
-hermes-desktop 的 FHS 容器运行时。本块是待拼接的包名字符串片段：内容是若干裸字符串，并不是一个列表；单独看它不构成完整表达式，引用处必须整体放进 =(list……)= 里当参数使用。
+=hermes-desktop= 运行在独立的 FHS 沙箱容器中，其底层依赖分为两部分管理：
+
+- =hermes-desktop-pkg-specs= :: 存放基础运行时与 Electron/VA-API 依赖的 *裸字符串片段* （本身不含外层括号，须由引用处包进 ~(list……)~ 展开）。
+- =hermes-desktop-runtime-packages= :: 将上述公共依赖安装进 =%home= ，为其建立 GC Root，防止被 =guix gc= 误回收。
+- =hermes-desktop-manifest-file= :: 额外拼入与宿主环境易冲突的图形库（ =cairo= 、 =dconf= 、 =glib= 、 =gtk+= ），tangle 为独立 manifest 并由下方「文件管理服务」部署至 =$XDG_DATA_HOME/hermes/manifest.scm= 。
 
 #+NAME: hermes-desktop-pkg-specs
 #+begin_src scheme
@@ -2344,16 +2334,12 @@ hermes-desktop 的 FHS 容器运行时。本块是待拼接的包名字符串片
 "gsettings-desktop-schemas"
 #+end_src
 
-将其安装进 ~home-packages~，这样 =guix gc= 就不会清理掉它们了。
-
 #+NAME: hermes-desktop-runtime-packages
 #+begin_src scheme :noweb yes
 (specifications->packages
  (list
   <<hermes-desktop-pkg-specs>>))
 #+end_src
-
-tangle 成独立 manifest，再由「文件管理服务」用 =local-file= 部署到 hermes 数据目录的 =$XDG_DATA_HOME/hermes/manifest.scm=（启动 desktop 的脚本需要用到这个）。
 
 #+NAME: hermes-desktop-manifest-file
 #+begin_src scheme :noweb yes :tangle ../tmp/hermes-desktop-manifest.scm
@@ -2370,14 +2356,11 @@ tangle 成独立 manifest，再由「文件管理服务」用 =local-file= 部�
 
 *** Fish 服务
 
-=10-source.fish= 由 *rosenthal* 频道的 =computed-substitution-with-inputs= 生成：模板文本（ =<<fish-cfg>>= ）里的 =$$bin/程序名$$= 不是 shell 语法，而是路径注入占位符；构建期会在 =specs->pkgs= 给出的各包目录下逐项查找 =bin/程序名= ，命中就替换为对应的 =/gnu/store/…= 绝对路径，找不到则构建失败并报 =file 'bin/程序名' not found= 。
+生成 =~/.config/fish/conf.d/10-source.fish= 启动配置与 =foreign-env= 兼容函数。模板块（ ~<<fish-cfg>>~ ）通过 =rosenthal= 频道的 ~computed-substitution-with-inputs~ 渲染：
 
-契约要点：
-
-+ 每个 =$$bin/X$$= 都必须在同处 =specs->pkgs= 列表里登记提供它的包，漏登记会在构建期报错；列表里多写包无害（多出的包只是不被引用）。
-+ =specs->pkgs= 是 rosenthal 提供的变参版 =(map specification->package……)=，直接写包名字符串，返回裸包对象；它不支持 =pkg:output= 形式的规格。
-+ 不能改用官方的 =specifications->packages=：它返回 =(包 输出)= 元组列表，而占位符注入函数要求传入纯包对象（需要能 lower 成 store 目录字符串）。
-+ 不需要路径注入的普通配置文件请直接放 =dotfiles/immutable/=，不必走这条路径。
+- *占位符自动寻址* :: 模板中的 ~$$bin/程序名$$~ 并非 Fish 语法，而是构建期路径占位符；构建器会在 ~specs->pkgs~ 列出的包目录中查找 =bin/程序名= 并替换为对应的 =/gnu/store/...= 绝对路径（未找到则直接在构建期报错终止）。
+- *为什么用 ~specs->pkgs~* :: 占位符替换函数要求传入纯 =<package>= 对象列表，而 Guix 官方的 ~specifications->packages~ 在遇到带输出分支的包时会返回 ~(package output)~ 二元组，因此这里必须使用 =rosenthal= 提供的 ~specs->pkgs~ 。
+- *交互式守卫* :: =10-source.fish= 以 ~status is-interactive~ 包裹，确保只在交互式终端加载补全与提示符（脚本与 ~fish -c~ 调用零开销）。
 
 #+NAME: fish-services
 #+begin_src scheme :noweb yes
@@ -2406,8 +2389,6 @@ tangle 成独立 manifest，再由「文件管理服务」用 =local-file= 部�
                                                            "/share/fish/functions/fenv.fish")))))
 #+end_src
 
-模板正文（=10-source.fish=）：=status is-interactive= 守卫保证只在交互 shell 执行，非交互场景（脚本、=fish -c= 调用）零开销零副作用；逐行 source 各工具的 shell 集成（atuin 历史、direnv、herdr/niri 补全、fzf 键位、zoxide、starship 提示符），末尾 =enable_transience= 是 starship 的 transient prompt 开关（由上一行 =starship init= 提供）。新增工具需同时在上方 =specs->pkgs= 列表登记包名，否则构建期报 =file 'bin/foo' not found=。
-
 #+NAME: fish-cfg
 #+begin_src fish
 status is-interactive
@@ -2427,28 +2408,26 @@ end
 
 *** Kanata 键盘映射
 
-笔记本内置键盘（AT Translated Set 2 keyboard）映射。
+针对笔记本内置键盘（ =AT Translated Set 2 keyboard= ）定制键位重映射，核心目标是： *在不插外接客制化小键盘时，内置键盘也能提供完全一致的肌肉记忆与层切换手感* 。
 
-目标：*不插外接小键盘时，内置键盘也能给出一致的手感*。小键盘的每一列对应标准键盘的一个行（列 4 ↔ QWERTY、列 3 ↔ ASDF、列 2 ↔ ZXCV、列 1 ↔ 底部行）
+外接小键盘的四列依次对应标准键盘的四行（列 4 ↔ =QWERTY= 、列 3 ↔ =ASDF= 、列 2 ↔ =ZXCV= 、列 1 ↔ 底部修饰行），且列首键自上而下为 =Esc= / =Tab= / =Shift= / =Alt= 。据此将内置键盘映射为两层：
 
-+ 这个小键盘的列首键依次是 Esc / Tab / Shift / Alt，因此修改内置键盘的 base 层：
-  - QWERTY 行首（物理 Tab）→ Esc
-  - ASDF 行首（物理 CapsLock）→ Tab（CapsLock 功能在 fn 层收回）
-  - 底部行前两个（物理 Ctrl / Alt）互换
+- *Base 基础层改动* ：
+  - =QWERTY= 行首（物理 =Tab= 键）→ 映射为 =Esc=
+  - =ASDF= 行首（物理 =CapsLock= 键）→ 映射为 =Tab= （原 =CapsLock= 下沉至 =fn= 层）
+  - 底部左侧前两键（物理 =Left Ctrl= 与 =Left Alt= ）→ 互换位置，对齐小键盘拇指区
+  - 右侧 =Right Alt= → 按住激活 =fn= 层（ ~layer-while-held fn~ ）
+- *Fn 扩展层映射（按住 =Right Alt= 触发）* ：
 
-右 Alt 按住时激活 fn 层，复刻小键盘驱动定制后的 Fn 层：
-
-  Q W E R T Y U I O P → 1 2 3 4 5 6 7 8 9 0      列 4 的 Fn 层是整条数字行
-
-  A S D F G          → F1 F2 F3 F4 F5            列 3 的 Fn 层接管 F1-F5
-
-  H J K L            → [ ] ; '                   列 2 的 Fn 层接管符号区域
-
-  Z X C V B N M      → F6 F7 F8 F9 F10 F11 F12   列 2 的 Fn 层接管 F6-F12
-
-原本的 Tab（即小键盘的 Esc 键位）→ `
-
-Enter / Backspace  → \ / -
+| 物理键区                      | Fn 层输出                 | 对应外接小键盘设计         |
+|-------------------------------+---------------------------+----------------------------|
+| =Q W E R T Y U I O P=         | =1 2 3 4 5 6 7 8 9 0=     | 列 4 的 Fn 层接管整排数字  |
+| =A S D F G=                   | =F1 F2 F3 F4 F5=          | 列 3 的 Fn 层左半接管 F1–5 |
+| =H J K L=                     | =[ ] ; '=                 | 列 2 的 Fn 层右半接管符号  |
+| =Z X C V B N M=               | =F6 F7 F8 F9 F10 F11 F12= | 列 2 的 Fn 层接管 F6–12    |
+| 物理 =Tab= （现 Base =Esc= ） | =`= （反引号）            | 小键盘左上角键位           |
+| 物理 =CapsLock= （现 =Tab= ） | =CapsLock=                | 在 Fn 层保留大小写锁定     |
+| =Backspace= / =Enter=         | =-= （减号，两键同映射）  | 取代原 =\= 与 =Enter= 映射 |
 
 #+begin_src conf :tangle ../tmp/kanata-laptop.kbd
 (defcfg
@@ -2475,7 +2454,7 @@ lalt lmet lctl spc (layer-while-held fn) rmet rctl _)
 _    _  _  _  _  _  _  _  _  _  _  _  _
 _    _  _  _  _  _  _  _  _  _  _  _  _  -
 grv  1  2  3  4  5  6  7  8  9  0  _  _  _
-caps f1 f2 f3 f4 f5 [  ]  ;  '  _  _  \
+caps f1 f2 f3 f4 f5 [  ]  ;  '  _  _  -
 _    f6 f7 f8 f9 f10 f11 f12 _  _  _  _
 _    _  _  _  _  _  _  _)
 #+end_src
@@ -2491,13 +2470,10 @@ _    _  _  _  _  _  _  _)
 
 *** Emacs 服务
 
-常驻 ~emacs --fg-daemon~；并且让 Emacs 相关的包进入到它的专属 profile。
+以 ~emacs --fg-daemon~ 守护进程方式常驻后台，并将所有 Emacs 插件与辅助 CLI 隔离在专属 profile 中：
 
-=emacs-packages= 块展开的并不是一个包清单，而是**整个字段*  =(packages (specifications->manifest '(……)))=：
-
-+ 配置记录的 =packages= 字段类型是 *manifest*（不是普通包列表），=(specifications->manifest '("包名"……))= 负责把包名转成 manifest 记录。
-+ 该字段片段被 Emacs 与 Neomacs 两个服务共用，因此这份 ~90 项的清单只维护一处，两个 profile 不会漂移。
-+ 新增 Emacs 插件只改本块；同时须按 =dotfiles/mutable/emacs/.config/emacs/AGENTS.md= 的细则同步（该文档记录包清单同步要求）。
+- *共享 Manifest 片段* :: 下方的 =emacs-packages= 代码块展开的是 *完整配置字段* ~(packages (specifications->manifest '(……)))~ （因为该字段要求传入 manifest 对象而非普通包列表）。
+- *双前端零漂移* :: =home-emacs-service-type= （ =emacs-next-pgtk= ）与 =home-neomacs-service-type= 共同引用 ~<<emacs-packages>>~ ，约 90 个插件与 Tree-sitter 语法库只需在一处维护（增删插件时请同步参照 =dotfiles/mutable/emacs/.config/emacs/AGENTS.md= ）。
 
 #+NAME: emacs-services
 #+begin_src scheme :noweb yes
@@ -2599,7 +2575,11 @@ _    _  _  _  _  _  _  _)
 
 *** 软件自启动
 
+用户态 Shepherd 常驻守护服务，随图形会话或用户登录拉起。
+
 **** 桌面常驻组件
+
+集中声明五项桌面辅助守护进程： =kdeconnect= （默认不自启，按需拉起）、 =mpris-proxy= （蓝牙耳机媒体键转发）、 =poweralertd= （低电量通知）、 =usb-power-watch= （熄屏 USB 挂起）与 =clipsync= （X11/Wayland 剪切板双向桥接）。
 
 #+NAME: essential-desktop-services
 #+begin_src scheme
@@ -2634,29 +2614,12 @@ _    _  _  _  _  _  _  _)
                                             "X11 与 Wayland CLIPBOARD 双向同步（niri + xwayland-satellite 无自动转发）"))))
 #+end_src
 
-**** Moonlight 串流被控端
-
-=Sunshine= 是 Moonlight 协议的服务端，用于远程操控本机桌面（画面 + 键鼠 + 音频回传）。
-网络面：只经 Tailscale 访问。UPnP 在 Sunshine 中默认关闭，不会向公网打洞。
-
-#+NAME: sunshine-services
-#+begin_src scheme
-(list (simple-service 'sunshine-services home-shepherd-service-type
-                      (list
-                       (home-daemon-service 'sunshine
-                                            (list (file-append sunshine "/bin/sunshine"))
-                                            #:requirement '(graphical-session)
-                                            #:documentation
-                                            "Moonlight 串流被控端))))
-#+end_src
-
 **** usb-power-watch 脚本
 
-熄屏断电守护，挂在物理 USB 口上的设备无论是什么都一律挂起，清单外的端口不碰，清单内的端口熄屏写 =auto= 、亮屏写 =on= 。由上方 =essential-desktop-services= 作为 home shepherd 常驻服务经 =/bin/sh= 拉起，轮询式实现（无事件依赖），写 =power/control= 的权限来自上一小节的 udev 0666 规则。
+配合系统层 ~95-usb-power-control-perms.rules~ （将 USB 设备的 =power/control= 放宽为 =0666= ），在屏幕连续熄灭后自动挂起指定物理 USB 端口上的外设以节省待机功耗，亮屏后立即恢复供电：
 
-判读与状态机：每 =INTERVAL= 秒扫一遍 =/sys/class/backlight/*/bl_power=（=0= 为点亮）——任一读到的背光在亮即视为亮屏；全部熄灭且至少一块可判为熄才进入熄屏计时；一块都读不到时（lit=dark=0）落在亮屏分支，属安全默认。连续熄屏满 =THRESHOLD= 秒才对受管口写 =auto=（避免一闪而过的熄屏抖断电）；亮屏时仅当当前处于 off 态才写一次 =on=——新插设备的 =power/control= 内核默认值即 =on=，无需重复写。
-
-=PORTS= 是 =/sys/bus/usb/devices/= 下的根端口名（=3-2= 这类 =总线-端口=）；匹配含 =3-2.x= 形式的子设备名前缀，带冒号的接口目录（=3-2:1.0=）被跳过。所有写操作 =2>/dev/null= 忽略失败（节点消失/权限抖动不致命，下一轮会重试）。
+- *状态机与防抖* :: 每 =30= 秒轮询一次 =/sys/class/backlight/*/bl_power= （ =0= 表示点亮）。仅当所有背光均处于熄灭状态且持续满 =120= 秒（ =THRESHOLD= ）时，才向白名单端口（ =PORTS= ）写入 =auto= 挂起设备，避免短暂黑屏引发外设断连。
+- *唤醒恢复* :: 一旦检测到任一背光点亮（或无可读背光节点时按安全默认视为亮屏），若当前处于挂起态则立即向受管端口写回 =on= 。
 
 #+NAME: usb-power-watch
 #+CAPTION: 熄屏守护：连续熄屏 120s 后挂起清单内 USB 物理口，亮屏恢复
@@ -2709,19 +2672,16 @@ done
 
 **** clipsync 剪切板桥接
 
-niri + =xwayland-satellite= 组合下 X11 与 Wayland 的 =CLIPBOARD= 两个方向都 *不会自动转发* （本机实测：=xclip= 写入后 =wl-paste= 读不到，反向同样），两套剪切板完全隔离；叠加 LinuxQQ 的剪切板实现（=wrapper.node= 内只调用 Xlib）只读写 X11 一侧，XWayland 应用（flatpak 版 QQ / WeChat / DingTalk 等）与 Wayland 原生应用之间互相粘贴不可用。本守护进程维护 =CLIPBOARD= 选择的双向同步，由上方 =essential-desktop-services= 作为 home shepherd 服务 =clipsync= 启动：依赖 =graphical-session=（继承会话的 =DISPLAY= / =WAYLAND_DISPLAY=，不内置探测），日志落 =~/.local/state/shepherd/clipsync.log=。
+在 =Niri= + =xwayland-satellite= 架构下，X11 与 Wayland 的 =CLIPBOARD= 彼此隔离、不会自动互相转发，导致只走 X11 剪切板的 XWayland 应用（如 Flatpak 版 QQ、微信等）无法与 Wayland 原生应用互相复制粘贴。本守护脚本（Guile 实现，架构等价于已归档的 [[https://github.com/SHORiN-KiWATA/linuxqq-clipsync][linuxqq-clipsync]]）通过监听 =clipnotify= （X11 侧）与 ~wl-paste --watch echo~ （Wayland 侧），调用 =xclip= 与 =wl-copy= / =wl-paste= 完成双向同步，并与 =cliphist= 历史记录天然兼容。
 
-架构与 [[https://github.com/SHORiN-KiWATA/linuxqq-clipsync][linuxqq-clipsync]]（Rust 版，已归档）等价：事件源 =clipnotify=（X11 所有权变化即退出，退出即事件）与 =wl-paste --watch echo=（Wayland 侧每次变化输出一行），读写由 =xclip= / =wl-copy= / =wl-paste= 完成；依赖包已在桌面软件包列表（=clipnotify= / =xclip= / =wl-clipboard=），读子进程额外依赖系统 profile 中的 coreutils =timeout=。
-
-不变量（改代码前先读完，均有实测依据）：
-
-1. *防环靠归一化内容比对，不是方向时间窗* ：文本去空白与 =NUL=、uri-list 剥 =file://= 前缀并丢弃 =copy=/=cut= 行后比较，回声一趟内容相等即跳过。删掉比对只留时间窗必然回环。
-2. *对向 =1 s= 抑制必须「推迟处理」而非跳过* ：本机无自动转发回声，跳过会把窗口内的真实复制永久吞掉（Rust 版的隐性依赖，见 agenote 20261002-083559）。
-3. *写目标剪切板之前登记状态* ：否则对向线程在写入进行中回读大图，会命中 =xclip= 的 INCR 并发缺陷（丢弃并发的粘贴请求）。
-4. *所有子进程包 =timeout=* ：对端进程死亡时 =xclip= 的 INCR 传输会挂死，不设超时会拖死整个线程。
-5. *事件后 =30 ms= 去抖再读* ：所有权生效与数据可读之间存在时序差。
-
-Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettimeofday= 返回点对 =(sec . usec)=，不能 =cadr=。与 cliphist 天然兼容：QQ 的复制经桥接进入 Wayland 剪切板后，由 niri 启动项 =wl-paste --watch cliphist store= 收进历史。
+#+begin_quote
+*核心不变量（修改代码前必读，均有实机验证依据）* ：
+1. *防环靠归一化内容比对，而非单纯依赖时间窗* ：文本剥除空白与 =NUL= 、URI 列表剥除 =file://= 前缀及 =copy= / =cut= 操作行后再做字节比对；内容相同即视为回声跳过，若删掉内容比对必然触发死循环。
+2. *对向 1 秒抑制窗口必须「推迟处理」而非直接丢弃* ：由于本机无自动转发回声，若直接丢弃窗口内的事件，会把用户快速切换窗口时的真实复制永久吞掉。
+3. *必须在写入目标剪切板之前调用 ~record!~ 登记状态* ：防止对向监听线程在写入中途回读大图，避开 =xclip= 在 INCR 分块传输下的并发丢包缺陷。
+4. *所有读写子进程必须外包 ~timeout 10~* ：当源端窗口意外关闭时， =xclip= 的 INCR 传输会永久挂死，不加超时会直接卡死同步线程。
+5. *事件触发后先经 30 ms 去抖（ ~usleep 30000~ ）再读取* ：消除剪切板所有权声明与实际数据可读之间的微小时间差。
+#+end_quote
 
 #+NAME: clipsync
 #+CAPTION: X11 与 Wayland CLIPBOARD 双向同步守护
@@ -2878,7 +2838,7 @@ Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettime
 (define (handle-x11->wayland)
   (let* ([types-bv (clip-read "xclip" "-selection" "clipboard" "-t" "TARGETS" "-o")]
          [types (and types-bv (catch #t (lambda () (utf8->string types-bv))
-                                     (lambda args #f)))])
+                                (lambda args #f)))])
     (when types
       (let ([pick (pick-x11 types)])
         (when pick
@@ -2895,7 +2855,7 @@ Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettime
 (define (handle-wayland->x11)
   (let* ([types-bv (clip-read "wl-paste" "--list-types")]
          [types (and types-bv (catch #t (lambda () (utf8->string types-bv))
-                                     (lambda args #f)))])
+                                (lambda args #f)))])
     (when types
       (let ([pick (pick-wayland types)])
         (when pick
@@ -2963,7 +2923,10 @@ Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettime
 
 **** Hermes 后端与网关
 
-开机启动 =dashboard= / =gateway=；~hermes-desktop~ 包装以此网关为连接目标。两个服务使用同一个可执行文件（= ~/.local/bin/hermes=）配不同子命令；该路径写作 =#~ (string-append (getenv "HOME")……)= 而非普通字符串：=# ~= 让 HOME 在**服务启动时* （用户会话）求值，若去掉 =#~ =，HOME 会在配置求值时取到执行重建的用户（如 root）的值并烘焙进服务闭包。
+随图形会话自动拉起 =hermes-backend= （本地 =127.0.0.1:9119= 控制台）与 =hermes-gateway= ，供 =hermes-desktop= 客户端连接：
+
+- *运行期求值 ~$HOME~* :: 命令路径必须写成 =#~(string-append (getenv "HOME") "/.local/bin/hermes")= ，外层的 =#~(……)= 保证 ~getenv~ 在用户会话启动服务时才求值；若省去 =#~(……)= ，当使用 ~sudo~ 执行系统重建时会在配置求值期取到 =/root= 并死锁进服务闭包。
+- *透传 =nix-ld= 环境变量* :: Python 虚拟环境中的 Rust 原生扩展（如 =pydantic_core= ）依赖 =libgcc_s.so.1= ，此处显式捕获并注入 =NIX_LD= 与 =NIX_LD_LIBRARY_PATH= ，确保即便从干净终端手动 ~herd restart~ 也不会因丢失动态库路径而报错。
 
 #+NAME: hermes-services
 #+begin_src scheme
@@ -3002,7 +2965,7 @@ Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettime
 
 **** cpu-dma-latency
 
-按需持有 =/dev/cpu_dma_latency=（audio 组可写）压浅 C-state 消唤醒抖动；默认不自启（待机功耗代价），需要时 ~herd start/stop cpu-dma-latency~。
+通过打开并持有 =/dev/cpu_dma_latency= 文件描述符、写入 32 位整数 =0= ，强制 CPU 保持在浅层 C-state 以消除核心唤醒抖动。因会增加待机功耗，默认设为不自启（ ~#:auto-start? #f~ ），在进行音游或低延迟音频工作时可通过 ~herd start cpu-dma-latency~ 按需开启、用毕 ~herd stop~ 释放。
 
 #+NAME: cpu-dma-latency-service
 #+begin_src scheme
@@ -3018,11 +2981,13 @@ Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettime
 
 *** 计时器服务
 
-目前的计时器任务如下：
+用户态周期性维护任务，各定时器错峰排布以避免 IO 与网络争用：
 
-+ 每周六 18:00 自动更新 flatpak 用户安装的软件包，仅在使用外接电源时执行。
-+ 每周日 19:30 清理 Nix 用户 profiles 中 14 天前的旧 generation 并回收 store（在 18:00 的 guix-gc 之后错峰执行；仅系统装有 nix 时存在，随 =<<nix-gc-timer>>= 引用行一起注释 / 取消注释）。
-+ 每晚 22:00 自动 commit hermes 包与 Org 知识库（agenote 卡片）变更（=kb-backup=，脚本与日志见下），落在周六 18:00 flatpak 更新的维护窗口之外，与其余 timer 错峰。
+| 定时器名称            | 触发时间     | 职责说明                                                                        |
+|-----------------------+--------------+---------------------------------------------------------------------------------|
+| =flatpak-user-update= | 每周六 18:00 | 复用 =%flatpak-update-script= ，仅在接通外接电源时静默更新用户级 Flatpak 应用   |
+| =nix-gc= （按需启用） | 每周日 19:30 | 清理 14 天前的 Nix 用户 profile 世代并回收 store（默认随 Nix 本体一同注释停用） |
+| =kb-backup=           | 每日 22:00   | 自动提交 =hermes= 配置子目录与 =~/Documents/Org= 知识库的本地 Git 变更          |
 
 #+NAME: timer-services
 #+begin_src scheme
@@ -3040,7 +3005,7 @@ Guile 陷阱：=sleep= 只收精确整数（用 =usleep=）；标准库 =gettime
                        )))
 #+end_src
 
-kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services= 平级，经下方 =%home= 的 services append 生效，运行效果等同于并入上方 list 成为第三个元素）：每晚 22:00 执行下方 tangle 到 =tmp/kb-backup= 的备份脚本；无变更时静默跳过，任一步 git 失败仅记 warning，不中断后续步骤。
+=kb-backup-services= 作为独立模块挂入 =%home= 服务列表（与 =timer-services= 平级），方便单独开关。
 
 #+NAME: kb-backup-services
 #+begin_src scheme
@@ -3053,9 +3018,9 @@ kb-backup 单独成块挂载（同为 home-shepherd timer，与 =timer-services=
 
 **** kb-backup 备份脚本
 
-对 Guix-configs 的 hermes 包与 = ~/Documents/Org= 知识库各自 =git add= 后，无变更即静默跳过、有变更则按既有风格 =git commit=；任一步 git 命令失败（如 index.lock 冲突、gpg 签名失败）只向 =~ /.cache/kb-backup.log= 追加一条带时间戳的 warning 并继续下一步，整体退出码恒为 0。
+每晚自动为两处本地高频演进数据生成 Git 快照，日志追加至 =~/.cache/kb-backup.log= ：
 
-git 与 gpg 通过脚本内 PATH 前缀（home profile + system profile）定位，不依赖 shepherd 运行环境；提交签名沿用用户 gitconfig（=commit.gpgsign=）。
+- *两步独立容错* :: 依次备份本仓库的 =dotfiles/mutable/agents/hermes= 子目录（通过 Stow 软链反推仓库根路径，仅 ~git add~ 该子目录以防误吞其他未提交工作）与 =~/Documents/Org= 知识库。工作区无改动时静默跳过；任一步失败仅记录告警日志，最终退出码恒为 =0= 。
 
 #+NAME: kb-backup-script
 #+CAPTION: 每日自动 commit hermes 包与 Org 知识库；两步独立容错，退出码恒 0
@@ -3071,24 +3036,24 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 # hermes 包: 仅 add 该子目录，避免吞并用户未提交的 WIP。
 # 仓库根经 HERMES_HOME 锚点反推（stow 链回仓库的文件），不写死路径。
 (
-  hermes_home="${HERMES_HOME:-$HOME/.local/share/hermes}"
-  repo=""
-  for anchor in "$hermes_home/config.yaml" "$hermes_home/SOUL.md"; do
-    [ -L "$anchor" ] || continue
-    target=$(readlink -f "$anchor") || continue
-    repo=$(git -C "$(dirname "$target")" rev-parse --show-toplevel 2>/dev/null) || continue
-    break
-  done
-  [ -n "$repo" ] || { echo "找不到链回仓库的 hermes 锚点文件 ($hermes_home)"; exit 1; }
-  git -C "$repo" add dotfiles/mutable/agents/hermes || exit 1
-  git -C "$repo" diff --cached --quiet || git -C "$repo" commit -m "chore(hermes): backup $(date)" || exit 1
+    hermes_home="${HERMES_HOME:-$HOME/.local/share/hermes}"
+    repo=""
+    for anchor in "$hermes_home/config.yaml" "$hermes_home/SOUL.md"; do
+        [ -L "$anchor" ] || continue
+        target=$(readlink -f "$anchor") || continue
+        repo=$(git -C "$(dirname "$target")" rev-parse --show-toplevel 2>/dev/null) || continue
+        break
+    done
+    [ -n "$repo" ] || { echo "找不到链回仓库的 hermes 锚点文件 ($hermes_home)"; exit 1; }
+    git -C "$repo" add dotfiles/mutable/agents/hermes || exit 1
+    git -C "$repo" diff --cached --quiet || git -C "$repo" commit -m "chore(hermes): backup $(date)" || exit 1
 ) >>"$log" 2>&1 || warn "hermes 备份失败, 详见上方 git 输出"
 
 # Org 知识库: agenote 卡片仓库，本地无 remote，add -A 安全
 (
-  cd "$HOME/Documents/Org" || exit 1
-  git add -A || exit 1
-  git diff --cached --quiet || git commit -m "chore(backup): auto $(date '+%Y-%m-%d %H:%M:%S')" || exit 1
+    cd "$HOME/Documents/Org" || exit 1
+    git add -A || exit 1
+    git diff --cached --quiet || git commit -m "chore(backup): auto $(date '+%Y-%m-%d %H:%M:%S')" || exit 1
 ) >>"$log" 2>&1 || warn "Org 知识库备份失败, 详见上方 git 输出"
 #+end_src
 
@@ -3096,7 +3061,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** dotfiles 管理服务
 
-通过 Guix Home 的 =home-dotfiles-service-type= 来部署 =dotfiles/immutable/= 下的 dotfiles，这个服务创建出来的所有链接都是不能够被写入的，来确保没有软件乱改配置。
+通过 Guix Home 的 ~home-dotfiles-service-type~ （Stow 布局）部署 =dotfiles/immutable/= 下的六个静态配置包，并将多版本 OpenJDK（17 / 21 / 25）链接至 =PrismLauncher= 的 Java 运行时目录。所有由此生成的软链均指向 =/gnu/store= 下的只读副本，从根本上阻止应用程序覆写篡改用户配置。
 
 #+NAME: dotfile-services
 #+begin_src scheme
@@ -3136,11 +3101,10 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** 文件管理服务
 
-自行指定文件与目的地
+对于需要 *动态注入 =/gnu/store= 二进制路径* （如 =gpg-agent.conf= 与 =zed/settings.json= 中的 LSP/格式化器绝对路径）或来自 =tmp/= 构建产物的零散文件，通过 ~home-files-service-type~ 定点投放至 =$HOME= ：
 
-+ 需要注入二进制路径时用来自 *rosenthal* 频道的 =computed-substitution-with-inputs=
-  （模板写 =$$bin/foo$$= 占位符 + =specs->pkgs= 给包；完整契约与易错点见上文 * Services → Fish 服务* ）
-+ 非字面量路径必须用 =assume-source-relative-file-name= 来做标记，否则 =local-file= 会退化成按 cwd 解析。
+- ~computed-substitution-with-inputs~ :: 将 =source/files/= 模板中的 ~$$bin/foo$$~ 占位符替换为对应包在 store 中的真实路径（契约详见上文「Fish 服务」小节）。
+- ~assume-source-relative-file-name~ :: 标记相对于当前源文件解析的路径，防止 ~local-file~ 退化为按运行时的当前工作目录（cwd）查找。
 
 #+NAME: home-files-services
 #+begin_src scheme
@@ -3211,6 +3175,8 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** 软件相关的环境变量
 
+声明默认浏览器与编辑器、Wayland 原生后端开关（GTK / Qt / Mozilla / Ozone / Java AWT）以及鼠标光标主题参数。
+
 #+NAME: extend-environment-variables
 #+begin_src scheme
 '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
@@ -3237,6 +3203,8 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 #+end_src
 
 **** XDG 规范变量
+
+将各类开发工具、REPL 历史记录、包管理器缓存与 AI Agent 的配置/数据目录统一收纳至 XDG Base Directory 规范路径下，保持 =$HOME= 顶层目录整洁（同时也便于通过 =%data-dirs= 精确控制持久化边界）。
 
 #+NAME: xdg-basedir-env-vars
 #+begin_src scheme
@@ -3293,10 +3261,10 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** 环境变量汇总
 
-两个数据块（=extend-environment-variables= 与 =xdg-basedir-env-vars=）与下面 4 条需要拼接的长值合并成一个服务。两处容易误解的地方：
+将上述两张变量表与下方的多段拼接变量合并注册为 ~home-environment-variables-service-type~ ：
 
-+ 值里的 =$HOME= 与 =$XDG_ *= 是* 字面量* ：Guix 导出 setup-environment 时保留 =$= 不替换，由登录 shell 在 source 时展开，不是 Guile 变量。
-+ 反引号段里 =,=(string-append……)= 的拼接发生在 *Guile 侧*，只是把长值折行排版；若某个值需要 store 路径，应改用 gexp／=file-append=，而不是字符串拼接。
+- *Shell 展开语义* :: 字符串值中的 =$HOME= 与 =$XDG_*= 均为 *Shell 字面量* （而非 Guile 变量），Guix 在生成 =setup-environment= 时原样保留，待用户登录 Shell 加载时再行展开。
+- *折行拼接技巧* :: 反引号列表中的 ~,(string-append……)~ 在 Guile 求值期执行，仅用于将超长的搜索路径或命令行旗标折行排版；若未来某项需要引用 =/gnu/store= 路径，则应改用 gexp 与 ~file-append~ 。
 
 #+NAME: environment-variable-services
 #+begin_src scheme :noweb yes
@@ -3331,7 +3299,9 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** 全局服务
 
-空 ~dbus~ 服务承接依赖，避免与拉起 niri 的 ~dbus-run-session~ 冲突。
+装配用户级桌面底座服务（ =Fcitx5= 雾凇拼音、 =PipeWire= 音频栈、 =nosdshell= 桌面壳层、 =OpenTabletDriver= 、 =Sunshine= 串流与 =Syncthing= 同步）：
+
+- *空 =dbus= 占位服务* :: 由于图形会话已由 =greetd= 通过 ~dbus-run-session niri --session~ 建立会话总线，此处注册一个 ~start~ 为 =#~(const #t)= 的空 =dbus= Shepherd 服务，仅用于承接下游服务的依赖声明，避免重复拉起第二条会话总线造成冲突。
 
 #+NAME: user-desktop-services
 #+begin_src scheme :noweb yes
@@ -3358,14 +3328,14 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
       (service home-pipewire-service-type)
 
+      (service home-sunshine-service-type)
+
       (service home-syncthing-service-type))
 #+end_src
 
 **** 默认应用程序关联
 
-数据按「应用 → 它担当默认应用的 MIME 类型」分组记录：表中每行是点对 =(应用 desktop 文件 . 该应用的 MIME 列表)=；下方 =append-map= + =match-lambda= 负责把它**反转并摊平* 成 Guix =default= 字段要求的 =(MIME . 应用)= alist（方向相反，别记混）。
-
-之所以保留「按应用分组 + 反转」而不直接平铺最终表：目标表有上百条，平铺要重复书写应用名，改一个应用的归属要动多行且容易漏改；新增一条只需在表中加一行 =(应用 . MIME……)=。
+XDG MIME 默认应用表。Guix 的 ~default~ 字段原本要求传入形如 ~(MIME 类型 . desktop 文件)~ 的关联表，但上百种文件格式若平铺书写会产生大量重复的应用名。因此这里采用 *「按应用分组声明 + 代码反转摊平」* 的表驱动写法：数据源按 ~(desktop 文件 MIME 类型……)~ 组织，再由 ~append-map~ 配合 ~match-lambda~ 翻转为标准格式。后续若要新增或更换某类文件的默认打开方式，只需修改对应应用名下的列表即可。
 
 #+NAME: default-applications
 #+begin_src scheme
@@ -3472,6 +3442,8 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 :CUSTOM_ID: home-font
 :END:
 
+扩展 Fontconfig 字体搜索目录与全局字体族回退顺序：无衬线与衬线字体优先使用 =Sarasa Gothic SC= （更纱黑体），等宽编程字体优先使用 =Maple Mono NF CN= （以 =Sarasa Mono SC= 兜底），彩色 Emoji 统一交由 =Noto Color Emoji= 渲染。
+
 #+NAME: font-services
 #+begin_src scheme
 (list (simple-service 'extend-fontconfig home-fontconfig-service-type
@@ -3497,14 +3469,16 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 :CUSTOM_ID: iso
 :END:
 
-自建 Live 安装镜像的 =operating-system= 声明，与主机 =%system= 独立。定位是**救砖 + 装机* 双用途救援盘。
+自包含的 *系统救援 + 全新装机* 双用途 Live ISO 声明（与宿主机的 =%system= 独立，通过 =blue build-iso= 抽离至 =tmp/live-iso-<variant>.scm= 并交由 =tools/build-image.scm= 构建镜像，详见 [[../docs/iso-build.md][docs/iso-build.md]]）：
 
-- 构建命令：执行 =blue build-iso= 进行 tangle 并调用 =tools/build-image.scm= 生成 ISO 镜像文件。
-- 变体：=desktop=（XFCE + labwc，greetd 免密自动登录 live 用户，登出后自动回桌面）与 =minimal=（保留 tty1 TUI 安装器，tty3-6 root 免密 shell），分别 tangle 到 =tmp/live-iso-desktop.scm= / =tmp/live-iso-minimal.scm=。
-- 救砖装机载荷：=rescue-chroot.sh= / =emergency-blue.sh= 经 =live-rescue-tools= 包装进系统 PATH；本仓库快照（剔除 =.git= / =dist= / =tmp=）放进各用户 =~/Guix-configs=，配合内嵌的 =emacs-minimal= 让 =emergency-blue.sh init= 开箱可跑。
-- 自包含设计：ISO 镜像专用的模块引用（=use-modules=）直接内联在本块中；唯一的跨区共享是 =<<guix-substitutes>>= 服务（定义于 System 区「Guix 下载源」小节），宿主与 ISO 有意共用同一组 substitute 源。
-- 精简频道（guix+nonguix）写进 Live 的 =/etc/guix/channels.scm=；sshd 随系统启动，root 与 live 密码均为 =live=（救援盘场景可接受）；=modprobe.blacklist=radeon,amdgpu= 已删——黑名单会让 AMD 显卡失去 KMS，Wayland 桌面直接起不来。
-- 网络栈：desktop 变体删掉安装器基底默认的 connman，统一走 =xfce-desktop-service-type= 自带的 NetworkManager + nm-applet（=nmtui= 亦可）；minimal 变体保留 connman（TUI 安装器的网络步骤依赖它）。
+| 变体名称  | 输出文件                   | 适用场景与会话设计                                                                                                  |
+|-----------+----------------------------+---------------------------------------------------------------------------------------------------------------------|
+| =desktop= | =tmp/live-iso-desktop.scm= | 搭载 =XFCE= + =labwc= （Wayland）与 =IceCat= 浏览器，开机自动免密登录 =live= 用户桌面，网络走 NetworkManager        |
+| =minimal= | =tmp/live-iso-minimal.scm= | 纯终端轻量救援盘： =TTY1= 保留官方 TUI 安装器（网络走 connman）， =TTY2= 为手册， =TTY3= – =TTY6= 为免密 root Shell |
+
+- *开箱即用的救砖与装机载荷* :: 镜像内直接将 =rescue-chroot.sh= 与 =emergency-blue.sh= 打包进系统 =PATH= （ =live-rescue-tools= ），并将当前仓库快照（剔除 =.git= 、 =dist= 与 =tmp= ）预置到 =~/Guix-configs= ，配合内嵌的 =emacs-minimal= ，启动后无需联网克隆即可直接执行 ~emergency-blue.sh init~ 。
+- *硬件兼容性与远程排障* :: 内置完整 =linux= 内核与 =linux-firmware= ，并移除了上游安装盘默认屏蔽 AMD 显卡 KMS 的 ~modprobe.blacklist=radeon,amdgpu~ 参数；同时默认自启 =sshd= 并允许密码登录（ =root= 与 =live= 账户密码均为 =live= ）。
+- *模块自包含* :: 两个变体块各自在顶部内联所需的 ~use-modules~ ，公共底座通过 ~<<live-common>>~ 展开，唯一跨区复用的代码块是上文的系统级 ~<<guix-substitutes>>~ 镜像源配置。
 
 #+NAME: live-common
 #+begin_src scheme
