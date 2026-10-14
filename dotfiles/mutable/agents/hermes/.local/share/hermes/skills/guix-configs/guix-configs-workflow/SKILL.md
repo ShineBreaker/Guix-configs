@@ -1144,6 +1144,26 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 
 **防护**: 手写 replacement body 时**从代码第一行开始**,不要包含语言标记;由 `block-show` 产物改造时先 `tail -n +3 <file> > <newfile>`。写错后 `git checkout source/config.org` 重做,不要在坏文件上再叠 patch。
 
+#### 坑 7：`blue check` 只验 scheme 块，非 scheme 块（conf / sh / fish / js）零覆盖
+
+`config.org` 里除 scheme 外还有 `conf`（kanata .kbd）、`sh`、`fish`、`js` 等语言块。`blue check` 与 `GUIX_DRY_RUN=1 blue rebuild` **完全不碰这些块的内容**——键位数写错、shell 语法错都能全绿通过,直到部署后行为不对才暴露。
+
+**防护：非 scheme 块必须用工具自己的校验器验，且从 org 里抽出来验**：
+
+```bash
+# 抽出指定 tangle 目标的块体（去掉 begin/end 两行）
+sed -n '/#+begin_src conf :tangle ..\/tmp\/kanata-laptop.kbd/,/#+end_src/p' source/config.org \
+  | sed '1d;$d' > /tmp/check.kbd
+
+# 用工具本体校验；二进制路径从 pgrep -af kanata 的 cmdline 拿
+/gnu/store/*-kanata-*/bin/kanata --check --cfg /tmp/check.kbd
+# 判据是输出里的 "config file is valid" / "Error in configuration"，不要看退出码
+```
+
+sed 的块头正则必须与 `#+begin_src` 行的 tangle 路径**字节级一致**（相对 `source/` 写），错一个字符就静默匹配不到、抽出空文件。抽出后先 `wc -l` 确认非空，并对空配置也可能报 valid 的校验器保持警惕。
+
+从布局截图反推键位改动的完整流程（读图 diff、layer 判定、项数配对、硬件功能键不可映射的处理）见 `remap-keymap-from-screenshot` skill。
+
 ### 9.3 字段引用小抄
 
 ### 9.2 补遗：功能回退不要信 commit message 的分类，直接读 diff
@@ -1178,6 +1198,7 @@ git stash pop   # baseline 报错 = 跟你的 patch 无关,别去动 channel.loc
 | `unbound variable: <name>`                         | use-modules 没引                  | 加对应模块                                |
 | `Symbol's value as variable is void: replaced` | `blue block-replace` 工具自身 bug | 先剥掉 body 头两行；仍报错则改用 patch |
 | `git diff` 出现多余的 `+scheme` / `+plain` 行 | §9.2 坑 6：body 带了 `block-show` 头两行 | `tail -n +3` 剥掉后重写 block-replace |
+| `blue check` 全绿但部署后行为不对（非 scheme 块） | §9.2 坑 7 | 用工具本体校验器验抽出的块体 |
 
 完整错误 transcript 和字段引用小抄见 `references/config-org-modify-safely.md`。
 
