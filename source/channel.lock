@@ -42,7 +42,7 @@
        (name 'pantherx)
        (url "https://codeberg.org/gofranz/panther.git")
        (branch "master")
-       (commit "028e11f1a33f16ff60f98b1e228229cbbba4c08e")
+       (commit "90f3f18f340f7882600d4783829e74ae17eacbda")
        (introduction
         (make-channel-introduction
          "54b4056ac571611892c743b65f4c47dc298c49da"
