@@ -17,7 +17,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/code-review/SKILL.md",
-      "computedHash": "caa9a086baaf9e0f7cd71f64edfa83da6821c05e826b083221f3d02e3d6a1905"
+      "computedHash": "57cfd4ceb011f05e58a1a4f4cad3b2e03419d371f8990f4bcb32ff0d435a039f"
     },
     "codebase-design": {
       "source": "mattpocock/skills",
@@ -29,7 +29,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
-      "computedHash": "b35c6a6e37c61ca3169532fbab2300dea26f2ad190e1d2dac065800b8b2bb0aa"
+      "computedHash": "ede7254edbd22fcab97a0941511f7d440d8f9a249348fea97c50987ad5501674"
     },
     "domain-modeling": {
       "source": "mattpocock/skills",
@@ -47,13 +47,13 @@
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/embedded-captions/SKILL.md",
-      "computedHash": "8831e9f939808bd07f01465e4be3ee47d939a3180749cd36377aa04c6a352c85"
+      "computedHash": "ad483d73e2f12e0c25a1432e4ad28c619296f5de747dd8a22306ffd3374af2a3"
     },
     "faceless-explainer": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/faceless-explainer/SKILL.md",
-      "computedHash": "c130c82de934030cc632b73262abff37dd83ee7bd4a7b5b1f9241b0bb2229e18"
+      "computedHash": "1c880fd8bdce2e48dc89c7e4f0ea5dacf068981547010fefdd6a156974dc74da"
     },
     "find-skills": {
       "source": "vercel-labs/skills",
@@ -65,7 +65,7 @@
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/general-video/SKILL.md",
-      "computedHash": "9c085a20d0d751c45692f353f4a9d062ce78c89357025fcca5ed09005fe3eb19"
+      "computedHash": "fd7e61d6de8011481944cd345fd7ce9e2cdb374cf5a54a33bc2cddf6dc7c6272"
     },
     "grill-me": {
       "source": "mattpocock/skills",
@@ -83,7 +83,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
-      "computedHash": "4dd886b0196bf43729d954ae326016f2bd9f5f79d892500b407c33a753362f14"
+      "computedHash": "ef1641a2047b71b60f1942cd35efb47d3afc9d584dff5a0b01f8c7db923aaa08"
     },
     "handoff": {
       "source": "mattpocock/skills",
@@ -95,19 +95,19 @@
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/hyperframes/SKILL.md",
-      "computedHash": "f6de7447e62c549940f93941aa2e910cb14d84a1627916d44b98bb71e450ce42"
+      "computedHash": "6cbde2286a360f435781495a8eda239cfe21bef5d6ca0405e6a92bfdf88bad84"
     },
     "hyperframes-animation": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/hyperframes-animation/SKILL.md",
-      "computedHash": "90be8b12d647ccb58f89a34de9da2ca3187371b905ff2c973d836ebaf9db9a36"
+      "computedHash": "3dc5649fb6b39e58e96e8ed5fa4481c7487e84e6f01e9c0ba37b613972eb4ea1"
     },
     "hyperframes-cli": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/hyperframes-cli/SKILL.md",
-      "computedHash": "0e07ae94255fc8d696c6bf1b1286a5adf3e6feb7f059feebe8f1a83faf220b8c"
+      "computedHash": "5983a1c74181e08ca2e3ccc9b181a8a38a2e05d807644b23755946c2973f0e25"
     },
     "hyperframes-core": {
       "source": "heygen-com/hyperframes",
@@ -149,19 +149,19 @@
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/motion-graphics/SKILL.md",
-      "computedHash": "eacdd43b420cfac2192e22de45295b03db7c910ee6eaebd19d97e7496981b8c9"
+      "computedHash": "de6aee841c033d9cdc567e952fa34df1ec671b4a1e7a66fcec02749062f4b59e"
     },
     "pr-to-video": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/pr-to-video/SKILL.md",
-      "computedHash": "dbe81e66072204b0ec90553f9251e5204874e4a5a5cc8cf17f9c9faa30632e91"
+      "computedHash": "494cd6c4732881525388e4658dd01c8b4539d0d69ee8dae5535c7b0b6633228b"
     },
     "product-launch-video": {
       "source": "heygen-com/hyperframes",
       "sourceType": "github",
       "skillPath": "skills/product-launch-video/SKILL.md",
-      "computedHash": "3e231c414125f5f47ebb7ba2e3e3ee11b46ad11c6c49da43f9e55289818c993e"
+      "computedHash": "b61907f39aee08db92d59b884da7a8e8fb4dda654c14e387ffec234e4d575989"
     },
     "prototype": {
       "source": "mattpocock/skills",
@@ -203,7 +203,7 @@
       "source": "warpdotdev/common-skills",
       "sourceType": "github",
       "skillPath": ".agents/skills/skill-doctor/SKILL.md",
-      "computedHash": "30931b68b6fe24705073e0f2a720df286974e9dd097e837e099372e85764a878"
+      "computedHash": "eae54bb2041744ff27c288e92a4805e9e1beef8ab8e9bd14c4950b8414246f80"
     },
     "slideshow": {
       "source": "heygen-com/hyperframes",
@@ -215,13 +215,13 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/tdd/SKILL.md",
-      "computedHash": "9ce12c4a1e209e557fcf9d02086ade3d7ffdb976186018fc1b063b4164246004"
+      "computedHash": "daf55026f456af104a72fa43247f7bcec89e5127316dc5b1b8d675d6a9d8ce94"
     },
     "teach": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/teach/SKILL.md",
-      "computedHash": "b8a69574c7a019bed84e84313dc8bf02e1d1bf925ba43057d433217c63863206"
+      "computedHash": "81c196426808c270a9d4688be291405c038bba11f020b9fe10098ad0f1d8c132"
     },
     "typesafe-ai": {
       "source": "typesafe-ai/skills",
@@ -233,7 +233,7 @@
       "source": "cursor/plugins",
       "sourceType": "github",
       "skillPath": "pstack/skills/unslop/SKILL.md",
-      "computedHash": "6018ca8c329ba87c6b4298207f58d6b773fe23e44ff52a00a9a4d160c19bedc0"
+      "computedHash": "eca0ad9fa3a3867c83f3aaf3a058e247a569c8976a68ca423a569b93eb86de5d"
     },
     "wait-what": {
       "source": "mattpocock/skills",
@@ -245,7 +245,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/wizard/SKILL.md",
-      "computedHash": "dee7f1a523994a1e063c69fe09c2f5b4da97a41ad68107722664e6e472cb2423"
+      "computedHash": "49298bed80e7f722b071ad5d64798c75eb705bbbe0635b9bbffd08cd6fb81647"
     },
     "writing-beats": {
       "source": "mattpocock/skills",

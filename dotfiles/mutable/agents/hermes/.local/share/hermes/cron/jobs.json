@@ -127,15 +127,15 @@
       "schedule_display": "30 23 * * 3,6",
       "repeat": {
         "times": null,
-        "completed": 20
+        "completed": 21
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-12T22:32:44.043191+08:00",
-      "next_run_at": "2026-10-14T23:30:00+08:00",
-      "last_run_at": "2026-10-11T00:09:01.248776+08:00",
+      "next_run_at": "2026-10-17T23:30:00+08:00",
+      "last_run_at": "2026-10-15T00:09:25.116487+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -150,9 +150,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-10T23:30:00+08:00",
-        "dispatched_at": "2026-10-10T23:30:14.832833+08:00",
-        "lateness_seconds": 14.8,
+        "scheduled_at": "2026-10-14T23:30:00+08:00",
+        "dispatched_at": "2026-10-14T23:30:41.964950+08:00",
+        "lateness_seconds": 42.0,
         "kind": "on_time"
       }
     },
@@ -183,8 +183,8 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T15:40:30.541829+08:00",
-      "next_run_at": "2026-10-15T03:00:00+08:00",
-      "last_run_at": "2026-10-14T03:36:12.436262+08:00",
+      "next_run_at": "2026-10-16T03:00:00+08:00",
+      "last_run_at": "2026-10-15T03:59:51.346115+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -196,9 +196,9 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-14T03:00:00+08:00",
-        "dispatched_at": "2026-10-14T03:00:57.808037+08:00",
-        "lateness_seconds": 57.8,
+        "scheduled_at": "2026-10-15T03:00:00+08:00",
+        "dispatched_at": "2026-10-15T03:00:42.237837+08:00",
+        "lateness_seconds": 42.2,
         "kind": "on_time"
       }
     },
@@ -271,18 +271,18 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 21
+        "completed": 22
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-10-15T08:00:00+08:00",
-      "last_run_at": "2026-10-14T08:01:47.909209+08:00",
-      "last_status": "ok",
+      "next_run_at": "2026-10-16T08:00:00+08:00",
+      "last_run_at": "2026-10-15T08:01:42.573049+08:00",
+      "last_status": "delivery_failed",
       "last_error": null,
-      "last_delivery_error": null,
+      "last_delivery_error": "live adapter send failed: Not connected; live adapter delivery to qqbot:52DAD9E6A36A3DEC33E37F47CF09673F failed: Not connected; delivery error: QQBot: no access_token in response (target qqbot:52DAD9E6A36A3DEC33E37F47CF09673F)",
       "last_delivery_unverified": null,
       "failure_streak": 0,
       "deliver": "qqbot",
@@ -297,9 +297,9 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-14T08:00:00+08:00",
-        "dispatched_at": "2026-10-14T08:00:57.807498+08:00",
-        "lateness_seconds": 57.8,
+        "scheduled_at": "2026-10-15T08:00:00+08:00",
+        "dispatched_at": "2026-10-15T08:00:42.240299+08:00",
+        "lateness_seconds": 42.2,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -367,5 +367,5 @@
       "fire_claim": null
     }
   ],
-  "updated_at": "2026-10-14T08:01:47.909912+08:00"
+  "updated_at": "2026-10-15T08:01:42.573635+08:00"
 }

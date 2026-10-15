@@ -1,10 +1,10 @@
 ---
 name: verify-harness-maintenance
-description: "修复或评估无头验证 harness（质量判定、场景运行、加固）。触发：verify 套件坏了或结果可疑 / 搭无头验证环境 / 判断 harness 是否可信——任一出现即调用。"
-version: 1.0.0
+description: "修复或评估验证 harness（无头场景运行、配置库冒烟/编译/lint 管线、结果可信度）。触发：verify 套件坏了或结果可疑 / 搭无头验证环境 / 写冒烟或 lint 脚本 / 判断 harness 是否可信——任一出现即调用。"
+version: 1.1.0
 metadata:
   hermes:
-    tags: [verify-harness, testing, headless, qml, parallel-agents, log-triage]
+    tags: [verify-harness, testing, headless, qml, config-repo, sentinel, parallel-agents, log-triage]
     related_skills: [quicksshell-qml-development, nosdshell-dev, monitoring-script-debugging, task-contract]
 ---
 
@@ -13,6 +13,7 @@ metadata:
 ## When to use
 
 - A verify script (`Scripts/test/verify.sh`, scene runners, seeded-config harnesses) needs a scene added, a seed key fixed, or a snapshot taken.
+- A config repo (dotfiles, Emacs config, channel) needs its `scripts/` set built or fixed: profile smoke, byte-compile check, convention lint, startup timing.
 - A verify run shows a defect and you must decide whether it belongs to the **harness**, the **product code**, or a **parallel agent's in-flight rewrite**.
 - Someone hands you a brief listing scenes, noise entries, or acceptance items that may not match the repo's current script.
 
@@ -27,6 +28,7 @@ Companion to `quickshell-qml-development` (shell authoring/debug) and `nosdshell
 5. **A scene whose body toggles state is not a baseline.** Harnesses routinely write `call X toggle; shot; call X toggle` — that frame is a *post-toggle* state, and the toggle can tear down surfaces unrelated to the key you are testing (a dock toggle can take the wallpaper with it). For A/B comparisons use a scene that does not mutate persisted state, and derive baseline and variants from that scene in the same snapshot.
 6. **A run with no usable PNG is a failed run, not evidence.** Check each PNG's byte size against its expected magnitude *before* reading it — a near-empty file means the shell never rendered, and reading it as a result manufactures a false verdict. Re-run that class.
 7. **Recon the repo's own test tooling before writing a harness of your own.** `ls Scripts/test/`, `Scripts/dev/`, and every subdir of them (a `niri/`, `sway/`, or scene-runner dir is cheap to open and often lands mid-session). A harness the repo already ships carries the per-quirk config this shell needs — compositor flags, binary resolution, frame landing, stop semantics — that ad-hoc work re-learns the slow way, and it is maintained when the shell changes while yours is not.
+8. **Prove the exit-code channel before building a verdict on it.** A launcher that runs the real binary as a child can swallow its status: Guix's generated wrappers exec the target through guile `system*` and never forward the result, so every wrapped command exits 0 and `cmd || fail` can never fire. Test whether the binary you invoke is such a wrapper (`file $(which X)`, or a `#!/gnu/store/.../guile` shebang) with a command you know fails, then put a **sentinel line in the output and grep for it** instead of trusting the code. The same suspicion applies to any interpreter shim, `sudo` policy, or container exec layer between your script and the tool.
 
 ## Procedure
 
@@ -69,6 +71,10 @@ Classify the result, and make the report say which class each key is in:
 | path-limited | read only by a component that does not render in this configuration | grep + component's render condition |
 
 A single "dead keys" bucket mixes classes and misleads: a key dead in one mode and path-limited in another needs both stated, along with which mode was seeded. A component never rendered in the seeded mode is unexercised, not dead.
+
+## Config-repo verification harnesses
+
+A config repo's `scripts/` set (profile smoke, byte-compile check, convention lint, startup timing) has no screenshots and no compositor, so every verdict rests on an exit code, a sentinel line, or a grep count — each of which fails silently in its own way. Recipe, the per-file byte-compile isolation rule, and the lint self-match exemption live in `references/config-repo-verify.md`.
 
 ## Re-verifying after a change
 

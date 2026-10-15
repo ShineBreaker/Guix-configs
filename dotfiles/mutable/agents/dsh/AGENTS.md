@@ -32,19 +32,20 @@
 
 | 插件                     | 当前版本       | 说明                                                                                         |
 | ------------------------ | -------------- | -------------------------------------------------------------------------------------------- |
-| `dsh-context`            | 0.61.0         | 上下文监控面板：Agent 组合、趋势、文件活动与 Agent 通信网络                                  |
-| `dsh-dream-skin`         | 9.29.0         | 原生主题换肤（官方 `ctx.theme.register` / `overrideTokens`）                                 |
-| `dsh-opencode-go`        | 0.1.16         | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                            |
-| `dshmarket`              | 1.66.4         | 插件市场：浏览、安装与更新社区插件                                                           |
+| `dsh-context`            | 0.70.0         | 上下文监控面板：Agent 组合、趋势、文件活动与 Agent 通信网络                                  |
+| `dsh-dream-skin`         | 10.14.2        | 原生主题换肤（官方 `ctx.theme.register` / `overrideTokens`）                                 |
+| `dsh-opencode-go`        | 0.1.22         | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                            |
+| `dshmarket`              | 1.66.21        | 插件市场：浏览、安装与更新社区插件                                                           |
+| `@xmanrui/dsh-im`        | 4.39.0         | IM 接入：微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix 连进 DSH     |
+| `dsh-pocket`             | 2.11.0         | 手机扫码远程访问（局域网 + 公网实时同屏），取代已删的 `dsh-remote-web-gateway`               |
 | `dsh-devin-cli`          | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，`dsh update` 自动跟 HEAD）               |
 | `dsh-find-plugin`        | 0.4.0          | 文件/内容查找；peer 止步 0.1.7 线，0.2.0 下被 compat 门 skip（见下）                         |
-| `dsh-remote-web-gateway` | 0.2.2          | 远程网关；2026-08-28 后停更，0.2.0 下被 compat 门 skip（见下）                               |
 | `dsh-agent-extensions`   | `link:` 本地   | 自建插件，见「自建插件」                                                                     |
 | `dsh-agenote`            | `link:` 本地   | 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在外部仓库 `~/Projects/agenote/dsh-agenote` |
 
 ### 兼容门（compat gate）
 
-0.1.7-rc.1 起 `dsh-app-boot` 的 `evaluatePluginCompatibility` 在启动时按插件 manifest 的 `@deepseek-ai/dsh*` peer 范围做强制校验（`includePrerelease: true`，不读 `peerDependenciesMeta.optional`），不满足即**整 bundle skip**，只在 `web.log` 记 `skipping profile bundle`——boot 本身不受影响，页面表现为该插件功能整体缺失。`dsh-find-plugin@0.4.0`（peer 止步 `^0.1.7-alpha.1`）与 `dsh-remote-web-gateway@0.2.2`（peer 全 0.1.x）当前就在这个状态，保留观望；上游发适配版后用 `dsh plugin --profile web add <pkg>@<ver>` 升回，确认不再需要则 `dsh plugin rm` 并验证 `package.json` 的 dependencies、`dsh.profile.bundles`、workspace 的 `minimumReleaseAgeExclude` 三处同清。
+0.1.7-rc.1 起 `dsh-app-boot` 的 `evaluatePluginCompatibility` 在启动时按插件 manifest 的 `@deepseek-ai/dsh*` peer 范围做强制校验（`includePrerelease: true`，不读 `peerDependenciesMeta.optional`），不满足即**整 bundle skip**，只在 `web.log` 记 `skipping profile bundle`——boot 本身不受影响，页面表现为该插件功能整体缺失。`dsh-find-plugin@0.4.0`（peer 止步 `^0.1.7-alpha.1`）当前就在这个状态，保留观望；上游发适配版后用 `dsh plugin --profile web add <pkg>@<ver>` 升回，确认不再需要则 `dsh plugin rm` 并验证 `package.json` 的 dependencies、`dsh.profile.bundles`、workspace 的 `minimumReleaseAgeExclude` 三处同清（`dsh-remote-web-gateway` 已于 2026-10 按此流程删除，远程访问由 `dsh-pocket` 接替）。
 
 > **semver 预发布区间的陷阱**：peer 范围写 `^0.1.0-rc.6` 时只匹配同 `0.1.0` 元组，永远够不到 `0.1.6-alpha.2`。降级判断先看这条。
 
@@ -168,3 +169,5 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
 3. **第三方插件报 `cannot get property "webServer" without inject`（boot 崩溃）**：`ctx.connection.rpc.handle()` 内部在 **connection 插件自己的 scope** 解析 `webServer`（cordis shadow 语义，`this.ctx` 经 `createShadow` 指向服务方 context），而 bundle 的 `connection` 行只 inject 了 `webRuntime` → 任何调 `rpc.handle` 的插件（如 `dsh-remote-web-gateway`）都会炸掉整个 boot；`rpc.intercept` / `fetch.register` 不受影响。修法：profile `cordis.patch.yml` 给 `connection` 行补 `inject: [webRuntime, webServer]`（inject 是整表替换，原值须复述）。
 4. **源与部署侧静默分叉**：UI / `dsh plugin` 装插件时 pnpm 原地写 `profiles/web/package.json`，把回本仓库的软链换成实体文件。断链自愈已双层覆盖（详见 [docs/scripts/dsh.md §dsh（wrapper）](../../../../docs/scripts/dsh.md)），但触发窗口（UI 编辑后、下次 dsh 命令前）内源是旧的，建议跑完 `ls -la ~/.local/share/dsh/profiles/web/` 抽查链接形态。
 5. **会话报 `本轮运行失败 format v4 message requires a producer-owned source kind`**：0.1.7 会话格式 v4 拒绝旧式消息源 `{kind: "plugin", plugin: "<名>"}`（`kind: "plugin"` 包装已退役）。**插件创建 user/developer 消息必须直接写 producer-owned kind**：按 v3→v4 迁移器规则写 `{kind: "plugin:<名>"}`（如 `plugin:agent-gate`），与旧日志重放的迁移结果保持一致；读取侧识别自注入消息要同时兼容 v3（`kind === "plugin"` + `plugin` 字段）与 v4（`kind` 以 `plugin:` 开头）两种形态。本包 `gate.js` 与外部 `dsh-agenote` 已按此规范写，新增注入消息的插件照此办理。
+6. **`dsh plugin add` 报 `ERR_PNPM_UNEXPECTED_STORE`（v11 linked vs wants v10）**：本机有两套 pnpm——PATH shim（`~/.local/share/pnpm/pnpm`，npm 装，10.x 用 store v10）与 corepack 解析的 11.22.0（store v11，profile 的 `node_modules` 实际链到 v11）。旧 shim 调 pnpm 时 store 大版本对不上即拒跑。临时解法：建 `exec corepack pnpm "$@"` 的 wrapper 目录前置到 PATH 再跑 `dsh plugin`。**根治需把全局 pnpm 升到 11.x（`pnpm self-update` 或重装 shim），属用户手动决策**。另见坑 7。
+7. **`dsh plugin add` 在非 TTY 下可能挂死**：pnpm 收尾阶段偶发 epoll 空等不退出（2026-10 装 `dsh-pocket` 实测 8 分钟无进展、无网络无子进程）。判定：`ps` 看 pnpm 进程 State=S 且 `ss -tnp` 无连接。处置：杀掉进程后核对安装完成度——`package.json` 的 dependencies 与 `pnpm-lock.yaml` 通常已被 pnpm 写完，缺的是 dsh 侧的 `dsh.profile.bundles` 写入与回源收尾：手动补 bundles 行、跑任意 `dsh` 命令触发 lockfile 回源即可，无需重装。
