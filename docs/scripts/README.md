@@ -108,11 +108,10 @@ niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解�
 | `mihomo-run`                                        | 解密订阅、渲染模板并 exec mihomo                                   |
 | `nm-dispatcher-trusted-connection`                  | NetworkManager dispatcher：可信 WiFi 接口进出 nftables 集合        |
 | `tuned-services`                                    | tuned 服务与 tuned-ppd 档位映射（profile 在 `source/files/tuned/`，无内嵌脚本） |
-| `usb-power-services`                                | USB `power/control` 权限 udev 规则                                 |
+| `usb-power-services`                                | USB autosuspend udev 规则（600s 空闲挂起 + VID:PID 白名单）        |
 | `root-services`                                     | `beesd-run` 启动包装                                               |
 | `50-hibernate.rules`                                | polkit 休眠授权规则（JavaScript）                                  |
 | `fish-cfg`                                          | fish 交互 shell 集成模板                                           |
-| `usb-power-watch`                                   | 熄屏 USB 挂起守护                                                  |
 | `clipsync`                                          | X11 与 Wayland CLIPBOARD 双向同步守护（Guile）                     |
 | `kb-backup-script`                                  | hermes 与 Org 知识库每日自动 commit                                |
 | `gnupg-home-fixup-script`                           | `tmp/gnupg-home-fixup`：GNUPGHOME 收敛 700 + 清外主机 dotlock 残留 |

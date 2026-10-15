@@ -203,7 +203,7 @@ blue build
 为了消除重复的样板代码，这里将 Shepherd 服务最常见的三种形态封装为辅助函数。其中 =command= 参数接收「可执行程序 + 参数」的列表，列表元素既可以是普通字符串，也可以是 Guix 的可 lower 对象（构建期自动展开为 =/gnu/store/……= 下的真实路径，无需手写绝对路径）：
 
 - *普通字符串* :: 如 ~"/bin/sh"~ 、 ~"--bind-dynamic"~ ，按原样拼入命令行。
-- *包内路径与本地文件* :: 如 ~(file-append kdeconnect "/bin/kdeconnect-indicator")~ 或 ~(local-file "usb-power-watch")~ ，构建时自动解析为对应 store 路径。
+- *包内路径与本地文件* :: 如 ~(file-append kdeconnect "/bin/kdeconnect-indicator")~ 或 ~(local-file "clipsync.scm")~ ，构建时自动解析为对应 store 路径。
 - *G-expression（gexp，构建期模板）* ::
   - ~define*~ 与 ~#:key~ ：定义带可选关键字参数的函数，调用时未显式传入的参数自动取默认值。
   - =#~(……)= ：声明构建期模板，内部代码不在读取配置时立即执行，而是延后至构建或服务运行期求值。
@@ -1425,7 +1425,7 @@ Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 
 *** UDEV 规则
 
-集中管理硬件外设节点权限、AC 电源热插拔调优以及 USB 端口熄屏挂起授权。
+集中管理硬件外设节点权限与 USB autosuspend 策略（电源档位调优见 tuned 一节）。
 
 **** 静态规则
 
@@ -1525,21 +1525,26 @@ Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
              (sysfs-acpi-monitor? #f))))))
 #+end_src
 
-**** USB 电源权限
+**** USB autosuspend 策略
 
-当 USB 设备插入或枚举出 =power/control= 属性时，自动将其权限放宽为 =0666= ，使得用户态的熄屏省电守护进程（见下文的 =usb-power-watch= ）无需 root 提权即可挂起或唤醒外设。
+内核原生 USB runtime PM：设备自身无流量满 600 秒自动挂起（功耗降至 µA 级），任何输入或流量即时唤醒——比「熄屏」代理信号更精准（熄屏播放 / 下载不误伤），且无需常驻轮询守护。白名单按 =VID:PID= 持久放行（ =control=on= ），用于兜底个别设备挂起后的唤醒体验；查 =/sys/bus/usb/devices/*/= 下的 =idVendor= / =idProduct= 获得设备标识。
 
 #+NAME: usb-power-services
 #+begin_src scheme
 (list (udev-rules-service
-       'usb-power-perms
+       'usb-autosuspend
        (file->udev-rule
-        "95-usb-power-control-perms.rules"
-        (mixed-text-file
-         "95-usb-power-control-perms.rules"
-         "ACTION==\"add\", SUBSYSTEM==\"usb\", TEST==\"power/control\", "
-         "RUN+=\"" (file-append coreutils "/bin/chmod")
-         " 666 %S%p/power/control\"\n"))))
+        "96-usb-autosuspend.rules"
+        ;; 逐段 string-append 而非 "\"" 续行：noweb 展开的缩进继承会把
+        ;; 续行行首空格烘进字符串，udev 规则将带前导空白
+        (plain-file "96-usb-autosuspend.rules"
+                    (string-append
+                     "# USB runtime PM：空闲 600s 挂起、有活动即时唤醒（内核 autosuspend），\n"
+                     "# 替代已退役的 usb-power-watch 熄屏守护。白名单按 VID:PID 持久放行，\n"
+                     "# 命中即 GOTO 跳过全局规则；某设备唤醒体验差时仿照注释行添加。\n"
+                     "#ACTION==\"add\", SUBSYSTEM==\"usb\", ATTR{idVendor}==\"28e9\", ATTR{idProduct}==\"31ff\", ATTR{power/control}=\"on\", GOTO=\"usb_pm_end\"\n"
+                     "ACTION==\"add\", SUBSYSTEM==\"usb\", TEST==\"power/control\", ATTR{power/control}=\"auto\", ATTR{power/autosuspend}=\"600\"\n"
+                     "LABEL=\"usb_pm_end\"\n")))))
 #+end_src
 
 *** 基础服务
@@ -2516,7 +2521,7 @@ _    _  _  _  _  _  _  _)
 
 **** 桌面常驻组件
 
-集中声明五项桌面辅助守护进程： =kdeconnect= （默认不自启，按需拉起）、 =mpris-proxy= （蓝牙耳机媒体键转发）、 =poweralertd= （低电量通知）、 =usb-power-watch= （熄屏 USB 挂起）与 =clipsync= （X11/Wayland 剪切板双向桥接）。
+集中声明四项桌面辅助守护进程： =kdeconnect= （默认不自启，按需拉起）、 =mpris-proxy= （蓝牙耳机媒体键转发）、 =poweralertd= （低电量通知）与 =clipsync= （X11/Wayland 剪切板双向桥接）。
 
 #+NAME: essential-desktop-services
 #+begin_src scheme
@@ -2538,10 +2543,6 @@ _    _  _  _  _  _  _  _)
                                                                "/bin/poweralertd"))
                                             #:requirement '(graphical-session))
 
-                       (home-daemon-service 'usb-power-watch
-                                            (list "/bin/sh"
-                                                  (local-file "usb-power-watch")))
-
                        (home-daemon-service 'clipsync
                                             (list (file-append guile-3.0 "/bin/guile")
                                                   "--no-auto-compile"
@@ -2549,62 +2550,6 @@ _    _  _  _  _  _  _  _)
                                             #:requirement '(graphical-session)
                                             #:documentation
                                             "X11 与 Wayland CLIPBOARD 双向同步（niri + xwayland-satellite 无自动转发）"))))
-#+end_src
-
-**** usb-power-watch 脚本
-
-配合系统层 ~95-usb-power-control-perms.rules~ （将 USB 设备的 =power/control= 放宽为 =0666= ），在屏幕连续熄灭后自动挂起指定物理 USB 端口上的外设以节省待机功耗，亮屏后立即恢复供电：
-
-- *状态机与防抖* :: 每 =30= 秒轮询一次 =/sys/class/backlight/*/bl_power= （ =0= 表示点亮）。仅当所有背光均处于熄灭状态且持续满 =120= 秒（ =THRESHOLD= ）时，才向白名单端口（ =PORTS= ）写入 =auto= 挂起设备，避免短暂黑屏引发外设断连。
-- *唤醒恢复* :: 一旦检测到任一背光点亮（或无可读背光节点时按安全默认视为亮屏），若当前处于挂起态则立即向受管端口写回 =on= 。
-
-#+NAME: usb-power-watch
-#+CAPTION: 熄屏守护：连续熄屏 120s 后挂起清单内 USB 物理口，亮屏恢复
-#+begin_src sh :tangle ../tmp/usb-power-watch
-#!/bin/sh
-# usb-power-watch — 熄屏后把清单内物理 USB 口挂起省电，亮屏即恢复供电。
-
-INTERVAL=30
-THRESHOLD=120
-PORTS="3-2 3-5 3-6 4-5 4-6"
-
-in_ports() {
-    for p in $PORTS; do
-        case "$1" in "$p"|"$p."*) return 0 ;; esac
-    done
-    return 1
-}
-
-set_ports() {
-    for dev in /sys/bus/usb/devices/*-*; do
-        case "${dev##*/}" in *:*) continue ;; esac
-        [ -f "$dev/power/control" ] || continue
-        if in_ports "${dev##*/}"; then
-            echo "$1" > "$dev/power/control" 2>/dev/null
-        fi
-    done
-}
-
-off_since=0
-state=on
-while :; do
-    lit=0; dark=0
-    for b in /sys/class/backlight/*/bl_power; do
-        [ -r "$b" ] || continue
-        if [ "$(cat "$b" 2>/dev/null)" = 0 ]; then lit=1; else dark=1; fi
-    done
-    if [ "$lit" = 0 ] && [ "$dark" = 1 ]; then
-        now=$(date +%s)
-        [ "$off_since" = 0 ] && off_since=$now
-        if [ $((now - off_since)) -ge $THRESHOLD ]; then
-            set_ports auto; state=off
-        fi
-    else
-        off_since=0
-        if [ "$state" != on ]; then set_ports on; state=on; fi
-    fi
-    sleep $INTERVAL
-done
 #+end_src
 
 **** clipsync 剪切板桥接
