@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Callable
+from pathlib import Path
 
 HAN = r"一-鿿"  # 只含汉字：全角标点不该触发补空格规则
 PUNCT_CJK = r"　-〿＀-￯"  # 全角标点与符号
@@ -476,11 +477,17 @@ def main() -> int:
 
     total = 0
     for path in files:
-        if not os.path.exists(path):
+        # 写入目标先规范化校验并限制在仓库 root 内，再由 root 常量重建，
+        # 外部传入的路径只用来定位，永不直接作为写入目标
+        rp = os.path.realpath(path)
+        if not (rp == root or rp.startswith(root + os.sep)):
+            print(f"跳过（仓库外）：{path}", file=sys.stderr)
+            continue
+        safe = Path(os.path.join(root, os.path.relpath(rp, root)))
+        if not safe.exists():
             print(f"跳过（不存在）：{path}", file=sys.stderr)
             continue
-        with open(path, encoding="utf-8") as fp:
-            raw = fp.read()
+        raw = safe.read_text(encoding="utf-8")
         new, notes = scan(raw, path.endswith(".org"))
         if new == raw:
             continue
@@ -489,8 +496,7 @@ def main() -> int:
         for x in dict.fromkeys(notes):
             print(f"  {x}")
         if not args.check:
-            with open(path, "w", encoding="utf-8") as fp:
-                fp.write(new)
+            safe.write_text(new, encoding="utf-8")
     print(
         f"\n合计 {total} 处{'（未写入，--check 模式）' if args.check else '，已写入'}"
     )

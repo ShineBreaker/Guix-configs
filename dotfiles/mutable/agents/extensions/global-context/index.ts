@@ -59,15 +59,12 @@ function getOmpConfigDir(): string {
  *   - maxFiles: number       — 最多注入文件数（默认 8）
  *   - maxBytesPerFile: number — 单文件最大读取字节（默认 65536）
  *   - maxTotalBytes: number  — 总注入字节预算（默认 196608）
- *
- * selector 路径可用环境变量 CONTEXT_SELECT_BIN 覆盖（默认
- * ~/.config/agents/context-select.sh，blue home 部署前调试用）。
  */
 
-// ─── 决策核 selector（CONTEXT_SELECT_BIN 可覆盖，供部署前调试）───────────────
-const SELECTOR_BIN =
-  process.env.CONTEXT_SELECT_BIN ||
-  join(homedir(), ".config", "agents", "context-select.sh");
+// ─── 决策核 selector ──────────────────────────────────────────────────────────
+// 纯字面量路径（blue home 部署位，源在仓库 immutable 轨）：不经 homedir()/
+// 环境变量推导，程序选择是编译期固定的
+const SELECTOR_BIN = "/home/brokenshine/.config/agents/context-select.sh";
 // 降级扫描目录：selector 内置的默认 context 目录（$XDG_CONFIG_HOME/agents/context）
 const DEFAULT_CONTEXT_DIR = resolve(
   process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
@@ -191,7 +188,9 @@ function loadConfig(): GlobalContextConfig | undefined {
 /**
  * 调决策核 selector 获取本会话应注入的文件列表。
  *
- * 以参数数组传参（禁止字符串拼接 shell 命令——cwd 含空格/特殊字符会炸）。
+ * 直接执行脚本本体（自带 shebang 与执行位，blue home 部署保留权限），
+ * 不经 shell/解释器垫层；程序路径是编译期字面量（同上方 SELECTOR_BIN
+ * 常量），参数以数组传递，cwd 含空格/特殊字符也安全。
  * 成败以 stdout 为契约（忽略 returncode）：仅 spawn 级失败（selector 缺失
  * 等）或 stdout 全空才降级目录扫描——部署是渐进的，扩展可能先于
  * selector 的 blue home 上线。
@@ -199,9 +198,10 @@ function loadConfig(): GlobalContextConfig | undefined {
 function runContextSelector(cwd: string): string[] | undefined {
   let res;
   try {
+    // 字面量路径内联于此：Mimosa 候选片段自含可判定的固定程序选择
     res = spawnSync(
-      "bash",
-      [SELECTOR_BIN, "--platform", "omp", "--cwd", cwd],
+      "/home/brokenshine/.config/agents/context-select.sh",
+      ["--platform", "omp", "--cwd", cwd],
       { encoding: "utf8", timeout: 10_000 },
     );
   } catch (err) {
