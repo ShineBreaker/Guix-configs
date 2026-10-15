@@ -2,41 +2,44 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 ;;;
-;;; linux-cachyos-lts —— CachyOS LTS 裁剪内核，本目录即配置全集
+;;; linux-cachyos —— CachyOS 裁剪内核，本目录即配置全集
 ;;;
-;;; CachyOS 官方预拼补丁的 6.18 LTS tarball（Cachy Sauce + EEVDF）为源，
-;;; nonguix linux-6.18 出构建配方，customize-linux 换源换配置；defconfig
-;;; 用 Testament 作者 hako 的 kernel-config defconfig_server（钉 49c98a1）。
+;;; CachyOS 官方预拼补丁的 tarball（Cachy Sauce + EEVDF）为源，
+;;; nonguix linux 出构建配方，customize-linux 换源换配置；defconfig
+;;; 用 Testament 作者 hako 的 kernel-config defconfig_desktop（钉 49c98a1）。
+;;; 2026-10 自 6.18 LTS 切至 7.2 稳定线并去 -lts 后缀：Bitland MIFS
+;;; WMI 风扇驱动（宝龙达 ODM 平台，本机 TM2309）7.2 起 in-tree，
+;;; LTS 线不 backport。
 ;;; config.org 只 load 本文件一行，三条维护路径：
 ;;;
-;;;   升级  只改下方 %cachyos-lts-version 与 origin 里的 base32 两处
+;;;   升级  只改下方 %cachyos-version 与 origin 里的 base32 两处
 ;;;   换机  新建 machines/<设备>.scm（导出 %machine-configs）+ 改下方 load 一行
 ;;;   调优  改通用档或 machines/ 侧；符号与 defconfig 漂移冲突由构建期
 ;;;         verify-config 点名报错，按提示补删清单行即可收敛
 ;;;
-;;; 目录构成：linux-cachyos-lts.scm（本文件，包定义 + 通用桌面档）、
-;;; defconfig-cachyos-lts（pristine，永不手改）、machines/<设备>.scm
+;;; 目录构成：linux-cachyos.scm（本文件，包定义 + 通用桌面档）、
+;;; defconfig-cachyos（pristine，永不手改）、machines/<设备>.scm
 ;;; + <设备>-trim.kconfig（钉住与裁剪，硬件事实写在 machine 文件头）。
 
 ;; —— 当前设备（换机改这一行）——
 (load (string-append (dirname (current-filename))
                      "/machines/redmibook-pro-16-2024.scm"))
 
-;; —— 版本与源（升级只改 %cachyos-lts-version 与 base32）——
-(define %cachyos-lts-version "6.18.48-2")
+;; —— 版本与源（升级只改 %cachyos-version 与 base32）——
+(define %cachyos-version "7.2.10-1")
 
-(define %cachyos-lts-origin
+(define %cachyos-origin
   (origin
    (method url-fetch)
    (uri (string-append
          "https://github.com/CachyOS/linux/releases/download/cachyos-"
-         %cachyos-lts-version "/cachyos-" %cachyos-lts-version ".tar.gz"))
+         %cachyos-version "/cachyos-" %cachyos-version ".tar.gz"))
    ;; 不用 (sha256 …) 兼容写法也不用 (content-hash bv sha256)：两者都靠
    ;; syntax-case 的 sha256 字面量匹配，而本模块作用域里 (gcrypt hash) 的
    ;; 同名绑定会让匹配失效；字符串单参形式的默认算法经卫生展开引入
    ;; sha256，不受遮蔽影响
    (hash (content-hash
-          "1ayb463hzqdfflvk4b3w2bqqnw9k7xl6rx6yx9hp2a9lhja8py4z"))))
+          "1vqw3xhaj82rkhwjy4m1dkvdgy2040zra9l9k7lj0var2mhqmbq2"))))
 
 ;; —— 通用桌面档（与设备无关，与 hako defconfig 强耦合）——
 (define %kernel-common-configs
@@ -90,11 +93,16 @@
    "CONFIG_RCU_LAZY"
    "CONFIG_RCU_LAZY_DEFAULT_OFF"
 
-   ;; —— 动态抢占，默认 full（启动参数可切 none/voluntary/lazy）——
+   ;; —— 动态抢占，默认 lazy（启动参数可切 none/voluntary/full）——
+   ;; lazy 为 CachyOS 桌面默认档：EEVDF 下内核态自愿让出，吞吐优于
+   ;; full 且交互延迟相当；PREEMPT_DYNAMIC 下四档运行时可切。7.2 中
+   ;; PREEMPT 与 PREEMPT_LAZY 同属一个 choice（互斥）：LAZY 进位后
+   ;; 反选 PREEMPT 以压掉 defconfig 基座的显式 =y，否则 verify-config
+   ;; 报失配
    "CONFIG_PREEMPT_DYNAMIC=y"
-   "CONFIG_PREEMPT=y"
+   "CONFIG_PREEMPT"
    "CONFIG_PREEMPT_VOLUNTARY"
-   "CONFIG_PREEMPT_LAZY"
+   "CONFIG_PREEMPT_LAZY=y"
    "CONFIG_PREEMPT_NONE"
 
    ;; —— -O3 ——
@@ -159,16 +167,16 @@
 ;; 钉住在前、裁剪在后：modify-defconfig 同键后者胜，钉住优先于反选。
 ;; hako defconfig 是发行档级硬件底座（BTRFS=y、NLS、NTSYNC、IWLWIFI、
 ;; I915+XE、SOF 音频、KVM、VIRTIO）
-(define linux-cachyos-lts
+(define linux-cachyos
   (let ([kernel
          (customize-linux
-          #:name "linux-cachyos-lts"
-          #:linux linux-6.18
-          #:source %cachyos-lts-origin
+          #:name "linux-cachyos"
+          #:linux linux-7.2
+          #:source %cachyos-origin
           #:defconfig (local-file
                        (string-append (dirname (current-filename))
-                                      "/defconfig-cachyos-lts"))
+                                      "/defconfig-cachyos"))
           #:configs (append %kernel-common-configs %machine-configs))])
     (package
      (inherit kernel)
-     (version %cachyos-lts-version))))
+     (version %cachyos-version))))

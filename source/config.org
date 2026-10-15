@@ -53,7 +53,7 @@ blue build
 除集中导入 Guix 官方与第三方频道（ =nongnu= 、 =rosenthal= 、 =jeans= 、 =px= ）的模块外，文件头部还通过 ~load~ 引入两份本地定义（相对路径均以 =source/= 目录为基准）：
 
 - =source/information.scm= :: 机器身份（主机名、用户名）、磁盘分区 UUID 及 Btrfs 子卷与持久化目录清单，作为全仓共享的单一数据源。
-- =source/files/kernel/linux-cachyos-lts.scm= :: 本地定制编译的 CachyOS LTS 内核包定义（详见下文的 [[#sys-kernel][Kernel]] 章节）。
+- =source/files/kernel/linux-cachyos.scm= :: 本地定制编译的 CachyOS 内核包定义（详见下文的 [[#sys-kernel][Kernel]] 章节）。
 
 #+NAME: modules
 #+begin_src scheme :noweb yes
@@ -192,7 +192,7 @@ blue build
 <<flatpak-service-helpers>>
 
 ;; 自定义变体包
-<<cachyos-lts-kernel>>
+<<cachyos-kernel>>
 <<fingerprint-packages>>
 <<other-def-packages>>
 #+end_src
@@ -303,13 +303,13 @@ blue build
 
 **** 包定义
 
-***** CachyOS LTS 内核
+***** CachyOS 内核
 
-对标上游 =linux-cachyos-lts= 变体（集成 Cachy Sauce 与 EEVDF 调度补丁，关闭 BORE 与 LTO），基于 hako 的 =kernel-config= 调整为桌面低延迟档并按本机硬件裁剪冗余驱动。完整定义与模块裁剪说明位于 [[./files/kernel/linux-cachyos-lts.scm][source/files/kernel/linux-cachyos-lts.scm]]。
+对标上游 =linux-cachyos= 变体（集成 Cachy Sauce 与 EEVDF 调度补丁，关闭 BORE 与 LTO），基于 hako 的 =kernel-config= 调整为桌面低延迟档并按本机硬件裁剪冗余驱动。完整定义与模块裁剪说明位于 [[./files/kernel/linux-cachyos.scm][source/files/kernel/linux-cachyos.scm]]。
 
-#+NAME: cachyos-lts-kernel
+#+NAME: cachyos-kernel
 #+begin_src scheme
-(load "../source/files/kernel/linux-cachyos-lts.scm")
+(load "../source/files/kernel/linux-cachyos.scm")
 #+end_src
 
 ***** 指纹识别栈
@@ -633,7 +633,7 @@ blue build
 
 *** 内核相关参数设置
 
-内核采用本地定制编译的 =linux-cachyos-lts= （详见 [[./files/kernel/AGENTS.md][source/files/kernel/AGENTS.md]]），配套微码与无线/声卡固件取自 =nonguix= 频道。主要内核启动参数的设计意图如下：
+内核采用本地定制编译的 =linux-cachyos= （详见 [[./files/kernel/AGENTS.md][source/files/kernel/AGENTS.md]]），配套微码与无线/声卡固件取自 =nonguix= 频道。主要内核启动参数的设计意图如下：
 
 - ~preempt=full~ + ~threadirqs~ :: 开启完全抢占与中断线程化，配合下文的 =@audio= 实时优先级消除低延迟音频 XRUN。
 - ~zswap.enabled=1~ + ~zswap.compressor=zstd~ :: 启用内存压缩缓存池（上限 35%），降低突发高负载下的磁盘 swap 写入。
@@ -644,7 +644,7 @@ blue build
 #+begin_src scheme
 (initrd microcode-initrd)
 (firmware (list bluez-firmware linux-firmware ovmf-x86-64 sof-firmware))
-(kernel linux-cachyos-lts)
+(kernel linux-cachyos)
 
 (kernel-arguments
  (cons* (string-append "resume=UUID=" %swap-uuid)
@@ -656,7 +656,7 @@ blue build
         "loglevel=0"
         "modprobe.blacklist=wacom,hid_uclogic"
         "nowatchdog"
-        "preempt=full"
+        "preempt=lazy"
         "quiet"
         "snd-intel-dspcfg.dsp_driver=3"
         "threadirqs"
@@ -1882,7 +1882,7 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
                    (prefer-regexp
                     "(zen|firefox|chrom|Web Content|WebExtensions|Isolated|qq|wechat|electron)")
                    (avoid-regexp
-                    "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom)")
+                    "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom|guix-daemon|cc1|cc1plus|make|ld|zstd)")
                    (run-with-higher-priority? #t)))
 
          (simple-service 'fingerprint-pam pam-root-service-type

@@ -14,12 +14,16 @@
 ;;;   摄像头 USB UVC（内摄+外接均走 UVC，无 MIPI IPU）
 ;;;   存储   YMTC PC300 NVMe / TPM 2.0 CRB / TBT4 + USB4
 ;;;   扩展   USB 转接坞 AX88179 千兆网（cdc_ncm）
+;;;   ODM    宝龙达（Bitland）：EC/BIOS 走 MIFS/MiInterface WMI
+;;;          接口（B60BFB48），7.2 起 in-tree 驱动覆盖风扇转速
+;;;          读取（CPU/GPU/SYS hwmon）、性能模式（platform_profile
+;;;          四档）与手动风扇全速开关（fan_boost）
 ;;;
 ;;; 两段式：钉住本机硬件（防上游 defconfig 漂移）+ 大类裁剪
 ;;; （redmibook-trim.kconfig，裸符号=反选），拼合导出单一
-;;; %machine-configs，由 linux-cachyos-lts.scm 与通用桌面档组装。
+;;; %machine-configs，由 linux-cachyos.scm 与通用桌面档组装。
 ;;; 换设备：新建 machines/<设备>.scm（导出同名 %machine-configs）
-;;; + <设备>-trim.kconfig，改 linux-cachyos-lts.scm 里一行 load。
+;;; + <设备>-trim.kconfig，改 linux-cachyos.scm 里一行 load。
 
 (use-modules (ice-9 rdelim)
              (ice-9 textual-ports)
@@ -65,7 +69,7 @@
    ;; 漏写前缀会变成不存在的符号，verify-config 报 mismatch
    "CONFIG_SND_SOC_INTEL_SKL_HDA_DSP_GENERIC_MACH=m"
 
-   ;; 摄像头 / 输入（HID_APPLE 的 =m 已由 linux-cachyos-lts.scm 通用档
+   ;; 摄像头 / 输入（HID_APPLE 的 =m 已由 linux-cachyos.scm 通用档
    ;; 的 initrd 符号钉住，此处不再重复列出）
    "CONFIG_USB_VIDEO_CLASS=m"
    "CONFIG_I2C_HID_ACPI=m"
@@ -87,6 +91,15 @@
    ;; 钉 USB4=m 即可，THUNDERBOLT 行会让 verify-config 报不存在符号
    "CONFIG_USB4=m"
    "CONFIG_TYPEC_UCSI=m"
+
+   ;; 风扇/性能模式管控（2026-10 升 7.2 的动机）：Bitland MIFS
+   ;; WMI 驱动，defconfig_desktop 默认 =m，此处内置进内核本体；
+   ;; ACPI_WMI 随之提为 y——tristate 规则下内置驱动不能依赖模块
+   ;; 化总线，否则 BITLAND=y 会被静默降级为 m；同时吃下
+   ;; ACPI_PLATFORM_PROFILE（该驱动 select），热管理用户态
+   ;; （powerprofilesctl 等）即刻可用
+   "CONFIG_ACPI_WMI=y"
+   "CONFIG_BITLAND_MIFS_WMI=y"
 
    ;; USB 转接坞千兆网（defconfig 默认 m，此处显式钉住）
    "CONFIG_USB_NET_CDC_NCM=m"))

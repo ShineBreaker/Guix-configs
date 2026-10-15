@@ -1,13 +1,13 @@
-# kernel/ — CachyOS LTS 裁剪内核配置
+# kernel/ — CachyOS 裁剪内核配置
 
-本目录是自包含的内核定义与裁剪体系：`source/config.org` 的 `cachyos-lts-kernel` 块只 load `linux-cachyos-lts.scm` 一行。内核版本、源码来源、上游 Defconfig 引用、通用桌面档与设备裁剪清单**全部在本目录内维护**。
+本目录是自包含的内核定义与裁剪体系：`source/config.org` 的 `cachyos-kernel` 块只 load `linux-cachyos.scm` 一行。内核版本、源码来源、上游 Defconfig 引用、通用桌面档与设备裁剪清单**全部在本目录内维护**。2026-10 自 6.18 LTS 切至 7.2 稳定线（Bitland MIFS WMI 驱动动机）并随切线去 `-lts` 后缀更名。
 
 ## 1. 文件职责
 
 | 文件 / 路径                          | 核心职责                                                                                            | 维护规则                                   |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `linux-cachyos-lts.scm`              | 包定义（`%cachyos-lts-version` + `%cachyos-lts-origin`）、通用桌面档 `%kernel-common-configs`、组装 | **版本升级入口**；导出 `linux-cachyos-lts` |
-| `defconfig-cachyos-lts`              | 上游纯净 Defconfig（逐字取自 codeberg `hako/kernel-config` 的 `defconfig_server`，钉在 `49c98a1`）  | **禁止手动编辑**，仅随上游版本整体替换     |
+| `linux-cachyos.scm`                   | 包定义（`%cachyos-version` + `%cachyos-origin`）、通用桌面档 `%kernel-common-configs`、组装 | **版本升级入口**；导出 `linux-cachyos`  |
+| `defconfig-cachyos`                   | 上游纯净 Defconfig（逐字取自 codeberg `hako/kernel-config` 的 `defconfig_desktop`，钉在 `49c98a1`；2026-10 随切线 7.2 由 `defconfig_server` 换入） | **禁止手动编辑**，仅随上游版本整体替换     |
 | `machines/redmibook-pro-16-2024.scm` | 设备层：文件头记录实机硬件探针（裁剪依据），导出 `%machine-pin-configs` 与 `%machine-configs`       | 换机即新建同构文件并改主文件里的 load 行   |
 | `machines/redmibook-trim.kconfig`    | 针对非本机硬件的大类反选清单（约 2000 行，裸符号即反选）                                            | 与 Defconfig 结构对齐，按硬件大类注释分组  |
 
@@ -25,7 +25,7 @@ flowchart LR
 
 ## 2. 三条维护路径
 
-**升级内核版本**（最常见）：改 `%cachyos-lts-version`，再用 `guix hash <cachyos-<新版本>.tar.gz>` 算出的 base32 改 `origin` 里的 `(content-hash "...")`。必须是**字符串单参数形式**——`(sha256 …)` 兼容写法与 `(content-hash bv sha256)` 都靠 syntax-case 匹配 sha256 字面量，而本模块作用域里 `(gcrypt hash)` 的同名绑定会让匹配失效；字符串单参形式经卫生展开引入 sha256，不受遮蔽影响。
+**升级内核版本**（最常见）：改 `%cachyos-version`，再用 `guix hash <cachyos-<新版本>.tar.gz>` 算出的 base32 改 `origin` 里的 `(content-hash "...")`。必须是**字符串单参数形式**——`(sha256 …)` 兼容写法与 `(content-hash bv sha256)` 都靠 syntax-case 匹配 sha256 字面量，而本模块作用域里 `(gcrypt hash)` 的同名绑定会让匹配失效；字符串单参形式经卫生展开引入 sha256，不受遮蔽影响。
 
 **换硬件平台**：采集硬件事实（`lspci -nnk`、`lsusb`、`lsmod`、`cat /proc/asound/cards`）写进新 `machines/<设备>.scm` 头部 → 钉住本机必需驱动（`=m` 或 `=y`）→ 在配套 trim 清单里反选非本机大类硬件 → 改主文件 load 行 → 走第 3 节验证。
 
@@ -48,7 +48,7 @@ cat > tmp/kernel-probe.scm <<'EOF'
   (chdir (dirname (current-filename)))
   (set! %load-path (cons "." %load-path))
   (primitive-load "config.scm")
-  linux-cachyos-lts)
+  linux-cachyos)
 EOF
 
 guix time-machine -C source/channel.lock -- build -f tmp/kernel-probe.scm
