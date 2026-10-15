@@ -1109,9 +1109,7 @@ Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
      ("*.a" file)
      ("*.so" file)
      ("main.el" file)
-     ("org-roam.db" file)
-     (,(string-append %stow-dir "/emacs/.config/emacs/etc") directory)
-     (,(string-append %stow-dir "/emacs/.config/emacs/var") directory))))
+     ("org-roam.db" file))))
 
 ;; 删旧世代 → guix gc → 删旧 EFI（均需人工触发）。
 (define-command (gc-command arguments)

@@ -26,3 +26,6 @@
 [submodule "dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui"]
 	path = dotfiles/mutable/agents/pi/.config/pi/extensions/pi-ui
 	url = https://github.com/ShineBreaker/pi-ui.git
+[submodule "dotfiles/mutable/emacs/.config/emacs"]
+	path = dotfiles/mutable/emacs/.config/emacs
+	url = https://github.com/ShineBreaker/UniEmacs.git

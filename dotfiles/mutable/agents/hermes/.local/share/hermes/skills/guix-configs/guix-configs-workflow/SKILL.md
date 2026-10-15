@@ -1654,7 +1654,6 @@ for f in /gnu/store/*-blue-*/bin/blue; do echo "== $f"; head -1 "$f"; done
 - 任何工作流细节冲突 → 以 `~/Documents/Org/experiences/*/` 对应 KB 卡片为准(session_search 召回)。
 - 新增协议不写本 skill,直接写 KB 卡片(人类主笔);本 skill 周期性从 KB 提取。
 - 详细场景化案例见各 KB 卡片 ID(报告 .hermes-extract-report.md B 节有完整 ID 索引)。
-- Emacs dotfiles 调试陷阱见 `references/emacs-org-capture-pitfalls.md`(org-capture-expand-file 不对内嵌 form 求值)。
 - niri 桌面 + fcitx IME + nix-profile GUI 应用的环境变量注入实战见 `references/niri-gui-environment-injection.md`(三件套诊断、blue home + 重启 niri 会话流程、Guix 不用 systemd 的反模式)。
 - hermes-desktop 启动失败诊断见 `references/hermes-desktop-diagnostics.md`(日志优先级、版本探测超时、cron 模块导入竞态、Nix flake lock 追溯、GC 检测)。
 - hermes-gateway 作为 shepherd service 的 self-kick loop 诊断见 `references/hermes-gateway-shepherd-service.md`(日志模式识别、`--replace` 触发机制、清理多个并存 home-shepherd、orphan gateway 进程)。
@@ -1672,7 +1671,7 @@ for f in /gnu/store/*-blue-*/bin/blue; do echo "== $f"; head -1 "$f"; done
 - **ISO `blue build-iso` 运行范式 + 四个真实构建错误序列**(不需 sudo / agent 可直跑 / `%guix` 吞报错需手动复现 / `append` 拍平 noweb-list / `with-imported-modules` 修 trivial-build-system 模块缺失 / `operating-system-services` 双倍注册 essential 导致 `多余一个类为'X'的目标服务`)见 §11.7 + `references/iso-build-debug.md`。
 - **ISO KDE Plasma 装配**(XFCE→KDE 差异 / SDDM 字段带 `.desktop` 后缀 / elogind 必须显式加 / 完整错误序列 1-4 / 已构建成功的 `jeans-desktop-*.iso` 验证)见 §11.8 + `references/iso-kde-plasma-assembly.md`。
 - **gpg-agent / pinentry 范式**(daemon conf 必须用绝对 store 路径 / `$$bin/...$$` 路径注入 / `gpgconf --check-programs` 诊断信号 / home-shepherd 起的 daemon `$HOME` 不可靠 / blue home 后必走 `gpgconf --reload` / 推广到 mako / swaync / river 等同类场景)见 §4.6 + `references/gpg-agent-pinentry-absolute-store-path.md`。
-- **org 文档行内标记渲染修复**（`= foo =`、`：=cmd=`、`**X* *` 双星混写、全角标点紧贴的标记失效；tmux 真机渲染验收法、agenote orgfmt 修复器要点）→ `org-markup-rendering` skill；emacs.org 属 mutable 包(改源即生效)。
+- **org 文档行内标记渲染修复**（`= foo =`、`：=cmd=`、`**X* *` 双星混写、全角标点紧贴的标记失效；tmux 真机渲染验收法、agenote orgfmt 修复器要点）→ `org-markup-rendering` skill；Emacs 配置仍属 mutable 包（改源即生效，现为 UniEmacs 子模块）。
 ## Appendix — agenote 20260629/20260716 (merged)
 - blue check 局部括号错位但总数平衡 → guix invalid field specifier; 用 guile reader 逐文件验真平衡而非总数 (agenote 20260629).
 - 源码包 hash 漂移须用实际源码重算 hash (agenote 20260716).

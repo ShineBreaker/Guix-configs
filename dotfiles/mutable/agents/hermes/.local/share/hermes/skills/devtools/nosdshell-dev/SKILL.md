@@ -5,7 +5,7 @@ version: 1.0.0
 metadata:
   hermes:
     tags: [nosdshell, quickshell, dde15, qml, qt]
-    related_skills: [qt-qss-adwaita-iteration, emacs-config-debugging]
+    related_skills: [qt-qss-adwaita-iteration]
 ---
 
 # nosDshell dev (Quickshell shell → DDE 15)

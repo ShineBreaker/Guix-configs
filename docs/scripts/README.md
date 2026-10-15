@@ -78,11 +78,7 @@ niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解�
 
 ## emacs
 
-| 脚本                     | 源码                                            | 部署    | 手册                                     |
-| ------------------------ | ----------------------------------------------- | ------- | ---------------------------------------- |
-| configctl + configctl.el | `dotfiles/mutable/emacs/.config/emacs/scripts/` | mutable | [emacs-configctl.md](emacs-configctl.md) |
-
-配置本身的工作手册在 `dotfiles/mutable/emacs/.config/emacs/AGENTS.md`。
+Emacs 配置为 UniEmacs 子模块（`dotfiles/mutable/emacs/.config/emacs/`，mutable stow 包，保存即生效）；插件包由本仓库 `source/config.org` 的 `<<emacs-packages>>` 经 Guix home 提供。配置工作手册见子模块内的 `AGENTS.md`。
 
 ## 专题手册（不在本目录）
 

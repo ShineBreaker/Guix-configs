@@ -43,8 +43,6 @@
   [[file:screenshots/daily.png]]
 - 终端工作区（ =Tmux= ）::
   [[file:screenshots/terminal.png]]
-- 文学编程与开发环境（ =Emacs= ）::
-  [[file:screenshots/emacs.png]]
 - 网页浏览（ =Zen Browser= ）::
   [[file:screenshots/browse.png]]
 

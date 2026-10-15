@@ -2412,10 +2412,10 @@ _    _  _  _  _  _  _  _)
 
 *** Emacs 服务
 
-以 ~emacs --fg-daemon~ 守护进程方式常驻后台，并将所有 Emacs 插件与辅助 CLI 隔离在专属 profile 中：
+以 ~emacs --fg-daemon~ 守护进程方式常驻后台，配置源为 UniEmacs 子模块（~dotfiles/mutable/emacs/.config/emacs/~），插件包与辅助 CLI 隔离在专属 profile 中：
 
-- *共享 Manifest 片段* :: 下方的 =emacs-packages= 代码块展开的是 *完整配置字段* ~(packages (specifications->manifest '(……)))~ （因为该字段要求传入 manifest 对象而非普通包列表）。
-- *双前端零漂移* :: =home-emacs-service-type= （ =emacs-next-pgtk= ）与 =home-neomacs-service-type= 共同引用 ~<<emacs-packages>>~ ，约 90 个插件与 Tree-sitter 语法库只需在一处维护（增删插件时请同步参照 =dotfiles/mutable/emacs/.config/emacs/AGENTS.md= ）。
+- *共享 Manifest 片段* :: 下方的 =emacs-packages= 代码块展开的是 *完整配置字段* ~(packages (specifications->manifest '(……)))~ （因为该字段要求传入 manifest 对象而非普通包列表；插件清单与 UniEmacs =profiles/full.el= 的 =self:profile-packages= 对齐，见其 =manifest.scm= 注释）。
+- *双前端零漂移* :: =home-emacs-service-type= （ =emacs-next-pgtk= ）与 =home-neomacs-service-type= 共同引用 ~<<emacs-packages>>~ ，约 50 个包只需在一处维护（不再引用旧 =emacs.org= 内联配置；配置问题优先查 UniEmacs 上游仓库）。
 
 #+NAME: emacs-services
 #+begin_src scheme :noweb yes
@@ -2432,87 +2432,70 @@ _    _  _  _  _  _  _  _)
 #+NAME: emacs-packages
 #+begin_src scheme
 (packages (specifications->manifest
-           '(;; Emacs 核心与基础
-             "emacs-gcmh"
-             "emacs-no-littering"
-
-             ;; 界面与外观
+           '(;; UniEmacs full 档第三方包（顺序同 profiles/full.el／manifest.scm；
+             ;; idle-highlight-mode → emacs-idle-highlight；magit 含 magit-diff；
+             ;; dsh 用锁定频道内实有的 emacs-dsh，提供 dsh-emacs.el）
              "emacs-dashboard"
-             "emacs-minibuffer-line"
              "emacs-nerd-icons"
-             "emacs-rainbow-delimiters"
-
-             ;; 编辑与导航
-             "emacs-avy"
-             "emacs-diff-hl"
-             "emacs-expand-region"
-             "emacs-idle-highlight"
+             "emacs-minibuffer-line"
              "emacs-indent-bars"
-             "emacs-multiple-cursors"
-             "emacs-with-editor"
              "emacs-goto-chg"
-             "emacs-tempel"
+             "emacs-multiple-cursors"
+             "emacs-expand-region"
              "emacs-vundo"
-
-             ;; 开发工具
-             "emacs-agent-shell"
-             "emacs-dsh"
-             "emacs-apheleia"
-             "emacs-envrc"
-             "emacs-ghostel"
-             "emacs-guix"
-             "emacs-dape"
-
-             ;; 编程语言支持
+             "emacs-idle-highlight"
+             "emacs-tempel"
+             "emacs-geiser"
              "emacs-arei"
-             "emacs-fish-mode"
-             "emacs-gdscript-mode"
-             "emacs-kdl-mode"
-             "emacs-markdown-mode"
-             "emacs-nix-mode"
-             "emacs-zig-mode"
-
-             ;; 版本控制与项目管理
-             "emacs-forge"
              "emacs-magit"
-
-             ;; Org Mode 生态
-             "emacs-olivetti"
+             "emacs-diff-hl"
+             "emacs-forge"
              "emacs-org-appear"
              "emacs-org-modern"
              "emacs-org-modern-indent"
+             "emacs-olivetti"
              "emacs-org-roam"
-
-             ;; 应用工具
-             "emacs-agenote"
+             "emacs-emacsql"
+             "emacs-markdown-mode"
+             "emacs-apheleia"
+             "emacs-dape"
+             "emacs-envrc"
+             "emacs-rainbow-delimiters"
+             "emacs-fish-mode"
+             "emacs-gdscript-mode"
+             "emacs-kdl-mode"
+             "emacs-nix-mode"
              "emacs-pdf-tools"
+             "emacs-zig-mode"
+             "emacs-agent-shell"
+             "emacs-dsh"
              "emacs-telega"
+             "emacs-guix"
+             "emacs-ghostel"
+             "emacs-agenote"
+             "emacs-gcmh"
+             "emacs-no-littering"
 
-             ;; 拼写检查
-             "aspell"
-             "aspell-dict-en"
-
-             ;; 命令行工具
-             "agenote"
-             "direnv"
-             "git"
-             "ripgrep"
-
-             ;; Tree-sitter（仅保留语言能力表实际启用的 grammar）
+             ;; Tree-sitter（UniEmacs 语言能力表实际启用的 grammar）
              "tree-sitter"
              "tree-sitter-c"
              "tree-sitter-cpp"
-             "tree-sitter-css"
              "tree-sitter-go"
              "tree-sitter-html"
              "tree-sitter-java"
-             "tree-sitter-javascript"
              "tree-sitter-json"
-             "tree-sitter-c-sharp"
              "tree-sitter-python"
              "tree-sitter-rust"
              "tree-sitter-typescript"
-             "tree-sitter-yaml")))
+             "tree-sitter-javascript"
+
+             ;; 命令行工具
+             "aspell"
+             "aspell-dict-en"
+             "direnv"
+             "git"
+             "ripgrep"
+             "sqlite")))
 #+end_src
 
 *** 软件自启动
