@@ -79,6 +79,7 @@ blue build
              (gnu packages guile)
              (gnu packages rust-apps)
              (gnu services)
+             (gnu services linux)
              (gnu services networking)
              (gnu services shepherd)
              (gnu system accounts)
@@ -484,9 +485,9 @@ blue build
      <<nix-ld-services>>
      ;; ── Guix 下载源 ──
      <<guix-substitutes>>
-     ;; ── udev：静态规则 / AC 电源联动 / USB 电源权限 ──
+     ;; ── udev：静态规则 / USB 电源权限 ──
      <<udev-static-rules>>
-     <<ac-power-services>>
+     <<tuned-services>>
      <<usb-power-services>>
      ;; ── 网络（nftables + 可信切换）──
      <<networking-services>>
@@ -803,6 +804,8 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
    "gvfs"
    "libgnome-keyring"
    "libsecret"
+   ;; 仅取 powerprofilesctl CLI：D-Bus 接口由 tuned-ppd 兼容层提供
+   "power-profiles-daemon"
    "poweralertd"
    "trash-cli"
 
@@ -1467,20 +1470,24 @@ Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
                                      "SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", GROUP=\"wheel\", MODE=\"0660\"")))
 #+end_src
 
-**** AC 电源状态联动
+**** tuned 调优与电源档位
 
-监听电源适配器插拔事件（ ~SUBSYSTEM=="power_supply"~ ）以及开机初始状态（ =ac-power-init= 服务读取 =/sys/class/power_supply/ADP1/online= ），自动调用 =ac-power-profile= 脚本在高性能档（ =on= ）与长续航档（ =off= ）之间切换：
+电源调优交给上游 =tuned= 守护进程（Red Hat 出品，Fedora 41+ 的默认方案），不再自写切换脚本：两个针对本机的 profile（ =source/files/tuned/= ）以声明式 INI 描述各档位参数， =tuned-ppd= 兼容层顶替 =power-profiles-daemon= 的 D-Bus 接口（ =powerprofilesctl= 与桌面电源档 UI 继续可用），并按电池 / 插电状态自动换档——原「AC 电源联动」的 udev 规则、 =ac-power-init= 开机服务与 =ac-power-profile= 脚本（约 90 行）全部退役：
 
-| 调优维度                        | 插电模式（ =on= ）                       | 电池模式（ =off= ）    |
+| 调优维度                        | 插电（ =redmibook-ac= ）                       | 电池（ =redmibook-battery= ）    |
 |---------------------------------+------------------------------------------+------------------------|
-| *PPD 电源档位*                  | =performance=                            | =power-saver=          |
-| *WiFi 省电（动态探测无线口）*   | ~power_save off~ （低延迟优先）          | ~power_save on~        |
+| *PPD 档位映射*                  | =performance=                            | =power-saver= （电池时 balanced 降档至此）          |
+| *WiFi 省电（动态探测无线口）*   | ~power_scheme=1~ （active，低延迟）          | ~power_scheme=3~ （低功耗）        |
+| *CPU EPP（intel_pstate）*       | =performance=                               | =power=                                 |
+| *EC 散热档（platform_profile）* | =balanced=                                  | =low-power= （EC 降噪省电）             |
 | *Intel P-State 频率下限与加速*  | ~min_perf_pct=30~ / ~dynamic_boost=1~    | ~min_perf_pct=8~ / =0= |
 | *调度器与定时器迁移*            | ~power_efficient=N~ / ~migration=0~      | ~Y~ / =1= （聚拢唤醒） |
 | *PCIe ASPM 策略*                | =performance=                            | =powersupersave=       |
 | *核心 PCI 设备 Runtime PM*      | =on= （核显、NVMe、网卡常开不进 D3）     | =auto=                 |
 | *声卡省电（ =snd_hda_intel= ）* | =0= （零延迟，消除爆音）                 | =10= （10 秒空闲挂起） |
 | *KSM 同页内存合并*              | 开启（ ~run=1~ ，每次扫 200 页 / 50 ms） | 关闭（ ~run=0~ ）      |
+
+=tuned-ppd= 的 =sysfs-acpi-monitor= （Fn 键改 EC 档时反向同步 PPD 档）保持关闭：它监听的 =platform_profile= 同时也是本机 profile 的写入目标，存在自反馈风险，且该特性上游标注 experimental。另注： =balanced-performance= / =performance= 两档 EC 固件要求圆孔适配器供电（本机纯 Type-C 供电时永远被拒），故 AC 档只写 =balanced= 。
 
 #+begin_quote
 *Guix 文件构造器速查* ：本节及周边服务使用了四种常见的「类文件对象（file-like objects）」，按用途区分如下：
@@ -1490,100 +1497,32 @@ Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 - =file->udev-rule= :: 将普通文本文件包装为 ~udev-rules-service~ 要求的规则目录结构。
 #+end_quote
 
-#+NAME: ac-power-services
+#+NAME: tuned-services
 #+begin_src scheme
-(let* ([ppdctl (file-append power-profiles-daemon
-                            "/bin/powerprofilesctl")]
-       [iw-bin (file-append iw "/sbin/iw")]
-
-       [ac-power-script
-        (program-file
-         "ac-power-profile"
-         #~(let ((mode (if (> (length (command-line)) 1)
-                           (cadr (command-line))
-                           ""))
-                 (ppdctl #$ppdctl)
-                 (iw-bin #$iw-bin))
-             (define (set-sys path val)
-               (false-if-exception
-                (call-with-output-file path
-                  (lambda (port) (display val port)))))
-             ;; 无线接口名运行时探测，不写死
-             (define (wireless-interfaces)
-               (let ([dir (false-if-exception (opendir "/sys/class/net"))])
-                 (if (not dir)
-                     '()
-                     (let loop ([acc '()])
-                       (let ([entry (readdir dir)])
-                         (cond [(or (not entry) (eof-object? entry))
-                                (closedir dir)
-                                (reverse acc)]
-                               [(file-exists? (string-append "/sys/class/net/"
-                                                             entry "/wireless"))
-                                (loop (cons entry acc))]
-                               [else (loop acc)]))))))
-             (let ([ac? (string=? mode "on")])
-               ;; userspace 调用，忽略子进程退出码
-               (system* ppdctl "set" (if ac? "performance" "power-saver"))
-               (for-each (lambda (dev)
-                           (system* iw-bin "dev" dev "set" "power_save"
-                                    (if ac? "off" "on")))
-                         (wireless-interfaces))
-               (set-sys "/sys/devices/system/cpu/intel_pstate/min_perf_pct"
-                        (if ac? "30" "8"))
-               (set-sys "/sys/devices/system/cpu/intel_pstate/hwp_dynamic_boost"
-                        (if ac? "1" "0"))
-               (set-sys "/sys/module/workqueue/parameters/power_efficient"
-                        (if ac? "N" "Y"))
-               (set-sys "/proc/sys/kernel/timer_migration"
-                        (if ac? "0" "1"))
-               (set-sys "/sys/module/pcie_aspm/parameters/policy"
-                        (if ac? "performance" "powersupersave"))
-               ;; PCI runtime PM 白名单
-               (for-each
-                (lambda (bdf)
-                  (set-sys (string-append "/sys/bus/pci/devices/" bdf
-                                          "/power/control")
-                           (if ac? "on" "auto")))
-                '("0000:00:02.0"   ; i915 iGPU
-                  "0000:01:00.0"   ; YMTC PC300 NVMe
-                  "0000:00:14.3")) ; iwlwifi wlp0s20f3
-               (set-sys "/sys/module/snd_hda_intel/parameters/power_save"
-                        (if ac? "0" "10"))
-               ;; KSM 扫描参数仅 AC 写
-               (when ac?
-                 (set-sys "/sys/kernel/mm/ksm/pages_to_scan" "200")
-                 (set-sys "/sys/kernel/mm/ksm/sleep_millisecs" "50"))
-               (set-sys "/sys/kernel/mm/ksm/run" (if ac? "1" "0"))
-               (set-sys "/proc/sys/kernel/nmi_watchdog" "0")
-               (set-sys "/proc/sys/kernel/soft_watchdog" "0"))))]
-
-       [ac-power-rules
-        (file->udev-rule
-         "90-ac-power-profile.rules"
-         (mixed-text-file
-          "90-ac-power-profile.rules"
-          "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
-          "ATTR{type}==\"Mains\", ATTR{online}==\"1\", "
-          "RUN+=\"" ac-power-script " on\"\n"
-          "ACTION==\"add|change\", SUBSYSTEM==\"power_supply\", "
-          "ATTR{type}==\"Mains\", ATTR{online}==\"0\", "
-          "RUN+=\"" ac-power-script " off\"\n"))])
-
-  (list (root-one-shot-service 'ac-power-init '(power-profiles-daemon user-processes)
-                               #~(lambda _
-                                   (let ([val (false-if-exception
-                                               (call-with-input-file
-                                                   "/sys/class/power_supply/ADP1/online"
-                                                 read))])
-                                     (zero? (system* #$ac-power-script
-                                                     (if (and (number? val) (= val 1))
-                                                         "on"
-                                                         "off")))))
-                               #:documentation
-                               "按当前电源状态初始化 PPD profile 与 WiFi 省电。")
-
-        (udev-rules-service 'ac-power-profile ac-power-rules)))
+(list
+ (service tuned-service-type
+          (tuned-configuration
+           ;; tuned-ppd 提供 net.hadess.PowerProfiles D-Bus 接口，
+           ;; 顶替 power-profiles-daemon（shepherd provision 同名，二者不可共存）
+           (power-profiles-daemon-support? #t)
+           (profiles
+            (list (list "redmibook-ac"
+                        (local-file "../source/files/tuned/redmibook-ac"
+                                    #:recursive? #t))
+                  (list "redmibook-battery"
+                        (local-file "../source/files/tuned/redmibook-battery"
+                                    #:recursive? #t))))
+           (ppd-settings
+            (tuned-ppd-settings
+             ;; PPD 档位 → tuned profile：插电 balanced/performance 都走 AC 档，
+             ;; 电池时 balanced 经 battery 映射自动降档
+             (profiles '(("power-saver" . "redmibook-battery")
+                         ("balanced" . "redmibook-ac")
+                         ("performance" . "redmibook-ac")))
+             (battery '(("balanced" . "redmibook-battery")))
+             ;; Fn 键 EC 档监听为 experimental，且与本机 profile 写同一
+             ;; sysfs 有自反馈风险，关闭
+             (sysfs-acpi-monitor? #f))))))
 #+end_src
 
 **** USB 电源权限
@@ -1938,8 +1877,6 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
          (service mysql-service-type)
 
          (service opentabletdriver-service-type)
-
-         (service power-profiles-daemon-service-type)
 
          (service rtkit-service-type)
 

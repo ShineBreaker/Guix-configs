@@ -107,7 +107,7 @@ niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解�
 | `flatpak-service-helpers`                           | `%flatpak-update-script`：flatpak 定时更新的启动脚本               |
 | `mihomo-run`                                        | 解密订阅、渲染模板并 exec mihomo                                   |
 | `nm-dispatcher-trusted-connection`                  | NetworkManager dispatcher：可信 WiFi 接口进出 nftables 集合        |
-| `ac-power-services`                                 | `ac-power-profile` 电源档位脚本与 `ac-power-init`                  |
+| `tuned-services`                                    | tuned 服务与 tuned-ppd 档位映射（profile 在 `source/files/tuned/`，无内嵌脚本） |
 | `usb-power-services`                                | USB `power/control` 权限 udev 规则                                 |
 | `root-services`                                     | `beesd-run` 启动包装                                               |
 | `50-hibernate.rules`                                | polkit 休眠授权规则（JavaScript）                                  |

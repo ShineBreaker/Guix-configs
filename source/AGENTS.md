@@ -23,7 +23,7 @@ source/
 
 ## 职责边界
 
-- **System 层（`operating-system`）**：引导器（Limine / Rosenthal）、文件系统（LUKS + Btrfs + tmpfs 根目录）、自编译 CachyOS LTS 内核、系统服务群与用户账户。
+- **System 层（`operating-system`）**：引导器（Limine / Rosenthal）、文件系统（LUKS + Btrfs + tmpfs 根目录）、自编译 CachyOS 内核、系统服务群与用户账户。
 - **Home 层（`home-environment`）**：4 个包清单（desktop / terminal / devtools / user）、自定义包与 Hermes 运行时、dotfiles 部署、用户服务、环境变量与字体。
 - **最小化原则**：系统层保持精简；Home 层能解决的不上浮 System 层。优先改 `dotfiles/immutable/<app>/`，仅在需要 Guix 介入时才动 `config.org`。
 - **两套部署路径互不干扰**：`source/files/` 走 `home-files-service-type`（支持 `$$bin/foo$$` 路径注入占位符）；`dotfiles/immutable/` 走 Guix Home stow 布局（改源后须 `blue home` 生效）。
@@ -93,14 +93,14 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 ## 系统层机制注记
 
 - **内核与网络协议栈**：加载 `ip_tables` / `iptable_nat` 作为兼容层，供 Libvirt 与 Podman 网络后端使用，与 nftables 主规则集并存。`zswap.compressor=zstd` 在内核 cmdline 阶段早于用户态 modprobe，故启动先用内置算法，待 zstd 模块加载后由 `zswap-zstd` 服务在运行时切换。`sysctl` 侧设 `default_qdisc=fq` 保障 BBR pacing，设 `tcp_rmem` / `tcp_wmem` 缓冲三元组避免高 BDP 链路受限，设 `dirty_writeback_centisecs=1500` 减少空闲时 SSD 唤醒。
-- **启动与清理服务**：`/tmp` 挂载在持久 Btrfs 子卷，用 `/run/cleanup-tmp-done` 标记保证单次开机只清一次；`cleanup-/tmp-prereq` 前置注入 `user-processes`，保证所有用户服务启动前 `/tmp` 已就绪。Udev 动态规则必须用 `file->udev-rule` 包装成标准目录派生结构。AC 电源联动捕获 Udev `power_supply` 事件自动调节 PPD 档位与 WiFi 省电策略，开机由 `ac-power-init` 按当前电源状态初始化。
+- **启动与清理服务**：`/tmp` 挂载在持久 Btrfs 子卷，用 `/run/cleanup-tmp-done` 标记保证单次开机只清一次；`cleanup-/tmp-prereq` 前置注入 `user-processes`，保证所有用户服务启动前 `/tmp` 已就绪。Udev 动态规则必须用 `file->udev-rule` 包装成标准目录派生结构。电源调优由 `tuned` + `tuned-ppd` 承担（见 config.org「tuned 调优与电源档位」）：本机两个 profile 在 `source/files/tuned/`，AC/电池自动换档由 tuned-ppd 的 battery detection 驱动，`powerprofilesctl` 与桌面电源档 UI 走其 D-Bus 兼容层。
 - **桌面与会话**：TTY1 留给内核消息，TTY2-6 走 kmscon，TTY7 跑 Greetd 图形登录。Elogind 默认忽略硬件休眠键，由 `50-hibernate.rules` 授权本地活跃用户。
 
 ## 网络与防火墙
 
 - **nftables（接口信任模型）**：规则集由 `nftables-service-type` 开机全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行；NetworkManager dispatcher 只动态增删该集合元素（可信 WiFi 加入发起连接的无线接口），**绝不执行 `flush ruleset`**。
 - **WiFi 信任白名单**：以 NM Profile 名（`CONNECTION_ID`，非 SSID）为准，存在加密文件 `wifi-trust.age` 中。Dispatcher 脚本在内存管道里解密比对、不落盘明文；私钥缺失时只按不可信处理，不阻断联网。脚本经 activation 装到 `/etc/NetworkManager/dispatcher.d/10-trusted-ssid`（该目录是持久挂载点，规则文件随系统代原子切换）。
-- **WiFi 省电策略（`nm-powersave-conf`）**：目标是连接时恒不省电（低延迟、远程操控优先）。NM 每次连接都把省电重置为开启，用 dispatcher 在 up 事件补救会被 NM 默认行为覆盖，故改为在 NM `[connection]` 段写默认 `wifi.powersave=2`——activation 装到 `/etc/NetworkManager/conf.d/wifi-powersave.conf`，拔电时由 udev ac-power 规则切回省电（`/etc/NetworkManager/dispatcher.d/20-wifi-powersave`）。注意 `[connection]` 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
+- **WiFi 省电策略（`nm-powersave-conf`）**：连接时恒不省电（低延迟、远程操控优先）。NM 每次连接都把省电重置为开启，用 dispatcher 在 up 事件补救会被 NM 默认行为覆盖，故改为在 NM `[connection]` 段写默认 `wifi.powersave=2`——activation 装到 `/etc/NetworkManager/conf.d/wifi-powersave.conf`（旧的 `20-wifi-powersave` dispatcher 已删，activation 会清理残留）。AC/电池切换由 tuned profile 写 `/sys/module/iwlmvm/parameters/power_scheme`（1=active / 3=低功耗）。注意 `[connection]` 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
 - **OpenSSH**：显式声明 `permit-root-login 'prohibit-password`——root 锁密码、仅密钥登录，防上游默认漂移。
 - **mihomo-daemon**：`-d` 把数据目录（geodata / cache / UI / proxies）归位到 `/var/lib/mihomo`，随 @data 子卷持久化。启动经 `mihomo-run` 包装：解密 `mihomo-subscriptions.age` 后用 envsubst 渲染模板到 `/var/lib/mihomo/config.yaml` 再 exec；解密失败降级为空订阅启动（直连仍可用），不触发 respawn 风暴。模板侧与换订阅操作见 `dotfiles/immutable/system/AGENTS.md`。
 
