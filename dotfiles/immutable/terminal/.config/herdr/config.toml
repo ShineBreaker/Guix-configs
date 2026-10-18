@@ -21,7 +21,7 @@ onboarding = false
 #
 # 热加载：prefix+r，或 `herdr server reload-config`。
 
-# ===== 主题：跟随系统亮暗（继承 tmux 经 foot/darkman 自动切换的习惯）=====
+# ===== 主题：跟随系统亮暗（继承 tmux 经 foot 随系统明暗模式切换的习惯）=====
 [theme]
 auto_switch = true
 dark_name = "terminal"     # 跟随终端 ANSI 色（对应原 tmux 无独立主题）

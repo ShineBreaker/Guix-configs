@@ -49,7 +49,7 @@ niri-quake-toggle    # exec kitten quick-access-terminal "$@"
 
 socket 发现用 `awk` 扫 `/proc/net/unix` 找 `quick-access-` 后缀的 kitty 控制 socket；找到且 `kitten` 可用时先 `kitten @ --to unix:$sock load-config`（静默容错），最后 `exec kitten quick-access-terminal "$@"` 收尾——**进程替换**，信号与退出码直透。
 
-面板未运行就没有 socket，直接跳过不阻塞。**为什么要 load-config**：darkman hook 切主题时是以后代身份发的 RC 写，被 kitty 忽略，且面板处于 hidden 态时重载还会延迟，主题刷新只能靠呼出瞬间以会话身份手动刷一次。
+面板未运行就没有 socket，直接跳过不阻塞。**为什么要 load-config**：主题切换链（mode.d hook → nosd-helpers apply）发起的 RC 写会因后代身份被 kitty 忽略，且面板处于 hidden 态时重载还会延迟，主题刷新只能靠呼出瞬间以会话身份手动刷一次。
 
 ## 系统与 GPU
 

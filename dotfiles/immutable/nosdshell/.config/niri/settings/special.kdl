@@ -1,13 +1,5 @@
 spawn-sh-at-startup "herd restart nosdshell"
 
-/* Apps: blur them all with xray to improve performance. */
-window-rule {
-  background-effect {
-    blur true
-    xray true
-  }
-}
-
 // Place the regular wallpaper on the backdrop.
 layer-rule {
   match namespace="^nosdshell-wallpaper(-.*)?$"
@@ -57,7 +49,7 @@ overview {
 // open panel (hosted by nosdshell-background), the fashion dock, the mini
 // launcher. These must blur the real window stack.
 layer-rule {
-  match namespace="^nosdshell-(background|dock|popupmenu)-.*$"
+  match namespace="^nosdshell-(background|dock)-.*$"
   match namespace="^nosd-launcher-mini-.*$"
   background-effect {
     xray false
@@ -96,7 +88,7 @@ layer-rule {
 // wizard/desktop-widgets are fullscreen or transient planes; the rest are
 // invisible helpers.
 layer-rule {
-  match namespace="^nosdshell-(wallpaper|overview|bar-content|bar-exclusion|bar-trigger|screen-detector|image-cache-renderer|fade-overlay|notifications|toast|osd|session-menu|setup-wizard|desktop-widgets)(-.*)?$"
+  match namespace="^nosdshell-(wallpaper|overview|bar-content|bar-exclusion|bar-trigger|screen-detector|image-cache-renderer|popupmenu|fade-overlay|notifications|toast|osd|session-menu|setup-wizard|desktop-widgets)(-.*)?$"
   background-effect {
     blur false
   }

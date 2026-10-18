@@ -69,12 +69,14 @@
 
 | 脚本                                                     | 源码                                                        | 部署                       | 手册                                 |
 | -------------------------------------------------------- | ----------------------------------------------------------- | -------------------------- | ------------------------------------ |
-| `{dark,light}-mode.d/0-apply-theme.sh` + theme-common.sh | `dotfiles/immutable/noctalia-suite/.local/{libexec,share}/` | immutable → darkman mode.d | [darkman-theme.md](darkman-theme.md) |
-| set-theme.sh                                             | `dotfiles/immutable/noctalia-suite/.config/darkman/script/` | immutable                  | [set-theme.md](set-theme.md)         |
+| `{dark,light}-mode.d/0-apply-theme.sh` + theme-common.sh + nosd-portal-run | `dotfiles/immutable/nosdshell/.local/{libexec,share}/` | immutable → mode.d / dbus services | [darkman-theme.md](darkman-theme.md) |
+| set-theme.sh                                             | `dotfiles/immutable/nosdshell/.config/darkman/script/` | immutable                  | [set-theme.md](set-theme.md)         |
 
 ## 桌面与系统零散脚本
 
 niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解静音兜底、只读家目录体检、Live ISO 的 fish 载荷合成一篇：[misc-scripts.md](misc-scripts.md)。全部在 `dotfiles/immutable/`，改源后须 `blue home`。
+
+mutable 侧另有 `hotspot`（WiFi 热点启停，频段跟随 STA 信道（2.4G/5G），客户端流量走 mihomo TUN 代理；`blue stow tools/hotspot`，改源即生效）：[hotspot.md](hotspot.md)。
 
 ## emacs
 

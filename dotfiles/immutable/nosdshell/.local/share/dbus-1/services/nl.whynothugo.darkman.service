@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# darkman 兼容总线名：由 nosd-helpers portal 持有（darkman 包已退役，
+# 模式查询/切换见 `nosd-helpers portal get|set|toggle`），订阅 ModeChanged
+# 的消费者（self-theme.el 等）无感知迁移；单实例由 daemon 内部保证
+# （docs/scripts/darkman-theme.md §nosd-portal-run）。
+
+[D-BUS Service]
+Name=nl.whynothugo.darkman
+Exec=/home/brokenshine/.local/libexec/nosd-portal-run

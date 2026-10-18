@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# portal 后端兼容别名：存量 `Settings=darkman` 的 portals.conf 或旧
+# darkman.portal 描述符依旧解析到本后端（darkman 包已退役，该名由
+# nosd-helpers portal 持有）；单实例由 daemon 内部保证
+#（docs/scripts/darkman-theme.md §nosd-portal-run）。
+
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.darkman
+Exec=/home/brokenshine/.local/libexec/nosd-portal-run

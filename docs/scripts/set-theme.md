@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com> -->
 <!-- SPDX-License-Identifier: MIT -->
 
-# set-theme.sh — darkman 模板渲染器（`$$VAR$$` → 模式变量组）
+# set-theme.sh — mode.d 模板渲染器（`$$VAR$$` → 模式变量组）
 
-`dotfiles/immutable/noctalia-suite/.config/darkman/script/set-theme.sh` · immutable → `~/.config/darkman/script/set-theme.sh`（改后须 `blue home`） · `~/.local/libexec/theme-common.sh`（由 darkman mode.d hook 触发）
+`dotfiles/immutable/nosdshell/.config/darkman/script/set-theme.sh` · immutable → `~/.config/darkman/script/set-theme.sh`（改后须 `blue home`） · `~/.local/libexec/theme-common.sh`（由 nosd-helpers portal 的 mode.d hook 触发，目录语义兼容 darkman）
 
 按 `script_dir/config.json` 中选定模式的变量组，把模板树里所有 `$$KEY$$` 占位符渲染后写入 `~/.config/` 下的对应相对路径。
 

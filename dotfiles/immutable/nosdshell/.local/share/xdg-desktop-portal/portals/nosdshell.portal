@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+[portal]
+DBusName=org.freedesktop.impl.portal.desktop.nosdshell
+Interfaces=org.freedesktop.impl.portal.Settings
+UseIn=niri;

@@ -6,12 +6,8 @@
 # fenv . $XDG_STATE_HOME/nix/profile/etc/profile.d/hm-session-vars.sh
 # fish_add_path -g -a $XDG_STATE_HOME/nix/profile/bin
 
-## PNPM
-mkdir -p $HOME/.local/share/pnpm
-set -gx PNPM_HOME $HOME/.local/share/pnpm
-if not string match -q -- $PNPM_HOME $PATH
-    set -gx PATH "$PNPM_HOME" $PATH
-end
+## PNPM：不设 PNPM_HOME，global 安装已废弃（anchors 冻结 pnpm/npm global）；
+## store 位置由 XDG_DATA_HOME 推导，仍是 ~/.local/share/pnpm/store，不受影响
 
 ## User
 fish_add_path -g -a $HOME/.local/bin

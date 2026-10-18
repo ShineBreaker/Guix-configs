@@ -17,6 +17,9 @@ spawn-sh-at-startup "herd set-environment graphical-session XDG_CURRENT_DESKTOP=
 spawn-sh-at-startup "wl-paste --watch cliphist store &"
 spawn-sh-at-startup "fish -c 'dex -a'"
 
+// 由 nosd-helpers portal 来接管 darkman
+spawn-sh-at-startup "$HOME/.local/libexec/nosd-portal-run"
+
 // 登录后解锁钥匙环
 spawn-sh-at-startup r##"
 o=$(dbus-send --session --print-reply --dest=org.freedesktop.secrets \

@@ -4,9 +4,15 @@
 #
 # SPDX-License-Identifier: MIT
 
-# theme-common.sh — darkman dark/light 两个 mode.d hook 的共享实现
-#（0-apply-theme.sh 薄 shim exec 本脚本并传模式；模式差异集中在下方
-# case）。用法、部署形态与失败降级见 docs/scripts/darkman-theme.md。
+# theme-common.sh — nosd-helpers portal 的 dark/light mode.d hook 共享实现
+#（0-apply-theme.sh 薄 shim exec 本脚本并传模式；mode.d 目录语义与 darkman
+# 兼容）。用法、部署形态与失败降级见 docs/scripts/darkman-theme.md。
+#
+# 覆盖范围边界：kitty/foot 主题由 nosdshell 模板管线 + `nosd-helpers apply`
+# 全权负责（文件先写、reload 后发信号），本脚本不碰；Electron/GTK4 走
+# portal SettingChanged；nosdshell 内部状态由 daemon 侧 ipc 前推。这里只管
+# 模板不覆盖的散件：set-theme.sh（GTK/qt 配置文件渲染）、mako、gsettings
+# 名称项与 NotifyThemeChange。
 
 set -eu
 
@@ -19,22 +25,20 @@ mode=$1
 case "$mode" in
   dark)
     log_tag=dark
-    foot_signal=SIGUSR1
     color_scheme=prefer-dark
     gtk_theme=adw-gtk3-dark
     icon_theme=Papirus-Dark
     ;;
   light)
     log_tag=light
-    foot_signal=SIGUSR2
     color_scheme=prefer-light
     gtk_theme=adw-gtk3
     icon_theme=Papirus-Light
     ;;
 esac
 
-# darkman daemon 经 home-shepherd 启动、未继承会话变量；wayland
-# socket 需自取。
+# nosd-helpers portal 可经 D-Bus activation 启动，会话变量随激活者环境
+# 而定；wayland socket 自取兜底。
 if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -d "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" ]; then
   for _d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/wayland-*; do
     case "$_d" in *\.lock) continue ;; esac
@@ -73,32 +77,17 @@ log "hook start"
 "${HOME}/.config/darkman/script/set-theme.sh" "$mode" >>"$LOG_FILE" 2>&1
 log "set-theme: ok"
 
-pkill -u "$USER" --signal="$foot_signal" ^foot$ || true
-log "foot reload signal sent"
-
-# kitty 配置监控不追踪 include 文件，只能 SIGUSR1 重载；信号必须等
-# nosdshell 写完主题文件后再发，否则读到上一个模式。
-if [ "$mode" = dark ]; then
-  run_optional "nosdshell darkMode" timeout 5 nosdshell ipc call darkMode setDark
-else
-  run_optional "nosdshell lightMode" timeout 5 nosdshell ipc call darkMode setLight
-fi
-
-if command -v kitty >/dev/null 2>&1; then
-  run_optional "kitty config reload" pkill -u "$USER" --signal=SIGUSR1 ^kitty$
-else
-  log "kitty theme reload: skipped (kitty not found)"
-fi
-
 makoctl reload || true
 log "mako reload requested"
 
-if command -v guix >/dev/null 2>&1; then
-  run_optional "gsettings color-scheme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface color-scheme "$color_scheme"
-  run_optional "gsettings gtk-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme"
-  run_optional "gsettings icon-theme" guix shell glib:bin -- gsettings set org.gnome.desktop.interface icon-theme "$icon_theme"
+# gsettings 由 home profile 的 glib:bin 提供，直调；不要再包 guix shell（每次
+# 调用都触发 profile 解析，慢且多一层 guix-daemon 失败面）。
+if command -v gsettings >/dev/null 2>&1; then
+  run_optional "gsettings color-scheme" gsettings set org.gnome.desktop.interface color-scheme "$color_scheme"
+  run_optional "gsettings gtk-theme" gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme"
+  run_optional "gsettings icon-theme" gsettings set org.gnome.desktop.interface icon-theme "$icon_theme"
 else
-  log "gsettings: skipped (guix not found)"
+  log "gsettings: skipped (gsettings not found)"
 fi
 
 # 通知运行中的 GTK 应用刷新主题

@@ -25,7 +25,7 @@ desktop/
 ## 关键约定
 
 - **Niri 分层**：`config.kdl` 只做顶层装配，`settings/` 下每个子模块单独一个文件并用 `include` 引入，`optional=true` 的条目允许缺省。
-- **Portal 后端**：`portals.conf` 默认 `default=gnome;gtk;`，其中 `Secret` 走 gnome-keyring、`Settings` 走 darkman。
+- **Portal 后端**：`portals.conf` 默认 `default=gnome;gtk;`，其中 `Secret` 走 gnome-keyring、`Settings` 走 nosdshell（`nosd-helpers portal` daemon，darkman 兼容见 `docs/scripts/darkman-theme.md`）。
 - **Autostart**：新增 `.desktop` 前先确认目标程序已在 `config.org` 的用户包清单声明，否则条目存在但拉不起二进制。
 
 ## 修改与生效

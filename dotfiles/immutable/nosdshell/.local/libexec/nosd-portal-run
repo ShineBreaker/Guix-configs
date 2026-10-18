@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# nosd-portal-run — `nosd-helpers portal` 守护进程的统一启动入口
+# 文档：docs/scripts/darkman-theme.md §nosd-portal-run
+
+set -euo pipefail
+
+# 单实例由 daemon 自身保证（$XDG_RUNTIME_DIR/nosd-portal.lock + 总线名
+# 占有检查）：并发 activation/重复 spawn 只会有一个活实例，后到者阻塞
+# 至首个实例退出才补位（兼作自动复活）。
+#
+# 本脚本只负责 PATH 规整：D-Bus activation 环境的 PATH 不含 Guix
+# profile，而 mode.d 钩子要调 gsettings / makoctl / dbus-send / jq。
+PATH="${HOME}/.guix-home/profile/bin:${HOME}/.guix-profile/bin:/run/current-system/profile/bin:${PATH}"
+export PATH
+
+exec nosd-helpers portal run
