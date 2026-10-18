@@ -26,7 +26,7 @@ metadata:
 1. **并发能力**：`iw list | sed -n '/valid interface combinations/,/^$/p'`。
    出现 `#{ managed } <= 1, #{ AP, ... } <= 1` + `#channels <= 1` = 可 STA+AP 并发，但**必须同信道**（AP 信道跟随 STA）。
 2. **频段选择**：`iw dev <wifi-if> info`（channel/freq）+ `iw phy` 的频段 flags。
-   country 00 下 5G 全段 `no IR` → AP 起不来（除非用打了 GO_CONCURRENT 补丁的 hostapd）；
+   本卡（Intel CNVi，LAR 固件自管监管域）5G 全段永远 `no IR` → AP 起不来，`iw reg set` 也救不了；
    **把 STA 切到 2.4G，AP 同信道起** —— 这是最省事路径（2.4G 有 IR）。用户连 2.4G 要密码，让其手动 `nmcli device wifi connect <ssid-2.4G>`。
 3. **代理接管不用配置**：mihomo auto-route 已加 `ip rule 9002: not from all iif lo lookup 2022` → 任何非 lo 入接口的转发流量自动进 Meta TUN，热点客户端天然过代理（`ip rule` 可确认）。
 4. **防火墙**：规则集 input/forward 默认 drop，放行靠 `trusted_ifaces` 集合（真相源：Guix-configs `source/config.org` 的 `nftables-conf` 块）。把热点接口加进该集合 = 全端口放行，**不需要逐端口开**。
