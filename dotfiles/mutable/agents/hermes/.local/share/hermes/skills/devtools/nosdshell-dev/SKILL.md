@@ -91,6 +91,16 @@ input they need, rather than implying the feature is verified.
 - Translation keys go in `en.json` only; `I18n.qml` falls back to English for the other locales. A missing key renders as `!!key!!`, so check the key exists in `en.json` before relying on it.
 - When a layout stops reading a setting, mark it inert (comment in `Commons/Settings.qml` plus a disabled control in the Settings panel) and delete the reads, rather than leaving branches no path reaches. Configs keep loading because the key still exists.
 
+## Guix-configs 侧的同步点（跨仓库契约）
+
+本仓库跑在 Guix-configs 维护的会话里，三处是跨仓库契约；改对应部件时同步检查系统侧（`~/Projects/Config/Guix-configs`，改动需在该仓库跑 `blue home` 才落到 `$HOME`）：
+
+- **niri 层规则**：canonical 副本 `Scripts/docs/nosdshell-layer-rules.kdl` ↔ 系统侧 `dotfiles/immutable/nosdshell/.config/niri/settings/special.kdl`。改 Tier 划分或 namespace 集合后两边 diff 一遍（系统侧多出头部装配行，其余应逐条一致）。
+- **主题模板管线**：`activeTemplates` 生成的 `~/.config/{kitty/themes,foot/themes}/nosdshell*` 是终端配色的唯一来源；系统侧 foot.ini / kitty.conf 只 include 该路径。改模板变量集时确认系统侧仍读同一路径。
+- **主题切换后端**：`nosd-helpers portal`（`run|get|set|toggle`）持有 portal 后端名与 darkman 兼容总线名；`~/.config/darkman/`、`~/.local/state/darkman/` 是沿用的兼容路径约定，别按「已废弃」清掉。
+
+系统侧部署与验证走 `blue home`（本仓库的 verify/lint 不覆盖系统侧文件）。
+
 ## Reporting
 
 - If a verify scene cannot reach a state headlessly — an auth-failure path that needs real keystrokes, for instance — the scene may exist while its screenshot stays unproduced. Name which part is verified and which is not; never substitute a plausible screenshot.

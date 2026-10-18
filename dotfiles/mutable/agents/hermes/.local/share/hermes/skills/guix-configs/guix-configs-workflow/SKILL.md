@@ -991,6 +991,33 @@ blue stow --delete hermes        # 撤销链(~ 下变回实际文件)
 
 完整协议(备份策略、md5 三方验证、实时生效测试、commit 规范、反模式清单、故障排查表)见 `references/gnu-stow-two-tier-dotfiles.md`。
 
+### 8.1 新增 mutable 工具包（`~/.local/bin` 入口）入仓序列（2026-10 实战走通）
+
+把一次性运维脚本（热点启停 / 体检 / 同步类）长期化为仓库工具时的最小形态：
+
+```
+dotfiles/mutable/tools/<pkg>/
+├── .stow-package        # 空文件，包身份标记
+├── .stow-local-ignore   # 照抄 toolbox：AGENTS.md / \.git$ / \.gitignore$
+├── AGENTS.md            # 可选；写入受授权闸门拦（见 §12.5），拿不到授权就先跳过
+└── .local/bin/<name>    # 单入口（一包一入口；多子命令在包内 case 分发）
+```
+
+登记三处（同一次改动内做完）：`tools.yaml` 加条目（`help_cmd` 只填「只打印用法、不触发主逻辑」的旗标）；fish 补全 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish`（硬性联动，属 immutable，生效需 `blue home`）；手册 `docs/scripts/<name>.md` + `docs/scripts/README.md` 索引一行。
+
+收尾验证序列（全在仓库根跑，AI 可执行）：
+
+```bash
+bash -n <script> && uvx --from shellcheck-py shellcheck <script>  # 零告警；nft 集合字面量等豁免写 disable + 理由
+fish --no-execute <completion.fish>                               # 补全语法
+blue stow tools/<pkg>                                             # 部署；mutable 软链即时生效
+~/.local/bin/toolbox check                                        # 清单对账 + 一包一入口执法（阻断级）
+blue format docs/scripts/<name>.md                                # 文档排版（prettier + 标点两级）
+blue structor                                                     # 目录树收录；完跑后 git diff 核对无关树（见 §8 陷阱）
+```
+
+**root 工具脚本的两个通用坑**：非 root 自提权用绝对路径重入（`exec sudo -- "$(readlink -f -- "$(command -v -- "$0" || printf '%s' "$0")") "$@"`，`$0` 可能是裸命令名）；**PATH 只能追加不能前置**——前置 `/run/current-system/profile/bin` 会遮蔽 `/run/privileged/bin` 的 setuid sudo，报 `sudo: ... 必须属于用户 ID 0 并且设置 setuid 位`。外部依赖（hostapd/dnsmasq 等）按 `command -v` → `guix build` 两级解析，别硬编码 store 路径。热点脚本的完整实现要点另见 `wifi-hotspot-ap` skill。
+
 ---
 
 ## 9. 改 `source/config.org` system 层 service 定义的安全协议
@@ -1645,6 +1672,27 @@ for f in /gnu/store/*-blue-*/bin/blue; do echo "== $f"; head -1 "$f"; done
 ### 12.5 AGENTS.md 写入需要用户授权
 
 `AGENTS.md`(仓库各级)被工具层列为受保护文件,`patch` 会直接 BLOCKED 并提示授权超时——**沉默不等于同意,不要换 terminal/execute_code 绕**。改这类文件前先向用户说明要改哪几处、取得授权后再写。文档类文件(README/手册/索引)无此限制,可直接改。
+
+### 12.6 组件退役（CLI / 服务被新实现替代）后的引用清理:三类残留分开处置
+
+退役形态:从包清单删掉旧组件、其角色由新实现接管(新旧可能共用同一个 D-Bus 名或路径)。旧名在仓库里的引用**先分类再动手**——一刀切删会砍掉兼容层,一刀切留会留下照做必失败的操作指令:
+
+| 残留                                                        | 例子                                          | 处置                                                                                     |
+| ----------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **可执行引用**(命令调用、配置模板/示例)                     | `darkman get`、示例里的 `Settings=darkman`    | 改到替代实现(`nosd-helpers portal get`、`Settings=nosdshell`)——按旧名操作会失败/静默降级 |
+| **兼容别名与约定路径**(D-Bus 名、`*.service`、配置/状态目录) | `nl.whynothugo.darkman`、`~/.config/darkman/` | 保留,但注释写明「旧组件已退役,该名/该路径由 X 持有」——否则下一个人以为遮蔽逻辑还有对象     |
+| **历史记录**(带日期的实测/事故条目)                         | 带 `_Verified <日期>_` 的经验条目             | 保留不改;要提示现状就加一句注,不要改写历史                                                 |
+
+```bash
+grep -rn '<旧名>' . --exclude-dir=.git --exclude-dir=workfile | grep -v '\.mimosa/hook-state'
+# .mimosa/hook-state 下的命中是工具快照,忽略
+```
+
+三条实战教训:
+
+- **文档承诺与实际配置矛盾是「退役没做干净」的第一信号**:文档写「X 包保留作 CLI 客户端」而包清单里已删 X,说明改动的各部分互不知情。先把矛盾摆给用户拍板(保留包 or 全面清理),再动手。
+- **agent skill / 手册里的命令示例是最高频漏点**:某 skill 的操作段会写旧命令,未来的 agent 会当真照做;扫到就改。
+- **跨仓库消费者要连带处理**:别的仓库里的调用要么改到替代命令,要么确认其失败路径可接受(`ignore-errors` 有降级 vs 直接崩),改完跑该仓库的语法级验证。
 
 ---
 

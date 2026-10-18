@@ -151,3 +151,4 @@ d-Bus 优先复用宿主 session bus（`DBUS_SESSION_BUS_ADDRESS` 已 preserve +
 | 窗口起不来、渲染 crash               | 容器沙箱或 GPU 探测                              | 确认 `--no-sandbox` 等旗标在；试 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop` |
 | 中文输入无效                         | 缺 `--enable-wayland-ime`                        | 检查 `EXEC_STRING`                                                        |
 | 远程模式退回本地                     | token 提取失败                                   | 查 backend 是否可达、页面是否含 session token                             |
+| rofi drun 报 `Failed to execute: 'hermes desktop'` | greetd 拉的会话 PATH 无 `~/.local/bin`，`Exec` 裸命令名 execvp 失败 | `.local/share/applications/hermes.desktop` 的 `Exec` 写绝对路径 `/home/brokenshine/.local/bin/hermes desktop` |

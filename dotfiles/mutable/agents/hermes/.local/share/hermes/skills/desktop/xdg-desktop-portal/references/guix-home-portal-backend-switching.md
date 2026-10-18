@@ -21,11 +21,11 @@ Testament 仓库（`~/Projects/Config/Testament`）**没有手写 portal 的 she
 
 Portal 后端切换必须同时改三处，否则会出现"包装了没启动"或"启动了但 portals.conf 没选"的割裂：
 
-| 位置 | 文件 | 作用 |
-| ---- | ---- | ---- |
-| **A. portals.conf** | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明默认后端 + 各接口优先级 |
-| **B. packages 列表** | `source/config.org` 的 `user-packages` 块 | 声明安装的 portal 包 |
-| **C. shepherd 服务** | `source/config.org` 的 `home-shepherd-services` 块 | 声明自启动的 portal daemon（如果用 Guix-configs 写法） |
+| 位置                 | 文件                                                                 | 作用                                                   |
+| -------------------- | -------------------------------------------------------------------- | ------------------------------------------------------ |
+| **A. portals.conf**  | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明默认后端 + 各接口优先级                            |
+| **B. packages 列表** | `source/config.org` 的 `user-packages` 块                            | 声明安装的 portal 包                                   |
+| **C. shepherd 服务** | `source/config.org` 的 `home-shepherd-services` 块                   | 声明自启动的 portal daemon（如果用 Guix-configs 写法） |
 
 ## portals.conf 语法
 
@@ -34,7 +34,7 @@ INI 格式，`[preferred]` 段。`default` 是分号分隔的 fallback 链（先
 ```ini
 [preferred]
 default=gnome;gtk
-org.freedesktop.impl.portal.Settings=darkman
+org.freedesktop.impl.portal.Settings=nosdshell
 org.freedesktop.impl.portal.ScreenCast=wlr
 org.freedesktop.impl.portal.Screenshot=wlr
 org.freedesktop.impl.portal.RemoteDesktop=wlr
@@ -42,11 +42,12 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 
 **实现 ID 对照**：
 
-| 包名 | 实现 ID |
-| ---- | ------- |
-| `xdg-desktop-portal-gnome` | `gnome` |
-| `xdg-desktop-portal-gtk` | `gtk` |
-| `xdg-desktop-portal-wlr` | `wlr` |
+| 包名                       | 实现 ID     |
+| -------------------------- | ----------- |
+| `xdg-desktop-portal-gnome` | `gnome`     |
+| `xdg-desktop-portal-gtk`   | `gtk`       |
+| `xdg-desktop-portal-wlr`   | `wlr`       |
+| `nosd-helpers`             | `nosdshell` |
 
 ## GNOME portal 在 niri 下的限制（源码级）
 
@@ -55,6 +56,7 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 GNOME portal 的 ScreenCast 和 Screenshot 接口依赖 GNOME Shell 的 `org.gnome.Mutter.ServiceChannel` D-Bus 接口。niri 不提供此接口 → gnome portal 在 niri 下**只能暴露 Settings 接口**。
 
 日志特征：
+
 ```
 Failed to open service channel Wayland connection, portals dialogs may missbehave
 (无法调用方法；代理名称为常见的无所有者的名称 org.gnome.Mutter.ServiceChannel)
@@ -65,6 +67,7 @@ Failed to open service channel Wayland connection, portals dialogs may missbehav
 ### 限制 2：`XDG_SESSION_TYPE=tty` 陷阱（本次会话实测根因）
 
 **调用链**：
+
 ```
 greetd (TTY 显示管理器) → XDG_SESSION_TYPE=tty
   → niri --session (继承 tty)
@@ -76,6 +79,7 @@ greetd (TTY 显示管理器) → XDG_SESSION_TYPE=tty
 ```
 
 `libgxdp/src/gxdp.c:82` 源码：
+
 ```c
 session_type = getenv("XDG_SESSION_TYPE");
 if (g_strcmp0(session_type, "wayland") == 0) { return gxdp_wayland_init(...); }
@@ -87,6 +91,7 @@ return FALSE;  // → settings_only = TRUE
 ```
 
 **修复**：在 `config.kdl` 的 `environment { }` 块里**直接写死**：
+
 ```kdl
 environment {
   XDG_CURRENT_DESKTOP "niri"
@@ -101,7 +106,7 @@ environment {
 ```ini
 [preferred]
 default=gnome;gtk
-org.freedesktop.impl.portal.Settings=darkman
+org.freedesktop.impl.portal.Settings=nosdshell
 org.freedesktop.impl.portal.FileChooser=gtk
 org.freedesktop.impl.portal.Access=gtk
 org.freedesktop.impl.portal.Notification=gtk
@@ -112,7 +117,9 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 ```
 
 各后端分工：
-- **gnome**：Settings（GNOME Settings）+ Secret（gnome-keyring）
+
+- **nosdshell**：Settings（`nosd-helpers portal` daemon，2026-10 起替代 darkman 并保留其兼容总线名）
+- **gnome**：Secret（gnome-keyring）
 - **gtk**：FileChooser / Access / Notification / Wallpaper 等基础接口
 - **wlr**：ScreenCast / Screenshot / RemoteDesktop（**niri 唯一支持的录屏后端**）
 
@@ -184,11 +191,13 @@ tr '\0' '\n' < /proc/$(pgrep -f 'libexec/xdg-desktop-portal$')/environ | grep -E
 3. `config.org` shepherd：删除 wlr portal 行
 
 **发现问题**：
+
 - 重启后 gnome portal 报 `Non-compatible display server, exposing settings only.`
 - 根因：`XDG_SESSION_TYPE=tty`（greetd → niri → shepherd → portal）
 - 修复：`config.kdl` `environment { }` 块写死 `XDG_SESSION_TYPE "wayland"` + `XDG_CURRENT_DESKTOP "niri"`
 
 **后续问题**：
+
 - gnome portal 在 niri 下只能提供 Settings（因缺少 Mutter 的 `org.gnome.Mutter.ServiceChannel`）
 - OBS 录屏完全不可用（wlr 被删了，gnome 又不支持）
 - 需要把 wlr 加回来，用多后端路由

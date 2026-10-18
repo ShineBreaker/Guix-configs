@@ -64,6 +64,7 @@ flatpak run --command=sh <app-id> -c 'xdg-open https://example.com'
 ```
 
 常见错误：
+
 - UnknownMethod → 没有 backend 实现该接口
 - no method available → backend 存在但无法处理
 
@@ -72,6 +73,7 @@ flatpak run --command=sh <app-id> -c 'xdg-open https://example.com'
 现象：xdg-desktop-portal-gtk 从 1.15.0 起彻底移除了 org.freedesktop.impl.portal.AppChooser 和 OpenURI 支持。上游认为应用应直接调用 GAppInfo 而非通过 portal。
 
 确认方法：
+
 ```bash
 cat /gnu/store/*-xdg-desktop-portal-gtk-*/share/xdg-desktop-portal/portals/gtk.portal | grep Interfaces
 ```
@@ -95,6 +97,7 @@ guix package -A | grep portal
 最小实现只需支持 OpenURI 方法（OpenFile 仅旧版 flatpak 需要）：
 
 核心逻辑：
+
 1. 收到 OpenURI 调用，解析 (parent_window, uri, options)
 2. 如果 uri 以 file:// 开头：
    - 用 g_filename_from_uri 转为路径
@@ -150,9 +153,9 @@ gcc -o openuri-portal openuri-portal.c \
 
 5. 验证注册是否成功：
    dbus-send --session --print-reply \
-     --dest=org.freedesktop.portal.Desktop \
-     /org/freedesktop/portal/desktop \
-     org.freedesktop.DBus.Introspectable.Introspect | grep -i openuri
+   --dest=org.freedesktop.portal.Desktop \
+   /org/freedesktop/portal/desktop \
+   org.freedesktop.DBus.Introspectable.Introspect | grep -i openuri
 
 ## niri 下 ScreenCast/Screenshot 修复（后端路由方案）
 
@@ -160,11 +163,11 @@ gcc -o openuri-portal openuri-portal.c \
 
 通过 `busctl --user introspect` 在 niri 25.x 环境下实测：
 
-| 后端 | 包名 | 实际提供的接口 | 原因 |
-|------|------|---------------|------|
-| gnome | `xdg-desktop-portal-gnome` | **仅 Settings** | 缺少 Mutter ServiceChannel（`org.gnome.Mutter.ServiceChannel`） |
-| gtk | `xdg-desktop-portal-gtk` | FileChooser/Access/Notification/Lockdown/Print/Wallpaper | `.portal` 文件未声明 ScreenCast/Screenshot |
-| wlr | `xdg-desktop-portal-wlr` | ScreenCast/Screenshot/RemoteDesktop | 通过 wlr-screencopy 协议 |
+| 后端  | 包名                       | 实际提供的接口                                           | 原因                                                            |
+| ----- | -------------------------- | -------------------------------------------------------- | --------------------------------------------------------------- |
+| gnome | `xdg-desktop-portal-gnome` | **仅 Settings**                                          | 缺少 Mutter ServiceChannel（`org.gnome.Mutter.ServiceChannel`） |
+| gtk   | `xdg-desktop-portal-gtk`   | FileChooser/Access/Notification/Lockdown/Print/Wallpaper | `.portal` 文件未声明 ScreenCast/Screenshot                      |
+| wlr   | `xdg-desktop-portal-wlr`   | ScreenCast/Screenshot/RemoteDesktop                      | 通过 wlr-screencopy 协议                                        |
 
 ### 根因
 
@@ -176,7 +179,7 @@ gcc -o openuri-portal openuri-portal.c \
 ```ini
 [preferred]
 default=gnome;gtk;
-org.freedesktop.impl.portal.Settings=darkman
+org.freedesktop.impl.portal.Settings=nosdshell
 org.freedesktop.impl.portal.FileChooser=gtk
 org.freedesktop.impl.portal.Access=gtk;
 org.freedesktop.impl.portal.Notification=gtk;
@@ -188,15 +191,15 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 
 ### 三处必须同步
 
-| 位置 | 文件 | 作用 |
-|------|------|------|
-| portals.conf | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明后端优先级 |
-| packages 列表 | `source/config.org` 的 `user-packages` 块 | 声明安装的 portal 包 |
-| shepherd 服务 | `source/config.org` 的 `home-shepherd-services` 块 | 声明自启动的 portal daemon |
+| 位置          | 文件                                                                 | 作用                       |
+| ------------- | -------------------------------------------------------------------- | -------------------------- |
+| portals.conf  | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明后端优先级             |
+| packages 列表 | `source/config.org` 的 `user-packages` 块                            | 声明安装的 portal 包       |
+| shepherd 服务 | `source/config.org` 的 `home-shepherd-services` 块                   | 声明自启动的 portal daemon |
 
 ### `GDK_BACKEND=wayland` 全局陷阱
 
-niki wiki 原文：*"Do not set the GDK_BACKEND environment variable globally as this will break the screencast portal."*
+niki wiki 原文：_"Do not set the GDK_BACKEND environment variable globally as this will break the screencast portal."_
 
 如果 `config.org` 里有 `("GDK_BACKEND" . "wayland")` 全局声明，需要删掉——让 GTK 应用自动选择 Wayland。
 

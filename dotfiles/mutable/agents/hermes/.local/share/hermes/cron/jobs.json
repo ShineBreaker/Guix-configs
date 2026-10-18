@@ -20,18 +20,18 @@
       "schedule_display": "0 23 * * 2,4,6",
       "repeat": {
         "times": null,
-        "completed": 53
+        "completed": 54
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-06-21T17:40:06.173351+08:00",
-      "next_run_at": "2026-10-17T23:00:00+08:00",
-      "last_run_at": "2026-10-15T23:01:11.307334+08:00",
-      "last_status": "ok",
+      "next_run_at": "2026-10-20T23:00:00+08:00",
+      "last_run_at": "2026-10-17T23:22:58.625245+08:00",
+      "last_status": "delivery_failed",
       "last_error": null,
-      "last_delivery_error": null,
+      "last_delivery_error": "delivery error: QQBot: no access_token in response (target qqbot:52DAD9E6A36A3DEC33E37F47CF09673F)",
       "deliver": "qqbot",
       "origin": {
         "platform": "qqbot",
@@ -46,9 +46,9 @@
       "model_snapshot": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-15T23:00:00+08:00",
-        "dispatched_at": "2026-10-15T23:00:02.441959+08:00",
-        "lateness_seconds": 2.4,
+        "scheduled_at": "2026-10-17T23:00:00+08:00",
+        "dispatched_at": "2026-10-17T23:00:42.692197+08:00",
+        "lateness_seconds": 42.7,
         "kind": "on_time"
       }
     },
@@ -127,18 +127,18 @@
       "schedule_display": "30 23 * * 3,6",
       "repeat": {
         "times": null,
-        "completed": 21
+        "completed": 22
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-08-12T22:32:44.043191+08:00",
-      "next_run_at": "2026-10-17T23:30:00+08:00",
-      "last_run_at": "2026-10-15T00:09:25.116487+08:00",
-      "last_status": "ok",
+      "next_run_at": "2026-10-21T23:30:00+08:00",
+      "last_run_at": "2026-10-18T00:08:33.144007+08:00",
+      "last_status": "delivery_failed",
       "last_error": null,
-      "last_delivery_error": null,
+      "last_delivery_error": "delivery error: QQBot: no access_token in response (target qqbot:52DAD9E6A36A3DEC33E37F47CF09673F)",
       "deliver": "qqbot",
       "origin": null,
       "enabled_toolsets": [
@@ -150,9 +150,9 @@
       "fire_claim": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-14T23:30:00+08:00",
-        "dispatched_at": "2026-10-14T23:30:41.964950+08:00",
-        "lateness_seconds": 42.0,
+        "scheduled_at": "2026-10-17T23:30:00+08:00",
+        "dispatched_at": "2026-10-17T23:30:42.692416+08:00",
+        "lateness_seconds": 42.7,
         "kind": "on_time"
       }
     },
@@ -183,8 +183,8 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T15:40:30.541829+08:00",
-      "next_run_at": "2026-10-17T03:00:00+08:00",
-      "last_run_at": "2026-10-16T03:29:29.087969+08:00",
+      "next_run_at": "2026-10-19T03:00:00+08:00",
+      "last_run_at": "2026-10-18T03:18:24.068838+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -196,11 +196,14 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-16T03:00:00+08:00",
-        "dispatched_at": "2026-10-16T03:00:02.445651+08:00",
-        "lateness_seconds": 2.4,
+        "scheduled_at": "2026-10-18T03:00:00+08:00",
+        "dispatched_at": "2026-10-18T03:00:34.509301+08:00",
+        "lateness_seconds": 34.5,
         "kind": "on_time"
-      }
+      },
+      "canonical_completions": [
+        "7a0de1e0b5e445a6b9e33f9ff49a9db1"
+      ]
     },
     {
       "id": "2c0af0473400",
@@ -271,18 +274,18 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 23
+        "completed": 25
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-10-17T08:00:00+08:00",
-      "last_run_at": "2026-10-16T08:00:20.512881+08:00",
-      "last_status": "delivery_failed",
+      "next_run_at": "2026-10-19T08:00:00+08:00",
+      "last_run_at": "2026-10-18T08:00:47.804301+08:00",
+      "last_status": "ok",
       "last_error": null,
-      "last_delivery_error": "delivery error: QQBot: no access_token in response (target qqbot:52DAD9E6A36A3DEC33E37F47CF09673F)",
+      "last_delivery_error": null,
       "last_delivery_unverified": null,
       "failure_streak": 0,
       "deliver": "qqbot",
@@ -297,12 +300,15 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-16T08:00:00+08:00",
-        "dispatched_at": "2026-10-16T08:00:02.445591+08:00",
-        "lateness_seconds": 2.4,
+        "scheduled_at": "2026-10-18T08:00:00+08:00",
+        "dispatched_at": "2026-10-18T08:00:34.509108+08:00",
+        "lateness_seconds": 34.5,
         "kind": "on_time"
       },
-      "fire_claim": null
+      "fire_claim": null,
+      "canonical_completions": [
+        "ba99375651944462990fd3b5c9366be8"
+      ]
     },
     {
       "id": "710940d9883f",
@@ -367,5 +373,5 @@
       "fire_claim": null
     }
   ],
-  "updated_at": "2026-10-16T08:00:20.513504+08:00"
+  "updated_at": "2026-10-18T08:00:52.345855+08:00"
 }

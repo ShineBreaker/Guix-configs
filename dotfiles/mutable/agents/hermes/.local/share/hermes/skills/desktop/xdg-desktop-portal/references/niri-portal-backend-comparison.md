@@ -6,13 +6,13 @@
 
 通过 `busctl --user introspect` 实测：
 
-| 后端 | 包名 | 实际提供的接口 | 原因 |
-|------|------|---------------|------|
-| gnome | `xdg-desktop-portal-gnome` | **仅 Settings** | 缺少 Mutter ServiceChannel |
-| gtk | `xdg-desktop-portal-gtk` | FileChooser/Access/Notification/Lockdown/Print/Wallpaper | `.portal` 文件未声明 ScreenCast/Screenshot |
-| wlr | `xdg-desktop-portal-wlr` | ScreenCast/Screenshot/RemoteDesktop | 通过 wlr-screencopy 协议 |
-| darkman | `darkman` | Settings（暗色模式） | 替代 gnome Settings |
-| gnome-keyring | `gnome-keyring` | Secret | 密码管理 |
+| 后端          | 包名                       | 实际提供的接口                                           | 原因                                        |
+| ------------- | -------------------------- | -------------------------------------------------------- | ------------------------------------------- |
+| gnome         | `xdg-desktop-portal-gnome` | **仅 Settings**                                          | 缺少 Mutter ServiceChannel                  |
+| gtk           | `xdg-desktop-portal-gtk`   | FileChooser/Access/Notification/Lockdown/Print/Wallpaper | `.portal` 文件未声明 ScreenCast/Screenshot  |
+| wlr           | `xdg-desktop-portal-wlr`   | ScreenCast/Screenshot/RemoteDesktop                      | 通过 wlr-screencopy 协议                    |
+| nosdshell     | `nosd-helpers`             | Settings（暗色模式）                                     | 替代 gnome Settings（2026-10 前为 darkman） |
+| gnome-keyring | `gnome-keyring`            | Secret                                                   | 密码管理                                    |
 
 ## 根因分析
 
@@ -31,7 +31,7 @@ gtk portal 的 `.portal` 文件（`share/xdg-desktop-portal/portals/gtk.portal`�
 ```ini
 [preferred]
 default=gnome;gtk;
-org.freedesktop.impl.portal.Settings=darkman
+org.freedesktop.impl.portal.Settings=nosdshell
 org.freedesktop.impl.portal.FileChooser=gtk
 org.freedesktop.impl.portal.Access=gtk;
 org.freedesktop.impl.portal.Notification=gtk;
@@ -43,21 +43,21 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 
 ## 三处必须同步
 
-| 位置 | 文件 | 作用 |
-|------|------|------|
-| portals.conf | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明后端优先级 |
-| packages 列表 | `source/config.org` 的 `user-packages` 块 | 声明安装的 portal 包 |
-| shepherd 服务 | `source/config.org` 的 `home-shepherd-services` 块 | 声明自启动的 portal daemon |
+| 位置          | 文件                                                                 | 作用                       |
+| ------------- | -------------------------------------------------------------------- | -------------------------- |
+| portals.conf  | `dotfiles/immutable/desktop/.config/xdg-desktop-portal/portals.conf` | 声明后端优先级             |
+| packages 列表 | `source/config.org` 的 `user-packages` 块                            | 声明安装的 portal 包       |
+| shepherd 服务 | `source/config.org` 的 `home-shepherd-services` 块                   | 声明自启动的 portal daemon |
 
 ## 常见错误
 
-| 错误 | 根因 | 修复 |
-|------|------|------|
-| `Non-compatible display server, exposing settings only.` | gnome portal 缺少 Mutter ServiceChannel | 用 wlr 做 ScreenCast |
-| `Failed to open service channel Wayland connection ... org.gnome.Mutter.ServiceChannel` | 同上 | 用 wlr 做 ScreenCast |
-| `Error reading events from display: 断开的管道` | gtk portal Wayland 连接断了（niri 重启后旧进程残留） | 重启 niri 会话 |
-| gnome portal 进程没跑 | shepherd 服务被删 / D-Bus 激活未触发 | 检查 shepherd.conf 和 packages 列表 |
-| `GDK_BACKEND=wayland` 全局设置 | niki wiki 点名会破 screencast portal | 删掉全局 GDK_BACKEND |
+| 错误                                                                                    | 根因                                                 | 修复                                |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------- |
+| `Non-compatible display server, exposing settings only.`                                | gnome portal 缺少 Mutter ServiceChannel              | 用 wlr 做 ScreenCast                |
+| `Failed to open service channel Wayland connection ... org.gnome.Mutter.ServiceChannel` | 同上                                                 | 用 wlr 做 ScreenCast                |
+| `Error reading events from display: 断开的管道`                                         | gtk portal Wayland 连接断了（niri 重启后旧进程残留） | 重启 niri 会话                      |
+| gnome portal 进程没跑                                                                   | shepherd 服务被删 / D-Bus 激活未触发                 | 检查 shepherd.conf 和 packages 列表 |
+| `GDK_BACKEND=wayland` 全局设置                                                          | niki wiki 点名会破 screencast portal                 | 删掉全局 GDK_BACKEND                |
 
 ## `putenv` 模式 — 给单个 portal 注入环境变量
 

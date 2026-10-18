@@ -58,6 +58,7 @@ dotfiles/mutable/agents/hermes/.local/share/hermes/image_cache/
 dotfiles/mutable/agents/hermes/.local/share/hermes/sessions/
 dotfiles/mutable/agents/hermes/.local/share/hermes/pairing/
 dotfiles/mutable/agents/hermes/.local/share/hermes/audit/
+dotfiles/mutable/agents/hermes/.local/share/hermes/cron/deliveries.db
 dotfiles/mutable/agents/hermes/.local/share/hermes/cron/executions.db
 dotfiles/mutable/agents/hermes/.local/share/hermes/cron/.fire-*.lock
 dotfiles/mutable/agents/hermes/.local/share/hermes/cron/notepad.db*

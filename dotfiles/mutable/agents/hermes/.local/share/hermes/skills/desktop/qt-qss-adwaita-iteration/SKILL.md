@@ -36,6 +36,7 @@ PYTHONPATH=<profile>/lib/python3.12/site-packages python3 <测试窗脚本>
 测试窗要一次覆盖全部样式目标：普通/禁用/checked 按钮、QToolButton、输入四件套（QLineEdit/QComboBox/QSpinBox/QDoubleSpinBox）、复选/单选两态、滑块+进度条、列表+表格、文本域、标签页+分组框、QDialogButtonBox（含 default 按钮）、菜单栏。
 
 窗口管理：
+
 ```bash
 niri msg windows | grep -B4 'App ID: "xxx"'   # 查 Window ID（每次启动会变）
 niri msg action focus-window --id <N>
@@ -57,13 +58,13 @@ niri msg action focus-window --id <N>
 4. **QT_PLUGIN_PATH 覆盖陷阱（最阴）**：把 `QT_PLUGIN_PATH` 只设成 qtsvg 的 plugins 目录会挤掉默认搜索路径 → qt6ct platformtheme 加载失败 → **QSS 整个静默失效退回原生 Fusion 方块脸**。补路径时必须把 qtbase 的 plugins 目录一起拼上。
 5. **判断 QSS 是否加载**：看胶囊输入框/圆角按钮在不在。截图突然变 Fusion = 先查环境变量，再怀疑样式表。
 6. **选中态用中性灰**：列表/图标选中用 `palette(mid)`（Adwaita 中性灰）；`palette(alternate-base)` 在白底上几乎不可见且偏蓝。蓝色只留给开关/聚焦/进度/default 按钮语义。
-7. **Adwaita 输入控件形态**：`base` 底 + 1px `mid` 边框 + 8px 圆角；hover 变 `dark` 边框；focus 变 2px `highlight` 且 padding 补偿防布局跳动。对话框按钮与普通按钮同形（不做药丸形）。
+7. **Adwaita 输入控件形态**：`base` 底 + 1 px `mid` 边框 + 8 px 圆角；hover 变 `dark` 边框；focus 变 2 px `highlight` 且 padding 补偿防布局跳动。对话框按钮与普通按钮同形（不做药丸形）。
 
 ## 5. 日夜双模式验证
 
 ```bash
-darkman get      # 查当前模式（没有 status 子命令）
-darkman toggle   # Noctalia 重写 ~/.config/qt6ct/colors/noctalia.conf
+nosd-helpers portal get      # 查当前模式（旧命令 `darkman get` 已随包退役）
+nosd-helpers portal toggle   # 切换并刷新 Qt 配色（模板渲染在 nosdshell 侧）
 ```
 
 调色板切换后已开的应用不会跟着变（启动时读一次），必须重启被测应用再截图。两态各截一轮全控件图，核对 chevron/对勾对比度、选中灰、禁用态。
