@@ -709,14 +709,15 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 针对桌面高并发与低延迟场景调优内核参数：
 
-- *文件系统（ =fs.*= ）* :: 大幅放宽 =inotify= 监听数与全局文件句柄上限，防止大型代码库编译或 IDE 索引时耗尽句柄。
+- *文件系统（ =fs.*= ）* :: 放宽 =inotify= 实例数与监听数上限（Electron 类应用每个进程会创建多个实例，默认 128 易被占满导致新建进程 =EMFILE=），并放宽全局文件句柄上限，防止大型代码库编译或 IDE 索引时耗尽句柄。
 - *虚拟内存（ =vm.*= ）* :: 将 =page-cluster= 设为 0（契合 zswap 随机单页读写）、拉长脏页回写周期（ ~dirty_writeback_centisecs=1500~ ）以减少空闲 SSD 唤醒，并调高 =max_map_count= 满足现代游戏（Wine/Proton）需求。
 - *网络协议栈（ =net.*= ）* :: 启用 =BBR= 拥塞控制与 =fq= 队列调度，放大 TCP 读写缓冲上限以跑满高带宽延迟积（BDP）链路，并开启 IPv4/IPv6 转发供容器与虚拟机使用。
 
 #+NAME: sysctl-services
 #+begin_src scheme
 (list (simple-service 'extend-sysctl sysctl-service-type
-                      '(("fs.inotify.max_user_watches" . "524288")
+                      '(("fs.inotify.max_user_instances" . "1024")
+                        ("fs.inotify.max_user_watches" . "524288")
                         ("fs.file-max" . "2097152")
                         ("fs.nr_open" . "2097152")
 
@@ -787,7 +788,6 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
    "rtkit"
 
    ;; 网络与连接
-   "adb"
    "bluez"
    "curl"
    "mihomo"
@@ -1463,11 +1463,7 @@ Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 
       (udev-rules-service 'solaar (spec->pkg "solaar"))
 
-      (udev-rules-service 'steam-devices steam-devices-udev-rules)
-
-      (udev-rules-service 'winapps-usb
-                          (udev-rule "60-winapps-usb.rules"
-                                     "SUBSYSTEM==\"usb\", ENV{DEVTYPE}==\"usb_device\", GROUP=\"wheel\", MODE=\"0660\"")))
+      (udev-rules-service 'steam-devices steam-devices-udev-rules))
 #+end_src
 
 **** tuned 调优与电源档位
@@ -2045,7 +2041,8 @@ polkit.addRule(function(action, subject) {
    "xvfb-run"
 
    ;; XDG 相关组件
-   "darkman"
+   "nosd-helpers"
+   "glib:bin"
    "xdg-desktop-portal-gnome"
    "xdg-desktop-portal-gtk"
    "xdg-utils"
@@ -2157,11 +2154,14 @@ polkit.addRule(function(action, subject) {
    "pkg-config"
 
    ;; AI Agent
-   "cc-switch-bin"
-   "claude-code"
    "cua-driver-bin"
+   "magpie-bin"
    "omo-bin"
    "zcode"
+
+   ;; Android
+   "adb"
+   "fastboot"
 
    ;; 工具
    "biome"
@@ -2233,10 +2233,13 @@ polkit.addRule(function(action, subject) {
 
    ;; 娱乐
    "gamemode"
-   "luanti-halon"
-   "luanti-mineclonia-csm"
    "mangohud"
+
+   "deltalazer-bin"
+   "g0v0-bin"
+   "inso-bin"
    "osu-lazer-bin"
+
    "prismlauncher-dolly"
    "steam"
 
@@ -2352,12 +2355,12 @@ end
 
 针对笔记本内置键盘（ =AT Translated Set 2 keyboard= ）定制键位重映射，核心目标是： *在不插外接客制化小键盘时，内置键盘也能提供完全一致的肌肉记忆与层切换手感* 。
 
-外接小键盘的四列依次对应标准键盘的四行（列 4 ↔ =QWERTY= 、列 3 ↔ =ASDF= 、列 2 ↔ =ZXCV= 、列 1 ↔ 底部修饰行），且列首键自上而下为 =Esc= / =Tab= / =Shift= / =Alt= 。据此将内置键盘映射为两层：
+外接小键盘为 4 行布局，各行依次对应标准键盘的 =QWERTY= / =ASDF= / =ZXCV= / 底部修饰行；行首键自上而下为 MT 键（短按 =Tab= 、按住 ≥150ms 为 =Esc= ）与 =Ctrl= / =Shift= ，底行 =Ctrl-Win-Alt= 与标准键盘一致。据此将内置键盘映射为两层：
 
 - *Base 基础层改动* ：
-  - =QWERTY= 行首（物理 =Tab= 键）→ 映射为 =Esc=
-  - =ASDF= 行首（物理 =CapsLock= 键）→ 映射为 =Tab= （原 =CapsLock= 下沉至 =fn= 层）
-  - 底部左侧前两键（物理 =Left Ctrl= 与 =Left Alt= ）→ 互换位置，对齐小键盘拇指区
+  - =QWERTY= 行首（物理 =Tab= 键）→ 复刻小键盘 MT 键：短按 =Tab= ，按住 ≥150ms 为 =Esc= （ ~tap-hold~ ）
+  - =ASDF= 行首（物理 =CapsLock= 键）→ 映射为左 =Ctrl= ，对齐小键盘 =A= 前的 =Ctrl= （原 =CapsLock= 下沉至 =fn= 层）
+  - 底部修饰行 → 全部透传（小键盘底行 =Ctrl-Win-Alt= 已与标准键盘一致；=Left Ctrl= 与 =Left Alt= 的互换只在 Fn 层复刻，见下表）
   - 右侧 =Right Alt= → 按住激活 =fn= 层（ ~layer-while-held fn~ ）
 - *Fn 扩展层映射（按住 =Right Alt= 触发）* ：
 
@@ -2367,9 +2370,10 @@ end
 | =A S D F G=                   | =F1 F2 F3 F4 F5=          | 列 3 的 Fn 层左半接管 F1–5 |
 | =H J K L=                     | =[ ] ; '=                 | 列 2 的 Fn 层右半接管符号  |
 | =Z X C V B N M=               | =F6 F7 F8 F9 F10 F11 F12= | 列 2 的 Fn 层接管 F6–12    |
-| 物理 =Tab= （现 Base =Esc= ） | =`= （反引号）            | 小键盘左上角键位           |
-| 物理 =CapsLock= （现 =Tab= ） | =CapsLock=                | 在 Fn 层保留大小写锁定     |
-| =Backspace= / =Enter=         | =-= （减号，两键同映射）  | 取代原 =\= 与 =Enter= 映射 |
+| 物理 =Tab= （Base 层短按 =Tab= / 长按 =Esc= ） | =Esc=                     | 小键盘左上角键位           |
+| 物理 =CapsLock= （现 左 =Ctrl= ） | =CapsLock=                | 在 Fn 层保留大小写锁定     |
+| =Backspace= / =Enter=         | =-= / =\=                 | 小键盘 Backspace 位、Enter 位的 Fn 层值 |
+| 物理 =L_Ctrl= / =L_Win= / =L_Alt= | =L_Alt= / =`= / =L_Ctrl=  | 小键盘 Fn 层底行左三（Ctrl/Alt 对调）   |
 
 #+begin_src conf :tangle ../tmp/kanata-laptop.kbd
 (defcfg
@@ -2384,21 +2388,25 @@ caps a  s  d  f  g  h  j  k  l  ;  '  ret
 lsft z  x  c  v  b  n  m  ,  .  /  rsft
 lctl lmet lalt spc ralt rmet rctl menu)
 
+(defalias
+  ;; 复刻小键盘左上角 MT 键：短按 Tab，按住 ≥150ms 为 Esc
+  tabesc (tap-hold 0 150 tab esc))
+
 (deflayer base
 _    _  _  _  _  _  _  _  _  _  _  _  _
 _    _  _  _  _  _  _  _  _  _  _  _  _  _
-esc  _  _  _  _  _  _  _  _  _  _  _  _  _
-tab  _  _  _  _  _  _  _  _  _  _  _  _
-_    _  _  _  _  _  _  _  _  _  _  _
-lalt lmet lctl spc (layer-while-held fn) rmet rctl _)
+@tabesc _  _  _  _  _  _  _  _  _  _  _  _  _
+lctl _  _  _  _  _  _  _  _  _  _  _  _
+_    _  _  _  _  _  _  _  _  _  _
+_    _  _  _ spc (layer-while-held fn) rmet rctl _)
 
 (deflayer fn
 _    _  _  _  _  _  _  _  _  _  _  _  _
 _    _  _  _  _  _  _  _  _  _  _  _  _  -
-grv  1  2  3  4  5  6  7  8  9  0  _  _  _
-caps f1 f2 f3 f4 f5 [  ]  ;  '  _  _  -
+esc  1  2  3  4  5  6  7  8  9  0  _  _  _
+caps f1 f2 f3 f4 f5 [  ]  ;  '  _  _  \
 _    f6 f7 f8 f9 f10 f11 f12 _  _  _  _
-_    _  _  _  _  _  _  _)
+lalt grv  lctl _  _  _  _  _)
 #+end_src
 
 #+NAME: kanata-services
@@ -2414,7 +2422,7 @@ _    _  _  _  _  _  _  _)
 
 以 ~emacs --fg-daemon~ 守护进程方式常驻后台，配置源为 UniEmacs 子模块（~dotfiles/mutable/emacs/.config/emacs/~），插件包与辅助 CLI 隔离在专属 profile 中：
 
-- *共享 Manifest 片段* :: 下方的 =emacs-packages= 代码块展开的是 *完整配置字段* ~(packages (specifications->manifest '(……)))~ （因为该字段要求传入 manifest 对象而非普通包列表；插件清单与 UniEmacs =profiles/full.el= 的 =self:profile-packages= 对齐，见其 =manifest.scm= 注释）。
+- *共享 Manifest 片段* :: 下方的 =emacs-packages= 代码块展开的是 *完整配置字段* ~(packages (specifications->manifest '(……)))~ （因为该字段要求传入 manifest 对象而非普通包列表；插件清单与 UniEmacs =profiles/ide.el= 的 =self:profile-packages= 对齐，见其 =manifest.scm= 注释）。
 - *双前端零漂移* :: =home-emacs-service-type= （ =emacs-next-pgtk= ）与 =home-neomacs-service-type= 共同引用 ~<<emacs-packages>>~ ，约 50 个包只需在一处维护（不再引用旧 =emacs.org= 内联配置；配置问题优先查 UniEmacs 上游仓库）。
 
 #+NAME: emacs-services
@@ -2432,10 +2440,7 @@ _    _  _  _  _  _  _  _)
 #+NAME: emacs-packages
 #+begin_src scheme
 (packages (specifications->manifest
-           '(;; UniEmacs full 档第三方包（顺序同 profiles/full.el／manifest.scm；
-             ;; idle-highlight-mode → emacs-idle-highlight；magit 含 magit-diff；
-             ;; dsh 用锁定频道内实有的 emacs-dsh，提供 dsh-emacs.el）
-             "emacs-dashboard"
+           '("emacs-dashboard"
              "emacs-nerd-icons"
              "emacs-minibuffer-line"
              "emacs-indent-bars"
@@ -2448,6 +2453,7 @@ _    _  _  _  _  _  _  _)
              "emacs-geiser"
              "emacs-arei"
              "emacs-magit"
+             "emacs-magit-fast"
              "emacs-diff-hl"
              "emacs-forge"
              "emacs-org-appear"
@@ -2476,7 +2482,7 @@ _    _  _  _  _  _  _  _)
              "emacs-gcmh"
              "emacs-no-littering"
 
-             ;; Tree-sitter（UniEmacs 语言能力表实际启用的 grammar）
+             ;; Tree-sitter
              "tree-sitter"
              "tree-sitter-c"
              "tree-sitter-cpp"
@@ -2495,7 +2501,22 @@ _    _  _  _  _  _  _  _)
              "direnv"
              "git"
              "ripgrep"
-             "sqlite")))
+             "sqlite"
+
+             ;; ide 档新增（对齐 UniEmacs profiles/ide.el；embark-consult 随 emacs-embark 提供）
+             "emacs-vertico"
+             "emacs-orderless"
+             "emacs-marginalia"
+             "emacs-consult"
+             "emacs-embark"
+             "emacs-corfu"
+             "emacs-cape"
+             "emacs-kind-icon"
+             "emacs-eldoc-box"
+             "emacs-treemacs"
+             "emacs-treemacs-nerd-icons"
+             "emacs-colorful-mode"
+             "emacs-minimap")))
 #+end_src
 
 *** 软件自启动
@@ -3296,8 +3317,6 @@ XDG MIME 默认应用表。Guix 的 ~default~ 字段原本要求传入形如 ~(M
                              "application/x-x509-ca-cert")
                             ("zcode.desktop"
                              "x-scheme-handler/zcode")
-                            ("CC Switch.desktop"
-                             "x-scheme-handler/ccswitch")
                             ("github-copilot.desktop"
                              "x-scheme-handler/gh" "x-scheme-handler/github-app")))))))
 #+end_src
