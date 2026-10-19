@@ -6,14 +6,18 @@
 // loader row 是精确包说明符时才被扫描到，子路径行会让 dsh.client 声明被静默
 // 跳过。config 形如 { gate: {...}, globalContext: {...} }。
 
+import * as appendSystem from "./append-system.js";
 import * as gate from "./gate.js";
 import * as globalContext from "./global-context.js";
 import * as lifecycle from "./lifecycle.js";
 
 export const name = "agent-extensions";
-export const inject = [...new Set([...gate.inject, ...globalContext.inject, ...lifecycle.inject])];
+export const inject = [
+	...new Set([...appendSystem.inject, ...gate.inject, ...globalContext.inject, ...lifecycle.inject]),
+];
 
 export function apply(ctx, config = {}) {
+	appendSystem.apply(ctx, config.appendSystem ?? {});
 	gate.apply(ctx, config.gate ?? {});
 	globalContext.apply(ctx, config.globalContext ?? {});
 	lifecycle.apply(ctx, config.lifecycle ?? {});
