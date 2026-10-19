@@ -56,6 +56,21 @@ if [[ ! -x "${BIN}" ]]; then
 fi
 
 if [[ -n "${PI_BUN_BIN}" && -f "${PI_BUN_ENTRY}" ]]; then
+  # Guix 的 bun 是包装脚本（`exec ld-linux …/bun.real "$@"`），经它启动会把
+  # argv0 覆写成 ld-linux 路径——herdr 按 argv0/进程名识别 agent，pi 会永远
+  # 识别不到（agent_status=unknown，集成上报被服务端挂起）。识别该形态时直启
+  # bun.real 并用 `exec -a pi` 固定 argv0，同时继承包装脚本声明的
+  # LD_LIBRARY_PATH；非包装形态（真二进制）走原路径。
+  _pi_bun_resolved="$(readlink -f "${PI_BUN_BIN}")"
+  # bun.real 的 ELF interpreter 是 /lib64/ld-linux（未 patchelf），该路径缺失时
+  # exec 会失败且无退路——检查后再选直启，宁可识别不了也不能让 pi 起不来。
+  if [[ -x "${_pi_bun_resolved}.real" && -e /lib64/ld-linux-x86-64.so.2 ]]; then
+    _pi_bun_libs="$(sed -nE 's/^export LD_LIBRARY_PATH=(.*):\$LD_LIBRARY_PATH$/\1/p' "${_pi_bun_resolved}" | head -n1)"
+    if [[ -n "${_pi_bun_libs}" ]]; then
+      export LD_LIBRARY_PATH="${_pi_bun_libs}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+    fi
+    exec -a pi "${_pi_bun_resolved}.real" "${PI_BUN_ENTRY}" "$@"
+  fi
   exec "${PI_BUN_BIN}" "${PI_BUN_ENTRY}" "$@"
 fi
 

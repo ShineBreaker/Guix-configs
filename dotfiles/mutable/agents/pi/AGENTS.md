@@ -26,6 +26,8 @@
 
 扩展生态假定 Bun 运行时：`atelier` 直接 `import { Database } from "bun:sqlite"`，而 npm 包的默认 node 入口 `dist/bundle/cli.js` 解析不了 `bun:` 内置模块，表现为启动即报 `Failed to load extension ... Cannot find module 'bun:sqlite'`。wrapper 因此走 `dist/bun/cli.js`（上游 `build:binary` 编译独立二进制所用的同一个入口）。缺 bun 或缺该入口时只打印告警退 node，**降级是静默的能力损失**：依赖 Bun 内置模块的扩展全部加载失败。`pi-update` 结尾会校验该入口存在，防止上游改 dist 布局后无声退化。
 
+同段还有一个 `exec -a pi` 分支：Guix 的 `bun` 是 `ld-linux …/bun.real` 包装脚本，经它 exec 会把 argv0 覆成 ld 路径——herdr 按 argv0/进程名识别 agent，pi 会永远 `agent_status=unknown`（`herdr:pi` 全生命周期上报被服务端挂起，`agent start` 超时）。识别包装形态时直启 `bun.real` 并固定 argv0=`pi`；`/lib64/ld-linux` 缺失时退回原 exec（降级为识别不了，pi 仍能跑）。**不要移除该分支或把 argv0 改回路径形式**；上游参考 herdr `src/detect/mod.rs` 的 `normalized_process_name`。
+
 ### 2. 目录类环境变量按 CLI 注入，不在 `config.org` 全局声明
 
 `PI_CODING_AGENT_DIR` / `PI_CODING_AGENT_SESSION_DIR` 被 pi 与 omp **同名同义**读取，全局一套会让两者撞车（omp 首次启动还会把 pi 的 `settings.json` 改名 `.bak`）。omp 侧由 nix wrapper 注入（见 `source/nix/configuration/programs/llm-agents.nix`），pi 侧由本包 wrapper 注入。wrapper 用**显式赋值**而非继承，以清掉残留的全局导出。
