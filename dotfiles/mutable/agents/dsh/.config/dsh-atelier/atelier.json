@@ -1,0 +1,32 @@
+{
+  "pollIntervalMs": 2000,
+  "panePrefix": "sub:",
+  "keepResults": 24,
+  "timeoutMs": 1800000,
+  "maxTasks": 8,
+  "maxConcurrency": 4,
+  "defaultTier": "pro",
+  "tiers": {
+    "ultra": {
+      "model": "hermes/opencode-go/deepseek-v4.1-flash",
+      "fallback": ["hermes/zai/glm-5.3-flash"]
+    },
+    "pro": {
+      "model": "hermes/opencode-go/deepseek-v4.1-flash",
+      "fallback": ["hermes/zai/glm-5.3-flash"]
+    },
+    "quick": {
+      "model": "hermes/zai/glm-5.3-flash",
+      "fallback": ["hermes/opencode-go/deepseek-v4.1-flash"]
+    },
+    "visual": {
+      "model": "hermes",
+      "fallback": ["hermes/zai/glm-5.3-flash"]
+    }
+  },
+  "modelSchedules": {
+    "hermes/zai/glm-5.3": {
+      "deny": ["Mon-Fri 14:00-18:00"]
+    }
+  }
+}
