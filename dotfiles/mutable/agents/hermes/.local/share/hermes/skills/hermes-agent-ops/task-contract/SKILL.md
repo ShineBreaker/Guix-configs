@@ -36,11 +36,11 @@ metadata:
 
 ## 工作流程（4 步）
 
-### Step 1: 复制模板
+### Step 1: 写契约文件
 
 `cp ~/.local/share/hermes/skills/hermes-agent-ops/task-contract/templates/contract.md /tmp/contract-<task-id>.md`
 
-或者直接按下方模板填到 `todo` 工具的 notes 字段。
+契约是过程产物，落在 `/tmp/`（或任何项目外的临时目录）。**不要**写 `~/.config/`、`~/.local/`（含 Hermes scratch 目录）——本机 harness 把这两处当部署位置，写入会被直接拒绝，白跑一轮。若不方便落盘，至少把 A/B 两段填进 `todo` 工具的 notes，保证会话中可见、收尾可核对。
 
 ### Step 2: 填空（4 个必填段）
 

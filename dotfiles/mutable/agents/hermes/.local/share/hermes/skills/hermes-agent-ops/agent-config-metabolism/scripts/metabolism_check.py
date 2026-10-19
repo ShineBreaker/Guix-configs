@@ -227,15 +227,19 @@ def check_broken_symlinks(cfg: dict) -> tuple[str, str]:
     exclude = cfg.get("exclude_paths", [])
     broken: list[str] = []
     if HERMES_HOME.exists():
-        for p in HERMES_HOME.rglob("*"):
+        for p in _walk_tree(HERMES_HOME):
             if p.is_symlink() and not p.exists():
                 rel = p.relative_to(HERMES_HOME).as_posix()
                 if any(_glob_match(rel, ex) for ex in exclude):
                     continue
-                broken.append(str(p))
+                broken.append(rel)
     n = len(broken)
     status = "GREEN" if n <= max_n else "RED"
-    return status, f"symlinks {n} broken (max {max_n})"
+    detail = f"symlinks {n} broken (max {max_n})"
+    if n:
+        sample = "; ".join(broken[:3]) + (f"; +{n - 3} more" if n > 3 else "")
+        detail += f": {sample}"
+    return status, detail
 
 
 def check_config_exists(cfg: dict) -> tuple[str, str]:
@@ -372,20 +376,38 @@ def check_json_parseable(cfg: dict) -> tuple[str, str]:
     JSONC tolerance catches tsconfig.json and tsdoc metadata.json shipped
     by hermes LSP tooling (yaml-language-server, bash-language-server, etc.).
     These are NOT broken — they're JSONC, the de-facto TS/VSCode dialect.
+
+    Traversal descends symlinked trees (skills/, cron/, logs/ ...) — see
+    `_walk_tree`.  Install-state activation-input stamps are recognized, not
+    excluded: `pm/environments.py::record_activation_inputs` creates EMPTY
+    files under `installs/<key>/inputs/` whose mtime records the mtime of
+    uv.lock / pyproject.toml / pm/lock.json at install time.  `pm/lock.json`
+    matches *.json by name only — empty content is the designed state.
     """
+    stamp_re = re.compile(r"^installs/[^/]+/inputs/")
     globs = cfg.get("globs", ["*.json"])
     exclude = cfg.get("exclude", [])
     bad: list[tuple[str, str]] = []
+    stamps = 0
     if HERMES_HOME.exists():
-        for pat in globs:
-            for p in HERMES_HOME.rglob(pat):
-                rel = p.relative_to(HERMES_HOME).as_posix()
-                if any(_glob_match(rel, ex) for ex in exclude):
+        for p in _walk_tree(HERMES_HOME):
+            if not any(_glob_match(p.name, pat) for pat in globs):
+                continue
+            if not p.is_file():
+                continue
+            rel = p.relative_to(HERMES_HOME).as_posix()
+            if any(_glob_match(rel, ex) for ex in exclude):
+                continue
+            try:
+                if p.stat().st_size == 0 and stamp_re.match(rel):
+                    stamps += 1
                     continue
-                try:
-                    text = p.read_text(errors="ignore")
-                except OSError:
-                    continue
+            except OSError:
+                continue
+            try:
+                text = p.read_text(errors="ignore")
+            except OSError:
+                continue
                 # Strip UTF-8 BOM — some third-party files (e.g. @vscode/codicons
                 # manifest.transforms.json under node_modules) ship with a BOM.
                 # json.loads rejects BOM-prefixed text; strip it so both the
@@ -410,6 +432,8 @@ def check_json_parseable(cfg: dict) -> tuple[str, str]:
     else:
         sample = "; ".join(f"{r}[{t}]" for r, t in bad[:5])
         detail = f"json {n_bad} broken ({sample})"
+    if stamps:
+        detail += f"; {stamps} install-state stamp(s) skipped (empty by design)"
     return status, detail
 
 
@@ -567,6 +591,22 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
                         if m2:
                             mod = m2.group(1)
                             msg = m2.group(2) or ""
+                            # platform adapters log under several module paths:
+                            # `gateway.platforms.<name>` or
+                            # `gateway.platforms.<name>.adapter` pre-refactor,
+                            # `hermes_plugins.platforms__<name>.adapter` after
+                            # the plugin split. Same adapter, same events — fold
+                            # to one canonical module identity.
+                            mod = re.sub(
+                                r"^hermes_plugins\.platforms__(\w+)\.adapter$",
+                                r"platforms.\1",
+                                mod,
+                            )
+                            mod = re.sub(
+                                r"^gateway\.platforms\.(\w+?)(?:\.adapter)?$",
+                                r"platforms.\1",
+                                mod,
+                            )
                             # normalize retry counters: (1/3)(2/3)(3/3) -> (n/3)
                             # (group 2 is the denominator; \1 fragmented one
                             # problem into one sig per retry ordinal)
@@ -590,7 +630,12 @@ def check_cross_window_errors(cfg: dict) -> tuple[str, str]:
     n_unique = len(problems)
     status = "GREEN" if n_unique <= max_per else "RED"
     top = sorted(problems.items(), key=lambda x: -len(x[1]))[:3]
-    top_str = "; ".join(f"{k}×{len(v)}" for k, v in top) if top else "none"
+    # last-seen stamp answers "still active now?": a recovered root cause keeps
+    # counting until it ages out of the window, but its last event dates it
+    top_str = (
+        "; ".join(f"{k}×{len(v)}(last {max(v):%m-%d %H:%M})" for k, v in top)
+        if top else "none"
+    )
     tr_str = ""
     if transients:
         ttop = sorted(transients.items(), key=lambda x: -len(x[1]))[:3]
@@ -648,10 +693,9 @@ def check_backup_tmp_pile(cfg: dict) -> tuple[str, str]:
     patterns = cfg.get("patterns", ["*.bak.*", "*.tmp", "*~"])
     n = 0
     if HERMES_HOME.exists():
-        for pat in patterns:
-            for p in HERMES_HOME.rglob(pat):
-                if p.is_file():
-                    n += 1
+        for p in _walk_tree(HERMES_HOME):
+            if any(_glob_match(p.name, pat) for pat in patterns) and p.is_file():
+                n += 1
     status = "GREEN" if n <= max_files else "RED"
     return status, f"backup_tmp {n} files (max {max_files})"
 
@@ -717,7 +761,7 @@ def check_plaintext_secrets(cfg: dict) -> tuple[str, str]:
         r"-----END (RSA |EC |OPENSSH )?PRIVATE KEY-----"
     )
     if HERMES_HOME.exists():
-        for p in HERMES_HOME.rglob("*"):
+        for p in _walk_tree(HERMES_HOME):
             if not p.is_file() or p.stat().st_size > 1_000_000:
                 continue
             rel = p.relative_to(HERMES_HOME).as_posix()
@@ -759,6 +803,45 @@ def _glob_match(path: str, pattern: str) -> bool:
     """Minimal fnmatch for our exclude rules (supports ** and *)."""
     import fnmatch
     return fnmatch.fnmatch(path, pattern)
+
+
+def _walk_tree(root: Path):
+    """Yield every entry under *root*, descending into symlinked directories.
+
+    `Path.rglob` / `os.walk` stop at a symlinked directory.  This deployment
+    symlinks whole trees (`skills/`, `cron/`, `logs/`, `hooks/`, `memories/`
+    -> the dotfiles checkout), so a plain recursive scan only saw the real-dir
+    remainder of HERMES_HOME: check 3 reported "0 broken symlinks" while 136
+    dangled inside `skills/.archive/`, and check 6 never saw `cron/jobs.json`.
+    Descend once per *physical* directory (realpath seen-set) so link cycles
+    terminate; aliased spellings may pick either path, never both.
+    """
+    seen: set[str] = set()
+    stack = [root]
+    while stack:
+        d = stack.pop()
+        try:
+            real = os.path.realpath(d)
+        except OSError:
+            continue
+        if real in seen:
+            continue
+        seen.add(real)
+        try:
+            entries = list(os.scandir(d))
+        except OSError:
+            continue
+        for entry in entries:
+            p = Path(entry.path)
+            yield p
+            try:
+                if entry.is_symlink():
+                    if entry.is_dir(follow_symlinks=True):
+                        stack.append(p)  # descend through the link, once
+                elif entry.is_dir(follow_symlinks=False):
+                    stack.append(p)
+            except OSError:
+                pass
 
 
 CHECKS = [

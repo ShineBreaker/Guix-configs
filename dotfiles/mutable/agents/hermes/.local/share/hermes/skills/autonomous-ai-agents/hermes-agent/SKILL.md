@@ -404,6 +404,61 @@ Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/con
 
 Full provider docs: https://hermes-agent.nousresearch.com/docs/integrations/providers
 
+### Switching the model/provider stack (all layers)
+
+"把模型全部换成 X" means four separate layers — changing only `model.default`
+leaves auxiliary calls and cron jobs on the old model:
+
+```bash
+# 1. Main model. Setting model.provider clears model.base_url/model.api_mode
+#    (they belonged to the old provider); re-set base_url when the provider
+#    needs an explicit endpoint (e.g. a coding-plan endpoint).
+hermes config set model.provider zai
+hermes config set model.default glm-5.3-flash
+hermes config set model.base_url https://open.bigmodel.cn/api/coding/paas/v4
+
+# 2. Every auxiliary section (nine of them; 'auto' does not follow the new default).
+for s in vision compression skills_hub approval mcp title_generation tts_audio_tags triage_specifier kanban_decomposer; do
+  hermes config set "auxiliary.$s.provider" zai
+  hermes config set "auxiliary.$s.model" glm-5.3-flash
+done
+
+# 3. Cron jobs carry their own model pins. The cronjob tool cannot change a
+#    pin (user-owned); use the CLI and loop over the ids.
+for id in $(hermes cron list | grep -oE '^[[:space:]]+[0-9a-f]{12}' | tr -d ' '); do
+  hermes cron edit "$id" --model glm-5.3-flash --provider zai --pin
+  done
+```
+
+**Verify end-to-end, not just the config.** `hermes config get` only proves the
+file. Prove the route with (a) a chat completion, (b) a vision call — a 1×1 PNG
+data URL is enough to prove image input reaches the model, and (c) one real agent
+turn via `hermes -z 'reply with ...'`, which exercises tool calling and any
+reasoning parameters the old provider did not receive.
+
+**Provider name ≠ product name.** A "Zhipu coding plan" is served by the `zai`
+provider (aliases include `glm`, `zhipu`); the coding endpoint is selected by
+`GLM_BASE_URL` in `.env` (e.g. `https://open.bigmodel.cn/api/coding/paas/v4`),
+which the profile reads as its `base_url_env_var`. There is no
+`zhipu-coding-plan` provider registration — resolve the user's product name to
+the registered profile first, never invent a provider key.
+
+**Leave `fallback_providers` alone when “switching everything”.** It is the
+failure chain, not a default value: collapsing it into the same provider/model
+removes the fallback. Keep at least one different provider; a first entry that
+duplicates the new primary is harmless (one wasted retry before it descends).
+
+**Back up `config.yaml` correctly.** In a stow/dotfiles setup `config.yaml` is a
+symlink into the repo; `cp -a config.yaml config.yaml.bak` copies the *link*, so
+"restoring" it restores nothing. Use `cp -L` (dereference) for a real snapshot.
+The edit will show up as a tracked-file modification in the dotfiles repo —
+leave it uncommitted unless asked, per the usual push policy.
+
+**New model takes effect on the next session, not mid-conversation.** The
+active session keeps the model it started with; send `/new` or restart the
+gateway to switch it. `load_config` is cached on the file signature, so fresh
+sessions and new processes read the new values without a restart.
+
 ### Toolsets
 
 Enable/disable via `hermes tools` (interactive) or `hermes tools enable/disable NAME`.

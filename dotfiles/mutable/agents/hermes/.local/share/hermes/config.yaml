@@ -35,9 +35,9 @@ moa:
   enabled: false
   degraded_reference_policy: loud
 model:
-  default: deepseek-v4.1-flash
-  provider: opencode-go
-  base_url: https://opencode.ai/zen/go/v1
+  default: glm-5.3-flash
+  provider: zai
+  base_url: https://open.bigmodel.cn/api/coding/paas/v4
   api_mode: chat_completions
 providers:
   minimax-cn:
@@ -207,8 +207,8 @@ auxiliary:
     timeout: 60
     language: ''
   tts_audio_tags:
-    provider: auto
-    model: ''
+    provider: zai
+    model: 'glm-5.3-flash'
     base_url: ''
     api_key: ''
     timeout: 30
@@ -242,9 +242,8 @@ auxiliary:
     model: ''
     provider: auto
   review:
-    provider: stepfun
-    model: 'step-5-preview'
-    reasoning_effort: ultra
+    provider: auto
+    model: ''
 display:
   compact: true
   personality: concise
@@ -471,7 +470,7 @@ matrix:
   allowed_rooms: ''
 approvals:
   mode: smart
-  timeout: 60
+  timeout: 600
   cron_mode: deny
   mcp_reload_confirm: true
   destructive_slash_confirm: false

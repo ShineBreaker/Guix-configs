@@ -26,6 +26,7 @@ metadata:
 | termux-configs（本仓库） | 手机端 Termux 配置；stow 包 + setup.sh + dot 命令 + justfile |
 | UniEmacs | Emacs 配置（桌面 + 手机共用）；手机侧 clone 到 Termux `~/.config/emacs`；桌面上它是 Guix-configs 的子模块 |
 | Guix-configs | 桌面配置仓库，有自己的 `guix-configs-workflow` skill |
+| termux-emacs | 为 Emacs 重签 Termux 系 APK 的独立仓库（`ShineBreaker/termux-emacs`：主程序 + 全部官方插件，CI 自动跟进上游）；UniEmacs 原重签流水线已剥离至此 |
 
 用户说「仓库里改了文案」时不指定哪个仓库时：先对候选仓库各跑 `git status --short` / 看最近 commit，别默认是本仓库。
 
@@ -43,7 +44,7 @@ metadata:
 - **部署两处、缺一不可**：仓库本体 clone 到 Termux 的 `~/.config/emacs`（TUI emacs 直接读它，无需其他步骤）；Android 原生 Emacs 另需把入口两文件（`early-init.el`、`init.el`）副本放到 `/data/data/org.gnu.emacs/files/.emacs.d/`。`just install-emacs` 只负责 Termux 侧（clone + 依赖），入口副本属应用侧。
 - **依赖走上游一键**：`just emacs`（= termux-deps → font → icons → packages）；`termux-deps` 在 Termux 上装 `curl unzip fontconfig emacs git sqlite ripgrep`，桌面自动跳过。首次插件预构建耗时数分钟。
 - **`install-emacs` 行为**：`~/.config/emacs` 已存在且是 git 仓库 → 跳过 clone、直接补依赖（可重复运行）；已存在但非 git 仓库 → 报错退出，不覆盖用户配置。
-- **Termux 必须是重签版**（与 Emacs 同签名，sharedUserId 机制），从 UniEmacs Releases 拿，否则 Termux 子进程互通不可用。
+- **Termux 系 APK 必须是重签版**（与 Emacs 同签名，sharedUserId 机制）：主程序与插件都从 `ShineBreaker/termux-emacs` 的 Releases 拿（原 UniEmacs 重签流水线已剥离到该仓库），否则 Termux 子进程互通不可用。
 - **UniEmacs 迭代极快**（文案、依赖清单、部署路径都可能变）：一切细节以它自己的 `docs/mobile/README.md` 为准，本仓库不做镜像。
 
 ## 变更验证配方（桌面可全跑）

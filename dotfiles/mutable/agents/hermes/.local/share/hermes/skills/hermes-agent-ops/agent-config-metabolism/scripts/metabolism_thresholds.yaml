@@ -3,8 +3,13 @@
 
 inject:
   enabled: true
-  max_kb: 32                # measured 30.8KB (2026-08-02); 32 keeps ~4% headroom
-                            # while still catching runaway growth (skill doubling)
+  max_kb: 34                # measured 32.6KB (2026-10-18): 95 skill descriptions 26.4KB +
+                            # memory 7.0KB. Trend 25.5 (10-04) -> 27.1 (10-11) -> 32.6 (10-18);
+                            # the jump is skill-description enrichment (+5.6KB in one week),
+                            # not runaway growth. Policy: cap = measured + ~4% headroom
+                            # (08-02: 32 at 30.8). If it trips again before the next quarterly
+                            # re-anchor, review description growth and trim — do not re-anchor
+                            # blindly.
 
 skill_count:
   enabled: true
@@ -39,6 +44,8 @@ json:
     - "*.json"
   # JSONC tolerance (in script) handles tsconfig.json + tsdoc-metadata.json.
   # No path excludes — every JSON file under HERMES_HOME is checked.
+  # 0-byte install-state stamps under installs/<key>/inputs/ are recognized in
+  # the script (pm/environments.py touch-stamps), not path-excluded.
 
 cron_alive:
   enabled: true

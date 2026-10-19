@@ -146,6 +146,20 @@ hermes cron edit <job_id> --model <model> --provider <provider>
 ```
 选一个 .env 里有 key 的稳定 provider（如 `deepseek-v4-flash` / `deepseek`，与现有任务一致）。**创建后立即 pin，别等用户手动触发才发现**。pin 后漂移防护不再对任务生效。
 
+**批量切换（全部任务换模型/供应商）**：`cronjob` 工具一次只能改一个、且不能改 pin；用 CLI 遍历 id，改完直接解析 `jobs.json` 核对落盘的 `model`/`provider`——`edit` 的回显不带模型字段，别拿它当证据：
+
+```bash
+for id in $(hermes cron list | grep -oE '^[[:space:]]+[0-9a-f]{12}' | tr -d ' '); do
+  hermes cron edit "$id" --model <model> --provider <provider> --pin
+done
+python3 -c "
+import json, os
+jobs = json.load(open(os.environ['HERMES_HOME'] + '/cron/jobs.json')).get('jobs', [])
+for j in jobs: print(j['id'], j['name'], j.get('model'), j.get('provider'))"
+```
+
+换主模型时记住：cron 的 pin 不会跟随 `model.default` 变更，必须逐个 edit；反过来，auxiliary 任务的模型也不跟随主模型，见 `hermes-agent` 的「Switching the model/provider stack」。
+
 ## 投递平台确认
 
 投递前先确认目标平台真的在线，否则任务跑完 delivery 静默失败：
@@ -184,6 +198,24 @@ con = sqlite3.connect('$HERMES_HOME/cron/executions.db')
 for r in con.execute('select job_id, started_at, finished_at, status from executions order by rowid desc limit 12'):
     print(f'{r[1][:19]} -> {(r[2] or \"?\")[:19]:19s} {r[3]:10s} {r[0]}')"
 ```
+
+## 用户对 cron 报告的编号回复：先找报告原文再对号
+
+周报类 job 的交付末尾常带「需要你拍板」清单（`1) … 2) …`，每项 A/B/C）。用户可能只回一行 `1. A; 2. B; 3. C; 4. <反问>`，不带任何上下文——它指向的是**最近一次投递到该会话的 cron 报告**，不是当前对话。
+
+1. 先 `date` 对齐真实时间：会话上下文标注的“今天”可能停在几天前，cron 投递与用户回复之间也可能隔了数小时到一天。
+2. `ls -lt $HERMES_HOME/cron/output/*/` 按 mtime 找最近几份报告（mtime 即投递时刻），读最新那份。
+3. `grep -n '需要你拍板\|拍板' <报告>` 定位清单段，把编号、选项、建议逐条对上。
+4. 逐项执行：A/B/C 是决策就照做，不再复述问题；带问号的一项（用户质疑前提）先查代码/配置解释机制，再给可选项，不要机械套用报告里的 A/B/C。
+
+报告选项的文字就是授权边界：选 A 表示 A 括号内的全部动作获批（如「重连 129 条 + 删 7 条死链」），没写进选项的动作不做。
+
+## “重新打开/检查所有 cron 任务”的标准响应
+
+用户说「重新打开一下我目前的所有 cron 任务」时，可能是在要清单，也可能以为任务被停用了。两件事都做：
+
+1. **状态真值**：`hermes cron list` 只列 active job 摘要；再用 python 读 `$HERMES_HOME/cron/jobs.json` 的 `enabled`/`paused` 字段（与 `hermes cron status` 的 "N active job(s)" 交叉核对）。全部在跑就明确说「没有需要重新打开的任务」，不要对 active job 执行 resume。
+2. **顺手查投递层**：`hermes cron doctor` + 最新 output 目录的 mtime。任务在跑 ≠ 报告送到了；近期投递失败的报告仍留在 `cron/output/<id>/`，主动指出并问是否补发——用户问“任务是不是停了”，真实原因常常是没收到报告。
 
 ## Pitfalls
 

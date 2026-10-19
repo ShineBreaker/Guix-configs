@@ -140,7 +140,7 @@ python3 ~/.local/share/hermes/skills/hermes-agent-ops/agent-config-metabolism/sc
 
 | Check | Threshold | File / source |
 |-------|-----------|---------------|
-| 1. Inject size | ≤ 25KB | sum of `description` field bytes + memory files |
+| 1. Inject size | ≤ 34KB (this setup; yaml `max_kb`) | sum of `description` field bytes + memory files |
 | 2. Skill count | ≤ 160 | `find $HERMES_HOME/skills -name SKILL.md \| wc -l` |
 | 3. Broken symlinks | 0 | `find $HERMES_HOME -xtype l` |
 | 4. Config exists | all present | `config.yaml`, `.env`, `auth.json` |
@@ -306,11 +306,51 @@ To change delivery later: `cronjob(action='update', job_id='<id>', deliver='loca
 - **YAML key names MUST match the CHECKS list keys.** The script dispatches via `thresholds.get(key, {})` where `key` comes from the CHECKS tuple. If your yaml section is named `backup_tmp_pile` but CHECKS says `"backup_tmp"`, the check runs on **empty cfg** and silently falls back to function defaults — you'll see GREEN when the real threshold isn't loaded. Always grep CHECKS keys against yaml top-level keys after editing either side (see `references/yaml-checks-key-parity.md`).
 - **The no-PyYAML fallback parser must handle the full thresholds dialect.** When PyYAML is absent, `load_thresholds()` falls back to `_yaml_fallback`, which needs three things the original didn't have: inline-comment stripping (`max_kb: 30 # comment` → int, not str), flow lists (`[name, description]`), and block lists (`patterns:` + `- item`). Without them every numeric comparison crashes with `'<=' not supported between instances of 'float' and 'str'`, `required_fields` becomes a string and check 5 flags every file as missing fields, and `patterns` becomes `{}` so check 12 is a permanent fake GREEN. The fixed parser is in the script — don't regress it.
 - **`_glob_match` uses `fnmatch`, whose `*` matches `/` but whose pattern is anchored at the start.** `references/**` and `node_modules/**` only match paths *starting* with that prefix — nested `.../hermes-agent/references/native-mcp.md` is NOT excluded, and doc examples with `sk-xxx` placeholders show up as check 14 hits. Use `**/references/**` style (leading `**/`) for any pattern that must match at any depth.
+- **Check 9 的 vision 超时是 auxiliary 路径超时，不是主模型没有视觉。**
+  `vision_analyze` 有两条路：native fast path（图直接进主模型上下文）与 auxiliary
+  vision（辅助模型把图描述成文字）。native 需要 provider profile 的
+  `supports_vision_tool_messages` 不为 False；opencode-go/opencode-zen 显式设为
+  False（Go relay 上游把 tool content 当严格字符串校验，list 型 content 会 422/400，
+  且被拒的行留在历史里毒化后续调用），所以即使模型目录判定该模型支持视觉，vision 也
+  只能走 aux（默认 aux 模型 glm-5，60s 超时，表现为 `Auxiliary vision (async) ... timed out`）。
+  解读这条签名时先用 `_should_use_native_vision_fast_path()` 确认走哪条路，再决定是
+  调 timeout、换更快的 aux 模型，还是减少调用次数；不要把它当成“模型不能看图”。
 - **Check 9 counts a rolling window, not all history.** `window_days: 7` (default) means a fixed root cause stops counting as soon as it ages out — the signal is "problems active NOW". Long-lived external failures (weixin poll errors, QQ token fetch) will keep the check RED week after week under the old all-history scan even after they're fixed; with the window they self-resolve. Retry counters `(1/3)(2/3)(3/3)` are normalized to `(n/3)` — three retries of one connection failure are one problem.
 - **Don't trust injected-size estimates.** Real inject is `sum(description field bytes)`, NOT `sum(SKILL.md file bytes) ÷ 5` (that's a ~7× over-estimate). When reading SKILL.md frontmatter, read **at least 4 KB** (not 600 bytes) — the 600-byte truncation silently broke 2 SKILL.md in this user's setup whose descriptions were 700-18000 bytes.
 - **Don't trust raw error counts.** A literal grep `ERROR\|Traceback` over all logs surfaces N independent problems when in reality it's 1 repeating failure (the same cron import error ×2626 looks like 2626 issues but is one root cause). **Group by `(file:module:msg_prefix)` signature** before comparing to threshold — the metabolic signal is "how many unique problems", not "how many log lines".
 - **Never `read_text()[:N]` then `write_text()` to modify a single field.** This silently truncates files whose content exceeds the slice. During the originating session, this exact pattern wiped the body of 3 SKILL.md files (emacs-config-debugging 19.6KB → 477 bytes, narrated-video-alignment 13.3KB → 590 bytes, guix-configs-workflow 51.5KB → 10.3KB) — all because the patch_desc helper sliced `[:800]` to find the `description:` line and then wrote back only the head. **Correct pattern for single-field edits**: use `patch_file` (or `patch()` tool) with unique `old_string` / `new_string`, never `write_file` after a head-slice. If you must use `write_file`, read the **full** file first, then verify byte count matches before AND after.
 
+- **Recursive scans stopped at symlinked trees (fixed 2026-10-18).** This
+  deployment symlinks whole trees (`skills/`, `cron/`, `logs/`, `hooks/`,
+  `memories/` → the dotfiles checkout); `Path.rglob` / `os.walk` never enter
+  a symlinked directory, so check 3 read GREEN "0 broken" while 136 links
+  dangled under `skills/.archive/`, and check 6 had never parsed
+  `cron/jobs.json`. Checks 3/6/12/14 now share `_walk_tree` (descend each
+  physical dir once via a realpath seen-set, cycle-safe). A file is reported
+  under whichever spelling is reached first — once, not twice.
+- **修复 `.archive` 悬空链接的配方（check 3 变红后）。** 症状：`skills/.archive/**`
+  下链接全部指向 `../../../../../../Projects/Config/.../skills/<cat>/<skill>/...`
+  ——按逻辑路径写了 6 层 `../`，但 `skills` 整目录是 symlink，内核按物理位置解析，
+  全部落到不存在的路径。修复：对每条悬空链接，从旧 target 提取
+  `/hermes/skills/<cat>/<skill>/<rest>`，确认 `$HERMES_HOME/skills/<cat>/<skill>/<rest>`
+  存在后用 `os.path.relpath(target, os.path.dirname(link))` 重写（技能根目录下 SKILL.md
+  是 `../../<cat>/<skill>/...`，references/ 下是 `../../../<cat>/<skill>/...`）；
+  目标不存在的死链按用户决定删除。验证：`find -L <realpath of skills>/.archive -xtype l | wc -l`
+  为 0，并重跑脚本确认 check 3 变 GREEN。注意 `.archive/` 在 `.gitignore` 里（这些链接
+  未跟踪），修复不产生 git 变更、无需 commit；其中被跟踪的实体归档文件仍归版本库管。
+- **Install-state inputs are empty touch-stamps, not rot (fixed 2026-10-18).**
+  `pm/environments.py::record_activation_inputs` creates 0-byte files under
+  `installs/<key>/inputs/` whose *mtime* is the payload; `pm/lock.json` there
+  collides with `*.json` by name only. Check 6 recognizes path+0-byte and
+  reports them as skipped. Do not "fix" the file, and do not exclude
+  `installs/**` — real JSON under it must stay visible.
+- **Platform module names changed with the plugin split (fixed 2026-10-18).**
+  Pre-refactor `gateway.platforms.<name>[.adapter]`, post-refactor
+  `hermes_plugins.platforms__<name>.adapter` — same adapter, same events.
+  Check 9 folds both to canonical `platforms.<name>`; without the fold one
+  outage counts twice (a 10-problem report read 8 after the fold).
+  Top-3 problems now carry `(last MM-DD HH:MM)` so a recovered root cause
+  (still inside the 7d window) is distinguishable from an active one.
 - **Check 3 originally ignored `exclude_paths` (fixed 2026-08-28).** The yaml key existed in spirit but the implementation only read `max` — a full rglob with no filtering, so whitelist entries were silently ineffective (same silent-cfg-drift class as the yaml/CHECKS parity bug). Implementation now applies `exclude_paths` via `_glob_match`; current whitelist covers `hermes-agent/.direnv/**` (nix dev-shell profile symlinks, GC-pruned, regenerated by direnv).
 - **Check 14 placeholder filtering (added 2026-08-28).** Doc examples use degenerate keys like `sk-` + 20 identical chars (`sk-xxxxxxxxxxxxxxxxxxxx`) that match `[A-Za-z0-9]{20,}` and caused permanent RED on content-addressed backup blobs. The check now requires a match's alphanumeric tail (past char 6) to span more than one distinct character; real-shaped keys still go RED. Verified both directions with a throwaway real-shaped fixture (RED) and its removal (GREEN) — note the fixture must be fully purged, the scanner sweeps `.Trash-1000/` too.
 

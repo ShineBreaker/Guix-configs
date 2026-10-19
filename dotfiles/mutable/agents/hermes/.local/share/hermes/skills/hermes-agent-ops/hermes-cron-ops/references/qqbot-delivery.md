@@ -73,3 +73,27 @@ grep "QQBot" "$HERMES_HOME/logs/gateway.log" | tail -20
 - 表格只用短表格（4 列以内），包名加粗
 - 每条结论附来源（commit hash / PR 号 / URL），抓不到标「未获取」，不臆造
 - 频道活动/新版本/changelog 三层结构，B/C 层合并命中时去重
+
+## 一次性投递（脚本/会话内）：`hermes send`
+
+cron 之外的临时投递（把构建产物、日志、报告发到用户 QQ）用 `hermes send`：复用 gateway 已配置的凭据，不需要 LLM，也不需要 gateway 在跑。
+
+```bash
+hermes send --list                                   # 列出现成通道，如 qqbot:<chat_id> / weixin:<id>
+hermes send --to "qqbot:<chat_id>" "说明文字
+
+MEDIA:/abs/path/to/file.apk" --json
+```
+
+- **附件只能靠正文里的 `MEDIA:<绝对路径>`**；`-f/--file` 只传文本正文，不是附件参数。
+- 返回 `{"success": true, "message_id": "ROBOT1.0_...", "chat_type": "c2c"}` 表示 API 已接受；投递失败以 exit 1 结束，所以 exit 0 已排除发送失败。
+- 大文件自动走分片上传，日志在 `$HERMES_HOME/logs/agent.log`：
+
+```
+[send_message.qqbot] Chunked upload start: file=<name> size=6.1 MB type=4
+[send_message.qqbot] Prepared: upload_id=... block_size=10.0 MB parts=1 concurrency=1
+[send_message.qqbot] All 1 parts uploaded, completing…
+```
+
+  `completing…` 是最后一条 INFO——`complete_upload` 成功后不再打日志，紧接着才发出消息。看到它 + `success: true` 即可判定文件消息已投递，**不要苦等完成日志**而误判成卡住。
+- 证据边界：本地能拿到的全部证据就是上面的返回值与日志行；「接收端确实显示了附件」只能由接收端确认，汇报时如实区分。附件没出现时可换路子（压成 zip 再发，或给临时 HTTP 链接），不要反复重发同一个文件。
