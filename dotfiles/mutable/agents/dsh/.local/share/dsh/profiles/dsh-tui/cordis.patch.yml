@@ -1,4 +1,43 @@
 # Your patch layer for this dsh profile, applied after every bundle layer:
 # a top-level YAML array of loader patch entries (id-targeted config
 # overrides, disables, and insert lists; `!!js` expressions allowed).
-[]
+
+# @@shared-begin: 由 dsh wrapper 从 web profile 同步，勿手改
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      zai-coding-cn:
+        baseURL: http://127.0.0.1:8972/v1
+        apiKeyEnv: ZAI_CODING_CN_API_KEY
+        models:
+          - id: glm-5.3
+            name: GLM-5.3
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+            contextWindow: 1000000
+            maxTokens: 131072
+            input:
+              - text
+              - image
+      step-plan:
+        apiKeyEnv: STEP_PLAN_API_KEY
+        api: anthropic-messages
+        baseURL: https://api.stepfun.com/step_plan
+        models:
+          - id: step-5-preview
+            contextWindow: 1000000
+            maxTokens: 128000
+            input:
+              - text
+              - image
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: step-plan
+    model: step-5-preview
+# @@shared:end

@@ -6,6 +6,11 @@
 # dsh — DeepSeek Harness CLI wrapper：注入 DSH_HOME（niri 会话不经 fish
 # conf.d），分发 update/web/tui 到同包 libexec 实体（一包一入口），CLI 本体在
 # $AGENTS_ROOT/dsh 经 pnpm 安装。文档：docs/scripts/dsh.md
+#
+# dsh-tui 的宿主包探测（host-dsh.js followLauncher）靠扫描启动器文本里的
+# .js 路径定位 @deepseek-ai/dsh——找不到则退化为 `dsh --profile` 委托启动并
+# 提示"没有用上已安装的 dsh"。下一行是唯一可解析回宿主包的实体路径：
+#   /home/brokenshine/.local/share/agents/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
@@ -92,6 +97,75 @@ _relink_profile() {
   pkg_local="$(dirname "$(dirname "$(readlink -f "$0")")")"
   _relink_dir 安装树 "$AGENTS_ROOT/dsh" "$pkg_local/share/agents/dsh"
   _relink_dir web "$DSH_HOME/profiles/web" "$pkg_local/share/dsh/profiles/web"
+  _relink_dir dsh-tui "$DSH_HOME/profiles/dsh-tui" "$pkg_local/share/dsh/profiles/dsh-tui"
+}
+
+# 共享行同步：provider/默认模型等 UI 设置写在 web profile 的 patch（唯一真源），
+# 其余 profile 的 patch 不互通——把共享行集合提取进各 profile patch 的
+# @@shared 受管块（整块重建，幂等）。同步源取部署侧文件而非仓库源：web patch
+# 被原子写断链的窗口期内部署侧才是运行时真值。
+_sync_shared_patch() {
+  local web_patch="$DSH_HOME/profiles/web/cordis.patch.yml"
+  [[ -f "$web_patch" ]] || return 0
+  local tmp_block target tmp_new prof
+  tmp_block=$(mktemp)
+  # 共享行集合：llm-* 一族（provider/模型目录配置）+ agent-default-model
+  if ! awk '
+    /^- / {
+      if ($0 ~ /^- id:[ \t]/) {
+        id = $0; sub(/^- id:[ \t]*/, "", id); sub(/[ \t#].*$/, "", id)
+        keep = (id ~ /^llm-/ || id == "agent-default-model")
+      } else {
+        keep = 0
+      }
+    }
+    keep && /^[^#]/ { print }
+  ' "$web_patch" >"$tmp_block"; then
+    rm -f "$tmp_block"
+    return 0
+  fi
+  for prof in dsh-tui headless; do
+    target="$DSH_HOME/profiles/$prof/cordis.patch.yml"
+    [[ -f "$target" ]] || continue
+    tmp_new=$(mktemp)
+    if awk -v blockfile="$tmp_block" '
+      BEGIN {
+        bn = 0
+        while ((getline l < blockfile) > 0) { bn++; block[bn] = l }
+        close(blockfile)
+        has_block = (bn > 0)
+      }
+      /^[ \t]*#[ \t]*@@shared-begin/ { inblk = 1; next }
+      /^[ \t]*#[ \t]*@@shared:end/ { inblk = 0; next }
+      inblk { next }
+      { lines[++n] = $0 }
+      END {
+        user_rows = 0; empty_arr = 0
+        for (i = 1; i <= n; i++) {
+          if (lines[i] ~ /^- /) user_rows = 1
+          if (lines[i] ~ /^[ \t]*\[\][ \t]*$/) empty_arr = i
+        }
+        for (i = 1; i <= n; i++) {
+          if (i == empty_arr && (has_block || user_rows)) continue
+          print lines[i]
+        }
+        if (has_block) {
+          print "# @@shared-begin: 由 dsh wrapper 从 web profile 同步，勿手改"
+          for (i = 1; i <= bn; i++) print block[i]
+          print "# @@shared:end"
+        }
+        if (!has_block && !user_rows && !empty_arr) print "[]"
+      }
+    ' "$target" >"$tmp_new"; then
+      # cp 而非 mv：tui 侧 patch 是 stow 软链，写穿进仓库源才保链
+      if ! cmp -s "$tmp_new" "$target"; then
+        cp "$tmp_new" "$target"
+        printf 'dsh: %s 的共享配置行已从 web profile 同步\n' "$prof" >&2
+      fi
+    fi
+    rm -f "$tmp_new"
+  done
+  rm -f "$tmp_block"
 }
 
 if [[ "${1:-}" == "plugin" ]]; then
@@ -107,6 +181,8 @@ fi
 # 原生行为须直调 CLI 本体触达：$_cli_bin update|web。分发须在下方 CLI 缺失
 # 检查之前（dsh-update 自身能装 CLI，dsh-web 的报错也更友好）。
 # `dsh tui` 遮蔽为 dsh-tui 启动器——上游没有 tui 子命令，不涉及覆写。
+# 同步放在分发前：tui/headless 经 exec/CLI 直达，无尾部兜底可挂
+_sync_shared_patch
 case "${1:-}" in
   update) exec "$_libexec_dir/dsh-update" "${@:2}" ;;
   web) exec "$_libexec_dir/dsh-web" "${@:2}" ;;
