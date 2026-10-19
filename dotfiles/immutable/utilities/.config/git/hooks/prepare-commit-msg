@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# Co-authored-by 兜底层（多宿主版）：AI 会话中的 git commit 缺 trailer 时，
+# Assisted-by 兜底层（多宿主版）：AI 会话中的 git commit 缺 trailer 时，
 # 按会话环境变量识别宿主并补该宿主的占位 trailer（不带模型名——shell 拿
 # 不到，完整署名由提醒层负责，如 zcode 插件 assisted-by-zcode）。
 #
@@ -47,25 +47,25 @@ esac
 }
 [ -n "$host" ] || exit 0   # 无任何 agent 标识 = 人工终端，不动
 
-# 模型已按提醒写了本宿主署名的 Co-authored-by 则不覆盖；
+# 模型已按提醒写了本宿主署名的 Assisted-by 则不覆盖；
 # 他人/其他宿主 的 trailer 不算，仍需补本会话署名
 token="${host#ai:}"
 [ "$host" = "dsh" ] && token="deepseek"
-grep -qi "^Co-authored-by:.*${token}" "$msg" && exit 0
+grep -qi "^Assisted-by:.*${token}" "$msg" && exit 0
 
 trailer=""
 case "$host" in
-  zcode)  trailer="Co-authored-by: ZCode <noreply@z.ai>" ;;
-  hermes) trailer="Co-authored-by: Hermes <noreply@nousresearch.com>" ;;
-  devin)  trailer="Co-authored-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>" ;;
-  pi)     trailer="Co-authored-by: Pi <noreply@pi.dev>" ;;
-  dsh)    trailer="Co-authored-by: DeepSeek Harness <noreply@deepseek.com>" ;;
-  claude) trailer="Co-authored-by: Claude <noreply@anthropic.com>" ;;
-  crush)  trailer="Co-authored-by: Crush <crush@charm.land>" ;;
+  zcode)  trailer="Assisted-by: ZCode <noreply@z.ai>" ;;
+  hermes) trailer="Assisted-by: Hermes <noreply@nousresearch.com>" ;;
+  devin)  trailer="Assisted-by: Devin <158243242+devin-ai-integration[bot]@users.noreply.github.com>" ;;
+  pi)     trailer="Assisted-by: Pi <noreply@pi.dev>" ;;
+  dsh)    trailer="Assisted-by: DeepSeek Harness <noreply@deepseek.com>" ;;
+  claude) trailer="Assisted-by: Claude <noreply@anthropic.com>" ;;
+  crush)  trailer="Assisted-by: Crush <crush@charm.land>" ;;
 esac
 
 if [ -z "$trailer" ]; then
-  printf '\nCo-authored-by: %s <FIXME-email>\n' "$token" >>"$msg"
+  printf '\nAssisted-by: %s <FIXME-email>\n' "$token" >>"$msg"
   printf 'prepare-commit-msg: 宿主 %s 未在映射表登记，已写入占位 trailer；补全署名或登记映射后重试\n' "$host" >&2
   exit 1
 fi

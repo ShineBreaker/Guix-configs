@@ -2,7 +2,7 @@
 
 [中文文档](./README_CN.md)
 
-AI-attributed commit trailer enforcement for ZCode sessions. The plugin name is historical: the trailer it actually enforces is `Co-authored-by`, whose format (`Co-authored-by: <AGENT> (<MODEL>) <EMAIL>`) comes from the commit conventions in `~/.config/agents/context/domains/coding.md` — `~/.config/git/gitmessage` only defines the commit-type list.
+AI-attributed commit trailer enforcement for ZCode sessions. The plugin name is historical: the trailer it actually enforces is `Assisted-by`, whose format (`Assisted-by: <AGENT> (<MODEL>) <EMAIL>`) comes from the commit conventions in `~/.config/agents/context/domains/coding.md` — `~/.config/git/gitmessage` only defines the commit-type list.
 
 Two layers, deliberately independent of any knowledge-base/agent integration:
 
@@ -31,6 +31,6 @@ Then open a new session — plugin hooks are snapshotted at session start.
 
 - Detects the host from session env vars: `ZCODE_APP_VERSION` (zcode), `HERMES_AGENT` (hermes), `DSH_AGENT` (injected by the dsh wrapper), `PI_CODING_AGENT_DIR`/`PI_CONFIG_DIR` (pi/omp), `CLAUDECODE` (claude), with `AI_AGENT` (devin and other generic attribution values) as the last resort; a terminal with no agent marker is passed through untouched.
 - Covers plain commit paths only (`$2` empty / `message` / `template`); merge, squash and amend are left alone.
-- Skips only when the message already carries a `Co-authored-by:` line naming this host, so the full trailer the model wrote is preserved. Other agents' trailers do not count — this session's line is appended alongside them.
+- Skips only when the message already carries a `Assisted-by:` line naming this host, so the full trailer the model wrote is preserved. Other agents' trailers do not count — this session's line is appended alongside them.
 - When a host is detected but missing from the trailer map, it writes an explicit placeholder trailer and exits non-zero, asking for manual completion.
 - Repository-level hooks (e.g. this repo's git-lfs hooks) are forwarded by `forward-to-repo-hook` via named stubs, so `core.hooksPath` does not eat them.

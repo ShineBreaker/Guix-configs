@@ -77,7 +77,7 @@ existing target is not owned by stow: <path>
 ## 2b. 收尾提交（git 侧）
 
 - `git commit` 只接受 `-m`（gate 拒 `-F` 与 heredoc）；多段 body 用多个 `-m`
-  按序拼：header / why 各一个，`Co-authored-by` trailer 一个。
+  按序拼：header / why 各一个，`Assisted-by` trailer 一个。
 - **提交前核对暂存清单恰好等于本任务文件表**：上个会话遗留的 staged 文件不会
   被 `git add -- <路径>` 排除，会静默混进提交。先
   `git restore --staged <遗留路径>`，再 `git diff --cached --name-only` 核对。

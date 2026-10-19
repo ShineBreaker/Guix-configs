@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际强制的 trailer 是 `Co-authored-by`，其格式（`Co-authored-by: <AGENT> (<MODEL>) <EMAIL>`）来自 `~/.config/agents/context/domains/coding.md` 的 commit 规范——`~/.config/git/gitmessage` 只定义提交类型清单。
+ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际强制的 trailer 是 `Assisted-by`，其格式（`Assisted-by: <AGENT> (<MODEL>) <EMAIL>`）来自 `~/.config/agents/context/domains/coding.md` 的 commit 规范——`~/.config/git/gitmessage` 只定义提交类型清单。
 
 两层机制，与任何知识库/agent 集成刻意无关：
 
@@ -31,6 +31,6 @@ ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际�
 
 - 按会话 env 识别宿主：`ZCODE_APP_VERSION`（zcode）、`HERMES_AGENT`（hermes）、`DSH_AGENT`（dsh wrapper 注入）、`PI_CODING_AGENT_DIR`/`PI_CONFIG_DIR`（pi/omp）、`CLAUDECODE`（claude）、`AI_AGENT`（devin 等通用归因变量）兜底；无任何标识的人工终端静默放行。
 - 只覆盖常规提交路径（`$2` 为空 / `message` / `template`）；merge、squash、amend 不动。
-- 仅当消息里已有本宿主署名的 `Co-authored-by:` 行时才跳过，模型写下的完整 trailer 原样保留；其他 agent 的 trailer 不算，会与它们并存追加本会话的署名。
+- 仅当消息里已有本宿主署名的 `Assisted-by:` 行时才跳过，模型写下的完整 trailer 原样保留；其他 agent 的 trailer 不算，会与它们并存追加本会话的署名。
 - 识别到宿主但映射表未登记时写入显式占位 trailer 并退出非零，提示人工补全。
 - 仓库自身 hook（如本仓库的 git-lfs 钩子）由同目录 `forward-to-repo-hook` 经具名 stub 转发，不被 `core.hooksPath` 吃掉。

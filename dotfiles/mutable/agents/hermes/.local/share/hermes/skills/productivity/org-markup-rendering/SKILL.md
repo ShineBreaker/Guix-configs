@@ -125,7 +125,7 @@ tmux -L orgver capture-pane -t v -p -e | sed -n '23p' | cat -v   # 带转义
 修复过 §6 验收后收尾；发布口径以仓库 AGENTS.md 为准，以下为实操要点与其补充：
 
 1. **提交消息 `-m` / `-F <file>` 均可**：agent gate 的「无 `-m` 硬拦」已于 2026-10 移除（此前 `git commit -F -`/heredoc 形式被误伤）；多行消息写在 `-m` 字符串内或用 `-F` 传消息文件都行。行为改动在同一提交内同步 CHANGELOG 条目。
-2. **`Co-authored-by` 按当前宿主/模型现填**：模型从会话环境读，勿照抄先例字面量（先例常属别的 agent，宿主名/模型/邮箱域均不同）；Hermes 会话的既定邮箱域是 `noreply@nousresearch.com`。不确定时反查先例：`git log --format='%B' | grep 'Co-authored-by: <宿主名>'`。
+2. **`Assisted-by` 按当前宿主/模型现填**：模型从会话环境读，勿照抄先例字面量（先例常属别的 agent，宿主名/模型/邮箱域均不同）；Hermes 会话的既定邮箱域是 `noreply@nousresearch.com`。不确定时反查先例：`git log --format='%B' | grep 'Assisted-by: <宿主名>'`。
 3. **签名**：仓库 `commit.gpgsign=true`，提交即自动签名；提交后 `git log -1 --format='%G?'` 应为 `G`（GPG 不可用时退回 `--no-gpg-sign`）。
 4. **发版 = 一个独立 release commit**（`chore(release): 发布 vX.Y.Z`）：同时含 `pyproject.toml` 版本、`uv lock` 刷新后的 `uv.lock`（输出 `Updated agenote v旧 -> v新` 即同步）、CHANGELOG；提交前 `uv run pytest tests/ -q` 全绿。
 5. **CHANGELOG 滚动**：把 `## [Unreleased]` 的累计内容整体转为新段 `## [X.Y.Z] - <date>`（日期用 `date +%F`），保留空的 `## [Unreleased]` 标题；每段以一行导语开头，再接 `### Added`/`### Fixed`。惯例存疑先对比先例：`git show <先例提交> -- CHANGELOG.md` 与其 `^` 版本。

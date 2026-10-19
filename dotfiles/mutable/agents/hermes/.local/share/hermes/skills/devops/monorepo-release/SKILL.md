@@ -63,7 +63,7 @@ Keep a Changelog 格式新增 `## [X.Y.Z] - 日期` 段；`### Fixed` 写清**�
 
 - **`-m` / `-F <file>` 均可传 message**（2026-10 前 agent gate 硬拦「无 `-m` 的 commit」、误伤 `-F`，已整条移除；与 git hook 无关）。多行 body 用多个 `-m` 或 `-F` 消息文件。
 - 无 GPG 时 `--no-gpg-sign`。多个 `-m` 时 body 里的换行直接写在参数内。
-- LLM 参与按**实际宿主与模型**写 `Co-authored-by`，别照抄仓里示例的字面量（那条 trailer 属于别的宿主）。
+- LLM 参与按**实际宿主与模型**写 `Assisted-by`，别照抄仓里示例的字面量（那条 trailer 属于别的宿主）。
 
 ### 7. tag + push + 远端自查
 
