@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "cua-driver": {
-      "command": "/home/brokenshine/.guix-home/profile/bin/cua-driver",
-      "args": ["mcp"],
-      "description": "Desktop and browser automation: screenshot, click, type, window and app control"
-    }
-  }
-}

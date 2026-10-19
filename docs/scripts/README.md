@@ -24,7 +24,6 @@
 
 | 脚本                                                 | 源码                                               | 部署    | 手册                               |
 | ---------------------------------------------------- | -------------------------------------------------- | ------- | ---------------------------------- |
-| pi / pi-acp / pi-update                              | `dotfiles/mutable/agents/pi/.local/bin/`           | mutable | [pi.md](pi.md)                     |
 | dsh / dsh-web / dsh-update / dsh-tui                 | `dotfiles/mutable/agents/dsh/.local/`              | mutable | [dsh.md](dsh.md)                   |
 | hermes / hermes-acp / hermes-update / hermes-desktop | `dotfiles/mutable/agents/hermes/.local/`           | mutable | [hermes.md](hermes.md)             |
 | devin                                                | `dotfiles/mutable/agents/devin/.local/bin/`        | mutable | [devin.md](devin.md)               |

@@ -1,1 +1,0 @@
-/home/brokenshine/.pi/agent/extensions/herdr-agent-state.ts

@@ -64,7 +64,6 @@ mutable/
 | `agents/devin`        | `~/.local/share/agents/devin/`（安装树）+ `~/.local/bin/devin`                                                       | Devin CLI（上游 binary bundle；`--install`/`update` 为 manifest 直装增强），入口手册 [devin.md](../../docs/scripts/devin.md)                                                                                              |
 | `agents/dsh`          | `~/.local/share/dsh/`（配置/状态）+ `~/.local/share/agents/dsh/`（CLI 安装树）+ `~/.local/bin/dsh` + 图标/desktop 项 | DeepSeek Harness 配置层与 CLI（update/web/tui 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)；入口手册 [dsh.md](../../docs/scripts/dsh.md)                                                              |
 | `agents/hermes`       | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                                                      | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）；入口手册 [hermes.md](../../docs/scripts/hermes.md)                                                                                      |
-| `agents/pi`           | `~/.config/pi/` + `~/.local/bin/pi*` + `~/.local/share/agents/pi/`（安装树）+ `~/.local/share/pi/`（sessions 数据）  | Pi 编码 Agent 的 wrapper 与配置（pnpm 自管理），详见 [pi/AGENTS.md](agents/pi/AGENTS.md)；入口手册 [pi.md](../../docs/scripts/pi.md)                                                                                      |
 | `agents/skills`       | `~/.config/agents/skills/` + `~/.local/bin/askill`                                                                   | 第三方技能锁（`skills-lock.json`）、自建技能与 `askill` 管理器（手册 [askill.md](../../docs/scripts/askill.md)）                                                                                                          |
 | `agents/zcode`        | `~/.zcode/`                                                                                                          | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md)                                                                                                                                       |
 | `agenote`             | `~/.config/agents/skills/` + `~/.zcode/plugins/`                                                                    | 知识库技能与各端 Hook/插件（内含子模块）                                                                                                                                                                                    |
@@ -72,17 +71,17 @@ mutable/
 | `tools/appimage-run`  | `~/.local/bin/appimage-run`                                                                                          | AppImage 运行器（子模块）                                                                                                                                                                                                 |
 | `tools/toolbox`       | `~/.local/bin/toolbox` + `~/.local/share/toolbox/`                                                                   | 自研工具统一入口（fzf 清单），详见 [toolbox/AGENTS.md](tools/toolbox/AGENTS.md)；手册 [toolbox.md](../../docs/scripts/toolbox.md)                                                                                         |
 
-> `agents/extensions/` 无 `.stow-package` 标记，不单独部署：它是 pi 自建扩展的源码存放点，`extensions/<name>/` 经软链被 pi 引用（见 [pi/AGENTS.md](agents/pi/AGENTS.md)）。
+> `agents/extensions/` 曾托管 pi 自建扩展源码（pi-gate 等），已随 pi 移除；其能力由 `agents/dsh` 的 agent-extensions 包承接。
 
 ## Agent 运行时安装根（`~/.local/share/agents/`）
 
-pnpm 安装的 agent（CLI 本体）统一把**安装树**——pnpm 项目（`package.json` + `pnpm-lock.yaml` + `node_modules`）——放在 `~/.local/share/agents/<pkg>/`（`AGENTS_ROOT` 环境变量可覆盖），与 pnpm 全局 store（`~/.local/share/pnpm`）同层。**配置与运行时状态不搬家**：各 agent 的 home（`~/.local/share/dsh`、`~/.local/share/pi`）与 `~/.config/<pkg>/` 原地不动。
+pnpm 安装的 agent（CLI 本体）统一把**安装树**——pnpm 项目（`package.json` + `pnpm-lock.yaml` + `node_modules`）——放在 `~/.local/share/agents/<pkg>/`（`AGENTS_ROOT` 环境变量可覆盖），与 pnpm 全局 store（`~/.local/share/pnpm`）同层。**配置与运行时状态不搬家**：各 agent 的 home（`~/.local/share/dsh`）与 `~/.config/<pkg>/` 原地不动。
 
 两条决策依据：**整目录迁移而非只搬 `node_modules`**（pnpm 要求两者同目录，且 `.modules.yaml` 的 `virtualStoreDir` 是相对路径、`storeDir` 指向全局内容寻址 store，整目录 `mv` 后无需重装）；**不并进 `pnpm add -g`**（会把所有 agent 揉进同一依赖图，hoisted 平铺劫持全局解析的事故在 dsh 有前科，还丢掉每 agent 的 git 锁文件、更新粒度变粗）。
 
 ### 新增 pnpm 系 agent 的完整配方
 
-范本：`agents/dsh`（回源最全：wrapper 双目录自愈 + update 参数化 sync）、`agents/pi`（最小形态：安装/数据目录拆分）。下文 `<pkg>` 为通配。
+范本：`agents/dsh`（回源最全：wrapper 双目录自愈 + update 参数化 sync）。下文 `<pkg>` 为通配。
 
 **0. 先判断走不走这条路**
 
@@ -98,7 +97,7 @@ pnpm 安装的 agent（CLI 本体）统一把**安装树**——pnpm 项目（`p
 PKG=<pkg>
 mkdir -p dotfiles/mutable/agents/$PKG/.local/share/agents/$PKG
 touch dotfiles/mutable/agents/$PKG/.stow-package
-cp dotfiles/mutable/agents/pi/.stow-local-ignore dotfiles/mutable/agents/$PKG/
+cp dotfiles/mutable/agents/dsh/.stow-local-ignore dotfiles/mutable/agents/$PKG/
 ```
 
 在 `.local/share/agents/$PKG/package.json` 写死首个目标版本（精确值不用 `^`）。同目录按需配 `pnpm-workspace.yaml`（stow 软链，两个高频坑必读）：`minimumReleaseAge: 0`——pnpm 12 默认 24h 供应链冷却，**发布不满一天的新版本会被静默排除出解析**；`allowBuilds: {<pkg>: true}`——依赖原生模块（better-sqlite3 等）时不批 build scripts 会装得上但跑不了，pnpm 安装输出的 `Ignored build scripts:` 名单照抄进即可（范本见 dsh）。**lockfile 不手写**，首装后由回源机制生成进仓库。
@@ -189,7 +188,7 @@ mutable 包的 `~/.local/bin` 入口遵循**一包一入口**（2026-09 已将 h
 3. **禁止新增 `*-update` 入口文件**：更新逻辑一律实现为 `tool update` 子命令。
 4. **`*-acp` 协议入口豁免**：外部 ACP host（Zed 等）按命令名寻址 agent，无法子命令化，允许作为包内第二入口；头注释须说明约束来源（范本：[hermes-acp](agents/hermes/.local/bin/hermes-acp)），`toolbox check` 对其自动豁免。
 5. **拦截即遮蔽须写明**：主入口分发与上游 CLI 已有同名子命令撞名时（如 `hermes update`），分发处头注释必须写明「拦截即覆写」及原生行为的直调触达路径（范本：hermes wrapper 头注释）。
-6. **例外声明**：确无法子命令化的入口（如上游子命令语义撞车、不可遮蔽）在包根 `.bin-entries-allow` 声明，每行「入口名 # 理由」，理由不可省略（范本：agents/pi 的 `pi-update`）。
+6. **例外声明**：确无法子命令化的入口（如上游子命令语义撞车、不可遮蔽）在包根 `.bin-entries-allow` 声明，每行「入口名 # 理由」，理由不可省略（范本：曾有的 agents/pi `pi-update`）。
 7. **登记对账**：原创工具新入口须同步登记 `tools.yaml`（`toolbox check` 对账）；子命令化工具条目挂主命令名下，usage 写子命令形态。
 8. **执法**：`toolbox check` 的一包一入口检测为阻断级——包内入口计入数 > 1 或豁免缺理由即非零退出（`*-acp` 自动豁免不计入；immutable 包不在检测范围）。
 

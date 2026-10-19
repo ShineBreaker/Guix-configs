@@ -45,15 +45,6 @@
   args: --install --force
   help_cmd: ""
   source: dotfiles/mutable/agents/devin/.local/bin/devin
-- name: pi-update
-  brief: 按 settings.json 更新 Pi 核心与扩展
-  category: agents
-  usage:
-    - pi-update
-    - pi-update --extensions-only
-  args: --extensions-only
-  help_cmd: ""
-  source: dotfiles/mutable/agents/pi/.local/bin/pi-update
 - name: askill
   brief: 声明式管理第三方 agent skills（lock 驱动）
   category: agents
