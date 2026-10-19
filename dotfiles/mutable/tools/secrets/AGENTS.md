@@ -22,6 +22,7 @@ secrets/
 │       └── secrets-encrypted/
 │           ├── mihomo-subscriptions.age
 │           ├── twitter-x.age
+│           ├── wifi-hotspot.age
 │           └── wifi-trust.age
 ├── .stow-local-ignore
 └── .stow-package

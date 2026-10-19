@@ -129,3 +129,13 @@
   args: ""
   help_cmd: ""
   source: dotfiles/immutable/utilities/.local/bin/home-health
+- name: hotspot
+  brief: 一键启停 2.4G 热点（客户端流量走本机 mihomo TUN 代理）
+  category: tools
+  usage:
+    - hotspot on
+    - hotspot off
+    - hotspot status
+  args: on off status
+  help_cmd: --help
+  source: dotfiles/mutable/tools/hotspot/.local/bin/hotspot

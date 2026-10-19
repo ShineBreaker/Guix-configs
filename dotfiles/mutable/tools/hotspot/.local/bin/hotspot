@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: MIT
+#
+# hotspot — 一键启停 WiFi 热点（2.4G，与 STA 同信道；hostapd 起 uap0，
+# 客户端流量由 mihomo TUN 接管）
+# 设计约束与排障：docs/scripts/hotspot.md
+set -euo pipefail
+
+# 兜底补齐基础工具搜索路径（追加，不改变已有优先级：/run/privileged/bin 的 setuid sudo 必须仍排前面）
+PATH=$PATH:/run/current-system/profile/bin:/run/current-system/profile/sbin
+
+WIFI=wlp0s20f3 # STA 侧接口（AP 与 STA 同信道，见 docs）
+APIF=uap0      # AP 虚拟接口名
+# 凭据在 secrets 体系（docs/secrets.md）：wifi-hotspot.age 的 SSID/PSK 字段，
+# on 时内存管道解密、不落盘。密文不入部署位（secrets 包 .stow-local-ignore），
+# on 时从 secrets 包仓库源取；私钥是机器级身份——sudo 重入后 HOME=/root，须绝对路径
+KEYS=/home/brokenshine/.local/share/keys/age
+GW=10.42.0.1 # 热点网关：DHCP 选项 3/6 与 Web 入口都是它
+CONF=/tmp/hotspot-hostapd.conf
+DNS_CONF=/tmp/hotspot-dnsmasq.conf
+RULE=/run/udev/rules.d/75-hotspot-uap0.rules
+GUIX=/run/current-system/profile/bin/guix
+
+prefix=${0##*/}
+die() {
+	printf '%s: %s\n' "$prefix" "$*" >&2
+	exit 1
+}
+step() { printf '==> %s\n' "$*"; }
+
+usage() {
+	cat <<'EOF'
+用法: hotspot on|off|status
+  on      启动热点（仅 2.4G，须先连 2.4G WiFi——AP 与 STA 同信道；非 root 自动 sudo）
+  off     停止热点，清理接口、udev 规则与防火墙放行
+  status  查看接口、进程、防火墙放行与客户端租约（默认动作）
+EOF
+}
+
+# 环境已有就直用，否则经 guix 取 store 路径（不持久安装）
+resolve_pkg_dir() { # $1=命令名 $2=包名 → 含 sbin/ 的 store 前缀
+	local bin
+	if bin=$(command -v -- "$1" 2>/dev/null); then
+		dirname "$(dirname "$bin")"
+		return 0
+	fi
+	"$GUIX" build "$2" 2>/dev/null ||
+		die "找不到 $1：先执行 guix build $2（取出 store 路径后重试）"
+}
+
+start() {
+	local freq ch hostapd dnsmasq agebin SSID PSK pid
+
+	freq=$(iw dev "$WIFI" info | sed -n 's/.*(\([0-9]*\) MHz).*/\1/p')
+	ch=$(iw dev "$WIFI" info | sed -n 's/.*channel \([0-9]*\).*/\1/p')
+	if [ -z "$freq" ]; then
+		die "$WIFI 无信道信息（接口未启用？）：先连上 WiFi 再跑 on"
+	fi
+	# 网卡并发组合 #channels <= 1：AP 必须与 STA 同信道；且仅 2.4G 可用
+	# （本卡 LAR 固件自管监管域，5G 信道永远 no IR，起不了 AP）
+	if [ "$freq" -lt 2400 ] || [ "$freq" -gt 2494 ]; then
+		die "$WIFI 不在 2.4G（freq=${freq}MHz）：先连 2.4G 网络再跑 on"
+	fi
+	# 凭据只进内存管道；条目格式 KEY="value"，sed 取值不用 eval（防注入）。
+	# 密文经 $0 的 stow 链回溯到 secrets 包仓库源（bin 起三层回到 tools/）
+	local secrets_pkg cipher plain
+	secrets_pkg=$(cd -- "$(dirname -- "$(readlink -f -- "$0")")/../../.." &&
+		pwd)/secrets ||
+		die "定位 secrets 包失败（stow 链是否完整）"
+	cipher=$secrets_pkg/.local/share/secrets-encrypted/wifi-hotspot.age
+	if [ ! -f "$cipher" ]; then
+		die "缺 wifi-hotspot.age（$cipher）：先建条目再跑 on——
+secrets set wifi-hotspot SSID '热点名'
+secrets set wifi-hotspot PSK '密码'"
+	fi
+	agebin=$(resolve_pkg_dir age age)/bin/age
+	plain=$("$agebin" -d -i "$KEYS" "$cipher" 2>/dev/null) ||
+		die "解密 wifi-hotspot.age 失败（私钥缺失或密文损坏，见 docs/secrets.md）"
+	SSID=$(printf '%s\n' "$plain" | sed -n 's/^SSID="\(.*\)"$/\1/p')
+	PSK=$(printf '%s\n' "$plain" | sed -n 's/^PSK="\(.*\)"$/\1/p')
+	if [ -z "$SSID" ] || [ -z "$PSK" ]; then
+		die "wifi-hotspot.age 缺 SSID/PSK 字段：secrets set wifi-hotspot SSID|PSK …"
+	fi
+	hostapd=$(resolve_pkg_dir hostapd hostapd)
+	dnsmasq=$(resolve_pkg_dir dnsmasq dnsmasq)
+
+	step "1/6 隔离 $APIF（udev NM_UNMANAGED；规则在 /run，重启即失）"
+	stop >/dev/null 2>&1 || true
+	mkdir -p /run/udev/rules.d
+	# 无此规则时 NM/wpa_supplicant 会抢走新接口并强转 station → ip link set up 报 EBUSY
+	printf 'SUBSYSTEM=="net", KERNEL=="%s", ACTION=="add", ENV{NM_UNMANAGED}="1"\n' "$APIF" >"$RULE"
+	udevadm control --reload
+
+	step "2/6 创建 $APIF 并确认未被 NM 接管"
+	iw dev "$WIFI" interface add "$APIF" type __ap
+	sleep 2
+	nmcli device set "$APIF" managed no 2>/dev/null || true
+	local typ
+	typ=$(iw dev "$APIF" info | sed -n 's/.*type \([A-Za-z_]*\).*/\1/p')
+	case "$typ" in
+	AP | __ap) ;;
+	*) die "$APIF 被 NM 强转为 $typ（udev 隔离未生效）" ;;
+	esac
+
+	step "3/6 配地址 $GW/24 并拉起接口"
+	ip addr replace "$GW/24" dev "$APIF"
+	ip link set "$APIF" up
+
+	step "4/6 启动 hostapd（2.4G ch$ch）"
+	cat >"$CONF" <<EOF
+interface=$APIF
+driver=nl80211
+ssid=$SSID
+hw_mode=g
+channel=$ch
+wpa=2
+wpa_passphrase=$PSK
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+EOF
+	"$hostapd/sbin/hostapd" -B -P /tmp/hotspot-hostapd.pid "$CONF"
+
+	step "5/6 启动 dnsmasq（DHCP + DNS → mihomo 的 127.0.0.1:53）"
+	# 127.0.0.1:53 被 mihomo 占用，listen-address 限定只绑热点网关
+	cat >"$DNS_CONF" <<EOF
+interface=$APIF
+listen-address=$GW
+except-interface=lo
+bind-interfaces
+user=root
+dhcp-range=10.42.0.50,10.42.0.150,255.255.255.0,12h
+dhcp-option=3,$GW
+dhcp-option=6,$GW
+no-resolv
+server=127.0.0.1#53
+EOF
+	if [ -f /tmp/hotspot-dnsmasq.pid ]; then
+		pid=$(cat /tmp/hotspot-dnsmasq.pid)
+		kill "$pid" 2>/dev/null || true
+	fi
+	"$dnsmasq/sbin/dnsmasq" --conf-file="$DNS_CONF" --pid-file=/tmp/hotspot-dnsmasq.pid
+
+	step "6/6 nft 放行 $APIF（trusted_ifaces 整接口全端口）"
+	# shellcheck disable=SC1083  # { } 是 nft 集合字面量语法，非 shell 展开
+	nft add element inet filter trusted_ifaces { "$APIF" }
+
+	printf '\n热点 %s 已启动：2.4G ch%s / WPA2 / 密码 %s / 网关 %s\n' "$SSID" "$ch" "$PSK" "$GW"
+	printf '客户端流量 → mihomo TUN → 代理；关闭：hotspot off\n'
+}
+
+stop() {
+	local pid
+	for pidfile in /tmp/hotspot-hostapd.pid /tmp/hotspot-dnsmasq.pid; do
+		if [ -f "$pidfile" ]; then
+			pid=$(cat "$pidfile")
+			kill "$pid" 2>/dev/null || true
+		fi
+	done
+	pkill -f 'hotspot-hostapd.conf' 2>/dev/null || true
+	pkill -f 'hotspot-dnsmasq.conf' 2>/dev/null || true
+	# shellcheck disable=SC1083  # 同上，nft 集合字面量
+	nft delete element inet filter trusted_ifaces { "$APIF" } 2>/dev/null || true
+	iw dev "$APIF" del 2>/dev/null || true
+	rm -f "$RULE" /tmp/hotspot-hostapd.pid /tmp/hotspot-dnsmasq.pid
+	udevadm control --reload 2>/dev/null || true
+	printf '热点已关闭（%s 已清理）\n' "$APIF"
+}
+
+status() {
+	local pid name
+	if iw dev "$APIF" info >/dev/null 2>&1; then
+		printf '接口: %s %s\n' "$APIF" "$(iw dev "$APIF" info | sed -n 's/.*channel \([0-9]*\) (\([0-9]*\) MHz).*/ch\1 (\2 MHz)/p')"
+	else
+		printf '接口: %s 未创建\n' "$APIF"
+	fi
+	for name in hostapd dnsmasq; do
+		pid=""
+		if [ -f "/tmp/hotspot-$name.pid" ]; then
+			pid=$(cat "/tmp/hotspot-$name.pid" 2>/dev/null) || pid=""
+		fi
+		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+			printf '%s: 运行中 (pid %s)\n' "$name" "$pid"
+		else
+			printf '%s: 未运行\n' "$name"
+		fi
+	done
+	if nft list set inet filter trusted_ifaces 2>/dev/null | grep -qw -- "$APIF"; then
+		printf 'nft: %s 在 trusted_ifaces（全端口放行）\n' "$APIF"
+	else
+		printf 'nft: %s 不在 trusted_ifaces\n' "$APIF"
+	fi
+	if [ -r /var/lib/misc/dnsmasq.leases ]; then
+		local leases
+		leases=$(awk 'NF == 4 { print "  " $3 " " $4 }' /var/lib/misc/dnsmasq.leases)
+		if [ -n "$leases" ]; then
+			printf '客户端:\n%s\n' "$leases"
+		fi
+	fi
+}
+
+cmd=${1:-status}
+case "$cmd" in
+-h | --help)
+	usage
+	exit 0
+	;;
+on | off | status) ;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac
+
+# 非法参数与非交互查询在上方处理；此处起才是需要 root 的动作，
+# 非 root 用绝对路径重入 sudo（$0 可能是裸命令名）
+if [ "$(id -u)" -ne 0 ]; then
+	exec sudo -- "$(readlink -f -- "$(command -v -- "$0" || printf '%s' "$0")")" "$@"
+fi
+
+case "$cmd" in
+on) start ;;
+off) stop ;;
+status) status ;;
+esac

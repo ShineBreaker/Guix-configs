@@ -35,7 +35,7 @@ dotfiles/
 | --------------------------- | --------- | --------------------------------------------------------------------------- |
 | `immutable/agents/`         | 有        | 跨 Agent 共享基础设施：Context 上下文注入、Anchors 工具调用拦截             |
 | `immutable/desktop/`        | 有        | 桌面环境：Niri、autostart、xdg-desktop-portal、PCManFM、Rofi、XFCE 辅助配置 |
-| `immutable/noctalia-suite/` | 无        | 主题与外观适配（Darkman、Noctalia）                                         |
+| `immutable/nosdshell/`      | 无        | 主题与外观适配（nosd-helpers portal 启动入口、mode.d hook、模板渲染）       |
 | `immutable/system/`         | 有        | 系统级用户态配置：容器策略、mihomo 代理、PipeWire 音频、XDG 用户目录        |
 | `immutable/terminal/`       | 有        | 终端工具链：Fish、Tmux、Foot、Kitty、Starship、Btop、Atuin 等               |
 | `immutable/utilities/`      | 有        | 常用工具与开发环境：Fcitx5/Rime、Helix、Git、Pnpm、GnuPG、WinApps           |

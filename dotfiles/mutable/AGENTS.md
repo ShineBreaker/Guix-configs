@@ -35,7 +35,6 @@ mutable/
 │   ├── agenote.lock
 │   └── sync-agenote.sh
 ├── agents/
-│   ├── claude/
 │   ├── devin/
 │   ├── dsh/
 │   ├── extensions/
@@ -50,6 +49,7 @@ mutable/
 │   └── .stow-package
 └── tools/
     ├── appimage-run/
+    ├── hotspot/
     ├── secrets/
     └── toolbox/
 ```

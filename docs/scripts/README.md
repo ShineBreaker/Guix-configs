@@ -76,7 +76,7 @@
 
 niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解静音兜底、只读家目录体检、Live ISO 的 fish 载荷合成一篇：[misc-scripts.md](misc-scripts.md)。全部在 `dotfiles/immutable/`，改源后须 `blue home`。
 
-mutable 侧另有 `hotspot`（WiFi 热点启停，频段跟随 STA 信道（2.4G/5G），客户端流量走 mihomo TUN 代理；`blue stow tools/hotspot`，改源即生效）：[hotspot.md](hotspot.md)。
+mutable 侧另有 `hotspot`（WiFi 热点启停，仅 2.4G（AP 与 STA 同信道），客户端流量走 mihomo TUN 代理；`blue stow tools/hotspot`，改源即生效）：[hotspot.md](hotspot.md)。
 
 ## emacs
 
