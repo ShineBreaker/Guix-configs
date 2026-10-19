@@ -16,12 +16,8 @@
       "fallback": ["zai-coding-cn/glm-5.3"]
     },
     "quick": {
-      "model": "claude",
-      "fallback": [
-        "opencode-go/deepseek-v4.1-flash",
-        "opencode-go/mimo-v2.6-flash",
-        "zai-coding-cn/glm-5.3-flash"
-      ]
+      "model": "opencode-go/deepseek-v4.1-flash",
+      "fallback": ["opencode-go/mimo-v2.6-flash", "zai-coding-cn/glm-5.3-flash"]
     },
     "visual": {
       "model": "hermes",
