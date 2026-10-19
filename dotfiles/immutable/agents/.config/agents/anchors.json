@@ -8,6 +8,11 @@
     "nix-env -i",
     "nix-env --install",
     "nix profile install",
+    "pnpm -g",
+    "pnpm --global",
+    "npm -g",
+    "npm --global",
+    "npm link",
     "tmux kill-server",
     "tmux kill-session -a",
     "herdr server stop",
@@ -100,7 +105,8 @@
   "redirect_conventions": {
     "git apply": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定",
     "git am": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定",
-    "patch": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定"
+    "patch": "补丁类命令已冻结（会绕过 edit-gate 直接写文件）；请改用 Edit 工具逐文件应用改动，自然经过 gate 判定",
+    "pnpm -g": "global 安装已废弃；一次性运行用 guix shell <pkg> -- <cmd>，项目依赖在仓库内声明并由 direnv 提供"
   },
   "rewrite": {},
   "path_hints": {},

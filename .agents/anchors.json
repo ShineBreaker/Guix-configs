@@ -6,7 +6,12 @@
     "blue init",
     "blue clean",
     "guix system reconfigure",
-    "guix system init"
+    "guix system init",
+    "pnpm -g",
+    "pnpm --global",
+    "npm -g",
+    "npm --global",
+    "npm link"
   ],
   "frozen_paths": [
     "tmp/",
@@ -14,7 +19,8 @@
   ],
   "frozen_globs": [],
   "redirect_conventions": {
-    "guix home reconfigure": "建议改用 blue home（锁定频道版本 + 括号检查，保证可复现）"
+    "guix home reconfigure": "建议改用 blue home（锁定频道版本 + 括号检查，保证可复现）",
+    "pnpm -g": "global 安装已废弃（PNPM_HOME 已撤）；一次性运行用 guix shell <pkg> -- <cmd>，项目依赖在仓库内声明并由 direnv 提供"
   },
   "path_hints": {
     "dotfiles/immutable": "此文件修改后需要运行 blue home 才能生效（~/.config 指向 store 只读副本，改源后须重建软链接）",

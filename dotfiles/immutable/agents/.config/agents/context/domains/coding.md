@@ -42,8 +42,8 @@
    - 动词开头，祈使语气，首字母小写，末尾不加句号。
 2. Body: 空一行后阐述「为什么改」（Why），保持简明扼要。
 3. Footer: `BREAKING CHANGE: <说明>` 或 `Closes #<issue>`。
-4. Co-authored-by 标签（AI 辅助时必填）：
-   - 格式：`Co-authored-by: NAME <EMAIL>`
+4. Assisted-by 标签（AI 辅助时必填）：
+   - 格式：`Assisted-by: NAME <EMAIL>`
    - NAME 按当轮 runtime 填实际 agent 名及模型名（`宿主 (模型)` 形态），EMAIL 用该宿主约定的 noreply 地址；历史 commit 与文档示例只是快照，禁止照抄。
    - 多作者各占一行，尖括号不可省略。
 </rule>
