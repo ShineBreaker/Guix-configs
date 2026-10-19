@@ -3,9 +3,10 @@
   "private": true,
   "dependencies": {
     "@deepseek-harness-tui/dsh-tui": "0.16.1",
-    "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-agenote": "link:/home/brokenshine/Projects/agenote/dsh-agenote",
-    "dsh-atelier": "link:/home/brokenshine/Projects/Agent/dsh-plugins/dsh-atelier"
+    "dsh-agent-extensions": "link:../agent-extensions",
+    "dsh-atelier": "link:/home/brokenshine/Projects/Agent/dsh-plugins/dsh-atelier",
+    "dsh-opencode-go": "0.1.22"
   },
   "dsh": {
     "profile": {
@@ -14,7 +15,8 @@
         "@deepseek-harness-tui/dsh-tui",
         "dsh-agent-extensions",
         "dsh-agenote",
-        "dsh-atelier"
+        "dsh-atelier",
+        "dsh-opencode-go"
       ]
     }
   }

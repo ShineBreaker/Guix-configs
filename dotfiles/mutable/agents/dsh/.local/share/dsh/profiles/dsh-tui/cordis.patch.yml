@@ -2,6 +2,16 @@
 # a top-level YAML array of loader patch entries (id-targeted config
 # overrides, disables, and insert lists; `!!js` expressions allowed).
 
+
+# ── MCP 服务（移植自 pi mcp.json，工具以 mcp__<server>__<tool> 进工具集）────
+- insert:
+    - id: mcp-cua-driver
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: cua-driver
+        command: /home/brokenshine/.guix-home/profile/bin/cua-driver
+        args: ['mcp']
 # @@shared-begin: 由 dsh wrapper 从 web profile 同步，勿手改
 - id: llm-pi-ai
   name: "@deepseek-ai/dsh-llm-pi-ai"
