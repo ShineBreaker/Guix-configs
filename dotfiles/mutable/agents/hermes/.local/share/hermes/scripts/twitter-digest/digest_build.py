@@ -48,10 +48,16 @@ def build_md(picked: list[dict], date: str, top: int) -> str:
         lines.append(t["text"])
         # 只留热度量级供判断重要性，不带符号噪音
         lines.append(f"[likes={t.get('likes', 0)} retweets={t.get('retweets', 0)}]")
-        # 图片索引：渲染器按编号下载，LLM 在条目里用 ![imgN] 引用
+        # 原帖地址：加工时顺着它取二次素材（官方公告、原文、榜单页），
+        # 也用作卡片末尾的来源行
+        if t.get("url"):
+            lines.append(f"[src {t['url']}]")
+        # 图片索引：渲染器按编号下载，LLM 在条目里用 ![imgN] 引用；
+        # 带 URL 是为了让加工阶段能自己下载读图（表格/参数截图）
         for m in (t.get("media") or []):
             n = media_index[m["url"]]
-            lines.append(f"[img{n} {m.get('type', 'photo')} {m.get('w')}x{m.get('h')}]")
+            lines.append(f"[img{n} {m.get('type', 'photo')} "
+                         f"{m.get('w')}x{m.get('h')} {m['url']}]")
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 

@@ -408,6 +408,8 @@ section{margin-bottom:34px}
 h2{font-size:26px;color:@title@;line-height:1.25;margin-bottom:16px;
   font-weight:500;font-family:@SERIF@;
   padding-left:14px;border-left:3px solid @accent@}
+h2 .gcount{font-size:16px;color:@muted@;font-weight:400;margin-left:10px;
+  font-family:@BODYFONT@;letter-spacing:0}
 ol.headlines{list-style:none;counter-reset:hl}
 ol.headlines li{counter-increment:hl;position:relative;
   padding-left:42px;margin-bottom:13px;font-size:21px;line-height:1.5}
@@ -423,7 +425,15 @@ article.card{position:relative;background:@card@;border-radius:6px;
 article.card:last-child{margin-bottom:0}
 .cnum{display:block;font-family:@SERIF@;font-size:17px;font-weight:500;
   color:@muted@;margin-bottom:8px;letter-spacing:1px}
-article.card .item{margin:0}
+article.card p.item{margin:0 0 12px}
+article.card p.item:last-of-type{margin-bottom:0}
+h3.ctitle{font-size:23px;line-height:1.35;font-weight:500;color:@title@;
+  font-family:@SERIF@;margin-bottom:10px}
+.cledeg{font-size:19px;line-height:1.6;color:@body@;background:@quote@;
+  border-left:3px solid @accent@;padding:10px 14px;margin-bottom:14px;
+  border-radius:0 4px 4px 0}
+.csrc{margin-top:14px;padding-top:10px;border-top:1px solid @border@;
+  font-size:14px;color:@muted@;line-height:1.5;word-break:break-all}
 figure.fig{position:relative;margin:16px 0 0;border-radius:6px;
   overflow:hidden;background:@quote@}
 figure.fig img{display:block;width:100%}
@@ -449,16 +459,47 @@ def _inline(s: str) -> str:
     return s
 
 
-def render_item(text: str, state: Path, mmap: dict[int, dict],
+def render_item(text, state: Path, mmap: dict[int, dict],
                 idx: int = 0) -> str:
-    """渲染一条正文条目为独立卡片，抽出 ![imgN] 换成下载好的图。
+    """渲染一条正文条目为独立卡片。
 
-    卡片式排版：序号 + 正文 + 图，一次一张。下载失败的编号直接丢掉，
-    不留空框。
+    text 可以是 parse_digest_md 产出的结构化卡片
+    {"title":…, "lines":[…]}，也可以是老格式的单段字符串。
+    卡片结构：序号 · 标题 · 一句话结论 · 正文段落 · 证据图 · 来源。
     """
+    if isinstance(text, dict):
+        title = text.get("title", "")
+        raw_lines = text.get("lines", [])
+    else:
+        title, raw_lines = "", [text]
+
+    lede = ""
+    src = ""
+    paras: list[str] = []
+    imgs: list[int] = []
+
+    for l in raw_lines:
+        l = l.strip()
+        if not l:
+            continue
+        m = re.match(r"^来源\s*[:：]\s*(.+)$", l)
+        if m:
+            src = m.group(1).strip()
+            continue
+        if l.startswith(">"):
+            lede = l.lstrip("> ").strip()
+            continue
+        inline = re.findall(r"!\[img(\d+)\]", l)
+        if inline:
+            imgs.extend(int(n) for n in inline)
+            l = re.sub(r"!\[img\d+\]", "", l).strip()
+            if not l:
+                continue
+        paras.append(l)
+
     figs = []
-    for n in re.findall(r"!\[img(\d+)\]", text):
-        m = mmap.get(int(n))
+    for n in imgs:
+        m = mmap.get(n)
         if not m:
             continue
         uri = fetch_image(state, m.get("url") or "")
@@ -467,10 +508,14 @@ def render_item(text: str, state: Path, mmap: dict[int, dict],
                      if m.get("type") == "video" else "")
             figs.append(f'<figure class="fig"><img src="{uri}" alt="" '
                         f'style="{img_style(m)}">{badge}</figure>')
-    body = _inline(re.sub(r"!\[img\d+\]", "", text).strip())
+
     num = (f'<span class="cnum">{idx:02d}</span>' if idx else "")
-    return (f'<article class="card">{num}'
-            f'<p class="item">{body}</p>{"".join(figs)}</article>')
+    h = f'<h3 class="ctitle">{_inline(title)}</h3>' if title else ""
+    lede_html = f'<div class="cledeg">{_inline(lede)}</div>' if lede else ""
+    body = "".join(f'<p class="item">{_inline(p)}</p>' for p in paras)
+    src_html = (f'<div class="csrc">来源 · {esc(src)}</div>' if src else "")
+    return (f'<article class="card">{num}{h}{lede_html}'
+            f'{body}{"".join(figs)}{src_html}</article>')
 
 
 def media_map(state: Path, date: str, top: int) -> tuple[dict[int, dict], int]:
@@ -499,10 +544,14 @@ def media_map(state: Path, date: str, top: int) -> tuple[dict[int, dict], int]:
             len(tweets))
 
 
-def parse_digest_md(text: str) -> tuple[str, list[tuple[str, list[str]]]]:
+def parse_digest_md(text: str) -> tuple[str, list[tuple[str, list]]]:
     """把日报 markdown 拆成 (标题, [(组名, [条目])])。
 
-    兼容两种条目：要闻的 `1. xxx` 有序列表，和分组的裸段落行。
+    支持两种条目：
+      - 要闻的 `1. xxx` 有序列表（组名必须是「要闻」）
+      - `### 标题` 开头的结构化卡片，标题后可跟 `> 一句话结论`、
+        多段正文、`来源：URL`、`![imgN]`，直到下一个 `###`/`##` 为止
+    老格式（每行一条裸文本）仍然兼容。
     cron 输出文件头部是 job prompt 与执行说明，正文从 `## Response`
     小节开始，`---` 分隔线之后是执行说明，一律排除。
     """
@@ -512,23 +561,36 @@ def parse_digest_md(text: str) -> tuple[str, list[tuple[str, list[str]]]]:
         text = text[m.end():]
 
     title = "X 关注账号日报"
-    groups: list[tuple[str, list[str]]] = []
+    groups: list[tuple[str, list]] = []
     cur_name, cur_items = "", []
+    cur_item: dict | None = None   # 正在累积的 ### 卡片
+
+    def flush_item():
+        nonlocal cur_item
+        if cur_item is not None:
+            cur_items.append(cur_item)
+        cur_item = None
 
     def flush():
         nonlocal cur_name, cur_items
+        flush_item()
         if cur_items:
             groups.append((cur_name, cur_items))
         cur_name, cur_items = "", []
 
     for line in text.splitlines():
         s = line.strip()
-        if not s:
-            continue
         if s == "---":
             break  # 分隔线之后是执行说明，不属于正文
+        if not s:
+            continue
         if s.startswith("# ") and not s.startswith("## "):
+            flush()
             title = s[2:].strip()
+            continue
+        if s.startswith("### "):
+            flush_item()
+            cur_item = {"title": s[4:].strip(), "lines": []}
             continue
         if s.startswith("## "):
             flush()
@@ -536,7 +598,11 @@ def parse_digest_md(text: str) -> tuple[str, list[tuple[str, list[str]]]]:
             continue
         m = re.match(r"^(\d+)[.、]\s*(.+)$", s)
         if m and cur_name == "要闻":
+            flush_item()
             cur_items.append(m.group(2).strip())
+            continue
+        if cur_item is not None:
+            cur_item["lines"].append(s)
         elif s.startswith((">", "-", "*")):
             cur_items.append(s.lstrip(">*- ").strip())
         elif not s.startswith("#"):
@@ -567,10 +633,13 @@ def render_md_html(text: str, variant: str, title_override: str,
     for name, items in groups:
         cls = "headlines" if name == "要闻" else ""
         tag = "ol" if cls else "div"
-        body.append(f"<section><h2>{esc(name)}</h2><{tag} class=\"{cls}\">")
+        body.append(f'<section><h2>{esc(name)}'
+                    f'<span class="gcount">{len(items)} 条</span></h2>'
+                    f'<{tag} class="{cls}">')
         for n, it in enumerate(items, 1):
             if cls:
-                body.append(f"<li>{_inline(it)}</li>")
+                text = it if isinstance(it, str) else it.get("title", "")
+                body.append(f"<li>{_inline(text)}</li>")
             elif state is not None and mmap:
                 body.append(render_item(it, state, mmap, n))
             else:
@@ -580,7 +649,8 @@ def render_md_html(text: str, variant: str, title_override: str,
     vals = {
         "WIDTH": str(WIDTH), "PAD": str(PAD),
         "DATE": esc(date), "PAGETITLE": esc(title),
-        "LEDE": f"{len(groups)} 个分组 · jev 价值筛选",
+        "LEDE": (f"本期 {sum(len(i) for _, i in groups)} 条 · "
+                 f"{len(groups)} 个分组 · 来自关注时间线"),
         "CONTENT": "\n".join(body),
         "COLOPHON": "X · Following Digest",
     }

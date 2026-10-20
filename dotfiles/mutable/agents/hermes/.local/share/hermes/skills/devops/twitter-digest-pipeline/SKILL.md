@@ -124,15 +124,42 @@ python3 $HERMES_HOME/scripts/twitter-digest/digest_render.py md daily.md \
 - 「要闻」保持编号列表（30 秒速览区），正文分组才用卡片。
 - 图内只放消息内容，执行说明不发；成品一律单张整图，不分割。
 
+### 正文卡片结构化格式（渲染器 `parse_digest_md` 按此解析）
+
+正文条目用 `### 事实句标题` 开卡片，卡片内跨多行累积到下一个 `###`/`##` 为止：`>` 行渲染成一句话结论框，`来源：URL` 行渲染成卡片底部来源行，`![imgN]` 单独一行放在来源之前（一条最多 2 张），其余非空行各成一段正文。老格式（一行一条裸文本）仍兼容，但成品 md 统一用新格式。要闻组只允许 `1.` 编号列表，`###` 混进要闻组会被降级成纯标题。
+
+### 取材工作流（卡片信息增量的来源，cron prompt 里有完整版）
+
+先取材再动笔：推文正文里的外链用 `web_extract` 抓官方页（t.co 先 `curl -sIL -o /dev/null -w '%{url_effective}'` 展开再抓）；配图是表格/跑分（宽高比约 1.2~2.4、长边 >1200px）才值得 vision 读，把表里的数字搬进正文；原帖 x.com 要登录通常抓不到，不重试；抓不到就按已有素材写短，不许凭常识补。整轮取材预算 15 分钟。`digest_build` 的素材每条带 `[src <原帖>]` 与 `[imgN photo WxH <URL>]`，就是为这一步服务的。
+
+## 日报质量诊断（用户说「质量差」或拿来参考样本时）
+
+**先分层定位再改。** 笼统判断「写得不好」会直接去调 prompt，而多数情况下天花板在素材层。
+
+1. **量转化率**：`picked/YYYY-MM-DD.json` 的条目数除以日报正文条数。超过六成说明没做编辑，只是把筛选结果逐条转写。
+2. **按三层从下往上找病灶**：
+   - **素材层（天花板）**：每条素材能否写出「是什么 / 关键参数 / 价格与可用性 / 横向位置」四段。推文只有两百来字符时，prompt 写得再细也只能产出那条推文的信息量。要突破得补信源或做二次取材（顺推文里的链接取官方 blog、docs、定价页、release notes）。
+   - **加工层**：同一事件是否合并；条目是否按四段组织而不是自由散文；活动预告、送积分、webcast 这类低信息量条目是否被砍掉。
+   - **呈现层**：来源链接、编号、分组计数、配图是否作为证据（官方公告、优惠页、榜单表）而非原帖装饰图。
+3. **读参考样本头部的自述**。专业 AI 日报样本常写明「内容由某产品整理，本图为某工具排版渲染」。分清内容编辑与排版各归谁：排版是现成能力，内容差距在信源和编辑。
+4. **对标前先确认定位**。全面性追不过有编辑团队和固定信源的产品。这条管道的差异化在个性化：只看用户关注的账号与话题，单条挖深、把同一项目的连续动态串成线索。用户没拍板前不要往铺广改。
+
+已解决的差距（改管道时别回退）：原帖链接已解禁，每条正文必须带 `来源：URL`；配图定位为证据（官方公告、榜单表、优惠页），原帖装饰图不配；`digest_build` 素材已导出 `[src]` 与图片 URL 供二次取材。仍未解决：素材偏英文 AI 圈，中文生态（国内模型厂商与工具平台）几乎为零，补信源是独立工程，与加工和渲染无关。
+
+**诊断类请求先给方向，不动手**：用户说「先给方向我看看」时，只交付分层结论与可选路线，等拍板再改 prompt、渲染器或信源。
+
 ## 卡片式排版
 
-每条正文独立卡片：ivory 填充从暖纸底浮起、无闭合描边、6px 圆角。序号做成正文上方的小标签（17px 灰），**不要**用右上角绝对定位的大数字——长文案会逼文字让位，且低透明度下几乎看不见。
+每条正文独立卡片：ivory 填充从暖纸底浮起、无闭合描边、6px 圆角。自上而下依次为：`cnum` 序号（17px 灰小标签，**不要**用右上角绝对定位的大数字——长文案会逼文字让位，且低透明度下几乎看不见）→ `ctitle` 标题（serif 23px，来自 md 的 `###` 行）→ `cledeg` 一句话结论框（浅底 + 左侧 accent 竖线，来自 `>` 行）→ 多个 `p.item` 正文段 → `figure.fig` 证据图 → `csrc` 来源行（14px、word-break:break-all）。分组标题右侧的 `N 条` 计数与页头总条数由渲染器自动生成，不要写进 md。
 
 ## Pitfalls
 
+- **对照参考样本时先确认样本完整**：聊天预览的长图只显示前几屏，据局部统计「展开了 N 条」会得出相反的结论（把全量展开误判成严格取舍）。看总条数、分组计数与末条编号是否连续到底。分段送 vision 若 2400px 仍 request timed out，缩到 55%~72% 另存 JPEG 再送，文字仍可辨，别原样重试。
+- **日报 md 的所有分组标题必须用 `##`，粗体行（`**要闻**`）会被 `digest_render.py` 静默丢弃**：2026-10-20 实测 cron prompt 写「只有要闻的小标题需要加粗」，照写 `**要闻**` 后整个要闻区块（标题 + 10 条编号）在成品图里消失、HTML 里 grep 不到该词，渲染器不报错。分组标题一律 `## 要闻`，编号列表原样保留。验收发现这类问题先 grep `digest-md-D.html` 确认是丢弃还是 vision 误读。
 - **cron 运行时 heredoc 被 approvals 拦截**（`BLOCKED: script execution via heredoc`）：临时脚本用 write_file 落盘后 `python3 <file>` 执行，不要用 `python3 - <<EOF`。
 - **RT 条目的原文拿不到**：state 里 `is_retweet` 条目的 `full_text` 只有 `RT @handle: …` 截断版（约 280 字符），转推原文不可得。加工日报时只写可见部分，补不全就写半句或放弃该条，勿脑补。
 - **vision 验收报的疑似文字错误先核对 HTML 再改**：`digest_render.py` 落在 `~/.cache/twitter-digest-render/digest-md-D.html` 的是渲染前完整文本，grep 它即可判定是渲染问题还是 vision 对小字的 OCR 误读（实测 `lsposed` 被读成 `isposed`、相邻小字漏笔画）。别凭 vision 输出直接改日报。
+- **改 `digest_render.py` 的解析或卡片结构后先跑结构回归**：`python3 ~/.local/share/hermes/skills/devops/twitter-digest-pipeline/scripts/test_render_struct.py`。断言 `###` 卡片（标题/结论框/来源行/多段正文）的解析与 HTML 输出、老格式兼容、要闻组混入卡片时的降级。渲染器解析失败不报错、只静默变形（粗体行整组消失是先例），结构改动必须用断言锁住。
 - **先看排期再看内容**。排查「为什么发了三次」这类问题时，`hermes cron list` 的 schedule 是第一现场：排期是 `0 1,3,5,7,9,11 * * *` 就会一天发六次，四份产出 md5 不同是四轮独立抓取，不是重复投递。调试期为多轮验证临时放宽的排期，调试结束要缩回去；改 job 名字为 nightly 就要核对排期是否真的一天一次。
 - **渲染成品写 `/tmp` 会被开机清理吞掉**（2026-10-04 已修，输出改 `~/.cache/twitter-digest-render/`）：本机 `/tmp` 虽是持久 Btrfs 子卷，Guix 的 `cleanup-/tmp` root-one-shot-service 每次开机都 `find /tmp -mindepth 1 -delete`（用 `/run/cleanup-tmp-done` 保证单次开机只清一次）。凌晨 3 点渲染完的成品、`fonts-serif.conf`、fontconfig cache 全部随开机消失，早上 8 点的投递 job 拿到 notepad 路径却找不到文件（2026-10-04 实测：机器 10:17 重启，03:10 写入的 `last_image` 失效）。修法是让渲染输出落到 `~/.cache/twitter-digest-render/`（`digest_render.py` 的 `emit()` 与 `fontconfig_for_serif()` 均指向该目录，fontconfig cache 同迁 `~/.cache/fontconfig-serif`），同步 cron prompt 里的 `daily.md` 路径、`MEDIA:` 行与 notepad 路径，改完必须 `hermes cron edit <id> --prompt "$(cat <prompt 源>)"`（job 存内联快照）。`MEDIA:` 与 notepad 必须写字面绝对路径，`$HOME` 不经 shell 展开。落在 /tmp 的其它管道同样中招。
 - `hermes cron run` 报 "already being fired by the scheduler"：先 `hermes cron history <id>` 看有没有 running 实例。父 shell 退出后实例可能变成孤儿继续跑，也可能被 terminal 进程清理连带杀死、执行记录永久卡 `running` 且无产出。调度器状态不可靠时直接手动跑四步更稳。
