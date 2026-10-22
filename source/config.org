@@ -100,7 +100,9 @@ blue build
              (jeans home services emacs-xyz)
              (jeans home services hardware)
              (jeans home services tools)
+             (jeans packages android)
              (jeans packages desktop)
+             (jeans services android)
              (jeans services hardware)
              (jeans services nix-ld)
              (jeans services tools)
@@ -841,6 +843,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
    "podman-compose"
    "qemu"
    "spice"
+   "waydroid"
 
    ;; 包管理器
    "flatpak"
@@ -1299,6 +1302,7 @@ esac
 
 - *入站与转发控制* :: 默认丢弃所有未匹配入站包，但始终放行已建立连接、本地回环、DHCP/ICMP 基础协议以及 Tailscale WireGuard 直连端口（UDP =41641= ），确保不可信网络下也能正常获取地址与打洞。
 - *虚拟机 NAT* :: 为 =virbr0= 网桥配置出站 masquerade 伪装（排除组播与广播地址），供 Libvirt 虚拟机访问外网。
+- *Waydroid 网桥* :: =waydroid0= 与 =virbr0= 同属本地容器/虚拟机网桥，一并列入 =trusted_ifaces= 集合；否则容器内 Android 向网关发的 DHCP/DNS 请求会被 =input= 链丢弃，出向流量也会被 =forward= 链丢弃。
 
 #+NAME: nftables-conf
 #+begin_src conf :tangle ../tmp/nftables.conf
@@ -1308,7 +1312,7 @@ table inet filter {
 # The dispatcher temporarily adds the WiFi interface for trusted connection profiles.
 set trusted_ifaces {
 type ifname
-elements = { "virbr0", "tailscale0" }
+elements = { "virbr0", "tailscale0", "waydroid0" }
 }
 
 chain input {
@@ -1705,6 +1709,7 @@ Guix 采用非 FHS 的 =/gnu/store= 路径布局，直接下载的第三方预�
 
 - *Libvirt + QEMU/KVM* :: 启用 =libvirtd= 与 =virtlogd= ，建立 =virbr0= 虚拟网桥（ =192.168.10.1/24= ），并由专属的 =dnsmasq= 实例为虚拟机分配 DHCP 地址池。
 - *Rootless Podman* :: 为当前用户分配 =100000= 起的 65536 个从属 UID/GID（ =subuids= / =subgids= ），支持免 root 运行容器。
+- *Waydroid* :: 由 jeans 频道的 =waydroid-service-type= 提供 root 容器守护进程（ =waydroid container start= ）。其 D-Bus 系统总线策略与 activation 文件经 =dbus-root-service-type= 装进 =/etc/dbus-1= ；容器网桥 =waydroid0= 由下方 nftables 的可信接口集合放行；=libgbinder= 的协议映射由本块安装的 =/etc/gbinder.d/waydroid.conf= 指定为 =aidl2= / =hidl= （库内置默认是更老的 =aidl= ，与 Android 11+ 镜像不匹配）。守护进程随开机启动，首次使用前须先手动执行 =sudo waydroid init= 下载 Android 镜像。
 
 #+NAME: virtualization-services
 #+begin_src scheme
@@ -1745,7 +1750,25 @@ Guix 采用非 FHS 的 =/gnu/store= 路径布局，直接下载的第三方预�
                                                                           (value
                                                                            "192.168.10.1/24")))))))
 
-      (service virtlog-service-type))
+      (service virtlog-service-type)
+
+      (service waydroid-service-type)
+
+      ;; libgbinder 内置默认协议是 aidl（Android 10 及更早），而 waydroid
+      ;; 的 Android 11+ 镜像走 aidl2；不打这个覆盖，宿主侧 binder 通信会失败。
+      (simple-service 'waydroid-gbinder etc-service-type
+                      (list `("gbinder.d/waydroid.conf"
+                              ,(plain-file "waydroid-gbinder.conf"
+                                           "[Protocol]
+/dev/binder = aidl2
+/dev/vndbinder = aidl2
+/dev/hwbinder = hidl
+
+[ServiceManager]
+/dev/binder = aidl2
+/dev/vndbinder = aidl2
+/dev/hwbinder = hidl
+")))))
 #+end_src
 
 *** 桌面服务
@@ -2229,6 +2252,7 @@ polkit.addRule(function(action, subject) {
    "freerdp@3"
    "pods"
    "virt-manager"
+   "waydroid"
    "winapps"
 
    ;; 娱乐
