@@ -22,12 +22,12 @@
         "times": null,
         "completed": 54
       },
-      "enabled": true,
-      "state": "scheduled",
-      "paused_at": null,
-      "paused_reason": null,
+      "enabled": false,
+      "state": "paused",
+      "paused_at": "2026-10-20T23:21:49.117630+08:00",
+      "paused_reason": "Canonical cron unknown; no automatic re-execution",
       "created_at": "2026-06-21T17:40:06.173351+08:00",
-      "next_run_at": "2026-10-20T23:00:00+08:00",
+      "next_run_at": "2026-10-22T23:00:00+08:00",
       "last_run_at": "2026-10-17T23:22:58.625245+08:00",
       "last_status": "delivery_failed",
       "last_error": null,
@@ -41,14 +41,17 @@
       },
       "enabled_toolsets": null,
       "workdir": "/home/brokenshine/Projects/Config/jeans",
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-10-20T23:03:30.687759+08:00",
+        "by": "BrokenShine-Laptop:10152:b34d363649fa41f8a8c8db21a3658a66"
+      },
       "provider_snapshot": null,
       "model_snapshot": null,
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-17T23:00:00+08:00",
-        "dispatched_at": "2026-10-17T23:00:42.692197+08:00",
-        "lateness_seconds": 42.7,
+        "scheduled_at": "2026-10-20T23:00:00+08:00",
+        "dispatched_at": "2026-10-20T23:00:30.612471+08:00",
+        "lateness_seconds": 30.6,
         "kind": "on_time"
       }
     },
@@ -132,12 +135,12 @@
         "times": null,
         "completed": 22
       },
-      "enabled": true,
-      "state": "scheduled",
-      "paused_at": null,
-      "paused_reason": null,
+      "enabled": false,
+      "state": "paused",
+      "paused_at": "2026-10-22T01:37:43.290802+08:00",
+      "paused_reason": "Canonical cron unknown; no automatic re-execution",
       "created_at": "2026-08-12T22:32:44.043191+08:00",
-      "next_run_at": "2026-10-21T23:30:00+08:00",
+      "next_run_at": "2026-10-24T23:30:00+08:00",
       "last_run_at": "2026-10-18T00:08:33.144007+08:00",
       "last_status": "delivery_failed",
       "last_error": null,
@@ -150,12 +153,15 @@
         "file"
       ],
       "workdir": "/home/brokenshine/Projects/Config/Guix-configs",
-      "fire_claim": null,
+      "fire_claim": {
+        "at": "2026-10-21T23:53:27.447713+08:00",
+        "by": "BrokenShine-Laptop:2746:4edf194342454d958e84250feb3b5caa"
+      },
       "failure_streak": 0,
       "last_dispatch": {
-        "scheduled_at": "2026-10-17T23:30:00+08:00",
-        "dispatched_at": "2026-10-17T23:30:42.692416+08:00",
-        "lateness_seconds": 42.7,
+        "scheduled_at": "2026-10-21T23:30:00+08:00",
+        "dispatched_at": "2026-10-21T23:30:27.104871+08:00",
+        "lateness_seconds": 27.1,
         "kind": "on_time"
       }
     },
@@ -186,8 +192,8 @@
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-22T15:40:30.541829+08:00",
-      "next_run_at": "2026-10-21T03:00:00+08:00",
-      "last_run_at": "2026-10-20T03:15:09.270858+08:00",
+      "next_run_at": "2026-10-23T03:00:00+08:00",
+      "last_run_at": "2026-10-22T03:15:33.776119+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -199,13 +205,13 @@
       "workdir": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-20T03:00:00+08:00",
-        "dispatched_at": "2026-10-20T03:00:30.613226+08:00",
-        "lateness_seconds": 30.6,
+        "scheduled_at": "2026-10-22T03:00:00+08:00",
+        "dispatched_at": "2026-10-22T03:00:43.449027+08:00",
+        "lateness_seconds": 43.4,
         "kind": "on_time"
       },
       "canonical_completions": [
-        "91aafdee1b6f4752b0d2021ae4c84fa1"
+        "ec889552d7f44d4ea7fd94415e209eb6"
       ]
     },
     {
@@ -280,15 +286,15 @@
       "schedule_display": "0 8 * * *",
       "repeat": {
         "times": null,
-        "completed": 27
+        "completed": 29
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-09-23T08:37:41.540933+08:00",
-      "next_run_at": "2026-10-21T08:00:00+08:00",
-      "last_run_at": "2026-10-20T08:00:59.878135+08:00",
+      "next_run_at": "2026-10-23T08:00:00+08:00",
+      "last_run_at": "2026-10-22T08:01:34.709480+08:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -306,14 +312,14 @@
       "enabled_toolsets": null,
       "workdir": null,
       "last_dispatch": {
-        "scheduled_at": "2026-10-20T08:00:00+08:00",
-        "dispatched_at": "2026-10-20T08:00:30.611866+08:00",
-        "lateness_seconds": 30.6,
+        "scheduled_at": "2026-10-22T08:00:00+08:00",
+        "dispatched_at": "2026-10-22T08:00:43.449455+08:00",
+        "lateness_seconds": 43.4,
         "kind": "on_time"
       },
       "fire_claim": null,
       "canonical_completions": [
-        "6cf2724962284d658474dcb1e7110104"
+        "6960de6527af40a5abba042b0767abbf"
       ]
     },
     {
@@ -382,5 +388,5 @@
       ]
     }
   ],
-  "updated_at": "2026-10-20T21:47:42.436010+08:00"
+  "updated_at": "2026-10-22T08:01:53.466163+08:00"
 }

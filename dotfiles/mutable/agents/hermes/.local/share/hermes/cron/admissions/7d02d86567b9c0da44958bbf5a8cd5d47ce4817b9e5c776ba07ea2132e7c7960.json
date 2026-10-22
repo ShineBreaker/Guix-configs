@@ -1,0 +1,15 @@
+{
+  "params": {
+    "job_id": "3ba1524b02f2",
+    "request_id": "9158aa266ec2453986be17e1dbf1ddae",
+    "extra_prompt": null
+  },
+  "receipt": {
+    "session_id": "local-faf85217a20f097b5555bb83a719a687af55d85281376147cd4c3697da33e070",
+    "admission_id": "9d15578f4baa4c248fd348d30293ea66"
+  },
+  "pause_recorded": {
+    "paused_at": "2026-10-20T23:21:49.117630+08:00",
+    "reason": "Canonical cron unknown; no automatic re-execution"
+  }
+}

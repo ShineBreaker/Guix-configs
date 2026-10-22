@@ -35,10 +35,11 @@ moa:
   enabled: false
   degraded_reference_policy: loud
 model:
-  default: glm-5.3-flash
-  provider: zai
-  base_url: https://open.bigmodel.cn/api/coding/paas/v4
+  default: group/cheap-first
+  provider: magpie
+  base_url: http://127.0.0.1:3425/v1
   api_mode: chat_completions
+  api_key: magpie
 providers:
   minimax-cn:
     models:
@@ -54,6 +55,27 @@ providers:
         timeout_seconds: 900
     request_timeout_seconds: 600
     stale_timeout_seconds: 600
+  magpie:
+    api_key: magpie
+    api_mode: chat_completions
+    base_url: http://127.0.0.1:3425/v1
+    extra_headers:
+      User-Agent: hermes-agent
+    models:
+      - group/never-stuck
+      - group/cheap-first
+      - group/auto-glm-5-3
+      - group/auto-glm-5-3-flash
+      - group/auto-minimax-m3-1-flash
+      - deepseek/deepseek-flash
+      - deepseek/deepseek-v4-flash
+      - deepseek/deepseek-v4-pro
+      - stepfun-cn/step-5-preview
+      - devin/swe-2
+      - zcode/GLM-5.3
+      - zcode/GLM-5.3-Flash
+      - minimax-code/MiniMax-M3.1-Flash
+    name: magpie
 fallback_providers:
   - provider: zai
     model: glm-5.3-flash
@@ -640,7 +662,6 @@ known_builtin_toolsets:
     - yuanbao
 desktop:
   manage_launcher_entry: false
-
 # ── Fallback Model ────────────────────────────────────────────────────
 # Automatic provider failover when primary is unavailable.
 # Uncomment and configure to enable. Triggers on rate limits (429),

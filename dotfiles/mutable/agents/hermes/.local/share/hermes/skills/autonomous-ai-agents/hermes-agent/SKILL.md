@@ -159,6 +159,12 @@ Supported platforms: Telegram, Discord, Slack, WhatsApp, Signal, Email, SMS, Mat
 
 Platform docs: https://hermes-agent.nousresearch.com/docs/user-guide/messaging/
 
+**`open` policies need an allow-all opt-in or the gateway refuses to start.** Setting `dm_policy` / `group_policy: open` without `GATEWAY_ALLOW_ALL_USERS=true` (or the platform's own `<PLATFORM>_ALLOW_ALL_USERS`) aborts startup — `gateway/run.py::_own_policy_open_startup_violation` logs `Refusing to start: … open policy without allow-all opt-in`, writes `startup_failed`, and exits. For durable access use `allowlist` + `group_allow_from` / `<PLATFORM>_GROUP_ALLOWED_USERS`; add the allow-all flag only for a short collection window, then remove it.
+
+**A silent platform usually drops messages at intake, not on the wire.** `pairing` (the default) and `disabled` never admit group traffic: `gateway/platforms/access_policy_mixin.py::_is_group_allowed` returns before writing any log line, so an empty log does not prove the event never arrived. Read the effective policy out of config before debugging credentials, event subscriptions, or network reachability.
+
+QQ group onboarding — `group_openid` discovery, sandbox rules, and the policy keys: `skill_view(name="hermes-agent", file_path="references/qqbot-group-onboarding.md")`.
+
 ### Sessions
 
 ```
