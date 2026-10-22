@@ -76,6 +76,7 @@ blue build
              (gnu home services syncthing)
              (gnu home services xdg)
              (gnu packages admin)
+             (gnu packages bash)
              (gnu packages guile)
              (gnu packages rust-apps)
              (gnu services)
@@ -449,6 +450,7 @@ blue build
               <<user-desktop-services>>
               ;; ── shepherd 自启动 ──
               <<essential-desktop-services>>
+              <<waydroid-session-service>>
               <<kanata-services>>
               <<hermes-services>>
               <<cpu-dma-latency-service>>
@@ -619,10 +621,25 @@ blue build
    (type "vfat")
    (create-mount-point? #t)))
 
+;; Waydroid 的 LXC 冻结（息屏时挂起容器）依赖 cgroup v1 的 freezer
+;; 层级：LXC 读 /proc/1/cgroup 枚举到 elogind 的 v1 挂载就会把整个
+;; 布局判为 HYBRID，此时 lxc_cmd_freeze_callback 拒绝执行 freeze。
+;; 必须同时挂一条可用的 v1 freezer 层级，让 LXC 走 legacy 路径落到
+;; freezer.state。
+(define %v1-freezer-filesystem
+  (file-system
+   (device "cgroup")
+   (mount-point "/sys/fs/cgroup/freezer")
+   (type "cgroup")
+   (options "freezer")
+   (check? #f)
+   (create-mount-point? #t)))
+
 (define %file-systems-config
   (append %bind-mounts %persist-filesystem %tmpfs
           (list %data-filesystem %efi-filesystem)
-          %base-file-systems))
+          %base-file-systems
+          (list %v1-freezer-filesystem)))
 
 (define %swap-devices
   (list (swap-space
@@ -2578,6 +2595,29 @@ lalt grv  lctl _  _  _  _  _)
                                             #:requirement '(graphical-session)
                                             #:documentation
                                             "X11 与 Wayland CLIPBOARD 双向同步（niri + xwayland-satellite 无自动转发）"))))
+
+#+end_src
+
+#+NAME: waydroid-session-service
+#+begin_src scheme
+;; 容器守护进程由系统层的 waydroid-service-type 提供（root shepherd）。
+;; 本服务在图形会话就绪后拉起 waydroid 会话；用 keepalive 包装脚本而非
+;; 直接调 waydroid session start —— 后者在会话已存在时因 D-Bus 名称冲突
+;; 立刻返回 0，shepherd 会把它当成进程退出而 respawn，形成日志刷屏循环。
+;; 包装脚本在会话结束后才退出，常驻语义才成立。
+(list (simple-service 'waydroid-session home-shepherd-service-type
+                      (list
+                       (home-daemon-service 'waydroid-session
+                                            ;; store 里的 local-file 副本没有 x 位，
+                                            ;; 故显式用 bash 解释执行。
+                                            (list (file-append bash
+                                                               "/bin/bash")
+                                                  (local-file
+                                                   (assume-source-relative-file-name
+                                                    "../dotfiles/immutable/utilities/.local/bin/waydroid-session-keepalive")))
+                                            #:requirement '(graphical-session)
+                                            #:documentation
+                                            "Waydroid 用户会话：等 graphical-session 就绪后启动容器"))))
 #+end_src
 
 **** clipsync 剪切板桥接

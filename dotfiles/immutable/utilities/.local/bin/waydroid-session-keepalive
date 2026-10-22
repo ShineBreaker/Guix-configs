@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+# SPDX-License-Identifier: MIT
+#
+# waydroid-session-keepalive — 让 shepherd 的 waydroid-session 服务常驻。
+#
+# waydroid session start 在会话已存在时会因 D-Bus 名称冲突（id.waydro.Session）
+# 立刻返回 0，shepherd 视其为「进程退出」而 respawn，形成日志刷屏的循环。
+# 本脚本在启动会话后转为等待：会话结束（容器停止）时才退出，
+# 让 shepherd 的常驻语义与「会话已存在」的场景都成立。
+
+set -u
+
+WAYDROID="${WAYDROID:-waydroid}"
+
+session_running() {
+	"$WAYDROID" status 2>/dev/null | grep -q '^Session:[[:space:]]*RUNNING'
+}
+
+# 首次尝试启动会话：成功则进入等待；已运行同样进入等待。
+"$WAYDROID" session start
+
+while session_running; do
+	sleep 5
+done
+
+# 会话已结束，服务可以安全退出（shepherd 会按需重启）。
+exit 0
