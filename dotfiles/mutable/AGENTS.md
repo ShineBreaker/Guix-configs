@@ -37,9 +37,7 @@ mutable/
 ├── agents/
 │   ├── devin/
 │   ├── dsh/
-│   ├── extensions/
 │   ├── hermes/
-│   ├── pi/
 │   ├── skills/
 │   └── zcode/
 ├── emacs/

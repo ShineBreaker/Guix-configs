@@ -60,21 +60,22 @@ dsh web --lan-off      # 本次不带 --trusted-host（`DSH_TS_HOST=` 的显式�
 ## dsh update
 
 ```bash
-dsh update            # 交互确认后更新本体 + web profile 插件
+dsh update            # 交互确认后更新本体 + web profile + dsh-tui profile
 dsh update --check    # 只查差异（退出码 0=已最新，1=有更新），可作 CI 判断
 dsh update -y|--yes   # 跳过确认
 dsh update --restart  # 完成后后台 `dsh web --reauth`
 ```
 
-- **插件清单从 `profiles/web/package.json` 的 dependencies 动态读取**（全量保序），本体固定为 `$AGENTS_ROOT/dsh/package.json` 的 `@deepseek-ai/dsh`。依赖分三类处理。
+- **覆盖三处 pnpm 项目**：本体（`$AGENTS_ROOT/dsh`）、web profile、dsh-tui profile。插件清单从各 profile 的 `package.json` 的 dependencies 动态读取（各 profile 内保序），本体固定为 `$AGENTS_ROOT/dsh/package.json` 的 `@deepseek-ai/dsh`。依赖分三类处理。
 - **npm 包选版不跟 `latest` tag**：dsh 全是 preview 版本，发布者把 latest 停在保守位。按通道稳定性 `latest → next → beta → alpha` 取第一个高于当前的版本，输出里标出来源通道与距冷却期的小时数。
 - **`github:<owner>/<repo>#<sha>` 跟上游 HEAD**：用 `git ls-remote` 查 HEAD，commit 变了才列为更新项。**`allowBuilds` key 迁移必须在换 commit 之前**——key 形如 `<pkg>@https://codeload.github.com/<repo>/tar.gz/<commit>`，绑定 commit，不迁则 prepare 不放行。
 - **`git+` / `git@` / `file:` / `link:` 只列提醒**：锁定源码没有可比较的上游位标，人工确认后改 spec 并 `pnpm install`。
 - **用 `pnpm add` 更新，不手改 `package.json`**：版本号只来自 pnpm 的 registry 解析；命令行 `-E` 加两侧 `pnpm-workspace.yaml` 的 `saveExact: true` 双保险写精确值（pnpm 默认写 `^`）。冷却期内的版本由 pnpm 自动写进 `minimumReleaseAgeExclude`，豁免不用手写。
 - **`ERR_PNPM_IGNORED_BUILDS` 在此降级为非致命**：包已装好、只是 build script 未审批时只提示去跑 `pnpm approve-builds`（与 pi 族的「批准后重试」不同）。
-- **lockfile 回源**：每次 `pnpm add` 后把部署侧 lockfile 拷回仓库源副本，收尾再对两棵目录树各拉平一次（`package.json`、`pnpm-workspace.yaml`、`cordis.patch.yml` 同步内容并重建软链）。
+- **lockfile 回源**：每次 `pnpm add` 后把部署侧 lockfile 拷回仓库源副本，收尾再对三棵目录树各拉平一次（`package.json`、`pnpm-workspace.yaml`、`cordis.patch.yml` 同步内容并重建软链）。
 - **兼容性提醒**：读插件的 `dsh.compatibility.dshReleases`，只在「声明了白名单却不含目标本体版本」时提醒；没有该字段不代表不兼容。
 - **更新后须重启 `dsh web`**（host 半边不热载），`--restart` 后台调 `dsh web --reauth`。
+- **与上游 `dsh tui update` 的分工**：后者是 TUI launcher 自带的子命令，只管 `@deepseek-harness-tui/dsh-tui` 一个包（且经 `dsh plugin add` 落到部署侧）；`dsh update` 才是全量通道——本体 + 两个 profile 的全部 npm 依赖一起升，并把改动回写仓库源。上游那个不负责回源，跑完仓库里的 lockfile 会落后一版。
 
 ## dsh tui
 
@@ -87,9 +88,10 @@ dsh tui [args...]   # 直 exec profile 内的完整 launcher
 ## 实现与约束
 
 - **分发与兜底统一用 `exec`**：wrapper 不残留在进程树上；`plugin` 分支需取回退出码故用普通调用并在末尾自愈。
-- **`dsh update` 的回源映射显式给出**：CLI 安装树与 web profile 分居两棵目录树，部署根与仓库源根须成对传入，否则搬出 `$DSH_HOME` 后会静默跳不回源。
+- **`dsh update` 的回源映射显式给出**：CLI 安装树与两个 profile 分居两棵目录树，部署根与仓库源根须成对传入，否则搬出 `$DSH_HOME` 后会静默跳不回源。**两个源根的深度不同**：本体是 `…/share/agents`（rel 为 `dsh`），profile 是 `…/share/dsh`（rel 为 `profiles/<name>`）——源根若直接取 `…/share/agents/dsh`，rel 再拼一次就成了 `…/agents/dsh/dsh/`，源侧文件不存在，回源会**静默跳过整个安装树**。
 - **回源源目录一律从 `$0` 的 stow 软链反推**，不从部署侧软链推导。
 - **`grep | head` 管道必须 `|| true`**：`set -euo pipefail` 下无匹配时 grep 返回 1，曾让 `migrate_allow_builds` 在「无需迁移」的正常场景中途退出，连带 `--restart` 到不了重启路径。
+- **收尾的 `cp` / `ln` 失败只告警不中止**：更新此时已经落盘，回源或重建软链失败不该把整脚本带崩（`set -e` 会吞掉后续所有步骤，包括「需重启」提示）。同理，lockfile 的源侧副本允许缺省，首次同步时补建——它存在的意义正是让部署可复现。
 
 ## 排障
 
@@ -100,7 +102,8 @@ dsh tui [args...]   # 直 exec profile 内的完整 launcher
 | 窗口 app_id 与桌面图标不匹配         | profile 目录名与 `StartupWMClass` 不成对 | 保持 `--profile-directory=dsh` 与 desktop 文件两处同步                         |
 | 改完 `package.json` 部署侧不生效     | stow 软链被原子写断                      | 下次 `dsh` 调用自动归源重建；或 `ls -la ~/.local/share/dsh/profiles/web/` 抽查 |
 | `dsh tui` 报 127                     | profile 内 launcher 副本缺失             | `dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>`        |
-| TUI 整条消失（dump-config 条目骤减） | `compatibility.json` 被删                | 恢复该文件（见 `agents/dsh/AGENTS.md`）                                        |
+| TUI 整条消失（dump-config 条目骤减） | TUI 的 peer 范围与本体版本对不上          | 查 TUI 包的 `peerDependencies` 是否含当前本体版本；**不是**删 `compatibility.json`（那是豁免授权表，缺失只等于「无豁免」） |
+| TUI 每次 boot 报 `patch: entry "tool-ralph" not found` | 上游 TUI bundle 自带 patch 的告警，本体 base 层已不注册该行 | 忽略，功能无损；勿在本包侧找 bug                        |
 
 ## 变更
 
