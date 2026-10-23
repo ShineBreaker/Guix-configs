@@ -10,7 +10,7 @@
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `~/.local/share/dsh/`                           | `$DSH_HOME`，真实目录，配置文件逐个软链回本包（no-folding）。含 `cordis.patch.yml`、`.credentials.yaml`、`sessions/`、`storages/`             |
 | `.local/share/dsh/profiles/web/`                | Web Profile：`cordis.yml`（loader 配置）+ `cordis.patch.yml`（用户 patch 层）+ `package.json`、`pnpm-workspace.yaml`                          |
-| `.local/share/dsh/profiles/dsh-tui/`            | dsh-TUI Profile：`package.json`、`cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`、**`compatibility.json`**、`pnpm-lock.yaml` 副本     |
+| `.local/share/dsh/profiles/dsh-tui/`            | dsh-TUI Profile：`package.json`、`cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 副本（`compatibility.json` 已删除，见下） |
 | `.local/share/dsh/profiles/agent-extensions/`   | 自建插件包（pi/omp 共享扩展的 DSH 移植）；web profile 以 `link:../agent-extensions` 引用                                                      |
 | `.local/share/dsh/profiles/web/preset-plugins/` | 自定义 preset 专用 `.mjs`（梁神模式的 tool-bootstrap 等 6 个），组合行以 `./preset-plugins/xxx.mjs` 相对 profile 目录引用                     |
 | `.local/share/agents/dsh/`                      | CLI 本体安装树（`$AGENTS_ROOT` 下）：源托管 `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 副本；`node_modules/` 是部署侧运行时产物  |
@@ -23,8 +23,8 @@
 
 ## 安装通道与 workspace 策略
 
-- **安装机制**：CLI 本体经 pnpm 装在 `$AGENTS_ROOT/dsh/`，配置与状态留 `$DSH_HOME` 不动。手动升级路径是改源 `package.json` 版本 → 在安装树跑 `pnpm install` → 跑任意 `dsh` 命令触发 lockfile 回源；日常更新走 `dsh update`（见 [docs/scripts/dsh.md §dsh update](../../../../docs/scripts/dsh.md)）。
-- **`pnpm-workspace.yaml` 三项策略**（本体与 web profile 各一份）：`minimumReleaseAge: 0` 适配预览期的日更版本（避开 24h 供应链冷却拦截）；`saveExact: true` 让一切 pnpm add 通道（含 `dsh plugin add`）都写精确版本，根治 `^` 范围漂移；`allowBuilds` 批准 node-pty、koffi、protobufjs 等原生编译依赖。显式 `pnpm add <pkg>@<ver>` 时 pnpm 会自行把冷却期内的版本写进 `minimumReleaseAgeExclude`，豁免不用手写。
+- **安装机制**：CLI 本体经 pnpm 装在 `$AGENTS_ROOT/dsh/`，配置与状态留 `$DSH_HOME` 不动。手动升级路径是改源 `package.json` 版本 → 在安装树跑 `pnpm install` → 跑任意 `dsh` 命令触发 lockfile 回源；日常更新走 `dsh update`（见 [docs/scripts/dsh.md §dsh update](../../../../docs/scripts/dsh.md)）。`dsh update` 一条命令覆盖**本体 + web profile + dsh-tui profile** 三处 pnpm 项目，每处 `pnpm add` 后即刻回源 lockfile 并重建 stow 软链。
+- **`pnpm-workspace.yaml` 三项策略**（本体、web profile、dsh-tui profile 各一份）：`minimumReleaseAge: 0` 适配预览期的日更版本（避开 pnpm 12 默认 1440 分钟 = 24h 的供应链冷却拦截）；`saveExact: true` 让一切 pnpm add 通道（含 `dsh plugin add`、上游 `dsh tui update` 走的也是 `dsh plugin add`）都写精确版本，根治 `^` 范围漂移；`allowBuilds` 批准 node-pty、koffi、protobufjs 等原生编译依赖。显式 `pnpm add <pkg>@<ver>` 时 pnpm 会自行把冷却期内的版本写进 `minimumReleaseAgeExclude`，豁免不用手写。
 
 ## 插件管理（Web Profile）
 
@@ -32,20 +32,24 @@
 
 | 插件                     | 当前版本       | 说明                                                                                         |
 | ------------------------ | -------------- | -------------------------------------------------------------------------------------------- |
-| `dsh-context`            | 0.70.0         | 上下文监控面板：Agent 组合、趋势、文件活动与 Agent 通信网络                                  |
-| `dsh-dream-skin`         | 10.14.2        | 原生主题换肤（官方 `ctx.theme.register` / `overrideTokens`）                                 |
-| `dsh-opencode-go`        | 0.1.22         | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                            |
-| `dshmarket`              | 1.66.21        | 插件市场：浏览、安装与更新社区插件                                                           |
-| `@xmanrui/dsh-im`        | 4.39.0         | IM 接入：微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix 连进 DSH     |
-| `dsh-pocket`             | 2.11.0         | 手机扫码远程访问（局域网 + 公网实时同屏），取代已删的 `dsh-remote-web-gateway`               |
+| `dsh-context`            | 0.73.3         | 上下文监控面板：Agent 组合、趋势、文件活动与 Agent 通信网络                                  |
+| `dsh-dream-skin`         | 10.16.0        | 原生主题换肤（官方 `ctx.theme.register` / `overrideTokens`）                                 |
+| `dsh-opencode-go`        | 0.1.24         | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                            |
+| `dshmarket`              | 1.66.42        | 插件市场：浏览、安装与更新社区插件                                                           |
+| `@xmanrui/dsh-im`        | 5.1.0          | IM 接入：微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix 连进 DSH     |
+| `dsh-pocket`             | 2.12.0         | 手机扫码远程访问（局域网 + 公网实时同屏），取代已删的 `dsh-remote-web-gateway`               |
 | `dsh-devin-cli`          | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，`dsh update` 自动跟 HEAD）               |
-| `dsh-find-plugin`        | 0.4.0          | 文件/内容查找；peer 止步 0.1.7 线，0.2.0 下被 compat 门 skip（见下）                         |
+| `dsh-find-plugin`        | 已移除         | 2026-10 移除：peer 止步 `^0.1.7-alpha.1`，0.4.0 已是上游最新且无 0.2.x 适配版，compat 门恒拒（见下） |
 | `dsh-agent-extensions`   | `link:` 本地   | 自建插件，见「自建插件」                                                                     |
 | `dsh-agenote`            | `link:` 本地   | 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在外部仓库 `~/Projects/agenote/dsh-agenote` |
 
+> 表中版本号与 `profiles/web/package.json` 的 dependencies 一一对应（`dsh update` 写精确值，不带 `^`）。以 `package.json` 为准。
+
 ### 兼容门（compat gate）
 
-0.1.7-rc.1 起 `dsh-app-boot` 的 `evaluatePluginCompatibility` 在启动时按插件 manifest 的 `@deepseek-ai/dsh*` peer 范围做强制校验（`includePrerelease: true`，不读 `peerDependenciesMeta.optional`），不满足即**整 bundle skip**，只在 `web.log` 记 `skipping profile bundle`——boot 本身不受影响，页面表现为该插件功能整体缺失。`dsh-find-plugin@0.4.0`（peer 止步 `^0.1.7-alpha.1`）当前就在这个状态，保留观望；上游发适配版后用 `dsh plugin --profile web add <pkg>@<ver>` 升回，确认不再需要则 `dsh plugin rm` 并验证 `package.json` 的 dependencies、`dsh.profile.bundles`、workspace 的 `minimumReleaseAgeExclude` 三处同清（`dsh-remote-web-gateway` 已于 2026-10 按此流程删除，远程访问由 `dsh-pocket` 接替）。
+0.1.7-rc.1 起 `dsh-app-boot` 的 `evaluatePluginCompatibility` 在启动时按插件 manifest 的 `@deepseek-ai/dsh*` peer 范围做强制校验（`includePrerelease: true`，不读 `peerDependenciesMeta.optional`），不满足即**整 bundle skip**，只在 `web.log` 记 `skipping profile bundle`——boot 本身不受影响，页面表现为该插件功能整体缺失。
+
+`dsh-find-plugin@0.4.0`（peer 止步 `^0.1.7-alpha.1`）曾长期停在这个状态。0.4.0 是上游**最新**版本且没有 0.2.x 适配线，等下去不会自愈，故 2026-10 按「确认不再需要则 `dsh plugin rm`」的流程移除：dependencies、`dsh.profile.bundles` 两处同清（`minimumReleaseAgeExclude` 本就没有它的条目），`pnpm install` 后 `node_modules` 与 lockfile 均已无痕。移除后 web profile 的 boot stderr 恢复干净。**若上游日后发了 0.2.x 适配版**，用 `dsh plugin --profile web add <pkg>@<ver>` 装回，并按此流程三处同清。
 
 > **semver 预发布区间的陷阱**：peer 范围写 `^0.1.0-rc.6` 时只匹配同 `0.1.0` 元组，永远够不到 `0.1.6-alpha.2`。降级判断先看这条。
 
@@ -118,8 +122,9 @@
 dsh-TUI（上游 `ccch1mneyyy/dsh-TUI`，npm `@deepseek-harness-tui/dsh-tui`）是官方收录的 TUI 补位插件：鲸鱼顶栏 / 实时状态 / 流式思考 / 双击 Esc 回滚 / 上下文进度 + TPS。它与 web profile **平级但独立**——插件自带 agent preset，与 web 的三套自定义 preset、chrome App 窗口那条链路互不干扰。不并进 web profile 是刻意的：并进去会把 TUI 的 preset 行注册进 web 的组合，而两边预设、shell 方言与渲染方式都不同。
 
 - **形态**：独立 profile `profiles/dsh-tui/`，随上游一键脚本 `install.sh`（`dsh plugin --profile dsh-tui add`）的建法，故沿用官方形态。入口 `dsh tui` 直 exec profile 内的完整 launcher 副本，不引上游 `dsh-tui`/`dst` 两个 bin 到 `~/.local/bin`。
-- **compat 门同样生效，授权落在 `profiles/dsh-tui/compatibility.json`**：boot 时 loader 比对 bundle 声明的 peer 范围与本体版本，不匹配就静默跳过整个 bundle。**删掉该文件 TUI 就整条消失**（dump-config 条目数骤减且不报错）。判定：`dsh --profile dsh-tui --dump-config | grep -c '^- id:'`，或 `dsh tui doctor` 输出的 `config: .../cordis.patch.yml` 行。
-- **版本线**：TUI 0.12.0 的 peer 逐项列出 `0.2.0-rc.1 || 0.2.0-rc.2`，是首个适配 0.2.0 的版本；0.11.0 的主验证线是 0.1.7-rc.2。
+- **compat 门同样生效，但本 profile 不需要豁免文件**：`compatibility.json` 是**版本豁免授权表**（精确 `pkg@version` → 精确 DSH 运行时版本列表），不是「TUI 能不能加载」的总开关——读不到文件即「无豁免」，插件仍按自己的 peer 范围正常判定。TUI 0.16.1 的 peer 逐项含 `0.2.1-rc.2`，与当前本体天生匹配，故该文件**已删除**（原先只授权过 0.11.0@0.1.7-rc.2，早已失效）。**误判的代价**：曾记「删掉该文件 TUI 就整条消失」——2026-10 实测证伪（移走后 dump-config 仍 121 条、48 条 tui 条目，与带文件时逐条一致）。真要让 TUI 消失，得让它的 peer 范围与本体对不上，而不是删授权文件。判定：`dsh --profile dsh-tui --dump-config | grep -c '^- id:'`，或 `dsh tui doctor` 输出的 `config: .../cordis.patch.yml` 行。
+- **版本线**：当前 TUI 0.16.1 + 本体 0.2.1-rc.2（peer 双向匹配）。0.12.0 是首个适配 0.2.0 的版本，0.11.0 的主验证线是 0.1.7-rc.2——这两条只作历史参照。
+- **`tool-ralph` 的 patch 告警是上游的，不是本包的**：TUI bundle 自带的 `cordis.patch.yml` 有一行 `- id: tool-ralph / disabled: true`，而本体 0.2.1-rc.2 的 base 层已不再注册该 host 行，于是每次 boot 报 `[@deepseek-harness-tui/dsh-tui] patch: entry "tool-ralph" not found`。上游同款行在 `tool-str-replace-editor` 上专门写了注释解释同类现象。纯告警，不影响任何功能，**不要在本包侧找 bug**。
 - **profile 层 patch 无法给 preset 行打补丁**：目标 id 要等 preset 挂载后才存在，提前写只会每次 boot 报 `patch: entry "terminal-bash" not found`。`shellPath` 坑只在切到 `minimal`/`liangshen` 时需要按 web 侧手法补；默认 `standard` preset 挂 `tool-bash`（subprocess 非 PTY），不吃这个坑。
 
 ## 图标与桌面集成
@@ -171,3 +176,4 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
 5. **会话报 `本轮运行失败 format v4 message requires a producer-owned source kind`**：0.1.7 会话格式 v4 拒绝旧式消息源 `{kind: "plugin", plugin: "<名>"}`（`kind: "plugin"` 包装已退役）。**插件创建 user/developer 消息必须直接写 producer-owned kind**：按 v3→v4 迁移器规则写 `{kind: "plugin:<名>"}`（如 `plugin:agent-gate`），与旧日志重放的迁移结果保持一致；读取侧识别自注入消息要同时兼容 v3（`kind === "plugin"` + `plugin` 字段）与 v4（`kind` 以 `plugin:` 开头）两种形态。本包 `gate.js` 与外部 `dsh-agenote` 已按此规范写，新增注入消息的插件照此办理。
 6. **`dsh plugin add` 报 `ERR_PNPM_UNEXPECTED_STORE`（v11 linked vs wants v10）**：本机有两套 pnpm——PATH shim（`~/.local/share/pnpm/pnpm`，npm 装，10.x 用 store v10）与 corepack 解析的 11.22.0（store v11，profile 的 `node_modules` 实际链到 v11）。旧 shim 调 pnpm 时 store 大版本对不上即拒跑。临时解法：建 `exec corepack pnpm "$@"` 的 wrapper 目录前置到 PATH 再跑 `dsh plugin`。**根治需把全局 pnpm 升到 11.x（`pnpm self-update` 或重装 shim），属用户手动决策**。另见坑 7。
 7. **`dsh plugin add` 在非 TTY 下可能挂死**：pnpm 收尾阶段偶发 epoll 空等不退出（2026-10 装 `dsh-pocket` 实测 8 分钟无进展、无网络无子进程）。判定：`ps` 看 pnpm 进程 State=S 且 `ss -tnp` 无连接。处置：杀掉进程后核对安装完成度——`package.json` 的 dependencies 与 `pnpm-lock.yaml` 通常已被 pnpm 写完，缺的是 dsh 侧的 `dsh.profile.bundles` 写入与回源收尾：手动补 bundles 行、跑任意 `dsh` 命令触发 lockfile 回源即可，无需重装。
+8. **`dsh --profile dsh-tui` 每次都打 `patch: entry "tool-ralph" not found`**：上游 TUI bundle 自带 patch 里的 `tool-ralph` 禁用行找不到目标 host 行（本体 0.2.1-rc.2 的 base 层已不再注册它）。纯上游告警，功能无损，本包侧无解也不必改。详见「dsh-TUI Profile」。

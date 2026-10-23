@@ -64,6 +64,7 @@ providers:
     models:
       - group/never-stuck
       - group/cheap-first
+      - group/auto-deepseek-v4-1-flash
       - group/auto-glm-5-3
       - group/auto-glm-5-3-flash
       - group/auto-minimax-m3-1-flash
@@ -74,6 +75,8 @@ providers:
       - devin/swe-2
       - zcode/GLM-5.3
       - zcode/GLM-5.3-Flash
+      - workbuddy/hy3
+      - workbuddy/deepseek-v4.1-flash
       - minimax-code/MiniMax-M3.1-Flash
     name: magpie
 fallback_providers:
@@ -268,7 +271,7 @@ auxiliary:
     model: ''
 display:
   compact: true
-  personality: concise
+  personality: none
   resume_display: full
   resume_exchanges: 10
   resume_max_user_chars: 300

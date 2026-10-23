@@ -3,8 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# dsh update — 把 dsh 本体与 web profile 的插件一键更新到上游最新。
-# 插件清单读自 profile 的 package.json；github:#<sha> 锁 commit 的依赖跟上游
+# dsh update — 把 dsh 本体与两个 profile（web、dsh-tui）的插件一键更新到上游最新。
+# 插件清单读自各 profile 的 package.json；github:#<sha> 锁 commit 的依赖跟上游
 # HEAD（换 commit 前先迁移 pnpm-workspace.yaml 里绑定 commit 的 allowBuilds key），
 # 其余锁定源码依赖只提示。版本声明靠 pnpm -E + saveExact 写精确值（^ 范围曾是
 # 静默升级到不兼容版本的成因）。选版按通道稳定性 latest→next→beta→alpha，不跟
@@ -18,6 +18,7 @@ export AGENTS_ROOT
 
 readonly CLI_DIR="$AGENTS_ROOT/dsh"
 readonly WEB_DIR="$DSH_HOME/profiles/web"
+readonly TUI_DIR="$DSH_HOME/profiles/dsh-tui"
 readonly CLI_PKG='@deepseek-ai/dsh'
 readonly COOLDOWN_HOURS=24
 
@@ -25,9 +26,9 @@ usage() {
   cat <<'EOF'
 用法: dsh update [选项]
 
-把 dsh 本体（$AGENTS_ROOT/dsh）与 web profile 的插件更新到上游最新。
-插件清单读自 profile 的 package.json；github:#<sha> 锁 commit 的依赖跟上游
-HEAD，其余锁定源码（git+/git@/file:/link:）的依赖只提示不更新。
+把 dsh 本体（$AGENTS_ROOT/dsh）与两个 profile（web、dsh-tui）的插件更新到
+上游最新。插件清单读自各 profile 的 package.json；github:#<sha> 锁 commit 的
+依赖跟上游 HEAD，其余锁定源码（git+/git@/file:/link:）的依赖只提示不更新。
 
 选项:
   --check     只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
@@ -57,13 +58,13 @@ while (($#)); do
   shift
 done
 
-# 输出 TSV：kind(npm|ghrepo|git) scope(cli|web) name spec；顺序为本体、web 原序。
+# 输出 TSV：kind(npm|ghrepo|git) scope(cli|web|tui) name spec；顺序为本体、web 原序、tui 原序。
 # npm spec 剥掉范围前缀取当前版本（历史数据可能残留 ^）。
 read_targets() {
-  python3 - "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$CLI_PKG" <<'PY'
+  python3 - "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$TUI_DIR/package.json" "$CLI_PKG" <<'PY'
 import json, re, sys
 
-cli, web, cli_pkg = sys.argv[1], sys.argv[2], sys.argv[3]
+cli, web, tui, cli_pkg = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 # 锁定源码的 spec：git+ / github: / git@ / file: / link: / 任意 URL 协议
 SOURCE_LOCKED = re.compile(r'^(git\+|github:|git@|file:|link:|[a-z][a-z0-9+.-]*://)')
 GITHUB_SHA = re.compile(r'^github:([^#]+)#([0-9a-f]{7,40})$')
@@ -80,9 +81,10 @@ def kind_of(spec):
 
 cur = RANGE_PREFIX.sub("", json.load(open(cli))["dependencies"].get(cli_pkg, ""))
 print("npm\tcli\t%s\t%s" % (cli_pkg, cur))
-for name, spec in json.load(open(web))["dependencies"].items():
-	kind, out = kind_of(spec)
-	print("%s\tweb\t%s\t%s" % (kind, name, out))
+for scope, path in (("web", web), ("tui", tui)):
+	for name, spec in json.load(open(path))["dependencies"].items():
+		kind, out = kind_of(spec)
+		print("%s\t%s\t%s\t%s" % (kind, scope, name, out))
 PY
 }
 
@@ -115,10 +117,16 @@ migrate_allow_builds() {
 # 仓库源目录：从本脚本经 stow 软链解析回包内 .local/share/（源与部署同构）。
 # 不能从部署侧软链推导——pnpm 覆写后软链可能已不存在，推导失败会静默跳过回源。
 # 赋值与 readonly 分开：readlink 失败时让 set -e 中止而非吞掉错误（SC2155）
+#
+# 两个源根的深度不同，回源映射须对得上 sync_dir 的 rel 计算：
+#   SRC_AGENTS_ROOT = .../share/agents —— rel 是 "dsh"，拼出 .../share/agents/dsh/<file>
+#   SRC_DSH_HOME    = .../share/dsh    —— rel 是 "profiles/<p>"，拼出 .../share/dsh/profiles/<p>/<file>
+# 源根若直接取 .../share/agents/dsh，rel 再拼一次就成了 .../agents/dsh/dsh/——多一层，
+# 源侧文件不存在，sync_dir 会静默跳过整个安装树（回源形同虚设）。
 SRC_DSH_HOME="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")/share/dsh"
 readonly SRC_DSH_HOME
-SRC_AGENTS_DSH="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")/share/agents/dsh"
-readonly SRC_AGENTS_DSH
+SRC_AGENTS_ROOT="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")/share/agents"
+readonly SRC_AGENTS_ROOT
 
 # 把部署侧 pnpm 覆写过的文件同步回仓库源并重建 stow 软链（lockfile 除外——
 # pnpm 拒绝写软链 lockfile，部署侧必须保持真实文件，只回拷内容）。
@@ -130,19 +138,46 @@ sync_dir() {
   [[ "$rel" == "$dir" ]] && return 0 # 不在部署根下，无从回源
   for name in pnpm-lock.yaml package.json pnpm-workspace.yaml cordis.patch.yml; do
     src_file="$src_root/$rel/$name"
-    [[ -f "$dir/$name" && -f "$src_file" ]] || continue
+    [[ -f "$dir/$name" ]] || continue
+    # lockfile 的源副本允许缺省（首次同步时补建）——它存在的意义正是让部署可复现；
+    # 其余三个文件源侧必须已存在，否则无从回源
+    if [[ "$name" != pnpm-lock.yaml && ! -f "$src_file" ]]; then
+      continue
+    fi
     if ! cmp -s "$dir/$name" "$src_file"; then
-      cp "$dir/$name" "$src_file"
+      # 同理：回源失败只告警不中止，更新结果已落盘，脚本不该在这里丢掉退出码
+      if ! cp "$dir/$name" "$src_file"; then
+        printf 'dsh update: %s/%s 回源失败（源目录不可写）——请手动同步\n' "$rel" "$name" >&2
+        continue
+      fi
       printf 'dsh update: %s/%s 已同步回仓库源\n' "$rel" "$name"
     fi
     if [[ "$name" != pnpm-lock.yaml && ! -L "$dir/$name" ]]; then
-      ln -sfn "$src_file" "$dir/$name"
+      # ln 失败（同一文件、只读目录等）不得中止整脚本：更新此时已经生效，
+      # 收尾重建软链失败只该告警——set -e 会让这里直接吞掉后续所有步骤。
+      if ! ln -sfn "$src_file" "$dir/$name" 2>/dev/null; then
+        printf 'dsh update: %s/%s 软链重建失败（源与部署同文件或目录不可写）——请手动核对\n' "$rel" "$name" >&2
+        continue
+      fi
       printf 'dsh update: %s/%s 软链已重建\n' "$rel" "$name"
     fi
   done
 }
 
-sync_lockfile() { sync_dir "$1" "$AGENTS_ROOT" "$SRC_AGENTS_DSH"; }
+# lockfile 回源：部署侧 lockfile 必须是真实文件（pnpm 拒写软链），内容拷回仓库源副本。
+# 部署根有两棵（$AGENTS_ROOT 与 $DSH_HOME），按目录归属选源根——写死单一源根会让
+# web / dsh-tui profile 的 lockfile 在 pnpm add 之后到收尾 sync_dir 之间不回源。
+sync_lockfile() {
+  local dir="$1" root src_root
+  if [[ "$dir" == "$AGENTS_ROOT"/* ]]; then
+    root="$AGENTS_ROOT"
+    src_root="$SRC_AGENTS_ROOT"
+  else
+    root="$DSH_HOME"
+    src_root="$SRC_DSH_HOME"
+  fi
+  sync_dir "$dir" "$root" "$src_root"
+}
 
 # 打印 "tag|version|hours|cool"，无更新则空。JSON 走参数：stdin 已被 heredoc 占用。
 pick_version() {
@@ -202,7 +237,7 @@ command -v pnpm >/dev/null 2>&1 || {
   printf 'dsh update: 找不到 pnpm（本机在 nix profile），无法更新\n' >&2
   exit 127
 }
-for f in "$CLI_DIR/package.json" "$WEB_DIR/package.json"; do
+for f in "$CLI_DIR/package.json" "$WEB_DIR/package.json" "$TUI_DIR/package.json"; do
   [[ -f "$f" ]] || {
     printf 'dsh update: %s 不存在（应由 blue stow 从 dotfiles/mutable/agents/dsh 链出）\n' "$f" >&2
     exit 1
@@ -221,13 +256,14 @@ for row in "${target_rows[@]}"; do
   cur+=("$c")
 done
 
-declare -a source_locked=() gh_repo=() gh_old_sha=() gh_new_sha=()
+declare -a source_locked=() gh_repo=() gh_scope=() gh_old_sha=() gh_new_sha=()
 for i in "${!name[@]}"; do
   if [[ "${kind[$i]}" == git ]]; then
-    source_locked+=("${name[$i]}  ${cur[$i]}")
+    source_locked+=("${scope[$i]}  ${name[$i]}  ${cur[$i]}")
   elif [[ "${kind[$i]}" == ghrepo ]]; then
     IFS=' ' read -r repo old_sha <<<"${cur[$i]}"
     gh_repo+=("$repo")
+    gh_scope+=("${scope[$i]}")
     gh_old_sha+=("$old_sha")
     if ! new_sha=$(git ls-remote "https://github.com/${repo}.git" HEAD 2>/dev/null | cut -f1); then
       printf 'dsh update: 查询 %s 上游 HEAD 失败（检查网络）\n' "$repo" >&2
@@ -276,8 +312,8 @@ for i in "${!name[@]}"; do
   IFS='|' read -r tag ver hours cooling <<<"$line"
   note=""
   [[ "$cooling" == cool ]] && note='24h 冷却内'
-  printf '  %-*s %-11s -> %-12s [%-6s] %8sh  %s\n' \
-    "$width" "${name[$i]}" "${cur[$i]}" "$ver" "$tag" "$hours" "$note"
+  printf '  %-3s %-*s %-11s -> %-12s [%-6s] %8sh  %s\n' \
+    "${scope[$i]}" "$width" "${name[$i]}" "${cur[$i]}" "$ver" "$tag" "$hours" "$note"
   [[ $i -eq 0 ]] && printf '\n'
 done
 for j in "${!gh_repo[@]}"; do
@@ -296,7 +332,8 @@ if [[ -n "${picked[0]}" ]]; then
 fi
 compat_notes=()
 for i in "${!name[@]}"; do
-  [[ "${kind[$i]}" == npm && "${scope[$i]}" == web ]] || continue
+  [[ "${kind[$i]}" == npm ]] || continue
+  [[ "${scope[$i]}" == web || "${scope[$i]}" == tui ]] || continue
   line=${picked[$i]}
   [[ -n "$line" ]] || continue
   IFS='|' read -r _ ver _ _ <<<"$line"
@@ -338,37 +375,46 @@ if [[ -n "${picked[0]}" ]]; then
   pnpm_add "$CLI_DIR" 本体 "${CLI_PKG}@${cli_target}" || exit 1
 fi
 
-declare -a plugin_args=()
+declare -a web_args=() tui_args=()
 for i in "${!name[@]}"; do
-  [[ "${scope[$i]}" == web ]] || continue
   line=${picked[$i]}
   [[ -n "$line" ]] || continue
   IFS='|' read -r _ ver _ _ <<<"$line"
-  plugin_args+=("${name[$i]}@$ver")
+  case "${scope[$i]}" in
+    web) web_args+=("${name[$i]}@$ver") ;;
+    tui) tui_args+=("${name[$i]}@$ver") ;;
+  esac
 done
-if ((${#plugin_args[@]})); then
+if ((${#web_args[@]})); then
   printf '\ndsh update: 更新插件（%s）\n' "$WEB_DIR"
-  pnpm_add "$WEB_DIR" 插件 "${plugin_args[@]}" || exit 1
+  pnpm_add "$WEB_DIR" 插件 "${web_args[@]}" || exit 1
+fi
+if ((${#tui_args[@]})); then
+  printf '\ndsh update: 更新 dsh-tui profile 依赖（%s）\n' "$TUI_DIR"
+  pnpm_add "$TUI_DIR" 插件 "${tui_args[@]}" || exit 1
 fi
 
 for j in "${!gh_repo[@]}"; do
   repo="${gh_repo[$j]}" old_sha="${gh_old_sha[$j]}" new_sha="${gh_new_sha[$j]}"
   [[ "$new_sha" != "$old_sha" ]] || continue
+  dir="$WEB_DIR"
+  [[ "${gh_scope[$j]}" == tui ]] && dir="$TUI_DIR"
   printf '\ndsh update: 更新 github 插件 %s#%s\n' "$repo" "${new_sha:0:7}"
   # spec 里只有 repo（无包名映射），包名从 package.json 找：github spec 的键
-  gpkg=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["dependencies"]; print(next((k for k,v in d.items() if v.startswith("github:"+sys.argv[2]+"#")), ""))' "$WEB_DIR/package.json" "$repo")
+  gpkg=$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["dependencies"]; print(next((k for k,v in d.items() if v.startswith("github:"+sys.argv[2]+"#")), ""))' "$dir/package.json" "$repo")
   if [[ -z "$gpkg" ]]; then
     printf 'dsh update: 在 package.json 里找不到 repo %s 的依赖键，跳过\n' "$repo" >&2
     continue
   fi
-  migrate_allow_builds "$WEB_DIR" "$gpkg" "$old_sha" "$new_sha"
-  pnpm_add "$WEB_DIR" 插件 "github:${repo}#${new_sha}" || exit 1
+  migrate_allow_builds "$dir" "$gpkg" "$old_sha" "$new_sha"
+  pnpm_add "$dir" 插件 "github:${repo}#${new_sha}" || exit 1
 done
 
 printf '\ndsh update: 更新完成。改动的是仓库源文件（package.json / pnpm-workspace.yaml / pnpm-lock.yaml），请 git diff 后提交。\n'
 # 收尾兜底：dsh web 运行中也会把 cordis.patch.yml 写成真实文件，两侧拉平
-sync_dir "$CLI_DIR" "$AGENTS_ROOT" "$SRC_AGENTS_DSH"
+sync_dir "$CLI_DIR" "$AGENTS_ROOT" "$SRC_AGENTS_ROOT"
 sync_dir "$WEB_DIR" "$DSH_HOME" "$SRC_DSH_HOME"
+sync_dir "$TUI_DIR" "$DSH_HOME" "$SRC_DSH_HOME"
 printf 'dsh update: 需重启 dsh web 才生效（host 半边不热载）。\n'
 
 if $do_restart; then

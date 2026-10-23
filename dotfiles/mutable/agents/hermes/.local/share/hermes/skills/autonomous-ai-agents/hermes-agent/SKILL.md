@@ -559,6 +559,17 @@ Note: YOLO / `approvals.mode: off` does NOT turn off secret redaction. They are 
 
 Some shell-hook integrations require explicit allowlisting before they fire. Managed via `~/.hermes/shell-hooks-allowlist.json` — prompted interactively the first time a hook wants to run.
 
+### Personality overlays（语气/人格叠加层）
+
+`display.personality` 是唯一的档位开关；档位文本的单一真相源在 `hermes_cli/personality.py::BUILTIN_PERSONALITIES`（14 档：helpful / concise / technical / creative / teacher / kawaii / catgirl / pirate / shakespeare / surfer / noir / uwu / philosopher / hype）。
+
+- **`none` / `neutral` / `default` / 空串都规范化为「无 overlay」** —— `hermes config set display.personality none` 即干净移除注入，不留残余指令。
+- 内置档全是英文祈使句、面向通用助手。`concise` 档（"Keep responses brief and to the point"）会全程压制闲聊展开——排查「说话没感情 / 太干 / 闲聊被压缩」类问题时先查这一层，它与 SOUL/persona 的情感表达要求直接冲突。
+- 自定义档写 config.yaml 的 `personalities:` 或 `agent.personalities:` 块（后者同名优先），值可为纯文本或 dict（`system_prompt` + `tone` + `style` 三键，见 `render_personality_prompt`）。
+- `resolve_ephemeral_system_prompt`：personality 名字命中时用档位文本，**否则才回落到 `agent.system_prompt`** —— 两者二选一，不叠加。
+- 改档只在**新 session** 生效（`/new` 或 gateway `/restart`）；当前会话继续用启动时快照的 prompt。
+- 本机约定：SOUL/persona 是用户认可的基线，不主动提议改动；语气调整走 personality 与 context 注入层（00-core / domains）而不是改 persona；工程类约束（简洁、ponytail 精神）只在编码场景生效。
+
 ### Disabling the web/browser/image-gen tools
 
 To keep the model away from network or media tools entirely, open `hermes tools` and toggle per-platform. Takes effect on next session (`/reset`). See the Tools & Skills section above.

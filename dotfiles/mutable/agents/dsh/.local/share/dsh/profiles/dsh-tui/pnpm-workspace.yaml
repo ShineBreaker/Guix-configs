@@ -3,6 +3,11 @@ packages:
 
 nodeLinker: hoisted
 autoInstallPeers: false
+# 与本体、web profile 同款三项策略：预览期日更版本不卡 24h 供应链冷却；
+# saveExact 让一切 pnpm add 通道（含上游 dsh tui update 走的 dsh plugin add）
+# 都写精确版本——^ 范围漂移曾是静默升级到不兼容版本的成因。
+saveExact: true
+minimumReleaseAge: 0
 minimumReleaseAgeExclude:
   - '@deepseek-harness-tui/dsh-tui@0.16.1'
 

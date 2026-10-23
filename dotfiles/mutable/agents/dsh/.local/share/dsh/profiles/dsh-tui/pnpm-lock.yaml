@@ -21,8 +21,8 @@ importers:
         specifier: link:/home/brokenshine/Projects/Agent/dsh-plugins/dsh-atelier
         version: link:../../../../../Projects/Agent/dsh-plugins/dsh-atelier
       dsh-opencode-go:
-        specifier: 0.1.22
-        version: 0.1.22(ws@8.22.0)(zod@4.6.5)
+        specifier: 0.1.24
+        version: 0.1.24(ws@8.22.0)(zod@4.6.5)
 
 packages:
 
@@ -291,8 +291,8 @@ packages:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
     engines: {node: '>=0.3.1'}
 
-  dsh-opencode-go@0.1.22:
-    resolution: {integrity: sha512-CuIbjnRUBqYgbD6uy7NnzrCE+xa0lUEQnI6gka7e7eEfQ5jb9mlXrgBbCzozR+kC+jiIIpoFdjm9ndoq6rSi0Q==}
+  dsh-opencode-go@0.1.24:
+    resolution: {integrity: sha512-tnKnvULaP166iGKXZEDVPU0BXxtWO1HREilrUhWvpRhpZxkyyVuo2m/8FgcljW8PBZj/pji3aVUN4Qt4stOFbA==}
     engines: {dsh: '>=0.1.5-rc.1', node: ^22.19.0 || >=24.0.0}
     peerDependencies:
       '@deepseek-ai/cordis': '>=4.0.2'
@@ -821,7 +821,7 @@ snapshots:
 
   diff@8.0.4: {}
 
-  dsh-opencode-go@0.1.22(ws@8.22.0)(zod@4.6.5):
+  dsh-opencode-go@0.1.24(ws@8.22.0)(zod@4.6.5):
     dependencies:
       '@anthropic-ai/sdk': 0.129.0(zod@4.6.5)
       '@deepseek-ai/dsh-brand': 0.1.6-alpha.1
