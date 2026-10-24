@@ -9,6 +9,12 @@
 [commit]
 	gpgsign = true
 	template = "~/.config/git/gitmessage"
+[credential "https://github.com"]
+	helper = ""
+	helper = "!~/.guix-home/profile/bin/gh auth git-credential"
+[credential "https://gist.github.com"]
+	helper = ""
+	helper = "!~/.guix-home/profile/bin/gh auth git-credential"
 [credential]
 	helper = "keepassxc --git-groups"
 [credential]
