@@ -215,6 +215,7 @@ blue build
                               #:key (requirement '())
                               (auto-start? #t) (respawn? #t)
                               (environment-variables #~(environ))
+                              (log-file #f)
                               (documentation "[No documentation.]"))
   (shepherd-service
    (provision (list name))
@@ -223,9 +224,11 @@ blue build
    (start #~(make-forkexec-constructor
              (list #$@command)
              #:environment-variables #$environment-variables
-             #:log-file (string-append (getenv "XDG_STATE_HOME")
-                                       "/shepherd/" #$(symbol->string name)
-                                       ".log")))
+             #:log-file #$(if log-file
+                              log-file
+                              #~(string-append (getenv "XDG_STATE_HOME")
+                                               "/shepherd/" #$(symbol->string name)
+                                               ".log"))))
    (stop #~(make-kill-destructor))
    (auto-start? auto-start?)
    (respawn? respawn?)))
@@ -432,6 +435,7 @@ blue build
               <<waydroid-session-service>>
               <<kanata-services>>
               <<hermes-services>>
+              <<dsh-web-service>>
               <<cpu-dma-latency-service>>
               <<timer-services>>
               <<kb-backup-services>>
@@ -2797,6 +2801,53 @@ lalt grv  lctl _  _  _  _  _)
                                      "gateway" "run")
                                #:requirement '(hermes-backend)
                                #:environment-variables hermes-env)))))
+#+end_src
+
+**** dsh-web 常驻服务
+
+=dsh web= 起的就是常驻 server（cordis 应用 + HTTP/WS，浏览器只是客户端），平时经
+=bin/dsh= wrapper 的 =web= 子命令 lazy-start。本服务把 server 挂到 home-shepherd 常驻
+（等价 =hermes-gateway= 形态）：开机即热，web 窗口、手机端（remote-web-ui 插件）、
+局域网访问不再依赖首次触发；回合进行中关掉浏览器窗口任务照跑，重开即接力。
+
+- *直调 =.bin/dsh= 而非 wrapper* :: wrapper 的 =web= 子命令会分发回 =dsh-web= 脚本造成
+  递归，且其 lazy-start 语义（端口占用检测 + 开窗）与常驻服务职责重叠。=.bin/dsh= 是
+  pnpm 的稳定 symlink（指向 =.pnpm= 内当前版本），升级不漂移——与 =dsh-web= 脚本的
+  =DSH_BIN= 同款路径。stow 断链自愈由 =bin/dsh= 每次调用的 =_relink_profile= 兜底，
+  cron 定时跑 =dsh --version= 即可触发。
+- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log= —— =dsh-web= wrapper 的
+  =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），
+  shepherd 接管后该路径继续可用，零分叉。
+- *环境显式设置* :: =DSH_HOME= / =AGENTS_ROOT= 在 gexp 内运行期求值并注入，不赌
+  服务环境；=.bin/dsh= shim 内部自行解析 =node=（PATH 里的 =.guix-home= profile）。
+- *信任尾网主机名* :: =--trusted-host= 与 =dsh-web= wrapper 默认一致，手机端远程访问
+  保持可用。
+
+#+NAME: dsh-web-service
+#+begin_src scheme
+(let ([dsh-env
+       #~(append (environ)
+                 (list (string-append "DSH_HOME="
+                                      (or (getenv "DSH_HOME")
+                                          (string-append (getenv "HOME")
+                                                         "/.local/share/dsh")))
+                       (string-append "AGENTS_ROOT="
+                                      (or (getenv "AGENTS_ROOT")
+                                          (string-append (getenv "HOME")
+                                                         "/.local/share/agents")))))])
+  (list (simple-service 'dsh-web-service home-shepherd-service-type
+                        (list (home-daemon-service
+                               'dsh-web
+                               (list #~(string-append (getenv "HOME")
+                                                      "/.local/share/agents/dsh/node_modules/.bin/dsh")
+                                     "web" "--no-open" "--port" "3080"
+                                     "--trusted-host" "brokenshine-laptop.tail3889e8.ts.net")
+                               #:requirement '(graphical-session)
+                               #:environment-variables dsh-env
+                               #:log-file #~(string-append (getenv "XDG_STATE_HOME")
+                                                           "/dsh/web.log")
+                               #:documentation
+                               "dsh web server (DeepSeek Harness HTTP/WS on 127.0.0.1:3080).")))))
 #+end_src
 
 **** cpu-dma-latency
