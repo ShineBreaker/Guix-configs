@@ -37,7 +37,7 @@
 
 ## 10-github-token.fish
 
-单一事实源是 gh 凭据，`gh auth token` 动态读取、不落盘；`type -q gh` 守卫后导出 `GITHUB_TOKEN` / `GH_TOKEN`。
+单一事实源是 gh 凭据，`gh auth token` 动态读取、不落盘；`type -q gh` 守卫后导出 `GITHUB_TOKEN` / `GH_TOKEN`。token 轮换入口统一为 `gh auth login`，本文件无需改动；github.com 的 git 推拉同样走 gh（见 misc-scripts.md §凭据）。已知副作用：环境里有 `GH_TOKEN` 时 `gh auth status` 会额外显示一条 `Active account: false` 的同名账号条目，属 gh 对环境变量凭据的正常呈现，非登录态损坏。
 
 **守卫不可省**：gh 缺失时 `command gh` 走 fish 的 command-not-found 路径，其诊断输出走 shell 自身 stderr、**绕过硬重定向 `2>/dev/null`**（实测 fish 4.7），没装 gh 的机器每次启动都刷一条错。`type -q gh` 让查找根本不发生，是唯一有效的静默手段。
 

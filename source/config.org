@@ -2129,7 +2129,6 @@ polkit.addRule(function(action, subject) {
 
    ;; 环境管理
    "bubblewrap"
-   "bun"
    "direnv"
    "pnpm"
    "uv"

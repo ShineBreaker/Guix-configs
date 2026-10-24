@@ -85,6 +85,10 @@ WirePlumber 兜底脚本，加载 `~/.config/wireplumber/scripts/40-alsa/` 时�
 
 ## 凭据
 
+github.com 的 git 凭据**不走 keepassxc**：`~/.config/git/config`（本仓库 `dotfiles/immutable/utilities/.config/git/config`）为 `https://github.com` 与 `https://gist.github.com` 配了 URL 级 credential helper，直接调 `gh auth git-credential`——单一事实源是 `gh auth login`（`~/.config/gh/hosts.yml`），token 轮换只需重跑 `gh auth login`，无需动 keepassxc。URL 级 `helper = ""` 先清空全局 helper 列表，防止 keepassxc 抢先弹窗；keepassxc 只服务 codeberg 等其余 host。
+
+`~/.config/nix/gh-token.conf`（nix access-tokens）与 fish 的 `GITHUB_TOKEN`/`GH_TOKEN` 导出同源 gh，token 过期后用 `gh auth token` 重新同步。
+
 ### keepassxc-credential-setup
 
 管理 `~/.config/git-credential-keepassxc`（JSON，分 `databases` 与 `callers` 两段）。`callers` 登记「谁被允许向 KeePassXC 要凭据」，git 凭据 helper 实际由 `libexec/git-core/git` 触发。

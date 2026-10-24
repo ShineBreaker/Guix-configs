@@ -128,8 +128,8 @@
 
 - 每个内嵌脚本所在的标题下，用 org 正文说明用途、运行时机、依赖与不变量；需要结构化元数据时使用标题的 `:PROPERTIES:` 抽屉（已有 `CUSTOM_ID` 约定）。
 - 代码块用 `#+NAME:` 命名，必要时加 `#+CAPTION:` 一句话说明。
-- 代码块内只保留短分类标签与关键警示（它们会进入 tangle 产物）。
-- 遵循 `source/AGENTS.md` 的 org 写法：`=code=` 两侧留 ASCII 空白或标点，全角标点。
+- 代码块内原则上不写解释性注释，机制说明、不变量与注意事项一律移入块旁正文；仅允许保留极简分节标签、按需启停的 `;; <<ref>>` 开关、目标配置文件头注释与必要的 shebang。
+- 遵循 `source/AGENTS.md` 的 org 写法与 `/unslop` 平实表达规范：`=code=` 与 `~code~` 两侧留 ASCII 空白或标点，全角标点，禁用破折号 `——` 与空洞修辞。
 - 验证：`blue check` 与 `blue --dry-run rebuild`；并把改动前后的 tangle 产物逐文件 diff，确认差异只在注释与预期改动。
 
 ## 6. 接口变更
@@ -156,7 +156,7 @@
 5. **完成判据**：差异为空，或每一处差异都在「变更记录」里说明原因。
 6. **静态检查**：§4 里对应语言的检查全部通过；`config.org` 额外对比改动前后的全部 tangle 产物。
 7. **部署位置陷阱**：
-   - `gate-core.sh` 优先加载已部署的 `~/.config/agents/anchors-lib.sh`：测试源码版本时用临时 `HOME`。
+   - `gate-core.sh` 优先加载已部署的 `~/.agents/anchors-lib.sh`：测试源码版本时用临时 `HOME`。
    - `blueprint.scm` 以 cwd 为 `%repo-root`：放在仓库副本里测试。
 8. **即时生效的文件**：`dotfiles/mutable/` 下的包由 Stow 直链仓库源码，`blueprint.scm` 由 `blue` 从 cwd 加载——两者改源即生效，用户的下一次调用就用上了未验证的新版本。先在 `/tmp` 副本上跑完本节的基线、用例、沙箱与比较，通过后再一次性换回，别把半验证状态留给用户。
 

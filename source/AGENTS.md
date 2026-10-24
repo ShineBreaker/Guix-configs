@@ -36,7 +36,7 @@ source/
 ### Noweb 机制
 
 - 块命名 `#+NAME: <block-name>`，引用其他块写 `<<block-name>>`（Org 模板展开，非 Scheme 语法）。
-- `main` 块是**唯一总装配表**：所有叶子块靠 `<<ref>>` 挂进 `%home` 与 `%system` 两个表单。注释掉 `<<ref>>` 即停用该功能块——被注释的 `<<ref>>` 是刻意保留的开关，**不是死代码，不要清理**。
+- `main` 块是**唯一总装配表**：所有叶子块靠 `<<ref>>` 挂进 `%home` 与 `%system` 两个表单。注释掉 `<<ref>>` 即停用该功能块，被注释的 `<<ref>>` 是刻意保留的开关，**不是死代码，不要清理**。
 - **shepherd 服务复用四个 helper 块**：`home-daemon-service-helpers`（常驻用户进程）、`root-daemon-service-helpers`（常驻系统进程）、`root-one-shot-service-helpers`（开机一次），三者统一了日志落点与环境约定；`flatpak-service-helpers` 的 `%flatpak-update-script` 供 system / user 两侧 flatpak 定时更新共用。
 
 ### 块级编辑操作
@@ -55,8 +55,9 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 
 ### Org 正文与内嵌脚本
 
-- 面向入门者的解释写在块旁正文（不进 tangle 产物）；代码块内只留短分类标签与关键警示（会进产物）。
-- 等宽标记 `=code=` 两侧必须是 ASCII 空白或 ASCII 标点——紧贴中文标点或汉字会**静默失效**并引发相邻标记误配对，一律「标记外加空格」。
+- **注释外置到正文**：代码块内原则上不写解释性注释，机制说明、参数意图、调用链路、不变量与维护注意事项一律移入块旁 Org 正文（不进 tangle 产物）；代码块内仅允许保留极简分节标签（如包清单分类）、按需启停的 `;; <<ref>>` 开关、生成到目标系统的配置文件自身的头注释（如 udev 规则字符串内的注释）与必要的 shebang。
+- **反 AI 腔与平实表达（遵循 `/unslop`）**：正文直陈机制、数字、具体动作与因果，写「某组件做了什么」，不写主观感受或空洞修辞；禁用破折号 `——`（改用句号、逗号或分号断句）；少用冒号作句中连接词；避免列表项粗体标签后紧跟同义复述；删除「核心目标是」「从根本上」「天然兼容」等铺垫套话，长句拆短，一行一事。
+- 等宽标记 `=code=` 与 `~code~` 两侧必须是 ASCII 空白或 ASCII 标点，紧贴中文标点或汉字会**静默失效**并引发相邻标记误配对，一律「标记外加空格」。
 - 只写可确证的行为（能从代码、数据表或上游源码验证），不臆测历史原因。
 - **内嵌脚本块**（sh / fish / js 块，以及 `program-file` / `computed-file` / `mixed-text-file` / `render-script` 生成的脚本）必须有 `#+NAME:`，必要时加 `#+CAPTION:`；用途、调用方、失败语义与不变量写在块旁正文；新增命名脚本块时在 `docs/scripts/README.md` 的「config.org 内嵌脚本」表登记。
 
@@ -100,8 +101,8 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 
 - **nftables（接口信任模型）**：规则集由 `nftables-service-type` 开机全局加载，input/forward 默认 drop，仅放行 DHCP、ICMP、established/related 与 Tailscale WireGuard 端口（udp 41641）。`trusted_ifaces` 集合内的接口（`virbr0` 虚拟机网桥、`tailscale0`）整接口全端口放行；NetworkManager dispatcher 只动态增删该集合元素（可信 WiFi 加入发起连接的无线接口），**绝不执行 `flush ruleset`**。
 - **WiFi 信任白名单**：以 NM Profile 名（`CONNECTION_ID`，非 SSID）为准，存在加密文件 `wifi-trust.age` 中。Dispatcher 脚本在内存管道里解密比对、不落盘明文；私钥缺失时只按不可信处理，不阻断联网。脚本经 activation 装到 `/etc/NetworkManager/dispatcher.d/10-trusted-ssid`（该目录是持久挂载点，规则文件随系统代原子切换）。
-- **WiFi 省电策略（`nm-powersave-conf`）**：连接时恒不省电（低延迟、远程操控优先）。NM 每次连接都把省电重置为开启，用 dispatcher 在 up 事件补救会被 NM 默认行为覆盖，故改为在 NM `[connection]` 段写默认 `wifi.powersave=2`——activation 装到 `/etc/NetworkManager/conf.d/wifi-powersave.conf`（旧的 `20-wifi-powersave` dispatcher 已删，activation 会清理残留）。AC/电池切换由 tuned profile 写 `/sys/module/iwlmvm/parameters/power_scheme`（1=active / 3=低功耗）。注意 `[connection]` 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
-- **OpenSSH**：显式声明 `permit-root-login 'prohibit-password`——root 锁密码、仅密钥登录，防上游默认漂移。
+- **WiFi 省电策略（`nm-powersave-conf`）**：连接时恒不省电（低延迟、远程操控优先）。NM 每次连接都把省电重置为开启，用 dispatcher 在 up 事件补救会被 NM 默认行为覆盖，故改为在 NM `[connection]` 段写默认 `wifi.powersave=2` ，由 activation 装到 `/etc/NetworkManager/conf.d/wifi-powersave.conf` （旧的 `20-wifi-powersave` dispatcher 已删，activation 会清理残留）。AC/电池切换由 tuned profile 写 `/sys/module/iwlmvm/parameters/power_scheme` （1=active / 3=低功耗）。注意 `[connection]` 段枚举与 profile 属性不同：0=NM默认 1=ignore 2=disable省电 3=enable省电。
+- **OpenSSH**：显式声明 `permit-root-login 'prohibit-password` ，root 锁密码、仅密钥登录，防上游默认漂移。
 - **mihomo-daemon**：`-d` 把数据目录（geodata / cache / UI / proxies）归位到 `/var/lib/mihomo`，随 @data 子卷持久化。启动经 `mihomo-run` 包装：解密 `mihomo-subscriptions.age` 后用 envsubst 渲染模板到 `/var/lib/mihomo/config.yaml` 再 exec；解密失败降级为空订阅启动（直连仍可用），不触发 respawn 风暴。模板侧与换订阅操作见 `dotfiles/immutable/system/AGENTS.md`。
 
 ## 用户层与自定义包
