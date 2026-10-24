@@ -8,7 +8,9 @@ description: "维护 dsh（DeepSeek Harness）：安装 / 更新 / 移除插件�
 dsh 经 pnpm 装在 `~/.local/share/agents/dsh`（本体，安装聚合根 `$AGENTS_ROOT/dsh`；2026-10-02 从 `$DSH_HOME/_cli` 迁来）与 `$DSH_HOME/profiles/web`（插件），配置源在
 Guix-configs 仓库 `dotfiles/mutable/agents/dsh/`，GNU Stow no-folding 逐文件软链。插件语义、
 版本锁定、远程访问、排障细节以仓库内 `dotfiles/mutable/agents/dsh/AGENTS.md` 为权威，本
-skill 不重复，只覆盖「更新 → 验证 → 源同步」工作流及其静默失败点。
+skill 不重复，只覆盖「更新 → 验证 → 源同步」工作流及其静默失败点。架构级调研或集成
+（server/client 形态、多客户端接入、backend 扩展接缝）见
+`references/dsh-architecture.md`。
 
 ## 0. 环境前置（每次都要）
 
