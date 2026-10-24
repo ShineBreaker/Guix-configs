@@ -143,7 +143,7 @@ quirks — lives in `references/` and is loaded on demand via
 
 ```
 Is it a cross-task working principle that should shape behavior before the agent picks a skill?  (a safety boundary, a verification discipline, a hard rule that applies regardless of task type)
-    → Global-context domain: dotfiles/immutable/agents/.config/agents/context/domains/<name>.md
+    → Global-context domain: dotfiles/immutable/agents/.agents/context/domains/<name>.md
     → universality bar (the user's explicit rule): promote ONLY if the principle holds regardless of task type, repo, and tool. Useful but repo/tool-specific material goes into that repo's own self-built skills instead — and prefer extending an existing self-built skill over opening a new domain. A domain is a per-session tax on every future session's prompt budget.
     → survey the self-built inventory before proposing a new domain: the repo's own `.agents/skills/`, the dotfiles self-built skills, and the hermes skill tree. A principle that is useful but narrower than universal gets extended in place in one of those, and the survey also surfaces content worth lifting into a domain.
     → single source of truth: the domain file carries only the decision kernel (the classes, the self-questions, the one hard rule). The per-case list stays in the skill that owns it, reached by a one-line pointer. Copying a skill's detail table into an always-on domain file pays that detail's tokens in every session and leaves two copies to rot.
@@ -672,7 +672,7 @@ such directory exists on disk. If you need to revive it (e.g. a
 restore this row.
 **Scope guard:** this categorization rule applies **only** to
 `~/.local/share/hermes/skills/`. The directory
-`~/.config/agents/skills/` is a separate Guix Home immutable
+`~/.agents/skills/` is a separate Guix Home immutable
 deployment and must NOT be touched when reorganizing hermes skills.
 
 **Anti-pattern: top-level `<skill-name>/`.** Creating `skills/<x>/SKILL.md`

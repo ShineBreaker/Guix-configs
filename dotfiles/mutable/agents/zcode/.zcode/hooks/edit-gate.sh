@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: MIT
 
 # edit-gate.sh — zcode PreToolUse hook for Write/Edit（协议适配器；判定语义
-# 在 ~/.config/agents/gate-core.sh，本脚本只做协议转换）。
+# 在 ~/.agents/gate-core.sh，本脚本只做协议转换）。
 #   stdin  - {"tool_name","tool_input":{"file_path","content|new_string"},"cwd"}
 #   stdout - {"additionalContext":"..."} | 空
 #   exit   - 0 放行；2 = block（路径与敏感拦截统一 exit 2，见
@@ -13,7 +13,7 @@
 
 set -uo pipefail
 
-CORE="$HOME/.config/agents/gate-core.sh"
+CORE="$HOME/.agents/gate-core.sh"
 # 人工总开关固定路径（须在核缺失降级之前检查——gate-core.md）
 GATE_PAUSE_FILE="/run/agent-gate.off"
 
@@ -62,7 +62,7 @@ fi
 
 # ─── Phase 1: 调决策核（待检内容经 stdin 传入）──────────────────────────────
 if [[ ! -f "$CORE" ]]; then
-  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），路径与敏感信息检查降级跳过\n' >&2
+  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.agents/），路径与敏感信息检查降级跳过\n' >&2
   exit 0
 fi
 

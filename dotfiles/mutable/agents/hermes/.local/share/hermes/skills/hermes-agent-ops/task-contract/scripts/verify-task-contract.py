@@ -162,10 +162,10 @@ def _(t):
 
 @check("12", "no_external_path_dependencies")
 def _(t):
-    """SKILL.md 不应引用 ~/.config/agents/skills/ 或 ~/.hermes/skills/ 等外部 skill 源路径。"""
+    """SKILL.md 不应引用 ~/.agents/skills/ 或 ~/.hermes/skills/ 等外部 skill 源路径。"""
     p = SKILL_ROOT / "SKILL.md"
     text = p.read_text()
-    forbidden = ["~/.config/agents/skills/", "~/.hermes/skills/"]
+    forbidden = ["~/.agents/skills/", "~/.hermes/skills/"]
     hits = [f for f in forbidden if f in text]
     if hits:
         return ("FAIL", f"external path references found: {hits}")

@@ -1,6 +1,6 @@
 # hub 第三方 skill 安装与安全裁决（hermes skills tap/install 路线）
 
-> `hermes-skill-curation` §1.7 三源里 **hub 区**的补充参考：`hermes skills install` 装进 hub 的第三方 skill 工作流、skills-guard-v2 拦截后的裁决协议、生态调研要点。`~/.config/agents/skills/` 锁内条目走 askill（见 `askill-third-party-skills.md`），两者不混。
+> `hermes-skill-curation` §1.7 三源里 **hub 区**的补充参考：`hermes skills install` 装进 hub 的第三方 skill 工作流、skills-guard-v2 拦截后的裁决协议、生态调研要点。`~/.agents/skills/` 锁内条目走 askill（见 `askill-third-party-skills.md`），两者不混。
 
 ## 1. hub 安装速查（2026-09-06 实测，Hermes v0.21.0）
 

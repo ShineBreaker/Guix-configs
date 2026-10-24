@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: MIT
 
 # bash-gate.sh — zcode PreToolUse hook for Bash（协议适配器；判定语义在
-# ~/.config/agents/gate-core.sh，本脚本只做协议转换）。
+# ~/.agents/gate-core.sh，本脚本只做协议转换）。
 #   stdin  - {"tool_name","tool_input":{"command"},"cwd"}
 #   stdout - {"decision":"allow"} | {"additionalContext":"..."} | 空
 #   exit   - 0 放行；2 + stderr = block
@@ -14,7 +14,7 @@
 
 set -uo pipefail
 
-CORE="$HOME/.config/agents/gate-core.sh"
+CORE="$HOME/.agents/gate-core.sh"
 # 人工总开关固定路径（须在核缺失保底之前检查——gate-core.md）
 GATE_PAUSE_FILE="/run/agent-gate.off"
 
@@ -63,7 +63,7 @@ fi
 # 核未部署（blue home 未跑）：sudo 保底 + stderr 提醒，其余放行
 if [[ ! -f "$CORE" ]]; then
   case "$CMD" in *sudo*) deny "冻结命令「sudo」禁止执行（gate-core 未部署，保底拦截）。" ;; esac
-  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.config/agents/），gate 仅保底 sudo 检查\n' >&2
+  printf '[警告] gate-core.sh 未部署（dotfiles/immutable/agents/.agents/），gate 仅保底 sudo 检查\n' >&2
   exit 0
 fi
 

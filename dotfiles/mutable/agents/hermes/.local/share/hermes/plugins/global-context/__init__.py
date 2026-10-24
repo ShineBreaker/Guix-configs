@@ -17,7 +17,7 @@ select 结果门控，文件不在当次清单内即返回空串。subagent / cr
 拦截承担）。
 
 selector 不可用 / 无输出时 fallback：恒注入 contextDir（CONTEXT_DIR 或
-$XDG_CONFIG_HOME/agents/context，与 selector 内定逻辑一致）下存在的
+$HOME/.agents/context，与 selector 内定逻辑一致）下存在的
 00-core.md 与 INDEX.md 两件，保证 blue home 部署前插件不空转。
 调用 selector 只以 stdout 为契约（忽略 returncode）。
 
@@ -68,8 +68,7 @@ def _fallback_context_dir() -> Path:
     env = os.environ.get("CONTEXT_DIR")
     if env:
         return Path(env)
-    xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
-    return Path(xdg) / "agents" / "context"
+    return Path.home() / ".agents" / "context"
 
 
 def _fallback_paths() -> list[Path]:
@@ -79,7 +78,7 @@ def _fallback_paths() -> list[Path]:
 
 def _selector_path() -> str:
     return os.environ.get("CONTEXT_SELECT_BIN") or str(
-        Path.home() / ".config" / "agents" / "context-select.sh"
+        Path.home() / ".agents" / "context-select.sh"
     )
 
 

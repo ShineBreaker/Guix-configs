@@ -19,7 +19,7 @@ Restrictions stack in three layers. Each layer can only **add** restrictions —
 | Layer         | Where                                 | Who edits                    | Scope                       |
 | ------------- | ------------------------------------- | ---------------------------- | --------------------------- |
 | 1. Code floor | `pi-gate/index.ts`                    | nobody (compiled in)         | universal, every project    |
-| 2. Global     | `~/.config/agents/anchors.json`       | human only (**meta-frozen**) | this machine, every project |
+| 2. Global     | `~/.agents/anchors.json`       | human only (**meta-frozen**) | this machine, every project |
 | 3. Project    | `<project-root>/.agents/anchors.json` | **you, via this skill**      | one repo                    |
 
 **Code floor (always on, do NOT duplicate in config):** `sudo`; interactive editors/pagers/REPLs (`vim`/`less`/`man`/bare `python`/`node`); `git add -p`, `git rebase -i`, `git commit` without `-m`; destructive `rm` (`rm -rf`, or `rm` targeting `/`, `~`, `$HOME`, `*`, `.`, `..`) — plain `rm` only gets a soft hint to use `trash`/`mv`.
@@ -58,7 +58,7 @@ Ask what you actually want to happen, then pick the narrowest tool:
 ## Security invariants (do not try to work around these)
 
 - **Ratchet:** your project gate cannot un-freeze `sudo`, the interactive-command bans, the `rm` protection, or anything in the global file. Adding `"frozen_commands": []` does nothing to lower layers.
-- **The global `~/.config/agents/anchors.json` is meta-frozen** — pi-gate blocks agents from editing it. If a rule belongs everywhere on this machine, ask a human to add it there.
+- **The global `~/.agents/anchors.json` is meta-frozen** — pi-gate blocks agents from editing it. If a rule belongs everywhere on this machine, ask a human to add it there.
 - **Your project gate is agent-writable by default** (that is the point of this skill). To lock a project gate so agents cannot weaken it, add `"_meta_frozen": true` — pi-gate will then refuse agent edits to that file too. Use this for rules a human has ratified (e.g. production-deploy bans).
 - Sensitive-content detection (API keys, private keys, tokens) always runs on `write`/`edit` content regardless of gates.
 

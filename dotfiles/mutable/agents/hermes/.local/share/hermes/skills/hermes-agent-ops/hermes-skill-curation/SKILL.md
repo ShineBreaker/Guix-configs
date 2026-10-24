@@ -1,6 +1,6 @@
 ---
 name: hermes-skill-curation
-description: "Use when the user wants to add, remove, prune, reorganize, audit, or curate the Hermes Agent skill library on disk. Triggers: '精简 skill', '删掉 XX skill', 'skill 太多', '哪些 skill 在用', '清理 Hermes skill', 'skill 审计', 'trash skill 目录', 'bundled skill 删不掉', 'curator 暂停', 'archiving skills', '分类 skill', '重新分类', 'skill 太散', 'skill 没分类', '重组 skill', 'reorganize skills', '创建分类目录', '新建分类', or any bulk add/remove/regroup of skill directories. Covers: skills_list 视图 vs 磁盘真实差异、bundled read-only 0555 权限位破解、XDG trash 范式(用户偏好 rm→trash)、用户 dotfile 源(Guix stow)与 Hermes 安装源(bundle)边界、分类重组(伪分类→真分类)、git 索引状态对 mv 的影响、作用域边界(本 skill 默认只管 ~/.local/share/hermes/skills/,不动 ~/.config/agents/skills/ 或 ~/.hermes/skills/ 除非用户明确授权)。Companion to skill-authoring: this skill handles *reorganizing existing* skills, while skill-authoring §9 routes placement for *new* skills."
+description: "Use when the user wants to add, remove, prune, reorganize, audit, or curate the Hermes Agent skill library on disk. Triggers: '精简 skill', '删掉 XX skill', 'skill 太多', '哪些 skill 在用', '清理 Hermes skill', 'skill 审计', 'trash skill 目录', 'bundled skill 删不掉', 'curator 暂停', 'archiving skills', '分类 skill', '重新分类', 'skill 太散', 'skill 没分类', '重组 skill', 'reorganize skills', '创建分类目录', '新建分类', or any bulk add/remove/regroup of skill directories. Covers: skills_list 视图 vs 磁盘真实差异、bundled read-only 0555 权限位破解、XDG trash 范式(用户偏好 rm→trash)、用户 dotfile 源(Guix stow)与 Hermes 安装源(bundle)边界、分类重组(伪分类→真分类)、git 索引状态对 mv 的影响、作用域边界(本 skill 默认只管 ~/.local/share/hermes/skills/,不动 ~/.agents/skills/ 或 ~/.hermes/skills/ 除非用户明确授权)。Companion to skill-authoring: this skill handles *reorganizing existing* skills, while skill-authoring §9 routes placement for *new* skills."
 version: 1.3.0
 license: MIT
 metadata:
@@ -17,9 +17,9 @@ metadata:
 
 1. **三种 skill 源,不要混**:
    - **Hermes bundled**:`~/.local/share/hermes/skills/<category>/<name>/` —— Hermes 安装包自带,read-only 权限位 `0555`,**不在任何仓库源里**。`blue home` 不会回滚它(它走 `source/nix/configuration/programs/hermes.nix` 装 `full` 输出)。精简它就是直接动磁盘。**正确卸载路径**:`hermes skills opt-out --yes` 写 `~/.local/share/hermes/.no-bundled-skills` marker,后续 `hermes update`/`skills sync` 不会 seed;`opt-out --remove --yes` 还会**删所有未修改的 bundled 副本**(user-edited 和 local/hub 不动)。**不要直接 trash builtin**——marker 不写,下次 self-update 仍会从 upstream 拉回。
-   - **用户 dotfile 源**:`~/.config/agents/skills/<name>/` —— Guix Home 的 `home-dotfiles-service-type` 软链接到 `/gnu/store` 只读副本。**不在** `~/.local/share/hermes/skills/` 下,但**会**被 `skills_list` 报出来。要精简必须改 `dotfiles/immutable/agents/.config/agents/skills/<name>/` 源 + `blue home`,**不**直接 rm 部署位置(被 `blue home` 软链接覆盖回来)。详细不变量见 `guix-configs-workflow` skill 不变量 #2。**local skill 三种子类型**:
+   - **用户 dotfile 源**:`~/.agents/skills/<name>/` —— Guix Home 的 `home-dotfiles-service-type` 软链接到 `/gnu/store` 只读副本。**不在** `~/.local/share/hermes/skills/` 下,但**会**被 `skills_list` 报出来。要精简必须改 `dotfiles/immutable/agents/.agents/skills/<name>/` 源 + `blue home`,**不**直接 rm 部署位置(被 `blue home` 软链接覆盖回来)。详细不变量见 `guix-configs-workflow` skill 不变量 #2。**local skill 三种子类型**:
      - **直接目录** (e.g. `agent-browser/`、`emacs-config/`) — `Path.is_dir()` True,trash 即可
-     - **git submodule** (e.g. `md2html/`, `.config/agents/skills/<sub>/`) — `Path.is_dir()` 且有 `.git/`;trash 目录 OK,但仓库源要 `git submodule deinit <path>` + 从 `.gitmodules`/`git config` 删条目
+     - **git submodule** (e.g. `md2html/`, `.agents/skills/<sub>/`) — `Path.is_dir()` 且有 `.git/`;trash 目录 OK,但仓库源要 `git submodule deinit <path>` + 从 `.gitmodules`/`git config` 删条目
      - **cc-switch 软链接** (e.g. `docx -> ~/.config/cc-switch/skills/docx`) — `Path.is_symlink()` True;**只 unlink 软链接,不动 cc-switch 那边的源目录**(cc-switch 自己用 SQLite 状态管理,删它会破坏 cc-switch 切换)
    - **Hub 安装** `~/.hermes/skills/<name>/` —— `hermes skills install <hub-id>` 装的,跟 bundled 同级,受 `hermes skills uninstall` 管理。精简用 CLI,**不**直接动磁盘。**注意**:`hermes skills uninstall <name>` **只接受 hub-installed**;对 local/bundled 报 `"is not a hub-installed skill (may be a builtin)"` 并拒绝。`hermes skills config` **必须 PTY**(报 `'requires an interactive terminal'`),AI 跑不了。
 2. **删文件一律走 trash,不用 rm**。用户明确偏好:`hermes-skill-curation` 范围内所有"删除 skill 目录"必须 `mv` 到 `~/.local/share/Trash/files/`,**不**用 `rm`/`rm -rf`;同时写 `~/.local/share/Trash/info/<name>.trashinfo`(XDG 规范)以便恢复。
@@ -48,7 +48,7 @@ metadata:
    验证 deploy 真的生效的方式见 §1.5 —— `do_list` 是 source of truth,`0 disabled` 是最低门槛。
 
 7. **作用域边界:本 skill 默认只管 `~/.local/share/hermes/skills/`**。
-   - **绝对不要碰 `~/.config/agents/skills/`**(用户 dotfile 源 + 软链接到 `/gnu/store` 只读副本,改动必须通过 `blue home` 部署,直接编辑会被覆盖;**且该目录下 skill 跟本 skill 库是 separate 的 24 个独立 skill**,2026-07-05 用户明令"不要碰 ~/.config/agents/skills/ 里面的东西")
+   - **绝对不要碰 `~/.agents/skills/`**(用户 dotfile 源 + 软链接到 `/gnu/store` 只读副本,改动必须通过 `blue home` 部署,直接编辑会被覆盖;**且该目录下 skill 跟本 skill 库是 separate 的 24 个独立 skill**,2026-07-05 用户明令"不要碰 ~/.agents/skills/ 里面的东西")
    - **不要碰 `~/.hermes/skills/`**(Hub 安装源,受 `hermes skills uninstall` 管理,走 CLI 不动磁盘)
    - **不要碰 Hermes 安装源**(`/gnu/store/<hash>-hermes-*/skills/` 或 `~/Projects/Agent/hermes-agent/skills/`),bundled skill 走 `hermes skills opt-out`
    - 如果任务确实需要跨多个源(如批量同步),**先 clarify 询问用户授权范围**,列出"将影响 X 个 skill 在 Y 个位置"的具体清单 + 影响预估,等用户拍板再动手
@@ -286,7 +286,7 @@ cd ~/Projects/Config/Guix-configs
 git status -s dotfiles/mutable/agents/hermes/.local/share/hermes/skills/
 
 # 4. 作用域边界确认:其他源未碰
-ls /home/brokenshine/.config/agents/skills/ | wc -l   # 应跟重组前一致
+ls /home/brokenshine/.agents/skills/ | wc -l   # 应跟重组前一致
 ```
 
 输出报告:「搬 N 个 / 新建 M 个分类 / 删 K 个空分类 / SKILL.md 总数保持 X / enabled Y disabled 0 / 其他作用域源未触碰 (24/24 原样)」。
@@ -302,9 +302,9 @@ ls /home/brokenshine/.config/agents/skills/ | wc -l   # 应跟重组前一致
 - ❌ **直接 trash builtin skill 当作"已卸载"** — 必须用 `hermes skills opt-out --yes` 写 `.no-bundled-skills` marker,否则下次 `hermes update` 拉回。trash 只是删副本,不是卸载语义
 - ❌ **`hermes skills uninstall <local-skill>`** — local 不接受 uninstall,会报 "is not a hub-installed skill";要走 trash
 - ❌ **`hermes skills config` 试图 echo 走 stdin** — 报 "requires an interactive terminal",必须 PTY,AI 跑不了
-- ❌ **删 cc-switch 软链接指向的真实目录** — 软链接 `~/.config/agents/skills/docx` 指向 `~/.config/cc-switch/skills/docx`,cc-switch 用 SQLite 状态管理;只 `os.unlink` 软链接,不要删 cc-switch 那边的源
+- ❌ **删 cc-switch 软链接指向的真实目录** — 软链接 `~/.agents/skills/docx` 指向 `~/.config/cc-switch/skills/docx`,cc-switch 用 SQLite 状态管理;只 `os.unlink` 软链接,不要删 cc-switch 那边的源
 - ❌ **`git mv` 对未跟踪目录直接用** — `git status` 显示 `??` 的目录不在 git 索引里,`git mv` 会报"fatal: source directory is empty"而不报错其实是 silent 跳过。**必须先 `git add <untracked>` 再 `git mv`**,否则 git history 断成两段(见 §1.8)
-- ❌ **分类重组时跨作用域** — 比如同时改 `~/.local/share/hermes/skills/` **和** `~/.config/agents/skills/`,后者的 skill 是 separate 24 个独立 skill,改动走 `blue home` 部署,直接编辑会被覆盖。**严格守住 §1.7 边界**,要跨就先 clarify 用户授权
+- ❌ **分类重组时跨作用域** — 比如同时改 `~/.local/share/hermes/skills/` **和** `~/.agents/skills/`,后者的 skill 是 separate 24 个独立 skill,改动走 `blue home` 部署,直接编辑会被覆盖。**严格守住 §1.7 边界**,要跨就先 clarify 用户授权
 - ❌ **盲目新建分类** — 看到两个 skill 没分类就开 `<新分类>/` 而不复用现有分类。每次新建分类前问自己:**现有 12 个分类里,真的没有任何一个语义上能容纳吗?** 用户硬偏好"先压入现有,只有在完全没合理文件夹时才新建"
 - ❌ **只写分类 DESCRIPTION.md,不写 skill 自己的 SKILL.md** — DESCRIPTION 是分类元数据(描述整个分类边界),SKILL.md 才是 skill 元数据。新建分类 + 搬 skill 时,两者都要写,缺一不可(2026-07-05 重组时只写了 DESCRIPTION,后续给具体 skill 时必须补 SKILL.md)
 - ❌ **execute_code / patch 工具在 hermes skill 文件上 timeout / blocked** — 这是 sandbox 拦截的「人工审批 + 沙箱限制」信号,**不要重试**,**不要换工具重新尝试同样效果**,改用直接终端命令(`mkdir` / `mv` / `cat > file <<EOF`)或 `skill_manage` 管理 SKILL.md
@@ -373,7 +373,7 @@ Q5: find-skills / pack-guix / 浏览器自动化 / 社交 CLI 等小项(逐项)
   - §5 **分类重组**(Reorganize 用,新增)— §5.1 盘点脚本 `reorganize-survey.sh` + §5.2 执行脚本 `reorganize-execute.sh`(处理 git 未跟踪 + chmod + trash + 验证 0 disabled)+ §5.3 cross-check 必问表
 - `references/audit-patterns.md` — 写审计/检查脚本的具体技巧库(JSONC 解析、Traceback tail 提取、yaml/CHECKS key parity、文件截断陷阱、灾难性回溯陷阱)。跟 §3 「❌ 用 exclude 绕过真实问题」配套——读完之后知道怎么直接解决问题而不是 exclude。
 - `references/hub-third-party-install.md` — 第三方 skill 走 `hermes skills tap/install` 装进 hub 区的工作流 + skills-guard-v2 拦截后的裁决协议（审读内容→grep 规则正则→force 由用户拍板）+ hermes 生态调研要点（OMH 模型机制、awesome 索引等）。
-- `references/askill-third-party-skills.md` — `~/.config/agents/skills/` 锁内条目的 askill 声明式安装路线（与 hub 路线互斥，别混）。
+- `references/askill-third-party-skills.md` — `~/.agents/skills/` 锁内条目的 askill 声明式安装路线（与 hub 路线互斥，别混）。
 
 ## 7. Companion skills
 

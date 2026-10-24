@@ -2,7 +2,7 @@
 
 [English](./README.md)
 
-ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际强制的 trailer 是 `Assisted-by`，其格式（`Assisted-by: <AGENT> (<MODEL>) <EMAIL>`）来自 `~/.config/agents/context/domains/coding.md` 的 commit 规范——`~/.config/git/gitmessage` 只定义提交类型清单。
+ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际强制的 trailer 是 `Assisted-by`，其格式（`Assisted-by: <AGENT> (<MODEL>) <EMAIL>`）来自 `~/.agents/context/domains/coding.md` 的 commit 规范——`~/.config/git/gitmessage` 只定义提交类型清单。
 
 两层机制，与任何知识库/agent 集成刻意无关：
 

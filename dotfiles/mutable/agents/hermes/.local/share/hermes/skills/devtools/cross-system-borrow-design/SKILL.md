@@ -32,7 +32,7 @@ metadata:
 |---|---|---|
 | 借鉴 agent 体系 | `MiMoCode/actor/` | 本机 `atelier` 扩展 |
 | 借鉴记忆体系 | `MiMoCode/memory/` | 本机 `agenote` + `kb` |
-| 借鉴 skill 注册 | MiMoCode `skill/discovery.ts` 远端 pull | 本机 `~/.config/agents/skills/` |
+| 借鉴 skill 注册 | MiMoCode `skill/discovery.ts` 远端 pull | 本机 `~/.agents/skills/` |
 | 借鉴 review 流程 | opencode superpowers `code-reviewer` skill | 本机 `code-reviewer` skill |
 | 借鉴 patch 工作流 | opencode `patch.ts` 工具 | 本机某个 patch 工具 |
 

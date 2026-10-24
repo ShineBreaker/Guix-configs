@@ -9,7 +9,7 @@
 # 见 docs/scripts/context-select.md。
 set -uo pipefail
 
-CTX_BASE="${XDG_CONFIG_HOME:-$HOME/.config}/agents"
+CTX_BASE="$HOME/.agents"
 CTX_DIR="${CONTEXT_DIR:-$CTX_BASE/context}"
 
 # ─── 注入映射表（有序：恒注入在前，域文件在后）───────────────────────────────

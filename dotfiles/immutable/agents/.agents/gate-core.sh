@@ -27,7 +27,7 @@ DEFAULT_MERGED='{"frozen_commands":["sudo"],"frozen_paths":[],"frozen_globs":[],
 # lib 定位：部署位置优先——home-dotfiles 把各文件复制成独立 store 项，
 # 同目录查找在部署形态必然落空（不变量见 gate-core.md §部署形态约束）。
 ANCHORS_LIB=""
-for candidate in "$HOME/.config/agents/anchors-lib.sh" "$LIB_DIR/anchors-lib.sh"; do
+for candidate in "$HOME/.agents/anchors-lib.sh" "$LIB_DIR/anchors-lib.sh"; do
 	if [[ -f "$candidate" ]]; then
 		ANCHORS_LIB="$candidate"
 		break
@@ -406,7 +406,7 @@ gate_bash() {
 check_meta_frozen() {
 	if [[ "$BASENAME" == "anchors.json" ]]; then
 		local GA_RESOLVED
-		GA_RESOLVED="$(resolve_path "$HOME/.config/agents/anchors.json" logical)"
+		GA_RESOLVED="$(resolve_path "$HOME/.agents/anchors.json" logical)"
 		if [[ "$LOGICAL" == "$GA_RESOLVED" ]]; then
 			emit BLOCK "全局 anchors.json 是冻结规则源（meta-frozen），禁止 agent 修改。如需调整全局冻结规则请人工编辑。"
 			return 0
@@ -489,8 +489,8 @@ check_frozen_globs() {
 # 1d 部署位置保护——逻辑路径检查：store 软链是部署设计，不是攻击面；
 # 项目内（INSIDE=1）豁免。
 check_deployed_locations() {
-	if [[ "$LOGICAL" == "$HOME/.config/"* || "$LOGICAL" == "$HOME/.local/"* ]] && [[ $INSIDE -eq 0 ]]; then
-		emit BLOCK "禁止直接修改已部署位置（~/.config/ 或 ~/.local/）。请修改 dotfiles/ 源文件后运行 just home。"
+	if [[ "$LOGICAL" == "$HOME/.config/"* || "$LOGICAL" == "$HOME/.local/"* || "$LOGICAL" == "$HOME/.agents/"* ]] && [[ $INSIDE -eq 0 ]]; then
+		emit BLOCK "禁止直接修改已部署位置（~/.config/ 或 ~/.local/ 或 ~/.agents/）。请修改 dotfiles/ 源文件后运行 just home。"
 		return 0
 	fi
 	return 1

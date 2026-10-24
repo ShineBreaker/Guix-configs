@@ -2,7 +2,7 @@
 
 [中文文档](./README_CN.md)
 
-AI-attributed commit trailer enforcement for ZCode sessions. The plugin name is historical: the trailer it actually enforces is `Assisted-by`, whose format (`Assisted-by: <AGENT> (<MODEL>) <EMAIL>`) comes from the commit conventions in `~/.config/agents/context/domains/coding.md` — `~/.config/git/gitmessage` only defines the commit-type list.
+AI-attributed commit trailer enforcement for ZCode sessions. The plugin name is historical: the trailer it actually enforces is `Assisted-by`, whose format (`Assisted-by: <AGENT> (<MODEL>) <EMAIL>`) comes from the commit conventions in `~/.agents/context/domains/coding.md` — `~/.config/git/gitmessage` only defines the commit-type list.
 
 Two layers, deliberately independent of any knowledge-base/agent integration:
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 function __fish_askill_skills
-    set -l lock $HOME/.config/agents/skills/skills-lock.json
+    set -l lock $HOME/.agents/skills/skills-lock.json
     if test -f "$lock"
         jq -r '.skills | keys[]' "$lock" 2>/dev/null
     end

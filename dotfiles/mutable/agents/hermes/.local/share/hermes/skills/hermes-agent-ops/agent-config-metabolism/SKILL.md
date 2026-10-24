@@ -120,7 +120,7 @@ cronjob(
 
 ## 边界
 
-- ❌ 不要动 `~/.config/agents/skills/`（Guix Home immutable）
+- ❌ 不要动 `~/.agents/skills/`（Guix Home immutable）
 - ❌ 不要碰 uncommit 的 git 文件
 - ❌ 不要 push 到 remote
 - ✅ 脚本 bug、阈值、白名单可以直接改
@@ -271,7 +271,7 @@ cronjob(
 
 ## 边界
 
-- ❌ 不要动 `~/.config/agents/skills/`（Guix Home immutable）
+- ❌ 不要动 `~/.agents/skills/`（Guix Home immutable）
 - ❌ 不要碰 uncommit 的 git 文件
 - ❌ 不要 push 到 remote
 - ✅ 脚本 bug、阈值、白名单可以直接改

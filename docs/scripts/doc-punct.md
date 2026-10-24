@@ -46,7 +46,7 @@ python3 tools/doc-punct.py --self-test     # 跑回归自检后退出
 - **`.` 不机械转 `。`**：小数、版本号、句点边界歧义三重风险，划入人工处理——`HALF_TO_FULL` 表里刻意没有 `.`。
 - **块内原样保留**：`scan` 跟踪围栏状态，` ``` ` / `~~~` 与（仅 `.org` 的）`#+begin_` … `#+end_` 整块跳过。
 - **文件枚举用 git 不用 glob**：`own_files` 跑 `git ls-files --cached --others --exclude-standard -- '*.md' '*.org'`；glob 的 `**` 不穿透 `.config` / `.zcode` 等隐藏目录，会漏掉一大批文档。
-- **排除清单以源码 `EXCLUDE` 元组为准**：vendored 子模块（`tools/linux-setup/`、`tools/appimage-run/`、`fcitx5/rime/`）、技能树（`.local/share/hermes/skills/`、`.config/agents/skills/`、`agents/skills/`）与归档目录 `.archive/`。**`--list` 把这份清单暴露成机器可读接口**，`doc-format.sh` 据此取文件列表——排除边界因此只有一个真相源，不在编排脚本里复制第二份。
+- **排除清单以源码 `EXCLUDE` 元组为准**：vendored 子模块（`tools/linux-setup/`、`tools/appimage-run/`、`fcitx5/rime/`）、技能树（`.local/share/hermes/skills/`、`.agents/skills/`、`agents/skills/`）与归档目录 `.archive/`。**`--list` 把这份清单暴露成机器可读接口**，`doc-format.sh` 据此取文件列表——排除边界因此只有一个真相源，不在编排脚本里复制第二份。
 - **`--check` 有待处理处即退出 1**：让 `--check` 对脚本与 CI 真正可用（原先恒返回 0，只能靠人眼看输出）。
 - **保守变换 + 逐处报告**：不追求全自动正确，追求「误改一眼能复核、能 `git diff` 找回」。
 - **只管标点，不管结构**：Markdown 的表格列宽、列表缩进、末尾换行由 prettier 负责（见 [doc-format.md](doc-format.md)）；本脚本对表格行只跑两条「原地替换」类规则，不碰对齐。

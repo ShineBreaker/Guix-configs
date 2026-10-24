@@ -2,7 +2,7 @@
 description: 执行 agenote 策展（健康 + 去重 + 归档 + 权重重分配）
 ---
 
-按 `agenote-curator` skill 执行策展：读取 `~/.config/agents/skills/agenote-curator/SKILL.md`，严格遵循其「策展流程（agent 主导）」Step 0–10；具体步骤与子步（3.5 / 4.5 / 7.5 / 8.5 / 8.6 等）一律以 skill 原文为准，不在本文件复制。流程编排与去留决策由 agent 执行。
+按 `agenote-curator` skill 执行策展：读取 `~/.agents/skills/agenote-curator/SKILL.md`，严格遵循其「策展流程（agent 主导）」Step 0–10；具体步骤与子步（3.5 / 4.5 / 7.5 / 8.5 / 8.6 等）一律以 skill 原文为准，不在本文件复制。流程编排与去留决策由 agent 执行。
 
 注意：
 

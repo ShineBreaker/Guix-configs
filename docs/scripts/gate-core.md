@@ -3,7 +3,7 @@
 
 # gate-core.sh 与 anchors-lib.sh — agent 工具调用的判定核与规则源
 
-`dotfiles/immutable/agents/.config/agents/{gate-core.sh,anchors-lib.sh}` · immutable → `~/.config/agents/`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/{bash,edit}-gate.sh`、pi `dotfiles/mutable/agents/extensions/pi-gate/index.ts`、hermes `dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/__init__.py`、DSH `dotfiles/mutable/agents/dsh/.local/share/dsh/profiles/agent-extensions/gate.js`（`anchors-lib.sh` 另被 zcode `session-start.sh` 直接 source）
+`dotfiles/immutable/agents/.agents/{gate-core.sh,anchors-lib.sh}` · immutable → `~/.agents/`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/{bash,edit}-gate.sh`、pi `dotfiles/mutable/agents/extensions/pi-gate/index.ts`、hermes `dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/__init__.py`、DSH `dotfiles/mutable/agents/dsh/.local/share/dsh/profiles/agent-extensions/gate.js`（`anchors-lib.sh` 另被 zcode `session-start.sh` 直接 source）
 
 判定核是四端共享的唯一真相源：CLI、行协议、环境变量与安全不变量全部定义在 `gate-core.sh`，适配器只做协议转换。`anchors-lib.sh` 只做「读 + 合并」，不含任何判定语义。**改匹配逻辑前先通读 §设计决策与不变量**——每条不变量在实现处都有一行注释指回该节。
 
@@ -69,7 +69,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 | 1   | `check_meta_frozen`         | 全局 `anchors.json` 或 `_meta_frozen` 项目规则源发 `BLOCK` |
 | 2   | `check_frozen_paths`        | 逻辑/物理任一路径命中冻结条目发 `BLOCK`                    |
 | 3   | `check_frozen_globs`        | 目标在项目内且命中 glob 发 `BLOCK`                         |
-| 4   | `check_deployed_locations`  | 直改 `~/.config/` 或 `~/.local/` 发 `BLOCK`                |
+| 4   | `check_deployed_locations`  | 直改 `~/.config/`、`~/.local/` 或 `~/.agents/` 发 `BLOCK`                |
 | 5   | `check_sensitive_and_hints` | stdin 命中敏感模式发 `SENSITIVE`；`path_hints` 发 `HINT`   |
 
 `edit` 的项目根基准由 `GATE_CWD` 经 `find_git_root` 求得（`anchors-lib.sh` 提供），据此算出两个布尔量：逻辑路径落在 `PROJ` 内为 `INSIDE`（物理路径则为 `INSP`），后续多项检查按它们启停。`find_git_root` 只认 `.git` **目录**，找不到时返回入参本身——于是非仓库 cwd 下 `PROJ` 就是 cwd 自己，其下的一切都算「项目内」，`frozen_globs` 与 `path_hints` 照常生效，但要求 `INSIDE=0` 的 `~/.config` 直改保护不会触发。
@@ -106,11 +106,11 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 **14. `unless_inside` 是逐条目的条件豁免。** `frozen_paths` 条目支持 `{"path": ..., "unless_inside": "<dir>"}`，`_meta_frozen` 支持 `{"unless_inside": "<dir>"}`：`GATE_CWD` 物理解析后位于该目录内时该条目不拦（决策核仓库内的会话可维护自己的规则源）。逐条目判定意味着近层补一条无条件条目即可恢复拦截，且不违反「只加不减」；豁免只能由人工维护的规则源声明，cwd 之外的会话仍被同一条目拦住。`cwd_under` 对 base 与 cwd 都做物理解析，防 cwd 经软链指向目标目录误判。
 
-**15. `_meta_frozen` 三态。** 只在目标 basename 为 `anchors.json` 时判：逻辑路径等于 `~/.config/agents/anchors.json` 的逻辑解即全局规则源，直接拦；文件存在且 `_meta_frozen == true` 即人工锁定的项目规则源，拦；`_meta_frozen` 是对象且声明了 `unless_inside` 而 cwd 不在范围内时拦。对象形式未声明 `unless_inside` 时不拦。
+**15. `_meta_frozen` 三态。** 只在目标 basename 为 `anchors.json` 时判：逻辑路径等于 `~/.agents/anchors.json` 的逻辑解即全局规则源，直接拦；文件存在且 `_meta_frozen == true` 即人工锁定的项目规则源，拦；`_meta_frozen` 是对象且声明了 `unless_inside` 而 cwd 不在范围内时拦。对象形式未声明 `unless_inside` 时不拦。
 
 ## 部署形态约束
 
-`anchors-lib.sh` 的定位顺序是 `$HOME/.config/agents/anchors-lib.sh` 优先、`dirname $0` 同目录兜底。原因是 home-dotfiles 把每个文件复制成**独立** store 项，`gate-core.sh` 与 `anchors-lib.sh` 不落在同一个 store 目录，同目录查找在部署形态下必然落空；同目录兜底只在源码树或直链场景生效。
+`anchors-lib.sh` 的定位顺序是 `$HOME/.agents/anchors-lib.sh` 优先、`dirname $0` 同目录兜底。原因是 home-dotfiles 把每个文件复制成**独立** store 项，`gate-core.sh` 与 `anchors-lib.sh` 不落在同一个 store 目录，同目录查找在部署形态下必然落空；同目录兜底只在源码树或直链场景生效。
 
 `anchors-lib.sh` 找不到或 `source` 失败时，`MERGED` 回退 `gate-core.sh` 内置的 DEFAULT——`frozen_commands` 只有 `["sudo"]`，其余字段全空、`builtin_rewrite: true`。同理，`load_merged_anchors` 返回失败也回退同一个 DEFAULT。hook 不因配置损坏整体失效是硬要求。
 
@@ -119,7 +119,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 三层规则源，代码底层在 `anchors-lib.sh` 的 merge 程序里，各层按由远到近的顺序叠加：
 
 1. **代码底层 DEFAULT**：`frozen_commands` 恒含 `sudo`，其余字段空，`builtin_rewrite: true`。没有任何 `anchors.json` 时返回的就是它。
-2. **全局** `~/.config/agents/anchors.json`：跨工作区通用约束（冻结命令、交互式命令、敏感模式等），meta-frozen 人工维护。
+2. **全局** `~/.agents/anchors.json`：跨工作区通用约束（冻结命令、交互式命令、敏感模式等），meta-frozen 人工维护。
 3. **项目级** `<root>/.agents/anchors.json`：从起点向上逐层收集，**含 git 根后停止**（`_find_anchors_files_near_to_root` 最多上溯 64 层，到根目录也停）。
 
 | 字段类型                                              | 合并规则                                                             |
@@ -129,7 +129,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 | 映射（`redirect_conventions`/`rewrite`/`path_hints`） | jq `*` 浅合并，近层覆盖远层                                          |
 | `builtin_rewrite`                                     | 布尔值由显式给出该字段的层覆盖，未给出的层不影响                     |
 
-**只加不减**：项目层无法移除全局或代码底层的条目，近层要削弱某条只能加 `unless_inside` 条件豁免。任一层损坏或 jq 合并失败 → 回退 DEFAULT 并向 `~/.config/agents/.load-errors.log` 追加一行（`log_gate_error`，时间戳 + 扩展标签 + 位置 + 原因，标签沿用历史值 `crush-gate`），防静默吞错。
+**只加不减**：项目层无法移除全局或代码底层的条目，近层要削弱某条只能加 `unless_inside` 条件豁免。任一层损坏或 jq 合并失败 → 回退 DEFAULT 并向 `~/.agents/.load-errors.log` 追加一行（`log_gate_error`，时间戳 + 扩展标签 + 位置 + 原因，标签沿用历史值 `crush-gate`），防静默吞错。
 
 | 函数                                 | 语义                                                                          |
 | ------------------------------------ | ----------------------------------------------------------------------------- |
@@ -158,8 +158,8 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 
 ## 排障
 
-- 看合并结果：`bash -c 'source ~/.config/agents/anchors-lib.sh && load_merged_anchors <dir>'`；加载失败会向 `~/.config/agents/.load-errors.log` 追加日志。
-- 单条判定：`GATE_CWD=<dir> bash ~/.config/agents/gate-core.sh bash '<cmd>'`，直接看行协议输出；写入判定把待检内容接在 stdin 上跑 `edit <file>`。
+- 看合并结果：`bash -c 'source ~/.agents/anchors-lib.sh && load_merged_anchors <dir>'`；加载失败会向 `~/.agents/.load-errors.log` 追加日志。
+- 单条判定：`GATE_CWD=<dir> bash ~/.agents/gate-core.sh bash '<cmd>'`，直接看行协议输出；写入判定把待检内容接在 stdin 上跑 `edit <file>`。
 - 「命令在禁用列表里却没被拦」：先确认是不是 §设计决策与不变量第 6 条列出的明确放弃形态，再确认冻结词是否落在命令位置。
 - 「命令被误拦」：冻结匹配走的是剥引号后的片段流，引号内的 `;`、反斜杠都会变成边界；用上面的单条判定命令对比改前改后输出。
 - 敏感模式明明存在却不命中：字符类里的 `\s` 被 GNU grep 当字面 `\` 与 `s` 处理，`[^"'\s]{8,}` 因此额外排除了值中的字母 `s`——写模式时用 `[^"'[:space:]]` 之类。

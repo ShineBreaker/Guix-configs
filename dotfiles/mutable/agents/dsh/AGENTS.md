@@ -67,7 +67,7 @@
 
 | 源扩展（pi/omp）         | DSH 行         | 作用面                                                                                   |
 | ------------------------ | -------------- | ---------------------------------------------------------------------------------------- |
-| `pi-gate`                | gate           | `tools/pre-execute` 拦截 bash/write/edit，判定仍由 `~/.config/agents/gate-core.sh` 出    |
+| `pi-gate`                | gate           | `tools/pre-execute` 拦截 bash/write/edit，判定仍由 `~/.agents/gate-core.sh` 出    |
 | `global-context`         | global-context | `systemPrompt.section`（order 10300）注入 + `/global-context`、`/fetchcontext` 命令      |
 | `custom-shortcuts`       | （客户端半边） | Shift+Tab 切 plan 模式，见 `client.js`                                                   |
 | （DSH 原生，无 pi 对应） | lifecycle      | `/dsh-services` / `/dsh-kill-others` / `/dsh-restart` 命令 + 会话头「清残留 / 重启」按钮 |

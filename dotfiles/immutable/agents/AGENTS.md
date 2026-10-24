@@ -1,6 +1,6 @@
 # Agent 共享基础设施
 
-本目录部署到 `~/.config/agents/`，是 Pi / ZCode / Hermes / DSH 四端 Agent 运行时共用两套正交系统的源码：会话启动时注入的 **Context** 与工具调用时机器硬拦截的 **Anchors**。
+本目录部署到 `~/.agents/`，是 Pi / ZCode / Hermes / DSH 四端 Agent 运行时共用两套正交系统的源码：会话启动时注入的 **Context** 与工具调用时机器硬拦截的 **Anchors**。
 
 ## 目录结构
 
@@ -10,8 +10,12 @@
 
 ```
 agents/
-├── .config/
-│   └── agents/
+├── .agents/
+│   ├── context/
+│   ├── anchors-lib.sh
+│   ├── anchors.json
+│   ├── context-select.sh
+│   └── gate-core.sh
 └── .gitignore
 ```
 
@@ -25,7 +29,7 @@ Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
 | 系统        | 介入时机       | 负责范围                                | 内容源                                                      | 改后生效                |
 | ----------- | -------------- | --------------------------------------- | ----------------------------------------------------------- | ----------------------- |
-| **Context** | 会话启动时注入 | 通用与领域工作原则（靠 agent 自律）     | `.config/agents/context/` + `context-select.sh`             | `blue home`             |
+| **Context** | 会话启动时注入 | 通用与领域工作原则（靠 agent 自律）     | `.agents/context/` + `context-select.sh`             | `blue home`             |
 | **Anchors** | 工具调用时拦截 | 冻结命令/路径、改写、提示（机器硬拦截） | `anchors.json`（两级）+ `gate-core.sh`                      | `blue home`             |
 | **Skills**  | 会话中按需加载 | 操作手册与工作流（查阅执行）            | mutable 包 `dotfiles/mutable/agents/skills/`（askill 管理） | Stow 直链，改源即时生效 |
 
@@ -35,7 +39,7 @@ Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
 `anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 Ratchet 合并）、`gate-core.sh`（决策核心）构成拦截内核；四端适配器（pi-gate TS、zcode bash hooks、hermes gate 插件、DSH `gate.js`）只做协议转换，决策一律集中在 `gate-core.sh`，不得在适配器里复刻判定。
 
-规则分三层，改哪层就动哪个文件：全局 `~/.config/agents/anchors.json` 放跨工作区通用约束（sudo、交互式命令限制、敏感信息模式）；项目级 `<root>/.agents/anchors.json` 放仓库专属规则（`frozen_commands`、`frozen_paths`、`redirect_conventions`、`path_hints`）；内核硬编规则在 `gate-core.sh`（`rm` 破坏性防护、Git 写操作防护、`~/.config`/`~/.local` 部署目录只读保护）。
+规则分三层，改哪层就动哪个文件：全局 `~/.agents/anchors.json` 放跨工作区通用约束（sudo、交互式命令限制、敏感信息模式）；项目级 `<root>/.agents/anchors.json` 放仓库专属规则（`frozen_commands`、`frozen_paths`、`redirect_conventions`、`path_hints`）；内核硬编规则在 `gate-core.sh`（`rm` 破坏性防护、Git 写操作防护、`~/.config`/`~/.local`/`~/.agents` 部署目录只读保护）。
 
 **改内核的约束**：`gate-core.sh` 与 `anchors-lib.sh` 是四端共用的安全边界，CLI、环境变量、`/run/agent-gate.off` 路径与 stdout 行协议一律不变。改判定逻辑前先建用例语料覆盖 `docs/scripts/gate-core.md` 的每一条不变量（命中与未命中都要有），新旧版本在临时 `HOME` 下逐条对比输出一致才算完成，方法见 `docs/scripts/CONVENTIONS.md` §7。
 
@@ -47,14 +51,14 @@ Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
 ### Context — 会话上下文注入
 
-`context-select.sh` 决策注入 `.config/agents/context/` 下三层：`00-core.md` 为跨领域通用原则（各端恒定注入）、`INDEX.md` 为领域路由表（指引 agent 何时读哪个领域文件）、`domains/<name>.md` 为领域专属原则（按门控条件按需注入，如 `coding` 仅在 Git 仓库内注入）。
+`context-select.sh` 决策注入 `.agents/context/` 下三层：`00-core.md` 为跨领域通用原则（各端恒定注入）、`INDEX.md` 为领域路由表（指引 agent 何时读哪个领域文件）、`domains/<name>.md` 为领域专属原则（按门控条件按需注入，如 `coding` 仅在 Git 仓库内注入）。
 
 维护操作：改通用原则编辑 `00-core.md`（`core` 与 `INDEX` 合计须 ≤5500 字符，超限即精简）；新增领域文件则依次在 `domains/<name>.md` 建文件、在 `context-select.sh` 映射表加门控规则、在 `INDEX.md` 加 `<domain>` 路由条目；一致性自检跑 `context-select.sh --check`（检测文件引用完整性与 INDEX 和 `domains/` 的一致性）；本地调试设 `CONTEXT_DIR` 与 `CONTEXT_SELECT_BIN` 指向仓库源码，可在 `blue home` 部署前跑通全链路。
 
 ### Skills — 声明式技能管理（askill）
 
-`askill` CLI（`~/.local/bin/askill`）与第三方 Skill 的版本锁 `skills-lock.json` 都由 mutable 包 `dotfiles/mutable/agents/skills/` 直链部署，改源即时生效；工作区 `~/.config/agents/skills/` 的版本冻结由 Git 提交保证。常用命令 `askill add <repo> -s <name>` / `update` / `install` / `remove` / `list`；自建技能直接在 `~/.config/agents/skills/` 下维护，不经 `askill` 锁管理。
+`askill` CLI（`~/.local/bin/askill`）与第三方 Skill 的版本锁 `skills-lock.json` 都由 mutable 包 `dotfiles/mutable/agents/skills/` 直链部署，改源即时生效；工作区 `~/.agents/skills/` 的版本冻结由 Git 提交保证。常用命令 `askill add <repo> -s <name>` / `update` / `install` / `remove` / `list`；自建技能直接在 `~/.agents/skills/` 下维护，不经 `askill` 锁管理。
 
 ## 修改与生效
 
-- **Context 与 Anchors 的源在本目录（immutable）**：改后必须 `blue home` 重建（部署进 Store 只读副本），四端才会用上新版本。适配器本身（pi-gate TS、zcode hooks、hermes 插件、DSH 扩展）在 mutable 包里，改源即时生效，但它们运行时加载的是 `~/.config/agents/` 下的已部署版本。
+- **Context 与 Anchors 的源在本目录（immutable）**：改后必须 `blue home` 重建（部署进 Store 只读副本），四端才会用上新版本。适配器本身（pi-gate TS、zcode hooks、hermes 插件、DSH 扩展）在 mutable 包里，改源即时生效，但它们运行时加载的是 `~/.agents/` 下的已部署版本。

@@ -17,7 +17,7 @@ description: "Guix-configs 仓库工作流：dotfiles 部署（stow/blue）、ho
 3. **AI 禁跑** `blue rebuild` / `guix system reconfigure` / `guix home reconfigure` (sudo 卡死 CLI)。改源后只能 `blue home` 暂用,固化等用户操作。**例外**:`blue structor` 只重写 AGENTS.md 标记对内容,AI 可以跑(见 §5.3)。
 4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。两处延伸：
    - **冻结前缀覆盖整个 `~/.config/` 与 `~/.local/`**，含 Hermes 系统提示推荐的 scratch 目录（`~/.local/share/hermes/cache/scratch`）——write_file/patch 一律被 gate 拒；跨调用暂存产物写 `/tmp`。
-   - **仓库里的 gate/安全规则源目录同样冻结**（如 `dotfiles/immutable/agents/.config/agents/`，即 context 注入与 gate 规则的源头，防止被管者改自己的护栏）。协作模式：把完整目标内容备到 `/tmp`，交用户 `cp` 回源 + `just home` 部署 + `~/.config/agents/context-select.sh --check` 校验；不绕、不拆分写入。selector 的 INJECT_MAP 门控（always / git / platform:x）可做场景差异化注入——git 门控 ≈ 仅编码会话生效，因 QQ/微信等 gateway 会话 cwd 是 `~/Projects`（非 git 仓库）。
+   - **仓库里的 gate/安全规则源目录同样冻结**（如 `dotfiles/immutable/agents/.agents/`，即 context 注入与 gate 规则的源头，防止被管者改自己的护栏）。协作模式：把完整目标内容备到 `/tmp`，交用户 `cp` 回源 + `just home` 部署 + `~/.agents/context-select.sh --check` 校验；不绕、不拆分写入。selector 的 INJECT_MAP 门控（always / git / platform:x）可做场景差异化注入——git 门控 ≈ 仅编码会话生效，因 QQ/微信等 gateway 会话 cwd 是 `~/Projects`（非 git 仓库）。
 5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息 `-m` / `-F <file>` 均可**(agent gate 的「无 `-m` 硬拦」2026-10 已移除)；多段 body 用多个 `-m` 按序拼或 `-F` 传消息文件；AI 参与时 `Assisted-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。
 6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
 7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
@@ -385,7 +385,7 @@ blue structor 2>&1 | grep -E "(WRITE|DRY|ERROR)"
 
 - **`blue structor` 不**自动给没标记的 AGENTS.md 加标记 —— 必须先手插标记对(但**只**插空标记 + 最小占位,内容由 structor 重写)
 - **子模块内 AGENTS.md 不要动**: `dotfiles/mutable/emacs/.config/emacs/general-config/AGENTS.md`、`dotfiles/immutable/utilities/.local/share/fcitx5/rime/` 在独立 git 仓库里
-- **重复手写段要删**: 翻新后顶部"## 目录结构"会重写完整树,文件下半部分如果还有手写的小节(`.config/agents/` 段等)就重复了 —— 删旧的
+- **重复手写段要删**: 翻新后顶部"## 目录结构"会重写完整树,文件下半部分如果还有手写的小节(`.agents/` 段等)就重复了 —— 删旧的
 - **语言风格**: structor 默认生成 `<!-- 此树形目录由 structor 自动生成,请勿手动编辑。 -->` 中文注释。已有英文注释(由前人手动写的)会被覆盖
 - **AI 可以跑 `blue structor`**: 它只重写标记对之间的内容,不涉及 system reconfigure/home rebuild —— **不**受不变量 #3 限制
 

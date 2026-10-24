@@ -5,7 +5,7 @@
 
 源码 `dotfiles/mutable/agents/skills/.local/bin/askill` · 部署 `~/.local/bin/askill`（mutable，改源即时生效） · 调用方：手动运行
 
-模型对齐 `source/channel.lock` 哲学：仓库只声明 `skills-lock.json` 与本脚本，skill 内容按需从上游装到部署位。引擎是 `npx -y skills@1.5.23`（project scope + universal agent + `--copy`），另需 `jq` 读锁；`DISABLE_TELEMETRY=1`，`SKILLS_CLONE_TIMEOUT_MS` 默认 `600000` 可覆盖。布局三处：锁真身在仓库（`dotfiles/mutable/agents/skills/.config/agents/skills/skills-lock.json`，Stow 单文件直链到部署位）、部署位与工作区 `~/.config/agents/skills/`（真实 skill 目录，自建 skill 共存）、暂存区 `~/.config/agents/skills/.agents/skills/`。运行不依赖仓库路径，改源即时生效。
+模型对齐 `source/channel.lock` 哲学：仓库只声明 `skills-lock.json` 与本脚本，skill 内容按需从上游装到部署位。引擎是 `npx -y skills@1.5.23`（project scope + universal agent + `--copy`），另需 `jq` 读锁；`DISABLE_TELEMETRY=1`，`SKILLS_CLONE_TIMEOUT_MS` 默认 `600000` 可覆盖。布局三处：锁真身在仓库（`dotfiles/mutable/agents/skills/.agents/skills/skills-lock.json`，Stow 单文件直链到部署位）、部署位与工作区 `~/.agents/skills/`（真实 skill 目录，自建 skill 共存）、暂存区 `~/.agents/skills/.agents/skills/`。运行不依赖仓库路径，改源即时生效。
 
 ## 用法
 

@@ -31,7 +31,7 @@ PUNCT_CJK = r"　-〿＀-￯"  # 全角标点与符号
 
 # 仓库自有文档：排除 vendored、agent skills、session scratch
 EXCLUDE = ("/fcitx5/rime/others/", "/.local/share/hermes/skills/",
-           "/.config/agents/skills/", "/.agents/workfile/",
+           "/.agents/skills/", "/.agents/workfile/",
            "/.zcode/plans/", "/.config/emacs/.agents/workfile/")
 
 

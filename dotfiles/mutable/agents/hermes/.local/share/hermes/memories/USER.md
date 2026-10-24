@@ -1,6 +1,6 @@
 删除一律 trash-cli (trash-put)，不用 rm/shutil.rmtree，含 skill 清理。
 §
-新建 skill 必须进现有 11 分类之一(<category>/<skill-name>/)，装不下才新建且需确认；不动 ~/.config/agents/skills/(Guix Home immutable)。决策树见 skill-authoring §9。
+新建 skill 必须进现有 11 分类之一(<category>/<skill-name>/)，装不下才新建且需确认；不动 ~/.agents/skills/(Guix Home immutable)。决策树见 skill-authoring §9。
 §
 commit 遵循 Conventional Commits；精确 staging，独立核对；无 GPG 时使用 --no-gpg-sign。
 §

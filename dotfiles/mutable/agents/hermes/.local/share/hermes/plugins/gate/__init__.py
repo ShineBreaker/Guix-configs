@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 """hermes gate — 权限边界插件（对位 omp pi-gate）。
 
-判定语义全部在 ~/.config/agents/gate-core.sh（决策核，规则源为两级
+判定语义全部在 ~/.agents/gate-core.sh（决策核，规则源为两级
 anchors.json 的 ratchet 合并）。本插件只做 hermes 协议转换：
   - BLOCK / SENSITIVE  → {"action": "block", "message": ...}
   - REWRITTEN          → {"action": "modify", "args": {"command": ...}}（terminal）
@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-GATE_CORE = Path.home() / ".config" / "agents" / "gate-core.sh"
+GATE_CORE = Path.home() / ".agents" / "gate-core.sh"
 # 人工总开关（固定路径，见 docs/scripts/gate-core.md §设计决策与不变量；
 # 创建/删除须 sudo，agent 恒冻 sudo 故自己打不开；重启自动清空）。须在
 # 核缺失保底之前检查；暂停时静默放行，不注入任何提示（与护栏不存在时表现一致）。

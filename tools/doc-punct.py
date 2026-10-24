@@ -33,7 +33,7 @@ UNIT_RE = re.compile(
 # 仓库自有文档：排除 vendored（子模块、上游 README）与 agent skills
 EXCLUDE = (
     "/.local/share/hermes/skills/",
-    "/.config/agents/skills/",
+    "/.agents/skills/",
     "/agents/skills/",
     "/.archive/",
     "/fcitx5/rime/",

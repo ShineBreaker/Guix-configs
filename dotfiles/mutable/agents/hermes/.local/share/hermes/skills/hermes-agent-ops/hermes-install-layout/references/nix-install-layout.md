@@ -93,7 +93,7 @@ nix-store --query --referrers "$HERMES_BIN"
 | `~/.local/share/hermes/logs/*.log` | 日志(ConcurrentRotatingFileHandler,默认轮转) | NO |
 | `~/.local/share/hermes/scripts/` | cron script 唯一允许的根目录 | NO |
 | `~/.local/bin/hermes` | wrapper(本 skill 装的) | NO |
-| `~/.config/agents/skills/` | 第二个 skill 源(guix home immutable 软链) | NO(immutable 部署) |
+| `~/.agents/skills/` | 第二个 skill 源(guix home immutable 软链) | NO(immutable 部署) |
 
 ## §5 故障排查流程
 

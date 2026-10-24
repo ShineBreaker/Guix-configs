@@ -89,7 +89,7 @@ check("13.reference_agenote_patterns", ref_patterns.is_file())
 # ── 10. 自包含性 ──────────────────────────────────────────────────
 
 check("14.no_external_path_dependencies",
-      "~/.config/agents/skills/" not in text and "~/.hermes/skills/" not in text)
+      "~/.agents/skills/" not in text and "~/.hermes/skills/" not in text)
 
 # ── 11. description trigger signals ────────────────────────────────
 

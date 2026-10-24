@@ -141,7 +141,7 @@ check("10.reference_present", True, "optional, skipped if missing")
 # ── 9. 自包含性 ──────────────────────────────────────────────────
 
 check("11.no_external_path_dependencies",
-      "~/.config/agents/skills/" not in text and "~/.hermes/skills/" not in text)
+      "~/.agents/skills/" not in text and "~/.hermes/skills/" not in text)
 
 print(f"\n{passed}/{passed + failed} PASS")
 print("\nad-hoc verification — not a test suite")

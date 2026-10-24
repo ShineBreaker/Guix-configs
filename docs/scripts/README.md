@@ -41,7 +41,7 @@
 
 | 脚本                          | 源码                                          | 部署                                              | 手册                                   |
 | ----------------------------- | --------------------------------------------- | ------------------------------------------------- | -------------------------------------- |
-| gate-core.sh + anchors-lib.sh | `dotfiles/immutable/agents/.config/agents/`   | immutable → `~/.config/agents/`（须 `blue home`） | [gate-core.md](gate-core.md)           |
+| gate-core.sh + anchors-lib.sh | `dotfiles/immutable/agents/.agents/`   | immutable → `~/.agents/`（须 `blue home`） | [gate-core.md](gate-core.md)           |
 | context-select.sh             | 同上                                          | 同上                                              | [context-select.md](context-select.md) |
 | zcode hooks（3 个）           | `dotfiles/mutable/agents/zcode/.zcode/hooks/` | mutable → `~/.zcode/hooks/`                       | [zcode-hooks.md](zcode-hooks.md)       |
 

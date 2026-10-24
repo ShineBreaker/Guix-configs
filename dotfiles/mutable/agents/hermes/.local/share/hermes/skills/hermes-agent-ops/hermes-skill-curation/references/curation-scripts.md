@@ -82,7 +82,7 @@ for s, d in moved: print(f"  {s} -> {d}")
 """local skill 批量清理。处理 3 种类型:regular dir / symlink / git submodule。"""
 import os, shutil, datetime, pathlib
 
-SKILLS_DIR = pathlib.Path.home() / ".config/agents/skills"
+SKILLS_DIR = pathlib.Path.home() / ".agents/skills"
 TRASH_FILES = pathlib.Path.home() / ".local/share/hermes/Trash/files"
 TRASH_INFO = pathlib.Path.home() / ".local/share/hermes/Trash/info"
 
@@ -318,7 +318,7 @@ echo "=== Hermes 端 discover(0 disabled 即成功)==="
 ~/.nix-profile/bin/hermes skills list 2>&1 | tail -3
 echo ""
 echo "=== 作用域边界:其他源未碰 ==="
-echo "  ~/.config/agents/skills/ 数: $(ls ~/.config/agents/skills/ | wc -l)"
+echo "  ~/.agents/skills/ 数: $(ls ~/.agents/skills/ | wc -l)"
 ```
 
 **关键点**:

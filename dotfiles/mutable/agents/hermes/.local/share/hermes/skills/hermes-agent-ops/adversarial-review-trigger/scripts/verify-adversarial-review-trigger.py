@@ -122,7 +122,7 @@ def c7():
 def c8():
     p = SKILL_ROOT / "SKILL.md"
     text = p.read_text()
-    forbidden = ["~/.config/agents/skills/", "~/.hermes/skills/"]
+    forbidden = ["~/.agents/skills/", "~/.hermes/skills/"]
     hits = [f for f in forbidden if f in text]
     if hits:
         print(f"    external path references: {hits}")

@@ -5,7 +5,7 @@
 
 `dotfiles/mutable/agents/zcode/.zcode/hooks/{bash-gate.sh,edit-gate.sh,session-start.sh}` · mutable → `~/.zcode/hooks/`（stow 直链仓库源码，改源即时生效，是活 hook）· 调用方：zcode 宿主
 
-同宿主同目录的三个 hook，共同点是**都从 stdin 读 JSON、都只做协议转换**：判定语义在 `~/.config/agents/gate-core.sh`（见 [gate-core.md](gate-core.md)），注入清单决策在 `~/.config/agents/context-select.sh`（见 [context-select.md](context-select.md)）。`bash-gate.sh` 与 `edit-gate.sh` 是同一模板的两种调用面——骨架逐行同构，实质差异只有 5 点（见下表）；`session-start.sh` 是会话启动钩子，不参与拦截。
+同宿主同目录的三个 hook，共同点是**都从 stdin 读 JSON、都只做协议转换**：判定语义在 `~/.agents/gate-core.sh`（见 [gate-core.md](gate-core.md)），注入清单决策在 `~/.agents/context-select.sh`（见 [context-select.md](context-select.md)）。`bash-gate.sh` 与 `edit-gate.sh` 是同一模板的两种调用面——骨架逐行同构，实质差异只有 5 点（见下表）；`session-start.sh` 是会话启动钩子，不参与拦截。
 
 ## 共享协议
 
@@ -46,7 +46,7 @@
 
 **zcode 宿主协议没有 `updated_input`**，所以 `REWRITTEN` 拿不到真改写能力，只能把改写后的命令当建议发给模型；pi（`pi-gate` 改写 `event.input.command`）与 hermes（返回 `{"action":"modify"}`）才支持真改写。这是本端与其它端最本质的差异。`RM_HINT` 是决策核不再发出的历史类型，此处保留兼容分支。
 
-核缺失时（`~/.config/agents/gate-core.sh` 不存在，通常是 `blue home` 没跑）先 `sudo` 保底拦截再放行其余命令，警告写 stderr——保底只认 `*sudo*` 子串，不做词序列匹配。
+核缺失时（`~/.agents/gate-core.sh` 不存在，通常是 `blue home` 没跑）先 `sudo` 保底拦截再放行其余命令，警告写 stderr——保底只认 `*sudo*` 子串，不做词序列匹配。
 
 ## edit-gate.sh
 
@@ -75,7 +75,7 @@
 
 **cwd 解析链**：`stdin` 的 `cwd` 解析失败或缺省时依次回退 `CLAUDE_PROJECT_DIR`、`ZCODE_PROJECT_DIR`、`$PWD`。
 
-**预算与回退**：单文件 >64 KiB 跳过、总量 >192 KiB 截断，两种情况各往 stderr 记一行（预算对齐 omp）。selector 路径取 `CONTEXT_SELECT_BIN`，未设置时用 `~/.config/agents/context-select.sh`；不可执行时回退直接 cat 恒注入的 `00-core.md` 与 `INDEX.md`（存在才加），保证不空转。`anchors-lib.sh` source 失败时摘要回退 DEFAULT（只有 `sudo` 冻结）。
+**预算与回退**：单文件 >64 KiB 跳过、总量 >192 KiB 截断，两种情况各往 stderr 记一行（预算对齐 omp）。selector 路径取 `CONTEXT_SELECT_BIN`，未设置时用 `~/.agents/context-select.sh`；不可执行时回退直接 cat 恒注入的 `00-core.md` 与 `INDEX.md`（存在才加），保证不空转。`anchors-lib.sh` source 失败时摘要回退 DEFAULT（只有 `sudo` 冻结）。
 
 **摘要字段集**只有 5 组：`frozen_commands`、`frozen_paths`、`redirect_conventions`、`path_hints`、`human_only_actions`。`frozen_globs`、`rewrite`、`interactive_commands`、`bare_repl_commands`、`sensitive_patterns` 不进摘要——摘要只给人看，硬判定一律交给 gate hook。`frozen_paths` 的对象条目渲染成 `path〔cwd 在 <unless_inside> 内豁免〕`，与 agent 实际遇到的判定口径一致；项目名只在 cwd 位于非 `$HOME` 的 git 根内时标注为 `+ 项目 <name>/.agents/anchors.json`。
 

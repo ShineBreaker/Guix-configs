@@ -44,7 +44,7 @@ function sharedConfig() {
 function normalize(cfg) {
 	return {
 		enabled: cfg.enabled ?? true,
-		selector: cfg.selector ?? process.env.CONTEXT_SELECT_BIN ?? join(xdgConfigHome(), "agents", "context-select.sh"),
+		selector: cfg.selector ?? process.env.CONTEXT_SELECT_BIN ?? join(homedir(), ".agents", "context-select.sh"),
 		separator: typeof cfg.separator === "string" ? cfg.separator : "\n\n",
 		maxFiles: Number.isFinite(cfg.maxFiles) && cfg.maxFiles > 0 ? Math.floor(cfg.maxFiles) : 20,
 		maxBytesPerFile: Number.isFinite(cfg.maxBytesPerFile) && cfg.maxBytesPerFile > 0 ? Math.floor(cfg.maxBytesPerFile) : 16 * 1024,

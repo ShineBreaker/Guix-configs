@@ -22,7 +22,7 @@ retry-guard 设计，已被 2026-07-11+ 的重写取代（当前部署版 = "自
 3. **执行流程**：git pull → 查 CI 状态（gh api runs + issue list）→ 按判定分支处理 →
    修包（如需要）→ `blue build` 验证 → `blue upgrade` 全量更新检查 → 改动只留本地工作树。
 4. **边界（硬性）**：❌ 不 commit / push / add；❌ 不改 CI workflow、AGENTS.md、blueprint.scm；
-   ❌ 不碰 `~/.config/agents/skills/`；❌ 不跑 sudo / reconfigure；✅ 可改 `modules/**/*.scm`、
+   ❌ 不碰 `~/.agents/skills/`；❌ 不跑 sudo / reconfigure；✅ 可改 `modules/**/*.scm`、
    可跑 `blue build` / `blue upgrade` / `guix refresh -u`。
 5. **最终交付**：判定结论 + 改动摘要表 + gitmessage（供用户复制提交）+ 待决策项。
 

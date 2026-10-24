@@ -24,7 +24,7 @@ CWD="${CWD:-${CLAUDE_PROJECT_DIR:-${ZCODE_PROJECT_DIR:-$PWD}}}"
 
 DEFAULT_MERGED='{"frozen_commands":["sudo"],"frozen_paths":[],"frozen_globs":[],"redirect_conventions":{},"rewrite":{},"path_hints":{},"builtin_rewrite":true,"human_only_actions":[],"anchor_measurements":[]}'
 # shellcheck disable=SC1091 # 部署位置的共享库
-if ! source "$HOME/.config/agents/anchors-lib.sh" 2>/dev/null; then
+if ! source "$HOME/.agents/anchors-lib.sh" 2>/dev/null; then
   MERGED="$DEFAULT_MERGED"
 else
   MERGED="$(load_merged_anchors "$CWD" 2>/dev/null || printf '%s' "$DEFAULT_MERGED")"
@@ -39,7 +39,7 @@ fi
 
 # 暂停态对 agent 完全不可见：人工总开关存在时摘要仍按拦截态输出
 #（gate-core.md）
-SUMMARY="[anchors 防护规则已加载（源：~/.config/agents/anchors.json${PROJ_NAME}）]"
+SUMMARY="[anchors 防护规则已加载（源：~/.agents/anchors.json${PROJ_NAME}）]"
 
 FC="$(jq -r '.frozen_commands | if length>0 then "[冻结命令] 禁止执行，需提示用户手动操作：\n  " + (join("， ")) else empty end' <<<"$MERGED" 2>/dev/null || true)"
 [[ -n "$FC" ]] && SUMMARY+=$'\n\n'"$FC"
@@ -58,14 +58,14 @@ HO="$(jq -r '.human_only_actions | if length>0 then "[仅人工操作] agent 不
 
 # ─── 全局上下文（context-select.sh 决策注入）────────────────────────────────
 # 预算对齐 omp：单文件 64KiB 跳过，总量 192KiB 截断。
-SELECTOR="${CONTEXT_SELECT_BIN:-$HOME/.config/agents/context-select.sh}"
+SELECTOR="${CONTEXT_SELECT_BIN:-$HOME/.agents/context-select.sh}"
 CTX=""
 CTX_FILES=()
 if [[ -x "$SELECTOR" ]]; then
   mapfile -t CTX_FILES < <("$SELECTOR" --platform zcode --cwd "$CWD" 2>/dev/null || true)
 else
   # selector 未部署时直接 cat 恒注入两件，保证不空转
-  for f in "$HOME/.config/agents/context/00-core.md" "$HOME/.config/agents/context/INDEX.md"; do
+  for f in "$HOME/.agents/context/00-core.md" "$HOME/.agents/context/INDEX.md"; do
     [[ -f "$f" ]] && CTX_FILES+=("$f")
   done
 fi
@@ -88,6 +88,6 @@ for f in ${CTX_FILES[@]+"${CTX_FILES[@]}"}; do
   CTX+="$(cat "$f")"$'\n\n'
   CTX_TOTAL=$((CTX_TOTAL + size))
 done
-[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.config/agents/context/，由 context-select.sh 决策：恒注入 00-core / INDEX，git 仓库内自动附加 coding 域；决策核与 omp / hermes 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
+[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.agents/context/，由 context-select.sh 决策：恒注入 00-core / INDEX，git 仓库内自动附加 coding 域；决策核与 omp / hermes 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
 
 printf '{"additionalContext":%s}\n' "$(printf '%s' "$SUMMARY" | jq -Rs .)"

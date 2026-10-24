@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: MIT
 #
 # askill — 声明式管理第三方 agent skills：仓库只跟踪 skills-lock.json +
-# 本脚本，内容按需装到 ~/.config/agents/skills/（引擎 npx skills project
+# 本脚本，内容按需装到 ~/.agents/skills/（引擎 npx skills project
 # scope）。文档：docs/scripts/askill.md
 set -euo pipefail
 
-WORK="$HOME/.config/agents/skills"
+WORK="$HOME/.agents/skills"
 STAGING="$WORK/.agents/skills"
 LOCK="$WORK/skills-lock.json"
 
@@ -105,7 +105,7 @@ case "${1:-help}" in
     cat <<'EOF'
 askill — 声明式管理第三方 agent skills（引擎: npx skills project scope）
 
-  askill add <owner/repo> [-s a,b]   安装上游 skill（写锁 + 落盘 ~/.config/agents/skills/）
+  askill add <owner/repo> [-s a,b]   安装上游 skill（写锁 + 落盘 ~/.agents/skills/）
   askill update                     按锁检查并更新全部（git diff 审查后提交冻结）
   askill install                    从 skills-lock.json 恢复（新机 clone + stow 后跑这个）
   askill remove <skill>...          卸载（删锁条目 + 部署目录）

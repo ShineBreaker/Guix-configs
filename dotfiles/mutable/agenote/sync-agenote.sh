@@ -11,7 +11,7 @@
 #   一行，天然原子，且不可能漏推。
 #
 # 组件装哪：
-#   agenote-skills → ~/.config/agents/skills/          （agenote-{base,curator,review}）
+#   agenote-skills → ~/.agents/skills/                   （agenote-{base,curator,review}）
 #   agenote-zcode  → ~/.zcode/plugins/agenote-zcode/
 #   agenote-hermes → ~/.local/share/hermes/plugins/agenote/
 #   agenote（CLI）、agenote-el、dsh-agenote 不由本脚本部署——分别走
@@ -37,7 +37,7 @@ readonly REPO="${AGENOTE_REPO:-ShineBreaker/agenote}"
 
 # 包 → 宿主目标目录（相对 $HOME）。顺序即铺设顺序，无依赖关系。
 declare -A TARGETS=(
-  [agenote-skills]='.config/agents/skills'
+  [agenote-skills]='.agents/skills'
   [agenote-zcode]='.zcode/plugins/agenote-zcode'
   [agenote-hermes]='.local/share/hermes/plugins/agenote'
 )
