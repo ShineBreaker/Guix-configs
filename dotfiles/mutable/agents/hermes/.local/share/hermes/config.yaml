@@ -64,15 +64,16 @@ providers:
     models:
       - group/never-stuck
       - group/cheap-first
-      - group/auto-deepseek-v4-1-flash
-      - group/auto-glm-5-3
-      - group/auto-glm-5-3-flash
-      - group/auto-minimax-m3-1-flash
+      - auto/deepseek-v4.1-flash
+      - auto/GLM-5.3
+      - auto/GLM-5.3-Flash
+      - auto/MiniMax-M3.1-Flash
       - deepseek/deepseek-flash
       - deepseek/deepseek-v4-flash
       - deepseek/deepseek-v4-pro
       - stepfun-cn/step-5-preview
       - devin/swe-2
+      - devin/gemini-4-argon
       - zcode/GLM-5.3
       - zcode/GLM-5.3-Flash
       - workbuddy/hy3
@@ -296,7 +297,7 @@ display:
   credits_notices: true
   turn_completion_explainer: true
   show_cost: false
-  skin: mono
+  skin: warm-lightmode
   language: zh
   tui_status_indicator: kaomoji
   cli_refresh_interval: 1

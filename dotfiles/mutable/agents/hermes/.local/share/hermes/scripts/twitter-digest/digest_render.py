@@ -312,21 +312,36 @@ def fontconfig_for_serif() -> dict | None:
     return {"FONTCONFIG_FILE": str(conf)}
 
 
-def html_to_png(html_path: Path, png_path: Path, height: int = 120000) -> bool:
+def html_to_png(html_path: Path, png_path: Path, height: int = 60000) -> bool:
     chrome = find_chromium()
     if chrome is None:
         print("[error] 找不到 chromium", file=sys.stderr)
         return False
     env = {**os.environ, **(fontconfig_for_serif() or {})}
+    # ponytail: 独立 profile 目录，避免桌面 chromium 在跑时 headless 撞 SingletonLock 卡死
+    udd = Path.home() / ".cache/chromium-headless"
+    udd.mkdir(parents=True, exist_ok=True)
+    # ponytail: 120000px 窗口会让 headless chromium 挂死（2026-10-24 实测，60000 稳定）；
+    # 内容更长会静默截断，截图后检查底边非背景即报错
     r = subprocess.run(
         [str(chrome), "--headless=new", "--no-sandbox", "--disable-gpu",
          "--hide-scrollbars", f"--screenshot={png_path}",
+         f"--user-data-dir={udd}",
          f"--window-size={WIDTH},{height}", f"file://{html_path}"],
         capture_output=True, timeout=240, env=env)
-    ok = png_path.exists() and png_path.stat().st_size > 1000
-    if not ok:
+    if not (png_path.exists() and png_path.stat().st_size > 1000):
         print(f"[error] 截图失败: {r.stderr.decode()[:300]}", file=sys.stderr)
-    return ok
+        return False
+    from PIL import Image
+    im = Image.open(png_path).convert("RGB")
+    px = im.load()
+    bg = px[4, 4]
+    if any(sum(abs(px[x, im.height - 1][i] - bg[i]) for i in range(3)) > 12
+           for x in range(0, im.width, 7)):
+        print(f"[error] 内容超过 {height}px 被截断，需增大 html_to_png 的 height",
+              file=sys.stderr)
+        return False
+    return True
 
 
 def trim_bottom(png_path: Path) -> None:

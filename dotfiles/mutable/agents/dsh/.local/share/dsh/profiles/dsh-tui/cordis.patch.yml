@@ -15,7 +15,8 @@
 - id: agent-default-model # magpie
   config:
     provider: magpie
-    model: group/cheap-first
+    model: devin/swe-2
+    reasoningEffort: max
 - id: llm-pi-ai # magpie
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:
@@ -36,12 +37,12 @@
           - id: group/cheap-first
             name: 便宜优先 · routing group
             contextWindow: 1048576
-            maxTokens: 524288
+            maxTokens: 458752
             input: [text, image]
             reasoningEfforts:
               high: high
               max: max
-          - id: group/auto-deepseek-v4-1-flash
+          - id: auto/deepseek-v4.1-flash
             name: DeepSeek V4.1 Flash · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -50,7 +51,7 @@
               low: low
               high: high
               max: max
-          - id: group/auto-glm-5-3
+          - id: auto/GLM-5.3
             name: GLM-5.3 · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -59,7 +60,7 @@
               low: low
               high: high
               max: max
-          - id: group/auto-glm-5-3-flash
+          - id: auto/GLM-5.3-Flash
             name: GLM-5.3-Flash · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -68,10 +69,10 @@
               low: low
               high: high
               max: max
-          - id: group/auto-minimax-m3-1-flash
+          - id: auto/MiniMax-M3.1-Flash
             name: MiniMax-M3.1-Flash · routing group
             contextWindow: 1048576
-            maxTokens: 524288
+            maxTokens: 458752
             input: [text, image]
             reasoningEfforts:
               low: low
@@ -121,16 +122,25 @@
           - id: devin/swe-2
             name: SWE-2 · Devin
             contextWindow: 262000
-            maxTokens: 128000
+            maxTokens: 65500
             input: [text, image]
             reasoningEfforts:
               medium: medium
               high: high
               max: max
+          - id: devin/gemini-4-argon
+            name: Gemini 4 Argon · Devin
+            contextWindow: 1048576
+            maxTokens: 458752
+            input: [text, image]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
           - id: workbuddy/hy3
             name: Hy3 · WorkBuddy
             contextWindow: 192000
-            maxTokens: 64000
+            maxTokens: 48000
             input: [text, image]
             reasoningEfforts:
               low: low
@@ -171,7 +181,7 @@
           - id: minimax-code/MiniMax-M3.1-Flash
             name: M3.1-Flash（订阅限免） · MiniMax Code
             contextWindow: 1048576
-            maxTokens: 524288
+            maxTokens: 458752
             input: [text, image]
             reasoningEfforts:
               low: low
@@ -179,3 +189,4 @@
               high: high
               xhigh: xhigh
               max: max
+# @@shared:end
