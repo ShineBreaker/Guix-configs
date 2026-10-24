@@ -28,12 +28,11 @@
 mutable/
 ├── agenote/
 │   ├── .agents/
+│   ├── .config/
 │   ├── .local/
 │   ├── .zcode/
 │   ├── .stow-local-ignore
-│   ├── .stow-package
-│   ├── agenote.lock
-│   └── sync-agenote.sh
+│   └── .stow-package
 ├── agents/
 │   ├── devin/
 │   ├── dsh/
