@@ -191,7 +191,6 @@ blue build
 <<home-daemon-service-helpers>>
 <<root-daemon-service-helpers>>
 <<root-one-shot-service-helpers>>
-<<flatpak-service-helpers>>
 
 <<cachyos-kernel>>
 <<fingerprint-packages>>
@@ -200,7 +199,7 @@ blue build
 
 *** 服务构造函数
 
-以下四个辅助函数封装 Shepherd 服务的常见构造形态。 =command= 参数接收可执行程序与参数的列表，列表元素支持普通字符串与 Guix 可 lower 对象（构建期自动展开为 =/gnu/store/……= 下的真实路径）：
+以下三个辅助函数封装 Shepherd 服务的常见构造形态。 =command= 参数接收可执行程序与参数的列表，列表元素支持普通字符串与 Guix 可 lower 对象（构建期自动展开为 =/gnu/store/……= 下的真实路径）：
 
 - *普通字符串* :: 如 ~"/bin/sh"~ 、 ~"--bind-dynamic"~ ，按原样拼入命令行。
 - *包内路径与本地文件* :: 如 ~(file-append kdeconnect "/bin/kdeconnect-indicator")~ 或 ~(local-file "clipsync.scm")~ ，构建时解析为对应 store 路径。
@@ -282,20 +281,6 @@ blue build
                          (modules modules)
                          (start start)
                          (stop stop)))))
-#+end_src
-
-- =%flatpak-update-script= :: 生成供系统层或用户态定时器复用的 Flatpak 自动更新脚本（ =scope= 取 ~"system"~ 或 ~"user"~ ）。脚本先用 =grep= 检查外接电源状态（ =/sys/class/power_supply/A*/online= ），电池供电时直接退出并跳过更新，插电时通过 ~exec~ 替换为 =flatpak update= 进程。
-
-#+NAME: flatpak-service-helpers
-#+begin_src scheme
-
-(define (%flatpak-update-script scope)
-  (mixed-text-file
-   (string-append "flatpak-" scope "-update.sh")
-   grep "/bin/grep"
-   " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
-   " && exec " flatpak "/bin/flatpak"
-   " update --" scope " -y"))
 #+end_src
 
 *** 自定义包与补丁
@@ -2836,7 +2821,7 @@ lalt grv  lctl _  _  _  _  _)
 
 | 定时器名称            | 触发时间     | 职责说明                                                                        |
 |-----------------------+--------------+---------------------------------------------------------------------------------|
-| =flatpak-user-update= | 每周六 18:00 | 复用 =%flatpak-update-script= ，仅在接通外接电源时静默更新用户级 Flatpak 应用   |
+| =flatpak-user-update= | 每周六 18:00 | 仅在接通外接电源时执行 =flatpak update --user -y= ，只更新用户安装的应用        |
 | =nix-gc= （按需启用） | 每周日 19:30 | 清理 14 天前的 Nix 用户 profile 世代并回收 store（默认随 Nix 本体一同注释停用） |
 | =kb-backup=           | 每日 22:00   | 自动提交 =hermes= 配置子目录与 =~/Documents/Org= 知识库的本地 Git 变更          |
 
@@ -2849,7 +2834,12 @@ lalt grv  lctl _  _  _  _  _)
                                                          #:hours '(18)
                                                          #:minutes '(0))
                                        #~("/bin/sh"
-                                          #$(%flatpak-update-script "user"))
+                                          #$(mixed-text-file
+                                             "flatpak-user-update.sh"
+                                             grep "/bin/grep"
+                                             " -q 1 /sys/class/power_supply/A*/online 2>/dev/null"
+                                             " && exec " flatpak
+                                             "/bin/flatpak update --user -y"))
                                        #:requirement '(dbus))
 
                        ;; <<nix-gc-timer>>

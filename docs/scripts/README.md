@@ -101,7 +101,6 @@ Emacs 配置为 UniEmacs 子模块（`dotfiles/mutable/emacs/.config/emacs/`，m
 | 块名                                                | 内容                                                               |
 | --------------------------------------------------- | ------------------------------------------------------------------ |
 | `maint-check` / `maint-dry-rebuild` / `maint-build` | 文件头的维护操作 Babel 块                                          |
-| `flatpak-service-helpers`                           | `%flatpak-update-script`：flatpak 定时更新的启动脚本               |
 | `mihomo-run`                                        | 解密订阅、渲染模板并 exec mihomo                                   |
 | `nm-dispatcher-trusted-connection`                  | NetworkManager dispatcher：可信 WiFi 接口进出 nftables 集合        |
 | `tuned-services`                                    | tuned 服务与 tuned-ppd 档位映射（profile 在 `source/files/tuned/`，无内嵌脚本） |

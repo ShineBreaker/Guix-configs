@@ -37,7 +37,7 @@ source/
 
 - 块命名 `#+NAME: <block-name>`，引用其他块写 `<<block-name>>`（Org 模板展开，非 Scheme 语法）。
 - `main` 块是**唯一总装配表**：所有叶子块靠 `<<ref>>` 挂进 `%home` 与 `%system` 两个表单。注释掉 `<<ref>>` 即停用该功能块，被注释的 `<<ref>>` 是刻意保留的开关，**不是死代码，不要清理**。
-- **shepherd 服务复用四个 helper 块**：`home-daemon-service-helpers`（常驻用户进程）、`root-daemon-service-helpers`（常驻系统进程）、`root-one-shot-service-helpers`（开机一次），三者统一了日志落点与环境约定；`flatpak-service-helpers` 的 `%flatpak-update-script` 供 system / user 两侧 flatpak 定时更新共用。
+- **shepherd 服务复用三个 helper 块**：`home-daemon-service-helpers`（常驻用户进程）、`root-daemon-service-helpers`（常驻系统进程）、`root-one-shot-service-helpers`（开机一次），三者统一了日志落点与环境约定。
 
 ### 块级编辑操作
 
