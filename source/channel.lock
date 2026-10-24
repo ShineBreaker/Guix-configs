@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "a639dc9f4767b55d5a9240a76c82957533273657")
+       (commit "973dbc8c00de826f3c38468b09519d30d064eea3")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -12,7 +12,7 @@
        (name 'bluebox)
        (url "https://codeberg.org/lapislazuli/bluebox")
        (branch "main")
-       (commit "a5b2168123bcc236f79cbb4f1c5d4cf5412ee31d")
+       (commit "3043a76d0bfc40b4c0eb3adff3767df88e17c89d")
        (introduction
         (make-channel-introduction
          "63350484aaacc362aea28fb14236019fced4050f"
@@ -22,7 +22,7 @@
        (name 'jeans)
        (url "https://github.com/ShineBreaker/jeans.git")
        (branch "main")
-       (commit "6b293b2894431e227f8257520ff052a0fce62529")
+       (commit "89b652170dc3b8ff813c75ba3b9b3cbb8e6e66d4")
        (introduction
         (make-channel-introduction
          "1e30ccbcaef375169d453d89d8186137bc32d9e8"
@@ -32,7 +32,7 @@
        (name 'nonguix)
        (url "https://gitlab.com/nonguix/nonguix")
        (branch "master")
-       (commit "47c20df59dd9f27c9154ef20a81d383a19d4ad7f")
+       (commit "c241d19ff840dc75556f722b231760d119b6adea")
        (introduction
         (make-channel-introduction
          "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
@@ -42,7 +42,7 @@
        (name 'pantherx)
        (url "https://codeberg.org/gofranz/panther.git")
        (branch "master")
-       (commit "31168a6deb37a1e9b28955ab7ef74146e303d763")
+       (commit "ecf07e28670b1c72c031f2db3eef64850212089c")
        (introduction
         (make-channel-introduction
          "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -52,7 +52,7 @@
        (name 'rosenthal)
        (url "https://codeberg.org/hako/rosenthal.git")
        (branch "trunk")
-       (commit "c3781eefc8bf06d90b5ee2e98de65d1bd36c777e")
+       (commit "1c6b3e3cb6f692bfa74d2882a1c68629f176391d")
        (introduction
         (make-channel-introduction
          "7677db76330121a901604dfbad19077893865f35"
