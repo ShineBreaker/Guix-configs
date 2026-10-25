@@ -141,14 +141,14 @@ d-Bus 优先复用宿主 session bus（`DBUS_SESSION_BUS_ADDRESS` 已 preserve +
 
 ## 排障
 
-| 现象                                 | 原因                                             | 处理                                                                      |
-| ------------------------------------ | ------------------------------------------------ | ------------------------------------------------------------------------- |
-| 容器内找不到安装（回退 `~/.hermes`） | `HERMES_HOME` 未 export 透传                     | 确认 lib 的 export 生效，不要手动覆盖                                     |
-| ACP 宿主报 agent 找不到              | `hermes-acp` 软链被上游 update 真身覆盖          | restow 后核对软链（`stow -R agents/hermes`）                              |
-| backend crash-loop、`EBADENGINE`     | managed node 未 provision，Guix npm 落进禁止区间 | 见「managed-node」，手动跑 node-bootstrap                                 |
-| 更新后 MCP 全挂                      | 旧 gateway 进程持失效模块路径                    | `herd restart hermes-gateway`，或再跑一次 `hermes update` 触发收尾        |
-| `$HERMES_HOME/bin/uv` 变成真二进制   | 预置 symlink 被官方替换                          | 重跑 `hermes update` 恢复 symlink                                         |
-| 窗口起不来、渲染 crash               | 容器沙箱或 GPU 探测                              | 确认 `--no-sandbox` 等旗标在；试 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop` |
-| 中文输入无效                         | 缺 `--enable-wayland-ime`                        | 检查 `EXEC_STRING`                                                        |
-| 远程模式退回本地                     | token 提取失败                                   | 查 backend 是否可达、页面是否含 session token                             |
+| 现象                                               | 原因                                                                | 处理                                                                                                          |
+| -------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| 容器内找不到安装（回退 `~/.hermes`）               | `HERMES_HOME` 未 export 透传                                        | 确认 lib 的 export 生效，不要手动覆盖                                                                         |
+| ACP 宿主报 agent 找不到                            | `hermes-acp` 软链被上游 update 真身覆盖                             | restow 后核对软链（`stow -R agents/hermes`）                                                                  |
+| backend crash-loop、`EBADENGINE`                   | managed node 未 provision，Guix npm 落进禁止区间                    | 见「managed-node」，手动跑 node-bootstrap                                                                     |
+| 更新后 MCP 全挂                                    | 旧 gateway 进程持失效模块路径                                       | `herd restart hermes-gateway`，或再跑一次 `hermes update` 触发收尾                                            |
+| `$HERMES_HOME/bin/uv` 变成真二进制                 | 预置 symlink 被官方替换                                             | 重跑 `hermes update` 恢复 symlink                                                                             |
+| 窗口起不来、渲染 crash                             | 容器沙箱或 GPU 探测                                                 | 确认 `--no-sandbox` 等旗标在；试 `LIBGL_ALWAYS_SOFTWARE=1 hermes desktop`                                     |
+| 中文输入无效                                       | 缺 `--enable-wayland-ime`                                           | 检查 `EXEC_STRING`                                                                                            |
+| 远程模式退回本地                                   | token 提取失败                                                      | 查 backend 是否可达、页面是否含 session token                                                                 |
 | rofi drun 报 `Failed to execute: 'hermes desktop'` | greetd 拉的会话 PATH 无 `~/.local/bin`，`Exec` 裸命令名 execvp 失败 | `.local/share/applications/hermes.desktop` 的 `Exec` 写绝对路径 `/home/brokenshine/.local/bin/hermes desktop` |

@@ -39,11 +39,11 @@
 | 输入法     | =Fcitx5= + =Rime=                |
 | 主力字体   | =Sarasa Gothic= / =Maple Mono=   |
 
-- 桌面日常（ =Niri= ）::
+- 桌面日常（ =Niri= ）：:
   [[file:screenshots/daily.png]]
-- 终端工作区（ =Tmux= ）::
+- 终端工作区（ =Tmux= ）：:
   [[file:screenshots/terminal.png]]
-- 网页浏览（ =Zen Browser= ）::
+- 网页浏览（ =Zen Browser= ）：:
   [[file:screenshots/browse.png]]
 
 * 设计概览

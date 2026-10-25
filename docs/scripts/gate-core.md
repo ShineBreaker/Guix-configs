@@ -69,7 +69,7 @@ stdout 行协议每行一条 `TYPE<TAB>payload`，payload 内的换行由 `emit`
 | 1   | `check_meta_frozen`         | 全局 `anchors.json` 或 `_meta_frozen` 项目规则源发 `BLOCK` |
 | 2   | `check_frozen_paths`        | 逻辑/物理任一路径命中冻结条目发 `BLOCK`                    |
 | 3   | `check_frozen_globs`        | 目标在项目内且命中 glob 发 `BLOCK`                         |
-| 4   | `check_deployed_locations`  | 直改 `~/.config/`、`~/.local/` 或 `~/.agents/` 发 `BLOCK`                |
+| 4   | `check_deployed_locations`  | 直改 `~/.config/`、`~/.local/` 或 `~/.agents/` 发 `BLOCK`  |
 | 5   | `check_sensitive_and_hints` | stdin 命中敏感模式发 `SENSITIVE`；`path_hints` 发 `HINT`   |
 
 `edit` 的项目根基准由 `GATE_CWD` 经 `find_git_root` 求得（`anchors-lib.sh` 提供），据此算出两个布尔量：逻辑路径落在 `PROJ` 内为 `INSIDE`（物理路径则为 `INSP`），后续多项检查按它们启停。`find_git_root` 只认 `.git` **目录**，找不到时返回入参本身——于是非仓库 cwd 下 `PROJ` 就是 cwd 自己，其下的一切都算「项目内」，`frozen_globs` 与 `path_hints` 照常生效，但要求 `INSIDE=0` 的 `~/.config` 直改保护不会触发。

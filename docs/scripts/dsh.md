@@ -51,7 +51,8 @@ dsh web --lan-off      # 本次不带 --trusted-host（`DSH_TS_HOST=` 的显式�
 
 - **`DSH_BIN` 默认必须指 CLI 本体**：公共入口会把 `web` 分发回本脚本，指公共入口即递归；测试覆盖时同理。
 - **实例永远带 `--trusted-host` 启动**：远程流量经 tailscale serve 反代进 loopback，Host 头是尾网主机名，非 loopback 请求必须命中该白名单；`DSH_TS_HOST=` 空串即关闭。已在监听但不带该参数的实例会被自动重启（判据是 `/proc/<pid>/cmdline` 里含 `--trusted-host <host>`）。
-- **launch token 按进程随机，一个 token 只换一次 cookie**：token 从日志的 `dsh web: http://127.0.0.1:<port>/?token=...` 行解析，只对本脚本亲自起的实例有效；cookie 由 `$DSH_HOME/.credentials.yaml` 里的持久化密钥签名，跨服务重启有效，之后直接开干净 URL。`--reauth` 终止旧实例换新。
+- **launch token 按进程随机，一个 token 只换一次 cookie**：token 从日志的 `dsh web: http://127.0.0.1:<port>/?token=...` 行解析，只对本脚本亲自起的实例有效；cookie 由 `$DSH_HOME/.credentials.yaml` 里的持久化密钥签名，跨服务重启有效，之后直接开干净 URL。`--reauth` 终止旧实例换新。CLI 0.2.x 起日志行带时间戳前缀，token/URL 解析不得锚定行首（锚定会永远匹配到 log 首行的远古 token）。
+- **`dsh-web` 常驻服务注册后启停经 `herd`**：home-shepherd 的 `dsh-web` 服务（`source/config.org` 的 `dsh-web-service`）常驻 server 后，wrapper 自行 spawn 会与服务抢 3080，服务连续 EADDRINUSE 撞 respawn 上限即自禁用。检测到服务注册时 `--reauth`/冷启动/补信任一律改走 `herd restart dsh-web`，按 token 值变化等新 boot 的 token（日志不 truncate，避免拿到上一次的已死 token）；未注册时回退按端口探测 + 自行 spawn 的原行为。
 - **窗口 app_id 与 `dsh.desktop` 的 `StartupWMClass` 严格成对绑定**：Wayland 下窗口 ID 只由 profile 目录名决定，脚本定死 `--profile-directory=dsh`，改名须两处同改。该 profile 顺带隔离 dsh 的 cookie 与日常浏览。不装 PWA——只传 `--app`/`--no-first-run`/`--no-default-browser-check`，装出来是全屏而非窗口。
 - **服务脱离会话**：以 `setsid -w` 起，日志 `umask 077` 重建，同时留有同寿命 pid 供 `kill -0` 早判失败；起不来时 `notify-send` critical 通知让桌面场景可见。`stop_server` 只终止 `/proc/<pid>/cmdline` 含 `@deepseek-ai/dsh` 的监听进程，拒绝杀第三方占端口的进程，最多等 10s。
 - **`usage()` 是独立 heredoc**，不得回读自身注释——历史实现用 `sed` 从头注释提取帮助，精简注释即自毁帮助。
@@ -95,15 +96,15 @@ dsh tui [args...]   # 直 exec profile 内的完整 launcher
 
 ## 排障
 
-| 现象                                 | 原因                                     | 处理                                                                           |
-| ------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------ |
-| 窗口打开要求重新登录                 | token 已被消耗或换了设备                 | `dsh web --reauth`                                                             |
-| 手机连上但 API 报 403                | 实例没带 `--trusted-host`                | 跑一次 `dsh web` 自动重启修复；查 `DSH_TS_HOST`                                |
-| 窗口 app_id 与桌面图标不匹配         | profile 目录名与 `StartupWMClass` 不成对 | 保持 `--profile-directory=dsh` 与 desktop 文件两处同步                         |
-| 改完 `package.json` 部署侧不生效     | stow 软链被原子写断                      | 下次 `dsh` 调用自动归源重建；或 `ls -la ~/.local/share/dsh/profiles/web/` 抽查 |
-| `dsh tui` 报 127                     | profile 内 launcher 副本缺失             | `dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>`        |
-| TUI 整条消失（dump-config 条目骤减） | TUI 的 peer 范围与本体版本对不上          | 查 TUI 包的 `peerDependencies` 是否含当前本体版本；**不是**删 `compatibility.json`（那是豁免授权表，缺失只等于「无豁免」） |
-| TUI 每次 boot 报 `patch: entry "tool-ralph" not found` | 上游 TUI bundle 自带 patch 的告警，本体 base 层已不注册该行 | 忽略，功能无损；勿在本包侧找 bug                        |
+| 现象                                                   | 原因                                                        | 处理                                                                                                                       |
+| ------------------------------------------------------ | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 窗口打开要求重新登录                                   | token 已被消耗或换了设备                                    | `dsh web --reauth`                                                                                                         |
+| 手机连上但 API 报 403                                  | 实例没带 `--trusted-host`                                   | 跑一次 `dsh web` 自动重启修复；查 `DSH_TS_HOST`                                                                            |
+| 窗口 app_id 与桌面图标不匹配                           | profile 目录名与 `StartupWMClass` 不成对                    | 保持 `--profile-directory=dsh` 与 desktop 文件两处同步                                                                     |
+| 改完 `package.json` 部署侧不生效                       | stow 软链被原子写断                                         | 下次 `dsh` 调用自动归源重建；或 `ls -la ~/.local/share/dsh/profiles/web/` 抽查                                             |
+| `dsh tui` 报 127                                       | profile 内 launcher 副本缺失                                | `dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>`                                                    |
+| TUI 整条消失（dump-config 条目骤减）                   | TUI 的 peer 范围与本体版本对不上                            | 查 TUI 包的 `peerDependencies` 是否含当前本体版本；**不是**删 `compatibility.json`（那是豁免授权表，缺失只等于「无豁免」） |
+| TUI 每次 boot 报 `patch: entry "tool-ralph" not found` | 上游 TUI bundle 自带 patch 的告警，本体 base 层已不注册该行 | 忽略，功能无损；勿在本包侧找 bug                                                                                           |
 
 ## 变更
 

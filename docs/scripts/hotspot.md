@@ -17,7 +17,7 @@ SSID 与密码存于 secrets 体系的 `wifi-hotspot.age` 条目（`secrets set 
 
 ## 实现与约束
 
-- **仅 2.4G，与 STA 同信道**：网卡并发组合是 `#{ managed } <= 1, #{ AP, ... } <= 1, #channels <= 1`——AP 必须与 STA 同信道，`on` 直接取 STA 当前信道。5G 不可用：本卡是 LAR（固件自管监管域），用户态 `iw reg set` 对 self-managed phy 无效，5G 信道永远 no IR，起不了 AP（曾评估过内核并发发射豁免路线，上游只为 P2P-GO 设计，打通需改内核源码，成本过高已放弃）；STA 不在 2.4G（2400-2494MHz）时拒绝。
+- **仅 2.4G，与 STA 同信道**：网卡并发组合是 `#{ managed } <= 1, #{ AP, ... } <= 1, #channels <= 1`——AP 必须与 STA 同信道，`on` 直接取 STA 当前信道。5G 不可用：本卡是 LAR（固件自管监管域），用户态 `iw reg set` 对 self-managed phy 无效，5G 信道永远 no IR，起不了 AP（曾评估过内核并发发射豁免路线，上游只为 P2P-GO 设计，打通需改内核源码，成本过高已放弃）；STA 不在 2.4G（2400-2494 MHz）时拒绝。
 - **udev 隔离新接口**：`uap0` 出现的瞬间 NetworkManager 会把它交给 wpa_supplicant 强转 station 并独占，之后的 `ip link set up` 报 `RTNETLINK answers: Device or resource busy`。脚本先写 `/run/udev/rules.d/75-hotspot-uap0.rules`（`ENV{NM_UNMANAGED}="1"`，内存盘、重启即失），再建接口；`off` 时删除规则。
 - **dnsmasq 只绑网关地址**：`127.0.0.1:53` 被 mihomo 的 DNS 占用，dnsmasq 必须用 `listen-address=10.42.0.1` + `except-interface=lo` 限定绑定，否则启动即报端口占用。
 - **nft 放行**：接口加入 `inet filter trusted_ifaces` 集合（接口信任模型：input/forward 整接口全端口放行），`off` 时移除。规则集开机一次性加载，运行期只做集合增删。

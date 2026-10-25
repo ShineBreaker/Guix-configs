@@ -6,10 +6,10 @@ AI-attributed commit trailer enforcement for ZCode sessions. The plugin name is 
 
 Two layers, deliberately independent of any knowledge-base/agent integration:
 
-| Layer    | Mechanism                                                                                                                              | Guarantee                                        |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Reminder | `PreToolUse(Bash)` hook — on `git commit`, injects a reminder to append a full trailer carrying the model's name and version             | Full attribution, but relies on model compliance |
-| Fallback | `~/.config/git/hooks/prepare-commit-msg` global git hook — appends the detected host's placeholder trailer when the model forgets        | Agent name even when the model forgets           |
+| Layer    | Mechanism                                                                                                                         | Guarantee                                        |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Reminder | `PreToolUse(Bash)` hook — on `git commit`, injects a reminder to append a full trailer carrying the model's name and version      | Full attribution, but relies on model compliance |
+| Fallback | `~/.config/git/hooks/prepare-commit-msg` global git hook — appends the detected host's placeholder trailer when the model forgets | Agent name even when the model forgets           |
 
 The fallback layer has moved out of this plugin into the managed git configuration area: source lives at `dotfiles/immutable/utilities/.config/git/hooks/` (`prepare-commit-msg` + `forward-to-repo-hook` + four named stubs), `core.hooksPath` is in `~/.config/git/config`, and it deploys via `blue home`. Do not maintain a copy inside this plugin.
 

@@ -6,18 +6,18 @@
 
 ## 目录与文件布局
 
-| 路径                                            | 说明                                                                                                                                          |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `~/.local/share/dsh/`                           | `$DSH_HOME`，真实目录，配置文件逐个软链回本包（no-folding）。含 `cordis.patch.yml`、`.credentials.yaml`、`sessions/`、`storages/`             |
-| `.local/share/dsh/profiles/web/`                | Web Profile：`cordis.yml`（loader 配置）+ `cordis.patch.yml`（用户 patch 层）+ `package.json`、`pnpm-workspace.yaml`                          |
+| 路径                                            | 说明                                                                                                                                                 |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `~/.local/share/dsh/`                           | `$DSH_HOME`，真实目录，配置文件逐个软链回本包（no-folding）。含 `cordis.patch.yml`、`.credentials.yaml`、`sessions/`、`storages/`                    |
+| `.local/share/dsh/profiles/web/`                | Web Profile：`cordis.yml`（loader 配置）+ `cordis.patch.yml`（用户 patch 层）+ `package.json`、`pnpm-workspace.yaml`                                 |
 | `.local/share/dsh/profiles/dsh-tui/`            | dsh-TUI Profile：`package.json`、`cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 副本（`compatibility.json` 已删除，见下） |
-| `.local/share/dsh/profiles/agent-extensions/`   | 自建插件包（pi/omp 共享扩展的 DSH 移植）；web profile 以 `link:../agent-extensions` 引用                                                      |
-| `.local/share/dsh/profiles/web/preset-plugins/` | 自定义 preset 专用 `.mjs`（梁神模式的 tool-bootstrap 等 6 个），组合行以 `./preset-plugins/xxx.mjs` 相对 profile 目录引用                     |
-| `.local/share/agents/dsh/`                      | CLI 本体安装树（`$AGENTS_ROOT` 下）：源托管 `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 副本；`node_modules/` 是部署侧运行时产物  |
-| `.local/bin/dsh`                                | 唯一入口：注入 `DSH_HOME`/`AGENTS_ROOT`，`update`/`web`/`tui` 分发到同包 libexec（上游同名子命令被遮蔽为 Guix 增强版，原生行为直调 CLI 本体） |
-| `.local/libexec/dsh-{web,update,tui}`           | 三个增强子命令实体（一包一入口，实现放 libexec）                                                                                              |
-| `.local/share/applications/dsh.desktop`         | 桌面入口，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                                                                        |
-| `.local/share/icons/hicolor/`                   | `48x48/apps/dsh.png` 栅格图标 + `scalable/apps/dsh.svg` 矢量母版                                                                              |
+| `.local/share/dsh/profiles/agent-extensions/`   | 自建插件包（pi/omp 共享扩展的 DSH 移植）；web profile 以 `link:../agent-extensions` 引用                                                             |
+| `.local/share/dsh/profiles/web/preset-plugins/` | 自定义 preset 专用 `.mjs`（梁神模式的 tool-bootstrap 等 6 个），组合行以 `./preset-plugins/xxx.mjs` 相对 profile 目录引用                            |
+| `.local/share/agents/dsh/`                      | CLI 本体安装树（`$AGENTS_ROOT` 下）：源托管 `package.json`、`pnpm-workspace.yaml`、`pnpm-lock.yaml` 副本；`node_modules/` 是部署侧运行时产物         |
+| `.local/bin/dsh`                                | 唯一入口：注入 `DSH_HOME`/`AGENTS_ROOT`，`update`/`web`/`tui` 分发到同包 libexec（上游同名子命令被遮蔽为 Guix 增强版，原生行为直调 CLI 本体）        |
+| `.local/libexec/dsh-{web,update,tui}`           | 三个增强子命令实体（一包一入口，实现放 libexec）                                                                                                     |
+| `.local/share/applications/dsh.desktop`         | 桌面入口，其 `StartupWMClass` 与窗口 `app_id` 成对绑定                                                                                               |
+| `.local/share/icons/hicolor/`                   | `48x48/apps/dsh.png` 栅格图标 + `scalable/apps/dsh.svg` 矢量母版                                                                                     |
 
 > **stow 忽略规则**：`.credentials.yaml`（API 密钥）、`sessions/`、`storages/`、`node_modules/`、`.mimosa/` 被 `.stow-local-ignore` 排除。`pnpm-lock.yaml` 也在忽略之列（pnpm 的 Rust 端拒绝写软链 lockfile，部署侧必须是真实文件），但**仓库源里留有副本**（进 git 保证部署可复现），由每次 `dsh` 调用的断链自愈（安装树 + web profile 双目录）拷回同步——手动升级路径（改 `package.json` 后裸跑 `pnpm install`）不过 `dsh update`，靠前者兜底。
 
@@ -30,18 +30,27 @@
 
 加插件用 `dsh plugin --profile web add <pkg>@<ver>`：在 profile 目录跑 pnpm 并自动写入 `dsh.profile.bundles`。**必须锁精确版本**，否则依赖漂移会让插件与核心版本不兼容。
 
-| 插件                     | 当前版本       | 说明                                                                                         |
-| ------------------------ | -------------- | -------------------------------------------------------------------------------------------- |
-| `dsh-context`            | 0.73.3         | 上下文监控面板：Agent 组合、趋势、文件活动与 Agent 通信网络                                  |
-| `dsh-dream-skin`         | 10.16.0        | 原生主题换肤（官方 `ctx.theme.register` / `overrideTokens`）                                 |
-| `dsh-opencode-go`        | 0.1.24         | OpenCode Go 订阅接入：网关模型目录 + 订阅额度显示                                            |
-| `dshmarket`              | 1.66.42        | 插件市场：浏览、安装与更新社区插件                                                           |
-| `@xmanrui/dsh-im`        | 5.1.0          | IM 接入：微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix 连进 DSH     |
-| `dsh-pocket`             | 2.12.0         | 手机扫码远程访问（局域网 + 公网实时同屏），取代已删的 `dsh-remote-web-gateway`               |
-| `dsh-devin-cli`          | 0.4.2 @06a9c61 | 本地 Devin CLI 经 stdio ACP 接入（github 锁 commit，`dsh update` 自动跟 HEAD）               |
-| `dsh-find-plugin`        | 已移除         | 2026-10 移除：peer 止步 `^0.1.7-alpha.1`，0.4.0 已是上游最新且无 0.2.x 适配版，compat 门恒拒（见下） |
-| `dsh-agent-extensions`   | `link:` 本地   | 自建插件，见「自建插件」                                                                     |
-| `dsh-agenote`            | `link:` 本地   | 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在外部仓库 `~/Projects/agenote/dsh-agenote` |
+| 插件                           | 当前版本       | 说明                                                                                                                                                      |
+| ------------------------------ | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dsh-context`                  | 0.75.1         | 上下文监控面板：Agent 组合、趋势、文件活动与 Agent 通信网络                                                                                               |
+| `dshmarket`                    | 1.66.45        | 插件市场：浏览、安装与更新社区插件                                                                                                                        |
+| `@xmanrui/dsh-im`              | 5.6.0          | IM 接入：微信、飞书、企微、钉钉、QQ、Telegram、WhatsApp、Slack、Discord、Matrix 连进 DSH                                                                  |
+| `cc-safety-net`                | 2.6.19         | 安全网：拦截敏感路径访问（`.env` 等 secret 文件）与危险命令模式                                                                                           |
+| `dsh-claude-style`             | 0.19.2         | Claude 风格 UI 皮肤（`ui-skin-claude-style` 行配置品牌、动效、吉祥物）                                                                                    |
+| `dsh-soul-md`                  | 0.10.3         | 人设卡托管：persona card + 分层记忆注入（`soul:memory`），配置含瑞树人设卡                                                                                |
+| `ds-bot`                       | 0.2.1          | Bot 团队：主会话 Lead + 可创建 teammate，共享 `$DSH_HOME/bot/` 记忆与工作区                                                                               |
+| `dsh-better-sidebar`           | 0.28.0         | 侧栏增强：agent open tools 等                                                                                                                             |
+| `@linxin666/dsh-remote-web-ui` | 0.4.8          | 远程 Web UI（接替 dsh-pocket：手机/平板远程访问，cloudflared 隧道）                                                                                       |
+| `@mengyuly/dsh-ponytail`       | 0.4.3          | Ponytail 懒惰高级工程师模式（模式档位 lite/full/ultra，`ponytail` 行配置默认档）                                                                          |
+| `dsh-agent-extensions`         | `link:` 本地   | 自建插件，见「自建插件」                                                                                                                                  |
+| `dsh-agenote`                  | `link:` 本地   | 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在外部仓库 `~/Projects/Agent/agenote/packages/dsh-agenote`                                               |
+| `dsh-atelier-agent`            | `link:` 本地   | Atelier 外部 agent CLI 编排（peer/scout/worker 等），源在 `~/Projects/Agent/dsh-plugins/dsh-atelier-agent`                                                |
+| `@michengai/dsh-automation`    | 1.0.10         | 定时任务：每次触发开**全新会话**执行 prompt，逐任务工作区/模型/技能/权限，暂停/立即运行/运行历史；补 `dsh-schedule`（绑定原会话的提醒）缺的无人值守执行面 |
+| `dsh-dream-skin`               | 已移除         | 2026-10 移除：换肤能力由 dsh-claude-style 接替（见下）                                                                                                    |
+| `dsh-pocket`                   | 已移除         | 2026-10 移除：远程访问改走 `@linxin666/dsh-remote-web-ui` + tailscale serve；`dsh-pocket/` 运行时目录已清                                                 |
+| `dsh-opencode-go`              | 仅 TUI profile | Web 侧已移除；TUI 侧 0.1.24 在装（订阅额度显示）                                                                                                          |
+| `dsh-devin-cli`                | 已移除         | 2026-10 移除（github 锁 commit 的 ACP 接入）                                                                                                              |
+| `dsh-find-plugin`              | 已移除         | 2026-10 移除：peer 止步 `^0.1.7-alpha.1`，0.4.0 已是上游最新且无 0.2.x 适配版，compat 门恒拒（见下）                                                      |
 
 > 表中版本号与 `profiles/web/package.json` 的 dependencies 一一对应（`dsh update` 写精确值，不带 `^`）。以 `package.json` 为准。
 
@@ -67,7 +76,7 @@
 
 | 源扩展（pi/omp）         | DSH 行         | 作用面                                                                                   |
 | ------------------------ | -------------- | ---------------------------------------------------------------------------------------- |
-| `pi-gate`                | gate           | `tools/pre-execute` 拦截 bash/write/edit，判定仍由 `~/.agents/gate-core.sh` 出    |
+| `pi-gate`                | gate           | `tools/pre-execute` 拦截 bash/write/edit，判定仍由 `~/.agents/gate-core.sh` 出           |
 | `global-context`         | global-context | `systemPrompt.section`（order 10300）注入 + `/global-context`、`/fetchcontext` 命令      |
 | `custom-shortcuts`       | （客户端半边） | Shift+Tab 切 plan 模式，见 `client.js`                                                   |
 | （DSH 原生，无 pi 对应） | lifecycle      | `/dsh-services` / `/dsh-kill-others` / `/dsh-restart` 命令 + 会话头「清残留 / 重启」按钮 |
@@ -122,6 +131,7 @@
 dsh-TUI（上游 `ccch1mneyyy/dsh-TUI`，npm `@deepseek-harness-tui/dsh-tui`）是官方收录的 TUI 补位插件：鲸鱼顶栏 / 实时状态 / 流式思考 / 双击 Esc 回滚 / 上下文进度 + TPS。它与 web profile **平级但独立**——插件自带 agent preset，与 web 的三套自定义 preset、chrome App 窗口那条链路互不干扰。不并进 web profile 是刻意的：并进去会把 TUI 的 preset 行注册进 web 的组合，而两边预设、shell 方言与渲染方式都不同。
 
 - **形态**：独立 profile `profiles/dsh-tui/`，随上游一键脚本 `install.sh`（`dsh plugin --profile dsh-tui add`）的建法，故沿用官方形态。入口 `dsh tui` 直 exec profile 内的完整 launcher 副本，不引上游 `dsh-tui`/`dst` 两个 bin 到 `~/.local/bin`。
+- **数据目录迁移（2026-10-25）**：上游把数据目录硬编码为 `join(homedir(), '.dsh-tui')`（`lib/types/utils/paths.js` 的 `DATA_DIR` + bin/launcher 与十余个 prefs 模块的内联构造），**无环境变量口子**，改 HOME 或打补丁都会被 `dsh update` 冲掉。方案：`~/.dsh-tui` → `$DSH_HOME/dsh-tui/data/` 搬家 + 软链回填，上游无感知。`dsh update` 会回源 launcher 但不会动 `$DSH_HOME` 下的用户数据，此形态可持久；若上游未来提供 dataDir 配置再评估。
 - **compat 门同样生效，但本 profile 不需要豁免文件**：`compatibility.json` 是**版本豁免授权表**（精确 `pkg@version` → 精确 DSH 运行时版本列表），不是「TUI 能不能加载」的总开关——读不到文件即「无豁免」，插件仍按自己的 peer 范围正常判定。TUI 0.16.1 的 peer 逐项含 `0.2.1-rc.2`，与当前本体天生匹配，故该文件**已删除**（原先只授权过 0.11.0@0.1.7-rc.2，早已失效）。**误判的代价**：曾记「删掉该文件 TUI 就整条消失」——2026-10 实测证伪（移走后 dump-config 仍 121 条、48 条 tui 条目，与带文件时逐条一致）。真要让 TUI 消失，得让它的 peer 范围与本体对不上，而不是删授权文件。判定：`dsh --profile dsh-tui --dump-config | grep -c '^- id:'`，或 `dsh tui doctor` 输出的 `config: .../cordis.patch.yml` 行。
 - **版本线**：当前 TUI 0.16.1 + 本体 0.2.1-rc.2（peer 双向匹配）。0.12.0 是首个适配 0.2.0 的版本，0.11.0 的主验证线是 0.1.7-rc.2——这两条只作历史参照。
 - **`tool-ralph` 的 patch 告警是上游的，不是本包的**：TUI bundle 自带的 `cordis.patch.yml` 有一行 `- id: tool-ralph / disabled: true`，而本体 0.2.1-rc.2 的 base 层已不再注册该 host 行，于是每次 boot 报 `[@deepseek-harness-tui/dsh-tui] patch: entry "tool-ralph" not found`。上游同款行在 `tool-str-replace-editor` 上专门写了注释解释同类现象。纯告警，不影响任何功能，**不要在本包侧找 bug**。
@@ -168,7 +178,7 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:3080
 
 ## 排障（配置层）
 
-1. **端口冲突**：服务启动失败时先用 `ss -tlnp` 查 3080 占用者。服务 stdout 在 `~/.local/state/dsh/web.log`（权限 600），含一次性 token URL 与 launch token 行；UI 缺失先浏览器硬刷新，仍缺则看 `__DSH_BOOT__.entries` 的加载条数。`DSH_WEB_PORT` / `DSH_WEB_LOG` 可覆盖端口与日志路径（换端口会使 cookie 的 authority 变，须重新握手）。
+1. **端口冲突**：服务启动失败时先用 `ss -tlnp` 查 3080 占用者。服务 stdout 在 `~/.local/state/dsh/web.log`（权限 600），含一次性 token URL 与 launch token 行；UI 缺失先浏览器硬刷新，仍缺则看 `__DSH_BOOT__.entries` 的加载条数。`DSH_WEB_PORT` / `DSH_WEB_LOG` 可覆盖端口与日志路径（换端口会使 cookie 的 authority 变，须重新握手）。server 自 2026-10 起由 home-shepherd `dsh-web` 服务常驻（定义在 `source/config.org`），wrapper 检测到服务注册即经 `herd` 启停、不再自行 spawn；`EADDRINUSE` respawn 振荡说明有第二个 shepherd 也注册了 dsh-web——bwrap 沙箱（qqbot/weixin 网关会话）内的 shepherd 即如此（2026-10-24 实录），宿主侧 `herd`/`herd restart` 才是权威。
 2. **极简模式报 `PTY shell exited during startup`**：Guix 没有 `/bin/bash`（`/bin` 下只有 `sh`），而 `@deepseek-ai/dsh-terminal-bash` 把 bash 方言的默认 shell 硬编码成该路径 → spawn `ENOENT` → PTY 子进程当场退出，报出这条**误导性**错误（真正失败在 exec 阶段，不是就绪超时；姐妹分支是 `PTY shell did not reach readiness before startup timeout`）。只有极简模式中招，四档 preset 里只有它挂持久 shell。修法见「自定义 Agent Presets」的 `preset-minimal-guix`。
    - **连带坑**：`shellPath` 是**单个字符串**（schemastery `z.string()`），loader 不按空格切分，`confine()` 直接把它当 `argv[0]`。写 `/usr/bin/env bash` 会被当成一个文件名 → 同样 `ENOENT`。要 env 语义只能 `shellPath: /usr/bin/env` + `shellArgs: [bash, --noprofile, --norc, -i]`。
 3. **第三方插件报 `cannot get property "webServer" without inject`（boot 崩溃）**：`ctx.connection.rpc.handle()` 内部在 **connection 插件自己的 scope** 解析 `webServer`（cordis shadow 语义，`this.ctx` 经 `createShadow` 指向服务方 context），而 bundle 的 `connection` 行只 inject 了 `webRuntime` → 任何调 `rpc.handle` 的插件（如 `dsh-remote-web-gateway`）都会炸掉整个 boot；`rpc.intercept` / `fetch.register` 不受影响。修法：profile `cordis.patch.yml` 给 `connection` 行补 `inject: [webRuntime, webServer]`（inject 是整表替换，原值须复述）。

@@ -2085,6 +2085,7 @@ polkit.addRule(function(action, subject) {
    "figlet"
    "graphviz"
    "jdtls-bin"
+   "jupyter"
    "node"
    "openjdk@25"
    "plantuml"
@@ -2118,8 +2119,10 @@ polkit.addRule(function(action, subject) {
 
    ;; 环境管理
    "bubblewrap"
+   "bun-bin"
    "direnv"
-   "pnpm"
+   "guix-jupyter"
+   "pnpm-bin"
    "uv"
 
    ;; 构造工具
@@ -2815,7 +2818,7 @@ lalt grv  lctl _  _  _  _  _)
   pnpm 的稳定 symlink（指向 =.pnpm= 内当前版本），升级不漂移——与 =dsh-web= 脚本的
   =DSH_BIN= 同款路径。stow 断链自愈由 =bin/dsh= 每次调用的 =_relink_profile= 兜底，
   cron 定时跑 =dsh --version= 即可触发。
-- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log= —— =dsh-web= wrapper 的
+- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log=——=dsh-web= wrapper 的
   =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），
   shepherd 接管后该路径继续可用，零分叉。
 - *环境显式设置* :: =DSH_HOME= / =AGENTS_ROOT= 在 gexp 内运行期求值并注入，不赌

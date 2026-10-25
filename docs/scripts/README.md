@@ -22,12 +22,12 @@
 
 ## agent 入口（`~/.local/bin`）
 
-| 脚本                                                 | 源码                                               | 部署    | 手册                               |
-| ---------------------------------------------------- | -------------------------------------------------- | ------- | ---------------------------------- |
-| dsh / dsh-web / dsh-update / dsh-tui                 | `dotfiles/mutable/agents/dsh/.local/`              | mutable | [dsh.md](dsh.md)                   |
-| hermes / hermes-acp / hermes-update / hermes-desktop | `dotfiles/mutable/agents/hermes/.local/`           | mutable | [hermes.md](hermes.md)             |
-| devin                                                | `dotfiles/mutable/agents/devin/.local/bin/`        | mutable | [devin.md](devin.md)               |
-| askill                                               | `dotfiles/mutable/agents/skills/.local/bin/`       | mutable | [askill.md](askill.md)             |
+| 脚本                                                 | 源码                                         | 部署    | 手册                   |
+| ---------------------------------------------------- | -------------------------------------------- | ------- | ---------------------- |
+| dsh / dsh-web / dsh-update / dsh-tui                 | `dotfiles/mutable/agents/dsh/.local/`        | mutable | [dsh.md](dsh.md)       |
+| hermes / hermes-acp / hermes-update / hermes-desktop | `dotfiles/mutable/agents/hermes/.local/`     | mutable | [hermes.md](hermes.md) |
+| devin                                                | `dotfiles/mutable/agents/devin/.local/bin/`  | mutable | [devin.md](devin.md)   |
+| askill                                               | `dotfiles/mutable/agents/skills/.local/bin/` | mutable | [askill.md](askill.md) |
 
 ## 第三方二进制（`~/.local/bin`）
 
@@ -39,11 +39,11 @@
 
 ## agent 闸门与钩子
 
-| 脚本                          | 源码                                          | 部署                                              | 手册                                   |
-| ----------------------------- | --------------------------------------------- | ------------------------------------------------- | -------------------------------------- |
-| gate-core.sh + anchors-lib.sh | `dotfiles/immutable/agents/.agents/`   | immutable → `~/.agents/`（须 `blue home`） | [gate-core.md](gate-core.md)           |
-| context-select.sh             | 同上                                          | 同上                                              | [context-select.md](context-select.md) |
-| zcode hooks（3 个）           | `dotfiles/mutable/agents/zcode/.zcode/hooks/` | mutable → `~/.zcode/hooks/`                       | [zcode-hooks.md](zcode-hooks.md)       |
+| 脚本                          | 源码                                          | 部署                                       | 手册                                   |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------ | -------------------------------------- |
+| gate-core.sh + anchors-lib.sh | `dotfiles/immutable/agents/.agents/`          | immutable → `~/.agents/`（须 `blue home`） | [gate-core.md](gate-core.md)           |
+| context-select.sh             | 同上                                          | 同上                                       | [context-select.md](context-select.md) |
+| zcode hooks（3 个）           | `dotfiles/mutable/agents/zcode/.zcode/hooks/` | mutable → `~/.zcode/hooks/`                | [zcode-hooks.md](zcode-hooks.md)       |
 
 ## 终端：fish
 
@@ -66,10 +66,10 @@
 
 ## 主题
 
-| 脚本                                                     | 源码                                                        | 部署                       | 手册                                 |
-| -------------------------------------------------------- | ----------------------------------------------------------- | -------------------------- | ------------------------------------ |
+| 脚本                                                                       | 源码                                                   | 部署                               | 手册                                 |
+| -------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- | ------------------------------------ |
 | `{dark,light}-mode.d/0-apply-theme.sh` + theme-common.sh + nosd-portal-run | `dotfiles/immutable/nosdshell/.local/{libexec,share}/` | immutable → mode.d / dbus services | [darkman-theme.md](darkman-theme.md) |
-| set-theme.sh                                             | `dotfiles/immutable/nosdshell/.config/darkman/script/` | immutable                  | [set-theme.md](set-theme.md)         |
+| set-theme.sh                                                               | `dotfiles/immutable/nosdshell/.config/darkman/script/` | immutable                          | [set-theme.md](set-theme.md)         |
 
 ## 桌面与系统零散脚本
 
@@ -98,16 +98,16 @@ Emacs 配置为 UniEmacs 子模块（`dotfiles/mutable/emacs/.config/emacs/`，m
 
 内嵌脚本不进 `docs/`：按 CONVENTIONS §5 写在 `source/config.org` 代码块旁的 org 正文里。按 `#+NAME:` 块名检索（`blue block-show <块名>` 可单独提取）：
 
-| 块名                                                | 内容                                                               |
-| --------------------------------------------------- | ------------------------------------------------------------------ |
-| `maint-check` / `maint-dry-rebuild` / `maint-build` | 文件头的维护操作 Babel 块                                          |
-| `mihomo-run`                                        | 解密订阅、渲染模板并 exec mihomo                                   |
-| `nm-dispatcher-trusted-connection`                  | NetworkManager dispatcher：可信 WiFi 接口进出 nftables 集合        |
+| 块名                                                | 内容                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `maint-check` / `maint-dry-rebuild` / `maint-build` | 文件头的维护操作 Babel 块                                                       |
+| `mihomo-run`                                        | 解密订阅、渲染模板并 exec mihomo                                                |
+| `nm-dispatcher-trusted-connection`                  | NetworkManager dispatcher：可信 WiFi 接口进出 nftables 集合                     |
 | `tuned-services`                                    | tuned 服务与 tuned-ppd 档位映射（profile 在 `source/files/tuned/`，无内嵌脚本） |
-| `usb-power-services`                                | USB autosuspend udev 规则（600s 空闲挂起 + VID:PID 白名单）        |
-| `root-services`                                     | `beesd-run` 启动包装                                               |
-| `50-hibernate.rules`                                | polkit 休眠授权规则（JavaScript）                                  |
-| `fish-cfg`                                          | fish 交互 shell 集成模板                                           |
-| `clipsync`                                          | X11 与 Wayland CLIPBOARD 双向同步守护（Guile）                     |
-| `kb-backup-script`                                  | hermes 与 Org 知识库每日自动 commit                                |
-| `gnupg-home-fixup-script`                           | `tmp/gnupg-home-fixup`：GNUPGHOME 收敛 700 + 清外主机 dotlock 残留 |
+| `usb-power-services`                                | USB autosuspend udev 规则（600s 空闲挂起 + VID:PID 白名单）                     |
+| `root-services`                                     | `beesd-run` 启动包装                                                            |
+| `50-hibernate.rules`                                | polkit 休眠授权规则（JavaScript）                                               |
+| `fish-cfg`                                          | fish 交互 shell 集成模板                                                        |
+| `clipsync`                                          | X11 与 Wayland CLIPBOARD 双向同步守护（Guile）                                  |
+| `kb-backup-script`                                  | hermes 与 Org 知识库每日自动 commit                                             |
+| `gnupg-home-fixup-script`                           | `tmp/gnupg-home-fixup`：GNUPGHOME 收敛 700 + 清外主机 dotlock 残留              |

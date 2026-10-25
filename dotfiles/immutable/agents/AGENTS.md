@@ -29,7 +29,7 @@ Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
 | 系统        | 介入时机       | 负责范围                                | 内容源                                                      | 改后生效                |
 | ----------- | -------------- | --------------------------------------- | ----------------------------------------------------------- | ----------------------- |
-| **Context** | 会话启动时注入 | 通用与领域工作原则（靠 agent 自律）     | `.agents/context/` + `context-select.sh`             | `blue home`             |
+| **Context** | 会话启动时注入 | 通用与领域工作原则（靠 agent 自律）     | `.agents/context/` + `context-select.sh`                    | `blue home`             |
 | **Anchors** | 工具调用时拦截 | 冻结命令/路径、改写、提示（机器硬拦截） | `anchors.json`（两级）+ `gate-core.sh`                      | `blue home`             |
 | **Skills**  | 会话中按需加载 | 操作手册与工作流（查阅执行）            | mutable 包 `dotfiles/mutable/agents/skills/`（askill 管理） | Stow 直链，改源即时生效 |
 

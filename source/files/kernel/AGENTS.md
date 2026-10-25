@@ -4,12 +4,12 @@
 
 ## 1. 文件职责
 
-| 文件 / 路径                          | 核心职责                                                                                            | 维护规则                                   |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `linux-cachyos.scm`                   | 包定义（`%cachyos-version` + `%cachyos-origin`）、通用桌面档 `%kernel-common-configs`、组装 | **版本升级入口**；导出 `linux-cachyos`  |
-| `defconfig-cachyos`                   | 上游纯净 Defconfig（逐字取自 codeberg `hako/kernel-config` 的 `defconfig_desktop`，钉在 `49c98a1`；2026-10 随切线 7.2 由 `defconfig_server` 换入） | **禁止手动编辑**，仅随上游版本整体替换     |
-| `machines/redmibook-pro-16-2024.scm` | 设备层：文件头记录实机硬件探针（裁剪依据），导出 `%machine-pin-configs` 与 `%machine-configs`       | 换机即新建同构文件并改主文件里的 load 行   |
-| `machines/redmibook-trim.kconfig`    | 针对非本机硬件的大类反选清单（约 2000 行，裸符号即反选）                                            | 与 Defconfig 结构对齐，按硬件大类注释分组  |
+| 文件 / 路径                          | 核心职责                                                                                                                                           | 维护规则                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `linux-cachyos.scm`                  | 包定义（`%cachyos-version` + `%cachyos-origin`）、通用桌面档 `%kernel-common-configs`、组装                                                        | **版本升级入口**；导出 `linux-cachyos`    |
+| `defconfig-cachyos`                  | 上游纯净 Defconfig（逐字取自 codeberg `hako/kernel-config` 的 `defconfig_desktop`，钉在 `49c98a1`；2026-10 随切线 7.2 由 `defconfig_server` 换入） | **禁止手动编辑**，仅随上游版本整体替换    |
+| `machines/redmibook-pro-16-2024.scm` | 设备层：文件头记录实机硬件探针（裁剪依据），导出 `%machine-pin-configs` 与 `%machine-configs`                                                      | 换机即新建同构文件并改主文件里的 load 行  |
+| `machines/redmibook-trim.kconfig`    | 针对非本机硬件的大类反选清单（约 2000 行，裸符号即反选）                                                                                           | 与 Defconfig 结构对齐，按硬件大类注释分组 |
 
 组装的唯一表达式在主文件里：`#:configs (append %kernel-common-configs %machine-configs)`，而 `%machine-configs` 自身是 `(append %machine-pin-configs %machine-trim-configs)`。裁剪清单的文件名由 machine `.scm` 内显式引用（`call-with-input-file` 读同目录），**改名必须两处同改**。
 

@@ -30,7 +30,7 @@ context-select.sh --check                                   # 一致性自检
 | 环境变量          | 语义                                                                     |
 | ----------------- | ------------------------------------------------------------------------ |
 | `CONTEXT_DIR`     | 覆盖 context 根，默认 `${XDG_CONFIG_HOME:-$HOME/.config}/agents/context` |
-| `XDG_CONFIG_HOME` | 覆盖配置根，参与 context 根定位                                |
+| `XDG_CONFIG_HOME` | 覆盖配置根，参与 context 根定位                                          |
 
 `CONTEXT_DIR` 与各端的 selector 路径变量（zcode 与 DSH 都认 `CONTEXT_SELECT_BIN`）配合，可在 `blue home` 部署前用仓库源码跑通全链路。
 
@@ -67,13 +67,13 @@ domains/dsh-sandbox.md|platform:dsh
 
 输出走 stdout，`✗` 行置 `fail=1` 并最终 exit 1，`－` 行只是提示不阻断，全过时打印 `✓` 并 exit 0。
 
-| 检查项                                                                  | 不一致时                           |
-| ----------------------------------------------------------------------- | ---------------------------------- |
-| 映射表引用的文件存在                                                    | fail                               |
-| `domains/` 磁盘集合 == 映射集合                                         | fail（双向，含未登记与已登记缺失） |
-| `INDEX.md` 条目集合 == `domains/`                                       | fail（双向）                       |
-| `INDEX.md` 条目带 `file=` 声明                                          | fail（逐条比对 name 与 file 同名） |
-| hermes 插件已部署                                                       | 仅提示「未部署，跳过」             |
+| 检查项                            | 不一致时                           |
+| --------------------------------- | ---------------------------------- |
+| 映射表引用的文件存在              | fail                               |
+| `domains/` 磁盘集合 == 映射集合   | fail（双向，含未登记与已登记缺失） |
+| `INDEX.md` 条目集合 == `domains/` | fail（双向）                       |
+| `INDEX.md` 条目带 `file=` 声明    | fail（逐条比对 name 与 file 同名） |
+| hermes 插件已部署                 | 仅提示「未部署，跳过」             |
 
 hermes 插件是可选部署，未部署时只提示。
 
