@@ -1,0 +1,37 @@
+{
+  "//": "manifest 形状示例：数组，每项一个 logo。kind 决定怎么取源。",
+  "root": "/home/<user>/Projects/<asset-lib>",
+  "items": [
+    {
+      "category": "01-ai-models",
+      "name": "OpenAI",
+      "kind": "simple-icons",
+      "src": "openai",
+      "brand_color": "412991",
+      "note": "optional 备注，写进 meta.json 的 source 之外"
+    },
+    {
+      "category": "02-harness",
+      "name": "Hermes",
+      "kind": "local",
+      "src": "/path/to/hermes-agent/assets/icon-master.svg",
+      "brand_color": "",
+      "note": "本机已安装资产，优先级最高"
+    },
+    {
+      "category": "02-harness",
+      "name": "Kitty",
+      "kind": "url",
+      "src": "https://raw.githubusercontent.com/kovidgoyal/kitty/master/logo/kitty.svg",
+      "brand_color": "000000",
+      "note": "官方仓库原生 SVG，已带色，不要注入 fill"
+    },
+    {
+      "category": "06-tech-stack",
+      "name": "Java",
+      "kind": "url",
+      "src": "https://www.vectorlogo.zone/logos/java/java-icon.svg",
+      "brand_color": "FF0000"
+    }
+  ]
+}

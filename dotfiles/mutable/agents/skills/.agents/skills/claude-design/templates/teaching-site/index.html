@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>互动教程</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__left">
+    <button class="hamburger" id="hamburger" aria-label="打开侧栏">☰</button>
+    <a class="brand" href="#"><span class="brand__logo">λ</span><span class="brand__text">互动教程</span></a>
+  </div>
+  <div class="topbar__center">
+    <div class="search">
+      <input id="searchInput" type="text" placeholder="搜索 (Ctrl + K)" autocomplete="off" />
+      <kbd class="kbd">Ctrl K</kbd>
+      <div id="searchResults" class="search__results"></div>
+    </div>
+  </div>
+  <div class="topbar__right">
+    <div class="progress-pill"><span id="progressText">0 / 0</span><div class="progress-pill__bar"><div id="progressBar"></div></div></div>
+    <button class="icon-btn" id="glossaryBtn">📖</button>
+    <button class="icon-btn" id="themeBtn">🌗</button>
+  </div>
+</header>
+
+<aside class="sidebar" id="sidebar">
+  <nav class="nav" id="dayNav"></nav>
+</aside>
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<main class="main" id="main"></main>
+
+<div id="tooltip" class="tooltip" role="tooltip"></div>
+<div class="glossary-panel" id="glossaryPanel" aria-hidden="true">
+  <div class="glossary-panel__inner">
+    <header>
+      <h2>📖 术语表</h2>
+      <button class="icon-btn" id="glossaryClose">✕</button>
+    </header>
+    <input id="glossarySearch" class="glossary-search" placeholder="搜索术语…" />
+    <div class="glossary-list" id="glossaryList"></div>
+  </div>
+</div>
+<div id="toast" class="toast" role="status"></div>
+
+<script src="data/glossary.js"></script>
+<script src="data/content.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/components.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
