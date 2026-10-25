@@ -6,7 +6,6 @@
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
 - 开工先 `cd /home/brokenshine/Projects/Config/Guix-configs`，之后相对路径都相对它。
-- 下文 `$HERMES_HOME` 若未注入，按 `/home/brokenshine/.local/share/hermes` 展开（skills 数据仍在 hermes 侧，暂未迁移）。
 - 不要调用 `hermes` CLI（`hermes cron ...` 在本环境不可用）；跨任务状态一律写文件。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
@@ -20,72 +19,57 @@
    - 其它失败 → 报告末尾照实写「投递失败：<原因>」，最多重试一次。
 3. 最后把报告正文作为最终回复输出：第一行就是正文，不要客套、不要汇报执行过程。
 
-## 任务书（迁移自 hermes cron `agent-config-metabolism-weekly`，判据、阈值与铁则一律照旧）
+## 任务书（迁移自 hermes cron `agent-config-metabolism-weekly`；2026-10-26 起审计对象转为 agenote 体系与 DSH 自动化，hermes 配置审计随宿主退役）
 
-你是 Hermes Agent 的自主周检助手。加载 agent-config-metabolism skill，然后按以下流程执行：
+你是 agenote 知识库与 DSH 自动化体系的健康周检助手，按以下流程执行：
 
 ## 执行流程
 
-1. **跑审计脚本**
+1. **agenote 知识库诊断**（对象：`~/Documents/Org/agenote`，CLI 在 `~/.guix-home/profile/bin/agenote`）
 
    ```bash
-   python3 /home/brokenshine/.local/share/dsh/automations/scripts/metabolism_check.py
+   ~/.guix-home/profile/bin/agenote health --quality --duplicates
+   ~/.guix-home/profile/bin/agenote stats
+   ~/.guix-home/profile/bin/agenote gaps --stale-days 60
    ```
 
-2. **分析 RED 项**（cross-validation）
+   判据（agenote 健康面板既定口径，逐项标 GREEN/RED）：
+   - 孤立率 < 15%
+   - 过时率 < 10%
+   - debug 类型占比 < 45%
+   - 薄弱类别（类别卡片数 < 3）列清单
+
+2. **DSH 自动化运行健康**
+
+   读 `/home/brokenshine/.local/share/dsh/storages/dsh_automation.json`（python3 解析 `tables.runs`，按 `automationName` 分组），统计最近 7 天：
+   - 各任务 success / failed / interrupted 计数；`host_interrupted`（宿主重启打断）单列，不计入任务自身失败
+   - 同一任务连续失败 ≥ 2 → RED，逐条附错误码与消息
+   - 注册表 `tables.definitions` 里 7 个任务全部 `status: active`；`ls /home/brokenshine/.local/share/dsh/automations/*.md` 确认任务书文件齐全
+   - 任务书引用的关键资源存在性：`qq-deliver.py`、`scripts/` 下的脚本、`automation-state/` 可写
+
+3. **分析 RED 项**（cross-validation）
    对每个 RED，独立用 shell 探针验证真伪。重点排查：
-   - 脚本 bug（如 JSONC 解析器漏了块注释）
-   - 阈值配置过紧（inject 27 KB/25 KB 这种轻微超标）
-   - 白名单漏配（session dump Bearer、微信 poll 错误）
-   - 真实问题（真正需要修复的）
+   - 统计口径问题（新增卡片拉高孤立率分母、usage_count 未刷新）
+   - CLI bug（health/stats 输出解析错误）
+   - 环境性中断（host_interrupted 类，重跑即可恢复）
+   - 真实退化（真正需要处置的）
 
-3. **自主修复 false-positive**
-   - 脚本 bug → 直接 patch 脚本 + 跑一次验证
-   - 阈值过紧 → 调 yaml 并说明理由
-   - 白名单漏配 → 加 exclude_paths/grep 过滤并说明理由
-   - **修完后必须重跑脚本验证，确认对应 RED 变绿才能算完成**——未完成验证的修复不得写进"已自主修复"，要如实列入"待验证"
-
-4. **skill 语义质量预筛**（Jev，只读）
-
-   ```bash
-   python3 /home/brokenshine/.local/share/dsh/automations/scripts/jev_skill_audit.py \
-       --root /home/brokenshine/.local/share/hermes/skills \
-       --out /home/brokenshine/.local/share/dsh/automation-reports/agent-config-metabolism-weekly/jev-weekly.md
-   ```
-
-   按 jev-skill-quality-audit 的判据读报告：
-   - `trigger_class < 0.80` → description 触发类不可判定，loader 可能发现不了这个 skill
-   - `stale_facts > 0.70` → 版本绑定内容，需人工读一遍确认是否仍成立
-   - 两者同时命中 → 优先重写
-
-   **只出清单，不改任何 skill 文件**。Jev 是语义预筛层，不是决策层；合并/归档判断仍归 curator。
-   报告里标出被 cron 引用或 pinned 的 skill（如 twitter-digest-pipeline）——它们的生命周期由 curator 另行保护，语义结论只作参考。
+4. **处置边界**
+   - 本任务是诊断层：agenote 卡片的降级/归档/合并是 `agenote-curator-weekly` 的职责，这里只出清单不动内容
+   - 明显误报（口径/CLI 问题）在报告里标注证据即可；不修 agenote 知识库文件
+   - 知识库触达：若有可信审计源（agenote 使用记录）则报告最近 30 天触达趋势，无可信源时明确标「不可测」
 
 5. **汇报结果**
    最终交付：
-   - **已自主修复**：修了什么、怎么改的、验证结果（重跑脚本后的输出）
-   - **Jev 语义预筛清单**：trigger_class/stale_facts 命中项，含建议动作（重写 description / 人工复核），标注 cron-pinned
+   - **DSH 自动化健康**：7 任务运行状态表（含最近一次运行时间与状态）+ 资源完整性检查结果
+   - **agenote 指标**：四项判据逐项 GREEN/RED + 交叉验证结论
    - **真实问题需你拍板**：问题描述、选项（A/B/C）、建议方向
    - **全绿**：简洁确认即可
-
-## 6. 当前状态审计
-
-实测并报告：
-
-```bash
-# ① cron 成功率: 读 cron/executions.db 最近 7 天 status
-# ② 技能触达率: /home/brokenshine/.local/share/hermes/skills/.usage.json 中 use_count>0 占比（分母=活技能数，不计 .archive）
-# ③ 内置记忆健康: MEMORY.md/USER.md 无 drift backup，条目可解析，文件哈希与 dotfiles 源一致
-# ④ 知识库触达: 统计最近 30 天经 agenote CLI 成功 add/search/touch 的执行记录；无可信审计源时明确标为不可测
-```
-
-判据：①无连续失败≥2；②≥90%；③无 drift backup 且源/部署一致；④若有可信审计源，触达量不得连续两周下降，否则报告「假设死亡」并归因。
 
 ## 边界
 
 - ❌ 不要动 `~/.agents/skills/`（Guix Home immutable）
+- ❌ 不做 agenote 卡片的降级/归档/合并（归 curator），本任务只诊断
 - ❌ 不要碰 uncommit 的 git 文件
 - ❌ 不要 push 到 remote
-- ❌ 不要用 Jev 判「该不该合并」——成对相似度偏保守，合并归 curator LLM pass
-- ✅ 脚本 bug、阈值、白名单可以直接改
 - ✅ 真正拿不准的，给我选项让我决定
