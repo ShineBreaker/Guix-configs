@@ -297,7 +297,7 @@ display:
   credits_notices: true
   turn_completion_explainer: true
   show_cost: false
-  skin: warm-lightmode
+  skin: default
   language: zh
   tui_status_indicator: kaomoji
   cli_refresh_interval: 1

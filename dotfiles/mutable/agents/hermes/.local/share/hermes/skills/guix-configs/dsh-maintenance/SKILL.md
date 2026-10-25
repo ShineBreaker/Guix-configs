@@ -22,6 +22,8 @@ skill 不重复，只覆盖「更新 → 验证 → 源同步」工作流及其�
 - 被提升为 background 的 terminal 可能丢掉前台的 export：同一条命令里用
   `PATH="$HOME/.local/state/nix/profiles/profile/bin:$PATH" <绝对路径>/dsh ...` 前缀赋值 +
   绝对路径调用最稳，别只写 `dsh` 依赖 PATH 解析。
+- dsh web 的 server 已由 home-shepherd 的 `dsh-web` 服务常驻（`dsh web` wrapper 幂等衔接：
+  端口有活实例即直接开窗）。排障入口见 §5。
 
 ## 1. 更新流程
 
@@ -164,9 +166,20 @@ done
   超时未获同意）；重试一次，仍被拦则如实上报「待补文档」，不要静默跳过——
   用户说「再试试」就是明确的重试授权。
 
-## 5. 收尾
+## 5. dsh-web 常驻服务排障
+
+`dsh-web` shepherd 服务（`source/config.org` 的 `dsh-web-service` 块）已接管常驻；服务命令直调 `.bin/dsh` shim，日志仍写 `${XDG_STATE_HOME}/dsh/web.log`（wrapper 的 `launch_token()` 依赖不变）。
+
+- **EADDRINUSE 振荡**（respawn 循环、每次 startup failed）= 3080 被另一个实例占着：宿主上 wrapper/手动起的残留实例会跟服务抢端口。杀掉占用者即自愈。**qqbot/weixin 沙箱（bwrap）内 `ss -p` 看不到宿主进程 pid**，端口占用排查要么 `herd eval root` 借宿主 shepherd 视野、要么交用户宿主侧做（详见 guix-configs-workflow §4 典型陷阱）。
+- **`herd enable/disable` 无持久化**：只改内存标志，daemon 重启后按 conf 的 `auto-start?` 恢复——临时 disable 止住 respawn 噪音不会影响下次启动。
+- **`herd load` 单独跑不注册服务**：它只求值文件，`(service ...)` 返回值被丢弃；注册要走 init.scm 同款 `register-services` + `load`（recipe 见 guix-configs-workflow §4.4.1）。
+- 服务自身崩溃后的最终验证，必须以新 conf 加载路径注册的实例为准（respawn 验证 recipe 同 §4.4.1）。
+
+## 6. 收尾
 
 - 改动全部落在仓库源（mutable stow 包，改源即时生效；包内新增文件才需要
   `blue stow --restow agents/dsh`；不需要 `blue home`，更不需要 sudo）。
 - `git diff` 核对后按 Conventional Commits 提交，遵守逐文件精确 add 的 commit 边界；
-  运行中的 dsh web 持有旧模块图，最终以 `dsh web --reauth` 重启后的 §2 验证为准。
+  运行中的 dsh web 持有旧模块图，重启走 `herd restart dsh-web`。`dsh web --reauth`
+  自 2026-10-25 起检测到服务注册即内部经 herd 路由（等价 `herd restart`，并按
+  token 值变化等新 boot），不再另起进程，可正常使用。

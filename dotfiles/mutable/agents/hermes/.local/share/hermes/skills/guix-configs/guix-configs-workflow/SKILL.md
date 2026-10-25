@@ -18,7 +18,7 @@ description: "Guix-configs 仓库工作流：dotfiles 部署（stow/blue）、ho
 4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。两处延伸：
    - **冻结前缀覆盖整个 `~/.config/` 与 `~/.local/`**，含 Hermes 系统提示推荐的 scratch 目录（`~/.local/share/hermes/cache/scratch`）——write_file/patch 一律被 gate 拒；跨调用暂存产物写 `/tmp`。
    - **仓库里的 gate/安全规则源目录同样冻结**（如 `dotfiles/immutable/agents/.agents/`，即 context 注入与 gate 规则的源头，防止被管者改自己的护栏）。协作模式：把完整目标内容备到 `/tmp`，交用户 `cp` 回源 + `just home` 部署 + `~/.agents/context-select.sh --check` 校验；不绕、不拆分写入。selector 的 INJECT_MAP 门控（always / git / platform:x）可做场景差异化注入——git 门控 ≈ 仅编码会话生效，因 QQ/微信等 gateway 会话 cwd 是 `~/Projects`（非 git 仓库）。
-5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息 `-m` / `-F <file>` 均可**(agent gate 的「无 `-m` 硬拦」2026-10 已移除)；多段 body 用多个 `-m` 按序拼或 `-F` 传消息文件；AI 参与时 `Assisted-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。
+5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息 `-m` / `-F <file>` 均可**(agent gate 的「无 `-m` 硬拦」2026-10 已移除)；多段 body 用多个 `-m` 按序拼或 `-F` 传消息文件；AI 参与时 `Assisted-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。沙箱会话内 `git commit -S` 的 pinentry 会超时失败(无显示通道可弹)——直接 `--no-gpg-sign` 提交,需要签名时交用户在宿主侧 `git rebase --exec 'git commit --amend --no-edit -S' HEAD~N` 补签,不要反复重试签名。
 6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
 7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
 
@@ -214,6 +214,8 @@ pkexec grep "<service-keyword>" /var/log/messages
 - **shepherd cached PID 不可信**:`make-forkexec-constructor` 不 wait 子进程,子进程死后 shepherd 仍缓存 PID。真相只在 `/var/log/messages` + `/proc/<pid>`。
 - **home-shepherd fork 不继承 WAYLAND_DISPLAY**: 调 wayland 客户端(`noctalia msg` / `makoctl`)需在 hook 脚本顶部动态探测 `$XDG_RUNTIME_DIR/wayland-*` 设 `WAYLAND_DISPLAY`。KB 20260619-195519 + F028。
 - **shepherd service command 禁止带 `--replace`**: 任何 `make-forkexec-constructor` 命令里的 `--replace`(典型来源:hermes gateway CLI 的 self-replace flag)会触发**自踢循环**——新进程启动 → 给前任发 SIGTERM → 前任退出码非 0 → shepherd `respawn? #t` 视为失败 → 再重启 → 又踢自己。日志特征是 `Received SIGTERM as a planned --replace takeover — exiting cleanly` 与 `Another gateway instance is already running (PID XXXX)` 交替出现。修复:从 service 定义里删 `--replace`,详情见 §4.5 + `references/hermes-gateway-shepherd-service.md`。
+- **网关会话(qqbot/weixin)跑在 bwrap 沙箱,宿主进程不可见**:`cat /proc/1/cmdline` 见 `bwrap ... workbuddy` 即是。PID namespace 隔离但 `$HOME`、`/run/user/1000`、loopback 与端口空间共享——宿主进程占着端口时 `ss -p` 无 pid、`/proc/*/fd` 扫描全空、`ps` 找不到监听者,**别误判成幽灵 socket 或 fd 泄漏**。排查宿主端口占用走 `herd eval root` 借宿主 shepherd 视野执行命令,或交用户宿主侧查;沙箱内自证一圈(扫 fd、列进程)只会白耗时间。
+- **从进程列表抓服务 pid 别用 `pgrep -f`**:terminal 工具的整段命令行出现在 `bash -c` 的 cmdline 里,`pgrep -f "<模式>"` 必然自匹配,`kill -9` 会把自己的终端会话带走(exit -9)。按端口抓用 `ss -tlnpH 'sport = :<port>'` 抽 `pid=`,按名字抓用 `pgrep -x <comm>`。
 
 ### 4.4 改 shepherd 服务定义后的完整重启流程(blue home 不够)
 
@@ -229,6 +231,23 @@ herd restart <service-name>
 # 3) 验证 command 字段已更新
 herd status <service-name>   # 看 "命令:" 行是不是新值
 ```
+
+### 4.4.1 动态加载的服务 ≠ conf 加载的服务(respawn 验证陷阱)
+
+on-change gexp 灌进来的服务(以及任何 `herd eval` 动态注册的对象)与 boot 时 conf 加载的**不是同一个 Scheme 对象**。若该服务**首启即崩溃循环**(命令写错等),很快撞上 respawn limit 被自动禁用;之后 `herd enable` 只翻回 enabled 标志、**不清脏状态**——这个动态对象的 respawn 行为不可信(kill -9 可能不重启,与同 daemon 内其他服务的正常 respawn 表面矛盾,极易把人带去查全局机制)。最终验证必须以新 conf 的真实加载路径注册的实例为准:
+
+```bash
+# init.scm 同款机制:register-services + load
+# (herd load 单独跑不注册——它只求值文件,(service ...) 的返回值被丢弃)
+herd eval root '(begin (use-modules (shepherd service))
+  (define (make-um) (let ((m (make-fresh-user-module)))
+    (module-use! m (resolve-interface (quote (shepherd service)))) m))
+  (register-services (list (save-module-excursion (lambda ()
+    (set-current-module (make-um))
+    (load "/gnu/store/<hash>-shepherd-<name>.scm"))))) #t)'
+```
+
+验证 respawn:`kill -9 <pid>` 后查 `~/.local/state/shepherd/shepherd.log` 的「正在重启 <name>」行(shepherd 日志已按 locale 本地化,grep 英文 "Respawning" 恒空)。收尾确认部署位 `~/.config/shepherd/init.scm` 软链指向**含新服务的 conf**(grep 服务名),下次 daemon 重启自动接管,无需手动干预。
 
 ### 4.5 多个 home-shepherd 并存时的清理范式
 
