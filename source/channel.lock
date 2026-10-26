@@ -2,7 +2,7 @@
        (name 'guix)
        (url "https://git.guix.gnu.org/guix.git")
        (branch "master")
-       (commit "973dbc8c00de826f3c38468b09519d30d064eea3")
+       (commit "ae27c30d2900d30af80abc99c6deb4ec5c2be87f")
        (introduction
         (make-channel-introduction
          "9edb3f66fd807b096b48283debdcddccfea34bad"
@@ -42,7 +42,7 @@
        (name 'pantherx)
        (url "https://codeberg.org/gofranz/panther.git")
        (branch "master")
-       (commit "ecf07e28670b1c72c031f2db3eef64850212089c")
+       (commit "370e0518444bad652dfe14a461592ab7af0a1123")
        (introduction
         (make-channel-introduction
          "54b4056ac571611892c743b65f4c47dc298c49da"
@@ -52,7 +52,7 @@
        (name 'rosenthal)
        (url "https://codeberg.org/hako/rosenthal.git")
        (branch "trunk")
-       (commit "1c6b3e3cb6f692bfa74d2882a1c68629f176391d")
+       (commit "55d68222f4cc0eaeb3ba0dca3530062784de710f")
        (introduction
         (make-channel-introduction
          "7677db76330121a901604dfbad19077893865f35"
