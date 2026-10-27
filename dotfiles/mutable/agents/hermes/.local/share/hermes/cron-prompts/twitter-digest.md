@@ -69,7 +69,7 @@ python3 "$HOME/.local/share/hermes/scripts/twitter-digest/digest_build.py" build
 **取材按这个优先级：**
 
 1. **推文正文里的外链**（官方 blog、GitHub release、文档页、定价页、榜单页）：用 `web_extract` 抓正文，把参数、价格、时间表、可用渠道搬进来。这是最可靠的信息增量来源。短链 `t.co` 先展开：`curl -sIL -o /dev/null -w '%{url_effective}' <url>`。
-2. **配图里的表格、参数、跑分**：素材 `[imgN photo WxH URL]` 带地址。宽高比接近 1.2 到 2.4、长边超过 1200px 的图多半是截图或表格，用 `vision_analyze` 读，把表里的关键数字写进正文。人像、渲染图、纯 logo 不读。
+2. **配图里的表格、参数、跑分**：素材 `[imgN photo WxH URL]` 带地址。宽高比接近 1.2 到 2.4、长边超过 1200 px 的图多半是截图或表格，用 `vision_analyze` 读，把表里的关键数字写进正文。人像、渲染图、纯 logo 不读。
 3. 原帖 `[src https://x.com/...]` 需要登录，通常抓不到，不要反复重试。
 4. 抓不到就按素材已有的写，**不许凭常识补全**。
 
