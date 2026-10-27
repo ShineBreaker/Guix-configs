@@ -105,7 +105,7 @@
       "tab_size": 4,
       "formatter": {
         "external": {
-          "command": "$$bin/clang-format$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/clang-format",
           "arguments": ["-style=file", "-assume-filename={buffer_path}"]
         }
       }
@@ -115,7 +115,7 @@
       "tab_size": 4,
       "formatter": {
         "external": {
-          "command": "$$bin/clang-format$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/clang-format",
           "arguments": ["-style=file", "-assume-filename={buffer_path}"]
         }
       }
@@ -124,7 +124,7 @@
       "language_servers": ["gopls"],
       "formatter": {
         "external": {
-          "command": "$$bin/gofmt$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/gofmt",
           "arguments": ["-"]
         }
       }
@@ -138,7 +138,7 @@
     "Nix": {
       "formatter": {
         "external": {
-          "command": "$$bin/nixfmt$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/nixfmt",
           "arguments": ["-"]
         }
       }
@@ -147,7 +147,7 @@
       "language_servers": ["rust-analyzer"],
       "formatter": {
         "external": {
-          "command": "$$bin/rustfmt$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/rustfmt",
           "arguments": ["--emit=stdout"]
         }
       }
@@ -155,7 +155,7 @@
     "Shell Script": {
       "formatter": {
         "external": {
-          "command": "$$bin/shfmt$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/shfmt",
           "arguments": ["-"]
         }
       }
@@ -163,7 +163,7 @@
     "YAML": {
       "formatter": {
         "external": {
-          "command": "$$bin/yq$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/yq",
           "arguments": ["-P", "-"]
         }
       }
@@ -172,7 +172,7 @@
       "language_servers": ["zls"],
       "formatter": {
         "external": {
-          "command": "$$bin/zig$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/zig",
           "arguments": ["fmt", "--stdin", "-"]
         }
       }
@@ -180,7 +180,7 @@
     "CSS": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -188,7 +188,7 @@
     "HTML": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -196,7 +196,7 @@
     "JavaScript": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -204,7 +204,7 @@
     "JSX": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -212,7 +212,7 @@
     "TSX": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -220,7 +220,7 @@
     "TypeScript": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -228,7 +228,7 @@
     "GraphQL": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -236,7 +236,7 @@
     "LESS": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -244,7 +244,7 @@
     "Markdown": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -252,7 +252,7 @@
     "MDX": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -260,7 +260,7 @@
     "SCSS": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -268,7 +268,7 @@
     "Vue": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -276,7 +276,7 @@
     "JSON": {
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -285,7 +285,7 @@
       "soft_wrap": "prefer_line",
       "formatter": {
         "external": {
-          "command": "$$bin/prettier$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -297,7 +297,7 @@
       "language_servers": ["pylsp", "!pyright", "!ruff", "!basedpyright"],
       "formatter": {
         "external": {
-          "command": "$$bin/black$$",
+          "command": "/home/brokenshine/.guix-home/profile/bin/black",
           "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
         }
       }
@@ -306,28 +306,28 @@
   "lsp": {
     "ccls": {
       "binary": {
-        "path": "$$bin/ccls$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/ccls"
       }
     },
     "gopls": {
       "binary": {
-        "path": "$$bin/gopls$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/gopls"
       }
     },
     "omnisharp": {
       "binary": {
-        "path": "$$bin/omnisharp-wrapper$$",
+        "path": "/home/brokenshine/.guix-home/profile/bin/omnisharp-wrapper",
         "arguments": ["-lsp"]
       }
     },
     "zls": {
       "binary": {
-        "path": "$$bin/zls$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/zls"
       }
     },
     "jdtls": {
       "binary": {
-        "path": "$$bin/jdtls$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/jdtls"
       }
     },
     "kotlin-language-server": {
@@ -341,7 +341,7 @@
     },
     "pylsp": {
       "binary": {
-        "path": "$$bin/pylsp$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/pylsp"
       },
       "initialization_options": {
         "pylsp": {
@@ -361,12 +361,17 @@
     },
     "rust-analyzer": {
       "binary": {
-        "path": "$$bin/rust-analyzer$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/rust-analyzer"
       }
     },
     "guile-lsp-server": {
       "binary": {
-        "path": "$$bin/guile-lsp-server$$"
+        "path": "/home/brokenshine/.guix-home/profile/bin/guile-lsp-server"
+      }
+    },
+    "lua-language-server": {
+      "binary": {
+        "path": "/home/brokenshine/.guix-home/profile/bin/lua-language-server"
       }
     }
   },
@@ -380,8 +385,8 @@
     "thumb_border": "left_open"
   },
   "node": {
-    "npm_path": "$$bin/npm$$",
-    "path": "$$bin/node$$"
+    "npm_path": "/home/brokenshine/.guix-home/profile/bin/npm",
+    "path": "/home/brokenshine/.guix-home/profile/bin/node"
   },
   "on_last_window_closed": "quit_app",
   "outline_panel": {

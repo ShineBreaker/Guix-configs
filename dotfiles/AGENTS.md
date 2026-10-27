@@ -24,7 +24,9 @@ dotfiles/
     ├── agenote/
     ├── agents/
     ├── emacs/
-    └── tools/
+    ├── herdr/
+    ├── tools/
+    └── zed/
 ```
 
 <!-- /structor -->

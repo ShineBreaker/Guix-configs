@@ -2098,6 +2098,7 @@ polkit.addRule(function(action, subject) {
    "guile-ares-rs"
    "guile-lsp-server"
    "gopls"
+   "lua-language-server"
    "nixfmt"
    "omnisharp"
    "prettier-bin"
@@ -2992,7 +2993,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** 文件管理服务
 
-对于需要 *动态注入 =/gnu/store= 二进制路径* （如 =gpg-agent.conf= 与 =zed/settings.json= 中的 LSP/格式化器绝对路径）或来自 =tmp/= 构建产物的零散文件，通过 ~home-files-service-type~ 定点投放至 =$HOME= ：
+对于需要 *动态注入 =/gnu/store= 二进制路径* （如 =gpg-agent.conf= 中的 =pinentry= 绝对路径）或来自 =tmp/= 构建产物的零散文件，通过 ~home-files-service-type~ 定点投放至 =$HOME= ：
 
 - ~computed-substitution-with-inputs~ :: 将 =source/files/= 模板中的 ~$$bin/foo$$~ 占位符替换为对应包在 store 中的真实路径（契约详见上文「Fish 服务」小节）。
 - ~assume-source-relative-file-name~ :: 标记相对于当前源文件解析的路径，防止 ~local-file~ 退化为按运行时的当前工作目录（cwd）查找。
@@ -3030,33 +3031,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
                                                          "pinentry-qt")))
 
                  (".local/share/hermes/manifest.scm" ,(local-file
-                                                       "../tmp/hermes-desktop-manifest.scm"))
-
-                 (".config/zed/settings.json" ,(computed-substitution-with-inputs
-                                                "zed.json"
-                                                (local-file
-                                                 "../source/files/zed.json")
-                                                (specs->pkgs
-                                                 "ccls"
-                                                 "clang"
-                                                 "go"
-                                                 "gopls"
-                                                 "guile-lsp-server"
-                                                 "jdtls-bin"
-                                                 "maven"
-                                                 "nixfmt"
-                                                 "node"
-                                                 "omnisharp"
-                                                 "prettier-bin"
-                                                 "python-black"
-                                                 "python-lsp-black"
-                                                 "python-lsp-server"
-                                                 "rust"
-                                                 "rust-analyzer"
-                                                 "shfmt"
-                                                 "yq"
-                                                 "zig"
-                                                 "zig-zls"))))))
+                                                       "../tmp/hermes-desktop-manifest.scm")))))
 #+end_src
 
 *** 环境变量

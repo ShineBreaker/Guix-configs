@@ -44,11 +44,18 @@ mutable/
 │   ├── .local/
 │   ├── .stow-local-ignore
 │   └── .stow-package
-└── tools/
-    ├── appimage-run/
-    ├── hotspot/
-    ├── secrets/
-    └── toolbox/
+├── herdr/
+│   ├── .config/
+│   └── .stow-package
+├── tools/
+│   ├── appimage-run/
+│   ├── hotspot/
+│   ├── secrets/
+│   └── toolbox/
+└── zed/
+    ├── .config/
+    ├── .stow-folding
+    └── .stow-package
 ```
 
 <!-- /structor -->
@@ -58,6 +65,7 @@ mutable/
 | 软件包               | 部署目标                                                                                                             | 说明与手册                                                                                                                                                   |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `emacs`              | `~/.config/emacs/`                                                                                                   | UniEmacs 子模块（上游独立仓库），插件包由 `source/config.org` 的 `<<emacs-packages>>` 提供，详见子模块内的 [AGENTS.md](emacs/.config/emacs/AGENTS.md)        |
+| `zed`                | `~/.config/zed/`                                                                                                     | Zed 编辑器配置（settings/tasks/themes；`.stow-folding` 整目录折叠，UI 原子写直接落仓库；LSP 二进制走 `~/.guix-home/profile/bin/` 稳定绝对路径）           |
 | `agents/devin`       | `~/.local/share/agents/devin/`（安装树）+ `~/.local/bin/devin`                                                       | Devin CLI（上游 binary bundle；`--install`/`update` 为 manifest 直装增强），入口手册 [devin.md](../../docs/scripts/devin.md)                                 |
 | `agents/dsh`         | `~/.local/share/dsh/`（配置/状态）+ `~/.local/share/agents/dsh/`（CLI 安装树）+ `~/.local/bin/dsh` + 图标/desktop 项 | DeepSeek Harness 配置层与 CLI（update/web/tui 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)；入口手册 [dsh.md](../../docs/scripts/dsh.md) |
 | `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                                                      | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）；入口手册 [hermes.md](../../docs/scripts/hermes.md)                         |

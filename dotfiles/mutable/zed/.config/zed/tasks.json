@@ -1,0 +1,12 @@
+[
+  {
+    "allow_concurrent_runs": false,
+    "command": "jjui",
+    "hide": "on_success",
+    "label": "jjui",
+    "shell": {
+      "program": "bash"
+    },
+    "use_new_terminal": true
+  }
+]
