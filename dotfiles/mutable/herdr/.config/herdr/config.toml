@@ -23,11 +23,12 @@ onboarding = false
 
 # ===== 主题：跟随系统亮暗（继承 tmux 经 foot 随系统明暗模式切换的习惯）=====
 [theme]
-auto_switch = true
+auto_switch = false
 dark_name = "terminal"     # 跟随终端 ANSI 色（对应原 tmux 无独立主题）
 light_name = "terminal"
 
 # ===== 终端 =====
+name = "terminal"
 [terminal]
 # 新 pane/tab/workspace 继承源 pane 的 cwd（对应 tmux split-window -c pane_current_path）
 new_cwd = "follow"
@@ -75,3 +76,6 @@ tabs = "alt"                           # alt+1..9 直接切 tab
 [ui]
 sidebar_width = 32                     # 对应原 tmux @sidebar_width 32
 # mouse_capture / copy_on_select 保持默认 true（对应原 tmux mouse on + 拖拽自动复制）
+
+[ui.toast]
+delivery = "system"

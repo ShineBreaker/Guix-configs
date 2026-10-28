@@ -16,9 +16,9 @@ export DSH_HOME
 _tui_bin="${DSH_TUI_BIN:-$DSH_HOME/profiles/dsh-tui/node_modules/@deepseek-harness-tui/dsh-tui/bin/dsh-tui.js}"
 
 if [[ ! -r "$_tui_bin" ]]; then
-  printf 'dsh tui: 找不到 %s\n' "$_tui_bin" >&2
-  printf 'dsh tui: 先安装插件：dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>\n' >&2
-  exit 127
+	printf 'dsh tui: 找不到 %s\n' "$_tui_bin" >&2
+	printf 'dsh tui: 先安装插件：dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>\n' >&2
+	exit 127
 fi
 
 exec node "$_tui_bin" "$@"

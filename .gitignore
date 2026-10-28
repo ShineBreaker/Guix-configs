@@ -85,3 +85,9 @@ dotfiles/mutable/agents/hermes/.local/share/hermes/*.pid
 
 # rope（Emacs rope 插件）本地运行残留
 .ropeproject
+
+# zcode 视频插件缓存路径快照（本地绝对路径，机器相关）
+.v2c
+
+# dsh 自动化投递报告（运行产物，含 IM 投递目标标识）
+dotfiles/mutable/agents/dsh/.local/share/dsh/automation-reports/

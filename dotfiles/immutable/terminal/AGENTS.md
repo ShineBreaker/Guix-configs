@@ -17,7 +17,6 @@ terminal/
     ├── fastfetch/
     ├── fish/
     ├── foot/
-    ├── herdr/
     ├── kitty/
     ├── tmux/
     ├── tmuxifier/

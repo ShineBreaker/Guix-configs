@@ -2,4 +2,20 @@
 # a top-level YAML array of loader patch entries (id-targeted config
 # overrides, disables, and insert lists; `!!js` expressions allowed).
 
-[]
+# 本文件是 home 级层（$DSH_HOME/cordis.patch.yml）：对每个 profile 都生效，
+# 优先级高于各 profile 自己的 cordis.patch.yml。只放跨 profile 共用的配置。
+
+# ── MCP 服务：cua-driver（computer-use 驱动，工具名 mcp__cua-driver__*）────
+# command 取 home profile 的 wrapper，而非 `cua-driver mcp-config` 输出的
+# libexec 实体：wrapper 负责 Wayland 原生捕获开关（CUA_DRIVER_RS_ENABLE_WAYLAND）
+# 与 telemetry 关断，且随 Guix 重建自动跟随版本。
+# 原先只写在 dsh-tui profile 里，提到 home 层后 web/tui 共用一份；同 serverName
+# 在两处注册会在加载时直接报错，故 dsh-tui 侧的同名条目已删除。
+- insert:
+    - id: mcp-cua-driver
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: stdio
+        serverName: cua-driver
+        command: /home/brokenshine/.guix-home/profile/bin/cua-driver
+        args: [ 'mcp' ]

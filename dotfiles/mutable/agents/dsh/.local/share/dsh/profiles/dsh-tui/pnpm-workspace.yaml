@@ -11,11 +11,8 @@ minimumReleaseAge: 0
 minimumReleaseAgeExclude:
   - '@deepseek-harness-tui/dsh-tui@0.16.1'
 
-allowBuilds:
-  '@google/genai': false
-  esbuild: false
-  koffi: false
-  protobufjs: false
+# allowBuilds 已清空：原四条（@google/genai/esbuild/koffi/protobufjs）
+# 在本 profile lockfile 中均无引用，属已删依赖的死条目
 
 ignoredOptionalDependencies:
   - '@img/sharp-darwin-arm64'

@@ -23,7 +23,7 @@ readonly CLEAN_URL="http://127.0.0.1:${DSH_WEB_PORT}/"
 readonly DSH_WEB_PROFILE=dsh
 
 usage() {
-  cat >&2 <<'EOF'
+	cat >&2 <<'EOF'
 dsh web — DeepSeek Harness Web UI 启动实体
 用法: dsh web [--reauth] [--remote-url] [--lan-off]
   (无参数)     起服务（默认带远程信任）并开本机窗口
@@ -36,197 +36,239 @@ EOF
 # 尾网信任参数（--lan-off 或 DSH_TS_HOST 空串时不带）
 ts_args=()
 if [[ -n "${DSH_TS_HOST:-}" ]]; then
-  ts_args=(--trusted-host "$DSH_TS_HOST")
+	ts_args=(--trusted-host "$DSH_TS_HOST")
 fi
 
 server_up() { (exec 3<>"/dev/tcp/127.0.0.1/${DSH_WEB_PORT}") 2>/dev/null; }
 
 # 监听中的实例是否已带本尾网 host（/proc/<pid>/cmdline 匹配 argv）
 server_trusted() {
-  local pid cmdline
-  pid=$(ss -tlnpH "sport = :${DSH_WEB_PORT}" 2>/dev/null \
-    | sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
-  [[ -z "$pid" ]] && return 1
-  [[ -r "/proc/${pid}/cmdline" ]] || return 1
-  cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline")
-  [[ "$cmdline" == *"--trusted-host ${DSH_TS_HOST}"* ]]
+	local pid cmdline
+	pid=$(ss -tlnpH "sport = :${DSH_WEB_PORT}" 2>/dev/null |
+		sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
+	[[ -z "$pid" ]] && return 1
+	[[ -r "/proc/${pid}/cmdline" ]] || return 1
+	cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline")
+	[[ "$cmdline" == *"--trusted-host ${DSH_TS_HOST}"* ]]
 }
 
 chromium_bin() {
-  if command -v chromium >/dev/null 2>&1; then
-    command -v chromium
-  elif [[ -x "$HOME/.guix-home/profile/bin/chromium" ]]; then
-    printf '%s\n' "$HOME/.guix-home/profile/bin/chromium"
-  else
-    return 1
-  fi
+	if command -v chromium >/dev/null 2>&1; then
+		command -v chromium
+	elif [[ -x "$HOME/.guix-home/profile/bin/chromium" ]]; then
+		printf '%s\n' "$HOME/.guix-home/profile/bin/chromium"
+	else
+		return 1
+	fi
 }
 
 stop_server() {
-  local pid waited=0 cmdline=x
-  pid=$(ss -tlnpH "sport = :${DSH_WEB_PORT}" 2>/dev/null \
-    | sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
-  if [[ -z "$pid" ]]; then
-    printf 'dsh web: 端口 %s 上没有监听进程\n' "$DSH_WEB_PORT" >&2
-    return 1
-  fi
-  if [[ -r "/proc/${pid}/cmdline" ]]; then
-    cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline")
-  fi
-  if [[ "$cmdline" != *"@deepseek-ai/dsh"* ]]; then
-    printf 'dsh web: pid=%s 不是 dsh CLI（%s），拒绝终止\n' "$pid" "$cmdline" >&2
-    return 1
-  fi
-  printf 'dsh web: --reauth 终止 pid=%s\n' "$pid" >&2
-  kill "$pid"
-  while ((waited < 40)); do
-    server_up || return 0
-    sleep 0.25
-    waited=$((waited + 1))
-  done
-  printf 'dsh web: pid=%s 在 10s 内没有退出\n' "$pid" >&2
-  return 1
+	local pid waited=0 cmdline=x
+	pid=$(ss -tlnpH "sport = :${DSH_WEB_PORT}" 2>/dev/null |
+		sed -n 's/.*pid=\([0-9]\{1,\}\).*/\1/p' | head -n 1)
+	if [[ -z "$pid" ]]; then
+		printf 'dsh web: 端口 %s 上没有监听进程\n' "$DSH_WEB_PORT" >&2
+		return 1
+	fi
+	if [[ -r "/proc/${pid}/cmdline" ]]; then
+		cmdline=$(tr '\0' ' ' <"/proc/${pid}/cmdline")
+	fi
+	if [[ "$cmdline" != *"@deepseek-ai/dsh"* ]]; then
+		printf 'dsh web: pid=%s 不是 dsh CLI（%s），拒绝终止\n' "$pid" "$cmdline" >&2
+		return 1
+	fi
+	printf 'dsh web: --reauth 终止 pid=%s\n' "$pid" >&2
+	kill "$pid"
+	while ((waited < 40)); do
+		server_up || return 0
+		sleep 0.25
+		waited=$((waited + 1))
+	done
+	printf 'dsh web: pid=%s 在 10s 内没有退出\n' "$pid" >&2
+	return 1
 }
 
 # desktop 入口没有终端可看，起不来时靠桌面通知让失败可见
 report_start_failure() {
-  local detail
-  detail=$(tail -n 3 "$DSH_WEB_LOG" 2>/dev/null | tr '\n' ' ')
-  printf 'dsh web: dsh web 未能起来，%s 末尾：\n' "$DSH_WEB_LOG" >&2
-  tail -n 20 "$DSH_WEB_LOG" >&2 || true
-  command -v notify-send >/dev/null 2>&1 || return 0
-  notify-send -a dsh web -u critical 'dsh web 启动失败' "${detail:-详见 $DSH_WEB_LOG}" 2>/dev/null || true
+	local detail
+	detail=$(tail -n 3 "$DSH_WEB_LOG" 2>/dev/null | tr '\n' ' ')
+	printf 'dsh web: dsh web 未能起来，%s 末尾：\n' "$DSH_WEB_LOG" >&2
+	tail -n 20 "$DSH_WEB_LOG" >&2 || true
+	command -v notify-send >/dev/null 2>&1 || return 0
+	notify-send -a dsh web -u critical 'dsh web 启动失败' "${detail:-详见 $DSH_WEB_LOG}" 2>/dev/null || true
 }
 
 # 断链自愈：dsh 的原子写会把 stow 软链换成实体文件——内容归源再重建软链；
 # lockfile 反向只回拷内容（与 bin/dsh 的 _relink_profile 同款，起服务前检测）
 _relink_profile() {
-  local dir="$DSH_HOME/profiles/web" src_dir name
-  src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
-  [[ -d "$src_dir" ]] || return 0
-  for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
-    [[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
-    if [[ ! -L "$dir/$name" ]]; then
-      cp "$dir/$name" "$src_dir/$name"
-      ln -sfn "$src_dir/$name" "$dir/$name"
-      printf 'dsh web: %s 断链已写回仓库源并重建软链\n' "$name" >&2
-    fi
-  done
-  if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] \
-    && ! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
-    cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
-    printf 'dsh web: pnpm-lock.yaml 已同步回仓库源\n' >&2
-  fi
+	local dir="$DSH_HOME/profiles/web" src_dir name
+	src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
+	[[ -d "$src_dir" ]] || return 0
+	for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
+		[[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
+		if [[ ! -L "$dir/$name" ]]; then
+			cp "$dir/$name" "$src_dir/$name"
+			ln -sfn "$src_dir/$name" "$dir/$name"
+			printf 'dsh web: %s 断链已写回仓库源并重建软链\n' "$name" >&2
+		fi
+	done
+	if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] &&
+		! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
+		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
+		printf 'dsh web: pnpm-lock.yaml 已同步回仓库源\n' >&2
+	fi
 }
 
 start_server_url() {
-  local dir url="" waited=0 child
-  _relink_profile
-  dir=$(dirname -- "$DSH_WEB_LOG")
-  mkdir -p -- "$dir"
-  (
-    umask 077
-    : >"$DSH_WEB_LOG"
-  )
-  # setsid -w：脱离 desktop 入口会话，且留有同寿命 pid 供 kill -0 早判失败
-  setsid -w "$DSH_BIN" web --no-open --port "$DSH_WEB_PORT" "$@" \
-    >"$DSH_WEB_LOG" 2>&1 </dev/null &
-  child=$!
-  while ((waited < 120)); do
-    url=$(sed -n 's/^dsh web: \([^ 	]\{1,\}\).*$/\1/p' "$DSH_WEB_LOG" | head -n 1)
-    if [[ -n "$url" ]]; then
-      printf '%s\n' "$url"
-      return 0
-    fi
-    if ! kill -0 "$child" 2>/dev/null; then
-      report_start_failure
-      return 1
-    fi
-    sleep 0.5
-    waited=$((waited + 1))
-  done
-  report_start_failure
-  return 1
+	local dir url="" waited=0 child
+	_relink_profile
+	dir=$(dirname -- "$DSH_WEB_LOG")
+	mkdir -p -- "$dir"
+	(
+		umask 077
+		: >"$DSH_WEB_LOG"
+	)
+	# setsid -w：脱离 desktop 入口会话，且留有同寿命 pid 供 kill -0 早判失败
+	setsid -w "$DSH_BIN" web --no-open --port "$DSH_WEB_PORT" "$@" \
+		>"$DSH_WEB_LOG" 2>&1 </dev/null &
+	child=$!
+	while ((waited < 120)); do
+		url=$(sed -n 's/.*dsh web: \(http:\/\/[^ 	]\{1,\}\).*$/\1/p' "$DSH_WEB_LOG" | head -n 1)
+		if [[ -n "$url" ]]; then
+			printf '%s\n' "$url"
+			return 0
+		fi
+		if ! kill -0 "$child" 2>/dev/null; then
+			report_start_failure
+			return 1
+		fi
+		sleep 0.5
+		waited=$((waited + 1))
+	done
+	report_start_failure
+	return 1
 }
 
-# launch token 一次性：已消耗的握手必失败，--reauth 换新
+# launch token 一次性：已消耗的握手必失败，--reauth 换新。0.2.x 起 CLI 给
+# 日志行加了时间戳前缀，匹配不能锚定行首，取最后一条（最新 boot 的 token）
 launch_token() {
-  sed -n 's/^dsh web: http:\/\/127\.0\.0\.1:'"${DSH_WEB_PORT}"'\/?token=\([^ 	]\{1,\}\).*$/\1/p' \
-    "$DSH_WEB_LOG" 2>/dev/null | tail -n 1
+	sed -n 's/.*dsh web: http:\/\/127\.0\.0\.1:'"${DSH_WEB_PORT}"'\/?token=\([^ 	]\{1,\}\).*$/\1/p' \
+		"$DSH_WEB_LOG" 2>/dev/null | tail -n 1
+}
+
+# dsh-web 常驻服务（home-shepherd）接管 server 启停后，本脚本再自行 spawn
+# 会与服务抢 3080 端口，服务连续 EADDRINUSE 触发 respawn 上限即自禁用；
+# 检测到服务注册，启停一律改经 herd
+service_managed() { command -v herd >/dev/null 2>&1 && herd status dsh-web >/dev/null 2>&1; }
+
+# 经 herd 重启并等新 token（--reauth / 服务未起 / 实例未 trusted 共用）。
+# 日志不 truncate，靠 token 值变化识别新 boot，避免拿到上一次的已死 token
+managed_restart_url() {
+	local old new waited=0
+	old=$(launch_token)
+	herd restart dsh-web >/dev/null 2>&1
+	while ((waited < 120)); do
+		new=$(launch_token)
+		if [[ -n "$new" && "$new" != "$old" ]]; then
+			printf 'http://127.0.0.1:%s/?token=%s\n' "$DSH_WEB_PORT" "$new"
+			return 0
+		fi
+		sleep 0.5
+		waited=$((waited + 1))
+	done
+	report_start_failure
+	return 1
 }
 
 reauth=false
 remote_url=false
 passthrough=()
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --reauth) reauth=true ;;
-    --remote-url) remote_url=true ;;
-    --lan-off) DSH_TS_HOST="" ;;
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    *) passthrough+=("$1") ;;
-  esac
-  shift
+	case "$1" in
+	--reauth) reauth=true ;;
+	--remote-url) remote_url=true ;;
+	--lan-off) DSH_TS_HOST="" ;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*) passthrough+=("$1") ;;
+	esac
+	shift
 done
 
 # --remote-url：不弹窗，只保证实例 trusted 并打印握手 URL
 if $remote_url; then
-  if [[ -z "$DSH_TS_HOST" ]]; then
-    echo "dsh web: --remote-url 需要尾网主机名（DSH_TS_HOST 为空）" >&2
-    exit 2
-  fi
-  if server_up && server_trusted; then
-    : # 已就绪
-  elif server_up; then
-    printf 'dsh web: 现有实例未带 --trusted-host，重启中……\n' >&2
-    stop_server
-    start_server_url "${ts_args[@]}" >/dev/null || {
-      echo "dsh web: 服务启动失败" >&2
-      exit 1
-    }
-  else
-    start_server_url "${ts_args[@]}" >/dev/null || {
-      echo "dsh web: 服务启动失败" >&2
-      exit 1
-    }
-  fi
-  token=""
-  for _ in $(seq 1 24); do
-    token=$(launch_token)
-    [[ -n "$token" ]] && break
-    sleep 0.5
-  done
-  echo "已握手设备日常入口: https://${DSH_TS_HOST:-<未配置>}/"
-  if [[ -n "$token" ]]; then
-    echo "首次握手（30 天有效）: https://${DSH_TS_HOST}/?token=${token}"
-  else
-    echo "dsh web: 未在日志找到 token；稍候重跑或 --reauth 换新" >&2
-  fi
-  exit 0
+	if [[ -z "$DSH_TS_HOST" ]]; then
+		echo "dsh web: --remote-url 需要尾网主机名（DSH_TS_HOST 为空）" >&2
+		exit 2
+	fi
+	if server_up && server_trusted; then
+		: # 已就绪
+	elif service_managed; then
+		printf 'dsh web: 经 herd 重启 dsh-web 服务……\n' >&2
+		managed_restart_url >/dev/null || {
+			echo "dsh web: 服务启动失败" >&2
+			exit 1
+		}
+	elif server_up; then
+		printf 'dsh web: 现有实例未带 --trusted-host，重启中……\n' >&2
+		stop_server
+		start_server_url "${ts_args[@]}" >/dev/null || {
+			echo "dsh web: 服务启动失败" >&2
+			exit 1
+		}
+	else
+		start_server_url "${ts_args[@]}" >/dev/null || {
+			echo "dsh web: 服务启动失败" >&2
+			exit 1
+		}
+	fi
+	token=""
+	for _ in $(seq 1 24); do
+		token=$(launch_token)
+		[[ -n "$token" ]] && break
+		sleep 0.5
+	done
+	echo "已握手设备日常入口: https://${DSH_TS_HOST:-<未配置>}/"
+	if [[ -n "$token" ]]; then
+		echo "首次握手（30 天有效）: https://${DSH_TS_HOST}/?token=${token}"
+	else
+		echo "dsh web: 未在日志找到 token；稍候重跑或 --reauth 换新" >&2
+	fi
+	exit 0
 fi
 
-# 常规路径：需要远程但实例未 trusted 时自动重启（远程关闭时跳过）
-if [[ -n "$DSH_TS_HOST" ]] && server_up && ! server_trusted; then
-  printf 'dsh web: 实例未带 --trusted-host，自动重启以启用远程入口……\n' >&2
-  stop_server
-fi
-if $reauth; then
-  stop_server
-fi
-
-if server_up; then
-  url="$CLEAN_URL"
+# 常规路径：服务由 shepherd 托管时启停经 herd（防双起抢端口），否则维持
+# 按端口探测 + 自行 spawn 的原行为
+url=""
+if service_managed; then
+	if $reauth || ! server_up || { [[ -n "${DSH_TS_HOST:-}" ]] && ! server_trusted; }; then
+		printf 'dsh web: 经 herd 重启 dsh-web 服务……\n' >&2
+		url=$(managed_restart_url) || exit 1
+	fi
 else
-  url=$(start_server_url "${ts_args[@]}" "${passthrough[@]}")
+	if [[ -n "${DSH_TS_HOST:-}" ]] && server_up && ! server_trusted; then
+		printf 'dsh web: 实例未带 --trusted-host，自动重启以启用远程入口……\n' >&2
+		stop_server
+	fi
+	if $reauth; then
+		stop_server
+	fi
+fi
+
+if [[ -z "$url" ]]; then
+	if server_up; then
+		url="$CLEAN_URL"
+	else
+		url=$(start_server_url "${ts_args[@]}" "${passthrough[@]}")
+	fi
 fi
 
 chromium=$(chromium_bin) || {
-  printf 'dsh web: 找不到 chromium（ungoogled-chromium-wayland 未装或不在 PATH）\n' >&2
-  exit 127
+	printf 'dsh web: 找不到 chromium（ungoogled-chromium-wayland 未装或不在 PATH）\n' >&2
+	exit 127
 }
 
 exec "$chromium" --profile-directory="$DSH_WEB_PROFILE" \
-  --app="$url" --no-first-run --no-default-browser-check
+	--app="$url" --no-first-run --no-default-browser-check

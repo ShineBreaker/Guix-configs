@@ -5,19 +5,24 @@ autoInstallPeers: false
 saveExact: true
 # 预览期日更版本不卡 pnpm 12 默认的 24h 供应链冷却（本体安装树同款）
 minimumReleaseAge: 0
-minimumReleaseAgeExclude:
-  - dsh-context@0.49.0 || 0.53.3 || 0.54.2 || 0.54.4 || 0.56.2 || 0.57.0 || 0.61.0 || 0.62.2 || 0.70.0 || 0.73.3
-  - '@opencode2dsh/dsh-plugin@0.3.2'
-  - dsh-opencode-go@0.1.4 || 0.1.5 || 0.1.7 || 0.1.14 || 0.1.15 || 0.1.17 || 0.1.20
-  - '@mars-sea/dsh-commandcode-provider@0.11.5'
-  - '@deepseek-ai/cosmokit@1.8.4'
-  - '@deepseek-ai/schemastery@3.18.3'
-  - dsh-dream-skin@9.26.1 || 10.14.2
-  - dshmarket@1.66.2 || 1.66.8 || 1.66.21 || 1.66.42
+# minimumReleaseAgeExclude 已清空：原条目全部属于已移除插件
+# （dsh-dream-skin/dsh-devin-cli/dsh-opencode-go web 侧）或锁定旧版本
+# （cosmokit 1.8.4/schemastery 3.18.3 已升 1.8.6/3.18.5）；下次显式
+# add 冷却期内版本时 pnpm 会自行重写本表
 allowBuilds:
-  '@google/genai': false
-  dsh-devin-cli@https://codeload.github.com/leewf/dsh-devin-cli/tar.gz/06a9c61de653d86e6e634a3cc4f12f6035623788: true
-  esbuild: true
-  node-pty: true
-  protobufjs: false
   cloudflared: true
+  protobufjs: true
+  esbuild: true
+patchedDependencies:
+  dsh-session-import@0.1.1: patches/dsh-session-import@0.1.1.patch
+# dsh-session-import 把核心包写成 dependencies（范围 ^0.1.0-rc.6 只匹配
+# 旧预发布），把 dsh-llm/session 等钉在 0.1.0-rc.8 平铺顶层、劫持全树解析，
+# 0.2.1-rc.2 核心的 compat 门禁因此禁用 llm/session/commands/tools 行致
+# boot 失败。overrides 删边让这些包回退 _cli 树的 0.2.x，插件本体保留。
+overrides:
+  dsh-session-import>@deepseek-ai/dsh-commands: '-'
+  dsh-session-import>@deepseek-ai/dsh-credentials: '-'
+  dsh-session-import>@deepseek-ai/dsh-llm: '-'
+  dsh-session-import>@deepseek-ai/dsh-session: '-'
+  dsh-session-import>@deepseek-ai/dsh-session-title: '-'
+  dsh-session-import>@deepseek-ai/dsh-tools: '-'

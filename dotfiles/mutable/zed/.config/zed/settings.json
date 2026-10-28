@@ -105,7 +105,7 @@
       "tab_size": 4,
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/clang-format",
+          "command": "/gnu/store/rkdhldcc4vjhy1c6mb6kxbpl1hk0vd4m-clang-23.1.1/bin/clang-format",
           "arguments": ["-style=file", "-assume-filename={buffer_path}"]
         }
       }
@@ -115,7 +115,7 @@
       "tab_size": 4,
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/clang-format",
+          "command": "/gnu/store/rkdhldcc4vjhy1c6mb6kxbpl1hk0vd4m-clang-23.1.1/bin/clang-format",
           "arguments": ["-style=file", "-assume-filename={buffer_path}"]
         }
       }
@@ -124,7 +124,7 @@
       "language_servers": ["gopls"],
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/gofmt",
+          "command": "/gnu/store/w4yd8qh1g6s3x716g87axkqqac0lzx2d-go-1.27.3/bin/gofmt",
           "arguments": ["-"]
         }
       }
@@ -138,7 +138,7 @@
     "Nix": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/nixfmt",
+          "command": "/gnu/store/qgjf9hlcjifgndjzvllyqixili30c3jn-nixfmt-1.1.0/bin/nixfmt",
           "arguments": ["-"]
         }
       }
@@ -147,7 +147,7 @@
       "language_servers": ["rust-analyzer"],
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/rustfmt",
+          "command": "/gnu/store/dfiqab66szqjw622bpci4d202y5c3jfj-rust-1.93.0/bin/rustfmt",
           "arguments": ["--emit=stdout"]
         }
       }
@@ -155,7 +155,7 @@
     "Shell Script": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/shfmt",
+          "command": "/gnu/store/xbgg8g28khqcxfzg9bn391aggnb106lf-shfmt-3.14.0/bin/shfmt",
           "arguments": ["-"]
         }
       }
@@ -163,7 +163,7 @@
     "YAML": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/yq",
+          "command": "/gnu/store/hyagh7yrj0f7c4nccg8ndxn07kp8kd0b-yq-4.53.3/bin/yq",
           "arguments": ["-P", "-"]
         }
       }
@@ -172,7 +172,7 @@
       "language_servers": ["zls"],
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/zig",
+          "command": "/gnu/store/7rr6jlypwsc073lnjbsiyinq3xzp83if-zig-0.16.0/bin/zig",
           "arguments": ["fmt", "--stdin", "-"]
         }
       }
@@ -180,7 +180,7 @@
     "CSS": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -188,7 +188,7 @@
     "HTML": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -196,7 +196,7 @@
     "JavaScript": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -204,7 +204,7 @@
     "JSX": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -212,7 +212,7 @@
     "TSX": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -220,7 +220,7 @@
     "TypeScript": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -228,7 +228,7 @@
     "GraphQL": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -236,7 +236,7 @@
     "LESS": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -244,7 +244,7 @@
     "Markdown": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -252,7 +252,7 @@
     "MDX": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -260,7 +260,7 @@
     "SCSS": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -268,7 +268,7 @@
     "Vue": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -276,7 +276,7 @@
     "JSON": {
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -285,7 +285,7 @@
       "soft_wrap": "prefer_line",
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/prettier",
+          "command": "/gnu/store/523jrd190rgg75qw3dss1ca6k8r5v9a1-prettier-bin-3.9.10/bin/prettier",
           "arguments": ["--stdin-filepath", "{buffer_path}"]
         }
       }
@@ -297,7 +297,7 @@
       "language_servers": ["pylsp", "!pyright", "!ruff", "!basedpyright"],
       "formatter": {
         "external": {
-          "command": "/home/brokenshine/.guix-home/profile/bin/black",
+          "command": "/gnu/store/z4gqvz8qr0fpj3xcicqcjzb48i2fhdsx-python-black-26.5.1/bin/black",
           "arguments": ["--quiet", "--stdin-filename", "{buffer_path}", "-"]
         }
       }
@@ -306,28 +306,28 @@
   "lsp": {
     "ccls": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/ccls"
+        "path": "/gnu/store/3zdq0cwfj6whs5xjf8i144apwl3bvc03-ccls-0.20250815.1/bin/ccls"
       }
     },
     "gopls": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/gopls"
+        "path": "/gnu/store/wxbgvl8dlw9g0xrkqxip7scvlamgkn4n-gopls-0.23.0/bin/gopls"
       }
     },
     "omnisharp": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/omnisharp-wrapper",
+        "path": "/gnu/store/fdzjhf9sk9afc4zj3xlv1psc02na4bj1-omnisharp-1.37.7/bin/omnisharp-wrapper",
         "arguments": ["-lsp"]
       }
     },
     "zls": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/zls"
+        "path": "/gnu/store/66nvha4p59cpqafjvrw0apzw9jqd6n9k-zig-zls-0.16.0/bin/zls"
       }
     },
     "jdtls": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/jdtls"
+        "path": "/gnu/store/wwxayk0kml20wpsnk8gs37sx5g3sklfm-jdtls-bin-1.63.0/bin/jdtls"
       }
     },
     "kotlin-language-server": {
@@ -341,7 +341,7 @@
     },
     "pylsp": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/pylsp"
+        "path": "/gnu/store/44fi6mch6sq1g4mfarvqvm1ggxxbj8cx-python-lsp-server-1.15.0/bin/pylsp"
       },
       "initialization_options": {
         "pylsp": {
@@ -361,17 +361,12 @@
     },
     "rust-analyzer": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/rust-analyzer"
+        "path": "/gnu/store/dfiqab66szqjw622bpci4d202y5c3jfj-rust-1.93.0/bin/rust-analyzer"
       }
     },
     "guile-lsp-server": {
       "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/guile-lsp-server"
-      }
-    },
-    "lua-language-server": {
-      "binary": {
-        "path": "/home/brokenshine/.guix-home/profile/bin/lua-language-server"
+        "path": "/gnu/store/x0xfdwzh284xiap175rls6n0bg6kms1i-guile-lsp-server-0.4.8/bin/guile-lsp-server"
       }
     }
   },
@@ -385,8 +380,8 @@
     "thumb_border": "left_open"
   },
   "node": {
-    "npm_path": "/home/brokenshine/.guix-home/profile/bin/npm",
-    "path": "/home/brokenshine/.guix-home/profile/bin/node"
+    "npm_path": "/gnu/store/48vjs5ji2ws7zajaws4q1wv3m70x2fr1-node-24.18.0/bin/npm",
+    "path": "/gnu/store/48vjs5ji2ws7zajaws4q1wv3m70x2fr1-node-24.18.0/bin/node"
   },
   "on_last_window_closed": "quit_app",
   "outline_panel": {

@@ -15,10 +15,13 @@
         "dsh-atelier-agent",
         "dsh-claude-style",
         "@mengyuly/dsh-ponytail",
-        "@xmanrui/dsh-im",
         "cc-safety-net",
         "dsh-better-sidebar",
-        "@linxin666/dsh-remote-web-ui"
+        "@linxin666/dsh-remote-web-ui",
+        "@michengai/dsh-automation",
+        "dsh-soul-md",
+        "@xmanrui/dsh-im",
+        "dsh-session-import"
       ],
       "patchReload": "live"
     }
@@ -26,14 +29,17 @@
   "dependencies": {
     "@linxin666/dsh-remote-web-ui": "0.4.8",
     "@mengyuly/dsh-ponytail": "0.4.3",
-    "@xmanrui/dsh-im": "5.4.0",
-    "cc-safety-net": "2.6.16",
+    "@michengai/dsh-automation": "1.0.10",
+    "@xmanrui/dsh-im": "link:/home/brokenshine/Projects/Agent/dsh-plugins/dsh-im",
+    "cc-safety-net": "2.6.19",
     "dsh-agenote": "link:/home/brokenshine/Projects/Agent/agenote/packages/dsh-agenote",
     "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-atelier-agent": "link:/home/brokenshine/Projects/Agent/dsh-plugins/dsh-atelier-agent",
     "dsh-better-sidebar": "0.28.0",
-    "dsh-claude-style": "0.17.0",
-    "dsh-context": "0.74.0",
-    "dshmarket": "1.66.45"
+    "dsh-claude-style": "0.19.3",
+    "dsh-context": "0.76.0",
+    "dsh-session-import": "0.1.1",
+    "dsh-soul-md": "0.10.3",
+    "dshmarket": "1.70.2"
   }
 }
