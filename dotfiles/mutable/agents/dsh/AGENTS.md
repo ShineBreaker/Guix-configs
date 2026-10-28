@@ -44,7 +44,7 @@
 | `@mengyuly/dsh-ponytail`       | 0.4.3          | Ponytail 懒惰高级工程师模式（模式档位 lite/full/ultra，`ponytail` 行配置默认档）                                                                          |
 | `dsh-agent-extensions`         | `link:` 本地   | 自建插件，见「自建插件」                                                                                                                                  |
 | `dsh-agenote`                  | `link:` 本地   | 知识库集成（会话注入 / turn 转交 / 斜杠命令），源在外部仓库 `~/Projects/Agent/agenote/packages/dsh-agenote`                                               |
-| `dsh-atelier-agent`            | `link:` 本地   | Atelier 外部 agent CLI 编排（peer/scout/worker 等），源在 `~/Projects/Agent/dsh-plugins/dsh-atelier-agent`                                                |
+| `dsh-atelier-agent`            | 已移除         | 2026-10 移除：外部 agent CLI 编排（peer/scout/worker）退役，委派统一走 DSH 原生 subagent 与 agent-team                                                        |
 | `@michengai/dsh-automation`    | 1.0.10         | 定时任务：每次触发开**全新会话**执行 prompt，逐任务工作区/模型/技能/权限，暂停/立即运行/运行历史；补 `dsh-schedule`（绑定原会话的提醒）缺的无人值守执行面 |
 | `dsh-dream-skin`               | 已移除         | 2026-10 移除：换肤能力由 dsh-claude-style 接替（见下）                                                                                                    |
 | `dsh-pocket`                   | 已移除         | 2026-10 移除：远程访问改走 `@linxin666/dsh-remote-web-ui` + tailscale serve；`dsh-pocket/` 运行时目录已清                                                 |

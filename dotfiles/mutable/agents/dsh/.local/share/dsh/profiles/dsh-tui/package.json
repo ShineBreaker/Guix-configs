@@ -5,7 +5,6 @@
     "@deepseek-harness-tui/dsh-tui": "0.16.1",
     "dsh-agenote": "link:/home/brokenshine/Projects/Agent/agenote/packages/dsh-agenote",
     "dsh-agent-extensions": "link:../agent-extensions",
-    "dsh-atelier-agent": "link:/home/brokenshine/Projects/Agent/dsh-plugins/dsh-atelier-agent",
     "dsh-opencode-go": "0.1.24"
   },
   "dsh": {
@@ -15,7 +14,6 @@
         "@deepseek-harness-tui/dsh-tui",
         "dsh-agent-extensions",
         "dsh-agenote",
-        "dsh-atelier-agent",
         "dsh-opencode-go"
       ]
     }

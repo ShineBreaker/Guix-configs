@@ -26,9 +26,9 @@
     preference: system
 - id: agent-default-model # magpie
   config:
-    provider: magpie
-    model: devin/swe-2
-    reasoningEffort: max
+    provider: deepseek-official
+    model: deepseek-flash
+    reasoningEffort: high
 - insert:
     - id: preset-minimal-guix
       name: '@deepseek-ai/dsh-agent-preset'
@@ -1121,8 +1121,6 @@
         title: nosDshell
       - path: /home/brokenshine/Projects/Agent/agenote
         title: agenote
-      - path: /home/brokenshine/Projects/Agent/dsh-plugins/dsh-atelier-agent
-        title: dsh-atelier-agent
       - path: /home/brokenshine/Projects/Android/termux-float-modern
         title: termux-float-modern
       - path: /home/brokenshine/Projects/Config/Guix-configs
