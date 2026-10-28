@@ -6,8 +6,7 @@
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
 - 开工先 `cd /home/brokenshine/Projects/Config/Guix-configs`，之后相对路径都相对它。
-- 下文 `$HERMES_HOME` 若未注入，按 `/home/brokenshine/.local/share/hermes` 展开。
-- 不要调用 `hermes` CLI（`hermes cron ...` 在本环境不可用）；跨任务状态一律写文件。
+- 跨任务状态一律写文件，不依赖任何外部 agent CLI。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
 

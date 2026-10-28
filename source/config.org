@@ -426,8 +426,7 @@ blue build
               <<terminal-packages-list>>
               <<devtools-packages-list>>
               <<user-packages-list>>
-              <<custom-packages-list>>
-              <<hermes-desktop-runtime-packages>>))
+              <<custom-packages-list>>))
 
    (services (append
               <<default-applications>>
@@ -435,7 +434,6 @@ blue build
               <<essential-desktop-services>>
               <<waydroid-session-service>>
               <<kanata-services>>
-              <<hermes-services>>
               <<dsh-web-service>>
               <<cpu-dma-latency-service>>
               <<timer-services>>
@@ -2220,39 +2218,8 @@ polkit.addRule(function(action, subject) {
    "python-openpyxl"))
 #+end_src
 
-=hermes-desktop= 运行在独立的 FHS 沙箱容器中，其底层依赖分为两部分管理：
 
-- =hermes-desktop-pkg-specs= :: 存放 =appimage-run= 基础包、Electron/Chromium GUI 运行时栈、 =libva= 视频硬件解码与 =gsettings-desktop-schemas= 的裸字符串片段（不含外层括号，由引用处包进 ~(list……)~ 展开）。
-- =hermes-desktop-runtime-packages= :: 将上述公共依赖安装进 =%home= ，为其建立 GC Root，防止被 =guix gc= 误回收。
-- =hermes-desktop-manifest-file= :: 额外拼入与宿主环境易冲突的图形库（ =cairo= 、 =dconf= 、 =glib= 、 =gtk+= ），tangle 为独立 manifest 并由下方「文件管理服务」部署至 =$XDG_DATA_HOME/hermes/manifest.scm= 。
 
-#+NAME: hermes-desktop-pkg-specs
-#+begin_src scheme
-"coreutils" "bash" "zlib" "mesa" "libglvnd" "alsa-lib" "fontconfig"
-"freetype" "nss-certs" "gcc-toolchain" "font-sarasa-gothic"
-"ffmpeg" "nss" "at-spi2-core" "cups" "libdrm" "p11-kit"
-"pango"  "libx11" "libxext" "libxfixes"
-"libxcb" "libxcomposite" "libxdamage" "libxrandr" "libxtst"
-"dbus" "expat" "eudev" "libxkbcommon" "xcb-util" "xcb-util-wm"
-"xcb-util-keysyms" "xdg-utils"
-"libva"
-"gsettings-desktop-schemas"
-#+end_src
-
-#+NAME: hermes-desktop-runtime-packages
-#+begin_src scheme :noweb yes
-(specifications->packages
- (list
-  <<hermes-desktop-pkg-specs>>))
-#+end_src
-
-#+NAME: hermes-desktop-manifest-file
-#+begin_src scheme :noweb yes :tangle ../tmp/hermes-desktop-manifest.scm
-(specifications->manifest
- (list
-  "cairo" "dconf" "glib" "gtk+"
-  <<hermes-desktop-pkg-specs>>))
-#+end_src
 
 ** Services
 :PROPERTIES:
@@ -2758,44 +2725,11 @@ lalt grv  lctl _  _  _  _  _)
 (main)
 #+end_src
 
-**** Hermes 后端与网关
-
-随图形会话自动拉起 =hermes-backend= （本地 =127.0.0.1:9119= 控制台）与 =hermes-gateway= ，供 =hermes-desktop= 客户端连接：
-
-- *运行期求值 ~$HOME~* :: 命令路径写成 =#~(string-append (getenv "HOME") "/.local/bin/hermes")= ，外层的 =#~(……)= 让 ~getenv~ 在用户会话启动服务时求值；若省去 =#~(……)= ，使用 ~sudo~ 执行系统重建时会在配置求值期取到 =/root= 并烘焙进服务闭包。
-- *透传 =nix-ld= 环境变量* :: Python 虚拟环境中的 Rust 原生扩展（如 =pydantic_core= ）依赖 =libgcc_s.so.1= ，由系统层的 =NIX_LD= 与 =NIX_LD_LIBRARY_PATH= 兼容层提供。若从干净终端手动 ~herd restart~ 丢失这两个变量，虚拟环境中的 =.so= 会报 ~ImportError~ 并被包装为 ~No module named 'pydantic_core._pydantic_core'~ 。因此 =hermes-env= 在 gexp 内（运行期）捕获这两个变量，并以 ~"K=V"~ 字符串列表格式（ ~make-forkexec-constructor~ 要求的格式，非点对）传给 ~#:environment-variables~ 。
-
-#+NAME: hermes-services
-#+begin_src scheme
-(let ([hermes-env
-       #~(append (environ)
-                 (let ([ld (getenv "NIX_LD")]
-                       [p (getenv "NIX_LD_LIBRARY_PATH")])
-                   (append (if ld (list (string-append "NIX_LD=" ld)) '())
-                           (if p (list (string-append "NIX_LD_LIBRARY_PATH=" p)) '()))))])
-  (list (simple-service 'hermes-services home-shepherd-service-type
-                        (list (home-daemon-service
-                               'hermes-backend
-                               (list #~(string-append (getenv "HOME")
-                                                      "/.local/bin/hermes")
-                                     "dashboard" "--no-open"
-                                     "--host" "127.0.0.1" "--port" "9119")
-                               #:requirement '(graphical-session)
-                               #:environment-variables hermes-env)
-                              (home-daemon-service
-                               'hermes-gateway
-                               (list #~(string-append (getenv "HOME")
-                                                      "/.local/bin/hermes")
-                                     "gateway" "run")
-                               #:requirement '(hermes-backend)
-                               #:environment-variables hermes-env)))))
-#+end_src
-
 **** dsh-web 常驻服务
 
 =dsh web= 起的就是常驻 server（cordis 应用 + HTTP/WS，浏览器只是客户端），平时经
 =bin/dsh= wrapper 的 =web= 子命令 lazy-start。本服务把 server 挂到 home-shepherd 常驻
-（等价 =hermes-gateway= 形态）：开机即热，web 窗口、手机端（remote-web-ui 插件）、
+：开机即热，web 窗口、手机端（remote-web-ui 插件）、
 局域网访问不再依赖首次触发；回合进行中关掉浏览器窗口任务照跑，重开即接力。
 
 - *直调 =.bin/dsh= 而非 wrapper* :: wrapper 的 =web= 子命令会分发回 =dsh-web= 脚本造成
@@ -2862,7 +2796,7 @@ lalt grv  lctl _  _  _  _  _)
 |-----------------------+--------------+---------------------------------------------------------------------------------|
 | =flatpak-user-update= | 每周六 18:00 | 仅在接通外接电源时执行 =flatpak update --user -y= ，只更新用户安装的应用        |
 | =nix-gc=              | 每周日 19:30 | 清理 14 天前的 Nix 用户 profile 世代并回收 store（随 Nix 本体一同启停） |
-| =kb-backup=           | 每日 22:00   | 自动提交 =hermes= 配置子目录与 =~/Documents/Org= 知识库的本地 Git 变更          |
+| =kb-backup=           | 每日 22:00   | 自动提交 =~/Documents/Org= 知识库的本地 Git 变更                              |
 
 #+NAME: timer-services
 #+begin_src scheme :noweb yes
@@ -2898,12 +2832,12 @@ lalt grv  lctl _  _  _  _  _)
 
 **** kb-backup 备份脚本
 
-每晚 22:00 自动为两处本地高频变动数据生成 Git 提交，日志追加至 =~/.cache/kb-backup.log= ：
+每晚 22:00 自动为本地知识库 =~/Documents/Org= 生成 Git 提交，日志追加至 =~/.cache/kb-backup.log= ：
 
-- *两步独立容错* :: 第一步通过 =$HERMES_HOME= 下的 Stow 软链（ =config.yaml= 或 =SOUL.md= ）反推仓库根路径，仅 ~git add dotfiles/mutable/agents/hermes~ 子目录以避免误提交其他未完成改动；第二步进入 =~/Documents/Org= （本地知识库，无远端仓库）执行 ~git add -A~ 并提交。工作区无改动时静默跳过；任一步失败仅写入告警日志，脚本退出码恒为 =0= 。
+- *独立容错* :: 工作区无改动时静默跳过；失败仅写入告警日志，脚本退出码恒为 =0= 。
 
 #+NAME: kb-backup-script
-#+CAPTION: 每日自动 commit hermes 包与 Org 知识库；两步独立容错，退出码恒 0
+#+CAPTION: 每日自动 commit Org 知识库；独立容错，退出码恒 0
 #+begin_src sh :tangle ../tmp/kb-backup
 #!/bin/sh
 
@@ -2911,20 +2845,6 @@ PATH="$HOME/.guix-home/profile/bin:/run/current-system/profile/bin:$PATH"
 log="$HOME/.cache/kb-backup.log"
 mkdir -p "$(dirname "$log")"
 warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
-
-(
-    hermes_home="${HERMES_HOME:-$HOME/.local/share/hermes}"
-    repo=""
-    for anchor in "$hermes_home/config.yaml" "$hermes_home/SOUL.md"; do
-        [ -L "$anchor" ] || continue
-        target=$(readlink -f "$anchor") || continue
-        repo=$(git -C "$(dirname "$target")" rev-parse --show-toplevel 2>/dev/null) || continue
-        break
-    done
-    [ -n "$repo" ] || { echo "找不到链回仓库的 hermes 锚点文件 ($hermes_home)"; exit 1; }
-    git -C "$repo" add dotfiles/mutable/agents/hermes || exit 1
-    git -C "$repo" diff --cached --quiet || git -C "$repo" commit -m "chore(hermes): backup $(date)" || exit 1
-) >>"$log" 2>&1 || warn "hermes 备份失败, 详见上方 git 输出"
 
 (
     cd "$HOME/Documents/Org" || exit 1
@@ -3012,10 +2932,8 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
                                                         (local-file
                                                          "../source/files/gpg-agent.conf")
                                                         (specs->pkgs
-                                                         "pinentry-qt")))
+                                                         "pinentry-qt"))))))
 
-                 (".local/share/hermes/manifest.scm" ,(local-file
-                                                       "../tmp/hermes-desktop-manifest.scm")))))
 #+end_src
 
 *** 环境变量
@@ -3069,7 +2987,6 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
   ("GOPATH" . "$XDG_DATA_HOME/go")
   ("GRADLE_USER_HOME" . "$XDG_DATA_HOME/gradle")
   ("GUILE_HISTORY" . "$XDG_STATE_HOME/guile/history")
-  ("HERMES_HOME" . "$XDG_DATA_HOME/hermes")
   ("MINETEST_USER_PATH" . "$XDG_DATA_HOME/luanti")
   ("NPM_CONFIG_USERCONFIG" . "$XDG_CONFIG_HOME/npm/npmrc")
   ("CUDA_CACHE_PATH" . "$XDG_CACHE_HOME/nv")

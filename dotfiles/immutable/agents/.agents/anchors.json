@@ -58,10 +58,6 @@
     {
       "path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/hooks/",
       "unless_inside": "~/Projects/Config/Guix-configs"
-    },
-    {
-      "path": "~/Projects/Config/Guix-configs/dotfiles/mutable/agents/hermes/.local/share/hermes/plugins/gate/",
-      "unless_inside": "~/Projects/Config/Guix-configs"
     }
   ],
   "frozen_globs": [],

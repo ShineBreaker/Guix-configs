@@ -13,7 +13,6 @@
 # 组件装哪：
 #   agenote-skills → ~/.agents/skills/                   （agenote-{base,curator,review}）
 #   agenote-zcode  → ~/.zcode/plugins/agenote-zcode/
-#   agenote-hermes → ~/.local/share/hermes/plugins/agenote/
 #   agenote（CLI）、agenote-el、dsh-agenote 不由本脚本部署——分别走
 #   uv tool install / package.el / npm install，见 monorepo 的 README。
 #
@@ -39,7 +38,6 @@ readonly REPO="${AGENOTE_REPO:-ShineBreaker/agenote}"
 declare -A TARGETS=(
   [agenote-skills]='.agents/skills'
   [agenote-zcode]='.zcode/plugins/agenote-zcode'
-  [agenote-hermes]='.local/share/hermes/plugins/agenote'
 )
 
 DRY_RUN=0

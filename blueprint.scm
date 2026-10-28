@@ -1280,7 +1280,7 @@ GNU Stow 直链部署 dotfiles/mutable/PKG/ 到 $HOME。改源即生效（无需
   blue stow --restow PKG ... 强制重建所有软链接（先删除再重建）
   blue stow --delete PKG ... 删除软链接（$HOME 下变回实际文件）
 
-PKG 支持一层分组路径（如 agents/hermes，对应 dotfiles/mutable/agents/hermes/）。
+PKG 支持一层分组路径（如 agents/dsh，对应 dotfiles/mutable/agents/dsh/）。
 
 包识别（stow-all 枚举依据）:
   dotfiles/mutable/<PKG>/.stow-package      存在即该目录是一个包（空文件，仅作身份声明）
@@ -1297,7 +1297,7 @@ folding 控制:
   dotfiles/mutable/<PKG>/.stow-local-ignore  每包 Perl 正则，逐行，# 注释允许
   --ignore=REGEX              命令行一次性（blueprint 内部固定加 --ignore=\\.stow-(folding|package)$）
 
-源目录布局: dotfiles/mutable/PKG/.local/share/hermes/ -> ~/.local/share/hermes/
+源目录布局: dotfiles/mutable/PKG/.local/share/dsh/ -> ~/.local/share/dsh/
 改后用 git commit 备份。配合 dotfiles/immutable/ 的 Guix stow（仅读源）使用。"))
   (let* ([parsed (parse-stow-args arguments)]
          [mode (assq-ref parsed 'mode)]
@@ -1315,7 +1315,7 @@ folding 控制:
    (category 'stow)
    (synopsis "对 dotfiles/mutable/ 下所有包批量执行 stow 操作")
    (help "[--adopt|--restow|--delete]
-枚举 dotfiles/mutable/ 下所有包（含一层分组目录内的包，如 agents/hermes），逐个执行。默认为部署。
+枚举 dotfiles/mutable/ 下所有包（含一层分组目录内的包，如 agents/dsh），逐个执行。默认为部署。
 
   blue stow-all              部署所有包
   blue stow-all --restow     重建所有软链接（最常用）

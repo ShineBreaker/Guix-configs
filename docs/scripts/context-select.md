@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com> -->
 <!-- SPDX-License-Identifier: MIT -->
 
-# context-select.sh — Pi / ZCode / Hermes / DSH 共用的会话上下文注入决策核
+# context-select.sh — Pi / ZCode / DSH 共用的会话上下文注入决策核
 
-`dotfiles/immutable/agents/.agents/context-select.sh` · immutable → `~/.agents/context-select.sh`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/session-start.sh`（`--platform zcode`）、pi `dotfiles/mutable/agents/extensions/global-context/index.ts`（`--platform omp`，平台名沿用 omp 历史值）、hermes `plugins/global-context/__init__.py`（`--platform hermes`）、DSH `profiles/agent-extensions/global-context.js`（`--platform dsh`，路径可由 `CONTEXT_SELECT_BIN` 覆盖）
+`dotfiles/immutable/agents/.agents/context-select.sh` · immutable → `~/.agents/context-select.sh`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/session-start.sh`（`--platform zcode`）、pi `dotfiles/mutable/agents/extensions/global-context/index.ts`（`--platform omp`，平台名沿用 omp 历史值）、DSH `profiles/agent-extensions/global-context.js`（`--platform dsh`，路径可由 `CONTEXT_SELECT_BIN` 覆盖）
 
 内容分层在 `~/.agents/context/`：`00-core.md` 是跨领域通用原则、`INDEX.md` 是领域路由表（XML `<domain name=… file=…>` 条目）、`domains/<name>.md` 是领域专属原则。本脚本只回答「这个会话该注入哪些文件」，不读内容；注入清单单一真相源在此，各端适配器不各自维护文件列表。
 
@@ -73,8 +73,5 @@ domains/dsh-sandbox.md|platform:dsh
 | `domains/` 磁盘集合 == 映射集合   | fail（双向，含未登记与已登记缺失） |
 | `INDEX.md` 条目集合 == `domains/` | fail（双向）                       |
 | `INDEX.md` 条目带 `file=` 声明    | fail（逐条比对 name 与 file 同名） |
-| hermes 插件已部署                 | 仅提示「未部署，跳过」             |
-
-hermes 插件是可选部署，未部署时只提示。
 
 依赖 `bash`、`realpath`、`grep`、`sed`。`set -uo pipefail` 不用 `-e`：单项检查失败不应中断后续校验项。

@@ -44,7 +44,7 @@
 | `RM_HINT` / `NOTES` / `REDIRECT` | 汇总进 `additionalContext`，多条以 `; ` 连接      |
 | 无输出                           | 无输出                                            |
 
-**zcode 宿主协议没有 `updated_input`**，所以 `REWRITTEN` 拿不到真改写能力，只能把改写后的命令当建议发给模型；pi（`pi-gate` 改写 `event.input.command`）与 hermes（返回 `{"action":"modify"}`）才支持真改写。这是本端与其它端最本质的差异。`RM_HINT` 是决策核不再发出的历史类型，此处保留兼容分支。
+**zcode 宿主协议没有 `updated_input`**，所以 `REWRITTEN` 拿不到真改写能力，只能把改写后的命令当建议发给模型；pi（`pi-gate` 改写 `event.input.command`）才支持真改写。这是本端与其它端最本质的差异。`RM_HINT` 是决策核不再发出的历史类型，此处保留兼容分支。
 
 核缺失时（`~/.agents/gate-core.sh` 不存在，通常是 `blue home` 没跑）先 `sudo` 保底拦截再放行其余命令，警告写 stderr——保底只认 `*sudo*` 子串，不做词序列匹配。
 

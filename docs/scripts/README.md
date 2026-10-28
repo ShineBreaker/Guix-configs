@@ -25,7 +25,6 @@
 | 脚本                                                 | 源码                                         | 部署    | 手册                   |
 | ---------------------------------------------------- | -------------------------------------------- | ------- | ---------------------- |
 | dsh / dsh-web / dsh-update / dsh-tui                 | `dotfiles/mutable/agents/dsh/.local/`        | mutable | [dsh.md](dsh.md)       |
-| hermes / hermes-acp / hermes-update / hermes-desktop | `dotfiles/mutable/agents/hermes/.local/`     | mutable | [hermes.md](hermes.md) |
 | devin                                                | `dotfiles/mutable/agents/devin/.local/bin/`  | mutable | [devin.md](devin.md)   |
 | askill                                               | `dotfiles/mutable/agents/skills/.local/bin/` | mutable | [askill.md](askill.md) |
 
@@ -109,5 +108,5 @@ Emacs 配置为 UniEmacs 子模块（`dotfiles/mutable/emacs/.config/emacs/`，m
 | `50-hibernate.rules`                                | polkit 休眠授权规则（JavaScript）                                               |
 | `fish-cfg`                                          | fish 交互 shell 集成模板                                                        |
 | `clipsync`                                          | X11 与 Wayland CLIPBOARD 双向同步守护（Guile）                                  |
-| `kb-backup-script`                                  | hermes 与 Org 知识库每日自动 commit                                             |
+| `kb-backup-script`                                  | 每日提交 ~/Documents/Org 知识库                                                  |
 | `gnupg-home-fixup-script`                           | `tmp/gnupg-home-fixup`：GNUPGHOME 收敛 700 + 清外主机 dotlock 残留              |

@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# context-select.sh — zcode / pi / hermes / DSH 共享的上下文注入决策核。
+# context-select.sh — zcode / pi / DSH 共享的上下文注入决策核。
 # 分层（00-core.md / INDEX.md / domains/*.md）、门控语义、CLI 与消费链路
 # 见 docs/scripts/context-select.md。
 set -uo pipefail
@@ -137,10 +137,6 @@ check() {
 		echo "✗ $CTX_DIR/INDEX.md 不存在"
 		fail=1
 	fi
-
-	# 5. hermes：插件存在
-	local hermes_plugin="${HERMES_HOME:-$HOME/.local/share/hermes}/plugins/global-context/__init__.py"
-	[[ -f "$hermes_plugin" ]] || echo "－ hermes global-context 插件未部署，跳过"
 
 	[[ $fail -eq 0 ]] && echo "✓ context 注入体系一致性检查通过（$CTX_DIR）"
 	return $fail

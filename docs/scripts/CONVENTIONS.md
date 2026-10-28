@@ -87,7 +87,7 @@
 ### Bash
 
 - 默认 `set -euo pipefail`。刻意不用 `-e` 的脚本（如 `gate-core.sh`：单项检查失败不能中断后续检查）在文件头用一行写明理由。
-- 被 `source` 的库文件（`*-lib.sh`、`anchors-lib.sh`、`hermes-lib.sh` 等）**不修改**调用方的 shell 选项，也不 `exit`。`theme-common.sh` 是 `exec` 的可执行入口而非库，不受此条约束。
+- 被 `source` 的库文件（`*-lib.sh`、`anchors-lib.sh` 等）**不修改**调用方的 shell 选项，也不 `exit`。`theme-common.sh` 是 `exec` 的可执行入口而非库，不受此条约束。
 - 所有变量展开加引号；命令行参数用数组传递；避免 `eval`，确需使用时注释理由。
 - 统一的 `die` / `warn` 辅助函数：错误写 stderr、带脚本名前缀、非零退出。
 - 非基础依赖（`jq`、`yq`、`fzf`、`age` 等）在入口处用 `command -v` 检查并给出可操作的报错。

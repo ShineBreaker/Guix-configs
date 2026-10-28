@@ -16,8 +16,6 @@
 3. **`.stow-local-ignore`（忽略规则）**：逐行写 Perl 正则（匹配路径结尾，支持 `#` 注释），用于排除包内运行时产物、构建缓存与临时文件。
 4. **`.stow-folding`（目录折叠，按包 opt-in）**：有标记 → 目标目录整条变成指向源的软链；无标记 → 保持真实目录逐文件放链。**一个 `$HOME` 目录只能被一个包折叠**：两个包都想折叠同一目录时先部署者赢得该目录，后到者只能下探逐文件放链，形态静默退化为 no-folding。因此加标记前先确认目标目录没有被别的包占窝。
 
-   `agents/hermes` 曾带该标记，但它的运行时产物（`logs/`、`state.db`、`sessions/`）只适合 no-folding，该标记已移除，防污染靠 `.stow-local-ignore` 那串规则。
-
 ## 目录结构
 
 <!-- structor:begin depth=2 -->
@@ -36,7 +34,6 @@ mutable/
 ├── agents/
 │   ├── devin/
 │   ├── dsh/
-│   ├── hermes/
 │   ├── skills/
 │   └── zcode/
 ├── emacs/
@@ -68,7 +65,6 @@ mutable/
 | `zed`                | `~/.config/zed/`                                                                                                     | Zed 编辑器配置（settings/tasks/themes；`.stow-folding` 整目录折叠，UI 原子写直接落仓库；LSP 二进制走 `~/.guix-home/profile/bin/` 稳定绝对路径）           |
 | `agents/devin`       | `~/.local/share/agents/devin/`（安装树）+ `~/.local/bin/devin`                                                       | Devin CLI（上游 binary bundle；`--install`/`update` 为 manifest 直装增强），入口手册 [devin.md](../../docs/scripts/devin.md)                                 |
 | `agents/dsh`         | `~/.local/share/dsh/`（配置/状态）+ `~/.local/share/agents/dsh/`（CLI 安装树）+ `~/.local/bin/dsh` + 图标/desktop 项 | DeepSeek Harness 配置层与 CLI（update/web/tui 为 Guix 增强子命令），详见 [dsh/AGENTS.md](agents/dsh/AGENTS.md)；入口手册 [dsh.md](../../docs/scripts/dsh.md) |
-| `agents/hermes`      | `~/.local/share/hermes/` + `~/.local/bin/hermes` + `hermes-acp`                                                      | Hermes Agent 提示词、配置、插件与启动项（update/desktop 增强子命令由主入口分发）；入口手册 [hermes.md](../../docs/scripts/hermes.md)                         |
 | `agents/skills`      | `~/.agents/skills/` + `~/.local/bin/askill`                                                                          | 第三方技能锁（`skills-lock.json`）、自建技能与 `askill` 管理器（手册 [askill.md](../../docs/scripts/askill.md)）                                             |
 | `agents/zcode`       | `~/.zcode/`                                                                                                          | ZCode 配置与子智能体规则，详见 [zcode/.../AGENTS.md](agents/zcode/.zcode/AGENTS.md)                                                                          |
 | `agenote`            | `~/.agents/skills/` + `~/.zcode/plugins/`                                                                            | 知识库技能与各端 Hook/插件（内含子模块）                                                                                                                     |
@@ -94,7 +90,7 @@ pnpm 安装的 agent（CLI 本体）统一把**安装树**——pnpm 项目（`p
 | -------------------------------------- | ------------------------------------------------ |
 | npm 包、要版本锁定进 git               | 本配方                                           |
 | Guix 频道已有                          | `source/config.org` 的 home-packages，不走本配方 |
-| 非 node 生态（git checkout + venv 等） | 不走本配方，agent home 自持（如 hermes）         |
+| 非 node 生态（git checkout + venv 等） | 不走本配方，agent home 自持                         |
 
 **1. 建包与安装清单**
 
@@ -188,11 +184,11 @@ git status --short                    # package.json / lockfile 已回源，只�
 
 mutable 包的 `~/.local/bin` 入口遵循**一包一入口**（2026-09 已将 hermes/dsh/pi 族从多入口收敛到每包一个，规则成文防回潮），由 `toolbox check` 阻断级执法。
 
-1. **一包一入口**：每个 stow 包默认只在 `.local/bin/` 放一个入口文件，其余实现放包内 `.local/libexec/`，由主入口 case 分发子命令（范本：[agents/hermes](agents/hermes/.local/bin/hermes) 的 wrapper）。
+1. **一包一入口**：每个 stow 包默认只在 `.local/bin/` 放一个入口文件，其余实现放包内 `.local/libexec/`，由主入口 case 分发子命令（范本：[agents/dsh](agents/dsh/.local/bin/dsh) 的 wrapper）。
 2. **先论证挂靠**：新增入口前必须先论证无法作为现有工具的子命令挂靠；直接新建独立入口视为违规。
 3. **禁止新增 `*-update` 入口文件**：更新逻辑一律实现为 `tool update` 子命令。
-4. **`*-acp` 协议入口豁免**：外部 ACP host（Zed 等）按命令名寻址 agent，无法子命令化，允许作为包内第二入口；头注释须说明约束来源（范本：[hermes-acp](agents/hermes/.local/bin/hermes-acp)），`toolbox check` 对其自动豁免。
-5. **拦截即遮蔽须写明**：主入口分发与上游 CLI 已有同名子命令撞名时（如 `hermes update`），分发处头注释必须写明「拦截即覆写」及原生行为的直调触达路径（范本：hermes wrapper 头注释）。
+4. **`*-acp` 协议入口豁免**：外部 ACP host（Zed 等）按命令名寻址 agent，无法子命令化，允许作为包内第二入口；头注释须说明约束来源，`toolbox check` 对其自动豁免。
+5. **拦截即遮蔽须写明**：主入口分发与上游 CLI 已有同名子命令撞名时（如 `dsh update`），分发处头注释必须写明「拦截即覆写」及原生行为的直调触达路径（范本：[dsh wrapper](agents/dsh/.local/bin/dsh) 头注释）。
 6. **例外声明**：确无法子命令化的入口（如上游子命令语义撞车、不可遮蔽）在包根 `.bin-entries-allow` 声明，每行「入口名 # 理由」，理由不可省略（范本：曾有的 agents/pi `pi-update`）。
 7. **登记对账**：原创工具新入口须同步登记 `tools.yaml`（`toolbox check` 对账）；子命令化工具条目挂主命令名下，usage 写子命令形态。
 8. **执法**：`toolbox check` 的一包一入口检测为阻断级——包内入口计入数 > 1 或豁免缺理由即非零退出（`*-acp` 自动豁免不计入；immutable 包不在检测范围）。

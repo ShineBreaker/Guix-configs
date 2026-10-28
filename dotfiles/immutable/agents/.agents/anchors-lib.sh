@@ -4,13 +4,13 @@
 #
 # SPDX-License-Identifier: MIT
 
-# anchors-lib.sh — zcode / pi / hermes / DSH 四端 gate 共享的 anchors.json 分层加载与 ratchet 合并库。
+# anchors-lib.sh — zcode / pi / DSH 三端 gate 共享的 anchors.json 分层加载与 ratchet 合并库。
 # 只做「读 + 合并」，判定语义全部在 gate-core.sh（单一真相源分工）。
 # 分层模型、merge 语义、失败回退约定见 docs/scripts/gate-core.md §规则源。
 #
 # 被同目录 gate-core.sh source；消费链路：
 #   zcode hooks → gate-core.sh → 本库
-#   pi（pi-gate/index.ts）、hermes（plugins/gate/__init__.py）、DSH gate.js
+#   pi（pi-gate/index.ts）、DSH gate.js
 #
 # 契约：本库是被 source 的库文件——不得 set -e/-u/-o pipefail、不得 exit、
 # 不得依赖未被调用方设置的变量以外的环境状态。

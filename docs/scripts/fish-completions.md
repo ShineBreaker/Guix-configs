@@ -22,7 +22,6 @@
 | `denv.fish`                       | `denv`                          | 例外：独立维护；覆盖 `init/load/remove/status/doctor` 与全部旗标                          |
 | `devin.fish`                      | `devin`（wrapper 入口）         | 上游 20 个子命令 + 二级子命令 + 顶层旗标；`--install` 与 `update --force` 为 wrapper 增强 |
 | `git-resign.fish`                 | `git-resign`                    | 单参数 `<base-ref>`，补 `HEAD~N` 候选                                                     |
-| `hermes.fish`                     | `hermes`                        | 首行 source 上游 `hermes completion fish`；追加本仓库 `update --branch/--check`           |
 | `jbuild.fish`                     | `jbuild`                        | 动态补 `src/*.java` 的 basename                                                           |
 | `jdk.fish`                        | `jdk`                           | `set` / `current` 子命令；`set` 补版本候选 `8 11 17 21 25`                                |
 | `jrun.fish`                       | `jrun`                          | 动态补 `bin/*.class` 的 basename                                                          |

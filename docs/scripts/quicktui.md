@@ -59,7 +59,7 @@ PY
 ## 实现与约束
 
 - **二进制不进 Guix profile**：server 要 attach 的是本机 tmux 默认 socket（`/tmp/tmux-1000/default`）与 `$HOME` 下的配置/配对状态，store 只读副本拿不到这些；`session_backend` 探测到的 `herdr`（`herdr_bin`）与 tmux 也都只在用户 profile 里。
-- **服务走 `home-daemon-service` 而非 systemd**：上游 `service install` 只认 `systemctl --user`，本机没有 systemd。`source/config.org` 内的路径写成 `#~(string-append (getenv "HOME") …)`，让 HOME 在**服务启动时**求值——去掉 `#~` 会以重建时的用户（可能是 root）取 `/root` 并烘焙进服务闭包（hermes-services 同款约定）。
+- **服务走 `home-daemon-service` 而非 systemd**：上游 `service install` 只认 `systemctl --user`，本机没有 systemd。`source/config.org` 内的路径写成 `#~(string-append (getenv "HOME") …)`，让 HOME 在**服务启动时**求值——去掉 `#~` 会以重建时的用户（可能是 root）取 `/root` 并烘焙进服务闭包（同款约定）。
 - **AB2 hooks 由 server 自管，禁止手改**：`~/.config/claude/settings.json`、`~/.config/codex/hooks.json`、`~/.config/opencode/plugins/agentbridge2.js`、`~/.pi/agent/extensions/agentbridge2.ts` 四处文件里带 `_ab2_managed` 标记的块全部由 `hooks install` / `hooks uninstall` 增删；claude 的 `settings.json` 改写前会留 `settings.json.ab2-backup-<时间戳>` 备份。这些文件本身多由各自应用拥有，手工编辑会与下一次 `hooks install` 冲突。
 - **installer 不认沙箱 HOME**：若 `$HOME` 与 euid 对应的 passwd home 不一致，installer 打 warning 后**改用 passwd home 落盘**（实测 `HOME=/tmp/... ` 时全部写进了真实家目录）。想在隔离环境试跑必须让 `$HOME` 与 passwd 记录一致，或直接手动安装。
 - **监听面**：默认 `addr = "0.0.0.0:8022"`（局域网可达，纯 HTTP + 设备配对 + 端到端加密）。只想本机用时 `quicktui-server config set addr 127.0.0.1:8022` 后 `herd restart quicktui`。

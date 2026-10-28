@@ -88,6 +88,6 @@ for f in ${CTX_FILES[@]+"${CTX_FILES[@]}"}; do
   CTX+="$(cat "$f")"$'\n\n'
   CTX_TOTAL=$((CTX_TOTAL + size))
 done
-[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.agents/context/，由 context-select.sh 决策：恒注入 00-core / INDEX，git 仓库内自动附加 coding 域；决策核与 omp / hermes 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
+[[ -n "$CTX" ]] && SUMMARY="[全局上下文已加载（源：~/.agents/context/，由 context-select.sh 决策：恒注入 00-core / INDEX，git 仓库内自动附加 coding 域；决策核与 omp / pi / DSH 共享）]"$'\n\n'"$CTX"$'\n'"$SUMMARY"
 
 printf '{"additionalContext":%s}\n' "$(printf '%s' "$SUMMARY" | jq -Rs .)"

@@ -3,7 +3,7 @@
 <!-- 领域上下文路由表：按任务场景按需读取对应文件，未匹配条目仅遵循 00-core 通用原则。 -->
 
 <domain name="coding" file="domains/coding.md">
-	<when>Git 仓库内的编码、重构、调试与提交任务。zcode/omp/hermes/pi 端由 context-select.sh 自动注入；无自动注入机制的端手动读取本文件。</when>
+	<when>Git 仓库内的编码、重构、调试与提交任务。zcode/omp/pi 端由 context-select.sh 自动注入；无自动注入机制的端手动读取本文件。</when>
 </domain>
 
 <domain name="verify" file="domains/verify.md">

@@ -24,7 +24,7 @@ source/
 ## 职责边界
 
 - **System 层（`operating-system`）**：引导器（Limine / Rosenthal）、文件系统（LUKS + Btrfs + tmpfs 根目录）、自编译 CachyOS 内核、系统服务群与用户账户。
-- **Home 层（`home-environment`）**：4 个包清单（desktop / terminal / devtools / user）、自定义包与 Hermes 运行时、dotfiles 部署、用户服务、环境变量与字体。
+- **Home 层（`home-environment`）**：4 个包清单（desktop / terminal / devtools / user）、自定义包、dotfiles 部署、用户服务、环境变量与字体。
 - **最小化原则**：系统层保持精简；Home 层能解决的不上浮 System 层。优先改 `dotfiles/immutable/<app>/`，仅在需要 Guix 介入时才动 `config.org`。
 - **两套部署路径互不干扰**：`source/files/` 走 `home-files-service-type`（支持 `$$bin/foo$$` 路径注入占位符）；`dotfiles/immutable/` 走 Guix Home stow 布局（改源后须 `blue home` 生效）。
 - **新增配置流程**：在 `dotfiles/immutable/<app>/` 建目录 → 在 `config.org` 的对应包清单里加入 → 在 `dotfile-services` 的 `packages` 列表登记。Emacs 插件包另须登记 `emacs-packages` 块。
@@ -109,7 +109,6 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 
 - **D-Bus 总线**：声明空 `dbus` Home 服务承接依赖，避免与 Niri 启动时的 `dbus-run-session` 会话总线冲突。
 - **Emacs 服务**：以 `emacs --fg-daemon` 常驻，相关包隔离在 Emacs 专属 profile（`emacs-services` 块同时喂 home-emacs 与 neomacs 两个服务）。
-- **Hermes 运行时**：FHS 基础依赖纳入 `home-packages` 维持 GC Root；系统冲突包（cairo、glib、gtk+ 等）写入独立的 manifest 部署到 Hermes 专属数据目录。
 - **自定义包**：`custom-defines` 块的顶层 `define` 经 Noweb 拼入 `main` 顶部；`custom-packages-list` 只放包列表表达式（被 `main` 里 `(append ...)` 引用）。
 - **指纹识别栈**：Goodix `27c6:689a` 需要 libfprint ≥1.94.9 的 `goodixmoc` 驱动，故定制了 libfprint 与 fprintd 变体包；PAM 层面把 `pam_fprintd.so` 作为 sufficient 规则插在 `pam_unix` 之前，实现指纹优先、密码兜底。
 

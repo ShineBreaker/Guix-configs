@@ -12,7 +12,7 @@
 
 ## 收录标准（用户拍板 2026-09-15）
 
-只收**自己写了实质逻辑的原创工具**；纯透传 wrapper（hermes / pi / dsh 等把上游 CLI 摆进 PATH 的启动器）不收。登记是 opt-in 的。
+只收**自己写了实质逻辑的原创工具**；纯透传 wrapper（pi / dsh 等把上游 CLI 摆进 PATH 的启动器）不收。登记是 opt-in 的。
 
 清单字段：
 
@@ -22,7 +22,7 @@
 - `help_cmd` 白名单：仅当确认该旗标**只打印用法、不触发主逻辑**才填（反例：`niri-app-switcher --help` 会直接启动切换器；`pi --help` 挂起）
 - `source` 仓库内相对路径
 
-子命令化工具（`dsh update` / `pi-update` / `hermes desktop` 这类增强逻辑并入主命令的）条目挂**主命令名**下，`usage` 写子命令形态，`args` 含子命令旗标。
+子命令化工具（`dsh update` / `pi-update` 这类增强逻辑并入主命令的）条目挂**主命令名**下，`usage` 写子命令形态，`args` 含子命令旗标。
 
 ## 维护
 
