@@ -1002,11 +1002,21 @@
 ;; 锁文件有实际变化才提交：单频道/单 flake 刷新常无新版本，git commit 的
 ;; 空提交以非零退出会让 %run 当失败报错。git status 只读，真跑无害；
 ;; dry-run 下锁文件不会被写，直接视作有变化以保留 commit 预演输出。
+;; 签名失败（无人值守会话无 TTY，pinentry-qt 无 DISPLAY 回退 curses 后
+;; 无法交互）降级为无签名提交并告警：lock bump 属可审计的低风险提交，
+;; 卡死整个 update 流程代价更高。见 2026-10-29 GPG 巡检事故。
 (define (%commit-lock file message)
   (when (or (dry-build?)
             (pair? (%pipe->lines (%shell-command
                                   `("git" "status" "--porcelain" "--" ,file)))))
-    (%run `("git" "commit" "-S" "-m" ,message ,file))))
+    (catch #t
+      (lambda ()
+        (%run `("git" "commit" "-S" "-m" ,message ,file)))
+      (lambda args
+        (format (current-error-port)
+                "[warn] 签名提交失败（pinentry 不可用？），降级无签名提交: ~a~%"
+                (car args))
+        (%run `("git" "commit" "-m" ,message ,file))))))
 
 (define (%lock-commit-message target)
   (match target
