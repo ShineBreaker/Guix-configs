@@ -1183,24 +1183,71 @@ proseWrap=preserve 即为此设；文档内嵌的代码块也不重排，示例�
 
 ;;; ---------- Nix 备用 ----------
 
+;; nix/nh 在 ~/.local/state/nix/profiles/profile/bin（nix3 state 布局，
+;; 非交互 shell 读不到 fish 的 fish_add_path）。blue 起子进程前把它 prepend
+;; 到 PATH，保证 blue nix / blue nix-init 总能解析到。
+(define %nix-profile-bin
+  (string-append (getenv "HOME") "/.local/state/nix/profiles/profile/bin"))
+
+(define (%with-nix-path!)
+  (setenv "PATH" (string-append %nix-profile-bin ":" (getenv "PATH"))))
+
 ;; 备用 Nix home-manager（与 Guix 不互通）；配置名显式指定为 Guix
 ;;（flake.nix 的 homeConfigurations.Guix）。
 (define-command (nix-command arguments)
   ((invoke "nix")
    (category 'nix)
    (synopsis "应用备用 Nix home-manager 配置"))
+  (%with-nix-path!)
   (%run `("nh" "home" "switch" ,%nix-dir
           "--configuration" "Guix"
-          "--backup-extension" "backup")))
+          "--backup-extension" "backup"))
+  (%nix-gpu-sync (string-append (getenv "HOME") "/.nix-profile")))
 
 ;; 首次或损坏后引导：不依赖 channel / nh / 现有 profile，版本由 flake.lock 锁定。
 (define-command (nix-init-command arguments)
   ((invoke "nix-init")
    (category 'nix)
    (synopsis "构建并激活备用 Nix home-manager 配置"))
+  (%with-nix-path!)
   (%run `("nix" "build" ,(string-append %nix-dir "#homeConfigurations.Guix.activationPackage")
           "--out-link" "/tmp/hm-activation"))
-  (%run '("/tmp/hm-activation/activate")))
+  (%run '("/tmp/hm-activation/activate"))
+  (%nix-gpu-sync "/tmp/hm-activation/home-path"))
+
+;; ---- non-nixos-gpu 驱动同步 ----
+;; home-manager 的 genericLinux GPU 模块只打印提示（其 setup 脚本依赖
+;; systemd-tmpfiles，在 shepherd 下不可用），实际动作等价于把
+;; /var/lib/non-nixos-gpu 指到激活产物里渲染出的驱动 store 路径。system 层
+;; non-nixos-gpu 服务再把 /run/opengl-driver 链向该目录，故此处只须换中间
+;; 链接并挂 gcroot 防 GC。
+
+;; 从 home-path 前缀的 tmpfiles conf 取新驱动 store 路径；未启用 GPU 模块
+;; 时该文件不存在，返回 #f。nix-init 传 /tmp/hm-activation/home-path，
+;; nix 传 ~/.nix-profile。
+(define (%nix-gpu-target home-path)
+  (let ([conf (string-append home-path
+                             "/lib/tmpfiles.d/non-nixos-gpu.conf")])
+    (if (file-exists? conf)
+        (let ([fields (string-tokenize
+                       (call-with-input-file conf get-string-all))])
+          (find (lambda (f) (string-prefix? "/nix/store/" f)) fields))
+        #f)))
+
+(define (%nix-gpu-sync home-path)
+  (let* ([target (%nix-gpu-target home-path)]
+         [link "/var/lib/non-nixos-gpu"]
+         [current (false-if-exception (readlink link))])
+    (cond
+     [(not target) #f]                        ; 未启用 GPU 模块
+     [(equal? current target)                ; 已同步
+      (format #t "GPU 驱动已是最新 (~a)~%" target)]
+     [else
+      (format #t "GPU 驱动更新 ~a -> ~a~%" (or current "无") target)
+      (%run `("sudo" "ln" "-nsf" ,target ,link))
+      ;; 挂 gcroot：驱动集 store 路径随换代变化，防 nix-collect-garbage 回收
+      (%run `("sudo" "ln" "-sf" ,link "/nix/var/nix/gcroots/non-nixos-gpu"))
+      (%run `("sudo" "herd" "restart" "non-nixos-gpu"))])))
 
 ;;; ---------- 校验 ----------
 

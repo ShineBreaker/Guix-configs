@@ -9,23 +9,17 @@
   home.packages =
     (with pkgs; [
       ## Tools
-      beekeeper-studio
       localsend
-      gh
 
       ## Editor
-      android-studio
       apostrophe
-      graphite
 
       ## Android
-      android-tools
       pmbootstrap
 
       ## Gaming Tools
       gamescope
       mangojuice
-      sunshine
       winetricks
 
       ## Environment management

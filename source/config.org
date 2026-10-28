@@ -50,7 +50,7 @@ blue build
 
 * 模块导入
 
-除集中导入 Guix 官方与第三方频道（ =nongnu= 、 =rosenthal= 、 =jeans= 、 =px= ）的模块外，文件头部还通过 ~load~ 引入两份本地定义（相对路径均以 =source/= 目录为基准）：
+除集中导入 Guix 官方与第三方频道（ =nongnu= 、 =rosenthal= 、 =jeans= ）的模块外，文件头部还通过 ~load~ 引入两份本地定义（相对路径均以 =source/= 目录为基准）：
 
 - =source/information.scm= :: 机器身份（主机名、用户名）、磁盘分区 UUID 及 Btrfs 子卷与持久化目录清单，作为全仓共享的单一数据源。
 - =source/files/kernel/linux-cachyos.scm= :: 本地定制编译的 CachyOS 内核包定义（详见下文的 [[#sys-kernel][Kernel]] 章节）。
@@ -112,8 +112,6 @@ blue build
              (nongnu packages linux)
              (nongnu system linux-initrd)
 
-             (px packages video)
-
              (rosenthal bootloader limine)
              (rosenthal home services desktop)
              (rosenthal home services emacs)
@@ -123,8 +121,10 @@ blue build
              (rosenthal services desktop)
              (rosenthal services games)
              (rosenthal services networking)
+             (rosenthal services nix)
              (rosenthal services shellutils)
              (rosenthal utils file)
+             (rosenthal utils nix)
              (rosenthal utils packages)
 
              (srfi srfi-1))
@@ -170,6 +170,7 @@ blue build
                      dns
                      guix
                      linux
+                     nix
                      pam-mount
                      pm
                      shepherd
@@ -477,7 +478,7 @@ blue build
      <<kernel-module-services>>
      <<sysctl-services>>
      <<pam-limits-services>>
-     ;; <<nix-services>>
+     <<nix-services>>
      <<machine-id-service>>
      <<resume-device-service>>
      <<cleanup-tmp-services>>
@@ -842,6 +843,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
    ;; 包管理器
    "flatpak"
    "flatpak-xdg-utils"
+   "nix"
 
    ;; 工具
    "gzip"
@@ -1341,18 +1343,10 @@ iifname "virbr0" oifname != "virbr0" masquerade
 
 *** Nix 包管理器
 
-Nix 包管理器本体（ =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-files= 三个代码块）当前处于 *按需停用态* ，代码块保留在本节备查。若需重新启用 Nix，将以下五处开关同步取消注释（停用时反之）：
-
-| 联动位置                    | 对应代码或引用                                                      |
-|-----------------------------+---------------------------------------------------------------------|
-| 顶部 ~use-modules~          | 补回 ~(rosenthal services nix)~ 、 ~(rosenthal utils nix)~ 与 ~nix~ |
-| 系统包列表 =packages-list=  | 取消 ~;; "nix"~ 的注释                                              |
-| 系统服务列表 =%system=      | 取消 ~;; <<nix-services>>~ 的注释                                   |
-| 用户定时器 =timer-services= | 取消 ~;; <<nix-gc-timer>>~ 的注释                                   |
-| 环境变量汇总                | 取消 ~;; <<nix-user-conf-files>>~ 的注释                            |
+Nix 包管理器本体由 =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-files= 三个代码块组成，当前 *已启用* 。其联动位置共五处（顶部 ~use-modules~ 的 ~(rosenthal services nix)~ 、 ~(rosenthal utils nix)~ 与 ~nix~ 服务模块； =packages-list= 的 ~"nix"~ ； =%system= 的 ~<<nix-services>>~ ； =timer-services= 的 ~<<nix-gc-timer>>~ ；环境变量汇总的 ~<<nix-user-conf-files>>~ ），停用时将这五处一并注释即可：
 
 - =nix-services= :: 声明 =nix-service-type= （五条 =extra-config= 中仅 =trusted-users= 需拼接 =username= ）与单次服务 =non-nixos-gpu= （将 =/var/lib/non-nixos-gpu= 软链至 =/run/opengl-driver= ，供 Nix 打包的图形程序调用宿主显卡驱动）。
-- =nix-gc-timer= :: 每周日 19:30 调用系统 profile 下的 =/run/current-system/profile/bin/nix-collect-garbage= 清理 14 天前的用户 profile 旧世代并回收 store。系统未安装 =nix= 时该二进制不存在，因此在 =timer-services= 中以注释态 ~;; <<nix-gc-timer>>~ 整行停用。
+- =nix-gc-timer= :: 每周日 19:30 调用系统 profile 下的 =/run/current-system/profile/bin/nix-collect-garbage= 清理 14 天前的用户 profile 旧世代并回收 store。系统未安装 =nix= 时该二进制不存在，故须与 =packages-list= 的 ~"nix"~ 联动开关。
 - =nix-user-conf-files= :: 将 =NIX_USER_CONF_FILES= 指向 =~/.config/nix/gh-token.conf= 与 =~/.config/nix/nix.conf= （用于注入 GitHub ~access-tokens~ ）。该块写成独立的单元素关联列表供 =environment-variable-services= 的 ~append~ 引用；不要直接内联进 =extend-environment-variables= 尾部注释，否则该点对的右括号一并被注释，会破坏外层列表的括号平衡。
 
 #+begin_quote
@@ -1917,13 +1911,6 @@ polkit.addRule(function(action, subject) {
                         (list (plain-file "nonguix.pub"
                                           "(public-key (ecc (curve Ed25519) (q #C1FD53E5D4CE971933EC50C9F307AE2171A2D3B52C804642A7A35F84F3A4EA98#)))")))))
 
-      (simple-service 'panther-substitutes guix-service-type
-                      (guix-extension
-                       (substitute-urls '("https://substitutes.guix.gofranz.com"))
-                       (authorized-keys
-                        (list (plain-file "panther.pub"
-                                          "(public-key (ecc (curve Ed25519) (q #0096373009D945F86C75DFE96FC2D21E2F82BA8264CB69180AA4F9D3C45BAA47#)))")))))
-
       (simple-service 'sjtug-substitutes guix-service-type
                       (guix-extension
                        (substitute-urls '("https://mirror.sjtu.edu.cn/guix"
@@ -2134,7 +2121,6 @@ polkit.addRule(function(action, subject) {
    "pkg-config"
 
    ;; AI Agent
-   "claude-code"
    "cua-driver-bin"
    "magpie-bin"
    "zcode"
@@ -2144,7 +2130,6 @@ polkit.addRule(function(action, subject) {
    "fastboot"
 
    ;; 工具
-   "biome"
    "gh"
    "guile-json"
    "jq"
@@ -2207,7 +2192,6 @@ polkit.addRule(function(action, subject) {
 
    ;; 容器与虚拟机
    "freerdp@3"
-   "pods"
    "virt-manager"
    "waydroid"
    "winapps"
@@ -2877,11 +2861,11 @@ lalt grv  lctl _  _  _  _  _)
 | 定时器名称            | 触发时间     | 职责说明                                                                        |
 |-----------------------+--------------+---------------------------------------------------------------------------------|
 | =flatpak-user-update= | 每周六 18:00 | 仅在接通外接电源时执行 =flatpak update --user -y= ，只更新用户安装的应用        |
-| =nix-gc= （按需启用） | 每周日 19:30 | 清理 14 天前的 Nix 用户 profile 世代并回收 store（默认随 Nix 本体一同注释停用） |
+| =nix-gc=              | 每周日 19:30 | 清理 14 天前的 Nix 用户 profile 世代并回收 store（随 Nix 本体一同启停） |
 | =kb-backup=           | 每日 22:00   | 自动提交 =hermes= 配置子目录与 =~/Documents/Org= 知识库的本地 Git 变更          |
 
 #+NAME: timer-services
-#+begin_src scheme
+#+begin_src scheme :noweb yes
 (list (simple-service 'auto-update home-shepherd-service-type
                       (list
                        (shepherd-timer '(flatpak-user-update)
@@ -2897,7 +2881,7 @@ lalt grv  lctl _  _  _  _  _)
                                              "/bin/flatpak update --user -y"))
                                        #:requirement '(dbus))
 
-                       ;; <<nix-gc-timer>>
+                       <<nix-gc-timer>>
                        )))
 #+end_src
 
@@ -3069,7 +3053,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 
 **** XDG 规范变量
 
-将开发工具（Bash、GDB、Go、Gradle、Guile、Node、NVIDIA CUDA、Python、Rust、SQLite、Wine）、密码管理器（GnuPG、pass）、终端布局（tmuxifier）、沙箱游戏（Luanti）与 AI Agent（Claude Code、Codex、cua-driver、DSH、Hermes、Paseo、Reasonix、zcode-proxy）的配置与数据目录收纳至 XDG Base Directory 规范路径下，保持 =$HOME= 顶层目录整洁，并通过 =%data-dirs= 统一控制持久化边界。
+尽量将所有的配置与数据目录收纳至 XDG Base Directory 规范路径下，保持 =$HOME= 顶层目录整洁，并通过 =%data-dirs= 统一控制持久化边界。
 
 #+NAME: xdg-basedir-env-vars
 #+begin_src scheme
@@ -3113,7 +3097,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
                       home-environment-variables-service-type
                       (append
                        <<extend-environment-variables>>
-                       ;; <<nix-user-conf-files>>
+                       <<nix-user-conf-files>>
                        <<xdg-basedir-env-vars>>
                        `(("QT_PLUGIN_PATH" . ,(string-append
                                                "$HOME/.guix-home/profile/lib/qt5/plugins:"

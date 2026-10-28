@@ -53,25 +53,6 @@ socket 发现用 `awk` 扫 `/proc/net/unix` 找 `quick-access-` 后缀的 kitty 
 
 ## 系统与 GPU
 
-### nixgpu-update
-
-```bash
-sudo nixgpu-update    # 建 /var/lib/non-nixos-gpu → /nix/store/<hash>-non-nixos-gpu
-```
-
-配合 shepherd service `non-nixos-gpu`：`/run/opengl-driver` 在 tmpfs 上、重启即空，service 启动时建链 `/run/opengl-driver → /var/lib/non-nixos-gpu`，`/var/lib/non-nixos-gpu` 才是持久化目标。
-
-**调用时机：首次安装后跑一次，nix 重新部署（store hash 变化）后再跑一次。**
-
-流程：
-
-1. root 前置检查——写 `/etc` 与 `/var/lib`，非 root 会在中途留半成品，所以先查 `EUID` 直接退出。
-2. `mkdir -p /etc/tmpfiles.d` 兜底（Guix 用 shepherd 而非 systemd，该目录默认不存在，setup 内部的软链会因父目录缺失失败），随后 `non-nixos-gpu-setup || true`（其末步 `systemd-tmpfiles --create` 在 Guix 上无此命令）。
-3. 从 `/etc/tmpfiles.d/non-nixos-gpu.conf` 取 target：conf 格式为 `L+ /run/opengl-driver - - - - /nix/store/<hash>-non-nixos-gpu`，取末字段。
-4. **强校验 `$target` 以 `/nix/store/` 开头**后 `ln -nsf "$target" /var/lib/non-nixos-gpu`——防止异常 conf 把链接指到任意路径。
-
-三条错误文案可压成一行排障：`not found after non-nixos-gpu-setup` = setup 没产出 conf（nix profile 未装或版本旧）；`failed to parse target` = conf 格式变了，人工看 conf 调 awk 匹配；`target is not under /nix/store` = conf 内容异常，**不要**手工建链绕过。
-
 ### 40-force-unmute
 
 WirePlumber 兜底脚本，加载 `~/.config/wireplumber/scripts/40-alsa/` 时自动注册。

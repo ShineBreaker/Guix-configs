@@ -38,7 +38,7 @@ blue build-iso minimal      # 只构建 minimal 镜像（纯 CLI fallback）
 
 ### 3. 产物内容
 
-两个变体共用：live/live 与 root/live 固定口令（救援盘需要确定性的 sudo/ssh 口令），shell 均为 fish；nonguix `linux` + `linux-firmware` 内核（基底默认的 `modprobe.blacklist=radeon,amdgpu` 已删，否则 AMD 显卡无 KMS、Wayland 桌面起不来）；4 套 substitute 镜像（guix-moe、nonguix、panther、sjtug，公钥内嵌为 plain-file，不依赖运行时联网拉公钥）；`/etc/guix/channels.scm` 预置 guix + nonguix；`rescue-chroot.sh` 与 `emergency-blue.sh` 经 `live-rescue-tools` 包装进 PATH；`emacs-minimal` 内嵌供 tangle；仓库快照在 `~/Guix-configs`（剔除 `.git`/`dist`/`tmp`，只读，用前 `cp -r` 一份可写副本）。
+两个变体共用：live/live 与 root/live 固定口令（救援盘需要确定性的 sudo/ssh 口令），shell 均为 fish；nonguix `linux` + `linux-firmware` 内核（基底默认的 `modprobe.blacklist=radeon,amdgpu` 已删，否则 AMD 显卡无 KMS、Wayland 桌面起不来）；3 套 substitute 镜像（guix-moe、nonguix、sjtug，公钥内嵌为 plain-file，不依赖运行时联网拉公钥）；`/etc/guix/channels.scm` 预置 guix + nonguix；`rescue-chroot.sh` 与 `emergency-blue.sh` 经 `live-rescue-tools` 包装进 PATH；`emacs-minimal` 内嵌供 tangle；仓库快照在 `~/Guix-configs`（剔除 `.git`/`dist`/`tmp`，只读，用前 `cp -r` 一份可写副本）。
 
 - **desktop**：`xfce-desktop-service-type` + `labwc`（Wayland）+ `greetd`（vt7 自动登录 live，登出后 default-session 自动回桌面）；删掉 tty1 的 kmscon 安装器直进桌面；网络走 NetworkManager（nm-applet 托盘、`nmtui` 亦可）。
 - **minimal**：保留 tty1 的 TUI 安装器（kmscon）与 connman（TUI 安装器的网络步骤依赖它）；`issue` 印救援盘速查。
