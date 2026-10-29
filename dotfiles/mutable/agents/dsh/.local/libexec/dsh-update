@@ -8,7 +8,8 @@
 # HEAD（换 commit 前先迁移 pnpm-workspace.yaml 里绑定 commit 的 allowBuilds key），
 # 其余锁定源码依赖只提示。版本声明靠 pnpm -E + saveExact 写精确值（^ 范围曾是
 # 静默升级到不兼容版本的成因）。选版按通道稳定性 latest→next→beta→alpha，不跟
-# npm latest tag。文档：docs/scripts/dsh.md §dsh update
+# npm latest tag。更新成功后默认经公共入口自动重启 dsh web 并核验新 boot（成败
+# 并入退出码，--no-restart 跳过）。文档：docs/scripts/dsh.md §dsh update
 set -euo pipefail
 
 : "${DSH_HOME:=${XDG_DATA_HOME:-$HOME/.local/share}/dsh}"
@@ -31,21 +32,23 @@ usage() {
 依赖跟上游 HEAD，其余锁定源码（git+/git@/file:/link:）的依赖只提示不更新。
 
 选项:
-  --check     只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
-  -y, --yes   跳过确认
-  --restart   更新完成后自动重启 dsh web（dsh web --reauth）
-  -h, --help  显示本帮助
+  --check       只检查并报告，不修改任何东西（退出码 0=已最新，1=有更新）
+  -y, --yes     跳过确认
+  --no-restart  更新后不自动重启 dsh web（默认重启并核验新 boot）
+  --restart     已废弃：自动重启现为默认行为，保留仅为兼容旧调用
+  -h, --help    显示本帮助
 EOF
 }
 
 check_only=false
 assume_yes=false
-do_restart=false
+do_restart=true
 while (($#)); do
 	case "$1" in
 	--check) check_only=true ;;
 	-y | --yes) assume_yes=true ;;
-	--restart) do_restart=true ;;
+	--no-restart) do_restart=false ;;
+	--restart) ;; # 无操作：默认行为已含重启
 	-h | --help)
 		usage
 		exit 0
@@ -415,16 +418,36 @@ printf '\ndsh update: 更新完成。改动的是仓库源文件（package.json 
 sync_dir "$CLI_DIR" "$AGENTS_ROOT" "$SRC_AGENTS_ROOT"
 sync_dir "$WEB_DIR" "$DSH_HOME" "$SRC_DSH_HOME"
 sync_dir "$TUI_DIR" "$DSH_HOME" "$SRC_DSH_HOME"
-printf 'dsh update: 需重启 dsh web 才生效（host 半边不热载）。\n'
+
+# 重启入口从本脚本位置反推同包 wrapper，不赌调用方 PATH（agent shell 常只
+# 导出 nix profile 给 pnpm，dsh 不在 PATH 时旧写法会静默跳过重启）
+dsh_entry="$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")/bin/dsh"
 
 if $do_restart; then
-	# setsid 后台跑，不阻塞收尾；经公共入口 dsh web --reauth 重启
-	if command -v dsh >/dev/null 2>&1; then
-		printf 'dsh update: 重启 dsh web（dsh web --reauth，后台）\n'
-		setsid dsh web --reauth >/dev/null 2>&1 &
+	# herd 不在 PATH 而端口已有实例：实例多半就是 shepherd 托管的服务，
+	# dsh web --reauth 此时会退回自行 spawn 路径与服务抢端口（EADDRINUSE
+	# respawn 振荡直至服务自禁用），拒绝自动重启交人工处理
+	if ! command -v herd >/dev/null 2>&1 &&
+		(exec 3<>"/dev/tcp/127.0.0.1/${DSH_WEB_PORT:-3080}") 2>/dev/null; then
+		printf 'dsh update: 端口 %s 有实例在跑但 PATH 里没有 herd，无法确认是否\n' "${DSH_WEB_PORT:-3080}" >&2
+		printf 'dsh update: shepherd 托管，自动重启有抢端口风险——请在常规环境跑 dsh web --reauth\n' >&2
+		exit 1
+	fi
+	if [[ -x "$dsh_entry" ]]; then
+		# 前台经公共入口重启并等新 boot（token 变化），成败并入本脚本退出码；
+		# --no-window 不弹 chromium——cookie 让既有窗口自动重连
+		printf 'dsh update: 自动重启 dsh web（dsh web --reauth --no-window）……\n'
+		if "$dsh_entry" web --reauth --no-window; then
+			printf 'dsh update: dsh web 已在新版本上重启\n'
+		else
+			printf 'dsh update: dsh web 重启失败——tail %s/dsh/web.log 排障，必要时 git checkout 单文件回退版本后重跑\n' \
+				"${XDG_STATE_HOME:-$HOME/.local/state}" >&2
+			exit 1
+		fi
 	else
-		printf 'dsh update: 找不到 dsh，请手动重启 dsh web\n' >&2
+		printf 'dsh update: 找不到 dsh 入口（%s），请手动 dsh web --reauth 重启\n' "$dsh_entry" >&2
+		exit 1
 	fi
 else
-	printf 'dsh update: 重启请运行 dsh web --reauth（cookie 由持久化密钥签名，不会要求重新认证）\n'
+	printf 'dsh update: 已按 --no-restart 跳过重启。注意：pnpm 已剪掉旧依赖树，仍在跑的实例可能中途报模块缺失（host 半边不热载），尽快 dsh web --reauth；cookie 由持久化密钥签名，重启不要求重新认证。\n'
 fi
