@@ -17,7 +17,9 @@ export AGENTS_ROOT
 # 起服务必须直调 CLI 本体：dsh 公共入口会把 web 分发回本脚本造成递归；
 # DSH_BIN 覆盖测试时同理须指向 CLI 本体
 : "${DSH_BIN:=${AGENTS_ROOT}/dsh/node_modules/.bin/dsh}"
-: "${DSH_TS_HOST:=brokenshine-laptop.tail3889e8.ts.net}"
+# 默认值用 = 而非 :=：显式空串（DSH_TS_HOST= dsh web）表示本次不带
+# 尾网信任，空串须原样保留不得填默认
+: "${DSH_TS_HOST=brokenshine-laptop.tail3889e8.ts.net}"
 
 readonly CLEAN_URL="http://127.0.0.1:${DSH_WEB_PORT}/"
 readonly DSH_WEB_PROFILE=dsh
@@ -25,19 +27,18 @@ readonly DSH_WEB_PROFILE=dsh
 usage() {
 	cat >&2 <<'EOF'
 dsh web — DeepSeek Harness Web UI 启动实体
-用法: dsh web [--reauth] [--remote-url] [--lan-off]
+用法: dsh web [--reauth] [--no-window] [--remote-url] [--lan-off]
   (无参数)     起服务（默认带远程信任）并开本机窗口
   --reauth     强制重启服务换新 token（cookie 失效时用）
+  --no-window  只确保服务在跑，不开窗：打印带 token 的 URL 后退出
+               （脚本化重启用，如 dsh update 的自动重启）
   --remote-url 只打印手机首次握手的 https://<尾网主机名>/?token=... URL
   --lan-off    本次不带 --trusted-host 启动（DSH_TS_HOST= 的显式等价）
+
+另有 --service：shepherd 常驻服务专用入口（见 source/config.org 的
+dsh-web-service），断链自愈后直接 exec CLI 本体，不走窗口与端口探测逻辑。
 EOF
 }
-
-# 尾网信任参数（--lan-off 或 DSH_TS_HOST 空串时不带）
-ts_args=()
-if [[ -n "${DSH_TS_HOST:-}" ]]; then
-	ts_args=(--trusted-host "$DSH_TS_HOST")
-fi
 
 server_up() { (exec 3<>"/dev/tcp/127.0.0.1/${DSH_WEB_PORT}") 2>/dev/null; }
 
@@ -99,24 +100,35 @@ report_start_failure() {
 }
 
 # 断链自愈：dsh 的原子写会把 stow 软链换成实体文件——内容归源再重建软链；
-# lockfile 反向只回拷内容（与 bin/dsh 的 _relink_profile 同款，起服务前检测）
-_relink_profile() {
-	local dir="$DSH_HOME/profiles/web" src_dir name
-	src_dir="$(dirname "$(dirname "$(readlink -f "$0")")")/share/dsh/profiles/web"
+# lockfile 反向只回拷内容（pnpm 拒写软链 lockfile）。与 bin/dsh 的同款函数
+# 保持一致：--service 是 shepherd 的启动入口，不经 wrapper，安装树 + 两个
+# profile 三棵树都要在此覆盖；重建必须用相对链——绝对链 stow 拒绝接管，
+# --restow 报 not owned by stow 并整包中止
+_relink_dir() {
+	local label="$1" dir="$2" src_dir="$3" name rel
 	[[ -d "$src_dir" ]] || return 0
 	for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
 		[[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
 		if [[ ! -L "$dir/$name" ]]; then
 			cp "$dir/$name" "$src_dir/$name"
-			ln -sfn "$src_dir/$name" "$dir/$name"
-			printf 'dsh web: %s 断链已写回仓库源并重建软链\n' "$name" >&2
+			rel="$(realpath --relative-to="$dir" "$src_dir/$name")"
+			ln -sfn "$rel" "$dir/$name"
+			printf 'dsh web: [%s] %s 断链已写回仓库源并重建软链\n' "$label" "$name" >&2
 		fi
 	done
 	if [[ -f "$dir/pnpm-lock.yaml" && -f "$src_dir/pnpm-lock.yaml" ]] &&
 		! cmp -s "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"; then
 		cp "$dir/pnpm-lock.yaml" "$src_dir/pnpm-lock.yaml"
-		printf 'dsh web: pnpm-lock.yaml 已同步回仓库源\n' >&2
+		printf 'dsh web: [%s] pnpm-lock.yaml 已同步回仓库源\n' "$label" >&2
 	fi
+}
+
+_relink_profile() {
+	local pkg_local
+	pkg_local="$(dirname "$(dirname "$(readlink -f "$0")")")"
+	_relink_dir 安装树 "$AGENTS_ROOT/dsh" "$pkg_local/share/agents/dsh"
+	_relink_dir web "$DSH_HOME/profiles/web" "$pkg_local/share/dsh/profiles/web"
+	_relink_dir dsh-tui "$DSH_HOME/profiles/dsh-tui" "$pkg_local/share/dsh/profiles/dsh-tui"
 }
 
 start_server_url() {
@@ -182,11 +194,15 @@ managed_restart_url() {
 
 reauth=false
 remote_url=false
+no_window=false
+service_mode=false
 passthrough=()
 while [[ $# -gt 0 ]]; do
 	case "$1" in
 	--reauth) reauth=true ;;
 	--remote-url) remote_url=true ;;
+	--no-window) no_window=true ;;
+	--service) service_mode=true ;;
 	--lan-off) DSH_TS_HOST="" ;;
 	-h | --help)
 		usage
@@ -196,6 +212,23 @@ while [[ $# -gt 0 ]]; do
 	esac
 	shift
 done
+
+# 尾网信任参数（--lan-off 或 DSH_TS_HOST 空串时不带）。必须在参数解析
+# **之后**计算：--lan-off 在解析中才置空 DSH_TS_HOST，提前冻结会让该旗标
+# 永远不生效（存量 bug，2026-10-30 修正）
+ts_args=()
+if [[ -n "${DSH_TS_HOST:-}" ]]; then
+	ts_args=(--trusted-host "$DSH_TS_HOST")
+fi
+
+# --service：shepherd 常驻服务专用入口。先跑断链自愈（服务不经 bin/dsh
+# wrapper，UI 运行期对 cordis.patch.yml 的原子写断掉的 stow 软链在每次
+# 服务启动/respawn 时归位），再 exec CLI 本体——常驻职责（respawn、日志、
+# requirement）在 shepherd，此处不做端口探测与开窗
+if $service_mode; then
+	_relink_profile
+	exec "$DSH_BIN" web --no-open --port "$DSH_WEB_PORT" "${ts_args[@]}"
+fi
 
 # --remote-url：不弹窗，只保证实例 trusted 并打印握手 URL
 if $remote_url; then
@@ -263,6 +296,13 @@ if [[ -z "$url" ]]; then
 	else
 		url=$(start_server_url "${ts_args[@]}" "${passthrough[@]}")
 	fi
+fi
+
+# --no-window：服务已就绪即收尾，打印带 token 的 URL（首次握手/脚本化
+# curl 验证用）后退出，不开 chromium 窗口——cookie 让既有窗口自动重连
+if $no_window; then
+	printf '%s\n' "$url"
+	exit 0
 fi
 
 chromium=$(chromium_bin) || {
