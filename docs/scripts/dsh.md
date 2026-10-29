@@ -29,7 +29,7 @@ dsh update|web|tui   # Guix 增强子命令 → libexec/{dsh-update,dsh-web,dsh-
 - **分发必须排在 CLI 缺失检查之前**：`dsh-update` 自身能装 CLI，`dsh-web` 的缺 CLI 报错也更友好，先检查会拦掉这两条自举路径。
 - **CLI 缺失行为分叉**：交互终端问一句再装（`[y/N]`，拒绝则退出码 130）；非交互只提示 `dsh --install` 并以 127 退出，不静默联网。
 - **`dsh plugin` 提前单独放行**：直调 CLI 本体取回退出码，末尾统一跑一次断链自愈（该子命令正是 `package.json` 原子写的触发源）。
-- **断链自愈 `_relink_profile`**（全族唯一一份定义）：dsh 的原子写（临时文件 + rename）会把 stow 软链换成实体文件——plugin bundles 写入、UI 设置编辑 `cordis.patch.yml`、pnpm 覆写 manifest 都在这条路上。自愈覆盖**两处 pnpm 项目**：CLI 安装树（`$AGENTS_ROOT/dsh`）与 web profile（`$DSH_HOME/profiles/web`），各按 `package.json`、`pnpm-workspace.yaml`、`cordis.patch.yml` 三个文件检测非 symlink → 内容写回仓库源再 `ln -sfn` 重建软链；`pnpm-lock.yaml` 只回拷内容（pnpm 的 Rust 端拒写软链 lockfile，部署侧必须真实文件）。源目录从 `$0` 反推而非从部署侧软链推导——pnpm 覆写后链接随时不在。时机：每次 CLI 调用结束、`dsh web` 起服务前、`dsh update` 每次 pnpm 操作后。
+- **断链自愈 `_relink_profile`**（bin/dsh 与 dsh-web 各一份定义，语义必须保持一致）：dsh 的原子写（临时文件 + rename）会把 stow 软链换成实体文件——plugin bundles 写入、UI 设置编辑 `cordis.patch.yml`、pnpm 覆写 manifest 都在这条路上。自愈覆盖**三处 pnpm 项目**：CLI 安装树（`$AGENTS_ROOT/dsh`）与 web、dsh-tui 两个 profile，各按 `package.json`、`pnpm-workspace.yaml`、`cordis.patch.yml` 三个文件检测非 symlink → 内容写回仓库源再以**相对链**（`realpath --relative-to`，绝对链 stow 拒绝接管、`--restow` 整包中止）重建软链；`pnpm-lock.yaml` 只回拷内容（pnpm 的 Rust 端拒写软链 lockfile，部署侧必须真实文件）。源目录从 `$0` 反推而非从部署侧软链推导——pnpm 覆写后链接随时不在。时机：每次 CLI 调用结束、`dsh web` 起服务前、`dsh-web --service` 服务启动前、`dsh update` 每次 pnpm 操作后。
 - **安装树的 lockfile 回源**：`install_cli` 成功后单独拷回 `pnpm-lock.yaml`。安装树是手动升级路径（改 `package.json` 后裸跑 `pnpm install`）的回源盲区，不过 `dsh update` 的 sync，靠自愈兜底。
 
 ## dsh web
@@ -37,6 +37,7 @@ dsh update|web|tui   # Guix 增强子命令 → libexec/{dsh-update,dsh-web,dsh-
 ```bash
 dsh web                # 起服务（默认带远程信任）并开本机 chromium --app 窗口
 dsh web --reauth       # 强制重启服务换新 token（cookie 失效时用）
+dsh web --no-window    # 只确保服务在跑，不开窗：打印带 token 的 URL 后退出
 dsh web --remote-url   # 只打印手机首次握手的 https://<尾网主机名>/?token=... URL
 dsh web --lan-off      # 本次不带 --trusted-host（`DSH_TS_HOST=` 的显式等价）
 ```
@@ -52,7 +53,8 @@ dsh web --lan-off      # 本次不带 --trusted-host（`DSH_TS_HOST=` 的显式�
 - **`DSH_BIN` 默认必须指 CLI 本体**：公共入口会把 `web` 分发回本脚本，指公共入口即递归；测试覆盖时同理。
 - **实例永远带 `--trusted-host` 启动**：远程流量经 tailscale serve 反代进 loopback，Host 头是尾网主机名，非 loopback 请求必须命中该白名单；`DSH_TS_HOST=` 空串即关闭。已在监听但不带该参数的实例会被自动重启（判据是 `/proc/<pid>/cmdline` 里含 `--trusted-host <host>`）。
 - **launch token 按进程随机，一个 token 只换一次 cookie**：token 从日志的 `dsh web: http://127.0.0.1:<port>/?token=...` 行解析，只对本脚本亲自起的实例有效；cookie 由 `$DSH_HOME/.credentials.yaml` 里的持久化密钥签名，跨服务重启有效，之后直接开干净 URL。`--reauth` 终止旧实例换新。CLI 0.2.x 起日志行带时间戳前缀，token/URL 解析不得锚定行首（锚定会永远匹配到 log 首行的远古 token）。
-- **`dsh-web` 常驻服务注册后启停经 `herd`**：home-shepherd 的 `dsh-web` 服务（`source/config.org` 的 `dsh-web-service`）常驻 server 后，wrapper 自行 spawn 会与服务抢 3080，服务连续 EADDRINUSE 撞 respawn 上限即自禁用。检测到服务注册时 `--reauth`/冷启动/补信任一律改走 `herd restart dsh-web`，按 token 值变化等新 boot 的 token（日志不 truncate，避免拿到上一次的已死 token）；未注册时回退按端口探测 + 自行 spawn 的原行为。
+- **`dsh-web` 常驻服务注册后启停经 `herd`**：home-shepherd 的 `dsh-web` 服务（`source/config.org` 的 `dsh-web-service`）常驻 server 后，wrapper 自行 spawn 会与服务抢 3080，服务连续 EADDRINUSE 撞 respawn 上限即自禁用。检测到服务注册时 `--reauth`/冷启动/补信任一律改走 `herd restart dsh-web`，按 token 值变化等新 boot 的 token（日志不 truncate，避免拿到上一次的已死 token）；未注册时回退按端口探测 + 自行 spawn 的原行为。服务本体经 `~/.local/libexec/dsh-web --service` 入口启动：断链自愈后 exec 稳定 symlink `.bin/dsh`，升级后 restart 即加载新版本。
+- **`--no-window` 只确保服务、不开窗**：服务就绪后打印带 token 的 URL 即退出、不 exec chromium——脚本化重启用（`dsh update` 的自动重启走这里）；cookie 让既有窗口自动重连，无需新窗。
 - **窗口 app_id 与 `dsh.desktop` 的 `StartupWMClass` 严格成对绑定**：Wayland 下窗口 ID 只由 profile 目录名决定，脚本定死 `--profile-directory=dsh`，改名须两处同改。该 profile 顺带隔离 dsh 的 cookie 与日常浏览。不装 PWA——只传 `--app`/`--no-first-run`/`--no-default-browser-check`，装出来是全屏而非窗口。
 - **服务脱离会话**：以 `setsid -w` 起，日志 `umask 077` 重建，同时留有同寿命 pid 供 `kill -0` 早判失败；起不来时 `notify-send` critical 通知让桌面场景可见。`stop_server` 只终止 `/proc/<pid>/cmdline` 含 `@deepseek-ai/dsh` 的监听进程，拒绝杀第三方占端口的进程，最多等 10s。
 - **`usage()` 是独立 heredoc**，不得回读自身注释——历史实现用 `sed` 从头注释提取帮助，精简注释即自毁帮助。
@@ -61,10 +63,10 @@ dsh web --lan-off      # 本次不带 --trusted-host（`DSH_TS_HOST=` 的显式�
 ## dsh update
 
 ```bash
-dsh update            # 交互确认后更新本体 + web profile + dsh-tui profile
-dsh update --check    # 只查差异（退出码 0=已最新，1=有更新），可作 CI 判断
-dsh update -y|--yes   # 跳过确认
-dsh update --restart  # 完成后后台 `dsh web --reauth`
+dsh update               # 交互确认后更新本体 + web profile + dsh-tui profile，成功后自动重启 dsh web
+dsh update --check       # 只查差异（退出码 0=已最新，1=有更新），可作 CI 判断
+dsh update -y|--yes      # 跳过确认
+dsh update --no-restart  # 更新后不自动重启（默认重启并核验新 boot，成败计入退出码）
 ```
 
 - **覆盖三处 pnpm 项目**：本体（`$AGENTS_ROOT/dsh`）、web profile、dsh-tui profile。插件清单从各 profile 的 `package.json` 的 dependencies 动态读取（各 profile 内保序），本体固定为 `$AGENTS_ROOT/dsh/package.json` 的 `@deepseek-ai/dsh`。依赖分三类处理。
@@ -75,7 +77,7 @@ dsh update --restart  # 完成后后台 `dsh web --reauth`
 - **`ERR_PNPM_IGNORED_BUILDS` 在此降级为非致命**：包已装好、只是 build script 未审批时只提示去跑 `pnpm approve-builds`（与 pi 族的「批准后重试」不同）。
 - **lockfile 回源**：每次 `pnpm add` 后把部署侧 lockfile 拷回仓库源副本，收尾再对三棵目录树各拉平一次（`package.json`、`pnpm-workspace.yaml`、`cordis.patch.yml` 同步内容并重建软链）。
 - **兼容性提醒**：读插件的 `dsh.compatibility.dshReleases`，只在「声明了白名单却不含目标本体版本」时提醒；没有该字段不代表不兼容。
-- **更新后须重启 `dsh web`**（host 半边不热载），`--restart` 后台调 `dsh web --reauth`。
+- **更新成功后自动重启 `dsh web`**（host 半边不热载）：前台经 `dsh web --reauth --no-window` 重启并等新 boot token，重启失败以退出码 1 上报；`--no-restart` 跳过（旧依赖树已被 pnpm 剪掉，仍在跑的实例可能中途报模块缺失，应尽快手动重启）。重启入口从脚本位置反推同包 wrapper（`BASH_SOURCE` → `../bin/dsh`），不赌调用方 PATH；PATH 里没有 `herd` 而端口已被占时拒绝自动重启——无法确认实例是否 shepherd 托管，强行走 wrapper 会退化成自行 spawn 与服务抢端口。
 - **与上游 `dsh tui update` 的分工**：后者是 TUI launcher 自带的子命令，只管 `@deepseek-harness-tui/dsh-tui` 一个包（且经 `dsh plugin add` 落到部署侧）；`dsh update` 才是全量通道——本体 + 两个 profile 的全部 npm 依赖一起升，并把改动回写仓库源。上游那个不负责回源，跑完仓库里的 lockfile 会落后一版。
 
 ## dsh tui
@@ -91,7 +93,7 @@ dsh tui [args...]   # 直 exec profile 内的完整 launcher
 - **分发与兜底统一用 `exec`**：wrapper 不残留在进程树上；`plugin` 分支需取回退出码故用普通调用并在末尾自愈。
 - **`dsh update` 的回源映射显式给出**：CLI 安装树与两个 profile 分居两棵目录树，部署根与仓库源根须成对传入，否则搬出 `$DSH_HOME` 后会静默跳不回源。**两个源根的深度不同**：本体是 `…/share/agents`（rel 为 `dsh`），profile 是 `…/share/dsh`（rel 为 `profiles/<name>`）——源根若直接取 `…/share/agents/dsh`，rel 再拼一次就成了 `…/agents/dsh/dsh/`，源侧文件不存在，回源会**静默跳过整个安装树**。
 - **回源源目录一律从 `$0` 的 stow 软链反推**，不从部署侧软链推导。
-- **`grep | head` 管道必须 `|| true`**：`set -euo pipefail` 下无匹配时 grep 返回 1，曾让 `migrate_allow_builds` 在「无需迁移」的正常场景中途退出，连带 `--restart` 到不了重启路径。
+- **`grep | head` 管道必须 `|| true`**：`set -euo pipefail` 下无匹配时 grep 返回 1，曾让 `migrate_allow_builds` 在「无需迁移」的正常场景中途退出，连带自动重启路径到不了。
 - **收尾的 `cp` / `ln` 失败只告警不中止**：更新此时已经落盘，回源或重建软链失败不该把整脚本带崩（`set -e` 会吞掉后续所有步骤，包括「需重启」提示）。同理，lockfile 的源侧副本允许缺省，首次同步时补建——它存在的意义正是让部署可复现。
 
 ## 排障

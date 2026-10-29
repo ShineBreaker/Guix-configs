@@ -28,15 +28,17 @@ skill 不重复，只覆盖「更新 → 验证 → 源同步」工作流及其�
 ## 1. 更新流程
 
 ```bash
-dsh update --check          # 只查差异；退出码 0=已最新，1=有更新
-dsh update --yes --restart  # 执行 + 后台 dsh web --reauth 重启
+dsh update --check      # 只查差异；退出码 0=已最新，1=有更新
+dsh update --yes        # 执行 + 前台自动重启 dsh web（--reauth --no-window，
+                        # 等新 boot token，成败计入退出码；--no-restart 跳过）
 ```
 
 - 本体与 web 插件两层强绑定一起升；差异列表即更新面（按通道稳定性 latest→next→
   beta→alpha 选版，24h 冷却内的版本由 pnpm 自动写 minimumReleaseAgeExclude 豁免）。
 - `link:` 本地插件（dsh-agenote / dsh-agent-extensions）不参与自动更新，只在输出里
   列提示。
-- `--restart` 换新 launch token；cookie 由 `.credentials.yaml` 持久化密钥签名（30 天），
+- 更新成功后**默认自动重启**（旧 `--restart` 旗标废弃为无操作，`--no-restart` 跳过），
+  重启换新 launch token；cookie 由 `.credentials.yaml` 持久化密钥签名（30 天），
   浏览器旧窗口重连即可，不需要用户重新认证。
 - 跑完再执行一次 `dsh update --check`，应报已是最新——同时验证版本声明与 lockfile
   回源一致。
@@ -168,7 +170,7 @@ done
 
 ## 5. dsh-web 常驻服务排障
 
-`dsh-web` shepherd 服务（`source/config.org` 的 `dsh-web-service` 块）已接管常驻；服务命令直调 `.bin/dsh` shim，日志仍写 `${XDG_STATE_HOME}/dsh/web.log`（wrapper 的 `launch_token()` 依赖不变）。
+`dsh-web` shepherd 服务（`source/config.org` 的 `dsh-web-service` 块）已接管常驻；服务命令经 `~/.local/libexec/dsh-web --service` 入口启动（断链自愈后 exec 稳定 symlink `.bin/dsh` shim），日志仍写 `${XDG_STATE_HOME}/dsh/web.log`（wrapper 的 `launch_token()` 依赖不变）。
 
 - **EADDRINUSE 振荡**（respawn 循环、每次 startup failed）= 3080 被另一个实例占着：宿主上 wrapper/手动起的残留实例会跟服务抢端口。杀掉占用者即自愈。**qqbot/weixin 沙箱（bwrap）内 `ss -p` 看不到宿主进程 pid**，端口占用排查要么 `herd eval root` 借宿主 shepherd 视野、要么交用户宿主侧做（详见 guix-configs-workflow §4 典型陷阱）。
 - **`herd enable/disable` 无持久化**：只改内存标志，daemon 重启后按 conf 的 `auto-start?` 恢复——临时 disable 止住 respawn 噪音不会影响下次启动。
