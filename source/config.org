@@ -2732,18 +2732,21 @@ lalt grv  lctl _  _  _  _  _)
 ：开机即热，web 窗口、手机端（remote-web-ui 插件）、
 局域网访问不再依赖首次触发；回合进行中关掉浏览器窗口任务照跑，重开即接力。
 
-- *直调 =.bin/dsh= 而非 wrapper* :: wrapper 的 =web= 子命令会分发回 =dsh-web= 脚本造成
-  递归，且其 lazy-start 语义（端口占用检测 + 开窗）与常驻服务职责重叠。=.bin/dsh= 是
-  pnpm 的稳定 symlink（指向 =.pnpm= 内当前版本），升级不漂移——与 =dsh-web= 脚本的
-  =DSH_BIN= 同款路径。stow 断链自愈由 =bin/dsh= 每次调用的 =_relink_profile= 兜底，
-  cron 定时跑 =dsh --version= 即可触发。
+- *经 =dsh-web= 脚本的 =--service= 入口启动* :: 该入口先跑 =_relink_profile= 断链
+  自愈（服务不经 =bin/dsh= wrapper，UI 运行期对 =cordis.patch.yml= 的原子写断掉的
+  stow 软链在每次服务启动 / respawn 时归位——替代从未落地的「cron 定时跑
+  =dsh --version=」方案），再 exec =.bin/dsh=：pnpm 的稳定 symlink（指向 =.pnpm=
+  内当前版本），升级不漂移，restart 即加载新版本。不走 wrapper 的 =web= 子命令分发
+  （避免递归），也不做端口探测与开窗——常驻职责（respawn、日志、requirement）在
+  shepherd。
 - *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log=——=dsh-web= wrapper 的
   =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），
   shepherd 接管后该路径继续可用，零分叉。
 - *环境显式设置* :: =DSH_HOME= / =AGENTS_ROOT= 在 gexp 内运行期求值并注入，不赌
-  服务环境；=.bin/dsh= shim 内部自行解析 =node=（PATH 里的 =.guix-home= profile）。
-- *信任尾网主机名* :: =--trusted-host= 与 =dsh-web= wrapper 默认一致，手机端远程访问
-  保持可用。
+  服务环境；=dsh-web=（bash）与 =.bin/dsh= shim 内部的 =node= 均自行从 PATH 里的
+  =.guix-home= profile 解析。
+- *信任尾网主机名* :: =--trusted-host= 不再在服务定义里硬编码，由 =--service= 按
+  =DSH_TS_HOST= 默认值提供——与交互入口同一份配置源，手机端远程访问保持可用。
 
 #+NAME: dsh-web-service
 #+begin_src scheme
@@ -2761,9 +2764,8 @@ lalt grv  lctl _  _  _  _  _)
                         (list (home-daemon-service
                                'dsh-web
                                (list #~(string-append (getenv "HOME")
-                                                      "/.local/share/agents/dsh/node_modules/.bin/dsh")
-                                     "web" "--no-open" "--port" "3080"
-                                     "--trusted-host" "brokenshine-laptop.tail3889e8.ts.net")
+                                                      "/.local/libexec/dsh-web")
+                                     "--service")
                                #:requirement '(graphical-session)
                                #:environment-variables dsh-env
                                #:log-file #~(string-append (getenv "XDG_STATE_HOME")
