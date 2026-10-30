@@ -20,7 +20,7 @@ ZCode 会话的 AI 归因提交规范保障。插件名是历史遗留：实际�
 ```json
 {
   "plugins": {
-    "dirs": ["/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/agenote-zcode", "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/plugins/assisted-by-zcode"]
+    "dirs": ["~/Projects/dotfiles/guix/Guix-configs/dotfiles/mutable/agenote/.config/agenote", "/home/brokenshine/Projects/dotfiles/guix/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/plugins/assisted-by-zcode"]
   }
 }
 ```

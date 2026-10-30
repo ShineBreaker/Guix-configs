@@ -20,7 +20,7 @@ Point `plugins.dirs` in `~/.zcode/cli/config.json` at this plugin root (each ent
 ```json
 {
   "plugins": {
-    "dirs": ["/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agenote/.zcode/plugins/agenote-zcode", "/home/brokenshine/Projects/Config/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/plugins/assisted-by-zcode"]
+    "dirs": ["~/Projects/dotfiles/guix/Guix-configs/dotfiles/mutable/agenote/.config/agenote", "/home/brokenshine/Projects/dotfiles/guix/Guix-configs/dotfiles/mutable/agents/zcode/.zcode/plugins/assisted-by-zcode"]
   }
 }
 ```

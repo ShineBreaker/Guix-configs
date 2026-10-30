@@ -15,8 +15,13 @@
       "computer-use@zcode-plugins-official": true,
       "example-plugin@zcode-plugins-official": false,
       "cloudflare@claude-plugins-official": true,
+      "restore-legacy-sessions@zcode-plugins-official": false,
       "mimosa@zcode-plugins-official": false,
-      "restore-legacy-sessions@zcode-plugins-official": false
+      "jupyter-notebook@zcode-plugins-official": true,
+      "typst-workbench@zcode-plugins-official": true,
+      "video2code@zcode-plugins-official": true,
+      "libtv-cli@zcode-plugins-official": true,
+      "godot@zcode-plugins-official": true
     }
   },
   "mcp": {
