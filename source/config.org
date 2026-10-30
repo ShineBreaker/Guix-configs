@@ -2153,6 +2153,8 @@ polkit.addRule(function(action, subject) {
 
 日常生产力、浏览器、影音创作、虚拟机/容器前端与游戏娱乐软件。
 
+~nss-certs~ 必须留在本层。Guix 的 nss-certs 会在所在 profile 生成 ~etc/profile~ ，按 ~${GUIX_PROFILE:-默认}~ 拼出 ~SSL_CERT_FILE~ 路径。系统层经 ~%base-packages~ 已含该包，home profile 缺它时， ~GUIX_PROFILE~ 指向 ~$HOME/.guix-home/profile~ 会让拼出的 CA 路径不存在，gh、curl、git 均报 x509 证书错误。
+
 #+NAME: user-packages-list
 #+begin_src scheme
 (specifications->packages
@@ -2211,6 +2213,9 @@ polkit.addRule(function(action, subject) {
    "mesa-utils"
    "pinentry-qt"
    "slurp"
+
+   ;; TLS 证书
+   "nss-certs"
 
    ;; Python
    "python-openpyxl"))
