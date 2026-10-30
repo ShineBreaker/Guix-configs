@@ -8,7 +8,7 @@
 `blue build-iso` **不需要 sudo**（与 `blue rebuild` 不同）。Agent 可直接后台跑：
 
 ```bash
-cd ~/Projects/Config/Guix-configs && blue build-iso          # 全变体
+cd ~/Projects/dotfiles/guix/Guix-configs && blue build-iso          # 全变体
 blue build-iso xfce                                        # 只 xfce（先验证）
 ```
 
@@ -22,7 +22,7 @@ Error while running command build-iso:
 看不到 guix 自己的 backtrace。遇到失败**必须手动复现同一条 guix 命令**抓完整输出：
 
 ```bash
-cd ~/Projects/Config/Guix-configs
+cd ~/Projects/dotfiles/guix/Guix-configs
 guix time-machine --channels=source/channel.lock -- repl -- \
   tools/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
   tmp/live-iso.scm --image-type=iso9660 2>&1 | tee /tmp/iso-xfce-build.log
@@ -33,7 +33,7 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 **现象**（手动复现后）：
 
 ```
-/home/brokenshine/Projects/Config/Guix-configs/tmp/live-iso.scm:225:4: 错误：
+/home/brokenshine/Projects/dotfiles/guix/Guix-configs/tmp/live-iso.scm:225:4: 错误：
  'services' field must contain a list of services
 ```
 
@@ -182,7 +182,7 @@ guix time-machine --channels=source/channel.lock -- repl -- \
 # 进入 guix-system image 构建 = 成功越过 OS 定义阶段
 
 # 3) 正式后台构建
-cd ~/Projects/Config/Guix-configs && blue build-iso xfce
+cd ~/Projects/dotfiles/guix/Guix-configs && blue build-iso xfce
 # 产物: dist/jeans-xfce-<YYYYMMDD>.x86_64-linux.iso
 ```
 

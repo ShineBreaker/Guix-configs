@@ -11,7 +11,7 @@ metadata:
 
 # Guix System 调试
 
-> 针对 `~/Projects/Config/Guix-configs` 仓库的 `blue rebuild` / `guix system reconfigure` / `herd` 卡死场景。核心是区分 **shepherd 层死锁**与 **substitute/代理层假象**，并提供可复用的取证命令组。
+> 针对 `~/Projects/dotfiles/guix/Guix-configs` 仓库的 `blue rebuild` / `guix system reconfigure` / `herd` 卡死场景。核心是区分 **shepherd 层死锁**与 **substitute/代理层假象**，并提供可复用的取证命令组。
 
 ## 何时使用
 

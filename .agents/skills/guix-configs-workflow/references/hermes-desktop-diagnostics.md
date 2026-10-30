@@ -74,7 +74,7 @@ ModuleNotFoundError: No module named 'cron.scheduler_provider'
 
 ```bash
 # 查看 flake.lock 中 hermes-agent 的 commit
-grep -A6 '"hermes-agent"' ~/Projects/Config/Guix-configs/source/nix/flake.lock | grep rev
+grep -A6 '"hermes-agent"' ~/Projects/dotfiles/guix/Guix-configs/source/nix/flake.lock | grep rev
 ```
 
 然后用 commit hash 去 https://github.com/NousResearch/hermes-agent 查看是否有新版本。

@@ -101,7 +101,7 @@ Type=Application
 ## 4. 验证（AI 不跑 rebuild）
 
 ```bash
-cd ~/Projects/Config/Guix-configs && blue check    # 括号平衡，秒级，不写系统
+cd ~/Projects/dotfiles/guix/Guix-configs && blue check    # 括号平衡，秒级，不写系统
 ```
 
 `blue check` 通过 = 块级括号合法。真正生效需用户手动 `blue rebuild`（生成 `tmp/live-iso.scm` + 打包 ISO），
@@ -116,7 +116,7 @@ cd ~/Projects/Config/Guix-configs && blue check    # 括号平衡，秒级，不
 # 列出所有含 lightdm.scm 的 guix store 路径（注意可能有多个版本）
 ls -d /gnu/store/*guix*/gnu/services/lightdm.scm
 # 用 channel.lock 的 commit 锁定版本:
-grep commit ~/Projects/Config/Guix-configs/source/channel.lock   # 拿到 9e068cc...
+grep commit ~/Projects/dotfiles/guix/Guix-configs/source/channel.lock   # 拿到 9e068cc...
 ls -d /gnu/store/*9e068cc*/gnu/services/lightdm.scm
 # 读 define-configuration 确认字段
 grep -n -A 30 'define-configuration lightdm-seat-configuration' \

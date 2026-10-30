@@ -97,7 +97,7 @@ sha256: 0844693d652c1020a09d107e144ed5a47ea786b1da045682a903f350af80ede8
 ## 3. 验证路径（端到端）
 
 ```bash
-cd ~/Projects/Config/Guix-configs
+cd ~/Projects/dotfiles/guix/Guix-configs
 
 # 1) 括号平衡（block 级，秒级）
 blue check 2>&1 | tail -3

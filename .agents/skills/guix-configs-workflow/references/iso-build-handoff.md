@@ -6,13 +6,13 @@ session: hermes ISO 移植细化文档工作
 
 # ISO 移植会话复盘
 
-> 本文档是 2026-07-06 hermes 跟 user 一同细化 Guix-configs ISO 移植方案的**会话级复盘**。完整方案文档在 `~/Projects/Config/Guix-configs/docs/iso-build.md`(1200 行,§0-§13),本复盘聚焦**接手 agent 真正需要知道的事**——决策背后的反例、踩过的坑、我自己的失误。
+> 本文档是 2026-07-06 hermes 跟 user 一同细化 Guix-configs ISO 移植方案的**会话级复盘**。完整方案文档在 `~/Projects/dotfiles/guix/Guix-configs/docs/iso-build.md`(1200 行,§0-§13),本复盘聚焦**接手 agent 真正需要知道的事**——决策背后的反例、踩过的坑、我自己的失误。
 
 ## 1. 会话产物清单
 
 | 文件                                                       | 大小 | 用途                                  |
 | ---------------------------------------------------------- | ---- | ------------------------------------- |
-| `~/Projects/Config/Guix-configs/docs/iso-build.md`         | **1986 行 / v0.5** | **主方案文档**,接手 agent 直接照这个干 |
+| `~/Projects/dotfiles/guix/Guix-configs/docs/iso-build.md`         | **1986 行 / v0.5** | **主方案文档**,接手 agent 直接照这个干 |
 | 本文件 (`references/iso-build-handoff.md`)                | 本文件 | 会话复盘,接手 agent 必读                |
 | `~/.local/share/hermes/skills/guix-configs/guix-configs-workflow/SKILL.md` §10 | 新增 5 子节(10.1~10.5) | 用户偏好 + 模块归属陷阱 + 文档交接习惯,内嵌到 umbrella skill |
 
@@ -78,7 +78,7 @@ User 三选一拍板: "留空密码,装机后 passwd 设"。理由:`(password #f
 **防护套路**(跟 SKILL.md §8.2 坑 2 同):
 
 ```bash
-guix time-machine -C ~/Projects/Config/Guix-configs/source/channel.lock -- repl <<'EOF'
+guix time-machine -C ~/Projects/dotfiles/guix/Guix-configs/source/channel.lock -- repl <<'EOF'
 (use-modules (gnu services desktop) (gnu services xorg) (gnu services))
 ;; 输出真正的 module-variable value,而不仅靠 defined?
 (format #t "xfce in desktop: ~a~%"
@@ -113,7 +113,7 @@ curl -fsSL "https://codeberg.org/api/v1/repos/guix/guix/issues/7373"
 curl -fsSL "https://codeberg.org/api/v1/repos/hako/rosenthal/branches"
 
 # Guix commit 提取(channel.lock 用)
-guix time-machine -C ~/Projects/Config/Guix-configs/source/channel.lock \
+guix time-machine -C ~/Projects/dotfiles/guix/Guix-configs/source/channel.lock \
   -- describe --format=channels > /tmp/channels.txt
 grep -A1 "name 'guix'" /tmp/channels.txt | grep commit
 ```
@@ -205,7 +205,7 @@ $ blue list | grep build-iso
 
 ## 7. 重要参考链接
 
-- 主方案:`~/Projects/Config/Guix-configs/docs/iso-build.md`(1201 行)
+- 主方案:`~/Projects/dotfiles/guix/Guix-configs/docs/iso-build.md`(1201 行)
 - Guix 1.5 桌面服务文档:`https://guix.gnu.org/manual/1.5.0/en/html_node/Desktop-Services.html`
 - 上游 #7373:`https://codeberg.org/guix/guix/issues/7373`
 - rosenthal 模块索引:`https://codeberg.org/hako/rosenthal/src/branch/trunk/modules/rosenthal`

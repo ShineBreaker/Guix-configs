@@ -1,6 +1,6 @@
 # shepherd 死锁 vs substitute 假象 — 2026-08-30 四次卡死复盘
 
-**来源**：`~/Projects/Config/Guix-configs` `blue rebuild` 频道 bump 后连续 4 次卡死实战；zcode memory `reconfigure-hang-substitute-shepherd`；KB 卡 `20260830-163945`
+**来源**：`~/Projects/dotfiles/guix/Guix-configs` `blue rebuild` 频道 bump 后连续 4 次卡死实战；zcode memory `reconfigure-hang-substitute-shepherd`；KB 卡 `20260830-163945`
 
 ## 时序
 

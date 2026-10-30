@@ -43,7 +43,7 @@ description: "Guix-configs 仓库工作流：dotfiles 部署（stow/blue）、ho
 
 ```bash
 # ✅ 正确
-cd ~/Projects/Config/Guix-configs && blue home
+cd ~/Projects/dotfiles/guix/Guix-configs && blue home
 
 # ❌ 错:从子模块 cwd 跑(典型:emacs 子模块在 dotfiles/mutable/emacs/.config/emacs/)
 blue home
@@ -57,9 +57,9 @@ blue home
 
 | 子模块                                  | cwd           | 仓库根命令                                                      |
 | --------------------------------------- | ------------- | --------------------------------------------------------------- |
-| `dotfiles/mutable/emacs/.config/emacs/` | Emacs 配置根  | `cd ~/Projects/Config/Guix-configs && blue stow --restow emacs` |
-| `dotfiles/immutable/agents/`            | Hermes agents | `cd ~/Projects/Config/Guix-configs && blue home`                |
-| 其他 `dotfiles/immutable/<app>/` 子目录 |               | `cd ~/Projects/Config/Guix-configs && blue home`                |
+| `dotfiles/mutable/emacs/.config/emacs/` | Emacs 配置根  | `cd ~/Projects/dotfiles/guix/Guix-configs && blue stow --restow emacs` |
+| `dotfiles/immutable/agents/`            | Hermes agents | `cd ~/Projects/dotfiles/guix/Guix-configs && blue home`                |
+| 其他 `dotfiles/immutable/<app>/` 子目录 |               | `cd ~/Projects/dotfiles/guix/Guix-configs && blue home`                |
 
 ### 仓库源直接验证 ≠ 部署生效(假阳性陷阱)
 
@@ -72,7 +72,7 @@ blue home
 **完整验证四步**(缺一不可):
 
 1. 改源
-2. `cd ~/Projects/Config/Guix-configs && blue home`
+2. `cd ~/Projects/dotfiles/guix/Guix-configs && blue home`
 3. `md5sum` 源 vs `~/.config/<app>/` 部署,确认 store hash 变了
 4. `herd restart <service>` + **行为模拟**(开 buffer 触发 hook,inspect 实际变量值),不要只信 byte-compile
 
@@ -223,7 +223,7 @@ pkexec grep "<service-keyword>" /var/log/messages
 
 ```bash
 # 1) blue home(部署新 .scm 到 store)
-cd ~/Projects/Config/Guix-configs && blue home
+cd ~/Projects/dotfiles/guix/Guix-configs && blue home
 
 # 2) herd restart(让现有 shepherd 重新加载服务定义并 respawn)
 herd restart <service-name>
@@ -311,7 +311,7 @@ gpgconf --check-programs
                                           (local-file "../source/files/gpg-agent.conf")
                                           (specs->pkgs "pinentry-qt")))
    ```
-4. `cd ~/Projects/Config/Guix-configs && blue home`
+4. `cd ~/Projects/dotfiles/guix/Guix-configs && blue home`
 5. **`gpgconf --reload gpg-agent`** —— 必须!blue home 不重启已在跑的 daemon
 6. `echo test | gpg --clearsign` 验证弹 GUI 窗口
 
@@ -414,7 +414,7 @@ blue structor 2>&1 | grep -E "(WRITE|DRY|ERROR)"
 
 ```bash
 # 1) 验证是真的 dead(没 init)
-cd ~/Projects/Config/Guix-configs
+cd ~/Projects/dotfiles/guix/Guix-configs
 git submodule status | grep <path>  # 空 = dead
 
 # 2) 删 .gitmodules 条目(直接编辑文件;git 没批量删命令)
@@ -662,7 +662,7 @@ Exec=<app-wrapper-path> --ozone-platform=wayland --enable-features=UseOzonePlatf
 
 ## 7. XDG 与环境变量注入全家桶（Testament 范式）
 
-> Testament 仓库（`~/Projects/Config/Testament`）用一套多层次的环境变量注入体系覆盖桌面场景。**核心原则：不同层次的进程用不同机制喂环境变量，不存在银弹。**本节提炼自 `modules/common.scm` `%xdg-base-directory-env-vars`、`config/dorphine.org` niri.kdl / zfs-auto-snapshot / gpg-agent、`config/nuporta.org` guix-moe-mirror-publish / setup-mirror.scm。
+> Testament 仓库（`~/Projects/dotfiles/guix/Testament`）用一套多层次的环境变量注入体系覆盖桌面场景。**核心原则：不同层次的进程用不同机制喂环境变量，不存在银弹。**本节提炼自 `modules/common.scm` `%xdg-base-directory-env-vars`、`config/dorphine.org` niri.kdl / zfs-auto-snapshot / gpg-agent、`config/nuporta.org` guix-moe-mirror-publish / setup-mirror.scm。
 
 ### 7.1 注入机制分层
 
@@ -802,7 +802,7 @@ org.freedesktop.impl.portal.Notification=gtk;
 #    删除 (make-shepherd-service xdg-desktop-portal-wlr ...) 行
 
 # 4) 括号检查
-cd ~/Projects/Config/Guix-configs && blue check
+cd ~/Projects/dotfiles/guix/Guix-configs && blue check
 
 # 5) 部署
 blue home
@@ -942,7 +942,7 @@ shepherd 定时器/脚本在 gexp 里运行时，用 `setenv` 设置运行时变
 ```bash
 cat > /tmp/check-env.scm <<'EOF'
 (use-modules (gnu home) (gnu services base) (srfi srfi-1))
-(load "/home/brokenshine/Projects/Config/Guix-configs/tmp/config.scm")
+(load "/home/brokenshine/Projects/dotfiles/guix/Guix-configs/tmp/config.scm")
 (define h (eval '%home (current-module)))
 ;; 注意：不能按 service-type 找 env 服务——(gnu services base) 里的
 ;; home-environment-variables-service-type 命中的是另一个空服务。
@@ -959,7 +959,7 @@ cat > /tmp/check-env.scm <<'EOF'
             (format #t "  ~a => ~a~%" k (if hit (format #t "FOUND ~s" (cdr hit)) "MISSING")))
           '("VAR_A" "VAR_B"))
 EOF
-cd ~/Projects/Config/Guix-configs && guix time-machine --channels=source/channel.lock -- repl /tmp/check-env.scm
+cd ~/Projects/dotfiles/guix/Guix-configs && guix time-machine --channels=source/channel.lock -- repl /tmp/check-env.scm
 ```
 
 `service?` / `service-kind` / `service-value` 都可用，但 **`(service-type s)` 不是访问器**——它会跟 `(gnu services base)` 的 `service` 宏撞名，报 `invalid field specifier`；`(guix services)` 模块不存在，别试。
@@ -1048,7 +1048,7 @@ blue structor                                                     # 目录树收
 ### 9.1 标准 4 步流程(必走)
 
 ```
-① cd ~/Projects/Config/Guix-configs          # 必须在仓库根
+① cd ~/Projects/dotfiles/guix/Guix-configs          # 必须在仓库根
 ② 用 patch 工具精确改 source/config.org(§3 安全提示)
 ③ blue check                                # 括号平衡检查,秒级
 ④ GUIX_DRY_RUN=1 blue rebuild                # 完整构建,不写入系统
@@ -1355,7 +1355,7 @@ unmute_hook:register ()
 
 ```bash
 # 1) blue home(必须在仓库根,见 §1 ⚠)
-cd ~/Projects/Config/Guix-configs && blue home
+cd ~/Projects/dotfiles/guix/Guix-configs && blue home
 
 # 2) 验证部署到位
 ls -la ~/.config/wireplumber/   # 应存在(原本是空/不存在的)
@@ -1420,7 +1420,7 @@ wpctl status    # 看 sink 是否还 MUTED
 guix describe --format=channels | grep -A1 "name 'guix'" | grep commit | head -1
 
 # 2) 用本地 repl 枚举"我要的 service-type 在哪个模块"
-guix time-machine -C ~/Projects/Config/Guix-configs/source/channel.lock \
+guix time-machine -C ~/Projects/dotfiles/guix/Guix-configs/source/channel.lock \
   -- repl <<'EOF'
 (use-modules (gnu services desktop) (gnu services xorg) (gnu services))
 ;; 验证你以为是 xorg 模块的 service-type 是不是真的在 xorg 模块
@@ -1485,7 +1485,7 @@ config.org 实际做了什么?
 
 ### 11.5 ISO 移植相关参考
 
-完整 ISO 移植方案(1986 行 / v0.5,§接手必读 + §0~§15)见 `~/Projects/Config/Guix-configs/docs/iso-build.md`。**接手 agent 必读路径**:
+完整 ISO 移植方案(1986 行 / v0.5,§接手必读 + §0~§15)见 `~/Projects/dotfiles/guix/Guix-configs/docs/iso-build.md`。**接手 agent 必读路径**:
 
 - **§接手必读**(第一屏) → 阅读路径 + 7 条工作纪律 + 30 秒 checklist
 - §0 决策记录 → XFCE 首选 / jeans- 前缀 / live user 留空密码 / nonguix 频道自动配 / DM=slim
@@ -1581,7 +1581,7 @@ no code for module (guix build utils)
 
 ```bash
 # 后台跑（30+ 分钟,用 background=true + notify_on_complete）
-cd ~/Projects/Config/Guix-configs && blue build-iso
+cd ~/Projects/dotfiles/guix/Guix-configs && blue build-iso
 
 # 只构建 xfce 变体（主目标,先验证再放量）
 blue build-iso xfce
@@ -1590,7 +1590,7 @@ blue build-iso xfce
 **调试关键**：`blue` 的 `%guix` 封装在 guix 非零退出时**只报** `命令执行失败 (256): (...)`,**吞掉** guix 的真实 backtrace。遇到 build-iso 失败,**手动复现同一条 guix 命令**抓完整报错：
 
 ```bash
-cd ~/Projects/Config/Guix-configs
+cd ~/Projects/dotfiles/guix/Guix-configs
 guix time-machine --channels=source/channel.lock -- repl -- \
   tools/build-image.scm dist/jeans-xfce-<date>.x86_64-linux.iso \
   tmp/live-iso.scm --image-type=iso9660 2>&1 | tee /tmp/iso-xfce-build.log

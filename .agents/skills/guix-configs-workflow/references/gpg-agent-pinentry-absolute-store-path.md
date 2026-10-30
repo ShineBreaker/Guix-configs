@@ -121,7 +121,7 @@ git add source/files/gpg-agent.conf
 ### 步骤 4:blue home 部署 + reload
 
 ```bash
-cd ~/Projects/Config/Guix-configs && blue home
+cd ~/Projects/dotfiles/guix/Guix-configs && blue home
 # 部署完成,store 副本会有新 hash
 
 # 验证 symlink 指向新 store

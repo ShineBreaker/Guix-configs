@@ -6,7 +6,7 @@
 ## 工作流（4 步，必走）
 
 ```
-① 在仓库根 cd ~/Projects/Config/Guix-configs
+① 在仓库根 cd ~/Projects/dotfiles/guix/Guix-configs
 ② 用 patch 工具精确改 source/config.org（见 §3 安全提示）
 ③ blue check            # 括号平衡检查，秒级
 ④ GUIX_DRY_RUN=1 blue rebuild  # 完整构建，不写入系统
@@ -38,14 +38,14 @@
 **改 Org/Scheme 前先 `cat -A` 精确数括号**（特别是末尾的 `))))))` 链）：
 
 ```bash
-cd ~/Projects/Config/Guix-configs && sed -n '600,620p' source/config.org | cat -A
+cd ~/Projects/dotfiles/guix/Guix-configs && sed -n '600,620p' source/config.org | cat -A
 # 注意每行末尾的 $ 前有多少个 )
 ```
 
 或者用 python 精确数：
 
 ```bash
-cd ~/Projects/Config/Guix-configs && python3 -c "
+cd ~/Projects/dotfiles/guix/Guix-configs && python3 -c "
 with open('source/config.org') as f: lines = f.readlines()
 line = lines[606]  # 1-indexed
 print(repr(line))
@@ -179,13 +179,13 @@ guix time-machine --channels=source/channel.lock -- environment --ad-hoc \
 
 ```bash
 # 1. 括号平衡（最快）
-cd ~/Projects/Config/Guix-configs && blue check
+cd ~/Projects/dotfiles/guix/Guix-configs && blue check
 
 # 2. 完整 dry-run（构建但不写入系统，分钟级）
-cd ~/Projects/Config/Guix-configs && GUIX_DRY_RUN=1 blue rebuild
+cd ~/Projects/dotfiles/guix/Guix-configs && GUIX_DRY_RUN=1 blue rebuild
 
 # 3. 看具体 Guix 错误栈（DRY_RUN 报错时）
-cd ~/Projects/Config/Guix-configs && GUIX_DRY_RUN=1 blue rebuild 2>&1 | head -80
+cd ~/Projects/dotfiles/guix/Guix-configs && GUIX_DRY_RUN=1 blue rebuild 2>&1 | head -80
 
 # 4. 撤回（单个文件，安全）
 git checkout source/config.org
