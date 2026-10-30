@@ -7,7 +7,10 @@ binds {
   Mod+Ctrl+R  hotkey-overlay-title="随机壁纸"                  { spawn-sh "nosdshell ipc call wallpaper random"; }
 
   Mod+C hotkey-overlay-title="打开剪切板"      repeat=false    { spawn-sh "nosdshell ipc call launcher clipboard"; }
-  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn-sh "rofi -show drun -theme launcher"; }
+  // nix 软件自带的 .desktop 里 Exec 是裸命令名，启动时靠 PATH 查找；
+  // 而 nix profile 的 bin/share 只由登录 shell（fish conf.d）注入，
+  // greetd 直接拉起的 niri 会话里没有这段环境。经登录 fish 包一层补上。
+  Mod+D hotkey-overlay-title="打开搜索"        repeat=false    { spawn-sh "fish -lc 'exec rofi -show drun -theme launcher'"; }
 
 
   XF86AudioRaiseVolume  allow-when-locked=true { spawn-sh "nosdshell ipc call volume increase"; }
