@@ -5,7 +5,7 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/Config/Guix-configs`，之后相对路径都相对它。
+- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`，之后相对路径都相对它。
 - `$XDG_RUNTIME_DIR` 可能未注入，按 `${XDG_RUNTIME_DIR:-/run/user/1000}` 展开。
 - **不要调用 `hermes` CLI**（本环境不可用）；跨任务状态一律写文件。
 - 工具名映射（hermes 旧名 → 本环境）：`web_extract` → `web_fetch`；`vision_analyze` → `read_image`。
@@ -125,7 +125,7 @@ python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/digest_build.
   - 横向位置：和谁比、差多少、在哪个榜单第几
   - 影响：谁能用上、旧方案还能不能用、下游要改什么
 - **来源**（`来源：` 开头）：一行，原帖或官方页 URL。每条必须有。多个来源用空格分隔。
-- **配图**：`![imgN]` 单独一行，放在来源之前。一条最多 2 张。
+- **配图**：`![imgN]` 单独一行，放在来源之前。一条最多 2 张。渲染器 2026-10-29 起改为完整显示（contain 限高，横图 760px / 方图 520px / 竖图 560px，不裁切），**正常配图，不要以"裁切会丢信息"为由弃图**；图位空白即下载失败，验收时确认每张引用都有图。
 - 两个卡片之间空一行。`![imgN]` 不要写进要闻。
 
 **不是每条都要写厚。** 信息增量少的（一句吐槽、纯观点、无外链的转推），写一到两句放进「趣闻」组，或直接不进日报。删条目的唯一标准是「没有信息量」。

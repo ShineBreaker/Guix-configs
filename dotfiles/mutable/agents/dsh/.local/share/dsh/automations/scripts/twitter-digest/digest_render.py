@@ -195,14 +195,24 @@ def fetch_image(state: Path, url: str, timeout: int = 15) -> str | None:
 
 
 def img_style(m: dict) -> str:
+    """图片显示策略：完整显示，不裁切。
+
+    2026-10-29 放宽：旧策略用 object-fit:cover 定高，横图（榜单、表格、
+    截图）上下各被切掉约三成，表头与列名丢失；竖长图只露中段四分之一。
+    策略改为 contain + 限高，图按原比例完整缩放，关键信息不丢，
+    代价是卡片高度不再整齐。
+    """
     w, h = m.get("w") or 0, m.get("h") or 0
     if w and h:
         ratio = w / h
         if ratio > 1.25:
-            return "object-fit:cover;height:300px"
+            # 横图：以卡片内容宽为上限，高度按比例，表头列名完整可见
+            return "object-fit:contain;max-width:100%;max-height:760px;margin:0 auto"
         if ratio < 0.85:
-            return "object-fit:cover;max-height:380px"
-    return "object-fit:cover;max-height:320px"
+            # 竖长图：限高完整显示，不切中段
+            return "object-fit:contain;max-width:100%;max-height:560px;margin:0 auto"
+    # 方图：限高完整显示并居中
+    return "object-fit:contain;max-width:100%;max-height:520px;margin:0 auto"
 
 
 def build_cards(tweets: list[dict], state: Path, translated: dict) -> str:

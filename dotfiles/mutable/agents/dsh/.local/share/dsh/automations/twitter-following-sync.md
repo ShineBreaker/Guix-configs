@@ -5,7 +5,7 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/Config/Guix-configs`，之后相对路径都相对它。
+- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`，之后相对路径都相对它。
 - 状态目录已从 hermes 迁入 dsh：`$HOME/.local/share/dsh/automation-state/twitter-digest`，旧 hermes 路径已作废。
 - 不要调用 `hermes` CLI；跨任务状态一律写文件。
 - `rm` 被 gate 冻结：清理用 `trash-put`。

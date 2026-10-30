@@ -13,16 +13,4 @@ allowBuilds:
   cloudflared: true
   protobufjs: true
   esbuild: true
-patchedDependencies:
-  dsh-session-import@0.1.1: patches/dsh-session-import@0.1.1.patch
-# dsh-session-import 把核心包写成 dependencies（范围 ^0.1.0-rc.6 只匹配
-# 旧预发布），把 dsh-llm/session 等钉在 0.1.0-rc.8 平铺顶层、劫持全树解析，
-# 0.2.1-rc.2 核心的 compat 门禁因此禁用 llm/session/commands/tools 行致
-# boot 失败。overrides 删边让这些包回退 _cli 树的 0.2.x，插件本体保留。
-overrides:
-  dsh-session-import>@deepseek-ai/dsh-commands: '-'
-  dsh-session-import>@deepseek-ai/dsh-credentials: '-'
-  dsh-session-import>@deepseek-ai/dsh-llm: '-'
-  dsh-session-import>@deepseek-ai/dsh-session: '-'
-  dsh-session-import>@deepseek-ai/dsh-session-title: '-'
-  dsh-session-import>@deepseek-ai/dsh-tools: '-'
+

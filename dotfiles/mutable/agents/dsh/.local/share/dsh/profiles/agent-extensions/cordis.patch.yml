@@ -1,27 +1,3 @@
-# dsh-agent-extensions bundle patch layer.
-#
-# ONE host row, mounted by the bare package name. Both halves are keyed off that
-# name: the row's specifier must be an exact package specifier for the browser
-# half to be discovered at all. dsh's client-modules scanner resolves the row's
-# module location and keeps only bare specifiers (`exactPackageSpecifier`
-# rejects any non-scoped name containing "/"), so a subpath row such as
-# `dsh-agent-extensions/gate` makes `locatePkgJson` bail out and the
-# `dsh.client` declaration is silently skipped — the host half still loads,
-# the browser half never does. Keep this row bare.
-#
-# index.js applies gate + global-context together; subsection config comes from
-# this row's config:
-#
-#   - id: agent-extensions
-#     config:
-#       gate: { enabled: false }
-#       globalContext: { maxFiles: 8 }
-#
-# The browser half (Shift+Tab → /plan toggle) is declared by `dsh.client` in
-# package.json and needs no row of its own.
-- insert:
-    - id: agent-extensions
-      name: 'dsh-agent-extensions'
 - id: llm-pi-ai # magpie
   name: "@deepseek-ai/dsh-llm-pi-ai"
   config:
@@ -84,36 +60,6 @@
               medium: medium
               high: high
               xhigh: xhigh
-              max: max
-          - id: deepseek/deepseek-flash
-            name: DeepSeek V4.1 Flash 1017 · DeepSeek
-            contextWindow: 1048576
-            maxTokens: 393216
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              high: high
-              max: max
-          - id: deepseek/deepseek-v4-flash
-            name: DeepSeek V4 Flash · DeepSeek
-            contextWindow: 1048576
-            maxTokens: 393216
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              high: high
-              max: max
-          - id: deepseek/deepseek-v4-pro
-            name: DeepSeek V4 Pro · DeepSeek
-            contextWindow: 1048576
-            maxTokens: 393216
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              high: high
               max: max
           - id: stepfun-cn/step-5-preview
             name: Step 5 Preview · StepFun (China)
@@ -201,5 +147,4 @@
 - id: agent-default-model # magpie
   config:
     provider: magpie
-    model: "auto/GLM-5.3"
-    reasoningEffort: "high"
+    model: "stepfun-cn/step-5-preview"

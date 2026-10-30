@@ -5,7 +5,7 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/Config/Guix-configs`。
+- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`。
 - **不要调用 `hermes`**：本任务的投递已改走 DSH 自带的 dsh-im 接口，hermes 与它无关。跨任务状态一律读文件。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。

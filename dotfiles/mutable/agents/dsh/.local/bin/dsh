@@ -75,13 +75,18 @@ fi
 # 自洽，不从部署侧软链推导：pnpm 会把文件原地写成实体文件，链接随时不在）。
 # 每次 CLI 调用尾部统一检测，开销可忽略（一次 cmp）。
 _relink_dir() {
-  local label="$1" dir="$2" src_dir="$3" name
+  local label="$1" dir="$2" src_dir="$3" name rel
   [[ -d "$src_dir" ]] || return 0
   for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
     [[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
     if [[ ! -L "$dir/$name" ]]; then
       cp "$dir/$name" "$src_dir/$name"
-      ln -sfn "$src_dir/$name" "$dir/$name"
+      # 重建的软链必须与 stow 的形态一致：**相对**链。绝对链有两重代价——
+      # stow 不承认非自建链值，`blue stow-all` 报 "not owned by stow" 而中止；
+      # 且仓库搬家时绝对链必断（2026-10 Config→dotfiles/guix 那次 676 个断链
+      # 即此类）。相对链由 realpath --relative-to 计算，与 stow 逐文件等价。
+      rel="$(realpath --relative-to="$dir" "$src_dir/$name")"
+      ln -sfn "$rel" "$dir/$name"
       printf 'dsh: [%s] %s 断链已写回仓库源并重建软链\n' "$label" "$name" >&2
     fi
   done
