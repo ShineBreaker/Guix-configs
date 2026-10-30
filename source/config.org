@@ -2096,8 +2096,7 @@ polkit.addRule(function(action, subject) {
 
    ;; 编辑器
    "helix-steel"
-   "zedg-bin"
-   "zedg-bin:shim"
+   "zed-bin"
 
    ;; 数据库
    "sqlite"
