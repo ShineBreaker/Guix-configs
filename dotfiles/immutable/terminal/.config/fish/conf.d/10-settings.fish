@@ -18,8 +18,18 @@ alias ll "ls -la"
 alias ls eza
 alias rm "rm -i"
 
-abbr --add cm 'git commit'
-abbr --add cmall 'git commit --all -S'
+abbr --add status	'git status -sb'
+abbr --add add	'git add'
+abbr --add commit	'git commit -S'
+abbr --add commitall	'git commit --all -S'
+abbr --add push	'git push'
+abbr --add pull	'git pull'
+abbr --add fetch	'git fetch'
+abbr --add diff	'git diff'
+abbr --add log	'git log'
+abbr --add clone	'git clone'
+
+abbr --add cc 'claude --dangerously-skip-permissions'
 abbr --add enter distrobox enter
 abbr --add push git push
 abbr --add reboot loginctl reboot
