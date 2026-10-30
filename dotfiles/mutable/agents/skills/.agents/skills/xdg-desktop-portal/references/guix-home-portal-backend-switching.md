@@ -4,7 +4,7 @@
 
 ## 架构：D-Bus 自动激活（不需要手写 shepherd 服务）
 
-Testament 仓库（`~/Projects/Config/Testament`）**没有手写 portal 的 shepherd 服务**——portal 后端通过 D-Bus service 文件自动激活：
+Testament 仓库（`~/Projects/dotfiles/guix/Testament`）**没有手写 portal 的 shepherd 服务**——portal 后端通过 D-Bus service 文件自动激活：
 
 ```
 ~/.guix-home/profile/share/dbus-1/services/
@@ -140,7 +140,7 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 #    删除 (make-shepherd-service xdg-desktop-portal-wlr ...) 行
 
 # 4) 括号检查
-cd ~/Projects/Config/Guix-configs && blue check
+cd ~/Projects/dotfiles/guix/Guix-configs && blue check
 
 # 5) 部署
 blue home

@@ -22,7 +22,7 @@ export -f scan
 timeout 30 find "$dir" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1
 
 # 是否被 dotfiles 仓库引用（在用 = 别动）
-cd ~/Projects/Config/Guix-configs && git grep -il "<name>" | head -2
+cd ~/Projects/dotfiles/guix/Guix-configs && git grep -il "<name>" | head -2
 ```
 
 `git grep` 无命中只说明仓库没引用它，不等于能删——判据是「mtime 旧」且「无引用」同时成立，且**用户确认过**。

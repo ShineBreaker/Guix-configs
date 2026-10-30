@@ -9,13 +9,14 @@ AI-friendly CLI for .docx, .xlsx, .pptx. Single binary, no dependencies, no Offi
 
 ## Install
 
-If `officecli` is not installed, **do not pipe remote installers into a shell**
-(unverified third-party origin). Instead ask the user to install it manually:
+If `officecli` is not installed:
 
 ```bash
-# 建议用户自行执行（先审阅脚本再运行）：
-#   curl -fsSL https://d.officecli.ai/install.sh -o /tmp/officecli-install.sh
-#   less /tmp/officecli-install.sh && bash /tmp/officecli-install.sh
+# macOS / Linux
+curl -fsSL https://d.officecli.ai/install.sh | bash
+
+# Windows (PowerShell)
+irm https://d.officecli.ai/install.ps1 | iex
 ```
 
 Verify with `officecli --version`. If still not found after install, open a new terminal.

@@ -82,7 +82,7 @@ org.freedesktop.impl.portal.RemoteDesktop=wlr
 
 ## Testament 参考
 
-`~/Projects/Config/Testament` 的 dorphine 配置只装了 gnome + gtk，`niri-portals.conf` 里也没有 ScreenCast/Screenshot 路由——因为该仓库**不处理 niri 下的录屏**。如果需要在 niri 下录屏，必须加 wlr。
+`~/Projects/dotfiles/guix/Testament` 的 dorphine 配置只装了 gnome + gtk，`niri-portals.conf` 里也没有 ScreenCast/Screenshot 路由——因为该仓库**不处理 niri 下的录屏**。如果需要在 niri 下录屏，必须加 wlr。
 
 ## niri wiki 原文警告
 

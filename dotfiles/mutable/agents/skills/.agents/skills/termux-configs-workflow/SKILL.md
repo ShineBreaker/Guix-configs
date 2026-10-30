@@ -14,7 +14,7 @@ metadata:
 
 ## When to Use（何时用）
 
-- 在 `~/Projects/Config/termux-configs` 里改配置、加/改 `just` 一键指令、动 `setup.sh` / `dot`
+- 在 `~/Projects/dotfiles/config/termux-configs` 里改配置、加/改 `just` 一键指令、动 `setup.sh` / `dot`
 - 手机（真机 Termux）侧 Emacs 配置接入（UniEmacs）与部署排障
 
 仓库自身的 `AGENTS.md` 在仓库内工作时自动注入（结构、文档同步表、检查清单、commit 规范），是本仓库的权威指引。本技能只补它没有的：跨仓库上下文、指令设计偏好、验证配方与坑。
@@ -50,7 +50,7 @@ metadata:
 ## 变更验证配方（桌面可全跑）
 
 ```bash
-cd ~/Projects/Config/termux-configs
+cd ~/Projects/dotfiles/config/termux-configs
 bash -n setup.sh
 fish -n fish/.config/fish/conf.d/*.fish fish/.config/fish/config.fish fish/.config/fish/functions/cheat.fish
 just --list && just                       # 语法 + 裸跑菜单
