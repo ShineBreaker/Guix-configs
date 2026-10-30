@@ -26,7 +26,7 @@
     }
   },
   "dependencies": {
-    "@linxin666/dsh-remote-web-ui": "0.4.8",
+    "@linxin666/dsh-remote-web-ui": "0.4.12",
     "@mengyuly/dsh-ponytail": "0.4.3",
     "@michengai/dsh-automation": "1.0.13",
     "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#9a8de5314324e798ed8ff6d14f5e4ae0708defc9",
@@ -35,9 +35,9 @@
     "dsh-agenote": "https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz",
     "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-better-sidebar": "0.28.2",
-    "dsh-claude-style": "0.19.5",
-    "dsh-context": "0.78.1",
+    "dsh-claude-style": "0.19.6",
+    "dsh-context": "0.78.2",
     "dsh-soul-md": "0.10.3",
-    "dshmarket": "1.70.2"
+    "dshmarket": "1.73.5"
   }
 }

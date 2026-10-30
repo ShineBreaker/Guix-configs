@@ -77,7 +77,7 @@ fi
 _relink_dir() {
   local label="$1" dir="$2" src_dir="$3" name rel
   [[ -d "$src_dir" ]] || return 0
-  for name in package.json pnpm-workspace.yaml cordis.patch.yml; do
+  for name in package.json pnpm-workspace.yaml cordis.patch.yml compatibility.json; do
     [[ -f "$dir/$name" && -f "$src_dir/$name" ]] || continue
     if [[ ! -L "$dir/$name" ]]; then
       cp "$dir/$name" "$src_dir/$name"

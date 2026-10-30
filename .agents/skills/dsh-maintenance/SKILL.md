@@ -138,13 +138,20 @@ done
 ~/.local/bin/dsh plugin --profile <name> add -w <pkg>@<ver>
 ```
 
-- **`compatibility.json` 是 boot 必需文件**：删掉它 compat 门直接静默跳过整条
-  bundle（dump-config 条目数掉下去、零报错），症状是「插件装了却什么都不显示」。
-  它记录 allow-version 授权，必须进仓库源（新机复现的一部分）。
+- **`compatibility.json` 是版本豁免授权表，不是「插件能不能加载」的总开关**：它
+  记录 allow-version 授权（精确 `pkg@version` → 精确 DSH 运行时版本列表），
+  必须进仓库源（新机复现的一部分）。**读不到文件 ≠ 插件被跳过**——插件仍按自己的
+  peer 范围正常判定，只有 peer 够不着当前运行时才整条 skip。2026-10 实测证伪了
+  「删掉该文件插件就整条消失」的说法：移走后 dump-config 条目数不变。真要让插件
+  消失，得让它的 peer 范围与本体对不上（典型场景：本体升到 rc.N 而插件 peer 止步
+  rc.N-1，且上游未跟进）——此时用官方命令授精确豁免：
+  `dsh plugin --profile <name> allow-version '<pkg>@<ver>' --dsh-version <dshver> --accept-risk`。
+  豁免**按精确版本对**授权，本体再升一级就失效，需重授（键里的插件版本也要同步）。
+  写出来的是部署侧 600 权限的实体文件（原子写），须回灌仓库源再 `blue stow --restow`。
 - **验证三连**：`dsh --profile <name> --dump-config | grep -c '^- id:'` 对基线；
   `grep -c '^- id: <bundle-id>$'` 精确到条；插件自带 launcher 的再跑其
-  `doctor` 子命令。缺 compat 授权时做一次「移走 compatibility.json → 条目下降 →
-  放回」的删除测试，把基线数字钉住。
+  `doctor` 子命令。判「bundle 是否被跳过」看 stderr 有无
+  `skipping profile bundle`——dump-config 条目数不变但 stderr 报 skip 即是被跳过。
 - **alt-screen CLI 的 boot 冒烟看 session 文件，不看 stdout**：ink 类 TUI 的
   alt-screen 会吞掉全部日志，`script -qfc` 抓到的 6 字节 `ESC[?25l` 就是已进入渲染
   阶段的证据；再核

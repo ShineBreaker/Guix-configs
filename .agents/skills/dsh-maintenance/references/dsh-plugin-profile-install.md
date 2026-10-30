@@ -98,8 +98,20 @@ existing target is not owned by stow: <path>
 node <profile>/node_modules/<pkg>/bin/<bin>.js doctor                        # 自带 launcher 才有
 ```
 
-**compatibility.json 删除测试**（判定它是否 boot 必需，做一次把基线钉住）：移走它
-再 dump-config，条目数应下降；放回恢复。数字对不上 = bundle 被静默跳过。
+**bundle 是否被跳过的判据**（看 stderr，不看条目数）：dump-config 时 stderr 出现
+`skipping profile bundle` 即该 bundle 被 compat 门整条跳过——条目数不变是因为
+skip 发生在挂载之后。条目数下降是另一个故障（manifest 读不到/语法错），两者别混。
+
+**compatibility.json 的语义**（2026-10 实测修正）：它是**版本豁免授权表**，不是
+「插件能不能加载」的总开关。读不到文件 ≠ 插件被跳过，插件仍按自己的 peer 范围
+判定；只有 peer 够不着当前运行时才 skip，skip 时才有豁免可救：
+
+```bash
+~/.local/bin/dsh plugin --profile <name> allow-version '<pkg>@<ver>' --dsh-version <dshver> --accept-risk
+```
+
+授权按**精确版本对**生效（插件版本 + DSH 运行时版本都要对上），本体再升一级即失效，
+需重授。命令写的是部署侧 600 权限实体文件，须回灌仓库源再 `blue stow --restow`。
 
 ## 4. alt-screen CLI 的 boot 冒烟
 
