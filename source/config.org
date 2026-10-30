@@ -1983,7 +1983,6 @@ polkit.addRule(function(action, subject) {
 
    ;; 输入法
    "fcitx5"
-   "fcitx5-lua"
 
    ;; 工具
    "cliphist"
@@ -3059,7 +3058,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
       (service home-fcitx5-service-type
                (home-fcitx5-configuration (themes (list fcitx5-material-color-theme))
                                           (input-method-editors (list fcitx5-rime))
-                                          (utilities (list fcitx5-configtool fcitx5-lua))))
+                                          (utilities (list fcitx5-configtool))))
 
       (service home-graphical-session-service-type
 	             (home-graphical-session-configuration
