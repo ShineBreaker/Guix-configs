@@ -25,14 +25,10 @@
 ```
 mutable/
 ├── agenote/
-│   ├── .agents/
 │   ├── .config/
-│   ├── .local/
-│   ├── .zcode/
 │   ├── .stow-local-ignore
 │   └── .stow-package
 ├── agents/
-│   ├── devin/
 │   ├── dsh/
 │   ├── skills/
 │   └── zcode/
