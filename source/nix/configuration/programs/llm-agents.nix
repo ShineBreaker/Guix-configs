@@ -5,10 +5,7 @@
       claude-agent-acp
       claude-code
 
-      freebuff
-      jcode
-      omo-ai
-      opencode2-desktop
+      officecli
       skills
     ])
     ++ (with pkgs; [
