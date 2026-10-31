@@ -229,11 +229,19 @@
       "skillPath": "skills/typesafe-ai/SKILL.md",
       "computedHash": "9cd84c5e535dec8dec59917c110f9c00b4a61faadb86b432ec7e41051170af12"
     },
-    "unslop": {
+    "unslop-text": {
       "source": "cursor/plugins",
       "sourceType": "github",
       "skillPath": "pstack/skills/unslop/SKILL.md",
-      "computedHash": "eca0ad9fa3a3867c83f3aaf3a058e247a569c8976a68ca423a569b93eb86de5d"
+      "computedHash": "eca0ad9fa3a3867c83f3aaf3a058e247a569c8976a68ca423a569b93eb86de5d",
+      "upstreamName": "unslop"
+    },
+    "unslop-ui": {
+      "source": "heydamir/unslop",
+      "sourceType": "github",
+      "skillPath": "skills/unslop/SKILL.md",
+      "computedHash": "83dcbc854b05c73ccea32a96a25112cce278ce1c647f75824ae8bc6ab5311dbc",
+      "upstreamName": "unslop"
     },
     "wait-what": {
       "source": "mattpocock/skills",

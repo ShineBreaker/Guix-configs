@@ -23,40 +23,131 @@ die() {
 
 npx_skills() { (cd "$WORK" && npx -y "$SKILLS_VER" "$@"); }
 
+# 写锁：部署位的锁是 stow 软链指向仓库源，用 mv 换文件会斩断软链、
+# 让仓库源与部署位分家（改完 git diff 看不到、仓库源还是旧内容）。
+# 先落临时文件再写内容：写内容到软链会穿透到仓库源，链接关系不变。
+# 不能用 `cat >"$LOCK"` 从管道直接写——上游 jq 正从同一个文件读，
+# 截断先于读取发生，锁内容会被清空。
+write_lock() {
+  local tmp
+  tmp=$(mktemp)
+  cat >"$tmp"
+  cat "$tmp" >"$LOCK"
+  rm -f "$tmp"
+}
+
+# 锁内条目的上游真名：未声明 upstreamName 时 key 即上游名。
+upstream_name() { jq -r --arg k "$1" '.skills[$k].upstreamName // $k' "$LOCK"; }
+
+# 重命名：目录名 + frontmatter 的 name: 一起改，否则宿主按 frontmatter 认名
+# 时看到的仍是旧名。DSH 的 skill 名取自 frontmatter name:，目录名只决定落点。
+# 只改 frontmatter 里的 name: 行（首行 --- 到下一个 --- 之间）。
+set_frontmatter_name() {
+  local path="$1" new="$2"
+  [ -f "$path" ] || return 0
+  python3 - "$path" "$new" <<'PY'
+import re, sys
+path, new = sys.argv[1], sys.argv[2]
+try:
+    s = open(path, encoding="utf8").read()
+except OSError:
+    raise SystemExit(0)
+m = re.match(r"(---\r?\n)(.*?)(\r?\n---)", s, re.S)
+if not m:
+    raise SystemExit(0)
+head, fm, tail = m.group(1), m.group(2), m.group(3)
+fm2 = re.sub(r"(?m)^name:.*$", f"name: {new}", fm, count=1)
+if fm2 != fm:
+    open(path, "w", encoding="utf8").write(head + fm2 + tail + s[m.end():])
+PY
+}
+
+# 暂存区里按上游名找目录：npx 装出来的是上游目录名，改名后不在锁 key 上。
+staging_dir_for() {
+  local key="$1" up
+  up=$(upstream_name "$key")
+  if [ -d "$STAGING/$key" ]; then
+    echo "$STAGING/$key"
+  elif [ -d "$STAGING/$up" ]; then
+    echo "$STAGING/$up"
+  else
+    echo ""
+  fi
+}
+
+# agent 链接目录（.claude/skills 等）里 npx 按上游名建的软链要跟着改名，
+# 否则链接指向的目录已不存在（断链）。链接指向暂存区，与 npx 行为一致。
+sync_agent_links() {
+  local linkdir name up
+  [ -e "$LOCK" ] || return 0
+  for linkdir in "$WORK"/.*/skills; do
+    [ -d "$linkdir" ] || continue
+    while IFS= read -r name; do
+      up=$(upstream_name "$name")
+      [ "$up" != "$name" ] || continue
+      # 旧名的链接若指向已消失的上游名目录，改指向新名
+      if [ -L "$linkdir/$up" ] && [ ! -e "$linkdir/$up" ]; then
+        ln -sfn "../../.agents/skills/$name" "$linkdir/$name"
+        rm -f "$linkdir/$up"
+        echo "  已改链: $linkdir/$up → $name"
+      elif [ ! -e "$linkdir/$name" ] && [ -d "$STAGING/$name" ]; then
+        ln -sfn "../../.agents/skills/$name" "$linkdir/$name"
+        echo "  已建链: $linkdir/$name"
+      fi
+    done < <(jq -r '.skills | keys[]' "$LOCK")
+  done
+}
+
 # 只处理锁内名字（自建 skill 绝不触碰）。cp -aL 摊平软链。
 sync_from_staging() {
   [ -e "$LOCK" ] || die "找不到 $LOCK（先 askill add 生成锁）"
-  local names name tmp
+  local names name tmp src
   names=$(jq -r '.skills | keys[]' "$LOCK")
   [ -n "$names" ] || {
     echo "锁为空，无可同步"
     return 0
   }
   while IFS= read -r name; do
-    [ -d "$STAGING/$name" ] || {
+    src=$(staging_dir_for "$name")
+    [ -n "$src" ] || {
       echo "  跳过（暂存区无）: $name"
       continue
     }
     tmp="$WORK/.$name.incoming"
     rm -rf "$tmp"
-    cp -aL "$STAGING/$name" "$tmp"
+    cp -aL "$src" "$tmp"
     rm -rf "${WORK:?}/$name" # 无斜杠：对旧 stow 软链只删链本身
     mv "$tmp" "$WORK/$name"
+    # 部署名与上游名不同时，改 frontmatter 让宿主认得新名
+    if [ "$(upstream_name "$name")" != "$name" ]; then
+      set_frontmatter_name "$WORK/$name/SKILL.md" "$name"
+    fi
     echo "  已同步: $name"
   done <<<"$names"
+  sync_agent_links
 }
 
 case "${1:-help}" in
   add)
-    [ $# -ge 2 ] || die "用法: askill add <owner/repo> [-s <skill>[,<skill>...]] [-l 只列出不安装]"
+    [ $# -ge 2 ] || die "用法: askill add <owner/repo> [-s <skill>[,<skill>...]] [--as <部署名>] [-l 只列出不安装]"
     shift
     # npx -s 不支持逗号多值（报 No matching skills found），展开为重复 -s
     args=()
+    deploy_name=""
+    upstream=""
     while [ $# -gt 0 ]; do
       case "$1" in
         -s)
           IFS=',' read -ra _names <<<"$2"
-          for _n in "${_names[@]}"; do args+=(-s "$_n"); done
+          for _n in "${_names[@]}"; do
+            args+=(-s "$_n")
+            [ -n "$upstream" ] || upstream="$_n"
+          done
+          shift 2
+          ;;
+        --as)
+          # 装成另一个名字（上游同名时区分用途，如 -text / -ui 后缀）
+          deploy_name="$2"
           shift 2
           ;;
         *)
@@ -66,12 +157,52 @@ case "${1:-help}" in
       esac
     done
     npx_skills add "${args[@]}" -a universal --copy -y
+    if [ -n "$deploy_name" ]; then
+      # npx 装出的是上游名目录；把锁的 key 改成部署名并记下上游名
+      # -s 缺省时上游名 = 源仓库里唯一的 skill 目录名
+      if [ -z "$upstream" ]; then
+        upstream=$(jq -r '.skills | keys[]' "$LOCK" | tail -1)
+      fi
+      jq --arg up "$upstream" --arg dep "$deploy_name" \
+        '.skills[$up] as $e | del(.skills[$up]) | .skills[$dep] = ($e + {upstreamName: $up})' \
+        "$LOCK" | write_lock
+      # 暂存区里 npx 装出的是上游名目录，一并改成部署名，
+      # 否则后续 sync 按部署名找暂存区会找不到（暂存区是 agent 链接的指向处）
+      if [ -d "$STAGING/$upstream" ] && [ ! -e "$STAGING/$deploy_name" ]; then
+        mv "$STAGING/$upstream" "$STAGING/$deploy_name"
+      fi
+      set_frontmatter_name "$STAGING/$deploy_name/SKILL.md" "$deploy_name"
+      echo "已重命名: $upstream → $deploy_name"
+    fi
     sync_from_staging
     echo "完成。锁已更新（mutable 直链），git diff 审查后提交以冻结版本。"
     ;;
   update)
     [ -e "$LOCK" ] || die "找不到 $LOCK（先 blue stow agents/skills 部署锁）"
-    npx_skills update -p -y
+    # npx update 按锁里的名字去上游取同名 skill，部署名与上游名不同时会失败。
+    # 办法：update 前把重命名条目的 key 临时换回上游名，跑完再换回部署名——
+    # 重命名能力由此完全复用 npx 的更新逻辑，不必 fork 它。
+    tmp_lock=$(mktemp)
+    cp "$LOCK" "$tmp_lock"
+    renamed=0
+    while IFS= read -r dep; do
+      up=$(jq -r --arg k "$dep" '.skills[$k].upstreamName // empty' "$LOCK")
+      [ -n "$up" ] || continue
+      jq --arg up "$up" --arg dep "$dep" \
+        '.skills[$up] = .skills[$dep] | del(.skills[$dep])' "$LOCK" | write_lock
+      renamed=1
+    done < <(jq -r '.skills | to_entries[] | select(.value.upstreamName) | .key' "$LOCK")
+    npx_skills update -p -y || true
+    # 换回部署名，并把上游刷新到的条目带回来
+    while IFS= read -r dep; do
+      up=$(jq -r --arg k "$dep" '.skills[$k].upstreamName // empty' "$tmp_lock")
+      [ -n "$up" ] || continue
+      jq --arg up "$up" --arg dep "$dep" \
+        '.skills[$up] as $e | del(.skills[$up]) | .skills[$dep] = ($e + {upstreamName: $up})' \
+        "$LOCK" | write_lock
+    done < <(jq -r '.skills | to_entries[] | select(.value.upstreamName) | .key' "$tmp_lock")
+    rm -f "$tmp_lock"
+    [ "$renamed" -eq 1 ] && echo "（重命名条目已用上游名刷新内容）"
     sync_from_staging
     echo "完成。锁已更新（mutable 直链），git diff 审查后提交以冻结新版本。"
     ;;
@@ -79,7 +210,24 @@ case "${1:-help}" in
     # ref 无 commit pin：恢复的是上游当前最新，与锁内 computedHash 的偏差
     # 由随后 npx update 的检测体现
     [ -e "$LOCK" ] || die "找不到 $LOCK（先 blue stow agents/skills 部署锁）"
-    npx_skills experimental_install
+    # 与 update 同理：重命名条目按上游名恢复，跑完换回部署名
+    tmp_lock=$(mktemp)
+    cp "$LOCK" "$tmp_lock"
+    while IFS= read -r dep; do
+      up=$(jq -r --arg k "$dep" '.skills[$k].upstreamName // empty' "$LOCK")
+      [ -n "$up" ] || continue
+      jq --arg up "$up" --arg dep "$dep" \
+        '.skills[$up] = .skills[$dep] | del(.skills[$dep])' "$LOCK" | write_lock
+    done < <(jq -r '.skills | to_entries[] | select(.value.upstreamName) | .key' "$LOCK")
+    npx_skills experimental_install || true
+    while IFS= read -r dep; do
+      up=$(jq -r --arg k "$dep" '.skills[$k].upstreamName // empty' "$tmp_lock")
+      [ -n "$up" ] || continue
+      jq --arg up "$up" --arg dep "$dep" \
+        '.skills[$up] as $e | del(.skills[$up]) | .skills[$dep] = ($e + {upstreamName: $up})' \
+        "$LOCK" | write_lock
+    done < <(jq -r '.skills | to_entries[] | select(.value.upstreamName) | .key' "$tmp_lock")
+    rm -f "$tmp_lock"
     sync_from_staging
     ;;
   remove)
@@ -88,9 +236,22 @@ case "${1:-help}" in
     for name in "$@"; do
       case "$name" in */* | .* | '') die "非法 skill 名: $name" ;; esac
     done
-    npx_skills remove "$@" -y
+    # 重命名条目在锁里的 key 是部署名，npx remove 认的是上游名
+    upstreams=()
+    for name in "$@"; do
+      up=$(jq -r --arg k "$name" '.skills[$k].upstreamName // empty' "$LOCK")
+      if [ -n "$up" ]; then
+        upstreams+=("$up")
+      else
+        upstreams+=("$name")
+      fi
+    done
+    npx_skills remove "${upstreams[@]}" -y || true
     for name in "$@"; do
       rm -rf "${WORK:?}/$name"
+      # 暂存区里留着上游名目录，一并清掉
+      up=$(jq -r --arg k "$name" '.skills[$k].upstreamName // empty' "$LOCK")
+      [ -n "$up" ] && rm -rf "${STAGING:?}/$up"
       echo "  已删除: $name"
     done
     echo "完成。锁已更新（mutable 直链），git diff 审查后提交。"
@@ -105,7 +266,9 @@ case "${1:-help}" in
     cat <<'EOF'
 askill — 声明式管理第三方 agent skills（引擎: npx skills project scope）
 
-  askill add <owner/repo> [-s a,b]   安装上游 skill（写锁 + 落盘 ~/.agents/skills/）
+  askill add <owner/repo> [-s a,b] [--as 部署名]
+                                        安装上游 skill（写锁 + 落盘 ~/.agents/skills/）
+                                        --as 装成另一个名字（上游同名时区分用途）
   askill update                     按锁检查并更新全部（git diff 审查后提交冻结）
   askill install                    从 skills-lock.json 恢复（新机 clone + stow 后跑这个）
   askill remove <skill>...          卸载（删锁条目 + 部署目录）
@@ -115,6 +278,10 @@ askill — 声明式管理第三方 agent skills（引擎: npx skills project sc
 skill 内容不进 git：仓库只跟踪 skills-lock.json（mutable Stow 直链部署，
 npx 写锁即写仓库源）与本脚本（immutable）。
 自建 skill（不在锁内）不受任何命令影响。
+
+重命名：锁的 key 是部署名，upstreamName 字段记上游真名（缺省即上游名）。
+同名上游用不同部署名共存（如 unslop-text / unslop-ui），frontmatter 的
+name: 随部署名改写，宿主按 frontmatter 认名。
 EOF
     ;;
 esac
