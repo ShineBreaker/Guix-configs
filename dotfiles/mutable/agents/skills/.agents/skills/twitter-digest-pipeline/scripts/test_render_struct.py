@@ -8,7 +8,7 @@
 import sys
 from pathlib import Path
 
-RENDER_DIR = Path.home() / ".local/share/hermes/scripts/twitter-digest"
+RENDER_DIR = Path.home() / ".local/share/dsh/automations/scripts/twitter-digest"
 sys.path.insert(0, str(RENDER_DIR))
 from digest_render import parse_digest_md, render_item  # noqa: E402
 

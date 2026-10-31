@@ -33,6 +33,11 @@ PAD = 56
 CARD_PAD = 32
 RADIUS = 20
 
+# 中文日报（md 子命令）的排版缩放。手机上看长图时正文偏小，
+# 用 zoom 等比放大整块排版：字号、行距、边距、配图一起变大。
+# 逻辑宽度除以 zoom 后再缩放回 WIDTH，物理像素宽度仍是 WIDTH。
+MD_SCALE = 1.25
+
 VARIANTS = {
     "A": {
         "name": "暗色·墨蓝",
@@ -421,8 +426,10 @@ def emit(args, html_text: str, stem: str) -> int:
 MD_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh"><head><meta charset="utf-8"><style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{width:@WIDTH@px;background:@bg@;font-family:@BODYFONT@;
-  padding:52px @PAD@px 60px;color:@body@;-webkit-font-smoothing:antialiased}
+html{background:@bg@}
+body{width:@BODYW@px;background:@bg@;font-family:@BODYFONT@;
+  padding:52px @PAD@px 60px;color:@body@;-webkit-font-smoothing:antialiased;
+  zoom:@ZOOM@}
 .masthead{display:flex;align-items:baseline;gap:14px}
 .masthead h1{font-size:44px;color:@title@;letter-spacing:1px;
   font-family:@SERIF@;font-weight:500}
@@ -673,6 +680,9 @@ def render_md_html(text: str, variant: str, title_override: str,
 
     vals = {
         "WIDTH": str(WIDTH), "PAD": str(PAD),
+        "ZOOM": str(MD_SCALE),
+        # body 按缩放后的逻辑宽度布局，再由 zoom 放大到 WIDTH 物理像素
+        "BODYW": str(round(WIDTH / MD_SCALE)),
         "DATE": esc(date), "PAGETITLE": esc(title),
         "LEDE": (f"本期 {sum(len(i) for _, i in groups)} 条 · "
                  f"{len(groups)} 个分组 · 来自关注时间线"),
