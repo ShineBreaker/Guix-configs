@@ -18,14 +18,17 @@ importers:
         specifier: 1.0.13
         version: 1.0.13(@deepseek-ai/cordis@4.0.5)(@deepseek-ai/schemastery@3.18.5)
       '@xmanrui/dsh-im':
-        specifier: github:ShineBreaker/dsh-im#9a8de5314324e798ed8ff6d14f5e4ae0708defc9
-        version: https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/9a8de5314324e798ed8ff6d14f5e4ae0708defc9(debug@4.4.3)
+        specifier: github:ShineBreaker/dsh-im#7f7e1a249b0d8e8872510fb6744f4a821cad95f6
+        version: https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/7f7e1a249b0d8e8872510fb6744f4a821cad95f6(debug@4.4.3)
       cc-safety-net:
-        specifier: 2.7.0
-        version: 2.7.0
+        specifier: 2.7.1
+        version: 2.7.1
       ds-bot:
         specifier: 0.2.4
         version: 0.2.4(@deepseek-ai/cordis@4.0.5)
+      ds-harness-remote:
+        specifier: 0.6.0
+        version: 0.6.0(@deepseek-ai/cordis@4.0.5)
       dsh-agenote:
         specifier: https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz
         version: https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz
@@ -196,6 +199,7 @@ packages:
     resolution: {integrity: sha512-Y3dgX/6lE2QhQb+Gxy0WZxfg9MEm/JBjamZpS2IklP7xIQoKN4hzAm7KcMVGtaVDt3neE9OKBC7vAfonA/Lr1A==}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@img/sharp-libvips-linux-arm@1.3.4':
     resolution: {integrity: sha512-LmRtTsOHuvM2+wlO2Db37dx5MiZhB0FvSunciw48YjdOkZz9KAiRbm8ujeMOA1INqmei5NapFxYEK1D1ZSidmw==}
@@ -213,6 +217,7 @@ packages:
     resolution: {integrity: sha512-aHkkIEHPRdQEegJN20MLmGtxYD9R2wQr3Cwpddnu5+YKMt6Uzax7S9h5gpZTo8wyrGuZSlfQ63OevL5mTyOC7Q==}
     cpu: [riscv64]
     os: [linux]
+    libc: [glibc]
 
   '@img/sharp-libvips-linux-s390x@1.3.4':
     resolution: {integrity: sha512-ra/mB6MikESDUO7Yg+Mi95bFBb9GsObURuhnOv3OqknjGe9sZrG8tCe9q0xSIGrtLgvgw0gKnFWcK4blSgQOuQ==}
@@ -224,11 +229,13 @@ packages:
     resolution: {integrity: sha512-GJ//SSXbnwSDes02umB3nDJLFcQzw8a18V8fyhqr6tV515tOEMdImjjxj1AoafMRz56F3PHgftnj1QEKSU1zkw==}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@img/sharp-libvips-linuxmusl-arm64@1.3.4':
     resolution: {integrity: sha512-hvulFwtjUcagsis6BBxHwGFwWoNZjgYmULGVrZcyfNbjA8hKILbRxGg15/7w5HDyXHXUos/j6baAWqnCyQ2DWA==}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@img/sharp-libvips-linuxmusl-x64@1.3.4':
     resolution: {integrity: sha512-6zXKeE/p39I1AmA3cJG35eyBGNqNddLnUXjhwBnsGjFPWqf5VKkDBEqaEkPDoTEtkxwi2vv8Tcr2mDyP4So7Fg==}
@@ -241,18 +248,21 @@ packages:
     engines: {node: '>=20.9.0'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@img/sharp-linux-arm@0.35.5':
     resolution: {integrity: sha512-LEaXK2WdXVK5ykcw0buWyPMsmLLL2vpHLD6yrNSW+JGEL3BZPA4tpKN6iaMc4AxTTAoaX/sU1rOL51lcIz48ZQ==}
     engines: {node: '>=20.9.0'}
     cpu: [arm]
     os: [linux]
+    libc: [glibc]
 
   '@img/sharp-linux-ppc64@0.35.5':
     resolution: {integrity: sha512-QVxAAq8evVRI9ia2vqgwrmWucn5Dfv+JdWzj75pD8omHLPSP7f8p20O8jxzjCcuCEQEOtYOZUmX1hkiZ0kdevA==}
     engines: {node: '>=20.9.0'}
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   '@img/sharp-linux-riscv64@0.35.5':
     resolution: {integrity: sha512-LtdreXguaavKODPIfzJ4kffx7UNt1omwtK0rch4EBbbSTXPnxWmYSayXdLJw0fJzQ97kHt1gL/yh4tvU+nCyRQ==}
@@ -287,6 +297,7 @@ packages:
     engines: {node: '>=20.9.0'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@img/sharp-wasm32@0.35.5':
     resolution: {integrity: sha512-Ptsga1su4tQx+LLF1ECS9U6nz5kmrXKo6XVbtR48Ke3ZRxxgaWBu7IDtEe1quo8hiupwm6WFqxVlXaSf7IINGQ==}
@@ -430,6 +441,34 @@ packages:
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
+
+  '@roamhq/wrtc-darwin-arm64@0.10.0':
+    resolution: {integrity: sha512-vFdi79jWuPHcnUcnuOjTvyKtmY/RI2xRQo9Y6RsIjIlYePN/7LTy00c+Ivrz4prYAPbp0oHscl7PDV64VUqGTQ==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@roamhq/wrtc-darwin-x64@0.10.0':
+    resolution: {integrity: sha512-H6852g2xYCuaR+/TrthpdMafs4bMfAUEpvRDhsIguzrK7Dz+MKpNI8MkwdqJN8W65J+7w7k+YqXIkTHe7Fz/cg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@roamhq/wrtc-linux-arm64@0.10.0':
+    resolution: {integrity: sha512-fEuJbNjprxQG6QlFd2iqBW9x028RDSho6izVg7gyt8irdPiXWOxzOxNnYMs/B2fohBTd1wD4Qxfivl07/dCR8A==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@roamhq/wrtc-linux-x64@0.10.0':
+    resolution: {integrity: sha512-H32lK2eFg3sVb/9nkHIX5HIisxFoS82Gpesuea+zqAyRpRzSd5NpFXx28bVy9wQyRrNtj8k0bTUgEzWRzSbYCA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@roamhq/wrtc-win32-x64@0.10.0':
+    resolution: {integrity: sha512-wEVXMvLrBizdLyrd+Zc7zb7zpwUuHUBXwrdIvI69e3i/AA8YsVYI2xo/sxk6GoQ+o8a14ONc4SStDS35TCjg+w==}
+    cpu: [x64]
+    os: [win32]
+
+  '@roamhq/wrtc@0.10.0':
+    resolution: {integrity: sha512-yFqQQ0EV1ZUHaphh3tmjoxPi2wzhW2vjmzoAVNRRLUjXYd2e1nvwi9TKfE2w4WNvNws/hBkouvOt23Xo9FkXkQ==}
 
   '@selderee/plugin-htmlparser2@0.12.0':
     resolution: {integrity: sha512-oELmoyA6ML9jDRMV3kgcMQFKxUfBU0yFVn6yTctVaLT5ygXnxH52I3TZEgV9EhXJC68/uFvE5Daj1/25c0Xa/A==}
@@ -597,14 +636,20 @@ packages:
   '@wecom/aibot-node-sdk@1.0.7':
     resolution: {integrity: sha512-51w+sTqunry6GD3HFvmuh0gArMSJDFE418vyvR1wMJHj1N6DaFuGD3HuaY2fazZs3mb9FWeQFX3+vU5t0Qhwmw==}
 
-  '@xmanrui/dsh-im@https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/9a8de5314324e798ed8ff6d14f5e4ae0708defc9':
-    resolution: {gitHosted: true, integrity: sha512-BENQ+C+/4ljwRy+XWSwkvX5J6EgK4G5bBs2p7dUloQ7CTuHzXdPCy1eDAACop70rSQkPQNneOeK30IKvBNcvjA==, tarball: https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/9a8de5314324e798ed8ff6d14f5e4ae0708defc9}
+  '@xmanrui/dsh-im@https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/7f7e1a249b0d8e8872510fb6744f4a821cad95f6':
+    resolution: {gitHosted: true, integrity: sha512-zsrKkxqE74MVlEWoNuSDoab9xrbCby0mJSRp91Uk3GHcM60Pa1qMj7bXPzz6G+Tf3UksAEaMlk/e98ApO7TSaQ==, tarball: https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/7f7e1a249b0d8e8872510fb6744f4a821cad95f6}
     version: 5.8.0
     engines: {node: '>=22.19'}
     hasBin: true
 
   '@xterm/addon-fit@0.11.0':
     resolution: {integrity: sha512-jYcgT6xtVYhnhgxh3QgYDnnNMYTcf8ElbxxFzX0IZo+vabQqSPAjC3c1wJrKB5E19VwQei89QCiZZP86DCPF7g==}
+
+  '@xterm/addon-serialize@0.14.0':
+    resolution: {integrity: sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA==}
+
+  '@xterm/headless@6.0.0':
+    resolution: {integrity: sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw==}
 
   '@xterm/xterm@6.0.0':
     resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
@@ -646,8 +691,8 @@ packages:
     resolution: {integrity: sha512-L28STB170nwWS63UjtlEOE3dldQApaJXZkOI1uMFfzf3rRuPegHaHesyee+YxQ+W6SvRDQV6UrdOdRiR153wJg==}
     engines: {node: '>=6'}
 
-  cc-safety-net@2.7.0:
-    resolution: {integrity: sha512-c1ZkyjbpTmiMIXBYNU07kk1Pd4SHoFtOeViVrscz1T5uFOL8t+Sz9RvvfTDbjhreRlIabe7cCRt41Ua+BHLccg==}
+  cc-safety-net@2.7.1:
+    resolution: {integrity: sha512-7qFMwJY3AkFciG6tC05yzx0IaZgj43vJrMqfY6MNQ0JseQ7995iekQeGbhg0RR1EyEWX6yQ3ob7Y8awnsaFoZg==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -905,6 +950,11 @@ packages:
   domelementtype@2.3.0:
     resolution: {integrity: sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==}
 
+  domexception@4.0.0:
+    resolution: {integrity: sha512-A2is4PLG+eeSfoTMA95/s4pvAoSo2mKtiM5jlHkAVewmiO8ISFTFKZjH7UAM1Atli/OT/7JHOrJRJiMKUZKYBw==}
+    engines: {node: '>=12'}
+    deprecated: Use your platform's native DOMException instead
+
   domhandler@5.0.3:
     resolution: {integrity: sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==}
     engines: {node: '>= 4'}
@@ -922,6 +972,43 @@ packages:
       '@deepseek-ai/dsh-llm': '*'
       '@deepseek-ai/dsh-tools': '*'
       '@deepseek-ai/dsh-web': '*'
+
+  ds-harness-remote@0.6.0:
+    resolution: {integrity: sha512-/H+jNxkwc/F3hoPyJFXCk8i2OI0FWY7UWGXEoMig4p55KKMCo9VQCQiq9uqZf3hcMPGHWMDHbT8dgR+GuUTDvg==}
+    hasBin: true
+    peerDependencies:
+      '@deepseek-ai/cordis': '>=4.0.1 <5 || >=4.0.5-alpha.1 <4.0.6-0'
+      '@deepseek-ai/dsh-api-gateway': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-connection': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-locale': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-plugin-manager': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-settings': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-settings-general': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-settings-plugin-inventory': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-settings-plugins': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-sidebar': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-client-ui-slots': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      '@deepseek-ai/dsh-settings': '>=0.2.0-rc.1 <0.3.0-0 || >=0.2.1-0 <0.2.2-0 || >=0.2.2-0 <0.2.3-0'
+      react: '>=18.2.0 <19'
+    peerDependenciesMeta:
+      '@deepseek-ai/dsh-client-connection':
+        optional: true
+      '@deepseek-ai/dsh-client-locale':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-plugin-manager':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-settings':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-settings-general':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-settings-plugin-inventory':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-settings-plugins':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        optional: true
+      '@deepseek-ai/dsh-client-ui-slots':
+        optional: true
 
   dsh-agenote@https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz:
     resolution: {integrity: sha512-IHVufKfRYVzk6AJWUB57NQPcyDy+LcvuCsjdF+7e8B9pMdC41lKK4KHkAcwX+FhmEpUDeTpJapHQP/JC80lvQQ==, tarball: https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz}
@@ -1426,6 +1513,10 @@ packages:
   w3c-keyname@2.2.8:
     resolution: {integrity: sha512-dpojBhNsCNN7T82Tm7k26A6G9ML3NkhDsnw9n/eoxSRlVBB4CEtIQ/KTCLI2Fwf3ataSXRhYFkQi3SlnFwPvPQ==}
 
+  webidl-conversions@7.0.0:
+    resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
+    engines: {node: '>=12'}
+
   which-module@2.0.1:
     resolution: {integrity: sha512-iBdZ57RDvnOR9AGBhML2vFZf7h8vmBjhoaZqODJBFWHVtKkDmKuHai3cx5PgVMrX5YDNp27AofYbAwctSS+vhQ==}
 
@@ -1904,6 +1995,31 @@ snapshots:
 
   '@pinojs/redact@0.4.0': {}
 
+  '@roamhq/wrtc-darwin-arm64@0.10.0':
+    optional: true
+
+  '@roamhq/wrtc-darwin-x64@0.10.0':
+    optional: true
+
+  '@roamhq/wrtc-linux-arm64@0.10.0':
+    optional: true
+
+  '@roamhq/wrtc-linux-x64@0.10.0':
+    optional: true
+
+  '@roamhq/wrtc-win32-x64@0.10.0':
+    optional: true
+
+  '@roamhq/wrtc@0.10.0':
+    optionalDependencies:
+      '@roamhq/wrtc-darwin-arm64': 0.10.0
+      '@roamhq/wrtc-darwin-x64': 0.10.0
+      '@roamhq/wrtc-linux-arm64': 0.10.0
+      '@roamhq/wrtc-linux-x64': 0.10.0
+      '@roamhq/wrtc-win32-x64': 0.10.0
+      domexception: 4.0.0
+    optional: true
+
   '@selderee/plugin-htmlparser2@0.12.0(selderee@0.12.0)':
     dependencies:
       domelementtype: 2.3.0
@@ -2089,7 +2205,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@xmanrui/dsh-im@https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/9a8de5314324e798ed8ff6d14f5e4ae0708defc9(debug@4.4.3)':
+  '@xmanrui/dsh-im@https://codeload.github.com/ShineBreaker/dsh-im/tar.gz/7f7e1a249b0d8e8872510fb6744f4a821cad95f6(debug@4.4.3)':
     dependencies:
       '@matrix-org/olm': 3.2.15
       '@tencent-connect/qqbot-connector': 1.2.0
@@ -2114,6 +2230,10 @@ snapshots:
       - utf-8-validate
 
   '@xterm/addon-fit@0.11.0': {}
+
+  '@xterm/addon-serialize@0.14.0': {}
+
+  '@xterm/headless@6.0.0': {}
 
   '@xterm/xterm@6.0.0': {}
 
@@ -2158,7 +2278,7 @@ snapshots:
 
   camelcase@5.3.1: {}
 
-  cc-safety-net@2.7.0: {}
+  cc-safety-net@2.7.1: {}
 
   cliui@6.0.0:
     dependencies:
@@ -2421,6 +2541,11 @@ snapshots:
 
   domelementtype@2.3.0: {}
 
+  domexception@4.0.0:
+    dependencies:
+      webidl-conversions: 7.0.0
+    optional: true
+
   domhandler@5.0.3:
     dependencies:
       domelementtype: 2.3.0
@@ -2439,6 +2564,21 @@ snapshots:
     dependencies:
       '@deepseek-ai/cordis': 4.0.5
       deep-view: 0.1.0(@deepseek-ai/cordis@4.0.5)
+
+  ds-harness-remote@0.6.0(@deepseek-ai/cordis@4.0.5):
+    dependencies:
+      '@deepseek-ai/cordis': 4.0.5
+      '@deepseek-ai/schemastery': 3.18.5
+      '@xterm/addon-serialize': 0.14.0
+      '@xterm/headless': 6.0.0
+      qrcode: 1.5.4
+      ws: 8.22.0
+      zod: 4.6.7
+    optionalDependencies:
+      '@roamhq/wrtc': 0.10.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   dsh-agenote@https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz: {}
 
@@ -2927,6 +3067,9 @@ snapshots:
   uuid@14.0.3: {}
 
   w3c-keyname@2.2.8: {}
+
+  webidl-conversions@7.0.0:
+    optional: true
 
   which-module@2.0.1: {}
 

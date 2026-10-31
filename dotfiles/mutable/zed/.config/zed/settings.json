@@ -13,8 +13,8 @@
               "tools": true
             },
             "display_name": "永不卡住 · routing group",
-            "max_output_tokens": 128000,
-            "max_tokens": 1128000,
+            "max_output_tokens": 384000,
+            "max_tokens": 1384000,
             "name": "group/never-stuck",
             "reasoning_effort": "high"
           },
@@ -27,8 +27,8 @@
               "tools": true
             },
             "display_name": "便宜优先 · routing group",
-            "max_output_tokens": 524288,
-            "max_tokens": 1572864,
+            "max_output_tokens": 384000,
+            "max_tokens": 1384000,
             "name": "group/cheap-first",
             "reasoning_effort": "high"
           },
@@ -41,8 +41,8 @@
               "tools": true
             },
             "display_name": "DeepSeek V4.1 Flash · routing group",
-            "max_output_tokens": 128000,
-            "max_tokens": 1128000,
+            "max_output_tokens": 384000,
+            "max_tokens": 1384000,
             "name": "auto/deepseek-v4.1-flash",
             "reasoning_effort": "high"
           },
@@ -82,10 +82,10 @@
               "prompt_cache_key": false,
               "tools": true
             },
-            "display_name": "MiniMax-M3.1-Flash · routing group",
-            "max_output_tokens": 524288,
-            "max_tokens": 1572864,
-            "name": "auto/MiniMax-M3.1-Flash",
+            "display_name": "Step 5 Preview · StepFun (China)",
+            "max_output_tokens": 65536,
+            "max_tokens": 1065536,
+            "name": "stepfun-cn/step-5-preview",
             "reasoning_effort": "high"
           },
           {
@@ -96,10 +96,149 @@
               "prompt_cache_key": false,
               "tools": true
             },
-            "display_name": "Step 5 Preview · StepFun (China)",
-            "max_output_tokens": 65536,
-            "max_tokens": 1065536,
-            "name": "stepfun-cn/step-5-preview",
+            "display_name": "Beam Free · OpenCode Go",
+            "max_output_tokens": 131072,
+            "max_tokens": 1179648,
+            "name": "opencode-go/beam-free",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Iceman Contributor Free · OpenCode Go",
+            "max_output_tokens": 131072,
+            "max_tokens": 393216,
+            "name": "opencode-go/iceman-contributor-free",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "DeepSeek V4.1 Flash · OpenCode Go",
+            "max_output_tokens": 384000,
+            "max_tokens": 1384000,
+            "name": "opencode-go/deepseek-v4.1-flash",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.7 · xAI",
+            "max_output_tokens": 500000,
+            "max_tokens": 1000000,
+            "name": "xai/grok-4.7",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.6 · xAI",
+            "max_output_tokens": 500000,
+            "max_tokens": 1000000,
+            "name": "xai/grok-4.6",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.5 · xAI",
+            "max_output_tokens": 500000,
+            "max_tokens": 1000000,
+            "name": "xai/grok-4.5",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.3 · xAI",
+            "max_output_tokens": 30000,
+            "max_tokens": 1030000,
+            "name": "xai/grok-4.3",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok Build 0.1 · xAI",
+            "max_output_tokens": 256000,
+            "max_tokens": 512000,
+            "name": "xai/grok-build-0.1",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.20 (Non-Reasoning) · xAI",
+            "max_output_tokens": 30000,
+            "max_tokens": 1030000,
+            "name": "xai/grok-4.20-0309-non-reasoning"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.20 (Reasoning) · xAI",
+            "max_output_tokens": 30000,
+            "max_tokens": 1030000,
+            "name": "xai/grok-4.20-0309-reasoning",
+            "reasoning_effort": "high"
+          },
+          {
+            "capabilities": {
+              "chat_completions": true,
+              "images": true,
+              "parallel_tool_calls": false,
+              "prompt_cache_key": false,
+              "tools": true
+            },
+            "display_name": "Grok 4.20 Multi-Agent · xAI",
+            "max_output_tokens": 30000,
+            "max_tokens": 1030000,
+            "name": "xai/grok-4.20-multi-agent-0309",
             "reasoning_effort": "high"
           },
           {
@@ -184,20 +323,6 @@
             "max_output_tokens": 128000,
             "max_tokens": 1128000,
             "name": "workbuddy/deepseek-v4.1-flash",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "M3.1-Flash · MiniMax Code",
-            "max_output_tokens": 524288,
-            "max_tokens": 1572864,
-            "name": "minimax-code/MiniMax-M3.1-Flash",
             "reasoning_effort": "high"
           }
         ]

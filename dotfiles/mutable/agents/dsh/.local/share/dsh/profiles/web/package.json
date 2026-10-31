@@ -20,7 +20,8 @@
         "@michengai/dsh-automation",
         "dsh-soul-md",
         "@xmanrui/dsh-im",
-        "ds-bot"
+        "ds-bot",
+        "ds-harness-remote"
       ],
       "patchReload": "live"
     }
@@ -29,9 +30,10 @@
     "@linxin666/dsh-remote-web-ui": "0.4.12",
     "@mengyuly/dsh-ponytail": "0.4.3",
     "@michengai/dsh-automation": "1.0.13",
-    "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#9a8de5314324e798ed8ff6d14f5e4ae0708defc9",
-    "cc-safety-net": "2.7.0",
+    "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#7f7e1a249b0d8e8872510fb6744f4a821cad95f6",
+    "cc-safety-net": "2.7.1",
     "ds-bot": "0.2.4",
+    "ds-harness-remote": "0.6.0",
     "dsh-agenote": "https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz",
     "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-better-sidebar": "0.28.2",
