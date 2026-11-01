@@ -39,6 +39,15 @@
    - debug 类型占比 < 45%
    - 薄弱类别（类别卡片数 < 3）列清单
 
+   **口径标注（固定写入每期报告，不要省略）**：agenote 0.2.x 的 `health.py` 里
+   `weak_categories` 取自全量 `cards`，而 `category_distribution` 取自 `analyze()`
+   的活跃子集（done+stable），两处分母不一致。因此：
+   - **类型偏斜（debug 占比）**：面板值按全库算（含归档卡），**判定以活跃卡口径为准**，
+     报告里同时给出两个数并标注「面板为全库口径，活跃卡口径另算」。
+   - **薄弱类别**：面板值同为全库口径，列清单时注明「全库口径」，并另给活跃卡口径的清单。
+   - 这两项属 agenote 上游 CLI 的口径问题（已向 `ShineBreaker/agenote` 提 issue），
+     本任务不修 CLI、不改知识库文件，只在报告里如实标注两套口径。
+
 2. **DSH 自动化运行健康**
 
    读 `/home/brokenshine/.local/share/dsh/storages/dsh_automation.json`（python3 解析 `tables.runs`，按 `automationName` 分组），统计最近 7 天：
