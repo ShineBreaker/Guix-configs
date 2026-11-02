@@ -73,8 +73,8 @@ Jev 全量判定约 470 张卡片约 20 分钟、约 610K input tokens。**单 t
    - **B 级**：usage 总和 5–9 且聚焦 → 次优先
    - **C 级**：其余聚焦簇 → 仅当 A/B 不足 3 个时补位
 3. 对 A/B 级候选各读 2-3 张源卡（`agenote get <id>`）确认主题同一、信息可互补
-4. **每轮提案 1–3 个晋升候选**（A 级优先，超出留下周）；每个提案含：候选名、源卡 ID 列表、usage 总和、聚焦度结论、建议的 skill 落点（`dotfiles/mutable/agents/skills/<分类>/<skill-name>/SKILL.md`，askill 托管）、预期复用场景（什么任务什么关键词会命中）
-5. 晋升审计簿维护在 `~/.local/share/dsh/automations/state/skill-impact.md`（目录不存在先创建）：用户拍板 Accepted/Rejected 后由当轮会话补登一行；提案前先读簿头，被 Rejected 过的方向不得原样重提
+4. **每轮提案 1–3 个晋升候选**（A 级优先，超出留下周）；每个提案含：候选名、源卡 ID 列表、usage 总和、聚焦度结论、建议的 skill 落点（`dotfiles/mutable/agents/skills/.agents/skills/<skill-name>/SKILL.md`，扁平结构、无分类层，askill 托管）、预期复用场景（什么任务什么关键词会命中）。**提案前先确认消费方仍存在**：候选 skill 若服务于已退役的工具（如 pi/omp），先查 `command -v <tool>` 与配置目录，不存在则改提「归档该 skill」而不是增补
+5. 晋升审计簿维护在 `~/.local/share/dsh/automation-state/skill-impact.md`（目录不存在先创建）：用户拍板 Accepted/Rejected 后由当轮会话补登一行；提案前先读簿头，被 Rejected 过的方向不得原样重提
 6. **候选多于 1 个时不自行批量落地**——原子提案，防批量改动无法归因
 
 零候选（无聚焦簇）= 正常，报告里写明「本轮无晋升提案」即可。
@@ -120,7 +120,7 @@ commit：<sha>（git show --stat 已核对）
 【蒸馏与晋升】
 distill 候选：N 个（聚焦 A 级 a / B 级 b / 散簇 c——散簇列出簇名+张数，注明非单一工作流）
 晋升提案（等拍板，最多 3 个）：
-  1. <候选名>：源卡 <IDs>，usage 合计 M，聚焦度结论，建议落点 dotfiles/mutable/agents/skills/<分类>/<name>/，预期命中场景 <任务+关键词>
+  1. <候选名>：源卡 <IDs>，usage 合计 M，聚焦度结论，建议落点 dotfiles/mutable/agents/skills/.agents/skills/<name>/，预期命中场景 <任务+关键词>
 审计簿：Accepted x / Rejected y（本轮补登）；被拒方向 n 个不再重提
 
 【Jev 语义复核】
@@ -138,6 +138,6 @@ token 用量：约 Nk
 
 - 不跑 `blue rebuild` / `guix system reconfigure` 等需 sudo 的系统操作。
 - 不碰 `~/.agents/skills/`（agenote-skills 的部署位，全软链，sync-agenote.sh 重铺会覆盖手改）。
-- 晋升 skill 的**唯一落点**是仓库源 `dotfiles/mutable/agents/skills/`（askill 托管）；本任务只提案不落地，用户拍板后才写入。
+- 晋升 skill 的**唯一落点**是仓库源 `dotfiles/mutable/agents/skills/.agents/skills/`（扁平结构、无分类层，askill 托管）；本任务只提案不落地，用户拍板后才写入。
 - 晋升审计簿在 `~/.local/share/dsh/automation-state/skill-impact.md`。
 - cron 内禁止递归创建 cron job。
