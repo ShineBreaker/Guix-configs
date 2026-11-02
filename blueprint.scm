@@ -72,6 +72,18 @@
                                 (format #f "命令执行失败 (~a): ~s" status command)))
            #t)])))
 
+;; %run 的软失败变体：返回子进程退出码而不终止 blue。供逐子模块的容错
+;; 循环用——单个 submodule 的 fetch/push 失败只告警跳过，不中断其余
+;; 子模块与外层流程（sub-update 是 rebuild 前置，离线时不能因此挡住 rebuild）。
+(define* (%run/soft command)
+  (if (dry-build?)
+      (begin (%print-preview command) 0)
+      (match command
+        [(program . args)
+         (status:exit-val (popen program args))])))
+
+(define (nonzero? n) (not (zero? n)))
+
 ;; 所有 guix 调用都必须经 `guix time-machine --channels=...'，否则频道
 ;; 版本与 channel.lock 不一致，构建结果不可复现。
 (define* (%guix-command args #:key (channels %channel-lock))
@@ -788,11 +800,14 @@
              #:sudo? #t))))
 
 ;; ⚠ Agent 不要自行运行此命令（会卡 sudo 密码提示），调试只许 blue home。
+;; 前置 sub-update：系统重建前先把子模块同步到各自远端最新（含别人的
+;; 仓库，如 rime-ice）；离线或单个子模块失败只告警，不阻塞重建。
 (define-command (rebuild-command arguments)
   ((invoke "rebuild")
    (category 'deployment)
    (synopsis "应用 Guix System 配置")
    (help "应用 operating-system 表。blue --dry-run rebuild 仅构建验证、不写入系统。"))
+  ((command-procedure sub-update-command) '())
   (%prune-system-generations)
   ((command-procedure clean-artifacts-command) '())
   (apply-config "system" "%system"
@@ -938,8 +953,14 @@
 (define-command (pull-command arguments)
   ((invoke "pull")
    (category 'guix)
-   (synopsis "通过锁定频道执行 guix pull"))
-  (%guix '("pull" "--allow-downgrades" "--fallback")))
+   (synopsis "通过锁定频道执行 guix pull")
+   (help "以 source/channel.lock 为频道清单执行 guix pull，把用户 profile
+（~/.config/guix/current）对齐到仓库锁定的频道 commit。
+显式传 --channels 而不依赖 /etc/guix/channels.scm：后者由系统 reconfigure
+从 lock 生成，blue update 刷新 lock 后到下次 rebuild 之前一直是旧 pin。"))
+  ;; 见 help：绕开部署时序，直接对齐仓库锁。
+  (%guix `("pull" ,(string-append "--channels=" %channel-lock)
+           "--allow-downgrades" "--fallback")))
 
 ;; ---- 单频道刷新辅助（blue update --channel 用） ----
 
@@ -1018,6 +1039,20 @@
                 (car args))
         (%run `("git" "commit" "-m" ,message ,file))))))
 
+;; 已暂存内容有变化才提交（sub-update 的 bump 用）；签名降级同上。
+(define (%commit-staged message)
+  (when (or (dry-build?)
+            (pair? (%pipe->lines
+                    (%shell-command '("git" "diff" "--cached" "--name-only")))))
+    (catch #t
+      (lambda ()
+        (%run `("git" "commit" "-S" "-m" ,message)))
+      (lambda args
+        (format (current-error-port)
+                "[warn] 签名提交失败（pinentry 不可用？），降级无签名提交: ~a~%"
+                (car args))
+        (%run `("git" "commit" "-m" ,message))))))
+
 (define (%lock-commit-message target)
   (match target
     ['all "build(channel.lock): bump channels"]
@@ -1078,13 +1113,155 @@
 -C/--commit COMMIT：搭配 -c 使用，目标频道 pin 到指定 commit 而非刷新到最新。
 --nix：只更新 Nix；--flake NAME 只更新该 flake input（不刷 nix channel）。
 Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
-  (match (match (%update-scope arguments)
-           ;; 无任何参数 → 两侧全量
-           [(#f #f) '(all all)]
-           [scope scope])
-    [(guix nix)
-     (when guix (%update-guix guix))
-     (when nix (%update-nix nix))]))
+  (let ([scope (match (%update-scope arguments)
+                 [(#f #f) '(all all)]
+                 [scope scope])])
+    (match scope
+      [(guix nix)
+       (when guix (%update-guix guix))
+       (when nix (%update-nix nix))
+       ;; lock 刷新后自动拉平用户 profile（频道侧无更新时 pull 也近乎零
+       ;; 成本，profile 已对齐则直接跳过构建）。仅 guix 侧更新时需要。
+       (when guix
+         (format #t "~%--- 自动执行 blue pull（对齐用户 profile 到新 lock）---~%")
+         ((command-procedure pull-command) '()))])))
+
+;; ---- 子模块辅助（sub-update / sub-push 用） ----
+
+;; 从 .gitmodules 枚举 (path . url) 对，按 path 排序保证输出稳定。
+;; path 与 url 分两条查询再按 submodule 名拼对：名字可含 '.'（如
+;; ".agents/skills/guix-skills"），单条 url 正则捕名字会漏这类条目、
+;; 且名字 ≠ path（"rime" 的 path 在 dotfiles/ 深处）。只读管道。
+(define (%gitmodules-key-values key)
+  ;; 返回 ((name . value) ...)；name 取 submodule.<name>.<key> 的中段。
+  (filter-map
+   (lambda (line)
+     (and=> (string-match
+             (string-append "^submodule\\.(.*)\\." key " (.*)$") line)
+            (lambda (m)
+              (cons (string-trim-both (match:substring m 1))
+                    (string-trim-both (match:substring m 2))))))
+   (%pipe->lines
+    (%shell-command `("git" "config" "--file" ".gitmodules" "--get-regexp"
+                      ,(string-append "^submodule\\..*\\" key "$"))))))
+
+(define (%submodule-list)
+  (let* ([paths (%gitmodules-key-values "path")]
+         [urls (%gitmodules-key-values "url")])
+    (sort
+     (filter-map
+      (lambda (p)                       ; p = (name . path)
+        (and=> (assoc-ref urls (car p))
+               (lambda (url) (cons (cdr p) url))))
+      paths)
+     (lambda (a b) (string<? (car a) (car b))))))
+
+;; 工作区是否有未提交改动（含 staged）。git status 只读。
+(define (%submodule-dirty? path)
+  (pair? (%pipe->lines
+          (%shell-command `("git" "-C" ,path "status" "--porcelain")))))
+
+;; 仓库 URL 是否指向自己的命名空间（ShineBreaker）——sub-push 只推自己的。
+(define (%own-repository? url)
+  (string-contains url "/ShineBreaker/"))
+
+;; 单个子模块的 fetch + ff-only 更新；返回 #t 表示 gitlink 有变化（父仓库
+;; 需要提交 bump）。脏 / ff 失败 / 网络失败都只告警跳过，返回 #f。
+(define (%submodule-update-one path url)
+  (format #t "--- ~a (~a)~%" path url)
+  (cond
+   [(not (file-exists? (string-append path "/.git")))
+    (format (current-error-port) "[跳过] ~a 未 init，保留现状~%" path)
+    #f]
+   [(%submodule-dirty? path)
+    (format (current-error-port) "[跳过] ~a 有未提交改动，保留现场~%" path)
+    #f]
+   [(nonzero? (%run/soft `("git" "-C" ,path "fetch" "--quiet" "origin")))
+    (format (current-error-port) "[跳过] ~a fetch 失败（网络？），保留旧版本~%" path)
+    #f]
+   [else
+    (let ([old (string-trim-both
+                (string-join
+                 (%pipe->lines
+                   (%shell-command `("git" "-C" ,path "rev-parse" "HEAD"))) ""))])
+      ;; detached HEAD（submodule 日常工作形态）直接 checkout 远端跟踪分支；
+      ;; 在分支上则 ff-only：本地领先/分叉立即跳过，保住 linux-setup 这类
+      ;; "本地有提交还没推"的现场。
+      (let ([rc (%run/soft
+                 (if (string=? (string-trim-both
+                                (string-join
+                                 (%pipe->lines
+                                  (%shell-command
+                                   `("git" "-C" ,path "rev-parse" "--abbrev-ref" "HEAD"))) ""))
+                               "HEAD")
+                     `("git" "-C" ,path "checkout" "--quiet" "origin/main")
+                     `("git" "-C" ,path "merge" "--ff-only" "origin/main")))])
+        (if (nonzero? rc)
+            (begin
+              (format (current-error-port) "[跳过] ~a 非快进或冲突，保留旧版本~%" path)
+              #f)
+            (not (string=? old
+                           (string-trim-both
+                            (string-join
+                             (%pipe->lines
+                              (%shell-command `("git" "-C" ,path "rev-parse" "HEAD"))) "")))))))]))
+;; 变化非空时以一条 bump 提交收口（复用 %commit-lock 的签名降级范式）。
+(define (%submodules-update)
+  (let ([changed
+         (filter-map (lambda (entry)
+                       (and (%submodule-update-one (car entry) (cdr entry))
+                            (car entry)))
+                     (%submodule-list))])
+    (if (null? changed)
+        (format #t "子模块均为最新，无 bump 提交~%")
+        (begin
+          (%run `("git" "add" ,@changed))
+          (%commit-staged "chore(submodules): bump 子模块")))))
+
+;; 只推自己的仓库（URL 含 /ShineBreaker/）；脏的跳过（避免把半成品推
+;; 上去），无 upstream 的补 -u。别人的仓库（如 rime-ice）没有推送权限，
+;; 也不该推。
+(define (%submodules-push)
+  (for-each
+   (lambda (entry)
+     (let ([path (car entry)] [url (cdr entry)])
+       (cond
+        [(not (%own-repository? url))
+         (format #t "--- ~a: 非自有仓库，跳过推送~%" path)]
+        [(not (file-exists? (string-append path "/.git")))
+         (format (current-error-port) "[跳过] ~a 未 init~%" path)]
+        [(%submodule-dirty? path)
+         (format (current-error-port) "[跳过] ~a 有未提交改动，先提交再推~%" path)]
+        [else
+         (format #t "--- ~a~%" path)
+         (let ([rc (%run/soft `("git" "-C" ,path "push" "origin" "HEAD:main"))])
+           (when (nonzero? rc)
+             (format (current-error-port) "[失败] ~a push 退出码 ~a，继续其余~%" path rc)))])))
+   (%submodule-list)))
+
+;;; ---------- 子模块 ----------
+
+;; rebuild 的前置步骤；也被 blue rebuild 自动调用。全部走 %run/soft 与
+;; 只读管道，离线/单模块失败只告警，不阻塞外层流程。
+(define-command (sub-update-command arguments)
+  ((invoke "sub-update")
+   (category 'submodule)
+   (synopsis "更新全部子模块到各自远端最新（ff-only）")
+   (help "逐个子模块 fetch origin 并快进到远端最新；含别人的仓库（如 rime-ice）。
+gitlink 有变化时自动在父仓库提交一条 bump（chore(submodules): bump 子模块）。
+安全边界：未 init、有未提交改动、非快进（本地分叉或领先）的子模块一律跳过并
+在 stderr 告警，绝不覆盖现场；blue rebuild 前会自动执行本命令。"))
+  (%submodules-update))
+
+;; 推送时机由人触发（blue sub-push 不会自动跑）；只推自己的仓库。
+(define-command (sub-push-command arguments)
+  ((invoke "sub-push")
+   (category 'submodule)
+   (synopsis "推送自有子模块到各自远端")
+   (help "对 URL 含 /ShineBreaker/ 的子模块执行 git push origin HEAD:main。
+别人的仓库（如 rime-ice）与未 init / 有未提交改动的子模块自动跳过。
+注意：只推子模块自身，不动父仓库（父仓库推送仍由人工决定）。"))
+  (%submodules-push))
 
 ;;; ---------- 维护 ----------
 
@@ -1261,6 +1438,84 @@ proseWrap=preserve 即为此设；文档内嵌的代码块也不重排，示例�
 
 ;;; ---------- 校验 ----------
 
+;; ---- 签名补齐（resign 用） ----
+
+;; origin/main..HEAD 中「未签名且作者是自己」的提交，按新到旧返回
+;; ((hash message) ...)。%G? 取值：U=好签名、N=无签名、E=签名但失效、
+;; B/G/Y/X/Bad=坏签名。E 只报告不重签（重签会连别人的提交一起改写）。
+;; 邮箱过滤防误伤：范围里可能混有 cherry-pick 的上游提交（作者邮箱不同），
+;; 对它们 amend 等于篡改他人签名。git log 只读。
+(define %signature-email "brokenshine@noreply.codeberg.org")
+
+(define (%unsigned-commits range)
+  (filter-map
+   (lambda (line)
+     (and=> (string-match "^([0-9a-f]+) (N) \\[(.*?)\\] (.*)$" line)
+            (lambda (m)
+              (and (string=? (match:substring m 3) %signature-email)
+                   (list (match:substring m 1) (match:substring m 4))))))
+   (%pipe->lines
+    (%shell-command
+     `("git" "log" "--pretty=format:%H %G? [%ae] %s" ,range)))))
+
+;; range 里的过期/坏签名提交（E/B 等），只报告。
+(define (%abnormal-signatures range)
+  (filter (cut string-match "^[0-9a-f]+ [EB]" <>)
+          (%pipe->lines
+           (%shell-command
+            `("git" "log" "--pretty=format:%H %G? [%ae] %s" ,range)))))
+
+;; base 之后的历史全部重写（rebase --exec 逐个 amend -S），只允许在
+;; 未推送区间执行——push 过的历史改写会让远端与本地分叉。resign 的
+;; 默认 range 就是 origin/main..HEAD，天然满足；显式传 BASE 时由
+;; 调用者自担风险（命令 help 里注明）。
+(define (%resign-commits range)
+  (let* ([unsigned (%unsigned-commits range)]
+         [abnormal (%abnormal-signatures range)])
+    (cond
+     [(null? unsigned)
+      (format #t "未推送区间内没有待补签的提交")
+      (unless (null? abnormal)
+        (format #t "（另有 ~a 条 E/B 状态签名，仅报告不重签）" (length abnormal)))
+      (format #t "~%")]
+     [else
+      (format #t "待补签 ~a 个提交（新→旧）：~%" (length unsigned))
+      (for-each (match-lambda
+                  [(hash message) (format #t "  ~a ~a~%" (substring hash 0 8) message)])
+                unsigned)
+      (for-each (lambda (line)
+                  (format (current-error-port) "  [E/B] ~a~%" line))
+                abnormal)
+      ;; range 形如 origin/main..HEAD；rebase 需要的是排除端（base）。
+      ;; base 上的提交不重写，rebase --exec 只对 base 之后的提交逐个
+      ;; 跑 git commit --amend --no-edit -S。
+      ;; 签名中途失败时 rebase 停在半途等人工处置——%run 非零退出即中止
+      ;; blue 并保留现场，提示用 git rebase --abort 回退。
+      (let ([base (car (string-split range #\.))])
+        (format #t "rebase 补签中（失败时可用 git rebase --abort 回退）…~%")
+        (%run `("git" "rebase" "--exec"
+                "git commit --amend --no-edit -S"
+                "--onto" ,base ,base "HEAD"))
+        (format #t "[OK] 补签完成~%"))])))
+
+;; 额外裸参数作为正则扩展；GUIX_SECRET_SCAN_FAIL_ON_FIND=0 把报错降为警告。
+
+;; 给未推送且未签名（作者邮箱 = 本人）的提交批量补 GPG 签名。
+;; rebase 重写历史，故只允许在未推送区间执行；历史须线性（本仓库无
+;; merge 提交）。签名过期（E）或坏签名（B）的提交只报告，不自动重签。
+(define-command (resign-command arguments)
+  ((invoke "resign")
+   (category 'maintenance)
+   (synopsis "给未推送的未签名提交批量补签")
+   (help "[BASE]
+找出 origin/main..HEAD 内未签名（%G?=N）且作者邮箱为自己的提交，
+git rebase --exec 'git commit --amend --no-edit -S' 逐个补签。
+不带参数以 origin/main 为基点（安全：只动未推送历史）；
+显式传 BASE 则重写 BASE 之后的全部历史，含已推送提交，后果自负。
+签名失败时中止并提示 git rebase --abort 回退。"))
+  (%resign-commits
+   (if (null? arguments) "origin/main..HEAD" (string-append (car arguments) "..HEAD"))))
+
 ;; 额外裸参数作为正则扩展；GUIX_SECRET_SCAN_FAIL_ON_FIND=0 把报错降为警告。
 (define-command (secret-scan-command arguments)
   ((invoke "secret-scan")
@@ -1364,8 +1619,9 @@ folding 控制:
   `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
     ("编辑 (editing)" ,block-show-command ,block-replace-command)
     ("Guix 频道 (guix)" ,pull-command ,update-command)
+    ("子模块 (submodule)" ,sub-update-command ,sub-push-command)
     ("维护 (maintenance)" ,clean-artifacts-command
-     ,format-command ,gc-command ,reuse-command ,structor-command)
+     ,format-command ,gc-command ,resign-command ,reuse-command ,structor-command)
     ("Nix 备用 (nix)" ,nix-command ,nix-init-command)
     ("Stow (stow)" ,stow-command ,stow-all-command)
     ("验证 (validation)" ,secret-scan-command)

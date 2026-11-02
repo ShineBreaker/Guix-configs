@@ -58,7 +58,7 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 
 ### 部署
 
-- **rebuild**：修剪 system 世代 → `clean-artifacts` → tangle + 括号检查 → `system reconfigure` → `locate --update`。
+- **rebuild**：`sub-update`（同步子模块到远端最新，失败只告警）→ 修剪 system 世代 → `clean-artifacts` → tangle + 括号检查 → `system reconfigure` → `locate --update`。
   - **世代修剪刻意放最前**：reconfigure 耗时久，若留到其后 sudo 宽限期（15 分钟）可能已过期、二次要密码；前置后全程最多输一次。
   - **为什么修剪**：limine 每次 reconfigure 按当时全部 system 世代在 ESP 重建 UKI（CURRENT.EFI + 每旧世代一个 OLD-N.EFI，单个约 50M），世代无上限会挤爆 ESP；`%keep-system-generations = 20`。`delete-generations` 顺带的 reinstall-bootloader 对 limine 只写无人读取的 grub.cfg；多余 UKI 由下一次 reconfigure 按剩余世代重建时自然收敛。
   - 世代号单调递增、**不因清理重新编号**，`%system-generation-numbers` 枚举 `/var/guix/profiles/system-*-link` 的实号而非假设 1..N 连续；未超限则静默跳过，不起 sudo。
@@ -74,15 +74,23 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 
 ### Guix 频道（update / pull）
 
-- **pull**：`guix time-machine --channels=channel.lock -- pull --allow-downgrades --fallback`，只认 lock、不读 `channel.scm` 的未锁定改动（顺序：改 channel.scm → `blue update` → `blue pull`）。
-- **update**：`--guix` / `--nix` 两侧可独立指定；`-c NAME` 单频道刷新、`-C COMMIT` pin 到 commit、`--flake NAME` 单 input 刷新，组合约束在 `%update-scope` 的 match 里逐条给出中文报错。
+- **pull**：`guix time-machine --channels=channel.lock -- pull --channels=<lock绝对路径> --allow-downgrades --fallback`。pull 自身也显式吃 lock——不依赖 `/etc/guix/channels.scm` 的部署时序（它由系统 reconfigure 从 lock 生成，`blue update` 刷新 lock 后到下次 rebuild 前一直是旧 pin），用户 profile 直接对齐仓库锁。
+- **update**：`--guix` / `--nix` 两侧可独立指定；`-c NAME` 单频道刷新、`-C COMMIT` pin 到 commit、`--flake NAME` 单 input 刷新，组合约束在 `%update-scope` 的 match 里逐条给出中文报错。guix 侧更新完成后自动链一次 pull（对齐 profile 到新 lock）。
 - `%partial-channels-file` 生成「目标频道可变定义 + 其余按 lock pin」的临时 channels 文件（`guix repl` 跑 `tools/gen-partial.scm`，契约见 [blue-helpers.md](blue-helpers.md) §gen-partial.scm）；随后 `guix time-machine --channels=<临时文件> -- describe --format=channels` 的输出原子写回 `channel.lock`。**dry-run 分支不生成临时文件、直接返回 `%channel-scm` 原件**，只打一行 `[预演]`——让后续 dry-run 分支有可用的 channels 参数可传。
 - **`%update-guix` 里的 describe 是捕获 stdout 的管道命令，不走 `%run` 短路**——dry-run 分支在此手动 `%print-preview`，是「管道不短路」不变量的典型用例。
 - `%commit-lock` 只在 `git status --porcelain` 显示锁文件有变化时才 `git commit -S`：单频道/单 flake 刷新常无新版本，空提交的非零退出会让 `%run` 误报失败；dry-run 下直接视作有变化以保留 commit 预演输出。
 - `%update-nix`：全量时先 `nix-channel --update` 再 `nix flake update`；单 input 用 nix 2.19+ 的参数语法。全部走 `%run`，dry-run 自动短路。**入口先按 `which` 探测所需命令**（全量要 `nix-channel` + `nix`，单 input 只要 `nix`），任一缺失即整侧跳过：Nix 只是本仓库的备用配置，缺它不该让 `blue update` 整条命令失败；提示走 stderr，显式 `--nix` 的用户也能看到、不会误以为 flake.lock 已更新。
 
+### 子模块（sub-update / sub-push）
+
+- **sub-update**：逐个子模块 `git fetch origin` + 快进（detached HEAD 直接 checkout `origin/main`，在分支上则 `merge --ff-only`）——本地领先/分叉立即跳过，保住「有提交还没推」的现场。gitlink 有变化时自动在父仓库提交一条 `chore(submodules): bump 子模块`（复用签名降级范式）。`blue rebuild` 前自动执行；离线或单模块失败只 stderr 告警，不阻塞重建。安全边界：未 init、脏工作区、非快进一律跳过。
+- **sub-push**：只推自有仓库（URL 含 `/ShineBreaker/`），`git push origin HEAD:main`；别人的仓库（如 rime-ice）与脏/未 init 的子模块跳过。只推子模块自身，父仓库推送仍由人工决定。
+- `%submodule-list` 用 path / url 两条 `git config --get-regexp` 查询按 submodule 名拼对：名字可含 `.`（`.agents/skills/guix-skills`），单条 url 正则会漏；且名字 ≠ path（"rime" 的 path 在 dotfiles/ 深处）。
+- `%run/soft` 是 `%run` 的软失败变体（返回退出码不终止 blue），专供上述容错循环；rebase 类「半途失败需要人介入」的操作仍走 `%run` 硬失败。
+
 ### 维护
 
+- **resign**：`git log --pretty=%H+%G?` 找 `origin/main..HEAD` 内未签名（`%G?=N`）且作者邮箱为自己的提交，`git rebase --exec 'git commit --amend --no-edit -S' --onto <base> <base> HEAD` 逐个补签。显式传 BASE 可越过未推送边界（重写已推送历史，后果自负）。E（过期）/B（坏）签名只报告不重签；签名失败时 rebase 停在半途，`%run` 以非零退出中止 blue 并保留现场，`git rebase --abort` 回退。
 - **clean-artifacts**：文件型目标（`__pycache__`、`*.elc`、`*.o`、`*.a`、`*.so`、`main.el`、`org-roam.db`）走 `%run` 的 `find -delete`（dry-run 自动短路）；目录型目标（stow 包内 emacs 的 `etc` / `var` 缓存）由 Scheme 直接删，必须显式守 `dry-build?`。rebuild / home 前自动先跑本命令。
 - **gc**：删旧 system/home 世代 → `guix gc` → 删 ESP 上 `OLD-*.EFI`。`%run` 经 popen 直 exec、无 shell 展开，所以 `OLD-*` 要在 Guile 侧 `scandir` 收集后逐个 `sudo rm`。ESP 挂载点是 `/efi`（limine-efi-removable-bootloader 的 targets），旧命令里的 `/boot/EFI/Guix` 在这台机器上并不存在——`blue help gc` 的 synopsis 仍写旧路径，以实现为准。
 - **format**：委派 `tools/doc-format.sh`，两级编排（标点 → Markdown 结构，见 [doc-format.md](doc-format.md)）。注意 `format-command` 自己走 `%run`，`blue --dry-run format` 只打印 `[预演] bash …/doc-format.sh` 而**不执行脚本**；只报告不写盘要用 `blue format --check`，它有待处理项即退出 1。
@@ -127,5 +135,6 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 
 ## 变更
 
+- 2026-11-02 新增 `sub-update` / `sub-push` / `resign` 三命令；`rebuild` 前置 `sub-update`，`update` 的 guix 侧完成后自动链 `pull`，`pull` 显式 `--channels=<lock>`（不再依赖 `/etc/guix/channels.scm` 的部署时序）。`resign` 的 rebase 走 `%run` 硬失败（中途签名失败保留现场）。
 - 2026-10-06 `%update-nix` 入口按 `which` 探测所需命令（全量 `nix-channel` + `nix`、单 input `nix`），任一缺失即整侧跳过并打 stderr 提示：本机未安装 Nix，此前 `blue update` 会因 `nix-channel` 不存在（popen exec 失败）整条命令不可用。
 - 2026-09-29 两处行为级修复：`clean-artifacts` 的目录型目标原本直接 `delete-file-recursively`，不走 `%run`，故 `blue --dry-run clean-artifacts`（连带 `--dry-run rebuild` / `home`）会真删这些目录，现改为 dry-run 下打 `[预演] 移除`；`%pipe->string` 在子进程非零退出时把已捕获 stdout 转发到 stderr，`blue block-show` / `block-list` / `describe` 等失败现在能看到脚本自己的 `[ERROR]` 诊断。
