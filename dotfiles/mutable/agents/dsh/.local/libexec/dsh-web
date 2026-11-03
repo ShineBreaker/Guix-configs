@@ -227,6 +227,17 @@ fi
 # requirement）在 shepherd，此处不做端口探测与开窗
 if $service_mode; then
 	_relink_profile
+	# shepherd 从 tty 登录启动，环境里没有 WAYLAND_DISPLAY；缺了它
+	# pinentry-qt 会回退 curses 并对 /dev/null 报 ENOTTY，GPG 签名必败
+	if [[ -z "${WAYLAND_DISPLAY:-}" && -z "${DISPLAY:-}" ]]; then
+		_uid=$(id -u)
+		for s in /run/user/$_uid/wayland-*; do
+			[[ -S "$s" ]] || continue
+			case "$s" in *.lock) continue ;; esac
+			export WAYLAND_DISPLAY="${s##*/}"
+			break
+		done
+	fi
 	exec "$DSH_BIN" web --no-open --port "$DSH_WEB_PORT" "${ts_args[@]}"
 fi
 

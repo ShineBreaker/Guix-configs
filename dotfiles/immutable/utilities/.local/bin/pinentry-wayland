@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# pinentry 分发：按会话类型选择输入通道。
+# - 有 --ttyname（SSH / 本地终端）→ pinentry-curses，密码框画在对应 pty；
+# - 无 ttyname（DSH 等非交互前端）+ 探测到 Wayland socket → pinentry-qt；
+# - 其余保持 pinentry-qt 原行为（无 display 时它自己回退 curses）。
+#
+# 背景：git 调用 gpg 时 stdin 是管道，gpg 靠 GPG_TTY 找终端；非交互会话
+# 既无 tty 也无 display 时，pinentry-qt 回退 curses 并对 /dev/null 做
+# isatty()，得到 ENOTTY「对设备不适当的 ioctl 操作」。
+
+has_tty=0
+prev=
+for arg in "$@"; do
+    case "$prev" in
+        --ttyname) [ -n "$arg" ] && [ "$arg" != "-" ] && has_tty=1 ;;
+    esac
+    case "$arg" in
+        --ttyname=*) [ "${arg#--ttyname=}" != "-" ] && has_tty=1 ;;
+    esac
+    prev="$arg"
+done
+
+if [ "$has_tty" = 1 ]; then
+    # 终端会话一律走 curses：即使 agent 环境里带着本地图形 display，
+    # SSH 用户也看不到本地弹窗，只能在自己的 pty 里输入
+    unset WAYLAND_DISPLAY DISPLAY
+    exec "$HOME/.guix-home/profile/bin/pinentry-curses" "$@"
+fi
+
+if [ "$has_tty" = 0 ] && [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
+    uid=$(id -u)
+    for s in /run/user/"$uid"/wayland-*; do
+        [ -S "$s" ] || continue
+        case "$s" in *.lock) continue;; esac
+        export WAYLAND_DISPLAY="${s##*/}"
+        export XDG_RUNTIME_DIR="/run/user/$uid"
+        break
+    done
+fi
+
+exec "$HOME/.guix-home/profile/bin/pinentry-qt" "$@"

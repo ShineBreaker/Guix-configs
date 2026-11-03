@@ -3001,14 +3001,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
                                 "../source/files/qt/chevron-up.svg")))
                  (".config/qt6ct/qss/chevron-down.svg"
                   ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/chevron-down.svg")))
-
-                 (".local/share/gnupg/gpg-agent.conf" ,(computed-substitution-with-inputs
-                                                        "gpg-agent.conf"
-                                                        (local-file
-                                                         "../source/files/gpg-agent.conf")
-                                                        (specs->pkgs
-                                                         "pinentry-qt"))))))
+                                "../source/files/qt/chevron-down.svg"))))))
 
 #+end_src
 
