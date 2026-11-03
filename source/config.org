@@ -208,7 +208,7 @@ blue build
   - ~define*~ 与 ~#:key~ ：定义带可选关键字参数的函数，未显式传入的参数取默认值。
   - =#~(……)= ：声明构建期模板，内部代码延后至构建或服务运行期求值。
   - ~#$expr~ 与 ~#$@lst~ ：在模板内插入外部值（包或文件对象在此展开为绝对路径）； ~#$@~ 将列表元素逐个摊平拼接到当前位置。
-- =home-daemon-service= :: 构造用户态常驻守护进程，继承启动时的用户环境变量，并将日志写入 =$XDG_STATE_HOME/shepherd/<name>.log= 。
+- =home-daemon-service= :: 构造用户态常驻守护进程，每次启动时重新读取 Shepherd 当前环境（而非定义加载时的快照），并将日志写入 =$XDG_STATE_HOME/shepherd/<name>.log= 。
 
 #+NAME: home-daemon-service-helpers
 #+begin_src scheme
@@ -222,18 +222,24 @@ blue build
    (provision (list name))
    (requirement requirement)
    (documentation documentation)
-   (start #~(make-forkexec-constructor
-             (list #$@command)
-             #:environment-variables #$environment-variables
-             #:log-file #$(if log-file
-                              log-file
-                              #~(string-append (getenv "XDG_STATE_HOME")
-                                               "/shepherd/" #$(symbol->string name)
-                                               ".log"))))
+   (start #~(lambda args
+              ((make-forkexec-constructor
+                (list #$@command)
+                #:environment-variables #$environment-variables
+                #:log-file #$(if log-file
+                                 log-file
+                                 #~(string-append (getenv "XDG_STATE_HOME")
+                                                  "/shepherd/" #$(symbol->string name)
+                                                  ".log")))
+               args)))
    (stop #~(make-kill-destructor))
    (auto-start? auto-start?)
    (respawn? respawn?)))
 #+end_src
+
+#+begin_quote
+*start 的环境求值时机* ： ~#:start~ 的值必须是 ~(lambda args (...))~ ，而非 ~(make-forkexec-constructor ...)~ 的求值结果。后者会在 *加载服务定义时* 就把 ~(environ)~ 与 ~(getenv ...)~ 固化成一个快照——登录瞬间 niri 尚未就绪，快照里没有 ~DISPLAY~ / ~WAYLAND_DISPLAY~ / ~DBUS_SESSION_BUS_ADDRESS~ ，之后 ~herd set-environment~ 只改 Shepherd 进程环境、回填不了快照， ~herd restart~ 也不会重新求值。依赖 ~graphical-session~ 只保证启动顺序，救不回求值时机。自定义服务一律照抄上面的写法。
+#+end_quote
 
 - =root-daemon-service= :: 构造系统级常驻守护进程，支持通过 ~#:log-file~ 指定日志路径，或通过 ~#:one-shot?~ 切换为单次任务。
 
@@ -435,6 +441,7 @@ blue build
               <<waydroid-session-service>>
               <<kanata-services>>
               <<dsh-web-service>>
+              <<adhoc-services>>
               <<cpu-dma-latency-service>>
               <<timer-services>>
               <<kb-backup-services>>
@@ -2184,8 +2191,8 @@ polkit.addRule(function(action, subject) {
    "keepassxc"
    "kdeconnect"
    "libreoffice"
-   "rayburst-bin"
    "seahorse"
+   "tigervnc-client"
    "wine64-staging"
 
    ;; 容器与虚拟机
@@ -2777,9 +2784,33 @@ lalt grv  lctl _  _  _  _  _)
                                "dsh web server (DeepSeek Harness HTTP/WS on 127.0.0.1:3080).")))))
 #+end_src
 
+**** ad-hoc 外部服务
+
+只用于无法仅靠 Guix 安装与管理的服务。这类服务的「是否已安装」由各自的安装流程负责，本配置不做探测：目录里有定义就交给 shepherd，没有就什么都不发生。全新安装不会留下永久故障态，也不必为一个容器内的进程在系统声明里写死路径。
+
+- 目录 :: =$ADHOC_SERVICES_DIR= 默认 =~/.local/share/adhoc-services= ，文件名即服务名，每个 =<名称>.scm= 是一个 shepherd 原生服务定义。
+- 命令 :: =adhoc-services reload|list|enable|disable= ，只负责扫描目录、=herd load root= 与 =herd start= 。
+- 登录触发 :: =adhoc-services= 自身是一次性 shepherd 服务，会话启动后跑一次 =reload= ，之后各服务由 shepherd 守护。
+- 安装流程 :: 服务装好后调用 =adhoc-services enable <名称> < <定义>= 写入，或直接把定义放进目录再 =adhoc-services reload= 。
+
+#+NAME: adhoc-services
+#+begin_src scheme
+(list (simple-service 'adhoc-services home-shepherd-service-type
+                      (list (home-daemon-service
+                             'adhoc-services
+                             (list "/bin/sh"
+                                   (local-file
+                                    "../dotfiles/mutable/tools/adhoc-services/.local/bin/adhoc-services")
+                                   "reload")
+                             #:requirement '(dbus)
+                             #:respawn? #f
+                             #:documentation
+                             "扫描 ad-hoc 服务目录并交给 shepherd 管理（一次性触发）"))))
+#+end_src
+
 **** cpu-dma-latency
 
-通过打开并持有 =/dev/cpu_dma_latency= 文件描述符、写入 32 位整数 =0= ，强制 CPU 保持在浅层 C-state 以消除核心唤醒抖动。因会增加待机功耗，默认设为不自启（ ~#:auto-start? #f~ ），在进行音游或低延迟音频工作时可通过 ~herd start cpu-dma-latency~ 按需开启、用毕 ~herd stop~ 释放。
+通过打开并持有 =/dev/cpu_dma_latency= 文件描述符、写入 32 位整数 =0= ，强制 CPU 保持在浅层 C-state 以消除核心唤醒抖动。因会增加待机功耗，服务本身默认不自启（ ~#:auto-start? #f~ ）；实际开关由 =ac-cpu-dma-policy= 跟随外接电源完成——插电时自动开启、拔电时自动释放，也可随时用 ~herd start cpu-dma-latency~ / ~herd stop~ 手动干预。
 
 #+NAME: cpu-dma-latency-service
 #+begin_src scheme
@@ -2790,7 +2821,47 @@ lalt grv  lctl _  _  _  _  _)
                                    "exec 3>/dev/cpu_dma_latency && printf '\\000\\000\\000\\000' >&3 && exec sleep infinity")
                              #:auto-start? #f #:respawn? #f
                              #:documentation
-                             "Hold /dev/cpu_dma_latency=0 to keep C-states shallow."))))
+                             "Hold /dev/cpu_dma_latency=0 to keep C-states shallow.")
+                            (home-daemon-service
+                             'ac-cpu-dma-policy
+                             (list "/bin/sh" (local-file "ac-cpu-dma-policy.sh"))
+                             #:documentation
+                             "Start cpu-dma-latency while external power is connected."))))
+#+end_src
+
+#+NAME: ac-cpu-dma-policy
+#+begin_src sh :tangle ../tmp/ac-cpu-dma-policy.sh
+#!/bin/sh
+# 跟随外接电源开关 cpu-dma-latency：插电开启、拔电释放。
+# 电源状态只能从 sysfs 轮询：root 侧的 udev / tuned 无法直接操作用户 shepherd。
+set -u
+
+herd=$(command -v herd) || {
+    echo "ac-cpu-dma-policy: 找不到 herd 命令" >&2
+    exit 1
+}
+
+ac_online() {
+    for dev in /sys/class/power_supply/*; do
+        [ "$(cat "$dev/type" 2>/dev/null)" = Mains ] || continue
+        [ "$(cat "$dev/online" 2>/dev/null)" = 1 ] && return 0
+    done
+    return 1
+}
+
+state=
+while :; do
+    if ac_online; then now=on; else now=off; fi
+    if [ "$now" != "$state" ]; then
+        if [ "$now" = on ]; then
+            "$herd" start cpu-dma-latency
+        else
+            "$herd" stop cpu-dma-latency
+        fi
+        state=$now
+    fi
+    sleep 5
+done
 #+end_src
 
 *** 计时器服务

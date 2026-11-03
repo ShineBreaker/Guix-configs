@@ -34,16 +34,108 @@ environment {
   GLFW_IM_MODULE "ibus"
 }
 
-spawn-sh-at-startup "herd set-environment graphical-session DISPLAY=$DISPLAY WAYLAND_DISPLAY=$WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET GTK_IM_MODULE=$GTK_IM_MODULE QT_IM_MODULE=$QT_IM_MODULE XMODIFIERS=$XMODIFIERS SDL_IM_MODULE=$SDL_IM_MODULE GLFW_IM_MODULE=$GLFW_IM_MODULE"
+spawn-sh-at-startup "herd set-environment graphical-session XDG_CURRENT_DESKTOP=$XDG_CURRENT_DESKTOP XDG_SESSION_TYPE=$XDG_SESSION_TYPE NIRI_SOCKET=$NIRI_SOCKET DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS WAYLAND_DISPLAY=$WAYLAND_DISPLAY PATH=$PATH:$XDG_STATE_HOME/nix/profile/bin:$HOME/.local/bin"
 
 spawn-sh-at-startup "dbus-update-activation-environment WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP GTK_IM_MODULE QT_IM_MODULE XMODIFIERS SDL_IM_MODULE GLFW_IM_MODULE"
 ```
+
+（`DISPLAY` 不必在此列——`x11-display` 服务会在依赖链上游 `setenv`；IME 变量只喂 niri 子进程，shepherd 服务不需要。注意 `herd set-environment` 只改 shepherd 进程环境，**对加载时已固化环境列表的服务无效**，见下节「求值时机陷阱」。）
 
 三处作用:
 
 1. `environment { }` —— niri 给所有子进程注入(主战场)
 2. `herd set-environment` —— 喂 Guix shepherd 拉起的服务
 3. `dbus-update-activation-environment` —— 喂 dbus activation 环境(影响 dbus 拉起的服务,如 fcitx5 dbus interface)
+
+## Shepherd 服务拿不到图形环境变量：求值时机陷阱
+
+> 2026-11-03 实证。clipsync / mpris-proxy / poweralertd / waydroid-session 登录后连续失败三次被 shepherd 禁用，而 `herd eval root '(getenv "WAYLAND_DISPLAY")'` 明明有值。
+
+### 现象
+
+- 服务日志：`缺少 DISPLAY / WAYLAND_DISPLAY`、`Can't get on session bus`、`Unable to autolaunch a dbus-daemon without a $DISPLAY`。
+- shepherd 进程当时**已经有**这些变量（`herd eval` 可查），`herd restart` 也不恢复，`herd enable && herd start` 仍失败。
+- 同一批服务里，Guix 自带的（nosdshell / sunshine）却正常。
+
+### 根因
+
+服务定义里的环境列表在**加载定义时**就被求值并固化，不是每次 start 时读：
+
+```scheme
+;; 错误：加载 config 的那一刻就调用 make-forkexec-constructor，
+;; (environ) 从此固定为「shepherd 刚启动、niri 尚未就绪」的快照
+(start (make-forkexec-constructor
+        (list ...)
+        #:environment-variables (environ)))
+```
+
+shepherd 登录时先于 niri 加载配置，快照里没有 `DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS`。之后 niri 的 `herd set-environment` 或 `wayland-display` 服务的 `setenv` 只改 shepherd 进程的环境，**不会回填已经固化的列表**。所以依赖 `graphical-session` 也没用——依赖只决定启动顺序，不改变快照时机。
+
+### 正确写法（Guix 自家 home 服务类型同款）
+
+把构造调用放进 start 过程的函数体，每次 start 重新求值：
+
+```scheme
+(start (lambda args
+         ((make-forkexec-constructor
+           (list ...)
+           #:environment-variables (environ)
+           #:log-file (string-append (getenv "XDG_STATE_HOME") "/shepherd/foo.log"))
+          args)))
+```
+
+`#:start` 必须是 `(lambda args (...))`，不能是 `(make-forkexec-constructor ...)` 的直接求值结果。`herd restart` 会重新执行这个 lambda，因此改完环境后 restart 即可生效，无需重启 shepherd。
+
+### 对照实验（可复现）
+
+```bash
+# 旧形式：加载时固化
+herd eval root '(putenv "SENTINEL=before")'
+herd load root /tmp/svc-old.scm      # #:start (make-forkexec-constructor ... (environ))
+herd start svc-old                   # → before
+herd eval root '(putenv "SENTINEL=after")'
+herd restart svc-old                 # → 仍是 before
+
+# 新形式：start 时求值
+herd load root /tmp/svc-new.scm      # #:start (lambda args ((make-forkexec-constructor ... (environ)) args))
+herd start svc-new                   # → after
+```
+
+### 自查
+
+```bash
+# 配置里所有直接求值的 start 都是潜在受害者
+grep -n '#:start (make-forkexec-constructor' source/config.org
+grep -rn 'make-forkexec-constructor' dotfiles/mutable/agents/*/.local/share/adhoc-services/
+```
+
+本仓库的 `home-daemon-service` 已按此模式实现；自己手写开关服务时照抄同一形式。
+
+### 热验证单个服务：`herd load` 必须包 `register-services`
+
+Guix 生成的 `/gnu/store/*-shepherd-<svc>.scm` 末尾只是一个裸 `(service ...)` 表达式，没有注册动作。直接 `herd load root` 它会打印「正在加载」却**什么都不注册**，随后 `herd status` 看到的是旧定义——很容易误判成「修了没用」。先 `herd unload root <name>` 让名字空出来，再用包装文件加载：
+
+```scheme
+;; /tmp/verify-<svc>.scm
+(use-modules (shepherd service))
+(register-services
+ (list (primitive-load "/gnu/store/<hash>-shepherd-<svc>.scm")))
+```
+
+```bash
+herd stop <svc>; herd unload root <svc> || true
+herd load root /tmp/verify-<svc>.scm
+herd enable <svc>; herd start <svc>
+tr '\0' '\n' < /proc/$(herd status <svc> | grep -oP '主 PID：\K[0-9]+')/environ | grep -E '^(DISPLAY|WAYLAND_DISPLAY|DBUS_SESSION_BUS_ADDRESS)='
+```
+
+注意两点：`herd load` 只收绝对路径（相对路径报 `open-fdes: 没有那个文件或目录`）；这种手工加载只活在当前 shepherd 进程里，`blue home` 重启 shepherd 后会回到 conf 里的定义。
+
+### 边界：set-environment 之后仍有小竞态
+
+- `DISPLAY` / `WAYLAND_DISPLAY`：由 `x11-display` / `wayland-display` 服务在依赖链上游 `setenv`，服务 start 时必然已在，无竞态。
+- `DBUS_SESSION_BUS_ADDRESS`：实测 shepherd 启动时就已经在环境里（登录链提供），早于 niri 注入即有值，无竞态。
+- `NIRI_SOCKET` / `XDG_CURRENT_DESKTOP`：只有这两个是 niri 自己 `spawn-sh-at-startup` 注入的，与 `graphical-session` ready 并行，存在百毫秒级窗口。服务若需要它们，在入口加短轮询等变量出现，或把变量前移到登录链而不是 niri 内注入。
 
 ## 部署 + 生效流程(三步缺一不可)
 

@@ -18,9 +18,10 @@ description: "Guix-configs 仓库工作流：dotfiles 部署（stow/blue）、ho
 4. **AI 禁直接编辑** `/gnu/store` 只读副本、`tmp/` 下 blue 产物、已部署的 `~/.config/` `~/.local/`。两处延伸：
    - **冻结前缀覆盖整个 `~/.config/` 与 `~/.local/`**，含 Hermes 系统提示推荐的 scratch 目录（`~/.local/share/hermes/cache/scratch`）——write_file/patch 一律被 gate 拒；跨调用暂存产物写 `/tmp`。
    - **仓库里的 gate/安全规则源目录同样冻结**（如 `dotfiles/immutable/agents/.agents/`，即 context 注入与 gate 规则的源头，防止被管者改自己的护栏）。协作模式：把完整目标内容备到 `/tmp`，交用户 `cp` 回源 + `just home` 部署 + `~/.agents/context-select.sh --check` 校验；不绕、不拆分写入。selector 的 INJECT_MAP 门控（always / git / platform:x）可做场景差异化注入——git 门控 ≈ 仅编码会话生效，因 QQ/微信等 gateway 会话 cwd 是 `~/Projects`（非 git 仓库）。
-5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息 `-m` / `-F <file>` 均可**(agent gate 的「无 `-m` 硬拦」2026-10 已移除)；多段 body 用多个 `-m` 按序拼或 `-F` 传消息文件；AI 参与时 `Assisted-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。沙箱会话内 `git commit -S` 的 pinentry 会超时失败(无显示通道可弹)——直接 `--no-gpg-sign` 提交,需要签名时交用户在宿主侧 `git rebase --exec 'git commit --amend --no-edit -S' HEAD~N` 补签,不要反复重试签名。
+5. **commit 严格遵循 Conventional Commits 规范** (`<type>[optional scope]: <description>`) + 逐文件 serial(禁并发) + 撤回用 `--soft/--mixed`(禁 `--hard`) + 混合文件立即修复。**消息 `-m` / `-F <file>` 均可**(agent gate 的「无 `-m` 硬拦」2026-10 已移除)；多段 body 用多个 `-m` 按序拼或 `-F` 传消息文件；AI 参与时 `Assisted-by` 按当前宿主/模型现填(从会话环境读，勿照抄先例字面量)。签名一律先尝试，不主动加 `--no-gpg-sign`：首次 `git commit` 若因 pinentry 无 tty/显示通道而超时失败，先原样重试一次——gpg-agent 完成首次解锁后会缓存，通常立即成功；仍失败才降级 `--no-gpg-sign`，并在回复中注明「本次未签名」及原因，不得因一次失败就认定本会话无法签名而永久关闭。批量补签历史极谨慎（补签会重放提交，须 `--rebase-merges` 且只作用于自己的 commit），默认交用户处理。
 6. **subagent 委派** 必须显式传 `cwd` + 任务描述用绝对路径(双保险),worker 默认 cwd 不是项目根。
 7. **AGENTS.md 目录树** **禁止手写**(用户偏好 2026-06-21)。所有 `## 目录结构` 段必须用 `<!-- structor:begin -->...<!-- /structor -->` 标记对 + `blue structor` 自动重写。详细见 §5。
+8. **shepherd 服务的 environment 必须在 start 时求值**：`#:start` 写成 `(lambda args ((make-forkexec-constructor ... (environ)) args))`，不能直接给 `(make-forkexec-constructor ...)` 的求值结果。后者在**加载配置时**就把 `(environ)` 固化成快照，登录瞬间 niri 尚未就绪，`DISPLAY` / `WAYLAND_DISPLAY` / `DBUS_SESSION_BUS_ADDRESS` 全部缺失；`herd set-environment` 只改 shepherd 进程环境，回填不了快照，依赖 `graphical-session` 也无法救，`herd restart` 同样无效。机制与对照实验见 `references/niri-gui-environment-injection.md` §求值时机陷阱。
 
 ---
 
