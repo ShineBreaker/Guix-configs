@@ -21,7 +21,9 @@
                (url "https://github.com/ShineBreaker/jeans.git")
                (introduction
                 (make-channel-introduction
-                 "1e30ccbcaef375169d453d89d8186137bc32d9e8"
+                 ;; 不用 1e30ccb：其后 9115919/7791bbe 两个 GitHub merge commit 的签名
+                 ;; 只带 issuer key-id，guix 验到会崩（bytevector-u16-ref）。
+                 "35d1811c26daf2c132880fe304149b1363064a79"
                  (openpgp-fingerprint
                   "6271 1D5E 9CCD EC69 07CA  DBF8 8637 1322 2257 1907"))))
               (channel
