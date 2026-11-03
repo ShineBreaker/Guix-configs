@@ -68,7 +68,8 @@ window-rule {
   match app-id=r#"org.quickshell$"#
   match app-id="QtScrcpy"
   match app-id="waypaper"
-  match app-id="xdg-desktop-portal-gtk"
+  match app-id="wpp"
+  match app-id="^xdg-desktop-portal"
 
   open-floating true
 }

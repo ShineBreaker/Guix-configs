@@ -57,7 +57,7 @@
             "display_name": "GLM-5.3 · routing group",
             "max_output_tokens": 128000,
             "max_tokens": 1128000,
-            "name": "auto/GLM-5.3",
+            "name": "auto/glm-5.3",
             "reasoning_effort": "high"
           },
           {
@@ -71,7 +71,7 @@
             "display_name": "GLM-5.3-Flash · routing group",
             "max_output_tokens": 128000,
             "max_tokens": 1128000,
-            "name": "auto/GLM-5.3-Flash",
+            "name": "auto/glm-5.3-flash",
             "reasoning_effort": "high"
           },
           {
@@ -138,135 +138,10 @@
               "prompt_cache_key": false,
               "tools": true
             },
-            "display_name": "Grok 4.7 · xAI",
+            "display_name": "Grok 4.7 · Grok (SuperGrok)",
             "max_output_tokens": 500000,
-            "max_tokens": 1000000,
-            "name": "xai/grok-4.7",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok 4.6 · xAI",
-            "max_output_tokens": 500000,
-            "max_tokens": 1000000,
-            "name": "xai/grok-4.6",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok 4.5 · xAI",
-            "max_output_tokens": 500000,
-            "max_tokens": 1000000,
-            "name": "xai/grok-4.5",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok 4.3 · xAI",
-            "max_output_tokens": 30000,
-            "max_tokens": 1030000,
-            "name": "xai/grok-4.3",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok Build 0.1 · xAI",
-            "max_output_tokens": 256000,
-            "max_tokens": 512000,
-            "name": "xai/grok-build-0.1",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok 4.20 (Non-Reasoning) · xAI",
-            "max_output_tokens": 30000,
-            "max_tokens": 1030000,
-            "name": "xai/grok-4.20-0309-non-reasoning"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok 4.20 (Reasoning) · xAI",
-            "max_output_tokens": 30000,
-            "max_tokens": 1030000,
-            "name": "xai/grok-4.20-0309-reasoning",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Grok 4.20 Multi-Agent · xAI",
-            "max_output_tokens": 30000,
-            "max_tokens": 1030000,
-            "name": "xai/grok-4.20-multi-agent-0309",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "SWE-2 · Devin",
-            "max_output_tokens": 128000,
-            "max_tokens": 390000,
-            "name": "devin/swe-2",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Gemini 4 Argon · Devin",
-            "max_output_tokens": 1000000,
-            "max_tokens": 2048576,
-            "name": "devin/gemini-4-argon",
+            "max_tokens": 756000,
+            "name": "grok/grok-4.7",
             "reasoning_effort": "high"
           },
           {

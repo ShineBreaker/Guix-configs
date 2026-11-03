@@ -29,9 +29,8 @@ abbr --add diff	'git diff'
 abbr --add log	'git log'
 abbr --add clone	'git clone'
 
-abbr --add cc 'claude --dangerously-skip-permissions'
+abbr --add cl 'claude --dangerously-skip-permissions'
 abbr --add enter distrobox enter
 abbr --add push git push
 abbr --add reboot loginctl reboot
 abbr --add shutdown loginctl poweroff
-abbr --add update 'sudo flatpak upgrade -y && flatpak upgrade -y && distrobox upgrade --all'
