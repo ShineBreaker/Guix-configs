@@ -26,16 +26,17 @@
   args: update web --check --restart --yes --reauth --remote-url --lan-off
   help_cmd: ""
   source: dotfiles/mutable/agents/dsh/.local/bin/dsh
-- name: hermes
-  brief: Hermes 入口
+- name: hermes-install
+  brief: 容器内安装/更新 hermes，并把 gateway 交给宿主 shepherd
   category: agents
   usage:
-    - hermes update --branch main
-    - hermes update --check
-    - hermes desktop
-  args: update desktop --check --branch --yes
+    - hermes-install
+    - hermes-install --branch main
+    - hermes-install --setup
+    - hermes-install --service-only
+  args: --setup --service-only --branch --check --yes --no-backup --force
   help_cmd: ""
-  source: dotfiles/mutable/agents/hermes/.local/bin/hermes
+  source: dotfiles/mutable/agents/hermes/.local/bin/hermes-install
 - name: devin
   brief: Devin CLI 入口
   category: agents
@@ -78,6 +79,17 @@
   args: init list add show clip edit rename remove re-encrypt menu --dry-run
   help_cmd: --help
   source: dotfiles/mutable/tools/secrets/.local/bin/secrets
+- name: adhoc-services
+  brief: 管理无法由 Guix 声明的外部服务（目录驱动，交给 shepherd）
+  category: tools
+  usage:
+    - adhoc-services reload
+    - adhoc-services list
+    - adhoc-services enable hermes-gateway < def.scm
+    - adhoc-services disable hermes-gateway
+  args: reload list enable disable
+  help_cmd: ""
+  source: dotfiles/mutable/tools/adhoc-services/.local/bin/adhoc-services
 - name: niri-app-switcher
   brief: niri 按应用聚合的窗口切换器（rofi + 历史排序）
   category: desktop
@@ -104,14 +116,6 @@
   args: status init update callers
   help_cmd: --help
   source: dotfiles/immutable/utilities/.local/bin/keepassxc-credential-setup
-- name: nixgpu-update
-  brief: 重建 /var/lib/non-nixos-gpu 软链指向 nix GPU 资源（需 sudo）
-  category: utilities
-  usage:
-    - sudo nixgpu-update
-  args: ""
-  help_cmd: ""
-  source: dotfiles/immutable/utilities/.local/bin/nixgpu-update
 - name: home-health
   brief: 只读体检 HOME：规模 / 会长胖目录 / 仓库同步债 / 可回收空间（一页输出）
   category: utilities

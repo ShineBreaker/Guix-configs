@@ -1,0 +1,86 @@
+#!/bin/sh
+# adhoc-services — 读取外部服务定义，交给 GNU Shepherd 管理。
+#
+# 适用范围：无法仅靠 Guix 安装与管理的服务（distrobox 容器内的 agent、
+# 外部二进制发行版等）。"是否已安装"由各自的安装流程负责，本命令不做探测：
+# 目录里有定义就交给 shepherd，没有就什么都不发生——全新安装不会留下永久
+# 故障态。
+#
+# 目录：$ADHOC_SERVICES_DIR（默认 ~/.local/share/adhoc-services）
+# 约定：每个 <名称>.scm 是一个 shepherd 原生服务定义，文件名即服务名：
+#
+#   (use-modules (shepherd service))
+#   (register-services
+#    (list (service '(名称)
+#                   ;; 包一层 lambda，让环境在每次 start 时重新求值
+#                   #:start (lambda args
+#                             ((make-forkexec-constructor '("命令" "参数")) args))
+#                   #:stop (make-kill-destructor)
+#                   #:respawn? #t)))
+#
+# 用法：
+#   adhoc-services reload            扫描目录，加载并启动全部服务（默认）
+#   adhoc-services list              列出目录中的服务名
+#   adhoc-services enable <名称>     从 stdin 读定义写入 <名称>.scm 并重载
+#   adhoc-services disable <名称>    停止、注销并把定义移入 .disabled-<名称>.scm
+set -u
+
+dir="${ADHOC_SERVICES_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/adhoc-services}"
+herd="${HERD:-$HOME/.guix-home/profile/bin/herd}"
+
+die() {
+    printf 'adhoc-services: %s\n' "$*" >&2
+    exit 1
+}
+
+# 加载并启动目录中的全部服务。已注册的只 start，不重复 load。
+reload() {
+    [ -d "$dir" ] || return 0
+    for f in "$dir"/*.scm; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f" .scm)
+        if "$herd" status "$name" >/dev/null 2>&1; then
+            "$herd" start "$name" >/dev/null 2>&1 ||
+                printf 'adhoc-services: 启动失败：%s\n' "$name" >&2
+        else
+            "$herd" load root "$f" >/dev/null 2>&1 || {
+                printf 'adhoc-services: 加载失败：%s\n' "$name" >&2
+                continue
+            }
+            "$herd" start "$name" >/dev/null 2>&1 ||
+                printf 'adhoc-services: 启动失败：%s\n' "$name" >&2
+        fi
+    done
+}
+
+case "${1:-reload}" in
+    reload)
+        reload
+        ;;
+    list)
+        [ -d "$dir" ] || exit 0
+        for f in "$dir"/*.scm; do
+            [ -f "$f" ] && basename "$f" .scm
+        done
+        ;;
+    enable)
+        name=${2:-}
+        [ -n "$name" ] || die "用法：adhoc-services enable <名称> < <定义文件>"
+        mkdir -p "$dir"
+        cat >"$dir/$name.scm"
+        # 定义可能变化：先卸旧实例，再让 reload 重新加载。
+        "$herd" stop "$name" >/dev/null 2>&1
+        "$herd" unload root "$name" >/dev/null 2>&1
+        reload
+        ;;
+    disable)
+        name=${2:-}
+        [ -n "$name" ] || die "用法：adhoc-services disable <名称>"
+        "$herd" stop "$name" >/dev/null 2>&1
+        "$herd" unload root "$name" >/dev/null 2>&1
+        [ -f "$dir/$name.scm" ] && mv "$dir/$name.scm" "$dir/.disabled-$name.scm"
+        ;;
+    *)
+        die "未知命令：$1（可用：reload|list|enable|disable）"
+        ;;
+esac

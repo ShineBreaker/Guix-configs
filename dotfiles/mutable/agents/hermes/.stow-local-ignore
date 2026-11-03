@@ -1,0 +1,5 @@
+# hermes 运行时会往 $HOME/.local/share/hermes 写日志与缓存。
+# 旧部署曾把这些产物写进仓库，一律不部署、不再纳管。
+# 注：stow 的匹配路径带前导斜杠，锚点须写 ^/；范围收窄到 hermes 自身，
+# 否则会把本包的 .local/share/applications 桌面项一起吞掉。
+^/\.local/share/hermes

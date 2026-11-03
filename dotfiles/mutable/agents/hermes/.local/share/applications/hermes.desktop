@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Hermes Desktop
+GenericName=Hermes
+Comment=在 my-distrobox 容器内启动 Hermes Desktop
+Exec=/run/current-system/profile/bin/distrobox enter --no-tty my-distrobox -- /home/brokenshine/.local/bin/hermes desktop
+Icon=hermes
+Terminal=false
+Categories=Development;Utility;
+Keywords=hermes;agent;ai;
+StartupNotify=true
+StartupWMClass=Hermes

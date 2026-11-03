@@ -1,0 +1,2 @@
+# adhoc-services：读取外部服务定义并交给 shepherd。
+# 目录驱动，服务定义在 $HOME，不进包内。
