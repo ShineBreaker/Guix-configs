@@ -21,6 +21,7 @@
             maxTokens: 384000
             input: [text, image]
             reasoningEfforts:
+              low: low
               high: high
               max: max
           - id: auto/deepseek-v4.1-flash
@@ -32,7 +33,7 @@
               low: low
               high: high
               max: max
-          - id: auto/GLM-5.3
+          - id: auto/glm-5.3
             name: GLM-5.3 · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -41,7 +42,7 @@
               low: low
               high: high
               max: max
-          - id: auto/GLM-5.3-Flash
+          - id: auto/glm-5.3-flash
             name: GLM-5.3-Flash · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -84,95 +85,6 @@
               low: low
               high: high
               max: max
-          - id: xai/grok-4.7
-            name: Grok 4.7 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.6
-            name: Grok 4.6 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.5
-            name: Grok 4.5 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.3
-            name: Grok 4.3 · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-build-0.1
-            name: Grok Build 0.1 · xAI
-            contextWindow: 256000
-            maxTokens: 64000
-            input: [text, image]
-          - id: xai/grok-4.20-0309-non-reasoning
-            name: Grok 4.20 (Non-Reasoning) · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-          - id: xai/grok-4.20-0309-reasoning
-            name: Grok 4.20 (Reasoning) · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.20-multi-agent-0309
-            name: Grok 4.20 Multi-Agent · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: devin/swe-2
-            name: SWE-2 · Devin
-            contextWindow: 262000
-            maxTokens: 65500
-            input: [text, image]
-            reasoningEfforts:
-              medium: medium
-              high: high
-              max: max
-          - id: devin/gemini-4-argon
-            name: Gemini 4 Argon · Devin
-            contextWindow: 1048576
-            maxTokens: 458752
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
           - id: workbuddy/hy3
             name: Hy3 · WorkBuddy
             contextWindow: 192000
@@ -219,7 +131,30 @@
               max: max
             compat:
               forceAdaptiveThinking: true
+      magpie-responses:
+        displayName: Magpie · Responses
+        apiKeyEnv: MAGPIE_GATEWAY_KEY
+        api: openai-responses
+        baseURL: http://127.0.0.1:3425/v1
+        models:
+          - id: grok/grok-4.7
+            name: Grok 4.7 · Grok (SuperGrok)
+            contextWindow: 256000
+            maxTokens: 64000
+            input: [text, image]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
 - id: agent-default-model # magpie
   config:
     provider: magpie
-    model: "stepfun-cn/step-5-preview"
+    model: "auto/deepseek-v4.1-flash"
+
+# 插件本体：bundle 的 patch 只贡献配置层，不会把包自己挂成 loader row。
+# 缺这一段时 index.js（append-system / gate / global-context / lifecycle）
+# 根本不会被加载，插件页就永远停在「已安装，重启后生效」。
+- insert:
+    - id: agent-extensions
+      name: dsh-agent-extensions

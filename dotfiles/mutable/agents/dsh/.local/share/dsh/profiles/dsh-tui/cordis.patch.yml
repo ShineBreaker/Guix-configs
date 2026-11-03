@@ -177,7 +177,191 @@
 - id: agent-default-model # magpie
   config:
     provider: magpie
-    model: "stepfun-cn/step-5-preview"
+    model: "auto/deepseek-v4.1-flash"
+    reasoningEffort: "max"
+- id: llm-pi-ai # magpie
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      magpie:
+        displayName: Magpie
+        apiKeyEnv: MAGPIE_GATEWAY_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:3425/v1
+        models:
+          - id: group/never-stuck
+            name: 永不卡住 · routing group
+            contextWindow: 1000000
+            maxTokens: 384000
+            input: [ text, image ]
+            reasoningEfforts:
+              max: max
+          - id: group/cheap-first
+            name: 便宜优先 · routing group
+            contextWindow: 1000000
+            maxTokens: 384000
+            input: [ text, image ]
+            reasoningEfforts:
+              high: high
+              max: max
+          - id: auto/deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash · routing group
+            contextWindow: 1000000
+            maxTokens: 384000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
+          - id: auto/glm-5.3
+            name: GLM-5.3 · routing group
+            contextWindow: 1000000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
+          - id: auto/glm-5.3-flash
+            name: GLM-5.3-Flash · routing group
+            contextWindow: 1000000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
+          - id: stepfun-cn/step-5-preview
+            name: Step 5 Preview · StepFun (China)
+            contextWindow: 1000000
+            maxTokens: 65536
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+          - id: opencode-go/beam-free
+            name: Beam Free · OpenCode Go
+            contextWindow: 1048576
+            maxTokens: 131072
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+              max: max
+          - id: opencode-go/iceman-contributor-free
+            name: Iceman Contributor Free · OpenCode Go
+            contextWindow: 262144
+            maxTokens: 65536
+            input: [ text, image ]
+          - id: opencode-go/deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash · OpenCode Go
+            contextWindow: 1000000
+            maxTokens: 384000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
+          - id: devin/swe-2
+            name: SWE-2 · Devin
+            contextWindow: 262000
+            maxTokens: 65500
+            input: [ text, image ]
+            reasoningEfforts:
+              medium: medium
+              high: high
+              max: max
+          - id: devin/gemini-4-argon
+            name: Gemini 4 Argon · Devin
+            contextWindow: 1048576
+            maxTokens: 458752
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+          - id: workbuddy/hy3
+            name: Hy3 · WorkBuddy
+            contextWindow: 192000
+            maxTokens: 48000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+          - id: workbuddy/deepseek-v4.1-flash
+            name: DeepSeek-V4.1-Flash · WorkBuddy
+            contextWindow: 1000000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              "off": none
+              low: low
+              high: high
+              max: max
+        retryPolicy:
+          mode: normal
+          maxRetries: 5
+          retryableCodes:
+            - EMPTY_RESPONSE
+            - RATE_LIMIT
+            - SERVER
+            - TIMEOUT
+            - TRANSPORT
+            - STREAM_CLOSED
+      magpie-anthropic:
+        displayName: Magpie · Anthropic
+        apiKeyEnv: MAGPIE_GATEWAY_KEY
+        api: anthropic-messages
+        baseURL: http://127.0.0.1:3425
+        models:
+          - id: zcode/GLM-5.3
+            name: GLM-5.3 · ZCode
+            contextWindow: 1000000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
+            compat:
+              forceAdaptiveThinking: true
+          - id: zcode/GLM-5.3-Flash
+            name: GLM-5.3-Flash · ZCode
+            contextWindow: 1000000
+            maxTokens: 128000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
+            compat:
+              forceAdaptiveThinking: true
+      magpie-responses:
+        displayName: Magpie · Responses
+        apiKeyEnv: MAGPIE_GATEWAY_KEY
+        api: openai-responses
+        baseURL: http://127.0.0.1:3425/v1
+        models:
+          - id: grok/grok-4.7
+            name: Grok 4.7 · Grok (SuperGrok)
+            contextWindow: 256000
+            maxTokens: 64000
+            input: [ text, image ]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: magpie
+    model: auto/deepseek-v4.1-flash
+    reasoningEffort: max
+
 # @@shared-begin: 由 dsh wrapper 从 web profile 同步，勿手改
 - id: llm-pi-ai # magpie
   name: "@deepseek-ai/dsh-llm-pi-ai"
@@ -202,6 +386,7 @@
             maxTokens: 384000
             input: [text, image]
             reasoningEfforts:
+              low: low
               high: high
               max: max
           - id: auto/deepseek-v4.1-flash
@@ -213,7 +398,7 @@
               low: low
               high: high
               max: max
-          - id: auto/GLM-5.3
+          - id: auto/glm-5.3
             name: GLM-5.3 · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -222,7 +407,7 @@
               low: low
               high: high
               max: max
-          - id: auto/GLM-5.3-Flash
+          - id: auto/glm-5.3-flash
             name: GLM-5.3-Flash · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -265,95 +450,6 @@
               low: low
               high: high
               max: max
-          - id: xai/grok-4.7
-            name: Grok 4.7 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.6
-            name: Grok 4.6 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.5
-            name: Grok 4.5 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.3
-            name: Grok 4.3 · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-build-0.1
-            name: Grok Build 0.1 · xAI
-            contextWindow: 256000
-            maxTokens: 64000
-            input: [text, image]
-          - id: xai/grok-4.20-0309-non-reasoning
-            name: Grok 4.20 (Non-Reasoning) · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-          - id: xai/grok-4.20-0309-reasoning
-            name: Grok 4.20 (Reasoning) · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.20-multi-agent-0309
-            name: Grok 4.20 Multi-Agent · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: devin/swe-2
-            name: SWE-2 · Devin
-            contextWindow: 262000
-            maxTokens: 65500
-            input: [text, image]
-            reasoningEfforts:
-              medium: medium
-              high: high
-              max: max
-          - id: devin/gemini-4-argon
-            name: Gemini 4 Argon · Devin
-            contextWindow: 1048576
-            maxTokens: 458752
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
           - id: workbuddy/hy3
             name: Hy3 · WorkBuddy
             contextWindow: 192000
@@ -372,16 +468,6 @@
               low: low
               high: high
               max: max
-        retryPolicy:
-          mode: normal
-          maxRetries: 5
-          retryableCodes:
-            - EMPTY_RESPONSE
-            - RATE_LIMIT
-            - SERVER
-            - TIMEOUT
-            - TRANSPORT
-            - STREAM_CLOSED
       magpie-anthropic:
         displayName: Magpie · Anthropic
         apiKeyEnv: MAGPIE_GATEWAY_KEY
@@ -410,11 +496,19 @@
               max: max
             compat:
               forceAdaptiveThinking: true
-- id: agent-default-model
-  name: "@deepseek-ai/dsh-agent-default-model"
-  config:
-    provider: magpie
-    model: stepfun-cn/step-5-preview
-    reasoningEffort: high
-
-# @@shared:end
+      magpie-responses:
+        displayName: Magpie · Responses
+        apiKeyEnv: MAGPIE_GATEWAY_KEY
+        api: openai-responses
+        baseURL: http://127.0.0.1:3425/v1
+        models:
+          - id: grok/grok-4.7
+            name: Grok 4.7 · Grok (SuperGrok)
+            contextWindow: 256000
+            maxTokens: 64000
+            input: [text, image]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh

@@ -5,10 +5,35 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/Config/jeans`，之后相对路径都相对它。
+- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/jeans`，之后相对路径都相对它。路径不存在（仓库搬过家）时用
+  `find ~/Projects -maxdepth 4 -type d -name jeans` 探测取唯一结果；找不到就在报告里写「仓库路径未找到」结束，不要猜。
 - 跨任务状态一律写文件，不依赖任何外部 agent CLI。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
+
+### GitHub 凭据与 D-Bus（踩过的坑，必读）
+
+`gh` 的 token 存在 GNOME keyring，keyring 挂在 niri 会话的 D-Bus 总线上。DSH 服务由 home-shepherd 启动，
+不在 `dbus-run-session niri` 那个会话里，所以 bash 环境**没有** `DBUS_SESSION_BUS_ADDRESS`。此时 libsecret
+会 autolaunch 一条空总线（`/tmp` 下不断冒出的 `dbus-daemon --session` 就是它），里面没有
+`org.freedesktop.secrets`，`gh` 便零输出无限期挂住。**这不是「没有 GitHub 凭据」，不要据此判定失败。**
+
+开工时先挑出带密钥服务的那条会话总线并导出（其余候选连不上会 3 秒超时，不影响）：
+
+```bash
+for s in /run/user/1000/bus /tmp/dbus-*; do
+  [ -S "$s" ] || continue
+  if DBUS_SESSION_BUS_ADDRESS="unix:path=$s" timeout 3 gdbus call --session \
+       --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+       --method org.freedesktop.DBus.ListNames 2>/dev/null | grep -q org.freedesktop.secrets; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$s"; break
+  fi
+done
+GH=/home/brokenshine/.guix-home/profile/bin/gh   # ~/.local/state/nix 那条路径已不存在
+$GH auth status                                  # 应秒回 Logged in to github.com
+```
+
+所有候选都没有密钥服务（会话未登录 / keyring 未启动）时，才按「凭据不可用」处理，并在报告里写明是这条原因。
 
 ## 交付（每次运行收尾必做）
 
@@ -37,19 +62,32 @@ git pull
 
 ### 2. 检查 CI 状态（判定失败类型）
 
-用 gh CLI（绝对路径 `/home/brokenshine/.local/state/nix/profile/bin/gh`，若不存在则用 `/home/brokenshine/.guix-home/profile/bin/gh`）查看最近一次 auto-update 工作流运行和 open issues：
+用 `$GH`（见上节导出的 GitHub 凭据与总线）查看最近一次 auto-update 工作流运行和 open issues：
 
 ```bash
-/home/brokenshine/.local/state/nix/profile/bin/gh api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' \
+$GH api 'repos/ShineBreaker/jeans/actions/runs?per_page=5' \
   --jq '.workflow_runs[] | select(.name=="Auto Update Packages") | {id, status, conclusion, event, created_at, updated_at}'
-/home/brokenshine/.local/state/nix/profile/bin/gh issue list --repo ShineBreaker/jeans --state open --json number,title,labels,createdAt
+$GH issue list --repo ShineBreaker/jeans --state open --json number,title,labels,createdAt
 ```
+
+要看失败挂在哪一步、报的什么错（判定 A 的依据就是它）：
+
+```bash
+$GH api "repos/ShineBreaker/jeans/actions/runs/<run-id>/jobs?per_page=20" \
+  --jq '.jobs[] | {name, conclusion, steps: [.steps[] | select(.conclusion!="success") | {number, name, conclusion}]}'
+$GH api --allow-escape-sequences "repos/ShineBreaker/jeans/actions/jobs/<job-id>/logs" \
+  | sed -e 's/\x1b\[[0-9;]*m//g' | grep -B2 -A2 '##\[error\]'
+```
+
+`gh api <logs>` 必须带 `--allow-escape-sequences`，否则 gh 以「响应含终端转义序列」直接拒绝输出。
+常见的基础设施失败形态是 `guix refresh: error: https://api.github.com/...: HTTP download failed: 504 ("Gateway Timeout")`
+——上游瞬时故障，重跑即可。
 
 **判定逻辑：**
 
 - **A. 基础设施失败**（run 创建后 1 分钟内 completed+failure、卡在 `Install Guix` / `Checkout` / `Set up job` 等早期步骤、`Build test updated packages` 从未开始、无新 issue）→ 重跑 action：
   ```bash
-  /home/brokenshine/.local/state/nix/profile/bin/gh workflow run auto-update.yml --repo ShineBreaker/jeans --ref main
+  $GH workflow run auto-update.yml --repo ShineBreaker/jeans --ref main
   ```
   报告一句话（run id + 判定 + 已重跑）后结束，不修任何包。
 - **B. CI 成功完成、无构建失败 issue** → 直接结束，回复 `[SILENT]`。CI 已经把更新提交好了，不跑 blue upgrade、不跑 guix refresh、不做任何本地更新检查、不改任何 .scm。

@@ -8,7 +8,14 @@
 //
 //   /dsh-services     列出全部 dsh 服务进程（pid/端口/启动时间/是否本进程）
 //   /dsh-kill-others  SIGTERM 除本进程外的 dsh 服务进程（清残留测试实例）
-//   /dsh-restart      重启本进程：detached watcher 等本 PID 死亡后按原 argv 重拉
+//   /dsh-restart      重启本进程：有 supervisor 时委托给它，否则 watcher 自拉
+//
+// 重启为什么要分两种模式：进程被 shepherd/systemd 托管时，服务进程退出后
+// supervisor 会**立刻自己**拉一个新的。此时再跑「等本 PID 死后 exec 原 argv」
+// 的 watcher，就有两个进程抢同一个监听端口——抢输的那个退出，supervisor 见
+// 状又拉一个，形成每几秒一次的 EADDRINUSE 振荡（2026-11-03 实测：3.5 秒一轮，
+// 持续十几分钟，web.log 涨了几百条）。所以托管场景只发重启请求，由 supervisor
+// 独占「停旧 + 起新」。
 //
 // 「dsh 服务进程」的判据：cmdline 指向 dsh/lib/bin.js，且在 ss -tlnp 的监听表
 // 里有条目。CLI 短命令（dsh plugin 等）不监听端口，天然被排除；只匹配 cmdline
@@ -92,6 +99,26 @@ function shq(arg) {
 	return `'${String(arg).replaceAll("'", "'\\''")}'`;
 }
 
+/** shepherd 里承载 web 服务的单元名。与 source/config.org 的服务名一致。 */
+const SHEPHERD_UNIT = "dsh-web";
+
+/**
+ * 本进程若由 shepherd 托管，返回单元名；否则 null。
+ *
+ * 两层判据缺一不可：PPID 的 comm 是 shepherd（服务进程由 guix home shepherd
+ * 直接拉起），且该 shepherd 里确实注册了 dsh-web。只认 PPID 会让手动 `dsh web`
+ * 起的测试实例误按服务处理；只认 herd 则会让任何进程都去重启服务实例。
+ */
+function shepherdUnit() {
+	try {
+		if (readFileSync(`/proc/${process.ppid}/comm`, "utf8").trim() !== "shepherd") return null;
+	} catch {
+		return null;
+	}
+	const probe = spawnSync("herd", ["status", SHEPHERD_UNIT], { encoding: "utf8", timeout: 5000 });
+	return probe.status === 0 ? SHEPHERD_UNIT : null;
+}
+
 export function apply(ctx, config = {}) {
 	if (config.enabled === false) return;
 
@@ -136,8 +163,17 @@ export function apply(ctx, config = {}) {
 		name: "dsh-restart",
 		description: "重启当前 dsh web 服务（同 argv 重拉；浏览器 cookie 跨重启有效）",
 		handler: () => {
-			// detached watcher：轮询本 PID，死后 exec 原 argv。轮询而非裸 sleep——
-			// SIGTERM 走优雅停机（dispose 最长 ~5s），端口释放时刻不定。
+			const unit = shepherdUnit();
+			if (unit !== null) {
+				// 托管模式：只发重启请求。延迟一拍让命令回执先送到客户端，
+				// detached 让 herd 在本进程被停掉后仍能跑完这次请求。
+				setTimeout(() => {
+					spawn("herd", ["restart", unit], { detached: true, stdio: "ignore", env: process.env }).unref();
+				}, 500);
+				return { kind: "success", text: `正在通过 shepherd 重启 ${unit}（浏览器会自动重连）…` };
+			}
+			// 非托管模式：detached watcher 轮询本 PID，死后 exec 原 argv。
+			// 轮询而非裸 sleep——SIGTERM 走优雅停机（dispose 最长 ~5s），端口释放时刻不定。
 			const argv = [process.execPath, ...process.argv.slice(1)].map(shq).join(" ");
 			const watcher = [
 				`for i in $(seq 1 200); do kill -0 ${process.pid} 2>/dev/null || break; sleep 0.2; done`,

@@ -12,34 +12,32 @@
         "@deepseek-ai/dsh-experimental-agent-team-profile",
         "dshmarket",
         "@deepseek-ai/dsh-experimental-auto-review",
-        "dsh-claude-style",
         "@mengyuly/dsh-ponytail",
         "cc-safety-net",
         "dsh-better-sidebar",
-        "@linxin666/dsh-remote-web-ui",
         "@michengai/dsh-automation",
         "dsh-soul-md",
         "@xmanrui/dsh-im",
-        "ds-bot",
-        "ds-harness-remote"
+        "ds-harness-remote",
+        "billion-context",
+        "dsh-claude-style"
       ],
       "patchReload": "live"
     }
   },
   "dependencies": {
-    "@linxin666/dsh-remote-web-ui": "0.4.12",
     "@mengyuly/dsh-ponytail": "0.4.3",
     "@michengai/dsh-automation": "1.0.13",
-    "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#7f7e1a249b0d8e8872510fb6744f4a821cad95f6",
-    "cc-safety-net": "2.7.1",
-    "ds-bot": "0.2.4",
-    "ds-harness-remote": "0.6.0",
+    "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#c3975a56a31e28362493cd33db8a7d479edb2634",
+    "billion-context": "0.1.212",
+    "cc-safety-net": "2.7.2",
+    "ds-harness-remote": "0.6.2",
     "dsh-agenote": "https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz",
     "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-better-sidebar": "0.28.2",
     "dsh-claude-style": "0.19.6",
-    "dsh-context": "0.78.2",
-    "dsh-soul-md": "0.10.3",
-    "dshmarket": "1.73.5"
+    "dsh-context": "0.80.2",
+    "dsh-soul-md": "0.11.0",
+    "dshmarket": "1.73.8"
   }
 }

@@ -2,7 +2,7 @@
   "name": "dsh-profile-dsh-tui",
   "private": true,
   "dependencies": {
-    "@deepseek-harness-tui/dsh-tui": "0.17.0",
+    "@deepseek-harness-tui/dsh-tui": "0.18.0",
     "dsh-agenote": "https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz",
     "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-opencode-go": "0.1.24"

@@ -704,6 +704,8 @@
     ongoingIndicator: ring
     chatReveal: on
     processRows: flat
+    quickProviders:
+      - magpie
 
 # QQ 机器人会话的工作区：patch 对 config 是整表替换，凭据用 __FROM_ENV__ 占位
 - id: im-qqbot
@@ -749,7 +751,7 @@
               low: low
               high: high
               max: max
-          - id: auto/GLM-5.3
+          - id: auto/glm-5.3
             name: GLM-5.3 · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -758,7 +760,7 @@
               low: low
               high: high
               max: max
-          - id: auto/GLM-5.3-Flash
+          - id: auto/glm-5.3-flash
             name: GLM-5.3-Flash · routing group
             contextWindow: 1000000
             maxTokens: 128000
@@ -801,77 +803,6 @@
               low: low
               high: high
               max: max
-          - id: xai/grok-4.7
-            name: Grok 4.7 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.6
-            name: Grok 4.6 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.5
-            name: Grok 4.5 · xAI
-            contextWindow: 500000
-            maxTokens: 184464
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.3
-            name: Grok 4.3 · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-build-0.1
-            name: Grok Build 0.1 · xAI
-            contextWindow: 256000
-            maxTokens: 64000
-            input: [text, image]
-          - id: xai/grok-4.20-0309-non-reasoning
-            name: Grok 4.20 (Non-Reasoning) · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-          - id: xai/grok-4.20-0309-reasoning
-            name: Grok 4.20 (Reasoning) · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
-          - id: xai/grok-4.20-multi-agent-0309
-            name: Grok 4.20 Multi-Agent · xAI
-            contextWindow: 1000000
-            maxTokens: 30000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              medium: medium
-              high: high
-              xhigh: xhigh
           - id: devin/swe-2
             name: SWE-2 · Devin
             contextWindow: 262000
@@ -936,6 +867,22 @@
               max: max
             compat:
               forceAdaptiveThinking: true
+      magpie-responses:
+        displayName: Magpie · Responses
+        apiKeyEnv: MAGPIE_GATEWAY_KEY
+        api: openai-responses
+        baseURL: http://127.0.0.1:3425/v1
+        models:
+          - id: grok/grok-4.7
+            name: Grok 4.7 · Grok (SuperGrok)
+            contextWindow: 256000
+            maxTokens: 64000
+            input: [text, image]
+            reasoningEfforts:
+              low: low
+              medium: medium
+              high: high
+              xhigh: xhigh
 - id: ponytail
   name: "@mengyuly/dsh-ponytail"
   config:
@@ -1070,8 +1017,15 @@
         </persona-card>
     active: 瑞树
     sessions: {}
+    showPersonaSwitcher: true
     workspaces: {}
     workspaceList:
+      - path: /home/brokenshine/Projects/apps/android/droidEdit
+        title: droidEdit
+      - path: /home/brokenshine/Projects/agents/projects/dsh-plugins/dsh-im
+        title: dsh-im
+      - path: /home/brokenshine/Projects
+        title: Projects
       - path: /home/brokenshine/Projects/school/lab/ultralytics-8.4.47
         title: ultralytics-8.4.47
       - path: /home/brokenshine/Projects/dotfiles/guix/Guix-configs
@@ -1082,8 +1036,6 @@
         title: osu
       - path: /home/brokenshine/Projects/dotfiles/guix/jeans
         title: jeans
-      - path: /home/brokenshine/Projects
-        title: Projects
       - path: /home/brokenshine/Projects/apps/desktop/quickshell-nosd
         title: quickshell-nosd
       - path: /home/brokenshine/Projects/games/projects/Prism-CE
@@ -1176,6 +1128,7 @@
       layered: false
       injectMaxChars: 8000
       recall: off
+      recallPlacement: context
       indexMode: all
       recallMaxTopics: 5
       recallMaxChars: 1600
@@ -1204,9 +1157,71 @@
   name: "@deepseek-ai/dsh-client-ui-conversation"
   config:
     busyEnter: steer
-- id: agent-default-model
-  name: "@deepseek-ai/dsh-agent-default-model"
+- id: ds-harness-remote
+  name: ds-harness-remote
   config:
-    provider: magpie
-    model: stepfun-cn/step-5-preview
-    reasoningEffort: high
+    enabled: true
+    role: host
+    serverUrl: https://dsh.r2049.cn
+    codex:
+      enabled: true
+      binary: codex
+    terminal:
+      enabled: true
+    remoteTools:
+      enabled: true
+    hostControl:
+      enabled: true
+    loopback:
+      ports: []
+    forceRelay: false
+    logLevel: info
+    reconnect:
+      initialDelayMs: 1000
+      maxDelayMs: 30000
+      jitter: 0.2
+    cursor:
+      enabled: false
+      binary: agent
+    acp:
+      enabled: true
+      backends:
+        - id: codex
+          enabled: true
+          command: codex
+          args:
+            - app-server
+        - id: cursor
+          enabled: false
+          command: agent
+          args:
+            - acp
+        - id: antigravity
+          enabled: true
+          command: agy
+          args:
+            - --input-format
+            - stream-json
+            - --output-format
+            - stream-json
+        - id: pi
+          enabled: true
+          command: pi-acp
+          args: []
+        - id: claude
+          enabled: false
+          command: claude-agent-acp
+          args: []
+        - id: opencode
+          enabled: true
+          command: opencode
+          args:
+            - acp
+# 市场自带的「一键重启」在 shepherd 托管下会与 shepherd 的 respawn 抢端口：
+# dshmarket 的 supervisor 检测只认 systemd（INVOCATION_ID + ppid===1/comm==='systemd'），
+# shepherd 被误判成「无监督者」而放行重启，于是它 SIGTERM 自己后由 detached helper
+# 拉起替换进程，与 shepherd 立刻 respawn 的新进程抢 3080——2026-11-03 实测 3.5 秒一轮
+# 的 EADDRINUSE 振荡。关掉市场的重启，重启统一走 `herd restart dsh-web`。
+- id: dsh-market
+  config:
+    allowRestart: false

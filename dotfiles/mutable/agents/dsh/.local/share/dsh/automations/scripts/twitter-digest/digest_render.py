@@ -33,6 +33,12 @@ PAD = 56
 CARD_PAD = 32
 RADIUS = 20
 
+# QQ 媒体接口拒绝过高的长图：2026-11-03 实测 1080x30999 报 delivery-failed
+# （web.log 的原话是「上传文件大小超过限制」，但把同一张图量化到 1.88MB
+# 仍失败，压到 1010x29000 才通过——所以卡的是像素尺寸，不是文件体积）。
+# 前一天 1080x29492 正常。超限时等比缩小整图（宽会略窄），不裁内容。
+MAX_PNG_HEIGHT = 29000
+
 # 中文日报（md 子命令）的排版缩放。
 # 手机上点开长图后，图按屏宽铺满（1080 → 约 1220 屏像素，缩放 1.13），
 # 所以图内字号要按「点开后实显」来定，不能按气泡里的小缩略图定。
@@ -380,6 +386,27 @@ def trim_bottom(png_path: Path) -> None:
         im.crop((0, 0, w, min(last + 60, h))).save(png_path)
 
 
+def fit_height(png_path: Path) -> None:
+    """高度超过 MAX_PNG_HEIGHT 时等比缩小整图。
+
+    QQ 拒收过高的长图，但用户要的是「内容完整」而不是「不被裁切」——
+    所以整图等比缩放（宽度一起变窄），不做截断。缩放会让 PNG 体积变大，
+    故顺手做 256 色量化，把文件压回原量级。
+    """
+    from PIL import Image
+    im = Image.open(png_path).convert("RGB")
+    if im.height <= MAX_PNG_HEIGHT:
+        return
+    ratio = MAX_PNG_HEIGHT / im.height
+    orig_h = im.height
+    new_w = round(im.width * ratio)
+    im = im.resize((new_w, MAX_PNG_HEIGHT), Image.LANCZOS)
+    im.quantize(colors=256, method=Image.MEDIANCUT,
+                dither=Image.FLOYDSTEINBERG).save(png_path, optimize=True)
+    print(f"[info] 原图高 {orig_h}px 超过 {MAX_PNG_HEIGHT}，"
+          f"已等比缩到 {new_w}x{MAX_PNG_HEIGHT}", file=sys.stderr)
+
+
 def cmd_render(args) -> int:
     state = Path(args.state_dir)
     date = args.date or datetime.now().astimezone().strftime("%Y-%m-%d")
@@ -418,6 +445,7 @@ def emit(args, html_text: str, stem: str) -> int:
     if not html_to_png(html_path, out):
         return 1
     trim_bottom(out)
+    fit_height(out)
 
     from PIL import Image
     im = Image.open(out)
