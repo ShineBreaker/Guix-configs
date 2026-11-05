@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # denv - 项目环境管理器 (direnv + Guix + 语言支持 + LLM 脚手架)
-# 用法、provider 扩展契约与设计说明见 docs/scripts/denv.md
+# 用法、provider 扩展契约与设计说明见 docs/scripts/terminal/denv.md
 
 # --- 全局配置 — 修改此区域以自定义默认行为 ---
 
@@ -213,7 +213,7 @@ function __denv_read_config -d "读取 .denv，回填 __denv_restore_langs / __d
     return 0
 end
 
-# --- Provider 定义（扩展契约见 docs/scripts/denv.md） ---
+# --- Provider 定义（扩展契约见 docs/scripts/terminal/denv.md） ---
 
 # --- guix (默认激活，可 --no-guix 关闭) ---
 

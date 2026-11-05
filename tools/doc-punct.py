@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """doc-punct.py — 中文技术文档标点规范化（blue format 的后端）。
 
-用法、规则清单与设计理由：docs/scripts/doc-punct.md
+用法、规则清单与设计理由：docs/scripts/repo/doc-punct.md
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def _free(spans: list[tuple[int, int]], n: int, i: int) -> bool:
 #
 # 关键实现约束：每条规则在自己收到的行上重算 protected spans——会改变行长度
 # 的规则（删空格、补空格、省略号整体替换）若复用旧坐标，保护区间会错位，把
-# org 等宽/行内代码边界吃掉（曾真实误删）。细节见 docs/scripts/doc-punct.md。
+# org 等宽/行内代码边界吃掉（曾真实误删）。细节见 docs/scripts/repo/doc-punct.md。
 
 
 def rule_halfwidth_to_fullwidth(line: str) -> tuple[str, list[str]]:

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # doc-format.sh — 文档格式化编排：doc-punct 管标点，prettier 管 Markdown 结构
-# 文档：docs/scripts/doc-format.md
+# 文档：docs/scripts/repo/doc-format.md
 set -euo pipefail
 
 die() { printf '%s: %s\n' "doc-format:" "$1" >&2; exit "${2:-1}"; }

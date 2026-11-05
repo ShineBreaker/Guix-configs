@@ -3,7 +3,7 @@
 ;;; SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
 ;;; SPDX-License-Identifier: MIT
 ;;;
-;;; 用法与输出协议：docs/scripts/org-block-tools.md（协议面向 blueprint.scm，勿改）
+;;; 用法与输出协议：docs/scripts/repo/org-block-tools.md（协议面向 blueprint.scm，勿改）
 
 (let* ((file (nth 0 command-line-args-left))
        (name (nth 1 command-line-args-left))

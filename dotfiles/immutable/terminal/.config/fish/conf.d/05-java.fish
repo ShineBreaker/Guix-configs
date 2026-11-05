@@ -4,7 +4,7 @@
 
 # 裸命令名一律 command <name>：本文件在登录路径加载，__set_jdk 亦可在交互态
 # （alias 已生效）被调用；缺 rg/bat 的机器上裸 grep/cat 会踩 command-not-found
-# 递归刷屏。契约细节见 docs/scripts/fish-conf-d.md 与 fish-functions.md。
+# 递归刷屏。契约细节见 docs/scripts/terminal/fish-conf-d.md 与 fish-functions.md。
 
 set -g JDK_VERSION_FILE $XDG_CONFIG_HOME/fish/.jdk_version
 set -g JDK_PATH_FILE $XDG_CONFIG_HOME/fish/.jdk_path

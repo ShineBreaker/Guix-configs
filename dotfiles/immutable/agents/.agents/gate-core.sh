@@ -6,7 +6,7 @@
 
 # gate-core.sh — zcode / pi / DSH 三端共享的 gate 决策核
 # （单一真相源，适配器只做协议转换）。CLI、行协议、环境变量与安全不变量
-# 全部定义于 docs/scripts/gate-core.md；修改匹配逻辑前必读其
+# 全部定义于 docs/scripts/agents/gate-core.md；修改匹配逻辑前必读其
 # §设计决策与不变量——头部逐条不变量对应实现处均有一行指引注释。
 #
 # 速览（细节见文档）：

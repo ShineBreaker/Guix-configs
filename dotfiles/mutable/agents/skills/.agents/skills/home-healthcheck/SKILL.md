@@ -78,7 +78,7 @@ done
 
 - `tools/toolbox/.local/share/toolbox/tools.yaml` 加一条
 - `terminal/.config/fish/completions/<name>.fish`（无参工具 `complete -c <name> -f`）
-- `docs/scripts/misc-scripts.md` 加一节 + `docs/scripts/README.md` 索引行
+- `docs/scripts/desktop/misc-scripts.md` 加一节 + `docs/scripts/README.md` 索引行
 
 **immutable 包新建文件后，`toolbox check` 会报「清单条目在部署位找不到」**——预期行为，要 `blue home` 重建才进 `~/.local/bin`。先原地 `bash <源文件路径>` 跑通再提交，别等部署。
 

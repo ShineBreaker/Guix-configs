@@ -6,7 +6,7 @@
 ;;; SPDX-License-Identifier: MIT
 
 ;; sidebar-render.scm — tmux 侧边栏长驻渲染进程；完整设计见
-;; docs/scripts/tmux-sidebar.md
+;; docs/scripts/terminal/tmux-sidebar.md
 ;;
 ;; 接口：daemon（长驻 pane，FIFO 收 refresh/click/toggle-group，聚焦时读
 ;; stdin 键盘）| render（单次渲染到 stdout）| --as-library（仅 load 定义）

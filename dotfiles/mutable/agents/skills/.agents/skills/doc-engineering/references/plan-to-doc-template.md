@@ -97,7 +97,7 @@ PLAN 退到 footnote 引用。
 - ❌ 保留 "P0-P8 阶段" 叙事 —— 那是过程不是产品
 - ❌ 复述 gril session 假设的"实施细节"（如 "PAM allow-empty-passwords #t"） —— 文档必须匹配现实代码，不是 gril 当时的猜测
 
-**实证**（2026-07-07）：`docs/iso-build.md` 110 KB / 2155 行 → 12.8 KB / 268 行（88% 缩减），单 rewrite pass。读者按 "见 `source/config.org` `* Live ISO` 章节" 查代码细节，单一真相源保留。
+**实证**（2026-07-07）：`docs/operations/iso-build.md` 110 KB / 2155 行 → 12.8 KB / 268 行（88% 缩减），单 rewrite pass。读者按 "见 `source/config.org` `* Live ISO` 章节" 查代码细节，单一真相源保留。
 
 ## 2. 通用改写规则（所有类型）
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # 登录 shell 里经 fenv 继承 ~/.profile（guix profile 环境）；守卫变量防重复 source。
-# 各 conf.d 语义见 docs/scripts/fish-conf-d.md
+# 各 conf.d 语义见 docs/scripts/terminal/fish-conf-d.md
 status --is-login; and not set -q __fish_login_config_sourced
 and begin
 

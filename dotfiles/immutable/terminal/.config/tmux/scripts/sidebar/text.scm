@@ -2,7 +2,7 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-;; 子系统设计见 docs/scripts/tmux-sidebar.md
+;; 子系统设计见 docs/scripts/terminal/tmux-sidebar.md
 
 ;; sidebar/text.scm — 侧栏渲染基础工具：ANSI 常量、pane 字段访问、
 ;; 文本宽度/截断/填充/居中、路径处理。由 sidebar-render.scm load 进

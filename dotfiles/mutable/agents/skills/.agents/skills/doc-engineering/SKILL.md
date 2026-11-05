@@ -181,7 +181,7 @@ asking for a **功能说明 (function spec)**, not "缩 30% 保持同等结构".
   Save `clarify` for genuinely ambiguous trade-offs (e.g. "where to put
   the backup").
 
-**Empirical result** (2026-07-07): `docs/iso-build.md` from 110 KB / 2155
+**Empirical result** (2026-07-07): `docs/operations/iso-build.md` from 110 KB / 2155
 lines → 12.8 KB / 268 lines (88% reduction) in one rewrite. The resulting
 doc points readers to `source/config.org` `* Live ISO` 章节 for code
 detail — single source of truth preserved.

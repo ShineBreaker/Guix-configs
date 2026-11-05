@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: MIT
 
 # termide — VSCode 风格 tmuxifier 会话布局（Explorer | Editor / Terminal）
-# 布局图与 TERMIDE_* 环境变量见 docs/scripts/termide-layout.md
+# 布局图与 TERMIDE_* 环境变量见 docs/scripts/terminal/termide-layout.md
 
 set -eo pipefail
 

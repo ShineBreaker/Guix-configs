@@ -6,10 +6,10 @@
 # 设计运行环境：live 环境（Guix ISO / Arch / Ubuntu 等）以 root 运行。
 # 不带 --go 一律 dry-run 只回显；交互输入 yes 或 --go 才执行；
 # 检测到「当前就是运行中的 Guix 主机」拒绝 mount/chroot（--force 可越过）。
-# 文档：docs/rescue-chroot.md
+# 文档：docs/operations/rescue-chroot.md
 
 # 拓扑变量块：运行时由 load_topology 从 source/information.scm 解析填充
-# （单一真源，换机只改那个文件；手册 docs/rescue-chroot.md §操作 的存储拓扑速查是同步副本）。
+# （单一真源，换机只改那个文件；手册 docs/operations/rescue-chroot.md §操作 的存储拓扑速查是同步副本）。
 INFO_SCM="${INFO_SCM:-}"
 LUKS_UUID="" LUKS_MAPPER="" BTRFS_DEV="" ESP_UUID="" SWAP_UUID=""
 MACHINE_ID="" REPO_IN_DATA="" BTRFS_OPTS=""
@@ -167,11 +167,11 @@ mount_subvol() { # $1=目标根 $2=条目
   fi
 }
 
-# /etc 重建方式（docs/rescue-chroot.md §操作 的「重建 /etc」）。菜单必须走 stderr：
+# /etc 重建方式（docs/operations/rescue-chroot.md §操作 的「重建 /etc」）。菜单必须走 stderr：
 # 本函数经 $(choose_etc_mode) 调用，写 stdout 会被吃掉并污染返回值。
 choose_etc_mode() {
   local reply=""
-  printf '\n/etc 重建方式（详见 docs/rescue-chroot.md §操作 的「重建 /etc」）:\n' >&2
+  printf '\n/etc 重建方式（详见 docs/operations/rescue-chroot.md §操作 的「重建 /etc」）:\n' >&2
   printf '  [1] 方案一: cp -a 拷贝当前代 etc 模板（推荐；缺 passwd/shadow，账户由后续 activation 补回）\n' >&2
   printf '  [2] 方案二: 仅提示命令，进 chroot 后手动跑 /var/guix/profiles/system/activate（完整但副作用多）\n' >&2
   printf '  [s] 跳过\n' >&2
@@ -405,7 +405,7 @@ usage() {
   rescue-chroot.sh umount /mnt --go
 
 拓扑运行时解析自 source/information.scm（单一真源；可用 INFO_SCM 覆盖路径）；
-手册: docs/rescue-chroot.md
+手册: docs/operations/rescue-chroot.md
 EOF
 }
 

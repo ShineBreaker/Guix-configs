@@ -2,7 +2,7 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-;; 子系统设计见 docs/scripts/tmux-sidebar.md
+;; 子系统设计见 docs/scripts/terminal/tmux-sidebar.md
 
 ;; sidebar/input.scm — 键盘光标导航、按键解析（cbreak）与 FIFO 事件
 ;; 循环。依赖主文件的渲染状态机（handle-action/render-current! 等），

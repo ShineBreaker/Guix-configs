@@ -6,7 +6,7 @@
 
 # theme-common.sh — nosd-helpers portal 的 dark/light mode.d hook 共享实现
 #（0-apply-theme.sh 薄 shim exec 本脚本并传模式；mode.d 目录语义与 darkman
-# 兼容）。用法、部署形态与失败降级见 docs/scripts/darkman-theme.md。
+# 兼容）。用法、部署形态与失败降级见 docs/scripts/desktop/darkman-theme.md。
 #
 # 覆盖范围边界：kitty/foot 主题由 nosdshell 模板管线 + `nosd-helpers apply`
 # 全权负责（文件先写、reload 后发信号），本脚本不碰；Electron/GTK4 走

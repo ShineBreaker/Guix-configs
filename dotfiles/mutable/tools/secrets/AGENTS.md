@@ -1,6 +1,6 @@
 # dotfiles/mutable/tools/secrets — Age 密钥与机密数据管理
 
-用 [age](https://age-encryption.org/) 管理加密的敏感配置：明文 → age 加密 → `.age` 密文入库 Git，运行时由 `secrets` 命令解密到 `$XDG_RUNTIME_DIR/secrets-decrypted/`（tmpfs，重启即消）供应用读取。设计原则、密钥轮换与故障排查见 [docs/secrets.md](../../../../docs/secrets.md)；本篇讲本包的硬约束与维护范式。
+用 [age](https://age-encryption.org/) 管理加密的敏感配置：明文 → age 加密 → `.age` 密文入库 Git，运行时由 `secrets` 命令解密到 `$XDG_RUNTIME_DIR/secrets-decrypted/`（tmpfs，重启即消）供应用读取。设计原则、密钥轮换与故障排查见 [docs/systems/secrets.md](../../../../docs/systems/secrets.md)；本篇讲本包的硬约束与维护范式。
 
 ## 目录结构
 
@@ -90,4 +90,4 @@ secrets --dry-run encrypt example < /tmp/example.toml
 
 ## 跨机迁移
 
-新机上执行 `blue stow tools/secrets` 建立私钥软链与 `secrets` 命令（公钥已随仓库到位）；私钥须经安全通道（物理介质或加密传输）手动拷入并确保权限 `0600`。密钥轮换的完整顺序见 [docs/secrets.md §5](../../../../docs/secrets.md)——顺序有依赖（先备份旧私钥再 trash，否则旧密文解不开）。
+新机上执行 `blue stow tools/secrets` 建立私钥软链与 `secrets` 命令（公钥已随仓库到位）；私钥须经安全通道（物理介质或加密传输）手动拷入并确保权限 `0600`。密钥轮换的完整顺序见 [docs/systems/secrets.md §5](../../../../docs/systems/secrets.md)——顺序有依赖（先备份旧私钥再 trash，否则旧密文解不开）。

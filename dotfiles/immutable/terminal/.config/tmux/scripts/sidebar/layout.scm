@@ -2,7 +2,7 @@
 ;;;
 ;;; SPDX-License-Identifier: MIT
 
-;; 子系统设计见 docs/scripts/tmux-sidebar.md
+;; 子系统设计见 docs/scripts/terminal/tmux-sidebar.md
 
 ;; sidebar/layout.scm — 折叠键派生、pane→window→group→session 聚合、
 ;; 布局行构造与带样式输出。纯计算（仅写 current-output-port），

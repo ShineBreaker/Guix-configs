@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-# livecd fish_greeting — Live ISO 欢迎信息；见 docs/scripts/misc-scripts.md §livecd fish 函数
+# livecd fish_greeting — Live ISO 欢迎信息；见 docs/scripts/desktop/misc-scripts.md §livecd fish 函数
 
 function fish_greeting
     set_color brcyan

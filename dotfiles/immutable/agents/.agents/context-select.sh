@@ -6,7 +6,7 @@
 
 # context-select.sh — zcode / pi / DSH 共享的上下文注入决策核。
 # 分层（00-core.md / INDEX.md / domains/*.md）、门控语义、CLI 与消费链路
-# 见 docs/scripts/context-select.md。
+# 见 docs/scripts/agents/context-select.md。
 set -uo pipefail
 
 CTX_BASE="$HOME/.agents"
