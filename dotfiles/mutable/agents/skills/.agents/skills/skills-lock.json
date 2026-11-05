@@ -139,6 +139,12 @@
       "skillPath": "SKILL.md",
       "computedHash": "cefd848148b27a380be78ad0ca35c2c8131bf6c8190199b94e0d9ba83ca1185e"
     },
+    "lieflat-less-ai-tone": {
+      "source": "larashero3-dotcom/lieflat-less-ai-tone",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "d064ed9d20f0b722c59d27d63352e860c3c48ba4b56d7f866a26cd67e93cf7df"
+    },
     "md2html": {
       "source": "haidang1810/md2html",
       "sourceType": "github",
