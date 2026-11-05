@@ -30,6 +30,14 @@
         "type": "stdio",
         "command": "cua-driver",
         "args": []
+      },
+      "rea": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "rea-agents@6.8.0",
+          "mcp"
+        ]
       }
     }
   },
