@@ -26,7 +26,7 @@
                      "/machines/redmibook-pro-16-2024.scm"))
 
 ;; —— 版本与源（升级只改 %cachyos-version 与 base32）——
-(define %cachyos-version "7.2.10-1")
+(define %cachyos-version "7.3.1-1")
 
 (define %cachyos-origin
   (origin
@@ -39,7 +39,7 @@
    ;; 同名绑定会让匹配失效；字符串单参形式的默认算法经卫生展开引入
    ;; sha256，不受遮蔽影响
    (hash (content-hash
-          "1vqw3xhaj82rkhwjy4m1dkvdgy2040zra9l9k7lj0var2mhqmbq2"))))
+          "0gzvvnbcdb5f1w5m20nrnmz9kzgvdp3f9638xqxa9kbxism2kfix"))))
 
 ;; —— 通用桌面档（与设备无关，与 hako defconfig 强耦合）——
 (define %kernel-common-configs
