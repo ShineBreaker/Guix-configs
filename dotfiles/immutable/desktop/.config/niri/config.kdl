@@ -32,6 +32,15 @@ if [ -n "$p" ]; then
 fi
 "##
 
+// 清理 at-spi 的旧会话残留
+spawn-sh-at-startup r##"
+for p in $(pgrep -f 'libexec/at-spi-bus-launcher( |$)') \
+         $(pgrep -f 'libexec/at-spi2-registryd( |$)') \
+         $(pgrep -f 'at-spi2/accessibility\.conf'); do
+  kill "$p" 2>/dev/null
+done
+"##
+
 blur {
   passes 4
   offset 6

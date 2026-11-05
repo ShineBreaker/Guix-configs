@@ -68,5 +68,4 @@ client 尺寸按 `list-clients -a` 的行内 `session_id` **分别取 max**—�
 - **`flock -n 9` 取不到锁直接丢弃**：保证 hook 风暴下同窗口的 pane 操作串行；事件本身幂等可重发，丢弃无损失。锁键含 socket 名与 window id，无 `TMUX` 的裸调用按 default socket 处理。写类动作（`signal` / `click` / `toggle-group`）在锁外执行故可重入，改 pane 的动作在锁内。
 - **解析 tmux 格式串一律用 `|` 分隔，不用空白或 tab**：`start_command` 可能含分隔符，且空的 `@no_sidebar` 在 IFS-tab 下会丢字段导致错位。
 - **创建失败必须回滚**：`split-window` 失败（无普通窗格，或 tmux 低于 **3.3a+** 缺 `-b -f`）时把 `@sidebar_visible` 回滚为 `0`。回滚必须与置 1 同为 session 级（不带 `-g`），否则残留的 1 会让 follow hook 无限重试 split 刷屏。
-- **`@no_sidebar 1` 的窗口跳过侧栏**：termide 布局给自家 Explorer 栏留位，见 [termide-layout.md](termide-layout.md)。
 - 重复创建出的多个侧栏 pane 会被清掉，只留第一个。pane 消失不等于 `exec` 出的 daemon 已死，销毁时须显式 `kill -TERM` 再 `kill-pane`。

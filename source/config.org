@@ -2034,6 +2034,7 @@ polkit.addRule(function(action, subject) {
    "btop"
    "starship"
    "tree"
+   "yazi"
 
    ;; 运行器
    "just"
@@ -2041,7 +2042,6 @@ polkit.addRule(function(action, subject) {
    ;; 终端复用器
    "herdr-bin"
    "tmux"
-   "tmuxifier"
    "tmux-xpanes"
 
    ;; 命令行工具
@@ -2059,7 +2059,7 @@ polkit.addRule(function(action, subject) {
 
 *** 开发环境相关软件包
 
-多语言编译器与运行时、LSP 语言服务器、代码格式化器、主力编辑器（ =Zed= / =Helix= ）、AI 编程 Agent 及版本控制辅助工具。
+多语言编译器与运行时、LSP 语言服务器、代码格式化器、主力编辑器（ =Zed= ）、AI 编程 Agent 及版本控制辅助工具。
 
 #+NAME: devtools-packages-list
 #+begin_src scheme
@@ -2098,7 +2098,6 @@ polkit.addRule(function(action, subject) {
    "zig-zls"
 
    ;; 编辑器
-   "helix-steel"
    "zed-bin"
 
    ;; 数据库
@@ -2993,7 +2992,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 #+begin_src scheme
 '(("ANDROID_HOME" . "$HOME/Programs/Android/SDK")
   ("BROWSER" . "zen")
-  ("EDITOR" . "hx")
+  ("EDITOR" . "emacs")
   ("FREERDP_ASKPASS" . "1")
   ("GUIX_PROFILE" . "$HOME/.guix-profile")
   ("GUIX_SANDBOX_HOME" . "$XDG_DATA_HOME/Sandbox")
@@ -3040,7 +3039,6 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
   ("REASONIX_HOME" . "$XDG_DATA_HOME/reasonix")
   ("CARGO_HOME" . "$XDG_DATA_HOME/cargo")
   ("SQLITE_HISTORY" . "$XDG_STATE_HOME/sqlite_history")
-  ("TMUXIFIER_LAYOUT_PATH" . "$XDG_CONFIG_HOME/tmuxifier/layouts")
   ("WINEPREFIX" . "$XDG_DATA_HOME/wine")
   ("ZCODE_PROXY_CONFIG" . "$XDG_CONFIG_HOME/zcode-proxy/config.yaml"))
 #+end_src

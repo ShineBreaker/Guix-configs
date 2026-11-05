@@ -60,7 +60,6 @@
 | session-selector / attach-entry / window-jump / which-key | `dotfiles/immutable/terminal/.config/tmux/scripts/`      | immutable（须 `blue home`）                | [tmux-scripts.md](terminal/tmux-scripts.md)     |
 | sidebar-toggle                                            | 同上                                                     | 同上                                       | [sidebar-toggle.md](terminal/sidebar-toggle.md) |
 | sidebar-render.scm + sidebar/*.scm                        | 同上                                                     | 同上                                       | [tmux-sidebar.md](terminal/tmux-sidebar.md)     |
-| termide.session.sh                                        | `dotfiles/immutable/terminal/.config/tmuxifier/layouts/` | immutable → `~/.config/tmuxifier/layouts/` | [termide-layout.md](terminal/termide-layout.md) |
 
 ## 主题
 
