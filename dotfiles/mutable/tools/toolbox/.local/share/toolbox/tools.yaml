@@ -37,15 +37,6 @@
   args: --setup --service-only --branch --check --yes --no-backup --force
   help_cmd: ""
   source: dotfiles/mutable/agents/hermes/.local/bin/hermes-install
-- name: devin
-  brief: Devin CLI 入口
-  category: agents
-  usage:
-    - devin --install
-    - devin update --force
-  args: --install --force
-  help_cmd: ""
-  source: dotfiles/mutable/agents/devin/.local/bin/devin
 - name: askill
   brief: 声明式管理第三方 agent skills（lock 驱动）
   category: agents
