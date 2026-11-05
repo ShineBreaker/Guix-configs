@@ -171,34 +171,6 @@
             "max_tokens": 1128000,
             "name": "zcode/GLM-5.3-Flash",
             "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "Hy3 · WorkBuddy",
-            "max_output_tokens": 64000,
-            "max_tokens": 256000,
-            "name": "workbuddy/hy3",
-            "reasoning_effort": "high"
-          },
-          {
-            "capabilities": {
-              "chat_completions": true,
-              "images": true,
-              "parallel_tool_calls": false,
-              "prompt_cache_key": false,
-              "tools": true
-            },
-            "display_name": "DeepSeek-V4.1-Flash · WorkBuddy",
-            "max_output_tokens": 128000,
-            "max_tokens": 1128000,
-            "name": "workbuddy/deepseek-v4.1-flash",
-            "reasoning_effort": "high"
           }
         ]
       }
