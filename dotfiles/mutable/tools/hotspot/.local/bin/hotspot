@@ -17,8 +17,9 @@ APIF=uap0      # AP 虚拟接口名
 # on 时从 secrets 包仓库源取；私钥是机器级身份——sudo 重入后 HOME=/root，须绝对路径
 KEYS=/home/brokenshine/.local/share/keys/age
 GW=10.42.0.1 # 热点网关：DHCP 选项 3/6 与 Web 入口都是它
-CONF=/tmp/hotspot-hostapd.conf
-DNS_CONF=/tmp/hotspot-dnsmasq.conf
+RUN=/run/hotspot # 运行时文件目录（root-owned 700；/tmp world-writable 有预置文件攻击面）
+CONF=$RUN/hostapd.conf
+DNS_CONF=$RUN/dnsmasq.conf
 RULE=/run/udev/rules.d/75-hotspot-uap0.rules
 GUIX=/run/current-system/profile/bin/guix
 
@@ -84,6 +85,7 @@ secrets set wifi-hotspot PSK '密码'"
 	fi
 	hostapd=$(resolve_pkg_dir hostapd hostapd)
 	dnsmasq=$(resolve_pkg_dir dnsmasq dnsmasq)
+	install -d -m 700 "$RUN"
 
 	step "1/6 隔离 $APIF（udev NM_UNMANAGED；规则在 /run，重启即失）"
 	stop >/dev/null 2>&1 || true
@@ -119,7 +121,7 @@ wpa_passphrase=$PSK
 wpa_key_mgmt=WPA-PSK
 rsn_pairwise=CCMP
 EOF
-	"$hostapd/sbin/hostapd" -B -P /tmp/hotspot-hostapd.pid "$CONF"
+	"$hostapd/sbin/hostapd" -B -P "$RUN/hostapd.pid" "$CONF"
 
 	step "5/6 启动 dnsmasq（DHCP + DNS → mihomo 的 127.0.0.1:53）"
 	# 127.0.0.1:53 被 mihomo 占用，listen-address 限定只绑热点网关
@@ -135,11 +137,11 @@ dhcp-option=6,$GW
 no-resolv
 server=127.0.0.1#53
 EOF
-	if [ -f /tmp/hotspot-dnsmasq.pid ]; then
-		pid=$(cat /tmp/hotspot-dnsmasq.pid)
+	if [ -f "$RUN/dnsmasq.pid" ]; then
+		pid=$(cat "$RUN/dnsmasq.pid")
 		kill "$pid" 2>/dev/null || true
 	fi
-	"$dnsmasq/sbin/dnsmasq" --conf-file="$DNS_CONF" --pid-file=/tmp/hotspot-dnsmasq.pid
+	"$dnsmasq/sbin/dnsmasq" --conf-file="$DNS_CONF" --pid-file="$RUN/dnsmasq.pid"
 
 	step "6/6 nft 放行 $APIF（trusted_ifaces 整接口全端口）"
 	# shellcheck disable=SC1083  # { } 是 nft 集合字面量语法，非 shell 展开
@@ -151,18 +153,18 @@ EOF
 
 stop() {
 	local pid
-	for pidfile in /tmp/hotspot-hostapd.pid /tmp/hotspot-dnsmasq.pid; do
+	for pidfile in "$RUN/hostapd.pid" "$RUN/dnsmasq.pid"; do
 		if [ -f "$pidfile" ]; then
 			pid=$(cat "$pidfile")
 			kill "$pid" 2>/dev/null || true
 		fi
 	done
-	pkill -f 'hotspot-hostapd.conf' 2>/dev/null || true
-	pkill -f 'hotspot-dnsmasq.conf' 2>/dev/null || true
+	pkill -f 'hotspot/hostapd.conf' 2>/dev/null || true
+	pkill -f 'hotspot/dnsmasq.conf' 2>/dev/null || true
 	# shellcheck disable=SC1083  # 同上，nft 集合字面量
 	nft delete element inet filter trusted_ifaces { "$APIF" } 2>/dev/null || true
 	iw dev "$APIF" del 2>/dev/null || true
-	rm -f "$RULE" /tmp/hotspot-hostapd.pid /tmp/hotspot-dnsmasq.pid
+	rm -f "$RULE" "$RUN/hostapd.pid" "$RUN/dnsmasq.pid"
 	udevadm control --reload 2>/dev/null || true
 	printf '热点已关闭（%s 已清理）\n' "$APIF"
 }
@@ -176,8 +178,8 @@ status() {
 	fi
 	for name in hostapd dnsmasq; do
 		pid=""
-		if [ -f "/tmp/hotspot-$name.pid" ]; then
-			pid=$(cat "/tmp/hotspot-$name.pid" 2>/dev/null) || pid=""
+		if [ -f "$RUN/$name.pid" ]; then
+			pid=$(cat "$RUN/$name.pid" 2>/dev/null) || pid=""
 		fi
 		if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
 			printf '%s: 运行中 (pid %s)\n' "$name" "$pid"

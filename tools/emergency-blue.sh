@@ -4,7 +4,7 @@
 
 # emergency-blue.sh — blue 不可用时的应急替代（tangle / home / rebuild / init / check）
 # 零依赖 blue 与 blueprint.scm：bash + guix 即可跑，guix 调用与蓝图逐字一致
-# 文档：docs/emergency-blue.md
+# 文档：docs/operations/emergency-blue.md
 
 set -euo pipefail
 
@@ -91,7 +91,7 @@ ensure_config() {
 # --- 括号平衡检查 -----------------------------------------------------------
 
 # blueprint.scm 的词法扫描的 awk 移植（整文件兜底版）。与 blue 的边界差异
-# 见 docs/emergency-blue.md §关键约束。
+# 见 docs/operations/emergency-blue.md §关键约束。
 paren_check() {
   local file="$1"
   [[ -f "$file" ]] || die "括号检查目标不存在: $file"
@@ -175,7 +175,10 @@ cmd_rebuild() {
       system build "$CONFIG_SCM" --dry-run
   else
     # --no-kexec 仅 system 有（防 kexec 挂死电源操作，home 不认此选项）
-    run_cmd sudo guix time-machine "--channels=$CHANNEL_LOCK" -- \
+    echo_cmd sudo guix time-machine "--channels=$CHANNEL_LOCK" -- \
+      system reconfigure "$CONFIG_SCM" --allow-downgrades --fallback --no-kexec
+    confirm_or_die
+    sudo guix time-machine "--channels=$CHANNEL_LOCK" -- \
       system reconfigure "$CONFIG_SCM" --allow-downgrades --fallback --no-kexec
   fi
 }
@@ -196,7 +199,10 @@ cmd_init() {
     run_cmd guix time-machine "--channels=$CHANNEL_LOCK" -- \
       system build "$CONFIG_SCM" --dry-run
   else
-    run_cmd sudo guix time-machine "--channels=$CHANNEL_LOCK" -- \
+    echo_cmd sudo guix time-machine "--channels=$CHANNEL_LOCK" -- \
+      system init "$CONFIG_SCM" "$mountpoint"
+    confirm_or_die
+    sudo guix time-machine "--channels=$CHANNEL_LOCK" -- \
       system init "$CONFIG_SCM" "$mountpoint"
   fi
 }
@@ -222,7 +228,7 @@ emergency-blue.sh —— blue 不可用时的应急替代
   -y, --yes         跳过 sudo 命令的执行确认
 
 所有 guix 调用均锁定 source/channel.lock 频道。详细文档:
-docs/emergency-blue.md（含 blue 彻底不可用时的纯手动命令序列）
+docs/operations/emergency-blue.md（含 blue 彻底不可用时的纯手动命令序列）
 EOF
 }
 
