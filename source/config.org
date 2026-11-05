@@ -2401,6 +2401,7 @@ lalt grv  lctl _  _  _  _  _)
              "emacs-nix-mode"
              "emacs-pdf-tools"
              "emacs-zig-mode"
+             "emacs-jupyter"
              "emacs-agent-shell"
              "emacs-dsh"
              "emacs-telega"
@@ -2443,8 +2444,7 @@ lalt grv  lctl _  _  _  _  _)
              "emacs-eldoc-box"
              "emacs-treemacs"
              "emacs-treemacs-nerd-icons"
-             "emacs-colorful-mode"
-             "emacs-minimap")))
+             "emacs-colorful-mode")))
 #+end_src
 
 *** 软件自启动
