@@ -19,25 +19,25 @@
         "dsh-soul-md",
         "@xmanrui/dsh-im",
         "ds-harness-remote",
-        "billion-context",
-        "dsh-claude-style"
+        "dsh-claude-style",
+        "dsh-free-search"
       ],
       "patchReload": "live"
     }
   },
   "dependencies": {
     "@mengyuly/dsh-ponytail": "0.4.3",
-    "@michengai/dsh-automation": "1.0.13",
+    "@michengai/dsh-automation": "1.0.18",
     "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#c3975a56a31e28362493cd33db8a7d479edb2634",
-    "billion-context": "0.1.212",
-    "cc-safety-net": "2.7.2",
+    "cc-safety-net": "2.7.3",
     "ds-harness-remote": "0.6.2",
     "dsh-agenote": "https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz",
     "dsh-agent-extensions": "link:../agent-extensions",
-    "dsh-better-sidebar": "0.28.2",
-    "dsh-claude-style": "0.19.6",
-    "dsh-context": "0.80.2",
-    "dsh-soul-md": "0.11.0",
-    "dshmarket": "1.73.8"
+    "dsh-better-sidebar": "0.30.1",
+    "dsh-claude-style": "0.19.8",
+    "dsh-context": "0.81.2",
+    "dsh-free-search": "0.9.31",
+    "dsh-soul-md": "0.12.0",
+    "dshmarket": "1.73.11"
   }
 }

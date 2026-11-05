@@ -450,24 +450,6 @@
               low: low
               high: high
               max: max
-          - id: workbuddy/hy3
-            name: Hy3 · WorkBuddy
-            contextWindow: 192000
-            maxTokens: 48000
-            input: [text, image]
-            reasoningEfforts:
-              low: low
-              high: high
-          - id: workbuddy/deepseek-v4.1-flash
-            name: DeepSeek-V4.1-Flash · WorkBuddy
-            contextWindow: 1000000
-            maxTokens: 128000
-            input: [text, image]
-            reasoningEfforts:
-              "off": none
-              low: low
-              high: high
-              max: max
       magpie-anthropic:
         displayName: Magpie · Anthropic
         apiKeyEnv: MAGPIE_GATEWAY_KEY

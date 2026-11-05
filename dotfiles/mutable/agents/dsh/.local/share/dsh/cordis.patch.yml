@@ -19,3 +19,14 @@
         serverName: cua-driver
         command: /home/brokenshine/.guix-home/profile/bin/cua-driver
         args: [ 'mcp' ]
+- insert:
+    - id: rea-mcp
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        serverName: rea
+        transport: stdio
+        command: npx
+        args:
+          - -y
+          - rea-agents@6.8.0
+          - mcp
