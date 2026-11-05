@@ -3,7 +3,7 @@
 ;;; SPDX-License-Identifier: MIT
 
 ;; blueprint.scm — blue 任务运行器（Guix-configs 项目主入口）
-;; 结构地图、管线与设计理由：docs/scripts/blueprint.md
+;; 结构地图、管线与设计理由：docs/scripts/repo/blueprint.md
 
 (use-modules (blue build)
              (blue states)
@@ -74,7 +74,7 @@
 
 ;; %run 的软失败变体：返回子进程退出码而不终止 blue。供逐子模块的容错
 ;; 循环用——单个 submodule 的 fetch/push 失败只告警跳过，不中断其余
-;; 子模块与外层流程（sub-update 是 rebuild 前置，离线时不能因此挡住 rebuild）。
+;; 子模块与外层流程（离线时不能因此挡住 update 的其余步骤）。
 (define* (%run/soft command)
   (if (dry-build?)
       (begin (%print-preview command) 0)
@@ -156,7 +156,7 @@
 ;;; --- §3 括号平衡检查 ---
 ;; 手写词法扫描而非 guix read：config.org 的块含读取器宏（unquote 等），
 ;; read 报错定位差。已知限制：字符串未闭合不会单独报错（emergency-blue
-;; 的 awk 移植版额外覆盖，见 docs/emergency-blue.md §关键约束）。
+;; 的 awk 移植版额外覆盖，见 docs/operations/emergency-blue.md §关键约束）。
 
 ;; 返回 #(paren-open paren-close bracket-open bracket-close mismatch?)；
 ;; 栈记录开括号类型，闭括号须与栈顶同类（[ 配 ) 算错）。
@@ -237,7 +237,7 @@
 ;; config.org ──tangle──▶ tmp/config.scm ──尾表达式+括号兜底──▶ reconfigure。
 ;; 两个 blue 类接进内建命令：<org-config> → `blue build` 触发 tangle；
 ;; <paren-check> → `blue check` 逐块括号检查（不 tangle，定位到块名）。
-;; 块编辑 elisp 外置在 tools/block-*.el，输出协议见 docs/scripts/org-block-tools.md。
+;; 块编辑 elisp 外置在 tools/block-*.el，输出协议见 docs/scripts/repo/org-block-tools.md。
 
 (define-blue-class <org-config>
   (inherit <buildable>)
@@ -300,7 +300,7 @@
        ,(string-append %tools-dir "/" name ".el")
        ,%config-org ,@extra-args)))))
 
-;; block-list.el 的 >>> / <<< 记录协议见 docs/scripts/org-block-tools.md，勿改。
+;; block-list.el 的 >>> / <<< 记录协议见 docs/scripts/repo/org-block-tools.md，勿改。
 (define %block-header-re
   (make-regexp "^>>>name=([^[:space:]]+)\tlang=([^[:space:]]+)\tnoweb=(.+)$"))
 
@@ -501,7 +501,7 @@
 ;;; --- §6 目录树生成器（structor 命令） ---
 ;; 标记对 `<!-- structor:begin depth=N -->' / `<!-- /structor -->' 之间的
 ;; 内容由本节生成。可见性 = `git ls-files' 驱动（.gitignore 与 submodule
-;; 自动正确）；规则细节见 docs/scripts/blueprint.md。
+;; 自动正确）；规则细节见 docs/scripts/repo/blueprint.md。
 
 (define %structor-marker-end "<!-- /structor -->")
 
@@ -800,14 +800,13 @@
              #:sudo? #t))))
 
 ;; ⚠ Agent 不要自行运行此命令（会卡 sudo 密码提示），调试只许 blue home。
-;; 前置 sub-update：系统重建前先把子模块同步到各自远端最新（含别人的
-;; 仓库，如 rime-ice）；离线或单个子模块失败只告警，不阻塞重建。
+;; 子模块更新刻意不放这里：由 `blue update' 显式触发，重建不再每次
+;; 顺带拉一遍别人的仓库（rime-ice 等）。
 (define-command (rebuild-command arguments)
   ((invoke "rebuild")
    (category 'deployment)
    (synopsis "应用 Guix System 配置")
    (help "应用 operating-system 表。blue --dry-run rebuild 仅构建验证、不写入系统。"))
-  ((command-procedure sub-update-command) '())
   (%prune-system-generations)
   ((command-procedure clean-artifacts-command) '())
   (apply-config "system" "%system"
@@ -839,7 +838,7 @@
 
 ;; ---- Live ISO 辅助（build-iso-command 用） ----
 ;; 每个变体对应 config.org 独立 tangle 目标 tmp/live-iso-<variant>.scm
-;; （desktop=XFCE 救援桌面，minimal=TUI 安装器；详见 docs/iso-build.md）。
+;; （desktop=XFCE 救援桌面，minimal=TUI 安装器；详见 docs/operations/iso-build.md）。
 
 ;; ISO 变体列表（顺序即构建顺序：先 desktop 主目标，再 minimal fallback）。
 (define %images '("desktop" "minimal"))
@@ -857,7 +856,7 @@
           (%current-system)))
 
 ;; 先 tangle 让 live-iso 目标块出产物，再对每个变体调 build-image.scm
-;; （guix repl 子进程）。构建耗时 30+ 分钟，见 docs/iso-build.md。
+;; （guix repl 子进程）。构建耗时 30+ 分钟，见 docs/operations/iso-build.md。
 (define-command (build-iso-command arguments)
   ((invoke "build-iso")
    (category 'deployment)
@@ -968,7 +967,7 @@
 ;; （commit 非 #f 时 pin 到该 commit），其余用 channel.lock 的锁定版本。
 ;; 必须走 guix repl 子进程：blue 的 Guile 环境缺 (guix openpgp) 等模块，
 ;; 展开 openpgp-fingerprint 宏会报 unbound variable（契约见
-;; docs/scripts/blue-helpers.md §gen-partial.scm）。
+;; docs/scripts/repo/blue-helpers.md §gen-partial.scm）。
 (define (%partial-channels-file target commit)
   (let ([out (string-append %tmp-dir "/update-channels.scm")])
     (if (dry-build?)
@@ -986,39 +985,44 @@
                 #:real? #t)
           out))))
 
-;; 解析 blue update 的参数 → (guix nix)。每侧为 #f（不更新）、'all（全量）
-;; 或单目标：nix 侧为 flake 名字符串，guix 侧为 (频道名 . commit) 对——
-;; commit 为 #f 表示刷新到 branch 最新，字符串表示 pin 到该 commit。
+;; 解析 blue update 的参数 → (guix nix sub)。每侧为 #f（不更新）、'all
+;; （全量）或单目标：nix 侧为 flake 名字符串，guix 侧为 (频道名 . commit)
+;; 对——commit 为 #f 表示刷新到 branch 最新，字符串表示 pin 到该 commit；
+;; sub 侧只有 'all（子模块无单目标语法）。
 ;; -c/--channel 需搭配 --guix、-C/--commit 需搭配 -c、--flake 需搭配 --nix。
 (define (%update-scope arguments)
-  (let loop ([rest arguments] [guix #f] [nix #f])
+  (let loop ([rest arguments] [guix #f] [nix #f] [sub #f])
     (match rest
-      [() (list guix nix)]
+      [() (list guix nix sub)]
       [("--guix" . more)
-       (if guix (error "重复指定 --guix") (loop more 'all nix))]
+       (if guix (error "重复指定 --guix") (loop more 'all nix sub))]
       [("--nix" . more)
-       (if nix (error "重复指定 --nix") (loop more guix 'all))]
+       (if nix (error "重复指定 --nix") (loop more guix 'all sub))]
+      [((or "--sub" "--submodules") . more)
+       (if sub
+           (error "重复指定 --sub/--submodules")
+           (loop more guix nix 'all))]
       [((or "-c" "--channel") name . more)
        (match guix
          [(n . _) (error "重复指定 -c/--channel")]
          ['all
           (if (string-null? name)
               (error "-c/--channel 不能为空")
-              (loop more (cons name #f) nix))]
+              (loop more (cons name #f) nix sub))]
          [_ (error "-c/--channel 需搭配 --guix（用法: blue update --guix -c NAME [-C COMMIT]）")])]
       [((or "-C" "--commit") commit . more)
        (match guix
          [(name . #f)
           (if (string-null? commit)
               (error "-C/--commit 不能为空")
-              (loop more (cons name commit) nix))]
+              (loop more (cons name commit) nix sub))]
          [(name . _) (error "重复指定 -C/--commit")]
          [_ (error "-C/--commit 需搭配 -c/--channel（用法: blue update --guix -c NAME -C COMMIT）")])]
       [("--flake" name . more)
        (match nix
-         ['all (loop more guix name)]
+         ['all (loop more guix name sub)]
          [_ (error "--flake 需搭配 --nix（用法: blue update --nix --flake NAME）")])]
-      [_ (error "usage: blue update [--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]]")])))
+      [_ (error "usage: blue update [--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]] [--sub]")])))
 
 ;; 锁文件有实际变化才提交：单频道/单 flake 刷新常无新版本，git commit 的
 ;; 空提交以非零退出会让 %run 当失败报错。git status 只读，真跑无害；
@@ -1038,20 +1042,6 @@
                 "[warn] 签名提交失败（pinentry 不可用？），降级无签名提交: ~a~%"
                 (car args))
         (%run `("git" "commit" "-m" ,message ,file))))))
-
-;; 已暂存内容有变化才提交（sub-update 的 bump 用）；签名降级同上。
-(define (%commit-staged message)
-  (when (or (dry-build?)
-            (pair? (%pipe->lines
-                    (%shell-command '("git" "diff" "--cached" "--name-only")))))
-    (catch #t
-      (lambda ()
-        (%run `("git" "commit" "-S" "-m" ,message)))
-      (lambda args
-        (format (current-error-port)
-                "[warn] 签名提交失败（pinentry 不可用？），降级无签名提交: ~a~%"
-                (car args))
-        (%run `("git" "commit" "-m" ,message))))))
 
 (define (%lock-commit-message target)
   (match target
@@ -1106,18 +1096,23 @@
 (define-command (update-command arguments)
   ((invoke "update")
    (category 'guix)
-   (synopsis "更新 channel.lock / flake.lock 并提交")
-   (help "[--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]]
-不带参数：guix 频道与 Nix 全部刷新。
+   (synopsis "更新 channel.lock / flake.lock 与子模块并提交")
+   (help "[--guix [-c NAME [-C COMMIT]]] [--nix [--flake NAME]] [--sub]
+不带参数：guix 频道、Nix 与子模块全部刷新。
 --guix：只刷新 guix 频道；-c/--channel NAME 只刷新该频道，其余保持 channel.lock 锁定的 commit。
 -C/--commit COMMIT：搭配 -c 使用，目标频道 pin 到指定 commit 而非刷新到最新。
 --nix：只更新 Nix；--flake NAME 只更新该 flake input（不刷 nix channel）。
+--sub：只更新子模块（同 blue sub-update）。
 Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
   (let ([scope (match (%update-scope arguments)
-                 [(#f #f) '(all all)]
+                 [(#f #f #f) '(all all all)]
                  [scope scope])])
     (match scope
-      [(guix nix)
+      [(guix nix sub)
+       ;; 子模块属配置输入，先于锁刷新：bump 提交落在 lock 提交之下。
+       (when sub
+         (format #t "~%--- 子模块更新 ---~%")
+         (%submodules-update))
        (when guix (%update-guix guix))
        (when nix (%update-nix nix))
        ;; lock 刷新后自动拉平用户 profile（频道侧无更新时 pull 也近乎零
@@ -1206,6 +1201,8 @@ Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
                              (%pipe->lines
                               (%shell-command `("git" "-C" ,path "rev-parse" "HEAD"))) "")))))))]))
 ;; 变化非空时以一条 bump 提交收口（复用 %commit-lock 的签名降级范式）。
+;; 用 %commit-paths 而非整暂存区提交：blue update 默认会走到这里，
+;; 只提交子模块路径才不会吞掉用户已暂存的其他内容。
 (define (%submodules-update)
   (let ([changed
          (filter-map (lambda (entry)
@@ -1216,7 +1213,7 @@ Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
         (format #t "子模块均为最新，无 bump 提交~%")
         (begin
           (%run `("git" "add" ,@changed))
-          (%commit-staged "chore(submodules): bump 子模块")))))
+          (%commit-paths "chore(submodules): bump 子模块" changed)))))
 
 ;; 只推自己的仓库（URL 含 /ShineBreaker/）；脏的跳过（避免把半成品推
 ;; 上去），无 upstream 的补 -u。别人的仓库（如 rime-ice）没有推送权限，
@@ -1241,8 +1238,8 @@ Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
 
 ;;; ---------- 子模块 ----------
 
-;; rebuild 的前置步骤；也被 blue rebuild 自动调用。全部走 %run/soft 与
-;; 只读管道，离线/单模块失败只告警，不阻塞外层流程。
+;; blue update 默认会调用它，也可单独跑。全部走 %run/soft 与只读管道，
+;; 离线/单模块失败只告警，不阻塞外层流程。
 (define-command (sub-update-command arguments)
   ((invoke "sub-update")
    (category 'submodule)
@@ -1250,7 +1247,7 @@ Nix 未安装（PATH 中找不到所需命令）时，Nix 侧自动跳过。"))
    (help "逐个子模块 fetch origin 并快进到远端最新；含别人的仓库（如 rime-ice）。
 gitlink 有变化时自动在父仓库提交一条 bump（chore(submodules): bump 子模块）。
 安全边界：未 init、有未提交改动、非快进（本地分叉或领先）的子模块一律跳过并
-在 stderr 告警，绝不覆盖现场；blue rebuild 前会自动执行本命令。"))
+在 stderr 告警，绝不覆盖现场。blue update 默认执行本命令（--sub 可单独指定）。"))
   (%submodules-update))
 
 ;; 推送时机由人触发（blue sub-push 不会自动跑）；只推自己的仓库。
@@ -1262,6 +1259,78 @@ gitlink 有变化时自动在父仓库提交一条 bump（chore(submodules): bum
 别人的仓库（如 rime-ice）与未 init / 有未提交改动的子模块自动跳过。
 注意：只推子模块自身，不动父仓库（父仓库推送仍由人工决定）。"))
   (%submodules-push))
+
+;; 只提交指定路径：bump 时不能吞掉用户已暂存的其他内容（整暂存区提交
+;; 会一并带走）。dry-run 下同 %commit-lock 打印预演。
+(define (%commit-paths message paths)
+  (when (or (dry-build?)
+            (pair? (%pipe->lines
+                    (%shell-command `("git" "status" "--porcelain" "--" ,@paths)))))
+    ;; 用 %run/soft 探测签名：%run 失败走 primitive-exit，catch 拦不住
+    (if (nonzero? (%run/soft `("git" "commit" "-S" "-m" ,message "--" ,@paths)))
+        (begin
+          (format (current-error-port)
+                  "[warn] 签名提交失败（pinentry 不可用？），降级无签名提交~%")
+          (%run `("git" "commit" "-m" ,message "--" ,@paths)))
+        #t)))
+
+;; git 命令的 stdout 单行结果；只读管道。args 含程序名之后的全部实参，
+;; 需要 -C 时必须放在子命令前（git -C <path> rev-parse HEAD）。
+(define (%git-rev args)
+  (string-trim-both
+   (string-join (%pipe->lines (%shell-command `("git" ,@args))) "")))
+
+;; 一键收尾：推自有子模块 → 父仓库 bump gitlink → 推父仓库。
+;; 主仓库未提交改动一律不碰（用户明确要求只推已有 commit）；子模块脏的
+;; 跳过；推送失败的子模块保留旧 gitlink，避免父仓库指向远端不存在的提交。
+(define (%submodules-push-and-bump)
+  (let ([failed '()] [bumped '()])
+    (for-each
+     (lambda (entry)
+       (let ([path (car entry)] [url (cdr entry)])
+         (cond
+          [(not (%own-repository? url))
+           (format #t "--- ~a: 非自有仓库，跳过~%" path)]
+          [(not (file-exists? (string-append path "/.git")))
+           (format (current-error-port) "[跳过] ~a 未 init~%" path)]
+          [(%submodule-dirty? path)
+           (format (current-error-port) "[跳过] ~a 有未提交改动，先提交再推~%" path)]
+          [else
+           (format #t "--- ~a~%" path)
+           (if (nonzero? (%run/soft `("git" "-C" ,path "push" "origin" "HEAD:main")))
+               (begin
+                 (format (current-error-port)
+                         "[失败] ~a 推送失败，保留旧 gitlink~%" path)
+                 (set! failed (cons path failed)))
+               (let ([head (%git-rev (list "-C" path "rev-parse" "HEAD"))]
+                     [link (%git-rev (list "rev-parse" (string-append ":" path)))])
+                 (unless (string=? head link)
+                   (set! bumped (cons path bumped)))))])))
+     (%submodule-list))
+    (unless (null? bumped)
+      (format #t "--- 主仓库 bump: ~a~%" (string-join (reverse bumped) ", "))
+      (%commit-paths "chore(submodules): bump 子模块" (reverse bumped)))
+    (format #t "--- 主仓库~%")
+    (when (nonzero? (%run/soft '("git" "push" "origin" "HEAD:main")))
+      (format (current-error-port) "[失败] 主仓库推送失败~%")
+      (set! failed (cons "主仓库" failed)))
+    (if (null? failed)
+        (format #t "推送完成~%")
+        (%subprocess-fail!
+         1 (format #f "[汇总] ~a 项失败: ~a"
+                   (length failed) (string-join (reverse failed) ", "))))))
+
+;; 主仓库未提交改动不参与也不阻止；有未提交改动的子模块跳过。
+(define-command (push-command arguments)
+  ((invoke "push")
+   (category 'submodule)
+   (synopsis "推送子模块、bump 指针并推送父仓库")
+   (help "依次推送自有子模块 → 对本地 HEAD 与父仓库 gitlink 不一致者提交一条
+bump（只提交这些路径，不吞其它暂存内容）→ 推送父仓库。
+
+主仓库未提交改动一律不提交、也不阻止推送；子模块有未提交改动时跳过并告警；
+推送失败的子模块保留旧 gitlink，最后以非零退出码汇总失败项。"))
+  (%submodules-push-and-bump))
 
 ;;; ---------- 维护 ----------
 
@@ -1329,7 +1398,7 @@ gitlink 有变化时自动在父仓库提交一条 bump（chore(submodules): bum
           "--year" ,(strftime "%Y" (localtime (time-second (current-time))))
           ".")))
 
-;; 委派 tools/doc-format.sh（编排规则见 docs/scripts/doc-format.md）：
+;; 委派 tools/doc-format.sh（编排规则见 docs/scripts/repo/doc-format.md）：
 ;; 先 doc-punct.py 规范标点，再 prettier 统一 Markdown 结构。
 (define-command (format-command arguments)
   ((invoke "format")
@@ -1337,7 +1406,7 @@ gitlink 有变化时自动在父仓库提交一条 bump（chore(submodules): bum
    (synopsis "规范化仓库文档的中文标点与 Markdown 排版")
    (help "按仓库文档规范跑两级格式化：
 
-1. doc-punct.py 规范中文标点与中英间距（规则见 docs/scripts/doc-punct.md）；
+1. doc-punct.py 规范中文标点与中英间距（规则见 docs/scripts/repo/doc-punct.md）；
 2. prettier 统一 Markdown 结构——表格列宽、列表缩进、末尾换行。
 
 正文不做折行：仓库规范禁止把段落按固定列宽切断，.prettierrc.json 的
@@ -1619,7 +1688,7 @@ folding 控制:
   `(("部署 (deployment)" ,rebuild-command ,home-command ,init-command ,build-iso-command)
     ("编辑 (editing)" ,block-show-command ,block-replace-command)
     ("Guix 频道 (guix)" ,pull-command ,update-command)
-    ("子模块 (submodule)" ,sub-update-command ,sub-push-command)
+    ("子模块 (submodule)" ,sub-update-command ,sub-push-command ,push-command)
     ("维护 (maintenance)" ,clean-artifacts-command
      ,format-command ,gc-command ,resign-command ,reuse-command ,structor-command)
     ("Nix 备用 (nix)" ,nix-command ,nix-init-command)
