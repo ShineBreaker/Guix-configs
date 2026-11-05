@@ -69,6 +69,7 @@ window-rule {
   match app-id="QtScrcpy"
   match app-id="waypaper"
   match app-id="wpp"
+  match app-id="wps"
   match app-id="^xdg-desktop-portal"
 
   open-floating true
@@ -171,7 +172,7 @@ window-rule {
   match app-id="affinity.exe"
   match app-id="gimp"
   match app-id="krita"
-  match app-id="wps"
+  match app-id="wpsoffice"
   match app-id="^libreoffice"
   match app-id="Microsoft Windows"
   match app-id="obsidian"
