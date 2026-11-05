@@ -38,6 +38,7 @@
       # Communication
       discord
       feishu-cli
+      telegram-desktop
       wechat
       wemeet
 

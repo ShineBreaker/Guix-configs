@@ -2177,10 +2177,6 @@ polkit.addRule(function(action, subject) {
    "nomacs"
    "obs"
 
-   ;; 社交
-   "notmuch"
-   "telegram-desktop"
-
    ;; 生产力工具
    "filezilla"
    "keepassxc"
