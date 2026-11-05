@@ -5,7 +5,7 @@
 
 `dotfiles/mutable/tools/toolbox/.local/bin/toolbox` + `.local/share/toolbox/tools.yaml` · 部署到 `~/.local/bin/toolbox` 与 `~/.local/share/toolbox/tools.yaml`（mutable，stow 直链，改源即时生效）· 调用方：手动运行
 
-本文只写**机制与不变量**；文件清单与收录标准的操作视角见 [toolbox/AGENTS.md](../../dotfiles/mutable/tools/toolbox/AGENTS.md)。
+本文只写**机制与不变量**；文件清单与收录标准的操作视角见 [toolbox/AGENTS.md](../../../dotfiles/mutable/tools/toolbox/AGENTS.md)。
 
 ## 用法
 

@@ -3,7 +3,7 @@
 
 # gate-core.sh 与 anchors-lib.sh — agent 工具调用的判定核与规则源
 
-`dotfiles/immutable/agents/.agents/{gate-core.sh,anchors-lib.sh}` · immutable → `~/.agents/`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/{bash,edit}-gate.sh`、pi `dotfiles/mutable/agents/extensions/pi-gate/index.ts`、DSH `dotfiles/mutable/agents/dsh/.local/share/dsh/profiles/agent-extensions/gate.js`（`anchors-lib.sh` 另被 zcode `session-start.sh` 直接 source）
+`dotfiles/immutable/agents/.agents/{gate-core.sh,anchors-lib.sh}` · immutable → `~/.agents/`（改后须 `blue home`）· 调用方：zcode `~/.zcode/hooks/{bash,edit}-gate.sh`、DSH `dotfiles/mutable/agents/dsh/.local/share/dsh/profiles/agent-extensions/gate.js`（`anchors-lib.sh` 另被 zcode `session-start.sh` 直接 source）
 
 判定核是三端共享的唯一真相源：CLI、行协议、环境变量与安全不变量全部定义在 `gate-core.sh`，适配器只做协议转换。`anchors-lib.sh` 只做「读 + 合并」，不含任何判定语义。**改匹配逻辑前先通读 §设计决策与不变量**——每条不变量在实现处都有一行注释指回该节。
 

@@ -14,7 +14,7 @@
 
 ## bootstrap.sh — 干净 Guix 环境开带 blue 的临时 shell
 
-`tools/bootstrap.sh` · 不部署（仓库内直接运行） · 人工执行：`README.org` 装机流程、[`docs/emergency-blue.md`](../emergency-blue.md) §3 恢复 blue
+`tools/bootstrap.sh` · 不部署（仓库内直接运行） · 人工执行：`README.org` 装机流程、[`docs/operations/emergency-blue.md`](../../operations/emergency-blue.md) §3 恢复 blue
 
 ```bash
 ./tools/bootstrap.sh
@@ -24,7 +24,7 @@
 
 - 前置：已用官方 Guix ISO 启动，或已完成 `guix system install`；脚本自检 `guix`、`source/channel.lock`、`source/manifest.scm`，任一缺失走 `die`——`bootstrap: 错误: …` 写 stderr、退出 1。
 - 仓库根取 `BASH_SOURCE[0]` 的父目录，不依赖调用 cwd；与 `gen-partial.scm` 靠 `getcwd` 定位仓库根正好相反。
-- 职责到此为止：不分区、不动盘、不跑 `blue init`——装机后续必须人工执行。恢复 blue 的完整步骤见 [`docs/emergency-blue.md`](../emergency-blue.md)，本篇不复述。
+- 职责到此为止：不分区、不动盘、不跑 `blue init`——装机后续必须人工执行。恢复 blue 的完整步骤见 [`docs/operations/emergency-blue.md`](../../operations/emergency-blue.md)，本篇不复述。
 - 首次运行较慢：要克隆并构建频道。
 
 ## build-image.scm — guix system image 产物落地

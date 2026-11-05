@@ -30,7 +30,7 @@
 
 | 组件       | 方案                             |
 |------------+----------------------------------|
-| 内核       | =linux-cachyos-lts= （本地定制） |
+| 内核       | =linux-cachyos= （本地定制）     |
 | 引导器     | =Limine= （ =rosenthal= 频道）   |
 | 窗口合成器 | =Niri= （Wayland）               |
 | 登录管理器 | =Greetd= + =tuigreet=            |
@@ -39,18 +39,18 @@
 | 输入法     | =Fcitx5= + =Rime=                |
 | 主力字体   | =Sarasa Gothic= / =Maple Mono=   |
 
-- 桌面日常（ =Niri= ）：:
+- 桌面日常（ =Niri= ）：：
   [[file:screenshots/daily.png]]
-- 终端工作区（ =Tmux= ）：:
+- 终端工作区（ =Tmux= ）：：
   [[file:screenshots/terminal.png]]
-- 网页浏览（ =Zen Browser= ）：:
+- 网页浏览（ =Zen Browser= ）：：
   [[file:screenshots/browse.png]]
 
 * 设计概览
 
 在动手修改配置前，只需把握本仓库的三个核心设计：
 
-- 文学化单一声明源 :: 系统层遵循「能放用户态就不上浮系统层」的最小化原则，并通过 =guix-home-service-type= 将 Guix Home 内嵌进系统定义。[[./source/config.org][source/config.org]] 利用 Org Babel 的 Noweb 引用（ ~<<block-name>>~ ）把分散的功能块拼装为完整的 =tmp/config.scm= ，说明文档与配置代码始终贴合在同一处。软件源除官方 =guix= 外，还启用了 =nonguix= （专有固件）、 =rosenthal= （ =Limine= 引导等扩展）与作者个人源 =jeans= ，所有频道的精确 commit 均由 [[./source/channel.lock][source/channel.lock]] 锁定。
+- 文学化单一声明源 :: 系统层遵循「能放用户态就不上浮系统层」的最小化原则，并通过 =guix-home-service-type= 将 Guix Home 内嵌进系统定义。[[./source/config.org][source/config.org]] 利用 Org Babel 的 Noweb 引用（ ~<<block-name>>~ ）把分散的功能块拼装为完整的 =tmp/config.scm= ，说明文档与配置代码始终贴合在同一处。软件源除官方 =guix= 外，还启用了 =nonguix= （专有固件）、 =rosenthal= （ =Limine= 引导等扩展）、 =bluebox= （ =blue= 本体）与作者个人源 =jeans= ，所有频道的精确 commit 均由 [[./source/channel.lock][source/channel.lock]] 锁定。
 - 双轨 Dotfiles 部署 :: 应用配置按改动频率分为两轨： *不可变层* （[[./dotfiles/immutable/][dotfiles/immutable/]]）在构建时复制进 =/gnu/store= 并以只读软链挂回 =$HOME= ，防止程序私自篡改配置，修改后需执行 =blue home= 生效； *可变层* （[[./dotfiles/mutable/][dotfiles/mutable/]]）通过 GNU Stow 直接将 =$HOME= 下的目标路径软链至仓库源码，适合 Emacs 与 AI Agent 等高频演进的配置，存盘即刻生效。
 - 无状态根与显式持久化 :: 根目录 =/= 挂载在 =tmpfs= （内存盘）上，每次关机重启自动归零。系统与个人数据的持久化完全由 [[./source/information.scm][source/information.scm]] 显式接管：系统级目录通过 =%btrfs-subvolumes= 挂载到加密 Btrfs 子卷，用户目录则通过 =%data-dirs= 从 =/data= 分区以 =bind-mount= 方式挂回 =$HOME= 。
 
@@ -79,7 +79,7 @@ blue init
 passwd
 #+end_src
 
-若需自行构建带完整无线固件与图形环境的安装盘，请参阅 [[./docs/iso-build.md][Live ISO 构建指南]]；SSH 私钥与代理订阅等敏感信息的加密入仓方式见 [[./docs/secrets.md][机密管理说明]]。
+若需自行构建带完整无线固件与图形环境的安装盘，请参阅 [[./docs/operations/iso-build.md][Live ISO 构建指南]]；SSH 私钥与代理订阅等敏感信息的加密入仓方式见 [[./docs/systems/secrets.md][机密管理说明]]。
 
 ** 日常维护命令
 
@@ -90,8 +90,8 @@ passwd
 | =blue rebuild=                | 抽离代码并校验括号，一次性完成系统层与用户态的世代切换（需 sudo）       |
 | =blue home=                   | 仅重构建并切换 Guix Home 与不可变层 dotfiles（无需 sudo，适合日常调试） |
 | =blue stow= / =blue stow-all= | 部署单个或全部可变层 dotfiles（GNU Stow 软链管理）                      |
-| =blue check=                  | 秒级检查 =config.org= 所有代码块的括号平衡并精准报告出错块名            |
-| =blue update=                 | 拉取各频道最新 commit，更新并自动提交 =source/channel.lock=             |
+| =blue check=                  | 秒级检查 =config.org= 全部 scheme 块的括号平衡，定位到出错的块名        |
+| =blue update=                 | 刷新频道锁、Nix 与子模块；guix 侧完成后自动 =blue pull=                  |
 | =blue pull=                   | 严格按照 =source/channel.lock= 锁定的版本执行 =guix pull=               |
 
 * 寻路指南与排障
@@ -102,7 +102,7 @@ passwd
 |--------------------------------------+------------------------------------------------------+----------------------------------------------|
 | 系统服务、内核、软件包、Home 服务    | [[./source/config.org][source/config.org]]           | 跑 =blue home= （仅用户态）或 =blue rebuild= |
 | 用户名、主机 ID、磁盘 UUID、持久目录 | [[./source/information.scm][source/information.scm]] | 跑 =blue rebuild= （新增子卷需同步挂载声明） |
-| 增删软件频道或调整分支               | [[./source/channel.scm][source/channel.scm]]         | 先跑 =blue update= 刷锁，再跑 =blue pull=    |
+| 增删软件频道或调整分支               | [[./source/channel.scm][source/channel.scm]]         | 跑 =blue update= 刷锁（会自动 =blue pull=）  |
 | 常规只读应用配置                     | [[./dotfiles/immutable/][dotfiles/immutable/]]       | 跑 =blue home=                               |
 | 需注入 =/gnu/store= 绝对路径的模板   | [[./source/files/][source/files/]]                   | 跑 =blue home=                               |
 | 高频热改配置与 =~/.local/bin= 工具   | [[./dotfiles/mutable/][dotfiles/mutable/]]           | 首次跑 =blue stow <包>= ，后续保存即生效     |

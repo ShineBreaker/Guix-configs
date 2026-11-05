@@ -94,5 +94,5 @@ sha256sum dist/jeans-desktop-*.iso
 
 - `source/config.org` 的 `* Live ISO` 章节——实施细节、全部 use-modules、块代码
 - `blueprint.scm` 的 `build-iso` 命令——`%images`、变体过滤、文件名拼合
-- [scripts/blue-helpers.md](scripts/blue-helpers.md) §build-image.scm——`tools/build-image.scm` 的调用契约
+- [scripts/blue-helpers.md](../scripts/repo/blue-helpers.md) §build-image.scm——`tools/build-image.scm` 的调用契约
 - [rescue-chroot.md](rescue-chroot.md) / [emergency-blue.md](emergency-blue.md)——ISO 里预装的两个救援脚本

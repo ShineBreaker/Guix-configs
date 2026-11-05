@@ -2,7 +2,7 @@
 
 `source/config.org` 是唯一的 Org 配置源（不要新建第二个），经 Org Babel tangle 生成 `tmp/config.scm`，一次 reconfigure 同时应用 `operating-system` 与内嵌的 `home-environment`。命令清单以 `blue list` 为准，单命令详情见 `blue help <命令>`。
 
-`config.org` 正文承载**面向入门读者的就近解释**（块旁说明语法、数据形态与陷阱），**架构决策与运维知识集中在本文件**。本篇不讲 `blue` 与脚本的旗标机制（见 `docs/scripts/blueprint.md`）；仓库级硬约束见根 `AGENTS.md`。
+`config.org` 正文承载**面向入门读者的就近解释**（块旁说明语法、数据形态与陷阱），**架构决策与运维知识集中在本文件**。本篇不讲 `blue` 与脚本的旗标机制（见 `docs/scripts/repo/blueprint.md`）；仓库级硬约束见根 `AGENTS.md`。
 
 <!-- structor:begin depth=1 -->
 
@@ -51,7 +51,7 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 - 块名只允许字母 / 数字 / `-` / `_`（拼进输出路径并交给 elisp，`../` 与空白会构成路径穿越 / 匹配注入面）。
 - 提取出的 body **前两行是语言与 noweb 标记，第 3 行起才是代码内容**。
 - `block-replace` 是真实写 `source/config.org` 的操作，**dry-run 模式下直接报错禁用**；写回是原子的，失败时用 `git checkout source/config.org` 还原。
-- 高耦合的大型块（如 `emacs-packages`、`home-packages`）建议直接读上下文，块工具的价值在独立小块。
+- 高耦合的大型块（如 `emacs-packages`、`user-packages-list`）建议直接读上下文，块工具的价值在独立小块。
 
 ### Org 正文与内嵌脚本
 
@@ -63,7 +63,7 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 
 ## 代码风格
 
-目标读者是刚入门 Guile/Guix/org 的用户，可读性优先于「聪明」的写法。方括号的合法语法位置遵循 [`docs/scripts/CONVENTIONS.md`](../docs/scripts/CONVENTIONS.md) §4「Guile Scheme」，本节只写惯用法与陷阱。
+目标读者是刚入门 Guile/Guix/org 的用户，可读性优先于「聪明」的写法。方括号的合法语法位置遵循 [`docs/scripts/repo/CONVENTIONS.md`](../docs/scripts/repo/CONVENTIONS.md) §4「Guile Scheme」，本节只写惯用法与陷阱。
 
 - **抽象判定**：只有 ≥3 个调用点且确实消除重复的包装才值得保留；单用途包装直接内联平凡写法。程序化生成（`map` / `append-map` + 数据表）只用于消除真实重复或反转数据方向，否则平铺字面量。
 - **平凡写法**：拼接少量已知值用普通 `list` / `string-append`，不用 quasiquote（`` `((,a ,b)) `` 写 `(list (list a b))`）；数字比较用 `=`（必要时先判 `number?`）不用 `eq?`；不用点参数 + `apply`、双层闭包表达一次性逻辑；同一字面量（如 UUID）多处出现时收敛为单一绑定。
@@ -81,7 +81,7 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 `config.org` 在头部通过 `(load "../source/information.scm")` 引入全局变量。
 
 - **存储拓扑**：根目录 `/` 为 tmpfs（每次重启自动清空）；持久化数据放 Btrfs 子卷并挂载到 `/var/lib`、`/gnu`、`/boot`；用户主目录数据挂自 `/data` 分区。
-- **持久化登记**：新增需持久化的目录，必须同时在 `information.scm` 的 `%data-dirs` 与 `%btrfs-subvolumes` 中声明。
+- **持久化登记**：`%data-dirs` 与 `%btrfs-subvolumes` 用途不同。新增随 @data 子卷持久化并绑进用户目录的目录，写 `%data-dirs`（喂 `%bind-mounts`）；新增独立挂载的系统目录，写 `%btrfs-subvolumes`。
 - **休眠机制**：Guile initrd 无法从加密 swap 恢复休眠镜像，故 swap 采用明文独立分区。镜像写入该分区，恢复链路由 `resume=UUID=` 内核参数与 `resume-device-service`（按 UUID 反查 major:minor 写入 `/sys/power/resume`）衔接。
 - `fixed-machine-id` 的生成算法（`generate-machine-id`）定义在 `information.scm`，由 `machine-id-service` 块写成 `/etc/machine-id`。
 
@@ -114,12 +114,12 @@ blue block-replace <name> <body-file>  # 原子写回 config.org，scheme 块自
 
 ## Live ISO 构建
 
-`blue build-iso` 先 tangle 出 `tmp/live-iso-<variant>.scm`（`desktop` = XFCE + labwc、免密自动登录 live 用户；`minimal` = 保留 tty1 TUI 安装器与 tty3-6 root 免密 shell），再由 `tools/build-image.scm` 构建镜像，产物落到 `dist/`。**tangle 目标必须是独立的 `tmp/live-iso-<variant>.scm`，绝对不能复用 `tmp/config.scm`**；ISO 专用的模块引用内联在各变体块内部，共享部分走 `<<live-common>>` noweb 片段（不独立 tangle）。完整构建流程见 `docs/iso-build.md`。
+`blue build-iso` 先 tangle 出 `tmp/live-iso-<variant>.scm`（`desktop` = XFCE + labwc、免密自动登录 live 用户；`minimal` = 保留 tty1 TUI 安装器与 tty3-6 root 免密 shell），再由 `tools/build-image.scm` 构建镜像，产物落到 `dist/`。**tangle 目标必须是独立的 `tmp/live-iso-<variant>.scm`，绝对不能复用 `tmp/config.scm`**；ISO 专用的模块引用内联在各变体块内部，共享部分走 `<<live-common>>` noweb 片段（不独立 tangle）。完整构建流程见 `docs/operations/iso-build.md`。
 
 ## 频道管理
 
 - `channel.scm` 声明 Guix 官方频道与第三方扩展分支，**可手动编辑**；`channel.lock` 由 `blue update` 按当前锁定 Commit 自动生成并提交，**禁止手动编辑**。
-- 更新顺序不可颠倒：编辑 `channel.scm` → `blue update`（重建并提交 `channel.lock`）→ `blue pull`（按锁定频道 `guix pull`）。`blue pull` 只认 `channel.lock`，不读 `channel.scm` 的未锁定改动。
+- 更新顺序不可颠倒：编辑 `channel.scm`，再跑 `blue update`。它重建并提交 `channel.lock`，guix 侧完成后自动执行一次 `blue pull`，按锁定频道跑 `guix pull`。手动 `blue pull` 只在需要重拉 profile 时用。`blue pull` 只认 `channel.lock`，不读 `channel.scm` 的未锁定改动。
 
 ## 验证
 

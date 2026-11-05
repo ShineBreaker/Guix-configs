@@ -125,10 +125,10 @@ blue --dry-run rebuild                           # 3. 门禁：tangle + 检查 +
 | 系统重装/升级后 blue 不可用             | guile 路径变化、Home 层损坏导致 blue 本体丢失         | 同上：`bootstrap.sh` + `blue home`                                                                                                                                                 |
 | `blue rebuild` 崩在 derivation 计算阶段 | guix 与刚刷新的频道快照不兼容                         | 走「频道锁的兼容性回滚」；先用 `blue check` 区分是不是 `config.org` 的问题                                                                                                         |
 
-磁盘清理走系统自带 timer（每周日 18:00 `guix gc`、19:30 nix-gc）或 `blue gc`（删旧世代 + `guix gc` + 清 `/efi/EFI/Guix/OLD-*.EFI`，见 [scripts/blueprint.md](scripts/blueprint.md)）。
+磁盘清理走系统自带 timer（每周日 18:00 `guix gc`、19:30 nix-gc）或 `blue gc`（删旧世代 + `guix gc` + 清 `/efi/EFI/Guix/OLD-*.EFI`，见 [scripts/blueprint.md](../scripts/repo/blueprint.md)）。
 
 ## 相关
 
 - `tools/emergency-blue.sh`——应急脚本本体
-- [scripts/blue-helpers.md](scripts/blue-helpers.md) §bootstrap.sh——恢复 blue 的引导 shell
-- [scripts/blueprint.md](scripts/blueprint.md)——blue 完整管线、维护命令与世代修剪
+- [scripts/blue-helpers.md](../scripts/repo/blue-helpers.md) §bootstrap.sh——恢复 blue 的引导 shell
+- [scripts/blueprint.md](../scripts/repo/blueprint.md)——blue 完整管线、维护命令与世代修剪

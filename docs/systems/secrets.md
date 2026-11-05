@@ -158,6 +158,6 @@ trash /tmp/age.old
 ## 相关
 
 - [age 官方文档](https://age-encryption.org/)
-- [`secrets` 源码](../dotfiles/mutable/tools/secrets/.local/bin/secrets)——子命令与安全不变量的唯一真源
-- [`dotfiles/mutable/tools/secrets/AGENTS.md`](../dotfiles/mutable/tools/secrets/AGENTS.md)——维护范式
-- [`keys/.gitignore`](../dotfiles/mutable/tools/secrets/.local/share/keys/.gitignore)——私钥排除规则
+- [`secrets` 源码](../../dotfiles/mutable/tools/secrets/.local/bin/secrets)——子命令与安全不变量的唯一真源
+- [`dotfiles/mutable/tools/secrets/AGENTS.md`](../../dotfiles/mutable/tools/secrets/AGENTS.md)——维护范式
+- [`keys/.gitignore`](../../dotfiles/mutable/tools/secrets/.local/share/keys/.gitignore)——私钥排除规则

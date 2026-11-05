@@ -23,6 +23,7 @@ SSID 与密码存于 secrets 体系的 `wifi-hotspot.age` 条目（`secrets set 
 - **nft 放行**：接口加入 `inet filter trusted_ifaces` 集合（接口信任模型：input/forward 整接口全端口放行），`off` 时移除。规则集开机一次性加载，运行期只做集合增删。
 - **代理接管转发流量**：客户端流量命中 mihomo 的 `ip rule 9002`（非 lo 入接口 → 表 2022 → `Meta` TUN），无需 tproxy 或 NAT；DNS 由 dnsmasq 转发到 `127.0.0.1:53` 拿到 fake-ip。客户端访问本机服务（如 Syncthing `22000`）走 `local` 表直投，不过代理。
 - **依赖获取**：hostapd / dnsmasq 不在系统 profile，脚本先查 `PATH`，找不到就用 `guix build` 取 store 路径（一次性使用，不持久安装）。
+- **运行时文件**：hostapd 配置（含明文 PSK）、dnsmasq 配置与二者 pid 文件放 `/run/hotspot/`（root 创建，权限 700）。不放 `/tmp`：world-writable 目录下本地用户可预置同名实体文件截获 root 写入的凭据，或预置 pid 诱导 `stop` 误杀进程。
 
 ## 排障
 

@@ -1,6 +1,6 @@
 # Agent 共享基础设施
 
-本目录部署到 `~/.agents/`，是 Pi / ZCode / DSH 三端 Agent 运行时共用两套正交系统的源码：会话启动时注入的 **Context** 与工具调用时机器硬拦截的 **Anchors**。
+本目录部署到 `~/.agents/`，是 ZCode / DSH 两端 Agent 运行时共用两套正交系统的源码：会话启动时注入的 **Context** 与工具调用时机器硬拦截的 **Anchors**。
 
 ## 目录结构
 
@@ -37,17 +37,17 @@ Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
 ### Anchors — 运行时工具调用拦截
 
-`anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 Ratchet 合并）、`gate-core.sh`（决策核心）构成拦截内核；三端适配器（pi-gate TS、zcode bash hooks、DSH `gate.js`）只做协议转换，决策一律集中在 `gate-core.sh`，不得在适配器里复刻判定。
+`anchors.json`（规则集）、`anchors-lib.sh`（分层加载与 Ratchet 合并）、`gate-core.sh`（决策核心）构成拦截内核；两端适配器（zcode bash hooks、DSH `gate.js`）只做协议转换，决策一律集中在 `gate-core.sh`，不得在适配器里复刻判定。
 
 规则分三层，改哪层就动哪个文件：全局 `~/.agents/anchors.json` 放跨工作区通用约束（sudo、交互式命令限制、敏感信息模式）；项目级 `<root>/.agents/anchors.json` 放仓库专属规则（`frozen_commands`、`frozen_paths`、`redirect_conventions`、`path_hints`）；内核硬编规则在 `gate-core.sh`（`rm` 破坏性防护、Git 写操作防护、`~/.config`/`~/.local`/`~/.agents` 部署目录只读保护）。
 
-**改内核的约束**：`gate-core.sh` 与 `anchors-lib.sh` 是三端共用的安全边界，CLI、环境变量、`/run/agent-gate.off` 路径与 stdout 行协议一律不变。改判定逻辑前先建用例语料覆盖 `docs/scripts/gate-core.md` 的每一条不变量（命中与未命中都要有），新旧版本在临时 `HOME` 下逐条对比输出一致才算完成，方法见 `docs/scripts/CONVENTIONS.md` §7。
+**改内核的约束**：`gate-core.sh` 与 `anchors-lib.sh` 是两端共用的安全边界，CLI、环境变量、`/run/agent-gate.off` 路径与 stdout 行协议一律不变。改判定逻辑前先建用例语料覆盖 `docs/scripts/agents/gate-core.md` 的每一条不变量（命中与未命中都要有），新旧版本在临时 `HOME` 下逐条对比输出一致才算完成，方法见 `docs/scripts/repo/CONVENTIONS.md` §7。
 
-**人工总开关**：`/run/agent-gate.off` 存在即三端全部放行（静默，不向 agent 发任何暂停提示，与护栏不存在时表现一致），删除即恢复拦截。`/run` 是 root 拥有的 tmpfs，创建与删除都需提权，而提权命令对 agent 恒冻，所以 agent 自己打不开这个开关；重启自动清空，天然临时。暂停 `sudo touch /run/agent-gate.off`，恢复 `sudo rm -f /run/agent-gate.off`，查状态 `stat /run/agent-gate.off`。开关只认固定路径且必须由人工在终端执行：agent 不得代劳、不得主动要求用户关闭护栏、不得创建、删除或改道该文件。
+**人工总开关**：`/run/agent-gate.off` 存在即两端全部放行（静默，不向 agent 发任何暂停提示，与护栏不存在时表现一致），删除即恢复拦截。`/run` 是 root 拥有的 tmpfs，创建与删除都需提权，而提权命令对 agent 恒冻，所以 agent 自己打不开这个开关；重启自动清空，天然临时。暂停 `sudo touch /run/agent-gate.off`，恢复 `sudo rm -f /run/agent-gate.off`，查状态 `stat /run/agent-gate.off`。开关只认固定路径且必须由人工在终端执行：agent 不得代劳、不得主动要求用户关闭护栏、不得创建、删除或改道该文件。
 
-**无写工具会话降级**：DSH 的 `simple-mode` 一类 preset 工具面只有持久 bash、没有 write/edit 工具，而 `redirect_conventions` 的拦截理由引导「改用 Edit 工具」，会让模型反复调用不存在的工具而死锁。`gate-core.sh` 识别环境变量 `GATE_NO_WRITE_TOOLS=1`（由 DSH 的 `gate.js` 按当前 agent 作用域检测写工具可见性后设置）：BLOCK 不附 redirect ALT（回落通用冻结理由）、interactive 去掉「请使用对应工具」尾巴、NOTES/REDIRECT 软提示抑制；硬拦截、AUTO_ALLOW、REWRITTEN 一概不变——降级只收窄输出，不制造放行面。Pi/ZCode 不设该变量，行为零变化。
+**无写工具会话降级**：DSH 的 `simple-mode` 一类 preset 工具面只有持久 bash、没有 write/edit 工具，而 `redirect_conventions` 的拦截理由引导「改用 Edit 工具」，会让模型反复调用不存在的工具而死锁。`gate-core.sh` 识别环境变量 `GATE_NO_WRITE_TOOLS=1`（由 DSH 的 `gate.js` 按当前 agent 作用域检测写工具可见性后设置）：BLOCK 不附 redirect ALT（回落通用冻结理由）、interactive 去掉「请使用对应工具」尾巴、NOTES/REDIRECT 软提示抑制；硬拦截、AUTO_ALLOW、REWRITTEN 一概不变——降级只收窄输出，不制造放行面。ZCode 不设该变量，行为零变化。
 
-参考文档：判定语义、行协议、全部安全不变量与 anchors 分层合并语义见 `docs/scripts/gate-core.md`；注入决策见 `docs/scripts/context-select.md`；zcode hook 协议见 `docs/scripts/zcode-hooks.md`。
+参考文档：判定语义、行协议、全部安全不变量与 anchors 分层合并语义见 `docs/scripts/agents/gate-core.md`；注入决策见 `docs/scripts/agents/context-select.md`；zcode hook 协议见 `docs/scripts/agents/zcode-hooks.md`。
 
 ### Context — 会话上下文注入
 
@@ -61,4 +61,4 @@ Context、Anchors、Skills 正交，同一条规则只应维护在一处：
 
 ## 修改与生效
 
-- **Context 与 Anchors 的源在本目录（immutable）**：改后必须 `blue home` 重建（部署进 Store 只读副本），三端才会用上新版本。适配器本身（pi-gate TS、zcode hooks、DSH 扩展）在 mutable 包里，改源即时生效，但它们运行时加载的是 `~/.agents/` 下的已部署版本。
+- **Context 与 Anchors 的源在本目录（immutable）**：改后必须 `blue home` 重建（部署进 Store 只读副本），两端才会用上新版本。适配器本身（zcode hooks、DSH 扩展）在 mutable 包里，改源即时生效，但它们运行时加载的是 `~/.agents/` 下的已部署版本。

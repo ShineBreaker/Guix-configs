@@ -93,6 +93,12 @@ keepassxc-credential-setup callers   # 仅重新注册 callers（不影响 datab
 
 典型症状：git 拉取时 KeePassXC 不弹授权——先 `status` 确认，再 `update` 刷新路径。
 
+## Waydroid
+
+### waydroid-session-keepalive
+
+`waydroid-session` 服务的常驻包装，服务定义在 `source/config.org` 的 `<<waydroid-session-service>>`。`waydroid session start` 在会话已存在时会因 D-Bus 名称冲突立刻返回 0，shepherd 把它当成进程退出而反复 respawn，日志刷屏。本脚本启动会话后转为等待，会话结束（容器停止）才退出，让常驻语义与「会话已存在」两种情况都成立。
+
 ## 家目录体检
 
 ### home-health

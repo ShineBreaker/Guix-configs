@@ -3,7 +3,7 @@
 
 # fish 自定义函数速查 — 构建派发、桌面动作、Git 签名、Java 学习工具与提示符
 
-`dotfiles/immutable/terminal/.config/fish/functions/` · immutable → `~/.config/fish/functions/`（改后须 `blue home`） · 交互 shell 手动调用，各有同名 `completions/<name>.fish`
+`dotfiles/immutable/terminal/.config/fish/functions/` · immutable → `~/.config/fish/functions/`（改后须 `blue home`） · 交互 shell 手动调用；有参数的函数各配 `completions/<name>.fish` 补全（`java_tools` 拆成 `jdk`/`jbuild`/`jrun` 三个，`fish_prompt` 不登记）
 
 本篇覆盖 `functions/` 下的日常小函数。`denv`（1575 行、9 个 provider、6 个子命令）自成子系统，不并入本篇，见 [denv.md](denv.md)。
 

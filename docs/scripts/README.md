@@ -3,78 +3,77 @@
 
 # 脚本文档索引
 
-本仓库自研脚本的手册索引。编写与维护规范（注释与文档的分工、单篇模板、同族归并规则、排版要求）：[`CONVENTIONS.md`](CONVENTIONS.md)。
+本仓库自研脚本的手册索引。编写与维护规范（注释与文档的分工、单篇模板、同族归并规则、排版要求）：[`CONVENTIONS.md`](repo/CONVENTIONS.md)。
 
 同一族同构脚本合并为一篇，族文档用 `## <脚本名>` 分节；脚本头注释的文档指针相应写成 `docs/scripts/<族文档>.md §<脚本名>`。
 
 ## blue 本体与仓库工具
 
-| 脚本                            | 源码                                     | 部署                      | 手册                                     |
-| ------------------------------- | ---------------------------------------- | ------------------------- | ---------------------------------------- |
-| blueprint.scm                   | `blueprint.scm`                          | 仓库根（blue 本体加载）   | [blueprint.md](blueprint.md)             |
-| bootstrap.sh                    | `tools/bootstrap.sh`                     | 不部署                    | [blue-helpers.md](blue-helpers.md)       |
-| build-image.scm                 | `tools/build-image.scm`                  | 不部署                    | [blue-helpers.md](blue-helpers.md)       |
-| gen-partial.scm                 | `tools/gen-partial.scm`                  | 不部署                    | [blue-helpers.md](blue-helpers.md)       |
-| doc-format.sh                   | `tools/doc-format.sh`                    | 不部署（format 编排）     | [doc-format.md](doc-format.md)           |
-| doc-punct.py                    | `tools/doc-punct.py`                     | 不部署（format 标点一级） | [doc-punct.md](doc-punct.md)             |
-| block-{list,extract,replace}.el | `tools/`                                 | 不部署（blueprint 调用）  | [org-block-tools.md](org-block-tools.md) |
-| toolbox                         | `dotfiles/mutable/tools/toolbox/.local/` | mutable                   | [toolbox.md](toolbox.md)                 |
+| 脚本                            | 源码                                     | 部署                      | 手册                                          |
+| ------------------------------- | ---------------------------------------- | ------------------------- | --------------------------------------------- |
+| blueprint.scm                   | `blueprint.scm`                          | 仓库根（blue 本体加载）   | [blueprint.md](repo/blueprint.md)             |
+| bootstrap.sh                    | `tools/bootstrap.sh`                     | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)       |
+| build-image.scm                 | `tools/build-image.scm`                  | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)       |
+| gen-partial.scm                 | `tools/gen-partial.scm`                  | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)       |
+| doc-format.sh                   | `tools/doc-format.sh`                    | 不部署（format 编排）     | [doc-format.md](repo/doc-format.md)           |
+| doc-punct.py                    | `tools/doc-punct.py`                     | 不部署（format 标点一级） | [doc-punct.md](repo/doc-punct.md)             |
+| block-{list,extract,replace}.el | `tools/`                                 | 不部署（blueprint 调用）  | [org-block-tools.md](repo/org-block-tools.md) |
+| toolbox                         | `dotfiles/mutable/tools/toolbox/.local/` | mutable                   | [toolbox.md](repo/toolbox.md)                 |
 
 ## agent 入口（`~/.local/bin`）
 
-| 脚本                                                 | 源码                                         | 部署    | 手册                   |
-| ---------------------------------------------------- | -------------------------------------------- | ------- | ---------------------- |
-| dsh / dsh-web / dsh-update / dsh-tui                 | `dotfiles/mutable/agents/dsh/.local/`        | mutable | [dsh.md](dsh.md)       |
-| devin                                                | `dotfiles/mutable/agents/devin/.local/bin/`  | mutable | [devin.md](devin.md)   |
-| askill                                               | `dotfiles/mutable/agents/skills/.local/bin/` | mutable | [askill.md](askill.md) |
+| 脚本                                 | 源码                                         | 部署    | 手册                          |
+| ------------------------------------ | -------------------------------------------- | ------- | ----------------------------- |
+| dsh / dsh-web / dsh-update / dsh-tui | `dotfiles/mutable/agents/dsh/.local/`        | mutable | [dsh.md](agents/dsh.md)       |
+| askill                               | `dotfiles/mutable/agents/skills/.local/bin/` | mutable | [askill.md](agents/askill.md) |
 
 ## 第三方二进制（`~/.local/bin`）
 
 上游发行、无线仓库源码，手动落盘并按需在 `source/config.org` 声明常驻服务。
 
-| 二进制          | 部署目标                                                              | 手册                       |
-| --------------- | --------------------------------------------------------------------- | -------------------------- |
-| quicktui-server | `~/.local/bin/` + `~/.config/quicktui-server-v2/`，home shepherd 常驻 | [quicktui.md](quicktui.md) |
+| 二进制          | 部署目标                                                                            | 手册                               |
+| --------------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
+| quicktui-server | `~/.local/bin/` + `~/.config/quicktui-server-v2/`，手动部署（常驻服务未在仓库声明） | [quicktui.md](desktop/quicktui.md) |
 
 ## agent 闸门与钩子
 
-| 脚本                          | 源码                                          | 部署                                       | 手册                                   |
-| ----------------------------- | --------------------------------------------- | ------------------------------------------ | -------------------------------------- |
-| gate-core.sh + anchors-lib.sh | `dotfiles/immutable/agents/.agents/`          | immutable → `~/.agents/`（须 `blue home`） | [gate-core.md](gate-core.md)           |
-| context-select.sh             | 同上                                          | 同上                                       | [context-select.md](context-select.md) |
-| zcode hooks（3 个）           | `dotfiles/mutable/agents/zcode/.zcode/hooks/` | mutable → `~/.zcode/hooks/`                | [zcode-hooks.md](zcode-hooks.md)       |
+| 脚本                          | 源码                                          | 部署                                       | 手册                                          |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------ | --------------------------------------------- |
+| gate-core.sh + anchors-lib.sh | `dotfiles/immutable/agents/.agents/`          | immutable → `~/.agents/`（须 `blue home`） | [gate-core.md](agents/gate-core.md)           |
+| context-select.sh             | 同上                                          | 同上                                       | [context-select.md](agents/context-select.md) |
+| zcode hooks（3 个）           | `dotfiles/mutable/agents/zcode/.zcode/hooks/` | mutable → `~/.zcode/hooks/`                | [zcode-hooks.md](agents/zcode-hooks.md)       |
 
 ## 终端：fish
 
-| 脚本                                                                      | 源码                                                    | 部署                            | 手册                                         |
-| ------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------- | -------------------------------------------- |
-| 自定义函数（run/retry/screen-off/git-resign/jdk·jbuild·jrun/fish_prompt） | `dotfiles/immutable/terminal/.config/fish/functions/`   | immutable（须 `blue home`）     | [fish-functions.md](fish-functions.md)       |
-| denv                                                                      | 同上                                                    | 同上                            | [denv.md](denv.md)                           |
-| conf.d/*.fish（9 个启动碎片）                                             | `dotfiles/immutable/terminal/.config/fish/conf.d/`      | 同上                            | [fish-conf-d.md](fish-conf-d.md)             |
-| completions/*.fish（18 个补全）                                           | `dotfiles/immutable/terminal/.config/fish/completions/` | 同上                            | [fish-completions.md](fish-completions.md)   |
-| livecd fish_greeting / fish_prompt                                        | `source/files/livecd/.config/fish/functions/`           | Live ISO 内经 `local-file` 引用 | [misc-scripts.md](misc-scripts.md) §Live ISO |
+| 脚本                                                                                    | 源码                                                    | 部署                            | 手册                                                 |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------------------- | ---------------------------------------------------- |
+| 自定义函数（run/retry/screen-off/git-resign/java_tools（jdk·jbuild·jrun）/fish_prompt） | `dotfiles/immutable/terminal/.config/fish/functions/`   | immutable（须 `blue home`）     | [fish-functions.md](terminal/fish-functions.md)      |
+| denv                                                                                    | 同上                                                    | 同上                            | [denv.md](terminal/denv.md)                          |
+| conf.d/*.fish（9 个启动碎片）                                                           | `dotfiles/immutable/terminal/.config/fish/conf.d/`      | 同上                            | [fish-conf-d.md](terminal/fish-conf-d.md)            |
+| completions/*.fish（19 个补全）                                                         | `dotfiles/immutable/terminal/.config/fish/completions/` | 同上                            | [fish-completions.md](terminal/fish-completions.md)  |
+| livecd fish_greeting / fish_prompt                                                      | `source/files/livecd/.config/fish/functions/`           | Live ISO 内经 `local-file` 引用 | [misc-scripts.md](desktop/misc-scripts.md) §Live ISO |
 
 ## 终端：tmux
 
-| 脚本                                                      | 源码                                                     | 部署                                       | 手册                                   |
-| --------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------ | -------------------------------------- |
-| session-selector / attach-entry / window-jump / which-key | `dotfiles/immutable/terminal/.config/tmux/scripts/`      | immutable（须 `blue home`）                | [tmux-scripts.md](tmux-scripts.md)     |
-| sidebar-toggle                                            | 同上                                                     | 同上                                       | [sidebar-toggle.md](sidebar-toggle.md) |
-| sidebar-render.scm + sidebar/*.scm                        | 同上                                                     | 同上                                       | [tmux-sidebar.md](tmux-sidebar.md)     |
-| termide.session.sh                                        | `dotfiles/immutable/terminal/.config/tmuxifier/layouts/` | immutable → `~/.config/tmuxifier/layouts/` | [termide-layout.md](termide-layout.md) |
+| 脚本                                                      | 源码                                                     | 部署                                       | 手册                                            |
+| --------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
+| session-selector / attach-entry / window-jump / which-key | `dotfiles/immutable/terminal/.config/tmux/scripts/`      | immutable（须 `blue home`）                | [tmux-scripts.md](terminal/tmux-scripts.md)     |
+| sidebar-toggle                                            | 同上                                                     | 同上                                       | [sidebar-toggle.md](terminal/sidebar-toggle.md) |
+| sidebar-render.scm + sidebar/*.scm                        | 同上                                                     | 同上                                       | [tmux-sidebar.md](terminal/tmux-sidebar.md)     |
+| termide.session.sh                                        | `dotfiles/immutable/terminal/.config/tmuxifier/layouts/` | immutable → `~/.config/tmuxifier/layouts/` | [termide-layout.md](terminal/termide-layout.md) |
 
 ## 主题
 
-| 脚本                                                                       | 源码                                                   | 部署                               | 手册                                 |
-| -------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- | ------------------------------------ |
-| `{dark,light}-mode.d/0-apply-theme.sh` + theme-common.sh + nosd-portal-run | `dotfiles/immutable/nosdshell/.local/{libexec,share}/` | immutable → mode.d / dbus services | [darkman-theme.md](darkman-theme.md) |
-| set-theme.sh                                                               | `dotfiles/immutable/nosdshell/.config/darkman/script/` | immutable                          | [set-theme.md](set-theme.md)         |
+| 脚本                                                                       | 源码                                                   | 部署                               | 手册                                         |
+| -------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- | -------------------------------------------- |
+| `{dark,light}-mode.d/0-apply-theme.sh` + theme-common.sh + nosd-portal-run | `dotfiles/immutable/nosdshell/.local/{libexec,share}/` | immutable → mode.d / dbus services | [darkman-theme.md](desktop/darkman-theme.md) |
+| set-theme.sh                                                               | `dotfiles/immutable/nosdshell/.config/darkman/script/` | immutable                          | [set-theme.md](desktop/set-theme.md)         |
 
 ## 桌面与系统零散脚本
 
-niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解静音兜底、只读家目录体检、Live ISO 的 fish 载荷合成一篇：[misc-scripts.md](misc-scripts.md)。全部在 `dotfiles/immutable/`，改源后须 `blue home`。
+niri 窗口切换与面板、非 NixOS GPU 链接、KeePassXC 凭据、ALSA 解静音兜底、只读家目录体检、Live ISO 的 fish 载荷合成一篇：[misc-scripts.md](desktop/misc-scripts.md)。全部在 `dotfiles/immutable/`，改源后须 `blue home`。
 
-mutable 侧另有 `hotspot`（WiFi 热点启停，仅 2.4G（AP 与 STA 同信道），客户端流量走 mihomo TUN 代理；`blue stow tools/hotspot`，改源即生效）：[hotspot.md](hotspot.md)。
+mutable 侧另有 `hotspot`（WiFi 热点启停，仅 2.4G（AP 与 STA 同信道），客户端流量走 mihomo TUN 代理；`blue stow tools/hotspot`，改源即生效）：[hotspot.md](desktop/hotspot.md)。
 
 ## emacs
 
@@ -82,12 +81,12 @@ Emacs 配置为 UniEmacs 子模块（`dotfiles/mutable/emacs/.config/emacs/`，m
 
 ## 专题手册（不在本目录）
 
-| 主题                                        | 手册                                             |
-| ------------------------------------------- | ------------------------------------------------ |
-| blue 不可用时的应急部署与纯手动命令序列     | [`docs/emergency-blue.md`](../emergency-blue.md) |
-| Live ISO 自主打包                           | [`docs/iso-build.md`](../iso-build.md)           |
-| Chroot 救援（tmpfs 根 + LUKS + Btrfs 子卷） | [`docs/rescue-chroot.md`](../rescue-chroot.md)   |
-| 加密入仓配置管理                            | [`docs/secrets.md`](../secrets.md)               |
+| 主题                                        | 手册                                                                   |
+| ------------------------------------------- | ---------------------------------------------------------------------- |
+| blue 不可用时的应急部署与纯手动命令序列     | [`docs/operations/emergency-blue.md`](../operations/emergency-blue.md) |
+| Live ISO 自主打包                           | [`docs/operations/iso-build.md`](../operations/iso-build.md)           |
+| Chroot 救援（tmpfs 根 + LUKS + Btrfs 子卷） | [`docs/operations/rescue-chroot.md`](../operations/rescue-chroot.md)   |
+| 加密入仓配置管理                            | [`docs/systems/secrets.md`](../systems/secrets.md)                     |
 
 ## 子模块
 
@@ -108,5 +107,5 @@ Emacs 配置为 UniEmacs 子模块（`dotfiles/mutable/emacs/.config/emacs/`，m
 | `50-hibernate.rules`                                | polkit 休眠授权规则（JavaScript）                                               |
 | `fish-cfg`                                          | fish 交互 shell 集成模板                                                        |
 | `clipsync`                                          | X11 与 Wayland CLIPBOARD 双向同步守护（Guile）                                  |
-| `kb-backup-script`                                  | 每日提交 ~/Documents/Org 知识库                                                  |
+| `kb-backup-script`                                  | 每日提交 ~/Documents/Org 知识库                                                 |
 | `gnupg-home-fixup-script`                           | `tmp/gnupg-home-fixup`：GNUPGHOME 收敛 700 + 清外主机 dotlock 残留              |

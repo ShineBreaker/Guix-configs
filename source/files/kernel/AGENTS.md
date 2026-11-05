@@ -54,7 +54,7 @@ EOF
 guix time-machine -C source/channel.lock -- build -f tmp/kernel-probe.scm
 ```
 
-**构建失败排查**：`verify-config` 会逐条打印 mismatch 的符号，可进入保留的失败构建目录 `/tmp/guix-build-linux-cachyos-lts-*.drv-0` 执行 `make ARCH=x86_64 guix_defconfig` 快速复现调试，按提示调整 Pin 或 Trim 清单。
+**构建失败排查**：`verify-config` 会逐条打印 mismatch 的符号，可进入保留的失败构建目录 `/tmp/guix-build-linux-cachyos-*.drv-0` 执行 `make ARCH=x86_64 guix_defconfig` 快速复现调试，按提示调整 Pin 或 Trim 清单。
 
 **对拍复验**（大改与重构后）：
 

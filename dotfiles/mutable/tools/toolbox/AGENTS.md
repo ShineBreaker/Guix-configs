@@ -1,6 +1,6 @@
 # toolbox — 自研工具目录
 
-浏览 / 运行本仓库自研 `.local/bin` 工具的统一入口：fzf 列表 + 详情预览，运行页展示帮助并支持 Tab 补全传参，GUI 侧由 `.desktop` 拉起专用 kitty 窗口。命令与界面细节见 [docs/scripts/toolbox.md](../../../../docs/scripts/toolbox.md)；本篇讲清单的收录标准与维护约定。
+浏览 / 运行本仓库自研 `.local/bin` 工具的统一入口：fzf 列表 + 详情预览，运行页展示帮助并支持 Tab 补全传参，GUI 侧由 `.desktop` 拉起专用 kitty 窗口。命令与界面细节见 [docs/scripts/repo/toolbox.md](../../../../docs/scripts/repo/toolbox.md)；本篇讲清单的收录标准与维护约定。
 
 ## 文件
 
@@ -12,7 +12,7 @@
 
 ## 收录标准（用户拍板 2026-09-15）
 
-只收**自己写了实质逻辑的原创工具**；纯透传 wrapper（pi / dsh 等把上游 CLI 摆进 PATH 的启动器）不收。登记是 opt-in 的。
+只收**自己写了实质逻辑的原创工具**；把上游 CLI 原样摆进 PATH 的纯透传 wrapper 不收。带增强子命令的入口按主命令形态登记。
 
 清单字段：
 

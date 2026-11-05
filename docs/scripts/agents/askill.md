@@ -30,10 +30,10 @@ askill add heydamir/unslop -s unslop --as unslop-ui
 
 装出的是 `~/.agents/skills/unslop-ui/`，frontmatter 的 `name:` 同步改成 `unslop-ui`——宿主（DSH 等）按 frontmatter 认名，目录名只决定落点。两版同名上游可共存：
 
-| 部署名      | 上游名   | 来源              | 用途     |
-| ----------- | -------- | ----------------- | -------- |
-| `unslop-text` | `unslop` | `cursor/plugins`   | 文字去 AI 味 |
-| `unslop-ui`   | `unslop` | `heydamir/unslop` | UI 去 AI 味   |
+| 部署名        | 上游名   | 来源              | 用途         |
+| ------------- | -------- | ----------------- | ------------ |
+| `unslop-text` | `unslop` | `cursor/plugins`  | 文字去 AI 味 |
+| `unslop-ui`   | `unslop` | `heydamir/unslop` | UI 去 AI 味  |
 
 ## 实现与约束
 
@@ -47,11 +47,11 @@ askill add heydamir/unslop -s unslop --as unslop-ui
 
 ## 排障
 
-| 现象                       | 原因                                           | 处理                                             |
-| -------------------------- | ---------------------------------------------- | ------------------------------------------------ |
-| 找不到 `skills-lock.json`  | 尚未生成锁（`update`/`install`/`sync` 都会报） | `askill add <owner/repo>` 生成                   |
-| npx clone 超时             | 网络慢或仓库大                                 | `SKILLS_CLONE_TIMEOUT_MS=1200000 askill add ...` |
-| 自建 skill 被覆盖          | 名字与锁内 skill 冲突                          | 改名；脚本只同步锁内名字，但同名仍会被换入覆盖   |
-| 暂存区有内容但部署位没更新 | `sync_from_staging` 跳过（锁内无该名字）       | 用 `askill add`/`update` 重新落盘，或核对锁      |
-| 同名上游只剩一个           | 未加 `--as`，锁 key 撞名                       | `askill add <repo> -s <skill> --as <部署名>`     |
-| `update` 报 `Failed to update <部署名>` | 锁里存的是部署名，上游无同名 skill      | 确认 `upstreamName` 字段存在                     |
+| 现象                                    | 原因                                           | 处理                                             |
+| --------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| 找不到 `skills-lock.json`               | 尚未生成锁（`update`/`install`/`sync` 都会报） | `askill add <owner/repo>` 生成                   |
+| npx clone 超时                          | 网络慢或仓库大                                 | `SKILLS_CLONE_TIMEOUT_MS=1200000 askill add ...` |
+| 自建 skill 被覆盖                       | 名字与锁内 skill 冲突                          | 改名；脚本只同步锁内名字，但同名仍会被换入覆盖   |
+| 暂存区有内容但部署位没更新              | `sync_from_staging` 跳过（锁内无该名字）       | 用 `askill add`/`update` 重新落盘，或核对锁      |
+| 同名上游只剩一个                        | 未加 `--as`，锁 key 撞名                       | `askill add <repo> -s <skill> --as <部署名>`     |
+| `update` 报 `Failed to update <部署名>` | 锁里存的是部署名，上游无同名 skill             | 确认 `upstreamName` 字段存在                     |

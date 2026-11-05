@@ -3,9 +3,9 @@
 
 # quicktui-server — 远程终端服务（手机/网页经配对接入本机 tmux）
 
-上游 Rust 单文件发行二进制（无仓库源码） · 手动部署到 `~/.local/bin/quicktui-server` + `~/.config/quicktui-server-v2/` · 调用方：home shepherd 常驻（`quicktui`）与手动配对/管理
+上游 Rust 单文件发行二进制（无仓库源码） · 手动部署到 `~/.local/bin/quicktui-server` + `~/.config/quicktui-server-v2/` · 调用方：手动调用（原 home shepherd 常驻已移除）与手动配对/管理
 
-QuickTUI 提供 HTTP + WebSocket 终端入口，设备配对后可 attach 本机 tmux 会话；AgentBridge2（AB2）另把本机各 agent 宿主（claude / codex / opencode / pi）的生命周期事件转发到同一入口。服务在 `source/config.org`「QuickTUI 远程终端」以 `home-daemon-service` 声明，日志落 `$XDG_STATE_HOME/shepherd/quicktui.log`。
+QuickTUI 提供 HTTP + WebSocket 终端入口，设备配对后可 attach 本机 tmux 会话；AgentBridge2（AB2）另把本机各 agent 宿主（claude / codex / opencode / pi）的生命周期事件转发到同一入口。该服务此前由 `source/config.org` 的 `home-daemon-service` 常驻，2026-10-09 起服务定义已从 `source/config.org` 移除，需要常驻时手动运行 `quicktui-server serve`。日志落 `$XDG_STATE_HOME/shepherd/quicktui.log`。
 
 ## 用法
 

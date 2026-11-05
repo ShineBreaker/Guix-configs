@@ -52,18 +52,19 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 - `prepare-config`：追加尾表达式（`%system` / `%home`——guix 取文件最后一个表达式的值为配置对象）再整文件括号兜底。
 - `apply-config`：dry-run 降级为 `guix <subsystem> build --dry-run`；真跑时 `reconfigure --allow-downgrades --fallback`，system 另加 `--no-kexec`（reconfigure 默认 kexec-load 新内核，此后 elogind 的 reboot 会走 kexec 路径并挂死电源操作）；成功后删除 `tmp/` 中间产物。`#:after` 回调（rebuild 的 `guix locate --update`）在 dry-run 下也经 `%run` 预演。
 - `blue --dry-run rebuild` / `home` 真跑 tangle 与括号检查，但 build 验证本身也是 `%run` 调用——会被短路成预演打印而不真正求值。要真做语义验证须手工跑 build 命令（`source/AGENTS.md` 验证流程一节有现成写法）。
-- `blue init`（装机到 /mnt）dry-run 下同样 tangle + 预演打印，并保留 `tmp/` 产物；它**没有** build --dry-run 降级（init 本身无可预演形态；应急脚本 `tools/emergency-blue.sh` 用 `build --dry-run` 模拟，见 [docs/emergency-blue.md](../emergency-blue.md)）。
+- `blue init`（装机到 /mnt）dry-run 下同样 tangle + 预演打印，并保留 `tmp/` 产物；它**没有** build --dry-run 降级（init 本身无可预演形态；应急脚本 `tools/emergency-blue.sh` 用 `build --dry-run` 模拟，见 [docs/operations/emergency-blue.md](../../operations/emergency-blue.md)）。
 
 ## 各命令组要点（§8）
 
 ### 部署
 
-- **rebuild**：`sub-update`（同步子模块到远端最新，失败只告警）→ 修剪 system 世代 → `clean-artifacts` → tangle + 括号检查 → `system reconfigure` → `locate --update`。
+- **rebuild**：修剪 system 世代 → `clean-artifacts` → tangle + 括号检查 → `system reconfigure` → `locate --update`。
+  - **子模块更新刻意不在这里**：每次重建都拉一遍别人的仓库（rime-ice 等）既慢、又会把与本次重建无关的变更混进来；子模块同步归 `blue update` 显式触发。
   - **世代修剪刻意放最前**：reconfigure 耗时久，若留到其后 sudo 宽限期（15 分钟）可能已过期、二次要密码；前置后全程最多输一次。
   - **为什么修剪**：limine 每次 reconfigure 按当时全部 system 世代在 ESP 重建 UKI（CURRENT.EFI + 每旧世代一个 OLD-N.EFI，单个约 50M），世代无上限会挤爆 ESP；`%keep-system-generations = 20`。`delete-generations` 顺带的 reinstall-bootloader 对 limine 只写无人读取的 grub.cfg；多余 UKI 由下一次 reconfigure 按剩余世代重建时自然收敛。
   - 世代号单调递增、**不因清理重新编号**，`%system-generation-numbers` 枚举 `/var/guix/profiles/system-*-link` 的实号而非假设 1..N 连续；未超限则静默跳过，不起 sudo。
 - **home**：`clean-artifacts` → `home reconfigure`（无需 sudo，agent 首选调试方式）。
-- **build-iso**：先 tangle 让 `:tangle ../tmp/live-iso-<variant>.scm` 块出产物，再对每个变体经 `guix repl` 调 `tools/build-image.scm`。变体表 `%images`（`desktop` / `minimal`，顺序即构建顺序）仿 Testament 项目的写法，前缀为本仓库名 `jeans`；产物 `dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso`。构建耗时 30+ 分钟，细节见 [docs/iso-build.md](../iso-build.md)。
+- **build-iso**：先 tangle 让 `:tangle ../tmp/live-iso-<variant>.scm` 块出产物，再对每个变体经 `guix repl` 调 `tools/build-image.scm`。变体表 `%images`（`desktop` / `minimal`，顺序即构建顺序）仿 Testament 项目的写法，前缀为本仓库名 `jeans`；产物 `dist/jeans-<variant>-<YYYYMMDD>.<arch>.iso`。构建耗时 30+ 分钟，细节见 [docs/operations/iso-build.md](../../operations/iso-build.md)。
 
 ### 编辑（Org 块级）
 
@@ -75,16 +76,17 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 ### Guix 频道（update / pull）
 
 - **pull**：`guix time-machine --channels=channel.lock -- pull --channels=<lock绝对路径> --allow-downgrades --fallback`。pull 自身也显式吃 lock——不依赖 `/etc/guix/channels.scm` 的部署时序（它由系统 reconfigure 从 lock 生成，`blue update` 刷新 lock 后到下次 rebuild 前一直是旧 pin），用户 profile 直接对齐仓库锁。
-- **update**：`--guix` / `--nix` 两侧可独立指定；`-c NAME` 单频道刷新、`-C COMMIT` pin 到 commit、`--flake NAME` 单 input 刷新，组合约束在 `%update-scope` 的 match 里逐条给出中文报错。guix 侧更新完成后自动链一次 pull（对齐 profile 到新 lock）。
+- **update**：`--guix` / `--nix` / `--sub` 三侧可独立指定，不带参数时三侧全刷（子模块先于锁刷新，bump 提交落在 lock 提交之下）；`-c NAME` 单频道刷新、`-C COMMIT` pin 到 commit、`--flake NAME` 单 input 刷新，组合约束在 `%update-scope` 的 match 里逐条给出中文报错。guix 侧更新完成后自动链一次 pull（对齐 profile 到新 lock）。
 - `%partial-channels-file` 生成「目标频道可变定义 + 其余按 lock pin」的临时 channels 文件（`guix repl` 跑 `tools/gen-partial.scm`，契约见 [blue-helpers.md](blue-helpers.md) §gen-partial.scm）；随后 `guix time-machine --channels=<临时文件> -- describe --format=channels` 的输出原子写回 `channel.lock`。**dry-run 分支不生成临时文件、直接返回 `%channel-scm` 原件**，只打一行 `[预演]`——让后续 dry-run 分支有可用的 channels 参数可传。
 - **`%update-guix` 里的 describe 是捕获 stdout 的管道命令，不走 `%run` 短路**——dry-run 分支在此手动 `%print-preview`，是「管道不短路」不变量的典型用例。
 - `%commit-lock` 只在 `git status --porcelain` 显示锁文件有变化时才 `git commit -S`：单频道/单 flake 刷新常无新版本，空提交的非零退出会让 `%run` 误报失败；dry-run 下直接视作有变化以保留 commit 预演输出。
 - `%update-nix`：全量时先 `nix-channel --update` 再 `nix flake update`；单 input 用 nix 2.19+ 的参数语法。全部走 `%run`，dry-run 自动短路。**入口先按 `which` 探测所需命令**（全量要 `nix-channel` + `nix`，单 input 只要 `nix`），任一缺失即整侧跳过：Nix 只是本仓库的备用配置，缺它不该让 `blue update` 整条命令失败；提示走 stderr，显式 `--nix` 的用户也能看到、不会误以为 flake.lock 已更新。
 
-### 子模块（sub-update / sub-push）
+### 子模块（sub-update / sub-push / push）
 
-- **sub-update**：逐个子模块 `git fetch origin` + 快进（detached HEAD 直接 checkout `origin/main`，在分支上则 `merge --ff-only`）——本地领先/分叉立即跳过，保住「有提交还没推」的现场。gitlink 有变化时自动在父仓库提交一条 `chore(submodules): bump 子模块`（复用签名降级范式）。`blue rebuild` 前自动执行；离线或单模块失败只 stderr 告警，不阻塞重建。安全边界：未 init、脏工作区、非快进一律跳过。
+- **sub-update**：逐个子模块 `git fetch origin` + 快进（detached HEAD 直接 checkout `origin/main`，在分支上则 `merge --ff-only`）——本地领先/分叉立即跳过，保住「有提交还没推」的现场。gitlink 有变化时自动在父仓库提交一条 `chore(submodules): bump 子模块`（复用签名降级范式；走 `%commit-paths` 只提交这些路径，不吞用户暂存区的其他内容）。`blue update` 默认执行（`--sub` 单独指定）；离线或单模块失败只 stderr 告警，不阻塞其余步骤。安全边界：未 init、脏工作区、非快进一律跳过。
 - **sub-push**：只推自有仓库（URL 含 `/ShineBreaker/`），`git push origin HEAD:main`；别人的仓库（如 rime-ice）与脏/未 init 的子模块跳过。只推子模块自身，父仓库推送仍由人工决定。
+- **push**：一键收尾 = `sub-push` 的推送逻辑 + 父仓库 bump + 父仓库推送。子模块推送成功后，若其 HEAD 与父仓库 gitlink 不一致，用 `%commit-paths` 提交 `chore(submodules): bump 子模块`——只把这几条路径交给 `git commit -- <paths>`，不吞用户已暂存的其他内容（整暂存区提交会一并带走，故不做）。推送失败的子模块**保留旧 gitlink**，避免父仓库指向远端不存在的提交。主仓库未提交改动一律不提交、也不阻止推送；任一项失败以非零退出码汇总。dry-run 下所有 git 写操作走 `%run` 预演。
 - `%submodule-list` 用 path / url 两条 `git config --get-regexp` 查询按 submodule 名拼对：名字可含 `.`（`.agents/skills/guix-skills`），单条 url 正则会漏；且名字 ≠ path（"rime" 的 path 在 dotfiles/ 深处）。
 - `%run/soft` 是 `%run` 的软失败变体（返回退出码不终止 blue），专供上述容错循环；rebase 类「半途失败需要人介入」的操作仍走 `%run` 硬失败。
 
@@ -129,12 +131,14 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 - `%subprocess-fail!` 用 `primitive-exit` 而非 `error` / `exit`：blue 框架会给异常打整套 backtrace，而「子进程非零退出」是预期内失败，堆栈无诊断价值。`popen` 返回原始 wait status（退出码在高位），须 `status:exit-val` 解包后再交 `primitive-exit`，否则低 8 位截断后失败也报 0。
 - `%write-file-atomically`：`mkstemp!` 写 `file.XXXXXX` 再 `rename` 覆盖，异常清理临时文件——config.org / channel.lock / AGENTS.md 等关键文件绝不停留在「写一半」。
 - `%shell-quote` / `%shell-command`：POSIX 单引号转义（`'\''` 切断重开），拼进 shell 字符串前逐参数 quote。
-- 括号检查（§3）是手写词法扫描而非 guix `read`：config.org 的块含读取器宏（unquote 等），read 报错定位差。栈式配对要求 `[`/`(` 严格同类（`[` 配 `)` 算错）；跳过字符串字面量与 `;` 注释。**字符串未闭合不会单独报错**（emergency-blue 的 awk 移植版额外覆盖此点，见 [docs/emergency-blue.md](../emergency-blue.md) §7）。
+- 括号检查（§3）是手写词法扫描而非 guix `read`：config.org 的块含读取器宏（unquote 等），read 报错定位差。栈式配对要求 `[`/`(` 严格同类（`[` 配 `)` 算错）；跳过字符串字面量与 `;` 注释。**字符串未闭合不会单独报错**（emergency-blue 的 awk 移植版额外覆盖此点，见 [docs/operations/emergency-blue.md](../../operations/emergency-blue.md) §7）。
 - `%check-config-blocks` 只查 `scheme` 块（fish/bash 是嵌在 scheme 字符串里的内容）；`main` 块也查——`<<ref>>` 占位本身括号平衡。失败不立即中止，让用户一次看到所有错误。
 - `%pipe->string` 在非零退出时先把已捕获的 stdout 转发到 stderr 再报错——`blue block-show <不存在的块>` 因此能直接看到 elisp 的 `[ERROR] 未找到代码块`，而不是只有一行「命令执行失败」。
 
 ## 变更
 
+- 2026-11-05 `sub-update` 从 `rebuild` 前置移入 `update`：`%update-scope` 扩为 `(guix nix sub)` 三元组，不带参数时三侧全刷，`--sub` 单独指定；`rebuild` 不再每次拉子模块。子模块 bump 改用 `%commit-paths` 只提交子模块路径（原 `%commit-staged` 会吞用户暂存区，已删除）。
+- 2026-11-04 新增 `push` 命令：子模块推送后自动在父仓库 bump gitlink 并推送父仓库，补上 `sub-push` 只推子模块、指针仍需人工补的缺口。bump 用新 helper `%commit-paths`（`git commit -- <paths>`）只提交子模块路径，避免吞掉用户已暂存的其他内容。
 - 2026-11-02 新增 `sub-update` / `sub-push` / `resign` 三命令；`rebuild` 前置 `sub-update`，`update` 的 guix 侧完成后自动链 `pull`，`pull` 显式 `--channels=<lock>`（不再依赖 `/etc/guix/channels.scm` 的部署时序）。`resign` 的 rebase 走 `%run` 硬失败（中途签名失败保留现场）。
 - 2026-10-06 `%update-nix` 入口按 `which` 探测所需命令（全量 `nix-channel` + `nix`、单 input `nix`），任一缺失即整侧跳过并打 stderr 提示：本机未安装 Nix，此前 `blue update` 会因 `nix-channel` 不存在（popen exec 失败）整条命令不可用。
 - 2026-09-29 两处行为级修复：`clean-artifacts` 的目录型目标原本直接 `delete-file-recursively`，不走 `%run`，故 `blue --dry-run clean-artifacts`（连带 `--dry-run rebuild` / `home`）会真删这些目录，现改为 dry-run 下打 `[预演] 移除`；`%pipe->string` 在子进程非零退出时把已捕获 stdout 转发到 stderr，`blue block-show` / `block-list` / `describe` 等失败现在能看到脚本自己的 `[ERROR]` 诊断。
