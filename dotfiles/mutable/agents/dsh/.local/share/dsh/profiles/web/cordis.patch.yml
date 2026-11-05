@@ -848,6 +848,8 @@
               medium: medium
               high: high
               xhigh: xhigh
+      opencode-go:
+        apiKeyEnv: OPENCODE_GO_API_KEY
 - id: ponytail
   name: "@mengyuly/dsh-ponytail"
   config:
@@ -1090,6 +1092,7 @@
     memory:
       maxBytes: 1048576
       inject: true
+      disabledCards: []
       layered: false
       injectMaxChars: 8000
       recall: off
@@ -1190,9 +1193,13 @@
 - id: dsh-market
   config:
     allowRestart: false
+- id: web
+  name: "@deepseek-ai/dsh-web"
+  config:
+    searchProvider: ddg
+    fetchProvider: fs-quality-fetch
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: magpie
-    model: auto/deepseek-v4.1-flash
-    reasoningEffort: max
+    provider: opencode-go
+    model: deepseek-v4.1-flash

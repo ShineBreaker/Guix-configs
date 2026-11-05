@@ -39,5 +39,5 @@ dotfiles/
 | `immutable/nosdshell/` | 无        | 主题与外观适配（nosd-helpers portal 启动入口、mode.d hook、模板渲染） |
 | `immutable/system/`    | 有        | 系统级用户态配置：容器策略、mihomo 代理、PipeWire 音频、XDG 用户目录  |
 | `immutable/terminal/`  | 有        | 终端工具链：Fish、Tmux、Foot、Kitty、Starship、Btop、Atuin 等         |
-| `immutable/utilities/` | 有        | 常用工具与开发环境：Fcitx5/Rime、Helix、Git、Pnpm、GnuPG、WinApps     |
+| `immutable/utilities/` | 有        | 常用工具与开发环境：Fcitx5/Rime、Git、Pnpm、GnuPG、WinApps            |
 | `mutable/`             | 有        | Emacs、Agenote、DSH、Secrets、Toolbox 等可变配置包                    |

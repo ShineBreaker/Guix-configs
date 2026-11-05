@@ -494,3 +494,11 @@
               medium: medium
               high: high
               xhigh: xhigh
+      opencode-go:
+        apiKeyEnv: OPENCODE_GO_API_KEY
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: opencode-go
+    model: deepseek-v4.1-flash
+# @@shared:end
