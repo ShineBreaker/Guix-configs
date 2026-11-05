@@ -1,6 +1,8 @@
-# gpg-agent / pinentry 范式：把 `$HOME`-relative 路径换成绝对 store 路径
+# gpg-agent / pinentry 范式：daemon 配置里的路径可靠性
 
-> 沉淀自 2026-07-18 实操。用户报："为什么我的 gpg 填写密码不走 pinentry-qt 了，奇怪"。诊断链 + 根因 + 范式修复。
+> **现行实现（2026-11 核对）**：conf 写在 dotfile 里，`pinentry-program ~/.local/bin/pinentry-wayland`。`pinentry-wayland` 是包装脚本，按会话类型分流：SSH 与终端会话走 curses，非交互会话补 Wayland 环境变量后走 Qt。下文的绝对 store 路径方案是当初的修复路径，思路仍然有效，但不是当前唯一做法；诊断方法与 `gpgconf` 的用法对所有方案通用。
+>
+> 沉淀自 2026-07-18 实操。用户报："为什么我的 gpg 填写密码不走 pinentry-qt 了，奇怪"。诊断链 + 根因 + 当时的修复。
 
 ---
 
@@ -118,10 +120,10 @@ git add source/files/gpg-agent.conf
 # source/config.org 的 home-files-services 块改动一起 git add
 ```
 
-### 步骤 4:blue home 部署 + reload
+### 步骤 4:重新部署 Home + reload
 
 ```bash
-cd ~/Projects/dotfiles/guix/Guix-configs && blue home
+guix home reconfigure /path/to/home.scm
 # 部署完成,store 副本会有新 hash
 
 # 验证 symlink 指向新 store
@@ -130,7 +132,7 @@ readlink -f ~/.local/share/gnupg/gpg-agent.conf
 
 # 让正在跑的 gpg-agent 重读 conf
 gpgconf --reload gpg-agent
-# 这一步必须!blue home 只部署,不会重启已在跑的 gpg-agent
+# 这一步必须!重新部署 Home 只部署,不会重启已在跑的 gpg-agent
 
 # 触发一次签名验证
 echo "test" | gpg --clearsign
@@ -162,10 +164,10 @@ echo "test" | gpg --clearsign
 ## 反模式
 
 - ❌ **保留 dotfile 在 `dotfiles/immutable/<app>/` 里 + 写 `~`-relative 路径** —— daemon 跑的时候 `$HOME` 未必正确,结果就是你这次的 tty 弹窗
-- ❌ **改 gpg-agent.conf 后只 `blue home` 不 `gpgconf --reload gpg-agent`** —— 已在跑的 daemon 持有旧配置
+- ❌ **改 gpg-agent.conf 后只 `重新部署 Home` 不 `gpgconf --reload gpg-agent`** —— 已在跑的 daemon 持有旧配置
 - ❌ **gpg-agent.conf 里写绝对路径但忘了加 `specs->pkgs`** —— `$$bin/...$$` 不替换,conf 模板原样落到磁盘,pinentry 解析失败
 - ❌ **改 conf 路径但不动 `source/config.org` 的 `home-files-services` 块** —— Guix Home 不知道要部署这个 conf
-- ❌ **手动 `cp` conf 到 `~/.local/share/gnupg/`** —— store hash 是孤立的,下一次 `blue home` 会覆盖;正确做法是改源 + `blue home`
+- ❌ **手动 `cp` conf 到 `~/.local/share/gnupg/`** —— store hash 是孤立的,下一次 `重新部署 Home` 会覆盖;正确做法是改源 + `重新部署 Home`
 - ❌ **看到 tty 弹窗就去改 pinentry-qt 二进制本身** —— 二进制没问题,问题在 conf 路径没传到位
 
 ---
@@ -195,7 +197,7 @@ tr '\0' '\n' < /proc/$(pgrep -x gpg-agent)/environ \
 
 **根因**：gpg-agent 由「最近一次触发它的客户端」按需拉起（fork 后 daemonize，PPID 归 init/shepherd），之后所有客户端复用该实例；**进程环境启动后不可变**。若最后触发者来自 tty 环境（kmscon、agent 的 tty 会话等），agent 永久背着无显示变量的环境，pinentry-qt 无从弹窗。与 key 身份、conf 内容无关。
 
-**修复**（运行时重启，无需改配置、无需 blue home）：
+**修复**（运行时重启，无需改配置、无需 重新部署 Home）：
 
 ```bash
 gpgconf --kill gpg-agent
@@ -216,5 +218,5 @@ gpg-connect-agent 'GETINFO version' /bye                                    # �
 ## 一句话总结
 
 > **daemon 跑的 conf,路径必须绝对 store 路径,不依赖 `$HOME` 解析。**
-> **改 conf 后 `blue home` + `gpgconf --reload gpg-agent` 两个都要。**
+> **改 conf 后 `重新部署 Home` + `gpgconf --reload gpg-agent` 两个都要。**
 > **变体 2(弹窗完全不出现):先查 gpg-agent 进程的显示变量,kill 后从图形环境重启;无人输密码时改用 `--no-gpg-sign` 提交、事后 amend 补签。**

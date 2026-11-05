@@ -98,9 +98,10 @@ done
   脚本自身位置反推（`readlink -f "${BASH_SOURCE[0]}"` → 包根 → `share/dsh`（profile 侧）/
   `share/agents/dsh`（本体侧）），源布局与部署布局同构，不依赖任何软链存活。
 - **wrapper 自愈（2026-10-02 起全覆盖）**：`bin/dsh` 每次调用尾部跑
-  `_relink_profile` → `_relink_dir`，对 CLI 安装树（`$AGENTS_ROOT/dsh`）与 web
-  profile 两处做同一套自愈：三个配置文件（`package.json`/`pnpm-workspace.yaml`/
-  `cordis.patch.yml`）断链则内容归源 + 重建软链，lockfile 反向只回拷内容。
+  `_relink_profile` → `_relink_dir`，对 CLI 安装树（`$AGENTS_ROOT/dsh`）、web
+  profile 与 dsh-tui profile 三处做同一套自愈：四个配置文件（`package.json`/
+  `pnpm-workspace.yaml`/`cordis.patch.yml`/`compatibility.json`）断链则内容归源 +
+  重建软链，lockfile 反向只回拷内容。
   安装树是手动升级路径的回源盲区——改 `package.json` 后裸跑 `pnpm install` 不过
   `dsh update` 的 sync（曾致仓库 lockfile 落后一个 minor），靠这个兜底；全量
   回源（四件套）仍只发生在 `dsh update`。
@@ -179,9 +180,9 @@ done
 
 `dsh-web` shepherd 服务（`source/config.org` 的 `dsh-web-service` 块）已接管常驻；服务命令经 `~/.local/libexec/dsh-web --service` 入口启动（断链自愈后 exec 稳定 symlink `.bin/dsh` shim），日志仍写 `${XDG_STATE_HOME}/dsh/web.log`（wrapper 的 `launch_token()` 依赖不变）。
 
-- **EADDRINUSE 振荡**（respawn 循环、每次 startup failed）= 3080 被另一个实例占着：宿主上 wrapper/手动起的残留实例会跟服务抢端口。杀掉占用者即自愈。**qqbot/weixin 沙箱（bwrap）内 `ss -p` 看不到宿主进程 pid**，端口占用排查要么 `herd eval root` 借宿主 shepherd 视野、要么交用户宿主侧做（详见 guix-configs-workflow §4 典型陷阱）。
+- **EADDRINUSE 振荡**（respawn 循环、每次 startup failed）= 3080 被另一个实例占着：宿主上 wrapper/手动起的残留实例会跟服务抢端口。杀掉占用者即自愈。**qqbot/weixin 沙箱（bwrap）内 `ss -p` 看不到宿主进程 pid**，端口占用排查要么 `herd eval root` 借宿主 shepherd 视野、要么交用户宿主侧做（详见 guix-config-maintenance §4 典型陷阱）。
 - **`herd enable/disable` 无持久化**：只改内存标志，daemon 重启后按 conf 的 `auto-start?` 恢复——临时 disable 止住 respawn 噪音不会影响下次启动。
-- **`herd load` 单独跑不注册服务**：它只求值文件，`(service ...)` 返回值被丢弃；注册要走 init.scm 同款 `register-services` + `load`（recipe 见 guix-configs-workflow §4.4.1）。
+- **`herd load` 单独跑不注册服务**：它只求值文件，`(service ...)` 返回值被丢弃；注册要走 init.scm 同款 `register-services` + `load`（recipe 见 guix-config-maintenance §4.4.1）。
 - 服务自身崩溃后的最终验证，必须以新 conf 加载路径注册的实例为准（respawn 验证 recipe 同 §4.4.1）。
 
 ## 6. 收尾

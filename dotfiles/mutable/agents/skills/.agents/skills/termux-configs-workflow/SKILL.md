@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [termux, dotfiles, just, uniemacs]
-    related_skills: [guix-configs-workflow]
+    related_skills: [guix-config-maintenance]
 ---
 
 # termux-configs 仓库维护（手机端 Termux 配置）
@@ -25,7 +25,7 @@ metadata:
 |------|------|
 | termux-configs（本仓库） | 手机端 Termux 配置；stow 包 + setup.sh + dot 命令 + justfile |
 | UniEmacs | Emacs 配置（桌面 + 手机共用）；手机侧 clone 到 Termux `~/.config/emacs`；桌面上它是 Guix-configs 的子模块 |
-| Guix-configs | 桌面配置仓库，有自己的 `guix-configs-workflow` skill |
+| Guix-configs | 桌面配置仓库，有自己的 `guix-config-maintenance` skill |
 | termux-emacs | 为 Emacs 重签 Termux 系 APK 的独立仓库（`ShineBreaker/termux-emacs`：主程序 + 全部官方插件，CI 自动跟进上游）；UniEmacs 原重签流水线已剥离至此 |
 
 用户说「仓库里改了文案」时不指定哪个仓库时：先对候选仓库各跑 `git status --short` / 看最近 commit，别默认是本仓库。

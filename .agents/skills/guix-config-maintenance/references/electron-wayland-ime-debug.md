@@ -32,7 +32,7 @@ fcitx5-diagnose 2>/dev/null | grep -A1 'program:<app>'
 
 ### 调试步骤
 
-1. **对比两端 /proc/PID/environ**：`comm -23 /tmp/env-hermes.txt /tmp/env-qq.txt` → 发现 IME 变量相同（NIXOS_OZONE_WL=1、GTK_IM_MODULE=fcitx 等），环境变量不是根因。
+1. **对比两端 /proc/PID/environ**：`comm -23 /tmp/env-app1.txt /tmp/env-qq.txt` → 发现 IME 变量相同（NIXOS_OZONE_WL=1、GTK_IM_MODULE=fcitx 等），环境变量不是根因。
 
 2. **对比 cmdline**：Hermes cmdline 零 flag；QQ 有 `--ozone-platform-hint=auto --enable-wayland-ime=true --wayland-text-input-version=3` —— flag 看似齐全。
 

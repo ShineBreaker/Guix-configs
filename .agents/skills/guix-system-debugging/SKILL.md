@@ -1,71 +1,73 @@
 ---
 name: guix-system-debugging
-description: "当 blue rebuild 或 herd 卡死时排查 shepherd 死锁与 substitute 代理假象。"
-version: 0.1.0
+description: "Guix System 重建卡死排查：区分 shepherd 死锁与 substitute 代理假象，给出取证命令、恢复步骤与 profile PATH 漂移处理。触发：guix system reconfigure 卡住 / herd 命令挂起 / substitute 长时间无响应——任一出现即调用。"
+version: 0.2.0
 license: MIT
 metadata:
   hermes:
-    tags: [guix, shepherd, guix-daemon, substitute, mihomo, blue, debugging]
-    related_skills: [guix-configs-workflow, hermes-install-layout]
+    tags: [guix, shepherd, guix-daemon, substitute, debugging]
 ---
 
-# Guix System 调试
+# Guix System 卡死排查
 
-> 针对 `~/Projects/dotfiles/guix/Guix-configs` 仓库的 `blue rebuild` / `guix system reconfigure` / `herd` 卡死场景。核心是区分 **shepherd 层死锁**与 **substitute/代理层假象**，并提供可复用的取证命令组。
+适用于 `guix system reconfigure` 长时间无进展、`herd` 命令挂起、substitute 下载卡住的场景。先分类，再取证，不要在没有证据前回滚配置。
 
-## 何时使用
+## 先区分两类原因
 
-- `blue rebuild` 卡在 `引导加载程序已成功安装` 之后无进展
-- `sudo herd status root` 卡死、任何 `herd` 命令挂起
-- `guix substitute --query` 长时间 CLOSE-WAIT，但 `--no-substitutes` 仍卡
-- 频道 `blue update` 后首次 rebuild，怀疑 `guix` 包版本变化触发服务重启
-- `git` / `guix` 等命令在 Guix Home 容器内 `command not found`
+### shepherd 死锁
 
-## 核心鉴别：shepherd 死锁 vs substitute 假象
+特征：
 
-**shepherd 死锁（真凶）特征**（2026-08-30 实测，shepherd 1.0.9）：
-- syslog 18:50:35 `Spawning systemd-style service .../guix-daemon` + `Running value of service guix-daemon changed`
-- 触发：`upgrade-shepherd-services` 重启 `guix-daemon` 服务 → 控制 fiber 死锁
-- 后果双重：客户端 store 连接被抽（RPC 永等）+ shepherd 控制 fiber 死锁（所有 herd 挂，socket 残留僵尸连接但 syslog 转发仍活）
-- 后续每次 rebuild 在 `current-services` 查询阶段即卡，与 substitute 无关
-- 恢复：`Ctrl+C` → `reboot`（重置 shepherd）→ 再 rebuild 一次（此时 daemon 已新版，不再触发重启）
+- 重建停在引导加载程序安装之后不再推进。
+- 重启 `guix-daemon` 服务后控制 fiber 死锁，之后所有 `herd` 命令挂起，socket 留着僵尸连接。
+- 日志里能看到 `Spawning systemd-style service ... guix-daemon` 与 `Running value of service guix-daemon changed` 相邻出现。
+- 之后每次重建都在查询当前服务阶段就卡住，与网络无关。
 
-**substitute 代理假象**（常误导数小时）：
-- daemon 配 `http-proxy 127.0.0.1:7890`（`guix-service-type` 字段），`guix substitute --query` 走 mihomo 黑洞 + CLOSE-WAIT 4 分钟+
-- **排除法**：`--no-substitutes` 仍卡 + 无新 daemon 重启日志 → substitute 已排除
-- **取证陷阱**：shell `curl` 直连镜像秒回不能证伪代理路径（shell 无代理变量，daemon 有）；必须查 ` /proc/<daemon-pid>/environ` 的 proxy env
+恢复：中断重建，重启系统（重置 shepherd），再跑一次重建。此时 daemon 已是新版，不会再触发同一轮重启。
 
-详见 `references/shepherd-vs-substitute.md`（含完整根因链、时序图、触发条件、mihomo 放行清单）。
+### substitute 代理假象
 
-## 取证命令组（直接可用）
+特征：
+
+- daemon 配了 `http-proxy`，`guix substitute --query` 连不上，连接停在 CLOSE-WAIT 数分钟。
+- shell 里 `curl` 直连镜像正常，看起来网络没问题。这是假象：shell 没有代理变量，daemon 有。
+- 判断代理是否参与：看 daemon 进程的环境，不是 shell 的环境。
+
+排除法：加 `--no-substitutes` 仍然卡，且日志里没有新的 daemon 重启记录，说明 substitute 不是原因。
+
+## 取证命令
 
 ```bash
 pgrep -af guix
-ps --ppid $(pgrep -x shepherd) -o pid,cmd  # 进程树
-sudo ss -tnp | grep 7890                    # 代理连接状态
-sudo cat /proc/$(pgrep -x guix-daemon)/environ | tr '\0' '\n' | grep -i proxy
-time sudo herd status root                  # 是否卡死（正常 <1s，死锁 >5s 挂起）
-sudo grep "shepherd\[1\]" /var/log/messages | tail -20
+ps --ppid "$(pgrep -x shepherd)" -o pid,cmd          # 进程树
+ss -tnp | grep <代理端口>                             # 代理连接状态
+tr '\0' '\n' < /proc/"$(pgrep -x guix-daemon)"/environ | grep -i proxy
+time herd status root                                 # 正常一秒内返回，挂起说明控制 fiber 死了
+grep 'shepherd\[1\]' /var/log/messages | tail -20
 ```
 
-`blue home` 永远不受影响（不动系统 shepherd），可作为对照。
+`guix home reconfigure` 不受系统 shepherd 死锁影响，可以拿来做对照：Home 侧能正常重建，系统侧卡住，基本可以确定是系统 shepherd 的问题。
 
-## Guix Home profile PATH 漂移
+## 恢复顺序
 
-`~/.guix-home/profile` 是 `/gnu/store/*-profile` symlink，`guix home` 重建后 hash 变化但旧 store 残留时 `$PATH` 指向旧 profile 导致 `git: command not found`：
+1. 中断当前重建。
+2. 系统 shepherd 死锁：重启系统。
+3. 代理问题：先在 daemon 配置里绕开代理，或放行 substitute 域名，再重跑。
+4. 重跑前确认没有新的死锁迹象，不要连续重试。
+
+## Profile PATH 漂移
+
+`~/.guix-home/profile` 指向 `/gnu/store/*-profile`。重建后 hash 变化，旧 store 可能残留，`$PATH` 里的旧 profile 会让命令报 `command not found`。
 
 ```bash
-ls /gnu/store/*-profile/bin/git  # 定位存活 profile
+ls /gnu/store/*-profile/bin/git          # 找存活的 profile
 export PATH="/gnu/store/<alive>-profile/bin:$PATH"
-# 或绝对路径调用：/gnu/store/<alive>-profile/bin/git -C ~/Documents/Org status --short
 ```
 
-## fstrim 定时器等次要坑
+或用绝对路径调用该 profile 里的程序，等下次登录重新生成环境。
 
-- `config.scm` fstrim 定时器（周日 19:00 ~1201行）`command` gexp 报 `list-of-strings?` 类型错从未跑成，待修
-- mihomo 对 7 个 `substitute-urls` 黑洞且 guile `read` 无超时（`%fetch-timeout` 仅管连接），建议规则放行（见 references）
+## 取证边界
 
-## References
-
-- `references/shepherd-vs-substitute.md` — 完整复盘（2026-08-30 四次卡死实战，含日志片段、恢复步骤、上游 #72354 关联）
-- `references/guix-home-profile-path.md` — PATH 漂移取证与多 profile 并存时的 git 定位技巧
+- 日志按 locale 输出，grep 英文关键词可能为空。
+- `herd status` 缓存的 PID 不可信，进程是否活着看 `/proc/<pid>`。
+- 代理配置在 daemon 侧，排查时读 daemon 的环境，不要读 shell 的。

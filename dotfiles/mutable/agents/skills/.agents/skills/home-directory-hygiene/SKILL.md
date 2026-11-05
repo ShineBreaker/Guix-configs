@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [home, dotfiles, disk, hygiene, git-sync, cleanup]
-    related_skills: [guix-configs-workflow, authority-gate]
+    related_skills: [guix-config-maintenance, authority-gate]
 ---
 
 # 家目录体检与回收

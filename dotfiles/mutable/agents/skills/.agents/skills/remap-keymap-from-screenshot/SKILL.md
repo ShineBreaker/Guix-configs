@@ -6,7 +6,7 @@ description: "Use when layout screenshots must become keymap config edits."
 metadata:
   hermes:
     tags: [kanata, keymap, keyboard, screenshot, vision, qmk]
-    related_skills: [guix-configs-workflow]
+    related_skills: [guix-config-maintenance]
 ---
 # remap-keymap-from-screenshot — 从布局截图反推键位改动
 
@@ -121,5 +121,5 @@ kanata 的报错 `Layer <name> has N item(s), but requires M` 是**唯一权威�
 ## 参考
 
 - `references/ichip-laptop-mapping.md`：本用户 I-CHIP 小键盘 ↔ 笔记本 kanata 的对位模型、Fn 层基线值与有意不映射清单——再次核对或改动这套键位前先读。
-- 若配置源在 Guix-configs 仓库的 `source/config.org`：先读 `guix-configs-workflow`（§1 部署三步、§9 改 config.org 的安全协议、§9.2 坑 7 非 scheme 块零覆盖）。
+- 若配置源在 Guix-configs 仓库的 `source/config.org`：先读 `guix-config-maintenance`（§1 部署三步、§9 改 config.org 的安全协议、§9.2 坑 7 非 scheme 块零覆盖）。
 - 若外设有自己的配置界面（Via / Vial / 厂商网页工具）：其层名与键名与 kanata 不同名，映射时先建一张对照表再动手。

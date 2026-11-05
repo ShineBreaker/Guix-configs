@@ -21,7 +21,7 @@
 ⑤ 实测：程序在新位置读写 + 旧位置没被重建
 ```
 
-**若变量要等 `blue home` 才生效，搬迁数据会有一段"变量还没生效"的窗口**——见 §2。
+**若变量要等 `重新部署 Home` 才生效，搬迁数据会有一段"变量还没生效"的窗口**——见 §2。
 
 ---
 
@@ -116,7 +116,7 @@ NPM_CONFIG_CACHE=/tmp/x npm run show    # 脚本里 process.env.npm_config_cache
 大写变量不会下传成小写别名，lifecycle 脚本（`prebuild-install` 这类原生模块构建）读不到，仍把 `_prebuilds` 写回 `~/.npm`。走 npmrc 则正常下传：
 
 ```bash
-# ~/.config/npm/npmrc（放 dotfiles/immutable/utilities/.config/npm/npmrc 随 blue home 部署）
+# ~/.config/npm/npmrc（放 dotfiles 源里的 .config/npm/npmrc 随 重新部署 Home 部署）
 cache=${XDG_CACHE_HOME}/npm     # npmrc 会展开 ${XDG_*}
 ```
 
@@ -124,7 +124,7 @@ cache=${XDG_CACHE_HOME}/npm     # npmrc 会展开 ${XDG_*}
 
 ---
 
-## 五、实测模板（`blue home` 未生效时也能验）
+## 五、实测模板（`重新部署 Home` 未生效时也能验）
 
 ```bash
 # 正向：程序读到了新路径吗

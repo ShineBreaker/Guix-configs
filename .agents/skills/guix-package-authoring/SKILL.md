@@ -7,7 +7,6 @@ license: MIT
 metadata:
   hermes:
     tags: [guix, packaging]
-    related_skills: [jeans-channel-workflow]
 category: guix-packaging
 ---
 
@@ -18,9 +17,9 @@ category: guix-packaging
 - 为不在受管 channel 仓库里的上游软件写 Guix 包定义，尤其仓库内嵌 `<project>.scm`（`guix build -f <x>.scm`）
 - 打包 GTK/PyGObject/meson 应用到 Guix（typelib/PYTHONPATH wrap、测试环境）
 - 脚本 FHS-free 适配（shebang、绝对路径假设）
-- 不适用：jeans channel 仓库的例行维护（CI、auto-update、lint sweep）→ jeans-channel-workflow
+- 不适用：频道仓库的例行维护（CI、auto-update、lint sweep）
 
-为不在受管 channel 仓库里的软件写 Guix 包定义：上游仓库内嵌打包脚本（`guix build -f <x>.scm`）、为 GTK/Python/meson 应用做 Guix 适配。channel 仓库维护（CI、auto-update、lint sweep）不在本 skill 范围，走 jeans-channel-workflow。
+为不在受管 channel 仓库里的软件写 Guix 包定义：上游仓库内嵌打包脚本（`guix build -f <x>.scm`）、为 GTK/Python/meson 应用做 Guix 适配。频道仓库维护（CI、auto-update、lint sweep）不在本 skill 范围。
 
 ## 流程
 

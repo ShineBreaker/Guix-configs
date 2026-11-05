@@ -7,7 +7,7 @@ description: 开 WiFi 热点让客户端流量过 mihomo 代理。触发：开�
 metadata:
   hermes:
     tags: [wifi, hotspot, ap, networkmanager, hostapd, mihomo]
-    related_skills: [guix-configs-workflow, multi-hop-tcp-debugging]
+    related_skills: [guix-config-maintenance, multi-hop-tcp-debugging]
 ---
 
 # WiFi 热点（AP+STA 并发 + 流量自动过代理）
