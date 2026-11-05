@@ -40,6 +40,7 @@
 (define %esp-uuid "9699-52A2") ; ESP vfat 短 UUID（本机: /dev/nvme0n1p1）
 (define %swap-uuid "169557cc-00a4-448c-9bb6-7bd80fc2b023") ; 明文 swap，休眠镜像所在（禁 mkswap/格式化）
 (define %btrfs-label "Linux") ; LUKS 内 Btrfs 卷标
+(define %btrfs-uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036") ; LUKS 内 Btrfs 卷 UUID（bees 去重等按 UUID 寻址的消费者共用）
 (define %btrfs-mount-opts "compress=zstd:3") ; 与系统日常挂载一致的 Btrfs 选项
 (define %repo-in-data "/data/Projects/Config/Guix-configs") ; 配置仓库物理路径（Projects 在 %data-dirs）
 

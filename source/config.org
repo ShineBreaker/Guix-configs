@@ -68,7 +68,6 @@ blue build
              (gnu home services dotfiles)
              (gnu home services fontutils)
              (gnu home services gnupg)
-             (gnu home services guix)
              (gnu home services niri)
              (gnu home services shells)
              (gnu home services shepherd)
@@ -198,7 +197,7 @@ blue build
 <<other-def-packages>>
 #+end_src
 
-*** 服务构造函数
+** 服务构造函数
 
 以下三个辅助函数封装 Shepherd 服务的常见构造形态。 =command= 参数接收可执行程序与参数的列表，列表元素支持普通字符串与 Guix 可 lower 对象（构建期自动展开为 =/gnu/store/……= 下的真实路径）：
 
@@ -238,7 +237,7 @@ blue build
 #+end_src
 
 #+begin_quote
-*start 的环境求值时机* ： ~#:start~ 的值必须是 ~(lambda args (...))~ ，而非 ~(make-forkexec-constructor ...)~ 的求值结果。后者会在 *加载服务定义时* 就把 ~(environ)~ 与 ~(getenv ...)~ 固化成一个快照——登录瞬间 niri 尚未就绪，快照里没有 ~DISPLAY~ / ~WAYLAND_DISPLAY~ / ~DBUS_SESSION_BUS_ADDRESS~ ，之后 ~herd set-environment~ 只改 Shepherd 进程环境、回填不了快照， ~herd restart~ 也不会重新求值。依赖 ~graphical-session~ 只保证启动顺序，救不回求值时机。自定义服务一律照抄上面的写法。
+*start 的环境求值时机* ： ~#:start~ 的值必须是 ~(lambda args (...))~ ，而非 ~(make-forkexec-constructor ...)~ 的求值结果。后者会在 *加载服务定义时* 就把 ~(environ)~ 与 ~(getenv ...)~ 固化成一个快照。登录瞬间 niri 尚未就绪，快照里没有 ~DISPLAY~ / ~WAYLAND_DISPLAY~ / ~DBUS_SESSION_BUS_ADDRESS~ ，之后 ~herd set-environment~ 只改 Shepherd 进程环境、回填不了快照， ~herd restart~ 也不会重新求值。依赖 ~graphical-session~ 只保证启动顺序，救不回求值时机。自定义服务一律照抄上面的写法。
 #+end_quote
 
 - =root-daemon-service= :: 构造系统级常驻守护进程，支持通过 ~#:log-file~ 指定日志路径，或通过 ~#:one-shot?~ 切换为单次任务。
@@ -293,7 +292,15 @@ blue build
                          (stop stop)))))
 #+end_src
 
-*** 自定义包与补丁
+#+begin_quote
+*Guix 文件构造器速查* ：本文档及周边服务使用了四种常见的「类文件对象（file-like objects）」，按用途区分如下：
+- =plain-file= :: 纯静态字符串构成的文本文件（若某字段必填文件对象但实际不使用，可传 ~(plain-file "empty" "")~ 占位）。
+- =mixed-text-file= :: 将字符串与 Guix 包路径交织拼接而成的配置文件。
+- =program-file= :: 由 gexp 生成并自动带上 Guile shebang 的可执行脚本。
+- =file->udev-rule= :: 将普通文本文件包装为 ~udev-rules-service~ 要求的规则目录结构。
+#+end_quote
+
+** 自定义包与补丁
 
 当上游包版本滞后或需要针对本机硬件打补丁时，在此处派生自定义包：先在「包定义」小节声明顶层 ~define~ ，再于「包列表」小节汇总注入用户环境。
 
@@ -640,7 +647,7 @@ blue build
 
 内核采用本地定制编译的 =linux-cachyos= （详见 [[./files/kernel/AGENTS.md][source/files/kernel/AGENTS.md]]），配套微码与无线/声卡固件取自 =nonguix= 频道。主要内核启动参数的设计意图如下：
 
-- ~preempt=full~ + ~threadirqs~ :: 开启完全抢占与中断线程化，配合下文的 =@audio= 实时优先级消除低延迟音频 XRUN。
+- ~preempt=lazy~ + ~threadirqs~ :: 开启惰性抢占与中断线程化，配合下文的 =@audio= 实时优先级消除低延迟音频 XRUN。
 - ~zswap.enabled=1~ + ~zswap.compressor=zstd~ :: 启用内存压缩缓存池（上限 35%），降低突发高负载下的磁盘 swap 写入。
 - ~kvm_intel.nested=1~ 等 KVM 参数 :: 开启嵌套虚拟化并静默未知 MSR 读写日志（因 =kvm_intel= 会被 udev 抢先加载，此类参数必须写在内核命令行而非 =/etc/modprobe.d= ）。
 - ~modprobe.blacklist=wacom,hid_uclogic~ :: 屏蔽内核自带数位板驱动，交由用户态的 =OpenTabletDriver= 接管。
@@ -653,7 +660,6 @@ blue build
 
 (kernel-arguments
  (cons* (string-append "resume=UUID=" %swap-uuid)
-        "kernel.sysrq=1"
         "kvm_intel.nested=1"
         "kvm_intel.emulate_invalid_guest_state=0"
         "kvm.ignore_msrs=1"
@@ -715,6 +721,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 - *文件系统（ =fs.*= ）* :: 放宽 =inotify= 实例数与监听数上限（Electron 类应用每个进程会创建多个实例，默认 128 易被占满导致新建进程 =EMFILE= ），并放宽全局文件句柄上限，防止大型代码库编译或 IDE 索引时耗尽句柄。
 - *虚拟内存（ =vm.*= ）* :: 将 =page-cluster= 设为 0（契合 zswap 随机单页读写）、拉长脏页回写周期（ ~dirty_writeback_centisecs=1500~ ）以减少空闲 SSD 唤醒，并调高 =max_map_count= 满足现代游戏（Wine/Proton）需求。
 - *网络协议栈（ =net.*= ）* :: 启用 =BBR= 拥塞控制与 =fq= 队列调度，放大 TCP 读写缓冲上限以跑满高带宽延迟积（BDP）链路，并开启 IPv4/IPv6 转发供容器与虚拟机使用。
+- *kernel.sysrq* :: 开启全部 SysRq 功能（魔术键救急）。注意写成内核命令行参数 ~kernel.sysrq=1~ 内核并不认（实测 =/proc/sys/kernel/sysrq= 仍为 0），必须走 sysctl。
 
 #+NAME: sysctl-services
 #+begin_src scheme
@@ -751,7 +758,8 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
                         ("kernel.numa_balancing" . "0")
                         ("kernel.sched_autogroup_enabled" . "1")
-                        ("kernel.sched_child_runs_first" . "0"))))
+                        ("kernel.sched_child_runs_first" . "0")
+                        ("kernel.sysrq" . "1"))))
 #+end_src
 
 **** 音频实时优先级
@@ -948,6 +956,8 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
                        (source-module-closure '((guix build utils)))
                        #~(begin
                            (use-modules (guix build utils))
+                           (mkdir-p "/data")
+                           (chmod "/data" #o755)
                            (let* ([pw (getpwnam #$username)]
                                   [uid (passwd:uid pw)]
                                   [gid (passwd:gid pw)]
@@ -961,13 +971,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
                                   (mkdir-p home-path)
                                   (chown home-path uid gid)
                                   (chmod home-path #o755)))
-                              '#$%data-dirs)))))
-
-      (simple-service 'fix-data-perms activation-service-type
-                      #~(begin
-                          (use-modules (guix build utils))
-                          (mkdir-p "/data")
-                          (chmod "/data" #o755))))
+                              '#$%data-dirs))))))
 #+end_src
 
 **** 回收站放行（utab 注入）
@@ -1062,6 +1066,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 | =@MIHOMO_TEMPLATE@= | =/home/brokenshine/.config/mihomo/config.yaml= （由不可变层 dotfiles 部署） |
 | =@MKDIR_BIN@=       | =coreutils= 包的 =/bin/mkdir=                                               |
 | =@MV_BIN@=          | =coreutils= 包的 =/bin/mv=                                                  |
+| =@SED_BIN@=         | =sed= 包的 =/bin/sed=                                                       |
 | =@SUBS_CIPHER@=     | =dotfiles/mutable/tools/secrets= 下的 =mihomo-subscriptions.age= 密文       |
 
 - *=nm-dispatcher-trusted-connection= 占位符映射表* ：
@@ -1130,6 +1135,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
                               "/.config/mihomo/config.yaml"))
            ("@MKDIR_BIN@" . ,(pkg-bin "coreutils" "/bin/mkdir"))
            ("@MV_BIN@" . ,(pkg-bin "coreutils" "/bin/mv"))
+           ("@SED_BIN@" . ,(pkg-bin "sed" "/bin/sed"))
            ("@SUBS_CIPHER@" . ,(secret "mihomo-subscriptions"))))])
 
   (list (root-daemon-service 'mihomo-daemon (list mihomo-run-script)
@@ -1141,21 +1147,22 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
                  (nftables-configuration (ruleset (local-file
                                                    "./nftables.conf"))))
 
-        (simple-service 'nm-dispatcher-trusted-ssid activation-service-type
-                        #~(let ([dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"])
-                            (system* "mkdir" "-p"
-                                     "/etc/NetworkManager/dispatcher.d")
-                            (system* "install" "-m" "755"
-                                     #$dispatcher-script dest)))
-
-        (simple-service 'nm-wifi-powersave-default activation-service-type
-                        #~(let ([dest "/etc/NetworkManager/conf.d/wifi-powersave.conf"])
-                            (system* "mkdir" "-p"
-                                     "/etc/NetworkManager/conf.d")
-                            (system* "install" "-m" "644"
-                                     #$nm-powersave-conf dest)
-                            (system* "rm" "-f"
-                                     "/etc/NetworkManager/dispatcher.d/20-wifi-powersave")))
+        (simple-service 'nm-networkmanager-files activation-service-type
+                        (with-imported-modules
+                         (source-module-closure '((guix build utils)))
+                         #~(begin
+                             (use-modules (guix build utils))
+                             (mkdir-p "/etc/NetworkManager/dispatcher.d")
+                             (mkdir-p "/etc/NetworkManager/conf.d")
+                             (let ([dest "/etc/NetworkManager/dispatcher.d/10-trusted-ssid"])
+                               (copy-file #$dispatcher-script dest)
+                               (chmod dest #o755))
+                             (let ([dest "/etc/NetworkManager/conf.d/wifi-powersave.conf"])
+                               (copy-file #$nm-powersave-conf dest)
+                               (chmod dest #o644))
+                             (false-if-exception
+                              (delete-file
+                               "/etc/NetworkManager/dispatcher.d/20-wifi-powersave")))))
 
         (service openssh-service-type
                  (openssh-configuration
@@ -1173,7 +1180,7 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 =mihomo= 的配置模板由不可变层 dotfiles 部署至 =~/.config/mihomo/config.yaml= ，其中订阅链接以 =$MIHOMO_SUB_ONE= / =$MIHOMO_SUB_TWO= 环境变量占位。本启动包装脚本负责在运行期补齐真实订阅并拉起守护进程：
 
 - *渲染与启动流* :: 解密 =mihomo-subscriptions.age= 密文并导出环境变量 → 调用 =envsubst= 将订阅注入 =/var/lib/mihomo/config.yaml= （权限收敛为 =0600= ， =DATA_DIR= 可由同名环境变量覆盖以便离线 mock 测试）→ ~exec~ 启动 =mihomo= 。
-- *降级容错设计* :: 脚本不启用 ~set -e~ ：除了配置模板本身缺失会以退出码 1 终止外，若私钥缺失或解密失败，脚本会降级为空订阅启动（保证基础直连网络可用），避免触发 Shepherd 无限重启。
+- *降级容错设计* :: 若私钥缺失或解密失败，脚本降级为空订阅启动（保证基础直连网络可用），避免触发 Shepherd 无限重启；但模板缺失与 envsubst 渲染失败均以退出码 1 终止，宁可重启也不带破配置运行。订阅字段按 ~KEY="value"~ 提取注入（容忍 =export = 前缀），不 ~eval~ 解密内容。
 - *更换订阅命令* :: 执行 ~secrets set mihomo-subscriptions MIHOMO_SUB_ONE "<url>"~ （或 ~secrets edit~ ）后，运行 ~sudo herd restart mihomo-daemon~ 即可生效。
 
 #+NAME: mihomo-run
@@ -1189,6 +1196,7 @@ MIHOMO_BIN="${MIHOMO_BIN:-@MIHOMO_BIN@}"
 MIHOMO_TEMPLATE="${MIHOMO_TEMPLATE:-@MIHOMO_TEMPLATE@}"
 MKDIR_BIN="${MKDIR_BIN:-@MKDIR_BIN@}"
 MV_BIN="${MV_BIN:-@MV_BIN@}"
+SED_BIN="${SED_BIN:-@SED_BIN@}"
 SUBS_CIPHER="${SUBS_CIPHER:-@SUBS_CIPHER@}"
 
 log() { echo "mihomo-run: $*" >&2; }
@@ -1196,19 +1204,23 @@ die() { echo "mihomo-run: 失败: $*" >&2; exit 1; }
 
 DATA_DIR="${DATA_DIR:-/var/lib/mihomo}"
 OUT="$DATA_DIR/config.yaml"
+umask 077
 
 "$MKDIR_BIN" -p "$DATA_DIR"
-[ -f "$MIHOMO_TEMPLATE" ] || die "模板不存在: $MIHOMO_TEMPLATE (immutable 部署, 需 just home)"
+[ -f "$MIHOMO_TEMPLATE" ] || die "模板不存在: $MIHOMO_TEMPLATE (immutable 部署, 需 blue home)"
+
+sub_value() { printf '%s\n' "$1" | "$SED_BIN" -nE "s/^(export +)?$2=\"(.*)\"[[:space:]]*\$/\\2/p"; }
 
 if subs=$("$AGE_BIN" -d -i "$AGE_IDENTITY" "$SUBS_CIPHER" 2>/dev/null); then
-    set -a
-    eval "$subs"
-    set +a
+    MIHOMO_SUB_ONE=$(sub_value "$subs" MIHOMO_SUB_ONE)
+    MIHOMO_SUB_TWO=$(sub_value "$subs" MIHOMO_SUB_TWO)
+    export MIHOMO_SUB_ONE MIHOMO_SUB_TWO
 else
     log "警告: 订阅解密失败 (age exit=$?), 以空订阅启动; 密文=$SUBS_CIPHER 私钥=$AGE_IDENTITY"
 fi
 
-"$ENVSUBST_BIN" '$MIHOMO_SUB_ONE $MIHOMO_SUB_TWO' <"$MIHOMO_TEMPLATE" >"$OUT.tmp"
+"$ENVSUBST_BIN" '$MIHOMO_SUB_ONE $MIHOMO_SUB_TWO' <"$MIHOMO_TEMPLATE" >"$OUT.tmp" ||
+    die "envsubst 渲染失败"
 "$CHMOD_BIN" 600 "$OUT.tmp"
 "$MV_BIN" "$OUT.tmp" "$OUT"
 log "配置已渲染: $OUT (sub1=$([ -n "${MIHOMO_SUB_ONE:-}" ] && echo 已注入 || echo 空), sub2=$([ -n "${MIHOMO_SUB_TWO:-}" ] && echo 已注入 || echo 空))"
@@ -1397,7 +1409,7 @@ Nix 包管理器本体由 =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 '(("NIX_USER_CONF_FILES" . "$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/nix.conf"))
 #+end_src
 
-*** UDEV 规则
+*** 硬件与电源规则
 
 集中管理硬件外设节点权限与 USB autosuspend 策略（电源档位调优见 tuned 一节）。
 
@@ -1458,14 +1470,6 @@ Nix 包管理器本体由 =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 | *KSM 同页内存合并*              | 开启（ ~run=1~ ，每次扫 200 页 / 50 ms） | 关闭（ ~run=0~ ）                          |
 
 =tuned-ppd= 的 =sysfs-acpi-monitor= （Fn 键改 EC 档时反向同步 PPD 档）保持关闭：它监听的 =platform_profile= 同时也是本机 profile 的写入目标，存在自反馈风险，且该特性上游标注 experimental。另注： =balanced-performance= / =performance= 两档 EC 固件要求圆孔适配器供电（本机纯 Type-C 供电时永远被拒），故 AC 档只写 =balanced= 。
-
-#+begin_quote
-*Guix 文件构造器速查* ：本节及周边服务使用了四种常见的「类文件对象（file-like objects）」，按用途区分如下：
-- =plain-file= :: 纯静态字符串构成的文本文件（若某字段必填文件对象但实际不使用，可传 ~(plain-file "empty" "")~ 占位）。
-- =mixed-text-file= :: 将字符串与 Guix 包路径交织拼接而成的配置文件。
-- =program-file= :: 由 gexp 生成并自动带上 Guile shebang 的可执行脚本。
-- =file->udev-rule= :: 将普通文本文件包装为 ~udev-rules-service~ 要求的规则目录结构。
-#+end_quote
 
 #+NAME: tuned-services
 #+begin_src scheme
@@ -1537,15 +1541,8 @@ Nix 包管理器本体由 =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 | =fstrim=      | 每周日 19:00 对所有已挂载 SSD 执行 ~fstrim -av~ 全盘 TRIM                                                                           |
 
 #+begin_quote
-*配置维护提示* ： =beesd= 依据配置文件内的 ~UUID=~ 行定位目标文件系统。若更换 Btrfs 池 UUID，需同步更新下方 =bees-conf= 代码块与 =root-services= 中的 =bees-uuid= 绑定。此外， ~etc-service-type~ 采用的 ~`("目标路径" ,文件对象)~ 反引号点对是 Guix 扩展 =/etc= 的通用写法。
+*配置维护提示* ： =beesd= 依据配置文件内的 ~UUID=~ 行定位目标文件系统。该 UUID 与启动包装共用 =%btrfs-uuid= （定义在 =information.scm= ，本机 Btrfs 卷 UUID 单一真源）。此外， ~etc-service-type~ 采用的 ~`("目标路径" ,文件对象)~ 反引号点对是 Guix 扩展 =/etc= 的通用写法。
 #+end_quote
-
-#+NAME: bees-conf
-#+begin_src conf :tangle ../tmp/bees.conf
-UUID="2f6b6499-2a27-4583-847f-dd70b9fcb036"
-DB_SIZE=$((128*1024*1024))
-OPTIONS="--loadavg-target 5.0 --thread-count 4"
-#+end_src
 
 #+NAME: smartd-conf
 #+begin_src conf :tangle ../tmp/smartd.conf
@@ -1554,7 +1551,7 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
 #+NAME: root-services
 #+begin_src scheme
-(let ([bees-uuid "2f6b6499-2a27-4583-847f-dd70b9fcb036"])
+(let ([bees-uuid %btrfs-uuid])
   (list (root-daemon-service 'beesd
                              (list (program-file
                                     "beesd-run"
@@ -1565,7 +1562,8 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
                                                                             "/dev/disk/by-uuid/" #$bees-uuid)])
                                                                  (mkdir-p "/dev/disk/by-uuid")
                                                                  (false-if-exception (delete-file link))
-                                                                 (symlink "/dev/mapper/root" link)
+                                                                 (symlink (string-append "/dev/mapper/"
+                                                                                         #$%luks-mapper) link)
                                                                  (setenv "PATH"
                                                                          #$(file-append util-linux "/sbin"))
                                                                  (execl #$(file-append (spec->pkg "bees") "/sbin/beesd")
@@ -1576,10 +1574,11 @@ DEVICESCAN -a -o on -S on -n standby,q -s (S/../.././02|L/../../6/03)
 
         (simple-service 'beesd-conf etc-service-type
                         (list `(,(string-append "bees/" bees-uuid ".conf")
-                                ,(local-file "./bees.conf"))))
-
-        (simple-service 'home-channels home-channels-service-type
-                        guix-channels)
+                                ,(plain-file "bees.conf"
+                                             (string-append
+                                              "UUID=\"" %btrfs-uuid "\"\n"
+                                              "DB_SIZE=$((128*1024*1024))\n"
+                                              "OPTIONS=\"--loadavg-target 5.0 --thread-count 4\"\n")))))
 
         (simple-service 'root-services shepherd-root-service-type
                         (list (shepherd-timer '(fstrim)
@@ -1801,7 +1800,7 @@ ntfs:ntfs3_allow=uid=$UID,gid=$GID,umask,dmask,fmask,iocharset,discard,nodiscard
                    (prefer-regexp
                     "(zen|firefox|chrom|Web Content|WebExtensions|Isolated|qq|wechat|electron)")
                    (avoid-regexp
-                    "(shepherd|niri|pipewire|wireplumber|noctalia|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom|guix-daemon|cc1|cc1plus|make|ld|zstd)")
+                    "(shepherd|niri|quickshell|nosd-helpers|pipewire|wireplumber|emacs|dbus|Xwayland|greetd|kdeconnect|earlyoom|guix-daemon|cc1|make|^ld|zstd)")
                    (run-with-higher-priority? #t)))
 
          (simple-service 'fingerprint-pam pam-root-service-type
@@ -1934,9 +1933,9 @@ polkit.addRule(function(action, subject) {
 
 #+NAME: information-configs
 #+begin_src scheme
-(timezone "Asia/Shanghai" )
-(host-name "BrokenShine-Laptop" )
-(locale "zh_CN.utf8" )
+(timezone "Asia/Shanghai")
+(host-name "BrokenShine-Laptop")
+(locale "zh_CN.utf8")
 #+end_src
 
 #+NAME: users-config
@@ -1980,7 +1979,7 @@ polkit.addRule(function(action, subject) {
 图形界面配套组件，涵盖字体、 =Fcitx5= 输入法、剪切板与壁纸工具、XDG Portal 及 GTK/Qt 主题外观。
 
 #+NAME: desktop-packages-list
-#+begin_src scheme :noweb yes
+#+begin_src scheme
 (specifications->packages
  '(;; 字体
    "font-awesome"
@@ -1996,8 +1995,6 @@ polkit.addRule(function(action, subject) {
    "clipnotify"
    "dconf-editor"
    "dex"
-   "file-roller"
-   "libnotify"
    "open-wallpaper-engine-bin"
    "pavucontrol"
    "rofi"
@@ -2092,7 +2089,6 @@ polkit.addRule(function(action, subject) {
    "lua-language-server"
    "nixfmt"
    "omnisharp"
-   "prettier-bin"
    "python-black"
    "python-lsp-black"
    "python-lsp-server"
@@ -2198,7 +2194,6 @@ polkit.addRule(function(action, subject) {
    ;; 容器与虚拟机
    "freerdp@3"
    "virt-manager"
-   "waydroid"
    "winapps"
 
    ;; 娱乐
@@ -2227,9 +2222,6 @@ polkit.addRule(function(action, subject) {
    ;; Python
    "python-openpyxl"))
 #+end_src
-
-
-
 
 ** Services
 :PROPERTIES:
@@ -2737,26 +2729,12 @@ lalt grv  lctl _  _  _  _  _)
 
 **** dsh-web 常驻服务
 
-=dsh web= 起的就是常驻 server（cordis 应用 + HTTP/WS，浏览器只是客户端），平时经
-=bin/dsh= wrapper 的 =web= 子命令 lazy-start。本服务把 server 挂到 home-shepherd 常驻
-：开机即热，web 窗口、手机端（remote-web-ui 插件）、
-局域网访问不再依赖首次触发；回合进行中关掉浏览器窗口任务照跑，重开即接力。
+=dsh web= 起的是常驻 server（cordis 应用 + HTTP/WS，浏览器只是客户端），平时经 =bin/dsh= wrapper 的 =web= 子命令 lazy-start。本服务把 server 挂到 home-shepherd 常驻：开机即热，web 窗口、手机端（remote-web-ui 插件）、局域网访问不再依赖首次触发；回合进行中关掉浏览器窗口任务照跑，重开即接力。
 
-- *经 =dsh-web= 脚本的 =--service= 入口启动* :: 该入口先跑 =_relink_profile= 断链
-  自愈（服务不经 =bin/dsh= wrapper，UI 运行期对 =cordis.patch.yml= 的原子写断掉的
-  stow 软链在每次服务启动 / respawn 时归位——替代从未落地的「cron 定时跑
-  =dsh --version=」方案），再 exec =.bin/dsh=：pnpm 的稳定 symlink（指向 =.pnpm=
-  内当前版本），升级不漂移，restart 即加载新版本。不走 wrapper 的 =web= 子命令分发
-  （避免递归），也不做端口探测与开窗——常驻职责（respawn、日志、requirement）在
-  shepherd。
-- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log=——=dsh-web= wrapper 的
-  =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），
-  shepherd 接管后该路径继续可用，零分叉。
-- *环境显式设置* :: =DSH_HOME= / =AGENTS_ROOT= 在 gexp 内运行期求值并注入，不赌
-  服务环境；=dsh-web=（bash）与 =.bin/dsh= shim 内部的 =node= 均自行从 PATH 里的
-  =.guix-home= profile 解析。
-- *信任尾网主机名* :: =--trusted-host= 不再在服务定义里硬编码，由 =--service= 按
-  =DSH_TS_HOST= 默认值提供——与交互入口同一份配置源，手机端远程访问保持可用。
+- *经 =dsh-web= 脚本的 =--service= 入口启动* :: 该入口先跑 =_relink_profile= 断链自愈（服务不经 =bin/dsh= wrapper，UI 运行期对 =cordis.patch.yml= 的原子写断掉的 stow 软链在每次服务启动 / respawn 时归位，替代从未落地的「cron 定时跑 =dsh --version=」方案），再 exec =.bin/dsh=：pnpm 的稳定 symlink（指向 =.pnpm= 内当前版本），升级不漂移，restart 即加载新版本。不走 wrapper 的 =web= 子命令分发以避免递归，也不做端口探测与开窗，常驻职责（respawn、日志、requirement）在 shepherd。
+- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log= ；=dsh-web= wrapper 的 =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），shepherd 接管后该路径继续可用，零分叉。
+- *环境显式设置* :: =DSH_HOME= / =AGENTS_ROOT= 在 gexp 内运行期求值并注入，不赌服务环境；=dsh-web=（bash）与 =.bin/dsh= shim 内部的 =node= 均自行从 PATH 里的 =.guix-home= profile 解析。
+- *信任尾网主机名* :: =--trusted-host= 不再在服务定义里硬编码，由 =--service= 按 =DSH_TS_HOST= 默认值提供。与交互入口同一份配置源，手机端远程访问保持可用。
 
 #+NAME: dsh-web-service
 #+begin_src scheme
@@ -2810,7 +2788,7 @@ lalt grv  lctl _  _  _  _  _)
 
 **** cpu-dma-latency
 
-通过打开并持有 =/dev/cpu_dma_latency= 文件描述符、写入 32 位整数 =0= ，强制 CPU 保持在浅层 C-state 以消除核心唤醒抖动。因会增加待机功耗，服务本身默认不自启（ ~#:auto-start? #f~ ）；实际开关由 =ac-cpu-dma-policy= 跟随外接电源完成——插电时自动开启、拔电时自动释放，也可随时用 ~herd start cpu-dma-latency~ / ~herd stop~ 手动干预。
+通过打开并持有 =/dev/cpu_dma_latency= 文件描述符、写入 32 位整数 =0= ，强制 CPU 保持在浅层 C-state 以消除核心唤醒抖动。因会增加待机功耗，服务本身默认不自启（ ~#:auto-start? #f~ ）；实际开关由 =ac-cpu-dma-policy= 跟随外接电源完成。插电时自动开启、拔电时自动释放，也可随时用 ~herd start cpu-dma-latency~ / ~herd stop~ 手动干预。
 
 #+NAME: cpu-dma-latency-service
 #+begin_src scheme
@@ -2854,11 +2832,18 @@ while :; do
     if ac_online; then now=on; else now=off; fi
     if [ "$now" != "$state" ]; then
         if [ "$now" = on ]; then
-            "$herd" start cpu-dma-latency
+            if "$herd" start cpu-dma-latency; then
+                state=$now
+            else
+                echo "ac-cpu-dma-policy: herd start cpu-dma-latency 失败" >&2
+            fi
         else
-            "$herd" stop cpu-dma-latency
+            if "$herd" stop cpu-dma-latency; then
+                state=$now
+            else
+                echo "ac-cpu-dma-policy: herd stop cpu-dma-latency 失败" >&2
+            fi
         fi
-        state=$now
     fi
     sleep 5
 done
@@ -2983,25 +2968,15 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 (list (service home-files-service-type
                `((".guile" ,%default-dotguile)
                  (".Xdefaults" ,%default-xdefaults)
-
-                 (".config/qt5ct/qss/check-white.svg"
-                  ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/check-white.svg")))
-                 (".config/qt5ct/qss/chevron-up.svg"
-                  ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/chevron-up.svg")))
-                 (".config/qt5ct/qss/chevron-down.svg"
-                  ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/chevron-down.svg")))
-                 (".config/qt6ct/qss/check-white.svg"
-                  ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/check-white.svg")))
-                 (".config/qt6ct/qss/chevron-up.svg"
-                  ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/chevron-up.svg")))
-                 (".config/qt6ct/qss/chevron-down.svg"
-                  ,(local-file (assume-source-relative-file-name
-                                "../source/files/qt/chevron-down.svg"))))))
+                 ,@(append-map
+                    (lambda (toolkit)
+                      (map (lambda (icon)
+                             (list (string-append ".config/" toolkit "/qss/" icon)
+                                   (local-file
+                                    (assume-source-relative-file-name
+                                     (string-append "../source/files/qt/" icon)))))
+                           '("check-white.svg" "chevron-up.svg" "chevron-down.svg")))
+                    '("qt5ct" "qt6ct")))))
 
 #+end_src
 
@@ -3115,8 +3090,7 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
 - *空 =dbus= 占位服务* :: 图形会话已由 =greetd= 通过 ~dbus-run-session niri --session~ 建立会话总线，此处注册一个 ~start~ 为 =#~(const #t)= 的空 =dbus= Shepherd 服务，用于承接下游服务的依赖声明，避免重复拉起第二条会话总线。
 
 #+NAME: user-desktop-services
-#+begin_src scheme :noweb yes
-;; <<waybar-desktop-services>>
+#+begin_src scheme
 (list (simple-service 'dbus home-shepherd-service-type
                       (list (shepherd-service
                              (provision '(dbus))
@@ -3129,9 +3103,9 @@ warn() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: $1" >>"$log"; }
                                           (utilities (list fcitx5-configtool))))
 
       (service home-graphical-session-service-type
-	             (home-graphical-session-configuration
-	              (wayland? #t)
-	              (x11? #t)))
+               (home-graphical-session-configuration
+                (wayland? #t)
+                (x11? #t)))
 
       (service home-nosdshell-service-type)
 
@@ -3277,7 +3251,7 @@ XDG MIME 默认应用表。Guix 的 ~default~ 字段原本要求传入形如 ~(M
 :CUSTOM_ID: iso
 :END:
 
-自包含的 *系统救援 + 全新装机* 双用途 Live ISO 声明（与宿主机的 =%system= 独立，通过 =blue build-iso= 抽离至 =tmp/live-iso-<variant>.scm= 并交由 =tools/build-image.scm= 构建镜像，详见 [[../docs/iso-build.md][docs/iso-build.md]]）：
+自包含的 *系统救援 + 全新装机* 双用途 Live ISO 声明（与宿主机的 =%system= 独立，通过 =blue build-iso= 抽离至 =tmp/live-iso-<variant>.scm= 并交由 =tools/build-image.scm= 构建镜像，详见 [[../docs/operations/iso-build.md][docs/operations/iso-build.md]]）：
 
 | 变体名称  | 输出文件                   | 适用场景与会话设计                                                                                                                                  |
 |-----------+----------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------|
