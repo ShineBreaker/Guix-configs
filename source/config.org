@@ -2059,7 +2059,7 @@ polkit.addRule(function(action, subject) {
 
 *** 开发环境相关软件包
 
-多语言编译器与运行时、LSP 语言服务器、代码格式化器、主力编辑器（ =Zed= ）、AI 编程 Agent 及版本控制辅助工具。
+多语言编译器与运行时、LSP 语言服务器、代码格式化器、编辑器、AI 编程 Agent 及版本控制辅助工具。
 
 #+NAME: devtools-packages-list
 #+begin_src scheme
@@ -2098,7 +2098,7 @@ polkit.addRule(function(action, subject) {
    "zig-zls"
 
    ;; 编辑器
-   "zed-bin"
+   "wu-bin"
 
    ;; 数据库
    "sqlite"
@@ -2399,7 +2399,6 @@ lalt grv  lctl _  _  _  _  _)
              "emacs-jupyter"
              "emacs-agent-shell"
              "emacs-dsh"
-             "emacs-telega"
              "emacs-guix"
              "emacs-ghostel"
              "emacs-agenote"
