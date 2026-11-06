@@ -449,7 +449,7 @@ check_frozen_paths() {
 			# 尾斜杠必须剥掉，否则 "$exp/"* 双斜杠模式永不匹配
 			exp="${exp%/}"
 			if [[ "$LOGICAL" == "$exp" || "$LOGICAL" == "$exp/"* ]] || [[ "$PHYSICAL" == "$exp" || "$PHYSICAL" == "$exp/"* ]]; then
-				emit BLOCK "冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 just home 生效。"
+				emit BLOCK "冻结路径「${frozen}」禁止 agent 写入（gate/安全规则源）。确需修改请人工编辑源文件后 blue home 生效。"
 				return 0
 			fi
 			;;
@@ -486,12 +486,17 @@ check_frozen_globs() {
 	return 1
 }
 
-# 1d 部署位置保护——逻辑路径检查：store 软链是部署设计，不是攻击面；
-# 项目内（INSIDE=1）豁免。
+# 1d 部署位置保护——只拦真正由 dotfiles 部署的只读副本：逻辑路径位于
+# ~/.config/~/.local/~/.agents 下，且物理解析后落在 /gnu/store 里（immutable
+# 包复制进 store 的副本，形如 <hash>-home-<包>--<文件>）。尚未部署、或不归
+# dotfiles 管理的普通文件放行；项目内（INSIDE=1）豁免。store 软链是部署设计，
+# 不是攻击面。
 check_deployed_locations() {
 	if [[ "$LOGICAL" == "$HOME/.config/"* || "$LOGICAL" == "$HOME/.local/"* || "$LOGICAL" == "$HOME/.agents/"* ]] && [[ $INSIDE -eq 0 ]]; then
-		emit BLOCK "禁止直接修改已部署位置（~/.config/ 或 ~/.local/ 或 ~/.agents/）。请修改 dotfiles/ 源文件后运行 just home。"
-		return 0
+		if [[ "$PHYSICAL" == /gnu/store/* ]]; then
+			emit BLOCK "禁止直接修改由 dotfiles 部署的只读副本（~/.config/ 或 ~/.local/ 或 ~/.agents/ 下的 store 生成）。请修改 dotfiles/ 源文件后运行 blue home。"
+			return 0
+		fi
 	fi
 	return 1
 }
