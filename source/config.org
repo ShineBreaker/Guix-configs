@@ -77,6 +77,7 @@ blue build
              (gnu packages admin)
              (gnu packages bash)
              (gnu packages guile)
+             (gnu packages image)
              (gnu packages rust-apps)
              (gnu services)
              (gnu services linux)
@@ -393,6 +394,11 @@ blue build
 
 将 =blue= 任务运行器的 Guile 运行时替换为 =guile-3.0-latest= ，以保持与系统字节码版本一致。
 
+桌面截图工具 =flameshot= 13.x 在 niri 下有两个上游缺陷，就地打补丁（补丁文件见 [[./files/patches/flameshot-niri-wayland.patch][source/files/patches/flameshot-niri-wayland.patch]]）：
+
+- *窗口 app_id* :: flameshot 不调用 =setDesktopFileName= ，Wayland 窗口 app_id 为空。niri 的窗口规则（ =open-fullscreen= 等）按 app_id 匹配不到它，截图界面会落进平铺布局。
+- *grim 适配器缩放* :: 走 grim 适配器时截图画布未设置 =devicePixelRatio= ，物理分辨率图（本机缩放 1.75，图 3072×1920）被当成逻辑像素使用，界面整体放大且预览发糊。
+
 #+NAME: other-def-packages
 #+begin_src scheme
 (define blue-fix
@@ -404,6 +410,16 @@ blue build
    (arguments
     (substitute-keyword-arguments (package-arguments blue)
                                   [(#:tests? orig #t) #f]))))
+
+(define flameshot-niri
+  (package
+   (inherit flameshot)
+   (source
+    (origin
+     (inherit (package-source flameshot))
+     (patches
+      (list (local-file
+             "../source/files/patches/flameshot-niri-wayland.patch")))))))
 #+end_src
 
 **** 包列表
@@ -413,6 +429,7 @@ blue build
 #+NAME: custom-packages-list
 #+begin_src scheme
 (list blue-fix
+      flameshot-niri
       fprintd-1.94)
 #+end_src
 

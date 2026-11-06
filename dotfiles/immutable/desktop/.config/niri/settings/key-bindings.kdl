@@ -5,7 +5,7 @@
 binds {
   Alt+Print   { screenshot-window; }
   Ctrl+Print  { screenshot-screen; }
-  Print       { screenshot; }
+  Print       { spawn "flameshot" "gui"; }
 
   Mod+0       { focus-workspace 0; }
   Mod+1       { focus-workspace 1; }
@@ -94,7 +94,7 @@ binds {
   Mod+Shift+L { focus-monitor-right; }
 
   Mod+Shift+F hotkey-overlay-title="窗口全屏" { fullscreen-window; }
-  Mod+Shift+S hotkey-overlay-title="截图"     { screenshot; }
+  Mod+Shift+S hotkey-overlay-title="截图"     { spawn "flameshot" "gui"; }
 
   Mod+Shift+Down  { focus-monitor-down; }
   Mod+Shift+Left  { focus-monitor-left; }

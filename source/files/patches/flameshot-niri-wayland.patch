@@ -1,0 +1,75 @@
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -208,6 +208,8 @@
+     QCoreApplication::setApplicationVersion(APP_VERSION);
+     QCoreApplication::setApplicationName(QStringLiteral("flameshot"));
+     QCoreApplication::setOrganizationName(QStringLiteral("flameshot"));
++    // Expose an app_id so Wayland compositors can match window rules.
++    QApplication::setDesktopFileName(QStringLiteral("flameshot"));
+ 
+     // no arguments, just launch Flameshot
+     if (argc == 1) {
+--- a/src/utils/screengrabber.cpp
++++ b/src/utils/screengrabber.cpp
+@@ -44,6 +44,13 @@
+     Process.start(program, arguments);
+     if (Process.waitForFinished()) {
+         res.load(imgPath, "ppm");
++        // grim captures at physical resolution; derive the fractional scale
++        // from the logical screen geometry so the pixmap maps 1:1 on screen.
++        const QRect screenGeom = QGuiApplication::primaryScreen()->geometry();
++        if (screenGeom.height() > 0) {
++            res.setDevicePixelRatio(qreal(res.height()) /
++                                    qreal(screenGeom.height()));
++        }
+         QFile imgFile(imgPath);
+         imgFile.remove();
+         ok = true;
+--- a/src/utils/screenshotsaver.cpp
++++ b/src/utils/screenshotsaver.cpp
+@@ -185,6 +185,34 @@
+ 
+ // If data is saved to the clipboard before the notification is sent via
+ // dbus, the application freezes.
++#if defined(Q_OS_LINUX) || defined(Q_OS_UNIX)
++// flameshot exits right after copying, which kills the Qt clipboard source on
++// Wayland. Hand the data to wl-copy instead: it forks and keeps serving the
++// selection after flameshot is gone.
++static bool copyToClipboardWithWlCopy(const QPixmap& capture)
++{
++    QByteArray png;
++    QBuffer buffer(&png);
++    buffer.open(QIODevice::WriteOnly);
++    if (!capture.save(&buffer, "PNG")) {
++        return false;
++    }
++    QProcess proc;
++    proc.start(QStringLiteral("wl-copy"),
++               { QStringLiteral("--type"), QStringLiteral("image/png") });
++    if (!proc.waitForStarted(3000)) {
++        return false;
++    }
++    proc.write(png);
++    proc.closeWriteChannel();
++    if (!proc.waitForFinished(10000)) {
++        proc.kill();
++        return false;
++    }
++    return proc.exitStatus() == QProcess::NormalExit && proc.exitCode() == 0;
++}
++#endif
++
+ void saveToClipboard(const QPixmap& capture)
+ {
+     // If we are able to properly save the file, save the file and copy to
+@@ -207,7 +235,9 @@
+         // Need to send message before copying to clipboard
+ #if defined(Q_OS_LINUX) || defined(Q_OS_UNIX)
+         if (DesktopInfo().waylandDetected()) {
+-            saveToClipboardMime(capture, "png");
++            if (!copyToClipboardWithWlCopy(capture)) {
++                saveToClipboardMime(capture, "png");
++            }
+         } else {
+             QApplication::clipboard()->setPixmap(capture);
+         }

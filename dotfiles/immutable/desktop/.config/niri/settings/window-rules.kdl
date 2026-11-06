@@ -76,6 +76,18 @@ window-rule {
 }
 
 window-rule {
+  match app-id="^flameshot$"
+
+  open-fullscreen true
+  geometry-corner-radius 0
+  clip-to-geometry false
+  draw-border-with-background false
+
+  focus-ring { off; }
+  shadow { off; }
+}
+
+window-rule {
   match app-id="Waydroid"
   match app-id="gamescope"
   match app-id="labwc"
