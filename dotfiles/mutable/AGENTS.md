@@ -47,7 +47,7 @@ mutable/
 │   ├── hotspot/
 │   ├── secrets/
 │   └── toolbox/
-└── zed/
+└── wu/
     ├── .config/
     ├── .stow-folding
     └── .stow-package

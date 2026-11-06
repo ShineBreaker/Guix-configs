@@ -12,7 +12,6 @@
 terminal/
 └── .config/
     ├── atuin/
-    ├── broot/
     ├── btop/
     ├── fastfetch/
     ├── fish/

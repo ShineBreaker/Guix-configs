@@ -25,7 +25,7 @@ dotfiles/
     ├── emacs/
     ├── herdr/
     ├── tools/
-    └── zed/
+    └── wu/
 ```
 
 <!-- /structor -->
