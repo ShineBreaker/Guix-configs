@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# 选区截图进入 swappy 标注。slurp 选区，grim 截取，swappy 从 stdin 接图；
+# 标注完 Ctrl+C 复制到剪贴板（wl-copy），或 Ctrl+S 保存，early_exit 使首个动作后退出。
+# 取消选区（Esc）时 slurp 非零退出，管道短路，swappy 不会启动。
+set -euo pipefail
+grim -g "$(slurp)" - | swappy -f - >/dev/null 2>&1 || true

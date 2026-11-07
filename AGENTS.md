@@ -22,7 +22,8 @@ Guix-configs///
 ├── CLAUDE.md
 ├── LICENSE
 ├── README.org
-└── blueprint.scm
+├── blueprint.scm
+└── default.xml.bak
 ```
 
 <!-- /structor -->
