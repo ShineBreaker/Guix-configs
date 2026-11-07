@@ -78,7 +78,20 @@ window-rule {
 window-rule {
   match app-id="^flameshot$"
 
-  open-fullscreen true
+  // flameshot 带 Qt::BypassWindowManagerHint，Qt 在 Wayland 下会先发
+  // set_fullscreen、后发 set_app_id，niri 收到全屏请求时本规则还匹配不上，
+  // 窗口直接全屏并按平铺插入新列，打开时视图跟着滚动。这里拒绝该请求，
+  // 让它走浮动分支，浮窗不占布局列。
+  open-floating true
+  open-fullscreen false
+
+  // 浮窗尺寸比输出逻辑尺寸各多 1 像素。分数缩放 1.75 下 Qt 的窗口 buffer 按
+  // 逻辑尺寸取整（1755 * 1.75 = 3071.25 -> 3071 px），比输出少 1 物理像素，
+  // 边缘会露出窗口底色。多要 1 逻辑像素后 buffer 覆盖输出，超出部分由 niri
+  // 裁掉。换分辨率时需要同步调整这两个值。
+  default-column-width { fixed 1756; }
+  default-window-height { fixed 1098; }
+
   geometry-corner-radius 0
   clip-to-geometry false
   draw-border-with-background false
