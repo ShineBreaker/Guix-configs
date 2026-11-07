@@ -19,25 +19,29 @@
         "dsh-soul-md",
         "@xmanrui/dsh-im",
         "ds-harness-remote",
-        "dsh-claude-style",
-        "dsh-free-search"
+        "dsh-free-search",
+        "@local/dsh-process-guard",
+        "dsh-dream-skin",
+        "dsh-pet"
       ],
       "patchReload": "live"
     }
   },
   "dependencies": {
+    "@local/dsh-process-guard": "link:/home/brokenshine/Projects/agents/projects/dsh-plugins/dsh-process-guard",
     "@mengyuly/dsh-ponytail": "0.4.3",
-    "@michengai/dsh-automation": "1.0.18",
+    "@michengai/dsh-automation": "1.0.19",
     "@xmanrui/dsh-im": "github:ShineBreaker/dsh-im#c3975a56a31e28362493cd33db8a7d479edb2634",
-    "cc-safety-net": "2.7.3",
-    "ds-harness-remote": "0.6.2",
+    "cc-safety-net": "2.7.4",
+    "ds-harness-remote": "0.6.3",
     "dsh-agenote": "https://github.com/ShineBreaker/agenote/releases/download/dsh-agenote-v0.1.4/dsh-agenote-0.1.4.tgz",
     "dsh-agent-extensions": "link:../agent-extensions",
     "dsh-better-sidebar": "0.30.1",
-    "dsh-claude-style": "0.19.8",
-    "dsh-context": "0.81.2",
-    "dsh-free-search": "0.9.31",
-    "dsh-soul-md": "0.12.0",
-    "dshmarket": "1.73.11"
+    "dsh-context": "0.82.1",
+    "dsh-dream-skin": "11.7.0",
+    "dsh-free-search": "0.9.34",
+    "dsh-pet": "0.4.5",
+    "dsh-soul-md": "0.12.1",
+    "dshmarket": "1.73.14"
   }
 }

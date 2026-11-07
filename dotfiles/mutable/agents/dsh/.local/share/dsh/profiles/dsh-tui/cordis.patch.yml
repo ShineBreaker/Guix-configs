@@ -499,6 +499,7 @@
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
-    provider: opencode-go
-    model: deepseek-v4.1-flash
+    provider: magpie
+    model: auto/deepseek-v4.1-flash
+    reasoningEffort: max
 # @@shared:end
