@@ -38,7 +38,7 @@ proxy-providers:
     path: proxies/two.yaml
 mixed-port: 7890
 # allow-lan 若需让局域网/热点设备走本机代理再开 true；false 时仅本机可用，无开放代理暴露面
-allow-lan: false
+allow-lan: true
 mode: rule
 ipv6: true
 udp: true

@@ -1209,4 +1209,4 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: magpie
-    model: stepfun-cn/step-5-preview
+    model: group/never-stuck
