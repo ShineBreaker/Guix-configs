@@ -13,12 +13,12 @@
 *阅读与裁剪提示* ：在 =main= 块中注释掉任意一行 ~<<ref>>~ ，即可在构建时停用对应的功能模块；下文已被注释的 ~<<ref>>~ 均为按需启停的开关。架构约定与排障背景可配合查阅同目录的 [[./AGENTS.md][source/AGENTS.md]]。
 #+end_quote
 
-| 层级与模块     | 章节索引                                                                                                                                                                                     |
-|----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| *前置与骨架*   | [[#maintenance][维护操作]] · [[#main-skeleton][配置文件骨架（main）]]                                                                                                                        |
-| *系统层配置*   | [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users 与主机信息]] |
-| *用户态配置*   | [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]                                                                                 |
-| *救援与安装盘* | [[#iso][Live ISO]]                                                                                                                                                                           |
+| 层级与模块   | 章节索引                                                                    |
+|--------------+-----------------------------------------------------------------------------|
+| *前置与骨架*   | [[#maintenance][维护操作]] · [[#main-skeleton][配置文件骨架（main）]]                                             |
+| *系统层配置*   | [[#sys-bootloader][Bootloader]] · [[#sys-filesystems][FileSystems]] · [[#sys-kernel][Kernel]] · [[#sys-packages][Packages]] · [[#sys-services][Services]] · [[#sys-users][Users 与主机信息]]  |
+| *用户态配置*   | [[#home-packages][Packages]] · [[#home-services][Services]] · [[#home-env][环境变量]] · [[#home-font][Font]]                                       |
+| *救援与安装盘* | [[#iso][Live ISO]]                                                                    |
 
 * 维护操作
 :PROPERTIES:
@@ -533,14 +533,14 @@ blue build
 
 最终传给系统的 =%file-systems-config= 由以下六组挂载按序拼接而成：
 
-| 挂载分组                               | 数据来源与作用                                                                                     |
-|----------------------------------------+----------------------------------------------------------------------------------------------------|
-| =%bind-mounts=                         | 遍历 =%data-dirs= 清单，将持久化分区下的 =/data/<目录>= 逐一 =bind-mount= 到 =$HOME/<目录>=        |
-| =%persist-filesystem=                  | 用 ~match-lambda~ 解构 =%btrfs-subvolumes= 的 ~(子卷 挂载点)~ 二元组，批量生成 18 条系统级子卷挂载 |
-| =%tmpfs=                               | 承载根目录 =/= （10% 内存上限）与 =/var/lock= 的内存文件系统                                       |
-| =%data-filesystem= / =%efi-filesystem= | 挂载用户数据主子卷 =/data= 与 EFI 引导分区 =/efi=                                                  |
-| =%base-file-systems=                   | Guix 内置基础挂载（ =/dev/pts= 、 =/dev/shm= 、 =efivars= 及只读的 =/gnu/store= 等）               |
-| =%v1-freezer-filesystem=               | 挂载 cgroup v1 的 =freezer= 层级至 =/sys/fs/cgroup/freezer= ，供 Waydroid 容器休眠冻结使用         |
+| 挂载分组                           | 数据来源与作用                                                                               |
+|------------------------------------+----------------------------------------------------------------------------------------------|
+| =%bind-mounts=                       | 遍历 =%data-dirs= 清单，将持久化分区下的 =/data/<目录>= 逐一 =bind-mount= 到 =$HOME/<目录>=          |
+| =%persist-filesystem=                | 用 ~match-lambda~ 解构 =%btrfs-subvolumes= 的 ~(子卷 挂载点)~ 二元组，批量生成 18 条系统级子卷挂载 |
+| =%tmpfs=                             | 承载根目录 =/= （10% 内存上限）与 =/var/lock= 的内存文件系统                                     |
+| =%data-filesystem= / =%efi-filesystem= | 挂载用户数据主子卷 =/data= 与 EFI 引导分区 =/efi=                                                |
+| =%base-file-systems=                 | Guix 内置基础挂载（ =/dev/pts= 、 =/dev/shm= 、 =efivars= 及只读的 =/gnu/store= 等）                 |
+| =%v1-freezer-filesystem=             | 挂载 cgroup v1 的 =freezer= 层级至 =/sys/fs/cgroup/freezer= ，供 Waydroid 容器休眠冻结使用       |
 
 - *子卷挂载的两处特判* :: 在 =%persist-filesystem= 的 18 条记录中，仅 =/tmp= 将 ~needed-for-boot?~ 设为 ~#f~ （无需在 initrd 阶段挂载，开机后由 =cleanup-/tmp= 服务清理），且仅 =/gnu= 将 ~check?~ 设为 ~#t~ （挂载前执行文件系统自检）。
 - *Waydroid 容器冻结兼容* :: Waydroid 在熄屏挂起容器时依赖 cgroup v1 的 =freezer= 层级。LXC 读取 =/proc/1/cgroup= 枚举到 =elogind= 的 v1 挂载后，会将整个 cgroup 布局判定为 =HYBRID= ，此时 ~lxc_cmd_freeze_callback~ 会拒绝执行冻结操作。因此必须显式挂载 =/sys/fs/cgroup/freezer= ，让 LXC 走 legacy 路径写入 =freezer.state= 。
@@ -620,10 +620,6 @@ blue build
    (type "cgroup")
    (options "freezer")
    (check? #f)
-   ;; 必须依赖 cgroup2 主挂载：否则冷启动时与 file-system-/sys/fs/cgroup
-   ;; 并发竞态，mkdir-p 在 /sys/fs/cgroup 尚未挂载时执行而报 ENOENT，
-   ;; 拖死 file-systems 聚合服务 → user-processes → 登录管理器全起不来。
-   ;; 挂载失败只降级（Waydroid 息屏冻结不可用），不阻断启动。
    (mount-may-fail? #t)
    (shepherd-requirements '(file-system-/sys/fs/cgroup))
    (create-mount-point? #t)))
@@ -1057,25 +1053,25 @@ options v4l2loopback devices=1 video_nr=1 card_label="OBS Cam" exclusive_caps=1
 
 - *=mihomo-run= 占位符映射表* ：
 
-| 占位符              | 构建期注入值                                                                |
-|---------------------+-----------------------------------------------------------------------------|
-| =@AGE_BIN@=         | =age= 包的 =/bin/age=                                                       |
+| 占位符            | 构建期注入值                                                              |
+|-------------------+---------------------------------------------------------------------------|
+| =@AGE_BIN@=         | =age= 包的 =/bin/age=                                                         |
 | =@AGE_IDENTITY@=    | =/home/brokenshine/.local/share/keys/age= （运行期私钥路径）                |
-| =@CHMOD_BIN@=       | =coreutils= 包的 =/bin/chmod=                                               |
-| =@ENVSUBST_BIN@=    | =gettext= 包的 =/bin/envsubst=                                              |
-| =@MIHOMO_BIN@=      | =mihomo= 包（ =rosenthal= 频道）的 =/bin/mihomo=                            |
+| =@CHMOD_BIN@=       | =coreutils= 包的 =/bin/chmod=                                                 |
+| =@ENVSUBST_BIN@=    | =gettext= 包的 =/bin/envsubst=                                                |
+| =@MIHOMO_BIN@=      | =mihomo= 包（ =rosenthal= 频道）的 =/bin/mihomo=                                |
 | =@MIHOMO_TEMPLATE@= | =/home/brokenshine/.config/mihomo/config.yaml= （由不可变层 dotfiles 部署） |
-| =@MKDIR_BIN@=       | =coreutils= 包的 =/bin/mkdir=                                               |
-| =@MV_BIN@=          | =coreutils= 包的 =/bin/mv=                                                  |
-| =@SED_BIN@=         | =sed= 包的 =/bin/sed=                                                       |
-| =@SUBS_CIPHER@=     | =dotfiles/mutable/tools/secrets= 下的 =mihomo-subscriptions.age= 密文       |
+| =@MKDIR_BIN@=       | =coreutils= 包的 =/bin/mkdir=                                                 |
+| =@MV_BIN@=          | =coreutils= 包的 =/bin/mv=                                                    |
+| =@SED_BIN@=         | =sed= 包的 =/bin/sed=                                                         |
+| =@SUBS_CIPHER@=     | =dotfiles/mutable/tools/secrets= 下的 =mihomo-subscriptions.age= 密文         |
 
 - *=nm-dispatcher-trusted-connection= 占位符映射表* ：
 
-| 占位符                         | 构建期注入值                                                |
-|--------------------------------+-------------------------------------------------------------|
+| 占位符                       | 构建期注入值                                            |
+|------------------------------+---------------------------------------------------------|
 | =@AGE_BIN@=                    | =age= 包的 =/bin/age=                                       |
-| =@AGE_IDENTITY@=               | =/home/brokenshine/.local/share/keys/age=                   |
+| =@AGE_IDENTITY@=               | =/home/brokenshine/.local/share/keys/age=                 |
 | =@GREP_BIN@=                   | =grep= 包的 =/bin/grep=                                     |
 | =@NFT_BIN@=                    | =nftables= 包的 =/sbin/nft=                                 |
 | =@TRUSTED_CONNECTIONS_CIPHER@= | =dotfiles/mutable/tools/secrets= 下的 =wifi-trust.age= 密文 |
@@ -2122,6 +2118,8 @@ polkit.addRule(function(action, subject) {
    ;; AI Agent
    "cua-driver-bin"
    "magpie-bin"
+   "qoder-cn"
+   "workbuddy-cn"
    "zcode"
 
    ;; Android
@@ -2230,7 +2228,7 @@ polkit.addRule(function(action, subject) {
 生成 =~/.config/fish/conf.d/10-source.fish= 启动配置与 =foreign-env= 兼容函数。模板块（ ~<<fish-cfg>>~ ）通过 =rosenthal= 频道的 ~computed-substitution-with-inputs~ 渲染：
 
 - *占位符自动寻址* :: 模板中的 ~$$bin/程序名$$~ 并非 Fish 语法，而是构建期路径占位符；构建器会在 ~specs->pkgs~ 列出的包目录中查找 =bin/程序名= 并替换为对应的 =/gnu/store/……= 绝对路径（未找到则直接在构建期报错终止）。
-- *为什么用 ~specs->pkgs~* :: 占位符替换函数要求传入纯 =<package>= 对象列表，而 Guix 官方的 ~specifications->packages~ 在遇到带输出分支的包时会返回 ~(package output)~ 二元组，因此这里使用 =rosenthal= 提供的 ~specs->pkgs~ 。
+- 为什么用 ~specs->pkgs~ :: 占位符替换函数要求传入纯 =<package>= 对象列表，而 Guix 官方的 ~specifications->packages~ 在遇到带输出分支的包时会返回 ~(package output)~ 二元组，因此这里使用 =rosenthal= 提供的 ~specs->pkgs~ 。
 - *交互式守卫* :: =10-source.fish= 以 ~status is-interactive~ 包裹，只在交互式终端加载补全与提示符。
 
 #+NAME: fish-services
@@ -2290,16 +2288,16 @@ end
   - 右侧 =Right Alt= → 按住激活 =fn= 层（ ~layer-while-held fn~ ）
 - *Fn 扩展层映射（按住 =Right Alt= 触发）* ：
 
-| 物理键区                                       | Fn 层输出                 | 对应外接小键盘设计                      |
-|------------------------------------------------+---------------------------+-----------------------------------------|
-| =Q W E R T Y U I O P=                          | =1 2 3 4 5 6 7 8 9 0=     | 列 4 的 Fn 层接管整排数字               |
-| =A S D F G=                                    | =F1 F2 F3 F4 F5=          | 列 3 的 Fn 层左半接管 F1–5              |
-| =H J K L=                                      | =[ ] ; '=                 | 列 2 的 Fn 层右半接管符号               |
-| =Z X C V B N M=                                | =F6 F7 F8 F9 F10 F11 F12= | 列 2 的 Fn 层接管 F6–12                 |
+| 物理键区                                 | Fn 层输出               | 对应外接小键盘设计                      |
+|------------------------------------------+-------------------------+-----------------------------------------|
+| =Q W E R T Y U I O P=                      | =1 2 3 4 5 6 7 8 9 0=     | 列 4 的 Fn 层接管整排数字               |
+| =A S D F G=                                | =F1 F2 F3 F4 F5=          | 列 3 的 Fn 层左半接管 F1–5              |
+| =H J K L=                                  | =[ ] ; '=                 | 列 2 的 Fn 层右半接管符号               |
+| =Z X C V B N M=                            | =F6 F7 F8 F9 F10 F11 F12= | 列 2 的 Fn 层接管 F6–12                 |
 | 物理 =Tab= （Base 层短按 =Tab= / 长按 =Esc= ） | =Esc=                     | 小键盘左上角键位                        |
-| 物理 =CapsLock= （现 左 =Ctrl= ）              | =CapsLock=                | 在 Fn 层保留大小写锁定                  |
-| =Backspace= / =Enter=                          | =-= / =\=                 | 小键盘 Backspace 位、Enter 位的 Fn 层值 |
-| 物理 =L_Ctrl= / =L_Win= / =L_Alt=              | =L_Alt= / =`= / =L_Ctrl=  | 小键盘 Fn 层底行左三（Ctrl/Alt 对调）   |
+| 物理 =CapsLock= （现 左 =Ctrl= ）            | =CapsLock=                | 在 Fn 层保留大小写锁定                  |
+| =Backspace= / =Enter=                        | =-= / =\=                   | 小键盘 Backspace 位、Enter 位的 Fn 层值 |
+| 物理 =L_Ctrl= / =L_Win= / =L_Alt=              | =L_Alt= / =`= / =L_Ctrl=      | 小键盘 Fn 层底行左三（Ctrl/Alt 对调）   |
 
 #+begin_src conf :tangle ../tmp/kanata-laptop.kbd
 (defcfg
@@ -2315,7 +2313,7 @@ lsft z  x  c  v  b  n  m  ,  .  /  rsft
 lctl lmet lalt spc ralt rmet rctl menu)
 
 (defalias
-  tabesc (tap-hold 0 150 tab esc))
+tabesc (tap-hold 0 150 tab esc))
 
 (deflayer base
 _    _  _  _  _  _  _  _  _  _  _  _  _
@@ -2728,7 +2726,7 @@ lalt grv  lctl _  _  _  _  _)
 =dsh web= 起的是常驻 server（cordis 应用 + HTTP/WS，浏览器只是客户端），平时经 =bin/dsh= wrapper 的 =web= 子命令 lazy-start。本服务把 server 挂到 home-shepherd 常驻：开机即热，web 窗口、手机端（remote-web-ui 插件）、局域网访问不再依赖首次触发；回合进行中关掉浏览器窗口任务照跑，重开即接力。
 
 - *经 =dsh-web= 脚本的 =--service= 入口启动* :: 该入口先跑 =_relink_profile= 断链自愈（服务不经 =bin/dsh= wrapper，UI 运行期对 =cordis.patch.yml= 的原子写断掉的 stow 软链在每次服务启动 / respawn 时归位，替代从未落地的「cron 定时跑 =dsh --version=」方案），再 exec =.bin/dsh=：pnpm 的稳定 symlink（指向 =.pnpm= 内当前版本），升级不漂移，restart 即加载新版本。不走 wrapper 的 =web= 子命令分发以避免递归，也不做端口探测与开窗，常驻职责（respawn、日志、requirement）在 shepherd。
-- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log= ；=dsh-web= wrapper 的 =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），shepherd 接管后该路径继续可用，零分叉。
+- *日志路径不变* :: 仍写 =${XDG_STATE_HOME}/dsh/web.log= ； =dsh-web= wrapper 的 =launch_token()= 从该日志提取一次性 token（=--remote-url= / 手机首次配对依赖它），shepherd 接管后该路径继续可用，零分叉。
 - *环境显式设置* :: =DSH_HOME= / =AGENTS_ROOT= 在 gexp 内运行期求值并注入，不赌服务环境；=dsh-web=（bash）与 =.bin/dsh= shim 内部的 =node= 均自行从 PATH 里的 =.guix-home= profile 解析。
 - *信任尾网主机名* :: =--trusted-host= 不再在服务定义里硬编码，由 =--service= 按 =DSH_TS_HOST= 默认值提供。与交互入口同一份配置源，手机端远程访问保持可用。
 
@@ -2849,11 +2847,11 @@ done
 
 用户态周期性维护任务，各定时器错峰排布以避免 IO 与网络争用：
 
-| 定时器名称            | 触发时间     | 职责说明                                                                        |
-|-----------------------+--------------+---------------------------------------------------------------------------------|
-| =flatpak-user-update= | 每周六 18:00 | 仅在接通外接电源时执行 =flatpak update --user -y= ，只更新用户安装的应用        |
+| 定时器名称          | 触发时间     | 职责说明                                                                |
+|---------------------+--------------+-------------------------------------------------------------------------|
+| =flatpak-user-update= | 每周六 18:00 | 仅在接通外接电源时执行 =flatpak update --user -y= ，只更新用户安装的应用  |
 | =nix-gc=              | 每周日 19:30 | 清理 14 天前的 Nix 用户 profile 世代并回收 store（随 Nix 本体一同启停） |
-| =kb-backup=           | 每日 22:00   | 自动提交 =~/Documents/Org= 知识库的本地 Git 变更                              |
+| =kb-backup=           | 每日 22:00   | 自动提交 =~/Documents/Org= 知识库的本地 Git 变更                          |
 
 #+NAME: timer-services
 #+begin_src scheme :noweb yes
@@ -3248,10 +3246,10 @@ XDG MIME 默认应用表。Guix 的 ~default~ 字段原本要求传入形如 ~(M
 
 自包含的 *系统救援 + 全新装机* 双用途 Live ISO 声明（与宿主机的 =%system= 独立，通过 =blue build-iso= 抽离至 =tmp/live-iso-<variant>.scm= 并交由 =tools/build-image.scm= 构建镜像，详见 [[../docs/operations/iso-build.md][docs/operations/iso-build.md]]）：
 
-| 变体名称  | 输出文件                   | 适用场景与会话设计                                                                                                                                  |
-|-----------+----------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| =desktop= | =tmp/live-iso-desktop.scm= | 搭载 =XFCE= + =labwc= （Wayland）与 =IceCat= 浏览器， =greetd= 的初始与默认会话均指向 =%xfce-session= （登出后自动重进桌面），网络走 NetworkManager |
-| =minimal= | =tmp/live-iso-minimal.scm= | 纯终端轻量救援盘： =TTY1= 保留官方 TUI 安装器（kmscon）， =TTY2= 为手册， =TTY3= – =TTY6= 为免密 root Shell，登录前 =/etc/issue= 显示救援速查提示   |
+| 变体名称 | 输出文件                 | 适用场景与会话设计                                                                                                                        |
+|----------+--------------------------+-------------------------------------------------------------------------------------------------------------------------------------------|
+| =desktop=  | =tmp/live-iso-desktop.scm= | 搭载 =XFCE= + =labwc= （Wayland）与 =IceCat= 浏览器， =greetd= 的初始与默认会话均指向 =%xfce-session= （登出后自动重进桌面），网络走 NetworkManager |
+| =minimal=  | =tmp/live-iso-minimal.scm= | 纯终端轻量救援盘： =TTY1= 保留官方 TUI 安装器（kmscon）， =TTY2= 为手册， =TTY3= – =TTY6= 为免密 root Shell，登录前 =/etc/issue= 显示救援速查提示   |
 
 - *救砖与装机载荷* :: =live-rescue-tools= 将 =rescue-chroot.sh= 与 =emergency-blue.sh= 装进系统 profile 的 =/bin= （其 builder 仅使用核心 Guile 过程 ~mkdir~ 、 ~copy-file~ 与 ~chmod~ ，无需外包 ~with-imported-modules~ ）。 =%live-skeletons= 将 =source/files/livecd= 配置与当前仓库快照（经 =%live-repo-select?= 剔除 =.git= 、 =dist= 与 =tmp= ，防止把 =dist/= 下的旧 ISO 打进镜像）预置到 =~/Guix-configs= ；由于骨架文件保留 store 的只读权限，使用前需先 ~cp -r~ 复制一份可写副本。 =%live-cli-packages= 内嵌 =emacs-minimal= （ =emergency-blue= 执行 Org Babel tangle 的硬依赖），启动后无需联网即可运行 ~emergency-blue.sh init~ 。
 - *硬件兼容、权限与远程排障* :: 内置完整 =linux= 内核与 =linux-firmware= ， =kernel-arguments= 仅保留 ~"quiet"~ （移除基底安装盘屏蔽 AMD 显卡 KMS 的 ~modprobe.blacklist=radeon,amdgpu~ ），并将 =privileged-programs= 恢复为 =%default-privileged-programs= （基底安装盘仅保留 =passwd= ，缺少 =sudo= 、 =su= 、 =mount= 等 setuid 权限）。 =%live-base-services= 默认自启 =sshd= 并允许密码登录（ =root= 与 =live= 账户均使用 =fish= ，密码同为 =live= ），同时通过 =special-files-service-type= 补齐 =/usr/bin/env= （基底仅提供 =/bin/sh= ，救援脚本的 shebang 依赖 =/usr/bin/env= ）。
