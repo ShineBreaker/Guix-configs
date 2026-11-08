@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=DS Bot
+GenericName=ds-bot
+Comment=容器内 DS Bot（自带独立 DeepSeek Harness）的 Web UI
+Exec=sh -c "exec $HOME/.local/libexec/ds-bot-window"
+Icon=dsbot
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+StartupWMClass=chrome-127.0.0.1__-ds-bot

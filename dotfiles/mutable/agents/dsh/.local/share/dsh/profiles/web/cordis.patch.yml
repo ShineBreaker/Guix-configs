@@ -804,6 +804,11 @@
               low: low
               high: high
               max: max
+        compat:
+          supportsDeveloperRole: false
+          supportsStore: false
+          maxTokensField: max_tokens
+          requiresReasoningContentOnAssistantMessages: true
       magpie-anthropic:
         displayName: Magpie · Anthropic
         apiKeyEnv: MAGPIE_GATEWAY_KEY
@@ -848,6 +853,8 @@
               medium: medium
               high: high
               xhigh: xhigh
+        compat:
+          supportsDeveloperRole: false
       opencode-go:
         apiKeyEnv: OPENCODE_GO_API_KEY
 - id: ponytail
@@ -1202,5 +1209,4 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: magpie
-    model: auto/deepseek-v4.1-flash
-    reasoningEffort: max
+    model: stepfun-cn/step-5-preview

@@ -15,14 +15,13 @@
         "@mengyuly/dsh-ponytail",
         "cc-safety-net",
         "dsh-better-sidebar",
-        "@michengai/dsh-automation",
         "dsh-soul-md",
         "@xmanrui/dsh-im",
         "ds-harness-remote",
         "dsh-free-search",
         "@local/dsh-process-guard",
         "dsh-dream-skin",
-        "dsh-pet"
+        "@michengai/dsh-automation"
       ],
       "patchReload": "live"
     }
@@ -40,7 +39,6 @@
     "dsh-context": "0.82.1",
     "dsh-dream-skin": "11.7.0",
     "dsh-free-search": "0.9.34",
-    "dsh-pet": "0.4.5",
     "dsh-soul-md": "0.12.1",
     "dshmarket": "1.73.14"
   }

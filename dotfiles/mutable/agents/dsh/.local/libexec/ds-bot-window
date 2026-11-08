@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 BrokenShine <xchai404@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+#
+# ds-bot-window — 打开容器内 DS Bot 的 Web UI 窗口（desktop 入口共用）。
+#
+# DS Bot（Fei2411/DS-Bot 独立 AppImage）常驻在 my-distrobox 容器内，由 home-shepherd
+# 的 ds-bot 服务拉起（adhoc-services，定义见同包 adhoc-services/ds-bot.scm），监听
+# 3081。容器是 host 网络，宿主 127.0.0.1:3081 即容器内同一地址。
+#
+# 与 dsh-web 的差异：ds-bot 是另一套独立 DSH，authority 不同，浏览器没有历史 cookie，
+# 所以总是从 shepherd 日志取最新 launch token 拼进 URL——token 换取 session cookie 后
+# 由 cookie 接管（30 天）。服务已在跑时 herd start 是 no-op，不会中断进行中的回合。
+set -euo pipefail
+
+PORT=3081
+LOG="${DS_BOT_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/dsh/ds-bot.log}"
+PROFILE=ds-bot
+HERD="$HOME/.guix-home/profile/bin/herd"
+
+# 确保服务在跑（shepherd 管；已在跑则 no-op）。失败不阻断——下面取不到 token 会报错。
+"$HERD" start ds-bot >/dev/null 2>&1 || true
+
+# 等日志出现 token 行：服务刚起时 DSH 需要几秒才打印。
+token=""
+for _ in $(seq 1 40); do
+	token=$(sed -n 's/.*dsh web: http:\/\/127\.0\.0\.1:'"${PORT}"'\/?token=\([^[:space:]]\{1,\}\).*$/\1/p' \
+		"$LOG" 2>/dev/null | tail -n 1)
+	[[ -n "$token" ]] && break
+	sleep 0.5
+done
+
+url="http://127.0.0.1:${PORT}/"
+if [[ -n "$token" ]]; then
+	url="http://127.0.0.1:${PORT}/?token=${token}"
+else
+	printf 'ds-bot-window: 未在 %s 找到 token（服务起没起来？）\n' "$LOG" >&2
+	printf 'ds-bot-window: 用干净 URL 尝试，可能需要先手动握手\n' >&2
+fi
+
+chromium_bin() {
+	if command -v chromium >/dev/null 2>&1; then
+		command -v chromium
+	elif [[ -x "$HOME/.guix-home/profile/bin/chromium" ]]; then
+		printf '%s\n' "$HOME/.guix-home/profile/bin/chromium"
+	else
+		return 1
+	fi
+}
+
+chromium=$(chromium_bin) || {
+	printf 'ds-bot-window: 找不到 chromium（ungoogled-chromium-wayland 未装或不在 PATH）\n' >&2
+	exit 127
+}
+
+# profile-directory 与 ds-bot.desktop 的 StartupWMClass 成对绑定（Wayland 下窗口 ID
+# 只由 profile 目录名决定，两处必须同改）。该 profile 同时隔离 ds-bot 的 cookie 与
+# 日常浏览器配置，和 dsh 的那份互不干扰。
+exec "$chromium" --profile-directory="$PROFILE" \
+	--app="$url" --no-first-run --no-default-browser-check
