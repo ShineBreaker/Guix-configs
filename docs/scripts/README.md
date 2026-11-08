@@ -18,6 +18,7 @@
 | doc-format.sh                   | `tools/doc-format.sh`                    | 不部署（format 编排）     | [doc-format.md](repo/doc-format.md)           |
 | doc-punct.py                    | `tools/doc-punct.py`                     | 不部署（format 标点一级） | [doc-punct.md](repo/doc-punct.md)             |
 | block-{list,extract,replace}.el | `tools/`                                 | 不部署（blueprint 调用）  | [org-block-tools.md](repo/org-block-tools.md) |
+| sarasa-ttf-extract.py           | `tools/sarasa-ttf-extract.py`            | 不部署（手动运行）        | [sarasa-ttf-extract.md](repo/sarasa-ttf-extract.md) |
 | toolbox                         | `dotfiles/mutable/tools/toolbox/.local/` | mutable                   | [toolbox.md](repo/toolbox.md)                 |
 
 ## agent 入口（`~/.local/bin`）
