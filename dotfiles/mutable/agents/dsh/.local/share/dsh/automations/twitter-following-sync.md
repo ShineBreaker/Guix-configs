@@ -25,7 +25,11 @@
 你是 X 关注列表周同步任务的执行者。只做一件事：刷新关注列表。
 
 ```bash
-secrets decrypt twitter-x    # 产出 tmpfs 明文凭据
+# workspace-write 沙箱下 /run/user/1000 不可写；沙箱内 /tmp 是每次 bash 调用独立的
+# tmpfs（重启即消，同等级）。twitter_fetch.py 的凭据路径同样读 $XDG_RUNTIME_DIR。
+# 解密与同步必须在同一次 bash 调用内完成：沙箱 /tmp 不跨调用持久。
+export XDG_RUNTIME_DIR=/tmp
+secrets decrypt twitter-x
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" sync-following \
   --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest"
 ```

@@ -6,6 +6,7 @@
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
 - 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`，之后相对路径都相对它。
+- 本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine`）：可写范围只有 home 目录树与 `/tmp`，`/run/user/1000`、`/var` 等 home 外路径不可写（报 EROFS / Read-only file system）。凭据解密产物因此落 `/tmp`，见第 0/1 步。
 - `$XDG_RUNTIME_DIR` 可能未注入，按 `${XDG_RUNTIME_DIR:-/run/user/1000}` 展开。
 - **不要调用 `hermes` CLI**（本环境不可用）；跨任务状态一律写文件。
 - 工具名映射（hermes 旧名 → 本环境）：`web_extract` → `web_fetch`；`vision_analyze` → `read_image`。
@@ -45,19 +46,18 @@
 ### 第 0 步：准备凭据
 
 ```bash
-secrets decrypt twitter-x        # 产出 $XDG_RUNTIME_DIR/secrets-decrypted/twitter-x
 export TYPESAFE_API_KEY="$(secrets get typesafe TYPESAFE_API_KEY)"
 ```
 
-**jev 密钥已迁到 secrets 库的 `typesafe` 条目**：`secrets get typesafe TYPESAFE_API_KEY`。取不到时见上方降级规则。
-
 `secrets get` 取不到值（条目不存在或为空）时：明确报告「jev 密钥缺失，跳过打分」，**照常**执行第 1、3、4 步，用原文人工筛选并在报告里标注该降级；不要伪造 `scored/` 或 `picked/` 产物。
 
-`secrets decrypt` 失败则明确报告「凭据缺失，跳过本次」，不要用 guest 模式糊盖（guest 拿不到最新推文，日报会是空的）。
+**推特登录凭据的解密与抓取必须放在同一次 bash 调用里**：`secrets decrypt` 的明文产物写 `$XDG_RUNTIME_DIR/secrets-decrypted/twitter-x`，本任务以 workspace-write 运行（可写范围只有 home 与 `/tmp`），`/run/user/1000` 不可写；沙箱内的 `/tmp` 是每次 bash 调用独立的 tmpfs（重启即消，与 `/run/user/1000` 同等级），但**不跨调用持久**，所以解密与三个源的抓取合并为一次调用执行，中途不能拆开。解密失败则明确报告「凭据缺失，跳过本次」，不要用 guest 模式糊盖（guest 拿不到最新推文，日报会是空的）。
 
-### 第 1 步：抓取推文（三个源，依次跑）
+### 第 1 步：抓取推文（凭据解密与三个源在同一次 bash 调用内完成）
 
 ```bash
+export XDG_RUNTIME_DIR=/tmp   # 沙箱内 /tmp 为每次调用独立的 tmpfs；twitter_fetch.py 的凭据路径同样读该变量，两边一致
+secrets decrypt twitter-x
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" feed \
   --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest" --source following --count 100
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" feed \
