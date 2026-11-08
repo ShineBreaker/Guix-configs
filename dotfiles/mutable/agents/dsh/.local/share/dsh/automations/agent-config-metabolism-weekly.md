@@ -5,15 +5,15 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`，之后相对路径都相对它。
+- 开工先 `cd /home/brokenshine/Documents/Org`，之后相对路径都相对它。本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine/Documents/Org`）：纯诊断任务只写报告，落在 `agent-config-metabolism/` 下；agenote CLI 与 DSH 注册表均为只读访问，不受工作区限制。
 - 跨任务状态一律写文件，不依赖任何外部 agent CLI。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
 
 ## 交付（每次运行收尾必做）
 
-1. 报告先落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/agent-config-metabolism-weekly/<YYYY-MM-DD>.md`（目录不存在先创建）。
-2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/.local/share/dsh/automation-reports/agent-config-metabolism-weekly/<YYYY-MM-DD>.md`
+1. 报告先落盘到 `/home/brokenshine/Documents/Org/agent-config-metabolism/<YYYY-MM-DD>.md`（目录不存在先创建）。
+2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/Documents/Org/agent-config-metabolism/<YYYY-MM-DD>.md`
    - 输出含 `"sent": true` → 报告末尾写一行「已投递 QQ」。
    - 输出含 `"reason": "no-target"` → 报告末尾写一行「未投递：QQ 投递目标未配置」。
    - 其它失败 → 报告末尾照实写「投递失败：<原因>」，最多重试一次。

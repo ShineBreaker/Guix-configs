@@ -5,14 +5,15 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`。
+- 开工先 `cd /home/brokenshine/Projects/agents/workspace/twitter-digest`（本任务只读状态目录、写报告，产物都在这个目录下）。
+- 本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine/Projects/agents/workspace/twitter-digest`）：可写范围只有这个目录树与 `/tmp`；`~/.cache`、`/run/user/1000` 不可写。
 - **不要调用 `hermes`**：本任务的投递已改走 DSH 自带的 dsh-im 接口，hermes 与它无关。跨任务状态一律读文件。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
 
 ## 交付（每次运行收尾必做）
 
-1. 报告先落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/twitter-digest-deliver/<YYYY-MM-DD>.md`（目录不存在先创建）。
+1. 报告先落盘到 `/home/brokenshine/Projects/agents/workspace/twitter-digest/reports/twitter-digest-deliver/<YYYY-MM-DD>.md`（目录不存在先创建）。
 2. 投递（**图片优先，文本回退**）：主通道是 `dsh_im_push_media` 工具，返回 `sent=true` 即成功；主通道失败才回退 `qq-deliver.py` 发文本。报告末尾如实写投递结果与用了哪条通道。
 3. 最后把报告正文作为最终回复输出：第一行就是正文，不要客套、不要汇报执行过程。
 
@@ -25,7 +26,7 @@
 1. **读凌晨任务留下的状态文件**（hermes notepad 的替代形态）：
 
 ```bash
-STATE="$HOME/.local/share/dsh/automation-state/twitter-digest"
+STATE="$HOME/Projects/agents/workspace/twitter-digest/state"
 cat "$STATE/last_image"    # 成品 PNG 绝对路径，可能为空
 cat "$STATE/last_date"     # YYYY-MM-DD
 ```

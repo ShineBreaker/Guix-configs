@@ -300,6 +300,16 @@ def render_html(tweets: list[dict], date: str, variant: str,
     return re.sub(r"@[A-Z_]+@", "", out)
 
 
+def render_root() -> Path:
+    """渲染产物根目录：默认 ~/.cache/twitter-digest-render。
+
+    TWITTER_DIGEST_RENDER_DIR 可覆盖——无人值守定时任务以 workspace-write 在
+    专属工作区运行时 ~/.cache 不可写，任务书 export 该变量指到工作区内。
+    """
+    override = os.environ.get("TWITTER_DIGEST_RENDER_DIR")
+    return Path(override) if override else Path.home() / ".cache/twitter-digest-render"
+
+
 def find_chromium() -> Path | None:
     cands = sorted(Path("/gnu/store").glob("*/bin/chromium"))
     return cands[0] if cands else None
@@ -322,9 +332,10 @@ def fontconfig_for_serif() -> dict | None:
     if not extra:
         return None
     dirs = "".join(f"  <dir>{d}</dir>\n" for d in extra)
-    conf = Path.home() / ".cache/twitter-digest-render/fonts-serif.conf"  # 同 work，别放 /tmp
+    work = render_root()
+    conf = work / "fonts-serif.conf"  # 同 work，别放 /tmp
     conf.parent.mkdir(parents=True, exist_ok=True)
-    cache = Path.home() / ".cache/fontconfig-serif"
+    cache = work / "fontconfig"
     cache.mkdir(parents=True, exist_ok=True)
     conf.write_text(
         '<?xml version="1.0"?>\n'
@@ -344,7 +355,7 @@ def html_to_png(html_path: Path, png_path: Path, height: int = 60000) -> bool:
         return False
     env = {**os.environ, **(fontconfig_for_serif() or {})}
     # ponytail: 独立 profile 目录，避免桌面 chromium 在跑时 headless 撞 SingletonLock 卡死
-    udd = Path.home() / ".cache/chromium-headless"
+    udd = render_root() / "chromium-headless"
     udd.mkdir(parents=True, exist_ok=True)
     # ponytail: 120000px 窗口会让 headless chromium 挂死（2026-10-24 实测，60000 稳定）；
     # 内容更长会静默截断，截图后检查底边非背景即报错
@@ -434,9 +445,10 @@ def cmd_render(args) -> int:
 def emit(args, html_text: str, stem: str) -> int:
     """写 HTML → 截图 → 裁底，打印成品路径。"""
     # Guix 的 cleanup-/tmp 服务每次开机执行 `find /tmp -mindepth 1 -delete`，
-    # 凌晨渲染的成品会在早上投递前被吞掉（2026-10-04 实测）。改用 ~/.cache 下的
-    # 持久目录，它不在清理范围内。
-    work = Path.home() / ".cache/twitter-digest-render"
+    # 凌晨渲染的成品会在早上投递前被吞掉（2026-10-04 实测）。默认落 ~/.cache 下的
+    # 持久目录（不在清理范围）；无人值守任务以 workspace-write 在专属目录运行时
+    # ~/.cache 不可写，任务书 export TWITTER_DIGEST_RENDER_DIR 指到 workspace 内。
+    work = render_root()
     work.mkdir(parents=True, exist_ok=True)
     html_path = work / f"{stem}.html"
     html_path.write_text(html_text, encoding="utf-8")

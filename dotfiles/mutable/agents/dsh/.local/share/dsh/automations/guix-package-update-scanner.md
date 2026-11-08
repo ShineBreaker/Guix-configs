@@ -12,8 +12,8 @@
 
 ## 交付（每次运行收尾必做）
 
-1. 报告先落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/guix-package-update-scanner/<YYYY-MM-DD>.md`（目录不存在先创建）。
-2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/.local/share/dsh/automation-reports/guix-package-update-scanner/<YYYY-MM-DD>.md`
+1. 报告先落盘到 `tmp/reports/guix-package-update-scanner/<YYYY-MM-DD>.md`（相对仓库根，git 已忽略；目录不存在先创建）。
+2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py tmp/reports/guix-package-update-scanner/<YYYY-MM-DD>.md`
    - 输出含 `"sent": true` → 报告末尾写一行「已投递 QQ」。
    - 输出含 `"reason": "no-target"` → 报告末尾写一行「未投递：QQ 投递目标未配置」。
    - 其它失败 → 报告末尾照实写「投递失败：<原因>」，最多重试一次。

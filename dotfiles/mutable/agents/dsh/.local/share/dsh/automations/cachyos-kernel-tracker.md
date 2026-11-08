@@ -9,12 +9,12 @@
 - `rm` 被 gate 冻结：清理用 `trash-put`，大文件删除极慢时直接保留并在报告说明。
 - 无人值守：没有人可以问，按任务书规则自行决定，不确定项在报告里单列「待拍板」。
 - **超时必须显式给**：下载 260 MB、解压 1.8 GB、内核全编 20 分钟，bash 工具默认 60 秒会截断，这些命令一律传 `timeoutMs`（下载 600000、解压 300000、构建 3600000）。
-- **沙箱边界**：本任务以 `workspace-write` 运行（workspace = `/home/brokenshine`），可写范围 = home 目录树 + `/tmp`。`guix build` 走 daemon（`/gnu/store` 由 daemon 写），`~/.cache/guix` 在 home 内可写，`guix time-machine` 可用。需要 sudo 的 `blue rebuild` / `guix system reconfigure` 仍一律不跑。
+- **沙箱边界**：本任务以 `workspace-write` 运行（workspace = Guix-configs 仓库根），可写范围 = 仓库树 + `/tmp`。`guix build` 走 daemon（`/gnu/store` 由 daemon 写）；`~/.cache/guix` 在 workspace 外**不可写**，因此 `guix time-machine` / `blue check` / `blue --dry-run rebuild` 一律跑不通，不要尝试。需要 sudo 的 `blue rebuild` / `guix system reconfigure` 仍一律不跑。
 
 ## 交付（每次运行收尾必做）
 
-1. 报告落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/cachyos-kernel-tracker/<YYYY-MM-DD>.md`（目录不存在先创建）。
-2. 投递 QQ：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py <报告路径>`
+1. 报告落盘到 `tmp/reports/cachyos-kernel-tracker/<YYYY-MM-DD>.md`（相对仓库根，git 已忽略；目录不存在先创建）。
+2. 投递 QQ：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py tmp/reports/cachyos-kernel-tracker/<YYYY-MM-DD>.md`
    - 输出含 `"sent": true` → 报告末尾写一行「已投递 QQ」。
    - 输出含 `"reason": "no-target"` → 写「未投递：QQ 投递目标未配置」。
    - 其它失败 → 写「投递失败：<原因>」，最多重试一次。

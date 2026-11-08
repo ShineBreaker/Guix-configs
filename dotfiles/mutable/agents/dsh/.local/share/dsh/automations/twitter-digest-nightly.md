@@ -5,8 +5,8 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`，之后相对路径都相对它。
-- 本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine`）：可写范围只有 home 目录树与 `/tmp`，`/run/user/1000`、`/var` 等 home 外路径不可写（报 EROFS / Read-only file system）。凭据解密产物因此落 `/tmp`，见第 0/1 步。
+- 开工先 `cd /home/brokenshine/Projects/agents/workspace/twitter-digest`，之后相对路径都相对它（本任务的全部产物都在这个目录下）。
+- 本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine/Projects/agents/workspace/twitter-digest`）：可写范围只有这个目录树与 `/tmp`，`~/.cache`、`/run/user/1000` 等均不可写（报 EROFS / Read-only file system）。凭据解密产物落 `/tmp`（见第 0/1 步），渲染产物经 `TWITTER_DIGEST_RENDER_DIR` 落在 `render/work/` 下。
 - `$XDG_RUNTIME_DIR` 可能未注入，按 `${XDG_RUNTIME_DIR:-/run/user/1000}` 展开。
 - **不要调用 `hermes` CLI**（本环境不可用）；跨任务状态一律写文件。
 - 工具名映射（hermes 旧名 → 本环境）：`web_extract` → `web_fetch`；`vision_analyze` → `read_image`。
@@ -15,12 +15,12 @@
 
 ## 交付（每次运行收尾必做）
 
-1. **写跨任务状态**（早上 8 点的投递任务靠它）：状态目录 `/home/brokenshine/.local/share/dsh/automation-state/twitter-digest/`
+1. **写跨任务状态**（早上 8 点的投递任务靠它）：状态目录 `/home/brokenshine/Projects/agents/workspace/twitter-digest/state/`
    - `last_image` ← 成品 PNG 绝对路径
    - `last_date` ← `$(date +%F)`
    - `daily/<date>.md` ← 第 3 步写好的日报 markdown 原文
    - 目录不存在先 `mkdir -p`。
-2. 报告落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/twitter-digest-nightly/<YYYY-MM-DD>.md`，内容含：三个源各自抓到多少条、jev 打分结果、成稿条数、PNG 路径与像素尺寸、失败项。**报告正文里不要堆日报全文**，日报在 `daily/<date>.md`。
+2. 报告落盘到 `/home/brokenshine/Projects/agents/workspace/twitter-digest/reports/twitter-digest-nightly/<YYYY-MM-DD>.md`，内容含：三个源各自抓到多少条、jev 打分结果、成稿条数、PNG 路径与像素尺寸、失败项。**报告正文里不要堆日报全文**，日报在 `daily/<date>.md`。
 3. **不投递**：投递是 08:00 那个任务的职责，本任务只负责生产。
 4. 最后把报告正文作为最终回复输出：第一行就是正文，不要客套、不要汇报执行过程。
 
@@ -30,7 +30,7 @@
 
 ## 环境与路径
 
-- 状态目录：`$HOME/.local/share/dsh/automation-state/twitter-digest`（脚本内部抓取缓存 `new/`、`scored/`、`picked/`、`raw/`、`seen_ids.json` 等也在其下）
+- 状态目录：`$HOME/Projects/agents/workspace/twitter-digest/state`（脚本内部抓取缓存 `new/`、`scored/`、`picked/`、`raw/`、`seen_ids.json` 等也在其下）
 - 脚本目录：`$HOME/.local/share/dsh/automations/scripts/twitter-digest`
   1. `twitter_fetch.py` 抓取推文（feed / explore 子命令，见下）
   2. `jev_score.py` jev 价值判定（score 子命令）
@@ -59,11 +59,11 @@ export TYPESAFE_API_KEY="$(secrets get typesafe TYPESAFE_API_KEY)"
 export XDG_RUNTIME_DIR=/tmp   # 沙箱内 /tmp 为每次调用独立的 tmpfs；twitter_fetch.py 的凭据路径同样读该变量，两边一致
 secrets decrypt twitter-x
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" feed \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest" --source following --count 100
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state" --source following --count 100
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" feed \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest" --source for-you --count 40
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state" --source for-you --count 40
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" explore \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest"
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state"
 ```
 
 三个源各一次调用，总共约 1 分钟：
@@ -81,8 +81,8 @@ python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch
 
 ```bash
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/jev_score.py" score \
-  --input "$HOME/.local/share/dsh/automation-state/twitter-digest/new/$(date +%F).json" \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest"
+  --input "$HOME/Projects/agents/workspace/twitter-digest/state/new/$(date +%F).json" \
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state"
 ```
 
 输入文件不存在说明本轮没抓到新内容，跳到第 3 步。
@@ -91,7 +91,7 @@ python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/jev_score.py"
 
 ```bash
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/digest_build.py" build \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest" --top 60
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state" --top 60
 ```
 
 第 3 步的 stdout 是**原始素材**：每条含作者、完整原文、热度、原帖地址 `[src ...]`、图片索引 `[imgN photo WxH URL]`。它不是交付物。
@@ -166,29 +166,29 @@ OpenRouter 已上线 Inception 的 Mercury 3，生成速度 1000+ tok/s，支持
 把第 3 步写好的日报 markdown 先落盘到状态目录（供早上投递任务读取）：
 
 ```bash
-mkdir -p "$HOME/.local/share/dsh/automation-state/twitter-digest/daily"
-# 把成稿 markdown 写进 $HOME/.local/share/dsh/automation-state/twitter-digest/daily/$(date +%F).md
+mkdir -p "$HOME/Projects/agents/workspace/twitter-digest/state/daily"
+# 把成稿 markdown 写进 $HOME/Projects/agents/workspace/twitter-digest/state/daily/$(date +%F).md
 ```
 
-然后渲染：
+然后渲染（`TWITTER_DIGEST_RENDER_DIR` 把渲染产物指到 workspace 内的 `render/work/`，`~/.cache` 在本任务权限下不可写）：
 
 ```bash
-mkdir -p "$HOME/.cache/twitter-digest-render"
+export TWITTER_DIGEST_RENDER_DIR="$HOME/Projects/agents/workspace/twitter-digest/render/work"
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/digest_render.py" md \
-  "$HOME/.local/share/dsh/automation-state/twitter-digest/daily/$(date +%F).md" --variant D --title 日报 \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest" \
+  "$HOME/Projects/agents/workspace/twitter-digest/state/daily/$(date +%F).md" --variant D --title 日报 \
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state" \
   --date "$(date +%F)" --top 60
 ```
 
-命令的 stdout 是成品 PNG 的绝对路径（形如 `/home/brokenshine/.cache/twitter-digest-render/digest-md-D.png 1080xNNNN`）。图内只放日报内容本身，执行说明不要写进图里。
-（渲染输出落在 `~/.cache/twitter-digest-render/`：本机每次开机会 `find /tmp -mindepth 1 -delete`，
-凌晨 3 点的成品撑不到早上 8 点投递。`~/.cache` 不在清理范围内。）
+命令的 stdout 是成品 PNG 的绝对路径（形如 `/home/brokenshine/Projects/agents/workspace/twitter-digest/render/work/digest-md-D.png 1080xNNNN`）。图内只放日报内容本身，执行说明不要写进图里。
+（渲染输出落在 `render/work/`：本机每次开机会 `find /tmp -mindepth 1 -delete`，
+凌晨 3 点的成品撑不到早上 8 点投递；`render/` 不在清理范围内。）
 
 **渲染完成后写状态文件**（替代 hermes 的 notepad，早上 8 点的投递任务靠它）：
 
 ```bash
-STATE="$HOME/.local/share/dsh/automation-state/twitter-digest"
-printf '%s\n' "/home/brokenshine/.cache/twitter-digest-render/digest-md-D.png" > "$STATE/last_image"
+STATE="$HOME/Projects/agents/workspace/twitter-digest/state"
+printf '%s\n' "$HOME/Projects/agents/workspace/twitter-digest/render/work/digest-md-D.png" > "$STATE/last_image"
 date +%F > "$STATE/last_date"
 ```
 

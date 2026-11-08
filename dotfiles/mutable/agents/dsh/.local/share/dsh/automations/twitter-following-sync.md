@@ -5,16 +5,17 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/Guix-configs`，之后相对路径都相对它。
-- 状态目录已从 hermes 迁入 dsh：`$HOME/.local/share/dsh/automation-state/twitter-digest`，旧 hermes 路径已作废。
+- 开工先 `cd /home/brokenshine/Projects/agents/workspace/twitter-digest`，之后相对路径都相对它（本任务的全部产物都在这个目录下）。
+- 本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine/Projects/agents/workspace/twitter-digest`）：可写范围只有这个目录树与 `/tmp`；`~/.cache`、`/run/user/1000` 不可写（凭据解密产物落 `/tmp`，见任务书命令）。
+- 状态目录已从 hermes 迁入 dsh：`$HOME/Projects/agents/workspace/twitter-digest/state`，旧 hermes 路径已作废。
 - 不要调用 `hermes` CLI；跨任务状态一律写文件。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
 
 ## 交付（每次运行收尾必做）
 
-1. 报告先落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/twitter-following-sync/<YYYY-MM-DD>.md`（目录不存在先创建）。
-2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/.local/share/dsh/automation-reports/twitter-following-sync/<YYYY-MM-DD>.md`
+1. 报告先落盘到 `/home/brokenshine/Projects/agents/workspace/twitter-digest/reports/twitter-following-sync/<YYYY-MM-DD>.md`（目录不存在先创建）。
+2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/Projects/agents/workspace/twitter-digest/reports/twitter-following-sync/<YYYY-MM-DD>.md`
    - 输出含 `"sent": true` → 报告末尾写一行「已投递 QQ」。
    - 输出含 `"reason": "no-target"` → 报告末尾写一行「未投递：QQ 投递目标未配置」。
    - 其它失败 → 报告末尾照实写「投递失败：<原因>」，最多重试一次。
@@ -31,7 +32,7 @@
 export XDG_RUNTIME_DIR=/tmp
 secrets decrypt twitter-x
 python3 "$HOME/.local/share/dsh/automations/scripts/twitter-digest/twitter_fetch.py" sync-following \
-  --state-dir "$HOME/.local/share/dsh/automation-state/twitter-digest"
+  --state-dir "$HOME/Projects/agents/workspace/twitter-digest/state"
 ```
 
 输出形如 `synced N accounts -> <path>`。原样把该行作为最终回复。

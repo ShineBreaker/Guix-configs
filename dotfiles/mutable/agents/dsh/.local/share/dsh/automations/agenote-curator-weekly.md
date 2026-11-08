@@ -5,15 +5,15 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Documents/Org`，之后相对路径都相对它。
+- 开工先 `cd /home/brokenshine/Documents/Org`，之后相对路径都相对它。本任务以 `workspace-write` 权限运行（workspace = `/home/brokenshine/Documents/Org`）：可写范围只有 Org 目录树 + `/tmp`，报告与审计簿放 Org 下的 `agenote-curator/`。
 - 跨任务状态一律写文件，不依赖任何外部 agent CLI。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
 
 ## 交付（每次运行收尾必做）
 
-1. 报告先落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/agenote-curator-weekly/<YYYY-MM-DD>.md`（目录不存在先创建）。
-2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/.local/share/dsh/automation-reports/agenote-curator-weekly/<YYYY-MM-DD>.md`
+1. 报告先落盘到 `/home/brokenshine/Documents/Org/agenote-curator/reports/<YYYY-MM-DD>.md`（目录不存在先创建）。
+2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/Documents/Org/agenote-curator/reports/<YYYY-MM-DD>.md`
    - 输出含 `"sent": true` → 报告末尾写一行「已投递 QQ」。
    - 输出含 `"reason": "no-target"` → 报告末尾写一行「未投递：QQ 投递目标未配置」。
    - 其它失败 → 报告末尾照实写「投递失败：<原因>」，最多重试一次。
@@ -74,7 +74,7 @@ Jev 全量判定约 470 张卡片约 20 分钟、约 610K input tokens。**单 t
    - **C 级**：其余聚焦簇 → 仅当 A/B 不足 3 个时补位
 3. 对 A/B 级候选各读 2-3 张源卡（`agenote get <id>`）确认主题同一、信息可互补
 4. **每轮提案 1–3 个晋升候选**（A 级优先，超出留下周）；每个提案含：候选名、源卡 ID 列表、usage 总和、聚焦度结论、建议的 skill 落点（`dotfiles/mutable/agents/skills/.agents/skills/<skill-name>/SKILL.md`，扁平结构、无分类层，askill 托管）、预期复用场景（什么任务什么关键词会命中）。**提案前先确认消费方仍存在**：候选 skill 若服务于已退役的工具（如 pi/omp），先查 `command -v <tool>` 与配置目录，不存在则改提「归档该 skill」而不是增补
-5. 晋升审计簿维护在 `~/.local/share/dsh/automation-state/skill-impact.md`（目录不存在先创建）：用户拍板 Accepted/Rejected 后由当轮会话补登一行；提案前先读簿头，被 Rejected 过的方向不得原样重提
+5. 晋升审计簿维护在 `~/Documents/Org/agenote-curator/skill-impact.md`（目录不存在先创建）：用户拍板 Accepted/Rejected 后由当轮会话补登一行；提案前先读簿头，被 Rejected 过的方向不得原样重提
 6. **候选多于 1 个时不自行批量落地**——原子提案，防批量改动无法归因
 
 零候选（无聚焦簇）= 正常，报告里写明「本轮无晋升提案」即可。
@@ -86,7 +86,7 @@ Jev 全量判定约 470 张卡片约 20 分钟、约 610K input tokens。**单 t
 ```bash
 # 卡片侧：约 20 分钟 / 610K tokens，约 470 张
 python3 /home/brokenshine/.local/share/dsh/automations/scripts/curation/jev_audit.py \
-    --root ~/Documents/Org/agenote --out jev-cards.jsonl [--resume]
+    --root ~/Documents/Org/agenote --out agenote-curator/jev-cards.jsonl [--resume]
 ```
 
 判定口径（写在报告里）：Jev（TypeSafe SystemOne `evaluateJev`）返回 0~1 概率，主训练语言英文，CJK 绝对精度受限，**只信相对排序与交叉验证**。三个问题：
@@ -139,5 +139,5 @@ token 用量：约 Nk
 - 不跑 `blue rebuild` / `guix system reconfigure` 等需 sudo 的系统操作。
 - 不碰 `~/.agents/skills/`（agenote-skills 的部署位，全软链，sync-agenote.sh 重铺会覆盖手改）。
 - 晋升 skill 的**唯一落点**是仓库源 `dotfiles/mutable/agents/skills/.agents/skills/`（扁平结构、无分类层，askill 托管）；本任务只提案不落地，用户拍板后才写入。
-- 晋升审计簿在 `~/.local/share/dsh/automation-state/skill-impact.md`。
+- 晋升审计簿在 `~/Documents/Org/agenote-curator/skill-impact.md`。
 - cron 内禁止递归创建 cron job。

@@ -5,7 +5,7 @@
 ## 运行环境
 
 - 本机 Guix System；bash 工具以 bash 执行（别写 fish 语法）。
-- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/jeans`，之后相对路径都相对它。路径不存在（仓库搬过家）时用
+- 开工先 `cd /home/brokenshine/Projects/dotfiles/guix/jeans`，之后相对路径都相对它。本任务以 `workspace-write` 权限运行（workspace = jeans 仓库根）：可写范围 = 仓库树 + `/tmp`，`~/.local/share/dsh`、`~/.cache` 不可写，报告与状态文件因此放仓库内 git 忽略的 `.agents/workfile/`。路径不存在（仓库搬过家）时用
   `find ~/Projects -maxdepth 4 -type d -name jeans` 探测取唯一结果；找不到就在报告里写「仓库路径未找到」结束，不要猜。
 - 跨任务状态一律写文件，不依赖任何外部 agent CLI。
 - `rm` 被 gate 冻结：清理用 `trash-put`。
@@ -37,8 +37,8 @@ $GH auth status                                  # 应秒回 Logged in to github
 
 ## 交付（每次运行收尾必做）
 
-1. 报告先落盘到 `/home/brokenshine/.local/share/dsh/automation-reports/jeans-issue-fixer/<YYYY-MM-DD>.md`（目录不存在先创建）。
-2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py /home/brokenshine/.local/share/dsh/automation-reports/jeans-issue-fixer/<YYYY-MM-DD>.md`
+1. 报告先落盘到 `.agents/workfile/jeans-issue-fixer/<YYYY-MM-DD>.md`（相对仓库根，git 已忽略；目录不存在先创建）。
+2. 再投递：`python3 /home/brokenshine/.local/share/dsh/automations/qq-deliver.py .agents/workfile/jeans-issue-fixer/<YYYY-MM-DD>.md`
    - 输出含 `"sent": true` → 报告末尾写一行「已投递 QQ」。
    - 输出含 `"reason": "no-target"` → 报告末尾写一行「未投递：QQ 投递目标未配置」。
    - 其它失败 → 报告末尾照实写「投递失败：<原因>」，最多重试一次。
@@ -133,11 +133,11 @@ git status --short                        # 未提交的工作树改动
 同时把同样的状态写进持久状态文件，供用户在别处问起时可直接读取：
 
 ```bash
-mkdir -p "$HOME/.local/share/dsh/automation-state/jeans-issue-fixer"
+mkdir -p .agents/workfile
 printf '%s 个未推送 commit / %s 项未提交改动（%s）\n' \
   "$(git log --oneline origin/main..HEAD | wc -l)" \
   "$(git status --porcelain | wc -l)" "$(date +%F)" \
-  > "$HOME/.local/share/dsh/automation-state/jeans-issue-fixer/pending_push"
+  > .agents/workfile/pending_push
 ```
 
 报告格式：
