@@ -48,6 +48,7 @@ ignoredOptionalDependencies:
 
 allowBuilds:
   '@google/genai': false
+  bun: set this to true or false
   esbuild: false
   koffi: false
   protobufjs: false

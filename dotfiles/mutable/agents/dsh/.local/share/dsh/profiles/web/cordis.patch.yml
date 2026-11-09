@@ -994,6 +994,8 @@
     showPersonaSwitcher: true
     workspaces: {}
     workspaceList:
+      - path: /home/brokenshine/Projects/agents/workspace/twitter-digest
+        title: twitter-digest
       - path: /home/brokenshine/Projects/apps/android/droidEdit
         title: droidEdit
       - path: /home/brokenshine/Projects/agents/projects/dsh-plugins/dsh-im
@@ -1058,8 +1060,6 @@
         title: DS Bot
       - path: /home/brokenshine/Projects/games/projects/LZSync
         title: LZSync
-      - path: /home/brokenshine/Projects/games/projects
-        title: games/projects
       - path: /home/brokenshine/Projects/apps/android/waydroid-helper
         title: waydroid-helper
       - path: /home/brokenshine/Projects/agents/projects
@@ -1205,8 +1205,23 @@
   config:
     searchProvider: ddg
     fetchProvider: fs-quality-fetch
+# SkillOpt-Sleep：微软官方 DSH 插件（上游 monorepo 子目录 plugins/dsh，包名
+# dsh-skillopt）。链路 = harvest 本机 agent 会话 → mine 复现任务 → replay →
+# 在 held-out gate 后 stage 提案（adopt 才是唯一改动 live 文件的边界）。
+# 为什么这样装：pnpm 的 git resolver 不认 monorepo 子目录后缀（同 dsh-agenote
+# 条目），故整repo 以 dsh-skillopt 键名装进 profile node_modules；合成包没有
+# dsh.bundle.patch 字段，走 dsh.profile.bundles 只会被记 skipping bundle，
+# 因此用 insert + 相对路径（Loader baseUrl 锚定 profile 目录）。
+# backend 默认 mock：不发起任何模型调用，仅验证插件链路；真实 backend 会消耗
+# API 额度并把会话摘录发给所选提供方，切换前先读数据边界说明。
+- insert:
+    - id: skillopt
+      name: './node_modules/dsh-skillopt/plugins/dsh/src/index.js'
+      config:
+        backend: mock
 - id: agent-default-model
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: magpie
-    model: group/never-stuck
+    model: auto/deepseek-v4.1-flash
+    reasoningEffort: max

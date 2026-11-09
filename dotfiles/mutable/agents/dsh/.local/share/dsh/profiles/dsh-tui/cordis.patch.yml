@@ -507,5 +507,6 @@
   name: "@deepseek-ai/dsh-agent-default-model"
   config:
     provider: magpie
-    model: group/never-stuck
+    model: auto/deepseek-v4.1-flash
+    reasoningEffort: max
 # @@shared:end
