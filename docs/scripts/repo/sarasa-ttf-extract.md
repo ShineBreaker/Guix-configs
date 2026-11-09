@@ -35,7 +35,7 @@ Sarasa Mono SC 不提取：monospace 首选 Maple Mono NF CN 已是单 TTF，Chr
 
 ## 验证
 
-修复生效判据（2026-11-09 实测，`fc-match` 输出首列应为文件列）：
+生效判据（`fc-match` 输出首列应为文件列）：
 
 ```
 fc-match sans-serif                # SarasaGothicSC-Regular.ttf

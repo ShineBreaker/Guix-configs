@@ -9,17 +9,17 @@
 
 ## blue 本体与仓库工具
 
-| 脚本                            | 源码                                     | 部署                      | 手册                                          |
-| ------------------------------- | ---------------------------------------- | ------------------------- | --------------------------------------------- |
-| blueprint.scm                   | `blueprint.scm`                          | 仓库根（blue 本体加载）   | [blueprint.md](repo/blueprint.md)             |
-| bootstrap.sh                    | `tools/bootstrap.sh`                     | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)       |
-| build-image.scm                 | `tools/build-image.scm`                  | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)       |
-| gen-partial.scm                 | `tools/gen-partial.scm`                  | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)       |
-| doc-format.sh                   | `tools/doc-format.sh`                    | 不部署（format 编排）     | [doc-format.md](repo/doc-format.md)           |
-| doc-punct.py                    | `tools/doc-punct.py`                     | 不部署（format 标点一级） | [doc-punct.md](repo/doc-punct.md)             |
-| block-{list,extract,replace}.el | `tools/`                                 | 不部署（blueprint 调用）  | [org-block-tools.md](repo/org-block-tools.md) |
+| 脚本                            | 源码                                     | 部署                      | 手册                                                |
+| ------------------------------- | ---------------------------------------- | ------------------------- | --------------------------------------------------- |
+| blueprint.scm                   | `blueprint.scm`                          | 仓库根（blue 本体加载）   | [blueprint.md](repo/blueprint.md)                   |
+| bootstrap.sh                    | `tools/bootstrap.sh`                     | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)             |
+| build-image.scm                 | `tools/build-image.scm`                  | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)             |
+| gen-partial.scm                 | `tools/gen-partial.scm`                  | 不部署                    | [blue-helpers.md](repo/blue-helpers.md)             |
+| doc-format.sh                   | `tools/doc-format.sh`                    | 不部署（format 编排）     | [doc-format.md](repo/doc-format.md)                 |
+| doc-punct.py                    | `tools/doc-punct.py`                     | 不部署（format 标点一级） | [doc-punct.md](repo/doc-punct.md)                   |
+| block-{list,extract,replace}.el | `tools/`                                 | 不部署（blueprint 调用）  | [org-block-tools.md](repo/org-block-tools.md)       |
 | sarasa-ttf-extract.py           | `tools/sarasa-ttf-extract.py`            | 不部署（手动运行）        | [sarasa-ttf-extract.md](repo/sarasa-ttf-extract.md) |
-| toolbox                         | `dotfiles/mutable/tools/toolbox/.local/` | mutable                   | [toolbox.md](repo/toolbox.md)                 |
+| toolbox                         | `dotfiles/mutable/tools/toolbox/.local/` | mutable                   | [toolbox.md](repo/toolbox.md)                       |
 
 ## agent 入口（`~/.local/bin`）
 
@@ -56,11 +56,11 @@
 
 ## 终端：tmux
 
-| 脚本                                                      | 源码                                                     | 部署                                       | 手册                                            |
-| --------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------- |
-| session-selector / attach-entry / window-jump / which-key | `dotfiles/immutable/terminal/.config/tmux/scripts/`      | immutable（须 `blue home`）                | [tmux-scripts.md](terminal/tmux-scripts.md)     |
-| sidebar-toggle                                            | 同上                                                     | 同上                                       | [sidebar-toggle.md](terminal/sidebar-toggle.md) |
-| sidebar-render.scm + sidebar/*.scm                        | 同上                                                     | 同上                                       | [tmux-sidebar.md](terminal/tmux-sidebar.md)     |
+| 脚本                                                      | 源码                                                | 部署                        | 手册                                            |
+| --------------------------------------------------------- | --------------------------------------------------- | --------------------------- | ----------------------------------------------- |
+| session-selector / attach-entry / window-jump / which-key | `dotfiles/immutable/terminal/.config/tmux/scripts/` | immutable（须 `blue home`） | [tmux-scripts.md](terminal/tmux-scripts.md)     |
+| sidebar-toggle                                            | 同上                                                | 同上                        | [sidebar-toggle.md](terminal/sidebar-toggle.md) |
+| sidebar-render.scm + sidebar/*.scm                        | 同上                                                | 同上                        | [tmux-sidebar.md](terminal/tmux-sidebar.md)     |
 
 ## 主题
 

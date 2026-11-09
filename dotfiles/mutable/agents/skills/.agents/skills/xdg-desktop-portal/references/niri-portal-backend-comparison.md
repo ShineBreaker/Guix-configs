@@ -11,7 +11,7 @@
 | gnome         | `xdg-desktop-portal-gnome` | **仅 Settings**                                          | 缺少 Mutter ServiceChannel                  |
 | gtk           | `xdg-desktop-portal-gtk`   | FileChooser/Access/Notification/Lockdown/Print/Wallpaper | `.portal` 文件未声明 ScreenCast/Screenshot  |
 | wlr           | `xdg-desktop-portal-wlr`   | ScreenCast/Screenshot/RemoteDesktop                      | 通过 wlr-screencopy 协议                    |
-| nosdshell     | `nosd-helpers`             | Settings（暗色模式）                                     | 替代 gnome Settings（2026-10 前为 darkman） |
+| nosdshell     | `nosd-helpers`             | Settings（暗色模式）                                     | 替代 gnome Settings |
 | gnome-keyring | `gnome-keyring`            | Secret                                                   | 密码管理                                    |
 
 ## 根因分析

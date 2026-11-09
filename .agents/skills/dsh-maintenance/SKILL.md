@@ -114,13 +114,13 @@ done
   文件后的 `neither a link nor a directory` 冲突同理：内容已在源里，trash 部署侧实体
   文件即可，**不要** `--adopt`（那会把部署侧当基线反向覆盖源）。
 - **`blue stow` 的包参数是 `agents/dsh`**（stow dir = `dotfiles/mutable/agents`）：写
-  `dsh` 报「stow 包不存在: .../dotfiles/mutable/dsh」，别顺着报错去建同名目录。
+  `dsh` 报「stow 包不存在：……/dotfiles/mutable/dsh」，别顺着报错去建同名目录。
 - **提交前核对暂存清单恰好等于本次任务文件表**：上个会话遗留的 staged 文件不会
   被你的 `git add -- <路径>` 排除，会静默混进你的提交。先
   `git restore --staged <遗留路径>` 剔出，再 `git diff --cached --name-only` 核对。
   修正形态：`git reset --soft HEAD~N`（禁 `--hard`）后按正确清单重提。
 - **`git commit` 只接受 `-m`**：gate 拒 `-F` 与 heredoc（`git commit 必须使用
-  -m 指定提交信息`）。多段 body 用多个 `-m` 按序拼（header / why / trailer
+-m 指定提交信息`）。多段 body 用多个 `-m` 按序拼（header / why / trailer
   各一个）；不要为了凑一条完整消息去试 `-F /tmp/msg` 或 `commit -F -`。
 - **署名必须是当前 agent 名 + 实际模型**：仓库配置（SOUL.md 的 commit 偏好、
   agent skill 的 commit 规范、wrapper 头注释）可能残留**别的 agent** 的

@@ -43,7 +43,7 @@ print('CMD=' + shlex.quote(cmd))
 print('CWD=' + shlex.quote(d.get('cwd') or ''))
 " 2>/dev/null || true)"
 
-# JSON 非空但解析失败 → fail-closed（此前 fail-open 是已知绕过面）
+# JSON 非空但解析失败 → fail-closed（fail-open 是已知绕过面）
 if [[ "${PARSE_FAIL:-}" == "1" && -n "$INPUT" ]]; then
   deny "bash-gate：stdin JSON 解析失败（fail-closed 拦截）。请重试或检查 hook 输入。"
 fi

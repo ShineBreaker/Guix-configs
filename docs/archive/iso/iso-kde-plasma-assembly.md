@@ -18,21 +18,21 @@ sha256: 0844693d652c1020a09d107e144ed5a47ea786b1da045682a903f350af80ede8
 
 ## 1. KDE 装配要点（与 XFCE 的本质差异）
 
-| 维度 | XFCE 版（旧） | KDE Plasma 版（新） |
-| --- | --- | --- |
-| 桌面 service | `xfce-desktop-service-type` | `plasma-desktop-service-type`（来自 `(gnu services desktop)`） |
-| 显示管理器 | `lightdm-service-type` | `sddm-service-type`（来自 `(gnu services sddm)`） |
-| 桌面自带 DM？ | 否（lightdm 独立） | **否**——`plasma-desktop-service-type` 只 extends polkit/dbus/pam/profile，**不**带 DM，必须显式加 sddm |
-| session 名 | `xfce`（`.desktop` 去扩展名） | `plasma`（SDDM 的 `auto-login-session` 值 = `"plasma.desktop"`） |
+| 维度           | XFCE 版（旧）                      | KDE Plasma 版（新）                                                                                         |
+| -------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 桌面 service   | `xfce-desktop-service-type`        | `plasma-desktop-service-type`（来自 `(gnu services desktop)`）                                              |
+| 显示管理器     | `lightdm-service-type`             | `sddm-service-type`（来自 `(gnu services sddm)`）                                                           |
+| 桌面自带 DM？  | 否（lightdm 独立）                 | **否**——`plasma-desktop-service-type` 只 extends polkit/dbus/pam/profile，**不**带 DM，必须显式加 sddm      |
+| session 名     | `xfce`（`.desktop` 去扩展名）      | `plasma`（SDDM 的 `auto-login-session` 值 = `"plasma.desktop"`）                                            |
 | 依赖 elogind？ | 否（installer 用 mingetty/kmscon） | **是**——SDDM 的 `display-server "x11"` 路径拉 `xorg-server`，xorg-server 依赖 elogind，installer 基座不含它 |
 
 ### 1.1 SDDM 配置字段（对照锁定版 guix 源码验证）
 
 `gnu/services/sddm.scm`（`channel.lock` 锁定 commit）的 `sddm-configuration` 字段：
 
-- `(display-server "x11")` —— 默认 x11；写 `"wayland"` 在当前版本不真正生效（注释说"enabled by wayland greeter PR"，未合）
-- `(auto-login-user "live")` —— 自动登录用户（配合 live user 弱密码）
-- `(auto-login-session "plasma.desktop")` —— **必须带 `.desktop` 后缀**（源码注释示例：`xfce.desktop` / `gnome.desktop`）。值 = `share/wayland-sessions/` 或 `share/xsessions/` 下 `.desktop` 文件名去扩展名后加 `.desktop`
+- `(display-server "x11")`——默认 x11；写 `"wayland"` 在当前版本不真正生效（注释说"enabled by wayland greeter PR"，未合）
+- `(auto-login-user "live")`——自动登录用户（配合 live user 弱密码）
+- `(auto-login-session "plasma.desktop")`——**必须带 `.desktop` 后缀**（源码注释示例：`xfce.desktop` / `gnome.desktop`）。值 = `share/wayland-sessions/` 或 `share/xsessions/` 下 `.desktop` 文件名去扩展名后加 `.desktop`
 
 > 注意：SDDM 的 `auto-login-session` 与 lightdm 的 `user-session` 不同——SDDM **必须**写 `"plasma.desktop"`（带后缀），lightdm 写 `"xfce"`（不带后缀）。混用会导致 autologin 后进不去桌面。
 

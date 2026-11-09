@@ -8,7 +8,7 @@
 | 工具                   | 报错                                                    | 替代                                                          |
 | ---------------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
 | `execute_code`         | `BLOCKED: execute_code runs arbitrary local Python ...` | `write_file` 写脚本到 `/tmp/` + `terminal "python3 <script>"` |
-| `git commit -S`        | `gpg: signing failed: 超时` (pinentry 永远等不到交互)   | `git -c commit.gpgsign=false commit -F <msg>`                 |
+| `git commit -S`        | `gpg: signing failed: 超时` （pinentry 永远等不到交互） | `git -c commit.gpgsign=false commit -F <msg>`                 |
 | `sudo` / `pkexec`      | tty 不可用，T 卡死                                      | 不要跑 sudo 命令；让 CI / 用户跑                              |
 | `read_file` 编辑二进制 | OK，但 image / pdf 等读不出来                           | `vision_analyze` 处理图片；OCR skill 处理 PDF                 |
 

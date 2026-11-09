@@ -109,6 +109,7 @@ Mismatching configurations in .config and arch/x86/configs/guix_defconfig
    ```
 
    裸符号即反选。**不要手改 `defconfig-cachyos`**（那是上游逐字副本）。
+
 3. 重跑 2.3。仍失败就按新报错继续收敛；同一轮连续失败 3 次仍未通过 → 判定无法自动收敛，转 2.6 回滚。
 
 #### 2.5 对拍复验（构建成功后必做）
@@ -140,6 +141,7 @@ git checkout -- source/files/kernel/linux-cachyos.scm source/files/kernel/machin
   ```
 
   用户可能有其他未提交改动，**禁止 `git add -A` / `git add .`**。提交前用 `git status --short` 核对只有这两个文件。
+
 - commit message 模板（`<type>(<scope>): <subject>`，正文写清升级动机与漂移处理）：
 
   ```
@@ -151,6 +153,7 @@ git checkout -- source/files/kernel/linux-cachyos.scm source/files/kernel/machin
 
   Assisted-by: DeepSeek Harness (deepseek-v4.1-flash) <noreply@deepseek.com>
   ```
+
 - **GPG 签名**：正常提交，不要预先加 `--no-gpg-sign`。无人值守下 pinentry 可能超时，失败就重试一次（gpg-agent 常已解锁）；仍失败才加 `--no-gpg-sign`，并在报告里写明「本次未签名及原因」。
 - **禁止 push**；**禁止** `blue rebuild` / `guix system reconfigure`（需 sudo，AI 禁跑）。
 

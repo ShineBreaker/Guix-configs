@@ -8,10 +8,10 @@
 - hidraw 节点**默认不带任何 tag**（不像 `input` 事件节点被 `50-udev-default.rules` 之类波及），`ls -l` 显示 `crw------- root root`。某些设备能打开，是因为**别的规则**已经给它打了 tag（例：数位板靠 `70-opentabletdriver.rules`）。
 - 授权方式二选一，语义差别很大：
 
-| 写法 | 效果 | 适用 |
-| --- | --- | --- |
-| `MODE="0666"` | 本机**所有**用户可读写该节点 | 只在确需共享时用；单为一个浏览器需求付这个代价不值 |
-| `TAG+="uaccess"` + `TAG+="udev-acl"` | elogind 的 `elogind-uaccess-command` 给**当前活动会话用户**加 ACL（`ls -l` 出现 `+`） | 默认选择，上游对 WebHID 的推荐做法 |
+| 写法                                 | 效果                                                                                  | 适用                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `MODE="0666"`                        | 本机**所有**用户可读写该节点                                                          | 只在确需共享时用；单为一个浏览器需求付这个代价不值 |
+| `TAG+="uaccess"` + `TAG+="udev-acl"` | elogind 的 `elogind-uaccess-command` 给**当前活动会话用户**加 ACL（`ls -l` 出现 `+`） | 默认选择，上游对 WebHID 的推荐做法                 |
 
 - `TAG=="uaccess"` 会经 `71-seat.rules` 自动补 `seat` tag，两个 tag 同时加是安全的。
 - **WebHID 只有 Chromium 系实现**（Chrome / Edge / Brave / Chromium），Firefox 没有——动手前先确认用户用的是哪种浏览器。
@@ -74,6 +74,7 @@ KERNEL=="hidraw*", ATTRS{idVendor}=="28e9", ATTRS{idProduct}=="31ff", TAG+="uacc
   ```
 
   规则只对 add 事件生效，已有节点 `trigger` 不灵就**重新插拔**。`/etc` 下的改动下次系统代即丢，验证通过后仍要落 `config.org` 并让用户正式部署，最后复查 `/etc/udev/rules.d/` 的实际文件与源码一致。
+
 - 块级编辑走 `blue block-show` / `blue block-replace` 时，注意 body 头两行陷阱（SKILL.md §9.2 坑 6）。
 
 ## 5. 为新设备复用旧设备配置
@@ -85,4 +86,3 @@ KERNEL=="hidraw*", ATTRS{idVendor}=="28e9", ATTRS{idProduct}=="31ff", TAG+="uacc
 3. 复制一条，改 VID/PID，换符号名与规则文件名
 4. `blue --dry-run rebuild` 验证
 5. 提示用户 sudo 部署，并在汇报里明确区分「源码已落地」与「已生效」——udev 规则在用户跑完 rebuild 前，`/dev/hidraw*` 的权限一行都没变
-

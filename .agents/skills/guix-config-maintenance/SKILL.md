@@ -11,10 +11,10 @@ description: "Guix System 与 Guix Home 配置维护：改配置不生效的排�
 
 Guix Home 的 dotfile 有两套部署，先确认文件属于哪套。
 
-| 部署方式 | 改源后 |
-| --- | --- |
+| 部署方式                                            | 改源后                                                                                 |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | `home-dotfiles-service-type`（通常 `layout 'stow`） | 文件复制进 `/gnu/store` 只读副本，再软链到 `$HOME`。必须重跑 `guix home reconfigure`。 |
-| GNU Stow 直链 | 单文件软链到 `$HOME`，保存即生效。 |
+| GNU Stow 直链                                       | 单文件软链到 `$HOME`，保存即生效。                                                     |
 
 验证三步：
 
@@ -125,15 +125,15 @@ tr '\0' '\n' < /proc/$(pgrep -f <app>)/environ | grep GTK_IM_MODULE
 
 ### 常见变量
 
-| 类别 | 变量 | 症状 |
-| --- | --- | --- |
-| 输入法 | `GTK_IM_MODULE` / `QT_IM_MODULE` / `XMODIFIERS` / `SDL_IM_MODULE` / `GLFW_IM_MODULE` | Electron、Qt、SDL、GLFW 应用打不了中文 |
-| Wayland | `WAYLAND_DISPLAY` / `XDG_RUNTIME_DIR` | 应用找不到 wayland socket，退回 X11 或黑屏 |
-| 显示 | `DISPLAY` / `XDG_SESSION_TYPE` | XWayland 回落、会话类型识别错误 |
-| 桌面 | `XDG_CURRENT_DESKTOP` | portal 集成失效 |
-| Locale | `LANG` / `LC_ALL` / `LANGUAGE` | 界面乱码 |
-| 代理 | `http_proxy` / `https_proxy` / `HTTP_PROXY` / `HTTPS_PROXY` | Electron、Qt 应用不走终端代理 |
-| 光标与字体 | `XCURSOR_PATH` / `FONTCONFIG_PATH` / `QT_QPA_FONTDIR` | 主题或字体 fallback |
+| 类别       | 变量                                                                                 | 症状                                       |
+| ---------- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
+| 输入法     | `GTK_IM_MODULE` / `QT_IM_MODULE` / `XMODIFIERS` / `SDL_IM_MODULE` / `GLFW_IM_MODULE` | Electron、Qt、SDL、GLFW 应用打不了中文     |
+| Wayland    | `WAYLAND_DISPLAY` / `XDG_RUNTIME_DIR`                                                | 应用找不到 wayland socket，退回 X11 或黑屏 |
+| 显示       | `DISPLAY` / `XDG_SESSION_TYPE`                                                       | XWayland 回落、会话类型识别错误            |
+| 桌面       | `XDG_CURRENT_DESKTOP`                                                                | portal 集成失效                            |
+| Locale     | `LANG` / `LC_ALL` / `LANGUAGE`                                                       | 界面乱码                                   |
+| 代理       | `http_proxy` / `https_proxy` / `HTTP_PROXY` / `HTTPS_PROXY`                          | Electron、Qt 应用不走终端代理              |
+| 光标与字体 | `XCURSOR_PATH` / `FONTCONFIG_PATH` / `QT_QPA_FONTDIR`                                | 主题或字体 fallback                        |
 
 ### XCURSOR_PATH 是整体替换
 
@@ -168,14 +168,14 @@ env -u XCURSOR_PATH ./probe
 
 不同层次的进程用不同机制。没有单一手段覆盖全部。
 
-| 层次 | 机制 | 用途 |
-| --- | --- | --- |
-| 用户 session | `home-environment-variables-service-type` | XDG 基础目录、`EDITOR`、`PAGER` |
-| Wayland session | `home-graphical-session-service-type` | `XDG_SESSION_TYPE` 等会话标记 |
-| GUI 应用 | 合成器 `environment {}` 加 `dbus-update-activation-environment` | 输入法、Wayland、桌面集成 |
-| Portal 路由 | `xdg-desktop-portal` 的 `portals.conf` | 截图、文件选择器、通知后端 |
-| 系统服务 | `#:environment-variables` | 服务进程自身的环境 |
-| 定时器与 gexp 脚本 | gexp 里 `setenv` | 运行时补变量 |
+| 层次               | 机制                                                            | 用途                            |
+| ------------------ | --------------------------------------------------------------- | ------------------------------- |
+| 用户 session       | `home-environment-variables-service-type`                       | XDG 基础目录、`EDITOR`、`PAGER` |
+| Wayland session    | `home-graphical-session-service-type`                           | `XDG_SESSION_TYPE` 等会话标记   |
+| GUI 应用           | 合成器 `environment {}` 加 `dbus-update-activation-environment` | 输入法、Wayland、桌面集成       |
+| Portal 路由        | `xdg-desktop-portal` 的 `portals.conf`                          | 截图、文件选择器、通知后端      |
+| 系统服务           | `#:environment-variables`                                       | 服务进程自身的环境              |
+| 定时器与 gexp 脚本 | gexp 里 `setenv`                                                | 运行时补变量                    |
 
 ### 用户 session 变量
 
@@ -206,11 +206,11 @@ env -u XCURSOR_PATH ./probe
 
 `portals.conf` 里的实现 ID 必须与已安装的 portal 包对应：
 
-| 包 | 实现 ID |
-| --- | --- |
+| 包                         | 实现 ID |
+| -------------------------- | ------- |
 | `xdg-desktop-portal-gnome` | `gnome` |
-| `xdg-desktop-portal-gtk` | `gtk` |
-| `xdg-desktop-portal-wlr` | `wlr` |
+| `xdg-desktop-portal-gtk`   | `gtk`   |
+| `xdg-desktop-portal-wlr`   | `wlr`   |
 
 改了 `portals.conf` 要同时确认包在 profile 里，否则该后端不存在，portal 静默回落。
 
@@ -232,10 +232,10 @@ gpgconf --check-programs   # 看实际解析到的 pinentry 路径
 
 同一份仓库可以同时用两种部署：
 
-| 模型 | 链路 | 改源后 |
-| --- | --- | --- |
+| 模型      | 链路                                             | 改源后                       |
+| --------- | ------------------------------------------------ | ---------------------------- |
 | Guix Home | 源复制到 `/gnu/store` 只读副本，再软链到 `$HOME` | 必须 `guix home reconfigure` |
-| GNU Stow | 源直接软链到 `$HOME` | 立即生效 |
+| GNU Stow  | 源直接软链到 `$HOME`                             | 立即生效                     |
 
 GNU Stow 适合高频手改、需要 git 备份的配置。常用命令：
 
@@ -258,12 +258,12 @@ stow -d /path/to/dotfiles -t "$HOME" --delete <pkg>   # 撤销
 
 ### 先分类再动手
 
-| 根因 | 表现 | 兜底 |
-| --- | --- | --- |
-| daemon 的自动行为被误触发 | 某条件触发后状态被改并持久化 | 配置层关掉该行为 |
-| 状态恢复把错误状态读回来 | 状态文件里的旧值反复回放 | 行为层 hook 强制覆盖 |
-| 启动顺序 | 服务比 daemon 先起，配置没读到 | 行为层加 ready hook |
-| 上游 bug | 无解 | 接受现状，写 workaround，不跟上游硬碰 |
+| 根因                      | 表现                           | 兜底                                  |
+| ------------------------- | ------------------------------ | ------------------------------------- |
+| daemon 的自动行为被误触发 | 某条件触发后状态被改并持久化   | 配置层关掉该行为                      |
+| 状态恢复把错误状态读回来  | 状态文件里的旧值反复回放       | 行为层 hook 强制覆盖                  |
+| 启动顺序                  | 服务比 daemon 先起，配置没读到 | 行为层加 ready hook                   |
+| 上游 bug                  | 无解                           | 接受现状，写 workaround，不跟上游硬碰 |
 
 ### 配置层加行为层
 

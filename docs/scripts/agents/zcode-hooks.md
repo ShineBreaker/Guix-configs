@@ -18,7 +18,7 @@
 
 上表是 `bash-gate.sh` 与 `edit-gate.sh` 的完整协议；`session-start.sh` 只有 stdin 的 `cwd` 与 stdout 的 `additionalContext` 两面，没有拦截语义，详见该节。
 
-**fail-closed 三态**（两个 gate hook 相同）：`python3` 不在 PATH → deny；stdin 非空但 JSON 解析失败 → deny（此前 fail-open 是已知绕过面）；stdin 为空 → 不拦，按无待检内容正常放行。解析出的值经 `python3 shlex.quote` 转义后才 `eval`，`eval` 只作用在受控输出上。
+**fail-closed 三态**（两个 gate hook 相同）：`python3` 不在 PATH → deny；stdin 非空但 JSON 解析失败 → deny（fail-open 是已知绕过面）；stdin 为空 → 不拦，按无待检内容正常放行。解析出的值经 `python3 shlex.quote` 转义后才 `eval`，`eval` 只作用在受控输出上。
 
 **顺序红线**（两个 gate hook）：待检内容为空（`command` 或 `file_path` 为空串）时立刻 `exit 0`，这一步发生在人工总开关检查**之前**；`/run/agent-gate.off` 的存在即静默放行检查必须发生在「核缺失保底」**之前**——暂停态优先于一切降级路径，且零输出、不向 agent 暴露暂停态。
 

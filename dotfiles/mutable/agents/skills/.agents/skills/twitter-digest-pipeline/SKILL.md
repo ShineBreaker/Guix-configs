@@ -24,7 +24,7 @@ description: "X（推特）日报管道的维护与调优——抓取、jev 判�
   - 拆开的原因：抓取跑十几分钟到半小时（几百个账号分批 + jev 逐批调 API），若 08:00 才开始跑，用户收到图可能是八九点；凌晨跑完、早上只做文件检查，8 点整准时。
   - prompt 源：`cron-prompts/twitter-digest.md`（抓取）、`cron-prompts/twitter-digest-deliver.md`（投递）
 - **cron job 存内联 prompt 快照**：改 prompt 源后必须 `hermes cron edit <id> --prompt "$(cat <prompt 源>)"` 才生效（`$HERMES_HOME/cron/jobs.json` 是权威源，executions.db 无 prompt 列）。id 用 `hermes cron list | grep twitter-digest` 查。
-- **cron prompt 与脚本子命令必须同步**：脚本删掉 `fetch` 子命令（2026-09-26，被 `feed --source following` 取代）后，prompt 里若还写着 `twitter_batch.sh`，job 会执行一个不存在的脚本。改脚本入口的同时改 prompt 源并重新 `hermes cron edit`。
+- **cron prompt 与脚本子命令必须同步**：`fetch` 子命令已由 `feed --source following` 取代，prompt 里若还写着 `twitter_batch.sh`，job 会执行一个不存在的脚本。改脚本入口的同时改 prompt 源并重新提交定时任务。
 - ~~报 `git commit 必须使用 -m 指定提交信息`~~（已解决）：该报错出自 agent gate 的「无 `-m` 硬拦」而非 git hook，2026-10 已整条移除，`git commit -F <file>` 可正常使用。
 
 ## 信息源清单（现有 `fetch` 只用了第 1 个）
@@ -65,10 +65,7 @@ python3 $HERMES_HOME/scripts/twitter-digest/twitter_fetch.py explore \
   AI 工具/生态内容主要靠它补。
 - queryId 会随 X 发布滚动失效（404 且 body 为空）。更新办法见
   `web-data-harvesting` skill 的 `references/webpack-chunk-manifest.md`。
-- **逐账号抓取已废**：`fetch` 子命令与 `twitter_batch.sh` 于 2026-09-26 删除。
-  224 账号 × 2s 分批跑实测每天只覆盖 11 到 14 个账号（9 天才一轮），而
-  `feed --source following` 一次调用拿到 99 条、覆盖全部活跃账号。别再把
-  分批机制加回来。
+- **抓取用 `feed --source following` 一次拿全**：单次约 99 条、覆盖全部活跃账号。逐账号 224 × 2s 分批跑每天只覆盖 11 到 14 个账号（9 天才一轮），别再把分批机制加回来。
 - **`promoted-` 前缀的 entry 是广告**，与普通推文同为 `TimelineTweet`，只能靠
   entryId 挡；`test_feed_parse.py` 里有对应断言。
 
@@ -96,7 +93,7 @@ python3 $HERMES_HOME/scripts/twitter-digest/digest_render.py md daily.md \
 - 渲染细节（HTML 模板、chromium headless 截图、Guix 字体、HTML 实体双重转义）见 `hermes-cron-ops` 的 `references/image-report-rendering.md`，此处不重复。
 - **成品长图必须逐段 vision 验收后才发**：竖长图动辄 7000+ px，整图丢给 vision 会被降采样，小字和图内截图全糊。用 PIL 切成 2~3 段（每段 ≤2400 px 高）分别检查：文字截断/溢出、分组标题、`![imgN]` 是否嵌对位置、有无缺字形方块。验收通过才发 `MEDIA:`。
 - **临时预览不要污染 notepad**：手动渲染一张给用户看效果时，别把 `last_image` 指向它，否则次日 08:00 的投递 job 会重发这张预览图。
-- **配图正常写，渲染器完整显示**：2026-10-29 起 `img_style` 从 `object-fit:cover` 定高改为 contain 限高完整显示（横图 max-height 760px、方图 520px、竖长图 560px），表格表头、列名、坐标轴不再被裁掉。日报按素材正常写 `![imgN]`（一条最多 2 张，放在来源之前），**不再以"裁切不安全"为由弃图**——旧规则下 2026-10-26 至 10-29 连续四天 0 配图。唯一的无图情形是 `fetch_image` 下载失败（pbs.twimg.com 不可达时静默变无图卡片），验收时看图位有无图即可。
+- **配图正常写**：渲染器以 contain 限高完整显示（横图 max-height 760px、方图 520px、竖长图 560px），表格表头、列名、坐标轴不会被裁。日报按素材正常写 `![imgN]`（一条最多 2 张，放在来源之前），**不得以"裁切不安全"为由弃图**。唯一无图的情形是 `fetch_image` 下载失败（pbs.twimg.com 不可达时静默变无图卡片），验收时看图位有无图即可。
 
 ## jev 阈值设计（最容易被改坏的部分）
 

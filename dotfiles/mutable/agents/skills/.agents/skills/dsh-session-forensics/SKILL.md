@@ -27,7 +27,7 @@ metadata:
 
 1. **路径**：`~/.local/share/dsh/sessions/--<projectKey>--/<session-dir>/session.v<N>.jsonl.zstd`
 2. **projectKey 编码**：cwd 按 `/` 拆开拼 readable → `replace(/^-+/, "")` → 两头包 `--`。
-   `/home/u/Projects` → `--home-u-Projects--`。**前导 `-` 必须去掉**；写成 `---X--` 是 2026-10-26 迁移留下的旧规则 bug，会让 `assertStoredIdentity` 判 corrupt。
+   `/home/u/Projects` → `--home-u-Projects--`。**前导 `-` 必须去掉**：写成 `---X--` 会让 `assertStoredIdentity` 判 corrupt。
 3. **会话目录名会转义**：`im:qq_x` → `im~003Aqq_x`。宿主按 **header.id** 定位会话，用目录名当 id 会双重编码并假报 `session not found`。凡需 id 一律从 header 读。
 4. **分帧**：`session.vN.jsonl.zstd` 的**第一帧必须恰好是 header 一行**（明文非空且末字节为 `\n`），后续帧各自独立可解。违反时 `listArtifacts` **静默跳过**（不抛不警告）→ 会话不进 `WorkspaceRegistry.sessionPaths` 索引 → 一次读取失败即被 `mutate()` 永久除名。
 5. **可见性只由 registry 决定**：`storages/workspace.json` 的 `tables.workspaces[].sessionIds`。磁盘上有文件 ≠ 可见；未登记的最多落到「未分组」。

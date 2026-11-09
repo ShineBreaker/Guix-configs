@@ -68,32 +68,32 @@ mv <副本> /tmp/verify-only    # /tmp 重启自清，是安全暂存区
 
 ### 有官方变量，可迁
 
-| 目录 | 工具 | 变量 | 落点 |
-|---|---|---|---|
-| `~/.cua-driver` | Cua Driver | `CUA_DRIVER_RS_HOME` | `$XDG_CONFIG_HOME/cua-driver` |
-| `~/.paseo` | Paseo | `PASEO_HOME`（模型另有 `PASEO_LOCAL_MODELS_DIR`） | `$XDG_DATA_HOME/paseo` |
-| `~/.pi/context-mode` | pi 的 context-mode 扩展 | `CONTEXT_MODE_DIR` | `$XDG_STATE_HOME/pi/context-mode` |
-| `~/.copilot` | GitHub Copilot CLI | `COPILOT_HOME` + `COPILOT_CACHE_HOME` | `$XDG_CONFIG_HOME/copilot` |
-| `~/.zcode-proxy` | zcode-proxy | `ZCODE_PROXY_STORE_DIR` | `$XDG_CONFIG_HOME/zcode-proxy/store` |
-| `~/.npm` | npm | 无 env var，见 §4 | npmrc 的 `cache=` |
-| `~/.rustup` | rustup | `RUSTUP_HOME` | `$XDG_DATA_HOME/rustup` |
-| `~/.mysqlsh` | MySQL Shell | `MYSQLSH_USER_CONFIG_HOME` | `$XDG_STATE_HOME/mysqlsh` |
-| `~/.android` | adb | `ANDROID_USER_HOME` | `$XDG_CONFIG_HOME/android` |
-| `~/.bun` | bun | `BUN_INSTALL_CACHE_DIR` | `$XDG_CACHE_HOME/bun` |
+| 目录                 | 工具                    | 变量                                              | 落点                                 |
+| -------------------- | ----------------------- | ------------------------------------------------- | ------------------------------------ |
+| `~/.cua-driver`      | Cua Driver              | `CUA_DRIVER_RS_HOME`                              | `$XDG_CONFIG_HOME/cua-driver`        |
+| `~/.paseo`           | Paseo                   | `PASEO_HOME`（模型另有 `PASEO_LOCAL_MODELS_DIR`） | `$XDG_DATA_HOME/paseo`               |
+| `~/.pi/context-mode` | pi 的 context-mode 扩展 | `CONTEXT_MODE_DIR`                                | `$XDG_STATE_HOME/pi/context-mode`    |
+| `~/.copilot`         | GitHub Copilot CLI      | `COPILOT_HOME` + `COPILOT_CACHE_HOME`             | `$XDG_CONFIG_HOME/copilot`           |
+| `~/.zcode-proxy`     | zcode-proxy             | `ZCODE_PROXY_STORE_DIR`                           | `$XDG_CONFIG_HOME/zcode-proxy/store` |
+| `~/.npm`             | npm                     | 无 env var，见 §4                                 | npmrc 的 `cache=`                    |
+| `~/.rustup`          | rustup                  | `RUSTUP_HOME`                                     | `$XDG_DATA_HOME/rustup`              |
+| `~/.mysqlsh`         | MySQL Shell             | `MYSQLSH_USER_CONFIG_HOME`                        | `$XDG_STATE_HOME/mysqlsh`            |
+| `~/.android`         | adb                     | `ANDROID_USER_HOME`                               | `$XDG_CONFIG_HOME/android`           |
+| `~/.bun`             | bun                     | `BUN_INSTALL_CACHE_DIR`                           | `$XDG_CACHE_HOME/bun`                |
 
 `~/.rustup` 迁前先 `command -v rustup`——没有 rustup 二进制时那 1.3G 是孤儿重量，迁了也没用。
 
 ### 看似有变量，实则迁不动
 
-| 目录 | 为什么迁不动 |
-|---|---|
-| `~/.xwechat` | 微信 Linux 版 4.1.1.8，数据路径是编译期字面量；二进制里零个 `*_HOME/_DIR` 变量 |
-| `~/.workbuddy` | flatpak manifest 硬绑 `--filesystem=~/.workbuddy:create`，沙箱外变量进不去；启动代码还自我覆写 |
-| `~/.zcode` | 见 §2 坑 1 |
-| `~/.pki` | NSS 源码 `getUserDB()` 搜索顺序写死 `~/.pki/nssdb` **优先**，存在就永不走 XDG；无 env var 可改。删掉会回落到 `.local/share/pki/nssdb` 但证书私钥"看起来丢失" |
-| `~/.java` | 路径由 `${user.home}` 拼，JVM 在 Linux 上**不跟随 `$HOME`**（实测 `HOME=/tmp/x java -XshowSettings:properties` 仍报原值） |
-| `~/.commandcode` | 官方 env 表里只有 `HOME`/`USERPROFILE` 用于解析该目录——改 HOME 会连带废掉全局 XDG |
-| `~/.dsh-tui` / `~/.mimosa` / `~/.duckdb` / `~/.subversion` | 无目录变量；后两者只有 CLI 开关 / SQL `SET` |
+| 目录                                                       | 为什么迁不动                                                                                                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `~/.xwechat`                                               | 微信 Linux 版 4.1.1.8，数据路径是编译期字面量；二进制里零个 `*_HOME/_DIR` 变量                                                                               |
+| `~/.workbuddy`                                             | flatpak manifest 硬绑 `--filesystem=~/.workbuddy:create`，沙箱外变量进不去；启动代码还自我覆写                                                               |
+| `~/.zcode`                                                 | 见 §2 坑 1                                                                                                                                                   |
+| `~/.pki`                                                   | NSS 源码 `getUserDB()` 搜索顺序写死 `~/.pki/nssdb` **优先**，存在就永不走 XDG；无 env var 可改。删掉会回落到 `.local/share/pki/nssdb` 但证书私钥"看起来丢失" |
+| `~/.java`                                                  | 路径由 `${user.home}` 拼，JVM 在 Linux 上**不跟随 `$HOME`**（实测 `HOME=/tmp/x java -XshowSettings:properties` 仍报原值）                                    |
+| `~/.commandcode`                                           | 官方 env 表里只有 `HOME`/`USERPROFILE` 用于解析该目录——改 HOME 会连带废掉全局 XDG                                                                            |
+| `~/.dsh-tui` / `~/.mimosa` / `~/.duckdb` / `~/.subversion` | 无目录变量；后两者只有 CLI 开关 / SQL `SET`                                                                                                                  |
 
 ### 残留/空壳，可清（清理用 `trash-put`）
 

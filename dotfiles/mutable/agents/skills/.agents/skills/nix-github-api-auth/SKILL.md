@@ -55,6 +55,8 @@ export NIX_USER_CONF_FILES="$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/ni
 
 ⚠ **关键坑**：设置 `NIX_USER_CONF_FILES` 后 nix **不再自动读** XDG 位置的 `~/.config/nix/nix.conf`——必须把原来的 nix.conf 也列入，否则 substituters 等全丢。顺序无键冲突时随意；有冲突时靠前文件最后加载（覆盖）。
 
+> **本机（Guix-configs）不常驻该文件**：静态副本会与 gh 凭据脱钩并静默过期，而 nix 在本机使用频率低，撞 403 时用 `NIX_CONFIG="access-tokens = github.com=<token>"` 单次注入即可，不维护第二份事实源。本机 `NIX_USER_CONF_FILES` 只指向 `~/.config/nix/nix.conf`，GitHub 认证的单一事实源是 `~/.config/gh/hosts.yml`。
+
 ## 反模式（全部实测踩过）
 
 | 写法 | 结果 |
@@ -87,7 +89,3 @@ cp /tmp/flake.lock.bak flake.lock
 
 - gh OAuth token（`~/.config/gh/hosts.yml`）重新 `gh auth login` 后要同步更新私有 conf
 - `NIX_USER_CONF_FILES` 方案下更新 = 改一个 0600 文件，无部署动作
-
-## 案例
-
-Guix-configs 仓库（blue nix-update 二轨链）的完整落地过程见 `references/guix-configs-nix-chain-case.md`。

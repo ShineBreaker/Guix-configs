@@ -3,14 +3,14 @@
 
 # quicktui-server — 远程终端服务（手机/网页经配对接入本机 tmux）
 
-上游 Rust 单文件发行二进制（无仓库源码） · 手动部署到 `~/.local/bin/quicktui-server` + `~/.config/quicktui-server-v2/` · 调用方：手动调用（原 home shepherd 常驻已移除）与手动配对/管理
+上游 Rust 单文件发行二进制（无仓库源码） · 手动部署到 `~/.local/bin/quicktui-server` + `~/.config/quicktui-server-v2/` · 调用方：手动调用与配对/管理
 
-QuickTUI 提供 HTTP + WebSocket 终端入口，设备配对后可 attach 本机 tmux 会话；AgentBridge2（AB2）另把本机各 agent 宿主（claude / codex / opencode / pi）的生命周期事件转发到同一入口。该服务此前由 `source/config.org` 的 `home-daemon-service` 常驻，2026-10-09 起服务定义已从 `source/config.org` 移除，需要常驻时手动运行 `quicktui-server serve`。日志落 `$XDG_STATE_HOME/shepherd/quicktui.log`。
+QuickTUI 提供 HTTP + WebSocket 终端入口，设备配对后可 attach 本机 tmux 会话；AgentBridge2（AB2）另把本机各 agent 宿主（claude / codex / opencode / pi）的生命周期事件转发到同一入口。本机不常驻运行（`source/config.org` 无对应服务定义），需要时手动 `quicktui-server serve`。日志落 `$XDG_STATE_HOME/shepherd/quicktui.log`。
 
 ## 用法
 
 ```bash
-quicktui-server serve                 # 前台起服务（日常由 shepherd 拉起，勿手动）
+quicktui-server serve                 # 前台起服务（无常驻定义，需时手动拉起）
 quicktui-server doctor                # 自检外部依赖（tmux / herdr / 登录 shell PATH）
 quicktui-server pairing welcome       # 配对引导（终端内交互）
 quicktui-server pairing qrcode        # 打印短效配对二维码
@@ -19,7 +19,7 @@ quicktui-server config show           # 打印配置原文
 quicktui-server hooks status          # 各宿主的 AB2 hook 安装态
 ```
 
-服务侧操作用 shepherd，不用 `systemctl`：`herd status quicktui` / `herd restart quicktui` / `herd stop quicktui`。
+本机是 Shepherd 初始系统、无 systemd，服务管理一律用 `herd`（`herd status` / `herd restart` / `herd stop`）而非 `systemctl`。当前没有 quicktui 的常驻服务定义，服务本身由手动 `serve` 拉起。
 
 ### 安装（手动，替代上游 `curl | sh`）
 

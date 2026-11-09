@@ -40,7 +40,7 @@
 6. **改源 ≠ 生效**：`~/.config/<app>/` 指向 `/gnu/store` 只读副本，改完 `dotfiles/immutable/` 要 `blue home` 才同步；`dotfiles/mutable/` 是 stow 直链，改源即生效。
 7. **块读写协议是跨语言契约**：`tools/block-*.el` 的 stdout 格式（`>>>` / `<<<` 记录分隔、`lang=` / `noweb=` 行、body 纯文本）由 `%extract-all-blocks` / `block-show` / `block-replace` 消费，改格式须与 [org-block-tools.md](org-block-tools.md) 同步。
 
-除 `%run` 与管道之外，Scheme 侧的直接副作用（如 `delete-file-recursively`）也必须显式守 `dry-build?`——`clean-artifacts` 曾因此在 dry-run 下真删目录，见下方「变更」。
+除 `%run` 与管道之外，Scheme 侧的直接副作用（如 `delete-file-recursively`）也必须显式守 `dry-build?`——`clean-artifacts` 的目录型目标由 Scheme 直接删，漏掉这条守卫会让 `--dry-run` 真删目录。
 
 ## 配置管线（§4）
 
@@ -116,7 +116,7 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 ### Stow（§7）
 
 - `dotfiles/mutable/` 用 GNU Stow 直链仓库源（改源即生效，无需 `blue home`），与 `dotfiles/immutable/`（Guix Home stow，store 只读副本）互补，适合频繁手改且需 git 备份的配置。
-- **包身份由标记文件显式声明**：`<PKG>/.stow-package` 存在即该目录是包（`stow-all` 枚举依据）；`<PKG>/.stow-folding` 对该包 opt-in 整目录折叠。此前用「目录内含 dot 条目」启发式判包，会被分组目录里的 dot 杂物（`.gitignore` 等）误触发、也会漏掉尚未放内容的空包，故改显式声明。
+- **包身份由标记文件显式声明**：`<PKG>/.stow-package` 存在即该目录是包（`stow-all` 枚举依据）；`<PKG>/.stow-folding` 对该包 opt-in 整目录折叠。启发式判包（「目录内含 dot 条目」）会被分组目录里的 dot 杂物（`.gitignore` 等）误触发、也会漏掉尚未放内容的空包，故用显式声明。
 - 无标记目录只可能是分组容器，下钻一层找带标记子包；`group/pkg` 名字在 `%stow-split-pkg` 把分组前缀并入 `--dir`，stow 本身永远只收一级包名（GNU Stow 不保证接受带斜杠的包名）。
 - 默认 `--no-folding`（目标目录保持真实目录、逐文件软链）保护应用运行时产物（logs/、state.db 等）不污染源；`--ignore=\.stow-(folding|package)$` 始终带上，标记文件本身永不部署到 `$HOME`（多包同名标记会冲突）。
 
@@ -134,11 +134,3 @@ config.org ──tangle──▶ tmp/config.scm ──+尾表达式+括号兜底
 - 括号检查（§3）是手写词法扫描而非 guix `read`：config.org 的块含读取器宏（unquote 等），read 报错定位差。栈式配对要求 `[`/`(` 严格同类（`[` 配 `)` 算错）；跳过字符串字面量与 `;` 注释。**字符串未闭合不会单独报错**（emergency-blue 的 awk 移植版额外覆盖此点，见 [docs/operations/emergency-blue.md](../../operations/emergency-blue.md) §7）。
 - `%check-config-blocks` 只查 `scheme` 块（fish/bash 是嵌在 scheme 字符串里的内容）；`main` 块也查——`<<ref>>` 占位本身括号平衡。失败不立即中止，让用户一次看到所有错误。
 - `%pipe->string` 在非零退出时先把已捕获的 stdout 转发到 stderr 再报错——`blue block-show <不存在的块>` 因此能直接看到 elisp 的 `[ERROR] 未找到代码块`，而不是只有一行「命令执行失败」。
-
-## 变更
-
-- 2026-11-05 `sub-update` 从 `rebuild` 前置移入 `update`：`%update-scope` 扩为 `(guix nix sub)` 三元组，不带参数时三侧全刷，`--sub` 单独指定；`rebuild` 不再每次拉子模块。子模块 bump 改用 `%commit-paths` 只提交子模块路径（原 `%commit-staged` 会吞用户暂存区，已删除）。
-- 2026-11-04 新增 `push` 命令：子模块推送后自动在父仓库 bump gitlink 并推送父仓库，补上 `sub-push` 只推子模块、指针仍需人工补的缺口。bump 用新 helper `%commit-paths`（`git commit -- <paths>`）只提交子模块路径，避免吞掉用户已暂存的其他内容。
-- 2026-11-02 新增 `sub-update` / `sub-push` / `resign` 三命令；`rebuild` 前置 `sub-update`，`update` 的 guix 侧完成后自动链 `pull`，`pull` 显式 `--channels=<lock>`（不再依赖 `/etc/guix/channels.scm` 的部署时序）。`resign` 的 rebase 走 `%run` 硬失败（中途签名失败保留现场）。
-- 2026-10-06 `%update-nix` 入口按 `which` 探测所需命令（全量 `nix-channel` + `nix`、单 input `nix`），任一缺失即整侧跳过并打 stderr 提示：本机未安装 Nix，此前 `blue update` 会因 `nix-channel` 不存在（popen exec 失败）整条命令不可用。
-- 2026-09-29 两处行为级修复：`clean-artifacts` 的目录型目标原本直接 `delete-file-recursively`，不走 `%run`，故 `blue --dry-run clean-artifacts`（连带 `--dry-run rebuild` / `home`）会真删这些目录，现改为 dry-run 下打 `[预演] 移除`；`%pipe->string` 在子进程非零退出时把已捕获 stdout 转发到 stderr，`blue block-show` / `block-list` / `describe` 等失败现在能看到脚本自己的 `[ERROR]` 诊断。

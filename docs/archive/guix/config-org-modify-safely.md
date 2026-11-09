@@ -200,7 +200,7 @@ ORG_BLOCK=networking-services blue block-show 2>&1 | tail -1 | xargs cat
 ## 反模式
 
 - ❌ **不查字段就改 Guix service** → DRY_RUN 100% 报 extraneous field initializers
-- ❌ **`patch` 改 `(respawn? #f)))))` 这种多 `)` 链时手抖加一个** → blue check 报"多 1 个 )"，但 git diff 里两行看着一样（坑位 1）
+- ❌ **`patch` 改 `(respawn? #f)))))` 这种多 `)` 链时手抖加一个** → blue check 报"多 1 个）"，但 git diff 里两行看着一样（坑位 1）
 - ❌ **AI 跑 `blue rebuild`** → sudo 卡死 CLI（不变量 #3）
 - ❌ **改完直接让用户 rebuild，不先 DRY_RUN** → 用户跑 `blue rebuild` 时可能编译几分钟后发现一个括号错，前功尽弃
 - ❌ **`blue block-replace` 改 config.org** → 当前 Guix 时间机器 + emacs-minimal 组合下报 `Symbol's value as variable is void: replaced`，跑不通（见 `hermes-gateway-shepherd-service.md` §4）

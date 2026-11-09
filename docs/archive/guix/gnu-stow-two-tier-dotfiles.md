@@ -47,13 +47,13 @@ stow/
 
 **关键约束**：
 
-- **不要**把 `stow/` 下的任何文件加到 `dotfiles/immutable/` —— 双轨部署会产生软链接到软链接的冲突
+- **不要**把 `stow/` 下的任何文件加到 `dotfiles/immutable/`——双轨部署会产生软链接到软链接的冲突
 - `home-dotfiles-service-type` 默认 `directories '("../dotfiles/immutable")`，**不**递归到 `stow/`
-- 包目录内**不要**有空目录 —— 空目录 stow 会建奇怪的链，且 git 会污染
+- 包目录内**不要**有空目录——空目录 stow 会建奇怪的链，且 git 会污染
 
 ## 首次建链（adopt 模式）
 
-**不能用 `rm` 直接删 `~` 下的原文件** —— Hermes 硬保护 (`BLOCKED recursive delete of home directory`)。必须用 `mv` 移到临时目录，让 stow 建链后再清理临时目录。
+**不能用 `rm` 直接删 `~` 下的原文件**——Hermes 硬保护 (`BLOCKED recursive delete of home directory`)。必须用 `mv` 移到临时目录，让 stow 建链后再清理临时目录。
 
 ```bash
 # 0. 备份到 /tmp/hermes-backup-<timestamp>/
@@ -90,7 +90,7 @@ rm -rf "$TMP"
 
 ### `--adopt` 模式的坑
 
-直接 `stow --adopt --dir=stow --target=$HOME hermes` 会失败 —— 当**源目录是空的**时 stow 没东西可链，`--adopt` 不会触发"把 ~ 下文件移到源"的动作；建链前源目录**必须先有文件**。本 skill 推荐的"cp → mv → stow"三步法是更可靠的等价流程。
+直接 `stow --adopt --dir=stow --target=$HOME hermes` 会失败——当**源目录是空的**时 stow 没东西可链，`--adopt` 不会触发"把 ~ 下文件移到源"的动作；建链前源目录**必须先有文件**。本 skill 推荐的"cp → mv → stow"三步法是更可靠的等价流程。
 
 ## blue stow 命令包装
 
@@ -125,7 +125,7 @@ cp "$BACKUP/SOUL.md" stow/hermes/.local/share/hermes/SOUL.md
 ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=stow/AGENTS.md blue structor
 ```
 
-若仓库根 AGENTS.md 也想列 stow 包，**手写**（不靠 structor —— structor 只扫到第 4 层）。
+若仓库根 AGENTS.md 也想列 stow 包，**手写**（不靠 structor——structor 只扫到第 4 层）。
 
 ## git commit 规范
 
@@ -138,11 +138,11 @@ ORG_STRUCTOR_DEPTH=6 ORG_STRUCTOR_TARGET=stow/AGENTS.md blue structor
 
 ## 反模式
 
-- ❌ **直接 `rm ~/.local/share/hermes/X`** —— Hermes 硬保护拦截；即便绕过，丢失风险太大
-- ❌ **让 `stow/` 与 `dotfiles/immutable/` 部署同一文件** —— 双链冲突，激活时哪个生效不确定
-- ❌ **stow 软链接到 `~/.local/share/hermes/logs/` 等运行时目录** —— stow 会试图建软链接到目录下的每个文件，污染严重
-- ❌ **在 `stow/<pkg>/` 里建空目录占位** —— stow 会建奇怪链，git 跟踪空目录无意义
-- ❌ **跑 `blue rebuild` 期望 stow 生效** —— stow 与 Guix 无关，rebuild 不会重建 stow 链
+- ❌ **直接 `rm ~/.local/share/hermes/X`**——Hermes 硬保护拦截；即便绕过，丢失风险太大
+- ❌ **让 `stow/` 与 `dotfiles/immutable/` 部署同一文件**——双链冲突，激活时哪个生效不确定
+- ❌ **stow 软链接到 `~/.local/share/hermes/logs/` 等运行时目录**——stow 会试图建软链接到目录下的每个文件，污染严重
+- ❌ **在 `stow/<pkg>/` 里建空目录占位**——stow 会建奇怪链，git 跟踪空目录无意义
+- ❌ **跑 `blue rebuild` 期望 stow 生效**——stow 与 Guix 无关，rebuild 不会重建 stow 链
 
 ## 现有纳管的包
 

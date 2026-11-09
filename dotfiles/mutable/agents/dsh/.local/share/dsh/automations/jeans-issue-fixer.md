@@ -11,29 +11,44 @@
 - `rm` 被 gate 冻结：清理用 `trash-put`。
 - 没有人可以问：按任务书里的规则自行决定，不确定项在报告里单列「待拍板」。
 
-### GitHub 凭据与 D-Bus（踩过的坑，必读）
+### GitHub 凭据（踩过的坑，必读）
 
-`gh` 的 token 存在 GNOME keyring，keyring 挂在 niri 会话的 D-Bus 总线上。DSH 服务由 home-shepherd 启动，
-不在 `dbus-run-session niri` 那个会话里，所以 bash 环境**没有** `DBUS_SESSION_BUS_ADDRESS`。此时 libsecret
-会 autolaunch 一条空总线（`/tmp` 下不断冒出的 `dbus-daemon --session` 就是它），里面没有
-`org.freedesktop.secrets`，`gh` 便零输出无限期挂住。**这不是「没有 GitHub 凭据」，不要据此判定失败。**
-
-开工时先挑出带密钥服务的那条会话总线并导出（其余候选连不上会 3 秒超时，不影响）：
+2026-11-09 修复后，token 存放在 `~/.config/gh/hosts.yml`（文件），**不依赖 GNOME keyring 或 D-Bus**，本任务直接可用，无需探测会话总线：
 
 ```bash
-for s in /run/user/1000/bus /tmp/dbus-*; do
-  [ -S "$s" ] || continue
-  if DBUS_SESSION_BUS_ADDRESS="unix:path=$s" timeout 3 gdbus call --session \
-       --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
-       --method org.freedesktop.DBus.ListNames 2>/dev/null | grep -q org.freedesktop.secrets; then
-    export DBUS_SESSION_BUS_ADDRESS="unix:path=$s"; break
-  fi
-done
 GH=/home/brokenshine/.guix-home/profile/bin/gh   # ~/.local/state/nix 那条路径已不存在
-$GH auth status                                  # 应秒回 Logged in to github.com
+$GH auth status
 ```
 
-所有候选都没有密钥服务（会话未登录 / keyring 未启动）时，才按「凭据不可用」处理，并在报告里写明是这条原因。
+**认证检查必须判输出内容，不能只看退出码。** `gh auth status` 的退出码不可信：
+
+| 输出                                                                  | 退出码 | 含义                                          |
+| --------------------------------------------------------------------- | ------ | --------------------------------------------- |
+| `✓ Logged in to github.com account ...`                               | 0      | 正常                                          |
+| `You are not logged into any GitHub hosts`                            | 0      | 无凭据，**退出码也是 0**                      |
+| `The token in default is invalid` / `The token in keyring is invalid` | 1      | 凭据损坏                                      |
+| 零输出、超过 10 秒无响应                                              | —      | libsecret 在 autolaunch 的空 D-Bus 总线上挂起 |
+
+所以判定写成：
+
+```bash
+st=$(timeout 15 $GH auth status 2>&1)
+case "$st" in
+  *"✓ Logged in"*) ;;                        # 继续执行
+  *) echo "凭据不可用：$st"; exit 0 ;;        # 报告并结束，不要走 [SILENT]
+esac
+```
+
+**凭据损坏时必须显式报告「凭据不可用」并结束，绝不静默。** 2026-11-09 的教训：`hosts.yml` 的 `oauth_token` 为空时，`gh api` 与 `gh issue list` 立即报错，而本任务当时没有这一分支，agent 把报错当成「无 issue」处理，输出 `[SILENT]`，故障因此被掩盖了半个多月。
+
+**为什么 token 不能在 keyring 里**（若哪天 `gh auth status` 显示 `(keyring)` 后缀，说明有人登录时把它存进了密钥环）：无人值守会话的 D-Bus 总线每次调用重新 autolaunch，keyring 读取间歇失败，状态会在 `✓ Logged in (keyring)` 与 `The token in keyring is invalid` 之间横跳。修法是强制落文件（细节见 `docs/scripts/desktop/misc-scripts.md` §凭据）：
+
+```bash
+DBUS_SESSION_BUS_ADDRESS=unix:path=/run/does-not-exist-bus \
+  gh auth login --hostname github.com --with-token < token.txt
+```
+
+这需要用户提供有效 token，agent 不自行完成；发现此形态时按「凭据不可用」报告并结束。
 
 ## 交付（每次运行收尾必做）
 

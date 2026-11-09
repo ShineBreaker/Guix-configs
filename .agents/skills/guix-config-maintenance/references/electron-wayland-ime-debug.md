@@ -27,18 +27,18 @@ fcitx5-diagnose 2>/dev/null | grep -A1 'program:<app>'
 
 - **Compositor**: niri 26.04（wlroots）
 - **IME**: fcitx5 5.1.19（wayland_v2 frontend）
-- **QQ**: 3.2.29（内嵌 Electron 37.1.0，Chromium ~130）
-- **Hermes**: Electron 41.7.2（Chromium ~134）—— **工作正常，作对照**
+- **QQ**：3.2.29（内嵌 Electron 37.1.0，Chromium ~130）
+- **Hermes**：Electron 41.7.2（Chromium ~134）——**工作正常，作对照**
 
 ### 调试步骤
 
 1. **对比两端 /proc/PID/environ**：`comm -23 /tmp/env-app1.txt /tmp/env-qq.txt` → 发现 IME 变量相同（NIXOS_OZONE_WL=1、GTK_IM_MODULE=fcitx 等），环境变量不是根因。
 
-2. **对比 cmdline**：Hermes cmdline 零 flag；QQ 有 `--ozone-platform-hint=auto --enable-wayland-ime=true --wayland-text-input-version=3` —— flag 看似齐全。
+2. **对比 cmdline**：Hermes cmdline 零 flag；QQ 有 `--ozone-platform-hint=auto --enable-wayland-ime=true --wayland-text-input-version=3`——flag 看似齐全。
 
 3. **查 Electron 版本**：从 QQ 的 `chrome_crashpad_handler` 进程 cmdline 中提取 `--annotation=ver=37.1.0`；Hermes 是 41.7.2。
 
-4. **查 fcitx5 IC**：`program:QQ frontend:wayland_v2 cap:72 focus:0` —— wayland 连接正常、capability 正常，但 focus 从未变成 1（即使点击输入框）。
+4. **查 fcitx5 IC**：`program:QQ frontend:wayland_v2 cap:72 focus:0`——wayland 连接正常、capability 正常，但 focus 从未变成 1（即使点击输入框）。
 
 5. **hypothesis**：QQ wrapper 的 `--ozone-platform-hint=auto` 在 Electron 37 上无法激活 text-input-v3 focus。Hermes（Electron 41）不需要任何 flag 就能工作。
 

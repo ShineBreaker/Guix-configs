@@ -1361,7 +1361,7 @@ Nix 包管理器本体由 =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 
 - =nix-services= :: 声明 =nix-service-type= （五条 =extra-config= 中仅 =trusted-users= 需拼接 =username= ）与单次服务 =non-nixos-gpu= （将 =/var/lib/non-nixos-gpu= 软链至 =/run/opengl-driver= ，供 Nix 打包的图形程序调用宿主显卡驱动）。
 - =nix-gc-timer= :: 每周日 19:30 调用系统 profile 下的 =/run/current-system/profile/bin/nix-collect-garbage= 清理 14 天前的用户 profile 旧世代并回收 store。系统未安装 =nix= 时该二进制不存在，故须与 =packages-list= 的 ~"nix"~ 联动开关。
-- =nix-user-conf-files= :: 将 =NIX_USER_CONF_FILES= 指向 =~/.config/nix/gh-token.conf= 与 =~/.config/nix/nix.conf= （用于注入 GitHub ~access-tokens~ ）。该块写成独立的单元素关联列表供 =environment-variable-services= 的 ~append~ 引用；不要直接内联进 =extend-environment-variables= 尾部注释，否则该点对的右括号一并被注释，会破坏外层列表的括号平衡。
+- =nix-user-conf-files= :: 将 =NIX_USER_CONF_FILES= 只指向 =~/.config/nix/nix.conf= 。GitHub 认证的单一事实源是 =~/.config/gh/hosts.yml= ，nix 侧不常驻注入 ~access-tokens~ （静态副本与 gh 脱钩后会静默过期），需要时按 =nix-github-api-auth= 技能临时配置 ~NIX_CONFIG~ 。该块写成独立的单元素关联列表供 =environment-variable-services= 的 ~append~ 引用；不要直接内联进 =extend-environment-variables= 尾部注释，否则该点对的右括号一并被注释，会破坏外层列表的括号平衡。
 
 #+begin_quote
 *注意* ：下文的 =nix-ld= 服务（ ~<<nix-ld-services>>~ ）虽源于 Nix 社区，但仅用于为第三方预编译二进制提供动态链接器兼容层，与 Nix 包管理器本身无依赖关系，始终保持启用。
@@ -1403,7 +1403,7 @@ Nix 包管理器本体由 =nix-services= 、 =nix-gc-timer= 与 =nix-user-conf-f
 
 #+NAME: nix-user-conf-files
 #+begin_src scheme
-'(("NIX_USER_CONF_FILES" . "$HOME/.config/nix/gh-token.conf:$HOME/.config/nix/nix.conf"))
+'(("NIX_USER_CONF_FILES" . "$HOME/.config/nix/nix.conf"))
 #+end_src
 
 *** 硬件与电源规则
@@ -3218,6 +3218,8 @@ XDG MIME 默认应用表。Guix 的 ~default~ 字段原本要求传入形如 ~(M
 :END:
 
 扩展 Fontconfig 字体搜索目录与全局字体族回退顺序：无衬线与衬线字体优先使用 =Sarasa Gothic SC= （更纱黑体），等宽编程字体优先使用 =Maple Mono NF CN= （以 =Sarasa Mono SC= 兜底），彩色 Emoji 统一交由 =Noto Color Emoji= 渲染。
+
+Chromium 150（Electron 43.8.4）对 generic family 的 fontconfig 匹配结果不采用 TTC 文件，而 Guix 的 =font-sarasa-gothic= 只发布 TTC。为保证此类应用的界面拉丁字形仍走 Sarasa Gothic SC， =~/.local/share/fonts/= 下另存一份由 =tools/sarasa-ttf-extract.py= 提取的 Gothic SC 单文件 TTF（全部字重）。fontconfig 对同家族的多文件候选按目录扫描顺序排序，该目录先于系统 profile，generic 与点名查询都命中单 TTF，本处字体偏好不变。升级 =font-sarasa-gothic= 后须重跑该脚本，机制与验证方法见 [[../docs/scripts/repo/sarasa-ttf-extract.md][docs/scripts/repo/sarasa-ttf-extract.md]]。
 
 #+NAME: font-services
 #+begin_src scheme

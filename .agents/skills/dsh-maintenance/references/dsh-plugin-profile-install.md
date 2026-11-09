@@ -30,14 +30,14 @@ pnpm view <pkg>@<ver> peerDependencies    # peer 锁的 @deepseek-ai/dsh-* 范�
 产物六件套，全部进仓库源
 `dotfiles/mutable/agents/dsh/.local/share/dsh/profiles/<name>/`：
 
-| 文件 | 内容 | stow 形态 |
-| --- | --- | --- |
-| `package.json` | dependencies + `dsh.profile.bundles` | 软链 |
-| `cordis.yml` | 空 entry 列表（编辑 patch，别动它） | 软链 |
-| `cordis.patch.yml` | 用户 patch 层 | 软链 |
-| `pnpm-workspace.yaml` | pnpm 配置 | 软链 |
-| `pnpm-lock.yaml` | 锁文件 | 源副本 + 部署侧真实文件（stow ignore，pnpm 拒写软链） |
-| `compatibility.json` | compat 授权记录（部署侧 600 权限） | 软链 |
+| 文件                  | 内容                                 | stow 形态                                             |
+| --------------------- | ------------------------------------ | ----------------------------------------------------- |
+| `package.json`        | dependencies + `dsh.profile.bundles` | 软链                                                  |
+| `cordis.yml`          | 空 entry 列表（编辑 patch，别动它）  | 软链                                                  |
+| `cordis.patch.yml`    | 用户 patch 层                        | 软链                                                  |
+| `pnpm-workspace.yaml` | pnpm 配置                            | 软链                                                  |
+| `pnpm-lock.yaml`      | 锁文件                               | 源副本 + 部署侧真实文件（stow ignore，pnpm 拒写软链） |
+| `compatibility.json`  | compat 授权记录（部署侧 600 权限）   | 软链                                                  |
 
 ```bash
 cd <repo>/dotfiles/mutable/agents/dsh/.local/share/dsh/profiles

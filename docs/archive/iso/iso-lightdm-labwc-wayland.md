@@ -7,6 +7,7 @@
 ## 0. 先确认这段是 ISO 还是主机配置
 
 `source/config.org` 里有**两套**桌面栈：
+
 - 主机配置：走 `(gnu services ...)` 主 `operating-system`，tangle 到 `tmp/config.scm`。
 - ISO 配置：`live-installation-os` 块，tangle 到 `tmp/live-iso.scm`（独立 `#+NAME:` + `:tangle ../tmp/live-iso.scm`）。
 
@@ -17,16 +18,16 @@
 
 lightdm 的 `lightdm-seat-configuration` 字段（`guix 9e068cc`，`gnu/services/lightdm.scm:263`）：
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `name` | seat-name | `*` 匹配所有 seat |
-| `user-session` | maybe-string | 默认进的 session 名（小写，如 `"xfce"`） |
-| `type` | seat-type | `'local` / `'xremote`，默认 `'local` |
-| `autologin-user` | maybe-string | 自动登录的用户名 |
-| `greeter-session` | greeter-session | 默认 `'lightdm-gtk-greeter` |
-| `xserver-command` | maybe-file-like | 通常不用填 |
-| `session-wrapper` | file-like | 默认 `(xinitrc)` |
-| `extra-config` | list-of-strings | 追加到 seat 段 |
+| 字段              | 类型            | 说明                                     |
+| ----------------- | --------------- | ---------------------------------------- |
+| `name`            | seat-name       | `*` 匹配所有 seat                        |
+| `user-session`    | maybe-string    | 默认进的 session 名（小写，如 `"xfce"`） |
+| `type`            | seat-type       | `'local` / `'xremote`，默认 `'local`     |
+| `autologin-user`  | maybe-string    | 自动登录的用户名                         |
+| `greeter-session` | greeter-session | 默认 `'lightdm-gtk-greeter`              |
+| `xserver-command` | maybe-file-like | 通常不用填                               |
+| `session-wrapper` | file-like       | 默认 `(xinitrc)`                         |
+| `extra-config`    | list-of-strings | 追加到 seat 段                           |
 
 **典型坑**：只写 `(autologin-user "live")` 不写 `user-session`，lightdm 自动登录后不知道进哪个桌面，
 **停在 greeter 等选 session**，看起来像"没自动登录"。修复就是补一行 `(user-session "xfce")`。
@@ -44,7 +45,7 @@ Guix **没有** `labwc-desktop-service-type`（XFCE 有，labwc 没有官方 ser
 **(a) 装包**：`"labwc"` + `"xwayland"`（labwc 0.20 默认自动拉起 Xwayland，让 XFCE 的 X11 app 在 wayland 下仍可用）。
 验证：`/gnu/store/7zgni80jiqddpy7127lh8yvpk48bqmkd-guix-9e068cc/gnu/packages/wm.scm:4830` 有 `(define-public labwc "0.20.1")`。
 
-**(b) 造一个 synthetic 包**写 `share/wayland-sessions/labwc.desktop` —— labwc 包本身不提供 `.desktop`，
+**(b) 造一个 synthetic 包**写 `share/wayland-sessions/labwc.desktop`——labwc 包本身不提供 `.desktop`，
 但 lightdm 的 `sessions-directory` 会扫这个目录，所以放进去 greeter 就能列出 "Labwc"。
 
 ```scheme

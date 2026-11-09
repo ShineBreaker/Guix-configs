@@ -57,8 +57,6 @@
 ## 实现与约束
 
 ## 排障（可选）
-
-## 变更（可选，仅破坏性改动：日期、旧行为 → 新行为、迁移方式）
 ```
 
 族文档：标题行与元信息行写一次，之后每个脚本一个 `## <脚本名>`；共用协议、差异对照提到族首的公共小节，不要在每个脚本下重复。
@@ -69,7 +67,7 @@
 2. 命令与输出协议用代码块或表格，不用散落的行内反引号拼接。
 3. 表格不超过 5 列；一行能说完的不建表。
 4. 不留空壳小节。凑不出内容的「依赖」「工作原理」直接删掉，依赖并进元信息行。
-5. 「变更」只在有破坏性行为变化时出现；没有就整节省略，**禁止写「无破坏性改动」这类零信息量条目**。目录迁移类事实写成「现状陈述」，历史事故只在仍会复发时保留为一行排障线索。
+5. **不设变更记录**。文档只写当前状态，历史由 git 管理：不写日期化的「某日新增/删除/改为」，也不用「此前/原先/旧版」叙述已不存在的方案。目录迁移、方案替换一律写成现状陈述（现在是什么、为什么这样），不交代沿革；只有仍会复发的历史事故保留为一行排障线索，写触发条件与症状，不写日期。
 6. 只写可以从代码、上游文档或实测确证的内容，不臆测历史原因。
 7. 文档里引用的命令、路径、退出码必须与源码对得上；源码变了就改文档，不留过时说法。
 8. 排版交给 `blue format <文件>`，别手工调：标点与中英间距走 `doc-punct.py`，表格列宽、列表缩进、末尾换行走 prettier（编排见 [doc-format.md](doc-format.md)）。两级都不折正文，所以第 1 条的单行规则不会被工具推翻。
@@ -139,7 +137,7 @@
 - 所有调用方（`rg --hidden` 全仓搜索脚本名，含 niri / tmux / fish 配置、`config.org`、其他脚本）；
 - fish 补全 `dotfiles/immutable/terminal/.config/fish/completions/<name>.fish`；
 - toolbox 清单 `dotfiles/mutable/tools/toolbox/.local/share/toolbox/tools.yaml`（`usage` / `args` / `help_cmd`）；
-- 相关 `AGENTS.md` 与文档的「变更记录」。
+- 相关 `AGENTS.md` 与文档里的用法、旗标、行为描述直接改成新状态（不另写变更条目）。
 
 跨语言协议保持稳定：`gate-core.sh` 的 CLI 与 stdout 行协议、`context-select.sh` 的输出格式、`tools/*.el` 与 `blueprint.scm` 之间的输出协议、各 agent 宿主规定的钩子协议。这些协议横跨本次改动不会一起重读的调用方，破坏它们的代价远大于顺手重构的收益。
 
@@ -153,7 +151,7 @@
    - tmux 用 `tmux -L <name> -f /dev/null`，结束后 kill 掉。
    - 需要 Emacs server 时使用独立的 socket 名。
 4. **比较**：同一组用例分别跑新旧两版，归一化临时路径、时间戳、PID 后 `diff -r`。stdout、stderr、退出码、桩日志、生成的文件都要比。
-5. **完成判据**：差异为空，或每一处差异都在「变更记录」里说明原因。
+5. **完成判据**：差异为空，或每一处差异都能归因到本次改动，并在提交消息里说明。
 6. **静态检查**：§4 里对应语言的检查全部通过；`config.org` 额外对比改动前后的全部 tangle 产物。
 7. **部署位置陷阱**：
    - `gate-core.sh` 优先加载已部署的 `~/.agents/anchors-lib.sh`：测试源码版本时用临时 `HOME`。
@@ -169,7 +167,7 @@ dry-run 必须真的无副作用——否则 `blue --dry-run rebuild` 承诺的�
 - 新增副作用一律走 `%run`：它是唯一允许直接启动子进程的地方（[blueprint.md](blueprint.md) §1），`blue --dry-run` 下只打印 argv 不执行，不要绕过它自行 `popen` / `system`。
 - 确需在 dry-run 下真跑（tangle、括号检查这类纯读操作）才传 `#:real? #t`，并写明理由。
 - 管道读取 `%pipe->lines` / `%pipe->string` **不经** `%run`，dry-run 下也真跑：只读用途（`git status` / `git ls-files` / `grep` / elisp 块导出）可直接用；有副作用的必须像 `%update-guix` 那样手动判断 `dry-build?` 并改走 `%print-preview`。
-- Scheme 侧的直接副作用（如 `delete-file-recursively`）必须显式守 `dry-build?`：`clean-artifacts` 的目录型目标曾因此在 dry-run 下真删目录。
+- Scheme 侧的直接副作用（如 `delete-file-recursively`）必须显式守 `dry-build?`：`clean-artifacts` 的目录型目标漏掉守卫时，`--dry-run` 会真删目录。
 - 所有 `guix` 调用走 `%guix`，它内部包一层 `guix time-machine --channels=`（默认 `source/channel.lock`）；直接调 `guix` 会用未锁定频道构建。
 
 旗标语义与每条命令的 dry-run 行为见 [blueprint.md](blueprint.md)。

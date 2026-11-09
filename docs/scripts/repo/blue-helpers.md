@@ -60,8 +60,3 @@ guix repl tools/gen-partial.scm TARGET OUT-FILE [COMMIT]
 - `TARGET` 不在 `channel.scm` 声明的频道里 → 打印「未知频道 + 可用频道清单」到 stderr、退出 1。
 - 产物写到 `OUT-FILE`（先 `mkdir-p` 父目录），成功时 stdout 打印一行摘要。调用方接着拿它跑 `guix time-machine --channels=<该文件> -- describe --format=channels`，输出原子写回 `source/channel.lock`。
 - dry-run 下 `%partial-channels-file` 不生成临时文件，直接复用 `channel.scm` 原件并打一行 `[预演]`；故虽然调用处给 `%run` 传了 `#:real? #t` 逃生口（其语义是 dry-run 仍真跑），当前路径并不会真的执行本脚本。
-
-## 变更
-
-- 2026-10-03：三篇合并为本文件，`docs/scripts/bootstrap.md`、`docs/scripts/build-image.md`、`docs/scripts/gen-partial.md` 已删除；脚本头注释的文档指针按 CONVENTIONS §2 改指本篇对应小节。
-- `gen-partial.scm` 修正文件头已过时的调用方说明：原写 `tools/update-locks.py / legacy blue`，该文件在仓库中并不存在，实际调用方是 `blueprint.scm` 的 `%partial-channels-file`。

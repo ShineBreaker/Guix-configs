@@ -107,7 +107,3 @@ dsh tui [args...]   # 直 exec profile 内的完整 launcher
 | `dsh tui` 报 127                                       | profile 内 launcher 副本缺失                                | `dsh plugin --profile dsh-tui add @deepseek-harness-tui/dsh-tui@<版本>`                                                    |
 | TUI 整条消失（dump-config 条目骤减）                   | TUI 的 peer 范围与本体版本对不上                            | 查 TUI 包的 `peerDependencies` 是否含当前本体版本；**不是**删 `compatibility.json`（那是豁免授权表，缺失只等于「无豁免」） |
 | TUI 每次 boot 报 `patch: entry "tool-ralph" not found` | 上游 TUI bundle 自带 patch 的告警，本体 base 层已不注册该行 | 忽略，功能无损；勿在本包侧找 bug                                                                                           |
-
-## 变更
-
-- CLI 本体安装树从 `$DSH_HOME/_cli` 迁至 `$AGENTS_ROOT/dsh`，配置与运行时状态留 `$DSH_HOME` 不动；`dsh-update` 的 lockfile 回源映射随之参数化（部署根 + 仓库源根显式传入）；断链自愈从「仅 web profile」扩展为「安装树 + web profile」双目录，补上手动升级路径的回源盲区。

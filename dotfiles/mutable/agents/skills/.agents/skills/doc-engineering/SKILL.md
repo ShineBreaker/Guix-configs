@@ -130,9 +130,9 @@ does today". Recipe:
    - **When** (trigger signals — when does the user reach for this?)
    - **Why** (motivation the original doc lacked)
    - **How** (worked example using the user's own project, not an abstract one)
-3. Add a "已落地修复" / "变更记录" section if the expansion is the result of
-   a defect-fix batch (the user will re-reference this doc when reviewing
-   the next defect batch).
+3. Rewrite the outdated statements in place instead of appending a "已落地修复" /
+   "变更记录" section — history belongs to git; the doc states current behavior
+   only. Keep a "已知缺陷" section only for defects that are still open.
 
 ### 4.2 Contract-specific advice (turning implementation history into a function spec)
 

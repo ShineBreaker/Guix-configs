@@ -9,8 +9,8 @@
 - `#:tests? #f`：容器内 meson test 跑不了需要 typelib 的用例（meson test 重置环境变量）
 - 输入三层：
   - native-inputs: gettext-minimal、python-wrapper、glib（gio-2.0.pc）、`("glib:bin" ,glib "bin")`、`("gtk:bin" ,gtk "bin")`、desktop-file-utils、pytest（可选）
-  - inputs（GI 库，供 wrap 收 typelib）: gtk(=out)、libadwaita、vte、graphene、gdk-pixbuf、**gobject-introspection**（cairo typelib 在这）、glib、pango、harfbuzz
-  - inputs（python 绑定 + 脚本 PATH 工具）: python-pygobject、python-pycairo、…按应用 import 清单；bash-minimal、coreutils、grep、sed、tar、pciutils 等
+  - inputs（GI 库，供 wrap 收 typelib）：gtk(=out)、libadwaita、vte、graphene、gdk-pixbuf、**gobject-introspection**（cairo typelib 在这）、glib、pango、harfbuzz
+  - inputs（python 绑定 + 脚本 PATH 工具）：python-pygobject、python-pycairo、…按应用 import 清单；bash-minimal、coreutils、grep、sed、tar、pciutils 等
 
 ## wrap 阶段模板
 
@@ -50,6 +50,7 @@
 ```
 
 关键点：
+
 - `existing-dirs` 只收真实存在的目录，inputs 增减不用改 wrap 代码。
 - site-packages 后缀用 `(version-major+minor (package-version python))` 算，别硬编码 3.11/3.12。
 - PATH 用 `prefix` 语义保留会话 PATH（用户 profile 里的外部工具如 waydroid 仍可见）。

@@ -5,12 +5,12 @@
 
 ## 1. 组件与路径
 
-| 层 | 路径 |
-| --- | --- |
-| CLI 本体（pnpm 聚合根） | `~/.local/share/agents/dsh/node_modules/@deepseek-ai/dsh` |
-| profiles | `$DSH_HOME/profiles/<name>`（web / dsh-tui / headless / …） |
-| 会话存储（全 profile 共享） | `$DSH_HOME/sessions/--<workspace 路径转义>--/` |
-| wrapper 与 libexec | Guix-configs `dotfiles/mutable/agents/dsh/.local/{bin,libexec}` |
+| 层                          | 路径                                                            |
+| --------------------------- | --------------------------------------------------------------- |
+| CLI 本体（pnpm 聚合根）     | `~/.local/share/agents/dsh/node_modules/@deepseek-ai/dsh`       |
+| profiles                    | `$DSH_HOME/profiles/<name>`（web / dsh-tui / headless / …）     |
+| 会话存储（全 profile 共享） | `$DSH_HOME/sessions/--<workspace 路径转义>--/`                  |
+| wrapper 与 libexec          | Guix-configs `dotfiles/mutable/agents/dsh/.local/{bin,libexec}` |
 
 包生态速查：`ls ~/.local/share/agents/dsh/node_modules/.pnpm/ | grep <关键词>`
 命中后读该包 package.json 的 `description`——每包一句话自述，是画依赖图最快的方式。
